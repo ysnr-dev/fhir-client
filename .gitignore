@@ -1,0 +1,18 @@
+# Backend (Rails)
+/backend/.env
+/backend/log/*
+/backend/tmp/*
+/backend/storage/*
+/backend/.bundle/
+/backend/vendor/bundle/
+!/backend/log/.keep
+!/backend/tmp/.keep
+/backend/config/master.key
+
+# Frontend (Vite + React)
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.vite/
+
+# OS
+.DS_Store

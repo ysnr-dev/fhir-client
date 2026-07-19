@@ -1,0 +1,17 @@
+.git
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+tmp/
+log/
+storage/
+node_modules/
+
+.env
+.bundle/
+*.md
+
+.DS_Store
+coverage/
