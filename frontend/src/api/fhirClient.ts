@@ -50,6 +50,14 @@ export function readResource<T extends fhir4.Resource>(
   return fetch(`${BASE}/${resourceType}/${id}`).then((r) => handle(r));
 }
 
+export function postBundle(bundle: fhir4.Bundle): Promise<FhirResult<fhir4.Bundle>> {
+  return fetch(BASE, {
+    method: "POST",
+    headers: { "Content-Type": FHIR_JSON },
+    body: JSON.stringify(bundle),
+  }).then((r) => handle(r));
+}
+
 export function createResource<T extends fhir4.Resource>(resource: T): Promise<FhirResult<T>> {
   return fetch(`${BASE}/${resource.resourceType}`, {
     method: "POST",

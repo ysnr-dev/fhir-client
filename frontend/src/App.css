@@ -57,6 +57,11 @@
   margin: 0;
 }
 
+.page__header > div {
+  display: flex;
+  gap: 8px;
+}
+
 .button,
 button {
   font: inherit;
@@ -239,6 +244,240 @@ button:disabled {
   margin: 0;
   font-size: 14px;
   color: var(--text-h);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  width: min(640px, 90vw);
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.modal__header h2 {
+  font-size: 18px;
+  margin: 0;
+  color: var(--text-h);
+}
+
+.modal__close {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  padding: 4px 8px;
+}
+
+.master-search__form {
+  margin-bottom: 12px;
+}
+
+.master-search__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.master-search__form input {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.master-search__table-wrap {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.master-search__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.master-search__table th,
+.master-search__table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.master-search__table button {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.master-search__empty {
+  text-align: center;
+  color: var(--text);
+  padding: 16px;
+}
+
+.master-search__pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.prescription-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+
+.prescription-form fieldset {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.prescription-form fieldset legend {
+  font-size: 13px;
+  color: var(--text);
+  padding: 0 4px;
+}
+
+.prescription-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.prescription-form input,
+.prescription-form select {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.prescription-form__actions,
+.prescription-form__submit {
+  display: flex;
+  gap: 8px;
+}
+
+.rp-card {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.rp-card__usage {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rp-card__usage-value {
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.rp-card__usage-value--empty {
+  color: var(--text);
+  font-style: italic;
+}
+
+.rp-card__medicines {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rp-card__medicines th,
+.rp-card__medicines td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.rp-card__medicines input {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  width: 100%;
+}
+
+.rp-card__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.prescription-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+
+.prescription-detail fieldset {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.prescription-detail fieldset legend {
+  font-size: 13px;
+  color: var(--text);
+  padding: 0 4px;
+}
+
+.prescription-detail__common {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.prescription-detail__common dt {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.prescription-detail__common dd {
+  margin: 0;
+  color: var(--text-h);
+  font-size: 14px;
 }
 
 .error-banner {

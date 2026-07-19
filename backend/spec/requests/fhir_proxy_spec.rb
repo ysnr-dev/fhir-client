@@ -81,6 +81,36 @@ RSpec.describe "FhirProxy", type: :request do
     end
   end
 
+  describe "POST /fhir (transaction Bundle)" do
+    it "relays the bundle to the upstream root and returns the transaction-response" do
+      bundle = '{"resourceType":"Bundle","type":"transaction","entry":[]}'
+      response_bundle = '{"resourceType":"Bundle","type":"transaction-response","entry":[]}'
+
+      stub_request(:post, "#{upstream_base}/")
+        .with(body: bundle, headers: { "Content-Type" => "application/fhir+json" })
+        .to_return(status: 200, body: response_bundle,
+                   headers: { "Content-Type" => "application/fhir+json" })
+
+      post "/fhir", params: bundle, headers: { "Content-Type" => "application/fhir+json" }
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to eq(response_bundle)
+    end
+  end
+
+  describe "GET /fhir/ServiceRequest" do
+    it "is allowlisted and forwards the search" do
+      stub_request(:get, "#{upstream_base}/ServiceRequest")
+        .with(query: { "patient" => "Patient/123" })
+        .to_return(status: 200, body: '{"resourceType":"Bundle"}',
+                   headers: { "Content-Type" => "application/fhir+json" })
+
+      get "/fhir/ServiceRequest?patient=Patient/123"
+
+      expect(response).to have_http_status(:ok)
+    end
+  end
+
   describe "resource type allowlist" do
     it "returns 404 OperationOutcome for a resource type that is not allowlisted, without calling upstream" do
       get "/fhir/Observation/1"

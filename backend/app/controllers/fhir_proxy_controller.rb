@@ -1,5 +1,5 @@
 class FhirProxyController < ApplicationController
-  ALLOWED_RESOURCE_TYPES = %w[Patient MedicationRequest].freeze
+  ALLOWED_RESOURCE_TYPES = %w[Patient MedicationRequest ServiceRequest].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 
   FORWARD_REQUEST_HEADERS = %w[Content-Type Accept If-Match If-None-Match Prefer].freeze
@@ -9,7 +9,7 @@ class FhirProxyController < ApplicationController
     path = params[:fhir_path].to_s
     resource_type = path.split("/").first
 
-    unless resource_type == "metadata" || ALLOWED_RESOURCE_TYPES.include?(resource_type)
+    unless bundle_post?(path) || resource_type == "metadata" || ALLOWED_RESOURCE_TYPES.include?(resource_type)
       return render_outcome(:not_found, "not-supported", "Resource type not supported: #{resource_type}")
     end
 
@@ -29,6 +29,11 @@ class FhirProxyController < ApplicationController
   end
 
   private
+
+  # transaction/batch Bundle を root (/fhir) へ POST するリクエスト。
+  def bundle_post?(path)
+    path.blank? && request.post?
+  end
 
   def forwarded_request_headers
     FORWARD_REQUEST_HEADERS.each_with_object({}) do |name, headers|

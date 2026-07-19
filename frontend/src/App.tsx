@@ -4,6 +4,9 @@ import { MasterImportPage } from "./pages/MasterImportPage";
 import { PatientCreatePage } from "./pages/PatientCreatePage";
 import { PatientEditPage } from "./pages/PatientEditPage";
 import { PatientListPage } from "./pages/PatientListPage";
+import { PrescriptionCreatePage } from "./pages/PrescriptionCreatePage";
+import { PrescriptionDetailPage } from "./pages/PrescriptionDetailPage";
+import { PrescriptionListPage } from "./pages/PrescriptionListPage";
 
 function App() {
   return (
@@ -23,6 +26,9 @@ function App() {
           <Route path="/patients" element={<PatientListPage />} />
           <Route path="/patients/new" element={<PatientCreatePage />} />
           <Route path="/patients/:id/edit" element={<PatientEditPage />} />
+          <Route path="/patients/:patientId/prescriptions" element={<PrescriptionListPage />} />
+          <Route path="/patients/:patientId/prescriptions/new" element={<PrescriptionCreatePage />} />
+          <Route path="/patients/:patientId/prescriptions/:srId" element={<PrescriptionDetailPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
         </Routes>
       </main>

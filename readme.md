@@ -150,6 +150,28 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
 - 日付項目（`updated_on`, `changed_on` 等）は `"99999999"`（無期限）等の特殊値を含むため、
   すべて文字列（`YYYYMMDD`）で保持しています。
 
+## 処方オーダー機能
+
+患者一覧の「処方」リンクから患者ごとの処方一覧(`/patients/:id/prescriptions`)へ遷移し、新規処方の登録
+(`.../prescriptions/new`)と登録済み処方の表示(`.../prescriptions/:srId`)ができます。編集・削除は未実装です。
+
+- **リソースの持ち方**: 1処方 = `ServiceRequest` 1リソース + 薬剤数分の `MedicationRequest`。
+  fhir-server がトランザクション Bundle (`POST /`) に対応しているため、登録は **1回の transaction
+  Bundle POST**（`ServiceRequest` → 各 `MedicationRequest` の順、`urn:uuid` で相互参照)で行い、
+  一部が不正なら全体がロールバックされます。
+- **SR→MRの紐づけ**: `MedicationRequest.basedOn` は fhir-server で検索できないため、代わりに
+  `ServiceRequest.orderDetail[].extension`（ローカル定義の
+  `http://fhir-client.local/StructureDefinition/prescription-medication-request`）に
+  `valueReference` で各 `MedicationRequest` の `urn:uuid` を持たせています(Bundle 内での参照解決により
+  実IDへ書き換わります)。処方詳細画面はこの extension から MedicationRequest の id を取り出し、並列 read
+  で内容を取得します(`_id` のカンマ区切り検索に fhir-server が対応していないため)。
+- **RP・医薬品**: 用法・医薬品はいずれもマスタデータAPI(後述)から検索して選択します。RP・医薬品行は
+  フォーム上で動的に追加/削除でき、RP番号は自動連番です。用法の `basic_usage_category`（内服/頓服）に
+  応じて「投与日数」または「投与回数」のいずれかを入力します。
+- backend の `/fhir` プロキシは `ALLOWED_RESOURCE_TYPES` に `ServiceRequest` を追加し、
+  `POST /fhir`(空パス)を transaction Bundle 中継用のルートとして扱います
+  (`backend/app/controllers/fhir_proxy_controller.rb`)。
+
 ## テスト(ローカル)
 
 ```bash

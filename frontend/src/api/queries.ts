@@ -1,7 +1,14 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   createResource,
   deleteResource,
+  postBundle,
   readResource,
   searchResource,
   updateResource,
@@ -30,7 +37,10 @@ function buildSearchParams(search: PatientSearchParams, offset: number): URLSear
   return params;
 }
 
-function hasRelation(bundle: fhir4.Bundle<fhir4.Patient> | undefined, relation: string): boolean {
+function hasRelation<T extends fhir4.Resource>(
+  bundle: fhir4.Bundle<T> | undefined,
+  relation: string,
+): boolean {
   return Boolean(bundle?.link?.some((l) => l.relation === relation));
 }
 
@@ -87,6 +97,58 @@ export function useDeletePatient() {
     mutationFn: (id: string) => deleteResource("Patient", id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Patient", "search"] });
+    },
+  });
+}
+
+const PRESCRIPTION_COUNT = 20;
+
+export function usePrescriptionSearch(patientId: string | undefined, offset: number) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("_count", String(PRESCRIPTION_COUNT));
+  params.set("_offset", String(offset));
+
+  const query = useQuery({
+    queryKey: ["ServiceRequest", "search", patientId, offset],
+    queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", params),
+    placeholderData: keepPreviousData,
+    enabled: Boolean(patientId),
+  });
+
+  return {
+    ...query,
+    bundle: query.data?.data,
+    total: query.data?.data.total ?? 0,
+    count: PRESCRIPTION_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+export function useServiceRequest(id: string | undefined) {
+  return useQuery({
+    queryKey: ["ServiceRequest", id],
+    queryFn: () => readResource<fhir4.ServiceRequest>("ServiceRequest", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useMedicationRequests(ids: string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ["MedicationRequest", id],
+      queryFn: () => readResource<fhir4.MedicationRequest>("MedicationRequest", id),
+    })),
+  });
+}
+
+export function useCreatePrescription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },
   });
 }
