@@ -1,5 +1,6 @@
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
+import { MasterImportPage } from "./pages/MasterImportPage";
 import { PatientCreatePage } from "./pages/PatientCreatePage";
 import { PatientEditPage } from "./pages/PatientEditPage";
 import { PatientListPage } from "./pages/PatientListPage";
@@ -11,6 +12,10 @@ function App() {
         <Link to="/patients" className="app__title">
           FHIR Client
         </Link>
+        <nav className="app__nav">
+          <Link to="/patients">患者一覧</Link>
+          <Link to="/master-import">マスタ取込</Link>
+        </nav>
       </header>
       <main className="app__main">
         <Routes>
@@ -18,6 +23,7 @@ function App() {
           <Route path="/patients" element={<PatientListPage />} />
           <Route path="/patients/new" element={<PatientCreatePage />} />
           <Route path="/patients/:id/edit" element={<PatientEditPage />} />
+          <Route path="/master-import" element={<MasterImportPage />} />
         </Routes>
       </main>
     </div>

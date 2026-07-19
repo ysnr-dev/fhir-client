@@ -8,6 +8,24 @@
 .app__header {
   border-bottom: 1px solid var(--border);
   padding: 16px 24px;
+  display: flex;
+  align-items: baseline;
+  gap: 32px;
+}
+
+.app__nav {
+  display: flex;
+  gap: 16px;
+}
+
+.app__nav a {
+  color: var(--text);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.app__nav a:hover {
+  color: var(--accent);
 }
 
 .app__title {
@@ -167,6 +185,60 @@ button:disabled {
 
 .patient-form__actions {
   margin-top: 8px;
+}
+
+.master-import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 480px;
+}
+
+.master-import-form fieldset {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  gap: 16px;
+}
+
+.master-import-form fieldset legend {
+  font-size: 13px;
+  color: var(--text);
+  padding: 0 4px;
+}
+
+.master-import-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.master-import-form__radio {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.master-import-form__hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.master-import-form__warning {
+  margin: 0;
+  font-size: 13px;
+  color: #b8860b;
+}
+
+.master-import-form__success {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
 }
 
 .error-banner {

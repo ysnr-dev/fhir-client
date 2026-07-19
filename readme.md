@@ -6,14 +6,13 @@ FHIR サーバー(`../fhir-server`)に対する CRUD を仲介する、Rails 製
 
 ```
 fhir-client/
-├── backend/    # Rails 7 API-only。/fhir/* を FHIR サーバーへ中継するプロキシ (port 3001)
-├── frontend/   # Vite + React + TypeScript。Patient の登録/更新/削除/一覧/検索 UI (port 5173)
-└── master-data/
+├── backend/    # Rails 7 API-only。/fhir/* を FHIR サーバーへ中継するプロキシ + /master/* マスタデータAPI (port 3001)
+└── frontend/   # Vite + React + TypeScript。Patient の登録/更新/削除/一覧/検索 UI、マスタ取込 UI (port 5173)
 ```
 
-- FHIR リソースは backend の DB に永続化しません(常に FHIR サーバーへ中継)。
+- FHIR リソースは backend の DB に永続化しません(常に FHIR サーバーへ中継)。マスタデータ(後述)のみ backend 自身の DB に永続化します。
 - フロントエンドは FHIR R4 の JSON をそのまま組み立て/解釈します(`@types/fhir` の `fhir4` 名前空間を使用)。
-- 開発時、ブラウザ→フロントエンド(5173)は同一オリジンで、`/fhir/*` は Vite の dev proxy が backend(3001)へ転送します。CORS 設定は不要です。
+- 開発時、ブラウザ→フロントエンド(5173)は同一オリジンで、`/fhir/*` と `/master/*` は Vite の dev proxy が backend(3001)へ転送します。CORS 設定は不要です。
 
 ## 起動方法(Docker Compose、推奨)
 
@@ -75,7 +74,7 @@ export PATH="/usr/local/opt/postgresql@18/bin:$PATH"
 bin/rails s -p 3001
 ```
 
-初回のみ: `bundle install && bin/rails db:create`
+初回のみ: `bundle install && bin/rails db:create db:migrate`
 
 接続先の FHIR サーバー URL は `backend/.env` の `FHIR_SERVER_BASE_URL` で切り替え可能です(デフォルト `http://localhost:3000`)。
 
@@ -86,6 +85,70 @@ cd frontend
 npm install   # 初回のみ
 npm run dev
 ```
+
+## マスタデータAPI（処方オーダー基盤）
+
+処方オーダー機能のための国内参照マスタ3種を管理する API です。**FHIR リソースではなく通常の
+JSON REST**（snake_case、`OperationOutcome` は使わず `{error: ...}` / `{errors: [...]}` 形式）として
+`/master` 配下に実装しています。データは fhir-server へは中継せず、**backend 自身の DB
+(`master_*` テーブル)に永続化**します。
+
+| マスタ | エンドポイント | ソースファイル形式 |
+|---|---|---|
+| HOTコード | `/master/hot_codes` | MEDIS HOT9マスタ（CSV, Shift_JIS） |
+| 医薬品 | `/master/medicines` | 医薬品マスタ（CSV, Shift_JIS, ヘッダーなし） |
+| 用法 | `/master/medicine_usages` | 電子処方箋用法マスタ（xlsx） |
+
+以下、`{master}` は `hot_codes` / `medicines` / `medicine_usages` のいずれかに読み替えてください。
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| `GET` | `/master/{master}` | 検索（`{ total, page, per, items }`。`page`/`per`指定可、`per`上限100） |
+| `GET` | `/master/{master}/:id` | 参照 |
+| `POST` | `/master/{master}` | 作成 |
+| `PATCH`/`PUT` | `/master/{master}/:id` | 更新 |
+| `DELETE` | `/master/{master}/:id` | 削除（204） |
+| `POST` | `/master/{master}/import` | ファイル一括インポート（**総洗い替え**：既存全件削除→全件挿入） |
+
+### 一括インポート
+
+フロントエンドの「マスタ取込」画面（`http://localhost:5173/master-import`）からローカルファイルを
+アップロードするか、`multipart/form-data` の `file` パラメータで直接 API を呼び出します。
+文字コード（Shift_JIS/CP932）やxlsxのシート構成はサーバー側で自動処理します。
+
+```bash
+curl -X POST http://localhost:3001/master/hot_codes/import \
+  -F "file=@MEDIS20260630_HOT9.TXT"
+# => {"imported": 38364}
+
+curl -X POST http://localhost:3001/master/medicines/import \
+  -F "file=@y_r07_ALL20260317.csv"
+# => {"imported": 19337}
+
+curl -X POST http://localhost:3001/master/medicine_usages/import \
+  -F "file=@001056865.xlsx"
+# => {"imported": 1803}
+```
+
+- **総洗い替え**: 1トランザクション内で既存データを全削除後、全件再挿入します。ファイルの一部行が
+  不正（列数不一致）な場合は**インポート全体を中断**し、既存データは変更されません（422 + `{error: ...}`）。
+- `file` 未指定の場合は 422。
+
+### 検索例
+
+```bash
+curl -G "http://localhost:3001/master/medicines" --data-urlencode "name=ガスター" --data-urlencode "per=5"
+curl -G "http://localhost:3001/master/hot_codes" --data-urlencode "sales_name=フローセン"
+curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_name=朝食"
+```
+
+### 注意点
+
+- `hot_codes.hot_code` は**一意キーではありません**（MEDIS実データ上、同一HOTコードに異なる
+  個別医薬品コード・販売名を持つ複数レコードが存在するため）。`medicines.medicine_code` /
+  `medicine_usages.usage_code` は一意制約あり。
+- 日付項目（`updated_on`, `changed_on` 等）は `"99999999"`（無期限）等の特殊値を含むため、
+  すべて文字列（`YYYYMMDD`）で保持しています。
 
 ## テスト(ローカル)
 
@@ -103,6 +166,7 @@ bundle exec rspec
 - FHIR サーバー無応答時に backend が 502 + OperationOutcome を返すこと
 - フロントエンドの本番ビルド(`npm run build`)と型チェック(`tsc -b`)
 - Docker Compose での起動(db/backend/frontend)、backend→fhir-server(host.docker.internal経由)、frontend→backend(サービス名経由)の疎通
+- マスタ3種のインポート(ローカル・Docker 双方で curl により確認。サンプルファイルで hot_codes=3件 / medicines=3件 / medicine_usages=1803件)、`file` 未指定 422、列数不一致 422(既存データ保持)
 
 ## 未検証
 
