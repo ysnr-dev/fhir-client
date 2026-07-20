@@ -445,6 +445,15 @@ button:disabled {
   gap: 8px;
 }
 
+.prescription-form__comment-field {
+  flex: 1 1 100%;
+}
+
+.prescription-form__comment-field input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .rp-card {
   flex-direction: column;
   align-items: stretch;
@@ -452,8 +461,36 @@ button:disabled {
 
 .rp-card__usage {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+
+.rp-card__dose-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rp-card__dose-count-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.rp-card__dose-count-input {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  width: 64px;
+}
+
+.rp-card__dose-count-suffix {
+  font-size: 14px;
+  color: var(--text-h);
 }
 
 .rp-card__usage-value {

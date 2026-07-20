@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Medicine } from "../api/masterClient";
 import { useMedicineSearch } from "../api/masterQueries";
+import { dosageFormLabel } from "../fhir/medicineHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 
@@ -52,7 +53,7 @@ export function MedicineSearchModal({ onSelect, onClose }: MedicineSearchModalPr
                 <td>{medicine.medicine_code}</td>
                 <td>{medicine.name}</td>
                 <td>{medicine.unit_name}</td>
-                <td>{medicine.dosage_form}</td>
+                <td>{dosageFormLabel(medicine.dosage_form)}</td>
                 <td>
                   <button type="button" onClick={() => onSelect(medicine)}>
                     選択

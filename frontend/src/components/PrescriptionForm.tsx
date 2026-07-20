@@ -181,7 +181,7 @@ export function PrescriptionForm({ onSubmit, submitting, submitError }: Prescrip
             onChange={(e) => update("authoredDate", e.target.value)}
           />
         </label>
-        <label>
+        <label className="prescription-form__comment-field">
           処方箋コメント
           <input type="text" value={values.comment} onChange={(e) => update("comment", e.target.value)} />
         </label>
@@ -273,30 +273,34 @@ export function PrescriptionForm({ onSubmit, submitting, submitError }: Prescrip
             <button type="button" onClick={() => setModal({ kind: "usage", rpIndex })}>
               {rp.usage ? "用法を変更" : "用法を選択"}
             </button>
-          </div>
 
-          {rp.usage?.basic_usage_category === "内服" && (
-            <label>
-              投与日数
-              <input
-                type="number"
-                min="1"
-                value={rp.doseDays}
-                onChange={(e) => updateRp(rpIndex, { doseDays: e.target.value })}
-              />
-            </label>
-          )}
-          {rp.usage?.basic_usage_category === "頓服" && (
-            <label>
-              投与回数
-              <input
-                type="number"
-                min="1"
-                value={rp.doseCount}
-                onChange={(e) => updateRp(rpIndex, { doseCount: e.target.value })}
-              />
-            </label>
-          )}
+            {rp.usage?.basic_usage_category === "内服" && (
+              <span className="rp-card__dose-count">
+                <span className="rp-card__dose-count-label">投与日数</span>
+                <input
+                  type="number"
+                  min="1"
+                  className="rp-card__dose-count-input"
+                  value={rp.doseDays}
+                  onChange={(e) => updateRp(rpIndex, { doseDays: e.target.value })}
+                />
+                <span className="rp-card__dose-count-suffix">日分</span>
+              </span>
+            )}
+            {rp.usage?.basic_usage_category === "頓服" && (
+              <span className="rp-card__dose-count">
+                <span className="rp-card__dose-count-label">投与回数</span>
+                <input
+                  type="number"
+                  min="1"
+                  className="rp-card__dose-count-input"
+                  value={rp.doseCount}
+                  onChange={(e) => updateRp(rpIndex, { doseCount: e.target.value })}
+                />
+                <span className="rp-card__dose-count-suffix">回分</span>
+              </span>
+            )}
+          </div>
 
           <label>
             用法コメント

@@ -86,13 +86,13 @@ export function PrescriptionDetailPage() {
                   {rp.basicCategory === "内服" && (
                     <>
                       <dt>投与日数</dt>
-                      <dd>{rp.doseDays ?? "-"}</dd>
+                      <dd>{rp.doseDays != null ? `${rp.doseDays}日分` : "-"}</dd>
                     </>
                   )}
                   {rp.basicCategory === "頓服" && (
                     <>
                       <dt>投与回数</dt>
-                      <dd>{rp.doseCount ?? "-"}</dd>
+                      <dd>{rp.doseCount != null ? `${rp.doseCount}回分` : "-"}</dd>
                     </>
                   )}
                   <dt>用法コメント</dt>
