@@ -76,17 +76,39 @@ export async function searchMedicines(params: {
 
 export async function searchMedicineUsages(params: {
   usage_name?: string;
+  basic_usage_category?: string;
+  detailed_usage_category?: string;
+  timing_category?: string;
+  dose_count?: string;
   page?: number;
   per?: number;
 }): Promise<MasterSearchResult<MedicineUsage>> {
   const search = new URLSearchParams();
   if (params.usage_name) search.set("usage_name", params.usage_name);
+  if (params.basic_usage_category) search.set("basic_usage_category", params.basic_usage_category);
+  if (params.detailed_usage_category)
+    search.set("detailed_usage_category", params.detailed_usage_category);
+  if (params.timing_category) search.set("timing_category", params.timing_category);
+  if (params.dose_count) search.set("dose_count", params.dose_count);
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 
   const res = await fetch(`/master/medicine_usages?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<MedicineUsage>;
+}
+
+export interface MedicineUsageCategories {
+  basic_usage_categories: string[];
+  detailed_usage_categories: string[];
+  timing_categories: string[];
+  dose_counts: string[];
+}
+
+export async function fetchMedicineUsageCategories(): Promise<MedicineUsageCategories> {
+  const res = await fetch("/master/medicine_usages/categories");
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MedicineUsageCategories;
 }
 
 export async function importMaster(

@@ -11,6 +11,7 @@ import {
   type PrescriptionSetting,
   type RpValues,
 } from "../fhir/prescriptionHelpers";
+import { presetUsageFilters } from "../fhir/usageMapping";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { UsageSearchModal } from "./UsageSearchModal";
@@ -191,6 +192,13 @@ export function PrescriptionForm({ onSubmit, submitting, submitError }: Prescrip
           <legend>{`RP${rpIndex + 1}`}</legend>
 
           <table className="rp-card__medicines">
+            <colgroup>
+              <col />
+              <col style={{ width: "88px" }} />
+              <col style={{ width: "72px" }} />
+              <col style={{ width: "30%" }} />
+              <col style={{ width: "72px" }} />
+            </colgroup>
             <thead>
               <tr>
                 <th>医薬品</th>
@@ -204,17 +212,19 @@ export function PrescriptionForm({ onSubmit, submitting, submitError }: Prescrip
               {rp.medicines.map((med, medIndex) => (
                 <tr key={medIndex}>
                   <td>
-                    {med.medicine ? (
-                      <span>{med.medicine.name}</span>
-                    ) : (
-                      <span className="rp-card__usage-value--empty">未選択</span>
-                    )}{" "}
-                    <button
-                      type="button"
-                      onClick={() => setModal({ kind: "medicine", rpIndex, medIndex })}
-                    >
-                      {med.medicine ? "変更" : "選択"}
-                    </button>
+                    <div className="rp-card__medicine-cell">
+                      <button
+                        type="button"
+                        onClick={() => setModal({ kind: "medicine", rpIndex, medIndex })}
+                      >
+                        {med.medicine ? "変更" : "選択"}
+                      </button>
+                      {med.medicine ? (
+                        <span className="rp-card__medicine-name">{med.medicine.name}</span>
+                      ) : (
+                        <span className="rp-card__usage-value--empty">未選択</span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     <input
@@ -320,7 +330,13 @@ export function PrescriptionForm({ onSubmit, submitting, submitError }: Prescrip
       </div>
 
       {modal?.kind === "usage" && (
-        <UsageSearchModal onSelect={handleUsageSelect} onClose={() => setModal(null)} />
+        <UsageSearchModal
+          onSelect={handleUsageSelect}
+          onClose={() => setModal(null)}
+          initialFilters={presetUsageFilters(
+            values.rps[modal.rpIndex].medicines.find((m) => m.medicine)?.medicine,
+          )}
+        />
       )}
       {modal?.kind === "medicine" && (
         <MedicineSearchModal onSelect={handleMedicineSelect} onClose={() => setModal(null)} />

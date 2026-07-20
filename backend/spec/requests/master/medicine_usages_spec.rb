@@ -51,4 +51,63 @@ RSpec.describe "Master::MedicineUsages", type: :request do
       expect(response).to have_http_status(:unprocessable_entity)
     end
   end
+
+  describe "GET /master/medicine_usages (区分フィルタ)" do
+    before do
+      Master::MedicineUsage.create!(
+        usage_code: "1011000000000000", usage_name: "内服A",
+        basic_usage_category_code: "1", basic_usage_category: "内服",
+        detailed_usage_category_code: "A", detailed_usage_category: "経口",
+        timing_category_code: "1", timing_category: "食事ベース型"
+      )
+      Master::MedicineUsage.create!(
+        usage_code: "2A05000000000000", usage_name: "外用B",
+        basic_usage_category_code: "2", basic_usage_category: "外用",
+        detailed_usage_category_code: "H", detailed_usage_category: "点眼",
+        timing_category_code: "5", timing_category: "頓用指示型"
+      )
+    end
+
+    it "filters by each category independently" do
+      get "/master/medicine_usages", params: { basic_usage_category: "内服" }
+      body = JSON.parse(response.body)
+      expect(body["total"]).to eq(1)
+      expect(body["items"].first["usage_name"]).to eq("内服A")
+
+      get "/master/medicine_usages", params: { detailed_usage_category: "点眼" }
+      expect(JSON.parse(response.body)["items"].map { |i| i["usage_name"] }).to eq(["外用B"])
+
+      get "/master/medicine_usages", params: { timing_category: "食事ベース型" }
+      expect(JSON.parse(response.body)["items"].map { |i| i["usage_name"] }).to eq(["内服A"])
+    end
+
+    it "filters by dose_count (usage_code の 4 桁目)" do
+      get "/master/medicine_usages", params: { dose_count: "1" }
+      expect(JSON.parse(response.body)["items"].map { |i| i["usage_name"] }).to eq(["内服A"])
+
+      get "/master/medicine_usages", params: { dose_count: "5" }
+      expect(JSON.parse(response.body)["items"].map { |i| i["usage_name"] }).to eq(["外用B"])
+    end
+  end
+
+  describe "GET /master/medicine_usages/categories" do
+    it "returns distinct category names ordered by category code" do
+      Master::MedicineUsage.create!(
+        usage_code: "1013000000000000", usage_name: "内服A",
+        basic_usage_category_code: "2", basic_usage_category: "外用"
+      )
+      Master::MedicineUsage.create!(
+        usage_code: "1011000000000000", usage_name: "内服B",
+        basic_usage_category_code: "1", basic_usage_category: "内服"
+      )
+
+      get "/master/medicine_usages/categories"
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)
+      expect(body["basic_usage_categories"]).to eq(%w[内服 外用])
+      expect(body["detailed_usage_categories"]).to eq([])
+      expect(body["dose_counts"]).to eq(%w[1 3])
+    end
+  end
 end

@@ -16,7 +16,10 @@ Rails.application.routes.draw do
       collection { post :import }
     end
     resources :medicine_usages, only: %i[index show create update destroy] do
-      collection { post :import }
+      collection do
+        post :import
+        get :categories
+      end
     end
   end
 end
