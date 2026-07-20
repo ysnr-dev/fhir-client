@@ -480,6 +480,50 @@ button:disabled {
   font-size: 14px;
 }
 
+.prescription-detail__raw {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.prescription-detail__raw summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.json-block {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--code-bg);
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+  color: var(--text);
+  margin: 12px 0 0;
+}
+
+.json-block code {
+  display: inline;
+  padding: 0;
+  background: none;
+  border-radius: 0;
+}
+
+.json-block .hljs-attr {
+  color: var(--accent);
+}
+
+.json-block .hljs-string,
+.json-block .hljs-number {
+  color: var(--text-h);
+}
+
+.json-block .hljs-literal {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .error-banner {
   border: 1px solid #e0687a;
   background: rgba(224, 104, 122, 0.1);

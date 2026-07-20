@@ -190,52 +190,6 @@ export function PrescriptionForm({ onSubmit, submitting, submitError }: Prescrip
         <fieldset className="rp-card" key={rpIndex}>
           <legend>{`RP${rpIndex + 1}`}</legend>
 
-          <div className="rp-card__usage">
-            <label>
-              用法
-              {rp.usage ? (
-                <span className="rp-card__usage-value">{rp.usage.usage_name}</span>
-              ) : (
-                <span className="rp-card__usage-value rp-card__usage-value--empty">未選択</span>
-              )}
-            </label>
-            <button type="button" onClick={() => setModal({ kind: "usage", rpIndex })}>
-              {rp.usage ? "用法を変更" : "用法を選択"}
-            </button>
-          </div>
-
-          {rp.usage?.basic_usage_category === "内服" && (
-            <label>
-              投与日数
-              <input
-                type="number"
-                min="1"
-                value={rp.doseDays}
-                onChange={(e) => updateRp(rpIndex, { doseDays: e.target.value })}
-              />
-            </label>
-          )}
-          {rp.usage?.basic_usage_category === "頓服" && (
-            <label>
-              投与回数
-              <input
-                type="number"
-                min="1"
-                value={rp.doseCount}
-                onChange={(e) => updateRp(rpIndex, { doseCount: e.target.value })}
-              />
-            </label>
-          )}
-
-          <label>
-            用法コメント
-            <input
-              type="text"
-              value={rp.usageComment}
-              onChange={(e) => updateRp(rpIndex, { usageComment: e.target.value })}
-            />
-          </label>
-
           <table className="rp-card__medicines">
             <thead>
               <tr>
@@ -295,12 +249,61 @@ export function PrescriptionForm({ onSubmit, submitting, submitError }: Prescrip
             <button type="button" onClick={() => addMedicine(rpIndex)}>
               + 医薬品追加
             </button>
-            {values.rps.length > 1 && (
+          </div>
+
+          <div className="rp-card__usage">
+            <label>
+              用法
+              {rp.usage ? (
+                <span className="rp-card__usage-value">{rp.usage.usage_name}</span>
+              ) : (
+                <span className="rp-card__usage-value rp-card__usage-value--empty">未選択</span>
+              )}
+            </label>
+            <button type="button" onClick={() => setModal({ kind: "usage", rpIndex })}>
+              {rp.usage ? "用法を変更" : "用法を選択"}
+            </button>
+          </div>
+
+          {rp.usage?.basic_usage_category === "内服" && (
+            <label>
+              投与日数
+              <input
+                type="number"
+                min="1"
+                value={rp.doseDays}
+                onChange={(e) => updateRp(rpIndex, { doseDays: e.target.value })}
+              />
+            </label>
+          )}
+          {rp.usage?.basic_usage_category === "頓服" && (
+            <label>
+              投与回数
+              <input
+                type="number"
+                min="1"
+                value={rp.doseCount}
+                onChange={(e) => updateRp(rpIndex, { doseCount: e.target.value })}
+              />
+            </label>
+          )}
+
+          <label>
+            用法コメント
+            <input
+              type="text"
+              value={rp.usageComment}
+              onChange={(e) => updateRp(rpIndex, { usageComment: e.target.value })}
+            />
+          </label>
+
+          {values.rps.length > 1 && (
+            <div className="rp-card__actions">
               <button type="button" onClick={() => removeRp(rpIndex)}>
                 RP削除
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </fieldset>
       ))}
 

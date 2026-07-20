@@ -1,29 +1,27 @@
 import { Link, useParams } from "react-router-dom";
-import { useMedicationRequests, useServiceRequest } from "../api/queries";
+import { usePrescriptionDetail } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { JsonBlock } from "../components/JsonBlock";
 import {
   groupByRp,
-  medicationRequestIds,
   prescriptionComment,
+  splitPrescriptionDetailBundle,
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
 
 export function PrescriptionDetailPage() {
   const { patientId, srId } = useParams<{ patientId: string; srId: string }>();
 
-  const serviceRequest = useServiceRequest(srId);
-  const mrIds = serviceRequest.data ? medicationRequestIds(serviceRequest.data.data) : [];
-  const medicationRequests = useMedicationRequests(mrIds);
+  const detail = usePrescriptionDetail(srId);
 
-  const isLoading = serviceRequest.isLoading || medicationRequests.some((q) => q.isLoading);
-  const error = serviceRequest.error ?? medicationRequests.find((q) => q.error)?.error;
+  const isLoading = detail.isLoading;
+  const error = detail.error;
 
-  const sr = serviceRequest.data?.data;
+  const { serviceRequest: sr, medicationRequests: mrs } = detail.data
+    ? splitPrescriptionDetailBundle(detail.data.data)
+    : { serviceRequest: undefined, medicationRequests: [] };
   const summary = sr ? summarizeServiceRequest(sr) : undefined;
-  const mrs = medicationRequests
-    .map((q) => q.data?.data)
-    .filter((r): r is fhir4.MedicationRequest => Boolean(r));
-  const rps = mrs.length === mrIds.length ? groupByRp(mrs) : [];
+  const rps = sr ? groupByRp(mrs) : [];
 
   return (
     <div className="page">
@@ -59,24 +57,6 @@ export function PrescriptionDetailPage() {
             {rps.map((rp) => (
               <fieldset className="rp-card" key={rp.rpNumber}>
                 <legend>{`RP${rp.rpNumber}`}</legend>
-                <dl className="prescription-detail__common">
-                  <dt>用法</dt>
-                  <dd>{rp.usageName ?? "-"}</dd>
-                  {rp.basicCategory === "内服" && (
-                    <>
-                      <dt>投与日数</dt>
-                      <dd>{rp.doseDays ?? "-"}</dd>
-                    </>
-                  )}
-                  {rp.basicCategory === "頓服" && (
-                    <>
-                      <dt>投与回数</dt>
-                      <dd>{rp.doseCount ?? "-"}</dd>
-                    </>
-                  )}
-                  <dt>用法コメント</dt>
-                  <dd>{rp.usageComment || "-"}</dd>
-                </dl>
                 <table className="rp-card__medicines">
                   <thead>
                     <tr>
@@ -97,8 +77,31 @@ export function PrescriptionDetailPage() {
                     ))}
                   </tbody>
                 </table>
+                <dl className="prescription-detail__common">
+                  <dt>用法</dt>
+                  <dd>{rp.usageName ?? "-"}</dd>
+                  {rp.basicCategory === "内服" && (
+                    <>
+                      <dt>投与日数</dt>
+                      <dd>{rp.doseDays ?? "-"}</dd>
+                    </>
+                  )}
+                  {rp.basicCategory === "頓服" && (
+                    <>
+                      <dt>投与回数</dt>
+                      <dd>{rp.doseCount ?? "-"}</dd>
+                    </>
+                  )}
+                  <dt>用法コメント</dt>
+                  <dd>{rp.usageComment || "-"}</dd>
+                </dl>
               </fieldset>
             ))}
+
+            <details className="prescription-detail__raw">
+              <summary>FHIR JSON を表示</summary>
+              <JsonBlock value={detail.data?.data} />
+            </details>
           </div>
         )
       )}

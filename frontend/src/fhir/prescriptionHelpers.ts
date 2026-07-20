@@ -317,16 +317,22 @@ export function prescriptionComment(sr: fhir4.ServiceRequest): string {
   return sr.note?.[0]?.text ?? "";
 }
 
-export function medicationRequestIds(sr: fhir4.ServiceRequest): string[] {
-  const ids: string[] = [];
-  for (const detail of sr.orderDetail ?? []) {
-    const ext = detail.extension?.find((e) => e.url === ORDER_DETAIL_MR_EXT_URL);
-    const reference = ext?.valueReference?.reference;
-    if (reference?.startsWith("MedicationRequest/")) {
-      ids.push(reference.slice("MedicationRequest/".length));
+export interface PrescriptionDetailBundle {
+  serviceRequest?: fhir4.ServiceRequest;
+  medicationRequests: fhir4.MedicationRequest[];
+}
+
+export function splitPrescriptionDetailBundle(bundle: fhir4.Bundle): PrescriptionDetailBundle {
+  const result: PrescriptionDetailBundle = { medicationRequests: [] };
+  for (const entry of bundle.entry ?? []) {
+    const resource = entry.resource;
+    if (resource?.resourceType === "ServiceRequest") {
+      result.serviceRequest = resource as fhir4.ServiceRequest;
+    } else if (resource?.resourceType === "MedicationRequest") {
+      result.medicationRequests.push(resource as fhir4.MedicationRequest);
     }
   }
-  return ids;
+  return result;
 }
 
 export interface MedicineLineDisplay {

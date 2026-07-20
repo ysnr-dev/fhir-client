@@ -1,10 +1,4 @@
-import {
-  keepPreviousData,
-  useMutation,
-  useQueries,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createResource,
   deleteResource,
@@ -126,20 +120,15 @@ export function usePrescriptionSearch(patientId: string | undefined, offset: num
   };
 }
 
-export function useServiceRequest(id: string | undefined) {
-  return useQuery({
-    queryKey: ["ServiceRequest", id],
-    queryFn: () => readResource<fhir4.ServiceRequest>("ServiceRequest", id as string),
-    enabled: Boolean(id),
-  });
-}
+export function usePrescriptionDetail(srId: string | undefined) {
+  const params = new URLSearchParams();
+  if (srId) params.set("_id", srId);
+  params.set("_revinclude", "MedicationRequest:based-on");
 
-export function useMedicationRequests(ids: string[]) {
-  return useQueries({
-    queries: ids.map((id) => ({
-      queryKey: ["MedicationRequest", id],
-      queryFn: () => readResource<fhir4.MedicationRequest>("MedicationRequest", id),
-    })),
+  return useQuery({
+    queryKey: ["ServiceRequest", "detail", srId],
+    queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", params),
+    enabled: Boolean(srId),
   });
 }
 
