@@ -82,19 +82,21 @@ export function PrescriptionDetailPage() {
                 </table>
                 <dl className="prescription-detail__common">
                   <dt>用法</dt>
-                  <dd>{rp.usageName ?? "-"}</dd>
-                  {rp.basicCategory === "内服" && (
-                    <>
-                      <dt>投与日数</dt>
-                      <dd>{rp.doseDays != null ? `${rp.doseDays}日分` : "-"}</dd>
-                    </>
-                  )}
-                  {rp.basicCategory === "頓服" && (
-                    <>
-                      <dt>投与回数</dt>
-                      <dd>{rp.doseCount != null ? `${rp.doseCount}回分` : "-"}</dd>
-                    </>
-                  )}
+                  <dd className="prescription-detail__usage-value">
+                    <span>{rp.usageName ?? "-"}</span>
+                    {rp.basicCategory === "内服" && (
+                      <span className="prescription-detail__dose">
+                        <span className="prescription-detail__dose-label">投与日数</span>
+                        {rp.doseDays != null ? `${rp.doseDays}日分` : "-"}
+                      </span>
+                    )}
+                    {rp.basicCategory === "頓服" && (
+                      <span className="prescription-detail__dose">
+                        <span className="prescription-detail__dose-label">投与回数</span>
+                        {rp.doseCount != null ? `${rp.doseCount}回分` : "-"}
+                      </span>
+                    )}
+                  </dd>
                   <dt>用法コメント</dt>
                   <dd>{rp.usageComment || "-"}</dd>
                 </dl>

@@ -403,7 +403,6 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 720px;
 }
 
 .prescription-form fieldset {
@@ -517,6 +516,10 @@ button:disabled {
   font-size: 14px;
 }
 
+.rp-card__medicines td {
+  color: var(--text-h);
+}
+
 .rp-card__medicines button {
   padding: 6px 10px;
   font-size: 13px;
@@ -557,7 +560,6 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  max-width: 720px;
 }
 
 .prescription-detail fieldset {
@@ -587,6 +589,23 @@ button:disabled {
   margin: 0;
   color: var(--text-h);
   font-size: 14px;
+}
+
+.prescription-detail__usage-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prescription-detail__dose {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.prescription-detail__dose-label {
+  color: var(--text);
+  margin-right: 4px;
 }
 
 .prescription-detail__raw {
