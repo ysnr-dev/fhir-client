@@ -31,7 +31,7 @@ export function MedicineSearchModal({ onSelect, onClose }: MedicineSearchModalPr
             type="text"
             value={name}
             onChange={(e) => handleNameChange(e.target.value)}
-            placeholder="部分一致で検索"
+            placeholder="部分一致で検索(かな・全半角の違いは無視)"
           />
         </label>
       </div>

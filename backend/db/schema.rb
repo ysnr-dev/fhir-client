@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2026_07_19_134304) do
+ActiveRecord::Schema[7.0].define(version: 2026_07_20_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -65,6 +65,7 @@ ActiveRecord::Schema[7.0].define(version: 2026_07_19_134304) do
     t.string "usage_code_category"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "search_name"
     t.index ["usage_code"], name: "index_master_medicine_usages_on_usage_code", unique: true
     t.index ["usage_name"], name: "index_master_medicine_usages_on_usage_name"
   end
@@ -114,6 +115,9 @@ ActiveRecord::Schema[7.0].define(version: 2026_07_19_134304) do
     t.string "selective_treatment_category"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "search_name"
+    t.string "search_kana"
+    t.string "search_generic"
     t.index ["generic_name_code"], name: "index_master_medicines_on_generic_name_code"
     t.index ["medicine_code"], name: "index_master_medicines_on_medicine_code", unique: true
     t.index ["name"], name: "index_master_medicines_on_name"

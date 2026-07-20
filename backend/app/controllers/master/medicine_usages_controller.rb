@@ -5,7 +5,7 @@ module Master
     def index
       scope = Master::MedicineUsage.all
       scope = scope.where(usage_code: params[:usage_code]) if params[:usage_code].present?
-      scope = scope.where("usage_name ILIKE ?", "%#{sanitize_like(params[:usage_name])}%") if params[:usage_name].present?
+      scope = flexible_name_match(scope, params[:usage_name], %w[search_name]) if params[:usage_name].present?
       scope = scope.where(basic_usage_category: params[:basic_usage_category]) if params[:basic_usage_category].present?
       scope = scope.where(detailed_usage_category: params[:detailed_usage_category]) if params[:detailed_usage_category].present?
       scope = scope.where(timing_category: params[:timing_category]) if params[:timing_category].present?

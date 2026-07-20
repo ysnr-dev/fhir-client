@@ -36,5 +36,19 @@ module Master
     def sanitize_like(str)
       str.gsub(/[%_\\]/) { |c| "\\#{c}" }
     end
+
+    # 表記ゆれを吸収した名称検索。クエリを正規化トークンに分割し、全トークンが
+    # いずれかの検索用カラムに含まれる(AND)レコードに絞り込む。正規化後の
+    # クエリ全体が連続一致するレコードを先頭に並べる。
+    def flexible_name_match(scope, query, columns)
+      Master::SearchNormalizer.tokenize(query).each do |token|
+        clause = columns.map { |c| "#{c} LIKE :pattern" }.join(" OR ")
+        scope = scope.where(clause, pattern: "%#{sanitize_like(token)}%")
+      end
+
+      whole = "%#{sanitize_like(Master::SearchNormalizer.normalize(query))}%"
+      exact = columns.map { |c| "#{c} LIKE #{ActiveRecord::Base.connection.quote(whole)}" }.join(" OR ")
+      scope.order(Arel.sql("(#{exact}) DESC NULLS LAST"))
+    end
   end
 end

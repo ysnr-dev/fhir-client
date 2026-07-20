@@ -55,6 +55,8 @@ module MasterImport
           next if values.first.blank?
 
           attrs = COLUMNS.zip(values.map { |v| v.nil? ? nil : v.to_s }).to_h
+          # insert_all! はモデルのコールバックを通らないため、検索用カラムはここで埋める。
+          attrs[:search_name] = Master::SearchNormalizer.normalize(attrs[:usage_name])
           attrs.merge(created_at: now, updated_at: now)
         end
       end

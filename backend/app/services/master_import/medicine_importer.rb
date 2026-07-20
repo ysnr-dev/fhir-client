@@ -60,6 +60,10 @@ module MasterImport
 
         attrs = COLUMNS.zip(values).to_h
         DECIMAL_COLUMNS.each { |col| attrs[col] = attrs[col].presence }
+        # insert_all! はモデルのコールバックを通らないため、検索用カラムはここで埋める。
+        attrs[:search_name] = Master::SearchNormalizer.normalize(attrs[:name])
+        attrs[:search_kana] = Master::SearchNormalizer.normalize(attrs[:name_kana])
+        attrs[:search_generic] = Master::SearchNormalizer.normalize(attrs[:generic_name_description])
         attrs.merge(created_at: now, updated_at: now)
       end
     end

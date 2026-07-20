@@ -52,6 +52,26 @@ RSpec.describe "Master::MedicineUsages", type: :request do
     end
   end
 
+  describe "GET /master/medicine_usages (表記ゆれ検索)" do
+    before do
+      Master::MedicineUsage.create!(usage_code: "1013044400000000", usage_name: "１日３回朝昼夕食後")
+      Master::MedicineUsage.create!(usage_code: "2A05000100000000", usage_name: "ネブライザー")
+    end
+
+    def usage_names_for(query)
+      get "/master/medicine_usages", params: { usage_name: query }
+      JSON.parse(response.body)["items"].map { |i| i["usage_name"] }
+    end
+
+    it "半角数字で全角数字の用法名にヒットする" do
+      expect(usage_names_for("1日3回")).to eq(["１日３回朝昼夕食後"])
+    end
+
+    it "ひらがなでカタカナの用法名にヒットする" do
+      expect(usage_names_for("ねぶらいざー")).to eq(["ネブライザー"])
+    end
+  end
+
   describe "GET /master/medicine_usages (区分フィルタ)" do
     before do
       Master::MedicineUsage.create!(

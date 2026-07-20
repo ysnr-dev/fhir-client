@@ -23,6 +23,44 @@ RSpec.describe "Master::Medicines", type: :request do
     end
   end
 
+  describe "GET /master/medicines (表記ゆれ検索)" do
+    before do
+      Master::Medicine.create!(
+        medicine_code: "610000001", name: "ロキソニン錠６０ｍｇ", name_kana: "ﾛｷｿﾆﾝｼﾞｮｳ60MG",
+        generic_name_description: "【般】ロキソプロフェンＮａ錠６０ｍｇ"
+      )
+      Master::Medicine.create!(medicine_code: "610000002", name: "ＰＬ配合顆粒", name_kana: "PLﾊｲｺﾞｳｶﾘｭｳ")
+      Master::Medicine.create!(medicine_code: "610000003", name: "アスピリン錠")
+    end
+
+    def names_for(query)
+      get "/master/medicines", params: { name: query }
+      JSON.parse(response.body)["items"].map { |i| i["name"] }
+    end
+
+    it "ひらがなでカタカナ名にヒットする" do
+      expect(names_for("ろきそにん")).to eq(["ロキソニン錠６０ｍｇ"])
+    end
+
+    it "全角半角の違いを無視する" do
+      expect(names_for("PL配合顆粒")).to eq(["ＰＬ配合顆粒"])
+      expect(names_for("ロキソニン60mg")).to eq(["ロキソニン錠６０ｍｇ"])
+    end
+
+    it "間の語が抜けていてもトークンの AND 検索でヒットする" do
+      expect(names_for("PL顆粒")).to eq(["ＰＬ配合顆粒"])
+    end
+
+    it "カナ読み(ひらがな)でもヒットする" do
+      expect(names_for("はいごうかりゅう")).to eq(["ＰＬ配合顆粒"])
+    end
+
+    it "一般名称でもヒットする" do
+      expect(names_for("ロキソプロフェン")).to eq(["ロキソニン錠６０ｍｇ"])
+      expect(names_for("ろきそぷろふぇんna")).to eq(["ロキソニン錠６０ｍｇ"])
+    end
+  end
+
   describe "CRUD" do
     it "creates, reads, updates, lists, and deletes a record" do
       post "/master/medicines", params: valid_attrs, as: :json

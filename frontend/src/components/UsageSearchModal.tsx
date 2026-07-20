@@ -63,7 +63,7 @@ export function UsageSearchModal({ onSelect, onClose, initialFilters }: UsageSea
             type="text"
             value={usageName}
             onChange={(e) => handleNameChange(e.target.value)}
-            placeholder="部分一致で検索"
+            placeholder="部分一致で検索(かな・全半角の違いは無視)"
           />
         </label>
         {isPreset && (

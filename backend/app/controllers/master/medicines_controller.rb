@@ -6,7 +6,7 @@ module Master
       scope = Master::Medicine.all
       scope = scope.where(medicine_code: params[:medicine_code]) if params[:medicine_code].present?
       scope = scope.where(yakka_code: params[:yakka_code]) if params[:yakka_code].present?
-      scope = scope.where("name ILIKE ?", "%#{sanitize_like(params[:name])}%") if params[:name].present?
+      scope = flexible_name_match(scope, params[:name], %w[search_name search_kana search_generic]) if params[:name].present?
 
       render json: paginate(scope)
     end
