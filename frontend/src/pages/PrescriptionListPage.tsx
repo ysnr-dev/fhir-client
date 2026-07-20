@@ -1,16 +1,15 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { usePatient, usePrescriptionSearch } from "../api/queries";
+import { usePrescriptionSearch } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Pagination } from "../components/Pagination";
+import { PatientHeader } from "../components/PatientHeader";
 import { PrescriptionTable } from "../components/PrescriptionTable";
-import { displayName } from "../fhir/patientHelpers";
 
 export function PrescriptionListPage() {
   const { patientId } = useParams<{ patientId: string }>();
   const [offset, setOffset] = useState(0);
 
-  const patient = usePatient(patientId);
   const { bundle, total, count, hasPrevious, hasNext, isLoading, error } = usePrescriptionSearch(
     patientId,
     offset,
@@ -21,7 +20,7 @@ export function PrescriptionListPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>処方一覧{patient.data ? `（${displayName(patient.data.data)}）` : ""}</h1>
+        <h1>処方一覧</h1>
         <div>
           <Link to={`/patients/${patientId}/prescriptions/new`} className="button">
             新規処方
@@ -31,6 +30,8 @@ export function PrescriptionListPage() {
           </Link>
         </div>
       </div>
+
+      <PatientHeader patientId={patientId} />
 
       <ErrorBanner error={error} />
 

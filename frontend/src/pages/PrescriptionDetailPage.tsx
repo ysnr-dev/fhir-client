@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { usePrescriptionDetail } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { JsonBlock } from "../components/JsonBlock";
+import { PatientHeader } from "../components/PatientHeader";
 import {
   groupByRp,
   prescriptionComment,
@@ -31,6 +32,8 @@ export function PrescriptionDetailPage() {
           ← 処方一覧に戻る
         </Link>
       </div>
+
+      <PatientHeader patientId={patientId} />
 
       <ErrorBanner error={error} />
 

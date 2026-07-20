@@ -115,3 +115,28 @@ export function displayKana(patient: fhir4.Patient): string {
   if (!kanaName) return "";
   return [kanaName.family, kanaName.given?.[0]].filter(Boolean).join(" ");
 }
+
+export function calculateAge(birthDate: string, asOf: Date = new Date()): number | undefined {
+  if (!birthDate) return undefined;
+  const birth = new Date(birthDate);
+  if (Number.isNaN(birth.getTime())) return undefined;
+
+  let age = asOf.getFullYear() - birth.getFullYear();
+  const monthDiff = asOf.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && asOf.getDate() < birth.getDate())) {
+    age -= 1;
+  }
+  return age >= 0 ? age : undefined;
+}
+
+const GENDER_LABELS: Record<string, string> = {
+  male: "男性",
+  female: "女性",
+  other: "その他",
+  unknown: "不明",
+};
+
+export function genderLabel(gender: string | undefined): string {
+  if (!gender) return "-";
+  return GENDER_LABELS[gender] ?? gender;
+}

@@ -1,5 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useCreatePrescription } from "../api/queries";
+import { PatientHeader } from "../components/PatientHeader";
 import { PrescriptionForm } from "../components/PrescriptionForm";
 import { buildPrescriptionBundle, type PrescriptionFormValues } from "../fhir/prescriptionHelpers";
 
@@ -23,6 +24,9 @@ export function PrescriptionCreatePage() {
           ← 処方一覧に戻る
         </Link>
       </div>
+
+      <PatientHeader patientId={patientId} />
+
       <PrescriptionForm
         onSubmit={handleSubmit}
         submitting={createPrescription.isPending}
