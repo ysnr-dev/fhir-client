@@ -6,6 +6,7 @@ import { PatientEditPage } from "./pages/PatientEditPage";
 import { PatientListPage } from "./pages/PatientListPage";
 import { PrescriptionCreatePage } from "./pages/PrescriptionCreatePage";
 import { PrescriptionDetailPage } from "./pages/PrescriptionDetailPage";
+import { PrescriptionEditPage } from "./pages/PrescriptionEditPage";
 import { PrescriptionListPage } from "./pages/PrescriptionListPage";
 
 function App() {
@@ -29,6 +30,7 @@ function App() {
           <Route path="/patients/:patientId/prescriptions" element={<PrescriptionListPage />} />
           <Route path="/patients/:patientId/prescriptions/new" element={<PrescriptionCreatePage />} />
           <Route path="/patients/:patientId/prescriptions/:srId" element={<PrescriptionDetailPage />} />
+          <Route path="/patients/:patientId/prescriptions/:srId/edit" element={<PrescriptionEditPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
         </Routes>
       </main>

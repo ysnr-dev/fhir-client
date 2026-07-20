@@ -17,9 +17,11 @@ import { MedicineSearchModal } from "./MedicineSearchModal";
 import { UsageSearchModal } from "./UsageSearchModal";
 
 interface PrescriptionFormProps {
+  initialValues?: PrescriptionFormValues;
   onSubmit: (values: PrescriptionFormValues) => void;
   submitting: boolean;
   submitError?: unknown;
+  submitLabel?: string;
 }
 
 type ModalState =
@@ -27,8 +29,14 @@ type ModalState =
   | { kind: "medicine"; rpIndex: number; medIndex: number }
   | null;
 
-export function PrescriptionForm({ onSubmit, submitting, submitError }: PrescriptionFormProps) {
-  const [values, setValues] = useState<PrescriptionFormValues>(emptyPrescriptionForm);
+export function PrescriptionForm({
+  initialValues,
+  onSubmit,
+  submitting,
+  submitError,
+  submitLabel = "登録",
+}: PrescriptionFormProps) {
+  const [values, setValues] = useState<PrescriptionFormValues>(initialValues ?? emptyPrescriptionForm);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
 
@@ -329,7 +337,7 @@ export function PrescriptionForm({ onSubmit, submitting, submitError }: Prescrip
 
       <div className="prescription-form__submit">
         <button type="submit" disabled={submitting}>
-          {submitting ? "送信中..." : "登録"}
+          {submitting ? "送信中..." : submitLabel}
         </button>
       </div>
 

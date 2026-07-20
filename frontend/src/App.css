@@ -172,7 +172,8 @@ button:disabled {
   align-items: center;
 }
 
-.patient-table__actions button {
+.patient-table__actions button,
+.patient-table__actions .button {
   padding: 4px 10px;
   font-size: 13px;
 }

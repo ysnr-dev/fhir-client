@@ -44,6 +44,7 @@ export const CATEGORY_OPTIONS: Record<
 };
 
 export interface MedicineLineValues {
+  id?: string;
   medicine: Medicine | null;
   dose: string;
   comment: string;
@@ -110,9 +111,8 @@ function buildMedicationRequest(
   orderInRp: number,
   patientId: string,
   authoredOn: string,
-  serviceRequestUuid: string,
-  mrUuid: string,
-): { fullUrl: string; resource: fhir4.MedicationRequest } {
+  serviceRequestReference: string,
+): fhir4.MedicationRequest {
   const timingCoding: fhir4.Coding[] = [];
   if (rp.usage) {
     timingCoding.push({
@@ -176,9 +176,11 @@ function buildMedicationRequest(
       : undefined,
     subject: { reference: `Patient/${patientId}` },
     authoredOn,
-    basedOn: [{ reference: `urn:uuid:${serviceRequestUuid}` }],
+    basedOn: [{ reference: serviceRequestReference }],
     dosageInstruction: [dosageInstruction],
   };
+
+  if (medLine.id) resource.id = medLine.id;
 
   if (basicCategory === BASIC_USAGE_CATEGORY_ORAL && rp.doseDays) {
     resource.dispenseRequest = {
@@ -195,40 +197,53 @@ function buildMedicationRequest(
     resource.note = [{ text: medLine.comment }];
   }
 
-  return { fullUrl: `urn:uuid:${mrUuid}`, resource };
+  return resource;
 }
 
-export function buildPrescriptionBundle(
+function buildPrescriptionTransactionBundle(
   values: PrescriptionFormValues,
   patientId: string,
+  serviceRequestId?: string,
+  originalMedicationRequestIds?: string[],
 ): fhir4.Bundle {
   const authoredOn = authoredOnDateTime(values.authoredDate);
-  const serviceRequestUuid = crypto.randomUUID();
+  const serviceRequestReference = serviceRequestId
+    ? `ServiceRequest/${serviceRequestId}`
+    : `urn:uuid:${crypto.randomUUID()}`;
 
   const orderDetail: fhir4.CodeableConcept[] = [];
-  const medicationEntries: { fullUrl: string; resource: fhir4.MedicationRequest }[] = [];
+  const medicationEntries: fhir4.BundleEntry[] = [];
+  const keptMedicationRequestIds = new Set<string>();
 
   values.rps.forEach((rp, rpIndex) => {
     const rpNumber = rpIndex + 1;
     rp.medicines.forEach((medLine, medIndex) => {
       const orderInRp = medIndex + 1;
-      const mrUuid = crypto.randomUUID();
-      const entry = buildMedicationRequest(
+      const resource = buildMedicationRequest(
         rp,
         medLine,
         rpNumber,
         orderInRp,
         patientId,
         authoredOn,
-        serviceRequestUuid,
-        mrUuid,
+        serviceRequestReference,
       );
-      medicationEntries.push(entry);
+
+      const fullUrl = medLine.id ? `MedicationRequest/${medLine.id}` : `urn:uuid:${crypto.randomUUID()}`;
+      if (medLine.id) keptMedicationRequestIds.add(medLine.id);
+
+      medicationEntries.push({
+        fullUrl,
+        resource,
+        request: medLine.id
+          ? { method: "PUT", url: `MedicationRequest/${medLine.id}` }
+          : { method: "POST", url: "MedicationRequest" },
+      });
       orderDetail.push({
         extension: [
           {
             url: ORDER_DETAIL_MR_EXT_URL,
-            valueReference: { reference: entry.fullUrl },
+            valueReference: { reference: fullUrl },
           },
         ],
         text: `RP${rpNumber}-${orderInRp}`,
@@ -261,23 +276,59 @@ export function buildPrescriptionBundle(
     orderDetail,
   };
 
+  if (serviceRequestId) serviceRequest.id = serviceRequestId;
   if (values.comment) {
     serviceRequest.note = [{ text: values.comment }];
   }
+
+  const removedMedicationRequestEntries: fhir4.BundleEntry[] = (originalMedicationRequestIds ?? [])
+    .filter((id) => !keptMedicationRequestIds.has(id))
+    .map((id) => ({ request: { method: "DELETE", url: `MedicationRequest/${id}` } }));
 
   return {
     resourceType: "Bundle",
     type: "transaction",
     entry: [
       {
-        fullUrl: `urn:uuid:${serviceRequestUuid}`,
+        fullUrl: serviceRequestReference,
         resource: serviceRequest,
-        request: { method: "POST", url: "ServiceRequest" },
+        request: serviceRequestId
+          ? { method: "PUT", url: `ServiceRequest/${serviceRequestId}` }
+          : { method: "POST", url: "ServiceRequest" },
       },
-      ...medicationEntries.map((entry) => ({
-        fullUrl: entry.fullUrl,
-        resource: entry.resource,
-        request: { method: "POST" as const, url: "MedicationRequest" },
+      ...medicationEntries,
+      ...removedMedicationRequestEntries,
+    ],
+  };
+}
+
+export function buildPrescriptionBundle(
+  values: PrescriptionFormValues,
+  patientId: string,
+): fhir4.Bundle {
+  return buildPrescriptionTransactionBundle(values, patientId);
+}
+
+export function buildPrescriptionUpdateBundle(
+  values: PrescriptionFormValues,
+  patientId: string,
+  serviceRequestId: string,
+  originalMedicationRequestIds: string[],
+): fhir4.Bundle {
+  return buildPrescriptionTransactionBundle(values, patientId, serviceRequestId, originalMedicationRequestIds);
+}
+
+export function buildPrescriptionDeleteBundle(
+  serviceRequestId: string,
+  medicationRequestIds: string[],
+): fhir4.Bundle {
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [
+      { request: { method: "DELETE", url: `ServiceRequest/${serviceRequestId}` } },
+      ...medicationRequestIds.map((id) => ({
+        request: { method: "DELETE" as const, url: `MedicationRequest/${id}` },
       })),
     ],
   };
@@ -402,4 +453,105 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
   result.forEach((g) => g.medicines.sort((a, b) => a.orderInRp - b.orderInRp));
   result.sort((a, b) => a.rpNumber - b.rpNumber);
   return result;
+}
+
+// ---- 編集フォームへの復元 ----
+//
+// FHIR リソースにはマスタの全項目(id, 剤形など)は保存されていないため、フォーム上で
+// 再選択されない限り、コード・名称・単位など保存済みの項目のみを持つ簡易オブジェクトとして復元する。
+
+function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null {
+  const coding = mr.medicationCodeableConcept?.coding?.find((c) => c.system === MEDICINE_CODE_SYSTEM);
+  if (!coding) return null;
+  return {
+    id: 0,
+    medicine_code: coding.code ?? "",
+    name: coding.display ?? mr.medicationCodeableConcept?.text ?? "",
+    name_kana: null,
+    unit_code: null,
+    unit_name: mr.dosageInstruction?.[0]?.doseAndRate?.[0]?.doseQuantity?.unit ?? null,
+    dosage_form: null,
+    yakka_code: null,
+    price: null,
+    generic_name_description: null,
+    abolished_on: null,
+  };
+}
+
+function usageFromCoding(mr: fhir4.MedicationRequest): MedicineUsage | null {
+  const dosage = mr.dosageInstruction?.[0];
+  const usageCoding = codingBySystem(dosage?.timing?.code?.coding, USAGE_CODE_SYSTEM);
+  const categoryCoding = codingBySystem(dosage?.timing?.code?.coding, USAGE_CATEGORY_SYSTEM);
+  if (!usageCoding) return null;
+  return {
+    id: 0,
+    usage_code: usageCoding.code ?? "",
+    usage_name: usageCoding.display ?? "",
+    basic_usage_category_code: categoryCoding?.code ?? null,
+    basic_usage_category: categoryCoding?.display ?? null,
+    detailed_usage_category_code: null,
+    detailed_usage_category: null,
+    timing_category_code: null,
+    timing_category: null,
+  };
+}
+
+export function parsePrescriptionForm(
+  sr: fhir4.ServiceRequest,
+  mrs: fhir4.MedicationRequest[],
+): PrescriptionFormValues {
+  const setting = (codingBySystem(sr.category?.[0]?.coding, SETTING_SYSTEM)?.code ??
+    "") as PrescriptionSetting;
+  const category = codingBySystem(sr.category?.[1]?.coding, CATEGORY_SYSTEM)?.code ?? "";
+
+  const rpGroups = new Map<number, RpValues & { medicinesByOrder: Map<number, MedicineLineValues> }>();
+
+  for (const mr of mrs) {
+    const rpNumber = Number(identifierValue(mr, RP_NUMBER_SYSTEM) ?? "0");
+    const orderInRp = Number(identifierValue(mr, ORDER_IN_RP_SYSTEM) ?? "0");
+    const dosage = mr.dosageInstruction?.[0];
+
+    let group = rpGroups.get(rpNumber);
+    if (!group) {
+      group = {
+        usage: usageFromCoding(mr),
+        doseDays: mr.dispenseRequest?.expectedSupplyDuration?.value != null
+          ? String(mr.dispenseRequest.expectedSupplyDuration.value)
+          : "",
+        doseCount: dosage?.timing?.repeat?.count != null ? String(dosage.timing.repeat.count) : "",
+        usageComment: dosage?.additionalInstruction?.[0]?.text ?? "",
+        medicines: [],
+        medicinesByOrder: new Map(),
+      };
+      rpGroups.set(rpNumber, group);
+    }
+
+    const doseValue = dosage?.doseAndRate?.[0]?.doseQuantity?.value;
+    group.medicinesByOrder.set(orderInRp, {
+      id: mr.id,
+      medicine: medicineFromCoding(mr),
+      dose: doseValue != null ? String(doseValue) : "",
+      comment: mr.note?.[0]?.text ?? "",
+    });
+  }
+
+  const rps: RpValues[] = Array.from(rpGroups.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([, group]) => ({
+      usage: group.usage,
+      doseDays: group.doseDays,
+      doseCount: group.doseCount,
+      usageComment: group.usageComment,
+      medicines: Array.from(group.medicinesByOrder.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([, medLine]) => medLine),
+    }));
+
+  return {
+    setting,
+    category,
+    authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
+    comment: prescriptionComment(sr),
+    rps: rps.length ? rps : [{ ...emptyRp, medicines: [{ ...emptyMedicineLine }] }],
+  };
 }

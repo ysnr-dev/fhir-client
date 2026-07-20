@@ -1,5 +1,9 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  buildPrescriptionDeleteBundle,
+  splitPrescriptionDetailBundle,
+} from "../fhir/prescriptionHelpers";
+import {
   createResource,
   deleteResource,
   postBundle,
@@ -136,6 +140,39 @@ export function useCreatePrescription() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+    },
+  });
+}
+
+export function useUpdatePrescription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
+  });
+}
+
+async function fetchRelatedMedicationRequestIds(srId: string): Promise<string[]> {
+  const params = new URLSearchParams();
+  params.set("_id", srId);
+  params.set("_revinclude", "MedicationRequest:based-on");
+  const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+  const { medicationRequests } = splitPrescriptionDetailBundle(bundle);
+  return medicationRequests.map((mr) => mr.id).filter((id): id is string => Boolean(id));
+}
+
+export function useDeletePrescription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (srId: string) => {
+      const mrIds = await fetchRelatedMedicationRequestIds(srId);
+      return postBundle(buildPrescriptionDeleteBundle(srId, mrIds));
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },

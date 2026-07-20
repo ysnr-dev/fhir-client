@@ -42,8 +42,12 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
               <td>{patient.birthDate ?? "-"}</td>
               <td>{patient.active === false ? "無効" : "有効"}</td>
               <td className="patient-table__actions">
-                <Link to={`/patients/${patient.id}/prescriptions`}>処方</Link>
-                <Link to={`/patients/${patient.id}/edit`}>編集</Link>
+                <Link className="button" to={`/patients/${patient.id}/prescriptions`}>
+                  処方
+                </Link>
+                <Link className="button" to={`/patients/${patient.id}/edit`}>
+                  編集
+                </Link>
                 <button
                   type="button"
                   onClick={() => handleDelete(patient)}

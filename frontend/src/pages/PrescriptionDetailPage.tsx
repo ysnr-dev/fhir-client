@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { usePrescriptionDetail } from "../api/queries";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { useDeletePrescription, usePrescriptionDetail } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { JsonBlock } from "../components/JsonBlock";
 import { PatientHeader } from "../components/PatientHeader";
@@ -15,12 +15,22 @@ type JsonView = "bundle" | "resource";
 
 export function PrescriptionDetailPage() {
   const { patientId, srId } = useParams<{ patientId: string; srId: string }>();
+  const navigate = useNavigate();
   const [jsonView, setJsonView] = useState<JsonView>("bundle");
 
   const detail = usePrescriptionDetail(srId);
+  const deletePrescription = useDeletePrescription();
 
   const isLoading = detail.isLoading;
-  const error = detail.error;
+  const error = detail.error ?? deletePrescription.error;
+
+  function handleDelete() {
+    if (!srId) return;
+    if (!window.confirm("この処方を削除します。よろしいですか?")) return;
+    deletePrescription.mutate(srId, {
+      onSuccess: () => navigate(`/patients/${patientId}/prescriptions`),
+    });
+  }
 
   const { serviceRequest: sr, medicationRequests: mrs } = detail.data
     ? splitPrescriptionDetailBundle(detail.data.data)
@@ -32,9 +42,17 @@ export function PrescriptionDetailPage() {
     <div className="page">
       <div className="page__header">
         <h1>処方内容</h1>
-        <Link to={`/patients/${patientId}/prescriptions`} className="button">
-          ← 処方一覧に戻る
-        </Link>
+        <div>
+          <Link to={`/patients/${patientId}/prescriptions/${srId}/edit`} className="button">
+            編集
+          </Link>
+          <button type="button" onClick={handleDelete} disabled={deletePrescription.isPending}>
+            削除
+          </button>
+          <Link to={`/patients/${patientId}/prescriptions`} className="button">
+            ← 処方一覧に戻る
+          </Link>
+        </div>
       </div>
 
       <PatientHeader patientId={patientId} />

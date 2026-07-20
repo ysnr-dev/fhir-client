@@ -153,7 +153,9 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
 ## 処方オーダー機能
 
 患者一覧の「処方」リンクから患者ごとの処方一覧(`/patients/:id/prescriptions`)へ遷移し、新規処方の登録
-(`.../prescriptions/new`)と登録済み処方の表示(`.../prescriptions/:srId`)ができます。編集・削除は未実装です。
+(`.../prescriptions/new`)、登録済み処方の表示(`.../prescriptions/:srId`)、編集(`.../prescriptions/:srId/edit`)、
+削除ができます。編集・削除も登録と同様に transaction Bundle で行い、`ServiceRequest`・`MedicationRequest`を
+まとめて更新・削除します(フォーム上で削除された薬剤行は `DELETE` エントリとして送信されます)。
 
 - **リソースの持ち方**: 1処方 = `ServiceRequest` 1リソース + 薬剤数分の `MedicationRequest`。
   fhir-server がトランザクション Bundle (`POST /`) に対応しているため、登録は **1回の transaction
