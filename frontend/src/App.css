@@ -620,6 +620,34 @@ button:disabled {
   font-size: 14px;
 }
 
+.prescription-detail__raw-toggle {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.prescription-detail__raw-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.prescription-detail__raw-resources {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.prescription-detail__raw-resource h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+  margin: 12px 0 0;
+}
+
 .json-block {
   font-family: var(--mono);
   font-size: 13px;

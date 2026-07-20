@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { usePrescriptionDetail } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -10,8 +11,11 @@ import {
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
 
+type JsonView = "bundle" | "resource";
+
 export function PrescriptionDetailPage() {
   const { patientId, srId } = useParams<{ patientId: string; srId: string }>();
+  const [jsonView, setJsonView] = useState<JsonView>("bundle");
 
   const detail = usePrescriptionDetail(srId);
 
@@ -105,7 +109,42 @@ export function PrescriptionDetailPage() {
 
             <details className="prescription-detail__raw">
               <summary>FHIR JSON を表示</summary>
-              <JsonBlock value={detail.data?.data} />
+              <div className="prescription-detail__raw-toggle">
+                <label>
+                  <input
+                    type="radio"
+                    name="json-view"
+                    checked={jsonView === "bundle"}
+                    onChange={() => setJsonView("bundle")}
+                  />
+                  Bundle
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="json-view"
+                    checked={jsonView === "resource"}
+                    onChange={() => setJsonView("resource")}
+                  />
+                  リソース単位
+                </label>
+              </div>
+
+              {jsonView === "bundle" ? (
+                <JsonBlock value={detail.data?.data} />
+              ) : (
+                <div className="prescription-detail__raw-resources">
+                  {detail.data?.data.entry?.map((entry, index) => (
+                    <div className="prescription-detail__raw-resource" key={entry.resource?.id ?? index}>
+                      <h3>
+                        {entry.resource?.resourceType}
+                        {entry.resource?.id ? ` / ${entry.resource.id}` : ""}
+                      </h3>
+                      <JsonBlock value={entry.resource} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </details>
           </div>
         )
