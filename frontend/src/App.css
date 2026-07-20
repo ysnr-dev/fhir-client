@@ -299,6 +299,11 @@ button:disabled {
   overflow-y: auto;
 }
 
+/* 薬効分類など列が多いモーダル用の広幅バリアント */
+.modal--wide {
+  width: min(880px, 92vw);
+}
+
 .modal__header {
   display: flex;
   align-items: center;
@@ -383,6 +388,14 @@ button:disabled {
 .master-search__table button {
   padding: 4px 10px;
   font-size: 13px;
+}
+
+/* 薬効分類名は長いため小さめフォント＋列内で折り返す。
+   .master-search__table td より詳細度を上げて font-size を確実に上書きする。 */
+.master-search__table td.master-search__yakko {
+  font-size: 10px;
+  color: var(--text);
+  max-width: 100px;
 }
 
 .master-search__empty {

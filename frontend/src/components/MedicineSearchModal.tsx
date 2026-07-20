@@ -53,7 +53,7 @@ export function MedicineSearchModal({ onSelect, onClose }: MedicineSearchModalPr
   const hasNext = data ? page * data.per < data.total : false;
 
   return (
-    <Modal title="医薬品を選択" onClose={onClose}>
+    <Modal title="医薬品を選択" onClose={onClose} className="modal--wide">
       <div className="master-search__form">
         <label>
           医薬品名
@@ -87,9 +87,9 @@ export function MedicineSearchModal({ onSelect, onClose }: MedicineSearchModalPr
             <tr>
               <th>医薬品コード</th>
               <th>名称</th>
-              <th>薬効分類</th>
               <th>単位</th>
               <th>剤形</th>
+              <th>薬効分類</th>
               <th></th>
             </tr>
           </thead>
@@ -98,9 +98,11 @@ export function MedicineSearchModal({ onSelect, onClose }: MedicineSearchModalPr
               <tr key={medicine.id}>
                 <td>{medicine.medicine_code}</td>
                 <td>{medicine.name}</td>
-                <td>{medicine.yakko_name ?? medicine.yakko_code ?? ""}</td>
                 <td>{medicine.unit_name}</td>
                 <td>{dosageFormLabel(medicine.dosage_form)}</td>
+                <td className="master-search__yakko">
+                  {medicine.yakko_name ?? medicine.yakko_code ?? ""}
+                </td>
                 <td>
                   <button type="button" onClick={() => onSelect(medicine)}>
                     選択
