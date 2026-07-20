@@ -16,6 +16,15 @@ export interface Medicine {
   price: string | null;
   generic_name_description: string | null;
   abolished_on: string | null;
+  // 薬効分類（YJコード上4桁 = 薬効分類番号）。検索APIが JOIN で付与する。
+  yakko_code: string | null;
+  yakko_name: string | null;
+}
+
+export interface MedicineType {
+  id: number;
+  code: string;
+  name: string | null;
 }
 
 export interface MedicineUsage {
@@ -61,17 +70,28 @@ async function buildError(res: Response): Promise<MasterApiError> {
 
 export async function searchMedicines(params: {
   name?: string;
+  yakko_code?: string;
+  yakko_name?: string;
   page?: number;
   per?: number;
 }): Promise<MasterSearchResult<Medicine>> {
   const search = new URLSearchParams();
   if (params.name) search.set("name", params.name);
+  if (params.yakko_code) search.set("yakko_code", params.yakko_code);
+  if (params.yakko_name) search.set("yakko_name", params.yakko_name);
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 
   const res = await fetch(`/master/medicines?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<Medicine>;
+}
+
+// 薬効分類の選択プルダウン用。全件を薬効分類番号順で返す（ページングなし）。
+export async function fetchMedicineTypeOptions(): Promise<MedicineType[]> {
+  const res = await fetch("/master/medicine_types/options");
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MedicineType[];
 }
 
 export async function searchMedicineUsages(params: {

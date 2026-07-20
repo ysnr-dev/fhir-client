@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import {
+  fetchMedicineTypeOptions,
   fetchMedicineUsageCategories,
   importMaster,
   searchMedicineUsages,
@@ -23,11 +24,32 @@ export function useImportMaster() {
   });
 }
 
-export function useMedicineSearch(name: string, page: number, enabled: boolean) {
+export function useMedicineSearch(
+  name: string,
+  yakkoCode: string,
+  page: number,
+  enabled: boolean,
+) {
   return useQuery({
-    queryKey: ["master", "medicines", name, page],
-    queryFn: () => searchMedicines({ name: name || undefined, page, per: MASTER_SEARCH_PER }),
+    queryKey: ["master", "medicines", name, yakkoCode, page],
+    queryFn: () =>
+      searchMedicines({
+        name: name || undefined,
+        yakko_code: yakkoCode || undefined,
+        page,
+        per: MASTER_SEARCH_PER,
+      }),
     placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+// 薬効分類の選択プルダウン用（全件・薬効分類番号順）。変化しないので無期限キャッシュ。
+export function useMedicineTypeOptions(enabled: boolean) {
+  return useQuery({
+    queryKey: ["master", "medicine_types", "options"],
+    queryFn: fetchMedicineTypeOptions,
+    staleTime: Infinity,
     enabled,
   });
 }

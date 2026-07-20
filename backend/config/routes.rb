@@ -21,5 +21,8 @@ Rails.application.routes.draw do
         get :categories
       end
     end
+    resources :medicine_types, only: %i[index show create update destroy] do
+      collection { get :options }
+    end
   end
 end

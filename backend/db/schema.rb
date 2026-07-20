@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2026_07_20_010000) do
+ActiveRecord::Schema[7.0].define(version: 2026_07_20_020000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -48,6 +48,15 @@ ActiveRecord::Schema[7.0].define(version: 2026_07_20_010000) do
     t.index ["receipt_code_1"], name: "index_master_hot_codes_on_receipt_code_1"
     t.index ["sales_name"], name: "index_master_hot_codes_on_sales_name"
     t.index ["yakka_code"], name: "index_master_hot_codes_on_yakka_code"
+  end
+
+  create_table "master_medicine_types", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name"
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_medicine_types_on_code", unique: true
   end
 
   create_table "master_medicine_usages", force: :cascade do |t|

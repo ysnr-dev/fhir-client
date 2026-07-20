@@ -98,6 +98,23 @@ JSON REST**（snake_case、`OperationOutcome` は使わず `{error: ...}` / `{er
 | HOTコード | `/master/hot_codes` | MEDIS HOT9マスタ（CSV, Shift_JIS） |
 | 医薬品 | `/master/medicines` | 医薬品マスタ（CSV, Shift_JIS, ヘッダーなし） |
 | 用法 | `/master/medicine_usages` | 電子処方箋用法マスタ（xlsx） |
+| 薬効分類 | `/master/medicine_types` | 薬効分類番号(4桁)→名称。`db/seed_data/medicine_types.csv` を `db:seed` で投入（日本標準商品分類「87」由来） |
+
+### 薬効分類（薬効検索）
+
+薬効分類番号は **YJコード（`medicines.yakka_code`, 12桁）の上4桁**で、日本標準商品分類「87 医薬品」の細分類に対応する。
+`master_medicine_types`（`code`=4桁, `name`=名称）がその名称マスタで、`db/seed_data/medicine_types.csv`（`code,name`, ヘッダー無し）を `bin/rails db:seed` で投入する。
+
+医薬品検索(`GET /master/medicines`)は薬効での絞り込みに対応する:
+
+- `yakko_code`（薬効分類番号の完全一致）/ `yakko_name`（薬効名の部分一致）で絞り込み
+- レスポンス各件に `yakko_code`（YJ上4桁）と `yakko_name`（薬効分類名称）を付与
+
+```bash
+curl -G "http://localhost:3001/master/medicines" --data-urlencode "yakko_name=消化性潰瘍"
+curl -G "http://localhost:3001/master/medicines" --data-urlencode "yakko_code=2325"
+curl -G "http://localhost:3001/master/medicine_types" --data-urlencode "name=降圧"
+```
 
 以下、`{master}` は `hot_codes` / `medicines` / `medicine_usages` のいずれかに読み替えてください。
 

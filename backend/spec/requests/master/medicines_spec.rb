@@ -61,6 +61,41 @@ RSpec.describe "Master::Medicines", type: :request do
     end
   end
 
+  describe "GET /master/medicines (薬効分類)" do
+    before do
+      Master::MedicineType.create!(code: "2325", name: "Ｈ２遮断剤")
+      Master::MedicineType.create!(code: "2171", name: "冠血管拡張剤")
+      # yakka_code(YJコード)の上4桁が薬効分類番号。
+      Master::Medicine.create!(medicine_code: "610000010", name: "ガスター錠", yakka_code: "2325001F1020")
+      Master::Medicine.create!(medicine_code: "610000011", name: "アダラート錠", yakka_code: "2171014F1234")
+      Master::Medicine.create!(medicine_code: "610000012", name: "分類なし薬", yakka_code: "")
+    end
+
+    it "レスポンスに薬効分類番号(yakko_code)と名称(yakko_name)を付与する" do
+      get "/master/medicines", params: { name: "ガスター" }
+      item = JSON.parse(response.body)["items"].first
+      expect(item["yakko_code"]).to eq("2325")
+      expect(item["yakko_name"]).to eq("Ｈ２遮断剤")
+    end
+
+    it "yakko_code(薬効分類番号)の完全一致で絞り込む" do
+      get "/master/medicines", params: { yakko_code: "2171" }
+      names = JSON.parse(response.body)["items"].map { |i| i["name"] }
+      expect(names).to eq(["アダラート錠"])
+    end
+
+    it "yakko_name(薬効名の部分一致)で絞り込む" do
+      get "/master/medicines", params: { yakko_name: "遮断" }
+      names = JSON.parse(response.body)["items"].map { |i| i["name"] }
+      expect(names).to eq(["ガスター錠"])
+    end
+
+    it "該当する薬効名が無ければ0件を返す" do
+      get "/master/medicines", params: { yakko_name: "存在しない薬効" }
+      expect(JSON.parse(response.body)["total"]).to eq(0)
+    end
+  end
+
   describe "CRUD" do
     it "creates, reads, updates, lists, and deletes a record" do
       post "/master/medicines", params: valid_attrs, as: :json

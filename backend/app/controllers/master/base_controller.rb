@@ -27,7 +27,9 @@ module Master
 
     def paginate(scope)
       page, per = pagination_params
-      total = scope.count
+      # カスタム select（例: 医薬品検索の yakko_name JOIN）を含む relation でも
+      # COUNT(*) になるよう count(:all) を使う。
+      total = scope.count(:all)
       items = scope.order(:id).limit(per).offset((page - 1) * per)
 
       { total: total, page: page, per: per, items: items }

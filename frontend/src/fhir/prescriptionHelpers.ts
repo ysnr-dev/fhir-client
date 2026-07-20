@@ -472,6 +472,8 @@ function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null {
     unit_name: mr.dosageInstruction?.[0]?.doseAndRate?.[0]?.doseQuantity?.unit ?? null,
     dosage_form: null,
     yakka_code: null,
+    yakko_code: null,
+    yakko_name: null,
     price: null,
     generic_name_description: null,
     abolished_on: null,
