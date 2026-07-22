@@ -19,7 +19,7 @@ RSpec.describe "Master::HotCodes", type: :request do
     it "returns 422 when file is missing" do
       post "/master/hot_codes/import", params: {}
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
     end
   end
 
@@ -52,7 +52,7 @@ RSpec.describe "Master::HotCodes", type: :request do
     it "returns 422 when hot_code is missing" do
       post "/master/hot_codes", params: { sales_name: "無効" }, as: :json
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
     end
   end
 end

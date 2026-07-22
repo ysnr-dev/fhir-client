@@ -1,9 +1,9 @@
-FROM ruby:3.1.0-slim
+FROM ruby:3.4.10-slim
 
 # Packages needed to build native extensions:
 #   - build-essential: compiler toolchain
 #   - libpq-dev:       pg gem
-#   - libyaml-dev:     psych gem (Ruby 3.1 bundles psych 5.x which needs libyaml)
+#   - libyaml-dev:     psych gem (Ruby 3.4 bundles psych 5.x which needs libyaml)
 #   - git:             some gems resolve git sources
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
       build-essential \

@@ -1,10 +1,10 @@
 source "https://rubygems.org"
 git_source(:github) { |repo| "https://github.com/#{repo}.git" }
 
-ruby "3.1.0"
+ruby "3.4.10"
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
-gem "rails", "~> 7.0.10"
+gem "rails", "~> 8.0.0"
 
 # Use postgresql as the database for Active Record
 gem "pg", "~> 1.1"
@@ -33,12 +33,15 @@ gem "bootsnap", require: false
 # Read .xlsx master data files for bulk import
 gem "roo", "~> 2.10"
 
+# CSV parsing for master data import. No longer a default gem as of Ruby 3.4.
+gem "csv", "~> 3.3"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri mingw x64_mingw ]
 
   gem "dotenv-rails"
-  gem "rspec-rails", "~> 6.1"
+  gem "rspec-rails", "~> 8.0"
   gem "webmock"
 end
 

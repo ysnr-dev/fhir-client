@@ -14,7 +14,7 @@ module Master
     end
 
     def render_import_error(exception)
-      render json: { error: exception.message }, status: :unprocessable_entity
+      render json: { error: exception.message }, status: :unprocessable_content
     end
 
     def pagination_params

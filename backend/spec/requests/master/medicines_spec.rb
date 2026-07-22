@@ -19,7 +19,7 @@ RSpec.describe "Master::Medicines", type: :request do
     it "returns 422 when file is missing" do
       post "/master/medicines/import", params: {}
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
     end
   end
 
@@ -118,14 +118,14 @@ RSpec.describe "Master::Medicines", type: :request do
     it "returns 422 when medicine_code is missing" do
       post "/master/medicines", params: { name: "無効" }, as: :json
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
     end
 
     it "returns 422 for a duplicate medicine_code" do
       post "/master/medicines", params: valid_attrs, as: :json
       post "/master/medicines", params: valid_attrs, as: :json
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
     end
   end
 end
