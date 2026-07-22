@@ -38,9 +38,18 @@ services:
     staticPublishPath: dist
     autoDeploy: true
     routes:
+      # トランザクション Bundle は末尾セグメントの無い /fhir ちょうどに POST される
+      # (postBundle → fetch("/fhir"))。/fhir/* だけだとこれが SPA フォールバックに
+      # 落ちて index.html が 200 で返り、処方登録が backend に届かない。exact も必要。
+      - type: rewrite
+        source: /fhir
+        destination: https://ysnr-fhir-client-api.onrender.com/fhir
       - type: rewrite
         source: /fhir/*
         destination: https://ysnr-fhir-client-api.onrender.com/fhir/*
+      - type: rewrite
+        source: /master
+        destination: https://ysnr-fhir-client-api.onrender.com/master
       - type: rewrite
         source: /master/*
         destination: https://ysnr-fhir-client-api.onrender.com/master/*
