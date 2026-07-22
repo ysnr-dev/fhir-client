@@ -1,4 +1,7 @@
 Rails.application.routes.draw do
+  # ホスティング環境(Render 等)のヘルスチェック用。DB 到達性は見ない軽量応答。
+  get "up" => "rails/health#show", as: :rails_health_check
+
   scope "fhir", format: false do
     get "metadata", to: "fhir_proxy#relay", defaults: { fhir_path: "metadata" }
     # Transaction/batch Bundle は空パスへの POST として届く。catch-all の

@@ -26,6 +26,9 @@ class FhirProxyController < ApplicationController
            content_type: upstream.headers["content-type"] || FHIR_CONTENT_TYPE
   rescue Faraday::ConnectionFailed, Faraday::TimeoutError => e
     render_outcome(:bad_gateway, "transient", "FHIR server unreachable: #{e.class}")
+  rescue FhirTokenProvider::TokenError
+    # Do not leak token endpoint details to the browser.
+    render_outcome(:bad_gateway, "security", "FHIR server token acquisition failed")
   end
 
   private

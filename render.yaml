@@ -1,0 +1,51 @@
+# Render Blueprint(無料枠)。backend は Docker、frontend は静的サイト。
+# DB は Neon(無料・無期限)を外部利用する。
+# 手順は fhir-server リポジトリの docs/DEPLOY_RENDER.md を参照。
+services:
+  # --- Rails backend(FHIR プロキシ + 国内マスタ API) ---
+  - type: web
+    name: ysnr-fhir-client-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile.production
+    dockerContext: ./backend
+    healthCheckPath: /up
+    autoDeploy: true
+    envVars:
+      # Neon の接続文字列(?sslmode=require 付き)。ダッシュボードで設定する。
+      - key: DATABASE_URL
+        sync: false
+      - key: RAILS_MASTER_KEY
+        sync: false
+      # fhir-server 側で `rails fhir:register_client` した client_id / client_secret。
+      - key: FHIR_SERVER_CLIENT_ID
+        sync: false
+      - key: FHIR_SERVER_CLIENT_SECRET
+        sync: false
+      # fhir-server の実ホスト名に合わせる(名前衝突サフィックスに注意)。
+      - key: FHIR_SERVER_BASE_URL
+        value: https://ysnr-fhir-server.onrender.com
+
+  # --- React SPA(Vite ビルドの静的配信) ---
+  # /fhir・/master は rewrite で backend にプロキシし同一オリジン化する
+  # (フロントは相対パス固定・backend に CORS 設定がないため必須)。
+  - type: web
+    name: ysnr-fhir-client
+    runtime: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    routes:
+      - type: rewrite
+        source: /fhir/*
+        destination: https://ysnr-fhir-client-api.onrender.com/fhir/*
+      - type: rewrite
+        source: /master/*
+        destination: https://ysnr-fhir-client-api.onrender.com/master/*
+      # SPA フォールバック(react-router の直リンク対応)
+      - type: rewrite
+        source: /*
+        destination: /index.html
