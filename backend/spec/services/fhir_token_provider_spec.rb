@@ -3,14 +3,17 @@ require "rails_helper"
 RSpec.describe FhirTokenProvider do
   let(:base_url) { "http://fhir.example" }
   let(:token_url) { "#{base_url}/oauth/token" }
+  let(:up_url) { "#{base_url}/up" }
 
-  def build_provider(client_id: "cid", client_secret: "sec", clock: nil)
+  # No-op sleeper so retry backoff doesn't actually block the suite.
+  def build_provider(client_id: "cid", client_secret: "sec", clock: nil, sleeper: ->(_seconds) {})
     described_class.new(
       base_url: base_url,
       client_id: client_id,
       client_secret: client_secret,
       host_header: nil,
-      clock: clock
+      clock: clock,
+      sleeper: sleeper
     )
   end
 
@@ -19,6 +22,10 @@ RSpec.describe FhirTokenProvider do
     stub_request(:post, token_url).to_return(
       status: status, body: body.to_json, headers: { "Content-Type" => "application/json" }
     )
+  end
+
+  def stub_up(status: 200)
+    stub_request(:get, up_url).to_return(status: status, body: "ok")
   end
 
   describe "no-auth mode" do
@@ -31,6 +38,8 @@ RSpec.describe FhirTokenProvider do
   end
 
   describe "#access_token" do
+    before { stub_up }
+
     it "fetches with client_credentials and caches the token" do
       stub = stub_token
       provider = build_provider
@@ -82,6 +91,68 @@ RSpec.describe FhirTokenProvider do
         expect(error.message).to include("HTTP 400")
         expect(error.message).not_to include("invalid_client")
       end
+    end
+
+    it "does not retry a non-transient failure (e.g. 400)" do
+      stub = stub_token(status: 400, body: { error: "invalid_client" })
+      provider = build_provider
+
+      expect { provider.access_token }.to raise_error(FhirTokenProvider::TokenError)
+      expect(stub).to have_been_requested.once
+    end
+
+    it "warms up the upstream via /up before fetching the token" do
+      up = stub_up
+      stub_token
+      provider = build_provider
+
+      provider.access_token
+
+      expect(up).to have_been_requested.once
+    end
+
+    it "still fetches the token when the warm-up request fails" do
+      stub_request(:get, up_url).to_raise(Faraday::ConnectionFailed.new("cold"))
+      stub_token
+      provider = build_provider
+
+      expect(provider.access_token).to eq("tok-1")
+    end
+
+    it "retries a transient 502 (cold start) and then succeeds" do
+      stub_request(:post, token_url)
+        .to_return(status: 502, body: "")
+        .to_return(status: 200,
+                   body: { access_token: "tok-1", token_type: "Bearer", expires_in: 3600 }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      slept = []
+      provider = build_provider(sleeper: ->(seconds) { slept << seconds })
+
+      expect(provider.access_token).to eq("tok-1")
+      expect(a_request(:post, token_url)).to have_been_made.twice
+      expect(slept).to eq([FhirTokenProvider::RETRY_BACKOFF.first])
+    end
+
+    it "retries a connection timeout and then succeeds" do
+      stub_request(:post, token_url)
+        .to_raise(Faraday::TimeoutError)
+        .to_return(status: 200,
+                   body: { access_token: "tok-1", expires_in: 3600 }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      provider = build_provider
+
+      expect(provider.access_token).to eq("tok-1")
+      expect(a_request(:post, token_url)).to have_been_made.twice
+    end
+
+    it "gives up with a TokenError after the retry window is exhausted" do
+      stub_request(:post, token_url).to_return(status: 502, body: "")
+      provider = build_provider
+
+      expect { provider.access_token }.to raise_error(FhirTokenProvider::TokenError, /HTTP 502/)
+      # initial attempt + one per backoff step
+      expect(a_request(:post, token_url))
+        .to have_been_made.times(FhirTokenProvider::RETRY_BACKOFF.size + 1)
     end
 
     it "raises when the response has no access_token" do

@@ -15,6 +15,21 @@ class FhirTokenProvider
   # Refresh proactively once this fraction of the token lifetime has elapsed.
   REFRESH_RATIO = 0.9
 
+  # The upstream runs on Render's free tier, which spins the service down after
+  # ~15 min idle. The first request wakes it and can take ~50s to boot; until
+  # then the gateway answers 502/503/504 or the connection times out. To avoid
+  # surfacing that as a token failure we (1) proactively wake the server via the
+  # unauthenticated /up health check, then (2) retry the token POST across the
+  # startup window. Non-transient failures (e.g. 400 invalid_client) are never
+  # retried.
+  TRANSIENT_STATUSES = [502, 503, 504].freeze
+  # Seconds to wait between token attempts (~59s total across all retries),
+  # sized to outlast a cold-start.
+  RETRY_BACKOFF = [2, 4, 8, 15, 15, 15].freeze
+  # /up may block until the cold server finishes booting, so allow the full
+  # startup window.
+  WARMUP_TIMEOUT = 60
+
   class TokenError < StandardError; end
 
   @default_mutex = Mutex.new
@@ -37,13 +52,16 @@ class FhirTokenProvider
     client_id: ENV["FHIR_SERVER_CLIENT_ID"].presence,
     client_secret: ENV["FHIR_SERVER_CLIENT_SECRET"].presence,
     host_header: ENV["FHIR_SERVER_HOST_HEADER"],
-    clock: nil
+    clock: nil,
+    sleeper: nil
   )
-    @token_url = "#{base_url.to_s.chomp('/')}/oauth/token"
+    @base_url = base_url.to_s.chomp("/")
+    @token_url = "#{@base_url}/oauth/token"
     @client_id = client_id
     @client_secret = client_secret
     @host_header = host_header
     @clock = clock || -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
+    @sleeper = sleeper || ->(seconds) { sleep(seconds) }
     @mutex = Mutex.new
     @token = nil
     @refresh_at = 0.0
@@ -76,20 +94,8 @@ class FhirTokenProvider
   private
 
   def fetch_token
-    response = connection.post(
-      nil,
-      URI.encode_www_form(
-        grant_type: "client_credentials",
-        client_id: @client_id,
-        client_secret: @client_secret
-      ),
-      { "Content-Type" => "application/x-www-form-urlencoded" }
-    )
-
-    unless response.success?
-      # Deliberately omit the response body: it may echo request parameters.
-      raise TokenError, "token request failed with HTTP #{response.status}"
-    end
+    warm_up!
+    response = post_token_with_retry
 
     payload = parse_json(response.body)
     token = payload["access_token"]
@@ -101,12 +107,72 @@ class FhirTokenProvider
     @token = token
   end
 
+  # Best-effort wake of a spun-down upstream so the token POST below hits a live
+  # server. This must never break token acquisition, so any failure (still
+  # booting, unreachable, etc.) is swallowed — the retry loop covers the
+  # residual window.
+  def warm_up!
+    warmup_connection.get
+  rescue StandardError
+    nil
+  end
+
+  # POSTs the client_credentials grant, retrying while the upstream is still
+  # starting up (a fast 502/503/504 from the gateway, or a connection/read
+  # timeout). Non-transient responses (e.g. 400 invalid_client) fail immediately.
+  def post_token_with_retry
+    attempt = 0
+    loop do
+      response =
+        begin
+          post_token
+        rescue Faraday::TimeoutError, Faraday::ConnectionFailed => e
+          raise TokenError, "token request failed: #{e.class}" if attempt >= RETRY_BACKOFF.size
+
+          @sleeper.call(RETRY_BACKOFF[attempt])
+          attempt += 1
+          next
+        end
+
+      return response if response.success?
+
+      # Deliberately omit the response body: it may echo request parameters.
+      unless TRANSIENT_STATUSES.include?(response.status) && attempt < RETRY_BACKOFF.size
+        raise TokenError, "token request failed with HTTP #{response.status}"
+      end
+
+      @sleeper.call(RETRY_BACKOFF[attempt])
+      attempt += 1
+    end
+  end
+
+  def post_token
+    connection.post(
+      nil,
+      URI.encode_www_form(
+        grant_type: "client_credentials",
+        client_id: @client_id,
+        client_secret: @client_secret
+      ),
+      { "Content-Type" => "application/x-www-form-urlencoded" }
+    )
+  end
+
   def connection
     @connection ||= Faraday.new(url: @token_url) do |f|
       f.options.open_timeout = 2
       f.options.timeout = 15
       f.headers["Host"] = @host_header if @host_header.present?
       f.headers["Accept"] = "application/json"
+      f.adapter Faraday.default_adapter
+    end
+  end
+
+  def warmup_connection
+    @warmup_connection ||= Faraday.new(url: "#{@base_url}/up") do |f|
+      f.options.open_timeout = 2
+      f.options.timeout = WARMUP_TIMEOUT
+      f.headers["Host"] = @host_header if @host_header.present?
       f.adapter Faraday.default_adapter
     end
   end

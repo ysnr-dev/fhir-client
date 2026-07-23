@@ -4,6 +4,9 @@ RSpec.describe FhirGateway do
   let(:base_url) { "http://fhir.example" }
   let(:token_url) { "#{base_url}/oauth/token" }
 
+  # A token fetch first warms the (possibly spun-down) upstream via /up.
+  before { stub_request(:get, "#{base_url}/up").to_return(status: 200, body: "ok") }
+
   def build_gateway(provider)
     described_class.new(base_url: base_url, host_header: nil, token_provider: provider)
   end
