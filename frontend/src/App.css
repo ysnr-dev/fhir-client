@@ -368,7 +368,9 @@ button:disabled {
 }
 
 .master-search__table-wrap {
-  max-height: 320px;
+  /* 検索結果の件数によってモーダルの高さが変動しないよう、
+     max-height ではなく固定 height にしてスクロール領域の高さを一定に保つ。 */
+  height: 320px;
   overflow-y: auto;
 }
 
