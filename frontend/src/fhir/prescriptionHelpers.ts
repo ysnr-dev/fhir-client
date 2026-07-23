@@ -474,6 +474,7 @@ function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null {
     yakka_code: null,
     yakko_code: null,
     yakko_name: null,
+    yj_code: null,
     price: null,
     generic_name_description: null,
     abolished_on: null,
