@@ -103,7 +103,17 @@ export function MedicineSearchModal({ onSelect, onClose }: MedicineSearchModalPr
                 <td className="master-search__yakko">
                   {medicine.yakko_name ?? medicine.yakko_code ?? ""}
                 </td>
-                <td>
+                <td className="master-search__actions">
+                  {medicine.yj_code && (
+                    <a
+                      className="master-search__medley-link"
+                      href={`https://medley.life/medicines/prescription/${medicine.yj_code}/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      DI
+                    </a>
+                  )}
                   <button type="button" onClick={() => onSelect(medicine)}>
                     選択
                   </button>

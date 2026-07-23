@@ -96,6 +96,29 @@ RSpec.describe "Master::Medicines", type: :request do
     end
   end
 
+  describe "GET /master/medicines (YJコード付与)" do
+    before do
+      Master::Medicine.create!(medicine_code: "620003477", name: "ロキソプロフェン錠")
+      Master::Medicine.create!(medicine_code: "620000001", name: "HOT無し薬")
+      Master::HotCode.create!(
+        hot_code: "1234567", receipt_code_1: "620003477",
+        individual_medicine_code: "6149003F2038",
+      )
+    end
+
+    it "HOTコードマスタからレセプト電算コードで個別医薬品コード(yj_code)を付与する" do
+      get "/master/medicines", params: { name: "ロキソプロフェン" }
+      item = JSON.parse(response.body)["items"].first
+      expect(item["yj_code"]).to eq("6149003F2038")
+    end
+
+    it "対応するHOTコードが無ければ yj_code は null" do
+      get "/master/medicines", params: { name: "HOT無し薬" }
+      item = JSON.parse(response.body)["items"].first
+      expect(item["yj_code"]).to be_nil
+    end
+  end
+
   describe "CRUD" do
     it "creates, reads, updates, lists, and deletes a record" do
       post "/master/medicines", params: valid_attrs, as: :json

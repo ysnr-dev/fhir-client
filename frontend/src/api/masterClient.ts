@@ -19,6 +19,8 @@ export interface Medicine {
   // 薬効分類（YJコード上4桁 = 薬効分類番号）。検索APIが JOIN で付与する。
   yakko_code: string | null;
   yakko_name: string | null;
+  // 個別医薬品コード（YJコード）。検索APIが HOTコードマスタから付与する。
+  yj_code: string | null;
 }
 
 export interface MedicineType {

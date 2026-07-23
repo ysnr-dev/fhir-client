@@ -392,6 +392,33 @@ button:disabled {
   font-size: 13px;
 }
 
+/* DIリンクの有無で「選択」ボタンの位置がズレないよう右揃えで固定する。
+   td を flex 化すると行が高い(薬効分類が2行など)ときに縦位置が崩れるため、
+   通常のセル挙動のまま text-align で右揃えにする。
+   .master-search__table td より詳細度を上げて text-align: left を確実に上書きする。 */
+.master-search__table td.master-search__actions {
+  white-space: nowrap;
+  text-align: right;
+  vertical-align: middle;
+}
+
+/* DIリンクを「選択」ボタンと並ぶボタン風の見た目にする。 */
+.master-search__medley-link {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 4px 10px;
+  font-size: 13px;
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  text-decoration: none;
+}
+
+.master-search__medley-link:hover {
+  border-color: var(--accent);
+}
+
 /* 薬効分類名は長いため小さめフォント＋列内で折り返す。
    .master-search__table td より詳細度を上げて font-size を確実に上書きする。 */
 .master-search__table td.master-search__yakko {

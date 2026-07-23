@@ -55,10 +55,21 @@ module Master
 
     # 薬効分類名称(yakko_name)と薬効分類番号(yakko_code=YJ上4桁)を各医薬品に付与する。
     # master_medicine_types.code は一意なので LEFT JOIN で件数は増えない。
+    # yj_code(個別医薬品コード)は医薬品マスタに無いため、HOTコードマスタを
+    # レセプト電算コード(medicine_code = receipt_code_1)で引く相関サブクエリで付与する。
+    # 1件に複数の包装(HOT行)が対応しうるが個別医薬品コードは同一なので LIMIT 1 でよく、
+    # JOIN と違い件数(paginate の COUNT)を増やさない。
     def medicines_with_type
       Master::Medicine
         .joins("LEFT JOIN master_medicine_types ON master_medicine_types.code = LEFT(master_medicines.yakka_code, 4)")
-        .select("master_medicines.*, LEFT(master_medicines.yakka_code, 4) AS yakko_code, master_medicine_types.name AS yakko_name")
+        .select(
+          "master_medicines.*",
+          "LEFT(master_medicines.yakka_code, 4) AS yakko_code",
+          "master_medicine_types.name AS yakko_name",
+          "(SELECT hc.individual_medicine_code FROM master_hot_codes hc " \
+          "WHERE hc.receipt_code_1 = master_medicines.medicine_code " \
+          "AND hc.individual_medicine_code <> '' LIMIT 1) AS yj_code",
+        )
     end
 
     # 薬効分類名称での絞り込み。名称を表記ゆれ吸収検索で該当コードに解決し、
