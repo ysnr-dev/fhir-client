@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
 import {
   CATEGORY_OPTIONS,
@@ -144,8 +144,16 @@ export function PrescriptionForm({
     onSubmit(values);
   }
 
+  function handleKeyDown(e: KeyboardEvent<HTMLFormElement>) {
+    // input 上での Enter による暗黙の form submit を抑止する。
+    // 「登録」ボタン(BUTTON要素)や textarea 上の Enter には影響しない。
+    if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") {
+      e.preventDefault();
+    }
+  }
+
   return (
-    <form className="prescription-form" onSubmit={handleSubmit}>
+    <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
       {validationError && (
         <div className="error-banner" role="alert">
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
