@@ -16,19 +16,23 @@ class FhirTokenProvider
   REFRESH_RATIO = 0.9
 
   # The upstream runs on Render's free tier, which spins the service down after
-  # ~15 min idle. The first request wakes it and can take ~50s to boot; until
-  # then the gateway answers 502/503/504 or the connection times out. To avoid
-  # surfacing that as a token failure we (1) proactively wake the server via the
-  # unauthenticated /up health check, then (2) retry the token POST across the
-  # startup window. Non-transient failures (e.g. 400 invalid_client) are never
-  # retried.
+  # ~15 min idle. The first request wakes it and can take ~50s (sometimes more)
+  # to boot; until then the gateway either holds the request open or answers
+  # 502/503/504. To avoid surfacing that as a token failure we (1) poll the
+  # unauthenticated /up health check until the server is actually ready, then
+  # (2) POST the token with a short retry as a safety net. Non-transient failures
+  # (e.g. 400 invalid_client) are never retried.
   TRANSIENT_STATUSES = [502, 503, 504].freeze
-  # Seconds to wait between token attempts (~59s total across all retries),
-  # sized to outlast a cold-start.
-  RETRY_BACKOFF = [2, 4, 8, 15, 15, 15].freeze
-  # /up may block until the cold server finishes booting, so allow the full
-  # startup window.
-  WARMUP_TIMEOUT = 60
+  # Seconds to wait between token attempts (~44s total), a safety net for the
+  # brief window between /up going green and the token endpoint being ready.
+  RETRY_BACKOFF = [2, 4, 8, 15, 15].freeze
+  # A cold Render service may hold /up open until it finishes booting, so give a
+  # single probe the full startup window.
+  WARMUP_PROBE_TIMEOUT = 90
+  # Cap on /up readiness probes, covering the case where the gateway fast-fails
+  # /up with 502/503 during boot instead of holding it (~60s at this interval).
+  WARMUP_MAX_ATTEMPTS = 20
+  WARMUP_POLL_INTERVAL = 3
 
   class TokenError < StandardError; end
 
@@ -107,14 +111,24 @@ class FhirTokenProvider
     @token = token
   end
 
-  # Best-effort wake of a spun-down upstream so the token POST below hits a live
-  # server. This must never break token acquisition, so any failure (still
-  # booting, unreachable, etc.) is swallowed — the retry loop covers the
-  # residual window.
+  # Wake a spun-down upstream and wait until it is actually ready, so the token
+  # POST below lands on a live server. A single probe isn't enough: Render may
+  # hold /up open until boot completes, or fast-fail it with 502/503 while still
+  # starting, so poll until /up returns 2xx (or the attempts are exhausted).
+  # Best-effort: never raises. If the server never comes up, the token POST and
+  # its retry surface the failure.
   def warm_up!
-    warmup_connection.get
+    WARMUP_MAX_ATTEMPTS.times do |attempt|
+      return if up_ready?
+
+      @sleeper.call(WARMUP_POLL_INTERVAL) unless attempt == WARMUP_MAX_ATTEMPTS - 1
+    end
+  end
+
+  def up_ready?
+    warmup_connection.get.success?
   rescue StandardError
-    nil
+    false
   end
 
   # POSTs the client_credentials grant, retrying while the upstream is still
@@ -171,7 +185,7 @@ class FhirTokenProvider
   def warmup_connection
     @warmup_connection ||= Faraday.new(url: "#{@base_url}/up") do |f|
       f.options.open_timeout = 2
-      f.options.timeout = WARMUP_TIMEOUT
+      f.options.timeout = WARMUP_PROBE_TIMEOUT
       f.headers["Host"] = @host_header if @host_header.present?
       f.adapter Faraday.default_adapter
     end

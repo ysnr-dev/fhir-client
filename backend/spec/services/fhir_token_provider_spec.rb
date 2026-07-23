@@ -111,12 +111,27 @@ RSpec.describe FhirTokenProvider do
       expect(up).to have_been_requested.once
     end
 
-    it "still fetches the token when the warm-up request fails" do
+    it "polls /up until the upstream is ready, then fetches the token" do
+      stub_request(:get, up_url)
+        .to_return(status: 503, body: "").then
+        .to_return(status: 200, body: "ok")
+      stub_token
+      slept = []
+      provider = build_provider(sleeper: ->(seconds) { slept << seconds })
+
+      expect(provider.access_token).to eq("tok-1")
+      expect(a_request(:get, up_url)).to have_been_made.twice
+      expect(slept).to include(FhirTokenProvider::WARMUP_POLL_INTERVAL)
+    end
+
+    it "still fetches the token when /up never becomes ready" do
       stub_request(:get, up_url).to_raise(Faraday::ConnectionFailed.new("cold"))
       stub_token
       provider = build_provider
 
       expect(provider.access_token).to eq("tok-1")
+      expect(a_request(:get, up_url))
+        .to have_been_made.times(FhirTokenProvider::WARMUP_MAX_ATTEMPTS)
     end
 
     it "retries a transient 502 (cold start) and then succeeds" do
