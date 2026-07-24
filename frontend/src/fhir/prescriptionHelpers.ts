@@ -6,7 +6,11 @@ const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting
 const CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-category"; // 処方区分
 const ORDER_DETAIL_MR_EXT_URL =
   "http://fhir-client.local/StructureDefinition/prescription-medication-request"; // orderDetail→MedicationRequest 参照
+// レセプト電算コード（6始まり9桁）。JP Core の MedicationCode ValueSet には
+// レセ電コードに対応する正式な CodeSystem が定義されていないため、ローカル URI を使用。
 const MEDICINE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-code";
+// 個別医薬品コード（YJコード）。JP Core（CAPS）で定義された正式な CodeSystem URL。
+const YJ_CODE_SYSTEM = "http://capstandard.jp/iyaku.info/CodeSystem/YJ-code";
 const USAGE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-usage";
 const USAGE_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-usage-basic-category";
 
@@ -170,6 +174,15 @@ function buildMedicationRequest(
               code: medLine.medicine.medicine_code,
               display: medLine.medicine.name,
             },
+            ...(medLine.medicine.yj_code
+              ? [
+                  {
+                    system: YJ_CODE_SYSTEM,
+                    code: medLine.medicine.yj_code,
+                    display: medLine.medicine.name,
+                  },
+                ]
+              : []),
           ],
           text: medLine.medicine.name,
         }
@@ -463,6 +476,7 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
 function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null {
   const coding = mr.medicationCodeableConcept?.coding?.find((c) => c.system === MEDICINE_CODE_SYSTEM);
   if (!coding) return null;
+  const yjCoding = mr.medicationCodeableConcept?.coding?.find((c) => c.system === YJ_CODE_SYSTEM);
   return {
     id: 0,
     medicine_code: coding.code ?? "",
@@ -474,7 +488,7 @@ function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null {
     yakka_code: null,
     yakko_code: null,
     yakko_name: null,
-    yj_code: null,
+    yj_code: yjCoding?.code ?? null,
     price: null,
     generic_name_description: null,
     abolished_on: null,
