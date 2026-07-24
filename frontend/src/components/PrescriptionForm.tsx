@@ -84,12 +84,14 @@ export function PrescriptionForm({
       return;
     }
     setValidationError(null);
+    const newMedIndex = rp.medicines.length;
     setValues((v) => ({
       ...v,
       rps: v.rps.map((r, i) =>
         i === rpIndex ? { ...r, medicines: [...r.medicines, { ...emptyMedicineLine }] } : r,
       ),
     }));
+    setModal({ kind: "medicine", rpIndex, medIndex: newMedIndex });
   }
 
   function removeMedicine(rpIndex: number, medIndex: number) {
