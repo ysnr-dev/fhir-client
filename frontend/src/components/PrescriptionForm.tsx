@@ -78,10 +78,16 @@ export function PrescriptionForm({
   }
 
   function addMedicine(rpIndex: number) {
+    const rp = values.rps[rpIndex];
+    if (rp.medicines.some((m) => !m.medicine)) {
+      setValidationError("医薬品が未選択のレコードがあります。選択してから追加してください。");
+      return;
+    }
+    setValidationError(null);
     setValues((v) => ({
       ...v,
-      rps: v.rps.map((rp, i) =>
-        i === rpIndex ? { ...rp, medicines: [...rp.medicines, { ...emptyMedicineLine }] } : rp,
+      rps: v.rps.map((r, i) =>
+        i === rpIndex ? { ...r, medicines: [...r.medicines, { ...emptyMedicineLine }] } : r,
       ),
     }));
   }
