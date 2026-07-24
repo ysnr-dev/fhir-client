@@ -655,6 +655,24 @@ button:disabled {
   word-break: break-all;
 }
 
+/* 処方内容(詳細)表示用: 各列を内容幅で左に詰め、DIリンクだけを行末へ右寄せする。
+   table-layout を auto にして医薬品名などが折り返さず内容幅で並ぶようにし、
+   DI列を伸縮(width: 100%)させて余白を吸収、その中でボタンを右寄せする。 */
+.rp-card__medicines--detail {
+  table-layout: auto;
+}
+
+.rp-card__medicines--detail th:nth-child(5),
+.rp-card__medicines--detail td.rp-card__medicine-di {
+  width: 100%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.rp-card__medicine-di .master-search__medley-link {
+  margin-right: 0;
+}
+
 .rp-card__medicines input {
   font: inherit;
   font-size: 14px;

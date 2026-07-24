@@ -82,13 +82,14 @@ export function PrescriptionDetailPage() {
             {rps.map((rp) => (
               <fieldset className="rp-card" key={rp.rpNumber}>
                 <legend>{`RP${rp.rpNumber}`}</legend>
-                <table className="rp-card__medicines">
+                <table className="rp-card__medicines rp-card__medicines--detail">
                   <thead>
                     <tr>
                       <th>医薬品</th>
                       <th>用量</th>
                       <th>単位</th>
                       <th>薬剤コメント</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -98,6 +99,18 @@ export function PrescriptionDetailPage() {
                         <td>{med.dose ?? "-"}</td>
                         <td>{med.unit ?? "-"}</td>
                         <td>{med.comment || "-"}</td>
+                        <td className="rp-card__medicine-di">
+                          {med.yjCode && (
+                            <a
+                              className="master-search__medley-link"
+                              href={`https://medley.life/medicines/prescription/${med.yjCode}/`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              DI
+                            </a>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

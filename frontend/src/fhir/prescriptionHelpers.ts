@@ -403,6 +403,7 @@ export interface MedicineLineDisplay {
   orderInRp: number;
   code: string;
   name: string;
+  yjCode?: string;
   dose?: number;
   unit?: string;
   comment?: string;
@@ -451,11 +452,15 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
     const medicineCoding = mr.medicationCodeableConcept?.coding?.find(
       (c) => c.system === MEDICINE_CODE_SYSTEM,
     );
+    const yjCoding = mr.medicationCodeableConcept?.coding?.find(
+      (c) => c.system === YJ_CODE_SYSTEM,
+    );
 
     group.medicines.push({
       orderInRp,
       code: medicineCoding?.code ?? "",
       name: medicineCoding?.display ?? mr.medicationCodeableConcept?.text ?? "",
+      yjCode: yjCoding?.code ?? undefined,
       dose: dosage?.doseAndRate?.[0]?.doseQuantity?.value,
       unit: dosage?.doseAndRate?.[0]?.doseQuantity?.unit,
       comment: mr.note?.[0]?.text,
