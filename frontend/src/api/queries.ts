@@ -106,6 +106,9 @@ export function usePrescriptionSearch(patientId: string | undefined, offset: num
   if (patientId) params.set("patient", `Patient/${patientId}`);
   params.set("_count", String(PRESCRIPTION_COUNT));
   params.set("_offset", String(offset));
+  // 処方日の降順（新しい順）。_sort のキーは検索パラメータ名（小文字 authoredon）。
+  // FHIR プロパティ名 authoredOn では当該サーバーに無視されるため注意。
+  params.set("_sort", "-authoredon");
 
   const query = useQuery({
     queryKey: ["ServiceRequest", "search", patientId, offset],
