@@ -655,16 +655,31 @@ button:disabled {
   word-break: break-all;
 }
 
-/* 処方内容(詳細)表示用: 各列を内容幅で左に詰め、DIリンクだけを行末へ右寄せする。
-   table-layout を auto にして医薬品名などが折り返さず内容幅で並ぶようにし、
-   DI列を伸縮(width: 100%)させて余白を吸収、その中でボタンを右寄せする。 */
+/* 処方内容(詳細)表示用: RP は RP ごとに別テーブルなので、table-layout: fixed +
+   明示幅で全 RP の列位置を揃える。医薬品名(1列目)は固定幅内で折り返し、コメント
+   (4列目)が残り幅を吸収、DI(5列目)を行末へ右寄せする。 */
 .rp-card__medicines--detail {
-  table-layout: auto;
+  table-layout: fixed;
 }
+
+.rp-card__medicines--detail th:nth-child(1),
+.rp-card__medicines--detail td:nth-child(1) {
+  width: 360px;
+  overflow-wrap: anywhere;
+}
+
+.rp-card__medicines--detail th:nth-child(2),
+.rp-card__medicines--detail td:nth-child(2),
+.rp-card__medicines--detail th:nth-child(3),
+.rp-card__medicines--detail td:nth-child(3) {
+  width: 72px;
+}
+
+/* 4列目(薬剤コメント)は幅指定なし = 残り幅を吸収 */
 
 .rp-card__medicines--detail th:nth-child(5),
 .rp-card__medicines--detail td.rp-card__medicine-di {
-  width: 100%;
+  width: 56px;
   text-align: right;
   white-space: nowrap;
 }
