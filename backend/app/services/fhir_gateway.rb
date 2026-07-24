@@ -7,11 +7,24 @@ class FhirGateway
   # host.docker.internal) that upstream would reject as an unrecognized Host
   # header, FHIR_SERVER_HOST_HEADER lets us present an allowed Host header
   # while still connecting to the real target.
+  # base_url / host_header default from the effective connection settings
+  # (persisted admin settings, falling back to ENV). UNSET lets callers pass an
+  # explicit nil host_header (meaning "send no Host header") without it being
+  # overridden by the effective value — and keeps unit specs that inject both
+  # from ever touching the DB.
+  UNSET = Object.new
+
   def initialize(
-    base_url: ENV.fetch("FHIR_SERVER_BASE_URL", "http://localhost:3000"),
-    host_header: ENV["FHIR_SERVER_HOST_HEADER"],
+    base_url: UNSET,
+    host_header: UNSET,
     token_provider: FhirTokenProvider.default
   )
+    if base_url.equal?(UNSET) || host_header.equal?(UNSET)
+      config = FhirConnectionSettings.effective
+      base_url = config.base_url if base_url.equal?(UNSET)
+      host_header = config.host_header if host_header.equal?(UNSET)
+    end
+
     @token_provider = token_provider
     @connection = Faraday.new(url: base_url) do |f|
       f.options.open_timeout = 2

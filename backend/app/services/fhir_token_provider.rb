@@ -40,14 +40,35 @@ class FhirTokenProvider
 
   class << self
     # Process-wide shared instance, so the token cache survives across
-    # per-request FhirGateway instances.
+    # per-request FhirGateway instances. Rebuilt when the persisted connection
+    # settings change (FhirConnectionSettings.config_version), so a base_url /
+    # client_id change made via the admin UI propagates without a restart —
+    # not just token expiry.
     def default
-      @default_mutex.synchronize { @default ||= new }
+      @default_mutex.synchronize do
+        version = FhirConnectionSettings.config_version
+        if @default.nil? || @default_version != version
+          cfg = FhirConnectionSettings.effective
+          @default = new(
+            base_url: cfg.base_url,
+            client_id: cfg.client_id,
+            client_secret: cfg.client_secret,
+            token_path: cfg.token_path,
+            host_header: cfg.host_header
+          )
+          @default_version = version
+        end
+        @default
+      end
     end
 
-    # For tests: drop the shared instance so changed ENV is picked up.
+    # Drop the shared instance so the next #default rebuilds from current
+    # settings (called after the admin UI saves new settings).
     def reset_default!
-      @default_mutex.synchronize { @default = nil }
+      @default_mutex.synchronize do
+        @default = nil
+        @default_version = nil
+      end
     end
   end
 
@@ -55,12 +76,13 @@ class FhirTokenProvider
     base_url: ENV.fetch("FHIR_SERVER_BASE_URL", "http://localhost:3000"),
     client_id: ENV["FHIR_SERVER_CLIENT_ID"].presence,
     client_secret: ENV["FHIR_SERVER_CLIENT_SECRET"].presence,
+    token_path: "/oauth/token",
     host_header: ENV["FHIR_SERVER_HOST_HEADER"],
     clock: nil,
     sleeper: nil
   )
     @base_url = base_url.to_s.chomp("/")
-    @token_url = "#{@base_url}/oauth/token"
+    @token_url = "#{@base_url}#{token_path}"
     @client_id = client_id
     @client_secret = client_secret
     @host_header = host_header

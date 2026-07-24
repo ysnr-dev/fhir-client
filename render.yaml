@@ -26,6 +26,18 @@ services:
       # fhir-server の実ホスト名に合わせる(名前衝突サフィックスに注意)。
       - key: FHIR_SERVER_BASE_URL
         value: https://ysnr-fhir-server.onrender.com
+      # 接続設定 UI の client_secret を暗号化して DB 保存するための鍵。
+      # `bin/rails db:encryption:init` で生成し、ダッシュボードで設定する。
+      - key: AR_ENCRYPTION_PRIMARY_KEY
+        sync: false
+      - key: AR_ENCRYPTION_DETERMINISTIC_KEY
+        sync: false
+      - key: AR_ENCRYPTION_KEY_DERIVATION_SALT
+        sync: false
+      # 設定 (/admin/*) の任意アクセストークン。設定すると Bearer / X-Admin-Token を要求。
+      # 本番で接続設定 UI を公開する場合は設定を強く推奨。
+      - key: ADMIN_TOKEN
+        sync: false
 
   # --- React SPA(Vite ビルドの静的配信) ---
   # /fhir・/master は rewrite で backend にプロキシし同一オリジン化する
@@ -53,6 +65,13 @@ services:
       - type: rewrite
         source: /master/*
         destination: https://ysnr-fhir-client-api.onrender.com/master/*
+      # 接続設定(管理)API。無いと SPA フォールバックに落ちて index.html が返る。
+      - type: rewrite
+        source: /admin
+        destination: https://ysnr-fhir-client-api.onrender.com/admin
+      - type: rewrite
+        source: /admin/*
+        destination: https://ysnr-fhir-client-api.onrender.com/admin/*
       # SPA フォールバック(react-router の直リンク対応)
       - type: rewrite
         source: /*

@@ -10,9 +10,21 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2026_07_20_020000) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_23_000000) do
   # These are extensions that must be enabled in order to support this database
-  enable_extension "plpgsql"
+  enable_extension "pg_catalog.plpgsql"
+
+  create_table "fhir_connection_settings", force: :cascade do |t|
+    t.string "base_url"
+    t.string "client_id"
+    t.text "client_secret"
+    t.string "token_path", default: "/oauth/token", null: false
+    t.string "host_header"
+    t.integer "singleton_guard", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["singleton_guard"], name: "index_fhir_connection_settings_on_singleton_guard", unique: true
+  end
 
   create_table "master_hot_codes", force: :cascade do |t|
     t.string "hot_code", null: false
@@ -132,5 +144,4 @@ ActiveRecord::Schema[7.0].define(version: 2026_07_20_020000) do
     t.index ["name"], name: "index_master_medicines_on_name"
     t.index ["yakka_code"], name: "index_master_medicines_on_yakka_code"
   end
-
 end

@@ -279,6 +279,78 @@ button:disabled {
   color: var(--text-h);
 }
 
+.connection-settings__lead {
+  margin: 0 0 16px;
+  max-width: 560px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.connection-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 520px;
+}
+
+.connection-settings-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.connection-settings-form input {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.connection-settings-form__status {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--accent-bg);
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.connection-settings-form__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.connection-settings-form__hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.connection-settings-form__success {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.connection-settings-form__test-error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #e0687a;
+  background: rgba(224, 104, 122, 0.1);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;

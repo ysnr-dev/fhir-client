@@ -86,4 +86,16 @@ RSpec.describe FhirGateway do
     expect(response.status).to eq(401)
     expect(upstream).to have_been_requested.once
   end
+
+  it "defaults base_url from the effective connection settings when omitted" do
+    FhirConnectionSettings.current.update!(base_url: "http://db.example")
+    stub = stub_request(:get, "http://db.example/Patient/p1").to_return(status: 200, body: "{}")
+    # base_url を渡さない → effective(DB 設定)から解決される。
+    gateway = described_class.new(token_provider: no_auth_provider)
+
+    response = gateway.forward(method: :get, path: "/Patient/p1")
+
+    expect(response.status).to eq(200)
+    expect(stub).to have_been_requested.once
+  end
 end

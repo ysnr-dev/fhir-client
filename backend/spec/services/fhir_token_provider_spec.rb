@@ -178,5 +178,37 @@ RSpec.describe FhirTokenProvider do
         FhirTokenProvider::TokenError, /access_token/
       )
     end
+
+    it "builds the token URL from a custom token_path" do
+      stub_up
+      stub_request(:post, "#{base_url}/auth/token").to_return(
+        status: 200,
+        body: { access_token: "tok-1", expires_in: 3600 }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+      provider = described_class.new(
+        base_url: base_url, client_id: "cid", client_secret: "sec",
+        token_path: "/auth/token", host_header: nil, sleeper: ->(_seconds) {}
+      )
+
+      expect(provider.access_token).to eq("tok-1")
+      expect(a_request(:post, "#{base_url}/auth/token")).to have_been_made
+    end
+  end
+
+  describe ".default" do
+    before { described_class.reset_default! }
+    after { described_class.reset_default! }
+
+    it "memoizes while the connection settings are unchanged" do
+      expect(described_class.default).to be(described_class.default)
+    end
+
+    it "rebuilds when the connection settings change" do
+      first = described_class.default
+      FhirConnectionSettings.current.update!(base_url: "http://changed.example")
+
+      expect(described_class.default).not_to be(first)
+    end
   end
 end

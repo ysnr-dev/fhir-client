@@ -10,6 +10,14 @@ Rails.application.routes.draw do
     match "*fhir_path", to: "fhir_proxy#relay", via: %i[get post put delete]
   end
 
+  # 管理用: 上流 FHIR サーバーへの接続設定(SMART Backend Services)。
+  # 単数リソース(単一行設定) + 接続テスト。
+  namespace :admin do
+    resource :fhir_connection_settings, only: %i[show update] do
+      post :test, on: :collection
+    end
+  end
+
   # 国内マスタデータ（FHIR リソースではないプレーンな JSON REST）
   namespace :master do
     resources :hot_codes, only: %i[index show create update destroy] do
