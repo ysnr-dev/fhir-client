@@ -18,10 +18,11 @@ Rails.application.configure do
   # Ensures that a master key has been made available in either ENV["RAILS_MASTER_KEY"]
   # or in config/master.key. This key is used to decrypt credentials (and other encrypted files).
   #
-  # 管理UI(/admin)のセッション Cookie は credentials 内の secret_key_base に依存する。
-  # キーが無いと起動自体は通ってしまい、最初のログイン試行で 500 になる -- 起動時に
-  # 落とした方が原因が明確なので有効化する(render.yaml は既に設定済み)。
-  config.require_master_key = true
+  # 有効化しないこと。このアプリは credentials を必要としない(ActiveRecord
+  # Encryption の鍵は AR_ENCRYPTION_* env、管理セッションの secret_key_base は
+  # SECRET_KEY_BASE env から取る)。有効にすると RAILS_MASTER_KEY 未設定で
+  # 起動自体が失敗し、管理画面と無関係な FHIR プロキシまで落ちる。
+  # config.require_master_key = true
 
   # Disable serving static files from the `/public` folder by default since
   # Apache or NGINX already handles this.

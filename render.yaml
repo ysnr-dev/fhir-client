@@ -18,6 +18,12 @@ services:
         sync: false
       - key: RAILS_MASTER_KEY
         sync: false
+      # 管理画面(/admin)のセッション Cookie の署名鍵。credentials 経由
+      # (= RAILS_MASTER_KEY 依存)にすると鍵未設定で管理画面が 500 になるので、
+      # Render に生成させて env で明示的に渡す。値が変わると既存の管理セッションは
+      # 失効するだけで、DB の暗号化データ(AR_ENCRYPTION_* 由来)には影響しない。
+      - key: SECRET_KEY_BASE
+        generateValue: true
       # fhir-server 側で `rails fhir:register_client` した client_id / client_secret。
       - key: FHIR_SERVER_CLIENT_ID
         sync: false

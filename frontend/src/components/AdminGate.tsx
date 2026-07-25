@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AdminApiError } from "../api/adminClient";
 import { useAdminSession, useAdminLogout } from "../api/adminQueries";
 import { AdminLoginPage } from "../pages/AdminLoginPage";
 import { ErrorBanner } from "./ErrorBanner";
@@ -14,9 +15,22 @@ export function AdminGate({ children }: { children: ReactNode }) {
 
   if (isLoading) return <p className="page">読み込み中...</p>;
   if (error) {
+    // フロントエンドと backend は Render 上で別サービスとして独立にデプロイされる。
+    // 先にフロントだけが入れ替わると /admin/session が存在せず 404 になるので、
+    // 素の「HTTP 404」ではなく原因を名指しする。
+    const staleBackend = error instanceof AdminApiError && error.status === 404;
     return (
       <div className="page">
-        <ErrorBanner error={error} />
+        {staleBackend ? (
+          <div className="error-banner" role="alert">
+            <p className="error-banner__line error-banner__line--error">
+              管理APIが見つかりません (HTTP 404)。backend
+              のデプロイがまだ完了していない可能性があります。
+            </p>
+          </div>
+        ) : (
+          <ErrorBanner error={error} />
+        )}
       </div>
     );
   }
