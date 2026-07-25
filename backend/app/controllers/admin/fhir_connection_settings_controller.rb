@@ -10,8 +10,9 @@ module Admin
 
     def update
       attrs = settings_params
-      # client_secret は入力があったときだけ更新する(空なら既存の暗号化値を保持)。
+      # 秘密の類は入力があったときだけ更新する(空なら既存の暗号化値を保持)。
       attrs = attrs.except(:client_secret) if attrs[:client_secret].blank?
+      attrs = attrs.except(:fhir_admin_token) if attrs[:fhir_admin_token].blank?
 
       if @settings.update(attrs)
         # このプロセスのシングルトンを即時に作り直させる。他プロセスは次リクエスト時に
@@ -64,10 +65,10 @@ module Admin
 
     def settings_params
       # master コントローラと同様にフラットな params を許可する(パラメータラップに依存しない)。
-      params.permit(:base_url, :client_id, :client_secret, :token_path, :host_header)
+      params.permit(:base_url, :client_id, :client_secret, :token_path, :host_header, :fhir_admin_token)
     end
 
-    # ブラウザ向けの表現。client_secret の値は決して含めない。
+    # ブラウザ向けの表現。client_secret / fhir_admin_token の値は決して含めない。
     def masked(settings)
       effective = FhirConnectionSettings.effective
       {
@@ -76,6 +77,9 @@ module Admin
         token_path: settings.token_path,
         host_header: settings.host_header,
         client_secret_set: settings.client_secret.present?,
+        fhir_admin_token_set: settings.fhir_admin_token.present?,
+        # 管理API(OAuthクライアント管理画面)が使える状態か。env フォールバック込み。
+        admin_api_available: effective.admin_token.present?,
         # env フォールバック込みで、実際に認証(Bearer)が有効になるか。
         auth_enabled: effective.client_id.present? && effective.client_secret.present?,
         # env にフォールバック中かどうかを UI で示すための参考情報(secret は含めない)。

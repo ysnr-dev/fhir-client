@@ -13,9 +13,17 @@ Rails.application.routes.draw do
   # 管理用: 上流 FHIR サーバーへの接続設定(SMART Backend Services)。
   # 単数リソース(単一行設定) + 接続テスト。
   namespace :admin do
+    # 管理UIのログイン(ADMIN_TOKEN をパスフレーズにして HttpOnly セッションを張る)
+    resource :session, only: %i[show create destroy]
+
     resource :fhir_connection_settings, only: %i[show update] do
       post :test, on: :collection
     end
+
+    # 上流 FHIR サーバーの管理API(/admin/oauth_clients、/admin/scopes)への中継。
+    # ブラウザから上流を直接叩けない(CORS無効)ため、ここでサーバー間中継する。
+    resources :oauth_clients, only: %i[index create destroy]
+    get "scopes", to: "scopes#show"
   end
 
   # 国内マスタデータ（FHIR リソースではないプレーンな JSON REST）

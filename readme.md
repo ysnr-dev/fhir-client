@@ -34,7 +34,7 @@ docker compose up --build
 - frontend: `http://localhost:5173/patients`
 - db: `localhost:5434`(fhir-server の db の 5433、ローカル Homebrew Postgres の 5432 と衝突しないポート)
 
-fhir-server の Rails は開発環境のデフォルトで `ActionDispatch::HostAuthorization` が有効なため、`Host: host.docker.internal:3000` を許可外ホストとして 403 で拒否します(fhir-server 自体は変更しない方針のため)。そこで backend の `FhirGateway` は `FHIR_SERVER_HOST_HEADER`(既定 `localhost:3000`)を使い、実際の接続先は `host.docker.internal` のままアップストリームに許可される `Host` ヘッダーを送出します。別サーバーに向ける際、そのサーバーの HostAuthorization 設定次第では `FHIR_SERVER_HOST_HEADER` の調整や空値化が必要です。
+fhir-server の Rails は開発環境のデフォルトで `ActionDispatch::HostAuthorization` が有効なため、`Host: host.docker.internal:3000` を許可外ホストとして 403 で拒否します。そこで backend の `FhirGateway` は `FHIR_SERVER_HOST_HEADER`(既定 `localhost:3000`)を使い、実際の接続先は `host.docker.internal` のままアップストリームに許可される `Host` ヘッダーを送出します。別サーバーに向ける際、そのサーバーの HostAuthorization 設定次第では `FHIR_SERVER_HOST_HEADER` の調整や空値化が必要です。
 同様に fhir-client 自身の backend も frontend コンテナから `Host: backend:3001` で呼ばれるため、`backend/config/environments/development.rb` で `config.hosts << "backend"` を追加しています。
 
 backend/frontend ともソースディレクトリをボリュームマウントしているため、コード変更は再ビルド不要で反映されます(Puma 再起動 / Vite HMR)。
@@ -190,6 +190,47 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
 - backend の `/fhir` プロキシは `ALLOWED_RESOURCE_TYPES` に `ServiceRequest` を追加し、
   `POST /fhir`(空パス)を transaction Bundle 中継用のルートとして扱います
   (`backend/app/controllers/fhir_proxy_controller.rb`)。
+
+## 管理画面（接続設定 / OAuth クライアント）
+
+`/settings`（接続設定）と `/oauth-clients`（OAuth クライアント）は管理用の画面です。
+
+### アクセス制限
+
+環境変数 `ADMIN_TOKEN` を設定すると、両画面はログインを要求します。入力したパスフレーズは
+backend が照合し、成功すると **HttpOnly のセッション Cookie**（`path=/admin`、SameSite=Lax、12時間）を
+張ります。トークンをブラウザ側（sessionStorage 等）に保持しないため、XSS でパスフレーズ自体を
+持ち去られることがありません。非 GET リクエストには `X-CSRF-Token`（ログイン応答で渡される値）が必要です。
+
+`ADMIN_TOKEN` 未設定なら従来どおり認証なしで通ります（`docker compose up` だけで触れる）。
+ただし本番環境では、`ADMIN_TOKEN` 未設定のとき OAuth クライアント管理の API は 503 で閉じます。
+`Authorization: Bearer` / `X-Admin-Token` ヘッダーによる直叩き（curl・CI）も従来どおり使えます
+（Cookie を使わないので CSRF トークンは不要）。
+
+`ADMIN_TOKEN` をローテーションすると既存のセッションはすべて失効します。
+
+### OAuth クライアント管理
+
+fhir-server 側の OAuth クライアント（SMART Backend Services / 対話型 launch）を一覧・登録・削除できます。
+これまで fhir-server の rake タスクでしか登録できず、削除の手段がありませんでした。
+
+**fhir-server 側に管理 API `/admin/oauth_clients` を追加してあります**（`FHIR_ADMIN_TOKEN` による共有トークン認証）。
+fhir-server は CORS を意図的に無効にしているため、ブラウザから直接は叩けません。この backend が
+`FhirAdminGateway` でサーバー間中継します（`FHIR_SERVER_HOST_HEADER` は引き続き HostAuthorization 対策として必要）。
+
+使うには両側の設定が必要です:
+
+1. fhir-server に `FHIR_ADMIN_TOKEN` を設定する（`openssl rand -hex 32`。未設定なら管理 API は 503）
+2. fhir-client の `/settings` で「FHIR 管理トークン」に同じ値を入れて保存する
+   （DB に暗号化して保存。`FHIR_ADMIN_TOKEN` 環境変数でも渡せますが、接続先を変えるたびに
+   再デプロイが必要になるので画面からの設定を推奨）
+
+`client_secret` は登録直後の一度だけ表示され、以後どのレスポンスにも現れません。削除は物理削除で、
+発行済みのアクセストークン・リフレッシュトークン・認可コードも同時に失効します（件数が返ります）。
+
+> 上流の管理トークンが誤っている場合、画面は 502「管理トークンを拒否されました」を表示します
+> （401 をそのまま返すとログアウト扱いになってしまうため、意図的に読み替えています）。
+> 上流がスリープ中の場合、初回の表示は最大 90 秒ほどかかることがあります。
 
 ## テスト(ローカル)
 

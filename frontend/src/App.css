@@ -845,3 +845,328 @@ button:disabled {
 .error-banner__line--warning {
   color: #b8860b;
 }
+
+/* --- 管理画面: ログイン ---------------------------------------------------- */
+
+.admin-login__lead {
+  margin: 0 0 16px;
+  max-width: 560px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.admin-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 360px;
+}
+
+.admin-login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.admin-login-form input {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.admin-session-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.connection-settings-form__field-hint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+/* --- 管理画面: OAuth クライアント ------------------------------------------ */
+
+.oauth-clients__lead {
+  margin: 0 0 16px;
+  max-width: 720px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.oauth-client-table__scroll {
+  overflow-x: auto;
+}
+
+.oauth-client-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.oauth-client-table th,
+.oauth-client-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.oauth-client-table__id {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--code-bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.oauth-client-table__scopes,
+.oauth-client-table__uris {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oauth-client-table__scopes code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.oauth-client-table__uris {
+  white-space: normal;
+  max-width: 260px;
+  word-break: break-all;
+}
+
+.oauth-client-table__actions {
+  white-space: nowrap;
+}
+
+.oauth-client-table__empty {
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* --- 管理画面: クライアント登録フォーム ------------------------------------ */
+
+.oauth-client-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 640px;
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.oauth-client-form fieldset {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  margin: 0;
+}
+
+.oauth-client-form legend {
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.oauth-client-form > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.oauth-client-form input[type="text"],
+.oauth-client-form input[type="url"],
+.oauth-client-form textarea {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.oauth-client-form textarea {
+  font-family: var(--mono);
+  font-size: 13px;
+  resize: vertical;
+}
+
+.oauth-client-form__shape label,
+.oauth-client-form fieldset > label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.oauth-client-form__hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.oauth-client-form__uri-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.oauth-client-form__uri-row input {
+  flex: 1;
+}
+
+.oauth-client-form__validation {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #e0687a;
+  background: rgba(224, 104, 122, 0.1);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.oauth-client-form__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* --- 管理画面: スコープ選択 ------------------------------------------------ */
+
+.scope-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.scope-selector--context {
+  max-height: none;
+}
+
+.scope-selector__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scope-selector__row--wildcard {
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.scope-selector__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.scope-selector__name {
+  flex: 0 0 auto;
+}
+
+.scope-selector__code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  background: var(--code-bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.scope-selector__status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* --- 管理画面: シークレット表示モーダル ------------------------------------ */
+
+.client-secret-modal__field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.client-secret-modal__label {
+  flex: 0 0 110px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.client-secret-modal__value {
+  flex: 1;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--code-bg);
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-h);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.client-secret-modal__warning {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #e0687a;
+  background: rgba(224, 104, 122, 0.1);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-h);
+}
+
+.client-secret-modal__note {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.client-secret-modal__ack {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.client-secret-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+}

@@ -44,6 +44,8 @@ function ConnectionSettingsForm({ settings }: { settings: ConnectionSettings }) 
   const [hostHeader, setHostHeader] = useState(settings.host_header ?? "");
   const [clientSecret, setClientSecret] = useState("");
   const [secretSet, setSecretSet] = useState(settings.client_secret_set);
+  const [adminToken, setAdminToken] = useState("");
+  const [adminTokenSet, setAdminTokenSet] = useState(settings.fhir_admin_token_set);
 
   const update = useUpdateConnectionSettings();
   const test = useTestConnection();
@@ -56,13 +58,16 @@ function ConnectionSettingsForm({ settings }: { settings: ConnectionSettings }) 
       token_path: tokenPath,
       host_header: hostHeader,
     };
-    // client_secret は入力があったときだけ送る(空欄なら既存値を保持)。
+    // 秘密の類は入力があったときだけ送る(空欄なら既存値を保持)。
     if (clientSecret) payload.client_secret = clientSecret;
+    if (adminToken) payload.fhir_admin_token = adminToken;
 
     update.mutate(payload, {
       onSuccess: (data) => {
         setSecretSet(data.client_secret_set);
+        setAdminTokenSet(data.fhir_admin_token_set);
         setClientSecret("");
+        setAdminToken("");
       },
     });
   }
@@ -123,6 +128,21 @@ function ConnectionSettingsForm({ settings }: { settings: ConnectionSettings }) 
           placeholder="通常は空欄"
           onChange={(e) => setHostHeader(e.target.value)}
         />
+      </label>
+
+      <label>
+        FHIR 管理トークン（OAuth クライアント管理用）
+        <input
+          type="password"
+          value={adminToken}
+          autoComplete="new-password"
+          placeholder={adminTokenSet ? "設定済み（変更する場合のみ入力）" : "未設定"}
+          onChange={(e) => setAdminToken(e.target.value)}
+        />
+        <span className="connection-settings-form__field-hint">
+          上流 FHIR サーバーの <code>FHIR_ADMIN_TOKEN</code> と同じ値。OAuth クライアントの
+          一覧・登録・削除に使います（client_secret とは別のトークンです）。
+        </span>
       </label>
 
       <div className="connection-settings-form__actions">

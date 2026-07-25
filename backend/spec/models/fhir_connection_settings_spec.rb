@@ -37,6 +37,41 @@ RSpec.describe FhirConnectionSettings do
     end
   end
 
+  describe "fhir_admin_token encryption" do
+    it "stores the admin token encrypted at rest but reads it back in the clear" do
+      row = described_class.current
+      row.update!(fhir_admin_token: "admin-shared-token")
+
+      raw = described_class.connection.select_value(
+        "SELECT fhir_admin_token FROM fhir_connection_settings WHERE id = #{row.id}"
+      )
+      expect(raw).not_to include("admin-shared-token")
+      expect(described_class.current.fhir_admin_token).to eq("admin-shared-token")
+    end
+  end
+
+  describe ".effective admin_token" do
+    it "prefers the DB value over ENV" do
+      with_env("FHIR_ADMIN_TOKEN" => "env-admin") do
+        described_class.current.update!(fhir_admin_token: "db-admin")
+
+        expect(described_class.effective.admin_token).to eq("db-admin")
+      end
+    end
+
+    it "falls back to ENV when the DB value is blank" do
+      with_env("FHIR_ADMIN_TOKEN" => "env-admin") do
+        expect(described_class.effective.admin_token).to eq("env-admin")
+      end
+    end
+
+    it "is nil when neither is set" do
+      with_env("FHIR_ADMIN_TOKEN" => nil) do
+        expect(described_class.effective.admin_token).to be_nil
+      end
+    end
+  end
+
   describe ".effective" do
     it "prefers DB values over ENV" do
       with_env("FHIR_SERVER_BASE_URL" => "http://env-server", "FHIR_SERVER_CLIENT_ID" => "env-cid") do

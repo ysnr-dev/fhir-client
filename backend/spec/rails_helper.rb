@@ -63,4 +63,7 @@ RSpec.configure do |config|
   config.filter_rails_from_backtrace!
   # arbitrary gems may also be filtered via:
   # config.filter_gems_from_backtrace("gem name")
+
+  # 管理セッションの有効期限(12時間)を travel_to で越えるために使う。
+  config.include ActiveSupport::Testing::TimeHelpers
 end

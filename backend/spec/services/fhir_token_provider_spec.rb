@@ -121,7 +121,7 @@ RSpec.describe FhirTokenProvider do
 
       expect(provider.access_token).to eq("tok-1")
       expect(a_request(:get, up_url)).to have_been_made.twice
-      expect(slept).to include(FhirTokenProvider::WARMUP_POLL_INTERVAL)
+      expect(slept).to include(UpstreamWarmup::POLL_INTERVAL)
     end
 
     it "still fetches the token when /up never becomes ready" do
@@ -131,7 +131,7 @@ RSpec.describe FhirTokenProvider do
 
       expect(provider.access_token).to eq("tok-1")
       expect(a_request(:get, up_url))
-        .to have_been_made.times(FhirTokenProvider::WARMUP_MAX_ATTEMPTS)
+        .to have_been_made.times(UpstreamWarmup::MAX_ATTEMPTS)
     end
 
     it "retries a transient 502 (cold start) and then succeeds" do

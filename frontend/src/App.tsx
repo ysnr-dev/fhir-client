@@ -1,6 +1,8 @@
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
+import { AdminGate } from "./components/AdminGate";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
+import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
 import { PatientCreatePage } from "./pages/PatientCreatePage";
 import { PatientEditPage } from "./pages/PatientEditPage";
@@ -20,6 +22,7 @@ function App() {
         <nav className="app__nav">
           <Link to="/patients">患者一覧</Link>
           <Link to="/master-import">マスタ取込</Link>
+          <Link to="/oauth-clients">OAuth クライアント</Link>
           <Link to="/settings">接続設定</Link>
         </nav>
       </header>
@@ -34,7 +37,25 @@ function App() {
           <Route path="/patients/:patientId/prescriptions/:srId" element={<PrescriptionDetailPage />} />
           <Route path="/patients/:patientId/prescriptions/:srId/edit" element={<PrescriptionEditPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
-          <Route path="/settings" element={<ConnectionSettingsPage />} />
+          {/* 管理画面は AdminGate で包む。/settings も対象にするのは、
+              これまで ADMIN_TOKEN ヘッダーを送っておらず、本番で
+              ADMIN_TOKEN を設定すると 401 で開けなくなっていたため。 */}
+          <Route
+            path="/settings"
+            element={
+              <AdminGate>
+                <ConnectionSettingsPage />
+              </AdminGate>
+            }
+          />
+          <Route
+            path="/oauth-clients"
+            element={
+              <AdminGate>
+                <OauthClientsPage />
+              </AdminGate>
+            }
+          />
         </Routes>
       </main>
     </div>

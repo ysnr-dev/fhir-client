@@ -17,7 +17,11 @@ Rails.application.configure do
 
   # Ensures that a master key has been made available in either ENV["RAILS_MASTER_KEY"]
   # or in config/master.key. This key is used to decrypt credentials (and other encrypted files).
-  # config.require_master_key = true
+  #
+  # 管理UI(/admin)のセッション Cookie は credentials 内の secret_key_base に依存する。
+  # キーが無いと起動自体は通ってしまい、最初のログイン試行で 500 になる -- 起動時に
+  # 落とした方が原因が明確なので有効化する(render.yaml は既に設定済み)。
+  config.require_master_key = true
 
   # Disable serving static files from the `/public` folder by default since
   # Apache or NGINX already handles this.
@@ -32,6 +36,11 @@ Rails.application.configure do
 
   # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
   # config.force_ssl = true
+
+  # TLS終端はホスティング側(Render)のエッジが行う。assume_ssl でプロキシからの
+  # リクエストを https として扱わせる -- これが無いと管理セッションの Cookie に
+  # 付けている secure 属性と実際の request.ssl? 判定が食い違う。
+  config.assume_ssl = true
 
   # Include generic and useful information about system operation, but avoid logging too much
   # information to avoid inadvertent exposure of personally identifiable information (PII).

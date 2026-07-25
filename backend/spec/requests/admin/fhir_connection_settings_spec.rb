@@ -25,6 +25,31 @@ RSpec.describe "Admin::FhirConnectionSettings", type: :request do
       body = JSON.parse(response.body)
       expect(body["client_secret_set"]).to be(false)
     end
+
+    it "reports whether the FHIR admin token is set without returning it" do
+      # キー名(fhir_admin_token_set)に部分一致しない値を使う
+      FhirConnectionSettings.current.update!(fhir_admin_token: "zz-upstream-secret-9")
+
+      get "/admin/fhir_connection_settings"
+
+      body = JSON.parse(response.body)
+      expect(response.body).not_to include("zz-upstream-secret-9")
+      expect(body).not_to have_key("fhir_admin_token")
+      expect(body["fhir_admin_token_set"]).to be(true)
+      expect(body["admin_api_available"]).to be(true)
+    end
+
+    it "reports admin_api_available false when no admin token is configured" do
+      previous = ENV.delete("FHIR_ADMIN_TOKEN")
+
+      get "/admin/fhir_connection_settings"
+
+      body = JSON.parse(response.body)
+      expect(body["fhir_admin_token_set"]).to be(false)
+      expect(body["admin_api_available"]).to be(false)
+    ensure
+      ENV["FHIR_ADMIN_TOKEN"] = previous if previous
+    end
   end
 
   describe "PATCH /admin/fhir_connection_settings" do
@@ -44,6 +69,19 @@ RSpec.describe "Admin::FhirConnectionSettings", type: :request do
 
       body = JSON.parse(response.body)
       expect(body).not_to have_key("client_secret")
+    end
+
+    it "sets the FHIR admin token only when provided" do
+      patch "/admin/fhir_connection_settings", params: { fhir_admin_token: "adm-1" }, as: :json
+      expect(response).to have_http_status(:ok)
+      expect(FhirConnectionSettings.current.fhir_admin_token).to eq("adm-1")
+
+      # 空で送っても既存値は保持される(client_secret と同じ扱い)。
+      patch "/admin/fhir_connection_settings",
+        params: { base_url: "http://kept.example", fhir_admin_token: "" }, as: :json
+      expect(response).to have_http_status(:ok)
+      expect(FhirConnectionSettings.current.fhir_admin_token).to eq("adm-1")
+      expect(response.body).not_to include("adm-1")
     end
 
     it "rebuilds the token provider singleton on save" do
