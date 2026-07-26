@@ -48,7 +48,7 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
                 </Link>
                 <RowMenu label={`${displayName(patient) || patient.id} の操作`}>
                   <Link className="row-menu__item" to={`/patients/${patient.id}/edit`}>
-                    編集
+                    患者編集
                   </Link>
                   <button
                     type="button"
@@ -56,7 +56,7 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
                     onClick={() => handleDelete(patient)}
                     disabled={deletePatient.isPending}
                   >
-                    削除
+                    患者削除
                   </button>
                 </RowMenu>
               </td>
