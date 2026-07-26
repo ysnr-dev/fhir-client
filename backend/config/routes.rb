@@ -43,5 +43,8 @@ Rails.application.routes.draw do
     resources :medicine_types, only: %i[index show create update destroy] do
       collection { get :options }
     end
+    resources :lab_items, only: %i[index show create update destroy] do
+      collection { post :import }
+    end
   end
 end

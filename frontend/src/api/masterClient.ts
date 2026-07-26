@@ -1,4 +1,4 @@
-export type MasterType = "hot_codes" | "medicines" | "medicine_usages";
+export type MasterType = "hot_codes" | "medicines" | "medicine_usages" | "lab_items";
 
 export interface MasterImportResult {
   imported: number;
