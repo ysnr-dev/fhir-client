@@ -87,6 +87,30 @@ RSpec.describe FhirGateway do
     expect(upstream).to have_been_requested.once
   end
 
+  # FHIR は同じ検索パラメータの繰り返しを AND として使う(生年月日の範囲指定
+  # birthdate=ge...&birthdate=le...、_include の複数指定など)。Faraday 既定の
+  # NestedParamsEncoder はこれを最後の1つに潰すため、明示的に検証する。
+  #
+  # WebMock は記録するリクエストURIの時点で繰り返しパラメータを潰してしまい
+  # (素の Net::HTTP でも同様)、stub のマッチでは検証できない。そのため
+  # Faraday の test アダプタで、組み立てられた URL を直接見る。
+  it "繰り返しクエリパラメータを潰さずに上流へ渡す" do
+    requested_url = nil
+    gateway = build_gateway(no_auth_provider)
+    connection = gateway.instance_variable_get(:@connection)
+    connection.builder.handlers.clear
+    connection.adapter(:test) do |stub|
+      stub.get(/.*/) { |env| requested_url = env.url.to_s; [200, {}, "{}"] }
+    end
+
+    gateway.forward(
+      method: :get, path: "/Patient",
+      query: "birthdate=ge1980-01-01&birthdate=le1990-12-31"
+    )
+
+    expect(requested_url).to eq("#{base_url}/Patient?birthdate=ge1980-01-01&birthdate=le1990-12-31")
+  end
+
   it "defaults base_url from the effective connection settings when omitted" do
     FhirConnectionSettings.current.update!(base_url: "http://db.example")
     stub = stub_request(:get, "http://db.example/Patient/p1").to_return(status: 200, body: "{}")
