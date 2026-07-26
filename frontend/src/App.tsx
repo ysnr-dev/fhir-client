@@ -7,6 +7,10 @@ import { MasterImportPage } from "./pages/MasterImportPage";
 import { PatientCreatePage } from "./pages/PatientCreatePage";
 import { PatientEditPage } from "./pages/PatientEditPage";
 import { PatientListPage } from "./pages/PatientListPage";
+import { LabResultCreatePage } from "./pages/LabResultCreatePage";
+import { LabResultDetailPage } from "./pages/LabResultDetailPage";
+import { LabResultEditPage } from "./pages/LabResultEditPage";
+import { LabResultListPage } from "./pages/LabResultListPage";
 import { PrescriptionCreatePage } from "./pages/PrescriptionCreatePage";
 import { PrescriptionDetailPage } from "./pages/PrescriptionDetailPage";
 import { PrescriptionEditPage } from "./pages/PrescriptionEditPage";
@@ -36,6 +40,10 @@ function App() {
           <Route path="/patients/:patientId/prescriptions/new" element={<PrescriptionCreatePage />} />
           <Route path="/patients/:patientId/prescriptions/:srId" element={<PrescriptionDetailPage />} />
           <Route path="/patients/:patientId/prescriptions/:srId/edit" element={<PrescriptionEditPage />} />
+          <Route path="/patients/:patientId/lab-results" element={<LabResultListPage />} />
+          <Route path="/patients/:patientId/lab-results/new" element={<LabResultCreatePage />} />
+          <Route path="/patients/:patientId/lab-results/:reportId" element={<LabResultDetailPage />} />
+          <Route path="/patients/:patientId/lab-results/:reportId/edit" element={<LabResultEditPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           {/* 管理画面は AdminGate で包む。/settings も対象にするのは、
               これまで ADMIN_TOKEN ヘッダーを送っておらず、本番で

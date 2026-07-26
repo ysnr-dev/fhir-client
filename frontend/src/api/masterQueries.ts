@@ -1,8 +1,10 @@
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import {
+  fetchLabItemCategories,
   fetchMedicineTypeOptions,
   fetchMedicineUsageCategories,
   importMaster,
+  searchLabItems,
   searchMedicineUsages,
   searchMedicines,
   type MasterType,
@@ -83,5 +85,40 @@ export function useMedicineUsageCategories(enabled: boolean) {
     queryFn: fetchMedicineUsageCategories,
     staleTime: Infinity,
     enabled,
+  });
+}
+
+export function useLabItemSearch(name: string, categoryName: string, page: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["master", "lab_items", name, categoryName, page],
+    queryFn: () =>
+      searchLabItems({
+        name: name || undefined,
+        category_name: categoryName || undefined,
+        page,
+        per: MASTER_SEARCH_PER,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useLabItemCategories(enabled: boolean) {
+  return useQuery({
+    queryKey: ["master", "lab_items", "categories"],
+    queryFn: fetchLabItemCategories,
+    staleTime: Infinity,
+    enabled,
+  });
+}
+
+// 検査結果の編集画面用。保存済みの JLAC11 コードからマスタ情報
+// (コード型の選択肢など)を一括で引き直す。
+export function useLabItemsByCodes(codes: string[]) {
+  return useQuery({
+    queryKey: ["master", "lab_items", "by_codes", codes],
+    queryFn: () => searchLabItems({ jlac11_code: codes.join(","), per: 100 }),
+    staleTime: Infinity,
+    enabled: codes.length > 0,
   });
 }

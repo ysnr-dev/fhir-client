@@ -29,6 +29,12 @@ const MASTER_OPTIONS: MasterOption[] = [
     formatHint: "電子処方箋 用法マスタ / Excel（.xlsx）",
     accept: ".xlsx",
   },
+  {
+    type: "lab_items",
+    label: "検査項目マスタ",
+    formatHint: "共有項目JLACコードマスタ / CSV（UTF-8、ヘッダあり・32列）",
+    accept: ".csv",
+  },
 ];
 
 export function MasterImportPage() {

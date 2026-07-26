@@ -1,5 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  buildLabResultDeleteBundle,
+  observationIdsFromReport,
+  specimenIdsFromReport,
+} from "../fhir/labResultHelpers";
+import {
   buildPrescriptionDeleteBundle,
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
@@ -167,6 +172,93 @@ async function fetchRelatedMedicationRequestIds(srId: string): Promise<string[]>
   const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
   const { medicationRequests } = splitPrescriptionDetailBundle(bundle);
   return medicationRequests.map((mr) => mr.id).filter((id): id is string => Boolean(id));
+}
+
+const LAB_RESULT_COUNT = 20;
+
+export function useLabResultSearch(patientId: string | undefined, offset: number) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  // DiagnosticReport は検査結果機能でのみ使用するが、将来の用途拡張に備えて
+  // 検体検査カテゴリ(LAB)で絞り込んでおく。
+  params.set("category", "LAB");
+  params.set("_count", String(LAB_RESULT_COUNT));
+  params.set("_offset", String(offset));
+  // 検体採取日(effective)の降順。_sort のキーは検索パラメータ名 date。
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["DiagnosticReport", "search", patientId, offset],
+    queryFn: () => searchResource<fhir4.DiagnosticReport>("DiagnosticReport", params),
+    placeholderData: keepPreviousData,
+    enabled: Boolean(patientId),
+  });
+
+  return {
+    ...query,
+    bundle: query.data?.data,
+    total: query.data?.data.total ?? 0,
+    count: LAB_RESULT_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+export function useLabResultDetail(reportId: string | undefined) {
+  const params = new URLSearchParams();
+  if (reportId) params.set("_id", reportId);
+  params.append("_include", "DiagnosticReport:result");
+  params.append("_include", "DiagnosticReport:specimen");
+
+  return useQuery({
+    queryKey: ["DiagnosticReport", "detail", reportId],
+    queryFn: () => searchResource<fhir4.Resource>("DiagnosticReport", params),
+    enabled: Boolean(reportId),
+  });
+}
+
+export function useCreateLabResult() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
+    },
+  });
+}
+
+export function useUpdateLabResult() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "detail"] });
+    },
+  });
+}
+
+export function useDeleteLabResult() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (reportId: string) => {
+      // 削除対象の Observation / Specimen は DiagnosticReport の参照から辿る。
+      const { data: report } = await readResource<fhir4.DiagnosticReport>(
+        "DiagnosticReport",
+        reportId,
+      );
+      return postBundle(
+        buildLabResultDeleteBundle(
+          reportId,
+          observationIdsFromReport(report),
+          specimenIdsFromReport(report),
+        ),
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
+    },
+  });
 }
 
 export function useDeletePrescription() {

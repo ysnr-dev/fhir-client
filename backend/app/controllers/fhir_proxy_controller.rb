@@ -1,5 +1,7 @@
 class FhirProxyController < ApplicationController
-  ALLOWED_RESOURCE_TYPES = %w[Patient MedicationRequest ServiceRequest].freeze
+  ALLOWED_RESOURCE_TYPES = %w[
+    Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen
+  ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 
   FORWARD_REQUEST_HEADERS = %w[Content-Type Accept If-Match If-None-Match Prefer].freeze

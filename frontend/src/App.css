@@ -522,6 +522,17 @@ button:disabled {
   font-size: 14px;
 }
 
+/* スクロールしても列見出しを残す。border-collapse: collapse では sticky な
+   th の border が一緒にスクロールしてしまうため、下線は box-shadow で描く。 */
+.master-search__table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  border-bottom: none;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
 .master-search__table button {
   padding: 4px 10px;
   font-size: 13px;

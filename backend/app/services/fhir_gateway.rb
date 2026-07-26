@@ -29,6 +29,11 @@ class FhirGateway
     @connection = Faraday.new(url: base_url) do |f|
       f.options.open_timeout = 2
       f.options.timeout = 15
+      # FHIR は同じ検索パラメータの繰り返しを AND として使う(生年月日の範囲指定
+      # birthdate=ge...&birthdate=le... や、_include の複数指定など)。Faraday 既定の
+      # NestedParamsEncoder は繰り返しキーを最後の1つに潰してしまうため、
+      # 繰り返しをそのまま保持する FlatParamsEncoder を使う。
+      f.options.params_encoder = Faraday::FlatParamsEncoder
       f.headers["Host"] = host_header if host_header.present?
       f.adapter Faraday.default_adapter
     end
