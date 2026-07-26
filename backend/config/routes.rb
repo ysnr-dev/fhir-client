@@ -44,7 +44,10 @@ Rails.application.routes.draw do
       collection { get :options }
     end
     resources :lab_items, only: %i[index show create update destroy] do
-      collection { post :import }
+      collection do
+        post :import
+        get :categories
+      end
     end
   end
 end

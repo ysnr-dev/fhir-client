@@ -64,6 +64,47 @@ RSpec.describe "Master::LabItems", type: :request do
     it "category_name(区分名称)で絞り込む" do
       expect(names_for(category_name: "血液学的検査")).to eq(["白血球数"])
     end
+
+    it "jlac11_code のカンマ区切りで複数指定できる" do
+      expect(names_for(jlac11_code: "C1000000000000001,C1000000000000003"))
+        .to eq(["総蛋白(TP)", "白血球数"])
+    end
+  end
+
+  describe "GET /master/lab_items (並び順)" do
+    it "display_order の数値順に並べる(桁数が揃っていない値も正しく並ぶ)" do
+      Master::LabItem.create!(jlac11_code: "C1", fhir_item_name: "三番目", display_order: "1000")
+      Master::LabItem.create!(jlac11_code: "C2", fhir_item_name: "一番目", display_order: "100")
+      Master::LabItem.create!(jlac11_code: "C3", fhir_item_name: "二番目", display_order: "200")
+
+      get "/master/lab_items"
+
+      expect(JSON.parse(response.body)["items"].map { |i| i["fhir_item_name"] })
+        .to eq(%w[一番目 二番目 三番目])
+    end
+
+    it "display_order が同値なら収載順(id)で並べる" do
+      Master::LabItem.create!(jlac11_code: "C1", fhir_item_name: "先", display_order: "100")
+      Master::LabItem.create!(jlac11_code: "C2", fhir_item_name: "後", display_order: "100")
+
+      get "/master/lab_items"
+
+      expect(JSON.parse(response.body)["items"].map { |i| i["fhir_item_name"] }).to eq(%w[先 後])
+    end
+  end
+
+  describe "GET /master/lab_items/categories" do
+    it "distinct な区分名称をマスタ収載順で返す" do
+      Master::LabItem.create!(jlac11_code: "C1", category_name: "生化学検査")
+      Master::LabItem.create!(jlac11_code: "C2", category_name: "血液学的検査")
+      Master::LabItem.create!(jlac11_code: "C3", category_name: "生化学検査")
+      Master::LabItem.create!(jlac11_code: "C4", category_name: "")
+
+      get "/master/lab_items/categories"
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["category_names"]).to eq(%w[生化学検査 血液学的検査])
+    end
   end
 
   describe "CRUD" do

@@ -46,6 +46,9 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
                 <Link className="button" to={`/patients/${patient.id}/prescriptions`}>
                   処方
                 </Link>
+                <Link className="button" to={`/patients/${patient.id}/lab-results`}>
+                  検査結果
+                </Link>
                 <RowMenu label={`${displayName(patient) || patient.id} の操作`}>
                   <Link className="row-menu__item" to={`/patients/${patient.id}/edit`}>
                     患者編集

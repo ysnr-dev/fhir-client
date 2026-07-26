@@ -41,6 +41,24 @@ export interface MedicineUsage {
   usage_name: string;
 }
 
+export interface LabItem {
+  id: number;
+  category_name: string | null;
+  fhir_item_name: string | null;
+  abbreviation: string | null;
+  jlac11_specimen: string | null;
+  jlac11_method: string | null;
+  jlac11_code: string;
+  display_unit: string | null;
+  xml_unit: string | null;
+  // PQ:数値型、CD:大小順序のないコード型、CO:大小順序のあるコード型、ST:文字列型
+  data_type: string | null;
+  // コード型の選択肢。「1：陽性、2：陰性」のような 区切り文字列
+  code_value_list: string | null;
+  // コード型の値の CodeSystem URL
+  code_oid: string | null;
+}
+
 export interface MasterSearchResult<T> {
   total: number;
   page: number;
@@ -131,6 +149,35 @@ export async function fetchMedicineUsageCategories(): Promise<MedicineUsageCateg
   const res = await fetch("/master/medicine_usages/categories");
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MedicineUsageCategories;
+}
+
+export async function searchLabItems(params: {
+  name?: string;
+  category_name?: string;
+  jlac11_code?: string;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<LabItem>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.category_name) search.set("category_name", params.category_name);
+  if (params.jlac11_code) search.set("jlac11_code", params.jlac11_code);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await fetch(`/master/lab_items?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<LabItem>;
+}
+
+export interface LabItemCategories {
+  category_names: string[];
+}
+
+export async function fetchLabItemCategories(): Promise<LabItemCategories> {
+  const res = await fetch("/master/lab_items/categories");
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as LabItemCategories;
 }
 
 export async function importMaster(
