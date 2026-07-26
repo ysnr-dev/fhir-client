@@ -184,6 +184,68 @@ button:disabled {
   color: var(--text);
 }
 
+.row-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.row-menu__trigger {
+  padding: 4px 10px;
+  font-size: 16px;
+  line-height: 1;
+  border-color: var(--border);
+  color: var(--text);
+  background: transparent;
+}
+
+.row-menu__trigger:hover,
+.row-menu__trigger[aria-expanded="true"] {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.row-menu__items {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+
+/* グローバルの button {} と .patient-table__actions button {} を上書きするため
+   詳細度を 2 クラス以上に上げている。 */
+.row-menu__items .row-menu__item {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-h);
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.row-menu__items .row-menu__item:hover:not(:disabled) {
+  background: var(--accent-bg);
+}
+
+.row-menu__items .row-menu__item--danger {
+  color: #e0687a;
+}
+
 .pagination {
   display: flex;
   align-items: center;

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useDeletePatient } from "../api/queries";
 import { displayKana, displayName } from "../fhir/patientHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { RowMenu } from "./RowMenu";
 
 export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
   const deletePatient = useDeletePatient();
@@ -45,16 +46,19 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
                 <Link className="button" to={`/patients/${patient.id}/prescriptions`}>
                   処方
                 </Link>
-                <Link className="button" to={`/patients/${patient.id}/edit`}>
-                  編集
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(patient)}
-                  disabled={deletePatient.isPending}
-                >
-                  削除
-                </button>
+                <RowMenu label={`${displayName(patient) || patient.id} の操作`}>
+                  <Link className="row-menu__item" to={`/patients/${patient.id}/edit`}>
+                    編集
+                  </Link>
+                  <button
+                    type="button"
+                    className="row-menu__item row-menu__item--danger"
+                    onClick={() => handleDelete(patient)}
+                    disabled={deletePatient.isPending}
+                  >
+                    削除
+                  </button>
+                </RowMenu>
               </td>
             </tr>
           ))}
