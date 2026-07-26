@@ -89,7 +89,7 @@ export function PrescriptionDetailPage() {
                       <th>用量</th>
                       <th>単位</th>
                       <th>薬剤コメント</th>
-                      <th></th>
+                      <th className="rp-card__medicine-di"></th>
                     </tr>
                   </thead>
                   <tbody>

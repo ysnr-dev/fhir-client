@@ -751,7 +751,9 @@ button:disabled {
 
 /* 4列目(薬剤コメント)は幅指定なし = 残り幅を吸収 */
 
-.rp-card__medicines--detail th:nth-child(5),
+/* DI 列は処方内容(詳細)固有の列。--detail は検査結果(詳細)とも共用しており
+   列の並びが違うため、nth-child ではなくクラスで指定する。 */
+.rp-card__medicines--detail th.rp-card__medicine-di,
 .rp-card__medicines--detail td.rp-card__medicine-di {
   width: 56px;
   text-align: right;
@@ -763,6 +765,12 @@ button:disabled {
 .rp-card__medicines--detail th.rp-card__lab-value,
 .rp-card__medicines--detail td.rp-card__lab-value {
   text-align: right;
+}
+
+/* 単位を固定幅にして、結果値(幅指定なし)が残り幅を吸収し単位のすぐ左に揃うようにする。 */
+.rp-card__medicines--detail th.rp-card__lab-unit,
+.rp-card__medicines--detail td.rp-card__lab-unit {
+  width: 72px;
 }
 
 .rp-card__medicine-di .master-search__medley-link {
