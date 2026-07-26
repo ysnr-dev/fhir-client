@@ -30,7 +30,7 @@ export function RowMenu({ label, children }: { label: string; children: ReactNod
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        ⋯
+        ⋮
       </button>
       {open && (
         // 項目を押したら閉じる。Link は遷移で消えるが、削除は同じ行に留まるため必要。

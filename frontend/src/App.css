@@ -170,6 +170,7 @@ button:disabled {
   display: flex;
   gap: 12px;
   align-items: center;
+  justify-content: flex-end;
 }
 
 .patient-table__actions button,
