@@ -758,6 +758,13 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* 検査結果(詳細)の結果値は数値が多いため右揃えにして桁を揃える。
+   .rp-card__medicines td より詳細度を上げて text-align: left を確実に上書きする。 */
+.rp-card__medicines--detail th.rp-card__lab-value,
+.rp-card__medicines--detail td.rp-card__lab-value {
+  text-align: right;
+}
+
 .rp-card__medicine-di .master-search__medley-link {
   margin-right: 0;
 }

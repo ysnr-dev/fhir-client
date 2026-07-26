@@ -83,7 +83,7 @@ export function LabResultDetailPage() {
                     <th>検査項目</th>
                     <th>略称</th>
                     <th>材料</th>
-                    <th>結果値</th>
+                    <th className="rp-card__lab-value">結果値</th>
                     <th>単位</th>
                   </tr>
                 </thead>
@@ -95,7 +95,7 @@ export function LabResultDetailPage() {
                         <td>{line.name || "-"}</td>
                         <td>{line.abbreviation || "-"}</td>
                         <td>{line.specimen || "-"}</td>
-                        <td>{line.value || "-"}</td>
+                        <td className="rp-card__lab-value">{line.value || "-"}</td>
                         <td>{line.unit || "-"}</td>
                       </tr>
                     );
