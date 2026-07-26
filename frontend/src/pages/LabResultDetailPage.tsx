@@ -43,6 +43,9 @@ export function LabResultDetailPage() {
       <div className="page__header">
         <h1>検査結果内容</h1>
         <div>
+          <Link to={`/patients/${patientId}/lab-results/new?from=${reportId}`} className="button">
+            DO
+          </Link>
           <Link to={`/patients/${patientId}/lab-results/${reportId}/edit`} className="button">
             編集
           </Link>
