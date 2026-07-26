@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useDeletePrescription } from "../api/queries";
 import { summarizeServiceRequest } from "../fhir/prescriptionHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { RowMenu } from "./RowMenu";
 
 interface PrescriptionTableProps {
   prescriptions: fhir4.ServiceRequest[];
@@ -47,16 +48,22 @@ export function PrescriptionTable({ prescriptions, patientId }: PrescriptionTabl
                   <Link className="button" to={`/patients/${patientId}/prescriptions/${summary.id}`}>
                     表示
                   </Link>
-                  <Link className="button" to={`/patients/${patientId}/prescriptions/${summary.id}/edit`}>
-                    編集
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(summary.id)}
-                    disabled={deletePrescription.isPending}
-                  >
-                    削除
-                  </button>
+                  <RowMenu label={`${summary.date} の処方の操作`}>
+                    <Link
+                      className="row-menu__item"
+                      to={`/patients/${patientId}/prescriptions/${summary.id}/edit`}
+                    >
+                      編集
+                    </Link>
+                    <button
+                      type="button"
+                      className="row-menu__item row-menu__item--danger"
+                      onClick={() => handleDelete(summary.id)}
+                      disabled={deletePrescription.isPending}
+                    >
+                      削除
+                    </button>
+                  </RowMenu>
                 </td>
               </tr>
             );
