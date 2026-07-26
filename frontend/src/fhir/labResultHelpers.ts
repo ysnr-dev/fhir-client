@@ -588,6 +588,19 @@ export function parseLabResultForm(
   };
 }
 
+// 既存の検査結果を DO(流用)して新規登録するためのフォーム値に変換する。
+// ・検査項目(と入外区分)は引き継ぐ
+// ・結果値は継承せず空にする
+// ・Observation の id を落とし、既存リソースの更新ではなく新規登録にする
+// ・検体採取日は DO 元ではなく当日にする
+export function buildDoLabResultForm(values: LabResultFormValues): LabResultFormValues {
+  return {
+    ...values,
+    specimenDate: today(),
+    lines: values.lines.map((line) => ({ item: line.item, value: "" })),
+  };
+}
+
 // 更新 Bundle 用に、保存済み Specimen の 材料コード → id を取り出す。
 // 同じ材料が引き続き使われていればその Specimen を PUT で使い回す。
 export function specimenRefsFrom(specimens: fhir4.Specimen[]): SpecimenRef[] {

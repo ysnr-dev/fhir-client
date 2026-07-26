@@ -43,6 +43,9 @@ export function LabResultDetailPage() {
       <div className="page__header">
         <h1>検査結果内容</h1>
         <div>
+          <Link to={`/patients/${patientId}/lab-results/new?from=${reportId}`} className="button">
+            DO
+          </Link>
           <Link to={`/patients/${patientId}/lab-results/${reportId}/edit`} className="button">
             編集
           </Link>
@@ -83,8 +86,8 @@ export function LabResultDetailPage() {
                     <th>検査項目</th>
                     <th>略称</th>
                     <th>材料</th>
-                    <th>結果値</th>
-                    <th>単位</th>
+                    <th className="rp-card__lab-value">結果値</th>
+                    <th className="rp-card__lab-unit">単位</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -95,8 +98,8 @@ export function LabResultDetailPage() {
                         <td>{line.name || "-"}</td>
                         <td>{line.abbreviation || "-"}</td>
                         <td>{line.specimen || "-"}</td>
-                        <td>{line.value || "-"}</td>
-                        <td>{line.unit || "-"}</td>
+                        <td className="rp-card__lab-value">{line.value || "-"}</td>
+                        <td className="rp-card__lab-unit">{line.unit || "-"}</td>
                       </tr>
                     );
                   })}
