@@ -17,6 +17,38 @@ RSpec.describe "FhirProxy", type: :request do
     end
   end
 
+  # FHIR は同じ検索パラメータの繰り返しを AND として使う。Faraday 既定の
+  # NestedParamsEncoder はこれを最後の1つに潰すため、明示的に検証する。
+  describe "繰り返しクエリパラメータの転送" do
+    it "生年月日の範囲指定(birthdate を2回)を両方とも上流に渡す" do
+      stub = stub_request(:get, "#{upstream_base}/Patient")
+        .with(query: { "birthdate" => %w[ge1980-01-01 le1990-12-31] })
+        .to_return(status: 200, body: '{"resourceType":"Bundle"}',
+                   headers: { "Content-Type" => "application/fhir+json" })
+
+      get "/fhir/Patient?birthdate=ge1980-01-01&birthdate=le1990-12-31"
+
+      expect(response).to have_http_status(:ok)
+      expect(stub).to have_been_requested
+    end
+
+    it "_include の複数指定を全て上流に渡す" do
+      stub = stub_request(:get, "#{upstream_base}/DiagnosticReport")
+        .with(query: {
+          "_id" => "r1",
+          "_include" => ["DiagnosticReport:result", "DiagnosticReport:specimen"]
+        })
+        .to_return(status: 200, body: '{"resourceType":"Bundle"}',
+                   headers: { "Content-Type" => "application/fhir+json" })
+
+      get "/fhir/DiagnosticReport?_id=r1&_include=DiagnosticReport%3Aresult" \
+          "&_include=DiagnosticReport%3Aspecimen"
+
+      expect(response).to have_http_status(:ok)
+      expect(stub).to have_been_requested
+    end
+  end
+
   describe "GET /fhir/Patient/:id" do
     it "forwards ETag and Location headers from upstream" do
       stub_request(:get, "#{upstream_base}/Patient/123")
@@ -121,8 +153,8 @@ RSpec.describe "FhirProxy", type: :request do
       expect(body["issue"].first["diagnostics"]).to include("Condition")
     end
 
-    it "allowlists DiagnosticReport and Observation (検査結果機能)" do
-      %w[DiagnosticReport Observation].each do |type|
+    it "allowlists DiagnosticReport, Observation, Specimen (検査結果機能)" do
+      %w[DiagnosticReport Observation Specimen].each do |type|
         stub_request(:get, "#{upstream_base}/#{type}")
           .with(query: { "patient" => "Patient/123" })
           .to_return(status: 200, body: '{"resourceType":"Bundle"}',

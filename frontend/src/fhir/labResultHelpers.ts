@@ -5,6 +5,8 @@ import type { LabItem } from "../api/masterClient";
 const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/lab-result-setting"; // 入外区分
 // JLAC11 コード。正式な CodeSystem URL が公開されていないためローカル URI を使用。
 const JLAC11_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11";
+// JLAC11 の材料(検体)コード。同じく正式な CodeSystem URL がないためローカル URI。
+const JLAC11_SPECIMEN_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11-specimen";
 // 検査項目の略称。詳細表示・編集フォームへの復元に使う補助 coding。
 const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
 
@@ -17,6 +19,28 @@ const UNITS_OF_MEASURE_SYSTEM = "http://unitsofmeasure.org";
 // JP Core の検体検査結果プロファイル。
 const OBSERVATION_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Observation_LabResult";
 const REPORT_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_DiagnosticReport_LabResult";
+const SPECIMEN_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Specimen_Common";
+
+// JLAC11 は17桁固定で、10〜12桁目が材料(検体)コード。
+// 桁構成: 測定物5桁 + 識別4桁 + 材料3桁 + 測定法3桁 + 結果単位2桁
+// https://www.idial.or.jp/jlac_eleven.html
+const JLAC11_LENGTH = 17;
+const SPECIMEN_CODE_START = 9;
+const SPECIMEN_CODE_END = 12;
+
+// 検査項目の JLAC11 コードから材料(検体)コードを取り出す。桁数が想定外のマスタは
+// 位置で切り出すと誤ったコードになるため、空文字を返して Specimen を作らない。
+export function specimenCodeOf(item: LabItem | null | undefined): string {
+  const code = item?.jlac11_code ?? "";
+  if (code.length !== JLAC11_LENGTH) return "";
+  return code.slice(SPECIMEN_CODE_START, SPECIMEN_CODE_END);
+}
+
+// 更新時に既存の Specimen を使い回すための、材料コード → リソース id の対応。
+export interface SpecimenRef {
+  code: string;
+  id: string;
+}
 
 export type LabResultSetting = "inpatient" | "outpatient" | "";
 
@@ -121,10 +145,65 @@ function buildObservationValue(line: LabResultLineValues): Partial<fhir4.Observa
   return { valueString: line.value };
 }
 
+// 1回の検査結果の中で使われる材料(検体)ごとに1つの Specimen を作る計画。
+// 血清と血漿が混在する場合は Specimen も2つになり、各 Observation は自分の材料を参照する。
+interface SpecimenPlan {
+  code: string;
+  display: string;
+  fullUrl: string;
+  id?: string;
+}
+
+function planSpecimens(
+  values: LabResultFormValues,
+  originalSpecimens: SpecimenRef[],
+): Map<string, SpecimenPlan> {
+  const idByCode = new Map(originalSpecimens.map((s) => [s.code, s.id]));
+  const plans = new Map<string, SpecimenPlan>();
+
+  for (const line of values.lines) {
+    const code = specimenCodeOf(line.item);
+    if (!code || plans.has(code)) continue;
+
+    const id = idByCode.get(code);
+    plans.set(code, {
+      code,
+      display: line.item?.jlac11_specimen ?? "",
+      id,
+      fullUrl: id ? `Specimen/${id}` : `urn:uuid:${crypto.randomUUID()}`,
+    });
+  }
+  return plans;
+}
+
+function buildSpecimen(plan: SpecimenPlan, patientId: string, collected: string): fhir4.Specimen {
+  const resource: fhir4.Specimen = {
+    resourceType: "Specimen",
+    meta: { profile: [SPECIMEN_PROFILE] },
+    status: "available",
+    type: {
+      coding: [
+        {
+          system: JLAC11_SPECIMEN_SYSTEM,
+          code: plan.code,
+          display: plan.display || undefined,
+        },
+      ],
+      text: plan.display || undefined,
+    },
+    subject: { reference: `Patient/${patientId}` },
+    collection: { collectedDateTime: collected },
+  };
+
+  if (plan.id) resource.id = plan.id;
+  return resource;
+}
+
 function buildObservation(
   line: LabResultLineValues,
   patientId: string,
   effective: string,
+  specimenReference?: string,
 ): fhir4.Observation {
   const item = line.item;
 
@@ -165,6 +244,7 @@ function buildObservation(
     ...buildObservationValue(line),
   };
 
+  if (specimenReference) resource.specimen = { reference: specimenReference };
   if (line.id) resource.id = line.id;
   return resource;
 }
@@ -174,18 +254,33 @@ function buildLabResultTransactionBundle(
   patientId: string,
   reportId?: string,
   originalObservationIds?: string[],
+  originalSpecimens?: SpecimenRef[],
 ): fhir4.Bundle {
   const effective = effectiveDateTime(values.specimenDate);
   const reportReference = reportId
     ? `DiagnosticReport/${reportId}`
     : `urn:uuid:${crypto.randomUUID()}`;
 
+  const specimenPlans = planSpecimens(values, originalSpecimens ?? []);
+  const specimenEntries: fhir4.BundleEntry[] = Array.from(specimenPlans.values()).map((plan) => ({
+    fullUrl: plan.fullUrl,
+    resource: buildSpecimen(plan, patientId, effective),
+    request: plan.id
+      ? { method: "PUT" as const, url: `Specimen/${plan.id}` }
+      : { method: "POST" as const, url: "Specimen" },
+  }));
+  const specimenReferences: fhir4.Reference[] = Array.from(specimenPlans.values()).map((plan) => ({
+    reference: plan.fullUrl,
+    display: plan.display || undefined,
+  }));
+
   const observationEntries: fhir4.BundleEntry[] = [];
   const resultReferences: fhir4.Reference[] = [];
   const keptObservationIds = new Set<string>();
 
   for (const line of values.lines) {
-    const resource = buildObservation(line, patientId, effective);
+    const specimenReference = specimenPlans.get(specimenCodeOf(line.item))?.fullUrl;
+    const resource = buildObservation(line, patientId, effective, specimenReference);
     const fullUrl = line.id ? `Observation/${line.id}` : `urn:uuid:${crypto.randomUUID()}`;
     if (line.id) keptObservationIds.add(line.id);
 
@@ -220,6 +315,7 @@ function buildLabResultTransactionBundle(
     },
     subject: { reference: `Patient/${patientId}` },
     effectiveDateTime: effective,
+    specimen: specimenReferences.length ? specimenReferences : undefined,
     result: resultReferences,
   };
 
@@ -228,6 +324,12 @@ function buildLabResultTransactionBundle(
   const removedObservationEntries: fhir4.BundleEntry[] = (originalObservationIds ?? [])
     .filter((id) => !keptObservationIds.has(id))
     .map((id) => ({ request: { method: "DELETE", url: `Observation/${id}` } }));
+
+  // 使われなくなった材料の Specimen を消す。Observation より後に置くことで、
+  // 参照元の Observation が先に更新/削除されてから検体が消える順序になる。
+  const removedSpecimenEntries: fhir4.BundleEntry[] = (originalSpecimens ?? [])
+    .filter((s) => !specimenPlans.has(s.code))
+    .map((s) => ({ request: { method: "DELETE", url: `Specimen/${s.id}` } }));
 
   return {
     resourceType: "Bundle",
@@ -240,8 +342,10 @@ function buildLabResultTransactionBundle(
           ? { method: "PUT", url: `DiagnosticReport/${reportId}` }
           : { method: "POST", url: "DiagnosticReport" },
       },
+      ...specimenEntries,
       ...observationEntries,
       ...removedObservationEntries,
+      ...removedSpecimenEntries,
     ],
   };
 }
@@ -258,13 +362,21 @@ export function buildLabResultUpdateBundle(
   patientId: string,
   reportId: string,
   originalObservationIds: string[],
+  originalSpecimens: SpecimenRef[],
 ): fhir4.Bundle {
-  return buildLabResultTransactionBundle(values, patientId, reportId, originalObservationIds);
+  return buildLabResultTransactionBundle(
+    values,
+    patientId,
+    reportId,
+    originalObservationIds,
+    originalSpecimens,
+  );
 }
 
 export function buildLabResultDeleteBundle(
   reportId: string,
   observationIds: string[],
+  specimenIds: string[],
 ): fhir4.Bundle {
   return {
     resourceType: "Bundle",
@@ -274,14 +386,26 @@ export function buildLabResultDeleteBundle(
       ...observationIds.map((id) => ({
         request: { method: "DELETE" as const, url: `Observation/${id}` },
       })),
+      // 参照元の Observation を消してから検体を消す。
+      ...specimenIds.map((id) => ({
+        request: { method: "DELETE" as const, url: `Specimen/${id}` },
+      })),
     ],
   };
 }
 
-export function observationIdsFromReport(report: fhir4.DiagnosticReport): string[] {
-  return (report.result ?? [])
+function referencedIds(references: fhir4.Reference[] | undefined): string[] {
+  return (references ?? [])
     .map((r) => r.reference?.split("/").pop())
     .filter((id): id is string => Boolean(id));
+}
+
+export function observationIdsFromReport(report: fhir4.DiagnosticReport): string[] {
+  return referencedIds(report.result);
+}
+
+export function specimenIdsFromReport(report: fhir4.DiagnosticReport): string[] {
+  return referencedIds(report.specimen);
 }
 
 // ---- 一覧・詳細表示のための parse ----
@@ -320,16 +444,19 @@ export function summarizeDiagnosticReport(report: fhir4.DiagnosticReport): LabRe
 export interface LabResultDetailBundle {
   report?: fhir4.DiagnosticReport;
   observations: fhir4.Observation[];
+  specimens: fhir4.Specimen[];
 }
 
 export function splitLabResultDetailBundle(bundle: fhir4.Bundle): LabResultDetailBundle {
-  const result: LabResultDetailBundle = { observations: [] };
+  const result: LabResultDetailBundle = { observations: [], specimens: [] };
   for (const entry of bundle.entry ?? []) {
     const resource = entry.resource;
     if (resource?.resourceType === "DiagnosticReport") {
       result.report = resource as fhir4.DiagnosticReport;
     } else if (resource?.resourceType === "Observation") {
       result.observations.push(resource as fhir4.Observation);
+    } else if (resource?.resourceType === "Specimen") {
+      result.specimens.push(resource as fhir4.Specimen);
     }
   }
 
@@ -350,13 +477,33 @@ export interface LabResultLineDisplay {
   id: string;
   name: string;
   abbreviation: string;
+  specimen: string;
   value: string;
   unit: string;
 }
 
-export function observationLineDisplay(obs: fhir4.Observation): LabResultLineDisplay {
+function specimenName(specimen: fhir4.Specimen): string {
+  return (
+    specimen.type?.text ??
+    codingBySystem(specimen.type?.coding, JLAC11_SPECIMEN_SYSTEM)?.display ??
+    ""
+  );
+}
+
+// Observation.specimen の参照先を引くための、Specimen id → 材料名称の対応。
+export function specimenNamesById(specimens: fhir4.Specimen[]): Map<string, string> {
+  return new Map(
+    specimens.flatMap((s) => (s.id ? [[s.id, specimenName(s)] as [string, string]] : [])),
+  );
+}
+
+export function observationLineDisplay(
+  obs: fhir4.Observation,
+  specimenNames?: Map<string, string>,
+): LabResultLineDisplay {
   const jlacCoding = codingBySystem(obs.code.coding, JLAC11_SYSTEM);
   const abbrCoding = codingBySystem(obs.code.coding, ABBREVIATION_SYSTEM);
+  const specimenId = obs.specimen?.reference?.split("/").pop();
 
   let value = "";
   let unit = "";
@@ -373,6 +520,7 @@ export function observationLineDisplay(obs: fhir4.Observation): LabResultLineDis
     id: obs.id ?? "",
     name: jlacCoding?.display ?? obs.code.text ?? "",
     abbreviation: abbrCoding?.display ?? "",
+    specimen: (specimenId && specimenNames?.get(specimenId)) || "",
     value,
     unit,
   };
@@ -384,10 +532,14 @@ export function observationLineDisplay(obs: fhir4.Observation): LabResultLineDis
 // まず保存済みの値のみを持つ簡易オブジェクトとして復元し、編集画面側で
 // hydrateLabResultForm によりマスタ情報を引き直して補完する。
 
-function labItemFromObservation(obs: fhir4.Observation): LabItem | null {
+function labItemFromObservation(
+  obs: fhir4.Observation,
+  specimenNames: Map<string, string>,
+): LabItem | null {
   const jlacCoding = codingBySystem(obs.code.coding, JLAC11_SYSTEM);
   if (!jlacCoding?.code) return null;
   const abbrCoding = codingBySystem(obs.code.coding, ABBREVIATION_SYSTEM);
+  const specimenId = obs.specimen?.reference?.split("/").pop();
 
   const dataType = obs.valueQuantity ? "PQ" : obs.valueCodeableConcept ? "CD" : "ST";
 
@@ -396,7 +548,7 @@ function labItemFromObservation(obs: fhir4.Observation): LabItem | null {
     category_name: null,
     fhir_item_name: jlacCoding.display ?? obs.code.text ?? null,
     abbreviation: abbrCoding?.display ?? null,
-    jlac11_specimen: null,
+    jlac11_specimen: (specimenId && specimenNames.get(specimenId)) || null,
     jlac11_method: null,
     jlac11_code: jlacCoding.code,
     display_unit: obs.valueQuantity?.unit ?? null,
@@ -420,10 +572,12 @@ function lineValueFromObservation(obs: fhir4.Observation): string {
 export function parseLabResultForm(
   report: fhir4.DiagnosticReport,
   observations: fhir4.Observation[],
+  specimens: fhir4.Specimen[] = [],
 ): LabResultFormValues {
+  const specimenNames = specimenNamesById(specimens);
   const lines: LabResultLineValues[] = observations.map((obs) => ({
     id: obs.id,
-    item: labItemFromObservation(obs),
+    item: labItemFromObservation(obs, specimenNames),
     value: lineValueFromObservation(obs),
   }));
 
@@ -432,6 +586,15 @@ export function parseLabResultForm(
     specimenDate: report.effectiveDateTime?.slice(0, 10) ?? today(),
     lines: lines.length ? lines : [{ ...emptyLabResultLine }],
   };
+}
+
+// 更新 Bundle 用に、保存済み Specimen の 材料コード → id を取り出す。
+// 同じ材料が引き続き使われていればその Specimen を PUT で使い回す。
+export function specimenRefsFrom(specimens: fhir4.Specimen[]): SpecimenRef[] {
+  return specimens.flatMap((s) => {
+    const code = codingBySystem(s.type?.coding, JLAC11_SPECIMEN_SYSTEM)?.code;
+    return code && s.id ? [{ code, id: s.id }] : [];
+  });
 }
 
 // 復元した簡易オブジェクトを、マスタから引き直した完全な LabItem で置き換える。

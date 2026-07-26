@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import {
   buildLabResultDeleteBundle,
   observationIdsFromReport,
+  specimenIdsFromReport,
 } from "../fhir/labResultHelpers";
 import {
   buildPrescriptionDeleteBundle,
@@ -206,7 +207,8 @@ export function useLabResultSearch(patientId: string | undefined, offset: number
 export function useLabResultDetail(reportId: string | undefined) {
   const params = new URLSearchParams();
   if (reportId) params.set("_id", reportId);
-  params.set("_include", "DiagnosticReport:result");
+  params.append("_include", "DiagnosticReport:result");
+  params.append("_include", "DiagnosticReport:specimen");
 
   return useQuery({
     queryKey: ["DiagnosticReport", "detail", reportId],
@@ -240,12 +242,18 @@ export function useDeleteLabResult() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (reportId: string) => {
-      // 削除対象の Observation は DiagnosticReport.result の参照から辿る。
+      // 削除対象の Observation / Specimen は DiagnosticReport の参照から辿る。
       const { data: report } = await readResource<fhir4.DiagnosticReport>(
         "DiagnosticReport",
         reportId,
       );
-      return postBundle(buildLabResultDeleteBundle(reportId, observationIdsFromReport(report)));
+      return postBundle(
+        buildLabResultDeleteBundle(
+          reportId,
+          observationIdsFromReport(report),
+          specimenIdsFromReport(report),
+        ),
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });

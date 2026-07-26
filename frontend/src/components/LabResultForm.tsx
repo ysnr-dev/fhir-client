@@ -185,7 +185,8 @@ export function LabResultForm({
         <table className="rp-card__medicines">
           <colgroup>
             <col />
-            <col style={{ width: "30%" }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "18%" }} />
             <col style={{ width: "160px" }} />
             <col style={{ width: "96px" }} />
             <col style={{ width: "72px" }} />
@@ -194,6 +195,7 @@ export function LabResultForm({
             <tr>
               <th>検査項目</th>
               <th>略称</th>
+              <th>材料</th>
               <th>結果値</th>
               <th>単位</th>
               <th></th>
@@ -215,6 +217,7 @@ export function LabResultForm({
                   </div>
                 </td>
                 <td>{line.item?.abbreviation ?? "-"}</td>
+                <td>{line.item?.jlac11_specimen ?? "-"}</td>
                 <td>
                   <ResultValueInput
                     line={line}

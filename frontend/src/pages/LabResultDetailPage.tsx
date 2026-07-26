@@ -6,6 +6,7 @@ import { JsonBlock } from "../components/JsonBlock";
 import { PatientHeader } from "../components/PatientHeader";
 import {
   observationLineDisplay,
+  specimenNamesById,
   splitLabResultDetailBundle,
   summarizeDiagnosticReport,
 } from "../fhir/labResultHelpers";
@@ -31,10 +32,11 @@ export function LabResultDetailPage() {
     });
   }
 
-  const { report, observations } = detail.data
+  const { report, observations, specimens } = detail.data
     ? splitLabResultDetailBundle(detail.data.data)
-    : { report: undefined, observations: [] };
+    : { report: undefined, observations: [], specimens: [] };
   const summary = report ? summarizeDiagnosticReport(report) : undefined;
+  const specimenNames = specimenNamesById(specimens);
 
   return (
     <div className="page">
@@ -80,17 +82,19 @@ export function LabResultDetailPage() {
                   <tr>
                     <th>検査項目</th>
                     <th>略称</th>
+                    <th>材料</th>
                     <th>結果値</th>
                     <th>単位</th>
                   </tr>
                 </thead>
                 <tbody>
                   {observations.map((obs, index) => {
-                    const line = observationLineDisplay(obs);
+                    const line = observationLineDisplay(obs, specimenNames);
                     return (
                       <tr key={line.id || index}>
                         <td>{line.name || "-"}</td>
                         <td>{line.abbreviation || "-"}</td>
+                        <td>{line.specimen || "-"}</td>
                         <td>{line.value || "-"}</td>
                         <td>{line.unit || "-"}</td>
                       </tr>

@@ -9,6 +9,7 @@ import {
   buildLabResultUpdateBundle,
   hydrateLabResultForm,
   parseLabResultForm,
+  specimenRefsFrom,
   splitLabResultDetailBundle,
   type LabResultFormValues,
 } from "../fhir/labResultHelpers";
@@ -19,14 +20,16 @@ export function LabResultEditPage() {
   const detail = useLabResultDetail(reportId);
   const updateLabResult = useUpdateLabResult();
 
-  const { report, observations } = detail.data
+  const { report, observations, specimens } = detail.data
     ? splitLabResultDetailBundle(detail.data.data)
-    : { report: undefined, observations: [] };
+    : { report: undefined, observations: [], specimens: [] };
 
   const parsed = useMemo(() => {
     if (!detail.data) return undefined;
     const split = splitLabResultDetailBundle(detail.data.data);
-    return split.report ? parseLabResultForm(split.report, split.observations) : undefined;
+    return split.report
+      ? parseLabResultForm(split.report, split.observations, split.specimens)
+      : undefined;
   }, [detail.data]);
 
   // 保存済みリソースにはコード型の選択肢などマスタ情報が含まれないため、
@@ -48,9 +51,16 @@ export function LabResultEditPage() {
   function handleSubmit(values: LabResultFormValues) {
     if (!patientId || !reportId || !report) return;
     const originalIds = observations.map((o) => o.id).filter((id): id is string => Boolean(id));
-    updateLabResult.mutate(buildLabResultUpdateBundle(values, patientId, reportId, originalIds), {
-      onSuccess: () => navigate(`/patients/${patientId}/lab-results/${reportId}`),
-    });
+    updateLabResult.mutate(
+      buildLabResultUpdateBundle(
+        values,
+        patientId,
+        reportId,
+        originalIds,
+        specimenRefsFrom(specimens),
+      ),
+      { onSuccess: () => navigate(`/patients/${patientId}/lab-results/${reportId}`) },
+    );
   }
 
   // マスタ照会の完了(またはエラー)を待ってからフォームを初期化する。
