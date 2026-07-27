@@ -43,6 +43,9 @@ export function PrescriptionDetailPage() {
       <div className="page__header">
         <h1>処方内容</h1>
         <div>
+          <Link to={`/patients/${patientId}/prescriptions/new?from=${srId}`} className="button">
+            DO
+          </Link>
           <Link to={`/patients/${patientId}/prescriptions/${srId}/edit`} className="button">
             編集
           </Link>
