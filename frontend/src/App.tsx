@@ -1,6 +1,7 @@
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import { AdminGate } from "./components/AdminGate";
+import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
@@ -29,6 +30,7 @@ function App() {
           <Link to="/oauth-clients">OAuth クライアント</Link>
           <Link to="/settings">接続設定</Link>
         </nav>
+        <WakeButton />
       </header>
       <main className="app__main">
         <Routes>

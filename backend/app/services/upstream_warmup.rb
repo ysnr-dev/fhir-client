@@ -22,7 +22,7 @@ module UpstreamWarmup
   module_function
 
   def wait_until_ready(base_url:, host_header: nil, sleeper: ->(seconds) { sleep(seconds) })
-    connection = probe_connection(base_url, host_header)
+    connection = probe_connection(base_url, host_header, timeout: PROBE_TIMEOUT)
 
     MAX_ATTEMPTS.times do |attempt|
       return true if ready?(connection)
@@ -38,10 +38,13 @@ module UpstreamWarmup
     false
   end
 
-  def probe_connection(base_url, host_header)
+  # timeout はプローブ 1 回あたりの待ち時間。起動を待ち切りたい呼び出し
+  # (wait_until_ready)は PROBE_TIMEOUT を、待たずに現況だけ知りたい呼び出し
+  # (WakeupController)は短い値を渡す。
+  def probe_connection(base_url, host_header, timeout: PROBE_TIMEOUT)
     Faraday.new(url: "#{base_url.to_s.chomp('/')}/up") do |f|
       f.options.open_timeout = 2
-      f.options.timeout = PROBE_TIMEOUT
+      f.options.timeout = timeout
       f.headers["Host"] = host_header if host_header.present?
       f.adapter Faraday.default_adapter
     end

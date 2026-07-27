@@ -15,6 +15,10 @@ export default defineConfig({
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
         changeOrigin: true,
       },
+      '/wakeup': {
+        target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
+        changeOrigin: true,
+      },
       '/admin': {
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
         changeOrigin: true,

@@ -78,6 +78,11 @@ services:
       - type: rewrite
         source: /master/*
         destination: https://ysnr-fhir-client-api.onrender.com/master/*
+      # 休眠したサーバーを明示的に起こすエンドポイント(ヘッダーの起こしボタン)。
+      # backend に届くこと自体が backend の起動トリガーになる。
+      - type: rewrite
+        source: /wakeup
+        destination: https://ysnr-fhir-client-api.onrender.com/wakeup
       # 接続設定(管理)API。無いと SPA フォールバックに落ちて index.html が返る。
       - type: rewrite
         source: /admin

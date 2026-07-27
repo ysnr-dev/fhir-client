@@ -35,6 +35,59 @@
   text-decoration: none;
 }
 
+/* 休眠したサーバーを起こすボタン。常用するものではないので、ヘッダー右端に
+   地味なテキストボタンとして置く(グローバルの button スタイルを打ち消す)。 */
+.wake-button {
+  margin-left: auto;
+  font-size: 13px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  background: transparent;
+  gap: 6px;
+  opacity: 0.7;
+}
+
+.wake-button:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--text-h);
+}
+
+.wake-button:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.wake-button__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+.wake-button--waking .wake-button__dot {
+  animation: wake-button-blink 1.2s ease-in-out infinite;
+}
+
+.wake-button--ready .wake-button__dot {
+  background: #22c55e;
+  opacity: 1;
+}
+
+.wake-button--failed {
+  opacity: 1;
+  color: #dc2626;
+  border-color: currentColor;
+}
+
+@keyframes wake-button-blink {
+  50% {
+    opacity: 0.1;
+  }
+}
+
 .app__main {
   flex: 1;
   padding: 24px;
