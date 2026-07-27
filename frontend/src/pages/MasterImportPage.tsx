@@ -35,6 +35,24 @@ const MASTER_OPTIONS: MasterOption[] = [
     formatHint: "共有項目JLACコードマスタ / CSV（UTF-8、ヘッダあり・32列）",
     accept: ".csv",
   },
+  {
+    type: "diseases",
+    label: "病名マスタ",
+    formatHint: "ICD10対応標準病名マスター 病名基本テーブル nmain*.txt（Shift_JIS、ヘッダなし・20列）",
+    accept: ".txt,.csv",
+  },
+  {
+    type: "modifiers",
+    label: "修飾語マスタ",
+    formatHint: "ICD10対応標準病名マスター 修飾語テーブル mdfy*.txt（Shift_JIS、ヘッダなし・10列）",
+    accept: ".txt,.csv",
+  },
+  {
+    type: "disease_indexes",
+    label: "病名索引マスタ",
+    formatHint: "ICD10対応標準病名マスター 索引テーブル index*.txt（Shift_JIS、ヘッダなし・9列）",
+    accept: ".txt,.csv",
+  },
 ];
 
 export function MasterImportPage() {

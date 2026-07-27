@@ -1,4 +1,11 @@
-export type MasterType = "hot_codes" | "medicines" | "medicine_usages" | "lab_items";
+export type MasterType =
+  | "hot_codes"
+  | "medicines"
+  | "medicine_usages"
+  | "lab_items"
+  | "diseases"
+  | "modifiers"
+  | "disease_indexes";
 
 export interface MasterImportResult {
   imported: number;

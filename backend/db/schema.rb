@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_26_010000) do
+ActiveRecord::Schema[8.0].define(version: 2026_07_28_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -25,6 +25,53 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_26_010000) do
     t.datetime "updated_at", null: false
     t.text "fhir_admin_token"
     t.index ["singleton_guard"], name: "index_fhir_connection_settings_on_singleton_guard", unique: true
+  end
+
+  create_table "master_disease_indexes", force: :cascade do |t|
+    t.string "term", null: false
+    t.string "target_code", null: false
+    t.string "disease_modifier_category"
+    t.string "kana_kanji_category"
+    t.string "synonym_category"
+    t.string "variant_category"
+    t.string "first_edition_category"
+    t.string "language_category"
+    t.string "abbreviation_category"
+    t.string "search_term"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["search_term"], name: "index_master_disease_indexes_on_search_term"
+    t.index ["target_code"], name: "index_master_disease_indexes_on_target_code"
+  end
+
+  create_table "master_diseases", force: :cascade do |t|
+    t.string "change_category"
+    t.string "management_number", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.string "adoption_category"
+    t.string "exchange_code"
+    t.string "icd10_2013"
+    t.string "icd10_2013_secondary"
+    t.string "reserve1"
+    t.string "reserve2"
+    t.string "receipt_code"
+    t.string "abbreviated_name"
+    t.string "usage_field"
+    t.string "change_history_number"
+    t.string "updated_on"
+    t.string "transfer_management_number"
+    t.string "single_use_prohibited_category"
+    t.string "non_billable_category"
+    t.string "reserve3"
+    t.string "reserve4"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["exchange_code"], name: "index_master_diseases_on_exchange_code"
+    t.index ["icd10_2013"], name: "index_master_diseases_on_icd10_2013"
+    t.index ["management_number"], name: "index_master_diseases_on_management_number", unique: true
   end
 
   create_table "master_hot_codes", force: :cascade do |t|
@@ -186,5 +233,24 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_26_010000) do
     t.index ["medicine_code"], name: "index_master_medicines_on_medicine_code", unique: true
     t.index ["name"], name: "index_master_medicines_on_name"
     t.index ["yakka_code"], name: "index_master_medicines_on_yakka_code"
+  end
+
+  create_table "master_modifiers", force: :cascade do |t|
+    t.string "change_category"
+    t.string "management_number", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.string "exchange_code"
+    t.string "connection_position_category"
+    t.string "modifier_category"
+    t.string "exclusive_group_code"
+    t.string "receipt_code"
+    t.string "description_label"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["exchange_code"], name: "index_master_modifiers_on_exchange_code"
+    t.index ["management_number"], name: "index_master_modifiers_on_management_number", unique: true
   end
 end

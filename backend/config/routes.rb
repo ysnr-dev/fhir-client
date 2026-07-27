@@ -52,5 +52,15 @@ Rails.application.routes.draw do
         get :categories
       end
     end
+    resources :diseases, only: %i[index show create update destroy] do
+      collection { post :import }
+    end
+    resources :modifiers, only: %i[index show create update destroy] do
+      collection { post :import }
+    end
+    # 索引テーブルは検索専用(取込で全件洗い替え)のため CRUD は持たない。
+    resources :disease_indexes, only: %i[index] do
+      collection { post :import }
+    end
   end
 end
