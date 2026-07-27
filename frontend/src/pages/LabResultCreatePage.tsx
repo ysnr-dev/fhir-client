@@ -19,7 +19,7 @@ export function LabResultCreatePage() {
 
   // ?from=<DiagnosticReport id> が付いていれば、その検査結果を DO(検査項目のみ流用)する。
   const sourceReportId = searchParams.get("from") ?? undefined;
-  const source = useLabResultInitialValues(sourceReportId);
+  const source = useLabResultInitialValues(sourceReportId, patientId);
 
   const initialValues = useMemo(
     () => (source.initialValues ? buildDoLabResultForm(source.initialValues) : undefined),

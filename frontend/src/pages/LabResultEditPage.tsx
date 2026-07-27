@@ -15,11 +15,12 @@ export function LabResultEditPage() {
   const navigate = useNavigate();
   const updateLabResult = useUpdateLabResult();
 
-  const { report, observations, specimens, initialValues, ready, error } =
-    useLabResultInitialValues(reportId);
+  const { report, observations, specimens, initialValues, ready, patientMismatch, error } =
+    useLabResultInitialValues(reportId, patientId);
 
   function handleSubmit(values: LabResultFormValues) {
-    if (!patientId || !reportId || !report) return;
+    // 別患者の検査結果を更新すると subject が URL の患者に書き換わり、検査結果が付け替わってしまう。
+    if (!patientId || !reportId || !report || patientMismatch) return;
     const originalIds = observations.map((o) => o.id).filter((id): id is string => Boolean(id));
     updateLabResult.mutate(
       buildLabResultUpdateBundle(

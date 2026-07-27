@@ -19,7 +19,7 @@ export function PrescriptionCreatePage() {
 
   // ?from=<ServiceRequest id> が付いていれば、その処方を DO(投与量などの値も流用)する。
   const sourceSrId = searchParams.get("from") ?? undefined;
-  const source = usePrescriptionInitialValues(sourceSrId);
+  const source = usePrescriptionInitialValues(sourceSrId, patientId);
 
   const initialValues = useMemo(
     () => (source.initialValues ? buildDoPrescriptionForm(source.initialValues) : undefined),

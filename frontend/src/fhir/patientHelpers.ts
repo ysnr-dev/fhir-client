@@ -7,6 +7,22 @@ export const DEFAULT_IDENTIFIER_SYSTEM = "urn:oid:1.2.392.100495.20.3.51";
 
 export type Gender = "male" | "female" | "other" | "unknown" | "";
 
+// "Patient/123" 形式(サーバーによっては絶対 URL)の参照から患者 id を取り出す。
+export function patientIdFromReference(reference: string | undefined): string | undefined {
+  return reference?.split("/").pop() || undefined;
+}
+
+// URL 上の患者と、読み込んだリソースが指す患者が食い違っていないかを判定する。
+// 一致しない ID を URL に直接書いた場合に、他患者の内容を表示したり、
+// 更新で subject を書き換えて別患者に付け替えたりするのを防ぐために使う。
+export function isPatientMismatch(
+  patientId: string | undefined,
+  subject: fhir4.Reference | undefined,
+): boolean {
+  const sourcePatientId = patientIdFromReference(subject?.reference);
+  return Boolean(patientId && sourcePatientId && sourcePatientId !== patientId);
+}
+
 export interface PatientFormValues {
   identifierSystem: string;
   identifierValue: string;

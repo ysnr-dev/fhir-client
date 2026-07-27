@@ -19,11 +19,13 @@ export function PrescriptionEditPage() {
     medicationRequests: mrs,
     initialValues,
     ready,
+    patientMismatch,
     error,
-  } = usePrescriptionInitialValues(srId);
+  } = usePrescriptionInitialValues(srId, patientId);
 
   function handleSubmit(values: PrescriptionFormValues) {
-    if (!patientId || !srId || !sr) return;
+    // 別患者の処方を更新すると subject が URL の患者に書き換わり、処方が付け替わってしまう。
+    if (!patientId || !srId || !sr || patientMismatch) return;
     const originalIds = mrs.map((mr) => mr.id).filter((id): id is string => Boolean(id));
     updatePrescription.mutate(buildPrescriptionUpdateBundle(values, patientId, srId, originalIds), {
       onSuccess: () => navigate(`/patients/${patientId}/prescriptions/${srId}`),
@@ -46,7 +48,8 @@ export function PrescriptionEditPage() {
       {!ready ? (
         <p>読み込み中...</p>
       ) : (
-        sr && (
+        sr &&
+        initialValues && (
           <PrescriptionForm
             initialValues={initialValues}
             onSubmit={handleSubmit}
