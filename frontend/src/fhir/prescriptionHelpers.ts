@@ -331,6 +331,21 @@ export function buildPrescriptionUpdateBundle(
   return buildPrescriptionTransactionBundle(values, patientId, serviceRequestId, originalMedicationRequestIds);
 }
 
+// 既存の処方を DO(流用)して新規登録するためのフォーム値に変換する。
+// ・入外区分/処方区分/用法/投与量/投与日数/コメントなど入力値はすべて引き継ぐ
+// ・MedicationRequest の id を落とし、既存リソースの更新(PUT)ではなく新規登録(POST)にする
+// ・処方日は DO 元ではなく当日にする
+export function buildDoPrescriptionForm(values: PrescriptionFormValues): PrescriptionFormValues {
+  return {
+    ...values,
+    authoredDate: today(),
+    rps: values.rps.map((rp) => ({
+      ...rp,
+      medicines: rp.medicines.map(({ id: _id, ...rest }) => rest),
+    })),
+  };
+}
+
 export function buildPrescriptionDeleteBundle(
   serviceRequestId: string,
   medicationRequestIds: string[],
