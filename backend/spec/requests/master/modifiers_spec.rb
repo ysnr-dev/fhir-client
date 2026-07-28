@@ -47,6 +47,18 @@ RSpec.describe "Master::Modifiers", type: :request do
     it "modifier_category の完全一致で絞り込む" do
       expect(names_for(modifier_category: "A2000000")).to eq(["左"])
     end
+
+    it "病名索引の同義語からも検索できる" do
+      Master::DiseaseIndex.create!(term: "アキュート", target_code: "0001", disease_modifier_category: "2")
+
+      expect(names_for(name: "あきゅーと")).to eq(["急性"])
+    end
+
+    it "exclude_deleted で削除区分レコードを除外する" do
+      Master::Modifier.create!(management_number: "27009999", name: "旧修飾語", change_category: "1")
+
+      expect(names_for(exclude_deleted: "1")).to eq(%w[急性 左])
+    end
   end
 
   describe "CRUD" do

@@ -5,6 +5,10 @@ import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
+import { ConditionCreatePage } from "./pages/ConditionCreatePage";
+import { ConditionDetailPage } from "./pages/ConditionDetailPage";
+import { ConditionEditPage } from "./pages/ConditionEditPage";
+import { ConditionListPage } from "./pages/ConditionListPage";
 import { PatientCreatePage } from "./pages/PatientCreatePage";
 import { PatientEditPage } from "./pages/PatientEditPage";
 import { PatientListPage } from "./pages/PatientListPage";
@@ -46,6 +50,10 @@ function App() {
           <Route path="/patients/:patientId/lab-results/new" element={<LabResultCreatePage />} />
           <Route path="/patients/:patientId/lab-results/:reportId" element={<LabResultDetailPage />} />
           <Route path="/patients/:patientId/lab-results/:reportId/edit" element={<LabResultEditPage />} />
+          <Route path="/patients/:patientId/conditions" element={<ConditionListPage />} />
+          <Route path="/patients/:patientId/conditions/new" element={<ConditionCreatePage />} />
+          <Route path="/patients/:patientId/conditions/:conditionId" element={<ConditionDetailPage />} />
+          <Route path="/patients/:patientId/conditions/:conditionId/edit" element={<ConditionEditPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           {/* 管理画面は AdminGate で包む。/settings も対象にするのは、
               これまで ADMIN_TOKEN ヘッダーを送っておらず、本番で

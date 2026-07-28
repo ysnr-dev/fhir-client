@@ -261,6 +261,73 @@ export function useDeleteLabResult() {
   });
 }
 
+const CONDITION_COUNT = 20;
+
+export function useConditionSearch(patientId: string | undefined, offset: number) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("_count", String(CONDITION_COUNT));
+  params.set("_offset", String(offset));
+  // 開始日の降順(新しい順)。_sort のキーは検索パラメータ名 onset-date。
+  params.set("_sort", "-onset-date");
+
+  const query = useQuery({
+    queryKey: ["Condition", "search", patientId, offset],
+    queryFn: () => searchResource<fhir4.Condition>("Condition", params),
+    placeholderData: keepPreviousData,
+    enabled: Boolean(patientId),
+  });
+
+  return {
+    ...query,
+    bundle: query.data?.data,
+    total: query.data?.data.total ?? 0,
+    count: CONDITION_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+export function useCondition(id: string | undefined) {
+  return useQuery({
+    queryKey: ["Condition", id],
+    queryFn: () => readResource<fhir4.Condition>("Condition", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateCondition() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (condition: fhir4.Condition) => createResource(condition),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Condition", "search"] });
+    },
+  });
+}
+
+export function useUpdateCondition() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ condition, etag }: { condition: fhir4.Condition; etag: string }) =>
+      updateResource(condition, etag),
+    onSuccess: (result: FhirResult<fhir4.Condition>) => {
+      queryClient.invalidateQueries({ queryKey: ["Condition", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["Condition", result.data.id] });
+    },
+  });
+}
+
+export function useDeleteCondition() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteResource("Condition", id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Condition", "search"] });
+    },
+  });
+}
+
 export function useDeletePrescription() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -1312,3 +1312,58 @@ button:disabled {
   display: flex;
   justify-content: flex-end;
 }
+
+/* ---- 病名フォーム ---- */
+
+.condition-form__row {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.condition-form__modifiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.condition-form__modifier-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--text-h);
+  background: var(--bg);
+}
+
+.condition-form__modifier-chip button {
+  border: none;
+  background: none;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.condition-form__modifier-chip button:hover {
+  color: var(--text-h);
+}
+
+.condition-form__preview {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.condition-form__hint {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}

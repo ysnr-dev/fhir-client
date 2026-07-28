@@ -11,7 +11,8 @@ module Master
       # IS DISTINCT FROM で change_category が NULL の手動作成レコードも残す。
       scope = scope.where("change_category IS DISTINCT FROM '1'") if params[:exclude_deleted].present?
       if params[:name].present?
-        scope = flexible_name_match(scope, params[:name], %w[search_name search_kana])
+        # 名称・カナに加えて病名索引テーブル(同義語・異字体など)からも検索する。
+        scope = flexible_name_or_index_match(scope, params[:name], "1")
       end
 
       render json: paginate(scope)

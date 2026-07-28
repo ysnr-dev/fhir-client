@@ -39,6 +39,29 @@ module Master
       str.gsub(/[%_\\]/) { |c| "\\#{c}" }
     end
 
+    # 病名・修飾語マスタ用の名称検索。flexible_name_match と同じ表記ゆれ検索に
+    # 加えて、病名索引テーブルの索引用語(同義語・異字体・読みなど)にヒットした
+    # 交換用コードのレコードも結果に含める。
+    # index_category: 索引テーブルの病名修飾語区分("1"=病名, "2"=修飾語)
+    def flexible_name_or_index_match(scope, query, index_category)
+      conn = ActiveRecord::Base.connection
+      whole = conn.quote("%#{sanitize_like(Master::SearchNormalizer.normalize(query))}%")
+
+      name_clauses = Master::SearchNormalizer.tokenize(query).map do |token|
+        pattern = conn.quote("%#{sanitize_like(token)}%")
+        "(search_name LIKE #{pattern} OR search_kana LIKE #{pattern})"
+      end
+      name_sql = name_clauses.presence&.join(" AND ") || "FALSE"
+
+      index_sql = "exchange_code IN (SELECT target_code FROM master_disease_indexes " \
+                  "WHERE disease_modifier_category = #{conn.quote(index_category)} " \
+                  "AND search_term LIKE #{whole})"
+
+      scope
+        .where("(#{name_sql}) OR (#{index_sql})")
+        .order(Arel.sql("(search_name LIKE #{whole} OR search_kana LIKE #{whole}) DESC NULLS LAST"))
+    end
+
     # 表記ゆれを吸収した名称検索。クエリを正規化トークンに分割し、全トークンが
     # いずれかの検索用カラムに含まれる(AND)レコードに絞り込む。正規化後の
     # クエリ全体が連続一致するレコードを先頭に並べる。

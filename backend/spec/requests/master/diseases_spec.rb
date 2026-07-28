@@ -58,6 +58,18 @@ RSpec.describe "Master::Diseases", type: :request do
     it "exclude_deleted で削除区分レコードを除外する" do
       expect(names_for(exclude_deleted: "1")).to eq(%w[急性膵炎 慢性膵炎])
     end
+
+    it "病名索引の同義語からも検索できる" do
+      Master::DiseaseIndex.create!(term: "急性膵臓炎", target_code: "C142", disease_modifier_category: "1")
+
+      expect(names_for(name: "急性膵臓炎")).to eq(["急性膵炎"])
+    end
+
+    it "修飾語向けの索引用語は病名検索にヒットしない" do
+      Master::DiseaseIndex.create!(term: "急性膵臓炎", target_code: "C142", disease_modifier_category: "2")
+
+      expect(names_for(name: "急性膵臓炎")).to eq([])
+    end
   end
 
   describe "CRUD" do
