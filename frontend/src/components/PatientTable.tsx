@@ -46,6 +46,9 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
                 <Link className="button" to={`/patients/${patient.id}/prescriptions`}>
                   処方
                 </Link>
+                <Link className="button" to={`/patients/${patient.id}/conditions`}>
+                  病名
+                </Link>
                 <Link className="button" to={`/patients/${patient.id}/lab-results`}>
                   検査結果
                 </Link>

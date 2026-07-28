@@ -4,9 +4,11 @@ import {
   fetchMedicineTypeOptions,
   fetchMedicineUsageCategories,
   importMaster,
+  searchDiseases,
   searchLabItems,
   searchMedicineUsages,
   searchMedicines,
+  searchModifiers,
   type MasterType,
 } from "./masterClient";
 
@@ -108,6 +110,24 @@ export function useLabItemCategories(enabled: boolean) {
     queryKey: ["master", "lab_items", "categories"],
     queryFn: fetchLabItemCategories,
     staleTime: Infinity,
+    enabled,
+  });
+}
+
+export function useDiseaseSearch(name: string, page: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["master", "diseases", name, page],
+    queryFn: () => searchDiseases({ name: name || undefined, page, per: MASTER_SEARCH_PER }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useModifierSearch(name: string, page: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["master", "modifiers", name, page],
+    queryFn: () => searchModifiers({ name: name || undefined, page, per: MASTER_SEARCH_PER }),
+    placeholderData: keepPreviousData,
     enabled,
   });
 }
