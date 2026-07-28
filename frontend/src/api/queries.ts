@@ -217,6 +217,138 @@ export function useLabResultDetail(reportId: string | undefined) {
   });
 }
 
+// 上流 fhir-server の _count 上限が 100 のため、それを 1 ページとして順に辿る。
+const LAB_RESULT_ORDER_PAGE = 100;
+// 患者あたりの検査結果が極端に多い場合の暴走防止（最大 1000 件まで前後移動できる）。
+const LAB_RESULT_ORDER_MAX_PAGES = 10;
+
+// 一覧と同じ絞り込み・並び順で DiagnosticReport の id だけを取得する。
+// 上流の _sort は同値時に id 昇順で安定するため、一覧の並びとページ境界をまたいでも一致する。
+async function fetchLabResultOrder(patientId: string): Promise<string[]> {
+  const ids: string[] = [];
+
+  for (let page = 0; page < LAB_RESULT_ORDER_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("patient", `Patient/${patientId}`);
+    params.set("category", "LAB");
+    params.set("_count", String(LAB_RESULT_ORDER_PAGE));
+    params.set("_offset", String(page * LAB_RESULT_ORDER_PAGE));
+    params.set("_sort", "-date");
+    // 前後移動には id の並びだけあればよいので本文は返させない。
+    params.set("_elements", "id");
+
+    const { data: bundle } = await searchResource<fhir4.DiagnosticReport>(
+      "DiagnosticReport",
+      params,
+    );
+    const pageIds =
+      bundle.entry
+        ?.map((entry) => entry.resource?.id)
+        .filter((id): id is string => Boolean(id)) ?? [];
+    ids.push(...pageIds);
+
+    if (pageIds.length < LAB_RESULT_ORDER_PAGE) break;
+  }
+
+  return ids;
+}
+
+// 検査結果内容ページの「前へ/次へ」用。一覧に戻らず隣の検査結果へ移動するための id を返す。
+export function useLabResultNavigation(patientId: string | undefined, reportId: string | undefined) {
+  // 作成・更新・削除時の invalidateQueries(["DiagnosticReport", "search"]) で
+  // まとめて無効化されるよう search 配下のキーにしている。
+  const query = useQuery({
+    queryKey: ["DiagnosticReport", "search", "order", patientId],
+    queryFn: () => fetchLabResultOrder(patientId as string),
+    enabled: Boolean(patientId),
+    // 前後移動のたびにページが再マウントされるため、連打で毎回引き直さないよう
+    // 少しだけ寝かせる。更新・削除時は invalidateQueries 側で無効化される。
+    staleTime: 30_000,
+  });
+
+  const ids = query.data ?? [];
+  const index = reportId ? ids.indexOf(reportId) : -1;
+
+  return {
+    previousId: index > 0 ? ids[index - 1] : undefined,
+    nextId: index >= 0 && index < ids.length - 1 ? ids[index + 1] : undefined,
+    position: index >= 0 ? index + 1 : undefined,
+    total: ids.length,
+    isLoading: query.isLoading,
+  };
+}
+
+// ---- 時系列表示 ----
+
+// 上流 fhir-server の _count 上限 100 を 1 ページとして順に辿る。
+const LAB_TIMELINE_PAGE = 100;
+// 患者あたりの検査結果が極端に多い場合の暴走防止。
+const LAB_TIMELINE_MAX_PAGES = 10;
+
+export interface LabTimelineResources {
+  reports: fhir4.DiagnosticReport[];
+  observations: fhir4.Observation[];
+}
+
+// 時系列表示は「直近 dateCount 回分の検体採取日」を横軸にするため、
+// 採取日の降順で DiagnosticReport を Observation ごと(_include)取得する。
+// dateCount+1 個目の採取日が現れたら、必要な日数分は揃っているので打ち切る
+// (同じ採取日のレポートがページ境界をまたぐ場合があるため +1 まで読む)。
+async function fetchLabTimelineResources(
+  patientId: string,
+  dateCount: number,
+): Promise<LabTimelineResources> {
+  const reports: fhir4.DiagnosticReport[] = [];
+  const observations: fhir4.Observation[] = [];
+  const dates = new Set<string>();
+
+  for (let page = 0; page < LAB_TIMELINE_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("patient", `Patient/${patientId}`);
+    params.set("category", "LAB");
+    params.set("_count", String(LAB_TIMELINE_PAGE));
+    params.set("_offset", String(page * LAB_TIMELINE_PAGE));
+    params.set("_sort", "-date");
+    params.set("_include", "DiagnosticReport:result");
+
+    const { data: bundle } = await searchResource<fhir4.Resource>("DiagnosticReport", params);
+
+    // _include の Observation も entry に混ざって返るため、レポート数は
+    // resourceType で数える。
+    let pageReports = 0;
+    for (const entry of bundle.entry ?? []) {
+      const resource = entry.resource;
+      if (resource?.resourceType === "DiagnosticReport") {
+        pageReports += 1;
+        const report = resource as fhir4.DiagnosticReport;
+        reports.push(report);
+        const date = report.effectiveDateTime?.slice(0, 10);
+        if (date) dates.add(date);
+      } else if (resource?.resourceType === "Observation") {
+        observations.push(resource as fhir4.Observation);
+      }
+    }
+
+    if (pageReports < LAB_TIMELINE_PAGE) break;
+    if (dates.size > dateCount) break;
+  }
+
+  return { reports, observations };
+}
+
+export function useLabResultTimeline(patientId: string | undefined, dateCount: number) {
+  // 作成・更新・削除時の invalidateQueries(["DiagnosticReport", "search"]) で
+  // まとめて無効化されるよう search 配下のキーにしている。
+  return useQuery({
+    queryKey: ["DiagnosticReport", "search", "timeline", patientId, dateCount],
+    queryFn: () => fetchLabTimelineResources(patientId as string, dateCount),
+    enabled: Boolean(patientId) && dateCount > 0,
+    // 表示数変更のたびに画面が空にならないよう前回結果を残す。
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+}
+
 export function useCreateLabResult() {
   const queryClient = useQueryClient();
   return useMutation({

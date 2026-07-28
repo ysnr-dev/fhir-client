@@ -497,6 +497,23 @@ export function specimenNamesById(specimens: fhir4.Specimen[]): Map<string, stri
   );
 }
 
+// Observation.value[x] の表示値と単位。PQ 以外に単位はない。
+function observationValueDisplay(obs: fhir4.Observation): { value: string; unit: string } {
+  if (obs.valueQuantity) {
+    return {
+      value: obs.valueQuantity.value != null ? String(obs.valueQuantity.value) : "",
+      unit: obs.valueQuantity.unit ?? "",
+    };
+  }
+  if (obs.valueCodeableConcept) {
+    return {
+      value: obs.valueCodeableConcept.coding?.[0]?.display ?? obs.valueCodeableConcept.text ?? "",
+      unit: "",
+    };
+  }
+  return { value: obs.valueString ?? "", unit: "" };
+}
+
 export function observationLineDisplay(
   obs: fhir4.Observation,
   specimenNames?: Map<string, string>,
@@ -504,17 +521,7 @@ export function observationLineDisplay(
   const jlacCoding = codingBySystem(obs.code.coding, JLAC11_SYSTEM);
   const abbrCoding = codingBySystem(obs.code.coding, ABBREVIATION_SYSTEM);
   const specimenId = obs.specimen?.reference?.split("/").pop();
-
-  let value = "";
-  let unit = "";
-  if (obs.valueQuantity) {
-    value = obs.valueQuantity.value != null ? String(obs.valueQuantity.value) : "";
-    unit = obs.valueQuantity.unit ?? "";
-  } else if (obs.valueCodeableConcept) {
-    value = obs.valueCodeableConcept.coding?.[0]?.display ?? obs.valueCodeableConcept.text ?? "";
-  } else if (obs.valueString != null) {
-    value = obs.valueString;
-  }
+  const { value, unit } = observationValueDisplay(obs);
 
   return {
     id: obs.id ?? "",
@@ -524,6 +531,82 @@ export function observationLineDisplay(
     value,
     unit,
   };
+}
+
+// ---- 時系列表示のための parse ----
+
+export interface LabTimelineRow {
+  // JLAC11 コード。同じ項目コードの結果を1行にまとめるためのキー。
+  // コードがない Observation は項目名で代用する。
+  key: string;
+  name: string;
+  abbreviation: string;
+  unit: string;
+  // 検体採取日(YYYY-MM-DD) → 表示値
+  values: Map<string, string>;
+  // 検体採取日 → 数値。PQ(valueQuantity) のみ。グラフ描画に使う。
+  numbers: Map<string, number>;
+}
+
+export interface LabTimeline {
+  // 表示対象の検体採取日。新しい順。
+  dates: string[];
+  rows: LabTimelineRow[];
+}
+
+// DiagnosticReport(検体採取日の降順) と _include で取得した Observation から、
+// 「検査項目 × 検体採取日」のマトリクスを組み立てる。
+// 行の並びは新しいレポートでの登場順(= 登録時の項目順)になる。
+export function buildLabTimeline(
+  reports: fhir4.DiagnosticReport[],
+  observations: fhir4.Observation[],
+  dateCount: number,
+): LabTimeline {
+  const obsById = new Map(observations.map((obs) => [obs.id ?? "", obs]));
+
+  const dates: string[] = [];
+  for (const report of reports) {
+    const date = report.effectiveDateTime?.slice(0, 10);
+    if (date && !dates.includes(date)) dates.push(date);
+  }
+  const shownDates = dates.slice(0, dateCount);
+  const shown = new Set(shownDates);
+
+  const rows = new Map<string, LabTimelineRow>();
+  for (const report of reports) {
+    const date = report.effectiveDateTime?.slice(0, 10) ?? "";
+    if (!shown.has(date)) continue;
+    for (const obsId of observationIdsFromReport(report)) {
+      const obs = obsById.get(obsId);
+      if (!obs) continue;
+
+      const jlacCoding = codingBySystem(obs.code.coding, JLAC11_SYSTEM);
+      const name = jlacCoding?.display ?? obs.code.text ?? "";
+      const key = jlacCoding?.code ?? `name:${name}`;
+      let row = rows.get(key);
+      if (!row) {
+        row = {
+          key,
+          name,
+          abbreviation: codingBySystem(obs.code.coding, ABBREVIATION_SYSTEM)?.display ?? "",
+          unit: "",
+          values: new Map(),
+          numbers: new Map(),
+        };
+        rows.set(key, row);
+      }
+
+      const { value, unit } = observationValueDisplay(obs);
+      if (!row.unit && unit) row.unit = unit;
+      // 同じ日に同じ項目が複数ある場合(同日の別レポートなど)は、
+      // 並びが先(=新しいレポート)の値を採用する。
+      if (row.values.has(date)) continue;
+      row.values.set(date, value);
+      if (obs.valueQuantity?.value != null) row.numbers.set(date, obs.valueQuantity.value);
+    }
+  }
+
+  return { dates: shownDates, rows: [...rows.values()] };
 }
 
 // ---- 編集フォームへの復元 ----

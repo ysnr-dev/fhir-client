@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useDeleteLabResult, useLabResultDetail } from "../api/queries";
+import { useDeleteLabResult, useLabResultDetail, useLabResultNavigation } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { JsonBlock } from "../components/JsonBlock";
 import { PatientHeader } from "../components/PatientHeader";
@@ -20,9 +20,15 @@ export function LabResultDetailPage() {
 
   const detail = useLabResultDetail(reportId);
   const deleteLabResult = useDeleteLabResult();
+  const nav = useLabResultNavigation(patientId, reportId);
 
   const isLoading = detail.isLoading;
   const error = detail.error ?? deleteLabResult.error;
+
+  function goToSibling(siblingId: string | undefined) {
+    if (!siblingId) return;
+    navigate(`/patients/${patientId}/lab-results/${siblingId}`);
+  }
 
   function handleDelete() {
     if (!reportId) return;
@@ -41,7 +47,34 @@ export function LabResultDetailPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>検査結果内容</h1>
+        <div className="page__header-title">
+          <h1>検査結果内容</h1>
+          <div className="record-nav">
+            <button
+              type="button"
+              className="record-nav__button"
+              onClick={() => goToSibling(nav.previousId)}
+              disabled={!nav.previousId}
+              title="前の検査結果（新しい順で1つ前）"
+              aria-label="前の検査結果"
+            >
+              ＜
+            </button>
+            <span className="record-nav__status">
+              {nav.position ? `${nav.position} / ${nav.total} 件` : "-"}
+            </span>
+            <button
+              type="button"
+              className="record-nav__button"
+              onClick={() => goToSibling(nav.nextId)}
+              disabled={!nav.nextId}
+              title="次の検査結果（新しい順で1つ後）"
+              aria-label="次の検査結果"
+            >
+              ＞
+            </button>
+          </div>
+        </div>
         <div>
           <Link to={`/patients/${patientId}/lab-results/new?from=${reportId}`} className="button">
             DO

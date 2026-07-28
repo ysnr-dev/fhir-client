@@ -115,6 +115,30 @@
   gap: 8px;
 }
 
+.page__header-title {
+  align-items: center;
+  gap: 16px;
+}
+
+/* 詳細ページのレコード送り（＜ / ＞） */
+.record-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.record-nav__button {
+  padding: 2px 10px;
+  line-height: 1.4;
+}
+
+.record-nav__status {
+  min-width: 88px;
+  font-size: 13px;
+  color: var(--text);
+  text-align: center;
+}
+
 .patient-header {
   display: flex;
   flex-wrap: wrap;
@@ -1365,5 +1389,196 @@ button:disabled {
   flex: 1 1 100%;
   margin: 0;
   font-size: 13px;
+  color: var(--text);
+}
+
+/* ---- 検査結果 時系列表示 ---- */
+
+.lab-timeline__controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.lab-timeline__count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.lab-timeline__count input {
+  width: 72px;
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.lab-timeline__hint {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* 採取日カラムが多いときはテーブル内だけを横スクロールさせる。 */
+.lab-timeline__table-wrap {
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.lab-timeline__table {
+  /* 項目カラムを sticky にするため collapse は使わない(境界線が一緒に
+     スクロールしてしまう)。罫線は各セルの border-bottom で引く。 */
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 100%;
+}
+
+.lab-timeline__table th,
+.lab-timeline__table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* 横スクロールしても検査項目名を残す。 */
+.lab-timeline__table .lab-timeline__item-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bg);
+  box-shadow: inset -1px 0 0 var(--border);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lab-timeline__item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-h);
+}
+
+.lab-timeline__unit-col {
+  color: var(--text);
+}
+
+/* .lab-timeline__table th/td の text-align: left より詳細度を上げて
+   確実に右寄せにする。 */
+.lab-timeline__table th.lab-timeline__date-col,
+.lab-timeline__table td.lab-timeline__value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 検査結果グラフ(時系列表示のモーダル) ---- */
+
+.lab-chart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.lab-chart {
+  position: relative;
+  /* dataviz 検証済みの系列色。ライト/ダークで面に合わせて段を変える。 */
+  --chart-series: #2a78d6;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lab-chart {
+    --chart-series: #3987e5;
+  }
+}
+
+.lab-chart__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.lab-chart__unit {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.lab-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lab-chart__grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.lab-chart__tick {
+  fill: var(--text);
+  font-size: 11px;
+}
+
+.lab-chart__crosshair {
+  stroke: var(--text);
+  stroke-width: 1;
+  opacity: 0.4;
+}
+
+.lab-chart__line {
+  fill: none;
+  stroke: var(--chart-series);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* マーカーは面色のリングで線との重なりでも読めるようにする。 */
+.lab-chart__marker {
+  fill: var(--chart-series);
+  stroke: var(--bg);
+  stroke-width: 2;
+  outline: none;
+}
+
+.lab-chart__end-label {
+  fill: var(--text);
+  font-size: 11px;
+}
+
+.lab-chart__tooltip {
+  position: absolute;
+  transform: translate(-50%, -115%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.lab-chart__tooltip-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.lab-chart__tooltip-date {
+  font-size: 11px;
   color: var(--text);
 }
