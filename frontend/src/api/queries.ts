@@ -217,6 +217,67 @@ export function useLabResultDetail(reportId: string | undefined) {
   });
 }
 
+// 上流 fhir-server の _count 上限が 100 のため、それを 1 ページとして順に辿る。
+const LAB_RESULT_ORDER_PAGE = 100;
+// 患者あたりの検査結果が極端に多い場合の暴走防止（最大 1000 件まで前後移動できる）。
+const LAB_RESULT_ORDER_MAX_PAGES = 10;
+
+// 一覧と同じ絞り込み・並び順で DiagnosticReport の id だけを取得する。
+// 上流の _sort は同値時に id 昇順で安定するため、一覧の並びとページ境界をまたいでも一致する。
+async function fetchLabResultOrder(patientId: string): Promise<string[]> {
+  const ids: string[] = [];
+
+  for (let page = 0; page < LAB_RESULT_ORDER_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("patient", `Patient/${patientId}`);
+    params.set("category", "LAB");
+    params.set("_count", String(LAB_RESULT_ORDER_PAGE));
+    params.set("_offset", String(page * LAB_RESULT_ORDER_PAGE));
+    params.set("_sort", "-date");
+    // 前後移動には id の並びだけあればよいので本文は返させない。
+    params.set("_elements", "id");
+
+    const { data: bundle } = await searchResource<fhir4.DiagnosticReport>(
+      "DiagnosticReport",
+      params,
+    );
+    const pageIds =
+      bundle.entry
+        ?.map((entry) => entry.resource?.id)
+        .filter((id): id is string => Boolean(id)) ?? [];
+    ids.push(...pageIds);
+
+    if (pageIds.length < LAB_RESULT_ORDER_PAGE) break;
+  }
+
+  return ids;
+}
+
+// 検査結果内容ページの「前へ/次へ」用。一覧に戻らず隣の検査結果へ移動するための id を返す。
+export function useLabResultNavigation(patientId: string | undefined, reportId: string | undefined) {
+  // 作成・更新・削除時の invalidateQueries(["DiagnosticReport", "search"]) で
+  // まとめて無効化されるよう search 配下のキーにしている。
+  const query = useQuery({
+    queryKey: ["DiagnosticReport", "search", "order", patientId],
+    queryFn: () => fetchLabResultOrder(patientId as string),
+    enabled: Boolean(patientId),
+    // 前後移動のたびにページが再マウントされるため、連打で毎回引き直さないよう
+    // 少しだけ寝かせる。更新・削除時は invalidateQueries 側で無効化される。
+    staleTime: 30_000,
+  });
+
+  const ids = query.data ?? [];
+  const index = reportId ? ids.indexOf(reportId) : -1;
+
+  return {
+    previousId: index > 0 ? ids[index - 1] : undefined,
+    nextId: index >= 0 && index < ids.length - 1 ? ids[index + 1] : undefined,
+    position: index >= 0 ? index + 1 : undefined,
+    total: ids.length,
+    isLoading: query.isLoading,
+  };
+}
+
 export function useCreateLabResult() {
   const queryClient = useQueryClient();
   return useMutation({

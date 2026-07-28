@@ -115,6 +115,30 @@
   gap: 8px;
 }
 
+.page__header-title {
+  align-items: center;
+  gap: 16px;
+}
+
+/* 詳細ページのレコード送り（＜ / ＞） */
+.record-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.record-nav__button {
+  padding: 2px 10px;
+  line-height: 1.4;
+}
+
+.record-nav__status {
+  min-width: 88px;
+  font-size: 13px;
+  color: var(--text);
+  text-align: center;
+}
+
 .patient-header {
   display: flex;
   flex-wrap: wrap;
