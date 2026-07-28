@@ -23,6 +23,9 @@ export function LabResultListPage() {
       <div className="page__header">
         <h1>検査結果一覧</h1>
         <div>
+          <Link to={`/patients/${patientId}/lab-results/timeline`} className="button">
+            時系列表示
+          </Link>
           <Link to={`/patients/${patientId}/lab-results/new`} className="button">
             新規検査結果
           </Link>

@@ -16,6 +16,7 @@ import { LabResultCreatePage } from "./pages/LabResultCreatePage";
 import { LabResultDetailPage } from "./pages/LabResultDetailPage";
 import { LabResultEditPage } from "./pages/LabResultEditPage";
 import { LabResultListPage } from "./pages/LabResultListPage";
+import { LabResultTimelinePage } from "./pages/LabResultTimelinePage";
 import { PrescriptionCreatePage } from "./pages/PrescriptionCreatePage";
 import { PrescriptionDetailPage } from "./pages/PrescriptionDetailPage";
 import { PrescriptionEditPage } from "./pages/PrescriptionEditPage";
@@ -48,6 +49,8 @@ function App() {
           <Route path="/patients/:patientId/prescriptions/:srId/edit" element={<PrescriptionEditPage />} />
           <Route path="/patients/:patientId/lab-results" element={<LabResultListPage />} />
           <Route path="/patients/:patientId/lab-results/new" element={<LabResultCreatePage />} />
+          {/* 固定パスは :reportId より先にマッチさせる。 */}
+          <Route path="/patients/:patientId/lab-results/timeline" element={<LabResultTimelinePage />} />
           <Route path="/patients/:patientId/lab-results/:reportId" element={<LabResultDetailPage />} />
           <Route path="/patients/:patientId/lab-results/:reportId/edit" element={<LabResultEditPage />} />
           <Route path="/patients/:patientId/conditions" element={<ConditionListPage />} />
