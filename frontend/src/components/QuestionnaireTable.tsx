@@ -45,10 +45,10 @@ export function QuestionnaireTable({ questionnaires }: QuestionnaireTableProps) 
                 <td>{summary.statusLabel || "-"}</td>
                 <td>{summary.lastUpdated || "-"}</td>
                 <td className="patient-table__actions">
+                  <Link className="button" to={`/questionnaires/${summary.id}/preview`}>
+                    表示
+                  </Link>
                   <RowMenu label={`${summary.title} の操作`}>
-                    <Link className="row-menu__item" to={`/questionnaires/${summary.id}/preview`}>
-                      表示
-                    </Link>
                     <Link className="row-menu__item" to={`/questionnaires/${summary.id}/edit`}>
                       編集
                     </Link>

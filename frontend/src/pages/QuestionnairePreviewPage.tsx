@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useQuestionnaire } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { JsonBlock } from "../components/JsonBlock";
 import { QuestionnaireResponseForm } from "../components/QuestionnaireResponseForm";
 
 export function QuestionnairePreviewPage() {
@@ -32,7 +33,16 @@ export function QuestionnairePreviewPage() {
       {isLoading ? (
         <p>読み込み中...</p>
       ) : (
-        questionnaire && <QuestionnaireResponseForm questionnaire={questionnaire} />
+        questionnaire && (
+          <>
+            <QuestionnaireResponseForm questionnaire={questionnaire} />
+
+            <details className="prescription-detail__raw">
+              <summary>FHIR JSON を表示</summary>
+              <JsonBlock value={questionnaire} />
+            </details>
+          </>
+        )
       )}
     </div>
   );

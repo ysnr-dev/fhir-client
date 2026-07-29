@@ -54,10 +54,10 @@ export function QuestionnaireResponseTable({
                 <td>{summary.authorName || "-"}</td>
                 <td>{summary.lastUpdated || "-"}</td>
                 <td className="patient-table__actions">
+                  <Link className="button" to={base}>
+                    表示
+                  </Link>
                   <RowMenu label={`${title} の操作`}>
-                    <Link className="row-menu__item" to={base}>
-                      表示
-                    </Link>
                     <Link className="row-menu__item" to={`${base}/edit`}>
                       編集
                     </Link>

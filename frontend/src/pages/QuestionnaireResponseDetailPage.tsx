@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useQuestionnaireByCanonical, useQuestionnaireResponse } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { JsonBlock } from "../components/JsonBlock";
 import { PatientHeader } from "../components/PatientHeader";
 import { QuestionnaireResponseForm } from "../components/QuestionnaireResponseForm";
 import { summarizeQuestionnaireResponse } from "../fhir/questionnaireResponseHelpers";
@@ -50,29 +51,36 @@ export function QuestionnaireResponseDetailPage() {
       ) : (
         response &&
         questionnaire && (
-          <QuestionnaireResponseForm
-            questionnaire={questionnaire}
-            initialResponse={response}
-            readOnly
-          >
-            <fieldset className="qp-group">
-              <legend>登録情報</legend>
-              <dl className="qr-meta">
-                <div className="qr-meta__item">
-                  <dt>ステータス</dt>
-                  <dd>{summary?.statusLabel || "-"}</dd>
-                </div>
-                <div className="qr-meta__item">
-                  <dt>記入日時</dt>
-                  <dd>{summary?.authored || "-"}</dd>
-                </div>
-                <div className="qr-meta__item">
-                  <dt>記入者</dt>
-                  <dd>{summary?.authorName || "-"}</dd>
-                </div>
-              </dl>
-            </fieldset>
-          </QuestionnaireResponseForm>
+          <>
+            <QuestionnaireResponseForm
+              questionnaire={questionnaire}
+              initialResponse={response}
+              readOnly
+            >
+              <fieldset className="qp-group">
+                <legend>登録情報</legend>
+                <dl className="qr-meta">
+                  <div className="qr-meta__item">
+                    <dt>ステータス</dt>
+                    <dd>{summary?.statusLabel || "-"}</dd>
+                  </div>
+                  <div className="qr-meta__item">
+                    <dt>記入日時</dt>
+                    <dd>{summary?.authored || "-"}</dd>
+                  </div>
+                  <div className="qr-meta__item">
+                    <dt>記入者</dt>
+                    <dd>{summary?.authorName || "-"}</dd>
+                  </div>
+                </dl>
+              </fieldset>
+            </QuestionnaireResponseForm>
+
+            <details className="prescription-detail__raw">
+              <summary>FHIR JSON を表示</summary>
+              <JsonBlock value={response} />
+            </details>
+          </>
         )
       )}
     </div>
