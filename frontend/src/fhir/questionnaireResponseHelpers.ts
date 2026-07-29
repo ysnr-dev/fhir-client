@@ -154,6 +154,63 @@ export function summarizeQuestionnaireResponse(
   };
 }
 
+// ---- 平文表示 ----
+
+const UNIT_EXT_URL = "http://hl7.org/fhir/StructureDefinition/questionnaire-unit";
+
+function plainAnswerText(answer: fhir4.QuestionnaireResponseItemAnswer): string {
+  return (
+    answer.valueCoding?.display ??
+    answer.valueCoding?.code ??
+    answer.valueString ??
+    answer.valueDate ??
+    answer.valueDateTime ??
+    answer.valueTime ??
+    (answer.valueInteger !== undefined ? String(answer.valueInteger) : undefined) ??
+    (answer.valueDecimal !== undefined ? String(answer.valueDecimal) : undefined) ??
+    ""
+  );
+}
+
+// テンプレート内容を「タイトル + 入力内容」の平文にする(カルテ等への貼り付け用)。
+// 項目名は QuestionnaireResponse.item.text、単位は元 Questionnaire から引く。
+export function questionnaireResponsePlainText(
+  questionnaire: fhir4.Questionnaire,
+  response: fhir4.QuestionnaireResponse,
+): string {
+  // linkId はテンプレート全体で一意(jsp-4)のためフラットな対応表でよい。
+  const units = new Map<string, string>();
+  (function collectUnits(items: fhir4.QuestionnaireItem[] | undefined) {
+    for (const item of items ?? []) {
+      const unit = item.extension?.find((e) => e.url === UNIT_EXT_URL)?.valueCoding;
+      if (unit) units.set(item.linkId, unit.display ?? unit.code ?? "");
+      collectUnits(item.item);
+    }
+  })(questionnaire.item);
+
+  const lines: string[] = [questionnaire.title ?? questionnaire.name ?? "", ""];
+
+  (function walk(items: fhir4.QuestionnaireResponseItem[] | undefined, depth: number) {
+    for (const item of items ?? []) {
+      const indent = "  ".repeat(depth);
+      const label = item.text ?? item.linkId;
+      if (item.item?.length) {
+        lines.push(`${indent}【${label}】`);
+        walk(item.item, depth + 1);
+        continue;
+      }
+      if (!item.answer?.length) continue;
+      const unit = units.get(item.linkId);
+      const values = item.answer
+        .map((answer) => (unit ? `${plainAnswerText(answer)} ${unit}` : plainAnswerText(answer)))
+        .join("、");
+      lines.push(`${indent}${label}: ${values}`);
+    }
+  })(response.item, 0);
+
+  return lines.join("\n");
+}
+
 // ---- バリデーション ----
 
 export function validateQuestionnaireResponseMeta(

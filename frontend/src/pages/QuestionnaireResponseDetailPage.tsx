@@ -1,13 +1,19 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuestionnaireByCanonical, useQuestionnaireResponse } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { JsonBlock } from "../components/JsonBlock";
 import { PatientHeader } from "../components/PatientHeader";
+import { PlainTextModal } from "../components/PlainTextModal";
 import { QuestionnaireResponseForm } from "../components/QuestionnaireResponseForm";
-import { summarizeQuestionnaireResponse } from "../fhir/questionnaireResponseHelpers";
+import {
+  questionnaireResponsePlainText,
+  summarizeQuestionnaireResponse,
+} from "../fhir/questionnaireResponseHelpers";
 
 export function QuestionnaireResponseDetailPage() {
   const { patientId, qrId } = useParams<{ patientId: string; qrId: string }>();
+  const [plainTextOpen, setPlainTextOpen] = useState(false);
 
   const { data: result, isLoading, error } = useQuestionnaireResponse(qrId);
   const response = result?.data;
@@ -25,6 +31,14 @@ export function QuestionnaireResponseDetailPage() {
       <div className="page__header">
         <h1>テンプレート表示</h1>
         <div>
+          <button
+            type="button"
+            className="button"
+            disabled={!response || !questionnaire}
+            onClick={() => setPlainTextOpen(true)}
+          >
+            平文
+          </button>
           <Link
             to={`/patients/${patientId}/questionnaire-responses/${qrId}/edit`}
             className="button"
@@ -80,6 +94,14 @@ export function QuestionnaireResponseDetailPage() {
               <summary>FHIR JSON を表示</summary>
               <JsonBlock value={response} />
             </details>
+
+            {plainTextOpen && (
+              <PlainTextModal
+                title="平文表示"
+                text={questionnaireResponsePlainText(questionnaire, response)}
+                onClose={() => setPlainTextOpen(false)}
+              />
+            )}
           </>
         )
       )}

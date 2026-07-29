@@ -2061,3 +2061,31 @@ button:disabled {
   font-size: 14px;
   color: var(--text-h);
 }
+
+/* ---- 平文表示モーダル ---- */
+
+.plain-text-modal__text {
+  margin: 0 0 12px;
+  padding: 12px;
+  max-height: 50vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-subtle, transparent);
+  color: var(--text-h);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.plain-text-modal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.plain-text-modal__result {
+  font-size: 13px;
+  color: var(--accent);
+}
