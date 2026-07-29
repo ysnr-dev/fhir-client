@@ -244,8 +244,9 @@ button:disabled {
 }
 
 /* td に display: flex を当てるとテーブルレイアウトから外れて行の下罫線がズレるため、
-   table-cell のまま右寄せ+余白で並べる。 */
-.patient-table__actions {
+   table-cell のまま右寄せ+余白で並べる。
+   td 付きにしているのは .patient-table td { text-align: left } より詳細度を上げるため。 */
+.patient-table td.patient-table__actions {
   text-align: right;
   white-space: nowrap;
 }
@@ -1986,4 +1987,77 @@ button:disabled {
 .qp-calculated__note {
   font-size: 11px;
   color: var(--accent);
+}
+
+/* ---- 診療記録メニュー(患者一覧のホバーメニュー) ---- */
+
+.hover-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.hover-menu__trigger[aria-expanded="true"] {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+/* トリガーとパネルの間に隙間があるとマウス移動中に mouseleave で閉じてしまうため、
+   パネルはトリガー直下に接して表示する。 */
+.hover-menu__items {
+  top: 100%;
+}
+
+/* ---- 患者テンプレート(QuestionnaireResponse) ---- */
+
+.qr-template-select {
+  max-width: 480px;
+  margin-bottom: 16px;
+}
+
+.qr-template-select label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.qr-template-select select {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 14px;
+}
+
+/* 読み取り専用表示: fieldset disabled で入力を止めつつ、枠は出さない。 */
+.qp-readonly {
+  display: contents;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.qr-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin: 0;
+}
+
+.qr-meta__item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.qr-meta__item dt {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.qr-meta__item dd {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
 }

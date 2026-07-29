@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import fhirpath from "fhirpath";
 // value[x] を "value" で参照できるようにする R4 のモデル情報。
 import fhirpathR4Model from "fhirpath/fhir-context/r4";
 
-// Questionnaire の item ツリーからテンプレート入力フォームを再帰レンダリングする
-// プレビュー。回答はローカル state のみで保持し、どこにも保存しない。
+// Questionnaire の item ツリーからテンプレート入力フォームを再帰レンダリングする。
+// onSubmit 指定時は入力フォーム(送信で QuestionnaireResponse.item を返す)、
+// 未指定時はプレビュー(回答はローカル state のみで保持し、どこにも保存しない)。
 //
 // 回答のキーは「インスタンスパス」。非繰り返し項目は "親グループ.linkId"、
 // 繰り返しグループ配下は "グループ#0.linkId" のようにインスタンス番号を挟む。
@@ -90,55 +91,107 @@ function collectInitialAnswers(
   return answers;
 }
 
-// enableWhen の参照先を解決する。jsp-2 で参照先は親階層に限られるため、
-// 自分のスコープ(prefix)から外側のスコープへ順に辿って最初に見つかった回答を返す。
-function resolveAnswer(answers: Answers, prefix: string, linkId: string): AnswerValue | undefined {
-  let current = prefix;
-  for (;;) {
-    const value = answers[current + linkId];
-    if (value !== undefined) return value;
-    if (current === "") return undefined;
-    // 末尾のスコープ("group." や "group#0.")をひとつ外す。
-    const trimmed = current.slice(0, -1);
-    const lastDot = trimmed.lastIndexOf(".");
-    current = lastDot === -1 ? "" : trimmed.slice(0, lastDot + 1);
+function answerToString(answer: fhir4.QuestionnaireResponseItemAnswer): string {
+  return (
+    answer.valueString ??
+    answer.valueDate ??
+    answer.valueDateTime ??
+    answer.valueTime ??
+    answer.valueCoding?.code ??
+    (answer.valueInteger !== undefined ? String(answer.valueInteger) : undefined) ??
+    (answer.valueDecimal !== undefined ? String(answer.valueDecimal) : undefined) ??
+    ""
+  );
+}
+
+// 保存済み QuestionnaireResponse から回答 state を復元する。
+// 繰り返しグループは同じ linkId の response item がインスタンス数だけ並ぶ。
+function collectResponseAnswers(
+  qItems: fhir4.QuestionnaireItem[] | undefined,
+  rItems: fhir4.QuestionnaireResponseItem[] | undefined,
+  prefix: string,
+  answers: Answers,
+  counts: Record<string, number>,
+): void {
+  for (const q of qItems ?? []) {
+    const key = prefix + q.linkId;
+    const matches = (rItems ?? []).filter((r) => r.linkId === q.linkId);
+    if (q.type === "group") {
+      if (q.repeats) {
+        if (matches.length) counts[key] = matches.length;
+        matches.forEach((m, i) =>
+          collectResponseAnswers(q.item, m.item, `${key}#${i}.`, answers, counts),
+        );
+      } else if (matches[0]) {
+        collectResponseAnswers(q.item, matches[0].item, `${key}.`, answers, counts);
+      }
+      continue;
+    }
+    if (q.type === "display") continue;
+    // 計算式項目の値は表示・保存時に再計算されるため復元しない。
+    if (calculatedExpressionOf(q)) continue;
+
+    const answerList = matches[0]?.answer ?? [];
+    if (answerList.length === 0) continue;
+    const values = answerList.map(answerToString);
+    answers[key] =
+      q.type === "choice" && itemControlOf(q) === "check-box" ? values : values[0];
   }
 }
 
-function isEnabled(item: fhir4.QuestionnaireItem, prefix: string, answers: Answers): boolean {
-  if (!item.enableWhen?.length) return true;
-  // JASPEHR では演算子 "="・Coding 比較のみ。enableBehavior は all を既定とする。
-  const results = item.enableWhen.map((ew) => {
-    const answer = resolveAnswer(answers, prefix, ew.question);
-    const code = ew.answerCoding?.code;
-    if (answer === undefined || code === undefined) return false;
-    return Array.isArray(answer) ? answer.includes(code) : answer === code;
-  });
-  return item.enableBehavior === "any" ? results.some(Boolean) : results.every(Boolean);
+interface InitialState {
+  answers: Answers;
+  counts: Record<string, number>;
 }
 
-// 回答からその場限りの QuestionnaireResponse を組み立てる(式評価用)。
+function buildInitialState(
+  questionnaire: fhir4.Questionnaire,
+  initialResponse: fhir4.QuestionnaireResponse | undefined,
+): InitialState {
+  if (!initialResponse) {
+    return { answers: collectInitialAnswers(questionnaire.item, "", {}), counts: {} };
+  }
+  const answers: Answers = {};
+  const counts: Record<string, number> = {};
+  collectResponseAnswers(questionnaire.item, initialResponse.item, "", answers, counts);
+  return { answers, counts };
+}
+
+interface BuildOptions {
+  // 表示条件(enableWhen)を満たさないグループを除外する(保存用)。
+  enabledOnly?: boolean;
+  // 計算式項目の値を評価して含める(保存用)。
+  evaluate?: (expression: string) => string;
+}
+
+// 回答から QuestionnaireResponse.item ツリーを組み立てる。
+// オプション未指定時は式評価用のその場限りのツリーを返す。
 function buildResponseItems(
   items: fhir4.QuestionnaireItem[] | undefined,
   prefix: string,
   answers: Answers,
   counts: Record<string, number>,
+  options: BuildOptions = {},
 ): fhir4.QuestionnaireResponseItem[] {
   const result: fhir4.QuestionnaireResponseItem[] = [];
   for (const item of items ?? []) {
     const key = prefix + item.linkId;
     if (item.type === "group") {
+      if (options.enabledOnly && !isEnabled(item, prefix, answers)) continue;
       const instances = item.repeats ? (counts[key] ?? 1) : 1;
       for (let i = 0; i < instances; i += 1) {
         const childPrefix = item.repeats ? `${key}#${i}.` : `${key}.`;
-        const children = buildResponseItems(item.item, childPrefix, answers, counts);
+        const children = buildResponseItems(item.item, childPrefix, answers, counts, options);
+        if (children.length === 0) continue;
         result.push({ linkId: item.linkId, ...(item.text ? { text: item.text } : {}), item: children });
       }
       continue;
     }
     if (item.type === "display") continue;
 
-    const raw = answers[key];
+    const calculated = calculatedExpressionOf(item);
+    const raw =
+      calculated && options.evaluate ? options.evaluate(calculated) : answers[key];
     if (raw === undefined || raw === "" || (Array.isArray(raw) && raw.length === 0)) continue;
 
     const values = Array.isArray(raw) ? raw : [raw];
@@ -173,16 +226,62 @@ function buildResponseItems(
   return result;
 }
 
-interface QuestionnairePreviewProps {
-  questionnaire: fhir4.Questionnaire;
+// enableWhen の参照先を解決する。jsp-2 で参照先は親階層に限られるため、
+// 自分のスコープ(prefix)から外側のスコープへ順に辿って最初に見つかった回答を返す。
+function resolveAnswer(answers: Answers, prefix: string, linkId: string): AnswerValue | undefined {
+  let current = prefix;
+  for (;;) {
+    const value = answers[current + linkId];
+    if (value !== undefined) return value;
+    if (current === "") return undefined;
+    // 末尾のスコープ("group." や "group#0.")をひとつ外す。
+    const trimmed = current.slice(0, -1);
+    const lastDot = trimmed.lastIndexOf(".");
+    current = lastDot === -1 ? "" : trimmed.slice(0, lastDot + 1);
+  }
 }
 
-export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProps) {
-  const [answers, setAnswers] = useState<Answers>(() =>
-    collectInitialAnswers(questionnaire.item, "", {}),
-  );
+function isEnabled(item: fhir4.QuestionnaireItem, prefix: string, answers: Answers): boolean {
+  if (!item.enableWhen?.length) return true;
+  // JASPEHR では演算子 "="・Coding 比較のみ。enableBehavior は all を既定とする。
+  const results = item.enableWhen.map((ew) => {
+    const answer = resolveAnswer(answers, prefix, ew.question);
+    const code = ew.answerCoding?.code;
+    if (answer === undefined || code === undefined) return false;
+    return Array.isArray(answer) ? answer.includes(code) : answer === code;
+  });
+  return item.enableBehavior === "any" ? results.some(Boolean) : results.every(Boolean);
+}
+
+interface QuestionnaireResponseFormProps {
+  questionnaire: fhir4.Questionnaire;
+  // 編集・表示時に回答を復元する保存済みリソース。
+  initialResponse?: fhir4.QuestionnaireResponse;
+  readOnly?: boolean;
+  // 指定時は form として描画し、送信時に保存用の item ツリーを渡す。
+  onSubmit?: (items: fhir4.QuestionnaireResponseItem[]) => void;
+  submitLabel?: string;
+  submitting?: boolean;
+  // フォーム先頭(質問項目の前)に描画するメタ情報フィールド。
+  children?: ReactNode;
+}
+
+export function QuestionnaireResponseForm({
+  questionnaire,
+  initialResponse,
+  readOnly = false,
+  onSubmit,
+  submitLabel = "登録",
+  submitting = false,
+  children,
+}: QuestionnaireResponseFormProps) {
+  const [initialState] = useState(() => buildInitialState(questionnaire, initialResponse));
+  const [answers, setAnswers] = useState<Answers>(initialState.answers);
   // 繰り返しグループのインスタンス数(キーはグループのインスタンスパス)。
-  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [counts, setCounts] = useState<Record<string, number>>(initialState.counts);
+
+  // 必須マークの入力強制はフォーム(保存あり)のときのみ行う。
+  const requireInputs = Boolean(onSubmit) && !readOnly;
 
   // 式評価用の QuestionnaireResponse と変数値。回答が変わるたびに引き直す。
   const expressionEnv = useMemo(() => {
@@ -226,6 +325,23 @@ export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProp
     }
   }
 
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    onSubmit?.(
+      buildResponseItems(questionnaire.item, "", answers, counts, {
+        enabledOnly: true,
+        evaluate: evaluateCalculated,
+      }),
+    );
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLFormElement>) {
+    // input 上での Enter による暗黙の form submit を抑止する。
+    if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") {
+      e.preventDefault();
+    }
+  }
+
   function setAnswer(key: string, value: AnswerValue) {
     setAnswers((current) => ({ ...current, [key]: value }));
   }
@@ -260,6 +376,7 @@ export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProp
     const orientation = ext(item, CHOICE_ORIENTATION_EXT_URL)?.valueCode;
     const options = item.answerOption ?? [];
     const value = answers[key];
+    const required = requireInputs && item.required;
 
     if (control === "check-box") {
       const selected = Array.isArray(value) ? value : value ? [value] : [];
@@ -298,6 +415,7 @@ export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProp
                   type="radio"
                   name={key}
                   checked={value === code}
+                  required={required}
                   onChange={() => setAnswer(key, code)}
                 />
                 {option.valueCoding?.display ?? code}
@@ -313,6 +431,7 @@ export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProp
         <select
           size={Math.min(options.length, 6)}
           value={typeof value === "string" ? value : ""}
+          required={required}
           onChange={(e) => setAnswer(key, e.target.value)}
         >
           {options.map((option) => {
@@ -331,6 +450,7 @@ export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProp
     return (
       <select
         value={typeof value === "string" ? value : ""}
+        required={required}
         onChange={(e) => setAnswer(key, e.target.value)}
       >
         <option value=""></option>
@@ -358,6 +478,7 @@ export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProp
     }
 
     const value = typeof answers[key] === "string" ? (answers[key] as string) : "";
+    const required = requireInputs && item.required;
 
     switch (item.type) {
       case "choice":
@@ -368,6 +489,7 @@ export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProp
             rows={3}
             value={value}
             maxLength={item.maxLength}
+            required={required}
             onChange={(e) => setAnswer(key, e.target.value)}
           />
         );
@@ -389,6 +511,7 @@ export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProp
               min={numberExt(item, MIN_VALUE_EXT_URL)}
               max={numberExt(item, MAX_VALUE_EXT_URL)}
               step={step}
+              required={required}
               onChange={(e) => setAnswer(key, e.target.value)}
             />
             {unit && <span className="qp-number__unit">{unit.display ?? unit.code}</span>}
@@ -396,17 +519,32 @@ export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProp
         );
       }
       case "date":
-        return <input type="date" value={value} onChange={(e) => setAnswer(key, e.target.value)} />;
+        return (
+          <input
+            type="date"
+            value={value}
+            required={required}
+            onChange={(e) => setAnswer(key, e.target.value)}
+          />
+        );
       case "dateTime":
         return (
           <input
             type="datetime-local"
             value={value}
+            required={required}
             onChange={(e) => setAnswer(key, e.target.value)}
           />
         );
       case "time":
-        return <input type="time" value={value} onChange={(e) => setAnswer(key, e.target.value)} />;
+        return (
+          <input
+            type="time"
+            value={value}
+            required={required}
+            onChange={(e) => setAnswer(key, e.target.value)}
+          />
+        );
       default:
         return (
           <input
@@ -414,6 +552,7 @@ export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProp
             value={value}
             maxLength={item.maxLength}
             pattern={ext(item, REGEX_EXT_URL)?.valueString}
+            required={required}
             onChange={(e) => setAnswer(key, e.target.value)}
           />
         );
@@ -490,7 +629,7 @@ export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProp
           </span>
           {renderInput(item, key)}
         </label>
-        {initialExpression && (
+        {initialExpression && !initialResponse && (
           <p className="qp-field__note">初期値式(実行時に設定): {initialExpression}</p>
         )}
       </div>
@@ -501,15 +640,44 @@ export function QuestionnairePreview({ questionnaire }: QuestionnairePreviewProp
     return (items ?? []).map((item) => renderItem(item, prefix));
   }
 
-  return (
-    <div className="qp">
-      <div className="qp__header">
-        <h2>{questionnaire.title}</h2>
-        <p className="qp__meta">
-          {questionnaire.name} / v{questionnaire.version}
-        </p>
-      </div>
-      {renderItems(questionnaire.item, "")}
+  const header = (
+    <div className="qp__header">
+      <h2>{questionnaire.title}</h2>
+      <p className="qp__meta">
+        {questionnaire.name} / v{questionnaire.version}
+      </p>
     </div>
+  );
+
+  // 読み取り専用は fieldset disabled でフォーム部品への入力をまとめて止める。
+  const body = readOnly ? (
+    <fieldset className="qp-readonly" disabled>
+      {renderItems(questionnaire.item, "")}
+    </fieldset>
+  ) : (
+    renderItems(questionnaire.item, "")
+  );
+
+  if (!onSubmit) {
+    return (
+      <div className="qp">
+        {header}
+        {children}
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <form className="qp" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
+      {header}
+      {children}
+      {body}
+      <div className="prescription-form__submit">
+        <button type="submit" disabled={submitting}>
+          {submitting ? "送信中..." : submitLabel}
+        </button>
+      </div>
+    </form>
   );
 }

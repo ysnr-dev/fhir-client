@@ -525,6 +525,113 @@ export function useDeleteQuestionnaire() {
   });
 }
 
+// テンプレート選択・一覧のタイトル解決用に Questionnaire をまとめて取得する。
+// 上流 fhir-server の _count 上限 100 を上限とした簡易版(それ以上は運用上想定しない)。
+export function useQuestionnaireOptions() {
+  const params = new URLSearchParams();
+  params.set("_count", "100");
+  params.set("_sort", "-_lastUpdated");
+
+  const query = useQuery({
+    queryKey: ["Questionnaire", "search", "options"],
+    queryFn: () => searchResource<fhir4.Questionnaire>("Questionnaire", params),
+  });
+
+  return {
+    ...query,
+    questionnaires:
+      query.data?.data.entry
+        ?.map((e) => e.resource)
+        .filter((r): r is fhir4.Questionnaire => Boolean(r)) ?? [],
+  };
+}
+
+// QuestionnaireResponse.questionnaire(canonical "<url>|<version>")から
+// 元テンプレートを引き当てる。url は上流で完全一致検索される。
+export function useQuestionnaireByCanonical(canonical: string | undefined) {
+  const query = useQuery({
+    queryKey: ["Questionnaire", "canonical", canonical],
+    queryFn: async () => {
+      const [url, version] = (canonical as string).split("|");
+      const params = new URLSearchParams();
+      params.set("url", url);
+      if (version) params.set("version", version);
+      const { data: bundle } = await searchResource<fhir4.Questionnaire>("Questionnaire", params);
+      return bundle.entry?.map((e) => e.resource).find((r) => r) ?? null;
+    },
+    enabled: Boolean(canonical),
+  });
+
+  return { ...query, questionnaire: query.data ?? undefined };
+}
+
+const QUESTIONNAIRE_RESPONSE_COUNT = 20;
+
+export function useQuestionnaireResponseSearch(patientId: string | undefined, offset: number) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("_count", String(QUESTIONNAIRE_RESPONSE_COUNT));
+  params.set("_offset", String(offset));
+  // 記入日時の降順(新しい順)。
+  params.set("_sort", "-authored");
+
+  const query = useQuery({
+    queryKey: ["QuestionnaireResponse", "search", patientId, offset],
+    queryFn: () => searchResource<fhir4.QuestionnaireResponse>("QuestionnaireResponse", params),
+    placeholderData: keepPreviousData,
+    enabled: Boolean(patientId),
+  });
+
+  return {
+    ...query,
+    bundle: query.data?.data,
+    total: query.data?.data.total ?? 0,
+    count: QUESTIONNAIRE_RESPONSE_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+export function useQuestionnaireResponse(id: string | undefined) {
+  return useQuery({
+    queryKey: ["QuestionnaireResponse", id],
+    queryFn: () => readResource<fhir4.QuestionnaireResponse>("QuestionnaireResponse", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateQuestionnaireResponse() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (response: fhir4.QuestionnaireResponse) => createResource(response),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
+    },
+  });
+}
+
+export function useUpdateQuestionnaireResponse() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ response, etag }: { response: fhir4.QuestionnaireResponse; etag: string }) =>
+      updateResource(response, etag),
+    onSuccess: (result: FhirResult<fhir4.QuestionnaireResponse>) => {
+      queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", result.data.id] });
+    },
+  });
+}
+
+export function useDeleteQuestionnaireResponse() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteResource("QuestionnaireResponse", id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
+    },
+  });
+}
+
 export function useDeletePrescription() {
   const queryClient = useQueryClient();
   return useMutation({

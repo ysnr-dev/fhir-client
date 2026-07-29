@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { useQuestionnaire } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { QuestionnairePreview } from "../components/QuestionnairePreview";
+import { QuestionnaireResponseForm } from "../components/QuestionnaireResponseForm";
 
 export function QuestionnairePreviewPage() {
   const { questionnaireId } = useParams<{ questionnaireId: string }>();
@@ -32,7 +32,7 @@ export function QuestionnairePreviewPage() {
       {isLoading ? (
         <p>読み込み中...</p>
       ) : (
-        questionnaire && <QuestionnairePreview questionnaire={questionnaire} />
+        questionnaire && <QuestionnaireResponseForm questionnaire={questionnaire} />
       )}
     </div>
   );
