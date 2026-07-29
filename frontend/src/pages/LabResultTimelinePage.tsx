@@ -76,7 +76,7 @@ export function LabResultTimelinePage() {
         <>
           <div className="lab-timeline__controls">
             <label className="lab-timeline__count">
-              検体採取日の表示数
+              履歴の表示数
               <input
                 type="number"
                 min={1}
@@ -92,9 +92,7 @@ export function LabResultTimelinePage() {
             >
               グラフ表示
             </button>
-            <span className="lab-timeline__hint">
-              数値結果のある項目をチェックするとグラフ表示できます
-            </span>
+            <span className="lab-timeline__hint"/>
           </div>
 
           {timeline.rows.length === 0 ? (
