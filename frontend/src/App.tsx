@@ -21,6 +21,10 @@ import { PrescriptionCreatePage } from "./pages/PrescriptionCreatePage";
 import { PrescriptionDetailPage } from "./pages/PrescriptionDetailPage";
 import { PrescriptionEditPage } from "./pages/PrescriptionEditPage";
 import { PrescriptionListPage } from "./pages/PrescriptionListPage";
+import { QuestionnaireCreatePage } from "./pages/QuestionnaireCreatePage";
+import { QuestionnaireEditPage } from "./pages/QuestionnaireEditPage";
+import { QuestionnaireListPage } from "./pages/QuestionnaireListPage";
+import { QuestionnairePreviewPage } from "./pages/QuestionnairePreviewPage";
 
 function App() {
   return (
@@ -32,6 +36,7 @@ function App() {
         <nav className="app__nav">
           <Link to="/patients">患者一覧</Link>
           <Link to="/master-import">マスタ取込</Link>
+          <Link to="/questionnaires">テンプレート</Link>
           <Link to="/oauth-clients">OAuth クライアント</Link>
           <Link to="/settings">接続設定</Link>
         </nav>
@@ -58,6 +63,10 @@ function App() {
           <Route path="/patients/:patientId/conditions/:conditionId" element={<ConditionDetailPage />} />
           <Route path="/patients/:patientId/conditions/:conditionId/edit" element={<ConditionEditPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
+          <Route path="/questionnaires" element={<QuestionnaireListPage />} />
+          <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />
+          <Route path="/questionnaires/:questionnaireId/edit" element={<QuestionnaireEditPage />} />
+          <Route path="/questionnaires/:questionnaireId/preview" element={<QuestionnairePreviewPage />} />
           {/* 管理画面は AdminGate で包む。/settings も対象にするのは、
               これまで ADMIN_TOKEN ヘッダーを送っておらず、本番で
               ADMIN_TOKEN を設定すると 401 で開けなくなっていたため。 */}

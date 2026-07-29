@@ -243,11 +243,19 @@ button:disabled {
   font-size: 14px;
 }
 
+/* td に display: flex を当てるとテーブルレイアウトから外れて行の下罫線がズレるため、
+   table-cell のまま右寄せ+余白で並べる。 */
 .patient-table__actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: flex-end;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.patient-table__actions > * {
+  vertical-align: middle;
+}
+
+.patient-table__actions > * + * {
+  margin-left: 12px;
 }
 
 .patient-table__actions button,
@@ -1612,4 +1620,370 @@ button:disabled {
 .lab-chart__tooltip-date {
   font-size: 11px;
   color: var(--text);
+}
+
+/* ---- Questionnaire テンプレートエディタ ---- */
+
+.qe-meta {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.qe-meta__description {
+  flex: 1 1 100%;
+}
+
+.qe-meta__description textarea {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.qe-hint {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.qe-variable__row {
+  flex: 1 1 100%;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.qe-variable__expression {
+  flex: 1;
+}
+
+.qe-item {
+  flex: 1 1 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--bg);
+}
+
+.qe-item--group {
+  border-left: 3px solid var(--accent-border);
+}
+
+.qe-item__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qe-item__type-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.qe-item__header-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qe-item__header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.qe-item__remove {
+  color: #dc2626;
+}
+
+.qe-item__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: flex-end;
+}
+
+.qe-item__text-field {
+  flex: 1 1 260px;
+}
+
+.qe-item__text-field input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.qe-item__checkbox {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+  padding-bottom: 8px;
+}
+
+.qe-item__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qe-item__children {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-left: 16px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+
+.qe-add-item {
+  align-self: flex-start;
+}
+
+.qe-options {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.qe-options th {
+  text-align: left;
+  font-weight: 400;
+  color: var(--text);
+  padding: 2px 8px 2px 0;
+}
+
+.qe-options td {
+  padding: 2px 8px 2px 0;
+}
+
+.qe-options input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.qe-options__center {
+  text-align: center;
+}
+
+.qe-options__actions {
+  white-space: nowrap;
+}
+
+.qe-enable-when {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.qe-enable-when__title {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.qe-enable-when__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qe-enable-when__operator {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.qe-item__advanced summary {
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.qe-item__advanced[open] summary {
+  margin-bottom: 8px;
+}
+
+/* ---- Questionnaire プレビュー ---- */
+
+.qp-notice {
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  background: var(--accent-bg);
+  color: var(--text-h);
+  font-size: 13px;
+}
+
+.qp {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+}
+
+.qp__header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--text-h);
+}
+
+.qp__meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.qp-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qp-group legend {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+  padding: 0 4px;
+}
+
+.qp-group__instance {
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qp-group__instance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.qp-group__add {
+  align-self: flex-start;
+}
+
+.qp-display {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+  white-space: pre-wrap;
+}
+
+.qp-field label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.qp-field input,
+.qp-field select,
+.qp-field textarea {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  max-width: 320px;
+}
+
+.qp-field textarea {
+  max-width: 100%;
+}
+
+.qp-field__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.qp-field__required {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+
+.qp-field__note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.qp-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qp-choices--horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.qp-choices__option {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.qp-choices__option input {
+  margin: 0;
+}
+
+.qp-number {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.qp-number__unit {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.qp-calculated {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qp-calculated input {
+  background: var(--accent-bg);
+}
+
+.qp-calculated__note {
+  font-size: 11px;
+  color: var(--accent);
 }

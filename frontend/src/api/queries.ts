@@ -460,6 +460,71 @@ export function useDeleteCondition() {
   });
 }
 
+const QUESTIONNAIRE_COUNT = 20;
+
+export function useQuestionnaireSearch(offset: number) {
+  const params = new URLSearchParams();
+  params.set("_count", String(QUESTIONNAIRE_COUNT));
+  params.set("_offset", String(offset));
+  // 更新日時の降順(新しい順)。
+  params.set("_sort", "-_lastUpdated");
+
+  const query = useQuery({
+    queryKey: ["Questionnaire", "search", offset],
+    queryFn: () => searchResource<fhir4.Questionnaire>("Questionnaire", params),
+    placeholderData: keepPreviousData,
+  });
+
+  return {
+    ...query,
+    bundle: query.data?.data,
+    total: query.data?.data.total ?? 0,
+    count: QUESTIONNAIRE_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+export function useQuestionnaire(id: string | undefined) {
+  return useQuery({
+    queryKey: ["Questionnaire", id],
+    queryFn: () => readResource<fhir4.Questionnaire>("Questionnaire", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateQuestionnaire() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (questionnaire: fhir4.Questionnaire) => createResource(questionnaire),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
+    },
+  });
+}
+
+export function useUpdateQuestionnaire() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ questionnaire, etag }: { questionnaire: fhir4.Questionnaire; etag: string }) =>
+      updateResource(questionnaire, etag),
+    onSuccess: (result: FhirResult<fhir4.Questionnaire>) => {
+      queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["Questionnaire", result.data.id] });
+    },
+  });
+}
+
+export function useDeleteQuestionnaire() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteResource("Questionnaire", id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
+    },
+  });
+}
+
 export function useDeletePrescription() {
   const queryClient = useQueryClient();
   return useMutation({
