@@ -5,6 +5,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { JsonBlock } from "../components/JsonBlock";
 import { PatientHeader } from "../components/PatientHeader";
 import {
+  interpretationClass,
   observationLineDisplay,
   specimenNamesById,
   splitLabResultDetailBundle,
@@ -131,7 +132,9 @@ export function LabResultDetailPage() {
                         <td>{line.name || "-"}</td>
                         <td>{line.abbreviation || "-"}</td>
                         <td>{line.specimen || "-"}</td>
-                        <td className="rp-card__lab-value">{line.value || "-"}</td>
+                        <td className={interpretationClass(line.interpretation, "rp-card__lab-value")}>
+                          {line.value || "-"}
+                        </td>
                         <td className="rp-card__lab-unit">{line.unit || "-"}</td>
                       </tr>
                     );

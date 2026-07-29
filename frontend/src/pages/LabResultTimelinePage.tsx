@@ -5,7 +5,11 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { LabTimelineChart, type LabTimelineSeries } from "../components/LabTimelineChart";
 import { Modal } from "../components/Modal";
 import { PatientHeader } from "../components/PatientHeader";
-import { buildLabTimeline, type LabTimelineRow } from "../fhir/labResultHelpers";
+import {
+  buildLabTimeline,
+  interpretationClass,
+  type LabTimelineRow,
+} from "../fhir/labResultHelpers";
 
 const DEFAULT_DATE_COUNT = 10;
 const MAX_DATE_COUNT = 100;
@@ -161,7 +165,13 @@ function TimelineRow({ row, dates, checked, onToggle }: TimelineRowProps) {
       </td>
       <td className="lab-timeline__unit-col">{row.unit}</td>
       {dates.map((date) => (
-        <td key={date} className="lab-timeline__value">
+        <td
+          key={date}
+          className={interpretationClass(
+            row.interpretations.get(date) ?? "",
+            "lab-timeline__value",
+          )}
+        >
           {row.values.get(date) ?? ""}
         </td>
       ))}

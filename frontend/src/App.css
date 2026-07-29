@@ -850,6 +850,37 @@ button:disabled {
   width: 72px;
 }
 
+/* H/L 判定による結果値の色分け。H(高値): 赤字 / L(低値): 青字。
+   ベースの td 色指定より詳細度を上げて上書きする。 */
+.rp-card__medicines--detail td.rp-card__lab-value--high,
+.lab-timeline__table td.lab-timeline__value--high {
+  color: var(--lab-high);
+  font-weight: 700;
+}
+
+.rp-card__medicines--detail td.rp-card__lab-value--low,
+.lab-timeline__table td.lab-timeline__value--low {
+  color: var(--lab-low);
+  font-weight: 700;
+}
+
+/* 登録フォームの結果値セル: 結果値入力と H/L プルダウンを横に並べる。 */
+.lab-result-form__value-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lab-result-form__value-cell > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.lab-result-form__interpretation {
+  flex: none;
+  width: 52px;
+}
+
 .rp-card__medicine-di .master-search__medley-link {
   margin-right: 0;
 }

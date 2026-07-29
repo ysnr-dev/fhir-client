@@ -3,8 +3,10 @@ import type { LabItem } from "../api/masterClient";
 import {
   emptyLabResultForm,
   emptyLabResultLine,
+  INTERPRETATION_OPTIONS,
   parseCodeValueList,
   SETTING_OPTIONS,
+  type LabInterpretation,
   type LabResultFormValues,
   type LabResultLineValues,
   type LabResultSetting,
@@ -187,7 +189,8 @@ export function LabResultForm({
             <col />
             <col style={{ width: "18%" }} />
             <col style={{ width: "18%" }} />
-            <col style={{ width: "160px" }} />
+            {/* 結果値入力 + H/L プルダウンの2つが並ぶ分の幅。 */}
+            <col style={{ width: "220px" }} />
             <col style={{ width: "96px" }} />
             <col style={{ width: "72px" }} />
           </colgroup>
@@ -219,10 +222,30 @@ export function LabResultForm({
                 <td>{line.item?.abbreviation ?? "-"}</td>
                 <td>{line.item?.jlac11_specimen ?? "-"}</td>
                 <td>
-                  <ResultValueInput
-                    line={line}
-                    onChange={(value) => updateLine(lineIndex, { value })}
-                  />
+                  <div className="lab-result-form__value-cell">
+                    <ResultValueInput
+                      line={line}
+                      onChange={(value) => updateLine(lineIndex, { value })}
+                    />
+                    {/* H/L 判定。未選択(空)は FHIR 上 "N" として記録される。 */}
+                    <select
+                      className="lab-result-form__interpretation"
+                      value={line.interpretation}
+                      onChange={(e) =>
+                        updateLine(lineIndex, {
+                          interpretation: e.target.value as LabInterpretation,
+                        })
+                      }
+                      aria-label="H/L判定"
+                    >
+                      <option value=""></option>
+                      {INTERPRETATION_OPTIONS.map((code) => (
+                        <option key={code} value={code}>
+                          {code}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </td>
                 <td>{line.item?.data_type === "PQ" ? line.item.display_unit || "-" : "-"}</td>
                 <td>
