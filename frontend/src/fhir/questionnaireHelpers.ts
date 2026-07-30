@@ -91,10 +91,9 @@ export interface EditorAnswerOption {
   initialSelected: boolean;
 }
 
-// operator は JASPEHR 仕様で "=" 固定のため保持しない。
+// choice 配下の group にのみ設定できる表示条件(jsp-1, jsp-9)。
+// question は親 choice の linkId 固定(jsp-2)、operator は "=" 固定のため保持しない。
 export interface EditorEnableWhen {
-  id: string;
-  question: string;
   answerSystem: string;
   answerCode: string;
 }
@@ -119,7 +118,9 @@ export interface EditorItem {
   // group 専用
   repeats: boolean;
   maxOccurs: string;
-  enableWhen: EditorEnableWhen[];
+  // choice 配下の group 専用(プロファイルで 0..1)。null は条件なし。
+  enableWhen: EditorEnableWhen | null;
+  // group の子項目、または choice の条件付きグループ。
   children: EditorItem[];
   // choice 専用
   itemControl: string;
@@ -168,7 +169,7 @@ export function newEditorItem(type: EditorItemType = "string"): EditorItem {
     calculatedExpression: "",
     repeats: false,
     maxOccurs: "",
-    enableWhen: [],
+    enableWhen: null,
     children: [],
     itemControl: type === "choice" ? "drop-down" : "",
     choiceOrientation: "",
@@ -186,8 +187,9 @@ export function newAnswerOption(): EditorAnswerOption {
   return { id: crypto.randomUUID(), system: "", code: "", display: "", initialSelected: false };
 }
 
-export function newEnableWhen(): EditorEnableWhen {
-  return { id: crypto.randomUUID(), question: "", answerSystem: "", answerCode: "" };
+// choice 配下に置く条件付き group。「特定の選択肢が選ばれたときだけ表示」を表す。
+export function newConditionalGroup(): EditorItem {
+  return { ...newEditorItem("group"), enableWhen: { answerSystem: "", answerCode: "" } };
 }
 
 export function newVariable(): EditorVariable {
@@ -219,7 +221,8 @@ export function changeItemType(item: EditorItem, type: EditorItemType): EditorIt
     required: type === "group" || type === "display" ? false : item.required,
     hidden: item.hidden,
     designNote: item.designNote,
-    children: type === "group" ? item.children : [],
+    // group⇔choice の変換でも子項目は引き継がない(choice の子は条件付き group 限定のため)。
+    children: [],
   };
 }
 
@@ -278,31 +281,6 @@ export function findItemById(items: EditorItem[], id: string): EditorItem | unde
     if (found) return found;
   }
   return undefined;
-}
-
-// enableWhen の参照先候補(jsp-2: 親階層の linkId のみ)。
-// 対象 group を囲む各スコープ(ルート〜親)にある choice 型 item を集める。
-// group 自身の配下は候補にならない。
-export function enableWhenCandidates(items: EditorItem[], groupId: string): EditorItem[] {
-  const result: EditorItem[] = [];
-
-  function walk(scope: EditorItem[]): boolean {
-    if (!scopeContains(scope, groupId)) return false;
-    for (const item of scope) {
-      if (item.id === groupId) continue;
-      if (item.type === "choice") result.push(item);
-    }
-    const parent = scope.find((item) => item.id !== groupId && scopeContains(item.children, groupId));
-    if (parent) walk(parent.children);
-    return true;
-  }
-
-  function scopeContains(scope: EditorItem[], id: string): boolean {
-    return scope.some((item) => item.id === id || scopeContains(item.children, id));
-  }
-
-  walk(items);
-  return result;
 }
 
 // ---- FHIR リソースへの変換 (build) ----
@@ -399,7 +377,9 @@ function buildInitial(item: EditorItem): fhir4.QuestionnaireItemInitial[] | unde
   }
 }
 
-function buildItem(item: EditorItem): fhir4.QuestionnaireItem {
+// parentChoice は item が choice 配下の条件付き group のときの親 choice。
+// enableWhen.question は jsp-2 により親 choice の linkId 固定なので build 時に補う。
+function buildItem(item: EditorItem, parentChoice?: EditorItem): fhir4.QuestionnaireItem {
   const extensions = buildItemExtensions(item);
 
   const result: fhir4.QuestionnaireItem = {
@@ -413,29 +393,35 @@ function buildItem(item: EditorItem): fhir4.QuestionnaireItem {
 
   if (item.type === "group") {
     if (item.repeats) result.repeats = true;
-    if (item.enableWhen.length) {
-      result.enableWhen = item.enableWhen.map((ew) => ({
-        question: ew.question,
-        operator: "=",
-        answerCoding: {
-          ...(ew.answerSystem ? { system: ew.answerSystem } : {}),
-          code: ew.answerCode,
+    // jsp-1/jsp-9: 表示条件は choice 配下の group のみ。プロファイルで 0..1、enableBehavior は禁止。
+    if (parentChoice && item.enableWhen) {
+      result.enableWhen = [
+        {
+          question: parentChoice.linkId,
+          operator: "=",
+          answerCoding: {
+            ...(item.enableWhen.answerSystem ? { system: item.enableWhen.answerSystem } : {}),
+            code: item.enableWhen.answerCode,
+          },
         },
-      }));
-      if (item.enableWhen.length > 1) result.enableBehavior = "all";
+      ];
     }
-    if (item.children.length) result.item = item.children.map(buildItem);
+    if (item.children.length) result.item = item.children.map((child) => buildItem(child));
   }
 
-  if (item.type === "choice" && item.answerOptions.length) {
-    result.answerOption = item.answerOptions.map((option) => ({
-      valueCoding: {
-        ...(option.system ? { system: option.system } : {}),
-        code: option.code,
-        ...(option.display ? { display: option.display } : {}),
-      },
-      ...(option.initialSelected ? { initialSelected: true } : {}),
-    }));
+  if (item.type === "choice") {
+    if (item.answerOptions.length) {
+      result.answerOption = item.answerOptions.map((option) => ({
+        valueCoding: {
+          ...(option.system ? { system: option.system } : {}),
+          code: option.code,
+          ...(option.display ? { display: option.display } : {}),
+        },
+        ...(option.initialSelected ? { initialSelected: true } : {}),
+      }));
+    }
+    // 条件付きグループは choice の子として出力する(jsp-9)。
+    if (item.children.length) result.item = item.children.map((child) => buildItem(child, item));
   }
 
   if (item.type === "string" || item.type === "text") {
@@ -462,7 +448,7 @@ export function buildQuestionnaire(
     status: values.status,
     // JASPEHR プロファイルで 1..1。本アプリのテンプレートは患者を対象とする。
     subjectType: ["Patient"],
-    item: values.items.map(buildItem),
+    item: values.items.map((item) => buildItem(item)),
   };
 
   if (questionnaireId) questionnaire.id = questionnaireId;
@@ -503,7 +489,10 @@ function parseInitialValue(item: fhir4.QuestionnaireItem): string {
   );
 }
 
-function parseItem(item: fhir4.QuestionnaireItem): EditorItem {
+// parentType は親 item の type(ルート直下は undefined)。
+// 表示条件は choice 配下の group のみ編集対象とし、それ以外に付いた enableWhen は
+// JASPEHR 非準拠(jsp-1/jsp-9)のため復元しない(編集して保存すると失われる)。
+function parseItem(item: fhir4.QuestionnaireItem, parentType?: string): EditorItem {
   const ext = item.extension;
   const type = (ITEM_TYPES as readonly string[]).includes(item.type)
     ? (item.type as EditorItemType)
@@ -527,13 +516,14 @@ function parseItem(item: fhir4.QuestionnaireItem): EditorItem {
       extensionByUrl(ext, CALCULATED_EXPRESSION_EXT_URL)?.valueExpression?.expression ?? "",
     repeats: item.repeats ?? false,
     maxOccurs: numberToString(extensionByUrl(ext, MAX_OCCURS_EXT_URL)?.valueInteger),
-    enableWhen: (item.enableWhen ?? []).map((ew) => ({
-      id: crypto.randomUUID(),
-      question: ew.question,
-      answerSystem: ew.answerCoding?.system ?? "",
-      answerCode: ew.answerCoding?.code ?? "",
-    })),
-    children: (item.item ?? []).map(parseItem),
+    enableWhen:
+      parentType === "choice" && item.type === "group" && item.enableWhen?.[0]
+        ? {
+            answerSystem: item.enableWhen[0].answerCoding?.system ?? "",
+            answerCode: item.enableWhen[0].answerCoding?.code ?? "",
+          }
+        : null,
+    children: (item.item ?? []).map((child) => parseItem(child, item.type)),
     itemControl:
       extensionByUrl(ext, ITEM_CONTROL_EXT_URL)?.valueCodeableConcept?.coding?.[0]?.code ?? "",
     choiceOrientation: (extensionByUrl(ext, CHOICE_ORIENTATION_EXT_URL)?.valueCode ?? "") as
@@ -575,7 +565,7 @@ export function parseQuestionnaireForm(questionnaire: fhir4.Questionnaire): Ques
         name: ext.valueExpression?.name ?? "",
         expression: ext.valueExpression?.expression ?? "",
       })),
-    items: (questionnaire.item ?? []).map(parseItem),
+    items: (questionnaire.item ?? []).map((item) => parseItem(item)),
   };
 }
 
@@ -618,10 +608,12 @@ function itemLabel(item: EditorItem, position: string): string {
 
 function validateItems(
   items: EditorItem[],
-  ancestors: EditorItem[],
-  seenLinkIds: Map<string, EditorItem>,
+  parent: EditorItem | null,
+  seenLinkIds: Set<string>,
   position: string,
 ): string | null {
+  const underChoice = parent?.type === "choice";
+
   for (let i = 0; i < items.length; i += 1) {
     const item = items[i];
     const pos = position ? `${position}-${i + 1}` : String(i + 1);
@@ -634,7 +626,12 @@ function validateItems(
     if (seenLinkIds.has(item.linkId)) {
       return `linkId「${item.linkId}」が重複しています。linkId はテンプレート全体で一意にしてください。`;
     }
-    seenLinkIds.set(item.linkId, item);
+    seenLinkIds.add(item.linkId);
+
+    // jsp-1/jsp-9: choice の子は enableWhen 付き group のみ。
+    if (underChoice && item.type !== "group") {
+      return `${label}: 選択肢項目の下には条件付きグループのみ配置できます(jsp-9)。`;
+    }
 
     if (item.type !== "display" && item.type !== "group" && !item.text) {
       return `${label}: 質問文(表示文言)を入力してください。`;
@@ -648,6 +645,20 @@ function validateItems(
     }
 
     if (item.type === "group") {
+      if (underChoice) {
+        if (!item.enableWhen?.answerCode) {
+          return `${label}: 表示条件の比較値(選択肢)を選択してください。`;
+        }
+        if (!parent!.answerOptions.some((o) => o.code === item.enableWhen?.answerCode)) {
+          return `${label}: 表示条件の比較値「${item.enableWhen.answerCode}」が親の選択肢にありません。`;
+        }
+        // jsp-8: enableWhen と repeats は併用不可。
+        if (item.repeats) {
+          return `${label}: 表示条件付きグループは繰り返しにできません(jsp-8)。`;
+        }
+      } else if (item.enableWhen) {
+        return `${label}: 表示条件は選択肢項目の直下のグループにのみ設定できます(jsp-1, jsp-9)。`;
+      }
       if (item.children.length === 0) {
         return `${label}: グループには1つ以上の子項目が必要です。`;
       }
@@ -657,18 +668,7 @@ function validateItems(
           return `${label}: 最大繰り返し数は1以上の整数で入力してください。`;
         }
       }
-      for (const ew of item.enableWhen) {
-        if (!ew.question) return `${label}: 表示条件の参照先項目を選択してください。`;
-        const referenced = ancestors.find((a) => a.linkId === ew.question);
-        const inScope =
-          referenced ??
-          [...seenLinkIds.values()].find((s) => s.linkId === ew.question && s.type === "choice");
-        if (!inScope) {
-          return `${label}: 表示条件の参照先「${ew.question}」が親階層に見つかりません。`;
-        }
-        if (!ew.answerCode) return `${label}: 表示条件の比較値を選択してください。`;
-      }
-      const childError = validateItems(item.children, [...ancestors, ...items], seenLinkIds, pos);
+      const childError = validateItems(item.children, item, seenLinkIds, pos);
       if (childError) return childError;
     }
 
@@ -691,6 +691,8 @@ function validateItems(
           return `${label}: 初期選択は1つまでです(チェックボックス以外)。`;
         }
       }
+      const childError = validateItems(item.children, item, seenLinkIds, pos);
+      if (childError) return childError;
     }
 
     if (item.type === "integer" || item.type === "decimal") {
@@ -765,5 +767,5 @@ export function validateQuestionnaireForm(values: QuestionnaireFormValues): stri
 
   if (values.items.length === 0) return "項目を1つ以上追加してください。";
 
-  return validateItems(values.items, [], new Map(), "");
+  return validateItems(values.items, null, new Set(), "");
 }
