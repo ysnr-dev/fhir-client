@@ -27,6 +27,16 @@ Rails.application.routes.draw do
     # ブラウザから上流を直接叩けない(CORS無効)ため、ここでサーバー間中継する。
     resources :oauth_clients, only: %i[index create destroy]
     get "scopes", to: "scopes#show"
+
+    # 帳票レイアウト(.tlf)の管理。Questionnaire の canonical と紐付けて保存する。
+    resources :report_layouts, only: %i[index show create update destroy]
+  end
+
+  # 帳票出力(QuestionnaireResponse の PDF 化)。FHIR リソースではないため
+  # /fhir とは別のプレーン JSON / PDF エンドポイント。
+  namespace :reports do
+    get "layouts", to: "layouts#show"
+    get "questionnaire_responses/:id/pdf", to: "questionnaire_response_pdfs#show"
   end
 
   # 国内マスタデータ（FHIR リソースではないプレーンな JSON REST）

@@ -1,23 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createOauthClient,
+  createReportLayout,
   deleteOauthClient,
+  deleteReportLayout,
   fetchAdminSession,
   fetchConnectionSettings,
   fetchOauthClients,
+  fetchReportLayouts,
   fetchScopeOptions,
   login,
   logout,
   testConnection,
   updateConnectionSettings,
+  updateReportLayout,
   type ConnectionSettingsUpdate,
   type NewOauthClient,
+  type ReportLayoutPayload,
 } from "./adminClient";
 
 const CONNECTION_SETTINGS_KEY = ["admin", "connection_settings"];
 export const ADMIN_SESSION_KEY = ["admin", "session"];
 const OAUTH_CLIENTS_KEY = ["admin", "oauth_clients"];
 const SCOPE_OPTIONS_KEY = ["admin", "scope_options"];
+const REPORT_LAYOUTS_KEY = ["admin", "report_layouts"];
 
 // 管理系はすべて retry: false。自動リトライされた 401 は上流 fhir-server の
 // レート制限(admin/ip)を無駄に消費するだけで、状況を改善しない。
@@ -120,6 +126,48 @@ export function useDeleteOauthClient() {
     retry: false,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: OAUTH_CLIENTS_KEY });
+    },
+  });
+}
+
+export function useReportLayouts() {
+  return useQuery({
+    queryKey: REPORT_LAYOUTS_KEY,
+    queryFn: fetchReportLayouts,
+    retry: false,
+  });
+}
+
+export function useCreateReportLayout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ReportLayoutPayload) => createReportLayout(payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: REPORT_LAYOUTS_KEY });
+    },
+  });
+}
+
+export function useUpdateReportLayout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Partial<ReportLayoutPayload> }) =>
+      updateReportLayout(id, payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: REPORT_LAYOUTS_KEY });
+    },
+  });
+}
+
+export function useDeleteReportLayout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteReportLayout(id),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: REPORT_LAYOUTS_KEY });
     },
   });
 }

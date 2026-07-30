@@ -10,7 +10,7 @@ fhir-client/
 └── frontend/   # Vite + React + TypeScript。Patient の登録/更新/削除/一覧/検索 UI、マスタ取込 UI (port 5173)
 ```
 
-- FHIR リソースは backend の DB に永続化しません(常に FHIR サーバーへ中継)。マスタデータ(後述)のみ backend 自身の DB に永続化します。
+- FHIR リソースは backend の DB に永続化しません(常に FHIR サーバーへ中継)。マスタデータ(後述)と帳票レイアウト(後述)のみ backend 自身の DB に永続化します。
 - フロントエンドは FHIR R4 の JSON をそのまま組み立て/解釈します(`@types/fhir` の `fhir4` 名前空間を使用)。
 - 開発時、ブラウザ→フロントエンド(5173)は同一オリジンで、`/fhir/*` と `/master/*` は Vite の dev proxy が backend(3001)へ転送します。CORS 設定は不要です。
 
@@ -211,6 +211,46 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
 - backend の `/fhir` プロキシは `ALLOWED_RESOURCE_TYPES` に `Binary` を追加しています。画像の表示は
   `Accept: image/*` を付けた `GET /fhir/Binary/<id>` で生バイトを取得します(上流が非 FHIR な Accept に
   対して `contentType` 付きの実体を返す挙動を利用)。
+
+## 帳票PDF出力（QuestionnaireResponse の ThinReports 帳票）
+
+テンプレートの回答(`QuestionnaireResponse`)を、あらかじめ登録した帳票レイアウトに流し込んで
+PDF 出力できます。レイアウトは [ThinReports Basic Editor](https://github.com/thinreports/thinreports-basic-editor)
+で作成した `.tlf` ファイルを管理画面 `/report-layouts` からアップロードし、テンプレートの
+canonical(`url|version`)に紐付けます(backend DB の `report_layouts` に保存)。
+
+- **PDF 生成は backend**(`thinreports` gem、純 Ruby・IPA フォント同梱)。上流から
+  QR → canonical で元 Questionnaire → Patient → シェーマ画像 Binary を取得して組み立てます。
+- **エンドポイント**: `GET /reports/questionnaire_responses/:id/pdf`(inline 表示)、
+  `GET /reports/layouts?canonical=...`(登録有無の照会。テンプレート表示画面の「PDF」ボタンの
+  表示判定に使用)。レイアウト未登録のテンプレートではボタンが無効になります。
+- **レイアウト管理 API**: `/admin/report_layouts`(CRUD。`ADMIN_TOKEN` 設定時は他の管理APIと
+  同じ認証・CSRF が必要)。
+
+### プレースホルダー規約(レイアウト側アイテム ID)
+
+Basic Editor のアイテム ID は「先頭英数字 + 英数字・アンダースコア」しか使えないため、
+linkId の記号を変換して対応付けます。
+
+| 出力したい内容 | アイテム ID | 種類 |
+|---|---|---|
+| 項目の回答値 | linkId の記号(`-.!#%/:;?@~` 等)を 1 文字ずつ `_` に置換した ID。先頭が英数字でない場合は `x` を前置(例: `body/temp` → `body_temp`) | text-block |
+| 繰り返しグループ n 回目(n≥2)の回答 | `<ID>_2`, `<ID>_3`, ...(出現順。レイアウトに置いた個数を超えた分は出力されない) | text-block |
+| シェーマ描き込み画像 | `<ID>_img`(n 回目は `<ID>_img_2`, ...) | image-block |
+| 患者: 氏名 / カナ / 患者番号 / 生年月日 / 年齢(記入日時点) / 性別 | `pt_name` / `pt_kana` / `pt_id` / `pt_birthdate` / `pt_age` / `pt_gender` | text-block |
+| 回答: タイトル / ステータス / 記入日時 / 記入者 / 保険医療機関番号 / ID | `qr_title` / `qr_status` / `qr_authored` / `qr_author` / `qr_institution` / `qr_id` | text-block |
+
+- 値の整形は平文表示と同じ(choice は display 優先、複数回答は `、` 連結、単位付与)。日付は
+  `YYYY/MM/DD`、日時は JST の `YYYY/MM/DD HH:MM`。
+- **未回答の項目は空文字**になります(text-block のデザイン時初期値は残りません)。レイアウトに
+  無いプレースホルダーは黙って捨てられ、逆にレイアウト独自の text-block(linkId 由来でない ID)は
+  触りません。
+- 変換の結果 2 つの linkId が同じ ID に潰れる場合(例: `a-b` と `a.b`)は生成時に 422 で拒否します。
+  **帳票化するテンプレートの linkId は英数字とアンダースコアのみを推奨**します。
+- 予約 ID(`pt_*` / `qr_*`)は linkId 由来の値より優先されます。
+- **各テンプレートで使えるアイテム ID の一覧は、管理画面 `/report-layouts` の登録フォームで
+  テンプレートを選択すると表示されます**(変換済み ID・単位・繰り返しの有無・ID 衝突の警告つき。
+  コピーボタンで Basic Editor へ貼り付けられます)。
 
 ## 管理画面（接続設定 / OAuth クライアント）
 

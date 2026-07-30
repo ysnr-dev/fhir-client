@@ -29,6 +29,7 @@ import { QuestionnaireResponseCreatePage } from "./pages/QuestionnaireResponseCr
 import { QuestionnaireResponseDetailPage } from "./pages/QuestionnaireResponseDetailPage";
 import { QuestionnaireResponseEditPage } from "./pages/QuestionnaireResponseEditPage";
 import { QuestionnaireResponseListPage } from "./pages/QuestionnaireResponseListPage";
+import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
           <Link to="/patients">患者一覧</Link>
           <Link to="/master-import">マスタ取込</Link>
           <Link to="/questionnaires">テンプレート</Link>
+          <Link to="/report-layouts">帳票レイアウト</Link>
           <Link to="/oauth-clients">OAuth クライアント</Link>
           <Link to="/settings">接続設定</Link>
         </nav>
@@ -103,6 +105,14 @@ function App() {
             element={
               <AdminGate>
                 <OauthClientsPage />
+              </AdminGate>
+            }
+          />
+          <Route
+            path="/report-layouts"
+            element={
+              <AdminGate>
+                <ReportLayoutsPage />
               </AdminGate>
             }
           />

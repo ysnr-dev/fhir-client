@@ -213,3 +213,60 @@ export async function deleteOauthClient(clientId: string): Promise<OauthClientDe
 export async function fetchScopeOptions(): Promise<ScopeOptions> {
   return adminJson<ScopeOptions>("/admin/scopes");
 }
+
+// --- 帳票レイアウト ----------------------------------------------------------
+
+export interface ReportLayoutSummary {
+  id: number;
+  name: string;
+  questionnaire_url: string;
+  questionnaire_version: string;
+  canonical: string;
+  tlf_bytesize: number;
+  updated_at: string;
+}
+
+/** show のみ tlf 本文(.tlf の JSON テキスト)を含む。 */
+export interface ReportLayoutDetail extends ReportLayoutSummary {
+  tlf: string;
+}
+
+export interface ReportLayoutPayload {
+  name: string;
+  questionnaire_url: string;
+  questionnaire_version: string;
+  /** .tlf ファイルの中身(JSON テキスト)。FileReader で読んだ文字列をそのまま送る。 */
+  tlf: string;
+}
+
+const REPORT_LAYOUTS = "/admin/report_layouts";
+
+export async function fetchReportLayouts(): Promise<ReportLayoutSummary[]> {
+  const body = await adminJson<{ total: number; items: ReportLayoutSummary[] }>(REPORT_LAYOUTS);
+  return body.items;
+}
+
+export async function fetchReportLayout(id: number): Promise<ReportLayoutDetail> {
+  return adminJson<ReportLayoutDetail>(`${REPORT_LAYOUTS}/${id}`);
+}
+
+export async function createReportLayout(
+  payload: ReportLayoutPayload,
+): Promise<ReportLayoutSummary> {
+  return adminJson<ReportLayoutSummary>(REPORT_LAYOUTS, { method: "POST", ...jsonBody(payload) });
+}
+
+export async function updateReportLayout(
+  id: number,
+  payload: Partial<ReportLayoutPayload>,
+): Promise<ReportLayoutSummary> {
+  return adminJson<ReportLayoutSummary>(`${REPORT_LAYOUTS}/${id}`, {
+    method: "PATCH",
+    ...jsonBody(payload),
+  });
+}
+
+export async function deleteReportLayout(id: number): Promise<void> {
+  const res = await adminFetch(`${REPORT_LAYOUTS}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
