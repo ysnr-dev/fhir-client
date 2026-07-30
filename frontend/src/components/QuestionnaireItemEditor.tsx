@@ -475,22 +475,6 @@ export function QuestionnaireItemEditor({
         </div>
       )}
 
-      <div className="schema-image">
-        <label className="schema-image__label">
-          シェーマ画像
-          <input type="file" accept="image/*" onChange={handleImageSelect} />
-        </label>
-        {imageError && <p className="schema-image__error">{imageError}</p>}
-        {imageSrc && (
-          <div className="schema-image__preview">
-            <img className="schema-image__thumb" src={imageSrc} alt="シェーマ画像" />
-            <button type="button" onClick={() => patch({ image: null })}>
-              画像を削除
-            </button>
-          </div>
-        )}
-      </div>
-
       <details className="qe-item__advanced">
         <summary>詳細設定</summary>
         <div className="qe-item__grid">
@@ -533,6 +517,25 @@ export function QuestionnaireItemEditor({
                 />
               </label>
             </>
+          )}
+        </div>
+      </details>
+
+      <details className="qe-item__advanced">
+        <summary>拡張設定</summary>
+        <div className="schema-image">
+          <label className="schema-image__label">
+            シェーマ画像
+            <input type="file" accept="image/*" onChange={handleImageSelect} />
+          </label>
+          {imageError && <p className="schema-image__error">{imageError}</p>}
+          {imageSrc && (
+            <div className="schema-image__preview">
+              <img className="schema-image__thumb" src={imageSrc} alt="シェーマ画像" />
+              <button type="button" onClick={() => patch({ image: null })}>
+                画像を削除
+              </button>
+            </div>
           )}
         </div>
       </details>
