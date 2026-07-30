@@ -3,6 +3,12 @@ module Admin
   # tlf は JSON テキストなので multipart ではなく JSON ボディで受ける
   # (SPA 側は FileReader で読んだ文字列をそのまま送る)。
   class ReportLayoutsController < BaseController
+    # 帳票レイアウトの登録・差し替えは日常運用で行うため、ADMIN_TOKEN を設定した
+    # 環境でも管理者認証を要求しない。CSRF 検査はセッション認証時のみ意味を持つ
+    # ガードなので、認証を外すのに合わせてスキップする。
+    skip_before_action :authorize_admin!
+    skip_before_action :verify_admin_csrf!
+
     before_action :set_layout, only: %i[show update destroy]
 
     def index

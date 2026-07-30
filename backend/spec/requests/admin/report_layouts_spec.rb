@@ -94,43 +94,20 @@ RSpec.describe "Admin::ReportLayouts", type: :request do
     end
   end
 
-  describe "ADMIN_TOKEN guard" do
-    it "rejects unauthenticated requests when the token is configured" do
+  # 帳票レイアウトは日常運用で使うため、ADMIN_TOKEN を設定した環境でも
+  # 認証なしで CRUD できる(コントローラ側で認証ガードをスキップしている)。
+  describe "with ADMIN_TOKEN configured" do
+    it "lists layouts without credentials" do
       with_admin_token("s3cret") do
         get "/admin/report_layouts"
 
-        expect(response).to have_http_status(:unauthorized)
-      end
-    end
-
-    it "accepts the X-Admin-Token header (no CSRF needed on the header path)" do
-      with_admin_token("s3cret") do
-        post "/admin/report_layouts", params: valid_params, as: :json,
-                                      headers: { "X-Admin-Token" => "s3cret" }
-
-        expect(response).to have_http_status(:created)
-      end
-    end
-
-    it "rejects a session-authenticated POST without a CSRF token" do
-      with_admin_token("s3cret") do
-        post "/admin/session", params: { token: "s3cret" }, as: :json
         expect(response).to have_http_status(:ok)
-
-        post "/admin/report_layouts", params: valid_params, as: :json
-
-        expect(response).to have_http_status(:forbidden)
-        expect(response.parsed_body["error"]).to eq("invalid_csrf_token")
       end
     end
 
-    it "accepts a session-authenticated POST with the CSRF token" do
+    it "creates a layout without credentials or CSRF token" do
       with_admin_token("s3cret") do
-        post "/admin/session", params: { token: "s3cret" }, as: :json
-        csrf = response.parsed_body["csrf_token"]
-
-        post "/admin/report_layouts", params: valid_params, as: :json,
-                                      headers: { "X-CSRF-Token" => csrf }
+        post "/admin/report_layouts", params: valid_params, as: :json
 
         expect(response).to have_http_status(:created)
       end

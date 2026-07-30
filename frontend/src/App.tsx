@@ -108,14 +108,9 @@ function App() {
               </AdminGate>
             }
           />
-          <Route
-            path="/report-layouts"
-            element={
-              <AdminGate>
-                <ReportLayoutsPage />
-              </AdminGate>
-            }
-          />
+          {/* 帳票レイアウトは日常運用で使うため管理者ログインを要求しない
+              (backend 側も認証対象外)。 */}
+          <Route path="/report-layouts" element={<ReportLayoutsPage />} />
         </Routes>
       </main>
     </div>
