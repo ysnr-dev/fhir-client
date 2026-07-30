@@ -33,7 +33,10 @@ export function QuestionnaireResponseCreatePage() {
 
   const createResponse = useCreateQuestionnaireResponse();
 
-  function handleSubmit(items: fhir4.QuestionnaireResponseItem[]) {
+  function handleSubmit(
+    items: fhir4.QuestionnaireResponseItem[],
+    imageEntries: fhir4.BundleEntry[],
+  ) {
     if (!questionnaire || !patient) return;
     const metaError = validateQuestionnaireResponseMeta(meta);
     if (metaError) {
@@ -41,9 +44,13 @@ export function QuestionnaireResponseCreatePage() {
       return;
     }
     setValidationError(null);
-    createResponse.mutate(buildQuestionnaireResponse({ questionnaire, patient, items, meta }), {
-      onSuccess: () => navigate(`/patients/${patientId}/questionnaire-responses`),
-    });
+    createResponse.mutate(
+      {
+        response: buildQuestionnaireResponse({ questionnaire, patient, items, meta }),
+        imageEntries,
+      },
+      { onSuccess: () => navigate(`/patients/${patientId}/questionnaire-responses`) },
+    );
   }
 
   return (

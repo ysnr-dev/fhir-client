@@ -1,6 +1,13 @@
 // JASPEHR 実装ガイド v1.0.0 の Questionnaire プロファイルに準拠したテンプレートの
 // 編集用中間表現(EditorItem)と FHIR リソースとの相互変換。
 // https://jaspehr.jp/wp-content/docs/full-ig_v1.0.0/site/index.html
+import {
+  binaryIdFromAttachment,
+  imageBinaryEntry,
+  itemMediaExtension,
+  itemMediaOf,
+} from "./schemaImage";
+
 export const JASPEHR_QUESTIONNAIRE_PROFILE_URL =
   "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire";
 
@@ -104,6 +111,14 @@ export interface EditorVariable {
   expression: string;
 }
 
+// item に添付するシェーマ画像。binaryId は保存(アップロード)済みの Binary、
+// dataUrl は選択直後でまだアップロードされていない画像を表す。
+export interface EditorItemImage {
+  binaryId: string | null;
+  contentType: string;
+  dataUrl: string | null;
+}
+
 export interface EditorItem {
   id: string;
   linkId: string;
@@ -134,6 +149,8 @@ export interface EditorItem {
   // string / text 専用
   maxLength: string;
   regex: string;
+  // シェーマ画像(全 type 共通、1枚まで)
+  image: EditorItemImage | null;
 }
 
 export interface QuestionnaireFormValues {
@@ -180,6 +197,7 @@ export function newEditorItem(type: EditorItemType = "string"): EditorItem {
     unit: "",
     maxLength: "",
     regex: "",
+    image: null,
   };
 }
 
@@ -221,6 +239,7 @@ export function changeItemType(item: EditorItem, type: EditorItemType): EditorIt
     required: type === "group" || type === "display" ? false : item.required,
     hidden: item.hidden,
     designNote: item.designNote,
+    image: item.image,
     // group⇔choice の変換でも子項目は引き継がない(choice の子は条件付き group 限定のため)。
     children: [],
   };
@@ -351,6 +370,12 @@ function buildItemExtensions(item: EditorItem): fhir4.Extension[] {
   }
   if (item.calculatedExpression) {
     extensions.push(buildExpressionExt(CALCULATED_EXPRESSION_EXT_URL, item.calculatedExpression));
+  }
+
+  // binaryId が決まっている画像だけ出力する(新規画像は build 前に
+  // collectPendingImageEntries が Bundle 内プレースホルダを割り当てる)。
+  if (item.image?.binaryId) {
+    extensions.push(itemMediaExtension(item.image.binaryId, item.image.contentType));
   }
 
   return extensions;
@@ -543,7 +568,41 @@ function parseItem(item: fhir4.QuestionnaireItem, parentType?: string): EditorIt
     unit: extensionByUrl(ext, UNIT_EXT_URL)?.valueCoding?.code ?? "",
     maxLength: numberToString(item.maxLength),
     regex: extensionByUrl(ext, REGEX_EXT_URL)?.valueString ?? "",
+    image: parseItemImage(item),
   };
+}
+
+// itemMedia 拡張からシェーマ画像を復元する。url が "Binary/<id>" 形式でない
+// Attachment はこのエディタでは扱えないため復元しない(保存すると失われる)。
+function parseItemImage(item: fhir4.QuestionnaireItem): EditorItemImage | null {
+  const attachment = itemMediaOf(item);
+  const binaryId = binaryIdFromAttachment(attachment);
+  if (!binaryId) return null;
+  return { binaryId, contentType: attachment?.contentType ?? "image/png", dataUrl: null };
+}
+
+// 未保存(dataUrl のみ)の画像を transaction Bundle の Binary 作成エントリにし、
+// item にはその fullUrl プレースホルダを入れた新しいツリーを返す。
+// 呼び出し側は buildQuestionnaire の結果と entries を 1 つの Bundle で保存する。
+export function collectPendingImageEntries(items: EditorItem[]): {
+  items: EditorItem[];
+  entries: fhir4.BundleEntry[];
+} {
+  const entries: fhir4.BundleEntry[] = [];
+
+  const walk = (list: EditorItem[]): EditorItem[] =>
+    list.map((item) => {
+      let image = item.image;
+      if (image?.dataUrl && !image.binaryId) {
+        const { placeholder, entry } = imageBinaryEntry(image.dataUrl, image.contentType);
+        entries.push(entry);
+        image = { binaryId: placeholder, contentType: image.contentType, dataUrl: null };
+      }
+      const children = item.children.length ? walk(item.children) : item.children;
+      return image === item.image && children === item.children ? item : { ...item, image, children };
+    });
+
+  return { items: walk(items), entries };
 }
 
 export function parseQuestionnaireForm(questionnaire: fhir4.Questionnaire): QuestionnaireFormValues {

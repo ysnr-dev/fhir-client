@@ -2,6 +2,14 @@ import { Fragment, useMemo, useState, type FormEvent, type KeyboardEvent, type R
 import fhirpath from "fhirpath";
 // value[x] を "value" で参照できるようにする R4 のモデル情報。
 import fhirpathR4Model from "fhirpath/fhir-context/r4";
+import {
+  annotatedImageExtension,
+  annotationOf,
+  binaryIdFromAttachment,
+  imageBinaryEntry,
+  itemMediaOf,
+} from "../fhir/schemaImage";
+import { SchemaImageField, type AnnotationState } from "./SchemaImageField";
 
 // Questionnaire の item ツリーからテンプレート入力フォームを再帰レンダリングする。
 // onSubmit 指定時は入力フォーム(送信で QuestionnaireResponse.item を返す)、
@@ -28,6 +36,9 @@ const INITIAL_EXPRESSION_EXT_URL =
 
 type AnswerValue = string | string[];
 type Answers = Record<string, AnswerValue>;
+// シェーマ画像への描き込み。回答(Answers)は文字列型のため別レコードで持つ。
+// キーは Answers と同じインスタンスパス(繰り返しグループ自体は "group#0")。
+type Annotations = Record<string, AnnotationState>;
 
 function ext(item: fhir4.QuestionnaireItem, url: string): fhir4.Extension | undefined {
   return item.extension?.find((e) => e.url === url);
@@ -114,25 +125,34 @@ function collectResponseAnswers(
   prefix: string,
   answers: Answers,
   counts: Record<string, number>,
+  annotations: Annotations,
 ): void {
+  const restoreAnnotation = (key: string, r: fhir4.QuestionnaireResponseItem | undefined) => {
+    const binaryId = r ? binaryIdFromAttachment(annotationOf(r)) : null;
+    if (binaryId) annotations[key] = { binaryId, dataUrl: null };
+  };
+
   for (const q of qItems ?? []) {
     const key = prefix + q.linkId;
     const matches = (rItems ?? []).filter((r) => r.linkId === q.linkId);
     if (q.type === "group") {
       if (q.repeats) {
         if (matches.length) counts[key] = matches.length;
-        matches.forEach((m, i) =>
-          collectResponseAnswers(q.item, m.item, `${key}#${i}.`, answers, counts),
-        );
+        matches.forEach((m, i) => {
+          restoreAnnotation(`${key}#${i}`, m);
+          collectResponseAnswers(q.item, m.item, `${key}#${i}.`, answers, counts, annotations);
+        });
       } else if (matches[0]) {
-        collectResponseAnswers(q.item, matches[0].item, `${key}.`, answers, counts);
+        restoreAnnotation(key, matches[0]);
+        collectResponseAnswers(q.item, matches[0].item, `${key}.`, answers, counts, annotations);
       }
       continue;
     }
+    restoreAnnotation(key, matches[0]);
     if (q.type === "display") continue;
     // choice 配下の条件付きグループの回答は choice の response item の item に入る。
     if (q.item?.length) {
-      collectResponseAnswers(q.item, matches[0]?.item, `${key}.`, answers, counts);
+      collectResponseAnswers(q.item, matches[0]?.item, `${key}.`, answers, counts, annotations);
     }
     // 計算式項目の値は表示・保存時に再計算されるため復元しない。
     if (calculatedExpressionOf(q)) continue;
@@ -148,6 +168,7 @@ function collectResponseAnswers(
 interface InitialState {
   answers: Answers;
   counts: Record<string, number>;
+  annotations: Annotations;
 }
 
 function buildInitialState(
@@ -155,12 +176,13 @@ function buildInitialState(
   initialResponse: fhir4.QuestionnaireResponse | undefined,
 ): InitialState {
   if (!initialResponse) {
-    return { answers: collectInitialAnswers(questionnaire.item, "", {}), counts: {} };
+    return { answers: collectInitialAnswers(questionnaire.item, "", {}), counts: {}, annotations: {} };
   }
   const answers: Answers = {};
   const counts: Record<string, number> = {};
-  collectResponseAnswers(questionnaire.item, initialResponse.item, "", answers, counts);
-  return { answers, counts };
+  const annotations: Annotations = {};
+  collectResponseAnswers(questionnaire.item, initialResponse.item, "", answers, counts, annotations);
+  return { answers, counts, annotations };
 }
 
 interface BuildOptions {
@@ -168,6 +190,8 @@ interface BuildOptions {
   enabledOnly?: boolean;
   // 計算式項目の値を評価して含める(保存用)。
   evaluate?: (expression: string) => string;
+  // シェーマ描き込みを extension として含める(保存用。binaryId 確定済みが前提)。
+  annotations?: Annotations;
 }
 
 // 回答から QuestionnaireResponse.item ツリーを組み立てる。
@@ -180,20 +204,39 @@ function buildResponseItems(
   options: BuildOptions = {},
 ): fhir4.QuestionnaireResponseItem[] {
   const result: fhir4.QuestionnaireResponseItem[] = [];
+  const annotationExt = (instanceKey: string): fhir4.Extension[] | undefined => {
+    const binaryId = options.annotations?.[instanceKey]?.binaryId;
+    return binaryId ? [annotatedImageExtension(binaryId)] : undefined;
+  };
+
   for (const item of items ?? []) {
     const key = prefix + item.linkId;
     if (item.type === "group") {
       if (options.enabledOnly && !isEnabled(item, prefix, answers)) continue;
       const instances = item.repeats ? (counts[key] ?? 1) : 1;
       for (let i = 0; i < instances; i += 1) {
-        const childPrefix = item.repeats ? `${key}#${i}.` : `${key}.`;
+        const instanceKey = item.repeats ? `${key}#${i}` : key;
+        const childPrefix = `${instanceKey}.`;
         const children = buildResponseItems(item.item, childPrefix, answers, counts, options);
-        if (children.length === 0) continue;
-        result.push({ linkId: item.linkId, ...(item.text ? { text: item.text } : {}), item: children });
+        const extension = annotationExt(instanceKey);
+        if (children.length === 0 && !extension) continue;
+        result.push({
+          linkId: item.linkId,
+          ...(item.text ? { text: item.text } : {}),
+          ...(extension ? { extension } : {}),
+          ...(children.length ? { item: children } : {}),
+        });
       }
       continue;
     }
-    if (item.type === "display") continue;
+    if (item.type === "display") {
+      // display 項目は通常保存しないが、描き込みがあるときだけ emit する。
+      const extension = annotationExt(key);
+      if (extension) {
+        result.push({ linkId: item.linkId, ...(item.text ? { text: item.text } : {}), extension });
+      }
+      continue;
+    }
 
     const calculated = calculatedExpressionOf(item);
     const raw =
@@ -229,10 +272,12 @@ function buildResponseItems(
       ? buildResponseItems(item.item, `${key}.`, answers, counts, options)
       : [];
 
-    if (answerList.length || children.length) {
+    const extension = annotationExt(key);
+    if (answerList.length || children.length || extension) {
       result.push({
         linkId: item.linkId,
         ...(item.text ? { text: item.text } : {}),
+        ...(extension ? { extension } : {}),
         ...(answerList.length ? { answer: answerList } : {}),
         ...(children.length ? { item: children } : {}),
       });
@@ -275,7 +320,12 @@ interface QuestionnaireResponseFormProps {
   initialResponse?: fhir4.QuestionnaireResponse;
   readOnly?: boolean;
   // 指定時は form として描画し、送信時に保存用の item ツリーを渡す。
-  onSubmit?: (items: fhir4.QuestionnaireResponseItem[]) => void;
+  // imageEntries は新しく描き込んだシェーマ画像の Binary 作成エントリで、
+  // 回答本体と同じ transaction Bundle で保存する。
+  onSubmit?: (
+    items: fhir4.QuestionnaireResponseItem[],
+    imageEntries: fhir4.BundleEntry[],
+  ) => void;
   submitLabel?: string;
   submitting?: boolean;
   // フォーム先頭(質問項目の前)に描画するメタ情報フィールド。
@@ -295,6 +345,8 @@ export function QuestionnaireResponseForm({
   const [answers, setAnswers] = useState<Answers>(initialState.answers);
   // 繰り返しグループのインスタンス数(キーはグループのインスタンスパス)。
   const [counts, setCounts] = useState<Record<string, number>>(initialState.counts);
+  // シェーマ画像への描き込み(キーはインスタンスパス)。
+  const [annotations, setAnnotations] = useState<Annotations>(initialState.annotations);
 
   // 必須マークの入力強制はフォーム(保存あり)のときのみ行う。
   const requireInputs = Boolean(onSubmit) && !readOnly;
@@ -343,11 +395,27 @@ export function QuestionnaireResponseForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    onSubmit?.(
+    if (!onSubmit) return;
+
+    // 未保存の描き込み(dataUrl のみ)は Binary 作成エントリにして、回答本体と
+    // 同じ transaction Bundle で保存する。item 側にはいったん Bundle 内の
+    // プレースホルダを入れ、実 ID への解決は上流に任せる。
+    const imageEntries: fhir4.BundleEntry[] = [];
+    const resolved: Annotations = { ...annotations };
+    for (const [key, annotation] of Object.entries(annotations)) {
+      if (!annotation.dataUrl || annotation.binaryId) continue;
+      const { placeholder, entry } = imageBinaryEntry(annotation.dataUrl, "image/png");
+      imageEntries.push(entry);
+      resolved[key] = { binaryId: placeholder, dataUrl: annotation.dataUrl };
+    }
+
+    onSubmit(
       buildResponseItems(questionnaire.item, "", answers, counts, {
         enabledOnly: true,
         evaluate: evaluateCalculated,
+        annotations: resolved,
       }),
+      imageEntries,
     );
   }
 
@@ -362,28 +430,32 @@ export function QuestionnaireResponseForm({
     setAnswers((current) => ({ ...current, [key]: value }));
   }
 
+  // 繰り返しグループのインスタンス削除時のキー詰め替え(回答・描き込み共通)。
+  function rekeyAfterRemoval<T>(current: Record<string, T>, groupKey: string, index: number): Record<string, T> {
+    const next: Record<string, T> = {};
+    for (const [key, value] of Object.entries(current)) {
+      const match = key.startsWith(`${groupKey}#`)
+        ? Number(key.slice(groupKey.length + 1).split(".")[0])
+        : null;
+      if (match === null || Number.isNaN(match)) {
+        next[key] = value;
+        continue;
+      }
+      if (match === index) continue;
+      if (match > index) {
+        const rest = key.slice(`${groupKey}#${match}`.length);
+        next[`${groupKey}#${match - 1}${rest}`] = value;
+      } else {
+        next[key] = value;
+      }
+    }
+    return next;
+  }
+
   // 繰り返しグループのインスタンス削除。後続インスタンスの回答キーを詰め替える。
   function removeGroupInstance(groupKey: string, index: number, total: number) {
-    setAnswers((current) => {
-      const next: Answers = {};
-      for (const [key, value] of Object.entries(current)) {
-        const match = key.startsWith(`${groupKey}#`)
-          ? Number(key.slice(groupKey.length + 1).split(".")[0])
-          : null;
-        if (match === null || Number.isNaN(match)) {
-          next[key] = value;
-          continue;
-        }
-        if (match === index) continue;
-        if (match > index) {
-          const rest = key.slice(`${groupKey}#${match}`.length);
-          next[`${groupKey}#${match - 1}${rest}`] = value;
-        } else {
-          next[key] = value;
-        }
-      }
-      return next;
-    });
+    setAnswers((current) => rekeyAfterRemoval(current, groupKey, index));
+    setAnnotations((current) => rekeyAfterRemoval(current, groupKey, index));
     setCounts((current) => ({ ...current, [groupKey]: Math.max(1, total - 1) }));
   }
 
@@ -579,6 +651,30 @@ export function QuestionnaireResponseForm({
     return renderItems(item.item, childPrefix);
   }
 
+  // シェーマ画像(itemMedia)があれば表示 + フォーム入力時は描き込み UI を出す。
+  function renderSchemaImage(item: fhir4.QuestionnaireItem, instanceKey: string) {
+    if (!itemMediaOf(item)) return null;
+    return (
+      <SchemaImageField
+        item={item}
+        instanceKey={instanceKey}
+        canAnnotate={requireInputs}
+        annotation={annotations[instanceKey]}
+        onChange={(key, next) =>
+          setAnnotations((current) => {
+            const copy = { ...current };
+            if (next) {
+              copy[key] = next;
+            } else {
+              delete copy[key];
+            }
+            return copy;
+          })
+        }
+      />
+    );
+  }
+
   function renderItem(item: fhir4.QuestionnaireItem, prefix: string): React.ReactNode {
     if (isHidden(item)) return null;
     const key = prefix + item.linkId;
@@ -590,6 +686,7 @@ export function QuestionnaireResponseForm({
         return (
           <fieldset className="qp-group" key={key}>
             {item.text && <legend>{item.text}</legend>}
+            {renderSchemaImage(item, key)}
             {renderGroupContent(item, `${key}.`)}
           </fieldset>
         );
@@ -610,6 +707,7 @@ export function QuestionnaireResponseForm({
                   </button>
                 )}
               </div>
+              {renderSchemaImage(item, `${key}#${i}`)}
               {renderGroupContent(item, `${key}#${i}.`)}
             </div>
           ))}
@@ -628,9 +726,10 @@ export function QuestionnaireResponseForm({
 
     if (item.type === "display") {
       return (
-        <p className="qp-display" key={key}>
-          {item.text}
-        </p>
+        <Fragment key={key}>
+          <p className="qp-display">{item.text}</p>
+          {renderSchemaImage(item, key)}
+        </Fragment>
       );
     }
 
@@ -646,6 +745,7 @@ export function QuestionnaireResponseForm({
             </span>
             {renderInput(item, key)}
           </label>
+          {renderSchemaImage(item, key)}
           {initialExpression && !initialResponse && (
             <p className="qp-field__note">初期値式(実行時に設定): {initialExpression}</p>
           )}

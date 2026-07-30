@@ -1,16 +1,23 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCreateQuestionnaire } from "../api/queries";
 import { QuestionnaireEditor } from "../components/QuestionnaireEditor";
-import { buildQuestionnaire, type QuestionnaireFormValues } from "../fhir/questionnaireHelpers";
+import {
+  buildQuestionnaire,
+  collectPendingImageEntries,
+  type QuestionnaireFormValues,
+} from "../fhir/questionnaireHelpers";
 
 export function QuestionnaireCreatePage() {
   const navigate = useNavigate();
   const createQuestionnaire = useCreateQuestionnaire();
 
   function handleSubmit(values: QuestionnaireFormValues) {
-    createQuestionnaire.mutate(buildQuestionnaire(values), {
-      onSuccess: () => navigate("/questionnaires"),
-    });
+    // シェーマ画像は本体と同じ transaction Bundle で保存する(部分失敗なし)。
+    const { items, entries } = collectPendingImageEntries(values.items);
+    createQuestionnaire.mutate(
+      { questionnaire: buildQuestionnaire({ ...values, items }), imageEntries: entries },
+      { onSuccess: () => navigate("/questionnaires") },
+    );
   }
 
   return (

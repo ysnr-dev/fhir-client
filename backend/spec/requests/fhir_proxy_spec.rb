@@ -135,6 +135,40 @@ RSpec.describe "FhirProxy", type: :request do
     end
   end
 
+  describe "Binary (シェーマ画像)" do
+    it "is allowlisted and relays a base64 JSON create" do
+      body = '{"resourceType":"Binary","contentType":"image/png","data":"aGVsbG8="}'
+
+      stub_request(:post, "#{upstream_base}/Binary")
+        .with(body: body, headers: { "Content-Type" => "application/fhir+json" })
+        .to_return(status: 201, body: '{"resourceType":"Binary","id":"b1","contentType":"image/png"}',
+                   headers: {
+                     "Content-Type" => "application/fhir+json",
+                     "ETag" => 'W/"1"',
+                     "Location" => "#{upstream_base}/Binary/b1/_history/1"
+                   })
+
+      post "/fhir/Binary", params: body, headers: { "Content-Type" => "application/fhir+json" }
+
+      expect(response).to have_http_status(:created)
+      expect(response.headers["Location"]).to eq("#{upstream_base}/Binary/b1/_history/1")
+    end
+
+    it "forwards a non-FHIR Accept header and relays raw image bytes with their content-type" do
+      raw = "\x89PNG\r\n\x1a\nfakebytes".b
+
+      stub_request(:get, "#{upstream_base}/Binary/b1")
+        .with(headers: { "Accept" => "image/*" })
+        .to_return(status: 200, body: raw, headers: { "Content-Type" => "image/png" })
+
+      get "/fhir/Binary/b1", headers: { "Accept" => "image/*" }
+
+      expect(response).to have_http_status(:ok)
+      expect(response.content_type).to eq("image/png")
+      expect(response.body.b).to eq(raw)
+    end
+  end
+
   describe "upstream unreachable" do
     it "returns 502 with a synthesized OperationOutcome" do
       stub_request(:get, "#{upstream_base}/metadata").to_raise(Faraday::ConnectionFailed.new("connection refused"))

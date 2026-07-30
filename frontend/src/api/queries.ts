@@ -8,15 +8,35 @@ import {
   buildPrescriptionDeleteBundle,
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
+import { resourceFromBundleResponse, resourceWithImagesBundle } from "../fhir/schemaImage";
 import {
   createResource,
   deleteResource,
+  fetchBinaryImage,
   postBundle,
   readResource,
   searchResource,
   updateResource,
   type FhirResult,
 } from "./fhirClient";
+
+// シェーマ画像を伴う保存は、画像 Binary と本体を 1 つの transaction Bundle で
+// atomic に書く(片方だけ保存されて孤児 Binary が残ることを防ぐ)。画像がない
+// 保存は従来どおり単体リソースの POST / PUT。戻り値は両者で同じ形に揃える。
+async function saveWithImages<T extends fhir4.Resource & { id?: string }>(
+  resource: T,
+  imageEntries: fhir4.BundleEntry[] | undefined,
+  etag?: string,
+): Promise<FhirResult<T>> {
+  if (!imageEntries?.length) {
+    return etag ? updateResource(resource, etag) : createResource(resource);
+  }
+
+  const { data: bundle } = await postBundle(resourceWithImagesBundle(resource, imageEntries, etag));
+  const saved = resourceFromBundleResponse<T>(bundle);
+  if (!saved.resource) throw new Error("保存結果を取得できませんでした。");
+  return { data: saved.resource, etag: saved.etag };
+}
 
 export interface PatientSearchParams {
   name?: string;
@@ -496,7 +516,13 @@ export function useQuestionnaire(id: string | undefined) {
 export function useCreateQuestionnaire() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (questionnaire: fhir4.Questionnaire) => createResource(questionnaire),
+    mutationFn: ({
+      questionnaire,
+      imageEntries,
+    }: {
+      questionnaire: fhir4.Questionnaire;
+      imageEntries?: fhir4.BundleEntry[];
+    }) => saveWithImages(questionnaire, imageEntries),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
     },
@@ -506,8 +532,15 @@ export function useCreateQuestionnaire() {
 export function useUpdateQuestionnaire() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ questionnaire, etag }: { questionnaire: fhir4.Questionnaire; etag: string }) =>
-      updateResource(questionnaire, etag),
+    mutationFn: ({
+      questionnaire,
+      etag,
+      imageEntries,
+    }: {
+      questionnaire: fhir4.Questionnaire;
+      etag: string;
+      imageEntries?: fhir4.BundleEntry[];
+    }) => saveWithImages(questionnaire, imageEntries, etag),
     onSuccess: (result: FhirResult<fhir4.Questionnaire>) => {
       queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Questionnaire", result.data.id] });
@@ -544,6 +577,17 @@ export function useQuestionnaireOptions() {
         ?.map((e) => e.resource)
         .filter((r): r is fhir4.Questionnaire => Boolean(r)) ?? [],
   };
+}
+
+// シェーマ画像(Binary)を dataURL で取得する。本アプリでは Binary は不変
+// (差し替えは常に新規作成)なのでキャッシュを無期限に保持する。
+export function useBinaryImage(binaryId: string | undefined) {
+  return useQuery({
+    queryKey: ["Binary", binaryId, "image"],
+    queryFn: () => fetchBinaryImage(binaryId as string),
+    enabled: Boolean(binaryId),
+    staleTime: Infinity,
+  });
 }
 
 // QuestionnaireResponse.questionnaire(canonical "<url>|<version>")から
@@ -603,7 +647,13 @@ export function useQuestionnaireResponse(id: string | undefined) {
 export function useCreateQuestionnaireResponse() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (response: fhir4.QuestionnaireResponse) => createResource(response),
+    mutationFn: ({
+      response,
+      imageEntries,
+    }: {
+      response: fhir4.QuestionnaireResponse;
+      imageEntries?: fhir4.BundleEntry[];
+    }) => saveWithImages(response, imageEntries),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
     },
@@ -613,8 +663,15 @@ export function useCreateQuestionnaireResponse() {
 export function useUpdateQuestionnaireResponse() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ response, etag }: { response: fhir4.QuestionnaireResponse; etag: string }) =>
-      updateResource(response, etag),
+    mutationFn: ({
+      response,
+      etag,
+      imageEntries,
+    }: {
+      response: fhir4.QuestionnaireResponse;
+      etag: string;
+      imageEntries?: fhir4.BundleEntry[];
+    }) => saveWithImages(response, imageEntries, etag),
     onSuccess: (result: FhirResult<fhir4.QuestionnaireResponse>) => {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", result.data.id] });

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { FhirError } from "../api/fhirClient";
 import {
   usePatient,
   useQuestionnaireByCanonical,
@@ -86,15 +87,20 @@ function EditForm({
   const navigate = useNavigate();
   const [meta, setMeta] = useState(() => parseQuestionnaireResponseMeta(response));
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState(false);
   const updateResponse = useUpdateQuestionnaireResponse();
 
-  function handleSubmit(items: fhir4.QuestionnaireResponseItem[]) {
+  function handleSubmit(
+    items: fhir4.QuestionnaireResponseItem[],
+    imageEntries: fhir4.BundleEntry[],
+  ) {
     const metaError = validateQuestionnaireResponseMeta(meta);
     if (metaError) {
       setValidationError(metaError);
       return;
     }
     setValidationError(null);
+    setConflict(false);
     updateResponse.mutate(
       {
         response: buildQuestionnaireResponse({
@@ -105,14 +111,30 @@ function EditForm({
           existing: response,
         }),
         etag,
+        imageEntries,
       },
-      { onSuccess: () => navigate(`/patients/${patientId}/questionnaire-responses`) },
+      {
+        onSuccess: () => navigate(`/patients/${patientId}/questionnaire-responses`),
+        onError: (err) => {
+          if (err instanceof FhirError && err.status === 412) {
+            setConflict(true);
+          }
+        },
+      },
     );
   }
 
   return (
     <>
-      <ErrorBanner error={updateResponse.error} />
+      {conflict ? (
+        <div className="error-banner" role="alert">
+          <p className="error-banner__line error-banner__line--error">
+            この回答は他の操作によって更新されています。画面を再読込してから再度編集してください。
+          </p>
+        </div>
+      ) : (
+        <ErrorBanner error={updateResponse.error} />
+      )}
       {validationError && (
         <div className="error-banner" role="alert">
           <p className="error-banner__line error-banner__line--error">{validationError}</p>

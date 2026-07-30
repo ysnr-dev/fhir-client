@@ -2089,3 +2089,97 @@ button:disabled {
   font-size: 13px;
   color: var(--accent);
 }
+
+/* ---- シェーマ画像(テンプレート添付画像 + 描き込み) ---- */
+
+.schema-image {
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.schema-image__label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.schema-image__thumb {
+  max-width: 200px;
+  max-height: 150px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+}
+
+.schema-image__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.schema-image__error {
+  color: #c62828;
+  font-size: 13px;
+  margin: 0;
+}
+
+.schema-image__loading {
+  font-size: 13px;
+  color: var(--text);
+  margin: 0;
+}
+
+/* 描き込みモーダル */
+.modal--schema {
+  width: min(1280px, 94vw);
+}
+
+.schema-annotator__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.schema-annotator__tool-group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.schema-annotator__swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+}
+
+.schema-annotator__swatch--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+.schema-annotator__tool--active {
+  outline: 2px solid var(--accent);
+}
+
+.schema-annotator__canvas {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: auto;
+  max-height: 65vh;
+  touch-action: none;
+}
+
+.schema-annotator__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}

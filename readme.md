@@ -191,6 +191,27 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   `POST /fhir`(空パス)を transaction Bundle 中継用のルートとして扱います
   (`backend/app/controllers/fhir_proxy_controller.rb`)。
 
+## シェーマ画像（テンプレートへの画像添付と描き込み）
+
+テンプレート(`Questionnaire`)の各項目に画像を1枚添付でき、回答(`QuestionnaireResponse`)ではその画像に
+ペイントツールで描き込めます。画像本体は `Binary` リソースに置き、項目からは extension の
+`valueAttachment.url`(`Binary/<id>`)で参照します。
+
+- **extension**: テンプレート側は標準の
+  `http://hl7.org/fhir/StructureDefinition/questionnaire-itemMedia`、回答側の描き込み画像は
+  ローカル定義の `http://fhir-client.local/StructureDefinition/questionnaire-response-annotated-image`。
+  描き込みは元画像を書き換えず、合成 PNG を別の `Binary` として保存します。
+- **保存は transaction Bundle**: 画像と本体リソースを**1回の `POST /fhir`** で atomic に保存します
+  (画像エントリの `fullUrl`(`urn:uuid:...`)を `valueAttachment.url` に入れ、上流が実 ID に解決)。
+  更新時は本体を `PUT` + `ifMatch` にするので、**412 で弾かれた場合は画像も保存されません**
+  = 参照されない孤児 `Binary` が生まれません。
+- **旧 Binary は削除しません**: 画像の差し替えや描き込みのやり直しで参照が外れた `Binary` は残します。
+  リソースの旧バージョン(`_history` / vread)がその画像を参照しているため、消すと過去の記録が壊れます
+  (容量よりも履歴保全を優先する方針)。
+- backend の `/fhir` プロキシは `ALLOWED_RESOURCE_TYPES` に `Binary` を追加しています。画像の表示は
+  `Accept: image/*` を付けた `GET /fhir/Binary/<id>` で生バイトを取得します(上流が非 FHIR な Accept に
+  対して `contentType` 付きの実体を返す挙動を利用)。
+
 ## 管理画面（接続設定 / OAuth クライアント）
 
 `/settings`（接続設定）と `/oauth-clients`（OAuth クライアント）は管理用の画面です。
