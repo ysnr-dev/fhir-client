@@ -5,7 +5,11 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { LabTimelineChart, type LabTimelineSeries } from "../components/LabTimelineChart";
 import { Modal } from "../components/Modal";
 import { PatientHeader } from "../components/PatientHeader";
-import { buildLabTimeline, type LabTimelineRow } from "../fhir/labResultHelpers";
+import {
+  buildLabTimeline,
+  interpretationClass,
+  type LabTimelineRow,
+} from "../fhir/labResultHelpers";
 
 const DEFAULT_DATE_COUNT = 10;
 const MAX_DATE_COUNT = 100;
@@ -76,7 +80,7 @@ export function LabResultTimelinePage() {
         <>
           <div className="lab-timeline__controls">
             <label className="lab-timeline__count">
-              検体採取日の表示数
+              履歴の表示数
               <input
                 type="number"
                 min={1}
@@ -92,9 +96,7 @@ export function LabResultTimelinePage() {
             >
               グラフ表示
             </button>
-            <span className="lab-timeline__hint">
-              数値結果のある項目をチェックするとグラフ表示できます
-            </span>
+            <span className="lab-timeline__hint"/>
           </div>
 
           {timeline.rows.length === 0 ? (
@@ -163,7 +165,13 @@ function TimelineRow({ row, dates, checked, onToggle }: TimelineRowProps) {
       </td>
       <td className="lab-timeline__unit-col">{row.unit}</td>
       {dates.map((date) => (
-        <td key={date} className="lab-timeline__value">
+        <td
+          key={date}
+          className={interpretationClass(
+            row.interpretations.get(date) ?? "",
+            "lab-timeline__value",
+          )}
+        >
           {row.values.get(date) ?? ""}
         </td>
       ))}

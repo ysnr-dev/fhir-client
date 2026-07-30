@@ -1,0 +1,501 @@
+import {
+  changeItemType,
+  enableWhenCandidates,
+  ITEM_CONTROLS,
+  ITEM_TYPE_LABELS,
+  ITEM_TYPES,
+  newAnswerOption,
+  newEnableWhen,
+  type EditorAnswerOption,
+  type EditorEnableWhen,
+  type EditorItem,
+  type EditorItemType,
+} from "../fhir/questionnaireHelpers";
+
+interface QuestionnaireItemEditorProps {
+  item: EditorItem;
+  index: number;
+  siblingCount: number;
+  // enableWhen の参照先候補を親階層から求めるためルートの items を渡す。
+  rootItems: EditorItem[];
+  onUpdate: (id: string, updater: (item: EditorItem) => EditorItem) => void;
+  onRemove: (id: string) => void;
+  onMove: (id: string, direction: "up" | "down") => void;
+  onAppendChild: (parentId: string) => void;
+}
+
+const INITIAL_INPUT_TYPES: Partial<Record<EditorItemType, string>> = {
+  integer: "number",
+  decimal: "number",
+  date: "date",
+  dateTime: "datetime-local",
+  time: "time",
+};
+
+export function QuestionnaireItemEditor({
+  item,
+  index,
+  siblingCount,
+  rootItems,
+  onUpdate,
+  onRemove,
+  onMove,
+  onAppendChild,
+}: QuestionnaireItemEditorProps) {
+  function patch(partial: Partial<EditorItem>) {
+    onUpdate(item.id, (it) => ({ ...it, ...partial }));
+  }
+
+  function handleTypeChange(type: EditorItemType) {
+    onUpdate(item.id, (it) => changeItemType(it, type));
+  }
+
+  function handleRemove() {
+    if (item.children.length > 0) {
+      if (!window.confirm(`グループ内の子項目 ${item.children.length} 件も削除されます。よろしいですか?`)) {
+        return;
+      }
+    }
+    onRemove(item.id);
+  }
+
+  function updateOption(optionId: string, partial: Partial<EditorAnswerOption>) {
+    patch({
+      answerOptions: item.answerOptions.map((o) => (o.id === optionId ? { ...o, ...partial } : o)),
+    });
+  }
+
+  // チェックボックス以外は初期選択を1つに保つ(ラジオ的に排他)。
+  function setInitialSelected(optionId: string, selected: boolean) {
+    patch({
+      answerOptions: item.answerOptions.map((o) => ({
+        ...o,
+        initialSelected:
+          o.id === optionId ? selected : item.itemControl === "check-box" ? o.initialSelected : false,
+      })),
+    });
+  }
+
+  function moveOption(optionId: string, direction: "up" | "down") {
+    const options = [...item.answerOptions];
+    const i = options.findIndex((o) => o.id === optionId);
+    const target = direction === "up" ? i - 1 : i + 1;
+    if (i < 0 || target < 0 || target >= options.length) return;
+    [options[i], options[target]] = [options[target], options[i]];
+    patch({ answerOptions: options });
+  }
+
+  function updateEnableWhen(ewId: string, partial: Partial<EditorEnableWhen>) {
+    patch({
+      enableWhen: item.enableWhen.map((ew) => (ew.id === ewId ? { ...ew, ...partial } : ew)),
+    });
+  }
+
+  const isGroup = item.type === "group";
+  const isChoice = item.type === "choice";
+  const isNumeric = item.type === "integer" || item.type === "decimal";
+  const isTextual = item.type === "string" || item.type === "text";
+  const hasInitial = !isGroup && !isChoice && item.type !== "display";
+  const candidates = isGroup ? enableWhenCandidates(rootItems, item.id) : [];
+
+  return (
+    <div className={`qe-item${item.type === "group" ? " qe-item--group" : ""}`}>
+      <div className="qe-item__header">
+        <span className="qe-item__type-badge">{ITEM_TYPE_LABELS[item.type]}</span>
+        <span className="qe-item__header-text">{item.text || item.linkId}</span>
+        <span className="qe-item__header-actions">
+          <button
+            type="button"
+            aria-label="上へ移動"
+            disabled={index === 0}
+            onClick={() => onMove(item.id, "up")}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            aria-label="下へ移動"
+            disabled={index === siblingCount - 1}
+            onClick={() => onMove(item.id, "down")}
+          >
+            ↓
+          </button>
+          <button type="button" className="qe-item__remove" onClick={handleRemove}>
+            削除
+          </button>
+        </span>
+      </div>
+
+      <div className="qe-item__grid">
+        <label>
+          種類
+          <select value={item.type} onChange={(e) => handleTypeChange(e.target.value as EditorItemType)}>
+            {ITEM_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {ITEM_TYPE_LABELS[type]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          linkId
+          <input
+            type="text"
+            value={item.linkId}
+            onChange={(e) => patch({ linkId: e.target.value })}
+            placeholder="半角英数字と - . _ など"
+          />
+        </label>
+        <label className="qe-item__text-field">
+          {item.type === "display" ? "表示テキスト" : "質問文"}
+          <input type="text" value={item.text} onChange={(e) => patch({ text: e.target.value })} />
+        </label>
+        {!isGroup && item.type !== "display" && (
+          <label className="qe-item__checkbox">
+            <input
+              type="checkbox"
+              checked={item.required}
+              onChange={(e) => patch({ required: e.target.checked })}
+            />
+            必須
+          </label>
+        )}
+      </div>
+
+      {isChoice && (
+        <div className="qe-item__panel">
+          <div className="qe-item__grid">
+            <label>
+              描画形式
+              <select value={item.itemControl} onChange={(e) => patch({ itemControl: e.target.value })}>
+                {ITEM_CONTROLS.map((control) => (
+                  <option key={control.code} value={control.code}>
+                    {control.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              並び方向
+              <select
+                value={item.choiceOrientation}
+                onChange={(e) =>
+                  patch({ choiceOrientation: e.target.value as "" | "horizontal" | "vertical" })
+                }
+              >
+                <option value="">指定なし</option>
+                <option value="vertical">縦</option>
+                <option value="horizontal">横</option>
+              </select>
+            </label>
+          </div>
+          <table className="qe-options">
+            <thead>
+              <tr>
+                <th>コード</th>
+                <th>表示名</th>
+                <th>システム(任意)</th>
+                <th>初期選択</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {item.answerOptions.map((option, optionIndex) => (
+                <tr key={option.id}>
+                  <td>
+                    <input
+                      type="text"
+                      value={option.code}
+                      onChange={(e) => updateOption(option.id, { code: e.target.value })}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={option.display}
+                      onChange={(e) => updateOption(option.id, { display: e.target.value })}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={option.system}
+                      onChange={(e) => updateOption(option.id, { system: e.target.value })}
+                    />
+                  </td>
+                  <td className="qe-options__center">
+                    <input
+                      type="checkbox"
+                      checked={option.initialSelected}
+                      onChange={(e) => setInitialSelected(option.id, e.target.checked)}
+                    />
+                  </td>
+                  <td className="qe-options__actions">
+                    <button
+                      type="button"
+                      aria-label="選択肢を上へ"
+                      disabled={optionIndex === 0}
+                      onClick={() => moveOption(option.id, "up")}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="選択肢を下へ"
+                      disabled={optionIndex === item.answerOptions.length - 1}
+                      onClick={() => moveOption(option.id, "down")}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        patch({ answerOptions: item.answerOptions.filter((o) => o.id !== option.id) })
+                      }
+                    >
+                      ×
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button
+            type="button"
+            onClick={() => patch({ answerOptions: [...item.answerOptions, newAnswerOption()] })}
+          >
+            + 選択肢を追加
+          </button>
+        </div>
+      )}
+
+      {isNumeric && (
+        <div className="qe-item__grid">
+          <label>
+            最小値
+            <input
+              type="number"
+              value={item.minValue}
+              onChange={(e) => patch({ minValue: e.target.value })}
+            />
+          </label>
+          <label>
+            最大値
+            <input
+              type="number"
+              value={item.maxValue}
+              onChange={(e) => patch({ maxValue: e.target.value })}
+            />
+          </label>
+          {item.type === "decimal" && (
+            <label>
+              小数点以下桁数
+              <input
+                type="number"
+                min="0"
+                value={item.maxDecimalPlaces}
+                onChange={(e) => patch({ maxDecimalPlaces: e.target.value })}
+              />
+            </label>
+          )}
+          <label>
+            単位(UCUMコード)
+            <input
+              type="text"
+              value={item.unit}
+              onChange={(e) => patch({ unit: e.target.value })}
+              placeholder="kg, cm, mmHg など"
+            />
+          </label>
+        </div>
+      )}
+
+      {isTextual && (
+        <div className="qe-item__grid">
+          <label>
+            最大文字数
+            <input
+              type="number"
+              min="1"
+              value={item.maxLength}
+              onChange={(e) => patch({ maxLength: e.target.value })}
+            />
+          </label>
+          <label>
+            正規表現制約
+            <input
+              type="text"
+              value={item.regex}
+              onChange={(e) => patch({ regex: e.target.value })}
+              placeholder="例: ^([ -~]|\n|\t)+$"
+            />
+          </label>
+        </div>
+      )}
+
+      {hasInitial && (
+        <div className="qe-item__grid">
+          <label>
+            初期値
+            <input
+              type={INITIAL_INPUT_TYPES[item.type] ?? "text"}
+              value={item.initialValue}
+              onChange={(e) => patch({ initialValue: e.target.value })}
+            />
+          </label>
+        </div>
+      )}
+
+      {isGroup && (
+        <div className="qe-item__panel">
+          <div className="qe-item__grid">
+            <label className="qe-item__checkbox">
+              <input
+                type="checkbox"
+                checked={item.repeats}
+                onChange={(e) => patch({ repeats: e.target.checked, maxOccurs: "" })}
+              />
+              繰り返し入力を許可
+            </label>
+            {item.repeats && (
+              <label>
+                最大繰り返し数
+                <input
+                  type="number"
+                  min="1"
+                  value={item.maxOccurs}
+                  onChange={(e) => patch({ maxOccurs: e.target.value })}
+                  placeholder="無制限"
+                />
+              </label>
+            )}
+          </div>
+
+          <div className="qe-enable-when">
+            <span className="qe-enable-when__title">表示条件(すべて一致で表示)</span>
+            {item.enableWhen.map((ew) => {
+              const referenced = candidates.find((c) => c.linkId === ew.question);
+              return (
+                <div className="qe-enable-when__row" key={ew.id}>
+                  <select
+                    aria-label="参照先項目"
+                    value={ew.question}
+                    onChange={(e) =>
+                      updateEnableWhen(ew.id, { question: e.target.value, answerSystem: "", answerCode: "" })
+                    }
+                  >
+                    <option value="">項目を選択</option>
+                    {candidates.map((candidate) => (
+                      <option key={candidate.id} value={candidate.linkId}>
+                        {candidate.text || candidate.linkId}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="qe-enable-when__operator">=</span>
+                  <select
+                    aria-label="比較値"
+                    value={ew.answerCode}
+                    onChange={(e) => {
+                      const option = referenced?.answerOptions.find((o) => o.code === e.target.value);
+                      updateEnableWhen(ew.id, {
+                        answerCode: e.target.value,
+                        answerSystem: option?.system ?? "",
+                      });
+                    }}
+                    disabled={!referenced}
+                  >
+                    <option value="">値を選択</option>
+                    {referenced?.answerOptions.map((option) => (
+                      <option key={option.id} value={option.code}>
+                        {option.display || option.code}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => patch({ enableWhen: item.enableWhen.filter((x) => x.id !== ew.id) })}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => patch({ enableWhen: [...item.enableWhen, newEnableWhen()] })}
+              disabled={candidates.length === 0}
+              title={candidates.length === 0 ? "親階層に選択肢項目がある場合に設定できます" : undefined}
+            >
+              + 条件を追加
+            </button>
+          </div>
+
+          <div className="qe-item__children">
+            {item.children.map((child, childIndex) => (
+              <QuestionnaireItemEditor
+                key={child.id}
+                item={child}
+                index={childIndex}
+                siblingCount={item.children.length}
+                rootItems={rootItems}
+                onUpdate={onUpdate}
+                onRemove={onRemove}
+                onMove={onMove}
+                onAppendChild={onAppendChild}
+              />
+            ))}
+            <button type="button" className="qe-add-item" onClick={() => onAppendChild(item.id)}>
+              + 子項目を追加
+            </button>
+          </div>
+        </div>
+      )}
+
+      <details className="qe-item__advanced">
+        <summary>詳細設定</summary>
+        <div className="qe-item__grid">
+          <label className="qe-item__checkbox">
+            <input
+              type="checkbox"
+              checked={item.hidden}
+              onChange={(e) => patch({ hidden: e.target.checked })}
+            />
+            非表示(hidden)
+          </label>
+          <label className="qe-item__text-field">
+            設計メモ(designNote)
+            <input
+              type="text"
+              value={item.designNote}
+              onChange={(e) => patch({ designNote: e.target.value })}
+            />
+          </label>
+          {hasInitial && (
+            <>
+              <label className="qe-item__text-field">
+                初期値式(FHIRPath)
+                <input
+                  type="text"
+                  value={item.initialExpression}
+                  onChange={(e) => patch({ initialExpression: e.target.value })}
+                  disabled={Boolean(item.calculatedExpression)}
+                  placeholder="計算式とは同時に設定できません"
+                />
+              </label>
+              <label className="qe-item__text-field">
+                計算式(FHIRPath)
+                <input
+                  type="text"
+                  value={item.calculatedExpression}
+                  onChange={(e) => patch({ calculatedExpression: e.target.value })}
+                  disabled={Boolean(item.initialExpression)}
+                  placeholder="例: %weight / (%height / 100 * %height / 100)"
+                />
+              </label>
+            </>
+          )}
+        </div>
+      </details>
+    </div>
+  );
+}

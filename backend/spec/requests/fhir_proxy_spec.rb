@@ -121,8 +121,8 @@ RSpec.describe "FhirProxy", type: :request do
       expect(body["issue"].first["diagnostics"]).to include("Encounter")
     end
 
-    it "allowlists DiagnosticReport, Observation, Specimen (検査結果機能)、Condition (病名機能)" do
-      %w[DiagnosticReport Observation Specimen Condition].each do |type|
+    it "allowlists DiagnosticReport, Observation, Specimen (検査結果機能)、Condition (病名機能)、Questionnaire・QuestionnaireResponse (テンプレート機能)" do
+      %w[DiagnosticReport Observation Specimen Condition Questionnaire QuestionnaireResponse].each do |type|
         stub_request(:get, "#{upstream_base}/#{type}")
           .with(query: { "patient" => "Patient/123" })
           .to_return(status: 200, body: '{"resourceType":"Bundle"}',

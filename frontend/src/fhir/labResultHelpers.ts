@@ -10,6 +10,11 @@ const JLAC11_SPECIMEN_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11-speci
 // 検査項目の略称。詳細表示・編集フォームへの復元に使う補助 coding。
 const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
 
+// Observation.interpretation(H/L/N)。JP-CLINS の JP-Observation-LabResult-eCS が
+// 参照する v3 ObservationInterpretation コードシステム。
+const INTERPRETATION_SYSTEM =
+  "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation";
+
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
 const REPORT_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0074";
 const LOINC_SYSTEM = "http://loinc.org";
@@ -49,11 +54,24 @@ export const SETTING_OPTIONS: { code: Exclude<LabResultSetting, "">; display: st
   { code: "outpatient", display: "外来" },
 ];
 
+// 結果値の H/L 判定。フォームでは未選択(空)を許し、FHIR には空を "N" として記録する。
+export type LabInterpretation = "H" | "L" | "";
+
+export const INTERPRETATION_OPTIONS: Exclude<LabInterpretation, "">[] = ["H", "L"];
+
+const INTERPRETATION_DISPLAYS: Record<string, string> = {
+  H: "High",
+  L: "Low",
+  N: "Normal",
+};
+
 export interface LabResultLineValues {
   id?: string;
   item: LabItem | null;
   // 結果値。PQ/ST は入力文字列、CD/CO は code_value_list 中の値コード。
   value: string;
+  // H/L 判定。空値は FHIR 上 "N"(Normal) として記録する。
+  interpretation: LabInterpretation;
 }
 
 export interface LabResultFormValues {
@@ -62,7 +80,11 @@ export interface LabResultFormValues {
   lines: LabResultLineValues[];
 }
 
-export const emptyLabResultLine: LabResultLineValues = { item: null, value: "" };
+export const emptyLabResultLine: LabResultLineValues = {
+  item: null,
+  value: "",
+  interpretation: "",
+};
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -206,6 +228,8 @@ function buildObservation(
   specimenReference?: string,
 ): fhir4.Observation {
   const item = line.item;
+  // 未選択(空)は "N"(Normal) として記録する。
+  const interpretationCode = line.interpretation || "N";
 
   const resource: fhir4.Observation = {
     resourceType: "Observation",
@@ -242,6 +266,17 @@ function buildObservation(
     subject: { reference: `Patient/${patientId}` },
     effectiveDateTime: effective,
     ...buildObservationValue(line),
+    interpretation: [
+      {
+        coding: [
+          {
+            system: INTERPRETATION_SYSTEM,
+            code: interpretationCode,
+            display: INTERPRETATION_DISPLAYS[interpretationCode],
+          },
+        ],
+      },
+    ],
   };
 
   if (specimenReference) resource.specimen = { reference: specimenReference };
@@ -424,6 +459,31 @@ function codingBySystem(
   return codings?.find((c) => c.system === system);
 }
 
+// Observation.interpretation から H/L/N コードを取り出す。未記録なら空文字。
+function interpretationCodeOf(obs: fhir4.Observation): string {
+  for (const concept of obs.interpretation ?? []) {
+    const coding = codingBySystem(concept.coding, INTERPRETATION_SYSTEM);
+    if (coding?.code) return coding.code;
+  }
+  return "";
+}
+
+// H/L のみ表示・フォームの対象にする。"N"(および未記録)は通常表示として扱う。
+function formInterpretationOf(obs: fhir4.Observation): LabInterpretation {
+  const code = interpretationCodeOf(obs);
+  return code === "H" || code === "L" ? code : "";
+}
+
+// H/L 判定に応じた表示用クラス修飾子を返す。H: 赤字 / L: 青字。
+export function interpretationClass(
+  interpretation: string,
+  base: string,
+): string {
+  if (interpretation === "H") return `${base} ${base}--high`;
+  if (interpretation === "L") return `${base} ${base}--low`;
+  return base;
+}
+
 function settingCoding(report: fhir4.DiagnosticReport): fhir4.Coding | undefined {
   for (const category of report.category ?? []) {
     const coding = codingBySystem(category.coding, SETTING_SYSTEM);
@@ -480,6 +540,8 @@ export interface LabResultLineDisplay {
   specimen: string;
   value: string;
   unit: string;
+  // H/L 判定("H" | "L" | "")。表示の色分けに使う。
+  interpretation: LabInterpretation;
 }
 
 function specimenName(specimen: fhir4.Specimen): string {
@@ -530,6 +592,7 @@ export function observationLineDisplay(
     specimen: (specimenId && specimenNames?.get(specimenId)) || "",
     value,
     unit,
+    interpretation: formInterpretationOf(obs),
   };
 }
 
@@ -546,6 +609,8 @@ export interface LabTimelineRow {
   values: Map<string, string>;
   // 検体採取日 → 数値。PQ(valueQuantity) のみ。グラフ描画に使う。
   numbers: Map<string, number>;
+  // 検体採取日 → H/L 判定。H は赤字、L は青字で表示する。N は登録しない。
+  interpretations: Map<string, LabInterpretation>;
 }
 
 export interface LabTimeline {
@@ -592,6 +657,7 @@ export function buildLabTimeline(
           unit: "",
           values: new Map(),
           numbers: new Map(),
+          interpretations: new Map(),
         };
         rows.set(key, row);
       }
@@ -603,6 +669,8 @@ export function buildLabTimeline(
       if (row.values.has(date)) continue;
       row.values.set(date, value);
       if (obs.valueQuantity?.value != null) row.numbers.set(date, obs.valueQuantity.value);
+      const interpretation = formInterpretationOf(obs);
+      if (interpretation) row.interpretations.set(date, interpretation);
     }
   }
 
@@ -662,6 +730,7 @@ export function parseLabResultForm(
     id: obs.id,
     item: labItemFromObservation(obs, specimenNames),
     value: lineValueFromObservation(obs),
+    interpretation: formInterpretationOf(obs),
   }));
 
   return {
@@ -673,14 +742,14 @@ export function parseLabResultForm(
 
 // 既存の検査結果を DO(流用)して新規登録するためのフォーム値に変換する。
 // ・検査項目(と入外区分)は引き継ぐ
-// ・結果値は継承せず空にする
+// ・結果値(と H/L 判定)は継承せず空にする
 // ・Observation の id を落とし、既存リソースの更新ではなく新規登録にする
 // ・検体採取日は DO 元ではなく当日にする
 export function buildDoLabResultForm(values: LabResultFormValues): LabResultFormValues {
   return {
     ...values,
     specimenDate: today(),
-    lines: values.lines.map((line) => ({ item: line.item, value: "" })),
+    lines: values.lines.map((line) => ({ item: line.item, value: "", interpretation: "" })),
   };
 }
 
