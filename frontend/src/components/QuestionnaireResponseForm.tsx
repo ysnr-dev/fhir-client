@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import fhirpath from "fhirpath";
 // value[x] を "value" で参照できるようにする R4 のモデル情報。
 import fhirpathR4Model from "fhirpath/fhir-context/r4";
@@ -75,6 +75,8 @@ function collectInitialAnswers(
       if (selected.length) {
         answers[key] = itemControlOf(item) === "check-box" ? selected : selected[0];
       }
+      // choice 配下の条件付きグループ内の初期値も収集する。
+      collectInitialAnswers(item.item, `${key}.`, answers);
       continue;
     }
     const initial = item.initial?.[0];
@@ -128,6 +130,10 @@ function collectResponseAnswers(
       continue;
     }
     if (q.type === "display") continue;
+    // choice 配下の条件付きグループの回答は choice の response item の item に入る。
+    if (q.item?.length) {
+      collectResponseAnswers(q.item, matches[0]?.item, `${key}.`, answers, counts);
+    }
     // 計算式項目の値は表示・保存時に再計算されるため復元しない。
     if (calculatedExpressionOf(q)) continue;
 
@@ -192,9 +198,8 @@ function buildResponseItems(
     const calculated = calculatedExpressionOf(item);
     const raw =
       calculated && options.evaluate ? options.evaluate(calculated) : answers[key];
-    if (raw === undefined || raw === "" || (Array.isArray(raw) && raw.length === 0)) continue;
 
-    const values = Array.isArray(raw) ? raw : [raw];
+    const values = raw === undefined || raw === "" ? [] : Array.isArray(raw) ? raw : [raw];
     const answerList: fhir4.QuestionnaireResponseItemAnswer[] = values
       .map((value) => {
         switch (item.type) {
@@ -219,8 +224,18 @@ function buildResponseItems(
       .filter((a) => !("valueInteger" in a && Number.isNaN(a.valueInteger)))
       .filter((a) => !("valueDecimal" in a && Number.isNaN(a.valueDecimal)));
 
-    if (answerList.length) {
-      result.push({ linkId: item.linkId, ...(item.text ? { text: item.text } : {}), answer: answerList });
+    // choice 配下の条件付きグループ。表示条件は再帰先の group 分岐(isEnabled)で評価される。
+    const children = item.item?.length
+      ? buildResponseItems(item.item, `${key}.`, answers, counts, options)
+      : [];
+
+    if (answerList.length || children.length) {
+      result.push({
+        linkId: item.linkId,
+        ...(item.text ? { text: item.text } : {}),
+        ...(answerList.length ? { answer: answerList } : {}),
+        ...(children.length ? { item: children } : {}),
+      });
     }
   }
   return result;
@@ -243,7 +258,8 @@ function resolveAnswer(answers: Answers, prefix: string, linkId: string): Answer
 
 function isEnabled(item: fhir4.QuestionnaireItem, prefix: string, answers: Answers): boolean {
   if (!item.enableWhen?.length) return true;
-  // JASPEHR では演算子 "="・Coding 比較のみ。enableBehavior は all を既定とする。
+  // JASPEHR では演算子 "="・Coding 比較・enableWhen は最大1件(enableBehavior 禁止)。
+  // 旧データや外部リソースの複数条件にも耐えるよう all 既定で評価する。
   const results = item.enableWhen.map((ew) => {
     const answer = resolveAnswer(answers, prefix, ew.question);
     const code = ew.answerCoding?.code;
@@ -621,18 +637,22 @@ export function QuestionnaireResponseForm({
     const initialExpression = initialExpressionOf(item);
 
     return (
-      <div className="qp-field" key={key}>
-        <label>
-          <span className="qp-field__label">
-            {item.text}
-            {item.required && <span className="qp-field__required">必須</span>}
-          </span>
-          {renderInput(item, key)}
-        </label>
-        {initialExpression && !initialResponse && (
-          <p className="qp-field__note">初期値式(実行時に設定): {initialExpression}</p>
-        )}
-      </div>
+      <Fragment key={key}>
+        <div className="qp-field">
+          <label>
+            <span className="qp-field__label">
+              {item.text}
+              {item.required && <span className="qp-field__required">必須</span>}
+            </span>
+            {renderInput(item, key)}
+          </label>
+          {initialExpression && !initialResponse && (
+            <p className="qp-field__note">初期値式(実行時に設定): {initialExpression}</p>
+          )}
+        </div>
+        {/* choice 配下の条件付きグループ。表示条件は group 側の isEnabled で評価される。 */}
+        {item.item?.length ? renderItems(item.item, `${key}.`) : null}
+      </Fragment>
     );
   }
 

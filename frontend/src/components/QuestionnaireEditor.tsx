@@ -2,7 +2,9 @@ import { useState, type FormEvent, type KeyboardEvent } from "react";
 import {
   appendChild,
   emptyQuestionnaireForm,
+  findItemById,
   moveItemById,
+  newConditionalGroup,
   newEditorItem,
   newVariable,
   removeItemById,
@@ -55,8 +57,13 @@ export function QuestionnaireEditor({
     setValues((v) => ({ ...v, items: moveItemById(v.items, id, direction) }));
   }
 
+  // choice への追加は条件付きグループ(jsp-9: choice の子は enableWhen 付き group のみ)。
   function handleAppendChild(parentId: string | null) {
-    setValues((v) => ({ ...v, items: appendChild(v.items, parentId, newEditorItem()) }));
+    setValues((v) => {
+      const parent = parentId ? findItemById(v.items, parentId) : undefined;
+      const child = parent?.type === "choice" ? newConditionalGroup() : newEditorItem();
+      return { ...v, items: appendChild(v.items, parentId, child) };
+    });
   }
 
   function updateVariable(id: string, key: "name" | "expression", value: string) {
@@ -205,7 +212,7 @@ export function QuestionnaireEditor({
             item={item}
             index={index}
             siblingCount={values.items.length}
-            rootItems={values.items}
+            parentChoice={null}
             onUpdate={handleItemUpdate}
             onRemove={handleItemRemove}
             onMove={handleItemMove}

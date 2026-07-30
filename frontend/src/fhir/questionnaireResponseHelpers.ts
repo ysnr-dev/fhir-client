@@ -194,17 +194,17 @@ export function questionnaireResponsePlainText(
     for (const item of items ?? []) {
       const indent = "  ".repeat(depth);
       const label = item.text ?? item.linkId;
-      if (item.item?.length) {
+      // choice 配下に条件付きグループがある場合は answer と item の両方を持つ。
+      if (item.answer?.length) {
+        const unit = units.get(item.linkId);
+        const values = item.answer
+          .map((answer) => (unit ? `${plainAnswerText(answer)} ${unit}` : plainAnswerText(answer)))
+          .join("、");
+        lines.push(`${indent}${label}: ${values}`);
+      } else if (item.item?.length) {
         lines.push(`${indent}【${label}】`);
-        walk(item.item, depth + 1);
-        continue;
       }
-      if (!item.answer?.length) continue;
-      const unit = units.get(item.linkId);
-      const values = item.answer
-        .map((answer) => (unit ? `${plainAnswerText(answer)} ${unit}` : plainAnswerText(answer)))
-        .join("、");
-      lines.push(`${indent}${label}: ${values}`);
+      if (item.item?.length) walk(item.item, depth + 1);
     }
   })(response.item, 0);
 

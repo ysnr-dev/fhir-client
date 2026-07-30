@@ -1,13 +1,10 @@
 import {
   changeItemType,
-  enableWhenCandidates,
   ITEM_CONTROLS,
   ITEM_TYPE_LABELS,
   ITEM_TYPES,
   newAnswerOption,
-  newEnableWhen,
   type EditorAnswerOption,
-  type EditorEnableWhen,
   type EditorItem,
   type EditorItemType,
 } from "../fhir/questionnaireHelpers";
@@ -16,8 +13,8 @@ interface QuestionnaireItemEditorProps {
   item: EditorItem;
   index: number;
   siblingCount: number;
-  // enableWhen の参照先候補を親階層から求めるためルートの items を渡す。
-  rootItems: EditorItem[];
+  // item が choice 配下の条件付き group のとき、その親 choice(表示条件の参照先)。
+  parentChoice: EditorItem | null;
   onUpdate: (id: string, updater: (item: EditorItem) => EditorItem) => void;
   onRemove: (id: string) => void;
   onMove: (id: string, direction: "up" | "down") => void;
@@ -36,7 +33,7 @@ export function QuestionnaireItemEditor({
   item,
   index,
   siblingCount,
-  rootItems,
+  parentChoice,
   onUpdate,
   onRemove,
   onMove,
@@ -52,7 +49,7 @@ export function QuestionnaireItemEditor({
 
   function handleRemove() {
     if (item.children.length > 0) {
-      if (!window.confirm(`グループ内の子項目 ${item.children.length} 件も削除されます。よろしいですか?`)) {
+      if (!window.confirm(`配下の子項目 ${item.children.length} 件も削除されます。よろしいですか?`)) {
         return;
       }
     }
@@ -85,18 +82,13 @@ export function QuestionnaireItemEditor({
     patch({ answerOptions: options });
   }
 
-  function updateEnableWhen(ewId: string, partial: Partial<EditorEnableWhen>) {
-    patch({
-      enableWhen: item.enableWhen.map((ew) => (ew.id === ewId ? { ...ew, ...partial } : ew)),
-    });
-  }
-
   const isGroup = item.type === "group";
   const isChoice = item.type === "choice";
   const isNumeric = item.type === "integer" || item.type === "decimal";
   const isTextual = item.type === "string" || item.type === "text";
   const hasInitial = !isGroup && !isChoice && item.type !== "display";
-  const candidates = isGroup ? enableWhenCandidates(rootItems, item.id) : [];
+  // choice 配下の条件付き group(jsp-9)。type 変更・繰り返し不可、表示条件は必須。
+  const isConditionalGroup = isGroup && parentChoice !== null;
 
   return (
     <div className={`qe-item${item.type === "group" ? " qe-item--group" : ""}`}>
@@ -129,7 +121,12 @@ export function QuestionnaireItemEditor({
       <div className="qe-item__grid">
         <label>
           種類
-          <select value={item.type} onChange={(e) => handleTypeChange(e.target.value as EditorItemType)}>
+          <select
+            value={item.type}
+            disabled={isConditionalGroup}
+            title={isConditionalGroup ? "条件付きグループの種類は変更できません" : undefined}
+            onChange={(e) => handleTypeChange(e.target.value as EditorItemType)}
+          >
             {ITEM_TYPES.map((type) => (
               <option key={type} value={type}>
                 {ITEM_TYPE_LABELS[type]}
@@ -266,6 +263,36 @@ export function QuestionnaireItemEditor({
           >
             + 選択肢を追加
           </button>
+
+          <div className="qe-item__children">
+            <span className="qe-enable-when__title">
+              条件付きグループ(特定の選択肢が選ばれたときだけ表示する項目)
+            </span>
+            {item.children.map((child, childIndex) => (
+              <QuestionnaireItemEditor
+                key={child.id}
+                item={child}
+                index={childIndex}
+                siblingCount={item.children.length}
+                parentChoice={item}
+                onUpdate={onUpdate}
+                onRemove={onRemove}
+                onMove={onMove}
+                onAppendChild={onAppendChild}
+              />
+            ))}
+            <button
+              type="button"
+              className="qe-add-item"
+              onClick={() => onAppendChild(item.id)}
+              disabled={item.answerOptions.length === 0}
+              title={
+                item.answerOptions.length === 0 ? "選択肢を追加すると設定できます" : undefined
+              }
+            >
+              + 条件付きグループを追加
+            </button>
+          </div>
         </div>
       )}
 
@@ -348,87 +375,62 @@ export function QuestionnaireItemEditor({
 
       {isGroup && (
         <div className="qe-item__panel">
-          <div className="qe-item__grid">
-            <label className="qe-item__checkbox">
-              <input
-                type="checkbox"
-                checked={item.repeats}
-                onChange={(e) => patch({ repeats: e.target.checked, maxOccurs: "" })}
-              />
-              繰り返し入力を許可
-            </label>
-            {item.repeats && (
-              <label>
-                最大繰り返し数
+          {/* jsp-8: 表示条件付きグループは繰り返し不可 */}
+          {!isConditionalGroup && (
+            <div className="qe-item__grid">
+              <label className="qe-item__checkbox">
                 <input
-                  type="number"
-                  min="1"
-                  value={item.maxOccurs}
-                  onChange={(e) => patch({ maxOccurs: e.target.value })}
-                  placeholder="無制限"
+                  type="checkbox"
+                  checked={item.repeats}
+                  onChange={(e) => patch({ repeats: e.target.checked, maxOccurs: "" })}
                 />
+                繰り返し入力を許可
               </label>
-            )}
-          </div>
+              {item.repeats && (
+                <label>
+                  最大繰り返し数
+                  <input
+                    type="number"
+                    min="1"
+                    value={item.maxOccurs}
+                    onChange={(e) => patch({ maxOccurs: e.target.value })}
+                    placeholder="無制限"
+                  />
+                </label>
+              )}
+            </div>
+          )}
 
-          <div className="qe-enable-when">
-            <span className="qe-enable-when__title">表示条件(すべて一致で表示)</span>
-            {item.enableWhen.map((ew) => {
-              const referenced = candidates.find((c) => c.linkId === ew.question);
-              return (
-                <div className="qe-enable-when__row" key={ew.id}>
-                  <select
-                    aria-label="参照先項目"
-                    value={ew.question}
-                    onChange={(e) =>
-                      updateEnableWhen(ew.id, { question: e.target.value, answerSystem: "", answerCode: "" })
-                    }
-                  >
-                    <option value="">項目を選択</option>
-                    {candidates.map((candidate) => (
-                      <option key={candidate.id} value={candidate.linkId}>
-                        {candidate.text || candidate.linkId}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="qe-enable-when__operator">=</span>
-                  <select
-                    aria-label="比較値"
-                    value={ew.answerCode}
-                    onChange={(e) => {
-                      const option = referenced?.answerOptions.find((o) => o.code === e.target.value);
-                      updateEnableWhen(ew.id, {
+          {/* 表示条件は親 choice の回答との一致のみ(jsp-2: 参照先は親、演算子は "=" 固定) */}
+          {parentChoice && (
+            <div className="qe-enable-when">
+              <span className="qe-enable-when__title">表示条件</span>
+              <div className="qe-enable-when__row">
+                <span>{parentChoice.text || parentChoice.linkId}</span>
+                <span className="qe-enable-when__operator">=</span>
+                <select
+                  aria-label="比較値"
+                  value={item.enableWhen?.answerCode ?? ""}
+                  onChange={(e) => {
+                    const option = parentChoice.answerOptions.find((o) => o.code === e.target.value);
+                    patch({
+                      enableWhen: {
                         answerCode: e.target.value,
                         answerSystem: option?.system ?? "",
-                      });
-                    }}
-                    disabled={!referenced}
-                  >
-                    <option value="">値を選択</option>
-                    {referenced?.answerOptions.map((option) => (
-                      <option key={option.id} value={option.code}>
-                        {option.display || option.code}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => patch({ enableWhen: item.enableWhen.filter((x) => x.id !== ew.id) })}
-                  >
-                    ×
-                  </button>
-                </div>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => patch({ enableWhen: [...item.enableWhen, newEnableWhen()] })}
-              disabled={candidates.length === 0}
-              title={candidates.length === 0 ? "親階層に選択肢項目がある場合に設定できます" : undefined}
-            >
-              + 条件を追加
-            </button>
-          </div>
+                      },
+                    });
+                  }}
+                >
+                  <option value="">値を選択</option>
+                  {parentChoice.answerOptions.map((option) => (
+                    <option key={option.id} value={option.code}>
+                      {option.display || option.code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           <div className="qe-item__children">
             {item.children.map((child, childIndex) => (
@@ -437,7 +439,7 @@ export function QuestionnaireItemEditor({
                 item={child}
                 index={childIndex}
                 siblingCount={item.children.length}
-                rootItems={rootItems}
+                parentChoice={null}
                 onUpdate={onUpdate}
                 onRemove={onRemove}
                 onMove={onMove}
