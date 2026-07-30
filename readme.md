@@ -212,6 +212,23 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   `Accept: image/*` を付けた `GET /fhir/Binary/<id>` で生バイトを取得します(上流が非 FHIR な Accept に
   対して `contentType` 付きの実体を返す挙動を利用)。
 
+## テンプレートのエクスポート / インポート
+
+テンプレート(`Questionnaire`)を単一の JSON ファイルとして書き出し、別環境(開発→本番など)へ
+取り込めます。テンプレート一覧の行メニュー「エクスポート」でダウンロード、一覧上部の
+「インポート」ボタンでファイルを選択して取り込みます。
+
+- **自己完結なファイル**: シェーマ画像は `Binary/<id>` 参照のままでは移行先で辿れないため、
+  エクスポート時に `valueAttachment.data`(base64)として埋め込みます。サーバー固有の `id` /
+  `meta.versionId` / `meta.lastUpdated` は含めません(`meta.profile` は保持)。
+- **インポートは新規作成と同じ経路**: ファイルを編集フォームの中間表現に変換して検証
+  (JASPEHR 制約)した上で、canonical(url + version)の重複検証 → 画像 `Binary` と本体を
+  1 つの transaction Bundle で保存、という新規作成と同じ流れで取り込みます。同じ url + version の
+  テンプレートが既にあるとエラーになります(取り込みたい場合は既存側を削除するか、ファイルの
+  `url` / `version` を変更してください)。
+- エディタが扱わない要素・拡張はインポート時に失われます(本アプリで作成したテンプレートの
+  移行を前提とします)。
+
 ## 帳票PDF出力（QuestionnaireResponse の ThinReports 帳票）
 
 テンプレートの回答(`QuestionnaireResponse`)を、あらかじめ登録した帳票レイアウトに流し込んで

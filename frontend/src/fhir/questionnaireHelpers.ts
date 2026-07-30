@@ -572,13 +572,20 @@ function parseItem(item: fhir4.QuestionnaireItem, parentType?: string): EditorIt
   };
 }
 
-// itemMedia 拡張からシェーマ画像を復元する。url が "Binary/<id>" 形式でない
+// itemMedia 拡張からシェーマ画像を復元する。url が "Binary/<id>" 形式のものに
+// 加え、エクスポートファイルの data 埋め込み(base64)は未保存画像として復元する
+// (保存時に collectPendingImageEntries が Binary を新規作成する)。それ以外の
 // Attachment はこのエディタでは扱えないため復元しない(保存すると失われる)。
 function parseItemImage(item: fhir4.QuestionnaireItem): EditorItemImage | null {
   const attachment = itemMediaOf(item);
+  if (!attachment) return null;
   const binaryId = binaryIdFromAttachment(attachment);
-  if (!binaryId) return null;
-  return { binaryId, contentType: attachment?.contentType ?? "image/png", dataUrl: null };
+  const contentType = attachment.contentType ?? "image/png";
+  if (binaryId) return { binaryId, contentType, dataUrl: null };
+  if (attachment.data) {
+    return { binaryId: null, contentType, dataUrl: `data:${contentType};base64,${attachment.data}` };
+  }
+  return null;
 }
 
 // 未保存(dataUrl のみ)の画像を transaction Bundle の Binary 作成エントリにし、

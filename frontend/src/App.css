@@ -428,6 +428,12 @@ button:disabled {
   color: var(--text-h);
 }
 
+.questionnaire-import__success {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
 .connection-settings__lead {
   margin: 0 0 16px;
   max-width: 560px;
