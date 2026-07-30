@@ -1,0 +1,63 @@
+[
+  { "meta": "pt_name", "tlfId": "patient_name" },
+  { "meta": "qr_authored", "tlfId": "date" },
+  { "meta": "qr_institution", "tlfId": "organization_name" },
+  { "meta": "qr_author", "tlfId": "practitioner_name" },
+
+  { "linkId": "item-ms7a68ca-31", "tlfId": "17" },
+  { "linkId": "item-ms7a3nyj-25", "tlfId": "8_2_1" },
+  { "linkId": "item-ms7avfxr-77", "tlfId": "14_4_1" },
+  { "linkId": "item-ms7alu6u-58", "tlfId": "remark" },
+  { "linkId": "item-ms7awhoy-78", "tlfId": "mouth_image" },
+
+  { "linkId": "item-ms7a3w6x-26", "code": "01", "show": ["3_2"] },
+
+  { "linkId": "item-ms7a00v3-18", "answered": true, "show": ["7_2"] },
+  { "linkId": "item-ms7a00v3-18", "code": "02", "show": ["7_2_1"] },
+  { "linkId": "item-ms7a00v3-18", "code": "04", "show": ["7_2_3"] },
+  { "linkId": "item-ms7a00v3-18", "code": "01", "show": ["7_2_4"] },
+  { "linkId": "item-ms7a00v3-18", "code": "03", "show": ["7_2_5"] },
+  { "linkId": "item-ms7a00v3-18", "code": "05", "show": ["7_2_5"] },
+  { "linkId": "item-ms7a00v3-18", "code": "99", "show": ["7_2_5"] },
+
+  { "linkId": "item-ms7a2ya4-22", "code": "01", "show": ["8_1"] },
+  { "linkId": "item-ms7a2ya4-22", "code": "02", "show": ["8_2"] },
+
+  { "linkId": "item-ms7a9tsw-41", "code": "01", "show": ["9_1"] },
+  { "linkId": "item-ms7a9tsw-41", "code": "02", "show": ["9_2"] },
+  { "linkId": "item-ms7a9tsw-41", "code": "03", "show": ["9_2"] },
+
+  { "linkId": "item-ms7a962e-39", "code": "01", "show": ["10_1"] },
+  { "linkId": "item-ms7a962e-39", "code": "02", "show": ["10_2"] },
+
+  { "linkId": "item-ms7a8g6w-37", "code": "01", "show": ["11_1"] },
+  { "linkId": "item-ms7a8g6w-37", "code": "02", "show": ["11_2"] },
+
+  { "linkId": "item-ms7a78cl-35", "code": "01", "show": ["12_1"] },
+  { "linkId": "item-ms7a78cl-35", "code": "02", "show": ["12_2"] },
+
+  { "linkId": "item-ms7ahgs3-54", "code": "00", "show": ["18_1"] },
+  { "linkId": "item-ms7ahgs3-54", "code": "01", "show": ["18_2"] },
+  { "linkId": "item-ms7ahgs3-54", "code": "02", "show": ["18_2"] },
+  { "linkId": "item-ms7ahgs3-54", "code": "03", "show": ["18_2"] },
+  { "linkId": "item-ms7ahgs3-54", "code": "04", "show": ["18_2"] },
+  { "linkId": "item-ms7ahgs3-54", "code": "05", "show": ["18_2"] },
+  { "linkId": "item-ms7ahgs3-54", "code": "06", "show": ["18_2"] },
+  { "linkId": "item-ms7ahgs3-54", "code": "07", "show": ["18_2"] },
+
+  { "linkId": "item-ms7ane9j-64", "code": "03", "show": ["15_1"] },
+  { "linkId": "item-ms7ane9j-64", "code": "04", "show": ["15_2"] },
+  { "linkId": "item-ms7ane9j-64", "code": "05", "show": ["15_2"] },
+  { "linkId": "item-ms7ane9j-64", "code": "01", "show": ["15_3"] },
+  { "linkId": "item-ms7ane9j-64", "code": "02", "show": ["15_3"] },
+
+  { "linkId": "item-ms7arp8k-70", "answered": true, "show": ["14_1"] },
+  { "linkId": "item-ms7arp8k-70", "code": "01", "show": ["14_1_1"] },
+  { "linkId": "item-ms7arp8k-70", "code": "02", "show": ["14_1_2"] },
+  { "linkId": "item-ms7arp8k-70", "code": "03", "show": ["14_1_3"] },
+
+  { "linkId": "item-ms7atlfb-74", "code": "01", "show": ["14_3"] },
+  { "linkId": "item-ms7atlfb-74", "code": "02", "show": ["14_3"] },
+  { "linkId": "item-ms7atlfb-74", "code": "03", "show": ["14_2"] },
+  { "linkId": "item-ms7atlfb-74", "code": "04", "show": ["14_4"] }
+]

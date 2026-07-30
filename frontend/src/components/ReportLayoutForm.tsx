@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReportLayoutPayload, ReportLayoutSummary } from "../api/adminClient";
-import { useCreateReportLayout, useUpdateReportLayout } from "../api/adminQueries";
+import { useCreateReportLayout, useReportLayout, useUpdateReportLayout } from "../api/adminQueries";
 import { useQuestionnaireOptions } from "../api/queries";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { ErrorBanner } from "./ErrorBanner";
@@ -21,12 +21,21 @@ export function ReportLayoutForm({ layout, onSaved, onCancel }: Props) {
   const [version, setVersion] = useState(layout?.questionnaire_version ?? "");
   const [tlf, setTlf] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
+  const [mappingText, setMappingText] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const { questionnaires } = useQuestionnaireOptions();
   const create = useCreateReportLayout();
   const update = useUpdateReportLayout();
   const saving = create.isPending || update.isPending;
+
+  // 編集時は保存済みのマッピング本文を読み込んでフォームに反映する。
+  // 読み込みが済むまでは mapping を送らない(空文字で上書きしないため)。
+  const detail = useReportLayout(layout?.id);
+  const mappingReady = !layout || detail.isSuccess;
+  useEffect(() => {
+    if (detail.data) setMappingText(detail.data.mapping);
+  }, [detail.data]);
 
   // 入力中の canonical に一致するテンプレート(プレースホルダー一覧の表示にも使う)。
   const selectedQuestionnaire = questionnaires.find(
@@ -72,12 +81,23 @@ export function ReportLayoutForm({ layout, onSaved, onCancel }: Props) {
     if (!url.trim()) return setValidationError("テンプレートを選択するか URL を入力してください。");
     if (!layout && !tlf) return setValidationError("レイアウトファイル(.tlf)を選択してください。");
 
+    const mapping = mappingText.trim();
+    if (mapping) {
+      try {
+        const parsed: unknown = JSON.parse(mapping);
+        if (!Array.isArray(parsed)) throw new Error();
+      } catch {
+        return setValidationError("マッピング定義はルールの配列(JSON Array)で入力してください。");
+      }
+    }
+
     const payload: Partial<ReportLayoutPayload> = {
       name: name.trim(),
       questionnaire_url: url.trim(),
       questionnaire_version: version.trim(),
     };
     if (tlf) payload.tlf = tlf;
+    if (mappingReady) payload.mapping = mapping;
 
     try {
       if (layout) {
@@ -142,6 +162,21 @@ export function ReportLayoutForm({ layout, onSaved, onCancel }: Props) {
             ファイルを選択しない場合、レイアウト本体は変更されません。
           </p>
         )}
+
+        <label>
+          マッピング定義(JSON、任意)
+          <textarea
+            value={mappingText}
+            onChange={(e) => setMappingText(e.target.value)}
+            rows={8}
+            placeholder={'[\n  { "linkId": "item-1", "tlfId": "answer_1" },\n  { "linkId": "item-2", "code": "01", "show": ["check_1"] }\n]'}
+            disabled={!mappingReady}
+          />
+        </label>
+        <p className="report-layout-form__file">
+          linkId とレイアウトのアイテム ID の対応を明示する場合に入力します。空欄なら
+          linkId 由来の ID 規約のみで対応します。
+        </p>
 
         {validationError && <p className="error-banner">{validationError}</p>}
         <ErrorBanner error={create.error} />

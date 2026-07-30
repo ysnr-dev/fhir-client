@@ -51,6 +51,7 @@ export function ReportLayoutTable({ layouts, onEdit }: Props) {
             <th>名称</th>
             <th>テンプレート(canonical)</th>
             <th>サイズ</th>
+            <th>マッピング</th>
             <th>更新日時</th>
             <th></th>
           </tr>
@@ -61,6 +62,7 @@ export function ReportLayoutTable({ layouts, onEdit }: Props) {
               <td>{layout.name}</td>
               <td>{layout.canonical}</td>
               <td>{(layout.tlf_bytesize / 1024).toFixed(1)} KB</td>
+              <td>{layout.mapping_set ? "あり" : "-"}</td>
               <td>{formatDateTime(layout.updated_at)}</td>
               <td className="patient-table__actions">
                 <button type="button" onClick={() => onEdit(layout)}>

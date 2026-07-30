@@ -1,0 +1,188 @@
+{
+  "version": "0.11.0",
+  "title": "マッピング帳票テスト",
+  "report": {
+    "paper-type": "A4",
+    "orientation": "portrait",
+    "margin": [20, 20, 20, 20]
+  },
+  "state": {
+    "layout-guides": []
+  },
+  "items": [
+    {
+      "id": "check_yes",
+      "type": "text",
+      "display": false,
+      "description": "",
+      "x": 40,
+      "y": 30,
+      "width": 60,
+      "height": 18,
+      "texts": ["はい"],
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "check_no",
+      "type": "text",
+      "display": true,
+      "description": "レイアウト上は表示だが、条件を満たさなければ隠される",
+      "x": 120,
+      "y": 30,
+      "width": 60,
+      "height": 18,
+      "texts": ["いいえ"],
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "check_any",
+      "type": "text",
+      "display": false,
+      "description": "",
+      "x": 200,
+      "y": 30,
+      "width": 80,
+      "height": 18,
+      "texts": ["回答あり"],
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "circle_smoking",
+      "type": "ellipse",
+      "display": false,
+      "description": "",
+      "style": {
+        "border-color": "#000000",
+        "border-width": 1,
+        "border-style": "solid",
+        "fill-color": "none"
+      },
+      "cx": 100,
+      "cy": 80,
+      "rx": 20,
+      "ry": 10
+    },
+    {
+      "id": "tooth_count",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 40,
+      "y": 110,
+      "width": 120,
+      "height": 18,
+      "value": "",
+      "multiple-line": false,
+      "format": { "base": "", "type": "" },
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "memo_field",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 40,
+      "y": 140,
+      "width": 380,
+      "height": 18,
+      "value": "デザイン初期値(メモ)",
+      "multiple-line": false,
+      "format": { "base": "", "type": "" },
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "pt_name_alias",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 40,
+      "y": 170,
+      "width": 200,
+      "height": 18,
+      "value": "",
+      "multiple-line": false,
+      "format": { "base": "", "type": "" },
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "mouth_img",
+      "type": "image-block",
+      "display": true,
+      "description": "",
+      "x": 40,
+      "y": 210,
+      "width": 200,
+      "height": 150,
+      "style": {
+        "position-x": "left",
+        "position-y": "top"
+      }
+    }
+  ]
+}

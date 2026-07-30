@@ -54,8 +54,34 @@ RSpec.describe "Admin::ReportLayouts", type: :request do
       expect(ReportLayout.count).to eq(1)
     end
 
+    it "creates a layout with a mapping and reports mapping_set" do
+      mapping = [{ linkId: "item-1", code: "01", show: ["check_1"] }].to_json
+
+      post "/admin/report_layouts", params: valid_params.merge(mapping: mapping), as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(response.parsed_body["mapping_set"]).to be(true)
+      expect(ReportLayout.last.mapping).to eq(mapping)
+    end
+
+    it "returns the mapping body on show" do
+      mapping = [{ linkId: "item-1", tlfId: "answer_1" }].to_json
+      layout = create_layout!(mapping: mapping)
+
+      get "/admin/report_layouts/#{layout.id}"
+
+      expect(response.parsed_body["mapping"]).to eq(mapping)
+    end
+
     it "rejects an invalid tlf with validation errors" do
       post "/admin/report_layouts", params: valid_params.merge(tlf: "{broken"), as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(response.parsed_body["errors"]).to be_present
+    end
+
+    it "rejects an invalid mapping with validation errors" do
+      post "/admin/report_layouts", params: valid_params.merge(mapping: "{broken"), as: :json
 
       expect(response).to have_http_status(:unprocessable_content)
       expect(response.parsed_body["errors"]).to be_present

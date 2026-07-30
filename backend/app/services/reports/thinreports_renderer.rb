@@ -10,6 +10,10 @@ module Reports
   #   - メタ情報:    pt_* / qr_* の予約 ID(下記 META 参照)
   # レイアウトに存在しないプレースホルダーは黙って捨て、レイアウトにあるが
   # 回答にない項目は空文字にする(text-block のデザイン時初期値を残さない)。
+  #
+  # 加えて ReportLayout にマッピング定義(Reports::LayoutMapping)があれば、
+  # 命名規約に依らない出力先の指定と、choice 回答の code に応じた
+  # チェックマーク等(text/ellipse)の表示切替を行う。
   class ThinreportsRenderer
     UNIT_EXT_URL = "http://hl7.org/fhir/StructureDefinition/questionnaire-unit".freeze
     ANNOTATED_IMAGE_EXT_URL =
@@ -47,11 +51,15 @@ module Reports
       link_ids = collect_link_ids(@questionnaire["item"])
       mapper = ItemIdMapper.new(link_ids)
       formatter = AnswerFormatter.new(collect_units(@questionnaire["item"]))
+      mapping = @layout.parsed_mapping
 
-      text_ids, image_ids = layout_item_ids
+      text_ids, image_ids, all_ids = layout_item_ids
 
       values = preset_blank_values(text_ids, link_ids.map { |id| mapper.tlf_id(id) })
+      # マッピングの値出力先も、未回答ならデザイン時初期値を残さず空文字にする。
+      mapping&.value_target_ids&.each { |id| values[id] = "" if text_ids.include?(id) }
       image_values = {}
+      shown_ids = Set.new
 
       occurrences = Hash.new(0)
       walk(@response["item"]) do |item|
@@ -62,22 +70,41 @@ module Reports
         if answers.present?
           tlf_id = mapper.tlf_id(link_id, occurrence)
           values[tlf_id] = formatter.format(link_id, answers) if text_ids.include?(tlf_id)
+
+          if mapping
+            mapping.value_targets(link_id).each do |id|
+              values[id] = formatter.format(link_id, answers) if text_ids.include?(id)
+            end
+            shown_ids.merge(mapping.triggered_show_ids(link_id, answers))
+          end
         end
 
         if (binary_id = annotation_binary_id(item)) && @images[binary_id]
           image_id = mapper.image_id(link_id, occurrence)
           image_values[image_id] = @images[binary_id] if image_ids.include?(image_id)
+
+          mapping&.value_targets(link_id)&.each do |id|
+            image_values[id] = @images[binary_id] if image_ids.include?(id)
+          end
         end
       end
 
       # 予約プレースホルダーは最後に設定する(linkId 由来の値より優先)。
-      meta_values.each { |id, value| values[id] = value if text_ids.include?(id) }
+      meta_values.each do |id, value|
+        values[id] = value if text_ids.include?(id)
+        mapping&.meta_targets(id)&.each { |alias_id| values[alias_id] = value if text_ids.include?(alias_id) }
+      end
+
+      # show ルールの対象は、条件を満たしたら表示・満たさなければ非表示で確定させる
+      # (レイアウトの display 設定に依らず、回答だけで出力が決まるようにする)。
+      toggle_ids = mapping ? mapping.show_target_ids & all_ids : Set.new
 
       @layout.with_tlf_file do |path|
         report = Thinreports::Report.new(layout: path)
         report.start_new_page do |page|
           values.each { |id, value| page.item(id).value(value) }
           image_values.each { |id, bytes| page.item(id).src(StringIO.new(bytes)) }
+          toggle_ids.each { |id| shown_ids.include?(id) ? page.item(id).show : page.item(id).hide }
         end
         report.generate
       end
@@ -87,20 +114,23 @@ module Reports
 
     # レイアウト内のアイテム ID を種類別に列挙する(v1 はトップレベルのみ、list 非対応)。
     # 未知の ID へ page.item すると例外になるため、設定対象を積集合に絞るのに使う。
+    # 3 つ目の戻り値は ID を持つ全アイテム(text/ellipse 等を含む。表示切替の対象確認用)。
     def layout_item_ids
       items = JSON.parse(@layout.tlf).fetch("items", [])
       text_ids = Set.new
       image_ids = Set.new
+      all_ids = Set.new
       items.each do |item|
         id = item["id"].to_s
         next if id.empty?
 
+        all_ids << id
         case item["type"]
         when "text-block" then text_ids << id
         when "image-block" then image_ids << id
         end
       end
-      [text_ids, image_ids]
+      [text_ids, image_ids, all_ids]
     end
 
     # レイアウトにあるが回答にない項目を空文字で埋める。対象は linkId 由来の ID
