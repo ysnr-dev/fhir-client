@@ -36,6 +36,9 @@ gem "roo", "~> 2.10"
 # CSV parsing for master data import. No longer a default gem as of Ruby 3.4.
 gem "csv", "~> 3.3"
 
+# QuestionnaireResponse の PDF 帳票生成。純 Ruby(prawn ベース)で IPA フォント同梱。
+gem "thinreports", "~> 0.15"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri mingw x64_mingw ]
@@ -43,6 +46,8 @@ group :development, :test do
   gem "dotenv-rails"
   gem "rspec-rails", "~> 8.0"
   gem "webmock"
+  # 生成した帳票 PDF からテキストを抽出して検証する(prawn 公式のテスト用 gem)
+  gem "pdf-inspector", require: "pdf/inspector"
 end
 
 group :development do

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuestionnaireByCanonical, useQuestionnaireResponse } from "../api/queries";
+import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { JsonBlock } from "../components/JsonBlock";
 import { PatientHeader } from "../components/PatientHeader";
@@ -26,6 +27,10 @@ export function QuestionnaireResponseDetailPage() {
 
   const summary = response ? summarizeQuestionnaireResponse(response) : undefined;
 
+  // 帳票レイアウトが登録されているテンプレートだけ PDF 出力できる。
+  const { data: layoutStatus } = useReportLayoutStatus(response?.questionnaire);
+  const pdfReady = Boolean(layoutStatus?.registered && qrId);
+
   return (
     <div className="page">
       <div className="page__header">
@@ -39,6 +44,25 @@ export function QuestionnaireResponseDetailPage() {
           >
             平文
           </button>
+          {pdfReady ? (
+            <a
+              className="button"
+              href={questionnaireResponsePdfUrl(qrId!)}
+              target="_blank"
+              rel="noopener"
+            >
+              PDF
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="button"
+              disabled
+              title="このテンプレートの帳票レイアウトが未登録です"
+            >
+              PDF
+            </button>
+          )}
           <Link
             to={`/patients/${patientId}/questionnaire-responses/${qrId}/edit`}
             className="button"

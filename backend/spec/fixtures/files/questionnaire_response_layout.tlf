@@ -1,0 +1,232 @@
+{
+  "version": "0.11.0",
+  "title": "テンプレート帳票テスト",
+  "report": {
+    "paper-type": "A4",
+    "orientation": "portrait",
+    "margin": [20, 20, 20, 20]
+  },
+  "state": {
+    "layout-guides": []
+  },
+  "items": [
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 40,
+      "y": 30,
+      "width": 300,
+      "height": 24,
+      "texts": ["テンプレート帳票"],
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 16,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "pt_name",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 40,
+      "y": 70,
+      "width": 200,
+      "height": 18,
+      "value": "",
+      "multiple-line": false,
+      "format": { "base": "", "type": "" },
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "qr_authored",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 260,
+      "y": 70,
+      "width": 160,
+      "height": 18,
+      "value": "",
+      "multiple-line": false,
+      "format": { "base": "", "type": "" },
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "chief_complaint",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 40,
+      "y": 110,
+      "width": 380,
+      "height": 18,
+      "value": "回答なし",
+      "multiple-line": false,
+      "format": { "base": "", "type": "" },
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "body_temp",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 40,
+      "y": 140,
+      "width": 180,
+      "height": 18,
+      "value": "",
+      "multiple-line": false,
+      "format": { "base": "", "type": "" },
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "symptom_note",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 40,
+      "y": 170,
+      "width": 380,
+      "height": 18,
+      "value": "未入力のまま残るはずのないデザイン初期値",
+      "multiple-line": false,
+      "format": { "base": "", "type": "" },
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "med_name_2",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 40,
+      "y": 200,
+      "width": 180,
+      "height": 18,
+      "value": "",
+      "multiple-line": false,
+      "format": { "base": "", "type": "" },
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "med_name",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 240,
+      "y": 200,
+      "width": 180,
+      "height": 18,
+      "value": "",
+      "multiple-line": false,
+      "format": { "base": "", "type": "" },
+      "style": {
+        "font-family": ["IPAMincho"],
+        "font-size": 12,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "schema_body_img",
+      "type": "image-block",
+      "display": true,
+      "description": "",
+      "x": 40,
+      "y": 240,
+      "width": 200,
+      "height": 150,
+      "style": {
+        "position-x": "left",
+        "position-y": "top"
+      }
+    }
+  ]
+}

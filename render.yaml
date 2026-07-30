@@ -90,6 +90,14 @@ services:
       - type: rewrite
         source: /admin/*
         destination: https://ysnr-fhir-client-api.onrender.com/admin/*
+      # 帳票出力(レイアウト照会 + QuestionnaireResponse の PDF)。exact + /* の
+      # 両方が必要なのは /fhir と同じ理由。
+      - type: rewrite
+        source: /reports
+        destination: https://ysnr-fhir-client-api.onrender.com/reports
+      - type: rewrite
+        source: /reports/*
+        destination: https://ysnr-fhir-client-api.onrender.com/reports/*
       # SPA フォールバック(react-router の直リンク対応)
       - type: rewrite
         source: /*
