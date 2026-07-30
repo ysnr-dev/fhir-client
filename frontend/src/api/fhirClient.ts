@@ -80,3 +80,17 @@ export function updateResource<T extends fhir4.Resource & { id?: string }>(
 export function deleteResource(resourceType: string, id: string): Promise<FhirResult<void>> {
   return fetch(`${BASE}/${resourceType}/${id}`, { method: "DELETE" }).then((r) => handle(r));
 }
+
+// Binary を raw バイトで取得して dataURL にする。非 FHIR Accept を送ると
+// 上流が data を decode した生バイトを contentType 付きで返す。
+export async function fetchBinaryImage(id: string): Promise<string> {
+  const res = await fetch(`${BASE}/Binary/${id}`, { headers: { Accept: "image/*" } });
+  if (!res.ok) throw new FhirError(res.status);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("画像の読み込みに失敗しました。"));
+    reader.readAsDataURL(blob);
+  });
+}

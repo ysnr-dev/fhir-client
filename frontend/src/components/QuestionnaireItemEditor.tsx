@@ -1,3 +1,5 @@
+import { useState, type ChangeEvent } from "react";
+import { useBinaryImage } from "../api/queries";
 import {
   changeItemType,
   ITEM_CONTROLS,
@@ -8,6 +10,7 @@ import {
   type EditorItem,
   type EditorItemType,
 } from "../fhir/questionnaireHelpers";
+import { normalizeImageFile } from "../fhir/schemaImage";
 
 interface QuestionnaireItemEditorProps {
   item: EditorItem;
@@ -39,8 +42,27 @@ export function QuestionnaireItemEditor({
   onMove,
   onAppendChild,
 }: QuestionnaireItemEditorProps) {
+  const [imageError, setImageError] = useState<string | null>(null);
+  // 保存済み画像のサムネイル。未アップロードの dataUrl があるときは取得しない。
+  const savedImage = useBinaryImage(item.image?.dataUrl ? undefined : (item.image?.binaryId ?? undefined));
+  const imageSrc = item.image?.dataUrl ?? (item.image?.binaryId ? savedImage.data : undefined);
+
   function patch(partial: Partial<EditorItem>) {
     onUpdate(item.id, (it) => ({ ...it, ...partial }));
+  }
+
+  async function handleImageSelect(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // 同じファイルの再選択でも change が発火するようリセットする。
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const { dataUrl, contentType } = await normalizeImageFile(file);
+      setImageError(null);
+      patch({ image: { binaryId: null, contentType, dataUrl } });
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "画像の読み込みに失敗しました。");
+    }
   }
 
   function handleTypeChange(type: EditorItemType) {
@@ -452,6 +474,22 @@ export function QuestionnaireItemEditor({
           </div>
         </div>
       )}
+
+      <div className="schema-image">
+        <label className="schema-image__label">
+          シェーマ画像
+          <input type="file" accept="image/*" onChange={handleImageSelect} />
+        </label>
+        {imageError && <p className="schema-image__error">{imageError}</p>}
+        {imageSrc && (
+          <div className="schema-image__preview">
+            <img className="schema-image__thumb" src={imageSrc} alt="シェーマ画像" />
+            <button type="button" onClick={() => patch({ image: null })}>
+              画像を削除
+            </button>
+          </div>
+        )}
+      </div>
 
       <details className="qe-item__advanced">
         <summary>詳細設定</summary>

@@ -6,6 +6,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { QuestionnaireEditor } from "../components/QuestionnaireEditor";
 import {
   buildQuestionnaire,
+  collectPendingImageEntries,
   parseQuestionnaireForm,
   type QuestionnaireFormValues,
 } from "../fhir/questionnaireHelpers";
@@ -22,8 +23,15 @@ export function QuestionnaireEditPage() {
   function handleSubmit(values: QuestionnaireFormValues) {
     if (!questionnaireId || !result?.etag) return;
     setConflict(false);
+    // 画像と本体を 1 つの transaction Bundle で更新するので、412 で弾かれた
+    // ときは画像も保存されない(孤児が残らず、そのまま再送できる)。
+    const { items, entries } = collectPendingImageEntries(values.items);
     updateQuestionnaire.mutate(
-      { questionnaire: buildQuestionnaire(values, questionnaireId), etag: result.etag },
+      {
+        questionnaire: buildQuestionnaire({ ...values, items }, questionnaireId),
+        etag: result.etag,
+        imageEntries: entries,
+      },
       {
         onSuccess: () => navigate("/questionnaires"),
         onError: (err) => {

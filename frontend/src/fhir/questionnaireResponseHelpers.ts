@@ -1,6 +1,8 @@
 // JASPEHR 実装ガイド v1.0.0 の QuestionnaireResponse プロファイルに準拠した
 // テンプレート回答リソースの組み立て・復元。
 // https://jaspehr.jp/wp-content/docs/full-ig_v1.0.0/site/index.html
+import { annotationOf } from "./schemaImage";
+
 export const JASPEHR_QUESTIONNAIRE_RESPONSE_PROFILE_URL =
   "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaireresponse";
 
@@ -194,15 +196,19 @@ export function questionnaireResponsePlainText(
     for (const item of items ?? []) {
       const indent = "  ".repeat(depth);
       const label = item.text ?? item.linkId;
+      // シェーマ画像への描き込みは平文にできないため存在だけ示す。
+      const annotationNote = annotationOf(item) ? "(シェーマ画像あり)" : "";
       // choice 配下に条件付きグループがある場合は answer と item の両方を持つ。
       if (item.answer?.length) {
         const unit = units.get(item.linkId);
         const values = item.answer
           .map((answer) => (unit ? `${plainAnswerText(answer)} ${unit}` : plainAnswerText(answer)))
           .join("、");
-        lines.push(`${indent}${label}: ${values}`);
+        lines.push(`${indent}${label}: ${values}${annotationNote}`);
       } else if (item.item?.length) {
-        lines.push(`${indent}【${label}】`);
+        lines.push(`${indent}【${label}】${annotationNote}`);
+      } else if (annotationNote) {
+        lines.push(`${indent}${label}: ${annotationNote}`);
       }
       if (item.item?.length) walk(item.item, depth + 1);
     }
