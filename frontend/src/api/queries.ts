@@ -8,6 +8,12 @@ import {
   buildPrescriptionDeleteBundle,
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
+import { buildQuestionnaire, collectPendingImageEntries } from "../fhir/questionnaireHelpers";
+import {
+  buildQuestionnaireExport,
+  downloadQuestionnaireExport,
+  parseQuestionnaireImport,
+} from "../fhir/questionnaireTransfer";
 import { resourceFromBundleResponse, resourceWithImagesBundle } from "../fhir/schemaImage";
 import {
   createResource,
@@ -577,6 +583,34 @@ export function useUpdateQuestionnaire() {
     onSuccess: (result: FhirResult<fhir4.Questionnaire>) => {
       queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Questionnaire", result.data.id] });
+    },
+  });
+}
+
+// テンプレートをシェーマ画像埋め込みの単一 JSON ファイルとしてダウンロードする。
+export function useExportQuestionnaire() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data } = await readResource<fhir4.Questionnaire>("Questionnaire", id);
+      downloadQuestionnaireExport(await buildQuestionnaireExport(data));
+    },
+  });
+}
+
+// エクスポートファイルを取り込んで新しいテンプレートとして保存する。
+// 保存は新規作成と同じ経路(canonical 重複検証 → 画像込み transaction Bundle)。
+export function useImportQuestionnaire() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const values = parseQuestionnaireImport(await file.text());
+      const { items, entries } = collectPendingImageEntries(values.items);
+      const questionnaire = buildQuestionnaire({ ...values, items });
+      await assertQuestionnaireCanonicalUnique(questionnaire);
+      return saveWithImages(questionnaire, entries);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
     },
   });
 }

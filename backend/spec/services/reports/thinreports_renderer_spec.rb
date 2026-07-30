@@ -99,6 +99,12 @@ RSpec.describe Reports::ThinreportsRenderer do
     PDF::Inspector::Text.analyze(pdf).strings
   end
 
+  # 静的テキスト(text)はスタンプ(Form XObject)で描画され PDF::Inspector::Text には
+  # 現れないため、表示切替の検証には XObject も辿る PDF::Reader の text を使う。
+  def rendered_text(pdf)
+    PDF::Reader.new(StringIO.new(pdf)).pages.map(&:text).join(" ")
+  end
+
   it "generates a PDF" do
     expect(render[0, 5]).to eq("%PDF-")
   end
@@ -137,5 +143,96 @@ RSpec.describe Reports::ThinreportsRenderer do
     questionnaire["item"] << { "linkId" => "chief.complaint", "type" => "string" }
 
     expect { render }.to raise_error(Reports::ItemIdMapper::IdCollision)
+  end
+
+  context "with a mapping definition" do
+    let(:layout) do
+      ReportLayout.new(
+        name: "マッピングテスト帳票",
+        questionnaire_url: "http://example.com/Questionnaire/dental",
+        questionnaire_version: "1.0.0",
+        tlf: Rails.root.join("spec/fixtures/files/mapped_report_layout.tlf").read,
+        mapping: JSON.generate([
+          { "linkId" => "teeth-count", "tlfId" => "tooth_count" },
+          { "linkId" => "memo", "tlfId" => "memo_field" },
+          { "linkId" => "smoking", "code" => "01", "show" => ["check_no"] },
+          { "linkId" => "smoking", "code" => "02", "show" => %w[check_yes circle_smoking] },
+          { "linkId" => "smoking", "answered" => true, "show" => ["check_any"] },
+          { "linkId" => "smoking", "code" => "03", "show" => ["not_in_layout"] },
+          { "linkId" => "mouth", "tlfId" => "mouth_img" },
+          { "meta" => "pt_name", "tlfId" => "pt_name_alias" }
+        ])
+      )
+    end
+
+    let(:questionnaire) do
+      {
+        "resourceType" => "Questionnaire",
+        "title" => "歯科計画書",
+        "item" => [
+          { "linkId" => "smoking", "type" => "choice", "text" => "喫煙" },
+          { "linkId" => "teeth-count", "type" => "integer", "text" => "現存歯" },
+          { "linkId" => "memo", "type" => "text", "text" => "備考" },
+          { "linkId" => "mouth", "type" => "display", "text" => "口腔内の状況" }
+        ]
+      }
+    end
+
+    let(:response) do
+      {
+        "resourceType" => "QuestionnaireResponse",
+        "id" => "qr-2",
+        "status" => "completed",
+        "authored" => "2026-07-30T01:23:00Z",
+        "item" => [
+          { "linkId" => "smoking", "text" => "喫煙",
+            "answer" => [{ "valueCoding" => { "code" => "02", "display" => "あり" } }] },
+          { "linkId" => "teeth-count", "text" => "現存歯",
+            "answer" => [{ "valueInteger" => 28 }] },
+          { "linkId" => "mouth", "text" => "口腔内の状況",
+            "extension" => [
+              { "url" => "http://fhir-client.local/StructureDefinition/questionnaire-response-annotated-image",
+                "valueAttachment" => { "contentType" => "image/png", "url" => "Binary/bin-1" } }
+            ] }
+        ]
+      }
+    end
+
+    it "shows items whose code condition is met and hides the others" do
+      text = rendered_text(render)
+
+      expect(text).to include("はい")        # code "02" 一致 → 表示(レイアウトは display: false)
+      expect(text).not_to include("いいえ")   # code "01" 不一致 → 非表示(レイアウトは display: true でも隠す)
+      expect(text).to include("回答あり")     # answered ルール
+    end
+
+    it "prints answers and meta values into mapped item ids" do
+      strings = rendered_strings(render)
+
+      expect(strings).to include("28")          # teeth-count → tooth_count
+      expect(strings).to include("テスト 太郎")  # pt_name → pt_name_alias
+    end
+
+    it "blanks mapped text targets that have no answer" do
+      expect(rendered_strings(render).join).not_to include("デザイン初期値(メモ)")
+    end
+
+    it "renders the annotated image into the mapped image-block" do
+      expect { render }.not_to raise_error
+      expect(render[0, 5]).to eq("%PDF-")
+    end
+
+    it "ignores show targets that do not exist in the layout" do
+      expect { render }.not_to raise_error
+    end
+
+    it "hides untriggered show targets when the item is unanswered" do
+      response["item"].shift # smoking の回答を落とす
+
+      text = rendered_text(render)
+      expect(text).not_to include("はい")
+      expect(text).not_to include("いいえ")
+      expect(text).not_to include("回答あり")
+    end
   end
 end

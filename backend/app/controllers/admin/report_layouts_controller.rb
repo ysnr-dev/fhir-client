@@ -19,9 +19,9 @@ module Admin
       }
     end
 
-    # tlf 本文は一覧では返さず、再ダウンロード用に show でのみ返す。
+    # tlf・mapping 本文は一覧では返さず、再ダウンロード用に show でのみ返す。
     def show
-      render json: layout_summary(@layout).merge(tlf: @layout.tlf)
+      render json: layout_summary(@layout).merge(tlf: @layout.tlf, mapping: @layout.mapping)
     end
 
     def create
@@ -53,7 +53,7 @@ module Admin
     end
 
     def layout_params
-      params.permit(:name, :questionnaire_url, :questionnaire_version, :tlf)
+      params.permit(:name, :questionnaire_url, :questionnaire_version, :tlf, :mapping)
     end
 
     def layout_summary(layout)
@@ -64,6 +64,7 @@ module Admin
         questionnaire_version: layout.questionnaire_version,
         canonical: layout.canonical,
         tlf_bytesize: layout.tlf.bytesize,
+        mapping_set: layout.mapping.present?,
         updated_at: layout.updated_at
       }
     end

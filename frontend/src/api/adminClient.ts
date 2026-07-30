@@ -223,12 +223,15 @@ export interface ReportLayoutSummary {
   questionnaire_version: string;
   canonical: string;
   tlf_bytesize: number;
+  /** マッピング定義が登録されているか(本文は show でのみ返る)。 */
+  mapping_set: boolean;
   updated_at: string;
 }
 
-/** show のみ tlf 本文(.tlf の JSON テキスト)を含む。 */
+/** show のみ tlf・mapping 本文(JSON テキスト)を含む。 */
 export interface ReportLayoutDetail extends ReportLayoutSummary {
   tlf: string;
+  mapping: string;
 }
 
 export interface ReportLayoutPayload {
@@ -237,6 +240,8 @@ export interface ReportLayoutPayload {
   questionnaire_version: string;
   /** .tlf ファイルの中身(JSON テキスト)。FileReader で読んだ文字列をそのまま送る。 */
   tlf: string;
+  /** マッピング定義(JSON 配列のテキスト)。空文字はマッピングなし。 */
+  mapping?: string;
 }
 
 const REPORT_LAYOUTS = "/admin/report_layouts";

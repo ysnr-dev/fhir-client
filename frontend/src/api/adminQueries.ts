@@ -7,6 +7,7 @@ import {
   fetchAdminSession,
   fetchConnectionSettings,
   fetchOauthClients,
+  fetchReportLayout,
   fetchReportLayouts,
   fetchScopeOptions,
   login,
@@ -134,6 +135,16 @@ export function useReportLayouts() {
   return useQuery({
     queryKey: REPORT_LAYOUTS_KEY,
     queryFn: fetchReportLayouts,
+    retry: false,
+  });
+}
+
+// 編集フォームで mapping 本文を読み込むための詳細取得。
+export function useReportLayout(id: number | undefined) {
+  return useQuery({
+    queryKey: [...REPORT_LAYOUTS_KEY, id],
+    queryFn: () => fetchReportLayout(id as number),
+    enabled: id !== undefined,
     retry: false,
   });
 }

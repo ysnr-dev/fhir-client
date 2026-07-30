@@ -1,23 +1,48 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuestionnaireSearch } from "../api/queries";
+import { useImportQuestionnaire, useQuestionnaireSearch } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Pagination } from "../components/Pagination";
 import { QuestionnaireTable } from "../components/QuestionnaireTable";
 
 export function QuestionnaireListPage() {
   const [offset, setOffset] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { bundle, total, count, hasPrevious, hasNext, isLoading, error } =
     useQuestionnaireSearch(offset);
   const questionnaires =
     bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Questionnaire => Boolean(r)) ?? [];
 
+  const importQuestionnaire = useImportQuestionnaire();
+
+  function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // 同じファイルを選び直しても change が発火するよう毎回クリアする。
+    event.target.value = "";
+    if (file) importQuestionnaire.mutate(file);
+  }
+
   return (
     <div className="page">
       <div className="page__header">
         <h1>テンプレート一覧</h1>
         <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={handleImportFile}
+          />
+          <button
+            type="button"
+            className="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importQuestionnaire.isPending}
+          >
+            {importQuestionnaire.isPending ? "インポート中..." : "インポート"}
+          </button>
           <Link to="/questionnaires/new" className="button">
             新規作成
           </Link>
@@ -25,6 +50,12 @@ export function QuestionnaireListPage() {
       </div>
 
       <ErrorBanner error={error} />
+      <ErrorBanner error={importQuestionnaire.error} />
+      {importQuestionnaire.isSuccess && (
+        <p className="questionnaire-import__success" role="status">
+          テンプレート「{importQuestionnaire.data.data.title ?? ""}」をインポートしました。
+        </p>
+      )}
 
       {isLoading ? (
         <p>読み込み中...</p>

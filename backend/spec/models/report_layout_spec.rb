@@ -45,6 +45,40 @@ RSpec.describe ReportLayout do
       expect(layout).not_to be_valid
       expect(layout.errors[:tlf]).to be_present
     end
+
+    it "accepts a blank mapping and a valid mapping" do
+      expect(build_layout(mapping: "")).to be_valid
+      valid = [{ linkId: "item-1", code: "01", show: ["check_1"] }].to_json
+      expect(build_layout(mapping: valid)).to be_valid
+    end
+
+    it "rejects an invalid mapping" do
+      expect(build_layout(mapping: "{not json")).not_to be_valid
+      expect(build_layout(mapping: { linkId: "a" }.to_json)).not_to be_valid
+
+      layout = build_layout(mapping: [{ linkId: "a" }].to_json)
+      expect(layout).not_to be_valid
+      expect(layout.errors[:mapping]).to be_present
+    end
+
+    it "rejects mapping larger than the size limit" do
+      big = "[#{{ linkId: 'a', tlfId: 'x' * described_class::MAPPING_MAX_BYTESIZE }.to_json}]"
+      layout = build_layout(mapping: big)
+      expect(layout).not_to be_valid
+      expect(layout.errors[:mapping]).to be_present
+    end
+  end
+
+  describe "#parsed_mapping" do
+    it "returns nil when mapping is blank" do
+      expect(build_layout.parsed_mapping).to be_nil
+    end
+
+    it "returns a LayoutMapping when mapping is present" do
+      layout = build_layout(mapping: [{ linkId: "item-1", tlfId: "answer_1" }].to_json)
+      expect(layout.parsed_mapping).to be_a(Reports::LayoutMapping)
+      expect(layout.parsed_mapping.value_targets("item-1")).to eq(["answer_1"])
+    end
   end
 
   describe "canonical uniqueness" do

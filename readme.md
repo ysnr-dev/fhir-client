@@ -212,6 +212,23 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   `Accept: image/*` を付けた `GET /fhir/Binary/<id>` で生バイトを取得します(上流が非 FHIR な Accept に
   対して `contentType` 付きの実体を返す挙動を利用)。
 
+## テンプレートのエクスポート / インポート
+
+テンプレート(`Questionnaire`)を単一の JSON ファイルとして書き出し、別環境(開発→本番など)へ
+取り込めます。テンプレート一覧の行メニュー「エクスポート」でダウンロード、一覧上部の
+「インポート」ボタンでファイルを選択して取り込みます。
+
+- **自己完結なファイル**: シェーマ画像は `Binary/<id>` 参照のままでは移行先で辿れないため、
+  エクスポート時に `valueAttachment.data`(base64)として埋め込みます。サーバー固有の `id` /
+  `meta.versionId` / `meta.lastUpdated` は含めません(`meta.profile` は保持)。
+- **インポートは新規作成と同じ経路**: ファイルを編集フォームの中間表現に変換して検証
+  (JASPEHR 制約)した上で、canonical(url + version)の重複検証 → 画像 `Binary` と本体を
+  1 つの transaction Bundle で保存、という新規作成と同じ流れで取り込みます。同じ url + version の
+  テンプレートが既にあるとエラーになります(取り込みたい場合は既存側を削除するか、ファイルの
+  `url` / `version` を変更してください)。
+- エディタが扱わない要素・拡張はインポート時に失われます(本アプリで作成したテンプレートの
+  移行を前提とします)。
+
 ## 帳票PDF出力（QuestionnaireResponse の ThinReports 帳票）
 
 テンプレートの回答(`QuestionnaireResponse`)を、あらかじめ登録した帳票レイアウトに流し込んで
@@ -251,6 +268,40 @@ linkId の記号を変換して対応付けます。
 - **各テンプレートで使えるアイテム ID の一覧は、管理画面 `/report-layouts` の登録フォームで
   テンプレートを選択すると表示されます**(変換済み ID・単位・繰り返しの有無・ID 衝突の警告つき。
   コピーボタンで Basic Editor へ貼り付けられます)。
+
+### マッピング定義(チェックマーク・丸囲みの表示切替、独自 ID への出力)
+
+ID 規約だけでは表現できない帳票 --- choice 回答の code に応じてチェックマーク(✓ の text)や
+丸囲み(ellipse)を出し分ける紙様式の再現、既存レイアウトの独自アイテム ID への出力 --- は、
+レイアウト登録時に**マッピング定義**(JSON 配列)を併せて登録することで対応できます
+(管理画面 `/report-layouts` のフォーム、または API の `mapping` パラメータ)。
+
+ルールは 1 要素 1 件で、次の 4 形式があります:
+
+```jsonc
+[
+  // 回答値を任意 ID の text-block へ出力(対象が image-block なら描き込み画像を出力)
+  { "linkId": "item-1", "tlfId": "answer_1" },
+  // answerCoding.code が一致する回答があればアイテム(text/ellipse 等)を表示
+  { "linkId": "item-2", "code": "01", "show": ["check_1", "circle_1"] },
+  // 回答が 1 つでもあれば表示(code 省略時と同義)
+  { "linkId": "item-2", "answered": true, "show": ["check_any"] },
+  // 予約プレースホルダー(pt_* / qr_*)の値を別 ID の text-block にも出力
+  { "meta": "pt_name", "tlfId": "patient_name" }
+]
+```
+
+- `show` に指定したアイテムは、**どのルールの条件も満たさなければ強制的に非表示**になります
+  (レイアウト側の display 設定に依らず、回答だけで出力が確定します)。チェックボックス
+  (複数回答)は複数の code ルールがそれぞれ独立に評価されます。
+- マッピングの値出力先も未回答時は空文字になります(デザイン時初期値は残りません)。
+  レイアウトに存在しない ID を参照するルールは黙って無視されます。
+- 繰り返しグループは非対応です(値は最後の出現で上書き、show は全出現の OR)。
+- マッピングは ID 規約と併用できます。規約どおりの ID とマッピングの両方がある場合は両方に
+  出力され、予約 ID への直接出力は従来どおり機能します。
+- 記入例: 歯科疾患管理計画書のマッピング定義が
+  [`docs/report-mappings/shikan-01.mapping.json`](docs/report-mappings/shikan-01.mapping.json)
+  にあります。
 
 ## 管理画面（接続設定 / OAuth クライアント）
 

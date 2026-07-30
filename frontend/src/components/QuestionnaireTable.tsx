@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useDeleteQuestionnaire } from "../api/queries";
+import { useDeleteQuestionnaire, useExportQuestionnaire } from "../api/queries";
 import { summarizeQuestionnaire } from "../fhir/questionnaireHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { RowMenu } from "./RowMenu";
@@ -10,6 +10,7 @@ interface QuestionnaireTableProps {
 
 export function QuestionnaireTable({ questionnaires }: QuestionnaireTableProps) {
   const deleteQuestionnaire = useDeleteQuestionnaire();
+  const exportQuestionnaire = useExportQuestionnaire();
 
   function handleDelete(questionnaireId: string, title: string) {
     if (!window.confirm(`テンプレート「${title}」を削除します。よろしいですか?`)) return;
@@ -23,6 +24,7 @@ export function QuestionnaireTable({ questionnaires }: QuestionnaireTableProps) 
   return (
     <>
       <ErrorBanner error={deleteQuestionnaire.error} />
+      <ErrorBanner error={exportQuestionnaire.error} />
       <table className="patient-table">
         <thead>
           <tr>
@@ -52,6 +54,14 @@ export function QuestionnaireTable({ questionnaires }: QuestionnaireTableProps) 
                     <Link className="row-menu__item" to={`/questionnaires/${summary.id}/edit`}>
                       編集
                     </Link>
+                    <button
+                      type="button"
+                      className="row-menu__item"
+                      onClick={() => exportQuestionnaire.mutate(summary.id)}
+                      disabled={exportQuestionnaire.isPending}
+                    >
+                      エクスポート
+                    </button>
                     <button
                       type="button"
                       className="row-menu__item row-menu__item--danger"
