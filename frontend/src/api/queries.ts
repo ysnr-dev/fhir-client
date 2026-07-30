@@ -482,6 +482,33 @@ export function useDeleteCondition() {
 
 const QUESTIONNAIRE_COUNT = 20;
 
+// QuestionnaireResponse はテンプレートを canonical("<url>|<version>")だけで参照する。
+// 同じ url + version のテンプレートが複数あると、登録済みの回答がどちらのものか
+// 判別できず、一覧に別テンプレート名が出たり、表示時に別テンプレートの構造で
+// 解釈されて回答が欠落する。保存前に上流を検索して重複を弾く。
+// (version 未設定なら canonical は url だけになるので、同じ url すべてが衝突する)
+async function assertQuestionnaireCanonicalUnique(questionnaire: fhir4.Questionnaire) {
+  if (!questionnaire.url) return;
+
+  const params = new URLSearchParams();
+  params.set("url", questionnaire.url);
+  if (questionnaire.version) params.set("version", questionnaire.version);
+  params.set("_elements", "id");
+
+  const { data: bundle } = await searchResource<fhir4.Questionnaire>("Questionnaire", params);
+  const duplicated = bundle.entry?.some(
+    (entry) => entry.resource?.id && entry.resource.id !== questionnaire.id,
+  );
+  if (!duplicated) return;
+
+  const canonical = questionnaire.version
+    ? `URL「${questionnaire.url}」・バージョン「${questionnaire.version}」`
+    : `URL「${questionnaire.url}」`;
+  throw new Error(
+    `${canonical}は既に別のテンプレートで使われています。URL かバージョンを変更してください。`,
+  );
+}
+
 export function useQuestionnaireSearch(offset: number) {
   const params = new URLSearchParams();
   params.set("_count", String(QUESTIONNAIRE_COUNT));
@@ -516,13 +543,16 @@ export function useQuestionnaire(id: string | undefined) {
 export function useCreateQuestionnaire() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       questionnaire,
       imageEntries,
     }: {
       questionnaire: fhir4.Questionnaire;
       imageEntries?: fhir4.BundleEntry[];
-    }) => saveWithImages(questionnaire, imageEntries),
+    }) => {
+      await assertQuestionnaireCanonicalUnique(questionnaire);
+      return saveWithImages(questionnaire, imageEntries);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
     },
@@ -532,7 +562,7 @@ export function useCreateQuestionnaire() {
 export function useUpdateQuestionnaire() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       questionnaire,
       etag,
       imageEntries,
@@ -540,7 +570,10 @@ export function useUpdateQuestionnaire() {
       questionnaire: fhir4.Questionnaire;
       etag: string;
       imageEntries?: fhir4.BundleEntry[];
-    }) => saveWithImages(questionnaire, imageEntries, etag),
+    }) => {
+      await assertQuestionnaireCanonicalUnique(questionnaire);
+      return saveWithImages(questionnaire, imageEntries, etag);
+    },
     onSuccess: (result: FhirResult<fhir4.Questionnaire>) => {
       queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Questionnaire", result.data.id] });
