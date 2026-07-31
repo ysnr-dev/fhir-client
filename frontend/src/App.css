@@ -611,6 +611,21 @@ button:disabled {
   min-width: 140px;
 }
 
+/* 主要品目のみ表示などの絞り込みチェックボックス。列方向のラベルを行方向に上書きする。 */
+.master-search__form label.master-search__checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+/* 主要品目マーク(★) */
+.master-search__badge {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
 .master-search__table-wrap {
   /* 検索結果の件数によってモーダルの高さが変動しないよう、
      max-height ではなく固定 height にしてスクロール領域の高さを一定に保つ。 */

@@ -6,6 +6,10 @@ import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
+import { AllergyCreatePage } from "./pages/AllergyCreatePage";
+import { AllergyDetailPage } from "./pages/AllergyDetailPage";
+import { AllergyEditPage } from "./pages/AllergyEditPage";
+import { AllergyListPage } from "./pages/AllergyListPage";
 import { ConditionCreatePage } from "./pages/ConditionCreatePage";
 import { ConditionDetailPage } from "./pages/ConditionDetailPage";
 import { ConditionEditPage } from "./pages/ConditionEditPage";
@@ -93,6 +97,10 @@ function App() {
           <Route path="/patients/:patientId/conditions/new" element={<ConditionCreatePage />} />
           <Route path="/patients/:patientId/conditions/:conditionId" element={<ConditionDetailPage />} />
           <Route path="/patients/:patientId/conditions/:conditionId/edit" element={<ConditionEditPage />} />
+          <Route path="/patients/:patientId/allergies" element={<AllergyListPage />} />
+          <Route path="/patients/:patientId/allergies/new" element={<AllergyCreatePage />} />
+          <Route path="/patients/:patientId/allergies/:allergyId" element={<AllergyDetailPage />} />
+          <Route path="/patients/:patientId/allergies/:allergyId/edit" element={<AllergyEditPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/questionnaires" element={<QuestionnaireListPage />} />
           <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />
