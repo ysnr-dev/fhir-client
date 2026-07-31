@@ -1,6 +1,7 @@
-import { Link, Navigate, Route, Routes } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes } from "react-router-dom";
 import "./App.css";
 import { AdminGate } from "./components/AdminGate";
+import { HoverMenu } from "./components/HoverMenu";
 import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
@@ -39,12 +40,20 @@ function App() {
           FHIR Client
         </Link>
         <nav className="app__nav">
-          <Link to="/patients">患者一覧</Link>
-          <Link to="/master-import">マスタ取込</Link>
-          <Link to="/questionnaires">テンプレート</Link>
-          <Link to="/report-layouts">帳票レイアウト</Link>
-          <Link to="/oauth-clients">OAuth クライアント</Link>
-          <Link to="/settings">接続設定</Link>
+          <NavLink to="/patients">患者一覧</NavLink>
+          <NavLink to="/questionnaires">テンプレート</NavLink>
+          <NavLink to="/report-layouts">帳票レイアウト</NavLink>
+          <HoverMenu label="管理">
+            <Link to="/master-import" className="row-menu__item">
+              マスタ取込
+            </Link>
+            <Link to="/oauth-clients" className="row-menu__item">
+              OAuth クライアント
+            </Link>
+            <Link to="/settings" className="row-menu__item">
+              接続設定
+            </Link>
+          </HoverMenu>
         </nav>
         <WakeButton />
       </header>

@@ -15,6 +15,7 @@
 
 .app__nav {
   display: flex;
+  align-items: baseline;
   gap: 16px;
 }
 
@@ -26,6 +27,33 @@
 
 .app__nav a:hover {
   color: var(--accent);
+}
+
+.app__nav a.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* nav 内の HoverMenu トリガーはリンクと同じ見た目にする */
+.app__nav .hover-menu__trigger {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  line-height: inherit;
+  color: var(--text);
+}
+
+.app__nav .hover-menu__trigger:hover,
+.app__nav .hover-menu__trigger[aria-expanded="true"] {
+  color: var(--accent);
+  background: transparent;
+}
+
+/* パネルはトリガー左端に揃える(row-menu__items のデフォルトは right: 0) */
+.app__nav .row-menu__items {
+  left: 0;
+  right: auto;
 }
 
 .app__title {
