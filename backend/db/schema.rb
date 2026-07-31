@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_07_31_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_01_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -108,6 +108,27 @@ ActiveRecord::Schema[8.0].define(version: 2026_07_31_000000) do
     t.index ["receipt_code_1"], name: "index_master_hot_codes_on_receipt_code_1"
     t.index ["sales_name"], name: "index_master_hot_codes_on_sales_name"
     t.index ["yakka_code"], name: "index_master_hot_codes_on_yakka_code"
+  end
+
+  create_table "master_jfagy_allergens", force: :cascade do |t|
+    t.string "display_seq"
+    t.string "jfagy_code", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.string "name_en"
+    t.string "level"
+    t.string "main_flag"
+    t.string "guideline"
+    t.string "cxg_category"
+    t.string "record_date"
+    t.string "end_date"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["jfagy_code"], name: "index_master_jfagy_allergens_on_jfagy_code", unique: true
+    t.index ["search_kana"], name: "index_master_jfagy_allergens_on_search_kana"
+    t.index ["search_name"], name: "index_master_jfagy_allergens_on_search_name"
   end
 
   create_table "master_lab_items", force: :cascade do |t|

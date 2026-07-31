@@ -5,7 +5,8 @@ export type MasterType =
   | "lab_items"
   | "diseases"
   | "modifiers"
-  | "disease_indexes";
+  | "disease_indexes"
+  | "jfagy_allergens";
 
 export interface MasterImportResult {
   imported: number;

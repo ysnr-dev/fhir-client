@@ -72,5 +72,9 @@ Rails.application.routes.draw do
     resources :disease_indexes, only: %i[index] do
       collection { post :import }
     end
+    # J-FAGYアレルゲンコードも検索専用(取込で全件洗い替え)のため CRUD は持たない。
+    resources :jfagy_allergens, only: %i[index] do
+      collection { post :import }
+    end
   end
 end

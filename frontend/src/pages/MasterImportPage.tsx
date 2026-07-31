@@ -53,6 +53,12 @@ const MASTER_OPTIONS: MasterOption[] = [
     formatHint: "ICD10対応標準病名マスター 索引テーブル index*.txt（Shift_JIS、ヘッダなし・9列）",
     accept: ".txt,.csv",
   },
+  {
+    type: "jfagy_allergens",
+    label: "J-FAGYアレルゲンマスタ",
+    formatHint: "J-FAGYコード表 JFAGY_*.csv（UTF-8、ヘッダあり・11列）",
+    accept: ".csv",
+  },
 ];
 
 export function MasterImportPage() {
