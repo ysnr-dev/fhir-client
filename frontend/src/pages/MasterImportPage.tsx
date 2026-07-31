@@ -93,21 +93,19 @@ export function MasterImportPage() {
         <h1>マスタ取込</h1>
       </div>
       <form className="master-import-form" onSubmit={handleSubmit}>
-        <fieldset>
-          <legend>マスタ種別</legend>
-          {MASTER_OPTIONS.map((option) => (
-            <label key={option.type} className="master-import-form__radio">
-              <input
-                type="radio"
-                name="masterType"
-                value={option.type}
-                checked={masterType === option.type}
-                onChange={() => handleMasterTypeChange(option.type)}
-              />
-              {option.label}
-            </label>
-          ))}
-        </fieldset>
+        <label>
+          マスタ種別
+          <select
+            value={masterType}
+            onChange={(e) => handleMasterTypeChange(e.target.value as MasterType)}
+          >
+            {MASTER_OPTIONS.map((option) => (
+              <option key={option.type} value={option.type}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <p className="master-import-form__hint">対応ファイル: {selected.formatHint}</p>
         <label>
           取込ファイル
