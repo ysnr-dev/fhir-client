@@ -32,6 +32,14 @@ export const SECTION_OPTIONS = [
 
 export type SectionCode = (typeof SECTION_OPTIONS)[number]["code"];
 
+// 自由記載モードで使う唯一のセクション。
+export const FREE_TEXT_SECTION_CODE = "77599-9" satisfies SectionCode;
+// SOAP モードの初期セクション。
+const SOAP_SECTION_CODES = ["61150-9", "61149-1", "51848-0", "18776-5"] as const;
+
+// 記載形式。SOAP は複数セクション、自由記載は 1 セクション(自由記載)のみ。
+export type ClinicalNoteMode = "soap" | "free";
+
 export function sectionTitle(code: string | undefined): string {
   return SECTION_OPTIONS.find((o) => o.code === code)?.title ?? "";
 }
@@ -58,6 +66,7 @@ export interface ClinicalNoteSectionDraft {
 }
 
 export interface ClinicalNoteFormValues {
+  mode: ClinicalNoteMode;
   title: string;
   status: "preliminary" | "final";
   // datetime-local 形式 "YYYY-MM-DDTHH:mm"
@@ -69,14 +78,22 @@ export function newSectionDraft(code: SectionCode): ClinicalNoteSectionDraft {
   return { uid: crypto.randomUUID(), code, html: "" };
 }
 
+// 記載形式ごとのセクション初期形。モード切替時はこれで作り直す
+// (入力済みの本文は引き継がない)。
+export function defaultSectionsForMode(mode: ClinicalNoteMode): ClinicalNoteSectionDraft[] {
+  return mode === "free"
+    ? [newSectionDraft(FREE_TEXT_SECTION_CODE)]
+    : SOAP_SECTION_CODES.map(newSectionDraft);
+}
+
 export function emptyClinicalNoteForm(): ClinicalNoteFormValues {
   return {
+    mode: "soap",
     // タイトルは必須(Composition.title 1..1)。毎回の入力を省けるよう既定値を入れておく。
     title: "診療記録",
     status: "final",
     date: toDateTimeInput(new Date()),
-    // SOAP 入力を既定形として S/O/A/P の 4 セクションを用意しておく(不要なら削除できる)
-    sections: (["61150-9", "61149-1", "51848-0", "18776-5"] as const).map(newSectionDraft),
+    sections: defaultSectionsForMode("soap"),
   };
 }
 
@@ -206,19 +223,24 @@ export function buildClinicalNote(
 
 export function parseClinicalNoteForm(composition: fhir4.Composition): ClinicalNoteFormValues {
   const knownCodes = new Set<string>(SECTION_OPTIONS.map((o) => o.code));
+  const sections = (composition.section ?? []).map((section) => {
+    const code = section.code?.coding?.find((c) => c.system === LOINC_SYSTEM)?.code;
+    return {
+      uid: crypto.randomUUID(),
+      // 未知コードは「自由記載」として編集を継続できるようにする(保存で正規化される)
+      code: (knownCodes.has(code ?? "") ? code : FREE_TEXT_SECTION_CODE) as SectionCode,
+      html: xhtmlToHtml(section.text?.div),
+    };
+  });
+
   return {
+    // 記載形式は保存されないので構成から復元する。自由記載セクション 1 つだけなら
+    // 自由記載モード、それ以外(複数セクション・SOAP 系コード)は SOAP モード。
+    mode: sections.length === 1 && sections[0].code === FREE_TEXT_SECTION_CODE ? "free" : "soap",
     title: composition.title ?? "",
     status: composition.status === "preliminary" ? "preliminary" : "final",
     date: toDateTimeInput(composition.date),
-    sections: (composition.section ?? []).map((section) => {
-      const code = section.code?.coding?.find((c) => c.system === LOINC_SYSTEM)?.code;
-      return {
-        uid: crypto.randomUUID(),
-        // 未知コードは「自由記載」として編集を継続できるようにする(保存で正規化される)
-        code: (knownCodes.has(code ?? "") ? code : "77599-9") as SectionCode,
-        html: xhtmlToHtml(section.text?.div),
-      };
-    }),
+    sections,
   };
 }
 

@@ -2591,6 +2591,53 @@ button:disabled {
   max-width: 880px;
 }
 
+/* 記載形式(SOAP / 自由記載)のラジオ。fieldset 内の他の項目と同じ縦位置に見えるよう、
+   見出しを他の label と同じ字送りにして下にラジオを並べる。 */
+.clinical-note-form__mode {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.clinical-note-form__mode-legend {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.clinical-note-form__mode-options {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  /* 他の入力欄と高さを揃える(input の padding 6px + border 相当)。 */
+  padding: 7px 0;
+}
+
+/* .patient-form label の縦積み(flex-direction: column)を上書きするため、
+   フォームのクラスまで含めて詳細度を上げる。 */
+.patient-form .clinical-note-form__mode-option {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+/* ラジオは .patient-form input の共通スタイル(枠付きの入力欄)を打ち消す。 */
+.patient-form .clinical-note-form__mode-option input[type="radio"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+/* 自由記載は 1 枚の本文を書くので、SOAP の各セクションより高さを取る。 */
+.clinical-note-form--free .rich-text-editor .ProseMirror {
+  min-height: 360px;
+}
+
 /* セクション一覧。.patient-form fieldset の横並びを打ち消して縦に積む
    (.practitioner-form__role と同じパターン)。 */
 .clinical-note-form__sections {
