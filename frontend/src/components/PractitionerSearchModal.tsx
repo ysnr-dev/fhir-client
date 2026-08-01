@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
 import {
-  useOrganizationSearch,
+  useOrganizationOptions,
   usePractitionerRoleSearch,
   usePractitionerSearch,
 } from "../api/queries";
@@ -44,29 +44,25 @@ export function PractitionerSearchModal({
   const [nameInput, setNameInput] = useState("");
   const [name, setName] = useState("");
   const [roleCode, setRoleCode] = useState(defaultRoleCode ?? "");
-  const [organizationFilter, setOrganizationFilter] = useState(true);
+  // null は「未操作」。グループで選択済みの医療機関を初期値にする。
+  const [organizationChoice, setOrganizationChoice] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
 
-  // 医療機関名しか分からない場合は、名称の完全一致で id を引き当てる
-  // (同名が複数あるときは絞り込まない)。
-  const resolveOrganization = useOrganizationSearch(
-    { name: organizationName },
-    0,
-    !organizationId && Boolean(organizationName),
-  );
-  const resolvedOrganizations = (resolveOrganization.bundle?.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Organization => Boolean(r))
-    .filter((o) => organizationDisplayName(o) === organizationName);
-  const knownOrganizationId =
-    organizationId ??
-    (resolvedOrganizations.length === 1 ? resolvedOrganizations[0].id : undefined);
+  const organizationOptions = useOrganizationOptions();
 
-  const effectiveOrganizationId = organizationFilter ? knownOrganizationId : undefined;
+  // 医療機関名しか分からない場合(保存済み回答を開いた直後)は、名称の完全一致で
+  // 引き当てる。同名が複数あるときは特定できないので絞り込まない。
+  const matchedByName = organizationOptions.organizations.filter(
+    (o) => organizationDisplayName(o) === organizationName,
+  );
+  const knownOrganizationId =
+    organizationId ?? (matchedByName.length === 1 ? matchedByName[0].id : undefined);
+
+  const effectiveOrganizationId = organizationChoice ?? knownOrganizationId ?? "";
   const filtered = Boolean(effectiveOrganizationId || roleCode);
 
   const roleSearch = usePractitionerRoleSearch(
-    { organizationId: effectiveOrganizationId, roleCode: roleCode || undefined },
+    { organizationId: effectiveOrganizationId || undefined, roleCode: roleCode || undefined },
     filtered,
   );
   const practitionerSearch = usePractitionerSearch({ name }, offset, !filtered);
@@ -128,36 +124,30 @@ export function PractitionerSearchModal({
             ))}
           </select>
         </label>
+        <label>
+          所属医療機関
+          <select
+            value={effectiveOrganizationId}
+            onChange={(e) => {
+              setOrganizationChoice(e.target.value);
+              setOffset(0);
+            }}
+          >
+            <option value="">すべて</option>
+            {organizationOptions.organizations.map((organization) => (
+              <option key={organization.id} value={organization.id}>
+                {organizationDisplayName(organization)}
+              </option>
+            ))}
+          </select>
+        </label>
         <button type="button" onClick={runSearch} disabled={isFetching}>
           検索
         </button>
       </div>
 
-      {organizationName && (
-        <p className="master-search__preset-hint">
-          {knownOrganizationId ? (
-            organizationFilter ? (
-              <>
-                所属医療機関「{organizationName}」の医療従事者だけを表示しています。
-                <button type="button" onClick={() => setOrganizationFilter(false)}>
-                  すべて表示
-                </button>
-              </>
-            ) : (
-              <>
-                すべての医療従事者を表示しています。
-                <button type="button" onClick={() => setOrganizationFilter(true)}>
-                  「{organizationName}」で絞り込む
-                </button>
-              </>
-            )
-          ) : (
-            <>選択済みの医療機関「{organizationName}」を特定できないため、絞り込んでいません。</>
-          )}
-        </p>
-      )}
-
       <ErrorBanner error={error} />
+      <ErrorBanner error={organizationOptions.error} />
 
       <div className="master-search__table-wrap">
         <table className="master-search__table">

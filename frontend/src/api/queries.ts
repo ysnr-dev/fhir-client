@@ -146,11 +146,7 @@ export interface OrganizationSearchParams {
 
 const ORGANIZATION_COUNT = 20;
 
-export function useOrganizationSearch(
-  search: OrganizationSearchParams,
-  offset: number,
-  enabled = true,
-) {
+export function useOrganizationSearch(search: OrganizationSearchParams, offset: number) {
   const params = new URLSearchParams();
   if (search.name) params.set("name", search.name);
   if (search.identifier) params.set("identifier", search.identifier);
@@ -161,7 +157,6 @@ export function useOrganizationSearch(
     queryKey: ["Organization", "search", search, offset],
     queryFn: () => searchResource<fhir4.Organization>("Organization", params),
     placeholderData: keepPreviousData,
-    enabled,
   });
 
   return {
@@ -171,6 +166,27 @@ export function useOrganizationSearch(
     count: ORGANIZATION_COUNT,
     hasPrevious: hasRelation(query.data?.data, "previous"),
     hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+// 選択肢用に医療機関をまとめて取得する(上流の _count 上限 100 まで。
+// それ以上の施設数は運用上想定しない)。
+export function useOrganizationOptions() {
+  const params = new URLSearchParams();
+  params.set("_count", "100");
+  params.set("_sort", "name");
+
+  const query = useQuery({
+    queryKey: ["Organization", "search", "options"],
+    queryFn: () => searchResource<fhir4.Organization>("Organization", params),
+  });
+
+  return {
+    ...query,
+    organizations:
+      query.data?.data.entry
+        ?.map((e) => e.resource)
+        .filter((r): r is fhir4.Organization => Boolean(r)) ?? [],
   };
 }
 
