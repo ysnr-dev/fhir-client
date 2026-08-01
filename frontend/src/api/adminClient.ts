@@ -246,8 +246,12 @@ export interface ReportLayoutPayload {
 
 const REPORT_LAYOUTS = "/admin/report_layouts";
 
-export async function fetchReportLayouts(): Promise<ReportLayoutSummary[]> {
-  const body = await adminJson<{ total: number; items: ReportLayoutSummary[] }>(REPORT_LAYOUTS);
+// canonical("url|version")を渡すと該当テンプレート分だけに絞り込む。
+export async function fetchReportLayouts(canonical?: string): Promise<ReportLayoutSummary[]> {
+  const query = canonical ? `?canonical=${encodeURIComponent(canonical)}` : "";
+  const body = await adminJson<{ total: number; items: ReportLayoutSummary[] }>(
+    `${REPORT_LAYOUTS}${query}`,
+  );
   return body.items;
 }
 

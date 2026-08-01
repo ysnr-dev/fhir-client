@@ -11,8 +11,11 @@ module Admin
 
     before_action :set_layout, only: %i[show update destroy]
 
+    # ?canonical=url|version で単一テンプレート分に絞り込める(エクスポート・
+    # インポートが全件取得 → find せずに済むように)。
     def index
       layouts = ReportLayout.order(:name, :id)
+      layouts = layouts.with_canonical(params[:canonical]) if params[:canonical].present?
       render json: {
         total: layouts.count,
         items: layouts.map { |layout| layout_summary(layout) }

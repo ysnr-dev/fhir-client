@@ -47,6 +47,36 @@ RSpec.describe "Admin::ReportLayouts", type: :request do
       expect(response.parsed_body["tlf"]).to eq(valid_tlf)
     end
 
+    it "filters by canonical (url|version)" do
+      layout = create_layout!
+      create_layout!(questionnaire_version: "2.0.0", name: "別バージョン")
+
+      get "/admin/report_layouts", params: { canonical: layout.canonical }
+
+      body = response.parsed_body
+      expect(body["total"]).to eq(1)
+      expect(body["items"].first["id"]).to eq(layout.id)
+    end
+
+    it "filters by a version-less canonical" do
+      versionless = create_layout!(questionnaire_version: "", name: "版なし")
+      create_layout!
+
+      get "/admin/report_layouts", params: { canonical: "http://example.com/Questionnaire/intake" }
+
+      body = response.parsed_body
+      expect(body["total"]).to eq(1)
+      expect(body["items"].first["id"]).to eq(versionless.id)
+    end
+
+    it "returns an empty list for an unregistered canonical" do
+      create_layout!
+
+      get "/admin/report_layouts", params: { canonical: "http://example.com/Questionnaire/other|1.0.0" }
+
+      expect(response.parsed_body["total"]).to eq(0)
+    end
+
     it "creates a layout" do
       post "/admin/report_layouts", params: valid_params, as: :json
 

@@ -13,13 +13,19 @@ class ReportLayout < ApplicationRecord
   validate :tlf_must_be_valid_layout
   validate :mapping_must_be_valid
 
-  # "url|version" (version 省略時は url のみ) からレイアウトを引く。
-  # canonical の一意性はテンプレート保存時に検証済みなので、この引き当ては一意になる。
-  def self.for_canonical(canonical)
+  # "url|version" (version 省略時は url のみ) で絞り込む。
+  scope :with_canonical, ->(canonical) {
     url, version = canonical.to_s.split("|", 2)
+    where(questionnaire_url: url, questionnaire_version: version.to_s)
+  }
+
+  # "url|version" からレイアウトを引く。canonical の一意性は上流のテンプレート
+  # 保存時に保証されるので、この引き当ては一意になる。
+  def self.for_canonical(canonical)
+    url, = canonical.to_s.split("|", 2)
     return nil if url.blank?
 
-    find_by(questionnaire_url: url, questionnaire_version: version.to_s)
+    with_canonical(canonical).first
   end
 
   def canonical

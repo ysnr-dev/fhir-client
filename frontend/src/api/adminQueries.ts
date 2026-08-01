@@ -134,7 +134,7 @@ export function useDeleteOauthClient() {
 export function useReportLayouts() {
   return useQuery({
     queryKey: REPORT_LAYOUTS_KEY,
-    queryFn: fetchReportLayouts,
+    queryFn: () => fetchReportLayouts(),
     retry: false,
   });
 }

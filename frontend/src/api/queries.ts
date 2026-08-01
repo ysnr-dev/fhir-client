@@ -905,7 +905,7 @@ export function useExportQuestionnaire() {
       const exported = await buildQuestionnaireExport(data);
 
       const canonical = questionnaireCanonical(data);
-      const summary = (await fetchReportLayouts()).find((l) => l.canonical === canonical);
+      const [summary] = await fetchReportLayouts(canonical);
       const layout = summary ? await fetchReportLayout(summary.id) : undefined;
       downloadQuestionnaireExport(
         buildTransferExport(
@@ -947,7 +947,7 @@ export function useImportQuestionnaire() {
       // に限られる → 上書きする。
       try {
         const canonical = questionnaireCanonical(result.data);
-        const existing = (await fetchReportLayouts()).find((l) => l.canonical === canonical);
+        const [existing] = await fetchReportLayouts(canonical);
         const payload = {
           name: reportLayout.name,
           questionnaire_url: result.data.url ?? "",
