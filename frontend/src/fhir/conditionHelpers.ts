@@ -89,11 +89,6 @@ export function conditionDisplayName(values: {
   ].join("");
 }
 
-function toDateTime(dateStr: string): string {
-  // fhir-server は Time.iso8601 でパースするため日付のみは不可。時刻0時固定で送る。
-  return `${dateStr}T00:00:00+09:00`;
-}
-
 function diseaseCodings(disease: Disease): fhir4.Coding[] {
   const codings: fhir4.Coding[] = [
     { system: DISEASE_KEY_NUMBER_SYSTEM, code: disease.management_number, display: disease.name },
@@ -161,8 +156,9 @@ export function buildCondition(
   };
 
   if (conditionId) condition.id = conditionId;
-  if (values.startDate) condition.onsetDateTime = toDateTime(values.startDate);
-  if (values.endDate) condition.abatementDateTime = toDateTime(values.endDate);
+  // FHIR の dateTime は日付のみ(YYYY-MM-DD)を許容し、fhir-server もそのまま受理する。
+  if (values.startDate) condition.onsetDateTime = values.startDate;
+  if (values.endDate) condition.abatementDateTime = values.endDate;
 
   return condition;
 }

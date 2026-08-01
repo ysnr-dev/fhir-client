@@ -103,11 +103,6 @@ function findSettingDisplay(code: string): string {
   return SETTING_OPTIONS.find((s) => s.code === code)?.display ?? code;
 }
 
-function authoredOnDateTime(dateStr: string): string {
-  // fhir-server は Time.iso8601 でパースするため日付のみは不可。時刻0時固定で送る。
-  return `${dateStr}T00:00:00+09:00`;
-}
-
 function buildMedicationRequest(
   rp: RpValues,
   medLine: MedicineLineValues,
@@ -219,7 +214,8 @@ function buildPrescriptionTransactionBundle(
   serviceRequestId?: string,
   originalMedicationRequestIds?: string[],
 ): fhir4.Bundle {
-  const authoredOn = authoredOnDateTime(values.authoredDate);
+  // FHIR の dateTime は日付のみ(YYYY-MM-DD)を許容し、fhir-server もそのまま受理する。
+  const authoredOn = values.authoredDate;
   const serviceRequestReference = serviceRequestId
     ? `ServiceRequest/${serviceRequestId}`
     : `urn:uuid:${crypto.randomUUID()}`;

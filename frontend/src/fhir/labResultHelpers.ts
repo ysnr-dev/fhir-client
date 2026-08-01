@@ -121,11 +121,6 @@ export function parseCodeValueList(list: string | null | undefined): CodeValueOp
     });
 }
 
-function effectiveDateTime(dateStr: string): string {
-  // fhir-server は Time.iso8601 でパースするため日付のみは不可。時刻0時固定で送る。
-  return `${dateStr}T00:00:00+09:00`;
-}
-
 // データタイプに応じた Observation.value[x]。
 // PQ: valueQuantity / CD・CO: valueCodeableConcept / ST(その他): valueString
 function buildObservationValue(line: LabResultLineValues): Partial<fhir4.Observation> {
@@ -291,7 +286,8 @@ function buildLabResultTransactionBundle(
   originalObservationIds?: string[],
   originalSpecimens?: SpecimenRef[],
 ): fhir4.Bundle {
-  const effective = effectiveDateTime(values.specimenDate);
+  // FHIR の dateTime は日付のみ(YYYY-MM-DD)を許容し、fhir-server もそのまま受理する。
+  const effective = values.specimenDate;
   const reportReference = reportId
     ? `DiagnosticReport/${reportId}`
     : `urn:uuid:${crypto.randomUUID()}`;

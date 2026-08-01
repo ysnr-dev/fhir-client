@@ -161,11 +161,6 @@ export function emptyAllergyForm(): AllergyFormValues {
   };
 }
 
-function toDateTime(dateStr: string): string {
-  // fhir-server は Time.iso8601 でパースするため日付のみは不可。時刻0時固定で送る。
-  return `${dateStr}T00:00:00+09:00`;
-}
-
 export function buildAllergy(
   values: AllergyFormValues,
   patientId: string,
@@ -210,8 +205,9 @@ export function buildAllergy(
   if (values.type) allergy.type = values.type;
   if (category) allergy.category = [category];
   if (values.criticality) allergy.criticality = values.criticality;
-  if (values.onsetDate) allergy.onsetDateTime = toDateTime(values.onsetDate);
-  if (values.recordedDate) allergy.recordedDate = toDateTime(values.recordedDate);
+  // FHIR の dateTime は日付のみ(YYYY-MM-DD)を許容し、fhir-server もそのまま受理する。
+  if (values.onsetDate) allergy.onsetDateTime = values.onsetDate;
+  if (values.recordedDate) allergy.recordedDate = values.recordedDate;
   if (values.reaction) allergy.reaction = [{ manifestation: [{ text: values.reaction }] }];
   if (values.note) allergy.note = [{ text: values.note }];
 
