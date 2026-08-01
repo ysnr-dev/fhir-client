@@ -32,8 +32,9 @@ interface PractitionerSearchModalProps {
 }
 
 // 職種・所属医療機関は PractitionerRole が持つため、絞り込みの有無で検索対象を変える。
-//   絞り込みあり: PractitionerRole を検索し _include で本体を取得(氏名は画面側で絞る)
-//   絞り込みなし: Practitioner を検索(氏名・医籍登録番号は上流で絞る)
+//   絞り込みあり: PractitionerRole を検索し _include で本体を取得
+//                (氏名もチェーン検索 practitioner.name:contains で上流に渡す)
+//   絞り込みなし: Practitioner を検索(職種・所属が未登録の医療従事者も出せる)
 export function PractitionerSearchModal({
   onSelect,
   onClose,
@@ -62,7 +63,12 @@ export function PractitionerSearchModal({
   const filtered = Boolean(effectiveOrganizationId || roleCode);
 
   const roleSearch = usePractitionerRoleSearch(
-    { organizationId: effectiveOrganizationId || undefined, roleCode: roleCode || undefined },
+    {
+      organizationId: effectiveOrganizationId || undefined,
+      roleCode: roleCode || undefined,
+      name: name || undefined,
+    },
+    offset,
     filtered,
   );
   const practitionerSearch = usePractitionerSearch({ name }, offset, !filtered);
@@ -79,21 +85,11 @@ export function PractitionerSearchModal({
     }
   }
 
-  // 絞り込み中は氏名を画面側で照合する(PractitionerRole に name 検索が無いため)。
-  const matchesName = (practitioner: fhir4.Practitioner) => {
-    if (!nameInput) return true;
-    const haystack = `${practitionerDisplayName(practitioner)}${practitionerDisplayKana(practitioner)}`;
-    return haystack.includes(nameInput);
-  };
-
-  const practitioners = filtered
-    ? roleSearch.practitioners.filter(matchesName)
-    : practitionerSearch.practitioners;
-  const roleByPractitioner = rolesByPractitionerId(
-    filtered ? roleSearch.roles : practitionerSearch.roles,
-  );
-  const isFetching = filtered ? roleSearch.isFetching : practitionerSearch.isFetching;
-  const error = filtered ? roleSearch.error : practitionerSearch.error;
+  const activeSearch = filtered ? roleSearch : practitionerSearch;
+  const practitioners = activeSearch.practitioners;
+  const roleByPractitioner = rolesByPractitionerId(activeSearch.roles);
+  const isFetching = activeSearch.isFetching;
+  const error = activeSearch.error;
 
   return (
     <Modal title="医療従事者を選択" onClose={onClose} className="modal--wide">
@@ -191,22 +187,15 @@ export function PractitionerSearchModal({
         </table>
       </div>
 
-      {filtered ? (
-        <p className="master-search__preset-hint">
-          {practitioners.length} 件
-          {roleSearch.truncated && "(候補が多いため一部のみ表示しています。職種や氏名で絞り込んでください)"}
-        </p>
-      ) : (
-        <Pagination
-          offset={offset}
-          count={practitionerSearch.count}
-          total={practitionerSearch.total}
-          hasPrevious={practitionerSearch.hasPrevious}
-          hasNext={practitionerSearch.hasNext}
-          onPrevious={() => setOffset((o) => Math.max(0, o - practitionerSearch.count))}
-          onNext={() => setOffset((o) => o + practitionerSearch.count)}
-        />
-      )}
+      <Pagination
+        offset={offset}
+        count={activeSearch.count}
+        total={activeSearch.total}
+        hasPrevious={activeSearch.hasPrevious}
+        hasNext={activeSearch.hasNext}
+        onPrevious={() => setOffset((o) => Math.max(0, o - activeSearch.count))}
+        onNext={() => setOffset((o) => o + activeSearch.count)}
+      />
     </Modal>
   );
 }

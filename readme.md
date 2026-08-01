@@ -421,8 +421,9 @@ valueCode     : name | kana | medicalRegistrationNumber | role | organizationNam
   （同名が複数あるときは初期値になりません）。
 - テンプレート側の **「職種の初期値」**（`…/questionnaire-practitioner-role-default`）を設定しておくと、
   職種プルダウンの初期値になります（例: 担当医師名の欄なら「医師」）。
-- 職種・所属で絞り込んでいる間は、氏名の絞り込みとページングを画面側で行います
-  （PractitionerRole に氏名の検索パラメータが無いため）。候補が 100 件を超える場合はその旨を表示します。
+- 職種・所属で絞り込んでいる間の氏名絞り込みは、1 段チェーン検索
+  `practitioner.name:contains=…`（カナを含む全 name 表現に一致）で上流に渡します。
+  ページングも他の検索と同様に効きます。
 
 ## 管理画面（接続設定 / OAuth クライアント）
 
