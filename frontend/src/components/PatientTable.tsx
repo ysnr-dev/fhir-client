@@ -44,7 +44,10 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
               <td>{patient.birthDate ?? "-"}</td>
               <td>{patient.active === false ? "無効" : "有効"}</td>
               <td className="patient-table__actions">
-                <HoverMenu label="診療記録">
+                <HoverMenu label="診療情報">
+                  <Link className="row-menu__item" to={`/patients/${patient.id}/clinical-notes`}>
+                    診療記録
+                  </Link>
                   <Link className="row-menu__item" to={`/patients/${patient.id}/prescriptions`}>
                     処方
                   </Link>

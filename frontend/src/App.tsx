@@ -12,6 +12,10 @@ import { AllergyCreatePage } from "./pages/AllergyCreatePage";
 import { AllergyDetailPage } from "./pages/AllergyDetailPage";
 import { AllergyEditPage } from "./pages/AllergyEditPage";
 import { AllergyListPage } from "./pages/AllergyListPage";
+import { ClinicalNoteCreatePage } from "./pages/ClinicalNoteCreatePage";
+import { ClinicalNoteDetailPage } from "./pages/ClinicalNoteDetailPage";
+import { ClinicalNoteEditPage } from "./pages/ClinicalNoteEditPage";
+import { ClinicalNoteListPage } from "./pages/ClinicalNoteListPage";
 import { ConditionCreatePage } from "./pages/ConditionCreatePage";
 import { ConditionDetailPage } from "./pages/ConditionDetailPage";
 import { ConditionEditPage } from "./pages/ConditionEditPage";
@@ -115,6 +119,10 @@ function App() {
           <Route path="/patients/:patientId/conditions/new" element={<ConditionCreatePage />} />
           <Route path="/patients/:patientId/conditions/:conditionId" element={<ConditionDetailPage />} />
           <Route path="/patients/:patientId/conditions/:conditionId/edit" element={<ConditionEditPage />} />
+          <Route path="/patients/:patientId/clinical-notes" element={<ClinicalNoteListPage />} />
+          <Route path="/patients/:patientId/clinical-notes/new" element={<ClinicalNoteCreatePage />} />
+          <Route path="/patients/:patientId/clinical-notes/:noteId" element={<ClinicalNoteDetailPage />} />
+          <Route path="/patients/:patientId/clinical-notes/:noteId/edit" element={<ClinicalNoteEditPage />} />
           <Route path="/patients/:patientId/allergies" element={<AllergyListPage />} />
           <Route path="/patients/:patientId/allergies/new" element={<AllergyCreatePage />} />
           <Route path="/patients/:patientId/allergies/:allergyId" element={<AllergyDetailPage />} />

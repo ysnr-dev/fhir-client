@@ -146,6 +146,17 @@ RSpec.describe "FhirProxy", type: :request do
         expect(response).to have_http_status(:ok)
       end
     end
+
+    it "allowlists Composition (診療記録機能)" do
+      stub_request(:get, "#{upstream_base}/Composition")
+        .with(query: { "subject" => "Patient/123" })
+        .to_return(status: 200, body: '{"resourceType":"Bundle"}',
+                   headers: { "Content-Type" => "application/fhir+json" })
+
+      get "/fhir/Composition?subject=Patient/123"
+
+      expect(response).to have_http_status(:ok)
+    end
   end
 
   describe "Binary (シェーマ画像)" do

@@ -11,6 +11,12 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
+    "@tiptap/extension-image": "^3.29.2",
+    "@tiptap/extension-text-style": "^3.29.2",
+    "@tiptap/pm": "^3.29.2",
+    "@tiptap/react": "^3.29.2",
+    "@tiptap/starter-kit": "^3.29.2",
+    "dompurify": "^3.4.12",
     "fhirpath": "^5.0.0",
     "highlight.js": "^11.11.1",
     "react": "^19.2.7",
