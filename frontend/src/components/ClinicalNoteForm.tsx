@@ -4,10 +4,13 @@ import {
   isEmptyNoteHtml,
   newSectionDraft,
   SECTION_OPTIONS,
+  templateHtml,
   type ClinicalNoteFormValues,
   type ClinicalNoteMode,
+  type ClinicalNoteTemplateDraft,
   type SectionCode,
 } from "../fhir/clinicalNoteHelpers";
+import { ClinicalNoteTemplateModal } from "./ClinicalNoteTemplateModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { RichTextEditor } from "./RichTextEditor";
 
@@ -16,6 +19,8 @@ import { RichTextEditor } from "./RichTextEditor";
 // 自由記載(1 セクションのみ)をラジオで切り替える。
 
 interface ClinicalNoteFormProps {
+  // テンプレート記入モーダルが患者リソースと初期値式コンテキストを引くのに使う。
+  patientId: string;
   initialValues: ClinicalNoteFormValues;
   // 確定(final)・修正済み(amended)の編集ではステータス選択を出さない(保存で amended 固定)。
   statusLocked?: boolean;
@@ -27,6 +32,7 @@ interface ClinicalNoteFormProps {
 }
 
 export function ClinicalNoteForm({
+  patientId,
   initialValues,
   statusLocked = false,
   onSubmit,
@@ -38,6 +44,8 @@ export function ClinicalNoteForm({
   const [values, setValues] = useState<ClinicalNoteFormValues>(initialValues);
   // セクション追加セレクトの選択値(追加ボタンを押すまで反映しない)
   const [addCode, setAddCode] = useState<SectionCode>(SECTION_OPTIONS[0].code);
+  // テンプレート記入モーダルを開いているセクションの uid。
+  const [templateTarget, setTemplateTarget] = useState<string | null>(null);
 
   function update<K extends keyof ClinicalNoteFormValues>(key: K, value: ClinicalNoteFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -76,14 +84,34 @@ export function ClinicalNoteForm({
     setValues((v) => ({ ...v, mode, sections: defaultSectionsForMode(mode) }));
   }
 
+  // テンプレート記入モーダルの登録。回答の平文をセクション本文に反映し、
+  // 以後このセクションは直接編集不可(テンプレートからのみ編集)にする。
+  function applyTemplate(uid: string, draft: ClinicalNoteTemplateDraft) {
+    setValues((v) => ({
+      ...v,
+      sections: v.sections.map((s) =>
+        s.uid === uid
+          ? {
+              ...s,
+              html: templateHtml(draft.questionnaire, draft.response),
+              template: { responseId: s.template?.responseId ?? null, draft },
+            }
+          : s,
+      ),
+    }));
+    setTemplateTarget(null);
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     onSubmit(values);
   }
 
   const isSoap = values.mode === "soap";
+  const templateSection = values.sections.find((s) => s.uid === templateTarget);
 
   return (
+    <>
     <form
       className={`patient-form clinical-note-form${isSoap ? "" : " clinical-note-form--free"}`}
       onSubmit={handleSubmit}
@@ -164,8 +192,27 @@ export function ClinicalNoteForm({
             {/* セクション種別・並べ替え・削除はエディタの操作バーに同居させる
                 (枠を入れ子にしないため)。自由記載は 1 セクション固定なので出さない。 */}
             <RichTextEditor
+              // エディタは非制御なので、テンプレート反映で本文が外から変わったら
+              // key を変えて作り直す(authored は記入のたびに更新される)。
+              key={`${section.uid}:${section.template?.draft?.response.authored ?? (section.template ? "saved" : "plain")}`}
               initialHtml={section.html}
               onChange={(html) => updateSection(section.uid, { html })}
+              // テンプレート由来の本文は直接編集させない(回答との差異を防ぐ)。
+              editable={!section.template}
+              actions={
+                <button
+                  type="button"
+                  className="rich-text-editor__tool"
+                  title={
+                    section.template
+                      ? "テンプレートから再編集"
+                      : "テンプレートで記載(以後この本文はテンプレートからのみ編集)"
+                  }
+                  onClick={() => setTemplateTarget(section.uid)}
+                >
+                  {section.template ? "テンプレート編集" : "テンプレート"}
+                </button>
+              }
               leading={
                 isSoap ? (
                   <select
@@ -239,5 +286,18 @@ export function ClinicalNoteForm({
         </button>
       </div>
     </form>
+
+    {/* モーダル内の QuestionnaireResponseForm は独自の <form> を持つため、
+        外側フォームの子孫に置かない(form の入れ子は不正で、送信が外へ漏れる)。 */}
+    {templateSection && (
+      <ClinicalNoteTemplateModal
+        patientId={patientId}
+        draft={templateSection.template?.draft ?? null}
+        responseId={templateSection.template?.responseId ?? null}
+        onSubmit={(draft) => applyTemplate(templateSection.uid, draft)}
+        onClose={() => setTemplateTarget(null)}
+      />
+    )}
+    </>
   );
 }

@@ -19,6 +19,11 @@ interface RichTextEditorProps {
   // 呼び出し側が別の枠を作らずに済むよう、同じバーへ同居させるための口。
   leading?: ReactNode;
   trailing?: ReactNode;
+  // 画像ボタンの右に差し込む追加ボタン(テンプレート記載など)。
+  actions?: ReactNode;
+  // false で本文を読み取り専用にする(テンプレート由来セクション)。
+  // 装飾・画像ボタンも隠す。マウント後の切替は想定しない(呼び出し側が key で作り直す)。
+  editable?: boolean;
 }
 
 // SchemaImageAnnotator の PEN_COLORS と同じパレット(アプリ内で装飾色を統一する)。
@@ -34,7 +39,14 @@ const FONT_SIZES = [
   { value: "24px", label: "特大" },
 ] as const;
 
-export function RichTextEditor({ initialHtml, onChange, leading, trailing }: RichTextEditorProps) {
+export function RichTextEditor({
+  initialHtml,
+  onChange,
+  leading,
+  trailing,
+  actions,
+  editable = true,
+}: RichTextEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   // 装飾は使う機会が限られるため既定では畳んでおく。セクションが複数並ぶ画面で
   // ツールバーが場所を取り、本文が見渡しにくくなるのを避ける。
@@ -50,6 +62,7 @@ export function RichTextEditor({ initialHtml, onChange, leading, trailing }: Ric
       Image.configure({ allowBase64: true, inline: false }),
     ],
     content: initialHtml,
+    editable,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
   });
 
@@ -86,34 +99,39 @@ export function RichTextEditor({ initialHtml, onChange, leading, trailing }: Ric
           パネルを開いたときに出す。 */}
       <div className="rich-text-editor__bar">
         {leading}
-        <button
-          type="button"
-          className={`rich-text-editor__tool${toolbarOpen ? " is-active" : ""}`}
-          title="文字装飾パネルの表示切替"
-          aria-expanded={toolbarOpen}
-          onClick={() => setToolbarOpen((open) => !open)}
-        >
-          装飾 {toolbarOpen ? "▲" : "▼"}
-        </button>
-        <button
-          type="button"
-          className="rich-text-editor__tool"
-          title="画像を挿入"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          画像
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={(e) => void handleImageSelect(e.target.files?.[0])}
-        />
+        {editable && (
+          <>
+            <button
+              type="button"
+              className={`rich-text-editor__tool${toolbarOpen ? " is-active" : ""}`}
+              title="文字装飾パネルの表示切替"
+              aria-expanded={toolbarOpen}
+              onClick={() => setToolbarOpen((open) => !open)}
+            >
+              装飾 {toolbarOpen ? "▲" : "▼"}
+            </button>
+            <button
+              type="button"
+              className="rich-text-editor__tool"
+              title="画像を挿入"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              画像
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => void handleImageSelect(e.target.files?.[0])}
+            />
+          </>
+        )}
+        {actions}
         {trailing}
       </div>
 
-      {toolbarOpen && editor && (
+      {toolbarOpen && editable && editor && (
         <div className="rich-text-editor__toolbar" role="toolbar">
           <button
             type="button"

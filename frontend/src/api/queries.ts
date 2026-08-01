@@ -801,12 +801,22 @@ export function useClinicalNote(id: string | undefined) {
   });
 }
 
+// entries はテンプレート記載の QuestionnaireResponse(とそのシェーマ画像 Binary)。
+// 診療記録本体と同じ transaction Bundle で保存する — 先行 POST すると本体を
+// 保存しなかったときに QR だけが孤児として残るため(saveWithImages と同じ設計)。
 export function useCreateClinicalNote() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (composition: fhir4.Composition) => createResource(composition),
+    mutationFn: ({
+      composition,
+      entries,
+    }: {
+      composition: fhir4.Composition;
+      entries: fhir4.BundleEntry[];
+    }) => saveWithImages(composition, entries),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Composition", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
     },
   });
 }
@@ -814,11 +824,19 @@ export function useCreateClinicalNote() {
 export function useUpdateClinicalNote() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ composition, etag }: { composition: fhir4.Composition; etag: string }) =>
-      updateResource(composition, etag),
+    mutationFn: ({
+      composition,
+      entries,
+      etag,
+    }: {
+      composition: fhir4.Composition;
+      entries: fhir4.BundleEntry[];
+      etag: string;
+    }) => saveWithImages(composition, entries, etag),
     onSuccess: (result: FhirResult<fhir4.Composition>) => {
       queryClient.invalidateQueries({ queryKey: ["Composition", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Composition", result.data.id] });
+      queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse"] });
     },
   });
 }

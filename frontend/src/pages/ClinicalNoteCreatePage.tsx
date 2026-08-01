@@ -33,6 +33,8 @@ export function ClinicalNoteCreatePage() {
     });
   }
 
+  if (!patientId) return null;
+
   return (
     <div className="page">
       <div className="page__header">
@@ -45,6 +47,7 @@ export function ClinicalNoteCreatePage() {
       <PatientHeader patientId={patientId} />
 
       <ClinicalNoteForm
+        patientId={patientId}
         initialValues={emptyClinicalNoteForm()}
         onSubmit={handleSubmit}
         submitting={createNote.isPending}

@@ -74,7 +74,7 @@ function EditForm({
     setValidationError(null);
     setConflict(false);
     updateNote.mutate(
-      { composition: buildClinicalNote(values, { patientId, existing: note }), etag },
+      { ...buildClinicalNote(values, { patientId, existing: note }), etag },
       {
         onSuccess: () => navigate(`/patients/${patientId}/clinical-notes`),
         onError: (err) => {
@@ -101,6 +101,7 @@ function EditForm({
         </p>
       )}
       <ClinicalNoteForm
+        patientId={patientId}
         initialValues={initialValues}
         statusLocked={statusLocked}
         onSubmit={handleSubmit}
