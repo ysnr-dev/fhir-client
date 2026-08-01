@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuestionnaireOptions, useQuestionnaireResponseSearch } from "../api/queries";
+import { useQuestionnaireResponseSearch } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Pagination } from "../components/Pagination";
 import { PatientHeader } from "../components/PatientHeader";
@@ -11,15 +11,10 @@ export function QuestionnaireResponseListPage() {
   const { patientId } = useParams<{ patientId: string }>();
   const [offset, setOffset] = useState(0);
 
-  const { bundle, total, count, hasPrevious, hasNext, isLoading, error } =
+  const { responses, questionnaires, total, count, hasPrevious, hasNext, isLoading, error } =
     useQuestionnaireResponseSearch(patientId, offset);
-  const responses =
-    bundle?.entry
-      ?.map((e) => e.resource)
-      .filter((r): r is fhir4.QuestionnaireResponse => Boolean(r)) ?? [];
 
-  // canonical からテンプレートタイトルを引くための対応表。
-  const { questionnaires } = useQuestionnaireOptions();
+  // canonical からテンプレートタイトルを引くための対応表(_include で同時取得した分)。
   const titleByCanonical = new Map(
     questionnaires.map((q) => [questionnaireCanonical(q), q.title ?? q.name ?? ""]),
   );

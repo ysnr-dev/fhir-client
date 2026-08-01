@@ -813,33 +813,8 @@ export function useDeleteAllergy() {
 
 const QUESTIONNAIRE_COUNT = 20;
 
-// QuestionnaireResponse はテンプレートを canonical("<url>|<version>")だけで参照する。
-// 同じ url + version のテンプレートが複数あると、登録済みの回答がどちらのものか
-// 判別できず、一覧に別テンプレート名が出たり、表示時に別テンプレートの構造で
-// 解釈されて回答が欠落する。保存前に上流を検索して重複を弾く。
-// (version 未設定なら canonical は url だけになるので、同じ url すべてが衝突する)
-async function assertQuestionnaireCanonicalUnique(questionnaire: fhir4.Questionnaire) {
-  if (!questionnaire.url) return;
-
-  const params = new URLSearchParams();
-  params.set("url", questionnaire.url);
-  if (questionnaire.version) params.set("version", questionnaire.version);
-  params.set("_elements", "id");
-
-  const { data: bundle } = await searchResource<fhir4.Questionnaire>("Questionnaire", params);
-  const duplicated = bundle.entry?.some(
-    (entry) => entry.resource?.id && entry.resource.id !== questionnaire.id,
-  );
-  if (!duplicated) return;
-
-  const canonical = questionnaire.version
-    ? `URL「${questionnaire.url}」・バージョン「${questionnaire.version}」`
-    : `URL「${questionnaire.url}」`;
-  throw new Error(
-    `${canonical}は既に別のテンプレートで使われています。URL かバージョンを変更してください。`,
-  );
-}
-
+// canonical (url, version) の一意性は上流の Questionnaire バリデーション + DB 制約が
+// 保証する(重複時は 422 / issue code: duplicate。和訳は fhir/outcome.ts)。
 export function useQuestionnaireSearch(offset: number) {
   const params = new URLSearchParams();
   params.set("_count", String(QUESTIONNAIRE_COUNT));
@@ -881,7 +856,6 @@ export function useCreateQuestionnaire() {
       questionnaire: fhir4.Questionnaire;
       imageEntries?: fhir4.BundleEntry[];
     }) => {
-      await assertQuestionnaireCanonicalUnique(questionnaire);
       return saveWithImages(questionnaire, imageEntries);
     },
     onSuccess: () => {
@@ -902,7 +876,6 @@ export function useUpdateQuestionnaire() {
       etag: string;
       imageEntries?: fhir4.BundleEntry[];
     }) => {
-      await assertQuestionnaireCanonicalUnique(questionnaire);
       return saveWithImages(questionnaire, imageEntries, etag);
     },
     onSuccess: (result: FhirResult<fhir4.Questionnaire>) => {
@@ -946,7 +919,7 @@ export interface ImportQuestionnaireResult {
 }
 
 // エクスポートファイルを取り込んで新しいテンプレートとして保存する。
-// 保存は新規作成と同じ経路(canonical 重複検証 → 画像込み transaction Bundle)。
+// 保存は新規作成と同じ経路(画像込み transaction Bundle。canonical 重複は上流が 422 で弾く)。
 // 帳票レイアウトが同梱されていれば report_layouts へも登録する。
 export function useImportQuestionnaire() {
   const queryClient = useQueryClient();
@@ -955,14 +928,14 @@ export function useImportQuestionnaire() {
       const { values, reportLayout, layoutWarning } = parseTransferImport(await file.text());
       const { items, entries } = collectPendingImageEntries(values.items);
       const questionnaire = buildQuestionnaire({ ...values, items });
-      await assertQuestionnaireCanonicalUnique(questionnaire);
       const result = await saveWithImages(questionnaire, entries);
       if (!reportLayout) return { result, layoutStatus: "none", layoutWarning };
 
       // テンプレート本体(上流)が主、レイアウト(backend DB)は従。レイアウト側の
       // 失敗でインポート全体を失敗にせず、手動登録のフォールバックを案内する。
-      // canonical の重複は上で検証済みなので、同じ canonical のレイアウトが既に
-      // あるのは「上流にテンプレートが無い孤児レコード」に限られる → 上書きする。
+      // canonical の一意性は上流の保存(422/duplicate)が保証するので、保存が通った
+      // 時点で同じ canonical のレイアウトは「上流にテンプレートが無い孤児レコード」
+      // に限られる → 上書きする。
       try {
         const canonical = questionnaireCanonical(result.data);
         const existing = (await fetchReportLayouts()).find((l) => l.canonical === canonical);
@@ -1060,17 +1033,29 @@ export function useQuestionnaireResponseSearch(patientId: string | undefined, of
   params.set("_offset", String(offset));
   // 記入日時の降順(新しい順)。
   params.set("_sort", "-authored");
+  // タイトル表示用の元テンプレートを同じレスポンスで受け取る(canonical を解決する _include)。
+  params.set("_include", "QuestionnaireResponse:questionnaire");
 
   const query = useQuery({
     queryKey: ["QuestionnaireResponse", "search", patientId, offset],
-    queryFn: () => searchResource<fhir4.QuestionnaireResponse>("QuestionnaireResponse", params),
+    queryFn: () => searchResource<fhir4.Resource>("QuestionnaireResponse", params),
     placeholderData: keepPreviousData,
     enabled: Boolean(patientId),
   });
 
+  // _include の Questionnaire も entry に混ざって返るため resourceType で分ける。
+  const resources = query.data?.data.entry?.map((e) => e.resource) ?? [];
+  const responses = resources.filter(
+    (r): r is fhir4.QuestionnaireResponse => r?.resourceType === "QuestionnaireResponse",
+  );
+  const questionnaires = resources.filter(
+    (r): r is fhir4.Questionnaire => r?.resourceType === "Questionnaire",
+  );
+
   return {
     ...query,
-    bundle: query.data?.data,
+    responses,
+    questionnaires,
     total: query.data?.data.total ?? 0,
     count: QUESTIONNAIRE_RESPONSE_COUNT,
     hasPrevious: hasRelation(query.data?.data, "previous"),
@@ -1084,6 +1069,39 @@ export function useQuestionnaireResponse(id: string | undefined) {
     queryFn: () => readResource<fhir4.QuestionnaireResponse>("QuestionnaireResponse", id as string),
     enabled: Boolean(id),
   });
+}
+
+// テンプレート表示用に QuestionnaireResponse と元テンプレートを 1 リクエストで取得する
+// (canonical を解決する _include=QuestionnaireResponse:questionnaire)。
+// 削除済みは read の 410 と違い空の Bundle になる(response が undefined のまま)。
+// 編集画面は If-Match 用の ETag が要るため read(useQuestionnaireResponse)を使い続ける。
+export function useQuestionnaireResponseWithQuestionnaire(id: string | undefined) {
+  const query = useQuery({
+    queryKey: ["QuestionnaireResponse", id, "withQuestionnaire"],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("_id", id as string);
+      params.set("_include", "QuestionnaireResponse:questionnaire");
+      const { data: bundle } = await searchResource<fhir4.Resource>("QuestionnaireResponse", params);
+      const resources = bundle.entry?.map((e) => e.resource) ?? [];
+      return {
+        response:
+          resources.find(
+            (r): r is fhir4.QuestionnaireResponse => r?.resourceType === "QuestionnaireResponse",
+          ) ?? null,
+        questionnaire:
+          resources.find((r): r is fhir4.Questionnaire => r?.resourceType === "Questionnaire") ??
+          null,
+      };
+    },
+    enabled: Boolean(id),
+  });
+
+  return {
+    ...query,
+    response: query.data?.response ?? undefined,
+    questionnaire: query.data?.questionnaire ?? undefined,
+  };
 }
 
 // テンプレート回答フォームの初期値式(%conditions / %labResults / %prescriptions)の

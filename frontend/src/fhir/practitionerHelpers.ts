@@ -77,13 +77,10 @@ export function buildPractitioner(values: PractitionerValues, id?: string): fhir
   if (names.length) practitioner.name = names;
 
   if (values.medicalRegistrationNumber) {
+    // プロファイル上の置き場所は qualification。上流は qualification[].identifier も
+    // identifier 検索の索引に含めるため、トップレベルへの二重書きは不要。
     practitioner.qualification = [
       medicalRegistrationQualification(values.medicalRegistrationNumber),
-    ];
-    // 上流の identifier 検索はトップレベルの identifier しか索引しないため、
-    // プロファイル上の置き場所(qualification)に加えてこちらにも同じ値を書く。
-    practitioner.identifier = [
-      { system: MEDICAL_REGISTRATION_NUMBER_SYSTEM, value: values.medicalRegistrationNumber },
     ];
   }
 

@@ -222,10 +222,10 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   エクスポート時に `valueAttachment.data`(base64)として埋め込みます。サーバー固有の `id` /
   `meta.versionId` / `meta.lastUpdated` は含めません(`meta.profile` は保持)。
 - **インポートは新規作成と同じ経路**: ファイルを編集フォームの中間表現に変換して検証
-  (JASPEHR 制約)した上で、canonical(url + version)の重複検証 → 画像 `Binary` と本体を
-  1 つの transaction Bundle で保存、という新規作成と同じ流れで取り込みます。同じ url + version の
-  テンプレートが既にあるとエラーになります(取り込みたい場合は既存側を削除するか、ファイルの
-  `url` / `version` を変更してください)。
+  (JASPEHR 制約)した上で、画像 `Binary` と本体を 1 つの transaction Bundle で保存、という
+  新規作成と同じ流れで取り込みます。canonical(url + version)の一意性は上流 fhir-server の
+  バリデーション + DB 制約が保証し、同じ url + version のテンプレートが既にあると 422 エラーに
+  なります(取り込みたい場合は既存側を削除するか、ファイルの `url` / `version` を変更してください)。
 - エディタが扱わない要素・拡張はインポート時に失われます(本アプリで作成したテンプレートの
   移行を前提とします)。
 
@@ -377,9 +377,9 @@ valueCode     : name | institutionNumber | addressFull | address | postalCode | 
 
 - JP Core 上、Practitioner に必須項目はありません（`gender` / `birthDate` は値がある場合だけ書式検証）。
   画面では氏名（漢字）の姓・名いずれかを必須にしています。
-- **医籍登録番号は `qualification` と `identifier` の両方に書きます**。JP Core が指定する置き場所は
-  `qualification` ですが、上流の `identifier` 検索はトップレベルの `identifier` しか索引しないため、
-  番号での検索が効くよう同じ値を両方に持たせています（読み出しは `qualification` を優先）。
+- 医籍登録番号は JP Core が指定する置き場所どおり `qualification` にのみ書きます。上流の `identifier`
+  検索は `qualification[].identifier` も索引するため、番号での検索はそのまま効きます（読み出しは
+  `qualification` を優先し、他システム由来のデータのためにトップレベル `identifier` もフォールバックで見ます）。
 - 検索は氏名（漢字・カナの部分一致）と医籍登録番号。更新は他画面と同じく `If-Match` による楽観ロックです。
 - 上流 FHIR サーバーを直接操作するため、backend の管理API（`ADMIN_TOKEN`）の対象外です。
 

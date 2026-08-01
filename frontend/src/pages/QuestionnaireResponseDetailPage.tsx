@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuestionnaireByCanonical, useQuestionnaireResponse } from "../api/queries";
+import { useQuestionnaireResponseWithQuestionnaire } from "../api/queries";
 import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { JsonBlock } from "../components/JsonBlock";
@@ -16,14 +16,9 @@ export function QuestionnaireResponseDetailPage() {
   const { patientId, qrId } = useParams<{ patientId: string; qrId: string }>();
   const [plainTextOpen, setPlainTextOpen] = useState(false);
 
-  const { data: result, isLoading, error } = useQuestionnaireResponse(qrId);
-  const response = result?.data;
-
-  const {
-    questionnaire,
-    isLoading: questionnaireLoading,
-    error: questionnaireError,
-  } = useQuestionnaireByCanonical(response?.questionnaire);
+  // 回答と元テンプレートを _include で 1 リクエスト取得する。
+  const { response, questionnaire, isLoading, error } =
+    useQuestionnaireResponseWithQuestionnaire(qrId);
 
   const summary = response ? summarizeQuestionnaireResponse(response) : undefined;
 
@@ -78,10 +73,11 @@ export function QuestionnaireResponseDetailPage() {
       <PatientHeader patientId={patientId} />
 
       <ErrorBanner error={error} />
-      <ErrorBanner error={questionnaireError} />
 
-      {isLoading || questionnaireLoading ? (
+      {isLoading ? (
         <p>読み込み中...</p>
+      ) : !response && !error ? (
+        <p className="patient-table__empty">この回答は見つかりません(削除された可能性があります)。</p>
       ) : response && !questionnaire ? (
         <p className="patient-table__empty">
           元テンプレート({response.questionnaire})が見つからないため、内容を表示できません。
