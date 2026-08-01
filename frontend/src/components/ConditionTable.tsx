@@ -7,9 +7,11 @@ import { RowMenu } from "./RowMenu";
 interface ConditionTableProps {
   conditions: fhir4.Condition[];
   patientId: string;
+  /** 指定するとページ遷移せずこのコールバックで編集する(カルテ画面の左ペイン用)。 */
+  onEdit?: (conditionId: string) => void;
 }
 
-export function ConditionTable({ conditions, patientId }: ConditionTableProps) {
+export function ConditionTable({ conditions, patientId, onEdit }: ConditionTableProps) {
   const deleteCondition = useDeleteCondition();
 
   function handleDelete(conditionId: string | undefined, name: string) {
@@ -45,16 +47,28 @@ export function ConditionTable({ conditions, patientId }: ConditionTableProps) {
                 <td>{summary.endDate || "-"}</td>
                 <td>{summary.outcomeDisplay || "-"}</td>
                 <td className="patient-table__actions">
-                  <Link className="button" to={`/patients/${patientId}/conditions/${summary.id}`}>
-                    表示
-                  </Link>
-                  <RowMenu label={`${summary.name} の操作`}>
-                    <Link
-                      className="row-menu__item"
-                      to={`/patients/${patientId}/conditions/${summary.id}/edit`}
-                    >
-                      編集
+                  {!onEdit && (
+                    <Link className="button" to={`/patients/${patientId}/conditions/${summary.id}`}>
+                      表示
                     </Link>
+                  )}
+                  <RowMenu label={`${summary.name} の操作`}>
+                    {onEdit ? (
+                      <button
+                        type="button"
+                        className="row-menu__item"
+                        onClick={() => onEdit(summary.id)}
+                      >
+                        編集
+                      </button>
+                    ) : (
+                      <Link
+                        className="row-menu__item"
+                        to={`/patients/${patientId}/conditions/${summary.id}/edit`}
+                      >
+                        編集
+                      </Link>
+                    )}
                     <button
                       type="button"
                       className="row-menu__item row-menu__item--danger"

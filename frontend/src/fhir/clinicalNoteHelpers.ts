@@ -346,7 +346,7 @@ export function buildClinicalNoteDeleteBundle(
 }
 
 // Composition のセクション拡張が参照している保存済み QR の id 一覧。
-function referencedResponseIds(composition: fhir4.Composition | undefined): string[] {
+export function referencedResponseIds(composition: fhir4.Composition | undefined): string[] {
   return (composition?.section ?? []).flatMap((section) => {
     const ref = section.extension?.find((e) => e.url === SECTION_QR_EXT_URL)?.valueReference
       ?.reference;

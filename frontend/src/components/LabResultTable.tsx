@@ -7,9 +7,11 @@ import { RowMenu } from "./RowMenu";
 interface LabResultTableProps {
   reports: fhir4.DiagnosticReport[];
   patientId: string;
+  /** 指定するとページ遷移せずこのコールバックで編集する(カルテ画面の左ペイン用)。 */
+  onEdit?: (reportId: string) => void;
 }
 
-export function LabResultTable({ reports, patientId }: LabResultTableProps) {
+export function LabResultTable({ reports, patientId, onEdit }: LabResultTableProps) {
   const deleteLabResult = useDeleteLabResult();
 
   function handleDelete(reportId: string | undefined) {
@@ -43,16 +45,28 @@ export function LabResultTable({ reports, patientId }: LabResultTableProps) {
                 <td>{summary.settingDisplay}</td>
                 <td>{summary.itemCount}</td>
                 <td className="patient-table__actions">
-                  <Link className="button" to={`/patients/${patientId}/lab-results/${summary.id}`}>
-                    表示
-                  </Link>
-                  <RowMenu label={`${summary.date} の検査結果の操作`}>
-                    <Link
-                      className="row-menu__item"
-                      to={`/patients/${patientId}/lab-results/${summary.id}/edit`}
-                    >
-                      編集
+                  {!onEdit && (
+                    <Link className="button" to={`/patients/${patientId}/lab-results/${summary.id}`}>
+                      表示
                     </Link>
+                  )}
+                  <RowMenu label={`${summary.date} の検査結果の操作`}>
+                    {onEdit ? (
+                      <button
+                        type="button"
+                        className="row-menu__item"
+                        onClick={() => onEdit(summary.id)}
+                      >
+                        編集
+                      </button>
+                    ) : (
+                      <Link
+                        className="row-menu__item"
+                        to={`/patients/${patientId}/lab-results/${summary.id}/edit`}
+                      >
+                        編集
+                      </Link>
+                    )}
                     <button
                       type="button"
                       className="row-menu__item row-menu__item--danger"
