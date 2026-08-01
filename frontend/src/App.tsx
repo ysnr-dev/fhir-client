@@ -22,6 +22,9 @@ import { LabResultDetailPage } from "./pages/LabResultDetailPage";
 import { LabResultEditPage } from "./pages/LabResultEditPage";
 import { LabResultListPage } from "./pages/LabResultListPage";
 import { LabResultTimelinePage } from "./pages/LabResultTimelinePage";
+import { OrganizationCreatePage } from "./pages/OrganizationCreatePage";
+import { OrganizationEditPage } from "./pages/OrganizationEditPage";
+import { OrganizationListPage } from "./pages/OrganizationListPage";
 import { PrescriptionCreatePage } from "./pages/PrescriptionCreatePage";
 import { PrescriptionDetailPage } from "./pages/PrescriptionDetailPage";
 import { PrescriptionEditPage } from "./pages/PrescriptionEditPage";
@@ -48,6 +51,9 @@ function App() {
           <NavLink to="/questionnaires">テンプレート</NavLink>
           <NavLink to="/report-layouts">帳票レイアウト</NavLink>
           <HoverMenu label="管理">
+            <Link to="/organizations" className="row-menu__item">
+              医療機関
+            </Link>
             <Link to="/master-import" className="row-menu__item">
               マスタ取込
             </Link>
@@ -101,6 +107,11 @@ function App() {
           <Route path="/patients/:patientId/allergies/new" element={<AllergyCreatePage />} />
           <Route path="/patients/:patientId/allergies/:allergyId" element={<AllergyDetailPage />} />
           <Route path="/patients/:patientId/allergies/:allergyId/edit" element={<AllergyEditPage />} />
+          {/* 医療機関は上流 FHIR サーバーの Organization を直接操作するため、
+              backend 管理API(AdminGate)の対象外。 */}
+          <Route path="/organizations" element={<OrganizationListPage />} />
+          <Route path="/organizations/new" element={<OrganizationCreatePage />} />
+          <Route path="/organizations/:id/edit" element={<OrganizationEditPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/questionnaires" element={<QuestionnaireListPage />} />
           <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />

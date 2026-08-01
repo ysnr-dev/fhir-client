@@ -138,6 +138,76 @@ export function useDeletePatient() {
   });
 }
 
+export interface OrganizationSearchParams {
+  name?: string;
+  identifier?: string;
+}
+
+const ORGANIZATION_COUNT = 20;
+
+export function useOrganizationSearch(search: OrganizationSearchParams, offset: number) {
+  const params = new URLSearchParams();
+  if (search.name) params.set("name", search.name);
+  if (search.identifier) params.set("identifier", search.identifier);
+  params.set("_count", String(ORGANIZATION_COUNT));
+  params.set("_offset", String(offset));
+
+  const query = useQuery({
+    queryKey: ["Organization", "search", search, offset],
+    queryFn: () => searchResource<fhir4.Organization>("Organization", params),
+    placeholderData: keepPreviousData,
+  });
+
+  return {
+    ...query,
+    bundle: query.data?.data,
+    total: query.data?.data.total ?? 0,
+    count: ORGANIZATION_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+export function useOrganization(id: string | undefined) {
+  return useQuery({
+    queryKey: ["Organization", id],
+    queryFn: () => readResource<fhir4.Organization>("Organization", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (organization: fhir4.Organization) => createResource(organization),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Organization", "search"] });
+    },
+  });
+}
+
+export function useUpdateOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ organization, etag }: { organization: fhir4.Organization; etag: string }) =>
+      updateResource(organization, etag),
+    onSuccess: (result: FhirResult<fhir4.Organization>) => {
+      queryClient.invalidateQueries({ queryKey: ["Organization", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["Organization", result.data.id] });
+    },
+  });
+}
+
+export function useDeleteOrganization() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteResource("Organization", id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Organization", "search"] });
+    },
+  });
+}
+
 const PRESCRIPTION_COUNT = 20;
 
 export function usePrescriptionSearch(patientId: string | undefined, offset: number) {

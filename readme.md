@@ -303,6 +303,29 @@ ID 規約だけでは表現できない帳票 --- choice 回答の code に応�
   [`docs/report-mappings/shikan-01.mapping.json`](docs/report-mappings/shikan-01.mapping.json)
   にあります。
 
+## 医療機関（Organization）
+
+ヘッダーの「管理 > 医療機関」（`/organizations`）で、上流 FHIR サーバーの Organization を
+一覧・登録・編集・削除できます。JP Core の `JP_Organization` プロファイルを想定した項目構成です。
+
+| 画面項目 | FHIR 要素 |
+|---|---|
+| 医療機関名（必須） | `name` |
+| 保険医療機関番号 | `identifier`（system は `http://jpfhir.jp/fhir/core/IdSystem/insurance-medical-institution-no` 固定。JP_Organization の `medicalInstitutionCode` スライス） |
+| 種別 | `type`（`http://terminology.hl7.org/CodeSystem/organization-type`。binding は example） |
+| 有効 | `active` |
+| 電話番号 / FAX | `telecom`（`system=phone` / `system=fax`） |
+| 郵便番号 / 所在地 | `address[0].postalCode` / `address[0].text` |
+
+- 上流の検証は org-1 制約（`identifier` か `name` の少なくとも一方）のみのため、番号を持たない
+  施設も登録できます。番号を入力した場合だけ 10 桁（都道府県2桁 + 点数表1桁 + 医療機関コード7桁）の
+  書式を画面側で検証します。
+- 検索は医療機関名（部分一致）と保険医療機関番号。更新は他画面と同じく `If-Match` による楽観ロックです。
+- 他の識別子体系（例: `…/mhlw/IdSystem/medicalInstitutionCode10`）で登録済みのデータも一覧・編集で
+  読めますが、保存すると上記のプロファイル準拠の system に書き換わります。
+- 上流 FHIR サーバーを直接操作するため、backend の管理API（`ADMIN_TOKEN`）の対象外です
+  （マスタ取込・帳票レイアウトと同じ扱い）。
+
 ## 管理画面（接続設定 / OAuth クライアント）
 
 `/settings`（接続設定）と `/oauth-clients`（OAuth クライアント）は管理用の画面です。
@@ -380,6 +403,7 @@ bundle exec rspec
 - フロントエンドの本番ビルド(`npm run build`)と型チェック(`tsc -b`)
 - Docker Compose での起動(db/backend/frontend)、backend→fhir-server(host.docker.internal経由)、frontend→backend(サービス名経由)の疎通
 - マスタ3種のインポート(ローカル・Docker 双方で curl により確認。サンプルファイルで hot_codes=3件 / medicines=3件 / medicine_usages=1803件)、`file` 未指定 422、列数不一致 422(既存データ保持)
+- 医療機関(Organization)の登録・編集・削除・検索(名称部分一致)を Docker 環境の画面から確認。保険医療機関番号の 10 桁バリデーション、他体系の identifier で登録済みデータの表示も確認
 
 ## 未検証
 

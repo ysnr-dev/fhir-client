@@ -2404,3 +2404,12 @@ button:disabled {
   gap: 8px;
   margin-top: 12px;
 }
+
+/* ---- 医療機関(Organization) ---- */
+
+/* 入力欄の直下に置く補足。.patient-form の gap を詰めて欄と一体に見せる。 */
+.organization-form__hint {
+  margin: -12px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
