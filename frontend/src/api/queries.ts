@@ -146,7 +146,11 @@ export interface OrganizationSearchParams {
 
 const ORGANIZATION_COUNT = 20;
 
-export function useOrganizationSearch(search: OrganizationSearchParams, offset: number) {
+export function useOrganizationSearch(
+  search: OrganizationSearchParams,
+  offset: number,
+  enabled = true,
+) {
   const params = new URLSearchParams();
   if (search.name) params.set("name", search.name);
   if (search.identifier) params.set("identifier", search.identifier);
@@ -157,6 +161,7 @@ export function useOrganizationSearch(search: OrganizationSearchParams, offset: 
     queryKey: ["Organization", "search", search, offset],
     queryFn: () => searchResource<fhir4.Organization>("Organization", params),
     placeholderData: keepPreviousData,
+    enabled,
   });
 
   return {
@@ -216,7 +221,11 @@ export interface PractitionerSearchParams {
 
 const PRACTITIONER_COUNT = 20;
 
-export function usePractitionerSearch(search: PractitionerSearchParams, offset: number) {
+export function usePractitionerSearch(
+  search: PractitionerSearchParams,
+  offset: number,
+  enabled = true,
+) {
   const params = new URLSearchParams();
   if (search.name) params.set("name", search.name);
   if (search.identifier) params.set("identifier", search.identifier);
@@ -229,6 +238,7 @@ export function usePractitionerSearch(search: PractitionerSearchParams, offset: 
     queryKey: ["Practitioner", "search", search, offset],
     queryFn: () => searchResource<fhir4.Resource>("Practitioner", params),
     placeholderData: keepPreviousData,
+    enabled,
   });
 
   const entries = query.data?.data.entry ?? [];
@@ -262,6 +272,48 @@ export function usePractitionerRole(practitionerId: string | undefined) {
   return {
     ...query,
     role: query.data?.data.entry?.map((e) => e.resource).find((r) => r),
+  };
+}
+
+// 上流 fhir-server の _count 上限。職種・所属で絞った候補はこの件数まで一度に取り、
+// 氏名の絞り込みとページングは画面側で行う(PractitionerRole に name 検索が無いため)。
+const PRACTITIONER_ROLE_FILTER_MAX = 100;
+
+export interface PractitionerRoleFilter {
+  organizationId?: string;
+  roleCode?: string;
+}
+
+// 職種・所属医療機関で医療従事者を絞り込む。PractitionerRole を検索し、
+// _include で本体の Practitioner も一緒に取得する。
+export function usePractitionerRoleSearch(filter: PractitionerRoleFilter, enabled: boolean) {
+  const params = new URLSearchParams();
+  if (filter.organizationId) params.set("organization", `Organization/${filter.organizationId}`);
+  if (filter.roleCode) params.set("role", filter.roleCode);
+  params.set("_count", String(PRACTITIONER_ROLE_FILTER_MAX));
+  params.set("_include", "PractitionerRole:practitioner");
+
+  const query = useQuery({
+    queryKey: ["PractitionerRole", "search", filter],
+    queryFn: () => searchResource<fhir4.Resource>("PractitionerRole", params),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+
+  const entries = query.data?.data.entry ?? [];
+  const practitioners = entries
+    .map((e) => e.resource)
+    .filter((r): r is fhir4.Practitioner => r?.resourceType === "Practitioner");
+
+  return {
+    ...query,
+    practitioners,
+    roles: entries
+      .map((e) => e.resource)
+      .filter((r): r is fhir4.PractitionerRole => r?.resourceType === "PractitionerRole"),
+    total: query.data?.data.total ?? 0,
+    /** 上限に達していて、取得できていない候補がある。 */
+    truncated: (query.data?.data.total ?? 0) > PRACTITIONER_ROLE_FILTER_MAX,
   };
 }
 

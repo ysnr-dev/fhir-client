@@ -7,6 +7,13 @@ import {
   ORGANIZATION_FIELD_EXT_URL,
 } from "./organizationField";
 import {
+  isPractitionerFieldCode,
+  practitionerFieldLabel,
+  PRACTITIONER_FIELD_EXT_URL,
+  PRACTITIONER_ROLE_DEFAULT_EXT_URL,
+} from "./practitionerField";
+import { PRACTITIONER_ROLE_OPTIONS } from "./practitionerRoleHelpers";
+import {
   binaryIdFromAttachment,
   imageBinaryEntry,
   itemMediaExtension,
@@ -156,6 +163,10 @@ export interface EditorItem {
   regex: string;
   // 医療機関(Organization)選択で埋める項目。"" は対象外(organizationField.ts)。
   organizationField: string;
+  // 医療従事者(Practitioner)選択で埋める項目と、選択モーダルの職種フィルタの
+  // 初期値(practitionerField.ts)。
+  practitionerField: string;
+  practitionerRoleDefault: string;
   // シェーマ画像(全 type 共通、1枚まで)
   image: EditorItemImage | null;
 }
@@ -205,6 +216,8 @@ export function newEditorItem(type: EditorItemType = "string"): EditorItem {
     maxLength: "",
     regex: "",
     organizationField: "",
+    practitionerField: "",
+    practitionerRoleDefault: "",
     image: null,
   };
 }
@@ -248,12 +261,17 @@ export function changeItemType(item: EditorItem, type: EditorItemType): EditorIt
     hidden: item.hidden,
     designNote: item.designNote,
     image: item.image,
-    // 医療機関の項目は string ⇔ text の変更では引き継ぐ(所在地を長文入力に
-    // 変えただけで設定が消えると事故になるため)。
-    organizationField:
-      (type === "string" || type === "text") && (item.type === "string" || item.type === "text")
-        ? item.organizationField
-        : "",
+    // 医療機関・医療従事者の項目は string ⇔ text の変更では引き継ぐ(所在地を
+    // 長文入力に変えただけで設定が消えると事故になるため)。
+    ...(() => {
+      const textual = (t: EditorItemType) => t === "string" || t === "text";
+      const keep = textual(type) && textual(item.type);
+      return {
+        organizationField: keep ? item.organizationField : "",
+        practitionerField: keep ? item.practitionerField : "",
+        practitionerRoleDefault: keep ? item.practitionerRoleDefault : "",
+      };
+    })(),
     // group⇔choice の変換でも子項目は引き継がない(choice の子は条件付き group 限定のため)。
     children: [],
   };
@@ -379,6 +397,15 @@ function buildItemExtensions(item: EditorItem): fhir4.Extension[] {
     if (item.regex) extensions.push({ url: REGEX_EXT_URL, valueString: item.regex });
     if (item.organizationField) {
       extensions.push({ url: ORGANIZATION_FIELD_EXT_URL, valueCode: item.organizationField });
+    }
+    if (item.practitionerField) {
+      extensions.push({ url: PRACTITIONER_FIELD_EXT_URL, valueCode: item.practitionerField });
+      if (item.practitionerRoleDefault) {
+        extensions.push({
+          url: PRACTITIONER_ROLE_DEFAULT_EXT_URL,
+          valueCode: item.practitionerRoleDefault,
+        });
+      }
     }
   }
 
@@ -588,6 +615,9 @@ function parseItem(item: fhir4.QuestionnaireItem, parentType?: string): EditorIt
     // 型を問わず復元する。ここで弾くと不正なテンプレートを取り込んだときに
     // 黙って消えてしまい、保存時の検査で気づけない。
     organizationField: extensionByUrl(ext, ORGANIZATION_FIELD_EXT_URL)?.valueCode ?? "",
+    practitionerField: extensionByUrl(ext, PRACTITIONER_FIELD_EXT_URL)?.valueCode ?? "",
+    practitionerRoleDefault:
+      extensionByUrl(ext, PRACTITIONER_ROLE_DEFAULT_EXT_URL)?.valueCode ?? "",
     image: parseItemImage(item),
   };
 }
@@ -730,28 +760,56 @@ function validateItems(
       return `${label}: 初期値式と計算式は同時に設定できません(jsp-7)。`;
     }
 
-    if (item.organizationField) {
-      const fieldLabel = organizationFieldLabel(item.organizationField);
-      if (!isOrganizationFieldCode(item.organizationField)) {
-        return `${label}: 医療機関の項目「${item.organizationField}」は指定できません。`;
+    // 医療機関・医療従事者の選択で埋める項目は、選択ボタンがグループ内に出て
+    // そのグループ直下の項目だけを埋める。置き場所と併用不可の設定を検査する。
+    for (const picker of [
+      {
+        code: item.organizationField,
+        name: "医療機関の項目",
+        valid: isOrganizationFieldCode,
+        fieldLabel: organizationFieldLabel,
+      },
+      {
+        code: item.practitionerField,
+        name: "医療従事者の項目",
+        valid: isPractitionerFieldCode,
+        fieldLabel: practitionerFieldLabel,
+      },
+    ]) {
+      if (!picker.code) continue;
+      const fieldLabel = picker.fieldLabel(picker.code);
+      if (!picker.valid(picker.code)) {
+        return `${label}: ${picker.name}「${picker.code}」は指定できません。`;
       }
       if (item.type !== "string" && item.type !== "text") {
-        return `${label}: 医療機関の項目(${fieldLabel})はテキスト入力・複数行テキストにのみ設定できます。`;
+        return `${label}: ${picker.name}(${fieldLabel})はテキスト入力・複数行テキストにのみ設定できます。`;
       }
-      // 医療機関を選択するボタンはグループの見出しに出て、そのグループ直下の
-      // 項目だけを埋める。グループの外にあるとボタンが出ず、黙って埋まらない。
+      // グループの外にあるとボタンが出ず、黙って埋まらない。
       if (parent?.type !== "group") {
-        return `${label}: 医療機関の項目(${fieldLabel})はグループの直下に置いてください。`;
+        return `${label}: ${picker.name}(${fieldLabel})はグループの直下に置いてください。`;
       }
       // 計算式の項目は表示・保存とも式の評価結果で上書きされるため、
-      // 医療機関を選んでも反映されない。
+      // 選んでも反映されない。
       if (item.calculatedExpression) {
-        return `${label}: 医療機関の項目(${fieldLabel})と計算式は同時に設定できません。`;
+        return `${label}: ${picker.name}(${fieldLabel})と計算式は同時に設定できません。`;
       }
       // 流し込んだ値が正規表現に合わないと、原因の分からないまま保存できなくなる。
       if (item.regex) {
-        return `${label}: 医療機関の項目(${fieldLabel})と正規表現制約は同時に設定できません。`;
+        return `${label}: ${picker.name}(${fieldLabel})と正規表現制約は同時に設定できません。`;
       }
+    }
+
+    // 同じ項目に両方を設定すると、あとから押したボタンの値で上書きされて
+    // どちらが入るのか分からなくなる。
+    if (item.organizationField && item.practitionerField) {
+      return `${label}: 医療機関の項目と医療従事者の項目は同じ項目に設定できません。`;
+    }
+
+    if (
+      item.practitionerRoleDefault &&
+      !PRACTITIONER_ROLE_OPTIONS.some((o) => o.code === item.practitionerRoleDefault)
+    ) {
+      return `${label}: 職種の初期値「${item.practitionerRoleDefault}」は指定できません。`;
     }
 
     if (item.type === "group") {

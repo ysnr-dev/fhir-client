@@ -2104,18 +2104,17 @@ button:disabled {
   color: var(--text);
 }
 
-.qp-group__instance-actions {
+/* グループ枠内の先頭に置く「医療機関を選択」「医療従事者を選択」。
+   入力欄より控えめに見せたいので、グローバルの button より小さくする。 */
+.qp-group__pickers {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
-/* グループ見出し・繰り返しヘッダーに置く「医療機関を選択」。
-   グローバルの button より小さくして見出しに馴染ませる。 */
-.qp-group__org-button {
-  margin-left: 8px;
-  padding: 2px 8px;
-  font-size: 12px;
+.qp-group__picker-button {
+  padding: 4px 10px;
+  font-size: 13px;
   font-weight: normal;
 }
 

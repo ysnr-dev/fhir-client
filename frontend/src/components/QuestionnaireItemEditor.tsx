@@ -11,6 +11,8 @@ import {
   type EditorItemType,
 } from "../fhir/questionnaireHelpers";
 import { ORGANIZATION_FIELD_OPTIONS } from "../fhir/organizationField";
+import { PRACTITIONER_FIELD_OPTIONS } from "../fhir/practitionerField";
+import { PRACTITIONER_ROLE_OPTIONS } from "../fhir/practitionerRoleHelpers";
 import { normalizeImageFile } from "../fhir/schemaImage";
 
 interface QuestionnaireItemEditorProps {
@@ -530,6 +532,7 @@ export function QuestionnaireItemEditor({
               医療機関の項目
               <select
                 value={item.organizationField}
+                disabled={Boolean(item.practitionerField)}
                 onChange={(e) => patch({ organizationField: e.target.value })}
               >
                 <option value="">設定しない</option>
@@ -540,9 +543,50 @@ export function QuestionnaireItemEditor({
                 ))}
               </select>
             </label>
-            {item.organizationField && (
+            <label>
+              医療従事者の項目
+              <select
+                value={item.practitionerField}
+                disabled={Boolean(item.organizationField)}
+                onChange={(e) =>
+                  patch({
+                    practitionerField: e.target.value,
+                    // 職種の初期値は医療従事者の項目にのみ意味がある。
+                    ...(e.target.value ? {} : { practitionerRoleDefault: "" }),
+                  })
+                }
+              >
+                <option value="">設定しない</option>
+                {PRACTITIONER_FIELD_OPTIONS.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {item.practitionerField && (
+              <label>
+                職種の初期値
+                <select
+                  value={item.practitionerRoleDefault}
+                  onChange={(e) => patch({ practitionerRoleDefault: e.target.value })}
+                >
+                  <option value="">指定しない</option>
+                  {PRACTITIONER_ROLE_OPTIONS.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {(item.organizationField || item.practitionerField) && (
               <p className="qe-hint">
-                回答画面で、このグループの見出しに出る「医療機関を選択」ボタンから一括入力されます。
+                回答画面で、このグループ内に出る「
+                {item.organizationField ? "医療機関を選択" : "医療従事者を選択"}
+                」ボタンから一括入力されます。
+                {item.practitionerField &&
+                  "職種の初期値は、選択モーダルの職種フィルタの初期値になります。"}
               </p>
             )}
           </div>

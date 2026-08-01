@@ -51,8 +51,12 @@ QuestionnaireResponse に残るため PDF にもそのまま出る）。
   出る「医療機関を選択」ボタンから、登録済みの医療機関を選んで流し込める
   (readme「医療機関（Organization）> テンプレートへの一括入力」参照)。対応は
   `ref_to_name`・`ref_from_name` → 名称、`ref_from_address` → 郵便番号+所在地、
-  `ref_from_phone` → 電話番号、`ref_from_fax` → ＦＡＸ。診療科(`*_dept`)と
-  担当医師名(`ref_to_doctor`)は Organization に対応する要素が無いため手入力のまま。
+  `ref_from_phone` → 電話番号、`ref_from_fax` → ＦＡＸ。診療科(`*_dept`)は
+  Organization に対応する要素が無いため手入力のまま。
+- **医療従事者(Practitioner)の選択で担当医師名を入力**: 紹介先グループの
+  「医療従事者を選択」ボタンから選ぶと `ref_to_doctor` に氏名が入る。職種の初期値は
+  「医師」を設定してあるため、モーダルは既定で医師に絞られる。紹介先医療機関を
+  先に選んでおくと、その医療機関に所属する医療従事者だけが表示される。
 - **linkId は英数字とアンダースコアのみ**のため、回答値の出力はすべて
   ID 規約(linkId = レイアウトのアイテム ID)で流れる。
 
