@@ -760,6 +760,79 @@ export function useDeleteCondition() {
   });
 }
 
+const CLINICAL_NOTE_COUNT = 20;
+
+// 診療記録(経過記録)。type=LOINC 11506-3 の Composition だけを扱う。
+export function useClinicalNoteSearch(patientId: string | undefined, offset: number) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("type", "http://loinc.org|11506-3");
+  params.set("_count", String(CLINICAL_NOTE_COUNT));
+  params.set("_offset", String(offset));
+  // 記録日時の降順(新しい順)
+  params.set("_sort", "-date");
+  // narrative(Base64 画像込み)を一覧転送から省くための指定。現状の上流 fhir-server は
+  // _summary を無視して全量を返す(2026-08-01 確認)が、将来対応すれば自動で軽くなる。
+  // summarize 側は section 欠落(SUBSETTED)を常に許容している。
+  params.set("_summary", "true");
+
+  const query = useQuery({
+    queryKey: ["Composition", "search", patientId, offset],
+    queryFn: () => searchResource<fhir4.Composition>("Composition", params),
+    placeholderData: keepPreviousData,
+    enabled: Boolean(patientId),
+  });
+
+  return {
+    ...query,
+    bundle: query.data?.data,
+    total: query.data?.data.total ?? 0,
+    count: CLINICAL_NOTE_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+export function useClinicalNote(id: string | undefined) {
+  return useQuery({
+    queryKey: ["Composition", id],
+    queryFn: () => readResource<fhir4.Composition>("Composition", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateClinicalNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (composition: fhir4.Composition) => createResource(composition),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Composition", "search"] });
+    },
+  });
+}
+
+export function useUpdateClinicalNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ composition, etag }: { composition: fhir4.Composition; etag: string }) =>
+      updateResource(composition, etag),
+    onSuccess: (result: FhirResult<fhir4.Composition>) => {
+      queryClient.invalidateQueries({ queryKey: ["Composition", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["Composition", result.data.id] });
+    },
+  });
+}
+
+export function useDeleteClinicalNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteResource("Composition", id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Composition", "search"] });
+    },
+  });
+}
+
 const ALLERGY_COUNT = 20;
 
 export function useAllergySearch(patientId: string | undefined, offset: number) {

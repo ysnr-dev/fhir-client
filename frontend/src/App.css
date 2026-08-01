@@ -2260,7 +2260,7 @@ button:disabled {
   color: var(--accent);
 }
 
-/* ---- 診療記録メニュー(患者一覧のホバーメニュー) ---- */
+/* ---- 診療情報メニュー(患者一覧のホバーメニュー) ---- */
 
 .hover-menu {
   position: relative;
@@ -2483,5 +2483,156 @@ button:disabled {
 .practitioner-form__organization-value {
   flex: 1 1 160px;
   font-size: 14px;
+  color: var(--text-h);
+}
+
+/* ---- 診療記録(Composition / 経過記録) ---- */
+
+/* Tiptap エディタ。入力欄の見た目は .qp-field input に合わせ、
+   本文エリアだけ複数行ぶんの高さを確保する。 */
+.rich-text-editor {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.rich-text-editor__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.rich-text-editor__tool {
+  min-width: 32px;
+  padding: 2px 8px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+.rich-text-editor__tool.is-active {
+  outline: 2px solid var(--accent);
+}
+
+/* 文字色スウォッチ。シェーマ描画(.schema-annotator__swatch)と同じ見た目に揃える。 */
+.rich-text-editor__swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+}
+
+.rich-text-editor__swatch.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+.rich-text-editor__separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* ProseMirror は Tiptap が生成する contenteditable 本体。
+   クリック可能領域を広げるため min-height を持たせる。 */
+.rich-text-editor .ProseMirror {
+  min-height: 120px;
+  padding: 8px 10px;
+  outline: none;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.rich-text-editor .ProseMirror:focus-visible {
+  outline: none;
+}
+
+/* 編集中・表示中とも、埋め込み画像がレイアウトを壊さないように制限する。 */
+.rich-text-editor .ProseMirror img,
+.rich-text img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Tiptap の画像選択状態を可視化する(選択中はアクセント枠)。 */
+.rich-text-editor .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+}
+
+/* narrative 表示(詳細ページ)。エディタと同じ行間・余白で見え方を揃える。 */
+.rich-text {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.rich-text p {
+  margin: 0 0 0.5em;
+}
+
+/* セクション一覧。.patient-form fieldset の横並びを打ち消して縦に積む
+   (.practitioner-form__role と同じパターン)。 */
+.clinical-note-form__sections {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* セクション編集カード。見出し行(種別選択+操作)と本文エディタを縦に積む。 */
+.clinical-note-section {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clinical-note-section__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.clinical-note-section__header select {
+  min-width: 180px;
+}
+
+/* 並べ替え・削除ボタンを右端に寄せる。 */
+.clinical-note-section__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+/* セクション追加行(種別セレクト+追加ボタン)。 */
+.clinical-note-form__add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 確定済み記録の編集時に出す注意書き。 */
+.clinical-note-edit__hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 詳細ページのセクション表示。 */
+.clinical-note-view__section {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.clinical-note-view__section h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
   color: var(--text-h);
 }

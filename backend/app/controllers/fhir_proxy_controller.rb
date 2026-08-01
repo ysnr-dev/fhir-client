@@ -10,7 +10,7 @@ class FhirProxyController < ApplicationController
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
-    PractitionerRole
+    PractitionerRole Composition
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 
