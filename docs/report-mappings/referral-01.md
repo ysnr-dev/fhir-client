@@ -47,6 +47,12 @@ QuestionnaireResponse に残るため PDF にもそのまま出る）。
   `qr_author`(記入者。フォームのメタ情報欄で入力)。
 - **紹介元医療機関**: 名称・所在地・電話番号・ＦＡＸ・診療科名は入力項目
   (`ref_from_*`)。
+- **医療機関(Organization)の選択で一括入力**: 紹介先・紹介元の各グループ見出しに
+  出る「医療機関を選択」ボタンから、登録済みの医療機関を選んで流し込める
+  (readme「医療機関（Organization）> テンプレートへの一括入力」参照)。対応は
+  `ref_to_name`・`ref_from_name` → 名称、`ref_from_address` → 郵便番号+所在地、
+  `ref_from_phone` → 電話番号、`ref_from_fax` → ＦＡＸ。診療科(`*_dept`)と
+  担当医師名(`ref_to_doctor`)は Organization に対応する要素が無いため手入力のまま。
 - **linkId は英数字とアンダースコアのみ**のため、回答値の出力はすべて
   ID 規約(linkId = レイアウトのアイテム ID)で流れる。
 
@@ -59,6 +65,11 @@ QuestionnaireResponse に残るため PDF にもそのまま出る）。
 - 患者氏名の敬称は「殿」ではなく「様」。
 - 「病状経過及び検査結果」と「治療経過」は元様式どおり別欄。検査結果の
   初期値は「病状経過及び検査結果」欄に入る。
+- 紹介元の所在地は郵便番号と 1 欄にまとめている(紙様式に〒の独立枠が無いため、
+  `ref_from_address` に「〒100-0005 東京都…」の形で入る)。
+- 医療機関を選択して入力した場合も、保存されるのは文字列だけで「どの
+  Organization を選んだか」は残らない(JASPEHR が `item.type = "reference"` を
+  禁止しているため)。
 
 ## 検証済みの内容
 
@@ -69,3 +80,6 @@ QuestionnaireResponse に残るため PDF にもそのまま出る）。
 - サンプル回答・未回答(空)の両方で `Reports::ThinreportsRenderer` による
   PDF 生成を確認(値の流し込み・メタ情報・レイアウト崩れなし)。
 - `%conditions` / `%patient.…` の FHIRPath 評価(fhirpath.js)を確認。
+- 医療機関の選択による一括入力を実機で確認(紹介先・紹介元で別々の医療機関、
+  FAX 未登録の施設への選び直しで欄が空になること、手入力の診療科名が残ること、
+  PDF への反映)。

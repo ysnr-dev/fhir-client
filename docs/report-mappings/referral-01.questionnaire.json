@@ -22,7 +22,13 @@
           "linkId": "ref_to_name",
           "type": "string",
           "text": "紹介先医療機関名",
-          "required": true
+          "required": true,
+          "extension": [
+            {
+              "url": "http://fhir-client.local/StructureDefinition/questionnaire-organization-field",
+              "valueCode": "name"
+            }
+          ]
         },
         {
           "linkId": "ref_to_dept",
@@ -44,22 +50,46 @@
         {
           "linkId": "ref_from_name",
           "type": "string",
-          "text": "名称"
+          "text": "名称",
+          "extension": [
+            {
+              "url": "http://fhir-client.local/StructureDefinition/questionnaire-organization-field",
+              "valueCode": "name"
+            }
+          ]
         },
         {
           "linkId": "ref_from_address",
           "type": "string",
-          "text": "所在地"
+          "text": "所在地",
+          "extension": [
+            {
+              "url": "http://fhir-client.local/StructureDefinition/questionnaire-organization-field",
+              "valueCode": "addressFull"
+            }
+          ]
         },
         {
           "linkId": "ref_from_phone",
           "type": "string",
-          "text": "電話番号"
+          "text": "電話番号",
+          "extension": [
+            {
+              "url": "http://fhir-client.local/StructureDefinition/questionnaire-organization-field",
+              "valueCode": "phone"
+            }
+          ]
         },
         {
           "linkId": "ref_from_fax",
           "type": "string",
-          "text": "ＦＡＸ"
+          "text": "ＦＡＸ",
+          "extension": [
+            {
+              "url": "http://fhir-client.local/StructureDefinition/questionnaire-organization-field",
+              "valueCode": "fax"
+            }
+          ]
         },
         {
           "linkId": "ref_from_dept",

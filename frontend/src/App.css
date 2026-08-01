@@ -2104,6 +2104,21 @@ button:disabled {
   color: var(--text);
 }
 
+.qp-group__instance-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* グループ見出し・繰り返しヘッダーに置く「医療機関を選択」。
+   グローバルの button より小さくして見出しに馴染ませる。 */
+.qp-group__org-button {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: normal;
+}
+
 .qp-group__add {
   align-self: flex-start;
 }

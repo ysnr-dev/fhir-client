@@ -10,6 +10,7 @@ import {
   type EditorItem,
   type EditorItemType,
 } from "../fhir/questionnaireHelpers";
+import { ORGANIZATION_FIELD_OPTIONS } from "../fhir/organizationField";
 import { normalizeImageFile } from "../fhir/schemaImage";
 
 interface QuestionnaireItemEditorProps {
@@ -379,6 +380,25 @@ export function QuestionnaireItemEditor({
               placeholder="例: ^([ -~]|\n|\t)+$"
             />
           </label>
+          <label>
+            医療機関の項目
+            <select
+              value={item.organizationField}
+              onChange={(e) => patch({ organizationField: e.target.value })}
+            >
+              <option value="">設定しない</option>
+              {ORGANIZATION_FIELD_OPTIONS.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {item.organizationField && (
+            <p className="qe-hint">
+              回答画面で、このグループの見出しに出る「医療機関を選択」ボタンから一括入力されます。
+            </p>
+          )}
         </div>
       )}
 

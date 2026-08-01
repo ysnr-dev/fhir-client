@@ -2,6 +2,11 @@
 // 編集用中間表現(EditorItem)と FHIR リソースとの相互変換。
 // https://jaspehr.jp/wp-content/docs/full-ig_v1.0.0/site/index.html
 import {
+  isOrganizationFieldCode,
+  organizationFieldLabel,
+  ORGANIZATION_FIELD_EXT_URL,
+} from "./organizationField";
+import {
   binaryIdFromAttachment,
   imageBinaryEntry,
   itemMediaExtension,
@@ -149,6 +154,8 @@ export interface EditorItem {
   // string / text 専用
   maxLength: string;
   regex: string;
+  // 医療機関(Organization)選択で埋める項目。"" は対象外(organizationField.ts)。
+  organizationField: string;
   // シェーマ画像(全 type 共通、1枚まで)
   image: EditorItemImage | null;
 }
@@ -197,6 +204,7 @@ export function newEditorItem(type: EditorItemType = "string"): EditorItem {
     unit: "",
     maxLength: "",
     regex: "",
+    organizationField: "",
     image: null,
   };
 }
@@ -240,6 +248,12 @@ export function changeItemType(item: EditorItem, type: EditorItemType): EditorIt
     hidden: item.hidden,
     designNote: item.designNote,
     image: item.image,
+    // 医療機関の項目は string ⇔ text の変更では引き継ぐ(所在地を長文入力に
+    // 変えただけで設定が消えると事故になるため)。
+    organizationField:
+      (type === "string" || type === "text") && (item.type === "string" || item.type === "text")
+        ? item.organizationField
+        : "",
     // group⇔choice の変換でも子項目は引き継がない(choice の子は条件付き group 限定のため)。
     children: [],
   };
@@ -361,8 +375,11 @@ function buildItemExtensions(item: EditorItem): fhir4.Extension[] {
     }
   }
 
-  if ((item.type === "string" || item.type === "text") && item.regex) {
-    extensions.push({ url: REGEX_EXT_URL, valueString: item.regex });
+  if (item.type === "string" || item.type === "text") {
+    if (item.regex) extensions.push({ url: REGEX_EXT_URL, valueString: item.regex });
+    if (item.organizationField) {
+      extensions.push({ url: ORGANIZATION_FIELD_EXT_URL, valueCode: item.organizationField });
+    }
   }
 
   if (item.initialExpression) {
@@ -568,6 +585,9 @@ function parseItem(item: fhir4.QuestionnaireItem, parentType?: string): EditorIt
     unit: extensionByUrl(ext, UNIT_EXT_URL)?.valueCoding?.code ?? "",
     maxLength: numberToString(item.maxLength),
     regex: extensionByUrl(ext, REGEX_EXT_URL)?.valueString ?? "",
+    // 型を問わず復元する。ここで弾くと不正なテンプレートを取り込んだときに
+    // 黙って消えてしまい、保存時の検査で気づけない。
+    organizationField: extensionByUrl(ext, ORGANIZATION_FIELD_EXT_URL)?.valueCode ?? "",
     image: parseItemImage(item),
   };
 }
@@ -708,6 +728,30 @@ function validateItems(
 
     if (item.initialExpression && item.calculatedExpression) {
       return `${label}: 初期値式と計算式は同時に設定できません(jsp-7)。`;
+    }
+
+    if (item.organizationField) {
+      const fieldLabel = organizationFieldLabel(item.organizationField);
+      if (!isOrganizationFieldCode(item.organizationField)) {
+        return `${label}: 医療機関の項目「${item.organizationField}」は指定できません。`;
+      }
+      if (item.type !== "string" && item.type !== "text") {
+        return `${label}: 医療機関の項目(${fieldLabel})はテキスト入力・複数行テキストにのみ設定できます。`;
+      }
+      // 医療機関を選択するボタンはグループの見出しに出て、そのグループ直下の
+      // 項目だけを埋める。グループの外にあるとボタンが出ず、黙って埋まらない。
+      if (parent?.type !== "group") {
+        return `${label}: 医療機関の項目(${fieldLabel})はグループの直下に置いてください。`;
+      }
+      // 計算式の項目は表示・保存とも式の評価結果で上書きされるため、
+      // 医療機関を選んでも反映されない。
+      if (item.calculatedExpression) {
+        return `${label}: 医療機関の項目(${fieldLabel})と計算式は同時に設定できません。`;
+      }
+      // 流し込んだ値が正規表現に合わないと、原因の分からないまま保存できなくなる。
+      if (item.regex) {
+        return `${label}: 医療機関の項目(${fieldLabel})と正規表現制約は同時に設定できません。`;
+      }
     }
 
     if (item.type === "group") {

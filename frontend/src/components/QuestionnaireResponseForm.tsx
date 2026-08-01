@@ -3,12 +3,18 @@ import fhirpath from "fhirpath";
 // value[x] を "value" で参照できるようにする R4 のモデル情報。
 import fhirpathR4Model from "fhirpath/fhir-context/r4";
 import {
+  organizationFieldAnswers,
+  organizationFieldTargets,
+  type OrganizationFieldTarget,
+} from "../fhir/organizationField";
+import {
   annotatedImageExtension,
   annotationOf,
   binaryIdFromAttachment,
   imageBinaryEntry,
   itemMediaOf,
 } from "../fhir/schemaImage";
+import { OrganizationSearchModal } from "./OrganizationSearchModal";
 import { SchemaImageField, type AnnotationState } from "./SchemaImageField";
 
 // Questionnaire の item ツリーからテンプレート入力フォームを再帰レンダリングする。
@@ -399,6 +405,11 @@ export function QuestionnaireResponseForm({
   const [counts, setCounts] = useState<Record<string, number>>(initialState.counts);
   // シェーマ画像への描き込み(キーはインスタンスパス)。
   const [annotations, setAnnotations] = useState<Annotations>(initialState.annotations);
+  // 医療機関を選択中のグループ(その時点の子プレフィックスごと保持する。
+  // 入れ子や繰り返しでプレフィックスは動的に決まるため、後から組み立てない)。
+  const [organizationTargets, setOrganizationTargets] = useState<OrganizationFieldTarget[] | null>(
+    null,
+  );
 
   // 必須マークの入力強制はフォーム(保存あり)のときのみ行う。
   const requireInputs = Boolean(onSubmit) && !readOnly;
@@ -480,6 +491,29 @@ export function QuestionnaireResponseForm({
 
   function setAnswer(key: string, value: AnswerValue) {
     setAnswers((current) => ({ ...current, [key]: value }));
+  }
+
+  // 選択した医療機関の内容で、対象グループの項目をまとめて置き換える。
+  // 未登録の項目は空にする(A 病院の FAX が B 病院の欄に残る、といった
+  // 取り違えを防ぐため、部分的なマージはしない)。
+  function applyOrganization(targets: OrganizationFieldTarget[], organization: fhir4.Organization) {
+    const patch = organizationFieldAnswers(targets, organization);
+    const overwritten = targets
+      .filter((target) => {
+        const current = answers[target.key];
+        return typeof current === "string" && current !== "" && current !== patch[target.key];
+      })
+      .map((target) => target.label);
+
+    if (overwritten.length) {
+      const list = overwritten.join("、");
+      if (!window.confirm(`入力済みの項目(${list})を選択した医療機関の内容で上書きします。よろしいですか?`)) {
+        return;
+      }
+    }
+
+    setAnswers((current) => ({ ...current, ...patch }));
+    setOrganizationTargets(null);
   }
 
   // 繰り返しグループのインスタンス削除時のキー詰め替え(回答・描き込み共通)。
@@ -727,6 +761,21 @@ export function QuestionnaireResponseForm({
     );
   }
 
+  // 医療機関項目を持つグループの見出しに出す選択ボタン。
+  // 読み取り専用(回答の内容表示)では出さない。
+  function renderOrganizationButton(targets: OrganizationFieldTarget[]) {
+    if (readOnly || targets.length === 0) return null;
+    return (
+      <button
+        type="button"
+        className="qp-group__org-button"
+        onClick={() => setOrganizationTargets(targets)}
+      >
+        医療機関を選択
+      </button>
+    );
+  }
+
   function renderItem(item: fhir4.QuestionnaireItem, prefix: string): React.ReactNode {
     if (isHidden(item)) return null;
     const key = prefix + item.linkId;
@@ -735,9 +784,15 @@ export function QuestionnaireResponseForm({
       if (!isEnabled(item, prefix, answers)) return null;
 
       if (!item.repeats) {
+        const targets = organizationFieldTargets(item, `${key}.`);
         return (
           <fieldset className="qp-group" key={key}>
-            {item.text && <legend>{item.text}</legend>}
+            {(item.text || (targets.length > 0 && !readOnly)) && (
+              <legend>
+                {item.text}
+                {renderOrganizationButton(targets)}
+              </legend>
+            )}
             {renderSchemaImage(item, key)}
             {renderGroupContent(item, `${key}.`)}
           </fieldset>
@@ -753,11 +808,15 @@ export function QuestionnaireResponseForm({
             <div className="qp-group__instance" key={`${key}#${i}`}>
               <div className="qp-group__instance-header">
                 <span>{i + 1}件目</span>
-                {count > 1 && (
-                  <button type="button" onClick={() => removeGroupInstance(key, i, count)}>
-                    削除
-                  </button>
-                )}
+                <span className="qp-group__instance-actions">
+                  {/* 繰り返しはインスタンスごとに別の医療機関を選べる。 */}
+                  {renderOrganizationButton(organizationFieldTargets(item, `${key}#${i}.`))}
+                  {count > 1 && (
+                    <button type="button" onClick={() => removeGroupInstance(key, i, count)}>
+                      削除
+                    </button>
+                  )}
+                </span>
               </div>
               {renderSchemaImage(item, `${key}#${i}`)}
               {renderGroupContent(item, `${key}#${i}.`)}
@@ -830,12 +889,22 @@ export function QuestionnaireResponseForm({
     renderItems(questionnaire.item, "")
   );
 
+  // 医療機関の検索モーダルは項目ツリーの外側に1つだけ置く。グループごとに
+  // 描画すると readOnly の fieldset disabled 配下に入って操作できなくなる。
+  const organizationModal = organizationTargets && (
+    <OrganizationSearchModal
+      onSelect={(organization) => applyOrganization(organizationTargets, organization)}
+      onClose={() => setOrganizationTargets(null)}
+    />
+  );
+
   if (!onSubmit) {
     return (
       <div className="qp">
         {header}
         {children}
         {body}
+        {organizationModal}
       </div>
     );
   }
@@ -850,6 +919,7 @@ export function QuestionnaireResponseForm({
           {submitting ? "送信中..." : submitLabel}
         </button>
       </div>
+      {organizationModal}
     </form>
   );
 }
