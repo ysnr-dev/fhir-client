@@ -2700,19 +2700,58 @@ body.karte-wide #root {
   max-width: none;
 }
 
+/* 左右ペインの高さ。ページ自体はスクロールさせず(中身は各ペイン内でスクロール)、
+   ちょうどビューポートに収める。差分の内訳はアプリヘッダー + 患者情報行
+   (= ペイン上端 150px)+ .app__main の下 padding 24px。 */
+.karte-page {
+  --karte-pane-height: calc(100vh - 174px);
+}
+
+/* 患者情報と「患者一覧に戻る」を 1 行に並べる(見出し行を持たない分、
+   左右のペインを高くできる)。 */
+.karte-page__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.karte-page__header .patient-header {
+  flex: 1;
+  margin-bottom: 0;
+}
+
 .karte-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(460px, 44%);
   gap: 16px;
-  align-items: start;
 }
 
+/* 左右のペインは同じ高さに固定し、中身が縦の残りを埋める。 */
 .karte-left,
 .karte-right {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px;
   box-sizing: border-box;
+  height: var(--karte-pane-height);
+}
+
+.karte-left {
+  display: flex;
+  flex-direction: column;
+}
+
+/* タブの中身(カルテ / 各一覧)はペインの残り高さを使い、内部でスクロールする。
+   min-height: 0 が無いと flex アイテムの既定(auto)で中身の高さまで伸びる。 */
+.karte-left__body,
+.karte-tabpanel {
+  flex: 1;
+  min-height: 0;
+}
+
+.karte-tabpanel {
+  overflow-y: auto;
 }
 
 /* タブ(カルテ/病名/アレルギー/検査結果) */
@@ -2744,18 +2783,24 @@ body.karte-wide #root {
   display: grid;
   grid-template-columns: 160px minmax(0, 1fr);
   gap: 12px;
-  align-items: start;
+}
+
+/* grid アイテムの既定(min-height: auto)だと中身の高さまで伸びてページが
+   スクロールしてしまうので、両方の列に min-height: 0 を効かせる。 */
+.karte-left__body > * {
+  min-height: 0;
 }
 
 .karte-left__timeline {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .karte-daylist {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px;
-  max-height: calc(100vh - 260px);
   overflow-y: auto;
 }
 
@@ -2821,8 +2866,10 @@ body.karte-wide #root {
 }
 
 /* タイムライン本体(IntersectionObserver のスクロール root) */
+/* IntersectionObserver のスクロール root。エラー表示を除いた残りの高さを使う。 */
 .karte-timeline {
-  max-height: calc(100vh - 260px);
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -2992,12 +3039,6 @@ body.karte-wide #root {
 .karte-right {
   display: flex;
   gap: 12px;
-  position: sticky;
-  top: 8px;
-  /* 左ペインのタイムラインと同じ高さに固定する。ページ自体はスクロールしない
-     (左右とも内部スクロール)ため、ビューポートに収まる高さでないと
-     フォーム末尾の保存ボタンに届かなくなる。 */
-  height: calc(100vh - 260px);
 }
 
 .karte-right__body {
@@ -3053,8 +3094,10 @@ body.karte-wide #root {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* 縦積みになるのでページ側をスクロールさせる。 */
+  .karte-left,
   .karte-right {
-    position: static;
     height: auto;
+    max-height: var(--karte-pane-height);
   }
 }

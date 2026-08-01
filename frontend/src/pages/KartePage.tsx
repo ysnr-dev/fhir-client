@@ -120,14 +120,13 @@ export function KartePage() {
 
   return (
     <div className="page karte-page">
-      <div className="page__header">
-        <h1>カルテ</h1>
+      {/* 見出しは置かず、患者情報と戻るボタンを 1 行にまとめて縦幅を左右のペインに回す。 */}
+      <div className="karte-page__header">
+        <PatientHeader patientId={patientId} />
         <Link to="/patients" className="button">
           ← 患者一覧に戻る
         </Link>
       </div>
-
-      <PatientHeader patientId={patientId} />
 
       <div className="karte-layout">
         <section className="karte-left">
