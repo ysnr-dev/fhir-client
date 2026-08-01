@@ -533,7 +533,13 @@ export function QuestionnaireItemEditor({
               <select
                 value={item.organizationField}
                 disabled={Boolean(item.practitionerField)}
-                onChange={(e) => patch({ organizationField: e.target.value })}
+                onChange={(e) =>
+                  patch({
+                    organizationField: e.target.value,
+                    // 入れる値の種類が無くなると自動入力は意味を持たない。
+                    ...(e.target.value ? {} : { loginAutofill: false }),
+                  })
+                }
               >
                 <option value="">設定しない</option>
                 {ORGANIZATION_FIELD_OPTIONS.map((option) => (
@@ -552,7 +558,7 @@ export function QuestionnaireItemEditor({
                   patch({
                     practitionerField: e.target.value,
                     // 職種の初期値は医療従事者の項目にのみ意味がある。
-                    ...(e.target.value ? {} : { practitionerRoleDefault: "" }),
+                    ...(e.target.value ? {} : { practitionerRoleDefault: "", loginAutofill: false }),
                   })
                 }
               >
@@ -581,12 +587,26 @@ export function QuestionnaireItemEditor({
               </label>
             )}
             {(item.organizationField || item.practitionerField) && (
+              <label className="qe-item__checkbox">
+                <input
+                  type="checkbox"
+                  checked={item.loginAutofill}
+                  onChange={(e) => patch({ loginAutofill: e.target.checked })}
+                />
+                {item.organizationField
+                  ? "ログイン中の医療従事者の所属医療機関から自動入力"
+                  : "ログイン中の医療従事者から自動入力"}
+              </label>
+            )}
+            {(item.organizationField || item.practitionerField) && (
               <p className="qe-hint">
                 回答画面で、このグループ内に出る「
                 {item.organizationField ? "医療機関を選択" : "医療従事者を選択"}
                 」ボタンから一括入力されます。
                 {item.practitionerField &&
                   "職種の初期値は、選択モーダルの職種フィルタの初期値になります。"}
+                {item.loginAutofill &&
+                  "自動入力を設定すると、テンプレート登録画面を開いた時点でログイン中の医療従事者の値が入ります(その後の選択・手入力で上書きできます)。"}
               </p>
             )}
           </div>

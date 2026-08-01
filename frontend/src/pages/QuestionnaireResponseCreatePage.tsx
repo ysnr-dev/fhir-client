@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useCurrentPractitioner } from "../api/authQueries";
 import {
   useCreateQuestionnaireResponse,
   usePatient,
@@ -13,6 +12,7 @@ import { QuestionnaireResponseForm } from "../components/QuestionnaireResponseFo
 import { QuestionnaireResponseMetaFields } from "../components/QuestionnaireResponseMetaFields";
 import { displayJapaneseName } from "../fhir/humanName";
 import { buildPopulateContext } from "../fhir/populateContext";
+import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
 import {
   buildQuestionnaireResponse,
   emptyQuestionnaireResponseMeta,
@@ -38,11 +38,16 @@ export function QuestionnaireResponseCreatePage() {
   const [meta, setMeta] = useState(emptyQuestionnaireResponseMeta);
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  // ログイン中の医療従事者と所属医療機関。テンプレート項目の自動入力(拡張設定)と
+  // 記入者名の初期値に使う。
+  const loginAutofill = useLoginAutofillSource();
+
   // 記入者名はログイン中の医療従事者で埋める。セッションと Practitioner の取得は
   // 非同期なので初期値には使えず、未入力のときだけ後から流し込む(手入力の上書き
   // 防止)。administrator や認証不要モードでは紐付く Practitioner が無いため空欄のまま。
-  const { practitioner } = useCurrentPractitioner();
-  const loginPractitionerName = practitioner ? displayJapaneseName(practitioner.name) : "";
+  const loginPractitionerName = loginAutofill.source
+    ? displayJapaneseName(loginAutofill.source.practitioner.name)
+    : "";
   useEffect(() => {
     if (!loginPractitionerName) return;
     setMeta((prev) => (prev.authorName ? prev : { ...prev, authorName: loginPractitionerName }));
@@ -132,7 +137,7 @@ export function QuestionnaireResponseCreatePage() {
       )}
 
       {questionnaire &&
-        (expressionContext ? (
+        (expressionContext && loginAutofill.ready ? (
           // テンプレート切替時に入力途中の回答を持ち越さないよう key で作り直す。
           <QuestionnaireResponseForm
             key={questionnaire.id}
@@ -141,6 +146,7 @@ export function QuestionnaireResponseCreatePage() {
             submitLabel="登録"
             submitting={createResponse.isPending}
             expressionContext={expressionContext}
+            loginAutofill={loginAutofill.source}
           >
             <QuestionnaireResponseMetaFields values={meta} onChange={setMeta} />
           </QuestionnaireResponseForm>

@@ -1,6 +1,7 @@
 // JASPEHR 実装ガイド v1.0.0 の Questionnaire プロファイルに準拠したテンプレートの
 // 編集用中間表現(EditorItem)と FHIR リソースとの相互変換。
 // https://jaspehr.jp/wp-content/docs/full-ig_v1.0.0/site/index.html
+import { LOGIN_AUTOFILL_EXT_URL } from "./loginAutofill";
 import {
   isOrganizationFieldCode,
   organizationFieldLabel,
@@ -167,6 +168,9 @@ export interface EditorItem {
   // 初期値(practitionerField.ts)。
   practitionerField: string;
   practitionerRoleDefault: string;
+  // 上記の項目を、選択ボタンではなくログイン中の医療従事者(と所属医療機関)から
+  // 自動入力する(loginAutofill.ts)。
+  loginAutofill: boolean;
   // シェーマ画像(全 type 共通、1枚まで)
   image: EditorItemImage | null;
 }
@@ -218,6 +222,7 @@ export function newEditorItem(type: EditorItemType = "string"): EditorItem {
     organizationField: "",
     practitionerField: "",
     practitionerRoleDefault: "",
+    loginAutofill: false,
     image: null,
   };
 }
@@ -270,6 +275,7 @@ export function changeItemType(item: EditorItem, type: EditorItemType): EditorIt
         organizationField: keep ? item.organizationField : "",
         practitionerField: keep ? item.practitionerField : "",
         practitionerRoleDefault: keep ? item.practitionerRoleDefault : "",
+        loginAutofill: keep ? item.loginAutofill : false,
       };
     })(),
     // group⇔choice の変換でも子項目は引き継がない(choice の子は条件付き group 限定のため)。
@@ -406,6 +412,10 @@ function buildItemExtensions(item: EditorItem): fhir4.Extension[] {
           valueCode: item.practitionerRoleDefault,
         });
       }
+    }
+    // 自動入力は「どの情報を入れるか」が決まっている項目にのみ意味がある。
+    if (item.loginAutofill && (item.organizationField || item.practitionerField)) {
+      extensions.push({ url: LOGIN_AUTOFILL_EXT_URL, valueBoolean: true });
     }
   }
 
@@ -618,6 +628,7 @@ function parseItem(item: fhir4.QuestionnaireItem, parentType?: string): EditorIt
     practitionerField: extensionByUrl(ext, PRACTITIONER_FIELD_EXT_URL)?.valueCode ?? "",
     practitionerRoleDefault:
       extensionByUrl(ext, PRACTITIONER_ROLE_DEFAULT_EXT_URL)?.valueCode ?? "",
+    loginAutofill: extensionByUrl(ext, LOGIN_AUTOFILL_EXT_URL)?.valueBoolean === true,
     image: parseItemImage(item),
   };
 }
@@ -803,6 +814,11 @@ function validateItems(
     // どちらが入るのか分からなくなる。
     if (item.organizationField && item.practitionerField) {
       return `${label}: 医療機関の項目と医療従事者の項目は同じ項目に設定できません。`;
+    }
+
+    // 自動入力は入れる値の種類が決まっていないと何も起きない(黙って埋まらない)。
+    if (item.loginAutofill && !item.organizationField && !item.practitionerField) {
+      return `${label}: ログイン情報からの自動入力は、医療機関の項目・医療従事者の項目を設定した項目にのみ指定できます。`;
     }
 
     if (

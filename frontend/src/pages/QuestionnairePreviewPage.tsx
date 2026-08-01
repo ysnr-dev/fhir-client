@@ -3,10 +3,13 @@ import { useQuestionnaire } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { JsonBlock } from "../components/JsonBlock";
 import { QuestionnaireResponseForm } from "../components/QuestionnaireResponseForm";
+import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
 
 export function QuestionnairePreviewPage() {
   const { questionnaireId } = useParams<{ questionnaireId: string }>();
   const { data: result, isLoading, error } = useQuestionnaire(questionnaireId);
+  // 拡張設定の自動入力もプレビューで確認できるようにする(登録画面と同じ材料)。
+  const loginAutofill = useLoginAutofillSource();
 
   const questionnaire = result?.data;
 
@@ -30,12 +33,15 @@ export function QuestionnairePreviewPage() {
 
       <ErrorBanner error={error} />
 
-      {isLoading ? (
+      {isLoading || !loginAutofill.ready ? (
         <p>読み込み中...</p>
       ) : (
         questionnaire && (
           <>
-            <QuestionnaireResponseForm questionnaire={questionnaire} />
+            <QuestionnaireResponseForm
+              questionnaire={questionnaire}
+              loginAutofill={loginAutofill.source}
+            />
 
             <details className="prescription-detail__raw">
               <summary>FHIR JSON を表示</summary>

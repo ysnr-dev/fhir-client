@@ -36,7 +36,7 @@ services:
       # Enables login on the whole app (ID/password; administrator's password
       # is this value) and on the admin screens (接続設定 and OAuth クライアント).
       # Comment out to run everything without authentication.
-      # ADMIN_TOKEN: local-dev-passphrase
+      ADMIN_TOKEN: local-dev-passphrase
       # The upstream fhir-server's FHIR_ADMIN_TOKEN, needed by the OAuth client
       # management screen. Normally entered in the 接続設定 screen (stored
       # encrypted in the DB); this env var is only the fallback.

@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState, type FormEvent, type KeyboardEvent, type R
 import fhirpath from "fhirpath";
 // value[x] を "value" で参照できるようにする R4 のモデル情報。
 import fhirpathR4Model from "fhirpath/fhir-context/r4";
+import { loginAutofillValue, type LoginAutofillSource } from "../fhir/loginAutofill";
 import {
   organizationFieldAnswers,
   organizationFieldTargets,
@@ -160,6 +161,33 @@ function applyInitialExpressions(
   return answers;
 }
 
+// ログイン中の医療従事者(と所属医療機関)から初期回答を埋める(loginAutofill.ts)。
+// 新規作成時のみ適用する。初期値・初期値式より後に適用して上書きするが、
+// ログイン側に登録が無い項目(値が空)は既存の初期値をそのまま残す。
+function applyLoginAutofill(
+  items: fhir4.QuestionnaireItem[] | undefined,
+  answers: Answers,
+  source: LoginAutofillSource,
+): Answers {
+  const walk = (list: fhir4.QuestionnaireItem[] | undefined, prefix: string) => {
+    for (const item of list ?? []) {
+      const key = prefix + item.linkId;
+      if (item.type === "group") {
+        walk(item.item, item.repeats ? `${key}#0.` : `${key}.`);
+        continue;
+      }
+      // choice 配下の条件付きグループ。
+      if (item.item?.length) walk(item.item, `${key}.`);
+
+      const value = loginAutofillValue(item, source);
+      if (value) answers[key] = value;
+    }
+  };
+
+  walk(items, "");
+  return answers;
+}
+
 function answerToString(answer: fhir4.QuestionnaireResponseItemAnswer): string {
   return (
     answer.valueString ??
@@ -231,10 +259,12 @@ function buildInitialState(
   questionnaire: fhir4.Questionnaire,
   initialResponse: fhir4.QuestionnaireResponse | undefined,
   expressionContext: Record<string, unknown> | undefined,
+  loginAutofill: LoginAutofillSource | undefined,
 ): InitialState {
   if (!initialResponse) {
     const answers = collectInitialAnswers(questionnaire.item, "", {});
     if (expressionContext) applyInitialExpressions(questionnaire.item, answers, expressionContext);
+    if (loginAutofill) applyLoginAutofill(questionnaire.item, answers, loginAutofill);
     return { answers, counts: {}, annotations: {} };
   }
   const answers: Answers = {};
@@ -391,6 +421,10 @@ interface QuestionnaireResponseFormProps {
   // 新規作成時に与えると initialExpression を評価して初期回答にする
   // (populateContext.ts の buildPopulateContext で組み立てる)。
   expressionContext?: Record<string, unknown>;
+  // ログイン中の医療従事者・所属医療機関。新規作成時に与えると、自動入力を設定した
+  // 項目(loginAutofill.ts)の初期回答になる。初期回答はマウント時に一度だけ確定
+  // するため、呼び出し側は取得完了を待ってからフォームを描画すること。
+  loginAutofill?: LoginAutofillSource;
   // フォーム先頭(質問項目の前)に描画するメタ情報フィールド。
   children?: ReactNode;
 }
@@ -403,10 +437,11 @@ export function QuestionnaireResponseForm({
   submitLabel = "登録",
   submitting = false,
   expressionContext,
+  loginAutofill,
   children,
 }: QuestionnaireResponseFormProps) {
   const [initialState] = useState(() =>
-    buildInitialState(questionnaire, initialResponse, expressionContext),
+    buildInitialState(questionnaire, initialResponse, expressionContext, loginAutofill),
   );
   const [answers, setAnswers] = useState<Answers>(initialState.answers);
   // 繰り返しグループのインスタンス数(キーはグループのインスタンスパス)。
