@@ -57,8 +57,8 @@ export function emptyQuestionnaireResponseMeta(): QuestionnaireResponseMetaValue
   };
 }
 
-// 記入者は本アプリに Practitioner リソースが無いため contained で持つ
-// (JASPEHR プロファイルの contained:practitioner スライス)。
+// 記入者は JASPEHR プロファイルの contained:practitioner スライスに合わせて
+// contained で持つ(上流の Practitioner を参照するのではなく氏名を埋め込む)。
 const CONTAINED_PRACTITIONER_ID = "practitioner";
 
 function containedPractitionerName(qr: fhir4.QuestionnaireResponse): string {

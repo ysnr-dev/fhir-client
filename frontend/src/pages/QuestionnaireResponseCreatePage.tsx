@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useCurrentPractitioner } from "../api/authQueries";
 import {
   useCreateQuestionnaireResponse,
   usePatient,
@@ -10,6 +11,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientHeader } from "../components/PatientHeader";
 import { QuestionnaireResponseForm } from "../components/QuestionnaireResponseForm";
 import { QuestionnaireResponseMetaFields } from "../components/QuestionnaireResponseMetaFields";
+import { displayJapaneseName } from "../fhir/humanName";
 import { buildPopulateContext } from "../fhir/populateContext";
 import {
   buildQuestionnaireResponse,
@@ -35,6 +37,16 @@ export function QuestionnaireResponseCreatePage() {
 
   const [meta, setMeta] = useState(emptyQuestionnaireResponseMeta);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // 記入者名はログイン中の医療従事者で埋める。セッションと Practitioner の取得は
+  // 非同期なので初期値には使えず、未入力のときだけ後から流し込む(手入力の上書き
+  // 防止)。administrator や認証不要モードでは紐付く Practitioner が無いため空欄のまま。
+  const { practitioner } = useCurrentPractitioner();
+  const loginPractitionerName = practitioner ? displayJapaneseName(practitioner.name) : "";
+  useEffect(() => {
+    if (!loginPractitionerName) return;
+    setMeta((prev) => (prev.authorName ? prev : { ...prev, authorName: loginPractitionerName }));
+  }, [loginPractitionerName]);
 
   // 初期値式(%conditions / %labResults / %prescriptions / %patient)の実行時
   // コンテキスト。取得完了までフォームを描画しない(初期回答はマウント時に確定するため)。
