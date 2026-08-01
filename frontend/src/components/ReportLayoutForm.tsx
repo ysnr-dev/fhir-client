@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReportLayoutPayload, ReportLayoutSummary } from "../api/adminClient";
 import { useCreateReportLayout, useReportLayout, useUpdateReportLayout } from "../api/adminQueries";
 import { useQuestionnaireOptions } from "../api/queries";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
+import { parseMappingRules, validateMappingReferences } from "../fhir/reportLayoutMapping";
+import { extractTlfItemIds } from "../fhir/tlfPlaceholders";
 import { ErrorBanner } from "./ErrorBanner";
+import { ReportLayoutMappingEditor } from "./ReportLayoutMappingEditor";
 import { ReportPlaceholderList } from "./ReportPlaceholderList";
 
 interface Props {
@@ -40,6 +43,20 @@ export function ReportLayoutForm({ layout, onSaved, onCancel }: Props) {
   // 入力中の canonical に一致するテンプレート(プレースホルダー一覧の表示にも使う)。
   const selectedQuestionnaire = questionnaires.find(
     (q) => questionnaireCanonical(q) === canonicalOf(url.trim(), version.trim()),
+  );
+
+  // 参照整合性チェック(警告のみ、保存はブロックしない)。
+  // 編集時はアップロードした .tlf が無ければ保存済みの本文を使う。
+  const tlfText = tlf ?? detail.data?.tlf ?? null;
+  const tlfItems = useMemo(() => (tlfText ? extractTlfItemIds(tlfText) : null), [tlfText]);
+  const mappingRules = useMemo(() => {
+    const parsed = parseMappingRules(mappingText);
+    return "rules" in parsed ? parsed.rules : [];
+  }, [mappingText]);
+  const mappingWarnings = useMemo(
+    () =>
+      validateMappingReferences(mappingRules, { questionnaire: selectedQuestionnaire, tlfItems }),
+    [mappingRules, selectedQuestionnaire, tlfItems],
   );
 
   // テンプレート選択は url/version の入力補助。上流に接続できない環境でも
@@ -163,20 +180,38 @@ export function ReportLayoutForm({ layout, onSaved, onCancel }: Props) {
           </p>
         )}
 
-        <label>
-          マッピング定義(JSON、任意)
-          <textarea
-            value={mappingText}
-            onChange={(e) => setMappingText(e.target.value)}
-            rows={8}
-            placeholder={'[\n  { "linkId": "item-1", "tlfId": "answer_1" },\n  { "linkId": "item-2", "code": "01", "show": ["check_1"] }\n]'}
-            disabled={!mappingReady}
-          />
-        </label>
+        <ReportLayoutMappingEditor
+          value={mappingText}
+          onChange={setMappingText}
+          questionnaire={selectedQuestionnaire}
+          tlfItems={tlfItems}
+          disabled={!mappingReady}
+        />
         <p className="report-layout-form__file">
           linkId とレイアウトのアイテム ID の対応を明示する場合に入力します。空欄なら
           linkId 由来の ID 規約のみで対応します。
         </p>
+
+        {mappingRules.length > 0 && !selectedQuestionnaire && (
+          <p className="report-layout-form__file">
+            テンプレートが選択されていないため linkId の存在確認は省略しました。
+          </p>
+        )}
+        {mappingRules.length > 0 && !tlfItems && (
+          <p className="report-layout-form__file">
+            レイアウト(.tlf)が読み込まれていないためアイテム ID の存在確認は省略しました。
+          </p>
+        )}
+        {mappingWarnings.length > 0 && (
+          <div className="mapping-editor__warnings">
+            <p>保存は可能ですが、以下のルールは PDF 生成時に無視されます:</p>
+            <ul>
+              {mappingWarnings.map((warning) => (
+                <li key={`${warning.ruleIndex}:${warning.message}`}>{warning.message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {validationError && <p className="error-banner">{validationError}</p>}
         <ErrorBanner error={create.error} />

@@ -53,7 +53,20 @@ export function QuestionnaireListPage() {
       <ErrorBanner error={importQuestionnaire.error} />
       {importQuestionnaire.isSuccess && (
         <p className="questionnaire-import__success" role="status">
-          テンプレート「{importQuestionnaire.data.data.title ?? ""}」をインポートしました。
+          テンプレート「{importQuestionnaire.data.result.data.title ?? ""}」をインポートしました。
+          {importQuestionnaire.data.layoutStatus !== "none" && "帳票レイアウトも登録しました。"}
+        </p>
+      )}
+      {importQuestionnaire.isSuccess && importQuestionnaire.data.layoutWarning && (
+        <p className="master-import-form__warning" role="status">
+          {importQuestionnaire.data.layoutWarning}
+        </p>
+      )}
+      {importQuestionnaire.isSuccess && importQuestionnaire.data.layoutError && (
+        <p className="master-import-form__warning" role="status">
+          テンプレートは取り込みましたが、帳票レイアウトの登録に失敗しました:
+          {importQuestionnaire.data.layoutError}
+          。帳票レイアウト画面から手動で登録してください。
         </p>
       )}
 

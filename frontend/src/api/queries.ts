@@ -9,12 +9,20 @@ import {
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
 import { buildQuestionnaire, collectPendingImageEntries } from "../fhir/questionnaireHelpers";
+import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import {
   buildQuestionnaireExport,
+  buildTransferExport,
   downloadQuestionnaireExport,
-  parseQuestionnaireImport,
+  parseTransferImport,
 } from "../fhir/questionnaireTransfer";
 import { resourceFromBundleResponse, resourceWithImagesBundle } from "../fhir/schemaImage";
+import {
+  createReportLayout,
+  fetchReportLayout,
+  fetchReportLayouts,
+  updateReportLayout,
+} from "./adminClient";
 import {
   createResource,
   deleteResource,
@@ -656,26 +664,76 @@ export function useUpdateQuestionnaire() {
 }
 
 // テンプレートをシェーマ画像埋め込みの単一 JSON ファイルとしてダウンロードする。
+// 帳票レイアウト(report_layouts)が登録済みなら .tlf とマッピング定義も同梱する。
+// レイアウトの取得に失敗したらエクスポート自体を失敗にする(同梱されるはずの
+// レイアウトが黙って欠けたファイルを作らない)。
 export function useExportQuestionnaire() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { data } = await readResource<fhir4.Questionnaire>("Questionnaire", id);
-      downloadQuestionnaireExport(await buildQuestionnaireExport(data));
+      const exported = await buildQuestionnaireExport(data);
+
+      const canonical = questionnaireCanonical(data);
+      const summary = (await fetchReportLayouts()).find((l) => l.canonical === canonical);
+      const layout = summary ? await fetchReportLayout(summary.id) : undefined;
+      downloadQuestionnaireExport(
+        buildTransferExport(
+          exported,
+          layout && { name: layout.name, tlf: layout.tlf, mapping: layout.mapping },
+        ),
+      );
     },
   });
 }
 
+export interface ImportQuestionnaireResult {
+  result: FhirResult<fhir4.Questionnaire>;
+  /** 同梱レイアウトの登録結果(同梱なし・スキップ・失敗は "none")。 */
+  layoutStatus: "created" | "updated" | "none";
+  /** レイアウト登録の失敗理由(テンプレート本体は保存済み)。 */
+  layoutError?: string;
+  /** 同梱レイアウトが不正でスキップしたときの警告。 */
+  layoutWarning?: string;
+}
+
 // エクスポートファイルを取り込んで新しいテンプレートとして保存する。
 // 保存は新規作成と同じ経路(canonical 重複検証 → 画像込み transaction Bundle)。
+// 帳票レイアウトが同梱されていれば report_layouts へも登録する。
 export function useImportQuestionnaire() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (file: File) => {
-      const values = parseQuestionnaireImport(await file.text());
+    mutationFn: async (file: File): Promise<ImportQuestionnaireResult> => {
+      const { values, reportLayout, layoutWarning } = parseTransferImport(await file.text());
       const { items, entries } = collectPendingImageEntries(values.items);
       const questionnaire = buildQuestionnaire({ ...values, items });
       await assertQuestionnaireCanonicalUnique(questionnaire);
-      return saveWithImages(questionnaire, entries);
+      const result = await saveWithImages(questionnaire, entries);
+      if (!reportLayout) return { result, layoutStatus: "none", layoutWarning };
+
+      // テンプレート本体(上流)が主、レイアウト(backend DB)は従。レイアウト側の
+      // 失敗でインポート全体を失敗にせず、手動登録のフォールバックを案内する。
+      // canonical の重複は上で検証済みなので、同じ canonical のレイアウトが既に
+      // あるのは「上流にテンプレートが無い孤児レコード」に限られる → 上書きする。
+      try {
+        const canonical = questionnaireCanonical(result.data);
+        const existing = (await fetchReportLayouts()).find((l) => l.canonical === canonical);
+        const payload = {
+          name: reportLayout.name,
+          questionnaire_url: result.data.url ?? "",
+          questionnaire_version: result.data.version ?? "",
+          tlf: reportLayout.tlf,
+          mapping: reportLayout.mapping,
+        };
+        if (existing) {
+          await updateReportLayout(existing.id, payload);
+          return { result, layoutStatus: "updated" };
+        }
+        await createReportLayout(payload);
+        return { result, layoutStatus: "created" };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { result, layoutStatus: "none", layoutError: message };
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Questionnaire", "search"] });
