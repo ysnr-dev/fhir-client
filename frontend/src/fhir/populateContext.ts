@@ -20,7 +20,7 @@ import { groupByRp, splitPrescriptionDetailBundle, summarizeServiceRequest } fro
 
 export interface PopulateSources {
   patient: fhir4.Patient;
-  /** 患者の Condition(全件。整形時に「継続」のみへ絞る) */
+  /** 患者のアクティブな Condition(clinical-status=active で検索済み) */
   conditions: fhir4.Condition[];
   /** 最新の検査結果の詳細 Bundle(_include 付き検索の結果)。なければ undefined */
   labDetail?: fhir4.Bundle;
@@ -29,9 +29,9 @@ export interface PopulateSources {
 }
 
 // 転帰「継続」(clinicalStatus: active)の傷病名を「、」区切りで並べる。
+// 絞り込みは取得時の clinical-status=active 検索で済んでいる。
 export function formatConditions(conditions: fhir4.Condition[]): string {
   return conditions
-    .filter((c) => c.clinicalStatus?.coding?.[0]?.code === "active")
     .map((c) => summarizeCondition(c).name)
     .filter(Boolean)
     .join("、");

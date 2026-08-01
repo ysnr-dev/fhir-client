@@ -982,15 +982,16 @@ export function useDeleteQuestionnaire() {
   });
 }
 
-// テンプレート選択・一覧のタイトル解決用に Questionnaire をまとめて取得する。
+// テンプレート選択用に Questionnaire をまとめて取得する。
 // 上流 fhir-server の _count 上限 100 を上限とした簡易版(それ以上は運用上想定しない)。
-export function useQuestionnaireOptions() {
+export function useQuestionnaireOptions(options?: { status?: fhir4.Questionnaire["status"] }) {
   const params = new URLSearchParams();
+  if (options?.status) params.set("status", options.status);
   params.set("_count", "100");
   params.set("_sort", "-_lastUpdated");
 
   const query = useQuery({
-    queryKey: ["Questionnaire", "search", "options"],
+    queryKey: ["Questionnaire", "search", "options", options?.status ?? ""],
     queryFn: () => searchResource<fhir4.Questionnaire>("Questionnaire", params),
   });
 
@@ -1114,12 +1115,14 @@ export function useQuestionnaireResponseWithQuestionnaire(id: string | undefined
 }
 
 // テンプレート回答フォームの初期値式(%conditions / %labResults / %prescriptions)の
-// 元データ取得。傷病名は全件(上流の _count 上限 100 まで)、検査結果・処方は
-// 最新 1 件の詳細を一覧検索 → 詳細検索の 2 段で取る(一覧・詳細画面と同じ
-// リクエスト形に揃え、_sort と _include の組み合わせに依存しない)。
+// 元データ取得。傷病名はアクティブなもの全件(上流の _count 上限 100 まで)、
+// 検査結果・処方は最新 1 件を _sort + _count=1 + _include/_revinclude の 1 リクエスト
+// で関連リソースごと取る(この組み合わせは上流の回帰 spec で保証済み)。
 export function usePopulateSources(patientId: string | undefined) {
   const conditionParams = new URLSearchParams();
   if (patientId) conditionParams.set("patient", `Patient/${patientId}`);
+  // 初期値式が対象にするのはアクティブな傷病名のみ(populateContext 参照)。
+  conditionParams.set("clinical-status", "active");
   conditionParams.set("_count", "100");
   conditionParams.set("_sort", "-onset-date");
   const conditions = useQuery({
@@ -1128,59 +1131,34 @@ export function usePopulateSources(patientId: string | undefined) {
     enabled: Boolean(patientId),
   });
 
-  const labListParams = new URLSearchParams();
-  if (patientId) labListParams.set("patient", `Patient/${patientId}`);
-  labListParams.set("category", "LAB");
-  labListParams.set("_count", "1");
-  labListParams.set("_sort", "-date");
-  const labList = useQuery({
-    queryKey: ["DiagnosticReport", "populate-list", patientId],
-    queryFn: () => searchResource<fhir4.DiagnosticReport>("DiagnosticReport", labListParams),
-    enabled: Boolean(patientId),
-  });
-  const labReportId = labList.data?.data.entry?.[0]?.resource?.id;
-  const labDetailParams = new URLSearchParams();
-  if (labReportId) labDetailParams.set("_id", labReportId);
-  labDetailParams.append("_include", "DiagnosticReport:result");
-  labDetailParams.append("_include", "DiagnosticReport:specimen");
+  const labParams = new URLSearchParams();
+  if (patientId) labParams.set("patient", `Patient/${patientId}`);
+  labParams.set("category", "LAB");
+  labParams.set("_count", "1");
+  labParams.set("_sort", "-date");
+  labParams.append("_include", "DiagnosticReport:result");
+  labParams.append("_include", "DiagnosticReport:specimen");
   const labDetail = useQuery({
-    queryKey: ["DiagnosticReport", "populate-detail", labReportId],
-    queryFn: () => searchResource<fhir4.Resource>("DiagnosticReport", labDetailParams),
-    enabled: Boolean(labReportId),
-  });
-
-  const rxListParams = new URLSearchParams();
-  if (patientId) rxListParams.set("patient", `Patient/${patientId}`);
-  rxListParams.set("_count", "1");
-  rxListParams.set("_sort", "-authoredon");
-  const rxList = useQuery({
-    queryKey: ["ServiceRequest", "populate-list", patientId],
-    queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", rxListParams),
+    queryKey: ["DiagnosticReport", "populate", patientId],
+    queryFn: () => searchResource<fhir4.Resource>("DiagnosticReport", labParams),
     enabled: Boolean(patientId),
   });
-  const rxId = rxList.data?.data.entry?.[0]?.resource?.id;
-  const rxDetailParams = new URLSearchParams();
-  if (rxId) rxDetailParams.set("_id", rxId);
-  rxDetailParams.set("_revinclude", "MedicationRequest:based-on");
+
+  const rxParams = new URLSearchParams();
+  if (patientId) rxParams.set("patient", `Patient/${patientId}`);
+  rxParams.set("_count", "1");
+  rxParams.set("_sort", "-authoredon");
+  rxParams.set("_revinclude", "MedicationRequest:based-on");
   const rxDetail = useQuery({
-    queryKey: ["ServiceRequest", "populate-detail", rxId],
-    queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", rxDetailParams),
-    enabled: Boolean(rxId),
+    queryKey: ["ServiceRequest", "populate", patientId],
+    queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", rxParams),
+    enabled: Boolean(patientId),
   });
 
-  const queries = [conditions, labList, labDetail, rxList, rxDetail];
-  // 依存クエリ(詳細)は対象 id が判明しているときだけ待つ。isPending は
-  // 未フェッチでも true のため、enabled が切り替わる隙間で「取得完了」に
-  // 見えることがない(isLoading だと無効化中に false になる)。
-  const isLoading =
-    conditions.isPending ||
-    labList.isPending ||
-    rxList.isPending ||
-    (Boolean(labReportId) && labDetail.isPending) ||
-    (Boolean(rxId) && rxDetail.isPending);
+  const queries = [conditions, labDetail, rxDetail];
 
   return {
-    isLoading,
+    isLoading: queries.some((q) => q.isPending),
     error: queries.find((q) => q.error)?.error ?? null,
     conditions: (conditions.data?.data.entry ?? [])
       .map((e) => e.resource)

@@ -24,9 +24,12 @@ export function QuestionnaireResponseCreatePage() {
   const { data: patientResult } = usePatient(patientId);
   const patient = patientResult?.data;
 
-  // 登録対象のテンプレートは「有効」のもののみ選択できる。
-  const { questionnaires, isLoading, error } = useQuestionnaireOptions();
-  const activeQuestionnaires = questionnaires.filter((q) => q.status === "active");
+  // 登録対象のテンプレートは「有効」のもののみ選択できる(上流の status 検索で絞る)。
+  const {
+    questionnaires: activeQuestionnaires,
+    isLoading,
+    error,
+  } = useQuestionnaireOptions({ status: "active" });
   const [questionnaireId, setQuestionnaireId] = useState("");
   const questionnaire = activeQuestionnaires.find((q) => q.id === questionnaireId);
 
