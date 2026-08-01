@@ -9,6 +9,7 @@ import {
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
 import { buildPractitionerDeleteBundle } from "../fhir/practitionerHelpers";
+import { deleteLoginAccount } from "./authClient";
 import { buildQuestionnaire, collectPendingImageEntries } from "../fhir/questionnaireHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import {
@@ -387,8 +388,15 @@ export function useUpdatePractitioner() {
 export function useDeletePractitioner() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) =>
-      postBundle(buildPractitionerDeleteBundle(id, await fetchPractitionerRoleIds(id))),
+    mutationFn: async (id: string) => {
+      const result = await postBundle(
+        buildPractitionerDeleteBundle(id, await fetchPractitionerRoleIds(id)),
+      );
+      // ログインアカウントが残ると削除済みの医療従事者でログインできてしまう。
+      // Practitioner 本体の削除が主目的なので、こちらの失敗で全体は失敗させない。
+      await deleteLoginAccount(id).catch(() => {});
+      return result;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Practitioner", "search"] });
       queryClient.invalidateQueries({ queryKey: ["PractitionerRole"] });

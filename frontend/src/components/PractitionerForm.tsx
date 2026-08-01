@@ -9,9 +9,19 @@ import { PRACTITIONER_ROLE_OPTIONS } from "../fhir/practitionerRoleHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { OrganizationSearchModal } from "./OrganizationSearchModal";
 
+// ログイン設定(users テーブル)。Practitioner 本体とは別に backend の
+// /auth/account へ保存するため、FHIR 用の PractitionerFormValues とは分ける。
+export interface PractitionerLoginValues {
+  loginId: string;
+  /** 空なら「変更しない」(既存アカウントの更新時)。 */
+  password: string;
+}
+
 interface PractitionerFormProps {
   initialValues?: PractitionerFormValues;
-  onSubmit: (values: PractitionerFormValues) => void;
+  /** 編集時: 登録済みログインアカウントの初期値。新規は省略。 */
+  initialLogin?: { loginId: string; registered: boolean };
+  onSubmit: (values: PractitionerFormValues, login: PractitionerLoginValues) => void;
   submitting: boolean;
   submitError?: unknown;
   submitLabel: string;
@@ -19,6 +29,7 @@ interface PractitionerFormProps {
 
 export function PractitionerForm({
   initialValues,
+  initialLogin,
   onSubmit,
   submitting,
   submitError,
@@ -27,6 +38,11 @@ export function PractitionerForm({
   const [values, setValues] = useState<PractitionerFormValues>(
     initialValues ?? emptyPractitionerForm,
   );
+  const [login, setLogin] = useState<PractitionerLoginValues>({
+    loginId: initialLogin?.loginId ?? "",
+    password: "",
+  });
+  const accountRegistered = initialLogin?.registered ?? false;
   const [validationError, setValidationError] = useState<string | null>(null);
   const [organizationModalOpen, setOrganizationModalOpen] = useState(false);
 
@@ -43,15 +59,33 @@ export function PractitionerForm({
     setOrganizationModalOpen(false);
   }
 
+  function validateLogin(): string | null {
+    if (!login.loginId) {
+      if (login.password) return "パスワードを設定するにはログインIDも入力してください。";
+      return null;
+    }
+    if (login.loginId === "administrator") {
+      return "ログインID「administrator」は予約されています。";
+    }
+    // 新規アカウント(未登録)はパスワード必須。既存は空なら変更しない。
+    if (!accountRegistered && !login.password) {
+      return "ログインを設定するにはパスワードを入力してください。";
+    }
+    if (login.password && login.password.length < 8) {
+      return "パスワードは8文字以上で入力してください。";
+    }
+    return null;
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validatePractitionerForm(values);
+    const error = validatePractitionerForm(values) ?? validateLogin();
     if (error) {
       setValidationError(error);
       return;
     }
     setValidationError(null);
-    onSubmit(values);
+    onSubmit(values, login);
   }
 
   return (
@@ -188,6 +222,34 @@ export function PractitionerForm({
             </button>
           )}
         </div>
+      </fieldset>
+
+      <fieldset className="practitioner-form__login">
+        <legend>ログイン設定</legend>
+        <p className="practitioner-form__login-hint">
+          {accountRegistered
+            ? "パスワードは変更する場合のみ入力してください。ログインIDを空にして更新するとログインを無効化します。"
+            : "設定すると、このID/パスワードでこのアプリにログインできます(任意)。"}
+        </p>
+        <label>
+          ログインID
+          <input
+            type="text"
+            value={login.loginId}
+            autoComplete="off"
+            onChange={(e) => setLogin((l) => ({ ...l, loginId: e.target.value }))}
+          />
+        </label>
+        <label>
+          パスワード
+          <input
+            type="password"
+            value={login.password}
+            autoComplete="new-password"
+            placeholder={accountRegistered ? "(変更しない)" : ""}
+            onChange={(e) => setLogin((l) => ({ ...l, password: e.target.value }))}
+          />
+        </label>
       </fieldset>
 
       <div className="patient-form__actions">

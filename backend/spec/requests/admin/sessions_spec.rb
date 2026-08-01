@@ -44,7 +44,7 @@ RSpec.describe "Admin::Sessions", type: :request do
       end
     end
 
-    it "sets an HttpOnly session cookie scoped to /admin" do
+    it "sets an HttpOnly session cookie" do
       with_admin_token do
         body = login
 
@@ -54,11 +54,12 @@ RSpec.describe "Admin::Sessions", type: :request do
 
         cookie = response.headers["Set-Cookie"]
         cookie = cookie.join("\n") if cookie.is_a?(Array)
-        expect(cookie).to include("_fhir_client_admin_session")
+        # アプリ本体のログイン(/auth)と共有するセッション(path=/)
+        expect(cookie).to include("_fhir_client_session")
         # Rails は属性を小文字で出す(httponly / samesite=lax)
         expect(cookie.downcase).to include("httponly")
         expect(cookie.downcase).to include("samesite=lax")
-        expect(cookie.downcase).to include("path=/admin")
+        expect(cookie.downcase).to include("path=/")
         # パスフレーズそのものは Cookie に載せない
         expect(cookie).not_to include(passphrase)
       end

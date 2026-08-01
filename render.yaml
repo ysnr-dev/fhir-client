@@ -90,6 +90,13 @@ services:
       - type: rewrite
         source: /admin/*
         destination: https://ysnr-fhir-client-api.onrender.com/admin/*
+      # アプリ本体のログイン(/auth/session)と医療従事者ログインアカウント管理。
+      - type: rewrite
+        source: /auth
+        destination: https://ysnr-fhir-client-api.onrender.com/auth
+      - type: rewrite
+        source: /auth/*
+        destination: https://ysnr-fhir-client-api.onrender.com/auth/*
       # 帳票出力(レイアウト照会 + QuestionnaireResponse の PDF)。exact + /* の
       # 両方が必要なのは /fhir と同じ理由。
       - type: rewrite

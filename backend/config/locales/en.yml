@@ -31,3 +31,26 @@
 
 en:
   hello: "Hello world"
+  # 医療従事者登録ページに表示されるバリデーションメッセージを日本語にする。
+  # アプリの UI は日本語のみで、rails-i18n を入れずに default_locale を :ja に
+  # すると他の既定メッセージが translation missing になるため、en に上書きで足す。
+  activerecord:
+    attributes:
+      user:
+        login_id: ログインID
+        password: パスワード
+        practitioner_fhir_id: 医療従事者ID
+    errors:
+      models:
+        user:
+          attributes:
+            login_id:
+              blank: を入力してください
+              taken: は既に使用されています
+              too_long: は%{count}文字以内で入力してください
+            password:
+              blank: を入力してください
+              too_short: は%{count}文字以上で入力してください
+            practitioner_fhir_id:
+              blank: を指定してください
+              taken: には既にログイン設定があります

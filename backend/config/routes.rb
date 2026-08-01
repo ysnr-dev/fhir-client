@@ -13,6 +13,13 @@ Rails.application.routes.draw do
     match "*fhir_path", to: "fhir_proxy#relay", via: %i[get post put delete]
   end
 
+  # アプリ本体のログイン(ID/パスワード)。医療従事者のログインアカウントは
+  # 医療従事者登録ページから /auth/account で管理する。
+  namespace :auth do
+    resource :session, only: %i[show create destroy]
+    resource :account, only: %i[show update destroy]
+  end
+
   # 管理用: 上流 FHIR サーバーへの接続設定(SMART Backend Services)。
   # 単数リソース(単一行設定) + 接続テスト。
   namespace :admin do

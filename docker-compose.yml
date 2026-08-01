@@ -33,9 +33,9 @@ services:
       # Docker hostname above. Unset (or remove) when pointing at a server that
       # doesn't need this.
       FHIR_SERVER_HOST_HEADER: localhost:3000
-      # Uncomment to require a login on the admin screens (接続設定 and
-      # OAuth クライアント). Left unset by default so `docker compose up` needs
-      # no passphrase.
+      # Enables login on the whole app (ID/password; administrator's password
+      # is this value) and on the admin screens (接続設定 and OAuth クライアント).
+      # Comment out to run everything without authentication.
       # ADMIN_TOKEN: local-dev-passphrase
       # The upstream fhir-server's FHIR_ADMIN_TOKEN, needed by the OAuth client
       # management screen. Normally entered in the 接続設定 screen (stored

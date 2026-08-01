@@ -1,12 +1,13 @@
 // 管理API(/admin/*)のクライアント。
 //
 // 認証は HttpOnly のセッション Cookie で、ブラウザ側にトークンを保持しない。
-// 非 GET には CSRF トークン(ログイン応答で受け取る値)を X-CSRF-Token で付ける。
-// この値だけはモジュール変数に持つ -- localStorage に置かないので、タブを
-// 閉じれば消える。
+// 非 GET には CSRF トークン(ログイン応答で受け取る値)を X-CSRF-Token で付ける
+// (トークンの実体はアプリ本体のログインと共有 -- api/session.ts)。
 //
 // 秘密は書込専用: client_secret / FHIR 管理トークンはサーバーから返らず
 // (`*_set` で有無のみ)、入力があったときだけ送信する。
+
+import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 
 export interface ConnectionSettings {
   base_url: string | null;
@@ -118,25 +119,13 @@ async function buildError(res: Response): Promise<AdminApiError> {
   return new AdminApiError(message, res.status);
 }
 
-let csrfToken: string | null = null;
-let onUnauthorized: (() => void) | null = null;
-
-/** 401 を受けたときの処理(セッション状態の再取得)を登録する。 */
-export function setUnauthorizedHandler(handler: () => void) {
-  onUnauthorized = handler;
-}
-
 async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const method = (init.method ?? "GET").toUpperCase();
-  const headers = new Headers(init.headers);
-  if (method !== "GET" && method !== "HEAD" && csrfToken) {
-    headers.set("X-CSRF-Token", csrfToken);
-  }
 
-  const res = await fetch(path, { ...init, headers });
+  const res = await fetch(path, { ...init, headers: withCsrfHeaders(method, init.headers) });
   // 401 はこのアプリ自身のセッション失効だけを意味する。上流 FHIR サーバーの
   // 401 は backend が 502 に読み替えるので、設定ミスでログアウトさせられない。
-  if (res.status === 401) onUnauthorized?.();
+  if (res.status === 401) notifyUnauthorized();
   return res;
 }
 
@@ -155,7 +144,7 @@ function jsonBody(payload: unknown): RequestInit {
 const SESSION = "/admin/session";
 
 function rememberCsrf(session: AdminSession): AdminSession {
-  csrfToken = session.csrf_token;
+  setCsrfToken(session.csrf_token);
   return session;
 }
 

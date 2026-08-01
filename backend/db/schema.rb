@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_01_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_01_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -284,5 +284,15 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_01_000000) do
     t.datetime "updated_at", null: false
     t.text "mapping", default: "", null: false
     t.index ["questionnaire_url", "questionnaire_version"], name: "index_report_layouts_on_canonical", unique: true
+  end
+
+  create_table "users", force: :cascade do |t|
+    t.string "login_id", null: false
+    t.string "password_digest", null: false
+    t.string "practitioner_fhir_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["login_id"], name: "index_users_on_login_id", unique: true
+    t.index ["practitioner_fhir_id"], name: "index_users_on_practitioner_fhir_id", unique: true
   end
 end

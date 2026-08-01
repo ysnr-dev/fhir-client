@@ -1,3 +1,5 @@
+import { notifyUnauthorized, withCsrfHeaders } from "./session";
+
 export type MasterType =
   | "hot_codes"
   | "medicines"
@@ -118,6 +120,15 @@ export interface MasterSearchResult<T> {
   items: T[];
 }
 
+// ログインセッションは same-origin fetch に自動で載る。非 GET への CSRF
+// トークン付与と 401(セッション失効)の通知だけを行う(fhirClient と同じ)。
+async function masterFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  const res = await fetch(url, { ...init, headers: withCsrfHeaders(method, init.headers) });
+  if (res.status === 401) notifyUnauthorized();
+  return res;
+}
+
 export class MasterApiError extends Error {
   status: number;
 
@@ -154,14 +165,14 @@ export async function searchMedicines(params: {
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 
-  const res = await fetch(`/master/medicines?${search.toString()}`);
+  const res = await masterFetch(`/master/medicines?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<Medicine>;
 }
 
 // 薬効分類の選択プルダウン用。全件を薬効分類番号順で返す（ページングなし）。
 export async function fetchMedicineTypeOptions(): Promise<MedicineType[]> {
-  const res = await fetch("/master/medicine_types/options");
+  const res = await masterFetch("/master/medicine_types/options");
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MedicineType[];
 }
@@ -185,7 +196,7 @@ export async function searchMedicineUsages(params: {
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 
-  const res = await fetch(`/master/medicine_usages?${search.toString()}`);
+  const res = await masterFetch(`/master/medicine_usages?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<MedicineUsage>;
 }
@@ -198,7 +209,7 @@ export interface MedicineUsageCategories {
 }
 
 export async function fetchMedicineUsageCategories(): Promise<MedicineUsageCategories> {
-  const res = await fetch("/master/medicine_usages/categories");
+  const res = await masterFetch("/master/medicine_usages/categories");
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MedicineUsageCategories;
 }
@@ -217,7 +228,7 @@ export async function searchLabItems(params: {
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 
-  const res = await fetch(`/master/lab_items?${search.toString()}`);
+  const res = await masterFetch(`/master/lab_items?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<LabItem>;
 }
@@ -227,7 +238,7 @@ export interface LabItemCategories {
 }
 
 export async function fetchLabItemCategories(): Promise<LabItemCategories> {
-  const res = await fetch("/master/lab_items/categories");
+  const res = await masterFetch("/master/lab_items/categories");
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as LabItemCategories;
 }
@@ -244,7 +255,7 @@ export async function searchDiseases(params: {
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 
-  const res = await fetch(`/master/diseases?${search.toString()}`);
+  const res = await masterFetch(`/master/diseases?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<Disease>;
 }
@@ -260,7 +271,7 @@ export async function searchModifiers(params: {
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 
-  const res = await fetch(`/master/modifiers?${search.toString()}`);
+  const res = await masterFetch(`/master/modifiers?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<Modifier>;
 }
@@ -287,7 +298,7 @@ export async function searchJfagyAllergens(params: {
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 
-  const res = await fetch(`/master/jfagy_allergens?${search.toString()}`);
+  const res = await masterFetch(`/master/jfagy_allergens?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<JfagyAllergen>;
 }
@@ -300,7 +311,7 @@ export async function importMaster(
   formData.append("file", file);
 
   // Content-Type は指定しない（ブラウザが multipart boundary 付きで設定する）
-  const res = await fetch(`/master/${masterType}/import`, {
+  const res = await masterFetch(`/master/${masterType}/import`, {
     method: "POST",
     body: formData,
   });

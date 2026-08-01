@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useDeleteLoginAccount, useLoginAccount, useUpsertLoginAccount } from "../api/authQueries";
 import { FhirError } from "../api/fhirClient";
 import { usePractitioner, usePractitionerRole, useUpdatePractitioner } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { PractitionerForm } from "../components/PractitionerForm";
+import { PractitionerForm, type PractitionerLoginValues } from "../components/PractitionerForm";
 import {
   buildPractitionerSaveBundle,
   parsePractitioner,
@@ -15,6 +16,9 @@ export function PractitionerEditPage() {
   const { id } = useParams<{ id: string }>();
   const { data: result, isLoading, error: loadError } = usePractitioner(id);
   const role = usePractitionerRole(id);
+  // ログイン設定(backend の /auth/account)。フォームの初期値になるため、
+  // 職種・所属と同様に取得完了を待ってから描画する。
+  const account = useLoginAccount(id);
 
   const header = (
     <div className="page__header">
@@ -25,13 +29,15 @@ export function PractitionerEditPage() {
     </div>
   );
 
-  if (isLoading || role.isLoading) return <div className="page">読み込み中...</div>;
+  if (isLoading || role.isLoading || account.isLoading) {
+    return <div className="page">読み込み中...</div>;
+  }
 
-  if (loadError || role.error || !result) {
+  if (loadError || role.error || account.error || !result) {
     return (
       <div className="page">
         {header}
-        <ErrorBanner error={loadError ?? role.error} />
+        <ErrorBanner error={loadError ?? role.error ?? account.error} />
       </div>
     );
   }
@@ -49,6 +55,10 @@ export function PractitionerEditPage() {
           ...parsePractitioner(result.data),
           ...(role.role ? parsePractitionerRole(role.role) : emptyPractitionerRole),
         }}
+        initialLogin={{
+          loginId: account.data?.login_id ?? "",
+          registered: account.data?.registered ?? false,
+        }}
       />
     </div>
   );
@@ -60,18 +70,24 @@ interface EditFormProps {
   etag: string | null;
   roleId?: string;
   initialValues: PractitionerFormValues;
+  initialLogin: { loginId: string; registered: boolean };
 }
 
-function EditForm({ practitionerId, etag, roleId, initialValues }: EditFormProps) {
+function EditForm({ practitionerId, etag, roleId, initialValues, initialLogin }: EditFormProps) {
   const navigate = useNavigate();
   const updatePractitioner = useUpdatePractitioner();
+  const upsertAccount = useUpsertLoginAccount();
+  const deleteAccount = useDeleteLoginAccount();
   const [conflict, setConflict] = useState(false);
+  const [accountError, setAccountError] = useState<unknown>(null);
 
-  function handleSubmit(values: PractitionerFormValues) {
+  async function handleSubmit(values: PractitionerFormValues, login: PractitionerLoginValues) {
     if (!etag) return;
     setConflict(false);
-    updatePractitioner.mutate(
-      {
+    setAccountError(null);
+
+    try {
+      await updatePractitioner.mutateAsync({
         bundle: buildPractitionerSaveBundle({
           values,
           practitionerId,
@@ -79,17 +95,38 @@ function EditForm({ practitionerId, etag, roleId, initialValues }: EditFormProps
           existingRoleId: roleId,
         }),
         practitionerId,
-      },
-      {
-        onSuccess: () => navigate("/practitioners"),
-        onError: (error) => {
-          if (error instanceof FhirError && error.status === 412) {
-            setConflict(true);
-          }
-        },
-      },
-    );
+      });
+    } catch (error) {
+      if (error instanceof FhirError && error.status === 412) setConflict(true);
+      return; // updatePractitioner.error が submitError として表示される
+    }
+
+    // Practitioner 保存後にログイン設定を反映する。変更が無ければ何も送らない。
+    try {
+      if (login.loginId) {
+        const unchanged =
+          initialLogin.registered && login.loginId === initialLogin.loginId && !login.password;
+        if (!unchanged) {
+          await upsertAccount.mutateAsync({
+            practitionerId,
+            loginId: login.loginId,
+            password: login.password || undefined,
+          });
+        }
+      } else if (initialLogin.registered) {
+        // ログインIDを空にして保存 = ログインの無効化
+        await deleteAccount.mutateAsync(practitionerId);
+      }
+    } catch (error) {
+      setAccountError(error);
+      return;
+    }
+
+    navigate("/practitioners");
   }
+
+  const submitting =
+    updatePractitioner.isPending || upsertAccount.isPending || deleteAccount.isPending;
 
   return (
     <>
@@ -100,10 +137,19 @@ function EditForm({ practitionerId, etag, roleId, initialValues }: EditFormProps
           </p>
         </div>
       )}
+      {accountError != null && (
+        <div className="error-banner" role="alert">
+          <p className="error-banner__line error-banner__line--error">
+            医療従事者情報は更新されましたが、ログイン設定の保存に失敗しました:{" "}
+            {accountError instanceof Error ? accountError.message : "不明なエラー"}
+          </p>
+        </div>
+      )}
       <PractitionerForm
         initialValues={initialValues}
+        initialLogin={initialLogin}
         onSubmit={handleSubmit}
-        submitting={updatePractitioner.isPending}
+        submitting={submitting}
         submitError={conflict ? undefined : updatePractitioner.error}
         submitLabel="更新"
       />

@@ -4,6 +4,12 @@ module Master
   # are domestic reference tables, not FHIR resources, so they don't use
   # OperationOutcome or FHIR content types.
   class BaseController < ActionController::API
+    # アプリ本体のログイン認証(ADMIN_TOKEN 未設定なら従来どおり認証なし)。
+    include UserAuthentication
+
+    before_action :authorize_user!
+    before_action :verify_user_csrf!
+
     rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
     rescue_from MasterImport::ImportError, with: :render_import_error
 

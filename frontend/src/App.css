@@ -63,8 +63,32 @@
   text-decoration: none;
 }
 
+/* ログイン中ユーザーの表示 + ログアウト。ヘッダー右端に寄せる。 */
+.app__user {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.app__user-name {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.app__user-logout {
+  padding: 2px 10px;
+  font-size: 12px;
+}
+
+/* ユーザー表示が右端寄せを担うので、後続の起こしボタンは隣に並べる */
+.app__user ~ .wake-button {
+  margin-left: 0;
+}
+
 /* 休眠したサーバーを起こすボタン。常用するものではないので、ヘッダー右端に
-   地味なテキストボタンとして置く(グローバルの button スタイルを打ち消す)。 */
+   地味なテキストボタンとして置く(グローバルの button スタイルを打ち消す)。
+   ユーザー表示(.app__user)が居るときはその右隣に並ぶ。 */
 .wake-button {
   margin-left: auto;
   font-size: 13px;
@@ -1647,6 +1671,18 @@ button:disabled {
 }
 
 .condition-form__hint {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* fieldset 既定(flex row・nowrap)のままだとヒント文が縦に潰れるため折返しを許す */
+.practitioner-form__login {
+  flex-wrap: wrap;
+}
+
+.practitioner-form__login-hint {
   flex: 1 1 100%;
   margin: 0;
   font-size: 13px;

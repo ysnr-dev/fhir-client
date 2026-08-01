@@ -6,6 +6,10 @@ module Admin
   # XSS でトークンそのものを持ち去られると、curl から何度でも管理APIを叩ける
   # 資格情報になってしまう。Cookie なら HttpOnly で JS から読めない。
   class SessionsController < BaseController
+    # reset_session_preserving / USER_SESSION_KEYS のため(アプリ本体のログインと
+    # 同じ Cookie に同居しているので、互いに消し合わないようにする)。
+    include UserAuthentication
+
     skip_before_action :authorize_admin!
     skip_before_action :verify_admin_csrf!
 
@@ -27,7 +31,8 @@ module Admin
         return render json: { error: "パスフレーズが正しくありません" }, status: :unauthorized
       end
 
-      reset_session # session fixation
+      # session fixation 対策。アプリ本体のログインは消さずに引き継ぐ。
+      reset_session_preserving(UserAuthentication::USER_SESSION_KEYS)
       session[:admin_authenticated_at] = Time.current.to_i
       session[:admin_token_digest] = token_digest(expected)
       session[:csrf_token] = SecureRandom.urlsafe_base64(32)
@@ -35,9 +40,9 @@ module Admin
       render json: session_payload
     end
 
-    # DELETE /admin/session
+    # DELETE /admin/session -- 管理画面のログインだけを消す(アプリ本体は残す)
     def destroy
-      reset_session
+      UserAuthentication::ADMIN_SESSION_KEYS.each { |key| session.delete(key) }
 
       render json: { authenticated: false, auth_required: ENV["ADMIN_TOKEN"].present?, csrf_token: nil }
     end

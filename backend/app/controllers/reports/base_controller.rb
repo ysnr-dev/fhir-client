@@ -1,9 +1,14 @@
 module Reports
   # 帳票出力エンドポイントのプレーン JSON ベース。ApplicationController からは
   # 意図的に分離する(FHIR リソースではないので OperationOutcome を使わない)。
-  # 認証は既存の /fhir プロキシと同水準(なし)。同じデータは /fhir 経由で
-  # 読めるため、ここだけ守っても攻撃面は変わらない。
+  # 認証は /fhir プロキシと同水準(ログインセッション。ADMIN_TOKEN 未設定なら
+  # 従来どおりなし)。同じデータが /fhir 経由で読めるため、水準を揃えておく。
   class BaseController < ActionController::API
+    include UserAuthentication
+
+    before_action :authorize_user!
+    before_action :verify_user_csrf!
+
     rescue_from QuestionnaireResponseReport::NotFound do
       render json: { error: "questionnaire_response_not_found" }, status: :not_found
     end

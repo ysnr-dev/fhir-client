@@ -1,4 +1,12 @@
 class FhirProxyController < ApplicationController
+  # 上流 FHIR サーバーへの中継はログイン必須(ADMIN_TOKEN 未設定なら従来どおり
+  # 認証なし)。ここで返す 401 はこのアプリ自身のセッション失効を意味する
+  # (上流の 401 は FhirGateway 側で 502 に読み替えられる)。
+  include UserAuthentication
+
+  before_action :authorize_user!
+  before_action :verify_user_csrf!
+
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner

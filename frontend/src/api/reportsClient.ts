@@ -1,5 +1,7 @@
-// 帳票出力(/reports/*)のクライアント。管理APIとは別で認証なし(/fhir と同水準)。
+// 帳票出力(/reports/*)のクライアント。認証は /fhir と同水準
+// (ログインセッション Cookie。GET のみなので CSRF トークンは不要)。
 import { useQuery } from "@tanstack/react-query";
+import { notifyUnauthorized } from "./session";
 
 export interface ReportLayoutStatus {
   registered: boolean;
@@ -9,6 +11,7 @@ export interface ReportLayoutStatus {
 
 export async function fetchReportLayoutStatus(canonical: string): Promise<ReportLayoutStatus> {
   const res = await fetch(`/reports/layouts?canonical=${encodeURIComponent(canonical)}`);
+  if (res.status === 401) notifyUnauthorized();
   if (!res.ok) throw new Error(`帳票レイアウトの照会に失敗しました (HTTP ${res.status})`);
   return (await res.json()) as ReportLayoutStatus;
 }

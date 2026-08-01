@@ -166,6 +166,18 @@ export function buildPractitionerSaveBundle(args: {
   return { resourceType: "Bundle", type: "transaction", entry };
 }
 
+// transaction レスポンス Bundle から、新規作成された Practitioner の ID を取り出す。
+// entry.response.location は "Practitioner/{id}/_history/{vid}"(相対)にも
+// "http://.../Practitioner/{id}/_history/{vid}"(絶対)にもなり得る。
+// ログインアカウント(/auth/account)の紐付け先 practitioner_id に使う。
+export function createdPractitionerId(responseBundle: fhir4.Bundle): string | undefined {
+  for (const entry of responseBundle.entry ?? []) {
+    const match = entry.response?.location?.match(/(?:^|\/)Practitioner\/([^/]+)/);
+    if (match) return match[1];
+  }
+  return undefined;
+}
+
 // 医療従事者の削除。ぶら下がっている PractitionerRole も同じ Bundle で消す。
 export function buildPractitionerDeleteBundle(
   practitionerId: string,

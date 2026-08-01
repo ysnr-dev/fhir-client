@@ -1,6 +1,8 @@
 import { Link, Navigate, NavLink, Route, Routes } from "react-router-dom";
 import "./App.css";
 import { AdminGate } from "./components/AdminGate";
+import { AuthGate } from "./components/AuthGate";
+import { CurrentUserBadge } from "./components/CurrentUserBadge";
 import { HoverMenu } from "./components/HoverMenu";
 import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
@@ -44,7 +46,10 @@ import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 
 function App() {
   return (
-    <div className="app">
+    // アプリ全体をログインゲートで包む(ADMIN_TOKEN 未設定なら素通し)。
+    // ログイン中の医療従事者(Practitioner)は useCurrentPractitioner で参照できる。
+    <AuthGate>
+      <div className="app">
       <header className="app__header">
         <Link to="/patients" className="app__title">
           FHIR Client
@@ -71,6 +76,7 @@ function App() {
             </Link>
           </HoverMenu>
         </nav>
+        <CurrentUserBadge />
         <WakeButton />
       </header>
       <main className="app__main">
@@ -150,7 +156,8 @@ function App() {
           <Route path="/report-layouts" element={<ReportLayoutsPage />} />
         </Routes>
       </main>
-    </div>
+      </div>
+    </AuthGate>
   );
 }
 

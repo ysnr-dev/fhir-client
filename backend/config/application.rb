@@ -36,21 +36,22 @@ module Backend
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
 
-    # 管理UI(/admin)のログインセッションだけが Cookie を使う。FHIR プロキシ
-    # (/fhir)とマスタAPI(/master)はセッションを一切参照しない -- この境界が
-    # CSRF の影響範囲を /admin 配下に閉じ込める。path を /admin に限定して
-    # 他のパスへは Cookie 自体を送らせない。
+    # ログインセッション用の Cookie。アプリ本体のログイン(/auth、/fhir・
+    # /master・/reports の認可)と管理UI(/admin)が 1 つのセッションに同居する
+    # (キーは user_* / admin_* で分離。UserAuthentication 参照)。アプリ全体を
+    # 認証対象にしたため path は "/"。非 GET は各コントローラーが CSRF トークン
+    # (X-CSRF-Token)を検査する。
     #
     # api_only = true では config.session_store だけでは何も挿入されないので、
     # middleware.use で明示的に積む必要がある。
     #
     # ブラウザから見えるオリジンは常に1つ(開発は Vite proxy、本番は Render
-    # static site の rewrite が /admin を API サービスへ中継する)。したがって
+    # static site の rewrite が各パスを API サービスへ中継する)。したがって
     # Cookie は first-party で、SameSite=Lax で足りる。
     config.middleware.use ActionDispatch::Cookies
     config.middleware.use ActionDispatch::Session::CookieStore,
-                          key: "_fhir_client_admin_session",
-                          path: "/admin",
+                          key: "_fhir_client_session",
+                          path: "/",
                           same_site: :lax,
                           httponly: true,
                           secure: Rails.env.production?,
