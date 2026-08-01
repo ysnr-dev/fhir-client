@@ -134,15 +134,17 @@ RSpec.describe "FhirProxy", type: :request do
       end
     end
 
-    it "allowlists Organization (医療機関機能)" do
-      stub_request(:get, "#{upstream_base}/Organization")
-        .with(query: { "name" => "clinic" })
-        .to_return(status: 200, body: '{"resourceType":"Bundle"}',
-                   headers: { "Content-Type" => "application/fhir+json" })
+    it "allowlists Organization (医療機関機能)、Practitioner (医療従事者機能)" do
+      %w[Organization Practitioner].each do |type|
+        stub_request(:get, "#{upstream_base}/#{type}")
+          .with(query: { "name" => "clinic" })
+          .to_return(status: 200, body: '{"resourceType":"Bundle"}',
+                     headers: { "Content-Type" => "application/fhir+json" })
 
-      get "/fhir/Organization?name=clinic"
+        get "/fhir/#{type}?name=clinic"
 
-      expect(response).to have_http_status(:ok)
+        expect(response).to have_http_status(:ok)
+      end
     end
   end
 

@@ -358,6 +358,28 @@ valueCode     : name | institutionNumber | addressFull | address | postalCode | 
   保険医療機関番号の項目（必要なら hidden）を用意してください。
 - 回答の内容表示（読み取り専用）ではボタンは出ません。テンプレートのプレビュー画面では動かして確認できます。
 
+## 医療従事者（Practitioner）
+
+ヘッダーの「管理 > 医療従事者」（`/practitioners`）で、上流 FHIR サーバーの Practitioner を
+一覧・登録・編集・削除できます。JP Core の `JP_Practitioner` プロファイルを想定した項目構成です。
+
+| 画面項目 | FHIR 要素 |
+|---|---|
+| 氏名（漢字・必須） / 氏名（カナ） | `name`（`iso21090-EN-representation` が `IDE` / `SYL`。患者と同じ表現） |
+| 医籍登録番号 | `qualification`（`identifier.system` は `http://jpfhir.jp/fhir/core/mhlw/IdSystem/medicalRegistrationNumber`、`code` は `JP_MedicalLicenseCertificate_CS|medical-registration`） |
+| 性別 / 生年月日 | `gender` / `birthDate` |
+| 有効 | `active` |
+| 電話番号 / メールアドレス | `telecom`（`system=phone` / `system=email`） |
+
+- JP Core 上、Practitioner に必須項目はありません（`gender` / `birthDate` は値がある場合だけ書式検証）。
+  画面では氏名（漢字）の姓・名いずれかを必須にしています。
+- **医籍登録番号は `qualification` と `identifier` の両方に書きます**。JP Core が指定する置き場所は
+  `qualification` ですが、上流の `identifier` 検索はトップレベルの `identifier` しか索引しないため、
+  番号での検索が効くよう同じ値を両方に持たせています（読み出しは `qualification` を優先）。
+- 検索は氏名（漢字・カナの部分一致）と医籍登録番号。更新は他画面と同じく `If-Match` による楽観ロックです。
+- 職種（医師・看護師など）や所属医療機関は `PractitionerRole` の領域で、本アプリでは未実装です。
+- 上流 FHIR サーバーを直接操作するため、backend の管理API（`ADMIN_TOKEN`）の対象外です。
+
 ## 管理画面（接続設定 / OAuth クライアント）
 
 `/settings`（接続設定）と `/oauth-clients`（OAuth クライアント）は管理用の画面です。
@@ -436,6 +458,7 @@ bundle exec rspec
 - Docker Compose での起動(db/backend/frontend)、backend→fhir-server(host.docker.internal経由)、frontend→backend(サービス名経由)の疎通
 - マスタ3種のインポート(ローカル・Docker 双方で curl により確認。サンプルファイルで hot_codes=3件 / medicines=3件 / medicine_usages=1803件)、`file` 未指定 422、列数不一致 422(既存データ保持)
 - 医療機関(Organization)の登録・編集・削除・検索(名称部分一致)を Docker 環境の画面から確認。保険医療機関番号の 10 桁バリデーション、他体系の identifier で登録済みデータの表示も確認
+- 医療従事者(Practitioner)の登録・編集・削除・検索(氏名部分一致・医籍登録番号)を Docker 環境の画面から確認。氏名(漢字)必須のバリデーション、`qualification` と `identifier` の両方への医籍登録番号の保存、`If-Match` の 412 も確認
 - 医療機関のテンプレートへの一括入力: テンプレート編集での設定の往復(保存→再編集)、診療情報提供書の紹介先・紹介元で別々の医療機関を選択、FAX 未登録の施設への選び直しで欄が空になること、繰り返しグループでのインスタンスごとの選択とインスタンス削除時の繰り上がり、PDF への反映を確認
 
 ## 未検証

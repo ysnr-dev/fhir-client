@@ -208,6 +208,76 @@ export function useDeleteOrganization() {
   });
 }
 
+export interface PractitionerSearchParams {
+  name?: string;
+  identifier?: string;
+}
+
+const PRACTITIONER_COUNT = 20;
+
+export function usePractitionerSearch(search: PractitionerSearchParams, offset: number) {
+  const params = new URLSearchParams();
+  if (search.name) params.set("name", search.name);
+  if (search.identifier) params.set("identifier", search.identifier);
+  params.set("_count", String(PRACTITIONER_COUNT));
+  params.set("_offset", String(offset));
+
+  const query = useQuery({
+    queryKey: ["Practitioner", "search", search, offset],
+    queryFn: () => searchResource<fhir4.Practitioner>("Practitioner", params),
+    placeholderData: keepPreviousData,
+  });
+
+  return {
+    ...query,
+    bundle: query.data?.data,
+    total: query.data?.data.total ?? 0,
+    count: PRACTITIONER_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+export function usePractitioner(id: string | undefined) {
+  return useQuery({
+    queryKey: ["Practitioner", id],
+    queryFn: () => readResource<fhir4.Practitioner>("Practitioner", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreatePractitioner() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (practitioner: fhir4.Practitioner) => createResource(practitioner),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Practitioner", "search"] });
+    },
+  });
+}
+
+export function useUpdatePractitioner() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ practitioner, etag }: { practitioner: fhir4.Practitioner; etag: string }) =>
+      updateResource(practitioner, etag),
+    onSuccess: (result: FhirResult<fhir4.Practitioner>) => {
+      queryClient.invalidateQueries({ queryKey: ["Practitioner", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["Practitioner", result.data.id] });
+    },
+  });
+}
+
+export function useDeletePractitioner() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteResource("Practitioner", id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Practitioner", "search"] });
+    },
+  });
+}
+
 const PRESCRIPTION_COUNT = 20;
 
 export function usePrescriptionSearch(patientId: string | undefined, offset: number) {

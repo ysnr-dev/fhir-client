@@ -14,6 +14,9 @@ import { ConditionCreatePage } from "./pages/ConditionCreatePage";
 import { ConditionDetailPage } from "./pages/ConditionDetailPage";
 import { ConditionEditPage } from "./pages/ConditionEditPage";
 import { ConditionListPage } from "./pages/ConditionListPage";
+import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
+import { PractitionerEditPage } from "./pages/PractitionerEditPage";
+import { PractitionerListPage } from "./pages/PractitionerListPage";
 import { PatientCreatePage } from "./pages/PatientCreatePage";
 import { PatientEditPage } from "./pages/PatientEditPage";
 import { PatientListPage } from "./pages/PatientListPage";
@@ -53,6 +56,9 @@ function App() {
           <HoverMenu label="管理">
             <Link to="/organizations" className="row-menu__item">
               医療機関
+            </Link>
+            <Link to="/practitioners" className="row-menu__item">
+              医療従事者
             </Link>
             <Link to="/master-import" className="row-menu__item">
               マスタ取込
@@ -107,11 +113,14 @@ function App() {
           <Route path="/patients/:patientId/allergies/new" element={<AllergyCreatePage />} />
           <Route path="/patients/:patientId/allergies/:allergyId" element={<AllergyDetailPage />} />
           <Route path="/patients/:patientId/allergies/:allergyId/edit" element={<AllergyEditPage />} />
-          {/* 医療機関は上流 FHIR サーバーの Organization を直接操作するため、
-              backend 管理API(AdminGate)の対象外。 */}
+          {/* 医療機関・医療従事者は上流 FHIR サーバーの Organization / Practitioner を
+              直接操作するため、backend 管理API(AdminGate)の対象外。 */}
           <Route path="/organizations" element={<OrganizationListPage />} />
           <Route path="/organizations/new" element={<OrganizationCreatePage />} />
           <Route path="/organizations/:id/edit" element={<OrganizationEditPage />} />
+          <Route path="/practitioners" element={<PractitionerListPage />} />
+          <Route path="/practitioners/new" element={<PractitionerCreatePage />} />
+          <Route path="/practitioners/:id/edit" element={<PractitionerEditPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/questionnaires" element={<QuestionnaireListPage />} />
           <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />
