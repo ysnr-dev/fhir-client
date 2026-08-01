@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { buildClinicalNoteDeleteBundle } from "../fhir/clinicalNoteHelpers";
 import {
   buildLabResultDeleteBundle,
   observationIdsFromReport,
@@ -841,12 +842,24 @@ export function useUpdateClinicalNote() {
   });
 }
 
+// 削除はテンプレート回答(QuestionnaireResponse)も道連れにする。参照は一覧の検索
+// 結果ではなく単体 read から取る — 一覧は _summary=true を付けており、上流が
+// これを解釈すると section(参照拡張)が落ちて QR を取りこぼすため。
 export function useDeleteClinicalNote() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteResource("Composition", id),
+    mutationFn: async (id: string) => {
+      const { data: composition } = await readResource<fhir4.Composition>("Composition", id);
+      const bundle = buildClinicalNoteDeleteBundle(composition);
+      if (bundle) {
+        await postBundle(bundle);
+      } else {
+        await deleteResource("Composition", id);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Composition", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse"] });
     },
   });
 }

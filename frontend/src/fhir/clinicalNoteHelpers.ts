@@ -225,6 +225,9 @@ export function buildClinicalNote(
 ): ClinicalNoteSave {
   const { patientId, practitioner, existing } = options;
   const entries: fhir4.BundleEntry[] = [];
+  // 保存後も参照され続ける保存済み QR の id。既存 Composition が参照していたものとの
+  // 差分で「参照が外れた QR」を求め、同じ transaction で削除する(孤児を残さない)。
+  const keptResponseIds = new Set<string>();
 
   // 確定(final)・修正済み(amended)の記録を編集保存したら amended に遷移させる。
   // 下書き(preliminary)の間はユーザーの選択値のまま。
@@ -264,6 +267,7 @@ export function buildClinicalNote(
             if (responseId) {
               // 保存済み QR の再編集 → 同じ id へ PUT(参照は実 ID のまま)。
               reference = `QuestionnaireResponse/${responseId}`;
+              keptResponseIds.add(responseId);
               entries.push({
                 resource: { ...draft.response, id: responseId },
                 request: { method: "PUT", url: reference },
@@ -282,6 +286,7 @@ export function buildClinicalNote(
           } else if (responseId) {
             // 再編集していない保存済みテンプレート → 参照だけ引き継ぐ。
             reference = `QuestionnaireResponse/${responseId}`;
+            keptResponseIds.add(responseId);
           } else {
             reference = "";
           }
@@ -306,7 +311,48 @@ export function buildClinicalNote(
   };
 
   if (existing?.id) composition.id = existing.id;
+
+  // 参照が外れた QR(セクション削除・記載形式の切替・本文が空になった等で
+  // 既存 Composition の拡張から消えたもの)を同じ transaction で削除する。
+  // 差分は「既存リソースの参照 − 保存後も残る参照」で求めるので、フォーム側の
+  // 削除操作を追跡する必要がない。
+  for (const id of referencedResponseIds(existing)) {
+    if (!keptResponseIds.has(id)) {
+      entries.push({ request: { method: "DELETE", url: `QuestionnaireResponse/${id}` } });
+    }
+  }
+
   return { composition, entries };
+}
+
+// 診療記録の削除。セクションが参照しているテンプレート回答(QuestionnaireResponse)も
+// 同じ Bundle で消す。参照が無ければ null を返し、呼び出し側は単体 DELETE でよい。
+export function buildClinicalNoteDeleteBundle(
+  composition: fhir4.Composition,
+): fhir4.Bundle | null {
+  const responseIds = referencedResponseIds(composition);
+  if (!responseIds.length) return null;
+
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [
+      ...responseIds.map((id) => ({
+        request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` },
+      })),
+      { request: { method: "DELETE", url: `Composition/${composition.id}` } },
+    ],
+  };
+}
+
+// Composition のセクション拡張が参照している保存済み QR の id 一覧。
+function referencedResponseIds(composition: fhir4.Composition | undefined): string[] {
+  return (composition?.section ?? []).flatMap((section) => {
+    const ref = section.extension?.find((e) => e.url === SECTION_QR_EXT_URL)?.valueReference
+      ?.reference;
+    const id = ref?.match(/^QuestionnaireResponse\/(.+)$/)?.[1];
+    return id ? [id] : [];
+  });
 }
 
 export function parseClinicalNoteForm(composition: fhir4.Composition): ClinicalNoteFormValues {
