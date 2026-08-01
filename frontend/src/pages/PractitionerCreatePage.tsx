@@ -1,14 +1,17 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCreatePractitioner } from "../api/queries";
 import { PractitionerForm } from "../components/PractitionerForm";
-import { buildPractitioner, type PractitionerFormValues } from "../fhir/practitionerHelpers";
+import {
+  buildPractitionerSaveBundle,
+  type PractitionerFormValues,
+} from "../fhir/practitionerHelpers";
 
 export function PractitionerCreatePage() {
   const navigate = useNavigate();
   const createPractitioner = useCreatePractitioner();
 
   function handleSubmit(values: PractitionerFormValues) {
-    createPractitioner.mutate(buildPractitioner(values), {
+    createPractitioner.mutate(buildPractitionerSaveBundle({ values }), {
       onSuccess: () => navigate("/practitioners"),
     });
   }

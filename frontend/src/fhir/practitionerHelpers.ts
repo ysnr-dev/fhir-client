@@ -10,6 +10,12 @@ import {
   type JapaneseNameParts,
 } from "./humanName";
 import type { Gender } from "./patientHelpers";
+import {
+  buildPractitionerRole,
+  emptyPractitionerRole,
+  hasPractitionerRole,
+  type PractitionerRoleValues,
+} from "./practitionerRoleHelpers";
 
 // 医籍登録番号。JP_Practitioner では identifier ではなく
 // qualification:medicalRegistrationNumber スライスに入れる。
@@ -19,7 +25,9 @@ const MEDICAL_LICENSE_CERTIFICATE_SYSTEM =
   "http://jpfhir.jp/fhir/core/CodeSystem/JP_MedicalLicenseCertificate_CS";
 const MEDICAL_REGISTRATION_CODE = "medical-registration";
 
-export interface PractitionerFormValues extends JapaneseNameParts {
+// Practitioner リソース自体の項目。職種・所属は別リソース(PractitionerRole)だが、
+// 画面では 1 つのフォームとして扱う。
+export interface PractitionerValues extends JapaneseNameParts {
   medicalRegistrationNumber: string;
   gender: Gender;
   birthDate: string;
@@ -28,8 +36,11 @@ export interface PractitionerFormValues extends JapaneseNameParts {
   email: string;
 }
 
+export interface PractitionerFormValues extends PractitionerValues, PractitionerRoleValues {}
+
 export const emptyPractitionerForm: PractitionerFormValues = {
   ...emptyJapaneseName,
+  ...emptyPractitionerRole,
   medicalRegistrationNumber: "",
   gender: "",
   birthDate: "",
@@ -54,7 +65,7 @@ function medicalRegistrationQualification(value: string): fhir4.PractitionerQual
   };
 }
 
-export function buildPractitioner(values: PractitionerFormValues, id?: string): fhir4.Practitioner {
+export function buildPractitioner(values: PractitionerValues, id?: string): fhir4.Practitioner {
   const practitioner: fhir4.Practitioner = {
     resourceType: "Practitioner",
     active: values.active,
@@ -104,7 +115,7 @@ export function practitionerRegistrationNumber(practitioner: fhir4.Practitioner)
   return identifier?.value ?? "";
 }
 
-export function parsePractitioner(practitioner: fhir4.Practitioner): PractitionerFormValues {
+export function parsePractitioner(practitioner: fhir4.Practitioner): PractitionerValues {
   return {
     ...parseJapaneseNames(practitioner.name),
     medicalRegistrationNumber: practitionerRegistrationNumber(practitioner),
@@ -113,6 +124,63 @@ export function parsePractitioner(practitioner: fhir4.Practitioner): Practitione
     active: practitioner.active ?? true,
     phone: practitioner.telecom?.find((t) => t.system === "phone")?.value ?? "",
     email: practitioner.telecom?.find((t) => t.system === "email")?.value ?? "",
+  };
+}
+
+// 医療従事者と職種・所属(PractitionerRole)を 1 つの transaction Bundle で保存する。
+// 片方だけ保存されて職種の無い医療従事者や孤児 PractitionerRole が残るのを防ぐ。
+// 職種・所属が両方空になったら、既存の PractitionerRole は削除する。
+export function buildPractitionerSaveBundle(args: {
+  values: PractitionerFormValues;
+  practitionerId?: string;
+  etag?: string;
+  existingRoleId?: string;
+}): fhir4.Bundle {
+  const { values, practitionerId, etag, existingRoleId } = args;
+  const practitionerReference = practitionerId
+    ? `Practitioner/${practitionerId}`
+    : `urn:uuid:${crypto.randomUUID()}`;
+
+  const entry: fhir4.BundleEntry[] = [
+    {
+      fullUrl: practitionerReference,
+      resource: buildPractitioner(values, practitionerId),
+      request: practitionerId
+        ? {
+            method: "PUT",
+            url: `Practitioner/${practitionerId}`,
+            ...(etag ? { ifMatch: etag } : {}),
+          }
+        : { method: "POST", url: "Practitioner" },
+    },
+  ];
+
+  if (hasPractitionerRole(values)) {
+    entry.push({
+      resource: buildPractitionerRole(values, practitionerReference, existingRoleId),
+      request: existingRoleId
+        ? { method: "PUT", url: `PractitionerRole/${existingRoleId}` }
+        : { method: "POST", url: "PractitionerRole" },
+    });
+  } else if (existingRoleId) {
+    entry.push({ request: { method: "DELETE", url: `PractitionerRole/${existingRoleId}` } });
+  }
+
+  return { resourceType: "Bundle", type: "transaction", entry };
+}
+
+// 医療従事者の削除。ぶら下がっている PractitionerRole も同じ Bundle で消す。
+export function buildPractitionerDeleteBundle(
+  practitionerId: string,
+  roleIds: string[],
+): fhir4.Bundle {
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [
+      ...roleIds.map((id) => ({ request: { method: "DELETE" as const, url: `PractitionerRole/${id}` } })),
+      { request: { method: "DELETE", url: `Practitioner/${practitionerId}` } },
+    ],
   };
 }
 

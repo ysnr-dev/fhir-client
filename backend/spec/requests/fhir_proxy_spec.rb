@@ -134,8 +134,8 @@ RSpec.describe "FhirProxy", type: :request do
       end
     end
 
-    it "allowlists Organization (医療機関機能)、Practitioner (医療従事者機能)" do
-      %w[Organization Practitioner].each do |type|
+    it "allowlists Organization (医療機関機能)、Practitioner・PractitionerRole (医療従事者機能)" do
+      %w[Organization Practitioner PractitionerRole].each do |type|
         stub_request(:get, "#{upstream_base}/#{type}")
           .with(query: { "name" => "clinic" })
           .to_return(status: 200, body: '{"resourceType":"Bundle"}',

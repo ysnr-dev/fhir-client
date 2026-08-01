@@ -370,6 +370,7 @@ valueCode     : name | institutionNumber | addressFull | address | postalCode | 
 | 性別 / 生年月日 | `gender` / `birthDate` |
 | 有効 | `active` |
 | 電話番号 / メールアドレス | `telecom`（`system=phone` / `system=email`） |
+| 職種 / 所属医療機関 | 別リソース `PractitionerRole` の `code` / `organization`（下記） |
 
 - JP Core 上、Practitioner に必須項目はありません（`gender` / `birthDate` は値がある場合だけ書式検証）。
   画面では氏名（漢字）の姓・名いずれかを必須にしています。
@@ -377,8 +378,25 @@ valueCode     : name | institutionNumber | addressFull | address | postalCode | 
   `qualification` ですが、上流の `identifier` 検索はトップレベルの `identifier` しか索引しないため、
   番号での検索が効くよう同じ値を両方に持たせています（読み出しは `qualification` を優先）。
 - 検索は氏名（漢字・カナの部分一致）と医籍登録番号。更新は他画面と同じく `If-Match` による楽観ロックです。
-- 職種（医師・看護師など）や所属医療機関は `PractitionerRole` の領域で、本アプリでは未実装です。
 - 上流 FHIR サーバーを直接操作するため、backend の管理API（`ADMIN_TOKEN`）の対象外です。
+
+### 職種・所属医療機関（PractitionerRole）
+
+FHIR では職種・所属は Practitioner ではなく `PractitionerRole` に持ちます。画面では医療従事者フォームの
+「職種・所属」欄として一体で扱い、**1 人につき 1 件**だけ登録できます（兼務は表現できません）。
+
+- 職種は `PractitionerRole.code`。コードは HL7 の `http://terminology.hl7.org/CodeSystem/practitioner-role`
+  （医師 `doctor` / 歯科医師 `dentist` / 薬剤師 `pharmacist` / 看護師 `nurse` / 理学療法士 `physio` /
+  言語聴覚士 `speech` / 研究者 `researcher` / 教員 `teacher`）。JP_PractitionerRole の binding は
+  `JP_PractitionerRole_VS` への **preferred** なので、上流はコード値を検証しません。
+- 所属医療機関は `PractitionerRole.organization`。登録済みの医療機関を検索モーダル（医療機関画面と同じ
+  もの）から選び、`reference` に加えて `display` にも名称を入れます（一覧で Organization を引き直さずに
+  表示するため）。
+- 保存は **Practitioner と PractitionerRole を 1 つの transaction Bundle** で行います（新規作成時は
+  `urn:uuid` を介して参照を解決）。職種・所属を両方空にして保存すると PractitionerRole は削除され、
+  医療従事者を削除するとぶら下がる PractitionerRole も同じ Bundle で削除されます。
+- 一覧は `_revinclude=PractitionerRole:practitioner` で職種・所属を一緒に取得して表示します。
+- 診療科（`specialty`）や勤務期間（`period`）は未対応です。
 
 ## 管理画面（接続設定 / OAuth クライアント）
 
@@ -459,6 +477,7 @@ bundle exec rspec
 - マスタ3種のインポート(ローカル・Docker 双方で curl により確認。サンプルファイルで hot_codes=3件 / medicines=3件 / medicine_usages=1803件)、`file` 未指定 422、列数不一致 422(既存データ保持)
 - 医療機関(Organization)の登録・編集・削除・検索(名称部分一致)を Docker 環境の画面から確認。保険医療機関番号の 10 桁バリデーション、他体系の identifier で登録済みデータの表示も確認
 - 医療従事者(Practitioner)の登録・編集・削除・検索(氏名部分一致・医籍登録番号)を Docker 環境の画面から確認。氏名(漢字)必須のバリデーション、`qualification` と `identifier` の両方への医籍登録番号の保存、`If-Match` の 412 も確認
+- 職種・所属医療機関(PractitionerRole)を医療従事者と同じ transaction Bundle で保存・更新・削除できることを画面から確認(新規作成時の `urn:uuid` 参照解決、職種のみ/所属のみの登録、両方を空にしたときの PractitionerRole 削除、医療従事者削除時の連鎖削除、一覧の `_revinclude` 表示)
 - 医療機関のテンプレートへの一括入力: テンプレート編集での設定の往復(保存→再編集)、診療情報提供書の紹介先・紹介元で別々の医療機関を選択、FAX 未登録の施設への選び直しで欄が空になること、繰り返しグループでのインスタンスごとの選択とインスタンス削除時の繰り上がり、PDF への反映を確認
 
 ## 未検証

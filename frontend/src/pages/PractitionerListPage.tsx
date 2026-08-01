@@ -12,12 +12,8 @@ export function PractitionerListPage() {
   const [inputs, setInputs] = useState<PractitionerSearchParams>(emptySearch);
   const [offset, setOffset] = useState(0);
 
-  const { bundle, total, count, hasPrevious, hasNext, isLoading, error } = usePractitionerSearch(
-    search,
-    offset,
-  );
-  const practitioners =
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Practitioner => Boolean(r)) ?? [];
+  const { practitioners, roles, total, count, hasPrevious, hasNext, isLoading, error } =
+    usePractitionerSearch(search, offset);
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();
@@ -71,7 +67,7 @@ export function PractitionerListPage() {
         <p>読み込み中...</p>
       ) : (
         <>
-          <PractitionerTable practitioners={practitioners} />
+          <PractitionerTable practitioners={practitioners} roles={roles} />
           <Pagination
             offset={offset}
             count={count}

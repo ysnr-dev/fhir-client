@@ -1,10 +1,13 @@
 import { useState, type FormEvent } from "react";
+import { organizationDisplayName } from "../fhir/organizationHelpers";
 import {
   emptyPractitionerForm,
   validatePractitionerForm,
   type PractitionerFormValues,
 } from "../fhir/practitionerHelpers";
+import { PRACTITIONER_ROLE_OPTIONS } from "../fhir/practitionerRoleHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { OrganizationSearchModal } from "./OrganizationSearchModal";
 
 interface PractitionerFormProps {
   initialValues?: PractitionerFormValues;
@@ -25,9 +28,19 @@ export function PractitionerForm({
     initialValues ?? emptyPractitionerForm,
   );
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [organizationModalOpen, setOrganizationModalOpen] = useState(false);
 
   function update<K extends keyof PractitionerFormValues>(key: K, value: PractitionerFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
+  }
+
+  function handleOrganizationSelect(organization: fhir4.Organization) {
+    setValues((v) => ({
+      ...v,
+      organizationId: organization.id ?? "",
+      organizationName: organizationDisplayName(organization),
+    }));
+    setOrganizationModalOpen(false);
   }
 
   function handleSubmit(e: FormEvent) {
@@ -141,11 +154,54 @@ export function PractitionerForm({
         <input type="email" value={values.email} onChange={(e) => update("email", e.target.value)} />
       </label>
 
+      <fieldset className="practitioner-form__role">
+        <legend>職種・所属</legend>
+        <label>
+          職種
+          <select value={values.roleCode} onChange={(e) => update("roleCode", e.target.value)}>
+            <option value="">未指定</option>
+            {PRACTITIONER_ROLE_OPTIONS.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="practitioner-form__organization">
+          <span className="qp-field__label">所属医療機関</span>
+          <span className="practitioner-form__organization-value">
+            {values.organizationName || (
+              <span className="rp-card__usage-value--empty">未選択</span>
+            )}
+          </span>
+          <button type="button" onClick={() => setOrganizationModalOpen(true)}>
+            {values.organizationId ? "変更" : "選択"}
+          </button>
+          {values.organizationId && (
+            <button
+              type="button"
+              onClick={() =>
+                setValues((v) => ({ ...v, organizationId: "", organizationName: "" }))
+              }
+            >
+              クリア
+            </button>
+          )}
+        </div>
+      </fieldset>
+
       <div className="patient-form__actions">
         <button type="submit" disabled={submitting}>
           {submitting ? "送信中..." : submitLabel}
         </button>
       </div>
+
+      {organizationModalOpen && (
+        <OrganizationSearchModal
+          onSelect={handleOrganizationSelect}
+          onClose={() => setOrganizationModalOpen(false)}
+        />
+      )}
     </form>
   );
 }

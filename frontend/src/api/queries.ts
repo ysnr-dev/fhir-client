@@ -8,6 +8,7 @@ import {
   buildPrescriptionDeleteBundle,
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
+import { buildPractitionerDeleteBundle } from "../fhir/practitionerHelpers";
 import { buildQuestionnaire, collectPendingImageEntries } from "../fhir/questionnaireHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import {
@@ -221,21 +222,57 @@ export function usePractitionerSearch(search: PractitionerSearchParams, offset: 
   if (search.identifier) params.set("identifier", search.identifier);
   params.set("_count", String(PRACTITIONER_COUNT));
   params.set("_offset", String(offset));
+  // 一覧に職種・所属医療機関を出すため、ぶら下がる PractitionerRole も一緒に取る。
+  params.set("_revinclude", "PractitionerRole:practitioner");
 
   const query = useQuery({
     queryKey: ["Practitioner", "search", search, offset],
-    queryFn: () => searchResource<fhir4.Practitioner>("Practitioner", params),
+    queryFn: () => searchResource<fhir4.Resource>("Practitioner", params),
     placeholderData: keepPreviousData,
   });
 
+  const entries = query.data?.data.entry ?? [];
+
   return {
     ...query,
-    bundle: query.data?.data,
+    practitioners: entries
+      .map((e) => e.resource)
+      .filter((r): r is fhir4.Practitioner => r?.resourceType === "Practitioner"),
+    roles: entries
+      .map((e) => e.resource)
+      .filter((r): r is fhir4.PractitionerRole => r?.resourceType === "PractitionerRole"),
     total: query.data?.data.total ?? 0,
     count: PRACTITIONER_COUNT,
     hasPrevious: hasRelation(query.data?.data, "previous"),
     hasNext: hasRelation(query.data?.data, "next"),
   };
+}
+
+// 編集画面で職種・所属の初期値に使う。1 人につき 1 件だけ扱うため先頭を返す。
+export function usePractitionerRole(practitionerId: string | undefined) {
+  const params = new URLSearchParams();
+  if (practitionerId) params.set("practitioner", `Practitioner/${practitionerId}`);
+
+  const query = useQuery({
+    queryKey: ["PractitionerRole", "practitioner", practitionerId],
+    queryFn: () => searchResource<fhir4.PractitionerRole>("PractitionerRole", params),
+    enabled: Boolean(practitionerId),
+  });
+
+  return {
+    ...query,
+    role: query.data?.data.entry?.map((e) => e.resource).find((r) => r),
+  };
+}
+
+async function fetchPractitionerRoleIds(practitionerId: string): Promise<string[]> {
+  const params = new URLSearchParams();
+  params.set("practitioner", `Practitioner/${practitionerId}`);
+  params.set("_elements", "id");
+  const { data: bundle } = await searchResource<fhir4.PractitionerRole>("PractitionerRole", params);
+  return (
+    bundle.entry?.map((e) => e.resource?.id).filter((id): id is string => Boolean(id)) ?? []
+  );
 }
 
 export function usePractitioner(id: string | undefined) {
@@ -246,10 +283,12 @@ export function usePractitioner(id: string | undefined) {
   });
 }
 
+// 医療従事者と職種・所属は 1 つの transaction Bundle でまとめて保存する
+// (buildPractitionerSaveBundle 参照)。
 export function useCreatePractitioner() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (practitioner: fhir4.Practitioner) => createResource(practitioner),
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Practitioner", "search"] });
     },
@@ -259,11 +298,11 @@ export function useCreatePractitioner() {
 export function useUpdatePractitioner() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ practitioner, etag }: { practitioner: fhir4.Practitioner; etag: string }) =>
-      updateResource(practitioner, etag),
-    onSuccess: (result: FhirResult<fhir4.Practitioner>) => {
+    mutationFn: ({ bundle }: { bundle: fhir4.Bundle; practitionerId: string }) => postBundle(bundle),
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["Practitioner", "search"] });
-      queryClient.invalidateQueries({ queryKey: ["Practitioner", result.data.id] });
+      queryClient.invalidateQueries({ queryKey: ["Practitioner", variables.practitionerId] });
+      queryClient.invalidateQueries({ queryKey: ["PractitionerRole"] });
     },
   });
 }
@@ -271,9 +310,11 @@ export function useUpdatePractitioner() {
 export function useDeletePractitioner() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteResource("Practitioner", id),
+    mutationFn: async (id: string) =>
+      postBundle(buildPractitionerDeleteBundle(id, await fetchPractitionerRoleIds(id))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Practitioner", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["PractitionerRole"] });
     },
   });
 }
