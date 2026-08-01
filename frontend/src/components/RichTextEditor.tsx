@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Color, FontSize, TextStyle } from "@tiptap/extension-text-style";
@@ -15,6 +15,10 @@ interface RichTextEditorProps {
   // 編集ページは読込完了後にマウントするので初期値の再セットは不要。
   initialHtml: string;
   onChange: (html: string) => void;
+  // 操作バーの左端・右端に差し込む要素(セクション種別の選択や並べ替え/削除ボタン)。
+  // 呼び出し側が別の枠を作らずに済むよう、同じバーへ同居させるための口。
+  leading?: ReactNode;
+  trailing?: ReactNode;
 }
 
 // SchemaImageAnnotator の PEN_COLORS と同じパレット(アプリ内で装飾色を統一する)。
@@ -30,8 +34,11 @@ const FONT_SIZES = [
   { value: "24px", label: "特大" },
 ] as const;
 
-export function RichTextEditor({ initialHtml, onChange }: RichTextEditorProps) {
+export function RichTextEditor({ initialHtml, onChange, leading, trailing }: RichTextEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 装飾は使う機会が限られるため既定では畳んでおく。セクションが複数並ぶ画面で
+  // ツールバーが場所を取り、本文が見渡しにくくなるのを避ける。
+  const [toolbarOpen, setToolbarOpen] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -57,8 +64,8 @@ export function RichTextEditor({ initialHtml, onChange }: RichTextEditorProps) {
     }),
   });
 
-  if (!editor) return null;
-
+  // editor 未初期化でも早期 return しない。leading/trailing にはセクションの操作
+  // (種別変更・並べ替え・削除)が入るため、一瞬でも消えると操作を取りこぼす。
   async function handleImageSelect(file: File | undefined) {
     if (!file || !editor) return;
     try {
@@ -75,62 +82,18 @@ export function RichTextEditor({ initialHtml, onChange }: RichTextEditorProps) {
 
   return (
     <div className="rich-text-editor">
-      <div className="rich-text-editor__toolbar" role="toolbar">
+      {/* 常時見えるのは装飾パネルの開閉と画像挿入だけ。装飾(太字・サイズ・色)は
+          パネルを開いたときに出す。 */}
+      <div className="rich-text-editor__bar">
+        {leading}
         <button
           type="button"
-          className={`rich-text-editor__tool${toolbarState.bold ? " is-active" : ""}`}
-          title="太字"
-          onClick={() => editor.chain().focus().toggleBold().run()}
+          className={`rich-text-editor__tool${toolbarOpen ? " is-active" : ""}`}
+          title="文字装飾パネルの表示切替"
+          aria-expanded={toolbarOpen}
+          onClick={() => setToolbarOpen((open) => !open)}
         >
-          B
-        </button>
-        <span className="rich-text-editor__separator" />
-        <button
-          type="button"
-          className={`rich-text-editor__tool${toolbarState.fontSize === null ? " is-active" : ""}`}
-          title="標準サイズ"
-          onClick={() => editor.chain().focus().unsetFontSize().run()}
-        >
-          標準
-        </button>
-        {FONT_SIZES.map((size) => (
-          <button
-            key={size.value}
-            type="button"
-            className={`rich-text-editor__tool${toolbarState.fontSize === size.value ? " is-active" : ""}`}
-            title={`フォントサイズ: ${size.label}`}
-            style={{ fontSize: `min(${size.value}, 18px)` }}
-            onClick={() => editor.chain().focus().setFontSize(size.value).run()}
-          >
-            {size.label}
-          </button>
-        ))}
-        <span className="rich-text-editor__separator" />
-        <button
-          type="button"
-          className={`rich-text-editor__swatch${toolbarState.color === null ? " is-active" : ""}`}
-          style={{ backgroundColor: "#1f1f1f" }}
-          title="文字色: 黒(標準)"
-          onClick={() => editor.chain().focus().unsetColor().run()}
-        />
-        {TEXT_COLORS.map((color) => (
-          <button
-            key={color.code}
-            type="button"
-            className={`rich-text-editor__swatch${toolbarState.color === color.code ? " is-active" : ""}`}
-            style={{ backgroundColor: color.code }}
-            title={`文字色: ${color.label}`}
-            onClick={() => editor.chain().focus().setColor(color.code).run()}
-          />
-        ))}
-        <span className="rich-text-editor__separator" />
-        <button
-          type="button"
-          className="rich-text-editor__tool"
-          title="装飾を解除"
-          onClick={() => editor.chain().focus().unsetAllMarks().run()}
-        >
-          解除
+          装飾 {toolbarOpen ? "▲" : "▼"}
         </button>
         <button
           type="button"
@@ -147,7 +110,69 @@ export function RichTextEditor({ initialHtml, onChange }: RichTextEditorProps) {
           style={{ display: "none" }}
           onChange={(e) => void handleImageSelect(e.target.files?.[0])}
         />
+        {trailing}
       </div>
+
+      {toolbarOpen && editor && (
+        <div className="rich-text-editor__toolbar" role="toolbar">
+          <button
+            type="button"
+            className={`rich-text-editor__tool${toolbarState.bold ? " is-active" : ""}`}
+            title="太字"
+            onClick={() => editor.chain().focus().toggleBold().run()}
+          >
+            B
+          </button>
+          <span className="rich-text-editor__separator" />
+          <button
+            type="button"
+            className={`rich-text-editor__tool${toolbarState.fontSize === null ? " is-active" : ""}`}
+            title="標準サイズ"
+            onClick={() => editor.chain().focus().unsetFontSize().run()}
+          >
+            標準
+          </button>
+          {FONT_SIZES.map((size) => (
+            <button
+              key={size.value}
+              type="button"
+              className={`rich-text-editor__tool${toolbarState.fontSize === size.value ? " is-active" : ""}`}
+              title={`フォントサイズ: ${size.label}`}
+              style={{ fontSize: `min(${size.value}, 18px)` }}
+              onClick={() => editor.chain().focus().setFontSize(size.value).run()}
+            >
+              {size.label}
+            </button>
+          ))}
+          <span className="rich-text-editor__separator" />
+          <button
+            type="button"
+            className={`rich-text-editor__swatch${toolbarState.color === null ? " is-active" : ""}`}
+            style={{ backgroundColor: "#1f1f1f" }}
+            title="文字色: 黒(標準)"
+            onClick={() => editor.chain().focus().unsetColor().run()}
+          />
+          {TEXT_COLORS.map((color) => (
+            <button
+              key={color.code}
+              type="button"
+              className={`rich-text-editor__swatch${toolbarState.color === color.code ? " is-active" : ""}`}
+              style={{ backgroundColor: color.code }}
+              title={`文字色: ${color.label}`}
+              onClick={() => editor.chain().focus().setColor(color.code).run()}
+            />
+          ))}
+          <span className="rich-text-editor__separator" />
+          <button
+            type="button"
+            className="rich-text-editor__tool"
+            title="装飾を解除"
+            onClick={() => editor.chain().focus().unsetAllMarks().run()}
+          >
+            解除
+          </button>
+        </div>
+      )}
       <EditorContent editor={editor} />
     </div>
   );

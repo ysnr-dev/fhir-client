@@ -2488,20 +2488,30 @@ button:disabled {
 
 /* ---- 診療記録(Composition / 経過記録) ---- */
 
-/* Tiptap エディタ。入力欄の見た目は .qp-field input に合わせ、
-   本文エリアだけ複数行ぶんの高さを確保する。 */
+/* Tiptap エディタ。枠は外側(.clinical-note-section)が持つので、ここでは
+   持たない — セクション枠とエディタ枠が二重に見えるのを避ける。 */
 .rich-text-editor {
-  border: 1px solid var(--border);
-  border-radius: 6px;
   background: var(--bg);
 }
 
+/* 常時表示の操作バー(装飾パネルの開閉・画像挿入)。 */
+.rich-text-editor__bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+/* 装飾パネル。既定は非表示で、バーの「装飾」ボタンで開く。 */
 .rich-text-editor__toolbar {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
+  background: var(--bg-alt, transparent);
   flex-wrap: wrap;
 }
 
@@ -2575,6 +2585,12 @@ button:disabled {
   margin: 0 0 0.5em;
 }
 
+/* 本文を書き込む画面なので、.patient-form 既定の max-width(480px)では狭すぎる。
+   セクションの操作バー(種別+装飾+画像+並べ替え/削除)が 1 行に収まる幅を確保する。 */
+.clinical-note-form {
+  max-width: 880px;
+}
+
 /* セクション一覧。.patient-form fieldset の横並びを打ち消して縦に積む
    (.practitioner-form__role と同じパターン)。 */
 .clinical-note-form__sections {
@@ -2582,23 +2598,15 @@ button:disabled {
   align-items: stretch;
 }
 
-/* セクション編集カード。見出し行(種別選択+操作)と本文エディタを縦に積む。 */
+/* セクション編集カード。種別選択・操作ボタン・装飾・本文をこの 1 枠に収める。
+   overflow: hidden は内側の操作バーの背景を角丸からはみ出させないため。 */
 .clinical-note-section {
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  overflow: hidden;
 }
 
-.clinical-note-section__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.clinical-note-section__header select {
+.clinical-note-section select {
   min-width: 180px;
 }
 

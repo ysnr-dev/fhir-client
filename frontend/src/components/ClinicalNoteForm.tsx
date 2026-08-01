@@ -68,7 +68,7 @@ export function ClinicalNoteForm({
   }
 
   return (
-    <form className="patient-form" onSubmit={handleSubmit}>
+    <form className="patient-form clinical-note-form" onSubmit={handleSubmit}>
       <ErrorBanner error={submitError} />
       {validationError && (
         <div className="error-banner" role="alert">
@@ -117,43 +117,51 @@ export function ClinicalNoteForm({
         {values.sections.map((section, index) => (
           // key は uid。並べ替えでもエディタのインスタンスが section に追随する。
           <div key={section.uid} className="clinical-note-section">
-            <div className="clinical-note-section__header">
-              <select
-                value={section.code}
-                onChange={(e) => updateSection(section.uid, { code: e.target.value as SectionCode })}
-                aria-label="セクション種別"
-              >
-                {SECTION_OPTIONS.map((o) => (
-                  <option key={o.code} value={o.code}>
-                    {o.title}
-                  </option>
-                ))}
-              </select>
-              <div className="clinical-note-section__actions">
-                <button
-                  type="button"
-                  onClick={() => moveSection(section.uid, -1)}
-                  disabled={index === 0}
-                  title="上へ移動"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveSection(section.uid, 1)}
-                  disabled={index === values.sections.length - 1}
-                  title="下へ移動"
-                >
-                  ↓
-                </button>
-                <button type="button" onClick={() => removeSection(section.uid)} title="セクションを削除">
-                  削除
-                </button>
-              </div>
-            </div>
+            {/* セクション種別・並べ替え・削除はエディタの操作バーに同居させる
+                (枠を入れ子にしないため)。 */}
             <RichTextEditor
               initialHtml={section.html}
               onChange={(html) => updateSection(section.uid, { html })}
+              leading={
+                <select
+                  value={section.code}
+                  onChange={(e) => updateSection(section.uid, { code: e.target.value as SectionCode })}
+                  aria-label="セクション種別"
+                >
+                  {SECTION_OPTIONS.map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.title}
+                    </option>
+                  ))}
+                </select>
+              }
+              trailing={
+                <div className="clinical-note-section__actions">
+                  <button
+                    type="button"
+                    onClick={() => moveSection(section.uid, -1)}
+                    disabled={index === 0}
+                    title="上へ移動"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveSection(section.uid, 1)}
+                    disabled={index === values.sections.length - 1}
+                    title="下へ移動"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeSection(section.uid)}
+                    title="セクションを削除"
+                  >
+                    削除
+                  </button>
+                </div>
+              }
             />
           </div>
         ))}
