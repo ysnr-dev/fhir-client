@@ -104,6 +104,48 @@ function collectInitialAnswers(
   return answers;
 }
 
+// initialExpression(SDC)を評価して初期回答を設定する。実行時コンテキスト
+// (%変数。populateContext.ts 参照)が与えられた新規作成時のみ適用され、
+// initial.value[x] / initialSelected で既に値がある項目は上書きしない。
+function applyInitialExpressions(
+  items: fhir4.QuestionnaireItem[] | undefined,
+  answers: Answers,
+  context: Record<string, unknown>,
+): Answers {
+  // 回答前の評価なので、式のベースリソースは空の QuestionnaireResponse で足りる
+  // (初期値式は %変数 参照が主。回答参照は空を返す)。
+  const resource: fhir4.QuestionnaireResponse = {
+    resourceType: "QuestionnaireResponse",
+    status: "in-progress",
+  };
+
+  const walk = (list: fhir4.QuestionnaireItem[] | undefined, prefix: string) => {
+    for (const item of list ?? []) {
+      const key = prefix + item.linkId;
+      if (item.type === "group") {
+        walk(item.item, item.repeats ? `${key}#0.` : `${key}.`);
+        continue;
+      }
+      // choice 配下の条件付きグループ。
+      if (item.item?.length) walk(item.item, `${key}.`);
+
+      const expression = initialExpressionOf(item);
+      if (!expression || answers[key] !== undefined) continue;
+      try {
+        const values = fhirpath.evaluate(resource, expression, context, fhirpathR4Model) as unknown[];
+        const value = values[0];
+        if (typeof value === "string" && value !== "") answers[key] = value;
+        else if (typeof value === "number") answers[key] = String(value);
+      } catch (e) {
+        console.warn(`初期値式の評価に失敗しました(${item.linkId}):`, e);
+      }
+    }
+  };
+
+  walk(items, "");
+  return answers;
+}
+
 function answerToString(answer: fhir4.QuestionnaireResponseItemAnswer): string {
   return (
     answer.valueString ??
@@ -174,9 +216,12 @@ interface InitialState {
 function buildInitialState(
   questionnaire: fhir4.Questionnaire,
   initialResponse: fhir4.QuestionnaireResponse | undefined,
+  expressionContext: Record<string, unknown> | undefined,
 ): InitialState {
   if (!initialResponse) {
-    return { answers: collectInitialAnswers(questionnaire.item, "", {}), counts: {}, annotations: {} };
+    const answers = collectInitialAnswers(questionnaire.item, "", {});
+    if (expressionContext) applyInitialExpressions(questionnaire.item, answers, expressionContext);
+    return { answers, counts: {}, annotations: {} };
   }
   const answers: Answers = {};
   const counts: Record<string, number> = {};
@@ -328,6 +373,10 @@ interface QuestionnaireResponseFormProps {
   ) => void;
   submitLabel?: string;
   submitting?: boolean;
+  // 初期値式・計算式から参照できる実行時コンテキスト(%変数名 → 値)。
+  // 新規作成時に与えると initialExpression を評価して初期回答にする
+  // (populateContext.ts の buildPopulateContext で組み立てる)。
+  expressionContext?: Record<string, unknown>;
   // フォーム先頭(質問項目の前)に描画するメタ情報フィールド。
   children?: ReactNode;
 }
@@ -339,9 +388,12 @@ export function QuestionnaireResponseForm({
   onSubmit,
   submitLabel = "登録",
   submitting = false,
+  expressionContext,
   children,
 }: QuestionnaireResponseFormProps) {
-  const [initialState] = useState(() => buildInitialState(questionnaire, initialResponse));
+  const [initialState] = useState(() =>
+    buildInitialState(questionnaire, initialResponse, expressionContext),
+  );
   const [answers, setAnswers] = useState<Answers>(initialState.answers);
   // 繰り返しグループのインスタンス数(キーはグループのインスタンスパス)。
   const [counts, setCounts] = useState<Record<string, number>>(initialState.counts);
@@ -358,7 +410,7 @@ export function QuestionnaireResponseForm({
       status: "in-progress",
       item: buildResponseItems(questionnaire.item, "", answers, counts),
     };
-    const env: Record<string, unknown> = { resource: response };
+    const env: Record<string, unknown> = { ...expressionContext, resource: response };
     for (const extension of questionnaire.extension ?? []) {
       if (extension.url !== VARIABLE_EXT_URL) continue;
       const name = extension.valueExpression?.name;
@@ -373,7 +425,7 @@ export function QuestionnaireResponseForm({
       }
     }
     return { response, env };
-  }, [questionnaire, answers, counts]);
+  }, [questionnaire, answers, counts, expressionContext]);
 
   function evaluateCalculated(expression: string): string {
     try {
@@ -746,7 +798,7 @@ export function QuestionnaireResponseForm({
             {renderInput(item, key)}
           </label>
           {renderSchemaImage(item, key)}
-          {initialExpression && !initialResponse && (
+          {initialExpression && !initialResponse && !expressionContext && (
             <p className="qp-field__note">初期値式(実行時に設定): {initialExpression}</p>
           )}
         </div>

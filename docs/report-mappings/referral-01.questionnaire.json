@@ -1,0 +1,176 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://example4.com",
+  "version": "1.0.0",
+  "name": "REFERRAL_01",
+  "title": "診療情報提供書",
+  "status": "active",
+  "subjectType": ["Patient"],
+  "description": "紙様式「紹介状（診療情報提供書）」を基にしたテンプレート。傷病名・検査結果・現在の処方は初期値式(%conditions / %labResults / %prescriptions)で患者のFHIRリソースから取り込む。",
+  "item": [
+    {
+      "linkId": "grp_ref_to",
+      "type": "group",
+      "text": "紹介先",
+      "item": [
+        {
+          "linkId": "ref_to_name",
+          "type": "string",
+          "text": "紹介先医療機関名",
+          "required": true
+        },
+        {
+          "linkId": "ref_to_dept",
+          "type": "string",
+          "text": "診療科"
+        },
+        {
+          "linkId": "ref_to_doctor",
+          "type": "string",
+          "text": "担当医師名"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_ref_from",
+      "type": "group",
+      "text": "紹介元医療機関",
+      "item": [
+        {
+          "linkId": "ref_from_name",
+          "type": "string",
+          "text": "名称"
+        },
+        {
+          "linkId": "ref_from_address",
+          "type": "string",
+          "text": "所在地"
+        },
+        {
+          "linkId": "ref_from_phone",
+          "type": "string",
+          "text": "電話番号"
+        },
+        {
+          "linkId": "ref_from_fax",
+          "type": "string",
+          "text": "ＦＡＸ"
+        },
+        {
+          "linkId": "ref_from_dept",
+          "type": "string",
+          "text": "診療科名"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_patient",
+      "type": "group",
+      "text": "患者情報",
+      "item": [
+        {
+          "linkId": "pt_address",
+          "type": "string",
+          "text": "患者住所",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%patient.address.first().text"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "pt_phone",
+          "type": "string",
+          "text": "電話番号",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%patient.telecom.where(system='phone').value.first()"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "occupation",
+          "type": "string",
+          "text": "職業"
+        }
+      ]
+    },
+    {
+      "linkId": "disease_names",
+      "type": "text",
+      "text": "傷病名",
+      "required": true,
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+          "valueExpression": {
+            "language": "text/fhirpath",
+            "expression": "%conditions"
+          }
+        }
+      ]
+    },
+    {
+      "linkId": "purpose",
+      "type": "text",
+      "text": "紹介目的",
+      "required": true
+    },
+    {
+      "linkId": "history",
+      "type": "text",
+      "text": "既往歴及び家族歴"
+    },
+    {
+      "linkId": "course",
+      "type": "text",
+      "text": "病状経過及び検査結果",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+          "valueExpression": {
+            "language": "text/fhirpath",
+            "expression": "%labResults"
+          }
+        }
+      ]
+    },
+    {
+      "linkId": "treatment",
+      "type": "text",
+      "text": "治療経過"
+    },
+    {
+      "linkId": "prescription",
+      "type": "text",
+      "text": "現在の処方",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+          "valueExpression": {
+            "language": "text/fhirpath",
+            "expression": "%prescriptions"
+          }
+        }
+      ]
+    },
+    {
+      "linkId": "remarks",
+      "type": "text",
+      "text": "備考"
+    }
+  ]
+}

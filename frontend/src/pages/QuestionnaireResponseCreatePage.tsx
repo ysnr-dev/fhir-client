@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   useCreateQuestionnaireResponse,
   usePatient,
+  usePopulateSources,
   useQuestionnaireOptions,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientHeader } from "../components/PatientHeader";
 import { QuestionnaireResponseForm } from "../components/QuestionnaireResponseForm";
 import { QuestionnaireResponseMetaFields } from "../components/QuestionnaireResponseMetaFields";
+import { buildPopulateContext } from "../fhir/populateContext";
 import {
   buildQuestionnaireResponse,
   emptyQuestionnaireResponseMeta,
@@ -30,6 +32,22 @@ export function QuestionnaireResponseCreatePage() {
 
   const [meta, setMeta] = useState(emptyQuestionnaireResponseMeta);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // 初期値式(%conditions / %labResults / %prescriptions / %patient)の実行時
+  // コンテキスト。取得完了までフォームを描画しない(初期回答はマウント時に確定するため)。
+  const populate = usePopulateSources(patientId);
+  const expressionContext = useMemo(
+    () =>
+      patient && !populate.isLoading
+        ? buildPopulateContext({
+            patient,
+            conditions: populate.conditions,
+            labDetail: populate.labDetail,
+            prescriptionDetail: populate.prescriptionDetail,
+          })
+        : undefined,
+    [patient, populate.isLoading, populate.conditions, populate.labDetail, populate.prescriptionDetail],
+  );
 
   const createResponse = useCreateQuestionnaireResponse();
 
@@ -65,6 +83,7 @@ export function QuestionnaireResponseCreatePage() {
       <PatientHeader patientId={patientId} />
 
       <ErrorBanner error={error} />
+      <ErrorBanner error={populate.error} />
       <ErrorBanner error={createResponse.error} />
       {validationError && (
         <div className="error-banner" role="alert">
@@ -97,18 +116,22 @@ export function QuestionnaireResponseCreatePage() {
         </div>
       )}
 
-      {questionnaire && (
-        // テンプレート切替時に入力途中の回答を持ち越さないよう key で作り直す。
-        <QuestionnaireResponseForm
-          key={questionnaire.id}
-          questionnaire={questionnaire}
-          onSubmit={handleSubmit}
-          submitLabel="登録"
-          submitting={createResponse.isPending}
-        >
-          <QuestionnaireResponseMetaFields values={meta} onChange={setMeta} />
-        </QuestionnaireResponseForm>
-      )}
+      {questionnaire &&
+        (expressionContext ? (
+          // テンプレート切替時に入力途中の回答を持ち越さないよう key で作り直す。
+          <QuestionnaireResponseForm
+            key={questionnaire.id}
+            questionnaire={questionnaire}
+            onSubmit={handleSubmit}
+            submitLabel="登録"
+            submitting={createResponse.isPending}
+            expressionContext={expressionContext}
+          >
+            <QuestionnaireResponseMetaFields values={meta} onChange={setMeta} />
+          </QuestionnaireResponseForm>
+        ) : (
+          <p>読み込み中...</p>
+        ))}
     </div>
   );
 }
