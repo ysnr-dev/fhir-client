@@ -486,6 +486,74 @@ export function useDeleteCondition() {
   });
 }
 
+const ALLERGY_COUNT = 20;
+
+export function useAllergySearch(patientId: string | undefined, offset: number) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("_count", String(ALLERGY_COUNT));
+  params.set("_offset", String(offset));
+  // 記録日の降順(新しい順)。AllergyIntolerance に発症日の検索パラメータは無いため
+  // date(= recordedDate)でソートする。
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["AllergyIntolerance", "search", patientId, offset],
+    queryFn: () => searchResource<fhir4.AllergyIntolerance>("AllergyIntolerance", params),
+    placeholderData: keepPreviousData,
+    enabled: Boolean(patientId),
+  });
+
+  return {
+    ...query,
+    bundle: query.data?.data,
+    total: query.data?.data.total ?? 0,
+    count: ALLERGY_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+export function useAllergy(id: string | undefined) {
+  return useQuery({
+    queryKey: ["AllergyIntolerance", id],
+    queryFn: () => readResource<fhir4.AllergyIntolerance>("AllergyIntolerance", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateAllergy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (allergy: fhir4.AllergyIntolerance) => createResource(allergy),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["AllergyIntolerance", "search"] });
+    },
+  });
+}
+
+export function useUpdateAllergy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ allergy, etag }: { allergy: fhir4.AllergyIntolerance; etag: string }) =>
+      updateResource(allergy, etag),
+    onSuccess: (result: FhirResult<fhir4.AllergyIntolerance>) => {
+      queryClient.invalidateQueries({ queryKey: ["AllergyIntolerance", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["AllergyIntolerance", result.data.id] });
+    },
+  });
+}
+
+export function useDeleteAllergy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteResource("AllergyIntolerance", id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["AllergyIntolerance", "search"] });
+    },
+  });
+}
+
 const QUESTIONNAIRE_COUNT = 20;
 
 // QuestionnaireResponse はテンプレートを canonical("<url>|<version>")だけで参照する。

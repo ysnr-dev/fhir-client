@@ -11,7 +11,8 @@ export default defineConfig({
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
         changeOrigin: true,
       },
-      '/master': {
+      // 前方一致だと SPA ルート /master-import まで転送されるため、API の /master/ 配下に限定する
+      '^/master/': {
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
         changeOrigin: true,
       },

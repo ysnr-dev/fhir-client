@@ -51,6 +51,9 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
                   <Link className="row-menu__item" to={`/patients/${patient.id}/conditions`}>
                     病名
                   </Link>
+                  <Link className="row-menu__item" to={`/patients/${patient.id}/allergies`}>
+                    アレルギー
+                  </Link>
                   <Link className="row-menu__item" to={`/patients/${patient.id}/lab-results`}>
                     検査結果
                   </Link>
