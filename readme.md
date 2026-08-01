@@ -236,8 +236,9 @@ PDF 出力できます。レイアウトは [ThinReports Basic Editor](https://g
 で作成した `.tlf` ファイルを管理画面 `/report-layouts` からアップロードし、テンプレートの
 canonical(`url|version`)に紐付けます(backend DB の `report_layouts` に保存)。
 
-- **PDF 生成は backend**(`thinreports` gem、純 Ruby・IPA フォント同梱)。上流から
-  QR → canonical で元 Questionnaire → Patient → シェーマ画像 Binary を取得して組み立てます。
+- **PDF 生成は backend**(`thinreports` gem、純 Ruby・IPA フォント同梱)。上流アクセスは
+  QR の read と、batch Bundle(元 Questionnaire 検索 + Patient + シェーマ画像 Binary ×N)の
+  計 2 往復で組み立てます。
 - **エンドポイント**: `GET /reports/questionnaire_responses/:id/pdf`(inline 表示)、
   `GET /reports/layouts?canonical=...`(登録有無の照会。テンプレート表示画面の「PDF」ボタンの
   表示判定に使用)。レイアウト未登録のテンプレートではボタンが無効になります。

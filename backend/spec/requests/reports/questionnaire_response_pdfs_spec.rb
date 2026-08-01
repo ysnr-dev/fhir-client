@@ -64,22 +64,35 @@ RSpec.describe "Reports::QuestionnaireResponsePdfs", type: :request do
     )
   end
 
+  # 関連リソース(Questionnaire 検索・Patient・Binary)は 1 つの batch Bundle で
+  # 取得される。entry はリクエストと同順で返る。
+  def batch_entry(resource, status: "200 OK")
+    { "response" => { "status" => status }, "resource" => resource }
+  end
+
+  def stub_batch(entries)
+    stub_request(:post, "#{upstream_base}/")
+      .to_return(status: 200,
+                 body: { "resourceType" => "Bundle", "type" => "batch-response",
+                         "entry" => entries }.to_json,
+                 headers: { "Content-Type" => "application/fhir+json" })
+  end
+
+  def successful_batch_entries
+    [
+      batch_entry({ "resourceType" => "Bundle",
+                    "entry" => [{ "resource" => questionnaire }] }),
+      batch_entry(patient),
+      batch_entry({ "resourceType" => "Binary", "contentType" => "image/png",
+                    "data" => Base64.strict_encode64(png_1px) })
+    ]
+  end
+
   def stub_upstream
     stub_request(:get, "#{upstream_base}/QuestionnaireResponse/qr-1")
       .to_return(status: 200, body: questionnaire_response.to_json,
                  headers: { "Content-Type" => "application/fhir+json" })
-    stub_request(:get, "#{upstream_base}/Questionnaire")
-      .with(query: { "url" => canonical_url, "version" => "1.0.0" })
-      .to_return(status: 200,
-                 body: { "resourceType" => "Bundle",
-                         "entry" => [{ "resource" => questionnaire }] }.to_json,
-                 headers: { "Content-Type" => "application/fhir+json" })
-    stub_request(:get, "#{upstream_base}/Patient/pat-1")
-      .to_return(status: 200, body: patient.to_json,
-                 headers: { "Content-Type" => "application/fhir+json" })
-    stub_request(:get, "#{upstream_base}/Binary/bin-1")
-      .with(headers: { "Accept" => "image/*" })
-      .to_return(status: 200, body: png_1px, headers: { "Content-Type" => "image/png" })
+    stub_batch(successful_batch_entries)
   end
 
   describe "GET /reports/questionnaire_responses/:id/pdf" do
@@ -119,9 +132,9 @@ RSpec.describe "Reports::QuestionnaireResponsePdfs", type: :request do
     it "returns 422 when the questionnaire cannot be resolved by canonical" do
       create_layout!
       stub_upstream
-      stub_request(:get, "#{upstream_base}/Questionnaire")
-        .with(query: { "url" => canonical_url, "version" => "1.0.0" })
-        .to_return(status: 200, body: { "resourceType" => "Bundle", "entry" => [] }.to_json)
+      entries = successful_batch_entries
+      entries[0] = batch_entry({ "resourceType" => "Bundle", "entry" => [] })
+      stub_batch(entries)
 
       get "/reports/questionnaire_responses/qr-1/pdf"
 
@@ -142,8 +155,9 @@ RSpec.describe "Reports::QuestionnaireResponsePdfs", type: :request do
     it "returns 502 when the patient cannot be fetched" do
       create_layout!
       stub_upstream
-      stub_request(:get, "#{upstream_base}/Patient/pat-1")
-        .to_return(status: 404, body: '{"resourceType":"OperationOutcome"}')
+      entries = successful_batch_entries
+      entries[1] = { "response" => { "status" => "404 Not Found" } }
+      stub_batch(entries)
 
       get "/reports/questionnaire_responses/qr-1/pdf"
 
