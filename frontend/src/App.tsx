@@ -9,6 +9,7 @@ import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
+import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { AllergyCreatePage } from "./pages/AllergyCreatePage";
 import { AllergyDetailPage } from "./pages/AllergyDetailPage";
 import { AllergyEditPage } from "./pages/AllergyEditPage";
@@ -73,6 +74,9 @@ function App() {
             </Link>
             <Link to="/master-import" className="row-menu__item">
               マスタ取込
+            </Link>
+            <Link to="/medicine-dose-conversions" className="row-menu__item">
+              投与量換算
             </Link>
             <Link to="/oauth-clients" className="row-menu__item">
               OAuth クライアント
@@ -140,6 +144,7 @@ function App() {
           <Route path="/practitioners/new" element={<PractitionerCreatePage />} />
           <Route path="/practitioners/:id/edit" element={<PractitionerEditPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
+          <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/questionnaires" element={<QuestionnaireListPage />} />
           <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />
           <Route path="/questionnaires/:questionnaireId/edit" element={<QuestionnaireEditPage />} />

@@ -39,6 +39,56 @@ export interface MedicineType {
   name: string | null;
 }
 
+// 投与量の入力単位 → 医薬品マスタの薬価算定単位への換算。
+// 入力値 ÷ factor = to_unit での数量（例: factor=20, to_unit="管" なら 20mL が 1管）。
+export interface MedicineDoseConversion {
+  id: number;
+  medicine_code: string;
+  from_unit: string;
+  // decimal は JSON では文字列で返る。
+  factor: string;
+  to_unit: string;
+  // explicit=規格単位に力価量が明示 / from_percent=濃度%から算出 /
+  // volume=規格単位の容量から / identity=薬価算定単位が量そのもの / manual=手動登録
+  source: string;
+  needs_review: boolean;
+  note: string | null;
+  // 以下は一覧APIが医薬品マスタ・HOTコードマスタから JOIN で付与する。
+  medicine_name: string | null;
+  medicine_unit_name: string | null;
+  dosage_form: string | null;
+  standard_unit: string | null;
+}
+
+// 換算行を1件も持たない医薬品（手動メンテの対象）。
+export interface UnmappedMedicine {
+  id: number;
+  medicine_code: string;
+  name: string;
+  unit_name: string | null;
+  dosage_form: string | null;
+  yakka_code: string | null;
+  // HOTコードマスタの規格単位。空なら自動生成の材料そのものが無い。
+  standard_unit: string | null;
+}
+
+export interface MedicineDoseConversionPayload {
+  medicine_code: string;
+  from_unit: string;
+  factor: number;
+  to_unit?: string | null;
+  note?: string | null;
+  needs_review?: boolean;
+}
+
+export interface MedicineDoseConversionGenerateResult {
+  created: number;
+  medicines: number;
+  skipped: number;
+  unmapped: number;
+  needs_review: number;
+}
+
 export interface MedicineUsage {
   id: number;
   usage_code: string;
@@ -301,6 +351,85 @@ export async function searchJfagyAllergens(params: {
   const res = await masterFetch(`/master/jfagy_allergens?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<JfagyAllergen>;
+}
+
+const DOSE_CONVERSIONS_PATH = "/master/medicine_dose_conversions";
+
+export async function searchMedicineDoseConversions(params: {
+  name?: string;
+  medicine_code?: string;
+  source?: string;
+  dosage_form?: string;
+  needs_review?: boolean;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<MedicineDoseConversion>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.medicine_code) search.set("medicine_code", params.medicine_code);
+  if (params.source) search.set("source", params.source);
+  if (params.dosage_form) search.set("dosage_form", params.dosage_form);
+  if (params.needs_review) search.set("needs_review", "true");
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${DOSE_CONVERSIONS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<MedicineDoseConversion>;
+}
+
+export async function searchUnmappedMedicines(params: {
+  name?: string;
+  dosage_form?: string;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<UnmappedMedicine>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.dosage_form) search.set("dosage_form", params.dosage_form);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${DOSE_CONVERSIONS_PATH}/unmapped?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<UnmappedMedicine>;
+}
+
+// 未紐付けの医薬品にだけ換算行を作る。既存行（手動メンテ分を含む）は上書きしない。
+export async function generateMedicineDoseConversions(): Promise<MedicineDoseConversionGenerateResult> {
+  const res = await masterFetch(`${DOSE_CONVERSIONS_PATH}/generate`, { method: "POST" });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MedicineDoseConversionGenerateResult;
+}
+
+export async function createMedicineDoseConversion(
+  payload: MedicineDoseConversionPayload,
+): Promise<MedicineDoseConversion> {
+  const res = await masterFetch(DOSE_CONVERSIONS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MedicineDoseConversion;
+}
+
+export async function updateMedicineDoseConversion(
+  id: number,
+  payload: Partial<MedicineDoseConversionPayload>,
+): Promise<MedicineDoseConversion> {
+  const res = await masterFetch(`${DOSE_CONVERSIONS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MedicineDoseConversion;
+}
+
+export async function deleteMedicineDoseConversion(id: number): Promise<void> {
+  const res = await masterFetch(`${DOSE_CONVERSIONS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
 }
 
 export async function importMaster(

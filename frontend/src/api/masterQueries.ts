@@ -1,16 +1,23 @@
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createMedicineDoseConversion,
+  deleteMedicineDoseConversion,
   fetchLabItemCategories,
   fetchMedicineTypeOptions,
   fetchMedicineUsageCategories,
+  generateMedicineDoseConversions,
   importMaster,
   searchDiseases,
   searchJfagyAllergens,
   searchLabItems,
+  searchMedicineDoseConversions,
   searchMedicineUsages,
   searchMedicines,
   searchModifiers,
+  searchUnmappedMedicines,
+  updateMedicineDoseConversion,
   type MasterType,
+  type MedicineDoseConversionPayload,
 } from "./masterClient";
 
 export interface MedicineUsageFilters {
@@ -20,7 +27,18 @@ export interface MedicineUsageFilters {
   doseCount?: string;
 }
 
+export interface MedicineDoseConversionFilters {
+  name?: string;
+  source?: string;
+  dosageForm?: string;
+  needsReview?: boolean;
+}
+
 const MASTER_SEARCH_PER = 10;
+// メンテ画面は一覧をじっくり見る画面なので検索モーダルより多く出す。
+const DOSE_CONVERSION_PER = 20;
+// 換算行と未紐付け一覧はどちらも generate / CRUD で同時に変わるのでまとめて破棄する。
+const DOSE_CONVERSIONS_KEY = ["master", "medicine_dose_conversions"];
 
 export function useImportMaster() {
   return useMutation({
@@ -171,6 +189,95 @@ export function useJfagyAllergenGroups(enabled: boolean) {
     queryFn: () => searchJfagyAllergens({ level: "2", per: 100 }),
     staleTime: Infinity,
     enabled,
+  });
+}
+
+export function useMedicineDoseConversionSearch(
+  filters: MedicineDoseConversionFilters,
+  page: number,
+) {
+  return useQuery({
+    queryKey: [...DOSE_CONVERSIONS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchMedicineDoseConversions({
+        name: filters.name || undefined,
+        source: filters.source || undefined,
+        dosage_form: filters.dosageForm || undefined,
+        needs_review: filters.needsReview || undefined,
+        page,
+        per: DOSE_CONVERSION_PER,
+      }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+// 換算行を1件も持たない医薬品の一覧（手動メンテの対象）。
+export function useUnmappedMedicineSearch(
+  filters: MedicineDoseConversionFilters,
+  page: number,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: [...DOSE_CONVERSIONS_KEY, "unmapped", filters, page],
+    queryFn: () =>
+      searchUnmappedMedicines({
+        name: filters.name || undefined,
+        dosage_form: filters.dosageForm || undefined,
+        page,
+        per: DOSE_CONVERSION_PER,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useGenerateMedicineDoseConversions() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: generateMedicineDoseConversions,
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DOSE_CONVERSIONS_KEY });
+    },
+  });
+}
+
+export function useCreateMedicineDoseConversion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: MedicineDoseConversionPayload) => createMedicineDoseConversion(payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DOSE_CONVERSIONS_KEY });
+    },
+  });
+}
+
+export function useUpdateMedicineDoseConversion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: number;
+      payload: Partial<MedicineDoseConversionPayload>;
+    }) => updateMedicineDoseConversion(id, payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DOSE_CONVERSIONS_KEY });
+    },
+  });
+}
+
+export function useDeleteMedicineDoseConversion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteMedicineDoseConversion(id),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DOSE_CONVERSIONS_KEY });
+    },
   });
 }
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_02_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_02_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -171,6 +171,20 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_02_000000) do
     t.index ["fhir_item_name"], name: "index_master_lab_items_on_fhir_item_name"
     t.index ["jlac10_code"], name: "index_master_lab_items_on_jlac10_code"
     t.index ["jlac11_code"], name: "index_master_lab_items_on_jlac11_code", unique: true
+  end
+
+  create_table "master_medicine_dose_conversions", force: :cascade do |t|
+    t.string "medicine_code", null: false
+    t.string "from_unit", null: false
+    t.decimal "factor", precision: 16, scale: 6, null: false
+    t.string "to_unit", null: false
+    t.string "source", null: false
+    t.boolean "needs_review", default: false, null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["medicine_code", "from_unit"], name: "index_medicine_dose_conversions_on_code_and_from_unit", unique: true
+    t.index ["needs_review"], name: "index_master_medicine_dose_conversions_on_needs_review"
   end
 
   create_table "master_medicine_types", force: :cascade do |t|

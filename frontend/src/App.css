@@ -3538,3 +3538,68 @@ body.karte-wide #root {
     height: var(--karte-pane-height);
   }
 }
+
+/* 投与量換算マスタのメンテ画面 */
+.dose-conversion__lead {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.dose-conversion__tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dose-conversion__tab.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+/* 検索フォームのチェックボックスは列方向のラベルを行方向に上書きする。 */
+.patient-search-form label.dose-conversion__checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+}
+
+/* 一覧はモーダルと違いページ全体を使うので、高さ固定のスクロール枠は使わない。 */
+.dose-conversion__table {
+  margin-bottom: 4px;
+}
+
+.dose-conversion__table input {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  width: 100%;
+}
+
+.dose-conversion__table input.dose-conversion__factor {
+  width: 96px;
+}
+
+.dose-conversion__table input.dose-conversion__from-unit {
+  width: 80px;
+}
+
+.dose-conversion__row--review {
+  background: var(--accent-bg);
+}
+
+.dose-conversion__badge {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  border-radius: 3px;
+  padding: 0 4px;
+}
