@@ -10,11 +10,23 @@ import { useLabResultInitialValues } from "../hooks/useLabResultInitialValues";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabResultForm } from "./LabResultForm";
 import { LabResultTable } from "./LabResultTable";
+import { LabResultTimelinePanel } from "./LabResultTimelinePanel";
 import { Pagination } from "./Pagination";
 
-// カルテ画面の「検査結果」タブ。一覧・登録・編集・削除を左ペイン内で完結させる。
+// カルテ画面の「検査結果」タブ。一覧・時系列表示・登録・編集・削除を左ペイン内で完結させる。
 
-type Mode = { kind: "list" } | { kind: "create" } | { kind: "edit"; reportId: string };
+type Mode =
+  | { kind: "list" }
+  | { kind: "timeline" }
+  | { kind: "create" }
+  | { kind: "edit"; reportId: string };
+
+const MODE_TITLES: Record<Mode["kind"], string> = {
+  list: "検査結果",
+  timeline: "検査結果 時系列表示",
+  create: "検査結果登録",
+  edit: "検査結果編集",
+};
 
 export function KarteLabResultTab({ patientId }: { patientId: string }) {
   const [mode, setMode] = useState<Mode>({ kind: "list" });
@@ -34,12 +46,14 @@ export function KarteLabResultTab({ patientId }: { patientId: string }) {
     return (
       <div className="karte-tabpanel">
         <div className="karte-tabpanel__header">
-          <h3>{mode.kind === "create" ? "検査結果登録" : "検査結果編集"}</h3>
+          <h3>{MODE_TITLES[mode.kind]}</h3>
           <button type="button" onClick={backToList}>
             ← 一覧に戻る
           </button>
         </div>
-        {mode.kind === "create" ? (
+        {mode.kind === "timeline" ? (
+          <LabResultTimelinePanel patientId={patientId} />
+        ) : mode.kind === "create" ? (
           <CreateForm patientId={patientId} onSaved={backToList} />
         ) : (
           <EditForm patientId={patientId} reportId={mode.reportId} onSaved={backToList} />
@@ -51,10 +65,15 @@ export function KarteLabResultTab({ patientId }: { patientId: string }) {
   return (
     <div className="karte-tabpanel">
       <div className="karte-tabpanel__header">
-        <h3>検査結果</h3>
-        <button type="button" onClick={() => setMode({ kind: "create" })}>
-          新規登録
-        </button>
+        <h3>{MODE_TITLES.list}</h3>
+        <div className="karte-tabpanel__actions">
+          <button type="button" onClick={() => setMode({ kind: "timeline" })}>
+            時系列表示
+          </button>
+          <button type="button" onClick={() => setMode({ kind: "create" })}>
+            新規登録
+          </button>
+        </div>
       </div>
 
       <ErrorBanner error={error} />

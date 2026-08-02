@@ -175,7 +175,9 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
 
 - **左ペインのタブ**: 「カルテ」「病名」「アレルギー」「検査結果」。病名・アレルギー・検査結果は一覧・
   登録・編集・削除がタブ内で完結します(既存の一覧ページへは遷移しません)。テーブルは既存コンポーネントに
-  任意の `onEdit` を渡して再利用しており、未指定なら従来どおりページ遷移します。
+  任意の `onEdit` を渡して再利用しており、未指定なら従来どおりページ遷移します。検査結果タブには
+  「時系列表示」も置いてあり、時系列表示ページと同じ UI(`components/LabResultTimelinePanel.tsx`)を
+  タブ内に表示します。
 - **カルテタブ**: 診療記録(`Composition`)・処方(`ServiceRequest` + `MedicationRequest`)・単独登録の
   テンプレート回答(`QuestionnaireResponse`)を診療日ごとにまとめた時系列表示です。診療記録のセクションから
   参照されている回答は記録カードの本文として描画済みなので、単独カードには出しません。カードは高さを

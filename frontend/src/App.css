@@ -3035,6 +3035,11 @@ body.karte-wide #root {
   color: var(--text-h);
 }
 
+.karte-tabpanel__actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* 右ペイン: 登録・編集 UI + 右端の新規登録ボタン列 */
 .karte-right {
   display: flex;
