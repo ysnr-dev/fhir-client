@@ -259,13 +259,6 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
           <div className="karte-rp" key={rp.rpNumber}>
             <div className="karte-rp__head">
               <span className="karte-rp__number">{`RP${rp.rpNumber}`}</span>
-              <span className="karte-rp__usage">{rp.usageName ?? "-"}</span>
-              {rp.basicCategory === "内服" && rp.doseDays != null && (
-                <span className="karte-rp__dose">{`${rp.doseDays}日分`}</span>
-              )}
-              {rp.basicCategory === "頓服" && rp.doseCount != null && (
-                <span className="karte-rp__dose">{`${rp.doseCount}回分`}</span>
-              )}
             </div>
             <ul className="karte-rp__medicines">
               {rp.medicines.map((medicine) => (
@@ -276,9 +269,26 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
                       {`${medicine.dose}${medicine.unit ?? ""}`}
                     </span>
                   )}
+                  {medicine.comment && (
+                    <span className="karte-rp__comment">{`（${medicine.comment}）`}</span>
+                  )}
                 </li>
               ))}
             </ul>
+            {/* 紙の処方箋と同じく、用法は薬剤の後ろに置く。 */}
+            <div className="karte-rp__usage">
+              <span className="karte-rp__usage-label">用法:</span>
+              <span>{rp.usageName ?? "-"}</span>
+              {rp.basicCategory === "内服" && rp.doseDays != null && (
+                <span className="karte-rp__dose">{`${rp.doseDays}日分`}</span>
+              )}
+              {rp.basicCategory === "頓服" && rp.doseCount != null && (
+                <span className="karte-rp__dose">{`${rp.doseCount}回分`}</span>
+              )}
+              {rp.usageComment && (
+                <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>
+              )}
+            </div>
           </div>
         ))}
         {comment && <p className="karte-card__note">{comment}</p>}

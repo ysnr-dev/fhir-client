@@ -54,7 +54,8 @@ export function formatLabResults(labDetail: fhir4.Bundle | undefined): string {
   return [date ? `【検査結果 ${date}】` : "【検査結果】", ...lines].join("\n");
 }
 
-// 最新の処方 1 件を「処方日 + Rp ごとの用法・薬品」の複数行テキストにする。
+// 最新の処方 1 件を「処方日 + Rp ごとの薬品・用法」の複数行テキストにする。
+// 紙の処方箋と同じく、Rp 見出し → 薬品 → 最後に用法(投与量・コメント)の順で並べる。
 export function formatPrescriptions(prescriptionDetail: fhir4.Bundle | undefined): string {
   if (!prescriptionDetail) return "";
   const { serviceRequest, medicationRequests } = splitPrescriptionDetailBundle(prescriptionDetail);
@@ -63,6 +64,13 @@ export function formatPrescriptions(prescriptionDetail: fhir4.Bundle | undefined
   const date = summarizeServiceRequest(serviceRequest).date.replaceAll("-", "/");
   const lines: string[] = [date ? `【処方 ${date}】` : "【処方】"];
   for (const rp of groupByRp(medicationRequests)) {
+    lines.push(`Rp${rp.rpNumber}`);
+    for (const medicine of rp.medicines) {
+      const dose =
+        medicine.dose !== undefined ? ` ${medicine.dose}${medicine.unit ?? ""}` : "";
+      const comment = medicine.comment ? `（${medicine.comment}）` : "";
+      lines.push(`　${medicine.name}${dose}${comment}`);
+    }
     const amount =
       rp.doseDays !== undefined
         ? `${rp.doseDays}日分`
@@ -70,12 +78,8 @@ export function formatPrescriptions(prescriptionDetail: fhir4.Bundle | undefined
           ? `${rp.doseCount}回分`
           : "";
     const usage = [rp.usageName, amount].filter(Boolean).join(" ");
-    lines.push(`Rp${rp.rpNumber}${usage ? ` ${usage}` : ""}`);
-    for (const medicine of rp.medicines) {
-      const dose =
-        medicine.dose !== undefined ? ` ${medicine.dose}${medicine.unit ?? ""}` : "";
-      lines.push(`・${medicine.name}${dose}`);
-    }
+    const usageComment = rp.usageComment ? `（${rp.usageComment}）` : "";
+    if (usage || usageComment) lines.push(`　用法: ${usage}${usageComment}`);
   }
   return lines.join("\n");
 }

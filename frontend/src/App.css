@@ -3331,6 +3331,23 @@ body.karte-wide #root {
   color: var(--text-h);
 }
 
+/* 用法は薬剤リストの下に置くので、薬剤と同じだけ字下げする */
+.karte-rp__usage {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  padding-left: 12px;
+  font-size: 13px;
+}
+
+.karte-rp__usage-label {
+  color: var(--text);
+}
+
+.karte-rp__comment {
+  color: var(--text);
+}
+
 /* テンプレート回答カードの平文表示 */
 .karte-qr__lines {
   list-style: none;
