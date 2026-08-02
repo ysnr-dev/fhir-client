@@ -26,6 +26,7 @@ import { PractitionerListPage } from "./pages/PractitionerListPage";
 import { PatientCreatePage } from "./pages/PatientCreatePage";
 import { PatientEditPage } from "./pages/PatientEditPage";
 import { PatientListPage } from "./pages/PatientListPage";
+import { KartePage } from "./pages/KartePage";
 import { LabResultCreatePage } from "./pages/LabResultCreatePage";
 import { LabResultDetailPage } from "./pages/LabResultDetailPage";
 import { LabResultEditPage } from "./pages/LabResultEditPage";
@@ -89,6 +90,7 @@ function App() {
           <Route path="/patients" element={<PatientListPage />} />
           <Route path="/patients/new" element={<PatientCreatePage />} />
           <Route path="/patients/:id/edit" element={<PatientEditPage />} />
+          <Route path="/patients/:patientId/karte" element={<KartePage />} />
           <Route path="/patients/:patientId/prescriptions" element={<PrescriptionListPage />} />
           <Route path="/patients/:patientId/prescriptions/new" element={<PrescriptionCreatePage />} />
           <Route path="/patients/:patientId/prescriptions/:srId" element={<PrescriptionDetailPage />} />

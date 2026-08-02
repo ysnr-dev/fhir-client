@@ -1,30 +1,15 @@
-import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useDeleteLabResult, useLabResultDetail, useLabResultNavigation } from "../api/queries";
+import { useDeleteLabResult, useLabResultNavigation } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { JsonBlock } from "../components/JsonBlock";
+import { LabResultDetailPanel } from "../components/LabResultDetailPanel";
 import { PatientHeader } from "../components/PatientHeader";
-import {
-  interpretationClass,
-  observationLineDisplay,
-  specimenNamesById,
-  splitLabResultDetailBundle,
-  summarizeDiagnosticReport,
-} from "../fhir/labResultHelpers";
-
-type JsonView = "bundle" | "resource";
 
 export function LabResultDetailPage() {
   const { patientId, reportId } = useParams<{ patientId: string; reportId: string }>();
   const navigate = useNavigate();
-  const [jsonView, setJsonView] = useState<JsonView>("bundle");
 
-  const detail = useLabResultDetail(reportId);
   const deleteLabResult = useDeleteLabResult();
   const nav = useLabResultNavigation(patientId, reportId);
-
-  const isLoading = detail.isLoading;
-  const error = detail.error ?? deleteLabResult.error;
 
   function goToSibling(siblingId: string | undefined) {
     if (!siblingId) return;
@@ -39,11 +24,7 @@ export function LabResultDetailPage() {
     });
   }
 
-  const { report, observations, specimens } = detail.data
-    ? splitLabResultDetailBundle(detail.data.data)
-    : { report: undefined, observations: [], specimens: [] };
-  const summary = report ? summarizeDiagnosticReport(report) : undefined;
-  const specimenNames = specimenNamesById(specimens);
+  if (!patientId || !reportId) return null;
 
   return (
     <div className="page">
@@ -94,97 +75,9 @@ export function LabResultDetailPage() {
 
       <PatientHeader patientId={patientId} />
 
-      <ErrorBanner error={error} />
+      <ErrorBanner error={deleteLabResult.error} />
 
-      {isLoading ? (
-        <p>読み込み中...</p>
-      ) : (
-        report &&
-        summary && (
-          <div className="prescription-detail">
-            <fieldset>
-              <legend>検査共通</legend>
-              <dl className="prescription-detail__common">
-                <dt>検体採取日</dt>
-                <dd>{summary.date}</dd>
-                <dt>入外区分</dt>
-                <dd>{summary.settingDisplay}</dd>
-              </dl>
-            </fieldset>
-
-            <fieldset className="rp-card">
-              <legend>検査項目</legend>
-              <table className="rp-card__medicines rp-card__medicines--detail">
-                <thead>
-                  <tr>
-                    <th>検査項目</th>
-                    <th>略称</th>
-                    <th>材料</th>
-                    <th className="rp-card__lab-value">結果値</th>
-                    <th className="rp-card__lab-unit">単位</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {observations.map((obs, index) => {
-                    const line = observationLineDisplay(obs, specimenNames);
-                    return (
-                      <tr key={line.id || index}>
-                        <td>{line.name || "-"}</td>
-                        <td>{line.abbreviation || "-"}</td>
-                        <td>{line.specimen || "-"}</td>
-                        <td className={interpretationClass(line.interpretation, "rp-card__lab-value")}>
-                          {line.value || "-"}
-                        </td>
-                        <td className="rp-card__lab-unit">{line.unit || "-"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </fieldset>
-
-            <details className="prescription-detail__raw">
-              <summary>FHIR JSON を表示</summary>
-              <div className="prescription-detail__raw-toggle">
-                <label>
-                  <input
-                    type="radio"
-                    name="json-view"
-                    checked={jsonView === "bundle"}
-                    onChange={() => setJsonView("bundle")}
-                  />
-                  Bundle
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="json-view"
-                    checked={jsonView === "resource"}
-                    onChange={() => setJsonView("resource")}
-                  />
-                  リソース単位
-                </label>
-              </div>
-
-              {jsonView === "bundle" ? (
-                <JsonBlock value={detail.data?.data} />
-              ) : (
-                <div className="prescription-detail__raw-resources">
-                  {detail.data?.data.entry?.map((entry, index) => (
-                    <div className="prescription-detail__raw-resource" key={entry.resource?.id ?? index}>
-                      <h3>
-                        {entry.resource?.resourceType}
-                        {entry.resource?.id ? ` / ${entry.resource.id}` : ""}
-                      </h3>
-                      <JsonBlock value={entry.resource} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </details>
-          </div>
-        )
-      )}
+      <LabResultDetailPanel reportId={reportId} />
     </div>
   );
 }

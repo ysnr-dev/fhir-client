@@ -1,95 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import {
-  useCreateQuestionnaireResponse,
-  usePatient,
-  usePopulateSources,
-  useQuestionnaireOptions,
-} from "../api/queries";
-import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientHeader } from "../components/PatientHeader";
-import { QuestionnaireResponseForm } from "../components/QuestionnaireResponseForm";
-import { QuestionnaireResponseMetaFields } from "../components/QuestionnaireResponseMetaFields";
-import { displayJapaneseName } from "../fhir/humanName";
-import { buildPopulateContext } from "../fhir/populateContext";
-import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
-import {
-  buildQuestionnaireResponse,
-  emptyQuestionnaireResponseMeta,
-  validateQuestionnaireResponseMeta,
-} from "../fhir/questionnaireResponseHelpers";
+import { QuestionnaireResponseCreatePanel } from "../components/QuestionnaireResponsePanels";
 
 export function QuestionnaireResponseCreatePage() {
   const { patientId } = useParams<{ patientId: string }>();
   const navigate = useNavigate();
 
-  const { data: patientResult } = usePatient(patientId);
-  const patient = patientResult?.data;
-
-  // 登録対象のテンプレートは「有効」のもののみ選択できる(上流の status 検索で絞る)。
-  const {
-    questionnaires: activeQuestionnaires,
-    isLoading,
-    error,
-  } = useQuestionnaireOptions({ status: "active" });
-  const [questionnaireId, setQuestionnaireId] = useState("");
-  const questionnaire = activeQuestionnaires.find((q) => q.id === questionnaireId);
-
-  const [meta, setMeta] = useState(emptyQuestionnaireResponseMeta);
-  const [validationError, setValidationError] = useState<string | null>(null);
-
-  // ログイン中の医療従事者と所属医療機関。テンプレート項目の自動入力(拡張設定)と
-  // 記入者名の初期値に使う。
-  const loginAutofill = useLoginAutofillSource();
-
-  // 記入者名はログイン中の医療従事者で埋める。セッションと Practitioner の取得は
-  // 非同期なので初期値には使えず、未入力のときだけ後から流し込む(手入力の上書き
-  // 防止)。administrator や認証不要モードでは紐付く Practitioner が無いため空欄のまま。
-  const loginPractitionerName = loginAutofill.source
-    ? displayJapaneseName(loginAutofill.source.practitioner.name)
-    : "";
-  useEffect(() => {
-    if (!loginPractitionerName) return;
-    setMeta((prev) => (prev.authorName ? prev : { ...prev, authorName: loginPractitionerName }));
-  }, [loginPractitionerName]);
-
-  // 初期値式(%conditions / %labResults / %prescriptions / %patient)の実行時
-  // コンテキスト。取得完了までフォームを描画しない(初期回答はマウント時に確定するため)。
-  const populate = usePopulateSources(patientId);
-  const expressionContext = useMemo(
-    () =>
-      patient && !populate.isLoading
-        ? buildPopulateContext({
-            patient,
-            conditions: populate.conditions,
-            labDetail: populate.labDetail,
-            prescriptionDetail: populate.prescriptionDetail,
-          })
-        : undefined,
-    [patient, populate.isLoading, populate.conditions, populate.labDetail, populate.prescriptionDetail],
-  );
-
-  const createResponse = useCreateQuestionnaireResponse();
-
-  function handleSubmit(
-    items: fhir4.QuestionnaireResponseItem[],
-    imageEntries: fhir4.BundleEntry[],
-  ) {
-    if (!questionnaire || !patient) return;
-    const metaError = validateQuestionnaireResponseMeta(meta);
-    if (metaError) {
-      setValidationError(metaError);
-      return;
-    }
-    setValidationError(null);
-    createResponse.mutate(
-      {
-        response: buildQuestionnaireResponse({ questionnaire, patient, items, meta }),
-        imageEntries,
-      },
-      { onSuccess: () => navigate(`/patients/${patientId}/questionnaire-responses`) },
-    );
-  }
+  if (!patientId) return null;
 
   return (
     <div className="page">
@@ -102,57 +19,10 @@ export function QuestionnaireResponseCreatePage() {
 
       <PatientHeader patientId={patientId} />
 
-      <ErrorBanner error={error} />
-      <ErrorBanner error={populate.error} />
-      <ErrorBanner error={createResponse.error} />
-      {validationError && (
-        <div className="error-banner" role="alert">
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
-        </div>
-      )}
-
-      {isLoading ? (
-        <p>読み込み中...</p>
-      ) : activeQuestionnaires.length === 0 ? (
-        <p className="patient-table__empty">
-          有効なテンプレートがありません。先にテンプレートを作成し、ステータスを「有効」にしてください。
-        </p>
-      ) : (
-        <div className="qp-field qr-template-select">
-          <label>
-            <span className="qp-field__label">テンプレート</span>
-            <select
-              value={questionnaireId}
-              onChange={(e) => setQuestionnaireId(e.target.value)}
-            >
-              <option value="">選択してください</option>
-              {activeQuestionnaires.map((q) => (
-                <option key={q.id} value={q.id}>
-                  {q.title ?? q.name} (v{q.version})
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      )}
-
-      {questionnaire &&
-        (expressionContext && loginAutofill.ready ? (
-          // テンプレート切替時に入力途中の回答を持ち越さないよう key で作り直す。
-          <QuestionnaireResponseForm
-            key={questionnaire.id}
-            questionnaire={questionnaire}
-            onSubmit={handleSubmit}
-            submitLabel="登録"
-            submitting={createResponse.isPending}
-            expressionContext={expressionContext}
-            loginAutofill={loginAutofill.source}
-          >
-            <QuestionnaireResponseMetaFields values={meta} onChange={setMeta} />
-          </QuestionnaireResponseForm>
-        ) : (
-          <p>読み込み中...</p>
-        ))}
+      <QuestionnaireResponseCreatePanel
+        patientId={patientId}
+        onSaved={() => navigate(`/patients/${patientId}/questionnaire-responses`)}
+      />
     </div>
   );
 }

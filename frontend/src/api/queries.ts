@@ -1,4 +1,10 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { buildClinicalNoteDeleteBundle } from "../fhir/clinicalNoteHelpers";
 import {
   buildLabResultDeleteBundle,
@@ -1322,6 +1328,79 @@ export function useDeleteQuestionnaireResponse() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
     },
+  });
+}
+
+// ---- カルテ画面のタイムライン ----
+//
+// 診療記録・処方・テンプレート回答を 1 本の時系列にまとめて無限スクロールする。
+// 3 つは別リソースなので個別に無限クエリを持ち、表示側(buildKarteTimeline)が
+// 「どこまで表示してよいか」を判断する。
+//
+// キーはいずれも既存の作成・更新・削除が無効化する ["<型>", "search"] 配下に置く
+// (登録後にタイムラインが自動で再取得される)。
+const KARTE_PAGE = 20;
+
+// _include / _revinclude の関連リソースも entry に混ざるため、次ページのオフセットは
+// entry 数ではなく _count 固定で進める。
+function karteNextOffset(bundle: fhir4.Bundle | undefined, lastOffset: number): number | undefined {
+  return hasRelation(bundle, "next") ? lastOffset + KARTE_PAGE : undefined;
+}
+
+export function useKarteClinicalNotesInfinite(patientId: string | undefined) {
+  return useInfiniteQuery({
+    queryKey: ["Composition", "search", "karte", patientId],
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams();
+      params.set("subject", `Patient/${patientId}`);
+      params.set("type", "http://loinc.org|11506-3");
+      params.set("_count", String(KARTE_PAGE));
+      params.set("_offset", String(pageParam));
+      params.set("_sort", "-date");
+      // 一覧(useClinicalNoteSearch)と違い _summary は付けない。カルテは本文を
+      // 表示し、テンプレート回答の重複判定にも section の参照拡張が要るため。
+      return searchResource<fhir4.Composition>("Composition", params);
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
+    enabled: Boolean(patientId),
+  });
+}
+
+export function useKartePrescriptionsInfinite(patientId: string | undefined) {
+  return useInfiniteQuery({
+    queryKey: ["ServiceRequest", "search", "karte", patientId],
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("_count", String(KARTE_PAGE));
+      params.set("_offset", String(pageParam));
+      params.set("_sort", "-authoredon");
+      // カルテは薬剤名まで表示するので処方明細も同じレスポンスで受け取る。
+      params.set("_revinclude", "MedicationRequest:based-on");
+      return searchResource<fhir4.Resource>("ServiceRequest", params);
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
+    enabled: Boolean(patientId),
+  });
+}
+
+export function useKarteQuestionnaireResponsesInfinite(patientId: string | undefined) {
+  return useInfiniteQuery({
+    queryKey: ["QuestionnaireResponse", "search", "karte", patientId],
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("_count", String(KARTE_PAGE));
+      params.set("_offset", String(pageParam));
+      params.set("_sort", "-authored");
+      params.set("_include", "QuestionnaireResponse:questionnaire");
+      return searchResource<fhir4.Resource>("QuestionnaireResponse", params);
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
+    enabled: Boolean(patientId),
   });
 }
 

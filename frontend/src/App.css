@@ -2664,6 +2664,14 @@ button:disabled {
   gap: 4px;
 }
 
+/* 並べ替え・削除はエディタの操作バーに同居するので、既定の button サイズ
+   (padding 8px 16px)ではなく、同じバーのツールボタンやカルテのカード操作
+   (.karte-card__actions button)と同じ小さめのサイズに揃える。 */
+.clinical-note-section__actions button {
+  padding: 2px 10px;
+  font-size: 12px;
+}
+
 /* セクション追加行(種別セレクト+追加ボタン)。 */
 .clinical-note-form__add {
   display: flex;
@@ -2690,4 +2698,419 @@ button:disabled {
   margin: 0 0 8px;
   font-size: 15px;
   color: var(--text-h);
+}
+
+/* ---- カルテ画面 ---- */
+
+/* カルテは 2 ペインで横幅を使うため、この画面だけ #root の幅制限を外す
+   (KartePage が body に付け外しする)。 */
+body.karte-wide #root {
+  max-width: none;
+}
+
+/* 左右ペインの高さ。ページ自体はスクロールさせず(中身は各ペイン内でスクロール)、
+   ちょうどビューポートに収める。差分の内訳はアプリヘッダー + 患者情報行
+   (= ペイン上端 150px)+ .app__main の下 padding 24px。 */
+.karte-page {
+  --karte-pane-height: calc(100vh - 174px);
+}
+
+/* 患者情報と「患者一覧に戻る」を 1 行に並べる(見出し行を持たない分、
+   左右のペインを高くできる)。 */
+.karte-page__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.karte-page__header .patient-header {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.karte-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(460px, 44%);
+  gap: 16px;
+}
+
+/* 左右のペインは同じ高さに固定し、中身が縦の残りを埋める。 */
+.karte-left,
+.karte-right {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  box-sizing: border-box;
+  height: var(--karte-pane-height);
+}
+
+.karte-left {
+  display: flex;
+  flex-direction: column;
+}
+
+/* タブの中身(カルテ / 各一覧)はペインの残り高さを使い、内部でスクロールする。
+   min-height: 0 が無いと flex アイテムの既定(auto)で中身の高さまで伸びる。 */
+.karte-left__body,
+.karte-tabpanel {
+  flex: 1;
+  min-height: 0;
+}
+
+.karte-tabpanel {
+  overflow-y: auto;
+}
+
+/* タブ(カルテ/病名/アレルギー/検査結果) */
+.karte-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.karte-tabs__tab {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  padding: 6px 12px;
+}
+
+.karte-tabs__tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* カルテタブ: 診療日パネル + タイムライン */
+.karte-left__body {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+}
+
+/* grid アイテムの既定(min-height: auto)だと中身の高さまで伸びてページが
+   スクロールしてしまうので、両方の列に min-height: 0 を効かせる。 */
+.karte-left__body > * {
+  min-height: 0;
+}
+
+.karte-left__timeline {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.karte-daylist {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.karte-daylist__title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.karte-daylist__empty {
+  margin: 0;
+  font-size: 13px;
+}
+
+.karte-daylist__days,
+.karte-daylist__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.karte-daylist__items {
+  margin-left: 14px;
+}
+
+.karte-daylist__day {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* 診療日パネルのボタンは通常ボタンの装飾を落としてツリー表示にする。 */
+.karte-daylist button {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 2px 4px;
+  font-size: 13px;
+  text-align: left;
+}
+
+.karte-daylist button:hover {
+  color: var(--accent);
+}
+
+.karte-daylist__toggle {
+  width: 18px;
+  justify-content: center;
+  flex: none;
+}
+
+.karte-daylist__date {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.karte-daylist__item {
+  font-size: 12px;
+}
+
+.karte-daylist__item::before {
+  content: "- ";
+}
+
+/* タイムライン本体(IntersectionObserver のスクロール root) */
+/* IntersectionObserver のスクロール root。エラー表示を除いた残りの高さを使う。 */
+.karte-timeline {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.karte-group {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px 12px;
+  margin-bottom: 12px;
+}
+
+.karte-group__date {
+  position: sticky;
+  top: 0;
+  margin: 0 0 8px;
+  padding: 4px 0;
+  font-size: 14px;
+  color: var(--text-h);
+  background: var(--bg);
+}
+
+.karte-timeline__sentinel {
+  min-height: 1px;
+}
+
+/* 1 件のカード。高さが伸びすぎないよう本文は折りたたむ。 */
+.karte-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.karte-card__header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.karte-card__badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.karte-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.karte-card__meta {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.karte-card__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.karte-card__actions button {
+  padding: 2px 10px;
+  font-size: 12px;
+}
+
+.karte-card__body {
+  max-height: 220px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.karte-card__body--expanded {
+  max-height: none;
+}
+
+.karte-card__toggle {
+  margin-top: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+}
+
+.karte-card__section + .karte-card__section {
+  margin-top: 6px;
+}
+
+.karte-card__section-title {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.karte-card__empty,
+.karte-card__note {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* 処方カードの RP 表示 */
+.karte-rp + .karte-rp {
+  margin-top: 6px;
+}
+
+.karte-rp__head {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.karte-rp__number {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.karte-rp__medicines {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0 0 0 12px;
+}
+
+.karte-rp__medicines li {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.karte-rp__medicine-name {
+  color: var(--text-h);
+}
+
+/* テンプレート回答カードの平文表示 */
+.karte-qr__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.karte-qr__lines li {
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+/* 病名・アレルギー・検査結果タブ */
+.karte-tabpanel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.karte-tabpanel__header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.karte-tabpanel__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 右ペイン: 登録・編集 UI + 右端の新規登録ボタン列 */
+.karte-right {
+  display: flex;
+  gap: 12px;
+}
+
+.karte-right__body {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.karte-right__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.karte-right__header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.karte-right__placeholder {
+  margin: 0;
+  font-size: 13px;
+}
+
+.karte-right__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: none;
+}
+
+.karte-right__actions button {
+  font-size: 13px;
+  padding: 6px 12px;
+  justify-content: center;
+}
+
+/* 右ペインのフォームはペイン幅いっぱいに使う(既定の max-width を外す)。 */
+.karte-right .patient-form {
+  max-width: none;
+}
+
+/* ページ表示より横幅が狭いので、1 行に並べている入力欄は折り返させる
+   (診療記録フォームは既定で 880px 前提の横並び)。 */
+.karte-right .patient-form fieldset {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1200px) {
+  .karte-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 縦積みになるのでページ側をスクロールさせる。 */
+  .karte-left,
+  .karte-right {
+    height: auto;
+    max-height: var(--karte-pane-height);
+  }
 }
