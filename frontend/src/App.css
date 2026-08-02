@@ -2580,11 +2580,29 @@ button:disabled {
   outline: none;
 }
 
-/* 編集中・表示中とも、埋め込み画像がレイアウトを壊さないように制限する。 */
-.rich-text-editor .ProseMirror img,
-.rich-text img {
+/* 編集中は貼り付けた画像をそのまま確認できるよう、幅だけ制限する。 */
+.rich-text-editor .ProseMirror img {
   max-width: 100%;
   height: auto;
+}
+
+/* 表示側はサムネイル。クリック(Enter/Space)で別タブに原寸を開く。 */
+.rich-text img {
+  max-width: min(240px, 100%);
+  max-height: 160px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  vertical-align: top;
+  cursor: zoom-in;
+}
+
+.rich-text img:hover,
+.rich-text img:focus-visible {
+  border-color: var(--accent-border);
+  outline: none;
 }
 
 /* Tiptap の画像選択状態を可視化する(選択中はアクセント枠)。 */
