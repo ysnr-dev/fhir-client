@@ -4,6 +4,7 @@ import { AdminGate } from "./components/AdminGate";
 import { AuthGate } from "./components/AuthGate";
 import { CurrentUserBadge } from "./components/CurrentUserBadge";
 import { HoverMenu } from "./components/HoverMenu";
+import { ThemeToggleItem } from "./components/ThemeToggleItem";
 import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
@@ -79,6 +80,7 @@ function App() {
             <Link to="/settings" className="row-menu__item">
               接続設定
             </Link>
+            <ThemeToggleItem />
           </HoverMenu>
         </nav>
         <CurrentUserBadge />
