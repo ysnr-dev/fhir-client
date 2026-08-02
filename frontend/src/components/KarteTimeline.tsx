@@ -4,6 +4,7 @@ import {
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
 } from "../api/queries";
+import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
 import { sectionTitle, statusLabel } from "../fhir/clinicalNoteHelpers";
 import {
   KARTE_KIND_LABELS,
@@ -129,6 +130,13 @@ function KarteCard({
     deleteNote.isPending || deletePrescription.isPending || deleteResponse.isPending;
   const deleteError = deleteNote.error ?? deletePrescription.error ?? deleteResponse.error;
 
+  // テンプレートは帳票レイアウトが登録されているものだけ PDF 出力できる。
+  // 他の種別では canonical を渡さないので照会自体が走らない。
+  const { data: layoutStatus } = useReportLayoutStatus(
+    item.kind === "qr" ? item.response.questionnaire : undefined,
+  );
+  const pdfReady = Boolean(layoutStatus?.registered && item.id);
+
   function handleDelete() {
     if (!window.confirm(`この${KARTE_KIND_LABELS[item.kind]}を削除します。よろしいですか?`)) return;
     const options = { onSuccess: () => onDeleted(item) };
@@ -154,6 +162,25 @@ function KarteCard({
               DO
             </button>
           )}
+          {item.kind === "qr" &&
+            (pdfReady ? (
+              <a
+                className="button"
+                href={questionnaireResponsePdfUrl(item.id)}
+                target="_blank"
+                rel="noopener"
+              >
+                PDF
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title="このテンプレートの帳票レイアウトが未登録です"
+              >
+                PDF
+              </button>
+            ))}
           <button type="button" onClick={() => onEdit(item)}>
             編集
           </button>

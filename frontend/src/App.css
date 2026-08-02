@@ -2962,7 +2962,9 @@ body.karte-wide #root {
   gap: 6px;
 }
 
-.karte-card__actions button {
+/* PDF はリンク(a.button)なので button と揃えて小さくする。 */
+.karte-card__actions button,
+.karte-card__actions .button {
   padding: 2px 10px;
   font-size: 12px;
 }
