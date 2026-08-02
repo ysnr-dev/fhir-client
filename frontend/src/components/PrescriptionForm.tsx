@@ -29,6 +29,21 @@ type ModalState =
   | { kind: "medicine"; rpIndex: number; medIndex: number }
   | null;
 
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function PrescriptionForm({
   initialValues,
   onSubmit,
@@ -215,13 +230,13 @@ export function PrescriptionForm({
         <fieldset className="rp-card" key={rpIndex}>
           <legend>{`RP${rpIndex + 1}`}</legend>
 
-          <table className="rp-card__medicines">
+          <table className="rp-card__medicines rp-card__medicines--form">
             <colgroup>
               <col />
-              <col style={{ width: "88px" }} />
-              <col style={{ width: "72px" }} />
-              <col style={{ width: "30%" }} />
-              <col style={{ width: "72px" }} />
+              <col style={{ width: "60px" }} />
+              <col style={{ width: "60px" }} />
+              <col style={{ width: "18%" }} />
+              <col style={{ width: "32px" }} />
             </colgroup>
             <thead>
               <tr>
@@ -255,11 +270,12 @@ export function PrescriptionForm({
                       type="number"
                       step="any"
                       min="0"
+                      className="rp-card__dose-input"
                       value={med.dose}
                       onChange={(e) => updateMedicine(rpIndex, medIndex, { dose: e.target.value })}
                     />
                   </td>
-                  <td>{med.medicine?.unit_name ?? "-"}</td>
+                  <td className="rp-card__medicine-unit">{med.medicine?.unit_name ?? "-"}</td>
                   <td>
                     <input
                       type="text"
@@ -269,8 +285,14 @@ export function PrescriptionForm({
                   </td>
                   <td>
                     {rp.medicines.length > 1 && (
-                      <button type="button" onClick={() => removeMedicine(rpIndex, medIndex)}>
-                        削除
+                      <button
+                        type="button"
+                        className="rp-card__medicine-remove"
+                        title="この医薬品を削除"
+                        aria-label="この医薬品を削除"
+                        onClick={() => removeMedicine(rpIndex, medIndex)}
+                      >
+                        <TrashIcon />
                       </button>
                     )}
                   </td>

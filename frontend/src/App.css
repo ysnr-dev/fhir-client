@@ -877,6 +877,62 @@ button:disabled {
   word-break: break-all;
 }
 
+/* 処方登録フォーム: 医薬品名の列は幅が足りないと頻繁に折り返すため、他の列
+   (用量/単位/薬剤コメント/削除)を切り詰めて医薬品名に幅を回す。 */
+.rp-card__medicines--form th,
+.rp-card__medicines--form td {
+  padding: 6px 4px;
+}
+
+.rp-card__medicines--form th:first-child,
+.rp-card__medicines--form td:first-child {
+  padding-left: 0;
+}
+
+.rp-card__medicines--form th:last-child,
+.rp-card__medicines--form td:last-child {
+  padding-right: 0;
+}
+
+.rp-card__medicines--form .rp-card__medicine-cell {
+  gap: 6px;
+}
+
+.rp-card__medicines--form .rp-card__medicine-cell button {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* 用量はほとんどが 1 桁(力価を除く)。スピナーを消して数字だけに幅を使う。 */
+.rp-card__dose-input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.rp-card__dose-input::-webkit-outer-spin-button,
+.rp-card__dose-input::-webkit-inner-spin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* 単位は読むだけの補助情報なので一段小さく。 */
+.rp-card__medicines--form td.rp-card__medicine-unit {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* 削除はゴミ箱アイコンのみのアイコンボタンにして列幅を最小化する。 */
+.rp-card__medicines--form button.rp-card__medicine-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  width: 26px;
+  height: 26px;
+  color: var(--text);
+}
+
 /* 処方内容(詳細)表示用: RP は RP ごとに別テーブルなので、table-layout: fixed +
    明示幅で全 RP の列位置を揃える。医薬品名(1列目)は固定幅内で折り返し、コメント
    (4列目)が残り幅を吸収、DI(5列目)を行末へ右寄せする。 */
@@ -964,6 +1020,9 @@ button:disabled {
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text-h);
+  /* border-box にしないと width:100% にパディング+ボーダーが上乗せされ、
+     入力欄が右隣のセル(単位・削除)にはみ出して重なる。 */
+  box-sizing: border-box;
   width: 100%;
 }
 
