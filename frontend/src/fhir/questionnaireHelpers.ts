@@ -15,6 +15,11 @@ import {
 } from "./practitionerField";
 import { PRACTITIONER_ROLE_OPTIONS } from "./practitionerRoleHelpers";
 import {
+  templateCategoryExtension,
+  templateCategoryOf,
+  type TemplateCategoryRef,
+} from "./questionnaireCategory";
+import {
   binaryIdFromAttachment,
   imageBinaryEntry,
   itemMediaExtension,
@@ -182,6 +187,8 @@ export interface QuestionnaireFormValues {
   title: string;
   status: QuestionnaireStatus;
   description: string;
+  // テンプレート選択プルダウンの分類(任意)。未設定なら null。
+  category: TemplateCategoryRef | null;
   variables: EditorVariable[];
   items: EditorItem[];
 }
@@ -248,6 +255,7 @@ export function emptyQuestionnaireForm(): QuestionnaireFormValues {
     title: "",
     status: "draft",
     description: "",
+    category: null,
     variables: [],
     items: [newEditorItem()],
   };
@@ -532,11 +540,12 @@ export function buildQuestionnaire(
 
   if (questionnaireId) questionnaire.id = questionnaireId;
   if (values.description) questionnaire.description = values.description;
-  if (values.variables.length) {
-    questionnaire.extension = values.variables.map((v) =>
-      buildExpressionExt(VARIABLE_EXT_URL, v.expression, v.name),
-    );
-  }
+
+  const extensions: fhir4.Extension[] = values.variables.map((v) =>
+    buildExpressionExt(VARIABLE_EXT_URL, v.expression, v.name),
+  );
+  if (values.category) extensions.push(templateCategoryExtension(values.category));
+  if (extensions.length) questionnaire.extension = extensions;
 
   return questionnaire;
 }
@@ -685,6 +694,7 @@ export function parseQuestionnaireForm(questionnaire: fhir4.Questionnaire): Ques
     title: questionnaire.title ?? "",
     status,
     description: questionnaire.description ?? "",
+    category: templateCategoryOf(questionnaire),
     variables: (questionnaire.extension ?? [])
       .filter((ext) => ext.url === VARIABLE_EXT_URL)
       .map((ext) => ({
@@ -705,6 +715,8 @@ export interface QuestionnaireSummary {
   version: string;
   status: string;
   statusLabel: string;
+  /** 拡張に埋まっているカテゴリ名(未設定なら空文字)。 */
+  categoryName: string;
   lastUpdated: string;
 }
 
@@ -716,6 +728,7 @@ export function summarizeQuestionnaire(questionnaire: fhir4.Questionnaire): Ques
     name: questionnaire.name ?? "",
     version: questionnaire.version ?? "",
     status: questionnaire.status ?? "",
+    categoryName: templateCategoryOf(questionnaire)?.display ?? "",
     statusLabel: statusLabel(questionnaire.status),
     lastUpdated: lastUpdated ? new Date(lastUpdated).toLocaleString("ja-JP") : "",
   };

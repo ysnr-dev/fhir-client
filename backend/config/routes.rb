@@ -37,6 +37,9 @@ Rails.application.routes.draw do
 
     # 帳票レイアウト(.tlf)の管理。Questionnaire の canonical と紐付けて保存する。
     resources :report_layouts, only: %i[index show create update destroy]
+
+    # テンプレートカテゴリ(独自マスタ)。Questionnaire 側は拡張に code を持つ。
+    resources :questionnaire_categories, only: %i[index create update destroy]
   end
 
   # 帳票出力(QuestionnaireResponse の PDF 化)。FHIR リソースではないため

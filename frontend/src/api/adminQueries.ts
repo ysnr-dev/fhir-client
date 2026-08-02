@@ -1,12 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createOauthClient,
+  createQuestionnaireCategory,
   createReportLayout,
   deleteOauthClient,
+  deleteQuestionnaireCategory,
   deleteReportLayout,
   fetchAdminSession,
   fetchConnectionSettings,
   fetchOauthClients,
+  fetchQuestionnaireCategories,
   fetchReportLayout,
   fetchReportLayouts,
   fetchScopeOptions,
@@ -14,9 +17,11 @@ import {
   logout,
   testConnection,
   updateConnectionSettings,
+  updateQuestionnaireCategory,
   updateReportLayout,
   type ConnectionSettingsUpdate,
   type NewOauthClient,
+  type QuestionnaireCategoryPayload,
   type ReportLayoutPayload,
 } from "./adminClient";
 
@@ -25,6 +30,7 @@ export const ADMIN_SESSION_KEY = ["admin", "session"];
 const OAUTH_CLIENTS_KEY = ["admin", "oauth_clients"];
 const SCOPE_OPTIONS_KEY = ["admin", "scope_options"];
 const REPORT_LAYOUTS_KEY = ["admin", "report_layouts"];
+const QUESTIONNAIRE_CATEGORIES_KEY = ["admin", "questionnaire_categories"];
 
 // 管理系はすべて retry: false。自動リトライされた 401 は上流 fhir-server の
 // レート制限(admin/ip)を無駄に消費するだけで、状況を改善しない。
@@ -179,6 +185,51 @@ export function useDeleteReportLayout() {
     retry: false,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: REPORT_LAYOUTS_KEY });
+    },
+  });
+}
+
+// テンプレートカテゴリは選択プルダウン(診療画面)からも読む。件数が少なく
+// 変更も稀なので、画面遷移のたびに引き直さないよう staleTime を長めに取る。
+export function useQuestionnaireCategories() {
+  return useQuery({
+    queryKey: QUESTIONNAIRE_CATEGORIES_KEY,
+    queryFn: fetchQuestionnaireCategories,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useCreateQuestionnaireCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: QuestionnaireCategoryPayload) => createQuestionnaireCategory(payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUESTIONNAIRE_CATEGORIES_KEY });
+    },
+  });
+}
+
+export function useUpdateQuestionnaireCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: QuestionnaireCategoryPayload }) =>
+      updateQuestionnaireCategory(id, payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUESTIONNAIRE_CATEGORIES_KEY });
+    },
+  });
+}
+
+export function useDeleteQuestionnaireCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteQuestionnaireCategory(id),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUESTIONNAIRE_CATEGORIES_KEY });
     },
   });
 }

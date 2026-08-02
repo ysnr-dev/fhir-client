@@ -29,6 +29,7 @@ export function QuestionnaireTable({ questionnaires }: QuestionnaireTableProps) 
         <thead>
           <tr>
             <th>タイトル</th>
+            <th>カテゴリ</th>
             <th>名前</th>
             <th>バージョン</th>
             <th>ステータス</th>
@@ -42,6 +43,7 @@ export function QuestionnaireTable({ questionnaires }: QuestionnaireTableProps) 
             return (
               <tr key={summary.id}>
                 <td>{summary.title || "-"}</td>
+                <td>{summary.categoryName || "-"}</td>
                 <td>{summary.name || "-"}</td>
                 <td>{summary.version || "-"}</td>
                 <td>{summary.statusLabel || "-"}</td>

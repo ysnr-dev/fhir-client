@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useQuestionnaireCategories } from "../api/adminQueries";
 import {
   appendChild,
   emptyQuestionnaireForm,
@@ -37,6 +38,20 @@ export function QuestionnaireEditor({
     initialValues ?? emptyQuestionnaireForm,
   );
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // カテゴリは任意。マスタから消えた(あるいは別環境から取り込んだ)カテゴリが
+  // 設定されている場合も、勝手に外れないよう選択肢に残す。
+  const { data: categories = [], error: categoriesError } = useQuestionnaireCategories();
+  const selectedCategory = values.category;
+  const categoryOptions =
+    selectedCategory && !categories.some((c) => c.code === selectedCategory.code)
+      ? [...categories, { code: selectedCategory.code, name: selectedCategory.display }]
+      : categories;
+
+  function updateCategory(code: string) {
+    const category = categoryOptions.find((c) => c.code === code);
+    update("category", category ? { code: category.code, display: category.name } : null);
+  }
 
   function update<K extends keyof QuestionnaireFormValues>(
     key: K,
@@ -101,6 +116,7 @@ export function QuestionnaireEditor({
         </div>
       )}
       <ErrorBanner error={submitError} />
+      <ErrorBanner error={categoriesError} />
 
       <fieldset>
         <legend>テンプレート情報</legend>
@@ -149,6 +165,17 @@ export function QuestionnaireEditor({
               {STATUS_OPTIONS.map((status) => (
                 <option key={status.code} value={status.code}>
                   {status.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            カテゴリ
+            <select value={values.category?.code ?? ""} onChange={(e) => updateCategory(e.target.value)}>
+              <option value="">(未分類)</option>
+              {categoryOptions.map((category) => (
+                <option key={category.code} value={category.code}>
+                  {category.name}
                 </option>
               ))}
             </select>

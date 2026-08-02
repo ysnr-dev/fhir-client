@@ -12,6 +12,7 @@ import {
 import { ErrorBanner } from "./ErrorBanner";
 import { QuestionnaireResponseForm } from "./QuestionnaireResponseForm";
 import { QuestionnaireResponseMetaFields } from "./QuestionnaireResponseMetaFields";
+import { TemplateSelect } from "./TemplateSelect";
 import { displayJapaneseName } from "../fhir/humanName";
 import { buildPopulateContext } from "../fhir/populateContext";
 import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
@@ -119,18 +120,12 @@ export function QuestionnaireResponseCreatePanel({
           有効なテンプレートがありません。先にテンプレートを作成し、ステータスを「有効」にしてください。
         </p>
       ) : (
-        <div className="qp-field qr-template-select">
-          <label>
-            <span className="qp-field__label">テンプレート</span>
-            <select value={questionnaireId} onChange={(e) => setQuestionnaireId(e.target.value)}>
-              <option value="">選択してください</option>
-              {activeQuestionnaires.map((q) => (
-                <option key={q.id} value={q.id}>
-                  {q.title ?? q.name} (v{q.version})
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="qr-template-select">
+          <TemplateSelect
+            questionnaires={activeQuestionnaires}
+            value={questionnaireId}
+            onChange={setQuestionnaireId}
+          />
         </div>
       )}
 

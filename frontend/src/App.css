@@ -2318,6 +2318,168 @@ button:disabled {
   font-size: 14px;
 }
 
+/* ---- テンプレート選択(カテゴリ → テンプレートの2階層プルダウン) ---- */
+
+.template-select {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.template-select__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 15px;
+  text-align: left;
+}
+
+.template-select__trigger:hover,
+.template-select__trigger[aria-expanded="true"] {
+  border-color: var(--accent-border);
+}
+
+.template-select__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-select__value--empty {
+  color: var(--text);
+}
+
+/* body 直下のポータルに出す(モーダルの overflow で見切れないように)。
+   left / top / width / max-height はトリガー位置から JS で決める。 */
+.template-select__panel {
+  position: fixed;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+
+/* グローバルの button {} を上書きするため詳細度を 2 クラス以上に上げている。 */
+.template-select__panel .template-select__item,
+.template-select__panel .template-select__back {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-h);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.template-select__panel .template-select__back {
+  justify-content: flex-start;
+  gap: 6px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.template-select__panel .template-select__item:hover,
+.template-select__panel .template-select__back:hover {
+  background: var(--accent-bg);
+}
+
+.template-select__panel .template-select__item--selected {
+  color: var(--accent);
+}
+
+/* 階層の見出し(カテゴリ名)と、未分類テンプレートの区切り。 */
+.template-select__heading,
+.template-select__divider {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.template-select__divider {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+/* ---- テンプレートカテゴリ管理(テンプレート一覧のモーダル) ---- */
+
+.qc-modal__hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.qc-modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.qc-modal__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qc-modal__order {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.qc-modal__order button {
+  padding: 4px 8px;
+  line-height: 1;
+}
+
+.qc-modal__row input,
+.qc-modal__add input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.qc-modal__delete {
+  color: #e0687a;
+}
+
+.qc-modal__add {
+  display: flex;
+  gap: 8px;
+}
+
 /* 読み取り専用表示: fieldset disabled で入力を止めつつ、枠は出さない。 */
 .qp-readonly {
   display: contents;

@@ -242,6 +242,25 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   `Accept: image/*` を付けた `GET /fhir/Binary/<id>` で生バイトを取得します(上流が非 FHIR な Accept に
   対して `contentType` 付きの実体を返す挙動を利用)。
 
+## テンプレートカテゴリ
+
+テンプレート(`Questionnaire`)を分類し、テンプレート選択のプルダウンで「カテゴリ → テンプレート」と
+辿れるようにします。カテゴリは任意で、未設定のテンプレートはプルダウンの先頭階層(カテゴリと同じ層)に
+並びます。
+
+- **カテゴリの管理**: テンプレート一覧の「カテゴリ管理」ボタンから、追加・改名・並べ替え・削除を行います
+  (backend DB の `questionnaire_categories`。FHIR リソースではありません)。並び順がプルダウンの表示順です。
+- **テンプレートへの割り当て**: テンプレート編集画面の「カテゴリ」で選びます。保持先は Questionnaire の
+  extension `http://fhir-client.local/StructureDefinition/questionnaire-template-category` の `valueCoding`
+  (`code` = カテゴリの UUID、`display` = 設定時のカテゴリ名)。テンプレート本体は上流 FHIR サーバー、
+  カテゴリマスタは backend DB と保存先が別々なので、backend からテンプレートを参照する構造にはしていません。
+- **マスタに無い code の扱い**: カテゴリを削除した後や、別環境からインポートしたテンプレートのように
+  マスタに該当 code が無い場合は、extension の `display` を見出しにしたグループとして登録済みカテゴリの
+  後ろに表示します(テンプレート側の設定を勝手に落とさないため)。表示名はマスタがあればマスタ側を優先するので、
+  カテゴリを改名してもテンプレートの再保存は不要です。
+- **選択プルダウン**: 「テンプレート回答の登録」(ページ / カルテ右ペイン)と診療記録の「テンプレート記載」
+  モーダルで共通コンポーネント(`frontend/src/components/TemplateSelect.tsx`)を使います。
+
 ## テンプレートのエクスポート / インポート
 
 テンプレート(`Questionnaire`)を単一の JSON ファイルとして書き出し、別環境(開発→本番など)へ

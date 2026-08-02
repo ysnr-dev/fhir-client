@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_01_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_02_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -273,6 +273,16 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_01_100000) do
     t.datetime "updated_at", null: false
     t.index ["exchange_code"], name: "index_master_modifiers_on_exchange_code"
     t.index ["management_number"], name: "index_master_modifiers_on_management_number", unique: true
+  end
+
+  create_table "questionnaire_categories", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.integer "display_order", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_questionnaire_categories_on_code", unique: true
+    t.index ["name"], name: "index_questionnaire_categories_on_name", unique: true
   end
 
   create_table "report_layouts", force: :cascade do |t|

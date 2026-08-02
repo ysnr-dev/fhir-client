@@ -268,3 +268,52 @@ export async function deleteReportLayout(id: number): Promise<void> {
   const res = await adminFetch(`${REPORT_LAYOUTS}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
+
+// --- テンプレートカテゴリ ----------------------------------------------------
+
+export interface QuestionnaireCategorySummary {
+  id: number;
+  /** Questionnaire の拡張から参照される不変のコード(UUID)。 */
+  code: string;
+  name: string;
+  display_order: number;
+  updated_at: string;
+}
+
+export interface QuestionnaireCategoryPayload {
+  name?: string;
+  display_order?: number;
+}
+
+const QUESTIONNAIRE_CATEGORIES = "/admin/questionnaire_categories";
+
+export async function fetchQuestionnaireCategories(): Promise<QuestionnaireCategorySummary[]> {
+  const body = await adminJson<{ total: number; items: QuestionnaireCategorySummary[] }>(
+    QUESTIONNAIRE_CATEGORIES,
+  );
+  return body.items;
+}
+
+export async function createQuestionnaireCategory(
+  payload: QuestionnaireCategoryPayload,
+): Promise<QuestionnaireCategorySummary> {
+  return adminJson<QuestionnaireCategorySummary>(QUESTIONNAIRE_CATEGORIES, {
+    method: "POST",
+    ...jsonBody(payload),
+  });
+}
+
+export async function updateQuestionnaireCategory(
+  id: number,
+  payload: QuestionnaireCategoryPayload,
+): Promise<QuestionnaireCategorySummary> {
+  return adminJson<QuestionnaireCategorySummary>(`${QUESTIONNAIRE_CATEGORIES}/${id}`, {
+    method: "PATCH",
+    ...jsonBody(payload),
+  });
+}
+
+export async function deleteQuestionnaireCategory(id: number): Promise<void> {
+  const res = await adminFetch(`${QUESTIONNAIRE_CATEGORIES}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}

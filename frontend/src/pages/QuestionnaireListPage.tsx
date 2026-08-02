@@ -3,10 +3,12 @@ import { Link } from "react-router-dom";
 import { useImportQuestionnaire, useQuestionnaireSearch } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Pagination } from "../components/Pagination";
+import { QuestionnaireCategoryModal } from "../components/QuestionnaireCategoryModal";
 import { QuestionnaireTable } from "../components/QuestionnaireTable";
 
 export function QuestionnaireListPage() {
   const [offset, setOffset] = useState(0);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { bundle, total, count, hasPrevious, hasNext, isLoading, error } =
@@ -35,6 +37,9 @@ export function QuestionnaireListPage() {
             hidden
             onChange={handleImportFile}
           />
+          <button type="button" className="button" onClick={() => setCategoryModalOpen(true)}>
+            カテゴリ管理
+          </button>
           <button
             type="button"
             className="button"
@@ -48,6 +53,10 @@ export function QuestionnaireListPage() {
           </Link>
         </div>
       </div>
+
+      {categoryModalOpen && (
+        <QuestionnaireCategoryModal onClose={() => setCategoryModalOpen(false)} />
+      )}
 
       <ErrorBanner error={error} />
       <ErrorBanner error={importQuestionnaire.error} />

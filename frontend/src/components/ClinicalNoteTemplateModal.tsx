@@ -20,6 +20,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { QuestionnaireResponseForm } from "./QuestionnaireResponseForm";
 import { QuestionnaireResponseMetaFields } from "./QuestionnaireResponseMetaFields";
+import { TemplateSelect } from "./TemplateSelect";
 
 // 診療記録セクションのテンプレート記入モーダル。
 // QuestionnaireResponseCreatePage と同じ流れ(テンプレート選択 → 記入)を
@@ -155,18 +156,12 @@ export function ClinicalNoteTemplateModal({
                 有効なテンプレートがありません。先にテンプレートを作成し、ステータスを「有効」にしてください。
               </p>
             ) : (
-              <div className="qp-field qr-template-select">
-                <label>
-                  <span className="qp-field__label">テンプレート</span>
-                  <select value={questionnaireId} onChange={(e) => setQuestionnaireId(e.target.value)}>
-                    <option value="">選択してください</option>
-                    {options.questionnaires.map((q) => (
-                      <option key={q.id} value={q.id}>
-                        {q.title ?? q.name} (v{q.version})
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <div className="qr-template-select">
+                <TemplateSelect
+                  questionnaires={options.questionnaires}
+                  value={questionnaireId}
+                  onChange={setQuestionnaireId}
+                />
               </div>
             ))}
 
