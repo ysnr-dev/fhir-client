@@ -2121,6 +2121,36 @@ button:disabled {
   padding: 0 4px;
 }
 
+/* 登録情報(折り畳み)。qp-group の枠は流用しつつ details として並べる。 */
+.qp-meta {
+  display: block;
+}
+
+.qp-meta__summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.qp-meta__digest {
+  margin-left: 8px;
+  font-weight: normal;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.qp-meta__digest--warn {
+  color: #dc2626;
+}
+
+.qp-meta__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
 .qp-group__instance {
   border: 1px dashed var(--border);
   border-radius: 6px;
