@@ -287,7 +287,7 @@ export function PrescriptionForm({
                     {rp.medicines.length > 1 && (
                       <button
                         type="button"
-                        className="rp-card__medicine-remove"
+                        className="rp-card__icon-button"
                         title="この医薬品を削除"
                         aria-label="この医薬品を削除"
                         onClick={() => removeMedicine(rpIndex, medIndex)}
@@ -302,50 +302,58 @@ export function PrescriptionForm({
           </table>
 
           <div className="rp-card__actions">
-            <button type="button" onClick={() => addMedicine(rpIndex)}>
+            <button
+              type="button"
+              className="rp-card__compact-button"
+              onClick={() => addMedicine(rpIndex)}
+            >
               + 医薬品追加
             </button>
           </div>
 
           <div className="rp-card__usage">
-            <label>
-              用法
+            <span className="rp-card__usage-label">用法</span>
+            <div className="rp-card__usage-row">
+              <button
+                type="button"
+                className="rp-card__compact-button"
+                onClick={() => setModal({ kind: "usage", rpIndex })}
+              >
+                {rp.usage ? "用法を変更" : "用法を選択"}
+              </button>
               {rp.usage ? (
                 <span className="rp-card__usage-value">{rp.usage.usage_name}</span>
               ) : (
                 <span className="rp-card__usage-value rp-card__usage-value--empty">未選択</span>
               )}
-            </label>
-            <button type="button" onClick={() => setModal({ kind: "usage", rpIndex })}>
-              {rp.usage ? "用法を変更" : "用法を選択"}
-            </button>
 
-            {rp.usage?.basic_usage_category === "内服" && (
-              <span className="rp-card__dose-count">
-                <span className="rp-card__dose-count-label">投与日数</span>
-                <input
-                  type="number"
-                  min="1"
-                  className="rp-card__dose-count-input"
-                  value={rp.doseDays}
-                  onChange={(e) => updateRp(rpIndex, { doseDays: e.target.value })}
-                />
-                <span className="rp-card__dose-count-suffix">日分</span>
-              </span>
-            )}
-            {rp.usage?.basic_usage_category === "頓服" && (
-              <span className="rp-card__dose-count">
-                <span className="rp-card__dose-count-label">投与回数</span>
-                <input
-                  type="number"
-                  min="1"
-                  className="rp-card__dose-count-input"
-                  value={rp.doseCount}
-                  onChange={(e) => updateRp(rpIndex, { doseCount: e.target.value })}
-                />
-                <span className="rp-card__dose-count-suffix">回分</span>
-              </span>
-            )}
+              {rp.usage?.basic_usage_category === "内服" && (
+                <span className="rp-card__dose-count">
+                  <span className="rp-card__dose-count-label">投与日数</span>
+                  <input
+                    type="number"
+                    min="1"
+                    className="rp-card__dose-count-input"
+                    value={rp.doseDays}
+                    onChange={(e) => updateRp(rpIndex, { doseDays: e.target.value })}
+                  />
+                  <span className="rp-card__dose-count-suffix">日分</span>
+                </span>
+              )}
+              {rp.usage?.basic_usage_category === "頓服" && (
+                <span className="rp-card__dose-count">
+                  <span className="rp-card__dose-count-label">投与回数</span>
+                  <input
+                    type="number"
+                    min="1"
+                    className="rp-card__dose-count-input"
+                    value={rp.doseCount}
+                    onChange={(e) => updateRp(rpIndex, { doseCount: e.target.value })}
+                  />
+                  <span className="rp-card__dose-count-suffix">回分</span>
+                </span>
+              )}
+            </div>
           </div>
 
           <label>
@@ -358,9 +366,15 @@ export function PrescriptionForm({
           </label>
 
           {values.rps.length > 1 && (
-            <div className="rp-card__actions">
-              <button type="button" onClick={() => removeRp(rpIndex)}>
-                RP削除
+            <div className="rp-card__actions rp-card__actions--end">
+              <button
+                type="button"
+                className="rp-card__icon-button"
+                title={`RP${rpIndex + 1}を削除`}
+                aria-label={`RP${rpIndex + 1}を削除`}
+                onClick={() => removeRp(rpIndex)}
+              >
+                <TrashIcon />
               </button>
             </div>
           )}

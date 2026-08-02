@@ -795,11 +795,29 @@ button:disabled {
   align-items: stretch;
 }
 
+/* 「用法」見出しを 1 行目に置き、2 行目に [用法を選択] 用法名称 投与日数 を並べる。 */
 .rp-card__usage {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rp-card__usage-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.rp-card__usage-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+
+/* 常時表示の補助的なボタン(用法選択・医薬品追加)は、入力欄より控えめな大きさにする。 */
+.rp-card__compact-button {
+  font-size: 13px;
+  padding: 5px 10px;
 }
 
 .rp-card__dose-count {
@@ -922,8 +940,9 @@ button:disabled {
   color: var(--text);
 }
 
-/* 削除はゴミ箱アイコンのみのアイコンボタンにして列幅を最小化する。 */
-.rp-card__medicines--form button.rp-card__medicine-remove {
+/* 削除はゴミ箱アイコンのみのアイコンボタンにして、幅を取らないようにする。
+   医薬品行の削除と RP 削除の双方で使う。 */
+.rp-card__icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -931,6 +950,11 @@ button:disabled {
   width: 26px;
   height: 26px;
   color: var(--text);
+}
+
+/* テーブル内では .rp-card__medicines button の padding 指定を上書きする必要がある。 */
+.rp-card__medicines--form button.rp-card__icon-button {
+  padding: 4px;
 }
 
 /* 処方内容(詳細)表示用: RP は RP ごとに別テーブルなので、table-layout: fixed +
@@ -1029,6 +1053,10 @@ button:disabled {
 .rp-card__actions {
   display: flex;
   gap: 8px;
+}
+
+.rp-card__actions--end {
+  justify-content: flex-end;
 }
 
 .prescription-detail {
