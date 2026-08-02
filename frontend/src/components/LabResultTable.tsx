@@ -7,11 +7,12 @@ import { RowMenu } from "./RowMenu";
 interface LabResultTableProps {
   reports: fhir4.DiagnosticReport[];
   patientId: string;
-  /** 指定するとページ遷移せずこのコールバックで編集する(カルテ画面の左ペイン用)。 */
+  /** 指定するとページ遷移せずこのコールバックで表示・編集する(カルテ画面の左ペイン用)。 */
+  onView?: (reportId: string) => void;
   onEdit?: (reportId: string) => void;
 }
 
-export function LabResultTable({ reports, patientId, onEdit }: LabResultTableProps) {
+export function LabResultTable({ reports, patientId, onView, onEdit }: LabResultTableProps) {
   const deleteLabResult = useDeleteLabResult();
 
   function handleDelete(reportId: string | undefined) {
@@ -45,7 +46,11 @@ export function LabResultTable({ reports, patientId, onEdit }: LabResultTablePro
                 <td>{summary.settingDisplay}</td>
                 <td>{summary.itemCount}</td>
                 <td className="patient-table__actions">
-                  {!onEdit && (
+                  {onView ? (
+                    <button type="button" onClick={() => onView(summary.id)}>
+                      表示
+                    </button>
+                  ) : (
                     <Link className="button" to={`/patients/${patientId}/lab-results/${summary.id}`}>
                       表示
                     </Link>

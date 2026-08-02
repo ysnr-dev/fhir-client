@@ -12,14 +12,26 @@ import {
   type ConditionFormValues,
 } from "../fhir/conditionHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
+import { ConditionDetailPanel } from "./ConditionDetailPanel";
 import { ConditionForm } from "./ConditionForm";
 import { ConditionTable } from "./ConditionTable";
 import { ErrorBanner } from "./ErrorBanner";
 import { Pagination } from "./Pagination";
 
-// カルテ画面の「病名」タブ。一覧・登録・編集・削除を左ペイン内で完結させる。
+// カルテ画面の「病名」タブ。一覧・表示・登録・編集・削除を左ペイン内で完結させる。
 
-type Mode = { kind: "list" } | { kind: "create" } | { kind: "edit"; conditionId: string };
+type Mode =
+  | { kind: "list" }
+  | { kind: "detail"; conditionId: string }
+  | { kind: "create" }
+  | { kind: "edit"; conditionId: string };
+
+const MODE_TITLES: Record<Mode["kind"], string> = {
+  list: "病名",
+  detail: "病名詳細",
+  create: "病名登録",
+  edit: "病名編集",
+};
 
 export function KarteConditionTab({ patientId }: { patientId: string }) {
   const [mode, setMode] = useState<Mode>({ kind: "list" });
@@ -38,12 +50,24 @@ export function KarteConditionTab({ patientId }: { patientId: string }) {
     return (
       <div className="karte-tabpanel">
         <div className="karte-tabpanel__header">
-          <h3>{mode.kind === "create" ? "病名登録" : "病名編集"}</h3>
-          <button type="button" onClick={backToList}>
-            ← 一覧に戻る
-          </button>
+          <h3>{MODE_TITLES[mode.kind]}</h3>
+          <div className="karte-tabpanel__actions">
+            {mode.kind === "detail" && (
+              <button
+                type="button"
+                onClick={() => setMode({ kind: "edit", conditionId: mode.conditionId })}
+              >
+                編集
+              </button>
+            )}
+            <button type="button" onClick={backToList}>
+              ← 一覧に戻る
+            </button>
+          </div>
         </div>
-        {mode.kind === "create" ? (
+        {mode.kind === "detail" ? (
+          <ConditionDetailPanel patientId={patientId} conditionId={mode.conditionId} />
+        ) : mode.kind === "create" ? (
           <CreateForm patientId={patientId} onSaved={backToList} />
         ) : (
           <EditForm
@@ -59,7 +83,7 @@ export function KarteConditionTab({ patientId }: { patientId: string }) {
   return (
     <div className="karte-tabpanel">
       <div className="karte-tabpanel__header">
-        <h3>病名</h3>
+        <h3>{MODE_TITLES.list}</h3>
         <button type="button" onClick={() => setMode({ kind: "create" })}>
           新規登録
         </button>
@@ -74,6 +98,7 @@ export function KarteConditionTab({ patientId }: { patientId: string }) {
           <ConditionTable
             conditions={conditions}
             patientId={patientId}
+            onView={(conditionId) => setMode({ kind: "detail", conditionId })}
             onEdit={(conditionId) => setMode({ kind: "edit", conditionId })}
           />
           <Pagination

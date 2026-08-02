@@ -8,21 +8,25 @@ import {
 } from "../fhir/labResultHelpers";
 import { useLabResultInitialValues } from "../hooks/useLabResultInitialValues";
 import { ErrorBanner } from "./ErrorBanner";
+import { LabResultDetailPanel } from "./LabResultDetailPanel";
 import { LabResultForm } from "./LabResultForm";
 import { LabResultTable } from "./LabResultTable";
 import { LabResultTimelinePanel } from "./LabResultTimelinePanel";
 import { Pagination } from "./Pagination";
 
-// カルテ画面の「検査結果」タブ。一覧・時系列表示・登録・編集・削除を左ペイン内で完結させる。
+// カルテ画面の「検査結果」タブ。一覧・表示・時系列表示・登録・編集・削除を
+// 左ペイン内で完結させる。
 
 type Mode =
   | { kind: "list" }
+  | { kind: "detail"; reportId: string }
   | { kind: "timeline" }
   | { kind: "create" }
   | { kind: "edit"; reportId: string };
 
 const MODE_TITLES: Record<Mode["kind"], string> = {
   list: "検査結果",
+  detail: "検査結果内容",
   timeline: "検査結果 時系列表示",
   create: "検査結果登録",
   edit: "検査結果編集",
@@ -47,11 +51,23 @@ export function KarteLabResultTab({ patientId }: { patientId: string }) {
       <div className="karte-tabpanel">
         <div className="karte-tabpanel__header">
           <h3>{MODE_TITLES[mode.kind]}</h3>
-          <button type="button" onClick={backToList}>
-            ← 一覧に戻る
-          </button>
+          <div className="karte-tabpanel__actions">
+            {mode.kind === "detail" && (
+              <button
+                type="button"
+                onClick={() => setMode({ kind: "edit", reportId: mode.reportId })}
+              >
+                編集
+              </button>
+            )}
+            <button type="button" onClick={backToList}>
+              ← 一覧に戻る
+            </button>
+          </div>
         </div>
-        {mode.kind === "timeline" ? (
+        {mode.kind === "detail" ? (
+          <LabResultDetailPanel reportId={mode.reportId} />
+        ) : mode.kind === "timeline" ? (
           <LabResultTimelinePanel patientId={patientId} />
         ) : mode.kind === "create" ? (
           <CreateForm patientId={patientId} onSaved={backToList} />
@@ -85,6 +101,7 @@ export function KarteLabResultTab({ patientId }: { patientId: string }) {
           <LabResultTable
             reports={reports}
             patientId={patientId}
+            onView={(reportId) => setMode({ kind: "detail", reportId })}
             onEdit={(reportId) => setMode({ kind: "edit", reportId })}
           />
           <Pagination
