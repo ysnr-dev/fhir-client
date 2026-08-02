@@ -2800,9 +2800,95 @@ body.karte-wide #root {
 /* タブ(カルテ/病名/アレルギー/検査結果) */
 .karte-tabs {
   display: flex;
+  align-items: flex-end;
   gap: 4px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 12px;
+}
+
+.karte-tabs__list {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* 表示モード切替(タブ切替 / 上下分割)。タブ行の右端に置く。 */
+.karte-tabs__mode {
+  margin-left: auto;
+  align-self: center;
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  border-color: var(--border);
+  color: var(--text);
+  background: transparent;
+}
+
+.karte-tabs__mode:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.karte-tabs__mode--active {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+/* 上下分割モード: 上にカルテ、下にそれ以外のタブ。 */
+.karte-left__split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.karte-left__split-top,
+.karte-left__split-bottom {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 上ペインの高さは flex-basis(%)をインラインで指定して伸縮させない。 */
+.karte-left__split-top {
+  flex-grow: 0;
+  flex-shrink: 0;
+}
+
+.karte-left__split-bottom {
+  flex: 1 1 0;
+}
+
+/* 上下ペインの境界。細い線の周りに掴みやすい余白を持たせる。 */
+.karte-splitter {
+  flex: 0 0 auto;
+  position: relative;
+  height: 11px;
+  margin: 1px 0;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.karte-splitter::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: var(--border);
+}
+
+.karte-splitter:hover::before,
+.karte-splitter:focus-visible::before {
+  background: var(--accent);
+}
+
+.karte-splitter:focus-visible {
+  outline: none;
 }
 
 .karte-tabs__tab {
@@ -3149,5 +3235,10 @@ body.karte-wide #root {
   .karte-right {
     height: auto;
     max-height: var(--karte-pane-height);
+  }
+
+  /* 上下分割は上ペインの高さを % で決めるため、高さを確定させておく。 */
+  .karte-left--split {
+    height: var(--karte-pane-height);
   }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   useKarteClinicalNotesInfinite,
@@ -11,9 +11,17 @@ import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteDayList } from "../components/KarteDayList";
 import { KarteLabResultTab } from "../components/KarteLabResultTab";
 import { KarteRightPane, type KartePaneState } from "../components/KarteRightPane";
+import { KarteSplitter } from "../components/KarteSplitter";
 import { KARTE_TARGET_ATTR, KarteTimeline } from "../components/KarteTimeline";
 import { PatientHeader } from "../components/PatientHeader";
 import { buildKarteTimeline, type KarteTimelineItem } from "../fhir/karteTimeline";
+import {
+  readLeftPaneMode,
+  readTopRatio,
+  storeLeftPaneMode,
+  storeTopRatio,
+  type KarteLeftPaneMode,
+} from "../karteLayout";
 
 // 患者 1 人のカルテ画面。左ペインで登録済みの情報を参照し、右ペインで登録・編集する。
 
@@ -25,11 +33,23 @@ const TABS = [
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
+// 上下分割モードで下ペインに出すタブ(カルテは常に上ペインなので除く)。
+type OtherTabKey = Exclude<TabKey, "karte">;
+
+const OTHER_TABS = TABS.filter((item) => item.key !== "karte") as ReadonlyArray<{
+  key: OtherTabKey;
+  label: string;
+}>;
 
 export function KartePage() {
   const { patientId } = useParams<{ patientId: string }>();
   const [tab, setTab] = useState<TabKey>("karte");
+  // 分割モードの下ペインは別の選択状態を持たせ、モードを往復しても選択が入れ替わらないようにする。
+  const [otherTab, setOtherTab] = useState<OtherTabKey>("condition");
   const [pane, setPane] = useState<KartePaneState>({ kind: "empty" });
+  const [mode, setMode] = useState<KarteLeftPaneMode>(readLeftPaneMode);
+  const [topRatio, setTopRatio] = useState(readTopRatio);
+  const splitRef = useRef<HTMLDivElement>(null);
 
   // カルテは 2 ペインで横幅を使うため、この画面だけ #root の幅制限を外す。
   useEffect(() => {
@@ -112,11 +132,50 @@ export function KartePage() {
     if (openId === item.id) setPane({ kind: "empty" });
   }
 
+  function toggleMode() {
+    const next = mode === "split" ? "tabs" : "split";
+    setMode(next);
+    storeLeftPaneMode(next);
+  }
+
   if (!patientId) return null;
 
   const isLoading = notes.isPending || prescriptions.isPending || responses.isPending;
   const isFetchingMore =
     notes.isFetchingNextPage || prescriptions.isFetchingNextPage || responses.isFetchingNextPage;
+
+  const karteBody = (
+    <div className="karte-left__body">
+      <KarteDayList groups={timeline.groups} onSelect={scrollToTarget} />
+      <div className="karte-left__timeline">
+        <ErrorBanner error={notes.error} />
+        <ErrorBanner error={prescriptions.error} />
+        <ErrorBanner error={responses.error} />
+        <KarteTimeline
+          groups={timeline.groups}
+          // 3 ソースのうち一部だけ届いた段階でも、出せるものは出す。
+          isLoading={isLoading && timeline.groups.length === 0}
+          hasMore={timeline.hasMore}
+          isFetchingMore={isFetchingMore}
+          loadToken={loadToken}
+          onLoadMore={loadMore}
+          onEdit={handleEdit}
+          onDo={(srId) => setPane({ kind: "prescription-create", sourceSrId: srId })}
+          onDeleted={handleDeleted}
+          containerRef={timelineRef}
+        />
+      </div>
+    </div>
+  );
+
+  function renderTabPanel(key: OtherTabKey) {
+    if (!patientId) return null;
+    if (key === "condition") return <KarteConditionTab patientId={patientId} />;
+    if (key === "allergy") return <KarteAllergyTab patientId={patientId} />;
+    return <KarteLabResultTab patientId={patientId} />;
+  }
+
+  const modeToggle = <KarteModeToggleButton mode={mode} onToggle={toggleMode} />;
 
   return (
     <div className="page karte-page">
@@ -129,52 +188,107 @@ export function KartePage() {
       </div>
 
       <div className="karte-layout">
-        <section className="karte-left">
-          <div className="karte-tabs" role="tablist">
-            {TABS.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                role="tab"
-                aria-selected={tab === item.key}
-                className={`karte-tabs__tab${tab === item.key ? " karte-tabs__tab--active" : ""}`}
-                onClick={() => setTab(item.key)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {tab === "karte" && (
-            <div className="karte-left__body">
-              <KarteDayList groups={timeline.groups} onSelect={scrollToTarget} />
-              <div className="karte-left__timeline">
-                <ErrorBanner error={notes.error} />
-                <ErrorBanner error={prescriptions.error} />
-                <ErrorBanner error={responses.error} />
-                <KarteTimeline
-                  groups={timeline.groups}
-                  // 3 ソースのうち一部だけ届いた段階でも、出せるものは出す。
-                  isLoading={isLoading && timeline.groups.length === 0}
-                  hasMore={timeline.hasMore}
-                  isFetchingMore={isFetchingMore}
-                  loadToken={loadToken}
-                  onLoadMore={loadMore}
-                  onEdit={handleEdit}
-                  onDo={(srId) => setPane({ kind: "prescription-create", sourceSrId: srId })}
-                  onDeleted={handleDeleted}
-                  containerRef={timelineRef}
+        <section className={`karte-left${mode === "split" ? " karte-left--split" : ""}`}>
+          {mode === "tabs" ? (
+            <>
+              <KarteTabs tabs={TABS} active={tab} onSelect={setTab} trailing={modeToggle} />
+              {tab === "karte" ? karteBody : renderTabPanel(tab)}
+            </>
+          ) : (
+            // 上: カルテ / 下: それ以外のタブ。タブ行は操作対象の下ペイン側に置く。
+            <div className="karte-left__split" ref={splitRef}>
+              <div className="karte-left__split-top" style={{ flexBasis: `${topRatio * 100}%` }}>
+                {karteBody}
+              </div>
+              <KarteSplitter
+                containerRef={splitRef}
+                topRatio={topRatio}
+                onChange={setTopRatio}
+                onChangeEnd={() => storeTopRatio(topRatio)}
+              />
+              <div className="karte-left__split-bottom">
+                <KarteTabs
+                  tabs={OTHER_TABS}
+                  active={otherTab}
+                  onSelect={setOtherTab}
+                  trailing={modeToggle}
                 />
+                {renderTabPanel(otherTab)}
               </div>
             </div>
           )}
-          {tab === "condition" && <KarteConditionTab patientId={patientId} />}
-          {tab === "allergy" && <KarteAllergyTab patientId={patientId} />}
-          {tab === "lab" && <KarteLabResultTab patientId={patientId} />}
         </section>
 
         <KarteRightPane patientId={patientId} state={pane} onStateChange={setPane} />
       </div>
     </div>
+  );
+}
+
+// タブ行。右端に左ペインの表示モード切替ボタンを置く。
+function KarteTabs<K extends string>({
+  tabs,
+  active,
+  onSelect,
+  trailing,
+}: {
+  tabs: ReadonlyArray<{ key: K; label: string }>;
+  active: K;
+  onSelect: (key: K) => void;
+  trailing: ReactNode;
+}) {
+  return (
+    <div className="karte-tabs">
+      <div className="karte-tabs__list" role="tablist">
+        {tabs.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            role="tab"
+            aria-selected={active === item.key}
+            className={`karte-tabs__tab${active === item.key ? " karte-tabs__tab--active" : ""}`}
+            onClick={() => onSelect(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {trailing}
+    </div>
+  );
+}
+
+function KarteModeToggleButton({
+  mode,
+  onToggle,
+}: {
+  mode: KarteLeftPaneMode;
+  onToggle: () => void;
+}) {
+  const isSplit = mode === "split";
+  return (
+    <button
+      type="button"
+      className={`karte-tabs__mode${isSplit ? " karte-tabs__mode--active" : ""}`}
+      aria-pressed={isSplit}
+      title={isSplit ? "カルテと他タブを切り替え表示にする" : "カルテと他タブを上下に並べる"}
+      aria-label={isSplit ? "カルテと他タブを切り替え表示にする" : "カルテと他タブを上下に並べる"}
+      onClick={onToggle}
+    >
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+        <rect
+          x="1.5"
+          y="2.5"
+          width="13"
+          height="11"
+          rx="1.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+        />
+        {/* 分割中は 1 枚に戻すアイコン、通常時は上下に割るアイコンを出す。 */}
+        {!isSplit && <path d="M1.5 8h13" stroke="currentColor" strokeWidth="1.2" />}
+      </svg>
+    </button>
   );
 }
