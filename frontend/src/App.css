@@ -3193,6 +3193,11 @@ body.karte-wide #root {
   gap: 12px;
 }
 
+/* 診療日パネルを隠したときは切替ボタンぶんの細い帯だけ残す。 */
+.karte-left__body--daylist-hidden {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
 /* grid アイテムの既定(min-height: auto)だと中身の高さまで伸びてページが
    スクロールしてしまうので、両方の列に min-height: 0 を効かせる。 */
 .karte-left__body > * {
@@ -3212,10 +3217,48 @@ body.karte-wide #root {
   overflow-y: auto;
 }
 
+/* 非表示時はパネルの枠を消し、切替ボタンだけを左上に残す。 */
+.karte-daylist--collapsed {
+  align-self: start;
+  border: none;
+  padding: 0;
+  overflow: hidden;
+}
+
+.karte-daylist__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .karte-daylist__title {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 13px;
   color: var(--text-h);
+}
+
+/* 診療日パネルの表示切替。パネル内のボタン共通指定(枠なし)を上書きする。 */
+.karte-daylist .karte-daylist__visibility {
+  margin-left: auto;
+  flex: none;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  background: transparent;
+  line-height: 0;
+}
+
+.karte-daylist .karte-daylist__visibility:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.karte-daylist .karte-daylist__visibility--active {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-bg);
 }
 
 .karte-daylist__empty {

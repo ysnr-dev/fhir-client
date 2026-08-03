@@ -16,8 +16,10 @@ import { KARTE_TARGET_ATTR, KarteTimeline } from "../components/KarteTimeline";
 import { PatientHeader } from "../components/PatientHeader";
 import { buildKarteTimeline, type KarteTimelineItem } from "../fhir/karteTimeline";
 import {
+  readDayListVisible,
   readLeftPaneMode,
   readTopRatio,
+  storeDayListVisible,
   storeLeftPaneMode,
   storeTopRatio,
   type KarteLeftPaneMode,
@@ -49,6 +51,7 @@ export function KartePage() {
   const [pane, setPane] = useState<KartePaneState>({ kind: "empty" });
   const [mode, setMode] = useState<KarteLeftPaneMode>(readLeftPaneMode);
   const [topRatio, setTopRatio] = useState(readTopRatio);
+  const [dayListVisible, setDayListVisible] = useState(readDayListVisible);
   const splitRef = useRef<HTMLDivElement>(null);
 
   // カルテは 2 ペインで横幅を使うため、この画面だけ #root の幅制限を外す。
@@ -132,6 +135,12 @@ export function KartePage() {
     if (openId === item.id) setPane({ kind: "empty" });
   }
 
+  function toggleDayList() {
+    const next = !dayListVisible;
+    setDayListVisible(next);
+    storeDayListVisible(next);
+  }
+
   function toggleMode() {
     const next = mode === "split" ? "tabs" : "split";
     setMode(next);
@@ -145,8 +154,15 @@ export function KartePage() {
     notes.isFetchingNextPage || prescriptions.isFetchingNextPage || responses.isFetchingNextPage;
 
   const karteBody = (
-    <div className="karte-left__body">
-      <KarteDayList groups={timeline.groups} onSelect={scrollToTarget} />
+    <div
+      className={`karte-left__body${dayListVisible ? "" : " karte-left__body--daylist-hidden"}`}
+    >
+      <KarteDayList
+        groups={timeline.groups}
+        onSelect={scrollToTarget}
+        visible={dayListVisible}
+        onToggleVisible={toggleDayList}
+      />
       <div className="karte-left__timeline">
         <ErrorBanner error={notes.error} />
         <ErrorBanner error={prescriptions.error} />

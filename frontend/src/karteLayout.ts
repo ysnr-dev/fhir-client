@@ -5,6 +5,7 @@ export type KarteLeftPaneMode = "tabs" | "split";
 
 const MODE_STORAGE_KEY = "fhir-client.karte.leftPaneMode";
 const TOP_RATIO_STORAGE_KEY = "fhir-client.karte.leftPaneTopRatio";
+const DAY_LIST_STORAGE_KEY = "fhir-client.karte.dayListVisible";
 
 // 上下どちらのペインも潰れないように、上ペインが占める比率を制限する。
 const MIN_TOP_RATIO = 0.2;
@@ -47,5 +48,22 @@ export function storeTopRatio(ratio: number) {
     localStorage.setItem(TOP_RATIO_STORAGE_KEY, String(clampTopRatio(ratio)));
   } catch {
     // 保存できなくてもその場の表示は変える。
+  }
+}
+
+// カルテタブの診療日パネルの表示・非表示。既定は表示。
+export function readDayListVisible(): boolean {
+  try {
+    return localStorage.getItem(DAY_LIST_STORAGE_KEY) !== "hidden";
+  } catch {
+    return true;
+  }
+}
+
+export function storeDayListVisible(visible: boolean) {
+  try {
+    localStorage.setItem(DAY_LIST_STORAGE_KEY, visible ? "visible" : "hidden");
+  } catch {
+    // 保存できなくてもその場の表示は切り替える。
   }
 }
