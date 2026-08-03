@@ -50,6 +50,15 @@ RSpec.describe Master::DoseConversionBuilder do
     ])
   end
 
+  it "力価行を作れた散剤には 1:1 の行を作らない" do
+    create_medicine("610000010", unit_name: "ｇ")
+    create_hot("２％１ｇ", receipt_code_1: "610000010")
+
+    described_class.call
+
+    expect(conversions_for("610000010")).to eq([["mg", 20.0, "ｇ", "from_percent"]])
+  end
+
   it "薬価算定単位が量そのものなら 1:1 の行を作る" do
     create_medicine("610000002", unit_name: "ｇ")
     create_hot("１０ｇ", receipt_code_1: "610000002")

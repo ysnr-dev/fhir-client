@@ -117,9 +117,11 @@ module Master
     end
 
     # 薬価算定単位が量そのもの(生薬の g、内用液の mL など)なら、入力量がそのまま
-    # 製剤量になる。同じ単位の行が既にある場合は作らない。
+    # 製剤量になる。ただしマスタ単位での入力は換算行が無くても常に可能なので
+    # (錠剤に 錠→錠 の行を作っていないのと同じ)、他に換算行を作れた医薬品には作らない。
+    # 1行も作れない医薬品にだけ「確認済み・換算不要」の印として残す。
     def identity_row?(spec, rows)
-      StandardUnitParser.quantity_unit?(spec.pack_unit) && rows.none? { |row| row[0] == spec.pack_unit }
+      StandardUnitParser.quantity_unit?(spec.pack_unit) && rows.empty?
     end
 
     def needs_review?(spec, unit_name, injection_volume, conversions)
