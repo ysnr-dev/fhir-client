@@ -24,9 +24,9 @@ import {
 } from "../fhir/prescriptionHelpers";
 import {
   SCHEMA_IMAGE_NOTE,
-  qrStatusLabel,
   questionnaireResponsePlainText,
   schemaImageRefs,
+  summarizeQuestionnaireResponse,
 } from "../fhir/questionnaireResponseHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { KarteCardJsonModal } from "./KarteCardModals";
@@ -346,7 +346,9 @@ function cardMeta(item: KarteTimelineItem): string {
       .join(" | ");
   }
   if (item.kind === "qr") {
-    return [time, qrStatusLabel(item.response.status)].filter(Boolean).join(" | ");
+    // 診療記録と同じく、時刻・ステータス・記入者を並べる。
+    const summary = summarizeQuestionnaireResponse(item.response);
+    return [time, summary.statusLabel, summary.authorName].filter(Boolean).join(" | ");
   }
   // 処方は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。処方日は日付のみを
   // 入力する項目なので時刻は出さない(古い処方には時刻付きの authoredOn があり、
