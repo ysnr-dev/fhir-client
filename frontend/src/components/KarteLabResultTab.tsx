@@ -1,6 +1,12 @@
-import { useState } from "react";
-import { useCreateLabResult, useLabResultSearch, useUpdateLabResult } from "../api/queries";
+import { useMemo, useState } from "react";
 import {
+  useCreateLabResult,
+  useLabResultNavigation,
+  useLabResultSearch,
+  useUpdateLabResult,
+} from "../api/queries";
+import {
+  buildDoLabResultForm,
   buildLabResultBundle,
   buildLabResultUpdateBundle,
   specimenRefsFrom,
@@ -21,7 +27,7 @@ type Mode =
   | { kind: "list" }
   | { kind: "detail"; reportId: string }
   | { kind: "timeline" }
-  | { kind: "create" }
+  | { kind: "create"; sourceReportId?: string }
   | { kind: "edit"; reportId: string };
 
 const MODE_TITLES: Record<Mode["kind"], string> = {
@@ -31,6 +37,11 @@ const MODE_TITLES: Record<Mode["kind"], string> = {
   create: "検査結果登録",
   edit: "検査結果編集",
 };
+
+function modeTitle(mode: Mode) {
+  if (mode.kind === "create" && mode.sourceReportId) return "検査結果登録(DO)";
+  return MODE_TITLES[mode.kind];
+}
 
 export function KarteLabResultTab({ patientId }: { patientId: string }) {
   const [mode, setMode] = useState<Mode>({ kind: "list" });
@@ -46,31 +57,40 @@ export function KarteLabResultTab({ patientId }: { patientId: string }) {
 
   const backToList = () => setMode({ kind: "list" });
 
+  // 内容表示は前後移動(ページ送り)のために検査結果の並び順を引くので、
+  // 一覧など他モードで無駄に取得しないよう別コンポーネントに切り出している。
+  if (mode.kind === "detail") {
+    return (
+      <DetailPane
+        patientId={patientId}
+        reportId={mode.reportId}
+        onSelect={(reportId) => setMode({ kind: "detail", reportId })}
+        onDo={() => setMode({ kind: "create", sourceReportId: mode.reportId })}
+        onEdit={() => setMode({ kind: "edit", reportId: mode.reportId })}
+        onBack={backToList}
+      />
+    );
+  }
+
   if (mode.kind !== "list") {
     return (
       <div className="karte-tabpanel">
         <div className="karte-tabpanel__header">
-          <h3>{MODE_TITLES[mode.kind]}</h3>
+          <h3>{modeTitle(mode)}</h3>
           <div className="karte-tabpanel__actions">
-            {mode.kind === "detail" && (
-              <button
-                type="button"
-                onClick={() => setMode({ kind: "edit", reportId: mode.reportId })}
-              >
-                編集
-              </button>
-            )}
             <button type="button" onClick={backToList}>
               ← 一覧に戻る
             </button>
           </div>
         </div>
-        {mode.kind === "detail" ? (
-          <LabResultDetailPanel reportId={mode.reportId} />
-        ) : mode.kind === "timeline" ? (
+        {mode.kind === "timeline" ? (
           <LabResultTimelinePanel patientId={patientId} />
         ) : mode.kind === "create" ? (
-          <CreateForm patientId={patientId} onSaved={backToList} />
+          <CreateForm
+            patientId={patientId}
+            sourceReportId={mode.sourceReportId}
+            onSaved={backToList}
+          />
         ) : (
           <EditForm patientId={patientId} reportId={mode.reportId} onSaved={backToList} />
         )}
@@ -119,19 +139,111 @@ export function KarteLabResultTab({ patientId }: { patientId: string }) {
   );
 }
 
-function CreateForm({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {
+// 内容表示。詳細ページと同じく前後移動(新しい順)と DO を持つ。
+function DetailPane({
+  patientId,
+  reportId,
+  onSelect,
+  onDo,
+  onEdit,
+  onBack,
+}: {
+  patientId: string;
+  reportId: string;
+  onSelect: (reportId: string) => void;
+  onDo: () => void;
+  onEdit: () => void;
+  onBack: () => void;
+}) {
+  const nav = useLabResultNavigation(patientId, reportId);
+
+  return (
+    <div className="karte-tabpanel">
+      <div className="karte-tabpanel__header">
+        <div className="karte-tabpanel__title">
+          <h3>{MODE_TITLES.detail}</h3>
+          <div className="record-nav">
+            <button
+              type="button"
+              className="record-nav__button"
+              onClick={() => nav.previousId && onSelect(nav.previousId)}
+              disabled={!nav.previousId}
+              title="前の検査結果（新しい順で1つ前）"
+              aria-label="前の検査結果"
+            >
+              ＜
+            </button>
+            <span className="record-nav__status">
+              {nav.position ? `${nav.position} / ${nav.total} 件` : "-"}
+            </span>
+            <button
+              type="button"
+              className="record-nav__button"
+              onClick={() => nav.nextId && onSelect(nav.nextId)}
+              disabled={!nav.nextId}
+              title="次の検査結果（新しい順で1つ後）"
+              aria-label="次の検査結果"
+            >
+              ＞
+            </button>
+          </div>
+        </div>
+        <div className="karte-tabpanel__actions">
+          <button type="button" onClick={onDo}>
+            DO
+          </button>
+          <button type="button" onClick={onEdit}>
+            編集
+          </button>
+          <button type="button" onClick={onBack}>
+            ← 一覧に戻る
+          </button>
+        </div>
+      </div>
+
+      <LabResultDetailPanel reportId={reportId} />
+    </div>
+  );
+}
+
+function CreateForm({
+  patientId,
+  sourceReportId,
+  onSaved,
+}: {
+  patientId: string;
+  /** DO(検査項目のみ流用して新規登録)する元の DiagnosticReport id。 */
+  sourceReportId?: string;
+  onSaved: () => void;
+}) {
   const createLabResult = useCreateLabResult();
+  const source = useLabResultInitialValues(sourceReportId, patientId);
+
+  const initialValues = useMemo(
+    () => (source.initialValues ? buildDoLabResultForm(source.initialValues) : undefined),
+    [source.initialValues],
+  );
 
   function handleSubmit(values: LabResultFormValues) {
     createLabResult.mutate(buildLabResultBundle(values, patientId), { onSuccess: onSaved });
   }
 
   return (
-    <LabResultForm
-      onSubmit={handleSubmit}
-      submitting={createLabResult.isPending}
-      submitError={createLabResult.error}
-    />
+    <>
+      <ErrorBanner error={source.error} />
+
+      {/* DO 元の読み込み完了を待ってからフォームを描画する(初期値は初回描画時のみ反映される)。 */}
+      {sourceReportId && !source.ready ? (
+        <p>読み込み中...</p>
+      ) : (
+        <LabResultForm
+          initialValues={initialValues}
+          onSubmit={handleSubmit}
+          submitting={createLabResult.isPending}
+          submitError={createLabResult.error}
+        />
+      )}
+    </>
   );
 }
 

@@ -3866,6 +3866,13 @@ body.karte-wide #root {
   color: var(--text-h);
 }
 
+/* 見出し + レコード送り(＜ / ＞) */
+.karte-tabpanel__title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .karte-tabpanel__actions {
   display: flex;
   gap: 8px;
