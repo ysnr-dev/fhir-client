@@ -209,7 +209,7 @@ function cardTitle(item: KarteTimelineItem): string {
   if (item.kind === "note") return item.note.title ?? "";
   if (item.kind === "prescription") {
     const summary = summarizeServiceRequest(item.serviceRequest);
-    return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" / ");
+    return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" | ");
   }
   return item.label;
 }
@@ -219,10 +219,10 @@ function cardMeta(item: KarteTimelineItem): string {
   if (item.kind === "note") {
     return [time, statusLabel(item.note.status), item.note.author?.[0]?.display]
       .filter(Boolean)
-      .join(" / ");
+      .join(" | ");
   }
   if (item.kind === "qr") {
-    return [time, qrStatusLabel(item.response.status)].filter(Boolean).join(" / ");
+    return [time, qrStatusLabel(item.response.status)].filter(Boolean).join(" | ");
   }
   // 処方は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。処方日は日付のみを
   // 入力する項目なので時刻は出さない(古い処方には時刻付きの authoredOn があり、

@@ -79,7 +79,7 @@ export function PrescriptionDetailPage() {
                 <dd>{summary.settingDisplay}</dd>
                 <dt>処方区分</dt>
                 <dd>{summary.categoryDisplay}</dd>
-                <dt>依頼科 / 依頼医師</dt>
+                <dt>依頼科 | 依頼医師</dt>
                 <dd>{orderContextSummary(prescriptionRequester(sr)) || "-"}</dd>
                 <dt>処方箋コメント</dt>
                 <dd>{prescriptionComment(sr) || "-"}</dd>

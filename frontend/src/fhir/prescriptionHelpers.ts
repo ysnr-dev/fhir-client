@@ -452,9 +452,9 @@ export function prescriptionRequester(sr: fhir4.ServiceRequest): OrderContext {
   };
 }
 
-/** 「依頼科 / 依頼医師」の表示文字列。どちらも未設定なら空。 */
+/** 「依頼科 | 依頼医師」の表示文字列。どちらも未設定なら空。 */
 export function orderContextSummary(requester: OrderContext): string {
-  return [requester.departmentName, requester.practitionerName].filter(Boolean).join(" / ");
+  return [requester.departmentName, requester.practitionerName].filter(Boolean).join(" | ");
 }
 
 export interface PrescriptionDetailBundle {

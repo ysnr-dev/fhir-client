@@ -144,7 +144,7 @@ export function OrderContextPicker() {
 
   const summary = [value.departmentName || "診療科未選択", doctorName]
     .filter(Boolean)
-    .join(" / ");
+    .join(" | ");
 
   return (
     // 開くのはクリックのみ(マウスオーバーで勝手に開くと、直後のクリックで
