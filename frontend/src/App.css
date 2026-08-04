@@ -3675,6 +3675,33 @@ body.karte-wide #root {
   font-size: 12px;
 }
 
+/* カード操作はアイコンボタン。上の padding 指定を上書きして正方形にする
+   (PDF はリンクなので .button 側のセレクタも要る)。 */
+.karte-card__actions button.karte-card__icon-button,
+.karte-card__actions .button.karte-card__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  width: 24px;
+  height: 22px;
+  color: var(--text);
+}
+
+/* DO・PDF はアイコンだけでは意味が伝わりにくいので短いラベルを添える。
+   幅は内容に任せる(上の固定幅を打ち消す)。 */
+.karte-card__actions button.karte-card__icon-button--labeled,
+.karte-card__actions .button.karte-card__icon-button--labeled {
+  width: auto;
+  gap: 3px;
+  padding: 0 7px 0 5px;
+}
+
+.karte-card__icon-label {
+  font-size: 11px;
+  line-height: 1;
+}
+
 .karte-card__body {
   max-height: 220px;
   overflow: hidden;
