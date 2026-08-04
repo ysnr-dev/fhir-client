@@ -33,6 +33,13 @@ export function practitionerRoleLabel(code: string | undefined): string {
   return PRACTITIONER_ROLE_OPTIONS.find((o) => o.code === code)?.label ?? code;
 }
 
+// オーダーの依頼医師になれる職種。歯科医師も依頼者になれるので医師と同じ扱いにする。
+const DOCTOR_ROLE_CODES = ["doctor", "dentist"];
+
+export function isDoctorRoleCode(code: string | undefined): boolean {
+  return Boolean(code && DOCTOR_ROLE_CODES.includes(code));
+}
+
 export interface PractitionerRoleValues {
   roleCode: string;
   organizationId: string;

@@ -1,9 +1,10 @@
-import { Link, Navigate, NavLink, Route, Routes } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useMatch } from "react-router-dom";
 import "./App.css";
 import { AdminGate } from "./components/AdminGate";
 import { AuthGate } from "./components/AuthGate";
 import { CurrentUserBadge } from "./components/CurrentUserBadge";
 import { HoverMenu } from "./components/HoverMenu";
+import { OrderContextPicker } from "./components/OrderContextPicker";
 import { ThemeToggleItem } from "./components/ThemeToggleItem";
 import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
@@ -55,6 +56,10 @@ import { QuestionnaireResponseListPage } from "./pages/QuestionnaireResponseList
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 
 function App() {
+  // 依頼科・依頼医師はオーダーを登録するカルテ画面でだけ切り替えられればよいので、
+  // ヘッダーには同画面を開いている間だけ出す。
+  const onKarte = useMatch("/patients/:patientId/karte");
+
   return (
     // アプリ全体をログインゲートで包む(ADMIN_TOKEN 未設定なら素通し)。
     // ログイン中の医療従事者(Practitioner)は useCurrentPractitioner で参照できる。
@@ -93,6 +98,7 @@ function App() {
             <ThemeToggleItem />
           </HoverMenu>
         </nav>
+        {onKarte && <OrderContextPicker />}
         <CurrentUserBadge />
         <WakeButton />
       </header>

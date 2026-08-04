@@ -17,7 +17,12 @@ import {
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
 import { buildPractitionerDeleteBundle } from "../fhir/practitionerHelpers";
-import { baseRoleOf } from "../fhir/practitionerRoleHelpers";
+import {
+  baseRoleOf,
+  isDoctorRoleCode,
+  parsePractitionerRole,
+  practitionerIdOfRole,
+} from "../fhir/practitionerRoleHelpers";
 import { deleteLoginAccount } from "./authClient";
 import { buildQuestionnaire, collectPendingImageEntries } from "../fhir/questionnaireHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
@@ -434,6 +439,82 @@ export function usePractitionerRoleSearch(
     count: PRACTITIONER_ROLE_COUNT,
     hasPrevious: hasRelation(query.data?.data, "previous"),
     hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+// 指定した診療科に所属する医療従事者。診療科ロール(organization = 診療科)を引き、
+// _include で本体の Practitioner も取る。1 つの科の所属者が 100 人を超える想定は
+// ないのでページ送りはしない。
+async function fetchDepartmentMembers(departmentId: string): Promise<fhir4.Practitioner[]> {
+  const params = new URLSearchParams();
+  params.set("organization", `Organization/${departmentId}`);
+  params.set("_count", "100");
+  params.set("_include", "PractitionerRole:practitioner");
+
+  const { data: bundle } = await searchResource<fhir4.Resource>("PractitionerRole", params);
+  return (
+    bundle.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Practitioner => r?.resourceType === "Practitioner") ?? []
+  );
+}
+
+// 医療機関に所属する医療従事者の職種(Practitioner.id → 職種コード)。職種は所属
+// ロールだけが持ち、そのロールの organization は医療機関なので、施設で引けば
+// 「誰が医師か」が一度に分かる。診療科ロールは organization が診療科なのでヒットしない。
+async function fetchFacilityRoleCodes(facilityId: string): Promise<Record<string, string>> {
+  const PAGE = 100;
+  const codes: Record<string, string> = {};
+
+  for (let offset = 0; ; offset += PAGE) {
+    const params = new URLSearchParams();
+    params.set("organization", `Organization/${facilityId}`);
+    params.set("_count", String(PAGE));
+    params.set("_offset", String(offset));
+    const { data: bundle } = await searchResource<fhir4.PractitionerRole>(
+      "PractitionerRole",
+      params,
+    );
+    const page =
+      bundle.entry?.map((e) => e.resource).filter((r): r is fhir4.PractitionerRole => Boolean(r)) ??
+      [];
+    for (const role of page) {
+      const id = practitionerIdOfRole(role);
+      const code = parsePractitionerRole(role).roleCode;
+      if (id && code) codes[id] = code;
+    }
+    if (page.length < PAGE) return codes;
+  }
+}
+
+// 診療科に所属する医師・歯科医師。依頼科 → 依頼医師の階層選択に使う。
+// facilityId(所属医療機関)が分からないときは職種で絞れないので所属者をそのまま返す。
+export function useDepartmentDoctors(
+  departmentId: string | undefined,
+  facilityId: string | undefined,
+) {
+  const members = useQuery({
+    queryKey: ["PractitionerRole", "department", "members", departmentId],
+    queryFn: () => fetchDepartmentMembers(departmentId as string),
+    enabled: Boolean(departmentId),
+  });
+
+  const roleCodes = useQuery({
+    queryKey: ["PractitionerRole", "organization", "role-codes", facilityId],
+    queryFn: () => fetchFacilityRoleCodes(facilityId as string),
+    enabled: Boolean(departmentId && facilityId),
+    staleTime: 5 * 60_000,
+  });
+
+  const practitioners = members.data ?? [];
+  const doctors = facilityId
+    ? practitioners.filter((p) => p.id && isDoctorRoleCode(roleCodes.data?.[p.id]))
+    : practitioners;
+
+  return {
+    doctors,
+    isPending: members.isPending || (Boolean(facilityId) && roleCodes.isPending),
+    error: members.error ?? roleCodes.error,
   };
 }
 

@@ -63,6 +63,77 @@
   text-decoration: none;
 }
 
+/* カルテ画面ヘッダーの依頼科・依頼医師。常時出ている表示なので、プルダウンでは
+   なく枠線のないテキストとして置き、ログイン中ユーザーの左隣に並べる。 */
+.order-context {
+  margin-left: auto;
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* 右端寄せは .order-context が担うので、後続のユーザー表示は隣に並べる。 */
+.order-context ~ .app__user {
+  margin-left: 0;
+}
+
+.order-context__label {
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.order-context__trigger {
+  padding: 2px 6px;
+  border: none;
+  border-bottom: 1px dashed var(--border);
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  line-height: inherit;
+}
+
+.order-context__trigger:hover,
+.order-context__trigger[aria-expanded="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.order-context__menu {
+  left: auto;
+  right: 0;
+  min-width: 220px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.order-context__menu .order-context__dept {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.order-context__menu .order-context__doctor {
+  padding-left: 24px;
+  font-size: 13px;
+}
+
+.order-context__menu .order-context__item--active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.order-context__empty {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
 /* ログイン中ユーザーの表示 + ログアウト。ヘッダー右端に寄せる。 */
 .app__user {
   margin-left: auto;
