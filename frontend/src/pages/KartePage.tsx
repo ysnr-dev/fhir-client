@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   useKarteClinicalNotesInfinite,
@@ -16,11 +24,15 @@ import { KARTE_TARGET_ATTR, KarteTimeline } from "../components/KarteTimeline";
 import { PatientHeader } from "../components/PatientHeader";
 import { buildKarteTimeline, type KarteTimelineItem } from "../fhir/karteTimeline";
 import {
+  clampLeftWidthRatio,
+  clampTopRatio,
   readDayListVisible,
   readLeftPaneMode,
+  readLeftWidthRatio,
   readTopRatio,
   storeDayListVisible,
   storeLeftPaneMode,
+  storeLeftWidthRatio,
   storeTopRatio,
   type KarteLeftPaneMode,
 } from "../karteLayout";
@@ -51,8 +63,10 @@ export function KartePage() {
   const [pane, setPane] = useState<KartePaneState>({ kind: "empty" });
   const [mode, setMode] = useState<KarteLeftPaneMode>(readLeftPaneMode);
   const [topRatio, setTopRatio] = useState(readTopRatio);
+  const [leftWidthRatio, setLeftWidthRatio] = useState(readLeftWidthRatio);
   const [dayListVisible, setDayListVisible] = useState(readDayListVisible);
   const splitRef = useRef<HTMLDivElement>(null);
+  const layoutRef = useRef<HTMLDivElement>(null);
 
   // カルテは 2 ペインで横幅を使うため、この画面だけ #root の幅制限を外す。
   useEffect(() => {
@@ -203,7 +217,13 @@ export function KartePage() {
         </Link>
       </div>
 
-      <div className="karte-layout">
+      {/* 左右の幅はカスタムプロパティで渡す。狭い画面では CSS 側で縦積みに切り替える
+          ため、grid-template-columns 自体はインラインで上書きしない。 */}
+      <div
+        className="karte-layout"
+        ref={layoutRef}
+        style={{ "--karte-left-ratio": leftWidthRatio } as CSSProperties}
+      >
         <section className={`karte-left${mode === "split" ? " karte-left--split" : ""}`}>
           {mode === "tabs" ? (
             <>
@@ -218,9 +238,11 @@ export function KartePage() {
               </div>
               <KarteSplitter
                 containerRef={splitRef}
-                topRatio={topRatio}
-                onChange={setTopRatio}
-                onChangeEnd={() => storeTopRatio(topRatio)}
+                orientation="horizontal"
+                ratio={topRatio}
+                label="カルテと他タブの高さ"
+                onChange={(ratio) => setTopRatio(clampTopRatio(ratio))}
+                onChangeEnd={storeTopRatio}
               />
               <div className="karte-left__split-bottom">
                 <KarteTabs
@@ -234,6 +256,15 @@ export function KartePage() {
             </div>
           )}
         </section>
+
+        <KarteSplitter
+          containerRef={layoutRef}
+          orientation="vertical"
+          ratio={leftWidthRatio}
+          label="左ペインと右ペインの幅"
+          onChange={(ratio) => setLeftWidthRatio(clampLeftWidthRatio(ratio))}
+          onChangeEnd={storeLeftWidthRatio}
+        />
 
         <KarteRightPane patientId={patientId} state={pane} onStateChange={setPane} />
       </div>

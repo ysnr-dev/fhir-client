@@ -3172,10 +3172,19 @@ body.karte-wide #root {
   margin-bottom: 0;
 }
 
+/* 左ペイン / スプリッタ / 右ペインの 3 列。左ペインの幅の比率は
+   --karte-left-ratio(KartePage が指定)で決め、右ペインが残りを取る。
+   --karte-splitter-space はスプリッタ列 + 左右の column-gap の合計。 */
 .karte-layout {
+  --karte-left-ratio: 0.56;
+  --karte-splitter-space: 19px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(460px, 44%);
-  gap: 16px;
+  grid-template-columns:
+    minmax(0, calc(var(--karte-left-ratio) * (100% - var(--karte-splitter-space))))
+    auto
+    minmax(0, 1fr);
+  column-gap: 4px;
+  row-gap: 16px;
 }
 
 /* 左右のペインは同じ高さに固定し、中身が縦の残りを埋める。 */
@@ -3268,26 +3277,45 @@ body.karte-wide #root {
   flex: 1 1 0;
 }
 
-/* 上下ペインの境界。細い線の周りに掴みやすい余白を持たせる。 */
+/* ペインの境界。細い線の周りに掴みやすい余白を持たせる。 */
 .karte-splitter {
   flex: 0 0 auto;
   position: relative;
+  touch-action: none;
+}
+
+.karte-splitter--horizontal {
   height: 11px;
   margin: 1px 0;
   cursor: row-resize;
-  touch-action: none;
+}
+
+.karte-splitter--vertical {
+  width: 11px;
+  cursor: col-resize;
 }
 
 .karte-splitter::before {
   content: "";
   position: absolute;
+  border-radius: 1px;
+  background: var(--border);
+}
+
+.karte-splitter--horizontal::before {
   left: 0;
   right: 0;
   top: 50%;
   height: 2px;
   margin-top: -1px;
-  border-radius: 1px;
-  background: var(--border);
+}
+
+.karte-splitter--vertical::before {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
 }
 
 .karte-splitter:hover::before,
@@ -3696,6 +3724,11 @@ body.karte-wide #root {
 @media (max-width: 1200px) {
   .karte-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 縦積みでは左右の幅調整が意味を持たない。 */
+  .karte-splitter--vertical {
+    display: none;
   }
 
   /* 縦積みになるのでページ側をスクロールさせる。 */
