@@ -233,7 +233,7 @@ export function PrescriptionForm({
           <table className="rp-card__medicines rp-card__medicines--form">
             <colgroup>
               <col />
-              <col style={{ width: "60px" }} />
+              <col style={{ width: "88px" }} />
               <col style={{ width: "60px" }} />
               <col style={{ width: "18%" }} />
               <col style={{ width: "32px" }} />

@@ -992,19 +992,6 @@ button:disabled {
   font-size: 12px;
 }
 
-/* 用量はほとんどが 1 桁(力価を除く)。スピナーを消して数字だけに幅を使う。 */
-.rp-card__dose-input {
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-.rp-card__dose-input::-webkit-outer-spin-button,
-.rp-card__dose-input::-webkit-inner-spin-button {
-  appearance: none;
-  -webkit-appearance: none;
-  margin: 0;
-}
-
 /* 単位は読むだけの補助情報なので一段小さく。 */
 .rp-card__medicines--form td.rp-card__medicine-unit {
   font-size: 12px;
