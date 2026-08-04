@@ -11,9 +11,14 @@ import {
 } from "./humanName";
 import type { Gender } from "./patientHelpers";
 import {
+  baseRoleOf,
+  buildDepartmentRole,
   buildPractitionerRole,
+  departmentRolesOf,
   emptyPractitionerRole,
   hasPractitionerRole,
+  parseDepartmentRole,
+  type PractitionerDepartmentValues,
   type PractitionerRoleValues,
 } from "./practitionerRoleHelpers";
 
@@ -36,11 +41,15 @@ export interface PractitionerValues extends JapaneseNameParts {
   email: string;
 }
 
-export interface PractitionerFormValues extends PractitionerValues, PractitionerRoleValues {}
+export interface PractitionerFormValues extends PractitionerValues, PractitionerRoleValues {
+  /** 所属診療科。所属医療機関の配下から選ぶ。1 件を既定診療科にする。 */
+  departments: PractitionerDepartmentValues[];
+}
 
 export const emptyPractitionerForm: PractitionerFormValues = {
   ...emptyJapaneseName,
   ...emptyPractitionerRole,
+  departments: [],
   medicalRegistrationNumber: "",
   gender: "",
   birthDate: "",
@@ -52,6 +61,9 @@ export const emptyPractitionerForm: PractitionerFormValues = {
 export function validatePractitionerForm(values: PractitionerFormValues): string | null {
   if (!values.familyKanji.trim() && !values.givenKanji.trim()) {
     return "氏名(漢字)は姓・名のいずれかを入力してください。";
+  }
+  if (values.departments.length > 0 && !values.departments.some((d) => d.primary)) {
+    return "既定診療科を1つ選んでください。";
   }
   return null;
 }
@@ -124,16 +136,18 @@ export function parsePractitioner(practitioner: fhir4.Practitioner): Practitione
   };
 }
 
-// 医療従事者と職種・所属(PractitionerRole)を 1 つの transaction Bundle で保存する。
-// 片方だけ保存されて職種の無い医療従事者や孤児 PractitionerRole が残るのを防ぐ。
-// 職種・所属が両方空になったら、既存の PractitionerRole は削除する。
+// 医療従事者と職種・所属・所属診療科(PractitionerRole)を 1 つの transaction Bundle
+// で保存する。片方だけ保存されて職種の無い医療従事者や孤児 PractitionerRole が
+// 残るのを防ぐ。職種・所属が両方空になったら所属ロールは削除し、外された診療科の
+// ロールも同じ Bundle で消す。
 export function buildPractitionerSaveBundle(args: {
   values: PractitionerFormValues;
   practitionerId?: string;
   etag?: string;
-  existingRoleId?: string;
+  /** 編集時に既に登録されている PractitionerRole(所属ロール・診療科ロール両方)。 */
+  existingRoles?: fhir4.PractitionerRole[];
 }): fhir4.Bundle {
-  const { values, practitionerId, etag, existingRoleId } = args;
+  const { values, practitionerId, etag, existingRoles = [] } = args;
   const practitionerReference = practitionerId
     ? `Practitioner/${practitionerId}`
     : `urn:uuid:${crypto.randomUUID()}`;
@@ -152,15 +166,40 @@ export function buildPractitionerSaveBundle(args: {
     },
   ];
 
+  const existingBaseRoleId = baseRoleOf(existingRoles)?.id;
   if (hasPractitionerRole(values)) {
     entry.push({
-      resource: buildPractitionerRole(values, practitionerReference, existingRoleId),
-      request: existingRoleId
-        ? { method: "PUT", url: `PractitionerRole/${existingRoleId}` }
+      resource: buildPractitionerRole(values, practitionerReference, existingBaseRoleId),
+      request: existingBaseRoleId
+        ? { method: "PUT", url: `PractitionerRole/${existingBaseRoleId}` }
         : { method: "POST", url: "PractitionerRole" },
     });
-  } else if (existingRoleId) {
-    entry.push({ request: { method: "DELETE", url: `PractitionerRole/${existingRoleId}` } });
+  } else if (existingBaseRoleId) {
+    entry.push({ request: { method: "DELETE", url: `PractitionerRole/${existingBaseRoleId}` } });
+  }
+
+  // 診療科ロールは診療科 Organization ごとに 1 件。同じ診療科の既存ロールがあれば
+  // id を引き継いで PUT し、選択から外れたものは DELETE する。
+  const existingDepartmentRoles = departmentRolesOf(existingRoles);
+  const keptRoleIds = new Set<string>();
+
+  for (const department of values.departments) {
+    const existing = existingDepartmentRoles.find(
+      (role) => parseDepartmentRole(role).organizationId === department.organizationId,
+    );
+    if (existing?.id) keptRoleIds.add(existing.id);
+    entry.push({
+      resource: buildDepartmentRole(department, practitionerReference, existing?.id),
+      request: existing?.id
+        ? { method: "PUT", url: `PractitionerRole/${existing.id}` }
+        : { method: "POST", url: "PractitionerRole" },
+    });
+  }
+
+  for (const role of existingDepartmentRoles) {
+    if (role.id && !keptRoleIds.has(role.id)) {
+      entry.push({ request: { method: "DELETE", url: `PractitionerRole/${role.id}` } });
+    }
   }
 
   return { resourceType: "Bundle", type: "transaction", entry };

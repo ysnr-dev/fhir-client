@@ -79,6 +79,19 @@ export function departmentPartOfId(department: fhir4.Organization): string | und
   return department.partOf?.reference?.split("/").pop() || undefined;
 }
 
+// 診療科コードの昇順。コードは "01"〜"9Z" の 2 文字なので単純な文字列比較でよい。
+// コード未設定(院内独自の科)は末尾にまとめ、その中では名称順にする。
+export function sortDepartmentsByCode(departments: fhir4.Organization[]): fhir4.Organization[] {
+  return [...departments].sort((a, b) => {
+    const codeA = departmentCode(a);
+    const codeB = departmentCode(b);
+    if (codeA && codeB) return codeA.localeCompare(codeB);
+    if (codeA) return -1;
+    if (codeB) return 1;
+    return (a.name ?? "").localeCompare(b.name ?? "", "ja");
+  });
+}
+
 export function departmentDisplayName(department: fhir4.Organization): string {
   return department.name || departmentCodeDisplay(departmentCode(department)) || "(名称未登録)";
 }

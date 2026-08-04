@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useDeleteLoginAccount, useLoginAccount, useUpsertLoginAccount } from "../api/authQueries";
 import { FhirError } from "../api/fhirClient";
-import { usePractitioner, usePractitionerRole, useUpdatePractitioner } from "../api/queries";
+import { usePractitioner, usePractitionerRoles, useUpdatePractitioner } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PractitionerForm, type PractitionerLoginValues } from "../components/PractitionerForm";
 import {
@@ -10,12 +10,16 @@ import {
   parsePractitioner,
   type PractitionerFormValues,
 } from "../fhir/practitionerHelpers";
-import { emptyPractitionerRole, parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
+import {
+  emptyPractitionerRole,
+  parseDepartmentRoles,
+  parsePractitionerRole,
+} from "../fhir/practitionerRoleHelpers";
 
 export function PractitionerEditPage() {
   const { id } = useParams<{ id: string }>();
   const { data: result, isLoading, error: loadError } = usePractitioner(id);
-  const role = usePractitionerRole(id);
+  const role = usePractitionerRoles(id);
   // ログイン設定(backend の /auth/account)。フォームの初期値になるため、
   // 職種・所属と同様に取得完了を待ってから描画する。
   const account = useLoginAccount(id);
@@ -50,10 +54,11 @@ export function PractitionerEditPage() {
         practitionerId={id as string}
         practitioner={result.data}
         etag={result.etag}
-        roleId={role.role?.id}
+        existingRoles={role.roles}
         initialValues={{
           ...parsePractitioner(result.data),
           ...(role.role ? parsePractitionerRole(role.role) : emptyPractitionerRole),
+          departments: parseDepartmentRoles(role.roles),
         }}
         initialLogin={{
           loginId: account.data?.login_id ?? "",
@@ -68,12 +73,18 @@ interface EditFormProps {
   practitionerId: string;
   practitioner: fhir4.Practitioner;
   etag: string | null;
-  roleId?: string;
+  existingRoles: fhir4.PractitionerRole[];
   initialValues: PractitionerFormValues;
   initialLogin: { loginId: string; registered: boolean };
 }
 
-function EditForm({ practitionerId, etag, roleId, initialValues, initialLogin }: EditFormProps) {
+function EditForm({
+  practitionerId,
+  etag,
+  existingRoles,
+  initialValues,
+  initialLogin,
+}: EditFormProps) {
   const navigate = useNavigate();
   const updatePractitioner = useUpdatePractitioner();
   const upsertAccount = useUpsertLoginAccount();
@@ -92,7 +103,7 @@ function EditForm({ practitionerId, etag, roleId, initialValues, initialLogin }:
           values,
           practitionerId,
           etag,
-          existingRoleId: roleId,
+          existingRoles,
         }),
         practitionerId,
       });

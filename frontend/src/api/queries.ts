@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { buildClinicalNoteDeleteBundle } from "../fhir/clinicalNoteHelpers";
+import { sortDepartmentsByCode } from "../fhir/departmentHelpers";
 import {
   buildLabResultDeleteBundle,
   observationIdsFromReport,
@@ -16,6 +17,7 @@ import {
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
 import { buildPractitionerDeleteBundle } from "../fhir/practitionerHelpers";
+import { baseRoleOf } from "../fhir/practitionerRoleHelpers";
 import { deleteLoginAccount } from "./authClient";
 import { buildQuestionnaire, collectPendingImageEntries } from "../fhir/questionnaireHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
@@ -250,7 +252,7 @@ export interface DepartmentSearchParams {
   partOfId?: string;
 }
 
-const DEPARTMENT_COUNT = 20;
+export const DEPARTMENT_COUNT = 20;
 
 function departmentSearchParams(search: DepartmentSearchParams): URLSearchParams {
   const params = new URLSearchParams();
@@ -258,41 +260,23 @@ function departmentSearchParams(search: DepartmentSearchParams): URLSearchParams
   if (search.partOfId) params.set("partof", `Organization/${search.partOfId}`);
   // 所属医療機関の指定がなければ「親を持つ Organization」= 診療科すべて。
   else params.set("partof:missing", "false");
-  // ページ送りで順序がぶれないよう並び順を固定する(上流は identifier での
-  // ソートに対応しないため、診療科コード順ではなく名称順)。
+  // 全ページを読み切る間に順序がぶれないよう並び順を固定する。
   params.set("_sort", "name");
   return params;
 }
 
-export function useDepartmentSearch(search: DepartmentSearchParams, offset: number) {
-  const params = departmentSearchParams(search);
-  params.set("_count", String(DEPARTMENT_COUNT));
-  params.set("_offset", String(offset));
-
-  const query = useQuery({
-    queryKey: ["Organization", "search", "department", search, offset],
-    queryFn: () => searchResource<fhir4.Organization>("Organization", params),
-    placeholderData: keepPreviousData,
-  });
-
-  return {
-    ...query,
-    bundle: query.data?.data,
-    total: query.data?.data.total ?? 0,
-    count: DEPARTMENT_COUNT,
-    hasPrevious: hasRelation(query.data?.data, "previous"),
-    hasNext: hasRelation(query.data?.data, "next"),
-  };
-}
-
-// 一括登録の重複判定用に、指定医療機関の診療科を全件集める。上流の _count 上限は
-// 100 なので、次ページが尽きるまで _offset を進めて読み切る。
-async function fetchAllDepartments(partOfId: string): Promise<fhir4.Organization[]> {
+// 条件に合う診療科を全件集める。上流の _count 上限は 100 なので、次ページが
+// 尽きるまで _offset を進めて読み切る。
+//
+// 全件取ってから並べ替えるのは、上流が _sort=identifier を無視する(指定しても
+// 既定順のまま返す)ため。診療科コード昇順はページ送りをまたいで一貫させたいので、
+// 並べ替えとページングは呼び出し側で行う。1 施設あたり数百件を超えない前提。
+async function fetchAllDepartments(search: DepartmentSearchParams): Promise<fhir4.Organization[]> {
   const PAGE = 100;
   const departments: fhir4.Organization[] = [];
 
   for (let offset = 0; ; offset += PAGE) {
-    const params = departmentSearchParams({ partOfId });
+    const params = departmentSearchParams(search);
     params.set("_count", String(PAGE));
     params.set("_offset", String(offset));
     const { data: bundle } = await searchResource<fhir4.Organization>("Organization", params);
@@ -303,10 +287,26 @@ async function fetchAllDepartments(partOfId: string): Promise<fhir4.Organization
   }
 }
 
+// 一覧用。診療科コードの昇順(コード未設定は末尾)に並べた全件を返す。
+export function useDepartmentList(search: DepartmentSearchParams) {
+  const query = useQuery({
+    queryKey: ["Organization", "search", "department", "list", search],
+    queryFn: () => fetchAllDepartments(search),
+    placeholderData: keepPreviousData,
+  });
+
+  return {
+    ...query,
+    departments: sortDepartmentsByCode(query.data ?? []),
+    total: query.data?.length ?? 0,
+    count: DEPARTMENT_COUNT,
+  };
+}
+
 export function useDepartmentsOf(partOfId: string | undefined) {
   return useQuery({
     queryKey: ["Organization", "search", "department", "all", partOfId],
-    queryFn: () => fetchAllDepartments(partOfId as string),
+    queryFn: () => fetchAllDepartments({ partOfId }),
     enabled: Boolean(partOfId),
   });
 }
@@ -365,10 +365,12 @@ export function usePractitionerSearch(
   };
 }
 
-// 編集画面で職種・所属の初期値に使う。1 人につき 1 件だけ扱うため先頭を返す。
-export function usePractitionerRole(practitionerId: string | undefined) {
+// 編集画面で職種・所属・所属診療科の初期値に使う。所属ロールと診療科ロールの
+// 両方が返るので、role には所属ロール(診療科ロールでないもの)だけを入れる。
+export function usePractitionerRoles(practitionerId: string | undefined) {
   const params = new URLSearchParams();
   if (practitionerId) params.set("practitioner", `Practitioner/${practitionerId}`);
+  params.set("_count", "100");
 
   const query = useQuery({
     queryKey: ["PractitionerRole", "practitioner", practitionerId],
@@ -376,10 +378,12 @@ export function usePractitionerRole(practitionerId: string | undefined) {
     enabled: Boolean(practitionerId),
   });
 
-  return {
-    ...query,
-    role: query.data?.data.entry?.map((e) => e.resource).find((r) => r),
-  };
+  const roles =
+    query.data?.data.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.PractitionerRole => Boolean(r)) ?? [];
+
+  return { ...query, roles, role: baseRoleOf(roles) };
 }
 
 const PRACTITIONER_ROLE_COUNT = 20;

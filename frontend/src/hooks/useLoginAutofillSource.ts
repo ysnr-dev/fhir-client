@@ -1,5 +1,5 @@
 import { useAuthSession } from "../api/authQueries";
-import { useOrganization, usePractitioner, usePractitionerRole } from "../api/queries";
+import { useOrganization, usePractitioner, usePractitionerRoles } from "../api/queries";
 import type { LoginAutofillSource } from "../fhir/loginAutofill";
 import { parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
 
@@ -14,7 +14,7 @@ export function useLoginAutofillSource(): { source?: LoginAutofillSource; ready:
   const practitionerId = session.data?.user?.practitioner_id ?? undefined;
 
   const practitionerQuery = usePractitioner(practitionerId);
-  const roleQuery = usePractitionerRole(practitionerId);
+  const roleQuery = usePractitionerRoles(practitionerId);
   const organizationId = roleQuery.role ? parsePractitionerRole(roleQuery.role).organizationId : "";
   const organizationQuery = useOrganization(organizationId || undefined);
 

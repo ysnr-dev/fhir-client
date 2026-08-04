@@ -7,22 +7,33 @@ import {
   practitionerRegistrationNumber,
 } from "../fhir/practitionerHelpers";
 import {
+  departmentsByPractitionerId,
   practitionerRoleLabel,
   parsePractitionerRole,
   rolesByPractitionerId,
+  type PractitionerDepartmentValues,
 } from "../fhir/practitionerRoleHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { RowMenu } from "./RowMenu";
 
 interface PractitionerTableProps {
   practitioners: fhir4.Practitioner[];
-  /** 一覧と一緒に取得した PractitionerRole(職種・所属医療機関の表示に使う)。 */
+  /** 一覧と一緒に取得した PractitionerRole(職種・所属医療機関・所属診療科の表示に使う)。 */
   roles: fhir4.PractitionerRole[];
+}
+
+// 既定診療科を先頭に出し、他にもあれば件数を添える。
+function departmentSummary(departments: PractitionerDepartmentValues[] | undefined): string {
+  if (!departments?.length) return "-";
+  const [primary, ...rest] = departments;
+  const label = primary.code ? `${primary.code} ${primary.name}` : primary.name;
+  return rest.length ? `${label} 他${rest.length}件` : label;
 }
 
 export function PractitionerTable({ practitioners, roles }: PractitionerTableProps) {
   const deletePractitioner = useDeletePractitioner();
   const roleByPractitioner = rolesByPractitionerId(roles);
+  const departmentsByPractitioner = departmentsByPractitionerId(roles);
 
   function handleDelete(practitioner: fhir4.Practitioner) {
     if (!practitioner.id) return;
@@ -47,6 +58,7 @@ export function PractitionerTable({ practitioners, roles }: PractitionerTablePro
             <th>カナ</th>
             <th>職種</th>
             <th>所属医療機関</th>
+            <th>所属診療科</th>
             <th>性別</th>
             <th>状態</th>
             <th></th>
@@ -63,6 +75,11 @@ export function PractitionerTable({ practitioners, roles }: PractitionerTablePro
               <td>{practitionerDisplayKana(practitioner)}</td>
               <td>{practitionerRoleLabel(roleValues?.roleCode) || "-"}</td>
               <td>{roleValues?.organizationName || "-"}</td>
+              <td>
+                {departmentSummary(
+                  practitioner.id ? departmentsByPractitioner[practitioner.id] : undefined,
+                )}
+              </td>
               <td>{genderLabel(practitioner.gender)}</td>
               <td>{practitioner.active === false ? "無効" : "有効"}</td>
               <td className="patient-table__actions">

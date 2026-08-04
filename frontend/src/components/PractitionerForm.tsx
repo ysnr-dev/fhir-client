@@ -1,4 +1,10 @@
 import { useState, type FormEvent } from "react";
+import { useDepartmentsOf } from "../api/queries";
+import {
+  departmentCode,
+  departmentDisplayName,
+  sortDepartmentsByCode,
+} from "../fhir/departmentHelpers";
 import { organizationDisplayName } from "../fhir/organizationHelpers";
 import {
   emptyPractitionerForm,
@@ -45,6 +51,14 @@ export function PractitionerForm({
   const accountRegistered = initialLogin?.registered ?? false;
   const [validationError, setValidationError] = useState<string | null>(null);
   const [organizationModalOpen, setOrganizationModalOpen] = useState(false);
+  const [departmentToAdd, setDepartmentToAdd] = useState("");
+
+  // 診療科は所属医療機関にぶら下がる Organization なので、選べるのは選択中の
+  // 医療機関の配下だけ。既に追加済みのものは候補から外す。
+  const { data: facilityDepartments } = useDepartmentsOf(values.organizationId || undefined);
+  const departmentOptions = sortDepartmentsByCode(facilityDepartments ?? []).filter(
+    (department) => !values.departments.some((d) => d.organizationId === department.id),
+  );
 
   function update<K extends keyof PractitionerFormValues>(key: K, value: PractitionerFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -55,8 +69,51 @@ export function PractitionerForm({
       ...v,
       organizationId: organization.id ?? "",
       organizationName: organizationDisplayName(organization),
+      // 診療科は医療機関ごとに別リソースなので、施設を変えたら選び直してもらう。
+      departments: organization.id === v.organizationId ? v.departments : [],
     }));
+    setDepartmentToAdd("");
     setOrganizationModalOpen(false);
+  }
+
+  function addDepartment() {
+    const department = (facilityDepartments ?? []).find((d) => d.id === departmentToAdd);
+    if (!department?.id) return;
+    setValues((v) => ({
+      ...v,
+      departments: [
+        ...v.departments,
+        {
+          organizationId: department.id as string,
+          name: departmentDisplayName(department),
+          code: departmentCode(department),
+          // 最初の 1 件は自動的に既定診療科にする。
+          primary: v.departments.length === 0,
+        },
+      ],
+    }));
+    setDepartmentToAdd("");
+  }
+
+  function removeDepartment(organizationId: string) {
+    setValues((v) => {
+      const departments = v.departments.filter((d) => d.organizationId !== organizationId);
+      // 既定を外したときは残りの先頭を既定に繰り上げる(既定不在で保存できないため)。
+      if (departments.length > 0 && !departments.some((d) => d.primary)) {
+        departments[0] = { ...departments[0], primary: true };
+      }
+      return { ...v, departments };
+    });
+  }
+
+  function setPrimaryDepartment(organizationId: string) {
+    setValues((v) => ({
+      ...v,
+      departments: v.departments.map((d) => ({
+        ...d,
+        primary: d.organizationId === organizationId,
+      })),
+    }));
   }
 
   function validateLogin(): string | null {
@@ -215,13 +272,81 @@ export function PractitionerForm({
             <button
               type="button"
               onClick={() =>
-                setValues((v) => ({ ...v, organizationId: "", organizationName: "" }))
+                setValues((v) => ({
+                  ...v,
+                  organizationId: "",
+                  organizationName: "",
+                  departments: [],
+                }))
               }
             >
               クリア
             </button>
           )}
         </div>
+      </fieldset>
+
+      <fieldset className="practitioner-form__role">
+        <legend>所属診療科</legend>
+        {values.organizationId ? (
+          <>
+            <div className="practitioner-form__department-add">
+              <select
+                value={departmentToAdd}
+                onChange={(e) => setDepartmentToAdd(e.target.value)}
+                disabled={departmentOptions.length === 0}
+              >
+                <option value="">
+                  {departmentOptions.length === 0 ? "追加できる診療科がありません" : "診療科を選択"}
+                </option>
+                {departmentOptions.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {departmentCode(department)
+                      ? `${departmentCode(department)} ${departmentDisplayName(department)}`
+                      : departmentDisplayName(department)}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={addDepartment} disabled={!departmentToAdd}>
+                追加
+              </button>
+            </div>
+            {values.departments.length === 0 ? (
+              <p className="practitioner-form__login-hint">
+                診療科は未選択です。複数選べます(1つが既定診療科になります)。
+              </p>
+            ) : (
+              <ul className="practitioner-form__department-list">
+                {values.departments.map((department) => (
+                  <li key={department.organizationId}>
+                    <label>
+                      <input
+                        type="radio"
+                        name="primary-department"
+                        checked={department.primary}
+                        onChange={() => setPrimaryDepartment(department.organizationId)}
+                      />
+                      既定
+                    </label>
+                    <span className="practitioner-form__department-name">
+                      {department.code ? `${department.code} ${department.name}` : department.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeDepartment(department.organizationId)}
+                    >
+                      削除
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <p className="practitioner-form__login-hint">
+            先に所属医療機関を選ぶと、その医療機関の診療科を追加できます。
+          </p>
+        )}
       </fieldset>
 
       <fieldset className="practitioner-form__login">
