@@ -1,7 +1,7 @@
 // JASPEHR 実装ガイド v1.0.0 の QuestionnaireResponse プロファイルに準拠した
 // テンプレート回答リソースの組み立て・復元。
 // https://jaspehr.jp/wp-content/docs/full-ig_v1.0.0/site/index.html
-import { annotationOf } from "./schemaImage";
+import { annotationOf, binaryIdFromAttachment } from "./schemaImage";
 
 export const JASPEHR_QUESTIONNAIRE_RESPONSE_PROFILE_URL =
   "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaireresponse";
@@ -174,6 +174,33 @@ function plainAnswerText(answer: fhir4.QuestionnaireResponseItemAnswer): string 
   );
 }
 
+// 平文にできないシェーマ画像の存在を示す印。画像そのものを併せて描くカルテの
+// カードでは、この印を取り除いてから行を出す。
+export const SCHEMA_IMAGE_NOTE = "(シェーマ画像あり)";
+
+export interface SchemaImageRef {
+  /** 繰り返し項目でも重複しない描画用のキー。 */
+  key: string;
+  /** 画像に添える項目名。 */
+  label: string;
+  binaryId: string;
+}
+
+// 回答に含まれる描き込み済みシェーマ画像(合成済み PNG の Binary)を列挙する。
+// 元テンプレートは要らない — 描き込み画像は元画像を含んだ合成結果だけを持つため。
+export function schemaImageRefs(response: fhir4.QuestionnaireResponse): SchemaImageRef[] {
+  const refs: SchemaImageRef[] = [];
+  (function walk(items: fhir4.QuestionnaireResponseItem[] | undefined, path: string) {
+    (items ?? []).forEach((item, index) => {
+      const key = `${path}${item.linkId}#${index}`;
+      const binaryId = binaryIdFromAttachment(annotationOf(item));
+      if (binaryId) refs.push({ key, label: item.text ?? item.linkId, binaryId });
+      walk(item.item, `${key}/`);
+    });
+  })(response.item, "");
+  return refs;
+}
+
 // テンプレート内容を「タイトル + 入力内容」の平文にする(カルテ等への貼り付け用)。
 // 項目名は QuestionnaireResponse.item.text、単位は元 Questionnaire から引く。
 export function questionnaireResponsePlainText(
@@ -197,7 +224,7 @@ export function questionnaireResponsePlainText(
       const indent = "  ".repeat(depth);
       const label = item.text ?? item.linkId;
       // シェーマ画像への描き込みは平文にできないため存在だけ示す。
-      const annotationNote = annotationOf(item) ? "(シェーマ画像あり)" : "";
+      const annotationNote = annotationOf(item) ? SCHEMA_IMAGE_NOTE : "";
       // choice 配下に条件付きグループがある場合は answer と item の両方を持つ。
       if (item.answer?.length) {
         const unit = units.get(item.linkId);

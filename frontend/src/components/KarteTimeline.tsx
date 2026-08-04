@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
+  useBinaryImage,
   useDeleteClinicalNote,
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
@@ -22,8 +23,10 @@ import {
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
 import {
+  SCHEMA_IMAGE_NOTE,
   qrStatusLabel,
   questionnaireResponsePlainText,
+  schemaImageRefs,
 } from "../fhir/questionnaireResponseHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { KarteCardDetailModal, KarteCardJsonModal } from "./KarteCardModals";
@@ -434,19 +437,54 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
       </p>
     );
   }
-  // 平文化は改行区切りなので、そのまま行ごとに描画する。
+  // シェーマ画像は下に実物を出すので、平文の「あり」の印は落とす。印だけの行
+  // (答えがシェーマ画像しかない項目)は項目名が画像側のキャプションに出るので捨てる。
+  const schemas = schemaImageRefs(item.response);
   const lines = questionnaireResponsePlainText(item.questionnaire, item.response)
     .split("\n")
     // 先頭のテンプレート名と空行は見出しと重複するので落とす。
     .slice(2)
-    .filter((line) => line.trim());
-  if (lines.length === 0) return <p className="karte-card__empty">回答がありません。</p>;
+    .map((line) => line.replace(SCHEMA_IMAGE_NOTE, "").trimEnd())
+    .filter((line) => line.trim() && !/[:：]$/.test(line.trim()));
+  if (lines.length === 0 && schemas.length === 0) {
+    return <p className="karte-card__empty">回答がありません。</p>;
+  }
   return (
-    <ul className="karte-qr__lines">
-      {lines.map((line, index) => (
-        <li key={index}>{line}</li>
-      ))}
-    </ul>
+    <>
+      {lines.length > 0 && (
+        <ul className="karte-qr__lines">
+          {lines.map((line, index) => (
+            <li key={index}>{line}</li>
+          ))}
+        </ul>
+      )}
+      {schemas.length > 0 && (
+        <div className="karte-qr__schemas">
+          {schemas.map((schema) => (
+            <KarteSchemaImage key={schema.key} binaryId={schema.binaryId} label={schema.label} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+// 描き込み済みシェーマ画像のサムネイル。Binary は staleTime: Infinity で
+// キャッシュされるので、同じ画像を何枚出しても取得は 1 回で済む。
+function KarteSchemaImage({ binaryId, label }: { binaryId: string; label: string }) {
+  const { data, isLoading } = useBinaryImage(binaryId);
+
+  return (
+    <figure className="karte-qr__schema">
+      {data ? (
+        <img className="karte-qr__schema-image" src={data} alt={label || "シェーマ画像"} />
+      ) : (
+        <p className="karte-card__empty">
+          {isLoading ? "画像を読み込み中..." : "画像を表示できません。"}
+        </p>
+      )}
+      {label && <figcaption className="karte-qr__schema-caption">{label}</figcaption>}
+    </figure>
   );
 }
 

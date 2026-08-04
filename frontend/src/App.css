@@ -3892,6 +3892,35 @@ body.karte-wide #root {
   white-space: pre-wrap;
 }
 
+/* 描き込み済みシェーマ画像。複数あるときは横に並べ、入りきらなければ折り返す。 */
+.karte-qr__schemas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.karte-qr__schema {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.karte-qr__schema-image {
+  max-width: 160px;
+  max-height: 120px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  /* 線画は透過 PNG なので、暗いテーマでも見えるよう下地を白にする。 */
+  background: #fff;
+}
+
+.karte-qr__schema-caption {
+  font-size: 12px;
+  color: var(--text);
+}
+
 /* 病名・アレルギー・検査結果タブ */
 .karte-tabpanel__header {
   display: flex;
