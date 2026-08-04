@@ -1,4 +1,5 @@
 import type { Medicine, MedicineUsage } from "../api/masterClient";
+import { emptyOrderContext, type OrderContext } from "../orderContext";
 
 // ローカル拡張・コードシステム。JP Core / FHIR 標準に存在しない項目を表現するための、
 // この処方オーダー機能専用の URI。
@@ -6,6 +7,10 @@ const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting
 const CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-category"; // 処方区分
 const ORDER_DETAIL_MR_EXT_URL =
   "http://fhir-client.local/StructureDefinition/prescription-medication-request"; // orderDetail→MedicationRequest 参照
+// 依頼科(診療科 Organization)。ServiceRequest / MedicationRequest には診療科を持つ
+// 標準要素が無い(FHIR では Encounter 経由で表現する)ため、参照をローカル拡張で持たせる。
+// 依頼医師は標準の requester に入れる。
+const ORDER_DEPARTMENT_EXT_URL = "http://fhir-client.local/StructureDefinition/order-department";
 // レセプト電算コード（6始まり9桁）。JP Core の MedicationCode ValueSet には
 // レセ電コードに対応する正式な CodeSystem が定義されていないため、ローカル URI を使用。
 const MEDICINE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-code";
@@ -103,6 +108,32 @@ function findSettingDisplay(code: string): string {
   return SETTING_OPTIONS.find((s) => s.code === code)?.display ?? code;
 }
 
+// 依頼医師は標準の requester、依頼科はローカル拡張に入れる。どちらも参照を引き直さずに
+// 一覧・カルテで名前を出せるよう display を埋めておく(PractitionerRole と同じ方針)。
+function applyOrderContext(
+  resource: fhir4.ServiceRequest | fhir4.MedicationRequest,
+  requester: OrderContext,
+) {
+  if (requester.practitionerId) {
+    resource.requester = {
+      reference: `Practitioner/${requester.practitionerId}`,
+      ...(requester.practitionerName ? { display: requester.practitionerName } : {}),
+    };
+  }
+  if (requester.departmentId) {
+    resource.extension = [
+      ...(resource.extension ?? []),
+      {
+        url: ORDER_DEPARTMENT_EXT_URL,
+        valueReference: {
+          reference: `Organization/${requester.departmentId}`,
+          ...(requester.departmentName ? { display: requester.departmentName } : {}),
+        },
+      },
+    ];
+  }
+}
+
 function buildMedicationRequest(
   rp: RpValues,
   medLine: MedicineLineValues,
@@ -111,6 +142,7 @@ function buildMedicationRequest(
   patientId: string,
   authoredOn: string,
   serviceRequestReference: string,
+  requester: OrderContext,
 ): fhir4.MedicationRequest {
   const timingCoding: fhir4.Coding[] = [];
   if (rp.usage) {
@@ -190,6 +222,8 @@ function buildMedicationRequest(
 
   if (medLine.id) resource.id = medLine.id;
 
+  applyOrderContext(resource, requester);
+
   if (basicCategory === BASIC_USAGE_CATEGORY_ORAL && rp.doseDays) {
     resource.dispenseRequest = {
       expectedSupplyDuration: {
@@ -211,6 +245,7 @@ function buildMedicationRequest(
 function buildPrescriptionTransactionBundle(
   values: PrescriptionFormValues,
   patientId: string,
+  requester: OrderContext,
   serviceRequestId?: string,
   originalMedicationRequestIds?: string[],
 ): fhir4.Bundle {
@@ -236,6 +271,7 @@ function buildPrescriptionTransactionBundle(
         patientId,
         authoredOn,
         serviceRequestReference,
+        requester,
       );
 
       const fullUrl = medLine.id ? `MedicationRequest/${medLine.id}` : `urn:uuid:${crypto.randomUUID()}`;
@@ -286,6 +322,7 @@ function buildPrescriptionTransactionBundle(
   };
 
   if (serviceRequestId) serviceRequest.id = serviceRequestId;
+  applyOrderContext(serviceRequest, requester);
   if (values.comment) {
     serviceRequest.note = [{ text: values.comment }];
   }
@@ -311,11 +348,14 @@ function buildPrescriptionTransactionBundle(
   };
 }
 
+// requester: 新規はヘッダーで選択中の依頼科・依頼医師、更新は既存の処方から
+// 引き継いだ値(prescriptionRequester)を渡す。
 export function buildPrescriptionBundle(
   values: PrescriptionFormValues,
   patientId: string,
+  requester: OrderContext,
 ): fhir4.Bundle {
-  return buildPrescriptionTransactionBundle(values, patientId);
+  return buildPrescriptionTransactionBundle(values, patientId, requester);
 }
 
 export function buildPrescriptionUpdateBundle(
@@ -323,8 +363,15 @@ export function buildPrescriptionUpdateBundle(
   patientId: string,
   serviceRequestId: string,
   originalMedicationRequestIds: string[],
+  requester: OrderContext,
 ): fhir4.Bundle {
-  return buildPrescriptionTransactionBundle(values, patientId, serviceRequestId, originalMedicationRequestIds);
+  return buildPrescriptionTransactionBundle(
+    values,
+    patientId,
+    requester,
+    serviceRequestId,
+    originalMedicationRequestIds,
+  );
 }
 
 // 既存の処方を DO(流用)して新規登録するためのフォーム値に変換する。
@@ -390,6 +437,24 @@ export function summarizeServiceRequest(sr: fhir4.ServiceRequest): PrescriptionS
 
 export function prescriptionComment(sr: fhir4.ServiceRequest): string {
   return sr.note?.[0]?.text ?? "";
+}
+
+// 登録時に入れた依頼科・依頼医師。参照の display をそのまま名前として使うので、
+// 表示のために Organization / Practitioner を引き直す必要はない。
+export function prescriptionRequester(sr: fhir4.ServiceRequest): OrderContext {
+  const department = sr.extension?.find((e) => e.url === ORDER_DEPARTMENT_EXT_URL)?.valueReference;
+  if (!department && !sr.requester) return emptyOrderContext;
+  return {
+    departmentId: department?.reference?.split("/").pop() ?? "",
+    departmentName: department?.display ?? "",
+    practitionerId: sr.requester?.reference?.split("/").pop() ?? "",
+    practitionerName: sr.requester?.display ?? "",
+  };
+}
+
+/** 「依頼科 / 依頼医師」の表示文字列。どちらも未設定なら空。 */
+export function orderContextSummary(requester: OrderContext): string {
+  return [requester.departmentName, requester.practitionerName].filter(Boolean).join(" / ");
 }
 
 export interface PrescriptionDetailBundle {

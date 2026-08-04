@@ -46,9 +46,35 @@ export function readOrderContext(owner: string): OrderContext | null {
 }
 
 export function storeOrderContext(owner: string, value: OrderContext) {
+  snapshot = { owner, value };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...value, owner } satisfies StoredOrderContext));
   } catch {
     // 保存できなくてもその場の選択は有効にする。
   }
+  for (const listener of listeners) listener();
+}
+
+// ---- 参照側(オーダー登録画面)------------------------------------------------
+//
+// ヘッダーの選択を処方などの登録画面から読むための購読口。localStorage を都度
+// 読むと毎回別オブジェクトになり useSyncExternalStore が無限ループするため、
+// 最新値をメモリにも持って同じ参照を配る。
+
+let snapshot: { owner: string; value: OrderContext } | null = null;
+const listeners = new Set<() => void>();
+
+export function subscribeOrderContext(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** ログイン中の医療従事者 owner が選んでいる依頼科・依頼医師(未選択なら空)。 */
+export function orderContextSnapshot(owner: string): OrderContext {
+  if (!snapshot || snapshot.owner !== owner) {
+    snapshot = { owner, value: readOrderContext(owner) ?? emptyOrderContext };
+  }
+  return snapshot.value;
 }

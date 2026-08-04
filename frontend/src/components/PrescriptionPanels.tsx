@@ -6,8 +6,10 @@ import {
   buildDoPrescriptionForm,
   buildPrescriptionBundle,
   buildPrescriptionUpdateBundle,
+  prescriptionRequester,
   type PrescriptionFormValues,
 } from "../fhir/prescriptionHelpers";
+import { useOrderContext } from "../hooks/useOrderContext";
 import { usePrescriptionInitialValues } from "../hooks/usePrescriptionInitialValues";
 
 // 処方の登録・編集 UI。ページとカルテ画面の右ペインの双方から使う。
@@ -26,6 +28,8 @@ export function PrescriptionCreatePanel({
 }: PrescriptionCreatePanelProps) {
   const createPrescription = useCreatePrescription();
   const source = usePrescriptionInitialValues(sourceSrId, patientId);
+  // DO も新しいオーダーなので、依頼元は DO 元ではなくヘッダーで選択中のものを使う。
+  const requester = useOrderContext();
 
   const initialValues = useMemo(
     () => (source.initialValues ? buildDoPrescriptionForm(source.initialValues) : undefined),
@@ -33,7 +37,9 @@ export function PrescriptionCreatePanel({
   );
 
   function handleSubmit(values: PrescriptionFormValues) {
-    createPrescription.mutate(buildPrescriptionBundle(values, patientId), { onSuccess: onSaved });
+    createPrescription.mutate(buildPrescriptionBundle(values, patientId, requester), {
+      onSuccess: onSaved,
+    });
   }
 
   return (
@@ -76,10 +82,13 @@ export function PrescriptionEditPanel({ patientId, srId, onSaved }: Prescription
   function handleSubmit(values: PrescriptionFormValues) {
     // 別患者の処方を更新すると subject が URL の患者に書き換わり、処方が付け替わってしまう。
     if (!sr || patientMismatch) return;
+    // 依頼科・依頼医師は登録時のものを引き継ぐ(編集した人・その時のヘッダーの選択で
+    // 上書きしない)。診療記録の author と同じ考え方。
     const originalIds = mrs.map((mr) => mr.id).filter((id): id is string => Boolean(id));
-    updatePrescription.mutate(buildPrescriptionUpdateBundle(values, patientId, srId, originalIds), {
-      onSuccess: onSaved,
-    });
+    updatePrescription.mutate(
+      buildPrescriptionUpdateBundle(values, patientId, srId, originalIds, prescriptionRequester(sr)),
+      { onSuccess: onSaved },
+    );
   }
 
   return (

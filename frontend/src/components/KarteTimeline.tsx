@@ -12,7 +12,13 @@ import {
   type KarteDayGroup,
   type KarteTimelineItem,
 } from "../fhir/karteTimeline";
-import { groupByRp, prescriptionComment, summarizeServiceRequest } from "../fhir/prescriptionHelpers";
+import {
+  groupByRp,
+  orderContextSummary,
+  prescriptionComment,
+  prescriptionRequester,
+  summarizeServiceRequest,
+} from "../fhir/prescriptionHelpers";
 import {
   qrStatusLabel,
   questionnaireResponsePlainText,
@@ -218,7 +224,10 @@ function cardMeta(item: KarteTimelineItem): string {
   if (item.kind === "qr") {
     return [time, qrStatusLabel(item.response.status)].filter(Boolean).join(" / ");
   }
-  return time;
+  // 処方は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。処方日は日付のみを
+  // 入力する項目なので時刻は出さない(古い処方には時刻付きの authoredOn があり、
+  // 意味のない「00:00」が出てしまうため)。
+  return orderContextSummary(prescriptionRequester(item.serviceRequest));
 }
 
 // 診療日はグループ見出しに出るのでカードには時刻だけを添える。
