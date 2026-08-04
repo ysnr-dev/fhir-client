@@ -91,11 +91,7 @@ export function KarteConditionTab({ patientId, view, onViewChange }: KarteCondit
         ) : mode.kind === "create" ? (
           <CreateForm patientId={patientId} onSaved={backToList} />
         ) : (
-          <EditForm
-            patientId={patientId}
-            conditionId={mode.conditionId}
-            onSaved={backToList}
-          />
+          <EditForm patientId={patientId} conditionId={mode.conditionId} onSaved={backToList} />
         )}
       </div>
     );
@@ -118,7 +114,6 @@ export function KarteConditionTab({ patientId, view, onViewChange }: KarteCondit
         <>
           <ConditionTable
             conditions={conditions}
-            patientId={patientId}
             onView={(conditionId) => onViewChange(conditionId)}
             onEdit={(conditionId) => setForm({ kind: "edit", conditionId })}
           />

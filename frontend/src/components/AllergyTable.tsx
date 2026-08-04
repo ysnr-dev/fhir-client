@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { useDeleteAllergy } from "../api/queries";
 import { summarizeAllergy } from "../fhir/allergyHelpers";
 import { ErrorBanner } from "./ErrorBanner";
@@ -6,13 +5,12 @@ import { RowMenu } from "./RowMenu";
 
 interface AllergyTableProps {
   allergies: fhir4.AllergyIntolerance[];
-  patientId: string;
-  /** 指定するとページ遷移せずこのコールバックで表示・編集する(カルテ画面の左ペイン用)。 */
-  onView?: (allergyId: string) => void;
-  onEdit?: (allergyId: string) => void;
+  /** 表示・編集はページ遷移せずカルテ画面の左ペイン内で行う。 */
+  onView: (allergyId: string) => void;
+  onEdit: (allergyId: string) => void;
 }
 
-export function AllergyTable({ allergies, patientId, onView, onEdit }: AllergyTableProps) {
+export function AllergyTable({ allergies, onView, onEdit }: AllergyTableProps) {
   const deleteAllergy = useDeleteAllergy();
 
   function handleDelete(allergyId: string | undefined, name: string) {
@@ -52,32 +50,17 @@ export function AllergyTable({ allergies, patientId, onView, onEdit }: AllergyTa
                 <td>{summary.clinicalStatusLabel || "-"}</td>
                 <td>{summary.recordedDate || "-"}</td>
                 <td className="patient-table__actions">
-                  {onView ? (
-                    <button type="button" onClick={() => onView(summary.id)}>
-                      表示
-                    </button>
-                  ) : (
-                    <Link className="button" to={`/patients/${patientId}/allergies/${summary.id}`}>
-                      表示
-                    </Link>
-                  )}
+                  <button type="button" onClick={() => onView(summary.id)}>
+                    表示
+                  </button>
                   <RowMenu label={`${summary.name} の操作`}>
-                    {onEdit ? (
-                      <button
-                        type="button"
-                        className="row-menu__item"
-                        onClick={() => onEdit(summary.id)}
-                      >
-                        編集
-                      </button>
-                    ) : (
-                      <Link
-                        className="row-menu__item"
-                        to={`/patients/${patientId}/allergies/${summary.id}/edit`}
-                      >
-                        編集
-                      </Link>
-                    )}
+                    <button
+                      type="button"
+                      className="row-menu__item"
+                      onClick={() => onEdit(summary.id)}
+                    >
+                      編集
+                    </button>
                     <button
                       type="button"
                       className="row-menu__item row-menu__item--danger"

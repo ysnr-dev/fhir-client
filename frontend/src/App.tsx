@@ -1,4 +1,4 @@
-import { Link, Navigate, NavLink, Route, Routes, useMatch } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useMatch, useParams } from "react-router-dom";
 import "./App.css";
 import { AdminGate } from "./components/AdminGate";
 import { AuthGate } from "./components/AuthGate";
@@ -11,18 +11,6 @@ import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
-import { AllergyCreatePage } from "./pages/AllergyCreatePage";
-import { AllergyDetailPage } from "./pages/AllergyDetailPage";
-import { AllergyEditPage } from "./pages/AllergyEditPage";
-import { AllergyListPage } from "./pages/AllergyListPage";
-import { ClinicalNoteCreatePage } from "./pages/ClinicalNoteCreatePage";
-import { ClinicalNoteDetailPage } from "./pages/ClinicalNoteDetailPage";
-import { ClinicalNoteEditPage } from "./pages/ClinicalNoteEditPage";
-import { ClinicalNoteListPage } from "./pages/ClinicalNoteListPage";
-import { ConditionCreatePage } from "./pages/ConditionCreatePage";
-import { ConditionDetailPage } from "./pages/ConditionDetailPage";
-import { ConditionEditPage } from "./pages/ConditionEditPage";
-import { ConditionListPage } from "./pages/ConditionListPage";
 import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
 import { PractitionerEditPage } from "./pages/PractitionerEditPage";
 import { PractitionerListPage } from "./pages/PractitionerListPage";
@@ -30,30 +18,23 @@ import { PatientCreatePage } from "./pages/PatientCreatePage";
 import { PatientEditPage } from "./pages/PatientEditPage";
 import { PatientListPage } from "./pages/PatientListPage";
 import { KartePage } from "./pages/KartePage";
-import { LabResultCreatePage } from "./pages/LabResultCreatePage";
-import { LabResultDetailPage } from "./pages/LabResultDetailPage";
-import { LabResultEditPage } from "./pages/LabResultEditPage";
-import { LabResultListPage } from "./pages/LabResultListPage";
-import { LabResultTimelinePage } from "./pages/LabResultTimelinePage";
 import { DepartmentCreatePage } from "./pages/DepartmentCreatePage";
 import { DepartmentEditPage } from "./pages/DepartmentEditPage";
 import { DepartmentListPage } from "./pages/DepartmentListPage";
 import { OrganizationCreatePage } from "./pages/OrganizationCreatePage";
 import { OrganizationEditPage } from "./pages/OrganizationEditPage";
 import { OrganizationListPage } from "./pages/OrganizationListPage";
-import { PrescriptionCreatePage } from "./pages/PrescriptionCreatePage";
-import { PrescriptionDetailPage } from "./pages/PrescriptionDetailPage";
-import { PrescriptionEditPage } from "./pages/PrescriptionEditPage";
-import { PrescriptionListPage } from "./pages/PrescriptionListPage";
 import { QuestionnaireCreatePage } from "./pages/QuestionnaireCreatePage";
 import { QuestionnaireEditPage } from "./pages/QuestionnaireEditPage";
 import { QuestionnaireListPage } from "./pages/QuestionnaireListPage";
 import { QuestionnairePreviewPage } from "./pages/QuestionnairePreviewPage";
-import { QuestionnaireResponseCreatePage } from "./pages/QuestionnaireResponseCreatePage";
-import { QuestionnaireResponseDetailPage } from "./pages/QuestionnaireResponseDetailPage";
-import { QuestionnaireResponseEditPage } from "./pages/QuestionnaireResponseEditPage";
-import { QuestionnaireResponseListPage } from "./pages/QuestionnaireResponseListPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
+
+// 患者配下の未定義パスをその患者のカルテへ寄せる。
+function KarteRedirect() {
+  const { patientId } = useParams<{ patientId: string }>();
+  return <Navigate to={patientId ? `/patients/${patientId}/karte` : "/patients"} replace />;
+}
 
 function App() {
   // 依頼科・依頼医師はオーダーを登録するカルテ画面でだけ切り替えられればよいので、
@@ -108,45 +89,12 @@ function App() {
           <Route path="/patients" element={<PatientListPage />} />
           <Route path="/patients/new" element={<PatientCreatePage />} />
           <Route path="/patients/:id/edit" element={<PatientEditPage />} />
+          {/* 診療記録・処方・病名・アレルギー・検査結果・テンプレート回答は
+              患者ごとの一覧ページを持たず、カルテ画面(タブと右ペイン)で扱う。 */}
           <Route path="/patients/:patientId/karte" element={<KartePage />} />
-          <Route path="/patients/:patientId/prescriptions" element={<PrescriptionListPage />} />
-          <Route path="/patients/:patientId/prescriptions/new" element={<PrescriptionCreatePage />} />
-          <Route path="/patients/:patientId/prescriptions/:srId" element={<PrescriptionDetailPage />} />
-          <Route path="/patients/:patientId/prescriptions/:srId/edit" element={<PrescriptionEditPage />} />
-          <Route path="/patients/:patientId/lab-results" element={<LabResultListPage />} />
-          <Route path="/patients/:patientId/lab-results/new" element={<LabResultCreatePage />} />
-          {/* 固定パスは :reportId より先にマッチさせる。 */}
-          <Route path="/patients/:patientId/lab-results/timeline" element={<LabResultTimelinePage />} />
-          <Route path="/patients/:patientId/lab-results/:reportId" element={<LabResultDetailPage />} />
-          <Route path="/patients/:patientId/lab-results/:reportId/edit" element={<LabResultEditPage />} />
-          <Route
-            path="/patients/:patientId/questionnaire-responses"
-            element={<QuestionnaireResponseListPage />}
-          />
-          <Route
-            path="/patients/:patientId/questionnaire-responses/new"
-            element={<QuestionnaireResponseCreatePage />}
-          />
-          <Route
-            path="/patients/:patientId/questionnaire-responses/:qrId"
-            element={<QuestionnaireResponseDetailPage />}
-          />
-          <Route
-            path="/patients/:patientId/questionnaire-responses/:qrId/edit"
-            element={<QuestionnaireResponseEditPage />}
-          />
-          <Route path="/patients/:patientId/conditions" element={<ConditionListPage />} />
-          <Route path="/patients/:patientId/conditions/new" element={<ConditionCreatePage />} />
-          <Route path="/patients/:patientId/conditions/:conditionId" element={<ConditionDetailPage />} />
-          <Route path="/patients/:patientId/conditions/:conditionId/edit" element={<ConditionEditPage />} />
-          <Route path="/patients/:patientId/clinical-notes" element={<ClinicalNoteListPage />} />
-          <Route path="/patients/:patientId/clinical-notes/new" element={<ClinicalNoteCreatePage />} />
-          <Route path="/patients/:patientId/clinical-notes/:noteId" element={<ClinicalNoteDetailPage />} />
-          <Route path="/patients/:patientId/clinical-notes/:noteId/edit" element={<ClinicalNoteEditPage />} />
-          <Route path="/patients/:patientId/allergies" element={<AllergyListPage />} />
-          <Route path="/patients/:patientId/allergies/new" element={<AllergyCreatePage />} />
-          <Route path="/patients/:patientId/allergies/:allergyId" element={<AllergyDetailPage />} />
-          <Route path="/patients/:patientId/allergies/:allergyId/edit" element={<AllergyEditPage />} />
+          {/* 廃止した一覧・詳細ページ(/patients/:id/prescriptions など)のブックマークを
+              空白画面にせず、その患者のカルテへ寄せる。 */}
+          <Route path="/patients/:patientId/*" element={<KarteRedirect />} />
           {/* 医療機関・医療従事者は上流 FHIR サーバーの Organization / Practitioner を
               直接操作するため、backend 管理API(AdminGate)の対象外。 */}
           <Route path="/organizations" element={<OrganizationListPage />} />

@@ -27,7 +27,8 @@ const QR_STATUS_LABELS: Record<string, string> = {
   stopped: "中止",
 };
 
-export function qrStatusLabel(code: string | undefined): string {
+// 表示用ラベルは summarizeQuestionnaireResponse 経由で使う。
+function qrStatusLabel(code: string | undefined): string {
   return QR_STATUS_LABELS[code ?? ""] ?? code ?? "";
 }
 

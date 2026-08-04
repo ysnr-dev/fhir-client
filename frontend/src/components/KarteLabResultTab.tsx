@@ -147,7 +147,6 @@ export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabRes
         <>
           <LabResultTable
             reports={reports}
-            patientId={patientId}
             onView={(reportId) => onViewChange(reportId)}
             onEdit={(reportId) => setForm({ kind: "edit", reportId })}
           />

@@ -105,7 +105,6 @@ export function KarteAllergyTab({ patientId, view, onViewChange }: KarteAllergyT
         <>
           <AllergyTable
             allergies={allergies}
-            patientId={patientId}
             onView={(allergyId) => onViewChange(allergyId)}
             onEdit={(allergyId) => setForm({ kind: "edit", allergyId })}
           />

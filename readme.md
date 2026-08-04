@@ -174,10 +174,9 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
 `KartePage` が `body.karte-wide` を付け外しします)。
 
 - **左ペインのタブ**: 「カルテ」「病名」「アレルギー」「検査結果」。病名・アレルギー・検査結果は一覧・
-  表示・登録・編集・削除がタブ内で完結します(既存の一覧・詳細ページへは遷移しません)。テーブルは既存
-  コンポーネントに任意の `onView` / `onEdit` を渡して再利用しており、未指定なら従来どおりページ遷移
-  します。内容表示は詳細ページと同じ UI(`components/*DetailPanel.tsx`)で、検査結果タブにはさらに
-  「時系列表示」(`components/LabResultTimelinePanel.tsx`)も置いてあります。
+  表示・登録・編集・削除がタブ内で完結します。テーブル(`components/*Table.tsx`)は `onView` / `onEdit` を
+  受け取り、ページ遷移せずタブ内で表示を切り替えます。内容表示は `components/*DetailPanel.tsx`、
+  検査結果タブにはさらに「時系列表示」(`components/LabResultTimelinePanel.tsx`)も置いてあります。
 - **カルテタブ**: 診療記録(`Composition`)・処方(`ServiceRequest` + `MedicationRequest`)・単独登録の
   テンプレート回答(`QuestionnaireResponse`)を診療日ごとにまとめた時系列表示です。診療記録のセクションから
   参照されている回答は記録カードの本文として描画済みなので、単独カードには出しません。カードは高さを
@@ -217,17 +216,26 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   読めるようにしてあり、保存し直せば拡張へ正規化されます。
 - **クエリキー**: `["<型>", "search", "karte", patientId]`。既存の作成・更新・削除が無効化する
   `["<型>", "search"]` の配下に置いてあるので、右ペインでの保存後にタイムラインが自動で再取得されます。
-- **右ペインの再利用**: 登録・編集 UI は既存ページと共通のパネル(`components/*Panels.tsx`)です。既存の
-  `/patients/:id/clinical-notes/new` などのページも同じパネルを使い、保存後の遷移だけをページ側が担います。
+- **右ペインの登録・編集**: 登録・編集 UI はパネル(`components/*Panels.tsx`)に切り出してあります。
   各フォームは初期値をマウント時にしか読まないため、対象の切り替えでは `key` でフォームを作り直します。
+- **カードの操作**: タイムラインの各カードはケバブメニューに「詳細表示」「FHIR JSON 表示」「編集」
+  「削除」(テンプレートは「平文表示」も)を畳んでいます。DO(処方)と PDF(テンプレート)だけは 1 行に
+  出します。詳細表示は各リソースの詳細パネルをモーダルで開くので、処方の添付文書(DI)リンクや
+  テンプレートのシェーマ画像もここで参照できます。
+- **URL パラメータ**: 「どのタブで何を開いているか」は URL に載せます(`src/karteUrl.ts`)。
+  `?tab=<karte|condition|allergy|lab>`、`?view=<ID or timeline>`、`?detail=<種別>:<ID>` の 3 つで、
+  個別の記録をリンクで共有でき、ブラウザの戻るも画面内の操作に効きます。詳細モーダルはタイムラインの
+  読み込み位置に依存しないよう ID から引き直し、別患者の ID を指す URL では内容を出しません。
+  入力途中のフォーム(タブの登録・編集、右ペイン)は URL に載せません(復元しても入力内容は戻らず、
+  空のフォームだけが開く中途半端な状態になるため)。
 
-患者一覧の「リスト」メニューからの従来の一覧・登録動線は当面そのまま残します(将来的にカルテ画面へ統合予定)。
+診療記録・処方・病名・アレルギー・検査結果・テンプレート回答は、患者ごとの一覧ページを持たずカルテ画面で
+扱います(患者一覧にあった「リスト」メニューと、その先の一覧・詳細・登録・編集ページは廃止しました)。
 
 ## 処方オーダー機能
 
-患者一覧の「処方」リンクから患者ごとの処方一覧(`/patients/:id/prescriptions`)へ遷移し、新規処方の登録
-(`.../prescriptions/new`)、登録済み処方の表示(`.../prescriptions/:srId`)、編集(`.../prescriptions/:srId/edit`)、
-削除ができます。編集・削除も登録と同様に transaction Bundle で行い、`ServiceRequest`・`MedicationRequest`を
+カルテ画面の右ペイン「処方」から新規登録し、タイムラインのカードから表示(詳細モーダル)・編集・削除・DO
+を行います。編集・削除も登録と同様に transaction Bundle で行い、`ServiceRequest`・`MedicationRequest`を
 まとめて更新・削除します(フォーム上で削除された薬剤行は `DELETE` エントリとして送信されます)。
 
 - **リソースの持ち方**: 1処方 = `ServiceRequest` 1リソース + 薬剤数分の `MedicationRequest`。

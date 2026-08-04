@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import { useDeletePatient } from "../api/queries";
 import { displayKana, displayName } from "../fhir/patientHelpers";
 import { ErrorBanner } from "./ErrorBanner";
-import { HoverMenu } from "./HoverMenu";
 import { RowMenu } from "./RowMenu";
 
 export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
@@ -47,30 +46,6 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
                 <Link className="button" to={`/patients/${patient.id}/karte`}>
                   カルテ
                 </Link>
-                {/* 「リスト」メニューはカルテ画面へ移行するまでの暫定。 */}
-                <HoverMenu label="リスト">
-                  <Link className="row-menu__item" to={`/patients/${patient.id}/clinical-notes`}>
-                    診療記録
-                  </Link>
-                  <Link className="row-menu__item" to={`/patients/${patient.id}/prescriptions`}>
-                    処方
-                  </Link>
-                  <Link className="row-menu__item" to={`/patients/${patient.id}/conditions`}>
-                    病名
-                  </Link>
-                  <Link className="row-menu__item" to={`/patients/${patient.id}/allergies`}>
-                    アレルギー
-                  </Link>
-                  <Link className="row-menu__item" to={`/patients/${patient.id}/lab-results`}>
-                    検査結果
-                  </Link>
-                  <Link
-                    className="row-menu__item"
-                    to={`/patients/${patient.id}/questionnaire-responses`}
-                  >
-                    テンプレート
-                  </Link>
-                </HoverMenu>
                 <RowMenu label={`${displayName(patient) || patient.id} の操作`}>
                   <Link className="row-menu__item" to={`/patients/${patient.id}/edit`}>
                     患者編集

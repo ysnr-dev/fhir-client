@@ -579,33 +579,6 @@ export function useDeletePractitioner() {
   });
 }
 
-const PRESCRIPTION_COUNT = 20;
-
-export function usePrescriptionSearch(patientId: string | undefined, offset: number) {
-  const params = new URLSearchParams();
-  if (patientId) params.set("patient", `Patient/${patientId}`);
-  params.set("_count", String(PRESCRIPTION_COUNT));
-  params.set("_offset", String(offset));
-  // 処方日の降順（新しい順）。_sort のキーは検索パラメータ名（小文字 authoredon）。
-  // FHIR プロパティ名 authoredOn では当該サーバーに無視されるため注意。
-  params.set("_sort", "-authoredon");
-
-  const query = useQuery({
-    queryKey: ["ServiceRequest", "search", patientId, offset],
-    queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", params),
-    placeholderData: keepPreviousData,
-    enabled: Boolean(patientId),
-  });
-
-  return {
-    ...query,
-    bundle: query.data?.data,
-    total: query.data?.data.total ?? 0,
-    count: PRESCRIPTION_COUNT,
-    hasPrevious: hasRelation(query.data?.data, "previous"),
-    hasNext: hasRelation(query.data?.data, "next"),
-  };
-}
 
 export function usePrescriptionDetail(srId: string | undefined) {
   const params = new URLSearchParams();
@@ -964,38 +937,6 @@ export function useKarteConditions(patientId: string | undefined) {
   return { ...query, conditions };
 }
 
-const CLINICAL_NOTE_COUNT = 20;
-
-// 診療記録(経過記録)。type=LOINC 11506-3 の Composition だけを扱う。
-export function useClinicalNoteSearch(patientId: string | undefined, offset: number) {
-  const params = new URLSearchParams();
-  if (patientId) params.set("subject", `Patient/${patientId}`);
-  params.set("type", "http://loinc.org|11506-3");
-  params.set("_count", String(CLINICAL_NOTE_COUNT));
-  params.set("_offset", String(offset));
-  // 記録日時の降順(新しい順)
-  params.set("_sort", "-date");
-  // narrative(Base64 画像込み)を一覧転送から省くための指定。現状の上流 fhir-server は
-  // _summary を無視して全量を返す(2026-08-01 確認)が、将来対応すれば自動で軽くなる。
-  // summarize 側は section 欠落(SUBSETTED)を常に許容している。
-  params.set("_summary", "true");
-
-  const query = useQuery({
-    queryKey: ["Composition", "search", patientId, offset],
-    queryFn: () => searchResource<fhir4.Composition>("Composition", params),
-    placeholderData: keepPreviousData,
-    enabled: Boolean(patientId),
-  });
-
-  return {
-    ...query,
-    bundle: query.data?.data,
-    total: query.data?.data.total ?? 0,
-    count: CLINICAL_NOTE_COUNT,
-    hasPrevious: hasRelation(query.data?.data, "previous"),
-    hasNext: hasRelation(query.data?.data, "next"),
-  };
-}
 
 export function useClinicalNote(id: string | undefined) {
   return useQuery({
@@ -1349,44 +1290,6 @@ export function useQuestionnaireByCanonical(canonical: string | undefined) {
   return { ...query, questionnaire: query.data ?? undefined };
 }
 
-const QUESTIONNAIRE_RESPONSE_COUNT = 20;
-
-export function useQuestionnaireResponseSearch(patientId: string | undefined, offset: number) {
-  const params = new URLSearchParams();
-  if (patientId) params.set("patient", `Patient/${patientId}`);
-  params.set("_count", String(QUESTIONNAIRE_RESPONSE_COUNT));
-  params.set("_offset", String(offset));
-  // 記入日時の降順(新しい順)。
-  params.set("_sort", "-authored");
-  // タイトル表示用の元テンプレートを同じレスポンスで受け取る(canonical を解決する _include)。
-  params.set("_include", "QuestionnaireResponse:questionnaire");
-
-  const query = useQuery({
-    queryKey: ["QuestionnaireResponse", "search", patientId, offset],
-    queryFn: () => searchResource<fhir4.Resource>("QuestionnaireResponse", params),
-    placeholderData: keepPreviousData,
-    enabled: Boolean(patientId),
-  });
-
-  // _include の Questionnaire も entry に混ざって返るため resourceType で分ける。
-  const resources = query.data?.data.entry?.map((e) => e.resource) ?? [];
-  const responses = resources.filter(
-    (r): r is fhir4.QuestionnaireResponse => r?.resourceType === "QuestionnaireResponse",
-  );
-  const questionnaires = resources.filter(
-    (r): r is fhir4.Questionnaire => r?.resourceType === "Questionnaire",
-  );
-
-  return {
-    ...query,
-    responses,
-    questionnaires,
-    total: query.data?.data.total ?? 0,
-    count: QUESTIONNAIRE_RESPONSE_COUNT,
-    hasPrevious: hasRelation(query.data?.data, "previous"),
-    hasNext: hasRelation(query.data?.data, "next"),
-  };
-}
 
 export function useQuestionnaireResponse(id: string | undefined) {
   return useQuery({
@@ -1554,7 +1457,7 @@ export function useKarteClinicalNotesInfinite(patientId: string | undefined) {
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-date");
-      // 一覧(useClinicalNoteSearch)と違い _summary は付けない。カルテは本文を
+      // _summary は付けない。カルテは本文を
       // 表示し、テンプレート回答の重複判定にも section の参照拡張が要るため。
       return searchResource<fhir4.Composition>("Composition", params);
     },
