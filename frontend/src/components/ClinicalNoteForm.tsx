@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { useKarteConditions } from "../api/queries";
 import {
   defaultSectionsForMode,
   isEmptyNoteHtml,
@@ -7,9 +8,11 @@ import {
   templateHtml,
   type ClinicalNoteFormValues,
   type ClinicalNoteMode,
+  type ClinicalNoteProblem,
   type ClinicalNoteTemplateDraft,
   type SectionCode,
 } from "../fhir/clinicalNoteHelpers";
+import { problemLabel, splitConditions } from "../fhir/conditionHelpers";
 import { ClinicalNoteTemplateModal } from "./ClinicalNoteTemplateModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { RichTextEditor } from "./RichTextEditor";
@@ -46,6 +49,14 @@ export function ClinicalNoteForm({
   const [addCode, setAddCode] = useState<SectionCode>(SECTION_OPTIONS[0].code);
   // テンプレート記入モーダルを開いているセクションの uid。
   const [templateTarget, setTemplateTarget] = useState<string | null>(null);
+
+  // 対象プロブレムの候補。POMR の「#1 糖尿病についての S/O/A/P」を記録 1 件で表す
+  // (複数のプロブレムを扱うときは記録を分けて登録する)。
+  const { conditions } = useKarteConditions(patientId);
+  const problemOptions = splitConditions(conditions).problems.map((condition) => ({
+    conditionId: condition.id ?? "",
+    display: problemLabel(condition),
+  }));
 
   function update<K extends keyof ClinicalNoteFormValues>(key: K, value: ClinicalNoteFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -104,7 +115,15 @@ export function ClinicalNoteForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    onSubmit(values);
+    // プロブレムの表示名は保存時点の最新にそろえる(病名を変えたあとに記録を編集保存
+    // したとき、拡張の display だけ古い名前で残らないように)。
+    onSubmit({
+      ...values,
+      problem: values.problem
+        ? (problemOptions.find((o) => o.conditionId === values.problem?.conditionId) ??
+          values.problem)
+        : null,
+    });
   }
 
   const isSoap = values.mode === "soap";
@@ -150,6 +169,16 @@ export function ClinicalNoteForm({
             </label>
           </div>
         </div>
+        {/* 対象プロブレム。POMR ではプロブレムごとに SOAP を書くので、記録 1 件に
+            1 つだけ紐付ける(複数を扱うときは記録を分けて登録する)。 */}
+        <label>
+          対象プロブレム
+          <ProblemSelect
+            value={values.problem}
+            options={problemOptions}
+            onChange={(problem) => update("problem", problem)}
+          />
+        </label>
         <label>
           タイトル
           <input
@@ -299,5 +328,42 @@ export function ClinicalNoteForm({
       />
     )}
     </>
+  );
+}
+
+// 記録の対象プロブレムを選ぶセレクト。既に紐付いているプロブレムが候補に無い
+// (削除された)場合も、保存済みの表示名で選択肢に残して紐付けを失わせない。
+function ProblemSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: ClinicalNoteProblem | null;
+  options: ClinicalNoteProblem[];
+  onChange: (problem: ClinicalNoteProblem | null) => void;
+}) {
+  const isMissing = Boolean(value) && !options.some((o) => o.conditionId === value?.conditionId);
+
+  return (
+    <select
+      value={value?.conditionId ?? ""}
+      onChange={(e) => {
+        const conditionId = e.target.value;
+        if (!conditionId) return onChange(null);
+        onChange(options.find((o) => o.conditionId === conditionId) ?? value);
+      }}
+      aria-label="対象プロブレム"
+      title="このセクションが対象とするプロブレム"
+    >
+      <option value="">(プロブレムなし)</option>
+      {options.map((o) => (
+        <option key={o.conditionId} value={o.conditionId}>
+          {o.display}
+        </option>
+      ))}
+      {isMissing && value && (
+        <option value={value.conditionId}>{value.display || "(不明)"} (削除済み)</option>
+      )}
+    </select>
   );
 }

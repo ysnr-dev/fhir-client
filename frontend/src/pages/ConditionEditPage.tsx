@@ -7,12 +7,14 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientHeader } from "../components/PatientHeader";
 import { buildCondition, parseConditionForm, type ConditionFormValues } from "../fhir/conditionHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
+import { useProblemNumbering } from "../hooks/useProblemNumbering";
 
 export function ConditionEditPage() {
   const { patientId, conditionId } = useParams<{ patientId: string; conditionId: string }>();
   const navigate = useNavigate();
   const { data: result, isLoading, error: loadError } = useCondition(conditionId);
   const updateCondition = useUpdateCondition();
+  const problemNumberFor = useProblemNumbering(patientId);
   const [conflict, setConflict] = useState(false);
 
   const condition = result?.data;
@@ -22,10 +24,18 @@ export function ConditionEditPage() {
     loadError ?? (patientMismatch ? new Error("指定された病名は別の患者のものです。") : undefined);
 
   function handleSubmit(values: ConditionFormValues) {
-    if (!patientId || !conditionId || !result?.etag || patientMismatch) return;
+    if (!patientId || !conditionId || !result?.etag || patientMismatch || !condition) return;
     setConflict(false);
     updateCondition.mutate(
-      { condition: buildCondition(values, patientId, conditionId), etag: result.etag },
+      {
+        condition: buildCondition(
+          values,
+          patientId,
+          conditionId,
+          problemNumberFor(values, condition),
+        ),
+        etag: result.etag,
+      },
       {
         onSuccess: () => navigate(`/patients/${patientId}/conditions/${conditionId}`),
         onError: (err) => {

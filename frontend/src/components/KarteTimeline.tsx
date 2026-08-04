@@ -5,7 +5,8 @@ import {
   useDeleteQuestionnaireResponse,
 } from "../api/queries";
 import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
-import { sectionTitle, statusLabel } from "../fhir/clinicalNoteHelpers";
+import { clinicalNoteProblem, sectionTitle, statusLabel } from "../fhir/clinicalNoteHelpers";
+import { problemLabel } from "../fhir/conditionHelpers";
 import {
   KARTE_KIND_LABELS,
   karteItemKey,
@@ -40,6 +41,10 @@ interface KarteTimelineProps {
   onDeleted: (item: KarteTimelineItem) => void;
   /** スクロールコンテナ。診療日パネルからのスクロール指示に使う。 */
   containerRef: RefObject<HTMLDivElement | null>;
+  /** プロブレム(Condition)を id で引く辞書。バッジを最新の名称で描くために使う。 */
+  problemsById: Map<string, fhir4.Condition>;
+  /** 選択中のプロブレム。これを参照しない診療記録は控えめに表示する。 */
+  selectedProblemId: string | null;
 }
 
 // 診療日パネルからのスクロール先を引くための目印。キーは診療日 or karteItemKey。
@@ -56,6 +61,8 @@ export function KarteTimeline({
   onDo,
   onDeleted,
   containerRef,
+  problemsById,
+  selectedProblemId,
 }: KarteTimelineProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [sentinelVisible, setSentinelVisible] = useState(false);
@@ -104,6 +111,8 @@ export function KarteTimeline({
                 onEdit={onEdit}
                 onDo={onDo}
                 onDeleted={onDeleted}
+                problemsById={problemsById}
+                selectedProblemId={selectedProblemId}
               />
             ))}
           </section>
@@ -122,11 +131,15 @@ function KarteCard({
   onEdit,
   onDo,
   onDeleted,
+  problemsById,
+  selectedProblemId,
 }: {
   item: KarteTimelineItem;
   onEdit: (item: KarteTimelineItem) => void;
   onDo: (serviceRequestId: string) => void;
   onDeleted: (item: KarteTimelineItem) => void;
+  problemsById: Map<string, fhir4.Condition>;
+  selectedProblemId: string | null;
 }) {
   const deleteNote = useDeleteClinicalNote();
   const deletePrescription = useDeletePrescription();
@@ -151,9 +164,13 @@ function KarteCard({
     else deleteResponse.mutate(item.id, options);
   }
 
+  // プロブレム選択中は、そのプロブレムを参照しない情報を控えめに表示する
+  // (件数が減ると読み込み位置が動くので、隠さず減光にとどめる)。
+  const dimmed = Boolean(selectedProblemId) && !referencesProblem(item, selectedProblemId);
+
   return (
     <article
-      className={`karte-card karte-card--${item.kind}`}
+      className={`karte-card karte-card--${item.kind}${dimmed ? " karte-card--dimmed" : ""}`}
       {...{ [KARTE_TARGET_ATTR]: karteItemKey(item) }}
     >
       <header className="karte-card__header">
@@ -161,37 +178,66 @@ function KarteCard({
           {KARTE_KIND_LABELS[item.kind]}
         </span>
         <span className="karte-card__title">{cardTitle(item)}</span>
+        {item.kind === "note" && (
+          <NoteProblemBadge note={item.note} problemsById={problemsById} />
+        )}
         <span className="karte-card__meta">{cardMeta(item)}</span>
         <span className="karte-card__actions">
           {item.kind === "prescription" && (
-            <button type="button" onClick={() => onDo(item.id)}>
-              DO
+            <button
+              type="button"
+              className="karte-card__icon-button karte-card__icon-button--labeled"
+              title="DO(この処方を複写して新規登録)"
+              aria-label="DO(この処方を複写して新規登録)"
+              onClick={() => onDo(item.id)}
+            >
+              <CopyIcon />
+              <span className="karte-card__icon-label">DO</span>
             </button>
           )}
           {item.kind === "qr" &&
             (pdfReady ? (
               <a
-                className="button"
+                className="button karte-card__icon-button karte-card__icon-button--labeled"
                 href={questionnaireResponsePdfUrl(item.id)}
                 target="_blank"
                 rel="noopener"
+                title="PDF を開く"
+                aria-label="PDF を開く"
               >
-                PDF
+                <DocumentIcon />
+                <span className="karte-card__icon-label">PDF</span>
               </a>
             ) : (
               <button
                 type="button"
+                className="karte-card__icon-button karte-card__icon-button--labeled"
                 disabled
                 title="このテンプレートの帳票レイアウトが未登録です"
+                aria-label="PDF を開く(帳票レイアウトが未登録)"
               >
-                PDF
+                <DocumentIcon />
+                <span className="karte-card__icon-label">PDF</span>
               </button>
             ))}
-          <button type="button" onClick={() => onEdit(item)}>
-            編集
+          <button
+            type="button"
+            className="karte-card__icon-button"
+            title="編集"
+            aria-label="編集"
+            onClick={() => onEdit(item)}
+          >
+            <PencilIcon />
           </button>
-          <button type="button" onClick={handleDelete} disabled={deleting}>
-            削除
+          <button
+            type="button"
+            className="karte-card__icon-button"
+            title="削除"
+            aria-label="削除"
+            onClick={handleDelete}
+            disabled={deleting}
+          >
+            <TrashIcon />
           </button>
         </span>
       </header>
@@ -203,6 +249,70 @@ function KarteCard({
       </CollapsibleBody>
     </article>
   );
+}
+
+// カード操作は 1 行に並ぶ数が多いので、アイコンだけにして幅を詰める。
+// 意味は title / aria-label で補う。
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M11.3 2.2a1.2 1.2 0 0 1 1.7 0l.8.8a1.2 1.2 0 0 1 0 1.7L5.9 12.6l-3 .5.5-3 7.9-7.9ZM10.4 3.1l2.5 2.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// DO は「前回と同じ処方を起こす」操作なので、複写(2 枚重ね)のアイコンで表す。
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <g fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+        {/* 背面の 1 枚。前面に隠れる辺は描かず L 字にする。 */}
+        <path d="M10 5.6V3.2a1 1 0 0 0-1-1H3.2a1 1 0 0 0-1 1V9a1 1 0 0 0 1 1h2.4" />
+        <rect x="5.6" y="5.6" width="8.2" height="8.2" rx="1" />
+      </g>
+    </svg>
+  );
+}
+
+// PDF 出力。角を折った文書のアイコン。
+function DocumentIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <g fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9.4 2H4.6a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h6.8a1 1 0 0 0 1-1V5.1L9.4 2Z" />
+        <path d="M9.3 2.2v3h3" />
+      </g>
+    </svg>
+  );
+}
+
+// この情報が指定プロブレムに紐付いているか。現状プロブレムを持つのは診療記録だけ
+// (処方・テンプレートの紐付けは未実装)。
+function referencesProblem(item: KarteTimelineItem, conditionId: string | null): boolean {
+  if (!conditionId || item.kind !== "note") return false;
+  return clinicalNoteProblem(item.note)?.conditionId === conditionId;
 }
 
 function cardTitle(item: KarteTimelineItem): string {
@@ -325,6 +435,30 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
         <li key={index}>{line}</li>
       ))}
     </ul>
+  );
+}
+
+// 診療記録が対象とするプロブレムのバッジ。名称は現在のプロブレムから引き直すので、
+// 病名を編集しても過去の記録に古い名前が残らない。削除済みのプロブレムは
+// 拡張に保存してある表示名でフォールバックする。
+function NoteProblemBadge({
+  note,
+  problemsById,
+}: {
+  note: fhir4.Composition;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const problem = clinicalNoteProblem(note);
+  if (!problem) return null;
+
+  const current = problemsById.get(problem.conditionId);
+  return (
+    <span
+      className={`karte-card__problem${current ? "" : " karte-card__problem--missing"}`}
+      title={current ? "対象プロブレム" : "このプロブレムは削除されています"}
+    >
+      {current ? problemLabel(current) : `${problem.display || "不明"} (削除済み)`}
+    </span>
   );
 }
 

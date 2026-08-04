@@ -19,6 +19,79 @@ const POSTFIX_MODIFIER_EXT_URL =
 
 const CLINICAL_STATUS_SYSTEM = "http://terminology.hl7.org/CodeSystem/condition-clinical";
 const VERIFICATION_STATUS_SYSTEM = "http://terminology.hl7.org/CodeSystem/condition-ver-status";
+const CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/condition-category";
+
+// プロブレム番号(#1, #2...)を保持するアプリローカル拡張。
+// 表示順から動的に採番すると、削除や日付修正のたびに番号がずれて過去の診療記録が
+// 指すプロブレムが変わってしまうため、登録時に採番した番号をリソースに永続化する
+// (clinicalNoteHelpers.ts の SECTION_QR_EXT_URL と同じ URL 規約)。
+const PROBLEM_NUMBER_EXT_URL = "http://fhir-client.local/StructureDefinition/problem-number";
+
+// 病名の区分。POMR のプロブレムリストと、レセプト用の保険病名を同じ Condition で
+// 区分管理する。category が無い既存データは保険病名として扱う(移行不要)。
+export type ConditionCategory = "problem" | "billing";
+
+const CATEGORY_CODES: Record<ConditionCategory, { code: string; display: string }> = {
+  problem: { code: "problem-list-item", display: "Problem List Item" },
+  billing: { code: "encounter-diagnosis", display: "Encounter Diagnosis" },
+};
+
+export const CATEGORY_LABELS: Record<ConditionCategory, string> = {
+  problem: "プロブレム",
+  billing: "保険病名",
+};
+
+export function conditionCategoryOf(condition: fhir4.Condition): ConditionCategory {
+  const isProblem = (condition.category ?? []).some((c) =>
+    c.coding?.some((coding) => coding.code === CATEGORY_CODES.problem.code),
+  );
+  return isProblem ? "problem" : "billing";
+}
+
+export function problemNumberOf(condition: fhir4.Condition): number | undefined {
+  const value = condition.extension?.find((e) => e.url === PROBLEM_NUMBER_EXT_URL)
+    ?.valuePositiveInt;
+  return typeof value === "number" ? value : undefined;
+}
+
+// 番号順の比較。番号の無いプロブレム(区分を付ける前の既存データ)は末尾へ回し、
+// 番号なし同士は元の順序(取得順)を保つ。
+function compareProblemNumber(a: fhir4.Condition, b: fhir4.Condition): number {
+  const left = problemNumberOf(a);
+  const right = problemNumberOf(b);
+  if (left === undefined) return right === undefined ? 0 : 1;
+  if (right === undefined) return -1;
+  return left - right;
+}
+
+// プロブレムと保険病名の振り分け。上流 fhir-server は未知の検索パラメータを黙って
+// 無視して全件返すことがあるため、category での絞り込みはサーバーに任せずここで行う。
+// プロブレムは常に番号順にそろえる(取得は -onset-date 順なので、そのまま並べると
+// #3 #1 #2 のようになり、番号を永続化している意味が無くなるため)。
+export function splitConditions(conditions: fhir4.Condition[]): {
+  problems: fhir4.Condition[];
+  billings: fhir4.Condition[];
+} {
+  const problems: fhir4.Condition[] = [];
+  const billings: fhir4.Condition[] = [];
+  for (const condition of conditions) {
+    (conditionCategoryOf(condition) === "problem" ? problems : billings).push(condition);
+  }
+  problems.sort(compareProblemNumber);
+  return { problems, billings };
+}
+
+// 次に採番するプロブレム番号。欠番は再利用しない(番号の指す先を変えないため)。
+export function nextProblemNumber(problems: fhir4.Condition[]): number {
+  return problems.reduce((max, c) => Math.max(max, problemNumberOf(c) ?? 0), 0) + 1;
+}
+
+// 「#1 2型糖尿病」形式の表示名。番号が無いプロブレムは名称のみ。
+export function problemLabel(condition: fhir4.Condition): string {
+  const name = summarizeCondition(condition).name;
+  const number = problemNumberOf(condition);
+  return number === undefined ? name : `#${number} ${name}`;
+}
 
 // 転帰区分。Condition.clinicalStatus(required binding)のコードへ直接対応させる。
 // 終了日(abatement)を入れる場合は active 以外でなければならない(FHIR con-4)。
@@ -53,6 +126,7 @@ export function modifierCategoryLabel(category: string | null | undefined): stri
 }
 
 export interface ConditionFormValues {
+  category: ConditionCategory;
   disease: Disease | null;
   prefixModifiers: Modifier[];
   postfixModifiers: Modifier[];
@@ -67,6 +141,7 @@ function today(): string {
 
 export function emptyConditionForm(): ConditionFormValues {
   return {
+    category: "billing",
     disease: null,
     prefixModifiers: [],
     postfixModifiers: [],
@@ -118,10 +193,13 @@ function modifierConcept(modifier: Modifier): fhir4.CodeableConcept {
   return { coding: codings, text: modifier.name };
 }
 
+// problemNumber: プロブレム区分のときに付与する番号。新規は nextProblemNumber()、
+// 編集は problemNumberOf() で引き継いだ値を渡す。
 export function buildCondition(
   values: ConditionFormValues,
   patientId: string,
   conditionId?: string,
+  problemNumber?: number,
 ): fhir4.Condition {
   const modifierExtensions: fhir4.Extension[] = [
     ...values.prefixModifiers.map((m) => ({
@@ -145,6 +223,9 @@ export function buildCondition(
     verificationStatus: {
       coding: [{ system: VERIFICATION_STATUS_SYSTEM, code: "confirmed" }],
     },
+    // 区分は常に明示して保存する。category が無い既存データも、編集保存された時点で
+    // 保険病名(encounter-diagnosis)として正規化される。
+    category: [{ coding: [{ system: CATEGORY_SYSTEM, ...CATEGORY_CODES[values.category] }] }],
     code: values.disease
       ? {
           extension: modifierExtensions.length ? modifierExtensions : undefined,
@@ -156,6 +237,9 @@ export function buildCondition(
   };
 
   if (conditionId) condition.id = conditionId;
+  if (values.category === "problem" && problemNumber !== undefined) {
+    condition.extension = [{ url: PROBLEM_NUMBER_EXT_URL, valuePositiveInt: problemNumber }];
+  }
   // FHIR の dateTime は日付のみ(YYYY-MM-DD)を許容し、fhir-server もそのまま受理する。
   if (values.startDate) condition.onsetDateTime = values.startDate;
   if (values.endDate) condition.abatementDateTime = values.endDate;
@@ -178,6 +262,8 @@ export interface ConditionSummary {
   startDate: string;
   endDate: string;
   outcomeDisplay: string;
+  category: ConditionCategory;
+  problemNumber?: number;
 }
 
 export function summarizeCondition(condition: fhir4.Condition): ConditionSummary {
@@ -187,6 +273,8 @@ export function summarizeCondition(condition: fhir4.Condition): ConditionSummary
     startDate: condition.onsetDateTime?.slice(0, 10) ?? "",
     endDate: condition.abatementDateTime?.slice(0, 10) ?? "",
     outcomeDisplay: outcomeDisplay(condition.clinicalStatus?.coding?.[0]?.code),
+    category: conditionCategoryOf(condition),
+    problemNumber: problemNumberOf(condition),
   };
 }
 
@@ -240,6 +328,7 @@ export function parseConditionForm(condition: fhir4.Condition): ConditionFormVal
     : "active";
 
   return {
+    category: conditionCategoryOf(condition),
     disease: diseaseFromCode(condition.code),
     prefixModifiers: modifiersFromExtensions(condition.code, PREFIX_MODIFIER_EXT_URL),
     postfixModifiers: modifiersFromExtensions(condition.code, POSTFIX_MODIFIER_EXT_URL),

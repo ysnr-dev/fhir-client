@@ -80,6 +80,22 @@ export interface ClinicalNoteSectionTemplate {
   draft: ClinicalNoteTemplateDraft | null;
 }
 
+// 記録が対象とするプロブレム(Condition)。POMR は「プロブレムごとに SOAP を書く」ので、
+// 紐付けはセクションではなく診療記録 1 件に対して 1 つ持たせる(複数のプロブレムを
+// 扱うときは記録を分けて登録する)。
+// display には保存時点の「#番号 名称」を入れておき、参照解決なしでも描画できるようにする
+// (表示側はプロブレム一覧が引けるなら最新の名称で上書きする)。
+export interface ClinicalNoteProblem {
+  conditionId: string;
+  display: string;
+}
+
+// 対象プロブレムを記録するアプリローカル拡張。base Composition には診療記録の対象
+// 疾患を表す要素が無いため(event は検査・手術などの「行為」用)、SECTION_QR_EXT_URL
+// と同じ URL 規約で持たせる。
+export const NOTE_PROBLEM_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/clinical-note-problem";
+
 export interface ClinicalNoteSectionDraft {
   // React の key と並べ替えのための安定 ID。FHIR には保存しない。
   uid: string;
@@ -97,6 +113,8 @@ export interface ClinicalNoteFormValues {
   status: "preliminary" | "final";
   // datetime-local 形式 "YYYY-MM-DDTHH:mm"
   date: string;
+  // 対象プロブレム。null なら特定の問題に紐付かない記録。
+  problem: ClinicalNoteProblem | null;
   sections: ClinicalNoteSectionDraft[];
 }
 
@@ -112,13 +130,18 @@ export function defaultSectionsForMode(mode: ClinicalNoteMode): ClinicalNoteSect
     : SOAP_SECTION_CODES.map(newSectionDraft);
 }
 
-export function emptyClinicalNoteForm(): ClinicalNoteFormValues {
+// problem を渡すと対象プロブレムを選択済みで開く(プロブレムリストで選んでいる
+// プロブレムをそのまま新規記録の対象にするため)。
+export function emptyClinicalNoteForm(
+  problem: ClinicalNoteProblem | null = null,
+): ClinicalNoteFormValues {
   return {
     mode: "soap",
     // タイトルは必須(Composition.title 1..1)。毎回の入力を省けるよう既定値を入れておく。
     title: "診療記録",
     status: "final",
     date: toDateTimeInput(new Date()),
+    problem,
     sections: defaultSectionsForMode("soap"),
   };
 }
@@ -248,6 +271,18 @@ export function buildClinicalNote(
     resourceType: "Composition",
     status,
     type: PROGRESS_NOTE_TYPE,
+    // 対象プロブレム(POMR)。指定が無ければ拡張ごと出さない。
+    extension: values.problem
+      ? [
+          {
+            url: NOTE_PROBLEM_EXT_URL,
+            valueReference: {
+              reference: `Condition/${values.problem.conditionId}`,
+              display: values.problem.display,
+            },
+          },
+        ]
+      : undefined,
     subject: { reference: `Patient/${patientId}` },
     date: toFhirDateTime(values.date),
     author,
@@ -355,6 +390,25 @@ export function referencedResponseIds(composition: fhir4.Composition | undefined
   });
 }
 
+// 記録が対象としているプロブレム。編集フォームの復元とタイムライン表示の双方から使う。
+// セクション単位で紐付けていた頃のデータも読めるよう、拡張が無ければ section.entry の
+// Condition 参照にフォールバックする(保存し直せば拡張へ正規化される)。
+export function clinicalNoteProblem(
+  composition: fhir4.Composition | undefined,
+): ClinicalNoteProblem | null {
+  const ref = composition?.extension?.find((e) => e.url === NOTE_PROBLEM_EXT_URL)?.valueReference;
+  const fromExtension = ref?.reference?.match(/^Condition\/(.+)$/)?.[1];
+  if (fromExtension) return { conditionId: fromExtension, display: ref?.display ?? "" };
+
+  for (const section of composition?.section ?? []) {
+    for (const entry of section.entry ?? []) {
+      const conditionId = entry.reference?.match(/^Condition\/(.+)$/)?.[1];
+      if (conditionId) return { conditionId, display: entry.display ?? "" };
+    }
+  }
+  return null;
+}
+
 export function parseClinicalNoteForm(composition: fhir4.Composition): ClinicalNoteFormValues {
   const knownCodes = new Set<string>(SECTION_OPTIONS.map((o) => o.code));
   const sections = (composition.section ?? []).map((section) => {
@@ -380,6 +434,7 @@ export function parseClinicalNoteForm(composition: fhir4.Composition): ClinicalN
     title: composition.title ?? "",
     status: composition.status === "preliminary" ? "preliminary" : "final",
     date: toDateTimeInput(composition.date),
+    problem: clinicalNoteProblem(composition),
     sections,
   };
 }

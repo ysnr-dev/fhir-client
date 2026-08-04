@@ -935,6 +935,35 @@ export function useDeleteCondition() {
   });
 }
 
+// プロブレムリストの上限。1 患者の病名は高々数十件の想定なので 1 回の検索で足りる。
+const KARTE_CONDITION_COUNT = 100;
+
+// カルテ画面のプロブレムリスト用。プロブレムと保険病名の振り分けは
+// splitConditions() でクライアント側が行うため、ここでは患者の病名を全件取得する
+// (上流 fhir-server は未知の検索パラメータを黙って無視して全件返すことがあり、
+//  category での絞り込みをサーバーに任せられない)。
+// クエリキーを ["Condition", "search", ...] 配下に置くことで、病名の登録・更新・
+// 削除の invalidate がそのまま効き、プロブレムリストも自動で再取得される。
+export function useKarteConditions(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("_count", String(KARTE_CONDITION_COUNT));
+  params.set("_sort", "-onset-date");
+
+  const query = useQuery({
+    queryKey: ["Condition", "search", "karte", patientId],
+    queryFn: () => searchResource<fhir4.Condition>("Condition", params),
+    enabled: Boolean(patientId),
+  });
+
+  const conditions =
+    query.data?.data.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Condition => r?.resourceType === "Condition") ?? [];
+
+  return { ...query, conditions };
+}
+
 const CLINICAL_NOTE_COUNT = 20;
 
 // 診療記録(経過記録)。type=LOINC 11506-3 の Composition だけを扱う。

@@ -1,9 +1,11 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Disease, Modifier } from "../api/masterClient";
 import {
+  CATEGORY_LABELS,
   conditionDisplayName,
   emptyConditionForm,
   OUTCOME_OPTIONS,
+  type ConditionCategory,
   type ConditionFormValues,
   type OutcomeCode,
 } from "../fhir/conditionHelpers";
@@ -124,6 +126,25 @@ export function ConditionForm({
 
       <fieldset>
         <legend>病名</legend>
+
+        {/* 区分。プロブレム(POMR のプロブレムリストに載る)と保険病名(レセプト用)を
+            同じ Condition で区分管理する。ラジオの横並びは診療記録フォームと同じ形。 */}
+        <div className="clinical-note-form__mode">
+          <span className="clinical-note-form__mode-legend">区分</span>
+          <div className="clinical-note-form__mode-options">
+            {(["billing", "problem"] as const).map((category) => (
+              <label className="clinical-note-form__mode-option" key={category}>
+                <input
+                  type="radio"
+                  name="condition-category"
+                  checked={values.category === category}
+                  onChange={() => update("category", category as ConditionCategory)}
+                />
+                {CATEGORY_LABELS[category]}
+              </label>
+            ))}
+          </div>
+        </div>
 
         <div className="condition-form__row">
           <label>

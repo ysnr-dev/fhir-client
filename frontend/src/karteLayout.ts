@@ -7,6 +7,8 @@ const MODE_STORAGE_KEY = "fhir-client.karte.leftPaneMode";
 const TOP_RATIO_STORAGE_KEY = "fhir-client.karte.leftPaneTopRatio";
 const LEFT_WIDTH_RATIO_STORAGE_KEY = "fhir-client.karte.leftPaneWidthRatio";
 const DAY_LIST_STORAGE_KEY = "fhir-client.karte.dayListVisible";
+const PROBLEM_LIST_STORAGE_KEY = "fhir-client.karte.problemListVisible";
+const RESOLVED_PROBLEMS_STORAGE_KEY = "fhir-client.karte.resolvedProblemsVisible";
 
 // 上下どちらのペインも潰れないように、上ペインが占める比率を制限する。
 const MIN_TOP_RATIO = 0.2;
@@ -91,6 +93,41 @@ export function readDayListVisible(): boolean {
 export function storeDayListVisible(visible: boolean) {
   try {
     localStorage.setItem(DAY_LIST_STORAGE_KEY, visible ? "visible" : "hidden");
+  } catch {
+    // 保存できなくてもその場の表示は切り替える。
+  }
+}
+
+// カルテタブのプロブレムリストの表示・非表示。既定は表示。
+export function readProblemListVisible(): boolean {
+  try {
+    return localStorage.getItem(PROBLEM_LIST_STORAGE_KEY) !== "hidden";
+  } catch {
+    return true;
+  }
+}
+
+export function storeProblemListVisible(visible: boolean) {
+  try {
+    localStorage.setItem(PROBLEM_LIST_STORAGE_KEY, visible ? "visible" : "hidden");
+  } catch {
+    // 保存できなくてもその場の表示は切り替える。
+  }
+}
+
+// プロブレムリスト内の解決済み(継続以外)のプロブレムの表示・非表示。
+// 帯の幅を継続中のプロブレムに使いたいので、既定は非表示。
+export function readResolvedProblemsVisible(): boolean {
+  try {
+    return localStorage.getItem(RESOLVED_PROBLEMS_STORAGE_KEY) === "visible";
+  } catch {
+    return false;
+  }
+}
+
+export function storeResolvedProblemsVisible(visible: boolean) {
+  try {
+    localStorage.setItem(RESOLVED_PROBLEMS_STORAGE_KEY, visible ? "visible" : "hidden");
   } catch {
     // 保存できなくてもその場の表示は切り替える。
   }

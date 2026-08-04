@@ -10,6 +10,7 @@ import {
   parseClinicalNoteForm,
   validateClinicalNote,
   type ClinicalNoteFormValues,
+  type ClinicalNoteProblem,
 } from "../fhir/clinicalNoteHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 
@@ -18,10 +19,16 @@ import { isPatientMismatch } from "../fhir/patientHelpers";
 
 interface ClinicalNoteCreatePanelProps {
   patientId: string;
+  // 開いた時点で対象にしておくプロブレム(カルテ画面でプロブレムを選んでいる場合)。
+  defaultProblem?: ClinicalNoteProblem;
   onSaved: () => void;
 }
 
-export function ClinicalNoteCreatePanel({ patientId, onSaved }: ClinicalNoteCreatePanelProps) {
+export function ClinicalNoteCreatePanel({
+  patientId,
+  defaultProblem,
+  onSaved,
+}: ClinicalNoteCreatePanelProps) {
   const createNote = useCreateClinicalNote();
   // Composition.author(1..*)にログイン中の医療従事者の実参照を入れる。
   // administrator など Practitioner 未紐付けのアカウントでは validate で保存を止める。
@@ -43,7 +50,7 @@ export function ClinicalNoteCreatePanel({ patientId, onSaved }: ClinicalNoteCrea
   return (
     <ClinicalNoteForm
       patientId={patientId}
-      initialValues={emptyClinicalNoteForm()}
+      initialValues={emptyClinicalNoteForm(defaultProblem ?? null)}
       onSubmit={handleSubmit}
       submitting={createNote.isPending}
       submitError={createNote.error}

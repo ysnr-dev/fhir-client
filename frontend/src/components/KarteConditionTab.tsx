@@ -11,6 +11,7 @@ import {
   parseConditionForm,
   type ConditionFormValues,
 } from "../fhir/conditionHelpers";
+import { useProblemNumbering } from "../hooks/useProblemNumbering";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { ConditionDetailPanel } from "./ConditionDetailPanel";
 import { ConditionForm } from "./ConditionForm";
@@ -118,9 +119,13 @@ export function KarteConditionTab({ patientId }: { patientId: string }) {
 
 function CreateForm({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {
   const createCondition = useCreateCondition();
+  const problemNumberFor = useProblemNumbering(patientId);
 
   function handleSubmit(values: ConditionFormValues) {
-    createCondition.mutate(buildCondition(values, patientId), { onSuccess: onSaved });
+    createCondition.mutate(
+      buildCondition(values, patientId, undefined, problemNumberFor(values)),
+      { onSuccess: onSaved },
+    );
   }
 
   return (
@@ -143,6 +148,7 @@ function EditForm({
 }) {
   const { data: result, isLoading, error: loadError } = useCondition(conditionId);
   const updateCondition = useUpdateCondition();
+  const problemNumberFor = useProblemNumbering(patientId);
   const [conflict, setConflict] = useState(false);
 
   const condition = result?.data;
@@ -152,10 +158,18 @@ function EditForm({
     loadError ?? (patientMismatch ? new Error("指定された病名は別の患者のものです。") : undefined);
 
   function handleSubmit(values: ConditionFormValues) {
-    if (!result?.etag || patientMismatch) return;
+    if (!result?.etag || patientMismatch || !condition) return;
     setConflict(false);
     updateCondition.mutate(
-      { condition: buildCondition(values, patientId, conditionId), etag: result.etag },
+      {
+        condition: buildCondition(
+          values,
+          patientId,
+          conditionId,
+          problemNumberFor(values, condition),
+        ),
+        etag: result.etag,
+      },
       {
         onSuccess: onSaved,
         onError: (err) => {
