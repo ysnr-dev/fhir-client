@@ -2760,6 +2760,24 @@ button:disabled {
   color: var(--text);
 }
 
+/* ---- 診療科(Organization / partOf あり) ---- */
+
+/* コード表からの一括登録ボタンと、その説明・結果メッセージを 1 区画にまとめる。
+   .organization-form__hint と違い入力欄の直下ではないので、負の margin は付けない。 */
+.department-seed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.department-seed p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
 /* ---- 医療従事者(Practitioner) ---- */
 
 /* 職種・所属は別リソース(PractitionerRole)だが、フォームでは 1 区画にまとめる。

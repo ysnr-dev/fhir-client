@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import {
-  ORGANIZATION_TYPE_OPTIONS,
+  FACILITY_TYPE_OPTIONS,
   emptyOrganizationForm,
   validateOrganizationForm,
   type OrganizationFormValues,
@@ -79,7 +79,7 @@ export function OrganizationForm({
         種別
         <select value={values.typeCode} onChange={(e) => update("typeCode", e.target.value)}>
           <option value="">未指定</option>
-          {ORGANIZATION_TYPE_OPTIONS.map((option) => (
+          {FACILITY_TYPE_OPTIONS.map((option) => (
             <option key={option.code} value={option.code}>
               {option.label}
             </option>

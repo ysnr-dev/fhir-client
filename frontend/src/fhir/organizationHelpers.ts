@@ -17,6 +17,10 @@ export const ORGANIZATION_TYPE_OPTIONS = [
   { code: "other", label: "その他" },
 ] as const;
 
+// 「部門・診療科」は診療科登録画面(所属医療機関 partOf が必須)の担当なので、
+// 医療機関のフォームでは選べないようにする。ラベル引きには元の一覧を使う。
+export const FACILITY_TYPE_OPTIONS = ORGANIZATION_TYPE_OPTIONS.filter((o) => o.code !== "dept");
+
 export function organizationTypeLabel(code: string | undefined): string {
   if (!code) return "-";
   return ORGANIZATION_TYPE_OPTIONS.find((o) => o.code === code)?.label ?? code;

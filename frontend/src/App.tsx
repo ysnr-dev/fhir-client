@@ -34,6 +34,9 @@ import { LabResultDetailPage } from "./pages/LabResultDetailPage";
 import { LabResultEditPage } from "./pages/LabResultEditPage";
 import { LabResultListPage } from "./pages/LabResultListPage";
 import { LabResultTimelinePage } from "./pages/LabResultTimelinePage";
+import { DepartmentCreatePage } from "./pages/DepartmentCreatePage";
+import { DepartmentEditPage } from "./pages/DepartmentEditPage";
+import { DepartmentListPage } from "./pages/DepartmentListPage";
 import { OrganizationCreatePage } from "./pages/OrganizationCreatePage";
 import { OrganizationEditPage } from "./pages/OrganizationEditPage";
 import { OrganizationListPage } from "./pages/OrganizationListPage";
@@ -68,6 +71,9 @@ function App() {
           <HoverMenu label="管理">
             <Link to="/organizations" className="row-menu__item">
               医療機関
+            </Link>
+            <Link to="/departments" className="row-menu__item">
+              診療科
             </Link>
             <Link to="/practitioners" className="row-menu__item">
               医療従事者
@@ -140,6 +146,10 @@ function App() {
           <Route path="/organizations" element={<OrganizationListPage />} />
           <Route path="/organizations/new" element={<OrganizationCreatePage />} />
           <Route path="/organizations/:id/edit" element={<OrganizationEditPage />} />
+          {/* 診療科も Organization だが、所属医療機関(partOf)を持つ点で施設と切り分ける。 */}
+          <Route path="/departments" element={<DepartmentListPage />} />
+          <Route path="/departments/new" element={<DepartmentCreatePage />} />
+          <Route path="/departments/:id/edit" element={<DepartmentEditPage />} />
           <Route path="/practitioners" element={<PractitionerListPage />} />
           <Route path="/practitioners/new" element={<PractitionerCreatePage />} />
           <Route path="/practitioners/:id/edit" element={<PractitionerEditPage />} />

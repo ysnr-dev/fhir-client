@@ -158,6 +158,8 @@ export function useOrganizationSearch(search: OrganizationSearchParams, offset: 
   const params = new URLSearchParams();
   if (search.name) params.set("name", search.name);
   if (search.identifier) params.set("identifier", search.identifier);
+  // 診療科(partOf あり)は診療科一覧の担当なので、医療機関一覧からは除く。
+  params.set("partof:missing", "true");
   params.set("_count", String(ORGANIZATION_COUNT));
   params.set("_offset", String(offset));
 
@@ -181,6 +183,7 @@ export function useOrganizationSearch(search: OrganizationSearchParams, offset: 
 // それ以上の施設数は運用上想定しない)。
 export function useOrganizationOptions() {
   const params = new URLSearchParams();
+  params.set("partof:missing", "true");
   params.set("_count", "100");
   params.set("_sort", "name");
 
@@ -232,6 +235,86 @@ export function useDeleteOrganization() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteResource("Organization", id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Organization", "search"] });
+    },
+  });
+}
+
+// 診療科は Organization / partOf ありで表現する。読み書きは Organization 用の
+// フック(useOrganization / useCreateOrganization など)をそのまま使い、
+// ここには一覧検索と一括登録だけを置く。
+export interface DepartmentSearchParams {
+  name?: string;
+  /** 所属医療機関の Organization.id。未指定なら全医療機関の診療科。 */
+  partOfId?: string;
+}
+
+const DEPARTMENT_COUNT = 20;
+
+function departmentSearchParams(search: DepartmentSearchParams): URLSearchParams {
+  const params = new URLSearchParams();
+  if (search.name) params.set("name", search.name);
+  if (search.partOfId) params.set("partof", `Organization/${search.partOfId}`);
+  // 所属医療機関の指定がなければ「親を持つ Organization」= 診療科すべて。
+  else params.set("partof:missing", "false");
+  // ページ送りで順序がぶれないよう並び順を固定する(上流は identifier での
+  // ソートに対応しないため、診療科コード順ではなく名称順)。
+  params.set("_sort", "name");
+  return params;
+}
+
+export function useDepartmentSearch(search: DepartmentSearchParams, offset: number) {
+  const params = departmentSearchParams(search);
+  params.set("_count", String(DEPARTMENT_COUNT));
+  params.set("_offset", String(offset));
+
+  const query = useQuery({
+    queryKey: ["Organization", "search", "department", search, offset],
+    queryFn: () => searchResource<fhir4.Organization>("Organization", params),
+    placeholderData: keepPreviousData,
+  });
+
+  return {
+    ...query,
+    bundle: query.data?.data,
+    total: query.data?.data.total ?? 0,
+    count: DEPARTMENT_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+// 一括登録の重複判定用に、指定医療機関の診療科を全件集める。上流の _count 上限は
+// 100 なので、次ページが尽きるまで _offset を進めて読み切る。
+async function fetchAllDepartments(partOfId: string): Promise<fhir4.Organization[]> {
+  const PAGE = 100;
+  const departments: fhir4.Organization[] = [];
+
+  for (let offset = 0; ; offset += PAGE) {
+    const params = departmentSearchParams({ partOfId });
+    params.set("_count", String(PAGE));
+    params.set("_offset", String(offset));
+    const { data: bundle } = await searchResource<fhir4.Organization>("Organization", params);
+    const page =
+      bundle.entry?.map((e) => e.resource).filter((r): r is fhir4.Organization => Boolean(r)) ?? [];
+    departments.push(...page);
+    if (page.length < PAGE) return departments;
+  }
+}
+
+export function useDepartmentsOf(partOfId: string | undefined) {
+  return useQuery({
+    queryKey: ["Organization", "search", "department", "all", partOfId],
+    queryFn: () => fetchAllDepartments(partOfId as string),
+    enabled: Boolean(partOfId),
+  });
+}
+
+export function useSeedDepartments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Organization", "search"] });
     },

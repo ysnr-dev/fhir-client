@@ -52,6 +52,12 @@ export function OrganizationTable({ organizations }: { organizations: fhir4.Orga
                   <Link className="row-menu__item" to={`/organizations/${organization.id}/edit`}>
                     編集
                   </Link>
+                  <Link
+                    className="row-menu__item"
+                    to={`/departments?organization=${organization.id}`}
+                  >
+                    診療科
+                  </Link>
                   <button
                     type="button"
                     className="row-menu__item row-menu__item--danger"
