@@ -2,10 +2,12 @@ import { useMemo } from "react";
 import { useCreatePrescription, useUpdatePrescription } from "../api/queries";
 import { ErrorBanner } from "./ErrorBanner";
 import { PrescriptionForm } from "./PrescriptionForm";
+import type { ProblemRef } from "../fhir/conditionHelpers";
 import {
   buildDoPrescriptionForm,
   buildPrescriptionBundle,
   buildPrescriptionUpdateBundle,
+  emptyPrescriptionForm,
   prescriptionRequester,
   type PrescriptionFormValues,
 } from "../fhir/prescriptionHelpers";
@@ -18,12 +20,16 @@ interface PrescriptionCreatePanelProps {
   patientId: string;
   /** DO(内容を流用して新規登録)する元の ServiceRequest id。 */
   sourceSrId?: string;
+  // 開いた時点で対象にしておくプロブレム(カルテ画面でプロブレムを選んでいる場合)。
+  // DO では元の処方の対象プロブレムをそのまま引き継ぐので使わない。
+  defaultProblem?: ProblemRef;
   onSaved: () => void;
 }
 
 export function PrescriptionCreatePanel({
   patientId,
   sourceSrId,
+  defaultProblem,
   onSaved,
 }: PrescriptionCreatePanelProps) {
   const createPrescription = useCreatePrescription();
@@ -32,8 +38,11 @@ export function PrescriptionCreatePanel({
   const requester = useOrderContext();
 
   const initialValues = useMemo(
-    () => (source.initialValues ? buildDoPrescriptionForm(source.initialValues) : undefined),
-    [source.initialValues],
+    () =>
+      source.initialValues
+        ? buildDoPrescriptionForm(source.initialValues)
+        : emptyPrescriptionForm(defaultProblem ?? null),
+    [source.initialValues, defaultProblem],
   );
 
   function handleSubmit(values: PrescriptionFormValues) {
@@ -51,6 +60,7 @@ export function PrescriptionCreatePanel({
         <p>読み込み中...</p>
       ) : (
         <PrescriptionForm
+          patientId={patientId}
           initialValues={initialValues}
           onSubmit={handleSubmit}
           submitting={createPrescription.isPending}
@@ -101,6 +111,7 @@ export function PrescriptionEditPanel({ patientId, srId, onSaved }: Prescription
         sr &&
         initialValues && (
           <PrescriptionForm
+            patientId={patientId}
             initialValues={initialValues}
             onSubmit={handleSubmit}
             submitting={updatePrescription.isPending}

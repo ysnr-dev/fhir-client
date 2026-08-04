@@ -6,7 +6,7 @@ import {
 } from "../api/queries";
 import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
 import { clinicalNoteProblem, sectionTitle, statusLabel } from "../fhir/clinicalNoteHelpers";
-import { problemLabel } from "../fhir/conditionHelpers";
+import { problemLabel, type ProblemRef } from "../fhir/conditionHelpers";
 import {
   KARTE_KIND_LABELS,
   karteItemKey,
@@ -17,6 +17,7 @@ import {
   groupByRp,
   orderContextSummary,
   prescriptionComment,
+  prescriptionProblem,
   prescriptionRequester,
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
@@ -178,9 +179,7 @@ function KarteCard({
           {KARTE_KIND_LABELS[item.kind]}
         </span>
         <span className="karte-card__title">{cardTitle(item)}</span>
-        {item.kind === "note" && (
-          <NoteProblemBadge note={item.note} problemsById={problemsById} />
-        )}
+        <ProblemBadge problem={itemProblem(item)} problemsById={problemsById} />
         <span className="karte-card__meta">{cardMeta(item)}</span>
         <span className="karte-card__actions">
           {item.kind === "prescription" && (
@@ -308,11 +307,17 @@ function DocumentIcon() {
   );
 }
 
-// この情報が指定プロブレムに紐付いているか。現状プロブレムを持つのは診療記録だけ
-// (処方・テンプレートの紐付けは未実装)。
+// この情報が対象としているプロブレム。現状プロブレムを持つのは診療記録と処方だけ
+// (テンプレートの紐付けは未実装)。
+function itemProblem(item: KarteTimelineItem): ProblemRef | null {
+  if (item.kind === "note") return clinicalNoteProblem(item.note);
+  if (item.kind === "prescription") return prescriptionProblem(item.serviceRequest);
+  return null;
+}
+
 function referencesProblem(item: KarteTimelineItem, conditionId: string | null): boolean {
-  if (!conditionId || item.kind !== "note") return false;
-  return clinicalNoteProblem(item.note)?.conditionId === conditionId;
+  if (!conditionId) return false;
+  return itemProblem(item)?.conditionId === conditionId;
 }
 
 function cardTitle(item: KarteTimelineItem): string {
@@ -438,17 +443,16 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
   );
 }
 
-// 診療記録が対象とするプロブレムのバッジ。名称は現在のプロブレムから引き直すので、
+// 情報が対象とするプロブレムのバッジ。名称は現在のプロブレムから引き直すので、
 // 病名を編集しても過去の記録に古い名前が残らない。削除済みのプロブレムは
-// 拡張に保存してある表示名でフォールバックする。
-function NoteProblemBadge({
-  note,
+// リソースに保存してある表示名でフォールバックする。
+function ProblemBadge({
+  problem,
   problemsById,
 }: {
-  note: fhir4.Composition;
+  problem: ProblemRef | null;
   problemsById: Map<string, fhir4.Condition>;
 }) {
-  const problem = clinicalNoteProblem(note);
   if (!problem) return null;
 
   const current = problemsById.get(problem.conditionId);

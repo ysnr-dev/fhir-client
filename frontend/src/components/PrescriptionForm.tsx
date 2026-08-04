@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
+import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   CATEGORY_OPTIONS,
   emptyMedicineLine,
@@ -12,11 +13,15 @@ import {
   type RpValues,
 } from "../fhir/prescriptionHelpers";
 import { presetUsageFilters } from "../fhir/usageMapping";
+import { useProblemOptions } from "../hooks/useProblemOptions";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
+import { ProblemSelect } from "./ProblemSelect";
 import { UsageSearchModal } from "./UsageSearchModal";
 
 interface PrescriptionFormProps {
+  // 対象プロブレムの候補(この患者のプロブレムリスト)を引くのに使う。
+  patientId: string;
   initialValues?: PrescriptionFormValues;
   onSubmit: (values: PrescriptionFormValues) => void;
   submitting: boolean;
@@ -45,6 +50,7 @@ function TrashIcon() {
 }
 
 export function PrescriptionForm({
+  patientId,
   initialValues,
   onSubmit,
   submitting,
@@ -60,6 +66,10 @@ export function PrescriptionForm({
   const [usageCommentOpen, setUsageCommentOpen] = useState<boolean[]>(() =>
     (initialValues ?? emptyPrescriptionForm()).rps.map((rp) => Boolean(rp.usageComment)),
   );
+
+  // 対象プロブレムの候補。POMR では「#1 糖尿病に対する処方」のように、オーダー 1 件を
+  // 1 つのプロブレムに紐付ける(RP ごとに分けたいときはオーダーを分けて登録する)。
+  const problemOptions = useProblemOptions(patientId);
 
   function update<K extends keyof PrescriptionFormValues>(key: K, value: PrescriptionFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -177,7 +187,9 @@ export function PrescriptionForm({
       return;
     }
     setValidationError(null);
-    onSubmit(values);
+    // プロブレムの表示名は保存時点の最新にそろえる(病名を変えたあとに処方を編集保存
+    // したとき、参照の display だけ古い名前で残らないように)。
+    onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLFormElement>) {
@@ -199,6 +211,14 @@ export function PrescriptionForm({
 
       <fieldset>
         <legend>処方共通</legend>
+        <label>
+          対象プロブレム
+          <ProblemSelect
+            value={values.problem}
+            options={problemOptions}
+            onChange={(problem) => update("problem", problem)}
+          />
+        </label>
         <label>
           入外区分
           <select

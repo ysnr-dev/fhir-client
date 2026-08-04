@@ -1,5 +1,6 @@
 import type { Medicine, MedicineUsage } from "../api/masterClient";
 import { emptyOrderContext, type OrderContext } from "../orderContext";
+import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 
 // ローカル拡張・コードシステム。JP Core / FHIR 標準に存在しない項目を表現するための、
 // この処方オーダー機能専用の URI。
@@ -72,6 +73,8 @@ export interface PrescriptionFormValues {
   category: string;
   authoredDate: string;
   comment: string;
+  // 対象プロブレム(POMR)。null なら特定の問題に紐付かない処方。
+  problem: ProblemRef | null;
   rps: RpValues[];
 }
 
@@ -89,12 +92,15 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function emptyPrescriptionForm(): PrescriptionFormValues {
+// problem を渡すと対象プロブレムを選択済みで開く(プロブレムリストで選んでいる
+// プロブレムをそのまま新規処方の対象にするため)。
+export function emptyPrescriptionForm(problem: ProblemRef | null = null): PrescriptionFormValues {
   return {
     setting: "outpatient",
     category: "",
     authoredDate: today(),
     comment: "",
+    problem,
     rps: [{ ...emptyRp, medicines: [{ ...emptyMedicineLine }] }],
   };
 }
@@ -322,6 +328,17 @@ function buildPrescriptionTransactionBundle(
   };
 
   if (serviceRequestId) serviceRequest.id = serviceRequestId;
+  // 対象プロブレム(POMR)。オーダーの適応を表す標準要素 reasonReference をそのまま使う
+  // (診療記録と違いローカル拡張は不要)。紐付けは処方オーダー 1 件に対して 1 つ持たせ、
+  // RP ごとに分けたいときはオーダーを分けて登録する。
+  if (values.problem) {
+    serviceRequest.reasonReference = [
+      {
+        reference: `Condition/${values.problem.conditionId}`,
+        display: values.problem.display,
+      },
+    ];
+  }
   applyOrderContext(serviceRequest, requester);
   if (values.comment) {
     serviceRequest.note = [{ text: values.comment }];
@@ -375,7 +392,7 @@ export function buildPrescriptionUpdateBundle(
 }
 
 // 既存の処方を DO(流用)して新規登録するためのフォーム値に変換する。
-// ・入外区分/処方区分/用法/投与量/投与日数/コメントなど入力値はすべて引き継ぐ
+// ・入外区分/処方区分/用法/投与量/投与日数/コメント/対象プロブレムなど入力値はすべて引き継ぐ
 // ・MedicationRequest の id を落とし、既存リソースの更新(PUT)ではなく新規登録(POST)にする
 // ・処方日は DO 元ではなく当日にする
 export function buildDoPrescriptionForm(values: PrescriptionFormValues): PrescriptionFormValues {
@@ -437,6 +454,16 @@ export function summarizeServiceRequest(sr: fhir4.ServiceRequest): PrescriptionS
 
 export function prescriptionComment(sr: fhir4.ServiceRequest): string {
   return sr.note?.[0]?.text ?? "";
+}
+
+// 処方が対象としているプロブレム。編集フォームの復元とカルテのバッジ表示の双方から使う。
+// reasonReference には Condition 以外も入りうる仕様なので、Condition 参照だけを拾う。
+export function prescriptionProblem(sr: fhir4.ServiceRequest | undefined): ProblemRef | null {
+  for (const reference of sr?.reasonReference ?? []) {
+    const problem = problemRefFromReference(reference);
+    if (problem) return problem;
+  }
+  return null;
 }
 
 // 登録時に入れた依頼科・依頼医師。参照の display をそのまま名前として使うので、
@@ -650,6 +677,7 @@ export function parsePrescriptionForm(
     category,
     authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
     comment: prescriptionComment(sr),
+    problem: prescriptionProblem(sr),
     rps: rps.length ? rps : [{ ...emptyRp, medicines: [{ ...emptyMedicineLine }] }],
   };
 }

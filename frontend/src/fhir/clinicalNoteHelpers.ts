@@ -1,3 +1,4 @@
+import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 import { practitionerDisplayName } from "./practitionerHelpers";
 import { questionnaireResponsePlainText } from "./questionnaireResponseHelpers";
 
@@ -82,13 +83,8 @@ export interface ClinicalNoteSectionTemplate {
 
 // 記録が対象とするプロブレム(Condition)。POMR は「プロブレムごとに SOAP を書く」ので、
 // 紐付けはセクションではなく診療記録 1 件に対して 1 つ持たせる(複数のプロブレムを
-// 扱うときは記録を分けて登録する)。
-// display には保存時点の「#番号 名称」を入れておき、参照解決なしでも描画できるようにする
-// (表示側はプロブレム一覧が引けるなら最新の名称で上書きする)。
-export interface ClinicalNoteProblem {
-  conditionId: string;
-  display: string;
-}
+// 扱うときは記録を分けて登録する)。処方と共通の参照型を使う。
+export type ClinicalNoteProblem = ProblemRef;
 
 // 対象プロブレムを記録するアプリローカル拡張。base Composition には診療記録の対象
 // 疾患を表す要素が無いため(event は検査・手術などの「行為」用)、SECTION_QR_EXT_URL
@@ -397,13 +393,13 @@ export function clinicalNoteProblem(
   composition: fhir4.Composition | undefined,
 ): ClinicalNoteProblem | null {
   const ref = composition?.extension?.find((e) => e.url === NOTE_PROBLEM_EXT_URL)?.valueReference;
-  const fromExtension = ref?.reference?.match(/^Condition\/(.+)$/)?.[1];
-  if (fromExtension) return { conditionId: fromExtension, display: ref?.display ?? "" };
+  const fromExtension = problemRefFromReference(ref);
+  if (fromExtension) return fromExtension;
 
   for (const section of composition?.section ?? []) {
     for (const entry of section.entry ?? []) {
-      const conditionId = entry.reference?.match(/^Condition\/(.+)$/)?.[1];
-      if (conditionId) return { conditionId, display: entry.display ?? "" };
+      const fromEntry = problemRefFromReference(entry);
+      if (fromEntry) return fromEntry;
     }
   }
   return null;

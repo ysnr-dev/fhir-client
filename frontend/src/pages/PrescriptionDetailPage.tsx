@@ -8,6 +8,7 @@ import {
   groupByRp,
   orderContextSummary,
   prescriptionComment,
+  prescriptionProblem,
   prescriptionRequester,
   splitPrescriptionDetailBundle,
   summarizeServiceRequest,
@@ -73,6 +74,10 @@ export function PrescriptionDetailPage() {
             <fieldset>
               <legend>処方共通</legend>
               <dl className="prescription-detail__common">
+                {/* 表示名は保存時点のもの。カルテ画面のバッジと違い、この画面は
+                    プロブレム一覧を取得しないため引き直さない。 */}
+                <dt>対象プロブレム</dt>
+                <dd>{prescriptionProblem(sr)?.display || "-"}</dd>
                 <dt>処方日</dt>
                 <dd>{summary.date}</dd>
                 <dt>入外区分</dt>

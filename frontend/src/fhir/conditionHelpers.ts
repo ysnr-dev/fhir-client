@@ -93,6 +93,39 @@ export function problemLabel(condition: fhir4.Condition): string {
   return number === undefined ? name : `#${number} ${name}`;
 }
 
+// 診療情報(診療記録・処方など)が対象とするプロブレムへの参照。
+// display には保存時点の「#番号 名称」を入れておき、参照解決なしでも描画できるようにする
+// (表示側はプロブレム一覧が引けるなら最新の名称で上書きする)。
+export interface ProblemRef {
+  conditionId: string;
+  display: string;
+}
+
+export function problemRefOf(condition: fhir4.Condition): ProblemRef {
+  return { conditionId: condition.id ?? "", display: problemLabel(condition) };
+}
+
+/**
+ * 保存時に対象プロブレムの表示名を最新にそろえる。病名を変えたあとに古い情報を
+ * 編集保存したとき、保存済みの display だけ古い名前で残らないようにする。
+ * 候補に無い(削除済みの)プロブレムは、保存済みの値をそのまま維持する。
+ */
+export function refreshProblemDisplay(
+  problem: ProblemRef | null,
+  options: ProblemRef[],
+): ProblemRef | null {
+  if (!problem) return null;
+  return options.find((o) => o.conditionId === problem.conditionId) ?? problem;
+}
+
+/** Condition を指す参照を ProblemRef に読み替える。他リソース宛ての参照は null。 */
+export function problemRefFromReference(
+  reference: fhir4.Reference | undefined,
+): ProblemRef | null {
+  const conditionId = reference?.reference?.match(/^Condition\/(.+)$/)?.[1];
+  return conditionId ? { conditionId, display: reference?.display ?? "" } : null;
+}
+
 // 転帰区分。Condition.clinicalStatus(required binding)のコードへ直接対応させる。
 // 終了日(abatement)を入れる場合は active 以外でなければならない(FHIR con-4)。
 export const OUTCOME_OPTIONS = [

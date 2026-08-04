@@ -1,4 +1,4 @@
-import type { ClinicalNoteProblem } from "../fhir/clinicalNoteHelpers";
+import type { ProblemRef } from "../fhir/conditionHelpers";
 import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePanels";
 import { PrescriptionCreatePanel, PrescriptionEditPanel } from "./PrescriptionPanels";
 import {
@@ -11,9 +11,10 @@ import {
 export type KartePaneState =
   | { kind: "empty" }
   // problem: 登録ボタンを押した時点で選択されていたプロブレム(対象の初期値)。
-  | { kind: "note-create"; problem?: ClinicalNoteProblem }
+  | { kind: "note-create"; problem?: ProblemRef }
   | { kind: "note-edit"; noteId: string }
-  | { kind: "prescription-create"; sourceSrId?: string }
+  // DO(sourceSrId あり)では対象プロブレムも DO 元から引き継ぐので problem は使わない。
+  | { kind: "prescription-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "prescription-edit"; srId: string }
   | { kind: "qr-create" }
   | { kind: "qr-edit"; qrId: string };
@@ -38,10 +39,10 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
-    case "prescription-create":
-      return `${state.kind}:${state.sourceSrId ?? ""}`;
     // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
     // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
+    case "prescription-create":
+      return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "note-create":
       return `${state.kind}:${state.problem?.conditionId ?? ""}`;
     default:
@@ -52,8 +53,8 @@ function paneKey(state: KartePaneState): string {
 interface KarteRightPaneProps {
   patientId: string;
   state: KartePaneState;
-  // プロブレムリストで選択中のプロブレム。診療記録の新規登録の初期値にする。
-  selectedProblem?: ClinicalNoteProblem;
+  // プロブレムリストで選択中のプロブレム。診療記録・処方の新規登録の初期値にする。
+  selectedProblem?: ProblemRef;
   onStateChange: (state: KartePaneState) => void;
 }
 
@@ -99,7 +100,10 @@ export function KarteRightPane({
         <button type="button" onClick={() => onStateChange({ kind: "qr-create" })}>
           テンプレート
         </button>
-        <button type="button" onClick={() => onStateChange({ kind: "prescription-create" })}>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "prescription-create", problem: selectedProblem })}
+        >
           処方
         </button>
       </div>
@@ -134,6 +138,7 @@ function PaneContent({
         <PrescriptionCreatePanel
           patientId={patientId}
           sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
           onSaved={onSaved}
         />
       );
