@@ -7,6 +7,7 @@ const MODE_STORAGE_KEY = "fhir-client.karte.leftPaneMode";
 const TOP_RATIO_STORAGE_KEY = "fhir-client.karte.leftPaneTopRatio";
 const LEFT_WIDTH_RATIO_STORAGE_KEY = "fhir-client.karte.leftPaneWidthRatio";
 const DAY_LIST_STORAGE_KEY = "fhir-client.karte.dayListVisible";
+const PROBLEM_LIST_STORAGE_KEY = "fhir-client.karte.problemListVisible";
 
 // 上下どちらのペインも潰れないように、上ペインが占める比率を制限する。
 const MIN_TOP_RATIO = 0.2;
@@ -91,6 +92,23 @@ export function readDayListVisible(): boolean {
 export function storeDayListVisible(visible: boolean) {
   try {
     localStorage.setItem(DAY_LIST_STORAGE_KEY, visible ? "visible" : "hidden");
+  } catch {
+    // 保存できなくてもその場の表示は切り替える。
+  }
+}
+
+// カルテタブのプロブレムリストの表示・非表示。既定は表示。
+export function readProblemListVisible(): boolean {
+  try {
+    return localStorage.getItem(PROBLEM_LIST_STORAGE_KEY) !== "hidden";
+  } catch {
+    return true;
+  }
+}
+
+export function storeProblemListVisible(visible: boolean) {
+  try {
+    localStorage.setItem(PROBLEM_LIST_STORAGE_KEY, visible ? "visible" : "hidden");
   } catch {
     // 保存できなくてもその場の表示は切り替える。
   }

@@ -3229,10 +3229,18 @@ body.karte-wide #root {
 
 /* タブの中身(カルテ / 各一覧)はペインの残り高さを使い、内部でスクロールする。
    min-height: 0 が無いと flex アイテムの既定(auto)で中身の高さまで伸びる。 */
+.karte-left__karte,
 .karte-left__body,
 .karte-tabpanel {
   flex: 1;
   min-height: 0;
+}
+
+/* カルテタブ全体: 上にプロブレムリスト、下に診療日パネル + タイムライン。 */
+.karte-left__karte {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .karte-tabpanel {
@@ -3390,6 +3398,96 @@ body.karte-wide #root {
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* プロブレムリスト(POMR)。カルテ本体の上に横帯で常時出す。 */
+.karte-problems {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  /* プロブレムが増えても帯が高くなりすぎないよう、内部でスクロールさせる。 */
+  max-height: 96px;
+  overflow-y: auto;
+}
+
+.karte-problems--collapsed {
+  max-height: none;
+  overflow: visible;
+}
+
+.karte-problems__title {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.karte-problems__count,
+.karte-problems__empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* 帯内のボタン共通指定を打ち消して、開閉は控えめな三角だけにする。 */
+.karte-problems .karte-problems__toggle {
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.karte-problems .karte-problems__toggle:hover {
+  color: var(--accent);
+}
+
+.karte-problems__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.karte-problems .karte-problems__chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.karte-problems .karte-problems__chip:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.karte-problems .karte-problems__chip--selected {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 治癒・中止などのプロブレムは残しつつ控えめに出す。 */
+.karte-problems .karte-problems__chip--inactive {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.karte-problems__outcome {
+  font-size: 11px;
+  text-decoration: none;
 }
 
 .karte-daylist {
@@ -3602,6 +3700,46 @@ body.karte-wide #root {
 .karte-card__section-title {
   font-size: 12px;
   color: var(--text);
+}
+
+/* 診療記録が対象とするプロブレム。カード見出しのタイトルの右に添える。
+   種別バッジ(.karte-card__badge)と同じアクセント色にすると 1 行に強い要素が
+   2 つ並んで競合するので、こちらは meta と同じ明度の輪郭だけにする。 */
+.karte-card__problem {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+}
+
+/* 参照先が削除済みのプロブレム。色を足さず、破線で通常と区別する。 */
+.karte-card__problem--missing {
+  border-style: dashed;
+}
+
+/* プロブレム選択中、そのプロブレムに紐付かない情報は控えめに出す
+   (隠すとスクロール位置と追加読み込みの判定が動くため減光にとどめる)。 */
+.karte-card--dimmed {
+  opacity: 0.4;
+}
+
+/* 病名一覧・詳細の区分バッジ(プロブレム / 保険病名) */
+.condition-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.condition-badge--problem {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
 }
 
 .karte-card__empty,

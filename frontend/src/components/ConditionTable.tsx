@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useDeleteCondition } from "../api/queries";
-import { summarizeCondition } from "../fhir/conditionHelpers";
+import { CATEGORY_LABELS, summarizeCondition } from "../fhir/conditionHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { RowMenu } from "./RowMenu";
 
@@ -31,6 +31,7 @@ export function ConditionTable({ conditions, patientId, onView, onEdit }: Condit
       <table className="patient-table">
         <thead>
           <tr>
+            <th>区分</th>
             <th>病名</th>
             <th>開始日</th>
             <th>終了日</th>
@@ -43,6 +44,18 @@ export function ConditionTable({ conditions, patientId, onView, onEdit }: Condit
             const summary = summarizeCondition(condition);
             return (
               <tr key={summary.id}>
+                <td>
+                  <span
+                    className={`condition-badge condition-badge--${summary.category}`}
+                    title={CATEGORY_LABELS[summary.category]}
+                  >
+                    {summary.category === "problem"
+                      ? summary.problemNumber === undefined
+                        ? "P"
+                        : `#${summary.problemNumber}`
+                      : "保険"}
+                  </span>
+                </td>
                 <td>{summary.name}</td>
                 <td>{summary.startDate || "-"}</td>
                 <td>{summary.endDate || "-"}</td>

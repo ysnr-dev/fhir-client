@@ -10,6 +10,7 @@ import {
 import { Link, useParams } from "react-router-dom";
 import {
   useKarteClinicalNotesInfinite,
+  useKarteConditions,
   useKartePrescriptionsInfinite,
   useKarteQuestionnaireResponsesInfinite,
 } from "../api/queries";
@@ -18,10 +19,12 @@ import { KarteAllergyTab } from "../components/KarteAllergyTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteDayList } from "../components/KarteDayList";
 import { KarteLabResultTab } from "../components/KarteLabResultTab";
+import { KarteProblemList } from "../components/KarteProblemList";
 import { KarteRightPane, type KartePaneState } from "../components/KarteRightPane";
 import { KarteSplitter } from "../components/KarteSplitter";
 import { KARTE_TARGET_ATTR, KarteTimeline } from "../components/KarteTimeline";
 import { PatientHeader } from "../components/PatientHeader";
+import { splitConditions } from "../fhir/conditionHelpers";
 import { buildKarteTimeline, type KarteTimelineItem } from "../fhir/karteTimeline";
 import {
   clampLeftWidthRatio,
@@ -29,10 +32,12 @@ import {
   readDayListVisible,
   readLeftPaneMode,
   readLeftWidthRatio,
+  readProblemListVisible,
   readTopRatio,
   storeDayListVisible,
   storeLeftPaneMode,
   storeLeftWidthRatio,
+  storeProblemListVisible,
   storeTopRatio,
   type KarteLeftPaneMode,
 } from "../karteLayout";
@@ -65,6 +70,9 @@ export function KartePage() {
   const [topRatio, setTopRatio] = useState(readTopRatio);
   const [leftWidthRatio, setLeftWidthRatio] = useState(readLeftWidthRatio);
   const [dayListVisible, setDayListVisible] = useState(readDayListVisible);
+  const [problemListVisible, setProblemListVisible] = useState(readProblemListVisible);
+  // 選択中のプロブレム。タイムラインで関連する診療記録を強調するためだけに使う。
+  const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const splitRef = useRef<HTMLDivElement>(null);
   const layoutRef = useRef<HTMLDivElement>(null);
 
@@ -77,6 +85,14 @@ export function KartePage() {
   const notes = useKarteClinicalNotesInfinite(patientId);
   const prescriptions = useKartePrescriptionsInfinite(patientId);
   const responses = useKarteQuestionnaireResponsesInfinite(patientId);
+  const { conditions, error: conditionsError } = useKarteConditions(patientId);
+
+  // プロブレムは一覧表示と、タイムラインのバッジを最新の名称に解決するのに使う。
+  const problems = useMemo(() => splitConditions(conditions).problems, [conditions]);
+  const problemsById = useMemo(
+    () => new Map(problems.map((problem) => [problem.id ?? "", problem])),
+    [problems],
+  );
 
   const timeline = useMemo(
     () =>
@@ -155,6 +171,12 @@ export function KartePage() {
     storeDayListVisible(next);
   }
 
+  function toggleProblemList() {
+    const next = !problemListVisible;
+    setProblemListVisible(next);
+    storeProblemListVisible(next);
+  }
+
   function toggleMode() {
     const next = mode === "split" ? "tabs" : "split";
     setMode(next);
@@ -168,9 +190,18 @@ export function KartePage() {
     notes.isFetchingNextPage || prescriptions.isFetchingNextPage || responses.isFetchingNextPage;
 
   const karteBody = (
-    <div
-      className={`karte-left__body${dayListVisible ? "" : " karte-left__body--daylist-hidden"}`}
-    >
+    <div className="karte-left__karte">
+      {/* プロブレムリストはタブを切り替えても隠れないよう、カルテ本体の上に常時置く。 */}
+      <KarteProblemList
+        problems={problems}
+        selectedId={selectedProblemId}
+        onSelect={setSelectedProblemId}
+        visible={problemListVisible}
+        onToggleVisible={toggleProblemList}
+      />
+      <div
+        className={`karte-left__body${dayListVisible ? "" : " karte-left__body--daylist-hidden"}`}
+      >
       <KarteDayList
         groups={timeline.groups}
         onSelect={scrollToTarget}
@@ -181,6 +212,7 @@ export function KartePage() {
         <ErrorBanner error={notes.error} />
         <ErrorBanner error={prescriptions.error} />
         <ErrorBanner error={responses.error} />
+        <ErrorBanner error={conditionsError} />
         <KarteTimeline
           groups={timeline.groups}
           // 3 ソースのうち一部だけ届いた段階でも、出せるものは出す。
@@ -193,7 +225,10 @@ export function KartePage() {
           onDo={(srId) => setPane({ kind: "prescription-create", sourceSrId: srId })}
           onDeleted={handleDeleted}
           containerRef={timelineRef}
+          problemsById={problemsById}
+          selectedProblemId={selectedProblemId}
         />
+      </div>
       </div>
     </div>
   );

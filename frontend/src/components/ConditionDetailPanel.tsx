@@ -1,5 +1,5 @@
 import { useCondition } from "../api/queries";
-import { parseConditionForm, summarizeCondition } from "../fhir/conditionHelpers";
+import { CATEGORY_LABELS, parseConditionForm, summarizeCondition } from "../fhir/conditionHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { JsonBlock } from "./JsonBlock";
@@ -39,6 +39,13 @@ export function ConditionDetailPanel({
             <fieldset>
               <legend>病名情報</legend>
               <dl className="prescription-detail__common">
+                <dt>区分</dt>
+                <dd>
+                  {CATEGORY_LABELS[summary.category]}
+                  {summary.category === "problem" &&
+                    summary.problemNumber !== undefined &&
+                    ` (#${summary.problemNumber})`}
+                </dd>
                 <dt>病名</dt>
                 <dd>{summary.name}</dd>
                 <dt>接頭語</dt>
