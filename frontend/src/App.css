@@ -2471,7 +2471,7 @@ button:disabled {
   color: var(--accent);
 }
 
-/* ---- 診療情報メニュー(患者一覧のホバーメニュー) ---- */
+/* ---- リストメニュー(患者一覧のホバーメニュー) ---- */
 
 .hover-menu {
   position: relative;
