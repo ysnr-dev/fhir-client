@@ -1,10 +1,9 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useClinicalNote, useDeleteClinicalNote } from "../api/queries";
+import { ClinicalNoteDetailPanel } from "../components/ClinicalNoteDetailPanel";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { JsonBlock } from "../components/JsonBlock";
+import { FhirJsonView } from "../components/FhirJsonView";
 import { PatientHeader } from "../components/PatientHeader";
-import { RichTextView } from "../components/RichTextView";
-import { sectionTitle, summarizeClinicalNote } from "../fhir/clinicalNoteHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 
 export function ClinicalNoteDetailPage() {
@@ -29,8 +28,6 @@ export function ClinicalNoteDetailPage() {
       onSuccess: () => navigate(`/patients/${patientId}/clinical-notes`),
     });
   }
-
-  const summary = note && !patientMismatch ? summarizeClinicalNote(note) : undefined;
 
   return (
     <div className="page">
@@ -57,34 +54,13 @@ export function ClinicalNoteDetailPage() {
         <p>読み込み中...</p>
       ) : (
         note &&
-        summary && (
-          <div className="prescription-detail">
-            <fieldset>
-              <legend>記録情報</legend>
-              <dl className="prescription-detail__common">
-                <dt>タイトル</dt>
-                <dd>{summary.title || "-"}</dd>
-                <dt>記録日時</dt>
-                <dd>{summary.dateTime || "-"}</dd>
-                <dt>ステータス</dt>
-                <dd>{summary.statusLabel || "-"}</dd>
-                <dt>作成者</dt>
-                <dd>{summary.authorName}</dd>
-              </dl>
-            </fieldset>
-
-            {(note.section ?? []).map((section, index) => (
-              <div key={index} className="clinical-note-view__section">
-                <h3>{section.title || sectionTitle(section.code?.coding?.[0]?.code) || "セクション"}</h3>
-                <RichTextView html={section.text?.div ?? ""} />
-              </div>
-            ))}
-
+        !patientMismatch && (
+          <ClinicalNoteDetailPanel note={note}>
             <details className="prescription-detail__raw">
               <summary>FHIR JSON を表示</summary>
-              <JsonBlock value={note} />
+              <FhirJsonView resource={note} />
             </details>
-          </div>
+          </ClinicalNoteDetailPanel>
         )
       )}
     </div>

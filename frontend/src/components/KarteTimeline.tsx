@@ -26,7 +26,9 @@ import {
   questionnaireResponsePlainText,
 } from "../fhir/questionnaireResponseHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { KarteCardDetailModal, KarteCardJsonModal } from "./KarteCardModals";
 import { RichTextView } from "./RichTextView";
+import { RowMenu } from "./RowMenu";
 
 interface KarteTimelineProps {
   groups: KarteDayGroup[];
@@ -145,6 +147,9 @@ function KarteCard({
   const deleteNote = useDeleteClinicalNote();
   const deletePrescription = useDeletePrescription();
   const deleteResponse = useDeleteQuestionnaireResponse();
+  // 詳細表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [jsonOpen, setJsonOpen] = useState(false);
 
   const deleting =
     deleteNote.isPending || deletePrescription.isPending || deleteResponse.isPending;
@@ -219,25 +224,25 @@ function KarteCard({
                 <span className="karte-card__icon-label">PDF</span>
               </button>
             ))}
-          <button
-            type="button"
-            className="karte-card__icon-button"
-            title="編集"
-            aria-label="編集"
-            onClick={() => onEdit(item)}
-          >
-            <PencilIcon />
-          </button>
-          <button
-            type="button"
-            className="karte-card__icon-button"
-            title="削除"
-            aria-label="削除"
-            onClick={handleDelete}
-            disabled={deleting}
-          >
-            <TrashIcon />
-          </button>
+          <RowMenu label={`${cardTitle(item) || KARTE_KIND_LABELS[item.kind]} の操作`}>
+            <button type="button" className="row-menu__item" onClick={() => setDetailOpen(true)}>
+              詳細表示
+            </button>
+            <button type="button" className="row-menu__item" onClick={() => setJsonOpen(true)}>
+              FHIR JSON 表示
+            </button>
+            <button type="button" className="row-menu__item" onClick={() => onEdit(item)}>
+              編集
+            </button>
+            <button
+              type="button"
+              className="row-menu__item row-menu__item--danger"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              削除
+            </button>
+          </RowMenu>
         </span>
       </header>
 
@@ -246,41 +251,21 @@ function KarteCard({
       <CollapsibleBody>
         <KarteCardBody item={item} />
       </CollapsibleBody>
+
+      {detailOpen && (
+        <KarteCardDetailModal
+          item={item}
+          problemsById={problemsById}
+          onClose={() => setDetailOpen(false)}
+        />
+      )}
+      {jsonOpen && <KarteCardJsonModal item={item} onClose={() => setJsonOpen(false)} />}
     </article>
   );
 }
 
-// カード操作は 1 行に並ぶ数が多いので、アイコンだけにして幅を詰める。
-// 意味は title / aria-label で補う。
-function PencilIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M11.3 2.2a1.2 1.2 0 0 1 1.7 0l.8.8a1.2 1.2 0 0 1 0 1.7L5.9 12.6l-3 .5.5-3 7.9-7.9ZM10.4 3.1l2.5 2.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
+// DO・PDF は 1 行に並ぶので、アイコンに短いラベルを添えて幅を詰める。
+// それ以外の操作(詳細表示・FHIR JSON 表示・編集・削除)はケバブメニューに畳む。
 
 // DO は「前回と同じ処方を起こす」操作なので、複写(2 枚重ね)のアイコンで表す。
 function CopyIcon() {

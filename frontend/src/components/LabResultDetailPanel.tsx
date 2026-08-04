@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLabResultDetail } from "../api/queries";
 import {
   interpretationClass,
@@ -8,15 +7,12 @@ import {
   summarizeDiagnosticReport,
 } from "../fhir/labResultHelpers";
 import { ErrorBanner } from "./ErrorBanner";
-import { JsonBlock } from "./JsonBlock";
+import { FhirJsonView } from "./FhirJsonView";
 
 // 検査結果の内容表示。詳細ページとカルテ画面の検査結果タブの双方から使う。
 // DO・編集・削除の操作ボタンと前後移動は、遷移先が異なるので呼び出し側が持つ。
 
-type JsonView = "bundle" | "resource";
-
 export function LabResultDetailPanel({ reportId }: { reportId: string }) {
-  const [jsonView, setJsonView] = useState<JsonView>("bundle");
   const detail = useLabResultDetail(reportId);
 
   const { report, observations, specimens } = detail.data
@@ -78,42 +74,7 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
 
             <details className="prescription-detail__raw">
               <summary>FHIR JSON を表示</summary>
-              <div className="prescription-detail__raw-toggle">
-                <label>
-                  <input
-                    type="radio"
-                    name="json-view"
-                    checked={jsonView === "bundle"}
-                    onChange={() => setJsonView("bundle")}
-                  />
-                  Bundle
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="json-view"
-                    checked={jsonView === "resource"}
-                    onChange={() => setJsonView("resource")}
-                  />
-                  リソース単位
-                </label>
-              </div>
-
-              {jsonView === "bundle" ? (
-                <JsonBlock value={detail.data?.data} />
-              ) : (
-                <div className="prescription-detail__raw-resources">
-                  {detail.data?.data.entry?.map((entry, index) => (
-                    <div className="prescription-detail__raw-resource" key={entry.resource?.id ?? index}>
-                      <h3>
-                        {entry.resource?.resourceType}
-                        {entry.resource?.id ? ` / ${entry.resource.id}` : ""}
-                      </h3>
-                      <JsonBlock value={entry.resource} />
-                    </div>
-                  ))}
-                </div>
-              )}
+              <FhirJsonView resource={detail.data?.data} />
             </details>
           </div>
         )

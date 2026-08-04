@@ -399,7 +399,10 @@ button:disabled {
   display: inline-flex;
 }
 
+/* 三点リーダーはボタンの中央に置く。グローバルの button {} は inline-flex だが
+   justify-content が既定(flex-start)のままなので、明示しないと左に寄る。 */
 .row-menu__trigger {
+  justify-content: center;
   padding: 4px 10px;
   font-size: 16px;
   line-height: 1;
@@ -428,6 +431,12 @@ button:disabled {
   border-radius: 6px;
   background: var(--bg);
   box-shadow: var(--shadow);
+}
+
+/* 下に開くと見切れる場合(カルテのタイムラインなどスクロール領域の中)は上に開く。 */
+.row-menu__items--up {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 /* グローバルの button {} と .patient-table__actions button {} を上書きするため
@@ -3723,6 +3732,15 @@ body.karte-wide #root {
   width: 24px;
   height: 22px;
   color: var(--text);
+}
+
+/* ケバブは DO・PDF のアイコンボタンと大きさを揃える
+   (.karte-card__actions button の padding / font-size を打ち消す)。 */
+.karte-card__actions .row-menu__trigger {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  font-size: 15px;
 }
 
 /* DO・PDF はアイコンだけでは意味が伝わりにくいので短いラベルを添える。

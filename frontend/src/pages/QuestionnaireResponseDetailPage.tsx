@@ -3,14 +3,11 @@ import { Link, useParams } from "react-router-dom";
 import { useQuestionnaireResponseWithQuestionnaire } from "../api/queries";
 import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { JsonBlock } from "../components/JsonBlock";
+import { FhirJsonView } from "../components/FhirJsonView";
 import { PatientHeader } from "../components/PatientHeader";
 import { PlainTextModal } from "../components/PlainTextModal";
-import { QuestionnaireResponseForm } from "../components/QuestionnaireResponseForm";
-import {
-  questionnaireResponsePlainText,
-  summarizeQuestionnaireResponse,
-} from "../fhir/questionnaireResponseHelpers";
+import { QuestionnaireResponseDetailPanel } from "../components/QuestionnaireResponseDetailPanel";
+import { questionnaireResponsePlainText } from "../fhir/questionnaireResponseHelpers";
 
 export function QuestionnaireResponseDetailPage() {
   const { patientId, qrId } = useParams<{ patientId: string; qrId: string }>();
@@ -19,8 +16,6 @@ export function QuestionnaireResponseDetailPage() {
   // 回答と元テンプレートを _include で 1 リクエスト取得する。
   const { response, questionnaire, isLoading, error } =
     useQuestionnaireResponseWithQuestionnaire(qrId);
-
-  const summary = response ? summarizeQuestionnaireResponse(response) : undefined;
 
   // 帳票レイアウトが登録されているテンプレートだけ PDF 出力できる。
   const { data: layoutStatus } = useReportLayoutStatus(response?.questionnaire);
@@ -78,44 +73,19 @@ export function QuestionnaireResponseDetailPage() {
         <p>読み込み中...</p>
       ) : !response && !error ? (
         <p className="patient-table__empty">この回答は見つかりません(削除された可能性があります)。</p>
-      ) : response && !questionnaire ? (
-        <p className="patient-table__empty">
-          元テンプレート({response.questionnaire})が見つからないため、内容を表示できません。
-        </p>
       ) : (
-        response &&
-        questionnaire && (
+        response && (
           <>
-            <QuestionnaireResponseForm
-              questionnaire={questionnaire}
-              initialResponse={response}
-              readOnly
-            >
-              <fieldset className="qp-group">
-                <legend>登録情報</legend>
-                <dl className="qr-meta">
-                  <div className="qr-meta__item">
-                    <dt>ステータス</dt>
-                    <dd>{summary?.statusLabel || "-"}</dd>
-                  </div>
-                  <div className="qr-meta__item">
-                    <dt>記入日時</dt>
-                    <dd>{summary?.authored || "-"}</dd>
-                  </div>
-                  <div className="qr-meta__item">
-                    <dt>記入者</dt>
-                    <dd>{summary?.authorName || "-"}</dd>
-                  </div>
-                </dl>
-              </fieldset>
-            </QuestionnaireResponseForm>
+            <QuestionnaireResponseDetailPanel response={response} questionnaire={questionnaire} />
 
             <details className="prescription-detail__raw">
               <summary>FHIR JSON を表示</summary>
-              <JsonBlock value={response} />
+              <FhirJsonView resource={response} />
             </details>
 
-            {plainTextOpen && (
+            {/* 平文は元テンプレートの項目名と突き合わせて組み立てるため、
+                テンプレートが引けたときだけ開ける(ボタン側も無効化している)。 */}
+            {plainTextOpen && questionnaire && (
               <PlainTextModal
                 title="平文表示"
                 text={questionnaireResponsePlainText(questionnaire, response)}
