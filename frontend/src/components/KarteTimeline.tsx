@@ -27,6 +27,7 @@ import {
 } from "../fhir/questionnaireResponseHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { KarteCardDetailModal, KarteCardJsonModal } from "./KarteCardModals";
+import { PlainTextModal } from "./PlainTextModal";
 import { RichTextView } from "./RichTextView";
 import { RowMenu } from "./RowMenu";
 
@@ -147,8 +148,9 @@ function KarteCard({
   const deleteNote = useDeleteClinicalNote();
   const deletePrescription = useDeletePrescription();
   const deleteResponse = useDeleteQuestionnaireResponse();
-  // 詳細表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
+  // 詳細表示・平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
   const [detailOpen, setDetailOpen] = useState(false);
+  const [plainTextOpen, setPlainTextOpen] = useState(false);
   const [jsonOpen, setJsonOpen] = useState(false);
 
   const deleting =
@@ -228,6 +230,19 @@ function KarteCard({
             <button type="button" className="row-menu__item" onClick={() => setDetailOpen(true)}>
               詳細表示
             </button>
+            {/* 平文は元テンプレートの項目名と突き合わせて組み立てるので、
+                テンプレートが引けたときだけ開ける。 */}
+            {item.kind === "qr" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={!item.questionnaire}
+                title={item.questionnaire ? undefined : "元テンプレートが見つかりません"}
+                onClick={() => setPlainTextOpen(true)}
+              >
+                平文表示
+              </button>
+            )}
             <button type="button" className="row-menu__item" onClick={() => setJsonOpen(true)}>
               FHIR JSON 表示
             </button>
@@ -257,6 +272,13 @@ function KarteCard({
           item={item}
           problemsById={problemsById}
           onClose={() => setDetailOpen(false)}
+        />
+      )}
+      {plainTextOpen && item.kind === "qr" && item.questionnaire && (
+        <PlainTextModal
+          title="平文表示"
+          text={questionnaireResponsePlainText(item.questionnaire, item.response)}
+          onClose={() => setPlainTextOpen(false)}
         />
       )}
       {jsonOpen && <KarteCardJsonModal item={item} onClose={() => setJsonOpen(false)} />}
