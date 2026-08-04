@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FhirError } from "../api/fhirClient";
 import {
   useCondition,
@@ -20,12 +20,17 @@ import { ErrorBanner } from "./ErrorBanner";
 import { Pagination } from "./Pagination";
 
 // カルテ画面の「病名」タブ。一覧・表示・登録・編集・削除を左ペイン内で完結させる。
+//
+// 一覧と詳細は URL(view パラメータ)で表す。登録・編集は入力途中の内容を URL では
+// 復元できないので、このコンポーネント内の状態に留める。
 
 type Mode =
   | { kind: "list" }
   | { kind: "detail"; conditionId: string }
   | { kind: "create" }
   | { kind: "edit"; conditionId: string };
+
+type FormMode = Extract<Mode, { kind: "create" } | { kind: "edit" }> | null;
 
 const MODE_TITLES: Record<Mode["kind"], string> = {
   list: "病名",
@@ -34,9 +39,21 @@ const MODE_TITLES: Record<Mode["kind"], string> = {
   edit: "病名編集",
 };
 
-export function KarteConditionTab({ patientId }: { patientId: string }) {
-  const [mode, setMode] = useState<Mode>({ kind: "list" });
+interface KarteConditionTabProps {
+  patientId: string;
+  /** URL から渡される表示対象の病名 ID。空なら一覧。 */
+  view: string;
+  onViewChange: (view: string | null) => void;
+}
+
+export function KarteConditionTab({ patientId, view, onViewChange }: KarteConditionTabProps) {
+  const [form, setForm] = useState<FormMode>(null);
   const [offset, setOffset] = useState(0);
+
+  // 戻る・進むで表示対象が変わったら、開いていたフォームは畳む。
+  useEffect(() => setForm(null), [view]);
+
+  const mode: Mode = form ?? (view ? { kind: "detail", conditionId: view } : { kind: "list" });
 
   const { bundle, total, count, hasPrevious, hasNext, isLoading, error } = useConditionSearch(
     patientId,
@@ -45,7 +62,10 @@ export function KarteConditionTab({ patientId }: { patientId: string }) {
   const conditions =
     bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Condition => Boolean(r)) ?? [];
 
-  const backToList = () => setMode({ kind: "list" });
+  function backToList() {
+    setForm(null);
+    onViewChange(null);
+  }
 
   if (mode.kind !== "list") {
     return (
@@ -56,7 +76,7 @@ export function KarteConditionTab({ patientId }: { patientId: string }) {
             {mode.kind === "detail" && (
               <button
                 type="button"
-                onClick={() => setMode({ kind: "edit", conditionId: mode.conditionId })}
+                onClick={() => setForm({ kind: "edit", conditionId: mode.conditionId })}
               >
                 編集
               </button>
@@ -85,7 +105,7 @@ export function KarteConditionTab({ patientId }: { patientId: string }) {
     <div className="karte-tabpanel">
       <div className="karte-tabpanel__header">
         <h3>{MODE_TITLES.list}</h3>
-        <button type="button" onClick={() => setMode({ kind: "create" })}>
+        <button type="button" onClick={() => setForm({ kind: "create" })}>
           新規登録
         </button>
       </div>
@@ -99,8 +119,8 @@ export function KarteConditionTab({ patientId }: { patientId: string }) {
           <ConditionTable
             conditions={conditions}
             patientId={patientId}
-            onView={(conditionId) => setMode({ kind: "detail", conditionId })}
-            onEdit={(conditionId) => setMode({ kind: "edit", conditionId })}
+            onView={(conditionId) => onViewChange(conditionId)}
+            onEdit={(conditionId) => setForm({ kind: "edit", conditionId })}
           />
           <Pagination
             offset={offset}

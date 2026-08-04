@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FhirError } from "../api/fhirClient";
 import { useAllergy, useAllergySearch, useCreateAllergy, useUpdateAllergy } from "../api/queries";
 import { buildAllergy, parseAllergyForm, type AllergyFormValues } from "../fhir/allergyHelpers";
@@ -10,12 +10,17 @@ import { ErrorBanner } from "./ErrorBanner";
 import { Pagination } from "./Pagination";
 
 // カルテ画面の「アレルギー」タブ。一覧・表示・登録・編集・削除を左ペイン内で完結させる。
+//
+// 一覧と詳細は URL(view パラメータ)で表す。登録・編集は入力途中の内容を URL では
+// 復元できないので、このコンポーネント内の状態に留める。
 
 type Mode =
   | { kind: "list" }
   | { kind: "detail"; allergyId: string }
   | { kind: "create" }
   | { kind: "edit"; allergyId: string };
+
+type FormMode = Extract<Mode, { kind: "create" } | { kind: "edit" }> | null;
 
 const MODE_TITLES: Record<Mode["kind"], string> = {
   list: "アレルギー",
@@ -24,9 +29,21 @@ const MODE_TITLES: Record<Mode["kind"], string> = {
   edit: "アレルギー編集",
 };
 
-export function KarteAllergyTab({ patientId }: { patientId: string }) {
-  const [mode, setMode] = useState<Mode>({ kind: "list" });
+interface KarteAllergyTabProps {
+  patientId: string;
+  /** URL から渡される表示対象のアレルギー ID。空なら一覧。 */
+  view: string;
+  onViewChange: (view: string | null) => void;
+}
+
+export function KarteAllergyTab({ patientId, view, onViewChange }: KarteAllergyTabProps) {
+  const [form, setForm] = useState<FormMode>(null);
   const [offset, setOffset] = useState(0);
+
+  // 戻る・進むで表示対象が変わったら、開いていたフォームは畳む。
+  useEffect(() => setForm(null), [view]);
+
+  const mode: Mode = form ?? (view ? { kind: "detail", allergyId: view } : { kind: "list" });
 
   const { bundle, total, count, hasPrevious, hasNext, isLoading, error } = useAllergySearch(
     patientId,
@@ -36,7 +53,10 @@ export function KarteAllergyTab({ patientId }: { patientId: string }) {
     bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.AllergyIntolerance => Boolean(r)) ??
     [];
 
-  const backToList = () => setMode({ kind: "list" });
+  function backToList() {
+    setForm(null);
+    onViewChange(null);
+  }
 
   if (mode.kind !== "list") {
     return (
@@ -47,7 +67,7 @@ export function KarteAllergyTab({ patientId }: { patientId: string }) {
             {mode.kind === "detail" && (
               <button
                 type="button"
-                onClick={() => setMode({ kind: "edit", allergyId: mode.allergyId })}
+                onClick={() => setForm({ kind: "edit", allergyId: mode.allergyId })}
               >
                 編集
               </button>
@@ -72,7 +92,7 @@ export function KarteAllergyTab({ patientId }: { patientId: string }) {
     <div className="karte-tabpanel">
       <div className="karte-tabpanel__header">
         <h3>{MODE_TITLES.list}</h3>
-        <button type="button" onClick={() => setMode({ kind: "create" })}>
+        <button type="button" onClick={() => setForm({ kind: "create" })}>
           新規登録
         </button>
       </div>
@@ -86,8 +106,8 @@ export function KarteAllergyTab({ patientId }: { patientId: string }) {
           <AllergyTable
             allergies={allergies}
             patientId={patientId}
-            onView={(allergyId) => setMode({ kind: "detail", allergyId })}
-            onEdit={(allergyId) => setMode({ kind: "edit", allergyId })}
+            onView={(allergyId) => onViewChange(allergyId)}
+            onEdit={(allergyId) => setForm({ kind: "edit", allergyId })}
           />
           <Pagination
             offset={offset}

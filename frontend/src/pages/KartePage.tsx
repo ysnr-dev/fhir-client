@@ -7,7 +7,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   useKarteClinicalNotesInfinite,
   useKarteConditions,
@@ -20,12 +20,25 @@ import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteDayList } from "../components/KarteDayList";
 import { KarteLabResultTab } from "../components/KarteLabResultTab";
 import { KarteProblemList } from "../components/KarteProblemList";
+import { KarteDetailModal } from "../components/KarteCardModals";
 import { KarteRightPane, type KartePaneState } from "../components/KarteRightPane";
 import { KarteSplitter } from "../components/KarteSplitter";
 import { KARTE_TARGET_ATTR, KarteTimeline } from "../components/KarteTimeline";
 import { PatientHeader } from "../components/PatientHeader";
 import { problemLabel, splitConditions } from "../fhir/conditionHelpers";
 import { buildKarteTimeline, type KarteTimelineItem } from "../fhir/karteTimeline";
+import {
+  KARTE_DETAIL_PARAM,
+  KARTE_OTHER_TABS,
+  KARTE_TAB_PARAM,
+  KARTE_TABS,
+  KARTE_VIEW_PARAM,
+  formatKarteDetail,
+  parseKarteDetail,
+  parseKarteTab,
+  type KarteOtherTabKey,
+  type KarteTabKey,
+} from "../karteUrl";
 import {
   clampLeftWidthRatio,
   clampTopRatio,
@@ -45,28 +58,79 @@ import {
 } from "../karteLayout";
 
 // 患者 1 人のカルテ画面。左ペインで登録済みの情報を参照し、右ペインで登録・編集する。
-
-const TABS = [
-  { key: "karte", label: "カルテ" },
-  { key: "condition", label: "病名" },
-  { key: "allergy", label: "アレルギー" },
-  { key: "lab", label: "検査結果" },
-] as const;
-
-type TabKey = (typeof TABS)[number]["key"];
-// 上下分割モードで下ペインに出すタブ(カルテは常に上ペインなので除く)。
-type OtherTabKey = Exclude<TabKey, "karte">;
-
-const OTHER_TABS = TABS.filter((item) => item.key !== "karte") as ReadonlyArray<{
-  key: OtherTabKey;
-  label: string;
-}>;
+// 「どのタブで何を開いているか」は URL に持たせる(karteUrl.ts 参照)。
 
 export function KartePage() {
   const { patientId } = useParams<{ patientId: string }>();
-  const [tab, setTab] = useState<TabKey>("karte");
-  // 分割モードの下ペインは別の選択状態を持たせ、モードを往復しても選択が入れ替わらないようにする。
-  const [otherTab, setOtherTab] = useState<OtherTabKey>("condition");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const tab = parseKarteTab(searchParams.get(KARTE_TAB_PARAM));
+  const view = searchParams.get(KARTE_VIEW_PARAM) ?? "";
+  const detailTarget = parseKarteDetail(searchParams.get(KARTE_DETAIL_PARAM));
+
+  // 分割モードでカルテタブが選ばれているときの下ペインの既定。URL のタブが
+  // カルテ以外ならそれをそのまま使うので、モードを往復しても選択は保たれる。
+  const [lastOtherTab, setLastOtherTab] = useState<KarteOtherTabKey>("condition");
+  const otherTab: KarteOtherTabKey = tab === "karte" ? lastOtherTab : tab;
+
+  // 何かを開く操作だけ履歴に積む(戻るで一覧に戻れる)。タブ切替や閉じる操作で
+  // 積むと、戻るを何度も押さないと画面を離れられなくなる。
+  const updateParams = useCallback(
+    (mutate: (params: URLSearchParams) => void, push = false) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          mutate(next);
+          return next;
+        },
+        { replace: !push },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const selectTab = useCallback(
+    (next: KarteTabKey) => {
+      // タブが変われば「開いているもの」も意味を失うので一緒に落とす。
+      updateParams((params) => {
+        params.set(KARTE_TAB_PARAM, next);
+        params.delete(KARTE_VIEW_PARAM);
+      });
+    },
+    [updateParams],
+  );
+
+  const selectOtherTab = useCallback(
+    (next: KarteOtherTabKey) => {
+      setLastOtherTab(next);
+      selectTab(next);
+    },
+    [selectTab],
+  );
+
+  const selectView = useCallback(
+    (next: string | null) => {
+      updateParams((params) => {
+        if (next) params.set(KARTE_VIEW_PARAM, next);
+        else params.delete(KARTE_VIEW_PARAM);
+      }, Boolean(next));
+    },
+    [updateParams],
+  );
+
+  const openDetail = useCallback(
+    (item: KarteTimelineItem) => {
+      updateParams((params) => {
+        params.set(KARTE_DETAIL_PARAM, formatKarteDetail(item));
+      }, true);
+    },
+    [updateParams],
+  );
+
+  const closeDetail = useCallback(() => {
+    updateParams((params) => params.delete(KARTE_DETAIL_PARAM));
+  }, [updateParams]);
+
   const [pane, setPane] = useState<KartePaneState>({ kind: "empty" });
   const [mode, setMode] = useState<KarteLeftPaneMode>(readLeftPaneMode);
   const [topRatio, setTopRatio] = useState(readTopRatio);
@@ -165,7 +229,7 @@ export function KartePage() {
     else setPane({ kind: "qr-edit", qrId: item.id });
   }
 
-  // 右ペインで開いている情報が消えたら編集 UI も閉じる。
+  // 開いている情報が消えたら、それを見ている UI も閉じる。
   function handleDeleted(item: KarteTimelineItem) {
     const openId =
       pane.kind === "note-edit"
@@ -176,6 +240,7 @@ export function KartePage() {
             ? pane.qrId
             : undefined;
     if (openId === item.id) setPane({ kind: "empty" });
+    if (detailTarget?.kind === item.kind && detailTarget.id === item.id) closeDetail();
   }
 
   function toggleDayList() {
@@ -244,6 +309,7 @@ export function KartePage() {
           onLoadMore={loadMore}
           onEdit={handleEdit}
           onDo={(srId) => setPane({ kind: "prescription-create", sourceSrId: srId })}
+          onOpenDetail={openDetail}
           onDeleted={handleDeleted}
           containerRef={timelineRef}
           problemsById={problemsById}
@@ -254,11 +320,13 @@ export function KartePage() {
     </div>
   );
 
-  function renderTabPanel(key: OtherTabKey) {
+  // view は選択中のタブに属する値なので、そのタブを描くときだけ渡す。
+  function renderTabPanel(key: KarteOtherTabKey) {
     if (!patientId) return null;
-    if (key === "condition") return <KarteConditionTab patientId={patientId} />;
-    if (key === "allergy") return <KarteAllergyTab patientId={patientId} />;
-    return <KarteLabResultTab patientId={patientId} />;
+    const props = { patientId, view: tab === key ? view : "", onViewChange: selectView };
+    if (key === "condition") return <KarteConditionTab {...props} />;
+    if (key === "allergy") return <KarteAllergyTab {...props} />;
+    return <KarteLabResultTab {...props} />;
   }
 
   const modeToggle = <KarteModeToggleButton mode={mode} onToggle={toggleMode} />;
@@ -283,7 +351,7 @@ export function KartePage() {
         <section className={`karte-left${mode === "split" ? " karte-left--split" : ""}`}>
           {mode === "tabs" ? (
             <>
-              <KarteTabs tabs={TABS} active={tab} onSelect={setTab} trailing={modeToggle} />
+              <KarteTabs tabs={KARTE_TABS} active={tab} onSelect={selectTab} trailing={modeToggle} />
               {tab === "karte" ? karteBody : renderTabPanel(tab)}
             </>
           ) : (
@@ -302,9 +370,9 @@ export function KartePage() {
               />
               <div className="karte-left__split-bottom">
                 <KarteTabs
-                  tabs={OTHER_TABS}
+                  tabs={KARTE_OTHER_TABS}
                   active={otherTab}
-                  onSelect={setOtherTab}
+                  onSelect={selectOtherTab}
                   trailing={modeToggle}
                 />
                 {renderTabPanel(otherTab)}
@@ -329,6 +397,17 @@ export function KartePage() {
           onStateChange={setPane}
         />
       </div>
+
+      {/* 詳細モーダルはタイムラインの読み込み位置に依存しないよう、対象を ID で
+          受け取って自分で取得する(古い記録の URL を直接開いても表示できる)。 */}
+      {detailTarget && (
+        <KarteDetailModal
+          patientId={patientId}
+          target={detailTarget}
+          problemsById={problemsById}
+          onClose={closeDetail}
+        />
+      )}
     </div>
   );
 }

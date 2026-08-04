@@ -29,7 +29,7 @@ import {
   schemaImageRefs,
 } from "../fhir/questionnaireResponseHelpers";
 import { ErrorBanner } from "./ErrorBanner";
-import { KarteCardDetailModal, KarteCardJsonModal } from "./KarteCardModals";
+import { KarteCardJsonModal } from "./KarteCardModals";
 import { PlainTextModal } from "./PlainTextModal";
 import { RichTextView } from "./RichTextView";
 import { RowMenu } from "./RowMenu";
@@ -44,6 +44,8 @@ interface KarteTimelineProps {
   onLoadMore: () => void;
   onEdit: (item: KarteTimelineItem) => void;
   onDo: (serviceRequestId: string) => void;
+  /** 詳細表示。対象は URL に載せるので、モーダルは親(カルテ画面)が描く。 */
+  onOpenDetail: (item: KarteTimelineItem) => void;
   /** 削除された項目。右ペインで開いていたら閉じるために親へ通知する。 */
   onDeleted: (item: KarteTimelineItem) => void;
   /** スクロールコンテナ。診療日パネルからのスクロール指示に使う。 */
@@ -66,6 +68,7 @@ export function KarteTimeline({
   onLoadMore,
   onEdit,
   onDo,
+  onOpenDetail,
   onDeleted,
   containerRef,
   problemsById,
@@ -117,6 +120,7 @@ export function KarteTimeline({
                 item={item}
                 onEdit={onEdit}
                 onDo={onDo}
+                onOpenDetail={onOpenDetail}
                 onDeleted={onDeleted}
                 problemsById={problemsById}
                 selectedProblemId={selectedProblemId}
@@ -137,6 +141,7 @@ function KarteCard({
   item,
   onEdit,
   onDo,
+  onOpenDetail,
   onDeleted,
   problemsById,
   selectedProblemId,
@@ -144,6 +149,7 @@ function KarteCard({
   item: KarteTimelineItem;
   onEdit: (item: KarteTimelineItem) => void;
   onDo: (serviceRequestId: string) => void;
+  onOpenDetail: (item: KarteTimelineItem) => void;
   onDeleted: (item: KarteTimelineItem) => void;
   problemsById: Map<string, fhir4.Condition>;
   selectedProblemId: string | null;
@@ -151,8 +157,8 @@ function KarteCard({
   const deleteNote = useDeleteClinicalNote();
   const deletePrescription = useDeletePrescription();
   const deleteResponse = useDeleteQuestionnaireResponse();
-  // 詳細表示・平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
-  const [detailOpen, setDetailOpen] = useState(false);
+  // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
+  // 詳細表示は URL に載せるので親に任せる。
   const [plainTextOpen, setPlainTextOpen] = useState(false);
   const [jsonOpen, setJsonOpen] = useState(false);
 
@@ -230,7 +236,7 @@ function KarteCard({
               </button>
             ))}
           <RowMenu label={`${cardTitle(item) || KARTE_KIND_LABELS[item.kind]} の操作`}>
-            <button type="button" className="row-menu__item" onClick={() => setDetailOpen(true)}>
+            <button type="button" className="row-menu__item" onClick={() => onOpenDetail(item)}>
               詳細表示
             </button>
             {/* 平文は元テンプレートの項目名と突き合わせて組み立てるので、
@@ -270,13 +276,6 @@ function KarteCard({
         <KarteCardBody item={item} />
       </CollapsibleBody>
 
-      {detailOpen && (
-        <KarteCardDetailModal
-          item={item}
-          problemsById={problemsById}
-          onClose={() => setDetailOpen(false)}
-        />
-      )}
       {plainTextOpen && item.kind === "qr" && item.questionnaire && (
         <PlainTextModal
           title="平文表示"
