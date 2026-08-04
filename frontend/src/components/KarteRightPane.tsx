@@ -1,3 +1,4 @@
+import type { ClinicalNoteProblem } from "../fhir/clinicalNoteHelpers";
 import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePanels";
 import { PrescriptionCreatePanel, PrescriptionEditPanel } from "./PrescriptionPanels";
 import {
@@ -9,7 +10,8 @@ import {
 
 export type KartePaneState =
   | { kind: "empty" }
-  | { kind: "note-create" }
+  // problem: 登録ボタンを押した時点で選択されていたプロブレム(対象の初期値)。
+  | { kind: "note-create"; problem?: ClinicalNoteProblem }
   | { kind: "note-edit"; noteId: string }
   | { kind: "prescription-create"; sourceSrId?: string }
   | { kind: "prescription-edit"; srId: string }
@@ -38,6 +40,10 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.qrId}`;
     case "prescription-create":
       return `${state.kind}:${state.sourceSrId ?? ""}`;
+    // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
+    // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
+    case "note-create":
+      return `${state.kind}:${state.problem?.conditionId ?? ""}`;
     default:
       return state.kind;
   }
@@ -46,10 +52,17 @@ function paneKey(state: KartePaneState): string {
 interface KarteRightPaneProps {
   patientId: string;
   state: KartePaneState;
+  // プロブレムリストで選択中のプロブレム。診療記録の新規登録の初期値にする。
+  selectedProblem?: ClinicalNoteProblem;
   onStateChange: (state: KartePaneState) => void;
 }
 
-export function KarteRightPane({ patientId, state, onStateChange }: KarteRightPaneProps) {
+export function KarteRightPane({
+  patientId,
+  state,
+  selectedProblem,
+  onStateChange,
+}: KarteRightPaneProps) {
   const close = () => onStateChange({ kind: "empty" });
 
   return (
@@ -77,7 +90,10 @@ export function KarteRightPane({ patientId, state, onStateChange }: KarteRightPa
 
       {/* 新規登録の入口。デザイン上は右端に縦並び。 */}
       <div className="karte-right__actions">
-        <button type="button" onClick={() => onStateChange({ kind: "note-create" })}>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "note-create", problem: selectedProblem })}
+        >
           診療記録
         </button>
         <button type="button" onClick={() => onStateChange({ kind: "qr-create" })}>
@@ -102,7 +118,13 @@ function PaneContent({
 }) {
   switch (state.kind) {
     case "note-create":
-      return <ClinicalNoteCreatePanel patientId={patientId} onSaved={onSaved} />;
+      return (
+        <ClinicalNoteCreatePanel
+          patientId={patientId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
     case "note-edit":
       return (
         <ClinicalNoteEditPanel patientId={patientId} noteId={state.noteId} onSaved={onSaved} />

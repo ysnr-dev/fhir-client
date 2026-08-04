@@ -54,8 +54,20 @@ export function problemNumberOf(condition: fhir4.Condition): number | undefined 
   return typeof value === "number" ? value : undefined;
 }
 
+// 番号順の比較。番号の無いプロブレム(区分を付ける前の既存データ)は末尾へ回し、
+// 番号なし同士は元の順序(取得順)を保つ。
+function compareProblemNumber(a: fhir4.Condition, b: fhir4.Condition): number {
+  const left = problemNumberOf(a);
+  const right = problemNumberOf(b);
+  if (left === undefined) return right === undefined ? 0 : 1;
+  if (right === undefined) return -1;
+  return left - right;
+}
+
 // プロブレムと保険病名の振り分け。上流 fhir-server は未知の検索パラメータを黙って
 // 無視して全件返すことがあるため、category での絞り込みはサーバーに任せずここで行う。
+// プロブレムは常に番号順にそろえる(取得は -onset-date 順なので、そのまま並べると
+// #3 #1 #2 のようになり、番号を永続化している意味が無くなるため)。
 export function splitConditions(conditions: fhir4.Condition[]): {
   problems: fhir4.Condition[];
   billings: fhir4.Condition[];
@@ -65,6 +77,7 @@ export function splitConditions(conditions: fhir4.Condition[]): {
   for (const condition of conditions) {
     (conditionCategoryOf(condition) === "problem" ? problems : billings).push(condition);
   }
+  problems.sort(compareProblemNumber);
   return { problems, billings };
 }
 

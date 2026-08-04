@@ -130,14 +130,18 @@ export function defaultSectionsForMode(mode: ClinicalNoteMode): ClinicalNoteSect
     : SOAP_SECTION_CODES.map(newSectionDraft);
 }
 
-export function emptyClinicalNoteForm(): ClinicalNoteFormValues {
+// problem を渡すと対象プロブレムを選択済みで開く(プロブレムリストで選んでいる
+// プロブレムをそのまま新規記録の対象にするため)。
+export function emptyClinicalNoteForm(
+  problem: ClinicalNoteProblem | null = null,
+): ClinicalNoteFormValues {
   return {
     mode: "soap",
     // タイトルは必須(Composition.title 1..1)。毎回の入力を省けるよう既定値を入れておく。
     title: "診療記録",
     status: "final",
     date: toDateTimeInput(new Date()),
-    problem: null,
+    problem,
     sections: defaultSectionsForMode("soap"),
   };
 }

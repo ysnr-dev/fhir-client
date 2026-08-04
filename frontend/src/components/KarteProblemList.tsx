@@ -10,6 +10,13 @@ interface KarteProblemListProps {
   onSelect: (conditionId: string | null) => void;
   visible: boolean;
   onToggleVisible: () => void;
+  resolvedVisible: boolean;
+  onToggleResolved: () => void;
+}
+
+// 継続(active)以外は解決済み・中止として扱う。
+function isActiveProblem(problem: fhir4.Condition): boolean {
+  return problem.clinicalStatus?.coding?.[0]?.code === "active";
 }
 
 export function KarteProblemList({
@@ -18,6 +25,8 @@ export function KarteProblemList({
   onSelect,
   visible,
   onToggleVisible,
+  resolvedVisible,
+  onToggleResolved,
 }: KarteProblemListProps) {
   const toggleLabel = visible ? "プロブレムリストを隠す" : "プロブレムリストを表示する";
   const toggleButton = (
@@ -44,6 +53,15 @@ export function KarteProblemList({
     );
   }
 
+  const resolvedCount = problems.filter((problem) => !isActiveProblem(problem)).length;
+  // 解決済みを隠していても、選択中のものはタイムラインの減光の理由が分かるよう残す。
+  const shownProblems = problems.filter(
+    (problem) => isActiveProblem(problem) || resolvedVisible || problem.id === selectedId,
+  );
+  const resolvedLabel = resolvedVisible
+    ? "解決済みを隠す"
+    : `解決済み ${resolvedCount} 件を表示`;
+
   return (
     <div className="karte-problems">
       {toggleButton}
@@ -52,10 +70,9 @@ export function KarteProblemList({
         <p className="karte-problems__empty">未登録</p>
       ) : (
         <ul className="karte-problems__list">
-          {problems.map((problem) => {
+          {shownProblems.map((problem) => {
             const summary = summarizeCondition(problem);
-            // 継続(active)以外は解決済み・中止として控えめに出す。
-            const isActive = problem.clinicalStatus?.coding?.[0]?.code === "active";
+            const isActive = isActiveProblem(problem);
             const isSelected = selectedId === summary.id;
             return (
               <li key={summary.id}>
@@ -84,6 +101,19 @@ export function KarteProblemList({
               </li>
             );
           })}
+          {resolvedCount > 0 && (
+            <li>
+              <button
+                type="button"
+                className="karte-problems__resolved-toggle"
+                aria-pressed={resolvedVisible}
+                title={resolvedLabel}
+                onClick={onToggleResolved}
+              >
+                {resolvedLabel}
+              </button>
+            </li>
+          )}
         </ul>
       )}
     </div>

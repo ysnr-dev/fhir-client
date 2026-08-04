@@ -50,7 +50,8 @@ export function ClinicalNoteForm({
   // テンプレート記入モーダルを開いているセクションの uid。
   const [templateTarget, setTemplateTarget] = useState<string | null>(null);
 
-  // 対象プロブレムの候補。POMR の「#1 糖尿病についての A/P」をセクション単位で表現する。
+  // 対象プロブレムの候補。POMR の「#1 糖尿病についての S/O/A/P」を記録 1 件で表す
+  // (複数のプロブレムを扱うときは記録を分けて登録する)。
   const { conditions } = useKarteConditions(patientId);
   const problemOptions = splitConditions(conditions).problems.map((condition) => ({
     conditionId: condition.id ?? "",

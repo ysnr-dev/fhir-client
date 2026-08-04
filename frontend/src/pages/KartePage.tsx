@@ -24,7 +24,7 @@ import { KarteRightPane, type KartePaneState } from "../components/KarteRightPan
 import { KarteSplitter } from "../components/KarteSplitter";
 import { KARTE_TARGET_ATTR, KarteTimeline } from "../components/KarteTimeline";
 import { PatientHeader } from "../components/PatientHeader";
-import { splitConditions } from "../fhir/conditionHelpers";
+import { problemLabel, splitConditions } from "../fhir/conditionHelpers";
 import { buildKarteTimeline, type KarteTimelineItem } from "../fhir/karteTimeline";
 import {
   clampLeftWidthRatio,
@@ -33,11 +33,13 @@ import {
   readLeftPaneMode,
   readLeftWidthRatio,
   readProblemListVisible,
+  readResolvedProblemsVisible,
   readTopRatio,
   storeDayListVisible,
   storeLeftPaneMode,
   storeLeftWidthRatio,
   storeProblemListVisible,
+  storeResolvedProblemsVisible,
   storeTopRatio,
   type KarteLeftPaneMode,
 } from "../karteLayout";
@@ -71,6 +73,9 @@ export function KartePage() {
   const [leftWidthRatio, setLeftWidthRatio] = useState(readLeftWidthRatio);
   const [dayListVisible, setDayListVisible] = useState(readDayListVisible);
   const [problemListVisible, setProblemListVisible] = useState(readProblemListVisible);
+  const [resolvedProblemsVisible, setResolvedProblemsVisible] = useState(
+    readResolvedProblemsVisible,
+  );
   // 選択中のプロブレム。タイムラインで関連する診療記録を強調するためだけに使う。
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const splitRef = useRef<HTMLDivElement>(null);
@@ -93,6 +98,14 @@ export function KartePage() {
     () => new Map(problems.map((problem) => [problem.id ?? "", problem])),
     [problems],
   );
+
+  // 選択中のプロブレムは、診療記録を新規登録するときの対象の初期値にする。
+  const selectedProblem = useMemo(() => {
+    const condition = selectedProblemId ? problemsById.get(selectedProblemId) : undefined;
+    return condition
+      ? { conditionId: condition.id ?? "", display: problemLabel(condition) }
+      : undefined;
+  }, [selectedProblemId, problemsById]);
 
   const timeline = useMemo(
     () =>
@@ -177,6 +190,12 @@ export function KartePage() {
     storeProblemListVisible(next);
   }
 
+  function toggleResolvedProblems() {
+    const next = !resolvedProblemsVisible;
+    setResolvedProblemsVisible(next);
+    storeResolvedProblemsVisible(next);
+  }
+
   function toggleMode() {
     const next = mode === "split" ? "tabs" : "split";
     setMode(next);
@@ -198,6 +217,8 @@ export function KartePage() {
         onSelect={setSelectedProblemId}
         visible={problemListVisible}
         onToggleVisible={toggleProblemList}
+        resolvedVisible={resolvedProblemsVisible}
+        onToggleResolved={toggleResolvedProblems}
       />
       <div
         className={`karte-left__body${dayListVisible ? "" : " karte-left__body--daylist-hidden"}`}
@@ -301,7 +322,12 @@ export function KartePage() {
           onChangeEnd={storeLeftWidthRatio}
         />
 
-        <KarteRightPane patientId={patientId} state={pane} onStateChange={setPane} />
+        <KarteRightPane
+          patientId={patientId}
+          state={pane}
+          selectedProblem={selectedProblem}
+          onStateChange={setPane}
+        />
       </div>
     </div>
   );

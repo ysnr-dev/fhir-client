@@ -3490,6 +3490,20 @@ body.karte-wide #root {
   text-decoration: none;
 }
 
+/* 解決済みの開閉。チップの列に並ぶが、プロブレムそのものではないので枠は付けない。 */
+.karte-problems .karte-problems__resolved-toggle {
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.karte-problems .karte-problems__resolved-toggle:hover {
+  color: var(--accent);
+}
+
 .karte-daylist {
   border: 1px solid var(--border);
   border-radius: 6px;
