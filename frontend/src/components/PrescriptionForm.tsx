@@ -54,6 +54,12 @@ export function PrescriptionForm({
   const [values, setValues] = useState<PrescriptionFormValues>(initialValues ?? emptyPrescriptionForm);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  // コメント欄は常に入力する訳ではないため、既に値がある場合のみ初期表示し、
+  // それ以外はボタン操作で表示する。
+  const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
+  const [usageCommentOpen, setUsageCommentOpen] = useState<boolean[]>(() =>
+    (initialValues ?? emptyPrescriptionForm()).rps.map((rp) => Boolean(rp.usageComment)),
+  );
 
   function update<K extends keyof PrescriptionFormValues>(key: K, value: PrescriptionFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -86,10 +92,17 @@ export function PrescriptionForm({
       ...v,
       rps: [...v.rps, { ...emptyRp, medicines: [{ ...emptyMedicineLine }] }],
     }));
+    setUsageCommentOpen((open) => [...open, false]);
   }
 
   function removeRp(rpIndex: number) {
     setValues((v) => ({ ...v, rps: v.rps.filter((_, i) => i !== rpIndex) }));
+    setUsageCommentOpen((open) => open.filter((_, i) => i !== rpIndex));
+  }
+
+  function toggleUsageComment(rpIndex: number, open: boolean) {
+    setUsageCommentOpen((prev) => prev.map((v, i) => (i === rpIndex ? open : v)));
+    if (!open) updateRp(rpIndex, { usageComment: "" });
   }
 
   function addMedicine(rpIndex: number) {
@@ -220,10 +233,36 @@ export function PrescriptionForm({
             onChange={(e) => update("authoredDate", e.target.value)}
           />
         </label>
-        <label className="prescription-form__comment-field">
-          処方箋コメント
-          <input type="text" value={values.comment} onChange={(e) => update("comment", e.target.value)} />
-        </label>
+        {commentOpen ? (
+          <div className="prescription-form__comment-field">
+            <label>
+              処方箋コメント
+              <input
+                type="text"
+                value={values.comment}
+                onChange={(e) => update("comment", e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className="rp-card__icon-button"
+              title="処方箋コメントを削除"
+              aria-label="処方箋コメントを削除"
+              onClick={() => {
+                setCommentOpen(false);
+                update("comment", "");
+              }}
+            >
+              <TrashIcon />
+            </button>
+          </div>
+        ) : (
+          <div className="prescription-form__comment-toggle">
+            <button type="button" className="comment-add-button" onClick={() => setCommentOpen(true)}>
+              ＋処方箋コメント
+            </button>
+          </div>
+        )}
       </fieldset>
 
       {values.rps.map((rp, rpIndex) => (
@@ -356,14 +395,37 @@ export function PrescriptionForm({
             </div>
           </div>
 
-          <label>
-            用法コメント
-            <input
-              type="text"
-              value={rp.usageComment}
-              onChange={(e) => updateRp(rpIndex, { usageComment: e.target.value })}
-            />
-          </label>
+          {usageCommentOpen[rpIndex] ? (
+            <div className="rp-card__comment-field">
+              <label>
+                用法コメント
+                <input
+                  type="text"
+                  value={rp.usageComment}
+                  onChange={(e) => updateRp(rpIndex, { usageComment: e.target.value })}
+                />
+              </label>
+              <button
+                type="button"
+                className="rp-card__icon-button"
+                title="用法コメントを削除"
+                aria-label="用法コメントを削除"
+                onClick={() => toggleUsageComment(rpIndex, false)}
+              >
+                <TrashIcon />
+              </button>
+            </div>
+          ) : (
+            <div className="rp-card__actions">
+              <button
+                type="button"
+                className="comment-add-button"
+                onClick={() => toggleUsageComment(rpIndex, true)}
+              >
+                ＋用法コメント
+              </button>
+            </div>
+          )}
 
           {values.rps.length > 1 && (
             <div className="rp-card__actions rp-card__actions--end">
