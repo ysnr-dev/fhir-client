@@ -1959,6 +1959,29 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+/* 年をまとめる上段ヘッダー。年の切り替わりが分かるよう左側に区切り線を引く。 */
+.lab-timeline__table th.lab-timeline__year-col {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text);
+  padding-bottom: 2px;
+  border-bottom: none;
+}
+
+.lab-timeline__table th.lab-timeline__year-col + th.lab-timeline__year-col {
+  border-left: 1px solid var(--border);
+}
+
+/* 上段に年があるぶん、mm/dd 側の上下パディングを詰める。 */
+.lab-timeline__table th.lab-timeline__date-col {
+  padding-top: 2px;
+}
+
+/* 2 段ヘッダーで rowspan するセルは縦位置を揃える。 */
+.lab-timeline__table thead th[rowspan] {
+  vertical-align: bottom;
+}
+
 /* ---- 検査結果グラフ(時系列表示のモーダル) ---- */
 
 .lab-chart-list {

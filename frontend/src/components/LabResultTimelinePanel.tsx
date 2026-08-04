@@ -93,12 +93,28 @@ export function LabResultTimelinePanel({ patientId }: { patientId: string }) {
             <div className="lab-timeline__table-wrap">
               <table className="lab-timeline__table">
                 <thead>
+                  {/* 日付カラムは mm/dd のみ表示し、年は上段にまとめる。 */}
                   <tr>
-                    <th className="lab-timeline__item-col">検査項目(略称)</th>
-                    <th className="lab-timeline__unit-col">単位</th>
+                    <th className="lab-timeline__item-col" rowSpan={2}>
+                      検査項目(略称)
+                    </th>
+                    <th className="lab-timeline__unit-col" rowSpan={2}>
+                      単位
+                    </th>
+                    {groupDatesByYear(timeline.dates).map((group) => (
+                      <th
+                        key={group.dates[0]}
+                        className="lab-timeline__year-col"
+                        colSpan={group.dates.length}
+                      >
+                        {group.year}年
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
                     {timeline.dates.map((date) => (
-                      <th key={date} className="lab-timeline__date-col">
-                        {date}
+                      <th key={date} className="lab-timeline__date-col" title={date}>
+                        {monthDay(date)}
                       </th>
                     ))}
                   </tr>
@@ -127,6 +143,27 @@ export function LabResultTimelinePanel({ patientId }: { patientId: string }) {
       )}
     </>
   );
+}
+
+// "YYYY-MM-DD" -> "MM/DD"。想定外の形式はそのまま返す。
+function monthDay(date: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+  return m ? `${m[2]}/${m[3]}` : date;
+}
+
+// 連続する同じ年の日付をまとめる。年不明の日付は単独グループにする。
+function groupDatesByYear(dates: string[]): { year: string; dates: string[] }[] {
+  const groups: { year: string; dates: string[] }[] = [];
+  for (const date of dates) {
+    const year = /^(\d{4})-/.exec(date)?.[1] ?? "";
+    const last = groups[groups.length - 1];
+    if (last && year && last.year === year) {
+      last.dates.push(date);
+    } else {
+      groups.push({ year, dates: [date] });
+    }
+  }
+  return groups;
 }
 
 interface TimelineRowProps {
