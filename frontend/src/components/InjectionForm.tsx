@@ -3,6 +3,7 @@ import type { Medicine } from "../api/masterClient";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   CATEGORY_OPTIONS,
+  DRIP_DEFAULT_ROUTE,
   LINE_OPTIONS,
   METHOD_OPTIONS,
   ROUTE_OPTIONS,
@@ -107,9 +108,15 @@ export function InjectionForm({
     }));
   }
 
-  // ワンショットに投与速度は無いので、点滴以外に変わったら値も落とす。
-  function usageTypePatch(usageType: InjectionUsageType | ""): Partial<InjectionRpValues> {
-    return usageType === "drip" ? { usageType } : { usageType, rate: "" };
+  // 用法種別の変更に伴う付随項目。ワンショットに投与速度は無いので値を落とし、点滴なら
+  // 投与経路の既定(静脈内)を入れる。投与経路は選択済みなら上書きしないので、
+  // 手で選んだ経路が医薬品の入れ替えで戻ることはない。
+  function usageTypePatch(
+    rp: InjectionRpValues,
+    usageType: InjectionUsageType | "",
+  ): Partial<InjectionRpValues> {
+    if (usageType !== "drip") return { usageType, rate: "" };
+    return { usageType, ...(rp.routeCode ? {} : { routeCode: DRIP_DEFAULT_ROUTE }) };
   }
 
   // 医薬品の増減・入れ替え。用法種別を手で選んでいない RP は、医薬品の包装から推定した
@@ -126,7 +133,7 @@ export function InjectionForm({
         const medicines = updater(rp.medicines);
         if (touched) return { ...rp, medicines };
         const preset = presetInjectionUsageType(medicines.map((m) => m.medicine));
-        return { ...rp, medicines, ...usageTypePatch(preset) };
+        return { ...rp, medicines, ...usageTypePatch(rp, preset) };
       }),
     }));
   }
@@ -419,7 +426,7 @@ export function InjectionForm({
                 value={rp.usageType}
                 onChange={(e) => {
                   setUsageTypeTouched((prev) => prev.map((t, i) => (i === rpIndex ? true : t)));
-                  updateRp(rpIndex, usageTypePatch(e.target.value as InjectionUsageType | ""));
+                  updateRp(rpIndex, usageTypePatch(rp, e.target.value as InjectionUsageType | ""));
                 }}
               >
                 <option value="">選択してください</option>

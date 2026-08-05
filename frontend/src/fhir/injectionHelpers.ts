@@ -77,6 +77,9 @@ export const USAGE_TYPE_OPTIONS: { code: InjectionUsageType; display: string }[]
   { code: "one-shot", display: "ワンショット" },
 ];
 
+/** 点滴のときの投与経路の既定値。点滴はほぼ静脈内なので未選択なら入れる。 */
+export const DRIP_DEFAULT_ROUTE = "IV";
+
 export const ROUTE_OPTIONS: CodeOption[] = [
   { code: "IV", display: "静脈内" },
   { code: "IM", display: "筋肉内" },
