@@ -52,13 +52,15 @@ export function useMedicineSearch(
   yakkoCode: string,
   page: number,
   enabled: boolean,
+  dosageForm?: string,
 ) {
   return useQuery({
-    queryKey: ["master", "medicines", name, yakkoCode, page],
+    queryKey: ["master", "medicines", name, yakkoCode, dosageForm ?? "", page],
     queryFn: () =>
       searchMedicines({
         name: name || undefined,
         yakko_code: yakkoCode || undefined,
+        dosage_form: dosageForm || undefined,
         page,
         per: MASTER_SEARCH_PER,
       }),

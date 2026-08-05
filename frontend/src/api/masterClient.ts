@@ -205,6 +205,7 @@ export async function searchMedicines(params: {
   name?: string;
   yakko_code?: string;
   yakko_name?: string;
+  dosage_form?: string;
   page?: number;
   per?: number;
 }): Promise<MasterSearchResult<Medicine>> {
@@ -212,6 +213,7 @@ export async function searchMedicines(params: {
   if (params.name) search.set("name", params.name);
   if (params.yakko_code) search.set("yakko_code", params.yakko_code);
   if (params.yakko_name) search.set("yakko_name", params.yakko_name);
+  if (params.dosage_form) search.set("dosage_form", params.dosage_form);
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 

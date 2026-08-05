@@ -96,6 +96,25 @@ RSpec.describe "Master::Medicines", type: :request do
     end
   end
 
+  describe "GET /master/medicines (剤形区分)" do
+    before do
+      Master::Medicine.create!(medicine_code: "610000020", name: "内用薬A", dosage_form: "1")
+      Master::Medicine.create!(medicine_code: "640000021", name: "注射薬B", dosage_form: "4")
+      Master::Medicine.create!(medicine_code: "660000022", name: "外用薬C", dosage_form: "6")
+    end
+
+    it "dosage_form(剤形区分)の完全一致で絞り込む" do
+      get "/master/medicines", params: { dosage_form: "4" }
+      names = JSON.parse(response.body)["items"].map { |i| i["name"] }
+      expect(names).to eq(["注射薬B"])
+    end
+
+    it "dosage_form 未指定なら全剤形を返す" do
+      get "/master/medicines"
+      expect(JSON.parse(response.body)["total"]).to eq(3)
+    end
+  end
+
   describe "GET /master/medicines (YJコード付与)" do
     before do
       Master::Medicine.create!(medicine_code: "620003477", name: "ロキソプロフェン錠")

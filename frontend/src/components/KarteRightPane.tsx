@@ -1,5 +1,6 @@
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePanels";
+import { InjectionCreatePanel, InjectionEditPanel } from "./InjectionPanels";
 import { PrescriptionCreatePanel, PrescriptionEditPanel } from "./PrescriptionPanels";
 import {
   QuestionnaireResponseCreatePanel,
@@ -16,6 +17,8 @@ export type KartePaneState =
   // DO(sourceSrId あり)では対象プロブレムも DO 元から引き継ぐので problem は使わない。
   | { kind: "prescription-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "prescription-edit"; srId: string }
+  | { kind: "injection-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "injection-edit"; srId: string }
   | { kind: "qr-create" }
   | { kind: "qr-edit"; qrId: string };
 
@@ -25,6 +28,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "note-edit": "診療記録編集",
   "prescription-create": "処方登録",
   "prescription-edit": "処方編集",
+  "injection-create": "注射登録",
+  "injection-edit": "注射編集",
   "qr-create": "テンプレート登録",
   "qr-edit": "テンプレート編集",
 };
@@ -36,12 +41,14 @@ function paneKey(state: KartePaneState): string {
     case "note-edit":
       return `${state.kind}:${state.noteId}`;
     case "prescription-edit":
+    case "injection-edit":
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
     // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
     // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
     case "prescription-create":
+    case "injection-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "note-create":
       return `${state.kind}:${state.problem?.conditionId ?? ""}`;
@@ -106,6 +113,12 @@ export function KarteRightPane({
         >
           処方
         </button>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "injection-create", problem: selectedProblem })}
+        >
+          注射
+        </button>
       </div>
     </section>
   );
@@ -144,6 +157,17 @@ function PaneContent({
       );
     case "prescription-edit":
       return <PrescriptionEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "injection-create":
+      return (
+        <InjectionCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "injection-edit":
+      return <InjectionEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "qr-create":
       return <QuestionnaireResponseCreatePanel patientId={patientId} onSaved={onSaved} />;
     case "qr-edit":

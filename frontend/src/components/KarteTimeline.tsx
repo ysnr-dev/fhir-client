@@ -15,6 +15,12 @@ import {
   type KarteTimelineItem,
 } from "../fhir/karteTimeline";
 import {
+  groupInjectionByRp,
+  injectionComment,
+  summarizeInjectionServiceRequest,
+  type InjectionRpDisplay,
+} from "../fhir/injectionHelpers";
+import {
   groupByRp,
   orderContextSummary,
   prescriptionComment,
@@ -43,7 +49,8 @@ interface KarteTimelineProps {
   loadToken: string;
   onLoadMore: () => void;
   onEdit: (item: KarteTimelineItem) => void;
-  onDo: (serviceRequestId: string) => void;
+  /** DO(複写して新規登録)。処方と注射で開くフォームが違うので item ごと渡す。 */
+  onDo: (item: KarteTimelineItem) => void;
   /** 詳細表示。対象は URL に載せるので、モーダルは親(カルテ画面)が描く。 */
   onOpenDetail: (item: KarteTimelineItem) => void;
   /** 削除された項目。右ペインで開いていたら閉じるために親へ通知する。 */
@@ -148,7 +155,7 @@ function KarteCard({
 }: {
   item: KarteTimelineItem;
   onEdit: (item: KarteTimelineItem) => void;
-  onDo: (serviceRequestId: string) => void;
+  onDo: (item: KarteTimelineItem) => void;
   onOpenDetail: (item: KarteTimelineItem) => void;
   onDeleted: (item: KarteTimelineItem) => void;
   problemsById: Map<string, fhir4.Condition>;
@@ -177,8 +184,10 @@ function KarteCard({
     if (!window.confirm(`この${KARTE_KIND_LABELS[item.kind]}を削除します。よろしいですか?`)) return;
     const options = { onSuccess: () => onDeleted(item) };
     if (item.kind === "note") deleteNote.mutate(item.id, options);
-    else if (item.kind === "prescription") deletePrescription.mutate(item.id, options);
-    else deleteResponse.mutate(item.id, options);
+    // 注射も処方と同じ ServiceRequest + MedicationRequest 構成なので削除処理を共用する。
+    else if (item.kind === "prescription" || item.kind === "injection") {
+      deletePrescription.mutate(item.id, options);
+    } else deleteResponse.mutate(item.id, options);
   }
 
   // プロブレム選択中は、そのプロブレムを参照しない情報を控えめに表示する
@@ -198,13 +207,13 @@ function KarteCard({
         <ProblemBadge problem={itemProblem(item)} problemsById={problemsById} />
         <span className="karte-card__meta">{cardMeta(item)}</span>
         <span className="karte-card__actions">
-          {item.kind === "prescription" && (
+          {(item.kind === "prescription" || item.kind === "injection") && (
             <button
               type="button"
               className="karte-card__icon-button karte-card__icon-button--labeled"
-              title="DO(この処方を複写して新規登録)"
-              aria-label="DO(この処方を複写して新規登録)"
-              onClick={() => onDo(item.id)}
+              title={`DO(この${KARTE_KIND_LABELS[item.kind]}を複写して新規登録)`}
+              aria-label={`DO(この${KARTE_KIND_LABELS[item.kind]}を複写して新規登録)`}
+              onClick={() => onDo(item)}
             >
               <CopyIcon />
               <span className="karte-card__icon-label">DO</span>
@@ -316,11 +325,13 @@ function DocumentIcon() {
   );
 }
 
-// この情報が対象としているプロブレム。現状プロブレムを持つのは診療記録と処方だけ
-// (テンプレートの紐付けは未実装)。
+// この情報が対象としているプロブレム。現状プロブレムを持つのは診療記録と処方・注射
+// (テンプレートの紐付けは未実装)。注射も reasonReference なので処方と同じ関数で引ける。
 function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "note") return clinicalNoteProblem(item.note);
-  if (item.kind === "prescription") return prescriptionProblem(item.serviceRequest);
+  if (item.kind === "prescription" || item.kind === "injection") {
+    return prescriptionProblem(item.serviceRequest);
+  }
   return null;
 }
 
@@ -333,6 +344,11 @@ function cardTitle(item: KarteTimelineItem): string {
   if (item.kind === "note") return item.note.title ?? "";
   if (item.kind === "prescription") {
     const summary = summarizeServiceRequest(item.serviceRequest);
+    return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" | ");
+  }
+  // 注射も処方と同じく区分をタイトルにする(用法種別は本文の用法行に出る)。
+  if (item.kind === "injection") {
+    const summary = summarizeInjectionServiceRequest(item.serviceRequest);
     return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" | ");
   }
   return item.label;
@@ -350,10 +366,29 @@ function cardMeta(item: KarteTimelineItem): string {
     const summary = summarizeQuestionnaireResponse(item.response);
     return [time, summary.statusLabel, summary.authorName].filter(Boolean).join(" | ");
   }
-  // 処方は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。処方日は日付のみを
-  // 入力する項目なので時刻は出さない(古い処方には時刻付きの authoredOn があり、
-  // 意味のない「00:00」が出てしまうため)。
+  // 処方・注射は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。オーダー日は
+  // 日付のみを入力する項目なので時刻は出さない(古い処方には時刻付きの authoredOn が
+  // あり、意味のない「00:00」が出てしまうため)。
   return orderContextSummary(prescriptionRequester(item.serviceRequest));
+}
+
+// 注射カードの用法 1 行(「点滴 | 静脈注射 | 静脈内 | 100mL/h」)。
+function injectionUsageSummary(rp: InjectionRpDisplay): string {
+  return [
+    rp.usageTypeDisplay,
+    rp.methodDisplay,
+    rp.routeDisplay,
+    rp.siteDisplay,
+    rp.lineDisplay,
+    rp.rate != null ? `${rp.rate}mL/h` : "",
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
+
+// 開始時刻はカードでは「MM/DD HH:mm」に詰める(年はグループ日付から分かる)。
+function shortStartTime(local: string): string {
+  return local.slice(5, 16).replace("-", "/").replace("T", " ");
 }
 
 // 診療日はグループ見出しに出るのでカードには時刻だけを添える。
@@ -424,6 +459,52 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
                 <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>
               )}
             </div>
+          </div>
+        ))}
+        {comment && <p className="karte-card__note">{comment}</p>}
+      </>
+    );
+  }
+
+  if (item.kind === "injection") {
+    const rps = groupInjectionByRp(item.medicationRequests);
+    const comment = injectionComment(item.serviceRequest);
+    if (rps.length === 0) return <p className="karte-card__empty">注射内容がありません。</p>;
+    return (
+      <>
+        {rps.map((rp) => (
+          <div className="karte-rp" key={rp.rpNumber}>
+            <div className="karte-rp__head">
+              <span className="karte-rp__number">{`RP${rp.rpNumber}`}</span>
+            </div>
+            <ul className="karte-rp__medicines">
+              {rp.medicines.map((medicine) => (
+                <li key={medicine.orderInRp}>
+                  <span className="karte-rp__medicine-name">{medicine.name}</span>
+                  {medicine.dose != null && (
+                    <span className="karte-rp__medicine-dose">
+                      {`${medicine.dose}${medicine.unit ?? ""}`}
+                    </span>
+                  )}
+                  {medicine.comment && (
+                    <span className="karte-rp__comment">{`（${medicine.comment}）`}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <div className="karte-rp__usage">
+              <span className="karte-rp__usage-label">用法:</span>
+              <span>{injectionUsageSummary(rp) || "-"}</span>
+              {rp.usageComment && (
+                <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>
+              )}
+            </div>
+            {rp.startTimes.length > 0 && (
+              <div className="karte-rp__usage">
+                <span className="karte-rp__usage-label">開始:</span>
+                <span>{rp.startTimes.map(shortStartTime).join("、")}</span>
+              </div>
+            )}
           </div>
         ))}
         {comment && <p className="karte-card__note">{comment}</p>}

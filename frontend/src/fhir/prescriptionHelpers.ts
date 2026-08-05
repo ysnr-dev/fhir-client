@@ -4,7 +4,9 @@ import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 
 // ローカル拡張・コードシステム。JP Core / FHIR 標準に存在しない項目を表現するための、
 // この処方オーダー機能専用の URI。
-const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting"; // 入外区分
+// 入外区分。注射オーダーでも同じ区分(入院/外来)を使うので injectionHelpers.ts と共用する
+// (URI の "prescription-" は登録済みデータと揃えるためそのまま)。
+export const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting";
 const CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-category"; // 処方区分
 const ORDER_DETAIL_MR_EXT_URL =
   "http://fhir-client.local/StructureDefinition/prescription-medication-request"; // orderDetail→MedicationRequest 参照
@@ -14,17 +16,19 @@ const ORDER_DETAIL_MR_EXT_URL =
 const ORDER_DEPARTMENT_EXT_URL = "http://fhir-client.local/StructureDefinition/order-department";
 // レセプト電算コード（6始まり9桁）。JP Core の MedicationCode ValueSet には
 // レセ電コードに対応する正式な CodeSystem が定義されていないため、ローカル URI を使用。
-const MEDICINE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-code";
+// (注射オーダー injectionHelpers.ts とも共用する)
+export const MEDICINE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-code";
 // 個別医薬品コード（YJコード）。JP Core（CAPS）で定義された正式な CodeSystem URL。
-const YJ_CODE_SYSTEM = "http://capstandard.jp/iyaku.info/CodeSystem/YJ-code";
+export const YJ_CODE_SYSTEM = "http://capstandard.jp/iyaku.info/CodeSystem/YJ-code";
 const USAGE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-usage";
 const USAGE_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-usage-basic-category";
 
 // JP Core: MedicationRequest.identifier の必須スライス。値を入れないと警告になる。
-const RP_NUMBER_SYSTEM = "http://jpfhir.jp/fhir/core/mhlw/IdSystem/Medication-RPGroupNumber";
-const ORDER_IN_RP_SYSTEM = "http://jpfhir.jp/fhir/core/mhlw/IdSystem/MedicationAdministrationIndex";
+export const RP_NUMBER_SYSTEM = "http://jpfhir.jp/fhir/core/mhlw/IdSystem/Medication-RPGroupNumber";
+export const ORDER_IN_RP_SYSTEM =
+  "http://jpfhir.jp/fhir/core/mhlw/IdSystem/MedicationAdministrationIndex";
 
-const UNITS_OF_MEASURE_SYSTEM = "http://unitsofmeasure.org";
+export const UNITS_OF_MEASURE_SYSTEM = "http://unitsofmeasure.org";
 
 const BASIC_USAGE_CATEGORY_ORAL = "内服";
 const BASIC_USAGE_CATEGORY_AS_NEEDED = "頓服";
@@ -116,7 +120,7 @@ function findSettingDisplay(code: string): string {
 
 // 依頼医師は標準の requester、依頼科はローカル拡張に入れる。どちらも参照を引き直さずに
 // 一覧・カルテで名前を出せるよう display を埋めておく(PractitionerRole と同じ方針)。
-function applyOrderContext(
+export function applyOrderContext(
   resource: fhir4.ServiceRequest | fhir4.MedicationRequest,
   requester: OrderContext,
 ) {
@@ -432,7 +436,7 @@ export interface PrescriptionSummary {
   medicineCount: number;
 }
 
-function codingBySystem(
+export function codingBySystem(
   codings: fhir4.Coding[] | undefined,
   system: string,
 ): fhir4.Coding | undefined {
@@ -523,7 +527,7 @@ export interface RpDisplay {
   medicines: MedicineLineDisplay[];
 }
 
-function identifierValue(mr: fhir4.MedicationRequest, system: string): string | undefined {
+export function identifierValue(mr: fhir4.MedicationRequest, system: string): string | undefined {
   return mr.identifier?.find((i) => i.system === system)?.value;
 }
 
@@ -581,7 +585,7 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
 // FHIR リソースにはマスタの全項目(id, 剤形など)は保存されていないため、フォーム上で
 // 再選択されない限り、コード・名称・単位など保存済みの項目のみを持つ簡易オブジェクトとして復元する。
 
-function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null {
+export function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null {
   const coding = mr.medicationCodeableConcept?.coding?.find((c) => c.system === MEDICINE_CODE_SYSTEM);
   if (!coding) return null;
   const yjCoding = mr.medicationCodeableConcept?.coding?.find((c) => c.system === YJ_CODE_SYSTEM);

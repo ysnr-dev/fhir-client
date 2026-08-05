@@ -10,6 +10,7 @@ import type { KarteDetailTarget } from "../karteUrl";
 import { ClinicalNoteDetailPanel } from "./ClinicalNoteDetailPanel";
 import { ErrorBanner } from "./ErrorBanner";
 import { FhirJsonView } from "./FhirJsonView";
+import { InjectionDetailPanel } from "./InjectionDetailPanel";
 import { Modal } from "./Modal";
 import { PrescriptionDetailPanel } from "./PrescriptionDetailPanel";
 import { QuestionnaireResponseDetailPanel } from "./QuestionnaireResponseDetailPanel";
@@ -20,6 +21,7 @@ import { QuestionnaireResponseDetailPanel } from "./QuestionnaireResponseDetailP
 const DETAIL_TITLES: Record<KarteTimelineItem["kind"], string> = {
   note: "診療記録詳細",
   prescription: "処方内容",
+  injection: "注射内容",
   qr: "テンプレート表示",
 };
 
@@ -42,6 +44,8 @@ export function KarteDetailModal({
         <NoteDetail patientId={patientId} noteId={target.id} />
       ) : target.kind === "prescription" ? (
         <PrescriptionDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+      ) : target.kind === "injection" ? (
+        <InjectionDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : (
         <QuestionnaireResponseDetail patientId={patientId} qrId={target.id} />
       )}
@@ -113,6 +117,42 @@ function PrescriptionDetail({
   );
 }
 
+// 注射も処方と同じ ServiceRequest 詳細検索(SR + _revinclude の MR)で取得する。
+function InjectionDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = usePrescriptionDetail(srId);
+  const { serviceRequest, medicationRequests } = detail.data
+    ? splitPrescriptionDetailBundle(detail.data.data)
+    : { serviceRequest: undefined, medicationRequests: [] };
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された注射は別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <InjectionDetailPanel
+          serviceRequest={serviceRequest}
+          medicationRequests={medicationRequests}
+          problemsById={problemsById}
+        />
+      ) : (
+        !detail.error && <NotFound label="注射" />
+      )}
+    </>
+  );
+}
+
 function QuestionnaireResponseDetail({ patientId, qrId }: { patientId: string; qrId: string }) {
   const { response, questionnaire, isLoading, error } =
     useQuestionnaireResponseWithQuestionnaire(qrId);
@@ -149,7 +189,7 @@ export function KarteCardJsonModal({
       onClose={onClose}
       className="modal--wide"
     >
-      {item.kind === "prescription" ? (
+      {item.kind === "prescription" || item.kind === "injection" ? (
         <PrescriptionJson srId={item.id} />
       ) : (
         <FhirJsonView resource={item.kind === "note" ? item.note : item.response} />

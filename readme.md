@@ -255,6 +255,41 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   `POST /fhir`(空パス)を transaction Bundle 中継用のルートとして扱います
   (`backend/app/controllers/fhir_proxy_controller.rb`)。
 
+## 注射オーダー機能
+
+カルテ画面の右ペイン「注射」から新規登録し、処方と同じくタイムラインのカードから
+表示(詳細モーダル)・編集・削除・DO を行います(JAHIS注射データ交換規約 Ver.2.2 /
+JP Core の `JP_MedicationRequest_Injection` プロファイルを参考にした表現)。
+
+- **リソースの持ち方**: 処方と同一(1注射 = `ServiceRequest` + 薬剤数分の `MedicationRequest`、
+  RP = 同じルートから同時に投与する薬剤のまとまり(混注)、登録・更新・削除は transaction Bundle)。
+  実装は `frontend/src/fhir/injectionHelpers.ts`。
+- **処方との判別**: `ServiceRequest.category` にローカルのオーダー種別
+  (`http://fhir-client.local/CodeSystem/order-type` = `injection`)を付与します。カルテの
+  タイムラインは処方と同じ `ServiceRequest` 検索(1本のページング)で取得し、この category で
+  処方カード/注射カードに振り分けます(処方の `ServiceRequest` はオーダー種別を持たない)。
+- **入外区分・注射区分**: `category` にはオーダー種別に続けてこの2つも入れます。入外区分
+  (入院/外来)は処方と同じコードシステム(`.../prescription-setting`)を共用し、注射区分は
+  選択肢が処方と異なるため専用のコードシステム(`.../injection-category`)にしています
+  (入院→定時/臨時/緊急、外来→外来)。category は 3 要素になるので、読み出しは処方
+  (添字で引く)と違い system で引きます。
+- **用法**: JP Core の `JP_MedicationDosage_Injection` に寄せて `dosageInstruction` に持ちます。
+  - 用法種別(点滴/ワンショット): 対応する標準コード表が無いためローカル拡張
+    (`http://fhir-client.local/StructureDefinition/injection-usage-type`)
+  - 投与経路: `route`。JP Core の `route-codes`(HL7 Table 0162 ベース。IV/IM/SC など)
+  - 投与部位: `site`。JAMI標準用法規格 表13 外用部位コード(`urn:oid:1.2.392.200250.2.2.20.32`。
+    SS-MIX2 でも利用されるコード表)
+  - 手技: `method`。JAMI詳細用法コード(`urn:oid:1.2.392.200250.2.2.20.40`)の注射手技(30〜3Z)
+  - ライン: JP Core の `JP_MedicationDosage_Line` 拡張。コードは公式表が無いためローカル定義
+    (末梢/中心静脈 × 本管/側管)
+  - 投与速度: `doseAndRate.rateQuantity`(mL/h、UCUM)。点滴のときのみ入力
+  - 開始時刻: `timing.event`(複数可)。datetime-local の入力にタイムゾーンを付けて保存
+  - 投与量: `doseAndRate.doseQuantity`(処方の用量と同じ持ち方)
+- **医薬品検索**: 処方と同じ医薬品検索モーダルを剤形区分 4(注射薬)で初期絞り込みして使います
+  (`/master/medicines` に `dosage_form` パラメータを追加)。
+- テンプレートへの一括入力(`%prescriptions`)は最新の「処方」を対象とし、注射オーダーは
+  対象外です(検索結果から category で除外)。
+
 ## シェーマ画像（テンプレートへの画像添付と描き込み）
 
 テンプレート(`Questionnaire`)の各項目に画像を1枚添付でき、回答(`QuestionnaireResponse`)ではその画像に
