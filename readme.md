@@ -283,7 +283,9 @@ JP Core の `JP_MedicationRequest_Injection` プロファイルを参考にし�
   - ライン: JP Core の `JP_MedicationDosage_Line` 拡張。コードは公式表が無いためローカル定義
     (末梢/中心静脈 × 本管/側管)
   - 投与速度: `doseAndRate.rateQuantity`(mL/h、UCUM)。点滴のときのみ入力
-  - 開始時刻: `timing.event`(複数可)。datetime-local の入力にタイムゾーンを付けて保存
+  - 開始時刻: `timing.event`(複数可)。入力は時刻(HH:mm)のみで、日付は注射日を使う。
+    FHIR の dateTime は時刻を持つならタイムゾーンが必須なので、実行環境のオフセットを付けて
+    `2026-08-04T10:00:00+09:00` の形で保存する
   - 投与量: `doseAndRate.doseQuantity`(処方の用量と同じ持ち方)
 - **医薬品検索**: 処方と同じ医薬品検索モーダルを剤形区分 4(注射薬)で初期絞り込みして使います
   (`/master/medicines` に `dosage_form` パラメータを追加)。

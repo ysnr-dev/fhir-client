@@ -18,11 +18,6 @@ interface InjectionDetailPanelProps {
   children?: ReactNode;
 }
 
-function formatStartTime(local: string): string {
-  // "YYYY-MM-DDTHH:mm" → "YYYY/MM/DD HH:mm"
-  return local.replace("T", " ").replaceAll("-", "/");
-}
-
 export function InjectionDetailPanel({
   serviceRequest,
   medicationRequests,
@@ -107,11 +102,8 @@ export function InjectionDetailPanel({
             <dt>投与速度</dt>
             <dd>{rp.rate != null ? `${rp.rate} mL/h` : "-"}</dd>
             <dt>開始時刻</dt>
-            <dd>
-              {rp.startTimes.length
-                ? rp.startTimes.map((time) => formatStartTime(time)).join("、")
-                : "-"}
-            </dd>
+            {/* 日付は注射日なので時刻だけを並べる。 */}
+            <dd>{rp.startTimes.join("、") || "-"}</dd>
             <dt>用法コメント</dt>
             <dd>{rp.usageComment || "-"}</dd>
           </dl>

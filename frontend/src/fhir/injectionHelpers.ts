@@ -160,7 +160,7 @@ export interface InjectionRpValues {
   lineCode: string;
   /** 投与速度(mL/h)。点滴のときのみ使用。 */
   rate: string;
-  /** 開始時刻(datetime-local の "YYYY-MM-DDTHH:mm")。複数設定可能。 */
+  /** 開始時刻(HH:mm)。日付は注射日を使う。複数設定可能。 */
   startTimes: string[];
   usageComment: string;
   medicines: MedicineLineValues[];
@@ -211,19 +211,20 @@ export function emptyInjectionForm(problem: ProblemRef | null = null): Injection
 
 // ---- FHIR dateTime との相互変換 ----
 //
-// datetime-local の値には秒とタイムゾーンが無く、そのままでは FHIR の dateTime として
-// 不正(時刻を持つならタイムゾーン必須)。実行環境のオフセットを付けて保存する。
+// 開始時刻はフォーム上は時刻(HH:mm)だけを持ち、日付は注射日を使う。FHIR の dateTime は
+// 時刻を持つならタイムゾーンが必須なので、実行環境のオフセットを付けて保存する。
 
-function toFhirDateTime(local: string): string {
-  const offsetMinutes = -new Date(local).getTimezoneOffset();
+function toFhirDateTime(date: string, time: string): string {
+  const offsetMinutes = -new Date(`${date}T${time}`).getTimezoneOffset();
   const sign = offsetMinutes >= 0 ? "+" : "-";
   const abs = Math.abs(offsetMinutes);
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${local}:00${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+  return `${date}T${time}:00${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
 }
 
-function toLocalDateTime(fhirDateTime: string): string {
-  return fhirDateTime.slice(0, 16);
+/** FHIR の dateTime から時刻(HH:mm)だけを取り出す。 */
+function toLocalTime(fhirDateTime: string): string {
+  return fhirDateTime.slice(11, 16);
 }
 
 // ---- FHIR リソースの組み立て ----
@@ -301,7 +302,9 @@ function buildInjectionMedicationRequest(
   }
 
   if (rp.startTimes.length) {
-    dosageInstruction.timing = { event: rp.startTimes.map(toFhirDateTime) };
+    dosageInstruction.timing = {
+      event: rp.startTimes.map((time) => toFhirDateTime(authoredOn, time)),
+    };
   }
   if (rp.routeCode) {
     dosageInstruction.route = {
@@ -551,15 +554,14 @@ export function buildInjectionUpdateBundle(
 }
 
 // 既存の注射を DO(流用)して新規登録するためのフォーム値に変換する。処方の DO と同じく
-// id を落として新規登録(POST)にし、注射日は当日にする。開始時刻は日付が過去のものに
-// なるため引き継がない。
+// id を落として新規登録(POST)にし、注射日は当日にする。開始時刻は時刻だけを持ち
+// 日付は注射日から決まるので、そのまま引き継げる。
 export function buildDoInjectionForm(values: InjectionFormValues): InjectionFormValues {
   return {
     ...values,
     authoredDate: today(),
     rps: values.rps.map((rp) => ({
       ...rp,
-      startTimes: [],
       medicines: rp.medicines.map(({ id: _id, ...rest }) => rest),
     })),
   };
@@ -576,7 +578,7 @@ export interface InjectionRpDisplay {
   lineDisplay?: string;
   /** 投与速度(mL/h)。 */
   rate?: number;
-  /** 開始時刻(datetime-local 形式)。 */
+  /** 開始時刻(HH:mm)。 */
   startTimes: string[];
   usageComment?: string;
   medicines: MedicineLineDisplay[];
@@ -608,7 +610,7 @@ export function groupInjectionByRp(mrs: fhir4.MedicationRequest[]): InjectionRpD
         methodDisplay: dosage?.method?.coding?.[0]?.display,
         lineDisplay: extensionCoding(dosage?.extension, LINE_EXT_URL)?.display,
         rate: doseAndRate?.rateQuantity?.value,
-        startTimes: (dosage?.timing?.event ?? []).map(toLocalDateTime),
+        startTimes: (dosage?.timing?.event ?? []).map(toLocalTime),
         usageComment: dosage?.additionalInstruction?.[0]?.text,
         medicines: [],
       };
@@ -698,7 +700,7 @@ export function parseInjectionForm(
         lineCode: extensionCoding(dosage?.extension, LINE_EXT_URL)?.code ?? "",
         rate:
           doseAndRate?.rateQuantity?.value != null ? String(doseAndRate.rateQuantity.value) : "",
-        startTimes: (dosage?.timing?.event ?? []).map(toLocalDateTime),
+        startTimes: (dosage?.timing?.event ?? []).map(toLocalTime),
         usageComment: dosage?.additionalInstruction?.[0]?.text ?? "",
         medicines: [],
         medicinesByOrder: new Map(),

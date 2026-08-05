@@ -386,11 +386,6 @@ function injectionUsageSummary(rp: InjectionRpDisplay): string {
     .join(" | ");
 }
 
-// 開始時刻はカードでは「MM/DD HH:mm」に詰める(年はグループ日付から分かる)。
-function shortStartTime(local: string): string {
-  return local.slice(5, 16).replace("-", "/").replace("T", " ");
-}
-
 // 診療日はグループ見出しに出るのでカードには時刻だけを添える。
 // 日付のみ(処方の authoredOn)は時刻を持たないので空文字。
 function timeOf(dateTime: string): string {
@@ -502,7 +497,7 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
             {rp.startTimes.length > 0 && (
               <div className="karte-rp__usage">
                 <span className="karte-rp__usage-label">開始:</span>
-                <span>{rp.startTimes.map(shortStartTime).join("、")}</span>
+                <span>{rp.startTimes.join("、")}</span>
               </div>
             )}
           </div>

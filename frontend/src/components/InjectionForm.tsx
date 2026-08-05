@@ -514,8 +514,9 @@ export function InjectionForm({
             <span className="rp-card__usage-label">開始時刻</span>
             {rp.startTimes.map((time, timeIndex) => (
               <div className="injection-start-times__row" key={timeIndex}>
+                {/* 日付は注射日を使うので時刻だけを入力する。 */}
                 <input
-                  type="datetime-local"
+                  type="time"
                   value={time}
                   onChange={(e) => updateStartTime(rpIndex, timeIndex, e.target.value)}
                 />
