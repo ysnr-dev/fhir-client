@@ -597,6 +597,7 @@ export function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null
     unit_code: null,
     unit_name: mr.dosageInstruction?.[0]?.doseAndRate?.[0]?.doseQuantity?.unit ?? null,
     dosage_form: null,
+    injection_volume: null,
     yakka_code: null,
     yakko_code: null,
     yakko_name: null,

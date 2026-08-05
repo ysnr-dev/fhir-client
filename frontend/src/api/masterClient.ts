@@ -22,6 +22,8 @@ export interface Medicine {
   unit_code: string | null;
   unit_name: string | null;
   dosage_form: string | null;
+  // 注射容量(mL)。注射薬でも大半は "0"(アンプル・粉末製剤)で、未設定と区別できない。
+  injection_volume: string | null;
   yakka_code: string | null;
   price: string | null;
   generic_name_description: string | null;

@@ -21,6 +21,7 @@ import {
   type MedicineLineValues,
   type PrescriptionSetting,
 } from "../fhir/prescriptionHelpers";
+import { presetInjectionUsageType } from "../fhir/usageMapping";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
@@ -70,6 +71,11 @@ export function InjectionForm({
   const [usageCommentOpen, setUsageCommentOpen] = useState<boolean[]>(() =>
     (initialValues ?? emptyInjectionForm()).rps.map((rp) => Boolean(rp.usageComment)),
   );
+  // 用法種別を手で選んだ RP。以降は医薬品を変えても自動で書き換えない
+  // (保存済みの注射を開いた場合も、登録時の選択を勝手に変えないよう選択済み扱いにする)。
+  const [usageTypeTouched, setUsageTypeTouched] = useState<boolean[]>(() =>
+    (initialValues ?? emptyInjectionForm()).rps.map((rp) => Boolean(rp.usageType)),
+  );
 
   const problemOptions = useProblemOptions(patientId);
 
@@ -101,17 +107,43 @@ export function InjectionForm({
     }));
   }
 
+  // ワンショットに投与速度は無いので、点滴以外に変わったら値も落とす。
+  function usageTypePatch(usageType: InjectionUsageType | ""): Partial<InjectionRpValues> {
+    return usageType === "drip" ? { usageType } : { usageType, rate: "" };
+  }
+
+  // 医薬品の増減・入れ替え。用法種別を手で選んでいない RP は、医薬品の包装から推定した
+  // 既定値に追従させる(輸液を足せば点滴、外せばワンショットに戻る)。
+  function updateRpMedicines(
+    rpIndex: number,
+    updater: (medicines: MedicineLineValues[]) => MedicineLineValues[],
+  ) {
+    const touched = usageTypeTouched[rpIndex];
+    setValues((v) => ({
+      ...v,
+      rps: v.rps.map((rp, i) => {
+        if (i !== rpIndex) return rp;
+        const medicines = updater(rp.medicines);
+        if (touched) return { ...rp, medicines };
+        const preset = presetInjectionUsageType(medicines.map((m) => m.medicine));
+        return { ...rp, medicines, ...usageTypePatch(preset) };
+      }),
+    }));
+  }
+
   function addRp() {
     setValues((v) => ({
       ...v,
       rps: [...v.rps, { ...emptyInjectionRp, startTimes: [], medicines: [{ ...emptyMedicineLine }] }],
     }));
     setUsageCommentOpen((open) => [...open, false]);
+    setUsageTypeTouched((touched) => [...touched, false]);
   }
 
   function removeRp(rpIndex: number) {
     setValues((v) => ({ ...v, rps: v.rps.filter((_, i) => i !== rpIndex) }));
     setUsageCommentOpen((open) => open.filter((_, i) => i !== rpIndex));
+    setUsageTypeTouched((touched) => touched.filter((_, i) => i !== rpIndex));
   }
 
   function toggleUsageComment(rpIndex: number, open: boolean) {
@@ -137,17 +169,15 @@ export function InjectionForm({
   }
 
   function removeMedicine(rpIndex: number, medIndex: number) {
-    setValues((v) => ({
-      ...v,
-      rps: v.rps.map((rp, i) =>
-        i === rpIndex ? { ...rp, medicines: rp.medicines.filter((_, j) => j !== medIndex) } : rp,
-      ),
-    }));
+    updateRpMedicines(rpIndex, (medicines) => medicines.filter((_, j) => j !== medIndex));
   }
 
   function handleMedicineSelect(medicine: Medicine) {
     if (modal?.kind !== "medicine") return;
-    updateMedicine(modal.rpIndex, modal.medIndex, { medicine });
+    const { rpIndex, medIndex } = modal;
+    updateRpMedicines(rpIndex, (medicines) =>
+      medicines.map((m, j) => (j === medIndex ? { ...m, medicine } : m)),
+    );
     setModal(null);
   }
 
@@ -388,9 +418,8 @@ export function InjectionForm({
               <select
                 value={rp.usageType}
                 onChange={(e) => {
-                  const usageType = e.target.value as InjectionUsageType | "";
-                  // ワンショットに投与速度は無いので、切り替えたら値も落とす。
-                  updateRp(rpIndex, { usageType, ...(usageType === "drip" ? {} : { rate: "" }) });
+                  setUsageTypeTouched((prev) => prev.map((t, i) => (i === rpIndex ? true : t)));
+                  updateRp(rpIndex, usageTypePatch(e.target.value as InjectionUsageType | ""));
                 }}
               >
                 <option value="">選択してください</option>
