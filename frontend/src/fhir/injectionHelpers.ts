@@ -152,14 +152,68 @@ function findCategoryDisplay(setting: PrescriptionSetting, code: string): string
   return displayOf(CATEGORY_OPTIONS[setting], code);
 }
 
+// 投与時間の選択肢。総投与量(mL)をこの時間で割って投与速度(mL/h)を出す。
+export const INFUSION_HOURS_OPTIONS: { value: string; display: string }[] = [
+  { value: "0.5", display: "30分" },
+  { value: "1", display: "1時間" },
+  { value: "1.5", display: "1時間30分" },
+  { value: "2", display: "2時間" },
+  { value: "3", display: "3時間" },
+  { value: "4", display: "4時間" },
+  { value: "6", display: "6時間" },
+  { value: "8", display: "8時間" },
+  { value: "12", display: "12時間" },
+  { value: "24", display: "24時間" },
+];
+
+export interface RpDoseTotal {
+  /** mL に換算できた薬剤の合計(mL)。 */
+  ml: number;
+  /** mL 換算できなかった薬剤の数(粉末バイアル等、容量がマスタに無いもの)。 */
+  unconvertible: number;
+}
+
+/**
+ * RP の総投与量。投与量は薬価算定単位(管・瓶・袋…)で入力するので、投与量換算マスタの
+ * 係数(1[薬価算定単位] = factor[mL])を掛けて mL に揃えてから合計する。
+ */
+export function rpDoseTotal(
+  medicines: MedicineLineValues[],
+  mlFactors: Map<string, number>,
+): RpDoseTotal {
+  let ml = 0;
+  let unconvertible = 0;
+  for (const line of medicines) {
+    const code = line.medicine?.medicine_code;
+    const dose = Number(line.dose);
+    if (!code || !line.dose || !Number.isFinite(dose)) continue;
+    const factor = mlFactors.get(code);
+    if (factor === undefined) unconvertible += 1;
+    else ml += dose * factor;
+  }
+  return { ml, unconvertible };
+}
+
+/** 総投与量(mL)と投与時間から投与速度(mL/h)を求める。表示・保存とも小数第 1 位まで。 */
+export function infusionRate(totalMl: number, hours: string): string {
+  const h = Number(hours);
+  if (!totalMl || !h) return "";
+  return String(Math.round((totalMl / h) * 10) / 10);
+}
+
 export interface InjectionRpValues {
   usageType: InjectionUsageType | "";
   routeCode: string;
   siteCode: string;
   methodCode: string;
   lineCode: string;
-  /** 投与速度(mL/h)。点滴のときのみ使用。 */
+  /** 投与速度(mL/h)。点滴のときのみ使用。infusionHours を選んでいる間は自動計算値で埋まる。 */
   rate: string;
+  /**
+   * 投与時間。総投与量から投与速度を自動計算するための入力で、FHIR には保存しない
+   * (保存するのは計算結果の投与速度)。空なら投与速度を直接入力する。
+   */
+  infusionHours: string;
   /** 開始時刻(HH:mm)。日付は注射日を使う。複数設定可能。 */
   startTimes: string[];
   usageComment: string;
@@ -189,6 +243,7 @@ export const emptyInjectionRp: InjectionRpValues = {
   methodCode: "",
   lineCode: "",
   rate: "",
+  infusionHours: "",
   startTimes: [],
   usageComment: "",
   medicines: [{ ...emptyMedicineLine }],
@@ -700,6 +755,8 @@ export function parseInjectionForm(
         lineCode: extensionCoding(dosage?.extension, LINE_EXT_URL)?.code ?? "",
         rate:
           doseAndRate?.rateQuantity?.value != null ? String(doseAndRate.rateQuantity.value) : "",
+        // 投与時間は保存していないので、編集時は投与速度を直接入力する状態に戻す。
+        infusionHours: "",
         startTimes: (dosage?.timing?.event ?? []).map(toLocalTime),
         usageComment: dosage?.additionalInstruction?.[0]?.text ?? "",
         medicines: [],
@@ -726,6 +783,7 @@ export function parseInjectionForm(
       methodCode: group.methodCode,
       lineCode: group.lineCode,
       rate: group.rate,
+      infusionHours: group.infusionHours,
       startTimes: group.startTimes,
       usageComment: group.usageComment,
       medicines: Array.from(group.medicinesByOrder.entries())

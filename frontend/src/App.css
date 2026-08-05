@@ -950,6 +950,40 @@ fieldset.rp-card {
   gap: 4px;
 }
 
+/* 自動計算中の投与速度。読み取り専用であることを分かるようにする。 */
+.injection-usage__rate input[readonly] {
+  background: var(--bg-sub, transparent);
+  color: var(--text);
+}
+
+/* 医薬品追加ボタンと総投与量を 1 行の両端に置く。 */
+.rp-card__actions--between {
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.injection-total {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.injection-total__label {
+  color: var(--text);
+}
+
+.injection-total__value {
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.injection-total__note {
+  font-size: 12px;
+  color: var(--text);
+}
+
 .injection-usage__rate input {
   width: 90px;
 }

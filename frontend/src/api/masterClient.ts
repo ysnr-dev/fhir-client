@@ -361,7 +361,9 @@ const DOSE_CONVERSIONS_PATH = "/master/medicine_dose_conversions";
 
 export async function searchMedicineDoseConversions(params: {
   name?: string;
+  /** 医薬品コード。カンマ区切りで複数指定できる。 */
   medicine_code?: string;
+  from_unit?: string;
   source?: string;
   dosage_form?: string;
   needs_review?: boolean;
@@ -371,6 +373,7 @@ export async function searchMedicineDoseConversions(params: {
   const search = new URLSearchParams();
   if (params.name) search.set("name", params.name);
   if (params.medicine_code) search.set("medicine_code", params.medicine_code);
+  if (params.from_unit) search.set("from_unit", params.from_unit);
   if (params.source) search.set("source", params.source);
   if (params.dosage_form) search.set("dosage_form", params.dosage_form);
   if (params.needs_review) search.set("needs_review", "true");

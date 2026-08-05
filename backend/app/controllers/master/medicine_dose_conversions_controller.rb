@@ -17,7 +17,10 @@ module Master
 
     def index
       scope = conversions_with_medicine
-      scope = scope.where(medicine_code: params[:medicine_code]) if params[:medicine_code].present?
+      # 注射オーダーは RP 内の医薬品をまとめて mL 換算するため、カンマ区切りの複数コードと
+      # 換算元単位での絞り込みを受け付ける(検査項目マスタの jlac11_code と同じ方式)。
+      scope = scope.where(medicine_code: params[:medicine_code].split(",")) if params[:medicine_code].present?
+      scope = scope.where(from_unit: params[:from_unit]) if params[:from_unit].present?
       scope = scope.where(source: params[:source]) if params[:source].present?
       scope = scope.where(needs_review: true) if params[:needs_review] == "true"
       scope = scope.where("master_medicines.dosage_form = ?", params[:dosage_form]) if params[:dosage_form].present?

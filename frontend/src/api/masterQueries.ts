@@ -283,6 +283,31 @@ export function useDeleteMedicineDoseConversion() {
   });
 }
 
+// 注射オーダーの総投与量計算用。医薬品コード → 「1[薬価算定単位] が何 mL か」の係数。
+// 換算行を持たない医薬品(粉末バイアル等、容量がマスタに無いもの)は Map に入らない。
+export function useMedicineMlFactors(medicineCodes: string[]) {
+  const codes = Array.from(new Set(medicineCodes)).sort();
+
+  return useQuery({
+    queryKey: ["master", "medicine_dose_conversions", "ml", codes],
+    queryFn: async () => {
+      const result = await searchMedicineDoseConversions({
+        medicine_code: codes.join(","),
+        from_unit: "mL",
+        per: 100,
+      });
+      const factors = new Map<string, number>();
+      for (const row of result.items) {
+        const factor = Number(row.factor);
+        if (factor > 0) factors.set(row.medicine_code, factor);
+      }
+      return factors;
+    },
+    staleTime: Infinity,
+    enabled: codes.length > 0,
+  });
+}
+
 // 検査結果の編集画面用。保存済みの JLAC11 コードからマスタ情報
 // (コード型の選択肢など)を一括で引き直す。
 export function useLabItemsByCodes(codes: string[]) {

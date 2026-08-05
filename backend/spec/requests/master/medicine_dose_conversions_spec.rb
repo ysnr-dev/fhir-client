@@ -50,6 +50,20 @@ RSpec.describe "Master::MedicineDoseConversions", type: :request do
 
       expect(items.map { |i| i["from_unit"] }).to eq(["mL"])
     end
+
+    # 注射オーダーは RP 内の医薬品をまとめて mL 換算するため、複数コードと換算元単位で引く。
+    it "医薬品コードのカンマ区切りで複数まとめて引ける" do
+      get "/master/medicine_dose_conversions", params: { medicine_code: "620000242,610453063" }
+
+      expect(items.map { |i| i["medicine_code"] }.uniq).to contain_exactly("620000242", "610453063")
+    end
+
+    it "換算元単位で絞り込む" do
+      get "/master/medicine_dose_conversions",
+          params: { medicine_code: "620000242,610453063", from_unit: "mL" }
+
+      expect(items.map { |i| i.values_at("medicine_code", "from_unit") }).to eq([%w[620000242 mL]])
+    end
   end
 
   describe "GET /master/medicine_dose_conversions/unmapped" do

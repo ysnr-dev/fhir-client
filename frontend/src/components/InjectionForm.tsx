@@ -4,6 +4,7 @@ import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   CATEGORY_OPTIONS,
   DRIP_DEFAULT_ROUTE,
+  INFUSION_HOURS_OPTIONS,
   LINE_OPTIONS,
   METHOD_OPTIONS,
   ROUTE_OPTIONS,
@@ -12,9 +13,12 @@ import {
   defaultCategory,
   emptyInjectionForm,
   emptyInjectionRp,
+  infusionRate,
+  rpDoseTotal,
   type InjectionFormValues,
   type InjectionRpValues,
   type InjectionUsageType,
+  type RpDoseTotal,
 } from "../fhir/injectionHelpers";
 import {
   SETTING_OPTIONS,
@@ -23,6 +27,7 @@ import {
   type PrescriptionSetting,
 } from "../fhir/prescriptionHelpers";
 import { presetInjectionUsageType } from "../fhir/usageMapping";
+import { useMedicineMlFactors } from "../api/masterQueries";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
@@ -41,6 +46,11 @@ interface InjectionFormProps {
 }
 
 type ModalState = { kind: "medicine"; rpIndex: number; medIndex: number } | null;
+
+// 総投与量。端数が出るのは濃度からの換算だけなので小数第 1 位まで出す。
+function formatMl(ml: number): string {
+  return (Math.round(ml * 10) / 10).toLocaleString();
+}
 
 function TrashIcon() {
   return (
@@ -80,6 +90,22 @@ export function InjectionForm({
 
   const problemOptions = useProblemOptions(patientId);
 
+  // 総投与量の計算に使う mL 換算係数。フォーム上の全医薬品分をまとめて引く。
+  const { data: mlFactors } = useMedicineMlFactors(
+    values.rps.flatMap((rp) =>
+      rp.medicines.map((m) => m.medicine?.medicine_code).filter((c): c is string => Boolean(c)),
+    ),
+  );
+
+  function doseTotalOf(rp: InjectionRpValues): RpDoseTotal {
+    return rpDoseTotal(rp.medicines, mlFactors ?? new Map());
+  }
+
+  // 投与時間を選んでいる間は投与速度を自動計算で埋める(直接入力は投与時間が空のときだけ)。
+  function effectiveRate(rp: InjectionRpValues): string {
+    return rp.infusionHours ? infusionRate(doseTotalOf(rp).ml, rp.infusionHours) : rp.rate;
+  }
+
   function update<K extends keyof InjectionFormValues>(key: K, value: InjectionFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
   }
@@ -115,7 +141,7 @@ export function InjectionForm({
     rp: InjectionRpValues,
     usageType: InjectionUsageType | "",
   ): Partial<InjectionRpValues> {
-    if (usageType !== "drip") return { usageType, rate: "" };
+    if (usageType !== "drip") return { usageType, rate: "", infusionHours: "" };
     return { usageType, ...(rp.routeCode ? {} : { routeCode: DRIP_DEFAULT_ROUTE }) };
   }
 
@@ -215,8 +241,12 @@ export function InjectionForm({
       const rpLabel = `RP${i + 1}`;
       if (!rp.usageType) return `${rpLabel}: 用法種別を選択してください。`;
       if (!rp.routeCode) return `${rpLabel}: 投与経路を選択してください。`;
-      if (rp.usageType === "drip" && rp.rate && Number(rp.rate) <= 0) {
+      const rate = effectiveRate(rp);
+      if (rp.usageType === "drip" && rate && Number(rate) <= 0) {
         return `${rpLabel}: 投与速度は正の数値で入力してください。`;
+      }
+      if (rp.usageType === "drip" && rp.infusionHours && !rate) {
+        return `${rpLabel}: 総投与量を mL 換算できないため投与速度を計算できません。投与時間の選択を外して直接入力してください。`;
       }
       if (rp.startTimes.some((t) => !t)) {
         return `${rpLabel}: 開始時刻が未入力の行があります。入力するか削除してください。`;
@@ -239,7 +269,12 @@ export function InjectionForm({
       return;
     }
     setValidationError(null);
-    onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
+    // 投与時間から計算した投与速度を確定値として保存する(投与時間そのものは保存しない)。
+    onSubmit({
+      ...values,
+      problem: refreshProblemDisplay(values.problem, problemOptions),
+      rps: values.rps.map((rp) => ({ ...rp, rate: effectiveRate(rp) })),
+    });
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLFormElement>) {
@@ -334,7 +369,9 @@ export function InjectionForm({
         )}
       </fieldset>
 
-      {values.rps.map((rp, rpIndex) => (
+      {values.rps.map((rp, rpIndex) => {
+        const doseTotal = doseTotalOf(rp);
+        return (
         <fieldset className="rp-card" key={rpIndex}>
           <legend>{`RP${rpIndex + 1}`}</legend>
 
@@ -409,7 +446,7 @@ export function InjectionForm({
             </tbody>
           </table>
 
-          <div className="rp-card__actions">
+          <div className="rp-card__actions rp-card__actions--between">
             <button
               type="button"
               className="rp-card__compact-button"
@@ -417,6 +454,18 @@ export function InjectionForm({
             >
               + 医薬品追加
             </button>
+            {/* 総投与量は投与速度を使わない場合(ワンショット等)でも常に出す。 */}
+            <span className="injection-total">
+              <span className="injection-total__label">総投与量</span>
+              <span className="injection-total__value">
+                {doseTotal.ml ? `${formatMl(doseTotal.ml)} mL` : "-"}
+              </span>
+              {doseTotal.unconvertible > 0 && (
+                <span className="injection-total__note">
+                  {`(${doseTotal.unconvertible}件はmL換算できないため含みません)`}
+                </span>
+              )}
+            </span>
           </div>
 
           <div className="injection-usage">
@@ -494,19 +543,46 @@ export function InjectionForm({
               </select>
             </label>
             {rp.usageType === "drip" && (
-              <label>
-                投与速度
-                <span className="injection-usage__rate">
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={rp.rate}
-                    onChange={(e) => updateRp(rpIndex, { rate: e.target.value })}
-                  />
-                  <span className="injection-usage__rate-unit">mL/h</span>
-                </span>
-              </label>
+              <>
+                <label>
+                  投与時間
+                  <select
+                    value={rp.infusionHours}
+                    onChange={(e) =>
+                      // 投与時間をやめたら、それまでの計算値を直接入力の初期値として残す。
+                      updateRp(rpIndex, {
+                        infusionHours: e.target.value,
+                        ...(e.target.value ? {} : { rate: effectiveRate(rp) }),
+                      })
+                    }
+                  >
+                    <option value="">指定なし(速度を直接入力)</option>
+                    {INFUSION_HOURS_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.display}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  投与速度
+                  <span className="injection-usage__rate">
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      // 投与時間を選んでいる間は総投与量からの自動計算値を出す。
+                      value={effectiveRate(rp)}
+                      readOnly={Boolean(rp.infusionHours)}
+                      title={
+                        rp.infusionHours ? "総投与量と投与時間から自動計算しています" : undefined
+                      }
+                      onChange={(e) => updateRp(rpIndex, { rate: e.target.value })}
+                    />
+                    <span className="injection-usage__rate-unit">mL/h</span>
+                  </span>
+                </label>
+              </>
             )}
           </div>
 
@@ -588,7 +664,8 @@ export function InjectionForm({
             </div>
           )}
         </fieldset>
-      ))}
+        );
+      })}
 
       <div className="prescription-form__actions">
         <button type="button" onClick={addRp}>
