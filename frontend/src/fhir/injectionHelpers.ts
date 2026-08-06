@@ -136,6 +136,28 @@ export const SITE_OPTIONS: CodeOption[] = [
   { code: "91R", display: "右下肢" },
 ];
 
+// 投与経路から手技が一意に決まる組み合わせ。静脈内(IV)だけは末梢の静脈注射(30)と
+// 中心静脈注射(31)のどちらもありうるため入れない。
+const ROUTE_METHODS: Record<string, string> = {
+  IM: "33", // 筋肉内 → 筋肉内注射
+  SC: "32", // 皮下 → 皮下注射
+  ID: "34", // 皮内 → 皮内注射
+  IA: "35", // 動脈内 → 動脈注射
+  IT: "3B", // 髄腔内 → 脳脊髄腔注射
+  IP: "3R", // 腹腔内 → 腹腔内注射
+};
+
+/**
+ * 投与経路を選んだときの手技。経路から一意に決まるならその手技にする。決まらない
+ * (静脈内・未選択)場合は今の手技を残すが、別の経路に固有の手技(経路を選び直す前に
+ * 自動で入ったもの)なら経路と食い違うので落とす。
+ */
+export function methodForRoute(routeCode: string, currentMethod: string): string {
+  const unique = ROUTE_METHODS[routeCode];
+  if (unique) return unique;
+  return Object.values(ROUTE_METHODS).includes(currentMethod) ? "" : currentMethod;
+}
+
 export const LINE_OPTIONS: CodeOption[] = [
   { code: "peripheral", display: "末梢ルート" },
   { code: "peripheral-side", display: "末梢ルート(側管)" },

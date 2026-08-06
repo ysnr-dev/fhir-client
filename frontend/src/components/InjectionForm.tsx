@@ -14,6 +14,7 @@ import {
   emptyInjectionForm,
   emptyInjectionRp,
   infusionRate,
+  methodForRoute,
   rpDoseTotal,
   type InjectionFormValues,
   type InjectionRpValues,
@@ -490,7 +491,14 @@ export function InjectionForm({
               投与経路
               <select
                 value={rp.routeCode}
-                onChange={(e) => updateRp(rpIndex, { routeCode: e.target.value })}
+                onChange={(e) => {
+                  // 手技が経路から一意に決まるものは一緒に選ぶ(methodForRoute 参照)。
+                  const routeCode = e.target.value;
+                  updateRp(rpIndex, {
+                    routeCode,
+                    methodCode: methodForRoute(routeCode, rp.methodCode),
+                  });
+                }}
               >
                 <option value="">選択してください</option>
                 {ROUTE_OPTIONS.map((o) => (
