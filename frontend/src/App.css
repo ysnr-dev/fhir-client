@@ -908,8 +908,12 @@ button:disabled {
   text-decoration: underline;
 }
 
-.rp-card {
+/* fieldset 共通の flex-wrap: wrap のままだと、縦並びの子(注射の用法グリッド等)に
+   余分な高さが行間として配られてしまうため折り返しを無効にする
+   (.prescription-form fieldset より詳細度を上げるため fieldset を付ける)。 */
+fieldset.rp-card {
   flex-direction: column;
+  flex-wrap: nowrap;
   align-items: stretch;
 }
 
@@ -930,6 +934,76 @@ button:disabled {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+
+/* 注射の用法(用法種別・投与経路・部位・手技・ライン・速度)。
+   ラベル付き select を折り返しのグリッドで並べる。 */
+.injection-usage {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px 12px;
+}
+
+.injection-usage__rate {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 自動計算中の投与速度。読み取り専用であることを分かるようにする。 */
+.injection-usage__rate input[readonly] {
+  background: var(--bg-sub, transparent);
+  color: var(--text);
+}
+
+/* 医薬品追加ボタンと総投与量を 1 行の両端に置く。 */
+.rp-card__actions--between {
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.injection-total {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.injection-total__label {
+  color: var(--text);
+}
+
+.injection-total__value {
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.injection-total__note {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.injection-usage__rate input {
+  width: 90px;
+}
+
+.injection-usage__rate-unit {
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 開始時刻(複数)。1 行 1 時刻で削除アイコンを添える。 */
+.injection-start-times {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.injection-start-times__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* 常時表示の補助的なボタン(用法選択・医薬品追加)は、入力欄より控えめな大きさにする。 */

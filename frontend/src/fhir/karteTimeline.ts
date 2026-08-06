@@ -1,18 +1,23 @@
 import { referencedResponseIds } from "./clinicalNoteHelpers";
+import { isInjectionServiceRequest } from "./injectionHelpers";
 import { questionnaireCanonical } from "./questionnaireResponseHelpers";
 
 // カルテ画面のタイムライン(診療日ごとの時系列表示)を組み立てる純粋ロジック。
 //
-// 診療記録(Composition) / 処方(ServiceRequest + MedicationRequest) / 単独登録の
-// テンプレート回答(QuestionnaireResponse)を 1 本の時系列にまとめる。3 つは別々の
-// 検索でページングされるため、「どこまで表示してよいか」の判断が要になる
+// 診療記録(Composition) / 処方・注射(ServiceRequest + MedicationRequest) / 単独登録の
+// テンプレート回答(QuestionnaireResponse)を 1 本の時系列にまとめる。検索は別々に
+// ページングされるため、「どこまで表示してよいか」の判断が要になる
 // (buildKarteTimeline の安全カットオフを参照)。
+//
+// 処方と注射は同じ ServiceRequest 検索(1 本のページング)で取得し、category の
+// オーダー種別でカードの種別に振り分ける。
 
-export type KarteItemKind = "note" | "prescription" | "qr";
+export type KarteItemKind = "note" | "prescription" | "injection" | "qr";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   note: "診療記録",
   prescription: "処方",
+  injection: "注射",
   qr: "テンプレート",
 };
 
@@ -31,6 +36,11 @@ export type KarteTimelineItem = KarteItemBase &
     | { kind: "note"; note: fhir4.Composition }
     | {
         kind: "prescription";
+        serviceRequest: fhir4.ServiceRequest;
+        medicationRequests: fhir4.MedicationRequest[];
+      }
+    | {
+        kind: "injection";
         serviceRequest: fhir4.ServiceRequest;
         medicationRequests: fhir4.MedicationRequest[];
       }
@@ -176,15 +186,20 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     note,
   }));
 
-  const prescriptionItems: KarteTimelineItem[] = serviceRequests.map((serviceRequest) => ({
-    kind: "prescription",
-    id: serviceRequest.id ?? "",
-    day: dayOf(serviceRequest.authoredOn),
-    dateTime: serviceRequest.authoredOn ?? "",
-    label: KARTE_KIND_LABELS.prescription,
-    serviceRequest,
-    medicationRequests: medicationRequestsBySr.get(serviceRequest.id ?? "") ?? [],
-  }));
+  // 処方と注射は同じ検索結果に混ざって届くので、category のオーダー種別で振り分ける
+  // (注射より前から存在する処方の ServiceRequest はオーダー種別を持たない)。
+  const prescriptionItems: KarteTimelineItem[] = serviceRequests.map((serviceRequest) => {
+    const base = {
+      id: serviceRequest.id ?? "",
+      day: dayOf(serviceRequest.authoredOn),
+      dateTime: serviceRequest.authoredOn ?? "",
+      serviceRequest,
+      medicationRequests: medicationRequestsBySr.get(serviceRequest.id ?? "") ?? [],
+    };
+    return isInjectionServiceRequest(serviceRequest)
+      ? { ...base, kind: "injection" as const, label: KARTE_KIND_LABELS.injection }
+      : { ...base, kind: "prescription" as const, label: KARTE_KIND_LABELS.prescription };
+  });
 
   const qrItems: KarteTimelineItem[] = responses
     .filter((response) => !linkedResponseIds.has(response.id ?? ""))

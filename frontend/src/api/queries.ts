@@ -12,6 +12,7 @@ import {
   observationIdsFromReport,
   specimenIdsFromReport,
 } from "../fhir/labResultHelpers";
+import { isInjectionServiceRequest } from "../fhir/injectionHelpers";
 import {
   buildPrescriptionDeleteBundle,
   splitPrescriptionDetailBundle,
@@ -1332,9 +1333,35 @@ export function useQuestionnaireResponseWithQuestionnaire(id: string | undefined
   };
 }
 
+// 検索結果(新しい順)から最新の「処方」の ServiceRequest とその明細だけを残した Bundle
+// を作る。注射オーダーの ServiceRequest と、他のオーダーに属する MedicationRequest を
+// 取り除く(splitPrescriptionDetailBundle は basedOn を見ずに全 MR を集めるため)。
+function latestPrescriptionBundle(bundle: fhir4.Bundle): fhir4.Bundle {
+  const entries = bundle.entry ?? [];
+  const sr = entries
+    .map((e) => e.resource)
+    .find(
+      (r): r is fhir4.ServiceRequest =>
+        r?.resourceType === "ServiceRequest" && !isInjectionServiceRequest(r as fhir4.ServiceRequest),
+    );
+  if (!sr) return { ...bundle, entry: [] };
+
+  const kept = entries.filter((entry) => {
+    const resource = entry.resource;
+    if (resource?.resourceType === "ServiceRequest") return resource.id === sr.id;
+    if (resource?.resourceType === "MedicationRequest") {
+      return (resource as fhir4.MedicationRequest).basedOn?.some(
+        (basedOn) => basedOn.reference === `ServiceRequest/${sr.id}`,
+      );
+    }
+    return false;
+  });
+  return { ...bundle, entry: kept };
+}
+
 // テンプレート回答フォームの初期値式(%conditions / %labResults / %prescriptions)の
 // 元データ取得。傷病名はアクティブなもの全件(上流の _count 上限 100 まで)、
-// 検査結果・処方は最新 1 件を _sort + _count=1 + _include/_revinclude の 1 リクエスト
+// 検査結果・処方は最新 1 件を _sort + _count + _include/_revinclude の 1 リクエスト
 // で関連リソースごと取る(この組み合わせは上流の回帰 spec で保証済み)。
 export function usePopulateSources(patientId: string | undefined) {
   const conditionParams = new URLSearchParams();
@@ -1364,12 +1391,17 @@ export function usePopulateSources(patientId: string | undefined) {
 
   const rxParams = new URLSearchParams();
   if (patientId) rxParams.set("patient", `Patient/${patientId}`);
-  rxParams.set("_count", "1");
+  // 注射オーダーも同じ ServiceRequest として保存されるため、_count=1 だと最新が注射の
+  // 患者で %prescriptions が注射になってしまう。少し多めに取り、最新の処方だけを残す。
+  rxParams.set("_count", "5");
   rxParams.set("_sort", "-authoredon");
   rxParams.set("_revinclude", "MedicationRequest:based-on");
   const rxDetail = useQuery({
     queryKey: ["ServiceRequest", "populate", patientId],
-    queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", rxParams),
+    queryFn: async () => {
+      const result = await searchResource<fhir4.Resource>("ServiceRequest", rxParams);
+      return { ...result, data: latestPrescriptionBundle(result.data) };
+    },
     enabled: Boolean(patientId),
   });
 

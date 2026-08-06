@@ -1,9 +1,14 @@
 import type { Medicine } from "../api/masterClient";
 import type { MedicineUsageFilters } from "../api/masterQueries";
+import type { InjectionUsageType } from "./injectionHelpers";
 
-// 薬価基準収載医薬品コードの剤形英字（8桁目）と用法マスタ区分の対応。
-// 確定マッチではなく、用法検索モーダルの初期フィルタ（プリセット）を導出するためのもの。
-// 詳細は tmp/yakka_dosage_form_usage_mapping.md を参照。
+// 医薬品マスタから用法のプリセット（フォームの初期値）を導出する。いずれも確定マッチでは
+// ないため、常にユーザーが変更・解除できる前提で使うこと。
+//   - presetUsageFilters:        用法検索モーダルの初期フィルタ（内服・外用を含む全剤形）
+//   - presetInjectionUsageType:  注射の用法種別（点滴 / ワンショット）
+//
+// 薬価基準収載医薬品コードの剤形英字（8桁目）と用法マスタ区分の対応の詳細は
+// tmp/yakka_dosage_form_usage_mapping.md を参照。
 
 type Preset = Pick<MedicineUsageFilters, "basicUsageCategory" | "detailedUsageCategory">;
 
@@ -155,4 +160,51 @@ export function presetUsageFilters(medicine: Medicine | null | undefined): Medic
   if (byName) return byName;
 
   return presetFromDosageForm(medicine.dosage_form, medicine.yakka_code);
+}
+
+// ---- 注射の用法種別（点滴 / ワンショット）----
+//
+// 点滴かワンショットかは本来「どう投与するか」というオーダーの指示であって医薬品の属性では
+// ないため、マスタから確定させることはできない。ただし包装（薬価算定単位）は強い手がかりに
+// なる。医薬品マスタの注射薬 4176 件での確認:
+//   - 管(アンプル) 1043 件のうち注射容量 100mL 以上は 0 件。名称に「点滴」を含むのも 5%
+//   - 筒(シリンジ) 528 件で名称に「点滴」を含むのは 0.6%
+//   - 袋(バッグ) 583 件は 95% が 100mL 以上
+//   - 瓶 1602 件は粉末バイアルと輸液ボトルが同居するので、注射容量で分ける必要がある
+// 決められないもの（主にバイアル。全体の約 1/4）は空を返してユーザーに選ばせる。
+
+/** 「瓶」を輸液ボトル（点滴）とみなす注射容量の下限(mL)。 */
+const BOTTLE_ML = 100;
+
+// 薬価マスタの注射容量(mL)。アンプル・粉末製剤は "0" が入っている（未設定と区別できない）。
+function injectionVolume(medicine: Medicine): number {
+  return Number(medicine.injection_volume ?? "") || 0;
+}
+
+/** 医薬品 1 件の用法種別。両方ありうる（バイアル等）場合と判別できない場合は空。 */
+export function injectionUsageTypeOf(medicine: Medicine): InjectionUsageType | "" {
+  const unit = medicine.unit_name ?? "";
+  // 「点滴静注用」等。粉末バイアルでも点滴専用と分かるので包装より優先する。
+  if (medicine.name.includes("点滴")) return "drip";
+  // 筋注のプレフィルドシリンジがキット単位で登録されている（ゼプリオン水懸筋注シリンジ等）。
+  const syringeKit = unit === "キット" && medicine.name.includes("シリンジ");
+  if (unit === "袋") return "drip";
+  if (unit === "キット" && !syringeKit) return "drip";
+  if (unit === "瓶") return injectionVolume(medicine) >= BOTTLE_ML ? "drip" : "";
+  if (unit === "管" || unit === "筒" || syringeKit) return "one-shot";
+  return "";
+}
+
+/**
+ * RP（混注のまとまり）の用法種別。混注は「輸液 + アンプル数本」の構成になるので、
+ * 点滴の薬剤が 1 つでもあれば点滴とする。全部ワンショットならワンショット、
+ * 決まらなければ空（ユーザーが選ぶ）。
+ */
+export function presetInjectionUsageType(
+  medicines: (Medicine | null)[],
+): InjectionUsageType | "" {
+  const types = medicines.filter((m): m is Medicine => Boolean(m)).map(injectionUsageTypeOf);
+  if (types.includes("drip")) return "drip";
+  if (types.length > 0 && types.every((t) => t === "one-shot")) return "one-shot";
+  return "";
 }

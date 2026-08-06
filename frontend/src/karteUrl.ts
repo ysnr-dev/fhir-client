@@ -45,7 +45,7 @@ export interface KarteDetailTarget {
   id: string;
 }
 
-const DETAIL_KINDS: KarteItemKind[] = ["note", "prescription", "qr"];
+const DETAIL_KINDS: KarteItemKind[] = ["note", "prescription", "injection", "qr"];
 
 export function formatKarteDetail(target: KarteDetailTarget): string {
   return `${target.kind}:${target.id}`;

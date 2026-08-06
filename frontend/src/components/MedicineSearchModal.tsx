@@ -8,15 +8,17 @@ import { Modal } from "./Modal";
 interface MedicineSearchModalProps {
   onSelect: (medicine: Medicine) => void;
   onClose: () => void;
+  /** 剤形区分での絞り込み(注射オーダーでは "4"=注射薬)。指定しなければ全剤形。 */
+  dosageForm?: string;
 }
 
-export function MedicineSearchModal({ onSelect, onClose }: MedicineSearchModalProps) {
+export function MedicineSearchModal({ onSelect, onClose, dosageForm }: MedicineSearchModalProps) {
   const [name, setName] = useState("");
   // yakkoInput は入力欄の表示文字列、yakkoCode は候補確定時のみ更新する薬効分類番号。
   const [yakkoInput, setYakkoInput] = useState("");
   const [yakkoCode, setYakkoCode] = useState("");
   const [page, setPage] = useState(1);
-  const { data, error, isFetching } = useMedicineSearch(name, yakkoCode, page, true);
+  const { data, error, isFetching } = useMedicineSearch(name, yakkoCode, page, true, dosageForm);
   const yakkoOptions = useMedicineTypeOptions(true);
   const yakkoListId = useId();
 

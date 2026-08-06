@@ -22,6 +22,8 @@ export interface Medicine {
   unit_code: string | null;
   unit_name: string | null;
   dosage_form: string | null;
+  // 注射容量(mL)。注射薬でも大半は "0"(アンプル・粉末製剤)で、未設定と区別できない。
+  injection_volume: string | null;
   yakka_code: string | null;
   price: string | null;
   generic_name_description: string | null;
@@ -205,6 +207,7 @@ export async function searchMedicines(params: {
   name?: string;
   yakko_code?: string;
   yakko_name?: string;
+  dosage_form?: string;
   page?: number;
   per?: number;
 }): Promise<MasterSearchResult<Medicine>> {
@@ -212,6 +215,7 @@ export async function searchMedicines(params: {
   if (params.name) search.set("name", params.name);
   if (params.yakko_code) search.set("yakko_code", params.yakko_code);
   if (params.yakko_name) search.set("yakko_name", params.yakko_name);
+  if (params.dosage_form) search.set("dosage_form", params.dosage_form);
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 
@@ -357,7 +361,9 @@ const DOSE_CONVERSIONS_PATH = "/master/medicine_dose_conversions";
 
 export async function searchMedicineDoseConversions(params: {
   name?: string;
+  /** 医薬品コード。カンマ区切りで複数指定できる。 */
   medicine_code?: string;
+  from_unit?: string;
   source?: string;
   dosage_form?: string;
   needs_review?: boolean;
@@ -367,6 +373,7 @@ export async function searchMedicineDoseConversions(params: {
   const search = new URLSearchParams();
   if (params.name) search.set("name", params.name);
   if (params.medicine_code) search.set("medicine_code", params.medicine_code);
+  if (params.from_unit) search.set("from_unit", params.from_unit);
   if (params.source) search.set("source", params.source);
   if (params.dosage_form) search.set("dosage_form", params.dosage_form);
   if (params.needs_review) search.set("needs_review", "true");
