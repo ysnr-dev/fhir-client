@@ -66,39 +66,81 @@ export function OrderContextPicker() {
   const [value, setValue] = useState<OrderContext | null>(null);
   const [open, setOpen] = useState(false);
   const [expandedId, setExpandedId] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
   // 初期化済みのログインユーザー。ログインし直したら初期値を取り直す。
   const initializedFor = useRef("");
 
-  // 初期値: 保存済みの選択、無ければ既定診療科(+ 医師なら依頼医師は本人)。
+  // 初期値: ユーザーが選んだ保存済みの値、無ければ既定診療科(+ 医師なら依頼医師は本人)。
   useEffect(() => {
     if (!practitionerId || practitionerRoles.isPending) return;
     if (initializedFor.current === practitionerId) return;
     // 医師本人が依頼医師になるので、氏名が引けるまで待つ。
     if (isDoctor && !practitioner) return;
+    // 選択肢が出揃う前に確定させると、保存済みの科を照合できないまま
+    // 「診療科未選択」で固定されてしまう。施設の全科を引く場合は待つ。
+    if (!useMyDepartments && facilityId && facilityDepartments.isPending) return;
 
     initializedFor.current = practitionerId;
 
-    const stored = readOrderContext(practitionerId);
-    if (stored) {
-      setValue(stored);
-      return;
-    }
-
+    // 既定診療科。担当科が未登録なら(医師以外の代行入力を含め)空になる。
     const primary = myDepartments.find((d) => d.primary) ?? myDepartments[0];
+    // ユーザーが選んだ値だけを引き継ぐ。自動で入れただけの値(auto)は毎回入れ直す
+    // ので、医療従事者マスタで既定診療科を変えるとここにも反映される。今選べる科に
+    // 無い(診療科の登録が変わった)ときも既定診療科に戻す。
+    const chosen = readOrderContext(practitionerId);
+    const stored = chosen && !chosen.auto ? chosen : null;
+    const department =
+      departments.find((d) => d.id === stored?.departmentId) ??
+      (primary ? { id: primary.organizationId, name: primary.name } : undefined);
+    // 既定診療科のまま(ユーザーが選んでいない)かどうか。次回もマスタ側に追従させる。
+    const auto = !stored || stored.departmentId !== department?.id;
+    // 代行入力の指示医師は、科が保存時のままのときだけ引き継ぐ。
+    const keepsStoredDoctor = Boolean(stored && department && stored.departmentId === department.id);
+
     const initial: OrderContext = {
       ...emptyOrderContext,
-      departmentId: primary?.organizationId ?? "",
-      departmentName: primary?.name ?? "",
+      departmentId: department?.id ?? "",
+      departmentName: department?.name ?? "",
       ...(isDoctor && practitioner
         ? {
             practitionerId: practitionerId,
             practitionerName: practitionerDisplayName(practitioner),
           }
-        : {}),
+        : keepsStoredDoctor && stored
+          ? { practitionerId: stored.practitionerId, practitionerName: stored.practitionerName }
+          : {}),
     };
     setValue(initial);
-    storeOrderContext(practitionerId, initial);
-  }, [practitionerId, practitioner, practitionerRoles.isPending, isDoctor, myDepartments]);
+    storeOrderContext(practitionerId, initial, auto);
+  }, [
+    practitionerId,
+    practitioner,
+    practitionerRoles.isPending,
+    isDoctor,
+    myDepartments,
+    departments,
+    useMyDepartments,
+    facilityId,
+    facilityDepartments.isPending,
+  ]);
+
+  // メニュー外を押すか Esc で閉じる。マウスが離れただけでは閉じない
+  // (トリガーとパネルの間に隙間があり、そこを通っただけで消えてしまうため)。
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
 
   function update(next: OrderContext) {
     setValue(next);
@@ -147,15 +189,9 @@ export function OrderContextPicker() {
     .join(" | ");
 
   return (
-    // 開くのはクリックのみ(マウスオーバーで勝手に開くと、直後のクリックで
-    // 閉じてしまい「押しても開かない」ように見えるため)。離れるか Esc で閉じる。
-    <div
-      className="order-context"
-      onMouseLeave={() => setOpen(false)}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") setOpen(false);
-      }}
-    >
+    // 開閉はクリックのみ(マウスオーバーで勝手に開くと、直後のクリックで
+    // 閉じてしまい「押しても開かない」ように見えるため)。閉じるのは上の外側クリック。
+    <div className="order-context" ref={ref}>
       <span className="order-context__label">依頼</span>
       <button
         type="button"
