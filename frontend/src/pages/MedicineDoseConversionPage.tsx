@@ -18,6 +18,8 @@ const SOURCE_LABELS: Record<string, string> = {
   from_percent: "濃度%から算出",
   volume: "規格の容量",
   identity: "製剤量と同一",
+  from_name: "医薬品名から算出",
+  injection_volume: "マスタの注射容量",
   manual: "手動登録",
 };
 
@@ -158,7 +160,8 @@ export function MedicineDoseConversionPage() {
         <p className="master-import-form__success" role="status">
           {generate.data.created} 件の換算を作成しました（対象医薬品 {generate.data.medicines} 件 /
           作成済みのためスキップ {generate.data.skipped} 件 / 規格を読み取れず未紐付けのまま{" "}
-          {generate.data.unmapped} 件 / 要確認 {generate.data.needs_review} 件）
+          {generate.data.unmapped} 件 / 要確認 {generate.data.needs_review} 件 / 既存医薬品への mL 行補完{" "}
+          {generate.data.volume_filled} 件）
         </p>
       )}
 

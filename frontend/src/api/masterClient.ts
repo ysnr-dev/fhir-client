@@ -89,6 +89,8 @@ export interface MedicineDoseConversionGenerateResult {
   skipped: number;
   unmapped: number;
   needs_review: number;
+  /** 既存の医薬品に後から足した mL 行の数(点滴の総投与量を出すための補完)。 */
+  volume_filled: number;
 }
 
 export interface MedicineUsage {

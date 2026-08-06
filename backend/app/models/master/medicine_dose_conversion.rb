@@ -5,7 +5,7 @@ module Master
     self.table_name = "master_medicine_dose_conversions"
 
     # 自動生成の導出根拠。manual は画面から手で登録・修正したもの。
-    SOURCES = %w[explicit from_percent volume identity manual].freeze
+    SOURCES = %w[explicit from_percent volume identity from_name injection_volume manual].freeze
 
     validates :medicine_code, presence: true
     validates :from_unit, presence: true, uniqueness: { scope: :medicine_code }

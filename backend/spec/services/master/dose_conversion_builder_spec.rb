@@ -98,6 +98,65 @@ RSpec.describe Master::DoseConversionBuilder do
     expect(result.unmapped_count).to eq(2)
   end
 
+  it "規格単位を引けない医薬品は名前の規格から作り、要確認を立てる" do
+    create_medicine("610000020", name: "アテノロール２５ｍｇ錠", unit_name: "錠")
+
+    result = described_class.call
+
+    expect(conversions_for("610000020")).to eq([["mg", 25.0, "錠", "from_name"]])
+    expect(Master::MedicineDoseConversion.find_by(medicine_code: "610000020").needs_review).to be(true)
+    expect(result.needs_review_count).to eq(1)
+  end
+
+  it "規格単位に力価が無い貼付剤も名前の規格から作る" do
+    create_medicine("610000021", name: "ロキソプロフェンＮａテープ５０ｍｇ　７ｃｍ×１０ｃｍ", unit_name: "枚")
+    create_hot("７ｃｍ×１０ｃｍ１枚", receipt_code_1: "610000021")
+
+    described_class.call
+
+    expect(conversions_for("610000021")).to eq([["mg", 50.0, "枚", "from_name"]])
+  end
+
+  it "規格単位から作れるなら名前は見ない" do
+    create_medicine("610000022", name: "アテノロール９９ｍｇ錠", unit_name: "錠")
+    create_hot("１０ｍｇ１錠", receipt_code_1: "610000022")
+
+    result = described_class.call
+
+    expect(conversions_for("610000022")).to eq([["mg", 10.0, "錠", "explicit"]])
+    expect(result.needs_review_count).to be_zero
+  end
+
+  it "容量を読めない注射薬は医薬品マスタの注射容量から mL 行を作る" do
+    create_medicine("620000020", unit_name: "瓶", injection_volume: "100", name: "テスト注射液")
+    create_hot("２ｇ１瓶", receipt_code_1: "620000020")
+
+    described_class.call
+
+    expect(conversions_for("620000020")).to eq([
+      ["g", 2.0, "瓶", "explicit"],
+      ["mL", 100.0, "瓶", "injection_volume"],
+    ])
+  end
+
+  it "規格から容量を読めるなら注射容量は使わない" do
+    create_medicine("620000021", injection_volume: "20")
+    create_hot("３０ｍｇ２０ｍＬ１管", receipt_code_1: "620000021")
+
+    described_class.call
+
+    expect(conversions_for("620000021").map(&:last)).to contain_exactly("volume", "explicit")
+  end
+
+  it "注射容量を持たない粉末バイアルには mL 行を作らない" do
+    create_medicine("620000022", unit_name: "瓶", injection_volume: "0", name: "テスト静注用")
+    create_hot("２５０ｍｇ１瓶", receipt_code_1: "620000022")
+
+    described_class.call
+
+    expect(conversions_for("620000022")).to eq([["mg", 250.0, "瓶", "explicit"]])
+  end
+
   it "既に換算行を持つ医薬品はスキップして手動メンテを上書きしない" do
     create_medicine("620000005")
     create_hot("３０ｍｇ２０ｍＬ１管", receipt_code_1: "620000005")
@@ -110,6 +169,57 @@ RSpec.describe Master::DoseConversionBuilder do
     expect(conversions_for("620000005")).to eq([["mg", 99.0, "管", "manual"]])
     expect(result.created_count).to be_zero
     expect(result.skipped_count).to eq(1)
+  end
+
+  it "力価行しか持たない注射薬には後から注射容量の mL 行を足す" do
+    create_medicine("620000030", unit_name: "瓶", injection_volume: "100")
+    Master::MedicineDoseConversion.create!(
+      medicine_code: "620000030", from_unit: "mg", factor: 250, to_unit: "瓶", source: "explicit"
+    )
+
+    result = described_class.call
+
+    expect(conversions_for("620000030")).to eq([
+      ["mL", 100.0, "瓶", "injection_volume"],
+      ["mg", 250.0, "瓶", "explicit"],
+    ])
+    expect(result.volume_filled_count).to eq(1)
+  end
+
+  it "手動でメンテした医薬品には mL 行を足さない" do
+    create_medicine("620000031", unit_name: "瓶", injection_volume: "100")
+    Master::MedicineDoseConversion.create!(
+      medicine_code: "620000031", from_unit: "mg", factor: 250, to_unit: "瓶", source: "manual"
+    )
+
+    result = described_class.call
+
+    expect(conversions_for("620000031").map(&:first)).to eq(["mg"])
+    expect(result.volume_filled_count).to be_zero
+  end
+
+  it "既に mL 行を持つ注射薬は補完しない" do
+    create_medicine("620000032", unit_name: "瓶", injection_volume: "100")
+    Master::MedicineDoseConversion.create!(
+      medicine_code: "620000032", from_unit: "mL", factor: 20, to_unit: "瓶", source: "volume"
+    )
+
+    result = described_class.call
+
+    expect(conversions_for("620000032")).to eq([["mL", 20.0, "瓶", "volume"]])
+    expect(result.volume_filled_count).to be_zero
+  end
+
+  it "注射容量を持たない粉末バイアルには後からも mL 行を足さない" do
+    create_medicine("620000033", unit_name: "瓶", injection_volume: "0")
+    Master::MedicineDoseConversion.create!(
+      medicine_code: "620000033", from_unit: "mg", factor: 250, to_unit: "瓶", source: "explicit"
+    )
+
+    result = described_class.call
+
+    expect(conversions_for("620000033").map(&:first)).to eq(["mg"])
+    expect(result.volume_filled_count).to be_zero
   end
 
   it "2回目の実行では何も作らない" do

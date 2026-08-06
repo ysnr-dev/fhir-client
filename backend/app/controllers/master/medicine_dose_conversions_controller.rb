@@ -52,6 +52,7 @@ module Master
         skipped: result.skipped_count,
         unmapped: result.unmapped_count,
         needs_review: result.needs_review_count,
+        volume_filled: result.volume_filled_count,
       }
     end
 

@@ -62,6 +62,15 @@ module Master
       spec
     end
 
+    # 医薬品名から規格を読む。規格単位と違って名前には薬価算定単位が含まれないので、
+    # 医薬品マスタの単位名を薬価算定単位として与える(「アテノロール２５ｍｇ錠」+ 錠)。
+    # 規格単位を引けない一般名収載品や、規格単位に力価が無い貼付剤で使う。
+    def parse_name(name, pack_unit)
+      spec = Spec.new(pack_quantity: 1.0, pack_unit: canonical_unit(pack_unit))
+      scan_spec_part(normalize(name), spec)
+      spec
+    end
+
     # 薬価算定単位の表記ゆれを吸収した比較用の値。
     def canonical_unit(unit)
       normalized = normalize(unit)
