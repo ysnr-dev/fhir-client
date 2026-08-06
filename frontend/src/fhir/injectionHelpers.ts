@@ -182,6 +182,7 @@ export const INFUSION_HOURS_OPTIONS: { value: string; display: string }[] = [
   { value: "2", display: "2時間" },
   { value: "3", display: "3時間" },
   { value: "4", display: "4時間" },
+  { value: "5", display: "5時間" },
   { value: "6", display: "6時間" },
   { value: "8", display: "8時間" },
   { value: "12", display: "12時間" },
