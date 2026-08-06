@@ -952,7 +952,7 @@ fieldset.rp-card {
 
 /* 自動計算中の投与速度。読み取り専用であることを分かるようにする。 */
 .injection-usage__rate input[readonly] {
-  background: var(--bg-sub, transparent);
+  background: var(--surface-panel);
   color: var(--text);
 }
 
@@ -2840,7 +2840,7 @@ fieldset.rp-card {
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--bg-subtle, transparent);
+  background: var(--surface-panel);
   color: var(--text-h);
   font-size: 13px;
   line-height: 1.7;
@@ -3067,7 +3067,7 @@ fieldset.rp-card {
   gap: 4px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-alt, transparent);
+  background: var(--surface-panel);
   flex-wrap: wrap;
 }
 
@@ -3298,9 +3298,11 @@ body.karte-wide #root {
   margin-bottom: 12px;
 }
 
+/* 患者情報の帯。ページ地の上に載るのでパネルの濃さにする。 */
 .karte-page__header .patient-header {
   flex: 1;
   margin-bottom: 0;
+  background: var(--surface-panel);
 }
 
 /* 左ペイン / スプリッタ / 右ペインの 3 列。左ペインの幅の比率は
@@ -3318,7 +3320,8 @@ body.karte-wide #root {
   row-gap: 16px;
 }
 
-/* 左右のペインは同じ高さに固定し、中身が縦の残りを埋める。 */
+/* 左右のペインは同じ高さに固定し、中身が縦の残りを埋める。
+   ページの地より一段沈めて、中のパネル・カードが手前に浮いて見えるようにする。 */
 .karte-left,
 .karte-right {
   border: 1px solid var(--border);
@@ -3326,6 +3329,7 @@ body.karte-wide #root {
   padding: 12px;
   box-sizing: border-box;
   height: var(--karte-pane-height);
+  background: var(--surface-sunken);
 }
 
 .karte-left {
@@ -3515,6 +3519,7 @@ body.karte-wide #root {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 8px;
+  background: var(--surface-panel);
   /* プロブレムが増えても帯が高くなりすぎないよう、内部でスクロールさせる。 */
   max-height: 96px;
   overflow-y: auto;
@@ -3614,6 +3619,7 @@ body.karte-wide #root {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px;
+  background: var(--surface-panel);
   overflow-y: auto;
 }
 
@@ -3622,6 +3628,7 @@ body.karte-wide #root {
   align-self: start;
   border: none;
   padding: 0;
+  background: transparent;
   overflow: hidden;
 }
 
@@ -3730,8 +3737,11 @@ body.karte-wide #root {
   border-radius: 6px;
   padding: 8px 12px 12px;
   margin-bottom: 12px;
+  background: var(--surface-panel);
 }
 
+/* 日付見出しはスクロール中もグループ上端に貼り付くので、
+   下のカードが透けないようグループと同じ濃さで塗る。 */
 .karte-group__date {
   position: sticky;
   top: 0;
@@ -3739,19 +3749,22 @@ body.karte-wide #root {
   padding: 4px 0;
   font-size: 14px;
   color: var(--text-h);
-  background: var(--bg);
+  background: var(--surface-panel);
 }
 
 .karte-timeline__sentinel {
   min-height: 1px;
 }
 
-/* 1 件のカード。高さが伸びすぎないよう本文は折りたたむ。 */
+/* 1 件のカード。高さが伸びすぎないよう本文は折りたたむ。
+   日付グループより手前の面なので、濃淡の一番明るい段を当てる。 */
 .karte-card {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 10px;
   margin-bottom: 8px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-card-shadow);
 }
 
 .karte-card__header {
@@ -4022,6 +4035,27 @@ body.karte-wide #root {
   gap: 8px;
 }
 
+/* 一覧は沈んだペインの上に直接並ぶので、見出し行と 1 行おきの濃淡で
+   横に長い行を追いやすくする(カルテ画面の一覧だけ)。 */
+.karte-tabpanel .patient-table th {
+  background: var(--surface-panel);
+}
+
+.karte-tabpanel .patient-table tbody tr:nth-child(odd) {
+  background: var(--surface-card);
+}
+
+/* 時系列表示の表もペインの地から浮かせる。横スクロールで残る項目カラムは
+   表と同じ濃さにしないと、値のセルが下に透けて見える。 */
+.karte-tabpanel .lab-timeline__table-wrap {
+  background: var(--surface-card);
+  border-radius: 6px;
+}
+
+.karte-tabpanel .lab-timeline__table .lab-timeline__item-col {
+  background: var(--surface-card);
+}
+
 /* 右ペイン: 登録・編集 UI + 右端の新規登録ボタン列 */
 .karte-right {
   display: flex;
@@ -4071,9 +4105,11 @@ body.karte-wide #root {
 }
 
 /* ページ表示より横幅が狭いので、1 行に並べている入力欄は折り返させる
-   (診療記録フォームは既定で 880px 前提の横並び)。 */
+   (診療記録フォームは既定で 880px 前提の横並び)。
+   沈んだペインの上で入力のかたまりが見分けられるよう、カードの濃さで浮かせる。 */
 .karte-right .patient-form fieldset {
   flex-wrap: wrap;
+  background: var(--surface-card);
 }
 
 @media (max-width: 1200px) {
