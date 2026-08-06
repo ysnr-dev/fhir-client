@@ -13,9 +13,9 @@
   /* 面の濃淡(重なりの深さ)。sunken → panel → card の順に手前へ浮く。
      light は浮くほど白く、dark は浮くほど明るくして、枠線だけに頼らず
      入れ子の階層が背景の濃淡で分かるようにする。 */
-  --surface-sunken: #f1f1f4;
-  --surface-panel: #f8f8fa;
-  --surface-card: #fff;
+  --surface-sunken: #e4e5ea;
+  --surface-panel: #eeeef2;
+  --surface-card: #f8f8fa;
   --surface-card-shadow: rgba(0, 0, 0, 0.05) 0 1px 2px;
   /* 検査結果の H/L 判定色。H(高値): 赤 / L(低値): 青(グラフの系列色と揃える)。 */
   --lab-high: #d32f2f;

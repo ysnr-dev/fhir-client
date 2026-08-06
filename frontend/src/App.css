@@ -3282,6 +3282,17 @@ body.karte-wide #root {
   max-width: none;
 }
 
+/* ペインが画面をほぼ埋めるので、地が既定のままだと沈めたペインより明るい面が
+   周囲に縁取りとして残る。地もパネルの濃さに落として面の順序を揃える。 */
+body.karte-wide {
+  background: var(--surface-panel);
+}
+
+/* ヘッダーだけは他の画面と同じ見た目を保つ。 */
+body.karte-wide .app__header {
+  background: var(--bg);
+}
+
 /* 左右ペインの高さ。ページ自体はスクロールさせず(中身は各ペイン内でスクロール)、
    ちょうどビューポートに収める。差分の内訳はアプリヘッダー + 患者情報行
    (= ペイン上端 150px)+ .app__main の下 padding 24px。 */
