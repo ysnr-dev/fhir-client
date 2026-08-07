@@ -4130,6 +4130,21 @@ body.karte-wide .app__header {
   background-image: linear-gradient(var(--surface-stripe), var(--surface-stripe));
 }
 
+/* 検査結果内容の検査項目表も、同じ検査結果の一覧・時系列表示と濃淡を揃える。
+   処方・注射の内容表示と同じ --detail の表なので、検査固有の --lab で限定する。 */
+.karte-tabpanel .rp-card__medicines--lab {
+  background: var(--surface-card);
+  border-radius: 6px;
+}
+
+.karte-tabpanel .rp-card__medicines--lab thead th {
+  background: var(--surface-panel);
+}
+
+.karte-tabpanel .rp-card__medicines--lab tbody tr:nth-child(even) {
+  background: var(--surface-stripe);
+}
+
 /* 右ペイン: 登録・編集 UI + 右端の新規登録ボタン列 */
 .karte-right {
   display: flex;

@@ -43,7 +43,7 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
 
             <fieldset className="rp-card">
               <legend>検査項目</legend>
-              <table className="rp-card__medicines rp-card__medicines--detail">
+              <table className="rp-card__medicines rp-card__medicines--detail rp-card__medicines--lab">
                 <thead>
                   <tr>
                     <th>検査項目</th>
