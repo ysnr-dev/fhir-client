@@ -3749,6 +3749,10 @@ body.karte-wide .app__header {
   padding: 8px 12px 12px;
   margin-bottom: 12px;
   background: var(--surface-panel);
+  /* 強調は即座に付け、解除だけ余韻を持たせて消す(下の --highlight 参照)。 */
+  transition:
+    border-color 0.5s ease,
+    box-shadow 0.5s ease;
 }
 
 /* 日付見出しはスクロール中もグループ上端に貼り付くので、
@@ -3776,6 +3780,23 @@ body.karte-wide .app__header {
   margin-bottom: 8px;
   background: var(--surface-card);
   box-shadow: var(--surface-card-shadow);
+  transition:
+    border-color 0.5s ease,
+    box-shadow 0.5s ease;
+}
+
+/* 診療日パネルから飛んだ先。スクロール後にどれを選んだのか分かるよう、
+   一定時間だけ枠をアクセント色にする(時間切れで上の transition で消える)。 */
+.karte-card--highlight {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px var(--accent-border),
+    var(--surface-card-shadow);
+}
+
+.karte-group--highlight {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-border);
 }
 
 .karte-card__header {

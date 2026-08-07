@@ -61,6 +61,8 @@ interface KarteTimelineProps {
   problemsById: Map<string, fhir4.Condition>;
   /** 選択中のプロブレム。これを参照しない診療記録は控えめに表示する。 */
   selectedProblemId: string | null;
+  /** 診療日パネルから飛んだ先。該当する枠を一定時間だけ強調する。 */
+  highlightKey: string | null;
 }
 
 // 診療日パネルからのスクロール先を引くための目印。キーは診療日 or karteItemKey。
@@ -80,6 +82,7 @@ export function KarteTimeline({
   containerRef,
   problemsById,
   selectedProblemId,
+  highlightKey,
 }: KarteTimelineProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [sentinelVisible, setSentinelVisible] = useState(false);
@@ -114,27 +117,31 @@ export function KarteTimeline({
       ) : groups.length === 0 && !hasMore ? (
         <p className="patient-table__empty">登録されている診療情報がありません。</p>
       ) : (
-        groups.map((group) => (
-          <section
-            className="karte-group"
-            key={group.day || "no-date"}
-            {...{ [KARTE_TARGET_ATTR]: group.day || "no-date" }}
-          >
-            <h3 className="karte-group__date">{group.day || "日付なし"}</h3>
-            {group.items.map((item) => (
-              <KarteCard
-                key={karteItemKey(item)}
-                item={item}
-                onEdit={onEdit}
-                onDo={onDo}
-                onOpenDetail={onOpenDetail}
-                onDeleted={onDeleted}
-                problemsById={problemsById}
-                selectedProblemId={selectedProblemId}
-              />
-            ))}
-          </section>
-        ))
+        groups.map((group) => {
+          const dayKey = group.day || "no-date";
+          return (
+            <section
+              className={`karte-group${highlightKey === dayKey ? " karte-group--highlight" : ""}`}
+              key={dayKey}
+              {...{ [KARTE_TARGET_ATTR]: dayKey }}
+            >
+              <h3 className="karte-group__date">{group.day || "日付なし"}</h3>
+              {group.items.map((item) => (
+                <KarteCard
+                  key={karteItemKey(item)}
+                  item={item}
+                  onEdit={onEdit}
+                  onDo={onDo}
+                  onOpenDetail={onOpenDetail}
+                  onDeleted={onDeleted}
+                  problemsById={problemsById}
+                  selectedProblemId={selectedProblemId}
+                  highlighted={highlightKey === karteItemKey(item)}
+                />
+              ))}
+            </section>
+          );
+        })
       )}
 
       <div className="karte-timeline__sentinel" ref={sentinelRef}>
@@ -152,6 +159,7 @@ function KarteCard({
   onDeleted,
   problemsById,
   selectedProblemId,
+  highlighted,
 }: {
   item: KarteTimelineItem;
   onEdit: (item: KarteTimelineItem) => void;
@@ -160,6 +168,7 @@ function KarteCard({
   onDeleted: (item: KarteTimelineItem) => void;
   problemsById: Map<string, fhir4.Condition>;
   selectedProblemId: string | null;
+  highlighted: boolean;
 }) {
   const deleteNote = useDeleteClinicalNote();
   const deletePrescription = useDeletePrescription();
@@ -196,7 +205,9 @@ function KarteCard({
 
   return (
     <article
-      className={`karte-card karte-card--${item.kind}${dimmed ? " karte-card--dimmed" : ""}`}
+      className={`karte-card karte-card--${item.kind}${dimmed ? " karte-card--dimmed" : ""}${
+        highlighted ? " karte-card--highlight" : ""
+      }`}
       {...{ [KARTE_TARGET_ATTR]: karteItemKey(item) }}
     >
       <header className="karte-card__header">

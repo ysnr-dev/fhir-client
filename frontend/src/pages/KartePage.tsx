@@ -60,6 +60,9 @@ import {
 // 患者 1 人のカルテ画面。左ペインで登録済みの情報を参照し、右ペインで登録・編集する。
 // 「どのタブで何を開いているか」は URL に持たせる(karteUrl.ts 参照)。
 
+// 診療日パネルから飛んだ先の枠を強調しておく時間。
+const HIGHLIGHT_DURATION_MS = 2000;
+
 export function KartePage() {
   const { patientId } = useParams<{ patientId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -214,14 +217,21 @@ export function KartePage() {
   // スクロールさせてしまうため、タイムラインのスクロール位置だけを動かす。
   // behavior: "smooth" はアニメーションが抑制された環境で無視され、移動そのものが
   // 起きないことがあるため使わない。
+  // 飛んだ先がどれか分かるよう、移動先の枠を一定時間だけ強調する。
   const timelineRef = useRef<HTMLDivElement>(null);
+  const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  const highlightTimer = useRef<number | undefined>(undefined);
   const scrollToTarget = useCallback((key: string) => {
     const container = timelineRef.current;
     const target = container?.querySelector(`[${KARTE_TARGET_ATTR}="${key}"]`);
     if (!container || !target) return;
     container.scrollTop +=
       target.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    setHighlightKey(key);
+    window.clearTimeout(highlightTimer.current);
+    highlightTimer.current = window.setTimeout(() => setHighlightKey(null), HIGHLIGHT_DURATION_MS);
   }, []);
+  useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
 
   function handleEdit(item: KarteTimelineItem) {
     if (item.kind === "note") setPane({ kind: "note-edit", noteId: item.id });
@@ -321,6 +331,7 @@ export function KartePage() {
           containerRef={timelineRef}
           problemsById={problemsById}
           selectedProblemId={selectedProblemId}
+          highlightKey={highlightKey}
         />
       </div>
       </div>
