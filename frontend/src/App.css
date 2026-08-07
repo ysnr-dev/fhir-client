@@ -4074,25 +4074,60 @@ body.karte-wide .app__header {
   gap: 8px;
 }
 
-/* 一覧は沈んだペインの上に直接並ぶので、見出し行と 1 行おきの濃淡で
-   横に長い行を追いやすくする(カルテ画面の一覧だけ)。 */
+/* 一覧は沈んだペインの上に直接並ぶので、表全体をカードの濃さで浮かせてから、
+   1 行おきの濃淡で横に長い行を追いやすくする(カルテ画面の一覧だけ)。
+   縞に面の濃淡そのものを使うと行ごとの差が強すぎるため、地に薄く重ねる。 */
+.karte-tabpanel .patient-table {
+  background: var(--surface-card);
+  border-radius: 6px;
+}
+
 .karte-tabpanel .patient-table th {
   background: var(--surface-panel);
 }
 
-.karte-tabpanel .patient-table tbody tr:nth-child(odd) {
-  background: var(--surface-card);
+.karte-tabpanel .patient-table tbody tr:nth-child(even) {
+  background: var(--surface-stripe);
 }
 
-/* 時系列表示の表もペインの地から浮かせる。横スクロールで残る項目カラムは
-   表と同じ濃さにしないと、値のセルが下に透けて見える。 */
+/* 一覧の行の高さは文字の行送りではなく、操作ボタンと区分バッジの背が決めている。
+   狭いペインで一度に見える件数を稼ぐため、その 2 つの行送りを詰めて
+   行の高さを時系列表示の表と揃える(セルの padding は共通のまま)。
+   三点リーダーは既に行送り 1 で収まっているので、直下のボタンだけを対象にする。 */
+.karte-tabpanel .patient-table__actions > button,
+.karte-tabpanel .patient-table__actions > .button {
+  padding: 2px 10px;
+  line-height: 18px;
+}
+
+.karte-tabpanel .patient-table .condition-badge {
+  line-height: 18px;
+}
+
+/* 時系列表示の表もペインの地から浮かせ、見出し行と 1 行おきの濃淡は
+   上の一覧と揃える。横スクロールで残る項目カラムは表と同じ濃さにしないと、
+   値のセルが下に透けて見える。 */
 .karte-tabpanel .lab-timeline__table-wrap {
   background: var(--surface-card);
   border-radius: 6px;
 }
 
-.karte-tabpanel .lab-timeline__table .lab-timeline__item-col {
+.karte-tabpanel .lab-timeline__table thead th {
+  background: var(--surface-panel);
+}
+
+.karte-tabpanel .lab-timeline__table tbody .lab-timeline__item-col {
   background: var(--surface-card);
+}
+
+.karte-tabpanel .lab-timeline__table tbody tr:nth-child(even) {
+  background: var(--surface-stripe);
+}
+
+/* 項目カラムは sticky で行の縞の上に重なるため、同じ縞を自前で重ねて色を合わせる
+   (background-color は上の card を残したいので background-image で塗る)。 */
+.karte-tabpanel .lab-timeline__table tbody tr:nth-child(even) .lab-timeline__item-col {
+  background-image: linear-gradient(var(--surface-stripe), var(--surface-stripe));
 }
 
 /* 右ペイン: 登録・編集 UI + 右端の新規登録ボタン列 */
@@ -4145,10 +4180,10 @@ body.karte-wide .app__header {
 
 /* ページ表示より横幅が狭いので、1 行に並べている入力欄は折り返させる
    (診療記録フォームは既定で 880px 前提の横並び)。
-   沈んだペインの上で入力のかたまりが見分けられるよう、カードの濃さで浮かせる。 */
+   入力のかたまりの区切りは枠線だけで示す(ペインの地との濃淡を付けると、
+   同じ右ペインの処方・注射フォームとの差が大きく浮いて見えるため)。 */
 .karte-right .patient-form fieldset {
   flex-wrap: wrap;
-  background: var(--surface-card);
 }
 
 @media (max-width: 1200px) {

@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchWakeup } from "../api/wakeup";
+import { fetchWakeup, pokeUpstream } from "../api/wakeup";
 
 // backend も上流 FHIR サーバーも Render 無料枠で、~15 分アイドルでスピンダウンする。
 // 起動には合わせて 1〜2 分かかることがあるので、ヘッダーから明示的に起こせるようにする。
 const REQUEST_TIMEOUT_MS = 90_000; // backend 起動中はゲートウェイがリクエストを保留する
 const POLL_INTERVAL_MS = 5_000;
-const DEADLINE_MS = 180_000;
+// backend 起動に ~55 秒、そこから上流の起動に ~45 秒(実測)。詰まった日でも
+// 取りこぼさないよう余裕を持たせる。
+const DEADLINE_MS = 240_000;
+// 上流がコールドの間、この 1 本はゲートウェイに保留されたままになる。
+// 保留されること自体が起動トリガーなので、切らずに長めに張っておく。
+const POKE_TIMEOUT_MS = 60_000;
 const READY_DISPLAY_MS = 8_000;
 
 type State = "idle" | "waking" | "ready" | "failed";
@@ -33,6 +38,9 @@ export function WakeButton() {
   const [elapsed, setElapsed] = useState(0);
   const runningRef = useRef(false);
   const mountedRef = useRef(true);
+  // 上流への poke は同時に 1 本だけ。コールド中は 1 本が最大 POKE_TIMEOUT_MS
+  // ぶら下がるので、ポーリングのたびに投げるとブラウザの同時接続枠を食い潰す。
+  const pokingRef = useRef(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -78,6 +86,15 @@ export function WakeButton() {
         if (status?.upstream === "ready") {
           setState("ready");
           return;
+        }
+
+        // 上流を起こすのはブラウザの役目(backend からは起こせない。pokeUpstream 参照)。
+        // 宛先が分かり次第、判定のポーリングとは別に投げっぱなしにする。
+        if (status?.upstreamProbeUrl && !pokingRef.current) {
+          pokingRef.current = true;
+          void pokeUpstream(status.upstreamProbeUrl, POKE_TIMEOUT_MS).finally(() => {
+            pokingRef.current = false;
+          });
         }
 
         // 応答が返った = backend は起きた。残りは上流 fhir-server の起動待ち。

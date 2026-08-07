@@ -17,6 +17,9 @@
   --surface-panel: #eeeef2;
   --surface-card: #f8f8fa;
   --surface-card-shadow: rgba(0, 0, 0, 0.05) 0 1px 2px;
+  /* 一覧の 1 行おきの濃淡。面の濃淡(sunken/panel/card)を流用すると階層が
+     変わったように見えるので、地の上に薄く重ねるだけの差にする。 */
+  --surface-stripe: rgba(0, 0, 0, 0.05);
   /* 検査結果の H/L 判定色。H(高値): 赤 / L(低値): 青(グラフの系列色と揃える)。 */
   --lab-high: #d32f2f;
   --lab-low: #2a78d6;
@@ -61,6 +64,8 @@
   --surface-card: #272834;
   /* 暗い面では影がほとんど見えず輪郭がぼやけるだけなので、濃淡だけで浮かせる。 */
   --surface-card-shadow: none;
+  /* 暗いテーマでも縞は「沈む」向きに付ける(明るくすると card より手前に見える)。 */
+  --surface-stripe: rgba(0, 0, 0, 0.16);
   --lab-high: #ef5350;
   --lab-low: #3987e5;
 }
