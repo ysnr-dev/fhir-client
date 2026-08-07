@@ -32,9 +32,13 @@ module UpstreamWarmup
     false
   end
 
+  # 失敗理由は握り潰さずログに残す。ここが黙って false を返していたせいで、
+  # 「上流が起きない」原因(backend からのプローブが起動トリガーにならないこと)が
+  # 本番のログから一切見えなかった。
   def ready?(connection)
     connection.get.success?
-  rescue StandardError
+  rescue StandardError => e
+    Rails.logger.info("[UpstreamWarmup] プローブ失敗: #{e.class}: #{e.message}")
     false
   end
 
