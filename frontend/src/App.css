@@ -3895,12 +3895,19 @@ body.karte-wide .app__header {
 }
 
 .karte-card__section + .karte-card__section {
-  margin-top: 6px;
+  margin-top: 10px;
 }
 
+/* S/O/A/P などの見出し。本文(13px 通常)に埋もれないよう、
+   見出し色・太字にしたうえで頭にアクセントの縦線を添える。 */
 .karte-card__section-title {
+  display: block;
+  margin-bottom: 3px;
+  padding-left: 6px;
+  border-left: 2px solid var(--accent-border);
   font-size: 12px;
-  color: var(--text);
+  font-weight: 600;
+  color: var(--text-h);
 }
 
 /* 診療記録が対象とするプロブレム。カード見出しのタイトルの右に添える。
