@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_09_000300) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_09_000400) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -186,6 +186,31 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_09_000300) do
     t.index ["fhir_item_name"], name: "index_master_lab_items_on_fhir_item_name"
     t.index ["jlac10_code"], name: "index_master_lab_items_on_jlac10_code"
     t.index ["jlac11_code"], name: "index_master_lab_items_on_jlac11_code", unique: true
+  end
+
+  create_table "master_lab_order_item_layout_cells", force: :cascade do |t|
+    t.integer "layout_id", null: false
+    t.integer "grid_row", null: false
+    t.integer "grid_column", null: false
+    t.string "cell_type", default: "item", null: false
+    t.string "order_item_code"
+    t.string "display_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["layout_id", "grid_row", "grid_column"], name: "index_lab_layout_cells_on_layout_and_position", unique: true
+    t.index ["order_item_code"], name: "index_master_lab_order_item_layout_cells_on_order_item_code"
+  end
+
+  create_table "master_lab_order_item_layouts", force: :cascade do |t|
+    t.string "name", null: false
+    t.integer "row_count", default: 10, null: false
+    t.integer "column_count", default: 5, null: false
+    t.integer "display_order"
+    t.boolean "active", default: true, null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_master_lab_order_item_layouts_on_name", unique: true
   end
 
   create_table "master_lab_order_items", force: :cascade do |t|
