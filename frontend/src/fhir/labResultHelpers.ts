@@ -693,6 +693,7 @@ function labItemFromObservation(
   return {
     id: 0,
     category_name: null,
+    major_item: null,
     fhir_item_name: jlacCoding.display ?? obs.code.text ?? null,
     abbreviation: abbrCoding?.display ?? null,
     jlac11_specimen: (specimenId && specimenNames.get(specimenId)) || null,

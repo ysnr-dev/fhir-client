@@ -1,22 +1,54 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createLabContainer,
+  createLabOrderItem,
+  createLabOrderItemLayout,
+  createLabOrderItemLayoutCell,
+  createLabPanelItem,
+  createLabSpecimen,
   createMedicineDoseConversion,
+  deleteLabContainer,
+  deleteLabOrderItem,
+  deleteLabOrderItemLayout,
+  deleteLabOrderItemLayoutCell,
+  deleteLabPanelItem,
+  deleteLabSpecimen,
   deleteMedicineDoseConversion,
   fetchLabItemFilterOptions,
+  fetchLabOrderItem,
+  fetchLabOrderItemCategories,
+  fetchLabOrderItemLayout,
+  fetchLabOrderItemLayouts,
+  fetchLabSpecimenCategories,
   fetchMedicineTypeOptions,
   fetchMedicineUsageCategories,
   generateMedicineDoseConversions,
   importMaster,
   searchDiseases,
   searchJfagyAllergens,
+  searchLabContainers,
   searchLabItems,
+  searchLabOrderItems,
+  searchLabSpecimens,
   searchMedicineDoseConversions,
   searchMedicineUsages,
   searchMedicines,
   searchModifiers,
   searchUnmappedMedicines,
+  updateLabContainer,
+  updateLabOrderItem,
+  updateLabOrderItemLayout,
+  updateLabOrderItemLayoutCell,
+  updateLabPanelItem,
+  updateLabSpecimen,
   updateMedicineDoseConversion,
+  type LabContainerPayload,
   type LabItemDrilldown,
+  type LabOrderItemLayoutCellPayload,
+  type LabOrderItemLayoutPayload,
+  type LabOrderItemPayload,
+  type LabPanelItemPayload,
+  type LabSpecimenPayload,
   type MasterType,
   type MedicineDoseConversionPayload,
 } from "./masterClient";
@@ -320,4 +352,262 @@ export function useLabItemsByCodes(codes: string[]) {
     staleTime: Infinity,
     enabled: codes.length > 0,
   });
+}
+
+// 検体検査オーダーのマスタ群 ------------------------------------------------
+
+// オーダー項目・パネル構成は同じ詳細画面で同時に変わるのでまとめて破棄する。
+const LAB_ORDER_ITEMS_KEY = ["master", "lab_order_items"];
+const LAB_SPECIMENS_KEY = ["master", "lab_specimens"];
+const LAB_CONTAINERS_KEY = ["master", "lab_containers"];
+const LAB_LAYOUTS_KEY = ["master", "lab_order_item_layouts"];
+
+export interface LabOrderItemFilters {
+  name?: string;
+  kind?: string;
+  category?: string;
+  active?: boolean;
+}
+
+export function useLabOrderItemSearch(filters: LabOrderItemFilters, page: number, enabled = true) {
+  return useQuery({
+    queryKey: [...LAB_ORDER_ITEMS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchLabOrderItems({
+        name: filters.name || undefined,
+        kind: filters.kind || undefined,
+        category: filters.category || undefined,
+        active: filters.active || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useLabOrderItemCategories() {
+  return useQuery({
+    queryKey: [...LAB_ORDER_ITEMS_KEY, "categories"],
+    queryFn: fetchLabOrderItemCategories,
+  });
+}
+
+// 検体・採取管・パネル構成を添えた詳細(編集モーダル用)。
+export function useLabOrderItem(idOrCode: string | number | null) {
+  return useQuery({
+    queryKey: [...LAB_ORDER_ITEMS_KEY, "detail", idOrCode],
+    queryFn: () => fetchLabOrderItem(idOrCode as string | number),
+    enabled: idOrCode !== null,
+  });
+}
+
+export function useLabOrderItemMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: LAB_ORDER_ITEMS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: LabOrderItemPayload) => createLabOrderItem(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: LabOrderItemPayload }) =>
+        updateLabOrderItem(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteLabOrderItem(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+export function useLabPanelItemMutations() {
+  const queryClient = useQueryClient();
+  // パネル構成はオーダー項目詳細に添えて返るため、項目側のキーを破棄する。
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: LAB_ORDER_ITEMS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: LabPanelItemPayload) => createLabPanelItem(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: Partial<LabPanelItemPayload> }) =>
+        updateLabPanelItem(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteLabPanelItem(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+export interface LabSpecimenFilters {
+  name?: string;
+  category?: string;
+  recommendedOnly?: boolean;
+}
+
+export function useLabSpecimenSearch(filters: LabSpecimenFilters, page: number) {
+  return useQuery({
+    queryKey: [...LAB_SPECIMENS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchLabSpecimens({
+        name: filters.name || undefined,
+        category: filters.category || undefined,
+        recommended: filters.recommendedOnly || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useLabSpecimenCategories() {
+  return useQuery({
+    queryKey: [...LAB_SPECIMENS_KEY, "categories"],
+    queryFn: fetchLabSpecimenCategories,
+  });
+}
+
+// 検体の選択プルダウン用(掲載順の全件)。取込・編集後は invalidate で引き直す。
+export function useLabSpecimenOptions() {
+  return useQuery({
+    queryKey: [...LAB_SPECIMENS_KEY, "options"],
+    queryFn: () => searchLabSpecimens({ per: 500 }),
+  });
+}
+
+export function useLabSpecimenMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: LAB_SPECIMENS_KEY });
+    // オーダー項目詳細が検体名・既定採取管を添えて返すため、そちらも破棄する。
+    queryClient.invalidateQueries({ queryKey: LAB_ORDER_ITEMS_KEY });
+  };
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: LabSpecimenPayload) => createLabSpecimen(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: LabSpecimenPayload }) =>
+        updateLabSpecimen(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteLabSpecimen(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+// 採取管の一覧(全件)。選択プルダウンと一覧画面の両方で使う。
+export function useLabContainers() {
+  return useQuery({
+    queryKey: [...LAB_CONTAINERS_KEY, "list"],
+    queryFn: () => searchLabContainers({ per: 100 }),
+  });
+}
+
+export function useLabContainerMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: LAB_CONTAINERS_KEY });
+    queryClient.invalidateQueries({ queryKey: LAB_ORDER_ITEMS_KEY });
+  };
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: LabContainerPayload) => createLabContainer(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: LabContainerPayload }) =>
+        updateLabContainer(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteLabContainer(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+export function useLabOrderItemLayouts() {
+  return useQuery({
+    queryKey: [...LAB_LAYOUTS_KEY, "list"],
+    queryFn: fetchLabOrderItemLayouts,
+  });
+}
+
+export function useLabOrderItemLayout(id: number) {
+  return useQuery({
+    queryKey: [...LAB_LAYOUTS_KEY, "detail", id],
+    queryFn: () => fetchLabOrderItemLayout(id),
+  });
+}
+
+export function useLabOrderItemLayoutMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: LAB_LAYOUTS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: LabOrderItemLayoutPayload) => createLabOrderItemLayout(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: LabOrderItemLayoutPayload }) =>
+        updateLabOrderItemLayout(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteLabOrderItemLayout(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+export function useLabOrderItemLayoutCellMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: LAB_LAYOUTS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: LabOrderItemLayoutCellPayload) => createLabOrderItemLayoutCell(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: Partial<LabOrderItemLayoutCellPayload> }) =>
+        updateLabOrderItemLayoutCell(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteLabOrderItemLayoutCell(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
 }

@@ -10,6 +10,10 @@ import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
+import { LabContainerPage } from "./pages/LabContainerPage";
+import { LabOrderItemLayoutPage } from "./pages/LabOrderItemLayoutPage";
+import { LabOrderItemPage } from "./pages/LabOrderItemPage";
+import { LabSpecimenPage } from "./pages/LabSpecimenPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
 import { PractitionerEditPage } from "./pages/PractitionerEditPage";
@@ -70,6 +74,18 @@ function App() {
             <Link to="/medicine-dose-conversions" className="row-menu__item">
               投与量換算
             </Link>
+            <Link to="/lab-order-items" className="row-menu__item">
+              検査オーダー項目
+            </Link>
+            <Link to="/lab-order-item-layouts" className="row-menu__item">
+              検査オーダーレイアウト
+            </Link>
+            <Link to="/lab-specimens" className="row-menu__item">
+              検体
+            </Link>
+            <Link to="/lab-containers" className="row-menu__item">
+              採取管
+            </Link>
             <Link to="/oauth-clients" className="row-menu__item">
               OAuth クライアント
             </Link>
@@ -109,6 +125,10 @@ function App() {
           <Route path="/practitioners/:id/edit" element={<PractitionerEditPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
+          <Route path="/lab-order-items" element={<LabOrderItemPage />} />
+          <Route path="/lab-order-item-layouts" element={<LabOrderItemLayoutPage />} />
+          <Route path="/lab-specimens" element={<LabSpecimenPage />} />
+          <Route path="/lab-containers" element={<LabContainerPage />} />
           <Route path="/questionnaires" element={<QuestionnaireListPage />} />
           <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />
           <Route path="/questionnaires/:questionnaireId/edit" element={<QuestionnaireEditPage />} />

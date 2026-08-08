@@ -59,6 +59,13 @@ const MASTER_OPTIONS: MasterOption[] = [
     formatHint: "J-FAGYコード表 JFAGY_*.csv（UTF-8、ヘッダあり・11列）",
     accept: ".csv",
   },
+  {
+    type: "lab_specimens",
+    label: "検体マスタ",
+    formatHint:
+      "JLAC11コード一覧 jlac11_1_*.xlsx（「材料コード」シート）。略称・既定採取管などの手入力列は取込で消えない",
+    accept: ".xlsx",
+  },
 ];
 
 export function MasterImportPage() {

@@ -4377,3 +4377,251 @@ body.karte-wide .app__header {
   border-radius: 3px;
   padding: 0 4px;
 }
+
+/* 検査オーダー関連マスタ ------------------------------------------------- */
+
+/* パネル構成もまとめて編集する詳細モーダル。列が多いので広幅にする。 */
+.modal--lab-order-item {
+  width: min(1120px, 96vw);
+}
+
+/* クリックで編集モーダルを開く一覧の行。 */
+.master-search__row {
+  cursor: pointer;
+}
+
+.master-search__row:hover {
+  background: var(--accent-bg);
+}
+
+/* コードは名称の添え物なので小さく薄く出す。 */
+.lab-order-item__code {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--text);
+}
+
+/* 一覧の短い値の列(種別・推奨など)。列幅が足りると「単項/目」のように
+   1文字だけ折り返されて読みにくいので、この列だけ折り返さない。 */
+.lab-order-item__compact {
+  white-space: nowrap;
+}
+
+/* モーダル内のパネル構成表。件数が振れるので max-height で抑える。 */
+.lab-order-item__table-wrap {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.lab-order-item__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.lab-order-item__fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.lab-order-item__fields input[type="text"],
+.lab-order-item__fields input[type="date"],
+.lab-order-item__fields input[type="number"],
+.lab-order-item__fields select {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.lab-order-item__fields input[type="number"] {
+  width: 90px;
+}
+
+.lab-order-item__actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.lab-order-item__section {
+  margin-top: 20px;
+}
+
+.lab-order-item__section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.lab-order-item__section-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.lab-order-item__section-head input[type="text"] {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  min-width: 220px;
+}
+
+/* パネル構成・レイアウトに足す項目の候補。名称を打つと出る。 */
+.lab-order-item__candidates {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.lab-order-item__candidates button {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  color: var(--text);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.lab-order-item__candidates button:hover {
+  background: var(--accent-bg);
+}
+
+/* 検査オーダーレイアウト ------------------------------------------------- */
+
+/* レイアウト選択・名前・行数・列数の1行フォーム。 */
+.lab-layout__bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+
+.lab-layout__bar label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.lab-layout__bar input[type="text"],
+.lab-layout__bar input[type="number"],
+.lab-layout__bar select {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.lab-layout__bar input[type="number"] {
+  width: 72px;
+}
+
+.lab-layout__bar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 伝票グリッド。列数が多いときは枠内で横スクロールさせる。 */
+.lab-layout__grid-wrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.lab-layout__grid {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.lab-layout__cell {
+  border: 1px solid var(--border);
+  width: 140px;
+  min-width: 140px;
+  height: 40px;
+  padding: 4px 8px;
+  font-size: 13px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ラベル(表示専用)のマスは項目と見分けられるようにする。 */
+.lab-layout__cell--label {
+  background: var(--surface-panel);
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.lab-layout__cell.is-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.lab-layout__cell.is-drag-over {
+  background: var(--accent-bg);
+}
+
+/* 選択マスの編集(配置・表示名・削除)。グリッドの下に出す。 */
+.lab-layout__editor {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-card);
+}
+
+.lab-layout__editor-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 8px;
+}
+
+.lab-layout__editor-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.lab-layout__editor-row input[type="text"] {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  min-width: 240px;
+}
+
+.lab-layout__editor-kind {
+  font-size: 13px;
+  color: var(--text-h);
+  align-self: center;
+}
