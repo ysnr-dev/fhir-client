@@ -77,7 +77,7 @@ Rails.application.routes.draw do
     resources :lab_items, only: %i[index show create update destroy] do
       collection do
         post :import
-        get :categories
+        get :filter_options
       end
     end
     resources :diseases, only: %i[index show create update destroy] do

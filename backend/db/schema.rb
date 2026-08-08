@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_02_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_08_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -168,6 +168,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_02_100000) do
     t.string "search_abbreviation"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "search_major_item"
     t.index ["fhir_item_name"], name: "index_master_lab_items_on_fhir_item_name"
     t.index ["jlac10_code"], name: "index_master_lab_items_on_jlac10_code"
     t.index ["jlac11_code"], name: "index_master_lab_items_on_jlac11_code", unique: true

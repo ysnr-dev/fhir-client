@@ -7,7 +7,7 @@ module Master
       # カンマ区切りで複数指定可(検査結果編集画面が保存済みコードからマスタ情報を一括復元するため)。
       scope = scope.where(jlac11_code: params[:jlac11_code].split(",")) if params[:jlac11_code].present?
       scope = scope.where(jlac10_code: params[:jlac10_code]) if params[:jlac10_code].present?
-      scope = scope.where(category_name: params[:category_name]) if params[:category_name].present?
+      scope = apply_drilldown(scope)
       if params[:name].present?
         scope = flexible_name_match(scope, params[:name], %w[search_name search_abbreviation])
       end
@@ -21,15 +21,39 @@ module Master
       render json: paginate(scope)
     end
 
-    # 区分名称フィルタ用の選択肢(マスタ収載順の distinct な区分名称)。
-    def categories
-      names = Master::LabItem
-        .where.not(category_name: [nil, ""])
-        .group(:category_name)
-        .minimum(:id)
-        .sort_by { |_name, id| id }
-        .map(&:first)
-      render json: { category_names: names }
+    # 検査項目選択モーダルの段階的絞り込み用の選択肢。
+    # 区分名称 → 大項目 → 材料 → 測定法 の順に、上位の選択で絞り込んだ
+    # distinct な値をマスタ収載順で返す。1リクエストで4リストぶんを返すため、
+    # 選択のたびにリスト単位のリクエストが増えない。
+    def filter_options
+      scope = Master::LabItem.all
+      category_names = distinct_ordered(scope, :category_name)
+
+      scope = scope.where(category_name: params[:category_name]) if params[:category_name].present?
+      # 名称検索は大項目リストの絞り込みだけに効かせる(下位のリストと結果一覧は
+      # あくまで選択された大項目で決まる)。
+      # 大項目名そのものも検索対象にする。「グルコース(血糖)」のように、大項目名が
+      # 配下の FHIR 項目名称(随時血糖・空腹時血糖など)のどれとも一致しないことがある。
+      major_scope = scope
+      if params[:name].present?
+        major_scope = flexible_name_match(
+          major_scope, params[:name], %w[search_major_item search_name search_abbreviation]
+        )
+      end
+      major_items = distinct_ordered(major_scope, :major_item)
+
+      scope = scope.where(major_item: params[:major_item]) if params[:major_item].present?
+      specimens = distinct_ordered(scope, :jlac11_specimen)
+
+      scope = scope.where(jlac11_specimen: params[:jlac11_specimen]) if params[:jlac11_specimen].present?
+      methods = distinct_ordered(scope, :jlac11_method)
+
+      render json: {
+        category_names: category_names,
+        major_items: major_items,
+        specimens: specimens,
+        methods: methods
+      }
     end
 
     def show
@@ -66,6 +90,27 @@ module Master
     end
 
     private
+
+    # 段階的絞り込み(大項目・材料・測定法)の完全一致フィルタ。
+    def apply_drilldown(scope)
+      scope = scope.where(category_name: params[:category_name]) if params[:category_name].present?
+      scope = scope.where(major_item: params[:major_item]) if params[:major_item].present?
+      scope = scope.where(jlac11_specimen: params[:jlac11_specimen]) if params[:jlac11_specimen].present?
+      scope = scope.where(jlac11_method: params[:jlac11_method]) if params[:jlac11_method].present?
+      scope
+    end
+
+    # 指定カラムの distinct な値をマスタ収載順(最初に現れた id 順)で返す。
+    # flexible_name_match が付ける ORDER BY は GROUP BY と両立しないため落とす。
+    def distinct_ordered(scope, column)
+      scope
+        .reorder(nil)
+        .where.not(column => [nil, ""])
+        .group(column)
+        .minimum(:id)
+        .sort_by { |_value, id| id }
+        .map(&:first)
+    end
 
     def set_record
       @record = Master::LabItem.find(params[:id])

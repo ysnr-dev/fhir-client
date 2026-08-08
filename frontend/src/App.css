@@ -730,6 +730,95 @@ button:disabled {
   color: var(--accent);
 }
 
+/* 検査項目選択モーダル: 上段に段階的絞り込みの3リスト、下段に結果一覧を収める */
+.modal--lab-item {
+  width: min(1120px, 96vw);
+}
+
+/* 3リストぶんの高さが増えるので、結果一覧は他のマスタ検索より低くする。 */
+.modal--lab-item .master-search__table-wrap {
+  height: 220px;
+}
+
+.lab-drilldown__category {
+  max-width: 240px;
+}
+
+.lab-drilldown {
+  display: grid;
+  /* 大項目・測定法は名称が長く、材料は「血漿(ヘパリン入り)」程度で収まる。 */
+  grid-template-columns: 1.3fr 1fr 1.5fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.lab-drilldown__col {
+  display: flex;
+  flex-direction: column;
+  /* grid の子はデフォルト min-width: auto で、長い項目名が列幅を押し広げる。 */
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.lab-drilldown__head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.lab-drilldown__title {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.lab-drilldown__head input {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  min-width: 0;
+}
+
+.lab-drilldown__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  height: 176px;
+  overflow-y: auto;
+}
+
+/* 行はボタンだが、枠なしの一覧行として見せる(グローバルの button を上書き)。 */
+.lab-drilldown__list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-h);
+  font-size: 13px;
+  padding: 5px 8px;
+  /* 測定法(試薬名)は長く、途中に区切りが無いものもあるので強制的に折り返す。 */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.lab-drilldown__list button:hover {
+  background: var(--accent-bg);
+}
+
+.lab-drilldown__list button.is-selected {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .master-search__table-wrap {
   /* 検索結果の件数によってモーダルの高さが変動しないよう、
      max-height ではなく固定 height にしてスクロール領域の高さを一定に保つ。 */

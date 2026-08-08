@@ -59,6 +59,7 @@ module MasterImport
         # insert_all! はモデルのコールバックを通らないため、検索用カラムはここで埋める。
         attrs[:search_name] = Master::SearchNormalizer.normalize(attrs[:fhir_item_name])
         attrs[:search_abbreviation] = Master::SearchNormalizer.normalize(attrs[:abbreviation])
+        attrs[:search_major_item] = Master::SearchNormalizer.normalize(attrs[:major_item])
         attrs.merge(created_at: now, updated_at: now)
       end
     end

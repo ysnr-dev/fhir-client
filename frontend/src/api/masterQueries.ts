@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import {
   createMedicineDoseConversion,
   deleteMedicineDoseConversion,
-  fetchLabItemCategories,
+  fetchLabItemFilterOptions,
   fetchMedicineTypeOptions,
   fetchMedicineUsageCategories,
   generateMedicineDoseConversions,
@@ -16,6 +16,7 @@ import {
   searchModifiers,
   searchUnmappedMedicines,
   updateMedicineDoseConversion,
+  type LabItemDrilldown,
   type MasterType,
   type MedicineDoseConversionPayload,
 } from "./masterClient";
@@ -111,25 +112,27 @@ export function useMedicineUsageCategories(enabled: boolean) {
   });
 }
 
-export function useLabItemSearch(name: string, categoryName: string, page: number, enabled: boolean) {
+// 検査項目選択モーダルの結果一覧。名称検索は大項目リストの絞り込み専用なので
+// ここには渡さない(一覧は区分名称・大項目・材料・測定法の選択だけで決まる)。
+export function useLabItemSearch(drilldown: LabItemDrilldown, page: number, enabled: boolean) {
   return useQuery({
-    queryKey: ["master", "lab_items", name, categoryName, page],
-    queryFn: () =>
-      searchLabItems({
-        name: name || undefined,
-        category_name: categoryName || undefined,
-        page,
-        per: MASTER_SEARCH_PER,
-      }),
+    queryKey: ["master", "lab_items", "search", drilldown, page],
+    queryFn: () => searchLabItems({ ...drilldown, page, per: MASTER_SEARCH_PER }),
     placeholderData: keepPreviousData,
     enabled,
   });
 }
 
-export function useLabItemCategories(enabled: boolean) {
+// 段階的絞り込みの選択肢。選択が変わるたびに引き直すため、リストが一瞬空に
+// ならないよう前回値を保持する。
+export function useLabItemFilterOptions(
+  params: LabItemDrilldown & { name?: string },
+  enabled: boolean,
+) {
   return useQuery({
-    queryKey: ["master", "lab_items", "categories"],
-    queryFn: fetchLabItemCategories,
+    queryKey: ["master", "lab_items", "filter_options", params],
+    queryFn: () => fetchLabItemFilterOptions(params),
+    placeholderData: keepPreviousData,
     staleTime: Infinity,
     enabled,
   });

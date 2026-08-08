@@ -11,6 +11,7 @@ module Master
     def set_search_columns
       self.search_name = SearchNormalizer.normalize(fhir_item_name)
       self.search_abbreviation = SearchNormalizer.normalize(abbreviation)
+      self.search_major_item = SearchNormalizer.normalize(major_item)
     end
   end
 end
