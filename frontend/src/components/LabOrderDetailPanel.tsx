@@ -1,4 +1,3 @@
-import { useLabPanelMemberLabels } from "../api/masterQueries";
 import { problemLabel } from "../fhir/conditionHelpers";
 import {
   groupBySpecimen,
@@ -20,10 +19,7 @@ interface LabOrderDetailPanelProps {
 
 export function LabOrderDetailPanel({ serviceRequest, problemsById }: LabOrderDetailPanelProps) {
   const summary = summarizeLabOrder(serviceRequest);
-  const lines = labOrderItems(serviceRequest);
-  // パネルの構成項目はオーダーに写していないのでマスタから引く(カードと同じ)。
-  const panelMembers = useLabPanelMemberLabels(lines.map((line) => line.code));
-  const groups = groupBySpecimen(lines);
+  const groups = groupBySpecimen(labOrderItems(serviceRequest));
   const comment = labOrderComment(serviceRequest);
 
   const problem = labOrderProblem(serviceRequest);
@@ -63,12 +59,13 @@ export function LabOrderDetailPanel({ serviceRequest, problemsById }: LabOrderDe
               </tr>
             </thead>
             <tbody>
-              {group.items.map((line) => (
-                <tr key={line.code}>
-                  <td>{line.name}</td>
-                  <td>{panelMembers.data?.get(line.code)?.join(", ") || "-"}</td>
-                  <td>{line.code}</td>
-                  <td>{line.jlacCode || "-"}</td>
+              {group.entries.map((entry) => (
+                <tr key={entry.item.code}>
+                  <td>{entry.item.name}</td>
+                  {/* 構成項目もオーダーの内容(パネルから外したものはここにも出ない)。 */}
+                  <td>{entry.members.map((member) => member.name).join(", ") || "-"}</td>
+                  <td>{entry.item.code}</td>
+                  <td>{entry.item.jlacCode || "-"}</td>
                 </tr>
               ))}
             </tbody>

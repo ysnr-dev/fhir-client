@@ -9,7 +9,8 @@ export const JLAC11_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11";
 // JLAC11 の材料(検体)コード。同じく正式な CodeSystem URL がないためローカル URI。
 export const JLAC11_SPECIMEN_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11-specimen";
 // 検査項目の略称。詳細表示・編集フォームへの復元に使う補助 coding。
-const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
+// 検体検査オーダー(labOrderHelpers)も同じ用途で使うので共有する。
+export const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
 
 // Observation.interpretation(H/L/N)。JP-CLINS の JP-Observation-LabResult-eCS が
 // 参照する v3 ObservationInterpretation コードシステム。

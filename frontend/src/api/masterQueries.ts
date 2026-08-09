@@ -45,6 +45,8 @@ import {
   updateMedicineDoseConversion,
   type LabContainerPayload,
   type LabItemDrilldown,
+  type LabPanelItem,
+  type MasterSearchResult,
   type LabOrderItemLayoutCellPayload,
   type LabOrderItemLayoutPayload,
   type LabOrderItemPayload,
@@ -558,10 +560,11 @@ export function useLabOrderItemLayouts() {
   });
 }
 
-export function useLabOrderItemLayout(id: number) {
+export function useLabOrderItemLayout(id: number | undefined) {
   return useQuery({
     queryKey: [...LAB_LAYOUTS_KEY, "detail", id],
-    queryFn: () => fetchLabOrderItemLayout(id),
+    queryFn: () => fetchLabOrderItemLayout(id as number),
+    enabled: id !== undefined,
   });
 }
 
@@ -627,27 +630,29 @@ export function useLabOrderItemsByCodes(codes: string[]) {
   });
 }
 
-// パネルの構成項目名。「パネルコード → 構成項目の表示名」で返す。
-// 構成はオーダーに写していない(マスタ側の情報)ので、オーダー入力のプレビューでも
-// カルテのカード・詳細でも、その時点のマスタから引き直して添える。
+// select はモジュールスコープに置く。ここで無名関数を渡すと呼び出しのたびに
+// 別の関数になり、react-query が結果を再利用できず data が毎回別オブジェクトに
+// なってしまう(それを依存に持つ effect が回り続ける)。
+function toPanelMemberMap(result: MasterSearchResult<LabPanelItem>): Map<string, string[]> {
+  const members = new Map<string, string[]>();
+  for (const member of result.items) {
+    const list = members.get(member.panel_item_code);
+    if (list) list.push(member.member_item_code);
+    else members.set(member.panel_item_code, [member.member_item_code]);
+  }
+  return members;
+}
+
+// パネルの構成。「パネルコード → 構成項目の項目コード」で返す。
+// オーダー画面でパネルを選んだときに、その構成項目もオーダーに入れるために引く。
 // パネルでない項目コードを混ぜても結果が増えないだけなので、呼ぶ側で選別しない。
-export function useLabPanelMemberLabels(panelCodes: string[]) {
+export function useLabPanelMembers(panelCodes: string[]) {
   const sorted = Array.from(new Set(panelCodes)).sort();
 
   return useQuery({
     queryKey: [...LAB_ORDER_ITEMS_KEY, "panel_members", sorted],
     queryFn: () => searchLabPanelItems({ panel_item_code: sorted.join(","), per: 500 }),
-    // 横に並べるので、略称があれば略称を使う(WBC, RBC…)。
-    select: (result) => {
-      const labels = new Map<string, string[]>();
-      for (const member of result.items) {
-        const label = member.member_short_name || member.member_name || member.member_item_code;
-        const list = labels.get(member.panel_item_code);
-        if (list) list.push(label);
-        else labels.set(member.panel_item_code, [label]);
-      }
-      return labels;
-    },
+    select: toPanelMemberMap,
     enabled: sorted.length > 0,
   });
 }

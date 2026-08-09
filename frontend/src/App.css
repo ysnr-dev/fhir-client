@@ -4798,3 +4798,15 @@ body.karte-wide .app__header {
   font-size: 12px;
   color: var(--text);
 }
+
+/* プレビューのパネル構成項目。親の下に字下げして、1 つずつ外せるようにする。 */
+.lab-order-panel__members {
+  list-style: none;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.lab-order-panel__members li {
+  font-size: 12px;
+  color: var(--text);
+}

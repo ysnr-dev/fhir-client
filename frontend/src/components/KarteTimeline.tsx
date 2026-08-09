@@ -5,7 +5,6 @@ import {
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
 } from "../api/queries";
-import { useLabPanelMemberLabels } from "../api/masterQueries";
 import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
 import { clinicalNoteProblem, sectionTitle, statusLabel } from "../fhir/clinicalNoteHelpers";
 import { problemLabel, type ProblemRef } from "../fhir/conditionHelpers";
@@ -26,6 +25,7 @@ import {
   labOrderComment,
   labOrderItems,
   labOrderProblem,
+  memberSummary,
   specimenGroupLabel,
   summarizeLabOrder,
 } from "../fhir/labOrderHelpers";
@@ -587,12 +587,10 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
 }
 
 // 検体検査は検体(採血管)ごとにまとめて出す。採血の現場が動く単位に合わせる。
-// パネルの構成項目はオーダーに写していないので、オーダー画面のプレビューと同じく
-// マスタから引いて添える(取得中は項目名だけを出す)。
+// パネル検査は構成項目もオーダーに入っているので、親の後ろに並べて添える
+// (マスタではなくオーダーの内容なので、構成を後から直しても過去の表示は変わらない)。
 function LabOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.ServiceRequest }) {
-  const lines = labOrderItems(serviceRequest);
-  const panelMembers = useLabPanelMemberLabels(lines.map((line) => line.code));
-  const groups = groupBySpecimen(lines);
+  const groups = groupBySpecimen(labOrderItems(serviceRequest));
   const comment = labOrderComment(serviceRequest);
 
   if (groups.length === 0) return <p className="karte-card__empty">検査項目がありません。</p>;
@@ -606,15 +604,14 @@ function LabOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.ServiceReq
             <span className="karte-lab-order__specimen">{specimenGroupLabel(group)}</span>
           </div>
           <ul className="karte-rp__medicines">
-            {group.items.map((line) => {
-              const members = panelMembers.data?.get(line.code);
-              return (
-                <li key={line.code}>
-                  <span className="karte-rp__medicine-name">{line.name}</span>
-                  {members && <span className="karte-rp__comment">{`（${members.join(", ")}）`}</span>}
-                </li>
-              );
-            })}
+            {group.entries.map((entry) => (
+              <li key={entry.item.code}>
+                <span className="karte-rp__medicine-name">{entry.item.name}</span>
+                {entry.members.length > 0 && (
+                  <span className="karte-rp__comment">{`（${memberSummary(entry.members)}）`}</span>
+                )}
+              </li>
+            ))}
           </ul>
         </div>
       ))}
