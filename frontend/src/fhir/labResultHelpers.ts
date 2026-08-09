@@ -79,6 +79,11 @@ export interface LabResultLineValues {
 export interface LabResultFormValues {
   setting: LabResultSetting;
   specimenDate: string;
+  /**
+   * 元になった検体検査オーダー(ヘッダの ServiceRequest)の id。空なら紐付けなし。
+   * 紐付けは検査項目単位ではなく「オーダー 1 件 ↔ 結果レポート 1 件」で持つ。
+   */
+  orderId: string;
   lines: LabResultLineValues[];
 }
 
@@ -96,6 +101,7 @@ export function emptyLabResultForm(): LabResultFormValues {
   return {
     setting: "outpatient",
     specimenDate: today(),
+    orderId: "",
     lines: [{ ...emptyLabResultLine }],
   };
 }
@@ -348,6 +354,9 @@ function buildLabResultTransactionBundle(
     },
     subject: { reference: `Patient/${patientId}` },
     effectiveDateTime: effective,
+    // 元になった検体検査オーダー。オーダーの明細ではなくヘッダを指す。
+    // 更新でオーダーの選択を外した場合は、リソースごと組み直すので basedOn も消える。
+    basedOn: values.orderId ? [{ reference: `ServiceRequest/${values.orderId}` }] : undefined,
     specimen: specimenReferences.length ? specimenReferences : undefined,
     result: resultReferences,
   };
@@ -448,6 +457,18 @@ export interface LabResultSummary {
   date: string;
   settingDisplay: string;
   itemCount: number;
+  /** 元になった検体検査オーダーの id。空なら紐付けなし。 */
+  orderId: string;
+}
+
+/** DiagnosticReport.basedOn が指す検体検査オーダー(ヘッダ)の id。無ければ空。 */
+export function labOrderIdFromReport(
+  report: fhir4.DiagnosticReport | undefined,
+): string {
+  const reference = report?.basedOn?.find((r) =>
+    r.reference?.startsWith("ServiceRequest/"),
+  )?.reference;
+  return reference?.split("/")[1] ?? "";
 }
 
 function codingBySystem(
@@ -496,6 +517,7 @@ export function summarizeDiagnosticReport(report: fhir4.DiagnosticReport): LabRe
     date: report.effectiveDateTime?.slice(0, 10) ?? "",
     settingDisplay: settingCoding(report)?.display ?? "",
     itemCount: report.result?.length ?? 0,
+    orderId: labOrderIdFromReport(report),
   };
 }
 
@@ -735,6 +757,7 @@ export function parseLabResultForm(
   return {
     setting: (settingCoding(report)?.code ?? "") as LabResultSetting,
     specimenDate: report.effectiveDateTime?.slice(0, 10) ?? today(),
+    orderId: labOrderIdFromReport(report),
     lines: lines.length ? lines : [{ ...emptyLabResultLine }],
   };
 }
@@ -744,10 +767,12 @@ export function parseLabResultForm(
 // ・結果値(と H/L 判定)は継承せず空にする
 // ・Observation の id を落とし、既存リソースの更新ではなく新規登録にする
 // ・検体採取日は DO 元ではなく当日にする
+// ・検体検査オーダーの紐付けは引き継がない(DO 元のオーダーには既に結果があるため)
 export function buildDoLabResultForm(values: LabResultFormValues): LabResultFormValues {
   return {
     ...values,
     specimenDate: today(),
+    orderId: "",
     lines: values.lines.map((line) => ({ item: line.item, value: "", interpretation: "" })),
   };
 }

@@ -15,7 +15,11 @@ import {
 import { isInjectionServiceRequest } from "../fhir/injectionHelpers";
 import {
   buildLabOrderDeleteBundle,
+  isLabOrderItemRequest,
+  isLabServiceRequest,
   labOrderItemRequests,
+  labOrderItems,
+  labOrderLabel,
   serviceRequestsOf,
 } from "../fhir/labOrderHelpers";
 import {
@@ -612,6 +616,107 @@ export function useLabOrderDetail(srId: string | undefined) {
   });
 }
 
+// ---- 検査結果に紐付ける検体検査オーダーの候補 ----
+
+// 上流 fhir-server の _count 上限 100 を 1 ページとして順に辿る。
+const LAB_ORDER_CANDIDATE_PAGE = 100;
+// オーダーが極端に多い患者での暴走防止。
+const LAB_ORDER_CANDIDATE_MAX_PAGES = 5;
+// プルダウンに並べる未紐付けオーダーの上限。これだけ集まったら読むのをやめる。
+const LAB_ORDER_CANDIDATE_LIMIT = 50;
+
+/** 検査結果の登録画面で選ばせる検体検査オーダー 1 件。 */
+export interface LabOrderCandidate {
+  id: string;
+  /** 「2026-08-09 末梢血液一般検査・CRP」のような選択肢の表示。 */
+  label: string;
+  /** すでに紐付いている検査結果の id。空なら結果がまだ登録されていない。 */
+  reportId: string;
+}
+
+// 患者の検体検査オーダー(ヘッダ)を新しい順に集める。処方・注射のヘッダも同じ
+// 検索で返るのでクライアント側で振り分ける(上流の ServiceRequest には category
+// 検索パラメータが無いため)。
+//
+// 明細は選択肢のラベルに使うので `_revinclude:iterate=ServiceRequest:based-on` で、
+// 「結果が既に登録されているか」は `_revinclude=DiagnosticReport:based-on` で
+// 同じ応答に添えてもらう。
+async function fetchLabOrderCandidates(patientId: string): Promise<LabOrderCandidate[]> {
+  const candidates: LabOrderCandidate[] = [];
+
+  for (let page = 0; page < LAB_ORDER_CANDIDATE_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("patient", `Patient/${patientId}`);
+    // 明細(基づく先を持つ ServiceRequest)はオーダーそのものではないので除く。
+    params.set("based-on:missing", "true");
+    params.set("_count", String(LAB_ORDER_CANDIDATE_PAGE));
+    params.set("_offset", String(page * LAB_ORDER_CANDIDATE_PAGE));
+    params.set("_sort", "-authoredon");
+    params.set("_revinclude:iterate", "ServiceRequest:based-on");
+    params.set("_revinclude", "DiagnosticReport:based-on");
+
+    const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+
+    const serviceRequests = serviceRequestsOf(bundle);
+    // オーダー id → そのオーダーを元にした検査結果の id。
+    const reportIdByOrderId = new Map<string, string>();
+    for (const entry of bundle.entry ?? []) {
+      const report = entry.resource;
+      if (report?.resourceType !== "DiagnosticReport") continue;
+      for (const reference of (report as fhir4.DiagnosticReport).basedOn ?? []) {
+        const orderId = reference.reference?.startsWith("ServiceRequest/")
+          ? reference.reference.split("/")[1]
+          : undefined;
+        if (orderId && report.id) reportIdByOrderId.set(orderId, report.id);
+      }
+    }
+
+    // ヘッダ(= 検索にヒットした分)だけを数える。明細と検査結果も混ざって返るため。
+    const headers = serviceRequests.filter((sr) => !isLabOrderItemRequest(sr));
+    for (const header of headers) {
+      if (!header.id || !isLabServiceRequest(header)) continue;
+      const items = labOrderItems(header, labOrderItemRequests(serviceRequests, header.id));
+      candidates.push({
+        id: header.id,
+        label: labOrderLabel(header, items),
+        reportId: reportIdByOrderId.get(header.id) ?? "",
+      });
+    }
+
+    if (headers.length < LAB_ORDER_CANDIDATE_PAGE) break;
+    if (candidates.filter((c) => !c.reportId).length >= LAB_ORDER_CANDIDATE_LIMIT) break;
+  }
+
+  return candidates;
+}
+
+/**
+ * 検査結果に紐付ける検体検査オーダーの候補。すでに結果が登録されているオーダーは
+ * 出さないが、編集中の検査結果自身が紐付けているオーダーは残す(外して保存し直す
+ * つもりがないのに選択が消えてしまわないようにするため)。
+ */
+export function useLabOrderCandidates(
+  patientId: string | undefined,
+  currentReportId?: string,
+) {
+  // 検査結果の登録・更新・削除でも紐付け状況が変わるので、それらの
+  // invalidateQueries(["ServiceRequest", "search"]) で無効化されるキーにしている。
+  const query = useQuery({
+    queryKey: ["ServiceRequest", "search", "lab-order-candidates", patientId],
+    queryFn: () => fetchLabOrderCandidates(patientId as string),
+    enabled: Boolean(patientId),
+    staleTime: 30_000,
+  });
+
+  return {
+    candidates: (query.data ?? []).filter(
+      (candidate) => !candidate.reportId || candidate.reportId === currentReportId,
+    ),
+    isLoading: query.isLoading,
+    error: query.error,
+  };
+}
+
 export function useCreatePrescription() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -817,12 +922,15 @@ export function useLabResultTimeline(patientId: string | undefined, dateCount: n
   });
 }
 
+// 検査結果を保存・削除するとオーダーの紐付け状況が変わるため、
+// 検体検査オーダーの候補(["ServiceRequest", "search"] 配下)も無効化する。
 export function useCreateLabResult() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },
   });
 }
@@ -834,6 +942,7 @@ export function useUpdateLabResult() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "detail"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },
   });
 }
@@ -857,6 +966,7 @@ export function useDeleteLabResult() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },
   });
 }

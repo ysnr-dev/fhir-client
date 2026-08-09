@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
+import type { LabOrderCandidate } from "../api/queries";
 import type { LabItem } from "../api/masterClient";
 import {
   emptyLabResultForm,
@@ -20,6 +21,9 @@ interface LabResultFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /** 紐付けられる検体検査オーダー(結果が未登録のもの)。 */
+  orderCandidates: LabOrderCandidate[];
+  orderCandidatesLoading: boolean;
 }
 
 type ModalState = { lineIndex: number } | null;
@@ -73,6 +77,8 @@ export function LabResultForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  orderCandidates,
+  orderCandidatesLoading,
 }: LabResultFormProps) {
   const [values, setValues] = useState<LabResultFormValues>(initialValues ?? emptyLabResultForm);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -178,6 +184,35 @@ export function LabResultForm({
             value={values.specimenDate}
             onChange={(e) => update("specimenDate", e.target.value)}
           />
+        </label>
+        {/*
+          元になった検体検査オーダー。紐付けは検査項目単位ではなくオーダー単位で、
+          すでに結果が登録されているオーダーは候補に出ない(編集中の結果自身が
+          紐付けているオーダーだけは残る)。
+        */}
+        <label className="lab-result-form__order">
+          検体検査オーダー
+          <select
+            value={values.orderId}
+            onChange={(e) => update("orderId", e.target.value)}
+            disabled={orderCandidatesLoading}
+          >
+            <option value="">紐付けなし</option>
+            {orderCandidatesLoading && values.orderId && (
+              <option value={values.orderId}>読み込み中...</option>
+            )}
+            {orderCandidates.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.label}
+              </option>
+            ))}
+            {/* 紐付け先のオーダーが削除されている場合に、選択が空へ化けないようにする。 */}
+            {!orderCandidatesLoading &&
+              values.orderId &&
+              !orderCandidates.some((candidate) => candidate.id === values.orderId) && (
+                <option value={values.orderId}>(削除済みのオーダー)</option>
+              )}
+          </select>
         </label>
       </fieldset>
 

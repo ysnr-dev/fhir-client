@@ -174,6 +174,25 @@ export function memberSummary(members: LabOrderItemLine[]): string {
   return members.map((member) => member.shortName || member.name).join(", ");
 }
 
+// 1 行の要約に並べる検査項目の数。これを超えた分は「他 N 件」にまとめる。
+const LABEL_ITEM_COUNT = 3;
+
+/**
+ * オーダー 1 件を 1 行で表す要約(「2026-08-09 末梢血液一般検査・CRP 他2件」)。
+ * 検査結果の登録画面のオーダー選択や、紐付け先の表示のように、
+ * オーダーの中身を展開できない狭い場所で使う。
+ */
+export function labOrderLabel(sr: fhir4.ServiceRequest, items: LabOrderItemLine[]): string {
+  const date = (sr.occurrenceDateTime ?? sr.authoredOn ?? "").slice(0, 10);
+  const names = topLevelItems(items)
+    .map((item) => item.name)
+    .filter(Boolean);
+  const shown = names.slice(0, LABEL_ITEM_COUNT).join("・");
+  const rest = names.length > LABEL_ITEM_COUNT ? ` 他${names.length - LABEL_ITEM_COUNT}件` : "";
+  const urgent = sr.priority === "urgent" ? "【至急】" : "";
+  return `${date} ${urgent}${shown || "(項目なし)"}${rest}`;
+}
+
 /** 検体グループの見出し(「血清（生化学用分離剤入り管）」)。 */
 export function specimenGroupLabel(group: LabSpecimenGroup): string {
   const name = group.specimenName || group.specimenCode || "検体未設定";

@@ -1300,6 +1300,17 @@ fieldset.rp-card {
   width: 52px;
 }
 
+/* 検体検査オーダーの選択肢は検査項目名を並べるので長くなりがち。選択肢の幅に
+   引きずられてフォームが横に広がらないよう、行の残り幅に収める。 */
+.lab-result-form__order {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.lab-result-form__order select {
+  max-width: 100%;
+}
+
 .rp-card__medicine-di .master-search__medley-link {
   margin-right: 0;
 }
