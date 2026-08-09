@@ -37,8 +37,15 @@ const JLAC10_SYSTEM = "http://fhir-client.local/CodeSystem/jlac10";
 // 採取管。施設ごとのマスタなのでローカル URI。
 const CONTAINER_SYSTEM = "http://fhir-client.local/CodeSystem/lab-container";
 
-// 明細の ServiceRequest に添える検体・採取管。CodeableConcept は 1 つの概念を
-// 複数体系で表すものなので、検査項目とは別の概念である検体・採取管は拡張に持つ。
+// 明細の ServiceRequest に添える検体。採る検体そのものを表す情報なので Specimen
+// リソースにして、明細に contained して ServiceRequest.specimen で指す。採取管は
+// Specimen.container.type に持つ(検体と採取管は 1 対 1 で決まる)。
+// オーダー時点ではまだ採っていないので status(available など)は付けない。
+const SPECIMEN_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Specimen_Common";
+// contained の中だけで一意ならよいので、明細ごとに固定の id を使う。
+const CONTAINED_SPECIMEN_ID = "specimen";
+
+// 検体・採取管を拡張で持っていた頃の明細。読み出しのためだけに残してある。
 const SPECIMEN_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-order-specimen";
 const CONTAINER_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-order-container";
 
@@ -232,36 +239,6 @@ function buildItemRequest(
     coding.push({ system: ABBREVIATION_SYSTEM, code: item.shortName, display: item.shortName });
   }
 
-  const extension: fhir4.Extension[] = [];
-  if (item.specimenCode) {
-    extension.push({
-      url: SPECIMEN_EXT_URL,
-      valueCodeableConcept: {
-        coding: [
-          {
-            system: JLAC11_SPECIMEN_SYSTEM,
-            code: item.specimenCode,
-            display: item.specimenName || undefined,
-          },
-        ],
-      },
-    });
-  }
-  if (item.containerCode) {
-    extension.push({
-      url: CONTAINER_EXT_URL,
-      valueCodeableConcept: {
-        coding: [
-          {
-            system: CONTAINER_SYSTEM,
-            code: item.containerCode,
-            display: item.containerName || undefined,
-          },
-        ],
-      },
-    });
-  }
-
   const resource: fhir4.ServiceRequest = {
     resourceType: "ServiceRequest",
     status: "active",
@@ -273,9 +250,72 @@ function buildItemRequest(
     basedOn: [{ reference: parentReference }],
   };
   if (item.id) resource.id = item.id;
-  if (extension.length) resource.extension = extension;
+
+  const specimen = buildItemSpecimen(item, patientId);
+  if (specimen) {
+    resource.contained = [specimen];
+    resource.specimen = [
+      { reference: `#${CONTAINED_SPECIMEN_ID}`, display: item.specimenName || undefined },
+    ];
+  }
 
   return resource;
+}
+
+// 明細に contained する Specimen。検体も採取管も決まっていない項目には付けない。
+function buildItemSpecimen(item: LabOrderItemLine, patientId: string): fhir4.Specimen | undefined {
+  if (!item.specimenCode && !item.containerCode) return undefined;
+
+  const resource: fhir4.Specimen = {
+    resourceType: "Specimen",
+    id: CONTAINED_SPECIMEN_ID,
+    meta: { profile: [SPECIMEN_PROFILE] },
+    subject: { reference: `Patient/${patientId}` },
+  };
+
+  if (item.specimenCode) {
+    resource.type = {
+      coding: [
+        {
+          system: JLAC11_SPECIMEN_SYSTEM,
+          code: item.specimenCode,
+          display: item.specimenName || undefined,
+        },
+      ],
+      text: item.specimenName || undefined,
+    };
+  }
+  if (item.containerCode) {
+    resource.container = [
+      {
+        type: {
+          coding: [
+            {
+              system: CONTAINER_SYSTEM,
+              code: item.containerCode,
+              display: item.containerName || undefined,
+            },
+          ],
+          text: item.containerName || undefined,
+        },
+      },
+    ];
+  }
+
+  return resource;
+}
+
+// 明細が指している検体。ServiceRequest.specimen は contained への内部参照なので、
+// 参照先を contained の中から引く。
+function containedSpecimenOf(request: fhir4.ServiceRequest): fhir4.Specimen | undefined {
+  const reference = request.specimen?.[0]?.reference;
+  if (!reference?.startsWith("#")) return undefined;
+
+  const id = reference.slice(1);
+  return (request.contained ?? []).find(
+    (resource): resource is fhir4.Specimen =>
+      resource.resourceType === "Specimen" && resource.id === id,
+  );
 }
 
 function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): LabOrderItemLine {
@@ -286,10 +326,14 @@ function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): La
   const jlac11 = codingBySystem(coding, JLAC11_SYSTEM);
   const jlac10 = codingBySystem(coding, JLAC10_SYSTEM);
   const abbreviation = codingBySystem(coding, ABBREVIATION_SYSTEM);
-  const specimen = request.extension?.find((e) => e.url === SPECIMEN_EXT_URL)?.valueCodeableConcept
-    ?.coding?.[0];
-  const container = request.extension?.find((e) => e.url === CONTAINER_EXT_URL)?.valueCodeableConcept
-    ?.coding?.[0];
+  const contained = containedSpecimenOf(request);
+  // 検体・採取管を拡張で持っていた頃の明細のために、contained が無ければ拡張を読む。
+  const specimen =
+    codingBySystem(contained?.type?.coding, JLAC11_SPECIMEN_SYSTEM) ??
+    request.extension?.find((e) => e.url === SPECIMEN_EXT_URL)?.valueCodeableConcept?.coding?.[0];
+  const container =
+    codingBySystem(contained?.container?.[0]?.type?.coding, CONTAINER_SYSTEM) ??
+    request.extension?.find((e) => e.url === CONTAINER_EXT_URL)?.valueCodeableConcept?.coding?.[0];
 
   return {
     id,
