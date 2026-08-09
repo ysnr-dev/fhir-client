@@ -79,17 +79,22 @@ interface LabOrderEditPanelProps {
 
 export function LabOrderEditPanel({ patientId, srId, onSaved }: LabOrderEditPanelProps) {
   const updateLabOrder = useUpdatePrescription();
-  const { serviceRequest, initialValues, ready, patientMismatch, error } = useLabOrderInitialValues(
-    srId,
-    patientId,
-  );
+  const { serviceRequest, itemIds, initialValues, ready, patientMismatch, error } =
+    useLabOrderInitialValues(srId, patientId);
 
   function handleSubmit(values: LabOrderFormValues) {
     // 別患者のオーダーを更新すると subject が URL の患者に書き換わってしまうので防ぐ。
     if (!serviceRequest || patientMismatch) return;
     // 依頼科・依頼医師は登録時のものを引き継ぐ(処方・注射の編集と同じ考え方)。
+    // 外した検査項目は itemIds との差分で DELETE される。
     updateLabOrder.mutate(
-      buildLabOrderUpdateBundle(values, patientId, srId, prescriptionRequester(serviceRequest)),
+      buildLabOrderUpdateBundle(
+        values,
+        patientId,
+        srId,
+        itemIds,
+        prescriptionRequester(serviceRequest),
+      ),
       { onSuccess: onSaved },
     );
   }

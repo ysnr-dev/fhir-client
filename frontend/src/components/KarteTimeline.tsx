@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 import {
   useBinaryImage,
   useDeleteClinicalNote,
+  useDeleteLabOrder,
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
 } from "../api/queries";
@@ -181,6 +182,7 @@ function KarteCard({
 }) {
   const deleteNote = useDeleteClinicalNote();
   const deletePrescription = useDeletePrescription();
+  const deleteLabOrder = useDeleteLabOrder();
   const deleteResponse = useDeleteQuestionnaireResponse();
   // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
   // 詳細表示は URL に載せるので親に任せる。
@@ -188,8 +190,12 @@ function KarteCard({
   const [jsonOpen, setJsonOpen] = useState(false);
 
   const deleting =
-    deleteNote.isPending || deletePrescription.isPending || deleteResponse.isPending;
-  const deleteError = deleteNote.error ?? deletePrescription.error ?? deleteResponse.error;
+    deleteNote.isPending ||
+    deletePrescription.isPending ||
+    deleteLabOrder.isPending ||
+    deleteResponse.isPending;
+  const deleteError =
+    deleteNote.error ?? deletePrescription.error ?? deleteLabOrder.error ?? deleteResponse.error;
 
   // テンプレートは帳票レイアウトが登録されているものだけ PDF 出力できる。
   // 他の種別では canonical を渡さないので照会自体が走らない。
@@ -203,14 +209,12 @@ function KarteCard({
     const options = { onSuccess: () => onDeleted(item) };
     if (item.kind === "note") deleteNote.mutate(item.id, options);
     // 注射も処方と同じ ServiceRequest + MedicationRequest 構成なので削除処理を共用する。
-    // 検体検査は明細リソースが無いが、同じ処理で ServiceRequest だけが消える。
-    else if (
-      item.kind === "prescription" ||
-      item.kind === "injection" ||
-      item.kind === "lab-order"
-    ) {
+    else if (item.kind === "prescription" || item.kind === "injection") {
       deletePrescription.mutate(item.id, options);
-    } else deleteResponse.mutate(item.id, options);
+    }
+    // 検体検査は明細も ServiceRequest なので、専用の削除でまとめて消す。
+    else if (item.kind === "lab-order") deleteLabOrder.mutate(item.id, options);
+    else deleteResponse.mutate(item.id, options);
   }
 
   // プロブレム選択中は、そのプロブレムを参照しない情報を控えめに表示する
@@ -544,7 +548,7 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
   }
 
   if (item.kind === "lab-order") {
-    return <LabOrderCardBody serviceRequest={item.serviceRequest} />;
+    return <LabOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />;
   }
 
   if (!item.questionnaire) {
@@ -589,8 +593,14 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
 // 検体検査は検体(採血管)ごとにまとめて出す。採血の現場が動く単位に合わせる。
 // パネル検査は構成項目もオーダーに入っているので、親の後ろに並べて添える
 // (マスタではなくオーダーの内容なので、構成を後から直しても過去の表示は変わらない)。
-function LabOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.ServiceRequest }) {
-  const groups = groupBySpecimen(labOrderItems(serviceRequest));
+function LabOrderCardBody({
+  serviceRequest,
+  itemRequests,
+}: {
+  serviceRequest: fhir4.ServiceRequest;
+  itemRequests: fhir4.ServiceRequest[];
+}) {
+  const groups = groupBySpecimen(labOrderItems(serviceRequest, itemRequests));
   const comment = labOrderComment(serviceRequest);
 
   if (groups.length === 0) return <p className="karte-card__empty">検査項目がありません。</p>;

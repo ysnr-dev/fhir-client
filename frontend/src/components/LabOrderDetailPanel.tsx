@@ -14,12 +14,18 @@ import { orderContextSummary, prescriptionRequester } from "../fhir/prescription
 
 interface LabOrderDetailPanelProps {
   serviceRequest: fhir4.ServiceRequest;
+  /** オーダーにぶら下がる明細(検査項目・パネルの構成項目)。 */
+  itemRequests: fhir4.ServiceRequest[];
   problemsById?: Map<string, fhir4.Condition>;
 }
 
-export function LabOrderDetailPanel({ serviceRequest, problemsById }: LabOrderDetailPanelProps) {
+export function LabOrderDetailPanel({
+  serviceRequest,
+  itemRequests,
+  problemsById,
+}: LabOrderDetailPanelProps) {
   const summary = summarizeLabOrder(serviceRequest);
-  const groups = groupBySpecimen(labOrderItems(serviceRequest));
+  const groups = groupBySpecimen(labOrderItems(serviceRequest, itemRequests));
   const comment = labOrderComment(serviceRequest);
 
   const problem = labOrderProblem(serviceRequest);

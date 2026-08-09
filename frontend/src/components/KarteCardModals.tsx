@@ -1,9 +1,11 @@
 import {
   useClinicalNote,
+  useLabOrderDetail,
   usePrescriptionDetail,
   useQuestionnaireResponseWithQuestionnaire,
 } from "../api/queries";
 import { KARTE_KIND_LABELS, type KarteTimelineItem } from "../fhir/karteTimeline";
+import { labOrderItemRequests, serviceRequestsOf } from "../fhir/labOrderHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { splitPrescriptionDetailBundle } from "../fhir/prescriptionHelpers";
 import type { KarteDetailTarget } from "../karteUrl";
@@ -157,7 +159,7 @@ function InjectionDetail({
   );
 }
 
-// 検体検査は明細リソースを持たないが、取得は同じ ServiceRequest 詳細検索を共用する。
+// 検体検査は明細も ServiceRequest なので、ヘッダと明細を 1 リクエストで取る。
 function LabOrderDetail({
   patientId,
   srId,
@@ -167,10 +169,9 @@ function LabOrderDetail({
   srId: string;
   problemsById: Map<string, fhir4.Condition>;
 }) {
-  const detail = usePrescriptionDetail(srId);
-  const { serviceRequest } = detail.data
-    ? splitPrescriptionDetailBundle(detail.data.data)
-    : { serviceRequest: undefined };
+  const detail = useLabOrderDetail(srId);
+  const requests = serviceRequestsOf(detail.data?.data);
+  const serviceRequest = requests.find((request) => request.id === srId);
   const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
 
   return (
@@ -181,7 +182,11 @@ function LabOrderDetail({
       ) : mismatch ? (
         <p className="patient-table__empty">指定された検体検査は別の患者のものです。</p>
       ) : serviceRequest ? (
-        <LabOrderDetailPanel serviceRequest={serviceRequest} problemsById={problemsById} />
+        <LabOrderDetailPanel
+          serviceRequest={serviceRequest}
+          itemRequests={labOrderItemRequests(requests, srId)}
+          problemsById={problemsById}
+        />
       ) : (
         !detail.error && <NotFound label="検体検査" />
       )}
@@ -228,8 +233,7 @@ export function KarteCardJsonModal({
       {item.kind === "prescription" || item.kind === "injection" ? (
         <PrescriptionJson srId={item.id} />
       ) : item.kind === "lab-order" ? (
-        // 検体検査は 1 リソースで完結するので、手元の ServiceRequest をそのまま出す。
-        <FhirJsonView resource={item.serviceRequest} />
+        <LabOrderJson srId={item.id} />
       ) : (
         <FhirJsonView resource={item.kind === "note" ? item.note : item.response} />
       )}
@@ -241,6 +245,18 @@ export function KarteCardJsonModal({
 // 処方内容ページと同じ検索を実行する(モーダルを開いたときだけ走る)。
 function PrescriptionJson({ srId }: { srId: string }) {
   const detail = usePrescriptionDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
+    </>
+  );
+}
+
+// 検体検査もオーダーのヘッダと明細をまとめた Bundle で見せる。
+function LabOrderJson({ srId }: { srId: string }) {
+  const detail = useLabOrderDetail(srId);
 
   return (
     <>

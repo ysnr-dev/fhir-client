@@ -1,6 +1,6 @@
 import { referencedResponseIds } from "./clinicalNoteHelpers";
 import { isInjectionServiceRequest } from "./injectionHelpers";
-import { isLabServiceRequest } from "./labOrderHelpers";
+import { isLabOrderItemRequest, isLabServiceRequest, labOrderItemRequests } from "./labOrderHelpers";
 import { questionnaireCanonical } from "./questionnaireResponseHelpers";
 
 // カルテ画面のタイムライン(診療日ごとの時系列表示)を組み立てる純粋ロジック。
@@ -46,9 +46,13 @@ export type KarteTimelineItem = KarteItemBase &
         serviceRequest: fhir4.ServiceRequest;
         medicationRequests: fhir4.MedicationRequest[];
       }
-    // 検体検査は明細リソースを持たず、依頼した項目を ServiceRequest の
-    // orderDetail に持つ。
-    | { kind: "lab-order"; serviceRequest: fhir4.ServiceRequest }
+    // 検体検査の明細(検査項目・パネルの構成項目)も ServiceRequest なので、
+    // オーダーのヘッダにぶら下がるぶんを itemRequests に集めて渡す。
+    | {
+        kind: "lab-order";
+        serviceRequest: fhir4.ServiceRequest;
+        itemRequests: fhir4.ServiceRequest[];
+      }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
 
@@ -191,9 +195,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     note,
   }));
 
+  // 検体検査の明細(検査項目・パネルの構成項目)は ServiceRequest だが単独の
+  // カードにはしない。オーダーのヘッダに紐づけて、カードの中身として出す。
+  const orderRequests = serviceRequests.filter((sr) => !isLabOrderItemRequest(sr));
+  const itemRequests = serviceRequests.filter(isLabOrderItemRequest);
+
   // 処方・注射・検体検査は同じ検索結果に混ざって届くので、category のオーダー種別で
   // 振り分ける(注射より前から存在する処方の ServiceRequest はオーダー種別を持たない)。
-  const prescriptionItems: KarteTimelineItem[] = serviceRequests.map((serviceRequest) => {
+  const prescriptionItems: KarteTimelineItem[] = orderRequests.map((serviceRequest) => {
     const base = {
       id: serviceRequest.id ?? "",
       day: dayOf(serviceRequest.authoredOn),
@@ -201,7 +210,12 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
       serviceRequest,
     };
     if (isLabServiceRequest(serviceRequest)) {
-      return { ...base, kind: "lab-order" as const, label: KARTE_KIND_LABELS["lab-order"] };
+      return {
+        ...base,
+        kind: "lab-order" as const,
+        label: KARTE_KIND_LABELS["lab-order"],
+        itemRequests: labOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+      };
     }
     const withMedications = {
       ...base,

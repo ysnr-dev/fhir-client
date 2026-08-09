@@ -146,6 +146,8 @@ export function LabOrderForm({
       const container = containers.data?.items.find((c) => c.container_code === containerCode);
 
       return {
+        // 画面で足した項目は登録時に採番されるので、この時点では id を持たない。
+        id: "",
         code: item.order_item_code,
         name: item.name,
         shortName: item.short_name ?? "",

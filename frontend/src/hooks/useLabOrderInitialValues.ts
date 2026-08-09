@@ -1,29 +1,36 @@
 import { useMemo } from "react";
-import { usePrescriptionDetail } from "../api/queries";
-import { parseLabOrderForm } from "../fhir/labOrderHelpers";
+import { useLabOrderDetail } from "../api/queries";
+import {
+  labOrderItemRequests,
+  parseLabOrderForm,
+  serviceRequestsOf,
+} from "../fhir/labOrderHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
-import { splitPrescriptionDetailBundle } from "../fhir/prescriptionHelpers";
 
 // 保存済みの検体検査オーダーをフォームの初期値に復元する。編集と DO の双方から使う。
-// 取得は処方・注射と同じ ServiceRequest 詳細検索を共用する(検体検査は明細リソースを
-// 持たないので、返ってくる MedicationRequest は常に空)。
+// 明細も ServiceRequest なので、ヘッダと一緒に取得した明細から項目を組み立てる。
 export function useLabOrderInitialValues(srId: string | undefined, patientId?: string) {
-  const detail = usePrescriptionDetail(srId);
+  const detail = useLabOrderDetail(srId);
 
-  const serviceRequest = useMemo(
-    () => (detail.data ? splitPrescriptionDetailBundle(detail.data.data).serviceRequest : undefined),
-    [detail.data],
-  );
+  const { serviceRequest, itemRequests } = useMemo(() => {
+    const requests = serviceRequestsOf(detail.data?.data);
+    return {
+      serviceRequest: requests.find((request) => request.id === srId),
+      itemRequests: srId ? labOrderItemRequests(requests, srId) : [],
+    };
+  }, [detail.data, srId]);
 
   const initialValues = useMemo(
-    () => (serviceRequest ? parseLabOrderForm(serviceRequest) : undefined),
-    [serviceRequest],
+    () => (serviceRequest ? parseLabOrderForm(serviceRequest, itemRequests) : undefined),
+    [itemRequests, serviceRequest],
   );
 
   const patientMismatch = isPatientMismatch(patientId, serviceRequest?.subject);
 
   return {
     serviceRequest,
+    /** 更新時に、外された明細を消すために渡す元の明細 id。 */
+    itemIds: itemRequests.map((request) => request.id).filter((id): id is string => Boolean(id)),
     initialValues: patientMismatch ? undefined : initialValues,
     ready: !detail.isLoading,
     patientMismatch,

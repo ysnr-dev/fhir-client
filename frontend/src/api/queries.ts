@@ -14,6 +14,11 @@ import {
 } from "../fhir/labResultHelpers";
 import { isInjectionServiceRequest } from "../fhir/injectionHelpers";
 import {
+  buildLabOrderDeleteBundle,
+  labOrderItemRequests,
+  serviceRequestsOf,
+} from "../fhir/labOrderHelpers";
+import {
   buildPrescriptionDeleteBundle,
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
@@ -589,6 +594,20 @@ export function usePrescriptionDetail(srId: string | undefined) {
   return useQuery({
     queryKey: ["ServiceRequest", "detail", srId],
     queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", params),
+    enabled: Boolean(srId),
+  });
+}
+
+// 検体検査オーダー。明細も ServiceRequest なので、ヘッダと一緒に
+// パネルの構成項目(2 段目)まで 1 リクエストで受け取る。
+export function useLabOrderDetail(srId: string | undefined) {
+  const params = new URLSearchParams();
+  if (srId) params.set("_id", srId);
+  params.set("_revinclude:iterate", "ServiceRequest:based-on");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "detail", "lab-order", srId],
+    queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", params),
     enabled: Boolean(srId),
   });
 }
@@ -1395,6 +1414,8 @@ export function usePopulateSources(patientId: string | undefined) {
   // 患者で %prescriptions が注射になってしまう。少し多めに取り、最新の処方だけを残す。
   rxParams.set("_count", "5");
   rxParams.set("_sort", "-authoredon");
+  // 検体検査の明細(ServiceRequest)は処方ではないので最初から除く。
+  rxParams.set("based-on:missing", "true");
   rxParams.set("_revinclude", "MedicationRequest:based-on");
   const rxDetail = useQuery({
     queryKey: ["ServiceRequest", "populate", patientId],
@@ -1508,8 +1529,13 @@ export function useKartePrescriptionsInfinite(patientId: string | undefined) {
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-authoredon");
-      // カルテは薬剤名まで表示するので処方明細も同じレスポンスで受け取る。
+      // 検体検査は明細も ServiceRequest なので、オーダーのヘッダだけを 1 ページの
+      // 対象にする(明細がカードとして紛れ込まず、ページ数も項目数に左右されない)。
+      params.set("based-on:missing", "true");
+      // カルテは薬剤名・検査項目名まで表示するので、処方明細と検体検査の明細
+      // (パネルの構成項目まで 2 段)も同じレスポンスで受け取る。
       params.set("_revinclude", "MedicationRequest:based-on");
+      params.set("_revinclude:iterate", "ServiceRequest:based-on");
       return searchResource<fhir4.Resource>("ServiceRequest", params);
     },
     initialPageParam: 0,
@@ -1545,6 +1571,28 @@ export function useDeletePrescription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+    },
+  });
+}
+
+// 検体検査は明細も ServiceRequest なので、ぶら下がっているものを引いてから
+// ヘッダごと消す(処方の MedicationRequest と同じ考え方)。
+export function useDeleteLabOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (srId: string) => {
+      const params = new URLSearchParams();
+      params.set("_id", srId);
+      params.set("_revinclude:iterate", "ServiceRequest:based-on");
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      const itemIds = labOrderItemRequests(serviceRequestsOf(bundle), srId)
+        .map((request) => request.id)
+        .filter((id): id is string => Boolean(id));
+      return postBundle(buildLabOrderDeleteBundle(srId, itemIds));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
     },
   });
 }

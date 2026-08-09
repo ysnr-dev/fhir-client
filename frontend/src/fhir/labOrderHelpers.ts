@@ -10,22 +10,22 @@ import {
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
 
-// 検体検査オーダー。処方・注射と同じくオーダーヘッダは ServiceRequest だが、
-// 明細も ServiceRequest で表す(パネル検査 → 構成項目の親子を FHIR 側で持つため)。
+// 検体検査オーダー。処方・注射と同じくオーダーヘッダは ServiceRequest で、
+// 明細(検査項目)も 1 件ずつ独立した ServiceRequest にする。
 //
-// 明細を独立したリソースにせず contained に入れている理由:
-// (1) 上流 FHIR サーバーが ServiceRequest の based-on 検索に対応しておらず
-//     (未知の検索パラメータは無視されて全件返る)、「このオーダーの子」を引けない。
-// (2) カルテのタイムラインは患者の ServiceRequest を 1 本のページングで読むため、
-//     項目ごとに独立したリソースを作ると 1 オーダーでページが埋まり、
-//     「1 オーダー = 1 カード」で並べられなくなる(子を除外する検索もできない)。
-// contained なら 1 リソースの読み書きで階層ごと扱えて、上記のどちらにも当たらない。
-// 上流が based-on 検索に対応したら、独立リソースへの移行を検討する。
+//   ヘッダ ← basedOn ── 明細(単独の項目・パネル) ← basedOn ── パネルの構成項目
+//
+// カルテのタイムラインは患者の ServiceRequest を 1 本のページングで読むので、
+// 明細がカードとして紛れ込まないよう `based-on:missing=true` でヘッダだけを
+// 取り、明細は `_revinclude:iterate=ServiceRequest:based-on` で同じ応答に
+// 添えてもらう(上流サーバーは 2026-08-09 に based-on 検索へ対応済み)。
 //
 // 明細の各 ServiceRequest は、オーダーした時点の検査項目マスタの内容(項目コード・
 // 名称・略称・JLAC コード・検体・採取管)を写して持つ。マスタを直した後に過去の
 // オーダーの中身が変わってしまわないよう、参照ではなく写しにしている。
-// パネルの構成項目も同じ明細として持ち、親のパネルを basedOn(#id)で指す。
+//
+// 明細を contained に入れていた頃・検査項目を orderDetail に直接持っていた頃の
+// オーダーも読めるようにしてある(labOrderItems の読み出し順を参照)。
 
 // 処方の ServiceRequest と区別するオーダー種別(注射と同じ CodeSystem)。
 export const LAB_ORDER_TYPE = { code: "lab", display: "検体検査" };
@@ -42,9 +42,10 @@ const CONTAINER_SYSTEM = "http://fhir-client.local/CodeSystem/lab-container";
 const SPECIMEN_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-order-specimen";
 const CONTAINER_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-order-container";
 
-// ヘッダの orderDetail から明細(contained の ServiceRequest)を指す拡張。
-// 処方・注射が orderDetail から MedicationRequest を指すのと同じ形。
-const ITEM_REQUEST_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-order-item-request";
+// 明細の並び順。独立したリソースは検索の戻り順が保証されないため、伝票で選んだ
+// 順番を明細自身に持たせる(処方の RP 番号と同じ考え方)。
+const ITEM_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/lab-order-item-number";
+
 
 export type LabOrderPriority = "routine" | "urgent";
 
@@ -55,6 +56,8 @@ export const PRIORITY_OPTIONS: { code: LabOrderPriority; display: string }[] = [
 
 /** オーダーした検査項目 1 件。マスタの写しなので、表示に必要な値をすべて持つ。 */
 export interface LabOrderItemLine {
+  /** 明細の ServiceRequest の id。画面で足したばかりの項目は空(登録時に採番)。 */
+  id: string;
   /** 検体検査オーダー項目マスタの項目コード。 */
   code: string;
   name: string;
@@ -190,14 +193,15 @@ function jlacSystemOf(codeSystem: string): string {
   return codeSystem === "jlac10" ? JLAC10_SYSTEM : JLAC11_SYSTEM;
 }
 
-// 明細 1 件(検査項目 1 つ)の ServiceRequest。contained に入れるので、
-// リソース内で一意な id を位置から振る(項目コードは日本語などを含みうるため
-// FHIR の id に使えない)。パネルの構成項目は親を basedOn(#id)で指す。
+// 明細 1 件(検査項目 1 つ)の ServiceRequest。親(ヘッダ、またはパネル)を
+// basedOn で指す。parentReference には Bundle 内の fullUrl をそのまま渡すので、
+// 新規登録では urn:uuid、更新では ServiceRequest/{id} になる。
 function buildItemRequest(
   item: LabOrderItemLine,
-  containedId: string,
+  sequence: number,
   patientId: string,
-  parentContainedId?: string,
+  authoredOn: string,
+  parentReference: string,
 ): fhir4.ServiceRequest {
   const coding: fhir4.Coding[] = [
     { system: ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
@@ -241,13 +245,15 @@ function buildItemRequest(
 
   const resource: fhir4.ServiceRequest = {
     resourceType: "ServiceRequest",
-    id: containedId,
     status: "active",
     intent: "order",
+    identifier: [{ system: ITEM_NUMBER_SYSTEM, value: String(sequence) }],
     subject: { reference: `Patient/${patientId}` },
+    authoredOn,
     code: { coding, text: item.name },
+    basedOn: [{ reference: parentReference }],
   };
-  if (parentContainedId) resource.basedOn = [{ reference: `#${parentContainedId}` }];
+  if (item.id) resource.id = item.id;
   if (extension.length) resource.extension = extension;
 
   return resource;
@@ -255,6 +261,8 @@ function buildItemRequest(
 
 function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): LabOrderItemLine {
   const coding = request.code?.coding;
+  // contained だった頃の明細は id がリソース内だけの文字列(item-1)なので拾わない。
+  const id = request.id && !request.id.startsWith("item-") ? request.id : "";
   const itemCoding = codingBySystem(coding, ORDER_ITEM_SYSTEM);
   const jlac11 = codingBySystem(coding, JLAC11_SYSTEM);
   const jlac10 = codingBySystem(coding, JLAC10_SYSTEM);
@@ -265,6 +273,7 @@ function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): La
     ?.coding?.[0];
 
   return {
+    id,
     code: itemCoding?.code ?? "",
     name: itemCoding?.display ?? request.code?.text ?? "",
     shortName: abbreviation?.code ?? "",
@@ -278,37 +287,49 @@ function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): La
   };
 }
 
-interface BuiltItemRequests {
-  contained: fhir4.ServiceRequest[];
-  /** ヘッダから明細を指す orderDetail(単独で選んだ項目のぶんだけ)。 */
-  orderDetail: fhir4.CodeableConcept[];
+// 明細の Bundle エントリ。既にある明細は PUT、画面で足したものは POST、
+// 外した明細は DELETE(呼び出し側が元の id 一覧を渡す)。
+function buildItemEntries(
+  items: LabOrderItemLine[],
+  patientId: string,
+  authoredOn: string,
+  headerReference: string,
+  originalItemIds: string[],
+): fhir4.BundleEntry[] {
+  const entries: fhir4.BundleEntry[] = [];
+  const kept = new Set<string>();
+  let sequence = 0;
+
+  const pushEntry = (item: LabOrderItemLine, parentReference: string): string => {
+    sequence += 1;
+    const fullUrl = item.id ? `ServiceRequest/${item.id}` : `urn:uuid:${crypto.randomUUID()}`;
+    if (item.id) kept.add(item.id);
+
+    entries.push({
+      fullUrl,
+      resource: buildItemRequest(item, sequence, patientId, authoredOn, parentReference),
+      request: item.id
+        ? { method: "PUT", url: `ServiceRequest/${item.id}` }
+        : { method: "POST", url: "ServiceRequest" },
+    });
+    return fullUrl;
+  };
+
+  for (const item of topLevelItems(items)) {
+    const itemReference = pushEntry(item, headerReference);
+    for (const member of membersOf(items, item.code)) pushEntry(member, itemReference);
+  }
+
+  for (const id of originalItemIds) {
+    if (!kept.has(id)) entries.push({ request: { method: "DELETE", url: `ServiceRequest/${id}` } });
+  }
+
+  return entries;
 }
 
-function buildItemRequests(items: LabOrderItemLine[], patientId: string): BuiltItemRequests {
-  const contained: fhir4.ServiceRequest[] = [];
-  const orderDetail: fhir4.CodeableConcept[] = [];
-
-  topLevelItems(items).forEach((item, index) => {
-    const containedId = `item-${index + 1}`;
-    contained.push(buildItemRequest(item, containedId, patientId));
-    orderDetail.push({
-      extension: [{ url: ITEM_REQUEST_EXT_URL, valueReference: { reference: `#${containedId}` } }],
-      text: item.name,
-    });
-
-    membersOf(items, item.code).forEach((member, memberIndex) => {
-      contained.push(
-        buildItemRequest(member, `${containedId}-${memberIndex + 1}`, patientId, containedId),
-      );
-    });
-  });
-
-  return { contained, orderDetail };
-}
-
-// 明細を contained にする前(パネルの構成項目を持たなかった頃)のオーダー。
-// 検査項目を orderDetail の CodeableConcept として直接持っていた。
-// 過去のオーダーが「項目なし」に見えないよう、contained が無いときだけ読む。
+// 明細を独立したリソースにする前のオーダー。検査項目を orderDetail の
+// CodeableConcept として直接持っていた(パネルの構成項目は持てなかった)。
+// 過去のオーダーが「項目なし」に見えないよう、明細が無いときだけ読む。
 function parseLegacyOrderDetail(detail: fhir4.CodeableConcept): LabOrderItemLine {
   const itemCoding = codingBySystem(detail.coding, ORDER_ITEM_SYSTEM);
   const jlac11 = codingBySystem(detail.coding, JLAC11_SYSTEM);
@@ -319,6 +340,7 @@ function parseLegacyOrderDetail(detail: fhir4.CodeableConcept): LabOrderItemLine
     ?.coding?.[0];
 
   return {
+    id: "",
     code: itemCoding?.code ?? "",
     name: itemCoding?.display ?? detail.text ?? "",
     shortName: "",
@@ -332,25 +354,33 @@ function parseLegacyOrderDetail(detail: fhir4.CodeableConcept): LabOrderItemLine
   };
 }
 
-function parseItemRequests(sr: fhir4.ServiceRequest): LabOrderItemLine[] {
-  const requests = (sr.contained ?? []).filter(
-    (resource): resource is fhir4.ServiceRequest => resource.resourceType === "ServiceRequest",
-  );
-  if (requests.length === 0) {
-    return (sr.orderDetail ?? []).map(parseLegacyOrderDetail);
-  }
+function itemNumber(request: fhir4.ServiceRequest): number {
+  const value = request.identifier?.find((i) => i.system === ITEM_NUMBER_SYSTEM)?.value;
+  // 番号を持たない明細(contained だった頃)は配列の順序のままにしたいので後ろに置かない。
+  return value ? Number(value) : 0;
+}
 
-  // 親の contained id → 項目コード。構成項目に親のコードを持たせるために引く。
+// 明細の ServiceRequest 群を、親子の分かる 1 本の配列にする。
+// requests には単独の項目・パネル・パネルの構成項目が混ざって届く。
+function parseItemRequests(
+  requests: fhir4.ServiceRequest[],
+  headerId: string | undefined,
+): LabOrderItemLine[] {
+  // 明細の id(または contained id)→ 項目コード。構成項目に親のコードを持たせる。
   const codeById = new Map<string, string>();
   for (const request of requests) {
     const code = codingBySystem(request.code?.coding, ORDER_ITEM_SYSTEM)?.code;
     if (request.id && code) codeById.set(request.id, code);
   }
 
-  return requests.map((request) => {
-    const parentId = request.basedOn?.[0]?.reference?.replace(/^#/, "") ?? "";
-    return parseItemRequest(request, codeById.get(parentId) ?? "");
-  });
+  return [...requests]
+    .sort((a, b) => itemNumber(a) - itemNumber(b))
+    .map((request) => {
+      const parentId = request.basedOn?.[0]?.reference?.replace(/^#/, "").split("/").pop() ?? "";
+      // ヘッダを指しているものは単独で選んだ項目(親コードなし)。
+      const parentCode = parentId === headerId ? "" : (codeById.get(parentId) ?? "");
+      return parseItemRequest(request, parentCode);
+    });
 }
 
 function buildLabOrderServiceRequest(
@@ -359,7 +389,6 @@ function buildLabOrderServiceRequest(
   requester: OrderContext,
   serviceRequestId?: string,
 ): fhir4.ServiceRequest {
-  const { contained, orderDetail } = buildItemRequests(values.items, patientId);
   const resource: fhir4.ServiceRequest = {
     resourceType: "ServiceRequest",
     status: "active",
@@ -387,10 +416,6 @@ function buildLabOrderServiceRequest(
     authoredOn: values.authoredDate,
     // 検体を採る日。オーダー日と同じ日を入れる(検査日として 1 つだけ入力する)。
     occurrenceDateTime: values.authoredDate,
-    // 明細は contained の ServiceRequest。orderDetail はヘッダから明細を指す索引で、
-    // 単独で選んだ項目(パネルを含む)だけを並べる(構成項目は親の basedOn で辿る)。
-    contained,
-    orderDetail,
   };
 
   if (serviceRequestId) resource.id = serviceRequestId;
@@ -410,27 +435,37 @@ function buildLabOrderServiceRequest(
   return resource;
 }
 
-// 明細は contained なので Bundle は 1 エントリだが、処方・注射と同じ
-// transaction Bundle の POST で送る(mutation を共用するため)。
+// ヘッダ 1 件 + 明細 N 件の transaction Bundle。新規登録ではヘッダを urn:uuid で
+// 参照するので、明細の basedOn はサーバー側で採番後の id に解決される。
 function buildLabOrderTransactionBundle(
   values: LabOrderFormValues,
   patientId: string,
   requester: OrderContext,
   serviceRequestId?: string,
+  originalItemIds: string[] = [],
 ): fhir4.Bundle {
+  const headerReference = serviceRequestId
+    ? `ServiceRequest/${serviceRequestId}`
+    : `urn:uuid:${crypto.randomUUID()}`;
+
   return {
     resourceType: "Bundle",
     type: "transaction",
     entry: [
       {
-        fullUrl: serviceRequestId
-          ? `ServiceRequest/${serviceRequestId}`
-          : `urn:uuid:${crypto.randomUUID()}`,
+        fullUrl: headerReference,
         resource: buildLabOrderServiceRequest(values, patientId, requester, serviceRequestId),
         request: serviceRequestId
           ? { method: "PUT", url: `ServiceRequest/${serviceRequestId}` }
           : { method: "POST", url: "ServiceRequest" },
       },
+      ...buildItemEntries(
+        values.items,
+        patientId,
+        values.authoredDate,
+        headerReference,
+        originalItemIds,
+      ),
     ],
   };
 }
@@ -447,15 +482,43 @@ export function buildLabOrderUpdateBundle(
   values: LabOrderFormValues,
   patientId: string,
   serviceRequestId: string,
+  originalItemIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildLabOrderTransactionBundle(values, patientId, requester, serviceRequestId);
+  return buildLabOrderTransactionBundle(
+    values,
+    patientId,
+    requester,
+    serviceRequestId,
+    originalItemIds,
+  );
+}
+
+/** オーダーとその明細をまとめて消す Bundle。 */
+export function buildLabOrderDeleteBundle(
+  serviceRequestId: string,
+  itemIds: string[],
+): fhir4.Bundle {
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [
+      { request: { method: "DELETE", url: `ServiceRequest/${serviceRequestId}` } },
+      ...itemIds.map((id) => ({
+        request: { method: "DELETE" as const, url: `ServiceRequest/${id}` },
+      })),
+    ],
+  };
 }
 
 // 既存のオーダーを DO(流用)して新規登録するためのフォーム値。処方・注射と同じく
-// 検査日は当日にする。
+// 明細の id を落として新規登録(POST)にし、検査日は当日にする。
 export function buildDoLabOrderForm(values: LabOrderFormValues): LabOrderFormValues {
-  return { ...values, authoredDate: today() };
+  return {
+    ...values,
+    authoredDate: today(),
+    items: values.items.map((item) => ({ ...item, id: "" })),
+  };
 }
 
 // ---- 一覧・カルテ表示のための parse ----
@@ -483,9 +546,60 @@ export function summarizeLabOrder(sr: fhir4.ServiceRequest): LabOrderSummary {
   };
 }
 
-/** オーダーした検査項目(単独項目・パネル・パネルの構成項目をすべて含む平坦な一覧)。 */
-export function labOrderItems(sr: fhir4.ServiceRequest): LabOrderItemLine[] {
-  return parseItemRequests(sr);
+/**
+ * オーダーした検査項目(単独項目・パネル・パネルの構成項目をすべて含む平坦な一覧)。
+ *
+ * items には、そのオーダーにぶら下がる明細の ServiceRequest を渡す
+ * (`_revinclude:iterate=ServiceRequest:based-on` で取得したもの)。
+ * 明細を独立リソースにする前のオーダーのために、渡されなかった場合は
+ * contained → orderDetail の順で読む。
+ */
+export function labOrderItems(
+  sr: fhir4.ServiceRequest,
+  items: fhir4.ServiceRequest[] = [],
+): LabOrderItemLine[] {
+  if (items.length > 0) return parseItemRequests(items, sr.id);
+
+  const contained = (sr.contained ?? []).filter(
+    (resource): resource is fhir4.ServiceRequest => resource.resourceType === "ServiceRequest",
+  );
+  if (contained.length > 0) return parseItemRequests(contained, sr.id);
+
+  return (sr.orderDetail ?? []).map(parseLegacyOrderDetail);
+}
+
+/** 検索結果の Bundle から ServiceRequest だけを取り出す(ヘッダと明細が混ざって届く)。 */
+export function serviceRequestsOf(bundle: fhir4.Bundle | undefined): fhir4.ServiceRequest[] {
+  return (bundle?.entry ?? [])
+    .map((entry) => entry.resource)
+    .filter((resource): resource is fhir4.ServiceRequest => resource?.resourceType === "ServiceRequest");
+}
+
+/** ServiceRequest の一覧から、指定のオーダーにぶら下がる明細だけを取り出す。 */
+export function labOrderItemRequests(
+  serviceRequests: fhir4.ServiceRequest[],
+  headerId: string,
+): fhir4.ServiceRequest[] {
+  const descendants = new Set([headerId]);
+  // ヘッダ → 明細 → 構成項目の 2 段。親が先に入っていないと孫を拾えないので、
+  // 増えなくなるまで繰り返す(件数は数十なので素朴に回してよい)。
+  for (let depth = 0; depth < 2; depth += 1) {
+    for (const request of serviceRequests) {
+      const parentId = parentRequestId(request);
+      if (parentId && descendants.has(parentId) && request.id) descendants.add(request.id);
+    }
+  }
+  return serviceRequests.filter((request) => request.id !== headerId && descendants.has(request.id ?? ""));
+}
+
+/** ServiceRequest が別の ServiceRequest の明細か(タイムラインのカードにしない)。 */
+export function isLabOrderItemRequest(sr: fhir4.ServiceRequest): boolean {
+  return Boolean(parentRequestId(sr));
+}
+
+function parentRequestId(sr: fhir4.ServiceRequest): string | undefined {
+  const reference = sr.basedOn?.[0]?.reference;
+  return reference?.startsWith("ServiceRequest/") ? reference.split("/")[1] : undefined;
 }
 
 export function labOrderComment(sr: fhir4.ServiceRequest): string {
@@ -502,13 +616,16 @@ export function labOrderProblem(sr: fhir4.ServiceRequest | undefined): ProblemRe
 
 // ---- 編集フォームへの復元 ----
 
-export function parseLabOrderForm(sr: fhir4.ServiceRequest): LabOrderFormValues {
+export function parseLabOrderForm(
+  sr: fhir4.ServiceRequest,
+  items: fhir4.ServiceRequest[] = [],
+): LabOrderFormValues {
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as LabOrderPriority,
     authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
     comment: labOrderComment(sr),
     problem: labOrderProblem(sr),
-    items: labOrderItems(sr),
+    items: labOrderItems(sr, items),
   };
 }
