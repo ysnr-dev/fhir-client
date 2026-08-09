@@ -335,15 +335,35 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
     return container?.name ?? specimen.default_container_code;
   }, [containers.data, draft.specimen_code, specimens.data]);
 
+  // 共有項目JLACコードマスタの材料名(「血清」など)から検体マスタのコードを引く。
+  // どちらも JLAC11 の材料表が元なので名称で一致する。
+  const specimenCodesByName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const specimen of specimens.data?.items ?? []) {
+      if (!map.has(specimen.name)) map.set(specimen.name, specimen.specimen_code);
+    }
+    return map;
+  }, [specimens.data]);
+
   // 共有項目JLACコードマスタからの選択。コードと体系を埋め、名称が空なら補完する。
+  // 検査分野・検体は JLAC マスタが正なので、選び直したら選択に合わせて入れ替える
+  // (JLAC マスタ側が空、または対応する検体がマスタに無いときだけ元の選択を残す)。
   function handleSelectLabItem(item: LabItem) {
     setSearchingJlac(false);
+    const specimenCode = item.jlac11_specimen
+      ? (specimenCodesByName.get(item.jlac11_specimen) ?? "")
+      : "";
     setDraft((prev) => ({
       ...prev,
       jlac_code: item.jlac11_code,
       jlac_code_system: "jlac11",
       name: prev.name || (item.fhir_item_name ?? ""),
       short_name: prev.short_name || (item.abbreviation ?? ""),
+      category: item.category_name || prev.category,
+      specimen_code: specimenCode || prev.specimen_code,
+      // 検体が変わると既定の採取管も変わるため、項目側の上書きは外す。
+      container_code:
+        specimenCode && specimenCode !== prev.specimen_code ? "" : prev.container_code,
     }));
   }
 
@@ -512,12 +532,6 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
             </select>
           </label>
           <label>
-            &nbsp;
-            <button type="button" onClick={() => setSearchingJlac(true)}>
-              JLACマスタから検索
-            </button>
-          </label>
-          <label>
             有効開始日
             <input
               type="date"
@@ -557,6 +571,9 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
         <div className="lab-order-item__actions">
           <button type="submit" disabled={saving}>
             保存
+          </button>
+          <button type="button" onClick={() => setSearchingJlac(true)}>
+            JLACマスタから検索
           </button>
           {itemId !== null && (
             <button type="button" onClick={handleDelete} disabled={mutations.remove.isPending}>
