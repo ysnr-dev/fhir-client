@@ -3,6 +3,7 @@ import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 import {
   MEDICINE_CODE_SYSTEM,
   ORDER_IN_RP_SYSTEM,
+  ORDER_TYPE_SYSTEM,
   RP_NUMBER_SYSTEM,
   SETTING_OPTIONS,
   SETTING_SYSTEM,
@@ -31,8 +32,8 @@ import {
 //   - 開始時刻: timing.event(複数可)
 //   - 用法種別(点滴/ワンショット): 対応する標準コード表が存在しないためローカル拡張
 
-// 処方の ServiceRequest と区別するためのオーダー種別。category に付与する。
-export const ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type";
+// 処方の ServiceRequest と区別するためのオーダー種別(CodeSystem は
+// prescriptionHelpers の ORDER_TYPE_SYSTEM を検体検査と共有する)。
 export const INJECTION_ORDER_TYPE = { code: "injection", display: "注射" };
 
 // 注射区分。処方区分(処方の CATEGORY_SYSTEM)と選択肢が違うので別のコードシステムにする。

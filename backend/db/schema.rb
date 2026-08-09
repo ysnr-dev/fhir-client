@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_08_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_09_000400) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -131,6 +131,20 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_08_000000) do
     t.index ["search_name"], name: "index_master_jfagy_allergens_on_search_name"
   end
 
+  create_table "master_lab_containers", force: :cascade do |t|
+    t.string "container_code", null: false
+    t.string "name", null: false
+    t.string "short_name"
+    t.string "cap_color"
+    t.string "additive"
+    t.string "capacity"
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["container_code"], name: "index_master_lab_containers_on_container_code", unique: true
+  end
+
   create_table "master_lab_items", force: :cascade do |t|
     t.string "category_name"
     t.string "reserve_category_name"
@@ -172,6 +186,90 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_08_000000) do
     t.index ["fhir_item_name"], name: "index_master_lab_items_on_fhir_item_name"
     t.index ["jlac10_code"], name: "index_master_lab_items_on_jlac10_code"
     t.index ["jlac11_code"], name: "index_master_lab_items_on_jlac11_code", unique: true
+  end
+
+  create_table "master_lab_order_item_layout_cells", force: :cascade do |t|
+    t.integer "layout_id", null: false
+    t.integer "grid_row", null: false
+    t.integer "grid_column", null: false
+    t.string "cell_type", default: "item", null: false
+    t.string "order_item_code"
+    t.string "display_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["layout_id", "grid_row", "grid_column"], name: "index_lab_layout_cells_on_layout_and_position", unique: true
+    t.index ["order_item_code"], name: "index_master_lab_order_item_layout_cells_on_order_item_code"
+  end
+
+  create_table "master_lab_order_item_layouts", force: :cascade do |t|
+    t.string "name", null: false
+    t.integer "row_count", default: 10, null: false
+    t.integer "column_count", default: 5, null: false
+    t.integer "display_order"
+    t.boolean "active", default: true, null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_master_lab_order_item_layouts_on_name", unique: true
+  end
+
+  create_table "master_lab_order_items", force: :cascade do |t|
+    t.string "order_item_code", null: false
+    t.string "name", null: false
+    t.string "short_name"
+    t.string "name_kana"
+    t.string "category"
+    t.string "specimen_code"
+    t.string "container_code"
+    t.string "kind", default: "single", null: false
+    t.string "jlac_code"
+    t.string "jlac_code_system"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.string "execution_type"
+    t.string "receipt_code"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_short_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["jlac_code"], name: "index_master_lab_order_items_on_jlac_code"
+    t.index ["kind"], name: "index_master_lab_order_items_on_kind"
+    t.index ["order_item_code"], name: "index_master_lab_order_items_on_order_item_code", unique: true
+  end
+
+  create_table "master_lab_panel_items", force: :cascade do |t|
+    t.string "panel_item_code", null: false
+    t.string "member_item_code", null: false
+    t.integer "display_order"
+    t.string "member_type", default: "required", null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["member_item_code"], name: "index_master_lab_panel_items_on_member_item_code"
+    t.index ["panel_item_code", "member_item_code"], name: "index_lab_panel_items_on_panel_and_member", unique: true
+  end
+
+  create_table "master_lab_specimens", force: :cascade do |t|
+    t.string "specimen_code", null: false
+    t.string "name", null: false
+    t.string "short_name"
+    t.string "category"
+    t.string "parent_specimen_code"
+    t.boolean "recommended", default: false, null: false
+    t.string "jlac10_specimen_code"
+    t.string "default_container_code"
+    t.integer "display_order"
+    t.string "name_kana"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["parent_specimen_code"], name: "index_master_lab_specimens_on_parent_specimen_code"
+    t.index ["specimen_code"], name: "index_master_lab_specimens_on_specimen_code", unique: true
   end
 
   create_table "master_medicine_dose_conversions", force: :cascade do |t|

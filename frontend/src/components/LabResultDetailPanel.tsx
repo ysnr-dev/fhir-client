@@ -1,4 +1,10 @@
-import { useLabResultDetail } from "../api/queries";
+import { useLabOrderDetail, useLabResultDetail } from "../api/queries";
+import {
+  labOrderItemRequests,
+  labOrderItems,
+  labOrderLabel,
+  serviceRequestsOf,
+} from "../fhir/labOrderHelpers";
 import {
   interpretationClass,
   observationLineDisplay,
@@ -12,6 +18,23 @@ import { FhirJsonView } from "./FhirJsonView";
 // 検査結果の内容表示。詳細ページとカルテ画面の検査結果タブの双方から使う。
 // DO・編集・削除の操作ボタンと前後移動は、遷移先が異なるので呼び出し側が持つ。
 
+// 紐付いている検体検査オーダーの 1 行要約。オーダーが削除済みでも検査結果自体は
+// 表示できるようにしたいので、引けなかった場合は id だけを見せる。
+function useLabOrderLabel(orderId: string | undefined): string {
+  const order = useLabOrderDetail(orderId);
+  if (!orderId) return "";
+  if (order.isLoading) return "読み込み中...";
+
+  const serviceRequests = serviceRequestsOf(order.data?.data);
+  const header = serviceRequests.find((sr) => sr.id === orderId);
+  if (!header) return `${orderId} (削除済み)`;
+
+  return labOrderLabel(
+    header,
+    labOrderItems(header, labOrderItemRequests(serviceRequests, orderId)),
+  );
+}
+
 export function LabResultDetailPanel({ reportId }: { reportId: string }) {
   const detail = useLabResultDetail(reportId);
 
@@ -20,6 +43,7 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
     : { report: undefined, observations: [], specimens: [] };
   const summary = report ? summarizeDiagnosticReport(report) : undefined;
   const specimenNames = specimenNamesById(specimens);
+  const orderLabel = useLabOrderLabel(summary?.orderId);
 
   return (
     <>
@@ -38,6 +62,8 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                 <dd>{summary.date}</dd>
                 <dt>入外区分</dt>
                 <dd>{summary.settingDisplay}</dd>
+                <dt>検体検査オーダー</dt>
+                <dd>{summary.orderId ? orderLabel : "紐付けなし"}</dd>
               </dl>
             </fieldset>
 

@@ -40,12 +40,26 @@ export function parseKarteTab(value: string | null): KarteTabKey {
   return KARTE_TABS.some((tab) => tab.key === value) ? (value as KarteTabKey) : "karte";
 }
 
+/**
+ * 詳細モーダルの対象種別。カードの種別に加えて、検体検査のカードから開く
+ * 「検査結果表示」(DiagnosticReport)を持つ。検査結果はカルテのカードにはならないが、
+ * モーダルの対象としては独立した種別が要る。
+ */
+export type KarteDetailKind = KarteItemKind | "lab-result";
+
 export interface KarteDetailTarget {
-  kind: KarteItemKind;
+  kind: KarteDetailKind;
   id: string;
 }
 
-const DETAIL_KINDS: KarteItemKind[] = ["note", "prescription", "injection", "qr"];
+const DETAIL_KINDS: KarteDetailKind[] = [
+  "note",
+  "prescription",
+  "injection",
+  "lab-order",
+  "lab-result",
+  "qr",
+];
 
 export function formatKarteDetail(target: KarteDetailTarget): string {
   return `${target.kind}:${target.id}`;
@@ -56,7 +70,7 @@ export function parseKarteDetail(value: string | null): KarteDetailTarget | null
   if (!value) return null;
   const separator = value.indexOf(":");
   if (separator < 0) return null;
-  const kind = value.slice(0, separator) as KarteItemKind;
+  const kind = value.slice(0, separator) as KarteDetailKind;
   const id = value.slice(separator + 1);
   if (!id || !DETAIL_KINDS.includes(kind)) return null;
   return { kind, id };

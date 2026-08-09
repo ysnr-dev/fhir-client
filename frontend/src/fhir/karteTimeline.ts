@@ -1,5 +1,6 @@
 import { referencedResponseIds } from "./clinicalNoteHelpers";
 import { isInjectionServiceRequest } from "./injectionHelpers";
+import { isLabOrderItemRequest, isLabServiceRequest, labOrderItemRequests } from "./labOrderHelpers";
 import { questionnaireCanonical } from "./questionnaireResponseHelpers";
 
 // カルテ画面のタイムライン(診療日ごとの時系列表示)を組み立てる純粋ロジック。
@@ -9,15 +10,16 @@ import { questionnaireCanonical } from "./questionnaireResponseHelpers";
 // ページングされるため、「どこまで表示してよいか」の判断が要になる
 // (buildKarteTimeline の安全カットオフを参照)。
 //
-// 処方と注射は同じ ServiceRequest 検索(1 本のページング)で取得し、category の
-// オーダー種別でカードの種別に振り分ける。
+// 処方・注射・検体検査は同じ ServiceRequest 検索(1 本のページング)で取得し、
+// category のオーダー種別でカードの種別に振り分ける。
 
-export type KarteItemKind = "note" | "prescription" | "injection" | "qr";
+export type KarteItemKind = "note" | "prescription" | "injection" | "lab-order" | "qr";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   note: "診療記録",
   prescription: "処方",
   injection: "注射",
+  "lab-order": "検体検査",
   qr: "テンプレート",
 };
 
@@ -43,6 +45,15 @@ export type KarteTimelineItem = KarteItemBase &
         kind: "injection";
         serviceRequest: fhir4.ServiceRequest;
         medicationRequests: fhir4.MedicationRequest[];
+      }
+    // 検体検査の明細(検査項目・パネルの構成項目)も ServiceRequest なので、
+    // オーダーのヘッダにぶら下がるぶんを itemRequests に集めて渡す。
+    | {
+        kind: "lab-order";
+        serviceRequest: fhir4.ServiceRequest;
+        itemRequests: fhir4.ServiceRequest[];
+        /** このオーダーを元に登録された検査結果の id。空なら結果はまだ無い。 */
+        reportId: string;
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
@@ -166,6 +177,19 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     }
   }
 
+  // 検体検査オーダー id → そのオーダーを元にした検査結果の id
+  // (DiagnosticReport.basedOn。カードの「検査結果表示」を出せるかの判定に使う)。
+  const reportIdByOrderId = new Map<string, string>();
+  for (const report of pickByType<fhir4.DiagnosticReport>(
+    prescriptionResources,
+    "DiagnosticReport",
+  )) {
+    for (const basedOn of report.basedOn ?? []) {
+      const srId = basedOn.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
+      if (srId && report.id) reportIdByOrderId.set(srId, report.id);
+    }
+  }
+
   const medicationRequestsBySr = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
     for (const basedOn of mr.basedOn ?? []) {
@@ -186,19 +210,36 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     note,
   }));
 
-  // 処方と注射は同じ検索結果に混ざって届くので、category のオーダー種別で振り分ける
-  // (注射より前から存在する処方の ServiceRequest はオーダー種別を持たない)。
-  const prescriptionItems: KarteTimelineItem[] = serviceRequests.map((serviceRequest) => {
+  // 検体検査の明細(検査項目・パネルの構成項目)は ServiceRequest だが単独の
+  // カードにはしない。オーダーのヘッダに紐づけて、カードの中身として出す。
+  const orderRequests = serviceRequests.filter((sr) => !isLabOrderItemRequest(sr));
+  const itemRequests = serviceRequests.filter(isLabOrderItemRequest);
+
+  // 処方・注射・検体検査は同じ検索結果に混ざって届くので、category のオーダー種別で
+  // 振り分ける(注射より前から存在する処方の ServiceRequest はオーダー種別を持たない)。
+  const prescriptionItems: KarteTimelineItem[] = orderRequests.map((serviceRequest) => {
     const base = {
       id: serviceRequest.id ?? "",
       day: dayOf(serviceRequest.authoredOn),
       dateTime: serviceRequest.authoredOn ?? "",
       serviceRequest,
+    };
+    if (isLabServiceRequest(serviceRequest)) {
+      return {
+        ...base,
+        kind: "lab-order" as const,
+        label: KARTE_KIND_LABELS["lab-order"],
+        itemRequests: labOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+        reportId: reportIdByOrderId.get(serviceRequest.id ?? "") ?? "",
+      };
+    }
+    const withMedications = {
+      ...base,
       medicationRequests: medicationRequestsBySr.get(serviceRequest.id ?? "") ?? [],
     };
     return isInjectionServiceRequest(serviceRequest)
-      ? { ...base, kind: "injection" as const, label: KARTE_KIND_LABELS.injection }
-      : { ...base, kind: "prescription" as const, label: KARTE_KIND_LABELS.prescription };
+      ? { ...withMedications, kind: "injection" as const, label: KARTE_KIND_LABELS.injection }
+      : { ...withMedications, kind: "prescription" as const, label: KARTE_KIND_LABELS.prescription };
   });
 
   const qrItems: KarteTimelineItem[] = responses

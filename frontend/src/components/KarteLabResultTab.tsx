@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   useCreateLabResult,
+  useLabOrderCandidates,
   useLabResultNavigation,
   useLabResultSearch,
   useUpdateLabResult,
@@ -244,6 +245,7 @@ function CreateForm({
 }) {
   const createLabResult = useCreateLabResult();
   const source = useLabResultInitialValues(sourceReportId, patientId);
+  const orders = useLabOrderCandidates(patientId);
 
   const initialValues = useMemo(
     () => (source.initialValues ? buildDoLabResultForm(source.initialValues) : undefined),
@@ -257,6 +259,7 @@ function CreateForm({
   return (
     <>
       <ErrorBanner error={source.error} />
+      <ErrorBanner error={orders.error} />
 
       {/* DO 元の読み込み完了を待ってからフォームを描画する(初期値は初回描画時のみ反映される)。 */}
       {sourceReportId && !source.ready ? (
@@ -267,6 +270,8 @@ function CreateForm({
           onSubmit={handleSubmit}
           submitting={createLabResult.isPending}
           submitError={createLabResult.error}
+          orderCandidates={orders.candidates}
+          orderCandidatesLoading={orders.isLoading}
         />
       )}
     </>
@@ -285,6 +290,8 @@ function EditForm({
   const updateLabResult = useUpdateLabResult();
   const { report, observations, specimens, initialValues, ready, patientMismatch, error } =
     useLabResultInitialValues(reportId, patientId);
+  // 編集中の検査結果が紐付けているオーダーは、候補から落とさない。
+  const orders = useLabOrderCandidates(patientId, reportId);
 
   function handleSubmit(values: LabResultFormValues) {
     // 別患者の検査結果を更新すると subject が書き換わり、検査結果が付け替わってしまう。
@@ -305,6 +312,7 @@ function EditForm({
   return (
     <>
       <ErrorBanner error={error} />
+      <ErrorBanner error={orders.error} />
 
       {!ready ? (
         <p>読み込み中...</p>
@@ -317,6 +325,8 @@ function EditForm({
             submitting={updateLabResult.isPending}
             submitError={updateLabResult.error}
             submitLabel="更新"
+            orderCandidates={orders.candidates}
+            orderCandidatesLoading={orders.isLoading}
           />
         )
       )}

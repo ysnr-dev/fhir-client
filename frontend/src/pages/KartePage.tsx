@@ -36,6 +36,7 @@ import {
   formatKarteDetail,
   parseKarteDetail,
   parseKarteTab,
+  type KarteDetailTarget,
   type KarteOtherTabKey,
   type KarteTabKey,
 } from "../karteUrl";
@@ -122,9 +123,9 @@ export function KartePage() {
   );
 
   const openDetail = useCallback(
-    (item: KarteTimelineItem) => {
+    (target: KarteDetailTarget) => {
       updateParams((params) => {
-        params.set(KARTE_DETAIL_PARAM, formatKarteDetail(item));
+        params.set(KARTE_DETAIL_PARAM, formatKarteDetail(target));
       }, true);
     },
     [updateParams],
@@ -237,13 +238,15 @@ export function KartePage() {
     if (item.kind === "note") setPane({ kind: "note-edit", noteId: item.id });
     else if (item.kind === "prescription") setPane({ kind: "prescription-edit", srId: item.id });
     else if (item.kind === "injection") setPane({ kind: "injection-edit", srId: item.id });
+    else if (item.kind === "lab-order") setPane({ kind: "lab-order-edit", srId: item.id });
     else setPane({ kind: "qr-edit", qrId: item.id });
   }
 
-  // DO(複写して新規登録)。処方と注射で開くフォームが違う。
+  // DO(複写して新規登録)。処方・注射・検体検査で開くフォームが違う。
   function handleDo(item: KarteTimelineItem) {
     if (item.kind === "prescription") setPane({ kind: "prescription-create", sourceSrId: item.id });
     else if (item.kind === "injection") setPane({ kind: "injection-create", sourceSrId: item.id });
+    else if (item.kind === "lab-order") setPane({ kind: "lab-order-create", sourceSrId: item.id });
   }
 
   // 開いている情報が消えたら、それを見ている UI も閉じる。
@@ -251,7 +254,9 @@ export function KartePage() {
     const openId =
       pane.kind === "note-edit"
         ? pane.noteId
-        : pane.kind === "prescription-edit" || pane.kind === "injection-edit"
+        : pane.kind === "prescription-edit" ||
+            pane.kind === "injection-edit" ||
+            pane.kind === "lab-order-edit"
           ? pane.srId
           : pane.kind === "qr-edit"
             ? pane.qrId

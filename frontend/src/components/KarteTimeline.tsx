@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 import {
   useBinaryImage,
   useDeleteClinicalNote,
+  useDeleteLabOrder,
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
 } from "../api/queries";
@@ -14,12 +15,22 @@ import {
   type KarteDayGroup,
   type KarteTimelineItem,
 } from "../fhir/karteTimeline";
+import type { KarteDetailTarget } from "../karteUrl";
 import {
   groupInjectionByRp,
   injectionComment,
   summarizeInjectionServiceRequest,
   type InjectionRpDisplay,
 } from "../fhir/injectionHelpers";
+import {
+  groupBySpecimen,
+  labOrderComment,
+  labOrderItems,
+  labOrderProblem,
+  memberSummary,
+  specimenGroupLabel,
+  summarizeLabOrder,
+} from "../fhir/labOrderHelpers";
 import {
   groupByRp,
   orderContextSummary,
@@ -52,7 +63,7 @@ interface KarteTimelineProps {
   /** DO(複写して新規登録)。処方と注射で開くフォームが違うので item ごと渡す。 */
   onDo: (item: KarteTimelineItem) => void;
   /** 詳細表示。対象は URL に載せるので、モーダルは親(カルテ画面)が描く。 */
-  onOpenDetail: (item: KarteTimelineItem) => void;
+  onOpenDetail: (target: KarteDetailTarget) => void;
   /** 削除された項目。右ペインで開いていたら閉じるために親へ通知する。 */
   onDeleted: (item: KarteTimelineItem) => void;
   /** スクロールコンテナ。診療日パネルからのスクロール指示に使う。 */
@@ -164,7 +175,7 @@ function KarteCard({
   item: KarteTimelineItem;
   onEdit: (item: KarteTimelineItem) => void;
   onDo: (item: KarteTimelineItem) => void;
-  onOpenDetail: (item: KarteTimelineItem) => void;
+  onOpenDetail: (target: KarteDetailTarget) => void;
   onDeleted: (item: KarteTimelineItem) => void;
   problemsById: Map<string, fhir4.Condition>;
   selectedProblemId: string | null;
@@ -172,6 +183,7 @@ function KarteCard({
 }) {
   const deleteNote = useDeleteClinicalNote();
   const deletePrescription = useDeletePrescription();
+  const deleteLabOrder = useDeleteLabOrder();
   const deleteResponse = useDeleteQuestionnaireResponse();
   // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
   // 詳細表示は URL に載せるので親に任せる。
@@ -179,8 +191,12 @@ function KarteCard({
   const [jsonOpen, setJsonOpen] = useState(false);
 
   const deleting =
-    deleteNote.isPending || deletePrescription.isPending || deleteResponse.isPending;
-  const deleteError = deleteNote.error ?? deletePrescription.error ?? deleteResponse.error;
+    deleteNote.isPending ||
+    deletePrescription.isPending ||
+    deleteLabOrder.isPending ||
+    deleteResponse.isPending;
+  const deleteError =
+    deleteNote.error ?? deletePrescription.error ?? deleteLabOrder.error ?? deleteResponse.error;
 
   // テンプレートは帳票レイアウトが登録されているものだけ PDF 出力できる。
   // 他の種別では canonical を渡さないので照会自体が走らない。
@@ -196,7 +212,10 @@ function KarteCard({
     // 注射も処方と同じ ServiceRequest + MedicationRequest 構成なので削除処理を共用する。
     else if (item.kind === "prescription" || item.kind === "injection") {
       deletePrescription.mutate(item.id, options);
-    } else deleteResponse.mutate(item.id, options);
+    }
+    // 検体検査は明細も ServiceRequest なので、専用の削除でまとめて消す。
+    else if (item.kind === "lab-order") deleteLabOrder.mutate(item.id, options);
+    else deleteResponse.mutate(item.id, options);
   }
 
   // プロブレム選択中は、そのプロブレムを参照しない情報を控えめに表示する
@@ -218,7 +237,9 @@ function KarteCard({
         <ProblemBadge problem={itemProblem(item)} problemsById={problemsById} />
         <span className="karte-card__meta">{cardMeta(item)}</span>
         <span className="karte-card__actions">
-          {(item.kind === "prescription" || item.kind === "injection") && (
+          {(item.kind === "prescription" ||
+            item.kind === "injection" ||
+            item.kind === "lab-order") && (
             <button
               type="button"
               className="karte-card__icon-button karte-card__icon-button--labeled"
@@ -259,6 +280,18 @@ function KarteCard({
             <button type="button" className="row-menu__item" onClick={() => onOpenDetail(item)}>
               詳細表示
             </button>
+            {/* 検体検査は、結果が登録済みのオーダーだけ結果内容を開ける。 */}
+            {item.kind === "lab-order" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={!item.reportId}
+                title={item.reportId ? undefined : "この検体検査の結果はまだ登録されていません"}
+                onClick={() => onOpenDetail({ kind: "lab-result", id: item.reportId })}
+              >
+                検査結果表示
+              </button>
+            )}
             {/* 平文は元テンプレートの項目名と突き合わせて組み立てるので、
                 テンプレートが引けたときだけ開ける。 */}
             {item.kind === "qr" && (
@@ -336,10 +369,12 @@ function DocumentIcon() {
   );
 }
 
-// この情報が対象としているプロブレム。現状プロブレムを持つのは診療記録と処方・注射
-// (テンプレートの紐付けは未実装)。注射も reasonReference なので処方と同じ関数で引ける。
+// この情報が対象としているプロブレム。現状プロブレムを持つのは診療記録と
+// 処方・注射・検体検査(テンプレートの紐付けは未実装)。いずれも reasonReference
+// なので処方と同じ関数で引ける。
 function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "note") return clinicalNoteProblem(item.note);
+  if (item.kind === "lab-order") return labOrderProblem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);
   }
@@ -361,6 +396,13 @@ function cardTitle(item: KarteTimelineItem): string {
   if (item.kind === "injection") {
     const summary = summarizeInjectionServiceRequest(item.serviceRequest);
     return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" | ");
+  }
+  // 検体検査は入外区分と、至急のときだけ至急区分を並べる(通常はわざわざ出さない)。
+  if (item.kind === "lab-order") {
+    const summary = summarizeLabOrder(item.serviceRequest);
+    return [summary.settingDisplay, summary.urgent ? summary.priorityDisplay : ""]
+      .filter(Boolean)
+      .join(" | ");
   }
   return item.label;
 }
@@ -518,6 +560,10 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
     );
   }
 
+  if (item.kind === "lab-order") {
+    return <LabOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />;
+  }
+
   if (!item.questionnaire) {
     return (
       <p className="karte-card__empty">
@@ -553,6 +599,46 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
           ))}
         </div>
       )}
+    </>
+  );
+}
+
+// 検体検査は検体(採血管)ごとにまとめて出す。採血の現場が動く単位に合わせる。
+// パネル検査は構成項目もオーダーに入っているので、親の後ろに並べて添える
+// (マスタではなくオーダーの内容なので、構成を後から直しても過去の表示は変わらない)。
+function LabOrderCardBody({
+  serviceRequest,
+  itemRequests,
+}: {
+  serviceRequest: fhir4.ServiceRequest;
+  itemRequests: fhir4.ServiceRequest[];
+}) {
+  const groups = groupBySpecimen(labOrderItems(serviceRequest, itemRequests));
+  const comment = labOrderComment(serviceRequest);
+
+  if (groups.length === 0) return <p className="karte-card__empty">検査項目がありません。</p>;
+
+  return (
+    <>
+      {groups.map((group, index) => (
+        <div className="karte-rp" key={group.specimenCode || `unset-${index}`}>
+          <div className="karte-rp__head">
+            <span className="karte-rp__number">{`GP${index + 1}`}</span>
+            <span className="karte-lab-order__specimen">{specimenGroupLabel(group)}</span>
+          </div>
+          <ul className="karte-rp__medicines">
+            {group.entries.map((entry) => (
+              <li key={entry.item.code}>
+                <span className="karte-rp__medicine-name">{entry.item.name}</span>
+                {entry.members.length > 0 && (
+                  <span className="karte-rp__comment">{`（${memberSummary(entry.members)}）`}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {comment && <p className="karte-card__note">{comment}</p>}
     </>
   );
 }
