@@ -81,9 +81,7 @@ Rails.application.routes.draw do
       end
     end
     # 検体検査オーダーのマスタ群。
-    resources :lab_order_items, only: %i[index show create update destroy] do
-      collection { get :categories }
-    end
+    resources :lab_order_items, only: %i[index show create update destroy]
     resources :lab_panel_items, only: %i[index create update destroy]
     resources :lab_specimens, only: %i[index show create update destroy] do
       collection do

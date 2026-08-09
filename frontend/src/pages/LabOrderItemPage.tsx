@@ -3,7 +3,6 @@ import type { LabItem, LabOrderItemPayload } from "../api/masterClient";
 import {
   useLabContainers,
   useLabOrderItem,
-  useLabOrderItemCategories,
   useLabOrderItemMutations,
   useLabOrderItemSearch,
   useLabPanelItemMutations,
@@ -18,6 +17,22 @@ const KIND_LABELS: Record<string, string> = {
   single: "単項目",
   panel: "パネル",
 };
+
+// 検査分野の選択肢。前半は共有項目JLACコードマスタ(JLAC11)の区分名称に合わせ、
+// 同マスタが扱わない分野(微生物・遺伝子・病理)を後ろに足している。
+const CATEGORIES = [
+  "尿・糞便等検査",
+  "血液学的検査",
+  "生化学検査",
+  "免疫学的検査",
+  "免疫血液学的検査",
+  "内分泌学的検査",
+  "感染症関連検査",
+  "微生物学的検査",
+  "遺伝子関連・染色体検査",
+  "病理学的検査",
+  "その他",
+];
 
 const MEMBER_TYPE_LABELS: Record<string, string> = {
   required: "必須",
@@ -93,7 +108,6 @@ export function LabOrderItemPage() {
   const [editing, setEditing] = useState<number | "new" | null>(null);
 
   const list = useLabOrderItemSearch(filters, page);
-  const categories = useLabOrderItemCategories();
   const specimens = useLabSpecimenOptions();
   const containers = useLabContainers();
 
@@ -159,7 +173,7 @@ export function LabOrderItemPage() {
             onChange={(e) => setInputs({ ...inputs, category: e.target.value })}
           >
             <option value="">すべて</option>
-            {categories.data?.map((category) => (
+            {CATEGORIES.map((category) => (
               <option key={category} value={category}>
                 {category}
               </option>
@@ -274,7 +288,6 @@ interface ItemEditModalProps {
 function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
   const detail = useLabOrderItem(itemId);
   const mutations = useLabOrderItemMutations();
-  const categories = useLabOrderItemCategories();
   const specimens = useLabSpecimenOptions();
   const containers = useLabContainers();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -302,6 +315,15 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       note: d.note ?? "",
     });
   }, [detail.data]);
+
+  // 選択肢に無い検査分野が保存済みの場合でも、開いただけで値が消えないよう末尾に足す。
+  const categoryOptions = useMemo(
+    () =>
+      draft.category && !CATEGORIES.includes(draft.category)
+        ? [...CATEGORIES, draft.category]
+        : CATEGORIES,
+    [draft.category],
+  );
 
   // 検体の既定採取管(採取管を上書きしないときに使われるもの)の表示用。
   const defaultContainerName = useMemo(() => {
@@ -396,17 +418,17 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
           </label>
           <label>
             検査分野
-            <input
-              type="text"
-              list="lab-order-item-categories"
+            <select
               value={draft.category}
               onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-            />
-            <datalist id="lab-order-item-categories">
-              {categories.data?.map((category) => (
-                <option key={category} value={category} />
+            >
+              <option value="">未設定</option>
+              {categoryOptions.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
               ))}
-            </datalist>
+            </select>
           </label>
           <label>
             種別

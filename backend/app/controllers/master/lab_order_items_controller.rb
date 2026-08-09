@@ -26,18 +26,6 @@ module Master
       render json: paginate(scope.order(Arel.sql("display_order NULLS LAST")))
     end
 
-    # 検査分野の一覧(絞り込みプルダウン用)。表示順で返す。
-    def categories
-      list = Master::LabOrderItem
-        .where.not(category: [nil, ""])
-        .group(:category)
-        .minimum(:display_order)
-        .sort_by { |_category, order| order || 0 }
-        .map(&:first)
-
-      render json: list
-    end
-
     # 検体・採取管・パネル構成をまとめて返す。詳細画面が1リクエストで開けるようにする。
     # 採取管は項目の指定(container_code)が優先で、無ければ検体の既定を使う。
     def show

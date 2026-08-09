@@ -53,16 +53,6 @@ RSpec.describe "Master::LabOrderItems", type: :request do
     end
   end
 
-  describe "GET /master/lab_order_items/categories" do
-    it "検査分野を表示順で返す" do
-      create_item("L0001", category: "免疫学的検査", display_order: 20)
-      create_item("L0002", category: "血液学的検査", display_order: 10)
-
-      get "/master/lab_order_items/categories"
-      expect(body).to eq(%w[血液学的検査 免疫学的検査])
-    end
-  end
-
   describe "GET /master/lab_order_items/:id" do
     it "検体・採取管・パネル構成を添えて返す(コードでも引ける)" do
       Master::LabSpecimen.create!(specimen_code: "019", name: "血液", default_container_code: "T03")

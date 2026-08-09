@@ -680,12 +680,6 @@ export async function searchLabOrderItems(params: {
   return (await res.json()) as MasterSearchResult<LabOrderItem>;
 }
 
-export async function fetchLabOrderItemCategories(): Promise<string[]> {
-  const res = await masterFetch(`${LAB_ORDER_ITEMS_PATH}/categories`);
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as string[];
-}
-
 // 検体・採取管・パネル構成を添えた詳細。オーダー項目コードでも id でも引ける。
 export async function fetchLabOrderItem(idOrCode: string | number): Promise<LabOrderItemDetail> {
   const res = await masterFetch(`${LAB_ORDER_ITEMS_PATH}/${encodeURIComponent(String(idOrCode))}`);

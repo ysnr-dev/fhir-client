@@ -16,7 +16,6 @@ import {
   deleteMedicineDoseConversion,
   fetchLabItemFilterOptions,
   fetchLabOrderItem,
-  fetchLabOrderItemCategories,
   fetchLabOrderItemLayout,
   fetchLabOrderItemLayouts,
   fetchLabSpecimenCategories,
@@ -386,13 +385,6 @@ export function useLabOrderItemSearch(filters: LabOrderItemFilters, page: number
       }),
     placeholderData: keepPreviousData,
     enabled,
-  });
-}
-
-export function useLabOrderItemCategories() {
-  return useQuery({
-    queryKey: [...LAB_ORDER_ITEMS_KEY, "categories"],
-    queryFn: fetchLabOrderItemCategories,
   });
 }
 
