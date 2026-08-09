@@ -721,6 +721,24 @@ export async function deleteLabOrderItem(id: number): Promise<void> {
   if (!res.ok) throw await buildError(res);
 }
 
+export async function searchLabPanelItems(params: {
+  /** パネルの項目コード。カンマ区切りで複数指定できる。 */
+  panel_item_code?: string;
+  member_item_code?: string;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<LabPanelItem>> {
+  const search = new URLSearchParams();
+  if (params.panel_item_code) search.set("panel_item_code", params.panel_item_code);
+  if (params.member_item_code) search.set("member_item_code", params.member_item_code);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`/master/lab_panel_items?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<LabPanelItem>;
+}
+
 export async function createLabPanelItem(payload: LabPanelItemPayload): Promise<LabPanelItem> {
   const res = await masterFetch("/master/lab_panel_items", {
     method: "POST",

@@ -6,6 +6,11 @@ import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 // この処方オーダー機能専用の URI。
 // 入外区分。注射オーダーでも同じ区分(入院/外来)を使うので injectionHelpers.ts と共用する
 // (URI の "prescription-" は登録済みデータと揃えるためそのまま)。
+// オーダー種別。処方・注射・検体検査はどれも ServiceRequest で保存するので、
+// どの種類のオーダーかを category に持たせて振り分ける(処方は注射より前から
+// 存在するため、種別を持たない ServiceRequest は処方として扱う)。
+export const ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type";
+
 export const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting";
 const CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-category"; // 処方区分
 const ORDER_DETAIL_MR_EXT_URL =

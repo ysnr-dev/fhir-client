@@ -20,6 +20,17 @@ RSpec.describe "Master::LabPanelItems", type: :request do
     expect(body["items"].map { |m| m["member_item_code"] }).to eq(%w[L0001 L0002])
   end
 
+  it "パネルコードのカンマ区切りで複数パネルの構成をまとめて引ける" do
+    Master::LabOrderItem.create!(order_item_code: "P0002", name: "肝機能セット", kind: "panel")
+    Master::LabPanelItem.create!(panel_item_code: "P0001", member_item_code: "L0001")
+    Master::LabPanelItem.create!(panel_item_code: "P0002", member_item_code: "L0002")
+
+    get "/master/lab_panel_items", params: { panel_item_code: "P0001,P0002" }
+
+    expect(body["items"].map { |m| m["member_item_code"] }).to match_array(%w[L0001 L0002])
+    expect(body["items"].map { |m| m["member_name"] }).to match_array(%w[白血球数 赤血球数])
+  end
+
   it "追加時に並び順を採番し、二重追加・自己参照は登録できない" do
     post "/master/lab_panel_items", params: {
       panel_item_code: "P0001", member_item_code: "L0001",

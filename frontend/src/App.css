@@ -4625,3 +4625,176 @@ body.karte-wide .app__header {
   color: var(--text-h);
   align-self: center;
 }
+
+/* 検体検査オーダー(カルテ右ペイン) ---------------------------------------- */
+
+/* 伝票グリッド。右ペインは幅が狭いのでマスタ画面よりマスを小さくし、
+   入りきらないぶんは枠内で横スクロールさせる。 */
+.lab-order-panel__grid-wrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.lab-order-panel__grid {
+  border-collapse: collapse;
+}
+
+.lab-order-panel__cell {
+  border: 1px solid var(--border);
+  min-width: 104px;
+  height: 34px;
+  padding: 2px 6px;
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.lab-order-panel__cell--label {
+  background: var(--surface-panel);
+  color: var(--text-h);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 伝票と検索の切替タブ。カルテ画面のタブ(.karte-tabs)と同じ下線タブにする。 */
+.lab-order-item__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+
+.lab-order-item__tab {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.lab-order-item__tab:hover {
+  color: var(--accent);
+}
+
+.lab-order-item__tab.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* 検査項目のマスはマス全体をクリックで選択できるようにする。
+   flex-direction は .prescription-form label の縦並びを打ち消すために要る
+   (チェックボックスを項目名の左に置く)。 */
+.lab-order-panel__cell label,
+.lab-order-panel__search-list label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+/* フォームの入力欄と同じ余白・枠が付くと、チェックボックスだけ不揃いに見える。 */
+.lab-order-panel__cell input[type="checkbox"],
+.lab-order-panel__search-list input[type="checkbox"] {
+  flex: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lab-order-panel__search input[type="text"] {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  min-width: 240px;
+  margin-bottom: 8px;
+}
+
+.lab-order-panel__search-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.lab-order-panel__search-list li {
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.lab-order-panel__search-list li:last-child {
+  border-bottom: none;
+}
+
+/* 行のどこを押しても選べるよう、リストの 1 行いっぱいに広げる
+   (並びは検査項目のマスと共通の指定を使う)。 */
+.lab-order-panel__search-list label {
+  padding: 6px 10px;
+}
+
+.lab-order-panel__muted {
+  color: var(--text);
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+/* 選択中の項目を検体ごとにまとめたプレビュー。 */
+.lab-order-panel__preview {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.lab-order-panel__preview h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.lab-order-panel__group h4 {
+  margin: 8px 0 4px;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.lab-order-panel__group ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 14px;
+}
+
+.lab-order-panel__group li {
+  font-size: 13px;
+  padding: 2px 0;
+}
+
+.lab-order-panel__remove {
+  margin-left: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.lab-order-panel__remove:hover {
+  color: var(--accent);
+}
+
+/* カルテカードの検体グループ見出し。GP番号(karte-rp__number)の右に検体名を添える。 */
+.karte-lab-order__specimen {
+  font-size: 12px;
+  color: var(--text);
+}

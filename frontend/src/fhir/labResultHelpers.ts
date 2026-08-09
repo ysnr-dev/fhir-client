@@ -4,9 +4,10 @@ import type { LabItem } from "../api/masterClient";
 // 不明な)項目を表現するための、この検査結果機能専用の URI。
 const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/lab-result-setting"; // 入外区分
 // JLAC11 コード。正式な CodeSystem URL が公開されていないためローカル URI を使用。
-const JLAC11_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11";
+// 検体検査オーダー(labOrderHelpers)も同じ体系のコードを持つので共有する。
+export const JLAC11_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11";
 // JLAC11 の材料(検体)コード。同じく正式な CodeSystem URL がないためローカル URI。
-const JLAC11_SPECIMEN_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11-specimen";
+export const JLAC11_SPECIMEN_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11-specimen";
 // 検査項目の略称。詳細表示・編集フォームへの復元に使う補助 coding。
 const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
 

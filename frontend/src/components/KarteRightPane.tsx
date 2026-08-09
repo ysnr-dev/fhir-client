@@ -1,6 +1,7 @@
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePanels";
 import { InjectionCreatePanel, InjectionEditPanel } from "./InjectionPanels";
+import { LabOrderCreatePanel, LabOrderEditPanel } from "./LabOrderPanels";
 import { PrescriptionCreatePanel, PrescriptionEditPanel } from "./PrescriptionPanels";
 import {
   QuestionnaireResponseCreatePanel,
@@ -19,6 +20,8 @@ export type KartePaneState =
   | { kind: "prescription-edit"; srId: string }
   | { kind: "injection-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "injection-edit"; srId: string }
+  | { kind: "lab-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "lab-order-edit"; srId: string }
   | { kind: "qr-create" }
   | { kind: "qr-edit"; qrId: string };
 
@@ -30,6 +33,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "prescription-edit": "処方編集",
   "injection-create": "注射登録",
   "injection-edit": "注射編集",
+  "lab-order-create": "検体検査登録",
+  "lab-order-edit": "検体検査編集",
   "qr-create": "テンプレート登録",
   "qr-edit": "テンプレート編集",
 };
@@ -42,6 +47,7 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.noteId}`;
     case "prescription-edit":
     case "injection-edit":
+    case "lab-order-edit":
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
@@ -49,6 +55,7 @@ function paneKey(state: KartePaneState): string {
     // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
     case "prescription-create":
     case "injection-create":
+    case "lab-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "note-create":
       return `${state.kind}:${state.problem?.conditionId ?? ""}`;
@@ -119,6 +126,12 @@ export function KarteRightPane({
         >
           注射
         </button>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "lab-order-create", problem: selectedProblem })}
+        >
+          検体検査
+        </button>
       </div>
     </section>
   );
@@ -168,6 +181,17 @@ function PaneContent({
       );
     case "injection-edit":
       return <InjectionEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "lab-order-create":
+      return (
+        <LabOrderCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "lab-order-edit":
+      return <LabOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "qr-create":
       return <QuestionnaireResponseCreatePanel patientId={patientId} onSaved={onSaved} />;
     case "qr-edit":

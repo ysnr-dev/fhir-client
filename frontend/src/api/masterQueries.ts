@@ -29,6 +29,7 @@ import {
   searchLabContainers,
   searchLabItems,
   searchLabOrderItems,
+  searchLabPanelItems,
   searchLabSpecimens,
   searchMedicineDoseConversions,
   searchMedicineUsages,
@@ -610,4 +611,43 @@ export function useLabOrderItemLayoutCellMutations() {
       onSuccess: invalidate,
     }),
   };
+}
+
+// 検体検査オーダー画面用 --------------------------------------------------
+
+// 選択中の項目コードからマスタの内容(名称・検体・採取管)を引き直す。
+// オーダー画面のプレビューと、保存時に FHIR へ写す値の取得元。
+export function useLabOrderItemsByCodes(codes: string[]) {
+  const sorted = Array.from(new Set(codes)).sort();
+
+  return useQuery({
+    queryKey: [...LAB_ORDER_ITEMS_KEY, "by_codes", sorted],
+    queryFn: () => searchLabOrderItems({ order_item_code: sorted.join(","), per: 200 }),
+    enabled: sorted.length > 0,
+  });
+}
+
+// パネルの構成項目名。「パネルコード → 構成項目の表示名」で返す。
+// 構成はオーダーに写していない(マスタ側の情報)ので、オーダー入力のプレビューでも
+// カルテのカード・詳細でも、その時点のマスタから引き直して添える。
+// パネルでない項目コードを混ぜても結果が増えないだけなので、呼ぶ側で選別しない。
+export function useLabPanelMemberLabels(panelCodes: string[]) {
+  const sorted = Array.from(new Set(panelCodes)).sort();
+
+  return useQuery({
+    queryKey: [...LAB_ORDER_ITEMS_KEY, "panel_members", sorted],
+    queryFn: () => searchLabPanelItems({ panel_item_code: sorted.join(","), per: 500 }),
+    // 横に並べるので、略称があれば略称を使う(WBC, RBC…)。
+    select: (result) => {
+      const labels = new Map<string, string[]>();
+      for (const member of result.items) {
+        const label = member.member_short_name || member.member_name || member.member_item_code;
+        const list = labels.get(member.panel_item_code);
+        if (list) list.push(label);
+        else labels.set(member.panel_item_code, [label]);
+      }
+      return labels;
+    },
+    enabled: sorted.length > 0,
+  });
 }

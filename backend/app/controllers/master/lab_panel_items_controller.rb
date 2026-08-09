@@ -5,8 +5,24 @@ module Master
 
     def index
       scope = Master::LabPanelItem.all
-      scope = scope.where(panel_item_code: params[:panel_item_code]) if params[:panel_item_code].present?
-      scope = scope.where(member_item_code: params[:member_item_code]) if params[:member_item_code].present?
+      # どちらもカンマ区切りで複数指定可(オーダー画面が選択中のパネルの構成を
+      # まとめて引くため)。
+      if params[:panel_item_code].present?
+        scope = scope.where(panel_item_code: params[:panel_item_code].split(","))
+      end
+      if params[:member_item_code].present?
+        scope = scope.where(member_item_code: params[:member_item_code].split(","))
+      end
+
+      # 構成項目の名称を添える(オーダー画面がパネルの中身を並べて見せるため)。
+      scope = scope
+        .joins("LEFT JOIN master_lab_order_items " \
+               "ON master_lab_order_items.order_item_code = master_lab_panel_items.member_item_code")
+        .select(
+          "master_lab_panel_items.*",
+          "master_lab_order_items.name AS member_name",
+          "master_lab_order_items.short_name AS member_short_name",
+        )
 
       render json: paginate(scope.order(Arel.sql("display_order NULLS LAST")))
     end

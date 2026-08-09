@@ -11,6 +11,7 @@ import { ClinicalNoteDetailPanel } from "./ClinicalNoteDetailPanel";
 import { ErrorBanner } from "./ErrorBanner";
 import { FhirJsonView } from "./FhirJsonView";
 import { InjectionDetailPanel } from "./InjectionDetailPanel";
+import { LabOrderDetailPanel } from "./LabOrderDetailPanel";
 import { Modal } from "./Modal";
 import { PrescriptionDetailPanel } from "./PrescriptionDetailPanel";
 import { QuestionnaireResponseDetailPanel } from "./QuestionnaireResponseDetailPanel";
@@ -22,6 +23,7 @@ const DETAIL_TITLES: Record<KarteTimelineItem["kind"], string> = {
   note: "診療記録詳細",
   prescription: "処方内容",
   injection: "注射内容",
+  "lab-order": "検体検査内容",
   qr: "テンプレート表示",
 };
 
@@ -46,6 +48,8 @@ export function KarteDetailModal({
         <PrescriptionDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "injection" ? (
         <InjectionDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+      ) : target.kind === "lab-order" ? (
+        <LabOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : (
         <QuestionnaireResponseDetail patientId={patientId} qrId={target.id} />
       )}
@@ -153,6 +157,38 @@ function InjectionDetail({
   );
 }
 
+// 検体検査は明細リソースを持たないが、取得は同じ ServiceRequest 詳細検索を共用する。
+function LabOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = usePrescriptionDetail(srId);
+  const { serviceRequest } = detail.data
+    ? splitPrescriptionDetailBundle(detail.data.data)
+    : { serviceRequest: undefined };
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された検体検査は別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <LabOrderDetailPanel serviceRequest={serviceRequest} problemsById={problemsById} />
+      ) : (
+        !detail.error && <NotFound label="検体検査" />
+      )}
+    </>
+  );
+}
+
 function QuestionnaireResponseDetail({ patientId, qrId }: { patientId: string; qrId: string }) {
   const { response, questionnaire, isLoading, error } =
     useQuestionnaireResponseWithQuestionnaire(qrId);
@@ -191,6 +227,9 @@ export function KarteCardJsonModal({
     >
       {item.kind === "prescription" || item.kind === "injection" ? (
         <PrescriptionJson srId={item.id} />
+      ) : item.kind === "lab-order" ? (
+        // 検体検査は 1 リソースで完結するので、手元の ServiceRequest をそのまま出す。
+        <FhirJsonView resource={item.serviceRequest} />
       ) : (
         <FhirJsonView resource={item.kind === "note" ? item.note : item.response} />
       )}

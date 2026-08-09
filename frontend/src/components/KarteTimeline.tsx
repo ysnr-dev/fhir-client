@@ -5,6 +5,7 @@ import {
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
 } from "../api/queries";
+import { useLabPanelMemberLabels } from "../api/masterQueries";
 import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
 import { clinicalNoteProblem, sectionTitle, statusLabel } from "../fhir/clinicalNoteHelpers";
 import { problemLabel, type ProblemRef } from "../fhir/conditionHelpers";
@@ -20,6 +21,14 @@ import {
   summarizeInjectionServiceRequest,
   type InjectionRpDisplay,
 } from "../fhir/injectionHelpers";
+import {
+  groupBySpecimen,
+  labOrderComment,
+  labOrderItems,
+  labOrderProblem,
+  specimenGroupLabel,
+  summarizeLabOrder,
+} from "../fhir/labOrderHelpers";
 import {
   groupByRp,
   orderContextSummary,
@@ -194,7 +203,12 @@ function KarteCard({
     const options = { onSuccess: () => onDeleted(item) };
     if (item.kind === "note") deleteNote.mutate(item.id, options);
     // 注射も処方と同じ ServiceRequest + MedicationRequest 構成なので削除処理を共用する。
-    else if (item.kind === "prescription" || item.kind === "injection") {
+    // 検体検査は明細リソースが無いが、同じ処理で ServiceRequest だけが消える。
+    else if (
+      item.kind === "prescription" ||
+      item.kind === "injection" ||
+      item.kind === "lab-order"
+    ) {
       deletePrescription.mutate(item.id, options);
     } else deleteResponse.mutate(item.id, options);
   }
@@ -218,7 +232,9 @@ function KarteCard({
         <ProblemBadge problem={itemProblem(item)} problemsById={problemsById} />
         <span className="karte-card__meta">{cardMeta(item)}</span>
         <span className="karte-card__actions">
-          {(item.kind === "prescription" || item.kind === "injection") && (
+          {(item.kind === "prescription" ||
+            item.kind === "injection" ||
+            item.kind === "lab-order") && (
             <button
               type="button"
               className="karte-card__icon-button karte-card__icon-button--labeled"
@@ -336,10 +352,12 @@ function DocumentIcon() {
   );
 }
 
-// この情報が対象としているプロブレム。現状プロブレムを持つのは診療記録と処方・注射
-// (テンプレートの紐付けは未実装)。注射も reasonReference なので処方と同じ関数で引ける。
+// この情報が対象としているプロブレム。現状プロブレムを持つのは診療記録と
+// 処方・注射・検体検査(テンプレートの紐付けは未実装)。いずれも reasonReference
+// なので処方と同じ関数で引ける。
 function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "note") return clinicalNoteProblem(item.note);
+  if (item.kind === "lab-order") return labOrderProblem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);
   }
@@ -361,6 +379,13 @@ function cardTitle(item: KarteTimelineItem): string {
   if (item.kind === "injection") {
     const summary = summarizeInjectionServiceRequest(item.serviceRequest);
     return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" | ");
+  }
+  // 検体検査は入外区分と、至急のときだけ至急区分を並べる(通常はわざわざ出さない)。
+  if (item.kind === "lab-order") {
+    const summary = summarizeLabOrder(item.serviceRequest);
+    return [summary.settingDisplay, summary.urgent ? summary.priorityDisplay : ""]
+      .filter(Boolean)
+      .join(" | ");
   }
   return item.label;
 }
@@ -518,6 +543,10 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
     );
   }
 
+  if (item.kind === "lab-order") {
+    return <LabOrderCardBody serviceRequest={item.serviceRequest} />;
+  }
+
   if (!item.questionnaire) {
     return (
       <p className="karte-card__empty">
@@ -553,6 +582,43 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
           ))}
         </div>
       )}
+    </>
+  );
+}
+
+// 検体検査は検体(採血管)ごとにまとめて出す。採血の現場が動く単位に合わせる。
+// パネルの構成項目はオーダーに写していないので、オーダー画面のプレビューと同じく
+// マスタから引いて添える(取得中は項目名だけを出す)。
+function LabOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.ServiceRequest }) {
+  const lines = labOrderItems(serviceRequest);
+  const panelMembers = useLabPanelMemberLabels(lines.map((line) => line.code));
+  const groups = groupBySpecimen(lines);
+  const comment = labOrderComment(serviceRequest);
+
+  if (groups.length === 0) return <p className="karte-card__empty">検査項目がありません。</p>;
+
+  return (
+    <>
+      {groups.map((group, index) => (
+        <div className="karte-rp" key={group.specimenCode || `unset-${index}`}>
+          <div className="karte-rp__head">
+            <span className="karte-rp__number">{`GP${index + 1}`}</span>
+            <span className="karte-lab-order__specimen">{specimenGroupLabel(group)}</span>
+          </div>
+          <ul className="karte-rp__medicines">
+            {group.items.map((line) => {
+              const members = panelMembers.data?.get(line.code);
+              return (
+                <li key={line.code}>
+                  <span className="karte-rp__medicine-name">{line.name}</span>
+                  {members && <span className="karte-rp__comment">{`（${members.join(", ")}）`}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+      {comment && <p className="karte-card__note">{comment}</p>}
     </>
   );
 }
