@@ -4,9 +4,10 @@ module Master
 
     def index
       scope = Master::LabItem.all
-      # カンマ区切りで複数指定可(検査結果編集画面が保存済みコードからマスタ情報を一括復元するため)。
+      # カンマ区切りで複数指定可(検査結果編集画面が保存済みコードからマスタ情報を一括復元したり、
+      # 検体検査オーダーの JLAC コードから検査結果の項目を展開したりするため)。
       scope = scope.where(jlac11_code: params[:jlac11_code].split(",")) if params[:jlac11_code].present?
-      scope = scope.where(jlac10_code: params[:jlac10_code]) if params[:jlac10_code].present?
+      scope = scope.where(jlac10_code: params[:jlac10_code].split(",")) if params[:jlac10_code].present?
       scope = apply_drilldown(scope)
       if params[:name].present?
         scope = flexible_name_match(scope, params[:name], %w[search_name search_abbreviation])

@@ -1,6 +1,10 @@
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { LabOrderCandidate } from "../api/queries";
 import type { LabItem } from "../api/masterClient";
+import {
+  useLabOrderResultLines,
+  type ExpandedResultLine,
+} from "../hooks/useLabOrderResultLines";
 import {
   emptyLabResultForm,
   emptyLabResultLine,
@@ -27,6 +31,31 @@ interface LabResultFormProps {
 }
 
 type ModalState = { lineIndex: number } | null;
+
+/**
+ * オーダーから展開した項目を、いま入力中の行に反映する。
+ * ・並びはオーダーの項目順にし、すでに入力済みの結果値(と Observation の id)は引き継ぐ
+ * ・オーダーに含まれない項目でも、結果値が入っていれば消さずに後ろへ残す
+ */
+function mergeExpandedLines(
+  current: LabResultLineValues[],
+  expanded: ExpandedResultLine[],
+): LabResultLineValues[] {
+  const currentByCode = new Map(
+    current.flatMap((line) => (line.item ? [[line.item.jlac11_code, line] as const] : [])),
+  );
+  const expandedCodes = new Set(expanded.map((line) => line.item.jlac11_code));
+
+  const merged = expanded.map((line) => {
+    const existing = currentByCode.get(line.item.jlac11_code);
+    return existing ? { ...existing, item: line.item } : line;
+  });
+  const kept = current.filter(
+    (line) => line.item && line.value && !expandedCodes.has(line.item.jlac11_code),
+  );
+
+  return [...merged, ...kept];
+}
 
 // データタイプに応じた結果値入力。PQ: 数値 / CD・CO: 選択肢 / ST(その他): 文字列
 function ResultValueInput({
@@ -71,6 +100,23 @@ function ResultValueInput({
   return <input type="text" value={line.value} onChange={(e) => onChange(e.target.value)} />;
 }
 
+// 展開できなかった項目の名前を並べる上限(残りは「他N件」)。
+const NOTICE_NAME_COUNT = 5;
+
+function expandNoticeOf(lineCount: number, unmatchedNames: string[]): string | null {
+  if (lineCount === 0 && unmatchedNames.length === 0) return null;
+
+  const expanded = lineCount > 0 ? `オーダーの検査項目 ${lineCount} 件を展開しました。` : "";
+  if (unmatchedNames.length === 0) return expanded;
+
+  const shown = unmatchedNames.slice(0, NOTICE_NAME_COUNT).join("、");
+  const rest =
+    unmatchedNames.length > NOTICE_NAME_COUNT
+      ? ` 他${unmatchedNames.length - NOTICE_NAME_COUNT}件`
+      : "";
+  return `${expanded}JLACコードから検査項目マスタを引けなかったため、次の項目は展開していません: ${shown}${rest}`;
+}
+
 export function LabResultForm({
   initialValues,
   onSubmit,
@@ -83,6 +129,22 @@ export function LabResultForm({
   const [values, setValues] = useState<LabResultFormValues>(initialValues ?? emptyLabResultForm);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+
+  // 画面上でオーダーを選び直したときだけ検査項目を展開する(初期表示時の
+  // 紐付け済みオーダーで、保存済みの検査項目を上書きしてしまわないようにする)。
+  const [expandingOrderId, setExpandingOrderId] = useState("");
+  const [expandNotice, setExpandNotice] = useState<string | null>(null);
+  const expansion = useLabOrderResultLines(expandingOrderId || undefined);
+
+  useEffect(() => {
+    if (!expandingOrderId || !expansion.ready) return;
+    setExpandingOrderId("");
+
+    if (expansion.lines.length > 0) {
+      setValues((v) => ({ ...v, lines: mergeExpandedLines(v.lines, expansion.lines) }));
+    }
+    setExpandNotice(expandNoticeOf(expansion.lines.length, expansion.unmatchedNames));
+  }, [expandingOrderId, expansion.ready, expansion.lines, expansion.unmatchedNames]);
 
   function update<K extends keyof LabResultFormValues>(key: K, value: LabResultFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
@@ -108,6 +170,13 @@ export function LabResultForm({
 
   function removeLine(lineIndex: number) {
     setValues((v) => ({ ...v, lines: v.lines.filter((_, i) => i !== lineIndex) }));
+  }
+
+  // オーダーを選び直したら、その JLAC コードから検査項目を展開し直す。
+  function handleOrderChange(orderId: string) {
+    update("orderId", orderId);
+    setExpandNotice(null);
+    setExpandingOrderId(orderId);
   }
 
   function handleItemSelect(item: LabItem) {
@@ -160,6 +229,7 @@ export function LabResultForm({
         </div>
       )}
       <ErrorBanner error={submitError} />
+      <ErrorBanner error={expansion.error} />
 
       <fieldset>
         <legend>検査共通</legend>
@@ -194,7 +264,7 @@ export function LabResultForm({
           検体検査オーダー
           <select
             value={values.orderId}
-            onChange={(e) => update("orderId", e.target.value)}
+            onChange={(e) => handleOrderChange(e.target.value)}
             disabled={orderCandidatesLoading}
           >
             <option value="">紐付けなし</option>
@@ -214,6 +284,10 @@ export function LabResultForm({
               )}
           </select>
         </label>
+        {expandingOrderId && <p className="lab-result-form__notice">検査項目を展開中...</p>}
+        {!expandingOrderId && expandNotice && (
+          <p className="lab-result-form__notice">{expandNotice}</p>
+        )}
       </fieldset>
 
       <fieldset className="rp-card">

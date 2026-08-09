@@ -79,6 +79,11 @@ RSpec.describe "Master::LabItems", type: :request do
       expect(names_for(jlac11_code: "C1000000000000001,C1000000000000003"))
         .to eq(["総蛋白(TP)", "白血球数"])
     end
+
+    it "jlac10_code のカンマ区切りで複数指定できる" do
+      expect(names_for(jlac10_code: "3A010000002327101,3B035000002327201"))
+        .to eq(["総蛋白(TP)", "ＡＳＴ(ＧＯＴ)"])
+    end
   end
 
   describe "GET /master/lab_items (並び順)" do

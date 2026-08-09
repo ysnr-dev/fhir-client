@@ -723,6 +723,7 @@ function labItemFromObservation(
     jlac11_specimen: (specimenId && specimenNames.get(specimenId)) || null,
     jlac11_method: null,
     jlac11_code: jlacCoding.code,
+    jlac10_code: null,
     display_unit: obs.valueQuantity?.unit ?? null,
     xml_unit: obs.valueQuantity?.code ?? null,
     data_type: dataType,

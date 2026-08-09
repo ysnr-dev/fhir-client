@@ -356,6 +356,23 @@ export function useLabItemsByCodes(codes: string[]) {
   });
 }
 
+// 検体検査オーダーから検査結果の項目を展開する用。オーダー項目マスタの JLAC コードは
+// JLAC11・JLAC10 のどちらの体系でも持てるため、体系ごとに引いて結果をまとめる。
+export function useLabItemsByJlacCodes(jlac11Codes: string[], jlac10Codes: string[]) {
+  return useQuery({
+    queryKey: ["master", "lab_items", "by_jlac_codes", jlac11Codes, jlac10Codes],
+    queryFn: async () => {
+      const results = await Promise.all([
+        jlac11Codes.length ? searchLabItems({ jlac11_code: jlac11Codes.join(","), per: 100 }) : null,
+        jlac10Codes.length ? searchLabItems({ jlac10_code: jlac10Codes.join(","), per: 100 }) : null,
+      ]);
+      return results.flatMap((result) => result?.items ?? []);
+    },
+    staleTime: Infinity,
+    enabled: jlac11Codes.length > 0 || jlac10Codes.length > 0,
+  });
+}
+
 // 検体検査オーダーのマスタ群 ------------------------------------------------
 
 // オーダー項目・パネル構成は同じ詳細画面で同時に変わるのでまとめて破棄する。

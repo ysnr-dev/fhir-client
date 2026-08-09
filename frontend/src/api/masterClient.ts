@@ -117,6 +117,8 @@ export interface LabItem {
   jlac11_specimen: string | null;
   jlac11_method: string | null;
   jlac11_code: string;
+  // JLAC10 でオーダーされた検査項目からマスタを引き当てるために使う。
+  jlac10_code: string | null;
   display_unit: string | null;
   xml_unit: string | null;
   // PQ:数値型、CD:大小順序のないコード型、CO:大小順序のあるコード型、ST:文字列型
@@ -292,7 +294,9 @@ function appendDrilldown(search: URLSearchParams, drilldown: LabItemDrilldown): 
 export async function searchLabItems(
   params: LabItemDrilldown & {
     name?: string;
+    // JLAC コードはどちらもカンマ区切りで複数指定できる。
     jlac11_code?: string;
+    jlac10_code?: string;
     page?: number;
     per?: number;
   },
@@ -300,6 +304,7 @@ export async function searchLabItems(
   const search = new URLSearchParams();
   if (params.name) search.set("name", params.name);
   if (params.jlac11_code) search.set("jlac11_code", params.jlac11_code);
+  if (params.jlac10_code) search.set("jlac10_code", params.jlac10_code);
   appendDrilldown(search, params);
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
