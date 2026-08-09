@@ -5,6 +5,7 @@ import { AuthGate } from "./components/AuthGate";
 import { CurrentUserBadge } from "./components/CurrentUserBadge";
 import { HoverMenu } from "./components/HoverMenu";
 import { OrderContextPicker } from "./components/OrderContextPicker";
+import { SubMenu } from "./components/SubMenu";
 import { ThemeToggleItem } from "./components/ThemeToggleItem";
 import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
@@ -56,36 +57,53 @@ function App() {
         </Link>
         <nav className="app__nav">
           <NavLink to="/patients">患者一覧</NavLink>
-          <NavLink to="/questionnaires">テンプレート</NavLink>
-          <NavLink to="/report-layouts">帳票レイアウト</NavLink>
           <HoverMenu label="管理">
-            <Link to="/organizations" className="row-menu__item">
-              医療機関
-            </Link>
-            <Link to="/departments" className="row-menu__item">
-              診療科
-            </Link>
-            <Link to="/practitioners" className="row-menu__item">
-              医療従事者
-            </Link>
-            <Link to="/master-import" className="row-menu__item">
-              マスタ取込
-            </Link>
-            <Link to="/medicine-dose-conversions" className="row-menu__item">
-              投与量換算
-            </Link>
-            <Link to="/lab-order-items" className="row-menu__item">
-              検査オーダー項目
-            </Link>
-            <Link to="/lab-order-item-layouts" className="row-menu__item">
-              検査オーダーレイアウト
-            </Link>
-            <Link to="/lab-specimens" className="row-menu__item">
-              検体
-            </Link>
-            <Link to="/lab-containers" className="row-menu__item">
-              採取管
-            </Link>
+            {/* マスタメンテナンスは項目が増えるため、診療領域ごとに入れ子にする。
+                どの領域にも属さないものは「共通」にまとめる。
+                マスタ取込は領域をまたぐので直下に置く。 */}
+            <SubMenu label="マスタメンテナンス">
+              <Link to="/master-import" className="row-menu__item">
+                マスタ取込
+              </Link>
+              <SubMenu label="共通">
+                <Link to="/organizations" className="row-menu__item">
+                  医療機関
+                </Link>
+                <Link to="/departments" className="row-menu__item">
+                  診療科
+                </Link>
+                <Link to="/practitioners" className="row-menu__item">
+                  医療従事者
+                </Link>
+              </SubMenu>
+              <SubMenu label="テンプレート">
+                <Link to="/questionnaires" className="row-menu__item">
+                  テンプレート
+                </Link>
+                <Link to="/report-layouts" className="row-menu__item">
+                  帳票レイアウト
+                </Link>
+              </SubMenu>
+              <SubMenu label="医薬品">
+                <Link to="/medicine-dose-conversions" className="row-menu__item">
+                  投与量換算
+                </Link>
+              </SubMenu>
+              <SubMenu label="検体検査">
+                <Link to="/lab-order-items" className="row-menu__item">
+                  検査オーダー項目
+                </Link>
+                <Link to="/lab-order-item-layouts" className="row-menu__item">
+                  検査オーダーレイアウト
+                </Link>
+                <Link to="/lab-specimens" className="row-menu__item">
+                  検体
+                </Link>
+                <Link to="/lab-containers" className="row-menu__item">
+                  採取管
+                </Link>
+              </SubMenu>
+            </SubMenu>
             <Link to="/oauth-clients" className="row-menu__item">
               OAuth クライアント
             </Link>

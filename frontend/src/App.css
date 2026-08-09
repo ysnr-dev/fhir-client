@@ -2685,6 +2685,33 @@ fieldset.rp-card {
   top: 100%;
 }
 
+/* ---- サブメニュー(メニュー内の入れ子) ---- */
+
+.row-menu__items .sub-menu {
+  position: relative;
+}
+
+/* ラベルと ▸ を左右に振り分ける。詳細度は .row-menu__item に合わせる。 */
+.row-menu__items .sub-menu__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.row-menu__items .sub-menu__trigger[aria-expanded="true"] {
+  background: var(--accent-bg);
+}
+
+/* 右側に開く。トリガーとの間に隙間があるとマウス移動中に mouseleave で
+   閉じてしまうため、親パネルの padding/border に重ねて接して出す。
+   left/right は .app__nav .row-menu__items の左寄せ指定を打ち消す必要がある。 */
+.row-menu__items .sub-menu__items {
+  top: -4px;
+  left: 100%;
+  right: auto;
+}
+
 /* ---- テーマ切替(管理メニュー内) ---- */
 
 /* ラベルと ON/OFF を左右に振り分ける。詳細度は .row-menu__item に合わせる。 */
