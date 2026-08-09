@@ -15,6 +15,7 @@ import {
   type KarteDayGroup,
   type KarteTimelineItem,
 } from "../fhir/karteTimeline";
+import type { KarteDetailTarget } from "../karteUrl";
 import {
   groupInjectionByRp,
   injectionComment,
@@ -62,7 +63,7 @@ interface KarteTimelineProps {
   /** DO(複写して新規登録)。処方と注射で開くフォームが違うので item ごと渡す。 */
   onDo: (item: KarteTimelineItem) => void;
   /** 詳細表示。対象は URL に載せるので、モーダルは親(カルテ画面)が描く。 */
-  onOpenDetail: (item: KarteTimelineItem) => void;
+  onOpenDetail: (target: KarteDetailTarget) => void;
   /** 削除された項目。右ペインで開いていたら閉じるために親へ通知する。 */
   onDeleted: (item: KarteTimelineItem) => void;
   /** スクロールコンテナ。診療日パネルからのスクロール指示に使う。 */
@@ -174,7 +175,7 @@ function KarteCard({
   item: KarteTimelineItem;
   onEdit: (item: KarteTimelineItem) => void;
   onDo: (item: KarteTimelineItem) => void;
-  onOpenDetail: (item: KarteTimelineItem) => void;
+  onOpenDetail: (target: KarteDetailTarget) => void;
   onDeleted: (item: KarteTimelineItem) => void;
   problemsById: Map<string, fhir4.Condition>;
   selectedProblemId: string | null;
@@ -279,6 +280,18 @@ function KarteCard({
             <button type="button" className="row-menu__item" onClick={() => onOpenDetail(item)}>
               詳細表示
             </button>
+            {/* 検体検査は、結果が登録済みのオーダーだけ結果内容を開ける。 */}
+            {item.kind === "lab-order" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={!item.reportId}
+                title={item.reportId ? undefined : "この検体検査の結果はまだ登録されていません"}
+                onClick={() => onOpenDetail({ kind: "lab-result", id: item.reportId })}
+              >
+                検査結果表示
+              </button>
+            )}
             {/* 平文は元テンプレートの項目名と突き合わせて組み立てるので、
                 テンプレートが引けたときだけ開ける。 */}
             {item.kind === "qr" && (

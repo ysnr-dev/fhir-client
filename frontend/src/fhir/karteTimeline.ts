@@ -52,6 +52,8 @@ export type KarteTimelineItem = KarteItemBase &
         kind: "lab-order";
         serviceRequest: fhir4.ServiceRequest;
         itemRequests: fhir4.ServiceRequest[];
+        /** このオーダーを元に登録された検査結果の id。空なら結果はまだ無い。 */
+        reportId: string;
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
@@ -175,6 +177,19 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     }
   }
 
+  // 検体検査オーダー id → そのオーダーを元にした検査結果の id
+  // (DiagnosticReport.basedOn。カードの「検査結果表示」を出せるかの判定に使う)。
+  const reportIdByOrderId = new Map<string, string>();
+  for (const report of pickByType<fhir4.DiagnosticReport>(
+    prescriptionResources,
+    "DiagnosticReport",
+  )) {
+    for (const basedOn of report.basedOn ?? []) {
+      const srId = basedOn.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
+      if (srId && report.id) reportIdByOrderId.set(srId, report.id);
+    }
+  }
+
   const medicationRequestsBySr = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
     for (const basedOn of mr.basedOn ?? []) {
@@ -215,6 +230,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         kind: "lab-order" as const,
         label: KARTE_KIND_LABELS["lab-order"],
         itemRequests: labOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+        reportId: reportIdByOrderId.get(serviceRequest.id ?? "") ?? "",
       };
     }
     const withMedications = {

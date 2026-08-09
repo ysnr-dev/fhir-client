@@ -36,6 +36,7 @@ import {
   formatKarteDetail,
   parseKarteDetail,
   parseKarteTab,
+  type KarteDetailTarget,
   type KarteOtherTabKey,
   type KarteTabKey,
 } from "../karteUrl";
@@ -122,9 +123,9 @@ export function KartePage() {
   );
 
   const openDetail = useCallback(
-    (item: KarteTimelineItem) => {
+    (target: KarteDetailTarget) => {
       updateParams((params) => {
-        params.set(KARTE_DETAIL_PARAM, formatKarteDetail(item));
+        params.set(KARTE_DETAIL_PARAM, formatKarteDetail(target));
       }, true);
     },
     [updateParams],

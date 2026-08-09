@@ -1644,7 +1644,10 @@ export function useKartePrescriptionsInfinite(patientId: string | undefined) {
       params.set("based-on:missing", "true");
       // カルテは薬剤名・検査項目名まで表示するので、処方明細と検体検査の明細
       // (パネルの構成項目まで 2 段)も同じレスポンスで受け取る。
-      params.set("_revinclude", "MedicationRequest:based-on");
+      params.append("_revinclude", "MedicationRequest:based-on");
+      // 検体検査のカードから「検査結果表示」を出せるかの判定に、そのオーダーを
+      // 元にした検査結果も添えてもらう。
+      params.append("_revinclude", "DiagnosticReport:based-on");
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
       return searchResource<fhir4.Resource>("ServiceRequest", params);
     },
