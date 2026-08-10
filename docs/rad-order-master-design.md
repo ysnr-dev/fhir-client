@@ -2,6 +2,10 @@
 
 調査日: 2026-08-09。JJ1017指針 Ver3.4（2024）本文および配布別表（Ver3.3 Excel）を一次資料として確認済み。
 
+**実装済み（2026-08-09）**。設計から変えた点は各節の「実装メモ」に記載。取込は実データで検証済み:
+部品コード 1,623件（スキップ17件＝別表側の欠番・予約行）、頻用コード 9,116件（スキップ181件＝
+不正桁164・重複17）。頻用コード全9,116件について「32桁→要素分解→再合成」が元コードと完全一致することを確認。
+
 本文中の区別:
 - **［事実］** = 公式資料・配布ファイルの実データで確認した内容
 - **［導出］** = 仕様から論理的に導ける内容
@@ -146,7 +150,7 @@ master_rad_set_items               -- セット親子（検体検査のmaster_la
 --------------------------------
 set_item_code       -- 親（master_rad_items.item_code, kind=set）
 member_item_code    -- 子（同, kind=single）
-display_order
+display_order / note
 unique index (set_item_code, member_item_code)  ※短縮名 index_rad_set_items_on_set_and_member
 
 master_rad_item_layouts            -- レイアウト（検体検査のlayoutsと同型）
@@ -163,6 +167,15 @@ item_code           -- cell_type=item時（master_rad_items.item_code）
 display_name        -- 表示名上書き / ラベル文言
 unique index (layout_id, grid_row, grid_column)
 ```
+
+実装メモ:
+- **セット構成に `member_type`（必須/任意/条件付き）を持たせなかった**。検体検査のパネルでこの列を
+  置いたのは LOINC の R/O/C 区分を写すためで、JJ1017 側に対応する概念が無い。必要になってから足す。
+- **32桁コードの桁割り当ては `Master::Jj1017Code` 1か所だけが持つ**（`ELEMENTS` に要素→offset/length）。
+  組み立て(`compose`)・分解(`decompose`)・要素コードの桁数検証・拡張範囲の判定・画面が出す
+  プレビューまで、すべてこの定義から導く。画面側は桁位置を一切持たない（後述の要素APIで受け取る）。
+- 要素名と `master_rad_items` の列名は「要素名 + `_code`」の規則で対応させ、要素の追加を
+  `Master::Jj1017Code` 側だけで完結させている。
 
 設計判断:
 
@@ -203,7 +216,20 @@ unique index (layout_id, grid_row, grid_column)
   - source=official の行は画面から編集・削除不可
 - 削除時は `master_rad_items` の該当要素列を参照して**使用中なら削除不可**（コード疎結合なのでアプリ層でガード）。
 
-API: `resources :rad_jj1017_codes, only: %i[index create update destroy]`（indexは `element` / `name` / `source` フィルタ、`flexible_name_match` 利用）。
+API: `resources :rad_jj1017_codes, only: %i[index create update destroy]`（indexは `element` / `code` / `name` / `source` / `modality_use` フィルタ、`flexible_name_match` 利用）＋ collection に `import` / `elements` / `catalog`。
+
+実装メモ: 拡張範囲の判定は「桁数・使用可能文字」「要素ごとの開始位置（§2.2）」「JJ1017 が
+標準割当・予約済みの帯（`Z*` 全要素、手技3要素の `J*`/`P*`、手技拡張の `S*`）」の3段で行う。
+別表の実データでは特殊指示に既に `A*` の標準コードがあるなど、指針が言う「A0以降が施設用」は
+実態として侵食されているため、範囲外を弾くだけでなく **(element, code) の一意制約でも衝突を止める**
+二重の作りにしている。取込時に配布ファイルが拡張コードと同じコードを載せてきた場合は、
+どのコードが問題かを示して取込ごと止める（片側だけ入った状態を作らない）。
+
+追加した2つの collection API:
+- `GET .../elements` — 要素の一覧に **32桁コード内の位置(offset/length)** と拡張範囲・件数を添えて返す。
+  画面はこれを使って要素セレクタ・入力の案内・オーダー項目編集画面の32桁プレビューを組み立てる。
+- `GET .../catalog` — 全要素のコードを要素名でまとめて返す（ページングなし）。オーダー項目の
+  編集画面は11要素すべての選択肢を同時に要するため。全要素あわせても2千件弱なので一括で返す。
 
 ---
 
@@ -261,13 +287,26 @@ API: `resources :rad_item_layouts, only: %i[index show create update destroy]`�
 
 ---
 
-## 10. 実装ステップ（PR分割案）
+## 10. 実装したもの
 
-1. **PR1: JJ1017取込基盤** — migration（`master_rad_jj1017_codes` / `master_rad_jj1017_frequent_codes`）、`roo-xls` 追加（イメージ再ビルド）、Importer 2本＋spec（fixture: 各別表の縮小版xls/xlsx）、seed（種別・左右・Ver3.4差分）、MasterImportPageへの追加
-2. **PR2: 拡張コードUI** — `Master::RadJj1017Code` の拡張バリデーション、`rad_jj1017_codes` API＋spec、`/rad-jj1017-codes` ページ
-3. **PR3: オーダー項目マスタ** — migration（`master_rad_items` / `master_rad_set_items`）、モデル（32桁合成・有効期間バリデーション）、API＋spec、`/rad-order-items` ページ（編集モーダル・セットエディタ・頻用検索モーダル）
-4. **PR4: 頻用一括作成** — `bulk_create_from_frequent` API＋spec、一括作成モーダル
-5. **PR5: レイアウト** — migration（layouts/cells）、API＋spec、`/rad-order-item-layouts` ページ
+| 層 | 追加物 |
+|---|---|
+| migration | `20260809100000` JJ1017部品コード / `100100` 頻用コード / `100200` オーダー項目＋セット構成 / `100300` レイアウト＋セル |
+| モデル | `Master::Jj1017Code`（桁割り当て・組立/分解・拡張範囲の定義）、`RadJj1017Code` / `RadJj1017FrequentCode` / `RadItem` / `RadSetItem` / `RadItemLayout` / `RadItemLayoutCell` |
+| 取込 | `MasterImport::ExcelSource`（.xls/.xlsx 共通の入口）、`RadJj1017CodeImporter` / `RadFrequentCodeImporter`。Gemfile に `roo-xls`（**イメージ再ビルド必要**） |
+| seed | `db/seed_data/rad_jj1017_codes.csv`（種別18・左右13・Ver3.4差分3）。**別表A を取り込み直したら `db:seed` を再実行する** |
+| API | `rad_jj1017_codes`（+import/elements/catalog）、`rad_frequent_codes`（+import）、`rad_items`（+bulk_create_from_frequent）、`rad_set_items`、`rad_item_layouts`、`rad_item_layout_cells` |
+| 画面 | `/rad-jj1017-codes`、`/rad-items`、`/rad-item-layouts`、マスタ取込に2種別追加。ナビは 管理 → マスタメンテナンス → 放射線検査 |
+| spec | 取込2本・リクエスト5本（backend 全546 examples green） |
+
+ついでに直したもの: レイアウト編集の CSS クラスを `lab-layout__*` → `order-layout__*` に改名した
+（検体検査・放射線で同じ見た目を使うため、クラス名から領域名を外した）。
+
+運用手順（初回）:
+1. マスタ取込で「JJ1017コードマスタ」に別表A・BC・D・E を**1ファイルずつ4回**取り込む
+2. 同じく「JJ1017頻用コード集」に別表F を取り込む
+3. `db:seed`（種別・左右・Ver3.4差分。手順1の後に実行する）
+4. `/rad-items` の「頻用コード表から一括作成」で初期項目を作る → `/rad-item-layouts` で伝票を組む
 
 ---
 

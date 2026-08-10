@@ -60,6 +60,19 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".csv",
   },
   {
+    type: "rad_jj1017_codes",
+    label: "JJ1017コードマスタ",
+    formatHint:
+      "JJ1017 別表（手技 .xlsx / 部位・姿勢等・指示等 .xls）。ファイルに入っている要素だけを入れ替える。施設拡張コードは消えない",
+    accept: ".xls,.xlsx",
+  },
+  {
+    type: "rad_frequent_codes",
+    label: "JJ1017頻用コード集",
+    formatHint: "JJ1017 別表F（頻用）.xls（放射線検査・超音波検査・放射線治療の3シート）",
+    accept: ".xls,.xlsx",
+  },
+  {
     type: "lab_specimens",
     label: "検体マスタ",
     formatHint:
@@ -134,6 +147,13 @@ export function MasterImportPage() {
         {importMaster.isSuccess && (
           <p className="master-import-form__success" role="status">
             {importMaster.data.imported} 件を取り込みました
+            {importMaster.data.skipped
+              ? `（取り込めなかった行: ${importMaster.data.skipped} 件）`
+              : ""}
+            {importMaster.data.elements &&
+              `／ ${Object.entries(importMaster.data.elements)
+                .map(([element, count]) => `${element}: ${count}`)
+                .join(" ")}`}
           </p>
         )}
         <ErrorBanner error={importMaster.error} />

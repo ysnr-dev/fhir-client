@@ -92,6 +92,25 @@ Rails.application.routes.draw do
     resources :lab_containers, only: %i[index show create update destroy]
     resources :lab_order_item_layouts, only: %i[index show create update destroy]
     resources :lab_order_item_layout_cells, only: %i[create update destroy]
+    # 放射線検査オーダーのマスタ群。
+    # JJ1017 の部品コード。標準コードは取込、施設拡張コードは画面から登録する。
+    resources :rad_jj1017_codes, only: %i[index create update destroy] do
+      collection do
+        post :import
+        get :elements
+        get :catalog
+      end
+    end
+    # 頻用コード表は項目マスタの一括作成の選択元なので検索と取込だけ。
+    resources :rad_frequent_codes, only: %i[index] do
+      collection { post :import }
+    end
+    resources :rad_items, only: %i[index show create update destroy] do
+      collection { post :bulk_create_from_frequent }
+    end
+    resources :rad_set_items, only: %i[index create update destroy]
+    resources :rad_item_layouts, only: %i[index show create update destroy]
+    resources :rad_item_layout_cells, only: %i[create update destroy]
     resources :diseases, only: %i[index show create update destroy] do
       collection { post :import }
     end

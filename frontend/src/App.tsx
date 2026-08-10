@@ -15,6 +15,9 @@ import { LabContainerPage } from "./pages/LabContainerPage";
 import { LabOrderItemLayoutPage } from "./pages/LabOrderItemLayoutPage";
 import { LabOrderItemPage } from "./pages/LabOrderItemPage";
 import { LabSpecimenPage } from "./pages/LabSpecimenPage";
+import { RadItemLayoutPage } from "./pages/RadItemLayoutPage";
+import { RadItemPage } from "./pages/RadItemPage";
+import { RadJj1017CodePage } from "./pages/RadJj1017CodePage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
 import { PractitionerEditPage } from "./pages/PractitionerEditPage";
@@ -103,6 +106,17 @@ function App() {
                   採取管
                 </Link>
               </SubMenu>
+              <SubMenu label="放射線検査">
+                <Link to="/rad-items" className="row-menu__item">
+                  放射線オーダー項目
+                </Link>
+                <Link to="/rad-item-layouts" className="row-menu__item">
+                  放射線オーダーレイアウト
+                </Link>
+                <Link to="/rad-jj1017-codes" className="row-menu__item">
+                  JJ1017コード
+                </Link>
+              </SubMenu>
             </SubMenu>
             <Link to="/oauth-clients" className="row-menu__item">
               OAuth クライアント
@@ -147,6 +161,9 @@ function App() {
           <Route path="/lab-order-item-layouts" element={<LabOrderItemLayoutPage />} />
           <Route path="/lab-specimens" element={<LabSpecimenPage />} />
           <Route path="/lab-containers" element={<LabContainerPage />} />
+          <Route path="/rad-items" element={<RadItemPage />} />
+          <Route path="/rad-item-layouts" element={<RadItemLayoutPage />} />
+          <Route path="/rad-jj1017-codes" element={<RadJj1017CodePage />} />
           <Route path="/questionnaires" element={<QuestionnaireListPage />} />
           <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />
           <Route path="/questionnaires/:questionnaireId/edit" element={<QuestionnaireEditPage />} />

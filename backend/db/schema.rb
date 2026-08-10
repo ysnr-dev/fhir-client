@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_09_000400) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_09_100300) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -386,6 +386,112 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_09_000400) do
     t.datetime "updated_at", null: false
     t.index ["exchange_code"], name: "index_master_modifiers_on_exchange_code"
     t.index ["management_number"], name: "index_master_modifiers_on_management_number", unique: true
+  end
+
+  create_table "master_rad_item_layout_cells", force: :cascade do |t|
+    t.integer "layout_id", null: false
+    t.integer "grid_row", null: false
+    t.integer "grid_column", null: false
+    t.string "cell_type", default: "item", null: false
+    t.string "item_code"
+    t.string "display_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["item_code"], name: "index_master_rad_item_layout_cells_on_item_code"
+    t.index ["layout_id", "grid_row", "grid_column"], name: "index_rad_layout_cells_on_layout_and_position", unique: true
+  end
+
+  create_table "master_rad_item_layouts", force: :cascade do |t|
+    t.string "name", null: false
+    t.integer "row_count", default: 10, null: false
+    t.integer "column_count", default: 5, null: false
+    t.integer "display_order"
+    t.boolean "active", default: true, null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_master_rad_item_layouts_on_name", unique: true
+  end
+
+  create_table "master_rad_items", force: :cascade do |t|
+    t.string "item_code", null: false
+    t.string "name", null: false
+    t.string "short_name"
+    t.string "name_kana"
+    t.string "kind", default: "single", null: false
+    t.string "modality_code"
+    t.string "procedure_major_code"
+    t.string "procedure_minor_code"
+    t.string "procedure_extension_code"
+    t.string "body_part_code"
+    t.string "laterality_code"
+    t.string "body_position_code"
+    t.string "direction_code"
+    t.string "detail_position_code"
+    t.string "special_instruction_code"
+    t.string "nuclide_code"
+    t.string "generic_extension_code"
+    t.string "jj1017_code"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.string "receipt_code"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_short_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["item_code"], name: "index_master_rad_items_on_item_code", unique: true
+    t.index ["jj1017_code"], name: "index_master_rad_items_on_jj1017_code"
+    t.index ["kind"], name: "index_master_rad_items_on_kind"
+    t.index ["modality_code"], name: "index_master_rad_items_on_modality_code"
+  end
+
+  create_table "master_rad_jj1017_codes", force: :cascade do |t|
+    t.string "element", null: false
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "name_english"
+    t.string "common_name"
+    t.string "jj_version"
+    t.text "note"
+    t.string "source", default: "official", null: false
+    t.integer "display_order"
+    t.string "major_part_code"
+    t.string "organ_system_code"
+    t.boolean "use_general", default: false, null: false
+    t.boolean "use_ct", default: false, null: false
+    t.boolean "use_mr", default: false, null: false
+    t.boolean "use_us", default: false, null: false
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["element", "code"], name: "index_rad_jj1017_codes_on_element_and_code", unique: true
+    t.index ["search_name"], name: "index_master_rad_jj1017_codes_on_search_name"
+  end
+
+  create_table "master_rad_jj1017_frequent_codes", force: :cascade do |t|
+    t.string "category", null: false
+    t.string "jj1017_code", null: false
+    t.string "name", null: false
+    t.integer "display_order"
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category", "jj1017_code"], name: "index_rad_frequent_codes_on_category_and_code", unique: true
+    t.index ["search_name"], name: "index_master_rad_jj1017_frequent_codes_on_search_name"
+  end
+
+  create_table "master_rad_set_items", force: :cascade do |t|
+    t.string "set_item_code", null: false
+    t.string "member_item_code", null: false
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["member_item_code"], name: "index_master_rad_set_items_on_member_item_code"
+    t.index ["set_item_code", "member_item_code"], name: "index_rad_set_items_on_set_and_member", unique: true
   end
 
   create_table "questionnaire_categories", force: :cascade do |t|

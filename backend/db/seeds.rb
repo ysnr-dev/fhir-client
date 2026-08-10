@@ -91,3 +91,41 @@ if File.exist?(defaults_csv)
 else
   puts "master_lab_specimens defaults: #{defaults_csv} not found, skipped"
 end
+
+# JJ1017 の部品コードのうち、配布 Excel の別表に無いもの。
+# db/seed_data/rad_jj1017_codes.csv（ヘッダー有り）から投入する。
+#   - 種別(モダリティ)と左右等は指針本文の表5.2 / 表5.5 にしかコード表が無い
+#   - 手元の配布別表は Ver3.3 のため、Ver3.4 で追加されたコードをここで補う
+# source=official として入れるので、別表の取込（洗い替え）で消える。
+# 別表A を取り込み直したときは db:seed を再実行すること。
+rad_codes_csv = Rails.root.join("db/seed_data/rad_jj1017_codes.csv")
+if File.exist?(rad_codes_csv)
+  loaded = 0
+  # 掲載順は要素ごとの現在の最大値の後ろに積む。Ver3.4 の追加コードが、取込済みの
+  # 別表(Ver3.3)の並びの末尾に付くようにするため。
+  order_by_element = Master::RadJj1017Code.group(:element).maximum(:display_order)
+  order_by_element.default = 0
+  CSV.foreach(rad_codes_csv, headers: true) do |row|
+    element = row["element"].to_s.strip
+    code = row["code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if element.blank? || code.blank? || name.blank?
+
+    record = Master::RadJj1017Code.find_or_initialize_by(element: element, code: code)
+    order_by_element[element] = (order_by_element[element] || 0) + 10 if record.new_record?
+    record.assign_attributes(
+      name: name,
+      name_english: row["name_english"].to_s.strip.presence,
+      common_name: row["common_name"].to_s.strip.presence,
+      jj_version: row["jj_version"].to_s.strip.presence,
+      note: row["note"].to_s.strip.presence,
+      source: Master::RadJj1017Code::OFFICIAL,
+      display_order: record.display_order || order_by_element[element]
+    )
+    record.save!
+    loaded += 1
+  end
+  puts "master_rad_jj1017_codes: seeded #{loaded} rows"
+else
+  puts "master_rad_jj1017_codes: #{rad_codes_csv} not found, skipped"
+end

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  useLabOrderItemLayout,
-  useLabOrderItemLayoutCellMutations,
-  useLabOrderItemLayoutMutations,
-  useLabOrderItemLayouts,
-  useLabOrderItemSearch,
+  useRadItemLayout,
+  useRadItemLayoutCellMutations,
+  useRadItemLayoutMutations,
+  useRadItemLayouts,
+  useRadItemSearch,
 } from "../api/masterQueries";
-import type { LabOrderItem, LabOrderItemLayoutCell } from "../api/masterClient";
+import type { RadItem, RadItemLayoutCell } from "../api/masterClient";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 
@@ -21,11 +21,11 @@ interface LayoutDraft {
   column_count: number;
 }
 
-export function LabOrderItemLayoutPage() {
-  const layouts = useLabOrderItemLayouts();
+export function RadItemLayoutPage() {
+  const layouts = useRadItemLayouts();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
-  const layoutMutations = useLabOrderItemLayoutMutations();
+  const layoutMutations = useRadItemLayoutMutations();
 
   // 初回ロード後は先頭のレイアウトを開いておく。
   useEffect(() => {
@@ -37,7 +37,7 @@ export function LabOrderItemLayoutPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>検査オーダーレイアウト</h1>
+        <h1>放射線オーダーレイアウト</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setCreating(true)}>
             レイアウトを追加
@@ -152,9 +152,9 @@ function LayoutCreateModal({ pending, error, onSubmit, onClose }: LayoutCreateMo
 }
 
 function LayoutEditor({ layoutId, onDeleted }: { layoutId: number; onDeleted: () => void }) {
-  const { data, error } = useLabOrderItemLayout(layoutId);
-  const layoutMutations = useLabOrderItemLayoutMutations();
-  const cellMutations = useLabOrderItemLayoutCellMutations();
+  const { data, error } = useRadItemLayout(layoutId);
+  const layoutMutations = useRadItemLayoutMutations();
+  const cellMutations = useRadItemLayoutCellMutations();
   const [draft, setDraft] = useState<LayoutDraft | null>(null);
   const [selected, setSelected] = useState<Position | null>(null);
   const [draggingCellId, setDraggingCellId] = useState<number | null>(null);
@@ -167,7 +167,7 @@ function LayoutEditor({ layoutId, onDeleted }: { layoutId: number; onDeleted: ()
   }, [data]);
 
   const cellsByPosition = useMemo(() => {
-    const map = new Map<string, LabOrderItemLayoutCell>();
+    const map = new Map<string, RadItemLayoutCell>();
     for (const cell of data?.cells ?? []) {
       map.set(`${cell.grid_row}-${cell.grid_column}`, cell);
     }
@@ -318,7 +318,7 @@ function LayoutEditor({ layoutId, onDeleted }: { layoutId: number; onDeleted: ()
                       {cell &&
                         (cell.cell_type === "label"
                           ? cell.display_name
-                          : (cell.display_name ?? cell.item_name ?? cell.order_item_code))}
+                          : (cell.display_name ?? cell.item_name ?? cell.item_code))}
                     </td>
                   );
                 })}
@@ -344,8 +344,8 @@ function LayoutEditor({ layoutId, onDeleted }: { layoutId: number; onDeleted: ()
 interface CellEditorProps {
   layoutId: number;
   position: Position;
-  cell: LabOrderItemLayoutCell | null;
-  mutations: ReturnType<typeof useLabOrderItemLayoutCellMutations>;
+  cell: RadItemLayoutCell | null;
+  mutations: ReturnType<typeof useRadItemLayoutCellMutations>;
   onClose: () => void;
 }
 
@@ -353,7 +353,7 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
   const [displayName, setDisplayName] = useState(cell?.display_name ?? "");
   const [labelText, setLabelText] = useState("");
   const [query, setQuery] = useState("");
-  const candidates = useLabOrderItemSearch({ name: query }, 1, query.trim().length > 0);
+  const candidates = useRadItemSearch({ name: query }, 1, query.trim().length > 0);
 
   // 選択マスが変わったら編集中の値を持ち越さない。
   useEffect(() => {
@@ -362,14 +362,14 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
     setQuery("");
   }, [cell, position.row, position.column]);
 
-  async function handlePlaceItem(item: LabOrderItem) {
+  async function handlePlaceItem(item: RadItem) {
     setQuery("");
     await mutations.create.mutateAsync({
       layout_id: layoutId,
       grid_row: position.row,
       grid_column: position.column,
       cell_type: "item",
-      order_item_code: item.order_item_code,
+      item_code: item.item_code,
     });
   }
 
@@ -416,7 +416,7 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
       {cell ? (
         <form className="order-layout__editor-row" onSubmit={handleSave}>
           <span className="order-layout__editor-kind">
-            {cell.cell_type === "label" ? "ラベル" : (cell.item_name ?? cell.order_item_code)}
+            {cell.cell_type === "label" ? "ラベル" : (cell.item_name ?? cell.item_code)}
           </span>
           <label>
             {cell.cell_type === "label" ? "文言" : "表示名(空ならオーダー項目名)"}
@@ -443,7 +443,7 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
                 type="text"
                 value={labelText}
                 onChange={(e) => setLabelText(e.target.value)}
-                placeholder="◆ 生化学"
+                placeholder="◆ 一般撮影"
               />
             </label>
             <button type="submit" disabled={mutations.create.isPending}>
@@ -452,7 +452,7 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
           </form>
           <div className="order-layout__editor-row">
             <label>
-              検査項目を配置
+              放射線項目を配置
               <input
                 type="text"
                 value={query}
@@ -467,7 +467,7 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
                 <li key={item.id}>
                   <button type="button" onClick={() => handlePlaceItem(item)}>
                     {item.name}
-                    <span className="lab-order-item__code">{item.order_item_code}</span>
+                    <span className="lab-order-item__code">{item.item_code}</span>
                   </button>
                 </li>
               ))}

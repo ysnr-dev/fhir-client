@@ -9,10 +9,18 @@ export type MasterType =
   | "modifiers"
   | "disease_indexes"
   | "jfagy_allergens"
-  | "lab_specimens";
+  | "lab_specimens"
+  | "rad_jj1017_codes"
+  | "rad_frequent_codes";
 
 export interface MasterImportResult {
   imported: number;
+  /** 取り込めなかった行数。配布ファイルの欠番・桁不足・重複を数えるマスタだけが返す。 */
+  skipped?: number;
+  /** JJ1017 部品コード: 取り込んだ要素ごとの件数。 */
+  elements?: Record<string, number>;
+  /** JJ1017 頻用コード: 取り込んだ区分ごとの件数。 */
+  categories?: Record<string, number>;
 }
 
 export interface Medicine {
@@ -943,6 +951,494 @@ export async function updateLabOrderItemLayoutCell(
 
 export async function deleteLabOrderItemLayoutCell(id: number): Promise<void> {
   const res = await masterFetch(`/master/lab_order_item_layout_cells/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+// 放射線検査オーダーのマスタ群 ----------------------------------------------
+
+// JJ1017 の部品コード(手技・部位・体位・撮影方向など)。element でどの別表の
+// コードかを区別する。source=official は配布ファイル由来、local は施設拡張。
+export interface RadJj1017Code {
+  id: number;
+  element: string;
+  code: string;
+  name: string;
+  name_english: string | null;
+  // 別表1D(手技拡張)の核医学領域頻用名(11C-CH3COOH → 11C-酢酸)
+  common_name: string | null;
+  jj_version: string | null;
+  note: string | null;
+  // official | local
+  source: string;
+  display_order: number | null;
+  // 以下は element="body_part" のときだけ入る。
+  major_part_code: string | null;
+  organ_system_code: string | null;
+  use_general: boolean;
+  use_ct: boolean;
+  use_mr: boolean;
+  use_us: boolean;
+}
+
+export interface RadJj1017CodePayload {
+  element?: string;
+  code?: string;
+  name?: string;
+  name_english?: string | null;
+  common_name?: string | null;
+  note?: string | null;
+}
+
+// 要素の定義。32桁コード内の位置(offset/length)もサーバーが持つ値をそのまま使い、
+// 画面側で桁の割り当てを持たない。
+export interface RadJj1017Element {
+  element: string;
+  label: string;
+  table: string;
+  offset: number;
+  length: number;
+  extension_allowed: boolean;
+  extension_label: string | null;
+  official_count: number;
+  local_count: number;
+}
+
+export interface RadJj1017Elements {
+  code_length: number;
+  generic_extension: { offset: number; length: number };
+  elements: RadJj1017Element[];
+}
+
+// JJ1017 の代表的頻用コード集(別表F)。オーダー項目の初期データの種。
+export interface RadFrequentCode {
+  id: number;
+  // rad_exam | ultrasound | radiotherapy
+  category: string;
+  jj1017_code: string;
+  name: string;
+  display_order: number | null;
+}
+
+// 放射線オーダー項目。JJ1017 の各要素をコードで持ち、32桁コードは保存時に
+// サーバーが要素から組み立てる。
+export interface RadItem {
+  id: number;
+  item_code: string;
+  name: string;
+  short_name: string | null;
+  name_kana: string | null;
+  // single=単項目 / set=複数の撮影をまとめて依頼するもの
+  kind: string;
+  modality_code: string | null;
+  procedure_major_code: string | null;
+  procedure_minor_code: string | null;
+  procedure_extension_code: string | null;
+  body_part_code: string | null;
+  laterality_code: string | null;
+  body_position_code: string | null;
+  direction_code: string | null;
+  detail_position_code: string | null;
+  special_instruction_code: string | null;
+  nuclide_code: string | null;
+  // 15〜16桁目の拡張(汎用)。部品コード表を持たない共通拡張領域。
+  generic_extension_code: string | null;
+  jj1017_code: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  receipt_code: string | null;
+  display_order: number | null;
+  note: string | null;
+}
+
+// 要素コード → 名称。一覧・詳細APIが載っているコードの分だけ添えて返す。
+export type RadElementNames = Record<string, Record<string, string>>;
+
+export interface RadItemSearchResult extends MasterSearchResult<RadItem> {
+  elements: RadElementNames;
+}
+
+// セットの構成。member_name 以降は詳細APIがオーダー項目から付与する。
+export interface RadSetItem {
+  id: number;
+  set_item_code: string;
+  member_item_code: string;
+  display_order: number | null;
+  note: string | null;
+  member_name?: string | null;
+  member_short_name?: string | null;
+  member_jj1017_code?: string | null;
+}
+
+export interface RadItemDetail extends RadItem {
+  elements: RadElementNames;
+  set_items: RadSetItem[];
+}
+
+export interface RadItemPayload {
+  item_code?: string;
+  name?: string;
+  short_name?: string | null;
+  name_kana?: string | null;
+  kind?: string;
+  modality_code?: string | null;
+  procedure_major_code?: string | null;
+  procedure_minor_code?: string | null;
+  procedure_extension_code?: string | null;
+  body_part_code?: string | null;
+  laterality_code?: string | null;
+  body_position_code?: string | null;
+  direction_code?: string | null;
+  detail_position_code?: string | null;
+  special_instruction_code?: string | null;
+  nuclide_code?: string | null;
+  generic_extension_code?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  receipt_code?: string | null;
+  display_order?: number | null;
+  note?: string | null;
+}
+
+export interface RadSetItemPayload {
+  set_item_code: string;
+  member_item_code: string;
+  display_order?: number | null;
+  note?: string | null;
+}
+
+// 頻用コードからの一括作成の結果。作らなかったもの(登録済み)と、
+// 作れなかったもの(検証エラー)を分けて返す。
+export interface RadBulkCreateResult {
+  created: number;
+  skipped: { jj1017_code: string; name: string }[];
+  errors: { jj1017_code: string; name: string; messages: string[] }[];
+  items: RadItem[];
+}
+
+// 放射線オーダーレイアウト(伝票のようなグリッド)。1マスの中身は
+// RadItemLayoutCell が持つ。
+export interface RadItemLayout {
+  id: number;
+  name: string;
+  row_count: number;
+  column_count: number;
+  display_order: number | null;
+  active: boolean;
+  note: string | null;
+}
+
+export interface RadItemLayoutCell {
+  id: number;
+  layout_id: number;
+  grid_row: number;
+  grid_column: number;
+  // item=放射線オーダー項目 / label=表示専用の文言
+  cell_type: string;
+  item_code: string | null;
+  // item: 伝票上の表示名(空ならオーダー項目名) / label: 表示文言
+  display_name: string | null;
+  item_name?: string | null;
+  item_short_name?: string | null;
+  item_kind?: string | null;
+}
+
+export interface RadItemLayoutDetail extends RadItemLayout {
+  cells: RadItemLayoutCell[];
+  // 行数・列数を縮めたとき、範囲外で片付けられたセルの数(update の応答のみ)。
+  removed_cells?: number;
+}
+
+export interface RadItemLayoutPayload {
+  name?: string;
+  row_count?: number;
+  column_count?: number;
+  display_order?: number | null;
+  active?: boolean;
+  note?: string | null;
+}
+
+export interface RadItemLayoutCellPayload {
+  layout_id: number;
+  grid_row: number;
+  grid_column: number;
+  cell_type?: string;
+  item_code?: string | null;
+  display_name?: string | null;
+}
+
+const RAD_JJ1017_CODES_PATH = "/master/rad_jj1017_codes";
+
+export async function searchRadJj1017Codes(params: {
+  element?: string;
+  /** コード。カンマ区切りで複数指定できる。 */
+  code?: string;
+  /** official | local */
+  source?: string;
+  /** 部位の候補を撮影種別で絞る(general | ct | mr | us)。 */
+  modality_use?: string;
+  name?: string;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<RadJj1017Code>> {
+  const search = new URLSearchParams();
+  if (params.element) search.set("element", params.element);
+  if (params.code) search.set("code", params.code);
+  if (params.source) search.set("source", params.source);
+  if (params.modality_use) search.set("modality_use", params.modality_use);
+  if (params.name) search.set("name", params.name);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${RAD_JJ1017_CODES_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<RadJj1017Code>;
+}
+
+export async function fetchRadJj1017Elements(): Promise<RadJj1017Elements> {
+  const res = await masterFetch(`${RAD_JJ1017_CODES_PATH}/elements`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadJj1017Elements;
+}
+
+// 全要素のコードを要素名でまとめたもの。オーダー項目の編集画面が11要素すべての
+// 選択肢を一度に組み立てるために使う。
+export type RadJj1017Catalog = Record<string, RadJj1017Code[]>;
+
+export async function fetchRadJj1017Catalog(): Promise<RadJj1017Catalog> {
+  const res = await masterFetch(`${RAD_JJ1017_CODES_PATH}/catalog`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadJj1017Catalog;
+}
+
+export async function createRadJj1017Code(payload: RadJj1017CodePayload): Promise<RadJj1017Code> {
+  const res = await masterFetch(RAD_JJ1017_CODES_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadJj1017Code;
+}
+
+export async function updateRadJj1017Code(
+  id: number,
+  payload: RadJj1017CodePayload,
+): Promise<RadJj1017Code> {
+  const res = await masterFetch(`${RAD_JJ1017_CODES_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadJj1017Code;
+}
+
+export async function deleteRadJj1017Code(id: number): Promise<void> {
+  const res = await masterFetch(`${RAD_JJ1017_CODES_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+export async function searchRadFrequentCodes(params: {
+  category?: string;
+  /** 32桁コードの先頭1桁。カンマ区切りで複数指定できる。 */
+  modality_code?: string;
+  /** 32桁コードの8〜10桁目。カンマ区切りで複数指定できる。 */
+  body_part_code?: string;
+  /** true ならオーダー項目として未登録のものだけ。 */
+  unregistered?: boolean;
+  name?: string;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<RadFrequentCode>> {
+  const search = new URLSearchParams();
+  if (params.category) search.set("category", params.category);
+  if (params.modality_code) search.set("modality_code", params.modality_code);
+  if (params.body_part_code) search.set("body_part_code", params.body_part_code);
+  if (params.unregistered) search.set("unregistered", "true");
+  if (params.name) search.set("name", params.name);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`/master/rad_frequent_codes?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<RadFrequentCode>;
+}
+
+const RAD_ITEMS_PATH = "/master/rad_items";
+
+export async function searchRadItems(params: {
+  name?: string;
+  /** 項目コード。カンマ区切りで複数指定できる。 */
+  item_code?: string;
+  kind?: string;
+  modality_code?: string;
+  body_part_code?: string;
+  /** true なら今日オーダーできる項目(有効期間内)だけ。 */
+  active?: boolean;
+  page?: number;
+  per?: number;
+}): Promise<RadItemSearchResult> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.item_code) search.set("item_code", params.item_code);
+  if (params.kind) search.set("kind", params.kind);
+  if (params.modality_code) search.set("modality_code", params.modality_code);
+  if (params.body_part_code) search.set("body_part_code", params.body_part_code);
+  if (params.active) search.set("active", "true");
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${RAD_ITEMS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadItemSearchResult;
+}
+
+// 要素の名称とセット構成を添えた詳細。項目コードでも id でも引ける。
+export async function fetchRadItem(idOrCode: string | number): Promise<RadItemDetail> {
+  const res = await masterFetch(`${RAD_ITEMS_PATH}/${encodeURIComponent(String(idOrCode))}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadItemDetail;
+}
+
+export async function createRadItem(payload: RadItemPayload): Promise<RadItem> {
+  const res = await masterFetch(RAD_ITEMS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadItem;
+}
+
+export async function updateRadItem(id: number, payload: RadItemPayload): Promise<RadItem> {
+  const res = await masterFetch(`${RAD_ITEMS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadItem;
+}
+
+export async function deleteRadItem(id: number): Promise<void> {
+  const res = await masterFetch(`${RAD_ITEMS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+export async function bulkCreateRadItemsFromFrequent(
+  frequentCodeIds: number[],
+): Promise<RadBulkCreateResult> {
+  const res = await masterFetch(`${RAD_ITEMS_PATH}/bulk_create_from_frequent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ frequent_code_ids: frequentCodeIds }),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadBulkCreateResult;
+}
+
+export async function searchRadSetItems(params: {
+  /** セットの項目コード。カンマ区切りで複数指定できる。 */
+  set_item_code?: string;
+  member_item_code?: string;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<RadSetItem>> {
+  const search = new URLSearchParams();
+  if (params.set_item_code) search.set("set_item_code", params.set_item_code);
+  if (params.member_item_code) search.set("member_item_code", params.member_item_code);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`/master/rad_set_items?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<RadSetItem>;
+}
+
+export async function createRadSetItem(payload: RadSetItemPayload): Promise<RadSetItem> {
+  const res = await masterFetch("/master/rad_set_items", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadSetItem;
+}
+
+export async function deleteRadSetItem(id: number): Promise<void> {
+  const res = await masterFetch(`/master/rad_set_items/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+const RAD_ITEM_LAYOUTS_PATH = "/master/rad_item_layouts";
+
+export async function fetchRadItemLayouts(): Promise<MasterSearchResult<RadItemLayout>> {
+  const res = await masterFetch(`${RAD_ITEM_LAYOUTS_PATH}?per=100`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<RadItemLayout>;
+}
+
+export async function fetchRadItemLayout(id: number): Promise<RadItemLayoutDetail> {
+  const res = await masterFetch(`${RAD_ITEM_LAYOUTS_PATH}/${id}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadItemLayoutDetail;
+}
+
+export async function createRadItemLayout(payload: RadItemLayoutPayload): Promise<RadItemLayout> {
+  const res = await masterFetch(RAD_ITEM_LAYOUTS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadItemLayout;
+}
+
+export async function updateRadItemLayout(
+  id: number,
+  payload: RadItemLayoutPayload,
+): Promise<RadItemLayoutDetail> {
+  const res = await masterFetch(`${RAD_ITEM_LAYOUTS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadItemLayoutDetail;
+}
+
+export async function deleteRadItemLayout(id: number): Promise<void> {
+  const res = await masterFetch(`${RAD_ITEM_LAYOUTS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+export async function createRadItemLayoutCell(
+  payload: RadItemLayoutCellPayload,
+): Promise<RadItemLayoutCell> {
+  const res = await masterFetch("/master/rad_item_layout_cells", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadItemLayoutCell;
+}
+
+export async function updateRadItemLayoutCell(
+  id: number,
+  payload: Partial<RadItemLayoutCellPayload>,
+): Promise<RadItemLayoutCell> {
+  const res = await masterFetch(`/master/rad_item_layout_cells/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadItemLayoutCell;
+}
+
+export async function deleteRadItemLayoutCell(id: number): Promise<void> {
+  const res = await masterFetch(`/master/rad_item_layout_cells/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
 

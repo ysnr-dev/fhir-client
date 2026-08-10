@@ -4554,7 +4554,7 @@ body.karte-wide .app__header {
 /* 検査オーダーレイアウト ------------------------------------------------- */
 
 /* レイアウト選択・名前・行数・列数の1行フォーム。 */
-.lab-layout__bar {
+.order-layout__bar {
   display: flex;
   flex-wrap: wrap;
   gap: 12px 16px;
@@ -4562,16 +4562,16 @@ body.karte-wide .app__header {
   margin-bottom: 12px;
 }
 
-.lab-layout__bar label {
+.order-layout__bar label {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
 }
 
-.lab-layout__bar input[type="text"],
-.lab-layout__bar input[type="number"],
-.lab-layout__bar select {
+.order-layout__bar input[type="text"],
+.order-layout__bar input[type="number"],
+.order-layout__bar select {
   font: inherit;
   font-size: 14px;
   padding: 4px 6px;
@@ -4581,27 +4581,27 @@ body.karte-wide .app__header {
   color: var(--text);
 }
 
-.lab-layout__bar input[type="number"] {
+.order-layout__bar input[type="number"] {
   width: 72px;
 }
 
-.lab-layout__bar-actions {
+.order-layout__bar-actions {
   display: flex;
   gap: 8px;
 }
 
 /* 伝票グリッド。列数が多いときは枠内で横スクロールさせる。 */
-.lab-layout__grid-wrap {
+.order-layout__grid-wrap {
   overflow-x: auto;
   margin-bottom: 12px;
 }
 
-.lab-layout__grid {
+.order-layout__grid {
   border-collapse: collapse;
   table-layout: fixed;
 }
 
-.lab-layout__cell {
+.order-layout__cell {
   border: 1px solid var(--border);
   width: 140px;
   min-width: 140px;
@@ -4617,30 +4617,30 @@ body.karte-wide .app__header {
 }
 
 /* ラベル(表示専用)のマスは項目と見分けられるようにする。 */
-.lab-layout__cell--label {
+.order-layout__cell--label {
   background: var(--surface-panel);
   color: var(--text-h);
   font-weight: 600;
 }
 
-.lab-layout__cell.is-selected {
+.order-layout__cell.is-selected {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
-.lab-layout__cell.is-drag-over {
+.order-layout__cell.is-drag-over {
   background: var(--accent-bg);
 }
 
 /* 選択マスの編集(配置・表示名・削除)。グリッドの下に出す。 */
-.lab-layout__editor {
+.order-layout__editor {
   padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface-card);
 }
 
-.lab-layout__editor-row {
+.order-layout__editor-row {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -4648,14 +4648,14 @@ body.karte-wide .app__header {
   margin-bottom: 8px;
 }
 
-.lab-layout__editor-row label {
+.order-layout__editor-row label {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
 }
 
-.lab-layout__editor-row input[type="text"] {
+.order-layout__editor-row input[type="text"] {
   font: inherit;
   font-size: 14px;
   padding: 4px 6px;
@@ -4666,7 +4666,7 @@ body.karte-wide .app__header {
   min-width: 240px;
 }
 
-.lab-layout__editor-kind {
+.order-layout__editor-kind {
   font-size: 13px;
   color: var(--text-h);
   align-self: center;
@@ -4855,4 +4855,42 @@ body.karte-wide .app__header {
 .lab-order-panel__members li {
   font-size: 12px;
   color: var(--text);
+}
+
+/* 放射線検査マスタ ------------------------------------------------------- */
+
+/* 一覧の短い値の列(コード・Ver・区分など)。折り返すと読みにくいので抑える。 */
+.rad-code__compact,
+.rad-item__compact {
+  white-space: nowrap;
+}
+
+/* JJ1017 の32桁コード。桁位置を数えられるよう等幅で出す。 */
+.rad-frequent__code,
+.rad-item__preview {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 要素の桁位置・施設拡張の範囲などの案内文。指針を引かずに済ませるための説明。 */
+.rad-code__summary {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--text-muted, var(--text));
+}
+
+/* 別表1D(手技拡張)の通称名称。正式名称の後ろに小さく添える。 */
+.rad-code__common {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--text-muted, var(--text));
+}
+
+/* 配布ファイル由来でない(施設で足した)コードの目印。 */
+.rad-code__badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft, rgba(127, 127, 127, 0.18));
+  font-size: 11px;
 }
