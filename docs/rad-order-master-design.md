@@ -21,7 +21,9 @@
 - 頻用コード表（別表F）からの初期データ一括作成
 - 放射線オーダーレイアウト（検体検査レイアウトと同型）
 
-オーダー発行（ServiceRequest化）・会計連携・FHIA表現は次フェーズ（§9）。
+- オーダー入力画面とFHIR表現（§9。マスタに続けて実装した）
+
+会計連携・撮影実績（ImagingStudy）・読影レポートは未着手（§10）。
 
 ---
 
@@ -143,6 +145,9 @@ jj1017_code         -- 32桁の生成結果を保存（要素から自動合成�
                     --  kind=set はNULL。非unique index）
 valid_from / valid_to   -- 有効開始日・有効終了日（date）
 receipt_code        -- レセ電算コード（任意、検体検査と同様の紐付け用）
+-- オーダー画面の検査目的・特記事項を記入するテンプレート(Questionnaire)の canonical。
+-- 撮影項目ごとの既定で、オーダー時に別のテンプレートも選べる（§9.2）。
+purpose_template_canonical / remarks_template_canonical
 display_order / note
 search_name / search_short_name / search_kana
 
@@ -199,7 +204,7 @@ unique index (layout_id, grid_row, grid_column)
 - シート名→要素の対応: `別表A1*`→procedure_major、`別表A2*`→procedure_minor、`別表A3*`→procedure_extension、`別表B*`→body_part（B優先。Cシートは情報が少ない簡易版なので読まない）、`別表D1*`→body_position、`別表D2*`→direction、`別表E1*`→detail_position、`別表E2*`→special_instruction、`別表E3*`→nuclide、`別表F*`→頻用。シート名不一致は `MasterImport::ImportError`。
 - 列位置はヘッダ行（「整理番号」〜「コード値」）から動的に特定する（A1の補語列ずれ対策）。コード値空欄行・名称空欄行はスキップ。
 - `.xls` 対応のため **Gemfileに `roo-xls` を追加**（要イメージ再ビルド）。
-- **種別（modality, 18件）と左右等（laterality, 13件）はExcelに無いため `db/seeds.rb` + `db/seed_data/rad_jj1017_modalities.csv` / `rad_jj1017_lateralities.csv` で投入**（source=official扱い、既存行は上書きしない検体採取管と同方式）。Ver3.4差分（大分類3Y/4S・拡張LL）も同様に差分seed CSVで補う。
+- **種別（modality, 18件）と左右等（laterality, 13件）はExcelに無いため `db/seeds.rb` + `db/seed_data/rad_jj1017_codes.csv` で投入**（source=official扱い）。Ver3.4差分（大分類3Y/4S・拡張LL）も同じCSVに入れる。掲載順は要素ごとの現在の最大値の後ろに積むので、差分コードは取込済みの別表の末尾に付く。
 
 ---
 
@@ -271,23 +276,128 @@ API: `post :bulk_create_from_frequent`（`rad_order_items` の collection）、�
 
 - テーブルは§3の2表（構造は `master_lab_order_item_layout*` と同一、参照コードが `item_code` になるのみ）。
 - モデル制約も同一: MAX_SIZE=50、cell_typeごとの必須項目、layout範囲内チェック、行列縮小時の範囲外セル削除（`removed_cells` 返却）、セル移動時の占有セルswap。
-- UI: `LabOrderItemLayoutPage`（レイアウト選択→`LayoutEditor`（グリッド＋ドラッグ&ドロップ）→`CellEditor`）を流用実装。CSSクラスは `rad-layout__*`。
-- オーダー入力画面での消費（activeなレイアウト→タブ表示、セット項目の事前展開）は放射線オーダー入力フェーズで検体検査の `LabOrderForm` パターンを踏襲予定。
+- UI: `LabOrderItemLayoutPage`（レイアウト選択→`LayoutEditor`（グリッド＋ドラッグ&ドロップ）→`CellEditor`）を流用実装。
+- オーダー入力画面での消費（activeなレイアウト→タブ表示、セット項目の事前展開）は§9。
 
 API: `resources :rad_item_layouts, only: %i[index show create update destroy]`、`resources :rad_item_layout_cells, only: %i[create update destroy]`。
 
+実装メモ: レイアウト編集の見た目は検体検査と共通なので、CSSクラスは `rad-layout__*` を新設せず
+`lab-layout__*` → **`order-layout__*`** に改名して共用した（オーダー入力側も同様に
+`lab-order-panel__*` → `order-select__*`）。
+
 ---
 
-## 9. 次フェーズへの申し送り（本設計のスコープ外）
+## 9. オーダー入力画面とFHIR表現（実装済み）
 
-1. **オーダー発行のFHIR表現**: ServiceRequest.code に 独自項目コード（`http://fhir-client.local/CodeSystem/rad-order-item`）＋JJ1017-32 の並記を想定。JJ1017の標準system URI（JP Core / JAHIS放射線データ交換規約での定義有無）は要調査。セットは検体検査同様 basedOn 連鎖で表現できる見込み。
+検体検査オーダーと同型。カルテ右ペインの「放射線検査」から登録し、カードの
+DO / 編集 / 詳細表示 / FHIR JSON表示 / 削除も検体検査と同じ導線で動く。
+
+### 9.1 FHIR の構造
+
+［提案］ヘッダも明細も ServiceRequest。検体検査とまったく同じ親子関係にする。
+
+```text
+ヘッダ ServiceRequest（category に order-type=rad）
+  ← basedOn ── 明細（単項目・セット）
+                 ← basedOn ── セットの構成項目
+```
+
+明細1件の中身:
+
+| FHIR要素 | 入れるもの |
+|---|---|
+| `code.coding` | 独自項目コード（`.../CodeSystem/rad-order-item`）、**JJ1017-32**、**JJ1017-16M**（前半16桁）、**JJ1017-16S**（後半16桁）、略称 |
+| `code.text` | 項目名称 |
+| `category` | 種別（モダリティ）。`.../CodeSystem/jj1017-modality` |
+| `bodySite` | 部位（`.../CodeSystem/jj1017p`）＋左右（`.../CodeSystem/jj1017-laterality`）、`text` は「右 膝関節」 |
+| `identifier` | 伝票で選んだ並び順（`.../IdSystem/rad-order-item-number`） |
+| `reasonReference` / `reasonCode` | 依頼病名。登録病名から選んだなら Condition 参照、フリーテキストなら `reasonCode.text`（GP を表す明細のみ） |
+| `extension[rad-exam-purpose]` | 検査目的（GP を表す明細のみ） |
+| `note` | 特記事項（GP を表す明細のみ） |
+
+- ［事実］**JJ1017 には FHIR 用の公式 system URI が無い**。JP Core の ImagingStudy Radiology Profile は
+  `bodySite` に「JJ1017P の小部位コードの利用を許容する」、`laterality` に「JJ1017P の左右コードの利用を
+  許容する」と書くだけで、URI は定義していない（`procedureCode` は RadLex にバインド）。
+  そのため他のローカルコードと同じ `fhir-client.local` の URI を使い、末尾は JJ1017 指針が定める
+  符号化系指定子（JJ1017-32 / JJ1017-16M / JJ1017-16S / JJ1017P）に合わせた。
+- ［導出］**16M / 16S も併記する**のは、DICOM の符号値が16バイト上限で、受け手の RIS が前半を
+  予約済みプロトコル符号シーケンス、後半をプロトコル コンテキスト シーケンスに載せ替えるため
+  （指針 4.2 / 5.2）。復元は JJ1017-32 だけから行い、16M/16S は導出値として書くだけ。
+- ［導出］**部位・左右を bodySite にも出す**のは、JP Core が同時に「JJ1017 は手技のほか部位・左右も
+  含むので bodySite・laterality との整合に注意」と述べているため。32桁コードと同じ値をそのまま出す
+  ことで、二重に持ちながら食い違わないようにしている。
+- セット（kind=set）は撮影そのものではないので **JJ1017 コードを持たない**。構成項目がそれぞれ持つ。
+- `orderDetail` は使わない。撮影条件（体位・方向・詳細体位・特殊指示・核種）は32桁コードに
+  含まれており、要素を個別に並べても JJ1017 を解さない受け手には意味が伝わらないため。
+- ［提案］**依頼病名・検査目的・特記事項は GP 単位**（単項目ならその項目、セットならセット親）
+  の明細に載せる。構成項目には載せない。
+  - 特記事項は `note`（Annotation は「その依頼へのコメント」そのもの）。
+  - 検査目的は当てはまる標準要素が無い（`reason*` は依頼病名で使う）ので
+    `.../StructureDefinition/rad-exam-purpose` のローカル拡張にした。
+
+### 9.2 画面
+
+［提案］`RadOrderForm`。検体検査の `LabOrderForm` と同じ構成だが、**まとめる単位が違う**。
+検体検査は検体（採血管）ごとに GP をまとめるのに対し、放射線は **1 GP = 撮影項目 1 つ**、
+ただし**セットは親を 1 GP とし、構成する撮影を GP の中身として並べる**。
+
+- 検査共通: 対象プロブレム / 入外区分 / 至急区分 / 撮影日 / ＋依頼コメント（オーダー全体への申し送り）
+- 項目選択: activeなレイアウトをタブに並べ＋「撮影項目検索」タブ。
+  **伝票のマスはチェックボックスを置かず、マスごとクリックで選択・解除**する
+  （伝票を指でなぞる操作に近く、当たり判定も広い）。選択中は塗りと枠で示す
+- セットを選ぶと構成項目をマスタから引いて自動展開。伝票上の選択状態も連動し、構成項目だけを
+  外せばそのセットからその撮影を除いてオーダーできる（検体検査のパネルと同じ挙動）
+- GP ごとに **依頼病名 / 検査目的 / 特記事項** を入力する
+  - 依頼病名: 登録病名（プロブレム＋レセプト病名）のセレクトか直接入力。セレクトで選ぶと
+    文字列も入り、手で書き換えると Condition との紐付けは外れる（別の文言になるため）
+  - 検査目的・特記事項: 直接入力に加えて「テンプレート」ボタンで診療記録（SOAP）と同じ
+    テンプレート記入モーダルを開ける。撮影項目マスタに既定テンプレートがあれば最初から選択済み
+- 選んだ項目はマスタの写し（`RadOrderItemLine`）。マスタを直しても過去のオーダーは変わらない
+- GP の種別（モダリティ）表示は、セット自身が種別を持たないので構成項目から採る
+
+実装メモ: テンプレート記入の結果は **平文だけを欄に差し込み、QuestionnaireResponse は保存しない**。
+同じ欄をフリーテキストでも書ける仕様なので、SOAP のように「テンプレート由来の本文は直接編集不可」に
+すると矛盾する。記入後もそのまま手で直せる。
+
+マスタ側（`/rad-items` の編集モーダル「既定のテンプレート」）は撮影項目ごとに検査目的・特記事項の
+既定テンプレートを持つ。値は Questionnaire の canonical（`master_rad_items.purpose_template_canonical` /
+`remarks_template_canonical`）。id ではなく canonical にしたのは、テンプレートを作り直しても
+指し先が変わらないようにするため（`QuestionnaireResponse.questionnaire` と同じ形）。
+
+追加ファイル: `fhir/radOrderHelpers.ts`、`components/RadOrderForm.tsx` /
+`RadOrderPanels.tsx` / `RadOrderDetailPanel.tsx`、`hooks/useRadOrderInitialValues.ts` /
+`useConditionOptions.ts`、`api/queries.ts` に `useRadOrderDetail` / `useDeleteRadOrder`。
+`ClinicalNoteTemplateModal` には既定テンプレートを最初から選ぶ `defaultCanonical` を足した。
+カルテ側は `karteTimeline.ts` に `rad-order` 種別を足し、`KarteRightPane` / `KarteTimeline` /
+`KarteCardModals` / `karteUrl` / `KartePage` に検体検査と同じ分岐を追加。
+
+タイムラインの取得は既存のまま。`based-on:missing=true` でヘッダだけを1ページの対象にし、
+明細は `_revinclude:iterate=ServiceRequest:based-on` で同じ応答に添えてもらう作りが
+オーダー種別に依存しないため、放射線オーダーはそのまま乗った。
+
+### 9.3 検証したこと
+
+開発環境で、セット＋CT の4項目を登録 → カード表示 → 詳細表示 → 編集（構成項目を1件外し、
+CTを1件追加）→ DO → 削除、まで通した。編集では PUT / POST / DELETE が混在した transaction
+になり、外した明細がサーバーから消え、親を失った明細（孤児）が残らないことを確認した。
+
+---
+
+## 10. 次フェーズへの申し送り
+
+1. **実施・結果**: 撮影実績（ImagingStudy）と読影レポート（DiagnosticReport Radiology Profile）は未実装。
+   検体検査でいう「検査結果」に相当し、カードの「検査結果表示」導線も放射線には無い。
+   JP Core は ImagingStudy に `bodySite` / `laterality` / `procedureCode` を定義しているので、
+   §9.1 と同じコードをそのまま渡せる想定。
 2. **会計連携**: `receipt_code` 列は用意するが、レセ電算コードとの対応付け運用は未設計。
 3. **Ver3.4別表の正式取込**: Excel配布が確認できず、当面Ver3.3＋差分seedで運用。JSRT（office@jsrt.or.jp）にVer3.4のExcel/CSV配布有無を確認する価値あり。
 4. **放射線治療オーダー**: 頻用F3・治療系コードは取込対象に含めるが、照射指示（回数・線量分割等）のオーダー属性はJJ1017の範囲外であり別途設計が必要。
+5. **JJ1017 の system URI**: 公式 URI が定義されたら `radOrderHelpers.ts` の定数を差し替える
+   （読み出しは system 一致で引いているので、移行時は旧 URI も読む分岐が要る）。
 
 ---
 
-## 10. 実装したもの
+## 11. 実装したもの（マスタ）
 
 | 層 | 追加物 |
 |---|---|
@@ -296,7 +406,8 @@ API: `resources :rad_item_layouts, only: %i[index show create update destroy]`�
 | 取込 | `MasterImport::ExcelSource`（.xls/.xlsx 共通の入口）、`RadJj1017CodeImporter` / `RadFrequentCodeImporter`。Gemfile に `roo-xls`（**イメージ再ビルド必要**） |
 | seed | `db/seed_data/rad_jj1017_codes.csv`（種別18・左右13・Ver3.4差分3）。**別表A を取り込み直したら `db:seed` を再実行する** |
 | API | `rad_jj1017_codes`（+import/elements/catalog）、`rad_frequent_codes`（+import）、`rad_items`（+bulk_create_from_frequent）、`rad_set_items`、`rad_item_layouts`、`rad_item_layout_cells` |
-| 画面 | `/rad-jj1017-codes`、`/rad-items`、`/rad-item-layouts`、マスタ取込に2種別追加。ナビは 管理 → マスタメンテナンス → 放射線検査 |
+| 画面(マスタ) | `/rad-jj1017-codes`、`/rad-items`、`/rad-item-layouts`、マスタ取込に2種別追加。ナビは 管理 → マスタメンテナンス → 放射線検査 |
+| 画面(オーダー) | カルテ右ペインの「放射線検査」。§9 参照 |
 | spec | 取込2本・リクエスト5本（backend 全546 examples green） |
 
 ついでに直したもの: レイアウト編集の CSS クラスを `lab-layout__*` → `order-layout__*` に改名した

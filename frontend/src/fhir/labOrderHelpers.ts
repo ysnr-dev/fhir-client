@@ -655,8 +655,11 @@ export function labOrderItemRequests(
   return serviceRequests.filter((request) => request.id !== headerId && descendants.has(request.id ?? ""));
 }
 
-/** ServiceRequest が別の ServiceRequest の明細か(タイムラインのカードにしない)。 */
-export function isLabOrderItemRequest(sr: fhir4.ServiceRequest): boolean {
+/**
+ * ServiceRequest が別の ServiceRequest の明細か(タイムラインのカードにしない)。
+ * 検体検査・放射線検査とも明細をヘッダの basedOn 先にするので、判定は共通。
+ */
+export function isOrderItemRequest(sr: fhir4.ServiceRequest): boolean {
   return Boolean(parentRequestId(sr));
 }
 

@@ -8,6 +8,7 @@ import {
 } from "../api/queries";
 import type { ClinicalNoteTemplateDraft } from "../fhir/clinicalNoteHelpers";
 import { displayJapaneseName } from "../fhir/humanName";
+import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { buildPopulateContext } from "../fhir/populateContext";
 import {
   buildQuestionnaireResponse,
@@ -34,6 +35,12 @@ interface ClinicalNoteTemplateModalProps {
   // 両方 null なら新規記入(テンプレート選択から始める)。
   draft: ClinicalNoteTemplateDraft | null;
   responseId: string | null;
+  /**
+   * 新規記入で最初から選んでおくテンプレートの canonical。放射線オーダーのように
+   * 「この項目ならこのテンプレート」がマスタで決まっている場合に渡す。
+   * 選び直しは妨げない。
+   */
+  defaultCanonical?: string;
   onSubmit: (draft: ClinicalNoteTemplateDraft) => void;
   onClose: () => void;
 }
@@ -42,6 +49,7 @@ export function ClinicalNoteTemplateModal({
   patientId,
   draft,
   responseId,
+  defaultCanonical,
   onSubmit,
   onClose,
 }: ClinicalNoteTemplateModalProps) {
@@ -59,6 +67,17 @@ export function ClinicalNoteTemplateModal({
   // 新規記入: 有効なテンプレートから選択。
   const options = useQuestionnaireOptions({ status: "active" });
   const [questionnaireId, setQuestionnaireId] = useState("");
+
+  // 既定テンプレートは候補が届いてから当てる(選択済みなら触らない)。
+  // 版まで一致しなければ URL だけで拾い、版が上がっても指し先を見失わないようにする。
+  useEffect(() => {
+    if (!defaultCanonical || questionnaireId || options.questionnaires.length === 0) return;
+    const url = defaultCanonical.split("|")[0];
+    const found =
+      options.questionnaires.find((q) => questionnaireCanonical(q) === defaultCanonical) ??
+      options.questionnaires.find((q) => q.url === url);
+    if (found?.id) setQuestionnaireId(found.id);
+  }, [defaultCanonical, options.questionnaires, questionnaireId]);
 
   const questionnaire =
     draft?.questionnaire ??

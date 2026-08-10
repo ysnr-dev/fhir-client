@@ -16,9 +16,12 @@ import {
   useRadSetItemMutations,
   type RadItemFilters,
 } from "../api/masterQueries";
+import { useQuestionnaireOptions } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import { RadFrequentCodeSearchModal } from "../components/RadFrequentCodeSearchModal";
+import { TemplateSelect } from "../components/TemplateSelect";
+import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 
 const KIND_LABELS: Record<string, string> = {
   single: "単項目",
@@ -54,6 +57,9 @@ interface Draft {
   receipt_code: string;
   display_order: string;
   note: string;
+  // 検査目的・特記事項の既定テンプレート(Questionnaire の canonical)。
+  purpose_template_canonical: string;
+  remarks_template_canonical: string;
 }
 
 const emptyDraft: Draft = {
@@ -68,6 +74,8 @@ const emptyDraft: Draft = {
   receipt_code: "",
   display_order: "",
   note: "",
+  purpose_template_canonical: "",
+  remarks_template_canonical: "",
 };
 
 // 要素コードは要素名をキーに持つ(列名は保存時に <要素名>_code へ写す)。
@@ -86,6 +94,8 @@ function toPayload(draft: Draft, elementCodes: ElementCodes, elementNames: strin
     receipt_code: draft.receipt_code || null,
     display_order: draft.display_order ? Number(draft.display_order) : null,
     note: draft.note || null,
+    purpose_template_canonical: draft.purpose_template_canonical || null,
+    remarks_template_canonical: draft.remarks_template_canonical || null,
   };
   for (const element of elementNames) {
     // セットは撮影そのものではないので要素を持たせない。
@@ -345,6 +355,8 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       receipt_code: d.receipt_code ?? "",
       display_order: d.display_order === null ? "" : String(d.display_order),
       note: d.note ?? "",
+      purpose_template_canonical: d.purpose_template_canonical ?? "",
+      remarks_template_canonical: d.remarks_template_canonical ?? "",
     });
     setElementCodes(readElementCodes(d));
   }, [detail.data]);
@@ -497,6 +509,12 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
           </label>
         </div>
 
+        <TemplateDefaults
+          purpose={draft.purpose_template_canonical}
+          remarks={draft.remarks_template_canonical}
+          onChange={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
+        />
+
         {isSet ? (
           <p className="rad-code__summary">
             セットは撮影そのものではないため JJ1017 の要素を持ちません。構成する単項目を下で登録してください。
@@ -561,6 +579,52 @@ function readElementCodes(item: RadItemDetail): ElementCodes {
     if (value) codes[key.slice(0, -"_code".length)] = value;
   }
   return codes;
+}
+
+// オーダー画面の「検査目的」「特記事項」を記入するときに最初から選ばれている
+// テンプレート。撮影項目ごとに決めておくもので、オーダー時に別のものへ変えられる。
+function TemplateDefaults({
+  purpose,
+  remarks,
+  onChange,
+}: {
+  purpose: string;
+  remarks: string;
+  onChange: (patch: { purpose_template_canonical?: string; remarks_template_canonical?: string }) => void;
+}) {
+  const templates = useQuestionnaireOptions({ status: "active" });
+
+  // マスタは canonical で持ち、TemplateSelect は Questionnaire.id で扱うので変換する。
+  const idOf = (canonical: string) =>
+    templates.questionnaires.find((q) => questionnaireCanonical(q) === canonical)?.id ?? "";
+  const canonicalOf = (id: string) => {
+    const questionnaire = templates.questionnaires.find((q) => q.id === id);
+    return questionnaire ? questionnaireCanonical(questionnaire) : "";
+  };
+
+  return (
+    <section className="lab-order-item__section">
+      <div className="lab-order-item__section-head">
+        <h3>既定のテンプレート</h3>
+        <span className="rad-code__summary">オーダー画面の検査目的・特記事項の記入に使う</span>
+      </div>
+      <ErrorBanner error={templates.error} />
+      <div className="rad-item__templates">
+        <TemplateSelect
+          label="検査目的"
+          questionnaires={templates.questionnaires}
+          value={idOf(purpose)}
+          onChange={(id) => onChange({ purpose_template_canonical: canonicalOf(id) })}
+        />
+        <TemplateSelect
+          label="特記事項"
+          questionnaires={templates.questionnaires}
+          value={idOf(remarks)}
+          onChange={(id) => onChange({ remarks_template_canonical: canonicalOf(id) })}
+        />
+      </div>
+    </section>
+  );
 }
 
 interface ElementFieldsProps {

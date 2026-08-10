@@ -118,6 +118,19 @@ RSpec.describe "Master::RadItems", type: :request do
       expect(body["errors"].join).to include("部位(小部位)")
     end
 
+    it "検査目的・特記事項の既定テンプレートを保存する" do
+      post "/master/rad_items", params: {
+        item_code: "R0001", name: "胸部単純Ｘ線",
+        purpose_template_canonical: "http://example.com/Questionnaire/rad-purpose|1.0",
+        remarks_template_canonical: "http://example.com/Questionnaire/rad-remarks"
+      }
+
+      expect(response).to have_http_status(:created)
+      record = Master::RadItem.find_by(item_code: "R0001")
+      expect(record.purpose_template_canonical).to eq("http://example.com/Questionnaire/rad-purpose|1.0")
+      expect(record.remarks_template_canonical).to eq("http://example.com/Questionnaire/rad-remarks")
+    end
+
     it "有効終了日が有効開始日より前なら登録できない" do
       post "/master/rad_items", params: { item_code: "R0001", name: "期間おかしい",
                                           valid_from: "2026-08-01", valid_to: "2026-07-01" }

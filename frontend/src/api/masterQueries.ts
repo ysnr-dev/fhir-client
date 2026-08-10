@@ -72,6 +72,7 @@ import {
   searchRadFrequentCodes,
   searchRadItems,
   searchRadJj1017Codes,
+  searchRadSetItems,
   updateRadItem,
   updateRadItemLayout,
   updateRadItemLayoutCell,
@@ -81,6 +82,8 @@ import {
   type RadItemPayload,
   type RadJj1017CodePayload,
   type RadSetItemPayload,
+  type RadItemSearchResult,
+  type RadSetItem,
 } from "./masterClient";
 
 export interface MedicineUsageFilters {
@@ -944,4 +947,56 @@ export function useRadItemLayoutCellMutations() {
       onSuccess: invalidate,
     }),
   };
+}
+
+// 放射線オーダー画面用 --------------------------------------------------
+
+// 選択中の項目コードからマスタの内容(名称・JJ1017 の要素)を引き直す。
+// オーダー画面のプレビューと、保存時に FHIR へ写す値の取得元。
+// 検索APIが要素コードの名称(elements)も添えて返すので、種別・部位の名称も同時に揃う。
+export function useRadItemsByCodes(codes: string[]) {
+  const sorted = Array.from(new Set(codes)).sort();
+
+  return useQuery({
+    queryKey: [...RAD_ITEMS_KEY, "by_codes", sorted],
+    queryFn: () => searchRadItems({ item_code: sorted.join(","), per: 200 }),
+    enabled: sorted.length > 0,
+  });
+}
+
+// select はモジュールスコープに置く。ここで無名関数を渡すと呼び出しのたびに
+// 別の関数になり、react-query が結果を再利用できず data が毎回別オブジェクトに
+// なってしまう(それを依存に持つ effect が回り続ける)。
+function toSetMemberMap(result: MasterSearchResult<RadSetItem>): Map<string, string[]> {
+  const members = new Map<string, string[]>();
+  for (const member of result.items) {
+    const list = members.get(member.set_item_code);
+    if (list) list.push(member.member_item_code);
+    else members.set(member.set_item_code, [member.member_item_code]);
+  }
+  return members;
+}
+
+// セットの構成。「セットコード → 構成項目の項目コード」で返す。
+// オーダー画面でセットを選んだときに、その構成項目もオーダーに入れるために引く。
+// セットでない項目コードを混ぜても結果が増えないだけなので、呼ぶ側で選別しない。
+export function useRadSetMembers(setCodes: string[]) {
+  const sorted = Array.from(new Set(setCodes)).sort();
+
+  return useQuery({
+    queryKey: [...RAD_ITEMS_KEY, "set_members", sorted],
+    queryFn: () => searchRadSetItems({ set_item_code: sorted.join(","), per: 500 }),
+    select: toSetMemberMap,
+    enabled: sorted.length > 0,
+  });
+}
+
+/** 一覧APIが添えてくる要素コードの名称から、1 つ引く。 */
+export function elementName(
+  result: RadItemSearchResult | undefined,
+  element: string,
+  code: string | null | undefined,
+): string {
+  if (!code) return "";
+  return result?.elements?.[element]?.[code] ?? "";
 }

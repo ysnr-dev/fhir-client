@@ -357,7 +357,7 @@ export function LabOrderForm({
       </fieldset>
 
       {/* 検査伝票(レイアウト)と検査項目検索の切替。伝票が複数あればその数だけタブが並ぶ。 */}
-      <div className="lab-order-item__tabs" role="tablist">
+      <div className="order-select__tabs" role="tablist">
         {layoutTabs.map((tab) => {
           const selected = active?.kind === "layout" && active.id === tab.id;
           return (
@@ -366,7 +366,7 @@ export function LabOrderForm({
               type="button"
               role="tab"
               aria-selected={selected}
-              className={selected ? "lab-order-item__tab is-active" : "lab-order-item__tab"}
+              className={selected ? "order-select__tab is-active" : "order-select__tab"}
               onClick={() => setActive({ kind: "layout", id: tab.id })}
             >
               {tab.name}
@@ -378,7 +378,7 @@ export function LabOrderForm({
           role="tab"
           aria-selected={active?.kind === "search"}
           className={
-            active?.kind === "search" ? "lab-order-item__tab is-active" : "lab-order-item__tab"
+            active?.kind === "search" ? "order-select__tab is-active" : "order-select__tab"
           }
           onClick={() => setActive({ kind: "search" })}
         >
@@ -443,20 +443,20 @@ function LayoutSelectGrid({
   const columns = Array.from({ length: layout.column_count }, (_, i) => i + 1);
 
   return (
-    <div className="lab-order-panel__grid-wrap">
+    <div className="order-select__grid-wrap">
       <ErrorBanner error={error} />
-      <table className="lab-order-panel__grid">
+      <table className="order-select__grid">
         <tbody>
           {rows.map((row) => (
             <tr key={row}>
               {columns.map((column) => {
                 const cell = cellsByPosition.get(`${row}-${column}`);
                 if (!cell) {
-                  return <td key={column} className="lab-order-panel__cell" />;
+                  return <td key={column} className="order-select__cell" />;
                 }
                 if (cell.cell_type === "label") {
                   return (
-                    <td key={column} className="lab-order-panel__cell lab-order-panel__cell--label">
+                    <td key={column} className="order-select__cell order-select__cell--label">
                       {cell.display_name}
                     </td>
                   );
@@ -464,7 +464,7 @@ function LayoutSelectGrid({
                 const code = cell.order_item_code ?? "";
                 const master = catalogByCode.get(code);
                 return (
-                  <td key={column} className="lab-order-panel__cell">
+                  <td key={column} className="order-select__cell">
                     <label>
                       <input
                         type="checkbox"
@@ -507,7 +507,7 @@ function ItemSearchTab({
   }, [data, onResults]);
 
   return (
-    <div className="lab-order-panel__search">
+    <div className="order-select__search">
       <input
         type="text"
         value={name}
@@ -520,7 +520,7 @@ function ItemSearchTab({
       <ErrorBanner error={result.error} />
       {name.trim().length > 0 && (
         <>
-          <ul className="lab-order-panel__search-list">
+          <ul className="order-select__search-list">
             {data?.items.map((item) => (
               <li key={item.id}>
                 <label>
@@ -531,14 +531,14 @@ function ItemSearchTab({
                   />
                   {item.name}
                   {item.short_name && (
-                    <span className="lab-order-panel__muted">{item.short_name}</span>
+                    <span className="order-select__muted">{item.short_name}</span>
                   )}
                   {item.kind === "panel" && <span className="dose-conversion__badge">パネル</span>}
                 </label>
               </li>
             ))}
             {data && data.items.length === 0 && (
-              <li className="lab-order-panel__muted">該当する検査項目がありません</li>
+              <li className="order-select__muted">該当する検査項目がありません</li>
             )}
           </ul>
           <div className="master-search__pager">
@@ -578,11 +578,11 @@ function SelectionPreview({
   const groups = groupBySpecimen(items);
 
   return (
-    <section className="lab-order-panel__preview">
+    <section className="order-select__preview">
       <h3>選択中({items.length})</h3>
-      {items.length === 0 && <p className="lab-order-panel__muted">検査項目を選択してください</p>}
+      {items.length === 0 && <p className="order-select__muted">検査項目を選択してください</p>}
       {groups.map((group, index) => (
-        <div key={group.specimenCode || "unset"} className="lab-order-panel__group">
+        <div key={group.specimenCode || "unset"} className="order-select__group">
           <h4>
             GP{index + 1} {specimenGroupLabel(group)}
           </h4>
@@ -592,20 +592,20 @@ function SelectionPreview({
                 {entry.item.name}
                 <button
                   type="button"
-                  className="lab-order-panel__remove"
+                  className="order-select__remove"
                   onClick={() => onRemove(entry.item.code)}
                   aria-label={`${entry.item.name} を外す`}
                 >
                   ×
                 </button>
                 {entry.members.length > 0 && (
-                  <ul className="lab-order-panel__members">
+                  <ul className="order-select__members">
                     {entry.members.map((member) => (
                       <li key={member.code}>
                         {member.name}
                         <button
                           type="button"
-                          className="lab-order-panel__remove"
+                          className="order-select__remove"
                           onClick={() => onRemove(member.code)}
                           aria-label={`${member.name} をこのパネルから外す`}
                         >

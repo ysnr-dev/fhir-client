@@ -3,6 +3,7 @@ import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePa
 import { InjectionCreatePanel, InjectionEditPanel } from "./InjectionPanels";
 import { LabOrderCreatePanel, LabOrderEditPanel } from "./LabOrderPanels";
 import { PrescriptionCreatePanel, PrescriptionEditPanel } from "./PrescriptionPanels";
+import { RadOrderCreatePanel, RadOrderEditPanel } from "./RadOrderPanels";
 import {
   QuestionnaireResponseCreatePanel,
   QuestionnaireResponseEditPanel,
@@ -22,6 +23,8 @@ export type KartePaneState =
   | { kind: "injection-edit"; srId: string }
   | { kind: "lab-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "lab-order-edit"; srId: string }
+  | { kind: "rad-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "rad-order-edit"; srId: string }
   | { kind: "qr-create" }
   | { kind: "qr-edit"; qrId: string };
 
@@ -35,6 +38,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "injection-edit": "注射編集",
   "lab-order-create": "検体検査登録",
   "lab-order-edit": "検体検査編集",
+  "rad-order-create": "放射線検査登録",
+  "rad-order-edit": "放射線検査編集",
   "qr-create": "テンプレート登録",
   "qr-edit": "テンプレート編集",
 };
@@ -48,6 +53,7 @@ function paneKey(state: KartePaneState): string {
     case "prescription-edit":
     case "injection-edit":
     case "lab-order-edit":
+    case "rad-order-edit":
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
@@ -56,6 +62,7 @@ function paneKey(state: KartePaneState): string {
     case "prescription-create":
     case "injection-create":
     case "lab-order-create":
+    case "rad-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "note-create":
       return `${state.kind}:${state.problem?.conditionId ?? ""}`;
@@ -132,6 +139,12 @@ export function KarteRightPane({
         >
           検体検査
         </button>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "rad-order-create", problem: selectedProblem })}
+        >
+          放射線検査
+        </button>
       </div>
     </section>
   );
@@ -192,6 +205,17 @@ function PaneContent({
       );
     case "lab-order-edit":
       return <LabOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "rad-order-create":
+      return (
+        <RadOrderCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "rad-order-edit":
+      return <RadOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "qr-create":
       return <QuestionnaireResponseCreatePanel patientId={patientId} onSaved={onSaved} />;
     case "qr-edit":
