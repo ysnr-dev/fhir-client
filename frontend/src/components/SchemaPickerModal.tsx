@@ -113,7 +113,7 @@ export function SchemaPickerModal({ onSelect, onClose }: SchemaPickerModalProps)
             <p>読み込み中...</p>
           ) : items.length === 0 ? (
             <p className="patient-table__empty">
-              シェーマがありません。マスタメンテナンスの「シェーマ」から登録してください。
+              シェーマがありません。マスタメンテの「シェーマ」から登録してください。
             </p>
           ) : (
             <div className="schema-picker__grid">
