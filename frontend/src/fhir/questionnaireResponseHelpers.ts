@@ -202,8 +202,12 @@ export function schemaImageRefs(response: fhir4.QuestionnaireResponse): SchemaIm
   return refs;
 }
 
-// テンプレート内容を「タイトル + 入力内容」の平文にする(カルテ等への貼り付け用)。
-// 項目名は QuestionnaireResponse.item.text、単位は元 Questionnaire から引く。
+// 記入内容を平文にする(カルテ等への貼り付け用)。項目名は
+// QuestionnaireResponse.item.text、単位は元 Questionnaire から引く。
+//
+// テンプレート名は含めない。診療記録のセクション本文や放射線オーダーの検査目的の
+// ように、貼り付け先に見出しが別にある(あるいは要らない)場所で使うため。
+// テンプレート名まで要る「平文表示」は questionnaireResponseDocumentText を使う。
 export function questionnaireResponsePlainText(
   questionnaire: fhir4.Questionnaire,
   response: fhir4.QuestionnaireResponse,
@@ -218,7 +222,7 @@ export function questionnaireResponsePlainText(
     }
   })(questionnaire.item);
 
-  const lines: string[] = [questionnaire.title ?? questionnaire.name ?? "", ""];
+  const lines: string[] = [];
 
   (function walk(items: fhir4.QuestionnaireResponseItem[] | undefined, depth: number) {
     for (const item of items ?? []) {
@@ -243,6 +247,33 @@ export function questionnaireResponsePlainText(
   })(response.item, 0);
 
   return lines.join("\n");
+}
+
+// モーダルで記入したテンプレート内容(未保存)。診療記録・放射線オーダーとも、
+// 本体の保存と同じ transaction Bundle で QuestionnaireResponse として送る
+// (先に単独 POST しない — 本体を保存しなかったときに回答だけ残る孤児を防ぐ)。
+export interface TemplateDraft {
+  questionnaire: fhir4.Questionnaire;
+  response: fhir4.QuestionnaireResponse;
+  // シェーマ画像描き込みの Binary 作成エントリ(QR と同じ Bundle に同梱)。
+  imageEntries: fhir4.BundleEntry[];
+}
+
+// テンプレートから記載した箇所と、その回答の紐付け。
+export interface TemplateBinding {
+  // 保存済み QR の id。新規記入でまだ保存していなければ null。
+  responseId: string | null;
+  // 直近のモーダル記入内容。保存済みで再編集していなければ null。
+  draft: TemplateDraft | null;
+}
+
+/** テンプレート名を見出しに付けた平文。単独の文書として見せる「平文表示」用。 */
+export function questionnaireResponseDocumentText(
+  questionnaire: fhir4.Questionnaire,
+  response: fhir4.QuestionnaireResponse,
+): string {
+  const title = questionnaire.title ?? questionnaire.name ?? "";
+  return [title, "", questionnaireResponsePlainText(questionnaire, response)].join("\n");
 }
 
 // ---- バリデーション ----

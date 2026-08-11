@@ -33,6 +33,9 @@ gem "bootsnap", require: false
 # Read .xlsx master data files for bulk import
 gem "roo", "~> 2.10"
 
+# 旧 .xls 形式の配布ファイル用(JJ1017 の別表は大半が .xls)。roo 本体は .xlsx のみ。
+gem "roo-xls", "~> 1.2"
+
 # CSV parsing for master data import. No longer a default gem as of Ruby 3.4.
 gem "csv", "~> 3.3"
 

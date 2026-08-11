@@ -1,12 +1,14 @@
 import {
   useClinicalNote,
   useLabOrderDetail,
+  useRadOrderDetail,
   useLabResultDetail,
   usePrescriptionDetail,
   useQuestionnaireResponseWithQuestionnaire,
 } from "../api/queries";
 import { KARTE_KIND_LABELS, type KarteTimelineItem } from "../fhir/karteTimeline";
 import { labOrderItemRequests, serviceRequestsOf } from "../fhir/labOrderHelpers";
+import { radOrderItemRequests } from "../fhir/radOrderHelpers";
 import { splitLabResultDetailBundle } from "../fhir/labResultHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { splitPrescriptionDetailBundle } from "../fhir/prescriptionHelpers";
@@ -20,6 +22,7 @@ import { LabResultDetailPanel } from "./LabResultDetailPanel";
 import { Modal } from "./Modal";
 import { PrescriptionDetailPanel } from "./PrescriptionDetailPanel";
 import { QuestionnaireResponseDetailPanel } from "./QuestionnaireResponseDetailPanel";
+import { RadOrderDetailPanel } from "./RadOrderDetailPanel";
 
 // カルテのタイムラインから開くモーダル。詳細表示は各リソースの詳細ページと同じ
 // パネルを使うので、カードでは省いている情報(処方の DI リンクなど)も参照できる。
@@ -29,6 +32,7 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   prescription: "処方内容",
   injection: "注射内容",
   "lab-order": "検体検査内容",
+  "rad-order": "放射線検査内容",
   "lab-result": "検査結果内容",
   qr: "テンプレート表示",
 };
@@ -56,6 +60,8 @@ export function KarteDetailModal({
         <InjectionDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-order" ? (
         <LabOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+      ) : target.kind === "rad-order" ? (
+        <RadOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-result" ? (
         <LabResultDetail patientId={patientId} reportId={target.id} />
       ) : (
@@ -200,6 +206,41 @@ function LabOrderDetail({
   );
 }
 
+// 放射線検査も明細が ServiceRequest なので、ヘッダと明細を 1 リクエストで取る。
+function RadOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = useRadOrderDetail(srId);
+  const requests = serviceRequestsOf(detail.data?.data);
+  const serviceRequest = requests.find((request) => request.id === srId);
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された放射線検査は別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <RadOrderDetailPanel
+          serviceRequest={serviceRequest}
+          itemRequests={radOrderItemRequests(requests, srId)}
+          problemsById={problemsById}
+        />
+      ) : (
+        !detail.error && <NotFound label="放射線検査" />
+      )}
+    </>
+  );
+}
+
 // 検体検査のカードから開く「検査結果表示」。中身は検査結果タブの内容表示と同じ
 // パネルで、患者の取り違えだけここで弾く(パネルと同じクエリなので追加の取得は無い)。
 function LabResultDetail({ patientId, reportId }: { patientId: string; reportId: string }) {
@@ -263,6 +304,8 @@ export function KarteCardJsonModal({
         <PrescriptionJson srId={item.id} />
       ) : item.kind === "lab-order" ? (
         <LabOrderJson srId={item.id} />
+      ) : item.kind === "rad-order" ? (
+        <RadOrderJson srId={item.id} />
       ) : (
         <FhirJsonView resource={item.kind === "note" ? item.note : item.response} />
       )}
@@ -286,6 +329,18 @@ function PrescriptionJson({ srId }: { srId: string }) {
 // 検体検査もオーダーのヘッダと明細をまとめた Bundle で見せる。
 function LabOrderJson({ srId }: { srId: string }) {
   const detail = useLabOrderDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
+    </>
+  );
+}
+
+// 放射線検査もオーダーのヘッダと明細をまとめた Bundle で見せる。
+function RadOrderJson({ srId }: { srId: string }) {
+  const detail = useRadOrderDetail(srId);
 
   return (
     <>

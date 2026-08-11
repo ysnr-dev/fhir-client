@@ -1,6 +1,7 @@
 import { referencedResponseIds } from "./clinicalNoteHelpers";
 import { isInjectionServiceRequest } from "./injectionHelpers";
-import { isLabOrderItemRequest, isLabServiceRequest, labOrderItemRequests } from "./labOrderHelpers";
+import { isLabServiceRequest, isOrderItemRequest, labOrderItemRequests } from "./labOrderHelpers";
+import { isRadServiceRequest, radOrderItemRequests } from "./radOrderHelpers";
 import { questionnaireCanonical } from "./questionnaireResponseHelpers";
 
 // カルテ画面のタイムライン(診療日ごとの時系列表示)を組み立てる純粋ロジック。
@@ -13,13 +14,20 @@ import { questionnaireCanonical } from "./questionnaireResponseHelpers";
 // 処方・注射・検体検査は同じ ServiceRequest 検索(1 本のページング)で取得し、
 // category のオーダー種別でカードの種別に振り分ける。
 
-export type KarteItemKind = "note" | "prescription" | "injection" | "lab-order" | "qr";
+export type KarteItemKind =
+  | "note"
+  | "prescription"
+  | "injection"
+  | "lab-order"
+  | "rad-order"
+  | "qr";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   note: "診療記録",
   prescription: "処方",
   injection: "注射",
   "lab-order": "検体検査",
+  "rad-order": "放射線検査",
   qr: "テンプレート",
 };
 
@@ -54,6 +62,14 @@ export type KarteTimelineItem = KarteItemBase &
         itemRequests: fhir4.ServiceRequest[];
         /** このオーダーを元に登録された検査結果の id。空なら結果はまだ無い。 */
         reportId: string;
+      }
+    // 放射線検査も明細(撮影項目・セットの構成項目)が ServiceRequest なので、
+    // オーダーのヘッダにぶら下がるぶんを itemRequests に集めて渡す。
+    // 検査結果(ImagingStudy)との紐付けは未実装なので reportId は持たない。
+    | {
+        kind: "rad-order";
+        serviceRequest: fhir4.ServiceRequest;
+        itemRequests: fhir4.ServiceRequest[];
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
@@ -210,13 +226,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     note,
   }));
 
-  // 検体検査の明細(検査項目・パネルの構成項目)は ServiceRequest だが単独の
+  // 検体検査・放射線検査の明細(検査項目・構成項目)は ServiceRequest だが単独の
   // カードにはしない。オーダーのヘッダに紐づけて、カードの中身として出す。
-  const orderRequests = serviceRequests.filter((sr) => !isLabOrderItemRequest(sr));
-  const itemRequests = serviceRequests.filter(isLabOrderItemRequest);
+  const orderRequests = serviceRequests.filter((sr) => !isOrderItemRequest(sr));
+  const itemRequests = serviceRequests.filter(isOrderItemRequest);
 
-  // 処方・注射・検体検査は同じ検索結果に混ざって届くので、category のオーダー種別で
-  // 振り分ける(注射より前から存在する処方の ServiceRequest はオーダー種別を持たない)。
+  // 処方・注射・検体検査・放射線検査は同じ検索結果に混ざって届くので、category の
+  // オーダー種別で振り分ける(注射より前から存在する処方の ServiceRequest は
+  // オーダー種別を持たない)。
   const prescriptionItems: KarteTimelineItem[] = orderRequests.map((serviceRequest) => {
     const base = {
       id: serviceRequest.id ?? "",
@@ -231,6 +248,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         label: KARTE_KIND_LABELS["lab-order"],
         itemRequests: labOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
         reportId: reportIdByOrderId.get(serviceRequest.id ?? "") ?? "",
+      };
+    }
+    if (isRadServiceRequest(serviceRequest)) {
+      return {
+        ...base,
+        kind: "rad-order" as const,
+        label: KARTE_KIND_LABELS["rad-order"],
+        itemRequests: radOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
       };
     }
     const withMedications = {

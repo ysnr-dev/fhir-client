@@ -3,6 +3,7 @@ import {
   useBinaryImage,
   useDeleteClinicalNote,
   useDeleteLabOrder,
+  useDeleteRadOrder,
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
 } from "../api/queries";
@@ -32,6 +33,16 @@ import {
   summarizeLabOrder,
 } from "../fhir/labOrderHelpers";
 import {
+  bodySiteLabel,
+  entryLabel,
+  orderEntries,
+  radOrderComment,
+  radOrderItems,
+  radOrderProblem,
+  summarizeRadOrder,
+  type RadOrderItemLine,
+} from "../fhir/radOrderHelpers";
+import {
   groupByRp,
   orderContextSummary,
   prescriptionComment,
@@ -41,6 +52,7 @@ import {
 } from "../fhir/prescriptionHelpers";
 import {
   SCHEMA_IMAGE_NOTE,
+  questionnaireResponseDocumentText,
   questionnaireResponsePlainText,
   schemaImageRefs,
   summarizeQuestionnaireResponse,
@@ -184,6 +196,7 @@ function KarteCard({
   const deleteNote = useDeleteClinicalNote();
   const deletePrescription = useDeletePrescription();
   const deleteLabOrder = useDeleteLabOrder();
+  const deleteRadOrder = useDeleteRadOrder();
   const deleteResponse = useDeleteQuestionnaireResponse();
   // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
   // 詳細表示は URL に載せるので親に任せる。
@@ -194,9 +207,14 @@ function KarteCard({
     deleteNote.isPending ||
     deletePrescription.isPending ||
     deleteLabOrder.isPending ||
+    deleteRadOrder.isPending ||
     deleteResponse.isPending;
   const deleteError =
-    deleteNote.error ?? deletePrescription.error ?? deleteLabOrder.error ?? deleteResponse.error;
+    deleteNote.error ??
+    deletePrescription.error ??
+    deleteLabOrder.error ??
+    deleteRadOrder.error ??
+    deleteResponse.error;
 
   // テンプレートは帳票レイアウトが登録されているものだけ PDF 出力できる。
   // 他の種別では canonical を渡さないので照会自体が走らない。
@@ -213,8 +231,9 @@ function KarteCard({
     else if (item.kind === "prescription" || item.kind === "injection") {
       deletePrescription.mutate(item.id, options);
     }
-    // 検体検査は明細も ServiceRequest なので、専用の削除でまとめて消す。
+    // 検体検査・放射線検査は明細も ServiceRequest なので、専用の削除でまとめて消す。
     else if (item.kind === "lab-order") deleteLabOrder.mutate(item.id, options);
+    else if (item.kind === "rad-order") deleteRadOrder.mutate(item.id, options);
     else deleteResponse.mutate(item.id, options);
   }
 
@@ -239,7 +258,8 @@ function KarteCard({
         <span className="karte-card__actions">
           {(item.kind === "prescription" ||
             item.kind === "injection" ||
-            item.kind === "lab-order") && (
+            item.kind === "lab-order" ||
+            item.kind === "rad-order") && (
             <button
               type="button"
               className="karte-card__icon-button karte-card__icon-button--labeled"
@@ -332,7 +352,7 @@ function KarteCard({
       {plainTextOpen && item.kind === "qr" && item.questionnaire && (
         <PlainTextModal
           title="平文表示"
-          text={questionnaireResponsePlainText(item.questionnaire, item.response)}
+          text={questionnaireResponseDocumentText(item.questionnaire, item.response)}
           onClose={() => setPlainTextOpen(false)}
         />
       )}
@@ -375,6 +395,7 @@ function DocumentIcon() {
 function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "note") return clinicalNoteProblem(item.note);
   if (item.kind === "lab-order") return labOrderProblem(item.serviceRequest);
+  if (item.kind === "rad-order") return radOrderProblem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);
   }
@@ -397,9 +418,13 @@ function cardTitle(item: KarteTimelineItem): string {
     const summary = summarizeInjectionServiceRequest(item.serviceRequest);
     return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" | ");
   }
-  // 検体検査は入外区分と、至急のときだけ至急区分を並べる(通常はわざわざ出さない)。
-  if (item.kind === "lab-order") {
-    const summary = summarizeLabOrder(item.serviceRequest);
+  // 検体検査・放射線検査は入外区分と、至急のときだけ至急区分を並べる
+  // (通常はわざわざ出さない)。
+  if (item.kind === "lab-order" || item.kind === "rad-order") {
+    const summary =
+      item.kind === "lab-order"
+        ? summarizeLabOrder(item.serviceRequest)
+        : summarizeRadOrder(item.serviceRequest);
     return [summary.settingDisplay, summary.urgent ? summary.priorityDisplay : ""]
       .filter(Boolean)
       .join(" | ");
@@ -494,8 +519,8 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
               ))}
             </ul>
             {/* 紙の処方箋と同じく、用法は薬剤の後ろに置く。 */}
-            <div className="karte-rp__usage">
-              <span className="karte-rp__usage-label">用法:</span>
+            <div className="karte-rp__detail">
+              <span className="karte-rp__detail-label">用法:</span>
               <span>{rp.usageName ?? "-"}</span>
               {rp.basicCategory === "内服" && rp.doseDays != null && (
                 <span className="karte-rp__dose">{`${rp.doseDays}日分`}</span>
@@ -540,16 +565,16 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
                 </li>
               ))}
             </ul>
-            <div className="karte-rp__usage">
-              <span className="karte-rp__usage-label">用法:</span>
+            <div className="karte-rp__detail">
+              <span className="karte-rp__detail-label">用法:</span>
               <span>{injectionUsageSummary(rp) || "-"}</span>
               {rp.usageComment && (
                 <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>
               )}
             </div>
             {rp.startTimes.length > 0 && (
-              <div className="karte-rp__usage">
-                <span className="karte-rp__usage-label">開始:</span>
+              <div className="karte-rp__detail">
+                <span className="karte-rp__detail-label">開始:</span>
                 <span>{rp.startTimes.join("、")}</span>
               </div>
             )}
@@ -564,6 +589,10 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
     return <LabOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />;
   }
 
+  if (item.kind === "rad-order") {
+    return <RadOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />;
+  }
+
   if (!item.questionnaire) {
     return (
       <p className="karte-card__empty">
@@ -576,8 +605,6 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
   const schemas = schemaImageRefs(item.response);
   const lines = questionnaireResponsePlainText(item.questionnaire, item.response)
     .split("\n")
-    // 先頭のテンプレート名と空行は見出しと重複するので落とす。
-    .slice(2)
     .map((line) => line.replace(SCHEMA_IMAGE_NOTE, "").trimEnd())
     .filter((line) => line.trim() && !/[:：]$/.test(line.trim()));
   if (lines.length === 0 && schemas.length === 0) {
@@ -624,7 +651,7 @@ function LabOrderCardBody({
         <div className="karte-rp" key={group.specimenCode || `unset-${index}`}>
           <div className="karte-rp__head">
             <span className="karte-rp__number">{`GP${index + 1}`}</span>
-            <span className="karte-lab-order__specimen">{specimenGroupLabel(group)}</span>
+            <span className="karte-order__group-name">{specimenGroupLabel(group)}</span>
           </div>
           <ul className="karte-rp__medicines">
             {group.entries.map((entry) => (
@@ -638,6 +665,69 @@ function LabOrderCardBody({
           </ul>
         </div>
       ))}
+      {comment && <p className="karte-card__note">{comment}</p>}
+    </>
+  );
+}
+
+// GP 単位で入力した内容。撮影項目の下に、見出し付きで 1 行ずつ並べる。
+const RAD_GP_DETAILS: { label: string; of: (item: RadOrderItemLine) => string }[] = [
+  { label: "依頼病名", of: (item) => item.reasonName },
+  { label: "検査目的", of: (item) => item.purpose },
+  { label: "特別指示", of: (item) => item.remarks },
+];
+
+// 放射線検査は GP(撮影項目 1 つ、またはセット 1 つ)ごとに出す。セットは構成項目も
+// オーダーに入っているので、その中身を GP の下に並べる(マスタではなくオーダーの
+// 内容なので、構成を後から直しても過去の表示は変わらない)。
+function RadOrderCardBody({
+  serviceRequest,
+  itemRequests,
+}: {
+  serviceRequest: fhir4.ServiceRequest;
+  itemRequests: fhir4.ServiceRequest[];
+}) {
+  const entries = orderEntries(radOrderItems(serviceRequest, itemRequests));
+  const comment = radOrderComment(serviceRequest);
+
+  if (entries.length === 0) return <p className="karte-card__empty">撮影項目がありません。</p>;
+
+  return (
+    <>
+      {entries.map((entry, index) => {
+        // セットは自身が撮影ではないので、構成する撮影を並べる。単項目はその 1 件。
+        const shots = entry.members.length > 0 ? entry.members : [entry.item];
+        return (
+          <div className="karte-rp" key={entry.item.code || `gp-${index}`}>
+            <div className="karte-rp__head">
+              <span className="karte-rp__number">{`GP${index + 1}`}</span>
+              <span className="karte-order__group-name">{entryLabel(entry)}</span>
+            </div>
+            <ul className="karte-rp__medicines">
+              {shots.map((shot) => (
+                <li key={shot.code}>
+                  <span className="karte-rp__medicine-name">{shot.name}</span>
+                  {bodySiteLabel(shot) && (
+                    <span className="karte-rp__comment">{bodySiteLabel(shot)}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {/* 依頼病名・検査目的・特別指示は GP 単位の記入なので、撮影項目の後ろに
+                同じ字下げで並べる(処方の用法と同じ置き方)。 */}
+            {RAD_GP_DETAILS.map(({ label, of }) => {
+              const value = of(entry.item);
+              if (!value) return null;
+              return (
+                <div className="karte-rp__detail" key={label}>
+                  <span className="karte-rp__detail-label">{`${label}:`}</span>
+                  <span>{value}</span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
       {comment && <p className="karte-card__note">{comment}</p>}
     </>
   );

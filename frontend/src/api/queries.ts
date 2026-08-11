@@ -15,7 +15,7 @@ import {
 import { isInjectionServiceRequest } from "../fhir/injectionHelpers";
 import {
   buildLabOrderDeleteBundle,
-  isLabOrderItemRequest,
+  isOrderItemRequest,
   isLabServiceRequest,
   labOrderItemRequests,
   labOrderItems,
@@ -26,6 +26,11 @@ import {
   buildPrescriptionDeleteBundle,
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
+import {
+  buildRadOrderDeleteBundle,
+  radOrderItemRequests,
+  radOrderResponseIds,
+} from "../fhir/radOrderHelpers";
 import { buildPractitionerDeleteBundle } from "../fhir/practitionerHelpers";
 import {
   baseRoleOf,
@@ -616,6 +621,20 @@ export function useLabOrderDetail(srId: string | undefined) {
   });
 }
 
+// 放射線オーダーもヘッダと明細が別リソースなので、検体検査と同じ形で 1 リクエストに
+// まとめて取る(明細は _revinclude:iterate で添えてもらう)。
+export function useRadOrderDetail(srId: string | undefined) {
+  const params = new URLSearchParams();
+  if (srId) params.set("_id", srId);
+  params.set("_revinclude:iterate", "ServiceRequest:based-on");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "detail", "rad-order", srId],
+    queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", params),
+    enabled: Boolean(srId),
+  });
+}
+
 // ---- 検査結果に紐付ける検体検査オーダーの候補 ----
 
 // 上流 fhir-server の _count 上限 100 を 1 ページとして順に辿る。
@@ -672,7 +691,7 @@ async function fetchLabOrderCandidates(patientId: string): Promise<LabOrderCandi
     }
 
     // ヘッダ(= 検索にヒットした分)だけを数える。明細と検査結果も混ざって返るため。
-    const headers = serviceRequests.filter((sr) => !isLabOrderItemRequest(sr));
+    const headers = serviceRequests.filter((sr) => !isOrderItemRequest(sr));
     for (const header of headers) {
       if (!header.id || !isLabServiceRequest(header)) continue;
       const items = labOrderItems(header, labOrderItemRequests(serviceRequests, header.id));
@@ -1639,11 +1658,12 @@ export function useKartePrescriptionsInfinite(patientId: string | undefined) {
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-authoredon");
-      // 検体検査は明細も ServiceRequest なので、オーダーのヘッダだけを 1 ページの
-      // 対象にする(明細がカードとして紛れ込まず、ページ数も項目数に左右されない)。
+      // 検体検査・放射線検査は明細も ServiceRequest なので、オーダーのヘッダだけを
+      // 1 ページの対象にする(明細がカードとして紛れ込まず、ページ数も項目数に
+      // 左右されない)。
       params.set("based-on:missing", "true");
-      // カルテは薬剤名・検査項目名まで表示するので、処方明細と検体検査の明細
-      // (パネルの構成項目まで 2 段)も同じレスポンスで受け取る。
+      // カルテは薬剤名・検査項目名まで表示するので、処方明細と検体検査・放射線検査の
+      // 明細(構成項目まで 2 段)も同じレスポンスで受け取る。
       params.append("_revinclude", "MedicationRequest:based-on");
       // 検体検査のカードから「検査結果表示」を出せるかの判定に、そのオーダーを
       // 元にした検査結果も添えてもらう。
@@ -1702,6 +1722,32 @@ export function useDeleteLabOrder() {
         .map((request) => request.id)
         .filter((id): id is string => Boolean(id));
       return postBundle(buildLabOrderDeleteBundle(srId, itemIds));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
+  });
+}
+
+// 放射線オーダーも明細が独立した ServiceRequest なので、ヘッダだけ消すと明細が
+// 残ってしまう。消す直前に明細を引き直してからまとめて消す(検体検査と同じ)。
+export function useDeleteRadOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (srId: string) => {
+      const params = new URLSearchParams();
+      params.set("_id", srId);
+      params.set("_revinclude:iterate", "ServiceRequest:based-on");
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      const itemRequests = radOrderItemRequests(serviceRequestsOf(bundle), srId);
+      const itemIds = itemRequests
+        .map((request) => request.id)
+        .filter((id): id is string => Boolean(id));
+      // 明細が参照しているテンプレート回答も一緒に消す(孤児を残さない)。
+      return postBundle(
+        buildRadOrderDeleteBundle(srId, itemIds, radOrderResponseIds(itemRequests)),
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });

@@ -934,7 +934,8 @@ button:disabled {
 }
 
 .prescription-form input,
-.prescription-form select {
+.prescription-form select,
+.prescription-form textarea {
   font: inherit;
   font-size: 15px;
   padding: 6px 8px;
@@ -4124,8 +4125,9 @@ body.karte-wide .app__header {
   color: var(--text-h);
 }
 
-/* 用法は薬剤リストの下に置くので、薬剤と同じだけ字下げする */
-.karte-rp__usage {
+/* 明細リストの下に置く補足行(処方の用法・開始、放射線の依頼病名・検査目的・特記事項)。
+   明細と同じだけ字下げして、行の開始位置を揃える。 */
+.karte-rp__detail {
   display: flex;
   gap: 8px;
   margin-top: 2px;
@@ -4133,7 +4135,7 @@ body.karte-wide .app__header {
   font-size: 13px;
 }
 
-.karte-rp__usage-label {
+.karte-rp__detail-label {
   color: var(--text);
 }
 
@@ -4554,7 +4556,7 @@ body.karte-wide .app__header {
 /* 検査オーダーレイアウト ------------------------------------------------- */
 
 /* レイアウト選択・名前・行数・列数の1行フォーム。 */
-.lab-layout__bar {
+.order-layout__bar {
   display: flex;
   flex-wrap: wrap;
   gap: 12px 16px;
@@ -4562,16 +4564,16 @@ body.karte-wide .app__header {
   margin-bottom: 12px;
 }
 
-.lab-layout__bar label {
+.order-layout__bar label {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
 }
 
-.lab-layout__bar input[type="text"],
-.lab-layout__bar input[type="number"],
-.lab-layout__bar select {
+.order-layout__bar input[type="text"],
+.order-layout__bar input[type="number"],
+.order-layout__bar select {
   font: inherit;
   font-size: 14px;
   padding: 4px 6px;
@@ -4581,27 +4583,27 @@ body.karte-wide .app__header {
   color: var(--text);
 }
 
-.lab-layout__bar input[type="number"] {
+.order-layout__bar input[type="number"] {
   width: 72px;
 }
 
-.lab-layout__bar-actions {
+.order-layout__bar-actions {
   display: flex;
   gap: 8px;
 }
 
 /* 伝票グリッド。列数が多いときは枠内で横スクロールさせる。 */
-.lab-layout__grid-wrap {
+.order-layout__grid-wrap {
   overflow-x: auto;
   margin-bottom: 12px;
 }
 
-.lab-layout__grid {
+.order-layout__grid {
   border-collapse: collapse;
   table-layout: fixed;
 }
 
-.lab-layout__cell {
+.order-layout__cell {
   border: 1px solid var(--border);
   width: 140px;
   min-width: 140px;
@@ -4617,30 +4619,30 @@ body.karte-wide .app__header {
 }
 
 /* ラベル(表示専用)のマスは項目と見分けられるようにする。 */
-.lab-layout__cell--label {
+.order-layout__cell--label {
   background: var(--surface-panel);
   color: var(--text-h);
   font-weight: 600;
 }
 
-.lab-layout__cell.is-selected {
+.order-layout__cell.is-selected {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
-.lab-layout__cell.is-drag-over {
+.order-layout__cell.is-drag-over {
   background: var(--accent-bg);
 }
 
 /* 選択マスの編集(配置・表示名・削除)。グリッドの下に出す。 */
-.lab-layout__editor {
+.order-layout__editor {
   padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface-card);
 }
 
-.lab-layout__editor-row {
+.order-layout__editor-row {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -4648,14 +4650,14 @@ body.karte-wide .app__header {
   margin-bottom: 8px;
 }
 
-.lab-layout__editor-row label {
+.order-layout__editor-row label {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
 }
 
-.lab-layout__editor-row input[type="text"] {
+.order-layout__editor-row input[type="text"] {
   font: inherit;
   font-size: 14px;
   padding: 4px 6px;
@@ -4666,7 +4668,7 @@ body.karte-wide .app__header {
   min-width: 240px;
 }
 
-.lab-layout__editor-kind {
+.order-layout__editor-kind {
   font-size: 13px;
   color: var(--text-h);
   align-self: center;
@@ -4676,16 +4678,16 @@ body.karte-wide .app__header {
 
 /* 伝票グリッド。右ペインは幅が狭いのでマスタ画面よりマスを小さくし、
    入りきらないぶんは枠内で横スクロールさせる。 */
-.lab-order-panel__grid-wrap {
+.order-select__grid-wrap {
   overflow-x: auto;
   margin-bottom: 12px;
 }
 
-.lab-order-panel__grid {
+.order-select__grid {
   border-collapse: collapse;
 }
 
-.lab-order-panel__cell {
+.order-select__cell {
   border: 1px solid var(--border);
   min-width: 104px;
   height: 34px;
@@ -4694,7 +4696,7 @@ body.karte-wide .app__header {
   vertical-align: middle;
 }
 
-.lab-order-panel__cell--label {
+.order-select__cell--label {
   background: var(--surface-panel);
   color: var(--text-h);
   font-weight: 600;
@@ -4702,7 +4704,7 @@ body.karte-wide .app__header {
 }
 
 /* 伝票と検索の切替タブ。カルテ画面のタブ(.karte-tabs)と同じ下線タブにする。 */
-.lab-order-item__tabs {
+.order-select__tabs {
   display: flex;
   gap: 4px;
   border-bottom: 1px solid var(--border);
@@ -4710,7 +4712,7 @@ body.karte-wide .app__header {
   overflow-x: auto;
 }
 
-.lab-order-item__tab {
+.order-select__tab {
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
@@ -4721,11 +4723,11 @@ body.karte-wide .app__header {
   white-space: nowrap;
 }
 
-.lab-order-item__tab:hover {
+.order-select__tab:hover {
   color: var(--accent);
 }
 
-.lab-order-item__tab.is-active {
+.order-select__tab.is-active {
   color: var(--accent);
   border-bottom-color: var(--accent);
   font-weight: 600;
@@ -4734,8 +4736,8 @@ body.karte-wide .app__header {
 /* 検査項目のマスはマス全体をクリックで選択できるようにする。
    flex-direction は .prescription-form label の縦並びを打ち消すために要る
    (チェックボックスを項目名の左に置く)。 */
-.lab-order-panel__cell label,
-.lab-order-panel__search-list label {
+.order-select__cell label,
+.order-select__search-list label {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -4744,14 +4746,14 @@ body.karte-wide .app__header {
 }
 
 /* フォームの入力欄と同じ余白・枠が付くと、チェックボックスだけ不揃いに見える。 */
-.lab-order-panel__cell input[type="checkbox"],
-.lab-order-panel__search-list input[type="checkbox"] {
+.order-select__cell input[type="checkbox"],
+.order-select__search-list input[type="checkbox"] {
   flex: none;
   margin: 0;
   padding: 0;
 }
 
-.lab-order-panel__search input[type="text"] {
+.order-select__search input[type="text"] {
   font: inherit;
   font-size: 14px;
   padding: 4px 6px;
@@ -4763,7 +4765,7 @@ body.karte-wide .app__header {
   margin-bottom: 8px;
 }
 
-.lab-order-panel__search-list {
+.order-select__search-list {
   list-style: none;
   margin: 0 0 8px;
   padding: 0;
@@ -4773,59 +4775,59 @@ body.karte-wide .app__header {
   overflow-y: auto;
 }
 
-.lab-order-panel__search-list li {
+.order-select__search-list li {
   border-bottom: 1px solid var(--border);
   font-size: 13px;
 }
 
-.lab-order-panel__search-list li:last-child {
+.order-select__search-list li:last-child {
   border-bottom: none;
 }
 
 /* 行のどこを押しても選べるよう、リストの 1 行いっぱいに広げる
    (並びは検査項目のマスと共通の指定を使う)。 */
-.lab-order-panel__search-list label {
+.order-select__search-list label {
   padding: 6px 10px;
 }
 
-.lab-order-panel__muted {
+.order-select__muted {
   color: var(--text);
   font-size: 12px;
   padding: 4px 8px;
 }
 
 /* 選択中の項目を検体ごとにまとめたプレビュー。 */
-.lab-order-panel__preview {
+.order-select__preview {
   margin-top: 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px 12px;
 }
 
-.lab-order-panel__preview h3 {
+.order-select__preview h3 {
   margin: 0 0 8px;
   font-size: 14px;
   color: var(--text-h);
 }
 
-.lab-order-panel__group h4 {
+.order-select__group h4 {
   margin: 8px 0 4px;
   font-size: 13px;
   color: var(--text-h);
 }
 
-.lab-order-panel__group ul {
+.order-select__group ul {
   list-style: none;
   margin: 0;
   padding-left: 14px;
 }
 
-.lab-order-panel__group li {
+.order-select__group li {
   font-size: 13px;
   padding: 2px 0;
 }
 
-.lab-order-panel__remove {
+.order-select__remove {
   margin-left: 6px;
   border: none;
   background: transparent;
@@ -4835,24 +4837,204 @@ body.karte-wide .app__header {
   cursor: pointer;
 }
 
-.lab-order-panel__remove:hover {
+.order-select__remove:hover {
   color: var(--accent);
 }
 
 /* カルテカードの検体グループ見出し。GP番号(karte-rp__number)の右に検体名を添える。 */
-.karte-lab-order__specimen {
+.karte-order__group-name {
   font-size: 12px;
   color: var(--text);
 }
 
 /* プレビューのパネル構成項目。親の下に字下げして、1 つずつ外せるようにする。 */
-.lab-order-panel__members {
+.order-select__members {
   list-style: none;
   margin: 0;
   padding-left: 16px;
 }
 
-.lab-order-panel__members li {
+.order-select__members li {
   font-size: 12px;
   color: var(--text);
+}
+
+/* 放射線検査マスタ ------------------------------------------------------- */
+
+/* 一覧の短い値の列(コード・Ver・区分など)。折り返すと読みにくいので抑える。 */
+.rad-code__compact,
+.rad-item__compact {
+  white-space: nowrap;
+}
+
+/* JJ1017 の32桁コード。桁位置を数えられるよう等幅で出す。 */
+.rad-frequent__code,
+.rad-item__preview {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 要素の桁位置・施設拡張の範囲などの案内文。指針を引かずに済ませるための説明。 */
+.rad-code__summary {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--text-muted, var(--text));
+}
+
+/* 別表1D(手技拡張)の通称名称。正式名称の後ろに小さく添える。 */
+.rad-code__common {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--text-muted, var(--text));
+}
+
+/* 配布ファイル由来でない(施設で足した)コードの目印。 */
+.rad-code__badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft, rgba(127, 127, 127, 0.18));
+  font-size: 11px;
+}
+
+/* 放射線オーダーの入力 ---------------------------------------------------- */
+
+/* 1 GP(撮影項目 1 つ、またはセット 1 つ)の確認と記入。 */
+.rad-gp {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 8px;
+}
+
+.rad-gp__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rad-gp__number {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.rad-gp__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+/* セットの構成撮影。GP の中身なので字下げして並べる。 */
+.rad-gp__members {
+  list-style: none;
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
+
+.rad-gp__members li {
+  font-size: 12px;
+  padding: 1px 0;
+}
+
+.rad-gp__fields {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* 項目名を左、入力を右に置く(.prescription-form label の縦並びを打ち消す)。 */
+.rad-gp__fields > label {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  align-items: start;
+  gap: 8px;
+  font-size: 12px;
+}
+
+/* 登録病名のセレクトと直接入力を横に並べる。高さはセレクトの本来の高さ
+   (= 対象プロブレムなど他のセレクトと同じ)に揃う。input 側は下の line-height で
+   セレクトより低くしてあるので、既定の stretch でセレクトの高さに合う。 */
+.rad-gp__reason {
+  display: flex;
+  gap: 6px;
+}
+
+.rad-gp__reason select {
+  flex: 0 1 45%;
+  min-width: 0;
+}
+
+/* 直接入力欄。アプリ全体の input は継承した行の高さ(26.1px)で select より
+   7px ほど高くなるので、この行では行の高さを既定に戻して select と揃える。 */
+.rad-gp__reason input {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: normal;
+}
+
+.rad-gp__template-field {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.rad-gp__template-field textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+}
+
+/* テンプレートから記載した欄。直接編集できないことを分かるようにする
+   (注射の自動計算欄 .injection-usage__rate input[readonly] と同じ見せ方)。 */
+.rad-gp__template-field textarea[readonly] {
+  background: var(--surface-panel);
+  color: var(--text);
+}
+
+/* テンプレート操作(記入・解除)は縦に積む。欄の幅を狭めず、ボタンが増えても
+   行の高さも横幅も変わらないようにするため。 */
+.rad-gp__template-actions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* テンプレート記入を開くボタン。欄の付属操作なので、既定のボタン(15px / 8px 16px)
+   では欄より目立ってしまう。診療記録エディタの「テンプレート」(.rich-text-editor__tool)
+   と同じ控えめな見た目に揃える。 */
+.rad-gp__template-field button {
+  flex: none;
+  align-self: flex-start;
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.rad-gp__template-field button:hover {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+/* 詳細表示の検査目的・特記事項。テンプレート記入の結果は改行を含む。 */
+.rad-gp__text {
+  white-space: pre-wrap;
+}
+
+/* マスタメンテの既定テンプレート(検査目的・特記事項)。TemplateSelect のパネルは
+   トリガーと同じ幅で出るので、テンプレート名が読める幅を確保しておく。 */
+.rad-item__templates {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.rad-item__templates .template-select {
+  flex: 1 1 260px;
+  min-width: 260px;
 }

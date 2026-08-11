@@ -53,6 +53,37 @@ import {
   type LabSpecimenPayload,
   type MasterType,
   type MedicineDoseConversionPayload,
+  bulkCreateRadItemsFromFrequent,
+  createRadItem,
+  createRadItemLayout,
+  createRadItemLayoutCell,
+  createRadJj1017Code,
+  createRadSetItem,
+  deleteRadItem,
+  deleteRadItemLayout,
+  deleteRadItemLayoutCell,
+  deleteRadJj1017Code,
+  deleteRadSetItem,
+  fetchRadItem,
+  fetchRadItemLayout,
+  fetchRadItemLayouts,
+  fetchRadJj1017Catalog,
+  fetchRadJj1017Elements,
+  searchRadFrequentCodes,
+  searchRadItems,
+  searchRadJj1017Codes,
+  searchRadSetItems,
+  updateRadItem,
+  updateRadItemLayout,
+  updateRadItemLayoutCell,
+  updateRadJj1017Code,
+  type RadItemLayoutCellPayload,
+  type RadItemLayoutPayload,
+  type RadItemPayload,
+  type RadJj1017CodePayload,
+  type RadSetItemPayload,
+  type RadItemSearchResult,
+  type RadSetItem,
 } from "./masterClient";
 
 export interface MedicineUsageFilters {
@@ -664,4 +695,308 @@ export function useLabPanelMembers(panelCodes: string[]) {
     select: toPanelMemberMap,
     enabled: sorted.length > 0,
   });
+}
+
+
+// 放射線検査オーダーのマスタ群 ----------------------------------------------
+
+// オーダー項目・セット構成は同じ詳細画面で同時に変わるのでまとめて破棄する。
+const RAD_JJ1017_CODES_KEY = ["master", "rad_jj1017_codes"];
+const RAD_FREQUENT_CODES_KEY = ["master", "rad_frequent_codes"];
+const RAD_ITEMS_KEY = ["master", "rad_items"];
+const RAD_LAYOUTS_KEY = ["master", "rad_item_layouts"];
+
+export interface RadJj1017CodeFilters {
+  element?: string;
+  source?: string;
+  name?: string;
+}
+
+export function useRadJj1017CodeSearch(filters: RadJj1017CodeFilters, page: number, enabled = true) {
+  return useQuery({
+    queryKey: [...RAD_JJ1017_CODES_KEY, "list", filters, page],
+    queryFn: () =>
+      searchRadJj1017Codes({
+        element: filters.element || undefined,
+        source: filters.source || undefined,
+        name: filters.name || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+// 要素の定義(32桁コード内の位置・桁数・施設拡張の範囲)。滅多に変わらないので
+// 拡張コードの登録で破棄されるまで使い回す。
+export function useRadJj1017Elements() {
+  return useQuery({
+    queryKey: [...RAD_JJ1017_CODES_KEY, "elements"],
+    queryFn: fetchRadJj1017Elements,
+    staleTime: Infinity,
+  });
+}
+
+// 全要素の部品コード(要素名でまとめたもの)。編集モーダルは11要素すべての
+// 選択肢を同時に使うので、要素ごとに引かずまとめて取る。
+// 拡張コードの登録・削除で破棄されるまで使い回す。
+export function useRadJj1017Catalog() {
+  return useQuery({
+    queryKey: [...RAD_JJ1017_CODES_KEY, "catalog"],
+    queryFn: fetchRadJj1017Catalog,
+    staleTime: Infinity,
+  });
+}
+
+export function useRadJj1017CodeMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: RAD_JJ1017_CODES_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: RadJj1017CodePayload) => createRadJj1017Code(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: RadJj1017CodePayload }) =>
+        updateRadJj1017Code(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteRadJj1017Code(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+export interface RadFrequentCodeFilters {
+  category?: string;
+  modalityCode?: string;
+  name?: string;
+  unregisteredOnly?: boolean;
+}
+
+export function useRadFrequentCodeSearch(
+  filters: RadFrequentCodeFilters,
+  page: number,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [...RAD_FREQUENT_CODES_KEY, "list", filters, page],
+    queryFn: () =>
+      searchRadFrequentCodes({
+        category: filters.category || undefined,
+        modality_code: filters.modalityCode || undefined,
+        name: filters.name || undefined,
+        unregistered: filters.unregisteredOnly || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export interface RadItemFilters {
+  name?: string;
+  kind?: string;
+  modalityCode?: string;
+  active?: boolean;
+}
+
+export function useRadItemSearch(filters: RadItemFilters, page: number, enabled = true) {
+  return useQuery({
+    queryKey: [...RAD_ITEMS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchRadItems({
+        name: filters.name || undefined,
+        kind: filters.kind || undefined,
+        modality_code: filters.modalityCode || undefined,
+        active: filters.active || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+// 要素の名称とセット構成を添えた詳細(編集モーダル用)。
+export function useRadItem(idOrCode: string | number | null) {
+  return useQuery({
+    queryKey: [...RAD_ITEMS_KEY, "detail", idOrCode],
+    queryFn: () => fetchRadItem(idOrCode as string | number),
+    enabled: idOrCode !== null,
+  });
+}
+
+export function useRadItemMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: RAD_ITEMS_KEY });
+    // 頻用コード一覧は「未登録のみ」で絞れるため、項目が増減したら引き直す。
+    queryClient.invalidateQueries({ queryKey: RAD_FREQUENT_CODES_KEY });
+  };
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: RadItemPayload) => createRadItem(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: RadItemPayload }) =>
+        updateRadItem(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteRadItem(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    bulkCreateFromFrequent: useMutation({
+      mutationFn: (frequentCodeIds: number[]) => bulkCreateRadItemsFromFrequent(frequentCodeIds),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+export function useRadSetItemMutations() {
+  const queryClient = useQueryClient();
+  // セット構成はオーダー項目詳細に添えて返るため、項目側のキーを破棄する。
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: RAD_ITEMS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: RadSetItemPayload) => createRadSetItem(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteRadSetItem(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+export function useRadItemLayouts() {
+  return useQuery({
+    queryKey: [...RAD_LAYOUTS_KEY, "list"],
+    queryFn: fetchRadItemLayouts,
+  });
+}
+
+export function useRadItemLayout(id: number | undefined) {
+  return useQuery({
+    queryKey: [...RAD_LAYOUTS_KEY, "detail", id],
+    queryFn: () => fetchRadItemLayout(id as number),
+    enabled: id !== undefined,
+  });
+}
+
+export function useRadItemLayoutMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: RAD_LAYOUTS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: RadItemLayoutPayload) => createRadItemLayout(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: RadItemLayoutPayload }) =>
+        updateRadItemLayout(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteRadItemLayout(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+export function useRadItemLayoutCellMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: RAD_LAYOUTS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: RadItemLayoutCellPayload) => createRadItemLayoutCell(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: Partial<RadItemLayoutCellPayload> }) =>
+        updateRadItemLayoutCell(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteRadItemLayoutCell(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+// 放射線オーダー画面用 --------------------------------------------------
+
+// 選択中の項目コードからマスタの内容(名称・JJ1017 の要素)を引き直す。
+// オーダー画面のプレビューと、保存時に FHIR へ写す値の取得元。
+// 検索APIが要素コードの名称(elements)も添えて返すので、種別・部位の名称も同時に揃う。
+export function useRadItemsByCodes(codes: string[]) {
+  const sorted = Array.from(new Set(codes)).sort();
+
+  return useQuery({
+    queryKey: [...RAD_ITEMS_KEY, "by_codes", sorted],
+    queryFn: () => searchRadItems({ item_code: sorted.join(","), per: 200 }),
+    enabled: sorted.length > 0,
+  });
+}
+
+// select はモジュールスコープに置く。ここで無名関数を渡すと呼び出しのたびに
+// 別の関数になり、react-query が結果を再利用できず data が毎回別オブジェクトに
+// なってしまう(それを依存に持つ effect が回り続ける)。
+function toSetMemberMap(result: MasterSearchResult<RadSetItem>): Map<string, string[]> {
+  const members = new Map<string, string[]>();
+  for (const member of result.items) {
+    const list = members.get(member.set_item_code);
+    if (list) list.push(member.member_item_code);
+    else members.set(member.set_item_code, [member.member_item_code]);
+  }
+  return members;
+}
+
+// セットの構成。「セットコード → 構成項目の項目コード」で返す。
+// オーダー画面でセットを選んだときに、その構成項目もオーダーに入れるために引く。
+// セットでない項目コードを混ぜても結果が増えないだけなので、呼ぶ側で選別しない。
+export function useRadSetMembers(setCodes: string[]) {
+  const sorted = Array.from(new Set(setCodes)).sort();
+
+  return useQuery({
+    queryKey: [...RAD_ITEMS_KEY, "set_members", sorted],
+    queryFn: () => searchRadSetItems({ set_item_code: sorted.join(","), per: 500 }),
+    select: toSetMemberMap,
+    enabled: sorted.length > 0,
+  });
+}
+
+/** 一覧APIが添えてくる要素コードの名称から、1 つ引く。 */
+export function elementName(
+  result: RadItemSearchResult | undefined,
+  element: string,
+  code: string | null | undefined,
+): string {
+  if (!code) return "";
+  return result?.elements?.[element]?.[code] ?? "";
 }
