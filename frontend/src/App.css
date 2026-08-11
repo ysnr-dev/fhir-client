@@ -3247,10 +3247,17 @@ fieldset.rp-card {
   outline: none;
 }
 
-/* 編集中は貼り付けた画像をそのまま確認できるよう、幅だけ制限する。 */
+/* 編集中も表示側(.rich-text img)と同じサムネイル寸法にする。原寸のまま置くと
+   シェーマ(長辺1600px)が右ペインの幅を占領して本文が見えなくなるため。 */
 .rich-text-editor .ProseMirror img {
-  max-width: 100%;
+  max-width: min(240px, 100%);
+  max-height: 160px;
+  width: auto;
   height: auto;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  vertical-align: top;
 }
 
 /* 表示側はサムネイル。クリック(Enter/Space)で別タブに原寸を開く。 */
