@@ -746,7 +746,7 @@ function RadOrderCardBody({
               const responseId = templateOf?.(entry.item) ?? "";
               if (lines.length === 0 && !responseId) return null;
               return (
-                <div className="karte-rp__detail" key={label}>
+                <div className="karte-rp__detail karte-rp__detail--indent" key={label}>
                   <span className="karte-rp__detail-label">{`${label}:`}</span>
                   <div className="karte-rp__detail-body">
                     {lines.map((line, lineIndex) => (

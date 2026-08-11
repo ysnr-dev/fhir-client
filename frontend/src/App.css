@@ -4127,6 +4127,12 @@ body.karte-wide .app__header {
   font-size: 13px;
 }
 
+/* 放射線検査の GP 単位の記入(依頼病名・検査目的・特別指示)は、撮影項目より
+   もう一段字下げして、撮影 1 件ごとの内容ではないことを見た目で分ける。 */
+.karte-rp__detail--indent {
+  padding-left: 24px;
+}
+
 .karte-rp__detail-label {
   color: var(--text);
 }
