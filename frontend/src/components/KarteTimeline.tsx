@@ -52,6 +52,7 @@ import {
 } from "../fhir/prescriptionHelpers";
 import {
   SCHEMA_IMAGE_NOTE,
+  questionnaireResponseDocumentText,
   questionnaireResponsePlainText,
   schemaImageRefs,
   summarizeQuestionnaireResponse,
@@ -351,7 +352,7 @@ function KarteCard({
       {plainTextOpen && item.kind === "qr" && item.questionnaire && (
         <PlainTextModal
           title="平文表示"
-          text={questionnaireResponsePlainText(item.questionnaire, item.response)}
+          text={questionnaireResponseDocumentText(item.questionnaire, item.response)}
           onClose={() => setPlainTextOpen(false)}
         />
       )}
@@ -604,8 +605,6 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
   const schemas = schemaImageRefs(item.response);
   const lines = questionnaireResponsePlainText(item.questionnaire, item.response)
     .split("\n")
-    // 先頭のテンプレート名と空行は見出しと重複するので落とす。
-    .slice(2)
     .map((line) => line.replace(SCHEMA_IMAGE_NOTE, "").trimEnd())
     .filter((line) => line.trim() && !/[:：]$/.test(line.trim()));
   if (lines.length === 0 && schemas.length === 0) {
