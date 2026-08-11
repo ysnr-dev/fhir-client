@@ -3074,14 +3074,6 @@ fieldset.rp-card {
   outline: 2px solid var(--accent);
 }
 
-.schema-annotator__canvas {
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  overflow: auto;
-  max-height: 65vh;
-  touch-action: none;
-}
-
 .schema-annotator__footer {
   display: flex;
   justify-content: flex-end;
@@ -5037,4 +5029,306 @@ body.karte-wide .app__header {
 .rad-item__templates .template-select {
   flex: 1 1 260px;
   min-width: 260px;
+}
+
+/* ---- シェーママスタ(2ペイン: カテゴリツリー + シェーマ一覧) ---- */
+
+.schema-master {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.schema-master__categories {
+  flex: 0 0 340px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  background: var(--surface-panel);
+}
+
+.schema-master__schemas {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  background: var(--surface-panel);
+}
+
+.schema-master__pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.schema-master__pane-header h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.schema-master__pane-header button {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.schema-master__cat-tree,
+.schema-master__cat-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.schema-master__cat-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.schema-master__cat-row.is-selected {
+  background: var(--accent-bg);
+}
+
+.schema-master__cat-toggle {
+  flex: none;
+  width: 22px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted, #666);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.schema-master__cat-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schema-master__cat-row.is-selected .schema-master__cat-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 行の操作ボタン群。数が多いので普段は薄く、行にポインタが乗ったときに濃くする。 */
+.schema-master__cat-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0.35;
+}
+
+.schema-master__cat-row:hover .schema-master__cat-actions,
+.schema-master__cat-row:focus-within .schema-master__cat-actions {
+  opacity: 1;
+}
+
+.schema-master__cat-actions button {
+  padding: 1px 5px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.schema-master__cat-actions button:disabled {
+  opacity: 0.4;
+}
+
+.schema-master__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.schema-master__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.schema-master__item-order {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.schema-master__item-order button {
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.schema-master__item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-card);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.schema-master__item-body:hover {
+  border-color: var(--accent-border);
+}
+
+.schema-master__thumb {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.schema-master__item-name {
+  font-size: 14px;
+}
+
+.schema-master__item-note {
+  font-size: 12px;
+  color: var(--text-muted, #666);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 編集モーダルの画像プレビュー */
+.schema-master__preview img {
+  max-width: 200px;
+  max-height: 200px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+/* fabric.js ペイントモーダルのキャンバス。台紙が大きいときはスクロールさせる
+   (fabric が生成する .canvas-container ごと)。 */
+.schema-paint__canvas {
+  overflow: auto;
+  max-height: 65vh;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  /* 台紙が小さいときに左寄せの余白が出ないよう中身に合わせる */
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* ---- シェーマ選択モーダル(カテゴリツリー + サムネイルグリッド) ---- */
+
+.modal--schema-picker {
+  width: min(900px, 94vw);
+}
+
+.schema-picker {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  min-height: 320px;
+}
+
+.schema-picker__categories {
+  flex: 0 0 220px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  overflow: auto;
+  max-height: 60vh;
+}
+
+.schema-picker__cat {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 2px;
+  border-radius: 4px;
+}
+
+.schema-picker__cat.is-selected {
+  background: var(--accent-bg);
+}
+
+.schema-picker__cat.is-selected .schema-master__cat-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.schema-picker__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schema-picker__search {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.schema-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  overflow: auto;
+  max-height: 56vh;
+}
+
+.schema-picker__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-card);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.schema-picker__card:hover {
+  border-color: var(--accent-border);
+}
+
+.schema-picker__card img {
+  width: 100%;
+  height: 90px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.schema-picker__card span {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }

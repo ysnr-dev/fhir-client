@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useBinaryImage } from "../api/queries";
 import { binaryIdFromAttachment, itemMediaOf } from "../fhir/schemaImage";
-import { SchemaImageAnnotator } from "./SchemaImageAnnotator";
 
 // テンプレート項目のシェーマ画像表示 + 描き込み(フォーム入力時のみ)。
 // 表示の優先順: 描き込み(未保存 dataUrl → 保存済み Binary) → テンプレートの元画像。
+
+// 描き込みは診療記録のシェーマと同じツール(fabric.js)を使う。重いので開くまで読み込まない。
+const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
 
 // 項目インスタンスへの描き込み状態。binaryId は保存(アップロード)済み、
 // dataUrl は描き込んだがまだアップロードしていない合成画像。
@@ -64,15 +66,18 @@ export function SchemaImageField({
         </div>
       )}
       {annotating && displaySrc && (
-        <SchemaImageAnnotator
-          title={item.text ? `シェーマ編集: ${item.text}` : "シェーマ編集"}
-          backgroundDataUrl={displaySrc}
-          onClose={() => setAnnotating(false)}
-          onSave={(dataUrl) => {
-            onChange(instanceKey, { binaryId: null, dataUrl });
-            setAnnotating(false);
-          }}
-        />
+        <Suspense fallback={null}>
+          <SchemaPaintModal
+            title={item.text ? `シェーマ編集: ${item.text}` : "シェーマ編集"}
+            backgroundDataUrl={displaySrc}
+            saveLabel="編集を保存"
+            onClose={() => setAnnotating(false)}
+            onSave={(dataUrl) => {
+              onChange(instanceKey, { binaryId: null, dataUrl });
+              setAnnotating(false);
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );

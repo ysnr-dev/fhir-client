@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { lazy, Suspense, useRef, useState, type FormEvent } from "react";
+import { fetchSchema } from "../api/masterClient";
 import {
   defaultSectionsForMode,
   isEmptyNoteHtml,
@@ -15,7 +16,11 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
-import { RichTextEditor } from "./RichTextEditor";
+import { RichTextEditor, type RichTextEditorHandle } from "./RichTextEditor";
+import { SchemaPickerModal } from "./SchemaPickerModal";
+
+// ペイントモーダル(fabric.js)は重いので、開くまで読み込まない。
+const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
 
 // 診療記録の入力フォーム(Create/Edit 共用)。
 // 記載形式は SOAP(複数セクション可変。追加・削除・並べ替え、同じ種別の重複も許す)と
@@ -49,6 +54,17 @@ export function ClinicalNoteForm({
   const [addCode, setAddCode] = useState<SectionCode>(SECTION_OPTIONS[0].code);
   // テンプレート記入モーダルを開いているセクションの uid。
   const [templateTarget, setTemplateTarget] = useState<string | null>(null);
+  // シェーマ選択モーダルを開いているセクションの uid。
+  const [schemaPickTarget, setSchemaPickTarget] = useState<string | null>(null);
+  // シェーマのペイント中(台紙を取得済み)。
+  const [schemaPaint, setSchemaPaint] = useState<{
+    uid: string;
+    name: string;
+    background: string;
+  } | null>(null);
+  // セクションごとのエディタ操作ハンドル。key の付け替えでエディタが作り直され
+  // ても追随するよう、callback ref で登録・解除する。
+  const editorHandles = useRef(new Map<string, RichTextEditorHandle>());
 
   // 対象プロブレムの候補。POMR の「#1 糖尿病についての S/O/A/P」を記録 1 件で表す
   // (複数のプロブレムを扱うときは記録を分けて登録する)。
@@ -107,6 +123,23 @@ export function ClinicalNoteForm({
       ),
     }));
     setTemplateTarget(null);
+  }
+
+  // シェーマ選択 → 台紙(image)を取得してペイントへ進む。
+  async function pickSchema(uid: string, schemaId: number) {
+    try {
+      const detail = await fetchSchema(schemaId);
+      setSchemaPaint({ uid, name: detail.name, background: detail.image });
+      setSchemaPickTarget(null);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "シェーマを取得できませんでした。");
+    }
+  }
+
+  // ペイント完了。合成画像をそのセクションのカーソル位置に挿入する。
+  function insertSchema(uid: string, dataUrl: string) {
+    editorHandles.current.get(uid)?.insertImage(dataUrl);
+    setSchemaPaint(null);
   }
 
   function handleSubmit(e: FormEvent) {
@@ -218,19 +251,35 @@ export function ClinicalNoteForm({
               onChange={(html) => updateSection(section.uid, { html })}
               // テンプレート由来の本文は直接編集させない(回答との差異を防ぐ)。
               editable={!section.template}
+              apiRef={(handle) => {
+                if (handle) editorHandles.current.set(section.uid, handle);
+                else editorHandles.current.delete(section.uid);
+              }}
               actions={
-                <button
-                  type="button"
-                  className="rich-text-editor__tool"
-                  title={
-                    section.template
-                      ? "テンプレートから再編集"
-                      : "テンプレートで記載(以後この本文はテンプレートからのみ編集)"
-                  }
-                  onClick={() => setTemplateTarget(section.uid)}
-                >
-                  {section.template ? "テンプレート編集" : "テンプレート"}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="rich-text-editor__tool"
+                    title={
+                      section.template
+                        ? "テンプレートから再編集"
+                        : "テンプレートで記載(以後この本文はテンプレートからのみ編集)"
+                    }
+                    onClick={() => setTemplateTarget(section.uid)}
+                  >
+                    {section.template ? "テンプレート編集" : "テンプレート"}
+                  </button>
+                  {!section.template && (
+                    <button
+                      type="button"
+                      className="rich-text-editor__tool"
+                      title="シェーマを選んで描き込み、カーソル位置に挿入"
+                      onClick={() => setSchemaPickTarget(section.uid)}
+                    >
+                      シェーマ
+                    </button>
+                  )}
+                </>
               }
               leading={
                 isSoap ? (
@@ -316,6 +365,26 @@ export function ClinicalNoteForm({
         onSubmit={(draft) => applyTemplate(templateSection.uid, draft)}
         onClose={() => setTemplateTarget(null)}
       />
+    )}
+
+    {/* シェーマの選択・ペイントも同様に form の外に置く(fabric/一覧のボタンが
+        暗黙の submit にならないように)。 */}
+    {schemaPickTarget && (
+      <SchemaPickerModal
+        onSelect={(schemaId) => void pickSchema(schemaPickTarget, schemaId)}
+        onClose={() => setSchemaPickTarget(null)}
+      />
+    )}
+    {schemaPaint && (
+      <Suspense fallback={null}>
+        <SchemaPaintModal
+          title={`シェーマ: ${schemaPaint.name}`}
+          backgroundDataUrl={schemaPaint.background}
+          saveLabel="記録に挿入"
+          onSave={(dataUrl) => insertSchema(schemaPaint.uid, dataUrl)}
+          onClose={() => setSchemaPaint(null)}
+        />
+      </Suspense>
     )}
     </>
   );
