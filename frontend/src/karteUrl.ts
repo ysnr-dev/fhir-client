@@ -57,6 +57,7 @@ const DETAIL_KINDS: KarteDetailKind[] = [
   "prescription",
   "injection",
   "lab-order",
+  "micro-order",
   "rad-order",
   "lab-result",
   "qr",

@@ -1,6 +1,7 @@
 import { referencedResponseIds } from "./clinicalNoteHelpers";
 import { isInjectionServiceRequest } from "./injectionHelpers";
 import { isLabServiceRequest, isOrderItemRequest, labOrderItemRequests } from "./labOrderHelpers";
+import { isMicroServiceRequest, microOrderItemRequests } from "./microOrderHelpers";
 import {
   isRadServiceRequest,
   radOrderItemRequests,
@@ -23,6 +24,7 @@ export type KarteItemKind =
   | "prescription"
   | "injection"
   | "lab-order"
+  | "micro-order"
   | "rad-order"
   | "qr";
 
@@ -31,6 +33,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   prescription: "処方",
   injection: "注射",
   "lab-order": "検体検査",
+  "micro-order": "細菌検査",
   "rad-order": "放射線検査",
   qr: "テンプレート",
 };
@@ -66,6 +69,13 @@ export type KarteTimelineItem = KarteItemBase &
         itemRequests: fhir4.ServiceRequest[];
         /** このオーダーを元に登録された検査結果の id。空なら結果はまだ無い。 */
         reportId: string;
+      }
+    // 細菌検査も明細(検体グループ・検査項目)が ServiceRequest なので同じ形。
+    // 結果(培養・感受性)との紐付けは未実装なので reportId は持たない。
+    | {
+        kind: "micro-order";
+        serviceRequest: fhir4.ServiceRequest;
+        itemRequests: fhir4.ServiceRequest[];
       }
     // 放射線検査も明細(撮影項目・セットの構成項目)が ServiceRequest なので、
     // オーダーのヘッダにぶら下がるぶんを itemRequests に集めて渡す。
@@ -255,6 +265,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         label: KARTE_KIND_LABELS["lab-order"],
         itemRequests: labOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
         reportId: reportIdByOrderId.get(serviceRequest.id ?? "") ?? "",
+      };
+    }
+    if (isMicroServiceRequest(serviceRequest)) {
+      return {
+        ...base,
+        kind: "micro-order" as const,
+        label: KARTE_KIND_LABELS["micro-order"],
+        itemRequests: microOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
       };
     }
     if (isRadServiceRequest(serviceRequest)) {

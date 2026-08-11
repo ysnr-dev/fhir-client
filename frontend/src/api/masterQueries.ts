@@ -1305,3 +1305,19 @@ export function useMicroCollectionMethodMutations() {
     }),
   };
 }
+
+// 細菌検査オーダー画面用: 検体種別の選択肢(全件。標準50件+施設追加の想定)。
+export function useMicroSpecimenTypeOptions() {
+  return useQuery({
+    queryKey: [...MICRO_SPECIMEN_TYPES_KEY, "options"],
+    queryFn: () => searchMicroSpecimenTypes({ per: 100 }),
+  });
+}
+
+// 細菌検査オーダー画面用: 頻用菌(オーダー画面に直接並べる目的菌)の一覧。
+export function useFrequentMicroOrganisms() {
+  return useQuery({
+    queryKey: [...MICRO_ORGANISMS_KEY, "frequent"],
+    queryFn: () => searchMicroOrganisms({ frequent: true, per: 100 }),
+  });
+}

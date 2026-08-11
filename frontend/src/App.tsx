@@ -113,17 +113,7 @@ function App() {
                   採取管
                 </Link>
               </SubMenu>
-              <SubMenu label="放射線検査">
-                <Link to="/rad-items" className="row-menu__item">
-                  放射線オーダー項目
-                </Link>
-                <Link to="/rad-item-layouts" className="row-menu__item">
-                  放射線オーダーレイアウト
-                </Link>
-                <Link to="/rad-jj1017-codes" className="row-menu__item">
-                  JJ1017コード
-                </Link>
-              </SubMenu>
+              {/* 細菌検査は検体を扱う点で検体検査に近いので、その下に並べる。 */}
               <SubMenu label="細菌検査">
                 <Link to="/micro-order-items" className="row-menu__item">
                   検査項目・採取部位
@@ -133,6 +123,17 @@ function App() {
                 </Link>
                 <Link to="/micro-organisms" className="row-menu__item">
                   JANIS病原体コード
+                </Link>
+              </SubMenu>
+              <SubMenu label="放射線検査">
+                <Link to="/rad-items" className="row-menu__item">
+                  放射線オーダー項目
+                </Link>
+                <Link to="/rad-item-layouts" className="row-menu__item">
+                  放射線オーダーレイアウト
+                </Link>
+                <Link to="/rad-jj1017-codes" className="row-menu__item">
+                  JJ1017コード
                 </Link>
               </SubMenu>
             </SubMenu>

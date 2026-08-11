@@ -1904,3 +1904,17 @@ export async function deleteMicroCollectionMethod(id: number): Promise<void> {
   const res = await masterFetch(`${MICRO_COLLECTION_METHODS_PATH}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
+
+// レセプト電算コードの一括照会。細菌検査オーダーの「処方から取り込み」が、
+// 処方中の薬剤が抗菌薬(薬効分類 61x/622/624)かどうかを判定するために使う。
+export async function fetchMedicinesByCodes(
+  codes: string[],
+): Promise<MasterSearchResult<Medicine>> {
+  const search = new URLSearchParams();
+  for (const code of codes) search.append("medicine_code[]", code);
+  search.set("per", "100");
+
+  const res = await masterFetch(`/master/medicines?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<Medicine>;
+}

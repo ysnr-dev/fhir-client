@@ -2,6 +2,7 @@ import type { ProblemRef } from "../fhir/conditionHelpers";
 import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePanels";
 import { InjectionCreatePanel, InjectionEditPanel } from "./InjectionPanels";
 import { LabOrderCreatePanel, LabOrderEditPanel } from "./LabOrderPanels";
+import { MicroOrderCreatePanel, MicroOrderEditPanel } from "./MicroOrderPanels";
 import { PrescriptionCreatePanel, PrescriptionEditPanel } from "./PrescriptionPanels";
 import { RadOrderCreatePanel, RadOrderEditPanel } from "./RadOrderPanels";
 import {
@@ -23,6 +24,8 @@ export type KartePaneState =
   | { kind: "injection-edit"; srId: string }
   | { kind: "lab-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "lab-order-edit"; srId: string }
+  | { kind: "micro-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "micro-order-edit"; srId: string }
   | { kind: "rad-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "rad-order-edit"; srId: string }
   | { kind: "qr-create" }
@@ -38,6 +41,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "injection-edit": "注射編集",
   "lab-order-create": "検体検査登録",
   "lab-order-edit": "検体検査編集",
+  "micro-order-create": "細菌検査登録",
+  "micro-order-edit": "細菌検査編集",
   "rad-order-create": "放射線検査登録",
   "rad-order-edit": "放射線検査編集",
   "qr-create": "テンプレート登録",
@@ -53,6 +58,7 @@ function paneKey(state: KartePaneState): string {
     case "prescription-edit":
     case "injection-edit":
     case "lab-order-edit":
+    case "micro-order-edit":
     case "rad-order-edit":
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
@@ -62,6 +68,7 @@ function paneKey(state: KartePaneState): string {
     case "prescription-create":
     case "injection-create":
     case "lab-order-create":
+    case "micro-order-create":
     case "rad-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "note-create":
@@ -141,6 +148,12 @@ export function KarteRightPane({
         </button>
         <button
           type="button"
+          onClick={() => onStateChange({ kind: "micro-order-create", problem: selectedProblem })}
+        >
+          細菌検査
+        </button>
+        <button
+          type="button"
           onClick={() => onStateChange({ kind: "rad-order-create", problem: selectedProblem })}
         >
           放射線検査
@@ -205,6 +218,17 @@ function PaneContent({
       );
     case "lab-order-edit":
       return <LabOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "micro-order-create":
+      return (
+        <MicroOrderCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "micro-order-edit":
+      return <MicroOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "rad-order-create":
       return (
         <RadOrderCreatePanel

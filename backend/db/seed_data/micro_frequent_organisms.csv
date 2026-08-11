@@ -1,0 +1,33 @@
+code,name,category
+1131,Streptococcus pneumoniae,呼吸器
+3201,Haemophilus influenzae,呼吸器
+1851,Moraxella (Branhamella) catarrhalis,呼吸器
+8001,Mycoplasma pneumoniae,呼吸器
+3301,Legionella pneumophila subsp. pneumophila,呼吸器
+6501,Mycobacterium tuberculosis,抗酸菌
+6505,Mycobacterium avium complex,抗酸菌
+1301,Staphylococcus aureus subsp. aureus,グラム陽性球菌
+1303,Staphylococcus aureus (MRSA),グラム陽性球菌
+1111,Streptococcus pyogenes,グラム陽性球菌
+1114,Streptococcus agalactiae,グラム陽性球菌
+1201,Enterococcus faecalis,グラム陽性球菌
+1205,Enterococcus faecium,グラム陽性球菌
+2001,Escherichia coli,腸内細菌目
+2351,Klebsiella pneumoniae subsp. pneumoniae,腸内細菌目
+2151,Enterobacter cloacae,腸内細菌目
+2201,Proteus mirabilis,腸内細菌目
+2101,Serratia marcescens subsp. marcescens,腸内細菌目
+4001,Pseudomonas aeruginosa,ブドウ糖非発酵菌
+4402,Acinetobacter baumannii,ブドウ糖非発酵菌
+4151,Stenotrophomonas maltophilia,ブドウ糖非発酵菌
+5501,Bacteroides fragilis,嫌気性菌
+5051,Clostridium difficile,嫌気性菌
+3704,Campylobacter jejuni/coli,腸管感染症
+2453,"Salmonella sp. (S. Typhi, S. Paratyphi A以外)",腸管感染症
+2500,Shigella sp.,腸管感染症
+2003,"Escherichia coli ,enterohemorrhagic (EHEC)",腸管感染症
+1801,Neisseria gonorrhoeae,性感染症
+8201,Chlamydia trachomatis,性感染症
+7001,Candida albicans,真菌
+7111,Cryptococcus neoformans,真菌
+7302,Aspergillus fumigatus,真菌

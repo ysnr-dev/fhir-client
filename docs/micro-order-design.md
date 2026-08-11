@@ -223,11 +223,11 @@ API: `resources :micro_specimen_types / :micro_organisms / :micro_order_items /
 
 ---
 
-## 7. オーダー入力画面とFHIR表現
+## 7. オーダー入力画面とFHIR表現（実装済み）
 
 ### 7.1 FHIRの構造
 
-［提案］検体検査・放射線とまったく同じ親子関係にする。
+検体検査・放射線とまったく同じ親子関係にする。
 
 ```text
 ヘッダ ServiceRequest（category に order-type=micro）
@@ -313,7 +313,27 @@ contained Specimen（JP_Specimen_Common）:
 
 - `karteTimeline.ts` に kind `"micro-order"` を追加、`KarteRightPane` / `KarteTimeline` /
   `KarteCardModals` / `karteUrl` / `KartePage` に既存オーダーと同じ分岐を追加。
-- カード表示: 検体種別＋採取部位を見出しに、検査項目・目的菌・疑い病名を本文に出す。
+- カード表示: 「GP1 喀出痰（気管内・吸引）」の見出しに検査項目を並べ、
+  目的菌・疑い病名を字下げで添える（放射線カードと同じ組み方）。
+- 右ペインの新規登録ボタンとマスタメンテのナビは、いずれも
+  **「細菌検査」を「検体検査」の直下**に置く（検体を扱う点で近い領域のため）。
+
+### 7.4 実装メモ
+
+- 追加ファイル: `fhir/microOrderHelpers.ts`、`components/MicroOrderForm.tsx` /
+  `MicroOrderPanels.tsx` / `MicroOrderDetailPanel.tsx`、
+  `hooks/useMicroOrderInitialValues.ts` / `useAntimicrobialSuggestions.ts`、
+  `api/queries.ts` に `useMicroOrderDetail` / `useDeleteMicroOrder`。
+- 「処方から取り込み」は患者の直近オーダー20件の MedicationRequest から
+  レセ電算コードを集め、`GET /master/medicines?medicine_code[]=...`（一括照会を追加）で
+  薬効分類を引いて 61x/622/624 を抗菌薬とみなす。同じ薬剤は最新の1件だけを候補に出し、
+  選ぶと「薬品名（開始日〜 N日分）」をテキストに追記する。
+- 目的菌の頻用チェックは `frequent=true` の一覧、それ以外はインライン検索
+  （検索から選んだ菌は頻用リストの下に選択済みとして残し、外せるようにする）。
+- 開発環境で検証済み（2026-08-11）: 登録（喀出痰・気管内・吸引、塗抹/培養/感受性、
+  目的菌 S. pneumoniae、疑い病名、処方から取り込んだセファゾリン）→ カード表示 →
+  詳細モーダル → FHIR 構造（ヘッダ+GP+項目3件、orderDetail・reasonCode を上流で確認）→
+  DO（全項目複写）→ 削除（明細まで連鎖、孤児なしを上流で確認）。
 
 ---
 

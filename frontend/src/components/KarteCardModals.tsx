@@ -1,6 +1,7 @@
 import {
   useClinicalNote,
   useLabOrderDetail,
+  useMicroOrderDetail,
   useRadOrderDetail,
   useLabResultDetail,
   usePrescriptionDetail,
@@ -8,6 +9,7 @@ import {
 } from "../api/queries";
 import { KARTE_KIND_LABELS, type KarteTimelineItem } from "../fhir/karteTimeline";
 import { labOrderItemRequests, serviceRequestsOf } from "../fhir/labOrderHelpers";
+import { microOrderItemRequests } from "../fhir/microOrderHelpers";
 import { radOrderItemRequests } from "../fhir/radOrderHelpers";
 import { splitLabResultDetailBundle } from "../fhir/labResultHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
@@ -20,6 +22,7 @@ import { InjectionDetailPanel } from "./InjectionDetailPanel";
 import { LabOrderDetailPanel } from "./LabOrderDetailPanel";
 import { LabResultDetailPanel } from "./LabResultDetailPanel";
 import { Modal } from "./Modal";
+import { MicroOrderDetailPanel } from "./MicroOrderDetailPanel";
 import { PrescriptionDetailPanel } from "./PrescriptionDetailPanel";
 import { QuestionnaireResponseDetailPanel } from "./QuestionnaireResponseDetailPanel";
 import { RadOrderDetailPanel } from "./RadOrderDetailPanel";
@@ -32,6 +35,7 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   prescription: "処方内容",
   injection: "注射内容",
   "lab-order": "検体検査内容",
+  "micro-order": "細菌検査内容",
   "rad-order": "放射線検査内容",
   "lab-result": "検査結果内容",
   qr: "テンプレート表示",
@@ -60,6 +64,8 @@ export function KarteDetailModal({
         <InjectionDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-order" ? (
         <LabOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+      ) : target.kind === "micro-order" ? (
+        <MicroOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "rad-order" ? (
         <RadOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-result" ? (
@@ -206,6 +212,42 @@ function LabOrderDetail({
   );
 }
 
+// 細菌検査も明細(検体グループ・検査項目)が ServiceRequest なので、
+// ヘッダと明細を 1 リクエストで取る。
+function MicroOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = useMicroOrderDetail(srId);
+  const requests = serviceRequestsOf(detail.data?.data);
+  const serviceRequest = requests.find((request) => request.id === srId);
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された細菌検査は別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <MicroOrderDetailPanel
+          serviceRequest={serviceRequest}
+          itemRequests={microOrderItemRequests(requests, srId)}
+          problemsById={problemsById}
+        />
+      ) : (
+        !detail.error && <NotFound label="細菌検査" />
+      )}
+    </>
+  );
+}
+
 // 放射線検査も明細が ServiceRequest なので、ヘッダと明細を 1 リクエストで取る。
 function RadOrderDetail({
   patientId,
@@ -304,6 +346,8 @@ export function KarteCardJsonModal({
         <PrescriptionJson srId={item.id} />
       ) : item.kind === "lab-order" ? (
         <LabOrderJson srId={item.id} />
+      ) : item.kind === "micro-order" ? (
+        <MicroOrderJson srId={item.id} />
       ) : item.kind === "rad-order" ? (
         <RadOrderJson srId={item.id} />
       ) : (
@@ -329,6 +373,18 @@ function PrescriptionJson({ srId }: { srId: string }) {
 // 検体検査もオーダーのヘッダと明細をまとめた Bundle で見せる。
 function LabOrderJson({ srId }: { srId: string }) {
   const detail = useLabOrderDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
+    </>
+  );
+}
+
+// 細菌検査もオーダーのヘッダと明細をまとめた Bundle で見せる。
+function MicroOrderJson({ srId }: { srId: string }) {
+  const detail = useMicroOrderDetail(srId);
 
   return (
     <>
