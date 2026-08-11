@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_11_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_12_000100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -494,6 +494,27 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_11_000000) do
     t.datetime "updated_at", null: false
     t.index ["member_item_code"], name: "index_master_rad_set_items_on_member_item_code"
     t.index ["set_item_code", "member_item_code"], name: "index_rad_set_items_on_set_and_member", unique: true
+  end
+
+  create_table "master_schema_categories", force: :cascade do |t|
+    t.string "name", null: false
+    t.bigint "parent_id"
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["parent_id"], name: "index_master_schema_categories_on_parent_id"
+  end
+
+  create_table "master_schemas", force: :cascade do |t|
+    t.string "name", null: false
+    t.bigint "category_id"
+    t.text "image", null: false
+    t.text "thumbnail", null: false
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category_id"], name: "index_master_schemas_on_category_id"
   end
 
   create_table "questionnaire_categories", force: :cascade do |t|

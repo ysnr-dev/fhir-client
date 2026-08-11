@@ -12,6 +12,7 @@ import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
 import { LabContainerPage } from "./pages/LabContainerPage";
+import { SchemaMasterPage } from "./pages/SchemaMasterPage";
 import { LabOrderItemLayoutPage } from "./pages/LabOrderItemLayoutPage";
 import { LabOrderItemPage } from "./pages/LabOrderItemPage";
 import { LabSpecimenPage } from "./pages/LabSpecimenPage";
@@ -85,6 +86,9 @@ function App() {
                 </Link>
                 <Link to="/report-layouts" className="row-menu__item">
                   帳票レイアウト
+                </Link>
+                <Link to="/schemas" className="row-menu__item">
+                  シェーマ
                 </Link>
               </SubMenu>
               <SubMenu label="医薬品">
@@ -161,6 +165,7 @@ function App() {
           <Route path="/lab-order-item-layouts" element={<LabOrderItemLayoutPage />} />
           <Route path="/lab-specimens" element={<LabSpecimenPage />} />
           <Route path="/lab-containers" element={<LabContainerPage />} />
+          <Route path="/schemas" element={<SchemaMasterPage />} />
           <Route path="/rad-items" element={<RadItemPage />} />
           <Route path="/rad-item-layouts" element={<RadItemLayoutPage />} />
           <Route path="/rad-jj1017-codes" element={<RadJj1017CodePage />} />

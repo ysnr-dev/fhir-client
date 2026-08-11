@@ -108,6 +108,24 @@ export async function normalizeImageFile(
   return { dataUrl, contentType };
 }
 
+// 一覧・選択グリッド用のサムネイルを作る。台紙はシェーママスタの image(dataURL)を
+// 縮小するだけなので、劣化を許容して JPEG に落としサイズを稼ぐ。
+export async function makeThumbnailDataUrl(dataUrl: string, maxDim = 160): Promise<string> {
+  const img = await loadImage(dataUrl);
+  const scale = Math.min(maxDim / Math.max(img.naturalWidth, img.naturalHeight), 1);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("画像の変換に失敗しました。");
+  // 透過PNGを黒背景にしないよう白で塗ってから描く。
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.8);
+}
+
 // dataURL を transaction Bundle の Binary 作成エントリにする。
 // placeholder は同じ Bundle 内から参照するための fullUrl。
 export function imageBinaryEntry(

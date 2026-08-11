@@ -125,5 +125,9 @@ Rails.application.routes.draw do
     resources :jfagy_allergens, only: %i[index] do
       collection { post :import }
     end
+    # シェーマ(診療記録に描き込む台紙画像)。カテゴリは parent_id の隣接リストで
+    # 任意の深さの階層を持つ。
+    resources :schema_categories, only: %i[index show create update destroy]
+    resources :schemas, only: %i[index show create update destroy]
   end
 end

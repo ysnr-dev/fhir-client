@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Color, FontSize, TextStyle } from "@tiptap/extension-text-style";
@@ -9,6 +9,12 @@ import { normalizeImageFile } from "../fhir/schemaImage";
 // 装飾はフォントサイズと文字色のみ(要件)。出力は HTML で、FHIR へは
 // clinicalNoteHelpers の htmlToXhtml で XHTML 化して保存する。
 // 画像は Binary を使わず data: URI のまま本文に埋め込む。
+
+// 外(シェーマ挿入モーダルなど)からエディタを操作するためのハンドル。
+export interface RichTextEditorHandle {
+  // カーソル位置(未フォーカスなら文末)に画像を挿入する。
+  insertImage: (dataUrl: string) => void;
+}
 
 interface RichTextEditorProps {
   // 非制御。初期値を渡し、変更は onChange で受け取る。
@@ -24,6 +30,8 @@ interface RichTextEditorProps {
   // false で本文を読み取り専用にする(テンプレート由来セクション)。
   // 装飾・画像ボタンも隠す。マウント後の切替は想定しない(呼び出し側が key で作り直す)。
   editable?: boolean;
+  // 外部操作用ハンドル。prop 名 ref はコンポーネント参照と紛れるので分ける。
+  apiRef?: Ref<RichTextEditorHandle>;
 }
 
 // SchemaImageAnnotator の PEN_COLORS と同じパレット(アプリ内で装飾色を統一する)。
@@ -46,6 +54,7 @@ export function RichTextEditor({
   trailing,
   actions,
   editable = true,
+  apiRef,
 }: RichTextEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   // 装飾は使う機会が限られるため既定では畳んでおく。セクションが複数並ぶ画面で
@@ -76,6 +85,18 @@ export function RichTextEditor({
       fontSize: (editor?.getAttributes("textStyle").fontSize as string | undefined) ?? null,
     }),
   });
+
+  // シェーマ挿入(ClinicalNoteForm のモーダル)から画像を挿し込むための口。
+  // 既存の画像ボタンと同じ経路(setImage)でカーソル位置に入れる。
+  useImperativeHandle(
+    apiRef,
+    () => ({
+      insertImage: (dataUrl: string) => {
+        editor?.chain().focus().setImage({ src: dataUrl }).run();
+      },
+    }),
+    [editor],
+  );
 
   // editor 未初期化でも早期 return しない。leading/trailing にはセクションの操作
   // (種別変更・並べ替え・削除)が入るため、一瞬でも消えると操作を取りこぼす。

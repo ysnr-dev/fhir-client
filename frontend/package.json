@@ -17,6 +17,7 @@
     "@tiptap/react": "^3.29.2",
     "@tiptap/starter-kit": "^3.29.2",
     "dompurify": "^3.4.12",
+    "fabric": "^7.4.0",
     "fhirpath": "^5.0.0",
     "highlight.js": "^11.11.1",
     "react": "^19.2.7",
