@@ -202,6 +202,16 @@ export function schemaImageRefs(response: fhir4.QuestionnaireResponse): SchemaIm
   return refs;
 }
 
+// シェーマ画像を実物で並べる場所向けに、平文を行に割って「あり」の印を落とす。
+// 印だけになる行(答えがシェーマ画像しかない項目)は、項目名が画像側のキャプションに
+// 出るので捨てる。
+export function schemaAnnotatedLines(text: string): string[] {
+  return text
+    .split("\n")
+    .map((line) => line.replace(SCHEMA_IMAGE_NOTE, "").trimEnd())
+    .filter((line) => line.trim() && !/[:：]$/.test(line.trim()));
+}
+
 // 記入内容を平文にする(カルテ等への貼り付け用)。項目名は
 // QuestionnaireResponse.item.text、単位は元 Questionnaire から引く。
 //

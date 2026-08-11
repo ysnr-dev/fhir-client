@@ -1,7 +1,11 @@
 import { referencedResponseIds } from "./clinicalNoteHelpers";
 import { isInjectionServiceRequest } from "./injectionHelpers";
 import { isLabServiceRequest, isOrderItemRequest, labOrderItemRequests } from "./labOrderHelpers";
-import { isRadServiceRequest, radOrderItemRequests } from "./radOrderHelpers";
+import {
+  isRadServiceRequest,
+  radOrderItemRequests,
+  radOrderResponseIds,
+} from "./radOrderHelpers";
 import { questionnaireCanonical } from "./questionnaireResponseHelpers";
 
 // カルテ画面のタイムライン(診療日ごとの時系列表示)を組み立てる純粋ロジック。
@@ -179,9 +183,12 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   );
   const questionnaires = pickByType<fhir4.Questionnaire>(responseResources, "Questionnaire");
 
-  // 診療記録のセクションから参照されている回答は、記録カードの本文として既に
-  // 描画されるので単独カードにしない。
-  const linkedResponseIds = new Set(compositions.flatMap((c) => referencedResponseIds(c)));
+  // 診療記録のセクション・放射線オーダーの検査目的/特別指示から参照されている回答は、
+  // そのカードの本文として既に描画されるので単独カードにしない。
+  const linkedResponseIds = new Set([
+    ...compositions.flatMap((c) => referencedResponseIds(c)),
+    ...radOrderResponseIds(serviceRequests),
+  ]);
 
   // canonical("<url>|<version>")と url 単独の両方で引けるようにしておく
   // (QuestionnaireResponse.questionnaire はバージョン無しのこともある)。

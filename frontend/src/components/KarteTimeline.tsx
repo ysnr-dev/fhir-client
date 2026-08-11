@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
-  useBinaryImage,
   useDeleteClinicalNote,
   useDeleteLabOrder,
   useDeleteRadOrder,
@@ -51,9 +50,9 @@ import {
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
 import {
-  SCHEMA_IMAGE_NOTE,
   questionnaireResponseDocumentText,
   questionnaireResponsePlainText,
+  schemaAnnotatedLines,
   schemaImageRefs,
   summarizeQuestionnaireResponse,
 } from "../fhir/questionnaireResponseHelpers";
@@ -61,6 +60,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { KarteCardJsonModal } from "./KarteCardModals";
 import { PlainTextModal } from "./PlainTextModal";
 import { RichTextView } from "./RichTextView";
+import { ResponseSchemaImages, SchemaImageGallery } from "./SchemaImageGallery";
 import { RowMenu } from "./RowMenu";
 
 interface KarteTimelineProps {
@@ -600,13 +600,11 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
       </p>
     );
   }
-  // シェーマ画像は下に実物を出すので、平文の「あり」の印は落とす。印だけの行
-  // (答えがシェーマ画像しかない項目)は項目名が画像側のキャプションに出るので捨てる。
+  // シェーマ画像は下に実物を出すので、平文の「あり」の印は落とす。
   const schemas = schemaImageRefs(item.response);
-  const lines = questionnaireResponsePlainText(item.questionnaire, item.response)
-    .split("\n")
-    .map((line) => line.replace(SCHEMA_IMAGE_NOTE, "").trimEnd())
-    .filter((line) => line.trim() && !/[:：]$/.test(line.trim()));
+  const lines = schemaAnnotatedLines(
+    questionnaireResponsePlainText(item.questionnaire, item.response),
+  );
   if (lines.length === 0 && schemas.length === 0) {
     return <p className="karte-card__empty">回答がありません。</p>;
   }
@@ -619,13 +617,7 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
           ))}
         </ul>
       )}
-      {schemas.length > 0 && (
-        <div className="karte-qr__schemas">
-          {schemas.map((schema) => (
-            <KarteSchemaImage key={schema.key} binaryId={schema.binaryId} label={schema.label} />
-          ))}
-        </div>
-      )}
+      <SchemaImageGallery refs={schemas} />
     </>
   );
 }
@@ -671,10 +663,24 @@ function LabOrderCardBody({
 }
 
 // GP 単位で入力した内容。撮影項目の下に、見出し付きで 1 行ずつ並べる。
-const RAD_GP_DETAILS: { label: string; of: (item: RadOrderItemLine) => string }[] = [
+// 検査目的・特別指示はテンプレートからも記載でき、その回答にシェーマ画像が
+// 含まれることがあるので、記入内容(QuestionnaireResponse)の参照も持たせる。
+const RAD_GP_DETAILS: {
+  label: string;
+  of: (item: RadOrderItemLine) => string;
+  templateOf?: (item: RadOrderItemLine) => string;
+}[] = [
   { label: "依頼病名", of: (item) => item.reasonName },
-  { label: "検査目的", of: (item) => item.purpose },
-  { label: "特別指示", of: (item) => item.remarks },
+  {
+    label: "検査目的",
+    of: (item) => item.purpose,
+    templateOf: (item) => item.purposeTemplate?.responseId ?? "",
+  },
+  {
+    label: "特別指示",
+    of: (item) => item.remarks,
+    templateOf: (item) => item.remarksTemplate?.responseId ?? "",
+  },
 ];
 
 // 放射線検査は GP(撮影項目 1 つ、またはセット 1 つ)ごとに出す。セットは構成項目も
@@ -714,14 +720,22 @@ function RadOrderCardBody({
               ))}
             </ul>
             {/* 依頼病名・検査目的・特別指示は GP 単位の記入なので、撮影項目の後ろに
-                同じ字下げで並べる(処方の用法と同じ置き方)。 */}
-            {RAD_GP_DETAILS.map(({ label, of }) => {
-              const value = of(entry.item);
-              if (!value) return null;
+                同じ字下げで並べる(処方の用法と同じ置き方)。テンプレートから記載した
+                シェーマ画像は、平文の「あり」の印に代えて実物を続けて出す
+                (テンプレート回答カードと同じ見せ方)。 */}
+            {RAD_GP_DETAILS.map(({ label, of, templateOf }) => {
+              const lines = schemaAnnotatedLines(of(entry.item));
+              const responseId = templateOf?.(entry.item) ?? "";
+              if (lines.length === 0 && !responseId) return null;
               return (
                 <div className="karte-rp__detail" key={label}>
                   <span className="karte-rp__detail-label">{`${label}:`}</span>
-                  <span>{value}</span>
+                  <div className="karte-rp__detail-body">
+                    {lines.map((line, lineIndex) => (
+                      <span key={lineIndex}>{line}</span>
+                    ))}
+                    {responseId && <ResponseSchemaImages responseId={responseId} />}
+                  </div>
                 </div>
               );
             })}
@@ -730,25 +744,6 @@ function RadOrderCardBody({
       })}
       {comment && <p className="karte-card__note">{comment}</p>}
     </>
-  );
-}
-
-// 描き込み済みシェーマ画像のサムネイル。Binary は staleTime: Infinity で
-// キャッシュされるので、同じ画像を何枚出しても取得は 1 回で済む。
-function KarteSchemaImage({ binaryId, label }: { binaryId: string; label: string }) {
-  const { data, isLoading } = useBinaryImage(binaryId);
-
-  return (
-    <figure className="karte-qr__schema">
-      {data ? (
-        <img className="karte-qr__schema-image" src={data} alt={label || "シェーマ画像"} />
-      ) : (
-        <p className="karte-card__empty">
-          {isLoading ? "画像を読み込み中..." : "画像を表示できません。"}
-        </p>
-      )}
-      {label && <figcaption className="karte-qr__schema-caption">{label}</figcaption>}
-    </figure>
   );
 }
 

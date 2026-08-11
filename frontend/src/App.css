@@ -4131,6 +4131,14 @@ body.karte-wide .app__header {
   color: var(--text);
 }
 
+/* 見出しの右側。複数行の記載やシェーマ画像が入るので縦に積む。 */
+.karte-rp__detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .karte-rp__comment {
   color: var(--text);
 }
