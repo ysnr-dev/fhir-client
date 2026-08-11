@@ -3074,14 +3074,6 @@ fieldset.rp-card {
   outline: 2px solid var(--accent);
 }
 
-.schema-annotator__canvas {
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  overflow: auto;
-  max-height: 65vh;
-  touch-action: none;
-}
-
 .schema-annotator__footer {
   display: flex;
   justify-content: flex-end;

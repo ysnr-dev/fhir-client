@@ -14,20 +14,22 @@ import {
 } from "fabric";
 import { Modal } from "./Modal";
 
-// 診療記録に挿入するシェーマのペイントモーダル(fabric.js)。
-// 台紙(backgroundDataUrl)を背景に、ペン・図形・矢印・テキストを描き込み、
-// 保存時に背景込みの合成 PNG(dataURL)を返す。オブジェクト情報は保持しない
-// (挿入後の再編集は画像への追記になる)。
-// SchemaImageAnnotator(テンプレート用・ペンのみ)とはインターフェースを揃えてある。
+// シェーマのペイントモーダル(fabric.js)。台紙(backgroundDataUrl)を背景に、
+// ペン・図形・矢印・テキストを描き込み、保存時に背景込みの合成 PNG(dataURL)を返す。
+// オブジェクト情報は保持しない(保存後の再編集は画像への追記になる)。
+// 診療記録のシェーマ挿入(ClinicalNoteForm)とテンプレート項目の描き込み
+// (SchemaImageField)で共用する。
 
 interface SchemaPaintModalProps {
   title: string;
   backgroundDataUrl: string;
   onSave: (dataUrl: string) => void;
   onClose: () => void;
+  // 確定ボタンの文言。保存先が呼び出し側で異なる(記録への挿入 / 回答への添付)。
+  saveLabel?: string;
 }
 
-// SchemaImageAnnotator と同じパレット(アプリ内で装飾色を統一する)。
+// RichTextEditor の文字色と同じパレット(アプリ内で装飾色を統一する)。
 const PEN_COLORS = [
   { code: "#1f1f1f", label: "黒" },
   { code: "#d32f2f", label: "赤" },
@@ -68,6 +70,7 @@ export function SchemaPaintModal({
   backgroundDataUrl,
   onSave,
   onClose,
+  saveLabel = "保存",
 }: SchemaPaintModalProps) {
   const canvasElRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<Canvas | null>(null);
@@ -489,7 +492,7 @@ export function SchemaPaintModal({
             キャンセル
           </button>
           <button type="button" disabled={saving} onClick={handleSave}>
-            {saving ? "保存中..." : "記録に挿入"}
+            {saving ? "保存中..." : saveLabel}
           </button>
         </div>
       </div>

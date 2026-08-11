@@ -34,7 +34,7 @@ interface RichTextEditorProps {
   apiRef?: Ref<RichTextEditorHandle>;
 }
 
-// SchemaImageAnnotator の PEN_COLORS と同じパレット(アプリ内で装飾色を統一する)。
+// SchemaPaintModal の PEN_COLORS と同じパレット(アプリ内で装飾色を統一する)。
 const TEXT_COLORS = [
   { code: "#d32f2f", label: "赤" },
   { code: "#1565c0", label: "青" },

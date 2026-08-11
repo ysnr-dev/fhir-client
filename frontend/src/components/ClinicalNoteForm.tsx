@@ -380,6 +380,7 @@ export function ClinicalNoteForm({
         <SchemaPaintModal
           title={`シェーマ: ${schemaPaint.name}`}
           backgroundDataUrl={schemaPaint.background}
+          saveLabel="記録に挿入"
           onSave={(dataUrl) => insertSchema(schemaPaint.uid, dataUrl)}
           onClose={() => setSchemaPaint(null)}
         />
