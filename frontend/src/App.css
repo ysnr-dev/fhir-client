@@ -4605,7 +4605,8 @@ body.karte-wide .app__header {
   gap: 8px;
 }
 
-/* 伝票グリッド。列数が多いときは枠内で横スクロールさせる。 */
+/* 伝票グリッド。幅いっぱいに列を均等割りし、最小幅(列数×140px。table側で指定)を
+   下回るときだけ枠内で横スクロールさせる。 */
 .order-layout__grid-wrap {
   overflow-x: auto;
   margin-bottom: 12px;
@@ -4614,12 +4615,11 @@ body.karte-wide .app__header {
 .order-layout__grid {
   border-collapse: collapse;
   table-layout: fixed;
+  width: 100%;
 }
 
 .order-layout__cell {
   border: 1px solid var(--border);
-  width: 140px;
-  min-width: 140px;
   height: 40px;
   padding: 4px 8px;
   font-size: 13px;
@@ -4689,8 +4689,9 @@ body.karte-wide .app__header {
 
 /* 検体検査オーダー(カルテ右ペイン) ---------------------------------------- */
 
-/* 伝票グリッド。右ペインは幅が狭いのでマスタ画面よりマスを小さくし、
-   入りきらないぶんは枠内で横スクロールさせる。 */
+/* 伝票グリッド。右ペインは幅が狭いのでマスタ画面よりマスを小さくする。
+   幅いっぱいに列を均等割りし、最小幅(列数×104px。table側で指定)を下回るときだけ
+   枠内で横スクロールさせる。 */
 .order-select__grid-wrap {
   overflow-x: auto;
   margin-bottom: 12px;
@@ -4698,15 +4699,17 @@ body.karte-wide .app__header {
 
 .order-select__grid {
   border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
 }
 
 .order-select__cell {
   border: 1px solid var(--border);
-  min-width: 104px;
   height: 34px;
   padding: 2px 6px;
   font-size: 12px;
   vertical-align: middle;
+  overflow: hidden;
 }
 
 .order-select__cell--label {
@@ -4714,6 +4717,7 @@ body.karte-wide .app__header {
   color: var(--text-h);
   font-weight: 600;
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* 伝票と検索の切替タブ。カルテ画面のタブ(.karte-tabs)と同じ下線タブにする。 */

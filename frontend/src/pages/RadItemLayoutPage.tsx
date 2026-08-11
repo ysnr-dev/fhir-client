@@ -278,7 +278,8 @@ function LayoutEditor({ layoutId, onDeleted }: { layoutId: number; onDeleted: ()
       />
 
       <div className="order-layout__grid-wrap">
-        <table className="order-layout__grid">
+        {/* 列は幅いっぱいに均等割りするが、狭すぎるマスにならないよう最小幅は確保する。 */}
+        <table className="order-layout__grid" style={{ minWidth: columns.length * 140 }}>
           <tbody>
             {rows.map((row) => (
               <tr key={row}>

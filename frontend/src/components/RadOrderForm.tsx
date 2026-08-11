@@ -727,7 +727,8 @@ function LayoutSelectGrid({
   return (
     <div className="order-select__grid-wrap">
       <ErrorBanner error={error} />
-      <table className="order-select__grid">
+      {/* 列は幅いっぱいに均等割りするが、狭すぎるマスにならないよう最小幅は確保する。 */}
+      <table className="order-select__grid" style={{ minWidth: columns.length * 104 }}>
         <tbody>
           {rows.map((row) => (
             <tr key={row}>
