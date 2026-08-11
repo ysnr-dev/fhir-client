@@ -57,7 +57,7 @@ interface Draft {
   receipt_code: string;
   display_order: string;
   note: string;
-  // 検査目的・特記事項の既定テンプレート(Questionnaire の canonical)。
+  // 検査目的・特別指示の既定テンプレート(Questionnaire の canonical)。
   purpose_template_canonical: string;
   remarks_template_canonical: string;
 }
@@ -581,7 +581,7 @@ function readElementCodes(item: RadItemDetail): ElementCodes {
   return codes;
 }
 
-// オーダー画面の「検査目的」「特記事項」を記入するときに最初から選ばれている
+// オーダー画面の「検査目的」「特別指示」を記入するときに最初から選ばれている
 // テンプレート。撮影項目ごとに決めておくもので、オーダー時に別のものへ変えられる。
 function TemplateDefaults({
   purpose,
@@ -606,7 +606,7 @@ function TemplateDefaults({
     <section className="lab-order-item__section">
       <div className="lab-order-item__section-head">
         <h3>既定のテンプレート</h3>
-        <span className="rad-code__summary">オーダー画面の検査目的・特記事項の記入に使う</span>
+        <span className="rad-code__summary">オーダー画面の検査目的・特別指示の記入に使う</span>
       </div>
       <ErrorBanner error={templates.error} />
       <div className="rad-item__templates">
@@ -617,7 +617,7 @@ function TemplateDefaults({
           onChange={(id) => onChange({ purpose_template_canonical: canonicalOf(id) })}
         />
         <TemplateSelect
-          label="特記事項"
+          label="特別指示"
           questionnaires={templates.questionnaires}
           value={idOf(remarks)}
           onChange={(id) => onChange({ remarks_template_canonical: canonicalOf(id) })}

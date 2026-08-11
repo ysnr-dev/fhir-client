@@ -19,7 +19,10 @@ import {
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
-import { questionnaireResponsePlainText } from "../fhir/questionnaireResponseHelpers";
+import {
+  questionnaireResponsePlainText,
+  type TemplateBinding,
+} from "../fhir/questionnaireResponseHelpers";
 import {
   PRIORITY_OPTIONS,
   bodySiteLabel,
@@ -34,7 +37,7 @@ import {
 } from "../fhir/radOrderHelpers";
 import { useConditionOptions } from "../hooks/useConditionOptions";
 import { useProblemOptions } from "../hooks/useProblemOptions";
-import { ClinicalNoteTemplateModal } from "./ClinicalNoteTemplateModal";
+import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 
@@ -45,7 +48,7 @@ import { ProblemSelect } from "./ProblemSelect";
 // 構成する撮影は GP の中身として並べる。FHIR には検体検査のパネルと同じく
 // セット親と構成項目を親子の ServiceRequest で保存する。
 //
-// GP ごとに依頼病名・検査目的・特記事項を入力する。検査目的と特記事項は診療記録の
+// GP ごとに依頼病名・検査目的・特別指示を入力する。検査目的と特別指示は診療記録の
 // SOAP と同じテンプレート(Questionnaire)から記入でき、撮影項目マスタに既定の
 // テンプレートが設定してあればそれを最初から選んだ状態で開く。
 //
@@ -169,6 +172,8 @@ export function RadOrderForm({
       reasonName: "",
       purpose: "",
       remarks: "",
+      purposeTemplate: null,
+      remarksTemplate: null,
       parentCode,
     }),
     [catalogResult],
@@ -288,13 +293,23 @@ export function RadOrderForm({
   }
 
   const entries = orderEntries(values.items);
-  // テンプレートの既定は撮影項目マスタが持つ。記入後は本文だけを欄に入れるので、
-  // 回答(QuestionnaireResponse)は保存しない — 同じ欄をフリーテキストでも書けるため。
+  // テンプレートの既定は撮影項目マスタが持つ。記入内容は診療記録(SOAP)と同じく
+  // QuestionnaireResponse として保存し、後からテンプレート画面で開き直せる。
   const templateMaster = templateTarget ? catalogByCode.get(templateTarget.code) : undefined;
   const templateCanonical =
     templateTarget?.field === "purpose"
       ? templateMaster?.purpose_template_canonical
       : templateMaster?.remarks_template_canonical;
+  // 記入済みの欄を開いたときは、その回答を読み込んで続きから直せるようにする。
+  const templateItem = templateTarget
+    ? values.items.find((line) => line.code === templateTarget.code)
+    : undefined;
+  const templateBinding =
+    templateTarget && templateItem
+      ? templateTarget.field === "purpose"
+        ? templateItem.purposeTemplate
+        : templateItem.remarksTemplate
+      : null;
 
   return (
     <>
@@ -464,18 +479,24 @@ export function RadOrderForm({
       {/* モーダル内の QuestionnaireResponseForm は独自の <form> を持つため、
           外側フォームの子孫に置かない(form の入れ子は不正で、送信が外へ漏れる)。 */}
       {templateTarget && (
-        <ClinicalNoteTemplateModal
+        <TemplateEntryModal
           patientId={patientId}
-          draft={null}
-          responseId={null}
+          draft={templateBinding?.draft ?? null}
+          responseId={templateBinding?.responseId ?? null}
           defaultCanonical={templateCanonical ?? undefined}
           onSubmit={(draft) => {
-            updateItem(templateTarget.code, {
-              [templateTarget.field]: questionnaireResponsePlainText(
-                draft.questionnaire,
-                draft.response,
-              ),
-            });
+            const text = questionnaireResponsePlainText(draft.questionnaire, draft.response);
+            // 保存済みの回答を再編集した場合は同じ id へ書き戻す(id は保存時に使う)。
+            const binding: TemplateBinding = {
+              responseId: templateBinding?.responseId ?? null,
+              draft,
+            };
+            updateItem(
+              templateTarget.code,
+              templateTarget.field === "purpose"
+                ? { purpose: text, purposeTemplate: binding }
+                : { remarks: text, remarksTemplate: binding },
+            );
             setTemplateTarget(null);
           }}
           onClose={() => setTemplateTarget(null)}
@@ -486,7 +507,7 @@ export function RadOrderForm({
 }
 
 // GP 1 つぶんの確認と記入。セットなら構成する撮影を並べ、依頼病名・検査目的・
-// 特記事項は GP 単位で入力する(FHIR では GP を表す明細に載る)。
+// 特別指示は GP 単位で入力する(FHIR では GP を表す明細に載る)。
 function GroupEditor({
   entry,
   number,
@@ -593,41 +614,79 @@ function GroupEditor({
         <TemplateTextField
           label="検査目的"
           value={item.purpose}
+          template={item.purposeTemplate}
           onChange={(purpose) => onChange(item.code, { purpose })}
           onOpenTemplate={() => onOpenTemplate({ code: item.code, field: "purpose" })}
+          onClearTemplate={() => onChange(item.code, { purposeTemplate: null })}
         />
         <TemplateTextField
-          label="特記事項"
+          label="特別指示"
           value={item.remarks}
+          template={item.remarksTemplate}
           onChange={(remarks) => onChange(item.code, { remarks })}
           onOpenTemplate={() => onOpenTemplate({ code: item.code, field: "remarks" })}
+          onClearTemplate={() => onChange(item.code, { remarksTemplate: null })}
         />
       </div>
     </div>
   );
 }
 
-// テンプレートからも直接入力もできる欄。テンプレート記入の結果は平文として
-// 差し込むだけなので、そのあと手で直せる。
+// テンプレートからも直接入力もできる欄。テンプレートから記載した場合は、回答との
+// 食い違いを防ぐため直接編集は不可にし、直すときはテンプレート画面を開き直す
+// (診療記録の SOAP セクションと同じ扱い)。
+//
+// 「解除」でテンプレートとの紐付けを外すと、記載された文言を残したまま直接入力へ戻せる。
+// 保存すると、参照が外れた記入内容(QuestionnaireResponse)はオーダーの更新と同じ
+// transaction で削除される。
 function TemplateTextField({
   label,
   value,
+  template,
   onChange,
   onOpenTemplate,
+  onClearTemplate,
 }: {
   label: string;
   value: string;
+  template: TemplateBinding | null;
   onChange: (value: string) => void;
   onOpenTemplate: () => void;
+  onClearTemplate: () => void;
 }) {
+  const fromTemplate = Boolean(template);
+
   return (
     <label>
       {label}
       <div className="rad-gp__template-field">
-        <textarea rows={2} value={value} onChange={(e) => onChange(e.target.value)} />
-        <button type="button" onClick={onOpenTemplate} title={`${label}をテンプレートから記入`}>
-          テンプレート
-        </button>
+        <textarea
+          rows={2}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          readOnly={fromTemplate}
+          title={
+            fromTemplate ? "テンプレートから記載した内容です。テンプレート編集から直します" : undefined
+          }
+        />
+        <div className="rad-gp__template-actions">
+          <button
+            type="button"
+            onClick={onOpenTemplate}
+            title={fromTemplate ? `${label}をテンプレートから直す` : `${label}をテンプレートから記入`}
+          >
+            {fromTemplate ? "テンプレート編集" : "テンプレート"}
+          </button>
+          {fromTemplate && (
+            <button
+              type="button"
+              onClick={onClearTemplate}
+              title="テンプレートとの紐付けを外して直接入力に戻す(記載された文言は残る)"
+            >
+              解除
+            </button>
+          )}
+        </div>
       </div>
     </label>
   );

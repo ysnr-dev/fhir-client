@@ -1,5 +1,6 @@
 import type { OrderContext } from "../orderContext";
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
+import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import {
   ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
@@ -30,13 +31,17 @@ import {
 // - 種別(モダリティ)は明細の category に出す。撮影室・装置の単位。
 //
 // オーダーの単位(GP)は「単独で選んだ撮影項目 1 つ」または「セット 1 つ」。
-// 依頼病名・検査目的・特記事項はこの GP 単位で入力し、GP を表す明細
+// 依頼病名・検査目的・特別指示はこの GP 単位で入力し、GP を表す明細
 // (単項目ならその項目、セットならセット親)の ServiceRequest に載せる。
 // - 依頼病名: 登録病名から選んだなら reasonReference(Condition)、
 //   フリーテキストなら reasonCode.text。
-// - 特記事項: note。Annotation は「その依頼へのコメント」そのものなので標準要素に載せる。
+// - 特別指示: note。Annotation は「その依頼へのコメント」そのものなので標準要素に載せる。
 // - 検査目的: FHIR に当てはまる標準要素が無い(reason* は依頼病名で使う)ため、
 //   他のローカル拡張と同じ流儀で拡張にする。
+//
+// 検査目的・特別指示をテンプレートから記載した場合は、診療記録(SOAP)と同じく
+// 記入内容を QuestionnaireResponse として保存し、明細から拡張で参照する。
+// 参照があれば後からテンプレート画面で開き直して書き換えられる。
 //
 // JJ1017 には FHIR 用の公式な system URI が無い(JP Core も定義していない)ため、
 // 他のローカルコードと同じ fhir-client.local の URI を使い、末尾は JJ1017 指針が
@@ -60,6 +65,12 @@ const JJ1017_MODALITY_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-modal
 const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
 // 検査目的。標準要素に当てはまるものが無いのでローカル拡張で持つ。
 const EXAM_PURPOSE_EXT_URL = "http://fhir-client.local/StructureDefinition/rad-exam-purpose";
+// テンプレートから記載したときの記入内容(QuestionnaireResponse)への参照。
+// 命名は診療記録の clinical-note-section-questionnaire-response に合わせる。
+const PURPOSE_QR_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/rad-exam-purpose-questionnaire-response";
+const REMARKS_QR_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/rad-remarks-questionnaire-response";
 
 // 明細の並び順。独立したリソースは検索の戻り順が保証されないため、伝票で選んだ
 // 順番を明細自身に持たせる(検体検査・処方の RP 番号と同じ考え方)。
@@ -102,8 +113,14 @@ export interface RadOrderItemLine {
   reasonName: string;
   /** 検査目的。テンプレート記入かフリーテキストで入れる。 */
   purpose: string;
-  /** 特記事項。テンプレート記入かフリーテキストで入れる。 */
+  /** 特別指示。テンプレート記入かフリーテキストで入れる。 */
   remarks: string;
+  /**
+   * 検査目的・特別指示をテンプレートから記載した場合の回答の紐付け。
+   * null ならフリーテキスト(直接編集できる)。
+   */
+  purposeTemplate: TemplateBinding | null;
+  remarksTemplate: TemplateBinding | null;
   /**
    * セットの構成項目としてオーダーした場合、その親(セット)の項目コード。
    * 空ならオーダー画面で単独で選んだ項目。同じ項目がセットの構成項目としても
@@ -214,6 +231,9 @@ function buildItemRequest(
   patientId: string,
   authoredOn: string,
   parentReference: string,
+  // テンプレート記入内容(QuestionnaireResponse)への参照。Bundle 内で解決するため
+  // 呼び出し側が組み立てて渡す(新規は urn:uuid、既存は QuestionnaireResponse/{id})。
+  templateRefs: { purpose: string; remarks: string },
 ): fhir4.ServiceRequest {
   const coding: fhir4.Coding[] = [
     { system: ORDER_ITEM_SYSTEM, code: item.code, display: item.name },
@@ -268,14 +288,36 @@ function buildItemRequest(
   } else if (item.reasonName) {
     resource.reasonCode = [{ text: item.reasonName }];
   }
-  if (item.purpose) {
-    resource.extension = [{ url: EXAM_PURPOSE_EXT_URL, valueString: item.purpose }];
+  const extension: fhir4.Extension[] = [];
+  if (item.purpose) extension.push({ url: EXAM_PURPOSE_EXT_URL, valueString: item.purpose });
+  if (templateRefs.purpose) {
+    extension.push({ url: PURPOSE_QR_EXT_URL, valueReference: { reference: templateRefs.purpose } });
   }
+  if (templateRefs.remarks) {
+    extension.push({ url: REMARKS_QR_EXT_URL, valueReference: { reference: templateRefs.remarks } });
+  }
+  if (extension.length > 0) resource.extension = extension;
+
   if (item.remarks) {
     resource.note = [{ text: item.remarks }];
   }
 
   return resource;
+}
+
+// 保存済みのテンプレート回答 id。拡張の参照から取り出す。
+function responseIdOf(request: fhir4.ServiceRequest, url: string): string | null {
+  const reference = request.extension?.find((e) => e.url === url)?.valueReference?.reference;
+  return reference?.match(/^QuestionnaireResponse\/(.+)$/)?.[1] ?? null;
+}
+
+/** 明細が参照しているテンプレート回答の id 一覧(更新・削除で孤児を残さないために使う)。 */
+export function radOrderResponseIds(itemRequests: fhir4.ServiceRequest[]): string[] {
+  return itemRequests.flatMap((request) =>
+    [responseIdOf(request, PURPOSE_QR_EXT_URL), responseIdOf(request, REMARKS_QR_EXT_URL)].filter(
+      (id): id is string => Boolean(id),
+    ),
+  );
 }
 
 // 撮影部位。32桁コードの部位・左右と同じ値を、FHIR の bodySite としても読めるようにする。
@@ -312,6 +354,10 @@ function categoryCodingOf(
   return undefined;
 }
 
+function bindingOf(responseId: string | null): TemplateBinding | null {
+  return responseId ? { responseId, draft: null } : null;
+}
+
 function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): RadOrderItemLine {
   const coding = request.code?.coding;
   const itemCoding = codingBySystem(coding, ORDER_ITEM_SYSTEM);
@@ -340,31 +386,83 @@ function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): Ra
     reasonName: reasonReference?.display ?? request.reasonCode?.[0]?.text ?? "",
     purpose: request.extension?.find((e) => e.url === EXAM_PURPOSE_EXT_URL)?.valueString ?? "",
     remarks: request.note?.[0]?.text ?? "",
+    // draft は null = 「再編集されるまで回答は触らない」(診療記録と同じ)。
+    purposeTemplate: bindingOf(responseIdOf(request, PURPOSE_QR_EXT_URL)),
+    remarksTemplate: bindingOf(responseIdOf(request, REMARKS_QR_EXT_URL)),
     parentCode,
   };
 }
 
 // 明細の Bundle エントリ。既にある明細は PUT、画面で足したものは POST、
 // 外した明細は DELETE(呼び出し側が元の id 一覧を渡す)。
+// テンプレート記入内容(QuestionnaireResponse)も同じ Bundle に積み、参照が外れた
+// 回答は DELETE する(本体を保存しなかったときに回答だけ残る孤児を作らない)。
 function buildItemEntries(
   items: RadOrderItemLine[],
   patientId: string,
   authoredOn: string,
   headerReference: string,
   originalItemIds: string[],
+  originalResponseIds: string[],
 ): fhir4.BundleEntry[] {
   const entries: fhir4.BundleEntry[] = [];
-  const kept = new Set<string>();
+  const keptItemIds = new Set<string>();
+  const keptResponseIds = new Set<string>();
   let sequence = 0;
+
+  // テンプレート記入内容を Bundle に積み、明細から指す参照を返す。
+  // 未記入・未使用なら空文字(拡張を出さない)。
+  const templateReference = (binding: TemplateBinding | null): string => {
+    if (!binding) return "";
+    const { responseId, draft } = binding;
+    if (!draft) {
+      // 再編集していない保存済みの回答 → 参照だけ引き継ぐ。
+      if (!responseId) return "";
+      keptResponseIds.add(responseId);
+      return `QuestionnaireResponse/${responseId}`;
+    }
+    // 保存済みの再編集は同じ id へ PUT、新規記入は urn:uuid で POST し、
+    // 実 ID への解決は上流の transaction 処理に任せる。
+    const reference = responseId
+      ? `QuestionnaireResponse/${responseId}`
+      : `urn:uuid:${crypto.randomUUID()}`;
+    if (responseId) {
+      keptResponseIds.add(responseId);
+      entries.push({
+        resource: { ...draft.response, id: responseId },
+        request: { method: "PUT", url: reference },
+      });
+    } else {
+      entries.push({
+        fullUrl: reference,
+        resource: draft.response,
+        request: { method: "POST", url: "QuestionnaireResponse" },
+      });
+    }
+    entries.push(...draft.imageEntries);
+    return reference;
+  };
 
   const pushEntry = (item: RadOrderItemLine, parentReference: string): string => {
     sequence += 1;
     const fullUrl = item.id ? `ServiceRequest/${item.id}` : `urn:uuid:${crypto.randomUUID()}`;
-    if (item.id) kept.add(item.id);
+    if (item.id) keptItemIds.add(item.id);
+
+    const templateRefs = {
+      purpose: templateReference(item.purposeTemplate),
+      remarks: templateReference(item.remarksTemplate),
+    };
 
     entries.push({
       fullUrl,
-      resource: buildItemRequest(item, sequence, patientId, authoredOn, parentReference),
+      resource: buildItemRequest(
+        item,
+        sequence,
+        patientId,
+        authoredOn,
+        parentReference,
+        templateRefs,
+      ),
       request: item.id
         ? { method: "PUT", url: `ServiceRequest/${item.id}` }
         : { method: "POST", url: "ServiceRequest" },
@@ -378,7 +476,14 @@ function buildItemEntries(
   }
 
   for (const id of originalItemIds) {
-    if (!kept.has(id)) entries.push({ request: { method: "DELETE", url: `ServiceRequest/${id}` } });
+    if (!keptItemIds.has(id)) {
+      entries.push({ request: { method: "DELETE", url: `ServiceRequest/${id}` } });
+    }
+  }
+  for (const id of originalResponseIds) {
+    if (!keptResponseIds.has(id)) {
+      entries.push({ request: { method: "DELETE", url: `QuestionnaireResponse/${id}` } });
+    }
   }
 
   return entries;
@@ -472,6 +577,7 @@ function buildRadOrderTransactionBundle(
   requester: OrderContext,
   serviceRequestId?: string,
   originalItemIds: string[] = [],
+  originalResponseIds: string[] = [],
 ): fhir4.Bundle {
   const headerReference = serviceRequestId
     ? `ServiceRequest/${serviceRequestId}`
@@ -494,6 +600,7 @@ function buildRadOrderTransactionBundle(
         values.authoredDate,
         headerReference,
         originalItemIds,
+        originalResponseIds,
       ),
     ],
   };
@@ -512,6 +619,7 @@ export function buildRadOrderUpdateBundle(
   patientId: string,
   serviceRequestId: string,
   originalItemIds: string[],
+  originalResponseIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
   return buildRadOrderTransactionBundle(
@@ -520,13 +628,15 @@ export function buildRadOrderUpdateBundle(
     requester,
     serviceRequestId,
     originalItemIds,
+    originalResponseIds,
   );
 }
 
-/** オーダーとその明細をまとめて消す Bundle。 */
+/** オーダーとその明細、明細が参照しているテンプレート回答をまとめて消す Bundle。 */
 export function buildRadOrderDeleteBundle(
   serviceRequestId: string,
   itemIds: string[],
+  responseIds: string[] = [],
 ): fhir4.Bundle {
   return {
     resourceType: "Bundle",
@@ -536,17 +646,29 @@ export function buildRadOrderDeleteBundle(
       ...itemIds.map((id) => ({
         request: { method: "DELETE" as const, url: `ServiceRequest/${id}` },
       })),
+      ...responseIds.map((id) => ({
+        request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` },
+      })),
     ],
   };
 }
 
 // 既存のオーダーを DO(流用)して新規登録するためのフォーム値。明細の id を落として
 // 新規登録(POST)にし、撮影日は当日にする。
+//
+// テンプレートの紐付けは外す。同じ QuestionnaireResponse を 2 つのオーダーが指すと、
+// 片方で書き換えたときにもう片方の内容まで変わってしまうため。記載された文言は
+// そのまま残るので、DO 先ではフリーテキストとして直せる。
 export function buildDoRadOrderForm(values: RadOrderFormValues): RadOrderFormValues {
   return {
     ...values,
     authoredDate: today(),
-    items: values.items.map((item) => ({ ...item, id: "" })),
+    items: values.items.map((item) => ({
+      ...item,
+      id: "",
+      purposeTemplate: null,
+      remarksTemplate: null,
+    })),
   };
 }
 

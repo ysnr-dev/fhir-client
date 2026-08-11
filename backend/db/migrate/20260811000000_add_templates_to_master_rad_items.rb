@@ -1,5 +1,5 @@
 class AddTemplatesToMasterRadItems < ActiveRecord::Migration[8.0]
-  # 放射線オーダーの「検査目的」「特記事項」を、診療記録(SOAP)と同じテンプレート
+  # 放射線オーダーの「検査目的」「特別指示」を、診療記録(SOAP)と同じテンプレート
   # (Questionnaire)から記入できるようにする。撮影項目ごとに既定のテンプレートを
   # 決めておき、オーダー画面はそれを最初から選んだ状態でテンプレート記入を開く。
   #

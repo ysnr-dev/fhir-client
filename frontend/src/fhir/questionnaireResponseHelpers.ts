@@ -249,6 +249,24 @@ export function questionnaireResponsePlainText(
   return lines.join("\n");
 }
 
+// モーダルで記入したテンプレート内容(未保存)。診療記録・放射線オーダーとも、
+// 本体の保存と同じ transaction Bundle で QuestionnaireResponse として送る
+// (先に単独 POST しない — 本体を保存しなかったときに回答だけ残る孤児を防ぐ)。
+export interface TemplateDraft {
+  questionnaire: fhir4.Questionnaire;
+  response: fhir4.QuestionnaireResponse;
+  // シェーマ画像描き込みの Binary 作成エントリ(QR と同じ Bundle に同梱)。
+  imageEntries: fhir4.BundleEntry[];
+}
+
+// テンプレートから記載した箇所と、その回答の紐付け。
+export interface TemplateBinding {
+  // 保存済み QR の id。新規記入でまだ保存していなければ null。
+  responseId: string | null;
+  // 直近のモーダル記入内容。保存済みで再編集していなければ null。
+  draft: TemplateDraft | null;
+}
+
 /** テンプレート名を見出しに付けた平文。単独の文書として見せる「平文表示」用。 */
 export function questionnaireResponseDocumentText(
   questionnaire: fhir4.Questionnaire,

@@ -145,7 +145,7 @@ jj1017_code         -- 32桁の生成結果を保存（要素から自動合成�
                     --  kind=set はNULL。非unique index）
 valid_from / valid_to   -- 有効開始日・有効終了日（date）
 receipt_code        -- レセ電算コード（任意、検体検査と同様の紐付け用）
--- オーダー画面の検査目的・特記事項を記入するテンプレート(Questionnaire)の canonical。
+-- オーダー画面の検査目的・特別指示を記入するテンプレート(Questionnaire)の canonical。
 -- 撮影項目ごとの既定で、オーダー時に別のテンプレートも選べる（§9.2）。
 purpose_template_canonical / remarks_template_canonical
 display_order / note
@@ -313,7 +313,8 @@ DO / 編集 / 詳細表示 / FHIR JSON表示 / 削除も検体検査と同じ導
 | `identifier` | 伝票で選んだ並び順（`.../IdSystem/rad-order-item-number`） |
 | `reasonReference` / `reasonCode` | 依頼病名。登録病名から選んだなら Condition 参照、フリーテキストなら `reasonCode.text`（GP を表す明細のみ） |
 | `extension[rad-exam-purpose]` | 検査目的（GP を表す明細のみ） |
-| `note` | 特記事項（GP を表す明細のみ） |
+| `note` | 特別指示（GP を表す明細のみ） |
+| `extension[rad-exam-purpose-questionnaire-response]` / `[rad-remarks-questionnaire-response]` | テンプレートから記載した場合の記入内容（QuestionnaireResponse）への参照 |
 
 - ［事実］**JJ1017 には FHIR 用の公式 system URI が無い**。JP Core の ImagingStudy Radiology Profile は
   `bodySite` に「JJ1017P の小部位コードの利用を許容する」、`laterality` に「JJ1017P の左右コードの利用を
@@ -329,9 +330,9 @@ DO / 編集 / 詳細表示 / FHIR JSON表示 / 削除も検体検査と同じ導
 - セット（kind=set）は撮影そのものではないので **JJ1017 コードを持たない**。構成項目がそれぞれ持つ。
 - `orderDetail` は使わない。撮影条件（体位・方向・詳細体位・特殊指示・核種）は32桁コードに
   含まれており、要素を個別に並べても JJ1017 を解さない受け手には意味が伝わらないため。
-- ［提案］**依頼病名・検査目的・特記事項は GP 単位**（単項目ならその項目、セットならセット親）
+- ［提案］**依頼病名・検査目的・特別指示は GP 単位**（単項目ならその項目、セットならセット親）
   の明細に載せる。構成項目には載せない。
-  - 特記事項は `note`（Annotation は「その依頼へのコメント」そのもの）。
+  - 特別指示は `note`（Annotation は「その依頼へのコメント」そのもの）。
   - 検査目的は当てはまる標準要素が無い（`reason*` は依頼病名で使う）ので
     `.../StructureDefinition/rad-exam-purpose` のローカル拡張にした。
 
@@ -345,19 +346,32 @@ DO / 編集 / 詳細表示 / FHIR JSON表示 / 削除も検体検査と同じ導
 - 項目選択: activeなレイアウトをタブに並べ（伝票のマスにチェックボックス）＋「撮影項目検索」タブ
 - セットを選ぶと構成項目をマスタから引いて自動展開。伝票上のチェックも連動し、構成項目だけを
   外せばそのセットからその撮影を除いてオーダーできる（検体検査のパネルと同じ挙動）
-- GP ごとに **依頼病名 / 検査目的 / 特記事項** を入力する
+- GP ごとに **依頼病名 / 検査目的 / 特別指示** を入力する
   - 依頼病名: 登録病名（プロブレム＋レセプト病名）のセレクトか直接入力。セレクトで選ぶと
     文字列も入り、手で書き換えると Condition との紐付けは外れる（別の文言になるため）
-  - 検査目的・特記事項: 直接入力に加えて「テンプレート」ボタンで診療記録（SOAP）と同じ
-    テンプレート記入モーダルを開ける。撮影項目マスタに既定テンプレートがあれば最初から選択済み
+  - 検査目的・特別指示: 直接入力に加えて「テンプレート」ボタンで診療記録（SOAP）と同じ
+    テンプレート記入モーダルを開ける。撮影項目マスタに既定テンプレートがあれば最初から選択済み。
+    テンプレートから記載した欄は**直接編集不可**になり、直すときは「テンプレート編集」で
+    記入内容を開き直す（SOAP のセクションと同じ扱い）。「解除」で紐付けを外すと、記載された
+    文言を残したまま直接入力へ戻せる（SOAP には無い操作。放射線は欄単位なので、
+    セクションごと消して作り直すという逃げ道が無いため用意した）
 - 選んだ項目はマスタの写し（`RadOrderItemLine`）。マスタを直しても過去のオーダーは変わらない
 - GP の種別（モダリティ）表示は、セット自身が種別を持たないので構成項目から採る
 
-実装メモ: テンプレート記入の結果は **平文だけを欄に差し込み、QuestionnaireResponse は保存しない**。
-同じ欄をフリーテキストでも書ける仕様なので、SOAP のように「テンプレート由来の本文は直接編集不可」に
-すると矛盾する。記入後もそのまま手で直せる。
+実装メモ: テンプレート記入の内容は **QuestionnaireResponse として保存**し、明細から拡張で参照する。
+保存は診療記録と同じくオーダー本体と同じ transaction Bundle で行う（先に単独 POST しない
+＝オーダーを保存しなかったときに回答だけ残る孤児を作らない）。参照が外れた回答は、元の参照との
+差分で同じ transaction の中で DELETE する。オーダーを消すときも参照先の回答を一緒に消す。
 
-マスタ側（`/rad-items` の編集モーダル「既定のテンプレート」）は撮影項目ごとに検査目的・特記事項の
+DO（複写して新規登録）ではテンプレートの紐付けを外す。同じ回答を 2 つのオーダーが指すと、
+片方を書き換えたときにもう片方まで変わってしまうため。記載された文言は残るので、DO 先では
+フリーテキストとして直せる。
+
+テンプレート記入モーダルは診療記録と共用するので、名前から領域名を外して
+`ClinicalNoteTemplateModal` → **`TemplateEntryModal`**、記入内容の型も
+`ClinicalNoteTemplateDraft` → **`TemplateDraft` / `TemplateBinding`**（`questionnaireResponseHelpers`）に移した。
+
+マスタ側（`/rad-items` の編集モーダル「既定のテンプレート」）は撮影項目ごとに検査目的・特別指示の
 既定テンプレートを持つ。値は Questionnaire の canonical（`master_rad_items.purpose_template_canonical` /
 `remarks_template_canonical`）。id ではなく canonical にしたのは、テンプレートを作り直しても
 指し先が変わらないようにするため（`QuestionnaireResponse.questionnaire` と同じ形）。
@@ -365,7 +379,8 @@ DO / 編集 / 詳細表示 / FHIR JSON表示 / 削除も検体検査と同じ導
 追加ファイル: `fhir/radOrderHelpers.ts`、`components/RadOrderForm.tsx` /
 `RadOrderPanels.tsx` / `RadOrderDetailPanel.tsx`、`hooks/useRadOrderInitialValues.ts` /
 `useConditionOptions.ts`、`api/queries.ts` に `useRadOrderDetail` / `useDeleteRadOrder`。
-`ClinicalNoteTemplateModal` には既定テンプレートを最初から選ぶ `defaultCanonical` を足した。
+`TemplateEntryModal`（旧 `ClinicalNoteTemplateModal`）には既定テンプレートを最初から選ぶ
+`defaultCanonical` を足した。
 カルテ側は `karteTimeline.ts` に `rad-order` 種別を足し、`KarteRightPane` / `KarteTimeline` /
 `KarteCardModals` / `karteUrl` / `KartePage` に検体検査と同じ分岐を追加。
 

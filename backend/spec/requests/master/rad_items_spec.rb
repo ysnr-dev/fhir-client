@@ -118,7 +118,7 @@ RSpec.describe "Master::RadItems", type: :request do
       expect(body["errors"].join).to include("部位(小部位)")
     end
 
-    it "検査目的・特記事項の既定テンプレートを保存する" do
+    it "検査目的・特別指示の既定テンプレートを保存する" do
       post "/master/rad_items", params: {
         item_code: "R0001", name: "胸部単純Ｘ線",
         purpose_template_canonical: "http://example.com/Questionnaire/rad-purpose|1.0",

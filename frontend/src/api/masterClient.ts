@@ -1048,7 +1048,7 @@ export interface RadItem {
   receipt_code: string | null;
   display_order: number | null;
   note: string | null;
-  // オーダー画面の「検査目的」「特記事項」を記入するテンプレート(Questionnaire)の
+  // オーダー画面の「検査目的」「特別指示」を記入するテンプレート(Questionnaire)の
   // canonical。撮影項目ごとの既定で、オーダー時に別のテンプレートも選べる。
   purpose_template_canonical: string | null;
   remarks_template_canonical: string | null;

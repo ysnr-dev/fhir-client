@@ -4986,6 +4986,22 @@ body.karte-wide .app__header {
   resize: vertical;
 }
 
+/* テンプレートから記載した欄。直接編集できないことを分かるようにする
+   (注射の自動計算欄 .injection-usage__rate input[readonly] と同じ見せ方)。 */
+.rad-gp__template-field textarea[readonly] {
+  background: var(--surface-panel);
+  color: var(--text);
+}
+
+/* テンプレート操作(記入・解除)は縦に積む。欄の幅を狭めず、ボタンが増えても
+   行の高さも横幅も変わらないようにするため。 */
+.rad-gp__template-actions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* テンプレート記入を開くボタン。欄の付属操作なので、既定のボタン(15px / 8px 16px)
    では欄より目立ってしまう。診療記録エディタの「テンプレート」(.rich-text-editor__tool)
    と同じ控えめな見た目に揃える。 */

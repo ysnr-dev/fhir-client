@@ -26,7 +26,11 @@ import {
   buildPrescriptionDeleteBundle,
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
-import { buildRadOrderDeleteBundle, radOrderItemRequests } from "../fhir/radOrderHelpers";
+import {
+  buildRadOrderDeleteBundle,
+  radOrderItemRequests,
+  radOrderResponseIds,
+} from "../fhir/radOrderHelpers";
 import { buildPractitionerDeleteBundle } from "../fhir/practitionerHelpers";
 import {
   baseRoleOf,
@@ -1736,10 +1740,14 @@ export function useDeleteRadOrder() {
       params.set("_id", srId);
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
       const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
-      const itemIds = radOrderItemRequests(serviceRequestsOf(bundle), srId)
+      const itemRequests = radOrderItemRequests(serviceRequestsOf(bundle), srId);
+      const itemIds = itemRequests
         .map((request) => request.id)
         .filter((id): id is string => Boolean(id));
-      return postBundle(buildRadOrderDeleteBundle(srId, itemIds));
+      // 明細が参照しているテンプレート回答も一緒に消す(孤児を残さない)。
+      return postBundle(
+        buildRadOrderDeleteBundle(srId, itemIds, radOrderResponseIds(itemRequests)),
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });

@@ -6,7 +6,6 @@ import {
   useQuestionnaireOptions,
   useQuestionnaireResponse,
 } from "../api/queries";
-import type { ClinicalNoteTemplateDraft } from "../fhir/clinicalNoteHelpers";
 import { displayJapaneseName } from "../fhir/humanName";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { buildPopulateContext } from "../fhir/populateContext";
@@ -15,6 +14,7 @@ import {
   emptyQuestionnaireResponseMeta,
   parseQuestionnaireResponseMeta,
   validateQuestionnaireResponseMeta,
+  type TemplateDraft,
 } from "../fhir/questionnaireResponseHelpers";
 import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
 import { ErrorBanner } from "./ErrorBanner";
@@ -23,17 +23,18 @@ import { QuestionnaireResponseForm } from "./QuestionnaireResponseForm";
 import { QuestionnaireResponseMetaFields } from "./QuestionnaireResponseMetaFields";
 import { TemplateSelect } from "./TemplateSelect";
 
-// 診療記録セクションのテンプレート記入モーダル。
+// テンプレート記入モーダル。診療記録のセクションと放射線オーダーの検査目的・
+// 特別指示で共用する。
 // QuestionnaireResponseCreatePage と同じ流れ(テンプレート選択 → 記入)を
 // モーダル内で行い、登録時に組み立て済みの QuestionnaireResponse を親へ返す。
 // ここでは FHIR サーバーへ保存しない — 保存は診療記録本体と同じ
 // transaction Bundle で行う(親フォーム側の責務)。
 
-interface ClinicalNoteTemplateModalProps {
+interface TemplateEntryModalProps {
   patientId: string;
   // 再編集の元。未保存の記入内容(draft)か、保存済み QR の id のどちらか。
   // 両方 null なら新規記入(テンプレート選択から始める)。
-  draft: ClinicalNoteTemplateDraft | null;
+  draft: TemplateDraft | null;
   responseId: string | null;
   /**
    * 新規記入で最初から選んでおくテンプレートの canonical。放射線オーダーのように
@@ -41,18 +42,18 @@ interface ClinicalNoteTemplateModalProps {
    * 選び直しは妨げない。
    */
   defaultCanonical?: string;
-  onSubmit: (draft: ClinicalNoteTemplateDraft) => void;
+  onSubmit: (draft: TemplateDraft) => void;
   onClose: () => void;
 }
 
-export function ClinicalNoteTemplateModal({
+export function TemplateEntryModal({
   patientId,
   draft,
   responseId,
   defaultCanonical,
   onSubmit,
   onClose,
-}: ClinicalNoteTemplateModalProps) {
+}: TemplateEntryModalProps) {
   const { data: patientResult, error: patientError } = usePatient(patientId);
   const patient = patientResult?.data;
 

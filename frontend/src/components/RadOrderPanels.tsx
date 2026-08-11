@@ -79,20 +79,21 @@ interface RadOrderEditPanelProps {
 
 export function RadOrderEditPanel({ patientId, srId, onSaved }: RadOrderEditPanelProps) {
   const updateRadOrder = useUpdatePrescription();
-  const { serviceRequest, itemIds, initialValues, ready, patientMismatch, error } =
+  const { serviceRequest, itemIds, responseIds, initialValues, ready, patientMismatch, error } =
     useRadOrderInitialValues(srId, patientId);
 
   function handleSubmit(values: RadOrderFormValues) {
     // 別患者のオーダーを更新すると subject が URL の患者に書き換わってしまうので防ぐ。
     if (!serviceRequest || patientMismatch) return;
     // 依頼科・依頼医師は登録時のものを引き継ぐ(処方・注射・検体検査の編集と同じ)。
-    // 外した撮影項目は itemIds との差分で DELETE される。
+    // 外した撮影項目・参照が外れたテンプレート回答は、元の id との差分で DELETE される。
     updateRadOrder.mutate(
       buildRadOrderUpdateBundle(
         values,
         patientId,
         srId,
         itemIds,
+        responseIds,
         prescriptionRequester(serviceRequest),
       ),
       { onSuccess: onSaved },

@@ -674,7 +674,7 @@ function LabOrderCardBody({
 const RAD_GP_DETAILS: { label: string; of: (item: RadOrderItemLine) => string }[] = [
   { label: "依頼病名", of: (item) => item.reasonName },
   { label: "検査目的", of: (item) => item.purpose },
-  { label: "特記事項", of: (item) => item.remarks },
+  { label: "特別指示", of: (item) => item.remarks },
 ];
 
 // 放射線検査は GP(撮影項目 1 つ、またはセット 1 つ)ごとに出す。セットは構成項目も
@@ -713,7 +713,7 @@ function RadOrderCardBody({
                 </li>
               ))}
             </ul>
-            {/* 依頼病名・検査目的・特記事項は GP 単位の記入なので、撮影項目の後ろに
+            {/* 依頼病名・検査目的・特別指示は GP 単位の記入なので、撮影項目の後ろに
                 同じ字下げで並べる(処方の用法と同じ置き方)。 */}
             {RAD_GP_DETAILS.map(({ label, of }) => {
               const value = of(entry.item);

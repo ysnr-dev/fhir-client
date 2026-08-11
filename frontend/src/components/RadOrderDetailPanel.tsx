@@ -76,7 +76,7 @@ function GroupDetail({ entry, number }: { entry: RadOrderEntry; number: number }
         <dd>{item.reasonName || "-"}</dd>
         <dt>検査目的</dt>
         <dd className="rad-gp__text">{item.purpose || "-"}</dd>
-        <dt>特記事項</dt>
+        <dt>特別指示</dt>
         <dd className="rad-gp__text">{item.remarks || "-"}</dd>
       </dl>
       <table className="rp-card__medicines rp-card__medicines--detail">

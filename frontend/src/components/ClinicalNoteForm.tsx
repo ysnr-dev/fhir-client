@@ -7,12 +7,12 @@ import {
   templateHtml,
   type ClinicalNoteFormValues,
   type ClinicalNoteMode,
-  type ClinicalNoteTemplateDraft,
   type SectionCode,
 } from "../fhir/clinicalNoteHelpers";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
+import type { TemplateDraft } from "../fhir/questionnaireResponseHelpers";
 import { useProblemOptions } from "../hooks/useProblemOptions";
-import { ClinicalNoteTemplateModal } from "./ClinicalNoteTemplateModal";
+import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 import { RichTextEditor } from "./RichTextEditor";
@@ -93,7 +93,7 @@ export function ClinicalNoteForm({
 
   // テンプレート記入モーダルの登録。回答の平文をセクション本文に反映し、
   // 以後このセクションは直接編集不可(テンプレートからのみ編集)にする。
-  function applyTemplate(uid: string, draft: ClinicalNoteTemplateDraft) {
+  function applyTemplate(uid: string, draft: TemplateDraft) {
     setValues((v) => ({
       ...v,
       sections: v.sections.map((s) =>
@@ -309,7 +309,7 @@ export function ClinicalNoteForm({
     {/* モーダル内の QuestionnaireResponseForm は独自の <form> を持つため、
         外側フォームの子孫に置かない(form の入れ子は不正で、送信が外へ漏れる)。 */}
     {templateSection && (
-      <ClinicalNoteTemplateModal
+      <TemplateEntryModal
         patientId={patientId}
         draft={templateSection.template?.draft ?? null}
         responseId={templateSection.template?.responseId ?? null}

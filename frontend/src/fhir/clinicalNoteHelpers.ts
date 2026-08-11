@@ -1,6 +1,9 @@
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 import { practitionerDisplayName } from "./practitionerHelpers";
-import { questionnaireResponsePlainText } from "./questionnaireResponseHelpers";
+import {
+  questionnaireResponsePlainText,
+  type TemplateBinding,
+} from "./questionnaireResponseHelpers";
 
 // 診療記録(経過記録)を FHIR Composition で表現するためのヘルパー群。
 //
@@ -65,22 +68,6 @@ export function statusLabel(status: string | undefined): string {
 export const SECTION_QR_EXT_URL =
   "http://fhir-client.local/StructureDefinition/clinical-note-section-questionnaire-response";
 
-// モーダルで記入したテンプレート内容(未保存)。診療記録の保存時に
-// QuestionnaireResponse として同じ transaction Bundle で POST/PUT する。
-export interface ClinicalNoteTemplateDraft {
-  questionnaire: fhir4.Questionnaire;
-  response: fhir4.QuestionnaireResponse;
-  // シェーマ画像描き込みの Binary 作成エントリ(QR と同じ Bundle に同梱)。
-  imageEntries: fhir4.BundleEntry[];
-}
-
-export interface ClinicalNoteSectionTemplate {
-  // 保存済み QR の id。新規記入でまだ保存していなければ null。
-  responseId: string | null;
-  // 直近のモーダル記入内容。保存済みで再編集していなければ null。
-  draft: ClinicalNoteTemplateDraft | null;
-}
-
 // 記録が対象とするプロブレム(Condition)。POMR は「プロブレムごとに SOAP を書く」ので、
 // 紐付けはセクションではなく診療記録 1 件に対して 1 つ持たせる(複数のプロブレムを
 // 扱うときは記録を分けて登録する)。処方と共通の参照型を使う。
@@ -100,7 +87,7 @@ export interface ClinicalNoteSectionDraft {
   // テンプレート由来のセクションでは回答の平文から生成し、直接編集は不可。
   html: string;
   // テンプレート由来のセクションであることの印。undefined なら通常の手入力。
-  template?: ClinicalNoteSectionTemplate;
+  template?: TemplateBinding;
 }
 
 export interface ClinicalNoteFormValues {
