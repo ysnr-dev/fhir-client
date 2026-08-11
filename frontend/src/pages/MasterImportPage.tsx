@@ -79,6 +79,20 @@ const MASTER_OPTIONS: MasterOption[] = [
       "JLAC11コード一覧 jlac11_1_*.xlsx（「材料コード」シート）。略称・既定採取管などの手入力列は取込で消えない",
     accept: ".xlsx",
   },
+  {
+    type: "micro_specimen_types",
+    label: "JANIS材料コード（細菌検査）",
+    formatHint:
+      "JANIS 検査部門 材料コード表 specimenentitytype_*.xls。施設追加分は消えない",
+    accept: ".xls,.xlsx",
+  },
+  {
+    type: "micro_organisms",
+    label: "JANIS病原体コード（細菌検査）",
+    formatHint:
+      "JANIS 検査部門 感染症病原体コード表 infectiousagentcode_*.xls（最新版のシートだけを読む）。施設追加分・頻用菌の指定は消えない",
+    accept: ".xls,.xlsx",
+  },
 ];
 
 export function MasterImportPage() {
@@ -154,6 +168,7 @@ export function MasterImportPage() {
               `／ ${Object.entries(importMaster.data.elements)
                 .map(([element, count]) => `${element}: ${count}`)
                 .join(" ")}`}
+            {importMaster.data.sheet && `／取込シート: ${importMaster.data.sheet}`}
           </p>
         )}
         <ErrorBanner error={importMaster.error} />

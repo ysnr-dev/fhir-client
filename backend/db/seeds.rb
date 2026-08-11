@@ -98,6 +98,96 @@ end
 #   - 手元の配布別表は Ver3.3 のため、Ver3.4 で追加されたコードをここで補う
 # source=official として入れるので、別表の取込（洗い替え）で消える。
 # 別表A を取り込み直したときは db:seed を再実行すること。
+# 細菌検査オーダーの独自マスタ3種(検査項目・採取部位・採取方法)。
+# いずれも施設で直す前提の初期値なので、既存行は上書きしない。
+{
+  "micro_order_items" => [Master::MicroOrderItem, :item_code, lambda { |row|
+    {
+      item_code: row["item_code"].to_s.strip,
+      name: row["name"].to_s.strip,
+      short_name: row["short_name"].to_s.strip.presence,
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    }
+  }],
+  "micro_collection_sites" => [Master::MicroCollectionSite, :code, lambda { |row|
+    {
+      code: row["code"].to_s.strip,
+      name: row["name"].to_s.strip,
+      laterality_applicable: row["laterality_applicable"].to_s.strip == "1",
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    }
+  }],
+  "micro_collection_methods" => [Master::MicroCollectionMethod, :code, lambda { |row|
+    {
+      code: row["code"].to_s.strip,
+      name: row["name"].to_s.strip,
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    }
+  }]
+}.each do |basename, (model, key_column, build)|
+  csv_path = Rails.root.join("db/seed_data/#{basename}.csv")
+  unless File.exist?(csv_path)
+    puts "#{model.table_name}: #{csv_path} not found, skipped"
+    next
+  end
+
+  loaded = 0
+  kept = 0
+  CSV.foreach(csv_path, headers: true) do |row|
+    attrs = build.call(row)
+    next if attrs[key_column].blank? || attrs[:name].blank?
+
+    if model.exists?(key_column => attrs[key_column])
+      kept += 1
+      next
+    end
+
+    model.create!(attrs)
+    loaded += 1
+  end
+  puts "#{model.table_name}: seeded #{loaded} rows (kept #{kept})"
+end
+
+# 頻用菌(細菌検査オーダーの目的菌欄にチェックボックスで直接並べる菌)の初期セット。
+# db/seed_data/micro_frequent_organisms.csv（ヘッダー有り, code,name,category）の
+# JANIS 病原体コードに frequent を立てる。name/category は人が読むための欄で、
+# 突き合わせはコードだけで行う（名称がずれていれば警告して印は立てる）。
+# 菌マスタ(JANIS 配布ファイル)が未取込だとコードが無いのでスキップされる。
+# 取込後に db:seed を再実行すると反映される。
+# 既に立っている印は触らず、印を消した菌は再実行で戻る（他のマスタと同じく初期値の投入）。
+frequent_csv = Rails.root.join("db/seed_data/micro_frequent_organisms.csv")
+if File.exist?(frequent_csv)
+  marked = 0
+  kept = 0
+  missing = []
+  CSV.foreach(frequent_csv, headers: true) do |row|
+    code = row["code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank?
+
+    organism = Master::MicroOrganism.find_by(code: code)
+    if organism.nil?
+      missing << code
+      next
+    end
+
+    if name.present? && organism.name != name
+      puts "master_micro_organisms: code #{code} の菌名が CSV と違います (#{organism.name.inspect})"
+    end
+
+    if organism.frequent?
+      kept += 1
+    else
+      organism.update!(frequent: true)
+      marked += 1
+    end
+  end
+  puts "master_micro_organisms frequent: marked #{marked} rows " \
+       "(kept #{kept}, organism not imported #{missing.size}#{missing.empty? ? '' : ": #{missing.join(', ')}"})"
+else
+  puts "master_micro_organisms frequent: #{frequent_csv} not found, skipped"
+end
+
 rad_codes_csv = Rails.root.join("db/seed_data/rad_jj1017_codes.csv")
 if File.exist?(rad_codes_csv)
   loaded = 0

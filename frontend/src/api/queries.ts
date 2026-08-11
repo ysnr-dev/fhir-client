@@ -23,6 +23,10 @@ import {
   serviceRequestsOf,
 } from "../fhir/labOrderHelpers";
 import {
+  buildMicroOrderDeleteBundle,
+  microOrderItemRequests,
+} from "../fhir/microOrderHelpers";
+import {
   buildPrescriptionDeleteBundle,
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
@@ -616,6 +620,20 @@ export function useLabOrderDetail(srId: string | undefined) {
 
   return useQuery({
     queryKey: ["ServiceRequest", "detail", "lab-order", srId],
+    queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", params),
+    enabled: Boolean(srId),
+  });
+}
+
+// 細菌検査オーダーもヘッダ・検体グループ・検査項目が別リソースなので、
+// 検体検査と同じ形で 1 リクエストにまとめて取る。
+export function useMicroOrderDetail(srId: string | undefined) {
+  const params = new URLSearchParams();
+  if (srId) params.set("_id", srId);
+  params.set("_revinclude:iterate", "ServiceRequest:based-on");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "detail", "micro-order", srId],
     queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", params),
     enabled: Boolean(srId),
   });
@@ -1722,6 +1740,28 @@ export function useDeleteLabOrder() {
         .map((request) => request.id)
         .filter((id): id is string => Boolean(id));
       return postBundle(buildLabOrderDeleteBundle(srId, itemIds));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
+  });
+}
+
+// 細菌検査オーダーも明細(検体グループ・検査項目)が独立した ServiceRequest なので、
+// 消す直前に明細を引き直してからまとめて消す(検体検査と同じ)。
+export function useDeleteMicroOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (srId: string) => {
+      const params = new URLSearchParams();
+      params.set("_id", srId);
+      params.set("_revinclude:iterate", "ServiceRequest:based-on");
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      const itemIds = microOrderItemRequests(serviceRequestsOf(bundle), srId)
+        .map((request) => request.id)
+        .filter((id): id is string => Boolean(id));
+      return postBundle(buildMicroOrderDeleteBundle(srId, itemIds));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });

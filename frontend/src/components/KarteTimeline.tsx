@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 import {
   useDeleteClinicalNote,
   useDeleteLabOrder,
+  useDeleteMicroOrder,
   useDeleteRadOrder,
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
@@ -37,6 +38,14 @@ import {
   specimenGroupLabel,
   summarizeLabOrder,
 } from "../fhir/labOrderHelpers";
+import {
+  microOrderComment,
+  microOrderContents,
+  microOrderProblem,
+  organismSummary,
+  specimenLabel,
+  summarizeMicroOrder,
+} from "../fhir/microOrderHelpers";
 import {
   bodySiteLabel,
   entryLabel,
@@ -202,6 +211,7 @@ function KarteCard({
   const deleteNote = useDeleteClinicalNote();
   const deletePrescription = useDeletePrescription();
   const deleteLabOrder = useDeleteLabOrder();
+  const deleteMicroOrder = useDeleteMicroOrder();
   const deleteRadOrder = useDeleteRadOrder();
   const deleteResponse = useDeleteQuestionnaireResponse();
   // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
@@ -213,12 +223,14 @@ function KarteCard({
     deleteNote.isPending ||
     deletePrescription.isPending ||
     deleteLabOrder.isPending ||
+    deleteMicroOrder.isPending ||
     deleteRadOrder.isPending ||
     deleteResponse.isPending;
   const deleteError =
     deleteNote.error ??
     deletePrescription.error ??
     deleteLabOrder.error ??
+    deleteMicroOrder.error ??
     deleteRadOrder.error ??
     deleteResponse.error;
 
@@ -237,8 +249,9 @@ function KarteCard({
     else if (item.kind === "prescription" || item.kind === "injection") {
       deletePrescription.mutate(item.id, options);
     }
-    // 検体検査・放射線検査は明細も ServiceRequest なので、専用の削除でまとめて消す。
+    // 検体検査・細菌検査・放射線検査は明細も ServiceRequest なので、専用の削除でまとめて消す。
     else if (item.kind === "lab-order") deleteLabOrder.mutate(item.id, options);
+    else if (item.kind === "micro-order") deleteMicroOrder.mutate(item.id, options);
     else if (item.kind === "rad-order") deleteRadOrder.mutate(item.id, options);
     else deleteResponse.mutate(item.id, options);
   }
@@ -265,6 +278,7 @@ function KarteCard({
           {(item.kind === "prescription" ||
             item.kind === "injection" ||
             item.kind === "lab-order" ||
+            item.kind === "micro-order" ||
             item.kind === "rad-order") && (
             <button
               type="button"
@@ -401,6 +415,7 @@ function DocumentIcon() {
 function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "note") return clinicalNoteProblem(item.note);
   if (item.kind === "lab-order") return labOrderProblem(item.serviceRequest);
+  if (item.kind === "micro-order") return microOrderProblem(item.serviceRequest);
   if (item.kind === "rad-order") return radOrderProblem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);
@@ -424,13 +439,15 @@ function cardTitle(item: KarteTimelineItem): string {
     const summary = summarizeInjectionServiceRequest(item.serviceRequest);
     return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" | ");
   }
-  // 検体検査・放射線検査は入外区分と、至急のときだけ至急区分を並べる
+  // 検体検査・細菌検査・放射線検査は入外区分と、至急のときだけ至急区分を並べる
   // (通常はわざわざ出さない)。
-  if (item.kind === "lab-order" || item.kind === "rad-order") {
+  if (item.kind === "lab-order" || item.kind === "micro-order" || item.kind === "rad-order") {
     const summary =
       item.kind === "lab-order"
         ? summarizeLabOrder(item.serviceRequest)
-        : summarizeRadOrder(item.serviceRequest);
+        : item.kind === "micro-order"
+          ? summarizeMicroOrder(item.serviceRequest)
+          : summarizeRadOrder(item.serviceRequest);
     return [summary.settingDisplay, summary.urgent ? summary.priorityDisplay : ""]
       .filter(Boolean)
       .join(" | ");
@@ -607,6 +624,12 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
     return <LabOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />;
   }
 
+  if (item.kind === "micro-order") {
+    return (
+      <MicroOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />
+    );
+  }
+
   if (item.kind === "rad-order") {
     return <RadOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />;
   }
@@ -675,6 +698,51 @@ function LabOrderCardBody({
           </ul>
         </div>
       ))}
+      {comment && <p className="karte-card__note">{comment}</p>}
+    </>
+  );
+}
+
+// 細菌検査は検体(GP)の見出しの下に検査項目を並べ、目的菌・疑い病名を添える
+// (検体検査・放射線のカードと同じ組み方)。
+function MicroOrderCardBody({
+  serviceRequest,
+  itemRequests,
+}: {
+  serviceRequest: fhir4.ServiceRequest;
+  itemRequests: fhir4.ServiceRequest[];
+}) {
+  const { specimen, items } = microOrderContents(itemRequests);
+  const comment = microOrderComment(serviceRequest);
+
+  if (items.length === 0) return <p className="karte-card__empty">検査項目がありません。</p>;
+
+  const details = [
+    { label: "目的菌", value: organismSummary(specimen.organisms) },
+    { label: "疑い病名", value: specimen.reasonName },
+  ].filter((detail) => detail.value);
+
+  return (
+    <>
+      <div className="karte-rp">
+        <div className="karte-rp__head">
+          <span className="karte-rp__number">GP1</span>
+          <span className="karte-order__group-name">{specimenLabel(specimen)}</span>
+        </div>
+        <ul className="karte-rp__medicines">
+          {items.map((item) => (
+            <li key={item.code}>
+              <span className="karte-rp__medicine-name">{item.name}</span>
+            </li>
+          ))}
+        </ul>
+        {details.map((detail) => (
+          <div className="karte-rp__detail karte-rp__detail--indent" key={detail.label}>
+            <span className="karte-rp__detail-label">{`${detail.label}:`}</span>
+            <span>{detail.value}</span>
+          </div>
+        ))}
+      </div>
       {comment && <p className="karte-card__note">{comment}</p>}
     </>
   );

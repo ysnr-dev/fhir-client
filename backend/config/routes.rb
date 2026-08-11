@@ -111,6 +111,18 @@ Rails.application.routes.draw do
     resources :rad_set_items, only: %i[index create update destroy]
     resources :rad_item_layouts, only: %i[index show create update destroy]
     resources :rad_item_layout_cells, only: %i[create update destroy]
+    # 細菌検査オーダーのマスタ群。JANIS 由来の2つは標準コードを取込で洗い替え、
+    # 画面からは施設追加分(と病原体の頻用フラグ)だけを書ける。
+    resources :micro_specimen_types, only: %i[index create update destroy] do
+      collection { post :import }
+    end
+    resources :micro_organisms, only: %i[index create update destroy] do
+      collection { post :import }
+    end
+    # 独自マスタ3種(検査項目・採取部位・採取方法)。seed の初期値を画面でメンテする。
+    resources :micro_order_items, only: %i[index create update destroy]
+    resources :micro_collection_sites, only: %i[index create update destroy]
+    resources :micro_collection_methods, only: %i[index create update destroy]
     resources :diseases, only: %i[index show create update destroy] do
       collection { post :import }
     end

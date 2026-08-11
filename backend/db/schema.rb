@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_12_000100) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_12_001200) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -367,6 +367,66 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_12_000100) do
     t.index ["medicine_code"], name: "index_master_medicines_on_medicine_code", unique: true
     t.index ["name"], name: "index_master_medicines_on_name"
     t.index ["yakka_code"], name: "index_master_medicines_on_yakka_code"
+  end
+
+  create_table "master_micro_collection_methods", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_micro_collection_methods_on_code", unique: true
+  end
+
+  create_table "master_micro_collection_sites", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.boolean "laterality_applicable", default: false, null: false
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_micro_collection_sites_on_code", unique: true
+  end
+
+  create_table "master_micro_order_items", force: :cascade do |t|
+    t.string "item_code", null: false
+    t.string "name", null: false
+    t.string "short_name"
+    t.integer "display_order"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.string "receipt_code"
+    t.string "note"
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["item_code"], name: "index_master_micro_order_items_on_item_code", unique: true
+  end
+
+  create_table "master_micro_organisms", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.boolean "frequent", default: false, null: false
+    t.string "source", default: "official", null: false
+    t.integer "display_order"
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_micro_organisms_on_code", unique: true
+    t.index ["search_name"], name: "index_master_micro_organisms_on_search_name"
+  end
+
+  create_table "master_micro_specimen_types", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "category"
+    t.string "source", default: "official", null: false
+    t.integer "display_order"
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_micro_specimen_types_on_code", unique: true
+    t.index ["search_name"], name: "index_master_micro_specimen_types_on_search_name"
   end
 
   create_table "master_modifiers", force: :cascade do |t|

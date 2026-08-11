@@ -5353,3 +5353,88 @@ body.karte-wide .app__header {
   white-space: nowrap;
   max-width: 100%;
 }
+
+/* ---- 細菌検査オーダー ---- */
+
+/* 検査項目・目的菌(頻用)のチェックボックス群。少数の固定項目なので
+   伝票グリッドではなく折り返しで並べる。 */
+.micro-order__checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.micro-order__checks label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.micro-order__checks input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+/* 前投与抗菌薬の「処方から取り込み」候補。 */
+/* 前投与抗菌薬。1 行目にラベル、2 行目に textarea と取り込みボタンを並べる。
+   ボタンは textarea と同じ行の頭に置くので、天が揃う。 */
+.micro-order__prior {
+  display: grid;
+  /* 候補一覧もこの幅に収まるので、入力欄側に最低幅を持たせる。 */
+  grid-template-columns: minmax(200px, 1fr) auto;
+  align-items: start;
+  gap: 4px 8px;
+}
+
+.micro-order__prior > textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.micro-order__prior > label {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 開閉トグルは補助的な操作なので、入力欄の脇に置く小さめのボタンにする。 */
+.micro-order__suggest-toggle {
+  font-size: 13px;
+  padding: 4px 10px;
+}
+
+/* 候補一覧は入力欄とボタンの下に、その幅いっぱいに出す。薬品名が長くても
+   列を広げないよう幅を 0 にしておく(開閉でフォームの折り返しが変わらないように)。 */
+.micro-order__suggest {
+  grid-column: 1 / -1;
+  width: 0;
+  min-width: 100%;
+}
+
+.micro-order__suggest-item {
+  width: 100%;
+  text-align: left;
+  /* 薬品名は長いので、一覧の幅で折り返す(横スクロールを出さない)。 */
+  white-space: normal;
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.micro-order__suggest-item:hover {
+  background: var(--accent-bg);
+}
+
+/* 前投与抗菌薬(複数行テキスト)の詳細表示。 */
+.micro-order__multiline {
+  white-space: pre-wrap;
+}
