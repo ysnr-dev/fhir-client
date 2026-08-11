@@ -184,18 +184,42 @@ export interface SchemaImageRef {
   key: string;
   /** 画像に添える項目名。 */
   label: string;
-  binaryId: string;
+  /** 保存済み画像。未保存(Bundle 内プレースホルダ)なら null。 */
+  binaryId: string | null;
+  /** 未保存画像の dataURL(同じ Bundle に積む Binary から取り出したもの)。 */
+  dataUrl: string | null;
 }
 
 // 回答に含まれる描き込み済みシェーマ画像(合成済み PNG の Binary)を列挙する。
 // 元テンプレートは要らない — 描き込み画像は元画像を含んだ合成結果だけを持つため。
-export function schemaImageRefs(response: fhir4.QuestionnaireResponse): SchemaImageRef[] {
+//
+// imageEntries を渡すと、まだ保存していない記入内容(TemplateDraft)にも使える。
+// 未保存の画像は attachment.url が Bundle 内のプレースホルダ("urn:uuid:...")で、
+// 実体は同梱の Binary エントリにあるため、そこから dataURL を組み立てる。
+export function schemaImageRefs(
+  response: fhir4.QuestionnaireResponse,
+  imageEntries: fhir4.BundleEntry[] = [],
+): SchemaImageRef[] {
+  const pendingByPlaceholder = new Map<string, string>();
+  for (const entry of imageEntries) {
+    const binary = entry.resource as fhir4.Binary | undefined;
+    if (!entry.fullUrl || binary?.resourceType !== "Binary" || !binary.data) continue;
+    pendingByPlaceholder.set(
+      entry.fullUrl,
+      `data:${binary.contentType ?? "image/png"};base64,${binary.data}`,
+    );
+  }
+
   const refs: SchemaImageRef[] = [];
   (function walk(items: fhir4.QuestionnaireResponseItem[] | undefined, path: string) {
     (items ?? []).forEach((item, index) => {
       const key = `${path}${item.linkId}#${index}`;
-      const binaryId = binaryIdFromAttachment(annotationOf(item));
-      if (binaryId) refs.push({ key, label: item.text ?? item.linkId, binaryId });
+      const attachment = annotationOf(item);
+      const binaryId = binaryIdFromAttachment(attachment);
+      const dataUrl = attachment?.url ? (pendingByPlaceholder.get(attachment.url) ?? null) : null;
+      if (binaryId || dataUrl) {
+        refs.push({ key, label: item.text ?? item.linkId, binaryId, dataUrl });
+      }
       walk(item.item, `${key}/`);
     });
   })(response.item, "");

@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
-import { sectionTitle, summarizeClinicalNote } from "../fhir/clinicalNoteHelpers";
+import {
+  sectionResponseId,
+  sectionTitle,
+  stripSchemaImageNotes,
+  summarizeClinicalNote,
+} from "../fhir/clinicalNoteHelpers";
 import { RichTextView } from "./RichTextView";
+import { ResponseSchemaImages } from "./SchemaImageGallery";
 
 // 診療記録の内容表示。診療記録詳細ページとカルテ画面の詳細モーダルの双方から使う。
 // 編集・削除の操作ボタンは、遷移先が異なるので呼び出し側が持つ。
@@ -31,12 +37,22 @@ export function ClinicalNoteDetailPanel({
         </dl>
       </fieldset>
 
-      {(note.section ?? []).map((section, index) => (
-        <div key={index} className="clinical-note-view__section">
-          <h3>{section.title || sectionTitle(section.code?.coding?.[0]?.code) || "セクション"}</h3>
-          <RichTextView html={section.text?.div ?? ""} />
-        </div>
-      ))}
+      {(note.section ?? []).map((section, index) => {
+        // テンプレート由来のセクションは、記入内容のシェーマ画像を本文の下に並べる
+        // (カルテのカードと同じ見せ方)。
+        const responseId = sectionResponseId(section);
+        return (
+          <div key={index} className="clinical-note-view__section">
+            <h3>{section.title || sectionTitle(section.code?.coding?.[0]?.code) || "セクション"}</h3>
+            <RichTextView
+              html={
+                responseId ? stripSchemaImageNotes(section.text?.div) : (section.text?.div ?? "")
+              }
+            />
+            {responseId && <ResponseSchemaImages responseId={responseId} />}
+          </div>
+        );
+      })}
 
       {children}
     </div>

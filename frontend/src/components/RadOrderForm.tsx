@@ -40,6 +40,7 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
+import { TemplateSchemaImages } from "./SchemaImageGallery";
 
 // 放射線検査オーダーの入力フォーム。撮影伝票(放射線オーダーレイアウト)のタブと
 // 個別検索から項目を選び、選んだ内容を GP ごとに確認・記入してから登録する。
@@ -688,6 +689,9 @@ function TemplateTextField({
           )}
         </div>
       </div>
+      {/* 記入内容にシェーマ画像があれば、平文の「あり」の印だけでは何を描いたか
+          分からないので、入力中もサムネイルを出す(登録後の表示と同じ見せ方)。 */}
+      <TemplateSchemaImages template={template} />
     </label>
   );
 }

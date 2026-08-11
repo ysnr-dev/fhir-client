@@ -7,7 +7,13 @@ import {
   useDeleteQuestionnaireResponse,
 } from "../api/queries";
 import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
-import { clinicalNoteProblem, sectionTitle, statusLabel } from "../fhir/clinicalNoteHelpers";
+import {
+  clinicalNoteProblem,
+  sectionResponseId,
+  sectionTitle,
+  statusLabel,
+  stripSchemaImageNotes,
+} from "../fhir/clinicalNoteHelpers";
 import { problemLabel, type ProblemRef } from "../fhir/conditionHelpers";
 import {
   KARTE_KIND_LABELS,
@@ -480,14 +486,26 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
     if (sections.length === 0) return <p className="karte-card__empty">本文がありません。</p>;
     return (
       <>
-        {sections.map((section, index) => (
-          <div className="karte-card__section" key={index}>
-            <span className="karte-card__section-title">
-              {section.title || sectionTitle(section.code?.coding?.[0]?.code)}
-            </span>
-            <RichTextView html={section.text?.div ?? ""} />
-          </div>
-        ))}
+        {sections.map((section, index) => {
+          // テンプレート由来のセクションは、記入内容に描き込み済みシェーマ画像が
+          // あれば本文の「あり」の印に代えて実物を続けて出す。
+          const responseId = sectionResponseId(section);
+          return (
+            <div className="karte-card__section" key={index}>
+              <span className="karte-card__section-title">
+                {section.title || sectionTitle(section.code?.coding?.[0]?.code)}
+              </span>
+              <RichTextView
+                html={
+                  responseId
+                    ? stripSchemaImageNotes(section.text?.div)
+                    : (section.text?.div ?? "")
+                }
+              />
+              {responseId && <ResponseSchemaImages responseId={responseId} />}
+            </div>
+          );
+        })}
       </>
     );
   }

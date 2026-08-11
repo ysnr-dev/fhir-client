@@ -1,6 +1,7 @@
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 import { practitionerDisplayName } from "./practitionerHelpers";
 import {
+  SCHEMA_IMAGE_NOTE,
   questionnaireResponsePlainText,
   type TemplateBinding,
 } from "./questionnaireResponseHelpers";
@@ -363,14 +364,40 @@ export function buildClinicalNoteDeleteBundle(
   };
 }
 
+// セクション拡張が参照している保存済み QR の id(テンプレート由来でなければ空)。
+export function sectionResponseId(section: fhir4.CompositionSection): string {
+  const ref = section.extension?.find((e) => e.url === SECTION_QR_EXT_URL)?.valueReference
+    ?.reference;
+  return ref?.match(/^QuestionnaireResponse\/(.+)$/)?.[1] ?? "";
+}
+
 // Composition のセクション拡張が参照している保存済み QR の id 一覧。
 export function referencedResponseIds(composition: fhir4.Composition | undefined): string[] {
   return (composition?.section ?? []).flatMap((section) => {
-    const ref = section.extension?.find((e) => e.url === SECTION_QR_EXT_URL)?.valueReference
-      ?.reference;
-    const id = ref?.match(/^QuestionnaireResponse\/(.+)$/)?.[1];
+    const id = sectionResponseId(section);
     return id ? [id] : [];
   });
+}
+
+// テンプレート由来セクションの narrative から「(シェーマ画像あり)」の印を落とす。
+// 画像の実物を本文の下に並べる表示で使う(印だけになる段落は、項目名が画像側の
+// キャプションに出るので捨てる)。保存してある本文自体は印を含んだままにする
+// — 平文として読む場所では「画像がある」ことが分かる必要があるため。
+export function stripSchemaImageNotes(div: string | undefined): string {
+  if (!div?.includes(SCHEMA_IMAGE_NOTE)) return div ?? "";
+
+  const doc = new DOMParser().parseFromString(div, "text/html");
+  const root = doc.body.firstElementChild ?? doc.body;
+  for (const child of Array.from(root.children)) {
+    const text = child.textContent ?? "";
+    if (!text.includes(SCHEMA_IMAGE_NOTE)) continue;
+    // テンプレート由来の本文は装飾を持たない平文の段落なので、textContent の
+    // 置き換えで失われるものはない。
+    const stripped = text.replace(SCHEMA_IMAGE_NOTE, "").trimEnd();
+    if (!stripped.trim() || /[:：]$/.test(stripped.trim())) child.remove();
+    else child.textContent = stripped;
+  }
+  return doc.body.innerHTML;
 }
 
 // 記録が対象としているプロブレム。編集フォームの復元とタイムライン表示の双方から使う。

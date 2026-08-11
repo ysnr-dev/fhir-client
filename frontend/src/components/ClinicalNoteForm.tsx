@@ -17,6 +17,7 @@ import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 import { RichTextEditor, type RichTextEditorHandle } from "./RichTextEditor";
+import { TemplateSchemaImages } from "./SchemaImageGallery";
 import { SchemaPickerModal } from "./SchemaPickerModal";
 
 // ペイントモーダル(fabric.js)は重いので、開くまで読み込まない。
@@ -326,6 +327,10 @@ export function ClinicalNoteForm({
                 ) : undefined
               }
             />
+            {/* テンプレート由来の本文は平文なので、記入内容にシェーマ画像があっても
+                「あり」の印しか出ない。何を描いたか分かるよう、入力中も本文の下に
+                サムネイルを出す(カルテでの表示と同じ見せ方)。 */}
+            <TemplateSchemaImages template={section.template ?? null} />
           </div>
         ))}
 

@@ -4156,21 +4156,23 @@ body.karte-wide .app__header {
 }
 
 /* 描き込み済みシェーマ画像。複数あるときは横に並べ、入りきらなければ折り返す。 */
-.karte-qr__schemas {
+/* 描き込み済みシェーマ画像のサムネイル一覧(SchemaImageGallery)。カルテのカード・
+   詳細モーダル・診療記録/放射線オーダーの入力画面で共用する。 */
+.schema-gallery {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 6px;
 }
 
-.karte-qr__schema {
+.schema-gallery__item {
   margin: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.karte-qr__schema-image {
+.schema-gallery__image {
   max-width: 160px;
   max-height: 120px;
   border: 1px solid var(--border);
@@ -4179,9 +4181,14 @@ body.karte-wide .app__header {
   background: #fff;
 }
 
-.karte-qr__schema-caption {
+.schema-gallery__caption {
   font-size: 12px;
   color: var(--text);
+}
+
+.schema-gallery__empty {
+  margin: 0;
+  font-size: 13px;
 }
 
 /* 病名・アレルギー・検査結果タブ */
