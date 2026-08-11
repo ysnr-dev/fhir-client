@@ -31,6 +31,36 @@ RSpec.describe "Master::MicroSpecimenTypes", type: :request do
     end
   end
 
+  describe "CRUD" do
+    let!(:official_type) { Master::MicroSpecimenType.create!(code: "101", name: "喀出痰") }
+    let!(:local_type) do
+      Master::MicroSpecimenType.create!(code: "901", name: "施設追加材料", source: "local")
+    end
+
+    it "作成した材料は施設追加(local)になる" do
+      post "/master/micro_specimen_types", params: { code: "902", name: "新しい材料" }, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(Master::MicroSpecimenType.find_by(code: "902").source).to eq("local")
+    end
+
+    it "標準コードは編集も削除もできない" do
+      patch "/master/micro_specimen_types/#{official_type.id}", params: { name: "書き換え" }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+
+      delete "/master/micro_specimen_types/#{official_type.id}"
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "施設追加コードは編集・削除できる" do
+      patch "/master/micro_specimen_types/#{local_type.id}", params: { name: "改名した材料" }, as: :json
+      expect(local_type.reload.name).to eq("改名した材料")
+
+      delete "/master/micro_specimen_types/#{local_type.id}"
+      expect(response).to have_http_status(:no_content)
+    end
+  end
+
   describe "POST /master/micro_specimen_types/import" do
     it "JANIS 材料コード表を取り込んで件数を返す" do
       file = Rack::Test::UploadedFile.new(

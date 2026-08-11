@@ -19,6 +19,9 @@ import { LabSpecimenPage } from "./pages/LabSpecimenPage";
 import { RadItemLayoutPage } from "./pages/RadItemLayoutPage";
 import { RadItemPage } from "./pages/RadItemPage";
 import { RadJj1017CodePage } from "./pages/RadJj1017CodePage";
+import { MicroOrderItemPage } from "./pages/MicroOrderItemPage";
+import { MicroOrganismPage } from "./pages/MicroOrganismPage";
+import { MicroSpecimenTypePage } from "./pages/MicroSpecimenTypePage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
 import { PractitionerEditPage } from "./pages/PractitionerEditPage";
@@ -121,6 +124,17 @@ function App() {
                   JJ1017コード
                 </Link>
               </SubMenu>
+              <SubMenu label="細菌検査">
+                <Link to="/micro-order-items" className="row-menu__item">
+                  検査項目・採取部位
+                </Link>
+                <Link to="/micro-specimen-types" className="row-menu__item">
+                  JANIS材料コード
+                </Link>
+                <Link to="/micro-organisms" className="row-menu__item">
+                  JANIS病原体コード
+                </Link>
+              </SubMenu>
             </SubMenu>
             <Link to="/oauth-clients" className="row-menu__item">
               OAuth クライアント
@@ -169,6 +183,9 @@ function App() {
           <Route path="/rad-items" element={<RadItemPage />} />
           <Route path="/rad-item-layouts" element={<RadItemLayoutPage />} />
           <Route path="/rad-jj1017-codes" element={<RadJj1017CodePage />} />
+          <Route path="/micro-order-items" element={<MicroOrderItemPage />} />
+          <Route path="/micro-specimen-types" element={<MicroSpecimenTypePage />} />
+          <Route path="/micro-organisms" element={<MicroOrganismPage />} />
           <Route path="/questionnaires" element={<QuestionnaireListPage />} />
           <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />
           <Route path="/questionnaires/:questionnaireId/edit" element={<QuestionnaireEditPage />} />

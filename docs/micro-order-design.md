@@ -194,23 +194,27 @@ search_name
 - 取込・検索APIは `POST/GET /master/micro_specimen_types(/import)` /
   `/master/micro_organisms(/import)`。編集UIが未実装のため当面 index + import のみ。
 - 採取部位・採取方法・検査項目は `db/seeds.rb` + `db/seed_data/micro_*.csv` で初期投入し、
-  以後は画面メンテ（§6）。採取部位の初期値は依頼書で頻出の部位
-  （咽頭、鼻腔、喀痰由来は種別側で表現、創部、皮膚、耳、眼、尿道、腟、子宮頸管、
-  肘正中皮静脈、CVカテーテル等）から実装時に整理する。
+  以後は画面メンテ（§6）。**施設で直す前提の初期値なので、既存行は上書きしない**
+  （採取管マスタと同じ判断）。投入済みの初期値: 検査項目9件（§4の表）、
+  採取部位20件（咽頭・鼻腔・耳・眼・創部・肘正中皮静脈・中心静脈カテーテル等、
+  左右あり8件）、採取方法11件（スワブ・穿刺・吸引・導尿等）。
 
 ---
 
-## 6. マスタメンテUI
+## 6. マスタメンテUI（実装済み）
 
-［提案］ナビ: 管理 → マスタメンテナンス → 細菌検査。
+ナビ: 管理 → マスタメンテナンス → 細菌検査。
 
 - `/micro-organisms` — 病原体コード一覧（検索・ページネーション、official/localバッジ）。
-  **frequent フラグのトグル**（頻用菌の指定）が主用途。local追加・編集は
-  official行は不可、という既存パターンに従う。
-- `/micro-specimen-types` — 検体種別一覧。localの追加・編集。
+  **frequent フラグは一覧のチェックボックスで直接切り替える**（頻用菌の指定が主用途）。
+  行クリックでの編集・削除は local 行のみ。標準行の update はサーバー側でも
+  frequent 以外を受け付けない。
+- `/micro-specimen-types` — 検体種別一覧（系統列つき）。local の追加・編集・削除。
 - `/micro-order-items` — 検査項目・採取部位・採取方法の3小マスタをタブでまとめる
-  （いずれも数十件規模のため専用ページを分けない）。
+  （いずれも数十件規模のため専用ページを分けない。検査項目の編集モーダルに
+  有効開始/終了日を持ち、廃止は削除ではなく有効終了日で行う）。
 - マスタ取込（`MasterImportPage`）に「JANIS材料コード」「JANIS病原体コード」の2種別を追加。
+  病原体コードの取込結果には読んだ版シート名（例: Ver.6.1）を表示する。
 
 API: `resources :micro_specimen_types / :micro_organisms / :micro_order_items /
 :micro_collection_sites / :micro_collection_methods`（index/create/update/destroy、
