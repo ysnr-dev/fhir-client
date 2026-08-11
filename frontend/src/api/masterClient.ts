@@ -11,7 +11,9 @@ export type MasterType =
   | "jfagy_allergens"
   | "lab_specimens"
   | "rad_jj1017_codes"
-  | "rad_frequent_codes";
+  | "rad_frequent_codes"
+  | "micro_specimen_types"
+  | "micro_organisms";
 
 export interface MasterImportResult {
   imported: number;
@@ -21,6 +23,8 @@ export interface MasterImportResult {
   elements?: Record<string, number>;
   /** JJ1017 頻用コード: 取り込んだ区分ごとの件数。 */
   categories?: Record<string, number>;
+  /** JANIS 病原体コード: 実際に読んだ版シート名(最新版だけを読むため)。 */
+  sheet?: string;
 }
 
 export interface Medicine {

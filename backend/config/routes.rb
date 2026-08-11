@@ -111,6 +111,14 @@ Rails.application.routes.draw do
     resources :rad_set_items, only: %i[index create update destroy]
     resources :rad_item_layouts, only: %i[index show create update destroy]
     resources :rad_item_layout_cells, only: %i[create update destroy]
+    # 細菌検査オーダーのマスタ群(JANIS 検査部門のコード表)。編集UIは未実装の
+    # ため、当面は検索と取込だけ。
+    resources :micro_specimen_types, only: %i[index] do
+      collection { post :import }
+    end
+    resources :micro_organisms, only: %i[index] do
+      collection { post :import }
+    end
     resources :diseases, only: %i[index show create update destroy] do
       collection { post :import }
     end
