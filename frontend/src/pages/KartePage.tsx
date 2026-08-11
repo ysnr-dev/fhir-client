@@ -19,6 +19,7 @@ import { KarteAllergyTab } from "../components/KarteAllergyTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteDayList } from "../components/KarteDayList";
 import { KarteLabResultTab } from "../components/KarteLabResultTab";
+import { KarteMicroResultTab } from "../components/KarteMicroResultTab";
 import { KarteProblemList } from "../components/KarteProblemList";
 import { KarteDetailModal } from "../components/KarteCardModals";
 import { KarteRightPane, type KartePaneState } from "../components/KarteRightPane";
@@ -358,6 +359,7 @@ export function KartePage() {
     const props = { patientId, view: tab === key ? view : "", onViewChange: selectView };
     if (key === "condition") return <KarteConditionTab {...props} />;
     if (key === "allergy") return <KarteAllergyTab {...props} />;
+    if (key === "micro") return <KarteMicroResultTab {...props} />;
     return <KarteLabResultTab {...props} />;
   }
 

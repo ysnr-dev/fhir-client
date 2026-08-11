@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_12_001200) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_12_001400) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -369,6 +369,24 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_12_001200) do
     t.index ["yakka_code"], name: "index_master_medicines_on_yakka_code"
   end
 
+  create_table "master_micro_antimicrobials", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "abbreviation"
+    t.string "brand_name"
+    t.string "category"
+    t.boolean "frequent", default: false, null: false
+    t.string "source", default: "official", null: false
+    t.integer "display_order"
+    t.string "search_name"
+    t.string "search_abbreviation"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_micro_antimicrobials_on_code", unique: true
+    t.index ["search_abbreviation"], name: "index_master_micro_antimicrobials_on_search_abbreviation"
+    t.index ["search_name"], name: "index_master_micro_antimicrobials_on_search_name"
+  end
+
   create_table "master_micro_collection_methods", force: :cascade do |t|
     t.string "code", null: false
     t.string "name", null: false
@@ -427,6 +445,22 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_12_001200) do
     t.datetime "updated_at", null: false
     t.index ["code"], name: "index_master_micro_specimen_types_on_code", unique: true
     t.index ["search_name"], name: "index_master_micro_specimen_types_on_search_name"
+  end
+
+  create_table "master_micro_susceptibility_methods", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "classification"
+    t.string "product_name"
+    t.string "company"
+    t.string "note"
+    t.string "source", default: "official", null: false
+    t.integer "display_order"
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_micro_susceptibility_methods_on_code", unique: true
+    t.index ["search_name"], name: "index_master_micro_susceptibility_methods_on_search_name"
   end
 
   create_table "master_modifiers", force: :cascade do |t|

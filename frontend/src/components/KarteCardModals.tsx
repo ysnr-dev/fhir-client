@@ -2,6 +2,7 @@ import {
   useClinicalNote,
   useLabOrderDetail,
   useMicroOrderDetail,
+  useMicroResultDetail,
   useRadOrderDetail,
   useLabResultDetail,
   usePrescriptionDetail,
@@ -12,6 +13,7 @@ import { labOrderItemRequests, serviceRequestsOf } from "../fhir/labOrderHelpers
 import { microOrderItemRequests } from "../fhir/microOrderHelpers";
 import { radOrderItemRequests } from "../fhir/radOrderHelpers";
 import { splitLabResultDetailBundle } from "../fhir/labResultHelpers";
+import { splitMicroResultDetailBundle } from "../fhir/microResultHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { splitPrescriptionDetailBundle } from "../fhir/prescriptionHelpers";
 import type { KarteDetailKind, KarteDetailTarget } from "../karteUrl";
@@ -23,6 +25,7 @@ import { LabOrderDetailPanel } from "./LabOrderDetailPanel";
 import { LabResultDetailPanel } from "./LabResultDetailPanel";
 import { Modal } from "./Modal";
 import { MicroOrderDetailPanel } from "./MicroOrderDetailPanel";
+import { MicroResultDetailPanel } from "./MicroResultDetailPanel";
 import { PrescriptionDetailPanel } from "./PrescriptionDetailPanel";
 import { QuestionnaireResponseDetailPanel } from "./QuestionnaireResponseDetailPanel";
 import { RadOrderDetailPanel } from "./RadOrderDetailPanel";
@@ -38,6 +41,7 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   "micro-order": "細菌検査内容",
   "rad-order": "放射線検査内容",
   "lab-result": "検査結果内容",
+  "micro-result": "細菌検査結果内容",
   qr: "テンプレート表示",
 };
 
@@ -70,6 +74,8 @@ export function KarteDetailModal({
         <RadOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-result" ? (
         <LabResultDetail patientId={patientId} reportId={target.id} />
+      ) : target.kind === "micro-result" ? (
+        <MicroResultDetail patientId={patientId} reportId={target.id} />
       ) : (
         <QuestionnaireResponseDetail patientId={patientId} qrId={target.id} />
       )}
@@ -301,6 +307,29 @@ function LabResultDetail({ patientId, reportId }: { patientId: string; reportId:
         <LabResultDetailPanel reportId={reportId} />
       ) : (
         !detail.error && <NotFound label="検査結果" />
+      )}
+    </>
+  );
+}
+
+// 細菌検査のカードから開く「検査結果表示」。中身は細菌検査タブの内容表示と同じ
+// パネルで、患者の取り違えだけここで弾く(パネルと同じクエリなので追加の取得は無い)。
+function MicroResultDetail({ patientId, reportId }: { patientId: string; reportId: string }) {
+  const detail = useMicroResultDetail(reportId);
+  const report = detail.data ? splitMicroResultDetailBundle(detail.data.data).report : undefined;
+  const mismatch = isPatientMismatch(patientId, report?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された細菌検査結果は別の患者のものです。</p>
+      ) : report ? (
+        <MicroResultDetailPanel reportId={reportId} />
+      ) : (
+        !detail.error && <NotFound label="細菌検査結果" />
       )}
     </>
   );

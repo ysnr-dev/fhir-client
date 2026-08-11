@@ -188,6 +188,45 @@ else
   puts "master_micro_organisms frequent: #{frequent_csv} not found, skipped"
 end
 
+# 頻用抗菌薬(細菌検査結果の薬剤感受性欄に直接並べる薬)の初期セット。
+# db/seed_data/micro_frequent_antimicrobials.csv（ヘッダー有り, code,name,abbreviation）の
+# JANIS 抗菌薬コードに frequent を立てる。name/abbreviation は人が読むための欄で、
+# 突き合わせはコードだけで行う（名称がずれていれば警告して印は立てる）。
+# 抗菌薬マスタ(JANIS 配布ファイル)が未取込だとコードが無いのでスキップされる。
+# 取込後に db:seed を再実行すると反映される。
+frequent_drug_csv = Rails.root.join("db/seed_data/micro_frequent_antimicrobials.csv")
+if File.exist?(frequent_drug_csv)
+  marked = 0
+  kept = 0
+  missing = []
+  CSV.foreach(frequent_drug_csv, headers: true) do |row|
+    code = row["code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank?
+
+    drug = Master::MicroAntimicrobial.find_by(code: code)
+    if drug.nil?
+      missing << code
+      next
+    end
+
+    if name.present? && drug.name != name
+      puts "master_micro_antimicrobials: code #{code} の薬剤名が CSV と違います (#{drug.name.inspect})"
+    end
+
+    if drug.frequent?
+      kept += 1
+    else
+      drug.update!(frequent: true)
+      marked += 1
+    end
+  end
+  puts "master_micro_antimicrobials frequent: marked #{marked} rows " \
+       "(kept #{kept}, antimicrobial not imported #{missing.size}#{missing.empty? ? '' : ": #{missing.join(', ')}"})"
+else
+  puts "master_micro_antimicrobials frequent: #{frequent_drug_csv} not found, skipped"
+end
+
 rad_codes_csv = Rails.root.join("db/seed_data/rad_jj1017_codes.csv")
 if File.exist?(rad_codes_csv)
   loaded = 0

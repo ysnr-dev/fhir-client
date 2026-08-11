@@ -24,8 +24,11 @@ import {
 } from "../fhir/labOrderHelpers";
 import {
   buildMicroOrderDeleteBundle,
+  isMicroServiceRequest,
   microOrderItemRequests,
+  microOrderLabel,
 } from "../fhir/microOrderHelpers";
+import { buildMicroResultDeleteBundle } from "../fhir/microResultHelpers";
 import {
   buildPrescriptionDeleteBundle,
   splitPrescriptionDetailBundle,
@@ -653,7 +656,7 @@ export function useRadOrderDetail(srId: string | undefined) {
   });
 }
 
-// ---- 検査結果に紐付ける検体検査オーダーの候補 ----
+// ---- 検査結果に紐付けるオーダー(検体検査・細菌検査)の候補 ----
 
 // 上流 fhir-server の _count 上限 100 を 1 ページとして順に辿る。
 const LAB_ORDER_CANDIDATE_PAGE = 100;
@@ -662,7 +665,7 @@ const LAB_ORDER_CANDIDATE_MAX_PAGES = 5;
 // プルダウンに並べる未紐付けオーダーの上限。これだけ集まったら読むのをやめる。
 const LAB_ORDER_CANDIDATE_LIMIT = 50;
 
-/** 検査結果の登録画面で選ばせる検体検査オーダー 1 件。 */
+/** 検査結果の登録画面で選ばせるオーダー 1 件。 */
 export interface LabOrderCandidate {
   id: string;
   /** 「2026-08-09 末梢血液一般検査・CRP」のような選択肢の表示。 */
@@ -671,14 +674,19 @@ export interface LabOrderCandidate {
   reportId: string;
 }
 
-// 患者の検体検査オーダー(ヘッダ)を新しい順に集める。処方・注射のヘッダも同じ
+// 患者のオーダー(ヘッダ)を新しい順に集める。処方・注射など他種のヘッダも同じ
 // 検索で返るのでクライアント側で振り分ける(上流の ServiceRequest には category
-// 検索パラメータが無いため)。
+// 検索パラメータが無いため)。振り分けとラベルの組み立てだけがオーダー種別ごとに
+// 異なるので、そこを差し替えられるようにしている。
 //
 // 明細は選択肢のラベルに使うので `_revinclude:iterate=ServiceRequest:based-on` で、
 // 「結果が既に登録されているか」は `_revinclude=DiagnosticReport:based-on` で
 // 同じ応答に添えてもらう。
-async function fetchLabOrderCandidates(patientId: string): Promise<LabOrderCandidate[]> {
+async function fetchOrderCandidates(
+  patientId: string,
+  isTargetHeader: (sr: fhir4.ServiceRequest) => boolean,
+  buildLabel: (header: fhir4.ServiceRequest, itemRequests: fhir4.ServiceRequest[]) => string,
+): Promise<LabOrderCandidate[]> {
   const candidates: LabOrderCandidate[] = [];
 
   for (let page = 0; page < LAB_ORDER_CANDIDATE_MAX_PAGES; page += 1) {
@@ -711,11 +719,10 @@ async function fetchLabOrderCandidates(patientId: string): Promise<LabOrderCandi
     // ヘッダ(= 検索にヒットした分)だけを数える。明細と検査結果も混ざって返るため。
     const headers = serviceRequests.filter((sr) => !isOrderItemRequest(sr));
     for (const header of headers) {
-      if (!header.id || !isLabServiceRequest(header)) continue;
-      const items = labOrderItems(header, labOrderItemRequests(serviceRequests, header.id));
+      if (!header.id || !isTargetHeader(header)) continue;
       candidates.push({
         id: header.id,
-        label: labOrderLabel(header, items),
+        label: buildLabel(header, labOrderItemRequests(serviceRequests, header.id)),
         reportId: reportIdByOrderId.get(header.id) ?? "",
       });
     }
@@ -727,20 +734,30 @@ async function fetchLabOrderCandidates(patientId: string): Promise<LabOrderCandi
   return candidates;
 }
 
-/**
- * 検査結果に紐付ける検体検査オーダーの候補。すでに結果が登録されているオーダーは
- * 出さないが、編集中の検査結果自身が紐付けているオーダーは残す(外して保存し直す
- * つもりがないのに選択が消えてしまわないようにするため)。
- */
-export function useLabOrderCandidates(
+function fetchLabOrderCandidates(patientId: string): Promise<LabOrderCandidate[]> {
+  return fetchOrderCandidates(patientId, isLabServiceRequest, (header, itemRequests) =>
+    labOrderLabel(header, labOrderItems(header, itemRequests)),
+  );
+}
+
+function fetchMicroOrderCandidates(patientId: string): Promise<LabOrderCandidate[]> {
+  return fetchOrderCandidates(patientId, isMicroServiceRequest, microOrderLabel);
+}
+
+// 「すでに結果が登録されているオーダーは出さないが、編集中の結果自身が紐付けている
+// オーダーは残す(外して保存し直すつもりがないのに選択が消えてしまわないように
+// するため)」を検体検査・細菌検査で共通に行う。
+function useOrderCandidatesQuery(
+  queryKey: unknown[],
+  fetch: (patientId: string) => Promise<LabOrderCandidate[]>,
   patientId: string | undefined,
   currentReportId?: string,
 ) {
   // 検査結果の登録・更新・削除でも紐付け状況が変わるので、それらの
   // invalidateQueries(["ServiceRequest", "search"]) で無効化されるキーにしている。
   const query = useQuery({
-    queryKey: ["ServiceRequest", "search", "lab-order-candidates", patientId],
-    queryFn: () => fetchLabOrderCandidates(patientId as string),
+    queryKey,
+    queryFn: () => fetch(patientId as string),
     enabled: Boolean(patientId),
     staleTime: 30_000,
   });
@@ -752,6 +769,32 @@ export function useLabOrderCandidates(
     isLoading: query.isLoading,
     error: query.error,
   };
+}
+
+/** 検査結果に紐付ける検体検査オーダーの候補。 */
+export function useLabOrderCandidates(
+  patientId: string | undefined,
+  currentReportId?: string,
+) {
+  return useOrderCandidatesQuery(
+    ["ServiceRequest", "search", "lab-order-candidates", patientId],
+    fetchLabOrderCandidates,
+    patientId,
+    currentReportId,
+  );
+}
+
+/** 細菌検査結果に紐付ける細菌検査オーダーの候補。 */
+export function useMicroOrderCandidates(
+  patientId: string | undefined,
+  currentReportId?: string,
+) {
+  return useOrderCandidatesQuery(
+    ["ServiceRequest", "search", "micro-order-candidates", patientId],
+    fetchMicroOrderCandidates,
+    patientId,
+    currentReportId,
+  );
 }
 
 export function useCreatePrescription() {
@@ -834,13 +877,14 @@ const LAB_RESULT_ORDER_MAX_PAGES = 10;
 
 // 一覧と同じ絞り込み・並び順で DiagnosticReport の id だけを取得する。
 // 上流の _sort は同値時に id 昇順で安定するため、一覧の並びとページ境界をまたいでも一致する。
-async function fetchLabResultOrder(patientId: string): Promise<string[]> {
+// category は検体検査(LAB)・細菌検査(MB)の別。
+async function fetchLabResultOrder(patientId: string, category: string): Promise<string[]> {
   const ids: string[] = [];
 
   for (let page = 0; page < LAB_RESULT_ORDER_MAX_PAGES; page += 1) {
     const params = new URLSearchParams();
     params.set("patient", `Patient/${patientId}`);
-    params.set("category", "LAB");
+    params.set("category", category);
     params.set("_count", String(LAB_RESULT_ORDER_PAGE));
     params.set("_offset", String(page * LAB_RESULT_ORDER_PAGE));
     params.set("_sort", "-date");
@@ -864,12 +908,16 @@ async function fetchLabResultOrder(patientId: string): Promise<string[]> {
 }
 
 // 検査結果内容ページの「前へ/次へ」用。一覧に戻らず隣の検査結果へ移動するための id を返す。
-export function useLabResultNavigation(patientId: string | undefined, reportId: string | undefined) {
+function useResultNavigationQuery(
+  category: string,
+  patientId: string | undefined,
+  reportId: string | undefined,
+) {
   // 作成・更新・削除時の invalidateQueries(["DiagnosticReport", "search"]) で
   // まとめて無効化されるよう search 配下のキーにしている。
   const query = useQuery({
-    queryKey: ["DiagnosticReport", "search", "order", patientId],
-    queryFn: () => fetchLabResultOrder(patientId as string),
+    queryKey: ["DiagnosticReport", "search", "order", category, patientId],
+    queryFn: () => fetchLabResultOrder(patientId as string, category),
     enabled: Boolean(patientId),
     // 前後移動のたびにページが再マウントされるため、連打で毎回引き直さないよう
     // 少しだけ寝かせる。更新・削除時は invalidateQueries 側で無効化される。
@@ -886,6 +934,17 @@ export function useLabResultNavigation(patientId: string | undefined, reportId: 
     total: ids.length,
     isLoading: query.isLoading,
   };
+}
+
+export function useLabResultNavigation(patientId: string | undefined, reportId: string | undefined) {
+  return useResultNavigationQuery("LAB", patientId, reportId);
+}
+
+export function useMicroResultNavigation(
+  patientId: string | undefined,
+  reportId: string | undefined,
+) {
+  return useResultNavigationQuery("MB", patientId, reportId);
 }
 
 // ---- 時系列表示 ----
@@ -995,6 +1054,117 @@ export function useDeleteLabResult() {
       );
       return postBundle(
         buildLabResultDeleteBundle(
+          reportId,
+          observationIdsFromReport(report),
+          specimenIdsFromReport(report),
+        ),
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+    },
+  });
+}
+
+// ---- 細菌検査結果 ----
+
+const MICRO_RESULT_COUNT = 20;
+
+export interface MicroResultSearchResources {
+  bundle: fhir4.Bundle;
+  reports: fhir4.DiagnosticReport[];
+  observations: fhir4.Observation[];
+}
+
+// 一覧に培養結果・分離菌名も出すため、Observation を _include で添えてもらう。
+async function fetchMicroResultPage(
+  patientId: string,
+  offset: number,
+): Promise<MicroResultSearchResources> {
+  const params = new URLSearchParams();
+  params.set("patient", `Patient/${patientId}`);
+  params.set("category", "MB");
+  params.set("_count", String(MICRO_RESULT_COUNT));
+  params.set("_offset", String(offset));
+  // 検体採取日(effective)の降順。_sort のキーは検索パラメータ名 date。
+  params.set("_sort", "-date");
+  params.set("_include", "DiagnosticReport:result");
+
+  const { data: bundle } = await searchResource<fhir4.Resource>("DiagnosticReport", params);
+  const reports: fhir4.DiagnosticReport[] = [];
+  const observations: fhir4.Observation[] = [];
+  for (const entry of bundle.entry ?? []) {
+    const resource = entry.resource;
+    // _include の Observation も entry に混ざって返るため resourceType で振り分ける。
+    if (resource?.resourceType === "DiagnosticReport") {
+      reports.push(resource as fhir4.DiagnosticReport);
+    } else if (resource?.resourceType === "Observation") {
+      observations.push(resource as fhir4.Observation);
+    }
+  }
+  return { bundle, reports, observations };
+}
+
+export function useMicroResultSearch(patientId: string | undefined, offset: number) {
+  const query = useQuery({
+    queryKey: ["DiagnosticReport", "search", "micro", patientId, offset],
+    queryFn: () => fetchMicroResultPage(patientId as string, offset),
+    placeholderData: keepPreviousData,
+    enabled: Boolean(patientId),
+  });
+
+  return {
+    ...query,
+    resources: query.data,
+    total: query.data?.bundle.total ?? 0,
+    count: MICRO_RESULT_COUNT,
+    hasPrevious: hasRelation(query.data?.bundle, "previous"),
+    hasNext: hasRelation(query.data?.bundle, "next"),
+  };
+}
+
+// 内容表示・編集の取得は検体検査結果と同じ形(_id + result / specimen の _include)。
+export function useMicroResultDetail(reportId: string | undefined) {
+  return useLabResultDetail(reportId);
+}
+
+// 細菌検査結果を保存・削除するとオーダーの紐付け状況が変わるため、
+// 細菌検査オーダーの候補(["ServiceRequest", "search"] 配下)も無効化する。
+export function useCreateMicroResult() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+    },
+  });
+}
+
+export function useUpdateMicroResult() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "detail"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+    },
+  });
+}
+
+export function useDeleteMicroResult() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (reportId: string) => {
+      // 削除対象の Observation / Specimen は DiagnosticReport の参照から辿る。
+      const { data: report } = await readResource<fhir4.DiagnosticReport>(
+        "DiagnosticReport",
+        reportId,
+      );
+      return postBundle(
+        buildMicroResultDeleteBundle(
           reportId,
           observationIdsFromReport(report),
           specimenIdsFromReport(report),

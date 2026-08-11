@@ -54,5 +54,21 @@ module MasterImport
     def normalize_label(text)
       text.to_s.unicode_normalize(:nfkc).gsub(/[[:space:]]/, "")
     end
+
+    # "Ver.6.1" のような版シートのうち、版番号が最も新しいものを選ぶ。
+    # "Ver.3.0、3.1" のように複数版が相乗りしたシートは、その中の最大値で比べる。
+    def latest_version_sheet(workbook)
+      candidates = workbook.sheets.filter_map do |name|
+        next unless /ver/i.match?(name)
+
+        versions = name.scan(/\d+(?:\.\d+)*/)
+        next if versions.empty?
+
+        [name, versions.map { |v| Gem::Version.new(v) }.max]
+      end
+      raise ImportError, "版(Ver.x.x)のシートが見つかりません" if candidates.empty?
+
+      candidates.max_by(&:last).first
+    end
   end
 end

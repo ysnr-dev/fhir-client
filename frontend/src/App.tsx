@@ -21,6 +21,8 @@ import { RadItemPage } from "./pages/RadItemPage";
 import { RadJj1017CodePage } from "./pages/RadJj1017CodePage";
 import { MicroOrderItemPage } from "./pages/MicroOrderItemPage";
 import { MicroOrganismPage } from "./pages/MicroOrganismPage";
+import { MicroAntimicrobialPage } from "./pages/MicroAntimicrobialPage";
+import { MicroSusceptibilityMethodPage } from "./pages/MicroSusceptibilityMethodPage";
 import { MicroSpecimenTypePage } from "./pages/MicroSpecimenTypePage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
@@ -124,6 +126,12 @@ function App() {
                 <Link to="/micro-organisms" className="row-menu__item">
                   JANIS病原体コード
                 </Link>
+                <Link to="/micro-antimicrobials" className="row-menu__item">
+                  JANIS抗菌薬コード
+                </Link>
+                <Link to="/micro-susceptibility-methods" className="row-menu__item">
+                  JANIS感受性測定法コード
+                </Link>
               </SubMenu>
               <SubMenu label="放射線検査">
                 <Link to="/rad-items" className="row-menu__item">
@@ -187,6 +195,8 @@ function App() {
           <Route path="/micro-order-items" element={<MicroOrderItemPage />} />
           <Route path="/micro-specimen-types" element={<MicroSpecimenTypePage />} />
           <Route path="/micro-organisms" element={<MicroOrganismPage />} />
+          <Route path="/micro-antimicrobials" element={<MicroAntimicrobialPage />} />
+          <Route path="/micro-susceptibility-methods" element={<MicroSusceptibilityMethodPage />} />
           <Route path="/questionnaires" element={<QuestionnaireListPage />} />
           <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />
           <Route path="/questionnaires/:questionnaireId/edit" element={<QuestionnaireEditPage />} />

@@ -2,7 +2,8 @@ import type { LabItem } from "../api/masterClient";
 
 // ローカル拡張・コードシステム。正式な CodeSystem が定義されていない(または
 // 不明な)項目を表現するための、この検査結果機能専用の URI。
-const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/lab-result-setting"; // 入外区分
+// 入外区分。細菌検査結果(microResultHelpers)も同じ意味で使うので共有する。
+export const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/lab-result-setting";
 // JLAC11 コード。正式な CodeSystem URL が公開されていないためローカル URI を使用。
 // 検体検査オーダー(labOrderHelpers)も同じ体系のコードを持つので共有する。
 export const JLAC11_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11";

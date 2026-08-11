@@ -119,6 +119,14 @@ Rails.application.routes.draw do
     resources :micro_organisms, only: %i[index create update destroy] do
       collection { post :import }
     end
+    # 細菌検査結果のマスタ群。JANIS 由来の2つは標準コードを取込で洗い替え、
+    # 画面からは施設追加分(と抗菌薬の頻用フラグ)だけを書ける。
+    resources :micro_antimicrobials, only: %i[index create update destroy] do
+      collection { post :import }
+    end
+    resources :micro_susceptibility_methods, only: %i[index create update destroy] do
+      collection { post :import }
+    end
     # 独自マスタ3種(検査項目・採取部位・採取方法)。seed の初期値を画面でメンテする。
     resources :micro_order_items, only: %i[index create update destroy]
     resources :micro_collection_sites, only: %i[index create update destroy]

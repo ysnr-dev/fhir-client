@@ -44,8 +44,9 @@ export const MICRO_ORDER_TYPE = { code: "micro", display: "細菌検査" };
 const ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/micro-order-item";
 // JANIS 検査部門のコード表。公式の FHIR system URI が無いため、他のローカル
 // コードと同じ fhir-client.local の URI を使う。
-const SPECIMEN_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/janis-specimen-type";
-const ORGANISM_SYSTEM = "http://fhir-client.local/CodeSystem/janis-organism";
+// 細菌検査結果(microResultHelpers)も材料・菌名を同じ体系で持つので共有する。
+export const SPECIMEN_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/janis-specimen-type";
+export const ORGANISM_SYSTEM = "http://fhir-client.local/CodeSystem/janis-organism";
 // 採取部位・左右・採取方法(施設マスタ)。
 const COLLECTION_SITE_SYSTEM = "http://fhir-client.local/CodeSystem/micro-collection-site";
 const LATERALITY_SYSTEM = "http://fhir-client.local/CodeSystem/micro-laterality";
@@ -633,6 +634,21 @@ export function microOrderContents(itemRequests: fhir4.ServiceRequest[]): {
     specimen: group ? parseSpecimenGroupRequest(group) : emptyMicroSpecimen(),
     items,
   };
+}
+
+/**
+ * 「2026-08-11 喀出痰 塗抹・鏡検/培養・同定」のような 1 行要約。結果登録の
+ * オーダー選択肢と、結果内容表示の紐付けオーダー表示に使う。
+ * 検査項目名自体が「・」を含むため、項目の区切りは「/」にする。
+ */
+export function microOrderLabel(
+  header: fhir4.ServiceRequest,
+  itemRequests: fhir4.ServiceRequest[],
+): string {
+  const date = header.authoredOn?.slice(0, 10) ?? "";
+  const contents = microOrderContents(itemRequests);
+  const items = contents.items.map((item) => item.name).join("/");
+  return [date, contents.specimen.typeName, items].filter(Boolean).join(" ");
 }
 
 /** ServiceRequest の一覧から、指定のオーダーにぶら下がる明細だけを取り出す。

@@ -94,31 +94,41 @@ import {
   updateSchemaCategory,
   type SchemaCategoryPayload,
   type SchemaPayload,
+  createMicroAntimicrobial,
   createMicroCollectionMethod,
   createMicroCollectionSite,
   createMicroOrderItem,
   createMicroOrganism,
   createMicroSpecimenType,
+  createMicroSusceptibilityMethod,
+  deleteMicroAntimicrobial,
   deleteMicroCollectionMethod,
   deleteMicroCollectionSite,
   deleteMicroOrderItem,
   deleteMicroOrganism,
   deleteMicroSpecimenType,
+  deleteMicroSusceptibilityMethod,
   fetchMicroCollectionMethods,
   fetchMicroCollectionSites,
   fetchMicroOrderItems,
+  searchMicroAntimicrobials,
   searchMicroOrganisms,
   searchMicroSpecimenTypes,
+  searchMicroSusceptibilityMethods,
+  updateMicroAntimicrobial,
   updateMicroCollectionMethod,
   updateMicroCollectionSite,
   updateMicroOrderItem,
   updateMicroOrganism,
   updateMicroSpecimenType,
+  updateMicroSusceptibilityMethod,
+  type MicroAntimicrobialPayload,
   type MicroCollectionMethodPayload,
   type MicroCollectionSitePayload,
   type MicroOrderItemPayload,
   type MicroOrganismPayload,
   type MicroSpecimenTypePayload,
+  type MicroSusceptibilityMethodPayload,
 } from "./masterClient";
 
 export interface MedicineUsageFilters {
@@ -1319,5 +1329,119 @@ export function useFrequentMicroOrganisms() {
   return useQuery({
     queryKey: [...MICRO_ORGANISMS_KEY, "frequent"],
     queryFn: () => searchMicroOrganisms({ frequent: true, per: 100 }),
+  });
+}
+
+// ---- 細菌検査結果のマスタ ----
+
+const MICRO_ANTIMICROBIALS_KEY = ["master", "micro_antimicrobials"];
+const MICRO_SUSCEPTIBILITY_METHODS_KEY = ["master", "micro_susceptibility_methods"];
+
+export interface MicroAntimicrobialFilters {
+  name?: string;
+  frequent?: boolean;
+  source?: string;
+}
+
+export function useMicroAntimicrobialSearch(filters: MicroAntimicrobialFilters, page: number) {
+  return useQuery({
+    queryKey: [...MICRO_ANTIMICROBIALS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchMicroAntimicrobials({
+        name: filters.name || undefined,
+        frequent: filters.frequent || undefined,
+        source: filters.source || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useMicroAntimicrobialMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: MICRO_ANTIMICROBIALS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: MicroAntimicrobialPayload) => createMicroAntimicrobial(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: MicroAntimicrobialPayload }) =>
+        updateMicroAntimicrobial(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteMicroAntimicrobial(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+export interface MicroSusceptibilityMethodFilters {
+  name?: string;
+  source?: string;
+}
+
+export function useMicroSusceptibilityMethodSearch(
+  filters: MicroSusceptibilityMethodFilters,
+  page: number,
+) {
+  return useQuery({
+    queryKey: [...MICRO_SUSCEPTIBILITY_METHODS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchMicroSusceptibilityMethods({
+        name: filters.name || undefined,
+        source: filters.source || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useMicroSusceptibilityMethodMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: MICRO_SUSCEPTIBILITY_METHODS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: MicroSusceptibilityMethodPayload) =>
+        createMicroSusceptibilityMethod(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: MicroSusceptibilityMethodPayload }) =>
+        updateMicroSusceptibilityMethod(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteMicroSusceptibilityMethod(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+// 細菌検査結果画面用: 頻用抗菌薬(感受性欄に直接並べる薬)の一覧。
+export function useFrequentMicroAntimicrobials() {
+  return useQuery({
+    queryKey: [...MICRO_ANTIMICROBIALS_KEY, "frequent"],
+    queryFn: () => searchMicroAntimicrobials({ frequent: true, per: 100 }),
+  });
+}
+
+// 細菌検査結果画面用: 感受性測定法の選択肢(全件。標準33件+施設追加の想定)。
+export function useMicroSusceptibilityMethodOptions() {
+  return useQuery({
+    queryKey: [...MICRO_SUSCEPTIBILITY_METHODS_KEY, "options"],
+    queryFn: () => searchMicroSusceptibilityMethods({ per: 100 }),
   });
 }

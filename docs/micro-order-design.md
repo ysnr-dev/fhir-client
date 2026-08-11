@@ -342,13 +342,11 @@ contained Specimen（JP_Specimen_Common）:
 1. **定量培養の指定**（尿・BALの菌数定量）: 初期実装では持たない。必要ならコメント欄で
    運用し、恒常化したら「培養・同定」のオプションまたは独立項目として追加する。
 2. **感染対策情報**（耐性菌検出歴・保菌歴）の専用欄: 初期実装では持たない。コメント欄で運用。
-3. **結果側**: 塗抹結果・培養/同定結果（菌名=JANIS病原体コードが使える）・薬剤感受性成績
-   （抗菌薬コード・感受性測定方法コード・MIC値）は未設計。検体検査結果
-   （Observation / DiagnosticReport / 独立Specimen）の構造をベースに、菌株（分離菌）を
-   単位とする階層が必要になる見込み。
-4. **抗菌薬マスタ**（JANIS抗菌薬コード）: 結果側・JANIS提出のフェーズで
-   `master_micro_antimicrobials` として追加。前投与抗菌薬の構造化（YJ→JANIS対応列）も
-   その時点で再検討する。
+3. **結果側**: 実装済み。`docs/micro-result-design.md` を参照（DiagnosticReport(category=MB) +
+   分離菌 Observation + derivedFrom で紐付く薬剤感受性 Observation の階層）。
+4. **抗菌薬マスタ**（JANIS抗菌薬コード）: 結果側フェーズで `master_micro_antimicrobials`
+   として追加済み（感受性測定法の `master_micro_susceptibility_methods` も同時に追加）。
+   前投与抗菌薬の構造化（YJ→JANIS対応列）は引き続き未着手。
 5. **JANIS提出ファイル生成**: 検査部門送信ファイルの生成は結果側実装後の課題。
 6. **容器・ラベル**: 採取容器（滅菌容器・血培ボトル等）のマスタとラベル発行は未設計。
    検体検査の `master_lab_containers` と同型で追加できる。

@@ -25,6 +25,7 @@ export const KARTE_TABS = [
   { key: "condition", label: "病名" },
   { key: "allergy", label: "アレルギー" },
   { key: "lab", label: "検査結果" },
+  { key: "micro", label: "細菌検査" },
 ] as const;
 
 export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
@@ -41,11 +42,11 @@ export function parseKarteTab(value: string | null): KarteTabKey {
 }
 
 /**
- * 詳細モーダルの対象種別。カードの種別に加えて、検体検査のカードから開く
- * 「検査結果表示」(DiagnosticReport)を持つ。検査結果はカルテのカードにはならないが、
- * モーダルの対象としては独立した種別が要る。
+ * 詳細モーダルの対象種別。カードの種別に加えて、検体検査・細菌検査のカードから
+ * 開く「検査結果表示」(DiagnosticReport)を持つ。検査結果はカルテのカードには
+ * ならないが、モーダルの対象としては独立した種別が要る。
  */
-export type KarteDetailKind = KarteItemKind | "lab-result";
+export type KarteDetailKind = KarteItemKind | "lab-result" | "micro-result";
 
 export interface KarteDetailTarget {
   kind: KarteDetailKind;
@@ -60,6 +61,7 @@ const DETAIL_KINDS: KarteDetailKind[] = [
   "micro-order",
   "rad-order",
   "lab-result",
+  "micro-result",
   "qr",
 ];
 

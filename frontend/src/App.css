@@ -5438,3 +5438,163 @@ body.karte-wide .app__header {
 .micro-order__multiline {
   white-space: pre-wrap;
 }
+
+/* ---- 細菌検査結果 ---- */
+
+/* 中間報告のバッジ。最終化がまだなことを目立たせる(H 値と同じ注意色)。 */
+.micro-result__badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--lab-high);
+  color: var(--lab-high);
+  white-space: nowrap;
+}
+
+/* 一覧の分離菌名。長くなりがちなので折り返す。 */
+.micro-result__organisms {
+  white-space: normal;
+}
+
+/* 報告区分(中間/最終)のラジオ。ラベルと選択肢を 1 行に並べる。 */
+.micro-result-form__status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.micro-result-form__status-option {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.micro-result-form__status-option input[type="radio"] {
+  width: auto;
+  margin: 0;
+}
+
+/* 塗抹・鏡検所見は自由記載なので、行の残り幅を使って広めに確保する。 */
+.micro-result-form__smear {
+  flex: 1 1 260px;
+}
+
+.micro-result-form__smear > textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 喀痰品質・膿尿評価を並べる行。fieldset(flex-wrap)の中で常に行を改める。 */
+.micro-result-form__finding-row {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 48px;
+}
+
+/* 喀痰品質・膿尿評価の折り畳み。見出しはフォームのラベルと同じ文字サイズに
+   揃え、フレーム幅を中身に合わせる(開いたときに行いっぱいに伸びないように)。 */
+.micro-result-form__finding-details {
+  align-self: flex-start;
+}
+
+.micro-result-form__finding-details > summary {
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  width: fit-content;
+}
+
+/* 喀痰品質・膿尿評価。折り畳みの中に 2 つの select を並べる。 */
+.micro-result-form__finding-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 8px 0 4px 16px;
+}
+
+/* 分離菌フレーム内の検索ボタン(菌名の隣)。入力部品と高さを揃えた小さめの表示。 */
+.micro-result-form__search {
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
+/* 分離菌カードの 1 行目(菌名・菌量・菌数・起炎性)。 */
+.micro-result-form__isolate-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 16px;
+}
+
+.micro-result-form__isolate-remove {
+  margin-left: auto;
+}
+
+/* 感受性テーブル。薬剤名・製品名の長さで列が動かないよう colgroup の幅で固定し、
+   入力部品はセル幅いっぱいに合わせる(はみ出しは select の省略表示に任せる)。 */
+.micro-result-form__susceptibility {
+  table-layout: fixed;
+}
+
+/* 見出しはフォームのラベル(13px)に合わせて 1 段落とす。列幅が狭いので
+   「阻止円(mm)」「MIC(µg/mL)」が 2 行に折り返さないよう改行も止める。 */
+.micro-result-form__susceptibility th {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.micro-result-form__susceptibility select,
+.micro-result-form__susceptibility input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* 抗菌薬セル: プルダウンと検索ボタンを 1 行に並べ、プルダウン側だけ伸縮させる。 */
+.micro-result-form__susceptibility .rp-card__medicine-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.micro-result-form__susceptibility .rp-card__medicine-cell select {
+  flex: 1 1 auto;
+}
+
+/* 行削除・菌削除のごみ箱アイコン。.rp-card__medicines button の padding を上書きする。 */
+.micro-result-form__susceptibility button.rp-card__icon-button,
+button.rp-card__icon-button.micro-result-form__isolate-remove {
+  padding: 4px;
+}
+
+/* 塗抹・鏡検所見(自由記載)の詳細表示。 */
+.micro-result-detail__smear {
+  font-size: 13px;
+}
+
+.micro-result-detail__smear-label {
+  color: var(--text);
+  margin-right: 8px;
+}
+
+.micro-result-detail__smear > p {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+}
+
+/* 感受性の S/I/R 判定。R(耐性)だけ注意色にする。 */
+.micro-result-detail__sir {
+  text-align: center;
+}
+
+.micro-result-detail__sir--resistant {
+  color: var(--lab-high);
+  font-weight: 600;
+}

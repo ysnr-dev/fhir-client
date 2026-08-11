@@ -71,11 +71,14 @@ export type KarteTimelineItem = KarteItemBase &
         reportId: string;
       }
     // 細菌検査も明細(検体グループ・検査項目)が ServiceRequest なので同じ形。
-    // 結果(培養・感受性)との紐付けは未実装なので reportId は持たない。
     | {
         kind: "micro-order";
         serviceRequest: fhir4.ServiceRequest;
         itemRequests: fhir4.ServiceRequest[];
+        /** このオーダーを元に登録された細菌検査結果の id。空なら結果はまだ無い。 */
+        reportId: string;
+        /** 結果の報告区分。"preliminary" なら中間報告のバッジを出す。 */
+        reportStatus: string;
       }
     // 放射線検査も明細(撮影項目・セットの構成項目)が ServiceRequest なので、
     // オーダーのヘッダにぶら下がるぶんを itemRequests に集めて渡す。
@@ -210,16 +213,19 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     }
   }
 
-  // 検体検査オーダー id → そのオーダーを元にした検査結果の id
-  // (DiagnosticReport.basedOn。カードの「検査結果表示」を出せるかの判定に使う)。
-  const reportIdByOrderId = new Map<string, string>();
+  // オーダー id → そのオーダーを元にした検査結果(検体検査・細菌検査)の id と status
+  // (DiagnosticReport.basedOn。カードの「検査結果表示」を出せるかの判定と、
+  // 細菌検査の中間報告バッジに使う)。
+  const reportByOrderId = new Map<string, { id: string; status: string }>();
   for (const report of pickByType<fhir4.DiagnosticReport>(
     prescriptionResources,
     "DiagnosticReport",
   )) {
     for (const basedOn of report.basedOn ?? []) {
       const srId = basedOn.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
-      if (srId && report.id) reportIdByOrderId.set(srId, report.id);
+      if (srId && report.id) {
+        reportByOrderId.set(srId, { id: report.id, status: report.status ?? "" });
+      }
     }
   }
 
@@ -264,15 +270,18 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         kind: "lab-order" as const,
         label: KARTE_KIND_LABELS["lab-order"],
         itemRequests: labOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
-        reportId: reportIdByOrderId.get(serviceRequest.id ?? "") ?? "",
+        reportId: reportByOrderId.get(serviceRequest.id ?? "")?.id ?? "",
       };
     }
     if (isMicroServiceRequest(serviceRequest)) {
+      const report = reportByOrderId.get(serviceRequest.id ?? "");
       return {
         ...base,
         kind: "micro-order" as const,
         label: KARTE_KIND_LABELS["micro-order"],
         itemRequests: microOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+        reportId: report?.id ?? "",
+        reportStatus: report?.status ?? "",
       };
     }
     if (isRadServiceRequest(serviceRequest)) {

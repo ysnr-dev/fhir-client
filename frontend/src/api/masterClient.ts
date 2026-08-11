@@ -13,7 +13,9 @@ export type MasterType =
   | "rad_jj1017_codes"
   | "rad_frequent_codes"
   | "micro_specimen_types"
-  | "micro_organisms";
+  | "micro_organisms"
+  | "micro_antimicrobials"
+  | "micro_susceptibility_methods";
 
 export interface MasterImportResult {
   imported: number;
@@ -1902,6 +1904,160 @@ export async function updateMicroCollectionMethod(
 
 export async function deleteMicroCollectionMethod(id: number): Promise<void> {
   const res = await masterFetch(`${MICRO_COLLECTION_METHODS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+// ---- 細菌検査結果のマスタ ----
+
+// JANIS 抗菌薬コード。標準コード(official)は取込で洗い替えるため、
+// 画面から書けるのは施設追加分(local)と頻用薬の印(frequent)だけ。
+export interface MicroAntimicrobial {
+  id: number;
+  code: string;
+  name: string;
+  /** 略号(ABPC など)。 */
+  abbreviation: string | null;
+  /** 商品名(参考情報)。 */
+  brand_name: string | null;
+  /** 系統(ペニシリン系 など)。コード表の見出し行由来。 */
+  category: string | null;
+  /** 結果画面に直接並べる頻用薬の印。取込では消えない。 */
+  frequent: boolean;
+  source: "official" | "local";
+  display_order: number | null;
+}
+
+export interface MicroAntimicrobialPayload {
+  code?: string;
+  name?: string;
+  abbreviation?: string | null;
+  brand_name?: string | null;
+  category?: string | null;
+  frequent?: boolean;
+  display_order?: number | null;
+}
+
+// JANIS 薬剤感受性検査測定法コード。標準コードは読むだけ、施設追加分のみ編集できる。
+export interface MicroSusceptibilityMethod {
+  id: number;
+  code: string;
+  name: string;
+  /** 自動化機器 | 用手法。空欄もある。 */
+  classification: string | null;
+  product_name: string | null;
+  company: string | null;
+  note: string | null;
+  source: "official" | "local";
+  display_order: number | null;
+}
+
+export interface MicroSusceptibilityMethodPayload {
+  code?: string;
+  name?: string;
+  classification?: string | null;
+  product_name?: string | null;
+  company?: string | null;
+  note?: string | null;
+  display_order?: number | null;
+}
+
+const MICRO_ANTIMICROBIALS_PATH = "/master/micro_antimicrobials";
+
+export async function searchMicroAntimicrobials(params: {
+  name?: string;
+  frequent?: boolean;
+  source?: string;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<MicroAntimicrobial>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.frequent) search.set("frequent", "true");
+  if (params.source) search.set("source", params.source);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${MICRO_ANTIMICROBIALS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<MicroAntimicrobial>;
+}
+
+export async function createMicroAntimicrobial(
+  payload: MicroAntimicrobialPayload,
+): Promise<MicroAntimicrobial> {
+  const res = await masterFetch(MICRO_ANTIMICROBIALS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MicroAntimicrobial;
+}
+
+export async function updateMicroAntimicrobial(
+  id: number,
+  payload: MicroAntimicrobialPayload,
+): Promise<MicroAntimicrobial> {
+  const res = await masterFetch(`${MICRO_ANTIMICROBIALS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MicroAntimicrobial;
+}
+
+export async function deleteMicroAntimicrobial(id: number): Promise<void> {
+  const res = await masterFetch(`${MICRO_ANTIMICROBIALS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+const MICRO_SUSCEPTIBILITY_METHODS_PATH = "/master/micro_susceptibility_methods";
+
+export async function searchMicroSusceptibilityMethods(params: {
+  name?: string;
+  source?: string;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<MicroSusceptibilityMethod>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.source) search.set("source", params.source);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${MICRO_SUSCEPTIBILITY_METHODS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<MicroSusceptibilityMethod>;
+}
+
+export async function createMicroSusceptibilityMethod(
+  payload: MicroSusceptibilityMethodPayload,
+): Promise<MicroSusceptibilityMethod> {
+  const res = await masterFetch(MICRO_SUSCEPTIBILITY_METHODS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MicroSusceptibilityMethod;
+}
+
+export async function updateMicroSusceptibilityMethod(
+  id: number,
+  payload: MicroSusceptibilityMethodPayload,
+): Promise<MicroSusceptibilityMethod> {
+  const res = await masterFetch(`${MICRO_SUSCEPTIBILITY_METHODS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MicroSusceptibilityMethod;
+}
+
+export async function deleteMicroSusceptibilityMethod(id: number): Promise<void> {
+  const res = await masterFetch(`${MICRO_SUSCEPTIBILITY_METHODS_PATH}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
 

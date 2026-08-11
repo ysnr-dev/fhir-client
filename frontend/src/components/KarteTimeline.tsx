@@ -273,6 +273,10 @@ function KarteCard({
         </span>
         <span className="karte-card__title">{cardTitle(item)}</span>
         <ProblemBadge problem={itemProblem(item)} problemsById={problemsById} />
+        {/* 細菌検査の結果が中間報告のうちは、最終化がまだなことをカードでも示す。 */}
+        {item.kind === "micro-order" && item.reportStatus === "preliminary" && (
+          <span className="micro-result__badge">結果:中間報告</span>
+        )}
         <span className="karte-card__meta">{cardMeta(item)}</span>
         <span className="karte-card__actions">
           {(item.kind === "prescription" ||
@@ -320,7 +324,7 @@ function KarteCard({
             <button type="button" className="row-menu__item" onClick={() => onOpenDetail(item)}>
               詳細表示
             </button>
-            {/* 検体検査は、結果が登録済みのオーダーだけ結果内容を開ける。 */}
+            {/* 検体検査・細菌検査は、結果が登録済みのオーダーだけ結果内容を開ける。 */}
             {item.kind === "lab-order" && (
               <button
                 type="button"
@@ -328,6 +332,17 @@ function KarteCard({
                 disabled={!item.reportId}
                 title={item.reportId ? undefined : "この検体検査の結果はまだ登録されていません"}
                 onClick={() => onOpenDetail({ kind: "lab-result", id: item.reportId })}
+              >
+                検査結果表示
+              </button>
+            )}
+            {item.kind === "micro-order" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={!item.reportId}
+                title={item.reportId ? undefined : "この細菌検査の結果はまだ登録されていません"}
+                onClick={() => onOpenDetail({ kind: "micro-result", id: item.reportId })}
               >
                 検査結果表示
               </button>

@@ -93,6 +93,20 @@ const MASTER_OPTIONS: MasterOption[] = [
       "JANIS 検査部門 感染症病原体コード表 infectiousagentcode_*.xls（最新版のシートだけを読む）。施設追加分・頻用菌の指定は消えない",
     accept: ".xls,.xlsx",
   },
+  {
+    type: "micro_antimicrobials",
+    label: "JANIS抗菌薬コード（細菌検査）",
+    formatHint:
+      "JANIS 検査部門 抗菌薬コード表 antimicrobialdrugcode_*.xls（「抗菌薬コード一覧」シートを読む）。施設追加分・頻用薬の指定は消えない",
+    accept: ".xls,.xlsx",
+  },
+  {
+    type: "micro_susceptibility_methods",
+    label: "JANIS感受性測定法コード（細菌検査）",
+    formatHint:
+      "JANIS 検査部門 薬剤感受性検査測定法コード表 drugsusceptibilitymeasurementmethod_*.xls（最新版のシートだけを読む）。施設追加分は消えない",
+    accept: ".xls,.xlsx",
+  },
 ];
 
 export function MasterImportPage() {
