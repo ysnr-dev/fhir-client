@@ -639,7 +639,7 @@ interface SelectProps {
 }
 
 // 撮影伝票のグリッド。マス割りはレイアウトマスタの定義そのままで、
-// 撮影項目のマスはボタンにして、マスごとクリックで選択・解除する。
+// 撮影項目のマスにチェックボックスを重ねる。
 function LayoutSelectGrid({
   layout,
   error,
@@ -682,24 +682,19 @@ function LayoutSelectGrid({
                 }
                 const code = cell.item_code ?? "";
                 const master = catalogByCode.get(code);
-                const selected = selectedCodes.has(code);
                 return (
                   <td key={column} className="order-select__cell">
-                    <button
-                      type="button"
-                      className={
-                        selected
-                          ? "order-select__cell-button is-selected"
-                          : "order-select__cell-button"
-                      }
-                      aria-pressed={selected}
-                      // マスタ行が届く前に押されると JJ1017 コードが空のまま入って
-                      // しまうので、揃うまでは押せないようにする。
-                      disabled={!master}
-                      onClick={() => master && onToggle(master)}
-                    >
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={selectedCodes.has(code)}
+                        // マスタ行が届く前に押されると JJ1017 コードが空のまま入って
+                        // しまうので、揃うまでは押せないようにする。
+                        disabled={!master}
+                        onChange={() => master && onToggle(master)}
+                      />
                       {cell.display_name ?? cell.item_name ?? code}
-                    </button>
+                    </label>
                   </td>
                 );
               })}
@@ -745,29 +740,20 @@ function ItemSearchTab({
       {name.trim().length > 0 && (
         <>
           <ul className="order-select__search-list">
-            {data?.items.map((item) => {
-              const selected = selectedCodes.has(item.item_code);
-              return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    className={
-                      selected
-                        ? "order-select__search-item is-selected"
-                        : "order-select__search-item"
-                    }
-                    aria-pressed={selected}
-                    onClick={() => onToggle(item)}
-                  >
-                    {item.name}
-                    {item.short_name && (
-                      <span className="order-select__muted">{item.short_name}</span>
-                    )}
-                    {item.kind === "set" && <span className="dose-conversion__badge">セット</span>}
-                  </button>
-                </li>
-              );
-            })}
+            {data?.items.map((item) => (
+              <li key={item.id}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={selectedCodes.has(item.item_code)}
+                    onChange={() => onToggle(item)}
+                  />
+                  {item.name}
+                  {item.short_name && <span className="order-select__muted">{item.short_name}</span>}
+                  {item.kind === "set" && <span className="dose-conversion__badge">セット</span>}
+                </label>
+              </li>
+            ))}
             {data && data.items.length === 0 && (
               <li className="order-select__muted">該当する撮影項目がありません</li>
             )}
