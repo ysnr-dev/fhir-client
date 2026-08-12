@@ -8,6 +8,7 @@ import {
   radOrderComment,
   radOrderItems,
   radOrderProblem,
+  radOrderTime,
   summarizeRadOrder,
   type RadOrderEntry,
 } from "../fhir/radOrderHelpers";
@@ -46,6 +47,9 @@ export function RadOrderDetailPanel({
           <dd>{problemText}</dd>
           <dt>撮影日</dt>
           <dd>{serviceRequest.authoredOn?.slice(0, 10) ?? "-"}</dd>
+          <dt>撮影時刻</dt>
+          {/* 日付は撮影日として上に出るので時刻だけを並べる(注射の開始時刻と同じ)。 */}
+          <dd>{radOrderTime(serviceRequest) || "-"}</dd>
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay || "-"}</dd>
           <dt>至急区分</dt>

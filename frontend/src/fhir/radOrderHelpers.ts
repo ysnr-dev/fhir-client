@@ -1,4 +1,6 @@
 import type { OrderContext } from "../orderContext";
+// FHIR dateTime へのタイムゾーン付与は診療記録と同じ変換でよいので共用する。
+import { toFhirDateTime } from "./clinicalNoteHelpers";
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import {
@@ -134,6 +136,11 @@ export interface RadOrderFormValues {
   priority: RadOrderPriority;
   /** 撮影日。 */
   authoredDate: string;
+  /**
+   * 撮影時刻(HH:mm)。撮影の予定時刻を指定する場合だけ入れる任意入力で、
+   * 空なら撮影日だけのオーダー(時間帯は撮影側に任せる)。
+   */
+  authoredTime: string;
   /** 依頼コメント(臨床情報・読影依頼事項)。 */
   comment: string;
   // 対象プロブレム(POMR)。null なら特定の問題に紐付かない検査。
@@ -150,6 +157,7 @@ export function emptyRadOrderForm(problem: ProblemRef | null = null): RadOrderFo
     setting: "outpatient",
     priority: "routine",
     authoredDate: today(),
+    authoredTime: "",
     comment: "",
     problem,
     items: [],
@@ -548,8 +556,12 @@ function buildRadOrderServiceRequest(
     ],
     subject: { reference: `Patient/${patientId}` },
     authoredOn: values.authoredDate,
-    // 撮影日。オーダー日と同じ日を入れる(撮影日として 1 つだけ入力する)。
-    occurrenceDateTime: values.authoredDate,
+    // 撮影日時。オーダー日と同じ日を入れる(撮影日として 1 つだけ入力する)。
+    // 撮影時刻を指定したときだけ時刻まで入れる(FHIR の dateTime は時刻を持つなら
+    // タイムゾーンが必須なので、実行環境のオフセットを付ける)。
+    occurrenceDateTime: values.authoredTime
+      ? toFhirDateTime(`${values.authoredDate}T${values.authoredTime}`)
+      : values.authoredDate,
   };
 
   if (serviceRequestId) resource.id = serviceRequestId;
@@ -730,6 +742,15 @@ export function radOrderComment(sr: fhir4.ServiceRequest): string {
   return sr.note?.[0]?.text ?? "";
 }
 
+/**
+ * 撮影時刻(HH:mm)。時刻を指定せずにオーダーしたもの(occurrenceDateTime が
+ * 日付のみ)は空。
+ */
+export function radOrderTime(sr: fhir4.ServiceRequest): string {
+  const occurrence = sr.occurrenceDateTime ?? "";
+  return occurrence.length > 10 ? occurrence.slice(11, 16) : "";
+}
+
 export function radOrderProblem(sr: fhir4.ServiceRequest | undefined): ProblemRef | null {
   for (const reference of sr?.reasonReference ?? []) {
     const problem = problemRefFromReference(reference);
@@ -748,6 +769,7 @@ export function parseRadOrderForm(
     setting: (categoryCodingOf(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as RadOrderPriority,
     authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
+    authoredTime: radOrderTime(sr),
     comment: radOrderComment(sr),
     problem: radOrderProblem(sr),
     items: radOrderItems(sr, items),

@@ -53,6 +53,7 @@ import {
   radOrderComment,
   radOrderItems,
   radOrderProblem,
+  radOrderTime,
   summarizeRadOrder,
   type RadOrderItemLine,
 } from "../fhir/radOrderHelpers";
@@ -482,10 +483,17 @@ function cardMeta(item: KarteTimelineItem): string {
     const summary = summarizeQuestionnaireResponse(item.response);
     return [time, summary.statusLabel, summary.authorName].filter(Boolean).join(" | ");
   }
+  const requesterSummary = orderContextSummary(prescriptionRequester(item.serviceRequest));
+  // 放射線検査は撮影時刻を指定できるので、依頼科・依頼医師の前に添える。記入時刻を
+  // 出す診療記録と紛れないよう「撮影」と付ける(未指定のオーダーでは出さない)。
+  if (item.kind === "rad-order") {
+    const shotTime = radOrderTime(item.serviceRequest);
+    return [shotTime && `撮影 ${shotTime}`, requesterSummary].filter(Boolean).join(" | ");
+  }
   // 処方・注射は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。オーダー日は
   // 日付のみを入力する項目なので時刻は出さない(古い処方には時刻付きの authoredOn が
   // あり、意味のない「00:00」が出てしまうため)。
-  return orderContextSummary(prescriptionRequester(item.serviceRequest));
+  return requesterSummary;
 }
 
 // 注射カードの用法 1 行(「点滴 | 静脈注射 | 静脈内 | 100mL/h」)。

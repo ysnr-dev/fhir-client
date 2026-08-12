@@ -368,6 +368,16 @@ export function RadOrderForm({
               onChange={(e) => update("authoredDate", e.target.value)}
             />
           </label>
+          <label>
+            撮影時刻
+            {/* 日付は撮影日を使うので時刻だけを入力する(注射の開始時刻と同じ)。
+                時間帯を撮影側に任せる場合は未入力でよいので任意入力。 */}
+            <input
+              type="time"
+              value={values.authoredTime}
+              onChange={(e) => update("authoredTime", e.target.value)}
+            />
+          </label>
           {commentOpen ? (
             <div className="prescription-form__comment-field">
               <label>
