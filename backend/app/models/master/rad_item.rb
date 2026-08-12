@@ -20,12 +20,20 @@ module Master
     validates :kind, inclusion: { in: KINDS }
     validate :element_codes_are_valid
     validate :valid_period_is_ordered
+    validate :solo_item_is_not_a_set_member
 
     before_save :set_jj1017_code
     before_save :set_search_columns
 
     def set?
       kind == "set"
+    end
+
+    # 単独オーダー(この項目だけで 1 オーダー)。CT・MRI など 1 撮影に時間を要する
+    # 項目に付ける。オーダー画面では他の項目と一緒に選べるが、登録時に別のオーダーへ
+    # 分けられる。
+    def solo?
+      !groupable
     end
 
     # 要素コードの Hash(未指定の要素は含まない)。
@@ -67,6 +75,17 @@ module Master
       return if valid_from.blank? || valid_to.blank? || valid_from <= valid_to
 
       errors.add(:valid_to, "は有効開始日以降の日付にしてください")
+    end
+
+    # セットの構成項目は、そのセットの他の撮影と必ず同じオーダーに載る。単独に
+    # してもオーダーを分けられないので、矛盾する組み合わせを保存させない
+    # (逆向きの防止は RadSetItem 側にある)。
+    def solo_item_is_not_a_set_member
+      return if groupable || item_code.blank?
+      return unless RadSetItem.exists?(member_item_code: item_code)
+
+      # 画面にそのまま出る文なので、属性名が頭に付かない :base に載せる。
+      errors.add(:base, "セットの構成項目になっているため単独オーダーにできません")
     end
 
     def set_search_columns

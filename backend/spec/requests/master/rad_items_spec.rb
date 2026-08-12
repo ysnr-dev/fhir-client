@@ -38,6 +38,16 @@ RSpec.describe "Master::RadItems", type: :request do
       expect(body["items"].map { |i| i["item_code"] }).to eq(%w[R0001])
     end
 
+    it "オーダー単位(グループ化/単独)で絞り込める" do
+      create_item("R0006", name: "頭部CT単純", groupable: false, display_order: 40)
+
+      get "/master/rad_items", params: { groupable: "false" }
+      expect(body["items"].map { |i| i["item_code"] }).to eq(%w[R0006])
+
+      get "/master/rad_items", params: { groupable: "true" }
+      expect(body["items"].map { |i| i["item_code"] }).to eq(%w[R0002 R0001 R0003])
+    end
+
     it "active=true は有効期間内の項目だけ返す" do
       get "/master/rad_items", params: { active: "true" }
       expect(body["items"].map { |i| i["item_code"] }).to eq(%w[R0002 R0001])
@@ -131,6 +141,15 @@ RSpec.describe "Master::RadItems", type: :request do
       expect(record.remarks_template_canonical).to eq("http://example.com/Questionnaire/rad-remarks")
     end
 
+    it "既定はグループ化で、単独オーダーの項目も登録できる" do
+      post "/master/rad_items", params: { item_code: "R0001", name: "既定の項目" }
+      expect(body["groupable"]).to be(true)
+
+      post "/master/rad_items", params: { item_code: "R0006", name: "頭部CT単純", groupable: false }
+      expect(response).to have_http_status(:created)
+      expect(body["groupable"]).to be(false)
+    end
+
     it "有効終了日が有効開始日より前なら登録できない" do
       post "/master/rad_items", params: { item_code: "R0001", name: "期間おかしい",
                                           valid_from: "2026-08-01", valid_to: "2026-07-01" }
@@ -147,6 +166,17 @@ RSpec.describe "Master::RadItems", type: :request do
       patch "/master/rad_items/R0001", params: { body_part_code: "100" }
 
       expect(item.reload.jj1017_code[7, 3]).to eq("100")
+    end
+
+    it "セットの構成項目は単独オーダーにできない" do
+      create_item("R0002", kind: "set")
+      create_item("R0004")
+      Master::RadSetItem.create!(set_item_code: "R0002", member_item_code: "R0004")
+
+      patch "/master/rad_items/R0004", params: { groupable: false }
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("セットの構成項目")
     end
   end
 

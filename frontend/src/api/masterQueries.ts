@@ -849,6 +849,8 @@ export function useRadFrequentCodeSearch(
 export interface RadItemFilters {
   name?: string;
   kind?: string;
+  /** オーダー単位。"true"=グループ化のみ / "false"=単独オーダーのみ。 */
+  groupable?: string;
   modalityCode?: string;
   active?: boolean;
 }
@@ -860,6 +862,7 @@ export function useRadItemSearch(filters: RadItemFilters, page: number, enabled 
       searchRadItems({
         name: filters.name || undefined,
         kind: filters.kind || undefined,
+        groupable: filters.groupable || undefined,
         modality_code: filters.modalityCode || undefined,
         active: filters.active || undefined,
         page,

@@ -129,6 +129,13 @@ export interface RadOrderItemLine {
    * 単独としても入ることはない(選択時にどちらか一方へ寄せる)。
    */
   parentCode: string;
+  /**
+   * 他の撮影項目と同じオーダーにまとめられるか(マスタの写しではなく、登録時に
+   * オーダーを分けるためだけに使う印)。false の項目は 1 件で 1 オーダーになる。
+   * FHIR には出さないので、保存済みのオーダーを読んだ時点では判断できない。
+   * オーダー画面が登録前にマスタから引き直して入れる。
+   */
+  groupable: boolean;
 }
 
 export interface RadOrderFormValues {
@@ -398,6 +405,9 @@ function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): Ra
     purposeTemplate: bindingOf(responseIdOf(request, PURPOSE_QR_EXT_URL)),
     remarksTemplate: bindingOf(responseIdOf(request, REMARKS_QR_EXT_URL)),
     parentCode,
+    // 保存済みのオーダーには載っていない印なので、いったんグループ化として読む。
+    // 編集・DO では、登録前にオーダー画面が今のマスタから入れ直す。
+    groupable: true,
   };
 }
 
@@ -581,51 +591,87 @@ function buildRadOrderServiceRequest(
   return resource;
 }
 
-// ヘッダ 1 件 + 明細 N 件の transaction Bundle。新規登録ではヘッダを urn:uuid で
-// 参照するので、明細の basedOn はサーバー側で採番後の id に解決される。
-function buildRadOrderTransactionBundle(
+// オーダー 1 件(ヘッダ 1 + 明細 N)の Bundle エントリ。新規登録ではヘッダを
+// urn:uuid で参照するので、明細の basedOn はサーバー側で採番後の id に解決される。
+function buildRadOrderEntries(
   values: RadOrderFormValues,
   patientId: string,
   requester: OrderContext,
   serviceRequestId?: string,
   originalItemIds: string[] = [],
   originalResponseIds: string[] = [],
-): fhir4.Bundle {
+): fhir4.BundleEntry[] {
   const headerReference = serviceRequestId
     ? `ServiceRequest/${serviceRequestId}`
     : `urn:uuid:${crypto.randomUUID()}`;
 
-  return {
-    resourceType: "Bundle",
-    type: "transaction",
-    entry: [
-      {
-        fullUrl: headerReference,
-        resource: buildRadOrderServiceRequest(values, patientId, requester, serviceRequestId),
-        request: serviceRequestId
-          ? { method: "PUT", url: `ServiceRequest/${serviceRequestId}` }
-          : { method: "POST", url: "ServiceRequest" },
-      },
-      ...buildItemEntries(
-        values.items,
-        patientId,
-        values.authoredDate,
-        headerReference,
-        originalItemIds,
-        originalResponseIds,
-      ),
-    ],
-  };
+  return [
+    {
+      fullUrl: headerReference,
+      resource: buildRadOrderServiceRequest(values, patientId, requester, serviceRequestId),
+      request: serviceRequestId
+        ? { method: "PUT", url: `ServiceRequest/${serviceRequestId}` }
+        : { method: "POST", url: "ServiceRequest" },
+    },
+    ...buildItemEntries(
+      values.items,
+      patientId,
+      values.authoredDate,
+      headerReference,
+      originalItemIds,
+      originalResponseIds,
+    ),
+  ];
 }
 
+function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
+  return { resourceType: "Bundle", type: "transaction", entry };
+}
+
+/**
+ * 選んだ撮影項目を、登録する 1 オーダーぶんずつに分ける。
+ *
+ * CT・MRI などは 1 撮影に時間を要し、撮影室の枠を 1 件ずつ押さえる必要があるため、
+ * マスタで「単独」にした項目は 1 オーダー 1 撮影項目にする。オーダー画面では他の
+ * 項目と一度に選べるが、登録時にここで別のオーダー(別のカルテカード)へ分ける。
+ *
+ * 入外区分・至急区分・撮影日時・依頼コメント・対象プロブレムは伝票共通の入力なので
+ * 各オーダーへ写す。並びは、まとめられる項目のオーダーを先頭に、単独の項目を選んだ順。
+ */
+export function splitRadOrderValues(values: RadOrderFormValues): RadOrderFormValues[] {
+  const groupedLines: RadOrderItemLine[] = [];
+  const soloOrders: RadOrderItemLine[][] = [];
+
+  for (const item of topLevelItems(values.items)) {
+    // セットは構成項目と一緒でなければ意味がないので、必ず同じオーダーに入れる。
+    const lines = [item, ...membersOf(values.items, item.code)];
+    if (item.groupable) groupedLines.push(...lines);
+    else soloOrders.push(lines);
+  }
+
+  const orders = groupedLines.length > 0 ? [groupedLines, ...soloOrders] : soloOrders;
+  // 撮影項目が 1 つも無い場合も呼び出し側の検証に任せ、空のオーダーを 1 件返す。
+  if (orders.length === 0) orders.push([]);
+
+  return orders.map((items) => ({ ...values, items }));
+}
+
+// 新規登録。単独オーダーの項目があれば複数のオーダーになるが、まとめて登録するので
+// 1 つの transaction にする(片方だけ登録された状態を作らない)。
 export function buildRadOrderBundle(
   values: RadOrderFormValues,
   patientId: string,
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildRadOrderTransactionBundle(values, patientId, requester);
+  return transactionBundle(
+    splitRadOrderValues(values).flatMap((order) =>
+      buildRadOrderEntries(order, patientId, requester),
+    ),
+  );
 }
 
+// 更新は既にあるヘッダ 1 件への PUT なので分割しない(オーダーを分けたいときは
+// 一度消して登録し直す)。単独の項目が他の項目と同居しないことは画面側で確かめる。
 export function buildRadOrderUpdateBundle(
   values: RadOrderFormValues,
   patientId: string,
@@ -634,13 +680,15 @@ export function buildRadOrderUpdateBundle(
   originalResponseIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildRadOrderTransactionBundle(
-    values,
-    patientId,
-    requester,
-    serviceRequestId,
-    originalItemIds,
-    originalResponseIds,
+  return transactionBundle(
+    buildRadOrderEntries(
+      values,
+      patientId,
+      requester,
+      serviceRequestId,
+      originalItemIds,
+      originalResponseIds,
+    ),
   );
 }
 

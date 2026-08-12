@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_12_001400) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_13_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -538,6 +538,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_12_001400) do
     t.datetime "updated_at", null: false
     t.string "purpose_template_canonical"
     t.string "remarks_template_canonical"
+    t.boolean "groupable", default: true, null: false
+    t.index ["groupable"], name: "index_master_rad_items_on_groupable"
     t.index ["item_code"], name: "index_master_rad_items_on_item_code", unique: true
     t.index ["jj1017_code"], name: "index_master_rad_items_on_jj1017_code"
     t.index ["kind"], name: "index_master_rad_items_on_kind"

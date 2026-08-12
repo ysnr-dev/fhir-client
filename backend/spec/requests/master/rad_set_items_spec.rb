@@ -45,6 +45,15 @@ RSpec.describe "Master::RadSetItems", type: :request do
       expect(response).to have_http_status(:unprocessable_content)
       expect(body["errors"].join).to include("セット自身")
     end
+
+    it "単独オーダーの項目は構成項目にできない" do
+      Master::RadItem.create!(item_code: "R0006", name: "頭部CT単純", groupable: false)
+
+      post "/master/rad_set_items", params: { set_item_code: "R0002", member_item_code: "R0006" }
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("単独オーダー")
+    end
   end
 
   describe "DELETE /master/rad_set_items/:id" do

@@ -1035,6 +1035,9 @@ export interface RadItem {
   name_kana: string | null;
   // single=単項目 / set=複数の撮影をまとめて依頼するもの
   kind: string;
+  // 他の撮影項目と同じオーダーにまとめられるか。false は単独オーダー
+  // (この項目だけで1オーダー。CT・MRI など1撮影に時間を要する項目)。
+  groupable: boolean;
   modality_code: string | null;
   procedure_major_code: string | null;
   procedure_minor_code: string | null;
@@ -1090,6 +1093,7 @@ export interface RadItemPayload {
   short_name?: string | null;
   name_kana?: string | null;
   kind?: string;
+  groupable?: boolean;
   modality_code?: string | null;
   procedure_major_code?: string | null;
   procedure_minor_code?: string | null;
@@ -1283,6 +1287,8 @@ export async function searchRadItems(params: {
   /** 項目コード。カンマ区切りで複数指定できる。 */
   item_code?: string;
   kind?: string;
+  /** "true"=グループ化のみ / "false"=単独オーダーのみ。未指定なら両方。 */
+  groupable?: string;
   modality_code?: string;
   body_part_code?: string;
   /** true なら今日オーダーできる項目(有効期間内)だけ。 */
@@ -1294,6 +1300,7 @@ export async function searchRadItems(params: {
   if (params.name) search.set("name", params.name);
   if (params.item_code) search.set("item_code", params.item_code);
   if (params.kind) search.set("kind", params.kind);
+  if (params.groupable) search.set("groupable", params.groupable);
   if (params.modality_code) search.set("modality_code", params.modality_code);
   if (params.body_part_code) search.set("body_part_code", params.body_part_code);
   if (params.active) search.set("active", "true");

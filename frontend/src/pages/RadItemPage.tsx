@@ -51,6 +51,8 @@ interface Draft {
   short_name: string;
   name_kana: string;
   kind: string;
+  // 他の撮影項目と同じオーダーにまとめられるか。false は単独オーダー。
+  groupable: boolean;
   generic_extension_code: string;
   valid_from: string;
   valid_to: string;
@@ -68,6 +70,7 @@ const emptyDraft: Draft = {
   short_name: "",
   name_kana: "",
   kind: "single",
+  groupable: true,
   generic_extension_code: "",
   valid_from: "",
   valid_to: "",
@@ -88,6 +91,7 @@ function toPayload(draft: Draft, elementCodes: ElementCodes, elementNames: strin
     short_name: draft.short_name || null,
     name_kana: draft.name_kana || null,
     kind: draft.kind,
+    groupable: draft.groupable,
     generic_extension_code: draft.generic_extension_code || null,
     valid_from: draft.valid_from || null,
     valid_to: draft.valid_to || null,
@@ -215,6 +219,17 @@ export function RadItemPage() {
             <option value="set">セット</option>
           </select>
         </label>
+        <label>
+          オーダー単位
+          <select
+            value={inputs.groupable ?? ""}
+            onChange={(e) => setInputs({ ...inputs, groupable: e.target.value })}
+          >
+            <option value="">すべて</option>
+            <option value="true">グループ化</option>
+            <option value="false">単独</option>
+          </select>
+        </label>
         <label className="dose-conversion__checkbox">
           <input
             type="checkbox"
@@ -275,7 +290,12 @@ export function RadItemPage() {
                   ? (elementNames.body_part?.[item.body_part_code] ?? item.body_part_code)
                   : ""}
               </td>
-              <td className="rad-item__compact">{KIND_LABELS[item.kind] ?? item.kind}</td>
+              <td className="rad-item__compact">
+                {KIND_LABELS[item.kind] ?? item.kind}
+                {/* 単独オーダーは 1 オーダー 1 撮影項目になる。既定(グループ化)は
+                    印を出さず、例外だけを目立たせる。 */}
+                {!item.groupable && <span className="dose-conversion__badge">単独</span>}
+              </td>
               <td className="rad-frequent__code">{item.jj1017_code}</td>
               <td className="rad-item__compact">
                 {(item.valid_from || item.valid_to) && `${item.valid_from ?? ""}〜${item.valid_to ?? ""}`}
@@ -349,6 +369,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       short_name: d.short_name ?? "",
       name_kana: d.name_kana ?? "",
       kind: d.kind,
+      groupable: d.groupable,
       generic_extension_code: d.generic_extension_code ?? "",
       valid_from: d.valid_from ?? "",
       valid_to: d.valid_to ?? "",
@@ -462,6 +483,19 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
             <select value={draft.kind} onChange={(e) => setDraft({ ...draft, kind: e.target.value })}>
               <option value="single">単項目</option>
               <option value="set">セット</option>
+            </select>
+          </label>
+          {/* CT・MRI など 1 撮影に時間を要する項目は、撮影室の枠を 1 件ずつ押さえる
+              必要があるため単独にする。オーダー画面では他の項目と一緒に選べるが、
+              登録時にこの項目だけの別オーダーへ分けられる。 */}
+          <label>
+            オーダー単位
+            <select
+              value={draft.groupable ? "true" : "false"}
+              onChange={(e) => setDraft({ ...draft, groupable: e.target.value === "true" })}
+            >
+              <option value="true">グループ化(他の項目と同一オーダー可)</option>
+              <option value="false">単独(1オーダー1撮影項目)</option>
             </select>
           </label>
         </div>

@@ -116,6 +116,7 @@ export function RadOrderEditPanel({ patientId, srId, onSaved }: RadOrderEditPane
             submitting={updateRadOrder.isPending}
             submitError={updateRadOrder.error}
             submitLabel="更新"
+            editing
           />
         )
       )}

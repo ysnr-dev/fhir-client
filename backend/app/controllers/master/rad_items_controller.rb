@@ -10,6 +10,8 @@ module Master
       # カンマ区切りで複数指定可(保存済みのオーダーから項目情報を一括復元するため)。
       scope = scope.where(item_code: params[:item_code].split(",")) if params[:item_code].present?
       scope = scope.where(kind: params[:kind]) if params[:kind].present?
+      # オーダー単位(groupable=true グループ化 / false 単独)での絞り込み。
+      scope = scope.where(groupable: params[:groupable] == "true") if params[:groupable].present?
       scope = scope.where(modality_code: params[:modality_code]) if params[:modality_code].present?
       scope = scope.where(body_part_code: params[:body_part_code]) if params[:body_part_code].present?
       # active=true は今日オーダーできる項目(有効期間内)だけに絞る。

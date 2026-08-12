@@ -63,6 +63,11 @@ interface RadOrderFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /**
+   * 保存済みオーダーの編集。更新は 1 つのヘッダへの書き戻しなのでオーダーを
+   * 分けられず、単独の項目を他の項目と同居させられない(新規登録は分けられる)。
+   */
+  editing?: boolean;
 }
 
 type ActiveTab = { kind: "layout"; id: number } | { kind: "search" };
@@ -92,6 +97,7 @@ export function RadOrderForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  editing = false,
 }: RadOrderFormProps) {
   const [values, setValues] = useState<RadOrderFormValues>(initialValues ?? emptyRadOrderForm);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -176,6 +182,7 @@ export function RadOrderForm({
       purposeTemplate: null,
       remarksTemplate: null,
       parentCode,
+      groupable: item.groupable,
     }),
     [catalogResult],
   );
@@ -282,8 +289,26 @@ export function RadOrderForm({
       setValidationError("撮影日を入力してください。");
       return;
     }
+
+    // 単独オーダーかどうかは登録時点のマスタで決める(保存済みのオーダーを開いた
+    // ときは明細から復元できないため)。マスタから消えた項目は今の値のままにする。
+    const items = values.items.map((line) =>
+      line.parentCode
+        ? line
+        : { ...line, groupable: catalogByCode.get(line.code)?.groupable ?? line.groupable },
+    );
+
+    const groups = topLevelItems(items);
+    const solo = groups.find((line) => !line.groupable);
+    if (editing && solo && groups.length > 1) {
+      setValidationError(
+        `単独オーダーの項目「${solo.name}」は他の撮影項目と同じオーダーにできません。`,
+      );
+      return;
+    }
+
     setValidationError(null);
-    onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
+    onSubmit({ ...values, items, problem: refreshProblemDisplay(values.problem, problemOptions) });
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLFormElement>) {
@@ -294,6 +319,13 @@ export function RadOrderForm({
   }
 
   const entries = orderEntries(values.items);
+  // 単独オーダーの印はマスタが持つ。保存済みのオーダーを開いた場合は明細から
+  // 復元できないので、選択中の一覧も登録時と同じくマスタの今の値で見せる。
+  const isSolo = (entry: RadOrderEntry) =>
+    !(catalogByCode.get(entry.item.code)?.groupable ?? entry.item.groupable);
+  const soloCount = entries.filter(isSolo).length;
+  // 単独の項目はそれぞれ 1 オーダー。残りはまとめて 1 オーダー。
+  const orderCount = soloCount + (entries.length > soloCount ? 1 : 0);
   // テンプレートの既定は撮影項目マスタが持つ。記入内容は診療記録(SOAP)と同じく
   // QuestionnaireResponse として保存し、後からテンプレート画面で開き直せる。
   const templateMaster = templateTarget ? catalogByCode.get(templateTarget.code) : undefined;
@@ -467,11 +499,19 @@ export function RadOrderForm({
           {entries.length === 0 && (
             <p className="order-select__muted">撮影項目を選択してください</p>
           )}
+          {/* 単独の項目を混ぜて選べるようにしつつ、登録するとカルテのカードが
+              分かれることを選択中の時点で知らせる。 */}
+          {!editing && orderCount > 1 && (
+            <p className="order-select__muted">
+              単独の項目はそれぞれ別のオーダーになるため、{orderCount} 件のオーダーとして登録されます
+            </p>
+          )}
           {entries.map((entry, index) => (
             <GroupEditor
               key={entry.item.code}
               entry={entry}
               number={index + 1}
+              solo={isSolo(entry)}
               conditionOptions={conditionOptions}
               onRemove={remove}
               onChange={updateItem}
@@ -522,6 +562,7 @@ export function RadOrderForm({
 function GroupEditor({
   entry,
   number,
+  solo,
   conditionOptions,
   onRemove,
   onChange,
@@ -529,6 +570,8 @@ function GroupEditor({
 }: {
   entry: RadOrderEntry;
   number: number;
+  /** 単独オーダーの項目(登録時にこの GP だけで 1 オーダーになる)。 */
+  solo: boolean;
   conditionOptions: ProblemRef[];
   onRemove: (code: string) => void;
   onChange: (code: string, patch: Partial<RadOrderItemLine>) => void;
@@ -547,6 +590,7 @@ function GroupEditor({
       <div className="rad-gp__head">
         <span className="rad-gp__number">GP{number}</span>
         <span className="rad-gp__name">{item.name}</span>
+        {solo && <span className="dose-conversion__badge">単独</span>}
         {modality && <span className="order-select__muted">{modality}</span>}
         {site && <span className="order-select__muted">{site}</span>}
         <button
