@@ -73,6 +73,12 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".xls,.xlsx",
   },
   {
+    type: "medical_materials",
+    label: "特定器材マスタ",
+    formatHint: "レセプト電算 特定器材マスター t_ALL*.csv（Shift_JIS、ヘッダなし・38列）",
+    accept: ".csv",
+  },
+  {
     type: "lab_specimens",
     label: "検体マスタ",
     formatHint:

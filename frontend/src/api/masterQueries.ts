@@ -69,6 +69,7 @@ import {
   fetchRadItemLayouts,
   fetchRadJj1017Catalog,
   fetchRadJj1017Elements,
+  searchMedicalMaterials,
   searchRadFrequentCodes,
   searchRadItems,
   searchRadJj1017Codes,
@@ -750,6 +751,40 @@ const RAD_JJ1017_CODES_KEY = ["master", "rad_jj1017_codes"];
 const RAD_FREQUENT_CODES_KEY = ["master", "rad_frequent_codes"];
 const RAD_ITEMS_KEY = ["master", "rad_items"];
 const RAD_LAYOUTS_KEY = ["master", "rad_item_layouts"];
+const MEDICAL_MATERIALS_KEY = ["master", "medical_materials"];
+
+/** 特定器材の検索。実施入力で使った器材を選ぶために引く。 */
+export function useMedicalMaterialSearch(
+  filters: { name?: string; materialCategory?: string },
+  page: number,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [...MEDICAL_MATERIALS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchMedicalMaterials({
+        name: filters.name || undefined,
+        material_category: filters.materialCategory || undefined,
+        // 廃止済みの器材は選べても仕方がないので既定で除く。
+        active: true,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** 保存済みの実施情報から器材名を復元するための一括取得。 */
+export function useMedicalMaterialsByCodes(codes: string[]) {
+  const unique = Array.from(new Set(codes.filter(Boolean))).sort();
+
+  return useQuery({
+    queryKey: [...MEDICAL_MATERIALS_KEY, "by-codes", unique],
+    queryFn: () => searchMedicalMaterials({ material_code: unique.join(","), per: unique.length }),
+    enabled: unique.length > 0,
+  });
+}
 
 export interface RadJj1017CodeFilters {
   element?: string;

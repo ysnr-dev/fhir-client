@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_13_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_13_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -270,6 +270,54 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_13_000000) do
     t.datetime "updated_at", null: false
     t.index ["parent_specimen_code"], name: "index_master_lab_specimens_on_parent_specimen_code"
     t.index ["specimen_code"], name: "index_master_lab_specimens_on_specimen_code", unique: true
+  end
+
+  create_table "master_medical_materials", force: :cascade do |t|
+    t.string "change_category"
+    t.string "master_type"
+    t.string "material_code", null: false
+    t.integer "name_kanji_length"
+    t.string "name"
+    t.integer "name_kana_length"
+    t.string "name_kana"
+    t.string "unit_code"
+    t.integer "unit_name_length"
+    t.string "unit_name"
+    t.string "price_type"
+    t.decimal "price", precision: 13, scale: 2
+    t.string "reserve1"
+    t.string "age_addition_category"
+    t.string "lower_age_limit"
+    t.string "upper_age_limit"
+    t.string "reserve2"
+    t.string "reserve3"
+    t.string "name_change_flag"
+    t.string "kana_change_flag"
+    t.string "oxygen_category"
+    t.string "material_category"
+    t.string "price_cap_flag"
+    t.string "price_cap_points"
+    t.string "reserve4"
+    t.string "publication_order"
+    t.string "abolition_related_code"
+    t.string "changed_on"
+    t.string "transitional_measure_on"
+    t.string "abolished_on"
+    t.string "notification_table_number"
+    t.string "notification_section_number"
+    t.string "dpc_category"
+    t.string "reserve5"
+    t.string "reserve6"
+    t.string "reserve7"
+    t.string "basic_name"
+    t.string "remanufactured_single_use_device"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["abolished_on"], name: "index_master_medical_materials_on_abolished_on"
+    t.index ["material_code"], name: "index_master_medical_materials_on_material_code", unique: true
+    t.index ["name"], name: "index_master_medical_materials_on_name"
   end
 
   create_table "master_medicine_dose_conversions", force: :cascade do |t|

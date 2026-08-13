@@ -111,6 +111,10 @@ Rails.application.routes.draw do
     resources :rad_set_items, only: %i[index create update destroy]
     resources :rad_item_layouts, only: %i[index show create update destroy]
     resources :rad_item_layout_cells, only: %i[create update destroy]
+    # 特定器材(特定保険医療材料)。配布ファイルの全置換取込のみで手動メンテはしない。
+    resources :medical_materials, only: %i[index] do
+      collection { post :import }
+    end
     # 細菌検査オーダーのマスタ群。JANIS 由来の2つは標準コードを取込で洗い替え、
     # 画面からは施設追加分(と病原体の頻用フラグ)だけを書ける。
     resources :micro_specimen_types, only: %i[index create update destroy] do

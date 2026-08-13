@@ -12,6 +12,7 @@ export type MasterType =
   | "lab_specimens"
   | "rad_jj1017_codes"
   | "rad_frequent_codes"
+  | "medical_materials"
   | "micro_specimen_types"
   | "micro_organisms"
   | "micro_antimicrobials"
@@ -1278,6 +1279,47 @@ export async function searchRadFrequentCodes(params: {
   const res = await masterFetch(`/master/rad_frequent_codes?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<RadFrequentCode>;
+}
+
+// 特定器材(特定保険医療材料)。レセプト電算の特定器材マスターの写しで、
+// 放射線検査の実施入力で使った器材を選ぶために引く。
+export interface MedicalMaterial {
+  id: number;
+  material_code: string;
+  name: string | null;
+  name_kana: string | null;
+  unit_code: string | null;
+  unit_name: string | null;
+  /** 材料価格(円)。会計連携の基礎になる。 */
+  price: string | null;
+  /** 特定器材種別。フィルムと材料などの用途区分。 */
+  material_category: string | null;
+  /** 廃止年月日。"99999999" は廃止されていないことを表す(レセ電算の慣行)。 */
+  abolished_on: string | null;
+  basic_name: string | null;
+}
+
+export async function searchMedicalMaterials(params: {
+  name?: string;
+  /** 特定器材コード。カンマ区切りで複数指定できる。 */
+  material_code?: string;
+  material_category?: string;
+  /** true なら廃止されていないものだけ。 */
+  active?: boolean;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<MedicalMaterial>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.material_code) search.set("material_code", params.material_code);
+  if (params.material_category) search.set("material_category", params.material_category);
+  if (params.active) search.set("active", "true");
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`/master/medical_materials?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<MedicalMaterial>;
 }
 
 const RAD_ITEMS_PATH = "/master/rad_items";
