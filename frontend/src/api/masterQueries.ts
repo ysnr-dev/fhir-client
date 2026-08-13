@@ -70,6 +70,7 @@ import {
   fetchRadJj1017Catalog,
   fetchRadJj1017Elements,
   searchMedicalMaterials,
+  searchMedicalProcedures,
   searchRadFrequentCodes,
   searchRadItems,
   searchRadJj1017Codes,
@@ -782,6 +783,41 @@ export function useMedicalMaterialsByCodes(codes: string[]) {
   return useQuery({
     queryKey: [...MEDICAL_MATERIALS_KEY, "by-codes", unique],
     queryFn: () => searchMedicalMaterials({ material_code: unique.join(","), per: unique.length }),
+    enabled: unique.length > 0,
+  });
+}
+
+const MEDICAL_PROCEDURES_KEY = ["master", "medical_procedures"];
+
+/** 医科診療行為(手技料)の検索。実施入力で手技を確定するために引く。 */
+export function useMedicalProcedureSearch(
+  filters: { name?: string; codeTableNumberAlpha?: string },
+  page: number,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [...MEDICAL_PROCEDURES_KEY, "list", filters, page],
+    queryFn: () =>
+      searchMedicalProcedures({
+        name: filters.name || undefined,
+        code_table_number_alpha: filters.codeTableNumberAlpha || undefined,
+        // 廃止済みの診療行為は選べても仕方がないので既定で除く。
+        active: true,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** 保存済みの実施情報から手技名を復元するための一括取得。 */
+export function useMedicalProceduresByCodes(codes: string[]) {
+  const unique = Array.from(new Set(codes.filter(Boolean))).sort();
+
+  return useQuery({
+    queryKey: [...MEDICAL_PROCEDURES_KEY, "by-codes", unique],
+    queryFn: () => searchMedicalProcedures({ procedure_code: unique.join(","), per: unique.length }),
     enabled: unique.length > 0,
   });
 }

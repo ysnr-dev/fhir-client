@@ -13,6 +13,7 @@ export type MasterType =
   | "rad_jj1017_codes"
   | "rad_frequent_codes"
   | "medical_materials"
+  | "medical_procedures"
   | "micro_specimen_types"
   | "micro_organisms"
   | "micro_antimicrobials"
@@ -1320,6 +1321,49 @@ export async function searchMedicalMaterials(params: {
   const res = await masterFetch(`/master/medical_materials?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<MedicalMaterial>;
+}
+
+// 医科診療行為(手技料)。レセプト電算の医科診療行為マスターの写しで、
+// 放射線検査の実施入力で手技を確定するために引く。
+export interface MedicalProcedure {
+  id: number;
+  procedure_code: string;
+  name: string | null;
+  name_kana: string | null;
+  /** 点数。点数識別(point_type)と組で意味を持つ。 */
+  points: string | null;
+  point_type: string | null;
+  /** コード表用番号のアルファベット部。点数表の章で、画像診断は E。 */
+  code_table_number_alpha: string | null;
+  point_table_section_number: string | null;
+  /** 廃止年月日。"99999999" は廃止されていないことを表す(レセ電算の慣行)。 */
+  abolished_on: string | null;
+  basic_name: string | null;
+}
+
+export async function searchMedicalProcedures(params: {
+  name?: string;
+  /** 診療行為コード。カンマ区切りで複数指定できる。 */
+  procedure_code?: string;
+  code_table_number_alpha?: string;
+  /** true なら廃止されていないものだけ。 */
+  active?: boolean;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<MedicalProcedure>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.procedure_code) search.set("procedure_code", params.procedure_code);
+  if (params.code_table_number_alpha) {
+    search.set("code_table_number_alpha", params.code_table_number_alpha);
+  }
+  if (params.active) search.set("active", "true");
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`/master/medical_procedures?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<MedicalProcedure>;
 }
 
 const RAD_ITEMS_PATH = "/master/rad_items";

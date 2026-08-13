@@ -79,6 +79,12 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".csv",
   },
   {
+    type: "medical_procedures",
+    label: "医科診療行為マスタ",
+    formatHint: "レセプト電算 医科診療行為マスター s_ALL*.csv（Shift_JIS、ヘッダなし・150列）",
+    accept: ".csv",
+  },
+  {
     type: "lab_specimens",
     label: "検体マスタ",
     formatHint:

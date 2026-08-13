@@ -111,8 +111,12 @@ Rails.application.routes.draw do
     resources :rad_set_items, only: %i[index create update destroy]
     resources :rad_item_layouts, only: %i[index show create update destroy]
     resources :rad_item_layout_cells, only: %i[create update destroy]
-    # 特定器材(特定保険医療材料)。配布ファイルの全置換取込のみで手動メンテはしない。
+    # 特定器材(特定保険医療材料)と医科診療行為(手技料)。どちらもレセプト電算の
+    # 配布マスタを全置換で取り込むだけで、手動メンテはしない。
     resources :medical_materials, only: %i[index] do
+      collection { post :import }
+    end
+    resources :medical_procedures, only: %i[index] do
       collection { post :import }
     end
     # 細菌検査オーダーのマスタ群。JANIS 由来の2つは標準コードを取込で洗い替え、
