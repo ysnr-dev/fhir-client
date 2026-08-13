@@ -1366,6 +1366,108 @@ export async function searchMedicalProcedures(params: {
   return (await res.json()) as MasterSearchResult<MedicalProcedure>;
 }
 
+// 放射線検査で使う器材の施設マスタ。レセプト電算の特定器材は概念的な区分で
+// 収載されているため、実際に購入している製品をここに登録し、算定に使う特定器材
+// コードを紐付ける。
+export interface RadMaterial {
+  id: number;
+  /** 施設内の器材コード。 */
+  material_code: string;
+  /** 製品名(実際に購入しているもの)。 */
+  name: string;
+  name_kana: string | null;
+  maker: string | null;
+  model_number: string | null;
+  /** 算定に使うレセプト電算の特定器材コード。未紐付けなら空。 */
+  receipt_material_code: string | null;
+  unit_name: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  display_order: number | null;
+  note: string | null;
+  /** 紐付け先の名称・価格。一覧・詳細 API が添えて返す(未紐付け・未取込なら null)。 */
+  receipt_material_name: string | null;
+  receipt_material_price: string | null;
+}
+
+export interface RadMaterialPayload {
+  material_code?: string;
+  name?: string;
+  name_kana?: string | null;
+  maker?: string | null;
+  model_number?: string | null;
+  receipt_material_code?: string | null;
+  unit_name?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  display_order?: number | null;
+  note?: string | null;
+}
+
+const RAD_MATERIALS_PATH = "/master/rad_materials";
+
+export async function searchRadMaterials(params: {
+  name?: string;
+  maker?: string;
+  /** 施設内の器材コード。カンマ区切りで複数指定できる。 */
+  material_code?: string;
+  receipt_material_code?: string;
+  /** true なら紐付けのないものだけ(算定できない器材の点検用)。 */
+  unlinked?: boolean;
+  /** true なら今日採用している器材(有効期間内)だけ。 */
+  active?: boolean;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<RadMaterial>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.maker) search.set("maker", params.maker);
+  if (params.material_code) search.set("material_code", params.material_code);
+  if (params.receipt_material_code) search.set("receipt_material_code", params.receipt_material_code);
+  if (params.unlinked) search.set("unlinked", "true");
+  if (params.active) search.set("active", "true");
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${RAD_MATERIALS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<RadMaterial>;
+}
+
+export async function fetchRadMaterial(idOrCode: string | number): Promise<RadMaterial> {
+  const res = await masterFetch(`${RAD_MATERIALS_PATH}/${encodeURIComponent(String(idOrCode))}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadMaterial;
+}
+
+export async function createRadMaterial(payload: RadMaterialPayload): Promise<RadMaterial> {
+  const res = await masterFetch(RAD_MATERIALS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadMaterial;
+}
+
+export async function updateRadMaterial(
+  id: number,
+  payload: RadMaterialPayload,
+): Promise<RadMaterial> {
+  const res = await masterFetch(`${RAD_MATERIALS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadMaterial;
+}
+
+export async function deleteRadMaterial(id: number): Promise<void> {
+  const res = await masterFetch(`${RAD_MATERIALS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
 const RAD_ITEMS_PATH = "/master/rad_items";
 
 export async function searchRadItems(params: {

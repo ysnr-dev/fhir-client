@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_13_020000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_13_030000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -788,6 +788,26 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_13_020000) do
     t.datetime "updated_at", null: false
     t.index ["category", "jj1017_code"], name: "index_rad_frequent_codes_on_category_and_code", unique: true
     t.index ["search_name"], name: "index_master_rad_jj1017_frequent_codes_on_search_name"
+  end
+
+  create_table "master_rad_materials", force: :cascade do |t|
+    t.string "material_code", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.string "maker"
+    t.string "model_number"
+    t.string "receipt_material_code"
+    t.string "unit_name"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["material_code"], name: "index_master_rad_materials_on_material_code", unique: true
+    t.index ["receipt_material_code"], name: "index_master_rad_materials_on_receipt_material_code"
   end
 
   create_table "master_rad_set_items", force: :cascade do |t|

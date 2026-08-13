@@ -111,6 +111,9 @@ Rails.application.routes.draw do
     resources :rad_set_items, only: %i[index create update destroy]
     resources :rad_item_layouts, only: %i[index show create update destroy]
     resources :rad_item_layout_cells, only: %i[create update destroy]
+    # 放射線検査で使う器材の施設マスタ。実際の製品を登録し、算定に使うレセプト電算の
+    # 特定器材コードを紐付ける(配布マスタは medical_materials 側)。
+    resources :rad_materials, only: %i[index show create update destroy]
     # 特定器材(特定保険医療材料)と医科診療行為(手技料)。どちらもレセプト電算の
     # 配布マスタを全置換で取り込むだけで、手動メンテはしない。
     resources :medical_materials, only: %i[index] do

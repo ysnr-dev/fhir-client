@@ -5705,3 +5705,13 @@ body.page-wide #root {
 .rad-worklist__status--cancelled {
   text-decoration: line-through;
 }
+
+/* 放射線器材マスタ ------------------------------------------------------- */
+
+/* 算定に使う特定器材の紐付け。名称・コード・操作を 1 行に並べる。 */
+.rad-material__link {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}

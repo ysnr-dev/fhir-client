@@ -69,9 +69,14 @@ import {
   fetchRadItemLayouts,
   fetchRadJj1017Catalog,
   fetchRadJj1017Elements,
+  createRadMaterial,
+  deleteRadMaterial,
+  fetchRadMaterial,
   searchMedicalMaterials,
   searchMedicalProcedures,
   searchRadFrequentCodes,
+  searchRadMaterials,
+  updateRadMaterial,
   searchRadItems,
   searchRadJj1017Codes,
   searchRadSetItems,
@@ -82,6 +87,7 @@ import {
   type RadItemLayoutCellPayload,
   type RadItemLayoutPayload,
   type RadItemPayload,
+  type RadMaterialPayload,
   type RadJj1017CodePayload,
   type RadSetItemPayload,
   type RadItemSearchResult,
@@ -785,6 +791,67 @@ export function useMedicalMaterialsByCodes(codes: string[]) {
     queryFn: () => searchMedicalMaterials({ material_code: unique.join(","), per: unique.length }),
     enabled: unique.length > 0,
   });
+}
+
+const RAD_MATERIALS_KEY = ["master", "rad_materials"];
+
+export interface RadMaterialFilters {
+  name?: string;
+  maker?: string;
+  /** 紐付けのないものだけ(算定できない器材の点検用)。 */
+  unlinked?: boolean;
+  active?: boolean;
+}
+
+/** 放射線検査で使う器材(施設マスタ)の検索。 */
+export function useRadMaterialSearch(filters: RadMaterialFilters, page: number, enabled = true) {
+  return useQuery({
+    queryKey: [...RAD_MATERIALS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchRadMaterials({
+        name: filters.name || undefined,
+        maker: filters.maker || undefined,
+        unlinked: filters.unlinked || undefined,
+        active: filters.active || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** 編集モーダル用の詳細。器材コードでも id でも引ける。 */
+export function useRadMaterial(idOrCode: string | number | null) {
+  return useQuery({
+    queryKey: [...RAD_MATERIALS_KEY, "detail", idOrCode],
+    queryFn: () => fetchRadMaterial(idOrCode as string | number),
+    enabled: idOrCode !== null,
+  });
+}
+
+export function useRadMaterialMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: RAD_MATERIALS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: RadMaterialPayload) => createRadMaterial(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: RadMaterialPayload }) =>
+        updateRadMaterial(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteRadMaterial(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
 }
 
 const MEDICAL_PROCEDURES_KEY = ["master", "medical_procedures"];
