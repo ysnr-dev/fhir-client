@@ -157,6 +157,17 @@ RSpec.describe "FhirProxy", type: :request do
 
       expect(response).to have_http_status(:ok)
     end
+
+    it "allowlists Task (部門ワークリストの進捗)" do
+      stub_request(:get, "#{upstream_base}/Task")
+        .with(query: { "focus" => "ServiceRequest/123" })
+        .to_return(status: 200, body: '{"resourceType":"Bundle"}',
+                   headers: { "Content-Type" => "application/fhir+json" })
+
+      get "/fhir/Task?focus=ServiceRequest/123"
+
+      expect(response).to have_http_status(:ok)
+    end
   end
 
   describe "Binary (シェーマ画像)" do

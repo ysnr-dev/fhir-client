@@ -7,10 +7,12 @@ class FhirProxyController < ApplicationController
   before_action :authorize_user!
   before_action :verify_user_csrf!
 
+  # Task はオーダーの進捗(放射線検査の受付・実施など、部門ワークリストのステータス)を
+  # 持つ。オーダー本体の ServiceRequest とは別リソースなので個別に許可する。
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
-    PractitionerRole Composition
+    PractitionerRole Composition Task
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 

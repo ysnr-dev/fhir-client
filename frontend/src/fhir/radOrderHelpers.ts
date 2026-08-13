@@ -735,6 +735,8 @@ export function buildDoRadOrderForm(values: RadOrderFormValues): RadOrderFormVal
 // ---- 一覧・カルテ表示のための parse ----
 
 export interface RadOrderSummary {
+  /** 入外区分のコード。部門一覧の絞り込みに使う(表示は settingDisplay)。 */
+  settingCode: string;
   settingDisplay: string;
   priorityDisplay: string;
   /** 至急のオーダーはカードで目立たせるため、区分そのものも返す。 */
@@ -742,8 +744,10 @@ export interface RadOrderSummary {
 }
 
 export function summarizeRadOrder(sr: fhir4.ServiceRequest): RadOrderSummary {
+  const setting = categoryCodingOf(sr, SETTING_SYSTEM);
   return {
-    settingDisplay: categoryCodingOf(sr, SETTING_SYSTEM)?.display ?? "",
+    settingCode: setting?.code ?? "",
+    settingDisplay: setting?.display ?? "",
     priorityDisplay: priorityDisplay(sr.priority),
     urgent: sr.priority === "urgent",
   };

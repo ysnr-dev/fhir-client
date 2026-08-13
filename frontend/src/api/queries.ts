@@ -30,14 +30,23 @@ import {
 } from "../fhir/microOrderHelpers";
 import { buildMicroResultDeleteBundle } from "../fhir/microResultHelpers";
 import {
+  ORDER_TYPE_SYSTEM,
   buildPrescriptionDeleteBundle,
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
 import {
+  RAD_ORDER_TYPE,
   buildRadOrderDeleteBundle,
+  isRadServiceRequest,
   radOrderItemRequests,
   radOrderResponseIds,
+  radOrderTime,
 } from "../fhir/radOrderHelpers";
+import {
+  buildRadTaskUpdate,
+  radTasksByOrderId,
+  type RadTaskStatus,
+} from "../fhir/radTaskHelpers";
 import { buildPractitionerDeleteBundle } from "../fhir/practitionerHelpers";
 import {
   baseRoleOf,
@@ -653,6 +662,156 @@ export function useRadOrderDetail(srId: string | undefined) {
     queryKey: ["ServiceRequest", "detail", "rad-order", srId],
     queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", params),
     enabled: Boolean(srId),
+  });
+}
+
+// ---- 放射線検査一覧(部門ワークリスト) ----
+//
+// 撮影日で 1 日ぶんの放射線検査オーダーを読み、モダリティ・入外区分・診療科・
+// ステータスでの絞り込みは画面側で行う。上流の ServiceRequest が検索できるのは
+// category と authoredon までで、モダリティは明細に、診療科は拡張に、進捗は別リソース
+// (Task)にあるため。1 日ぶんなら数十件なので、全件読んでから絞る方が、ページごとに
+// 絞り込み結果が変わる作りより扱いやすい。
+//
+// 撮影日は ServiceRequest.authoredOn で引く。オーダー画面の「撮影日」がそのまま
+// authoredOn と occurrenceDateTime の両方に入るため(radOrderHelpers を参照)。
+// 撮影日をオーダー日と別に持たせるなら、上流に occurrence の検索パラメータが要る。
+
+const RAD_WORKLIST_PAGE = 100;
+// 1 日の放射線検査がこの件数を超えることは想定していない。超えた場合は読むのをやめ、
+// 画面に「一部のみ」と出す(黙って切り捨てると全件見えているように見えるため)。
+const RAD_WORKLIST_MAX_PAGES = 5;
+
+/** 放射線検査一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
+export interface RadWorklistRow {
+  order: fhir4.ServiceRequest;
+  /** 撮影項目(明細)。セットの構成項目まで含む平坦な一覧。 */
+  itemRequests: fhir4.ServiceRequest[];
+  patient?: fhir4.Patient;
+  /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
+  task?: fhir4.Task;
+}
+
+export interface RadWorklistResult {
+  rows: RadWorklistRow[];
+  /** 上限まで読んでも読み切れなかった。 */
+  truncated: boolean;
+}
+
+async function fetchRadWorklist(date: string): Promise<RadWorklistResult> {
+  const orders: fhir4.ServiceRequest[] = [];
+  const items: fhir4.ServiceRequest[] = [];
+  const tasks: fhir4.Task[] = [];
+  const patientsById = new Map<string, fhir4.Patient>();
+  let truncated = false;
+
+  for (let page = 0; page < RAD_WORKLIST_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("category", `${ORDER_TYPE_SYSTEM}|${RAD_ORDER_TYPE.code}`);
+    params.set("authoredon", date);
+    // 明細はオーダーそのものではないので、ヒットさせるのはヘッダだけにする。
+    params.set("based-on:missing", "true");
+    params.set("_count", String(RAD_WORKLIST_PAGE));
+    params.set("_offset", String(page * RAD_WORKLIST_PAGE));
+    // 撮影項目・患者・進捗を 1 リクエストで揃える。
+    params.set("_revinclude:iterate", "ServiceRequest:based-on");
+    params.set("_revinclude", "Task:focus");
+    params.set("_include", "ServiceRequest:subject");
+
+    const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+
+    let matched = 0;
+    for (const entry of bundle.entry ?? []) {
+      const resource = entry.resource;
+      if (!resource) continue;
+      if (resource.resourceType === "Patient") {
+        if (resource.id) patientsById.set(resource.id, resource as fhir4.Patient);
+      } else if (resource.resourceType === "Task") {
+        tasks.push(resource as fhir4.Task);
+      } else if (resource.resourceType === "ServiceRequest") {
+        const request = resource as fhir4.ServiceRequest;
+        // 検索にヒットしたヘッダと、添えられた明細を分ける。
+        if (isRadServiceRequest(request) && !request.basedOn?.length) {
+          orders.push(request);
+          matched += 1;
+        } else {
+          items.push(request);
+        }
+      }
+    }
+
+    if (matched < RAD_WORKLIST_PAGE) break;
+    if (page === RAD_WORKLIST_MAX_PAGES - 1) truncated = true;
+  }
+
+  const taskByOrderId = radTasksByOrderId(tasks);
+
+  const rows = orders.map((order) => ({
+    order,
+    itemRequests: radOrderItemRequests(items, order.id ?? ""),
+    patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+    task: taskByOrderId.get(order.id ?? ""),
+  }));
+
+  // 撮影時刻の早い順。時刻を指定していないオーダー(撮影日だけ)は後ろにまとめる。
+  rows.sort((a, b) => radWorklistSortKey(a).localeCompare(radWorklistSortKey(b)));
+
+  return { rows, truncated };
+}
+
+function radWorklistSortKey(row: RadWorklistRow): string {
+  const time = radOrderTime(row.order);
+  return time || "99:99";
+}
+
+/** 撮影日 1 日ぶんの放射線検査オーダー。日付が未選択の間は読みに行かない。 */
+export function useRadWorklist(date: string) {
+  return useQuery({
+    queryKey: RAD_WORKLIST_KEY(date),
+    queryFn: () => fetchRadWorklist(date),
+    enabled: Boolean(date),
+    placeholderData: keepPreviousData,
+  });
+}
+
+const RAD_WORKLIST_KEY = (date: string) => ["ServiceRequest", "rad-worklist", date];
+
+/**
+ * 受付・実施などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
+ *
+ * 単体の PUT ではなく transaction Bundle にするのは、更新に If-Match(ETag)が要る
+ * ためで、一覧は検索結果から Task を持っているだけで ETag を持たないため。
+ */
+export function useUpdateRadTaskStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      order,
+      task,
+      status,
+    }: {
+      order: fhir4.ServiceRequest;
+      task: fhir4.Task | undefined;
+      status: RadTaskStatus;
+    }) => {
+      const resource = buildRadTaskUpdate(task, order, status);
+      return postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          {
+            resource,
+            request: resource.id
+              ? { method: "PUT", url: `Task/${resource.id}` }
+              : { method: "POST", url: "Task" },
+          },
+        ],
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rad-worklist"] });
+    },
   });
 }
 

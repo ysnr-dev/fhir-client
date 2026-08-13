@@ -5609,3 +5609,99 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
   color: var(--lab-high);
   font-weight: 600;
 }
+
+/* 放射線検査一覧(部門ワークリスト) --------------------------------------- */
+
+/* 一覧は列が多く 960px では患者名や依頼科まで折り返すので、この画面だけ
+   #root の幅を広げる(RadWorklistPage が body に付け外しする)。
+   カルテと違って際限なく広げないのは、横に伸びるほど行を目で追いにくくなるため。
+   地の色も他の一覧画面と同じままにする。 */
+body.page-wide #root {
+  max-width: 1400px;
+}
+
+/* 列を折り返さないぶん、画面が狭いと表がページからはみ出す。ページ全体を横に
+   スクロールさせず、表の中だけで送れるようにする。 */
+.rad-worklist-wrap {
+  overflow-x: auto;
+}
+
+.rad-worklist {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 8px;
+}
+
+.rad-worklist th,
+.rad-worklist td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  vertical-align: top;
+  /* 撮影内容以外は短い値なので折り返さない。残った幅は撮影内容の列が受け取る。 */
+  white-space: nowrap;
+}
+
+.rad-worklist__time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 余った幅は撮影内容の列だけが受け取る。他の列は中身なりの幅で左に詰める
+   (全列 nowrap のままだと余白が均等に配られて、行が間延びする)。 */
+.rad-worklist__content {
+  width: 100%;
+}
+
+/* 撮影内容は 1 オーダーに複数の GP が並ぶことがあるので箇条書きにする。
+   1 行が長くなる列なので、ここだけは折り返しを許す。 */
+.rad-worklist__items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  white-space: normal;
+}
+
+.rad-worklist__items > li + li {
+  margin-top: 2px;
+}
+
+/* td に display: flex を当てると行の下罫線がズレるため table-cell のまま並べる
+   (患者一覧の操作列と同じ理由)。 */
+.rad-worklist td.rad-worklist__actions {
+  text-align: right;
+}
+
+.rad-worklist__actions > button + button {
+  margin-left: 4px;
+}
+
+/* 至急のオーダーは撮影の順番を決める手掛かりなので行ごと目立たせる。 */
+.rad-worklist__row--urgent > td:first-child {
+  box-shadow: inset 3px 0 0 var(--lab-high);
+}
+
+.rad-worklist__status {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 進捗の色。受付済(作業中)は強調し、実施済は落ち着かせ、中止は取り消し線で外す。 */
+.rad-worklist__status--accepted {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.rad-worklist__status--completed {
+  color: var(--lab-low);
+  border-color: var(--lab-low);
+}
+
+.rad-worklist__status--cancelled {
+  text-decoration: line-through;
+}

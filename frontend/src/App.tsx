@@ -42,6 +42,7 @@ import { QuestionnaireCreatePage } from "./pages/QuestionnaireCreatePage";
 import { QuestionnaireEditPage } from "./pages/QuestionnaireEditPage";
 import { QuestionnaireListPage } from "./pages/QuestionnaireListPage";
 import { QuestionnairePreviewPage } from "./pages/QuestionnairePreviewPage";
+import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 
 // 患者配下の未定義パスをその患者のカルテへ寄せる。
@@ -66,6 +67,13 @@ function App() {
         </Link>
         <nav className="app__nav">
           <NavLink to="/patients">患者一覧</NavLink>
+          {/* 部門業務は「依頼を受けた側」の画面。診療科がオーダーを出す患者一覧・カルテと、
+              マスタメンテの間に置く。放射線以外の部門が増えたらここに並べる。 */}
+          <HoverMenu label="部門業務">
+            <Link to="/rad-worklist" className="row-menu__item">
+              放射線検査一覧
+            </Link>
+          </HoverMenu>
           {/* マスタメンテは項目が増えるため、診療領域ごとに入れ子にする。
               どの領域にも属さないものは「共通」にまとめる。
               マスタ取込は領域をまたぐので直下に置く。 */}
@@ -182,6 +190,8 @@ function App() {
           <Route path="/practitioners" element={<PractitionerListPage />} />
           <Route path="/practitioners/new" element={<PractitionerCreatePage />} />
           <Route path="/practitioners/:id/edit" element={<PractitionerEditPage />} />
+          {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}
+          <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />
