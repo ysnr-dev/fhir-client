@@ -30,11 +30,13 @@ module Master
       render json: result.merge(elements: element_names_for(result[:items]))
     end
 
-    # 要素の名称とセット構成をまとめて返す。詳細画面が1リクエストで開けるようにする。
+    # 要素の名称・セット構成・実施入力用データセットの紐付けをまとめて返す。
+    # 詳細画面が1リクエストで開けるようにする。
     def show
       render json: @record.as_json.merge(
         elements: element_names_for([@record]),
-        set_items: set_items_for(@record.item_code).as_json
+        set_items: set_items_for(@record.item_code).as_json,
+        datasets: datasets_for(@record.item_code).as_json
       )
     end
 
@@ -56,12 +58,14 @@ module Master
       end
     end
 
-    # 外部キーを張っていないので、ぶら下がるセット構成も併せて片付ける。
+    # 外部キーを張っていないので、ぶら下がるセット構成とデータセットの紐付けも
+    # 併せて片付ける(データセット本体は他の項目からも使うので消さない)。
     def destroy
       code = @record.item_code
       Master::RadItem.transaction do
         Master::RadSetItem.where(set_item_code: code).delete_all
         Master::RadSetItem.where(member_item_code: code).delete_all
+        Master::RadItemDataset.where(item_code: code).delete_all
         @record.destroy!
       end
       head :no_content
@@ -157,6 +161,20 @@ module Master
           "master_rad_items.jj1017_code AS member_jj1017_code",
         )
         .order(Arel.sql("master_rad_set_items.display_order NULLS LAST"))
+        .order(:id)
+    end
+
+    # 紐付いている実施入力用データセット。名称を添えて詳細画面に出す。
+    def datasets_for(code)
+      Master::RadItemDataset
+        .where(item_code: code)
+        .joins("LEFT JOIN master_rad_datasets " \
+               "ON master_rad_datasets.dataset_code = master_rad_item_datasets.dataset_code")
+        .select(
+          "master_rad_item_datasets.*",
+          "master_rad_datasets.name AS dataset_name",
+        )
+        .order(Arel.sql("master_rad_item_datasets.display_order NULLS LAST"))
         .order(:id)
     end
 

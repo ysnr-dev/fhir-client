@@ -232,6 +232,8 @@ export async function searchMedicines(params: {
   yakko_code?: string;
   yakko_name?: string;
   dosage_form?: string;
+  /** true なら造影剤とその補助剤(発泡顆粒・腸管洗浄剤)だけ。放射線検査で使う。 */
+  contrast_medium?: boolean;
   page?: number;
   per?: number;
 }): Promise<MasterSearchResult<Medicine>> {
@@ -240,6 +242,7 @@ export async function searchMedicines(params: {
   if (params.yakko_code) search.set("yakko_code", params.yakko_code);
   if (params.yakko_name) search.set("yakko_name", params.yakko_name);
   if (params.dosage_form) search.set("dosage_form", params.dosage_form);
+  if (params.contrast_medium) search.set("contrast_medium", "true");
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 
@@ -1087,6 +1090,8 @@ export interface RadSetItem {
 export interface RadItemDetail extends RadItem {
   elements: RadElementNames;
   set_items: RadSetItem[];
+  /** 紐付けている実施入力用データセット。実施入力の初期明細になる。 */
+  datasets: RadItemDatasetLink[];
 }
 
 export interface RadItemPayload {
@@ -1574,6 +1579,223 @@ export async function createRadSetItem(payload: RadSetItemPayload): Promise<RadS
 
 export async function deleteRadSetItem(id: number): Promise<void> {
   const res = await masterFetch(`/master/rad_set_items/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+// 実施入力用データセット。実施入力で登録する手技料・造影剤・器材の組み合わせに
+// 名前を付けたもので、撮影項目に紐付けておくと実施入力モーダルの初期明細になる。
+
+export interface RadDataset {
+  id: number;
+  dataset_code: string;
+  name: string;
+  name_kana: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  display_order: number | null;
+  note: string | null;
+}
+
+/** データセット明細の種別。参照先マスタが決まる。 */
+export type RadDatasetDetailType = "procedure" | "medicine" | "material";
+
+export interface RadDatasetDetail {
+  id: number;
+  dataset_code: string;
+  detail_type: RadDatasetDetailType;
+  /** 参照先マスタのコード(診療行為コード / 医薬品コード / 施設内の器材コード)。 */
+  code: string;
+  /** 実施入力に初期表示する数量。造影剤は使用量(mL)、器材は本数など。手技は空。 */
+  default_quantity: string | null;
+  /** 造影剤の既定の投与経路(JP Core の route-codes)。 */
+  route_code: string | null;
+  /** 実施入力を開いたときに最初から並べるか。false は使ったときだけ検索して足す。 */
+  default_selected: boolean;
+  display_order: number | null;
+  /** 参照先マスタから解決した名称。未取込・削除済みなら null。 */
+  resolved_name: string | null;
+  resolved_unit_name: string | null;
+  /** 器材の算定用コード(レセプト電算の特定器材コード)。FHIR の usedCode に載せる。 */
+  receipt_material_code: string | null;
+  /** 造影剤の個別医薬品コード(YJコード)。処方・注射と揃えるために添える。 */
+  yj_code: string | null;
+}
+
+export interface RadDatasetWithDetails extends RadDataset {
+  details: RadDatasetDetail[];
+}
+
+export interface RadItemDatasetLink {
+  id: number;
+  item_code: string;
+  dataset_code: string;
+  display_order: number | null;
+  /** データセット名。一覧・詳細 API が添えて返す。 */
+  dataset_name: string | null;
+}
+
+export interface RadDatasetPayload {
+  dataset_code?: string;
+  name?: string;
+  name_kana?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  display_order?: number | null;
+  note?: string | null;
+}
+
+export interface RadDatasetDetailPayload {
+  dataset_code?: string;
+  detail_type?: RadDatasetDetailType;
+  code?: string;
+  default_quantity?: string | null;
+  route_code?: string | null;
+  default_selected?: boolean;
+  display_order?: number | null;
+}
+
+const RAD_DATASETS_PATH = "/master/rad_datasets";
+const RAD_DATASET_DETAILS_PATH = "/master/rad_dataset_details";
+const RAD_ITEM_DATASETS_PATH = "/master/rad_item_datasets";
+
+export async function searchRadDatasets(params: {
+  name?: string;
+  /** データセットコード。カンマ区切りで複数指定できる。 */
+  dataset_code?: string;
+  /** true なら今日使えるデータセット(有効期間内)だけ。 */
+  active?: boolean;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<RadDataset>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.dataset_code) search.set("dataset_code", params.dataset_code);
+  if (params.active) search.set("active", "true");
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${RAD_DATASETS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<RadDataset>;
+}
+
+// 明細を名称付きで添えた詳細。データセットコードでも id でも引ける。
+export async function fetchRadDataset(idOrCode: string | number): Promise<RadDatasetWithDetails> {
+  const res = await masterFetch(`${RAD_DATASETS_PATH}/${encodeURIComponent(String(idOrCode))}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadDatasetWithDetails;
+}
+
+export async function createRadDataset(payload: RadDatasetPayload): Promise<RadDataset> {
+  const res = await masterFetch(RAD_DATASETS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadDataset;
+}
+
+export async function updateRadDataset(
+  id: number,
+  payload: RadDatasetPayload,
+): Promise<RadDataset> {
+  const res = await masterFetch(`${RAD_DATASETS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadDataset;
+}
+
+export async function deleteRadDataset(id: number): Promise<void> {
+  const res = await masterFetch(`${RAD_DATASETS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+export async function searchRadDatasetDetails(params: {
+  /** データセットコード。カンマ区切りで複数指定できる(実施入力が一括で引く)。 */
+  dataset_code?: string;
+  detail_type?: RadDatasetDetailType;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<RadDatasetDetail>> {
+  const search = new URLSearchParams();
+  if (params.dataset_code) search.set("dataset_code", params.dataset_code);
+  if (params.detail_type) search.set("detail_type", params.detail_type);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${RAD_DATASET_DETAILS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<RadDatasetDetail>;
+}
+
+export async function createRadDatasetDetail(
+  payload: RadDatasetDetailPayload,
+): Promise<RadDatasetDetail> {
+  const res = await masterFetch(RAD_DATASET_DETAILS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadDatasetDetail;
+}
+
+export async function updateRadDatasetDetail(
+  id: number,
+  payload: RadDatasetDetailPayload,
+): Promise<RadDatasetDetail> {
+  const res = await masterFetch(`${RAD_DATASET_DETAILS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadDatasetDetail;
+}
+
+export async function deleteRadDatasetDetail(id: number): Promise<void> {
+  const res = await masterFetch(`${RAD_DATASET_DETAILS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+export async function searchRadItemDatasets(params: {
+  /** 撮影項目コード。カンマ区切りで複数指定できる(実施入力が一括で引く)。 */
+  item_code?: string;
+  dataset_code?: string;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<RadItemDatasetLink>> {
+  const search = new URLSearchParams();
+  if (params.item_code) search.set("item_code", params.item_code);
+  if (params.dataset_code) search.set("dataset_code", params.dataset_code);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${RAD_ITEM_DATASETS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<RadItemDatasetLink>;
+}
+
+export async function createRadItemDataset(payload: {
+  item_code: string;
+  dataset_code: string;
+  display_order?: number | null;
+}): Promise<RadItemDatasetLink> {
+  const res = await masterFetch(RAD_ITEM_DATASETS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as RadItemDatasetLink;
+}
+
+export async function deleteRadItemDataset(id: number): Promise<void> {
+  const res = await masterFetch(`${RAD_ITEM_DATASETS_PATH}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
 

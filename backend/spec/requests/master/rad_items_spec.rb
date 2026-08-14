@@ -84,6 +84,16 @@ RSpec.describe "Master::RadItems", type: :request do
       expect(body["name"]).to eq("頭部CTセット")
       expect(body["set_items"].map { |m| m["member_name"] }).to eq(["頭部CT単純"])
     end
+
+    it "紐付けている実施入力用データセットを名称付きで添えて返す" do
+      create_item("R0004", name: "頭部CT単純")
+      Master::RadDataset.create!(dataset_code: "000001", name: "造影CT標準セット")
+      Master::RadItemDataset.create!(item_code: "R0004", dataset_code: "000001", display_order: 1)
+
+      get "/master/rad_items/R0004"
+
+      expect(body["datasets"].map { |d| d["dataset_name"] }).to eq(["造影CT標準セット"])
+    end
   end
 
   describe "POST /master/rad_items" do
@@ -190,6 +200,17 @@ RSpec.describe "Master::RadItems", type: :request do
 
       expect(response).to have_http_status(:no_content)
       expect(Master::RadSetItem.count).to eq(0)
+    end
+
+    it "データセットへの紐付けも外す(データセット本体は他の項目でも使うので残す)" do
+      create_item("R0004")
+      Master::RadDataset.create!(dataset_code: "000001", name: "造影CT標準セット")
+      Master::RadItemDataset.create!(item_code: "R0004", dataset_code: "000001")
+
+      delete "/master/rad_items/R0004"
+
+      expect(Master::RadItemDataset.count).to eq(0)
+      expect(Master::RadDataset.count).to eq(1)
     end
   end
 

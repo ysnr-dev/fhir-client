@@ -10,15 +10,35 @@ interface MedicineSearchModalProps {
   onClose: () => void;
   /** 剤形区分での絞り込み(注射オーダーでは "4"=注射薬)。指定しなければ全剤形。 */
   dosageForm?: string;
+  /**
+   * 造影剤(と発泡顆粒などの補助剤)だけに絞る。放射線検査の実施入力で使う。
+   * 経口造影剤は内用薬なので、剤形では絞れない。
+   */
+  contrastMedium?: boolean;
+  /** モーダルの見出し。用途が造影剤選択のときなどに差し替える。 */
+  title?: string;
 }
 
-export function MedicineSearchModal({ onSelect, onClose, dosageForm }: MedicineSearchModalProps) {
+export function MedicineSearchModal({
+  onSelect,
+  onClose,
+  dosageForm,
+  contrastMedium,
+  title = "医薬品を選択",
+}: MedicineSearchModalProps) {
   const [name, setName] = useState("");
   // yakkoInput は入力欄の表示文字列、yakkoCode は候補確定時のみ更新する薬効分類番号。
   const [yakkoInput, setYakkoInput] = useState("");
   const [yakkoCode, setYakkoCode] = useState("");
   const [page, setPage] = useState(1);
-  const { data, error, isFetching } = useMedicineSearch(name, yakkoCode, page, true, dosageForm);
+  const { data, error, isFetching } = useMedicineSearch(
+    name,
+    yakkoCode,
+    page,
+    true,
+    dosageForm,
+    contrastMedium,
+  );
   const yakkoOptions = useMedicineTypeOptions(true);
   const yakkoListId = useId();
 
@@ -55,7 +75,7 @@ export function MedicineSearchModal({ onSelect, onClose, dosageForm }: MedicineS
   const hasNext = data ? page * data.per < data.total : false;
 
   return (
-    <Modal title="医薬品を選択" onClose={onClose} className="modal--wide">
+    <Modal title={title} onClose={onClose} className="modal--wide">
       <div className="master-search__form">
         <label>
           医薬品名

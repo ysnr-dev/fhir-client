@@ -45,6 +45,16 @@ export function radTaskStatusDisplay(status: RadTaskStatus): string {
 export interface RadTaskAction {
   label: string;
   next: RadTaskStatus;
+  /**
+   * 押すと実施入力を開く操作。ステータスだけを進める他の操作と違い、実施記録
+   * (使った造影剤・器材・手技)を入れてから Task の完了と一緒に登録する。
+   */
+  opensPerformInput?: true;
+  /**
+   * 日常の流れではない操作(押し間違いの訂正・検査の取りやめ)。一覧では
+   * ケバブメニューに畳み、その行で普通に押す操作だけをボタンで出す。
+   */
+  secondary?: true;
 }
 
 /**
@@ -58,18 +68,18 @@ export function radTaskActions(status: RadTaskStatus): RadTaskAction[] {
     case "requested":
       return [
         { label: "受付", next: "accepted" },
-        { label: "中止", next: "cancelled" },
+        { label: "中止", next: "cancelled", secondary: true },
       ];
     case "accepted":
       return [
-        { label: "実施", next: "completed" },
-        { label: "取消", next: "requested" },
-        { label: "中止", next: "cancelled" },
+        { label: "実施", next: "completed", opensPerformInput: true },
+        { label: "取消", next: "requested", secondary: true },
+        { label: "中止", next: "cancelled", secondary: true },
       ];
     case "completed":
-      return [{ label: "取消", next: "accepted" }];
+      return [{ label: "取消", next: "accepted", secondary: true }];
     case "cancelled":
-      return [{ label: "中止を取消", next: "requested" }];
+      return [{ label: "中止を取消", next: "requested", secondary: true }];
   }
 }
 

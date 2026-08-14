@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 // パネルの表示位置。下に開くと見切れる場合だけ上に開く
 // (カルテのタイムラインのようにスクロール領域の中に置かれることがある)。
@@ -16,9 +23,24 @@ function clipBounds(element: HTMLElement): { top: number; bottom: number } {
   return { top: 0, bottom: window.innerHeight };
 }
 
-export function RowMenu({ label, children }: { label: string; children: ReactNode }) {
+export function RowMenu({
+  label,
+  children,
+  escapesClipping = false,
+}: {
+  label: string;
+  children: ReactNode;
+  /**
+   * スクロール領域(overflow: auto)の中に置く場合に指定する。position: fixed に
+   * 切り替えて領域の外にはみ出せるようにする。既定の absolute のままだと、
+   * 領域の縁でメニューが切れてしまう。
+   */
+  escapesClipping?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<Placement>("down");
+  // escapesClipping のときだけ使う、ビューポート基準の位置。
+  const [fixedStyle, setFixedStyle] = useState<CSSProperties | undefined>(undefined);
   const ref = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<HTMLDivElement>(null);
 
@@ -30,11 +52,32 @@ export function RowMenu({ label, children }: { label: string; children: ReactNod
     if (!trigger || !items) return;
     const triggerRect = trigger.getBoundingClientRect();
     const height = items.offsetHeight + 4;
-    const bounds = clipBounds(trigger);
+    // はみ出せるなら、収まるかどうかはビューポートで判定する。
+    const bounds = escapesClipping ? { top: 0, bottom: window.innerHeight } : clipBounds(trigger);
     const fitsBelow = triggerRect.bottom + height <= bounds.bottom;
     const fitsAbove = triggerRect.top - height >= bounds.top;
-    setPlacement(!fitsBelow && fitsAbove ? "up" : "down");
-  }, [open]);
+    const next: Placement = !fitsBelow && fitsAbove ? "up" : "down";
+    setPlacement(next);
+
+    if (!escapesClipping) return;
+    setFixedStyle(
+      next === "down"
+        ? { position: "fixed", top: triggerRect.bottom + 4, bottom: "auto", right: window.innerWidth - triggerRect.right }
+        : { position: "fixed", top: "auto", bottom: window.innerHeight - triggerRect.top + 4, right: window.innerWidth - triggerRect.right },
+    );
+  }, [open, escapesClipping]);
+
+  // ビューポート基準で置いているので、スクロールされると位置がずれる。追従させずに閉じる
+  // (行の操作メニューは開いたまま画面を動かす使い方をしない)。capture で内側の
+  // スクロール領域の分も拾う。
+  useEffect(() => {
+    if (!open || !escapesClipping) return;
+    function close() {
+      setOpen(false);
+    }
+    window.addEventListener("scroll", close, true);
+    return () => window.removeEventListener("scroll", close, true);
+  }, [open, escapesClipping]);
 
   useEffect(() => {
     if (!open) return;
@@ -70,6 +113,7 @@ export function RowMenu({ label, children }: { label: string; children: ReactNod
           className={`row-menu__items${placement === "up" ? " row-menu__items--up" : ""}`}
           role="menu"
           ref={itemsRef}
+          style={fixedStyle}
           onClick={() => setOpen(false)}
         >
           {children}

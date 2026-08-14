@@ -5676,6 +5676,25 @@ body.page-wide #root {
   margin-left: 4px;
 }
 
+/* ケバブは操作の性質が違う(訂正・取りやめ)ので、進める操作のボタンより離して置く。 */
+.rad-worklist__actions > button + .row-menu {
+  margin-left: 8px;
+}
+
+/* ケバブは同じ行に並ぶボタンと高さ・上下位置を揃える
+   (.row-menu__trigger の小さめの padding / line-height を打ち消す)。
+   三点リーダーだけなので横幅はボタンより詰める。 */
+.rad-worklist__actions .row-menu__trigger {
+  padding: 8px 7px;
+  font-size: 15px;
+  line-height: normal;
+}
+
+/* 件数は表の右端に合わせる(行の操作列と同じ側に置いて視線を戻さない)。 */
+.rad-worklist__count {
+  text-align: right;
+}
+
 /* 至急のオーダーは撮影の順番を決める手掛かりなので行ごと目立たせる。 */
 .rad-worklist__row--urgent > td:first-child {
   box-shadow: inset 3px 0 0 var(--lab-high);
@@ -5690,11 +5709,13 @@ body.page-wide #root {
   white-space: nowrap;
 }
 
-/* 進捗の色。受付済(作業中)は強調し、実施済は落ち着かせ、中止は取り消し線で外す。 */
+/* 進捗の色。受付済(作業中)は強調し、実施済は落ち着かせ、中止は地に沈める。
+   受付済だけ塗りつぶしにするのは、同じ行に並ぶボタン(枠線 + 薄い accent 塗り)と
+   同じ見た目になり、押せるものと見分けが付かなくなるため。 */
 .rad-worklist__status--accepted {
-  color: var(--accent);
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
+  color: var(--bg);
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .rad-worklist__status--completed {
@@ -5702,8 +5723,11 @@ body.page-wide #root {
   border-color: var(--lab-low);
 }
 
+/* 中止は「その日の作業から外れたもの」。依頼済と見分けが付くよう地を敷いて沈める。 */
 .rad-worklist__status--cancelled {
-  text-decoration: line-through;
+  color: var(--text);
+  border-color: var(--border);
+  background: var(--surface-sunken);
 }
 
 /* 放射線器材マスタ ------------------------------------------------------- */
@@ -5714,4 +5738,92 @@ body.page-wide #root {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* データセット明細の「初期値」。行末の操作(ゴミ箱)の左に寄せ、行ごとの操作として
+   まとめて見えるようにする。.master-search__table td の text-align: left より
+   詳細度を上げる必要があるので td を付けて指定する。 */
+.master-search__table th.rad-dataset__default,
+.master-search__table td.rad-dataset__default {
+  width: 72px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* 手技料・造影剤・器材で列構成(数量・経路の有無)が違うため、自動列幅のままだと
+   行末の初期値の位置がセクションごとにずれる。初期値と削除の幅を固定し、余った幅は
+   名称の列が吸収するようにして 3 種で縦に揃える。 */
+.rad-dataset__details th:last-child,
+.rad-dataset__details td:last-child {
+  width: 56px;
+}
+
+/* 放射線検査の実施入力 --------------------------------------------------- */
+
+/* 実施入力・データセットの明細行に置く入力欄(使用量・数量・経路)。既定の入力欄は
+   小さすぎて読みにくいので、他のフォーム欄と同じ文字サイズにする。ただし縦は
+   .master-search__table button と同じ高さ(26px)に収め、行を高くしない。 */
+.rad-quantity-input,
+.rad-route-select {
+  font: inherit;
+  font-size: 14px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* 数量は桁数が知れているので固定幅にし、列の幅が値で揺れないようにする。
+   経路は選択肢の文字数で決まるので幅を指定しない。 */
+.rad-quantity-input {
+  width: 96px;
+}
+
+/* テーブル内では .master-search__table button の padding 指定を上書きする必要がある。 */
+.master-search__table button.rp-card__icon-button {
+  padding: 4px;
+}
+
+/* 何を撮った分の実施入力かの確認。取り違えを防ぐため、説明文ではなく
+   入力欄と同じ大きさで、区切り線を引いて目に留まるようにする。 */
+.rad-perform__items {
+  margin: 0 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: bold;
+}
+
+/* 見出し側は添え物なので、太字にするのは撮影項目名だけにする。 */
+.rad-perform__items-label {
+  margin-right: 10px;
+  font-size: 13px;
+  font-weight: normal;
+  color: var(--text-muted, var(--text));
+}
+
+/* 実施コメント。他の入力欄と違い 1 行を単独で使い、幅いっぱいに広げる。
+   ラベルは他のセクション見出し(.lab-order-item__section-head h3)に揃える。 */
+.rad-perform__comment {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  margin-bottom: 16px;
+  font-size: 15px;
+  font-weight: bold;
+}
+
+/* font: inherit はラベルの太字も引き継ぐので、入力文字は通常の太さに戻す。 */
+.rad-perform__comment textarea {
+  font: inherit;
+  font-size: 14px;
+  font-weight: normal;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
 }

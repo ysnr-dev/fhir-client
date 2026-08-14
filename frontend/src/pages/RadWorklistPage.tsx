@@ -8,6 +8,8 @@ import {
 } from "../api/queries";
 import { useRadJj1017Catalog } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { RadPerformModal } from "../components/RadPerformModal";
+import { RowMenu } from "../components/RowMenu";
 import { displayName } from "../fhir/patientHelpers";
 import {
   SETTING_OPTIONS,
@@ -60,6 +62,8 @@ export function RadWorklistPage() {
   // 撮影日は必須。未選択にはできないので当日から始める。
   const [date, setDate] = useState(today);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+  // 実施入力を開いている行。「実施」だけはステータス変更ではなくモーダルを開く。
+  const [performing, setPerforming] = useState<RadWorklistRow | null>(null);
 
   // 列が多く、既定の幅では患者名や依頼科まで折り返すので、この画面だけ幅を広げる
   // (カルテと同じやり方)。
@@ -136,6 +140,7 @@ export function RadWorklistPage() {
                     onChangeStatus={(status) =>
                       updateStatus.mutate({ order: row.order, task: row.task, status })
                     }
+                    onPerform={() => setPerforming(row)}
                   />
                 ))}
                 {rows.length === 0 && (
@@ -150,10 +155,12 @@ export function RadWorklistPage() {
               </tbody>
             </table>
           </div>
-          <p className="order-select__muted">
-            {rows.length} 件{rows.length !== total && ` / この日 ${total} 件`}
-          </p>
+          <p className="order-select__muted rad-worklist__count">{rows.length} 件</p>
         </>
+      )}
+
+      {performing && (
+        <RadPerformModal row={performing} onClose={() => setPerforming(null)} />
       )}
     </div>
   );
@@ -266,7 +273,7 @@ function FilterForm({
       </label>
       <div className="patient-search-form__actions">
         <button type="button" onClick={() => onChange(emptyFilters)}>
-          絞り込みをクリア
+          クリア
         </button>
       </div>
     </form>
@@ -277,16 +284,20 @@ function WorklistRow({
   row,
   pending,
   onChangeStatus,
+  onPerform,
 }: {
   row: RadWorklistRow;
   pending: boolean;
   onChangeStatus: (status: RadTaskStatus) => void;
+  onPerform: () => void;
 }) {
   const { order, patient, task } = row;
   const summary = summarizeRadOrder(order);
   const entries = orderEntries(radOrderItems(order, row.itemRequests));
   const status = radTaskStatus(task);
   const requester = prescriptionRequester(order);
+  const actions = radTaskActions(status);
+  const secondaryActions = actions.filter((action) => action.secondary);
 
   return (
     <tr className={summary.urgent ? "rad-worklist__row--urgent" : undefined}>
@@ -319,16 +330,40 @@ function WorklistRow({
         </span>
       </td>
       <td className="rad-worklist__actions">
-        {radTaskActions(status).map((action) => (
-          <button
-            key={action.next}
-            type="button"
-            disabled={pending}
-            onClick={() => onChangeStatus(action.next)}
-          >
-            {action.label}
-          </button>
-        ))}
+        {actions
+          .filter((action) => !action.secondary)
+          .map((action) => (
+            <button
+              key={action.next}
+              type="button"
+              disabled={pending}
+              onClick={() => (action.opensPerformInput ? onPerform() : onChangeStatus(action.next))}
+            >
+              {action.label}
+            </button>
+          ))}
+        {/* 訂正・取りやめは押し間違えると進捗が巻き戻るので、一段畳んで置く。
+            一覧は横スクロールできるよう overflow を持つため、メニューは
+            escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
+        {secondaryActions.length > 0 && (
+          <RowMenu label="この検査の操作" escapesClipping>
+            {secondaryActions.map((action) => (
+              <button
+                key={action.next}
+                type="button"
+                // 中止は検査そのものを取りやめる操作なので目立たせる。取消は
+                // 1 つ前に戻すだけの訂正なので通常の項目にする。
+                className={`row-menu__item${
+                  action.next === "cancelled" ? " row-menu__item--danger" : ""
+                }`}
+                disabled={pending}
+                onClick={() => onChangeStatus(action.next)}
+              >
+                {action.label}
+              </button>
+            ))}
+          </RowMenu>
+        )}
       </td>
     </tr>
   );

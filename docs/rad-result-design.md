@@ -111,8 +111,20 @@ ServiceRequest (放射線オーダー ヘッダ)                        ※既�
 | URI 末尾 | 用途 |
 |---|---|
 | `rad-procedure-code` | `Procedure.code`。レセ電算 診療行為コードの写し(撮影項目マスタの `receipt_code`) |
-| `medical-material` | `Procedure.usedCode`。特定保険医療材料コード(§4 の新マスタ) |
+| `rad-material` | `Procedure.usedCode`。施設内の器材コード(放射線器材マスタ) |
+| `medical-material` | `Procedure.usedCode`。算定に使う特定保険医療材料コード(§4.2) |
 | `rad-dose` | 被曝線量の測定項目。`ctdivol` / `dlp` / `dap` / `fluoroscopy-time` |
+
+［実装］器材の `usedCode` には**施設内コードと算定用コードの 2 つの coding を並べる**。
+技師が選ぶのは棚にある製品(施設コード)で、算定に要るのはレセ電算の特定器材コード。
+同じ物品の別表現なので 1 つの CodeableConcept に並べてよい。未紐付けの器材
+(算定対象でないもの)は施設コードだけになる。
+
+［実装］**器材の数量はローカル拡張**
+`http://fhir-client.local/StructureDefinition/rad-material-quantity`(valueQuantity)を
+`usedCode` に付ける。［事実］`usedCode` は CodeableConcept で数量を持てないが、
+行を数量ぶん繰り返す形にすると小数(mL 単位の器材)を表せず、同じ器材の 2 行目が
+別物なのか数量なのか読めなくなる。
 
 ［提案］線量の測定項目は当面ローカルコードにする。DICOM RDSR(線量レポート)の
 標準コードへ寄せるのは PACS 連携で RDSR を取り込む段階(§7-1)。その時点で
@@ -132,6 +144,38 @@ ServiceRequest (放射線オーダー ヘッダ)                        ※既�
 ---
 
 ## 4. マスタ
+
+### 4.1 実施入力用データセット(実装済み)
+
+［提案→実装］実施入力で毎回登録することになる**手技料・造影剤・器材の組み合わせ**に
+名前を付けてまとめ、撮影項目マスタに紐付ける。実施入力モーダルは、オーダーに載って
+いる全撮影項目に紐付く全データセットの明細をマージして初期表示する。
+
+```text
+master_rad_datasets                 -- 親。dataset_code / name / 運用期間
+master_rad_dataset_details          -- 明細(3種を縦持ち)
+  dataset_code                      -- 親
+  detail_type                       -- procedure / medicine / material
+  code                              -- 参照先マスタのコード
+  default_quantity                  -- 造影剤=使用量(mL) / 器材=数量 / 手技=NULL
+  route_code                        -- 造影剤の既定経路(JP Core route-codes)
+master_rad_item_datasets            -- 撮影項目 ↔ データセット(多対多)
+```
+
+設計判断:
+
+- **明細は 3 種を 1 テーブルに縦持ち**。3 種とも「参照先マスタのコード + 既定数量 +
+  表示順」で同じ形をしており、実施入力は 3 種をまとめて 1 回で引きたい。参照先が
+  別マスタになるぶんは `detail_type` つきの LEFT JOIN で名称を解決する
+  (`Master::RadDatasetDetail.with_names`)。
+- **撮影項目とは多対多**。同じ組み合わせ(造影 CT の標準セット)が複数の撮影項目で
+  使い回され、逆に 1 つの撮影項目に「造影剤のセット」と「穿刺器材のセット」を
+  併せて付けたいことがあるため。
+- **造影剤の専用マスタは作らない**。既存の医薬品マスタを、レセ電算の
+  **造影剤区分**(`master_medicines.contrast_medium_category`、0 以外が造影剤と
+  その補助剤)で絞って選ぶ。剤形では絞れない(経口造影剤は内用薬のため)。
+
+### 4.2 特定保険医療材料
 
 ［提案］**`master_medical_materials`(特定保険医療材料)を新規に作る**。現状この
 マスタが無く、カテーテル等をコードで選べない。会計連携を見据えるとコード化が前提。
@@ -230,11 +274,13 @@ Task の `completed` 化が 1 つの transaction で走る。
    設計する。造影加算のような加算は「造影剤を使ったか」から導出できるため、
    実施入力では入力させない。
 
-3. **手技料が項目ごとに要る場合**。オーダー単位 1 Procedure では
-   `Procedure.code` が 0..1 のため、複数手技の内訳を Procedure だけでは表せない。
-   会計連携でオーダー明細から展開して足りるかを実装前に確認する。足りなければ
-   撮影項目ごとの子 Procedure を `partOf` でぶら下げる(オーダー側のヘッダ・明細と
-   同じ 2 階層になる)。
+3. **複数手技の表し方(決定済み)**。`Procedure.code` は 0..1 なので、実施入力で
+   手技を 2 件以上足したときは **1 件目をハブの `code` に、2 件目以降を `partOf` で
+   子 Procedure にぶら下げる**(この節が予告したフォールバックをそのまま採った)。
+   異なる手技を 1 つの CodeableConcept の複数 coding に混ぜる案は、coding が
+   「同一概念の別表現」を並べるものである以上、意味が違うので採らない。
+   子にも `basedOn`(オーダー)を張ってあるので、`Procedure?based-on=` が上流に
+   入れば 1 回の検索で全手技を引ける。
 
 4. **線量の自動取得**。手入力を前提にしているが、実際の運用では RDSR から自動で
    入るべき値。手入力欄は残しつつ、取り込み時に上書きできる形にしておく。
@@ -242,3 +288,13 @@ Task の `completed` 化が 1 つの transaction で走る。
 5. **読影レポート**。DiagnosticReport(`basedOn` = オーダー、`imagingStudy` =
    ImagingStudy)で別途設計する。［事実］上流の DiagnosticReport は `based-on`
    検索に対応済み(検体検査で使用中)なので、リソース側の追加は不要。
+
+6. **実施の取消で Procedure が残る**。実施済の行の「取消」は Task を受付済へ
+   戻すだけで、実施記録は消していない。上流に `Procedure?based-on` が無い今は
+   「このオーダーの実施記録」を特定できないため。取消 → 再実施を通すと
+   Procedure が二重に残る。§5 の検索パラメータを上流に入れる際に、取消で
+   実施記録も片付けるか(`status = entered-in-error` にするか)を決める。
+
+7. **実施情報の表示は未実装**。§6.2 の表示は上流の `Procedure:based-on` /
+   `Observation:part-of` / `MedicationAdministration:part-of`(§5)とセットで
+   入れる。登録だけなら transaction POST で足りるため先に登録側を実装した。

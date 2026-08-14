@@ -44,7 +44,8 @@ const USAGE_TYPE_EXT_URL = "http://fhir-client.local/StructureDefinition/injecti
 const USAGE_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/injection-usage-type";
 
 // 投与経路。JP Core route-codes(HL7 Table 0162 ベース)のうち注射で使うもの。
-const ROUTE_SYSTEM = "http://jpfhir.jp/fhir/core/CodeSystem/route-codes";
+// 放射線検査の造影剤(経口・注腸を含む)も同じコード表を使う。
+export const ROUTE_SYSTEM = "http://jpfhir.jp/fhir/core/CodeSystem/route-codes";
 
 // 投与部位。JAMI標準用法規格 表13 外用部位コード(urn:oid:1.2.392.200250.2.2.20.32)。
 const SITE_SYSTEM = "urn:oid:1.2.392.200250.2.2.20.32";

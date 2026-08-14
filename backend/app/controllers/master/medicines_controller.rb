@@ -8,6 +8,9 @@ module Master
       scope = scope.where(yakka_code: params[:yakka_code]) if params[:yakka_code].present?
       # 剤形区分(1:内用薬、4:注射薬、6:外用薬、8:歯科用薬剤)。注射オーダーの医薬品検索で使う。
       scope = scope.where(dosage_form: params[:dosage_form]) if params[:dosage_form].present?
+      # 造影剤区分(0:該当しない、1:造影剤、2:造影の補助剤=発泡顆粒・腸管洗浄剤)。
+      # 放射線検査の造影剤選択で使う。剤形では絞れない(経口造影剤は内用薬のため)。
+      scope = scope.where.not(contrast_medium_category: [nil, "", "0"]) if params[:contrast_medium] == "true"
       # JOIN 後は master_medicine_types にも search_name があるためテーブル修飾で曖昧さを回避する。
       if params[:name].present?
         scope = flexible_name_match(scope, params[:name],

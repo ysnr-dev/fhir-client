@@ -8,7 +8,9 @@ import type {
   RadJj1017Elements,
 } from "../api/masterClient";
 import {
+  useRadDatasetSearch,
   useRadItem,
+  useRadItemDatasetMutations,
   useRadItemMutations,
   useRadItemSearch,
   useRadJj1017Catalog,
@@ -593,6 +595,10 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
         <SetItemsEditor setItemCode={detail.data.item_code} setItems={detail.data.set_items} />
       )}
 
+      {itemId !== null && detail.data && (
+        <DatasetLinksEditor itemCode={detail.data.item_code} links={detail.data.datasets} />
+      )}
+
       {searchingFrequent && (
         <RadFrequentCodeSearchModal
           onSelect={handleSelectFrequent}
@@ -744,6 +750,98 @@ function renderCodeOptions(codes: RadJj1017Code[], flag: keyof RadJj1017Code | u
       <optgroup label="この撮影種別で使う部位">{preferred.map(option)}</optgroup>
       <optgroup label="その他">{rest.map(option)}</optgroup>
     </>
+  );
+}
+
+// 実施入力用データセットの紐付け。実施入力モーダルは、オーダーに載っている撮影項目に
+// 紐付く全データセットの明細をマージして初期表示する。1項目に複数付けてよい
+// (造影剤のセットと穿刺器材のセットのように、性質の違うものを併せて付けられる)。
+function DatasetLinksEditor({
+  itemCode,
+  links,
+}: {
+  itemCode: string;
+  links: RadItemDetail["datasets"];
+}) {
+  const mutations = useRadItemDatasetMutations();
+  const [query, setQuery] = useState("");
+  const candidates = useRadDatasetSearch({ name: query }, 1, query.trim().length > 0);
+
+  const linkedCodes = new Set(links.map((link) => link.dataset_code));
+
+  return (
+    <section className="lab-order-item__section">
+      <div className="lab-order-item__section-head">
+        <h3>実施入力データセット</h3>
+        <span className="rad-code__summary">
+          実施入力の初期明細(手技料・造影剤・器材)。中身はデータセットマスタで編集する
+        </span>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="追加するデータセットを名称で検索"
+        />
+      </div>
+
+      {query.trim().length > 0 && (
+        <ul className="lab-order-item__candidates">
+          {candidates.data?.items
+            .filter((dataset) => !linkedCodes.has(dataset.dataset_code))
+            .map((dataset) => (
+              <li key={dataset.id}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setQuery("");
+                    await mutations.create.mutateAsync({
+                      item_code: itemCode,
+                      dataset_code: dataset.dataset_code,
+                    });
+                  }}
+                >
+                  {dataset.name}
+                  <span className="lab-order-item__code">{dataset.dataset_code}</span>
+                </button>
+              </li>
+            ))}
+        </ul>
+      )}
+
+      <ErrorBanner error={mutations.create.error ?? mutations.remove.error} />
+
+      <div className="lab-order-item__table-wrap">
+        <table className="master-search__table">
+          <thead>
+            <tr>
+              <th>データセット</th>
+              <th>コード</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {links.map((link) => (
+              <tr key={link.id}>
+                <td>{link.dataset_name ?? link.dataset_code}</td>
+                <td>{link.dataset_code}</td>
+                <td className="master-search__actions">
+                  <button type="button" onClick={() => mutations.remove.mutate(link.id)}>
+                    外す
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {links.length === 0 && (
+              <tr>
+                <td colSpan={3} className="master-search__empty">
+                  紐付けがありません。名称で検索して追加してください。
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

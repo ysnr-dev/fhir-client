@@ -92,6 +92,20 @@ import {
   type RadSetItemPayload,
   type RadItemSearchResult,
   type RadSetItem,
+  createRadDataset,
+  createRadDatasetDetail,
+  createRadItemDataset,
+  deleteRadDataset,
+  deleteRadDatasetDetail,
+  deleteRadItemDataset,
+  fetchRadDataset,
+  searchRadDatasetDetails,
+  searchRadDatasets,
+  searchRadItemDatasets,
+  updateRadDataset,
+  updateRadDatasetDetail,
+  type RadDatasetDetailPayload,
+  type RadDatasetPayload,
   createSchema,
   createSchemaCategory,
   deleteSchema,
@@ -172,14 +186,24 @@ export function useMedicineSearch(
   page: number,
   enabled: boolean,
   dosageForm?: string,
+  contrastMedium?: boolean,
 ) {
   return useQuery({
-    queryKey: ["master", "medicines", name, yakkoCode, dosageForm ?? "", page],
+    queryKey: [
+      "master",
+      "medicines",
+      name,
+      yakkoCode,
+      dosageForm ?? "",
+      contrastMedium ? "contrast" : "",
+      page,
+    ],
     queryFn: () =>
       searchMedicines({
         name: name || undefined,
         yakko_code: yakkoCode || undefined,
         dosage_form: dosageForm || undefined,
+        contrast_medium: contrastMedium || undefined,
         page,
         per: MASTER_SEARCH_PER,
       }),
@@ -887,6 +911,158 @@ export function useMedicalProceduresByCodes(codes: string[]) {
     queryFn: () => searchMedicalProcedures({ procedure_code: unique.join(","), per: unique.length }),
     enabled: unique.length > 0,
   });
+}
+
+const RAD_DATASETS_KEY = ["master", "rad_datasets"];
+// 撮影項目への紐付けは項目マスタの詳細にも載るので、変更したら両方を破棄する。
+const RAD_ITEM_DATASETS_KEY = ["master", "rad_item_datasets"];
+// 1データセットの明細も、オーダーに紐付く全データセットの明細も、この上限で足りる。
+const RAD_DATASET_DETAIL_PER = 100;
+
+/** 実施入力用データセットの検索。 */
+export function useRadDatasetSearch(
+  filters: { name?: string; active?: boolean },
+  page: number,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [...RAD_DATASETS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchRadDatasets({
+        name: filters.name || undefined,
+        active: filters.active || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** 編集モーダル用の詳細(明細を名称付きで同梱)。データセットコードでも id でも引ける。 */
+export function useRadDataset(idOrCode: string | number | null) {
+  return useQuery({
+    queryKey: [...RAD_DATASETS_KEY, "detail", idOrCode],
+    queryFn: () => fetchRadDataset(idOrCode as string | number),
+    enabled: idOrCode !== null,
+  });
+}
+
+export function useRadDatasetMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: RAD_DATASETS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: RadDatasetPayload) => createRadDataset(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: RadDatasetPayload }) =>
+        updateRadDataset(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteRadDataset(id),
+      retry: false,
+      onSuccess: () => {
+        invalidate();
+        // 削除でぶら下がる紐付けも消えるので、項目マスタ側も引き直す。
+        queryClient.invalidateQueries({ queryKey: RAD_ITEM_DATASETS_KEY });
+        queryClient.invalidateQueries({ queryKey: RAD_ITEMS_KEY });
+      },
+    }),
+  };
+}
+
+/** 明細の編集。データセット詳細に同梱されているので詳細ごと破棄する。 */
+export function useRadDatasetDetailMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: RAD_DATASETS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: RadDatasetDetailPayload) => createRadDatasetDetail(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: RadDatasetDetailPayload }) =>
+        updateRadDatasetDetail(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteRadDatasetDetail(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+/** 撮影項目とデータセットの紐付け。項目マスタの詳細画面から編集する。 */
+export function useRadItemDatasetMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: RAD_ITEM_DATASETS_KEY });
+    // 紐付けは項目マスタの詳細レスポンスにも載っている。
+    queryClient.invalidateQueries({ queryKey: RAD_ITEMS_KEY });
+  };
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: { item_code: string; dataset_code: string }) =>
+        createRadItemDataset(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteRadItemDataset(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+/**
+ * 撮影項目コード群に紐付く全データセットの明細。実施入力の初期表示に使う。
+ *
+ * 紐付け → 明細の2段。データセットは複数の撮影項目から使い回されるので、
+ * 明細を引く前にデータセットコードを一意化する(同じデータセットを2回引かない)。
+ */
+export function useRadDatasetLinesForItems(itemCodes: string[]) {
+  const codes = Array.from(new Set(itemCodes.filter(Boolean))).sort();
+
+  const links = useQuery({
+    queryKey: [...RAD_ITEM_DATASETS_KEY, "for-items", codes],
+    queryFn: () =>
+      searchRadItemDatasets({ item_code: codes.join(","), per: RAD_DATASET_DETAIL_PER }),
+    enabled: codes.length > 0,
+  });
+
+  const datasetCodes = Array.from(
+    new Set((links.data?.items ?? []).map((link) => link.dataset_code)),
+  ).sort();
+
+  const details = useQuery({
+    queryKey: [...RAD_DATASETS_KEY, "details-for", datasetCodes],
+    queryFn: () =>
+      searchRadDatasetDetails({
+        dataset_code: datasetCodes.join(","),
+        per: RAD_DATASET_DETAIL_PER,
+      }),
+    enabled: datasetCodes.length > 0,
+  });
+
+  return {
+    links: links.data?.items ?? [],
+    details: details.data?.items ?? [],
+    // 紐付けが1件も無いときは明細クエリが走らないので、その分は待たない。
+    isLoading: links.isLoading || (datasetCodes.length > 0 && details.isLoading),
+    error: links.error ?? details.error,
+  };
 }
 
 export interface RadJj1017CodeFilters {

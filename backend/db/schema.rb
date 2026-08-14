@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_13_030000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_14_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -689,6 +689,45 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_13_030000) do
     t.datetime "updated_at", null: false
     t.index ["exchange_code"], name: "index_master_modifiers_on_exchange_code"
     t.index ["management_number"], name: "index_master_modifiers_on_management_number", unique: true
+  end
+
+  create_table "master_rad_dataset_details", force: :cascade do |t|
+    t.string "dataset_code", null: false
+    t.string "detail_type", null: false
+    t.string "code", null: false
+    t.decimal "default_quantity", precision: 10, scale: 2
+    t.string "route_code"
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.boolean "default_selected", default: true, null: false
+    t.index ["dataset_code", "detail_type", "code"], name: "index_rad_dataset_details_on_dataset_type_code", unique: true
+    t.index ["dataset_code"], name: "index_master_rad_dataset_details_on_dataset_code"
+  end
+
+  create_table "master_rad_datasets", force: :cascade do |t|
+    t.string "dataset_code", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["dataset_code"], name: "index_master_rad_datasets_on_dataset_code", unique: true
+  end
+
+  create_table "master_rad_item_datasets", force: :cascade do |t|
+    t.string "item_code", null: false
+    t.string "dataset_code", null: false
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["dataset_code"], name: "index_master_rad_item_datasets_on_dataset_code"
+    t.index ["item_code", "dataset_code"], name: "index_rad_item_datasets_on_item_and_dataset", unique: true
   end
 
   create_table "master_rad_item_layout_cells", force: :cascade do |t|

@@ -815,6 +815,21 @@ export function useUpdateRadTaskStatus() {
   });
 }
 
+/**
+ * 放射線検査の実施登録。実施記録(Procedure 一式)と Task の完了を 1 つの
+ * transaction で書き込む。Bundle の組み立ては radResultHelpers を参照。
+ */
+export function useRegisterRadPerform() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rad-worklist"] });
+    },
+  });
+}
+
 // ---- 検査結果に紐付けるオーダー(検体検査・細菌検査)の候補 ----
 
 // 上流 fhir-server の _count 上限 100 を 1 ページとして順に辿る。

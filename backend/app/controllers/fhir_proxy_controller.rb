@@ -9,10 +9,13 @@ class FhirProxyController < ApplicationController
 
   # Task はオーダーの進捗(放射線検査の受付・実施など、部門ワークリストのステータス)を
   # 持つ。オーダー本体の ServiceRequest とは別リソースなので個別に許可する。
+  # Procedure と MedicationAdministration は放射線検査の実施記録(実施した手技・
+  # 使用した器材と造影剤)。実施登録は transaction Bundle で行うが、登録後の
+  # 読み出しはリソース単位で来るのでここにも要る。
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
-    PractitionerRole Composition Task
+    PractitionerRole Composition Task Procedure MedicationAdministration
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 

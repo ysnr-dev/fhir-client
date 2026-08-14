@@ -20,6 +20,7 @@ import { RadItemLayoutPage } from "./pages/RadItemLayoutPage";
 import { RadItemPage } from "./pages/RadItemPage";
 import { RadJj1017CodePage } from "./pages/RadJj1017CodePage";
 import { RadMaterialPage } from "./pages/RadMaterialPage";
+import { RadDatasetPage } from "./pages/RadDatasetPage";
 import { MicroOrderItemPage } from "./pages/MicroOrderItemPage";
 import { MicroOrganismPage } from "./pages/MicroOrganismPage";
 import { MicroAntimicrobialPage } from "./pages/MicroAntimicrobialPage";
@@ -155,6 +156,10 @@ function App() {
               <Link to="/rad-materials" className="row-menu__item">
                 放射線器材
               </Link>
+              {/* 実施入力の初期明細。撮影項目に紐付けて使う。 */}
+              <Link to="/rad-datasets" className="row-menu__item">
+                実施入力データセット
+              </Link>
             </SubMenu>
           </HoverMenu>
           <HoverMenu label="管理">
@@ -208,6 +213,7 @@ function App() {
           <Route path="/rad-item-layouts" element={<RadItemLayoutPage />} />
           <Route path="/rad-jj1017-codes" element={<RadJj1017CodePage />} />
           <Route path="/rad-materials" element={<RadMaterialPage />} />
+          <Route path="/rad-datasets" element={<RadDatasetPage />} />
           <Route path="/micro-order-items" element={<MicroOrderItemPage />} />
           <Route path="/micro-specimen-types" element={<MicroSpecimenTypePage />} />
           <Route path="/micro-organisms" element={<MicroOrganismPage />} />
