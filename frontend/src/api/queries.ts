@@ -2030,7 +2030,14 @@ export function useKartePrescriptionsInfinite(patientId: string | undefined) {
       // 検体検査のカードから「検査結果表示」を出せるかの判定に、そのオーダーを
       // 元にした検査結果も添えてもらう。
       params.append("_revinclude", "DiagnosticReport:based-on");
-      params.set("_revinclude:iterate", "ServiceRequest:based-on");
+      // 放射線検査カードの進捗(依頼済・受付済・実施済・中止)と実施記録。
+      params.append("_revinclude", "Task:focus");
+      params.append("_revinclude", "Procedure:based-on");
+      params.append("_revinclude:iterate", "ServiceRequest:based-on");
+      // 実施記録にぶら下がる造影剤・被曝線量。Procedure は上の _revinclude で
+      // 入ってくるので、その子を :iterate で 1 段先まで展開してもらう。
+      params.append("_revinclude:iterate", "MedicationAdministration:part-of");
+      params.append("_revinclude:iterate", "Observation:part-of");
       return searchResource<fhir4.Resource>("ServiceRequest", params);
     },
     initialPageParam: 0,

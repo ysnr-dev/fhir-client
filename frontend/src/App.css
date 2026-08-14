@@ -3958,8 +3958,27 @@ body.karte-wide .app__header {
 }
 
 .karte-card__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   font-size: 12px;
   color: var(--text);
+}
+
+/* 放射線検査カードの進捗(依頼済・受付済・実施済・中止)。カルテでは読むだけの印で、
+   進捗を追うのは放射線検査一覧の仕事なので、一覧(.rad-worklist__status)のような
+   枠線・塗りは付けず、メタデータの一部として文字だけで出す。カードの上端は
+   種別バッジ(放射線検査)とプロブレムのバッジが既に主張しており、そこに 3 つ目の
+   バッジを足すと何を先に読むのか分からなくなる。 */
+.karte-card__status {
+  white-space: nowrap;
+}
+
+/* 中止だけは「この依頼は行われない」という読み落とせない断りなので、
+   検査結果の異常値と同じ色で他の状態と分ける。 */
+.karte-card__status--cancelled {
+  color: var(--lab-high);
 }
 
 .karte-card__actions {
@@ -4154,6 +4173,72 @@ body.karte-wide .app__header {
 
 .karte-rp__comment {
   color: var(--text);
+}
+
+/* 放射線検査カードの実施情報。依頼した内容(オーダー)と、部門が実際に行ったことは
+   別の事実なので、地と左の帯で囲って依頼内容と読み違えないようにする。
+   帯を実施済のステータスと同じ色にして、カード上端の印と対応させる。 */
+.karte-perform {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--lab-low);
+  border-radius: 0 4px 4px 0;
+  background: var(--surface-panel);
+}
+
+.karte-perform__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.karte-perform__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.karte-perform__meta {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* 実施記録はあるのに撮影まで至っていない例外(造影剤だけ入れて中止など)。
+   見落とすと実施済と読めてしまうので、検査結果の異常値と同じ色で目に付かせる。 */
+.karte-perform__status {
+  padding: 0 6px;
+  border: 1px solid var(--lab-high);
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--lab-high);
+  white-space: nowrap;
+}
+
+.karte-perform__row {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 13px;
+}
+
+.karte-perform__label {
+  color: var(--text);
+}
+
+/* 造影剤・器材は 1 回の実施に複数並ぶので、折り返して横に流す。 */
+.karte-perform__values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-h);
+}
+
+.karte-perform__note {
+  margin: 2px 0 0;
+  font-size: 13px;
+  white-space: pre-wrap;
 }
 
 /* テンプレート回答カードの平文表示 */

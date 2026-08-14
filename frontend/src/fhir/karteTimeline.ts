@@ -7,6 +7,8 @@ import {
   radOrderItemRequests,
   radOrderResponseIds,
 } from "./radOrderHelpers";
+import { radPerformsByOrderId, type RadPerformDisplay } from "./radResultHelpers";
+import { radTaskStatus, radTasksByOrderId, type RadTaskStatus } from "./radTaskHelpers";
 import { questionnaireCanonical } from "./questionnaireResponseHelpers";
 
 // カルテ画面のタイムライン(診療日ごとの時系列表示)を組み立てる純粋ロジック。
@@ -87,6 +89,10 @@ export type KarteTimelineItem = KarteItemBase &
         kind: "rad-order";
         serviceRequest: fhir4.ServiceRequest;
         itemRequests: fhir4.ServiceRequest[];
+        /** 部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
+        status: RadTaskStatus;
+        /** 実施記録。未実施なら空。取消 → 再実施で複数残ることがある。 */
+        performs: RadPerformDisplay[];
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
@@ -229,6 +235,15 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     }
   }
 
+  // 放射線検査オーダー id → 部門の進捗(Task)と実施記録(Procedure 一式)。
+  // カードのステータス表示と「実施情報」の出力に使う。
+  const radTaskByOrderId = radTasksByOrderId(pickByType<fhir4.Task>(prescriptionResources, "Task"));
+  const radPerformByOrderId = radPerformsByOrderId(
+    pickByType<fhir4.Procedure>(prescriptionResources, "Procedure"),
+    pickByType<fhir4.MedicationAdministration>(prescriptionResources, "MedicationAdministration"),
+    pickByType<fhir4.Observation>(prescriptionResources, "Observation"),
+  );
+
   const medicationRequestsBySr = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
     for (const basedOn of mr.basedOn ?? []) {
@@ -285,11 +300,18 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
       };
     }
     if (isRadServiceRequest(serviceRequest)) {
+      const status = radTaskStatus(radTaskByOrderId.get(serviceRequest.id ?? ""));
       return {
         ...base,
         kind: "rad-order" as const,
         label: KARTE_KIND_LABELS["rad-order"],
         itemRequests: radOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+        status,
+        // 実施情報は実施済のときだけ出す。実施の取消は Task を受付済へ戻すだけで
+        // 実施記録を消していない(docs/rad-result-design.md §7-6)ため、取り消した
+        // 検査に実施情報が残って見えてしまう。カルテに出す「実施したこと」は
+        // 進捗が実施済であることと一致していなければならない。
+        performs: status === "completed" ? (radPerformByOrderId.get(serviceRequest.id ?? "") ?? []) : [],
       };
     }
     const withMedications = {

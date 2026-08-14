@@ -57,6 +57,8 @@ import {
   summarizeRadOrder,
   type RadOrderItemLine,
 } from "../fhir/radOrderHelpers";
+import type { RadPerformDisplay } from "../fhir/radResultHelpers";
+import { radTaskStatusDisplay } from "../fhir/radTaskHelpers";
 import {
   groupByRp,
   orderContextSummary,
@@ -278,7 +280,20 @@ function KarteCard({
         {item.kind === "micro-order" && item.reportStatus === "preliminary" && (
           <span className="micro-result__badge">結果:中間報告</span>
         )}
-        <span className="karte-card__meta">{cardMeta(item)}</span>
+        <span className="karte-card__meta">
+          {/* 放射線検査は部門の進捗(依頼済・受付済・実施済・中止)がカードだけで
+              分かるよう、撮影時刻・依頼元の先頭に添える。バッジにはせず、メタデータの
+              1 項目として同じ区切りで並べる(理由は .karte-card__status)。 */}
+          {item.kind === "rad-order" && (
+            <>
+              <span className={`karte-card__status karte-card__status--${item.status}`}>
+                {radTaskStatusDisplay(item.status)}
+              </span>
+              {cardMeta(item) && <span aria-hidden="true">|</span>}
+            </>
+          )}
+          {cardMeta(item)}
+        </span>
         <span className="karte-card__actions">
           {(item.kind === "prescription" ||
             item.kind === "injection" ||
@@ -654,7 +669,13 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
   }
 
   if (item.kind === "rad-order") {
-    return <RadOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />;
+    return (
+      <RadOrderCardBody
+        serviceRequest={item.serviceRequest}
+        itemRequests={item.itemRequests}
+        performs={item.performs}
+      />
+    );
   }
 
   if (!item.questionnaire) {
@@ -798,14 +819,24 @@ const RAD_GP_DETAILS: {
 function RadOrderCardBody({
   serviceRequest,
   itemRequests,
+  performs,
 }: {
   serviceRequest: fhir4.ServiceRequest;
   itemRequests: fhir4.ServiceRequest[];
+  performs: RadPerformDisplay[];
 }) {
   const entries = orderEntries(radOrderItems(serviceRequest, itemRequests));
   const comment = radOrderComment(serviceRequest);
 
-  if (entries.length === 0) return <p className="karte-card__empty">撮影項目がありません。</p>;
+  // 撮影項目が無いオーダーでも、実施情報が付いていれば出す。
+  if (entries.length === 0) {
+    return (
+      <>
+        <p className="karte-card__empty">撮影項目がありません。</p>
+        <RadPerformSection performs={performs} />
+      </>
+    );
+  }
 
   return (
     <>
@@ -852,6 +883,59 @@ function RadOrderCardBody({
         );
       })}
       {comment && <p className="karte-card__note">{comment}</p>}
+      <RadPerformSection performs={performs} />
+    </>
+  );
+}
+
+// 放射線検査一覧から入力した実施情報。依頼した内容(オーダー)とは別の事実なので、
+// 撮影項目の下に、地を敷いた別ブロックとして出す。
+// 取消 → 再実施で実施記録が複数残ることがあるため(docs/rad-result-design.md §7-6)、
+// 1 件に丸めず実施ごとに並べる。
+const RAD_PERFORM_ROWS: { label: string; of: (perform: RadPerformDisplay) => string[] }[] = [
+  { label: "手技", of: (perform) => perform.procedures },
+  { label: "造影剤", of: (perform) => perform.contrasts },
+  { label: "器材", of: (perform) => perform.materials },
+  { label: "被曝線量", of: (perform) => perform.doses },
+];
+
+function RadPerformSection({ performs }: { performs: RadPerformDisplay[] }) {
+  if (performs.length === 0) return null;
+
+  return (
+    <>
+      {performs.map((perform) => (
+        <section className="karte-perform" key={perform.id}>
+          <div className="karte-perform__head">
+            <span className="karte-perform__title">実施情報</span>
+            {perform.performedAt && (
+              <span className="karte-perform__meta">{perform.performedAt}</span>
+            )}
+            {perform.performerName && (
+              <span className="karte-perform__meta">{perform.performerName}</span>
+            )}
+            {/* 実施記録があるのに撮影まで至っていない例外(造影剤だけ入れて中止など)。 */}
+            {perform.statusNote && (
+              <span className="karte-perform__status">{perform.statusNote}</span>
+            )}
+          </div>
+          {RAD_PERFORM_ROWS.map(({ label, of }) => {
+            const values = of(perform);
+            if (values.length === 0) return null;
+            return (
+              <div className="karte-perform__row" key={label}>
+                <span className="karte-perform__label">{`${label}:`}</span>
+                <span className="karte-perform__values">
+                  {values.map((value, index) => (
+                    <span key={index}>{value}</span>
+                  ))}
+                </span>
+              </div>
+            );
+          })}
+          {perform.comment && <p className="karte-perform__note">{perform.comment}</p>}
+        </section>
+      ))}
     </>
   );
 }

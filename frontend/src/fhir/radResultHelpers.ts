@@ -1,4 +1,4 @@
-import { toFhirDateTime } from "./clinicalNoteHelpers";
+import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import { ROUTE_SYSTEM, type CodeOption } from "./injectionHelpers";
 import { MEDICINE_CODE_SYSTEM, ORDER_TYPE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
 import { RAD_ORDER_TYPE } from "./radOrderHelpers";
@@ -332,4 +332,165 @@ export function buildRadPerformBundle(
   });
 
   return { resourceType: "Bundle", type: "transaction", entry: entries };
+}
+
+// ---- 実施情報の表示 ----
+//
+// 登録の逆をたどって、Procedure(ハブ)+ 子の手技 + 造影剤 + 被曝線量を
+// 1 回の実施として読み解く。カルテのオーダーカードが使う。
+
+/** 実施記録 1 件(1 回の実施)ぶんの表示内容。 */
+export interface RadPerformDisplay {
+  /** ハブの Procedure id。表示のキー。 */
+  id: string;
+  /** 実施日時 "YYYY-MM-DD HH:mm"。持たない実施記録では空。 */
+  performedAt: string;
+  performerName: string;
+  /** 実施した手技。ハブの code と、partOf でぶら下がる 2 件目以降。 */
+  procedures: string[];
+  /** 造影剤。「イオパミロン注300 100mL 静脈内」の形。 */
+  contrasts: string[];
+  /** 使用した器材。「造影剤注入用チューブ 2本」の形。 */
+  materials: string[];
+  /** 被曝線量。「CTDIvol 12.4mGy」の形。 */
+  doses: string[];
+  comment: string;
+  /**
+   * 撮影まで至らなかった実施の注記(status が completed 以外)。
+   * 通常は空で、造影剤だけ入れて中止したときなどに入る。
+   */
+  statusNote: string;
+}
+
+// completed 以外の実施記録に添える注記。実施記録があるのに撮っていない、という
+// 例外的な状態を黙って隠さないために出す。
+const PROCEDURE_STATUS_NOTES: Record<string, string> = {
+  "not-done": "実施せず",
+  stopped: "途中で中止",
+  "in-progress": "実施中",
+  preparation: "準備中",
+  "on-hold": "保留中",
+  unknown: "状態不明",
+};
+
+/** 放射線検査の実施記録か。処方・検体検査の Procedure と振り分ける。 */
+export function isRadProcedure(procedure: fhir4.Procedure): boolean {
+  return Boolean(
+    procedure.category?.coding?.some(
+      (c) => c.system === ORDER_TYPE_SYSTEM && c.code === RAD_ORDER_TYPE.code,
+    ),
+  );
+}
+
+function referenceId(reference: string | undefined, resourceType: string): string {
+  return reference?.match(new RegExp(`^${resourceType}/(.+)$`))?.[1] ?? "";
+}
+
+function conceptLabel(concept: fhir4.CodeableConcept | undefined): string {
+  if (!concept) return "";
+  const coding = concept.coding?.find((c) => c.display) ?? concept.coding?.[0];
+  return concept.text || coding?.display || coding?.code || "";
+}
+
+function quantityLabel(quantity: fhir4.Quantity | undefined): string {
+  if (!quantity || quantity.value == null) return "";
+  return `${quantity.value}${quantity.unit ?? ""}`;
+}
+
+// usedCode は数量を持てないので、登録時に付けた拡張から数量を読む。
+function materialLabel(usedCode: fhir4.CodeableConcept): string {
+  const extension = usedCode.extension?.find((e) => e.url === MATERIAL_QUANTITY_EXT_URL);
+  return [conceptLabel(usedCode), quantityLabel(extension?.valueQuantity)].filter(Boolean).join(" ");
+}
+
+function contrastLabel(administration: fhir4.MedicationAdministration): string {
+  const dosage = administration.dosage;
+  const route = dosage?.route?.coding?.find((c) => c.system === ROUTE_SYSTEM)?.code;
+  return [
+    conceptLabel(administration.medicationCodeableConcept),
+    quantityLabel(dosage?.dose),
+    route ? radRouteDisplay(route) : conceptLabel(dosage?.route),
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function doseLabel(observation: fhir4.Observation): string {
+  return [conceptLabel(observation.code), quantityLabel(observation.valueQuantity)]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** 実施日時。カードの診療日と実施日は別日になりうるので日付ごと出す。 */
+function performedLabel(procedure: fhir4.Procedure): string {
+  const performed = procedure.performedDateTime ?? procedure.performedPeriod?.start;
+  return toDateTimeInput(performed).replace("T", " ");
+}
+
+/**
+ * 実施記録をオーダー id ごとの表示内容にまとめる。
+ *
+ * ハブ(partOf を持たない Procedure)1 件が 1 回の実施。取消 → 再実施でハブが複数
+ * 残ることがある(docs/rad-result-design.md §7-6)ため、オーダー 1 件に対して
+ * 配列を返し、古い実施も落とさずに実施時刻の順で並べる。
+ */
+export function radPerformsByOrderId(
+  procedures: fhir4.Procedure[],
+  administrations: fhir4.MedicationAdministration[],
+  observations: fhir4.Observation[],
+): Map<string, RadPerformDisplay[]> {
+  // 誤登録として取り消されたものは実施していないのと同じなので出さない。
+  const radProcedures = procedures.filter(
+    (procedure) => isRadProcedure(procedure) && procedure.status !== "entered-in-error",
+  );
+
+  const childrenByHub = new Map<string, fhir4.Procedure[]>();
+  const hubs: fhir4.Procedure[] = [];
+  for (const procedure of radProcedures) {
+    const hubId = referenceId(procedure.partOf?.[0]?.reference, "Procedure");
+    if (!hubId) {
+      hubs.push(procedure);
+      continue;
+    }
+    const list = childrenByHub.get(hubId);
+    if (list) list.push(procedure);
+    else childrenByHub.set(hubId, [procedure]);
+  }
+
+  const byOrderId = new Map<string, RadPerformDisplay[]>();
+  for (const hub of hubs) {
+    const hubId = hub.id ?? "";
+    const children = childrenByHub.get(hubId) ?? [];
+    // 造影剤・線量はハブにぶら下げるが、子の手技に付いていても拾えるようにする。
+    const partIds = new Set([hubId, ...children.map((child) => child.id ?? "")].filter(Boolean));
+    const partOf = (resource: { partOf?: fhir4.Reference[] }) =>
+      (resource.partOf ?? []).some((reference) =>
+        partIds.has(referenceId(reference.reference, "Procedure")),
+      );
+
+    const display: RadPerformDisplay = {
+      id: hubId,
+      performedAt: performedLabel(hub),
+      performerName: hub.performer?.[0]?.actor?.display ?? "",
+      procedures: [hub, ...children].map((p) => conceptLabel(p.code)).filter(Boolean),
+      contrasts: administrations.filter(partOf).map(contrastLabel).filter(Boolean),
+      materials: (hub.usedCode ?? []).map(materialLabel).filter(Boolean),
+      doses: observations.filter(partOf).map(doseLabel).filter(Boolean),
+      comment: hub.note?.map((note) => note.text).filter(Boolean).join("\n") ?? "",
+      statusNote: PROCEDURE_STATUS_NOTES[hub.status] ?? "",
+    };
+
+    for (const basedOn of hub.basedOn ?? []) {
+      const orderId = referenceId(basedOn.reference, "ServiceRequest");
+      if (!orderId) continue;
+      const list = byOrderId.get(orderId);
+      if (list) list.push(display);
+      else byOrderId.set(orderId, [display]);
+    }
+  }
+
+  for (const list of byOrderId.values()) {
+    list.sort((a, b) => a.performedAt.localeCompare(b.performedAt));
+  }
+  return byOrderId;
 }
