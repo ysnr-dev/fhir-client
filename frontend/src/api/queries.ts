@@ -42,8 +42,10 @@ import {
   radOrderResponseIds,
   radOrderTime,
 } from "../fhir/radOrderHelpers";
+import { buildRadPerformDeleteEntries } from "../fhir/radResultHelpers";
 import {
   buildRadTaskUpdate,
+  radTaskStatus,
   radTasksByOrderId,
   type RadTaskStatus,
 } from "../fhir/radTaskHelpers";
@@ -777,16 +779,51 @@ export function useRadWorklist(date: string) {
 const RAD_WORKLIST_KEY = (date: string) => ["ServiceRequest", "rad-worklist", date];
 
 /**
+ * 実施の取消で片付ける実施記録。オーダーにぶら下がる Procedure と、その子の
+ * 造影剤(MedicationAdministration)・被曝線量(Observation)を 1 リクエストで集める。
+ *
+ * 一覧が持っている行の情報からではなく、その場で引き直す。取消は稀な操作で、
+ * 一覧を開いた後に別の端末で登録された実施記録も残さず消したいため。
+ */
+async function fetchRadPerformResources(orderId: string) {
+  const params = new URLSearchParams();
+  params.set("based-on", `ServiceRequest/${orderId}`);
+  params.set("_count", "100");
+  params.append("_revinclude", "MedicationAdministration:part-of");
+  params.append("_revinclude", "Observation:part-of");
+
+  const { data: bundle } = await searchResource<fhir4.Resource>("Procedure", params);
+
+  const procedures: fhir4.Procedure[] = [];
+  const administrations: fhir4.MedicationAdministration[] = [];
+  const observations: fhir4.Observation[] = [];
+  for (const entry of bundle.entry ?? []) {
+    const resource = entry.resource;
+    if (resource?.resourceType === "Procedure") procedures.push(resource as fhir4.Procedure);
+    else if (resource?.resourceType === "MedicationAdministration") {
+      administrations.push(resource as fhir4.MedicationAdministration);
+    } else if (resource?.resourceType === "Observation") {
+      observations.push(resource as fhir4.Observation);
+    }
+  }
+  return { procedures, administrations, observations };
+}
+
+/**
  * 受付・実施などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
  *
  * 単体の PUT ではなく transaction Bundle にするのは、更新に If-Match(ETag)が要る
  * ためで、一覧は検索結果から Task を持っているだけで ETag を持たないため。
+ *
+ * 実施済から戻す(取消)ときは、実施記録も同じ transaction で消す。進捗だけ戻して
+ * 実施記録が残ると、取り消したはずの検査が実施済のまま会計・線量集計・カルテに
+ * 現れる(docs/rad-result-design.md §7-6)。
  */
 export function useUpdateRadTaskStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       order,
       task,
       status,
@@ -796,21 +833,33 @@ export function useUpdateRadTaskStatus() {
       status: RadTaskStatus;
     }) => {
       const resource = buildRadTaskUpdate(task, order, status);
+      const taskEntry: fhir4.BundleEntry = {
+        resource,
+        request: resource.id
+          ? { method: "PUT", url: `Task/${resource.id}` }
+          : { method: "POST", url: "Task" },
+      };
+
+      const cancelsPerform = radTaskStatus(task) === "completed" && status !== "completed";
+      const performed = cancelsPerform
+        ? await fetchRadPerformResources(order.id ?? "")
+        : { procedures: [], administrations: [], observations: [] };
+      const performEntries = buildRadPerformDeleteEntries(
+        performed.procedures,
+        performed.administrations,
+        performed.observations,
+      );
+
       return postBundle({
         resourceType: "Bundle",
         type: "transaction",
-        entry: [
-          {
-            resource,
-            request: resource.id
-              ? { method: "PUT", url: `Task/${resource.id}` }
-              : { method: "POST", url: "Task" },
-          },
-        ],
+        entry: [...performEntries, taskEntry],
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rad-worklist"] });
+      // カルテのオーダーカードも進捗と実施情報を出しているので読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },
   });
 }
@@ -826,6 +875,7 @@ export function useRegisterRadPerform() {
     mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rad-worklist"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },
   });
 }

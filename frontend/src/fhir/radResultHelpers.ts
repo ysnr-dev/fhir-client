@@ -334,6 +334,41 @@ export function buildRadPerformBundle(
   return { resourceType: "Bundle", type: "transaction", entry: entries };
 }
 
+/**
+ * 実施の取消で実施記録を片付ける DELETE エントリ。Task を受付済へ戻す更新と
+ * 同じ transaction に積む。
+ *
+ * 消す(status = entered-in-error で残さない)のは、撮らなかったものに実施記録を
+ * 残すと会計連携・線量集計の双方で除外条件が増えるため。中止で Procedure を作らない
+ * 判断(docs/rad-result-design.md §2)と同じ理由で、生きている実施記録だけが
+ * 残るようにする。取り消した内容は上流のバージョン履歴(_history)から追える。
+ *
+ * 子(造影剤・被曝線量・2 件目以降の手技)を先に消す。上流は 1 つの Bundle 内では
+ * 配列順に処理するので、参照先が先に消えた状態を作らない。
+ */
+export function buildRadPerformDeleteEntries(
+  procedures: fhir4.Procedure[],
+  administrations: fhir4.MedicationAdministration[],
+  observations: fhir4.Observation[],
+): fhir4.BundleEntry[] {
+  // 他部門の Procedure を巻き込まないよう、放射線検査の実施記録だけを対象にする。
+  const radProcedures = procedures.filter(isRadProcedure);
+  const children = radProcedures.filter((procedure) => procedure.partOf?.length);
+  const hubs = radProcedures.filter((procedure) => !procedure.partOf?.length);
+
+  const deleteEntry = (resourceType: string, id: string | undefined): fhir4.BundleEntry[] =>
+    id ? [{ request: { method: "DELETE" as const, url: `${resourceType}/${id}` } }] : [];
+
+  return [
+    ...observations.flatMap((observation) => deleteEntry("Observation", observation.id)),
+    ...administrations.flatMap((administration) =>
+      deleteEntry("MedicationAdministration", administration.id),
+    ),
+    ...children.flatMap((procedure) => deleteEntry("Procedure", procedure.id)),
+    ...hubs.flatMap((procedure) => deleteEntry("Procedure", procedure.id)),
+  ];
+}
+
 // ---- 実施情報の表示 ----
 //
 // 登録の逆をたどって、Procedure(ハブ)+ 子の手技 + 造影剤 + 被曝線量を
