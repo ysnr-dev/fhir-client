@@ -1066,6 +1066,11 @@ export interface RadItem {
   // canonical。撮影項目ごとの既定で、オーダー時に別のテンプレートも選べる。
   purpose_template_canonical: string | null;
   remarks_template_canonical: string | null;
+  /**
+   * 実施入力の初期明細になるデータセット(master_rad_datasets)。1項目に1つで、
+   * 同じデータセットを複数の撮影項目から参照してよい。
+   */
+  dataset_code: string | null;
 }
 
 // 要素コード → 名称。一覧・詳細APIが載っているコードの分だけ添えて返す。
@@ -1090,8 +1095,8 @@ export interface RadSetItem {
 export interface RadItemDetail extends RadItem {
   elements: RadElementNames;
   set_items: RadSetItem[];
-  /** 紐付けている実施入力用データセット。実施入力の初期明細になる。 */
-  datasets: RadItemDatasetLink[];
+  /** dataset_code から解決したデータセット名。未指定・削除済みなら null。 */
+  dataset_name: string | null;
 }
 
 export interface RadItemPayload {
@@ -1120,6 +1125,7 @@ export interface RadItemPayload {
   note?: string | null;
   purpose_template_canonical?: string | null;
   remarks_template_canonical?: string | null;
+  dataset_code?: string | null;
 }
 
 export interface RadSetItemPayload {
@@ -1625,15 +1631,6 @@ export interface RadDatasetWithDetails extends RadDataset {
   details: RadDatasetDetail[];
 }
 
-export interface RadItemDatasetLink {
-  id: number;
-  item_code: string;
-  dataset_code: string;
-  display_order: number | null;
-  /** データセット名。一覧・詳細 API が添えて返す。 */
-  dataset_name: string | null;
-}
-
 export interface RadDatasetPayload {
   dataset_code?: string;
   name?: string;
@@ -1656,7 +1653,6 @@ export interface RadDatasetDetailPayload {
 
 const RAD_DATASETS_PATH = "/master/rad_datasets";
 const RAD_DATASET_DETAILS_PATH = "/master/rad_dataset_details";
-const RAD_ITEM_DATASETS_PATH = "/master/rad_item_datasets";
 
 export async function searchRadDatasets(params: {
   name?: string;
@@ -1759,43 +1755,6 @@ export async function updateRadDatasetDetail(
 
 export async function deleteRadDatasetDetail(id: number): Promise<void> {
   const res = await masterFetch(`${RAD_DATASET_DETAILS_PATH}/${id}`, { method: "DELETE" });
-  if (!res.ok) throw await buildError(res);
-}
-
-export async function searchRadItemDatasets(params: {
-  /** 撮影項目コード。カンマ区切りで複数指定できる(実施入力が一括で引く)。 */
-  item_code?: string;
-  dataset_code?: string;
-  page?: number;
-  per?: number;
-}): Promise<MasterSearchResult<RadItemDatasetLink>> {
-  const search = new URLSearchParams();
-  if (params.item_code) search.set("item_code", params.item_code);
-  if (params.dataset_code) search.set("dataset_code", params.dataset_code);
-  if (params.page) search.set("page", String(params.page));
-  if (params.per) search.set("per", String(params.per));
-
-  const res = await masterFetch(`${RAD_ITEM_DATASETS_PATH}?${search.toString()}`);
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as MasterSearchResult<RadItemDatasetLink>;
-}
-
-export async function createRadItemDataset(payload: {
-  item_code: string;
-  dataset_code: string;
-  display_order?: number | null;
-}): Promise<RadItemDatasetLink> {
-  const res = await masterFetch(RAD_ITEM_DATASETS_PATH, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as RadItemDatasetLink;
-}
-
-export async function deleteRadItemDataset(id: number): Promise<void> {
-  const res = await masterFetch(`${RAD_ITEM_DATASETS_PATH}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
 

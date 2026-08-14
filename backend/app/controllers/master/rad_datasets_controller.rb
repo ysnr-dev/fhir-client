@@ -43,12 +43,12 @@ module Master
       end
     end
 
-    # 外部キーを張っていないので、明細と撮影項目への紐付けも併せて片付ける。
+    # 外部キーを張っていないので、明細と撮影項目からの参照も併せて片付ける。
     def destroy
       code = @record.dataset_code
       Master::RadDataset.transaction do
         Master::RadDatasetDetail.where(dataset_code: code).delete_all
-        Master::RadItemDataset.where(dataset_code: code).delete_all
+        Master::RadItem.where(dataset_code: code).update_all(dataset_code: nil)
         @record.destroy!
       end
       head :no_content

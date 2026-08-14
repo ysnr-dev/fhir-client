@@ -94,14 +94,11 @@ import {
   type RadSetItem,
   createRadDataset,
   createRadDatasetDetail,
-  createRadItemDataset,
   deleteRadDataset,
   deleteRadDatasetDetail,
-  deleteRadItemDataset,
   fetchRadDataset,
   searchRadDatasetDetails,
   searchRadDatasets,
-  searchRadItemDatasets,
   updateRadDataset,
   updateRadDatasetDetail,
   type RadDatasetDetailPayload,
@@ -914,8 +911,6 @@ export function useMedicalProceduresByCodes(codes: string[]) {
 }
 
 const RAD_DATASETS_KEY = ["master", "rad_datasets"];
-// 撮影項目への紐付けは項目マスタの詳細にも載るので、変更したら両方を破棄する。
-const RAD_ITEM_DATASETS_KEY = ["master", "rad_item_datasets"];
 // 1データセットの明細も、オーダーに紐付く全データセットの明細も、この上限で足りる。
 const RAD_DATASET_DETAIL_PER = 100;
 
@@ -936,6 +931,14 @@ export function useRadDatasetSearch(
       }),
     placeholderData: keepPreviousData,
     enabled,
+  });
+}
+
+/** 撮影項目に付けるデータセットの選択肢。件数が少ないので全件まとめて引く。 */
+export function useRadDatasetOptions() {
+  return useQuery({
+    queryKey: [...RAD_DATASETS_KEY, "options"],
+    queryFn: () => searchRadDatasets({ per: 200 }),
   });
 }
 
@@ -969,8 +972,7 @@ export function useRadDatasetMutations() {
       retry: false,
       onSuccess: () => {
         invalidate();
-        // 削除でぶら下がる紐付けも消えるので、項目マスタ側も引き直す。
-        queryClient.invalidateQueries({ queryKey: RAD_ITEM_DATASETS_KEY });
+        // 削除で参照していた項目の dataset_code も外れるので、項目マスタ側も引き直す。
         queryClient.invalidateQueries({ queryKey: RAD_ITEMS_KEY });
       },
     }),
@@ -1002,49 +1004,24 @@ export function useRadDatasetDetailMutations() {
   };
 }
 
-/** 撮影項目とデータセットの紐付け。項目マスタの詳細画面から編集する。 */
-export function useRadItemDatasetMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: RAD_ITEM_DATASETS_KEY });
-    // 紐付けは項目マスタの詳細レスポンスにも載っている。
-    queryClient.invalidateQueries({ queryKey: RAD_ITEMS_KEY });
-  };
-
-  return {
-    create: useMutation({
-      mutationFn: (payload: { item_code: string; dataset_code: string }) =>
-        createRadItemDataset(payload),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-    remove: useMutation({
-      mutationFn: (id: number) => deleteRadItemDataset(id),
-      retry: false,
-      onSuccess: invalidate,
-    }),
-  };
-}
-
 /**
- * 撮影項目コード群に紐付く全データセットの明細。実施入力の初期表示に使う。
+ * 撮影項目コード群が参照するデータセットの明細。実施入力の初期表示に使う。
  *
- * 紐付け → 明細の2段。データセットは複数の撮影項目から使い回されるので、
+ * 項目 → 明細の2段。1つのデータセットは複数の撮影項目から参照されるので、
  * 明細を引く前にデータセットコードを一意化する(同じデータセットを2回引かない)。
  */
 export function useRadDatasetLinesForItems(itemCodes: string[]) {
   const codes = Array.from(new Set(itemCodes.filter(Boolean))).sort();
 
-  const links = useQuery({
-    queryKey: [...RAD_ITEM_DATASETS_KEY, "for-items", codes],
-    queryFn: () =>
-      searchRadItemDatasets({ item_code: codes.join(","), per: RAD_DATASET_DETAIL_PER }),
+  const items = useQuery({
+    queryKey: [...RAD_ITEMS_KEY, "dataset-codes", codes],
+    queryFn: () => searchRadItems({ item_code: codes.join(","), per: RAD_DATASET_DETAIL_PER }),
     enabled: codes.length > 0,
   });
 
   const datasetCodes = Array.from(
-    new Set((links.data?.items ?? []).map((link) => link.dataset_code)),
-  ).sort();
+    new Set((items.data?.items ?? []).map((item) => item.dataset_code).filter(Boolean)),
+  ).sort() as string[];
 
   const details = useQuery({
     queryKey: [...RAD_DATASETS_KEY, "details-for", datasetCodes],
@@ -1057,11 +1034,10 @@ export function useRadDatasetLinesForItems(itemCodes: string[]) {
   });
 
   return {
-    links: links.data?.items ?? [],
     details: details.data?.items ?? [],
-    // 紐付けが1件も無いときは明細クエリが走らないので、その分は待たない。
-    isLoading: links.isLoading || (datasetCodes.length > 0 && details.isLoading),
-    error: links.error ?? details.error,
+    // データセットを持つ項目が1つも無いときは明細クエリが走らないので、その分は待たない。
+    isLoading: items.isLoading || (datasetCodes.length > 0 && details.isLoading),
+    error: items.error ?? details.error,
   };
 }
 

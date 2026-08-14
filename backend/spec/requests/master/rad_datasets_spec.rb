@@ -109,10 +109,10 @@ RSpec.describe "Master::RadDatasets", type: :request do
   end
 
   describe "DELETE /master/rad_datasets/:id" do
-    it "明細と撮影項目への紐付けも併せて片付ける" do
+    it "明細と撮影項目からの参照も併せて片付ける" do
       Master::RadDataset.create!(dataset_code: "000001", name: "造影CT標準セット")
       Master::RadDatasetDetail.create!(dataset_code: "000001", detail_type: "procedure", code: "170000410")
-      Master::RadItemDataset.create!(item_code: "000100", dataset_code: "000001")
+      item = Master::RadItem.create!(item_code: "000100", name: "頭部CT造影", dataset_code: "000001")
       # 別データセットのものは残る。
       Master::RadDatasetDetail.create!(dataset_code: "000002", detail_type: "procedure", code: "170000410")
 
@@ -120,7 +120,7 @@ RSpec.describe "Master::RadDatasets", type: :request do
 
       expect(response).to have_http_status(:no_content)
       expect(Master::RadDatasetDetail.where(dataset_code: "000001").count).to eq(0)
-      expect(Master::RadItemDataset.count).to eq(0)
+      expect(item.reload.dataset_code).to be_nil
       expect(Master::RadDatasetDetail.where(dataset_code: "000002").count).to eq(1)
     end
   end

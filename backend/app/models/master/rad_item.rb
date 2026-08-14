@@ -2,6 +2,8 @@ module Master
   # 放射線オーダー項目。医師がオーダー画面で選ぶ単位の検査項目で、
   # セットの構成は master_rad_set_items が持つ。
   # JJ1017 の各要素はコードで master_rad_jj1017_codes に緩く紐づく。
+  # dataset_code は実施入力の初期明細(master_rad_datasets)。1項目1つで、
+  # 同じデータセットを複数の項目から参照してよい。
   class RadItem < ApplicationRecord
     self.table_name = "master_rad_items"
 

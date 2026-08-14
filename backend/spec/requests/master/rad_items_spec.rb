@@ -85,14 +85,14 @@ RSpec.describe "Master::RadItems", type: :request do
       expect(body["set_items"].map { |m| m["member_name"] }).to eq(["頭部CT単純"])
     end
 
-    it "紐付けている実施入力用データセットを名称付きで添えて返す" do
-      create_item("R0004", name: "頭部CT単純")
+    it "参照している実施入力用データセットの名称を添えて返す" do
+      create_item("R0004", name: "頭部CT単純", dataset_code: "000001")
       Master::RadDataset.create!(dataset_code: "000001", name: "造影CT標準セット")
-      Master::RadItemDataset.create!(item_code: "R0004", dataset_code: "000001", display_order: 1)
 
       get "/master/rad_items/R0004"
 
-      expect(body["datasets"].map { |d| d["dataset_name"] }).to eq(["造影CT標準セット"])
+      expect(body["dataset_code"]).to eq("000001")
+      expect(body["dataset_name"]).to eq("造影CT標準セット")
     end
   end
 
@@ -202,14 +202,13 @@ RSpec.describe "Master::RadItems", type: :request do
       expect(Master::RadSetItem.count).to eq(0)
     end
 
-    it "データセットへの紐付けも外す(データセット本体は他の項目でも使うので残す)" do
-      create_item("R0004")
+    it "参照していたデータセット本体は他の項目でも使うので残す" do
+      create_item("R0004", dataset_code: "000001")
       Master::RadDataset.create!(dataset_code: "000001", name: "造影CT標準セット")
-      Master::RadItemDataset.create!(item_code: "R0004", dataset_code: "000001")
 
       delete "/master/rad_items/R0004"
 
-      expect(Master::RadItemDataset.count).to eq(0)
+      expect(Master::RadItem.count).to eq(0)
       expect(Master::RadDataset.count).to eq(1)
     end
   end

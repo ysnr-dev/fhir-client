@@ -30,13 +30,13 @@ module Master
       render json: result.merge(elements: element_names_for(result[:items]))
     end
 
-    # 要素の名称・セット構成・実施入力用データセットの紐付けをまとめて返す。
+    # 要素の名称・セット構成・実施入力用データセットの名称をまとめて返す。
     # 詳細画面が1リクエストで開けるようにする。
     def show
       render json: @record.as_json.merge(
         elements: element_names_for([@record]),
         set_items: set_items_for(@record.item_code).as_json,
-        datasets: datasets_for(@record.item_code).as_json
+        dataset_name: dataset_name_for(@record.dataset_code)
       )
     end
 
@@ -58,14 +58,13 @@ module Master
       end
     end
 
-    # 外部キーを張っていないので、ぶら下がるセット構成とデータセットの紐付けも
-    # 併せて片付ける(データセット本体は他の項目からも使うので消さない)。
+    # 外部キーを張っていないので、ぶら下がるセット構成も併せて片付ける
+    # (データセットは項目の列で参照しているだけなので、本体は消さない)。
     def destroy
       code = @record.item_code
       Master::RadItem.transaction do
         Master::RadSetItem.where(set_item_code: code).delete_all
         Master::RadSetItem.where(member_item_code: code).delete_all
-        Master::RadItemDataset.where(item_code: code).delete_all
         @record.destroy!
       end
       head :no_content
@@ -164,18 +163,11 @@ module Master
         .order(:id)
     end
 
-    # 紐付いている実施入力用データセット。名称を添えて詳細画面に出す。
-    def datasets_for(code)
-      Master::RadItemDataset
-        .where(item_code: code)
-        .joins("LEFT JOIN master_rad_datasets " \
-               "ON master_rad_datasets.dataset_code = master_rad_item_datasets.dataset_code")
-        .select(
-          "master_rad_item_datasets.*",
-          "master_rad_datasets.name AS dataset_name",
-        )
-        .order(Arel.sql("master_rad_item_datasets.display_order NULLS LAST"))
-        .order(:id)
+    # 参照している実施入力用データセットの名称。詳細画面が選択中の名前を出すのに使う。
+    def dataset_name_for(code)
+      return nil if code.blank?
+
+      Master::RadDataset.where(dataset_code: code).pick(:name)
     end
 
     # 数字だけの項目コードの最大値の次。手入力の英字混じりコードは無視する。

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_14_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_15_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -720,16 +720,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_14_000000) do
     t.index ["dataset_code"], name: "index_master_rad_datasets_on_dataset_code", unique: true
   end
 
-  create_table "master_rad_item_datasets", force: :cascade do |t|
-    t.string "item_code", null: false
-    t.string "dataset_code", null: false
-    t.integer "display_order"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["dataset_code"], name: "index_master_rad_item_datasets_on_dataset_code"
-    t.index ["item_code", "dataset_code"], name: "index_rad_item_datasets_on_item_and_dataset", unique: true
-  end
-
   create_table "master_rad_item_layout_cells", force: :cascade do |t|
     t.integer "layout_id", null: false
     t.integer "grid_row", null: false
@@ -787,6 +777,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_14_000000) do
     t.string "purpose_template_canonical"
     t.string "remarks_template_canonical"
     t.boolean "groupable", default: true, null: false
+    t.string "dataset_code"
+    t.index ["dataset_code"], name: "index_master_rad_items_on_dataset_code"
     t.index ["groupable"], name: "index_master_rad_items_on_groupable"
     t.index ["item_code"], name: "index_master_rad_items_on_item_code", unique: true
     t.index ["jj1017_code"], name: "index_master_rad_items_on_jj1017_code"

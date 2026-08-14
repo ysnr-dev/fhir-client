@@ -115,10 +115,10 @@ Rails.application.routes.draw do
     # 特定器材コードを紐付ける(配布マスタは medical_materials 側)。
     resources :rad_materials, only: %i[index show create update destroy]
     # 実施入力用データセット。手技料・造影剤・器材の組み合わせに名前を付けて
-    # 撮影項目に紐付けておくと、実施入力モーダルの初期明細として展開される。
+    # 撮影項目に紐付けておく(master_rad_items.dataset_code)と、実施入力モーダルの
+    # 初期明細として展開される。
     resources :rad_datasets, only: %i[index show create update destroy]
     resources :rad_dataset_details, only: %i[index create update destroy]
-    resources :rad_item_datasets, only: %i[index create destroy]
     # 特定器材(特定保険医療材料)と医科診療行為(手技料)。どちらもレセプト電算の
     # 配布マスタを全置換で取り込むだけで、手動メンテはしない。
     resources :medical_materials, only: %i[index] do

@@ -8,9 +8,8 @@ import type {
   RadJj1017Elements,
 } from "../api/masterClient";
 import {
-  useRadDatasetSearch,
+  useRadDatasetOptions,
   useRadItem,
-  useRadItemDatasetMutations,
   useRadItemMutations,
   useRadItemSearch,
   useRadJj1017Catalog,
@@ -64,6 +63,8 @@ interface Draft {
   // 検査目的・特別指示の既定テンプレート(Questionnaire の canonical)。
   purpose_template_canonical: string;
   remarks_template_canonical: string;
+  // 実施入力の初期明細になるデータセット。1項目1つ。
+  dataset_code: string;
 }
 
 const emptyDraft: Draft = {
@@ -81,6 +82,7 @@ const emptyDraft: Draft = {
   note: "",
   purpose_template_canonical: "",
   remarks_template_canonical: "",
+  dataset_code: "",
 };
 
 // 要素コードは要素名をキーに持つ(列名は保存時に <要素名>_code へ写す)。
@@ -102,6 +104,7 @@ function toPayload(draft: Draft, elementCodes: ElementCodes, elementNames: strin
     note: draft.note || null,
     purpose_template_canonical: draft.purpose_template_canonical || null,
     remarks_template_canonical: draft.remarks_template_canonical || null,
+    dataset_code: draft.dataset_code || null,
   };
   for (const element of elementNames) {
     // セットは撮影そのものではないので要素を持たせない。
@@ -380,6 +383,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       note: d.note ?? "",
       purpose_template_canonical: d.purpose_template_canonical ?? "",
       remarks_template_canonical: d.remarks_template_canonical ?? "",
+      dataset_code: d.dataset_code ?? "",
     });
     setElementCodes(readElementCodes(d));
   }, [detail.data]);
@@ -543,6 +547,11 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
               onChange={(e) => setDraft({ ...draft, note: e.target.value })}
             />
           </label>
+          <DatasetSelect
+            value={draft.dataset_code}
+            savedName={detail.data?.dataset_name ?? null}
+            onChange={(dataset_code) => setDraft((prev) => ({ ...prev, dataset_code }))}
+          />
         </div>
 
         <TemplateDefaults
@@ -595,10 +604,6 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
         <SetItemsEditor setItemCode={detail.data.item_code} setItems={detail.data.set_items} />
       )}
 
-      {itemId !== null && detail.data && (
-        <DatasetLinksEditor itemCode={detail.data.item_code} links={detail.data.datasets} />
-      )}
-
       {searchingFrequent && (
         <RadFrequentCodeSearchModal
           onSelect={handleSelectFrequent}
@@ -616,6 +621,7 @@ function readElementCodes(item: RadItemDetail): ElementCodes {
   for (const [key, value] of Object.entries(source)) {
     if (!key.endsWith("_code") || key === "jj1017_code" || key === "item_code") continue;
     if (key === "receipt_code" || key === "generic_extension_code") continue;
+    if (key === "dataset_code") continue;
     if (value) codes[key.slice(0, -"_code".length)] = value;
   }
   return codes;
@@ -646,7 +652,6 @@ function TemplateDefaults({
     <section className="lab-order-item__section">
       <div className="lab-order-item__section-head">
         <h3>既定のテンプレート</h3>
-        <span className="rad-code__summary">オーダー画面の検査目的・特別指示の記入に使う</span>
       </div>
       <ErrorBanner error={templates.error} />
       <div className="rad-item__templates">
@@ -753,95 +758,39 @@ function renderCodeOptions(codes: RadJj1017Code[], flag: keyof RadJj1017Code | u
   );
 }
 
-// 実施入力用データセットの紐付け。実施入力モーダルは、オーダーに載っている撮影項目に
-// 紐付く全データセットの明細をマージして初期表示する。1項目に複数付けてよい
-// (造影剤のセットと穿刺器材のセットのように、性質の違うものを併せて付けられる)。
-function DatasetLinksEditor({
-  itemCode,
-  links,
+// 実施入力の初期明細になるデータセット。1項目に1つで、実施入力モーダルは
+// オーダーに載っている撮影項目のデータセットの明細をまとめて初期表示する。
+function DatasetSelect({
+  value,
+  savedName,
+  onChange,
 }: {
-  itemCode: string;
-  links: RadItemDetail["datasets"];
+  value: string;
+  /** 保存済みの選択に対する名称。運用期間切れなどで候補に出ないときの表示に使う。 */
+  savedName: string | null;
+  onChange: (datasetCode: string) => void;
 }) {
-  const mutations = useRadItemDatasetMutations();
-  const [query, setQuery] = useState("");
-  const candidates = useRadDatasetSearch({ name: query }, 1, query.trim().length > 0);
-
-  const linkedCodes = new Set(links.map((link) => link.dataset_code));
+  const datasets = useRadDatasetOptions();
+  const options = datasets.data?.items ?? [];
+  const missing = value && !options.some((dataset) => dataset.dataset_code === value);
 
   return (
-    <section className="lab-order-item__section">
-      <div className="lab-order-item__section-head">
-        <h3>実施入力データセット</h3>
-        <span className="rad-code__summary">
-          実施入力の初期明細(手技料・造影剤・器材)。中身はデータセットマスタで編集する
-        </span>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="追加するデータセットを名称で検索"
-        />
-      </div>
-
-      {query.trim().length > 0 && (
-        <ul className="lab-order-item__candidates">
-          {candidates.data?.items
-            .filter((dataset) => !linkedCodes.has(dataset.dataset_code))
-            .map((dataset) => (
-              <li key={dataset.id}>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setQuery("");
-                    await mutations.create.mutateAsync({
-                      item_code: itemCode,
-                      dataset_code: dataset.dataset_code,
-                    });
-                  }}
-                >
-                  {dataset.name}
-                  <span className="lab-order-item__code">{dataset.dataset_code}</span>
-                </button>
-              </li>
-            ))}
-        </ul>
-      )}
-
-      <ErrorBanner error={mutations.create.error ?? mutations.remove.error} />
-
-      <div className="lab-order-item__table-wrap">
-        <table className="master-search__table">
-          <thead>
-            <tr>
-              <th>データセット</th>
-              <th>コード</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {links.map((link) => (
-              <tr key={link.id}>
-                <td>{link.dataset_name ?? link.dataset_code}</td>
-                <td>{link.dataset_code}</td>
-                <td className="master-search__actions">
-                  <button type="button" onClick={() => mutations.remove.mutate(link.id)}>
-                    外す
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {links.length === 0 && (
-              <tr>
-                <td colSpan={3} className="master-search__empty">
-                  紐付けがありません。名称で検索して追加してください。
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <label>
+      実施入力データセット
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">なし</option>
+        {missing && (
+          <option value={value}>
+            {savedName ?? value}({value})
+          </option>
+        )}
+        {options.map((dataset) => (
+          <option key={dataset.id} value={dataset.dataset_code}>
+            {dataset.name}({dataset.dataset_code})
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
