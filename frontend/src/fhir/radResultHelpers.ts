@@ -16,7 +16,7 @@ import { buildRadTaskUpdate } from "./radTaskHelpers";
 //         └ partOf ← Observation              (被曝線量)
 //
 // 造影剤を usedCode に混ぜないのは、usedCode(CodeableConcept)が数量を持てないため。
-// 造影剤は mL が薬剤料の算定根拠になるので MedicationAdministration にする。
+// 造影剤は使用量(製剤単位)が薬剤料の算定根拠になるので MedicationAdministration にする。
 
 /** JP Core の Procedure プロファイル。上流の登録先。 */
 const PROCEDURE_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Procedure";
@@ -105,14 +105,16 @@ export interface RadProcedureLine {
   name: string;
 }
 
-/** 造影剤の行。使用量(mL)が薬剤料の算定根拠になる。 */
+/** 造影剤の行。使用量が薬剤料の算定根拠になる。 */
 export interface RadContrastLine {
   medicineCode: string;
   name: string;
   /** YJ コード。処方・注射と同じ coding を載せるために持つ(無ければ空)。 */
   yjCode: string;
-  /** 使用量(mL)。 */
+  /** 使用量。単位は製剤単位(unitName)で、処方・注射と同じ数え方。 */
   dose: string;
+  /** 医薬品マスタの単位名(本・筒・g など)。未取込の医薬品では空。 */
+  unitName: string;
   routeCode: string;
 }
 
@@ -216,7 +218,10 @@ function buildContrast(
   const dose = Number(line.dose);
   const dosage: fhir4.MedicationAdministrationDosage = {};
   if (Number.isFinite(dose) && dose > 0) {
-    dosage.dose = { value: dose, unit: "mL", system: UCUM_SYSTEM, code: "mL" };
+    // 単位は医薬品マスタの製剤単位(本・筒・g など)。処方・注射の doseQuantity と
+    // 同じ数え方にして、薬剤料の算定根拠を揃える。UCUM には無い単位なので
+    // system/code は載せず、表示名だけを持たせる。
+    dosage.dose = { value: dose, ...(line.unitName ? { unit: line.unitName } : {}) };
   }
   if (line.routeCode) {
     dosage.route = {

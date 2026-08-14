@@ -338,7 +338,6 @@ const SECTIONS: {
   addLabel: string;
   /** 数量欄を出すか(手技料は数量を持たない)。 */
   quantity: boolean;
-  quantityLabel?: string;
 }[] = [
   {
     type: "procedure",
@@ -351,7 +350,6 @@ const SECTIONS: {
     title: "造影剤",
     addLabel: "造影剤を追加",
     quantity: true,
-    quantityLabel: "mL",
   },
   {
     type: "material",
@@ -472,7 +470,8 @@ function DetailRow({
     mutations.update.mutate({ id: detail.id, payload: { default_quantity: next || null } });
   }
 
-  const unit = section.quantityLabel ?? detail.resolved_unit_name ?? "";
+  // 単位は参照先マスタのもの(造影剤は医薬品マスタの製剤単位、器材は器材マスタ)。
+  const unit = detail.resolved_unit_name ?? "";
 
   return (
     <tr>

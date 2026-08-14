@@ -5860,9 +5860,23 @@ body.page-wide #root {
 }
 
 /* 数量は桁数が知れているので固定幅にし、列の幅が値で揺れないようにする。
-   経路は選択肢の文字数で決まるので幅を指定しない。 */
+   経路は選択肢の文字数で決まるので幅を指定しない。
+   右の余白は後ろに続く単位(筒・本など)との間隔。 */
 .rad-quantity-input {
   width: 96px;
+  margin-right: 6px;
+}
+
+/* 実施入力の明細表(造影剤・使用器材)。列構成が違う(造影剤には経路がある)ため、
+   自動列幅のままだと使用量と数量の左位置がずれる。名称の幅を揃えれば残りの列は
+   等分されるので、2 つの表で数量欄も行末の削除も縦に揃う。 */
+.rad-perform__lines {
+  table-layout: fixed;
+}
+
+.rad-perform__lines th:first-child,
+.rad-perform__lines td:first-child {
+  width: 50%;
 }
 
 /* テーブル内では .master-search__table button の padding 指定を上書きする必要がある。 */

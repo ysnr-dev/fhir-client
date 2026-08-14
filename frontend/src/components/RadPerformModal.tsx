@@ -176,11 +176,11 @@ export function RadPerformModal({ row, onClose }: Props) {
             </button>
           </div>
           <div className="lab-order-item__table-wrap">
-            <table className="master-search__table">
+            <table className="master-search__table rad-perform__lines">
               <thead>
                 <tr>
                   <th>名称</th>
-                  <th className="rad-item__compact">使用量(mL)</th>
+                  <th className="rad-item__compact">使用量</th>
                   <th className="rad-item__compact">経路</th>
                   <th></th>
                 </tr>
@@ -208,6 +208,8 @@ export function RadPerformModal({ row, onClose }: Props) {
                           })
                         }
                       />
+                      {/* 医薬品マスタの製剤単位(本・筒・g など)。器材の数量と同じ出し方。 */}
+                      {line.unitName}
                     </td>
                     <td className="rad-item__compact">
                       <select
@@ -259,7 +261,7 @@ export function RadPerformModal({ row, onClose }: Props) {
             </button>
           </div>
           <div className="lab-order-item__table-wrap">
-            <table className="master-search__table">
+            <table className="master-search__table rad-perform__lines">
               <thead>
                 <tr>
                   <th>名称</th>
@@ -385,6 +387,7 @@ export function RadPerformModal({ row, onClose }: Props) {
                   name: m.name ?? m.medicine_code,
                   yjCode: m.yj_code ?? "",
                   dose: "",
+                  unitName: m.unit_name ?? "",
                   routeCode: "",
                 },
               ],
@@ -451,6 +454,7 @@ function initialLines(details: ReturnType<typeof useRadDatasetLinesForItems>["de
         name,
         yjCode: detail.yj_code ?? "",
         dose: detail.default_quantity ?? "",
+        unitName: detail.resolved_unit_name ?? "",
         routeCode: detail.route_code ?? "",
       });
     } else {

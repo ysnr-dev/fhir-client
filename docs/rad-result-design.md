@@ -45,7 +45,7 @@ ServiceRequest (放射線オーダー ヘッダ)                        ※既�
       │        performedDateTime = 実施時刻
       ├ partOf ← MedicationAdministration (造影剤 0..*)
       │        medicationCodeableConcept = 医薬品マスタの写し
-      │        dosage.dose = 使用量(mL)、dosage.route = 経路
+      │        dosage.dose = 使用量(製剤単位)、dosage.route = 経路
       └ partOf ← Observation (被曝線量 0..*)
                code = CTDIvol / DLP / DAP / 透視時間
                valueQuantity = 実測値(UCUM 単位)
@@ -70,7 +70,7 @@ ServiceRequest (放射線オーダー ヘッダ)                        ※既�
   会計連携はオーダー明細 + Procedure から組み立てる(§7-2)。
 
 - **造影剤は `Procedure.usedCode` に混ぜず MedicationAdministration にする**。
-  ［事実］`usedCode` は CodeableConcept で**数量を持てない**。造影剤は mL が薬剤料の
+  ［事実］`usedCode` は CodeableConcept で**数量を持てない**。造影剤は使用量が薬剤料の
   算定根拠になるため分ける。既存の医薬品マスタと `MedicineSearchModal` を流用でき、
   コードは処方・注射と同じ `medicine-code` / YJ コードで揃う。
 
@@ -104,7 +104,7 @@ ServiceRequest (放射線オーダー ヘッダ)                        ※既�
 | `http://fhir-client.local/CodeSystem/order-type` | `Procedure.category` = `rad`。処方・検体検査の Procedure と振り分ける。［事実］上流の Procedure は `category` のトークン検索に対応済みなので、`Procedure?category=...|rad&date=<撮影日>` で日次の実施一覧が引ける |
 | `http://fhir-client.local/CodeSystem/medicine-code` | 造影剤のレセ電算コード(処方・注射と共通) |
 | `http://capstandard.jp/iyaku.info/CodeSystem/YJ-code` | 造影剤の YJ コード(同上) |
-| `http://unitsofmeasure.org` | 使用量・線量の単位(UCUM) |
+| `http://unitsofmeasure.org` | 被曝線量の単位(UCUM)。造影剤の使用量は製剤単位(本・筒・g など)なので UCUM を持たず、医薬品マスタの単位名を `dosage.dose.unit` に入れる |
 
 新規に定義するもの(すべて `http://fhir-client.local/CodeSystem/`):
 
@@ -139,7 +139,6 @@ ServiceRequest (放射線オーダー ヘッダ)                        ※既�
 | DLP | mGy·cm | `mGy.cm` |
 | DAP(面積線量) | Gy·cm² | `Gy.cm2` |
 | 透視時間 | 秒 | `s` |
-| 造影剤 使用量 | mL | `mL` |
 
 ---
 
@@ -157,7 +156,7 @@ master_rad_dataset_details          -- 明細(3種を縦持ち)
   dataset_code                      -- 親
   detail_type                       -- procedure / medicine / material
   code                              -- 参照先マスタのコード
-  default_quantity                  -- 造影剤=使用量(mL) / 器材=数量 / 手技=NULL
+  default_quantity                  -- 造影剤=使用量 / 器材=数量(いずれも製剤単位) / 手技=NULL
   route_code                        -- 造影剤の既定経路(JP Core route-codes)
 master_rad_items.dataset_code       -- 撮影項目 → データセット(1項目1つ)
 ```
@@ -253,7 +252,7 @@ Task の `completed` 化が 1 つの transaction で走る。
 |---|---|
 | 実施時刻 | 現在時刻 |
 | 実施者 | ログイン中の医療従事者 |
-| 造影剤(0..*) | なし。医薬品検索から選び、使用量(mL)と経路を入れる |
+| 造影剤(0..*) | なし。医薬品検索から選び、使用量(製剤単位)と経路を入れる |
 | 特定器材(0..*) | なし。材料マスタ検索(未整備ならフリーテキスト) |
 | 被曝線量 | モダリティで出し分ける(CT: CTDIvol・DLP / 血管撮影: DAP・透視時間 / 単純撮影: なし) |
 | コメント | 空 |
