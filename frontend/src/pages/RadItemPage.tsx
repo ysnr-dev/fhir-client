@@ -63,6 +63,8 @@ interface Draft {
   // 検査目的・特別指示の既定テンプレート(Questionnaire の canonical)。
   purpose_template_canonical: string;
   remarks_template_canonical: string;
+  // 実施入力をする項目か。false なら一覧の「実施」でそのまま実施済にする。
+  requires_perform_input: boolean;
   // 実施入力の初期明細になるデータセット。1項目1つ。
   dataset_code: string;
 }
@@ -82,6 +84,7 @@ const emptyDraft: Draft = {
   note: "",
   purpose_template_canonical: "",
   remarks_template_canonical: "",
+  requires_perform_input: true,
   dataset_code: "",
 };
 
@@ -104,7 +107,9 @@ function toPayload(draft: Draft, elementCodes: ElementCodes, elementNames: strin
     note: draft.note || null,
     purpose_template_canonical: draft.purpose_template_canonical || null,
     remarks_template_canonical: draft.remarks_template_canonical || null,
-    dataset_code: draft.dataset_code || null,
+    requires_perform_input: draft.requires_perform_input,
+    // 実施入力をしない項目は初期明細も持たない。
+    dataset_code: (draft.requires_perform_input && draft.dataset_code) || null,
   };
   for (const element of elementNames) {
     // セットは撮影そのものではないので要素を持たせない。
@@ -383,6 +388,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       note: d.note ?? "",
       purpose_template_canonical: d.purpose_template_canonical ?? "",
       remarks_template_canonical: d.remarks_template_canonical ?? "",
+      requires_perform_input: d.requires_perform_input,
       dataset_code: d.dataset_code ?? "",
     });
     setElementCodes(readElementCodes(d));
@@ -547,9 +553,27 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
               onChange={(e) => setDraft({ ...draft, note: e.target.value })}
             />
           </label>
+        </div>
+
+        {/* 実施入力をしない項目(撮影して終わりのもの)は、一覧の「実施」で
+            そのまま実施済になる。初期明細も持たないのでデータセットは選べない。 */}
+        <div className="lab-order-item__fields">
+          <label>
+            実施入力有無
+            <select
+              value={draft.requires_perform_input ? "true" : "false"}
+              onChange={(e) =>
+                setDraft({ ...draft, requires_perform_input: e.target.value === "true" })
+              }
+            >
+              <option value="true">あり</option>
+              <option value="false">なし</option>
+            </select>
+          </label>
           <DatasetSelect
-            value={draft.dataset_code}
+            value={draft.requires_perform_input ? draft.dataset_code : ""}
             savedName={detail.data?.dataset_name ?? null}
+            disabled={!draft.requires_perform_input}
             onChange={(dataset_code) => setDraft((prev) => ({ ...prev, dataset_code }))}
           />
         </div>
@@ -763,11 +787,13 @@ function renderCodeOptions(codes: RadJj1017Code[], flag: keyof RadJj1017Code | u
 function DatasetSelect({
   value,
   savedName,
+  disabled,
   onChange,
 }: {
   value: string;
   /** 保存済みの選択に対する名称。運用期間切れなどで候補に出ないときの表示に使う。 */
   savedName: string | null;
+  disabled: boolean;
   onChange: (datasetCode: string) => void;
 }) {
   const datasets = useRadDatasetOptions();
@@ -777,7 +803,7 @@ function DatasetSelect({
   return (
     <label>
       実施入力データセット
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
+      <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
         <option value="">なし</option>
         {missing && (
           <option value={value}>

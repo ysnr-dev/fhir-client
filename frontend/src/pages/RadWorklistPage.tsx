@@ -6,7 +6,8 @@ import {
   useUpdateRadTaskStatus,
   type RadWorklistRow,
 } from "../api/queries";
-import { useRadJj1017Catalog } from "../api/masterQueries";
+import type { RadItem } from "../api/masterClient";
+import { useRadItemsByCodes, useRadJj1017Catalog } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { RadPerformModal } from "../components/RadPerformModal";
 import { RowMenu } from "../components/RowMenu";
@@ -83,6 +84,42 @@ export function RadWorklistPage() {
   );
   const total = worklist.data?.rows.length ?? 0;
 
+  // 「実施」で実施入力を開くかどうかは撮影項目マスタが決めるので、この日の
+  // オーダーに載っている項目をまとめて引いておく。
+  const itemCodes = useMemo(
+    () =>
+      (worklist.data?.rows ?? []).flatMap((row) =>
+        radOrderItems(row.order, row.itemRequests).map((item) => item.code),
+      ),
+    [worklist.data],
+  );
+  const items = useRadItemsByCodes(itemCodes);
+  const masterByCode = useMemo(() => {
+    const map = new Map<string, RadItem>();
+    for (const item of items.data?.items ?? []) map.set(item.item_code, item);
+    return map;
+  }, [items.data]);
+
+  // 実施入力をする項目が 1 つでもあれば実施入力を開く。
+  //
+  // セットは撮影そのものではなく依頼の束ね方なので、判定は構成項目だけで行う
+  // (JJ1017 の要素を持たないのと同じ理由)。マスタに無いコード(項目を消した後の
+  // オーダーなど)は入力の機会を落とさないよう「あり」に倒す。
+  function needsPerformInput(row: RadWorklistRow): boolean {
+    const codes = radOrderItems(row.order, row.itemRequests)
+      .map((item) => item.code)
+      .filter((code) => masterByCode.get(code)?.kind !== "set");
+    if (codes.length === 0) return true;
+
+    return codes.some((code) => masterByCode.get(code)?.requires_perform_input ?? true);
+  }
+
+  // 実施入力をしない検査は、実施記録を作らずに Task を実施済にするだけ。
+  function handlePerform(row: RadWorklistRow) {
+    if (needsPerformInput(row)) setPerforming(row);
+    else updateStatus.mutate({ order: row.order, task: row.task, status: "completed" });
+  }
+
   function handleDateChange(value: string) {
     // 日付を空にはさせない(空で検索すると全期間になってしまう)。
     if (value) setDate(value);
@@ -104,7 +141,7 @@ export function RadWorklistPage() {
       />
 
       <ErrorBanner error={worklist.error} />
-      <ErrorBanner error={catalog.error ?? departments.error} />
+      <ErrorBanner error={catalog.error ?? departments.error ?? items.error} />
       <ErrorBanner error={updateStatus.error} />
 
       {worklist.data?.truncated && (
@@ -136,11 +173,12 @@ export function RadWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
-                    pending={updateStatus.isPending}
+                    // マスタが読めるまでは実施入力の有無が決まらないので押させない。
+                    pending={updateStatus.isPending || items.isLoading}
                     onChangeStatus={(status) =>
                       updateStatus.mutate({ order: row.order, task: row.task, status })
                     }
-                    onPerform={() => setPerforming(row)}
+                    onPerform={() => handlePerform(row)}
                   />
                 ))}
                 {rows.length === 0 && (

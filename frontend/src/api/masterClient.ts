@@ -1067,8 +1067,14 @@ export interface RadItem {
   purpose_template_canonical: string | null;
   remarks_template_canonical: string | null;
   /**
+   * 実施入力をする項目か。false の項目は放射線検査一覧の「実施」で実施入力を
+   * 開かずそのまま実施済にし、実施記録を作らない(カルテにも実施情報は出ない)。
+   */
+  requires_perform_input: boolean;
+  /**
    * 実施入力の初期明細になるデータセット(master_rad_datasets)。1項目に1つで、
    * 同じデータセットを複数の撮影項目から参照してよい。
+   * requires_perform_input が false の項目は持たない。
    */
   dataset_code: string | null;
 }
@@ -1125,6 +1131,7 @@ export interface RadItemPayload {
   note?: string | null;
   purpose_template_canonical?: string | null;
   remarks_template_canonical?: string | null;
+  requires_perform_input?: boolean;
   dataset_code?: string | null;
 }
 

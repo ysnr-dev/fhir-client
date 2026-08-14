@@ -160,6 +160,24 @@ RSpec.describe "Master::RadItems", type: :request do
       expect(body["groupable"]).to be(false)
     end
 
+    it "既定は実施入力ありで、実施入力なしの項目も登録できる" do
+      post "/master/rad_items", params: { item_code: "R0001", name: "既定の項目" }
+      expect(body["requires_perform_input"]).to be(true)
+
+      post "/master/rad_items", params: { item_code: "R0007", name: "撮って終わりの項目",
+                                          requires_perform_input: false }
+      expect(response).to have_http_status(:created)
+      expect(body["requires_perform_input"]).to be(false)
+    end
+
+    it "実施入力なしの項目はデータセットを持たない" do
+      post "/master/rad_items", params: { item_code: "R0007", name: "撮って終わりの項目",
+                                          requires_perform_input: false, dataset_code: "000001" }
+
+      expect(response).to have_http_status(:created)
+      expect(body["dataset_code"]).to be_nil
+    end
+
     it "有効終了日が有効開始日より前なら登録できない" do
       post "/master/rad_items", params: { item_code: "R0001", name: "期間おかしい",
                                           valid_from: "2026-08-01", valid_to: "2026-07-01" }
@@ -170,6 +188,15 @@ RSpec.describe "Master::RadItems", type: :request do
   end
 
   describe "PATCH /master/rad_items/:id" do
+    it "実施入力なしに変えるとデータセットの参照も外れる" do
+      item = create_item("R0004", dataset_code: "000001")
+
+      patch "/master/rad_items/R0004", params: { requires_perform_input: false }
+
+      expect(response).to have_http_status(:ok)
+      expect(item.reload.dataset_code).to be_nil
+    end
+
     it "要素を変えると32桁コードも作り直す" do
       item = create_item("R0001", modality_code: "1", body_part_code: "200")
 

@@ -3,7 +3,8 @@ module Master
   # セットの構成は master_rad_set_items が持つ。
   # JJ1017 の各要素はコードで master_rad_jj1017_codes に緩く紐づく。
   # dataset_code は実施入力の初期明細(master_rad_datasets)。1項目1つで、
-  # 同じデータセットを複数の項目から参照してよい。
+  # 同じデータセットを複数の項目から参照してよい。実施入力をしない項目
+  # (requires_perform_input = false)は初期明細を持たない。
   class RadItem < ApplicationRecord
     self.table_name = "master_rad_items"
 
@@ -26,6 +27,7 @@ module Master
 
     before_save :set_jj1017_code
     before_save :set_search_columns
+    before_save :clear_dataset_without_perform_input
 
     def set?
       kind == "set"
@@ -88,6 +90,12 @@ module Master
 
       # 画面にそのまま出る文なので、属性名が頭に付かない :base に載せる。
       errors.add(:base, "セットの構成項目になっているため単独オーダーにできません")
+    end
+
+    # 実施入力をしない項目は実施入力の初期明細も持たない。画面では選べないように
+    # しているが、API から入っても矛盾した組み合わせが残らないようにここでも落とす。
+    def clear_dataset_without_perform_input
+      self.dataset_code = nil unless requires_perform_input
     end
 
     def set_search_columns
