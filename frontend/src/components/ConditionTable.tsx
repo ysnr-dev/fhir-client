@@ -51,7 +51,9 @@ export function ConditionTable({ conditions, onView, onEdit }: ConditionTablePro
                       ? summary.problemNumber === undefined
                         ? "P"
                         : `#${summary.problemNumber}`
-                      : "保険"}
+                      : summary.category === "past"
+                        ? "既往"
+                        : "保険"}
                   </span>
                 </td>
                 <td>{summary.name}</td>

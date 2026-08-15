@@ -4222,6 +4222,13 @@ body.karte-wide .app__header {
   color: var(--accent);
 }
 
+/* 既往歴はプロブレムと同じ枠だが、現在の問題ではないので彩度を落とす。 */
+.condition-badge--past {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  opacity: 0.75;
+}
+
 .karte-card__empty,
 .karte-card__note {
   margin: 0;

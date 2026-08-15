@@ -27,25 +27,49 @@ const CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/condition-categor
 // (clinicalNoteHelpers.ts の SECTION_QR_EXT_URL と同じ URL 規約)。
 const PROBLEM_NUMBER_EXT_URL = "http://fhir-client.local/StructureDefinition/problem-number";
 
-// 病名の区分。POMR のプロブレムリストと、レセプト用の保険病名を同じ Condition で
-// 区分管理する。category が無い既存データは保険病名として扱う(移行不要)。
-export type ConditionCategory = "problem" | "billing";
+// 病名の区分。POMR のプロブレムリスト・既往歴・レセプト用の保険病名を同じ
+// Condition で区分管理する。category が無い既存データは保険病名として扱う(移行不要)。
+export type ConditionCategory = "problem" | "billing" | "past";
 
-const CATEGORY_CODES: Record<ConditionCategory, { code: string; display: string }> = {
+const CATEGORY_CODES: Record<"problem" | "billing", { code: string; display: string }> = {
   problem: { code: "problem-list-item", display: "Problem List Item" },
   billing: { code: "encounter-diagnosis", display: "Encounter Diagnosis" },
 };
 
+// 既往歴に当たるコードが標準の condition-category(problem-list-item /
+// encounter-diagnosis の 2 つだけ)に無いため、ローカルの CodeSystem で印を付ける。
+// JP Core も既往歴を Condition で表す方針なので、標準の problem-list-item を
+// 併記して保存し、標準しか見ない相手にはプロブレムリスト項目として読めるようにする
+// (アプリ内では下のローカルコードを先に見て区別する)。
+const LOCAL_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/condition-category";
+const PAST_HISTORY_CODE = "past-history";
+
 export const CATEGORY_LABELS: Record<ConditionCategory, string> = {
   problem: "プロブレム",
+  past: "既往歴",
   billing: "保険病名",
 };
 
 export function conditionCategoryOf(condition: fhir4.Condition): ConditionCategory {
-  const isProblem = (condition.category ?? []).some((c) =>
-    c.coding?.some((coding) => coding.code === CATEGORY_CODES.problem.code),
-  );
-  return isProblem ? "problem" : "billing";
+  const codings = (condition.category ?? []).flatMap((c) => c.coding ?? []);
+  // 既往歴は problem-list-item も併記するので、ローカルコードを先に判定する。
+  if (codings.some((c) => c.system === LOCAL_CATEGORY_SYSTEM && c.code === PAST_HISTORY_CODE)) {
+    return "past";
+  }
+  return codings.some((c) => c.code === CATEGORY_CODES.problem.code) ? "problem" : "billing";
+}
+
+// 保存する category。既往歴だけ標準コードとローカルコードの 2 つを並べる
+// (「プロブレムリスト項目であり、かつ既往歴」という 2 つの分類なので、
+//  1 つの CodeableConcept に coding を並べる書き方はしない)。
+function categoryConcepts(category: ConditionCategory): fhir4.CodeableConcept[] {
+  if (category === "past") {
+    return [
+      { coding: [{ system: CATEGORY_SYSTEM, ...CATEGORY_CODES.problem }] },
+      { coding: [{ system: LOCAL_CATEGORY_SYSTEM, code: PAST_HISTORY_CODE, display: "既往歴" }] },
+    ];
+  }
+  return [{ coding: [{ system: CATEGORY_SYSTEM, ...CATEGORY_CODES[category] }] }];
 }
 
 export function problemNumberOf(condition: fhir4.Condition): number | undefined {
@@ -71,14 +95,19 @@ function compareProblemNumber(a: fhir4.Condition, b: fhir4.Condition): number {
 export function splitConditions(conditions: fhir4.Condition[]): {
   problems: fhir4.Condition[];
   billings: fhir4.Condition[];
+  pasts: fhir4.Condition[];
 } {
   const problems: fhir4.Condition[] = [];
   const billings: fhir4.Condition[] = [];
+  const pasts: fhir4.Condition[] = [];
   for (const condition of conditions) {
-    (conditionCategoryOf(condition) === "problem" ? problems : billings).push(condition);
+    const category = conditionCategoryOf(condition);
+    if (category === "problem") problems.push(condition);
+    else if (category === "past") pasts.push(condition);
+    else billings.push(condition);
   }
   problems.sort(compareProblemNumber);
-  return { problems, billings };
+  return { problems, billings, pasts };
 }
 
 // 次に採番するプロブレム番号。欠番は再利用しない(番号の指す先を変えないため)。
@@ -258,7 +287,7 @@ export function buildCondition(
     },
     // 区分は常に明示して保存する。category が無い既存データも、編集保存された時点で
     // 保険病名(encounter-diagnosis)として正規化される。
-    category: [{ coding: [{ system: CATEGORY_SYSTEM, ...CATEGORY_CODES[values.category] }] }],
+    category: categoryConcepts(values.category),
     code: values.disease
       ? {
           extension: modifierExtensions.length ? modifierExtensions : undefined,

@@ -127,12 +127,13 @@ export function ConditionForm({
       <fieldset>
         <legend>病名</legend>
 
-        {/* 区分。プロブレム(POMR のプロブレムリストに載る)と保険病名(レセプト用)を
-            同じ Condition で区分管理する。ラジオの横並びは診療記録フォームと同じ形。 */}
+        {/* 区分。プロブレム(POMR のプロブレムリストに載る)・既往歴(基礎データ。
+            プロブレムリストには載せない)・保険病名(レセプト用)を同じ Condition で
+            区分管理する。ラジオの横並びは診療記録フォームと同じ形。 */}
         <div className="clinical-note-form__mode">
           <span className="clinical-note-form__mode-legend">区分</span>
           <div className="clinical-note-form__mode-options">
-            {(["billing", "problem"] as const).map((category) => (
+            {(["billing", "problem", "past"] as const).map((category) => (
               <label className="clinical-note-form__mode-option" key={category}>
                 <input
                   type="radio"
