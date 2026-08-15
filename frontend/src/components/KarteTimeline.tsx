@@ -258,7 +258,8 @@ function KarteCard({
     else if (item.kind === "lab-order") deleteLabOrder.mutate(item.id, options);
     else if (item.kind === "micro-order") deleteMicroOrder.mutate(item.id, options);
     else if (item.kind === "rad-order") deleteRadOrder.mutate(item.id, options);
-    else deleteResponse.mutate(item.id, options);
+    // テンプレート回答は、生成した Observation も一緒に消すのでリソースごと渡す。
+    else if (item.kind === "qr") deleteResponse.mutate(item.response, options);
   }
 
   // プロブレム選択中は、そのプロブレムを参照しない情報を控えめに表示する

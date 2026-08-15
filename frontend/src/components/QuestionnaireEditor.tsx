@@ -16,6 +16,7 @@ import {
   type QuestionnaireFormValues,
   type QuestionnaireStatus,
 } from "../fhir/questionnaireHelpers";
+import { OBSERVATION_CATEGORY_OPTIONS } from "../fhir/observationExtract";
 import { ErrorBanner } from "./ErrorBanner";
 import { QuestionnaireItemEditor } from "./QuestionnaireItemEditor";
 
@@ -187,6 +188,39 @@ export function QuestionnaireEditor({
               onChange={(e) => update("description", e.target.value)}
               rows={2}
             />
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>回答から Observation を生成</legend>
+        <p className="qe-hint">
+          有効にすると、項目コード(各項目の「詳細設定 &gt; 項目コード」)を設定した設問の回答が
+          Observation として保存され、検査結果と同じ構造化データになります。回答と同時に
+          作られ、回答を編集・削除すると作り直し・削除されます。
+        </p>
+        <div className="qe-meta__grid">
+          <label className="qe-item__checkbox">
+            <input
+              type="checkbox"
+              checked={values.observationExtract}
+              onChange={(e) => update("observationExtract", e.target.checked)}
+            />
+            回答から Observation を生成する
+          </label>
+          <label>
+            Observation の分類(category)
+            <select
+              value={values.observationCategory}
+              disabled={!values.observationExtract}
+              onChange={(e) => update("observationCategory", e.target.value)}
+            >
+              {OBSERVATION_CATEGORY_OPTIONS.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
       </fieldset>

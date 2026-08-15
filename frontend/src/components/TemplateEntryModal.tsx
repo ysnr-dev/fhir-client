@@ -8,6 +8,7 @@ import {
 } from "../api/queries";
 import { displayJapaneseName } from "../fhir/humanName";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
+import { observationExtractEnabled } from "../fhir/observationExtract";
 import { buildPopulateContext } from "../fhir/populateContext";
 import {
   buildQuestionnaireResponse,
@@ -184,6 +185,17 @@ export function TemplateEntryModal({
                 />
               </div>
             ))}
+
+          {/* 診療記録のセクションに貼る回答は記録と一緒に保存されるため、
+              Observation の生成(単独登録の経路にしか無い)は行われない。
+              黙って作られないと気づけないので明示する。 */}
+          {questionnaire && observationExtractEnabled(questionnaire) && (
+            <p className="qe-hint">
+              このテンプレートは「回答から Observation を生成する」設定ですが、診療記録に貼る記載では
+              生成されません。構造化データとして残すには、右ペインの「テンプレート」から単独で
+              登録してください。
+            </p>
+          )}
 
           {questionnaire && (
             // テンプレート切替時に入力途中の回答を持ち越さないよう key で作り直す。

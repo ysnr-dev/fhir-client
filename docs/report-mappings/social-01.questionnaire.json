@@ -13,7 +13,7 @@
   "subjectType": [
     "Patient"
   ],
-  "description": "POMR の基礎データ(Database)のうち社会歴。設問は JP Core の Observation(生活背景) JP_ObservationSocialHistoryCode_CS に 1 対 1 で対応させ、各項目の code に持たせている。SDC の Observation 抽出を実装すれば、この code がそのまま JP_Observation_SocialHistory の Observation.code になる。",
+  "description": "POMR の基礎データ(Database)のうち社会歴。設問は JP Core の Observation(生活背景) JP_ObservationSocialHistoryCode_CS に 1 対 1 で対応させ、各項目の code に持たせている。「回答から Observation を生成する」を有効にしてあるので、回答を保存すると category=social-history の Observation が同時に作られる。",
   "extension": [
     {
       "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
@@ -21,6 +21,21 @@
         "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
         "code": "6f3a9c14-5d02-4e7b-9a83-2c6e1b40d7f5",
         "display": "基礎データ"
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract",
+      "valueBoolean": true
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-observationExtract-category",
+      "valueCodeableConcept": {
+        "coding": [
+          {
+            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+            "code": "social-history"
+          }
+        ]
       }
     }
   ],

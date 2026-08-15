@@ -482,8 +482,8 @@ POMR は「基礎データから異常所見を抽出してプロブレムリス
 - **既往歴はテンプレートにしていません**。MEDIS 病名マスタのコードが要り、後からプロブレムへ
   昇格しうる情報なので、「病名」タブの `Condition` 側に区分を足す方が安く、プロブレムリストとの
   連続性も保てるためです（同じ情報が 2 経路に増えるのを避けています）。
-- 現状は `QuestionnaireResponse` として保存するだけで Observation にはなりません。残るのは抽出
-  処理（回答と Observation を同一の transaction Bundle で保存する）だけです。
+- 社会歴は「回答から Observation を生成する」を有効にしてあるので、回答を保存すると
+  `category=social-history` の Observation が同時に作られます（次節）。
 
 ## テンプレートの項目コード（`Questionnaire.item.code`）
 
@@ -498,6 +498,38 @@ POMR は「基礎データから異常所見を抽出してプロブレムリス
   入力方法とは独立なため）。ただし表示テキストへ変更したときだけは落とします（que-3）。
 - 空のコードは保存されません。`system` や `display` だけを入れて `code` が空の行は保存時に
   エラーになります（黙って消えると気づけないため）。
+
+## テンプレート回答からの Observation 生成
+
+テンプレート編集画面の **「回答から Observation を生成」** を有効にすると、項目コードを設定した
+設問の回答が `Observation` として保存され、検査結果と同じ構造化データになります
+（SDC の Observation-based extraction 相当。実装は `frontend/src/fhir/observationExtract.ts`）。
+
+- **設定はテンプレート単位**です。SDC 標準の拡張 `sdc-questionnaire-observationExtract`（有無）と
+  `sdc-observationExtract-category`（生成する Observation の `category`）を Questionnaire に
+  持たせます。項目コードの無い設問は対象外なので、除外したい設問はコードを付けなければ済みます。
+- 生成される Observation は `code` = 項目コード、`value[x]` = 回答値、`subject` / `effectiveDateTime` は
+  回答から引き継ぎ、`derivedFrom` に生成元の `QuestionnaireResponse` を持ちます。回答が下書き
+  （`in-progress`）のうちは `status` を `preliminary`、確定後は `final` にします。
+- **値の写し方**: 選択肢 → `valueCodeableConcept`、数値 + 単位 → `valueQuantity`、単位なしの整数 →
+  `valueInteger`、文字列 → `valueString`、日付 → `valueDateTime`。複数選択（チェックボックス）は
+  回答 1 つにつき 1 件の Observation にします（1 つの CodeableConcept に複数 coding を並べるのは
+  「同じ概念の別コード体系」の意味なので、別々の所見をまとめる用途には使えないため）。
+  単位は表示名だけを入れ、`system` / `code` は付けません。テンプレートの単位には「本/日」のように
+  UCUM のコードではない値も入っており、そのまま UCUM として出すと誤ったコード体系の主張に
+  なるためです。
+- **保存は回答と同じ transaction Bundle** で行うので、片方だけ保存されることはありません。
+  回答を更新すると前回生成した Observation を消して作り直し、回答を削除すると一緒に消します
+  （由来を辿れない Observation だけが残らないように）。更新で作り直す（差分更新しない）のは、
+  テンプレート側のコードが変わると項目と Observation の対応が崩れるためです。
+- **生成した Observation の参照は回答側のローカル拡張**
+  （`…/questionnaire-response-observation`）に記録します。上流 fhir-server は
+  `Observation.derived-from` を検索できないため、回答を編集・削除するときに対象を引き当てる手段が
+  これしかありません（処方の `ServiceRequest` → `MedicationRequest` と同じ事情・同じ回避策。
+  サーバー側の対応は `docs/server-improvement-backlog.md` の 8 に記録しています）。
+- **診療記録に貼るテンプレート記載では生成されません**。記載は診療記録と一緒に保存される別経路の
+  ためで、設定が有効なテンプレートを選ぶとモーダルにその旨を表示します。構造化データとして
+  残す場合は右ペインの「テンプレート」から単独で登録してください。
 
 ## 医療機関（Organization）
 

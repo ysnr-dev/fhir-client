@@ -15,6 +15,12 @@ import {
 } from "./practitionerField";
 import { PRACTITIONER_ROLE_OPTIONS } from "./practitionerRoleHelpers";
 import {
+  DEFAULT_OBSERVATION_CATEGORY,
+  observationExtractCategory,
+  observationExtractEnabled,
+  observationExtractExtensions,
+} from "./observationExtract";
+import {
   templateCategoryExtension,
   templateCategoryOf,
   type TemplateCategoryRef,
@@ -204,6 +210,10 @@ export interface QuestionnaireFormValues {
   description: string;
   // テンプレート選択プルダウンの分類(任意)。未設定なら null。
   category: TemplateCategoryRef | null;
+  // 回答から Observation を生成するか(項目コードの付いた設問が対象)と、
+  // 生成する Observation の category。
+  observationExtract: boolean;
+  observationCategory: string;
   variables: EditorVariable[];
   items: EditorItem[];
 }
@@ -276,6 +286,8 @@ export function emptyQuestionnaireForm(): QuestionnaireFormValues {
     status: "draft",
     description: "",
     category: null,
+    observationExtract: false,
+    observationCategory: DEFAULT_OBSERVATION_CATEGORY,
     variables: [],
     items: [newEditorItem()],
   };
@@ -579,6 +591,9 @@ export function buildQuestionnaire(
     buildExpressionExt(VARIABLE_EXT_URL, v.expression, v.name),
   );
   if (values.category) extensions.push(templateCategoryExtension(values.category));
+  extensions.push(
+    ...observationExtractExtensions(values.observationExtract, values.observationCategory),
+  );
   if (extensions.length) questionnaire.extension = extensions;
 
   return questionnaire;
@@ -736,6 +751,8 @@ export function parseQuestionnaireForm(questionnaire: fhir4.Questionnaire): Ques
     status,
     description: questionnaire.description ?? "",
     category: templateCategoryOf(questionnaire),
+    observationExtract: observationExtractEnabled(questionnaire),
+    observationCategory: observationExtractCategory(questionnaire),
     variables: (questionnaire.extension ?? [])
       .filter((ext) => ext.url === VARIABLE_EXT_URL)
       .map((ext) => ({
@@ -996,6 +1013,10 @@ function validateItems(
   return null;
 }
 
+function hasAnyItemCode(items: EditorItem[]): boolean {
+  return items.some((item) => item.codes.length > 0 || hasAnyItemCode(item.children));
+}
+
 export function validateQuestionnaireForm(values: QuestionnaireFormValues): string | null {
   if (!values.url) return "URL(一意識別子)を入力してください。";
   if (!/^https?:\/\/.+/.test(values.url)) {
@@ -1020,6 +1041,11 @@ export function validateQuestionnaireForm(values: QuestionnaireFormValues): stri
   }
 
   if (values.items.length === 0) return "項目を1つ以上追加してください。";
+
+  // 対象が 1 つも無いまま有効にすると、保存できてしまうのに何も生成されない。
+  if (values.observationExtract && !hasAnyItemCode(values.items)) {
+    return "回答から Observation を生成するには、項目コードを設定した設問が1つ以上必要です。";
+  }
 
   return validateItems(values.items, null, new Set(), "");
 }

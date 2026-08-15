@@ -78,23 +78,21 @@ SDC の Observation 抽出を実装すれば、この code がそのまま `Obse
   当てるには SNOMED CT の個別確認が要る。当てずっぽうのコードを入れる方が無コードより
   害が大きいので、必要になった時点で確認して入れる。
 
-## 将来 Observation として抽出する場合
+## Observation の生成(実装済み)
 
-現状は QuestionnaireResponse として保存するだけで、構造化データ(Observation)には
-なっていない。`item.code` は入っているので、残りは抽出処理だけ。
+社会歴は「回答から Observation を生成する」を有効にしてあるので、回答を保存すると
+`category=social-history` の Observation が同時に作られる。詳細は readme の
+「テンプレート回答からの Observation 生成」を参照。生成される内容は例えば次のとおり。
 
-1. 回答保存時に QuestionnaireResponse と Observation を同一の transaction Bundle へ
-   積む(シェーマ画像の Binary と同じパターン。`clinicalNoteHelpers.ts` の保存処理が参考になる)。
-   Observation は `code` = item.code、`value[x]` = 回答値、`category` = `social-history`、
-   `derivedFrom` = 生成元の QuestionnaireResponse。
-2. どの項目を抽出するかの指定が要るなら SDC の
-   `sdc-questionnaire-observationExtract`(boolean 拡張)を足す。全項目を対象にするなら
-   `item.code` の有無で判断してもよい。
-3. `questionnaireResponsePlainText` の再帰(linkId をたどって回答を読む処理)が、
-   そのまま抽出の走査に流用できる。
+| 設問 | Observation.code | value |
+|---|---|---|
+| 喫煙歴 = 有 | MD0012870 | `valueCodeableConcept` 02「有」 |
+| １日の喫煙本数 = 20 | MD0012900 | `valueQuantity` 20 本/日 |
+| 通算喫煙年数 = 30 | MD0012910 | `valueQuantity` 30 年 |
+| 喫煙指数(自動計算) = 600 | MD0012920 | `valueInteger` 600 |
 
-サーバー側の対応は不要。上流の JASPEHR プロファイルは `item.code` /
-`item.definition` / `sdc-questionnaire-itemExtractionContext` を既に許容している。
+家族歴・システムレビューは項目コードを入れていないので、有効にしても何も生成されない
+(保存時のバリデーションで弾かれる)。
 
 ## 運用上の既知の制約
 

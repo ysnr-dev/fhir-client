@@ -95,6 +95,7 @@ export function QuestionnaireResponseCreatePanel({
     setValidationError(null);
     createResponse.mutate(
       {
+        questionnaire,
         response: buildQuestionnaireResponse({ questionnaire, patient, items, meta }),
         imageEntries,
       },
@@ -233,6 +234,7 @@ function EditForm({
     setConflict(false);
     updateResponse.mutate(
       {
+        questionnaire,
         response: buildQuestionnaireResponse({
           questionnaire,
           patient,
@@ -242,6 +244,7 @@ function EditForm({
         }),
         etag,
         imageEntries,
+        existing: response,
       },
       {
         onSuccess: onSaved,

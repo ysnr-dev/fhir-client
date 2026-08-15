@@ -108,3 +108,20 @@ fhir-client のワークアラウンド調査（2026-08-01）で見つかった�
 - **影響範囲**: 記録数の多い患者でプロブレムを絞り込んだときのレイテンシと転送量。
   サーバー検索に切り替える場合は、3 ソースの安全カットオフによるページングを
   絞り込み専用のクエリへ分ける改修も要る。
+
+## 8. `Observation.derived-from` 検索（テンプレート回答から生成した Observation）
+
+- **現状**: テンプレート回答から生成した Observation（`frontend/src/fhir/observationExtract.ts`）を
+  回答の編集・削除時に引き当てるため、生成した Observation への参照を回答側の
+  ローカル拡張 `http://fhir-client.local/StructureDefinition/questionnaire-response-observation`
+  に記録している。`Observation.derivedFrom` には正しく回答への参照が入っているが、
+  上流の Observation 検索パラメータ（`app/lib/fhir/search_definitions/observation.rb`）に
+  `derived-from` が無く、そこから引けないための二重持ちになっている。
+- **望ましいサーバー機能**: `Observation.derived-from` 検索パラメータ（R4 標準）。
+  0..* の参照なので、同ファイルの `part-of` と同じ jsonb containment の定義を 1 行
+  足すだけで済む（マイグレーション不要）。`target_type` は複数取りうるので、
+  当面は `QuestionnaireResponse` に絞ってよい。
+- **影響範囲**: ローカル拡張を落とせる。拡張と実体がずれる余地（拡張だけ残って
+  Observation が消えている等）が無くなり、他の経路で作った Observation も
+  同じやり方で辿れるようになる。処方の `prescription-medication-request`（§5）と
+  同種の負債なので、まとめて整理するとよい。

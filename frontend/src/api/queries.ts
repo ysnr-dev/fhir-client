@@ -65,6 +65,12 @@ import {
   downloadQuestionnaireExport,
   parseTransferImport,
 } from "../fhir/questionnaireTransfer";
+import {
+  generatedObservationRefs,
+  observationExtractEnabled,
+  responseDeleteBundle,
+  responseSaveBundle,
+} from "../fhir/observationExtract";
 import { resourceFromBundleResponse, resourceWithImagesBundle } from "../fhir/schemaImage";
 import {
   createReportLayout,
@@ -1980,18 +1986,44 @@ export function usePopulateSources(patientId: string | undefined) {
   };
 }
 
+// 回答から Observation を生成するテンプレートは、回答・画像・Observation を 1 つの
+// transaction で書く。生成しないテンプレートは従来どおりの保存経路のまま
+// (無駄に Bundle にしない)。
+async function saveResponse(
+  questionnaire: fhir4.Questionnaire,
+  response: fhir4.QuestionnaireResponse,
+  imageEntries?: fhir4.BundleEntry[],
+  etag?: string,
+  existing?: fhir4.QuestionnaireResponse,
+): Promise<FhirResult<fhir4.QuestionnaireResponse>> {
+  const extracts = observationExtractEnabled(questionnaire);
+  if (!extracts && !generatedObservationRefs(existing).length) {
+    return saveWithImages(response, imageEntries, etag);
+  }
+
+  const { data: bundle } = await postBundle(
+    responseSaveBundle({ questionnaire, response, imageEntries, etag, existing }),
+  );
+  const saved = resourceFromBundleResponse<fhir4.QuestionnaireResponse>(bundle);
+  if (!saved.resource) throw new Error("保存結果を取得できませんでした。");
+  return { data: saved.resource, etag: saved.etag };
+}
+
 export function useCreateQuestionnaireResponse() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
+      questionnaire,
       response,
       imageEntries,
     }: {
+      questionnaire: fhir4.Questionnaire;
       response: fhir4.QuestionnaireResponse;
       imageEntries?: fhir4.BundleEntry[];
-    }) => saveWithImages(response, imageEntries),
+    }) => saveResponse(questionnaire, response, imageEntries),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
     },
   });
 }
@@ -2000,17 +2032,22 @@ export function useUpdateQuestionnaireResponse() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
+      questionnaire,
       response,
       etag,
       imageEntries,
+      existing,
     }: {
+      questionnaire: fhir4.Questionnaire;
       response: fhir4.QuestionnaireResponse;
       etag: string;
       imageEntries?: fhir4.BundleEntry[];
-    }) => saveWithImages(response, imageEntries, etag),
+      existing?: fhir4.QuestionnaireResponse;
+    }) => saveResponse(questionnaire, response, imageEntries, etag, existing),
     onSuccess: (result: FhirResult<fhir4.QuestionnaireResponse>) => {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", result.data.id] });
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
     },
   });
 }
@@ -2018,9 +2055,17 @@ export function useUpdateQuestionnaireResponse() {
 export function useDeleteQuestionnaireResponse() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteResource("QuestionnaireResponse", id),
+    // 生成した Observation も一緒に消す(回答が消えると derivedFrom の指す先が
+    // 無くなり、由来を辿れない Observation だけが残るため)。
+    mutationFn: async (response: fhir4.QuestionnaireResponse) => {
+      if (!generatedObservationRefs(response).length) {
+        return deleteResource("QuestionnaireResponse", response.id ?? "");
+      }
+      await postBundle(responseDeleteBundle(response));
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
     },
   });
 }
