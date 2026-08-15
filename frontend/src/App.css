@@ -3802,6 +3802,17 @@ body.karte-wide .app__header {
   text-decoration: none;
 }
 
+/* 下位プロブレム。帯は横並びなので、字下げの代わりに罫線の印で親子を示す。 */
+.karte-problems__child-mark {
+  margin-right: 2px;
+  opacity: 0.6;
+  text-decoration: none;
+}
+
+.karte-problems .karte-problems__chip--child {
+  border-style: dashed;
+}
+
 /* 解決済みの開閉。チップの列に並ぶが、プロブレムそのものではないので枠は付けない。 */
 .karte-problems .karte-problems__resolved-toggle {
   padding: 2px 4px;

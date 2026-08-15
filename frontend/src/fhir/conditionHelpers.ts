@@ -27,6 +27,18 @@ const CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/condition-categor
 // (clinicalNoteHelpers.ts の SECTION_QR_EXT_URL と同じ URL 規約)。
 const PROBLEM_NUMBER_EXT_URL = "http://fhir-client.local/StructureDefinition/problem-number";
 
+// プロブレム間の関連を保持するアプリローカル拡張。FHIR R4 には Condition 同士の
+// 型付き関連が無い(標準の condition-related 拡張は「関係がある」としか言えず、
+// 統合と親子を区別できない)ため、プロブレム番号と同じくローカルで持つ。
+//
+// - problem-parent: 下位プロブレム(subproblem)の親。親子とも継続したまま併存する。
+// - problem-succeeded-by: このプロブレムが引き継がれた先。統合と分割を同じ関係で
+//   表す(統合 = 複数の旧が同じ新を指す / 分割 = 1 つの旧が複数の新を指す。
+//   グラフの形が違うだけなので拡張を分けない)。
+const PROBLEM_PARENT_EXT_URL = "http://fhir-client.local/StructureDefinition/problem-parent";
+const PROBLEM_SUCCEEDED_BY_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/problem-succeeded-by";
+
 // 病名の区分。POMR のプロブレムリスト・既往歴・レセプト用の保険病名を同じ
 // Condition で区分管理する。category が無い既存データは保険病名として扱う(移行不要)。
 export type ConditionCategory = "problem" | "billing" | "past";
@@ -108,6 +120,67 @@ export function splitConditions(conditions: fhir4.Condition[]): {
   }
   problems.sort(compareProblemNumber);
   return { problems, billings, pasts };
+}
+
+// ---- プロブレム間の関連 ----
+
+function referenceIds(condition: fhir4.Condition, url: string): string[] {
+  return (condition.extension ?? [])
+    .filter((e) => e.url === url)
+    .map((e) => e.valueReference?.reference?.match(/^Condition\/(.+)$/)?.[1] ?? "")
+    .filter(Boolean);
+}
+
+/** 親プロブレムの id。無ければ null。 */
+export function problemParentId(condition: fhir4.Condition): string | null {
+  return referenceIds(condition, PROBLEM_PARENT_EXT_URL)[0] ?? null;
+}
+
+/** 引き継ぎ先(統合・分割)のプロブレム id。 */
+export function problemSucceededByIds(condition: fhir4.Condition): string[] {
+  return referenceIds(condition, PROBLEM_SUCCEEDED_BY_EXT_URL);
+}
+
+/** 引き継ぎ先が設定されているか(表示上「統合済み」として扱う)。 */
+export function isSucceeded(condition: fhir4.Condition): boolean {
+  return problemSucceededByIds(condition).length > 0;
+}
+
+/**
+ * 指定したプロブレムと、その配下の下位プロブレムすべての id。
+ * 親で絞り込んだときに子の記録も対象にするために使う。
+ * 参照が輪になっていても止まるよう、一度見た id は辿り直さない。
+ */
+export function problemWithDescendantIds(
+  problems: fhir4.Condition[],
+  rootId: string,
+): Set<string> {
+  const childrenByParent = new Map<string, string[]>();
+  for (const problem of problems) {
+    const parentId = problemParentId(problem);
+    if (!parentId || !problem.id) continue;
+    const siblings = childrenByParent.get(parentId);
+    if (siblings) siblings.push(problem.id);
+    else childrenByParent.set(parentId, [problem.id]);
+  }
+
+  const collected = new Set<string>();
+  const queue = [rootId];
+  while (queue.length) {
+    const id = queue.shift() as string;
+    if (collected.has(id)) continue;
+    collected.add(id);
+    queue.push(...(childrenByParent.get(id) ?? []));
+  }
+  return collected;
+}
+
+/**
+ * 親に指定できないプロブレムの id。自分自身と、自分の配下(そこを親にすると輪になる)。
+ * 引き継ぎ先の候補からも同じ理由で自分自身を外す。
+ */
+export function invalidParentIds(problems: fhir4.Condition[], selfId: string): Set<string> {
+  return problemWithDescendantIds(problems, selfId);
 }
 
 // 次に採番するプロブレム番号。欠番は再利用しない(番号の指す先を変えないため)。
@@ -203,6 +276,10 @@ export interface ConditionFormValues {
   startDate: string;
   endDate: string;
   outcome: OutcomeCode;
+  /** 下位プロブレムの親。プロブレム区分のときだけ使う。 */
+  parentId: string;
+  /** 引き継ぎ先(統合・分割)。プロブレム区分のときだけ使う。 */
+  succeededByIds: string[];
 }
 
 function today(): string {
@@ -220,6 +297,8 @@ export function emptyConditionForm(): ConditionFormValues {
     startDate: today(),
     endDate: "",
     outcome: "active",
+    parentId: "",
+    succeededByIds: [],
   };
 }
 
@@ -361,8 +440,25 @@ export function buildCondition(
   };
 
   if (conditionId) condition.id = conditionId;
-  if (values.category === "problem" && problemNumber !== undefined) {
-    condition.extension = [{ url: PROBLEM_NUMBER_EXT_URL, valuePositiveInt: problemNumber }];
+  // プロブレム番号と関連はプロブレム区分のときだけ持たせる(区分を変えたら落とす)。
+  if (values.category === "problem") {
+    const extensions: fhir4.Extension[] = [];
+    if (problemNumber !== undefined) {
+      extensions.push({ url: PROBLEM_NUMBER_EXT_URL, valuePositiveInt: problemNumber });
+    }
+    if (values.parentId) {
+      extensions.push({
+        url: PROBLEM_PARENT_EXT_URL,
+        valueReference: { reference: `Condition/${values.parentId}` },
+      });
+    }
+    for (const id of values.succeededByIds) {
+      extensions.push({
+        url: PROBLEM_SUCCEEDED_BY_EXT_URL,
+        valueReference: { reference: `Condition/${id}` },
+      });
+    }
+    if (extensions.length) condition.extension = extensions;
   }
   // FHIR の dateTime は日付のみ(YYYY-MM-DD)を許容し、fhir-server もそのまま受理する。
   if (values.startDate) condition.onsetDateTime = values.startDate;
@@ -489,5 +585,7 @@ export function parseConditionForm(condition: fhir4.Condition): ConditionFormVal
     startDate: condition.onsetDateTime?.slice(0, 10) ?? "",
     endDate: condition.abatementDateTime?.slice(0, 10) ?? "",
     outcome,
+    parentId: problemParentId(condition) ?? "",
+    succeededByIds: problemSucceededByIds(condition),
   };
 }

@@ -27,7 +27,11 @@ import { KarteRightPane, type KartePaneState } from "../components/KarteRightPan
 import { KarteSplitter } from "../components/KarteSplitter";
 import { KARTE_TARGET_ATTR, KarteTimeline } from "../components/KarteTimeline";
 import { PatientHeader } from "../components/PatientHeader";
-import { problemLabel, splitConditions } from "../fhir/conditionHelpers";
+import {
+  problemLabel,
+  problemWithDescendantIds,
+  splitConditions,
+} from "../fhir/conditionHelpers";
 import {
   buildKarteTimeline,
   filterKarteGroups,
@@ -299,15 +303,22 @@ export function KartePage() {
     ],
   );
 
+  // 選択中のプロブレムと、その下位プロブレム。親を選んだら子に紐付く情報も
+  // 同じ扱いにする(合併症を含めた経過を 1 つの軸で追えるようにするため)。
+  const activeProblemIds = useMemo(
+    () => (activeProblemId ? problemWithDescendantIds(problems, activeProblemId) : null),
+    [problems, activeProblemId],
+  );
+
   // 絞り込みはページングの判定(カットオフ・pending)より後に行う。判定は読み込み済みの
   // 全データで決まるので、ここで件数が減っても読み進みには影響しない。
   // プロブレムと種別の両方が選ばれていれば、両方を満たすものだけが残る。
   const filteredGroups = useMemo(() => {
     let groups = timeline.groups;
-    if (filterProblemId) groups = filterKarteGroups(groups, filterProblemId);
+    if (filterProblemId && activeProblemIds) groups = filterKarteGroups(groups, activeProblemIds);
     if (cardFilter) groups = filterKarteGroupsByCard(groups, cardFilter);
     return groups;
-  }, [timeline.groups, filterProblemId, cardFilter]);
+  }, [timeline.groups, filterProblemId, activeProblemIds, cardFilter]);
 
   // 表示範囲を押し下げているソースだけ次ページを読む。
   function loadMore() {
@@ -452,6 +463,7 @@ export function KartePage() {
         {filterProblemId && (
           <KarteProblemSummary
             condition={problemsById.get(filterProblemId)}
+            problems={problems}
             loading={conditionsPending}
             groups={filteredGroups}
             hasMore={timeline.hasMore}
@@ -476,7 +488,7 @@ export function KartePage() {
           onDeleted={handleDeleted}
           containerRef={timelineRef}
           problemsById={problemsById}
-          selectedProblemId={activeProblemId}
+          selectedProblemIds={activeProblemIds}
           highlightKey={highlightKey}
           emptyMessage={
             filterProblemId

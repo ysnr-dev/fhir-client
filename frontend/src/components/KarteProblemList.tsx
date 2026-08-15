@@ -1,4 +1,9 @@
-import { problemLabel, summarizeCondition } from "../fhir/conditionHelpers";
+import {
+  problemLabel,
+  problemParentId,
+  problemSucceededByIds,
+  summarizeCondition,
+} from "../fhir/conditionHelpers";
 import type { KarteProblemMode } from "../karteLayout";
 import { RowMenu } from "./RowMenu";
 
@@ -31,6 +36,42 @@ const MODE_ITEMS: { mode: KarteProblemMode; label: string }[] = [
 // 継続(active)以外は解決済み・中止として扱う。
 function isActiveProblem(problem: fhir4.Condition): boolean {
   return problem.clinicalStatus?.coding?.[0]?.code === "active";
+}
+
+/**
+ * 親の直後に下位プロブレムを並べた順序。番号順のままだと親子が離れて読みにくい。
+ * 親が一覧に無いもの(削除済みを指している等)は最上位として扱い、参照が輪になって
+ * いても一度出したものは出さないので止まる。
+ */
+function orderByHierarchy(problems: fhir4.Condition[]): fhir4.Condition[] {
+  const childrenByParent = new Map<string, fhir4.Condition[]>();
+  const ids = new Set(problems.map((p) => p.id ?? ""));
+  const roots: fhir4.Condition[] = [];
+
+  for (const problem of problems) {
+    const parentId = problemParentId(problem);
+    if (parentId && ids.has(parentId)) {
+      const siblings = childrenByParent.get(parentId);
+      if (siblings) siblings.push(problem);
+      else childrenByParent.set(parentId, [problem]);
+    } else {
+      roots.push(problem);
+    }
+  }
+
+  const ordered: fhir4.Condition[] = [];
+  const seen = new Set<string>();
+  function visit(problem: fhir4.Condition) {
+    const id = problem.id ?? "";
+    if (seen.has(id)) return;
+    seen.add(id);
+    ordered.push(problem);
+    for (const child of childrenByParent.get(id) ?? []) visit(child);
+  }
+  roots.forEach(visit);
+  // 輪になっていて根から辿れなかったものも、落とさずに末尾へ出す。
+  problems.forEach(visit);
+  return ordered;
 }
 
 export function KarteProblemList({
@@ -96,10 +137,14 @@ export function KarteProblemList({
     );
   }
 
+  // 下位プロブレムは親の直後に寄せる(番号順のままだと親子が離れて読みにくい)。
+  const ordered = orderByHierarchy(problems);
+  const numbersById = new Map(problems.map((p) => [p.id ?? "", problemLabel(p)]));
+
   const resolvedCount = problems.filter((problem) => !isActiveProblem(problem)).length;
   // 解決済みを隠していても、選択中のものはタイムラインの減光・絞り込みの理由が
   // 分かるよう残す。
-  const shownProblems = problems.filter(
+  const shownProblems = ordered.filter(
     (problem) => isActiveProblem(problem) || resolvedVisible || problem.id === selectedId,
   );
   const resolvedLabel = resolvedVisible
@@ -121,6 +166,11 @@ export function KarteProblemList({
             const summary = summarizeCondition(problem);
             const isActive = isActiveProblem(problem);
             const isSelected = selectedId === summary.id;
+            // 下位プロブレムは 1 段下げ、引き継がれたものは行き先を併記する。
+            const isChild = Boolean(problemParentId(problem) && numbersById.has(problemParentId(problem) ?? ""));
+            const successors = problemSucceededByIds(problem)
+              .map((id) => numbersById.get(id))
+              .filter(Boolean);
             return (
               <li key={summary.id}>
                 <button
@@ -129,6 +179,7 @@ export function KarteProblemList({
                     "karte-problems__chip",
                     isSelected ? "karte-problems__chip--selected" : "",
                     isActive ? "" : "karte-problems__chip--inactive",
+                    isChild ? "karte-problems__chip--child" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -144,9 +195,15 @@ export function KarteProblemList({
                   }
                   onClick={() => onSelect(isSelected ? null : summary.id)}
                 >
+                  {isChild && <span className="karte-problems__child-mark">└</span>}
                   {problemLabel(problem)}
-                  {!isActive && summary.outcomeDisplay && (
-                    <span className="karte-problems__outcome">{summary.outcomeDisplay}</span>
+                  {successors.length > 0 ? (
+                    <span className="karte-problems__outcome">→ {successors.join(", ")}</span>
+                  ) : (
+                    !isActive &&
+                    summary.outcomeDisplay && (
+                      <span className="karte-problems__outcome">{summary.outcomeDisplay}</span>
+                    )
                   )}
                 </button>
               </li>

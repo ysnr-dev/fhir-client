@@ -445,9 +445,18 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   return null;
 }
 
-export function referencesProblem(item: KarteTimelineItem, conditionId: string | null): boolean {
-  if (!conditionId) return false;
-  return itemProblem(item)?.conditionId === conditionId;
+/**
+ * この情報が対象プロブレムのいずれかを指しているか。
+ * 集合で受けるのは、親プロブレムを選んだときに下位プロブレムの記録も
+ * 同じ扱いにするため(conditionHelpers の problemWithDescendantIds で作る)。
+ */
+export function referencesProblem(
+  item: KarteTimelineItem,
+  conditionIds: ReadonlySet<string> | null,
+): boolean {
+  if (!conditionIds?.size) return false;
+  const id = itemProblem(item)?.conditionId;
+  return Boolean(id && conditionIds.has(id));
 }
 
 /**
@@ -461,12 +470,12 @@ export function referencesProblem(item: KarteTimelineItem, conditionId: string |
  */
 export function filterKarteGroups(
   groups: KarteDayGroup[],
-  conditionId: string,
+  conditionIds: ReadonlySet<string>,
 ): KarteDayGroup[] {
   return groups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => referencesProblem(item, conditionId)),
+      items: group.items.filter((item) => referencesProblem(item, conditionIds)),
     }))
     .filter((group) => group.items.length > 0);
 }

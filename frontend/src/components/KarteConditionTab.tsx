@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FhirError } from "../api/fhirClient";
 import {
   useCondition,
   useConditionSearch,
   useCreateCondition,
+  useKarteConditions,
   useUpdateCondition,
 } from "../api/queries";
 import {
   buildCondition,
   parseConditionForm,
+  splitConditions,
   type ConditionFormValues,
 } from "../fhir/conditionHelpers";
 import { useProblemNumbering } from "../hooks/useProblemNumbering";
@@ -135,6 +137,7 @@ export function KarteConditionTab({ patientId, view, onViewChange }: KarteCondit
 function CreateForm({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {
   const createCondition = useCreateCondition();
   const problemNumberFor = useProblemNumbering(patientId);
+  const problems = useProblemConditions(patientId);
 
   function handleSubmit(values: ConditionFormValues) {
     createCondition.mutate(
@@ -148,8 +151,15 @@ function CreateForm({ patientId, onSaved }: { patientId: string; onSaved: () => 
       onSubmit={handleSubmit}
       submitting={createCondition.isPending}
       submitError={createCondition.error}
+      problems={problems}
     />
   );
+}
+
+// 関連(親・引き継ぎ先)の候補にする既存プロブレム。
+function useProblemConditions(patientId: string) {
+  const { conditions } = useKarteConditions(patientId);
+  return useMemo(() => splitConditions(conditions).problems, [conditions]);
 }
 
 function EditForm({
@@ -164,6 +174,7 @@ function EditForm({
   const { data: result, isLoading, error: loadError } = useCondition(conditionId);
   const updateCondition = useUpdateCondition();
   const problemNumberFor = useProblemNumbering(patientId);
+  const problems = useProblemConditions(patientId);
   const [conflict, setConflict] = useState(false);
 
   const condition = result?.data;
@@ -219,6 +230,8 @@ function EditForm({
             submitting={updateCondition.isPending}
             submitError={conflict ? undefined : updateCondition.error}
             submitLabel="更新"
+            problems={problems}
+            selfId={conditionId}
           />
         )
       )}

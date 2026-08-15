@@ -98,7 +98,7 @@ interface KarteTimelineProps {
   /** プロブレム(Condition)を id で引く辞書。バッジを最新の名称で描くために使う。 */
   problemsById: Map<string, fhir4.Condition>;
   /** 選択中のプロブレム。これを参照しない診療記録は控えめに表示する。 */
-  selectedProblemId: string | null;
+  selectedProblemIds: ReadonlySet<string> | null;
   /** 診療日パネルから飛んだ先。該当する枠を一定時間だけ強調する。 */
   highlightKey: string | null;
   /** 表示するものが無いときの文言。プロブレムで絞り込んでいるときに差し替える。 */
@@ -121,7 +121,7 @@ export function KarteTimeline({
   onDeleted,
   containerRef,
   problemsById,
-  selectedProblemId,
+  selectedProblemIds,
   highlightKey,
   emptyMessage,
 }: KarteTimelineProps) {
@@ -178,7 +178,7 @@ export function KarteTimeline({
                   onOpenDetail={onOpenDetail}
                   onDeleted={onDeleted}
                   problemsById={problemsById}
-                  selectedProblemId={selectedProblemId}
+                  selectedProblemIds={selectedProblemIds}
                   highlighted={highlightKey === karteItemKey(item)}
                 />
               ))}
@@ -201,7 +201,7 @@ function KarteCard({
   onOpenDetail,
   onDeleted,
   problemsById,
-  selectedProblemId,
+  selectedProblemIds,
   highlighted,
 }: {
   item: KarteTimelineItem;
@@ -210,7 +210,7 @@ function KarteCard({
   onOpenDetail: (target: KarteDetailTarget) => void;
   onDeleted: (item: KarteTimelineItem) => void;
   problemsById: Map<string, fhir4.Condition>;
-  selectedProblemId: string | null;
+  selectedProblemIds: ReadonlySet<string> | null;
   highlighted: boolean;
 }) {
   const deleteNote = useDeleteClinicalNote();
@@ -264,7 +264,7 @@ function KarteCard({
 
   // プロブレム選択中は、そのプロブレムを参照しない情報を控えめに表示する
   // (件数が減ると読み込み位置が動くので、隠さず減光にとどめる)。
-  const dimmed = Boolean(selectedProblemId) && !referencesProblem(item, selectedProblemId);
+  const dimmed = Boolean(selectedProblemIds?.size) && !referencesProblem(item, selectedProblemIds);
 
   return (
     <article

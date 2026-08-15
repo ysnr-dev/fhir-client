@@ -3,7 +3,12 @@ import {
   sectionTitle,
   stripSchemaImageNotes,
 } from "../fhir/clinicalNoteHelpers";
-import { problemLabel, summarizeCondition } from "../fhir/conditionHelpers";
+import {
+  problemLabel,
+  problemParentId,
+  problemSucceededByIds,
+  summarizeCondition,
+} from "../fhir/conditionHelpers";
 import { itemProblem, type KarteDayGroup } from "../fhir/karteTimeline";
 
 // 「関連する記録のみ表示」で絞り込んでいるときに、タイムラインの上に出す見出し。
@@ -13,6 +18,8 @@ import { itemProblem, type KarteDayGroup } from "../fhir/karteTimeline";
 interface KarteProblemSummaryProps {
   /** 絞り込み対象のプロブレム。削除済みの id を指す URL では undefined。 */
   condition: fhir4.Condition | undefined;
+  /** 患者のプロブレム一覧。親子・引き継ぎ先の名称を引くのに使う。 */
+  problems: fhir4.Condition[];
   /** プロブレムの取得中か。取得前の undefined を「削除済み」と誤って出さないために要る。 */
   loading: boolean;
   /** 絞り込み済みのタイムライン。A/P の抜粋をここから引く。 */
@@ -59,6 +66,7 @@ function latestAssessment(groups: KarteDayGroup[]): { day: string; text: string 
 
 export function KarteProblemSummary({
   condition,
+  problems,
   loading,
   groups,
   hasMore,
@@ -92,6 +100,19 @@ export function KarteProblemSummary({
 
   const summary = summarizeCondition(condition);
   const assessment = latestAssessment(groups);
+  // 親・引き継ぎ先は「どの位置づけのプロブレムを見ているか」なので見出しに出す。
+  const labelOf = (id: string) => {
+    const found = problems.find((p) => p.id === id);
+    return found ? problemLabel(found) : "";
+  };
+  const parentLabel = condition.id ? labelOf(problemParentId(condition) ?? "") : "";
+  const successorLabels = problemSucceededByIds(condition).map(labelOf).filter(Boolean);
+  const relationText = successorLabels.length
+    ? `→ ${successorLabels.join(", ")} に引き継ぎ`
+    : parentLabel
+      ? `${parentLabel} の下位`
+      : "";
+  const childCount = problems.filter((p) => problemParentId(p) === condition.id).length;
   const period = summary.startDate
     ? `${summary.startDate} 〜 ${summary.endDate}`
     : summary.endDate && `〜 ${summary.endDate}`;
@@ -104,8 +125,14 @@ export function KarteProblemSummary({
           <span className="karte-problem-summary__outcome">{summary.outcomeDisplay}</span>
         )}
         {period && <span className="karte-problem-summary__dates">{period}</span>}
+        {relationText && <span className="karte-problem-summary__dates">{relationText}</span>}
         {clearButton}
       </div>
+      {childCount > 0 && (
+        <p className="karte-problem-summary__dates">
+          下位プロブレム {childCount} 件の記録も含めて表示しています。
+        </p>
+      )}
       {assessment ? (
         <p className="karte-problem-summary__assessment">
           <span className="karte-problem-summary__assessment-day">{assessment.day}</span>

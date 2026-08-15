@@ -5,8 +5,10 @@ import {
   conditionBaseName,
   conditionDisplayName,
   emptyConditionForm,
+  invalidParentIds,
   isSuspected,
   OUTCOME_OPTIONS,
+  problemLabel,
   withSuspected,
   type ConditionCategory,
   type ConditionFormValues,
@@ -23,6 +25,10 @@ interface ConditionFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /** 関連(親・引き継ぎ先)の候補にする、この患者の既存プロブレム。 */
+  problems?: fhir4.Condition[];
+  /** 編集中のプロブレム自身の id。自分と配下を候補から外すのに使う。 */
+  selfId?: string;
 }
 
 type ModalState = { kind: "disease" } | { kind: "prefix" } | { kind: "postfix" } | null;
@@ -33,6 +39,8 @@ export function ConditionForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  problems = [],
+  selfId,
 }: ConditionFormProps) {
   const [values, setValues] = useState<ConditionFormValues>(initialValues ?? emptyConditionForm);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -70,6 +78,21 @@ export function ConditionForm({
     setValues((v) => ({ ...v, [kind]: v[kind].filter((_, i) => i !== index) }));
   }
 
+  // 引き継ぎ先を指定したら、そのプロブレムは追わなくなるので転帰も閉じる
+  // (画面上で転帰欄も変わるので、勝手に閉じられたことが見える)。
+  function addSuccessor(id: string) {
+    if (!id) return;
+    setValues((v) => ({
+      ...v,
+      succeededByIds: v.succeededByIds.includes(id) ? v.succeededByIds : [...v.succeededByIds, id],
+      outcome: v.outcome === "active" ? "inactive" : v.outcome,
+    }));
+  }
+
+  function removeSuccessor(id: string) {
+    setValues((v) => ({ ...v, succeededByIds: v.succeededByIds.filter((x) => x !== id) }));
+  }
+
   function validate(): string | null {
     if (!conditionBaseName(values)) {
       return values.diseaseMode === "free"
@@ -103,6 +126,14 @@ export function ConditionForm({
       e.preventDefault();
     }
   }
+
+  // 自分自身と自分の配下は、親にすると参照が輪になるので候補から外す。
+  const excludedIds = selfId ? invalidParentIds(problems, selfId) : new Set<string>();
+  const relationOptions = problems.filter((p) => p.id && !excludedIds.has(p.id));
+  const problemLabelOf = (id: string) => {
+    const found = problems.find((p) => p.id === id);
+    return found ? problemLabel(found) : "(削除済み)";
+  };
 
   const fullName = conditionDisplayName(values);
   const singleUseWarning =
@@ -302,6 +333,65 @@ export function ConditionForm({
           </select>
         </label>
       </fieldset>
+
+      {/* プロブレム同士の関連。POMR では症状で立てたプロブレムが 1 つの診断に
+          まとまったり(統合)、1 つが複数に分かれたり(分割)、下位のプロブレムが
+          ぶら下がったりする。統合と分割は「引き継ぎ先」1 つで表す
+          (複数の旧が同じ先を指せば統合、1 つの旧が複数を指せば分割)。 */}
+      {values.category === "problem" && (
+        <fieldset>
+          <legend>プロブレムの関連</legend>
+          <label>
+            親プロブレム
+            <select value={values.parentId} onChange={(e) => update("parentId", e.target.value)}>
+              <option value="">(なし)</option>
+              {relationOptions.map((problem) => (
+                <option key={problem.id} value={problem.id}>
+                  {problemLabel(problem)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="condition-form__row">
+            <label>
+              引き継ぎ先(統合・分割)
+              {values.succeededByIds.length === 0 ? (
+                <span className="rp-card__usage-value rp-card__usage-value--empty">なし</span>
+              ) : (
+                <span className="condition-form__modifiers">
+                  {values.succeededByIds.map((id) => (
+                    <span className="condition-form__modifier-chip" key={id}>
+                      {problemLabelOf(id)}
+                      <button
+                        type="button"
+                        aria-label={`${problemLabelOf(id)} への引き継ぎを外す`}
+                        onClick={() => removeSuccessor(id)}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </span>
+              )}
+            </label>
+            <select
+              value=""
+              aria-label="引き継ぎ先を追加"
+              onChange={(e) => addSuccessor(e.target.value)}
+            >
+              <option value="">+ 引き継ぎ先を追加</option>
+              {relationOptions
+                .filter((p) => p.id && !values.succeededByIds.includes(p.id))
+                .map((problem) => (
+                  <option key={problem.id} value={problem.id}>
+                    {problemLabel(problem)}
+                  </option>
+                ))}
+            </select>
+          </div>
+        </fieldset>
+      )}
 
       <div className="prescription-form__submit">
         <button type="submit" disabled={submitting}>
