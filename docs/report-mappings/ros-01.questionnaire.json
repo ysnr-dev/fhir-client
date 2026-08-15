@@ -1,0 +1,686 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/ros-01",
+  "version": "1.0.0",
+  "name": "ROS_01",
+  "title": "システムレビュー",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "POMR の基礎データ(Database)のうちシステムレビュー(ROS)。器官系ごとに陽性の自覚症状をチェックする。チェックの無い項目は「聴取したが陰性」ではなく「未チェック」を意味するので、陰性を明示したい場合は補足欄に記載する。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "6f3a9c14-5d02-4e7b-9a83-2c6e1b40d7f5",
+        "display": "基礎データ"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "ros_presence",
+      "type": "choice",
+      "text": "自覚症状",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                "code": "radio-button"
+              }
+            ]
+          }
+        },
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+          "valueCode": "horizontal"
+        }
+      ],
+      "answerOption": [
+        {
+          "valueCoding": {
+            "code": "01",
+            "display": "特記すべきものなし"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "02",
+            "display": "あり(以下に記載)"
+          }
+        }
+      ]
+    },
+    {
+      "linkId": "grp_ros_general",
+      "type": "group",
+      "text": "全身",
+      "item": [
+        {
+          "linkId": "ros_general",
+          "type": "choice",
+          "text": "該当する症状",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "発熱"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "体重減少"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "体重増加"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "全身倦怠感"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "05",
+                "display": "食欲不振"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "06",
+                "display": "寝汗"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_ros_head",
+      "type": "group",
+      "text": "頭頸部",
+      "item": [
+        {
+          "linkId": "ros_head",
+          "type": "choice",
+          "text": "該当する症状",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "頭痛"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "視力低下"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "難聴"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "耳鳴"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "05",
+                "display": "鼻閉"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "06",
+                "display": "咽頭痛"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_ros_resp",
+      "type": "group",
+      "text": "呼吸器",
+      "item": [
+        {
+          "linkId": "ros_resp",
+          "type": "choice",
+          "text": "該当する症状",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "咳"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "喀痰"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "血痰"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "呼吸困難"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "05",
+                "display": "喘鳴"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "06",
+                "display": "胸痛"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_ros_cv",
+      "type": "group",
+      "text": "循環器",
+      "item": [
+        {
+          "linkId": "ros_cv",
+          "type": "choice",
+          "text": "該当する症状",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "動悸"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "胸痛"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "労作時息切れ"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "下腿浮腫"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "05",
+                "display": "失神"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_ros_gi",
+      "type": "group",
+      "text": "消化器",
+      "item": [
+        {
+          "linkId": "ros_gi",
+          "type": "choice",
+          "text": "該当する症状",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "腹痛"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "嘔気・嘔吐"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "下痢"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "便秘"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "05",
+                "display": "下血・黒色便"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "06",
+                "display": "嚥下困難"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_ros_gu",
+      "type": "group",
+      "text": "腎・泌尿器",
+      "item": [
+        {
+          "linkId": "ros_gu",
+          "type": "choice",
+          "text": "該当する症状",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "排尿痛"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "頻尿"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "血尿"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "尿失禁"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "05",
+                "display": "残尿感"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_ros_neuro",
+      "type": "group",
+      "text": "神経",
+      "item": [
+        {
+          "linkId": "ros_neuro",
+          "type": "choice",
+          "text": "該当する症状",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "めまい"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "しびれ"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "けいれん"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "意識消失"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "05",
+                "display": "脱力・麻痺"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_ros_musculo",
+      "type": "group",
+      "text": "筋・骨格",
+      "item": [
+        {
+          "linkId": "ros_musculo",
+          "type": "choice",
+          "text": "該当する症状",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "関節痛"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "腰背部痛"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "筋力低下"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "朝のこわばり"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_ros_skin",
+      "type": "group",
+      "text": "皮膚",
+      "item": [
+        {
+          "linkId": "ros_skin",
+          "type": "choice",
+          "text": "該当する症状",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "発疹"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "掻痒"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "脱毛"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "皮下出血"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_ros_psych",
+      "type": "group",
+      "text": "精神",
+      "item": [
+        {
+          "linkId": "ros_psych",
+          "type": "choice",
+          "text": "該当する症状",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "不眠"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "抑うつ気分"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "03",
+                "display": "不安"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "04",
+                "display": "意欲低下"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "ros_note",
+      "type": "text",
+      "text": "補足(陽性所見の詳細・その他の症状)"
+    }
+  ]
+}

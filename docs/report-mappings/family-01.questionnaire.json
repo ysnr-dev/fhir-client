@@ -1,0 +1,212 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/family-01",
+  "version": "1.0.0",
+  "name": "FAMILY_01",
+  "title": "家族歴",
+  "status": "active",
+  "subjectType": ["Patient"],
+  "description": "POMR の基礎データ(Database)のうち家族歴。血縁者ごとに繰り返して記載する。将来 FamilyMemberHistory へ変換する場合は、続柄が FamilyMemberHistory.relationship(v3-RoleCode)、疾患が condition.code に対応する(選択肢のコードは v3-RoleCode に合わせてある)。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "6f3a9c14-5d02-4e7b-9a83-2c6e1b40d7f5",
+        "display": "基礎データ"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "fh_presence",
+      "type": "choice",
+      "text": "特記すべき家族歴",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                "code": "radio-button"
+              }
+            ]
+          }
+        },
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+          "valueCode": "horizontal"
+        }
+      ],
+      "answerOption": [
+        { "valueCoding": { "code": "01", "display": "無" } },
+        { "valueCoding": { "code": "02", "display": "有" } },
+        { "valueCoding": { "code": "09", "display": "不明" } }
+      ]
+    },
+    {
+      "linkId": "grp_fh",
+      "type": "group",
+      "text": "血縁者(該当する方のみ。＋で追加)",
+      "repeats": true,
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-maxOccurs",
+          "valueInteger": 10
+        }
+      ],
+      "item": [
+        {
+          "linkId": "fh_relation",
+          "type": "choice",
+          "text": "続柄",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "コードは HL7 v3-RoleCode に合わせてある(FamilyMemberHistory.relationship へそのまま移せる)。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "drop-down"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            { "valueCoding": { "code": "FTH", "display": "父" } },
+            { "valueCoding": { "code": "MTH", "display": "母" } },
+            { "valueCoding": { "code": "BRO", "display": "兄弟" } },
+            { "valueCoding": { "code": "SIS", "display": "姉妹" } },
+            { "valueCoding": { "code": "SON", "display": "息子" } },
+            { "valueCoding": { "code": "DAU", "display": "娘" } },
+            { "valueCoding": { "code": "GRFTH", "display": "祖父" } },
+            { "valueCoding": { "code": "GRMTH", "display": "祖母" } },
+            { "valueCoding": { "code": "UNCLE", "display": "おじ" } },
+            { "valueCoding": { "code": "AUNT", "display": "おば" } },
+            { "valueCoding": { "code": "FAMMEMB", "display": "その他の家族" } }
+          ]
+        },
+        {
+          "linkId": "fh_disease",
+          "type": "string",
+          "text": "疾患・症状"
+        },
+        {
+          "linkId": "fh_onset_age",
+          "type": "integer",
+          "text": "発症年齢",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueInteger": 130
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "歳",
+                "display": "歳"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "fh_status",
+          "type": "choice",
+          "text": "現況",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            { "valueCoding": { "code": "01", "display": "存命" } },
+            { "valueCoding": { "code": "02", "display": "死亡" } },
+            { "valueCoding": { "code": "09", "display": "不明" } }
+          ],
+          "item": [
+            {
+              "linkId": "grp_fh_death",
+              "type": "group",
+              "text": "死亡の詳細",
+              "enableWhen": [
+                {
+                  "question": "fh_status",
+                  "operator": "=",
+                  "answerCoding": { "code": "02" }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "fh_death_age",
+                  "type": "integer",
+                  "text": "死亡時年齢",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+                      "valueInteger": 0
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+                      "valueInteger": 130
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+                      "valueCoding": {
+                        "system": "http://unitsofmeasure.org",
+                        "code": "歳",
+                        "display": "歳"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "linkId": "fh_death_cause",
+                  "type": "string",
+                  "text": "死因"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "linkId": "fh_note",
+          "type": "string",
+          "text": "備考"
+        }
+      ]
+    },
+    {
+      "linkId": "fh_summary",
+      "type": "text",
+      "text": "家族歴の補足"
+    }
+  ]
+}

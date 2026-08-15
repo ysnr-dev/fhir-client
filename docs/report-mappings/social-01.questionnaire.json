@@ -1,0 +1,622 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/social-01",
+  "version": "1.0.0",
+  "name": "SOCIAL_01",
+  "title": "社会歴",
+  "status": "active",
+  "subjectType": ["Patient"],
+  "description": "POMR の基礎データ(Database)のうち社会歴。設問は JP Core の Observation(生活背景) JP_ObservationSocialHistoryCode_CS に 1 対 1 で対応させてあり、対応コードは各項目の設計メモ(designNote)に記載している。将来 item.code に対応した際は、設計メモのコードをそのまま item.code へ移せば JP_Observation_SocialHistory として抽出できる。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "6f3a9c14-5d02-4e7b-9a83-2c6e1b40d7f5",
+        "display": "基礎データ"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp_smoking",
+      "type": "group",
+      "text": "喫煙",
+      "item": [
+        {
+          "linkId": "smoke_hist",
+          "type": "choice",
+          "text": "喫煙歴",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "JP Core 生活背景コード: MD0012870 喫煙歴.有無"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            { "valueCoding": { "code": "01", "display": "無" } },
+            { "valueCoding": { "code": "02", "display": "有" } },
+            { "valueCoding": { "code": "09", "display": "不明" } }
+          ],
+          "item": [
+            {
+              "linkId": "grp_smoke_dtl",
+              "type": "group",
+              "text": "喫煙の詳細",
+              "enableWhen": [
+                {
+                  "question": "smoke_hist",
+                  "operator": "=",
+                  "answerCoding": { "code": "02" }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "smoke_now",
+                  "type": "choice",
+                  "text": "現在の喫煙",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "JP Core 生活背景コード: MD0012880 現在の喫煙.有無"
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "radio-button"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    }
+                  ],
+                  "answerOption": [
+                    { "valueCoding": { "code": "01", "display": "無(禁煙)" } },
+                    { "valueCoding": { "code": "02", "display": "有" } }
+                  ]
+                },
+                {
+                  "linkId": "smoke_type",
+                  "type": "choice",
+                  "text": "喫煙種類",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "JP Core 生活背景コード: MD0012890 喫煙種類区分"
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "check-box"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    }
+                  ],
+                  "answerOption": [
+                    { "valueCoding": { "code": "01", "display": "紙巻きたばこ" } },
+                    { "valueCoding": { "code": "02", "display": "加熱式たばこ" } },
+                    { "valueCoding": { "code": "03", "display": "葉巻" } },
+                    { "valueCoding": { "code": "04", "display": "パイプ" } },
+                    { "valueCoding": { "code": "09", "display": "その他" } }
+                  ]
+                },
+                {
+                  "linkId": "smoke_num",
+                  "type": "integer",
+                  "text": "１日の喫煙本数",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "JP Core 生活背景コード: MD0012900 １日の喫煙本数"
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+                      "valueInteger": 0
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+                      "valueCoding": {
+                        "system": "http://unitsofmeasure.org",
+                        "code": "本/日",
+                        "display": "本/日"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "linkId": "smoke_yrs",
+                  "type": "integer",
+                  "text": "通算喫煙年数",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "JP Core 生活背景コード: MD0012910 通算喫煙年数"
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+                      "valueInteger": 0
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+                      "valueCoding": {
+                        "system": "http://unitsofmeasure.org",
+                        "code": "年",
+                        "display": "年"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "linkId": "smoke_idx",
+                  "type": "integer",
+                  "text": "喫煙指数(ブリンクマン指数)",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "JP Core 生活背景コード: MD0012920 喫煙指数。１日の喫煙本数 × 通算喫煙年数 を自動計算する。"
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+                      "valueExpression": {
+                        "language": "text/fhirpath",
+                        "expression": "descendants().where(linkId='smoke_num').answer.value.first() * descendants().where(linkId='smoke_yrs').answer.value.first()"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_drinking",
+      "type": "group",
+      "text": "飲酒",
+      "item": [
+        {
+          "linkId": "drink_hist",
+          "type": "choice",
+          "text": "飲酒歴",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "JP Core 生活背景コード: MD0012930 飲酒歴.有無"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            { "valueCoding": { "code": "01", "display": "無" } },
+            { "valueCoding": { "code": "02", "display": "有" } },
+            { "valueCoding": { "code": "09", "display": "不明" } }
+          ],
+          "item": [
+            {
+              "linkId": "grp_drink_dtl",
+              "type": "group",
+              "text": "飲酒の詳細",
+              "enableWhen": [
+                {
+                  "question": "drink_hist",
+                  "operator": "=",
+                  "answerCoding": { "code": "02" }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "drink_now",
+                  "type": "choice",
+                  "text": "現在の飲酒",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "JP Core 生活背景コード: MD0012940 現在の飲酒.有無"
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "radio-button"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    }
+                  ],
+                  "answerOption": [
+                    { "valueCoding": { "code": "01", "display": "無(禁酒)" } },
+                    { "valueCoding": { "code": "02", "display": "有" } }
+                  ]
+                },
+                {
+                  "linkId": "drink_type",
+                  "type": "choice",
+                  "text": "飲酒の種類",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "JP Core 生活背景コード: MD0012950 飲酒の種類区分"
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "check-box"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    }
+                  ],
+                  "answerOption": [
+                    { "valueCoding": { "code": "01", "display": "ビール" } },
+                    { "valueCoding": { "code": "02", "display": "日本酒" } },
+                    { "valueCoding": { "code": "03", "display": "焼酎" } },
+                    { "valueCoding": { "code": "04", "display": "ウイスキー" } },
+                    { "valueCoding": { "code": "05", "display": "ワイン" } },
+                    { "valueCoding": { "code": "09", "display": "その他" } }
+                  ]
+                },
+                {
+                  "linkId": "drink_amt",
+                  "type": "integer",
+                  "text": "１日の飲酒量(純アルコール換算)",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "JP Core 生活背景コード: MD0012960 １日の飲酒量"
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+                      "valueInteger": 0
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+                      "valueCoding": {
+                        "system": "http://unitsofmeasure.org",
+                        "code": "g/日",
+                        "display": "g/日"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "linkId": "drink_yrs",
+                  "type": "integer",
+                  "text": "通算飲酒年数",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "JP Core 生活背景コード: MD0012970 通算飲酒年数"
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+                      "valueInteger": 0
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+                      "valueCoding": {
+                        "system": "http://unitsofmeasure.org",
+                        "code": "年",
+                        "display": "年"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_occupation",
+      "type": "group",
+      "text": "職業・環境",
+      "item": [
+        {
+          "linkId": "occupation",
+          "type": "string",
+          "text": "職業歴",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "JP Core 生活背景コード: MD0012810 職業歴"
+            }
+          ]
+        },
+        {
+          "linkId": "chem_exp",
+          "type": "choice",
+          "text": "化学物質の取り扱い歴",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "JP Core 生活背景コード: MD0012820 化学物質.取り扱い歴"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            { "valueCoding": { "code": "01", "display": "無" } },
+            { "valueCoding": { "code": "02", "display": "有" } }
+          ],
+          "item": [
+            {
+              "linkId": "grp_chem_dtl",
+              "type": "group",
+              "text": "化学物質の詳細",
+              "enableWhen": [
+                {
+                  "question": "chem_exp",
+                  "operator": "=",
+                  "answerCoding": { "code": "02" }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "chem_detail",
+                  "type": "string",
+                  "text": "物質名・従事期間"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "linkId": "rad_exp",
+          "type": "choice",
+          "text": "放射線物質の取り扱い歴",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "JP Core 生活背景コード: MD0012830 放射線物質.取り扱い歴"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            { "valueCoding": { "code": "01", "display": "無" } },
+            { "valueCoding": { "code": "02", "display": "有" } }
+          ],
+          "item": [
+            {
+              "linkId": "grp_rad_dtl",
+              "type": "group",
+              "text": "放射線の詳細",
+              "enableWhen": [
+                {
+                  "question": "rad_exp",
+                  "operator": "=",
+                  "answerCoding": { "code": "02" }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "rad_detail",
+                  "type": "string",
+                  "text": "従事内容・期間"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "linkId": "travel_hist",
+          "type": "choice",
+          "text": "海外渡航歴",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "JP Core 生活背景コード: MD0012850 海外渡航歴"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            { "valueCoding": { "code": "01", "display": "無" } },
+            { "valueCoding": { "code": "02", "display": "有" } }
+          ],
+          "item": [
+            {
+              "linkId": "grp_travel_dtl",
+              "type": "group",
+              "text": "渡航の詳細",
+              "enableWhen": [
+                {
+                  "question": "travel_hist",
+                  "operator": "=",
+                  "answerCoding": { "code": "02" }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "travel_detail",
+                  "type": "string",
+                  "text": "渡航先・時期"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_lifestyle",
+      "type": "group",
+      "text": "生活習慣",
+      "item": [
+        {
+          "linkId": "exercise",
+          "type": "choice",
+          "text": "運動習慣",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "JP Core 生活背景コード: MD0012990 生活習慣"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            { "valueCoding": { "code": "01", "display": "無" } },
+            { "valueCoding": { "code": "02", "display": "週1〜2回" } },
+            { "valueCoding": { "code": "03", "display": "週3回以上" } }
+          ]
+        },
+        {
+          "linkId": "sleep_hours",
+          "type": "decimal",
+          "text": "睡眠時間(1日あたり)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "時間",
+                "display": "時間"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "otc_drugs",
+          "type": "string",
+          "text": "常用薬剤・サプリメント",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "JP Core 生活背景コード: MD0012860 常用薬剤歴"
+            }
+          ]
+        },
+        {
+          "linkId": "lifestyle_note",
+          "type": "text",
+          "text": "その他(嗜好品・生活状況など)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "JP Core 生活背景コード: MD0012980 嗜好品 / MD0012790 家庭環境"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -465,6 +465,27 @@ ID 規約だけでは表現できない帳票 --- choice 回答の code に応�
   [`docs/report-mappings/shikan-01.mapping.json`](docs/report-mappings/shikan-01.mapping.json)
   にあります。
 
+## 基礎データ（POMR の Data Base）のテンプレート
+
+POMR は「基礎データから異常所見を抽出してプロブレムリストを立てる」構成なので、その入口にあたる
+**社会歴・家族歴・システムレビュー(ROS)** をテンプレート(`Questionnaire`)として用意してあります
+（[`docs/report-mappings/basic-data.md`](docs/report-mappings/basic-data.md)、
+`social-01` / `family-01` / `ros-01` の 3 ファイル）。専用の構造化フォームを領域ごとに作らず
+テンプレートで賄うことで、設問の追加・変更を画面から行えるようにしています。テンプレート一覧の
+インポートから取り込み、カテゴリ「基礎データ」でまとめます。
+
+- **社会歴**は JP Core の `JP_Observation_SocialHistory`（`JP_ObservationSocialHistoryCode_CS`）に
+  設問を 1 対 1 で対応させ、対応コードを各項目の `designNote` に記録しています。将来 `item.code` に
+  対応したらそのまま移すだけで、SDC の Observation 抽出に載せられます（サーバー側は対応済み。
+  上流の JASPEHR プロファイルが `item.code` / `itemExtractionContext` を許容しています）。
+  喫煙指数（ブリンクマン指数）は `calculatedExpression` による自動計算です。
+- **既往歴はテンプレートにしていません**。MEDIS 病名マスタのコードが要り、後からプロブレムへ
+  昇格しうる情報なので、「病名」タブの `Condition` 側に区分を足す方が安く、プロブレムリストとの
+  連続性も保てるためです（同じ情報が 2 経路に増えるのを避けています）。
+- 現状は `QuestionnaireResponse` として保存するだけで Observation にはなりません。抽出を実装する
+  ときは **先に `item.code` の編集対応**を入れてください。エディタが扱わない要素は編集保存時に
+  落ちるため、JSON に直接書いても画面から一度編集すると失われます。
+
 ## 医療機関（Organization）
 
 ヘッダーの「管理 > 医療機関」（`/organizations`）で、上流 FHIR サーバーの Organization を
