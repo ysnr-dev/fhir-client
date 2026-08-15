@@ -187,9 +187,17 @@ export function modifierCategoryLabel(category: string | null | undefined): stri
   return MODIFIER_CATEGORY_LABELS[category?.charAt(1) ?? ""] ?? "";
 }
 
+// 病名の入力方法。既往歴のように具体的な傷病名が分からないことがあるため、
+// マスタから選ぶ以外にフリー入力も許す(区分は問わない)。
+export type DiseaseInputMode = "master" | "free";
+
 export interface ConditionFormValues {
   category: ConditionCategory;
+  diseaseMode: DiseaseInputMode;
+  /** マスタ入力のときの病名。フリー入力では null。 */
   disease: Disease | null;
+  /** フリー入力のときの病名(修飾語を含まない本体のみ)。 */
+  freeText: string;
   prefixModifiers: Modifier[];
   postfixModifiers: Modifier[];
   startDate: string;
@@ -204,7 +212,9 @@ function today(): string {
 export function emptyConditionForm(): ConditionFormValues {
   return {
     category: "billing",
+    diseaseMode: "master",
     disease: null,
+    freeText: "",
     prefixModifiers: [],
     postfixModifiers: [],
     startDate: today(),
@@ -213,17 +223,58 @@ export function emptyConditionForm(): ConditionFormValues {
   };
 }
 
+/** 修飾語を除いた病名本体。マスタ入力ならマスタの名称、フリー入力なら入力値。 */
+export function conditionBaseName(values: {
+  diseaseMode: DiseaseInputMode;
+  disease: Disease | null;
+  freeText: string;
+}): string {
+  return values.diseaseMode === "free" ? values.freeText.trim() : (values.disease?.name ?? "");
+}
+
 // 接頭語+病名+接尾語 を連結した表示用名称(レセプト表記と同じ並び)。
 export function conditionDisplayName(values: {
+  diseaseMode: DiseaseInputMode;
   disease: Disease | null;
+  freeText: string;
   prefixModifiers: Modifier[];
   postfixModifiers: Modifier[];
 }): string {
   return [
     ...values.prefixModifiers.map((m) => m.name),
-    values.disease?.name ?? "",
+    conditionBaseName(values),
     ...values.postfixModifiers.map((m) => m.name),
   ].join("");
+}
+
+// MEDIS 修飾語マスタの「の疑い」(接尾語)。疑い病名は毎回モーダルから選ぶのが手間なので、
+// フォームのチェックボックスで付け外しできるようにする。コードはマスタの固定値
+// (管理番号 27000001 / 交換用 5395 / レセ電算 8002)なので、マスタ未取込の環境でも
+// 同じ内容を保存できるようここに持つ。
+export const SUSPECTED_MODIFIER: Modifier = {
+  id: 0,
+  management_number: "27000001",
+  name: "の疑い",
+  name_kana: null,
+  exchange_code: "5395",
+  connection_position_category: null,
+  modifier_category: null,
+  receipt_code: "8002",
+};
+
+/** 「の疑い」が付いているか。チェックボックスとモーダル選択のどちらで付けても真になる。 */
+export function isSuspected(postfixModifiers: Modifier[]): boolean {
+  return postfixModifiers.some(
+    (m) => m.management_number === SUSPECTED_MODIFIER.management_number,
+  );
+}
+
+/** 「の疑い」を付け外しした接尾語の並び。読みが「〇〇の疑い」になるよう常に末尾へ置く。 */
+export function withSuspected(postfixModifiers: Modifier[], suspected: boolean): Modifier[] {
+  const others = postfixModifiers.filter(
+    (m) => m.management_number !== SUSPECTED_MODIFIER.management_number,
+  );
+  return suspected ? [...others, SUSPECTED_MODIFIER] : others;
 }
 
 function diseaseCodings(disease: Disease): fhir4.Coding[] {
@@ -282,16 +333,27 @@ export function buildCondition(
         { system: CLINICAL_STATUS_SYSTEM, code: values.outcome, display: outcomeDisplay(values.outcome) },
       ],
     },
+    // 「の疑い」が付いていれば確定診断ではない。レセプト表記は修飾語で表すが、
+    // FHIR としての確からしさはこちらで表す。
     verificationStatus: {
-      coding: [{ system: VERIFICATION_STATUS_SYSTEM, code: "confirmed" }],
+      coding: [
+        {
+          system: VERIFICATION_STATUS_SYSTEM,
+          code: isSuspected(values.postfixModifiers) ? "provisional" : "confirmed",
+        },
+      ],
     },
     // 区分は常に明示して保存する。category が無い既存データも、編集保存された時点で
     // 保険病名(encounter-diagnosis)として正規化される。
     category: categoryConcepts(values.category),
-    code: values.disease
+    // フリー入力はコード無しの CodeableConcept(text のみ)にする。
+    code: conditionBaseName(values)
       ? {
           extension: modifierExtensions.length ? modifierExtensions : undefined,
-          coding: diseaseCodings(values.disease),
+          coding:
+            values.diseaseMode === "master" && values.disease
+              ? diseaseCodings(values.disease)
+              : undefined,
           text: conditionDisplayName(values),
         }
       : undefined,
@@ -383,17 +445,47 @@ function modifiersFromExtensions(
     });
 }
 
+/**
+ * フリー入力の病名本体を code.text から取り出す。text は
+ * 「接頭語 + 本体 + 接尾語」を連結したものなので、両端から修飾語の名称を剥がす
+ * (conditionDisplayName の逆。前後一致を確かめてから外すので、想定外の text を
+ *  壊すことはない)。
+ */
+function freeTextFromCode(
+  code: fhir4.CodeableConcept | undefined,
+  prefixModifiers: Modifier[],
+  postfixModifiers: Modifier[],
+): string {
+  let text = code?.text ?? "";
+  for (const modifier of prefixModifiers) {
+    if (modifier.name && text.startsWith(modifier.name)) text = text.slice(modifier.name.length);
+  }
+  for (const modifier of [...postfixModifiers].reverse()) {
+    if (modifier.name && text.endsWith(modifier.name)) {
+      text = text.slice(0, text.length - modifier.name.length);
+    }
+  }
+  return text;
+}
+
 export function parseConditionForm(condition: fhir4.Condition): ConditionFormValues {
   const clinicalStatus = condition.clinicalStatus?.coding?.[0]?.code;
   const outcome = OUTCOME_OPTIONS.some((o) => o.code === clinicalStatus)
     ? (clinicalStatus as OutcomeCode)
     : "active";
 
+  const disease = diseaseFromCode(condition.code);
+  const prefixModifiers = modifiersFromExtensions(condition.code, PREFIX_MODIFIER_EXT_URL);
+  const postfixModifiers = modifiersFromExtensions(condition.code, POSTFIX_MODIFIER_EXT_URL);
+
   return {
     category: conditionCategoryOf(condition),
-    disease: diseaseFromCode(condition.code),
-    prefixModifiers: modifiersFromExtensions(condition.code, PREFIX_MODIFIER_EXT_URL),
-    postfixModifiers: modifiersFromExtensions(condition.code, POSTFIX_MODIFIER_EXT_URL),
+    // 病名コードが無ければフリー入力として復元する。
+    diseaseMode: disease ? "master" : "free",
+    disease,
+    freeText: disease ? "" : freeTextFromCode(condition.code, prefixModifiers, postfixModifiers),
+    prefixModifiers,
+    postfixModifiers,
     startDate: condition.onsetDateTime?.slice(0, 10) ?? "",
     endDate: condition.abatementDateTime?.slice(0, 10) ?? "",
     outcome,

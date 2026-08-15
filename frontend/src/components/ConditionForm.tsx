@@ -2,11 +2,15 @@ import { useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Disease, Modifier } from "../api/masterClient";
 import {
   CATEGORY_LABELS,
+  conditionBaseName,
   conditionDisplayName,
   emptyConditionForm,
+  isSuspected,
   OUTCOME_OPTIONS,
+  withSuspected,
   type ConditionCategory,
   type ConditionFormValues,
+  type DiseaseInputMode,
   type OutcomeCode,
 } from "../fhir/conditionHelpers";
 import { ErrorBanner } from "./ErrorBanner";
@@ -38,6 +42,16 @@ export function ConditionForm({
     setValues((v) => ({ ...v, [key]: value }));
   }
 
+  // フリー入力では修飾語(疑い病名を含む)を使わないので、切り替えたときに落とす。
+  // 残したまま隠すと、画面に出ていない語が病名に付いたまま保存されてしまう。
+  function selectDiseaseMode(mode: DiseaseInputMode) {
+    setValues((v) =>
+      mode === "free"
+        ? { ...v, diseaseMode: mode, prefixModifiers: [], postfixModifiers: [] }
+        : { ...v, diseaseMode: mode },
+    );
+  }
+
   function handleDiseaseSelect(disease: Disease) {
     update("disease", disease);
     setModal(null);
@@ -57,7 +71,11 @@ export function ConditionForm({
   }
 
   function validate(): string | null {
-    if (!values.disease) return "病名を選択してください。";
+    if (!conditionBaseName(values)) {
+      return values.diseaseMode === "free"
+        ? "病名を入力してください。"
+        : "病名を選択してください。";
+    }
     if (!values.startDate) return "開始日は必須です。";
     if (values.endDate && values.endDate < values.startDate) {
       return "終了日は開始日以降の日付を入力してください。";
@@ -88,6 +106,7 @@ export function ConditionForm({
 
   const fullName = conditionDisplayName(values);
   const singleUseWarning =
+    values.diseaseMode === "master" &&
     values.disease?.single_use_prohibited_category === "01" &&
     values.prefixModifiers.length === 0 &&
     values.postfixModifiers.length === 0;
@@ -147,44 +166,108 @@ export function ConditionForm({
           </div>
         </div>
 
-        <div className="condition-form__row">
-          <label>
-            病名
-            {values.disease ? (
-              <span className="rp-card__usage-value">{values.disease.name}</span>
-            ) : (
-              <span className="rp-card__usage-value rp-card__usage-value--empty">未選択</span>
-            )}
-          </label>
-          <button type="button" onClick={() => setModal({ kind: "disease" })}>
-            {values.disease ? "病名を変更" : "病名を選択"}
-          </button>
+        {/* 入力方法。既往歴のように具体的な傷病名が分からない場合はフリー入力を使う
+            (レセプトに使うコードは付かないので、保険病名では原則マスタから選ぶ)。 */}
+        <div className="clinical-note-form__mode condition-form__input-mode">
+          <span className="clinical-note-form__mode-legend">入力方法</span>
+          <div className="clinical-note-form__mode-options">
+            {(
+              [
+                ["master", "マスタから選択"],
+                ["free", "フリー入力"],
+              ] as const
+            ).map(([mode, label]) => (
+              <label className="clinical-note-form__mode-option" key={mode}>
+                <input
+                  type="radio"
+                  name="condition-disease-mode"
+                  checked={values.diseaseMode === mode}
+                  onChange={() => selectDiseaseMode(mode)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
         </div>
 
-        <div className="condition-form__row">
-          <label>
-            接頭語
-            {renderModifierList("prefixModifiers")}
-          </label>
-          <button type="button" onClick={() => setModal({ kind: "prefix" })}>
-            + 接頭語追加
-          </button>
-        </div>
+        {values.diseaseMode === "free" ? (
+          <div className="condition-form__row">
+            <label className="condition-form__free-text">
+              病名
+              <input
+                type="text"
+                value={values.freeText}
+                maxLength={100}
+                placeholder="例: 虫垂炎(詳細不明)"
+                onChange={(e) => update("freeText", e.target.value)}
+              />
+            </label>
+          </div>
+        ) : (
+          <div className="condition-form__row">
+            <label>
+              病名
+              {values.disease ? (
+                <span className="rp-card__usage-value">{values.disease.name}</span>
+              ) : (
+                <span className="rp-card__usage-value rp-card__usage-value--empty">未選択</span>
+              )}
+            </label>
+            <button type="button" onClick={() => setModal({ kind: "disease" })}>
+              {values.disease ? "病名を変更" : "病名を選択"}
+            </button>
+          </div>
+        )}
 
-        <div className="condition-form__row">
-          <label>
-            接尾語
-            {renderModifierList("postfixModifiers")}
-          </label>
-          <button type="button" onClick={() => setModal({ kind: "postfix" })}>
-            + 接尾語追加
-          </button>
-        </div>
+        {/* 修飾語はマスタの病名に付けるものなので、フリー入力では出さない。
+            疑い病名は毎回修飾語から選ぶのが手間なので、チェックで接尾語「の疑い」を
+            付け外しする。接尾語の一覧にも出るので、モーダルから外しても連動する。 */}
+        {values.diseaseMode === "master" && (
+          <>
+            <div className="condition-form__row">
+              <label className="qe-item__checkbox">
+                <input
+                  type="checkbox"
+                  checked={isSuspected(values.postfixModifiers)}
+                  onChange={(e) =>
+                    update(
+                      "postfixModifiers",
+                      withSuspected(values.postfixModifiers, e.target.checked),
+                    )
+                  }
+                />
+                疑い病名
+              </label>
+            </div>
 
-        {values.disease && (
+            <div className="condition-form__row">
+              <label>
+                接頭語
+                {renderModifierList("prefixModifiers")}
+              </label>
+              <button type="button" onClick={() => setModal({ kind: "prefix" })}>
+                + 接頭語追加
+              </button>
+            </div>
+
+            <div className="condition-form__row">
+              <label>
+                接尾語
+                {renderModifierList("postfixModifiers")}
+              </label>
+              <button type="button" onClick={() => setModal({ kind: "postfix" })}>
+                + 接尾語追加
+              </button>
+            </div>
+          </>
+        )}
+
+        {fullName && (
           <p className="condition-form__preview">
             登録される病名: <strong>{fullName}</strong>
-            {values.disease.icd10_2013 && ` (ICD10: ${values.disease.icd10_2013})`}
+            {values.diseaseMode === "master" && values.disease?.icd10_2013
+              ? ` (ICD10: ${values.disease.icd10_2013})`
+              : values.diseaseMode === "free" && " (コードなし)"}
           </p>
         )}
         {singleUseWarning && (

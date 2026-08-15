@@ -2006,6 +2006,22 @@ fieldset.rp-card {
   gap: 12px;
 }
 
+/* 区分と入力方法は別の選択なので、隣り合わせにならないよう間を空ける。 */
+.condition-form__input-mode {
+  margin-left: 32px;
+}
+
+/* フリー入力の病名。マスタ選択の行と高さが揃うよう入力欄に幅を持たせる。 */
+.condition-form__free-text {
+  flex: 1 1 320px;
+  max-width: 420px;
+}
+
+.condition-form__free-text input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .condition-form__modifiers {
   display: flex;
   flex-wrap: wrap;
