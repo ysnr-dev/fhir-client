@@ -3915,7 +3915,7 @@ body.karte-wide .app__header {
 .karte-daylist__header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   margin-bottom: 8px;
 }
 
@@ -4005,6 +4005,106 @@ body.karte-wide .app__header {
 
 /* タイムライン本体(IntersectionObserver のスクロール root) */
 /* IntersectionObserver のスクロール root。エラー表示を除いた残りの高さを使う。 */
+/* 左ペインの「診療日 / カテゴリ」切替。上のタブ(カルテ・病名…)と同じ下線の見た目に
+   そろえる。ペインは 160px しかないので、切替ボタンを詰めて表示切替アイコンの
+   場所を必ず残す。 */
+.karte-sidepane__modes {
+  display: flex;
+  gap: 2px;
+  /* 万一収まらなくても切替ボタンを押し出さない(スクロールバーが出て幅が減ったとき、
+     ボタンがペインの外に出て重なって見えるのを防ぐ)。 */
+  min-width: 0;
+  overflow: hidden;
+}
+
+.karte-daylist .karte-sidepane__mode {
+  padding: 4px 4px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.karte-daylist .karte-sidepane__mode:hover {
+  color: var(--accent);
+}
+
+.karte-daylist .karte-sidepane__mode--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* 情報の種別の一覧。診療日ツリーと同じ字送りにそろえる。 */
+.karte-catlist,
+.karte-catlist ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.karte-catlist__row {
+  display: flex;
+  align-items: center;
+}
+
+.karte-daylist .karte-catlist__toggle {
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* 名前の長いテンプレートでペインが横スクロールしないよう省略する(全体は title に出る)。 */
+.karte-daylist .karte-catlist__item {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.karte-daylist .karte-catlist__item:hover {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.karte-daylist .karte-catlist__item--selected {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.karte-daylist .karte-catlist__item--template {
+  padding-left: 12px;
+  font-size: 12px;
+}
+
+.karte-catlist__templates {
+  padding-left: 14px;
+}
+
+.karte-catlist__group {
+  display: block;
+  padding: 4px 6px 2px;
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.75;
+}
+
 .karte-timeline {
   flex: 1;
   min-height: 0;

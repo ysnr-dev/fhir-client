@@ -17,7 +17,7 @@ import {
 import { ErrorBanner } from "../components/ErrorBanner";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
-import { KarteDayList } from "../components/KarteDayList";
+import { KarteSidePane } from "../components/KarteSidePane";
 import { KarteLabResultTab } from "../components/KarteLabResultTab";
 import { KarteMicroResultTab } from "../components/KarteMicroResultTab";
 import { KarteProblemList } from "../components/KarteProblemList";
@@ -31,16 +31,21 @@ import { problemLabel, splitConditions } from "../fhir/conditionHelpers";
 import {
   buildKarteTimeline,
   filterKarteGroups,
+  filterKarteGroupsByCard,
+  type KarteCardFilter,
   type KarteTimelineItem,
 } from "../fhir/karteTimeline";
 import {
+  KARTE_CARD_PARAM,
   KARTE_DETAIL_PARAM,
   KARTE_OTHER_TABS,
   KARTE_PROBLEM_PARAM,
   KARTE_TAB_PARAM,
   KARTE_TABS,
   KARTE_VIEW_PARAM,
+  formatKarteCard,
   formatKarteDetail,
+  parseKarteCard,
   parseKarteDetail,
   parseKarteTab,
   type KarteDetailTarget,
@@ -56,6 +61,7 @@ import {
   readProblemListVisible,
   readProblemMode,
   readResolvedProblemsVisible,
+  readSidePaneMode,
   readTopRatio,
   storeDayListVisible,
   storeLeftPaneMode,
@@ -63,9 +69,11 @@ import {
   storeProblemListVisible,
   storeProblemMode,
   storeResolvedProblemsVisible,
+  storeSidePaneMode,
   storeTopRatio,
   type KarteLeftPaneMode,
   type KarteProblemMode,
+  type KarteSidePaneMode,
 } from "../karteLayout";
 
 // 患者 1 人のカルテ画面。左ペインで登録済みの情報を参照し、右ペインで登録・編集する。
@@ -73,6 +81,7 @@ import {
 
 // 診療日パネルから飛んだ先の枠を強調しておく時間。
 const HIGHLIGHT_DURATION_MS = 2000;
+
 
 export function KartePage() {
   const { patientId } = useParams<{ patientId: string }>();
@@ -158,6 +167,9 @@ export function KartePage() {
   // ここに持つ。絞り込み表示は共有できたほうがよいので URL 側(filterProblemId)。
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [problemMode, setProblemMode] = useState<KarteProblemMode>(readProblemMode);
+  const [sidePaneMode, setSidePaneMode] = useState<KarteSidePaneMode>(readSidePaneMode);
+  // 情報の種別での絞り込み。共有できるよう URL に載せる(プロブレムと同じ扱い)。
+  const cardFilter = parseKarteCard(searchParams.get(KARTE_CARD_PARAM));
   // 絞り込み中のプロブレム。これがあれば「関連する記録のみ表示」の状態。
   const filterProblemId = searchParams.get(KARTE_PROBLEM_PARAM);
   // 減光と絞り込みのどちらであれ、いま選ばれているプロブレム。
@@ -194,6 +206,33 @@ export function KartePage() {
       ? { conditionId: condition.id ?? "", display: problemLabel(condition) }
       : undefined;
   }, [activeProblemId, problemsById]);
+
+  // 種別の絞り込み。開くときだけ履歴に積む(切替・解除で積むと戻るのたびに絞り込みが
+  // 戻ってしまう)。
+  const selectCardFilter = useCallback(
+    (next: KarteCardFilter | null) => {
+      updateParams((params) => {
+        if (next) params.set(KARTE_CARD_PARAM, formatKarteCard(next));
+        else params.delete(KARTE_CARD_PARAM);
+      }, Boolean(next) && !cardFilter);
+    },
+    [updateParams, cardFilter],
+  );
+
+  const selectSidePaneMode = useCallback(
+    (mode: KarteSidePaneMode) => {
+      setSidePaneMode(mode);
+      storeSidePaneMode(mode);
+      // 診療日に切り替えたら絞り込みは解除する(絞り込みの操作は種別ペインでしか
+      // できないので、見えないところで効いたままにしない)。
+      if (mode === "days") selectCardFilter(null);
+    },
+    [selectCardFilter],
+  );
+
+  // 絞り込み中は必ず種別を表示する。URL(?card=...)で開いたときも、なぜ絞り込まれて
+  // いるのかがペインを見れば分かる。
+  const effectiveSidePaneMode: KarteSidePaneMode = cardFilter ? "categories" : sidePaneMode;
 
   // 絞り込みの解除。選択そのものも落とす(帯のチップだけ選ばれたまま残ると、
   // 何も起きていないのに選択中に見える)。
@@ -262,10 +301,13 @@ export function KartePage() {
 
   // 絞り込みはページングの判定(カットオフ・pending)より後に行う。判定は読み込み済みの
   // 全データで決まるので、ここで件数が減っても読み進みには影響しない。
-  const filteredGroups = useMemo(
-    () => (filterProblemId ? filterKarteGroups(timeline.groups, filterProblemId) : timeline.groups),
-    [timeline.groups, filterProblemId],
-  );
+  // プロブレムと種別の両方が選ばれていれば、両方を満たすものだけが残る。
+  const filteredGroups = useMemo(() => {
+    let groups = timeline.groups;
+    if (filterProblemId) groups = filterKarteGroups(groups, filterProblemId);
+    if (cardFilter) groups = filterKarteGroupsByCard(groups, cardFilter);
+    return groups;
+  }, [timeline.groups, filterProblemId, cardFilter]);
 
   // 表示範囲を押し下げているソースだけ次ページを読む。
   function loadMore() {
@@ -394,14 +436,19 @@ export function KartePage() {
       <div
         className={`karte-left__body${dayListVisible ? "" : " karte-left__body--daylist-hidden"}`}
       >
-      <KarteDayList
+      <KarteSidePane
         groups={filteredGroups}
         onSelect={scrollToTarget}
+        mode={effectiveSidePaneMode}
+        onModeChange={selectSidePaneMode}
+        filter={cardFilter}
+        onFilterChange={selectCardFilter}
         visible={dayListVisible}
         onToggleVisible={toggleDayList}
       />
       <div className="karte-left__timeline">
-        {/* 絞り込みの見出しはスクロール領域の外に置き、遡っても見えるようにする。 */}
+        {/* 絞り込みの見出しはスクロール領域の外に置き、遡っても見えるようにする。
+            種別の絞り込みは左端のペインで状態が見えて解除もできるので、ここには出さない。 */}
         {filterProblemId && (
           <KarteProblemSummary
             condition={problemsById.get(filterProblemId)}
@@ -432,7 +479,11 @@ export function KartePage() {
           selectedProblemId={activeProblemId}
           highlightKey={highlightKey}
           emptyMessage={
-            filterProblemId ? "このプロブレムに紐付く診療情報がありません。" : undefined
+            filterProblemId
+              ? "このプロブレムに紐付く診療情報がありません。"
+              : cardFilter
+                ? "この種別の診療情報がありません。"
+                : undefined
           }
         />
       </div>

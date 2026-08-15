@@ -1,4 +1,4 @@
-import type { KarteItemKind } from "./fhir/karteTimeline";
+import type { KarteCardFilter, KarteItemKind } from "./fhir/karteTimeline";
 
 // カルテ画面の URL パラメータ。
 //
@@ -22,6 +22,11 @@ export const KARTE_DETAIL_PARAM = "detail";
  * 一時的な状態なので載せない。
  */
 export const KARTE_PROBLEM_PARAM = "problem";
+/**
+ * タイムラインを情報の種別で絞り込むときの対象。
+ * 「<種別>」、テンプレートを 1 つに絞るときは「qr:<テンプレートの url>」。
+ */
+export const KARTE_CARD_PARAM = "card";
 
 /** 検査結果タブの時系列表示。ID と紛れないよう予約語として扱う。 */
 export const LAB_TIMELINE_VIEW = "timeline";
@@ -73,6 +78,39 @@ const DETAIL_KINDS: KarteDetailKind[] = [
 
 export function formatKarteDetail(target: KarteDetailTarget): string {
   return `${target.kind}:${target.id}`;
+}
+
+// ---- 種別での絞り込み ----
+
+// タイムラインに出る種別(詳細モーダル専用の検査結果は含まない)。
+const CARD_KINDS: KarteItemKind[] = [
+  "note",
+  "prescription",
+  "injection",
+  "lab-order",
+  "micro-order",
+  "rad-order",
+  "qr",
+];
+
+export function formatKarteCard(filter: KarteCardFilter): string {
+  return filter.kind === "qr" && filter.questionnaireUrl
+    ? `qr:${filter.questionnaireUrl}`
+    : filter.kind;
+}
+
+// 壊れた値(手打ちの URL や仕様変更後の古いリンク)は「絞り込みなし」として扱う。
+export function parseKarteCard(value: string | null): KarteCardFilter | null {
+  if (!value) return null;
+  const separator = value.indexOf(":");
+  if (separator < 0) {
+    return CARD_KINDS.includes(value as KarteItemKind) ? { kind: value as KarteItemKind } : null;
+  }
+  // テンプレートの url は "http://..." のようにコロンを含むので、最初の 1 つで切る。
+  const kind = value.slice(0, separator) as KarteItemKind;
+  const questionnaireUrl = value.slice(separator + 1);
+  if (kind !== "qr" || !questionnaireUrl) return null;
+  return { kind, questionnaireUrl };
 }
 
 // 壊れた値(手打ちの URL や仕様変更後の古いリンク)は「開いていない」として扱う。

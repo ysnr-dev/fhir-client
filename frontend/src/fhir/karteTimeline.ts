@@ -388,6 +388,47 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   };
 }
 
+// ---- カード種での絞り込み ----
+
+/**
+ * タイムラインに出す情報の種別。テンプレートは種別が 1 つしか無いので、
+ * どのテンプレートかまで指定できるようにする(社会歴だけを時系列で読む、など)。
+ */
+export interface KarteCardFilter {
+  kind: KarteItemKind;
+  /**
+   * kind が "qr" のときの絞り込み先テンプレート(canonical ではなく url)。
+   * テンプレートのバージョンを上げても過去の回答が外れないよう、版は見ない。
+   */
+  questionnaireUrl?: string;
+}
+
+/** 回答が指しているテンプレートの url(canonical からバージョンを落としたもの)。 */
+function responseQuestionnaireUrl(item: KarteTimelineItem): string {
+  if (item.kind !== "qr") return "";
+  const canonical = item.response.questionnaire ?? "";
+  return canonical ? canonical.split("|")[0] : (item.questionnaire?.url ?? "");
+}
+
+export function matchesCardFilter(item: KarteTimelineItem, filter: KarteCardFilter): boolean {
+  if (item.kind !== filter.kind) return false;
+  if (!filter.questionnaireUrl) return true;
+  return responseQuestionnaireUrl(item) === filter.questionnaireUrl;
+}
+
+/**
+ * 指定した種別の情報だけを残す。空になった診療日のグループは落とす。
+ * プロブレムの絞り込み(filterKarteGroups)と同じく、ページングの判定より後に行う。
+ */
+export function filterKarteGroupsByCard(
+  groups: KarteDayGroup[],
+  filter: KarteCardFilter,
+): KarteDayGroup[] {
+  return groups
+    .map((group) => ({ ...group, items: group.items.filter((item) => matchesCardFilter(item, filter)) }))
+    .filter((group) => group.items.length > 0);
+}
+
 // ---- プロブレム(POMR)との紐付け ----
 
 // この情報が対象としているプロブレム。現状プロブレムを持つのは診療記録と

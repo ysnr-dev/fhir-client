@@ -8,6 +8,10 @@ export type KarteLeftPaneMode = "tabs" | "split";
 // filter: 関連する情報だけを表示する(プロブレムごとの経過を縦に読む)
 export type KarteProblemMode = "dim" | "filter";
 
+// カルテ左端のペインに何を出すか。
+// days: 診療日のツリー(既定) / categories: 情報の種別で絞り込む一覧
+export type KarteSidePaneMode = "days" | "categories";
+
 const MODE_STORAGE_KEY = "fhir-client.karte.leftPaneMode";
 const TOP_RATIO_STORAGE_KEY = "fhir-client.karte.leftPaneTopRatio";
 const LEFT_WIDTH_RATIO_STORAGE_KEY = "fhir-client.karte.leftPaneWidthRatio";
@@ -15,6 +19,7 @@ const DAY_LIST_STORAGE_KEY = "fhir-client.karte.dayListVisible";
 const PROBLEM_LIST_STORAGE_KEY = "fhir-client.karte.problemListVisible";
 const RESOLVED_PROBLEMS_STORAGE_KEY = "fhir-client.karte.resolvedProblemsVisible";
 const PROBLEM_MODE_STORAGE_KEY = "fhir-client.karte.problemMode";
+const SIDE_PANE_MODE_STORAGE_KEY = "fhir-client.karte.sidePaneMode";
 
 // 上下どちらのペインも潰れないように、上ペインが占める比率を制限する。
 const MIN_TOP_RATIO = 0.2;
@@ -151,6 +156,25 @@ export function readProblemMode(): KarteProblemMode {
 export function storeProblemMode(mode: KarteProblemMode) {
   try {
     localStorage.setItem(PROBLEM_MODE_STORAGE_KEY, mode);
+  } catch {
+    // 保存できなくてもその場の表示は切り替える。
+  }
+}
+
+// 左端のペインの中身。既定は従来どおり診療日。
+export function readSidePaneMode(): KarteSidePaneMode {
+  try {
+    return localStorage.getItem(SIDE_PANE_MODE_STORAGE_KEY) === "categories"
+      ? "categories"
+      : "days";
+  } catch {
+    return "days";
+  }
+}
+
+export function storeSidePaneMode(mode: KarteSidePaneMode) {
+  try {
+    localStorage.setItem(SIDE_PANE_MODE_STORAGE_KEY, mode);
   } catch {
     // 保存できなくてもその場の表示は切り替える。
   }
