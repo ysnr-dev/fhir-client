@@ -20,6 +20,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteSidePane } from "../components/KarteSidePane";
+import { VitalFlowsheetPanel } from "../components/VitalFlowsheetPanel";
 import { KarteLabResultTab } from "../components/KarteLabResultTab";
 import { KarteMicroResultTab } from "../components/KarteMicroResultTab";
 import { KarteProblemList } from "../components/KarteProblemList";
@@ -532,6 +533,8 @@ export function KartePage() {
     const props = { patientId, view: tab === key ? view : "", onViewChange: selectView };
     if (key === "condition") return <KarteConditionTab {...props} />;
     if (key === "allergy") return <KarteAllergyTab {...props} />;
+    // 経過表は読み取り専用で、詳細を開く導線が無いので view は使わない。
+    if (key === "flowsheet") return <VitalFlowsheetPanel patientId={patientId} />;
     if (key === "micro") return <KarteMicroResultTab {...props} />;
     return <KarteLabResultTab {...props} />;
   }

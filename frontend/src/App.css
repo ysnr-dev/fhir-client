@@ -6332,3 +6332,14 @@ body.page-wide #root {
   font-size: 14px;
   color: var(--text-h);
 }
+
+/* 経過表の 3 段目ヘッダー(測定時刻)。列は測定 1 回なので、同じ日の朝夕を
+   区別できるよう日付の下に時刻を出す。日付より控えめにする。 */
+.lab-timeline__table th.vital-flowsheet__time-col {
+  text-align: right;
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--text);
+  padding-top: 0;
+  font-variant-numeric: tabular-nums;
+}

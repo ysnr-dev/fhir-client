@@ -1,7 +1,11 @@
 import { useRef, useState } from "react";
 
 export interface LabTimelinePoint {
-  // 検体採取日 YYYY-MM-DD
+  /**
+   * 検体採取日 "YYYY-MM-DD"、または測定日時 "YYYY-MM-DDTHH:mm"(経過表)。
+   * 日時を渡すと横軸の位置が時刻まで反映される(同じ日の朝夕が重ならない)。
+   * タイムゾーンを持たない形式で渡すこと(端末のローカル時刻として扱う)。
+   */
   date: string;
   value: number;
 }
@@ -35,15 +39,24 @@ const VB_HEIGHT = 200;
 const MARGIN = { top: 20, right: 28, bottom: 26, left: 56 };
 const PLOT_W = VB_WIDTH - MARGIN.left - MARGIN.right;
 const PLOT_H = VB_HEIGHT - MARGIN.top - MARGIN.bottom;
+// X 軸ラベルを重ねずに置ける最小間隔(viewBox 座標)。
+const MIN_LABEL_GAP = 56;
 
 function formatValue(value: number): string {
   return value.toLocaleString("ja-JP", { maximumFractionDigits: 4 });
 }
 
 function formatDate(date: string, withYear: boolean): string {
-  const [y, m, d] = date.split("-");
+  // 日時("...T09:00")で渡されることもあるので日付部分だけを見る。
+  const [y, m, d] = date.slice(0, 10).split("-");
   const md = `${Number(m)}/${Number(d)}`;
   return withYear ? `${y}/${md}` : md;
+}
+
+/** ツールチップの見出し。日時で渡されたときだけ時刻も出す。 */
+function formatPointDate(date: string): string {
+  const time = date.slice(11, 16);
+  return time ? `${date.slice(0, 10)} ${time}` : date;
 }
 
 // 値域を覆う「きりのよい」目盛り(4分割程度)を返す。
@@ -99,6 +112,33 @@ function ChartPanel({ series }: { series: LabTimelineSeries }) {
     ),
   );
   const years = points.map((p) => p.date.slice(0, 4));
+  // 横軸は時間に比例するので、近い時刻の点はラベルが重なる(経過表の朝夕の測定など)。
+  // 左から順に、直前に採用したラベルと間隔が足りるものだけを残す。末尾は必ず出したい
+  // ので、末尾に近すぎる採用済みラベルは落としてから足す。
+  const labelList: number[] = [];
+  for (const index of [...labelIndexes].sort((a, b) => a - b)) {
+    const previous = labelList[labelList.length - 1];
+    if (previous === undefined || xs[index] - xs[previous] >= MIN_LABEL_GAP) labelList.push(index);
+  }
+  const lastPoint = points.length - 1;
+  if (labelList[labelList.length - 1] !== lastPoint) {
+    while (labelList.length && xs[lastPoint] - xs[labelList[labelList.length - 1]] < MIN_LABEL_GAP) {
+      labelList.pop();
+    }
+    labelList.push(lastPoint);
+  }
+  // 同じ日に複数の点が残ったときは、2 つ目以降のラベルを時刻に差し替える
+  // (同じ日付が並んでも区別できないため)。
+  const sameDayAsPreviousLabel = new Set(
+    labelList.filter(
+      (index, n) => n > 0 && points[labelList[n - 1]].date.slice(0, 10) === points[index].date.slice(0, 10),
+    ),
+  );
+  const labelSet = new Set(labelList);
+  const axisLabel = (index: number) =>
+    sameDayAsPreviousLabel.has(index) && points[index].date.slice(11, 16)
+      ? points[index].date.slice(11, 16)
+      : formatDate(points[index].date, index === 0 || years[index] !== years[index - 1]);
 
   function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -145,7 +185,7 @@ function ChartPanel({ series }: { series: LabTimelineSeries }) {
           </g>
         ))}
         {points.map((p, i) =>
-          labelIndexes.has(i) ? (
+          labelSet.has(i) ? (
             <text
               key={p.date}
               className="lab-chart__tick"
@@ -153,7 +193,7 @@ function ChartPanel({ series }: { series: LabTimelineSeries }) {
               y={VB_HEIGHT - 8}
               textAnchor="middle"
             >
-              {formatDate(p.date, i === 0 || years[i] !== years[i - 1])}
+              {axisLabel(i)}
             </text>
           ) : null,
         )}
@@ -175,7 +215,7 @@ function ChartPanel({ series }: { series: LabTimelineSeries }) {
             cy={ys[i]}
             r={active === i ? 5 : 4}
             tabIndex={0}
-            aria-label={`${p.date} ${formatValue(p.value)}${series.unit}`}
+            aria-label={`${formatPointDate(p.date)} ${formatValue(p.value)}${series.unit}`}
             onFocus={() => setActive(i)}
             onBlur={() => setActive(null)}
           />
@@ -200,7 +240,7 @@ function ChartPanel({ series }: { series: LabTimelineSeries }) {
             {formatValue(points[active].value)}
             {series.unit && ` ${series.unit}`}
           </span>
-          <span className="lab-chart__tooltip-date">{points[active].date}</span>
+          <span className="lab-chart__tooltip-date">{formatPointDate(points[active].date)}</span>
         </div>
       )}
     </div>

@@ -35,6 +35,9 @@ export const KARTE_TABS = [
   { key: "karte", label: "カルテ" },
   { key: "condition", label: "病名" },
   { key: "allergy", label: "アレルギー" },
+  // 経過表(POMR のフローシート)。上下分割で「上にカルテ、下に経過表」と並べて
+  // 読めるよう、カルテ以外のタブとして持つ。
+  { key: "flowsheet", label: "経過表" },
   { key: "lab", label: "検査結果" },
   { key: "micro", label: "細菌検査" },
 ] as const;

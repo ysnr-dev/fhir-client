@@ -2332,6 +2332,55 @@ function invalidateVitals(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
 }
 
+// 経過表は「直近 N 回分の測定」を横軸にする。1 回の測定が 8 件前後の Observation に
+// 分かれるので、測定日時が N+1 個目に達した時点で打ち切る(同じ測定がページ境界を
+// またぐ場合があるため +1 まで読む)。検査結果の時系列表示と同じ流儀。
+const VITAL_FLOWSHEET_PAGE = 100;
+const VITAL_FLOWSHEET_MAX_PAGES = 10;
+
+async function fetchVitalFlowsheetObservations(
+  patientId: string,
+  columnCount: number,
+): Promise<fhir4.Observation[]> {
+  const observations: fhir4.Observation[] = [];
+  const columns = new Set<string>();
+
+  for (let page = 0; page < VITAL_FLOWSHEET_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("patient", `Patient/${patientId}`);
+    params.set("category", "vital-signs");
+    params.set("_count", String(VITAL_FLOWSHEET_PAGE));
+    params.set("_offset", String(page * VITAL_FLOWSHEET_PAGE));
+    params.set("_sort", "-date");
+
+    const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
+    const pageObservations = (bundle.entry ?? [])
+      .map((entry) => entry.resource)
+      .filter((r): r is fhir4.Observation => r?.resourceType === "Observation");
+
+    for (const observation of pageObservations) {
+      observations.push(observation);
+      if (observation.effectiveDateTime) columns.add(observation.effectiveDateTime);
+    }
+
+    if (pageObservations.length < VITAL_FLOWSHEET_PAGE) break;
+    if (columns.size > columnCount) break;
+  }
+
+  return observations;
+}
+
+export function useVitalFlowsheet(patientId: string | undefined, columnCount: number) {
+  return useQuery({
+    // 登録・更新・削除の invalidateQueries(["Observation", "search"]) でまとめて
+    // 無効化されるよう search 配下のキーにしている。
+    queryKey: ["Observation", "search", "vital-flowsheet", patientId, columnCount],
+    queryFn: () => fetchVitalFlowsheetObservations(patientId ?? "", columnCount),
+    enabled: Boolean(patientId),
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useSaveVitalEntry() {
   const queryClient = useQueryClient();
   return useMutation({

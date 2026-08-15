@@ -372,6 +372,160 @@ export function vitalDisplayRows(entry: VitalEntry): VitalDisplayRow[] {
   return rows;
 }
 
+// ---- 経過表(フローシート) ----
+
+/**
+ * 経過表の 1 行(測定項目)。列は測定 1 回ぶんなので、キーは測定日時。
+ *
+ * 検査結果の時系列表示(buildLabTimeline)が「日付」を列にするのに対し、こちらは
+ * 測定日時そのものを列にする。同じ日の朝夕の測定を 1 列に潰すと、経過表として
+ * 読めなくなるため。
+ */
+export interface VitalFlowsheetRow {
+  /** LOINC コード。コードの無い Observation は項目名で代用する。 */
+  key: string;
+  name: string;
+  unit: string;
+  /** 測定日時 → 表示値(血圧は "128/82" のように 1 セルにまとめる)。 */
+  values: Map<string, string>;
+  /** 測定日時 → グラフ用の数値。系列名を分けたい血圧は含めない。 */
+  numbers: Map<string, number>;
+}
+
+export interface VitalFlowsheet {
+  /** 表示対象の測定日時。新しい順。 */
+  columns: string[];
+  rows: VitalFlowsheetRow[];
+}
+
+/** 血圧はグラフでは収縮期・拡張期の 2 系列に分ける。 */
+export const BLOOD_PRESSURE_SERIES = [
+  { key: SYSTOLIC.code, name: "収縮期血圧", unit: BP_UNIT.unit },
+  { key: DIASTOLIC.code, name: "拡張期血圧", unit: BP_UNIT.unit },
+] as const;
+
+/** 経過表の行の並び。入力欄と同じ順を先頭に置き、それ以外は登場順で後ろへ。 */
+const FLOWSHEET_ORDER = [
+  BLOOD_PRESSURE.code,
+  ...VITAL_MEASURES.map((measure) => measure.code),
+  BMI.code,
+];
+
+const FLOWSHEET_LABELS = new Map<string, string>([
+  [BLOOD_PRESSURE.code, "血圧"],
+  ...VITAL_MEASURES.map((measure) => [measure.code, measure.label] as [string, string]),
+  [BMI.code, "BMI"],
+]);
+
+function bloodPressureComponent(
+  observation: fhir4.Observation,
+  code: string,
+): number | undefined {
+  return observation.component?.find((component) =>
+    component.code?.coding?.some((coding) => coding.code === code),
+  )?.valueQuantity?.value;
+}
+
+/**
+ * 「測定項目 × 測定日時」のマトリクスを組み立てる。
+ *
+ * 手入力のバイタルだけでなく、テンプレート回答から category を vital-signs にして
+ * 抽出した Observation も同じ表に載せる(経過表は値を時系列で読む画面なので、
+ * どの経路で作られたかは問わない)。identifier で束ねないのはそのため。
+ */
+export function buildVitalFlowsheet(
+  observations: fhir4.Observation[],
+  columnCount: number,
+): VitalFlowsheet {
+  const allColumns: string[] = [];
+  for (const observation of observations) {
+    const at = observation.effectiveDateTime ?? "";
+    if (at && !allColumns.includes(at)) allColumns.push(at);
+  }
+  // 取得は -date 順だが、同じ時刻のリソースの並びは保証されないので明示的に整える。
+  allColumns.sort((a, b) => b.localeCompare(a));
+  const columns = allColumns.slice(0, columnCount);
+  const shown = new Set(columns);
+
+  const rows = new Map<string, VitalFlowsheetRow>();
+
+  function rowFor(key: string, name: string, unit: string): VitalFlowsheetRow {
+    const existing = rows.get(key);
+    if (existing) {
+      if (!existing.unit && unit) existing.unit = unit;
+      return existing;
+    }
+    const row: VitalFlowsheetRow = { key, name, unit, values: new Map(), numbers: new Map() };
+    rows.set(key, row);
+    return row;
+  }
+
+  for (const observation of observations) {
+    const at = observation.effectiveDateTime ?? "";
+    if (!shown.has(at)) continue;
+
+    const coding = observation.code?.coding?.find((c) => c.system === LOINC);
+    const name = FLOWSHEET_LABELS.get(coding?.code ?? "") ?? coding?.display ?? observation.code?.text ?? "";
+    const key = coding?.code ?? `name:${name}`;
+
+    if (key === BLOOD_PRESSURE.code) {
+      const systolic = bloodPressureComponent(observation, SYSTOLIC.code);
+      const diastolic = bloodPressureComponent(observation, DIASTOLIC.code);
+      if (systolic === undefined || diastolic === undefined) continue;
+      const row = rowFor(key, name, BP_UNIT.unit);
+      if (row.values.has(at)) continue;
+      row.values.set(at, `${systolic}/${diastolic}`);
+      continue;
+    }
+
+    const quantity = observation.valueQuantity;
+    const value = quantity?.value !== undefined ? String(quantity.value) : observation.valueString ?? "";
+    if (!value) continue;
+    const row = rowFor(key, name, quantity?.unit ?? "");
+    // 同じ時刻に同じ項目が複数あるときは、先(=新しい)の値を採る。
+    if (row.values.has(at)) continue;
+    row.values.set(at, value);
+    if (quantity?.value !== undefined) row.numbers.set(at, quantity.value);
+  }
+
+  // 既定の項目を先に、それ以外(テンプレート抽出など)を登場順で後ろに並べる。
+  const ordered = [...rows.values()].sort((a, b) => {
+    const indexA = FLOWSHEET_ORDER.indexOf(a.key);
+    const indexB = FLOWSHEET_ORDER.indexOf(b.key);
+    if (indexA >= 0 && indexB >= 0) return indexA - indexB;
+    if (indexA >= 0) return -1;
+    if (indexB >= 0) return 1;
+    return 0;
+  });
+
+  return { columns, rows: ordered };
+}
+
+/** 血圧の行から、グラフ用に収縮期・拡張期の数値を取り出す。 */
+export function bloodPressureNumbers(
+  observations: fhir4.Observation[],
+  code: string,
+): Map<string, number> {
+  const numbers = new Map<string, number>();
+  for (const observation of observations) {
+    const at = observation.effectiveDateTime ?? "";
+    const isBp = observation.code?.coding?.some(
+      (coding) => coding.system === LOINC && coding.code === BLOOD_PRESSURE.code,
+    );
+    if (!at || !isBp || numbers.has(at)) continue;
+    const value = bloodPressureComponent(observation, code);
+    if (value !== undefined) numbers.set(at, value);
+  }
+  return numbers;
+}
+
+/** 列ヘッダに出す "MM/DD" と "HH:mm"。 */
+export function flowsheetColumnLabel(at: string): { date: string; time: string; year: string } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(toDateTimeLocal(at));
+  if (!match) return { date: at.slice(0, 10), time: "", year: at.slice(0, 4) };
+  return { year: match[1], date: `${match[2]}/${match[3]}`, time: `${match[4]}:${match[5]}` };
+}
+
 /** ISO 日時 → datetime-local の値。端末のタイムゾーンで表示する。 */
 export function toDateTimeLocal(iso: string | undefined): string {
   if (!iso) return "";
