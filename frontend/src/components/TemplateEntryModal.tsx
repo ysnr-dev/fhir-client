@@ -43,6 +43,12 @@ interface TemplateEntryModalProps {
    * 選び直しは妨げない。
    */
   defaultCanonical?: string;
+  /**
+   * 記載した回答から Observation を生成する経路かどうか。診療記録のセクションは
+   * 生成する(診療記録と同じ transaction で保存する)。放射線オーダーの検査目的・
+   * 特別指示は未対応なので、黙って作られないと気づけない旨をここで断る。
+   */
+  extractsObservations?: boolean;
   onSubmit: (draft: TemplateDraft) => void;
   onClose: () => void;
 }
@@ -52,6 +58,7 @@ export function TemplateEntryModal({
   draft,
   responseId,
   defaultCanonical,
+  extractsObservations = false,
   onSubmit,
   onClose,
 }: TemplateEntryModalProps) {
@@ -186,12 +193,10 @@ export function TemplateEntryModal({
               </div>
             ))}
 
-          {/* 診療記録のセクションに貼る回答は記録と一緒に保存されるため、
-              Observation の生成(単独登録の経路にしか無い)は行われない。
-              黙って作られないと気づけないので明示する。 */}
-          {questionnaire && observationExtractEnabled(questionnaire) && (
+          {/* 生成しない経路(放射線オーダー)では、黙って作られないと気づけないので断る。 */}
+          {!extractsObservations && questionnaire && observationExtractEnabled(questionnaire) && (
             <p className="qe-hint">
-              このテンプレートは「回答から Observation を生成する」設定ですが、診療記録に貼る記載では
+              このテンプレートは「回答から Observation を生成する」設定ですが、この記載では
               生成されません。構造化データとして残すには、右ペインの「テンプレート」から単独で
               登録してください。
             </p>

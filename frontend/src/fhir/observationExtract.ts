@@ -185,6 +185,25 @@ export function extractObservations(args: ExtractObservationsArgs): fhir4.Observ
   return observations;
 }
 
+/**
+ * 診療記録に貼ったテンプレート記載から生成する Observation の POST エントリ。
+ *
+ * 記載の回答は診療記録と同じ transaction で保存されるので、生成物もそこへ相乗り
+ * させる(回答だけ保存されて Observation が無い、という中途半端な状態を作らない)。
+ * responseReference は新規記入なら Bundle 内の urn:uuid、再編集なら
+ * "QuestionnaireResponse/<id>"。前者は上流の transaction 処理が実 ID へ解決する。
+ *
+ * 前回の生成物の削除は呼び出し側の責務(`Observation?derived-from=` の検索が要り、
+ * Bundle の組み立ては同期処理のため)。
+ */
+export function draftObservationEntries(args: ExtractObservationsArgs): fhir4.BundleEntry[] {
+  return extractObservations(args).map((observation) => ({
+    fullUrl: `urn:uuid:${crypto.randomUUID()}`,
+    resource: observation,
+    request: { method: "POST", url: "Observation" },
+  }));
+}
+
 // ---- 保存用の transaction Bundle ----
 
 export interface ResponseSaveBundleArgs {

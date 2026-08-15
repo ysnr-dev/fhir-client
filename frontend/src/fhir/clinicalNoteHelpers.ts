@@ -1,4 +1,5 @@
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
+import { draftObservationEntries } from "./observationExtract";
 import { practitionerDisplayName } from "./practitionerHelpers";
 import {
   SCHEMA_IMAGE_NOTE,
@@ -351,6 +352,15 @@ export function buildClinicalNote(
               });
             }
             entries.push(...draft.imageEntries);
+            // 「回答から Observation を生成する」テンプレートなら、単独登録と同じく
+            // 構造化データも残す(前回の生成物の削除は保存側で行う)。
+            entries.push(
+              ...draftObservationEntries({
+                questionnaire: draft.questionnaire,
+                response: draft.response,
+                responseReference: reference,
+              }),
+            );
           } else if (responseId) {
             // 再編集していない保存済みテンプレート → 参照だけ引き継ぐ。
             reference = `QuestionnaireResponse/${responseId}`;

@@ -1553,9 +1553,47 @@ export function useClinicalNote(id: string | undefined) {
   });
 }
 
-// entries はテンプレート記載の QuestionnaireResponse(とそのシェーマ画像 Binary)。
-// 診療記録本体と同じ transaction Bundle で保存する — 先行 POST すると本体を
-// 保存しなかったときに QR だけが孤児として残るため(saveWithImages と同じ設計)。
+/**
+ * Bundle エントリのうち、既存の QuestionnaireResponse を書き換える/消すものの id。
+ * その回答から前回生成した Observation は作り直し(または道連れ削除)の対象になる。
+ * 新規記入(urn:uuid で POST)は前回の生成物を持たないので含まない。
+ */
+function refreshedResponseIds(entries: fhir4.BundleEntry[]): string[] {
+  const ids = new Set<string>();
+  for (const entry of entries) {
+    const method = entry.request?.method;
+    if (method !== "PUT" && method !== "DELETE") continue;
+    const id = entry.request?.url?.match(/^QuestionnaireResponse\/(.+)$/)?.[1];
+    if (id) ids.add(id);
+  }
+  return [...ids];
+}
+
+/** 上記の回答から前回生成した Observation を消す DELETE エントリ。 */
+async function staleObservationEntries(entries: fhir4.BundleEntry[]): Promise<fhir4.BundleEntry[]> {
+  const refs = await Promise.all(refreshedResponseIds(entries).map(fetchDerivedObservationRefs));
+  return refs.flat().map((reference) => ({
+    request: { method: "DELETE" as const, url: reference },
+  }));
+}
+
+// entries はテンプレート記載の QuestionnaireResponse(とそのシェーマ画像 Binary、
+// 回答から生成した Observation)。診療記録本体と同じ transaction Bundle で保存する
+// — 先行 POST すると本体を保存しなかったときに QR だけが孤児として残るため
+// (saveWithImages と同じ設計)。
+//
+// 記載を編集し直したときは、前回その回答から生成した Observation を消してから
+// 作り直す(単独登録のテンプレート回答と同じ方式。項目と Observation を 1 対 1 で
+// 対応付けて差分更新すると、テンプレート側のコード変更で対応が崩れる)。
+async function saveClinicalNote(
+  composition: fhir4.Composition,
+  entries: fhir4.BundleEntry[],
+  etag?: string,
+): Promise<FhirResult<fhir4.Composition>> {
+  const stale = await staleObservationEntries(entries);
+  return saveWithImages(composition, [...stale, ...entries], etag);
+}
+
 export function useCreateClinicalNote() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -1565,10 +1603,11 @@ export function useCreateClinicalNote() {
     }: {
       composition: fhir4.Composition;
       entries: fhir4.BundleEntry[];
-    }) => saveWithImages(composition, entries),
+    }) => saveClinicalNote(composition, entries),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Composition", "search"] });
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
     },
   });
 }
@@ -1584,11 +1623,12 @@ export function useUpdateClinicalNote() {
       composition: fhir4.Composition;
       entries: fhir4.BundleEntry[];
       etag: string;
-    }) => saveWithImages(composition, entries, etag),
+    }) => saveClinicalNote(composition, entries, etag),
     onSuccess: (result: FhirResult<fhir4.Composition>) => {
       queryClient.invalidateQueries({ queryKey: ["Composition", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Composition", result.data.id] });
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse"] });
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
     },
   });
 }
@@ -1603,7 +1643,10 @@ export function useDeleteClinicalNote() {
       const { data: composition } = await readResource<fhir4.Composition>("Composition", id);
       const bundle = buildClinicalNoteDeleteBundle(composition);
       if (bundle) {
-        await postBundle(bundle);
+        // 消す回答から生成した Observation も道連れにする(由来を辿れない
+        // Observation だけが残らないように)。
+        const stale = await staleObservationEntries(bundle.entry ?? []);
+        await postBundle({ ...bundle, entry: [...stale, ...(bundle.entry ?? [])] });
       } else {
         await deleteResource("Composition", id);
       }
@@ -1611,6 +1654,7 @@ export function useDeleteClinicalNote() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Composition", "search"] });
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse"] });
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
     },
   });
 }

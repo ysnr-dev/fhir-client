@@ -367,6 +367,7 @@ export function ClinicalNoteForm({
         patientId={patientId}
         draft={templateSection.template?.draft ?? null}
         responseId={templateSection.template?.responseId ?? null}
+        extractsObservations
         onSubmit={(draft) => applyTemplate(templateSection.uid, draft)}
         onClose={() => setTemplateTarget(null)}
       />
