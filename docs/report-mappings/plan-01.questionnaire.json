@@ -1,0 +1,151 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/plan-01",
+  "version": "1.0.0",
+  "name": "PLAN_01",
+  "title": "初期計画(Dx/Rx/Ex)",
+  "status": "active",
+  "subjectType": ["Patient"],
+  "description": "POMR の初期計画(Initial Plan)。プロブレムを立てたときに、診断計画(Dx)・治療計画(Rx)・教育計画(Ex)の3つに分けて方針を書く。診療記録の「治療計画(P)」セクションに『テンプレート記載』で貼り付けて使う(記録がプロブレムに紐付くので、どのプロブレムの計画かはその紐付けで表す)。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "b41c7e28-9f56-4d03-8a17-5e2c9b04af61",
+        "display": "診療計画"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp_dx",
+      "type": "group",
+      "text": "診断計画(Dx)",
+      "item": [
+        {
+          "linkId": "dx_differential",
+          "type": "text",
+          "text": "鑑別診断・想定される原因",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "このプロブレムの原因として何を考えているか。症状名でプロブレムを立てた場合はここに候補を挙げる。"
+            }
+          ]
+        },
+        {
+          "linkId": "dx_tests",
+          "type": "text",
+          "text": "確認する検査・診察",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "鑑別を絞るために行う検査・身体診察・問診。実際のオーダーは検査オーダーで出す。"
+            }
+          ]
+        },
+        {
+          "linkId": "dx_criteria",
+          "type": "string",
+          "text": "確定・除外の目安",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "いつ、何をもって確定または除外とするか。後から経過を読む人が判断の根拠を辿れるようにする。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_rx",
+      "type": "group",
+      "text": "治療計画(Rx)",
+      "item": [
+        {
+          "linkId": "rx_policy",
+          "type": "text",
+          "text": "治療方針"
+        },
+        {
+          "linkId": "rx_medication",
+          "type": "text",
+          "text": "薬物療法",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "方針としての薬物療法。実際の処方は処方オーダーで出す。"
+            }
+          ]
+        },
+        {
+          "linkId": "rx_other",
+          "type": "text",
+          "text": "非薬物療法・処置"
+        },
+        {
+          "linkId": "rx_goal",
+          "type": "string",
+          "text": "治療目標",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "達成したい状態と目安(例: HbA1c 7.0% 未満、3か月後)。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_ex",
+      "type": "group",
+      "text": "教育計画(Ex)",
+      "item": [
+        {
+          "linkId": "ex_explanation",
+          "type": "text",
+          "text": "患者・家族への説明内容",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "病状・方針として何をどう説明したか。説明した事実と内容を記録に残す。"
+            }
+          ]
+        },
+        {
+          "linkId": "ex_selfcare",
+          "type": "text",
+          "text": "自己管理の指導",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "食事・運動・服薬・自己測定など、患者自身に行ってもらうこと。"
+            }
+          ]
+        },
+        {
+          "linkId": "ex_followup",
+          "type": "string",
+          "text": "次回受診・受診の目安"
+        }
+      ]
+    },
+    {
+      "linkId": "plan_review",
+      "type": "date",
+      "text": "計画の見直し予定日",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "この計画を評価し直す予定日。初期計画は立てたままにせず、経過記録で評価する。"
+        }
+      ]
+    }
+  ]
+}
