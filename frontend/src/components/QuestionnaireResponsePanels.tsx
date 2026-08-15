@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FhirError } from "../api/fhirClient";
 import {
   useCreateQuestionnaireResponse,
+  useLatestQuestionnaireResponse,
   usePatient,
   usePopulateSources,
   useQuestionnaireByCanonical,
@@ -20,8 +21,15 @@ import {
   buildQuestionnaireResponse,
   emptyQuestionnaireResponseMeta,
   parseQuestionnaireResponseMeta,
+  questionnaireCanonical,
   validateQuestionnaireResponseMeta,
 } from "../fhir/questionnaireResponseHelpers";
+import { stripResponseAnnotations } from "../fhir/schemaImage";
+
+// 複写ボタンに添える「いつの回答か」。日付だけで足りる。
+function formatAuthored(authored: string | undefined): string {
+  return authored ? authored.slice(0, 10) : "日付不明";
+}
 
 // テンプレート回答の登録・編集 UI。ページとカルテ画面の右ペインの双方から使う。
 
@@ -48,6 +56,16 @@ export function QuestionnaireResponseCreatePanel({
 
   const [meta, setMeta] = useState(emptyQuestionnaireResponseMeta);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // 前回の回答。基礎データのように「前回を見て差分を直す」使い方のために複写できる。
+  // 自動では入れない(前回の内容を今回の所見として無自覚に確定してしまうため)。
+  const { latest } = useLatestQuestionnaireResponse(
+    patientId,
+    questionnaire ? questionnaireCanonical(questionnaire) : undefined,
+  );
+  const [copied, setCopied] = useState<fhir4.QuestionnaireResponse | null>(null);
+  // テンプレートを切り替えたら複写は解除する(別のテンプレートの回答が残らないように)。
+  useEffect(() => setCopied(null), [questionnaireId]);
 
   // ログイン中の医療従事者と所属医療機関。テンプレート項目の自動入力(拡張設定)と
   // 記入者名の初期値に使う。
@@ -130,12 +148,32 @@ export function QuestionnaireResponseCreatePanel({
         </div>
       )}
 
+      {questionnaire && latest && (
+        <div className="qr-copy-previous">
+          {copied ? (
+            <>
+              <span className="qr-copy-previous__note">
+                {formatAuthored(latest.authored)}の回答を読み込みました。内容を確認して登録してください。
+              </span>
+              <button type="button" onClick={() => setCopied(null)}>
+                複写を取り消す
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => setCopied(stripResponseAnnotations(latest))}>
+              前回の回答を複写({formatAuthored(latest.authored)})
+            </button>
+          )}
+        </div>
+      )}
+
       {questionnaire &&
         (expressionContext && loginAutofill.ready ? (
-          // テンプレート切替時に入力途中の回答を持ち越さないよう key で作り直す。
+          // テンプレート切替時と複写の切替で入力途中の回答を持ち越さないよう key で作り直す。
           <QuestionnaireResponseForm
-            key={questionnaire.id}
+            key={`${questionnaire.id}:${copied ? "copy" : "new"}`}
             questionnaire={questionnaire}
+            initialResponse={copied ?? undefined}
             onSubmit={handleSubmit}
             submitLabel="登録"
             submitting={createResponse.isPending}

@@ -1866,6 +1866,39 @@ export function useQuestionnaireResponse(id: string | undefined) {
   });
 }
 
+/**
+ * 同じテンプレートに対する直近の回答。新規登録画面の「前回の回答を複写」に使う。
+ *
+ * canonical("<url>|<version>")の完全一致で引くので、テンプレートのバージョンを
+ * 上げると前回の回答は見つからなくなる。設問が変わっていれば回答の対応も崩れる
+ * ため、版をまたいで複写しないのは意図した動作。
+ * クエリキーを ["QuestionnaireResponse", "search"] 配下に置き、登録・更新・削除の
+ * invalidate がそのまま効くようにする。
+ */
+export function useLatestQuestionnaireResponse(
+  patientId: string | undefined,
+  canonical: string | undefined,
+) {
+  const query = useQuery({
+    queryKey: ["QuestionnaireResponse", "search", "latest", patientId, canonical],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("questionnaire", canonical as string);
+      params.set("_sort", "-authored");
+      params.set("_count", "1");
+      const { data: bundle } = await searchResource<fhir4.QuestionnaireResponse>(
+        "QuestionnaireResponse",
+        params,
+      );
+      return bundle.entry?.[0]?.resource;
+    },
+    enabled: Boolean(patientId && canonical),
+  });
+
+  return { ...query, latest: query.data };
+}
+
 // テンプレート表示用に QuestionnaireResponse と元テンプレートを 1 リクエストで取得する
 // (canonical を解決する _include=QuestionnaireResponse:questionnaire)。
 // 削除済みは read の 410 と違い空の Bundle になる(response が undefined のまま)。

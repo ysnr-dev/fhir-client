@@ -57,6 +57,34 @@ export function annotatedImageExtension(binaryId: string): fhir4.Extension {
   };
 }
 
+/**
+ * 描き込み画像の参照を落とした回答を返す。前回の回答を複写して新しい回答を作る
+ * ときに使う。同じ Binary を 2 つの回答が参照すると、片方を消したときにもう
+ * 片方の画像が壊れるため引き継がない(描き込みはその時点の所見なので、複写して
+ * 使い回すものでもない)。
+ */
+export function stripResponseAnnotations(
+  response: fhir4.QuestionnaireResponse,
+): fhir4.QuestionnaireResponse {
+  function stripItems(
+    items: fhir4.QuestionnaireResponseItem[] | undefined,
+  ): fhir4.QuestionnaireResponseItem[] | undefined {
+    return items?.map((item) => {
+      const extension = item.extension?.filter((ext) => ext.url !== ANNOTATED_IMAGE_EXT_URL);
+      const { extension: _drop, ...rest } = item;
+      return {
+        ...rest,
+        ...(extension?.length ? { extension } : {}),
+        ...(item.item ? { item: stripItems(item.item) } : {}),
+        ...(item.answer
+          ? { answer: item.answer.map((a) => (a.item ? { ...a, item: stripItems(a.item) } : a)) }
+          : {}),
+      };
+    });
+  }
+  return { ...response, item: stripItems(response.item) };
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();

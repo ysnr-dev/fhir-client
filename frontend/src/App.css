@@ -2795,6 +2795,20 @@ fieldset.rp-card {
   font-size: 14px;
 }
 
+/* 前回の回答の複写。テンプレート選択と入力欄の間に細く置く。 */
+.qr-copy-previous {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+}
+
+.qr-copy-previous__note {
+  font-size: 13px;
+  color: var(--accent);
+}
+
 /* ---- テンプレート選択(カテゴリ → テンプレートの2階層プルダウン) ---- */
 
 .template-select {
