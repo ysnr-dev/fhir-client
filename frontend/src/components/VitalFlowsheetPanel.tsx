@@ -72,7 +72,9 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
   }, [flowsheet, checkedKeys, observations]);
 
   return (
-    <>
+    // 表の地色・見出し行・1 行おきの濃淡は他のタブ(検査結果の時系列表示)と同じ
+    // .karte-tabpanel 配下の指定に任せる。
+    <div className="karte-tabpanel">
       <ErrorBanner error={error} />
 
       {isLoading ? (
@@ -161,7 +163,7 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
           <LabTimelineChart series={chartSeries} />
         </Modal>
       )}
-    </>
+    </div>
   );
 }
 
