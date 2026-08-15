@@ -9,7 +9,6 @@ import {
 } from "../api/queries";
 import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
 import {
-  clinicalNoteProblem,
   sectionResponseId,
   sectionTitle,
   statusLabel,
@@ -19,6 +18,8 @@ import { problemLabel, type ProblemRef } from "../fhir/conditionHelpers";
 import {
   KARTE_KIND_LABELS,
   karteItemKey,
+  itemProblem,
+  referencesProblem,
   type KarteDayGroup,
   type KarteTimelineItem,
 } from "../fhir/karteTimeline";
@@ -33,7 +34,6 @@ import {
   groupBySpecimen,
   labOrderComment,
   labOrderItems,
-  labOrderProblem,
   memberSummary,
   specimenGroupLabel,
   summarizeLabOrder,
@@ -41,7 +41,6 @@ import {
 import {
   microOrderComment,
   microOrderContents,
-  microOrderProblem,
   organismSummary,
   specimenLabel,
   summarizeMicroOrder,
@@ -52,7 +51,6 @@ import {
   orderEntries,
   radOrderComment,
   radOrderItems,
-  radOrderProblem,
   radOrderTime,
   summarizeRadOrder,
   type RadOrderItemLine,
@@ -63,7 +61,6 @@ import {
   groupByRp,
   orderContextSummary,
   prescriptionComment,
-  prescriptionProblem,
   prescriptionRequester,
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
@@ -104,6 +101,8 @@ interface KarteTimelineProps {
   selectedProblemId: string | null;
   /** 診療日パネルから飛んだ先。該当する枠を一定時間だけ強調する。 */
   highlightKey: string | null;
+  /** 表示するものが無いときの文言。プロブレムで絞り込んでいるときに差し替える。 */
+  emptyMessage?: string;
 }
 
 // 診療日パネルからのスクロール先を引くための目印。キーは診療日 or karteItemKey。
@@ -124,6 +123,7 @@ export function KarteTimeline({
   problemsById,
   selectedProblemId,
   highlightKey,
+  emptyMessage,
 }: KarteTimelineProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [sentinelVisible, setSentinelVisible] = useState(false);
@@ -156,7 +156,9 @@ export function KarteTimeline({
       {isLoading ? (
         <p>読み込み中...</p>
       ) : groups.length === 0 && !hasMore ? (
-        <p className="patient-table__empty">登録されている診療情報がありません。</p>
+        <p className="patient-table__empty">
+          {emptyMessage ?? "登録されている診療情報がありません。"}
+        </p>
       ) : (
         groups.map((group) => {
           const dayKey = group.day || "no-date";
@@ -438,25 +440,6 @@ function DocumentIcon() {
       </g>
     </svg>
   );
-}
-
-// この情報が対象としているプロブレム。現状プロブレムを持つのは診療記録と
-// 処方・注射・検体検査(テンプレートの紐付けは未実装)。いずれも reasonReference
-// なので処方と同じ関数で引ける。
-function itemProblem(item: KarteTimelineItem): ProblemRef | null {
-  if (item.kind === "note") return clinicalNoteProblem(item.note);
-  if (item.kind === "lab-order") return labOrderProblem(item.serviceRequest);
-  if (item.kind === "micro-order") return microOrderProblem(item.serviceRequest);
-  if (item.kind === "rad-order") return radOrderProblem(item.serviceRequest);
-  if (item.kind === "prescription" || item.kind === "injection") {
-    return prescriptionProblem(item.serviceRequest);
-  }
-  return null;
-}
-
-function referencesProblem(item: KarteTimelineItem, conditionId: string | null): boolean {
-  if (!conditionId) return false;
-  return itemProblem(item)?.conditionId === conditionId;
 }
 
 function cardTitle(item: KarteTimelineItem): string {

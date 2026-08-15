@@ -16,6 +16,12 @@ export const KARTE_TAB_PARAM = "tab";
 export const KARTE_VIEW_PARAM = "view";
 /** タイムラインのカードから開く詳細モーダルの対象("<種別>:<id>")。 */
 export const KARTE_DETAIL_PARAM = "detail";
+/**
+ * 「関連する記録のみ表示」で絞り込んでいるプロブレム(Condition)の id。
+ * 無ければ通常のタイムライン表示。プロブレムを選ぶだけの強調表示(減光)は
+ * 一時的な状態なので載せない。
+ */
+export const KARTE_PROBLEM_PARAM = "problem";
 
 /** 検査結果タブの時系列表示。ID と紛れないよう予約語として扱う。 */
 export const LAB_TIMELINE_VIEW = "timeline";

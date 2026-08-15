@@ -3,12 +3,18 @@
 // split: 上にカルテ、下にそれ以外のタブを同時に表示する
 export type KarteLeftPaneMode = "tabs" | "split";
 
+// プロブレムを選んだときのタイムラインの見せ方。
+// dim: 関連しない情報を減光する(既定)
+// filter: 関連する情報だけを表示する(プロブレムごとの経過を縦に読む)
+export type KarteProblemMode = "dim" | "filter";
+
 const MODE_STORAGE_KEY = "fhir-client.karte.leftPaneMode";
 const TOP_RATIO_STORAGE_KEY = "fhir-client.karte.leftPaneTopRatio";
 const LEFT_WIDTH_RATIO_STORAGE_KEY = "fhir-client.karte.leftPaneWidthRatio";
 const DAY_LIST_STORAGE_KEY = "fhir-client.karte.dayListVisible";
 const PROBLEM_LIST_STORAGE_KEY = "fhir-client.karte.problemListVisible";
 const RESOLVED_PROBLEMS_STORAGE_KEY = "fhir-client.karte.resolvedProblemsVisible";
+const PROBLEM_MODE_STORAGE_KEY = "fhir-client.karte.problemMode";
 
 // 上下どちらのペインも潰れないように、上ペインが占める比率を制限する。
 const MIN_TOP_RATIO = 0.2;
@@ -128,6 +134,23 @@ export function readResolvedProblemsVisible(): boolean {
 export function storeResolvedProblemsVisible(visible: boolean) {
   try {
     localStorage.setItem(RESOLVED_PROBLEMS_STORAGE_KEY, visible ? "visible" : "hidden");
+  } catch {
+    // 保存できなくてもその場の表示は切り替える。
+  }
+}
+
+// プロブレムを選んだときの見せ方。既定は従来どおりの減光。
+export function readProblemMode(): KarteProblemMode {
+  try {
+    return localStorage.getItem(PROBLEM_MODE_STORAGE_KEY) === "filter" ? "filter" : "dim";
+  } catch {
+    return "dim";
+  }
+}
+
+export function storeProblemMode(mode: KarteProblemMode) {
+  try {
+    localStorage.setItem(PROBLEM_MODE_STORAGE_KEY, mode);
   } catch {
     // 保存できなくてもその場の表示は切り替える。
   }

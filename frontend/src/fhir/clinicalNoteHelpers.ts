@@ -172,6 +172,14 @@ export function xhtmlToHtml(div: string | undefined): string {
   return doc.body.firstElementChild?.innerHTML ?? "";
 }
 
+// Narrative を抜粋表示用の平文にする。段落や改行は 1 つの空白に潰す
+// (1 行に丸めて出す場所でしか使わないため)。
+export function narrativePlainText(div: string | undefined): string {
+  if (!div) return "";
+  const doc = new DOMParser().parseFromString(div, "text/html");
+  return (doc.body.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
 // Narrative が実質空(タグだけで文字も画像もない)かどうか。空セクションの保存を防ぐ。
 export function isEmptyNoteHtml(html: string): boolean {
   const doc = new DOMParser().parseFromString(html, "text/html");

@@ -84,3 +84,27 @@ fhir-client のワークアラウンド調査（2026-08-01）で見つかった�
 - **望ましいサーバー機能**: `AllergyIntolerance.onset` 検索パラメータ（R4 標準）と
   抽出カラムの追加。`_sort=-onset` が使えるようになる。
 - **影響範囲**: 一覧の並び順の正確さのみ。データ量が少ない画面なので優先度は低い。
+
+## 7. プロブレム単位の絞り込みのサーバー側検索（POMR）
+
+- **現状**: カルテの「関連する記録のみ表示」（`filterKarteGroups`）は、プロブレムで
+  絞り込むための検索がサーバーに無いため、タイムラインの 3 系統の無限クエリ
+  （`Composition` / `ServiceRequest` / `QuestionnaireResponse`）をそのまま読み進め、
+  クライアント側で `reasonReference` とアプリローカル拡張を突き合わせている。
+  絞り込みの結果が 0 件でも古いページを読み続ける作りなので、記録の少ない
+  プロブレムや古いプロブレムを選ぶと、該当カードに達するまで患者の全記録を転送しうる。
+- **望ましいサーバー機能**:
+  1. `ServiceRequest.reason-reference`（R4 標準）。処方・注射・検体/細菌/放射線オーダーを
+     `Condition/<id>` で直接引ける。ただし明細側の `ServiceRequest` も依頼病名・疑い病名を
+     `reasonReference` に持つため、ヘッダだけを得るには `based-on:missing=true` の併用が要る。
+  2. `Composition` は対象プロブレムをアプリローカル拡張
+     （`http://fhir-client.local/StructureDefinition/clinical-note-problem`）に持つので、
+     標準の検索パラメータが無い。拡張に対するカスタム検索パラメータの追加か、
+     検索可能な標準要素への持ち替えが要る。前者を jsonb containment で実装する場合、
+     拡張の `url` を見ずに `valueReference` だけで一致させると、将来ルート直下に
+     別の `valueReference` 拡張を足したときに誤マッチする点に注意。
+  3. `QuestionnaireResponse` は単独登録のテンプレート回答にプロブレムの紐付け自体が無い
+     （`itemProblem` が `null` を返す）ため、絞り込みには最初から乗らない。
+- **影響範囲**: 記録数の多い患者でプロブレムを絞り込んだときのレイテンシと転送量。
+  サーバー検索に切り替える場合は、3 ソースの安全カットオフによるページングを
+  絞り込み専用のクエリへ分ける改修も要る。

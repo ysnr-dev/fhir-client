@@ -1,10 +1,18 @@
-import { referencedResponseIds } from "./clinicalNoteHelpers";
+import { clinicalNoteProblem, referencedResponseIds } from "./clinicalNoteHelpers";
+import type { ProblemRef } from "./conditionHelpers";
 import { isInjectionServiceRequest } from "./injectionHelpers";
-import { isLabServiceRequest, isOrderItemRequest, labOrderItemRequests } from "./labOrderHelpers";
-import { isMicroServiceRequest, microOrderItemRequests } from "./microOrderHelpers";
+import {
+  isLabServiceRequest,
+  isOrderItemRequest,
+  labOrderItemRequests,
+  labOrderProblem,
+} from "./labOrderHelpers";
+import { isMicroServiceRequest, microOrderItemRequests, microOrderProblem } from "./microOrderHelpers";
+import { prescriptionProblem } from "./prescriptionHelpers";
 import {
   isRadServiceRequest,
   radOrderItemRequests,
+  radOrderProblem,
   radOrderResponseIds,
 } from "./radOrderHelpers";
 import { radPerformsByOrderId, type RadPerformDisplay } from "./radResultHelpers";
@@ -378,4 +386,46 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     hasMore: input.noteHasNext || input.prescriptionHasNext || input.responseHasNext,
     pending: { note: notePending, prescription: prescriptionPending, qr: qrPending },
   };
+}
+
+// ---- プロブレム(POMR)との紐付け ----
+
+// この情報が対象としているプロブレム。現状プロブレムを持つのは診療記録と
+// 処方・注射・検体検査(テンプレートの紐付けは未実装)。いずれも reasonReference
+// なので処方と同じ関数で引ける。
+export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
+  if (item.kind === "note") return clinicalNoteProblem(item.note);
+  if (item.kind === "lab-order") return labOrderProblem(item.serviceRequest);
+  if (item.kind === "micro-order") return microOrderProblem(item.serviceRequest);
+  if (item.kind === "rad-order") return radOrderProblem(item.serviceRequest);
+  if (item.kind === "prescription" || item.kind === "injection") {
+    return prescriptionProblem(item.serviceRequest);
+  }
+  return null;
+}
+
+export function referencesProblem(item: KarteTimelineItem, conditionId: string | null): boolean {
+  if (!conditionId) return false;
+  return itemProblem(item)?.conditionId === conditionId;
+}
+
+/**
+ * 指定したプロブレムに紐付く情報だけを残す(「関連する記録のみ表示」)。
+ * 空になった診療日のグループは落とす。
+ *
+ * 絞り込みはページングの判定より後に行う。カットオフや次ページの要否は
+ * 「読み込み済みの全データ」で決まるので、ここで件数が減ってもタイムラインの
+ * 読み進みには影響しない(絞り込みの結果 0 件でも、末尾のセンチネルが見えている
+ * 限り古いページを読み続ける)。
+ */
+export function filterKarteGroups(
+  groups: KarteDayGroup[],
+  conditionId: string,
+): KarteDayGroup[] {
+  return groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => referencesProblem(item, conditionId)),
+    }))
+    .filter((group) => group.items.length > 0);
 }

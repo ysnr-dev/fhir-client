@@ -3666,14 +3666,11 @@ body.karte-wide .app__header {
   border-radius: 6px;
   padding: 6px 8px;
   background: var(--surface-panel);
-  /* プロブレムが増えても帯が高くなりすぎないよう、内部でスクロールさせる。 */
-  max-height: 96px;
-  overflow-y: auto;
 }
 
-.karte-problems--collapsed {
-  max-height: none;
-  overflow: visible;
+/* 絞り込み中は帯の縁で示す(見出しはタイムライン側の karte-problem-summary が出す)。 */
+.karte-problems--filtering {
+  border-color: var(--accent-border);
 }
 
 .karte-problems__title {
@@ -3703,13 +3700,19 @@ body.karte-wide .app__header {
   color: var(--accent);
 }
 
+/* プロブレムが増えても帯が高くなりすぎないよう、チップの一覧だけをスクロールさせる
+   (帯ごとスクロールさせると、右端の表示設定メニューまで流れて押せなくなる)。 */
 .karte-problems__list {
   display: flex;
+  flex: 1 1 200px;
+  min-width: 0;
   flex-wrap: wrap;
   gap: 4px 6px;
   list-style: none;
   margin: 0;
   padding: 0;
+  max-height: 84px;
+  overflow-y: auto;
 }
 
 .karte-problems .karte-problems__chip {
@@ -3759,6 +3762,85 @@ body.karte-wide .app__header {
 
 .karte-problems .karte-problems__resolved-toggle:hover {
   color: var(--accent);
+}
+
+/* 表示設定のケバブ。帯の行を増やさないよう右端に小さく置く。 */
+.karte-problems__menu {
+  margin-left: auto;
+  align-self: center;
+}
+
+.karte-problems__menu .row-menu__trigger {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-color: transparent;
+  font-size: 14px;
+}
+
+/* 絞り込み中のプロブレムの見出し。タイムラインのスクロール領域の外に置くので、
+   遡って読んでいる間も「今どのプロブレムを見ているか」が見えている。 */
+.karte-problem-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: var(--accent-bg);
+}
+
+.karte-problem-summary__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.karte-problem-summary__title {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.karte-problem-summary__outcome,
+.karte-problem-summary__dates {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.karte-problem-summary .karte-problem-summary__clear {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.karte-problem-summary .karte-problem-summary__clear:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* 直近の評価・計画(A/P)。長い記載でも見出しが伸びないよう数行で切る。 */
+.karte-problem-summary__assessment {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.karte-problem-summary__assessment-day {
+  margin-right: 6px;
+  color: var(--text-h);
+  font-weight: 600;
 }
 
 .karte-daylist {

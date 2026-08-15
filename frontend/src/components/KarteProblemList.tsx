@@ -1,7 +1,11 @@
 import { problemLabel, summarizeCondition } from "../fhir/conditionHelpers";
+import type { KarteProblemMode } from "../karteLayout";
+import { RowMenu } from "./RowMenu";
 
 // カルテタブの上に常時出すプロブレムリスト(POMR)。
-// 番号付きのチップを並べ、選択すると関連する診療記録がタイムラインで強調される。
+// 番号付きのチップを並べ、選択すると関連する診療記録がタイムラインで強調される
+// (ケバブメニューで「関連する記録のみ表示」に切り替えると、そのプロブレムの
+// 経過だけを縦に読める)。
 // 登録・編集は「病名」タブ側で行う(区分ラジオでプロブレムを選ぶ)。
 
 interface KarteProblemListProps {
@@ -12,7 +16,17 @@ interface KarteProblemListProps {
   onToggleVisible: () => void;
   resolvedVisible: boolean;
   onToggleResolved: () => void;
+  /** プロブレムを選んだときの見せ方(減光 or 絞り込み)。 */
+  mode: KarteProblemMode;
+  onChangeMode: (mode: KarteProblemMode) => void;
+  /** 実際に絞り込み表示中か。モードが filter でも未選択なら偽。 */
+  filterActive: boolean;
 }
+
+const MODE_ITEMS: { mode: KarteProblemMode; label: string }[] = [
+  { mode: "dim", label: "関連しない記録を減光" },
+  { mode: "filter", label: "関連する記録のみ表示" },
+];
 
 // 継続(active)以外は解決済み・中止として扱う。
 function isActiveProblem(problem: fhir4.Condition): boolean {
@@ -27,6 +41,9 @@ export function KarteProblemList({
   onToggleVisible,
   resolvedVisible,
   onToggleResolved,
+  mode,
+  onChangeMode,
+  filterActive,
 }: KarteProblemListProps) {
   const toggleLabel = visible ? "プロブレムリストを隠す" : "プロブレムリストを表示する";
   const toggleButton = (
@@ -42,28 +59,58 @@ export function KarteProblemList({
     </button>
   );
 
+  // 表示の切り替えは帯の行を増やさないようケバブに畳む。リストを畳んでいるときも
+  // 出しておく(絞り込み中に解除できなくならないように)。
+  const modeMenu = (
+    <div className="karte-problems__menu">
+      {/* チップの一覧がスクロール領域なので、メニューは領域の外へはみ出させる。 */}
+      <RowMenu label="プロブレムの表示設定" escapesClipping>
+        {MODE_ITEMS.map((item) => (
+          <button
+            key={item.mode}
+            type="button"
+            className="row-menu__item"
+            role="menuitemradio"
+            aria-checked={mode === item.mode}
+            onClick={() => onChangeMode(item.mode)}
+          >
+            {mode === item.mode ? "✓ " : "　"}
+            {item.label}
+          </button>
+        ))}
+      </RowMenu>
+    </div>
+  );
+
+  const className = `karte-problems${filterActive ? " karte-problems--filtering" : ""}`;
+
   // 非表示でも見出しと切替ボタンは残す(でないと表示に戻せない)。
   if (!visible) {
     return (
-      <div className="karte-problems karte-problems--collapsed">
+      <div className={`${className} karte-problems--collapsed`}>
         {toggleButton}
         <h3 className="karte-problems__title">プロブレム</h3>
         <span className="karte-problems__count">{problems.length}</span>
+        {modeMenu}
       </div>
     );
   }
 
   const resolvedCount = problems.filter((problem) => !isActiveProblem(problem)).length;
-  // 解決済みを隠していても、選択中のものはタイムラインの減光の理由が分かるよう残す。
+  // 解決済みを隠していても、選択中のものはタイムラインの減光・絞り込みの理由が
+  // 分かるよう残す。
   const shownProblems = problems.filter(
     (problem) => isActiveProblem(problem) || resolvedVisible || problem.id === selectedId,
   );
   const resolvedLabel = resolvedVisible
     ? "解決済みを隠す"
     : `解決済み ${resolvedCount} 件を表示`;
+  // 絞り込み中はモードの設定にかかわらず、チップの選択も絞り込みの切り替えになる
+  // (URL で開いた状態と操作の意味が食い違わないようにする)。
+  const selectsFilter = filterActive || mode === "filter";
 
   return (
-    <div className="karte-problems">
+    <div className={className}>
       {toggleButton}
       <h3 className="karte-problems__title">プロブレム</h3>
       {problems.length === 0 ? (
@@ -88,8 +135,12 @@ export function KarteProblemList({
                   aria-pressed={isSelected}
                   title={
                     isSelected
-                      ? "強調表示を解除"
-                      : `${summary.name} に紐付く診療記録を強調表示`
+                      ? selectsFilter
+                        ? "絞り込みを解除"
+                        : "強調表示を解除"
+                      : selectsFilter
+                        ? `${summary.name} に紐付く診療情報だけを表示`
+                        : `${summary.name} に紐付く診療記録を強調表示`
                   }
                   onClick={() => onSelect(isSelected ? null : summary.id)}
                 >
@@ -116,6 +167,7 @@ export function KarteProblemList({
           )}
         </ul>
       )}
+      {modeMenu}
     </div>
   );
 }

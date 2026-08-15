@@ -21,16 +21,22 @@ import { KarteDayList } from "../components/KarteDayList";
 import { KarteLabResultTab } from "../components/KarteLabResultTab";
 import { KarteMicroResultTab } from "../components/KarteMicroResultTab";
 import { KarteProblemList } from "../components/KarteProblemList";
+import { KarteProblemSummary } from "../components/KarteProblemSummary";
 import { KarteDetailModal } from "../components/KarteCardModals";
 import { KarteRightPane, type KartePaneState } from "../components/KarteRightPane";
 import { KarteSplitter } from "../components/KarteSplitter";
 import { KARTE_TARGET_ATTR, KarteTimeline } from "../components/KarteTimeline";
 import { PatientHeader } from "../components/PatientHeader";
 import { problemLabel, splitConditions } from "../fhir/conditionHelpers";
-import { buildKarteTimeline, type KarteTimelineItem } from "../fhir/karteTimeline";
+import {
+  buildKarteTimeline,
+  filterKarteGroups,
+  type KarteTimelineItem,
+} from "../fhir/karteTimeline";
 import {
   KARTE_DETAIL_PARAM,
   KARTE_OTHER_TABS,
+  KARTE_PROBLEM_PARAM,
   KARTE_TAB_PARAM,
   KARTE_TABS,
   KARTE_VIEW_PARAM,
@@ -48,15 +54,18 @@ import {
   readLeftPaneMode,
   readLeftWidthRatio,
   readProblemListVisible,
+  readProblemMode,
   readResolvedProblemsVisible,
   readTopRatio,
   storeDayListVisible,
   storeLeftPaneMode,
   storeLeftWidthRatio,
   storeProblemListVisible,
+  storeProblemMode,
   storeResolvedProblemsVisible,
   storeTopRatio,
   type KarteLeftPaneMode,
+  type KarteProblemMode,
 } from "../karteLayout";
 
 // 患者 1 人のカルテ画面。左ペインで登録済みの情報を参照し、右ペインで登録・編集する。
@@ -145,8 +154,14 @@ export function KartePage() {
   const [resolvedProblemsVisible, setResolvedProblemsVisible] = useState(
     readResolvedProblemsVisible,
   );
-  // 選択中のプロブレム。タイムラインで関連する診療記録を強調するためだけに使う。
+  // 選択中のプロブレム。減光(強調表示)だけの選択は一時的な状態なので URL に載せず、
+  // ここに持つ。絞り込み表示は共有できたほうがよいので URL 側(filterProblemId)。
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  const [problemMode, setProblemMode] = useState<KarteProblemMode>(readProblemMode);
+  // 絞り込み中のプロブレム。これがあれば「関連する記録のみ表示」の状態。
+  const filterProblemId = searchParams.get(KARTE_PROBLEM_PARAM);
+  // 減光と絞り込みのどちらであれ、いま選ばれているプロブレム。
+  const activeProblemId = filterProblemId ?? selectedProblemId;
   const splitRef = useRef<HTMLDivElement>(null);
   const layoutRef = useRef<HTMLDivElement>(null);
 
@@ -159,7 +174,11 @@ export function KartePage() {
   const notes = useKarteClinicalNotesInfinite(patientId);
   const prescriptions = useKartePrescriptionsInfinite(patientId);
   const responses = useKarteQuestionnaireResponsesInfinite(patientId);
-  const { conditions, error: conditionsError } = useKarteConditions(patientId);
+  const {
+    conditions,
+    error: conditionsError,
+    isPending: conditionsPending,
+  } = useKarteConditions(patientId);
 
   // プロブレムは一覧表示と、タイムラインのバッジを最新の名称に解決するのに使う。
   const problems = useMemo(() => splitConditions(conditions).problems, [conditions]);
@@ -170,11 +189,56 @@ export function KartePage() {
 
   // 選択中のプロブレムは、診療記録を新規登録するときの対象の初期値にする。
   const selectedProblem = useMemo(() => {
-    const condition = selectedProblemId ? problemsById.get(selectedProblemId) : undefined;
+    const condition = activeProblemId ? problemsById.get(activeProblemId) : undefined;
     return condition
       ? { conditionId: condition.id ?? "", display: problemLabel(condition) }
       : undefined;
-  }, [selectedProblemId, problemsById]);
+  }, [activeProblemId, problemsById]);
+
+  // 絞り込みの解除。選択そのものも落とす(帯のチップだけ選ばれたまま残ると、
+  // 何も起きていないのに選択中に見える)。
+  const clearProblemFilter = useCallback(() => {
+    updateParams((params) => params.delete(KARTE_PROBLEM_PARAM));
+    setSelectedProblemId(null);
+  }, [updateParams]);
+
+  // プロブレムのチップ。絞り込み中は表示対象の切り替え、そうでなければモードに従う。
+  const handleSelectProblem = useCallback(
+    (conditionId: string | null) => {
+      if (!conditionId) {
+        if (filterProblemId) clearProblemFilter();
+        else setSelectedProblemId(null);
+        return;
+      }
+      if (problemMode === "filter" || filterProblemId) {
+        // 絞り込みを開くのは「何かを開く」操作なので履歴に積む(戻ると減光に戻る)。
+        // 対象の差し替えでは積まない(チップを次々押すたびに履歴が伸びるため)。
+        updateParams(
+          (params) => params.set(KARTE_PROBLEM_PARAM, conditionId),
+          !filterProblemId,
+        );
+      } else {
+        setSelectedProblemId(conditionId);
+      }
+    },
+    [filterProblemId, problemMode, updateParams, clearProblemFilter],
+  );
+
+  // ケバブメニューでの見せ方の切り替え。選択中のプロブレムがあれば、その場で
+  // 減光 ⇔ 絞り込みを移し替える。
+  const handleChangeProblemMode = useCallback(
+    (next: KarteProblemMode) => {
+      setProblemMode(next);
+      storeProblemMode(next);
+      if (next === "filter" && !filterProblemId && selectedProblemId) {
+        updateParams((params) => params.set(KARTE_PROBLEM_PARAM, selectedProblemId), true);
+      } else if (next === "dim" && filterProblemId) {
+        updateParams((params) => params.delete(KARTE_PROBLEM_PARAM));
+        setSelectedProblemId(filterProblemId);
+      }
+    },
+    [filterProblemId, selectedProblemId, updateParams],
+  );
 
   const timeline = useMemo(
     () =>
@@ -194,6 +258,13 @@ export function KartePage() {
       prescriptions.hasNextPage,
       responses.hasNextPage,
     ],
+  );
+
+  // 絞り込みはページングの判定(カットオフ・pending)より後に行う。判定は読み込み済みの
+  // 全データで決まるので、ここで件数が減っても読み進みには影響しない。
+  const filteredGroups = useMemo(
+    () => (filterProblemId ? filterKarteGroups(timeline.groups, filterProblemId) : timeline.groups),
+    [timeline.groups, filterProblemId],
   );
 
   // 表示範囲を押し下げているソースだけ次ページを読む。
@@ -310,29 +381,42 @@ export function KartePage() {
       {/* プロブレムリストはタブを切り替えても隠れないよう、カルテ本体の上に常時置く。 */}
       <KarteProblemList
         problems={problems}
-        selectedId={selectedProblemId}
-        onSelect={setSelectedProblemId}
+        selectedId={activeProblemId}
+        onSelect={handleSelectProblem}
         visible={problemListVisible}
         onToggleVisible={toggleProblemList}
         resolvedVisible={resolvedProblemsVisible}
         onToggleResolved={toggleResolvedProblems}
+        mode={problemMode}
+        onChangeMode={handleChangeProblemMode}
+        filterActive={Boolean(filterProblemId)}
       />
       <div
         className={`karte-left__body${dayListVisible ? "" : " karte-left__body--daylist-hidden"}`}
       >
       <KarteDayList
-        groups={timeline.groups}
+        groups={filteredGroups}
         onSelect={scrollToTarget}
         visible={dayListVisible}
         onToggleVisible={toggleDayList}
       />
       <div className="karte-left__timeline">
+        {/* 絞り込みの見出しはスクロール領域の外に置き、遡っても見えるようにする。 */}
+        {filterProblemId && (
+          <KarteProblemSummary
+            condition={problemsById.get(filterProblemId)}
+            loading={conditionsPending}
+            groups={filteredGroups}
+            hasMore={timeline.hasMore}
+            onClear={clearProblemFilter}
+          />
+        )}
         <ErrorBanner error={notes.error} />
         <ErrorBanner error={prescriptions.error} />
         <ErrorBanner error={responses.error} />
         <ErrorBanner error={conditionsError} />
         <KarteTimeline
-          groups={timeline.groups}
+          groups={filteredGroups}
           // 3 ソースのうち一部だけ届いた段階でも、出せるものは出す。
           isLoading={isLoading && timeline.groups.length === 0}
           hasMore={timeline.hasMore}
@@ -345,8 +429,11 @@ export function KartePage() {
           onDeleted={handleDeleted}
           containerRef={timelineRef}
           problemsById={problemsById}
-          selectedProblemId={selectedProblemId}
+          selectedProblemId={activeProblemId}
           highlightKey={highlightKey}
+          emptyMessage={
+            filterProblemId ? "このプロブレムに紐付く診療情報がありません。" : undefined
+          }
         />
       </div>
       </div>
