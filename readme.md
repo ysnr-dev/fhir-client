@@ -475,16 +475,29 @@ POMR は「基礎データから異常所見を抽出してプロブレムリス
 インポートから取り込み、カテゴリ「基礎データ」でまとめます。
 
 - **社会歴**は JP Core の `JP_Observation_SocialHistory`（`JP_ObservationSocialHistoryCode_CS`）に
-  設問を 1 対 1 で対応させ、対応コードを各項目の `designNote` に記録しています。将来 `item.code` に
-  対応したらそのまま移すだけで、SDC の Observation 抽出に載せられます（サーバー側は対応済み。
+  設問を 1 対 1 で対応させ、各項目の `item.code` に持たせています（18 項目）。SDC の Observation
+  抽出を実装すれば、この code がそのまま `Observation.code` になります（サーバー側の対応は不要。
   上流の JASPEHR プロファイルが `item.code` / `itemExtractionContext` を許容しています）。
   喫煙指数（ブリンクマン指数）は `calculatedExpression` による自動計算です。
 - **既往歴はテンプレートにしていません**。MEDIS 病名マスタのコードが要り、後からプロブレムへ
   昇格しうる情報なので、「病名」タブの `Condition` 側に区分を足す方が安く、プロブレムリストとの
   連続性も保てるためです（同じ情報が 2 経路に増えるのを避けています）。
-- 現状は `QuestionnaireResponse` として保存するだけで Observation にはなりません。抽出を実装する
-  ときは **先に `item.code` の編集対応**を入れてください。エディタが扱わない要素は編集保存時に
-  落ちるため、JSON に直接書いても画面から一度編集すると失われます。
+- 現状は `QuestionnaireResponse` として保存するだけで Observation にはなりません。残るのは抽出
+  処理（回答と Observation を同一の transaction Bundle で保存する）だけです。
+
+## テンプレートの項目コード（`Questionnaire.item.code`）
+
+テンプレート編集画面の **「詳細設定 > 項目コード」** で、設問に標準コード（LOINC・JP Core など）を
+付けられます。`code` / `display` / `system` の 3 列で、1 項目に複数のコードを持たせられます。
+
+- **回答の選択肢（`answerOption`）のコードとは別物**です。項目コードは「この設問が何を訊いて
+  いるか」を表し、SDC の Observation 抽出では `Observation.code` になります。
+- **表示テキスト（display）には付けられません**（FHIR の不変条件 que-3）。入力欄自体を出さず、
+  取り込んだテンプレートに付いていた場合は保存時のエラーで知らせます（黙って落としません）。
+- 入力欄の種類（`item.type`）を変えてもコードは引き継ぎます（コードは「何を訊いているか」で、
+  入力方法とは独立なため）。ただし表示テキストへ変更したときだけは落とします（que-3）。
+- 空のコードは保存されません。`system` や `display` だけを入れて `code` が空の行は保存時に
+  エラーになります（黙って消えると気づけないため）。
 
 ## 医療機関（Organization）
 

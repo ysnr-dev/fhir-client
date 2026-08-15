@@ -27,9 +27,9 @@ POMR(問題志向型診療録)の 5 要素のうち **基礎データ(Data Base)
 ## 社会歴(SOCIAL_01)
 
 設問は **JP Core の `JP_Observation_SocialHistory`**
-(`JP_ObservationSocialHistoryCode_CS`、25 項目)に 1 対 1 で対応させてある。
-対応するコードは各項目の `designNote`(編集画面の「設計メモ」。回答フォームには出ない)に
-`JP Core 生活背景コード: MD00129xx ...` の形で書いてある。
+(`JP_ObservationSocialHistoryCode_CS`、25 項目)に 1 対 1 で対応させ、各項目の
+**`item.code`** に持たせてある(18 項目)。編集画面の「詳細設定 > 項目コード」で確認・変更できる。
+SDC の Observation 抽出を実装すれば、この code がそのまま `Observation.code` になる。
 
 | グループ | 項目 | 対応コード |
 |---|---|---|
@@ -68,19 +68,30 @@ POMR(問題志向型診療録)の 5 要素のうち **基礎データ(Data Base)
   場合は末尾の補足欄に書く運用にしている(器官系ごとに陰性を明示すると設問数が倍増し、
   ROS の網羅性より入力コストが勝ってしまうため)。
 
+## 家族歴・システムレビューに `item.code` を入れていない理由
+
+- **家族歴**の抽出先は `FamilyMemberHistory` で、Observation ではない。続柄・疾患を
+  それぞれ `FamilyMemberHistory.relationship` / `condition.code` に割り当てる
+  Definition-based extraction になるため、`item.code`(= Observation.code)は使わない。
+  代わりに続柄の選択肢コードを v3-RoleCode に合わせてある。
+- **システムレビュー**は器官系ごとの症状チェックで、症状 1 つずつに確度の高い標準コードを
+  当てるには SNOMED CT の個別確認が要る。当てずっぽうのコードを入れる方が無コードより
+  害が大きいので、必要になった時点で確認して入れる。
+
 ## 将来 Observation として抽出する場合
 
 現状は QuestionnaireResponse として保存するだけで、構造化データ(Observation)には
-なっていない。エディタが `item.code` に未対応なためで、抽出(SDC の
-Observation-based extraction)を実装するときは次の順で進める。
+なっていない。`item.code` は入っているので、残りは抽出処理だけ。
 
-1. **先に `item.code` の編集対応を入れる**。エディタが扱わない要素は編集保存時に
-   落ちる仕様(`questionnaireHelpers.ts` の parse/build)なので、先に JSON へ
-   `item.code` を書いても画面から一度編集した時点で失われる。
-2. 社会歴の `designNote` に書いてあるコードを `item.code` へ移す
-   (system は `http://jpfhir.jp/fhir/core/CodeSystem/JP_ObservationSocialHistoryCode_CS`)。
-3. 回答保存時に QuestionnaireResponse と Observation を同一の transaction Bundle へ
+1. 回答保存時に QuestionnaireResponse と Observation を同一の transaction Bundle へ
    積む(シェーマ画像の Binary と同じパターン。`clinicalNoteHelpers.ts` の保存処理が参考になる)。
+   Observation は `code` = item.code、`value[x]` = 回答値、`category` = `social-history`、
+   `derivedFrom` = 生成元の QuestionnaireResponse。
+2. どの項目を抽出するかの指定が要るなら SDC の
+   `sdc-questionnaire-observationExtract`(boolean 拡張)を足す。全項目を対象にするなら
+   `item.code` の有無で判断してもよい。
+3. `questionnaireResponsePlainText` の再帰(linkId をたどって回答を読む処理)が、
+   そのまま抽出の走査に流用できる。
 
 サーバー側の対応は不要。上流の JASPEHR プロファイルは `item.code` /
 `item.definition` / `sdc-questionnaire-itemExtractionContext` を既に許容している。

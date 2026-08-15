@@ -6,7 +6,9 @@ import {
   ITEM_TYPE_LABELS,
   ITEM_TYPES,
   newAnswerOption,
+  newItemCode,
   type EditorAnswerOption,
+  type EditorCoding,
   type EditorItem,
   type EditorItemType,
 } from "../fhir/questionnaireHelpers";
@@ -96,6 +98,10 @@ export function QuestionnaireItemEditor({
           o.id === optionId ? selected : item.itemControl === "check-box" ? o.initialSelected : false,
       })),
     });
+  }
+
+  function updateCode(codeId: string, partial: Partial<EditorCoding>) {
+    patch({ codes: item.codes.map((c) => (c.id === codeId ? { ...c, ...partial } : c)) });
   }
 
   function moveOption(optionId: string, direction: "up" | "down") {
@@ -497,6 +503,67 @@ export function QuestionnaireItemEditor({
               onChange={(e) => patch({ designNote: e.target.value })}
             />
           </label>
+          {item.type !== "display" && (
+            <div className="qe-item__codes">
+              <span className="qe-enable-when__title">
+                項目コード(code): この設問が何を訊いているかを表す標準コード(回答の選択肢の
+                コードとは別)。回答から Observation を作るときの Observation.code になります。
+              </span>
+              {item.codes.length > 0 && (
+                <table className="qe-options">
+                  <thead>
+                    <tr>
+                      <th>コード</th>
+                      <th>表示名</th>
+                      <th>システム</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {item.codes.map((coding) => (
+                      <tr key={coding.id}>
+                        <td>
+                          <input
+                            type="text"
+                            value={coding.code}
+                            onChange={(e) => updateCode(coding.id, { code: e.target.value })}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={coding.display}
+                            onChange={(e) => updateCode(coding.id, { display: e.target.value })}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={coding.system}
+                            onChange={(e) => updateCode(coding.id, { system: e.target.value })}
+                          />
+                        </td>
+                        <td className="qe-options__actions">
+                          <button
+                            type="button"
+                            aria-label="項目コードを削除"
+                            onClick={() =>
+                              patch({ codes: item.codes.filter((c) => c.id !== coding.id) })
+                            }
+                          >
+                            ×
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <button type="button" onClick={() => patch({ codes: [...item.codes, newItemCode()] })}>
+                + 項目コードを追加
+              </button>
+            </div>
+          )}
           {hasInitial && (
             <>
               <label className="qe-item__text-field">

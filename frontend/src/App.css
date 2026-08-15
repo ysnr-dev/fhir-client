@@ -2384,6 +2384,28 @@ fieldset.rp-card {
   box-sizing: border-box;
 }
 
+/* 項目コードはシステム URI が長いので、グリッドを 1 行使い切って広く見せる。 */
+.qe-item__codes {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.qe-item__codes .qe-options {
+  width: 100%;
+}
+
+/* コード・表示名より system(URI)に幅を配る。 */
+.qe-item__codes .qe-options th:nth-child(1) {
+  width: 20%;
+}
+
+.qe-item__codes .qe-options th:nth-child(2) {
+  width: 25%;
+}
+
 .qe-item__checkbox {
   flex-direction: row !important;
   align-items: center;

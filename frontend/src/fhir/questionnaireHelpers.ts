@@ -116,6 +116,19 @@ export interface EditorAnswerOption {
   initialSelected: boolean;
 }
 
+/**
+ * item が表す観察項目そのものを指すコード(Questionnaire.item.code)。
+ * 「この設問は何を訊いているか」を標準コードで示す欄で、回答の選択肢
+ * (answerOption)のコードとは別物。回答から Observation を作る(SDC の抽出)ときに
+ * Observation.code になるため、抽出を実装しない現状でも入れておく価値がある。
+ */
+export interface EditorCoding {
+  id: string;
+  system: string;
+  code: string;
+  display: string;
+}
+
 // choice 配下の group にのみ設定できる表示条件(jsp-1, jsp-9)。
 // question は親 choice の linkId 固定(jsp-2)、operator は "=" 固定のため保持しない。
 export interface EditorEnableWhen {
@@ -144,6 +157,8 @@ export interface EditorItem {
   text: string;
   required: boolean;
   hidden: boolean;
+  /** この設問が何を訊いているかを表す標準コード。display 項目には付けられない(que-3)。 */
+  codes: EditorCoding[];
   designNote: string;
   initialValue: string;
   initialExpression: string;
@@ -209,6 +224,7 @@ export function newEditorItem(type: EditorItemType = "string"): EditorItem {
     text: "",
     required: false,
     hidden: false,
+    codes: [],
     designNote: "",
     initialValue: "",
     initialExpression: "",
@@ -236,6 +252,10 @@ export function newEditorItem(type: EditorItemType = "string"): EditorItem {
 
 export function newAnswerOption(): EditorAnswerOption {
   return { id: crypto.randomUUID(), system: "", code: "", display: "", initialSelected: false };
+}
+
+export function newItemCode(): EditorCoding {
+  return { id: crypto.randomUUID(), system: "", code: "", display: "" };
 }
 
 // choice 配下に置く条件付き group。「特定の選択肢が選ばれたときだけ表示」を表す。
@@ -272,6 +292,9 @@ export function changeItemType(item: EditorItem, type: EditorItemType): EditorIt
     text: item.text,
     required: type === "group" || type === "display" ? false : item.required,
     hidden: item.hidden,
+    // コードは「何を訊いているか」なので入力欄の種類を変えても引き継ぐ。
+    // ただし表示テキストにはコードを付けられない(que-3)。
+    codes: type === "display" ? [] : item.codes,
     designNote: item.designNote,
     image: item.image,
     // 医療機関・医療従事者の項目は string ⇔ text の変更では引き継ぐ(所在地を
@@ -475,6 +498,17 @@ function buildItem(item: EditorItem, parentChoice?: EditorItem): fhir4.Questionn
   };
 
   if (extensions.length) result.extension = extensions;
+  // que-3: 表示テキストにはコードを付けられない。
+  if (item.type !== "display") {
+    const codes = item.codes
+      .filter((coding) => coding.code)
+      .map((coding) => ({
+        ...(coding.system ? { system: coding.system } : {}),
+        code: coding.code,
+        ...(coding.display ? { display: coding.display } : {}),
+      }));
+    if (codes.length) result.code = codes;
+  }
   if (item.text) result.text = item.text;
   if (item.required && item.type !== "group" && item.type !== "display") result.required = true;
 
@@ -596,6 +630,13 @@ function parseItem(item: fhir4.QuestionnaireItem, parentType?: string): EditorIt
     text: item.text ?? "",
     required: item.required ?? false,
     hidden: extensionByUrl(ext, HIDDEN_EXT_URL)?.valueBoolean ?? false,
+    // 型を問わず復元する(display に付いていれば保存時の検査で気づける)。
+    codes: (item.code ?? []).map((coding) => ({
+      id: crypto.randomUUID(),
+      system: coding.system ?? "",
+      code: coding.code ?? "",
+      display: coding.display ?? "",
+    })),
     designNote: extensionByUrl(ext, DESIGN_NOTE_EXT_URL)?.valueMarkdown ?? "",
     initialValue: parseInitialValue(item),
     initialExpression:
@@ -782,6 +823,22 @@ function validateItems(
 
     if (item.initialExpression && item.calculatedExpression) {
       return `${label}: 初期値式と計算式は同時に設定できません(jsp-7)。`;
+    }
+
+    // que-3: 表示テキストは設問ではないのでコードを持てない。
+    if (item.type === "display" && item.codes.length > 0) {
+      return `${label}: 表示テキストには項目コードを設定できません(que-3)。`;
+    }
+    const codeKeys = new Set<string>();
+    for (const coding of item.codes) {
+      if (!coding.code) {
+        return `${label}: 項目コードのコードを入力してください(システム・表示名だけでは保存されません)。`;
+      }
+      const key = `${coding.system}|${coding.code}`;
+      if (codeKeys.has(key)) {
+        return `${label}: 項目コード「${coding.code}」が重複しています。`;
+      }
+      codeKeys.add(key);
     }
 
     // 医療機関・医療従事者の選択で埋める項目は、選択ボタンがグループ内に出て
