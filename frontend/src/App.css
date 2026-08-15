@@ -2791,9 +2791,19 @@ fieldset.rp-card {
 
 /* ---- 患者テンプレート(QuestionnaireResponse) ---- */
 
+/* テンプレートのプルダウンと「前回値を複写」を 1 行に並べる。プルダウンにはラベルが
+   乗るので、下端(コントロールの高さ)で揃える。 */
 .qr-template-select {
-  max-width: 480px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 640px;
   margin-bottom: 16px;
+}
+
+.qr-template-select .template-select {
+  flex: 1;
+  min-width: 0;
 }
 
 .qr-template-select label {
@@ -2814,15 +2824,21 @@ fieldset.rp-card {
 /* 前回の回答の複写。テンプレート選択と入力欄の間に細く置く。 */
 .qr-copy-previous {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  margin-bottom: 16px;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* いつの回答かは添え物なので、ボタンの文言より一段落とす。 */
+.qr-copy-previous__date {
+  font-size: 11px;
+  color: var(--text);
 }
 
 .qr-copy-previous__note {
   font-size: 13px;
   color: var(--accent);
+  margin: -8px 0 16px;
 }
 
 /* ---- テンプレート選択(カテゴリ → テンプレートの2階層プルダウン) ---- */

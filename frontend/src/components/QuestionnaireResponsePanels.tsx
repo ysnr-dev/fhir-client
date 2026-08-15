@@ -155,26 +155,34 @@ export function QuestionnaireResponseCreatePanel({
             value={questionnaireId}
             onChange={setQuestionnaireId}
           />
-        </div>
-      )}
-
-      {questionnaire && latest && (
-        <div className="qr-copy-previous">
-          {copied ? (
-            <>
-              <span className="qr-copy-previous__note">
-                {formatAuthored(latest.authored)}の回答を読み込みました。内容を確認して登録してください。
-              </span>
-              <button type="button" onClick={() => setCopied(null)}>
-                複写を取り消す
-              </button>
-            </>
-          ) : (
-            <button type="button" onClick={() => setCopied(stripResponseAnnotations(latest))}>
-              前回の回答を複写({formatAuthored(latest.authored)})
+          {/* 複写はテンプレートを選んで初めて意味を持つので、プルダウンの右隣に置く。 */}
+          {questionnaire && latest && (
+            <button
+              type="button"
+              className="qr-copy-previous"
+              onClick={() =>
+                setCopied(copied ? null : stripResponseAnnotations(latest))
+              }
+            >
+              {copied ? (
+                "複写を取り消す"
+              ) : (
+                <>
+                  前回値を複写
+                  <span className="qr-copy-previous__date">
+                    {formatAuthored(latest.authored)}
+                  </span>
+                </>
+              )}
             </button>
           )}
         </div>
+      )}
+
+      {questionnaire && latest && copied && (
+        <p className="qr-copy-previous__note">
+          {formatAuthored(latest.authored)}の回答を読み込みました。内容を確認して登録してください。
+        </p>
       )}
 
       {questionnaire &&
