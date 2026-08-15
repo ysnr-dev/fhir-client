@@ -66,7 +66,6 @@ import {
   parseTransferImport,
 } from "../fhir/questionnaireTransfer";
 import {
-  generatedObservationRefs,
   observationExtractEnabled,
   responseDeleteBundle,
   responseSaveBundle,
@@ -2053,23 +2052,42 @@ export function usePopulateSources(patientId: string | undefined) {
   };
 }
 
+/**
+ * この回答から生成した Observation の参照。回答を更新・削除するときに、前回の
+ * 生成物を消すために引く(Observation.derivedFrom が唯一の根拠)。
+ * 1 回答あたりの項目数は多くても数十なので 1 ページで足りる。
+ */
+async function fetchDerivedObservationRefs(responseId: string): Promise<string[]> {
+  if (!responseId) return [];
+  const params = new URLSearchParams();
+  params.set("derived-from", `QuestionnaireResponse/${responseId}`);
+  params.set("_elements", "id");
+  params.set("_count", "100");
+  const { data } = await searchResource<fhir4.Observation>("Observation", params);
+  return (data.entry ?? [])
+    .map((entry) => entry.resource?.id)
+    .filter((id): id is string => Boolean(id))
+    .map((id) => `Observation/${id}`);
+}
+
 // 回答から Observation を生成するテンプレートは、回答・画像・Observation を 1 つの
 // transaction で書く。生成しないテンプレートは従来どおりの保存経路のまま
-// (無駄に Bundle にしない)。
+// (無駄に Bundle にしない)。ただし抽出を後から無効にしたテンプレートでは、前回
+// 生成した Observation を消すために Bundle 経路へ回る。
 async function saveResponse(
   questionnaire: fhir4.Questionnaire,
   response: fhir4.QuestionnaireResponse,
   imageEntries?: fhir4.BundleEntry[],
   etag?: string,
-  existing?: fhir4.QuestionnaireResponse,
 ): Promise<FhirResult<fhir4.QuestionnaireResponse>> {
   const extracts = observationExtractEnabled(questionnaire);
-  if (!extracts && !generatedObservationRefs(existing).length) {
+  const existingObservationRefs = response.id ? await fetchDerivedObservationRefs(response.id) : [];
+  if (!extracts && !existingObservationRefs.length) {
     return saveWithImages(response, imageEntries, etag);
   }
 
   const { data: bundle } = await postBundle(
-    responseSaveBundle({ questionnaire, response, imageEntries, etag, existing }),
+    responseSaveBundle({ questionnaire, response, imageEntries, etag, existingObservationRefs }),
   );
   const saved = resourceFromBundleResponse<fhir4.QuestionnaireResponse>(bundle);
   if (!saved.resource) throw new Error("保存結果を取得できませんでした。");
@@ -2103,14 +2121,12 @@ export function useUpdateQuestionnaireResponse() {
       response,
       etag,
       imageEntries,
-      existing,
     }: {
       questionnaire: fhir4.Questionnaire;
       response: fhir4.QuestionnaireResponse;
       etag: string;
       imageEntries?: fhir4.BundleEntry[];
-      existing?: fhir4.QuestionnaireResponse;
-    }) => saveResponse(questionnaire, response, imageEntries, etag, existing),
+    }) => saveResponse(questionnaire, response, imageEntries, etag),
     onSuccess: (result: FhirResult<fhir4.QuestionnaireResponse>) => {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", result.data.id] });
@@ -2125,10 +2141,10 @@ export function useDeleteQuestionnaireResponse() {
     // 生成した Observation も一緒に消す(回答が消えると derivedFrom の指す先が
     // 無くなり、由来を辿れない Observation だけが残るため)。
     mutationFn: async (response: fhir4.QuestionnaireResponse) => {
-      if (!generatedObservationRefs(response).length) {
-        return deleteResource("QuestionnaireResponse", response.id ?? "");
-      }
-      await postBundle(responseDeleteBundle(response));
+      const id = response.id ?? "";
+      const observationRefs = await fetchDerivedObservationRefs(id);
+      if (!observationRefs.length) return deleteResource("QuestionnaireResponse", id);
+      await postBundle(responseDeleteBundle(id, observationRefs));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
@@ -2153,13 +2169,37 @@ function karteNextOffset(bundle: fhir4.Bundle | undefined, lastOffset: number): 
   return hasRelation(bundle, "next") ? lastOffset + KARTE_PAGE : undefined;
 }
 
-export function useKarteClinicalNotesInfinite(patientId: string | undefined) {
+/**
+ * プロブレム絞り込みの検索値。3 リソースとも参照検索なので、カンマ区切りで OR に
+ * なる(親プロブレムを選んだときは下位プロブレムの分も並ぶ)。
+ *
+ * null は絞り込みなし、undefined は「まだプロブレムが確定していない」= 取得を
+ * 始めない、の意味。絞り込み前の並びを一瞬見せないための区別。
+ */
+export type KarteProblemFilter = string[] | null | undefined;
+
+function problemSearchValue(problemIds: string[]): string {
+  return problemIds.map((id) => `Condition/${id}`).join(",");
+}
+
+// クエリキーは値が変われば別のページング列になる。絞り込みごとに 1 列を持つので、
+// 絞り込みの切り替えは先頭ページからの読み直しになる。
+function problemQueryKey(problemIds: KarteProblemFilter): string | null {
+  return problemIds?.length ? problemIds.join(",") : null;
+}
+
+export function useKarteClinicalNotesInfinite(
+  patientId: string | undefined,
+  problemIds: KarteProblemFilter = null,
+) {
   return useInfiniteQuery({
-    queryKey: ["Composition", "search", "karte", patientId],
+    queryKey: ["Composition", "search", "karte", patientId, problemQueryKey(problemIds)],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("subject", `Patient/${patientId}`);
       params.set("type", "http://loinc.org|11506-3");
+      // 対象プロブレムはローカル拡張に持つので、上流の標準外パラメータで引く。
+      if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-date");
@@ -2169,16 +2209,22 @@ export function useKarteClinicalNotesInfinite(patientId: string | undefined) {
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
-    enabled: Boolean(patientId),
+    enabled: Boolean(patientId) && problemIds !== undefined,
   });
 }
 
-export function useKartePrescriptionsInfinite(patientId: string | undefined) {
+export function useKartePrescriptionsInfinite(
+  patientId: string | undefined,
+  problemIds: KarteProblemFilter = null,
+) {
   return useInfiniteQuery({
-    queryKey: ["ServiceRequest", "search", "karte", patientId],
+    queryKey: ["ServiceRequest", "search", "karte", patientId, problemQueryKey(problemIds)],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
+      // オーダーの対象プロブレムは reasonReference(R4 標準)。明細も親から
+      // 引き継いだ理由を持つが、下の based-on:missing でヘッダだけに絞られる。
+      if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-authoredon");
@@ -2204,16 +2250,21 @@ export function useKartePrescriptionsInfinite(patientId: string | undefined) {
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
-    enabled: Boolean(patientId),
+    enabled: Boolean(patientId) && problemIds !== undefined,
   });
 }
 
-export function useKarteQuestionnaireResponsesInfinite(patientId: string | undefined) {
+export function useKarteQuestionnaireResponsesInfinite(
+  patientId: string | undefined,
+  problemIds: KarteProblemFilter = null,
+) {
   return useInfiniteQuery({
-    queryKey: ["QuestionnaireResponse", "search", "karte", patientId],
+    queryKey: ["QuestionnaireResponse", "search", "karte", patientId, problemQueryKey(problemIds)],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
+      // 診療記録と同じローカル拡張による絞り込み。
+      if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-authored");
@@ -2222,7 +2273,7 @@ export function useKarteQuestionnaireResponsesInfinite(patientId: string | undef
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
-    enabled: Boolean(patientId),
+    enabled: Boolean(patientId) && problemIds !== undefined,
   });
 }
 

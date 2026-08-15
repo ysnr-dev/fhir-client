@@ -3,7 +3,8 @@
 fhir-client のワークアラウンド調査（2026-08-01）で見つかった「fhir-server 側を直した方が
 効率がよい」項目のうち、**今回実装しなかったもの**の記録。実装済みの項目
 （日付のみ dateTime の受理、qualification[].identifier の索引化、Questionnaire canonical の
-一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の回帰 spec）については
+一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の回帰 spec、
+プロブレム単位の絞り込み検索と `Observation.derived-from`）については
 両リポジトリのコミット履歴を参照。
 
 各項目は「現状のワークアラウンド → 望ましいサーバー機能 → 影響範囲」の形式。
@@ -84,44 +85,3 @@ fhir-client のワークアラウンド調査（2026-08-01）で見つかった�
 - **望ましいサーバー機能**: `AllergyIntolerance.onset` 検索パラメータ（R4 標準）と
   抽出カラムの追加。`_sort=-onset` が使えるようになる。
 - **影響範囲**: 一覧の並び順の正確さのみ。データ量が少ない画面なので優先度は低い。
-
-## 7. プロブレム単位の絞り込みのサーバー側検索（POMR）
-
-- **現状**: カルテの「関連する記録のみ表示」（`filterKarteGroups`）は、プロブレムで
-  絞り込むための検索がサーバーに無いため、タイムラインの 3 系統の無限クエリ
-  （`Composition` / `ServiceRequest` / `QuestionnaireResponse`）をそのまま読み進め、
-  クライアント側で `reasonReference` とアプリローカル拡張を突き合わせている。
-  絞り込みの結果が 0 件でも古いページを読み続ける作りなので、記録の少ない
-  プロブレムや古いプロブレムを選ぶと、該当カードに達するまで患者の全記録を転送しうる。
-- **望ましいサーバー機能**:
-  1. `ServiceRequest.reason-reference`（R4 標準）。処方・注射・検体/細菌/放射線オーダーを
-     `Condition/<id>` で直接引ける。ただし明細側の `ServiceRequest` も依頼病名・疑い病名を
-     `reasonReference` に持つため、ヘッダだけを得るには `based-on:missing=true` の併用が要る。
-  2. `Composition` は対象プロブレムをアプリローカル拡張
-     （`http://fhir-client.local/StructureDefinition/clinical-note-problem`）に持つので、
-     標準の検索パラメータが無い。拡張に対するカスタム検索パラメータの追加か、
-     検索可能な標準要素への持ち替えが要る。前者を jsonb containment で実装する場合、
-     拡張の `url` を見ずに `valueReference` だけで一致させると、将来ルート直下に
-     別の `valueReference` 拡張を足したときに誤マッチする点に注意。
-  3. `QuestionnaireResponse` も対象プロブレムをアプリローカル拡張
-     （`…/questionnaire-response-problem`）で持つので、2 と同じカスタム検索パラメータが要る。
-- **影響範囲**: 記録数の多い患者でプロブレムを絞り込んだときのレイテンシと転送量。
-  サーバー検索に切り替える場合は、3 ソースの安全カットオフによるページングを
-  絞り込み専用のクエリへ分ける改修も要る。
-
-## 8. `Observation.derived-from` 検索（テンプレート回答から生成した Observation）
-
-- **現状**: テンプレート回答から生成した Observation（`frontend/src/fhir/observationExtract.ts`）を
-  回答の編集・削除時に引き当てるため、生成した Observation への参照を回答側の
-  ローカル拡張 `http://fhir-client.local/StructureDefinition/questionnaire-response-observation`
-  に記録している。`Observation.derivedFrom` には正しく回答への参照が入っているが、
-  上流の Observation 検索パラメータ（`app/lib/fhir/search_definitions/observation.rb`）に
-  `derived-from` が無く、そこから引けないための二重持ちになっている。
-- **望ましいサーバー機能**: `Observation.derived-from` 検索パラメータ（R4 標準）。
-  0..* の参照なので、同ファイルの `part-of` と同じ jsonb containment の定義を 1 行
-  足すだけで済む（マイグレーション不要）。`target_type` は複数取りうるので、
-  当面は `QuestionnaireResponse` に絞ってよい。
-- **影響範囲**: ローカル拡張を落とせる。拡張と実体がずれる余地（拡張だけ残って
-  Observation が消えている等）が無くなり、他の経路で作った Observation も
-  同じやり方で辿れるようになる。処方の `prescription-medication-request`（§5）と
-  同種の負債なので、まとめて整理するとよい。

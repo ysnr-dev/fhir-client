@@ -13,6 +13,7 @@ import {
   useKarteConditions,
   useKartePrescriptionsInfinite,
   useKarteQuestionnaireResponsesInfinite,
+  type KarteProblemFilter,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
@@ -34,7 +35,6 @@ import {
 } from "../fhir/conditionHelpers";
 import {
   buildKarteTimeline,
-  filterKarteGroups,
   filterKarteGroupsByCard,
   type KarteCardFilter,
   type KarteTimelineItem,
@@ -187,9 +187,6 @@ export function KartePage() {
     return () => document.body.classList.remove("karte-wide");
   }, []);
 
-  const notes = useKarteClinicalNotesInfinite(patientId);
-  const prescriptions = useKartePrescriptionsInfinite(patientId);
-  const responses = useKarteQuestionnaireResponsesInfinite(patientId);
   const {
     conditions,
     error: conditionsError,
@@ -202,6 +199,26 @@ export function KartePage() {
     () => new Map(problems.map((problem) => [problem.id ?? "", problem])),
     [problems],
   );
+
+  // 選択中のプロブレムと、その下位プロブレム。親を選んだら子に紐付く情報も
+  // 同じ扱いにする(合併症を含めた経過を 1 つの軸で追えるようにするため)。
+  const activeProblemIds = useMemo(
+    () => (activeProblemId ? problemWithDescendantIds(problems, activeProblemId) : null),
+    [problems, activeProblemId],
+  );
+
+  // タイムラインに渡す絞り込み。下位プロブレムまで含めるので、プロブレムの取得が
+  // 終わるまでは undefined(取得を始めない)にして、絞り込み前の並びが一瞬見えたり
+  // 直後に読み直しになったりしないようにする。
+  const timelineProblemIds = useMemo<KarteProblemFilter>(() => {
+    if (!filterProblemId) return null;
+    if (conditionsPending) return undefined;
+    return [...(activeProblemIds ?? [filterProblemId])].sort();
+  }, [filterProblemId, conditionsPending, activeProblemIds]);
+
+  const notes = useKarteClinicalNotesInfinite(patientId, timelineProblemIds);
+  const prescriptions = useKartePrescriptionsInfinite(patientId, timelineProblemIds);
+  const responses = useKarteQuestionnaireResponsesInfinite(patientId, timelineProblemIds);
 
   // 選択中のプロブレムは、診療記録を新規登録するときの対象の初期値にする。
   const selectedProblem = useMemo(() => {
@@ -303,22 +320,13 @@ export function KartePage() {
     ],
   );
 
-  // 選択中のプロブレムと、その下位プロブレム。親を選んだら子に紐付く情報も
-  // 同じ扱いにする(合併症を含めた経過を 1 つの軸で追えるようにするため)。
-  const activeProblemIds = useMemo(
-    () => (activeProblemId ? problemWithDescendantIds(problems, activeProblemId) : null),
-    [problems, activeProblemId],
-  );
-
-  // 絞り込みはページングの判定(カットオフ・pending)より後に行う。判定は読み込み済みの
+  // プロブレムの絞り込みはサーバー検索で済んでいるので、ここで残るのは種別だけ。
+  // 種別はページングの判定(カットオフ・pending)より後に行う。判定は読み込み済みの
   // 全データで決まるので、ここで件数が減っても読み進みには影響しない。
-  // プロブレムと種別の両方が選ばれていれば、両方を満たすものだけが残る。
-  const filteredGroups = useMemo(() => {
-    let groups = timeline.groups;
-    if (filterProblemId && activeProblemIds) groups = filterKarteGroups(groups, activeProblemIds);
-    if (cardFilter) groups = filterKarteGroupsByCard(groups, cardFilter);
-    return groups;
-  }, [timeline.groups, filterProblemId, activeProblemIds, cardFilter]);
+  const filteredGroups = useMemo(
+    () => (cardFilter ? filterKarteGroupsByCard(timeline.groups, cardFilter) : timeline.groups),
+    [timeline.groups, cardFilter],
+  );
 
   // 表示範囲を押し下げているソースだけ次ページを読む。
   function loadMore() {

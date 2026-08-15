@@ -8,6 +8,10 @@
 //
 // 上流に $extract operation は無いため、回答の保存時にクライアントで組み立てて
 // 同じ transaction Bundle に載せる(シェーマ画像の Binary と同じ流儀)。
+//
+// 生成した Observation は Observation.derivedFrom で回答を指す。回答を更新・削除
+// するときに「前回この回答から作ったもの」を引き当てるのはこの参照だけが根拠で、
+// 上流の `Observation?derived-from=QuestionnaireResponse/<id>` で辿る。
 
 // SDC 拡張。抽出の有無と、生成する Observation の category を持たせる。
 export const OBSERVATION_EXTRACT_EXT_URL =
@@ -17,15 +21,6 @@ export const OBSERVATION_EXTRACT_CATEGORY_EXT_URL =
 
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
 const UNIT_EXT_URL = "http://hl7.org/fhir/StructureDefinition/questionnaire-unit";
-
-/**
- * 生成した Observation への参照を回答側に残すためのローカル拡張。
- * 上流 fhir-server は Observation.derived-from を検索できないため、回答を編集・
- * 削除するときに「この回答から作った Observation」を引き当てる手段がこれしかない
- * (処方の ServiceRequest → MedicationRequest と同じ事情・同じ回避策)。
- */
-export const GENERATED_OBSERVATION_EXT_URL =
-  "http://fhir-client.local/StructureDefinition/questionnaire-response-observation";
 
 /** FHIR 標準の observation-category。 */
 export const OBSERVATION_CATEGORY_OPTIONS = [
@@ -68,38 +63,6 @@ export function observationExtractExtensions(enabled: boolean, category: string)
       },
     },
   ];
-}
-
-// ---- 回答から生成した Observation の参照 ----
-
-/** 回答に記録されている「この回答から作った Observation」の参照。 */
-export function generatedObservationRefs(
-  response: fhir4.QuestionnaireResponse | undefined,
-): string[] {
-  return (response?.extension ?? [])
-    .filter((e) => e.url === GENERATED_OBSERVATION_EXT_URL)
-    .map((e) => e.valueReference?.reference ?? "")
-    .filter(Boolean);
-}
-
-/** 生成した Observation への参照を差し替えた回答を返す(既存の拡張は入れ替える)。 */
-export function withGeneratedObservationRefs(
-  response: fhir4.QuestionnaireResponse,
-  references: string[],
-): fhir4.QuestionnaireResponse {
-  const others = (response.extension ?? []).filter((e) => e.url !== GENERATED_OBSERVATION_EXT_URL);
-  const extension = [
-    ...others,
-    ...references.map((reference) => ({
-      url: GENERATED_OBSERVATION_EXT_URL,
-      valueReference: { reference },
-    })),
-  ];
-  if (!extension.length) {
-    const { extension: _drop, ...rest } = response;
-    return rest;
-  }
-  return { ...response, extension };
 }
 
 // ---- 抽出 ----
@@ -231,8 +194,11 @@ export interface ResponseSaveBundleArgs {
   imageEntries?: fhir4.BundleEntry[];
   /** 更新時の If-Match。渡すと回答は PUT になる。 */
   etag?: string;
-  /** 更新前の回答。前回生成した Observation を消すために使う。 */
-  existing?: fhir4.QuestionnaireResponse;
+  /**
+   * 前回この回答から生成した Observation の参照("Observation/<id>")。
+   * 上流の `Observation?derived-from=` で引いたものを渡す(呼び出し側が取得する)。
+   */
+  existingObservationRefs?: string[];
 }
 
 /**
@@ -246,7 +212,7 @@ export interface ResponseSaveBundleArgs {
  * 回答は常に最後の entry に置く(resourceFromBundleResponse が末尾を本体として読む)。
  */
 export function responseSaveBundle(args: ResponseSaveBundleArgs): fhir4.Bundle {
-  const { questionnaire, response, imageEntries = [], etag, existing } = args;
+  const { questionnaire, response, imageEntries = [], etag, existingObservationRefs = [] } = args;
 
   // 新規保存では回答の id がまだ無いので、transaction 内の仮 URL で相互参照する
   // (サーバーが実 ID へ書き換える)。
@@ -263,14 +229,9 @@ export function responseSaveBundle(args: ResponseSaveBundleArgs): fhir4.Bundle {
     request: { method: "POST", url: "Observation" },
   }));
 
-  const deleteEntries: fhir4.BundleEntry[] = generatedObservationRefs(existing).map((reference) => ({
+  const deleteEntries: fhir4.BundleEntry[] = existingObservationRefs.map((reference) => ({
     request: { method: "DELETE", url: reference },
   }));
-
-  const responseWithRefs = withGeneratedObservationRefs(
-    response,
-    observationEntries.map((entry) => entry.fullUrl ?? ""),
-  );
 
   const request: fhir4.BundleEntryRequest = etag
     ? { method: "PUT", url: `QuestionnaireResponse/${response.id}`, ifMatch: etag }
@@ -285,23 +246,29 @@ export function responseSaveBundle(args: ResponseSaveBundleArgs): fhir4.Bundle {
       ...observationEntries,
       {
         ...(response.id ? {} : { fullUrl: responseUrl }),
-        resource: responseWithRefs,
+        resource: response,
         request,
       },
     ],
   };
 }
 
-/** 回答を削除するとき、一緒に消す Observation の DELETE エントリ。 */
-export function responseDeleteBundle(response: fhir4.QuestionnaireResponse): fhir4.Bundle {
+/**
+ * 回答を削除するとき、一緒に消す Observation の DELETE エントリ。
+ * observationRefs は `Observation?derived-from=` で引いたもの。
+ */
+export function responseDeleteBundle(
+  responseId: string,
+  observationRefs: string[],
+): fhir4.Bundle {
   return {
     resourceType: "Bundle",
     type: "transaction",
     entry: [
-      ...generatedObservationRefs(response).map((reference) => ({
+      ...observationRefs.map((reference) => ({
         request: { method: "DELETE" as const, url: reference },
       })),
-      { request: { method: "DELETE" as const, url: `QuestionnaireResponse/${response.id}` } },
+      { request: { method: "DELETE" as const, url: `QuestionnaireResponse/${responseId}` } },
     ],
   };
 }

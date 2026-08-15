@@ -311,7 +311,6 @@ function EditForm({
         }),
         etag,
         imageEntries,
-        existing: response,
       },
       {
         onSuccess: onSaved,

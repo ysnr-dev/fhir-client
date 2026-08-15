@@ -421,7 +421,9 @@ export function matchesCardFilter(item: KarteTimelineItem, filter: KarteCardFilt
 
 /**
  * 指定した種別の情報だけを残す。空になった診療日のグループは落とす。
- * プロブレムの絞り込み(filterKarteGroups)と同じく、ページングの判定より後に行う。
+ * 種別はサーバー検索に無いのでここで絞る(プロブレムの絞り込みは検索側で済む)。
+ * ページングの判定は読み込み済みの全データで決まるので、ここで件数が減っても
+ * 読み進みには影響しない。
  */
 export function filterKarteGroupsByCard(
   groups: KarteDayGroup[],
@@ -449,7 +451,7 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
 }
 
 /**
- * この情報が対象プロブレムのいずれかを指しているか。
+ * この情報が対象プロブレムのいずれかを指しているか(減光の判定)。
  * 集合で受けるのは、親プロブレムを選んだときに下位プロブレムの記録も
  * 同じ扱いにするため(conditionHelpers の problemWithDescendantIds で作る)。
  */
@@ -462,23 +464,3 @@ export function referencesProblem(
   return Boolean(id && conditionIds.has(id));
 }
 
-/**
- * 指定したプロブレムに紐付く情報だけを残す(「関連する記録のみ表示」)。
- * 空になった診療日のグループは落とす。
- *
- * 絞り込みはページングの判定より後に行う。カットオフや次ページの要否は
- * 「読み込み済みの全データ」で決まるので、ここで件数が減ってもタイムラインの
- * 読み進みには影響しない(絞り込みの結果 0 件でも、末尾のセンチネルが見えている
- * 限り古いページを読み続ける)。
- */
-export function filterKarteGroups(
-  groups: KarteDayGroup[],
-  conditionIds: ReadonlySet<string>,
-): KarteDayGroup[] {
-  return groups
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => referencesProblem(item, conditionIds)),
-    }))
-    .filter((group) => group.items.length > 0);
-}
