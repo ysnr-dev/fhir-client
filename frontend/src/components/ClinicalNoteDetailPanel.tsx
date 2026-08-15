@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import {
+  clinicalNoteAttestation,
   sectionResponseId,
   sectionTitle,
   stripSchemaImageNotes,
@@ -20,6 +21,7 @@ export function ClinicalNoteDetailPanel({
   children?: ReactNode;
 }) {
   const summary = summarizeClinicalNote(note);
+  const attestation = clinicalNoteAttestation(note);
 
   return (
     <div className="prescription-detail">
@@ -34,6 +36,16 @@ export function ClinicalNoteDetailPanel({
           <dd>{summary.statusLabel || "-"}</dd>
           <dt>作成者</dt>
           <dd>{summary.authorName}</dd>
+          {/* 確定した記録は「誰がいつ内容に責任を負ったか」を出す(真正性の根拠)。 */}
+          {attestation && (
+            <>
+              <dt>確定者</dt>
+              <dd>
+                {attestation.name || "-"}
+                {attestation.time && ` (${attestation.time.slice(0, 16).replace("T", " ")})`}
+              </dd>
+            </>
+          )}
         </dl>
       </fieldset>
 

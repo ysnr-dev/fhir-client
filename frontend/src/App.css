@@ -4116,6 +4116,61 @@ body.karte-wide .app__header {
   opacity: 0.75;
 }
 
+/* 変更履歴。左に版の一覧、右にその版の内容。 */
+.note-history {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.note-history__versions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.note-history .note-history__version {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.note-history .note-history__version:hover {
+  background: var(--accent-bg);
+}
+
+.note-history .note-history__version--selected {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.note-history__version-no {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.note-history__version-meta {
+  font-size: 11px;
+  color: var(--text);
+}
+
+.note-history__body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
 .karte-timeline {
   flex: 1;
   min-height: 0;

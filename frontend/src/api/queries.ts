@@ -83,6 +83,7 @@ import {
   deleteResource,
   fetchBinaryImage,
   postBundle,
+  readHistory,
   readResource,
   searchResource,
   updateResource,
@@ -1478,6 +1479,9 @@ export function useDeleteCondition() {
 // プロブレムリストの上限。1 患者の病名は高々数十件の想定なので 1 回の検索で足りる。
 const KARTE_CONDITION_COUNT = 100;
 
+// 版履歴の取得件数。1 つの記録がこれを超えて修正されることは想定していない。
+const HISTORY_COUNT = 50;
+
 // カルテ画面のプロブレムリスト用。プロブレムと保険病名の振り分けは
 // splitConditions() でクライアント側が行うため、ここでは患者の病名を全件取得する
 // (上流 fhir-server は未知の検索パラメータを黙って無視して全件返すことがあり、
@@ -1504,6 +1508,36 @@ export function useKarteConditions(patientId: string | undefined) {
   return { ...query, conditions };
 }
 
+
+/**
+ * 診療記録の版履歴。「いつ誰が何を直したか」を辿るために使う。
+ * クエリキーを ["Composition", id] 配下に置き、更新の invalidate が効くようにする。
+ */
+export function useClinicalNoteHistory(id: string | undefined, enabled: boolean) {
+  const query = useQuery({
+    queryKey: ["Composition", id, "history"],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("_count", String(HISTORY_COUNT));
+      const { data: bundle } = await readHistory<fhir4.Composition>(
+        "Composition",
+        id as string,
+        params,
+      );
+      return bundle;
+    },
+    enabled: Boolean(id) && enabled,
+  });
+
+  return {
+    ...query,
+    // 新しい版が先。上流は versionId 降順で返すが、念のため並べ直す。
+    versions: (query.data?.entry ?? [])
+      .map((e) => e.resource)
+      .filter((r): r is fhir4.Composition => r?.resourceType === "Composition")
+      .sort((a, b) => Number(b.meta?.versionId ?? 0) - Number(a.meta?.versionId ?? 0)),
+  };
+}
 
 export function useClinicalNote(id: string | undefined) {
   return useQuery({

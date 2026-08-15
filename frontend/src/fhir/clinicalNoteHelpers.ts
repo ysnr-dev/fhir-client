@@ -220,6 +220,46 @@ export function validateClinicalNote(
   return null;
 }
 
+/**
+ * 確定した記録の署名。「誰がいつ内容に責任を負ったか」を残す
+ * (status だけでは確定の事実しか分からず、診療録の真正性の根拠にならない)。
+ *
+ * mode は legal(内容に法的責任を負う者)。attester は 0..* だが、
+ * 最後に確定した 1 件だけを持つ。過去の署名は版履歴(_history)に残るので
+ * 二重に持たず、「今この記録に責任を負っているのは誰か」を一意に読めるようにする。
+ *
+ * 下書きに戻した場合は署名を外す。医療従事者が紐付いていないアカウント
+ * (administrator 等)が確定済みの記録を編集したときは、既存の署名をそのまま残す
+ * (署名者を空にすると、誰も責任を負っていない確定記録になってしまうため)。
+ */
+function buildAttester(
+  status: fhir4.Composition["status"],
+  practitioner: fhir4.Practitioner | null | undefined,
+  existing: fhir4.Composition | undefined,
+): fhir4.CompositionAttester[] | undefined {
+  if (status === "preliminary") return undefined;
+  if (!practitioner?.id) return existing?.attester;
+  return [
+    {
+      mode: "legal",
+      time: new Date().toISOString(),
+      party: {
+        reference: `Practitioner/${practitioner.id}`,
+        display: practitionerDisplayName(practitioner),
+      },
+    },
+  ];
+}
+
+/** 確定した記録の署名者と署名日時。未確定なら null。 */
+export function clinicalNoteAttestation(
+  composition: fhir4.Composition | undefined,
+): { name: string; time: string } | null {
+  const attester = composition?.attester?.find((a) => a.mode === "legal") ?? composition?.attester?.[0];
+  if (!attester) return null;
+  return { name: attester.party?.display ?? "", time: attester.time ?? "" };
+}
+
 export interface ClinicalNoteSave {
   composition: fhir4.Composition;
   // Composition より先に同じ transaction Bundle へ入れるエントリ
@@ -263,6 +303,7 @@ export function buildClinicalNote(
     resourceType: "Composition",
     status,
     type: PROGRESS_NOTE_TYPE,
+    attester: buildAttester(status, practitioner, existing),
     // 対象プロブレム(POMR)。指定が無ければ拡張ごと出さない。
     extension: values.problem
       ? [

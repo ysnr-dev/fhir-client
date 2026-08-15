@@ -62,6 +62,21 @@ export function readResource<T extends fhir4.Resource>(
   return fhirFetch(`${BASE}/${resourceType}/${id}`).then((r) => handle(r));
 }
 
+/**
+ * リソースの版履歴(history bundle)。上流の /<型>/<id>/_history をそのまま引く。
+ * 各 entry.resource がその版の内容で、meta.versionId / meta.lastUpdated を持つ。
+ */
+export function readHistory<T extends fhir4.Resource>(
+  resourceType: string,
+  id: string,
+  params?: URLSearchParams,
+): Promise<FhirResult<fhir4.Bundle<T>>> {
+  const query = params?.toString();
+  return fhirFetch(
+    `${BASE}/${resourceType}/${id}/_history${query ? `?${query}` : ""}`,
+  ).then((r) => handle(r));
+}
+
 export function postBundle(bundle: fhir4.Bundle): Promise<FhirResult<fhir4.Bundle>> {
   return fhirFetch(BASE, {
     method: "POST",

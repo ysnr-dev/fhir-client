@@ -108,6 +108,9 @@ function EditForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const updateNote = useUpdateClinicalNote();
+  // 署名(確定者)を修正した本人に更新するために使う。紐付けの無いアカウントでは
+  // undefined になり、その場合は既存の署名をそのまま残す。
+  const { practitioner } = useCurrentPractitioner();
 
   // 確定済み(final/amended)の編集は保存で amended になる。ステータス選択は出さない。
   const statusLocked = note.status !== "preliminary";
@@ -122,7 +125,9 @@ function EditForm({
     setValidationError(null);
     setConflict(false);
     updateNote.mutate(
-      { ...buildClinicalNote(values, { patientId, existing: note }), etag },
+      // 編集でも医療従事者を渡す。作成者(author)は既存を保つが、確定の署名は
+      // 「今その内容に責任を負う人」なので、修正した本人に更新する。
+      { ...buildClinicalNote(values, { patientId, practitioner, existing: note }), etag },
       {
         onSuccess: onSaved,
         onError: (err) => {

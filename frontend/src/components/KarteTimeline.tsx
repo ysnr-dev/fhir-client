@@ -72,6 +72,7 @@ import {
   summarizeQuestionnaireResponse,
 } from "../fhir/questionnaireResponseHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
 import { KarteCardJsonModal } from "./KarteCardModals";
 import { PlainTextModal } from "./PlainTextModal";
 import { RichTextView } from "./RichTextView";
@@ -223,6 +224,7 @@ function KarteCard({
   // 詳細表示は URL に載せるので親に任せる。
   const [plainTextOpen, setPlainTextOpen] = useState(false);
   const [jsonOpen, setJsonOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const deleting =
     deleteNote.isPending ||
@@ -379,6 +381,16 @@ function KarteCard({
                 平文表示
               </button>
             )}
+            {/* 診療記録は修正のたびに版が残るので、いつ誰が直したかを辿れるようにする。 */}
+            {item.kind === "note" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => setHistoryOpen(true)}
+              >
+                変更履歴
+              </button>
+            )}
             <button type="button" className="row-menu__item" onClick={() => setJsonOpen(true)}>
               FHIR JSON 表示
             </button>
@@ -411,6 +423,9 @@ function KarteCard({
         />
       )}
       {jsonOpen && <KarteCardJsonModal item={item} onClose={() => setJsonOpen(false)} />}
+      {historyOpen && item.kind === "note" && (
+        <ClinicalNoteHistoryModal noteId={item.id} onClose={() => setHistoryOpen(false)} />
+      )}
     </article>
   );
 }
