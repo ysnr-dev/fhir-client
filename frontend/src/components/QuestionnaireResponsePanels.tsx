@@ -15,13 +15,17 @@ import { QuestionnaireResponseForm } from "./QuestionnaireResponseForm";
 import { QuestionnaireResponseMetaFields } from "./QuestionnaireResponseMetaFields";
 import { TemplateSelect } from "./TemplateSelect";
 import { displayJapaneseName } from "../fhir/humanName";
+import type { ProblemRef } from "../fhir/conditionHelpers";
 import { buildPopulateContext } from "../fhir/populateContext";
+import { useProblemOptions } from "../hooks/useProblemOptions";
+import { ProblemSelect } from "./ProblemSelect";
 import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
 import {
   buildQuestionnaireResponse,
   emptyQuestionnaireResponseMeta,
   parseQuestionnaireResponseMeta,
   questionnaireCanonical,
+  questionnaireResponseProblem,
   validateQuestionnaireResponseMeta,
 } from "../fhir/questionnaireResponseHelpers";
 import { stripResponseAnnotations } from "../fhir/schemaImage";
@@ -35,11 +39,14 @@ function formatAuthored(authored: string | undefined): string {
 
 interface QuestionnaireResponseCreatePanelProps {
   patientId: string;
+  /** 開いた時点で対象にしておくプロブレム(カルテ画面でプロブレムを選んでいる場合)。 */
+  defaultProblem?: ProblemRef;
   onSaved: () => void;
 }
 
 export function QuestionnaireResponseCreatePanel({
   patientId,
+  defaultProblem,
   onSaved,
 }: QuestionnaireResponseCreatePanelProps) {
   const { data: patientResult } = usePatient(patientId);
@@ -56,6 +63,9 @@ export function QuestionnaireResponseCreatePanel({
 
   const [meta, setMeta] = useState(emptyQuestionnaireResponseMeta);
   const [validationError, setValidationError] = useState<string | null>(null);
+  // 対象プロブレム(POMR)。診療記録・オーダーと同じく、回答 1 件に 1 プロブレム。
+  const [problem, setProblem] = useState<ProblemRef | null>(defaultProblem ?? null);
+  const problemOptions = useProblemOptions(patientId);
 
   // 前回の回答。基礎データのように「前回を見て差分を直す」使い方のために複写できる。
   // 自動では入れない(前回の内容を今回の所見として無自覚に確定してしまうため)。
@@ -114,7 +124,7 @@ export function QuestionnaireResponseCreatePanel({
     createResponse.mutate(
       {
         questionnaire,
-        response: buildQuestionnaireResponse({ questionnaire, patient, items, meta }),
+        response: buildQuestionnaireResponse({ questionnaire, patient, items, meta, problem }),
         imageEntries,
       },
       { onSuccess: onSaved },
@@ -181,6 +191,12 @@ export function QuestionnaireResponseCreatePanel({
             loginAutofill={loginAutofill.source}
           >
             <QuestionnaireResponseMetaFields values={meta} onChange={setMeta} />
+            <div className="qp-field">
+              <label>
+                <span className="qp-field__label">対象プロブレム</span>
+                <ProblemSelect value={problem} options={problemOptions} onChange={setProblem} />
+              </label>
+            </div>
           </QuestionnaireResponseForm>
         ) : (
           <p>読み込み中...</p>
@@ -258,6 +274,10 @@ function EditForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const updateResponse = useUpdateQuestionnaireResponse();
+  const [problem, setProblem] = useState<ProblemRef | null>(() =>
+    questionnaireResponseProblem(response),
+  );
+  const problemOptions = useProblemOptions(patient.id ?? "");
 
   function handleSubmit(
     items: fhir4.QuestionnaireResponseItem[],
@@ -278,6 +298,7 @@ function EditForm({
           patient,
           items,
           meta,
+          problem,
           existing: response,
         }),
         etag,
@@ -319,6 +340,12 @@ function EditForm({
         submitting={updateResponse.isPending}
       >
         <QuestionnaireResponseMetaFields values={meta} onChange={setMeta} />
+        <div className="qp-field">
+          <label>
+            <span className="qp-field__label">対象プロブレム</span>
+            <ProblemSelect value={problem} options={problemOptions} onChange={setProblem} />
+          </label>
+        </div>
       </QuestionnaireResponseForm>
     </>
   );

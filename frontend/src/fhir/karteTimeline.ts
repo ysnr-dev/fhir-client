@@ -17,7 +17,10 @@ import {
 } from "./radOrderHelpers";
 import { radPerformsByOrderId, type RadPerformDisplay } from "./radResultHelpers";
 import { radTaskStatus, radTasksByOrderId, type RadTaskStatus } from "./radTaskHelpers";
-import { questionnaireCanonical } from "./questionnaireResponseHelpers";
+import {
+  questionnaireCanonical,
+  questionnaireResponseProblem,
+} from "./questionnaireResponseHelpers";
 
 // カルテ画面のタイムライン(診療日ごとの時系列表示)を組み立てる純粋ロジック。
 //
@@ -431,11 +434,11 @@ export function filterKarteGroupsByCard(
 
 // ---- プロブレム(POMR)との紐付け ----
 
-// この情報が対象としているプロブレム。現状プロブレムを持つのは診療記録と
-// 処方・注射・検体検査(テンプレートの紐付けは未実装)。いずれも reasonReference
-// なので処方と同じ関数で引ける。
+// この情報が対象としているプロブレム。診療記録とテンプレート回答はアプリローカル
+// 拡張、オーダー系は reasonReference(処方と同じ関数で引ける)。
 export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "note") return clinicalNoteProblem(item.note);
+  if (item.kind === "qr") return questionnaireResponseProblem(item.response);
   if (item.kind === "lab-order") return labOrderProblem(item.serviceRequest);
   if (item.kind === "micro-order") return microOrderProblem(item.serviceRequest);
   if (item.kind === "rad-order") return radOrderProblem(item.serviceRequest);

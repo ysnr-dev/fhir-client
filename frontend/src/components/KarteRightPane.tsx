@@ -28,7 +28,7 @@ export type KartePaneState =
   | { kind: "micro-order-edit"; srId: string }
   | { kind: "rad-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "rad-order-edit"; srId: string }
-  | { kind: "qr-create" }
+  | { kind: "qr-create"; problem?: ProblemRef }
   | { kind: "qr-edit"; qrId: string };
 
 const PANE_TITLES: Record<KartePaneState["kind"], string> = {
@@ -72,6 +72,7 @@ function paneKey(state: KartePaneState): string {
     case "rad-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "note-create":
+    case "qr-create":
       return `${state.kind}:${state.problem?.conditionId ?? ""}`;
     default:
       return state.kind;
@@ -125,7 +126,10 @@ export function KarteRightPane({
         >
           診療記録
         </button>
-        <button type="button" onClick={() => onStateChange({ kind: "qr-create" })}>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "qr-create", problem: selectedProblem })}
+        >
           テンプレート
         </button>
         <button
@@ -241,7 +245,13 @@ function PaneContent({
     case "rad-order-edit":
       return <RadOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "qr-create":
-      return <QuestionnaireResponseCreatePanel patientId={patientId} onSaved={onSaved} />;
+      return (
+        <QuestionnaireResponseCreatePanel
+          patientId={patientId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
     case "qr-edit":
       return (
         <QuestionnaireResponseEditPanel patientId={patientId} qrId={state.qrId} onSaved={onSaved} />

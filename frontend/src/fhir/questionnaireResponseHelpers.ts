@@ -1,6 +1,7 @@
 // JASPEHR 実装ガイド v1.0.0 の QuestionnaireResponse プロファイルに準拠した
 // テンプレート回答リソースの組み立て・復元。
 // https://jaspehr.jp/wp-content/docs/full-ig_v1.0.0/site/index.html
+import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 import { annotationOf, binaryIdFromAttachment } from "./schemaImage";
 
 export const JASPEHR_QUESTIONNAIRE_RESPONSE_PROFILE_URL =
@@ -82,11 +83,34 @@ export function parseQuestionnaireResponseMeta(
   };
 }
 
+/**
+ * 回答が対象とするプロブレム(POMR)。診療記録の clinical-note-problem と同じ考え方の
+ * アプリローカル拡張。QuestionnaireResponse には対象疾患を表す標準要素が無い
+ * (basedOn は ServiceRequest/CarePlan、partOf は Observation/Procedure しか指せない)。
+ *
+ * display には保存時点の「#番号 名称」を入れておき、参照解決なしでも描画できるようにする
+ * (表示側はプロブレム一覧が引けるなら最新の名称で上書きする)。
+ */
+export const QR_PROBLEM_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/questionnaire-response-problem";
+
+export function questionnaireResponseProblem(
+  response: fhir4.QuestionnaireResponse | undefined,
+): ProblemRef | null {
+  const reference = response?.extension?.find((e) => e.url === QR_PROBLEM_EXT_URL)?.valueReference;
+  return problemRefFromReference(reference);
+}
+
 export interface BuildQuestionnaireResponseArgs {
   questionnaire: fhir4.Questionnaire;
   patient: fhir4.Patient;
   items: fhir4.QuestionnaireResponseItem[];
   meta: QuestionnaireResponseMetaValues;
+  /**
+   * 対象プロブレム。診療記録のセクションに貼る回答では指定しない
+   * (どのプロブレムの記載かは記録側の紐付けで表すため)。
+   */
+  problem?: ProblemRef | null;
   // 更新時は id と identifier(報告単位ID)を引き継ぐ。
   existing?: fhir4.QuestionnaireResponse;
 }
@@ -103,7 +127,7 @@ function buildIdentifierValue(
 export function buildQuestionnaireResponse(
   args: BuildQuestionnaireResponseArgs,
 ): fhir4.QuestionnaireResponse {
-  const { questionnaire, patient, items, meta, existing } = args;
+  const { questionnaire, patient, items, meta, problem, existing } = args;
 
   // contained の型は基底 Resource のため、いったん Practitioner として組み立てる。
   const author: fhir4.Practitioner = {
@@ -128,6 +152,17 @@ export function buildQuestionnaireResponse(
 
   if (existing?.id) response.id = existing.id;
   if (items.length) response.item = items;
+  if (problem) {
+    response.extension = [
+      {
+        url: QR_PROBLEM_EXT_URL,
+        valueReference: {
+          reference: `Condition/${problem.conditionId}`,
+          display: problem.display,
+        },
+      },
+    ];
+  }
 
   return response;
 }
