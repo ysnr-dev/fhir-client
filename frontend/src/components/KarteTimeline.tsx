@@ -6,6 +6,7 @@ import {
   useDeleteRadOrder,
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
+  useDeleteVitalEntry,
 } from "../api/queries";
 import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
 import {
@@ -71,6 +72,7 @@ import {
   schemaImageRefs,
   summarizeQuestionnaireResponse,
 } from "../fhir/questionnaireResponseHelpers";
+import { vitalDisplayRows } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
 import { KarteCardJsonModal } from "./KarteCardModals";
@@ -220,6 +222,7 @@ function KarteCard({
   const deleteMicroOrder = useDeleteMicroOrder();
   const deleteRadOrder = useDeleteRadOrder();
   const deleteResponse = useDeleteQuestionnaireResponse();
+  const deleteVital = useDeleteVitalEntry();
   // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
   // 詳細表示は URL に載せるので親に任せる。
   const [plainTextOpen, setPlainTextOpen] = useState(false);
@@ -232,14 +235,16 @@ function KarteCard({
     deleteLabOrder.isPending ||
     deleteMicroOrder.isPending ||
     deleteRadOrder.isPending ||
-    deleteResponse.isPending;
+    deleteResponse.isPending ||
+    deleteVital.isPending;
   const deleteError =
     deleteNote.error ??
     deletePrescription.error ??
     deleteLabOrder.error ??
     deleteMicroOrder.error ??
     deleteRadOrder.error ??
-    deleteResponse.error;
+    deleteResponse.error ??
+    deleteVital.error;
 
   // テンプレートは帳票レイアウトが登録されているものだけ PDF 出力できる。
   // 他の種別では canonical を渡さないので照会自体が走らない。
@@ -262,6 +267,13 @@ function KarteCard({
     else if (item.kind === "rad-order") deleteRadOrder.mutate(item.id, options);
     // テンプレート回答は、生成した Observation も一緒に消すのでリソースごと渡す。
     else if (item.kind === "qr") deleteResponse.mutate(item.response, options);
+    // バイタルは 1 回の測定が項目ごとの Observation に分かれるのでまとめて消す。
+    else if (item.kind === "vital") {
+      deleteVital.mutate(
+        item.entry.observations.map((observation) => observation.id ?? "").filter(Boolean),
+        options,
+      );
+    }
   }
 
   // プロブレム選択中は、そのプロブレムを参照しない情報を控えめに表示する
@@ -342,9 +354,12 @@ function KarteCard({
               </button>
             ))}
           <RowMenu label={`${cardTitle(item) || KARTE_KIND_LABELS[item.kind]} の操作`}>
-            <button type="button" className="row-menu__item" onClick={() => onOpenDetail(item)}>
-              詳細表示
-            </button>
+            {/* バイタルはカードに測定値が全部出るので詳細モーダルを持たない。 */}
+            {item.kind !== "vital" && (
+              <button type="button" className="row-menu__item" onClick={() => onOpenDetail(item)}>
+                詳細表示
+              </button>
+            )}
             {/* 検体検査・細菌検査は、結果が登録済みのオーダーだけ結果内容を開ける。 */}
             {item.kind === "lab-order" && (
               <button
@@ -460,6 +475,8 @@ function DocumentIcon() {
 
 function cardTitle(item: KarteTimelineItem): string {
   if (item.kind === "note") return item.note.title ?? "";
+  // バイタルは種別バッジだけで内容が分かるので、タイトルは持たない。
+  if (item.kind === "vital") return "";
   if (item.kind === "prescription") {
     const summary = summarizeServiceRequest(item.serviceRequest);
     return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" | ");
@@ -497,6 +514,8 @@ function cardMeta(item: KarteTimelineItem): string {
     const summary = summarizeQuestionnaireResponse(item.response);
     return [time, summary.statusLabel, summary.authorName].filter(Boolean).join(" | ");
   }
+  // バイタルは測定時刻だけ(誰が測ったかは Observation に持たせていない)。
+  if (item.kind === "vital") return time;
   const requesterSummary = orderContextSummary(prescriptionRequester(item.serviceRequest));
   // 放射線検査は撮影時刻を指定できるので、依頼科・依頼医師の前に添える。記入時刻を
   // 出す診療記録と紛れないよう「撮影」と付ける(未指定のオーダーでは出さない)。
@@ -535,6 +554,21 @@ function timeOf(dateTime: string): string {
 }
 
 function KarteCardBody({ item }: { item: KarteTimelineItem }) {
+  if (item.kind === "vital") {
+    const rows = vitalDisplayRows(item.entry);
+    if (rows.length === 0) return <p className="karte-card__empty">測定値がありません。</p>;
+    return (
+      <dl className="vital-card">
+        {rows.map((row) => (
+          <div className="vital-card__row" key={row.label}>
+            <dt>{row.label}</dt>
+            <dd>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    );
+  }
+
   if (item.kind === "note") {
     const sections = item.note.section ?? [];
     if (sections.length === 0) return <p className="karte-card__empty">本文がありません。</p>;

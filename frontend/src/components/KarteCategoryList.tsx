@@ -19,6 +19,7 @@ interface KarteCategoryListProps {
 // テンプレート以外の種別。並びは KARTE_KIND_LABELS の定義順。
 const PLAIN_KINDS: KarteItemKind[] = [
   "note",
+  "vital",
   "prescription",
   "injection",
   "lab-order",

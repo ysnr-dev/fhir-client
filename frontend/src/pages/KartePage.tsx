@@ -13,6 +13,7 @@ import {
   useKarteConditions,
   useKartePrescriptionsInfinite,
   useKarteQuestionnaireResponsesInfinite,
+  useKarteVitalsInfinite,
   type KarteProblemFilter,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -219,6 +220,7 @@ export function KartePage() {
   const notes = useKarteClinicalNotesInfinite(patientId, timelineProblemIds);
   const prescriptions = useKartePrescriptionsInfinite(patientId, timelineProblemIds);
   const responses = useKarteQuestionnaireResponsesInfinite(patientId, timelineProblemIds);
+  const vitals = useKarteVitalsInfinite(patientId, timelineProblemIds);
 
   // 選択中のプロブレムは、診療記録を新規登録するときの対象の初期値にする。
   const selectedProblem = useMemo(() => {
@@ -306,17 +308,21 @@ export function KartePage() {
         noteBundles: notes.data?.pages.map((page) => page.data) ?? [],
         prescriptionBundles: prescriptions.data?.pages.map((page) => page.data) ?? [],
         responseBundles: responses.data?.pages.map((page) => page.data) ?? [],
+        vitalBundles: vitals.data?.pages.map((page) => page.data) ?? [],
         noteHasNext: Boolean(notes.hasNextPage),
         prescriptionHasNext: Boolean(prescriptions.hasNextPage),
         responseHasNext: Boolean(responses.hasNextPage),
+        vitalHasNext: Boolean(vitals.hasNextPage),
       }),
     [
       notes.data,
       prescriptions.data,
       responses.data,
+      vitals.data,
       notes.hasNextPage,
       prescriptions.hasNextPage,
       responses.hasNextPage,
+      vitals.hasNextPage,
     ],
   );
 
@@ -335,6 +341,7 @@ export function KartePage() {
       prescriptions.fetchNextPage();
     }
     if (timeline.pending.qr && !responses.isFetchingNextPage) responses.fetchNextPage();
+    if (timeline.pending.vital && !vitals.isFetchingNextPage) vitals.fetchNextPage();
   }
 
   // 取得が一段落するたびに追加読み込みを再判定させるためのトークン。
@@ -342,9 +349,11 @@ export function KartePage() {
     notes.data?.pages.length ?? 0,
     prescriptions.data?.pages.length ?? 0,
     responses.data?.pages.length ?? 0,
+    vitals.data?.pages.length ?? 0,
     timeline.pending.note,
     timeline.pending.prescription,
     timeline.pending.qr,
+    timeline.pending.vital,
   ].join("/");
 
   // 診療日パネルからタイムラインの該当位置へ飛ぶ。scrollIntoView はページ側も
@@ -374,6 +383,8 @@ export function KartePage() {
     else if (item.kind === "lab-order") setPane({ kind: "lab-order-edit", srId: item.id });
     else if (item.kind === "micro-order") setPane({ kind: "micro-order-edit", srId: item.id });
     else if (item.kind === "rad-order") setPane({ kind: "rad-order-edit", srId: item.id });
+    // バイタルの id は 1 回の測定を束ねる identifier。
+    else if (item.kind === "vital") setPane({ kind: "vital-edit", entryId: item.id });
     else setPane({ kind: "qr-edit", qrId: item.id });
   }
 
@@ -433,9 +444,13 @@ export function KartePage() {
 
   if (!patientId) return null;
 
-  const isLoading = notes.isPending || prescriptions.isPending || responses.isPending;
+  const isLoading =
+    notes.isPending || prescriptions.isPending || responses.isPending || vitals.isPending;
   const isFetchingMore =
-    notes.isFetchingNextPage || prescriptions.isFetchingNextPage || responses.isFetchingNextPage;
+    notes.isFetchingNextPage ||
+    prescriptions.isFetchingNextPage ||
+    responses.isFetchingNextPage ||
+    vitals.isFetchingNextPage;
 
   const karteBody = (
     <div className="karte-left__karte">

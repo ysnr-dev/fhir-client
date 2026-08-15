@@ -380,10 +380,26 @@ export function KarteCardJsonModal({
       ) : item.kind === "rad-order" ? (
         <RadOrderJson srId={item.id} />
       ) : (
-        <FhirJsonView resource={item.kind === "note" ? item.note : item.response} />
+        <FhirJsonView resource={jsonResource(item)} />
       )}
     </Modal>
   );
+}
+
+// オーダー系以外でモーダルにそのまま出すリソース。バイタルは 1 回の測定が項目ごとの
+// Observation に分かれるので、束ねたものを collection Bundle にして全項目を見せる。
+function jsonResource(item: KarteTimelineItem): fhir4.Resource {
+  if (item.kind === "note") return item.note;
+  if (item.kind === "vital") {
+    const bundle: fhir4.Bundle = {
+      resourceType: "Bundle",
+      type: "collection",
+      entry: item.entry.observations.map((observation) => ({ resource: observation })),
+    };
+    return bundle;
+  }
+  if (item.kind === "qr") return item.response;
+  return item.serviceRequest;
 }
 
 // 処方は ServiceRequest と MedicationRequest をまとめた Bundle で見せたいので、

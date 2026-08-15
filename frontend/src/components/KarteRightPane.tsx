@@ -9,6 +9,7 @@ import {
   QuestionnaireResponseCreatePanel,
   QuestionnaireResponseEditPanel,
 } from "./QuestionnaireResponsePanels";
+import { VitalCreatePanel, VitalEditPanel } from "./VitalPanels";
 
 // カルテ画面の右ペイン。登録・編集 UI は既存ページと共通のパネルを使う。
 
@@ -17,6 +18,9 @@ export type KartePaneState =
   // problem: 登録ボタンを押した時点で選択されていたプロブレム(対象の初期値)。
   | { kind: "note-create"; problem?: ProblemRef }
   | { kind: "note-edit"; noteId: string }
+  | { kind: "vital-create"; problem?: ProblemRef }
+  // 1 回の測定は複数の Observation なので、束ねている identifier で対象を指す。
+  | { kind: "vital-edit"; entryId: string }
   // DO(sourceSrId あり)では対象プロブレムも DO 元から引き継ぐので problem は使わない。
   | { kind: "prescription-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "prescription-edit"; srId: string }
@@ -35,6 +39,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   empty: "",
   "note-create": "診療記録登録",
   "note-edit": "診療記録編集",
+  "vital-create": "バイタル登録",
+  "vital-edit": "バイタル編集",
   "prescription-create": "処方登録",
   "prescription-edit": "処方編集",
   "injection-create": "注射登録",
@@ -63,6 +69,8 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
+    case "vital-edit":
+      return `${state.kind}:${state.entryId}`;
     // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
     // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
     case "prescription-create":
@@ -73,6 +81,7 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "note-create":
     case "qr-create":
+    case "vital-create":
       return `${state.kind}:${state.problem?.conditionId ?? ""}`;
     default:
       return state.kind;
@@ -125,6 +134,12 @@ export function KarteRightPane({
           onClick={() => onStateChange({ kind: "note-create", problem: selectedProblem })}
         >
           診療記録
+        </button>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "vital-create", problem: selectedProblem })}
+        >
+          バイタル
         </button>
         <button
           type="button"
@@ -189,6 +204,12 @@ function PaneContent({
       return (
         <ClinicalNoteEditPanel patientId={patientId} noteId={state.noteId} onSaved={onSaved} />
       );
+    case "vital-create":
+      return (
+        <VitalCreatePanel patientId={patientId} defaultProblem={state.problem} onSaved={onSaved} />
+      );
+    case "vital-edit":
+      return <VitalEditPanel patientId={patientId} entryId={state.entryId} onSaved={onSaved} />;
     case "prescription-create":
       return (
         <PrescriptionCreatePanel

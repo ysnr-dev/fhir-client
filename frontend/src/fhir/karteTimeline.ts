@@ -21,11 +21,13 @@ import {
   questionnaireCanonical,
   questionnaireResponseProblem,
 } from "./questionnaireResponseHelpers";
+import { groupVitalEntries, vitalEntryProblem, type VitalEntry } from "./vitalHelpers";
 
 // カルテ画面のタイムライン(診療日ごとの時系列表示)を組み立てる純粋ロジック。
 //
 // 診療記録(Composition) / 処方・注射(ServiceRequest + MedicationRequest) / 単独登録の
-// テンプレート回答(QuestionnaireResponse)を 1 本の時系列にまとめる。検索は別々に
+// テンプレート回答(QuestionnaireResponse) / バイタル(Observation)を 1 本の時系列に
+// まとめる。検索は別々に
 // ページングされるため、「どこまで表示してよいか」の判断が要になる
 // (buildKarteTimeline の安全カットオフを参照)。
 //
@@ -34,6 +36,7 @@ import {
 
 export type KarteItemKind =
   | "note"
+  | "vital"
   | "prescription"
   | "injection"
   | "lab-order"
@@ -43,6 +46,7 @@ export type KarteItemKind =
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   note: "診療記録",
+  vital: "バイタル",
   prescription: "処方",
   injection: "注射",
   "lab-order": "検体検査",
@@ -64,6 +68,8 @@ interface KarteItemBase {
 export type KarteTimelineItem = KarteItemBase &
   (
     | { kind: "note"; note: fhir4.Composition }
+    // 1 回の測定は項目ごとの Observation に分かれるので、束ねたものを 1 枚のカードにする。
+    | { kind: "vital"; entry: VitalEntry }
     | {
         kind: "prescription";
         serviceRequest: fhir4.ServiceRequest;
@@ -117,9 +123,11 @@ export interface KarteTimelineInput {
   noteBundles: fhir4.Bundle[];
   prescriptionBundles: fhir4.Bundle[];
   responseBundles: fhir4.Bundle[];
+  vitalBundles: fhir4.Bundle[];
   noteHasNext: boolean;
   prescriptionHasNext: boolean;
   responseHasNext: boolean;
+  vitalHasNext: boolean;
 }
 
 export interface KarteTimelineResult {
@@ -130,7 +138,7 @@ export interface KarteTimelineResult {
    * 次ページを読むべきソース。表示範囲(カットオフ)を押し下げているものだけを
    * 対象にして、片方に大量データがある患者で無駄な取得をしないようにする。
    */
-  pending: { note: boolean; prescription: boolean; qr: boolean };
+  pending: { note: boolean; prescription: boolean; qr: boolean; vital: boolean };
 }
 
 /** 未ロードのソースがあるうちは何も表示できないことを表す番兵(どの日付文字列よりも大きい)。 */
@@ -200,6 +208,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const noteResources = resourcesOf(input.noteBundles);
   const prescriptionResources = resourcesOf(input.prescriptionBundles);
   const responseResources = resourcesOf(input.responseBundles);
+  const vitalResources = resourcesOf(input.vitalBundles);
 
   const compositions = pickByType<fhir4.Composition>(noteResources, "Composition");
   const serviceRequests = pickByType<fhir4.ServiceRequest>(prescriptionResources, "ServiceRequest");
@@ -334,6 +343,18 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
       : { ...withMedications, kind: "prescription" as const, label: KARTE_KIND_LABELS.prescription };
   });
 
+  const vitalEntries = groupVitalEntries(
+    pickByType<fhir4.Observation>(vitalResources, "Observation"),
+  );
+  const vitalItems: KarteTimelineItem[] = vitalEntries.map((entry) => ({
+    kind: "vital",
+    id: entry.entryId,
+    day: dayOf(entry.effectiveDateTime),
+    dateTime: entry.effectiveDateTime,
+    label: KARTE_KIND_LABELS.vital,
+    entry,
+  }));
+
   const qrItems: KarteTimelineItem[] = responses
     .filter((response) => !linkedResponseIds.has(response.id ?? ""))
     .map((response) => {
@@ -360,13 +381,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
       hasNext: input.responseHasNext,
       oldest: oldestDayOfDates(responses.map((r) => dayOf(r.authored))),
     },
+    { hasNext: input.vitalHasNext, oldest: oldestDay(vitalItems) },
   ];
   const cutoff = safeCutoff(sources);
-  const [notePending, prescriptionPending, qrPending] = sources.map(
+  const [notePending, prescriptionPending, qrPending, vitalPending] = sources.map(
     (source) => source.hasNext && (source.oldest ?? CUTOFF_BLOCK_ALL) >= (cutoff ?? ""),
   );
 
-  const visible = [...noteItems, ...prescriptionItems, ...qrItems].filter(
+  const visible = [...noteItems, ...prescriptionItems, ...qrItems, ...vitalItems].filter(
     (item) => cutoff === undefined || item.day > cutoff,
   );
 
@@ -386,8 +408,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
 
   return {
     groups,
-    hasMore: input.noteHasNext || input.prescriptionHasNext || input.responseHasNext,
-    pending: { note: notePending, prescription: prescriptionPending, qr: qrPending },
+    hasMore:
+      input.noteHasNext || input.prescriptionHasNext || input.responseHasNext || input.vitalHasNext,
+    pending: {
+      note: notePending,
+      prescription: prescriptionPending,
+      qr: qrPending,
+      vital: vitalPending,
+    },
   };
 }
 
@@ -441,6 +469,7 @@ export function filterKarteGroupsByCard(
 export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "note") return clinicalNoteProblem(item.note);
   if (item.kind === "qr") return questionnaireResponseProblem(item.response);
+  if (item.kind === "vital") return vitalEntryProblem(item.entry);
   if (item.kind === "lab-order") return labOrderProblem(item.serviceRequest);
   if (item.kind === "micro-order") return microOrderProblem(item.serviceRequest);
   if (item.kind === "rad-order") return radOrderProblem(item.serviceRequest);

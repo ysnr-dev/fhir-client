@@ -242,8 +242,9 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   評価と計画(A/P)の抜粋を添えます(プロブレムリスト自体は「今どうなっているか」を持たないため)。
   絞り込みの対象は URL の `?problem=<Condition の id>` に載せるので共有・復元できます
   (減光だけの選択は一時的な状態なので載せません)。
-  - **絞り込みはサーバー検索で行います**。3 系統の無限クエリにそれぞれ
-    `Composition?problem=` / `ServiceRequest?reason-reference=` / `QuestionnaireResponse?problem=`
+  - **絞り込みはサーバー検索で行います**。4 系統の無限クエリにそれぞれ
+    `Composition?problem=` / `ServiceRequest?reason-reference=` / `QuestionnaireResponse?problem=` /
+    `Observation?problem=`
     を付け、対象の Condition id をクエリキーにも入れます(絞り込みごとに別のページング列に
     なるので、切り替えると先頭ページから読み直します)。親プロブレムを選んだときは下位
     プロブレムの id もカンマ区切りで並べます(参照検索のカンマは OR)。
@@ -254,6 +255,26 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
     `buildKarteTimeline` の**後**で行います(`filterKarteGroupsByCard`)。安全カットオフと
     次ページの要否は読み込み済みの全データで決まるので、件数が減ってもページングは
     壊れません。
+- **バイタル**: 右ペインの「バイタル」から体温・血圧・脈拍・SpO2・呼吸数・身長・体重を 1 画面で
+  入力します(`components/VitalForm.tsx`、組み立ては `fhir/vitalHelpers.ts`)。
+  - **1 項目 = 1 Observation**(category `vital-signs`、コードは LOINC、単位は UCUM)。ただし
+    **血圧だけは 85354-9 の Observation 1 件に収縮期(8480-6)と拡張期(8462-4)を component として
+    入れます**。別々の Observation にすると「そのときの血圧」として組にして読めないためで、
+    JP Core の `JP_Observation_BloodPressure` と同じ構造です。片方だけの入力は登録時に弾きます。
+  - **BMI(39156-5)は身長・体重から自動計算**して一緒に残します。入力欄は持ちません(同じ測定の
+    身長・体重から一意に決まる値なので、経過表で並べて追えるように保存しています)。
+  - 空欄の項目は Observation を作りません(値 0 の Observation を残すと「測って 0 だった」と
+    読めてしまうため)。
+  - **1 回の測定は identifier(`http://fhir-client.local/vital-entry` + UUID)で束ねます**。
+    タイムラインではこの単位で 1 枚のカードにし、編集・削除もまとめて行います。測定日時で
+    束ねないのは、同じ時刻に別の担当者が入れた測定と混ざりうるためです。
+  - 更新は「前回の測定を全部消して作り直す」方式です(入力欄を空にした項目の削除や血圧の追加で、
+    項目と Observation の対応が崩れるため)。
+  - 対象プロブレムはローカル拡張 `…/observation-problem` に持ちます(Observation には理由を表す
+    標準要素が無いため)。上流には `Observation?problem=` を追加済みで、プロブレムの絞り込みにも
+    乗ります。
+  - タイムラインの取得では `derived-from:missing=true` を付けて、テンプレート回答から抽出した
+    Observation を除きます(そちらは回答のカードとして既に出るため)。
 - **診療記録とプロブレムの紐付け**: POMR は「各 Problem に対して SOAP 形式で経過を記録する」ため、
   紐付けはセクション単位ではなく**診療記録 1 件に対して 1 プロブレム**です(複数のプロブレムを扱う
   ときは記録を分けて登録します)。base `Composition` には対象疾患を表す要素が無い(`event` は検査・

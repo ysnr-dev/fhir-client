@@ -6249,3 +6249,86 @@ body.page-wide #root {
   color: var(--text);
   resize: vertical;
 }
+
+/* ---- バイタル ---- */
+
+/* 入力欄。項目名・値・単位を縦に揃えるので、行ごとに同じ列幅の grid にする。 */
+.vital-form__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0 4px;
+}
+
+.vital-form__row {
+  display: grid;
+  grid-template-columns: 5em 6em auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 血圧だけは「収縮期 / 拡張期」で入力欄が 2 つ。区切りの "/" は文字幅のまま置き、
+   余りは末尾の単位側に寄せる(auto を途中に置くと入力欄が離れてしまう)。 */
+.vital-form__row:has(.vital-form__separator) {
+  grid-template-columns: 5em 6em max-content 6em auto;
+}
+
+.vital-form__label {
+  color: var(--text);
+}
+
+.vital-form__row input {
+  font: inherit;
+  font-size: 15px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  text-align: right;
+}
+
+.vital-form__separator {
+  color: var(--text);
+}
+
+.vital-form__unit {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* BMI は入力欄を持たないので、値の位置を入力欄の右端に合わせる。 */
+.vital-form__derived-value {
+  font-size: 15px;
+  color: var(--text-h);
+  text-align: right;
+}
+
+/* カードの本文。項目数が少ないので横に流して 1〜2 行に収める。 */
+.vital-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0;
+}
+
+.vital-card__row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.vital-card__row dt {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.vital-card__row dd {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+}

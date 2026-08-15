@@ -4,7 +4,14 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from "@tanstack/react-query";
+import {
+  groupVitalEntries,
+  vitalDeleteBundle,
+  vitalSaveBundle,
+  VITAL_ENTRY_SYSTEM,
+} from "../fhir/vitalHelpers";
 import { buildClinicalNoteDeleteBundle } from "../fhir/clinicalNoteHelpers";
 import { sortDepartmentsByCode } from "../fhir/departmentHelpers";
 import {
@@ -2274,6 +2281,76 @@ export function useKarteQuestionnaireResponsesInfinite(
     initialPageParam: 0,
     getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
     enabled: Boolean(patientId) && problemIds !== undefined,
+  });
+}
+
+// バイタルは 1 回の測定が項目ごとの Observation に分かれるので、identifier で束ねて
+// 1 枚のカードにする(groupVitalEntries)。テンプレート回答から抽出した Observation は
+// 回答のカードとして既に出るため、derived-from を持つものは除く。
+export function useKarteVitalsInfinite(
+  patientId: string | undefined,
+  problemIds: KarteProblemFilter = null,
+) {
+  return useInfiniteQuery({
+    queryKey: ["Observation", "search", "karte-vital", patientId, problemQueryKey(problemIds)],
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("category", "vital-signs");
+      params.set("derived-from:missing", "true");
+      if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+      params.set("_count", String(KARTE_PAGE));
+      params.set("_offset", String(pageParam));
+      params.set("_sort", "-date");
+      return searchResource<fhir4.Observation>("Observation", params);
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
+    enabled: Boolean(patientId) && problemIds !== undefined,
+  });
+}
+
+/** 編集対象の測定 1 回分。identifier で束ねてあるので 1 検索で全項目そろう。 */
+export function useVitalEntry(entryId: string | undefined) {
+  return useQuery({
+    queryKey: ["Observation", "search", "vital-entry", entryId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("identifier", `${VITAL_ENTRY_SYSTEM}|${entryId}`);
+      params.set("_count", "50");
+      const { data } = await searchResource<fhir4.Observation>("Observation", params);
+      const observations = (data.entry ?? [])
+        .map((entry) => entry.resource)
+        .filter((r): r is fhir4.Observation => r?.resourceType === "Observation");
+      return groupVitalEntries(observations)[0] ?? null;
+    },
+    enabled: Boolean(entryId),
+  });
+}
+
+function invalidateVitals(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+}
+
+export function useSaveVitalEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      observations,
+      existingObservationIds,
+    }: {
+      observations: fhir4.Observation[];
+      existingObservationIds?: string[];
+    }) => postBundle(vitalSaveBundle(observations, existingObservationIds)),
+    onSuccess: () => invalidateVitals(queryClient),
+  });
+}
+
+export function useDeleteVitalEntry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (observationIds: string[]) => postBundle(vitalDeleteBundle(observationIds)),
+    onSuccess: () => invalidateVitals(queryClient),
   });
 }
 

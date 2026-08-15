@@ -57,7 +57,8 @@ export function parseKarteTab(value: string | null): KarteTabKey {
  * 開く「検査結果表示」(DiagnosticReport)を持つ。検査結果はカルテのカードには
  * ならないが、モーダルの対象としては独立した種別が要る。
  */
-export type KarteDetailKind = KarteItemKind | "lab-result" | "micro-result";
+// バイタルはカードに測定値が全部出るので詳細モーダルを持たない。
+export type KarteDetailKind = Exclude<KarteItemKind, "vital"> | "lab-result" | "micro-result";
 
 export interface KarteDetailTarget {
   kind: KarteDetailKind;
@@ -85,6 +86,7 @@ export function formatKarteDetail(target: KarteDetailTarget): string {
 // タイムラインに出る種別(詳細モーダル専用の検査結果は含まない)。
 const CARD_KINDS: KarteItemKind[] = [
   "note",
+  "vital",
   "prescription",
   "injection",
   "lab-order",
