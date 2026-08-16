@@ -6,9 +6,11 @@ import { WEEKDAY_LABELS, type SlotPattern, type SlotTimeBlock } from "../fhir/sc
 interface SlotPatternFieldsProps {
   value: SlotPattern;
   onChange: (pattern: SlotPattern) => void;
+  /** 検査予約は 1 枠 1 予約なので、定員(同時に受ける人数)の入力を出さない。 */
+  fixedCapacity?: boolean;
 }
 
-export function SlotPatternFields({ value, onChange }: SlotPatternFieldsProps) {
+export function SlotPatternFields({ value, onChange, fixedCapacity }: SlotPatternFieldsProps) {
   function toggleWeekday(weekday: number) {
     const weekdays = value.weekdays.includes(weekday)
       ? value.weekdays.filter((w) => w !== weekday)
@@ -91,16 +93,18 @@ export function SlotPatternFields({ value, onChange }: SlotPatternFieldsProps) {
             onChange={(e) => onChange({ ...value, durationMinutes: Number(e.target.value) })}
           />
         </label>
-        <label>
-          同時に受ける人数
-          <input
-            type="number"
-            min={1}
-            step={1}
-            value={value.capacity}
-            onChange={(e) => onChange({ ...value, capacity: Number(e.target.value) })}
-          />
-        </label>
+        {!fixedCapacity && (
+          <label>
+            同時に受ける人数
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={value.capacity}
+              onChange={(e) => onChange({ ...value, capacity: Number(e.target.value) })}
+            />
+          </label>
+        )}
       </div>
     </div>
   );

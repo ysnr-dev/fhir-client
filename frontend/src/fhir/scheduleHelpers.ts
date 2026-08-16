@@ -185,9 +185,38 @@ export function slotTime(slot: fhir4.Slot): string {
 
 // ---- Schedule ----
 
+/**
+ * 枠表の種別。診察予約(外来の診察)と検査予約(CT・MRI など撮影室の枠)を分ける。
+ * serviceType[0].coding のコードで持ち、予約を取る画面の絞り込みに使う。
+ *   診察予約 … カルテ右ペインの予約登録から。定員(同時に受ける人数)を持てる
+ *   検査予約 … 放射線オーダーの予約から。1 枠 1 予約(定員 1 固定)
+ */
+export type ScheduleType = "consultation" | "exam";
+
+export const SCHEDULE_TYPE_OPTIONS: { code: ScheduleType; label: string }[] = [
+  { code: "consultation", label: "診察予約" },
+  { code: "exam", label: "検査予約" },
+];
+
+export function scheduleTypeLabel(type: ScheduleType): string {
+  return SCHEDULE_TYPE_OPTIONS.find((o) => o.code === type)?.label ?? type;
+}
+
+/**
+ * 枠表の種別。種別を持たない頃のデータ(coding が "outpatient")や不明値は
+ * 診察予約として読む。
+ */
+export function scheduleTypeOf(schedule: fhir4.Schedule): ScheduleType {
+  const code = schedule.serviceType?.[0]?.coding?.find(
+    (c) => c.system === SERVICE_TYPE_SYSTEM,
+  )?.code;
+  return code === "exam" ? "exam" : "consultation";
+}
+
 export interface ScheduleFormValues {
   /** 枠の呼び名。serviceType[0].text に入る。 */
   name: string;
+  scheduleType: ScheduleType;
   /** 担当医の Practitioner.id。診察室とどちらか一方は必須。 */
   practitionerId: string;
   /** 診察室の Location.id。 */
@@ -205,6 +234,7 @@ export interface ScheduleFormValues {
 
 export const emptyScheduleForm: ScheduleFormValues = {
   name: "",
+  scheduleType: "consultation",
   practitionerId: "",
   locationId: "",
   departmentCode: "",
@@ -245,17 +275,28 @@ export function buildSchedule(
     actor.push({ reference: `Location/${values.locationId}`, display: actorNames.location });
   }
 
+  // 検査予約は 1 枠 1 予約。画面でも定員入力を出さないが、保存時にも 1 に倒して
+  // 矛盾したパターンを残さない。
+  const pattern: SlotPattern =
+    values.scheduleType === "exam" ? { ...values.pattern, capacity: 1 } : values.pattern;
+
   const schedule: fhir4.Schedule = {
     resourceType: "Schedule",
     active: values.active,
     actor,
     serviceType: [
       {
-        coding: [{ system: SERVICE_TYPE_SYSTEM, code: "outpatient", display: "外来枠" }],
+        coding: [
+          {
+            system: SERVICE_TYPE_SYSTEM,
+            code: values.scheduleType,
+            display: scheduleTypeLabel(values.scheduleType),
+          },
+        ],
         text: values.name.trim(),
       },
     ],
-    extension: [{ url: SLOT_PATTERN_EXT_URL, valueString: JSON.stringify(values.pattern) }],
+    extension: [{ url: SLOT_PATTERN_EXT_URL, valueString: JSON.stringify(pattern) }],
   };
 
   // 有効期間は任意。未入力なら planningHorizon ごと持たせず「無期限の枠表」にする
@@ -300,6 +341,7 @@ export function parseSchedule(schedule: fhir4.Schedule): ScheduleFormValues {
 
   return {
     name: scheduleName(schedule),
+    scheduleType: scheduleTypeOf(schedule),
     practitionerId: actorId(schedule, "Practitioner"),
     locationId: actorId(schedule, "Location"),
     departmentCode: specialty?.code ?? "",

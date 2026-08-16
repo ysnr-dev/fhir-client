@@ -4,6 +4,7 @@ import {
   appointmentScheduleLabel,
   appointmentStatusLabel,
   isActiveAppointment,
+  isExamAppointment,
 } from "../fhir/appointmentHelpers";
 import { RowMenu } from "./RowMenu";
 
@@ -40,11 +41,18 @@ export function AppointmentTable({
         {appointments.map((appointment) => {
           // 取り消した予約・受診が済んだ予約は日時を動かせない(枠はもう空きに戻っている)。
           const active = isActiveAppointment(appointment);
+          // 検査予約は放射線オーダーとひとかたまり。日時変更はオーダーの撮影日時も
+          // 同期するのでここからできるが、取消はオーダー削除の一部としてだけ行う
+          // (予約だけ消えてオーダーが残る事故を防ぐ)。
+          const exam = isExamAppointment(appointment);
 
           return (
             <tr key={appointment.id}>
               <td>{appointmentDateTimeLabel(appointment)}</td>
-              <td>{appointmentScheduleLabel(appointment)}</td>
+              <td>
+                {appointmentScheduleLabel(appointment)}
+                {exam && <span className="dose-conversion__badge">検査</span>}
+              </td>
               <td>{appointmentActorDisplay(appointment, "Practitioner") || "-"}</td>
               <td>{appointmentActorDisplay(appointment, "Location") || "-"}</td>
               <td>{appointmentStatusLabel(appointment.status)}</td>
@@ -59,14 +67,20 @@ export function AppointmentTable({
                     >
                       日時を変更
                     </button>
-                    <button
-                      type="button"
-                      className="row-menu__item row-menu__item--danger"
-                      onClick={() => onCancel(appointment)}
-                      disabled={busy}
-                    >
-                      取消
-                    </button>
+                    {exam ? (
+                      <span className="row-menu__item row-menu__item--muted">
+                        取消は放射線オーダーの削除から
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="row-menu__item row-menu__item--danger"
+                        onClick={() => onCancel(appointment)}
+                        disabled={busy}
+                      >
+                        取消
+                      </button>
+                    )}
                   </RowMenu>
                 )}
               </td>

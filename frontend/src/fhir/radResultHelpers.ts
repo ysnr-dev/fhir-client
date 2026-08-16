@@ -4,8 +4,9 @@ import { ROUTE_SYSTEM, type CodeOption } from "./injectionHelpers";
 import { MEDICINE_CODE_SYSTEM, ORDER_TYPE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
 import {
   RAD_ORDER_TYPE,
-  buildRadOrderEntries,
+  buildRadOrderSplitEntries,
   splitRadOrderValues,
+  type RadOrderBooking,
   type RadOrderFormValues,
 } from "./radOrderHelpers";
 import { buildRadTaskUpdate } from "./radTaskHelpers";
@@ -395,16 +396,22 @@ export function buildRadOrderWithPerformBundle(
   patientId: string,
   requester: OrderContext,
   performs: RadImmediatePerforms,
+  booking?: RadOrderBooking,
 ): fhir4.Bundle {
   return {
     resourceType: "Bundle",
     type: "transaction",
     entry: splitRadOrderValues(values).flatMap((split) => {
-      const { header, headerReference, entries } = buildRadOrderEntries(
-        split.values,
+      const { header, headerReference, entries } = buildRadOrderSplitEntries(
+        split,
         patientId,
         requester,
+        booking,
       );
+      // 即実施は登録するオーダーごとに選べる。選んでいないオーダーは通常の登録の
+      // まま(実施記録も Task も作らない)。
+      if (!performs.has(split.key)) return entries;
+
       return [
         ...entries,
         ...immediatePerformEntries(performs.get(split.key) ?? null, header, headerReference),

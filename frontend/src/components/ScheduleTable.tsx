@@ -4,6 +4,8 @@ import {
   actorDisplay,
   scheduleName,
   schedulePeriodLabel,
+  scheduleTypeLabel,
+  scheduleTypeOf,
 } from "../fhir/scheduleHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { RowMenu } from "./RowMenu";
@@ -30,10 +32,11 @@ export function ScheduleTable({ schedules }: { schedules: fhir4.Schedule[] }) {
   return (
     <>
       <ErrorBanner error={deleteSchedule.error} />
-      <table className="patient-table">
+      <table className="patient-table schedule-table">
         <thead>
           <tr>
             <th>名称</th>
+            <th>種別</th>
             <th>担当医</th>
             <th>診察室</th>
             <th>診療科</th>
@@ -46,6 +49,7 @@ export function ScheduleTable({ schedules }: { schedules: fhir4.Schedule[] }) {
           {schedules.map((schedule) => (
             <tr key={schedule.id}>
               <td>{scheduleName(schedule)}</td>
+              <td>{scheduleTypeLabel(scheduleTypeOf(schedule))}</td>
               <td>{actorDisplay(schedule, "Practitioner") || "-"}</td>
               <td>{actorDisplay(schedule, "Location") || "-"}</td>
               <td>{schedule.specialty?.[0]?.text ?? "-"}</td>

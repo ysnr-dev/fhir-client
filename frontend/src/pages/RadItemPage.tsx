@@ -17,7 +17,8 @@ import {
   useRadSetItemMutations,
   type RadItemFilters,
 } from "../api/masterQueries";
-import { useQuestionnaireOptions } from "../api/queries";
+import { useQuestionnaireOptions, useScheduleOptions } from "../api/queries";
+import { scheduleSummary } from "../fhir/scheduleHelpers";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import { RadFrequentCodeSearchModal } from "../components/RadFrequentCodeSearchModal";
@@ -67,6 +68,12 @@ interface Draft {
   requires_perform_input: boolean;
   // 実施入力の初期明細になるデータセット。1項目1つ。
   dataset_code: string;
+  // 予約必須の項目か。true なら検査予約を押さえてからオーダーする(必ず単独)。
+  requires_appointment: boolean;
+  // 所要時間(分)。予約で消費する枠数の計算に使う。
+  duration_minutes: string;
+  // 予約を取る先の枠表(FHIR Schedule の id)。予約必須の項目だけが持つ。
+  appointment_schedule_id: string;
 }
 
 const emptyDraft: Draft = {
@@ -86,6 +93,9 @@ const emptyDraft: Draft = {
   remarks_template_canonical: "",
   requires_perform_input: true,
   dataset_code: "",
+  requires_appointment: false,
+  duration_minutes: "",
+  appointment_schedule_id: "",
 };
 
 // 要素コードは要素名をキーに持つ(列名は保存時に <要素名>_code へ写す)。
@@ -110,6 +120,11 @@ function toPayload(draft: Draft, elementCodes: ElementCodes, elementNames: strin
     requires_perform_input: draft.requires_perform_input,
     // 実施入力をしない項目は初期明細も持たない。
     dataset_code: (draft.requires_perform_input && draft.dataset_code) || null,
+    requires_appointment: draft.requires_appointment,
+    duration_minutes: draft.duration_minutes ? Number(draft.duration_minutes) : null,
+    // 予約枠の紐づけは予約必須の項目だけが持つ(backend 側でも同じ規則で落とす)。
+    appointment_schedule_id:
+      (draft.requires_appointment && draft.appointment_schedule_id) || null,
   };
   for (const element of elementNames) {
     // セットは撮影そのものではないので要素を持たせない。
@@ -303,8 +318,11 @@ export function RadItemPage() {
               <td className="rad-item__compact">
                 {KIND_LABELS[item.kind] ?? item.kind}
                 {/* 単独オーダーは 1 オーダー 1 撮影項目になる。既定(グループ化)は
-                    印を出さず、例外だけを目立たせる。 */}
+                    印を出さず、例外だけを目立たせる。予約必須も同じ扱い。 */}
                 {!item.groupable && <span className="dose-conversion__badge">単独</span>}
+                {item.requires_appointment && (
+                  <span className="dose-conversion__badge">予約</span>
+                )}
               </td>
               <td className="rad-frequent__code">{item.jj1017_code}</td>
               <td className="rad-item__compact">
@@ -361,6 +379,8 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
   const meta = useRadJj1017Elements();
   const catalog = useRadJj1017Catalog();
   const mutations = useRadItemMutations();
+  // 予約必須の項目に紐づける枠表の候補。検査予約の枠表だけを出す。
+  const { schedules: examSchedules } = useScheduleOptions({ scheduleType: "exam" });
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [elementCodes, setElementCodes] = useState<ElementCodes>({});
   const [searchingFrequent, setSearchingFrequent] = useState(false);
@@ -390,6 +410,9 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       remarks_template_canonical: d.remarks_template_canonical ?? "",
       requires_perform_input: d.requires_perform_input,
       dataset_code: d.dataset_code ?? "",
+      requires_appointment: d.requires_appointment,
+      duration_minutes: d.duration_minutes === null ? "" : String(d.duration_minutes),
+      appointment_schedule_id: d.appointment_schedule_id ?? "",
     });
     setElementCodes(readElementCodes(d));
   }, [detail.data]);
@@ -499,15 +522,63 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
           </label>
           {/* CT・MRI など 1 撮影に時間を要する項目は、撮影室の枠を 1 件ずつ押さえる
               必要があるため単独にする。オーダー画面では他の項目と一緒に選べるが、
-              登録時にこの項目だけの別オーダーへ分けられる。 */}
+              登録時にこの項目だけの別オーダーへ分けられる。
+              予約必須の項目は予約(枠)ごとにオーダーが立つので単独に固定する。 */}
           <label>
             オーダー単位
             <select
               value={draft.groupable ? "true" : "false"}
               onChange={(e) => setDraft({ ...draft, groupable: e.target.value === "true" })}
+              disabled={draft.requires_appointment}
             >
               <option value="true">グループ化(他の項目と同一オーダー可)</option>
               <option value="false">単独(1オーダー1撮影項目)</option>
+            </select>
+          </label>
+          <label>
+            予約
+            <select
+              value={draft.requires_appointment ? "true" : "false"}
+              onChange={(e) => {
+                const requiresAppointment = e.target.value === "true";
+                // 予約必須は必ず単独オーダー(backend でも検証される)。
+                setDraft({
+                  ...draft,
+                  requires_appointment: requiresAppointment,
+                  groupable: requiresAppointment ? false : draft.groupable,
+                });
+              }}
+            >
+              <option value="false">不要</option>
+              <option value="true">必須</option>
+            </select>
+          </label>
+          <label>
+            所要時間(分)
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={draft.duration_minutes}
+              onChange={(e) => setDraft({ ...draft, duration_minutes: e.target.value })}
+              placeholder="未設定は1枠"
+            />
+          </label>
+          {/* 予約を取る先の枠表。CT の項目なら CT 室の検査予約枠、のように紐づけて
+              おくと、オーダー画面の予約モーダルでその枠表が最初から選ばれる。 */}
+          <label>
+            予約枠
+            <select
+              value={draft.requires_appointment ? draft.appointment_schedule_id : ""}
+              onChange={(e) => setDraft({ ...draft, appointment_schedule_id: e.target.value })}
+              disabled={!draft.requires_appointment}
+            >
+              <option value="">未指定(オーダー時に選ぶ)</option>
+              {examSchedules.map((schedule) => (
+                <option key={schedule.id} value={schedule.id}>
+                  {scheduleSummary(schedule)}
+                </option>
+              ))}
             </select>
           </label>
         </div>

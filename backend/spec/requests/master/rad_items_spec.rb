@@ -204,6 +204,39 @@ RSpec.describe "Master::RadItems", type: :request do
       expect(body["requires_perform_input"]).to be(false)
     end
 
+    it "既定は予約不要で、予約必須の項目は単独オーダーなら登録できる" do
+      post "/master/rad_items", params: { item_code: "R0001", name: "既定の項目" }
+      expect(body["requires_appointment"]).to be(false)
+      expect(body["duration_minutes"]).to be_nil
+
+      post "/master/rad_items", params: { item_code: "R0008", name: "頭部CT単純",
+                                          requires_appointment: true, groupable: false,
+                                          duration_minutes: 45 }
+      expect(response).to have_http_status(:created)
+      expect(body["requires_appointment"]).to be(true)
+      expect(body["duration_minutes"]).to eq(45)
+    end
+
+    it "予約必須の項目は予約枠を紐づけて登録でき、予約不要に変えると外れる" do
+      post "/master/rad_items", params: { item_code: "R0010", name: "CT頭部",
+                                          requires_appointment: true, groupable: false,
+                                          appointment_schedule_id: "schedule-1" }
+      expect(response).to have_http_status(:created)
+      expect(body["appointment_schedule_id"]).to eq("schedule-1")
+
+      patch "/master/rad_items/R0010", params: { requires_appointment: false }
+      expect(response).to have_http_status(:ok)
+      expect(body["appointment_schedule_id"]).to be_nil
+    end
+
+    it "予約必須の項目はグループ化のままでは登録できない" do
+      post "/master/rad_items", params: { item_code: "R0009", name: "予約必須なのにグループ化",
+                                          requires_appointment: true }
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("単独オーダー")
+    end
+
     it "実施入力なしの項目はデータセットを持たない" do
       post "/master/rad_items", params: { item_code: "R0007", name: "撮って終わりの項目",
                                           requires_perform_input: false, dataset_code: "000001" }

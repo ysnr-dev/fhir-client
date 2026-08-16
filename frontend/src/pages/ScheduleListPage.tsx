@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
   useLocationOptions,
@@ -25,6 +25,13 @@ export function ScheduleListPage() {
   const [search, setSearch] = useState<ScheduleSearchParams>(emptySearch);
   const [inputs, setInputs] = useState<ScheduleSearchParams>(emptySearch);
   const [offset, setOffset] = useState(0);
+
+  // 列が多く既定の幅では名称や期間まで折り返すので、この画面だけ幅を広げる
+  // (放射線検査一覧と同じやり方)。
+  useEffect(() => {
+    document.body.classList.add("page-wide");
+    return () => document.body.classList.remove("page-wide");
+  }, []);
 
   const { practitioners } = usePractitionerOptions();
   const { locations } = useLocationOptions();

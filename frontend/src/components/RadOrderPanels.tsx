@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCreatePrescription, useUpdatePrescription } from "../api/queries";
+import { useCreatePrescription, usePatient, useUpdatePrescription } from "../api/queries";
+import type { SlotSelection } from "../fhir/appointmentHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { prescriptionRequester } from "../fhir/prescriptionHelpers";
 import {
@@ -41,6 +42,9 @@ export function RadOrderCreatePanel({
   const source = useRadOrderInitialValues(sourceSrId, patientId);
   // DO も新しいオーダーなので、依頼元は DO 元ではなくヘッダーで選択中のものを使う。
   const requester = useOrderContext();
+  // 予約必須の検査は予約(Appointment)も同じ transaction で作る。participant に
+  // 患者の表示名まで持たせたいので患者リソースを読んでおく。
+  const { data: patientResult } = usePatient(patientId);
   const queryClient = useQueryClient();
 
   const initialValues = useMemo(
@@ -51,10 +55,22 @@ export function RadOrderCreatePanel({
     [source.initialValues, defaultProblem],
   );
 
-  function handleSubmit(values: RadOrderFormValues, performs: RadImmediatePerforms | null) {
+  function handleSubmit(
+    values: RadOrderFormValues,
+    performs: RadImmediatePerforms | null,
+    bookings: Record<string, SlotSelection> | null,
+  ) {
+    const patient = patientResult?.data;
+    // 予約は患者リソースが揃ってから同梱できる(読み込みは画面を開いた時点で始まって
+    // いるので、通らないのは患者が消えた場合くらい)。
+    const booking =
+      bookings && Object.keys(bookings).length > 0 && patient
+        ? { patient, selections: bookings }
+        : undefined;
+
     const bundle = performs
       ? buildRadOrderWithPerformBundle(values, patientId, requester, performs)
-      : buildRadOrderBundle(values, patientId, requester);
+      : buildRadOrderBundle(values, patientId, requester, booking);
 
     createRadOrder.mutate(bundle, {
       onSuccess: () => {
@@ -62,6 +78,11 @@ export function RadOrderCreatePanel({
         // (オーダーの無効化キーは検索(ServiceRequest search)だけを見ている)。
         if (performs) {
           queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rad-worklist"] });
+        }
+        // 予約も一緒に書いたので、予約タブと枠カレンダーを読み直させる。
+        if (booking) {
+          queryClient.invalidateQueries({ queryKey: ["Appointment"] });
+          queryClient.invalidateQueries({ queryKey: ["Slot"] });
         }
         onSaved();
       },

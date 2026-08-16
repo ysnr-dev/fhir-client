@@ -21,13 +21,17 @@ module Master
     validates :item_code, presence: true, uniqueness: true
     validates :name, presence: true
     validates :kind, inclusion: { in: KINDS }
+    validates :duration_minutes, numericality: { only_integer: true, greater_than: 0 },
+                                 allow_nil: true
     validate :element_codes_are_valid
     validate :valid_period_is_ordered
     validate :solo_item_is_not_a_set_member
+    validate :appointment_item_is_solo
 
     before_save :set_jj1017_code
     before_save :set_search_columns
     before_save :clear_dataset_without_perform_input
+    before_save :clear_schedule_without_appointment
 
     def set?
       kind == "set"
@@ -92,10 +96,26 @@ module Master
       errors.add(:base, "セットの構成項目になっているため単独オーダーにできません")
     end
 
+    # 予約必須の項目は撮影室の枠(予約)ごとにオーダーが立つので、必ず単独オーダーに
+    # する。他の項目とまとめられると 1 オーダーに予約が複数ぶら下がってしまう。
+    # 画面では予約必須を選ぶと単独に固定されるが、API から入る矛盾もここで落とす。
+    # なお単独はセット構成項目になれない(solo_item_is_not_a_set_member)ので、
+    # セット構成項目を予約必須にすることも連鎖的に防がれる。
+    def appointment_item_is_solo
+      return unless requires_appointment && groupable
+
+      errors.add(:base, "予約必須の項目は単独オーダーにしてください")
+    end
+
     # 実施入力をしない項目は実施入力の初期明細も持たない。画面では選べないように
     # しているが、API から入っても矛盾した組み合わせが残らないようにここでも落とす。
     def clear_dataset_without_perform_input
       self.dataset_code = nil unless requires_perform_input
+    end
+
+    # 予約枠(FHIR Schedule)への紐づけは予約必須の項目だけが持つ(dataset と同じ扱い)。
+    def clear_schedule_without_appointment
+      self.appointment_schedule_id = nil unless requires_appointment
     end
 
     def set_search_columns

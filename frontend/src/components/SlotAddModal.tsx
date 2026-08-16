@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useGenerateSlots, useSlotsInRange } from "../api/queries";
 import {
   buildSlotsAt,
+  scheduleTypeOf,
   emptySlotPattern,
   isWithinHorizon,
   schedulePeriodLabel,
@@ -37,6 +38,8 @@ export function SlotAddModal({
   onAdded,
 }: SlotAddModalProps) {
   const pattern = slotPatternOf(schedule) ?? emptySlotPattern;
+  // 検査予約は 1 枠 1 予約なので、同じ時間に席を重ねる「追加する人数」は出さない。
+  const fixedCount = scheduleTypeOf(schedule) === "exam";
 
   const [values, setValues] = useState<SlotAddValues>({
     date: defaultDate,
@@ -120,16 +123,18 @@ export function SlotAddModal({
               onChange={(e) => update("durationMinutes", Number(e.target.value))}
             />
           </label>
-          <label>
-            追加する人数
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={values.count}
-              onChange={(e) => update("count", Number(e.target.value))}
-            />
-          </label>
+          {!fixedCount && (
+            <label>
+              追加する人数
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={values.count}
+                onChange={(e) => update("count", Number(e.target.value))}
+              />
+            </label>
+          )}
         </div>
 
         {outsideHorizon && (

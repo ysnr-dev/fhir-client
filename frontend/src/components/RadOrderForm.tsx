@@ -6,6 +6,7 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import type { RadItem } from "../api/masterClient";
 import {
@@ -35,12 +36,17 @@ import {
   type RadOrderFormValues,
   type RadOrderItemLine,
   type RadOrderPriority,
+  type RadOrderSplit,
 } from "../fhir/radOrderHelpers";
 import {
   radPerformSummary,
   type RadImmediatePerforms,
   type RadPerformFormValues,
 } from "../fhir/radResultHelpers";
+import { scheduleSummary, slotDate, slotTime, today } from "../fhir/scheduleHelpers";
+import type { SlotSelection } from "../fhir/appointmentHelpers";
+import { AppointmentSlotPicker } from "./AppointmentSlotPicker";
+import { Modal } from "./Modal";
 import { useConditionOptions } from "../hooks/useConditionOptions";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { TemplateEntryModal } from "./TemplateEntryModal";
@@ -74,7 +80,12 @@ interface RadOrderFormProps {
    * performs は即実施の実施入力(オーダーごと)。即実施でない場合は null。
    * 編集では即実施を出さないので常に null。
    */
-  onSubmit: (values: RadOrderFormValues, performs: RadImmediatePerforms | null) => void;
+  onSubmit: (
+    values: RadOrderFormValues,
+    performs: RadImmediatePerforms | null,
+    /** 予約必須オーダーの予約(キーは撮影項目コード)。至急・編集では null。 */
+    bookings: Record<string, SlotSelection> | null,
+  ) => void;
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
@@ -120,11 +131,17 @@ export function RadOrderForm({
   const [active, setActive] = useState<ActiveTab | null>(null);
   const [searchCodes, setSearchCodes] = useState<string[]>([]);
   const [templateTarget, setTemplateTarget] = useState<TemplateTarget | null>(null);
-  // 即実施。実施入力は登録されるオーダー単位に持つ(添字は splitRadOrderValues のキー)。
-  const [performNow, setPerformNow] = useState(false);
+  // 即実施。オーダー単位に選べる(添字はどちらも splitRadOrderValues のキー)。
+  const [performNow, setPerformNow] = useState<Record<string, boolean>>({});
   const [performs, setPerforms] = useState<Record<string, RadPerformFormValues>>({});
   // 実施入力を開いているオーダー。まとめオーダーのキーは空文字なので null と区別する。
   const [performTarget, setPerformTarget] = useState<string | null>(null);
+  // 予約必須項目の予約(撮影項目コード → 選んだ枠)。モーダルで選ぶだけで、
+  // サーバーに書かれるのはオーダー登録の transaction のとき。
+  const [bookings, setBookings] = useState<Record<string, SlotSelection>>({});
+  // 予約モーダルを開いている撮影項目と、モーダル内で選択中の枠(確定前)。
+  const [bookingTarget, setBookingTarget] = useState<string | null>(null);
+  const [pendingBooking, setPendingBooking] = useState<SlotSelection | null>(null);
   // 構成項目を入れ終えたセット。保存済みオーダーを開いたときは、登録時に外した
   // 構成項目が復活しないよう、最初から入っているセットを入れ終わり扱いにする。
   const expandedSets = useRef<Set<string>>(
@@ -203,6 +220,10 @@ export function RadOrderForm({
       remarksTemplate: null,
       parentCode,
       groupable: item.groupable,
+      // オーダー枠ごとの撮影日時・至急区分(単独枠用)。まとめ枠は values 側。
+      date: today(),
+      time: "",
+      priority: "routine",
     }),
     [catalogResult],
   );
@@ -272,6 +293,16 @@ export function RadOrderForm({
   // そのセットからその撮影を除いたオーダーになる。
   function toggle(item: RadItem) {
     const code = item.item_code;
+    // 解除なら予約(未登録の選択)も捨てる。選択かどうかは setValues の外で判定すると
+    // StrictMode の二重呼び出しで狂うので、素朴に「あれば消す」だけにする。
+    if (values.items.some((line) => line.code === code)) {
+      setBookings((current) => {
+        if (!current[code]) return current;
+        const next = { ...current };
+        delete next[code];
+        return next;
+      });
+    }
     setValues((current) => {
       const selected = current.items.find((line) => line.code === code);
       if (selected) {
@@ -297,6 +328,13 @@ export function RadOrderForm({
         items: current.items.filter((line) => line.code !== code && line.parentCode !== code),
       };
     });
+    // 外した項目の予約(未登録の選択)も一緒に捨てる。
+    setBookings((current) => {
+      if (!current[code]) return current;
+      const next = { ...current };
+      delete next[code];
+      return next;
+    });
   }
 
   // 単独オーダーかどうかは登録時点のマスタで決める(保存済みのオーダーを開いた
@@ -314,6 +352,21 @@ export function RadOrderForm({
   const splits = useMemo(
     () => splitRadOrderValues({ ...values, items: refreshedItems }),
     [values, refreshedItems],
+  );
+
+  // 予約必須かどうか・所要時間はマスタの今の値で見る(groupable と同じ扱い)。
+  const requiresBooking = useCallback(
+    (code: string) => catalogByCode.get(code)?.requires_appointment ?? false,
+    [catalogByCode],
+  );
+
+  // 予約必須の検査は予約した日時に撮るものなので、登録と同時に実施済にはできない。
+  // 至急(予約なしの当日撮影)なら可。判定はオーダー単位。
+  const canPerformNow = useCallback(
+    (split: RadOrderSplit) =>
+      split.values.priority === "urgent" ||
+      !topLevelItems(split.values.items).some((line) => requiresBooking(line.code)),
+    [requiresBooking],
   );
 
   // 実施入力を開く項目が 1 つでもあるか(放射線検査一覧の「実施」と同じ判定)。
@@ -336,12 +389,8 @@ export function RadOrderForm({
       setValidationError("撮影項目を 1 つ以上選択してください。");
       return;
     }
-    if (!values.authoredDate) {
-      setValidationError("撮影日を入力してください。");
-      return;
-    }
 
-    const items = refreshedItems;
+    let items = refreshedItems;
     const groups = topLevelItems(items);
     const solo = groups.find((line) => !line.groupable);
     if (editing && solo && groups.length > 1) {
@@ -351,27 +400,82 @@ export function RadOrderForm({
       return;
     }
 
+    // 至急のオーダーは当日撮影に倒す(予約も取らない)。至急区分はオーダー枠ごとの
+    // 入力なので、まとめ枠と単独枠をそれぞれ見る。
+    const authoredDate = values.priority === "urgent" ? today() : values.authoredDate;
+    items = items.map((line) =>
+      !line.parentCode && !line.groupable && line.priority === "urgent"
+        ? { ...line, date: today() }
+        : line,
+    );
+
+    if (values.priority !== "urgent" && groups.some((line) => line.groupable) && !authoredDate) {
+      setValidationError("撮影日を入力してください。");
+      return;
+    }
+    if (!editing) {
+      const soloGroups = groups.filter((line) => !line.groupable);
+      const withoutDate = soloGroups.find(
+        (line) => line.priority !== "urgent" && !requiresBooking(line.code) && !line.date,
+      );
+      if (withoutDate) {
+        setValidationError(`「${withoutDate.name}」の撮影日を入力してください。`);
+        return;
+      }
+      // 予約必須の枠は予約が撮影日時そのもの。選ばずには登録させない(至急を除く)。
+      const unbooked = soloGroups.find(
+        (line) =>
+          line.priority !== "urgent" && requiresBooking(line.code) && !bookings[line.code],
+      );
+      if (unbooked) {
+        setValidationError(`「${unbooked.name}」の予約を取得してください。`);
+        return;
+      }
+    }
+
+    // 即実施にするオーダー。予約必須の非至急オーダーはチェックボックス自体を
+    // 無効化しているが、状態に残った値で実施記録を作らないよう判定にも噛ませる。
+    const performingSplits = splits.filter(
+      (split) => performNow[split.key] && canPerformNow(split),
+    );
+
     // 即実施は実施記録まで作る操作なので、入れずに登録できてしまわないようにする
     // (実施入力をしない項目だけのオーダーは、実施記録を作らないので対象外)。
     if (
-      performNow &&
-      splits.some((split) => needsPerformInput(split.values.items) && !performs[split.key])
+      performingSplits.some(
+        (split) => needsPerformInput(split.values.items) && !performs[split.key],
+      )
     ) {
       setValidationError("即実施にする検査の実施入力を行ってください。");
       return;
     }
 
+    // 至急のオーダーの予約は取らない。編集の予約変更は予約タブの担当なので渡さない。
+    const activeBookings = editing
+      ? null
+      : Object.fromEntries(
+          Object.entries(bookings).filter(([code]) =>
+            groups.some((line) => line.code === code && line.priority !== "urgent"),
+          ),
+        );
+
     setValidationError(null);
     onSubmit(
-      { ...values, items, problem: refreshProblemDisplay(values.problem, problemOptions) },
-      performNow
+      {
+        ...values,
+        authoredDate,
+        items,
+        problem: refreshProblemDisplay(values.problem, problemOptions),
+      },
+      performingSplits.length > 0
         ? new Map(
-            splits.map((split) => [
+            performingSplits.map((split) => [
               split.key,
               needsPerformInput(split.values.items) ? (performs[split.key] ?? null) : null,
             ]),
           )
         : null,
+      activeBookings,
     );
   }
 
@@ -387,8 +491,34 @@ export function RadOrderForm({
   // 復元できないので、選択中の一覧も登録時と同じくマスタの今の値で見せる。
   const isSolo = (entry: RadOrderEntry) =>
     !(catalogByCode.get(entry.item.code)?.groupable ?? entry.item.groupable);
-  // 単独の項目はそれぞれ 1 オーダー。残りはまとめて 1 オーダー。
-  const orderCount = entries.length === 0 ? 0 : splits.length;
+  // オーダー枠。まとめられる GP は 1 枠、単独の項目は項目ごとに 1 枠。
+  const groupedEntries = entries.filter((entry) => !isSolo(entry));
+  const soloEntries = entries.filter(isSolo);
+
+  function openBooking(code: string) {
+    setPendingBooking(bookings[code] ?? null);
+    setBookingTarget(code);
+  }
+
+  function clearBooking(code: string) {
+    setBookings((current) => {
+      const next = { ...current };
+      delete next[code];
+      return next;
+    });
+  }
+
+  function commitBooking() {
+    if (!bookingTarget || !pendingBooking) return;
+    setBookings((current) => ({ ...current, [bookingTarget]: pendingBooking }));
+    setBookingTarget(null);
+    setPendingBooking(null);
+  }
+
+  // 予約モーダルを開いている項目の所要時間。未設定は 1 枠ぶん(picker の既定)。
+  const bookingDuration = bookingTarget
+    ? (catalogByCode.get(bookingTarget)?.duration_minutes ?? undefined)
+    : undefined;
   // 実施入力を開いているオーダー。
   const performSplit =
     performTarget === null ? undefined : splits.find((split) => split.key === performTarget);
@@ -445,37 +575,9 @@ export function RadOrderForm({
               ))}
             </select>
           </label>
-          <label>
-            至急区分
-            <select
-              value={values.priority}
-              onChange={(e) => update("priority", e.target.value as RadOrderPriority)}
-            >
-              {PRIORITY_OPTIONS.map((o) => (
-                <option key={o.code} value={o.code}>
-                  {o.display}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            撮影日
-            <input
-              type="date"
-              value={values.authoredDate}
-              onChange={(e) => update("authoredDate", e.target.value)}
-            />
-          </label>
-          <label>
-            撮影時刻
-            {/* 日付は撮影日を使うので時刻だけを入力する(注射の開始時刻と同じ)。
-                時間帯を撮影側に任せる場合は未入力でよいので任意入力。 */}
-            <input
-              type="time"
-              value={values.authoredTime}
-              onChange={(e) => update("authoredTime", e.target.value)}
-            />
-          </label>
+          {/* 至急区分・撮影日・撮影時刻は伝票共通ではなく「選択中」のオーダー枠ごとに
+              入力する(オーダー単位で扱いが変わり、予約必須の項目は予約から日時が
+              入るため)。 */}
           {commentOpen ? (
             <div className="prescription-form__comment-field">
               <label>
@@ -565,74 +667,134 @@ export function RadOrderForm({
           {entries.length === 0 && (
             <p className="order-select__muted">撮影項目を選択してください</p>
           )}
-          {/* 単独の項目を混ぜて選べるようにしつつ、登録するとカルテのカードが
-              分かれることを選択中の時点で知らせる。 */}
-          {!editing && orderCount > 1 && (
-            <p className="order-select__muted">
-              単独の項目はそれぞれ別のオーダーになるため、{orderCount} 件のオーダーとして登録されます
-            </p>
-          )}
-          {entries.map((entry, index) => (
-            <GroupEditor
-              key={entry.item.code}
-              entry={entry}
-              number={index + 1}
-              solo={isSolo(entry)}
-              conditionOptions={conditionOptions}
-              onRemove={remove}
-              onChange={updateItem}
-              onOpenTemplate={setTemplateTarget}
-            />
-          ))}
 
-          {/* 即実施。更新は既に登録済みのオーダーへの書き戻しで、進捗は放射線検査
-              一覧が持つので出さない(実施の取消も一覧から行う)。 */}
-          {!editing && entries.length > 0 && (
-            <div className="rad-perform-now">
-              <label className="rad-perform-now__toggle">
-                <input
-                  type="checkbox"
-                  checked={performNow}
-                  onChange={(e) => setPerformNow(e.target.checked)}
+          {/* 1 枠 = 登録される 1 オーダー。まとめられる GP は 1 つの枠に集め、
+              単独の項目は項目ごとに枠が分かれる。至急区分・撮影日時・即実施は
+              オーダー単位の設定なので枠の中に置く。 */}
+          {groupedEntries.length > 0 && (
+            <OrderFrame
+              number={groupedEntries.length > 0 && soloEntries.length > 0 ? 1 : undefined}
+              priority={values.priority}
+              onChangePriority={(priority) => update("priority", priority)}
+              perform={
+                editing
+                  ? null
+                  : {
+                      split: splits.find((split) => split.key === "") ?? null,
+                      checked: Boolean(performNow[""]),
+                      onToggle: (checked) =>
+                        setPerformNow((current) => ({ ...current, "": checked })),
+                      onOpen: () => setPerformTarget(""),
+                      needsInput: (split) => needsPerformInput(split.values.items),
+                      canPerform: canPerformNow,
+                      summary: performs[""] ? radPerformSummary(performs[""]) : null,
+                    }
+              }
+              schedule={
+                <FrameDateTime
+                  date={values.authoredDate}
+                  time={values.authoredTime}
+                  urgent={values.priority === "urgent"}
+                  onChangeDate={(date) => update("authoredDate", date)}
+                  onChangeTime={(time) => update("authoredTime", time)}
                 />
-                即実施(登録と同時に実施済にする)
-              </label>
-              {performNow && (
-                <ul className="rad-perform-now__orders">
-                  {splits.map((split) => (
-                    <li key={split.key}>
-                      {/* オーダーが分かれるときは、どのオーダーぶんの実施入力かを添える。 */}
-                      {splits.length > 1 && (
-                        <span className="rad-perform-now__order">
-                          {topLevelItems(split.values.items)
-                            .map((item) => item.name)
-                            .join("、")}
-                        </span>
-                      )}
-                      {needsPerformInput(split.values.items) ? (
-                        <>
-                          <button type="button" onClick={() => setPerformTarget(split.key)}>
-                            実施入力
-                          </button>
-                          {performs[split.key] ? (
-                            <span className="rad-perform-now__summary">
-                              {radPerformSummary(performs[split.key])}
-                            </span>
-                          ) : (
-                            <span className="order-select__muted">未入力</span>
-                          )}
-                        </>
-                      ) : (
-                        <span className="order-select__muted">
-                          実施入力のない検査です(実施済にします)
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+              }
+            >
+              {groupedEntries.map((entry, index) => (
+                <GroupEditor
+                  key={entry.item.code}
+                  entry={entry}
+                  number={index + 1}
+                  solo={false}
+                  conditionOptions={conditionOptions}
+                  onRemove={remove}
+                  onChange={updateItem}
+                  onOpenTemplate={setTemplateTarget}
+                />
+              ))}
+            </OrderFrame>
           )}
+
+          {soloEntries.map((entry, index) => {
+            const code = entry.item.code;
+            const reserved = requiresBooking(code);
+            const booking = bookings[code];
+            const urgent = entry.item.priority === "urgent";
+
+            return (
+              <OrderFrame
+                key={code}
+                number={
+                  entries.length > 1
+                    ? (groupedEntries.length > 0 ? 1 : 0) + index + 1
+                    : undefined
+                }
+                priority={entry.item.priority}
+                onChangePriority={(priority) => updateItem(code, { priority })}
+                perform={
+                  editing
+                    ? null
+                    : {
+                        split: splits.find((split) => split.key === code) ?? null,
+                        checked: Boolean(performNow[code]),
+                        onToggle: (checked) =>
+                          setPerformNow((current) => ({ ...current, [code]: checked })),
+                        onOpen: () => setPerformTarget(code),
+                        needsInput: (split) => needsPerformInput(split.values.items),
+                        canPerform: canPerformNow,
+                        summary: performs[code] ? radPerformSummary(performs[code]) : null,
+                      }
+                }
+                schedule={
+                  reserved && !urgent ? (
+                    editing ? (
+                      // 編集は 1 オーダーへの書き戻しなので、日時は予約と同期している
+                      // ヘッダの値を表示するだけ。変更は予約タブの日時変更から。
+                      <span className="rad-order-frame__note">
+                        撮影日時 {values.authoredDate} {values.authoredTime}(変更は予約タブから)
+                      </span>
+                    ) : booking ? (
+                      <span className="rad-order-frame__booking">
+                        <span className="rad-order-frame__booked">{bookingLabel(booking)}</span>
+                        <button type="button" onClick={() => openBooking(code)}>
+                          変更
+                        </button>
+                        <button type="button" onClick={() => clearBooking(code)}>
+                          解除
+                        </button>
+                      </span>
+                    ) : (
+                      <button type="button" onClick={() => openBooking(code)}>
+                        予約
+                      </button>
+                    )
+                  ) : (
+                    <FrameDateTime
+                      date={editing ? values.authoredDate : urgent ? today() : entry.item.date}
+                      time={editing ? values.authoredTime : entry.item.time}
+                      urgent={urgent}
+                      onChangeDate={(date) =>
+                        editing ? update("authoredDate", date) : updateItem(code, { date })
+                      }
+                      onChangeTime={(time) =>
+                        editing ? update("authoredTime", time) : updateItem(code, { time })
+                      }
+                    />
+                  )
+                }
+              >
+                <GroupEditor
+                  entry={entry}
+                  number={1}
+                  solo
+                  conditionOptions={conditionOptions}
+                  onRemove={remove}
+                  onChange={updateItem}
+                  onOpenTemplate={setTemplateTarget}
+                />
+              </OrderFrame>
+            );
+          })}
         </section>
 
         <div className="prescription-form__submit">
@@ -682,7 +844,183 @@ export function RadOrderForm({
           onClose={() => setPerformTarget(null)}
         />
       )}
+
+      {/* 検査予約。ここでは枠を選ぶだけで、予約が書かれるのはオーダー登録のとき
+          (同じ transaction に同梱)。登録をやめれば予約も残らない。 */}
+      {bookingTarget && (
+        <Modal
+          title={`検査予約: ${catalogByCode.get(bookingTarget)?.name ?? bookingTarget}`}
+          onClose={() => setBookingTarget(null)}
+          className="rad-booking-modal"
+        >
+          <div className="rad-booking">
+            {bookingDuration && (
+              <p className="order-select__muted">
+                所要時間 {bookingDuration} 分。覆うだけの連続した空き枠を押さえます。
+              </p>
+            )}
+            <AppointmentSlotPicker
+              scheduleType="exam"
+              requiredMinutes={bookingDuration}
+              // 項目マスタに紐づけた枠表(CT なら CT 室の枠、など)を最初から選んでおく。
+              defaultScheduleId={
+                catalogByCode.get(bookingTarget)?.appointment_schedule_id ?? undefined
+              }
+              selected={pendingBooking}
+              onSelect={setPendingBooking}
+            />
+            <div className="rad-booking__actions">
+              <button type="button" onClick={commitBooking} disabled={!pendingBooking}>
+                この枠で予約
+              </button>
+              <button type="button" onClick={() => setBookingTarget(null)}>
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
+  );
+}
+
+/** 予約済みの枠の表示。「2026-08-19 09:00-10:00 CT枠(...)」。 */
+function bookingLabel(selection: SlotSelection): string {
+  const first = selection.slots[0];
+  const last = selection.slots[selection.slots.length - 1];
+  return `${slotDate(first)} ${slotTime(first)}-${last.end.slice(11, 16)} ${scheduleSummary(selection.schedule)}`;
+}
+
+/** 即実施の設定(オーダー単位)。編集画面では使わないので null を渡す。 */
+interface FramePerform {
+  split: RadOrderSplit | null;
+  checked: boolean;
+  onToggle: (checked: boolean) => void;
+  onOpen: () => void;
+  needsInput: (split: RadOrderSplit) => boolean;
+  canPerform: (split: RadOrderSplit) => boolean;
+  summary: string | null;
+}
+
+/**
+ * 登録される 1 オーダーぶんの枠。至急区分・撮影日時(または予約)・即実施という
+ * オーダー単位の設定を上下に置き、間に GP を並べる。
+ */
+function OrderFrame({
+  number,
+  priority,
+  onChangePriority,
+  schedule,
+  perform,
+  children,
+}: {
+  /** オーダーが複数に分かれるときだけ振る通し番号。1 件なら付けない。 */
+  number?: number;
+  priority: RadOrderPriority;
+  onChangePriority: (priority: RadOrderPriority) => void;
+  /** 撮影日時の入力、または予約の操作。 */
+  schedule: ReactNode;
+  perform: FramePerform | null;
+  children: ReactNode;
+}) {
+  const split = perform?.split ?? null;
+  // 予約必須の検査を含む非至急オーダーは、登録と同時に実施済にできない。
+  const canPerform = split ? perform?.canPerform(split) : false;
+
+  return (
+    <div className="rad-order-frame">
+      <div className="rad-order-frame__head">
+        {number !== undefined && <span className="rad-order-frame__number">{number}</span>}
+        <label className="rad-order-frame__priority">
+          至急区分
+          <select
+            value={priority}
+            onChange={(e) => onChangePriority(e.target.value as RadOrderPriority)}
+          >
+            {PRIORITY_OPTIONS.map((o) => (
+              <option key={o.code} value={o.code}>
+                {o.display}
+              </option>
+            ))}
+          </select>
+        </label>
+        {schedule}
+      </div>
+
+      <div className="rad-order-frame__body">{children}</div>
+
+      {perform && split && (
+        <div className="rad-order-frame__foot">
+          <label className="rad-order-frame__perform">
+            <input
+              type="checkbox"
+              checked={perform.checked && canPerform}
+              disabled={!canPerform}
+              onChange={(e) => perform.onToggle(e.target.checked)}
+            />
+            即実施(登録と同時に実施済にする)
+          </label>
+          {!canPerform && (
+            <span className="order-select__muted">予約する検査は即実施にできません</span>
+          )}
+          {perform.checked &&
+            canPerform &&
+            (perform.needsInput(split) ? (
+              <>
+                <button type="button" onClick={perform.onOpen}>
+                  実施入力
+                </button>
+                {perform.summary ? (
+                  <span className="rad-perform-now__summary">{perform.summary}</span>
+                ) : (
+                  <span className="order-select__muted">未入力</span>
+                )}
+              </>
+            ) : (
+              <span className="order-select__muted">
+                実施入力のない検査です(実施済にします)
+              </span>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * オーダー枠の撮影日・撮影時刻。時刻は撮影側に任せる場合は未入力でよい任意入力。
+ * 至急のオーダーは当日撮影に固定する。
+ */
+function FrameDateTime({
+  date,
+  time,
+  urgent,
+  onChangeDate,
+  onChangeTime,
+}: {
+  date: string;
+  time: string;
+  urgent?: boolean;
+  onChangeDate: (date: string) => void;
+  onChangeTime: (time: string) => void;
+}) {
+  return (
+    <span className="rad-order-frame__datetime">
+      <label>
+        撮影日
+        <input
+          type="date"
+          value={date}
+          disabled={urgent}
+          onChange={(e) => onChangeDate(e.target.value)}
+        />
+      </label>
+      <label>
+        撮影時刻
+        <input type="time" value={time} onChange={(e) => onChangeTime(e.target.value)} />
+      </label>
+      {urgent && <span className="rad-order-frame__note">当日撮影</span>}
+    </span>
   );
 }
 

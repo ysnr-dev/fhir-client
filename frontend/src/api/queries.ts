@@ -61,13 +61,18 @@ import {
   addDays,
   buildSlotCreateBundle,
   buildSlotDeleteBundle,
+  scheduleTypeOf,
+  slotDate,
+  type ScheduleType,
   type SlotStatus,
 } from "../fhir/scheduleHelpers";
 import {
   appointmentSlotIds,
   buildBookBundle,
   buildCancelBundle,
+  buildCancelEntries,
   buildRescheduleBundle,
+  isActiveAppointment,
 } from "../fhir/appointmentHelpers";
 import {
   baseRoleOf,
@@ -983,7 +988,12 @@ export function useDeleteSlots() {
 
 // 予約を取る画面の枠表セレクト。診療科は上流の specialty 検索に頼らず、取得後に
 // コードで絞る(枠表は施設あたり数十件の想定で、全件読んでも軽い)。
-export function useScheduleOptions(filter: { departmentCode?: string; practitionerId?: string }) {
+// 種別(診察予約/検査予約)も同様に取得後に絞る。
+export function useScheduleOptions(filter: {
+  departmentCode?: string;
+  practitionerId?: string;
+  scheduleType?: ScheduleType;
+}) {
   const params = new URLSearchParams();
   params.set("active", "true");
   if (filter.practitionerId) params.append("actor", `Practitioner/${filter.practitionerId}`);
@@ -999,17 +1009,21 @@ export function useScheduleOptions(filter: { departmentCode?: string; practition
       ?.map((e) => e.resource)
       .filter((r): r is fhir4.Schedule => Boolean(r)) ?? [];
 
+  const byType = filter.scheduleType
+    ? all.filter((schedule) => scheduleTypeOf(schedule) === filter.scheduleType)
+    : all;
+
   return {
     ...query,
     schedules: filter.departmentCode
-      ? all.filter((schedule) => {
+      ? byType.filter((schedule) => {
           const codes =
             schedule.specialty?.flatMap((s) => s.coding?.map((c) => c.code) ?? []) ?? [];
           // 診療科を設定していない枠表は、どの科からも選べる共通の枠として残す
           // (除外すると診療科を「すべて」に戻すまで候補に出ず、気づきにくい)。
           return codes.length === 0 || codes.includes(filter.departmentCode);
         })
-      : all,
+      : byType,
   };
 }
 
@@ -1098,8 +1112,8 @@ export function useBookAppointment() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ appointment, slot }: { appointment: fhir4.Appointment; slot: fhir4.Slot }) =>
-      postBundle(buildBookBundle(appointment, slot)),
+    mutationFn: ({ appointment, slots }: { appointment: fhir4.Appointment; slots: fhir4.Slot[] }) =>
+      postBundle(buildBookBundle(appointment, slots)),
     onSuccess: () => invalidateAppointments(queryClient),
   });
 }
@@ -1120,16 +1134,47 @@ export function useRescheduleAppointment() {
   return useMutation({
     mutationFn: async ({
       appointment,
-      slot,
+      slots,
     }: {
       appointment: fhir4.Appointment;
-      slot: fhir4.Slot;
+      slots: fhir4.Slot[];
     }) =>
       postBundle(
-        buildRescheduleBundle(appointment, await fetchAppointmentSlots(appointment), slot),
+        buildRescheduleBundle(
+          appointment,
+          await fetchAppointmentSlots(appointment),
+          slots,
+          await fetchExamOrderSyncEntries(appointment, slots),
+        ),
       ),
-    onSuccess: () => invalidateAppointments(queryClient),
+    onSuccess: () => {
+      invalidateAppointments(queryClient);
+      // 検査予約はオーダーの撮影日時も動かすので、カルテカード・部門一覧も読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+    },
   });
+}
+
+/**
+ * 検査予約の日時変更でオーダー側も追従させる書き込み。オーダーヘッダの撮影日時
+ * (occurrenceDateTime / authoredOn)は予約の枠と同期していないと、放射線検査一覧が
+ * 古い日付のままになってしまう。診察予約(basedOn なし)では空を返す。
+ */
+async function fetchExamOrderSyncEntries(
+  appointment: fhir4.Appointment,
+  newSlots: fhir4.Slot[],
+): Promise<fhir4.BundleEntry[]> {
+  const headerId = appointment.basedOn?.[0]?.reference?.split("/").pop();
+  if (!headerId) return [];
+
+  const { data: header } = await readResource<fhir4.ServiceRequest>("ServiceRequest", headerId);
+  const slot = newSlots[0];
+  const updated: fhir4.ServiceRequest = {
+    ...header,
+    authoredOn: slotDate(slot),
+    occurrenceDateTime: slot.start,
+  };
+  return [{ resource: updated, request: { method: "PUT", url: `ServiceRequest/${headerId}` } }];
 }
 
 export function usePrescriptionDetail(srId: string | undefined) {
@@ -3032,6 +3077,8 @@ export function useDeleteMicroOrder() {
 
 // 放射線オーダーも明細が独立した ServiceRequest なので、ヘッダだけ消すと明細が
 // 残ってしまう。消す直前に明細を引き直してからまとめて消す(検体検査と同じ)。
+// オーダーに紐づく検査予約があれば、取消(cancelled + 枠の free 化)も同じ
+// transaction に同梱する(予約だけ残ってオーダーが無い状態を作らない)。
 export function useDeleteRadOrder() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -3044,14 +3091,41 @@ export function useDeleteRadOrder() {
       const itemIds = itemRequests
         .map((request) => request.id)
         .filter((id): id is string => Boolean(id));
+
+      const appointmentEntries = await fetchRadAppointmentCancelEntries(srId);
+
       // 明細が参照しているテンプレート回答も一緒に消す(孤児を残さない)。
       return postBundle(
-        buildRadOrderDeleteBundle(srId, itemIds, radOrderResponseIds(itemRequests)),
+        buildRadOrderDeleteBundle(
+          srId,
+          itemIds,
+          radOrderResponseIds(itemRequests),
+          appointmentEntries,
+        ),
       );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      queryClient.invalidateQueries({ queryKey: ["Appointment"] });
+      queryClient.invalidateQueries({ queryKey: ["Slot"] });
     },
   });
+}
+
+/** オーダーヘッダに紐づく有効な検査予約の取消エントリ。予約が無ければ空。 */
+async function fetchRadAppointmentCancelEntries(srId: string): Promise<fhir4.BundleEntry[]> {
+  const params = new URLSearchParams();
+  params.set("based-on", `ServiceRequest/${srId}`);
+  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
+  const appointments = (bundle.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
+    .filter(isActiveAppointment);
+
+  const entries: fhir4.BundleEntry[] = [];
+  for (const appointment of appointments) {
+    entries.push(...buildCancelEntries(appointment, await fetchAppointmentSlots(appointment)));
+  }
+  return entries;
 }

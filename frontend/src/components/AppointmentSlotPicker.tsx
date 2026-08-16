@@ -7,6 +7,7 @@ import {
   useScheduleOptions,
 } from "../api/queries";
 import {
+  chainFreeSlots,
   currentMonth,
   freeCountByDate,
   groupSlotsByTime,
@@ -14,10 +15,17 @@ import {
   monthLabel,
   monthRange,
   shiftMonth,
+  type SlotSelection,
 } from "../fhir/appointmentHelpers";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
-import { WEEKDAY_LABELS, actorId, scheduleSummary, today } from "../fhir/scheduleHelpers";
+import {
+  WEEKDAY_LABELS,
+  actorId,
+  scheduleSummary,
+  today,
+  type ScheduleType,
+} from "../fhir/scheduleHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 
@@ -29,25 +37,40 @@ import { ErrorBanner } from "./ErrorBanner";
 //
 // 予約の登録(右ペイン)と日時変更(予約タブ)の双方から使う。
 
-export interface SlotSelection {
-  schedule: fhir4.Schedule;
-  slot: fhir4.Slot;
-}
+// 選択結果の型は FHIR 層(appointmentHelpers)が持つ。オーダーの Bundle 組み立て
+// からも使うため。既存の import 先を変えないようここから再輸出する。
+export type { SlotSelection };
 
 interface AppointmentSlotPickerProps {
+  /** 出す枠表の種別。診察予約(カルテ右ペイン)か検査予約(放射線オーダー)か。 */
+  scheduleType: ScheduleType;
+  /**
+   * 検査の所要時間(分)。指定すると、この時間を覆う連続した空き枠が組める時刻だけ
+   * 選べるようになり、選択結果はその枠列になる。未指定は 1 枠。
+   */
+  requiredMinutes?: number;
   /**
    * 絞り込みの初期値。日時変更では変更前の予約と同じ条件から始めたいので呼び出し側が渡す。
-   * 未指定ならカルテヘッダの依頼科・依頼医師を使う。
+   * 未指定なら診察予約はカルテヘッダの依頼科を使う(検査予約は部屋で選ぶものなので
+   * 診療科では絞らない)。
    */
   defaultDepartmentCode?: string;
   defaultPractitionerId?: string;
+  /**
+   * 最初から選んでおく枠表。放射線オーダー項目マスタに紐づけた枠表を渡す。
+   * 候補に無ければ(削除済み・無効など)無視して通常の選択に戻る。
+   */
+  defaultScheduleId?: string;
   selected: SlotSelection | null;
   onSelect: (selection: SlotSelection | null) => void;
 }
 
 export function AppointmentSlotPicker({
+  scheduleType,
+  requiredMinutes,
   defaultDepartmentCode,
   defaultPractitionerId,
+  defaultScheduleId,
   selected,
   onSelect,
 }: AppointmentSlotPickerProps) {
@@ -72,24 +95,33 @@ export function AppointmentSlotPicker({
   const departmentCodeFilter =
     departmentFilter ??
     defaultDepartmentCode ??
-    (defaultDepartment ? departmentCode(defaultDepartment) : "");
+    // 検査予約は撮影室の枠を部屋で選ぶものなので、依頼科では絞り込まない。
+    (scheduleType === "consultation" && defaultDepartment
+      ? departmentCode(defaultDepartment)
+      : "");
   const practitionerId = practitionerFilter ?? defaultPractitionerId ?? "";
   const filtered = Boolean(departmentCodeFilter) || Boolean(practitionerId);
 
   const scheduleOptions = useScheduleOptions({
     departmentCode: departmentCodeFilter || undefined,
     practitionerId: practitionerId || undefined,
+    scheduleType,
   });
-  // 枠表は、依頼医師(日時変更なら変更前の担当医)の枠があればそれを初期選択にする。
-  // 候補が届くのを待つ必要があるので、絞り込みと同じく「まだ選び直していない間は
-  // 既定値を使う」形にする。
+  // 枠表の初期選択。優先順は、呼び出し側の指定(項目マスタに紐づけた枠表)→
+  // 依頼医師(日時変更なら変更前の担当医)の枠。候補が届くのを待つ必要があるので、
+  // 絞り込みと同じく「まだ選び直していない間は既定値を使う」形にする。
   const [pickedScheduleId, setPickedScheduleId] = useState<string | null>(null);
-  const preferredPractitionerId = defaultPractitionerId ?? orderContext.practitionerId;
-  const defaultSchedule = preferredPractitionerId
-    ? scheduleOptions.schedules.find(
-        (s) => actorId(s, "Practitioner") === preferredPractitionerId,
-      )
+  const linkedSchedule = defaultScheduleId
+    ? scheduleOptions.schedules.find((s) => s.id === defaultScheduleId)
     : undefined;
+  const preferredPractitionerId = defaultPractitionerId ?? orderContext.practitionerId;
+  const defaultSchedule =
+    linkedSchedule ??
+    (preferredPractitionerId
+      ? scheduleOptions.schedules.find(
+          (s) => actorId(s, "Practitioner") === preferredPractitionerId,
+        )
+      : undefined);
   const scheduleId = pickedScheduleId ?? defaultSchedule?.id ?? "";
 
   // 絞り込みを変えて選択中の枠表が候補から外れたら、選び直させる。
@@ -132,11 +164,18 @@ export function AppointmentSlotPicker({
     onSelect(null);
   }
 
+  // その時刻に押さえる枠列。所要時間の指定があれば連続した空き枠を組み、
+  // 無ければ空き席の先頭 1 つ(定員が複数ある診察枠は席のどれか 1 つでよい)。
+  // 組めない時刻(空き無し・連続が途切れる)は null で、チップが押せなくなる。
+  function chainOf(group: (typeof timeGroups)[number]): fhir4.Slot[] | null {
+    if (requiredMinutes) return chainFreeSlots(timeGroups, group.time, requiredMinutes);
+    return group.freeSlots.length > 0 ? [group.freeSlots[0]] : null;
+  }
+
   function pickTime(group: (typeof timeGroups)[number]) {
-    // 定員が複数ある枠は、空いている席のうち先頭の 1 つを押さえる。
-    const slot = group.freeSlots[0];
-    if (!slot || !schedule) return;
-    onSelect({ schedule, slot });
+    const slots = chainOf(group);
+    if (!slots || !schedule) return;
+    onSelect({ schedule, slots });
   }
 
   return (
@@ -275,10 +314,17 @@ export function AppointmentSlotPicker({
                 // (プロブレムの帯と同じ見せ方)。選ぶと選択中の 1 つだけが強調される。
                 <div className="appointment-times__list">
                   {timeGroups.map((group) => {
-                    const picked = selected?.slot.start === group.freeSlots[0]?.start;
+                    const chain = chainOf(group);
+                    const picked = Boolean(
+                      chain && selected?.slots[0]?.start === chain[0]?.start,
+                    );
+                    // 所要時間ぶんの終了時刻(複数枠なら列の末尾)。
+                    const endTime = chain
+                      ? (chain[chain.length - 1].end.slice(11, 16) ?? group.endTime)
+                      : group.endTime;
                     const className = [
                       "appointment-times__slot",
-                      group.free > 0 ? "appointment-times__slot--free" : "",
+                      chain ? "appointment-times__slot--free" : "",
                       picked ? "appointment-times__slot--selected" : "",
                     ]
                       .filter(Boolean)
@@ -290,14 +336,21 @@ export function AppointmentSlotPicker({
                         type="button"
                         className={className}
                         onClick={() => pickTime(group)}
-                        disabled={group.free === 0}
+                        disabled={!chain}
                         aria-pressed={picked}
                       >
                         <span className="appointment-times__time">
-                          {group.endTime ? `${group.time}-${group.endTime}` : group.time}
+                          {endTime ? `${group.time}-${endTime}` : group.time}
                         </span>
                         <span className="appointment-times__count">
-                          {group.free > 0 ? group.free : "満"}
+                          {requiredMinutes
+                            ? // 所要時間指定では席数ではなく組めるかどうかが全て。
+                              chain
+                              ? ""
+                              : "不可"
+                            : group.free > 0
+                              ? group.free
+                              : "満"}
                         </span>
                       </button>
                     );

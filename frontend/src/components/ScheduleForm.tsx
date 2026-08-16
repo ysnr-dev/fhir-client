@@ -4,9 +4,11 @@ import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import {
+  SCHEDULE_TYPE_OPTIONS,
   emptyScheduleForm,
   validateScheduleForm,
   type ScheduleFormValues,
+  type ScheduleType,
 } from "../fhir/scheduleHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { SlotPatternFields } from "./SlotPatternFields";
@@ -96,6 +98,21 @@ export function ScheduleForm({
         />
       </label>
 
+      {/* 診察予約はカルテの予約登録から、検査予約は放射線オーダーの予約から使う。 */}
+      <label>
+        種別
+        <select
+          value={values.scheduleType}
+          onChange={(e) => update("scheduleType", e.target.value as ScheduleType)}
+        >
+          {SCHEDULE_TYPE_OPTIONS.map((option) => (
+            <option key={option.code} value={option.code}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <label>
         担当医
         <select
@@ -167,7 +184,12 @@ export function ScheduleForm({
       {/* ここで決めた条件は枠表に保存され、カレンダーの「枠を一括生成」の初期値になる。 */}
       <fieldset className="schedule-form__pattern">
         <legend>枠のパターン</legend>
-        <SlotPatternFields value={values.pattern} onChange={(pattern) => update("pattern", pattern)} />
+        <SlotPatternFields
+          value={values.pattern}
+          onChange={(pattern) => update("pattern", pattern)}
+          // 検査予約は 1 枠 1 予約なので定員入力を出さない。
+          fixedCapacity={values.scheduleType === "exam"}
+        />
       </fieldset>
 
       <label>

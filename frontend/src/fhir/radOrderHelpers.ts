@@ -1,4 +1,6 @@
 import type { OrderContext } from "../orderContext";
+import { buildExamAppointmentEntries, type SlotSelection } from "./appointmentHelpers";
+import { slotDate, slotTime } from "./scheduleHelpers";
 // FHIR dateTime へのタイムゾーン付与は診療記録と同じ変換でよいので共用する。
 import { toFhirDateTime } from "./clinicalNoteHelpers";
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
@@ -136,10 +138,21 @@ export interface RadOrderItemLine {
    * オーダー画面が登録前にマスタから引き直して入れる。
    */
   groupable: boolean;
+  /**
+   * 単独オーダー枠の撮影日("YYYY-MM-DD")と撮影時刻("HH:mm"、任意)、至急区分。
+   * これらはオーダー枠(=登録される 1 オーダー)ごとの入力で、まとめ枠のぶんは
+   * RadOrderFormValues の同名の項目が担う。groupable と同じく登録時の分割にだけ
+   * 使う画面の値で、行としては FHIR に出さない(分割後にヘッダへ写る)。
+   * 予約必須の項目では予約した枠の日時が入る。
+   */
+  date: string;
+  time: string;
+  priority: RadOrderPriority;
 }
 
 export interface RadOrderFormValues {
   setting: PrescriptionSetting;
+  /** 至急区分。オーダー枠ごとの入力で、これはまとめ枠のぶん(単独枠は行が持つ)。 */
   priority: RadOrderPriority;
   /** 撮影日。 */
   authoredDate: string;
@@ -408,6 +421,11 @@ function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): Ra
     // 保存済みのオーダーには載っていない印なので、いったんグループ化として読む。
     // 編集・DO では、登録前にオーダー画面が今のマスタから入れ直す。
     groupable: true,
+    // 撮影日時・至急区分も明細には載らない(ヘッダが正)。編集はヘッダ 1 件への
+    // 書き戻しで values 側を使うので、行は既定のままでよい。
+    date: "",
+    time: "",
+    priority: "routine",
   };
 }
 
@@ -671,7 +689,20 @@ export function splitRadOrderValues(values: RadOrderFormValues): RadOrderSplit[]
     // セットは構成項目と一緒でなければ意味がないので、必ず同じオーダーに入れる。
     const lines = [item, ...membersOf(values.items, item.code)];
     if (item.groupable) groupedLines.push(...lines);
-    else soloOrders.push({ key: item.code, values: { ...values, items: lines } });
+    else {
+      // 撮影日時・至急区分はオーダー枠ごとの入力。単独枠は行が持つ値をこのオーダーの
+      // 値にする(日時が未入力なら共通値のまま)。
+      soloOrders.push({
+        key: item.code,
+        values: {
+          ...values,
+          items: lines,
+          priority: item.priority,
+          authoredDate: item.date || values.authoredDate,
+          authoredTime: item.date ? item.time : values.authoredTime,
+        },
+      });
+    }
   }
 
   if (groupedLines.length > 0) {
@@ -681,16 +712,59 @@ export function splitRadOrderValues(values: RadOrderFormValues): RadOrderSplit[]
   return soloOrders.length > 0 ? soloOrders : [{ key: "", values: { ...values, items: [] } }];
 }
 
+/** 予約必須オーダーの予約内容。キーは splitRadOrderValues のキー(=撮影項目コード)。 */
+export interface RadOrderBooking {
+  patient: fhir4.Patient;
+  selections: Record<string, SlotSelection>;
+}
+
+/**
+ * オーダー 1 件ぶんのエントリ。予約必須の項目は、選んだ枠の予約(Appointment)と枠の
+ * busy 化も同じ transaction に同梱する。オーダーと予約が atomic に成立し、登録を
+ * やめれば予約も残らない。
+ *
+ * なお Bundle 内の Slot PUT に If-Match は付かないため、「枠を選んでから登録するまで
+ * の間に他所で同じ枠が埋まる」取り合いまでは防げない(画面の予約登録と同じ許容)。
+ *
+ * 即実施(radResultHelpers)も実施記録をここに足すので、分割 1 件ぶんの組み立ては
+ * この関数に集約する。
+ */
+export function buildRadOrderSplitEntries(
+  split: RadOrderSplit,
+  patientId: string,
+  requester: OrderContext,
+  booking?: RadOrderBooking,
+): RadOrderEntries {
+  const selection = booking?.selections[split.key];
+  if (!selection) return buildRadOrderEntries(split.values, patientId, requester);
+
+  // 予約したオーダーの撮影日時は予約の枠が正。行の入力値ではなく枠から写す。
+  const slot = selection.slots[0];
+  const built = buildRadOrderEntries(
+    { ...split.values, authoredDate: slotDate(slot), authoredTime: slotTime(slot) },
+    patientId,
+    requester,
+  );
+  return {
+    ...built,
+    entries: [
+      ...built.entries,
+      ...buildExamAppointmentEntries(booking.patient, selection, built.headerReference),
+    ],
+  };
+}
+
 // 新規登録。単独オーダーの項目があれば複数のオーダーになるが、まとめて登録するので
 // 1 つの transaction にする(片方だけ登録された状態を作らない)。
 export function buildRadOrderBundle(
   values: RadOrderFormValues,
   patientId: string,
   requester: OrderContext,
+  booking?: RadOrderBooking,
 ): fhir4.Bundle {
   return transactionBundle(
     splitRadOrderValues(values).flatMap(
-      (order) => buildRadOrderEntries(order.values, patientId, requester).entries,
+      (split) => buildRadOrderSplitEntries(split, patientId, requester, booking).entries,
     ),
   );
 }
@@ -722,6 +796,11 @@ export function buildRadOrderDeleteBundle(
   serviceRequestId: string,
   itemIds: string[],
   responseIds: string[] = [],
+  /**
+   * オーダーに紐づく検査予約の後始末(Appointment を cancelled に、押さえていた枠を
+   * free に)。予約はオーダーと一心同体なので、同じ transaction で消えるまで戻す。
+   */
+  appointmentEntries: fhir4.BundleEntry[] = [],
 ): fhir4.Bundle {
   return {
     resourceType: "Bundle",
@@ -734,6 +813,7 @@ export function buildRadOrderDeleteBundle(
       ...responseIds.map((id) => ({
         request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` },
       })),
+      ...appointmentEntries,
     ],
   };
 }
@@ -748,11 +828,17 @@ export function buildDoRadOrderForm(values: RadOrderFormValues): RadOrderFormVal
   return {
     ...values,
     authoredDate: today(),
+    authoredTime: "",
     items: values.items.map((item) => ({
       ...item,
       id: "",
       purposeTemplate: null,
       remarksTemplate: null,
+      // オーダー枠ごとの撮影日時も当日から入れ直す(単独枠の入力の初期値)。
+      // 至急区分は DO 元の伝票の値を引き継ぐ(同じ検査を同じ扱いで出し直すため)。
+      date: today(),
+      time: "",
+      priority: values.priority,
     })),
   };
 }

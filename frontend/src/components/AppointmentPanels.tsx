@@ -11,6 +11,7 @@ import {
   appointmentDepartmentCode,
   buildAppointment,
   emptyAppointmentForm,
+  isExamAppointment,
   type AppointmentFormValues,
 } from "../fhir/appointmentHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
@@ -53,10 +54,10 @@ export function AppointmentCreatePanel({
       values,
       patient,
       selection.schedule,
-      selection.slot,
+      selection.slots,
       defaultProblem,
     );
-    book.mutate({ appointment, slot: selection.slot }, { onSuccess: onSaved });
+    book.mutate({ appointment, slots: selection.slots }, { onSuccess: onSaved });
   }
 
   return (
@@ -69,7 +70,7 @@ export function AppointmentCreatePanel({
       <ErrorBanner error={patientError} />
       <ErrorBanner error={book.error} />
 
-      <AppointmentSlotPicker selected={selection} onSelect={setSelection} />
+      <AppointmentSlotPicker scheduleType="consultation" selected={selection} onSelect={setSelection} />
 
       <div className="appointment-panel__form">
         <label>
@@ -111,7 +112,7 @@ export function AppointmentReschedulePanel({
 
   function handleSubmit() {
     if (!appointment || !selection) return;
-    reschedule.mutate({ appointment, slot: selection.slot }, { onSuccess: onSaved });
+    reschedule.mutate({ appointment, slots: selection.slots }, { onSuccess: onSaved });
   }
 
   if (isLoading) return <p>読み込み中...</p>;
@@ -126,8 +127,14 @@ export function AppointmentReschedulePanel({
 
       <ErrorBanner error={reschedule.error} />
 
-      {/* 元の予約と同じ診療科・担当医から探し始める。 */}
+      {/* 元の予約と同じ種別・診療科・担当医から探し始める。検査予約(オーダーに
+          ぶら下がる予約)の取り直し先は検査予約の枠に限り、元と同じ所要時間ぶんの
+          連続枠が組める時刻だけ選べる。 */}
       <AppointmentSlotPicker
+        scheduleType={isExamAppointment(appointment) ? "exam" : "consultation"}
+        requiredMinutes={
+          isExamAppointment(appointment) ? appointment.minutesDuration : undefined
+        }
         defaultDepartmentCode={appointmentDepartmentCode(appointment)}
         defaultPractitionerId={appointmentActorId(appointment, "Practitioner")}
         selected={selection}

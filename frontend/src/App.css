@@ -6412,6 +6412,19 @@ body.page-wide #root {
 
 /* ---- 予約枠(Schedule / Slot) ---- */
 
+/* 列が多いので、途中で折り返さないようにする(幅は page-wide で確保する)。
+   名称だけは長くなりうるので折り返しを許す。 */
+.schedule-table th,
+.schedule-table td {
+  white-space: nowrap;
+}
+
+.schedule-table th:first-child,
+.schedule-table td:first-child {
+  white-space: normal;
+  min-width: 12em;
+}
+
 /* 一覧の操作列。カレンダーへの導線だけケバブの外に出しているので、
    ボタンとケバブを横に並べる。 */
 .schedule-table__actions {
@@ -7018,4 +7031,159 @@ body.page-wide #root {
 
 :root[data-theme="dark"] .appointment-month__day--free {
   color: #81c784;
+}
+
+/* ---- 放射線オーダーのオーダー枠(選択中を 1 オーダー単位で束ねる) ---- */
+
+/* 1 枠 = 登録される 1 オーダー。オーダー単位の設定(至急区分・撮影日時・即実施)を
+   上下の帯に置き、間に GP を並べて「どこまでが 1 オーダーか」を見せる。 */
+.rad-order-frame {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  background: var(--surface-card);
+}
+
+.rad-order-frame__head,
+.rad-order-frame__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 8px 12px;
+  background: var(--surface-panel);
+}
+
+/* ラベルの上端を揃える。入力欄はブラウザ既定の高さが select と date で違うので、
+   高さを明示して下端も揃うようにする。ラベルを持たない操作(予約ボタン・注記)は
+   入力欄の位置に合わせて下に寄せる。 */
+.rad-order-frame__head {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border);
+}
+
+.rad-order-frame__head > button,
+.rad-order-frame__booking,
+.rad-order-frame__head > .rad-order-frame__note {
+  align-self: flex-end;
+}
+
+.rad-order-frame__foot {
+  align-items: center;
+}
+
+.rad-order-frame__foot {
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.rad-order-frame__body {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* オーダーが複数に分かれるときの通し番号。 */
+.rad-order-frame__number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ラベルは入力欄の上に置き、左端を入力欄と揃える(伝票のラベルは既定で縦並び)。 */
+.rad-order-frame__priority,
+.rad-order-frame__datetime label {
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.rad-order-frame__datetime {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.rad-order-frame__priority select,
+.rad-order-frame__datetime input {
+  font: inherit;
+  font-size: 13px;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.rad-order-frame__note {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.rad-order-frame__booking {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.rad-order-frame__booked {
+  color: var(--text-h);
+}
+
+.rad-order-frame__booking button,
+.rad-order-frame__foot button {
+  font-size: 12px;
+  padding: 3px 10px;
+}
+
+/* 伝票のラベルは既定で縦並び(.prescription-form label)。チェックボックスと文言は
+   横に並べたいので、詳細度を上げて上書きする。 */
+.rad-order-frame .rad-order-frame__perform {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-h);
+}
+
+.rad-order-frame .rad-order-frame__perform input {
+  margin: 0;
+}
+
+/* 検査予約モーダル。右ペインより広く使えるのでカレンダーをそのまま出す。 */
+.rad-booking-modal {
+  width: min(560px, 92vw);
+}
+
+.rad-booking {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  max-height: 76vh;
+  overflow-y: auto;
+}
+
+.rad-booking__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 行メニューの中の説明行(押せない案内)。 */
+.row-menu__items .row-menu__item--muted {
+  color: var(--text);
+  font-size: 12px;
+  cursor: default;
 }

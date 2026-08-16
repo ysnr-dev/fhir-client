@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_15_010000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_16_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -779,6 +779,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_15_010000) do
     t.boolean "groupable", default: true, null: false
     t.string "dataset_code"
     t.boolean "requires_perform_input", default: true, null: false
+    t.boolean "requires_appointment", default: false, null: false
+    t.integer "duration_minutes"
+    t.string "appointment_schedule_id"
     t.index ["dataset_code"], name: "index_master_rad_items_on_dataset_code"
     t.index ["groupable"], name: "index_master_rad_items_on_groupable"
     t.index ["item_code"], name: "index_master_rad_items_on_item_code", unique: true

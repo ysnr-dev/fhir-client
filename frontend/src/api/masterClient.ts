@@ -1077,6 +1077,19 @@ export interface RadItem {
    * requires_perform_input が false の項目は持たない。
    */
   dataset_code: string | null;
+  /**
+   * 予約必須の項目か。true の項目は撮影室の枠(検査予約)を押さえてからオーダーする。
+   * 予約ごとにオーダーが立つので必ず単独オーダー(groupable=false)。
+   */
+  requires_appointment: boolean;
+  /** 所要時間(分)。予約で消費する枠数の計算に使う。未設定は 1 枠ぶん。 */
+  duration_minutes: number | null;
+  /**
+   * 予約を取る先の枠表(FHIR Schedule の id)。予約必須の項目だけが持ち、
+   * オーダー画面の予約モーダルでこの枠表が初期選択される。枠表が消えていたら
+   * 通常の枠表選択にフォールバックする。
+   */
+  appointment_schedule_id: string | null;
 }
 
 // 要素コード → 名称。一覧・詳細APIが載っているコードの分だけ添えて返す。
@@ -1136,6 +1149,9 @@ export interface RadItemPayload {
   remarks_template_canonical?: string | null;
   requires_perform_input?: boolean;
   dataset_code?: string | null;
+  requires_appointment?: boolean;
+  duration_minutes?: number | null;
+  appointment_schedule_id?: string | null;
 }
 
 export interface RadSetItemPayload {
