@@ -11,6 +11,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   useKarteClinicalNotesInfinite,
   useKarteConditions,
+  useKarteDayIndex,
   useKartePrescriptionsInfinite,
   useKarteQuestionnaireResponsesInfinite,
   useKarteVitalsInfinite,
@@ -39,6 +40,7 @@ import {
 import {
   buildKarteTimeline,
   filterKarteGroupsByCard,
+  mergeDayIndex,
   type KarteCardFilter,
   type KarteTimelineItem,
 } from "../fhir/karteTimeline";
@@ -223,6 +225,9 @@ export function KartePage() {
   const prescriptions = useKartePrescriptionsInfinite(patientId, timelineProblemIds);
   const responses = useKarteQuestionnaireResponsesInfinite(patientId, timelineProblemIds);
   const vitals = useKarteVitalsInfinite(patientId, timelineProblemIds);
+  // 診療日ペイン用の全診療日。タイムラインのページングとは別に日付だけを読み切る
+  // ので、スクロール(読み込み状況)に関係なく過去の日付まで最初から並ぶ。
+  const dayIndex = useKarteDayIndex(patientId, timelineProblemIds);
 
   // 選択中のプロブレムは、診療記録を新規登録するときの対象の初期値にする。
   const selectedProblem = useMemo(() => {
@@ -336,6 +341,12 @@ export function KartePage() {
     [timeline.groups, cardFilter],
   );
 
+  // 診療日ペインに出す全日付。読み込み済みの日はタイムラインの項目付き。
+  const dayEntries = useMemo(
+    () => mergeDayIndex(filteredGroups, dayIndex.days, timeline.cutoff),
+    [filteredGroups, dayIndex.days, timeline.cutoff],
+  );
+
   // 表示範囲を押し下げているソースだけ次ページを読む。
   function loadMore() {
     if (timeline.pending.note && !notes.isFetchingNextPage) notes.fetchNextPage();
@@ -377,6 +388,50 @@ export function KartePage() {
     highlightTimer.current = window.setTimeout(() => setHighlightKey(null), HIGHLIGHT_DURATION_MS);
   }, []);
   useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
+
+  // 診療日ペインは全日付を出すので、まだ読み込んでいない日も選べる。その場合は
+  // 該当の日が表示範囲に入るまで自動で読み進めてから飛ぶ。scroll はクリック
+  // (飛ぶ)か展開だけ(項目を出す)かの区別。
+  const [pendingDay, setPendingDay] = useState<{ key: string; scroll: boolean } | null>(null);
+
+  // 読み込みの進行(loadToken の変化)のたびに最新の loadMore を呼ぶための ref
+  // (KarteTimeline と同じ理由。effect の依存を安定させる)。
+  const loadMoreRef = useRef(loadMore);
+  loadMoreRef.current = loadMore;
+
+  useEffect(() => {
+    if (!pendingDay) return;
+    const day = pendingDay.key === "no-date" ? "" : pendingDay.key;
+    // カットオフより新しければ、その日は既に表示範囲(項目が無ければ無いことも確定)。
+    const loaded = timeline.cutoff === undefined || day > timeline.cutoff;
+    if (loaded) {
+      // インデックスと実データが食い違って項目の無い日は、スクロール先が無いので
+      // 何もせず終わる(scrollToTarget が対象なしを無視する)。
+      if (pendingDay.scroll) scrollToTarget(pendingDay.key);
+      setPendingDay(null);
+    } else if (timeline.hasMore) {
+      loadMoreRef.current();
+    } else {
+      setPendingDay(null);
+    }
+  }, [pendingDay, loadToken, timeline.cutoff, timeline.hasMore, scrollToTarget]);
+
+  // 診療日ペインからの移動。項目キー(kind:id)は読み込み済みの日にしか並ばないので
+  // そのまま飛ぶ。日付は未読のことがあるので、読み込みを待ち合わせる上の effect に
+  // 委ねる(読み込み済みでも即座に同じ結果になる)。
+  const handleSideSelect = useCallback(
+    (key: string) => {
+      if (key.includes(":")) scrollToTarget(key);
+      else setPendingDay({ key, scroll: true });
+    },
+    [scrollToTarget],
+  );
+
+  // 未読の日が展開されたときの読み込み。スクロールはしない。
+  const handleLoadDay = useCallback((key: string) => {
+    // クリック(飛ぶ)の待ち合わせ中に同じ日を展開しても、飛ぶ方を取り消さない。
+    setPendingDay((prev) => (prev?.key === key ? prev : { key, scroll: false }));
+  }, []);
 
   function handleEdit(item: KarteTimelineItem) {
     if (item.kind === "note") setPane({ kind: "note-edit", noteId: item.id });
@@ -473,8 +528,10 @@ export function KartePage() {
         className={`karte-left__body${dayListVisible ? "" : " karte-left__body--daylist-hidden"}`}
       >
       <KarteSidePane
-        groups={filteredGroups}
-        onSelect={scrollToTarget}
+        entries={dayEntries}
+        onSelect={handleSideSelect}
+        onLoadDay={handleLoadDay}
+        loadingKey={pendingDay?.key ?? null}
         mode={effectiveSidePaneMode}
         onModeChange={selectSidePaneMode}
         filter={cardFilter}

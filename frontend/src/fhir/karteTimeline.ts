@@ -135,6 +135,12 @@ export interface KarteTimelineResult {
   /** まだ読み込んでいない、より古いデータが残っているか。 */
   hasMore: boolean;
   /**
+   * 表示してよい範囲の境界。この日付より新しい日だけが groups に出ている
+   * (undefined は全件読み込み済み)。診療日ペインが「どの日まで読み込み済みか」の
+   * 判定に使う。
+   */
+  cutoff: string | undefined;
+  /**
    * 次ページを読むべきソース。表示範囲(カットオフ)を押し下げているものだけを
    * 対象にして、片方に大量データがある患者で無駄な取得をしないようにする。
    */
@@ -410,6 +416,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     groups,
     hasMore:
       input.noteHasNext || input.prescriptionHasNext || input.responseHasNext || input.vitalHasNext,
+    cutoff,
     pending: {
       note: notePending,
       prescription: prescriptionPending,
@@ -460,6 +467,37 @@ export function filterKarteGroupsByCard(
   return groups
     .map((group) => ({ ...group, items: group.items.filter((item) => matchesCardFilter(item, filter)) }))
     .filter((group) => group.items.length > 0);
+}
+
+// ---- 診療日インデックスとの突き合わせ ----
+
+/** 診療日ペインの 1 日分。まだタイムラインを読み込んでいない日は items が null。 */
+export interface KarteDayEntry {
+  day: string;
+  items: KarteTimelineItem[] | null;
+}
+
+/**
+ * 全診療日のインデックス(useKarteDayIndex)と読み込み済みのタイムラインを重ねる。
+ * 診療日ペインはタイムラインのスクロール(読み込み状況)に関係なく全日付を出す
+ * ためのもので、読み込み済みの日は項目付き、まだの日は日付だけ(items: null)に
+ * なる。インデックスと実データの食い違いで「読み込み済みなのに項目が無い」日は
+ * 空配列で返す(読み込み中と区別が付くように)。
+ */
+export function mergeDayIndex(
+  groups: KarteDayGroup[],
+  indexDays: string[],
+  cutoff: string | undefined,
+): KarteDayEntry[] {
+  const byDay = new Map(groups.map((group) => [group.day, group.items]));
+  // 登録直後などインデックスがまだ古いことがあるので、読み込み済みの日は常に足す。
+  const days = new Set([...indexDays, ...groups.map((group) => group.day)]);
+  return Array.from(days)
+    .sort((a, b) => b.localeCompare(a))
+    .map((day) => ({
+      day,
+      items: byDay.get(day) ?? (cutoff === undefined || day > cutoff ? [] : null),
+    }));
 }
 
 // ---- プロブレム(POMR)との紐付け ----

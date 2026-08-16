@@ -1,15 +1,19 @@
 import { KarteCategoryList } from "./KarteCategoryList";
 import { KarteDayList } from "./KarteDayList";
-import type { KarteCardFilter, KarteDayGroup } from "../fhir/karteTimeline";
+import type { KarteCardFilter, KarteDayEntry } from "../fhir/karteTimeline";
 import type { KarteSidePaneMode } from "../karteLayout";
 
 // カルテ左端のペイン。「診療日」(日付から探す)と「カテゴリ」(情報の種別で絞り込む)を
 // 切り替えて使う。折りたたみはペイン全体に効く(中身がどちらでも意味が変わらないため)。
 
 interface KarteSidePaneProps {
-  /** 絞り込み後の診療日グループ。診療日ツリーもタイムラインと同じ範囲を出す。 */
-  groups: KarteDayGroup[];
+  /** 全診療日。タイムラインが未読の日も含む(KarteDayList 参照)。 */
+  entries: KarteDayEntry[];
   onSelect: (targetKey: string) => void;
+  /** まだ読み込んでいない日が展開されたとき、その日までの読み込みを進めてもらう。 */
+  onLoadDay: (dayKey: string) => void;
+  /** 読み込みを進めている対象の日。 */
+  loadingKey: string | null;
   mode: KarteSidePaneMode;
   onModeChange: (mode: KarteSidePaneMode) => void;
   filter: KarteCardFilter | null;
@@ -26,8 +30,10 @@ const MODES: { key: KarteSidePaneMode; label: string }[] = [
 ];
 
 export function KarteSidePane({
-  groups,
+  entries,
   onSelect,
+  onLoadDay,
+  loadingKey,
   mode,
   onModeChange,
   filter,
@@ -62,7 +68,12 @@ export function KarteSidePane({
         {visibilityButton}
       </div>
       {mode === "days" ? (
-        <KarteDayList groups={groups} onSelect={onSelect} />
+        <KarteDayList
+          entries={entries}
+          onSelect={onSelect}
+          onLoadDay={onLoadDay}
+          loadingKey={loadingKey}
+        />
       ) : (
         <KarteCategoryList filter={filter} onSelect={onFilterChange} />
       )}

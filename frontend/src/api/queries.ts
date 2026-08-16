@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -2923,6 +2924,136 @@ export function useKarteVitalsInfinite(
     getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
     enabled: Boolean(patientId) && problemIds !== undefined,
   });
+}
+
+// ---- 診療日インデックス ----
+//
+// 診療日ペインには、タイムラインの読み込み状況に関係なく全診療日を最初から出す。
+// そのためにタイムラインと同じ 4 リソースを、日付だけの軽量な形(_elements)で
+// 全ページ読み切る。検索条件(プロブレム絞り込みを含む)はタイムラインの各
+// 無限クエリと揃えること。キーも同じ ["<型>", "search"] 配下に置くので、
+// 登録・削除の invalidate で一緒に再取得される。
+const KARTE_DAY_PAGE = 100;
+
+async function fetchKarteDays(
+  resourceType: string,
+  buildParams: () => URLSearchParams,
+  dateOf: (resource: fhir4.Resource) => string | undefined,
+): Promise<string[]> {
+  const days = new Set<string>();
+  for (let offset = 0; ; offset += KARTE_DAY_PAGE) {
+    const params = buildParams();
+    params.set("_count", String(KARTE_DAY_PAGE));
+    params.set("_offset", String(offset));
+    const { data: bundle } = await searchResource<fhir4.Resource>(resourceType, params);
+    for (const entry of bundle.entry ?? []) {
+      // 日付を持たないリソースは空文字で持ち、タイムラインの「日付なし」に揃える。
+      if (entry.resource) days.add(dateOf(entry.resource)?.slice(0, 10) ?? "");
+    }
+    if (!hasRelation(bundle, "next")) return Array.from(days);
+  }
+}
+
+/** 診療日ペインに出す全診療日(降順)。 */
+export function useKarteDayIndex(
+  patientId: string | undefined,
+  problemIds: KarteProblemFilter = null,
+) {
+  const enabled = Boolean(patientId) && problemIds !== undefined;
+  const problemKey = problemQueryKey(problemIds);
+
+  const notes = useQuery({
+    queryKey: ["Composition", "search", "karte-days", patientId, problemKey],
+    queryFn: () =>
+      fetchKarteDays(
+        "Composition",
+        () => {
+          const params = new URLSearchParams();
+          params.set("subject", `Patient/${patientId}`);
+          params.set("type", "http://loinc.org|11506-3");
+          if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+          params.set("_elements", "date");
+          // 全ページを読み切る間に順序がぶれないよう並び順を固定する(以下同)。
+          params.set("_sort", "-date");
+          return params;
+        },
+        (resource) => (resource as fhir4.Composition).date,
+      ),
+    enabled,
+  });
+
+  const prescriptions = useQuery({
+    queryKey: ["ServiceRequest", "search", "karte-days", patientId, problemKey],
+    queryFn: () =>
+      fetchKarteDays(
+        "ServiceRequest",
+        () => {
+          const params = new URLSearchParams();
+          params.set("patient", `Patient/${patientId}`);
+          if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
+          // タイムラインと同じく、オーダーのヘッダだけを数える(明細を含めない)。
+          params.set("based-on:missing", "true");
+          params.set("_elements", "authoredOn");
+          params.set("_sort", "-authoredon");
+          return params;
+        },
+        (resource) => (resource as fhir4.ServiceRequest).authoredOn,
+      ),
+    enabled,
+  });
+
+  const responses = useQuery({
+    queryKey: ["QuestionnaireResponse", "search", "karte-days", patientId, problemKey],
+    queryFn: () =>
+      fetchKarteDays(
+        "QuestionnaireResponse",
+        () => {
+          const params = new URLSearchParams();
+          params.set("patient", `Patient/${patientId}`);
+          if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+          params.set("_elements", "authored");
+          params.set("_sort", "-authored");
+          return params;
+        },
+        (resource) => (resource as fhir4.QuestionnaireResponse).authored,
+      ),
+    enabled,
+  });
+
+  const vitals = useQuery({
+    queryKey: ["Observation", "search", "karte-days", patientId, problemKey],
+    queryFn: () =>
+      fetchKarteDays(
+        "Observation",
+        () => {
+          const params = new URLSearchParams();
+          params.set("patient", `Patient/${patientId}`);
+          params.set("category", "vital-signs");
+          params.set("derived-from:missing", "true");
+          if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+          params.set("_elements", "effectiveDateTime");
+          params.set("_sort", "-date");
+          return params;
+        },
+        (resource) => (resource as fhir4.Observation).effectiveDateTime,
+      ),
+    enabled,
+  });
+
+  const queries = [notes, prescriptions, responses, vitals];
+  const days = useMemo(() => {
+    const merged = new Set<string>();
+    for (const list of [notes.data, prescriptions.data, responses.data, vitals.data]) {
+      for (const day of list ?? []) merged.add(day);
+    }
+    return Array.from(merged).sort((a, b) => b.localeCompare(a));
+  }, [notes.data, prescriptions.data, responses.data, vitals.data]);
+
+  return {
+    days,
+    isLoading: queries.some((q) => q.isPending),
+    error: queries.find((q) => q.error)?.error ?? null,
+  };
 }
 
 /** 編集対象の測定 1 回分。identifier で束ねてあるので 1 検索で全項目そろう。 */

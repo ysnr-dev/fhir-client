@@ -4037,6 +4037,18 @@ body.karte-wide .app__header {
   color: var(--text-h);
 }
 
+/* 未読の日へ飛ぶ・展開するときの自動読み込み中。控えめに薄くするだけにとどめる。 */
+.karte-daylist__date--loading {
+  opacity: 0.5;
+}
+
+/* 展開した日の「読み込み中...」と、項目が無い日の「-」。 */
+.karte-daylist__pending {
+  margin: 0 0 0 14px;
+  font-size: 12px;
+  color: var(--text-muted, #666);
+}
+
 .karte-daylist__item {
   font-size: 12px;
 }
