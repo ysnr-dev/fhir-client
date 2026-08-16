@@ -10,7 +10,7 @@
 // 枠の生成に使った曜日パターン(月水金 9:00-12:00、15分刻み …)は R4 の標準要素に
 // 置き場が無いので extension に JSON で持たせる。翌月ぶんを同じ条件で作り直せる
 // ようにするためで、Slot の内容そのものは常に Slot リソース側が正。
-import { toFhirDateTime } from "./clinicalNoteHelpers";
+import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import { SSMIX2_DEPARTMENT_CODE_SYSTEM } from "./departmentCodes";
 
 const SLOT_PATTERN_EXT_URL = "http://fhir-client.local/StructureDefinition/schedule-slot-pattern";
@@ -430,6 +430,67 @@ function buildSlot(
   }
 
   return slot;
+}
+
+/**
+ * 日時を直接指定して枠を作る(臨時枠の個別追加)。曜日パターンと違って既存の枠は
+ * 見ないので、同じ日時に足せば席が増える(「この時間だけもう 1 人受ける」)。
+ * 終了時刻は Date で足すので、日をまたぐ枠(23:30 から 60 分など)も正しく出る。
+ */
+export function buildSlotsAt(
+  scheduleId: string,
+  date: string,
+  time: string,
+  durationMinutes: number,
+  count: number,
+  appointmentTypeCode: string,
+): fhir4.Slot[] {
+  const startLocal = `${date}T${time}`;
+  const endAt = new Date(new Date(`${startLocal}:00`).getTime() + durationMinutes * 60_000);
+  const start = toFhirDateTime(startLocal);
+  const end = toFhirDateTime(toDateTimeInput(endAt));
+
+  return Array.from({ length: count }, () =>
+    buildSlot(scheduleId, start, end, appointmentTypeCode),
+  );
+}
+
+/** 個別追加のフォーム。 */
+export interface SlotAddValues {
+  date: string;
+  time: string;
+  durationMinutes: number;
+  count: number;
+  appointmentTypeCode: string;
+}
+
+export function validateSlotAdd(values: SlotAddValues): string | null {
+  if (!values.date) return "日付を入力してください。";
+  if (!values.time) return "開始時刻を入力してください。";
+  if (!Number.isFinite(values.durationMinutes) || values.durationMinutes < 1) {
+    return "枠の長さは 1 分以上で入力してください。";
+  }
+  if (!Number.isFinite(values.count) || values.count < 1) {
+    return "追加する人数は 1 人以上で入力してください。";
+  }
+  return null;
+}
+
+/** その日時に既にある枠(誤登録を除く)。個別追加のときに件数を知らせるのに使う。 */
+export function slotsAt(slots: fhir4.Slot[], date: string, time: string): fhir4.Slot[] {
+  return slots.filter(
+    (slot) =>
+      slot.status !== "entered-in-error" && slotDate(slot) === date && slotTime(slot) === time,
+  );
+}
+
+/** 枠表の有効期間の中か。外でも作れるが(臨時枠)、画面では注意を出す。 */
+export function isWithinHorizon(schedule: fhir4.Schedule, date: string): boolean {
+  const start = schedule.planningHorizon?.start?.slice(0, 10);
+  const end = schedule.planningHorizon?.end?.slice(0, 10);
+  if (start && date < start) return false;
+  if (end && date > end) return false;
+  return true;
 }
 
 /** 生成した Slot をまとめて登録する transaction Bundle。 */

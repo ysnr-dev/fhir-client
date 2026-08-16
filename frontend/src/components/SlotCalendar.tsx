@@ -24,9 +24,17 @@ interface SlotCalendarProps {
   weekStartISO: string;
   selectedIds: ReadonlySet<string>;
   onToggle: (slots: fhir4.Slot[]) => void;
+  /** 枠のないマスから個別追加を開く。 */
+  onAddAt: (date: string, time: string) => void;
 }
 
-export function SlotCalendar({ rows, weekStartISO, selectedIds, onToggle }: SlotCalendarProps) {
+export function SlotCalendar({
+  rows,
+  weekStartISO,
+  selectedIds,
+  onToggle,
+  onAddAt,
+}: SlotCalendarProps) {
   const dates = weekDates(weekStartISO);
 
   if (rows.length === 0) {
@@ -59,7 +67,14 @@ export function SlotCalendar({ rows, weekStartISO, selectedIds, onToggle }: Slot
                   {cell.slots.length > 0 ? (
                     <SlotCell slots={cell.slots} selectedIds={selectedIds} onToggle={onToggle} />
                   ) : (
-                    <span className="slot-calendar__empty">-</span>
+                    <button
+                      type="button"
+                      className="slot-calendar__empty"
+                      onClick={() => onAddAt(cell.date, row.time)}
+                      title={`${cell.date} ${row.time} に枠を追加`}
+                    >
+                      +
+                    </button>
                   )}
                 </td>
               ))}

@@ -6451,6 +6451,22 @@ body.page-wide #root {
   padding: 0 4px;
 }
 
+/* モーダルの中はフォーム(.patient-form)の外なので、入力にフォーム側のスタイルが
+   当たらない。予約枠まわりの入力にまとめて同じ見た目を与える。曜日のチェックボックスは
+   素のままにしたいので除く。 */
+.slot-generate input:not([type="checkbox"]),
+.slot-generate select,
+.slot-pattern input:not([type="checkbox"]),
+.slot-pattern select {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
 /* 曜日パターンの入力(枠表の登録画面と一括生成モーダルで共用) */
 .slot-pattern {
   display: flex;
@@ -6655,8 +6671,29 @@ body.page-wide #root {
   background: rgba(211, 47, 47, 0.06);
 }
 
+/* 枠のないマス。押すとその日時の個別追加を開くので、普段は目立たせず
+   hover でだけボタンらしく見せる。 */
 .slot-calendar__empty {
+  display: block;
+  width: 100%;
+  padding: 3px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
   color: var(--border);
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.slot-calendar__empty:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.slot-add__warning {
+  font-size: 13px;
+  color: var(--lab-high);
 }
 
 /* 枠のセル。状態ごとに色を変え、選択中は枠線で示す。 */

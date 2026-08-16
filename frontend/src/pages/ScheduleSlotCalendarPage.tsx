@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useDeleteSlots, useSchedule, useSlotWeek, useUpdateSlotStatus } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { SlotAddModal } from "../components/SlotAddModal";
 import { SlotCalendar } from "../components/SlotCalendar";
 import { SlotGenerateModal } from "../components/SlotGenerateModal";
 import {
@@ -25,6 +26,8 @@ export function ScheduleSlotCalendarPage() {
   const [week, setWeek] = useState(() => weekStart(today()));
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const [generating, setGenerating] = useState(false);
+  // 個別追加を開いている日時。カレンダーの空きマスから開くとその日時が入る。
+  const [adding, setAdding] = useState<{ date: string; time: string } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -127,6 +130,9 @@ export function ScheduleSlotCalendarPage() {
       <div className="page__header">
         <h1>予約枠カレンダー</h1>
         <div className="page__header-actions">
+          <button type="button" onClick={() => setAdding({ date: week, time: "" })}>
+            枠を追加
+          </button>
           <button type="button" onClick={() => setGenerating(true)}>
             枠を一括生成
           </button>
@@ -216,6 +222,7 @@ export function ScheduleSlotCalendarPage() {
           weekStartISO={week}
           selectedIds={selectedIds}
           onToggle={toggleCell}
+          onAddAt={(date, time) => setAdding({ date, time })}
         />
       )}
 
@@ -226,6 +233,19 @@ export function ScheduleSlotCalendarPage() {
           onGenerated={(created) => {
             setGenerating(false);
             setMessage(`${created} 件の枠を生成しました。`);
+          }}
+        />
+      )}
+
+      {adding && (
+        <SlotAddModal
+          schedule={schedule}
+          defaultDate={adding.date}
+          defaultTime={adding.time}
+          onClose={() => setAdding(null)}
+          onAdded={(created) => {
+            setAdding(null);
+            setMessage(`${created} 件の枠を追加しました。`);
           }}
         />
       )}
