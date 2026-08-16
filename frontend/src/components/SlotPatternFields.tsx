@@ -1,9 +1,4 @@
-import {
-  APPOINTMENT_TYPE_OPTIONS,
-  WEEKDAY_LABELS,
-  type SlotPattern,
-  type SlotTimeBlock,
-} from "../fhir/scheduleHelpers";
+import { WEEKDAY_LABELS, type SlotPattern, type SlotTimeBlock } from "../fhir/scheduleHelpers";
 
 // 枠の曜日パターン(曜日 × 時間帯 × 1 枠の長さ)の入力欄。枠表の登録画面と、
 // カレンダーの一括生成モーダルの双方から使う。
@@ -106,25 +101,7 @@ export function SlotPatternFields({ value, onChange }: SlotPatternFieldsProps) {
             onChange={(e) => onChange({ ...value, capacity: Number(e.target.value) })}
           />
         </label>
-        <label>
-          予約種別
-          <select
-            value={value.appointmentTypeCode}
-            onChange={(e) => onChange({ ...value, appointmentTypeCode: e.target.value })}
-          >
-            {APPOINTMENT_TYPE_OPTIONS.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
-
-      <p className="slot-pattern__hint">
-        「同時に受ける人数」を 2 以上にすると、同じ時間の枠をその数だけ作ります(FHIR の
-        Slot に定員の要素が無いため、1 枠 = 1 人ぶんの席で表します)。
-      </p>
     </div>
   );
 }

@@ -40,6 +40,8 @@ export const KARTE_TABS = [
   { key: "flowsheet", label: "経過表" },
   { key: "lab", label: "検査結果" },
   { key: "micro", label: "細菌検査" },
+  // 予約はカルテのカードにしない(タイムラインには出ない)ので、タブでのみ見る。
+  { key: "appointment", label: "予約" },
 ] as const;
 
 export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];

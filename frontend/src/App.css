@@ -6529,11 +6529,6 @@ body.page-wide #root {
   width: 96px;
 }
 
-.slot-pattern__hint {
-  font-size: 12px;
-  color: var(--text);
-}
-
 /* 枠の一括生成モーダル */
 .slot-generate {
   display: flex;
@@ -6755,4 +6750,272 @@ body.page-wide #root {
 
 :root[data-theme="dark"] .slot-calendar__slot--busy-tentative {
   color: #ffb74d;
+}
+
+/* ---- 予約(Appointment) ---- */
+
+.appointment-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.appointment-panel__current {
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+/* 予約種別の下にメモ。メモは複数行書けるよう幅いっぱいに広げる。 */
+.appointment-panel__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.appointment-panel__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.appointment-panel__form textarea {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  resize: vertical;
+}
+
+.appointment-panel__problem {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.appointment-panel__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 枠の選択(枠表 → 月カレンダー → 時刻) */
+.appointment-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.appointment-picker__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.appointment-picker__filters label,
+.appointment-picker__schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.appointment-picker__hint {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* セレクトの高さに合わせて下端で揃える(ラベルのぶんだけ下がる)。 */
+.appointment-picker__clear {
+  align-self: flex-end;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+/* 右ペインやタブはフォームの外なので、入力にフォーム側のスタイルが当たらない。 */
+.appointment-picker input,
+.appointment-picker select,
+.appointment-panel__form input,
+.appointment-panel__form select {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.appointment-month__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.appointment-month__header button {
+  font-size: 13px;
+  padding: 4px 10px;
+}
+
+.appointment-month {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.appointment-month th {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  padding: 4px 0;
+  text-align: center;
+}
+
+.appointment-month td {
+  padding: 1px;
+}
+
+.appointment-month__col--saturday {
+  color: var(--lab-low);
+}
+
+.appointment-month__col--sunday {
+  color: var(--lab-high);
+}
+
+/* 1 日のマス。空きがある日だけ残数を出す。 */
+.appointment-month__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 40px;
+  padding: 4px 2px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.appointment-month__day--outside {
+  opacity: 0.35;
+}
+
+.appointment-month__day--free {
+  background: rgba(76, 175, 80, 0.16);
+  color: #2e7d32;
+}
+
+.appointment-month__day--today {
+  border-color: var(--accent-border);
+}
+
+.appointment-month__day--selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 日付と空き数が同じ見た目だと数字が 2 つ並んでいるようにしか見えないので、
+   日付は大きく地の文字色、空き数は小さく「空き」の色(セルの状態色)に分ける。 */
+.appointment-month__date {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-h);
+}
+
+.appointment-month__day--selected .appointment-month__date {
+  color: var(--accent);
+}
+
+.appointment-month__free {
+  font-size: 10px;
+  line-height: 1.2;
+  /* 空き数が無い日でもマスの高さを揃える。 */
+  min-height: 12px;
+}
+
+.appointment-times h4 {
+  font-size: 13px;
+  margin: 0 0 6px;
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+/* 時刻は 15 分刻みなら 1 日で数十個になる。縦に積むと間延びするので、
+   プロブレムの帯と同じくチップを折り返して並べ、一覧だけをスクロールさせる。 */
+.appointment-times__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.appointment-times__slot {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.appointment-times__slot:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.appointment-times__slot--free {
+  color: #2e7d32;
+  border-color: rgba(76, 175, 80, 0.4);
+}
+
+.appointment-times__slot--selected,
+.appointment-times__slot--selected:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 満枠は残すが押せない(空き状況として見えている方が探しやすい)。 */
+.appointment-times__slot:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.appointment-times__time {
+  font-variant-numeric: tabular-nums;
+}
+
+.appointment-times__count {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+:root[data-theme="dark"] .appointment-times__slot--free {
+  color: #81c784;
+}
+
+:root[data-theme="dark"] .appointment-times__slot--selected {
+  color: var(--accent);
+}
+
+:root[data-theme="dark"] .appointment-month__day--free {
+  color: #81c784;
 }

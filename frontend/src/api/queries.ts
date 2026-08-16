@@ -64,6 +64,12 @@ import {
   type SlotStatus,
 } from "../fhir/scheduleHelpers";
 import {
+  appointmentSlotIds,
+  buildBookBundle,
+  buildCancelBundle,
+  buildRescheduleBundle,
+} from "../fhir/appointmentHelpers";
+import {
   baseRoleOf,
   isDoctorRoleCode,
   parsePractitionerRole,
@@ -854,6 +860,7 @@ export function useDeleteSchedule() {
 async function fetchScheduleSlots(
   scheduleId: string,
   range?: { from: string; to: string },
+  status?: string,
 ): Promise<fhir4.Slot[]> {
   const PAGE = 100;
   const slots: fhir4.Slot[] = [];
@@ -861,6 +868,7 @@ async function fetchScheduleSlots(
   for (let offset = 0; ; offset += PAGE) {
     const params = new URLSearchParams();
     params.set("schedule", `Schedule/${scheduleId}`);
+    if (status) params.set("status", status);
     if (range) {
       params.append("start", `ge${range.from}`);
       params.append("start", `lt${range.to}`);
@@ -970,6 +978,157 @@ export function useDeleteSlots() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Slot"] });
     },
+  });
+}
+
+// 予約を取る画面の枠表セレクト。診療科は上流の specialty 検索に頼らず、取得後に
+// コードで絞る(枠表は施設あたり数十件の想定で、全件読んでも軽い)。
+export function useScheduleOptions(filter: { departmentCode?: string; practitionerId?: string }) {
+  const params = new URLSearchParams();
+  params.set("active", "true");
+  if (filter.practitionerId) params.append("actor", `Practitioner/${filter.practitionerId}`);
+  params.set("_count", "100");
+
+  const query = useQuery({
+    queryKey: ["Schedule", "search", "options", filter.practitionerId ?? ""],
+    queryFn: () => searchResource<fhir4.Schedule>("Schedule", params),
+  });
+
+  const all =
+    query.data?.data.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Schedule => Boolean(r)) ?? [];
+
+  return {
+    ...query,
+    schedules: filter.departmentCode
+      ? all.filter((schedule) => {
+          const codes =
+            schedule.specialty?.flatMap((s) => s.coding?.map((c) => c.code) ?? []) ?? [];
+          // 診療科を設定していない枠表は、どの科からも選べる共通の枠として残す
+          // (除外すると診療科を「すべて」に戻すまで候補に出ず、気づきにくい)。
+          return codes.length === 0 || codes.includes(filter.departmentCode);
+        })
+      : all,
+  };
+}
+
+/**
+ * 月ぶんの空き枠。月カレンダーの「その日の空き数」に使う。
+ * status=free だけを引くので、予約が埋まるほど軽くなる。
+ */
+export function useFreeSlotsOfMonth(
+  scheduleId: string | undefined,
+  range: { from: string; to: string },
+) {
+  const query = useQuery({
+    queryKey: ["Slot", "month", scheduleId, range.from],
+    queryFn: () => fetchScheduleSlots(scheduleId as string, range, "free"),
+    enabled: Boolean(scheduleId),
+    placeholderData: keepPreviousData,
+  });
+
+  return { ...query, slots: query.data ?? [] };
+}
+
+/** 選んだ日の枠(全ステータス)。時刻ごとの「空き 2/3」を出すのに使う。 */
+export function useDaySlots(scheduleId: string | undefined, date: string) {
+  const query = useQuery({
+    queryKey: ["Slot", "day", scheduleId, date],
+    queryFn: () =>
+      fetchScheduleSlots(scheduleId as string, { from: date, to: addDays(date, 1) }),
+    enabled: Boolean(scheduleId) && Boolean(date),
+  });
+
+  return { ...query, slots: query.data ?? [] };
+}
+
+// ---- 予約(Appointment) ----
+
+/**
+ * その患者の予約。1 患者の予約は当面 100 件を超えない前提でまとめて取り、
+ * 並べ替え(新しい順)は画面側で行う(上流の _sort に依存しないため)。
+ */
+export function useAppointmentSearch(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("_count", "100");
+
+  const query = useQuery({
+    queryKey: ["Appointment", "search", patientId],
+    queryFn: () => searchResource<fhir4.Appointment>("Appointment", params),
+    enabled: Boolean(patientId),
+  });
+
+  return {
+    ...query,
+    appointments:
+      query.data?.data.entry
+        ?.map((e) => e.resource)
+        .filter((r): r is fhir4.Appointment => Boolean(r)) ?? [],
+  };
+}
+
+export function useAppointment(id: string | undefined) {
+  return useQuery({
+    queryKey: ["Appointment", id],
+    queryFn: () => readResource<fhir4.Appointment>("Appointment", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+// 予約の登録・取消・日時変更。いずれも Appointment と Slot を 1 つの transaction で
+// 書く(Bundle の組み立ては appointmentHelpers を参照)。
+//
+// 取消・変更で空きに戻す枠は、一覧が持っているのは参照だけなので mutation の中で
+// 引き直す。Slot の現物が無いと status だけを差し替えた PUT を組めない。
+function invalidateAppointments(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["Appointment"] });
+  queryClient.invalidateQueries({ queryKey: ["Slot"] });
+}
+
+async function fetchAppointmentSlots(appointment: fhir4.Appointment): Promise<fhir4.Slot[]> {
+  const results = await Promise.all(
+    appointmentSlotIds(appointment).map((id) => readResource<fhir4.Slot>("Slot", id)),
+  );
+  return results.map((r) => r.data);
+}
+
+export function useBookAppointment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ appointment, slot }: { appointment: fhir4.Appointment; slot: fhir4.Slot }) =>
+      postBundle(buildBookBundle(appointment, slot)),
+    onSuccess: () => invalidateAppointments(queryClient),
+  });
+}
+
+export function useCancelAppointment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (appointment: fhir4.Appointment) =>
+      postBundle(buildCancelBundle(appointment, await fetchAppointmentSlots(appointment))),
+    onSuccess: () => invalidateAppointments(queryClient),
+  });
+}
+
+export function useRescheduleAppointment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      appointment,
+      slot,
+    }: {
+      appointment: fhir4.Appointment;
+      slot: fhir4.Slot;
+    }) =>
+      postBundle(
+        buildRescheduleBundle(appointment, await fetchAppointmentSlots(appointment), slot),
+      ),
+    onSuccess: () => invalidateAppointments(queryClient),
   });
 }
 

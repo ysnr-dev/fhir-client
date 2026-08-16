@@ -28,10 +28,17 @@ export const APPOINTMENT_TYPE_OPTIONS = [
   { code: "EMERGENCY", label: "救急" },
 ] as const;
 
+/**
+ * 予約種別は画面では選ばせず「通常」で固定する。枠(Slot)と予約(Appointment)の
+ * 双方で使う。区別が要るようになったらフォームに戻す。
+ */
+export const DEFAULT_APPOINTMENT_TYPE = "ROUTINE";
+
 export function appointmentTypeLabel(code: string | undefined): string {
   if (!code) return "-";
   return APPOINTMENT_TYPE_OPTIONS.find((o) => o.code === code)?.label ?? code;
 }
+
 
 // ---- Slot の状態 ----
 
@@ -80,7 +87,6 @@ export interface SlotPattern {
    * 予約の排他も Slot 単位の楽観ロックがそのまま効く。
    */
   capacity: number;
-  appointmentTypeCode: string;
 }
 
 export const emptySlotPattern: SlotPattern = {
@@ -91,7 +97,6 @@ export const emptySlotPattern: SlotPattern = {
   ],
   durationMinutes: 15,
   capacity: 1,
-  appointmentTypeCode: "ROUTINE",
 };
 
 export function validateSlotPattern(pattern: SlotPattern): string | null {
@@ -139,6 +144,12 @@ export function today(): string {
 export function addDays(dateISO: string, days: number): string {
   const date = new Date(`${dateISO}T00:00:00`);
   date.setDate(date.getDate() + days);
+  return toDateInput(date);
+}
+
+export function addMonths(dateISO: string, months: number): string {
+  const date = new Date(`${dateISO}T00:00:00`);
+  date.setMonth(date.getMonth() + months);
   return toDateInput(date);
 }
 
@@ -211,8 +222,8 @@ export function validateScheduleForm(values: ScheduleFormValues): string | null 
   if (!values.practitionerId && !values.locationId) {
     return "担当医と診察室のどちらか一方は必ず選んでください。";
   }
-  if (!values.horizonStart || !values.horizonEnd) return "有効期間は必須です。";
-  if (values.horizonEnd < values.horizonStart) {
+  // 有効期間は任意(未入力なら無期限)。両方入れたときだけ前後関係を見る。
+  if (values.horizonStart && values.horizonEnd && values.horizonEnd < values.horizonStart) {
     return "有効期間の終了日は開始日以降にしてください。";
   }
   return validateSlotPattern(values.pattern);
@@ -244,14 +255,22 @@ export function buildSchedule(
         text: values.name.trim(),
       },
     ],
-    planningHorizon: {
-      // 期間は日単位で押さえる。instant ではないが、上流は dateTime として
-      // 検証するのでタイムゾーンは必要。
-      start: toFhirDateTime(`${values.horizonStart}T00:00`),
-      end: toFhirDateTime(`${values.horizonEnd}T23:59`),
-    },
     extension: [{ url: SLOT_PATTERN_EXT_URL, valueString: JSON.stringify(values.pattern) }],
   };
+
+  // 有効期間は任意。未入力なら planningHorizon ごと持たせず「無期限の枠表」にする
+  // (R4 でも planningHorizon は 0..1 で、無ければ期間の定めが無い意味になる)。
+  // 期間は日単位で押さえる。instant ではないが、上流は dateTime として検証するので
+  // タイムゾーンは必要。
+  if (values.horizonStart || values.horizonEnd) {
+    schedule.planningHorizon = {};
+    if (values.horizonStart) {
+      schedule.planningHorizon.start = toFhirDateTime(`${values.horizonStart}T00:00`);
+    }
+    if (values.horizonEnd) {
+      schedule.planningHorizon.end = toFhirDateTime(`${values.horizonEnd}T23:59`);
+    }
+  }
 
   if (id) schedule.id = id;
   if (values.comment.trim()) schedule.comment = values.comment.trim();
@@ -318,11 +337,12 @@ export function scheduleSummary(schedule: fhir4.Schedule): string {
   return actors ? `${scheduleName(schedule)}(${actors})` : scheduleName(schedule);
 }
 
+/** 「2026-08-17 〜 2026-09-30」。片側だけの指定もあり、両方無ければ無期限。 */
 export function schedulePeriodLabel(schedule: fhir4.Schedule): string {
   const start = dateOnly(schedule.planningHorizon?.start);
   const end = dateOnly(schedule.planningHorizon?.end);
-  if (!start && !end) return "-";
-  return `${start || "-"} 〜 ${end || "-"}`;
+  if (!start && !end) return "無期限";
+  return `${start} 〜 ${end}`;
 }
 
 /** extension に保存した曜日パターン。壊れた JSON は無視して既定値に落とす。 */
@@ -338,7 +358,6 @@ export function slotPatternOf(schedule: fhir4.Schedule): SlotPattern | null {
       durationMinutes: parsed.durationMinutes || emptySlotPattern.durationMinutes,
       // capacity を持たない頃に作った枠表は 1 人枠として読む。
       capacity: parsed.capacity || 1,
-      appointmentTypeCode: parsed.appointmentTypeCode || "ROUTINE",
     };
   } catch {
     return null;
@@ -393,7 +412,7 @@ export function generateSlots(
         const at = new Date(startAt).getTime();
 
         for (let seat = counts.get(at) ?? 0; seat < capacity; seat++) {
-          slots.push(buildSlot(scheduleId, startAt, endAt, pattern.appointmentTypeCode));
+          slots.push(buildSlot(scheduleId, startAt, endAt));
         }
         counts.set(at, Math.max(counts.get(at) ?? 0, capacity));
       }
@@ -403,33 +422,23 @@ export function generateSlots(
   return slots;
 }
 
-function buildSlot(
-  scheduleId: string,
-  start: string,
-  end: string,
-  appointmentTypeCode: string,
-): fhir4.Slot {
-  const slot: fhir4.Slot = {
+function buildSlot(scheduleId: string, start: string, end: string): fhir4.Slot {
+  return {
     resourceType: "Slot",
     schedule: { reference: `Schedule/${scheduleId}` },
     status: "free",
     start,
     end,
-  };
-
-  if (appointmentTypeCode) {
-    slot.appointmentType = {
+    appointmentType: {
       coding: [
         {
           system: APPOINTMENT_TYPE_SYSTEM,
-          code: appointmentTypeCode,
-          display: appointmentTypeLabel(appointmentTypeCode),
+          code: DEFAULT_APPOINTMENT_TYPE,
+          display: appointmentTypeLabel(DEFAULT_APPOINTMENT_TYPE),
         },
       ],
-    };
-  }
-
-  return slot;
+    },
+  };
 }
 
 /**
@@ -443,16 +452,13 @@ export function buildSlotsAt(
   time: string,
   durationMinutes: number,
   count: number,
-  appointmentTypeCode: string,
 ): fhir4.Slot[] {
   const startLocal = `${date}T${time}`;
   const endAt = new Date(new Date(`${startLocal}:00`).getTime() + durationMinutes * 60_000);
   const start = toFhirDateTime(startLocal);
   const end = toFhirDateTime(toDateTimeInput(endAt));
 
-  return Array.from({ length: count }, () =>
-    buildSlot(scheduleId, start, end, appointmentTypeCode),
-  );
+  return Array.from({ length: count }, () => buildSlot(scheduleId, start, end));
 }
 
 /** 個別追加のフォーム。 */
@@ -461,7 +467,6 @@ export interface SlotAddValues {
   time: string;
   durationMinutes: number;
   count: number;
-  appointmentTypeCode: string;
 }
 
 export function validateSlotAdd(values: SlotAddValues): string | null {

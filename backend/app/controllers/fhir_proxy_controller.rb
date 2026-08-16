@@ -13,12 +13,13 @@ class FhirProxyController < ApplicationController
   # 使用した器材と造影剤)。実施登録は transaction Bundle で行うが、登録後の
   # 読み出しはリソース単位で来るのでここにも要る。
   # Location は診察室・撮影室のマスタで、予約枠(Schedule.actor)の主体になる。
-  # Schedule / Slot は予約枠そのもの(枠表とその中の時間枠)。
+  # Schedule / Slot は予約枠そのもの(枠表とその中の時間枠)、Appointment は
+  # その枠を患者が押さえた予約。
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
     PractitionerRole Composition Task Procedure MedicationAdministration
-    Location Schedule Slot
+    Location Schedule Slot Appointment
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 

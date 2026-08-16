@@ -18,6 +18,7 @@ import {
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
+import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteSidePane } from "../components/KarteSidePane";
 import { VitalFlowsheetPanel } from "../components/VitalFlowsheetPanel";
@@ -536,6 +537,15 @@ export function KartePage() {
     // 経過表は読み取り専用で、詳細を開く導線が無いので view は使わない。
     if (key === "flowsheet") return <VitalFlowsheetPanel patientId={patientId} />;
     if (key === "micro") return <KarteMicroResultTab {...props} />;
+    // 予約の日時変更は枠を選ぶ操作なので、登録と同じ右ペインで開く。
+    if (key === "appointment") {
+      return (
+        <KarteAppointmentTab
+          patientId={patientId}
+          onReschedule={(appointmentId) => setPane({ kind: "appointment-reschedule", appointmentId })}
+        />
+      );
+    }
     return <KarteLabResultTab {...props} />;
   }
 

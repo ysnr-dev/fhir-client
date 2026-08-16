@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
 import { useGenerateSlots, useSlotsInRange } from "../api/queries";
 import {
+  addMonths,
   emptySlotPattern,
   generateSlots,
+  schedulePeriodLabel,
   slotPatternOf,
+  today,
   validateSlotPattern,
   type SlotPattern,
 } from "../fhir/scheduleHelpers";
@@ -30,8 +33,12 @@ export function SlotGenerateModal({ schedule, onClose, onGenerated }: SlotGenera
     from: schedule.planningHorizon?.start?.slice(0, 10) ?? "",
     to: schedule.planningHorizon?.end?.slice(0, 10) ?? "",
   };
+  const unlimited = !horizon.from && !horizon.to;
 
-  const [range, setRange] = useState(horizon);
+  // 無期限の枠表(有効期間なし)には既定にできる期間が無いので、当月ぶんを初期値にする。
+  const [range, setRange] = useState(
+    unlimited ? { from: today(), to: addMonths(today(), 1) } : horizon,
+  );
   const [pattern, setPattern] = useState<SlotPattern>(
     slotPatternOf(schedule) ?? emptySlotPattern,
   );
@@ -96,7 +103,9 @@ export function SlotGenerateModal({ schedule, onClose, onGenerated }: SlotGenera
           </label>
         </div>
         <p className="organization-form__hint">
-          既定はこの枠表の有効期間({horizon.from || "-"} 〜 {horizon.to || "-"})です。
+          {unlimited
+            ? "この枠表は無期限です。生成する期間を指定してください(既定は今日から 1 か月)。"
+            : `既定はこの枠表の有効期間(${schedulePeriodLabel(schedule)})です。`}
         </p>
 
         <SlotPatternFields value={pattern} onChange={setPattern} />

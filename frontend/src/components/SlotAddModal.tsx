@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useGenerateSlots, useSlotsInRange } from "../api/queries";
 import {
-  APPOINTMENT_TYPE_OPTIONS,
   buildSlotsAt,
   emptySlotPattern,
   isWithinHorizon,
@@ -44,7 +43,6 @@ export function SlotAddModal({
     time: defaultTime || pattern.blocks[0]?.start || "09:00",
     durationMinutes: pattern.durationMinutes,
     count: 1,
-    appointmentTypeCode: pattern.appointmentTypeCode,
   });
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -75,7 +73,6 @@ export function SlotAddModal({
       values.time,
       values.durationMinutes,
       values.count,
-      values.appointmentTypeCode,
     );
     addSlots.mutate(slots, { onSuccess: () => onAdded(slots.length) });
   }
@@ -132,19 +129,6 @@ export function SlotAddModal({
               value={values.count}
               onChange={(e) => update("count", Number(e.target.value))}
             />
-          </label>
-          <label>
-            予約種別
-            <select
-              value={values.appointmentTypeCode}
-              onChange={(e) => update("appointmentTypeCode", e.target.value)}
-            >
-              {APPOINTMENT_TYPE_OPTIONS.map((option) => (
-                <option key={option.code} value={option.code}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
           </label>
         </div>
 

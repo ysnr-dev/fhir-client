@@ -1,4 +1,5 @@
 import type { ProblemRef } from "../fhir/conditionHelpers";
+import { AppointmentCreatePanel, AppointmentReschedulePanel } from "./AppointmentPanels";
 import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePanels";
 import { InjectionCreatePanel, InjectionEditPanel } from "./InjectionPanels";
 import { LabOrderCreatePanel, LabOrderEditPanel } from "./LabOrderPanels";
@@ -33,7 +34,11 @@ export type KartePaneState =
   | { kind: "rad-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "rad-order-edit"; srId: string }
   | { kind: "qr-create"; problem?: ProblemRef }
-  | { kind: "qr-edit"; qrId: string };
+  | { kind: "qr-edit"; qrId: string }
+  // 予約は枠を押さえるだけで内容の編集は無く、変えられるのは日時(押さえる枠)だけ。
+  // 日時変更は予約タブの一覧から開く。
+  | { kind: "appointment-create"; problem?: ProblemRef }
+  | { kind: "appointment-reschedule"; appointmentId: string };
 
 const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   empty: "",
@@ -53,6 +58,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "rad-order-edit": "放射線検査編集",
   "qr-create": "テンプレート登録",
   "qr-edit": "テンプレート編集",
+  "appointment-create": "予約登録",
+  "appointment-reschedule": "予約の日時変更",
 };
 
 // 対象が切り替わったらフォームを作り直すためのキー。各フォームは初期値を useState の
@@ -69,6 +76,8 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
+    case "appointment-reschedule":
+      return `${state.kind}:${state.appointmentId}`;
     case "vital-edit":
       return `${state.kind}:${state.entryId}`;
     // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
@@ -82,6 +91,7 @@ function paneKey(state: KartePaneState): string {
     case "note-create":
     case "qr-create":
     case "vital-create":
+    case "appointment-create":
       return `${state.kind}:${state.problem?.conditionId ?? ""}`;
     default:
       return state.kind;
@@ -176,6 +186,12 @@ export function KarteRightPane({
           onClick={() => onStateChange({ kind: "rad-order-create", problem: selectedProblem })}
         >
           放射線検査
+        </button>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "appointment-create", problem: selectedProblem })}
+        >
+          予約
         </button>
       </div>
     </section>
@@ -276,6 +292,18 @@ function PaneContent({
     case "qr-edit":
       return (
         <QuestionnaireResponseEditPanel patientId={patientId} qrId={state.qrId} onSaved={onSaved} />
+      );
+    case "appointment-create":
+      return (
+        <AppointmentCreatePanel
+          patientId={patientId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "appointment-reschedule":
+      return (
+        <AppointmentReschedulePanel appointmentId={state.appointmentId} onSaved={onSaved} />
       );
     case "empty":
       return null;

@@ -122,9 +122,6 @@ export function ScheduleForm({
           ))}
         </select>
       </label>
-      <p className="organization-form__hint">
-        担当医と診察室のどちらか一方は必須です(FHIR の Schedule.actor は 1 件以上)。
-      </p>
 
       <label>
         診療科
@@ -138,6 +135,7 @@ export function ScheduleForm({
         </select>
       </label>
 
+      {/* 未入力なら無期限の枠表になる。 */}
       <div className="schedule-form__period">
         <label>
           有効期間(開始)
@@ -145,7 +143,6 @@ export function ScheduleForm({
             type="date"
             value={values.horizonStart}
             onChange={(e) => update("horizonStart", e.target.value)}
-            required
           />
         </label>
         <label>
@@ -154,7 +151,6 @@ export function ScheduleForm({
             type="date"
             value={values.horizonEnd}
             onChange={(e) => update("horizonEnd", e.target.value)}
-            required
           />
         </label>
       </div>
@@ -168,11 +164,9 @@ export function ScheduleForm({
         有効(active)
       </label>
 
+      {/* ここで決めた条件は枠表に保存され、カレンダーの「枠を一括生成」の初期値になる。 */}
       <fieldset className="schedule-form__pattern">
         <legend>枠のパターン</legend>
-        <p className="organization-form__hint">
-          ここで決めた条件は枠表に保存され、カレンダーの「枠を一括生成」の初期値になります。
-        </p>
         <SlotPatternFields value={values.pattern} onChange={(pattern) => update("pattern", pattern)} />
       </fieldset>
 
