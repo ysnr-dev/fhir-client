@@ -7138,6 +7138,12 @@ body.page-wide #root {
   color: var(--text);
 }
 
+/* オーダーごと外すゴミ箱。帯の右端に寄せ、帯の上端に揃える。 */
+.rad-order-frame__head > .rad-order-frame__remove {
+  margin-left: auto;
+  align-self: flex-start;
+}
+
 .rad-order-frame__booking {
   display: inline-flex;
   align-items: center;

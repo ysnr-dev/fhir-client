@@ -320,21 +320,30 @@ export function RadOrderForm({
     });
   }
 
-  function remove(code: string) {
+  // 撮影項目を外す。セットを外すと構成項目も一緒に外れる。
+  // オーダー枠ごと外すときは、その枠の GP をまとめて渡す。
+  function removeCodes(codes: string[]) {
+    const targets = new Set(codes);
     setValues((current) => {
-      expandedSets.current.delete(code);
+      for (const code of codes) expandedSets.current.delete(code);
       return {
         ...current,
-        items: current.items.filter((line) => line.code !== code && line.parentCode !== code),
+        items: current.items.filter(
+          (line) => !targets.has(line.code) && !targets.has(line.parentCode),
+        ),
       };
     });
     // 外した項目の予約(未登録の選択)も一緒に捨てる。
     setBookings((current) => {
-      if (!current[code]) return current;
+      if (!codes.some((code) => current[code])) return current;
       const next = { ...current };
-      delete next[code];
+      for (const code of codes) delete next[code];
       return next;
     });
+  }
+
+  function remove(code: string) {
+    removeCodes([code]);
   }
 
   // 単独オーダーかどうかは登録時点のマスタで決める(保存済みのオーダーを開いた
@@ -676,6 +685,7 @@ export function RadOrderForm({
               number={groupedEntries.length > 0 && soloEntries.length > 0 ? 1 : undefined}
               priority={values.priority}
               onChangePriority={(priority) => update("priority", priority)}
+              onRemove={() => removeCodes(groupedEntries.map((entry) => entry.item.code))}
               perform={
                 editing
                   ? null
@@ -731,6 +741,7 @@ export function RadOrderForm({
                 }
                 priority={entry.item.priority}
                 onChangePriority={(priority) => updateItem(code, { priority })}
+                onRemove={() => remove(code)}
                 perform={
                   editing
                     ? null
@@ -912,6 +923,7 @@ function OrderFrame({
   onChangePriority,
   schedule,
   perform,
+  onRemove,
   children,
 }: {
   /** オーダーが複数に分かれるときだけ振る通し番号。1 件なら付けない。 */
@@ -921,6 +933,8 @@ function OrderFrame({
   /** 撮影日時の入力、または予約の操作。 */
   schedule: ReactNode;
   perform: FramePerform | null;
+  /** このオーダー(枠内の撮影項目すべて)を選択から外す。 */
+  onRemove: () => void;
   children: ReactNode;
 }) {
   const split = perform?.split ?? null;
@@ -945,6 +959,16 @@ function OrderFrame({
           </select>
         </label>
         {schedule}
+        {/* このオーダーを丸ごと外す。GP 単位で外すときは GP の × を使う。 */}
+        <button
+          type="button"
+          className="rp-card__icon-button rad-order-frame__remove"
+          title="このオーダーを削除"
+          aria-label="このオーダーを削除"
+          onClick={onRemove}
+        >
+          <TrashIcon />
+        </button>
       </div>
 
       <div className="rad-order-frame__body">{children}</div>
