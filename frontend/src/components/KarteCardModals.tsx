@@ -4,6 +4,7 @@ import {
   useMicroOrderDetail,
   useMicroResultDetail,
   useRadOrderDetail,
+  useRadPerformDetail,
   useLabResultDetail,
   usePrescriptionDetail,
   useQuestionnaireResponseWithQuestionnaire,
@@ -439,14 +440,35 @@ function MicroOrderJson({ srId }: { srId: string }) {
   );
 }
 
-// 放射線検査もオーダーのヘッダと明細をまとめた Bundle で見せる。
+// 放射線検査もオーダーのヘッダと明細をまとめた Bundle で見せる。実施入力があるときは、
+// 実施記録(Procedure 一式)がオーダーとは別リソースなので、別の見出しで続けて出す
+// (1 つの Bundle に混ぜると、依頼した内容と実際に行ったことの境目が読めなくなる)。
 function RadOrderJson({ srId }: { srId: string }) {
   const detail = useRadOrderDetail(srId);
+  const perform = useRadPerformDetail(srId);
+  const performBundle = perform.data?.data;
+  const hasPerform = (performBundle?.entry?.length ?? 0) > 0;
 
   return (
     <>
       <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
+      <ErrorBanner error={perform.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : hasPerform ? (
+        <>
+          <section className="karte-json__section">
+            <h3 className="karte-json__section-title">オーダー</h3>
+            <FhirJsonView resource={detail.data?.data} />
+          </section>
+          <section className="karte-json__section">
+            <h3 className="karte-json__section-title">実施記録</h3>
+            <FhirJsonView resource={performBundle} />
+          </section>
+        </>
+      ) : (
+        <FhirJsonView resource={detail.data?.data} />
+      )}
     </>
   );
 }

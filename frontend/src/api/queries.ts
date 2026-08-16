@@ -680,6 +680,17 @@ export function useRadOrderDetail(srId: string | undefined) {
   });
 }
 
+// 放射線検査の実施記録(Procedure 一式)。オーダーとは別リソースで、オーダーの検索から
+// 辿れないので別に引く。カルテカードの FHIR JSON 表示で使う。
+export function useRadPerformDetail(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ["Procedure", "search", "rad-perform", orderId],
+    queryFn: () =>
+      searchResource<fhir4.Resource>("Procedure", radPerformSearchParams(orderId ?? "")),
+    enabled: Boolean(orderId),
+  });
+}
+
 // ---- 放射線検査一覧(部門ワークリスト) ----
 //
 // 撮影日で 1 日ぶんの放射線検査オーダーを読み、モダリティ・入外区分・診療科・
@@ -798,14 +809,20 @@ const RAD_WORKLIST_KEY = (date: string) => ["ServiceRequest", "rad-worklist", da
  * 一覧が持っている行の情報からではなく、その場で引き直す。取消は稀な操作で、
  * 一覧を開いた後に別の端末で登録された実施記録も残さず消したいため。
  */
-async function fetchRadPerformResources(orderId: string) {
+function radPerformSearchParams(orderId: string): URLSearchParams {
   const params = new URLSearchParams();
   params.set("based-on", `ServiceRequest/${orderId}`);
   params.set("_count", "100");
   params.append("_revinclude", "MedicationAdministration:part-of");
   params.append("_revinclude", "Observation:part-of");
+  return params;
+}
 
-  const { data: bundle } = await searchResource<fhir4.Resource>("Procedure", params);
+async function fetchRadPerformResources(orderId: string) {
+  const { data: bundle } = await searchResource<fhir4.Resource>(
+    "Procedure",
+    radPerformSearchParams(orderId),
+  );
 
   const procedures: fhir4.Procedure[] = [];
   const administrations: fhir4.MedicationAdministration[] = [];
@@ -873,6 +890,8 @@ export function useUpdateRadTaskStatus() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rad-worklist"] });
       // カルテのオーダーカードも進捗と実施情報を出しているので読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      // 取消では実施記録も消しているので、FHIR JSON 表示の実施記録も引き直させる。
+      queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
     },
   });
 }
@@ -889,6 +908,7 @@ export function useRegisterRadPerform() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rad-worklist"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
     },
   });
 }
