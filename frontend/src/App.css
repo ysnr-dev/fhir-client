@@ -6213,6 +6213,51 @@ body.page-wide #root {
   padding: 4px;
 }
 
+/* 即実施。オーダー画面の「選択中」の下に置く、登録と同時の実施入力。
+   撮影項目の確認とは別の操作なので、区切り線で分ける。 */
+.rad-perform-now {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* flex-direction は .prescription-form label の縦並びを打ち消すために要る
+   (チェックボックスを項目名の左に置く)。 */
+.prescription-form .rad-perform-now__toggle {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* 登録されるオーダーごとの実施入力。オーダーが 1 件なら 1 行だけになる。 */
+.rad-perform-now__orders {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.rad-perform-now__orders > li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+/* どのオーダーぶんの実施入力か。行が複数並ぶときだけ出る。 */
+.rad-perform-now__order {
+  flex: 1 1 140px;
+}
+
+.rad-perform-now__summary {
+  font-size: 12px;
+  color: var(--text);
+}
+
 /* 何を撮った分の実施入力かの確認。取り違えを防ぐため、説明文ではなく
    入力欄と同じ大きさで、区切り線を引いて目に留まるようにする。 */
 .rad-perform__items {

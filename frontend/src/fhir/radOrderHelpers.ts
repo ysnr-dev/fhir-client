@@ -591,41 +591,66 @@ function buildRadOrderServiceRequest(
   return resource;
 }
 
+/** オーダー 1 件ぶんの Bundle エントリと、そのヘッダ。 */
+export interface RadOrderEntries {
+  /** ヘッダの ServiceRequest。即実施の Task を組み立てる元になる。 */
+  header: fhir4.ServiceRequest;
+  /** ヘッダを指す参照。新規登録では urn:uuid、更新では ServiceRequest/{id}。 */
+  headerReference: string;
+  entries: fhir4.BundleEntry[];
+}
+
 // オーダー 1 件(ヘッダ 1 + 明細 N)の Bundle エントリ。新規登録ではヘッダを
 // urn:uuid で参照するので、明細の basedOn はサーバー側で採番後の id に解決される。
-function buildRadOrderEntries(
+export function buildRadOrderEntries(
   values: RadOrderFormValues,
   patientId: string,
   requester: OrderContext,
   serviceRequestId?: string,
   originalItemIds: string[] = [],
   originalResponseIds: string[] = [],
-): fhir4.BundleEntry[] {
+): RadOrderEntries {
   const headerReference = serviceRequestId
     ? `ServiceRequest/${serviceRequestId}`
     : `urn:uuid:${crypto.randomUUID()}`;
+  const header = buildRadOrderServiceRequest(values, patientId, requester, serviceRequestId);
 
-  return [
-    {
-      fullUrl: headerReference,
-      resource: buildRadOrderServiceRequest(values, patientId, requester, serviceRequestId),
-      request: serviceRequestId
-        ? { method: "PUT", url: `ServiceRequest/${serviceRequestId}` }
-        : { method: "POST", url: "ServiceRequest" },
-    },
-    ...buildItemEntries(
-      values.items,
-      patientId,
-      values.authoredDate,
-      headerReference,
-      originalItemIds,
-      originalResponseIds,
-    ),
-  ];
+  return {
+    header,
+    headerReference,
+    entries: [
+      {
+        fullUrl: headerReference,
+        resource: header,
+        request: serviceRequestId
+          ? { method: "PUT", url: `ServiceRequest/${serviceRequestId}` }
+          : { method: "POST", url: "ServiceRequest" },
+      },
+      ...buildItemEntries(
+        values.items,
+        patientId,
+        values.authoredDate,
+        headerReference,
+        originalItemIds,
+        originalResponseIds,
+      ),
+    ],
+  };
 }
 
 function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
   return { resourceType: "Bundle", type: "transaction", entry };
+}
+
+/** 登録する 1 オーダーぶんの入力。 */
+export interface RadOrderSplit {
+  /**
+   * オーダーの識別子。まとめて登録するオーダーは空文字、単独オーダーはその項目コード
+   * (単独の項目は 1 件で 1 オーダーになるので、項目コードがそのままオーダーを指す)。
+   * 即実施の実施入力をオーダーごとに持たせるための添字に使う。
+   */
+  key: string;
+  values: RadOrderFormValues;
 }
 
 /**
@@ -638,22 +663,22 @@ function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
  * 入外区分・至急区分・撮影日時・依頼コメント・対象プロブレムは伝票共通の入力なので
  * 各オーダーへ写す。並びは、まとめられる項目のオーダーを先頭に、単独の項目を選んだ順。
  */
-export function splitRadOrderValues(values: RadOrderFormValues): RadOrderFormValues[] {
+export function splitRadOrderValues(values: RadOrderFormValues): RadOrderSplit[] {
   const groupedLines: RadOrderItemLine[] = [];
-  const soloOrders: RadOrderItemLine[][] = [];
+  const soloOrders: RadOrderSplit[] = [];
 
   for (const item of topLevelItems(values.items)) {
     // セットは構成項目と一緒でなければ意味がないので、必ず同じオーダーに入れる。
     const lines = [item, ...membersOf(values.items, item.code)];
     if (item.groupable) groupedLines.push(...lines);
-    else soloOrders.push(lines);
+    else soloOrders.push({ key: item.code, values: { ...values, items: lines } });
   }
 
-  const orders = groupedLines.length > 0 ? [groupedLines, ...soloOrders] : soloOrders;
+  if (groupedLines.length > 0) {
+    return [{ key: "", values: { ...values, items: groupedLines } }, ...soloOrders];
+  }
   // 撮影項目が 1 つも無い場合も呼び出し側の検証に任せ、空のオーダーを 1 件返す。
-  if (orders.length === 0) orders.push([]);
-
-  return orders.map((items) => ({ ...values, items }));
+  return soloOrders.length > 0 ? soloOrders : [{ key: "", values: { ...values, items: [] } }];
 }
 
 // 新規登録。単独オーダーの項目があれば複数のオーダーになるが、まとめて登録するので
@@ -664,8 +689,8 @@ export function buildRadOrderBundle(
   requester: OrderContext,
 ): fhir4.Bundle {
   return transactionBundle(
-    splitRadOrderValues(values).flatMap((order) =>
-      buildRadOrderEntries(order, patientId, requester),
+    splitRadOrderValues(values).flatMap(
+      (order) => buildRadOrderEntries(order.values, patientId, requester).entries,
     ),
   );
 }
@@ -688,7 +713,7 @@ export function buildRadOrderUpdateBundle(
       serviceRequestId,
       originalItemIds,
       originalResponseIds,
-    ),
+    ).entries,
   );
 }
 

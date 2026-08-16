@@ -122,6 +122,9 @@ export function buildRadTaskUpdate(
   task: fhir4.Task | undefined,
   order: fhir4.ServiceRequest,
   status: RadTaskStatus,
+  // オーダーを指す参照。即実施(オーダー登録と同時に実施済にする)では、ヘッダが
+  // まだ採番されていないので同じ Bundle 内の fullUrl(urn:uuid)を渡す。
+  orderReference: string = `ServiceRequest/${order.id}`,
 ): fhir4.Task {
   // toFhirDateTime は「その場の時刻 + 実行環境のオフセット」を組み立てるので、
   // UTC 文字列ではなくローカル時刻の入力形式を渡す。
@@ -138,7 +141,7 @@ export function buildRadTaskUpdate(
       coding: [{ system: TASK_CODE_SYSTEM, ...RAD_TASK_CODE }],
       text: RAD_TASK_CODE.display,
     },
-    focus: { reference: `ServiceRequest/${order.id}` },
+    focus: { reference: orderReference },
     // Task.for が無いと患者コンパートメントに入らず、患者単位の読み出しから
     // 見えなくなる(上流の TaskValidator も警告する)。
     ...(patientReference ? { for: { reference: patientReference } } : {}),

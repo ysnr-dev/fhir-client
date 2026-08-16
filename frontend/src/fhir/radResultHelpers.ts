@@ -1,7 +1,13 @@
+import type { OrderContext } from "../orderContext";
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import { ROUTE_SYSTEM, type CodeOption } from "./injectionHelpers";
 import { MEDICINE_CODE_SYSTEM, ORDER_TYPE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
-import { RAD_ORDER_TYPE } from "./radOrderHelpers";
+import {
+  RAD_ORDER_TYPE,
+  buildRadOrderEntries,
+  splitRadOrderValues,
+  type RadOrderFormValues,
+} from "./radOrderHelpers";
 import { buildRadTaskUpdate } from "./radTaskHelpers";
 
 // 放射線検査の実施記録。設計は docs/rad-result-design.md を参照。
@@ -170,7 +176,8 @@ function usedCodeOf(line: RadMaterialLine): fhir4.CodeableConcept {
 function baseProcedure(
   values: RadPerformFormValues,
   subject: fhir4.Reference,
-  orderId: string,
+  // オーダー(ヘッダ)を指す参照。即実施では同じ Bundle 内の fullUrl(urn:uuid)。
+  orderReference: string,
   performedDateTime: string,
 ): fhir4.Procedure {
   const procedure: fhir4.Procedure = {
@@ -180,7 +187,7 @@ function baseProcedure(
     // 処方・検体検査の Procedure と振り分けるための区分。
     category: { coding: [{ system: ORDER_TYPE_SYSTEM, ...RAD_ORDER_TYPE }] },
     subject,
-    basedOn: [{ reference: `ServiceRequest/${orderId}` }],
+    basedOn: [{ reference: orderReference }],
     performedDateTime,
   };
 
@@ -264,25 +271,22 @@ function buildDoseObservation(
 }
 
 /**
- * 実施登録の transaction Bundle。実施記録一式と Task の完了を 1 つにまとめ、
- * 実施情報だけ保存されて進捗が止まる状態を作らない。
+ * 実施記録一式(ハブの Procedure・2 件目以降の手技・造影剤・被曝線量)の POST エントリ。
  *
  * 手技が複数あるときは、1件目を Procedure.code に置き、2件目以降を partOf で
  * ぶら下げる。Procedure.code は 0..1 で複数手技を1リソースには載せられず、
  * 異なる手技を1つの CodeableConcept の複数 coding に混ぜるのは(coding は同一概念の
  * 別表現を並べるもの)意味が違うため。
  */
-export function buildRadPerformBundle(
+function performEntries(
   values: RadPerformFormValues,
-  order: fhir4.ServiceRequest,
-  task: fhir4.Task | undefined,
-): fhir4.Bundle {
-  const orderId = order.id ?? "";
-  const subject = order.subject ?? {};
+  subject: fhir4.Reference,
+  orderReference: string,
+): fhir4.BundleEntry[] {
   const performedDateTime = toFhirDateTime(values.performedAt);
   const hubReference = `urn:uuid:${crypto.randomUUID()}`;
 
-  const hub = baseProcedure(values, subject, orderId, performedDateTime);
+  const hub = baseProcedure(values, subject, orderReference, performedDateTime);
   if (values.procedures[0]) hub.code = procedureCode(values.procedures[0]);
   if (values.materials.length > 0) hub.usedCode = values.materials.map(usedCodeOf);
   if (values.comment.trim()) hub.note = [{ text: values.comment.trim() }];
@@ -293,7 +297,7 @@ export function buildRadPerformBundle(
 
   // 2件目以降の手技。オーダーからも引けるよう basedOn も張る。
   for (const line of values.procedures.slice(1)) {
-    const child = baseProcedure(values, subject, orderId, performedDateTime);
+    const child = baseProcedure(values, subject, orderReference, performedDateTime);
     child.code = procedureCode(line);
     child.partOf = [{ reference: hubReference }];
     entries.push({
@@ -327,16 +331,101 @@ export function buildRadPerformBundle(
     });
   }
 
+  return entries;
+}
+
+/**
+ * 実施登録の transaction Bundle。実施記録一式と Task の完了を 1 つにまとめ、
+ * 実施情報だけ保存されて進捗が止まる状態を作らない。
+ */
+export function buildRadPerformBundle(
+  values: RadPerformFormValues,
+  order: fhir4.ServiceRequest,
+  task: fhir4.Task | undefined,
+): fhir4.Bundle {
+  const entries = performEntries(values, order.subject ?? {}, `ServiceRequest/${order.id ?? ""}`);
+
   // 進捗の完了。Task はステータスを最初に変えたときに作られるので、まだ無ければ作る。
-  const nextTask = buildRadTaskUpdate(task, order, "completed");
   entries.push({
-    resource: nextTask,
+    resource: buildRadTaskUpdate(task, order, "completed"),
     request: task?.id
       ? { method: "PUT", url: `Task/${task.id}` }
       : { method: "POST", url: "Task" },
   });
 
   return { resourceType: "Bundle", type: "transaction", entry: entries };
+}
+
+// ---- 即実施(オーダー登録と同時の実施) ----
+//
+// 診察室でその場で撮る運用のために、オーダー画面から実施まで一度に登録する。
+// 作るリソースは放射線検査一覧の「実施」と同じ(実施記録一式 + 実施済の Task)で、
+// 違うのは参照先のオーダーがまだ採番されていない点だけ。同じ Bundle 内の
+// fullUrl(urn:uuid)を指しておけば、上流が transaction 内で実 id に解決する。
+
+/**
+ * 即実施の実施入力。キーは `splitRadOrderValues` のキー(どのオーダーぶんか)。
+ * 値が null のオーダーは実施記録を作らず Task の完了だけにする(撮影項目マスタで
+ * 実施入力をしないことにしてある項目。放射線検査一覧の「実施」と同じ扱い)。
+ */
+export type RadImmediatePerforms = Map<string, RadPerformFormValues | null>;
+
+function immediatePerformEntries(
+  values: RadPerformFormValues | null,
+  header: fhir4.ServiceRequest,
+  headerReference: string,
+): fhir4.BundleEntry[] {
+  const entries = values ? performEntries(values, header.subject ?? {}, headerReference) : [];
+  entries.push({
+    resource: buildRadTaskUpdate(undefined, header, "completed", headerReference),
+    request: { method: "POST", url: "Task" },
+  });
+  return entries;
+}
+
+/**
+ * 即実施でのオーダー登録。オーダー(ヘッダ + 明細)・実施記録・実施済の Task を
+ * 1 つの transaction にまとめ、オーダーだけ登録されて実施が落ちる状態を作らない。
+ *
+ * 単独オーダーの項目を混ぜて選んだ場合はオーダーが分かれるので、実施記録も
+ * オーダーごとに作る(造影剤・器材・手技料が複数のオーダーに二重に載らないように)。
+ */
+export function buildRadOrderWithPerformBundle(
+  values: RadOrderFormValues,
+  patientId: string,
+  requester: OrderContext,
+  performs: RadImmediatePerforms,
+): fhir4.Bundle {
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: splitRadOrderValues(values).flatMap((split) => {
+      const { header, headerReference, entries } = buildRadOrderEntries(
+        split.values,
+        patientId,
+        requester,
+      );
+      return [
+        ...entries,
+        ...immediatePerformEntries(performs.get(split.key) ?? null, header, headerReference),
+      ];
+    }),
+  };
+}
+
+/** 実施入力の要約。オーダー画面の「選択中」に、入れた内容の確認として出す。 */
+export function radPerformSummary(values: RadPerformFormValues): string {
+  const doses = Object.values(values.doses).filter(Boolean).length;
+  return [
+    values.performedAt.replace("T", " "),
+    values.procedures.length > 0 ? `手技 ${values.procedures.length}` : "",
+    values.contrasts.length > 0 ? `造影剤 ${values.contrasts.length}` : "",
+    values.materials.length > 0 ? `器材 ${values.materials.length}` : "",
+    doses > 0 ? `線量 ${doses}` : "",
+    values.comment.trim() ? "コメントあり" : "",
+  ]
+    .filter(Boolean)
+    .join(" / ");
 }
 
 /**

@@ -29,17 +29,24 @@ import {
   emptyRadOrderForm,
   entryModalityName,
   orderEntries,
+  splitRadOrderValues,
   topLevelItems,
   type RadOrderEntry,
   type RadOrderFormValues,
   type RadOrderItemLine,
   type RadOrderPriority,
 } from "../fhir/radOrderHelpers";
+import {
+  radPerformSummary,
+  type RadImmediatePerforms,
+  type RadPerformFormValues,
+} from "../fhir/radResultHelpers";
 import { useConditionOptions } from "../hooks/useConditionOptions";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
+import { RadPerformInputModal } from "./RadPerformModal";
 import { TemplateSchemaImages } from "./SchemaImageGallery";
 
 // 放射線検査オーダーの入力フォーム。撮影伝票(放射線オーダーレイアウト)のタブと
@@ -55,11 +62,19 @@ import { TemplateSchemaImages } from "./SchemaImageGallery";
 //
 // 選んだ項目は、オーダー時点のマスタの内容(名称・JJ1017 コード・種別・部位・左右)を
 // 写して持つ。マスタを直しても過去のオーダーの中身が変わらないようにするため。
+//
+// 「即実施」を選ぶと、診察室でその場で撮る運用のために、登録と同時に実施記録を作って
+// Task を実施済にする。実施入力は放射線検査一覧と同じモーダルで、登録されるオーダー
+// 単位に入れる(単独オーダーの項目を混ぜて選ぶとオーダーが分かれるため)。
 
 interface RadOrderFormProps {
   patientId: string;
   initialValues?: RadOrderFormValues;
-  onSubmit: (values: RadOrderFormValues) => void;
+  /**
+   * performs は即実施の実施入力(オーダーごと)。即実施でない場合は null。
+   * 編集では即実施を出さないので常に null。
+   */
+  onSubmit: (values: RadOrderFormValues, performs: RadImmediatePerforms | null) => void;
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
@@ -105,6 +120,11 @@ export function RadOrderForm({
   const [active, setActive] = useState<ActiveTab | null>(null);
   const [searchCodes, setSearchCodes] = useState<string[]>([]);
   const [templateTarget, setTemplateTarget] = useState<TemplateTarget | null>(null);
+  // 即実施。実施入力は登録されるオーダー単位に持つ(添字は splitRadOrderValues のキー)。
+  const [performNow, setPerformNow] = useState(false);
+  const [performs, setPerforms] = useState<Record<string, RadPerformFormValues>>({});
+  // 実施入力を開いているオーダー。まとめオーダーのキーは空文字なので null と区別する。
+  const [performTarget, setPerformTarget] = useState<string | null>(null);
   // 構成項目を入れ終えたセット。保存済みオーダーを開いたときは、登録時に外した
   // 構成項目が復活しないよう、最初から入っているセットを入れ終わり扱いにする。
   const expandedSets = useRef<Set<string>>(
@@ -279,6 +299,37 @@ export function RadOrderForm({
     });
   }
 
+  // 単独オーダーかどうかは登録時点のマスタで決める(保存済みのオーダーを開いた
+  // ときは明細から復元できないため)。マスタから消えた項目は今の値のままにする。
+  const refreshedItems = useMemo(
+    () =>
+      values.items.map((line) =>
+        line.parentCode
+          ? line
+          : { ...line, groupable: catalogByCode.get(line.code)?.groupable ?? line.groupable },
+      ),
+    [values.items, catalogByCode],
+  );
+  // 登録すると分かれるオーダーの単位。即実施の実施入力もこの単位で入れる。
+  const splits = useMemo(
+    () => splitRadOrderValues({ ...values, items: refreshedItems }),
+    [values, refreshedItems],
+  );
+
+  // 実施入力を開く項目が 1 つでもあるか(放射線検査一覧の「実施」と同じ判定)。
+  // セットは撮影そのものではなく依頼の束ね方なので、構成項目だけで判定する。
+  const needsPerformInput = useCallback(
+    (items: RadOrderItemLine[]): boolean => {
+      const codes = items
+        .map((item) => item.code)
+        .filter((code) => catalogByCode.get(code)?.kind !== "set");
+      if (codes.length === 0) return true;
+
+      return codes.some((code) => catalogByCode.get(code)?.requires_perform_input ?? true);
+    },
+    [catalogByCode],
+  );
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (values.items.length === 0) {
@@ -290,14 +341,7 @@ export function RadOrderForm({
       return;
     }
 
-    // 単独オーダーかどうかは登録時点のマスタで決める(保存済みのオーダーを開いた
-    // ときは明細から復元できないため)。マスタから消えた項目は今の値のままにする。
-    const items = values.items.map((line) =>
-      line.parentCode
-        ? line
-        : { ...line, groupable: catalogByCode.get(line.code)?.groupable ?? line.groupable },
-    );
-
+    const items = refreshedItems;
     const groups = topLevelItems(items);
     const solo = groups.find((line) => !line.groupable);
     if (editing && solo && groups.length > 1) {
@@ -307,8 +351,28 @@ export function RadOrderForm({
       return;
     }
 
+    // 即実施は実施記録まで作る操作なので、入れずに登録できてしまわないようにする
+    // (実施入力をしない項目だけのオーダーは、実施記録を作らないので対象外)。
+    if (
+      performNow &&
+      splits.some((split) => needsPerformInput(split.values.items) && !performs[split.key])
+    ) {
+      setValidationError("即実施にする検査の実施入力を行ってください。");
+      return;
+    }
+
     setValidationError(null);
-    onSubmit({ ...values, items, problem: refreshProblemDisplay(values.problem, problemOptions) });
+    onSubmit(
+      { ...values, items, problem: refreshProblemDisplay(values.problem, problemOptions) },
+      performNow
+        ? new Map(
+            splits.map((split) => [
+              split.key,
+              needsPerformInput(split.values.items) ? (performs[split.key] ?? null) : null,
+            ]),
+          )
+        : null,
+    );
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLFormElement>) {
@@ -323,9 +387,11 @@ export function RadOrderForm({
   // 復元できないので、選択中の一覧も登録時と同じくマスタの今の値で見せる。
   const isSolo = (entry: RadOrderEntry) =>
     !(catalogByCode.get(entry.item.code)?.groupable ?? entry.item.groupable);
-  const soloCount = entries.filter(isSolo).length;
   // 単独の項目はそれぞれ 1 オーダー。残りはまとめて 1 オーダー。
-  const orderCount = soloCount + (entries.length > soloCount ? 1 : 0);
+  const orderCount = entries.length === 0 ? 0 : splits.length;
+  // 実施入力を開いているオーダー。
+  const performSplit =
+    performTarget === null ? undefined : splits.find((split) => split.key === performTarget);
   // テンプレートの既定は撮影項目マスタが持つ。記入内容は診療記録(SOAP)と同じく
   // QuestionnaireResponse として保存し、後からテンプレート画面で開き直せる。
   const templateMaster = templateTarget ? catalogByCode.get(templateTarget.code) : undefined;
@@ -518,6 +584,55 @@ export function RadOrderForm({
               onOpenTemplate={setTemplateTarget}
             />
           ))}
+
+          {/* 即実施。更新は既に登録済みのオーダーへの書き戻しで、進捗は放射線検査
+              一覧が持つので出さない(実施の取消も一覧から行う)。 */}
+          {!editing && entries.length > 0 && (
+            <div className="rad-perform-now">
+              <label className="rad-perform-now__toggle">
+                <input
+                  type="checkbox"
+                  checked={performNow}
+                  onChange={(e) => setPerformNow(e.target.checked)}
+                />
+                即実施(登録と同時に実施済にする)
+              </label>
+              {performNow && (
+                <ul className="rad-perform-now__orders">
+                  {splits.map((split) => (
+                    <li key={split.key}>
+                      {/* オーダーが分かれるときは、どのオーダーぶんの実施入力かを添える。 */}
+                      {splits.length > 1 && (
+                        <span className="rad-perform-now__order">
+                          {topLevelItems(split.values.items)
+                            .map((item) => item.name)
+                            .join("、")}
+                        </span>
+                      )}
+                      {needsPerformInput(split.values.items) ? (
+                        <>
+                          <button type="button" onClick={() => setPerformTarget(split.key)}>
+                            実施入力
+                          </button>
+                          {performs[split.key] ? (
+                            <span className="rad-perform-now__summary">
+                              {radPerformSummary(performs[split.key])}
+                            </span>
+                          ) : (
+                            <span className="order-select__muted">未入力</span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="order-select__muted">
+                          実施入力のない検査です(実施済にします)
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </section>
 
         <div className="prescription-form__submit">
@@ -551,6 +666,20 @@ export function RadOrderForm({
             setTemplateTarget(null);
           }}
           onClose={() => setTemplateTarget(null)}
+        />
+      )}
+
+      {/* 実施入力も独自の <form> を持つので、テンプレートと同じく外側フォームの外に置く。 */}
+      {performSplit && (
+        <RadPerformInputModal
+          items={performSplit.values.items}
+          initialValues={performs[performSplit.key] ?? null}
+          submitLabel="実施内容を確定"
+          onSubmit={(performValues) => {
+            setPerforms((current) => ({ ...current, [performSplit.key]: performValues }));
+            setPerformTarget(null);
+          }}
+          onClose={() => setPerformTarget(null)}
         />
       )}
     </>

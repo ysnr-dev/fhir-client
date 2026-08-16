@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCreatePrescription, useUpdatePrescription } from "../api/queries";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { prescriptionRequester } from "../fhir/prescriptionHelpers";
@@ -9,6 +10,10 @@ import {
   emptyRadOrderForm,
   type RadOrderFormValues,
 } from "../fhir/radOrderHelpers";
+import {
+  buildRadOrderWithPerformBundle,
+  type RadImmediatePerforms,
+} from "../fhir/radResultHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useRadOrderInitialValues } from "../hooks/useRadOrderInitialValues";
 import { ErrorBanner } from "./ErrorBanner";
@@ -36,6 +41,7 @@ export function RadOrderCreatePanel({
   const source = useRadOrderInitialValues(sourceSrId, patientId);
   // DO も新しいオーダーなので、依頼元は DO 元ではなくヘッダーで選択中のものを使う。
   const requester = useOrderContext();
+  const queryClient = useQueryClient();
 
   const initialValues = useMemo(
     () =>
@@ -45,9 +51,20 @@ export function RadOrderCreatePanel({
     [source.initialValues, defaultProblem],
   );
 
-  function handleSubmit(values: RadOrderFormValues) {
-    createRadOrder.mutate(buildRadOrderBundle(values, patientId, requester), {
-      onSuccess: onSaved,
+  function handleSubmit(values: RadOrderFormValues, performs: RadImmediatePerforms | null) {
+    const bundle = performs
+      ? buildRadOrderWithPerformBundle(values, patientId, requester, performs)
+      : buildRadOrderBundle(values, patientId, requester);
+
+    createRadOrder.mutate(bundle, {
+      onSuccess: () => {
+        // 即実施では実施済の Task まで作るので、放射線検査一覧の当日ぶんも読み直す
+        // (オーダーの無効化キーは検索(ServiceRequest search)だけを見ている)。
+        if (performs) {
+          queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rad-worklist"] });
+        }
+        onSaved();
+      },
     });
   }
 

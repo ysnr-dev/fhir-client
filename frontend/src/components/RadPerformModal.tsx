@@ -5,7 +5,7 @@ import { useCurrentPractitioner } from "../api/authQueries";
 import { useRegisterRadPerform, type RadWorklistRow } from "../api/queries";
 import { toDateTimeInput } from "../fhir/clinicalNoteHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
-import { radOrderItems } from "../fhir/radOrderHelpers";
+import { radOrderItems, type RadOrderItemLine } from "../fhir/radOrderHelpers";
 import {
   RAD_ROUTE_OPTIONS,
   buildRadPerformBundle,
@@ -22,8 +22,13 @@ import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
 import { RadMaterialSearchModal } from "./RadMaterialSearchModal";
 
-// 放射線検査の実施入力。一覧の「実施」から開き、登録すると実施記録(Procedure 一式)と
-// Task の完了が 1 つの transaction で走る。設計は docs/rad-result-design.md を参照。
+// 放射線検査の実施入力。設計は docs/rad-result-design.md を参照。
+//
+// 入力欄そのものは RadPerformInputModal(送信先を持たない)で、使い道は 2 つ:
+// - 放射線検査一覧の「実施」… RadPerformModal が包み、実施記録(Procedure 一式)と
+//   Task の完了を 1 つの transaction で登録する。
+// - オーダー画面の「即実施」… 入力値だけを受け取り、オーダーの登録と同じ
+//   transaction に積む(RadOrderForm)。
 //
 // 初期表示は、オーダーに載っている撮影項目に紐付く実施入力データセットの明細を
 // マージしたもの。造影剤も器材も無い単純撮影が件数の大半なので、何も足さずに
@@ -66,14 +71,55 @@ interface Props {
   onClose: () => void;
 }
 
+/** 放射線検査一覧の「実施」。入力した内容をその場で登録する。 */
 export function RadPerformModal({ row, onClose }: Props) {
-  const { practitionerId, practitioner } = useCurrentPractitioner();
   const register = useRegisterRadPerform();
 
   const items = useMemo(
     () => radOrderItems(row.order, row.itemRequests),
     [row.order, row.itemRequests],
   );
+
+  return (
+    <RadPerformInputModal
+      items={items}
+      submitLabel="実施を登録"
+      submitting={register.isPending}
+      submitError={register.error}
+      onSubmit={(values) =>
+        register.mutate(buildRadPerformBundle(values, row.order, row.task), { onSuccess: onClose })
+      }
+      onClose={onClose}
+    />
+  );
+}
+
+interface InputProps {
+  /** 撮影内容。データセット由来の初期明細と、線量欄の出し分けに使う。 */
+  items: RadOrderItemLine[];
+  /**
+   * 入力済みの内容。即実施で入力し直すときに渡す(データセット由来の初期行では
+   * なく、前に入れた内容から始める)。
+   */
+  initialValues?: RadPerformFormValues | null;
+  submitLabel: string;
+  submitting?: boolean;
+  submitError?: unknown;
+  onSubmit: (values: RadPerformFormValues) => void;
+  onClose: () => void;
+}
+
+export function RadPerformInputModal({
+  items,
+  initialValues = null,
+  submitLabel,
+  submitting = false,
+  submitError,
+  onSubmit,
+  onClose,
+}: InputProps) {
+  const { practitionerId, practitioner } = useCurrentPractitioner();
+
   const itemCodes = useMemo(() => items.map((item) => item.code), [items]);
   const dataset = useRadDatasetLinesForItems(itemCodes);
 
@@ -82,15 +128,28 @@ export function RadPerformModal({ row, onClose }: Props) {
     [items],
   );
 
-  const [performedAt, setPerformedAt] = useState(() => toDateTimeInput(new Date()));
-  const [comment, setComment] = useState("");
-  const [doses, setDoses] = useState<Partial<Record<DoseKey, string>>>({});
+  const [performedAt, setPerformedAt] = useState(
+    () => initialValues?.performedAt ?? toDateTimeInput(new Date()),
+  );
+  const [comment, setComment] = useState(initialValues?.comment ?? "");
+  const [doses, setDoses] = useState<Partial<Record<DoseKey, string>>>(
+    initialValues?.doses ?? {},
+  );
   const [adding, setAdding] = useState<Adding>(null);
 
   // データセット由来の初期行。読み込み後に一度だけ作り、以降は画面の編集を優先する
-  // (差し替えると入力中の数量が戻ってしまう)。
+  // (差し替えると入力中の数量が戻ってしまう)。入力済みの内容を渡された場合は、
+  // それを最初の編集内容として扱う(データセットで上書きしない)。
   const initial = useMemo(() => initialLines(dataset.details), [dataset.details]);
-  const [edited, setEdited] = useState<Lines | null>(null);
+  const [edited, setEdited] = useState<Lines | null>(() =>
+    initialValues
+      ? {
+          procedures: initialValues.procedures,
+          contrasts: initialValues.contrasts,
+          materials: initialValues.materials,
+        }
+      : null,
+  );
   const lines = edited ?? initial;
 
   function patch(next: Partial<Lines>) {
@@ -108,12 +167,11 @@ export function RadPerformModal({ row, onClose }: Props) {
     comment,
   };
 
-  async function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!performedAt) return;
 
-    await register.mutateAsync(buildRadPerformBundle(values, row.order, row.task));
-    onClose();
+    onSubmit(values);
   }
 
   return (
@@ -347,13 +405,13 @@ export function RadPerformModal({ row, onClose }: Props) {
           <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} />
         </label>
 
-        <ErrorBanner error={register.error} />
+        <ErrorBanner error={submitError} />
 
         <div className="lab-order-item__actions">
-          <button type="submit" disabled={register.isPending || dataset.isLoading}>
-            実施を登録
+          <button type="submit" disabled={submitting || dataset.isLoading}>
+            {submitLabel}
           </button>
-          <button type="button" onClick={onClose} disabled={register.isPending}>
+          <button type="button" onClick={onClose} disabled={submitting}>
             キャンセル
           </button>
         </div>
