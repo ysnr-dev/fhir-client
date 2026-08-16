@@ -23,6 +23,8 @@ module Master
       if params[:name].present?
         scope = flexible_name_match(scope, params[:name], %w[search_name search_short_name search_kana])
       end
+      # 名称・種別(モダリティ)・部位を1つの語でまとめて探す(その場で項目を足す検索欄用)。
+      scope = keyword_match(scope, params[:keyword]) if params[:keyword].present?
 
       result = paginate(scope.order(Arel.sql("display_order NULLS LAST")))
       # 一覧でも種別(モダリティ)の名称くらいは出したいので、載っている要素の
@@ -33,9 +35,13 @@ module Master
     # 要素の名称・セット構成・実施入力用データセットの名称をまとめて返す。
     # 詳細画面が1リクエストで開けるようにする。
     def show
+      set_items = set_items_for(@record.item_code).to_a
+      # 構成項目の種別(モダリティ)・部位も画面に出すため、名称の解決には
+      # セットに載っている項目そのものも含める。
+      members = Master::RadItem.where(item_code: set_items.map(&:member_item_code)).to_a
       render json: @record.as_json.merge(
-        elements: element_names_for([@record]),
-        set_items: set_items_for(@record.item_code).as_json,
+        elements: element_names_for([@record, *members]),
+        set_items: set_items.as_json,
         dataset_name: dataset_name_for(@record.dataset_code)
       )
     end
@@ -110,6 +116,30 @@ module Master
 
     private
 
+    # 1つの検索欄で当てにいく要素。項目の名称にはモダリティ・部位が入っていない
+    # ことも多く(「頭部単純Ｘ線 2方向」など)、要素からも引けると探しやすい。
+    KEYWORD_ELEMENTS = %w[modality body_part].freeze
+
+    # 名称・略称・カナに加えて、種別(モダリティ)・部位の名称にも当てる。要素の
+    # 名称は部品コードマスタにしか無いので、その語に当たるコードを引いて照合する。
+    # 表記ゆれの吸収は双方の search_name(正規化済み)に任せる。
+    def keyword_match(scope, query)
+      conn = ActiveRecord::Base.connection
+
+      Master::SearchNormalizer.tokenize(query).each do |token|
+        pattern = conn.quote("%#{sanitize_like(token)}%")
+        clauses = %w[search_name search_short_name search_kana].map { |column| "#{column} LIKE #{pattern}" }
+        KEYWORD_ELEMENTS.each do |element|
+          clauses << "#{Master::RadItem.element_column(element)} IN " \
+                     "(SELECT code FROM master_rad_jj1017_codes " \
+                     "WHERE element = #{conn.quote(element)} AND search_name LIKE #{pattern})"
+        end
+        scope = scope.where(clauses.join(" OR "))
+      end
+
+      scope
+    end
+
     def build_from_frequent(source, sequence)
       elements = source.elements
       attrs = Master::RadItem::ELEMENT_COLUMNS.to_h { |element, column| [column, elements[element]] }
@@ -158,6 +188,8 @@ module Master
           "master_rad_items.name AS member_name",
           "master_rad_items.short_name AS member_short_name",
           "master_rad_items.jj1017_code AS member_jj1017_code",
+          "master_rad_items.modality_code AS member_modality_code",
+          "master_rad_items.body_part_code AS member_body_part_code",
         )
         .order(Arel.sql("master_rad_set_items.display_order NULLS LAST"))
         .order(:id)

@@ -5299,6 +5299,12 @@ body.karte-wide .app__header {
   white-space: nowrap;
 }
 
+/* 項目検索モーダルの部位。「1000 頭部（あたま）」のような長い選択肢が
+   入るので、この欄だけで検索フォームの幅を占めないよう抑える。 */
+.rad-item-search__body-part select {
+  max-width: 220px;
+}
+
 /* JJ1017 の32桁コード。桁位置を数えられるよう等幅で出す。 */
 .rad-frequent__code,
 .rad-item__preview {

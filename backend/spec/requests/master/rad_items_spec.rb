@@ -61,6 +61,23 @@ RSpec.describe "Master::RadItems", type: :request do
       expect(body["items"].map { |i| i["item_code"] }).to eq(%w[R0001])
     end
 
+    it "keyword は名称・種別(モダリティ)・部位のどれかに当たる項目を返す" do
+      Master::RadJj1017Code.create!(element: "modality", code: "1", name: "Ｘ線単純撮影")
+      Master::RadJj1017Code.create!(element: "body_part", code: "200", name: "胸部")
+
+      # 名称に「Ｘ線単純撮影」も「胸部」も入っていない項目でも要素から引ける。
+      create_item("R0007", name: "胸写", modality_code: "1", body_part_code: "200")
+
+      get "/master/rad_items", params: { keyword: "ｘ線単純撮影" }
+      expect(body["items"].map { |i| i["item_code"] }).to match_array(%w[R0001 R0007])
+
+      get "/master/rad_items", params: { keyword: "胸部" }
+      expect(body["items"].map { |i| i["item_code"] }).to match_array(%w[R0001 R0007])
+
+      get "/master/rad_items", params: { keyword: "きょうぶ" }
+      expect(body["items"].map { |i| i["item_code"] }).to eq(%w[R0001])
+    end
+
     it "一覧に載っている要素コードの名称を添える" do
       Master::RadJj1017Code.create!(element: "modality", code: "1", name: "Ｘ線単純撮影")
       Master::RadJj1017Code.create!(element: "body_part", code: "200", name: "胸部")
@@ -83,6 +100,23 @@ RSpec.describe "Master::RadItems", type: :request do
 
       expect(body["name"]).to eq("頭部CTセット")
       expect(body["set_items"].map { |m| m["member_name"] }).to eq(["頭部CT単純"])
+    end
+
+    it "セット構成に構成項目の種別(モダリティ)・部位を添え、その名称も返す" do
+      Master::RadJj1017Code.create!(element: "modality", code: "6", name: "Ｘ線CT検査")
+      Master::RadJj1017Code.create!(element: "body_part", code: "100", name: "頭部")
+      create_item("R0002", name: "頭部CTセット", kind: "set")
+      create_item("R0004", name: "頭部CT単純", modality_code: "6", body_part_code: "100")
+      Master::RadSetItem.create!(set_item_code: "R0002", member_item_code: "R0004", display_order: 1)
+
+      get "/master/rad_items/R0002"
+
+      member = body["set_items"].first
+      expect(member["member_modality_code"]).to eq("6")
+      expect(member["member_body_part_code"]).to eq("100")
+      # セット自身は要素を持たないので、名称は構成項目の分を解決して返す。
+      expect(body["elements"]["modality"]).to eq("6" => "Ｘ線CT検査")
+      expect(body["elements"]["body_part"]).to eq("100" => "頭部")
     end
 
     it "参照している実施入力用データセットの名称を添えて返す" do

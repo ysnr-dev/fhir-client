@@ -1096,6 +1096,9 @@ export interface RadSetItem {
   member_name?: string | null;
   member_short_name?: string | null;
   member_jj1017_code?: string | null;
+  // 構成項目の種別(モダリティ)・部位。名称は詳細の elements で引く。
+  member_modality_code?: string | null;
+  member_body_part_code?: string | null;
 }
 
 export interface RadItemDetail extends RadItem {
@@ -1490,6 +1493,8 @@ const RAD_ITEMS_PATH = "/master/rad_items";
 
 export async function searchRadItems(params: {
   name?: string;
+  /** 名称・種別(モダリティ)・部位のどれかに当たる項目を1つの語で探す。 */
+  keyword?: string;
   /** 項目コード。カンマ区切りで複数指定できる。 */
   item_code?: string;
   kind?: string;
@@ -1504,6 +1509,7 @@ export async function searchRadItems(params: {
 }): Promise<RadItemSearchResult> {
   const search = new URLSearchParams();
   if (params.name) search.set("name", params.name);
+  if (params.keyword) search.set("keyword", params.keyword);
   if (params.item_code) search.set("item_code", params.item_code);
   if (params.kind) search.set("kind", params.kind);
   if (params.groupable) search.set("groupable", params.groupable);

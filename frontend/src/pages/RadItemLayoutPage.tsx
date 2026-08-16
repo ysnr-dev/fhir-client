@@ -9,6 +9,7 @@ import {
 import type { RadItem, RadItemLayoutCell } from "../api/masterClient";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { RadItemSearchModal } from "../components/RadItemSearchModal";
 
 interface Position {
   row: number;
@@ -353,17 +354,23 @@ interface CellEditorProps {
 function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditorProps) {
   const [displayName, setDisplayName] = useState(cell?.display_name ?? "");
   const [labelText, setLabelText] = useState("");
+  const [searching, setSearching] = useState(false);
+  // 目当ての項目が分かっているときはその場で置けるよう、打った語を名称・モダリティ・
+  // 部位のどれにも当てる。一覧を見ながら探すときは「項目を選択」の検索モーダルを使う。
   const [query, setQuery] = useState("");
-  const candidates = useRadItemSearch({ name: query }, 1, query.trim().length > 0);
+  const hasQuery = query.trim().length > 0;
+  const candidates = useRadItemSearch({ keyword: query }, 1, hasQuery);
 
   // 選択マスが変わったら編集中の値を持ち越さない。
   useEffect(() => {
     setDisplayName(cell?.display_name ?? "");
     setLabelText("");
+    setSearching(false);
     setQuery("");
   }, [cell, position.row, position.column]);
 
   async function handlePlaceItem(item: RadItem) {
+    setSearching(false);
     setQuery("");
     await mutations.create.mutateAsync({
       layout_id: layoutId,
@@ -458,11 +465,14 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="名称で検索"
+                placeholder="名称・モダリティ・部位で検索"
               />
             </label>
+            <button type="button" onClick={() => setSearching(true)}>
+              項目を選択
+            </button>
           </div>
-          {query.trim().length > 0 && (
+          {hasQuery && (
             <ul className="lab-order-item__candidates">
               {candidates.data?.items.map((item) => (
                 <li key={item.id}>
@@ -473,6 +483,13 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
                 </li>
               ))}
             </ul>
+          )}
+          {searching && (
+            <RadItemSearchModal
+              title="マスに配置する項目を選択"
+              onSelect={handlePlaceItem}
+              onClose={() => setSearching(false)}
+            />
           )}
         </>
       )}

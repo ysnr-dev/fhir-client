@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type {
+  RadElementNames,
   RadFrequentCode,
   RadItemDetail,
   RadItemPayload,
   RadJj1017Catalog,
-  RadJj1017Code,
   RadJj1017Elements,
 } from "../api/masterClient";
 import {
@@ -21,29 +21,29 @@ import { useQuestionnaireOptions } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import { RadFrequentCodeSearchModal } from "../components/RadFrequentCodeSearchModal";
+import { RadItemSearchModal } from "../components/RadItemSearchModal";
+import {
+  KIND_LABELS,
+  MODALITY_BODY_PART_FLAG,
+  renderJj1017CodeOptions,
+} from "../components/radItemOptions";
 import { TemplateSelect } from "../components/TemplateSelect";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 
-const KIND_LABELS: Record<string, string> = {
-  single: "単項目",
-  set: "セット",
-};
-
-// 種別(モダリティ)コード → 別表2が持つモダリティ別の使用可否フラグ。
-// 部位の候補を「その撮影で使う部位」から先に見せるために使う。
-// 表に対応する列が無いモダリティ(核医学・治療など)は絞り込まない。
-const MODALITY_BODY_PART_FLAG: Record<string, keyof RadJj1017Code> = {
-  "1": "use_general",
-  "2": "use_general",
-  "4": "use_general",
-  "5": "use_general",
-  "6": "use_ct",
-  "7": "use_mr",
-  "9": "use_us",
-  F: "use_general",
-  G: "use_general",
-  H: "use_general",
-};
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 // 編集フォームの値。input で扱うため全て文字列で持ち、保存時に payload へ変換する。
 interface Draft {
@@ -625,7 +625,11 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       </form>
 
       {itemId !== null && isSet && detail.data && (
-        <SetItemsEditor setItemCode={detail.data.item_code} setItems={detail.data.set_items} />
+        <SetItemsEditor
+          setItemCode={detail.data.item_code}
+          setItems={detail.data.set_items}
+          elements={detail.data.elements}
+        />
       )}
 
       {searchingFrequent && (
@@ -736,7 +740,7 @@ function ElementFields({
               onChange={(e) => onChangeElement(element.element, e.target.value)}
             >
               <option value="">未設定</option>
-              {renderCodeOptions(
+              {renderJj1017CodeOptions(
                 catalog?.[element.element] ?? [],
                 element.element === "body_part" ? bodyPartFlag : undefined,
               )}
@@ -755,30 +759,6 @@ function ElementFields({
         </label>
       </div>
     </section>
-  );
-}
-
-// 部位は撮影種別で使うものを先に見せる(別表2のモダリティ別使用可否)。
-// 対応する列が無いモダリティのときは素直に全件並べる。
-function renderCodeOptions(codes: RadJj1017Code[], flag: keyof RadJj1017Code | undefined) {
-  const option = (code: RadJj1017Code) => (
-    <option key={code.code} value={code.code}>
-      {code.code} {code.name}
-      {code.common_name ? `（${code.common_name}）` : ""}
-    </option>
-  );
-
-  if (!flag) return codes.map(option);
-
-  const preferred = codes.filter((code) => code[flag]);
-  if (preferred.length === 0) return codes.map(option);
-  const rest = codes.filter((code) => !code[flag]);
-
-  return (
-    <>
-      <optgroup label="この撮影種別で使う部位">{preferred.map(option)}</optgroup>
-      <optgroup label="その他">{rest.map(option)}</optgroup>
-    </>
   );
 }
 
@@ -823,14 +803,31 @@ function DatasetSelect({
 interface SetItemsEditorProps {
   setItemCode: string;
   setItems: RadItemDetail["set_items"];
+  /** 構成項目の種別(モダリティ)・部位の名称。詳細APIが構成項目の分も添えて返す。 */
+  elements: RadElementNames;
 }
 
-function SetItemsEditor({ setItemCode, setItems }: SetItemsEditorProps) {
+function SetItemsEditor({ setItemCode, setItems, elements }: SetItemsEditorProps) {
   const mutations = useRadSetItemMutations();
+  const [adding, setAdding] = useState(false);
+  // 目当ての項目が分かっているときはその場で足せるよう、打った語を名称・モダリティ・
+  // 部位のどれにも当てる。一覧を見ながら探すときは「項目を追加」の検索モーダルを使う。
   const [query, setQuery] = useState("");
-  const candidates = useRadItemSearch({ name: query }, 1, query.trim().length > 0);
+  const searching = query.trim().length > 0;
+  const candidates = useRadItemSearch({ keyword: query }, 1, searching);
 
-  const memberCodes = new Set(setItems.map((m) => m.member_item_code));
+  // 自分自身と既に入っている項目は選べない(モーダル側で印を付ける)。
+  const excludeCodes = [setItemCode, ...setItems.map((m) => m.member_item_code)];
+  const excluded = new Set(excludeCodes);
+
+  async function handleAdd(memberItemCode: string) {
+    setAdding(false);
+    setQuery("");
+    await mutations.create.mutateAsync({
+      set_item_code: setItemCode,
+      member_item_code: memberItemCode,
+    });
+  }
 
   return (
     <section className="lab-order-item__section">
@@ -840,26 +837,20 @@ function SetItemsEditor({ setItemCode, setItems }: SetItemsEditorProps) {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="追加する項目を名称で検索"
+          placeholder="名称・モダリティ・部位で検索"
         />
+        <button type="button" onClick={() => setAdding(true)}>
+          項目を追加
+        </button>
       </div>
 
-      {query.trim().length > 0 && (
+      {searching && (
         <ul className="lab-order-item__candidates">
           {candidates.data?.items
-            .filter((item) => item.item_code !== setItemCode && !memberCodes.has(item.item_code))
+            .filter((item) => !excluded.has(item.item_code))
             .map((item) => (
               <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setQuery("");
-                    await mutations.create.mutateAsync({
-                      set_item_code: setItemCode,
-                      member_item_code: item.item_code,
-                    });
-                  }}
-                >
+                <button type="button" onClick={() => handleAdd(item.item_code)}>
                   {item.name}
                   <span className="lab-order-item__code">{item.item_code}</span>
                 </button>
@@ -876,6 +867,8 @@ function SetItemsEditor({ setItemCode, setItems }: SetItemsEditorProps) {
             <tr>
               <th>構成項目</th>
               <th>コード</th>
+              <th>種別</th>
+              <th>部位</th>
               <th className="rad-frequent__code">JJ1017-32</th>
               <th></th>
             </tr>
@@ -885,24 +878,51 @@ function SetItemsEditor({ setItemCode, setItems }: SetItemsEditorProps) {
               <tr key={member.id}>
                 <td>{member.member_name ?? member.member_item_code}</td>
                 <td>{member.member_item_code}</td>
+                <td>
+                  {member.member_modality_code
+                    ? (elements.modality?.[member.member_modality_code] ??
+                      member.member_modality_code)
+                    : ""}
+                </td>
+                <td>
+                  {member.member_body_part_code
+                    ? (elements.body_part?.[member.member_body_part_code] ??
+                      member.member_body_part_code)
+                    : ""}
+                </td>
                 <td className="rad-frequent__code">{member.member_jj1017_code}</td>
                 <td className="master-search__actions">
-                  <button type="button" onClick={() => mutations.remove.mutate(member.id)}>
-                    外す
+                  <button
+                    type="button"
+                    className="rp-card__icon-button"
+                    title="外す"
+                    aria-label="外す"
+                    onClick={() => mutations.remove.mutate(member.id)}
+                  >
+                    <TrashIcon />
                   </button>
                 </td>
               </tr>
             ))}
             {setItems.length === 0 && (
               <tr>
-                <td colSpan={4} className="master-search__empty">
-                  構成項目がありません。名称で検索して追加してください。
+                <td colSpan={6} className="master-search__empty">
+                  構成項目がありません。名称で検索するか「項目を追加」から選んでください。
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {adding && (
+        <RadItemSearchModal
+          title="セットに追加する項目を選択"
+          excludeCodes={excludeCodes}
+          onSelect={(item) => handleAdd(item.item_code)}
+          onClose={() => setAdding(false)}
+        />
+      )}
     </section>
   );
 }
