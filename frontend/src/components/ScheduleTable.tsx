@@ -51,11 +51,13 @@ export function ScheduleTable({ schedules }: { schedules: fhir4.Schedule[] }) {
               <td>{schedule.specialty?.[0]?.text ?? "-"}</td>
               <td>{schedulePeriodLabel(schedule)}</td>
               <td>{schedule.active === false ? "無効" : "有効"}</td>
-              <td className="patient-table__actions">
+              <td className="patient-table__actions schedule-table__actions">
+                {/* 枠表を作った後にいちばん使うのは枠の管理なので、カレンダーだけ
+                    ケバブの外に出す。 */}
+                <Link className="button schedule-table__calendar" to={`/schedules/${schedule.id}/slots`}>
+                  予約枠カレンダー
+                </Link>
                 <RowMenu label={`${scheduleName(schedule)} の操作`}>
-                  <Link className="row-menu__item" to={`/schedules/${schedule.id}/slots`}>
-                    枠カレンダー
-                  </Link>
                   <Link className="row-menu__item" to={`/schedules/${schedule.id}/edit`}>
                     編集
                   </Link>

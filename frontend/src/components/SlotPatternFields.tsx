@@ -97,6 +97,16 @@ export function SlotPatternFields({ value, onChange }: SlotPatternFieldsProps) {
           />
         </label>
         <label>
+          同時に受ける人数
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={value.capacity}
+            onChange={(e) => onChange({ ...value, capacity: Number(e.target.value) })}
+          />
+        </label>
+        <label>
           予約種別
           <select
             value={value.appointmentTypeCode}
@@ -110,6 +120,11 @@ export function SlotPatternFields({ value, onChange }: SlotPatternFieldsProps) {
           </select>
         </label>
       </div>
+
+      <p className="slot-pattern__hint">
+        「同時に受ける人数」を 2 以上にすると、同じ時間の枠をその数だけ作ります(FHIR の
+        Slot に定員の要素が無いため、1 枠 = 1 人ぶんの席で表します)。
+      </p>
     </div>
   );
 }

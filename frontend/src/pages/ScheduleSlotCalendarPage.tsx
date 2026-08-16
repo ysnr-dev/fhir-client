@@ -53,12 +53,19 @@ export function ScheduleSlotCalendarPage() {
     setMessage(null);
   }
 
-  function toggleSlot(slot: fhir4.Slot) {
-    if (!slot.id) return;
+  // セル単位の選択。定員が複数ある枠は、そのセルの操作できる枠をまとめて扱う
+  // (「この時間を止める」は席ごとではなく時間ごとの操作なので)。
+  function toggleCell(slots: fhir4.Slot[]) {
+    const ids = slots.filter((s) => s.id && !isBookedSlot(s)).map((s) => s.id as string);
+    if (ids.length === 0) return;
+
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(slot.id as string)) next.delete(slot.id as string);
-      else next.add(slot.id as string);
+      const allSelected = ids.every((id) => next.has(id));
+      for (const id of ids) {
+        if (allSelected) next.delete(id);
+        else next.add(id);
+      }
       return next;
     });
   }
@@ -103,7 +110,7 @@ export function ScheduleSlotCalendarPage() {
     return (
       <div className="page">
         <div className="page__header">
-          <h1>枠カレンダー</h1>
+          <h1>予約枠カレンダー</h1>
           <Link to="/schedules" className="button">
             ← 一覧に戻る
           </Link>
@@ -118,7 +125,7 @@ export function ScheduleSlotCalendarPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>枠カレンダー</h1>
+        <h1>予約枠カレンダー</h1>
         <div className="page__header-actions">
           <button type="button" onClick={() => setGenerating(true)}>
             枠を一括生成
@@ -208,7 +215,7 @@ export function ScheduleSlotCalendarPage() {
           rows={rows}
           weekStartISO={week}
           selectedIds={selectedIds}
-          onToggle={toggleSlot}
+          onToggle={toggleCell}
         />
       )}
 

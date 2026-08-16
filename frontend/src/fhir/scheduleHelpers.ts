@@ -72,6 +72,14 @@ export interface SlotPattern {
   blocks: SlotTimeBlock[];
   /** 1 枠の長さ(分)。 */
   durationMinutes: number;
+  /**
+   * 同じ時間に受けられる人数。R4 の Slot に定員の要素は無い(overbooked は
+   * 「既に定員超過している」フラグで人数ではない)ため、「30 分枠で 3 人まで」は
+   * 同じ start / end の Slot を 3 件作って表す。1 Slot = 1 予約という R4 の
+   * 想定どおりなので、空き数は status=free の件数を数えるだけで済み、
+   * 予約の排他も Slot 単位の楽観ロックがそのまま効く。
+   */
+  capacity: number;
   appointmentTypeCode: string;
 }
 
@@ -82,6 +90,7 @@ export const emptySlotPattern: SlotPattern = {
     { start: "14:00", end: "17:00" },
   ],
   durationMinutes: 15,
+  capacity: 1,
   appointmentTypeCode: "ROUTINE",
 };
 
@@ -90,6 +99,9 @@ export function validateSlotPattern(pattern: SlotPattern): string | null {
   if (pattern.blocks.length === 0) return "時間帯を 1 つ以上入力してください。";
   if (!Number.isFinite(pattern.durationMinutes) || pattern.durationMinutes <= 0) {
     return "1 枠の長さは 1 分以上で入力してください。";
+  }
+  if (!Number.isFinite(pattern.capacity) || pattern.capacity < 1) {
+    return "同時に受けられる人数は 1 人以上で入力してください。";
   }
   for (const block of pattern.blocks) {
     if (!block.start || !block.end) return "時間帯の開始・終了を入力してください。";
@@ -324,6 +336,8 @@ export function slotPatternOf(schedule: fhir4.Schedule): SlotPattern | null {
       weekdays: parsed.weekdays,
       blocks: parsed.blocks,
       durationMinutes: parsed.durationMinutes || emptySlotPattern.durationMinutes,
+      // capacity を持たない頃に作った枠表は 1 人枠として読む。
+      capacity: parsed.capacity || 1,
       appointmentTypeCode: parsed.appointmentTypeCode || "ROUTINE",
     };
   } catch {
@@ -340,8 +354,9 @@ export interface SlotGenerateRange {
 }
 
 /**
- * 曜日パターンから Slot を組み立てる。既存 Slot と開始時刻が重なるものは作らない
- * (同じ期間に対して二度実行しても増えないようにするため)。
+ * 曜日パターンから Slot を組み立てる。同じ開始時刻の既存 Slot が定員に足りている
+ * 分は作らない(同じ期間に対して二度実行しても増えず、定員を 2 → 3 に増やしたときは
+ * 不足の 1 件だけが増える)。
  * 時間帯の端数(15分刻みで 09:00-09:50 の最後の 10 分など)は切り捨てる。
  */
 export function generateSlots(
@@ -350,8 +365,16 @@ export function generateSlots(
   range: SlotGenerateRange,
   existingSlots: fhir4.Slot[],
 ): fhir4.Slot[] {
-  const taken = new Set(existingSlots.map((slot) => new Date(slot.start).getTime()));
+  // 誤登録(entered-in-error)は席として数えない。残っていても作り直せるようにする。
+  const counts = new Map<number, number>();
+  for (const slot of existingSlots) {
+    if (slot.status === "entered-in-error") continue;
+    const at = new Date(slot.start).getTime();
+    counts.set(at, (counts.get(at) ?? 0) + 1);
+  }
+
   const weekdays = new Set(pattern.weekdays);
+  const capacity = Math.max(1, Math.floor(pattern.capacity));
   const slots: fhir4.Slot[] = [];
 
   for (let date = range.from; date <= range.to; date = addDays(date, 1)) {
@@ -366,9 +389,13 @@ export function generateSlots(
         start += pattern.durationMinutes
       ) {
         const startAt = toFhirDateTime(`${date}T${timeOf(start)}`);
-        if (taken.has(new Date(startAt).getTime())) continue;
-        taken.add(new Date(startAt).getTime());
-        slots.push(buildSlot(scheduleId, startAt, toFhirDateTime(`${date}T${timeOf(start + pattern.durationMinutes)}`), pattern.appointmentTypeCode));
+        const endAt = toFhirDateTime(`${date}T${timeOf(start + pattern.durationMinutes)}`);
+        const at = new Date(startAt).getTime();
+
+        for (let seat = counts.get(at) ?? 0; seat < capacity; seat++) {
+          slots.push(buildSlot(scheduleId, startAt, endAt, pattern.appointmentTypeCode));
+        }
+        counts.set(at, Math.max(counts.get(at) ?? 0, capacity));
       }
     }
   }
@@ -434,7 +461,8 @@ export function buildSlotDeleteBundle(slots: fhir4.Slot[]): fhir4.Bundle {
 
 export interface SlotCalendarCell {
   date: string;
-  slot: fhir4.Slot | undefined;
+  /** その日時の枠。定員 3 の枠表なら 3 件並ぶ。 */
+  slots: fhir4.Slot[];
 }
 
 export interface SlotCalendarRow {
@@ -446,22 +474,66 @@ export interface SlotCalendarRow {
 /**
  * 週の Slot を「行=開始時刻 / 列=曜日」の表にする。時刻の行は、その週に実在する
  * 開始時刻だけを昇順に並べる(枠のない時間帯で表が間延びしないようにする)。
+ * 1 セルには同じ日時の Slot がすべて入る(定員 = セル内の件数)。
  */
 export function buildSlotCalendar(slots: fhir4.Slot[], weekStartISO: string): SlotCalendarRow[] {
   const dates = weekDates(weekStartISO);
-  const byKey = new Map<string, fhir4.Slot>();
+  const byKey = new Map<string, fhir4.Slot[]>();
   const times = new Set<string>();
 
   for (const slot of slots) {
     const time = slotTime(slot);
     times.add(time);
-    byKey.set(`${slotDate(slot)}T${time}`, slot);
+    const key = `${slotDate(slot)}T${time}`;
+    const cell = byKey.get(key);
+    if (cell) cell.push(slot);
+    else byKey.set(key, [slot]);
   }
 
-  return [...times]
-    .sort()
-    .map((time) => ({
-      time,
-      cells: dates.map((date) => ({ date, slot: byKey.get(`${date}T${time}`) })),
-    }));
+  return [...times].sort().map((time) => ({
+    time,
+    cells: dates.map((date) => ({ date, slots: byKey.get(`${date}T${time}`) ?? [] })),
+  }));
+}
+
+export interface SlotCellSummary {
+  /** その日時の枠の総数 = 定員。 */
+  total: number;
+  free: number;
+  booked: number;
+  unavailable: number;
+  /** 停止・削除の対象にできる枠(予約が入っていないもの)。 */
+  operable: fhir4.Slot[];
+}
+
+export function summarizeSlotCell(slots: fhir4.Slot[]): SlotCellSummary {
+  return {
+    total: slots.length,
+    free: slots.filter((s) => s.status === "free").length,
+    booked: slots.filter(isBookedSlot).length,
+    unavailable: slots.filter((s) => s.status === "busy-unavailable").length,
+    operable: slots.filter((s) => !isBookedSlot(s) && s.id),
+  };
+}
+
+/**
+ * セルに出す文言。定員 1 の枠表は状態をそのまま出し(「空き」「予約済」)、
+ * 定員が複数のときは「空き 2/3」と残数を出す。
+ *
+ * 空きが無いときも「満」ではなく「空き 0/3」と書くのは、内訳が予約とは限らない
+ * ため(予約 1 + 停止 2 でも空きは 0)。内訳はセルの title に出す。
+ */
+export function slotCellLabel(summary: SlotCellSummary, slots: fhir4.Slot[]): string {
+  if (summary.total === 0) return "";
+  if (summary.total === 1) return slotStatusLabel(slots[0].status);
+  if (summary.free === 0 && summary.unavailable === summary.total) return "停止";
+  return `空き ${summary.free}/${summary.total}`;
+}
+
+/** セルの色。空きが残っていれば空き扱い、無ければ予約済(全部停止なら停止)。 */
+export function slotCellStatus(summary: SlotCellSummary, slots: fhir4.Slot[]): string {
+  if (summary.total === 1) return slots[0].status;
+  if (summary.free > 0) return "free";
+  if (summary.unavailable === summary.total) return "busy-unavailable";
+  return "busy";
 }

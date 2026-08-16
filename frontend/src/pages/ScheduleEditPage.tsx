@@ -51,7 +51,7 @@ export function ScheduleEditPage() {
         <h1>予約枠編集</h1>
         <div className="page__header-actions">
           <Link to={`/schedules/${id}/slots`} className="button">
-            枠カレンダー
+            予約枠カレンダー
           </Link>
           <Link to="/schedules" className="button">
             ← 一覧に戻る

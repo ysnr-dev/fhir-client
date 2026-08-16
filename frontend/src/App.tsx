@@ -83,6 +83,9 @@ function App() {
               放射線検査一覧
             </Link>
           </HoverMenu>
+          {/* 予約枠は診療科がオーダーを出す前段(いつ診るかを決める)なので、
+              部門業務とマスタメンテの間に独立して置く。 */}
+          <NavLink to="/schedules">予約枠</NavLink>
           {/* マスタメンテは項目が増えるため、診療領域ごとに入れ子にする。
               どの領域にも属さないものは「共通」にまとめる。
               マスタ取込は領域をまたぐので直下に置く。 */}
@@ -102,12 +105,6 @@ function App() {
               </Link>
               <Link to="/locations" className="row-menu__item">
                 診察室・撮影室
-              </Link>
-            </SubMenu>
-            {/* 予約枠は診察室・医療従事者の登録が前提なので、共通のすぐ下に置く。 */}
-            <SubMenu label="予約">
-              <Link to="/schedules" className="row-menu__item">
-                予約枠
               </Link>
             </SubMenu>
             <SubMenu label="テンプレート">

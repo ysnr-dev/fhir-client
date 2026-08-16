@@ -1,6 +1,8 @@
 import {
   formatDateLabel,
-  slotStatusLabel,
+  slotCellLabel,
+  slotCellStatus,
+  summarizeSlotCell,
   weekDates,
   type SlotCalendarRow,
 } from "../fhir/scheduleHelpers";
@@ -8,15 +10,20 @@ import {
 // 枠(Slot)の週表示。列 = 曜日、行 = 開始時刻。行に出るのはその週に実在する
 // 開始時刻だけなので、午前だけの枠表なら午前の行しか並ばない。
 //
-// セルをクリックすると選択に入り、停止・再開・削除は選んだ枠にまとめて効かせる。
-// 予約の入った枠(busy / busy-tentative)は選べない —— 枠を消す前に予約を取り消す
-// 必要があり、予約の取消はこの画面の担当ではないため。
+// 1 セル = その日時の枠すべて。「30 分枠で 3 人まで」は同じ日時の Slot 3 件で
+// 表すので、セルには残数を「空き 2/3」の形で出す(定員 1 の枠表は従来どおり
+// 状態をそのまま出す)。
+//
+// セルをクリックすると、そのセルの操作できる枠(予約が入っていないもの)が
+// まとめて選択に入る。停止・再開・削除は選んだ枠に効かせる。予約の入った枠は
+// 選べない —— 枠を消す前に予約を取り消す必要があり、予約の取消はこの画面の
+// 担当ではないため。
 
 interface SlotCalendarProps {
   rows: SlotCalendarRow[];
   weekStartISO: string;
   selectedIds: ReadonlySet<string>;
-  onToggle: (slot: fhir4.Slot) => void;
+  onToggle: (slots: fhir4.Slot[]) => void;
 }
 
 export function SlotCalendar({ rows, weekStartISO, selectedIds, onToggle }: SlotCalendarProps) {
@@ -49,12 +56,8 @@ export function SlotCalendar({ rows, weekStartISO, selectedIds, onToggle }: Slot
               <th className="slot-calendar__time-col">{row.time}</th>
               {row.cells.map((cell) => (
                 <td key={cell.date} className={weekendClass(cell.date)}>
-                  {cell.slot ? (
-                    <SlotCell
-                      slot={cell.slot}
-                      selected={Boolean(cell.slot.id && selectedIds.has(cell.slot.id))}
-                      onToggle={onToggle}
-                    />
+                  {cell.slots.length > 0 ? (
+                    <SlotCell slots={cell.slots} selectedIds={selectedIds} onToggle={onToggle} />
                   ) : (
                     <span className="slot-calendar__empty">-</span>
                   )}
@@ -69,18 +72,22 @@ export function SlotCalendar({ rows, weekStartISO, selectedIds, onToggle }: Slot
 }
 
 function SlotCell({
-  slot,
-  selected,
+  slots,
+  selectedIds,
   onToggle,
 }: {
-  slot: fhir4.Slot;
-  selected: boolean;
-  onToggle: (slot: fhir4.Slot) => void;
+  slots: fhir4.Slot[];
+  selectedIds: ReadonlySet<string>;
+  onToggle: (slots: fhir4.Slot[]) => void;
 }) {
-  const booked = slot.status === "busy" || slot.status === "busy-tentative";
+  const summary = summarizeSlotCell(slots);
+  const selected =
+    summary.operable.length > 0 &&
+    summary.operable.every((slot) => selectedIds.has(slot.id as string));
+
   const className = [
     "slot-calendar__slot",
-    `slot-calendar__slot--${slot.status}`,
+    `slot-calendar__slot--${slotCellStatus(summary, slots)}`,
     selected ? "slot-calendar__slot--selected" : "",
   ]
     .filter(Boolean)
@@ -90,14 +97,27 @@ function SlotCell({
     <button
       type="button"
       className={className}
-      onClick={() => onToggle(slot)}
-      disabled={booked}
-      title={booked ? "予約が入っているため操作できません" : undefined}
+      onClick={() => onToggle(slots)}
+      disabled={summary.operable.length === 0}
+      title={cellTitle(summary)}
       aria-pressed={selected}
     >
-      {slotStatusLabel(slot.status)}
+      {slotCellLabel(summary, slots)}
     </button>
   );
+}
+
+function cellTitle(summary: ReturnType<typeof summarizeSlotCell>): string | undefined {
+  const detail =
+    summary.total === 1
+      ? ""
+      : `定員 ${summary.total} / 空き ${summary.free} / 予約 ${summary.booked} / 停止 ${summary.unavailable}`;
+
+  if (summary.operable.length === 0) {
+    const reason = "予約が入っているため操作できません";
+    return detail ? `${detail}(${reason})` : reason;
+  }
+  return detail || undefined;
 }
 
 // 土日は列の背景を変えて週の区切りを見やすくする。

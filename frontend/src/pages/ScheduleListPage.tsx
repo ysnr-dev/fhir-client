@@ -13,7 +13,7 @@ import { locationDisplayName } from "../fhir/locationHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 
 // 予約枠(Schedule)の一覧。1 行 = 枠表 1 件で、実際の時間枠(Slot)は
-// 「枠カレンダー」から週単位で管理する。
+// 「予約枠カレンダー」から週単位で管理する。
 
 const emptySearch: ScheduleSearchParams = {
   practitionerId: "",
