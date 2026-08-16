@@ -159,6 +159,12 @@ export function KarteRightPane({
         </button>
         <button
           type="button"
+          onClick={() => onStateChange({ kind: "appointment-create", problem: selectedProblem })}
+        >
+          予約
+        </button>
+        <button
+          type="button"
           onClick={() => onStateChange({ kind: "prescription-create", problem: selectedProblem })}
         >
           処方
@@ -186,12 +192,6 @@ export function KarteRightPane({
           onClick={() => onStateChange({ kind: "rad-order-create", problem: selectedProblem })}
         >
           放射線検査
-        </button>
-        <button
-          type="button"
-          onClick={() => onStateChange({ kind: "appointment-create", problem: selectedProblem })}
-        >
-          予約
         </button>
       </div>
     </section>
