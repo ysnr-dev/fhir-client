@@ -40,6 +40,13 @@ import { DepartmentListPage } from "./pages/DepartmentListPage";
 import { OrganizationCreatePage } from "./pages/OrganizationCreatePage";
 import { OrganizationEditPage } from "./pages/OrganizationEditPage";
 import { OrganizationListPage } from "./pages/OrganizationListPage";
+import { LocationCreatePage } from "./pages/LocationCreatePage";
+import { LocationEditPage } from "./pages/LocationEditPage";
+import { LocationListPage } from "./pages/LocationListPage";
+import { ScheduleCreatePage } from "./pages/ScheduleCreatePage";
+import { ScheduleEditPage } from "./pages/ScheduleEditPage";
+import { ScheduleListPage } from "./pages/ScheduleListPage";
+import { ScheduleSlotCalendarPage } from "./pages/ScheduleSlotCalendarPage";
 import { QuestionnaireCreatePage } from "./pages/QuestionnaireCreatePage";
 import { QuestionnaireEditPage } from "./pages/QuestionnaireEditPage";
 import { QuestionnaireListPage } from "./pages/QuestionnaireListPage";
@@ -92,6 +99,15 @@ function App() {
               </Link>
               <Link to="/practitioners" className="row-menu__item">
                 医療従事者
+              </Link>
+              <Link to="/locations" className="row-menu__item">
+                診察室・撮影室
+              </Link>
+            </SubMenu>
+            {/* 予約枠は診察室・医療従事者の登録が前提なので、共通のすぐ下に置く。 */}
+            <SubMenu label="予約">
+              <Link to="/schedules" className="row-menu__item">
+                予約枠
               </Link>
             </SubMenu>
             <SubMenu label="テンプレート">
@@ -200,6 +216,15 @@ function App() {
           <Route path="/practitioners" element={<PractitionerListPage />} />
           <Route path="/practitioners/new" element={<PractitionerCreatePage />} />
           <Route path="/practitioners/:id/edit" element={<PractitionerEditPage />} />
+          <Route path="/locations" element={<LocationListPage />} />
+          <Route path="/locations/new" element={<LocationCreatePage />} />
+          <Route path="/locations/:id/edit" element={<LocationEditPage />} />
+
+          {/* 予約枠。枠表(Schedule)の下に時間枠(Slot)を週カレンダーでぶら下げる。 */}
+          <Route path="/schedules" element={<ScheduleListPage />} />
+          <Route path="/schedules/new" element={<ScheduleCreatePage />} />
+          <Route path="/schedules/:id/edit" element={<ScheduleEditPage />} />
+          <Route path="/schedules/:id/slots" element={<ScheduleSlotCalendarPage />} />
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />

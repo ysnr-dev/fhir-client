@@ -58,6 +58,12 @@ import {
 } from "../fhir/radTaskHelpers";
 import { buildPractitionerDeleteBundle } from "../fhir/practitionerHelpers";
 import {
+  addDays,
+  buildSlotCreateBundle,
+  buildSlotDeleteBundle,
+  type SlotStatus,
+} from "../fhir/scheduleHelpers";
+import {
   baseRoleOf,
   isDoctorRoleCode,
   parsePractitionerRole,
@@ -625,6 +631,347 @@ export function useDeletePractitioner() {
   });
 }
 
+// 予約枠の担当医セレクト用。医療従事者は施設あたり数百人を超えない前提で
+// まとめて取り、並べ替えは画面側で行う(useOrganizationOptions と同じ扱い)。
+export function usePractitionerOptions() {
+  const params = new URLSearchParams();
+  params.set("_count", "100");
+
+  const query = useQuery({
+    queryKey: ["Practitioner", "search", "options"],
+    queryFn: () => searchResource<fhir4.Practitioner>("Practitioner", params),
+  });
+
+  return {
+    ...query,
+    practitioners:
+      query.data?.data.entry
+        ?.map((e) => e.resource)
+        .filter((r): r is fhir4.Practitioner => Boolean(r)) ?? [],
+  };
+}
+
+// ---- 場所(Location) ----
+//
+// 診察室・撮影室のマスタ。単体で使うことはなく、予約枠(Schedule.actor)の
+// 主体として参照する。
+
+export interface LocationSearchParams {
+  name?: string;
+  status?: string;
+}
+
+const LOCATION_COUNT = 20;
+
+export function useLocationSearch(search: LocationSearchParams, offset: number) {
+  const params = new URLSearchParams();
+  if (search.name) params.set("name", search.name);
+  if (search.status) params.set("status", search.status);
+  params.set("_count", String(LOCATION_COUNT));
+  params.set("_offset", String(offset));
+
+  const query = useQuery({
+    queryKey: ["Location", "search", search, offset],
+    queryFn: () => searchResource<fhir4.Location>("Location", params),
+    placeholderData: keepPreviousData,
+  });
+
+  return {
+    ...query,
+    locations:
+      query.data?.data.entry
+        ?.map((e) => e.resource)
+        .filter((r): r is fhir4.Location => Boolean(r)) ?? [],
+    total: query.data?.data.total ?? 0,
+    count: LOCATION_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+// 選択肢用。使用しない場所を枠の主体に選べても仕方がないので active だけ返す。
+export function useLocationOptions() {
+  const params = new URLSearchParams();
+  params.set("status", "active");
+  params.set("_count", "100");
+
+  const query = useQuery({
+    queryKey: ["Location", "search", "options"],
+    queryFn: () => searchResource<fhir4.Location>("Location", params),
+  });
+
+  return {
+    ...query,
+    locations:
+      query.data?.data.entry
+        ?.map((e) => e.resource)
+        .filter((r): r is fhir4.Location => Boolean(r)) ?? [],
+  };
+}
+
+export function useLocation(id: string | undefined) {
+  return useQuery({
+    queryKey: ["Location", id],
+    queryFn: () => readResource<fhir4.Location>("Location", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateLocation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (location: fhir4.Location) => createResource(location),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Location"] });
+    },
+  });
+}
+
+export function useUpdateLocation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ location, etag }: { location: fhir4.Location; etag: string }) =>
+      updateResource(location, etag),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Location"] });
+    },
+  });
+}
+
+export function useDeleteLocation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteResource("Location", id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Location"] });
+    },
+  });
+}
+
+// ---- 予約枠(Schedule / Slot) ----
+
+export interface ScheduleSearchParams {
+  /** 担当医の Practitioner.id。 */
+  practitionerId?: string;
+  /** 診察室の Location.id。 */
+  locationId?: string;
+  /** 使わなくなった枠表は削除せず active=false にするので、既定は有効のみ。 */
+  activeOnly?: boolean;
+}
+
+const SCHEDULE_COUNT = 20;
+
+export function useScheduleSearch(search: ScheduleSearchParams, offset: number) {
+  const params = new URLSearchParams();
+  // actor は参照先の型を明示して渡す(既定の参照先は Practitioner)。
+  if (search.practitionerId) params.append("actor", `Practitioner/${search.practitionerId}`);
+  if (search.locationId) params.append("actor", `Location/${search.locationId}`);
+  if (search.activeOnly) params.set("active", "true");
+  params.set("_count", String(SCHEDULE_COUNT));
+  params.set("_offset", String(offset));
+
+  const query = useQuery({
+    queryKey: ["Schedule", "search", search, offset],
+    queryFn: () => searchResource<fhir4.Schedule>("Schedule", params),
+    placeholderData: keepPreviousData,
+  });
+
+  return {
+    ...query,
+    schedules:
+      query.data?.data.entry
+        ?.map((e) => e.resource)
+        .filter((r): r is fhir4.Schedule => Boolean(r)) ?? [],
+    total: query.data?.data.total ?? 0,
+    count: SCHEDULE_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+export function useSchedule(id: string | undefined) {
+  return useQuery({
+    queryKey: ["Schedule", id],
+    queryFn: () => readResource<fhir4.Schedule>("Schedule", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (schedule: fhir4.Schedule) => createResource(schedule),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Schedule"] });
+    },
+  });
+}
+
+export function useUpdateSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ schedule, etag }: { schedule: fhir4.Schedule; etag: string }) =>
+      updateResource(schedule, etag),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Schedule"] });
+    },
+  });
+}
+
+/**
+ * 枠表を削除する。上流は参照整合性を見ないので、先にぶら下がる Slot を消さないと
+ * どの枠表にも属さない Slot が残る。予約の入った枠があるときは何も消さずに中断する
+ * (予約の取消が先。予約の管理はこの画面の担当ではない)。
+ */
+export function useDeleteSchedule() {
+  const queryClient = useQueryClient();
+  const CHUNK = 100;
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const slots = await fetchScheduleSlots(id);
+      if (slots.some((slot) => slot.status === "busy" || slot.status === "busy-tentative")) {
+        throw new Error(
+          "予約が入っている枠があるため削除できません。予約を取り消してから削除してください。",
+        );
+      }
+
+      for (let i = 0; i < slots.length; i += CHUNK) {
+        await postBundle(buildSlotDeleteBundle(slots.slice(i, i + CHUNK)));
+      }
+      return deleteResource("Schedule", id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["Slot"] });
+    },
+  });
+}
+
+// 枠表にぶら下がる Slot。R4 は Slot.end に検索パラメータを定めていないので、
+// 期間は start を 2 回並べた AND で表す(上流 README の「空き枠を探す」と同じ形)。
+// 1 週間でも 15 分枠なら数百件になるため、次ページが尽きるまで読み切る。
+async function fetchScheduleSlots(
+  scheduleId: string,
+  range?: { from: string; to: string },
+): Promise<fhir4.Slot[]> {
+  const PAGE = 100;
+  const slots: fhir4.Slot[] = [];
+
+  for (let offset = 0; ; offset += PAGE) {
+    const params = new URLSearchParams();
+    params.set("schedule", `Schedule/${scheduleId}`);
+    if (range) {
+      params.append("start", `ge${range.from}`);
+      params.append("start", `lt${range.to}`);
+    }
+    params.set("_sort", "start");
+    params.set("_count", String(PAGE));
+    params.set("_offset", String(offset));
+
+    const { data: bundle } = await searchResource<fhir4.Slot>("Slot", params);
+    const page =
+      bundle.entry?.map((e) => e.resource).filter((r): r is fhir4.Slot => Boolean(r)) ?? [];
+    slots.push(...page);
+    if (page.length < PAGE) return slots;
+  }
+}
+
+export function useSlotWeek(scheduleId: string | undefined, weekStartISO: string) {
+  const query = useQuery({
+    queryKey: ["Slot", "week", scheduleId, weekStartISO],
+    queryFn: () =>
+      fetchScheduleSlots(scheduleId as string, {
+        from: weekStartISO,
+        to: addDays(weekStartISO, 7),
+      }),
+    enabled: Boolean(scheduleId),
+    placeholderData: keepPreviousData,
+  });
+
+  return { ...query, slots: query.data ?? [] };
+}
+
+/**
+ * 一括生成の重複判定に使う、生成対象期間の既存 Slot。カレンダーは 1 週間しか
+ * 読んでいないので、月単位で作るときはこちらで期間ぶんを引き直す。
+ */
+export function useSlotsInRange(
+  scheduleId: string | undefined,
+  range: { from: string; to: string },
+  enabled: boolean,
+) {
+  const query = useQuery({
+    queryKey: ["Slot", "range", scheduleId, range.from, range.to],
+    queryFn: () =>
+      fetchScheduleSlots(scheduleId as string, {
+        from: range.from,
+        // 終了日を含めたいので翌日未満で切る。
+        to: addDays(range.to, 1),
+      }),
+    enabled: enabled && Boolean(scheduleId) && Boolean(range.from) && Boolean(range.to),
+  });
+
+  return { ...query, slots: query.data ?? [] };
+}
+
+/**
+ * 曜日パターンから作った Slot をまとめて登録する。1 か月ぶんで数百件になるので、
+ * 1 リクエストが大きくなりすぎないよう 100 件ずつの transaction に分けて送る。
+ */
+export function useGenerateSlots() {
+  const queryClient = useQueryClient();
+  const CHUNK = 100;
+
+  return useMutation({
+    mutationFn: async (slots: fhir4.Slot[]) => {
+      for (let i = 0; i < slots.length; i += CHUNK) {
+        await postBundle(buildSlotCreateBundle(slots.slice(i, i + CHUNK)));
+      }
+      return slots.length;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Slot"] });
+    },
+  });
+}
+
+/**
+ * 枠の状態を変える(停止 ⇄ 再開)。カレンダーは検索結果の Slot を持っているだけで
+ * ETag が無いため、単体 PUT ではなく transaction Bundle で書く
+ * (useUpdateRadTaskStatus と同じ理由)。
+ */
+export function useUpdateSlotStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ slots, status }: { slots: fhir4.Slot[]; status: SlotStatus }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: slots
+          .filter((slot) => slot.id)
+          .map((slot) => ({
+            resource: { ...slot, status },
+            request: { method: "PUT" as const, url: `Slot/${slot.id}` },
+          })),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Slot"] });
+    },
+  });
+}
+
+export function useDeleteSlots() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (slots: fhir4.Slot[]) => postBundle(buildSlotDeleteBundle(slots)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Slot"] });
+    },
+  });
+}
 
 export function usePrescriptionDetail(srId: string | undefined) {
   const params = new URLSearchParams();

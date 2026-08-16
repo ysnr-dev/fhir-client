@@ -6409,3 +6409,271 @@ body.page-wide #root {
   padding-top: 0;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- 予約枠(Schedule / Slot) ---- */
+
+.schedule-form__period {
+  display: flex;
+  gap: 16px;
+}
+
+.schedule-form__period label {
+  flex: 1;
+}
+
+/* .patient-form fieldset は既定で横並び。パターン入力は説明文の下に
+   曜日・時間帯と積み上げたいので、この fieldset だけ縦並びにする。 */
+.schedule-form__pattern {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 0;
+  flex-direction: column;
+}
+
+.schedule-form__pattern legend {
+  font-size: 13px;
+  color: var(--text-h);
+  padding: 0 4px;
+}
+
+/* 曜日パターンの入力(枠表の登録画面と一括生成モーダルで共用) */
+.slot-pattern {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.slot-pattern__label {
+  display: block;
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.slot-pattern__weekday-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.slot-pattern__weekday {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.slot-pattern__block-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.slot-pattern__block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slot-pattern__block-remove {
+  padding: 2px 8px;
+}
+
+.slot-pattern__row {
+  display: flex;
+  gap: 16px;
+}
+
+.slot-pattern__row label {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  gap: 4px;
+}
+
+/* 枠の一括生成モーダル */
+.slot-generate {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.slot-generate__range {
+  display: flex;
+  gap: 16px;
+}
+
+.slot-generate__range label {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  gap: 4px;
+}
+
+.slot-generate__preview {
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.slot-generate__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 枠カレンダー(週表示) */
+.slot-calendar__schedule {
+  font-size: 14px;
+  color: var(--text-h);
+  margin-bottom: 12px;
+}
+
+.slot-calendar__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.slot-calendar__week {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slot-calendar__counts {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.slot-calendar__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-panel);
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.slot-calendar__delete {
+  color: var(--lab-high);
+}
+
+.slot-calendar__message {
+  font-size: 13px;
+  color: var(--text-h);
+  margin-bottom: 8px;
+}
+
+.slot-calendar__wrap {
+  overflow-x: auto;
+}
+
+.slot-calendar {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+.slot-calendar th,
+.slot-calendar td {
+  border: 1px solid var(--border);
+  padding: 2px 4px;
+  text-align: center;
+}
+
+.slot-calendar thead th {
+  background: var(--surface-panel);
+  font-weight: 500;
+  color: var(--text-h);
+  white-space: nowrap;
+}
+
+.slot-calendar th.slot-calendar__time-col {
+  width: 64px;
+  background: var(--surface-panel);
+  font-weight: normal;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.slot-calendar__col--saturday {
+  background: rgba(42, 120, 214, 0.06);
+}
+
+.slot-calendar__col--sunday {
+  background: rgba(211, 47, 47, 0.06);
+}
+
+.slot-calendar__empty {
+  color: var(--border);
+}
+
+/* 枠のセル。状態ごとに色を変え、選択中は枠線で示す。 */
+.slot-calendar__slot {
+  display: block;
+  width: 100%;
+  padding: 3px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  background: transparent;
+}
+
+.slot-calendar__slot:disabled {
+  cursor: not-allowed;
+}
+
+.slot-calendar__slot--free {
+  background: rgba(76, 175, 80, 0.16);
+  color: #2e7d32;
+}
+
+.slot-calendar__slot--busy {
+  background: rgba(33, 150, 243, 0.16);
+  color: #1565c0;
+}
+
+.slot-calendar__slot--busy-tentative {
+  background: rgba(255, 152, 0, 0.16);
+  color: #ef6c00;
+}
+
+.slot-calendar__slot--busy-unavailable {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+.slot-calendar__slot--entered-in-error {
+  color: var(--text);
+  text-decoration: line-through;
+}
+
+.slot-calendar__slot--selected {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .slot-calendar__slot--free {
+  color: #81c784;
+}
+
+:root[data-theme="dark"] .slot-calendar__slot--busy {
+  color: #64b5f6;
+}
+
+:root[data-theme="dark"] .slot-calendar__slot--busy-tentative {
+  color: #ffb74d;
+}
