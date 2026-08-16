@@ -6923,6 +6923,12 @@ body.page-wide #root {
   opacity: 0.35;
 }
 
+/* 過ぎた日は予約に使えない(過ぎた枠はバッチで削除される)。 */
+.appointment-month__day:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 .appointment-month__day--free {
   background: rgba(76, 175, 80, 0.16);
   color: #2e7d32;

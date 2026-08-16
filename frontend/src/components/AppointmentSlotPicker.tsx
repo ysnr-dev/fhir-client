@@ -259,7 +259,12 @@ export function AppointmentSlotPicker({
       ) : (
         <>
           <div className="appointment-month__header">
-            <button type="button" onClick={() => changeMonth(-1)}>
+            {/* 過ぎた日には予約できないので、当月より前には戻さない。 */}
+            <button
+              type="button"
+              onClick={() => changeMonth(-1)}
+              disabled={month <= currentMonth()}
+            >
               ← 前月
             </button>
             <span>{monthLabel(month)}</span>
@@ -380,11 +385,13 @@ function DayCell({
 }) {
   const day = Number(date.slice(8, 10));
   const isToday = date === today();
+  // 過ぎた日には予約を取れない(過ぎた枠は定期的に削除される)。
+  const past = date < today();
 
   const className = [
     "appointment-month__day",
     inMonth ? "" : "appointment-month__day--outside",
-    free > 0 ? "appointment-month__day--free" : "",
+    free > 0 && !past ? "appointment-month__day--free" : "",
     selected ? "appointment-month__day--selected" : "",
     isToday ? "appointment-month__day--today" : "",
   ]
@@ -392,7 +399,13 @@ function DayCell({
     .join(" ");
 
   return (
-    <button type="button" className={className} onClick={() => onSelect(date)}>
+    <button
+      type="button"
+      className={className}
+      onClick={() => onSelect(date)}
+      disabled={past}
+      title={past ? "過ぎた日には予約できません" : undefined}
+    >
       <span className="appointment-month__date">{day}</span>
       {/* 日付の数字と紛れないよう「空き」を添える。月のカレンダーは空き枠だけを
           引いているので出せるのは残数だけで、空きが無い日(満・休診)の区別は
