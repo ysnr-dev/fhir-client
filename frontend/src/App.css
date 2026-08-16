@@ -6521,8 +6521,9 @@ body.page-wide #root {
   gap: 8px;
 }
 
-.slot-pattern__block-remove {
-  padding: 2px 8px;
+/* アイコンボタンなので、周囲のフォーム用 button の padding 指定を打ち消す。 */
+.slot-pattern button.slot-pattern__block-remove {
+  padding: 4px;
 }
 
 .slot-pattern__row {

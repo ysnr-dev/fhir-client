@@ -88,7 +88,10 @@ export function ScheduleForm({
       <ErrorBanner error={submitError} />
 
       <label>
-        枠の名称(必須)
+        <span className="qp-field__label">
+          枠の名称
+          <span className="qp-field__required">必須</span>
+        </span>
         <input
           type="text"
           value={values.name}
