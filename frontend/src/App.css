@@ -4933,6 +4933,8 @@ body.karte-wide .app__header {
 
 .lab-order-item__fields input[type="text"],
 .lab-order-item__fields input[type="date"],
+.lab-order-item__fields input[type="datetime-local"],
+.lab-order-item__fields input[type="time"],
 .lab-order-item__fields input[type="number"],
 .lab-order-item__fields select {
   font: inherit;
