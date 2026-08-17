@@ -387,6 +387,10 @@ DO（複写して新規登録）ではテンプレートの紐付けを外す。
 `remarks_template_canonical`）。id ではなく canonical にしたのは、テンプレートを作り直しても
 指し先が変わらないようにするため（`QuestionnaireResponse.questionnaire` と同じ形）。
 
+CT の特別指示テンプレートは `docs/report-mappings/rad-ct-01.md`（`RAD_CT_01`）。造影の指示・
+前処置・搬送・読影の希望を訊く。JJ1017 の特殊指示（別表6B）が 2桁 × 1 個しか持てず、依頼ごとに
+変わる後処理・前処置を項目コードでは表せないことへの当面の答えでもある。
+
 追加ファイル: `fhir/radOrderHelpers.ts`、`components/RadOrderForm.tsx` /
 `RadOrderPanels.tsx` / `RadOrderDetailPanel.tsx`、`hooks/useRadOrderInitialValues.ts` /
 `useConditionOptions.ts`、`api/queries.ts` に `useRadOrderDetail` / `useDeleteRadOrder`。
