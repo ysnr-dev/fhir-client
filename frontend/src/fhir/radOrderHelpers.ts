@@ -161,8 +161,6 @@ export interface RadOrderFormValues {
    * 空なら撮影日だけのオーダー(時間帯は撮影側に任せる)。
    */
   authoredTime: string;
-  /** 依頼コメント(臨床情報・読影依頼事項)。 */
-  comment: string;
   // 対象プロブレム(POMR)。null なら特定の問題に紐付かない検査。
   problem: ProblemRef | null;
   items: RadOrderItemLine[];
@@ -178,7 +176,6 @@ export function emptyRadOrderForm(problem: ProblemRef | null = null): RadOrderFo
     priority: "routine",
     authoredDate: today(),
     authoredTime: "",
-    comment: "",
     problem,
     items: [],
   };
@@ -602,9 +599,6 @@ function buildRadOrderServiceRequest(
     ];
   }
   applyOrderContext(resource, requester);
-  if (values.comment) {
-    resource.note = [{ text: values.comment }];
-  }
 
   return resource;
 }
@@ -678,7 +672,7 @@ export interface RadOrderSplit {
  * マスタで「単独」にした項目は 1 オーダー 1 撮影項目にする。オーダー画面では他の
  * 項目と一度に選べるが、登録時にここで別のオーダー(別のカルテカード)へ分ける。
  *
- * 入外区分・至急区分・撮影日時・依頼コメント・対象プロブレムは伝票共通の入力なので
+ * 入外区分・至急区分・撮影日時・対象プロブレムは伝票共通の入力なので
  * 各オーダーへ写す。並びは、まとめられる項目のオーダーを先頭に、単独の項目を選んだ順。
  */
 export function splitRadOrderValues(values: RadOrderFormValues): RadOrderSplit[] {
@@ -901,10 +895,6 @@ function parentRequestId(sr: fhir4.ServiceRequest): string | undefined {
   return reference?.startsWith("ServiceRequest/") ? reference.split("/")[1] : undefined;
 }
 
-export function radOrderComment(sr: fhir4.ServiceRequest): string {
-  return sr.note?.[0]?.text ?? "";
-}
-
 /**
  * 撮影時刻(HH:mm)。時刻を指定せずにオーダーしたもの(occurrenceDateTime が
  * 日付のみ)は空。
@@ -933,7 +923,6 @@ export function parseRadOrderForm(
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as RadOrderPriority,
     authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
     authoredTime: radOrderTime(sr),
-    comment: radOrderComment(sr),
     problem: radOrderProblem(sr),
     items: radOrderItems(sr, items),
   };

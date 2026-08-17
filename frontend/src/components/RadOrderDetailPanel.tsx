@@ -5,7 +5,6 @@ import {
   bodySiteLabel,
   entryLabel,
   orderEntries,
-  radOrderComment,
   radOrderItems,
   radOrderProblem,
   radOrderTime,
@@ -32,7 +31,6 @@ export function RadOrderDetailPanel({
 }: RadOrderDetailPanelProps) {
   const summary = summarizeRadOrder(serviceRequest);
   const entries = orderEntries(radOrderItems(serviceRequest, itemRequests));
-  const comment = radOrderComment(serviceRequest);
 
   const problem = radOrderProblem(serviceRequest);
   const currentProblem = problem ? problemsById?.get(problem.conditionId) : undefined;
@@ -56,8 +54,6 @@ export function RadOrderDetailPanel({
           <dd>{summary.priorityDisplay || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
           <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
-          <dt>依頼コメント</dt>
-          <dd>{comment || "-"}</dd>
         </dl>
       </fieldset>
 

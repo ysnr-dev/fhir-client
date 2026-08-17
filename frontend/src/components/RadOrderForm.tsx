@@ -127,7 +127,6 @@ export function RadOrderForm({
 }: RadOrderFormProps) {
   const [values, setValues] = useState<RadOrderFormValues>(initialValues ?? emptyRadOrderForm);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const [active, setActive] = useState<ActiveTab | null>(null);
   const [searchCodes, setSearchCodes] = useState<string[]>([]);
   const [templateTarget, setTemplateTarget] = useState<TemplateTarget | null>(null);
@@ -587,41 +586,9 @@ export function RadOrderForm({
           {/* 至急区分・撮影日・撮影時刻は伝票共通ではなく「選択中」のオーダー枠ごとに
               入力する(オーダー単位で扱いが変わり、予約必須の項目は予約から日時が
               入るため)。 */}
-          {commentOpen ? (
-            <div className="prescription-form__comment-field">
-              <label>
-                依頼コメント
-                <input
-                  type="text"
-                  value={values.comment}
-                  onChange={(e) => update("comment", e.target.value)}
-                  placeholder="オーダー全体への申し送り"
-                />
-              </label>
-              <button
-                type="button"
-                className="rp-card__icon-button"
-                title="依頼コメントを削除"
-                aria-label="依頼コメントを削除"
-                onClick={() => {
-                  setCommentOpen(false);
-                  update("comment", "");
-                }}
-              >
-                <TrashIcon />
-              </button>
-            </div>
-          ) : (
-            <div className="prescription-form__comment-toggle">
-              <button
-                type="button"
-                className="comment-add-button"
-                onClick={() => setCommentOpen(true)}
-              >
-                ＋依頼コメント
-              </button>
-            </div>
-          )}
+          {/* 伝票共通の依頼コメントは持たない。1 オーダーの単位が撮影項目ごとに
+              変わり、伝票全体への申し送りが行き先を持たなくなったため
+              (申し送りは GP 単位の特別指示に書く)。 */}
         </fieldset>
 
         {/* 撮影伝票(レイアウト)と撮影項目検索の切替。伝票が複数あればその数だけタブが並ぶ。 */}

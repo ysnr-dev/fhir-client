@@ -50,7 +50,6 @@ import {
   bodySiteLabel,
   entryLabel,
   orderEntries,
-  radOrderComment,
   radOrderItems,
   radOrderTime,
   summarizeRadOrder,
@@ -859,7 +858,6 @@ function RadOrderCardBody({
   performs: RadPerformDisplay[];
 }) {
   const entries = orderEntries(radOrderItems(serviceRequest, itemRequests));
-  const comment = radOrderComment(serviceRequest);
 
   // 撮影項目が無いオーダーでも、実施情報が付いていれば出す。
   if (entries.length === 0) {
@@ -915,7 +913,6 @@ function RadOrderCardBody({
           </div>
         );
       })}
-      {comment && <p className="karte-card__note">{comment}</p>}
       <RadPerformSection performs={performs} />
     </>
   );
