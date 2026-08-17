@@ -63,7 +63,6 @@ import {
   buildSlotCreateBundle,
   buildSlotDeleteBundle,
   scheduleTypeOf,
-  slotDate,
   type ScheduleType,
   type SlotStatus,
 } from "../fhir/scheduleHelpers";
@@ -73,6 +72,7 @@ import {
   buildCancelBundle,
   buildCancelEntries,
   buildRescheduleBundle,
+  buildRescheduleEntries,
   isActiveAppointment,
 } from "../fhir/appointmentHelpers";
 import {
@@ -1092,6 +1092,29 @@ export function useAppointment(id: string | undefined) {
   });
 }
 
+/**
+ * 放射線オーダーに紐づく有効な検査予約(1 オーダーに 1 件)。予約日時の変更は
+ * オーダーの編集画面から行うので、編集を開くときに予約の現物を用意しておく。
+ */
+export function useRadOrderAppointment(srId: string | undefined) {
+  const params = new URLSearchParams();
+  if (srId) params.set("based-on", `ServiceRequest/${srId}`);
+
+  const query = useQuery({
+    queryKey: ["Appointment", "rad-order", srId],
+    queryFn: () => searchResource<fhir4.Appointment>("Appointment", params),
+    enabled: Boolean(srId),
+  });
+
+  return {
+    ...query,
+    appointment: (query.data?.data.entry ?? [])
+      .map((e) => e.resource)
+      .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
+      .find(isActiveAppointment),
+  };
+}
+
 // 予約の登録・取消・日時変更。いずれも Appointment と Slot を 1 つの transaction で
 // 書く(Bundle の組み立ては appointmentHelpers を参照)。
 //
@@ -1129,6 +1152,11 @@ export function useCancelAppointment() {
   });
 }
 
+/**
+ * 診察予約の日時変更。検査予約(オーダーにぶら下がる予約)の日時は、オーダーヘッダの
+ * 撮影日時と同時に動かす必要があるので、この mutation ではなく放射線オーダーの更新
+ * (useUpdateRadOrder)に同梱して変える。
+ */
 export function useRescheduleAppointment() {
   const queryClient = useQueryClient();
 
@@ -1141,41 +1169,10 @@ export function useRescheduleAppointment() {
       slots: fhir4.Slot[];
     }) =>
       postBundle(
-        buildRescheduleBundle(
-          appointment,
-          await fetchAppointmentSlots(appointment),
-          slots,
-          await fetchExamOrderSyncEntries(appointment, slots),
-        ),
+        buildRescheduleBundle(appointment, await fetchAppointmentSlots(appointment), slots),
       ),
-    onSuccess: () => {
-      invalidateAppointments(queryClient);
-      // 検査予約はオーダーの撮影日時も動かすので、カルテカード・部門一覧も読み直させる。
-      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
-    },
+    onSuccess: () => invalidateAppointments(queryClient),
   });
-}
-
-/**
- * 検査予約の日時変更でオーダー側も追従させる書き込み。オーダーヘッダの撮影日時
- * (occurrenceDateTime / authoredOn)は予約の枠と同期していないと、放射線検査一覧が
- * 古い日付のままになってしまう。診察予約(basedOn なし)では空を返す。
- */
-async function fetchExamOrderSyncEntries(
-  appointment: fhir4.Appointment,
-  newSlots: fhir4.Slot[],
-): Promise<fhir4.BundleEntry[]> {
-  const headerId = appointment.basedOn?.[0]?.reference?.split("/").pop();
-  if (!headerId) return [];
-
-  const { data: header } = await readResource<fhir4.ServiceRequest>("ServiceRequest", headerId);
-  const slot = newSlots[0];
-  const updated: fhir4.ServiceRequest = {
-    ...header,
-    authoredOn: slotDate(slot),
-    occurrenceDateTime: slot.start,
-  };
-  return [{ resource: updated, request: { method: "PUT", url: `ServiceRequest/${headerId}` } }];
 }
 
 export function usePrescriptionDetail(srId: string | undefined) {
@@ -3202,6 +3199,48 @@ export function useDeleteMicroOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
+  });
+}
+
+/** 予約日時の変更(付け替え先の枠)。放射線オーダーの更新に同梱する。 */
+export interface RadBookingChange {
+  appointment: fhir4.Appointment;
+  slots: fhir4.Slot[];
+}
+
+/**
+ * 放射線オーダーの更新。予約日時を変えたときは、予約の付け替え(Appointment の日時と
+ * 枠の busy/free)も同じ transaction で書く。オーダーだけ・予約だけが動いて撮影日時が
+ * 食い違うことを防ぐため。
+ *
+ * ヘッダの撮影日時は Bundle を組む前に新しい枠の日時にしてある(フォームが枠を選んだ
+ * 時点で書き換える)ので、ここではオーダー側に触らない。
+ */
+export function useUpdateRadOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      bundle,
+      booking,
+    }: {
+      bundle: fhir4.Bundle;
+      booking: RadBookingChange | null;
+    }) => {
+      if (!booking) return postBundle(bundle);
+      // 空きに戻す元の枠は参照しか持っていないので、ここで引き直す(取消と同じ)。
+      const entries = buildRescheduleEntries(
+        booking.appointment,
+        await fetchAppointmentSlots(booking.appointment),
+        booking.slots,
+      );
+      return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...entries] });
+    },
+    onSuccess: () => {
+      // 撮影日時が動くと放射線検査一覧の当日ぶんも変わるので、ServiceRequest は
+      // まとめて読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      invalidateAppointments(queryClient);
     },
   });
 }

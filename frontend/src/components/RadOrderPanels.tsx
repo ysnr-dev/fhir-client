@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCreatePrescription, usePatient, useUpdatePrescription } from "../api/queries";
+import {
+  useCreatePrescription,
+  usePatient,
+  useRadOrderAppointment,
+  useUpdateRadOrder,
+} from "../api/queries";
 import type { SlotSelection } from "../fhir/appointmentHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { prescriptionRequester } from "../fhir/prescriptionHelpers";
@@ -116,24 +121,39 @@ interface RadOrderEditPanelProps {
 }
 
 export function RadOrderEditPanel({ patientId, srId, onSaved }: RadOrderEditPanelProps) {
-  const updateRadOrder = useUpdatePrescription();
+  const updateRadOrder = useUpdateRadOrder();
   const { serviceRequest, itemIds, responseIds, initialValues, ready, patientMismatch, error } =
     useRadOrderInitialValues(srId, patientId);
+  // 予約日時の変更もこの画面から行うので、オーダーに紐づく検査予約を読んでおく
+  // (予約タブからは変えない。オーダーの撮影日時と必ず一緒に動かすため)。
+  const booking = useRadOrderAppointment(srId);
 
-  function handleSubmit(values: RadOrderFormValues) {
+  function handleSubmit(
+    values: RadOrderFormValues,
+    _performs: RadImmediatePerforms | null,
+    bookings: Record<string, SlotSelection> | null,
+  ) {
     // 別患者のオーダーを更新すると subject が URL の患者に書き換わってしまうので防ぐ。
     if (!serviceRequest || patientMismatch) return;
+    // 予約日時を選び直したときだけ、予約の付け替えを同じ transaction に同梱する。
+    // 編集は 1 オーダーへの書き戻しなので、予約も選択もそのオーダーの 1 件だけ。
+    const selection = bookings ? Object.values(bookings)[0] : undefined;
+    const appointment = booking.appointment;
+
     // 依頼科・依頼医師は登録時のものを引き継ぐ(処方・注射・検体検査の編集と同じ)。
     // 外した撮影項目・参照が外れたテンプレート回答は、元の id との差分で DELETE される。
     updateRadOrder.mutate(
-      buildRadOrderUpdateBundle(
-        values,
-        patientId,
-        srId,
-        itemIds,
-        responseIds,
-        prescriptionRequester(serviceRequest),
-      ),
+      {
+        bundle: buildRadOrderUpdateBundle(
+          values,
+          patientId,
+          srId,
+          itemIds,
+          responseIds,
+          prescriptionRequester(serviceRequest),
+        ),
+        booking: selection && appointment ? { appointment, slots: selection.slots } : null,
+      },
       { onSuccess: onSaved },
     );
   }
@@ -141,8 +161,9 @@ export function RadOrderEditPanel({ patientId, srId, onSaved }: RadOrderEditPane
   return (
     <>
       <ErrorBanner error={error} />
+      <ErrorBanner error={booking.error} />
 
-      {!ready ? (
+      {!ready || booking.isLoading ? (
         <p>読み込み中...</p>
       ) : (
         serviceRequest &&
@@ -155,6 +176,7 @@ export function RadOrderEditPanel({ patientId, srId, onSaved }: RadOrderEditPane
             submitError={updateRadOrder.error}
             submitLabel="更新"
             editing
+            hasBooking={Boolean(booking.appointment)}
           />
         )
       )}

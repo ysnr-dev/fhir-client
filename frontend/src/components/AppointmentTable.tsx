@@ -41,9 +41,9 @@ export function AppointmentTable({
         {appointments.map((appointment) => {
           // 取り消した予約・受診が済んだ予約は日時を動かせない(枠はもう空きに戻っている)。
           const active = isActiveAppointment(appointment);
-          // 検査予約は放射線オーダーとひとかたまり。日時変更はオーダーの撮影日時も
-          // 同期するのでここからできるが、取消はオーダー削除の一部としてだけ行う
-          // (予約だけ消えてオーダーが残る事故を防ぐ)。
+          // 検査予約は放射線オーダーとひとかたまりなので、ここからは動かさない。
+          // 日時変更はオーダーの編集(撮影日時と一緒に動かす)、取消はオーダーの削除
+          // (予約だけ消えてオーダーが残る事故を防ぐ)でだけ行う。
           const exam = isExamAppointment(appointment);
 
           return (
@@ -59,27 +59,29 @@ export function AppointmentTable({
               <td className="patient-table__actions">
                 {active && (
                   <RowMenu label={`${appointmentDateTimeLabel(appointment)} の予約の操作`}>
-                    <button
-                      type="button"
-                      className="row-menu__item"
-                      onClick={() => appointment.id && onReschedule(appointment.id)}
-                      disabled={busy}
-                    >
-                      日時を変更
-                    </button>
                     {exam ? (
                       <span className="row-menu__item row-menu__item--muted">
-                        取消は放射線オーダーの削除から
+                        日時変更・取消は放射線オーダーから
                       </span>
                     ) : (
-                      <button
-                        type="button"
-                        className="row-menu__item row-menu__item--danger"
-                        onClick={() => onCancel(appointment)}
-                        disabled={busy}
-                      >
-                        取消
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="row-menu__item"
+                          onClick={() => appointment.id && onReschedule(appointment.id)}
+                          disabled={busy}
+                        >
+                          日時を変更
+                        </button>
+                        <button
+                          type="button"
+                          className="row-menu__item row-menu__item--danger"
+                          onClick={() => onCancel(appointment)}
+                          disabled={busy}
+                        >
+                          取消
+                        </button>
+                      </>
                     )}
                   </RowMenu>
                 )}

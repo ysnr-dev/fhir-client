@@ -11,7 +11,6 @@ import {
   appointmentDepartmentCode,
   buildAppointment,
   emptyAppointmentForm,
-  isExamAppointment,
   type AppointmentFormValues,
 } from "../fhir/appointmentHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
@@ -127,14 +126,10 @@ export function AppointmentReschedulePanel({
 
       <ErrorBanner error={reschedule.error} />
 
-      {/* 元の予約と同じ種別・診療科・担当医から探し始める。検査予約(オーダーに
-          ぶら下がる予約)の取り直し先は検査予約の枠に限り、元と同じ所要時間ぶんの
-          連続枠が組める時刻だけ選べる。 */}
+      {/* 元の予約と同じ診療科・担当医から探し始める。ここに来るのは診察予約だけ
+          (検査予約の日時は放射線オーダーの編集から、撮影日時と一緒に変える)。 */}
       <AppointmentSlotPicker
-        scheduleType={isExamAppointment(appointment) ? "exam" : "consultation"}
-        requiredMinutes={
-          isExamAppointment(appointment) ? appointment.minutesDuration : undefined
-        }
+        scheduleType="consultation"
         defaultDepartmentCode={appointmentDepartmentCode(appointment)}
         defaultPractitionerId={appointmentActorId(appointment, "Practitioner")}
         selected={selection}

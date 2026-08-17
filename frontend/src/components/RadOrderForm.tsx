@@ -83,7 +83,10 @@ interface RadOrderFormProps {
   onSubmit: (
     values: RadOrderFormValues,
     performs: RadImmediatePerforms | null,
-    /** 予約必須オーダーの予約(キーは撮影項目コード)。至急・編集では null。 */
+    /**
+     * 予約必須オーダーの予約(キーは撮影項目コード)。至急のオーダーでは取らない。
+     * 編集では、予約日時を選び直したときだけ付け替え先の枠が入る。
+     */
     bookings: Record<string, SlotSelection> | null,
   ) => void;
   submitting: boolean;
@@ -94,6 +97,11 @@ interface RadOrderFormProps {
    * 分けられず、単独の項目を他の項目と同居させられない(新規登録は分けられる)。
    */
   editing?: boolean;
+  /**
+   * 編集で、このオーダーに紐づく検査予約が見つかっているか。予約があるときだけ
+   * 日時の変更を出す(付け替える先の予約が無ければ変えようがない)。
+   */
+  hasBooking?: boolean;
 }
 
 type ActiveTab = { kind: "layout"; id: number } | { kind: "search" };
@@ -124,6 +132,7 @@ export function RadOrderForm({
   submitError,
   submitLabel = "登録",
   editing = false,
+  hasBooking = false,
 }: RadOrderFormProps) {
   const [values, setValues] = useState<RadOrderFormValues>(initialValues ?? emptyRadOrderForm);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -458,14 +467,14 @@ export function RadOrderForm({
       return;
     }
 
-    // 至急のオーダーの予約は取らない。編集の予約変更は予約タブの担当なので渡さない。
-    const activeBookings = editing
-      ? null
-      : Object.fromEntries(
-          Object.entries(bookings).filter(([code]) =>
-            groups.some((line) => line.code === code && line.priority !== "urgent"),
-          ),
-        );
+    // 至急のオーダーの予約は取らない。編集では、枠を選び直したぶんだけが入る
+    // (選ばなければ空なので、予約は今のままになる)。
+    const selected = Object.fromEntries(
+      Object.entries(bookings).filter(([code]) =>
+        groups.some((line) => line.code === code && line.priority !== "urgent"),
+      ),
+    );
+    const activeBookings = Object.keys(selected).length > 0 ? selected : null;
 
     setValidationError(null);
     onSubmit(
@@ -519,6 +528,16 @@ export function RadOrderForm({
   function commitBooking() {
     if (!bookingTarget || !pendingBooking) return;
     setBookings((current) => ({ ...current, [bookingTarget]: pendingBooking }));
+    // 編集は 1 オーダーへの書き戻しで、ヘッダの撮影日時が予約の枠と同期している値。
+    // 選び直した枠に合わせてここで書き換える(新規登録では登録時に枠から写す)。
+    if (editing) {
+      const slot = pendingBooking.slots[0];
+      setValues((current) => ({
+        ...current,
+        authoredDate: slotDate(slot),
+        authoredTime: slotTime(slot),
+      }));
+    }
     setBookingTarget(null);
     setPendingBooking(null);
   }
@@ -726,10 +745,20 @@ export function RadOrderForm({
                 schedule={
                   reserved && !urgent ? (
                     editing ? (
-                      // 編集は 1 オーダーへの書き戻しなので、日時は予約と同期している
-                      // ヘッダの値を表示するだけ。変更は予約タブの日時変更から。
-                      <span className="rad-order-frame__note">
-                        撮影日時 {values.authoredDate} {values.authoredTime}(変更は予約タブから)
+                      // 編集では、予約日時もここから変える(予約タブからは変えない。
+                      // オーダーの撮影日時と予約を必ず一緒に動かすため)。日時は予約と
+                      // 同期しているヘッダの値で、枠を選び直すとその枠の日時になる。
+                      <span className="rad-order-frame__booking">
+                        <span className="rad-order-frame__booked">
+                          撮影日時 {values.authoredDate} {values.authoredTime}
+                        </span>
+                        {hasBooking ? (
+                          <button type="button" onClick={() => openBooking(code)}>
+                            予約日時を変更
+                          </button>
+                        ) : (
+                          <span className="rad-order-frame__note">(予約が見つかりません)</span>
+                        )}
                       </span>
                     ) : booking ? (
                       <span className="rad-order-frame__booking">

@@ -229,16 +229,15 @@ export function buildCancelBundle(
 }
 
 /**
- * 日時を変える。古い枠を空きに戻し、新しい枠を押さえ、予約の日時を差し替える。
- * extraEntries は同じ transaction で書きたい同期の書き込み(検査予約なら
- * 放射線オーダーヘッダの撮影日時)。
+ * 日時を変えるエントリ。古い枠を空きに戻し、新しい枠を押さえ、予約の日時を差し替える。
+ * 診察予約の日時変更(予約タブ)のほか、放射線オーダーの更新 transaction にもこのまま
+ * 同梱する(検査予約の日時はオーダーの編集画面から変える)。
  */
-export function buildRescheduleBundle(
+export function buildRescheduleEntries(
   appointment: fhir4.Appointment,
   oldSlots: fhir4.Slot[],
   newSlots: fhir4.Slot[],
-  extraEntries: fhir4.BundleEntry[] = [],
-): fhir4.Bundle {
+): fhir4.BundleEntry[] {
   const first = newSlots[0];
   const last = newSlots[newSlots.length - 1];
   const moved: fhir4.Appointment = {
@@ -252,15 +251,23 @@ export function buildRescheduleBundle(
   // 同じ枠に取り直した場合に free で上書きしないよう、古い枠から新しい枠を除く。
   const newIds = new Set(newSlots.map((slot) => slot.id));
 
+  return [
+    { resource: moved, request: { method: "PUT", url: `Appointment/${appointment.id}` } },
+    ...oldSlots.filter((slot) => !newIds.has(slot.id)).map((slot) => slotEntry(slot, "free")),
+    ...newSlots.map((slot) => slotEntry(slot, "busy")),
+  ];
+}
+
+/** 日時を変える。 */
+export function buildRescheduleBundle(
+  appointment: fhir4.Appointment,
+  oldSlots: fhir4.Slot[],
+  newSlots: fhir4.Slot[],
+): fhir4.Bundle {
   return {
     resourceType: "Bundle",
     type: "transaction",
-    entry: [
-      { resource: moved, request: { method: "PUT", url: `Appointment/${appointment.id}` } },
-      ...oldSlots.filter((slot) => !newIds.has(slot.id)).map((slot) => slotEntry(slot, "free")),
-      ...newSlots.map((slot) => slotEntry(slot, "busy")),
-      ...extraEntries,
-    ],
+    entry: buildRescheduleEntries(appointment, oldSlots, newSlots),
   };
 }
 
