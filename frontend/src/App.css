@@ -6124,13 +6124,22 @@ body.page-wide #root {
   margin-left: 8px;
 }
 
-/* ケバブは同じ行に並ぶボタンと高さ・上下位置を揃える
-   (.row-menu__trigger の小さめの padding / line-height を打ち消す)。
-   三点リーダーだけなので横幅はボタンより詰める。 */
+/* 行の操作は、既定のボタンサイズのままだと文字だけの行より 18px 高くなり、
+   操作のない行との間で行の高さがそろわない。文字 1 行に収まる高さまで詰める。
+   line-height を明示するのは、既定では本文の行送り(26px)を font: inherit で
+   受け継いでしまい、padding を削っただけでは縮まないため(外来一覧と同じ)。 */
+.rad-worklist__actions button {
+  padding: 2px 10px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* ケバブは同じ行に並ぶボタンと高さ・上下位置を揃える。三点リーダーだけなので
+   横幅はボタンより詰める。 */
 .rad-worklist__actions .row-menu__trigger {
-  padding: 8px 7px;
+  padding: 2px 7px;
   font-size: 15px;
-  line-height: normal;
+  line-height: 20px;
 }
 
 /* 件数は表の右端に合わせる(行の操作列と同じ側に置いて視線を戻さない)。 */
@@ -6223,11 +6232,23 @@ body.page-wide #root {
   margin-left: 8px;
 }
 
-/* ケバブは同じ行に並ぶボタンと高さ・上下位置を揃える(放射線検査一覧と同じ)。 */
+/* 行の操作は、既定のボタンサイズのままだと文字だけの行より 18px 高くなり、
+   操作のない行との間で行の高さがそろわない。文字 1 行に収まる高さまで詰める。
+   line-height を明示するのは、既定では本文の行送り(26px)を font: inherit で
+   受け継いでしまい、padding を削っただけでは縮まないため。 */
+.outpatient__actions button,
+.outpatient__actions .button {
+  padding: 2px 10px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* ケバブは同じ行に並ぶボタンと高さ・上下位置を揃える。三点リーダーだけなので
+   横幅はボタンより詰める。 */
 .outpatient__actions .row-menu__trigger {
-  padding: 8px 7px;
+  padding: 2px 7px;
   font-size: 15px;
-  line-height: normal;
+  line-height: 20px;
 }
 
 /* 件数は表の右端に合わせる(行の操作列と同じ側に置いて視線を戻さない)。 */
