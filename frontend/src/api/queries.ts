@@ -13,7 +13,7 @@ import {
   vitalSaveBundle,
   VITAL_ENTRY_SYSTEM,
 } from "../fhir/vitalHelpers";
-import { buildClinicalNoteDeleteBundle } from "../fhir/clinicalNoteHelpers";
+import { buildClinicalNoteDeleteBundle, toFhirDateTime } from "../fhir/clinicalNoteHelpers";
 import { sortDepartmentsByCode } from "../fhir/departmentHelpers";
 import {
   buildLabResultDeleteBundle,
@@ -67,6 +67,7 @@ import {
   type SlotStatus,
 } from "../fhir/scheduleHelpers";
 import {
+  appointmentActorId,
   appointmentSlotIds,
   buildBookBundle,
   buildCancelBundle,
@@ -74,6 +75,7 @@ import {
   buildRescheduleBundle,
   buildRescheduleEntries,
   isActiveAppointment,
+  isExamAppointment,
 } from "../fhir/appointmentHelpers";
 import {
   baseRoleOf,
@@ -1171,6 +1173,132 @@ export function useRescheduleAppointment() {
       postBundle(
         buildRescheduleBundle(appointment, await fetchAppointmentSlots(appointment), slots),
       ),
+    onSuccess: () => invalidateAppointments(queryClient),
+  });
+}
+
+// ---- 外来一覧(受付ワークリスト) ----
+//
+// 診察日 1 日ぶんの予約を読み、診療科・医師・診察室・状態での絞り込みは画面側で行う。
+// 上流は specialty や actor でも検索できるが、1 日ぶんなら数十件なので、全件読んで
+// から絞る方が絞り込みの切り替えで結果がぶれない(放射線検査一覧と同じ理由)。
+
+const OUTPATIENT_PAGE = 100;
+// 1 日の予約がこの件数を超えることは想定していない。超えた場合は読むのをやめ、
+// 画面に「一部のみ」と出す(黙って切り捨てると全件見えているように見えるため)。
+const OUTPATIENT_MAX_PAGES = 5;
+
+/** 外来一覧の 1 行。予約(Appointment)1 件ぶん。 */
+export interface OutpatientRow {
+  appointment: fhir4.Appointment;
+  patient?: fhir4.Patient;
+}
+
+export interface OutpatientListResult {
+  rows: OutpatientRow[];
+  /** 上限まで読んでも読み切れなかった。 */
+  truncated: boolean;
+}
+
+async function fetchOutpatientList(date: string): Promise<OutpatientListResult> {
+  const appointments: fhir4.Appointment[] = [];
+  const patientsById = new Map<string, fhir4.Patient>();
+  let truncated = false;
+
+  for (let page = 0; page < OUTPATIENT_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    // R4 の date は Appointment.start。「その日の予約」は ge / lt の AND で表す。
+    // 日付だけ(2026-08-18)を渡すと上流は UTC の 1 日として比べるため、朝 9 時前の
+    // 予約が前日に落ちる。ローカルの 0 時をタイムゾーン付きで渡して日の境界を合わせる。
+    params.append("date", `ge${toFhirDateTime(`${date}T00:00`)}`);
+    params.append("date", `lt${toFhirDateTime(`${addDays(date, 1)}T00:00`)}`);
+    params.set("_count", String(OUTPATIENT_PAGE));
+    params.set("_offset", String(page * OUTPATIENT_PAGE));
+    // 患者番号を出すのに患者の現物が要る。
+    params.set("_include", "Appointment:patient");
+
+    const { data: bundle } = await searchResource<fhir4.Resource>("Appointment", params);
+
+    let matched = 0;
+    for (const entry of bundle.entry ?? []) {
+      const resource = entry.resource;
+      if (resource?.resourceType === "Appointment") {
+        appointments.push(resource as fhir4.Appointment);
+        matched += 1;
+      } else if (resource?.resourceType === "Patient" && resource.id) {
+        patientsById.set(resource.id, resource as fhir4.Patient);
+      }
+    }
+
+    if (matched < OUTPATIENT_PAGE) break;
+    if (page === OUTPATIENT_MAX_PAGES - 1) truncated = true;
+  }
+
+  const rows = appointments
+    // 検査予約(オーダーにぶら下がる予約)の受付・実施は部門のワークリストが追うので
+    // 外来一覧には出さない。取消・誤登録はその日の外来から外れたものなので出さない。
+    .filter((appointment) => !isExamAppointment(appointment))
+    .filter(
+      (appointment) =>
+        appointment.status !== "cancelled" && appointment.status !== "entered-in-error",
+    )
+    .map((appointment) => ({
+      appointment,
+      patient: patientsById.get(appointmentActorId(appointment, "Patient")),
+    }));
+
+  // 診察の順に並べたいので開始時刻の早い順(予約タブの新しい順とは逆)。
+  rows.sort((a, b) => (a.appointment.start ?? "").localeCompare(b.appointment.start ?? ""));
+
+  return { rows, truncated };
+}
+
+/** 診察日 1 日ぶんの予約。日付が未選択の間は読みに行かない。 */
+export function useOutpatientList(date: string) {
+  return useQuery({
+    queryKey: ["Appointment", "outpatient", date],
+    queryFn: () => fetchOutpatientList(date),
+    enabled: Boolean(date),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 受付・受付取消を予約の status に書き込む。単体の PUT には If-Match(ETag)が
+ * 要るが、一覧は検索結果から Appointment を持っているだけで ETag を持たないので、
+ * If-Match の付かない transaction Bundle の PUT で書く(放射線 Task の進捗と同じ)。
+ */
+export function useUpdateAppointmentStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      appointment,
+      status,
+    }: {
+      appointment: fhir4.Appointment;
+      status: fhir4.Appointment["status"];
+    }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          {
+            resource: { ...appointment, status },
+            request: { method: "PUT", url: `Appointment/${appointment.id}` },
+          },
+        ],
+      }),
+    onSuccess: () => invalidateAppointments(queryClient),
+  });
+}
+
+/** 当日受付。枠を持たない予約を受付済で登録する(buildWalkInAppointment を参照)。 */
+export function useWalkInCheckIn() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (appointment: fhir4.Appointment) => createResource(appointment),
     onSuccess: () => invalidateAppointments(queryClient),
   });
 }

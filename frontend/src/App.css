@@ -6173,6 +6173,123 @@ body.page-wide #root {
   background: var(--surface-sunken);
 }
 
+/* 外来一覧(受付ワークリスト) --------------------------------------------- */
+
+/* 表の作りは放射線検査一覧と同じ。幅は page-wide で確保し、画面が狭いときは
+   ページ全体ではなく表の中だけを横にスクロールさせる。 */
+.outpatient-wrap {
+  overflow-x: auto;
+}
+
+.outpatient {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 8px;
+}
+
+.outpatient th,
+.outpatient td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.outpatient__time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 余った幅は予約枠の列だけが受け取る。他の列は中身なりの幅で左に詰める
+   (全列 nowrap のままだと余白が均等に配られて、行が間延びする)。 */
+.outpatient__schedule {
+  width: 100%;
+}
+
+/* td に display: flex を当てると行の下罫線がズレるため table-cell のまま並べる
+   (患者一覧の操作列と同じ理由)。 */
+.outpatient td.outpatient__actions {
+  text-align: right;
+}
+
+.outpatient__actions > button + .button,
+.outpatient__actions > .button + .button {
+  margin-left: 4px;
+}
+
+/* ケバブは操作の性質が違う(受付取消・予約取消)ので、進める操作より離して置く。 */
+.outpatient__actions > .button + .row-menu {
+  margin-left: 8px;
+}
+
+/* ケバブは同じ行に並ぶボタンと高さ・上下位置を揃える(放射線検査一覧と同じ)。 */
+.outpatient__actions .row-menu__trigger {
+  padding: 8px 7px;
+  font-size: 15px;
+  line-height: normal;
+}
+
+/* 件数は表の右端に合わせる(行の操作列と同じ側に置いて視線を戻さない)。 */
+.outpatient__count {
+  text-align: right;
+}
+
+.outpatient__status {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 受付済(待合にいる)だけを塗りつぶしで強調し、診療済は落ち着かせ、
+   未来院は地に沈める(放射線検査一覧の進捗と同じ使い分け)。 */
+.outpatient__status--checked-in {
+  color: var(--bg);
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.outpatient__status--fulfilled {
+  color: var(--lab-low);
+  border-color: var(--lab-low);
+}
+
+.outpatient__status--noshow {
+  color: var(--text);
+  border-color: var(--border);
+  background: var(--surface-sunken);
+}
+
+/* 当日受付モーダル。患者を選んだ後の受付内容。 */
+.walk-in__patient {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.walk-in__fields {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.walk-in__fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.walk-in__actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* 放射線器材マスタ ------------------------------------------------------- */
 
 /* 算定に使う特定器材の紐付け。名称・コード・操作を 1 行に並べる。 */

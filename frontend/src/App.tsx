@@ -51,6 +51,7 @@ import { QuestionnaireCreatePage } from "./pages/QuestionnaireCreatePage";
 import { QuestionnaireEditPage } from "./pages/QuestionnaireEditPage";
 import { QuestionnaireListPage } from "./pages/QuestionnaireListPage";
 import { QuestionnairePreviewPage } from "./pages/QuestionnairePreviewPage";
+import { OutpatientListPage } from "./pages/OutpatientListPage";
 import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 
@@ -76,6 +77,8 @@ function App() {
         </Link>
         <nav className="app__nav">
           <NavLink to="/patients">患者一覧</NavLink>
+          {/* 外来一覧はその日の予約患者を受付する画面。患者を探す患者一覧の隣に置く。 */}
+          <NavLink to="/outpatients">外来一覧</NavLink>
           {/* 部門業務は「依頼を受けた側」の画面。診療科がオーダーを出す患者一覧・カルテと、
               マスタメンテの間に置く。放射線以外の部門が増えたらここに並べる。 */}
           <HoverMenu label="部門業務">
@@ -222,6 +225,8 @@ function App() {
           <Route path="/schedules/new" element={<ScheduleCreatePage />} />
           <Route path="/schedules/:id/edit" element={<ScheduleEditPage />} />
           <Route path="/schedules/:id/slots" element={<ScheduleSlotCalendarPage />} />
+          {/* 外来の受付。その日の予約患者と当日受付の患者を捌くための一覧。 */}
+          <Route path="/outpatients" element={<OutpatientListPage />} />
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />

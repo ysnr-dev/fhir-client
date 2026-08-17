@@ -7,7 +7,9 @@
 //
 // なお Bundle の中の PUT には If-Match が付かないので、二人が同じ枠を同時に押さえる
 // 取り合いまでは防げない。1 施設で予約を取る端末が限られる前提で今回は許容している。
+import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import type { ProblemRef } from "./conditionHelpers";
+import { SSMIX2_DEPARTMENT_CODE_SYSTEM } from "./departmentCodes";
 import { displayName } from "./patientHelpers";
 import {
   APPOINTMENT_TYPE_SYSTEM,
@@ -42,6 +44,11 @@ export function isActiveAppointment(appointment: fhir4.Appointment): boolean {
   return ["proposed", "pending", "booked", "arrived", "checked-in", "waitlist"].includes(
     appointment.status,
   );
+}
+
+/** 受付できる予約(まだ受付が済んでいないもの)。外来一覧の「受付」の出し分けに使う。 */
+export function canCheckInAppointment(appointment: fhir4.Appointment): boolean {
+  return ["proposed", "pending", "booked", "arrived", "waitlist"].includes(appointment.status);
 }
 
 export interface AppointmentFormValues {
@@ -120,6 +127,103 @@ export function buildAppointment(
     appointment.reasonReference = [
       { reference: `Condition/${problem.conditionId}`, display: problem.display },
     ];
+  }
+
+  return appointment;
+}
+
+// ---- 当日受付 ----
+
+/** 当日受付の予約が押さえる名目の時間(分)。 */
+const WALK_IN_MINUTES = 15;
+
+export interface WalkInFormValues {
+  /** SS-MIX2 統一診療科コード。院内独自の科は空になり得る。 */
+  departmentCode: string;
+  departmentName: string;
+  practitionerId: string;
+  practitionerName: string;
+  locationId: string;
+  locationName: string;
+}
+
+/**
+ * 当日受付。予約なしで来院した患者を、枠(Slot)を持たない予約として受付済で作る。
+ * 枠がないので Slot の status を動かす transaction は要らず、単体の POST でよい。
+ *
+ * app-2 / app-3 により受付済(checked-in)の予約は start / end が必須なので、
+ * 受付時刻から名目の時間を入れる(診察の実時間を表すものではない)。
+ */
+export function buildWalkInAppointment(
+  patient: fhir4.Patient,
+  values: WalkInFormValues,
+  receivedAt: Date,
+): fhir4.Appointment {
+  const participant: fhir4.AppointmentParticipant[] = [
+    // participant の先頭は必ず患者(buildAppointment と同じ理由)。
+    {
+      actor: { reference: `Patient/${patient.id}`, display: displayName(patient) },
+      required: "required",
+      status: "accepted",
+    },
+  ];
+  if (values.practitionerId) {
+    participant.push({
+      actor: {
+        reference: `Practitioner/${values.practitionerId}`,
+        display: values.practitionerName || undefined,
+      },
+      required: "required",
+      status: "accepted",
+    });
+  }
+  if (values.locationId) {
+    participant.push({
+      actor: { reference: `Location/${values.locationId}`, display: values.locationName || undefined },
+      required: "required",
+      status: "accepted",
+    });
+  }
+
+  const appointment: fhir4.Appointment = {
+    resourceType: "Appointment",
+    status: "checked-in",
+    appointmentType: {
+      coding: [
+        {
+          system: APPOINTMENT_TYPE_SYSTEM,
+          code: "WALKIN",
+          display: appointmentTypeLabel("WALKIN"),
+        },
+      ],
+    },
+    // 予約枠を持たないので、枠名の代わりに「当日受付」を出す(appointmentScheduleLabel)。
+    description: appointmentTypeLabel("WALKIN"),
+    start: toFhirDateTime(toDateTimeInput(receivedAt)),
+    end: toFhirDateTime(
+      toDateTimeInput(new Date(receivedAt.getTime() + WALK_IN_MINUTES * 60_000)),
+    ),
+    minutesDuration: WALK_IN_MINUTES,
+    participant,
+  };
+
+  // 診療科。コードのある科は枠から取った予約(buildSchedule)と同じ形にし、
+  // コード未設定の院内独自科は名前だけ残す。
+  if (values.departmentCode) {
+    appointment.specialty = [
+      {
+        coding: [
+          {
+            system: SSMIX2_DEPARTMENT_CODE_SYSTEM,
+            code: values.departmentCode,
+            display: values.departmentName || undefined,
+          },
+        ],
+        text: values.departmentName || undefined,
+      },
+    ];
+  } else if (values.departmentName) {
+    appointment.specialty = [{ text: values.departmentName }];
   }
 
   return appointment;
@@ -301,6 +405,17 @@ function actorReference(
 /** 予約が引き継いでいる診療科コード(SS-MIX2)。日時変更で枠表を絞る初期値に使う。 */
 export function appointmentDepartmentCode(appointment: fhir4.Appointment): string {
   return appointment.specialty?.[0]?.coding?.[0]?.code ?? "";
+}
+
+/** 予約の診療科名。 */
+export function appointmentDepartmentLabel(appointment: fhir4.Appointment): string {
+  const specialty = appointment.specialty?.[0];
+  return specialty?.coding?.[0]?.display || specialty?.text || "";
+}
+
+/** 予約の開始時刻「09:00」。外来一覧の並び順の手掛かり。 */
+export function appointmentTimeLabel(appointment: fhir4.Appointment): string {
+  return appointment.start?.slice(11, 16) ?? "-";
 }
 
 /** 「2026-08-19(水) 09:00〜09:15」。 */
