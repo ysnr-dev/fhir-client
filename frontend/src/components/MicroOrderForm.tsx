@@ -509,7 +509,7 @@ function OrganismFieldset({
   );
 }
 
-// 臨床情報。疑い病名は放射線の依頼病名と同じ「登録病名から選ぶ or 直接入力」。
+// 臨床情報。疑い病名は登録病名のプルダウンから選ぶか直接入力する。
 function ClinicalInfoFieldset({
   patientId,
   specimen,

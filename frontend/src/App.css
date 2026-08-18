@@ -5420,25 +5420,43 @@ body.karte-wide .app__header {
   font-size: 12px;
 }
 
-/* 登録病名のセレクトと直接入力を横に並べる。高さはセレクトの本来の高さ
-   (= 対象プロブレムなど他のセレクトと同じ)に揃う。input 側は下の line-height で
-   セレクトより低くしてあるので、既定の stretch でセレクトの高さに合う。 */
+/* 依頼病名。入力欄の右に「病名」(登録病名から選ぶ)を置く。欄の幅は検査目的・
+   特別指示の textarea と揃うよう、ボタンぶんを差し引いた残り全部にする。 */
 .rad-gp__reason {
   display: flex;
   gap: 6px;
+  align-items: flex-start;
 }
 
-.rad-gp__reason select {
-  flex: 0 1 45%;
-  min-width: 0;
-}
-
-/* 直接入力欄。アプリ全体の input は継承した行の高さ(26.1px)で select より
-   7px ほど高くなるので、この行では行の高さを既定に戻して select と揃える。 */
 .rad-gp__reason input {
-  flex: 1 1 auto;
+  flex: 1;
   min-width: 0;
   line-height: normal;
+}
+
+/* 欄の付属操作なので、検査目的・特別指示の「テンプレート」と同じ控えめな見た目。 */
+.rad-gp__reason button {
+  align-self: flex-start;
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.rad-gp__reason button:hover {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+/* 依頼病名・検査目的・特別指示の入力欄の右端をそろえる。3 つの欄はそれぞれ別の
+   label(= 別の grid)なので列幅を共有できず、右の操作列の幅を最も広いボタン
+   (「テンプレート編集」)に合わせて固定することでそろえる。 */
+.rad-gp__reason-actions,
+.rad-gp__template-actions {
+  flex: none;
+  min-width: 116px;
 }
 
 .rad-gp__template-field {
@@ -5464,7 +5482,6 @@ body.karte-wide .app__header {
    行の高さも横幅も変わらないようにするため。 */
 .rad-gp__template-actions {
   display: flex;
-  flex: none;
   flex-direction: column;
   gap: 4px;
 }

@@ -17,7 +17,6 @@ import {
   useRadItemsByCodes,
   useRadSetMembers,
 } from "../api/masterQueries";
-import type { ProblemRef } from "../fhir/conditionHelpers";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import {
@@ -47,7 +46,7 @@ import { scheduleSummary, slotDate, slotTime, today } from "../fhir/scheduleHelp
 import type { SlotSelection } from "../fhir/appointmentHelpers";
 import { AppointmentSlotPicker } from "./AppointmentSlotPicker";
 import { Modal } from "./Modal";
-import { useConditionOptions } from "../hooks/useConditionOptions";
+import { ConditionPickerModal } from "./ConditionPickerModal";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
@@ -139,6 +138,8 @@ export function RadOrderForm({
   const [active, setActive] = useState<ActiveTab | null>(null);
   const [searchCodes, setSearchCodes] = useState<string[]>([]);
   const [templateTarget, setTemplateTarget] = useState<TemplateTarget | null>(null);
+  // 依頼病名の選択モーダルを開いている GP(撮影項目コード)。
+  const [conditionTarget, setConditionTarget] = useState<string | null>(null);
   // 即実施。オーダー単位に選べる(添字はどちらも splitRadOrderValues のキー)。
   const [performNow, setPerformNow] = useState<Record<string, boolean>>({});
   const [performs, setPerforms] = useState<Record<string, RadPerformFormValues>>({});
@@ -157,7 +158,6 @@ export function RadOrderForm({
   );
 
   const problemOptions = useProblemOptions(patientId);
-  const conditionOptions = useConditionOptions(patientId);
   const layouts = useRadItemLayouts();
 
   const layoutTabs = useMemo(
@@ -702,8 +702,8 @@ export function RadOrderForm({
                   entry={entry}
                   number={index + 1}
                   solo={false}
-                  conditionOptions={conditionOptions}
                   onRemove={remove}
+                  onOpenConditionPicker={setConditionTarget}
                   onChange={updateItem}
                   onOpenTemplate={setTemplateTarget}
                 />
@@ -794,8 +794,8 @@ export function RadOrderForm({
                   entry={entry}
                   number={1}
                   solo
-                  conditionOptions={conditionOptions}
                   onRemove={remove}
+                  onOpenConditionPicker={setConditionTarget}
                   onChange={updateItem}
                   onOpenTemplate={setTemplateTarget}
                 />
@@ -835,6 +835,20 @@ export function RadOrderForm({
             setTemplateTarget(null);
           }}
           onClose={() => setTemplateTarget(null)}
+        />
+      )}
+
+      {/* 依頼病名の選択。Modal はポータルではないので、外側フォームの中に置くと
+          モーダル内の操作が外側フォームのイベントに乗る。他のモーダルと同じく外へ出す。 */}
+      {conditionTarget && (
+        <ConditionPickerModal
+          patientId={patientId}
+          title="依頼病名を選択"
+          onSelect={({ conditionId, name }) => {
+            updateItem(conditionTarget, { reasonConditionId: conditionId, reasonName: name });
+            setConditionTarget(null);
+          }}
+          onClose={() => setConditionTarget(null)}
         />
       )}
 
@@ -1050,27 +1064,23 @@ function GroupEditor({
   entry,
   number,
   solo,
-  conditionOptions,
   onRemove,
   onChange,
   onOpenTemplate,
+  onOpenConditionPicker,
 }: {
   entry: RadOrderEntry;
   number: number;
   /** 単独オーダーの項目(登録時にこの GP だけで 1 オーダーになる)。 */
   solo: boolean;
-  conditionOptions: ProblemRef[];
   onRemove: (code: string) => void;
   onChange: (code: string, patch: Partial<RadOrderItemLine>) => void;
   onOpenTemplate: (target: TemplateTarget) => void;
+  onOpenConditionPicker: (code: string) => void;
 }) {
   const { item, members } = entry;
   const modality = entryModalityName(entry);
   const site = bodySiteLabel(item);
-  // 保存済みの依頼病名が候補に無い(病名を消した)場合も、選択を失わせない。
-  const missingCondition =
-    Boolean(item.reasonConditionId) &&
-    !conditionOptions.some((o) => o.conditionId === item.reasonConditionId);
 
   return (
     <div className="rad-gp">
@@ -1115,31 +1125,6 @@ function GroupEditor({
         <label>
           依頼病名
           <div className="rad-gp__reason">
-            <select
-              value={item.reasonConditionId}
-              onChange={(e) => {
-                const conditionId = e.target.value;
-                const option = conditionOptions.find((o) => o.conditionId === conditionId);
-                onChange(item.code, {
-                  reasonConditionId: conditionId,
-                  // 選び直したら病名も入れ替える。直接入力に戻したときは文字列を残す。
-                  reasonName: option ? option.display : item.reasonName,
-                });
-              }}
-              aria-label="登録病名から選ぶ"
-            >
-              <option value="">(直接入力)</option>
-              {conditionOptions.map((option) => (
-                <option key={option.conditionId} value={option.conditionId}>
-                  {option.display}
-                </option>
-              ))}
-              {missingCondition && (
-                <option value={item.reasonConditionId}>
-                  {item.reasonName || "(不明)"} (削除済み)
-                </option>
-              )}
-            </select>
             <input
               type="text"
               value={item.reasonName}
@@ -1150,6 +1135,17 @@ function GroupEditor({
               }
               aria-label="依頼病名"
             />
+            {/* 登録済みの病名から写す。候補が数十件になっても選べるよう、
+                絞り込みのできるモーダルで選ぶ(プルダウンでは探せない)。 */}
+            <div className="rad-gp__reason-actions">
+              <button
+                type="button"
+                onClick={() => onOpenConditionPicker(item.code)}
+                title="登録されている病名から選ぶ"
+              >
+                病名
+              </button>
+            </div>
           </div>
         </label>
 
