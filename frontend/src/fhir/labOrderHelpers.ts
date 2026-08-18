@@ -587,6 +587,8 @@ export function buildDoLabOrderForm(values: LabOrderFormValues): LabOrderFormVal
 // ---- 一覧・カルテ表示のための parse ----
 
 export interface LabOrderSummary {
+  /** 入外区分のコード。一覧の絞り込みで使う(表示は settingDisplay)。 */
+  settingCode: string;
   settingDisplay: string;
   priorityDisplay: string;
   /** 至急のオーダーはカードで目立たせるため、区分そのものも返す。 */
@@ -602,8 +604,10 @@ function categoryCoding(sr: fhir4.ServiceRequest, system: string): fhir4.Coding 
 }
 
 export function summarizeLabOrder(sr: fhir4.ServiceRequest): LabOrderSummary {
+  const setting = categoryCoding(sr, SETTING_SYSTEM);
   return {
-    settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
+    settingCode: setting?.code ?? "",
+    settingDisplay: setting?.display ?? "",
     priorityDisplay: priorityDisplay(sr.priority),
     urgent: sr.priority === "urgent",
   };

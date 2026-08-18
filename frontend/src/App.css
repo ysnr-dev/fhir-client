@@ -6237,10 +6237,14 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
   font-weight: 600;
 }
 
-/* 放射線検査一覧(部門ワークリスト) --------------------------------------- */
+/* 検査一覧(部門ワークリスト) --------------------------------------------- */
 
-/* 一覧は列が多く 960px では患者名や依頼科まで折り返すので、この画面だけ
-   #root の幅を広げる(RadWorklistPage が body に付け外しする)。
+/* 放射線検査一覧(.rad-worklist)と検体検査一覧(.lab-worklist)は同じ作りの
+   表なので、共通の見た目はセレクタを並べて共有する。進捗・操作の列は
+   放射線検査一覧にしかないので .rad-worklist だけに当てる。 */
+
+/* 一覧は列が多く 960px では患者名や依頼科まで折り返すので、これらの画面だけ
+   #root の幅を広げる(各ワークリストのページが body に付け外しする)。
    カルテと違って際限なく広げないのは、横に伸びるほど行を目で追いにくくなるため。
    地の色も他の一覧画面と同じままにする。 */
 body.page-wide #root {
@@ -6249,18 +6253,22 @@ body.page-wide #root {
 
 /* 列を折り返さないぶん、画面が狭いと表がページからはみ出す。ページ全体を横に
    スクロールさせず、表の中だけで送れるようにする。 */
-.rad-worklist-wrap {
+.rad-worklist-wrap,
+.lab-worklist-wrap {
   overflow-x: auto;
 }
 
-.rad-worklist {
+.rad-worklist,
+.lab-worklist {
   width: 100%;
   border-collapse: collapse;
   margin-bottom: 8px;
 }
 
 .rad-worklist th,
-.rad-worklist td {
+.rad-worklist td,
+.lab-worklist th,
+.lab-worklist td {
   text-align: left;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
@@ -6274,22 +6282,25 @@ body.page-wide #root {
   font-variant-numeric: tabular-nums;
 }
 
-/* 余った幅は撮影内容の列だけが受け取る。他の列は中身なりの幅で左に詰める
-   (全列 nowrap のままだと余白が均等に配られて、行が間延びする)。 */
-.rad-worklist__content {
+/* 余った幅は検査内容(撮影内容)の列だけが受け取る。他の列は中身なりの幅で左に
+   詰める(全列 nowrap のままだと余白が均等に配られて、行が間延びする)。 */
+.rad-worklist__content,
+.lab-worklist__content {
   width: 100%;
 }
 
-/* 撮影内容は 1 オーダーに複数の GP が並ぶことがあるので箇条書きにする。
+/* 検査内容は 1 オーダーに複数の GP・検体が並ぶことがあるので箇条書きにする。
    1 行が長くなる列なので、ここだけは折り返しを許す。 */
-.rad-worklist__items {
+.rad-worklist__items,
+.lab-worklist__items {
   margin: 0;
   padding: 0;
   list-style: none;
   white-space: normal;
 }
 
-.rad-worklist__items > li + li {
+.rad-worklist__items > li + li,
+.lab-worklist__items > li + li {
   margin-top: 2px;
 }
 
@@ -6327,12 +6338,14 @@ body.page-wide #root {
 }
 
 /* 件数は表の右端に合わせる(行の操作列と同じ側に置いて視線を戻さない)。 */
-.rad-worklist__count {
+.rad-worklist__count,
+.lab-worklist__count {
   text-align: right;
 }
 
-/* 至急のオーダーは撮影の順番を決める手掛かりなので行ごと目立たせる。 */
-.rad-worklist__row--urgent > td:first-child {
+/* 至急のオーダーは捌く順番を決める手掛かりなので行ごと目立たせる。 */
+.rad-worklist__row--urgent > td:first-child,
+.lab-worklist__row--urgent > td:first-child {
   box-shadow: inset 3px 0 0 var(--lab-high);
 }
 

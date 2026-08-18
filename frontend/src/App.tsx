@@ -52,6 +52,7 @@ import { QuestionnaireEditPage } from "./pages/QuestionnaireEditPage";
 import { QuestionnaireListPage } from "./pages/QuestionnaireListPage";
 import { QuestionnairePreviewPage } from "./pages/QuestionnairePreviewPage";
 import { OutpatientListPage } from "./pages/OutpatientListPage";
+import { LabWorklistPage } from "./pages/LabWorklistPage";
 import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 
@@ -82,6 +83,9 @@ function App() {
           {/* 部門業務は「依頼を受けた側」の画面。診療科がオーダーを出す患者一覧・カルテと、
               マスタメンテの間に置く。放射線以外の部門が増えたらここに並べる。 */}
           <HoverMenu label="部門業務">
+            <Link to="/lab-worklist" className="row-menu__item">
+              検体検査一覧
+            </Link>
             <Link to="/rad-worklist" className="row-menu__item">
               放射線検査一覧
             </Link>
@@ -228,6 +232,7 @@ function App() {
           {/* 外来の受付。その日の予約患者と当日受付の患者を捌くための一覧。 */}
           <Route path="/outpatients" element={<OutpatientListPage />} />
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}
+          <Route path="/lab-worklist" element={<LabWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />

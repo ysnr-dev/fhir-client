@@ -24,6 +24,7 @@ import {
 } from "../fhir/labResultHelpers";
 import { isInjectionServiceRequest } from "../fhir/injectionHelpers";
 import {
+  LAB_ORDER_TYPE,
   buildLabOrderDeleteBundle,
   isOrderItemRequest,
   isLabServiceRequest,
@@ -1596,6 +1597,107 @@ export function useRegisterRadPerform() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
     },
+  });
+}
+
+// ---- 検体検査一覧(部門ワークリスト) ----
+//
+// 検査日(検体を採る日)で 1 日ぶんの検体検査オーダーを読む。作りは放射線検査一覧と
+// 同じで、上流で絞れるのは category と authoredon までなので、検体・入外区分・
+// 診療科での絞り込みは画面側で行う(理由は放射線検査一覧の節のコメントを参照)。
+//
+// 検査日は ServiceRequest.authoredOn で引く。オーダー画面の「検査日」がそのまま
+// authoredOn と occurrenceDateTime の両方に入るため(labOrderHelpers を参照)。
+
+const LAB_WORKLIST_PAGE = 100;
+// 1 日の検体検査がこの件数を超えることは想定していない。超えた場合は読むのをやめ、
+// 画面に「一部のみ」と出す(放射線検査一覧と同じ)。
+const LAB_WORKLIST_MAX_PAGES = 5;
+
+/** 検体検査一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
+export interface LabWorklistRow {
+  order: fhir4.ServiceRequest;
+  /** 検査項目(明細)。パネルの構成項目まで含む平坦な一覧。 */
+  itemRequests: fhir4.ServiceRequest[];
+  patient?: fhir4.Patient;
+}
+
+export interface LabWorklistResult {
+  rows: LabWorklistRow[];
+  /** 上限まで読んでも読み切れなかった。 */
+  truncated: boolean;
+}
+
+async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
+  const orders: fhir4.ServiceRequest[] = [];
+  const items: fhir4.ServiceRequest[] = [];
+  const patientsById = new Map<string, fhir4.Patient>();
+  let truncated = false;
+
+  for (let page = 0; page < LAB_WORKLIST_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("category", `${ORDER_TYPE_SYSTEM}|${LAB_ORDER_TYPE.code}`);
+    params.set("authoredon", date);
+    // 明細はオーダーそのものではないので、ヒットさせるのはヘッダだけにする。
+    params.set("based-on:missing", "true");
+    params.set("_count", String(LAB_WORKLIST_PAGE));
+    params.set("_offset", String(page * LAB_WORKLIST_PAGE));
+    // 検査項目・患者を 1 リクエストで揃える。
+    params.set("_revinclude:iterate", "ServiceRequest:based-on");
+    params.set("_include", "ServiceRequest:subject");
+
+    const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+
+    let matched = 0;
+    for (const entry of bundle.entry ?? []) {
+      const resource = entry.resource;
+      if (!resource) continue;
+      if (resource.resourceType === "Patient") {
+        if (resource.id) patientsById.set(resource.id, resource as fhir4.Patient);
+      } else if (resource.resourceType === "ServiceRequest") {
+        const request = resource as fhir4.ServiceRequest;
+        // 検索にヒットしたヘッダと、添えられた明細を分ける。
+        if (isLabServiceRequest(request) && !request.basedOn?.length) {
+          orders.push(request);
+          matched += 1;
+        } else {
+          items.push(request);
+        }
+      }
+    }
+
+    if (matched < LAB_WORKLIST_PAGE) break;
+    if (page === LAB_WORKLIST_MAX_PAGES - 1) truncated = true;
+  }
+
+  const rows = orders.map((order) => ({
+    order,
+    itemRequests: labOrderItemRequests(items, order.id ?? ""),
+    patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+  }));
+
+  // 検体検査オーダーは時刻を持たない(検査日だけ)ので、患者番号順に並べて
+  // 採血の呼び出しや検体の突き合わせで探しやすくする。
+  rows.sort(compareLabWorklistRows);
+
+  return { rows, truncated };
+}
+
+function compareLabWorklistRows(a: LabWorklistRow, b: LabWorklistRow): number {
+  const aNumber = a.patient?.identifier?.[0]?.value ?? "";
+  const bNumber = b.patient?.identifier?.[0]?.value ?? "";
+  // 患者が読めなかった行は末尾へ。
+  if (!aNumber || !bNumber) return aNumber ? -1 : bNumber ? 1 : 0;
+  return aNumber.localeCompare(bNumber, undefined, { numeric: true });
+}
+
+/** 検査日 1 日ぶんの検体検査オーダー。日付が未選択の間は読みに行かない。 */
+export function useLabWorklist(date: string) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "lab-worklist", date],
+    queryFn: () => fetchLabWorklist(date),
+    enabled: Boolean(date),
+    placeholderData: keepPreviousData,
   });
 }
 
