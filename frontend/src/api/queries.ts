@@ -1278,17 +1278,23 @@ export function useUpdateAppointmentStatus() {
     }: {
       appointment: fhir4.Appointment;
       status: fhir4.Appointment["status"];
-    }) =>
-      postBundle({
+    }) => {
+      // BundleEntry.resource は基底の Resource 型なので、更新後の予約は
+      // Appointment として組んでから渡す(直接書くと status が余剰プロパティに
+      // なる)。appointmentHelpers の slotEntry と同じ形。
+      const updated: fhir4.Appointment = { ...appointment, status };
+
+      return postBundle({
         resourceType: "Bundle",
         type: "transaction",
         entry: [
           {
-            resource: { ...appointment, status },
+            resource: updated,
             request: { method: "PUT", url: `Appointment/${appointment.id}` },
           },
         ],
-      }),
+      });
+    },
     onSuccess: () => invalidateAppointments(queryClient),
   });
 }
