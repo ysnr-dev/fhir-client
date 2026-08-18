@@ -640,6 +640,13 @@ export interface LabTimeline {
   rows: LabTimelineRow[];
 }
 
+// 時系列表示で同じ検査項目を1行にまとめるキー(LabTimelineRow.key)。
+// 検査結果内容ページの「選択項目のみ時系列表示」で行の絞り込みにも使う。
+export function labTimelineKeyOf(obs: fhir4.Observation): string {
+  const jlacCoding = codingBySystem(obs.code.coding, JLAC11_SYSTEM);
+  return jlacCoding?.code ?? `name:${jlacCoding?.display ?? obs.code.text ?? ""}`;
+}
+
 // DiagnosticReport(検体採取日の降順) と _include で取得した Observation から、
 // 「検査項目 × 検体採取日」のマトリクスを組み立てる。
 // 行の並びは新しいレポートでの登場順(= 登録時の項目順)になる。
@@ -668,7 +675,7 @@ export function buildLabTimeline(
 
       const jlacCoding = codingBySystem(obs.code.coding, JLAC11_SYSTEM);
       const name = jlacCoding?.display ?? obs.code.text ?? "";
-      const key = jlacCoding?.code ?? `name:${name}`;
+      const key = labTimelineKeyOf(obs);
       let row = rows.get(key);
       if (!row) {
         row = {

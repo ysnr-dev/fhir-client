@@ -14,7 +14,14 @@ import {
 const DEFAULT_DATE_COUNT = 10;
 const MAX_DATE_COUNT = 100;
 
-export function LabResultTimelinePanel({ patientId }: { patientId: string }) {
+interface LabResultTimelinePanelProps {
+  patientId: string;
+  // 指定時はキー(LabTimelineRow.key)が一致する検査項目の行だけを表示する。
+  // 検査結果内容ページの「選択項目のみ時系列表示」で使う。
+  filterKeys?: ReadonlySet<string>;
+}
+
+export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimelinePanelProps) {
   const [dateCount, setDateCount] = useState(DEFAULT_DATE_COUNT);
   const [checkedKeys, setCheckedKeys] = useState<ReadonlySet<string>>(new Set());
   const [chartOpen, setChartOpen] = useState(false);
@@ -23,6 +30,10 @@ export function LabResultTimelinePanel({ patientId }: { patientId: string }) {
   const timeline = useMemo(
     () => buildLabTimeline(data?.reports ?? [], data?.observations ?? [], dateCount),
     [data, dateCount],
+  );
+  const rows = useMemo(
+    () => (filterKeys ? timeline.rows.filter((row) => filterKeys.has(row.key)) : timeline.rows),
+    [timeline, filterKeys],
   );
 
   function handleDateCountChange(raw: number) {
@@ -45,7 +56,7 @@ export function LabResultTimelinePanel({ patientId }: { patientId: string }) {
   const chartSeries: LabTimelineSeries[] = useMemo(() => {
     // グラフの X 軸は古い順に並べる。
     const datesAscending = [...timeline.dates].reverse();
-    return timeline.rows
+    return rows
       .filter((row) => checkedKeys.has(row.key) && row.numbers.size > 0)
       .map((row) => ({
         key: row.key,
@@ -56,7 +67,7 @@ export function LabResultTimelinePanel({ patientId }: { patientId: string }) {
           return value != null ? [{ date, value }] : [];
         }),
       }));
-  }, [timeline, checkedKeys]);
+  }, [timeline, rows, checkedKeys]);
 
   return (
     <>
@@ -87,7 +98,7 @@ export function LabResultTimelinePanel({ patientId }: { patientId: string }) {
             <span className="lab-timeline__hint" />
           </div>
 
-          {timeline.rows.length === 0 ? (
+          {rows.length === 0 ? (
             <p className="patient-table__empty">検査結果がありません</p>
           ) : (
             <div className="lab-timeline__table-wrap">
@@ -120,7 +131,7 @@ export function LabResultTimelinePanel({ patientId }: { patientId: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {timeline.rows.map((row) => (
+                  {rows.map((row) => (
                     <TimelineRow
                       key={row.key}
                       row={row}

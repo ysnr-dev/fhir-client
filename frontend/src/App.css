@@ -1270,6 +1270,47 @@ fieldset.rp-card {
   width: 72px;
 }
 
+/* 検査結果(詳細)は先頭にチェックボックス列があるため、--detail の nth-child
+   幅指定を 1 列ずらして上書きする(同じ詳細度なので --detail より後に置く)。 */
+.rp-card__medicines--lab th.rp-card__lab-check,
+.rp-card__medicines--lab td.rp-card__lab-check {
+  width: 32px;
+  text-align: center;
+}
+
+.rp-card__medicines--lab th:nth-child(2),
+.rp-card__medicines--lab td:nth-child(2) {
+  width: 360px;
+  overflow-wrap: anywhere;
+}
+
+.rp-card__medicines--lab th:nth-child(3),
+.rp-card__medicines--lab td:nth-child(3),
+.rp-card__medicines--lab th:nth-child(4),
+.rp-card__medicines--lab td:nth-child(4) {
+  width: 72px;
+}
+
+/* 検査項目枠の上の操作(クリップボードにコピー・時系列表示)。右寄せ・小さめ。 */
+.lab-result-detail__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  /* .prescription-detail の gap(16px) を詰めて検査項目枠のすぐ上に見せる。 */
+  margin-bottom: -8px;
+}
+
+.lab-result-detail__actions button {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.lab-result-detail__copy-result {
+  font-size: 12px;
+  color: var(--text);
+}
+
 /* H/L 判定による結果値の色分け。H(高値): 赤字 / L(低値): 青字。
    ベースの td 色指定より詳細度を上げて上書きする。 */
 .rp-card__medicines--detail td.rp-card__lab-value--high,

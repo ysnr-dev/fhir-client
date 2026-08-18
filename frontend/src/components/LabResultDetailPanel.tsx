@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { useLabOrderDetail, useLabResultDetail } from "../api/queries";
 import {
   labOrderItemRequests,
@@ -7,6 +8,7 @@ import {
 } from "../fhir/labOrderHelpers";
 import {
   interpretationClass,
+  labTimelineKeyOf,
   observationLineDisplay,
   specimenNamesById,
   splitLabResultDetailBundle,
@@ -14,6 +16,8 @@ import {
 } from "../fhir/labResultHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { FhirJsonView } from "./FhirJsonView";
+import { LabResultTimelinePanel } from "./LabResultTimelinePanel";
+import { Modal } from "./Modal";
 
 // 検査結果の内容表示。詳細ページとカルテ画面の検査結果タブの双方から使う。
 // DO・編集・削除の操作ボタンと前後移動は、遷移先が異なるので呼び出し側が持つ。
@@ -37,13 +41,70 @@ function useLabOrderLabel(orderId: string | undefined): string {
 
 export function LabResultDetailPanel({ reportId }: { reportId: string }) {
   const detail = useLabResultDetail(reportId);
+  const [checkedIds, setCheckedIds] = useState<ReadonlySet<string>>(new Set());
+  const [copyResult, setCopyResult] = useState<"copied" | "failed" | null>(null);
+  const [timelineOpen, setTimelineOpen] = useState(false);
 
-  const { report, observations, specimens } = detail.data
-    ? splitLabResultDetailBundle(detail.data.data)
-    : { report: undefined, observations: [], specimens: [] };
+  // 前後移動などで別の検査結果に切り替わったら選択状態をリセットする。
+  useEffect(() => {
+    setCheckedIds(new Set());
+    setCopyResult(null);
+    setTimelineOpen(false);
+  }, [reportId]);
+
+  const { report, observations, specimens } = useMemo(
+    () =>
+      detail.data
+        ? splitLabResultDetailBundle(detail.data.data)
+        : { report: undefined, observations: [], specimens: [] },
+    [detail.data],
+  );
   const summary = report ? summarizeDiagnosticReport(report) : undefined;
   const specimenNames = specimenNamesById(specimens);
   const orderLabel = useLabOrderLabel(summary?.orderId);
+
+  // 時系列表示は患者単位の検索なので、レポートの subject から患者 id を引く。
+  const patientId = report?.subject?.reference?.split("/").pop() ?? "";
+  const checkedObservations = useMemo(
+    () => observations.filter((obs) => obs.id && checkedIds.has(obs.id)),
+    [observations, checkedIds],
+  );
+  const timelineKeys = useMemo(
+    () => new Set(checkedObservations.map(labTimelineKeyOf)),
+    [checkedObservations],
+  );
+
+  function toggleChecked(id: string) {
+    setCopyResult(null);
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  // チェックした項目の 略称・結果値・単位・H/L をタブ区切りでコピーする。
+  // 略称がない項目は項目名で代用する。
+  async function handleCopy() {
+    const text = checkedObservations
+      .map((obs) => {
+        const line = observationLineDisplay(obs, specimenNames);
+        return [line.abbreviation || line.name, line.value, line.unit, line.interpretation].join(
+          "\t",
+        );
+      })
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyResult("copied");
+    } catch {
+      setCopyResult("failed");
+    }
+  }
 
   return (
     <>
@@ -67,11 +128,33 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
               </dl>
             </fieldset>
 
+            <div className="lab-result-detail__actions">
+              <span className="lab-result-detail__copy-result" role="status">
+                {copyResult === "copied" && "コピーしました。"}
+                {copyResult === "failed" && "コピーに失敗しました。"}
+              </span>
+              <button
+                type="button"
+                disabled={checkedObservations.length === 0}
+                onClick={handleCopy}
+              >
+                クリップボードにコピー
+              </button>
+              <button
+                type="button"
+                disabled={checkedObservations.length === 0 || !patientId}
+                onClick={() => setTimelineOpen(true)}
+              >
+                時系列表示
+              </button>
+            </div>
+
             <fieldset className="rp-card">
               <legend>検査項目</legend>
               <table className="rp-card__medicines rp-card__medicines--detail rp-card__medicines--lab">
                 <thead>
                   <tr>
+                    <th className="rp-card__lab-check" />
                     <th>検査項目</th>
                     <th>略称</th>
                     <th>材料</th>
@@ -84,6 +167,14 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                     const line = observationLineDisplay(obs, specimenNames);
                     return (
                       <tr key={line.id || index}>
+                        <td className="rp-card__lab-check">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(line.id) && checkedIds.has(line.id)}
+                            disabled={!line.id}
+                            onChange={() => line.id && toggleChecked(line.id)}
+                          />
+                        </td>
                         <td>{line.name || "-"}</td>
                         <td>{line.abbreviation || "-"}</td>
                         <td>{line.specimen || "-"}</td>
@@ -102,6 +193,16 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
               <summary>FHIR JSON を表示</summary>
               <FhirJsonView resource={detail.data?.data} />
             </details>
+
+            {timelineOpen && (
+              <Modal
+                title="時系列表示(選択項目)"
+                onClose={() => setTimelineOpen(false)}
+                className="modal--wide"
+              >
+                <LabResultTimelinePanel patientId={patientId} filterKeys={timelineKeys} />
+              </Modal>
+            )}
           </div>
         )
       )}
