@@ -27,6 +27,11 @@ class LabLabelRecord < ApplicationRecord
     "#{base}#{check_digit(base)}"
   end
 
+  # 到着確認のスキャン入力の検証。11 桁の数字で、末尾がチェックデジットと一致すること。
+  def self.valid_number?(number)
+    number.match?(/\A\d{11}\z/) && check_digit(number[0, 10]) == number[10]
+  end
+
   # M10W3(モジュラス 10 ウェイト 3)。JAN と同じ方式で、右端の桁から 3, 1, 3, ...
   # の重みを掛けて合計し、10 の補数を取る。スキャナ誤読・手入力ミスの検出用。
   def self.check_digit(digits)

@@ -52,6 +52,7 @@ import { QuestionnaireEditPage } from "./pages/QuestionnaireEditPage";
 import { QuestionnaireListPage } from "./pages/QuestionnaireListPage";
 import { QuestionnairePreviewPage } from "./pages/QuestionnairePreviewPage";
 import { OutpatientListPage } from "./pages/OutpatientListPage";
+import { LabArrivalPage } from "./pages/LabArrivalPage";
 import { LabWorklistPage } from "./pages/LabWorklistPage";
 import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
@@ -85,6 +86,9 @@ function App() {
           <HoverMenu label="部門業務">
             <Link to="/lab-worklist" className="row-menu__item">
               検体検査一覧
+            </Link>
+            <Link to="/lab-arrivals" className="row-menu__item">
+              検体到着確認
             </Link>
             <Link to="/rad-worklist" className="row-menu__item">
               放射線検査一覧
@@ -233,6 +237,7 @@ function App() {
           <Route path="/outpatients" element={<OutpatientListPage />} />
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}
           <Route path="/lab-worklist" element={<LabWorklistPage />} />
+          <Route path="/lab-arrivals" element={<LabArrivalPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />

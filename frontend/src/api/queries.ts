@@ -1750,6 +1750,53 @@ export function useUpdateLabTaskStatus() {
   });
 }
 
+/**
+ * 検体到着確認のための 1 オーダーぶんの文脈。スキャンした番号の逆引き結果
+ * (order id)から、患者・検査項目・進捗を 1 リクエストで揃える
+ * (docs/lab-arrival-design.md §4-1。_id 検索 + revinclude は上流で確認済み)。
+ */
+export interface LabArrivalContext {
+  order: fhir4.ServiceRequest;
+  itemRequests: fhir4.ServiceRequest[];
+  patient?: fhir4.Patient;
+  task?: fhir4.Task;
+}
+
+export async function fetchLabArrivalContext(orderId: string): Promise<LabArrivalContext | null> {
+  const params = new URLSearchParams();
+  params.set("_id", orderId);
+  params.set("_count", "100");
+  params.set("_revinclude:iterate", "ServiceRequest:based-on");
+  params.set("_revinclude", "Task:focus");
+  params.set("_include", "ServiceRequest:subject");
+
+  const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+
+  let order: fhir4.ServiceRequest | undefined;
+  const items: fhir4.ServiceRequest[] = [];
+  const tasks: fhir4.Task[] = [];
+  let patient: fhir4.Patient | undefined;
+  for (const entry of bundle.entry ?? []) {
+    const resource = entry.resource;
+    if (!resource) continue;
+    if (resource.resourceType === "Patient") patient = resource as fhir4.Patient;
+    else if (resource.resourceType === "Task") tasks.push(resource as fhir4.Task);
+    else if (resource.resourceType === "ServiceRequest") {
+      const request = resource as fhir4.ServiceRequest;
+      if (request.id === orderId) order = request;
+      else items.push(request);
+    }
+  }
+  if (!order) return null;
+
+  return {
+    order,
+    itemRequests: labOrderItemRequests(items, orderId),
+    patient,
+    task: labTasksByOrderId(tasks).get(orderId),
+  };
+}
+
 // ---- 検査結果に紐付けるオーダー(検体検査・細菌検査)の候補 ----
 
 // 上流 fhir-server の _count 上限 100 を 1 ページとして順に辿る。

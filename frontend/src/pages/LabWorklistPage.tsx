@@ -6,6 +6,7 @@ import {
   useUpdateLabTaskStatus,
   type LabWorklistRow,
 } from "../api/queries";
+import { useLabLabelRecords, type LabLabelRecord } from "../api/labLabelsClient";
 import {
   LAB_LABEL_LAYOUT_CANONICAL,
   labLabelPdfUrl,
@@ -40,9 +41,9 @@ import {
 // 1 行 = オーダー 1 件。検査内容は採血の現場が動く単位(どの容器に何を採るか)で
 // 見せたいので、検体・採取管ごとにまとめて並べる(カルテのカードと同じ考え方)。
 //
-// 進捗は受付まで。受付済になると検体ラベル(採取管に貼るバーコード付きの PDF)が
-// 発行できる(docs/lab-label-design.md)。到着済への遷移(検体が検査室に着いた記録)は
-// 到着確認の機能で足す予定。
+// 受付済になると検体ラベル(採取管に貼るバーコード付きの PDF)が発行できる
+// (docs/lab-label-design.md)。到着済へは検体到着確認画面のスキャンで進み、
+// この一覧では管ごとの発行・到着状況をバッジで見せる(docs/lab-arrival-design.md §4-2)。
 //
 // 検査日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
 // (理由は queries.ts の useLabWorklist を参照)。
@@ -82,6 +83,25 @@ export function LabWorklistPage() {
   // ラベルのレイアウト(.tlf)が未登録の環境では発行ボタンを無効にして案内する。
   const layoutStatus = useReportLayoutStatus(LAB_LABEL_LAYOUT_CANONICAL);
   const labelReady = Boolean(layoutStatus.data?.registered);
+
+  // 管ごとの発行・到着状況(検査内容のバッジ用)。表示中のオーダーぶんをまとめて引く。
+  const orderIds = useMemo(
+    () =>
+      (worklist.data?.rows ?? [])
+        .map((row) => row.order.id)
+        .filter((id): id is string => Boolean(id)),
+    [worklist.data],
+  );
+  const labelRecords = useLabLabelRecords(orderIds);
+  const recordsByOrder = useMemo(() => {
+    const map = new Map<string, LabLabelRecord[]>();
+    for (const record of labelRecords.data ?? []) {
+      const list = map.get(record.order_fhir_id);
+      if (list) list.push(record);
+      else map.set(record.order_fhir_id, [record]);
+    }
+    return map;
+  }, [labelRecords.data]);
 
   const rows = useMemo(
     () => (worklist.data?.rows ?? []).filter((row) => matchesFilters(row, filters)),
@@ -157,6 +177,7 @@ export function LabWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
+                    records={recordsByOrder.get(row.order.id ?? "") ?? []}
                     pending={updateStatus.isPending}
                     labelReady={labelReady}
                     onChangeStatus={(status) =>
@@ -303,13 +324,34 @@ function groupLabel(group: LabSpecimenGroup): string {
   return `${specimenGroupLabel(group)} | ${names.join("・") || "(項目なし)"}`;
 }
 
+/**
+ * 管(検体グループ)ごとの発行・到着バッジ。受付前は必ず未発行なので、
+ * 受付済・到着済の行でだけ出す(依頼済の行に「未発行」を並べても情報がない)。
+ */
+function TubeBadge({
+  group,
+  records,
+}: {
+  group: LabSpecimenGroup;
+  records: LabLabelRecord[];
+}) {
+  const record = records.find((r) => r.specimen_code === group.specimenCode);
+  if (!record) return <span className="lab-worklist__tube lab-worklist__tube--none">未発行</span>;
+  if (!record.arrived_at) {
+    return <span className="lab-worklist__tube lab-worklist__tube--issued">発行済</span>;
+  }
+  return <span className="lab-worklist__tube lab-worklist__tube--arrived">到着済</span>;
+}
+
 function WorklistRow({
   row,
+  records,
   pending,
   labelReady,
   onChangeStatus,
 }: {
   row: LabWorklistRow;
+  records: LabLabelRecord[];
   pending: boolean;
   labelReady: boolean;
   onChangeStatus: (status: LabTaskStatus) => void;
@@ -336,7 +378,12 @@ function WorklistRow({
       <td className="lab-worklist__content">
         <ul className="lab-worklist__items">
           {groups.map((group) => (
-            <li key={group.specimenCode || "(none)"}>{groupLabel(group)}</li>
+            <li key={group.specimenCode || "(none)"}>
+              {groupLabel(group)}
+              {(status === "accepted" || status === "completed") && (
+                <TubeBadge group={group} records={records} />
+              )}
+            </li>
           ))}
           {groups.length === 0 && <li className="order-select__muted">検査項目なし</li>}
         </ul>

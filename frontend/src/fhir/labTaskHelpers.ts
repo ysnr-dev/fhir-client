@@ -9,9 +9,9 @@ import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 // 一覧では「Task が無い = 依頼済(未受付)」として扱う。検体検査一覧を作る前に
 // 登録されたオーダーもそのまま並べられるようにするため。
 //
-// 受付済になると検体ラベルが発行できる(docs/lab-label-design.md)。到着済への
-// 遷移(検体が検査室に着いた記録)は到着確認の機能で足す予定で、ここでは
-// ステータスの語彙だけ先に持っておく。
+// 受付済になると検体ラベルが発行できる(docs/lab-label-design.md)。到着済へは
+// 到着確認画面のスキャンで進む(docs/lab-arrival-design.md。管ごとの到着は
+// backend の台帳に記録し、オーダーの全検体が揃ったら Task を到着済にする)。
 
 /** Task.code。部門の作業種別(放射線検査の rad-exam と同じ CodeSystem)。 */
 const TASK_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/task-code";
@@ -50,7 +50,7 @@ export interface LabTaskAction {
  * 今のステータスから移れる先。
  *
  * 「取消」は 1 つ前に戻す訂正、「中止」は検査そのものの取りやめ(放射線と同じ区別)。
- * 到着済への遷移は到着確認の機能で足すため、ここには無い(受付済で止まる)。
+ * 到着済への通常の遷移はここではなく到着確認画面のスキャンが行う。
  */
 export function labTaskActions(status: LabTaskStatus): LabTaskAction[] {
   switch (status) {
@@ -61,6 +61,9 @@ export function labTaskActions(status: LabTaskStatus): LabTaskAction[] {
       ];
     case "accepted":
       return [
+        // 到着確認はスキャン(到着確認画面)が原則。これはスキャナが使えない場面の
+        // 手動フォールバックで、管ごとの到着記録は付かず Task だけ進む。
+        { label: "到着済にする", next: "completed", secondary: true },
         { label: "取消", next: "requested", secondary: true },
         { label: "中止", next: "cancelled", secondary: true },
       ];

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_18_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_19_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -34,6 +34,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_18_000000) do
     t.string "label_number"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "arrived_at"
+    t.string "arrived_by"
     t.index ["label_number"], name: "index_lab_label_records_on_label_number", unique: true
     t.index ["order_fhir_id", "specimen_code"], name: "index_lab_label_records_on_order_fhir_id_and_specimen_code", unique: true
   end
