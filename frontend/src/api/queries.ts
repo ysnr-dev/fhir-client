@@ -42,6 +42,7 @@ import { buildMicroResultDeleteBundle } from "../fhir/microResultHelpers";
 import {
   ORDER_TYPE_SYSTEM,
   buildPrescriptionDeleteBundle,
+  departmentOf,
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
 import {
@@ -1614,6 +1615,9 @@ export interface LabOrderCandidate {
   label: string;
   /** すでに紐付いている検査結果の id。空なら結果がまだ登録されていない。 */
   reportId: string;
+  /** オーダーの依頼科。紐付けた検査結果の診療科として採用する。 */
+  departmentId: string;
+  departmentName: string;
 }
 
 // 患者のオーダー(ヘッダ)を新しい順に集める。処方・注射など他種のヘッダも同じ
@@ -1666,6 +1670,7 @@ async function fetchOrderCandidates(
         id: header.id,
         label: buildLabel(header, labOrderItemRequests(serviceRequests, header.id)),
         reportId: reportIdByOrderId.get(header.id) ?? "",
+        ...departmentOf(header),
       });
     }
 
@@ -1806,7 +1811,8 @@ async function fetchLabResultSummaries(
     // 要約に使う要素だけ返させ、検査項目の参照(result)などの本文は省く。
     // 上流の _elements はトップレベルの JSON キー名の一致で切り出すため、
     // choice 型は基底名(effective)ではなく実際のキー名で指定する。
-    params.set("_elements", "id,effectiveDateTime,category");
+    // extension は診療科(ローカル拡張)を要約に含めるために要る。
+    params.set("_elements", "id,effectiveDateTime,category,extension");
 
     const { data: bundle } = await searchResource<fhir4.DiagnosticReport>(
       "DiagnosticReport",

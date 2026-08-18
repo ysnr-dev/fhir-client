@@ -123,8 +123,36 @@ function findSettingDisplay(code: string): string {
   return SETTING_OPTIONS.find((s) => s.code === code)?.display ?? code;
 }
 
-// 依頼医師は標準の requester、依頼科はローカル拡張に入れる。どちらも参照を引き直さずに
-// 一覧・カルテで名前を出せるよう display を埋めておく(PractitionerRole と同じ方針)。
+/**
+ * 診療科(Organization)を指すローカル拡張。オーダーの依頼科のほか、検査結果
+ * (DiagnosticReport)の診療科にも同じ拡張を使う。参照を引き直さずに一覧・カルテで
+ * 名前を出せるよう display を埋めておく(PractitionerRole と同じ方針)。
+ */
+export function departmentExtension(departmentId: string, departmentName: string): fhir4.Extension {
+  return {
+    url: ORDER_DEPARTMENT_EXT_URL,
+    valueReference: {
+      reference: `Organization/${departmentId}`,
+      ...(departmentName ? { display: departmentName } : {}),
+    },
+  };
+}
+
+/** ローカル拡張に入れた診療科。未設定なら id・名前とも空。 */
+export function departmentOf(resource: { extension?: fhir4.Extension[] }): {
+  departmentId: string;
+  departmentName: string;
+} {
+  const reference = resource.extension?.find(
+    (e) => e.url === ORDER_DEPARTMENT_EXT_URL,
+  )?.valueReference;
+  return {
+    departmentId: reference?.reference?.split("/").pop() ?? "",
+    departmentName: reference?.display ?? "",
+  };
+}
+
+// 依頼医師は標準の requester、依頼科はローカル拡張に入れる。
 export function applyOrderContext(
   resource: fhir4.ServiceRequest | fhir4.MedicationRequest,
   requester: OrderContext,
@@ -138,13 +166,7 @@ export function applyOrderContext(
   if (requester.departmentId) {
     resource.extension = [
       ...(resource.extension ?? []),
-      {
-        url: ORDER_DEPARTMENT_EXT_URL,
-        valueReference: {
-          reference: `Organization/${requester.departmentId}`,
-          ...(requester.departmentName ? { display: requester.departmentName } : {}),
-        },
-      },
+      departmentExtension(requester.departmentId, requester.departmentName),
     ];
   }
 }
@@ -478,11 +500,10 @@ export function prescriptionProblem(sr: fhir4.ServiceRequest | undefined): Probl
 // 登録時に入れた依頼科・依頼医師。参照の display をそのまま名前として使うので、
 // 表示のために Organization / Practitioner を引き直す必要はない。
 export function prescriptionRequester(sr: fhir4.ServiceRequest): OrderContext {
-  const department = sr.extension?.find((e) => e.url === ORDER_DEPARTMENT_EXT_URL)?.valueReference;
-  if (!department && !sr.requester) return emptyOrderContext;
+  const department = departmentOf(sr);
+  if (!department.departmentId && !sr.requester) return emptyOrderContext;
   return {
-    departmentId: department?.reference?.split("/").pop() ?? "",
-    departmentName: department?.display ?? "",
+    ...department,
     practitionerId: sr.requester?.reference?.split("/").pop() ?? "",
     practitionerName: sr.requester?.display ?? "",
   };

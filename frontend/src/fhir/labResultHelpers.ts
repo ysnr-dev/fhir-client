@@ -1,4 +1,5 @@
 import type { LabItem } from "../api/masterClient";
+import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 
 // ローカル拡張・コードシステム。正式な CodeSystem が定義されていない(または
 // 不明な)項目を表現するための、この検査結果機能専用の URI。
@@ -81,6 +82,12 @@ export interface LabResultFormValues {
   setting: LabResultSetting;
   specimenDate: string;
   /**
+   * 検査を行った診療科(Organization)の id。空なら未設定。
+   * 検体検査オーダーに紐付ける場合は、オーダーの依頼科をそのまま採用する。
+   */
+  departmentId: string;
+  departmentName: string;
+  /**
    * 元になった検体検査オーダー(ヘッダの ServiceRequest)の id。空なら紐付けなし。
    * 紐付けは検査項目単位ではなく「オーダー 1 件 ↔ 結果レポート 1 件」で持つ。
    */
@@ -102,6 +109,8 @@ export function emptyLabResultForm(): LabResultFormValues {
   return {
     setting: "outpatient",
     specimenDate: today(),
+    departmentId: "",
+    departmentName: "",
     orderId: "",
     lines: [{ ...emptyLabResultLine }],
   };
@@ -355,6 +364,11 @@ function buildLabResultTransactionBundle(
     },
     subject: { reference: `Patient/${patientId}` },
     effectiveDateTime: effective,
+    // 診療科。DiagnosticReport にも診療科を持つ標準要素が無いため、オーダーの
+    // 依頼科と同じローカル拡張で持たせる。
+    extension: values.departmentId
+      ? [departmentExtension(values.departmentId, values.departmentName)]
+      : undefined,
     // 元になった検体検査オーダー。オーダーの明細ではなくヘッダを指す。
     // 更新でオーダーの選択を外した場合は、リソースごと組み直すので basedOn も消える。
     basedOn: values.orderId ? [{ reference: `ServiceRequest/${values.orderId}` }] : undefined,
@@ -457,6 +471,8 @@ export interface LabResultSummary {
   id: string;
   date: string;
   settingDisplay: string;
+  /** 検査を行った診療科の表示名。空なら未設定。 */
+  departmentName: string;
   itemCount: number;
   /** 元になった検体検査オーダーの id。空なら紐付けなし。 */
   orderId: string;
@@ -517,6 +533,7 @@ export function summarizeDiagnosticReport(report: fhir4.DiagnosticReport): LabRe
     id: report.id ?? "",
     date: report.effectiveDateTime?.slice(0, 10) ?? "",
     settingDisplay: settingCoding(report)?.display ?? "",
+    departmentName: departmentOf(report).departmentName,
     itemCount: report.result?.length ?? 0,
     orderId: labOrderIdFromReport(report),
   };
@@ -766,6 +783,7 @@ export function parseLabResultForm(
   return {
     setting: (settingCoding(report)?.code ?? "") as LabResultSetting,
     specimenDate: report.effectiveDateTime?.slice(0, 10) ?? today(),
+    ...departmentOf(report),
     orderId: labOrderIdFromReport(report),
     lines: lines.length ? lines : [{ ...emptyLabResultLine }],
   };

@@ -10,11 +10,13 @@ import {
   buildDoLabResultForm,
   buildLabResultBundle,
   buildLabResultUpdateBundle,
+  emptyLabResultForm,
   specimenRefsFrom,
   type LabResultFormValues,
   type LabResultSummary,
 } from "../fhir/labResultHelpers";
 import { useLabResultInitialValues } from "../hooks/useLabResultInitialValues";
+import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabResultDetailPanel } from "./LabResultDetailPanel";
 import { LabResultForm } from "./LabResultForm";
@@ -205,10 +207,17 @@ function CreateForm({
   const createLabResult = useCreateLabResult();
   const source = useLabResultInitialValues(sourceReportId, patientId);
   const orders = useLabOrderCandidates(patientId);
+  const requester = useOrderContext();
 
+  // 診療科の既定はヘッダーで選んでいる依頼科。DO でも元の検査結果の科ではなく、
+  // いま入力している科を初期値にする。
   const initialValues = useMemo(
-    () => (source.initialValues ? buildDoLabResultForm(source.initialValues) : undefined),
-    [source.initialValues],
+    () => ({
+      ...(source.initialValues ? buildDoLabResultForm(source.initialValues) : emptyLabResultForm()),
+      departmentId: requester.departmentId,
+      departmentName: requester.departmentName,
+    }),
+    [source.initialValues, requester.departmentId, requester.departmentName],
   );
 
   function handleSubmit(values: LabResultFormValues) {

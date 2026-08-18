@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
-import type { LabOrderCandidate } from "../api/queries";
+import { useDepartmentList, type LabOrderCandidate } from "../api/queries";
 import type { LabItem } from "../api/masterClient";
 import {
   useLabOrderResultLines,
@@ -129,6 +129,7 @@ export function LabResultForm({
   const [values, setValues] = useState<LabResultFormValues>(initialValues ?? emptyLabResultForm);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  const { departments } = useDepartmentList({});
 
   // 画面上でオーダーを選び直したときだけ検査項目を展開する(初期表示時の
   // 紐付け済みオーダーで、保存済みの検査項目を上書きしてしまわないようにする)。
@@ -173,10 +174,28 @@ export function LabResultForm({
   }
 
   // オーダーを選び直したら、その JLAC コードから検査項目を展開し直す。
+  // 診療科はオーダーの依頼科を採用する(オーダーと違う科の結果にならないよう、
+  // 紐付けている間は選び直せない)。
   function handleOrderChange(orderId: string) {
-    update("orderId", orderId);
+    const candidate = orderCandidates.find((c) => c.id === orderId);
+    setValues((v) => ({
+      ...v,
+      orderId,
+      ...(candidate
+        ? { departmentId: candidate.departmentId, departmentName: candidate.departmentName }
+        : {}),
+    }));
     setExpandNotice(null);
     setExpandingOrderId(orderId);
+  }
+
+  function handleDepartmentChange(departmentId: string) {
+    const department = departments.find((d) => d.id === departmentId);
+    setValues((v) => ({
+      ...v,
+      departmentId,
+      departmentName: departmentId ? (department?.name ?? v.departmentName) : "",
+    }));
   }
 
   function handleItemSelect(item: LabItem) {
@@ -245,6 +264,29 @@ export function LabResultForm({
                 {o.display}
               </option>
             ))}
+          </select>
+        </label>
+        {/* オーダーに紐付けている間は、オーダーの依頼科を採用するので選び直せない。 */}
+        <label>
+          診療科
+          <select
+            value={values.departmentId}
+            onChange={(e) => handleDepartmentChange(e.target.value)}
+            disabled={Boolean(values.orderId)}
+          >
+            <option value="">選択してください</option>
+            {departments.map((department) => (
+              <option key={department.id} value={department.id}>
+                {department.name}
+              </option>
+            ))}
+            {/* マスタの読み込み前や、診療科が削除された場合に選択が空へ化けないようにする。 */}
+            {values.departmentId &&
+              !departments.some((department) => department.id === values.departmentId) && (
+                <option value={values.departmentId}>
+                  {values.departmentName || "(削除済みの診療科)"}
+                </option>
+              )}
           </select>
         </label>
         <label>

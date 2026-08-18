@@ -1294,13 +1294,13 @@ fieldset.rp-card {
   width: 72px;
 }
 
-/* 検査項目枠の上の操作(クリップボードにコピー・時系列表示)。右寄せ・小さめ。 */
+/* 検査項目の表の上の操作(クリップボードにコピー・時系列表示)。右寄せ・小さめ。 */
 .lab-result-detail__actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  /* .prescription-detail の gap(16px) を詰めて検査項目枠のすぐ上に見せる。 */
+  /* .prescription-detail の gap(16px) を詰めて検査項目の表のすぐ上に見せる。 */
   margin-bottom: -8px;
 }
 
@@ -1424,6 +1424,21 @@ fieldset.rp-card {
   margin: 0;
   color: var(--text-h);
   font-size: 14px;
+}
+
+/* 検査結果の検査共通。検体採取日・入外区分・診療科は短いので 1 行に 3 組並べ、
+   幅を食う検体検査オーダーだけを次の行で残り幅いっぱいに置く。 */
+.prescription-detail__common--lab {
+  grid-template-columns: repeat(5, max-content) minmax(0, 1fr);
+  column-gap: 24px;
+}
+
+.prescription-detail__common--lab dt:nth-of-type(4) {
+  grid-column: 1;
+}
+
+.prescription-detail__common--lab dd:nth-of-type(4) {
+  grid-column: 2 / -1;
 }
 
 .prescription-detail__usage-value {

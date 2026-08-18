@@ -118,11 +118,14 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
           <div className="prescription-detail">
             <fieldset>
               <legend>検査共通</legend>
-              <dl className="prescription-detail__common">
+              {/* 短い 3 項目を 1 行に並べ、長い検体検査オーダーだけを次の行に置く。 */}
+              <dl className="prescription-detail__common prescription-detail__common--lab">
                 <dt>検体採取日</dt>
                 <dd>{summary.date}</dd>
                 <dt>入外区分</dt>
                 <dd>{summary.settingDisplay}</dd>
+                <dt>診療科</dt>
+                <dd>{summary.departmentName || "-"}</dd>
                 <dt>検体検査オーダー</dt>
                 <dd>{summary.orderId ? orderLabel : "紐付けなし"}</dd>
               </dl>
@@ -149,45 +152,42 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
               </button>
             </div>
 
-            <fieldset className="rp-card">
-              <legend>検査項目</legend>
-              <table className="rp-card__medicines rp-card__medicines--detail rp-card__medicines--lab">
-                <thead>
-                  <tr>
-                    <th className="rp-card__lab-check" />
-                    <th>検査項目</th>
-                    <th>略称</th>
-                    <th>材料</th>
-                    <th className="rp-card__lab-value">結果値</th>
-                    <th className="rp-card__lab-unit">単位</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {observations.map((obs, index) => {
-                    const line = observationLineDisplay(obs, specimenNames);
-                    return (
-                      <tr key={line.id || index}>
-                        <td className="rp-card__lab-check">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(line.id) && checkedIds.has(line.id)}
-                            disabled={!line.id}
-                            onChange={() => line.id && toggleChecked(line.id)}
-                          />
-                        </td>
-                        <td>{line.name || "-"}</td>
-                        <td>{line.abbreviation || "-"}</td>
-                        <td>{line.specimen || "-"}</td>
-                        <td className={interpretationClass(line.interpretation, "rp-card__lab-value")}>
-                          {line.value || "-"}
-                        </td>
-                        <td className="rp-card__lab-unit">{line.unit || "-"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </fieldset>
+            <table className="rp-card__medicines rp-card__medicines--detail rp-card__medicines--lab">
+              <thead>
+                <tr>
+                  <th className="rp-card__lab-check" />
+                  <th>検査項目</th>
+                  <th>略称</th>
+                  <th>材料</th>
+                  <th className="rp-card__lab-value">結果値</th>
+                  <th className="rp-card__lab-unit">単位</th>
+                </tr>
+              </thead>
+              <tbody>
+                {observations.map((obs, index) => {
+                  const line = observationLineDisplay(obs, specimenNames);
+                  return (
+                    <tr key={line.id || index}>
+                      <td className="rp-card__lab-check">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(line.id) && checkedIds.has(line.id)}
+                          disabled={!line.id}
+                          onChange={() => line.id && toggleChecked(line.id)}
+                        />
+                      </td>
+                      <td>{line.name || "-"}</td>
+                      <td>{line.abbreviation || "-"}</td>
+                      <td>{line.specimen || "-"}</td>
+                      <td className={interpretationClass(line.interpretation, "rp-card__lab-value")}>
+                        {line.value || "-"}
+                      </td>
+                      <td className="rp-card__lab-unit">{line.unit || "-"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
 
             <details className="prescription-detail__raw">
               <summary>FHIR JSON を表示</summary>
