@@ -19,6 +19,8 @@ import {
   buildLabResultDeleteBundle,
   observationIdsFromReport,
   specimenIdsFromReport,
+  summarizeDiagnosticReport,
+  type LabResultSummary,
 } from "../fhir/labResultHelpers";
 import { isInjectionServiceRequest } from "../fhir/injectionHelpers";
 import {
@@ -1767,36 +1769,6 @@ async function fetchRelatedMedicationRequestIds(srId: string): Promise<string[]>
   return medicationRequests.map((mr) => mr.id).filter((id): id is string => Boolean(id));
 }
 
-const LAB_RESULT_COUNT = 20;
-
-export function useLabResultSearch(patientId: string | undefined, offset: number) {
-  const params = new URLSearchParams();
-  if (patientId) params.set("patient", `Patient/${patientId}`);
-  // DiagnosticReport は検査結果機能でのみ使用するが、将来の用途拡張に備えて
-  // 検体検査カテゴリ(LAB)で絞り込んでおく。
-  params.set("category", "LAB");
-  params.set("_count", String(LAB_RESULT_COUNT));
-  params.set("_offset", String(offset));
-  // 検体採取日(effective)の降順。_sort のキーは検索パラメータ名 date。
-  params.set("_sort", "-date");
-
-  const query = useQuery({
-    queryKey: ["DiagnosticReport", "search", patientId, offset],
-    queryFn: () => searchResource<fhir4.DiagnosticReport>("DiagnosticReport", params),
-    placeholderData: keepPreviousData,
-    enabled: Boolean(patientId),
-  });
-
-  return {
-    ...query,
-    bundle: query.data?.data,
-    total: query.data?.data.total ?? 0,
-    count: LAB_RESULT_COUNT,
-    hasPrevious: hasRelation(query.data?.data, "previous"),
-    hasNext: hasRelation(query.data?.data, "next"),
-  };
-}
-
 export function useLabResultDetail(reportId: string | undefined) {
   const params = new URLSearchParams();
   if (reportId) params.set("_id", reportId);
@@ -1815,11 +1787,14 @@ const LAB_RESULT_ORDER_PAGE = 100;
 // 患者あたりの検査結果が極端に多い場合の暴走防止（最大 1000 件まで前後移動できる）。
 const LAB_RESULT_ORDER_MAX_PAGES = 10;
 
-// 一覧と同じ絞り込み・並び順で DiagnosticReport の id だけを取得する。
-// 上流の _sort は同値時に id 昇順で安定するため、一覧の並びとページ境界をまたいでも一致する。
+// 検体採取日の降順で全検査結果の要約(id・採取日・入外区分)を取得する。
+// 上流の _sort は同値時に id 昇順で安定するため、ページ境界をまたいでも並びが一致する。
 // category は検体検査(LAB)・細菌検査(MB)の別。
-async function fetchLabResultOrder(patientId: string, category: string): Promise<string[]> {
-  const ids: string[] = [];
+async function fetchLabResultSummaries(
+  patientId: string,
+  category: string,
+): Promise<LabResultSummary[]> {
+  const summaries: LabResultSummary[] = [];
 
   for (let page = 0; page < LAB_RESULT_ORDER_MAX_PAGES; page += 1) {
     const params = new URLSearchParams();
@@ -1828,23 +1803,49 @@ async function fetchLabResultOrder(patientId: string, category: string): Promise
     params.set("_count", String(LAB_RESULT_ORDER_PAGE));
     params.set("_offset", String(page * LAB_RESULT_ORDER_PAGE));
     params.set("_sort", "-date");
-    // 前後移動には id の並びだけあればよいので本文は返させない。
-    params.set("_elements", "id");
+    // 要約に使う要素だけ返させ、検査項目の参照(result)などの本文は省く。
+    // 上流の _elements はトップレベルの JSON キー名の一致で切り出すため、
+    // choice 型は基底名(effective)ではなく実際のキー名で指定する。
+    params.set("_elements", "id,effectiveDateTime,category");
 
     const { data: bundle } = await searchResource<fhir4.DiagnosticReport>(
       "DiagnosticReport",
       params,
     );
-    const pageIds =
+    const pageReports =
       bundle.entry
-        ?.map((entry) => entry.resource?.id)
-        .filter((id): id is string => Boolean(id)) ?? [];
-    ids.push(...pageIds);
+        ?.map((entry) => entry.resource)
+        .filter((r): r is fhir4.DiagnosticReport => Boolean(r?.id)) ?? [];
+    summaries.push(...pageReports.map(summarizeDiagnosticReport));
 
-    if (pageIds.length < LAB_RESULT_ORDER_PAGE) break;
+    if (pageReports.length < LAB_RESULT_ORDER_PAGE) break;
   }
 
-  return ids;
+  return summaries;
+}
+
+// 検体採取日ペイン・内容ページの「前へ/次へ」の双方で使う検査結果の並び。
+function useResultSummariesQuery(category: string, patientId: string | undefined) {
+  // 作成・更新・削除時の invalidateQueries(["DiagnosticReport", "search"]) で
+  // まとめて無効化されるよう search 配下のキーにしている。
+  return useQuery({
+    queryKey: ["DiagnosticReport", "search", "order", category, patientId],
+    queryFn: () => fetchLabResultSummaries(patientId as string, category),
+    enabled: Boolean(patientId),
+    // 前後移動のたびにページが再マウントされるため、連打で毎回引き直さないよう
+    // 少しだけ寝かせる。更新・削除時は invalidateQueries 側で無効化される。
+    staleTime: 30_000,
+  });
+}
+
+/** 検査結果タブの検体採取日ペイン用。全検査結果の要約を新しい順で返す。 */
+export function useLabResultEntries(patientId: string | undefined) {
+  const query = useResultSummariesQuery("LAB", patientId);
+  return {
+    entries: query.data ?? [],
+    isLoading: query.isLoading,
+    error: query.error,
+  };
 }
 
 // 検査結果内容ページの「前へ/次へ」用。一覧に戻らず隣の検査結果へ移動するための id を返す。
@@ -1853,18 +1854,9 @@ function useResultNavigationQuery(
   patientId: string | undefined,
   reportId: string | undefined,
 ) {
-  // 作成・更新・削除時の invalidateQueries(["DiagnosticReport", "search"]) で
-  // まとめて無効化されるよう search 配下のキーにしている。
-  const query = useQuery({
-    queryKey: ["DiagnosticReport", "search", "order", category, patientId],
-    queryFn: () => fetchLabResultOrder(patientId as string, category),
-    enabled: Boolean(patientId),
-    // 前後移動のたびにページが再マウントされるため、連打で毎回引き直さないよう
-    // 少しだけ寝かせる。更新・削除時は invalidateQueries 側で無効化される。
-    staleTime: 30_000,
-  });
+  const query = useResultSummariesQuery(category, patientId);
 
-  const ids = query.data ?? [];
+  const ids = (query.data ?? []).map((summary) => summary.id);
   const index = reportId ? ids.indexOf(reportId) : -1;
 
   return {
@@ -1874,10 +1866,6 @@ function useResultNavigationQuery(
     total: ids.length,
     isLoading: query.isLoading,
   };
-}
-
-export function useLabResultNavigation(patientId: string | undefined, reportId: string | undefined) {
-  return useResultNavigationQuery("LAB", patientId, reportId);
 }
 
 export function useMicroResultNavigation(

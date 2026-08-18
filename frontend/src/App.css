@@ -1261,10 +1261,10 @@ fieldset.rp-card {
    .rp-card__medicines td より詳細度を上げて text-align: left を確実に上書きする。 */
 .rp-card__medicines--detail th.rp-card__lab-value,
 .rp-card__medicines--detail td.rp-card__lab-value {
+  width: 88px;
   text-align: right;
 }
 
-/* 単位を固定幅にして、結果値(幅指定なし)が残り幅を吸収し単位のすぐ左に揃うようにする。 */
 .rp-card__medicines--detail th.rp-card__lab-unit,
 .rp-card__medicines--detail td.rp-card__lab-unit {
   width: 72px;
@@ -1278,9 +1278,12 @@ fieldset.rp-card {
   text-align: center;
 }
 
+/* 検査項目名は幅指定なし(残り幅を吸収)にする。固定幅にすると、検査結果タブの
+   ように検体採取日ペインぶん表が狭い場所で table-layout: fixed が全列を比例縮小し、
+   結果値・単位が潰れて見出しが縦に折り返してしまう。 */
 .rp-card__medicines--lab th:nth-child(2),
 .rp-card__medicines--lab td:nth-child(2) {
-  width: 360px;
+  width: auto;
   overflow-wrap: anywhere;
 }
 
@@ -4705,6 +4708,35 @@ body.karte-wide .app__header {
 .karte-tabpanel__actions {
   display: flex;
   gap: 8px;
+}
+
+/* 検査結果タブ: カルテタブの診療日パネルと同様に、左端に検体採取日のペイン、
+   右に内容表示を並べる。タブ全体のスクロールはやめて列ごとにスクロールさせる。 */
+/* ペインは検体採取日(10 桁)が 1 行に収まればよいので、カルテタブの診療日パネル
+   (160px)より詰めて内容表示に幅を回す。 */
+.karte-lab {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 12px;
+  overflow-y: visible;
+}
+
+/* grid アイテムの既定(min-height: auto)だと中身の高さまで伸びてページが
+   スクロールしてしまうので、両方の列に min-height: 0 を効かせる。 */
+.karte-lab > * {
+  min-height: 0;
+}
+
+.karte-lab__content {
+  min-width: 0;
+  overflow-y: auto;
+}
+
+/* 選択中の検体採取日。 */
+.karte-lab .karte-daylist__date--selected {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: 4px;
 }
 
 /* 一覧は沈んだペインの上に直接並ぶので、表全体をカードの濃さで浮かせてから、

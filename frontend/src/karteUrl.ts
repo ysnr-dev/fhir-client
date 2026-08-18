@@ -12,7 +12,7 @@ import type { KarteCardFilter, KarteItemKind } from "./fhir/karteTimeline";
 
 /** 左ペインのタブ。分割モードでは下ペインのタブを指す。 */
 export const KARTE_TAB_PARAM = "tab";
-/** 選択中のタブで開いているもの。病名・アレルギー・検査結果の ID か "timeline"。 */
+/** 選択中のタブで開いているもの。病名・アレルギー・検査結果の ID。 */
 export const KARTE_VIEW_PARAM = "view";
 /** タイムラインのカードから開く詳細モーダルの対象("<種別>:<id>")。 */
 export const KARTE_DETAIL_PARAM = "detail";
@@ -28,9 +28,6 @@ export const KARTE_PROBLEM_PARAM = "problem";
  */
 export const KARTE_CARD_PARAM = "card";
 
-/** 検査結果タブの時系列表示。ID と紛れないよう予約語として扱う。 */
-export const LAB_TIMELINE_VIEW = "timeline";
-
 export const KARTE_TABS = [
   { key: "karte", label: "カルテ" },
   { key: "condition", label: "病名" },
@@ -39,6 +36,9 @@ export const KARTE_TABS = [
   // 読めるよう、カルテ以外のタブとして持つ。
   { key: "flowsheet", label: "経過表" },
   { key: "lab", label: "検査結果" },
+  // 検査結果の時系列表示。上下分割で「上にカルテ、下に時系列」と並べて読めるよう、
+  // 検査結果タブの中ではなく独立したタブとして持つ。
+  { key: "lab-timeline", label: "検査結果時系列" },
   { key: "micro", label: "細菌検査" },
   // 予約はカルテのカードにしない(タイムラインには出ない)ので、タブでのみ見る。
   { key: "appointment", label: "予約" },

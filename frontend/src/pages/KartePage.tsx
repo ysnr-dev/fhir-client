@@ -24,6 +24,7 @@ import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteSidePane } from "../components/KarteSidePane";
 import { VitalFlowsheetPanel } from "../components/VitalFlowsheetPanel";
 import { KarteLabResultTab } from "../components/KarteLabResultTab";
+import { LabResultTimelinePanel } from "../components/LabResultTimelinePanel";
 import { KarteMicroResultTab } from "../components/KarteMicroResultTab";
 import { KarteProblemList } from "../components/KarteProblemList";
 import { KarteProblemSummary } from "../components/KarteProblemSummary";
@@ -591,8 +592,15 @@ export function KartePage() {
     const props = { patientId, view: tab === key ? view : "", onViewChange: selectView };
     if (key === "condition") return <KarteConditionTab {...props} />;
     if (key === "allergy") return <KarteAllergyTab {...props} />;
-    // 経過表は読み取り専用で、詳細を開く導線が無いので view は使わない。
+    // 経過表・検査結果時系列は読み取り専用で、詳細を開く導線が無いので view は使わない。
     if (key === "flowsheet") return <VitalFlowsheetPanel patientId={patientId} />;
+    if (key === "lab-timeline") {
+      return (
+        <div className="karte-tabpanel">
+          <LabResultTimelinePanel patientId={patientId} />
+        </div>
+      );
+    }
     if (key === "micro") return <KarteMicroResultTab {...props} />;
     // 予約の日時変更は枠を選ぶ操作なので、登録と同じ右ペインで開く。
     if (key === "appointment") {

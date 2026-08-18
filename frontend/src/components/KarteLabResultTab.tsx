@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   useCreateLabResult,
+  useDeleteLabResult,
   useLabOrderCandidates,
-  useLabResultNavigation,
-  useLabResultSearch,
+  useLabResultEntries,
   useUpdateLabResult,
 } from "../api/queries";
 import {
@@ -12,224 +12,183 @@ import {
   buildLabResultUpdateBundle,
   specimenRefsFrom,
   type LabResultFormValues,
+  type LabResultSummary,
 } from "../fhir/labResultHelpers";
 import { useLabResultInitialValues } from "../hooks/useLabResultInitialValues";
-import { LAB_TIMELINE_VIEW } from "../karteUrl";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabResultDetailPanel } from "./LabResultDetailPanel";
 import { LabResultForm } from "./LabResultForm";
-import { LabResultTable } from "./LabResultTable";
-import { LabResultTimelinePanel } from "./LabResultTimelinePanel";
-import { Pagination } from "./Pagination";
 
-// カルテ画面の「検査結果」タブ。一覧・表示・時系列表示・登録・編集・削除を
-// 左ペイン内で完結させる。
+// カルテ画面の「検査結果」タブ。カルテタブの診療日パネルと同様に、左端のペインに
+// 検体採取日を新しい順で並べ、その右に選択した検査結果の内容を表示する。
+// 登録・編集・削除も内容表示から行う。時系列表示は「検査結果時系列」タブが担う。
 //
-// 一覧・内容表示・時系列表示は URL(view パラメータ)で表す。登録・編集は入力途中の
-// 内容を URL では復元できないので、このコンポーネント内の状態に留める。
+// 表示対象は URL(view パラメータ)で表す。登録・編集は入力途中の内容を URL では
+// 復元できないので、このコンポーネント内の状態に留める。
 
-type Mode =
-  | { kind: "list" }
-  | { kind: "detail"; reportId: string }
-  | { kind: "timeline" }
-  | { kind: "create"; sourceReportId?: string }
-  | { kind: "edit"; reportId: string };
+type FormMode = { kind: "create"; sourceReportId?: string } | { kind: "edit"; reportId: string };
 
-const MODE_TITLES: Record<Mode["kind"], string> = {
-  list: "検査結果",
-  detail: "検査結果内容",
-  timeline: "検査結果 時系列表示",
-  create: "検査結果登録",
-  edit: "検査結果編集",
-};
-
-type FormMode = Extract<Mode, { kind: "create" } | { kind: "edit" }> | null;
-
-function modeTitle(mode: Mode) {
-  if (mode.kind === "create" && mode.sourceReportId) return "検査結果登録(DO)";
-  return MODE_TITLES[mode.kind];
+function formTitle(form: FormMode) {
+  if (form.kind === "edit") return "検査結果編集";
+  return form.sourceReportId ? "検査結果登録(DO)" : "検査結果登録";
 }
 
 interface KarteLabResultTabProps {
   patientId: string;
-  /** URL から渡される表示対象。検査結果 ID か "timeline"、空なら一覧。 */
+  /** URL から渡される表示対象の検査結果 ID。空なら最新の検査結果。 */
   view: string;
   onViewChange: (view: string | null) => void;
 }
 
 export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabResultTabProps) {
-  const [form, setForm] = useState<FormMode>(null);
-  const [offset, setOffset] = useState(0);
+  const [form, setForm] = useState<FormMode | null>(null);
 
   // 戻る・進むで表示対象が変わったら、開いていたフォームは畳む。
   useEffect(() => setForm(null), [view]);
 
-  const mode: Mode =
-    form ??
-    (view === LAB_TIMELINE_VIEW
-      ? { kind: "timeline" }
-      : view
-        ? { kind: "detail", reportId: view }
-        : { kind: "list" });
+  const { entries, isLoading, error } = useLabResultEntries(patientId);
+  const deleteLabResult = useDeleteLabResult();
 
-  const { bundle, total, count, hasPrevious, hasNext, isLoading, error } = useLabResultSearch(
-    patientId,
-    offset,
-  );
-  const reports =
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.DiagnosticReport => Boolean(r)) ??
-    [];
+  // view が指す検査結果が見つからないとき(削除済み・古いリンク)は最新に落とす。
+  const selected = entries.find((entry) => entry.id === view) ?? entries[0];
 
-  function backToList() {
+  function closeForm() {
+    setForm(null);
+  }
+
+  function handleCreated() {
+    // 登録した検査結果(たいてい採取日が最新)が選ばれるよう、最新表示に戻す。
     setForm(null);
     onViewChange(null);
   }
 
-  // 内容表示は前後移動(ページ送り)のために検査結果の並び順を引くので、
-  // 一覧など他モードで無駄に取得しないよう別コンポーネントに切り出している。
-  if (mode.kind === "detail") {
-    return (
-      <DetailPane
-        patientId={patientId}
-        reportId={mode.reportId}
-        onSelect={(reportId) => onViewChange(reportId)}
-        onDo={() => setForm({ kind: "create", sourceReportId: mode.reportId })}
-        onEdit={() => setForm({ kind: "edit", reportId: mode.reportId })}
-        onBack={backToList}
-      />
-    );
+  function handleDelete() {
+    if (!selected) return;
+    if (!window.confirm("この検査結果を削除します。よろしいですか?")) return;
+    deleteLabResult.mutate(selected.id, { onSuccess: () => onViewChange(null) });
   }
 
-  if (mode.kind !== "list") {
+  if (form) {
     return (
       <div className="karte-tabpanel">
         <div className="karte-tabpanel__header">
-          <h3>{modeTitle(mode)}</h3>
+          <h3>{formTitle(form)}</h3>
           <div className="karte-tabpanel__actions">
-            <button type="button" onClick={backToList}>
-              ← 一覧に戻る
+            <button type="button" onClick={closeForm}>
+              ← 内容表示に戻る
             </button>
           </div>
         </div>
-        {mode.kind === "timeline" ? (
-          <LabResultTimelinePanel patientId={patientId} />
-        ) : mode.kind === "create" ? (
+        {form.kind === "create" ? (
           <CreateForm
             patientId={patientId}
-            sourceReportId={mode.sourceReportId}
-            onSaved={backToList}
+            sourceReportId={form.sourceReportId}
+            onSaved={handleCreated}
           />
         ) : (
-          <EditForm patientId={patientId} reportId={mode.reportId} onSaved={backToList} />
+          <EditForm patientId={patientId} reportId={form.reportId} onSaved={closeForm} />
         )}
       </div>
     );
   }
 
   return (
-    <div className="karte-tabpanel">
-      <div className="karte-tabpanel__header">
-        <h3>{MODE_TITLES.list}</h3>
-        <div className="karte-tabpanel__actions">
-          <button type="button" onClick={() => onViewChange(LAB_TIMELINE_VIEW)}>
-            時系列表示
-          </button>
-          <button type="button" onClick={() => setForm({ kind: "create" })}>
-            新規登録
-          </button>
+    <div className="karte-tabpanel karte-lab">
+      <SpecimenDateList
+        entries={entries}
+        selectedId={selected?.id}
+        isLoading={isLoading}
+        onSelect={(reportId) => onViewChange(reportId)}
+      />
+
+      <div className="karte-lab__content">
+        <div className="karte-tabpanel__header">
+          <h3>検査結果内容</h3>
+          <div className="karte-tabpanel__actions">
+            <button type="button" onClick={() => setForm({ kind: "create" })}>
+              新規登録
+            </button>
+            <button
+              type="button"
+              disabled={!selected}
+              onClick={() =>
+                selected && setForm({ kind: "create", sourceReportId: selected.id })
+              }
+            >
+              DO
+            </button>
+            <button
+              type="button"
+              disabled={!selected}
+              onClick={() => selected && setForm({ kind: "edit", reportId: selected.id })}
+            >
+              編集
+            </button>
+            <button
+              type="button"
+              disabled={!selected || deleteLabResult.isPending}
+              onClick={handleDelete}
+            >
+              削除
+            </button>
+          </div>
         </div>
+
+        <ErrorBanner error={error} />
+        <ErrorBanner error={deleteLabResult.error} />
+
+        {isLoading ? (
+          <p>読み込み中...</p>
+        ) : selected ? (
+          <LabResultDetailPanel reportId={selected.id} />
+        ) : (
+          <p className="patient-table__empty">登録されている検査結果がありません。</p>
+        )}
       </div>
-
-      <ErrorBanner error={error} />
-
-      {isLoading ? (
-        <p>読み込み中...</p>
-      ) : (
-        <>
-          <LabResultTable
-            reports={reports}
-            onView={(reportId) => onViewChange(reportId)}
-            onEdit={(reportId) => setForm({ kind: "edit", reportId })}
-          />
-          <Pagination
-            offset={offset}
-            count={count}
-            total={total}
-            hasPrevious={hasPrevious}
-            hasNext={hasNext}
-            onPrevious={() => setOffset((o) => Math.max(0, o - count))}
-            onNext={() => setOffset((o) => o + count)}
-          />
-        </>
-      )}
     </div>
   );
 }
 
-// 内容表示。詳細ページと同じく前後移動(新しい順)と DO を持つ。
-function DetailPane({
-  patientId,
-  reportId,
+// 左端の検体採取日ペイン。同じ日に複数の検査結果があっても 1 件 1 行で並べる。
+function SpecimenDateList({
+  entries,
+  selectedId,
+  isLoading,
   onSelect,
-  onDo,
-  onEdit,
-  onBack,
 }: {
-  patientId: string;
-  reportId: string;
+  entries: LabResultSummary[];
+  selectedId: string | undefined;
+  isLoading: boolean;
   onSelect: (reportId: string) => void;
-  onDo: () => void;
-  onEdit: () => void;
-  onBack: () => void;
 }) {
-  const nav = useLabResultNavigation(patientId, reportId);
-
   return (
-    <div className="karte-tabpanel">
-      <div className="karte-tabpanel__header">
-        <div className="karte-tabpanel__title">
-          <h3>{MODE_TITLES.detail}</h3>
-          <div className="record-nav">
-            <button
-              type="button"
-              className="record-nav__button"
-              onClick={() => nav.previousId && onSelect(nav.previousId)}
-              disabled={!nav.previousId}
-              title="前の検査結果（新しい順で1つ前）"
-              aria-label="前の検査結果"
-            >
-              ＜
-            </button>
-            <span className="record-nav__status">
-              {nav.position ? `${nav.position} / ${nav.total} 件` : "-"}
-            </span>
-            <button
-              type="button"
-              className="record-nav__button"
-              onClick={() => nav.nextId && onSelect(nav.nextId)}
-              disabled={!nav.nextId}
-              title="次の検査結果（新しい順で1つ後）"
-              aria-label="次の検査結果"
-            >
-              ＞
-            </button>
-          </div>
-        </div>
-        <div className="karte-tabpanel__actions">
-          <button type="button" onClick={onDo}>
-            DO
-          </button>
-          <button type="button" onClick={onEdit}>
-            編集
-          </button>
-          <button type="button" onClick={onBack}>
-            ← 一覧に戻る
-          </button>
-        </div>
+    <nav className="karte-daylist" aria-label="検体採取日">
+      <div className="karte-daylist__header">
+        <h4 className="karte-daylist__title">検体採取日</h4>
       </div>
-
-      <LabResultDetailPanel reportId={reportId} />
-    </div>
+      {isLoading ? (
+        <p className="karte-daylist__empty">読み込み中...</p>
+      ) : entries.length === 0 ? (
+        <p className="karte-daylist__empty">-</p>
+      ) : (
+        <ul className="karte-daylist__days">
+          {entries.map((entry) => (
+            <li key={entry.id}>
+              <button
+                type="button"
+                className={`karte-daylist__date${
+                  entry.id === selectedId ? " karte-daylist__date--selected" : ""
+                }`}
+                aria-current={entry.id === selectedId || undefined}
+                onClick={() => onSelect(entry.id)}
+              >
+                {entry.date || "日付なし"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </nav>
   );
 }
 
