@@ -13,13 +13,13 @@ import {
   emptyLabResultForm,
   specimenRefsFrom,
   type LabResultFormValues,
-  type LabResultSummary,
 } from "../fhir/labResultHelpers";
 import { useLabResultInitialValues } from "../hooks/useLabResultInitialValues";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabResultDetailPanel } from "./LabResultDetailPanel";
 import { LabResultForm } from "./LabResultForm";
+import { SpecimenDateList } from "./SpecimenDateList";
 
 // カルテ画面の「検査結果」タブ。カルテタブの診療日パネルと同様に、左端のペインに
 // 検体採取日を新しい順で並べ、その右に選択した検査結果の内容を表示する。
@@ -148,49 +148,6 @@ export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabRes
         )}
       </div>
     </div>
-  );
-}
-
-// 左端の検体採取日ペイン。同じ日に複数の検査結果があっても 1 件 1 行で並べる。
-function SpecimenDateList({
-  entries,
-  selectedId,
-  isLoading,
-  onSelect,
-}: {
-  entries: LabResultSummary[];
-  selectedId: string | undefined;
-  isLoading: boolean;
-  onSelect: (reportId: string) => void;
-}) {
-  return (
-    <nav className="karte-daylist" aria-label="検体採取日">
-      <div className="karte-daylist__header">
-        <h4 className="karte-daylist__title">検体採取日</h4>
-      </div>
-      {isLoading ? (
-        <p className="karte-daylist__empty">読み込み中...</p>
-      ) : entries.length === 0 ? (
-        <p className="karte-daylist__empty">-</p>
-      ) : (
-        <ul className="karte-daylist__days">
-          {entries.map((entry) => (
-            <li key={entry.id}>
-              <button
-                type="button"
-                className={`karte-daylist__date${
-                  entry.id === selectedId ? " karte-daylist__date--selected" : ""
-                }`}
-                aria-current={entry.id === selectedId || undefined}
-                onClick={() => onSelect(entry.id)}
-              >
-                {entry.date || "日付なし"}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </nav>
   );
 }
 

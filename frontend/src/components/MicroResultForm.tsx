@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { LabOrderCandidate } from "../api/queries";
-import { useMicroOrderDetail } from "../api/queries";
+import { useDepartmentList, useMicroOrderDetail } from "../api/queries";
 import {
   useFrequentMicroAntimicrobials,
   useFrequentMicroOrganisms,
@@ -111,6 +111,7 @@ export function MicroResultForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
 
+  const { departments } = useDepartmentList({});
   const specimenTypes = useMicroSpecimenTypeOptions();
   const frequentOrganisms = useFrequentMicroOrganisms();
   const frequentDrugs = useFrequentMicroAntimicrobials();
@@ -260,9 +261,28 @@ export function MicroResultForm({
     }));
   }
 
+  // オーダーを選び直したら、その検体(材料)を転記し直す。診療科はオーダーの
+  // 依頼科を採用する(オーダーと違う科の結果にならないよう、紐付けている間は
+  // 選び直せない)。
   function handleOrderChange(orderId: string) {
-    update("orderId", orderId);
+    const candidate = orderCandidates.find((c) => c.id === orderId);
+    setValues((v) => ({
+      ...v,
+      orderId,
+      ...(candidate
+        ? { departmentId: candidate.departmentId, departmentName: candidate.departmentName }
+        : {}),
+    }));
     setExpandingOrderId(orderId);
+  }
+
+  function handleDepartmentChange(departmentId: string) {
+    const department = departments.find((d) => d.id === departmentId);
+    setValues((v) => ({
+      ...v,
+      departmentId,
+      departmentName: departmentId ? (department?.name ?? v.departmentName) : "",
+    }));
   }
 
   function handleOrganismSelect(organism: { code: string; name: string }) {
@@ -352,6 +372,29 @@ export function MicroResultForm({
                 {o.display}
               </option>
             ))}
+          </select>
+        </label>
+        {/* オーダーに紐付けている間は、オーダーの依頼科を採用するので選び直せない。 */}
+        <label>
+          診療科
+          <select
+            value={values.departmentId}
+            onChange={(e) => handleDepartmentChange(e.target.value)}
+            disabled={Boolean(values.orderId)}
+          >
+            <option value="">選択してください</option>
+            {departments.map((department) => (
+              <option key={department.id} value={department.id}>
+                {department.name}
+              </option>
+            ))}
+            {/* マスタの読み込み前や、診療科が削除された場合に選択が空へ化けないようにする。 */}
+            {values.departmentId &&
+              !departments.some((department) => department.id === values.departmentId) && (
+                <option value={values.departmentId}>
+                  {values.departmentName || "(削除済みの診療科)"}
+                </option>
+              )}
           </select>
         </label>
         <label>

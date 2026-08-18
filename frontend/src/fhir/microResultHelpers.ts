@@ -4,6 +4,7 @@ import {
   type LabResultSetting,
   observationIdsFromReport,
 } from "./labResultHelpers";
+import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 import { SPECIMEN_TYPE_SYSTEM, ORGANISM_SYSTEM } from "./microOrderHelpers";
 
 // 細菌検査結果。検体検査結果(labResultHelpers)と同型の
@@ -224,6 +225,12 @@ export interface MicroResultFormValues {
   /** 検体採取日。 */
   specimenDate: string;
   /**
+   * 検査を行った診療科(Organization)の id。空なら未設定。
+   * 細菌検査オーダーに紐付ける場合は、オーダーの依頼科をそのまま採用する。
+   */
+  departmentId: string;
+  departmentName: string;
+  /**
    * 元になった細菌検査オーダー(ヘッダの ServiceRequest)の id。空なら紐付けなし。
    * 検体検査結果と同じく「オーダー 1 件 ↔ 結果レポート 1 件」で持つ。
    */
@@ -286,6 +293,8 @@ export function emptyMicroResultForm(): MicroResultFormValues {
   return {
     setting: "outpatient",
     specimenDate: today(),
+    departmentId: "",
+    departmentName: "",
     orderId: "",
     reportStatus: "final",
     specimenTypeCode: "",
@@ -679,6 +688,11 @@ function buildMicroResultTransactionBundle(
     },
     subject: { reference: `Patient/${patientId}` },
     effectiveDateTime: effective,
+    // 診療科。DiagnosticReport にも診療科を持つ標準要素が無いため、オーダーの
+    // 依頼科と同じローカル拡張で持たせる(検体検査結果と同じ)。
+    extension: values.departmentId
+      ? [departmentExtension(values.departmentId, values.departmentName)]
+      : undefined,
     // 元になった細菌検査オーダー。オーダーの明細ではなくヘッダを指す。
     basedOn: values.orderId ? [{ reference: `ServiceRequest/${values.orderId}` }] : undefined,
     specimen: [{ reference: specimenFullUrl, display: values.specimenTypeName || undefined }],
@@ -758,21 +772,7 @@ export function buildMicroResultDeleteBundle(
   };
 }
 
-// ---- 一覧・詳細表示のための parse ----
-
-export interface MicroResultSummary {
-  id: string;
-  date: string;
-  settingDisplay: string;
-  status: string;
-  /** 中間報告のバッジ表示に使う。 */
-  preliminary: boolean;
-  specimenName: string;
-  cultureDisplay: string;
-  isolateNames: string[];
-  /** 元になった細菌検査オーダーの id。空なら紐付けなし。 */
-  orderId: string;
-}
+// ---- 詳細表示のための parse ----
 
 /** DiagnosticReport.basedOn が指す細菌検査オーダー(ヘッダ)の id。無ければ空。 */
 export function microOrderIdFromReport(report: fhir4.DiagnosticReport | undefined): string {
@@ -911,6 +911,9 @@ export function parseMicroResultForm(
   const values = emptyMicroResultForm();
   values.setting = (settingCoding(report)?.code ?? "") as LabResultSetting;
   values.specimenDate = report.effectiveDateTime?.slice(0, 10) ?? today();
+  const department = departmentOf(report);
+  values.departmentId = department.departmentId;
+  values.departmentName = department.departmentName;
   values.orderId = microOrderIdFromReport(report);
   values.reportStatus = report.status === "preliminary" ? "preliminary" : "final";
 
@@ -954,40 +957,6 @@ export function parseMicroResultForm(
     }
   }
   return values;
-}
-
-export function summarizeMicroResult(
-  report: fhir4.DiagnosticReport,
-  observations: fhir4.Observation[] = [],
-): MicroResultSummary {
-  const own = new Set(observationIdsFromReport(report));
-  const culture = observations.find(
-    (obs) => own.has(obs.id ?? "") && resultItemCodeOf(obs) === CODE_CULTURE,
-  );
-  const isolateNames = observations
-    .filter((obs) => own.has(obs.id ?? "") && resultItemCodeOf(obs) === CODE_ISOLATE)
-    .map(
-      (obs) =>
-        codingBySystem(obs.valueCodeableConcept?.coding, ORGANISM_SYSTEM)?.display ??
-        obs.valueCodeableConcept?.text ??
-        "",
-    )
-    .filter(Boolean);
-
-  return {
-    id: report.id ?? "",
-    date: report.effectiveDateTime?.slice(0, 10) ?? "",
-    settingDisplay: settingCoding(report)?.display ?? "",
-    status: report.status ?? "",
-    preliminary: report.status === "preliminary",
-    specimenName: report.specimen?.[0]?.display ?? "",
-    cultureDisplay: culture
-      ? (codingBySystem(culture.valueCodeableConcept?.coding, CULTURE_RESULT_SYSTEM)?.display ??
-        "")
-      : "",
-    isolateNames,
-    orderId: microOrderIdFromReport(report),
-  };
 }
 
 // MIC の表示値。"=" は記号を省き、それ以外は比較記号を前置する(例: "≦0.5")。

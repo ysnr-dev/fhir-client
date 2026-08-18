@@ -1441,6 +1441,21 @@ fieldset.rp-card {
   grid-column: 2 / -1;
 }
 
+/* 細菌検査結果の検査共通。検体採取日・入外区分・診療科・報告区分の短い 4 組を
+   1 行に並べ、幅を食う細菌検査オーダーだけを次の行で残り幅いっぱいに置く。 */
+.prescription-detail__common--micro {
+  grid-template-columns: repeat(7, max-content) minmax(0, 1fr);
+  column-gap: 24px;
+}
+
+.prescription-detail__common--micro dt:nth-of-type(5) {
+  grid-column: 1;
+}
+
+.prescription-detail__common--micro dd:nth-of-type(5) {
+  grid-column: 2 / -1;
+}
+
 .prescription-detail__usage-value {
   display: flex;
   align-items: baseline;
@@ -4725,8 +4740,9 @@ body.karte-wide .app__header {
   gap: 8px;
 }
 
-/* 検査結果タブ: カルテタブの診療日パネルと同様に、左端に検体採取日のペイン、
-   右に内容表示を並べる。タブ全体のスクロールはやめて列ごとにスクロールさせる。 */
+/* 検査結果・細菌検査タブ: カルテタブの診療日パネルと同様に、左端に検体採取日の
+   ペイン、右に内容表示を並べる。タブ全体のスクロールはやめて列ごとにスクロール
+   させる。 */
 /* ペインは検体採取日(10 桁)が 1 行に収まればよいので、カルテタブの診療日パネル
    (160px)より詰めて内容表示に幅を回す。 */
 .karte-lab {
@@ -6146,6 +6162,69 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
 .micro-result-detail__smear > p {
   margin: 2px 0 0;
   white-space: pre-wrap;
+}
+
+/* 分離菌の菌名。菌量・菌数と同じ枠内の 1 項目として並べたうえで、値だけを
+   一段大きく・太くして分離菌ごとの見出し代わりにする。
+   .prescription-detail__common dd と同じ詳細度では順序頼みになるため、
+   dd 側にクラスを重ねて確実に上書きする。 */
+.prescription-detail__common dd.micro-result-detail__organism {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* 感受性テーブル(詳細表示)。検体採取日ペインのぶん表が狭いので、幅を食う
+   薬剤名は略号のみ・測定法は見切れ表示にして、数値と判定の列を潰さない
+   (どちらも全文は title 属性のツールチップで読める)。 */
+.micro-result-detail__susceptibility {
+  table-layout: fixed;
+}
+
+/* 見出しが 2 行に折り返すと行高が跳ねるので、フォーム側と同じく 1 段落として
+   改行も止める。 */
+.micro-result-detail__susceptibility th {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+/* 抗菌薬(略号)。JANIS の略号は最長でも 6 文字程度。 */
+.micro-result-detail__susceptibility th:nth-child(1),
+.micro-result-detail__susceptibility td:nth-child(1) {
+  width: 88px;
+  white-space: nowrap;
+}
+
+/* 測定法(2 列目)は幅指定なし = 残り幅を吸収。 */
+
+.micro-result-detail__susceptibility th:nth-child(3),
+.micro-result-detail__susceptibility td:nth-child(3) {
+  width: 92px;
+}
+
+.micro-result-detail__susceptibility th:nth-child(4),
+.micro-result-detail__susceptibility td:nth-child(4) {
+  width: 88px;
+}
+
+.micro-result-detail__susceptibility th:nth-child(5),
+.micro-result-detail__susceptibility td:nth-child(5) {
+  width: 48px;
+}
+
+.micro-result-detail__susceptibility th:nth-child(6),
+.micro-result-detail__susceptibility td:nth-child(6) {
+  width: 64px;
+}
+
+/* td 自体は table-layout: fixed でも overflow が効かないため、中の span を
+   ブロックにして見切る。 */
+.micro-result-detail__method {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 感受性の S/I/R 判定。R(耐性)だけ注意色にする。 */

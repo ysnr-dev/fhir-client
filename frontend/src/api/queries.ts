@@ -1854,31 +1854,14 @@ export function useLabResultEntries(patientId: string | undefined) {
   };
 }
 
-// 検査結果内容ページの「前へ/次へ」用。一覧に戻らず隣の検査結果へ移動するための id を返す。
-function useResultNavigationQuery(
-  category: string,
-  patientId: string | undefined,
-  reportId: string | undefined,
-) {
-  const query = useResultSummariesQuery(category, patientId);
-
-  const ids = (query.data ?? []).map((summary) => summary.id);
-  const index = reportId ? ids.indexOf(reportId) : -1;
-
+/** 細菌検査タブの検体採取日ペイン用。全細菌検査結果の要約を新しい順で返す。 */
+export function useMicroResultEntries(patientId: string | undefined) {
+  const query = useResultSummariesQuery("MB", patientId);
   return {
-    previousId: index > 0 ? ids[index - 1] : undefined,
-    nextId: index >= 0 && index < ids.length - 1 ? ids[index + 1] : undefined,
-    position: index >= 0 ? index + 1 : undefined,
-    total: ids.length,
+    entries: query.data ?? [],
     isLoading: query.isLoading,
+    error: query.error,
   };
-}
-
-export function useMicroResultNavigation(
-  patientId: string | undefined,
-  reportId: string | undefined,
-) {
-  return useResultNavigationQuery("MB", patientId, reportId);
 }
 
 // ---- 時系列表示 ----
@@ -2002,61 +1985,6 @@ export function useDeleteLabResult() {
 }
 
 // ---- 細菌検査結果 ----
-
-const MICRO_RESULT_COUNT = 20;
-
-export interface MicroResultSearchResources {
-  bundle: fhir4.Bundle;
-  reports: fhir4.DiagnosticReport[];
-  observations: fhir4.Observation[];
-}
-
-// 一覧に培養結果・分離菌名も出すため、Observation を _include で添えてもらう。
-async function fetchMicroResultPage(
-  patientId: string,
-  offset: number,
-): Promise<MicroResultSearchResources> {
-  const params = new URLSearchParams();
-  params.set("patient", `Patient/${patientId}`);
-  params.set("category", "MB");
-  params.set("_count", String(MICRO_RESULT_COUNT));
-  params.set("_offset", String(offset));
-  // 検体採取日(effective)の降順。_sort のキーは検索パラメータ名 date。
-  params.set("_sort", "-date");
-  params.set("_include", "DiagnosticReport:result");
-
-  const { data: bundle } = await searchResource<fhir4.Resource>("DiagnosticReport", params);
-  const reports: fhir4.DiagnosticReport[] = [];
-  const observations: fhir4.Observation[] = [];
-  for (const entry of bundle.entry ?? []) {
-    const resource = entry.resource;
-    // _include の Observation も entry に混ざって返るため resourceType で振り分ける。
-    if (resource?.resourceType === "DiagnosticReport") {
-      reports.push(resource as fhir4.DiagnosticReport);
-    } else if (resource?.resourceType === "Observation") {
-      observations.push(resource as fhir4.Observation);
-    }
-  }
-  return { bundle, reports, observations };
-}
-
-export function useMicroResultSearch(patientId: string | undefined, offset: number) {
-  const query = useQuery({
-    queryKey: ["DiagnosticReport", "search", "micro", patientId, offset],
-    queryFn: () => fetchMicroResultPage(patientId as string, offset),
-    placeholderData: keepPreviousData,
-    enabled: Boolean(patientId),
-  });
-
-  return {
-    ...query,
-    resources: query.data,
-    total: query.data?.bundle.total ?? 0,
-    count: MICRO_RESULT_COUNT,
-    hasPrevious: hasRelation(query.data?.bundle, "previous"),
-    hasNext: hasRelation(query.data?.bundle, "next"),
-  };
-}
 
 // 内容表示・編集の取得は検体検査結果と同じ形(_id + result / specimen の _include)。
 export function useMicroResultDetail(reportId: string | undefined) {

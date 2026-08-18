@@ -112,7 +112,8 @@ export function MicroResultDetailPanel({ reportId }: { reportId: string }) {
           <div className="prescription-detail">
             <fieldset>
               <legend>検査共通</legend>
-              <dl className="prescription-detail__common">
+              {/* 短い 4 項目を 1 行に並べ、長い細菌検査オーダーだけを次の行に置く。 */}
+              <dl className="prescription-detail__common prescription-detail__common--micro">
                 <dt>検体採取日</dt>
                 <dd>{values.specimenDate}</dd>
                 <dt>入外区分</dt>
@@ -123,6 +124,8 @@ export function MicroResultDetailPanel({ reportId }: { reportId: string }) {
                       ? "外来"
                       : "-"}
                 </dd>
+                <dt>診療科</dt>
+                <dd>{values.departmentName || "-"}</dd>
                 <dt>報告区分</dt>
                 <dd>
                   {values.reportStatus === "preliminary" ? (
@@ -140,10 +143,14 @@ export function MicroResultDetailPanel({ reportId }: { reportId: string }) {
 
             {values.isolates.map((isolate, index) => (
               <fieldset key={isolate.id ?? index} className="rp-card">
-                <legend>
-                  分離菌 {isolateLabel(index)}: {isolate.organismName || "-"}
-                </legend>
+                <legend>分離菌 {isolateLabel(index)}</legend>
                 <dl className="prescription-detail__common">
+                  {/* 菌名は分離菌ごとの塊を追う手がかりなので、他の所見と違って
+                      未入力でも行を残し、値を一段強めて出す。 */}
+                  <dt>菌名</dt>
+                  <dd className="micro-result-detail__organism">
+                    {isolate.organismName || "-"}
+                  </dd>
                   <DefinitionRow
                     label="菌量"
                     value={
@@ -169,11 +176,10 @@ export function MicroResultDetailPanel({ reportId }: { reportId: string }) {
                 </dl>
 
                 {isolate.susceptibilities.length > 0 && (
-                  <table className="rp-card__medicines rp-card__medicines--detail micro-result-detail__susceptibility">
+                  <table className="rp-card__medicines micro-result-detail__susceptibility">
                     <thead>
                       <tr>
                         <th>抗菌薬</th>
-                        <th>略号</th>
                         <th>測定法</th>
                         <th>MIC(µg/mL)</th>
                         <th>阻止円(mm)</th>
@@ -184,9 +190,20 @@ export function MicroResultDetailPanel({ reportId }: { reportId: string }) {
                     <tbody>
                       {isolate.susceptibilities.map((row, rowIndex) => (
                         <tr key={row.id ?? rowIndex}>
-                          <td>{row.drugName || "-"}</td>
-                          <td>{row.drugAbbreviation || "-"}</td>
-                          <td>{row.methodName || "-"}</td>
+                          {/* 薬剤名は長く列が潰れるので略号だけを出し、名称はツールチップで読む。
+                              略号が無いマスタもあるため、その場合は名称で代用する。 */}
+                          <td title={row.drugName || undefined}>
+                            {row.drugAbbreviation || row.drugName || "-"}
+                          </td>
+                          {/* 測定法も長いので、はみ出す分は見切って全文はツールチップで読む。 */}
+                          <td>
+                            <span
+                              className="micro-result-detail__method"
+                              title={row.methodName || undefined}
+                            >
+                              {row.methodName || "-"}
+                            </span>
+                          </td>
                           <td>{micDisplay(row) || "-"}</td>
                           <td>{row.zone || "-"}</td>
                           <td
