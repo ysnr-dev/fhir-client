@@ -34,6 +34,11 @@ import {
   serviceRequestsOf,
 } from "../fhir/labOrderHelpers";
 import {
+  buildLabTaskUpdate,
+  labTasksByOrderId,
+  type LabTaskStatus,
+} from "../fhir/labTaskHelpers";
+import {
   buildMicroOrderDeleteBundle,
   isMicroServiceRequest,
   microOrderItemRequests,
@@ -1620,6 +1625,8 @@ export interface LabWorklistRow {
   /** 検査項目(明細)。パネルの構成項目まで含む平坦な一覧。 */
   itemRequests: fhir4.ServiceRequest[];
   patient?: fhir4.Patient;
+  /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
+  task?: fhir4.Task;
 }
 
 export interface LabWorklistResult {
@@ -1631,6 +1638,7 @@ export interface LabWorklistResult {
 async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const items: fhir4.ServiceRequest[] = [];
+  const tasks: fhir4.Task[] = [];
   const patientsById = new Map<string, fhir4.Patient>();
   let truncated = false;
 
@@ -1642,8 +1650,9 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
     params.set("based-on:missing", "true");
     params.set("_count", String(LAB_WORKLIST_PAGE));
     params.set("_offset", String(page * LAB_WORKLIST_PAGE));
-    // 検査項目・患者を 1 リクエストで揃える。
+    // 検査項目・患者・進捗を 1 リクエストで揃える。
     params.set("_revinclude:iterate", "ServiceRequest:based-on");
+    params.set("_revinclude", "Task:focus");
     params.set("_include", "ServiceRequest:subject");
 
     const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
@@ -1654,6 +1663,8 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
       if (!resource) continue;
       if (resource.resourceType === "Patient") {
         if (resource.id) patientsById.set(resource.id, resource as fhir4.Patient);
+      } else if (resource.resourceType === "Task") {
+        tasks.push(resource as fhir4.Task);
       } else if (resource.resourceType === "ServiceRequest") {
         const request = resource as fhir4.ServiceRequest;
         // 検索にヒットしたヘッダと、添えられた明細を分ける。
@@ -1670,10 +1681,13 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
     if (page === LAB_WORKLIST_MAX_PAGES - 1) truncated = true;
   }
 
+  const labTaskByOrderId = labTasksByOrderId(tasks);
+
   const rows = orders.map((order) => ({
     order,
     itemRequests: labOrderItemRequests(items, order.id ?? ""),
     patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+    task: labTaskByOrderId.get(order.id ?? ""),
   }));
 
   // 検体検査オーダーは時刻を持たない(検査日だけ)ので、患者番号順に並べて
@@ -1698,6 +1712,41 @@ export function useLabWorklist(date: string) {
     queryFn: () => fetchLabWorklist(date),
     enabled: Boolean(date),
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 受付などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
+ * transaction Bundle にする理由は useUpdateRadTaskStatus を参照(ETag を持たないため)。
+ */
+export function useUpdateLabTaskStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      order,
+      task,
+      status,
+    }: {
+      order: fhir4.ServiceRequest;
+      task: fhir4.Task | undefined;
+      status: LabTaskStatus;
+    }) => {
+      const resource = buildLabTaskUpdate(task, order, status);
+      const taskEntry: fhir4.BundleEntry = {
+        resource,
+        request: resource.id
+          ? { method: "PUT", url: `Task/${resource.id}` }
+          : { method: "POST", url: "Task" },
+      };
+
+      return postBundle({ resourceType: "Bundle", type: "transaction", entry: [taskEntry] });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "lab-worklist"] });
+      // カルテのオーダーカード側の表示にも将来効くよう、検索キャッシュも読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+    },
   });
 }
 

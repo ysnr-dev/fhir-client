@@ -6306,16 +6306,21 @@ body.page-wide #root {
 
 /* td に display: flex を当てると行の下罫線がズレるため table-cell のまま並べる
    (患者一覧の操作列と同じ理由)。 */
-.rad-worklist td.rad-worklist__actions {
+.rad-worklist td.rad-worklist__actions,
+.lab-worklist td.lab-worklist__actions {
   text-align: right;
 }
 
-.rad-worklist__actions > button + button {
+.rad-worklist__actions > button + button,
+.lab-worklist__actions > button + button {
   margin-left: 4px;
 }
 
-/* ケバブは操作の性質が違う(訂正・取りやめ)ので、進める操作のボタンより離して置く。 */
-.rad-worklist__actions > button + .row-menu {
+/* ケバブは操作の性質が違う(訂正・取りやめ)ので、進める操作のボタンより離して置く。
+   検体検査一覧のラベル発行はリンク(.button)なので、それも同じ扱いにする。 */
+.rad-worklist__actions > button + .row-menu,
+.lab-worklist__actions > button + .row-menu,
+.lab-worklist__actions > .button + .row-menu {
   margin-left: 8px;
 }
 
@@ -6323,7 +6328,9 @@ body.page-wide #root {
    操作のない行との間で行の高さがそろわない。文字 1 行に収まる高さまで詰める。
    line-height を明示するのは、既定では本文の行送り(26px)を font: inherit で
    受け継いでしまい、padding を削っただけでは縮まないため(外来一覧と同じ)。 */
-.rad-worklist__actions button {
+.rad-worklist__actions button,
+.lab-worklist__actions button,
+.lab-worklist__actions .button {
   padding: 2px 10px;
   font-size: 13px;
   line-height: 20px;
@@ -6331,7 +6338,8 @@ body.page-wide #root {
 
 /* ケバブは同じ行に並ぶボタンと高さ・上下位置を揃える。三点リーダーだけなので
    横幅はボタンより詰める。 */
-.rad-worklist__actions .row-menu__trigger {
+.rad-worklist__actions .row-menu__trigger,
+.lab-worklist__actions .row-menu__trigger {
   padding: 2px 7px;
   font-size: 15px;
   line-height: 20px;
@@ -6349,7 +6357,8 @@ body.page-wide #root {
   box-shadow: inset 3px 0 0 var(--lab-high);
 }
 
-.rad-worklist__status {
+.rad-worklist__status,
+.lab-worklist__status {
   display: inline-block;
   padding: 0 6px;
   border: 1px solid var(--border);
@@ -6361,19 +6370,22 @@ body.page-wide #root {
 /* 進捗の色。受付済(作業中)は強調し、実施済は落ち着かせ、中止は地に沈める。
    受付済だけ塗りつぶしにするのは、同じ行に並ぶボタン(枠線 + 薄い accent 塗り)と
    同じ見た目になり、押せるものと見分けが付かなくなるため。 */
-.rad-worklist__status--accepted {
+.rad-worklist__status--accepted,
+.lab-worklist__status--accepted {
   color: var(--bg);
   border-color: var(--accent);
   background: var(--accent);
 }
 
-.rad-worklist__status--completed {
+.rad-worklist__status--completed,
+.lab-worklist__status--completed {
   color: var(--lab-low);
   border-color: var(--lab-low);
 }
 
 /* 中止は「その日の作業から外れたもの」。依頼済と見分けが付くよう地を敷いて沈める。 */
-.rad-worklist__status--cancelled {
+.rad-worklist__status--cancelled,
+.lab-worklist__status--cancelled {
   color: var(--text);
   border-color: var(--border);
   background: var(--surface-sunken);

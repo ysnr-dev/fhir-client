@@ -1,7 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { useDepartmentList, useLabWorklist, type LabWorklistRow } from "../api/queries";
+import {
+  useDepartmentList,
+  useLabWorklist,
+  useUpdateLabTaskStatus,
+  type LabWorklistRow,
+} from "../api/queries";
+import {
+  LAB_LABEL_LAYOUT_CANONICAL,
+  labLabelPdfUrl,
+  useReportLayoutStatus,
+} from "../api/reportsClient";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { RowMenu } from "../components/RowMenu";
 import {
   groupBySpecimen,
   labOrderItems,
@@ -9,6 +20,13 @@ import {
   summarizeLabOrder,
   type LabSpecimenGroup,
 } from "../fhir/labOrderHelpers";
+import {
+  LAB_TASK_STATUS_OPTIONS,
+  labTaskActions,
+  labTaskStatus,
+  labTaskStatusDisplay,
+  type LabTaskStatus,
+} from "../fhir/labTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import {
   SETTING_OPTIONS,
@@ -22,8 +40,9 @@ import {
 // 1 行 = オーダー 1 件。検査内容は採血の現場が動く単位(どの容器に何を採るか)で
 // 見せたいので、検体・採取管ごとにまとめて並べる(カルテのカードと同じ考え方)。
 //
-// 今はその日のオーダーを見渡す一覧だけ。検体ラベルの発行と到着確認(進捗)は
-// この画面に足していく予定。
+// 進捗は受付まで。受付済になると検体ラベル(採取管に貼るバーコード付きの PDF)が
+// 発行できる(docs/lab-label-design.md)。到着済への遷移(検体が検査室に着いた記録)は
+// 到着確認の機能で足す予定。
 //
 // 検査日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
 // (理由は queries.ts の useLabWorklist を参照)。
@@ -36,12 +55,14 @@ interface Filters {
   specimenCode: string;
   setting: string;
   departmentId: string;
+  status: string;
 }
 
 const emptyFilters: Filters = {
   specimenCode: "",
   setting: "",
   departmentId: "",
+  status: "",
 };
 
 export function LabWorklistPage() {
@@ -57,6 +78,10 @@ export function LabWorklistPage() {
 
   const worklist = useLabWorklist(date);
   const departments = useDepartmentList({});
+  const updateStatus = useUpdateLabTaskStatus();
+  // ラベルのレイアウト(.tlf)が未登録の環境では発行ボタンを無効にして案内する。
+  const layoutStatus = useReportLayoutStatus(LAB_LABEL_LAYOUT_CANONICAL);
+  const labelReady = Boolean(layoutStatus.data?.registered);
 
   const rows = useMemo(
     () => (worklist.data?.rows ?? []).filter((row) => matchesFilters(row, filters)),
@@ -102,6 +127,7 @@ export function LabWorklistPage() {
 
       <ErrorBanner error={worklist.error} />
       <ErrorBanner error={departments.error} />
+      <ErrorBanner error={updateStatus.error} />
 
       {worklist.data?.truncated && (
         <p className="error-banner__line error-banner__line--error" role="status">
@@ -122,15 +148,25 @@ export function LabWorklistPage() {
                   <th className="lab-worklist__content">検査内容</th>
                   <th className="lab-worklist__compact">区分</th>
                   <th>依頼科 | 依頼医師</th>
+                  <th className="lab-worklist__compact">ステータス</th>
+                  <th className="lab-worklist__actions"></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <WorklistRow key={row.order.id} row={row} />
+                  <WorklistRow
+                    key={row.order.id}
+                    row={row}
+                    pending={updateStatus.isPending}
+                    labelReady={labelReady}
+                    onChangeStatus={(status) =>
+                      updateStatus.mutate({ order: row.order, task: row.task, status })
+                    }
+                  />
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="master-search__empty">
+                    <td colSpan={7} className="master-search__empty">
                       {total === 0
                         ? "この検査日の検体検査オーダーはありません"
                         : "絞り込みに該当する検査がありません"}
@@ -162,6 +198,8 @@ function matchesFilters(row: LabWorklistRow, filters: Filters): boolean {
 
   const requester = prescriptionRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
+
+  if (filters.status && labTaskStatus(row.task) !== filters.status) return false;
 
   return true;
 }
@@ -236,6 +274,20 @@ function FilterForm({
           ))}
         </select>
       </label>
+      <label>
+        ステータス
+        <select
+          value={filters.status}
+          onChange={(e) => onChange({ ...filters, status: e.target.value })}
+        >
+          <option value="">すべて</option>
+          {LAB_TASK_STATUS_OPTIONS.map((option) => (
+            <option key={option.code} value={option.code}>
+              {option.display}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="patient-search-form__actions">
         <button type="button" onClick={() => onChange(emptyFilters)}>
           クリア
@@ -251,11 +303,24 @@ function groupLabel(group: LabSpecimenGroup): string {
   return `${specimenGroupLabel(group)} | ${names.join("・") || "(項目なし)"}`;
 }
 
-function WorklistRow({ row }: { row: LabWorklistRow }) {
+function WorklistRow({
+  row,
+  pending,
+  labelReady,
+  onChangeStatus,
+}: {
+  row: LabWorklistRow;
+  pending: boolean;
+  labelReady: boolean;
+  onChangeStatus: (status: LabTaskStatus) => void;
+}) {
   const { order, patient } = row;
   const summary = summarizeLabOrder(order);
   const groups = groupBySpecimen(labOrderItems(order, row.itemRequests));
   const requester = prescriptionRequester(order);
+  const status = labTaskStatus(row.task);
+  const actions = labTaskActions(status);
+  const secondaryActions = actions.filter((action) => action.secondary);
 
   return (
     <tr className={summary.urgent ? "lab-worklist__row--urgent" : undefined}>
@@ -281,6 +346,61 @@ function WorklistRow({ row }: { row: LabWorklistRow }) {
         {summary.urgent && <span className="dose-conversion__badge">至急</span>}
       </td>
       <td>{orderContextSummary(requester) || "-"}</td>
+      <td className="lab-worklist__compact">
+        <span className={`lab-worklist__status lab-worklist__status--${status}`}>
+          {labTaskStatusDisplay(status)}
+        </span>
+      </td>
+      <td className="lab-worklist__actions">
+        {actions
+          .filter((action) => !action.secondary)
+          .map((action) => (
+            <button
+              key={action.next}
+              type="button"
+              disabled={pending}
+              onClick={() => onChangeStatus(action.next)}
+            >
+              {action.label}
+            </button>
+          ))}
+        {/* 検体ラベルは受付済のときだけ発行できる(docs/lab-label-design.md §4)。
+            再発行も同じボタン(同じ番号が刷られるだけなので区別しない)。 */}
+        {status === "accepted" &&
+          (labelReady ? (
+            <a
+              className="button"
+              href={labLabelPdfUrl(order.id ?? "")}
+              target="_blank"
+              rel="noopener"
+              title="検体ラベルの PDF を新規タブで開く"
+            >
+              ラベル発行
+            </a>
+          ) : (
+            <button type="button" disabled title="検体ラベルの帳票レイアウトが未登録です">
+              ラベル発行
+            </button>
+          ))}
+        {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(放射線検査一覧と同じ)。 */}
+        {secondaryActions.length > 0 && (
+          <RowMenu label="この検査の操作" escapesClipping>
+            {secondaryActions.map((action) => (
+              <button
+                key={action.next}
+                type="button"
+                className={`row-menu__item${
+                  action.next === "cancelled" ? " row-menu__item--danger" : ""
+                }`}
+                disabled={pending}
+                onClick={() => onChangeStatus(action.next)}
+              >
+                {action.label}
+              </button>
+            ))}
+          </RowMenu>
+        )}
+      </td>
     </tr>
   );
 }

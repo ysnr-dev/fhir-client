@@ -21,6 +21,18 @@ export function questionnaireResponsePdfUrl(qrId: string): string {
   return `/reports/questionnaire_responses/${encodeURIComponent(qrId)}/pdf`;
 }
 
+/**
+ * 検体ラベル帳票の引き当てに使う予約 canonical。Questionnaire には紐付かない帳票を
+ * 既存の帳票レイアウト管理(canonical キー)にそのまま載せるための予約 URL で、
+ * backend の LabLabelReport::LAYOUT_CANONICAL と同じ値。
+ */
+export const LAB_LABEL_LAYOUT_CANONICAL = "http://fhir-client.local/report/lab-label";
+
+/** 検体検査オーダー 1 件ぶんの検体ラベル PDF の URL(1 ページ = 採取管 1 本)。 */
+export function labLabelPdfUrl(orderId: string): string {
+  return `/reports/lab_labels/${encodeURIComponent(orderId)}/pdf`;
+}
+
 /** canonical(url|version)に帳票レイアウトが登録されているかを照会する。 */
 export function useReportLayoutStatus(canonical: string | undefined) {
   return useQuery({

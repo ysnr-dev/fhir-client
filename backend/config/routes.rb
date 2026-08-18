@@ -47,6 +47,8 @@ Rails.application.routes.draw do
   namespace :reports do
     get "layouts", to: "layouts#show"
     get "questionnaire_responses/:id/pdf", to: "questionnaire_response_pdfs#show"
+    # 検体ラベル(オーダー 1 件ぶん。1 ページ = 採取管 1 本)
+    get "lab_labels/:order_id/pdf", to: "lab_label_pdfs#show"
   end
 
   # 国内マスタデータ（FHIR リソースではないプレーンな JSON REST）

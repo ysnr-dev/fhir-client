@@ -18,21 +18,12 @@ module Reports
     UNIT_EXT_URL = "http://hl7.org/fhir/StructureDefinition/questionnaire-unit".freeze
     ANNOTATED_IMAGE_EXT_URL =
       "http://fhir-client.local/StructureDefinition/questionnaire-response-annotated-image".freeze
-    KANA_REPRESENTATION_URL = "http://hl7.org/fhir/StructureDefinition/iso21090-EN-representation".freeze
-
     QR_STATUS_LABELS = {
       "in-progress" => "入力中",
       "completed" => "完了",
       "amended" => "修正済",
       "entered-in-error" => "誤登録",
       "stopped" => "中止"
-    }.freeze
-
-    GENDER_LABELS = {
-      "male" => "男性",
-      "female" => "女性",
-      "other" => "その他",
-      "unknown" => "不明"
     }.freeze
 
     TIME_ZONE = "Asia/Tokyo".freeze
@@ -178,12 +169,12 @@ module Reports
 
     def meta_values
       {
-        "pt_name" => patient_display_name,
-        "pt_kana" => patient_display_kana,
-        "pt_id" => @patient.dig("identifier", 0, "value") || @patient["id"].to_s,
-        "pt_birthdate" => format_date(@patient["birthDate"]),
+        "pt_name" => PatientMeta.display_name(@patient),
+        "pt_kana" => PatientMeta.display_kana(@patient),
+        "pt_id" => PatientMeta.identifier(@patient),
+        "pt_birthdate" => PatientMeta.format_date(@patient["birthDate"]),
         "pt_age" => patient_age.to_s,
-        "pt_gender" => GENDER_LABELS.fetch(@patient["gender"].to_s, @patient["gender"].to_s),
+        "pt_gender" => PatientMeta.gender_label(@patient),
         "qr_title" => @questionnaire["title"] || @questionnaire["name"] || "",
         "qr_status" => QR_STATUS_LABELS.fetch(@response["status"].to_s, @response["status"].to_s),
         "qr_authored" => format_date_time(@response["authored"]),
@@ -191,27 +182,6 @@ module Reports
         "qr_institution" => @response.dig("identifier", "value").to_s.split("^").first.to_s,
         "qr_id" => @response["id"].to_s
       }
-    end
-
-    def representation_code(name)
-      Array(name["extension"]).find { |ext| ext["url"] == KANA_REPRESENTATION_URL }&.dig("valueCode")
-    end
-
-    def patient_display_name
-      names = Array(@patient["name"])
-      kanji = names.find { |name| representation_code(name) == "IDE" }
-      fallback = names.find { |name| representation_code(name).nil? } || names.first
-      name = kanji || fallback
-      return "" unless name
-
-      [name["family"], Array(name["given"]).first].compact.join(" ")
-    end
-
-    def patient_display_kana
-      kana = Array(@patient["name"]).find { |name| representation_code(name) == "SYL" }
-      return "" unless kana
-
-      [kana["family"], Array(kana["given"]).first].compact.join(" ")
     end
 
     # authored 時点(JST)での満年齢。
@@ -231,14 +201,6 @@ module Reports
     def contained_practitioner_name
       practitioner = Array(@response["contained"]).find { |r| r["resourceType"] == "Practitioner" }
       practitioner&.dig("name", 0, "text").to_s
-    end
-
-    def format_date(value)
-      return "" if value.blank?
-
-      Date.parse(value).strftime("%Y/%m/%d")
-    rescue ArgumentError
-      value.to_s
     end
 
     def format_date_time(value)
