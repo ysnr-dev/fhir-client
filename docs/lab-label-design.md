@@ -108,6 +108,10 @@ backend の採取管マスタ(`master_lab_containers`)にあり、PDF を作る�
 
 ### 3-3. 発行記録テーブル
 
+**追記(2026-08-19)**: このテーブルは Specimen への一本化で廃止した。番号→オーダー・
+検体の対応と発行・到着の状態は上流の Specimen が持ち、backend に残るのは採番だけの
+`lab_label_numbers` になった(docs/lab-arrival-design.md §6-1)。以下は当時の設計として残す。
+
 **［提案］**
 
 ```ruby

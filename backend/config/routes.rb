@@ -51,14 +51,6 @@ Rails.application.routes.draw do
     get "lab_labels/:order_id/pdf", to: "lab_label_pdfs#show"
   end
 
-  # 検体ラベルの台帳(発行・到着状況)。到着確認のスキャンが読み書きする
-  # (docs/lab-arrival-design.md §3)。
-  get "lab_labels", to: "lab_labels/records#index"
-  scope "lab_labels" do
-    post "arrivals", to: "lab_labels/arrivals#create"
-    delete "arrivals/:label_number", to: "lab_labels/arrivals#destroy"
-  end
-
   # 国内マスタデータ（FHIR リソースではないプレーンな JSON REST）
   namespace :master do
     resources :hot_codes, only: %i[index show create update destroy] do

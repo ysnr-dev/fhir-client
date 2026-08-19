@@ -6,7 +6,6 @@ import {
   useUpdateLabTaskStatus,
   type LabWorklistRow,
 } from "../api/queries";
-import { useLabLabelRecords, type LabLabelRecord } from "../api/labLabelsClient";
 import {
   LAB_LABEL_LAYOUT_CANONICAL,
   labLabelPdfUrl,
@@ -21,6 +20,7 @@ import {
   summarizeLabOrder,
   type LabSpecimenGroup,
 } from "../fhir/labOrderHelpers";
+import { specimenArrived, specimenTypeCodeOf } from "../fhir/labSpecimenHelpers";
 import {
   LAB_TASK_STATUS_OPTIONS,
   labTaskActions,
@@ -83,25 +83,6 @@ export function LabWorklistPage() {
   // ラベルのレイアウト(.tlf)が未登録の環境では発行ボタンを無効にして案内する。
   const layoutStatus = useReportLayoutStatus(LAB_LABEL_LAYOUT_CANONICAL);
   const labelReady = Boolean(layoutStatus.data?.registered);
-
-  // 管ごとの発行・到着状況(検査内容のバッジ用)。表示中のオーダーぶんをまとめて引く。
-  const orderIds = useMemo(
-    () =>
-      (worklist.data?.rows ?? [])
-        .map((row) => row.order.id)
-        .filter((id): id is string => Boolean(id)),
-    [worklist.data],
-  );
-  const labelRecords = useLabLabelRecords(orderIds);
-  const recordsByOrder = useMemo(() => {
-    const map = new Map<string, LabLabelRecord[]>();
-    for (const record of labelRecords.data ?? []) {
-      const list = map.get(record.order_fhir_id);
-      if (list) list.push(record);
-      else map.set(record.order_fhir_id, [record]);
-    }
-    return map;
-  }, [labelRecords.data]);
 
   const rows = useMemo(
     () => (worklist.data?.rows ?? []).filter((row) => matchesFilters(row, filters)),
@@ -177,7 +158,6 @@ export function LabWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
-                    records={recordsByOrder.get(row.order.id ?? "") ?? []}
                     pending={updateStatus.isPending}
                     labelReady={labelReady}
                     onChangeStatus={(status) =>
@@ -325,19 +305,21 @@ function groupLabel(group: LabSpecimenGroup): string {
 }
 
 /**
- * 管(検体グループ)ごとの発行・到着バッジ。受付前は必ず未発行なので、
- * 受付済・到着済の行でだけ出す(依頼済の行に「未発行」を並べても情報がない)。
+ * 管(検体グループ)ごとの発行・到着バッジ。管の台帳は上流の Specimen で、
+ * 発行済み = Specimen があること、到着済み = receivedTime があること。
+ * 受付前は必ず未発行なので、受付済・到着済の行でだけ出す
+ * (依頼済の行に「未発行」を並べても情報がない)。
  */
 function TubeBadge({
   group,
-  records,
+  specimens,
 }: {
   group: LabSpecimenGroup;
-  records: LabLabelRecord[];
+  specimens: fhir4.Specimen[];
 }) {
-  const record = records.find((r) => r.specimen_code === group.specimenCode);
-  if (!record) return <span className="lab-worklist__tube lab-worklist__tube--none">未発行</span>;
-  if (!record.arrived_at) {
+  const specimen = specimens.find((s) => specimenTypeCodeOf(s) === group.specimenCode);
+  if (!specimen) return <span className="lab-worklist__tube lab-worklist__tube--none">未発行</span>;
+  if (!specimenArrived(specimen)) {
     return <span className="lab-worklist__tube lab-worklist__tube--issued">発行済</span>;
   }
   return <span className="lab-worklist__tube lab-worklist__tube--arrived">到着済</span>;
@@ -345,13 +327,11 @@ function TubeBadge({
 
 function WorklistRow({
   row,
-  records,
   pending,
   labelReady,
   onChangeStatus,
 }: {
   row: LabWorklistRow;
-  records: LabLabelRecord[];
   pending: boolean;
   labelReady: boolean;
   onChangeStatus: (status: LabTaskStatus) => void;
@@ -381,7 +361,7 @@ function WorklistRow({
             <li key={group.specimenCode || "(none)"}>
               {groupLabel(group)}
               {(status === "accepted" || status === "completed") && (
-                <TubeBadge group={group} records={records} />
+                <TubeBadge group={group} specimens={row.specimens} />
               )}
             </li>
           ))}

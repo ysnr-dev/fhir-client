@@ -16,11 +16,17 @@ import {
 import { buildClinicalNoteDeleteBundle, toFhirDateTime } from "../fhir/clinicalNoteHelpers";
 import { sortDepartmentsByCode } from "../fhir/departmentHelpers";
 import {
+  buildLabResultBundle,
   buildLabResultDeleteBundle,
+  buildLabResultUpdateBundle,
+  isLabelSpecimen,
   observationIdsFromReport,
   specimenIdsFromReport,
+  splitLabResultDetailBundle,
   summarizeDiagnosticReport,
+  type LabResultFormValues,
   type LabResultSummary,
+  type SpecimenRef,
 } from "../fhir/labResultHelpers";
 import { isInjectionServiceRequest } from "../fhir/injectionHelpers";
 import {
@@ -33,6 +39,13 @@ import {
   labOrderLabel,
   serviceRequestsOf,
 } from "../fhir/labOrderHelpers";
+import {
+  LAB_LABEL_NUMBER_SYSTEM,
+  buildSpecimenArrival,
+  buildSpecimenArrivalCancel,
+  labelSpecimensByOrderId,
+  type ArrivalRecorder,
+} from "../fhir/labSpecimenHelpers";
 import {
   buildLabTaskUpdate,
   labTasksByOrderId,
@@ -1627,6 +1640,8 @@ export interface LabWorklistRow {
   patient?: fhir4.Patient;
   /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
   task?: fhir4.Task;
+  /** 管(ラベル発行が作った Specimen)。発行・到着の状況表示に使う。 */
+  specimens: fhir4.Specimen[];
 }
 
 export interface LabWorklistResult {
@@ -1639,6 +1654,7 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const items: fhir4.ServiceRequest[] = [];
   const tasks: fhir4.Task[] = [];
+  const specimens: fhir4.Specimen[] = [];
   const patientsById = new Map<string, fhir4.Patient>();
   let truncated = false;
 
@@ -1650,9 +1666,10 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
     params.set("based-on:missing", "true");
     params.set("_count", String(LAB_WORKLIST_PAGE));
     params.set("_offset", String(page * LAB_WORKLIST_PAGE));
-    // 検査項目・患者・進捗を 1 リクエストで揃える。
+    // 検査項目・患者・進捗・管(発行済み Specimen)を 1 リクエストで揃える。
     params.set("_revinclude:iterate", "ServiceRequest:based-on");
-    params.set("_revinclude", "Task:focus");
+    params.append("_revinclude", "Task:focus");
+    params.append("_revinclude", "Specimen:request");
     params.set("_include", "ServiceRequest:subject");
 
     const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
@@ -1665,6 +1682,8 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
         if (resource.id) patientsById.set(resource.id, resource as fhir4.Patient);
       } else if (resource.resourceType === "Task") {
         tasks.push(resource as fhir4.Task);
+      } else if (resource.resourceType === "Specimen") {
+        specimens.push(resource as fhir4.Specimen);
       } else if (resource.resourceType === "ServiceRequest") {
         const request = resource as fhir4.ServiceRequest;
         // 検索にヒットしたヘッダと、添えられた明細を分ける。
@@ -1682,12 +1701,14 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
   }
 
   const labTaskByOrderId = labTasksByOrderId(tasks);
+  const specimensByOrderId = labelSpecimensByOrderId(specimens);
 
   const rows = orders.map((order) => ({
     order,
     itemRequests: labOrderItemRequests(items, order.id ?? ""),
     patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
     task: labTaskByOrderId.get(order.id ?? ""),
+    specimens: specimensByOrderId.get(order.id ?? "") ?? [],
   }));
 
   // 検体検査オーダーは時刻を持たない(検査日だけ)ので、患者番号順に並べて
@@ -1760,6 +1781,8 @@ export interface LabArrivalContext {
   itemRequests: fhir4.ServiceRequest[];
   patient?: fhir4.Patient;
   task?: fhir4.Task;
+  /** 管(ラベル発行が作った Specimen)。到着の揃い判定に使う。 */
+  specimens: fhir4.Specimen[];
 }
 
 export async function fetchLabArrivalContext(orderId: string): Promise<LabArrivalContext | null> {
@@ -1767,7 +1790,8 @@ export async function fetchLabArrivalContext(orderId: string): Promise<LabArriva
   params.set("_id", orderId);
   params.set("_count", "100");
   params.set("_revinclude:iterate", "ServiceRequest:based-on");
-  params.set("_revinclude", "Task:focus");
+  params.append("_revinclude", "Task:focus");
+  params.append("_revinclude", "Specimen:request");
   params.set("_include", "ServiceRequest:subject");
 
   const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
@@ -1775,12 +1799,14 @@ export async function fetchLabArrivalContext(orderId: string): Promise<LabArriva
   let order: fhir4.ServiceRequest | undefined;
   const items: fhir4.ServiceRequest[] = [];
   const tasks: fhir4.Task[] = [];
+  const specimens: fhir4.Specimen[] = [];
   let patient: fhir4.Patient | undefined;
   for (const entry of bundle.entry ?? []) {
     const resource = entry.resource;
     if (!resource) continue;
     if (resource.resourceType === "Patient") patient = resource as fhir4.Patient;
     else if (resource.resourceType === "Task") tasks.push(resource as fhir4.Task);
+    else if (resource.resourceType === "Specimen") specimens.push(resource as fhir4.Specimen);
     else if (resource.resourceType === "ServiceRequest") {
       const request = resource as fhir4.ServiceRequest;
       if (request.id === orderId) order = request;
@@ -1794,7 +1820,83 @@ export async function fetchLabArrivalContext(orderId: string): Promise<LabArriva
     itemRequests: labOrderItemRequests(items, orderId),
     patient,
     task: labTasksByOrderId(tasks).get(orderId),
+    specimens: labelSpecimensByOrderId(specimens).get(orderId) ?? [],
   };
+}
+
+/** ラベル番号から管(Specimen)を引く。到着確認のスキャン逆引き。 */
+export async function fetchLabelSpecimenByNumber(number: string): Promise<fhir4.Specimen | null> {
+  const params = new URLSearchParams();
+  params.set("accession", `${LAB_LABEL_NUMBER_SYSTEM}|${number}`);
+
+  const { data: bundle } = await searchResource<fhir4.Specimen>("Specimen", params);
+  const specimen = (bundle.entry ?? [])
+    .map((entry) => entry.resource)
+    .find((resource): resource is fhir4.Specimen => resource?.resourceType === "Specimen");
+  return specimen ?? null;
+}
+
+/** オーダーの管(ラベル発行が作った Specimen)の一覧。orderId が空なら空配列。 */
+export async function fetchLabelSpecimens(orderId: string): Promise<fhir4.Specimen[]> {
+  if (!orderId) return [];
+  const params = new URLSearchParams();
+  params.set("request", `ServiceRequest/${orderId}`);
+  params.set("_count", "100");
+
+  const { data: bundle } = await searchResource<fhir4.Specimen>("Specimen", params);
+  return (bundle.entry ?? [])
+    .map((entry) => entry.resource)
+    .filter((resource): resource is fhir4.Specimen => resource?.resourceType === "Specimen")
+    .filter(isLabelSpecimen);
+}
+
+/**
+ * 検体到着の記録・取消。管の Specimen(receivedTime)と、必要ならオーダーの進捗
+ * (Task)を 1 つの transaction で書き込む。transaction なのは ETag を持たないため
+ * (useUpdateLabTaskStatus と同じ)に加え、「最後の管の到着」と「到着済への遷移」が
+ * 片方だけ成功する事態を避けるため。
+ */
+export function useUpdateLabArrival() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      specimen,
+      cancel,
+      recorder,
+      taskUpdate,
+    }: {
+      specimen: fhir4.Specimen;
+      cancel?: boolean;
+      recorder?: ArrivalRecorder;
+      taskUpdate?: {
+        order: fhir4.ServiceRequest;
+        task: fhir4.Task | undefined;
+        status: LabTaskStatus;
+      };
+    }) => {
+      const resource = cancel
+        ? buildSpecimenArrivalCancel(specimen)
+        : buildSpecimenArrival(specimen, recorder);
+      const entries: fhir4.BundleEntry[] = [
+        { resource, request: { method: "PUT", url: `Specimen/${specimen.id}` } },
+      ];
+      if (taskUpdate) {
+        const task = buildLabTaskUpdate(taskUpdate.task, taskUpdate.order, taskUpdate.status);
+        entries.push({
+          resource: task,
+          request: task.id
+            ? { method: "PUT", url: `Task/${task.id}` }
+            : { method: "POST", url: "Task" },
+        });
+      }
+      return postBundle({ resourceType: "Bundle", type: "transaction", entry: entries });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "lab-worklist"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+    },
+  });
 }
 
 // ---- 検査結果に紐付けるオーダー(検体検査・細菌検査)の候補 ----
@@ -2138,7 +2240,12 @@ export function useLabResultTimeline(patientId: string | undefined, dateCount: n
 export function useCreateLabResult() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    // オーダーに紐付く結果は、ラベル発行が作った管の Specimen を参照するので、
+    // 組み立ての前にオーダーの管を引く(labResultHelpers の planSpecimens を参照)。
+    mutationFn: async ({ values, patientId }: { values: LabResultFormValues; patientId: string }) => {
+      const labelSpecimens = await fetchLabelSpecimens(values.orderId);
+      return postBundle(buildLabResultBundle(values, patientId, labelSpecimens));
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
@@ -2149,7 +2256,31 @@ export function useCreateLabResult() {
 export function useUpdateLabResult() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: async ({
+      values,
+      patientId,
+      reportId,
+      originalObservationIds,
+      originalSpecimens,
+    }: {
+      values: LabResultFormValues;
+      patientId: string;
+      reportId: string;
+      originalObservationIds: string[];
+      originalSpecimens: SpecimenRef[];
+    }) => {
+      const labelSpecimens = await fetchLabelSpecimens(values.orderId);
+      return postBundle(
+        buildLabResultUpdateBundle(
+          values,
+          patientId,
+          reportId,
+          originalObservationIds,
+          originalSpecimens,
+          labelSpecimens,
+        ),
+      );
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "detail"] });
@@ -2162,17 +2293,22 @@ export function useDeleteLabResult() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (reportId: string) => {
-      // 削除対象の Observation / Specimen は DiagnosticReport の参照から辿る。
-      const { data: report } = await readResource<fhir4.DiagnosticReport>(
-        "DiagnosticReport",
-        reportId,
-      );
+      // 削除対象の Observation / Specimen は詳細と同じ検索で実体ごと引く。
+      // Specimen は結果側が所有するものだけを消す(ラベル由来はオーダー側の
+      // 台帳なので、結果を消しても発行・到着の記録は残す)。
+      const params = new URLSearchParams();
+      params.set("_id", reportId);
+      params.append("_include", "DiagnosticReport:result");
+      params.append("_include", "DiagnosticReport:specimen");
+      const { data: bundle } = await searchResource<fhir4.Resource>("DiagnosticReport", params);
+      const { report, specimens } = splitLabResultDetailBundle(bundle);
+      if (!report) throw new Error("検査結果が見つかりません");
+      const ownedSpecimenIds = specimens
+        .filter((s) => !isLabelSpecimen(s))
+        .map((s) => s.id)
+        .filter((id): id is string => Boolean(id));
       return postBundle(
-        buildLabResultDeleteBundle(
-          reportId,
-          observationIdsFromReport(report),
-          specimenIdsFromReport(report),
-        ),
+        buildLabResultDeleteBundle(reportId, observationIdsFromReport(report), ownedSpecimenIds),
       );
     },
     onSuccess: () => {

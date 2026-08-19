@@ -13,6 +13,20 @@ export const JLAC11_SPECIMEN_SYSTEM = "http://fhir-client.local/CodeSystem/jlac1
 // 検査項目の略称。詳細表示・編集フォームへの復元に使う補助 coding。
 // 検体検査オーダー(labOrderHelpers)も同じ用途で使うので共有する。
 export const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
+// 検体ラベル番号(Specimen.accessionIdentifier)。ラベル発行(backend の LabLabelNumber)が
+// 採番し、到着確認(labSpecimenHelpers)がスキャンで引く。
+export const LAB_LABEL_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/lab-label-number";
+
+/**
+ * ラベル発行が作った Specimen(採取管の台帳)かどうか。
+ *
+ * ラベル由来の Specimen はオーダー側(発行・到着確認)が所有していて、結果登録は
+ * 参照するだけで書き換え・削除しない。結果登録が自分で作る Specimen(オーダー
+ * 未紐付けの結果や、ラベルの無い材料)はラベル番号を持たないので、これで見分ける。
+ */
+export function isLabelSpecimen(specimen: fhir4.Specimen): boolean {
+  return specimen.accessionIdentifier?.system === LAB_LABEL_NUMBER_SYSTEM;
+}
 
 // Observation.interpretation(H/L/N)。JP-CLINS の JP-Observation-LabResult-eCS が
 // 参照する v3 ObservationInterpretation コードシステム。
@@ -180,18 +194,26 @@ function buildObservationValue(line: LabResultLineValues): Partial<fhir4.Observa
   return { valueString: line.value };
 }
 
-// 1回の検査結果の中で使われる材料(検体)ごとに1つの Specimen を作る計画。
+// 1回の検査結果の中で使われる材料(検体)ごとに1つの Specimen を参照する計画。
 // 血清と血漿が混在する場合は Specimen も2つになり、各 Observation は自分の材料を参照する。
+//
+// オーダーに紐付く結果では、ラベル発行が作った管の Specimen(labelSpecimens)を
+// そのまま参照する(referenceOnly)。実際に採った検体は管として 1 つしか無いのに、
+// 結果側にもう 1 つ Specimen を作ると同じ検体が二重になるため。ラベルの無い材料
+// (発行前に結果が来た・オーダー未紐付け)は従来どおり結果側で作って所有する。
 interface SpecimenPlan {
   code: string;
   display: string;
   fullUrl: string;
   id?: string;
+  /** ラベル由来の Specimen を参照するだけ(結果側では作成・更新・削除しない)。 */
+  referenceOnly?: boolean;
 }
 
 function planSpecimens(
   values: LabResultFormValues,
   originalSpecimens: SpecimenRef[],
+  labelSpecimens: fhir4.Specimen[],
 ): Map<string, SpecimenPlan> {
   const idByCode = new Map(originalSpecimens.map((s) => [s.code, s.id]));
   const plans = new Map<string, SpecimenPlan>();
@@ -199,6 +221,20 @@ function planSpecimens(
   for (const line of values.lines) {
     const code = specimenCodeOf(line.item);
     if (!code || plans.has(code)) continue;
+
+    const label = labelSpecimens.find(
+      (s) => codingBySystem(s.type?.coding, JLAC11_SPECIMEN_SYSTEM)?.code === code,
+    );
+    if (label?.id) {
+      plans.set(code, {
+        code,
+        display: line.item?.jlac11_specimen ?? "",
+        fullUrl: `Specimen/${label.id}`,
+        id: label.id,
+        referenceOnly: true,
+      });
+      continue;
+    }
 
     const id = idByCode.get(code);
     plans.set(code, {
@@ -300,6 +336,7 @@ function buildObservation(
 function buildLabResultTransactionBundle(
   values: LabResultFormValues,
   patientId: string,
+  labelSpecimens: fhir4.Specimen[],
   reportId?: string,
   originalObservationIds?: string[],
   originalSpecimens?: SpecimenRef[],
@@ -310,14 +347,18 @@ function buildLabResultTransactionBundle(
     ? `DiagnosticReport/${reportId}`
     : `urn:uuid:${crypto.randomUUID()}`;
 
-  const specimenPlans = planSpecimens(values, originalSpecimens ?? []);
-  const specimenEntries: fhir4.BundleEntry[] = Array.from(specimenPlans.values()).map((plan) => ({
-    fullUrl: plan.fullUrl,
-    resource: buildSpecimen(plan, patientId, effective),
-    request: plan.id
-      ? { method: "PUT" as const, url: `Specimen/${plan.id}` }
-      : { method: "POST" as const, url: "Specimen" },
-  }));
+  const specimenPlans = planSpecimens(values, originalSpecimens ?? [], labelSpecimens);
+  // referenceOnly(ラベル由来)は参照するだけ。PUT すると発行・到着の情報
+  // (番号・request・receivedTime)を消してしまう。
+  const specimenEntries: fhir4.BundleEntry[] = Array.from(specimenPlans.values())
+    .filter((plan) => !plan.referenceOnly)
+    .map((plan) => ({
+      fullUrl: plan.fullUrl,
+      resource: buildSpecimen(plan, patientId, effective),
+      request: plan.id
+        ? { method: "PUT" as const, url: `Specimen/${plan.id}` }
+        : { method: "POST" as const, url: "Specimen" },
+    }));
   const specimenReferences: fhir4.Reference[] = Array.from(specimenPlans.values()).map((plan) => ({
     reference: plan.fullUrl,
     display: plan.display || undefined,
@@ -382,10 +423,15 @@ function buildLabResultTransactionBundle(
     .filter((id) => !keptObservationIds.has(id))
     .map((id) => ({ request: { method: "DELETE", url: `Observation/${id}` } }));
 
-  // 使われなくなった材料の Specimen を消す。Observation より後に置くことで、
+  // 使われなくなった材料の Specimen を消す(originalSpecimens は結果側が所有する
+  // ものだけが渡る。specimenRefsFrom を参照)。ラベル由来の参照に置き換わった材料の
+  // 旧 Specimen も、もう参照されないので消す。Observation より後に置くことで、
   // 参照元の Observation が先に更新/削除されてから検体が消える順序になる。
   const removedSpecimenEntries: fhir4.BundleEntry[] = (originalSpecimens ?? [])
-    .filter((s) => !specimenPlans.has(s.code))
+    .filter((s) => {
+      const plan = specimenPlans.get(s.code);
+      return !plan || plan.referenceOnly;
+    })
     .map((s) => ({ request: { method: "DELETE", url: `Specimen/${s.id}` } }));
 
   return {
@@ -410,8 +456,9 @@ function buildLabResultTransactionBundle(
 export function buildLabResultBundle(
   values: LabResultFormValues,
   patientId: string,
+  labelSpecimens: fhir4.Specimen[] = [],
 ): fhir4.Bundle {
-  return buildLabResultTransactionBundle(values, patientId);
+  return buildLabResultTransactionBundle(values, patientId, labelSpecimens);
 }
 
 export function buildLabResultUpdateBundle(
@@ -420,10 +467,12 @@ export function buildLabResultUpdateBundle(
   reportId: string,
   originalObservationIds: string[],
   originalSpecimens: SpecimenRef[],
+  labelSpecimens: fhir4.Specimen[] = [],
 ): fhir4.Bundle {
   return buildLabResultTransactionBundle(
     values,
     patientId,
+    labelSpecimens,
     reportId,
     originalObservationIds,
     originalSpecimens,
@@ -806,8 +855,13 @@ export function buildDoLabResultForm(values: LabResultFormValues): LabResultForm
 
 // 更新 Bundle 用に、保存済み Specimen の 材料コード → id を取り出す。
 // 同じ材料が引き続き使われていればその Specimen を PUT で使い回す。
+/**
+ * 検査結果が参照する Specimen のうち、結果側が所有するものだけの材料コード → id。
+ * ラベル由来(オーダー側所有)は更新・削除の対象にしないため除く。
+ */
 export function specimenRefsFrom(specimens: fhir4.Specimen[]): SpecimenRef[] {
   return specimens.flatMap((s) => {
+    if (isLabelSpecimen(s)) return [];
     const code = codingBySystem(s.type?.coding, JLAC11_SPECIMEN_SYSTEM)?.code;
     return code && s.id ? [{ code, id: s.id }] : [];
   });

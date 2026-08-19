@@ -1,30 +1,32 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import {
-  LAB_LABELS_KEY,
-  LabLabelsApiError,
-  cancelLabelArrival,
-  fetchLabLabelRecords,
-  isValidLabelNumber,
-  recordLabelArrival,
-} from "../api/labLabelsClient";
+import { useCurrentPractitioner } from "../api/authQueries";
 import {
   fetchLabArrivalContext,
+  fetchLabelSpecimenByNumber,
+  useUpdateLabArrival,
   useUpdateLabTaskStatus,
-  type LabArrivalContext,
 } from "../api/queries";
+import { displayJapaneseName } from "../fhir/humanName";
 import { groupBySpecimen, labOrderItems, specimenGroupLabel } from "../fhir/labOrderHelpers";
+import {
+  isValidLabelNumber,
+  specimenArrived,
+  specimenOrderIdOf,
+  specimenTypeCodeOf,
+} from "../fhir/labSpecimenHelpers";
 import { labTaskStatus } from "../fhir/labTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
 
 // 検体到着確認(docs/lab-arrival-design.md §4-1)。検体ラベルのバーコードを
 // スキャンして、採取管 1 本ずつの到着を記録する画面。
 //
-// 1 スキャンの流れ: 台帳に到着を記録 → 上流からオーダー文脈(患者・検査項目・進捗)を
-// 読んで結果フィードに積む → 今のオーダーの検体グループ全部に到着記録が付いたら
-// Task を到着済へ進める。判定を「発行記録が揃ったか」ではなく「今のオーダーの検体が
-// 揃ったか」にするのは、発行後のオーダー訂正(検体の増減)に追従するため。
+// 台帳は上流の Specimen リソース(同 §6-1)。スキャンの流れは、番号で管を引き
+// (accession 検索)→ オーダー文脈(患者・検査項目・進捗・他の管)を読み →
+// 管の receivedTime と、全検体が揃ったときのオーダー進捗(Task → 到着済)を
+// 1 つの transaction で書き込む。揃い判定を「今のオーダーの検体グループ」で行うのは、
+// 発行後のオーダー訂正(検体の増減)に追従するため。
 //
 // フィードには患者氏名と検体を必ず出す。スキャンした管と画面の表示が食い違ったら
 // 貼り間違いに気付ける(ラベルの目的そのもの)。
@@ -36,7 +38,7 @@ interface FeedEntry {
   time: string;
   number: string;
   kind: "arrived" | "already" | "error";
-  /** kind=error のときの理由。 */
+  /** kind=error のときの理由、kind=already のときの記録時刻。 */
   message?: string;
   patientFhirId?: string;
   patientNumber?: string;
@@ -69,16 +71,23 @@ export function LabArrivalPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const keyRef = useRef(0);
   const queryClient = useQueryClient();
-  const updateStatus = useUpdateLabTaskStatus();
+  const updateArrival = useUpdateLabArrival();
+  const updateTask = useUpdateLabTaskStatus();
+
+  // 到着を記録したユーザー(Specimen のローカル拡張)。医師アカウント以外では省略。
+  const { practitionerId, practitioner } = useCurrentPractitioner();
+  const recorder = practitionerId
+    ? { practitionerId, display: displayJapaneseName(practitioner?.name) }
+    : undefined;
 
   function pushEntry(entry: Omit<FeedEntry, "key" | "time">) {
     keyRef.current += 1;
     setEntries((prev) => [{ ...entry, key: keyRef.current, time: timeLabel(new Date()) }, ...prev]);
   }
 
-  // 台帳とワークリストの表示を追い付かせる(到着バッジ・ステータス)。
+  // 到着バッジ・ステータスの表示を追い付かせる(useUpdateLabArrival の invalidate に
+  // 加えて、失敗時もエラーバナーではなくフィードで見せるため個別には持たない)。
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: [LAB_LABELS_KEY] });
     queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "lab-worklist"] });
   }
 
@@ -93,68 +102,63 @@ export function LabArrivalPage() {
       return;
     }
 
-    let result;
-    try {
-      result = await recordLabelArrival(number);
-    } catch (e) {
-      pushEntry({
-        number,
-        kind: "error",
-        message: e instanceof LabLabelsApiError ? e.message : "到着の記録に失敗しました",
-        warnings: [],
-      });
+    const specimen = await fetchLabelSpecimenByNumber(number);
+    if (!specimen) {
+      pushEntry({ number, kind: "error", message: "この番号の発行記録がありません", warnings: [] });
       return;
     }
 
-    // 記録はできたので、以降(文脈の取得・到着済への遷移)の失敗は警告に留める。
+    const orderId = specimenOrderIdOf(specimen);
+    const context = orderId ? await fetchLabArrivalContext(orderId) : null;
+
+    const already = specimenArrived(specimen);
     const entry: Omit<FeedEntry, "key" | "time"> = {
       number,
-      kind: result.already_arrived ? "already" : "arrived",
+      kind: already ? "already" : "arrived",
       warnings: [],
     };
-    if (result.already_arrived && result.arrived_at) {
-      entry.message = `${recordedAtLabel(result.arrived_at)} に記録済み`;
+    if (already && specimen.receivedTime) {
+      entry.message = `${recordedAtLabel(specimen.receivedTime)} に記録済み`;
     }
 
-    let context: LabArrivalContext | null = null;
-    try {
-      const [fetched, records] = await Promise.all([
-        fetchLabArrivalContext(result.order_fhir_id),
-        fetchLabLabelRecords([result.order_fhir_id]),
-      ]);
-      context = fetched;
+    let taskUpdate;
+    if (!context) {
+      entry.warnings.push("オーダーが見つかりません(削除された可能性)");
+    } else {
+      const { order, itemRequests, patient, task, specimens } = context;
+      entry.patientFhirId = patient?.id;
+      entry.patientNumber = patient?.identifier?.[0]?.value;
+      entry.patientName = patient ? displayName(patient) : undefined;
 
-      if (!context) {
-        entry.warnings.push("オーダーが見つかりません(削除された可能性)");
-      } else {
-        const { order, itemRequests, patient, task } = context;
-        entry.patientFhirId = patient?.id;
-        entry.patientNumber = patient?.identifier?.[0]?.value;
-        entry.patientName = patient ? displayName(patient) : undefined;
+      const groups = groupBySpecimen(labOrderItems(order, itemRequests));
+      const scannedCode = specimenTypeCodeOf(specimen);
+      const group = groups.find((g) => g.specimenCode === scannedCode);
+      entry.specimenLabel = group ? specimenGroupLabel(group) : scannedCode || "検体未設定";
+      if (!group) entry.warnings.push("オーダーにこの検体はありません(訂正で外れた可能性)");
 
-        const groups = groupBySpecimen(labOrderItems(order, itemRequests));
-        const group = groups.find((g) => g.specimenCode === result.specimen_code);
-        entry.specimenLabel = group
-          ? specimenGroupLabel(group)
-          : result.specimen_code || "検体未設定";
-        if (!group) entry.warnings.push("オーダーにこの検体はありません(訂正で外れた可能性)");
+      const status = labTaskStatus(task);
+      if (status === "cancelled") entry.warnings.push("このオーダーは中止されています");
 
-        const status = labTaskStatus(task);
-        if (status === "cancelled") entry.warnings.push("このオーダーは中止されています");
-
-        // 今のオーダーの検体グループ全部に到着記録が付いたら到着済へ。
-        const allArrived =
-          groups.length > 0 &&
-          groups.every((g) =>
-            records.some((r) => r.specimen_code === g.specimenCode && r.arrived_at),
-          );
-        if (allArrived && status === "accepted") {
-          await updateStatus.mutateAsync({ order, task, status: "completed" });
-          entry.taskCompleted = true;
-        }
+      // 今のオーダーの検体グループ全部に到着が付いたら到着済へ。今回の管も織り込む。
+      const arrivedCodes = new Set(
+        specimens.filter(specimenArrived).map((s) => specimenTypeCodeOf(s)),
+      );
+      arrivedCodes.add(scannedCode);
+      const allArrived = groups.length > 0 && groups.every((g) => arrivedCodes.has(g.specimenCode));
+      if (allArrived && status === "accepted") {
+        taskUpdate = { order, task, status: "completed" as const };
       }
-    } catch {
-      entry.warnings.push("オーダー情報の取得に失敗しました(到着は記録されています)");
+    }
+
+    if (!already) {
+      // 管の到着と進捗を 1 transaction で書き込む。失敗したら記録されていないので、
+      // エラーを見せて再スキャンしてもらう。
+      await updateArrival.mutateAsync({ specimen, recorder, taskUpdate });
+      entry.taskCompleted = Boolean(taskUpdate);
+    } else if (taskUpdate) {
+      // 二重スキャンでも、前回取りこぼした進捗(全部揃っているのに受付済のまま)は回収する。
+      await updateTask.mutateAsync(taskUpdate);
+      entry.taskCompleted = true;
     }
 
     pushEntry(entry);
@@ -170,6 +174,13 @@ export function LabArrivalPage() {
     setProcessing(true);
     try {
       await handleScan(number);
+    } catch {
+      pushEntry({
+        number,
+        kind: "error",
+        message: "到着を記録できませんでした(通信エラー)。もう一度スキャンしてください",
+        warnings: [],
+      });
     } finally {
       setProcessing(false);
       // ハンディスキャナは入力欄にフォーカスがある前提で打ってくるので、必ず戻す。
@@ -179,16 +190,16 @@ export function LabArrivalPage() {
 
   async function handleCancel(entry: FeedEntry) {
     try {
-      const record = await cancelLabelArrival(entry.number);
+      // 一覧を開いたまま別端末で状態が変わっていることがあるので、管も進捗も引き直す。
+      const specimen = await fetchLabelSpecimenByNumber(entry.number);
+      if (!specimen) throw new Error("specimen not found");
+      const context = await fetchLabArrivalContext(specimenOrderIdOf(specimen));
       // このスキャンで到着済まで進めていた場合は受付済へ戻す。
-      const context = await fetchLabArrivalContext(record.order_fhir_id);
-      if (context && labTaskStatus(context.task) === "completed") {
-        await updateStatus.mutateAsync({
-          order: context.order,
-          task: context.task,
-          status: "accepted",
-        });
-      }
+      const taskUpdate =
+        context && labTaskStatus(context.task) === "completed"
+          ? { order: context.order, task: context.task, status: "accepted" as const }
+          : undefined;
+      await updateArrival.mutateAsync({ specimen, cancel: true, taskUpdate });
       setEntries((prev) =>
         prev.map((e) => (e.key === entry.key ? { ...e, cancelled: true } : e)),
       );

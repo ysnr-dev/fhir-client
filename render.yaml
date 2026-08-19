@@ -105,13 +105,6 @@ services:
       - type: rewrite
         source: /reports/*
         destination: https://ysnr-fhir-client-api.onrender.com/reports/*
-      # 検体ラベルの台帳(発行・到着状況)。exact + /* の両方が必要なのは /fhir と同じ理由。
-      - type: rewrite
-        source: /lab_labels
-        destination: https://ysnr-fhir-client-api.onrender.com/lab_labels
-      - type: rewrite
-        source: /lab_labels/*
-        destination: https://ysnr-fhir-client-api.onrender.com/lab_labels/*
       # SPA フォールバック(react-router の直リンク対応)
       - type: rewrite
         source: /*

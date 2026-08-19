@@ -8,8 +8,6 @@ import {
 } from "../api/queries";
 import {
   buildDoLabResultForm,
-  buildLabResultBundle,
-  buildLabResultUpdateBundle,
   emptyLabResultForm,
   specimenRefsFrom,
   type LabResultFormValues,
@@ -178,7 +176,7 @@ function CreateForm({
   );
 
   function handleSubmit(values: LabResultFormValues) {
-    createLabResult.mutate(buildLabResultBundle(values, patientId), { onSuccess: onSaved });
+    createLabResult.mutate({ values, patientId }, { onSuccess: onSaved });
   }
 
   return (
@@ -223,13 +221,14 @@ function EditForm({
     if (!report || patientMismatch) return;
     const originalIds = observations.map((o) => o.id).filter((id): id is string => Boolean(id));
     updateLabResult.mutate(
-      buildLabResultUpdateBundle(
+      {
         values,
         patientId,
         reportId,
-        originalIds,
-        specimenRefsFrom(specimens),
-      ),
+        originalObservationIds: originalIds,
+        // 結果側が所有する Specimen だけ(ラベル由来はオーダー側の台帳)。
+        originalSpecimens: specimenRefsFrom(specimens),
+      },
       { onSuccess: onSaved },
     );
   }

@@ -7,7 +7,9 @@
 
 調査日: 2026-08-19。上流 fhir-server の `Task?focus=` 検索・`ServiceRequest?_id=` 検索
 (+ `_revinclude` / `_include` の併用)は同日に開発サーバーの実機で動作確認済み。
-本メモの範囲(§2〜§4)は 2026-08-19 に実装済み。§6 の未決事項は残っている。
+本メモの範囲(§2〜§4)は 2026-08-19 に実装済み。同日中に §6-1 の一本化(台帳を上流の
+Specimen へ移す)も実装したため、§2〜§4 に出てくる `lab_label_records` ベースの実装は
+Specimen ベースに置き換わっている。現行の形は §6-1 を参照。
 
 - **［事実］** = FHIR R4 / JP Core の仕様、またはこのリポジトリ・上流の実装で確認した内容
 - **［導出］** = 仕様・実装から論理的に導ける内容
@@ -141,9 +143,25 @@ Task の進捗の必要条件にはしない。
 
 ## 6. 未決事項・申し送り
 
-1. **独立 Specimen への一本化**(前メモ §7-5 から継続)。結果登録が到着済みの検体を
-   参照する設計にするとき、台帳から Specimen(accessionIdentifier = ラベル番号)を
-   起こすか、結果登録側の Specimen に番号を identifier で持たせるかを決める。
+1. **独立 Specimen への一本化(実装済み 2026-08-19)**。台帳を backend のテーブルから
+   上流の Specimen へ移した。現行の形:
+   - **発行**(`LabLabelReport`)が管ごとに独立 Specimen を作る。accessionIdentifier =
+     ラベル番号、request = ヘッダオーダー、type / container = 検体・採取管。二重発行は
+     conditional create(`If-None-Exist: request=...&type=...`)で防ぎ、再発行は既存
+     Specimen の番号をそのまま刷る。発行時点では status を付けない(未採取)。
+   - backend に残るのは番号の採番だけ(`lab_label_numbers`。行 = 採番 1 回で、番号は
+     id + チェックデジット)。`/lab_labels` の到着・照会 API は廃止し、frontend は
+     FHIR を直接読み書きする。
+   - **到着**は Specimen の `receivedTime` + `status: available`(取消はその削除)。
+     記録者はローカル拡張 `lab-arrival-recorder`(Practitioner 参照)。スキャンの逆引きは
+     `Specimen?accession=`、管の更新とオーダー進捗(Task)は 1 つの transaction で書く。
+   - **一覧・揃い判定**は ServiceRequest 検索への `_revinclude=Specimen:request` で
+     同じ応答から読む(発行済み = Specimen がある、到着済み = receivedTime がある)。
+   - **結果登録**はオーダーに紐付くとき、材料が一致するラベル Specimen を参照する
+     (`labResultHelpers` の planSpecimens。referenceOnly で、書き換え・削除はしない)。
+     所有権はラベル番号の有無で見分ける(`isLabelSpecimen`)。ラベルの無い材料や
+     オーダー未紐付けの結果は、従来どおり結果側で Specimen を作って所有する。
+     結果を削除してもラベル Specimen(発行・到着の記録)は残る。
 2. **未着レポート**。「発行済みで N 時間未到着」の横断一覧。台帳(issued/arrived)で
    作れるが、まず日々の運用で必要かを見る。
 3. **オーダー訂正で消えた検体の発行記録**。行は残るが、到着判定は今のオーダー内容で

@@ -2,9 +2,12 @@
 # 上流 FHIR サーバーから検体検査オーダー一式を 2 往復で取得し、検体・採取管ごとの
 # グループ(採取管 1 本 = ラベル 1 枚)に畳んで PDF を組む。
 #   1. GET /ServiceRequest/{id} -- 中身を見ないと患者参照が分からない
-#   2. batch Bundle POST /      -- 明細検索(based-on)+ Patient read
+#   2. batch Bundle POST /      -- 明細検索(based-on)+ Patient read + 発行済み Specimen 検索
 #
-# ラベル番号はグループごとに LabLabelRecord で採番する(再発行は同じ番号)。
+# 採取管 1 本の台帳は上流の Specimen リソース(docs/lab-arrival-design.md §6-1)。
+# 発行 = そのオーダー(request)と検体(type)の Specimen を作ること。番号は
+# accessionIdentifier に持たせ、再発行では既存の Specimen の番号をそのまま刷る。
+# backend 側に残るのは番号の採番(LabLabelNumber)だけ。
 class LabLabelReport
   # オーダーが上流に存在しない
   class NotFound < StandardError; end
@@ -50,17 +53,12 @@ class LabLabelReport
     raise LayoutNotRegistered, "layout not registered for #{LAYOUT_CANONICAL}" unless layout
 
     order = fetch_order
-    items, patient = fetch_related_resources(order)
+    items, patient, specimens = fetch_related_resources(order)
     groups = build_groups(items)
     raise NoLabelTarget, "order #{order_id} has no items" if groups.empty?
 
     labels = groups.map do |group|
-      record = LabLabelRecord.ensure_for(
-        order_fhir_id: order_id,
-        specimen_code: group.specimen_code,
-        container_code: group.container_code
-      )
-      { group: group, number: record.label_number }
+      { group: group, number: ensure_specimen_number(group, order, specimens) }
     end
 
     Reports::LabLabelRenderer.new(layout:, order:, patient:, labels:).render
@@ -89,7 +87,7 @@ class LabLabelReport
     end
   end
 
-  # 明細検索と Patient read を 1 つの batch Bundle で取得する。
+  # 明細検索・Patient read・発行済み Specimen 検索を 1 つの batch Bundle で取得する。
   # 明細はヘッダ直下(単独項目・パネル)だけでよい。パネルの構成項目は親と同じ検体で、
   # ラベルにはパネル名を刷るため取得しない。
   def fetch_related_resources(order)
@@ -97,7 +95,9 @@ class LabLabelReport
     entries = [
       { "request" => { "method" => "GET",
                        "url" => "ServiceRequest?based-on=ServiceRequest/#{order_id}&_count=100" } },
-      { "request" => { "method" => "GET", "url" => "Patient/#{patient_id}" } }
+      { "request" => { "method" => "GET", "url" => "Patient/#{patient_id}" } },
+      { "request" => { "method" => "GET",
+                       "url" => "Specimen?request=ServiceRequest/#{order_id}&_count=100" } }
     ]
 
     bundle = { "resourceType" => "Bundle", "type" => "batch", "entry" => entries }
@@ -110,10 +110,15 @@ class LabLabelReport
     ensure_success!(upstream, "batch bundle")
     results = Array(JSON.parse(upstream.body)["entry"])
 
-    items = Array(entry_resource!(results[0], "item search")["entry"])
+    items = searchset_resources(results[0], "ServiceRequest", "item search")
+    specimens = searchset_resources(results[2], "Specimen", "specimen search")
+    [items, entry_resource!(results[1], "Patient/#{patient_id}"), specimens]
+  end
+
+  def searchset_resources(entry, resource_type, context)
+    Array(entry_resource!(entry, context)["entry"])
       .map { |e| e["resource"] }
-      .select { |resource| resource&.dig("resourceType") == "ServiceRequest" }
-    [items, entry_resource!(results[1], "Patient/#{patient_id}")]
+      .select { |resource| resource&.dig("resourceType") == resource_type }
   end
 
   # ラベルの患者取り違えは重大なので、患者が引けない場合は生成を中止する。
@@ -124,6 +129,81 @@ class LabLabelReport
 
     patient_id
   end
+
+  # ---- 番号の確保(台帳 = 上流の Specimen) ----
+
+  # このグループの管の番号。発行済みの Specimen があればその番号(再発行)、
+  # 無ければ採番して Specimen を作る。
+  def ensure_specimen_number(group, order, specimens)
+    existing = specimens.find { |s| label_specimen?(s) && specimen_type_code(s) == group.specimen_code }
+    return accession_number(existing) if existing
+
+    create_label_specimen(group, order)
+  end
+
+  # ラベル発行で作った Specimen(番号を持つ)。結果登録が作る Specimen は request を
+  # 持たないので request 検索には掛からないが、番号の有無でも判定して取り違えを防ぐ。
+  def label_specimen?(specimen)
+    specimen.dig("accessionIdentifier", "system") == LabLabelNumber::SYSTEM
+  end
+
+  def specimen_type_code(specimen)
+    coding_by_system(specimen.dig("type", "coding"), JLAC11_SPECIMEN_SYSTEM)&.dig("code").to_s
+  end
+
+  def accession_number(specimen)
+    number = specimen.dig("accessionIdentifier", "value").to_s
+    # 番号の無い Specimen に番号を刷ることはできない(刷ってもスキャンで引けない)。
+    raise UpstreamError, "Specimen/#{specimen['id']} has no label number" if number.blank?
+
+    number
+  end
+
+  def create_label_specimen(group, order)
+    number = LabLabelNumber.allocate
+    headers = { "Content-Type" => "application/fhir+json" }
+    # 二重発行(同時クリック)で同じ管の Specimen が 2 つできないよう conditional create
+    # にする。検体未設定のグループは type で識別できないため事前検索(batch)だけで守る
+    # (稀な二重クリックで番号が 2 つ振られ得るが、どちらのラベルも読めるので実害は小さい)。
+    if group.specimen_code.present?
+      headers["If-None-Exist"] =
+        "request=ServiceRequest/#{order_id}&type=#{group.specimen_code}"
+    end
+
+    upstream = gateway.forward(
+      method: :post, path: "/Specimen",
+      body: build_label_specimen(group, order, number).to_json, headers: headers
+    )
+    ensure_success!(upstream, "Specimen create")
+    # 200 は conditional create が既存に合流した応答(同時発行の負け側)。
+    # その場合は既存の番号を採用する(採番済みの number は欠番になるだけ)。
+    accession_number(JSON.parse(upstream.body))
+  end
+
+  # 発行時点の Specimen。まだ採取していないので status は付けない
+  # (到着確認が receivedTime と status: available を書き込む)。
+  def build_label_specimen(group, order, number)
+    resource = {
+      "resourceType" => "Specimen",
+      "accessionIdentifier" => { "system" => LabLabelNumber::SYSTEM, "value" => number },
+      "subject" => { "reference" => order.dig("subject", "reference") },
+      "request" => [{ "reference" => "ServiceRequest/#{order_id}" }]
+    }
+    if group.specimen_code.present?
+      coding = { "system" => JLAC11_SPECIMEN_SYSTEM, "code" => group.specimen_code }
+      coding["display"] = group.specimen_name if group.specimen_name.present?
+      resource["type"] = { "coding" => [coding] }
+      resource["type"]["text"] = group.specimen_name if group.specimen_name.present?
+    end
+    if group.container_code.present?
+      coding = { "system" => CONTAINER_SYSTEM, "code" => group.container_code }
+      coding["display"] = group.container_name if group.container_name.present?
+      resource["container"] = [{ "type" => { "coding" => [coding] } }]
+    end
+    resource
+  end
+
+  # ---- 明細のグルーピング ----
 
   # 明細を検体コードでまとめる。frontend の groupBySpecimen と同じ規則で、
   # 伝票の並び(明細番号 identifier)を保ち、検体未設定のグループは最後に置く。

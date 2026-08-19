@@ -1,8 +1,9 @@
 require "rails_helper"
 
-# 上流アクセスは「オーダー read 1 本 + batch Bundle POST 1 本」の 2 往復であること、
-# 検体・採取管ごとのグルーピングと番号の採番、失敗時の例外マッピングを検証する
-# (PDF 描画自体は LabLabelRenderer が担うのでモックする)。
+# 上流アクセスは「オーダー read 1 本 + batch Bundle POST 1 本(+ 新規の管ぶんの
+# Specimen 作成)」であること、検体・採取管ごとのグルーピング、台帳としての
+# Specimen の扱い(再発行は既存の番号、新規は conditional create)、失敗時の
+# 例外マッピングを検証する(PDF 描画は LabLabelRenderer が担うのでモックする)。
 RSpec.describe LabLabelReport do
   let(:base_url) { "http://fhir.example" }
   let(:gateway) do
@@ -59,8 +60,25 @@ RSpec.describe LabLabelReport do
     resource
   end
 
+  # 発行済みの管(台帳としての Specimen)。
+  def label_specimen(id, number:, specimen_code:)
+    {
+      "resourceType" => "Specimen",
+      "id" => id,
+      "accessionIdentifier" => { "system" => LabLabelNumber::SYSTEM, "value" => number },
+      "type" => { "coding" => [{ "system" => described_class::JLAC11_SPECIMEN_SYSTEM,
+                                 "code" => specimen_code }] },
+      "request" => [{ "reference" => "ServiceRequest/o1" }]
+    }
+  end
+
   def batch_entry(resource)
     { "response" => { "status" => "200 OK" }, "resource" => resource }
+  end
+
+  def searchset(resources)
+    { "resourceType" => "Bundle", "type" => "searchset",
+      "entry" => resources.map { |r| { "resource" => r } } }
   end
 
   def stub_order(status: 200, body: order)
@@ -68,16 +86,19 @@ RSpec.describe LabLabelReport do
       .to_return(status: status, body: body.to_json)
   end
 
-  def stub_batch(items)
-    searchset = {
-      "resourceType" => "Bundle", "type" => "searchset",
-      "entry" => items.map { |i| { "resource" => i } }
-    }
+  def stub_batch(items, specimens: [])
     stub_request(:post, "#{base_url}/")
       .to_return(status: 200, body: {
         "resourceType" => "Bundle", "type" => "batch-response",
-        "entry" => [batch_entry(searchset), batch_entry(patient)]
+        "entry" => [batch_entry(searchset(items)), batch_entry(patient),
+                    batch_entry(searchset(specimens))]
       }.to_json)
+  end
+
+  # Specimen の conditional create。作成された(または合流した)リソースをそのまま返す。
+  def stub_specimen_create
+    stub_request(:post, "#{base_url}/Specimen")
+      .to_return { |request| { status: 201, body: request.body } }
   end
 
   def create_layout!
@@ -91,7 +112,7 @@ RSpec.describe LabLabelReport do
 
   before { create_layout! }
 
-  it "groups items by specimen, issues numbers, and renders one label per group" do
+  it "groups items by specimen and creates one label Specimen per new tube" do
     stub_order
     stub_batch([
       item("i1", number: 1, name: "末梢血液一般検査", abbreviation: "CBC",
@@ -101,6 +122,7 @@ RSpec.describe LabLabelReport do
       item("i2", number: 2, name: "総蛋白(TP)", abbreviation: "TP",
            specimen: { code: "250", name: "血清", container: "T01", container_name: "分離剤管" })
     ])
+    create = stub_specimen_create
 
     captured = nil
     renderer = instance_double(Reports::LabLabelRenderer, render: "%PDF")
@@ -116,34 +138,43 @@ RSpec.describe LabLabelReport do
     # 明細番号順に項目が並ぶ(略称優先)。
     expect(labels[0][:group].item_labels).to eq(["CBC"])
     expect(labels[1][:group].item_labels).to eq(%w[TP AST])
-    expect(labels[0][:group].container_code).to eq("T03")
-    # 番号は発行記録から採番される。
-    records = LabLabelRecord.order(:id)
-    expect(records.map(&:specimen_code)).to contain_exactly("212", "250")
     expect(labels.map { |l| l[:number] }).to all(match(/\A\d{11}\z/))
+    expect(labels.map { |l| l[:number] }.uniq.length).to eq(2)
 
+    # 管 1 本 = Specimen 1 件。二重発行対策の conditional create で作られる。
+    expect(create).to have_been_requested.twice
     expect(
-      a_request(:post, "#{base_url}/").with do |req|
-        urls = JSON.parse(req.body)["entry"].map { |e| e.dig("request", "url") }
-        urls == ["ServiceRequest?based-on=ServiceRequest/o1&_count=100", "Patient/p1"]
-      end
+      a_request(:post, "#{base_url}/Specimen").with(
+        headers: { "If-None-Exist" => "request=ServiceRequest/o1&type=212" }
+      ) { |req|
+        body = JSON.parse(req.body)
+        body.dig("accessionIdentifier", "system") == LabLabelNumber::SYSTEM &&
+          body["request"] == [{ "reference" => "ServiceRequest/o1" }] &&
+          body.dig("subject", "reference") == "Patient/p1" &&
+          body["status"].nil?
+      }
     ).to have_been_made.once
   end
 
-  it "reuses the same numbers on reprint" do
+  it "reuses the numbers of already issued Specimens (reprint creates nothing)" do
     stub_order
-    stub_batch([
-      item("i1", number: 1, name: "末梢血液一般検査",
-           specimen: { code: "212", name: "全血", container: "T03", container_name: "EDTA管" })
-    ])
-    allow(Reports::LabLabelRenderer).to receive(:new)
-      .and_return(instance_double(Reports::LabLabelRenderer, render: "%PDF"))
+    stub_batch(
+      [item("i1", number: 1, name: "末梢血液一般検査",
+            specimen: { code: "212", name: "全血", container: "T03", container_name: "EDTA管" })],
+      specimens: [label_specimen("sp1", number: "00000000456", specimen_code: "212")]
+    )
+    create = stub_specimen_create
+
+    captured = nil
+    allow(Reports::LabLabelRenderer).to receive(:new) do |args|
+      captured = args
+      instance_double(Reports::LabLabelRenderer, render: "%PDF")
+    end
 
     described_class.new("o1", gateway: gateway).generate
-    first_numbers = LabLabelRecord.pluck(:label_number)
-    described_class.new("o1", gateway: gateway).generate
 
-    expect(LabLabelRecord.pluck(:label_number)).to eq(first_numbers)
+    expect(captured[:labels].map { |l| l[:number] }).to eq(["00000000456"])
+    expect(create).not_to have_been_requested
   end
 
   it "raises NotFound when the order does not exist" do
