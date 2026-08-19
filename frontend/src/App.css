@@ -6290,18 +6290,21 @@ body.page-wide #root {
 }
 
 /* 検査内容は 1 オーダーに複数の GP・検体が並ぶことがあるので箇条書きにする。
-   1 行が長くなる列なので、ここだけは折り返しを許す。 */
-.rad-worklist__items,
-.lab-worklist__items {
+   1 行が長くなる列なので、ここだけは折り返しを許す
+   (検体検査一覧は検体名を横に繋げるだけなので .lab-worklist__content に直接当てる)。 */
+.rad-worklist__items {
   margin: 0;
   padding: 0;
   list-style: none;
   white-space: normal;
 }
 
-.rad-worklist__items > li + li,
-.lab-worklist__items > li + li {
+.rad-worklist__items > li + li {
   margin-top: 2px;
+}
+
+.lab-worklist__content {
+  white-space: normal;
 }
 
 /* td に display: flex を当てると行の下罫線がズレるため table-cell のまま並べる
@@ -6312,7 +6315,9 @@ body.page-wide #root {
 }
 
 .rad-worklist__actions > button + button,
-.lab-worklist__actions > button + button {
+.lab-worklist__actions > button + button,
+/* ラベル発行はリンク(.button)なので、その右に並ぶ「表示」にも同じ間隔を空ける。 */
+.lab-worklist__actions > .button + button {
   margin-left: 4px;
 }
 
@@ -6391,11 +6396,11 @@ body.page-wide #root {
   background: var(--surface-sunken);
 }
 
-/* 管(検体グループ)ごとの発行・到着バッジ。検査内容の行に添える小さな印。
-   ステータスのバッジより一回り小さくして、行の主役(検査内容)を邪魔しない。 */
+/* 管(検体グループ)ごとの発行・到着バッジ。「表示」で開くオーダー内容
+   (.lab-order-view)で検体の見出しに添える小さな印。ステータスのバッジより
+   一回り小さくして、見出しの主役(検体名)を邪魔しない。 */
 .lab-worklist__tube {
   display: inline-block;
-  margin-left: 8px;
   padding: 0 4px;
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -6417,6 +6422,37 @@ body.page-wide #root {
   color: var(--bg);
   border-color: var(--accent);
   background: var(--accent);
+}
+
+/* 検体検査一覧の「表示」で開くオーダー内容。中身はカルテのカードと同じ組み方
+   (.karte-rp)なので、ここではモーダルに置くぶんの余白と、頭の 1 行だけを持つ。 */
+.lab-order-view__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.lab-order-view .karte-rp + .karte-rp {
+  margin-top: 10px;
+}
+
+/* ステータス・管のバッジ。地の行送り(26px)をそのまま受け継ぐと文字に対して背が
+   高くなるので、文字 1 行ぶんまで詰める。並べる先が flex なので、伸ばされない
+   よう上下は中央に置く(一覧の表は行の高さに合わせるため既定のまま)。 */
+.lab-order-view .lab-worklist__status,
+.lab-order-view .lab-worklist__tube {
+  align-self: center;
+  line-height: 18px;
+}
+
+/* ラベルに刷られた採取番号。現物と突き合わせる値なので等幅数字で出す。 */
+.lab-order-view__number {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
 }
 
 /* 検体到着確認(スキャン画面) --------------------------------------------- */

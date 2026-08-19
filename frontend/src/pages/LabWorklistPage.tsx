@@ -12,15 +12,14 @@ import {
   useReportLayoutStatus,
 } from "../api/reportsClient";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { LabOrderViewModal } from "../components/LabOrderViewModal";
 import { RowMenu } from "../components/RowMenu";
 import {
   groupBySpecimen,
   labOrderItems,
-  specimenGroupLabel,
   summarizeLabOrder,
   type LabSpecimenGroup,
 } from "../fhir/labOrderHelpers";
-import { specimenArrived, specimenTypeCodeOf } from "../fhir/labSpecimenHelpers";
 import {
   LAB_TASK_STATUS_OPTIONS,
   labTaskActions,
@@ -38,12 +37,14 @@ import {
 // 検体検査一覧(部門ワークリスト)。検査日を決めて、その日に検体を採る検査を並べる。
 // 作りは放射線検査一覧(RadWorklistPage)に合わせてある。
 //
-// 1 行 = オーダー 1 件。検査内容は採血の現場が動く単位(どの容器に何を採るか)で
-// 見せたいので、検体・採取管ごとにまとめて並べる(カルテのカードと同じ考え方)。
+// 1 行 = オーダー 1 件。1 行を 1 段に収めて件数を目で追えるよう、検査内容の列には
+// 採る検体の名前だけを並べる。検査項目やラベルの番号は「表示」で開くモーダルに送る。
 //
-// 受付済になると検体ラベル(採取管に貼るバーコード付きの PDF)が発行できる
-// (docs/lab-label-design.md)。到着済へは検体到着確認画面のスキャンで進み、
-// この一覧では管ごとの発行・到着状況をバッジで見せる(docs/lab-arrival-design.md §4-2)。
+// 検体ラベル(採取管に貼るバーコード付きの PDF)の発行が受付を兼ねていて、
+// 依頼済のオーダーは発行と同時に受付済へ進む(docs/lab-label-design.md)。
+// 到着済へは検体到着確認画面のスキャンで進む。
+// 管ごとの発行・到着と採取番号は「表示」のモーダル(LabOrderViewModal)で見せる
+// (docs/lab-arrival-design.md §4-2)。
 //
 // 検査日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
 // (理由は queries.ts の useLabWorklist を参照)。
@@ -70,6 +71,9 @@ export function LabWorklistPage() {
   // 検査日は必須。未選択にはできないので当日から始める。
   const [date, setDate] = useState(today);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+  // 内容を開いているオーダー。行そのものではなく id で覚えておき、読み直しの
+  // たびに引き直す(受付・ラベル発行の後に開いたままのモーダルも追い付く)。
+  const [viewingId, setViewingId] = useState<string | null>(null);
 
   // 検査内容の列が長くなるので、この画面だけ幅を広げる(放射線検査一覧と同じ)。
   useEffect(() => {
@@ -89,6 +93,7 @@ export function LabWorklistPage() {
     [worklist.data, filters],
   );
   const total = worklist.data?.rows.length ?? 0;
+  const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
 
   // 検体の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。マスタ全件を出しても
   // その日に採らない検体ばかりが並ぶだけなので、実際にある検体だけにする。
@@ -160,6 +165,7 @@ export function LabWorklistPage() {
                     row={row}
                     pending={updateStatus.isPending}
                     labelReady={labelReady}
+                    onView={() => setViewingId(row.order.id ?? null)}
                     onChangeStatus={(status) =>
                       updateStatus.mutate({ order: row.order, task: row.task, status })
                     }
@@ -180,6 +186,8 @@ export function LabWorklistPage() {
           <p className="order-select__muted lab-worklist__count">{rows.length} 件</p>
         </>
       )}
+
+      {viewing && <LabOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
     </div>
   );
 }
@@ -298,42 +306,26 @@ function FilterForm({
   );
 }
 
-/** 検体グループ 1 行のラベル(「血清（分離剤管） | 末梢血液一般・CRP」)。 */
-function groupLabel(group: LabSpecimenGroup): string {
-  const names = group.entries.map((entry) => entry.item.name).filter(Boolean);
-  return `${specimenGroupLabel(group)} | ${names.join("・") || "(項目なし)"}`;
-}
-
 /**
- * 管(検体グループ)ごとの発行・到着バッジ。管の台帳は上流の Specimen で、
- * 発行済み = Specimen があること、到着済み = receivedTime があること。
- * 受付前は必ず未発行なので、受付済・到着済の行でだけ出す
- * (依頼済の行に「未発行」を並べても情報がない)。
+ * 検査内容の列。採る検体の名前だけを横に並べる(「血清・全血」)。採血の現場が
+ * 用意するものが一目で分かればよく、項目まで要るときは「表示」で開く。
+ * 採取管まで添えないのは、行が伸びると 1 行に収まらなくなるため。
  */
-function TubeBadge({
-  group,
-  specimens,
-}: {
-  group: LabSpecimenGroup;
-  specimens: fhir4.Specimen[];
-}) {
-  const specimen = specimens.find((s) => specimenTypeCodeOf(s) === group.specimenCode);
-  if (!specimen) return <span className="lab-worklist__tube lab-worklist__tube--none">未発行</span>;
-  if (!specimenArrived(specimen)) {
-    return <span className="lab-worklist__tube lab-worklist__tube--issued">発行済</span>;
-  }
-  return <span className="lab-worklist__tube lab-worklist__tube--arrived">到着済</span>;
+function specimenNames(groups: LabSpecimenGroup[]): string {
+  return groups.map((group) => group.specimenName || group.specimenCode || "検体未設定").join("・");
 }
 
 function WorklistRow({
   row,
   pending,
   labelReady,
+  onView,
   onChangeStatus,
 }: {
   row: LabWorklistRow;
   pending: boolean;
   labelReady: boolean;
+  onView: () => void;
   onChangeStatus: (status: LabTaskStatus) => void;
 }) {
   const { order, patient } = row;
@@ -356,17 +348,11 @@ function WorklistRow({
         )}
       </td>
       <td className="lab-worklist__content">
-        <ul className="lab-worklist__items">
-          {groups.map((group) => (
-            <li key={group.specimenCode || "(none)"}>
-              {groupLabel(group)}
-              {(status === "accepted" || status === "completed") && (
-                <TubeBadge group={group} specimens={row.specimens} />
-              )}
-            </li>
-          ))}
-          {groups.length === 0 && <li className="order-select__muted">検査項目なし</li>}
-        </ul>
+        {groups.length > 0 ? (
+          specimenNames(groups)
+        ) : (
+          <span className="order-select__muted">検査項目なし</span>
+        )}
       </td>
       <td className="lab-worklist__compact">
         {summary.settingDisplay || "-"}
@@ -391,9 +377,11 @@ function WorklistRow({
               {action.label}
             </button>
           ))}
-        {/* 検体ラベルは受付済のときだけ発行できる(docs/lab-label-design.md §4)。
-            再発行も同じボタン(同じ番号が刷られるだけなので区別しない)。 */}
-        {status === "accepted" &&
+        {/* 検体ラベルの発行が受付を兼ねる(docs/lab-label-design.md §4)。採血室が
+            最初にするのがラベルの発行なので、依頼済のオーダーはこの操作で受付済へ
+            進める。受付済で押したときは再発行(同じ番号が刷られるだけなので文言も
+            進捗も変えない)。中止のオーダーには出さない。 */}
+        {(status === "requested" || status === "accepted") &&
           (labelReady ? (
             <a
               className="button"
@@ -401,6 +389,9 @@ function WorklistRow({
               target="_blank"
               rel="noopener"
               title="検体ラベルの PDF を新規タブで開く"
+              onClick={() => {
+                if (status === "requested") onChangeStatus("accepted");
+              }}
             >
               ラベル発行
             </a>
@@ -409,6 +400,11 @@ function WorklistRow({
               ラベル発行
             </button>
           ))}
+        {/* 一覧には検体しか出さないので、検査項目・採取番号はここから開く。行によって
+            数が変わる進捗のボタンより右に置いて、どの行でも同じ位置で押せるようにする。 */}
+        <button type="button" onClick={onView}>
+          表示
+        </button>
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(放射線検査一覧と同じ)。 */}
         {secondaryActions.length > 0 && (
           <RowMenu label="この検査の操作" escapesClipping>
