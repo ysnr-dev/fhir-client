@@ -13,6 +13,7 @@ import {
 } from "../api/reportsClient";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { LabOrderViewModal } from "../components/LabOrderViewModal";
+import { LabResultEntryModal } from "../components/LabResultEntryModal";
 import { RowMenu } from "../components/RowMenu";
 import {
   groupBySpecimen,
@@ -74,6 +75,8 @@ export function LabWorklistPage() {
   // 内容を開いているオーダー。行そのものではなく id で覚えておき、読み直しの
   // たびに引き直す(受付・ラベル発行の後に開いたままのモーダルも追い付く)。
   const [viewingId, setViewingId] = useState<string | null>(null);
+  // 結果を入力しているオーダー。同じ理由で id で覚えておく。
+  const [enteringId, setEnteringId] = useState<string | null>(null);
 
   // 検査内容の列が長くなるので、この画面だけ幅を広げる(放射線検査一覧と同じ)。
   useEffect(() => {
@@ -94,6 +97,7 @@ export function LabWorklistPage() {
   );
   const total = worklist.data?.rows.length ?? 0;
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
+  const entering = worklist.data?.rows.find((row) => row.order.id === enteringId);
 
   // 検体の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。マスタ全件を出しても
   // その日に採らない検体ばかりが並ぶだけなので、実際にある検体だけにする。
@@ -166,6 +170,7 @@ export function LabWorklistPage() {
                     pending={updateStatus.isPending}
                     labelReady={labelReady}
                     onView={() => setViewingId(row.order.id ?? null)}
+                    onEnterResult={() => setEnteringId(row.order.id ?? null)}
                     onChangeStatus={(status) =>
                       updateStatus.mutate({ order: row.order, task: row.task, status })
                     }
@@ -188,6 +193,7 @@ export function LabWorklistPage() {
       )}
 
       {viewing && <LabOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
+      {entering && <LabResultEntryModal row={entering} onClose={() => setEnteringId(null)} />}
     </div>
   );
 }
@@ -320,12 +326,14 @@ function WorklistRow({
   pending,
   labelReady,
   onView,
+  onEnterResult,
   onChangeStatus,
 }: {
   row: LabWorklistRow;
   pending: boolean;
   labelReady: boolean;
   onView: () => void;
+  onEnterResult: () => void;
   onChangeStatus: (status: LabTaskStatus) => void;
 }) {
   const { order, patient } = row;
@@ -398,6 +406,20 @@ function WorklistRow({
           ) : (
             <button type="button" disabled title="検体ラベルの帳票レイアウトが未登録です">
               ラベル発行
+            </button>
+          ))}
+        {/* 検体が着いたら結果を入力できる。紐付け先はこの行のオーダーで決まっているので、
+            モーダルの中でオーダーを選ばせない(LabResultEntryModal)。
+            結果が登録済みのオーダーは 1 件目と二重にならないよう押させない
+            (訂正はカルテの検査結果タブで行う)。 */}
+        {status === "completed" &&
+          (row.reportId ? (
+            <button type="button" disabled title="この検査の結果は登録済みです">
+              結果登録
+            </button>
+          ) : (
+            <button type="button" disabled={!patient?.id} onClick={onEnterResult}>
+              結果登録
             </button>
           ))}
         {/* 一覧には検体しか出さないので、検査項目・採取番号はここから開く。行によって

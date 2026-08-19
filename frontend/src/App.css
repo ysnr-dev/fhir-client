@@ -1356,6 +1356,13 @@ fieldset.rp-card {
   max-width: 100%;
 }
 
+/* 検体検査一覧からの結果登録で、紐付け先が決まっているオーダーの表示。
+   選ばせないので select ではなく地の文で出す(高さは他の入力欄に合わせる)。 */
+.lab-result-form__order-locked {
+  padding: 6px 0;
+  color: var(--text-h);
+}
+
 /* オーダー選択に伴う検査項目の自動展開の状況。フィールドの下に 1 行で添える。 */
 .lab-result-form__notice {
   flex-basis: 100%;

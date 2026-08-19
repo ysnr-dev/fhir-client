@@ -28,6 +28,11 @@ interface LabResultFormProps {
   /** 紐付けられる検体検査オーダー(結果が未登録のもの)。 */
   orderCandidates: LabOrderCandidate[];
   orderCandidatesLoading: boolean;
+  /**
+   * 紐付け先のオーダーが決まっている場合の表示。検体検査一覧からの結果登録では
+   * 行のオーダーに必ず紐付くので、選ばせずにこの文字列を出す。
+   */
+  lockedOrderLabel?: string;
 }
 
 type ModalState = { lineIndex: number } | null;
@@ -125,6 +130,7 @@ export function LabResultForm({
   submitLabel = "登録",
   orderCandidates,
   orderCandidatesLoading,
+  lockedOrderLabel,
 }: LabResultFormProps) {
   const [values, setValues] = useState<LabResultFormValues>(initialValues ?? emptyLabResultForm);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -304,27 +310,31 @@ export function LabResultForm({
         */}
         <label className="lab-result-form__order">
           検体検査オーダー
-          <select
-            value={values.orderId}
-            onChange={(e) => handleOrderChange(e.target.value)}
-            disabled={orderCandidatesLoading}
-          >
-            <option value="">紐付けなし</option>
-            {orderCandidatesLoading && values.orderId && (
-              <option value={values.orderId}>読み込み中...</option>
-            )}
-            {orderCandidates.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {candidate.label}
-              </option>
-            ))}
-            {/* 紐付け先のオーダーが削除されている場合に、選択が空へ化けないようにする。 */}
-            {!orderCandidatesLoading &&
-              values.orderId &&
-              !orderCandidates.some((candidate) => candidate.id === values.orderId) && (
-                <option value={values.orderId}>(削除済みのオーダー)</option>
+          {lockedOrderLabel ? (
+            <span className="lab-result-form__order-locked">{lockedOrderLabel}</span>
+          ) : (
+            <select
+              value={values.orderId}
+              onChange={(e) => handleOrderChange(e.target.value)}
+              disabled={orderCandidatesLoading}
+            >
+              <option value="">紐付けなし</option>
+              {orderCandidatesLoading && values.orderId && (
+                <option value={values.orderId}>読み込み中...</option>
               )}
-          </select>
+              {orderCandidates.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.label}
+                </option>
+              ))}
+              {/* 紐付け先のオーダーが削除されている場合に、選択が空へ化けないようにする。 */}
+              {!orderCandidatesLoading &&
+                values.orderId &&
+                !orderCandidates.some((candidate) => candidate.id === values.orderId) && (
+                  <option value={values.orderId}>(削除済みのオーダー)</option>
+                )}
+            </select>
+          )}
         </label>
         {expandingOrderId && <p className="lab-result-form__notice">検査項目を展開中...</p>}
         {!expandingOrderId && expandNotice && (

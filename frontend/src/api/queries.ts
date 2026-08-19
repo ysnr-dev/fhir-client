@@ -1642,6 +1642,8 @@ export interface LabWorklistRow {
   task?: fhir4.Task;
   /** 管(ラベル発行が作った Specimen)。発行・到着の状況表示に使う。 */
   specimens: fhir4.Specimen[];
+  /** このオーダーを元に登録済みの検査結果の id。空なら結果はまだ無い。 */
+  reportId: string;
 }
 
 export interface LabWorklistResult {
@@ -1656,6 +1658,8 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
   const tasks: fhir4.Task[] = [];
   const specimens: fhir4.Specimen[] = [];
   const patientsById = new Map<string, fhir4.Patient>();
+  // オーダー id → そのオーダーを元にした検査結果の id(結果登録が済んだかの判定用)。
+  const reportIdByOrderId = new Map<string, string>();
   let truncated = false;
 
   for (let page = 0; page < LAB_WORKLIST_MAX_PAGES; page += 1) {
@@ -1666,10 +1670,11 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
     params.set("based-on:missing", "true");
     params.set("_count", String(LAB_WORKLIST_PAGE));
     params.set("_offset", String(page * LAB_WORKLIST_PAGE));
-    // 検査項目・患者・進捗・管(発行済み Specimen)を 1 リクエストで揃える。
+    // 検査項目・患者・進捗・管(発行済み Specimen)・検査結果を 1 リクエストで揃える。
     params.set("_revinclude:iterate", "ServiceRequest:based-on");
     params.append("_revinclude", "Task:focus");
     params.append("_revinclude", "Specimen:request");
+    params.append("_revinclude", "DiagnosticReport:based-on");
     params.set("_include", "ServiceRequest:subject");
 
     const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
@@ -1684,6 +1689,12 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
         tasks.push(resource as fhir4.Task);
       } else if (resource.resourceType === "Specimen") {
         specimens.push(resource as fhir4.Specimen);
+      } else if (resource.resourceType === "DiagnosticReport") {
+        const report = resource as fhir4.DiagnosticReport;
+        for (const reference of report.basedOn ?? []) {
+          const orderId = reference.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
+          if (orderId && report.id) reportIdByOrderId.set(orderId, report.id);
+        }
       } else if (resource.resourceType === "ServiceRequest") {
         const request = resource as fhir4.ServiceRequest;
         // 検索にヒットしたヘッダと、添えられた明細を分ける。
@@ -1709,6 +1720,7 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
     patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
     task: labTaskByOrderId.get(order.id ?? ""),
     specimens: specimensByOrderId.get(order.id ?? "") ?? [],
+    reportId: reportIdByOrderId.get(order.id ?? "") ?? "",
   }));
 
   // 検体検査オーダーは時刻を持たない(検査日だけ)ので、患者番号順に並べて
