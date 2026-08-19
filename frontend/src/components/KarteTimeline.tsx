@@ -39,6 +39,7 @@ import {
   specimenGroupLabel,
   summarizeLabOrder,
 } from "../fhir/labOrderHelpers";
+import { labTaskStatusDisplay } from "../fhir/labTaskHelpers";
 import {
   microOrderComment,
   microOrderContents,
@@ -297,13 +298,15 @@ function KarteCard({
           <span className="micro-result__badge">結果:中間報告</span>
         )}
         <span className="karte-card__meta">
-          {/* 放射線検査は部門の進捗(依頼済・受付済・実施済・中止)がカードだけで
-              分かるよう、撮影時刻・依頼元の先頭に添える。バッジにはせず、メタデータの
-              1 項目として同じ区切りで並べる(理由は .karte-card__status)。 */}
-          {item.kind === "rad-order" && (
+          {/* 検体検査・放射線検査は部門の進捗(依頼済・受付済・到着済/実施済・中止)が
+              カードだけで分かるよう、時刻・依頼元の先頭に添える。バッジにはせず、
+              メタデータの 1 項目として同じ区切りで並べる(理由は .karte-card__status)。 */}
+          {(item.kind === "rad-order" || item.kind === "lab-order") && (
             <>
               <span className={`karte-card__status karte-card__status--${item.status}`}>
-                {radTaskStatusDisplay(item.status)}
+                {item.kind === "rad-order"
+                  ? radTaskStatusDisplay(item.status)
+                  : labTaskStatusDisplay(item.status)}
               </span>
               {cardMeta(item) && <span aria-hidden="true">|</span>}
             </>

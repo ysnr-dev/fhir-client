@@ -7,6 +7,7 @@ import {
   labOrderItemRequests,
   labOrderProblem,
 } from "./labOrderHelpers";
+import { labTaskStatus, labTasksByOrderId, type LabTaskStatus } from "./labTaskHelpers";
 import { isMicroServiceRequest, microOrderItemRequests, microOrderProblem } from "./microOrderHelpers";
 import { prescriptionProblem } from "./prescriptionHelpers";
 import {
@@ -88,6 +89,8 @@ export type KarteTimelineItem = KarteItemBase &
         itemRequests: fhir4.ServiceRequest[];
         /** このオーダーを元に登録された検査結果の id。空なら結果はまだ無い。 */
         reportId: string;
+        /** 部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
+        status: LabTaskStatus;
       }
     // 細菌検査も明細(検体グループ・検査項目)が ServiceRequest なので同じ形。
     | {
@@ -261,9 +264,12 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     }
   }
 
-  // 放射線検査オーダー id → 部門の進捗(Task)と実施記録(Procedure 一式)。
-  // カードのステータス表示と「実施情報」の出力に使う。
-  const radTaskByOrderId = radTasksByOrderId(pickByType<fhir4.Task>(prescriptionResources, "Task"));
+  // 検体検査・放射線検査オーダー id → 部門の進捗(Task)。カードのステータス表示に使う
+  // (Task は部門ごとに code が違うだけで同じ検索結果に混ざって届く)。
+  const tasks = pickByType<fhir4.Task>(prescriptionResources, "Task");
+  const labTaskByOrderId = labTasksByOrderId(tasks);
+  // 放射線検査は実施記録(Procedure 一式)も「実施情報」の出力に使う。
+  const radTaskByOrderId = radTasksByOrderId(tasks);
   const radPerformByOrderId = radPerformsByOrderId(
     pickByType<fhir4.Procedure>(prescriptionResources, "Procedure"),
     pickByType<fhir4.MedicationAdministration>(prescriptionResources, "MedicationAdministration"),
@@ -312,6 +318,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         label: KARTE_KIND_LABELS["lab-order"],
         itemRequests: labOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
         reportId: reportByOrderId.get(serviceRequest.id ?? "")?.id ?? "",
+        status: labTaskStatus(labTaskByOrderId.get(serviceRequest.id ?? "")),
       };
     }
     if (isMicroServiceRequest(serviceRequest)) {

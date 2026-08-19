@@ -3260,7 +3260,8 @@ export function useKartePrescriptionsInfinite(
       // 検体検査のカードから「検査結果表示」を出せるかの判定に、そのオーダーを
       // 元にした検査結果も添えてもらう。
       params.append("_revinclude", "DiagnosticReport:based-on");
-      // 放射線検査カードの進捗(依頼済・受付済・実施済・中止)と実施記録。
+      // 検体検査・放射線検査カードの進捗(依頼済・受付済・到着済/実施済・中止)と、
+      // 放射線検査の実施記録。進捗の Task は部門で code が違うだけなので 1 つで足りる。
       params.append("_revinclude", "Task:focus");
       params.append("_revinclude", "Procedure:based-on");
       params.append("_revinclude:iterate", "ServiceRequest:based-on");
