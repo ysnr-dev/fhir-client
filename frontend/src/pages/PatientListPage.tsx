@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { usePatientSearch, type PatientSearchParams } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -9,6 +9,12 @@ import { PatientTable } from "../components/PatientTable";
 export function PatientListPage() {
   const [search, setSearch] = useState<PatientSearchParams>({});
   const [offset, setOffset] = useState(0);
+
+  // 一覧の幅は外来一覧とそろえる(画面を行き来したときに表の左端が動かないように)。
+  useEffect(() => {
+    document.body.classList.add("page-wide");
+    return () => document.body.classList.remove("page-wide");
+  }, []);
 
   const { bundle, total, count, hasPrevious, hasNext, isLoading, error } = usePatientSearch(search, offset);
   const patients = bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Patient => Boolean(r)) ?? [];
