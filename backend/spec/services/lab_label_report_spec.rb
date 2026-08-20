@@ -101,17 +101,6 @@ RSpec.describe LabLabelReport do
       .to_return { |request| { status: 201, body: request.body } }
   end
 
-  def create_layout!
-    ReportLayout.create!(
-      name: "検体ラベル",
-      questionnaire_url: described_class::LAYOUT_CANONICAL,
-      questionnaire_version: "",
-      tlf: { items: [] }.to_json
-    )
-  end
-
-  before { create_layout! }
-
   it "groups items by specimen and creates one label Specimen per new tube" do
     stub_order
     stub_batch([
@@ -199,11 +188,22 @@ RSpec.describe LabLabelReport do
       .to raise_error(described_class::NoLabelTarget)
   end
 
-  it "raises LayoutNotRegistered without touching upstream when no layout exists" do
-    ReportLayout.delete_all
+  it "renders with the bundled layout file (no DB registration involved)" do
+    stub_order
+    stub_batch([item("i1", number: 1, name: "末梢血液一般検査", abbreviation: "CBC",
+                     specimen: { code: "212", name: "全血", container: "T03", container_name: "EDTA管" })])
+    stub_specimen_create
 
-    expect { described_class.new("o1", gateway: gateway).generate }
-      .to raise_error(described_class::LayoutNotRegistered)
-    expect(a_request(:get, "#{base_url}/ServiceRequest/o1")).not_to have_been_made
+    captured = nil
+    renderer = instance_double(Reports::LabLabelRenderer, render: "%PDF")
+    expect(Reports::LabLabelRenderer).to receive(:new) do |args|
+      captured = args
+      renderer
+    end
+
+    described_class.new("o1", gateway: gateway).generate
+
+    expect(captured[:layout_path]).to eq(described_class::LAYOUT_PATH)
+    expect(described_class::LAYOUT_PATH).to exist
   end
 end

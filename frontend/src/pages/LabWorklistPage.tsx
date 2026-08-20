@@ -6,11 +6,7 @@ import {
   useUpdateLabTaskStatus,
   type LabWorklistRow,
 } from "../api/queries";
-import {
-  LAB_LABEL_LAYOUT_CANONICAL,
-  labLabelPdfUrl,
-  useReportLayoutStatus,
-} from "../api/reportsClient";
+import { labLabelPdfUrl } from "../api/reportsClient";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { LabOrderViewModal } from "../components/LabOrderViewModal";
 import { LabResultEntryModal } from "../components/LabResultEntryModal";
@@ -87,9 +83,6 @@ export function LabWorklistPage() {
   const worklist = useLabWorklist(date);
   const departments = useDepartmentList({});
   const updateStatus = useUpdateLabTaskStatus();
-  // ラベルのレイアウト(.tlf)が未登録の環境では発行ボタンを無効にして案内する。
-  const layoutStatus = useReportLayoutStatus(LAB_LABEL_LAYOUT_CANONICAL);
-  const labelReady = Boolean(layoutStatus.data?.registered);
 
   const rows = useMemo(
     () => (worklist.data?.rows ?? []).filter((row) => matchesFilters(row, filters)),
@@ -168,7 +161,6 @@ export function LabWorklistPage() {
                     key={row.order.id}
                     row={row}
                     pending={updateStatus.isPending}
-                    labelReady={labelReady}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onEnterResult={() => setEnteringId(row.order.id ?? null)}
                     onChangeStatus={(status) =>
@@ -324,14 +316,12 @@ function specimenNames(groups: LabSpecimenGroup[]): string {
 function WorklistRow({
   row,
   pending,
-  labelReady,
   onView,
   onEnterResult,
   onChangeStatus,
 }: {
   row: LabWorklistRow;
   pending: boolean;
-  labelReady: boolean;
   onView: () => void;
   onEnterResult: () => void;
   onChangeStatus: (status: LabTaskStatus) => void;
@@ -389,25 +379,20 @@ function WorklistRow({
             最初にするのがラベルの発行なので、依頼済のオーダーはこの操作で受付済へ
             進める。受付済で押したときは再発行(同じ番号が刷られるだけなので文言も
             進捗も変えない)。中止のオーダーには出さない。 */}
-        {(status === "requested" || status === "accepted") &&
-          (labelReady ? (
-            <a
-              className="button"
-              href={labLabelPdfUrl(order.id ?? "")}
-              target="_blank"
-              rel="noopener"
-              title="検体ラベルの PDF を新規タブで開く"
-              onClick={() => {
-                if (status === "requested") onChangeStatus("accepted");
-              }}
-            >
-              ラベル発行
-            </a>
-          ) : (
-            <button type="button" disabled title="検体ラベルの帳票レイアウトが未登録です">
-              ラベル発行
-            </button>
-          ))}
+        {(status === "requested" || status === "accepted") && (
+          <a
+            className="button"
+            href={labLabelPdfUrl(order.id ?? "")}
+            target="_blank"
+            rel="noopener"
+            title="検体ラベルの PDF を新規タブで開く"
+            onClick={() => {
+              if (status === "requested") onChangeStatus("accepted");
+            }}
+          >
+            ラベル発行
+          </a>
+        )}
         {/* 検体が着いたら結果を入力できる。紐付け先はこの行のオーダーで決まっているので、
             モーダルの中でオーダーを選ばせない(LabResultEntryModal)。
             結果が登録済みのオーダーは 1 件目と二重にならないよう押させない

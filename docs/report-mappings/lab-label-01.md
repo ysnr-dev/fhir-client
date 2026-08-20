@@ -4,13 +4,19 @@
 1 ページ = 採取管 1 本(オーダー内の検体・採取管グループ 1 つ)。
 設計は `docs/lab-label-design.md` を参照。
 
-| ファイル | 帳票 | name / canonical |
-|---|---|---|
-| `lab-label-01.tlf` | 検体ラベル | `検体ラベル` / `http://fhir-client.local/report/lab-label` |
+| ファイル | 帳票 |
+|---|---|
+| `backend/lib/report_layouts/lab_label.tlf` | 検体ラベル |
 
-Questionnaire には紐付かない帳票なので、canonical は予約 URL(バージョン無し)。
-帳票レイアウト画面(`/report-layouts`)で URL にこの値を入力して `.tlf` を登録する。
+他の帳票と違い、`report_layouts`(DB)には登録しない。バーコードの読み取りに合わせた
+固定様式で院内が書き換えるものではないため、リポジトリ同梱の `.tlf` を backend が
+直接読む(`LabLabelReport::LAYOUT_PATH`)。環境ごとの登録作業が要らず、コードと様式の
+版が揃う。`.tlf` は backend の Docker ビルドコンテキスト(`./backend`)の中に置く必要が
+あるので `docs/` ではなく `backend/lib/report_layouts/` に置く。
 マッピング定義は使わない(プレースホルダー ID の直接一致のみ)。
+
+差し替えるときは ThinReports Basic Editor で `.tlf` を編集してコミットし、backend を
+デプロイし直す(管理画面からの操作は無い)。
 
 用紙は 60×40mm(仮サイズ)のユーザー定義。ラベルプリンタ・用紙が決まったら
 `.tlf` の `report.width` / `report.height`(pt = mm × 72 ÷ 25.4)と配置を合わせる。

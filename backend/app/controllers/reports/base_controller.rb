@@ -25,8 +25,7 @@ module Reports
       render json: { error: "no_label_target" }, status: :unprocessable_content
     end
 
-    rescue_from QuestionnaireResponseReport::LayoutNotRegistered,
-                LabLabelReport::LayoutNotRegistered do
+    rescue_from QuestionnaireResponseReport::LayoutNotRegistered do
       render json: { error: "layout_not_registered" }, status: :not_found
     end
 

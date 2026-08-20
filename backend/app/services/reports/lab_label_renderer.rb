@@ -13,10 +13,10 @@ module Reports
   #   urgent ... 至急表示(id 付きの text。通常オーダーでは hide する)
   # レイアウトに存在しないプレースホルダーは黙って捨てる(既存レンダラと同じ)。
   class LabLabelRenderer
-    # layout: ReportLayout、order/patient: パース済み FHIR リソース(Hash)、
+    # layout_path: 同梱の .tlf のパス、order/patient: パース済み FHIR リソース(Hash)、
     # labels: { group: LabLabelReport::LabelGroup, number: String } の配列
-    def initialize(layout:, order:, patient:, labels:)
-      @layout = layout
+    def initialize(layout_path:, order:, patient:, labels:)
+      @layout_path = layout_path
       @order = order
       @patient = patient
       @labels = labels
@@ -25,21 +25,19 @@ module Reports
     def render
       text_ids, image_ids, all_ids = layout_item_ids
 
-      @layout.with_tlf_file do |path|
-        report = Thinreports::Report.new(layout: path)
-        @labels.each do |label|
-          report.start_new_page do |page|
-            page_values(label).each { |id, value| page.item(id).value(value) if text_ids.include?(id) }
-            if image_ids.include?("barcode_img")
-              page.item("barcode_img").src(StringIO.new(barcode_png(label[:number])))
-            end
-            if all_ids.include?("urgent")
-              urgent? ? page.item("urgent").show : page.item("urgent").hide
-            end
+      report = Thinreports::Report.new(layout: @layout_path.to_s)
+      @labels.each do |label|
+        report.start_new_page do |page|
+          page_values(label).each { |id, value| page.item(id).value(value) if text_ids.include?(id) }
+          if image_ids.include?("barcode_img")
+            page.item("barcode_img").src(StringIO.new(barcode_png(label[:number])))
+          end
+          if all_ids.include?("urgent")
+            urgent? ? page.item("urgent").show : page.item("urgent").hide
           end
         end
-        report.generate
       end
+      report.generate
     end
 
     private
@@ -86,7 +84,7 @@ module Reports
     # レイアウト内のアイテム ID を種類別に列挙する(ThinreportsRenderer と同じ理由:
     # 未知の ID へ page.item すると例外になるため、設定対象を絞るのに使う)。
     def layout_item_ids
-      items = JSON.parse(@layout.tlf).fetch("items", [])
+      items = JSON.parse(File.read(@layout_path)).fetch("items", [])
       text_ids = Set.new
       image_ids = Set.new
       all_ids = Set.new

@@ -13,16 +13,15 @@ class LabLabelReport
   class NotFound < StandardError; end
   # 指定されたオーダーが検体検査ではない(URL 直叩きなど)
   class NotLabOrder < StandardError; end
-  # ラベルのレイアウトが未登録
-  class LayoutNotRegistered < StandardError; end
   # 明細が 1 件もなく、刷るラベルがない
   class NoLabelTarget < StandardError; end
   # 上流が想定外の応答を返した
   class UpstreamError < StandardError; end
 
-  # 帳票レイアウトの引き当てに使う予約 canonical。Questionnaire には紐付かない
-  # ラベル帳票を、既存の report_layouts(canonical キー)にそのまま載せるための予約 URL。
-  LAYOUT_CANONICAL = "http://fhir-client.local/report/lab-label".freeze
+  # ラベルのレイアウト(.tlf)。院内で書き換える帳票ではない(様式はバーコードの
+  # 読み取りに合わせて固定)ので、report_layouts への登録ではなくリポジトリ同梱の
+  # ファイルを直接読む。環境ごとの登録作業が要らず、コードと様式の版が揃う。
+  LAYOUT_PATH = Rails.root.join("lib/report_layouts/lab_label.tlf").freeze
 
   # frontend の fhir/labOrderHelpers.ts・labResultHelpers.ts と同じ system 定義。
   ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type".freeze
@@ -49,9 +48,6 @@ class LabLabelReport
 
   # PDF のバイト列を返す。
   def generate
-    layout = ReportLayout.for_canonical(LAYOUT_CANONICAL)
-    raise LayoutNotRegistered, "layout not registered for #{LAYOUT_CANONICAL}" unless layout
-
     order = fetch_order
     items, patient, specimens = fetch_related_resources(order)
     groups = build_groups(items)
@@ -61,7 +57,7 @@ class LabLabelReport
       { group: group, number: ensure_specimen_number(group, order, specimens) }
     end
 
-    Reports::LabLabelRenderer.new(layout:, order:, patient:, labels:).render
+    Reports::LabLabelRenderer.new(layout_path: LAYOUT_PATH, order:, patient:, labels:).render
   end
 
   private

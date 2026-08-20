@@ -172,11 +172,15 @@ ServiceRequest(オーダー) ← focus ── Task(進捗)
 
 **［提案］** 構成要素:
 
-- **レイアウト登録**: `report_layouts` のキー(questionnaire_url)に予約 URL
-  `http://fhir-client.local/report/lab-label` を使い、既存の管理画面からアップロードする。
-  設計判断: `kind` 列を足して帳票種別を分ける案もあるが、引き当て・管理画面・検証が
-  1 本のままで済む予約 URL の方が変更が小さい。ラベル以外の非 Questionnaire 帳票が
-  もう 1 つ増えた時点で `kind` 列に改める(§7-6)。
+- **レイアウト**: `report_layouts`(DB)には登録せず、リポジトリ同梱の
+  `backend/lib/report_layouts/lab_label.tlf` を `LabLabelReport::LAYOUT_PATH` で直接読む。
+  設計判断: 当初は予約 URL `http://fhir-client.local/report/lab-label` で
+  `report_layouts` に載せていたが、ラベルはバーコードの読み取りに合わせた固定様式で
+  院内が書き換えるものではない。DB 登録にすると環境ごとに手作業が要り(未登録だと
+  発行ボタンが死ぬ)、コードと様式の版もずれるため、同梱ファイルに改めた。
+  差し替えは `.tlf` をコミットして backend をデプロイし直す。置き場所が `docs/` では
+  なく `backend/` 配下なのは、backend の Docker ビルドコンテキストが `./backend` で
+  `docs/` がイメージに入らないため。
 - **エンドポイント**: `GET /reports/lab_labels/:order_id/pdf`(`Reports::BaseController` 配下、
   ログイン必須・inline 返却は既存と同じ)。
 - **資源収集サービス**: `QuestionnaireResponseReport` と同じ役割の `LabLabelReport` を新設。
@@ -204,8 +208,8 @@ ServiceRequest(オーダー) ← focus ── Task(進捗)
 | `barcode_img` | バーコード画像(image-block) |
 | `label_number` | 番号の目視文字列 |
 
-レイアウトのサンプルとマッピング表は `docs/report-mappings/lab-label-01.md` として、
-実装時に既存帳票と同じ形で残す。
+マッピング表は `docs/report-mappings/lab-label-01.md` として、実装時に既存帳票と
+同じ形で残す(`.tlf` の実体は `backend/lib/report_layouts/lab_label.tlf`)。
 
 ## 6. 画面
 
@@ -216,8 +220,8 @@ ServiceRequest(オーダー) ← focus ── Task(進捗)
   スタイル(`.rad-worklist__status` 系のセレクタ共有)。
 - **操作列**:
   - 依頼済・受付済 → 「ラベル発行」。`<a href={/reports/lab_labels/{id}/pdf} target="_blank">` で
-    新規タブに PDF。レイアウト未登録なら無効化してツールチップ(既存の `useReportLayoutStatus`
-    と同じ照会を予約 canonical に対して行う)。発行済みかどうかで文言は変えない
+    新規タブに PDF。レイアウトは同梱なので常に押せる(登録状態の照会はしない)。
+    発行済みかどうかで文言は変えない
     (再発行も同じボタン。同じ番号が刷られるだけなので区別する必要がない)。
     依頼済で押したときは同時に受付済へ進める(§4 の追記)。
   - 「表示」(オーダー内容のモーダル)は行によって数が変わる上の操作より右に固定して置く。
