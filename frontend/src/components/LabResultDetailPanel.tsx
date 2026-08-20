@@ -178,7 +178,15 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                       </td>
                       <td>{line.name || "-"}</td>
                       <td>{line.abbreviation || "-"}</td>
-                      <td>{line.specimen || "-"}</td>
+                      {/* 材料名称は長いものがあるので、はみ出す分は見切って全文はツールチップで読む。 */}
+                      <td>
+                        <span
+                          className="lab-result-detail__specimen"
+                          title={line.specimen || undefined}
+                        >
+                          {line.specimen || "-"}
+                        </span>
+                      </td>
                       <td className={interpretationClass(line.interpretation, "rp-card__lab-value")}>
                         {line.value || "-"}
                       </td>

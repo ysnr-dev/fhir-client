@@ -1335,6 +1335,16 @@ fieldset.rp-card {
   width: 72px;
 }
 
+/* 材料名称は 72px に収まらないものがあるので、折り返さずに見切って全文はツールチップで
+   読ませる。td 自体は table-layout: fixed でも overflow が効かないため、中の span を
+   ブロックにして見切る。 */
+.lab-result-detail__specimen {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 検査項目の表の上の操作(クリップボードにコピー・時系列表示)。右寄せ・小さめ。 */
 .lab-result-detail__actions {
   display: flex;
