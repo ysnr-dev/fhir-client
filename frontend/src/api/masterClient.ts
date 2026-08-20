@@ -50,6 +50,9 @@ export interface Medicine {
   yakko_name: string | null;
   // 個別医薬品コード（YJコード）。検索APIが HOTコードマスタから付与する。
   yj_code: string | null;
+  // 一般名処方(【般】〜)の候補。true のとき medicine_code はレセプト電算コードでは
+  // なく一般名処方コード、name は一般名記載になる。銘柄検索の結果には付かない。
+  generic?: boolean;
 }
 
 export interface MedicineType {
@@ -234,6 +237,8 @@ export async function searchMedicines(params: {
   dosage_form?: string;
   /** true なら造影剤とその補助剤(発泡顆粒・腸管洗浄剤)だけ。放射線検査で使う。 */
   contrast_medium?: boolean;
+  /** true なら銘柄ではなく一般名処方(【般】〜)の候補を返す。院外処方の一般名処方で使う。 */
+  generic?: boolean;
   page?: number;
   per?: number;
 }): Promise<MasterSearchResult<Medicine>> {
@@ -243,6 +248,7 @@ export async function searchMedicines(params: {
   if (params.yakko_name) search.set("yakko_name", params.yakko_name);
   if (params.dosage_form) search.set("dosage_form", params.dosage_form);
   if (params.contrast_medium) search.set("contrast_medium", "true");
+  if (params.generic) search.set("generic", "true");
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 

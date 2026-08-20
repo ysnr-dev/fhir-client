@@ -17,6 +17,11 @@ interface MedicineSearchModalProps {
   contrastMedium?: boolean;
   /** モーダルの見出し。用途が造影剤選択のときなどに差し替える。 */
   title?: string;
+  /**
+   * 一般名処方(【般】〜)への切り替えを出す。院外処方でだけ選べるので、
+   * 呼び出し側が入外区分・処方区分を見て渡す。
+   */
+  allowGeneric?: boolean;
 }
 
 export function MedicineSearchModal({
@@ -25,12 +30,15 @@ export function MedicineSearchModal({
   dosageForm,
   contrastMedium,
   title = "医薬品を選択",
+  allowGeneric = false,
 }: MedicineSearchModalProps) {
   const [name, setName] = useState("");
   // yakkoInput は入力欄の表示文字列、yakkoCode は候補確定時のみ更新する薬効分類番号。
   const [yakkoInput, setYakkoInput] = useState("");
   const [yakkoCode, setYakkoCode] = useState("");
   const [page, setPage] = useState(1);
+  // 銘柄 / 一般名の切り替え。一般名は院外処方だけなので既定は銘柄。
+  const [generic, setGeneric] = useState(false);
   const { data, error, isFetching } = useMedicineSearch(
     name,
     yakkoCode,
@@ -38,6 +46,7 @@ export function MedicineSearchModal({
     true,
     dosageForm,
     contrastMedium,
+    generic,
   );
   const yakkoOptions = useMedicineTypeOptions(true);
   const yakkoListId = useId();
@@ -53,6 +62,11 @@ export function MedicineSearchModal({
 
   function handleNameChange(value: string) {
     setName(value);
+    setPage(1);
+  }
+
+  function handleGenericChange(next: boolean) {
+    setGeneric(next);
     setPage(1);
   }
 
@@ -76,9 +90,34 @@ export function MedicineSearchModal({
 
   return (
     <Modal title={title} onClose={onClose} className="modal--wide">
+      {allowGeneric && (
+        <div className="master-search__mode">
+          <span className="master-search__mode-legend">処方名</span>
+          <div className="master-search__mode-options">
+            <label className="master-search__mode-option">
+              <input
+                type="radio"
+                name="medicine-search-mode"
+                checked={!generic}
+                onChange={() => handleGenericChange(false)}
+              />
+              銘柄
+            </label>
+            <label className="master-search__mode-option">
+              <input
+                type="radio"
+                name="medicine-search-mode"
+                checked={generic}
+                onChange={() => handleGenericChange(true)}
+              />
+              一般名
+            </label>
+          </div>
+        </div>
+      )}
       <div className="master-search__form">
         <label>
-          医薬品名
+          {generic ? "一般名" : "医薬品名"}
           <input
             type="text"
             value={name}
@@ -107,7 +146,7 @@ export function MedicineSearchModal({
         <table className="master-search__table">
           <thead>
             <tr>
-              <th>医薬品コード</th>
+              <th>{generic ? "一般名処方コード" : "医薬品コード"}</th>
               <th>名称</th>
               <th>単位</th>
               <th>剤形</th>

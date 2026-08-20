@@ -184,6 +184,7 @@ export function useMedicineSearch(
   enabled: boolean,
   dosageForm?: string,
   contrastMedium?: boolean,
+  generic?: boolean,
 ) {
   return useQuery({
     queryKey: [
@@ -193,6 +194,7 @@ export function useMedicineSearch(
       yakkoCode,
       dosageForm ?? "",
       contrastMedium ? "contrast" : "",
+      generic ? "generic" : "",
       page,
     ],
     queryFn: () =>
@@ -201,6 +203,7 @@ export function useMedicineSearch(
         yakko_code: yakkoCode || undefined,
         dosage_form: dosageForm || undefined,
         contrast_medium: contrastMedium || undefined,
+        generic: generic || undefined,
         page,
         per: MASTER_SEARCH_PER,
       }),

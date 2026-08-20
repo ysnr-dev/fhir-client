@@ -138,6 +138,82 @@ RSpec.describe "Master::Medicines", type: :request do
     end
   end
 
+  describe "GET /master/medicines (一般名検索)" do
+    before do
+      Master::MedicineType.create!(code: "2325", name: "Ｈ２遮断剤")
+      # 同じ一般名処方コードに複数の銘柄がぶら下がる(先発・後発)。
+      Master::Medicine.create!(
+        medicine_code: "610000030", name: "ガスター散２％", unit_name: "ｇ", dosage_form: "1",
+        generic_name_code: "2325003B2ZZZ", generic_name_description: "【般】ファモチジン散２％"
+      )
+      Master::Medicine.create!(
+        medicine_code: "610000031", name: "ファモチジン散２％「サワイ」", unit_name: "ｇ", dosage_form: "1",
+        generic_name_code: "2325003B2ZZZ", generic_name_description: "【般】ファモチジン散２％"
+      )
+      Master::Medicine.create!(
+        medicine_code: "610000032", name: "ガスター錠１０ｍｇ", unit_name: "錠", dosage_form: "1",
+        generic_name_code: "2325003F1ZZZ", generic_name_description: "【般】ファモチジン錠１０ｍｇ"
+      )
+      # 一般名処方マスタに載らない薬(注射など)は一般名検索に出さない。
+      Master::Medicine.create!(medicine_code: "640000033", name: "一般名なし注", unit_name: "管")
+    end
+
+    def generic_items(params = {})
+      get "/master/medicines", params: params.merge(generic: "true")
+      JSON.parse(response.body)["items"]
+    end
+
+    it "一般名処方コードごとに1件へまとめて返す" do
+      names = generic_items.map { |i| i["name"] }
+      expect(names).to contain_exactly("【般】ファモチジン散２％", "【般】ファモチジン錠１０ｍｇ")
+    end
+
+    it "medicine_code に一般名処方コードを入れ、generic フラグを立てる" do
+      item = generic_items(name: "ファモチジン散").first
+      expect(item["medicine_code"]).to eq("2325003B2ZZZ")
+      expect(item["name"]).to eq("【般】ファモチジン散２％")
+      expect(item["unit_name"]).to eq("ｇ")
+      expect(item["generic"]).to be(true)
+    end
+
+    it "銘柄に固有の項目(薬価コード・YJコード)は返さない" do
+      item = generic_items(name: "ファモチジン散").first
+      expect(item["yakka_code"]).to be_nil
+      expect(item["yj_code"]).to be_nil
+    end
+
+    it "一般名の表記ゆれ検索でヒットする" do
+      expect(generic_items(name: "ふぁもちじん").map { |i| i["name"] }).to contain_exactly(
+        "【般】ファモチジン散２％", "【般】ファモチジン錠１０ｍｇ"
+      )
+    end
+
+    it "銘柄名では一般名検索にヒットしない" do
+      expect(generic_items(name: "ガスター")).to be_empty
+    end
+
+    it "一般名処方コードの上4桁で薬効分類を絞り込む" do
+      expect(generic_items(yakko_code: "2325").size).to eq(2)
+      expect(generic_items(yakko_code: "2171")).to be_empty
+    end
+
+    it "薬効名でも絞り込める" do
+      expect(generic_items(yakko_name: "遮断").size).to eq(2)
+    end
+
+    it "レスポンスに薬効分類番号と名称を付与する" do
+      item = generic_items(name: "ファモチジン散").first
+      expect(item["yakko_code"]).to eq("2325")
+      expect(item["yakko_name"]).to eq("Ｈ２遮断剤")
+    end
+
+    it "generic 未指定なら従来どおり銘柄を返す" do
+      get "/master/medicines", params: { name: "ガスター" }
+      names = JSON.parse(response.body)["items"].map { |i| i["name"] }
+      expect(names).to contain_exactly("ガスター散２％", "ガスター錠１０ｍｇ")
+    end
+  end
+
   describe "CRUD" do
     it "creates, reads, updates, lists, and deletes a record" do
       post "/master/medicines", params: valid_attrs, as: :json

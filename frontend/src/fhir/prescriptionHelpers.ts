@@ -25,6 +25,11 @@ const ORDER_DEPARTMENT_EXT_URL = "http://fhir-client.local/StructureDefinition/o
 export const MEDICINE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-code";
 // 個別医薬品コード（YJコード）。JP Core（CAPS）で定義された正式な CodeSystem URL。
 export const YJ_CODE_SYSTEM = "http://capstandard.jp/iyaku.info/CodeSystem/YJ-code";
+// 医薬品一般名処方コード(厚労省保険局の一般名処方マスタ)。JP Core の MedicationCode
+// ValueSet に含まれる正式な CodeSystem で、一般名処方はこのコードだけを載せる
+// (特定の銘柄を指さないので、レセ電コード・YJコードは付けない)。
+export const GENERAL_ORDER_CODE_SYSTEM =
+  "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/MedicationGeneralOrderCode";
 const USAGE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-usage";
 const USAGE_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-usage-basic-category";
 
@@ -171,6 +176,35 @@ export function applyOrderContext(
   }
 }
 
+/**
+ * 医薬品の CodeableConcept。銘柄はレセプト電算コード(+ あれば YJ コード)、
+ * 一般名処方は一般名処方コードだけを載せる。
+ */
+export function medicationCodeableConcept(medicine: Medicine): fhir4.CodeableConcept {
+  if (medicine.generic) {
+    return {
+      coding: [
+        {
+          system: GENERAL_ORDER_CODE_SYSTEM,
+          code: medicine.medicine_code,
+          display: medicine.name,
+        },
+      ],
+      text: medicine.name,
+    };
+  }
+
+  return {
+    coding: [
+      { system: MEDICINE_CODE_SYSTEM, code: medicine.medicine_code, display: medicine.name },
+      ...(medicine.yj_code
+        ? [{ system: YJ_CODE_SYSTEM, code: medicine.yj_code, display: medicine.name }]
+        : []),
+    ],
+    text: medicine.name,
+  };
+}
+
 function buildMedicationRequest(
   rp: RpValues,
   medLine: MedicineLineValues,
@@ -231,25 +265,7 @@ function buildMedicationRequest(
       { system: ORDER_IN_RP_SYSTEM, value: String(orderInRp) },
     ],
     medicationCodeableConcept: medLine.medicine
-      ? {
-          coding: [
-            {
-              system: MEDICINE_CODE_SYSTEM,
-              code: medLine.medicine.medicine_code,
-              display: medLine.medicine.name,
-            },
-            ...(medLine.medicine.yj_code
-              ? [
-                  {
-                    system: YJ_CODE_SYSTEM,
-                    code: medLine.medicine.yj_code,
-                    display: medLine.medicine.name,
-                  },
-                ]
-              : []),
-          ],
-          text: medLine.medicine.name,
-        }
+      ? medicationCodeableConcept(medLine.medicine)
       : undefined,
     subject: { reference: `Patient/${patientId}` },
     authoredOn,
@@ -537,6 +553,8 @@ export interface MedicineLineDisplay {
   code: string;
   name: string;
   yjCode?: string;
+  /** 一般名処方(【般】〜)の行。名称に【般】が付くので表示上の区別は不要だが、印刷・集計で使う。 */
+  generic?: boolean;
   dose?: number;
   unit?: string;
   comment?: string;
@@ -582,18 +600,17 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
       groups.set(rpNumber, group);
     }
 
-    const medicineCoding = mr.medicationCodeableConcept?.coding?.find(
-      (c) => c.system === MEDICINE_CODE_SYSTEM,
-    );
-    const yjCoding = mr.medicationCodeableConcept?.coding?.find(
-      (c) => c.system === YJ_CODE_SYSTEM,
-    );
+    const coding = mr.medicationCodeableConcept?.coding;
+    const genericCoding = codingBySystem(coding, GENERAL_ORDER_CODE_SYSTEM);
+    const medicineCoding = genericCoding ?? codingBySystem(coding, MEDICINE_CODE_SYSTEM);
+    const yjCoding = codingBySystem(coding, YJ_CODE_SYSTEM);
 
     group.medicines.push({
       orderInRp,
       code: medicineCoding?.code ?? "",
       name: medicineCoding?.display ?? mr.medicationCodeableConcept?.text ?? "",
       yjCode: yjCoding?.code ?? undefined,
+      generic: genericCoding ? true : undefined,
       dose: dosage?.doseAndRate?.[0]?.doseQuantity?.value,
       unit: dosage?.doseAndRate?.[0]?.doseQuantity?.unit,
       comment: mr.note?.[0]?.text,
@@ -612,13 +629,17 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
 // 再選択されない限り、コード・名称・単位など保存済みの項目のみを持つ簡易オブジェクトとして復元する。
 
 export function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null {
-  const coding = mr.medicationCodeableConcept?.coding?.find((c) => c.system === MEDICINE_CODE_SYSTEM);
+  const codings = mr.medicationCodeableConcept?.coding;
+  // 一般名処方は一般名処方コードだけを持ち、レセ電コードは無い。
+  const genericCoding = codingBySystem(codings, GENERAL_ORDER_CODE_SYSTEM);
+  const coding = genericCoding ?? codingBySystem(codings, MEDICINE_CODE_SYSTEM);
   if (!coding) return null;
-  const yjCoding = mr.medicationCodeableConcept?.coding?.find((c) => c.system === YJ_CODE_SYSTEM);
+  const yjCoding = codingBySystem(codings, YJ_CODE_SYSTEM);
+  const name = coding.display ?? mr.medicationCodeableConcept?.text ?? "";
   return {
     id: 0,
     medicine_code: coding.code ?? "",
-    name: coding.display ?? mr.medicationCodeableConcept?.text ?? "",
+    name,
     name_kana: null,
     unit_code: null,
     unit_name: mr.dosageInstruction?.[0]?.doseAndRate?.[0]?.doseQuantity?.unit ?? null,
@@ -629,8 +650,9 @@ export function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null
     yakko_name: null,
     yj_code: yjCoding?.code ?? null,
     price: null,
-    generic_name_description: null,
+    generic_name_description: genericCoding ? name : null,
     abolished_on: null,
+    ...(genericCoding ? { generic: true } : {}),
   };
 }
 

@@ -3,6 +3,18 @@ module Master
     before_action :set_record, only: %i[show update destroy]
 
     def index
+      # 一般名検索(処方オーダーの一般名処方用)。銘柄ではなく、一般名処方マスタ由来の
+      # 一般名(【般】付き)を1件ずつ返す。レスポンス形は銘柄検索と同じ。
+      if params[:generic] == "true"
+        scope = generic_medicines
+        if params[:name].present?
+          scope = flexible_name_match(scope, params[:name], %w[master_medicines.search_generic])
+        end
+        scope = scope.where("LEFT(master_medicines.generic_name_code, 4) = ?", params[:yakko_code]) if params[:yakko_code].present?
+        scope = filter_by_yakko_name(scope, params[:yakko_name], code_column: "generic_name_code") if params[:yakko_name].present?
+        return render json: paginate(scope)
+      end
+
       scope = medicines_with_type
       scope = scope.where(medicine_code: params[:medicine_code]) if params[:medicine_code].present?
       scope = scope.where(yakka_code: params[:yakka_code]) if params[:yakka_code].present?
@@ -77,13 +89,49 @@ module Master
         )
     end
 
+    # 一般名処方(【般】〜)の候補。医薬品マスタの一般名処方コード・一般名記載を、
+    # コードごとに 1 件へまとめて返す(同じ一般名に多数の銘柄がぶら下がるため)。
+    # 一般名には薬価・YJコード・剤形が一意に定まらない項目があるので、代表行
+    # (コードごとの最小 id)の値をそのまま使い、無い項目は NULL で返す。
+    # 呼び出し側が銘柄と取り違えないよう generic=true を立てる。
+    def generic_medicines
+      representative_ids = Master::Medicine
+        .where.not(generic_name_code: [nil, ""])
+        .where.not(generic_name_description: [nil, ""])
+        .group(:generic_name_code)
+        .select("MIN(id)")
+
+      Master::Medicine
+        .where(id: representative_ids)
+        .joins("LEFT JOIN master_medicine_types ON master_medicine_types.code = LEFT(master_medicines.generic_name_code, 4)")
+        .select(
+          "master_medicines.id",
+          "master_medicines.generic_name_code AS medicine_code",
+          "master_medicines.generic_name_description AS name",
+          "NULL AS name_kana",
+          "master_medicines.unit_code",
+          "master_medicines.unit_name",
+          "master_medicines.dosage_form",
+          "NULL AS injection_volume",
+          "NULL AS yakka_code",
+          "NULL AS price",
+          "master_medicines.generic_name_description",
+          "NULL AS abolished_on",
+          "LEFT(master_medicines.generic_name_code, 4) AS yakko_code",
+          "master_medicine_types.name AS yakko_name",
+          "NULL AS yj_code",
+          "TRUE AS generic",
+        )
+    end
+
     # 薬効分類名称での絞り込み。名称を表記ゆれ吸収検索で該当コードに解決し、
-    # その薬効分類番号(4桁)を持つ医薬品に絞る。
-    def filter_by_yakko_name(scope, query)
+    # その薬効分類番号(4桁)を持つ医薬品に絞る。一般名検索では薬価コードの代わりに
+    # 一般名処方コードの上4桁を見る(どちらも YJ コード体系で上4桁が薬効分類番号)。
+    def filter_by_yakko_name(scope, query, code_column: "yakka_code")
       codes = flexible_name_match(Master::MedicineType.all, query, %w[search_name]).pluck(:code)
       return scope.none if codes.empty?
 
-      scope.where("LEFT(master_medicines.yakka_code, 4) IN (?)", codes)
+      scope.where("LEFT(master_medicines.#{code_column}, 4) IN (?)", codes)
     end
 
     def set_record

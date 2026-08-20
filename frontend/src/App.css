@@ -715,6 +715,47 @@ button:disabled {
   min-width: 140px;
 }
 
+/* 銘柄 / 一般名の切り替え(院外処方の一般名処方)。 */
+.master-search__mode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.master-search__mode-legend {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.master-search__mode-options {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* モーダルは処方フォームの中に描画されるので、.prescription-form label の
+   縦積み(flex-direction: column)より詳細度を上げて打ち消す。 */
+.master-search__mode .master-search__mode-option {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.master-search__mode .master-search__mode-option input[type="radio"] {
+  /* .master-search__form input の枠付き入力欄スタイルを打ち消してラベルと高さを揃える。 */
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  accent-color: var(--accent);
+}
+
 /* 主要品目のみ表示などの絞り込みチェックボックス。列方向のラベルを行方向に上書きする。 */
 .master-search__form label.master-search__checkbox {
   flex-direction: row;

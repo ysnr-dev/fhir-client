@@ -71,6 +71,9 @@ export function PrescriptionForm({
   // 1 つのプロブレムに紐付ける(RP ごとに分けたいときはオーダーを分けて登録する)。
   const problemOptions = useProblemOptions(patientId);
 
+  // 一般名処方は保険上、外来の院外処方でだけ算定できる。
+  const allowGeneric = values.setting === "outpatient" && values.category === "external";
+
   function update<K extends keyof PrescriptionFormValues>(key: K, value: PrescriptionFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
   }
@@ -173,6 +176,10 @@ export function PrescriptionForm({
       for (let j = 0; j < rp.medicines.length; j++) {
         const med = rp.medicines[j];
         if (!med.medicine) return `${rpLabel}: 医薬品を選択してください。`;
+        // 入外区分・処方区分は医薬品を選んだ後でも変えられるので、送信前にもう一度見る。
+        if (med.medicine.generic && !allowGeneric) {
+          return `${rpLabel}: 一般名(${med.medicine.name})は外来の院外処方でのみ使えます。`;
+        }
         if (!med.dose || Number(med.dose) <= 0) return `${rpLabel}: 用量を入力してください。`;
       }
     }
@@ -485,7 +492,11 @@ export function PrescriptionForm({
         />
       )}
       {modal?.kind === "medicine" && (
-        <MedicineSearchModal onSelect={handleMedicineSelect} onClose={() => setModal(null)} />
+        <MedicineSearchModal
+          onSelect={handleMedicineSelect}
+          onClose={() => setModal(null)}
+          allowGeneric={allowGeneric}
+        />
       )}
     </form>
   );
