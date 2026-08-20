@@ -144,7 +144,8 @@ ServiceRequest(オーダー) ← focus ── Task(進捗)
 ```
 
 - `Task.code` = `task-code|lab-exam`(放射線の `rad-exam` と同じ CodeSystem)。
-- 状態: `requested`(依頼済)→ `accepted`(受付済)→ `completed`(到着済)、別枠で
+- 状態: `requested`(依頼済)→ `accepted`(受付済)→ `completed`(到着済。2026-08-20 に
+  呼び名を「実施済」へ変更、`docs/lab-arrival-design.md` §2 の追記)、別枠で
   `cancelled`(中止)。**本機能で実装するのは 受付(accepted)と中止・取消まで**。
   到着済への遷移(と、それが管ごとか オーダーごとか)は到着確認の設計で確定する(§7-2)。
 - Task が無いオーダー = 依頼済。書き込みは transaction Bundle(ETag を持たないため)。

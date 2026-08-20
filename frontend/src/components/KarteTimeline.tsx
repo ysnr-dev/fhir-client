@@ -298,7 +298,7 @@ function KarteCard({
           <span className="micro-result__badge">結果:中間報告</span>
         )}
         <span className="karte-card__meta">
-          {/* 検体検査・放射線検査は部門の進捗(依頼済・受付済・到着済/実施済・中止)が
+          {/* 検体検査・放射線検査は部門の進捗(依頼済・受付済・実施済・中止)が
               カードだけで分かるよう、時刻・依頼元の先頭に添える。バッジにはせず、
               メタデータの 1 項目として同じ区切りで並べる(理由は .karte-card__status)。 */}
           {(item.kind === "rad-order" || item.kind === "lab-order") && (

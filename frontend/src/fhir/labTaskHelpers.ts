@@ -10,9 +10,9 @@ import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 // 登録されたオーダーもそのまま並べられるようにするため。
 //
 // 受付済へは検体ラベルの発行で進む(docs/lab-label-design.md。採血室が最初にする
-// のがラベルの発行なので、それを受付そのものとして扱う)。到着済へは到着確認画面の
-// スキャンで進む(docs/lab-arrival-design.md。管ごとの到着は backend の台帳に記録し、
-// オーダーの全検体が揃ったら Task を到着済にする)。
+// のがラベルの発行なので、それを受付そのものとして扱う)。実施済へは到着確認画面の
+// スキャンで進む(docs/lab-arrival-design.md。管ごとの到着は上流の Specimen に記録し、
+// オーダーの全検体が揃った時点で部門の作業は終わりなので Task を実施済にする)。
 
 /** Task.code。部門の作業種別(放射線検査の rad-exam と同じ CodeSystem)。 */
 const TASK_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/task-code";
@@ -23,7 +23,7 @@ export const LAB_TASK_CODE = { code: "lab-exam", display: "検体検査" };
  *
  * requested … 依頼済(部門はまだ受け取っていない)
  * accepted  … 受付済(患者が採血室に来て、検体ラベルを発行した)
- * completed … 到着済(検体が検査室に着いた)
+ * completed … 実施済(オーダーの検体が全部そろって検査室に着いた)
  * cancelled … 中止
  */
 export type LabTaskStatus = "requested" | "accepted" | "completed" | "cancelled";
@@ -31,7 +31,7 @@ export type LabTaskStatus = "requested" | "accepted" | "completed" | "cancelled"
 export const LAB_TASK_STATUS_OPTIONS: { code: LabTaskStatus; display: string }[] = [
   { code: "requested", display: "依頼済" },
   { code: "accepted", display: "受付済" },
-  { code: "completed", display: "到着済" },
+  { code: "completed", display: "実施済" },
   { code: "cancelled", display: "中止" },
 ];
 
@@ -51,7 +51,7 @@ export interface LabTaskAction {
  * 今のステータスから移れる先。
  *
  * 「取消」は 1 つ前に戻す訂正、「中止」は検査そのものの取りやめ(放射線と同じ区別)。
- * 受付済・到着済への通常の遷移はここではなく、一覧のラベル発行と到着確認画面の
+ * 受付済・実施済への通常の遷移はここではなく、一覧のラベル発行と到着確認画面の
  * スキャンが行う。
  */
 export function labTaskActions(status: LabTaskStatus): LabTaskAction[] {
@@ -59,7 +59,7 @@ export function labTaskActions(status: LabTaskStatus): LabTaskAction[] {
     case "requested":
       return [
         // 受付はラベル発行が兼ねる。これはラベルの帳票レイアウトが未登録で発行を
-        // 押せない環境のための手動フォールバック(到着済にする、と同じ扱い)。
+        // 押せない環境のための手動フォールバック(実施済にする、と同じ扱い)。
         { label: "受付済にする", next: "accepted", secondary: true },
         { label: "中止", next: "cancelled", secondary: true },
       ];
@@ -67,7 +67,7 @@ export function labTaskActions(status: LabTaskStatus): LabTaskAction[] {
       return [
         // 到着確認はスキャン(到着確認画面)が原則。これはスキャナが使えない場面の
         // 手動フォールバックで、管ごとの到着記録は付かず Task だけ進む。
-        { label: "到着済にする", next: "completed", secondary: true },
+        { label: "実施済にする", next: "completed", secondary: true },
         { label: "取消", next: "requested", secondary: true },
         { label: "中止", next: "cancelled", secondary: true },
       ];

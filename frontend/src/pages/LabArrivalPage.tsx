@@ -24,7 +24,7 @@ import { displayName } from "../fhir/patientHelpers";
 //
 // 台帳は上流の Specimen リソース(同 §6-1)。スキャンの流れは、番号で管を引き
 // (accession 検索)→ オーダー文脈(患者・検査項目・進捗・他の管)を読み →
-// 管の receivedTime と、全検体が揃ったときのオーダー進捗(Task → 到着済)を
+// 管の receivedTime と、全検体が揃ったときのオーダー進捗(Task → 実施済)を
 // 1 つの transaction で書き込む。揃い判定を「今のオーダーの検体グループ」で行うのは、
 // 発行後のオーダー訂正(検体の増減)に追従するため。
 //
@@ -45,7 +45,7 @@ interface FeedEntry {
   patientName?: string;
   specimenLabel?: string;
   warnings: string[];
-  /** このスキャンで全検体が揃い、オーダーを到着済にした。 */
+  /** このスキャンで全検体が揃い、オーダーを実施済にした。 */
   taskCompleted?: boolean;
   /** 「取消」で到着の記録を消した行。 */
   cancelled?: boolean;
@@ -139,7 +139,7 @@ export function LabArrivalPage() {
       const status = labTaskStatus(task);
       if (status === "cancelled") entry.warnings.push("このオーダーは中止されています");
 
-      // 今のオーダーの検体グループ全部に到着が付いたら到着済へ。今回の管も織り込む。
+      // 今のオーダーの検体グループ全部に到着が付いたら実施済へ。今回の管も織り込む。
       const arrivedCodes = new Set(
         specimens.filter(specimenArrived).map((s) => specimenTypeCodeOf(s)),
       );
@@ -194,7 +194,7 @@ export function LabArrivalPage() {
       const specimen = await fetchLabelSpecimenByNumber(entry.number);
       if (!specimen) throw new Error("specimen not found");
       const context = await fetchLabArrivalContext(specimenOrderIdOf(specimen));
-      // このスキャンで到着済まで進めていた場合は受付済へ戻す。
+      // このスキャンで実施済まで進めていた場合は受付済へ戻す。
       const taskUpdate =
         context && labTaskStatus(context.task) === "completed"
           ? { order: context.order, task: context.task, status: "accepted" as const }
@@ -224,7 +224,7 @@ export function LabArrivalPage() {
       </div>
       <p className="oauth-clients__lead">
         検体ラベルのバーコードをスキャンすると到着を記録します。オーダーの検体が全部揃うと、
-        検体検査一覧のステータスが「到着済」になります。番号は手入力もできます。
+        検体検査一覧のステータスが「実施済」になります。番号は手入力もできます。
       </p>
 
       <form className="lab-arrival__scan" onSubmit={handleSubmit}>
@@ -281,7 +281,7 @@ function FeedRow({ entry, onCancel }: { entry: FeedEntry; onCancel: () => void }
           )}
           {entry.taskCompleted && !entry.cancelled && (
             <span className="lab-arrival__result lab-arrival__result--completed">
-              全検体到着 → 到着済
+              全検体到着 → 実施済
             </span>
           )}
         </>

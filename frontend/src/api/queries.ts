@@ -1865,7 +1865,7 @@ export async function fetchLabelSpecimens(orderId: string): Promise<fhir4.Specim
 /**
  * 検体到着の記録・取消。管の Specimen(receivedTime)と、必要ならオーダーの進捗
  * (Task)を 1 つの transaction で書き込む。transaction なのは ETag を持たないため
- * (useUpdateLabTaskStatus と同じ)に加え、「最後の管の到着」と「到着済への遷移」が
+ * (useUpdateLabTaskStatus と同じ)に加え、「最後の管の到着」と「実施済への遷移」が
  * 片方だけ成功する事態を避けるため。
  */
 export function useUpdateLabArrival() {
@@ -3260,7 +3260,7 @@ export function useKartePrescriptionsInfinite(
       // 検体検査のカードから「検査結果表示」を出せるかの判定に、そのオーダーを
       // 元にした検査結果も添えてもらう。
       params.append("_revinclude", "DiagnosticReport:based-on");
-      // 検体検査・放射線検査カードの進捗(依頼済・受付済・到着済/実施済・中止)と、
+      // 検体検査・放射線検査カードの進捗(依頼済・受付済・実施済・中止)と、
       // 放射線検査の実施記録。進捗の Task は部門で code が違うだけなので 1 つで足りる。
       params.append("_revinclude", "Task:focus");
       params.append("_revinclude", "Procedure:based-on");

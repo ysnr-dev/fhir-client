@@ -13,7 +13,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { LabResultForm } from "./LabResultForm";
 import { Modal } from "./Modal";
 
-// 検体検査一覧の「結果登録」。検体が着いた(到着済)オーダーの結果を、一覧から
+// 検体検査一覧の「結果登録」。検体が全部着いた(実施済)オーダーの結果を、一覧から
 // そのまま入力する画面。入力欄はカルテの検査結果タブと同じ LabResultForm で、
 // 違いは紐付け先のオーダーが決まっていること:
 //

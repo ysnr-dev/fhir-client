@@ -6517,7 +6517,7 @@ body.page-wide #root {
   background: var(--accent);
 }
 
-/* 全検体が揃ってオーダーを到着済にしたときの添え書き。実施済のバッジと同じ落ち着いた色。 */
+/* 全検体が揃ってオーダーを実施済にしたときの添え書き。実施済のバッジと同じ落ち着いた色。 */
 .lab-arrival__result--completed {
   color: var(--lab-low);
   border-color: var(--lab-low);
