@@ -60,10 +60,17 @@ import {
 import { buildMicroResultDeleteBundle } from "../fhir/microResultHelpers";
 import {
   ORDER_TYPE_SYSTEM,
+  PRESCRIPTION_CATEGORY_SYSTEM,
   buildPrescriptionDeleteBundle,
   departmentOf,
+  isPrescriptionServiceRequest,
   splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
+import {
+  buildRxTaskUpdate,
+  rxTasksByOrderId,
+  type RxTaskStatus,
+} from "../fhir/rxTaskHelpers";
 import {
   RAD_ORDER_TYPE,
   buildRadOrderDeleteBundle,
@@ -1779,6 +1786,182 @@ export function useUpdateLabTaskStatus() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "lab-worklist"] });
       // カルテのオーダーカード側の表示にも将来効くよう、検索キャッシュも読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+    },
+  });
+}
+
+// ---- 処方一覧(部門ワークリスト) ----
+//
+// 処方日で 1 日ぶんの処方オーダーを読む。画面の作りは検体検査一覧と同じで、
+// 上流で絞れるのは category と authoredon までなので、入外区分・処方区分・診療科での
+// 絞り込みは画面側で行う(理由は検体検査一覧の節のコメントを参照)。
+//
+// 処方オーダーはオーダー種別(order-type)を持たない(注射より前から存在するため)ので、
+// 検体検査・放射線検査のように種別コードでは引けない。代わりに処方オーダーだけが持つ
+// 処方区分の CodeSystem を system だけ指定して引く(FHIR token 検索の `system|` 形式)。
+
+const RX_WORKLIST_PAGE = 100;
+// 1 日の処方がこの件数を超えることは想定していない。超えた場合は読むのをやめ、
+// 画面に「一部のみ」と出す(検体検査一覧と同じ)。
+const RX_WORKLIST_MAX_PAGES = 5;
+
+/** 処方一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
+export interface RxWorklistRow {
+  order: fhir4.ServiceRequest;
+  /** 処方明細。RP ごとの用法・医薬品はここから組み立てる(groupByRp)。 */
+  medicationRequests: fhir4.MedicationRequest[];
+  patient?: fhir4.Patient;
+  /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
+  task?: fhir4.Task;
+}
+
+export interface RxWorklistResult {
+  rows: RxWorklistRow[];
+  /** 上限まで読んでも読み切れなかった。 */
+  truncated: boolean;
+}
+
+async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
+  const orders: fhir4.ServiceRequest[] = [];
+  const medicationRequests: fhir4.MedicationRequest[] = [];
+  const tasks: fhir4.Task[] = [];
+  const patientsById = new Map<string, fhir4.Patient>();
+  let truncated = false;
+
+  for (let page = 0; page < RX_WORKLIST_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    // 処方区分の system だけを指定して、処方オーダーだけを引く(注射は別の
+    // CodeSystem(injection-category)なので混ざらない)。
+    params.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|`);
+    params.set("authoredon", date);
+    // 処方の ServiceRequest はヘッダしか無いが、他部門と同じ形にしておく。
+    params.set("based-on:missing", "true");
+    params.set("_count", String(RX_WORKLIST_PAGE));
+    params.set("_offset", String(page * RX_WORKLIST_PAGE));
+    // 処方明細・患者・進捗を 1 リクエストで揃える。
+    params.set("_revinclude", "MedicationRequest:based-on");
+    params.append("_revinclude", "Task:focus");
+    params.set("_include", "ServiceRequest:subject");
+
+    const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+
+    let matched = 0;
+    for (const entry of bundle.entry ?? []) {
+      const resource = entry.resource;
+      if (!resource) continue;
+      if (resource.resourceType === "Patient") {
+        if (resource.id) patientsById.set(resource.id, resource as fhir4.Patient);
+      } else if (resource.resourceType === "Task") {
+        tasks.push(resource as fhir4.Task);
+      } else if (resource.resourceType === "MedicationRequest") {
+        medicationRequests.push(resource as fhir4.MedicationRequest);
+      } else if (resource.resourceType === "ServiceRequest") {
+        const request = resource as fhir4.ServiceRequest;
+        // 検索で絞り込んではいるが、オーダー種別を持たないことも確かめてから並べる
+        // (注射・検体検査が処方として混ざらないようにする最後の砦)。
+        if (isPrescriptionServiceRequest(request) && !request.basedOn?.length) {
+          orders.push(request);
+          matched += 1;
+        }
+      }
+    }
+
+    if (matched < RX_WORKLIST_PAGE) break;
+    if (page === RX_WORKLIST_MAX_PAGES - 1) truncated = true;
+  }
+
+  const rxTaskByOrderId = rxTasksByOrderId(tasks);
+  const medicationRequestsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
+  for (const mr of medicationRequests) {
+    for (const reference of mr.basedOn ?? []) {
+      const orderId = reference.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
+      if (!orderId) continue;
+      const list = medicationRequestsByOrderId.get(orderId);
+      if (list) list.push(mr);
+      else medicationRequestsByOrderId.set(orderId, [mr]);
+    }
+  }
+
+  const rows = orders.map((order) => ({
+    order,
+    medicationRequests: medicationRequestsByOrderId.get(order.id ?? "") ?? [],
+    patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+    task: rxTaskByOrderId.get(order.id ?? ""),
+  }));
+
+  // 処方オーダーは時刻を持たない(処方日だけ)ので、患者番号順に並べて薬袋の
+  // 突き合わせや窓口の呼び出しで探しやすくする(検体検査一覧と同じ)。
+  rows.sort(compareRxWorklistRows);
+
+  return { rows, truncated };
+}
+
+function compareRxWorklistRows(a: RxWorklistRow, b: RxWorklistRow): number {
+  const aNumber = a.patient?.identifier?.[0]?.value ?? "";
+  const bNumber = b.patient?.identifier?.[0]?.value ?? "";
+  // 患者が読めなかった行は末尾へ。
+  if (!aNumber || !bNumber) return aNumber ? -1 : bNumber ? 1 : 0;
+  return aNumber.localeCompare(bNumber, undefined, { numeric: true });
+}
+
+/** 処方日 1 日ぶんの処方オーダー。日付が未選択の間は読みに行かない。 */
+export function useRxWorklist(date: string) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "rx-worklist", date],
+    queryFn: () => fetchRxWorklist(date),
+    enabled: Boolean(date),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 処方箋発行などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
+ * transaction Bundle にする理由は useUpdateRadTaskStatus を参照(ETag を持たないため)。
+ */
+export function useUpdateRxTaskStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      order,
+      task,
+      status,
+    }: {
+      order: fhir4.ServiceRequest;
+      task: fhir4.Task | undefined;
+      status: RxTaskStatus;
+    }) => {
+      const resource = buildRxTaskUpdate(task, order, status);
+      const taskEntry: fhir4.BundleEntry = {
+        resource,
+        request: resource.id
+          ? { method: "PUT", url: `Task/${resource.id}` }
+          : { method: "POST", url: "Task" },
+      };
+
+      return postBundle({ resourceType: "Bundle", type: "transaction", entry: [taskEntry] });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rx-worklist"] });
+      // カルテの処方カード側の表示にも将来効くよう、検索キャッシュも読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+    },
+  });
+}
+
+/**
+ * 調剤登録。調剤結果(MedicationDispense)と調剤済の Task を 1 つの transaction で
+ * 書き込む。Bundle の組み立ては rxDispenseHelpers を参照。
+ */
+export function useRegisterRxDispense() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rx-worklist"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["MedicationDispense"] });
     },
   });
 }

@@ -12,7 +12,10 @@ import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 export const ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type";
 
 export const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting";
-const CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-category"; // 処方区分
+// 処方区分。処方オーダーだけが持つ CodeSystem なので、処方一覧では上流の
+// category 検索(system のみ指定)で処方オーダーだけを絞り込むのにも使う。
+export const PRESCRIPTION_CATEGORY_SYSTEM =
+  "http://fhir-client.local/CodeSystem/prescription-category";
 const ORDER_DETAIL_MR_EXT_URL =
   "http://fhir-client.local/StructureDefinition/prescription-medication-request"; // orderDetail→MedicationRequest 参照
 // 依頼科(診療科 Organization)。ServiceRequest / MedicationRequest には診療科を持つ
@@ -362,7 +365,7 @@ function buildPrescriptionTransactionBundle(
       {
         coding: [
           {
-            system: CATEGORY_SYSTEM,
+            system: PRESCRIPTION_CATEGORY_SYSTEM,
             code: values.category,
             display: findCategoryDisplay(values.setting, values.category),
           },
@@ -474,9 +477,22 @@ export function buildPrescriptionDeleteBundle(
 export interface PrescriptionSummary {
   id: string;
   date: string;
+  settingCode: string;
   settingDisplay: string;
+  categoryCode: string;
   categoryDisplay: string;
   medicineCount: number;
+}
+
+/**
+ * ServiceRequest が処方オーダーかどうか。処方は注射・検体検査などより前から存在し
+ * オーダー種別(order-type)を持たないので、種別が無いことで判定する
+ * (karteTimeline の振り分けと同じ規約)。
+ */
+export function isPrescriptionServiceRequest(sr: fhir4.ServiceRequest): boolean {
+  return !(sr.category ?? []).some((category) =>
+    category.coding?.some((c) => c.system === ORDER_TYPE_SYSTEM),
+  );
 }
 
 export function codingBySystem(
@@ -488,12 +504,14 @@ export function codingBySystem(
 
 export function summarizeServiceRequest(sr: fhir4.ServiceRequest): PrescriptionSummary {
   const setting = codingBySystem(sr.category?.[0]?.coding, SETTING_SYSTEM);
-  const category = codingBySystem(sr.category?.[1]?.coding, CATEGORY_SYSTEM);
+  const category = codingBySystem(sr.category?.[1]?.coding, PRESCRIPTION_CATEGORY_SYSTEM);
 
   return {
     id: sr.id ?? "",
     date: sr.authoredOn?.slice(0, 10) ?? "",
+    settingCode: setting?.code ?? "",
     settingDisplay: setting?.display ?? "",
+    categoryCode: category?.code ?? "",
     categoryDisplay: category?.display ?? "",
     medicineCount: sr.orderDetail?.length ?? 0,
   };
@@ -680,7 +698,7 @@ export function parsePrescriptionForm(
 ): PrescriptionFormValues {
   const setting = (codingBySystem(sr.category?.[0]?.coding, SETTING_SYSTEM)?.code ??
     "") as PrescriptionSetting;
-  const category = codingBySystem(sr.category?.[1]?.coding, CATEGORY_SYSTEM)?.code ?? "";
+  const category = codingBySystem(sr.category?.[1]?.coding, PRESCRIPTION_CATEGORY_SYSTEM)?.code ?? "";
 
   const rpGroups = new Map<number, RpValues & { medicinesByOrder: Map<number, MedicineLineValues> }>();
 

@@ -55,6 +55,7 @@ import { OutpatientListPage } from "./pages/OutpatientListPage";
 import { LabArrivalPage } from "./pages/LabArrivalPage";
 import { LabWorklistPage } from "./pages/LabWorklistPage";
 import { RadWorklistPage } from "./pages/RadWorklistPage";
+import { RxWorklistPage } from "./pages/RxWorklistPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 
 // 患者配下の未定義パスをその患者のカルテへ寄せる。
@@ -92,6 +93,9 @@ function App() {
             </Link>
             <Link to="/rad-worklist" className="row-menu__item">
               放射線検査一覧
+            </Link>
+            <Link to="/rx-worklist" className="row-menu__item">
+              処方一覧
             </Link>
           </HoverMenu>
           {/* 予約枠は診療科がオーダーを出す前段(いつ診るかを決める)なので、
@@ -239,6 +243,7 @@ function App() {
           <Route path="/lab-worklist" element={<LabWorklistPage />} />
           <Route path="/lab-arrivals" element={<LabArrivalPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
+          <Route path="/rx-worklist" element={<RxWorklistPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />

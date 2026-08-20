@@ -6365,6 +6365,29 @@ body.page-wide #root {
   white-space: normal;
 }
 
+/* 処方一覧の処方内容。1 オーダーに何剤も並ぶうえ薬品名そのものが長いので、
+   検体名を繋ぐだけの検体検査一覧と違って折り返すと 1 行が何段にもなり、件数を
+   目で追えなくなる。1 行に収めて入り切らない分は末尾を ... で見切り、全文は
+   ツールチップで読ませる(用法・用量まで要るときは「表示」で開く)。
+   td 自体は overflow が効かないため、中の span をブロックにして見切る
+   (カルテの検査結果の材料列と同じ手)。 */
+.rx-worklist__content {
+  width: 100%;
+}
+
+.lab-worklist td.rx-worklist__content {
+  /* 内容の幅に列が引きずられないようにする。これが無いと薬品名の並びぶんまで
+     列が伸びて、表そのものが横にはみ出す。 */
+  max-width: 0;
+}
+
+.rx-worklist__medicines {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* td に display: flex を当てると行の下罫線がズレるため table-cell のまま並べる
    (患者一覧の操作列と同じ理由)。 */
 .rad-worklist td.rad-worklist__actions,
@@ -6452,6 +6475,36 @@ body.page-wide #root {
   color: var(--text);
   border-color: var(--border);
   background: var(--surface-sunken);
+}
+
+/* 処方一覧の「調剤済」。薬はできあがっていて部門(薬剤部)の作業は終わっているので、
+   検体検査・放射線検査の実施済と同じ落ち着いた見た目にする。処方にはこの先に
+   「実施済」(与薬・服薬まで済んだ)が控えるが、その導線は別タスクなので、
+   見分けの付け方もそのときに決める。 */
+.lab-worklist__status--in-progress {
+  color: var(--lab-low);
+  border-color: var(--lab-low);
+}
+
+/* 調剤登録の疑義照会。処方医への問い合わせと回答を書くので、1 行では収まらない。
+   処方共通・RP と同じ幅に伸ばして、行を跨いでも読めるようにする。 */
+.rx-dispense__query {
+  flex: 1 1 100%;
+  resize: vertical;
+}
+
+/* 「表示」で開く処方内容に添える疑義照会。処方の中身と地続きに見えないよう、
+   一段空けてから見出しを置く。 */
+.rx-dispense__notes {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.rx-dispense__notes-label {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--text);
 }
 
 /* 管(検体グループ)ごとの発行・到着バッジ。「表示」で開くオーダー内容
