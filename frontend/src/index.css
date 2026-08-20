@@ -1,21 +1,21 @@
 :root {
   --text: #6b6375;
   --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
+  --bg: #f4f4f7;
+  --border: #d8d7dc;
+  --code-bg: #eceadf;
   --accent: #aa3bff;
   --accent-bg: rgba(170, 59, 255, 0.1);
   --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
+  --social-bg: rgba(236, 234, 223, 0.5);
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
   /* 面の濃淡(重なりの深さ)。sunken → panel → card の順に手前へ浮く。
      light は浮くほど白く、dark は浮くほど明るくして、枠線だけに頼らず
      入れ子の階層が背景の濃淡で分かるようにする。 */
-  --surface-sunken: #e4e5ea;
-  --surface-panel: #eeeef2;
-  --surface-card: #f8f8fa;
+  --surface-sunken: #d9dae1;
+  --surface-panel: #e4e5ea;
+  --surface-card: #eeeff3;
   --surface-card-shadow: rgba(0, 0, 0, 0.05) 0 1px 2px;
   /* 一覧の 1 行おきの濃淡。面の濃淡(sunken/panel/card)を流用すると階層が
      変わったように見えるので、地の上に薄く重ねるだけの差にする。 */
