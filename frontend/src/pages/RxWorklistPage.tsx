@@ -6,6 +6,7 @@ import {
   useUpdateRxTaskStatus,
   type RxWorklistRow,
 } from "../api/queries";
+import { prescriptionPdfUrl } from "../api/reportsClient";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { RowMenu } from "../components/RowMenu";
 import { RxDispenseModal } from "../components/RxDispenseModal";
@@ -296,6 +297,8 @@ function WorklistRow({
   const requester = prescriptionRequester(order);
   const status = rxTaskStatus(row.task);
   const actions = rxTaskActions(status);
+  // 発行済み(受付済以降)は処方箋を刷り直せる。中止した処方は刷らせない。
+  const canReissue = status === "accepted" || status === "in-progress" || status === "completed";
 
   // 処方内容の列。薬袋を作る側が何を揃えるかが分かればよいので、医薬品の名前だけを
   // 横に並べる。用法・用量まで要るときは「表示」か「調剤登録」で開く。
@@ -335,12 +338,21 @@ function WorklistRow({
       </td>
       <td className="lab-worklist__actions">
         {/* 処方箋の発行が受付を兼ねる(検体検査のラベル発行と同じ)。薬剤部が最初に
-            するのが処方箋の発行なので、依頼済のオーダーはこの操作で受付済へ進める。
-            処方箋そのものを刷る機能は別タスクで、いまは受付だけを進める。 */}
+            するのが処方箋の発行なので、依頼済のオーダーは PDF を開くと同時に受付済へ
+            進める。院外・院内どちらの様式で刷るかは backend がオーダーの区分で決める。
+            発行済みの再発行はケバブメニューへ畳む(同じ内容が刷られるだけの操作なので、
+            主ボタンの列には出さない)。 */}
         {status === "requested" && (
-          <button type="button" disabled={pending} onClick={() => onChangeStatus("accepted")}>
+          <a
+            className="button"
+            href={prescriptionPdfUrl(order.id ?? "")}
+            target="_blank"
+            rel="noopener"
+            title="処方箋の PDF を新規タブで開く"
+            onClick={() => onChangeStatus("accepted")}
+          >
             処方箋発行
-          </button>
+          </a>
         )}
         {/* 受付が済んだら調剤の結果を登録できる。紐付け先はこの行のオーダーで決まって
             いるので、モーダルの中でオーダーを選ばせない(RxDispenseModal)。 */}
@@ -354,9 +366,20 @@ function WorklistRow({
         <button type="button" onClick={onView}>
           表示
         </button>
-        {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(検体検査一覧と同じ)。 */}
-        {actions.length > 0 && (
+        {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(検体検査一覧と同じ)。
+            処方箋の再発行も同じメニューに置く(進捗は動かさず、同じ処方箋を開くだけ)。 */}
+        {(actions.length > 0 || canReissue) && (
           <RowMenu label="この処方の操作" escapesClipping>
+            {canReissue && (
+              <a
+                className="row-menu__item"
+                href={prescriptionPdfUrl(order.id ?? "")}
+                target="_blank"
+                rel="noopener"
+              >
+                処方箋再発行
+              </a>
+            )}
             {actions.map((action) => (
               <button
                 key={action.next}

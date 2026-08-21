@@ -26,6 +26,14 @@ export function labLabelPdfUrl(orderId: string): string {
   return `/reports/lab_labels/${encodeURIComponent(orderId)}/pdf`;
 }
 
+/**
+ * 処方オーダー 1 件ぶんの処方箋 PDF の URL。院外処方は様式第2号、それ以外は院内の
+ * 簡易様式で、どちらで刷るかはオーダーの区分から backend が決める。
+ */
+export function prescriptionPdfUrl(orderId: string): string {
+  return `/reports/prescriptions/${encodeURIComponent(orderId)}/pdf`;
+}
+
 /** canonical(url|version)に帳票レイアウトが登録されているかを照会する。 */
 export function useReportLayoutStatus(canonical: string | undefined) {
   return useQuery({

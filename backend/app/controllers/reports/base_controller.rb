@@ -25,6 +25,18 @@ module Reports
       render json: { error: "no_label_target" }, status: :unprocessable_content
     end
 
+    rescue_from PrescriptionReport::NotFound do
+      render json: { error: "order_not_found" }, status: :not_found
+    end
+
+    rescue_from PrescriptionReport::NotPrescriptionOrder do
+      render json: { error: "not_prescription_order" }, status: :unprocessable_content
+    end
+
+    rescue_from PrescriptionReport::NoMedication do
+      render json: { error: "no_prescription_content" }, status: :unprocessable_content
+    end
+
     rescue_from QuestionnaireResponseReport::LayoutNotRegistered do
       render json: { error: "layout_not_registered" }, status: :not_found
     end
@@ -38,6 +50,7 @@ module Reports
     end
 
     rescue_from QuestionnaireResponseReport::UpstreamError, LabLabelReport::UpstreamError,
+                PrescriptionReport::UpstreamError,
                 Faraday::ConnectionFailed, Faraday::TimeoutError do
       render json: { error: "upstream_unreachable" }, status: :bad_gateway
     end
