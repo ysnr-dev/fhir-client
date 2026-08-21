@@ -765,7 +765,12 @@ function KarteTabGroup<K extends string>({
   const [open, setOpen] = useState(false);
   // タブ行(.karte-tabs__list)は overflow-x: auto なので、中に absolute で開くと
   // クリップされる。トリガーの位置から fixed で開いてはみ出せるようにする。
-  const [menuStyle, setMenuStyle] = useState<CSSProperties | undefined>(undefined);
+  // 位置計算前の初期値も fixed + 不可視にする: 一瞬でも absolute で描くと
+  // タブ行に横スクロールバーが出て行の高さが押し上がったままになる。
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({
+    position: "fixed",
+    visibility: "hidden",
+  });
   const ref = useRef<HTMLDivElement>(null);
   const activeTab = tabs.find((item) => item.key === active);
 
