@@ -25,6 +25,7 @@ import {
   importMaster,
   searchDiseases,
   searchJfagyAllergens,
+  searchJfagyDrugs,
   searchLabContainers,
   searchLabItems,
   searchLabOrderItems,
@@ -324,6 +325,15 @@ export function useJfagyAllergenSearch(
         page,
         per: MASTER_SEARCH_PER,
       }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useJfagyDrugSearch(name: string, page: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["master", "jfagy_drugs", name, page],
+    queryFn: () => searchJfagyDrugs({ name: name || undefined, page, per: MASTER_SEARCH_PER }),
     placeholderData: keepPreviousData,
     enabled,
   });

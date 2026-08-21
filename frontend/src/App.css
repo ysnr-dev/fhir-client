@@ -3540,7 +3540,8 @@ fieldset.rp-card {
 
 /* .patient-form label の縦積み(flex-direction: column)を上書きするため、
    フォームのクラスまで含めて詳細度を上げる。 */
-.patient-form .clinical-note-form__mode-option {
+.patient-form .clinical-note-form__mode-option,
+.prescription-form .clinical-note-form__mode-option {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -3549,8 +3550,14 @@ fieldset.rp-card {
   color: var(--text-h);
 }
 
+/* 医薬品の「指定方法」は、直前の「区分」ラジオ群と一続きに見えないよう間隔を空ける。 */
+.prescription-form .allergy-form__medicine-mode {
+  margin-left: 32px;
+}
+
 /* ラジオは .patient-form input の共通スタイル(枠付きの入力欄)を打ち消す。 */
-.patient-form .clinical-note-form__mode-option input[type="radio"] {
+.patient-form .clinical-note-form__mode-option input[type="radio"],
+.prescription-form .clinical-note-form__mode-option input[type="radio"] {
   width: auto;
   margin: 0;
   padding: 0;

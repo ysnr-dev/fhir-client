@@ -1,4 +1,4 @@
-import type { JfagyAllergen } from "../api/masterClient";
+import type { JfagyAllergen, JfagyDrug, Medicine } from "../api/masterClient";
 
 // JP Core AllergyIntolerance プロファイルと J-FAGY アレルゲンコードの URI 群。
 const PROFILE_URL = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_AllergyIntolerance";
@@ -78,6 +78,38 @@ function jfagySystem(jfagyCode: string): string {
     default:
       return JFAGY_FOOD_SYSTEM;
   }
+}
+
+// ---- 医薬品からのアレルゲン組み立て ----
+//
+// J-FAGY の医薬品領域はコード表に個別コードを持たず、メタコード3桁 + 既存の
+// 医薬品コード体系で組み立てる。銘柄名は YCM+YJコード(12桁)、剤形・規格・銘柄
+// 不明は GCM+一般名コード(規格・銘柄部 ZZZ)を使う。
+
+const JFAGY_YCM_PREFIX = "YCM";
+
+function simpleAllergen(jfagyCode: string, name: string): JfagyAllergen {
+  return {
+    id: 0,
+    jfagy_code: jfagyCode,
+    name,
+    name_kana: null,
+    name_en: null,
+    level: null,
+    main_flag: null,
+    guideline: null,
+  };
+}
+
+// YJコード未登録(HOTコードマスタに無い)の医薬品はコードを組み立てられないため null。
+export function allergenFromMedicine(medicine: Medicine): JfagyAllergen | null {
+  if (!medicine.yj_code) return null;
+  return simpleAllergen(JFAGY_YCM_PREFIX + medicine.yj_code, medicine.name);
+}
+
+// 剤形・規格・銘柄不明コードマスタの jfagy_code は GCM プレフィックス込みで配布される。
+export function allergenFromJfagyDrug(drug: JfagyDrug): JfagyAllergen {
+  return simpleAllergen(drug.jfagy_code, drug.name);
 }
 
 export const CLINICAL_STATUS_OPTIONS = [
@@ -260,16 +292,7 @@ function allergenFromCode(code: fhir4.CodeableConcept | undefined): JfagyAllerge
   const coding =
     code?.coding?.find((c) => JFAGY_SYSTEMS.includes(c.system ?? "")) ?? code?.coding?.[0];
   if (!coding?.code) return null;
-  return {
-    id: 0,
-    jfagy_code: coding.code,
-    name: coding.display ?? code?.text ?? "",
-    name_kana: null,
-    name_en: null,
-    level: null,
-    main_flag: null,
-    guideline: null,
-  };
+  return simpleAllergen(coding.code, coding.display ?? code?.text ?? "");
 }
 
 function optionCode<T extends string>(

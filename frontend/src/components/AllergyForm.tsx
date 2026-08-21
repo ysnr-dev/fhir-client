@@ -1,7 +1,9 @@
 import { useState, type FormEvent, type KeyboardEvent } from "react";
-import type { JfagyAllergen } from "../api/masterClient";
+import type { JfagyAllergen, JfagyDrug, Medicine } from "../api/masterClient";
 import {
   allergenDomainLabel,
+  allergenFromJfagyDrug,
+  allergenFromMedicine,
   CLINICAL_STATUS_OPTIONS,
   CRITICALITY_OPTIONS,
   emptyAllergyForm,
@@ -15,6 +17,19 @@ import {
 } from "../fhir/allergyHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { AllergenSearchModal } from "./AllergenSearchModal";
+import { JfagyDrugSearchModal } from "./JfagyDrugSearchModal";
+import { MedicineSearchModal } from "./MedicineSearchModal";
+
+// アレルゲンの選び方。allergen は J-FAGY コード表(食品・非食品と医薬品ダミー)、
+// medicine は医薬品マスタ(銘柄名)または剤形・規格・銘柄不明コードマスタから選ぶ。
+type AllergenSource = "allergen" | "medicine";
+// 医薬品の指定方法。brand: 銘柄名(YCM+YJコード)、unknown: 剤形・規格・銘柄不明(GCM)。
+type MedicineCodeMode = "brand" | "unknown";
+
+function sourceOf(allergen: JfagyAllergen | null): AllergenSource {
+  const code = allergen?.jfagy_code ?? "";
+  return code.startsWith("YCM") || code.startsWith("GCM") ? "medicine" : "allergen";
+}
 
 interface AllergyFormProps {
   initialValues?: AllergyFormValues;
@@ -33,19 +48,51 @@ export function AllergyForm({
 }: AllergyFormProps) {
   const [values, setValues] = useState<AllergyFormValues>(initialValues ?? emptyAllergyForm);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [source, setSource] = useState<AllergenSource>(() =>
+    sourceOf(initialValues?.allergen ?? null),
+  );
+  const [medicineMode, setMedicineMode] = useState<MedicineCodeMode>(() =>
+    initialValues?.allergen?.jfagy_code.startsWith("GCM") ? "unknown" : "brand",
+  );
+  const [openModal, setOpenModal] = useState<null | "allergen" | "brand" | "unknown">(null);
 
   function update<K extends keyof AllergyFormValues>(key: K, value: AllergyFormValues[K]) {
     setValues((v) => ({ ...v, [key]: value }));
   }
 
+  function handleSourceChange(next: AllergenSource) {
+    setSource(next);
+    // 区分と合わない選択済みアレルゲンを残すと、登録内容が画面の区分表示と食い違うため捨てる。
+    if (values.allergen && sourceOf(values.allergen) !== next) update("allergen", null);
+  }
+
   function handleAllergenSelect(allergen: JfagyAllergen) {
     update("allergen", allergen);
-    setModalOpen(false);
+    setValidationError(null);
+    setOpenModal(null);
+  }
+
+  function handleMedicineSelect(medicine: Medicine) {
+    const allergen = allergenFromMedicine(medicine);
+    setOpenModal(null);
+    if (!allergen) {
+      setValidationError(
+        "選択した医薬品にはYJコードが登録されていないため、アレルゲンとして記録できません。剤形・規格・銘柄不明から成分で選択してください。",
+      );
+      return;
+    }
+    update("allergen", allergen);
+    setValidationError(null);
+  }
+
+  function handleJfagyDrugSelect(drug: JfagyDrug) {
+    handleAllergenSelect(allergenFromJfagyDrug(drug));
   }
 
   function validate(): string | null {
-    if (!values.allergen) return "アレルゲンを選択してください。";
+    if (!values.allergen) {
+      return source === "medicine" ? "医薬品を選択してください。" : "アレルゲンを選択してください。";
+    }
     if (!values.recordedDate) return "記録日は必須です。";
     if (values.onsetDate && values.onsetDate > values.recordedDate) {
       return "発症日は記録日以前の日付を入力してください。";
@@ -85,17 +132,74 @@ export function AllergyForm({
       <fieldset>
         <legend>アレルゲン</legend>
 
+        <div className="clinical-note-form__mode">
+          <span className="clinical-note-form__mode-legend">区分</span>
+          <div className="clinical-note-form__mode-options">
+            {(
+              [
+                ["allergen", "アレルゲン(食品・環境など)"],
+                ["medicine", "医薬品"],
+              ] as const
+            ).map(([value, label]) => (
+              <label className="clinical-note-form__mode-option" key={value}>
+                <input
+                  type="radio"
+                  name="allergy-source"
+                  checked={source === value}
+                  onChange={() => handleSourceChange(value)}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {source === "medicine" && (
+          <div className="clinical-note-form__mode allergy-form__medicine-mode">
+            <span className="clinical-note-form__mode-legend">指定方法</span>
+            <div className="clinical-note-form__mode-options">
+              {(
+                [
+                  ["brand", "銘柄名"],
+                  ["unknown", "剤形・規格・銘柄不明"],
+                ] as const
+              ).map(([value, label]) => (
+                <label className="clinical-note-form__mode-option" key={value}>
+                  <input
+                    type="radio"
+                    name="allergy-medicine-mode"
+                    checked={medicineMode === value}
+                    onChange={() => setMedicineMode(value)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="condition-form__row">
           <label>
-            アレルゲン
+            {source === "medicine" ? "医薬品" : "アレルゲン"}
             {values.allergen ? (
               <span className="rp-card__usage-value">{values.allergen.name}</span>
             ) : (
               <span className="rp-card__usage-value rp-card__usage-value--empty">未選択</span>
             )}
           </label>
-          <button type="button" onClick={() => setModalOpen(true)}>
-            {values.allergen ? "アレルゲンを変更" : "アレルゲンを選択"}
+          <button
+            type="button"
+            onClick={() =>
+              setOpenModal(source === "allergen" ? "allergen" : medicineMode)
+            }
+          >
+            {source === "medicine"
+              ? values.allergen
+                ? "医薬品を変更"
+                : "医薬品を選択"
+              : values.allergen
+                ? "アレルゲンを変更"
+                : "アレルゲンを選択"}
           </button>
         </div>
 
@@ -198,8 +302,18 @@ export function AllergyForm({
         </button>
       </div>
 
-      {modalOpen && (
-        <AllergenSearchModal onSelect={handleAllergenSelect} onClose={() => setModalOpen(false)} />
+      {openModal === "allergen" && (
+        <AllergenSearchModal onSelect={handleAllergenSelect} onClose={() => setOpenModal(null)} />
+      )}
+      {openModal === "brand" && (
+        <MedicineSearchModal
+          title="医薬品を選択(銘柄名)"
+          onSelect={handleMedicineSelect}
+          onClose={() => setOpenModal(null)}
+        />
+      )}
+      {openModal === "unknown" && (
+        <JfagyDrugSearchModal onSelect={handleJfagyDrugSelect} onClose={() => setOpenModal(null)} />
       )}
     </form>
   );
