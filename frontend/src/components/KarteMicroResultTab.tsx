@@ -19,7 +19,7 @@ import { MicroResultDetailPanel } from "./MicroResultDetailPanel";
 import { MicroResultForm } from "./MicroResultForm";
 import { SpecimenDateList } from "./SpecimenDateList";
 
-// カルテ画面の「細菌検査」タブ。検体検査の「検査結果」タブと同じ構成で、左端の
+// カルテ画面の「細菌検査」タブ(検査結果配下)。「検体検査」タブと同じ構成で、左端の
 // ペインに検体採取日を新しい順で並べ、その右に選択した細菌検査結果の内容を表示する。
 // 登録・編集・削除も内容表示から行う。細菌検査はレポート単位の内容表示が本体で
 // 「項目×日付」の表にならないため、時系列表示は持たない。

@@ -9,7 +9,7 @@ import {
   type LabTimelineRow,
 } from "../fhir/labResultHelpers";
 
-// 検査結果の時系列表示。時系列表示ページとカルテ画面の検査結果タブの双方から使う。
+// 検査結果の時系列表示。時系列表示ページとカルテ画面の「検体検査時系列」タブの双方から使う。
 
 const DEFAULT_DATE_COUNT = 10;
 const MAX_DATE_COUNT = 100;

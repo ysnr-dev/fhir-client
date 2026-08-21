@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -48,6 +49,7 @@ import {
 import {
   KARTE_CARD_PARAM,
   KARTE_DETAIL_PARAM,
+  KARTE_LAB_GROUP,
   KARTE_OTHER_TABS,
   KARTE_PROBLEM_PARAM,
   KARTE_TAB_PARAM,
@@ -698,6 +700,8 @@ export function KartePage() {
 }
 
 // タブ行。右端に左ペインの表示モード切替ボタンを置く。
+// 検査結果系のタブ(検体検査・検体検査時系列・細菌検査)はタブ行に並べず、
+// 「検査結果」1 つのドロップダウンにまとめる(タブ行の幅と行数を増やさない)。
 function KarteTabs<K extends string>({
   tabs,
   active,
@@ -709,23 +713,135 @@ function KarteTabs<K extends string>({
   onSelect: (key: K) => void;
   trailing: ReactNode;
 }) {
+  const groupKeys = KARTE_LAB_GROUP.keys as readonly string[];
+  const groupTabs = tabs.filter((item) => groupKeys.includes(item.key));
   return (
     <div className="karte-tabs">
       <div className="karte-tabs__list" role="tablist">
-        {tabs.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            role="tab"
-            aria-selected={active === item.key}
-            className={`karte-tabs__tab${active === item.key ? " karte-tabs__tab--active" : ""}`}
-            onClick={() => onSelect(item.key)}
-          >
-            {item.label}
-          </button>
-        ))}
+        {tabs.map((item) => {
+          if (groupKeys.includes(item.key)) {
+            // グループはまとめて 1 つ。先頭のタブの位置にだけ描く。
+            if (item.key !== groupTabs[0]?.key) return null;
+            return (
+              <KarteTabGroup
+                key={item.key}
+                tabs={groupTabs}
+                active={active}
+                onSelect={onSelect}
+              />
+            );
+          }
+          return (
+            <button
+              key={item.key}
+              type="button"
+              role="tab"
+              aria-selected={active === item.key}
+              className={`karte-tabs__tab${active === item.key ? " karte-tabs__tab--active" : ""}`}
+              onClick={() => onSelect(item.key)}
+            >
+              {item.label}
+            </button>
+          );
+        })}
       </div>
       {trailing}
+    </div>
+  );
+}
+
+// 「検査結果」ドロップダウンタブ。ヘッダーメニュー(HoverMenu)と同様にマウスオーバーで
+// 開き、メニューで配下(検体検査・検体検査時系列・細菌検査)を選ぶ。タブ名は
+// 「検査結果」固定で、キーボード操作向けにクリックでも開閉する。
+function KarteTabGroup<K extends string>({
+  tabs,
+  active,
+  onSelect,
+}: {
+  tabs: ReadonlyArray<{ key: K; label: string }>;
+  active: K;
+  onSelect: (key: K) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  // タブ行(.karte-tabs__list)は overflow-x: auto なので、中に absolute で開くと
+  // クリップされる。トリガーの位置から fixed で開いてはみ出せるようにする。
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | undefined>(undefined);
+  const ref = useRef<HTMLDivElement>(null);
+  const activeTab = tabs.find((item) => item.key === active);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const trigger = ref.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    // トリガーとの間に隙間があるとマウス移動中に mouseleave で閉じてしまうため接して開く。
+    setMenuStyle({ position: "fixed", top: rect.bottom, left: rect.left, right: "auto" });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    // fixed で置くのでスクロールに追従できない。開いたまま動かす使い方はしないので閉じる。
+    function close() {
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [open]);
+
+  return (
+    <div
+      className="karte-tabs__group"
+      ref={ref}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={activeTab != null}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`karte-tabs__tab${activeTab ? " karte-tabs__tab--active" : ""}`}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {KARTE_LAB_GROUP.label}
+        <span className="karte-tabs__caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div
+          className="row-menu__items karte-tabs__menu"
+          role="menu"
+          style={menuStyle}
+          onClick={() => setOpen(false)}
+        >
+          {tabs.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              role="menuitemradio"
+              aria-checked={item.key === active}
+              className="row-menu__item"
+              onClick={() => onSelect(item.key)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

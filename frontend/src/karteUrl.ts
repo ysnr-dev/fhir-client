@@ -35,16 +35,25 @@ export const KARTE_TABS = [
   // 経過表(POMR のフローシート)。上下分割で「上にカルテ、下に経過表」と並べて
   // 読めるよう、カルテ以外のタブとして持つ。
   { key: "flowsheet", label: "経過表" },
-  { key: "lab", label: "検査結果" },
-  // 検査結果の時系列表示。上下分割で「上にカルテ、下に時系列」と並べて読めるよう、
-  // 検査結果タブの中ではなく独立したタブとして持つ。
-  { key: "lab-timeline", label: "検査結果時系列" },
+  { key: "lab", label: "検体検査" },
+  // 検体検査の時系列表示。上下分割で「上にカルテ、下に時系列」と並べて読めるよう、
+  // 検体検査タブの中ではなく独立したタブとして持つ。
+  { key: "lab-timeline", label: "検体検査時系列" },
   { key: "micro", label: "細菌検査" },
   // 予約はカルテのカードにしない(タイムラインには出ない)ので、タブでのみ見る。
   { key: "appointment", label: "予約" },
 ] as const;
 
 export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
+
+/**
+ * タブ行で「検査結果」1 つのドロップダウンにまとめるタブ。タブ自体は独立のまま
+ * (URL の tab= も従来どおり)で、タブ行の見た目だけを階層化する。
+ */
+export const KARTE_LAB_GROUP: { label: string; keys: readonly KarteTabKey[] } = {
+  label: "検査結果",
+  keys: ["lab", "lab-timeline", "micro"],
+};
 /** 上下分割モードで下ペインに出せるタブ(カルテは常に上ペインなので除く)。 */
 export type KarteOtherTabKey = Exclude<KarteTabKey, "karte">;
 

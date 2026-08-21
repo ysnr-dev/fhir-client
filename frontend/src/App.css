@@ -3847,6 +3847,29 @@ body.karte-wide .app__header {
   font-weight: 600;
 }
 
+/* 「検査結果」ドロップダウンタブ。配下(検体検査・時系列・細菌検査)をメニューで選ぶ。 */
+.karte-tabs__group {
+  position: relative;
+  display: flex;
+}
+
+.karte-tabs__caret {
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* メニューはタブの左端に揃えて下に開く(row-menu__items の既定は right: 0)。 */
+.karte-tabs__menu {
+  left: 0;
+  right: auto;
+}
+
+.karte-tabs__menu .row-menu__item[aria-checked="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* カルテタブ: 診療日パネル + タイムライン */
 .karte-left__body {
   display: grid;
