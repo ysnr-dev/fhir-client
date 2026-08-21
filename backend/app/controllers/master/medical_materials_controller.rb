@@ -2,6 +2,7 @@ module Master
   # 特定器材(特定保険医療材料)マスタ。配布ファイルの全置換取込と、実施入力の
   # 器材検索のための一覧を持つ。手動メンテはしないので create/update/destroy は無い。
   class MedicalMaterialsController < BaseController
+    include Importable
     def index
       scope = Master::MedicalMaterial.all
       # カンマ区切りで複数指定可(保存済みの実施情報から器材名を一括復元するため)。
@@ -15,13 +16,6 @@ module Master
       end
 
       render json: paginate(scope.order(Arel.sql("publication_order NULLS LAST")).order(:material_code))
-    end
-
-    def import
-      return render json: { error: "file is required" }, status: :unprocessable_content if params[:file].blank?
-
-      result = MasterImport::MedicalMaterialImporter.call(params[:file])
-      render json: { imported: result.imported_count }
     end
   end
 end

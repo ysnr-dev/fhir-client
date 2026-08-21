@@ -1,5 +1,6 @@
 module Master
   class DiseasesController < BaseController
+    include Importable
     before_action :set_record, only: %i[show update destroy]
 
     def index
@@ -16,49 +17,6 @@ module Master
       end
 
       render json: paginate(scope)
-    end
-
-    def show
-      render json: @record
-    end
-
-    def create
-      record = Master::Disease.new(record_params)
-      if record.save
-        render json: record, status: :created
-      else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def destroy
-      @record.destroy!
-      head :no_content
-    end
-
-    def import
-      return render json: { error: "file is required" }, status: :unprocessable_content if params[:file].blank?
-
-      result = MasterImport::DiseaseImporter.call(params[:file])
-      render json: { imported: result.imported_count }
-    end
-
-    private
-
-    def set_record
-      @record = Master::Disease.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::Disease.column_names - %w[id created_at updated_at])
     end
   end
 end

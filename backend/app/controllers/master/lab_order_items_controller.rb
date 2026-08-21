@@ -38,23 +38,6 @@ module Master
       )
     end
 
-    def create
-      record = Master::LabOrderItem.new(record_params)
-      if record.save
-        render json: record, status: :created
-      else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
     # 外部キーを張っていないので、ぶら下がるパネル構成も併せて片付ける。
     def destroy
       code = @record.order_item_code
@@ -99,10 +82,6 @@ module Master
       # id ではなくオーダー項目コードでも引けるようにする。
       @record = Master::LabOrderItem.find_by(order_item_code: params[:id]) ||
                 Master::LabOrderItem.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::LabOrderItem.column_names - %w[id created_at updated_at])
     end
   end
 end

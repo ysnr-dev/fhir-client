@@ -9,10 +9,6 @@ module Master
       render json: { total: categories.count, items: categories }
     end
 
-    def show
-      render json: @record
-    end
-
     def create
       record = Master::SchemaCategory.new(record_params)
       # 並び順の指定が無ければ同じ親の中の末尾に置く。
@@ -20,15 +16,7 @@ module Master
       if record.save
         render json: record, status: :created
       else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
+        render_validation_errors(record)
       end
     end
 
@@ -46,14 +34,6 @@ module Master
     end
 
     private
-
-    def set_record
-      @record = Master::SchemaCategory.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::SchemaCategory.column_names - %w[id created_at updated_at])
-    end
 
     def next_display_order(parent_id)
       (Master::SchemaCategory.where(parent_id: parent_id).maximum(:display_order) || 0) + 1

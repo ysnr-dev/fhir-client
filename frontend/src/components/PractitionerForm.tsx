@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
 import { useDepartmentsOf } from "../api/queries";
 import {
@@ -60,9 +61,7 @@ export function PractitionerForm({
     (department) => !values.departments.some((d) => d.organizationId === department.id),
   );
 
-  function update<K extends keyof PractitionerFormValues>(key: K, value: PractitionerFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function handleOrganizationSelect(organization: fhir4.Organization) {
     setValues((v) => ({

@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { useQuestionnaireCategories } from "../api/adminQueries";
 import {
@@ -54,12 +55,7 @@ export function QuestionnaireEditor({
     update("category", category ? { code: category.code, display: category.name } : null);
   }
 
-  function update<K extends keyof QuestionnaireFormValues>(
-    key: K,
-    value: QuestionnaireFormValues[K],
-  ) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function handleItemUpdate(id: string, updater: (item: EditorItem) => EditorItem) {
     setValues((v) => ({ ...v, items: updateItemById(v.items, id, updater) }));

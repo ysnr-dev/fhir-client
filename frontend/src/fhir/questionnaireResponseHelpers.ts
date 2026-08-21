@@ -39,11 +39,6 @@ export function questionnaireCanonical(questionnaire: fhir4.Questionnaire): stri
   return questionnaire.version ? `${url}|${questionnaire.version}` : url;
 }
 
-export function splitCanonical(canonical: string): { url: string; version?: string } {
-  const [url, version] = canonical.split("|");
-  return version ? { url, version } : { url };
-}
-
 // フォームで編集する QuestionnaireResponse のメタ情報。
 export interface QuestionnaireResponseMetaValues {
   status: QuestionnaireResponseStatus;

@@ -31,15 +31,7 @@ module Master
       if record.save
         render json: record, status: :created
       else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
+        render_validation_errors(record)
       end
     end
 
@@ -67,10 +59,6 @@ module Master
     def set_record
       # id ではなくデータセットコードでも引けるようにする。
       @record = Master::RadDataset.find_by(dataset_code: params[:id]) || Master::RadDataset.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::RadDataset.column_names - %w[id created_at updated_at])
     end
   end
 end

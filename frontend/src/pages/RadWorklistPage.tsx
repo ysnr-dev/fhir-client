@@ -1,3 +1,4 @@
+import { today } from "../lib/dates";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -40,10 +41,6 @@ import {
 //
 // 撮影日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
 // (理由は queries.ts の useRadWorklist を参照)。
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 interface Filters {
   modalityCode: string;

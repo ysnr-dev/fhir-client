@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { LabOrderCandidate } from "../api/queries";
 import { useDepartmentList, useMicroOrderDetail } from "../api/queries";
@@ -158,12 +159,7 @@ export function MicroResultForm({
     }
   }, [specimenType, values.specimenTypeName, sputumHasValue, pyuriaHasValue]);
 
-  function update<K extends keyof MicroResultFormValues>(
-    key: K,
-    value: MicroResultFormValues[K],
-  ) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function updateIsolate(isolateIndex: number, patch: Partial<MicroIsolateValues>) {
     setValues((v) => ({

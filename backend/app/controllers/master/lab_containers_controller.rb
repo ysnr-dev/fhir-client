@@ -14,41 +14,5 @@ module Master
 
       render json: paginate(scope.order(Arel.sql("display_order NULLS LAST")))
     end
-
-    def show
-      render json: @record
-    end
-
-    def create
-      record = Master::LabContainer.new(record_params)
-      if record.save
-        render json: record, status: :created
-      else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def destroy
-      @record.destroy!
-      head :no_content
-    end
-
-    private
-
-    def set_record
-      @record = Master::LabContainer.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::LabContainer.column_names - %w[id created_at updated_at])
-    end
   end
 end

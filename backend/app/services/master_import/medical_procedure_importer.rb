@@ -1,5 +1,3 @@
-require "csv"
-
 module MasterImport
   # Parses the medical procedure master CSV (s_ALL*.csv, no header row, 150 columns)
   # and replaces master_medical_procedures wholesale within one transaction.
@@ -7,9 +5,7 @@ module MasterImport
   # レイアウトは診療報酬情報提供サービスの「ファイルレイアウト」(R08rec3.pdf)
   # 〈医科診療行為マスター〉の項番順。予備(未使用)の項目も落とさず取り込む。
   # 繰り返し項目(施設基準①〜⑩、年齢加算①〜④)は連番を付けて平坦に展開する。
-  class MedicalProcedureImporter
-    EXPECTED_COLUMNS = 150
-
+  class MedicalProcedureImporter < CsvImporter
     # 項番 1〜71。
     HEAD_COLUMNS = %i[
       change_category master_type procedure_code
@@ -81,57 +77,12 @@ module MasterImport
     # 項番 138〜150。すべて予備(未使用)。
     RESERVED_TAIL_COLUMNS = (8..20).map { |i| :"reserve#{i}" }.freeze
 
-    COLUMNS = (
+    self.model = Master::MedicalProcedure
+    self.columns = (
       HEAD_COLUMNS + FACILITY_STANDARD_COLUMNS + MIDDLE_COLUMNS +
       AGE_ADDITION_COLUMNS + TAIL_COLUMNS + RESERVED_TAIL_COLUMNS
     ).freeze
-
-    DECIMAL_COLUMNS = %i[points increment_points].freeze
-
-    Result = Struct.new(:imported_count, keyword_init: true)
-
-    def self.call(file)
-      new(file).call
-    end
-
-    def initialize(file)
-      @file = file
-    end
-
-    def call
-      rows = parse_rows
-
-      ActiveRecord::Base.transaction do
-        Master::MedicalProcedure.delete_all
-        rows.each_slice(1000) { |slice| Master::MedicalProcedure.insert_all!(slice) }
-      end
-
-      Result.new(imported_count: rows.size)
-    end
-
-    private
-
-    attr_reader :file
-
-    def parse_rows
-      now = Time.current
-      csv_text = file.read.force_encoding("CP932").encode("UTF-8")
-
-      CSV.parse(csv_text, headers: false).map.with_index do |row, index|
-        values = row.to_a
-
-        if values.size != EXPECTED_COLUMNS
-          raise ImportError, "row #{index + 1}: expected #{EXPECTED_COLUMNS} columns, got #{values.size}"
-        end
-
-        attrs = COLUMNS.zip(values).to_h
-        # 空文字のまま decimal 列へ入れると型変換で落ちるので nil に寄せる。
-        DECIMAL_COLUMNS.each { |col| attrs[col] = attrs[col].presence }
-        # insert_all! はモデルのコールバックを通らないため、検索用カラムはここで埋める。
-        attrs[:search_name] = Master::SearchNormalizer.normalize(attrs[:name])
-        attrs[:search_kana] = Master::SearchNormalizer.normalize(attrs[:name_kana])
-        attrs.merge(created_at: now, updated_at: now)
-      end
-    end
+    self.decimal_columns = %i[points increment_points].freeze
+    self.search_columns = { search_name: :name, search_kana: :name_kana }.freeze
   end
 end

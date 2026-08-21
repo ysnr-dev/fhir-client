@@ -1,3 +1,4 @@
+import { today } from "../lib/dates";
 import type { JfagyAllergen, JfagyDrug, Medicine } from "../api/masterClient";
 
 // JP Core AllergyIntolerance プロファイルと J-FAGY アレルゲンコードの URI 群。
@@ -173,10 +174,6 @@ export interface AllergyFormValues {
   // 症状(反応)の自由記載。reaction[0].manifestation[0].text に格納する。
   reaction: string;
   note: string;
-}
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 export function emptyAllergyForm(): AllergyFormValues {

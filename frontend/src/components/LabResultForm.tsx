@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useDepartmentList, type LabOrderCandidate } from "../api/queries";
 import type { LabItem } from "../api/masterClient";
@@ -153,9 +154,7 @@ export function LabResultForm({
     setExpandNotice(expandNoticeOf(expansion.lines.length, expansion.unmatchedNames));
   }, [expandingOrderId, expansion.ready, expansion.lines, expansion.unmatchedNames]);
 
-  function update<K extends keyof LabResultFormValues>(key: K, value: LabResultFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function updateLine(lineIndex: number, patch: Partial<LabResultLineValues>) {
     setValues((v) => ({

@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Medicine } from "../api/masterClient";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
@@ -107,9 +108,7 @@ export function InjectionForm({
     return rp.infusionHours ? infusionRate(doseTotalOf(rp).ml, rp.infusionHours) : rp.rate;
   }
 
-  function update<K extends keyof InjectionFormValues>(key: K, value: InjectionFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   // 注射区分の選択肢は入外区分で変わるので選び直させる。外来のように選択肢が
   // 1 つしかないときは既定値を入れておく。

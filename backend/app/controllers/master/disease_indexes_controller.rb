@@ -1,5 +1,6 @@
 module Master
   class DiseaseIndexesController < BaseController
+    include Importable
     def index
       scope = Master::DiseaseIndex.all
       # カンマ区切りで複数指定可(検索結果の病名・修飾語をコードから一括で引くため)。
@@ -12,13 +13,6 @@ module Master
       end
 
       render json: paginate(scope)
-    end
-
-    def import
-      return render json: { error: "file is required" }, status: :unprocessable_content if params[:file].blank?
-
-      result = MasterImport::DiseaseIndexImporter.call(params[:file])
-      render json: { imported: result.imported_count }
     end
   end
 end

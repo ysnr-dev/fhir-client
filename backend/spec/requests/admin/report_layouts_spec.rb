@@ -150,20 +150,43 @@ RSpec.describe "Admin::ReportLayouts", type: :request do
     end
   end
 
-  # 帳票レイアウトは日常運用で使うため、ADMIN_TOKEN を設定した環境でも
-  # 認証なしで CRUD できる(コントローラ側で認証ガードをスキップしている)。
+  # 帳票レイアウトは日常運用で使うため、管理者認証ではなくアプリ本体の
+  # ログイン認証(/master・/reports と同じ)で保護する。
   describe "with ADMIN_TOKEN configured" do
-    it "lists layouts without credentials" do
+    it "rejects reads without credentials" do
       with_admin_token("s3cret") do
         get "/admin/report_layouts"
 
-        expect(response).to have_http_status(:ok)
+        expect(response).to have_http_status(:unauthorized)
       end
     end
 
-    it "creates a layout without credentials or CSRF token" do
+    it "rejects writes without credentials" do
       with_admin_token("s3cret") do
         post "/admin/report_layouts", params: valid_params, as: :json
+
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
+
+    it "allows CRUD with a user login session and CSRF token" do
+      with_admin_token("s3cret") do
+        post "/auth/session", params: { login_id: "administrator", password: "s3cret" }, as: :json
+        csrf_token = response.parsed_body["csrf_token"]
+
+        get "/admin/report_layouts"
+        expect(response).to have_http_status(:ok)
+
+        post "/admin/report_layouts", params: valid_params, as: :json,
+                                      headers: { "X-CSRF-Token" => csrf_token }
+        expect(response).to have_http_status(:created)
+      end
+    end
+
+    it "allows writes with the header token (no CSRF needed)" do
+      with_admin_token("s3cret") do
+        post "/admin/report_layouts", params: valid_params, as: :json,
+                                      headers: { "X-Admin-Token" => "s3cret" }
 
         expect(response).to have_http_status(:created)
       end

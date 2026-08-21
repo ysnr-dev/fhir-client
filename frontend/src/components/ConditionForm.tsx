@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Disease, Modifier } from "../api/masterClient";
 import {
@@ -46,9 +47,7 @@ export function ConditionForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
 
-  function update<K extends keyof ConditionFormValues>(key: K, value: ConditionFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   // フリー入力では修飾語(疑い病名を含む)を使わないので、切り替えたときに落とす。
   // 残したまま隠すと、画面に出ていない語が病名に付いたまま保存されてしまう。

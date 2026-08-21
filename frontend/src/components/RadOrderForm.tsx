@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import {
   useCallback,
   useEffect,
@@ -286,9 +287,7 @@ export function RadOrderForm({
     if (changed) setValues((current) => ({ ...current, items }));
   }, [buildLine, catalogByCode, setMembers.data, values.items]);
 
-  function update<K extends keyof RadOrderFormValues>(key: K, value: RadOrderFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function updateItem(code: string, patch: Partial<RadOrderItemLine>) {
     setValues((current) => ({

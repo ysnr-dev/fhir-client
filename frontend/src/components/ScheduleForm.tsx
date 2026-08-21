@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
 import { useDepartmentList, useLocationOptions, usePractitionerOptions } from "../api/queries";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
@@ -40,9 +41,7 @@ export function ScheduleForm({
   const { locations } = useLocationOptions();
   const { departments } = useDepartmentList({});
 
-  function update<K extends keyof ScheduleFormValues>(key: K, value: ScheduleFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   // 診療科は Organization を選ばせて、SS-MIX2 コードと名称を Schedule.specialty に写す。
   function handleDepartmentChange(id: string) {

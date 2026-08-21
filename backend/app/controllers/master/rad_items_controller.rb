@@ -52,15 +52,7 @@ module Master
       if record.save
         render json: record, status: :created
       else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
+        render_validation_errors(record)
       end
     end
 

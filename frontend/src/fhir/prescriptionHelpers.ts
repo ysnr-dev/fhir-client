@@ -1,6 +1,10 @@
+import { today } from "../lib/dates";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
 import { emptyOrderContext, type OrderContext } from "../orderContext";
-import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
+import { orderProblem, type ProblemRef } from "./conditionHelpers";
+import { codingBySystem, findSettingDisplay, orderComment, SETTING_OPTIONS } from "./shared";
+
+export { codingBySystem, SETTING_OPTIONS };
 
 // ローカル拡張・コードシステム。JP Core / FHIR 標準に存在しない項目を表現するための、
 // この処方オーダー機能専用の URI。
@@ -47,11 +51,6 @@ const BASIC_USAGE_CATEGORY_ORAL = "内服";
 const BASIC_USAGE_CATEGORY_AS_NEEDED = "頓服";
 
 export type PrescriptionSetting = "inpatient" | "outpatient" | "";
-
-export const SETTING_OPTIONS: { code: Exclude<PrescriptionSetting, "">; display: string }[] = [
-  { code: "inpatient", display: "入院" },
-  { code: "outpatient", display: "外来" },
-];
 
 export const CATEGORY_OPTIONS: Record<
   Exclude<PrescriptionSetting, "">,
@@ -105,10 +104,6 @@ export const emptyRp: RpValues = {
   medicines: [{ ...emptyMedicineLine }],
 };
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 // problem を渡すと対象プロブレムを選択済みで開く(プロブレムリストで選んでいる
 // プロブレムをそのまま新規処方の対象にするため)。
 export function emptyPrescriptionForm(problem: ProblemRef | null = null): PrescriptionFormValues {
@@ -125,10 +120,6 @@ export function emptyPrescriptionForm(problem: ProblemRef | null = null): Prescr
 function findCategoryDisplay(setting: PrescriptionSetting, code: string): string {
   if (!setting) return code;
   return CATEGORY_OPTIONS[setting].find((c) => c.code === code)?.display ?? code;
-}
-
-function findSettingDisplay(code: string): string {
-  return SETTING_OPTIONS.find((s) => s.code === code)?.display ?? code;
 }
 
 /**
@@ -495,13 +486,6 @@ export function isPrescriptionServiceRequest(sr: fhir4.ServiceRequest): boolean 
   );
 }
 
-export function codingBySystem(
-  codings: fhir4.Coding[] | undefined,
-  system: string,
-): fhir4.Coding | undefined {
-  return codings?.find((c) => c.system === system);
-}
-
 export function summarizeServiceRequest(sr: fhir4.ServiceRequest): PrescriptionSummary {
   const setting = codingBySystem(sr.category?.[0]?.coding, SETTING_SYSTEM);
   const category = codingBySystem(sr.category?.[1]?.coding, PRESCRIPTION_CATEGORY_SYSTEM);
@@ -517,19 +501,8 @@ export function summarizeServiceRequest(sr: fhir4.ServiceRequest): PrescriptionS
   };
 }
 
-export function prescriptionComment(sr: fhir4.ServiceRequest): string {
-  return sr.note?.[0]?.text ?? "";
-}
-
-// 処方が対象としているプロブレム。編集フォームの復元とカルテのバッジ表示の双方から使う。
-// reasonReference には Condition 以外も入りうる仕様なので、Condition 参照だけを拾う。
-export function prescriptionProblem(sr: fhir4.ServiceRequest | undefined): ProblemRef | null {
-  for (const reference of sr?.reasonReference ?? []) {
-    const problem = problemRefFromReference(reference);
-    if (problem) return problem;
-  }
-  return null;
-}
+export const prescriptionComment = orderComment;
+export const prescriptionProblem = orderProblem;
 
 // 登録時に入れた依頼科・依頼医師。参照の display をそのまま名前として使うので、
 // 表示のために Organization / Practitioner を引き直す必要はない。

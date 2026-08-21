@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useState } from "react";
 import { useGenerateSlots, useSlotsInRange } from "../api/queries";
 import {
@@ -58,9 +59,7 @@ export function SlotAddModal({
   const existing = values.time ? slotsAt(sameDay.slots, values.date, values.time) : [];
   const addSlots = useGenerateSlots();
 
-  function update<K extends keyof SlotAddValues>(key: K, value: SlotAddValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function handleAdd() {
     const error = validateSlotAdd(values);

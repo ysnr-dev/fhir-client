@@ -1,5 +1,6 @@
 module Master
   class MedicineUsagesController < BaseController
+    include Importable
     before_action :set_record, only: %i[show update destroy]
 
     def index
@@ -25,39 +26,6 @@ module Master
       }
     end
 
-    def show
-      render json: @record
-    end
-
-    def create
-      record = Master::MedicineUsage.new(record_params)
-      if record.save
-        render json: record, status: :created
-      else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def destroy
-      @record.destroy!
-      head :no_content
-    end
-
-    def import
-      return render json: { error: "file is required" }, status: :unprocessable_content if params[:file].blank?
-
-      result = MasterImport::MedicineUsageImporter.call(params[:file])
-      render json: { imported: result.imported_count }
-    end
-
     private
 
     def distinct_category_names(code_column, name_column)
@@ -76,14 +44,6 @@ module Master
         .compact
         .reject(&:blank?)
         .sort
-    end
-
-    def set_record
-      @record = Master::MedicineUsage.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::MedicineUsage.column_names - %w[id created_at updated_at])
     end
   end
 end

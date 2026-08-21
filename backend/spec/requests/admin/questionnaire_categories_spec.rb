@@ -83,21 +83,35 @@ RSpec.describe "Admin::QuestionnaireCategories", type: :request do
     end
   end
 
-  # カテゴリ一覧は診療画面のテンプレート選択からも読むため、ADMIN_TOKEN を
-  # 設定した環境でも認証なしで扱える(帳票レイアウトと同じ扱い)。
+  # カテゴリ一覧は診療画面のテンプレート選択からも読むため、管理者認証では
+  # なくアプリ本体のログイン認証で保護する(帳票レイアウトと同じ扱い)。
   describe "with ADMIN_TOKEN configured" do
-    it "lists categories without credentials" do
+    it "rejects reads without credentials" do
       with_admin_token("s3cret") do
         get "/admin/questionnaire_categories"
 
-        expect(response).to have_http_status(:ok)
+        expect(response).to have_http_status(:unauthorized)
       end
     end
 
-    it "creates a category without credentials or CSRF token" do
+    it "rejects writes without credentials" do
       with_admin_token("s3cret") do
         post "/admin/questionnaire_categories", params: { name: "初診" }, as: :json
 
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
+
+    it "allows CRUD with a user login session and CSRF token" do
+      with_admin_token("s3cret") do
+        post "/auth/session", params: { login_id: "administrator", password: "s3cret" }, as: :json
+        csrf_token = response.parsed_body["csrf_token"]
+
+        get "/admin/questionnaire_categories"
+        expect(response).to have_http_status(:ok)
+
+        post "/admin/questionnaire_categories", params: { name: "初診" }, as: :json,
+                                                headers: { "X-CSRF-Token" => csrf_token }
         expect(response).to have_http_status(:created)
       end
     end

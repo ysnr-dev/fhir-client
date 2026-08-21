@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
 import {
   FACILITY_TYPE_OPTIONS,
@@ -27,9 +28,7 @@ export function OrganizationForm({
   );
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  function update<K extends keyof OrganizationFormValues>(key: K, value: OrganizationFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();

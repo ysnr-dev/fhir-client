@@ -2,11 +2,13 @@ module Admin
   # テンプレートカテゴリの CRUD。上流中継ではなく backend DB に保存する。
   class QuestionnaireCategoriesController < BaseController
     # カテゴリ一覧はテンプレート選択プルダウン(診療画面)からも読むため、
-    # ADMIN_TOKEN を設定した環境でも管理者認証を要求しない。CSRF 検査は
-    # セッション認証時のみ意味を持つガードなので、認証を外すのに合わせて外す
-    # (帳票レイアウトと同じ扱い)。
+    # 管理者認証ではなく /master・/reports と同じアプリ本体のログイン認証で
+    # 保護する(帳票レイアウトと同じ扱い。ADMIN_TOKEN 未設定なら認証なし)。
     skip_before_action :authorize_admin!
     skip_before_action :verify_admin_csrf!
+    include UserAuthentication
+    before_action :authorize_user!
+    before_action :verify_user_csrf!
 
     before_action :set_category, only: %i[update destroy]
 

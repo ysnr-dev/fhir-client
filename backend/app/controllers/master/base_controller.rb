@@ -13,7 +13,56 @@ module Master
     rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
     rescue_from MasterImport::ImportError, with: :render_import_error
 
+    # --- 標準 CRUD -----------------------------------------------------------
+    # 各マスタ共通の素朴な CRUD。index は絞り込みがマスタごとに違うため共通化
+    # しない。挙動を変えたいコントローラは該当アクションだけオーバーライドする。
+    # set_record を使うアクションは、各コントローラの
+    # `before_action :set_record, only: ...` で従来どおり配線する。
+
+    def show
+      render json: @record
+    end
+
+    def create
+      record = model_class.new(record_params)
+      if record.save
+        render json: record, status: :created
+      else
+        render_validation_errors(record)
+      end
+    end
+
+    def update
+      if @record.update(record_params)
+        render json: @record
+      else
+        render_validation_errors(@record)
+      end
+    end
+
+    def destroy
+      @record.destroy!
+      head :no_content
+    end
+
     private
+
+    # 規約: コントローラ名からモデルを引く(medicines → Master::Medicine)。
+    def model_class
+      "Master::#{controller_name.classify}".constantize
+    end
+
+    def set_record
+      @record = model_class.find(params[:id])
+    end
+
+    def record_params
+      params.permit(model_class.column_names - %w[id created_at updated_at])
+    end
+
+    def render_validation_errors(record)
+      render json: { errors: record.errors.full_messages }, status: :unprocessable_content
+    end
 
     def render_not_found
       render json: { error: "not_found" }, status: :not_found

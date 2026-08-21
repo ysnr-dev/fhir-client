@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
@@ -74,9 +75,7 @@ export function PrescriptionForm({
   // 一般名処方は保険上、外来の院外処方でだけ算定できる。
   const allowGeneric = values.setting === "outpatient" && values.category === "external";
 
-  function update<K extends keyof PrescriptionFormValues>(key: K, value: PrescriptionFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function updateRp(rpIndex: number, patch: Partial<RpValues>) {
     setValues((v) => ({

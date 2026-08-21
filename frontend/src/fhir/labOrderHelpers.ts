@@ -1,5 +1,9 @@
+import { today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
-import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
+import { orderProblem, type ProblemRef } from "./conditionHelpers";
+import { categoryCoding, displayOf, itemNumber, orderComment, parentRequestId, PRIORITY_OPTIONS } from "./shared";
+
+export { PRIORITY_OPTIONS };
 import { ABBREVIATION_SYSTEM, JLAC11_SPECIMEN_SYSTEM, JLAC11_SYSTEM } from "./labResultHelpers";
 import {
   ORDER_TYPE_SYSTEM,
@@ -56,11 +60,6 @@ const ITEM_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/lab-order-item-num
 
 export type LabOrderPriority = "routine" | "urgent";
 
-export const PRIORITY_OPTIONS: { code: LabOrderPriority; display: string }[] = [
-  { code: "routine", display: "通常" },
-  { code: "urgent", display: "至急" },
-];
-
 /** オーダーした検査項目 1 件。マスタの写しなので、表示に必要な値をすべて持つ。 */
 export interface LabOrderItemLine {
   /** 明細の ServiceRequest の id。画面で足したばかりの項目は空(登録時に採番)。 */
@@ -96,10 +95,6 @@ export interface LabOrderFormValues {
   items: LabOrderItemLine[];
 }
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function emptyLabOrderForm(problem: ProblemRef | null = null): LabOrderFormValues {
   return {
     setting: "outpatient",
@@ -109,10 +104,6 @@ export function emptyLabOrderForm(problem: ProblemRef | null = null): LabOrderFo
     problem,
     items: [],
   };
-}
-
-function displayOf<T extends { code: string; display: string }>(options: T[], code: string): string {
-  return options.find((o) => o.code === code)?.display ?? code;
 }
 
 export function priorityDisplay(priority: string | undefined): string {
@@ -417,12 +408,6 @@ function parseLegacyOrderDetail(detail: fhir4.CodeableConcept): LabOrderItemLine
   };
 }
 
-function itemNumber(request: fhir4.ServiceRequest): number {
-  const value = request.identifier?.find((i) => i.system === ITEM_NUMBER_SYSTEM)?.value;
-  // 番号を持たない明細(contained だった頃)は配列の順序のままにしたいので後ろに置かない。
-  return value ? Number(value) : 0;
-}
-
 // 明細の ServiceRequest 群を、親子の分かる 1 本の配列にする。
 // requests には単独の項目・パネル・パネルの構成項目が混ざって届く。
 function parseItemRequests(
@@ -437,7 +422,7 @@ function parseItemRequests(
   }
 
   return [...requests]
-    .sort((a, b) => itemNumber(a) - itemNumber(b))
+    .sort((a, b) => itemNumber(a, ITEM_NUMBER_SYSTEM) - itemNumber(b, ITEM_NUMBER_SYSTEM))
     .map((request) => {
       const parentId = request.basedOn?.[0]?.reference?.replace(/^#/, "").split("/").pop() ?? "";
       // ヘッダを指しているものは単独で選んだ項目(親コードなし)。
@@ -595,14 +580,6 @@ export interface LabOrderSummary {
   urgent: boolean;
 }
 
-function categoryCoding(sr: fhir4.ServiceRequest, system: string): fhir4.Coding | undefined {
-  for (const category of sr.category ?? []) {
-    const coding = codingBySystem(category.coding, system);
-    if (coding) return coding;
-  }
-  return undefined;
-}
-
 export function summarizeLabOrder(sr: fhir4.ServiceRequest): LabOrderSummary {
   const setting = categoryCoding(sr, SETTING_SYSTEM);
   return {
@@ -667,22 +644,8 @@ export function isOrderItemRequest(sr: fhir4.ServiceRequest): boolean {
   return Boolean(parentRequestId(sr));
 }
 
-function parentRequestId(sr: fhir4.ServiceRequest): string | undefined {
-  const reference = sr.basedOn?.[0]?.reference;
-  return reference?.startsWith("ServiceRequest/") ? reference.split("/")[1] : undefined;
-}
-
-export function labOrderComment(sr: fhir4.ServiceRequest): string {
-  return sr.note?.[0]?.text ?? "";
-}
-
-export function labOrderProblem(sr: fhir4.ServiceRequest | undefined): ProblemRef | null {
-  for (const reference of sr?.reasonReference ?? []) {
-    const problem = problemRefFromReference(reference);
-    if (problem) return problem;
-  }
-  return null;
-}
+export const labOrderComment = orderComment;
+export const labOrderProblem = orderProblem;
 
 // ---- 編集フォームへの復元 ----
 

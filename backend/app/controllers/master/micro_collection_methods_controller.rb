@@ -9,36 +9,12 @@ module Master
       )
     end
 
-    def create
-      record = Master::MicroCollectionMethod.new(record_params)
-      if record.save
-        render json: record, status: :created
-      else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
     def update
       if @record.update(record_params.except("code"))
         render json: @record
       else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
+        render_validation_errors(@record)
       end
-    end
-
-    def destroy
-      @record.destroy!
-      head :no_content
-    end
-
-    private
-
-    def set_record
-      @record = Master::MicroCollectionMethod.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::MicroCollectionMethod.column_names - %w[id created_at updated_at])
     end
   end
 end

@@ -1,5 +1,8 @@
+import { today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
-import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
+import { orderProblem, type ProblemRef } from "./conditionHelpers";
+import { toFhirDateTime } from "./clinicalNoteHelpers";
+import { categoryCoding, displayOf, orderComment } from "./shared";
 import {
   MEDICINE_CODE_SYSTEM,
   ORDER_IN_RP_SYSTEM,
@@ -167,10 +170,6 @@ export const LINE_OPTIONS: CodeOption[] = [
   { code: "central-side", display: "中心静脈ルート(側管)" },
 ];
 
-function displayOf(options: CodeOption[], code: string): string {
-  return options.find((o) => o.code === code)?.display ?? code;
-}
-
 function findCategoryDisplay(setting: PrescriptionSetting, code: string): string {
   if (!setting) return code;
   return displayOf(CATEGORY_OPTIONS[setting], code);
@@ -274,10 +273,6 @@ export const emptyInjectionRp: InjectionRpValues = {
   medicines: [{ ...emptyMedicineLine }],
 };
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function emptyInjectionForm(problem: ProblemRef | null = null): InjectionFormValues {
   return {
     setting: "outpatient",
@@ -293,14 +288,6 @@ export function emptyInjectionForm(problem: ProblemRef | null = null): Injection
 //
 // 開始時刻はフォーム上は時刻(HH:mm)だけを持ち、日付は注射日を使う。FHIR の dateTime は
 // 時刻を持つならタイムゾーンが必須なので、実行環境のオフセットを付けて保存する。
-
-function toFhirDateTime(date: string, time: string): string {
-  const offsetMinutes = -new Date(`${date}T${time}`).getTimezoneOffset();
-  const sign = offsetMinutes >= 0 ? "+" : "-";
-  const abs = Math.abs(offsetMinutes);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date}T${time}:00${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
-}
 
 /** FHIR の dateTime から時刻(HH:mm)だけを取り出す。 */
 function toLocalTime(fhirDateTime: string): string {
@@ -383,7 +370,7 @@ function buildInjectionMedicationRequest(
 
   if (rp.startTimes.length) {
     dosageInstruction.timing = {
-      event: rp.startTimes.map((time) => toFhirDateTime(authoredOn, time)),
+      event: rp.startTimes.map((time) => toFhirDateTime(`${authoredOn}T${time}`)),
     };
   }
   if (rp.routeCode) {
@@ -723,15 +710,7 @@ export interface InjectionSummary {
 }
 
 // category はオーダー種別・入外区分・注射区分の 3 つを持つので、処方(添字で引く
-// summarizeServiceRequest)と違い system で引く。
-function categoryCoding(sr: fhir4.ServiceRequest, system: string): fhir4.Coding | undefined {
-  for (const category of sr.category ?? []) {
-    const coding = codingBySystem(category.coding, system);
-    if (coding) return coding;
-  }
-  return undefined;
-}
-
+// summarizeServiceRequest)と違い system で引く(shared の categoryCoding を使う)。
 export function summarizeInjectionServiceRequest(sr: fhir4.ServiceRequest): InjectionSummary {
   return {
     settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
@@ -739,18 +718,9 @@ export function summarizeInjectionServiceRequest(sr: fhir4.ServiceRequest): Inje
   };
 }
 
-export function injectionComment(sr: fhir4.ServiceRequest): string {
-  return sr.note?.[0]?.text ?? "";
-}
-
+export const injectionComment = orderComment;
 // 注射が対象としているプロブレム。処方と同じく reasonReference の Condition 参照を拾う。
-export function injectionProblem(sr: fhir4.ServiceRequest | undefined): ProblemRef | null {
-  for (const reference of sr?.reasonReference ?? []) {
-    const problem = problemRefFromReference(reference);
-    if (problem) return problem;
-  }
-  return null;
-}
+export const injectionProblem = orderProblem;
 
 // ---- 編集フォームへの復元 ----
 

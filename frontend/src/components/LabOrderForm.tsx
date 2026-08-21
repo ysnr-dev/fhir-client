@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import {
   useCallback,
   useEffect,
@@ -213,9 +214,7 @@ export function LabOrderForm({
     if (changed) setValues((current) => ({ ...current, items }));
   }, [buildLine, catalogByCode, panelMembers.data, values.items]);
 
-  function update<K extends keyof LabOrderFormValues>(key: K, value: LabOrderFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   // チェックの ON/OFF。パネルを外すと構成項目も一緒に外れ、構成項目だけを外すと
   // そのパネルからその項目を除いたオーダーになる。

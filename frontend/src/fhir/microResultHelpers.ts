@@ -1,9 +1,10 @@
+import { today } from "../lib/dates";
 import {
   SETTING_SYSTEM,
-  SETTING_OPTIONS,
   type LabResultSetting,
   observationIdsFromReport,
 } from "./labResultHelpers";
+import { categoryCoding, codingBySystem, findSettingDisplay } from "./shared";
 import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 import { SPECIMEN_TYPE_SYSTEM, ORGANISM_SYSTEM } from "./microOrderHelpers";
 
@@ -285,10 +286,6 @@ export function emptyIsolate(): MicroIsolateValues {
   };
 }
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function emptyMicroResultForm(): MicroResultFormValues {
   return {
     setting: "outpatient",
@@ -309,18 +306,7 @@ export function emptyMicroResultForm(): MicroResultFormValues {
   };
 }
 
-function findSettingDisplay(code: string): string {
-  return SETTING_OPTIONS.find((s) => s.code === code)?.display ?? code;
-}
-
 // ---- FHIR リソースの組み立て ----
-
-function codingBySystem(
-  codings: fhir4.Coding[] | undefined,
-  system: string,
-): fhir4.Coding | undefined {
-  return codings?.find((c) => c.system === system);
-}
 
 interface ObservationContext {
   patientId: string;
@@ -782,23 +768,6 @@ export function microOrderIdFromReport(report: fhir4.DiagnosticReport | undefine
   return reference?.split("/")[1] ?? "";
 }
 
-function settingCoding(report: fhir4.DiagnosticReport): fhir4.Coding | undefined {
-  for (const category of report.category ?? []) {
-    const coding = codingBySystem(category.coding, SETTING_SYSTEM);
-    if (coding) return coding;
-  }
-  return undefined;
-}
-
-/** DiagnosticReport が細菌検査結果(category=MB)かどうか。 */
-export function isMicroDiagnosticReport(report: fhir4.DiagnosticReport): boolean {
-  return (report.category ?? []).some((category) =>
-    (category.coding ?? []).some(
-      (coding) => coding.system === REPORT_CATEGORY_SYSTEM && coding.code === "MB",
-    ),
-  );
-}
-
 export interface MicroResultDetailBundle {
   report?: fhir4.DiagnosticReport;
   observations: fhir4.Observation[];
@@ -909,7 +878,7 @@ export function parseMicroResultForm(
   specimens: fhir4.Specimen[] = [],
 ): MicroResultFormValues {
   const values = emptyMicroResultForm();
-  values.setting = (settingCoding(report)?.code ?? "") as LabResultSetting;
+  values.setting = (categoryCoding(report, SETTING_SYSTEM)?.code ?? "") as LabResultSetting;
   values.specimenDate = report.effectiveDateTime?.slice(0, 10) ?? today();
   const department = departmentOf(report);
   values.departmentId = department.departmentId;

@@ -11,10 +11,6 @@ export function setCsrfToken(token: string | null) {
   csrfToken = token;
 }
 
-export function getCsrfToken(): string | null {
-  return csrfToken;
-}
-
 /** 非 GET リクエストに X-CSRF-Token を付けたヘッダーを返す。 */
 export function withCsrfHeaders(method: string, headers?: HeadersInit): Headers {
   const result = new Headers(headers);

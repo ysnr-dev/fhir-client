@@ -1403,6 +1403,133 @@ export function useRadPerformDetail(orderId: string | undefined) {
   });
 }
 
+// ---- 部門ワークリスト共通 ----
+//
+// 放射線・検体検査・処方の一覧は、1 日ぶんのオーダー(ヘッダ)を _offset で
+// ページングしながら全件読み、患者(_include)と進捗(Task の _revinclude)を
+// 同じ応答から回収する、という骨格が共通。ドメインごとの明細の回収と行の
+// 組み立てはコールバックで注入する。
+
+const WORKLIST_PAGE = 100;
+// 1 日のオーダーがこの件数を超えることは想定していない。超えた場合は読むのをやめ、
+// 画面に「一部のみ」と出す(黙って切り捨てると全件見えているように見えるため)。
+const WORKLIST_MAX_PAGES = 5;
+
+/** ヘッダ検索の共通パラメータ。呼び出し側でドメインの _revinclude を足す。 */
+function worklistParams(category: string, date: string, page: number): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("category", category);
+  params.set("authoredon", date);
+  // 明細はオーダーそのものではないので、ヒットさせるのはヘッダだけにする。
+  params.set("based-on:missing", "true");
+  params.set("_count", String(WORKLIST_PAGE));
+  params.set("_offset", String(page * WORKLIST_PAGE));
+  params.set("_include", "ServiceRequest:subject");
+  return params;
+}
+
+/**
+ * ページングしながら全件読む。Patient と Task はここで回収し、それ以外の
+ * リソースは collect に渡す(ヘッダとして数えたら true を返す)。
+ */
+async function fetchWorklistBundles(
+  buildParams: (page: number) => URLSearchParams,
+  collect: (resource: fhir4.Resource) => boolean,
+): Promise<{ patientsById: Map<string, fhir4.Patient>; tasks: fhir4.Task[]; truncated: boolean }> {
+  const patientsById = new Map<string, fhir4.Patient>();
+  const tasks: fhir4.Task[] = [];
+  let truncated = false;
+
+  for (let page = 0; page < WORKLIST_MAX_PAGES; page += 1) {
+    const { data: bundle } = await searchResource<fhir4.Resource>(
+      "ServiceRequest",
+      buildParams(page),
+    );
+
+    let matched = 0;
+    for (const entry of bundle.entry ?? []) {
+      const resource = entry.resource;
+      if (!resource) continue;
+      if (resource.resourceType === "Patient") {
+        if (resource.id) patientsById.set(resource.id, resource as fhir4.Patient);
+      } else if (resource.resourceType === "Task") {
+        tasks.push(resource as fhir4.Task);
+      } else if (collect(resource)) {
+        matched += 1;
+      }
+    }
+
+    if (matched < WORKLIST_PAGE) break;
+    if (page === WORKLIST_MAX_PAGES - 1) truncated = true;
+  }
+
+  return { patientsById, tasks, truncated };
+}
+
+/**
+ * 時刻を持たないオーダーの一覧(検体検査・処方)の並び順。患者番号順に並べて
+ * 呼び出しや突き合わせで探しやすくする。患者が読めなかった行は末尾へ。
+ */
+function comparePatientNumber(
+  a: { patient?: fhir4.Patient },
+  b: { patient?: fhir4.Patient },
+): number {
+  const aNumber = a.patient?.identifier?.[0]?.value ?? "";
+  const bNumber = b.patient?.identifier?.[0]?.value ?? "";
+  if (!aNumber || !bNumber) return aNumber ? -1 : bNumber ? 1 : 0;
+  return aNumber.localeCompare(bNumber, undefined, { numeric: true });
+}
+
+/** Task の書き込み用エントリ。まだ id が無い(新規)なら POST、あれば PUT。 */
+function taskBundleEntry(resource: fhir4.Task): fhir4.BundleEntry {
+  return {
+    resource,
+    request: resource.id
+      ? { method: "PUT", url: `Task/${resource.id}` }
+      : { method: "POST", url: "Task" },
+  };
+}
+
+/**
+ * 受付などの進捗を書き込む hook を作る。Task がまだ無いオーダーでは新しく作る。
+ * 単体の PUT ではなく transaction Bundle にするのは、更新に If-Match(ETag)が要る
+ * ためで、一覧は検索結果から Task を持っているだけで ETag を持たないため。
+ * (実施記録の削除も同時に行う放射線検査は、このファクトリではなく専用の
+ * useUpdateRadTaskStatus を持つ。)
+ */
+function makeUpdateTaskStatusHook<S extends fhir4.Task["status"]>(
+  buildUpdate: (
+    task: fhir4.Task | undefined,
+    order: fhir4.ServiceRequest,
+    status: S,
+  ) => fhir4.Task,
+  worklistKey: string,
+) {
+  return function useUpdateTaskStatus() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+      mutationFn: async ({
+        order,
+        task,
+        status,
+      }: {
+        order: fhir4.ServiceRequest;
+        task: fhir4.Task | undefined;
+        status: S;
+      }) => {
+        const taskEntry = taskBundleEntry(buildUpdate(task, order, status));
+        return postBundle({ resourceType: "Bundle", type: "transaction", entry: [taskEntry] });
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["ServiceRequest", worklistKey] });
+        // カルテのオーダーカード側の表示にも効くよう、検索キャッシュも読み直させる。
+        queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      },
+    });
+  };
+}
+
 // ---- 放射線検査一覧(部門ワークリスト) ----
 //
 // 撮影日で 1 日ぶんの放射線検査オーダーを読み、モダリティ・入外区分・診療科・
@@ -1414,11 +1541,6 @@ export function useRadPerformDetail(orderId: string | undefined) {
 // 撮影日は ServiceRequest.authoredOn で引く。オーダー画面の「撮影日」がそのまま
 // authoredOn と occurrenceDateTime の両方に入るため(radOrderHelpers を参照)。
 // 撮影日をオーダー日と別に持たせるなら、上流に occurrence の検索パラメータが要る。
-
-const RAD_WORKLIST_PAGE = 100;
-// 1 日の放射線検査がこの件数を超えることは想定していない。超えた場合は読むのをやめ、
-// 画面に「一部のみ」と出す(黙って切り捨てると全件見えているように見えるため)。
-const RAD_WORKLIST_MAX_PAGES = 5;
 
 /** 放射線検査一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
 export interface RadWorklistRow {
@@ -1439,48 +1561,27 @@ export interface RadWorklistResult {
 async function fetchRadWorklist(date: string): Promise<RadWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const items: fhir4.ServiceRequest[] = [];
-  const tasks: fhir4.Task[] = [];
-  const patientsById = new Map<string, fhir4.Patient>();
-  let truncated = false;
 
-  for (let page = 0; page < RAD_WORKLIST_MAX_PAGES; page += 1) {
-    const params = new URLSearchParams();
-    params.set("category", `${ORDER_TYPE_SYSTEM}|${RAD_ORDER_TYPE.code}`);
-    params.set("authoredon", date);
-    // 明細はオーダーそのものではないので、ヒットさせるのはヘッダだけにする。
-    params.set("based-on:missing", "true");
-    params.set("_count", String(RAD_WORKLIST_PAGE));
-    params.set("_offset", String(page * RAD_WORKLIST_PAGE));
-    // 撮影項目・患者・進捗を 1 リクエストで揃える。
-    params.set("_revinclude:iterate", "ServiceRequest:based-on");
-    params.set("_revinclude", "Task:focus");
-    params.set("_include", "ServiceRequest:subject");
-
-    const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-
-    let matched = 0;
-    for (const entry of bundle.entry ?? []) {
-      const resource = entry.resource;
-      if (!resource) continue;
-      if (resource.resourceType === "Patient") {
-        if (resource.id) patientsById.set(resource.id, resource as fhir4.Patient);
-      } else if (resource.resourceType === "Task") {
-        tasks.push(resource as fhir4.Task);
-      } else if (resource.resourceType === "ServiceRequest") {
-        const request = resource as fhir4.ServiceRequest;
-        // 検索にヒットしたヘッダと、添えられた明細を分ける。
-        if (isRadServiceRequest(request) && !request.basedOn?.length) {
-          orders.push(request);
-          matched += 1;
-        } else {
-          items.push(request);
-        }
+  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
+    (page) => {
+      const params = worklistParams(`${ORDER_TYPE_SYSTEM}|${RAD_ORDER_TYPE.code}`, date, page);
+      // 撮影項目も同じ応答に添えてもらう。
+      params.set("_revinclude:iterate", "ServiceRequest:based-on");
+      params.set("_revinclude", "Task:focus");
+      return params;
+    },
+    (resource) => {
+      if (resource.resourceType !== "ServiceRequest") return false;
+      const request = resource as fhir4.ServiceRequest;
+      // 検索にヒットしたヘッダと、添えられた明細を分ける。
+      if (isRadServiceRequest(request) && !request.basedOn?.length) {
+        orders.push(request);
+        return true;
       }
-    }
-
-    if (matched < RAD_WORKLIST_PAGE) break;
-    if (page === RAD_WORKLIST_MAX_PAGES - 1) truncated = true;
-  }
+      items.push(request);
+      return false;
+    },
+  );
 
   const taskByOrderId = radTasksByOrderId(tasks);
 
@@ -1574,13 +1675,7 @@ export function useUpdateRadTaskStatus() {
       task: fhir4.Task | undefined;
       status: RadTaskStatus;
     }) => {
-      const resource = buildRadTaskUpdate(task, order, status);
-      const taskEntry: fhir4.BundleEntry = {
-        resource,
-        request: resource.id
-          ? { method: "PUT", url: `Task/${resource.id}` }
-          : { method: "POST", url: "Task" },
-      };
+      const taskEntry = taskBundleEntry(buildRadTaskUpdate(task, order, status));
 
       const cancelsPerform = radTaskStatus(task) === "completed" && status !== "completed";
       const performed = cancelsPerform
@@ -1634,11 +1729,6 @@ export function useRegisterRadPerform() {
 // 検査日は ServiceRequest.authoredOn で引く。オーダー画面の「検査日」がそのまま
 // authoredOn と occurrenceDateTime の両方に入るため(labOrderHelpers を参照)。
 
-const LAB_WORKLIST_PAGE = 100;
-// 1 日の検体検査がこの件数を超えることは想定していない。超えた場合は読むのをやめ、
-// 画面に「一部のみ」と出す(放射線検査一覧と同じ)。
-const LAB_WORKLIST_MAX_PAGES = 5;
-
 /** 検体検査一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
 export interface LabWorklistRow {
   order: fhir4.ServiceRequest;
@@ -1662,39 +1752,22 @@ export interface LabWorklistResult {
 async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const items: fhir4.ServiceRequest[] = [];
-  const tasks: fhir4.Task[] = [];
   const specimens: fhir4.Specimen[] = [];
-  const patientsById = new Map<string, fhir4.Patient>();
   // オーダー id → そのオーダーを元にした検査結果の id(結果登録が済んだかの判定用)。
   const reportIdByOrderId = new Map<string, string>();
-  let truncated = false;
 
-  for (let page = 0; page < LAB_WORKLIST_MAX_PAGES; page += 1) {
-    const params = new URLSearchParams();
-    params.set("category", `${ORDER_TYPE_SYSTEM}|${LAB_ORDER_TYPE.code}`);
-    params.set("authoredon", date);
-    // 明細はオーダーそのものではないので、ヒットさせるのはヘッダだけにする。
-    params.set("based-on:missing", "true");
-    params.set("_count", String(LAB_WORKLIST_PAGE));
-    params.set("_offset", String(page * LAB_WORKLIST_PAGE));
-    // 検査項目・患者・進捗・管(発行済み Specimen)・検査結果を 1 リクエストで揃える。
-    params.set("_revinclude:iterate", "ServiceRequest:based-on");
-    params.append("_revinclude", "Task:focus");
-    params.append("_revinclude", "Specimen:request");
-    params.append("_revinclude", "DiagnosticReport:based-on");
-    params.set("_include", "ServiceRequest:subject");
-
-    const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-
-    let matched = 0;
-    for (const entry of bundle.entry ?? []) {
-      const resource = entry.resource;
-      if (!resource) continue;
-      if (resource.resourceType === "Patient") {
-        if (resource.id) patientsById.set(resource.id, resource as fhir4.Patient);
-      } else if (resource.resourceType === "Task") {
-        tasks.push(resource as fhir4.Task);
-      } else if (resource.resourceType === "Specimen") {
+  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
+    (page) => {
+      const params = worklistParams(`${ORDER_TYPE_SYSTEM}|${LAB_ORDER_TYPE.code}`, date, page);
+      // 検査項目・管(発行済み Specimen)・検査結果も同じ応答に添えてもらう。
+      params.set("_revinclude:iterate", "ServiceRequest:based-on");
+      params.append("_revinclude", "Task:focus");
+      params.append("_revinclude", "Specimen:request");
+      params.append("_revinclude", "DiagnosticReport:based-on");
+      return params;
+    },
+    (resource) => {
+      if (resource.resourceType === "Specimen") {
         specimens.push(resource as fhir4.Specimen);
       } else if (resource.resourceType === "DiagnosticReport") {
         const report = resource as fhir4.DiagnosticReport;
@@ -1707,16 +1780,13 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
         // 検索にヒットしたヘッダと、添えられた明細を分ける。
         if (isLabServiceRequest(request) && !request.basedOn?.length) {
           orders.push(request);
-          matched += 1;
-        } else {
-          items.push(request);
+          return true;
         }
+        items.push(request);
       }
-    }
-
-    if (matched < LAB_WORKLIST_PAGE) break;
-    if (page === LAB_WORKLIST_MAX_PAGES - 1) truncated = true;
-  }
+      return false;
+    },
+  );
 
   const labTaskByOrderId = labTasksByOrderId(tasks);
   const specimensByOrderId = labelSpecimensByOrderId(specimens);
@@ -1730,19 +1800,10 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
     reportId: reportIdByOrderId.get(order.id ?? "") ?? "",
   }));
 
-  // 検体検査オーダーは時刻を持たない(検査日だけ)ので、患者番号順に並べて
-  // 採血の呼び出しや検体の突き合わせで探しやすくする。
-  rows.sort(compareLabWorklistRows);
+  // 検体検査オーダーは時刻を持たない(検査日だけ)ので、患者番号順に並べる。
+  rows.sort(comparePatientNumber);
 
   return { rows, truncated };
-}
-
-function compareLabWorklistRows(a: LabWorklistRow, b: LabWorklistRow): number {
-  const aNumber = a.patient?.identifier?.[0]?.value ?? "";
-  const bNumber = b.patient?.identifier?.[0]?.value ?? "";
-  // 患者が読めなかった行は末尾へ。
-  if (!aNumber || !bNumber) return aNumber ? -1 : bNumber ? 1 : 0;
-  return aNumber.localeCompare(bNumber, undefined, { numeric: true });
 }
 
 /** 検査日 1 日ぶんの検体検査オーダー。日付が未選択の間は読みに行かない。 */
@@ -1755,40 +1816,11 @@ export function useLabWorklist(date: string) {
   });
 }
 
-/**
- * 受付などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
- * transaction Bundle にする理由は useUpdateRadTaskStatus を参照(ETag を持たないため)。
- */
-export function useUpdateLabTaskStatus() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      order,
-      task,
-      status,
-    }: {
-      order: fhir4.ServiceRequest;
-      task: fhir4.Task | undefined;
-      status: LabTaskStatus;
-    }) => {
-      const resource = buildLabTaskUpdate(task, order, status);
-      const taskEntry: fhir4.BundleEntry = {
-        resource,
-        request: resource.id
-          ? { method: "PUT", url: `Task/${resource.id}` }
-          : { method: "POST", url: "Task" },
-      };
-
-      return postBundle({ resourceType: "Bundle", type: "transaction", entry: [taskEntry] });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "lab-worklist"] });
-      // カルテのオーダーカード側の表示にも将来効くよう、検索キャッシュも読み直させる。
-      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
-    },
-  });
-}
+/** 受付などの進捗を書き込む(組み立ては makeUpdateTaskStatusHook を参照)。 */
+export const useUpdateLabTaskStatus = makeUpdateTaskStatusHook<LabTaskStatus>(
+  buildLabTaskUpdate,
+  "lab-worklist",
+);
 
 // ---- 処方一覧(部門ワークリスト) ----
 //
@@ -1799,11 +1831,6 @@ export function useUpdateLabTaskStatus() {
 // 処方オーダーはオーダー種別(order-type)を持たない(注射より前から存在するため)ので、
 // 検体検査・放射線検査のように種別コードでは引けない。代わりに処方オーダーだけが持つ
 // 処方区分の CodeSystem を system だけ指定して引く(FHIR token 検索の `system|` 形式)。
-
-const RX_WORKLIST_PAGE = 100;
-// 1 日の処方がこの件数を超えることは想定していない。超えた場合は読むのをやめ、
-// 画面に「一部のみ」と出す(検体検査一覧と同じ)。
-const RX_WORKLIST_MAX_PAGES = 5;
 
 /** 処方一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
 export interface RxWorklistRow {
@@ -1824,36 +1851,20 @@ export interface RxWorklistResult {
 async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const medicationRequests: fhir4.MedicationRequest[] = [];
-  const tasks: fhir4.Task[] = [];
-  const patientsById = new Map<string, fhir4.Patient>();
-  let truncated = false;
 
-  for (let page = 0; page < RX_WORKLIST_MAX_PAGES; page += 1) {
-    const params = new URLSearchParams();
-    // 処方区分の system だけを指定して、処方オーダーだけを引く(注射は別の
-    // CodeSystem(injection-category)なので混ざらない)。
-    params.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|`);
-    params.set("authoredon", date);
-    // 処方の ServiceRequest はヘッダしか無いが、他部門と同じ形にしておく。
-    params.set("based-on:missing", "true");
-    params.set("_count", String(RX_WORKLIST_PAGE));
-    params.set("_offset", String(page * RX_WORKLIST_PAGE));
-    // 処方明細・患者・進捗を 1 リクエストで揃える。
-    params.set("_revinclude", "MedicationRequest:based-on");
-    params.append("_revinclude", "Task:focus");
-    params.set("_include", "ServiceRequest:subject");
-
-    const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-
-    let matched = 0;
-    for (const entry of bundle.entry ?? []) {
-      const resource = entry.resource;
-      if (!resource) continue;
-      if (resource.resourceType === "Patient") {
-        if (resource.id) patientsById.set(resource.id, resource as fhir4.Patient);
-      } else if (resource.resourceType === "Task") {
-        tasks.push(resource as fhir4.Task);
-      } else if (resource.resourceType === "MedicationRequest") {
+  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
+    (page) => {
+      // 処方オーダーはオーダー種別(order-type)を持たない(注射より前から存在する)ので、
+      // 処方オーダーだけが持つ処方区分の CodeSystem を system だけ指定して引く
+      // (FHIR token 検索の `system|` 形式。注射は別の CodeSystem なので混ざらない)。
+      const params = worklistParams(`${PRESCRIPTION_CATEGORY_SYSTEM}|`, date, page);
+      // 処方明細も同じ応答に添えてもらう。
+      params.set("_revinclude", "MedicationRequest:based-on");
+      params.append("_revinclude", "Task:focus");
+      return params;
+    },
+    (resource) => {
+      if (resource.resourceType === "MedicationRequest") {
         medicationRequests.push(resource as fhir4.MedicationRequest);
       } else if (resource.resourceType === "ServiceRequest") {
         const request = resource as fhir4.ServiceRequest;
@@ -1861,14 +1872,12 @@ async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
         // (注射・検体検査が処方として混ざらないようにする最後の砦)。
         if (isPrescriptionServiceRequest(request) && !request.basedOn?.length) {
           orders.push(request);
-          matched += 1;
+          return true;
         }
       }
-    }
-
-    if (matched < RX_WORKLIST_PAGE) break;
-    if (page === RX_WORKLIST_MAX_PAGES - 1) truncated = true;
-  }
+      return false;
+    },
+  );
 
   const rxTaskByOrderId = rxTasksByOrderId(tasks);
   const medicationRequestsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
@@ -1889,19 +1898,10 @@ async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
     task: rxTaskByOrderId.get(order.id ?? ""),
   }));
 
-  // 処方オーダーは時刻を持たない(処方日だけ)ので、患者番号順に並べて薬袋の
-  // 突き合わせや窓口の呼び出しで探しやすくする(検体検査一覧と同じ)。
-  rows.sort(compareRxWorklistRows);
+  // 処方オーダーは時刻を持たない(処方日だけ)ので、患者番号順に並べる(検体検査と同じ)。
+  rows.sort(comparePatientNumber);
 
   return { rows, truncated };
-}
-
-function compareRxWorklistRows(a: RxWorklistRow, b: RxWorklistRow): number {
-  const aNumber = a.patient?.identifier?.[0]?.value ?? "";
-  const bNumber = b.patient?.identifier?.[0]?.value ?? "";
-  // 患者が読めなかった行は末尾へ。
-  if (!aNumber || !bNumber) return aNumber ? -1 : bNumber ? 1 : 0;
-  return aNumber.localeCompare(bNumber, undefined, { numeric: true });
 }
 
 /** 処方日 1 日ぶんの処方オーダー。日付が未選択の間は読みに行かない。 */
@@ -1914,40 +1914,11 @@ export function useRxWorklist(date: string) {
   });
 }
 
-/**
- * 処方箋発行などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
- * transaction Bundle にする理由は useUpdateRadTaskStatus を参照(ETag を持たないため)。
- */
-export function useUpdateRxTaskStatus() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      order,
-      task,
-      status,
-    }: {
-      order: fhir4.ServiceRequest;
-      task: fhir4.Task | undefined;
-      status: RxTaskStatus;
-    }) => {
-      const resource = buildRxTaskUpdate(task, order, status);
-      const taskEntry: fhir4.BundleEntry = {
-        resource,
-        request: resource.id
-          ? { method: "PUT", url: `Task/${resource.id}` }
-          : { method: "POST", url: "Task" },
-      };
-
-      return postBundle({ resourceType: "Bundle", type: "transaction", entry: [taskEntry] });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rx-worklist"] });
-      // カルテの処方カード側の表示にも将来効くよう、検索キャッシュも読み直させる。
-      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
-    },
-  });
-}
+/** 処方箋発行などの進捗を書き込む(組み立ては makeUpdateTaskStatusHook を参照)。 */
+export const useUpdateRxTaskStatus = makeUpdateTaskStatusHook<RxTaskStatus>(
+  buildRxTaskUpdate,
+  "rx-worklist",
+);
 
 /**
  * 調剤登録。調剤結果(MedicationDispense)と調剤済の Task を 1 つの transaction で

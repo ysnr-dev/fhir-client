@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import type { JfagyAllergen, JfagyDrug, Medicine } from "../api/masterClient";
 import {
@@ -56,9 +57,7 @@ export function AllergyForm({
   );
   const [openModal, setOpenModal] = useState<null | "allergen" | "brand" | "unknown">(null);
 
-  function update<K extends keyof AllergyFormValues>(key: K, value: AllergyFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function handleSourceChange(next: AllergenSource) {
     setSource(next);

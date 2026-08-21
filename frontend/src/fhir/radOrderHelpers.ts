@@ -1,9 +1,13 @@
+import { today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { buildExamAppointmentEntries, type SlotSelection } from "./appointmentHelpers";
 import { slotDate, slotTime } from "./scheduleHelpers";
 // FHIR dateTime へのタイムゾーン付与は診療記録と同じ変換でよいので共用する。
 import { toFhirDateTime } from "./clinicalNoteHelpers";
-import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
+import { orderProblem, type ProblemRef } from "./conditionHelpers";
+import { categoryCoding, displayOf, itemNumber, parentRequestId, PRIORITY_OPTIONS } from "./shared";
+
+export { PRIORITY_OPTIONS };
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import {
   ORDER_TYPE_SYSTEM,
@@ -85,11 +89,6 @@ const JJ1017_16M_LENGTH = 16;
 
 export type RadOrderPriority = "routine" | "urgent";
 
-export const PRIORITY_OPTIONS: { code: RadOrderPriority; display: string }[] = [
-  { code: "routine", display: "通常" },
-  { code: "urgent", display: "至急" },
-];
-
 /** オーダーした撮影 1 件。マスタの写しなので、表示に必要な値をすべて持つ。 */
 export interface RadOrderItemLine {
   /** 明細の ServiceRequest の id。画面で足したばかりの項目は空(登録時に採番)。 */
@@ -166,10 +165,6 @@ export interface RadOrderFormValues {
   items: RadOrderItemLine[];
 }
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function emptyRadOrderForm(problem: ProblemRef | null = null): RadOrderFormValues {
   return {
     setting: "outpatient",
@@ -179,10 +174,6 @@ export function emptyRadOrderForm(problem: ProblemRef | null = null): RadOrderFo
     problem,
     items: [],
   };
-}
-
-function displayOf<T extends { code: string; display: string }>(options: T[], code: string): string {
-  return options.find((o) => o.code === code)?.display ?? code;
 }
 
 export function priorityDisplay(priority: string | undefined): string {
@@ -368,17 +359,6 @@ function buildBodySite(item: RadOrderItemLine): fhir4.CodeableConcept | undefine
   return { coding, text: bodySiteLabel(item) || undefined };
 }
 
-function categoryCodingOf(
-  resource: fhir4.ServiceRequest,
-  system: string,
-): fhir4.Coding | undefined {
-  for (const category of resource.category ?? []) {
-    const coding = codingBySystem(category.coding, system);
-    if (coding) return coding;
-  }
-  return undefined;
-}
-
 function bindingOf(responseId: string | null): TemplateBinding | null {
   return responseId ? { responseId, draft: null } : null;
 }
@@ -387,7 +367,7 @@ function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): Ra
   const coding = request.code?.coding;
   const itemCoding = codingBySystem(coding, ORDER_ITEM_SYSTEM);
   const abbreviation = codingBySystem(coding, ABBREVIATION_SYSTEM);
-  const modality = categoryCodingOf(request, JJ1017_MODALITY_SYSTEM);
+  const modality = categoryCoding(request, JJ1017_MODALITY_SYSTEM);
   const bodySite = request.bodySite?.[0]?.coding;
   const bodyPart = codingBySystem(bodySite, JJ1017P_SYSTEM);
   const laterality = codingBySystem(bodySite, JJ1017_LATERALITY_SYSTEM);
@@ -522,11 +502,6 @@ function buildItemEntries(
   return entries;
 }
 
-function itemNumber(request: fhir4.ServiceRequest): number {
-  const value = request.identifier?.find((i) => i.system === ITEM_NUMBER_SYSTEM)?.value;
-  return value ? Number(value) : 0;
-}
-
 // 明細の ServiceRequest 群を、親子の分かる 1 本の配列にする。
 // requests には単独の項目・セット・セットの構成項目が混ざって届く。
 function parseItemRequests(
@@ -541,7 +516,7 @@ function parseItemRequests(
   }
 
   return [...requests]
-    .sort((a, b) => itemNumber(a) - itemNumber(b))
+    .sort((a, b) => itemNumber(a, ITEM_NUMBER_SYSTEM) - itemNumber(b, ITEM_NUMBER_SYSTEM))
     .map((request) => {
       const parentId = request.basedOn?.[0]?.reference?.split("/").pop() ?? "";
       // ヘッダを指しているものは単独で選んだ項目(親コードなし)。
@@ -849,7 +824,7 @@ export interface RadOrderSummary {
 }
 
 export function summarizeRadOrder(sr: fhir4.ServiceRequest): RadOrderSummary {
-  const setting = categoryCodingOf(sr, SETTING_SYSTEM);
+  const setting = categoryCoding(sr, SETTING_SYSTEM);
   return {
     settingCode: setting?.code ?? "",
     settingDisplay: setting?.display ?? "",
@@ -890,11 +865,6 @@ export function radOrderItemRequests(
   );
 }
 
-function parentRequestId(sr: fhir4.ServiceRequest): string | undefined {
-  const reference = sr.basedOn?.[0]?.reference;
-  return reference?.startsWith("ServiceRequest/") ? reference.split("/")[1] : undefined;
-}
-
 /**
  * 撮影時刻(HH:mm)。時刻を指定せずにオーダーしたもの(occurrenceDateTime が
  * 日付のみ)は空。
@@ -904,13 +874,7 @@ export function radOrderTime(sr: fhir4.ServiceRequest): string {
   return occurrence.length > 10 ? occurrence.slice(11, 16) : "";
 }
 
-export function radOrderProblem(sr: fhir4.ServiceRequest | undefined): ProblemRef | null {
-  for (const reference of sr?.reasonReference ?? []) {
-    const problem = problemRefFromReference(reference);
-    if (problem) return problem;
-  }
-  return null;
-}
+export const radOrderProblem = orderProblem;
 
 // ---- 編集フォームへの復元 ----
 
@@ -919,7 +883,7 @@ export function parseRadOrderForm(
   items: fhir4.ServiceRequest[] = [],
 ): RadOrderFormValues {
   return {
-    setting: (categoryCodingOf(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
+    setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as RadOrderPriority,
     authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
     authoredTime: radOrderTime(sr),

@@ -14,15 +14,6 @@ module Master
       render json: @record.as_json.merge(cells: cells_for(@record.id).as_json)
     end
 
-    def create
-      record = Master::RadItemLayout.new(record_params)
-      if record.save
-        render json: record, status: :created
-      else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
     # 行数・列数を縮めたときは、範囲外に取り残されたセルを一緒に片付ける。
     # 何マス消したかを返すので、画面は事前の確認に使える。
     def update
@@ -65,14 +56,6 @@ module Master
           "master_rad_items.kind AS item_kind",
         )
         .order(:grid_row, :grid_column)
-    end
-
-    def set_record
-      @record = Master::RadItemLayout.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::RadItemLayout.column_names - %w[id created_at updated_at])
     end
   end
 end

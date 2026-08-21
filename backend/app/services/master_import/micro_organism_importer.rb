@@ -11,6 +11,8 @@ module MasterImport
   class MicroOrganismImporter
     Result = Struct.new(:imported_count, :skipped_count, :sheet_name, keyword_init: true)
 
+    include OfficialLocalReplace
+
     def self.call(file)
       new(file).call
     end
@@ -22,16 +24,7 @@ module MasterImport
 
     def call
       rows = parse_rows
-      raise ImportError, "取り込める行がありません" if rows.empty?
-
-      ActiveRecord::Base.transaction do
-        reject_local_conflicts(rows)
-        frequent_codes = Master::MicroOrganism.frequent.pluck(:code).to_set
-        rows.each { |row| row[:frequent] = frequent_codes.include?(row[:code]) }
-
-        Master::MicroOrganism.official.delete_all
-        rows.each_slice(1000) { |slice| Master::MicroOrganism.insert_all!(slice) }
-      end
+      replace_official!(Master::MicroOrganism, rows)
 
       Result.new(imported_count: rows.size, skipped_count: @skipped_count, sheet_name: @sheet_name)
     end
@@ -93,16 +86,6 @@ module MasterImport
           updated_at: now
         }
       end
-    end
-
-    # 施設追加コードと同じコードを配布ファイルが載せてきたら、どのコードが
-    # 問題かを示して取込ごと止める(片側だけ入った状態を作らない)。
-    def reject_local_conflicts(rows)
-      local_codes = Master::MicroOrganism.local.pluck(:code).to_set
-      conflicts = rows.map { |row| row[:code] }.select { |code| local_codes.include?(code) }
-      return if conflicts.empty?
-
-      raise ImportError, "施設追加コードと重複しています: #{conflicts.join(', ')}"
     end
   end
 end

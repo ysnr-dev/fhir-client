@@ -1,5 +1,9 @@
+import { today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
-import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
+import { orderProblem, type ProblemRef } from "./conditionHelpers";
+import { categoryCoding, displayOf, itemNumber, orderComment, PRIORITY_OPTIONS } from "./shared";
+
+export { PRIORITY_OPTIONS };
 import { labOrderItemRequests } from "./labOrderHelpers";
 import {
   ORDER_TYPE_SYSTEM,
@@ -63,11 +67,6 @@ const SPECIMEN_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Spec
 const CONTAINED_SPECIMEN_ID = "specimen";
 
 export type MicroOrderPriority = "routine" | "urgent";
-
-export const PRIORITY_OPTIONS: { code: MicroOrderPriority; display: string }[] = [
-  { code: "routine", display: "通常" },
-  { code: "urgent", display: "至急" },
-];
 
 export type MicroExamPurpose = "" | "diagnostic" | "surveillance";
 
@@ -143,10 +142,6 @@ export interface MicroOrderFormValues {
   items: MicroOrderItemLine[];
 }
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function emptyMicroSpecimen(): MicroSpecimenValues {
   return {
     id: "",
@@ -176,10 +171,6 @@ export function emptyMicroOrderForm(problem: ProblemRef | null = null): MicroOrd
     specimen: emptyMicroSpecimen(),
     items: [],
   };
-}
-
-function displayOf<T extends { code: string; display: string }>(options: T[], code: string): string {
-  return options.find((o) => o.code === code)?.display ?? code;
 }
 
 export function priorityDisplay(priority: string | undefined): string {
@@ -537,14 +528,6 @@ export interface MicroOrderSummary {
   urgent: boolean;
 }
 
-function categoryCoding(sr: fhir4.ServiceRequest, system: string): fhir4.Coding | undefined {
-  for (const category of sr.category ?? []) {
-    const coding = codingBySystem(category.coding, system);
-    if (coding) return coding;
-  }
-  return undefined;
-}
-
 export function summarizeMicroOrder(sr: fhir4.ServiceRequest): MicroOrderSummary {
   return {
     settingDisplay: categoryCoding(sr, SETTING_SYSTEM)?.display ?? "",
@@ -600,11 +583,6 @@ function parseSpecimenGroupRequest(request: fhir4.ServiceRequest): MicroSpecimen
   };
 }
 
-function itemNumber(request: fhir4.ServiceRequest): number {
-  const value = request.identifier?.find((i) => i.system === ITEM_NUMBER_SYSTEM)?.value;
-  return value ? Number(value) : 0;
-}
-
 function parseItemRequest(request: fhir4.ServiceRequest): MicroOrderItemLine {
   const itemCoding = codingBySystem(request.code?.coding, ORDER_ITEM_SYSTEM);
   return {
@@ -624,7 +602,7 @@ export function microOrderContents(itemRequests: fhir4.ServiceRequest[]): {
   specimen: MicroSpecimenValues;
   items: MicroOrderItemLine[];
 } {
-  const sorted = [...itemRequests].sort((a, b) => itemNumber(a) - itemNumber(b));
+  const sorted = [...itemRequests].sort((a, b) => itemNumber(a, ITEM_NUMBER_SYSTEM) - itemNumber(b, ITEM_NUMBER_SYSTEM));
   const group = sorted.find(isSpecimenGroupRequest);
   const items = sorted
     .filter((request) => !isSpecimenGroupRequest(request))
@@ -660,17 +638,8 @@ export function microOrderItemRequests(
   return labOrderItemRequests(serviceRequests, headerId);
 }
 
-export function microOrderComment(sr: fhir4.ServiceRequest): string {
-  return sr.note?.[0]?.text ?? "";
-}
-
-export function microOrderProblem(sr: fhir4.ServiceRequest | undefined): ProblemRef | null {
-  for (const reference of sr?.reasonReference ?? []) {
-    const problem = problemRefFromReference(reference);
-    if (problem) return problem;
-  }
-  return null;
-}
+export const microOrderComment = orderComment;
+export const microOrderProblem = orderProblem;
 
 export function microOrderPriorAntimicrobial(sr: fhir4.ServiceRequest): string {
   return sr.extension?.find((e) => e.url === PRIOR_ANTIMICROBIAL_EXT_URL)?.valueString ?? "";

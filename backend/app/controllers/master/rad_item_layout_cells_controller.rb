@@ -3,15 +3,6 @@ module Master
   class RadItemLayoutCellsController < BaseController
     before_action :set_record, only: %i[update destroy]
 
-    def create
-      record = Master::RadItemLayoutCell.new(record_params)
-      if record.save
-        render json: record, status: :created
-      else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
     # 位置(grid_row / grid_column)の変更が「移動」。移動先に別のセルが居れば
     # 位置を入れ替える。伝票編集で最も多い操作なので専用エンドポイントは作らず
     # update に寄せている。
@@ -39,21 +30,6 @@ module Master
       render json: @record
     rescue ActiveRecord::RecordInvalid => e
       render json: { errors: e.record.errors.full_messages }, status: :unprocessable_content
-    end
-
-    def destroy
-      @record.destroy!
-      head :no_content
-    end
-
-    private
-
-    def set_record
-      @record = Master::RadItemLayoutCell.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::RadItemLayoutCell.column_names - %w[id created_at updated_at])
     end
   end
 end

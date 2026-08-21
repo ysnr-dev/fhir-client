@@ -38,21 +38,8 @@ module Master
       if record.save
         render json: record, status: :created
       else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
+        render_validation_errors(record)
       end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def destroy
-      @record.destroy!
-      head :no_content
     end
 
     private
@@ -81,10 +68,6 @@ module Master
     def set_record
       # id ではなく器材コードでも引けるようにする。
       @record = Master::RadMaterial.find_by(material_code: params[:id]) || Master::RadMaterial.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::RadMaterial.column_names - %w[id created_at updated_at])
     end
   end
 end

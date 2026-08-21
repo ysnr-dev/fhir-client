@@ -21,35 +21,14 @@ module Master
       if record.save
         render json: record, status: :created
       else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
+        render_validation_errors(record)
       end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def destroy
-      @record.destroy!
-      head :no_content
     end
 
     private
 
     def next_display_order(dataset_code)
       (Master::RadDatasetDetail.where(dataset_code: dataset_code).maximum(:display_order) || 0) + 1
-    end
-
-    def set_record
-      @record = Master::RadDatasetDetail.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::RadDatasetDetail.column_names - %w[id created_at updated_at])
     end
   end
 end

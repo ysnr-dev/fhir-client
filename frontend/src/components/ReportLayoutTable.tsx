@@ -1,12 +1,8 @@
+import { formatDateTime } from "../lib/dates";
 import type { ReportLayoutSummary } from "../api/adminClient";
 import { fetchReportLayout } from "../api/adminClient";
 import { useDeleteReportLayout } from "../api/adminQueries";
 import { ErrorBanner } from "./ErrorBanner";
-
-function formatDateTime(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString("ja-JP");
-}
 
 interface Props {
   layouts: ReportLayoutSummary[];

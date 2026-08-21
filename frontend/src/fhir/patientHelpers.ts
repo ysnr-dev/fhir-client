@@ -4,6 +4,7 @@ import {
   displayJapaneseName,
   parseJapaneseNames,
 } from "./humanName";
+import { referenceId } from "./shared";
 
 // JP-Core: 医療記関番号(Medical Record Number)の標準 OID。デフォルトの識別子体系として使用する。
 export const DEFAULT_IDENTIFIER_SYSTEM = "urn:oid:1.2.392.100495.20.3.51";
@@ -11,9 +12,7 @@ export const DEFAULT_IDENTIFIER_SYSTEM = "urn:oid:1.2.392.100495.20.3.51";
 export type Gender = "male" | "female" | "other" | "unknown" | "";
 
 // "Patient/123" 形式(サーバーによっては絶対 URL)の参照から患者 id を取り出す。
-export function patientIdFromReference(reference: string | undefined): string | undefined {
-  return reference?.split("/").pop() || undefined;
-}
+export const patientIdFromReference = referenceId;
 
 // URL 上の患者と、読み込んだリソースが指す患者が食い違っていないかを判定する。
 // 一致しない ID を URL に直接書いた場合に、他患者の内容を表示したり、

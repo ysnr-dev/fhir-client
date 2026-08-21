@@ -1,11 +1,9 @@
-require "csv"
-
 module MasterImport
   # Parses the medicine master CSV (y_r07_ALL*.csv, no header row, 42 columns)
   # and replaces master_medicines wholesale within one transaction.
-  class MedicineImporter
-    EXPECTED_COLUMNS = 42
-    COLUMNS = %i[
+  class MedicineImporter < CsvImporter
+    self.model = Master::Medicine
+    self.columns = %i[
       change_category master_type medicine_code
       name_kanji_length name name_kana_length name_kana
       unit_code unit_name_length unit_name
@@ -20,52 +18,11 @@ module MasterImport
       listed_on generic_name_code generic_name_description generic_name_addition_category
       anti_hiv_flag long_term_listed_related_code selective_treatment_category
     ].freeze
-    DECIMAL_COLUMNS = %i[price old_price].freeze
-
-    Result = Struct.new(:imported_count, keyword_init: true)
-
-    def self.call(file)
-      new(file).call
-    end
-
-    def initialize(file)
-      @file = file
-    end
-
-    def call
-      rows = parse_rows
-
-      ActiveRecord::Base.transaction do
-        Master::Medicine.delete_all
-        rows.each_slice(1000) { |slice| Master::Medicine.insert_all!(slice) }
-      end
-
-      Result.new(imported_count: rows.size)
-    end
-
-    private
-
-    attr_reader :file
-
-    def parse_rows
-      now = Time.current
-      csv_text = file.read.force_encoding("CP932").encode("UTF-8")
-
-      CSV.parse(csv_text, headers: false).map.with_index do |row, index|
-        values = row.to_a
-
-        if values.size != EXPECTED_COLUMNS
-          raise ImportError, "row #{index + 1}: expected #{EXPECTED_COLUMNS} columns, got #{values.size}"
-        end
-
-        attrs = COLUMNS.zip(values).to_h
-        DECIMAL_COLUMNS.each { |col| attrs[col] = attrs[col].presence }
-        # insert_all! はモデルのコールバックを通らないため、検索用カラムはここで埋める。
-        attrs[:search_name] = Master::SearchNormalizer.normalize(attrs[:name])
-        attrs[:search_kana] = Master::SearchNormalizer.normalize(attrs[:name_kana])
-        attrs[:search_generic] = Master::SearchNormalizer.normalize(attrs[:generic_name_description])
-        attrs.merge(created_at: now, updated_at: now)
-      end
-    end
+    self.decimal_columns = %i[price old_price].freeze
+    self.search_columns = {
+      search_name: :name,
+      search_kana: :name_kana,
+      search_generic: :generic_name_description
+    }.freeze
   end
 end

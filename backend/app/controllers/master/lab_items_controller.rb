@@ -1,5 +1,6 @@
 module Master
   class LabItemsController < BaseController
+    include Importable
     before_action :set_record, only: %i[show update destroy]
 
     def index
@@ -57,39 +58,6 @@ module Master
       }
     end
 
-    def show
-      render json: @record
-    end
-
-    def create
-      record = Master::LabItem.new(record_params)
-      if record.save
-        render json: record, status: :created
-      else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def destroy
-      @record.destroy!
-      head :no_content
-    end
-
-    def import
-      return render json: { error: "file is required" }, status: :unprocessable_content if params[:file].blank?
-
-      result = MasterImport::LabItemImporter.call(params[:file])
-      render json: { imported: result.imported_count }
-    end
-
     private
 
     # 段階的絞り込み(大項目・材料・測定法)の完全一致フィルタ。
@@ -111,14 +79,6 @@ module Master
         .minimum(:id)
         .sort_by { |_value, id| id }
         .map(&:first)
-    end
-
-    def set_record
-      @record = Master::LabItem.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::LabItem.column_names - %w[id created_at updated_at])
     end
   end
 end

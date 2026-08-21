@@ -37,13 +37,6 @@ module Master
       kind == "set"
     end
 
-    # 単独オーダー(この項目だけで 1 オーダー)。CT・MRI など 1 撮影に時間を要する
-    # 項目に付ける。オーダー画面では他の項目と一緒に選べるが、登録時に別のオーダーへ
-    # 分けられる。
-    def solo?
-      !groupable
-    end
-
     # 要素コードの Hash(未指定の要素は含まない)。
     def element_codes
       ELEMENT_COLUMNS.filter_map do |element, column|

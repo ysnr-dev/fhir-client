@@ -3,6 +3,9 @@ module Master
   # 標準コード(source=official)は取込で洗い替え、画面からは施設独自の
   # 拡張コード(source=local)だけを登録・編集・削除する。
   class RadJj1017CodesController < BaseController
+    include OfficialLocalRecords
+    include Importable
+
     before_action :set_record, only: %i[update destroy]
 
     def index
@@ -68,27 +71,6 @@ module Master
       }
     end
 
-    # 画面から作れるのは施設拡張コードだけ。
-    def create
-      record = Master::RadJj1017Code.new(record_params)
-      record.source = Master::RadJj1017Code::LOCAL
-      if record.save
-        render json: record, status: :created
-      else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def update
-      return render_official_readonly if @record.official?
-
-      if @record.update(record_params.except("source", "element", "code"))
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
     # 使用中の拡張コードは消させない。外部キーを張っていないので、
     # オーダー項目マスタの該当要素の列を直接見て確かめる。
     def destroy
@@ -104,34 +86,23 @@ module Master
       head :no_content
     end
 
-    def import
-      return render json: { error: "file is required" }, status: :unprocessable_content if params[:file].blank?
+    private
 
-      result = MasterImport::RadJj1017CodeImporter.call(params[:file])
-      render json: {
+    def import_result_json(result)
+      {
         imported: result.imported_count,
         skipped: result.skipped_count,
         elements: result.element_counts
       }
     end
 
-    private
-
-    def render_official_readonly
-      render json: { errors: ["配布ファイル由来の標準コードは編集できません"] },
-             status: :unprocessable_content
+    # 要素も書き換えさせない(コード体系上、要素とコードの組で意味を持つため)。
+    def protected_record_keys
+      %w[source element code]
     end
 
     def modality_column(value)
       { "general" => :use_general, "ct" => :use_ct, "mr" => :use_mr, "us" => :use_us }[value]
-    end
-
-    def set_record
-      @record = Master::RadJj1017Code.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::RadJj1017Code.column_names - %w[id created_at updated_at])
     end
   end
 end

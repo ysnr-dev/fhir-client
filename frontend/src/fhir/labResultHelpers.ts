@@ -1,3 +1,7 @@
+import { today } from "../lib/dates";
+import { categoryCoding, codingBySystem, findSettingDisplay, SETTING_OPTIONS } from "./shared";
+
+export { SETTING_OPTIONS };
 import type { LabItem } from "../api/masterClient";
 import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 
@@ -67,11 +71,6 @@ export interface SpecimenRef {
 
 export type LabResultSetting = "inpatient" | "outpatient" | "";
 
-export const SETTING_OPTIONS: { code: Exclude<LabResultSetting, "">; display: string }[] = [
-  { code: "inpatient", display: "入院" },
-  { code: "outpatient", display: "外来" },
-];
-
 // 結果値の H/L 判定。フォームでは未選択(空)を許し、FHIR には空を "N" として記録する。
 export type LabInterpretation = "H" | "L" | "";
 
@@ -115,10 +114,6 @@ export const emptyLabResultLine: LabResultLineValues = {
   interpretation: "",
 };
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function emptyLabResultForm(): LabResultFormValues {
   return {
     setting: "outpatient",
@@ -128,10 +123,6 @@ export function emptyLabResultForm(): LabResultFormValues {
     orderId: "",
     lines: [{ ...emptyLabResultLine }],
   };
-}
-
-function findSettingDisplay(code: string): string {
-  return SETTING_OPTIONS.find((s) => s.code === code)?.display ?? code;
 }
 
 // コード型(CD/CO)の選択肢。「1：陽性、2：陰性」のような文字列をパースする。
@@ -537,13 +528,6 @@ export function labOrderIdFromReport(
   return reference?.split("/")[1] ?? "";
 }
 
-function codingBySystem(
-  codings: fhir4.Coding[] | undefined,
-  system: string,
-): fhir4.Coding | undefined {
-  return codings?.find((c) => c.system === system);
-}
-
 // Observation.interpretation から H/L/N コードを取り出す。未記録なら空文字。
 function interpretationCodeOf(obs: fhir4.Observation): string {
   for (const concept of obs.interpretation ?? []) {
@@ -569,19 +553,11 @@ export function interpretationClass(
   return base;
 }
 
-function settingCoding(report: fhir4.DiagnosticReport): fhir4.Coding | undefined {
-  for (const category of report.category ?? []) {
-    const coding = codingBySystem(category.coding, SETTING_SYSTEM);
-    if (coding) return coding;
-  }
-  return undefined;
-}
-
 export function summarizeDiagnosticReport(report: fhir4.DiagnosticReport): LabResultSummary {
   return {
     id: report.id ?? "",
     date: report.effectiveDateTime?.slice(0, 10) ?? "",
-    settingDisplay: settingCoding(report)?.display ?? "",
+    settingDisplay: categoryCoding(report, SETTING_SYSTEM)?.display ?? "",
     departmentName: departmentOf(report).departmentName,
     itemCount: report.result?.length ?? 0,
     orderId: labOrderIdFromReport(report),
@@ -830,7 +806,7 @@ export function parseLabResultForm(
   }));
 
   return {
-    setting: (settingCoding(report)?.code ?? "") as LabResultSetting,
+    setting: (categoryCoding(report, SETTING_SYSTEM)?.code ?? "") as LabResultSetting,
     specimenDate: report.effectiveDateTime?.slice(0, 10) ?? today(),
     ...departmentOf(report),
     orderId: labOrderIdFromReport(report),

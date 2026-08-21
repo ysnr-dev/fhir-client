@@ -2,6 +2,7 @@ module Master
   # JJ1017 の代表的頻用コード集(別表F)。オーダー項目マスタの初期データを
   # 一括作成するときの選択元なので、検索と取込だけを持つ。
   class RadFrequentCodesController < BaseController
+    include Importable
     def index
       scope = Master::RadJj1017FrequentCode.all
       scope = scope.where(category: params[:category]) if params[:category].present?
@@ -26,11 +27,10 @@ module Master
       render json: paginate(scope.order(Arel.sql("display_order NULLS LAST")).order(:id))
     end
 
-    def import
-      return render json: { error: "file is required" }, status: :unprocessable_content if params[:file].blank?
+    private
 
-      result = MasterImport::RadFrequentCodeImporter.call(params[:file])
-      render json: {
+    def import_result_json(result)
+      {
         imported: result.imported_count,
         skipped: result.skipped_count,
         categories: result.category_counts

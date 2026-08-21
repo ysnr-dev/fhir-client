@@ -6,8 +6,8 @@ RSpec.describe MasterImport::MedicalProcedureImporter do
   end
 
   it "declares exactly the 150 columns of the record layout" do
-    expect(described_class::COLUMNS.size).to eq(described_class::EXPECTED_COLUMNS)
-    expect(described_class::COLUMNS.uniq.size).to eq(described_class::COLUMNS.size)
+    expect(described_class.columns.size).to eq(150)
+    expect(described_class.columns.uniq.size).to eq(described_class.columns.size)
   end
 
   it "imports all rows and maps columns correctly" do

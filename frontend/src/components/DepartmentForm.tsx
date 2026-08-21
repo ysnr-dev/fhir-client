@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
 import { useOrganizationOptions } from "../api/queries";
 import { SSMIX2_DEPARTMENT_CODES, departmentCodeDisplay } from "../fhir/departmentCodes";
@@ -33,9 +34,7 @@ export function DepartmentForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const { organizations, isLoading: loadingOrganizations } = useOrganizationOptions();
 
-  function update<K extends keyof DepartmentFormValues>(key: K, value: DepartmentFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   // コードを選んだら診療科名も入れる。名称を編集済みのときは上書きしない
   // (コード表の名称をそのまま使わず院内呼称にしている場合があるため)。

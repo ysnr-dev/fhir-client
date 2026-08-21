@@ -816,17 +816,6 @@ export function useMedicalMaterialSearch(
   });
 }
 
-/** 保存済みの実施情報から器材名を復元するための一括取得。 */
-export function useMedicalMaterialsByCodes(codes: string[]) {
-  const unique = Array.from(new Set(codes.filter(Boolean))).sort();
-
-  return useQuery({
-    queryKey: [...MEDICAL_MATERIALS_KEY, "by-codes", unique],
-    queryFn: () => searchMedicalMaterials({ material_code: unique.join(","), per: unique.length }),
-    enabled: unique.length > 0,
-  });
-}
-
 const RAD_MATERIALS_KEY = ["master", "rad_materials"];
 
 export interface RadMaterialFilters {
@@ -909,17 +898,6 @@ export function useMedicalProcedureSearch(
       }),
     placeholderData: keepPreviousData,
     enabled,
-  });
-}
-
-/** 保存済みの実施情報から手技名を復元するための一括取得。 */
-export function useMedicalProceduresByCodes(codes: string[]) {
-  const unique = Array.from(new Set(codes.filter(Boolean))).sort();
-
-  return useQuery({
-    queryKey: [...MEDICAL_PROCEDURES_KEY, "by-codes", unique],
-    queryFn: () => searchMedicalProcedures({ procedure_code: unique.join(","), per: unique.length }),
-    enabled: unique.length > 0,
   });
 }
 

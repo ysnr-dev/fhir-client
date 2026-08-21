@@ -56,31 +56,14 @@ module Master
       }
     end
 
-    def show
-      render json: @record
-    end
-
     def create
       record = Master::MedicineDoseConversion.new(record_params)
       record.to_unit = default_to_unit(record.medicine_code) if record.to_unit.blank?
       if record.save
         render json: record, status: :created
       else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
+        render_validation_errors(record)
       end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def destroy
-      @record.destroy!
-      head :no_content
     end
 
     private
@@ -108,10 +91,6 @@ module Master
 
     def default_to_unit(medicine_code)
       Master::Medicine.where(medicine_code: medicine_code).pick(:unit_name)
-    end
-
-    def set_record
-      @record = Master::MedicineDoseConversion.find(params[:id])
     end
 
     # 画面から登録・修正したものは導出根拠を manual に固定する。

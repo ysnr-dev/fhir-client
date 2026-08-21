@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { lazy, Suspense, useRef, useState, type FormEvent } from "react";
 import { fetchSchema } from "../api/masterClient";
 import {
@@ -71,9 +72,7 @@ export function ClinicalNoteForm({
   // (複数のプロブレムを扱うときは記録を分けて登録する)。
   const problemOptions = useProblemOptions(patientId);
 
-  function update<K extends keyof ClinicalNoteFormValues>(key: K, value: ClinicalNoteFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function updateSection(uid: string, patch: Partial<{ code: SectionCode; html: string }>) {
     setValues((v) => ({

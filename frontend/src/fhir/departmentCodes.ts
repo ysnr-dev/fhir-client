@@ -106,7 +106,3 @@ export function departmentCodeDisplay(code: string | undefined): string {
   if (!code) return "";
   return SSMIX2_DEPARTMENT_CODES.find((d) => d.code === code)?.display ?? "";
 }
-
-export function isSsmix2DepartmentCode(code: string): boolean {
-  return SSMIX2_DEPARTMENT_CODES.some((d) => d.code === code);
-}

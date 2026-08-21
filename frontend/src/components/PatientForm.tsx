@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
 import { emptyPatientForm, type PatientFormValues } from "../fhir/patientHelpers";
 import { ErrorBanner } from "./ErrorBanner";
@@ -20,9 +21,7 @@ export function PatientForm({
   const [values, setValues] = useState<PatientFormValues>(initialValues ?? emptyPatientForm);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  function update<K extends keyof PatientFormValues>(key: K, value: PatientFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();

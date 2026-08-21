@@ -1,4 +1,4 @@
-import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
+import { createTaskHelpers } from "./taskHelpers";
 
 // 処方(調剤)の進捗。検体検査(labTaskHelpers)・放射線検査(radTaskHelpers)と同じ
 // 考え方で、オーダーの ServiceRequest はそのままにして、進捗を Task で別に持つ。
@@ -13,8 +13,6 @@ import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 // 印刷は別タスク)。調剤済へは「調剤登録」(RxDispenseModal)で進み、調剤結果の
 // MedicationDispense と一緒に 1 つの transaction で書き込む。
 
-/** Task.code。部門の作業種別(検体検査の lab-exam と同じ CodeSystem)。 */
-const TASK_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/task-code";
 export const RX_TASK_CODE = { code: "rx-dispense", display: "調剤" };
 
 /**
@@ -39,9 +37,15 @@ export const RX_TASK_STATUS_OPTIONS: { code: RxTaskStatus; display: string }[] =
   { code: "cancelled", display: "中止" },
 ];
 
-export function rxTaskStatusDisplay(status: RxTaskStatus): string {
-  return RX_TASK_STATUS_OPTIONS.find((o) => o.code === status)?.display ?? status;
-}
+const helpers = createTaskHelpers<RxTaskStatus>({
+  taskCode: RX_TASK_CODE,
+  statusOptions: RX_TASK_STATUS_OPTIONS,
+  // 調剤済(in-progress)で部門(薬剤部)の作業は終わる。実施済への遷移では
+  // executionPeriod.end を動かさない。
+  preserveEnd: true,
+});
+
+export const rxTaskStatusDisplay = helpers.statusDisplay;
 
 /** 一覧の行から押せる操作。検体検査の LabTaskAction と同じ形。 */
 export interface RxTaskAction {
@@ -79,82 +83,16 @@ export function rxTaskActions(status: RxTaskStatus): RxTaskAction[] {
 }
 
 /** Task が処方(調剤)の進捗かどうか。検体検査など他部門との振り分けに使う。 */
-export function isRxTask(task: fhir4.Task): boolean {
-  return Boolean(
-    task.code?.coding?.some((c) => c.system === TASK_CODE_SYSTEM && c.code === RX_TASK_CODE.code),
-  );
-}
+export const isRxTask = helpers.isTask;
 
 /** 進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
-export function rxTaskStatus(task: fhir4.Task | undefined): RxTaskStatus {
-  const status = task?.status;
-  return isRxTaskStatus(status) ? status : "requested";
-}
-
-function isRxTaskStatus(status: string | undefined): status is RxTaskStatus {
-  return RX_TASK_STATUS_OPTIONS.some((o) => o.code === status);
-}
+export const rxTaskStatus = helpers.taskStatus;
 
 /** ServiceRequest の id → その進捗。焦点(focus)で突き合わせる。 */
-export function rxTasksByOrderId(tasks: fhir4.Task[]): Map<string, fhir4.Task> {
-  const byOrderId = new Map<string, fhir4.Task>();
-  for (const task of tasks) {
-    if (!isRxTask(task)) continue;
-    const orderId = task.focus?.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
-    if (orderId) byOrderId.set(orderId, task);
-  }
-  return byOrderId;
-}
+export const rxTasksByOrderId = helpers.tasksByOrderId;
 
 /**
- * ステータスを変えた Task。まだ無ければ作る(組み立ての理由は radTaskHelpers の
- * buildRadTaskUpdate を参照。executionPeriod は受付で start、調剤で end)。
+ * ステータスを変えた Task。まだ無ければ作る(組み立ては taskHelpers を参照。
+ * executionPeriod は受付で start、調剤で end)。
  */
-export function buildRxTaskUpdate(
-  task: fhir4.Task | undefined,
-  order: fhir4.ServiceRequest,
-  status: RxTaskStatus,
-): fhir4.Task {
-  const now = toFhirDateTime(toDateTimeInput(new Date()));
-  const patientReference = order.subject?.reference ?? "";
-
-  const next: fhir4.Task = {
-    ...(task ?? {}),
-    resourceType: "Task",
-    status,
-    // 依頼を受けて実施する作業なので filler-order(受け手が起こしたオーダー)。
-    intent: "filler-order",
-    code: {
-      coding: [{ system: TASK_CODE_SYSTEM, ...RX_TASK_CODE }],
-      text: RX_TASK_CODE.display,
-    },
-    focus: { reference: `ServiceRequest/${order.id}` },
-    // Task.for が無いと患者コンパートメントに入らない(radTaskHelpers と同じ)。
-    ...(patientReference ? { for: { reference: patientReference } } : {}),
-    authoredOn: task?.authoredOn ?? now,
-    lastModified: now,
-  };
-
-  if (order.priority) next.priority = order.priority;
-  if (order.requester) next.requester = order.requester;
-
-  const period = executionPeriod(task, status, now);
-  if (period) next.executionPeriod = period;
-  else delete next.executionPeriod;
-
-  return next;
-}
-
-function executionPeriod(
-  task: fhir4.Task | undefined,
-  status: RxTaskStatus,
-  now: string,
-): fhir4.Period | undefined {
-  // 依頼済に戻す/中止するのは「部門が作業した時間帯」が無いのと同じ。
-  if (status === "requested" || status === "cancelled") return undefined;
-
-  const start = task?.executionPeriod?.start ?? now;
-  if (status === "accepted") return { start };
-  // 調剤済で部門(薬剤部)の作業は終わる。実施済への遷移では end を動かさない。
-  return { start, end: task?.executionPeriod?.end ?? now };
-}
+export const buildRxTaskUpdate = helpers.buildTaskUpdate;

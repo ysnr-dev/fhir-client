@@ -1,3 +1,5 @@
+import { today } from "../lib/dates";
+import { codingBySystem } from "./shared";
 import type { Disease, Modifier } from "../api/masterClient";
 
 // JP Core / 電子カルテ情報共有サービス(eCS)で定義されている正式な URI 群。
@@ -141,11 +143,6 @@ export function problemSucceededByIds(condition: fhir4.Condition): string[] {
   return referenceIds(condition, PROBLEM_SUCCEEDED_BY_EXT_URL);
 }
 
-/** 引き継ぎ先が設定されているか(表示上「統合済み」として扱う)。 */
-export function isSucceeded(condition: fhir4.Condition): boolean {
-  return problemSucceededByIds(condition).length > 0;
-}
-
 /**
  * 指定したプロブレムと、その配下の下位プロブレムすべての id。
  * 親で絞り込んだときに子の記録も対象にするために使う。
@@ -228,6 +225,17 @@ export function problemRefFromReference(
   return conditionId ? { conditionId, display: reference?.display ?? "" } : null;
 }
 
+// オーダー(ServiceRequest)が対象としているプロブレム。編集フォームの復元と
+// カルテのバッジ表示の双方から使う。reasonReference には Condition 以外も
+// 入りうる仕様なので、Condition 参照だけを拾う。
+export function orderProblem(sr: fhir4.ServiceRequest | undefined): ProblemRef | null {
+  for (const reference of sr?.reasonReference ?? []) {
+    const problem = problemRefFromReference(reference);
+    if (problem) return problem;
+  }
+  return null;
+}
+
 // 転帰区分。Condition.clinicalStatus(required binding)のコードへ直接対応させる。
 // 終了日(abatement)を入れる場合は active 以外でなければならない(FHIR con-4)。
 export const OUTCOME_OPTIONS = [
@@ -280,10 +288,6 @@ export interface ConditionFormValues {
   parentId: string;
   /** 引き継ぎ先(統合・分割)。プロブレム区分のときだけ使う。 */
   succeededByIds: string[];
-}
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 export function emptyConditionForm(): ConditionFormValues {
@@ -468,13 +472,6 @@ export function buildCondition(
 }
 
 // ---- 一覧・詳細表示のための parse ----
-
-function codingBySystem(
-  codings: fhir4.Coding[] | undefined,
-  system: string,
-): fhir4.Coding | undefined {
-  return codings?.find((c) => c.system === system);
-}
 
 export interface ConditionSummary {
   id: string;

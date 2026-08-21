@@ -1,5 +1,6 @@
 module Master
   class MedicinesController < BaseController
+    include Importable
     before_action :set_record, only: %i[show update destroy]
 
     def index
@@ -33,39 +34,6 @@ module Master
       scope = filter_by_yakko_name(scope, params[:yakko_name]) if params[:yakko_name].present?
 
       render json: paginate(scope)
-    end
-
-    def show
-      render json: @record
-    end
-
-    def create
-      record = Master::Medicine.new(record_params)
-      if record.save
-        render json: record, status: :created
-      else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def destroy
-      @record.destroy!
-      head :no_content
-    end
-
-    def import
-      return render json: { error: "file is required" }, status: :unprocessable_content if params[:file].blank?
-
-      result = MasterImport::MedicineImporter.call(params[:file])
-      render json: { imported: result.imported_count }
     end
 
     private
@@ -132,14 +100,6 @@ module Master
       return scope.none if codes.empty?
 
       scope.where("LEFT(master_medicines.#{code_column}, 4) IN (?)", codes)
-    end
-
-    def set_record
-      @record = Master::Medicine.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::Medicine.column_names - %w[id created_at updated_at])
     end
   end
 end

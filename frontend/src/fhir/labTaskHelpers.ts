@@ -1,4 +1,4 @@
-import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
+import { createTaskHelpers } from "./taskHelpers";
 
 // 検体検査の進捗(受付・到着)。放射線検査(radTaskHelpers)と同じ考え方で、
 // オーダーの ServiceRequest はそのままにして、進捗を Task で別に持つ。
@@ -14,8 +14,6 @@ import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 // スキャンで進む(docs/lab-arrival-design.md。管ごとの到着は上流の Specimen に記録し、
 // オーダーの全検体が揃った時点で部門の作業は終わりなので Task を実施済にする)。
 
-/** Task.code。部門の作業種別(放射線検査の rad-exam と同じ CodeSystem)。 */
-const TASK_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/task-code";
 export const LAB_TASK_CODE = { code: "lab-exam", display: "検体検査" };
 
 /**
@@ -35,9 +33,12 @@ export const LAB_TASK_STATUS_OPTIONS: { code: LabTaskStatus; display: string }[]
   { code: "cancelled", display: "中止" },
 ];
 
-export function labTaskStatusDisplay(status: LabTaskStatus): string {
-  return LAB_TASK_STATUS_OPTIONS.find((o) => o.code === status)?.display ?? status;
-}
+const helpers = createTaskHelpers<LabTaskStatus>({
+  taskCode: LAB_TASK_CODE,
+  statusOptions: LAB_TASK_STATUS_OPTIONS,
+});
+
+export const labTaskStatusDisplay = helpers.statusDisplay;
 
 /** 一覧の行から押せる操作。放射線検査の RadTaskAction と同じ形。 */
 export interface LabTaskAction {
@@ -79,81 +80,16 @@ export function labTaskActions(status: LabTaskStatus): LabTaskAction[] {
 }
 
 /** Task が検体検査の進捗かどうか。放射線検査など他部門との振り分けに使う。 */
-export function isLabTask(task: fhir4.Task): boolean {
-  return Boolean(
-    task.code?.coding?.some((c) => c.system === TASK_CODE_SYSTEM && c.code === LAB_TASK_CODE.code),
-  );
-}
+export const isLabTask = helpers.isTask;
 
 /** 進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
-export function labTaskStatus(task: fhir4.Task | undefined): LabTaskStatus {
-  const status = task?.status;
-  return isLabTaskStatus(status) ? status : "requested";
-}
-
-function isLabTaskStatus(status: string | undefined): status is LabTaskStatus {
-  return LAB_TASK_STATUS_OPTIONS.some((o) => o.code === status);
-}
+export const labTaskStatus = helpers.taskStatus;
 
 /** ServiceRequest の id → その進捗。焦点(focus)で突き合わせる。 */
-export function labTasksByOrderId(tasks: fhir4.Task[]): Map<string, fhir4.Task> {
-  const byOrderId = new Map<string, fhir4.Task>();
-  for (const task of tasks) {
-    if (!isLabTask(task)) continue;
-    const orderId = task.focus?.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
-    if (orderId) byOrderId.set(orderId, task);
-  }
-  return byOrderId;
-}
+export const labTasksByOrderId = helpers.tasksByOrderId;
 
 /**
- * ステータスを変えた Task。まだ無ければ作る(組み立ての理由は radTaskHelpers の
- * buildRadTaskUpdate を参照。executionPeriod は受付で start、到着で end)。
+ * ステータスを変えた Task。まだ無ければ作る(組み立ては taskHelpers を参照。
+ * executionPeriod は受付で start、到着で end)。
  */
-export function buildLabTaskUpdate(
-  task: fhir4.Task | undefined,
-  order: fhir4.ServiceRequest,
-  status: LabTaskStatus,
-): fhir4.Task {
-  const now = toFhirDateTime(toDateTimeInput(new Date()));
-  const patientReference = order.subject?.reference ?? "";
-
-  const next: fhir4.Task = {
-    ...(task ?? {}),
-    resourceType: "Task",
-    status,
-    // 依頼を受けて実施する作業なので filler-order(受け手が起こしたオーダー)。
-    intent: "filler-order",
-    code: {
-      coding: [{ system: TASK_CODE_SYSTEM, ...LAB_TASK_CODE }],
-      text: LAB_TASK_CODE.display,
-    },
-    focus: { reference: `ServiceRequest/${order.id}` },
-    // Task.for が無いと患者コンパートメントに入らない(radTaskHelpers と同じ)。
-    ...(patientReference ? { for: { reference: patientReference } } : {}),
-    authoredOn: task?.authoredOn ?? now,
-    lastModified: now,
-  };
-
-  if (order.priority) next.priority = order.priority;
-  if (order.requester) next.requester = order.requester;
-
-  const period = executionPeriod(task, status, now);
-  if (period) next.executionPeriod = period;
-  else delete next.executionPeriod;
-
-  return next;
-}
-
-function executionPeriod(
-  task: fhir4.Task | undefined,
-  status: LabTaskStatus,
-  now: string,
-): fhir4.Period | undefined {
-  // 依頼済に戻す/中止するのは「部門が作業した時間帯」が無いのと同じ。
-  if (status === "requested" || status === "cancelled") return undefined;
-
-  const start = task?.executionPeriod?.start ?? now;
-  if (status === "accepted") return { start };
-  return { start, end: now };
-}
+export const buildLabTaskUpdate = helpers.buildTaskUpdate;

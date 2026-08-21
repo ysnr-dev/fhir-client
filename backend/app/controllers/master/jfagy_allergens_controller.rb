@@ -1,5 +1,6 @@
 module Master
   class JfagyAllergensController < BaseController
+    include Importable
     def index
       scope = Master::JfagyAllergen.all
       scope = scope.where(jfagy_code: params[:jfagy_code]) if params[:jfagy_code].present?
@@ -18,13 +19,6 @@ module Master
       end
 
       render json: paginate(scope)
-    end
-
-    def import
-      return render json: { error: "file is required" }, status: :unprocessable_content if params[:file].blank?
-
-      result = MasterImport::JfagyAllergenImporter.call(params[:file])
-      render json: { imported: result.imported_count }
     end
   end
 end

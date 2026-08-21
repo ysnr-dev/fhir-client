@@ -1,3 +1,4 @@
+import { formatDateTime } from "../lib/dates";
 import type { OauthClientSummary } from "../api/adminClient";
 import { useDeleteOauthClient } from "../api/adminQueries";
 import { ErrorBanner } from "./ErrorBanner";
@@ -12,11 +13,6 @@ const AUTH_METHOD_LABELS: Record<OauthClientSummary["auth_method"], string> = {
   private_key_jwt: "private_key_jwt",
   none: "PKCE のみ",
 };
-
-function formatDateTime(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString("ja-JP");
-}
 
 export function OauthClientTable({ clients }: { clients: OauthClientSummary[] }) {
   const deleteClient = useDeleteOauthClient();

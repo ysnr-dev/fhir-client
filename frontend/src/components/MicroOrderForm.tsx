@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useId, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import {
   useFrequentMicroOrganisms,
@@ -76,9 +77,7 @@ export function MicroOrderForm({
     );
   }, [orderItems.data]);
 
-  function update<K extends keyof MicroOrderFormValues>(key: K, value: MicroOrderFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function updateSpecimen(patch: Partial<MicroSpecimenValues>) {
     setValues((v) => ({ ...v, specimen: { ...v.specimen, ...patch } }));

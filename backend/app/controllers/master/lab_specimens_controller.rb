@@ -2,6 +2,7 @@ module Master
   # 検体(材料)マスタのメンテナンス。JLAC11 の材料コード一覧から取り込み、
   # 略称・既定採取管などの手入力列を画面で整備する。
   class LabSpecimensController < BaseController
+    include Importable
     before_action :set_record, only: %i[show update destroy]
 
     def index
@@ -33,49 +34,6 @@ module Master
         .map(&:first)
 
       render json: list
-    end
-
-    def show
-      render json: @record
-    end
-
-    def create
-      record = Master::LabSpecimen.new(record_params)
-      if record.save
-        render json: record, status: :created
-      else
-        render json: { errors: record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def update
-      if @record.update(record_params)
-        render json: @record
-      else
-        render json: { errors: @record.errors.full_messages }, status: :unprocessable_content
-      end
-    end
-
-    def destroy
-      @record.destroy!
-      head :no_content
-    end
-
-    def import
-      return render json: { error: "file is required" }, status: :unprocessable_content if params[:file].blank?
-
-      result = MasterImport::LabSpecimenImporter.call(params[:file])
-      render json: { imported: result.imported_count }
-    end
-
-    private
-
-    def set_record
-      @record = Master::LabSpecimen.find(params[:id])
-    end
-
-    def record_params
-      params.permit(Master::LabSpecimen.column_names - %w[id created_at updated_at])
     end
   end
 end

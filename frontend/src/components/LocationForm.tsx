@@ -1,3 +1,4 @@
+import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
 import { useOrganizationOptions } from "../api/queries";
 import {
@@ -29,9 +30,7 @@ export function LocationForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const { organizations } = useOrganizationOptions();
 
-  function update<K extends keyof LocationFormValues>(key: K, value: LocationFormValues[K]) {
-    setValues((v) => ({ ...v, [key]: value }));
-  }
+  const update = makeFieldUpdater(setValues);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
