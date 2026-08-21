@@ -165,6 +165,10 @@ Rails.application.routes.draw do
     resources :jfagy_allergens, only: %i[index] do
       collection { post :import }
     end
+    # 剤形・規格・銘柄不明コード(J-FAGY医薬品領域)も検索専用(取込で全件洗い替え)。
+    resources :jfagy_drugs, only: %i[index] do
+      collection { post :import }
+    end
     # シェーマ(診療記録に描き込む台紙画像)。カテゴリは parent_id の隣接リストで
     # 任意の深さの階層を持つ。
     resources :schema_categories, only: %i[index show create update destroy]

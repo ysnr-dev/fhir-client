@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_19_010000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_22_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -133,6 +133,19 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_19_010000) do
     t.index ["jfagy_code"], name: "index_master_jfagy_allergens_on_jfagy_code", unique: true
     t.index ["search_kana"], name: "index_master_jfagy_allergens_on_search_kana"
     t.index ["search_name"], name: "index_master_jfagy_allergens_on_search_name"
+  end
+
+  create_table "master_jfagy_drugs", force: :cascade do |t|
+    t.string "jfagy_code", null: false
+    t.string "name", null: false
+    t.string "record_date"
+    t.string "end_date"
+    t.string "change_category"
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["jfagy_code"], name: "index_master_jfagy_drugs_on_jfagy_code", unique: true
+    t.index ["search_name"], name: "index_master_jfagy_drugs_on_search_name"
   end
 
   create_table "master_lab_containers", force: :cascade do |t|

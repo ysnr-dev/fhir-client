@@ -9,6 +9,7 @@ export type MasterType =
   | "modifiers"
   | "disease_indexes"
   | "jfagy_allergens"
+  | "jfagy_drugs"
   | "lab_specimens"
   | "rad_jj1017_codes"
   | "rad_frequent_codes"

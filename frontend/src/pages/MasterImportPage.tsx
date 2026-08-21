@@ -60,6 +60,13 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".csv",
   },
   {
+    type: "jfagy_drugs",
+    label: "剤形・規格・銘柄不明コードマスタ",
+    formatHint:
+      "J-FAGY医薬品(GCMコード) 剤形・規格・銘柄不明コードマスタ_*.csv（UTF-8、ヘッダあり・6列）",
+    accept: ".csv",
+  },
+  {
     type: "rad_jj1017_codes",
     label: "JJ1017コードマスタ",
     formatHint:
