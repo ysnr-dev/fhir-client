@@ -1,4 +1,4 @@
-import { usePatient } from "../api/queries";
+import { usePatient, usePatientAdmission } from "../api/queries";
 import { calculateAge, displayKana, displayName, genderLabel } from "../fhir/patientHelpers";
 
 interface PatientHeaderProps {
@@ -7,8 +7,15 @@ interface PatientHeaderProps {
 
 export function PatientHeader({ patientId }: PatientHeaderProps) {
   const patient = usePatient(patientId);
+  // 入院中なら居場所を添える(外来のときは項目ごと出さない)。
+  const admission = usePatientAdmission(patientId);
   const p = patient.data?.data;
   if (!p) return null;
+
+  // 「東3階病棟 301号室」。どの床かまでは出さない。
+  const admissionPlace = admission.data
+    ? [admission.data.wardName, admission.data.roomName].filter(Boolean).join(" ")
+    : "";
 
   const kana = displayKana(p);
   const age = p.birthDate ? calculateAge(p.birthDate) : undefined;
@@ -38,6 +45,12 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
         <span className="patient-header__label">性別</span>
         <span className="patient-header__value">{genderLabel(p.gender)}</span>
       </span>
+      {admissionPlace && (
+        <span className="patient-header__item">
+          <span className="patient-header__label">入院</span>
+          <span className="patient-header__value">{admissionPlace}</span>
+        </span>
+      )}
     </div>
   );
 }

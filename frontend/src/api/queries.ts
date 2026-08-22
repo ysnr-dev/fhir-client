@@ -18,6 +18,9 @@ import { sortDepartmentsByCode } from "../fhir/departmentHelpers";
 import { LOCATION_TYPE_CODES } from "../fhir/locationHelpers";
 import {
   MAX_BED_COUNT,
+  PHYSICAL_TYPE_SYSTEM,
+  ROOM_PHYSICAL_TYPE,
+  WARD_PHYSICAL_TYPE,
   WARD_TYPE_CODE,
   bedNumber,
   buildRoomDeleteBundle,
@@ -33,6 +36,7 @@ import {
   PLANNED_STATUS,
   buildCancelledEncounter,
   buildDischargedEncounter,
+  encounterBedId,
   buildEncounterUpdateBundle,
   latestEncounterByBed,
 } from "../fhir/encounterHelpers";
@@ -1316,6 +1320,87 @@ export function usePlannedAdmissions() {
     queryKey: ["Encounter", "planned-admissions"],
     queryFn: fetchPlannedAdmissions,
     placeholderData: keepPreviousData,
+  });
+}
+
+// ---- カルテの患者情報に出す入院 ----
+//
+// 「その患者が今どの病棟・病室に入院しているか」を患者 id だけで引く。入院患者一覧と
+// 違って病棟が分かっていないので、Encounter が指すベッドから partOf を辿って
+// 病室名・病棟名を取る(Encounter に控えた display は「301号室 ベッド1」の書き方で、
+// 病棟名も入っていないのでここでは使わない)。
+
+export interface PatientAdmission {
+  encounter: fhir4.Encounter;
+  /** 病棟名。辿れなければ空文字。 */
+  wardName: string;
+  /** 病室名。辿れなければ空文字。 */
+  roomName: string;
+}
+
+async function fetchPatientAdmission(patientId: string): Promise<PatientAdmission | null> {
+  const params = new URLSearchParams();
+  params.set("subject", `Patient/${patientId}`);
+  params.set("status", ADMISSION_STATUS);
+  params.set("class", ADMISSION_CLASS_CODE);
+  params.set("_count", "10");
+
+  const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
+  const encounters =
+    bundle.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter") ?? [];
+  // 同じ患者に入院中が 2 件並ぶことは無い想定だが、あれば入院日が新しい方を採る
+  // (データがおかしくてもカルテの見出しが壊れないように)。
+  const encounter = encounters.reduce<fhir4.Encounter | undefined>(
+    (latest, current) =>
+      !latest || (current.period?.start ?? "") > (latest.period?.start ?? "") ? current : latest,
+    undefined,
+  );
+  if (!encounter) return null;
+
+  const bedId = encounterBedId(encounter);
+  if (!bedId) return { encounter, wardName: "", roomName: "" };
+
+  // ベッドと、その上の病室・病棟をまとめて引く。階層は physicalType(wa/ro/bd)で
+  // 見分ける。_include:iterate に応えない上流でも病室までは返るので、
+  // 病棟が無ければそこから 1 件だけ読み足す。
+  const locationParams = new URLSearchParams();
+  locationParams.set("_id", bedId);
+  locationParams.append("_include", "Location:partof");
+  locationParams.append("_include:iterate", "Location:partof");
+
+  const { data: locationBundle } = await searchResource<fhir4.Location>(
+    "Location",
+    locationParams,
+  );
+  const locations =
+    locationBundle.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Location => r?.resourceType === "Location") ?? [];
+  const ofType = (code: string) =>
+    locations.find((location) =>
+      location.physicalType?.coding?.some(
+        (coding) => coding.system === PHYSICAL_TYPE_SYSTEM && coding.code === code,
+      ),
+    );
+
+  const room = ofType(ROOM_PHYSICAL_TYPE.code);
+  let ward = ofType(WARD_PHYSICAL_TYPE.code);
+  if (!ward) {
+    const wardId = room ? partOfId(room) : undefined;
+    if (wardId) ward = (await readResource<fhir4.Location>("Location", wardId)).data;
+  }
+
+  return { encounter, wardName: ward?.name ?? "", roomName: room?.name ?? "" };
+}
+
+/** 患者が入院中ならその入院と病棟名。入院していなければ null。 */
+export function usePatientAdmission(patientId: string | undefined) {
+  return useQuery({
+    queryKey: ["Encounter", "patient-admission", patientId],
+    queryFn: () => fetchPatientAdmission(patientId as string),
+    enabled: Boolean(patientId),
   });
 }
 
