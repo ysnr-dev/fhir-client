@@ -17,6 +17,8 @@ import {
   encounterDepartmentId,
   encounterDepartmentName,
   encounterNote,
+  encounterNurseIds,
+  encounterNurseNames,
   encounterPatientId,
 } from "../fhir/encounterHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
@@ -50,9 +52,10 @@ interface InpatientRow {
 interface Filters {
   departmentId: string;
   practitionerId: string;
+  nurseId: string;
 }
 
-const emptyFilters: Filters = { departmentId: "", practitionerId: "" };
+const emptyFilters: Filters = { departmentId: "", practitionerId: "", nurseId: "" };
 
 /** 参照 id と表示名の組。診療科・主治医の絞り込みの選択肢に使う。 */
 interface FilterOption {
@@ -75,15 +78,20 @@ function withRoomRowSpans(rows: Omit<InpatientRow, "roomRowSpan">[]): InpatientR
   });
 }
 
-/** 入院中の Encounter から絞り込みの選択肢を作る。名前順、重複は潰す。 */
+/**
+ * 入院中の Encounter から絞り込みの選択肢を作る。名前順、重複は潰す。
+ * 担当看護師のように 1 件の Encounter が複数の候補を持つことがあるので、
+ * pick は配列を返す。
+ */
 function filterOptions(
   encounters: fhir4.Encounter[],
-  pick: (encounter: fhir4.Encounter) => { id?: string; name: string },
+  pick: (encounter: fhir4.Encounter) => { id?: string; name: string }[],
 ): FilterOption[] {
   const byId = new Map<string, string>();
   for (const encounter of encounters) {
-    const { id, name } = pick(encounter);
-    if (id && !byId.has(id)) byId.set(id, name);
+    for (const { id, name } of pick(encounter)) {
+      if (id && !byId.has(id)) byId.set(id, name);
+    }
   }
   return [...byId]
     .map(([id, name]) => ({ id, name }))
@@ -125,7 +133,7 @@ export function InpatientListPage() {
   const byBed = inpatients.data?.byBed;
   const patientsById = inpatients.data?.patientsById;
 
-  const filtering = Boolean(filters.departmentId || filters.practitionerId);
+  const filtering = Boolean(filters.departmentId || filters.practitionerId || filters.nurseId);
 
   const rows = useMemo<InpatientRow[]>(() => {
     const all = grid.rooms.flatMap((room) => {
@@ -151,7 +159,8 @@ export function InpatientListPage() {
             (!filters.departmentId ||
               encounterDepartmentId(row.encounter) === filters.departmentId) &&
             (!filters.practitionerId ||
-              encounterAttendingId(row.encounter) === filters.practitionerId),
+              encounterAttendingId(row.encounter) === filters.practitionerId) &&
+            (!filters.nurseId || encounterNurseIds(row.encounter).includes(filters.nurseId)),
         )
       : all;
 
@@ -162,18 +171,24 @@ export function InpatientListPage() {
   // 表示中の病棟ではなく全病棟ぶんを見る。
   const departmentOptions = useMemo(
     () =>
-      filterOptions(inpatients.data?.encounters ?? [], (e) => ({
-        id: encounterDepartmentId(e),
-        name: encounterDepartmentName(e),
-      })),
+      filterOptions(inpatients.data?.encounters ?? [], (e) => [
+        { id: encounterDepartmentId(e), name: encounterDepartmentName(e) },
+      ]),
     [inpatients.data],
   );
   const practitionerOptions = useMemo(
     () =>
-      filterOptions(inpatients.data?.encounters ?? [], (e) => ({
-        id: encounterAttendingId(e),
-        name: encounterAttendingName(e),
-      })),
+      filterOptions(inpatients.data?.encounters ?? [], (e) => [
+        { id: encounterAttendingId(e), name: encounterAttendingName(e) },
+      ]),
+    [inpatients.data],
+  );
+  const nurseOptions = useMemo(
+    () =>
+      filterOptions(inpatients.data?.encounters ?? [], (e) => {
+        const ids = encounterNurseIds(e);
+        return encounterNurseNames(e).map((name, index) => ({ id: ids[index], name }));
+      }),
     [inpatients.data],
   );
 
@@ -254,6 +269,20 @@ export function InpatientListPage() {
             ))}
           </select>
         </label>
+        <label>
+          担当看護師
+          <select
+            value={filters.nurseId}
+            onChange={(e) => setFilters({ ...filters, nurseId: e.target.value })}
+          >
+            <option value="">すべて</option>
+            {nurseOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="patient-search-form__actions">
           <button type="button" onClick={() => setFilters(emptyFilters)} disabled={!filtering}>
             クリア
@@ -297,6 +326,7 @@ export function InpatientListPage() {
                   <th>性別</th>
                   <th>診療科</th>
                   <th>主治医</th>
+                  <th>担当看護師</th>
                   <th>入院日</th>
                   <th>特記事項</th>
                   <th></th>
@@ -396,6 +426,7 @@ function InpatientTableRow({
           <td>{genderLabel(patient.gender)}</td>
           <td>{encounterDepartmentName(encounter)}</td>
           <td>{encounterAttendingName(encounter)}</td>
+          <td>{encounterNurseNames(encounter).join("、") || "-"}</td>
           <td>{encounterAdmissionDate(encounter)}</td>
           <td className="inpatient__note">{encounterNote(encounter) || "-"}</td>
           <td className="patient-table__actions">
@@ -426,7 +457,7 @@ function InpatientTableRow({
         </>
       ) : (
         <>
-          <td className="inpatient__empty-bed" colSpan={7}>
+          <td className="inpatient__empty-bed" colSpan={8}>
             空床
           </td>
           <td className="patient-table__actions">

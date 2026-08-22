@@ -9,7 +9,9 @@
 //   location[0]     : ベッドの Location。病室・病棟は辿れるのでベッドだけ指す
 //                     (階層は wardHelpers.ts の冒頭を参照)
 //   serviceProvider : 診療科。診療科は partOf を持つ Organization で登録済み
-//   participant     : 主治医(種別 ATND)。未指定なら要素ごと付けない
+//   participant     : 主治医(種別 ATND)と担当看護師(種別はローカル code の nurse。
+//                     看護師を表す標準コードが ParticipationType に無いため)。複数可。
+//                     どちらも未指定なら要素ごと付けない
 //   period.start    : 入院日(時刻を持たない日付のみ)
 //
 // 特記事項は R4 の Encounter に置き場所が無いのでローカル拡張にする。上流の
@@ -36,6 +38,11 @@ export const CANCELLED_STATUS = "entered-in-error";
 /** 主治医を表す participant.type のコード(attender)。 */
 export const ATTENDING_PARTICIPANT_CODE = "ATND";
 
+// 担当看護師。ParticipationType に看護師を表すコードが無いのでローカルに建てる。
+export const PARTICIPANT_ROLE_SYSTEM =
+  "http://fhir-client.local/CodeSystem/encounter-participant-role";
+export const NURSE_PARTICIPANT_CODE = "nurse";
+
 export const ENCOUNTER_NOTE_EXTENSION_URL =
   "http://fhir-client.local/StructureDefinition/encounter-note";
 
@@ -46,6 +53,8 @@ export interface AdmissionFormValues {
   departmentId: string;
   /** 主治医。Practitioner の id。任意。 */
   practitionerId: string;
+  /** 担当看護師。Practitioner の id。複数可、任意。 */
+  nurseIds: string[];
   /** 入院日(YYYY-MM-DD)。 */
   admissionDate: string;
   /** 特記事項。任意。 */
@@ -65,6 +74,8 @@ export interface AdmissionTarget {
   bedLabel: string;
   departmentName: string;
   practitionerName: string;
+  /** 担当看護師。id と表示名の組。id は values.nurseIds を解決したもの。 */
+  nurses: { id: string; name: string }[];
 }
 
 export function buildAdmissionEncounter(
@@ -100,27 +111,27 @@ export function buildAdmissionEncounter(
     };
   }
 
+  // 主治医と担当看護師は同じ participant[] に種別違いで並べる。
+  const participants: fhir4.EncounterParticipant[] = [];
   if (values.practitionerId) {
-    encounter.participant = [
-      {
-        type: [
-          {
-            coding: [
-              {
-                system: PARTICIPATION_TYPE_SYSTEM,
-                code: ATTENDING_PARTICIPANT_CODE,
-                display: "attender",
-              },
-            ],
-          },
-        ],
-        individual: {
-          reference: `Practitioner/${values.practitionerId}`,
-          display: target.practitionerName,
-        },
-      },
-    ];
+    participants.push(
+      buildParticipant(
+        { system: PARTICIPATION_TYPE_SYSTEM, code: ATTENDING_PARTICIPANT_CODE, display: "attender" },
+        values.practitionerId,
+        target.practitionerName,
+      ),
+    );
   }
+  for (const nurse of target.nurses) {
+    participants.push(
+      buildParticipant(
+        { system: PARTICIPANT_ROLE_SYSTEM, code: NURSE_PARTICIPANT_CODE, display: "担当看護師" },
+        nurse.id,
+        nurse.name,
+      ),
+    );
+  }
+  if (participants.length > 0) encounter.participant = participants;
 
   if (values.note.trim()) {
     encounter.extension = [
@@ -129,6 +140,17 @@ export function buildAdmissionEncounter(
   }
 
   return encounter;
+}
+
+function buildParticipant(
+  type: fhir4.Coding,
+  practitionerId: string,
+  name: string,
+): fhir4.EncounterParticipant {
+  return {
+    type: [{ coding: [type] }],
+    individual: { reference: `Practitioner/${practitionerId}`, display: name },
+  };
 }
 
 // subject.display 用。patientHelpers を読むと循環しかねないのでここで最小限に組む。
@@ -178,6 +200,30 @@ export function encounterAttendingName(encounter: fhir4.Encounter): string {
 
 export function encounterAttendingId(encounter: fhir4.Encounter): string | undefined {
   return referenceId(attendingParticipant(encounter)?.individual?.reference);
+}
+
+// participant の中から担当看護師(複数可)を拾う。
+function nurseParticipants(encounter: fhir4.Encounter): fhir4.EncounterParticipant[] {
+  return (encounter.participant ?? []).filter((p) =>
+    p.type?.some((t) =>
+      t.coding?.some(
+        (c) => c.system === PARTICIPANT_ROLE_SYSTEM && c.code === NURSE_PARTICIPANT_CODE,
+      ),
+    ),
+  );
+}
+
+/** 担当看護師の氏名。登録順のまま返す。 */
+export function encounterNurseNames(encounter: fhir4.Encounter): string[] {
+  return nurseParticipants(encounter)
+    .map((p) => p.individual?.display)
+    .filter((name): name is string => Boolean(name));
+}
+
+export function encounterNurseIds(encounter: fhir4.Encounter): string[] {
+  return nurseParticipants(encounter)
+    .map((p) => referenceId(p.individual?.reference))
+    .filter((id): id is string => Boolean(id));
 }
 
 /** 入院日。時刻付きで入っていても日付だけ返す。 */

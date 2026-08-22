@@ -21,8 +21,8 @@ import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { Pagination } from "./Pagination";
 
-// 空きベッドへの入院登録。患者を選ぶまでは検索、選んだら診療科・主治医・入院日・
-// 特記事項を添えて登録する二段構え(当日受付モーダルと同じ形)。
+// 空きベッドへの入院登録。患者を選ぶまでは検索、選んだら診療科・主治医・担当看護師・
+// 入院日・特記事項を添えて登録する二段構え(当日受付モーダルと同じ形)。
 
 interface AdmissionModalProps {
   bed: fhir4.Location;
@@ -42,10 +42,13 @@ export function AdmissionModal({
   const [values, setValues] = useState<AdmissionFormValues>({
     departmentId: "",
     practitionerId: "",
+    nurseIds: [],
     admissionDate: today(),
     note: "",
   });
   const [validationError, setValidationError] = useState<string | null>(null);
+  // 担当看護師セレクトの選択中の値。追加したら空に戻すので values とは別に持つ。
+  const [nursePick, setNursePick] = useState("");
 
   const departments = useSelfDepartments();
   const practitioners = usePractitionerOptions();
@@ -53,6 +56,29 @@ export function AdmissionModal({
 
   const update = makeFieldUpdater(setValues);
   const bedLabel = bedDisplayName(bed, roomName);
+
+  function addNurse(id: string) {
+    if (!id) return;
+    setValues((current) =>
+      current.nurseIds.includes(id)
+        ? current
+        : { ...current, nurseIds: [...current.nurseIds, id] },
+    );
+    // 追加したらセレクトは「選択してください」に戻す。続けて次の人を選べる。
+    setNursePick("");
+  }
+
+  function removeNurse(id: string) {
+    setValues((current) => ({
+      ...current,
+      nurseIds: current.nurseIds.filter((n) => n !== id),
+    }));
+  }
+
+  function practitionerName(id: string): string {
+    const found = practitioners.practitioners.find((p) => p.id === id);
+    return found ? practitionerDisplayName(found) : id;
+  }
 
   function handleSubmit() {
     if (!patient?.id || !bed.id) return;
@@ -75,6 +101,10 @@ export function AdmissionModal({
 
     const department = departments.departments.find((d) => d.id === values.departmentId);
     const practitioner = practitioners.practitioners.find((p) => p.id === values.practitionerId);
+    const nurses = values.nurseIds
+      .map((id) => practitioners.practitioners.find((p) => p.id === id))
+      .filter((p): p is fhir4.Practitioner => Boolean(p?.id))
+      .map((p) => ({ id: p.id as string, name: practitionerDisplayName(p) }));
 
     const encounter = buildAdmissionEncounter(
       patient,
@@ -83,6 +113,7 @@ export function AdmissionModal({
         bedLabel,
         departmentName: department ? departmentDisplayName(department) : "",
         practitionerName: practitioner ? practitionerDisplayName(practitioner) : "",
+        nurses,
       },
       values,
     );
@@ -142,6 +173,49 @@ export function AdmissionModal({
                 ))}
               </select>
             </label>
+            <div className="admission__nurses">
+              {/* 複数選べるので、セレクトで 1 人ずつ足して下に並べる。
+                  select multiple は Ctrl 押しながらのクリックが要って選び方が
+                  見て分からないため使わない。 */}
+              <label>
+                担当看護師
+                <div className="admission__nurse-pick">
+                  <select value={nursePick} onChange={(e) => setNursePick(e.target.value)}>
+                    <option value="">看護師を選択</option>
+                    {practitioners.practitioners
+                      // 選んだ人はセレクトから消して、二重に足せないようにする。
+                      .filter((p) => !values.nurseIds.includes(p.id as string))
+                      .map((practitioner) => (
+                        <option key={practitioner.id} value={practitioner.id}>
+                          {practitionerDisplayName(practitioner)}
+                        </option>
+                      ))}
+                  </select>
+                  <button type="button" onClick={() => addNurse(nursePick)} disabled={!nursePick}>
+                    追加
+                  </button>
+                </div>
+              </label>
+
+              {values.nurseIds.length > 0 && (
+                <ul className="admission__nurse-chips">
+                  {values.nurseIds.map((id) => (
+                    <li key={id}>
+                      {practitionerName(id)}
+                      <button
+                        type="button"
+                        className="order-select__remove"
+                        onClick={() => removeNurse(id)}
+                        aria-label={`${practitionerName(id)} を担当から外す`}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             <label>
               入院日(必須)
               <input
