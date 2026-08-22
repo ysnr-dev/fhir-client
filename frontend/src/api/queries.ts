@@ -29,6 +29,7 @@ import {
 import {
   ADMISSION_CLASS_CODE,
   ADMISSION_STATUS,
+  DISCHARGED_STATUS,
   buildCancelledEncounter,
   buildDischargedEncounter,
   buildEncounterUpdateBundle,
@@ -1136,10 +1137,17 @@ export function useWardGrid(wardId: string | undefined) {
 // 入院は Encounter 1 件で「その患者が今どのベッドに居るか」を表す
 // (組み立て方は fhir/encounterHelpers.ts の冒頭)。
 //
-// 病棟で絞らず院内の入院中を全部取ってからベッド id で突き合わせる。病棟の
+// 病棟で絞らず院内の入院を全部取ってからベッド id で突き合わせる。病棟の
 // ベッド id を並べた location=... で引くこともできるが、ベッドの数だけ URL が
-// 伸びる。入院中の件数はベッド総数が上限で高が知れているうえ、全部持っていれば
+// 伸びる。件数はベッド総数が上限で高が知れているうえ、全部持っていれば
 // 「この患者は既に別の病棟に入院している」の判定も追加のリクエスト無しでできる。
+//
+// 「その日に在院していた患者」を出すので、退院済み(finished)も含めて期間が
+// その日に重なるものを引く。上流の date は eq が「期間を完全に含む」で重なりでは
+// ないため、重なりは ge と le の AND で表す(上流 period_fragment のコメント参照):
+//   date=ge<日> → 退院していない、またはその日以降に退院した
+//   date=le<日> → その日までに入院している
+// 取り消した入院(entered-in-error)は在院ではないので status で外す。
 
 const INPATIENT_PAGE = 100;
 const INPATIENT_MAX_PAGES = 5;
@@ -1155,15 +1163,18 @@ export interface InpatientResult {
   truncated: boolean;
 }
 
-async function fetchInpatients(): Promise<InpatientResult> {
+async function fetchInpatients(date: string): Promise<InpatientResult> {
   const encounters: fhir4.Encounter[] = [];
   const patientsById = new Map<string, fhir4.Patient>();
   let truncated = false;
 
   for (let page = 0; page < INPATIENT_MAX_PAGES; page += 1) {
     const params = new URLSearchParams();
-    params.set("status", ADMISSION_STATUS);
+    params.set("status", `${ADMISSION_STATUS},${DISCHARGED_STATUS}`);
     params.set("class", ADMISSION_CLASS_CODE);
+    // 同じ名前を 2 回渡すと AND になる(重なりの条件。上のコメント参照)。
+    params.append("date", `ge${date}`);
+    params.append("date", `le${date}`);
     params.set("_count", String(INPATIENT_PAGE));
     params.set("_offset", String(page * INPATIENT_PAGE));
     // 氏名・カナ・生年月日・性別を出すのに患者の現物が要る。
@@ -1189,10 +1200,12 @@ async function fetchInpatients(): Promise<InpatientResult> {
   return { byBed: latestEncounterByBed(encounters), patientsById, encounters, truncated };
 }
 
-export function useInpatientEncounters() {
+/** date(YYYY-MM-DD)にベッドを使っていた入院。既定は当日ぶん。 */
+export function useInpatientEncounters(date: string) {
   return useQuery({
-    queryKey: ["Encounter", "inpatients"],
-    queryFn: fetchInpatients,
+    queryKey: ["Encounter", "inpatients", date],
+    queryFn: () => fetchInpatients(date),
+    enabled: Boolean(date),
     placeholderData: keepPreviousData,
   });
 }

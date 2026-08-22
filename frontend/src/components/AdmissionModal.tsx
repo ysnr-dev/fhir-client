@@ -27,6 +27,8 @@ import { Pagination } from "./Pagination";
 interface AdmissionModalProps {
   bed: fhir4.Location;
   roomName: string;
+  /** 入院日の既定値。一覧で見ている日を渡す。 */
+  defaultAdmissionDate?: string;
   /** 患者 id -> 既に入院しているベッドの表示名。二重入院の警告に使う。 */
   admittedBedLabelByPatientId: Map<string, string>;
   onClose: () => void;
@@ -35,6 +37,7 @@ interface AdmissionModalProps {
 export function AdmissionModal({
   bed,
   roomName,
+  defaultAdmissionDate,
   admittedBedLabelByPatientId,
   onClose,
 }: AdmissionModalProps) {
@@ -43,7 +46,7 @@ export function AdmissionModal({
     departmentId: "",
     practitionerId: "",
     nurseIds: [],
-    admissionDate: today(),
+    admissionDate: defaultAdmissionDate || today(),
     note: "",
   });
   const [validationError, setValidationError] = useState<string | null>(null);

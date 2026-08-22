@@ -28,8 +28,10 @@ import {
   displayName,
   genderLabel,
 } from "../fhir/patientHelpers";
+import { addDays } from "../fhir/scheduleHelpers";
 import { bedDisplayName, bedNumber } from "../fhir/wardHelpers";
 import { useKarteLinkState } from "../karteReturn";
+import { today } from "../lib/dates";
 
 // 入院患者一覧。病棟を選ぶと、その病棟の病室・ベッドを 1 行 1 床で並べ、
 // 埋まっている床には入院中の患者を、空いている床には「患者選択」を出す。
@@ -37,8 +39,11 @@ import { useKarteLinkState } from "../karteReturn";
 // 入院は Encounter(fhir/encounterHelpers.ts)。ベッドの Location と Encounter を
 // ベッド id で突き合わせるだけなので、病室・ベッドの側は病棟マスタそのまま。
 //
-// 選んだ病棟は URL の ?ward= に持つ。カルテへ渡す戻り先(karteFrom)は検索文字列を
-// 含むので、カルテから戻ったときに同じ病棟が開く。
+// 選んだ病棟と日付は URL の ?ward= / ?date= に持つ。カルテへ渡す戻り先(karteFrom)は
+// 検索文字列を含むので、カルテから戻ったときに同じ病棟・同じ日が開く。
+//
+// 日付は「その日にベッドを使っていた人」を出すためのもの(退院済みも含む)で、
+// 診療科・主治医・担当看護師の絞り込みとは別扱い。日付を変えても空床は出す。
 
 interface InpatientRow {
   room: fhir4.Location;
@@ -101,6 +106,17 @@ function filterOptions(
 export function InpatientListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const wardId = searchParams.get("ward") ?? "";
+  const date = searchParams.get("date") || today();
+
+  // ward と date は URL で一緒に持つので、片方だけ変えるときも他方を残す。
+  function setParams(next: { ward?: string; date?: string }, replace = false) {
+    const params = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(next)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
+    setSearchParams(params, { replace });
+  }
   const [admissionTarget, setAdmissionTarget] = useState<{
     bed: fhir4.Location;
     roomName: string;
@@ -117,7 +133,7 @@ export function InpatientListPage() {
 
   const wardOptions = useWardOptions();
   const grid = useWardGrid(wardId || undefined);
-  const inpatients = useInpatientEncounters();
+  const inpatients = useInpatientEncounters(date);
   const cancelAdmission = useCancelAdmission();
 
   // 病棟が未指定なら先頭の病棟を開く。履歴を汚さないよう replace で書く。
@@ -127,8 +143,10 @@ export function InpatientListPage() {
     const first = wardOptions.wards[0];
     if (!first?.id) return;
     initialized.current = true;
-    setSearchParams({ ward: first.id }, { replace: true });
-  }, [wardId, wardOptions.wards, setSearchParams]);
+    setParams({ ward: first.id }, true);
+    // setParams は searchParams に依存するが、初回に一度だけ動けばよい。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wardId, wardOptions.wards]);
 
   const byBed = inpatients.data?.byBed;
   const patientsById = inpatients.data?.patientsById;
@@ -231,7 +249,7 @@ export function InpatientListPage() {
           病棟
           <select
             value={wardId}
-            onChange={(e) => setSearchParams(e.target.value ? { ward: e.target.value } : {})}
+            onChange={(e) => setParams({ ward: e.target.value })}
           >
             <option value="">選択してください</option>
             {wardOptions.wards.map((ward) => (
@@ -240,6 +258,33 @@ export function InpatientListPage() {
               </option>
             ))}
           </select>
+        </label>
+        <label>
+          基準日
+          <div className="inpatient__date">
+            <button
+              type="button"
+              onClick={() => setParams({ date: addDays(date, -1) })}
+              aria-label="前の日"
+            >
+              &lt;
+            </button>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setParams({ date: e.target.value || today() })}
+            />
+            <button
+              type="button"
+              onClick={() => setParams({ date: addDays(date, 1) })}
+              aria-label="次の日"
+            >
+              &gt;
+            </button>
+            <button type="button" onClick={() => setParams({ date: today() })} disabled={date === today()}>
+              今日
+            </button>
+          </div>
         </label>
         <label>
           診療科
@@ -354,7 +399,7 @@ export function InpatientListPage() {
           <p className="order-select__muted">
             {filtering
               ? `絞り込み結果 ${occupied} 件`
-              : `${beds} 床中 ${occupied} 床が入院中(空床 ${beds - occupied})`}
+              : `${beds} 床中 ${occupied} 床が在院(空床 ${beds - occupied})`}
           </p>
         </>
       )}
@@ -363,6 +408,9 @@ export function InpatientListPage() {
         <AdmissionModal
           bed={admissionTarget.bed}
           roomName={admissionTarget.roomName}
+          // 過去の日を見ているときに今日で登録すると、登録した本人がその画面に
+          // 出てこない。見ている日を入院日の既定にする。
+          defaultAdmissionDate={date}
           admittedBedLabelByPatientId={admittedBedLabelByPatientId}
           onClose={() => setAdmissionTarget(null)}
         />
