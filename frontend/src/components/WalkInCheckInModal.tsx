@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
 import {
-  useDepartmentList,
+  useSelfDepartments,
   useLocationOptions,
   usePatientSearch,
   usePractitionerOptions,
@@ -37,7 +37,7 @@ export function WalkInCheckInModal({ onClose }: WalkInCheckInModalProps) {
   const [patient, setPatient] = useState<fhir4.Patient | null>(null);
   const [selects, setSelects] = useState<WalkInSelects>(emptySelects);
 
-  const departments = useDepartmentList({});
+  const departments = useSelfDepartments();
   const practitioners = usePractitionerOptions();
   const locations = useLocationOptions();
   const checkIn = useWalkInCheckIn();

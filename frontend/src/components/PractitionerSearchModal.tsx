@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from "react";
 import {
   useOrganizationOptions,
+  useSelfOrganization,
   usePractitionerRoleSearch,
   usePractitionerSearch,
 } from "../api/queries";
@@ -50,6 +51,7 @@ export function PractitionerSearchModal({
   const [offset, setOffset] = useState(0);
 
   const organizationOptions = useOrganizationOptions();
+  const { organization: selfOrganization } = useSelfOrganization();
 
   // 医療機関名しか分からない場合(保存済み回答を開いた直後)は、名称の完全一致で
   // 引き当てる。同名が複数あるときは特定できないので絞り込まない。
@@ -130,11 +132,24 @@ export function PractitionerSearchModal({
             }}
           >
             <option value="">すべて</option>
-            {organizationOptions.organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organizationDisplayName(organization)}
-              </option>
-            ))}
+            {/* 自院と連携先(他院)を分けて出す。診療情報提供書では宛先に他院を、
+                差出人に自院を選ぶので、どちらも候補に残しつつ探しやすくする。 */}
+            {selfOrganization && (
+              <optgroup label="自院">
+                <option value={selfOrganization.id}>
+                  {organizationDisplayName(selfOrganization)}
+                </option>
+              </optgroup>
+            )}
+            <optgroup label={selfOrganization ? "連携先" : "医療機関"}>
+              {organizationOptions.organizations
+                .filter((organization) => organization.id !== selfOrganization?.id)
+                .map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organizationDisplayName(organization)}
+                  </option>
+                ))}
+            </optgroup>
           </select>
         </label>
         <button type="button" onClick={runSearch} disabled={isFetching}>

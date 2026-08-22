@@ -1,7 +1,7 @@
 import { makeFieldUpdater } from "../lib/form";
 import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { LabOrderCandidate } from "../api/queries";
-import { useDepartmentList, useMicroOrderDetail } from "../api/queries";
+import { useSelfDepartments, useMicroOrderDetail } from "../api/queries";
 import {
   useFrequentMicroAntimicrobials,
   useFrequentMicroOrganisms,
@@ -112,7 +112,7 @@ export function MicroResultForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
 
-  const { departments } = useDepartmentList({});
+  const { departments } = useSelfDepartments();
   const specimenTypes = useMicroSpecimenTypeOptions();
   const frequentOrganisms = useFrequentMicroOrganisms();
   const frequentDrugs = useFrequentMicroAntimicrobials();

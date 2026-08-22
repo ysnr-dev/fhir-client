@@ -31,6 +31,11 @@ export interface ConnectionSettingsUpdate {
   fhir_admin_token?: string;
 }
 
+/** 「自院」がどの Organization か。未設定なら null。 */
+export interface FacilitySettings {
+  self_organization_id: string | null;
+}
+
 export interface ConnectionTestResult {
   ok: boolean;
   auth?: "backend_services" | "none";
@@ -178,6 +183,26 @@ export async function updateConnectionSettings(
 
 export async function testConnection(): Promise<ConnectionTestResult> {
   return adminJson<ConnectionTestResult>(`${SETTINGS}/test`, { method: "POST" });
+}
+
+// --- 自院設定 ----------------------------------------------------------------
+
+// 「どの Organization が自院か」の指定。書き込みは管理者だけなので /admin 配下に
+// あるが、読み取りはログイン済みユーザー全員が使う /facility_settings 側
+// (api/facilityClient.ts)。
+const FACILITY_SETTINGS = "/admin/facility_settings";
+
+export async function fetchAdminFacilitySettings(): Promise<FacilitySettings> {
+  return adminJson<FacilitySettings>(FACILITY_SETTINGS);
+}
+
+export async function updateAdminFacilitySettings(
+  selfOrganizationId: string,
+): Promise<FacilitySettings> {
+  return adminJson<FacilitySettings>(FACILITY_SETTINGS, {
+    method: "PATCH",
+    ...jsonBody({ self_organization_id: selfOrganizationId }),
+  });
 }
 
 // --- OAuth クライアント ------------------------------------------------------

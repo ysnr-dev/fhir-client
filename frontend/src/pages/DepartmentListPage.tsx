@@ -5,6 +5,7 @@ import {
   useDepartmentsOf,
   useOrganizationOptions,
   useSeedDepartments,
+  useSelfOrganization,
   type DepartmentSearchParams,
 } from "../api/queries";
 import { DepartmentTable } from "../components/DepartmentTable";
@@ -17,6 +18,9 @@ import { organizationDisplayName } from "../fhir/organizationHelpers";
 const emptySearch: DepartmentSearchParams = { name: "", partOfId: "" };
 
 export function DepartmentListPage() {
+  // 診療科は自院にしか作らない。自院が設定済みなら所属で絞る UI は出さず、
+  // 常に自院配下だけを見せる(自院未設定の環境では従来どおり選べる)。
+  const self = useSelfOrganization();
   // 医療機関一覧から「診療科」で来たときは、その施設で絞った状態から始める。
   const [searchParams] = useSearchParams();
   const initialSearch: DepartmentSearchParams = {
@@ -29,12 +33,21 @@ export function DepartmentListPage() {
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
 
   const { organizations } = useOrganizationOptions();
+  const effectiveSearch: DepartmentSearchParams = self.selfOrganizationId
+    ? { ...search, partOfId: self.selfOrganizationId }
+    : search;
   // 診療科コード昇順は上流でソートできないため、全件取得して画面側で並べ替え・ページングする。
-  const { departments: allDepartments, total, count, isLoading, error } = useDepartmentList(search);
+  const {
+    departments: allDepartments,
+    total,
+    count,
+    isLoading,
+    error,
+  } = useDepartmentList(effectiveSearch);
   const departments = allDepartments.slice(offset, offset + count);
 
   // 一括登録は「どの医療機関の下に作るか」が決まって初めて実行できる。
-  const seedTargetId = search.partOfId ?? "";
+  const seedTargetId = effectiveSearch.partOfId ?? "";
   const { data: existingDepartments, isFetching: loadingExisting } = useDepartmentsOf(seedTargetId);
   const seedDepartments = useSeedDepartments();
 
@@ -95,20 +108,22 @@ export function DepartmentListPage() {
       </div>
 
       <form className="patient-search-form" onSubmit={handleSearch}>
-        <label>
-          所属医療機関
-          <select
-            value={inputs.partOfId}
-            onChange={(e) => setInputs({ ...inputs, partOfId: e.target.value })}
-          >
-            <option value="">すべて</option>
-            {organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organizationDisplayName(organization)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {!self.selfOrganizationId && (
+          <label>
+            所属医療機関
+            <select
+              value={inputs.partOfId}
+              onChange={(e) => setInputs({ ...inputs, partOfId: e.target.value })}
+            >
+              <option value="">すべて</option>
+              {organizations.map((organization) => (
+                <option key={organization.id} value={organization.id}>
+                  {organizationDisplayName(organization)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
           診療科名(部分一致)
           <input
@@ -135,7 +150,7 @@ export function DepartmentListPage() {
         </button>
         <p>
           {seedTargetId
-            ? `SS-MIX2 統一診療科コード表の 2 ケタ科 ${SSMIX2_DEPARTMENT_CODES.length} 件のうち、未登録のものを選択中の医療機関に登録します。`
+            ? `SS-MIX2 統一診療科コード表の 2 ケタ科 ${SSMIX2_DEPARTMENT_CODES.length} 件のうち、未登録のものを${self.selfOrganizationId ? "自院" : "選択中の医療機関"}に登録します。`
             : "一括登録するには、所属医療機関を選んで検索してください。"}
         </p>
         {seedMessage && <p>{seedMessage}</p>}

@@ -10,7 +10,16 @@ import {
   type OrganizationFormValues,
 } from "../fhir/organizationHelpers";
 
-export function OrganizationEditPage() {
+interface OrganizationEditPageProps {
+  /** 保存後・「一覧に戻る」の戻り先。連携先医療機関の編集で差し替える。 */
+  backTo?: string;
+  title?: string;
+}
+
+export function OrganizationEditPage({
+  backTo = "/organizations",
+  title = "医療機関編集",
+}: OrganizationEditPageProps = {}) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: result, isLoading, error: loadError } = useOrganization(id);
@@ -23,7 +32,7 @@ export function OrganizationEditPage() {
     updateOrganization.mutate(
       { organization: buildOrganization(values, id), etag: result.etag },
       {
-        onSuccess: () => navigate("/organizations"),
+        onSuccess: () => navigate(backTo),
         onError: (error) => {
           if (error instanceof FhirError && error.status === 412) {
             setConflict(true);
@@ -39,8 +48,8 @@ export function OrganizationEditPage() {
     return (
       <div className="page">
         <div className="page__header">
-          <h1>医療機関編集</h1>
-          <Link to="/organizations" className="button">
+          <h1>{title}</h1>
+          <Link to={backTo} className="button">
             ← 一覧に戻る
           </Link>
         </div>
@@ -52,8 +61,8 @@ export function OrganizationEditPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>医療機関編集</h1>
-        <Link to="/organizations" className="button">
+        <h1>{title}</h1>
+        <Link to={backTo} className="button">
           ← 一覧に戻る
         </Link>
       </div>

@@ -1,6 +1,6 @@
 import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
-import { useDepartmentsOf } from "../api/queries";
+import { useDepartmentsOf, useSelfOrganization } from "../api/queries";
 import {
   departmentCode,
   departmentDisplayName,
@@ -28,6 +28,11 @@ interface PractitionerFormProps {
   initialValues?: PractitionerFormValues;
   /** 編集時: 登録済みログインアカウントの初期値。新規は省略。 */
   initialLogin?: { loginId: string; registered: boolean };
+  /**
+   * 連携先医師(他院の医師)のフォームとして使う。所属は自院ではなく他院から
+   * 選び、自院スタッフ向けの項目(所属診療科・ログイン設定)は出さない。
+   */
+  partner?: boolean;
   onSubmit: (values: PractitionerFormValues, login: PractitionerLoginValues) => void;
   submitting: boolean;
   submitError?: unknown;
@@ -37,6 +42,7 @@ interface PractitionerFormProps {
 export function PractitionerForm({
   initialValues,
   initialLogin,
+  partner = false,
   onSubmit,
   submitting,
   submitError,
@@ -54,9 +60,22 @@ export function PractitionerForm({
   const [organizationModalOpen, setOrganizationModalOpen] = useState(false);
   const [departmentToAdd, setDepartmentToAdd] = useState("");
 
+  // 自院スタッフの所属は自院で固定する(マルチテナントではないので選ばせない)。
+  // 連携先医師は他院を選ぶので固定しない。自院未設定の環境では従来どおり選ぶ。
+  const self = useSelfOrganization();
+  const fixedToSelf = !partner && Boolean(self.selfOrganizationId);
+  const organizationId = fixedToSelf ? (self.selfOrganizationId as string) : values.organizationId;
+  const organizationName = fixedToSelf
+    ? self.organization
+      ? organizationDisplayName(self.organization)
+      : ""
+    : values.organizationName;
+
   // 診療科は所属医療機関にぶら下がる Organization なので、選べるのは選択中の
   // 医療機関の配下だけ。既に追加済みのものは候補から外す。
-  const { data: facilityDepartments } = useDepartmentsOf(values.organizationId || undefined);
+  const { data: facilityDepartments } = useDepartmentsOf(
+    partner ? undefined : organizationId || undefined,
+  );
   const departmentOptions = sortDepartmentsByCode(facilityDepartments ?? []).filter(
     (department) => !values.departments.some((d) => d.organizationId === department.id),
   );
@@ -135,13 +154,21 @@ export function PractitionerForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validatePractitionerForm(values) ?? validateLogin();
+    const submitted: PractitionerFormValues = {
+      ...values,
+      organizationId,
+      organizationName,
+      // 連携先医師には自院の診療科もログインも持たせない。
+      departments: partner ? [] : values.departments,
+    };
+    const error =
+      validatePractitionerForm(submitted) ?? (partner ? null : validateLogin());
     if (error) {
       setValidationError(error);
       return;
     }
     setValidationError(null);
-    onSubmit(values, login);
+    onSubmit(submitted, partner ? { loginId: "", password: "" } : login);
   }
 
   return (
@@ -260,121 +287,130 @@ export function PractitionerForm({
         <div className="practitioner-form__organization">
           <span className="qp-field__label">所属医療機関</span>
           <span className="practitioner-form__organization-value">
-            {values.organizationName || (
-              <span className="rp-card__usage-value--empty">未選択</span>
-            )}
+            {organizationName || <span className="rp-card__usage-value--empty">未選択</span>}
           </span>
-          <button type="button" onClick={() => setOrganizationModalOpen(true)}>
-            {values.organizationId ? "変更" : "選択"}
-          </button>
-          {values.organizationId && (
-            <button
-              type="button"
-              onClick={() =>
-                setValues((v) => ({
-                  ...v,
-                  organizationId: "",
-                  organizationName: "",
-                  departments: [],
-                }))
-              }
-            >
-              クリア
-            </button>
+          {/* 自院スタッフの所属は自院で固定。選び直せるのは連携先医師のときだけ。 */}
+          {!fixedToSelf && (
+            <>
+              <button type="button" onClick={() => setOrganizationModalOpen(true)}>
+                {values.organizationId ? "変更" : "選択"}
+              </button>
+              {values.organizationId && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setValues((v) => ({
+                      ...v,
+                      organizationId: "",
+                      organizationName: "",
+                      departments: [],
+                    }))
+                  }
+                >
+                  クリア
+                </button>
+              )}
+            </>
           )}
         </div>
       </fieldset>
 
-      <fieldset className="practitioner-form__role">
-        <legend>所属診療科</legend>
-        {values.organizationId ? (
-          <>
-            <div className="practitioner-form__department-add">
-              <select
-                value={departmentToAdd}
-                onChange={(e) => setDepartmentToAdd(e.target.value)}
-                disabled={departmentOptions.length === 0}
-              >
-                <option value="">
-                  {departmentOptions.length === 0 ? "追加できる診療科がありません" : "診療科を選択"}
-                </option>
-                {departmentOptions.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {departmentCode(department)
-                      ? `${departmentCode(department)} ${departmentDisplayName(department)}`
-                      : departmentDisplayName(department)}
+      {/* 連携先医師には自院の診療科を持たせない。 */}
+      {!partner && (
+        <fieldset className="practitioner-form__role">
+          <legend>所属診療科</legend>
+          {organizationId ? (
+            <>
+              <div className="practitioner-form__department-add">
+                <select
+                  value={departmentToAdd}
+                  onChange={(e) => setDepartmentToAdd(e.target.value)}
+                  disabled={departmentOptions.length === 0}
+                >
+                  <option value="">
+                    {departmentOptions.length === 0 ? "追加できる診療科がありません" : "診療科を選択"}
                   </option>
-                ))}
-              </select>
-              <button type="button" onClick={addDepartment} disabled={!departmentToAdd}>
-                追加
-              </button>
-            </div>
-            {values.departments.length === 0 ? (
-              <p className="practitioner-form__login-hint">
-                診療科は未選択です。複数選べます(1つが既定診療科になります)。
-              </p>
-            ) : (
-              <ul className="practitioner-form__department-list">
-                {values.departments.map((department) => (
-                  <li key={department.organizationId}>
-                    <label>
-                      <input
-                        type="radio"
-                        name="primary-department"
-                        checked={department.primary}
-                        onChange={() => setPrimaryDepartment(department.organizationId)}
-                      />
-                      既定
-                    </label>
-                    <span className="practitioner-form__department-name">
-                      {department.code ? `${department.code} ${department.name}` : department.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeDepartment(department.organizationId)}
-                    >
-                      削除
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        ) : (
-          <p className="practitioner-form__login-hint">
-            先に所属医療機関を選ぶと、その医療機関の診療科を追加できます。
-          </p>
-        )}
-      </fieldset>
+                  {departmentOptions.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {departmentCode(department)
+                        ? `${departmentCode(department)} ${departmentDisplayName(department)}`
+                        : departmentDisplayName(department)}
+                    </option>
+                  ))}
+                </select>
+                <button type="button" onClick={addDepartment} disabled={!departmentToAdd}>
+                  追加
+                </button>
+              </div>
+              {values.departments.length === 0 ? (
+                <p className="practitioner-form__login-hint">
+                  診療科は未選択です。複数選べます(1つが既定診療科になります)。
+                </p>
+              ) : (
+                <ul className="practitioner-form__department-list">
+                  {values.departments.map((department) => (
+                    <li key={department.organizationId}>
+                      <label>
+                        <input
+                          type="radio"
+                          name="primary-department"
+                          checked={department.primary}
+                          onChange={() => setPrimaryDepartment(department.organizationId)}
+                        />
+                        既定
+                      </label>
+                      <span className="practitioner-form__department-name">
+                        {department.code ? `${department.code} ${department.name}` : department.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeDepartment(department.organizationId)}
+                      >
+                        削除
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : (
+            <p className="practitioner-form__login-hint">
+              先に所属医療機関を選ぶと、その医療機関の診療科を追加できます。
+            </p>
+          )}
+        </fieldset>
+      )}
 
-      <fieldset className="practitioner-form__login">
-        <legend>ログイン設定</legend>
-        <p className="practitioner-form__login-hint">
-          {accountRegistered
-            ? "パスワードは変更する場合のみ入力してください。ログインIDを空にして更新するとログインを無効化します。"
-            : "設定すると、このID/パスワードでこのアプリにログインできます(任意)。"}
-        </p>
-        <label>
-          ログインID
-          <input
-            type="text"
-            value={login.loginId}
-            autoComplete="off"
-            onChange={(e) => setLogin((l) => ({ ...l, loginId: e.target.value }))}
-          />
-        </label>
-        <label>
-          パスワード
-          <input
-            type="password"
-            value={login.password}
-            autoComplete="new-password"
-            placeholder={accountRegistered ? "(変更しない)" : ""}
-            onChange={(e) => setLogin((l) => ({ ...l, password: e.target.value }))}
-          />
-        </label>
-      </fieldset>
+      {/* ログインするのは自院スタッフだけ。 */}
+      {!partner && (
+        <fieldset className="practitioner-form__login">
+          <legend>ログイン設定</legend>
+          <p className="practitioner-form__login-hint">
+            {accountRegistered
+              ? "パスワードは変更する場合のみ入力してください。ログインIDを空にして更新するとログインを無効化します。"
+              : "設定すると、このID/パスワードでこのアプリにログインできます(任意)。"}
+          </p>
+          <label>
+            ログインID
+            <input
+              type="text"
+              value={login.loginId}
+              autoComplete="off"
+              onChange={(e) => setLogin((l) => ({ ...l, loginId: e.target.value }))}
+            />
+          </label>
+          <label>
+            パスワード
+            <input
+              type="password"
+              value={login.password}
+              autoComplete="new-password"
+              placeholder={accountRegistered ? "(変更しない)" : ""}
+              onChange={(e) => setLogin((l) => ({ ...l, password: e.target.value }))}
+            />
+          </label>
+        </fieldset>
+      )}
 
       <div className="patient-form__actions">
         <button type="submit" disabled={submitting}>
@@ -386,6 +422,8 @@ export function PractitionerForm({
         <OrganizationSearchModal
           onSelect={handleOrganizationSelect}
           onClose={() => setOrganizationModalOpen(false)}
+          excludeSelf={partner}
+          title={partner ? "連携先医療機関を選択" : "医療機関を選択"}
         />
       )}
     </form>

@@ -11,6 +11,7 @@ import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { observationExtractEnabled } from "../fhir/observationExtract";
 import { buildPopulateContext } from "../fhir/populateContext";
 import {
+  DEFAULT_INSTITUTION_NUMBER,
   buildQuestionnaireResponse,
   emptyQuestionnaireResponseMeta,
   parseQuestionnaireResponseMeta,
@@ -18,6 +19,7 @@ import {
   type TemplateDraft,
 } from "../fhir/questionnaireResponseHelpers";
 import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
+import { useSelfInstitutionNumber } from "../hooks/useSelfInstitutionNumber";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { QuestionnaireResponseForm } from "./QuestionnaireResponseForm";
@@ -109,6 +111,18 @@ export function TemplateEntryModal({
     if (!loginPractitionerName) return;
     setMeta((prev) => (prev.authorName ? prev : { ...prev, authorName: loginPractitionerName }));
   }, [loginPractitionerName]);
+
+  // 保険医療機関番号は自院(管理 > 自院設定)の登録値で埋める。記入者名と同じく
+  // 取得が非同期なので、仮の初期値のままのときだけ後から流し込む。
+  const selfInstitutionNumber = useSelfInstitutionNumber();
+  useEffect(() => {
+    if (!selfInstitutionNumber) return;
+    setMeta((prev) =>
+      prev.institutionNumber === DEFAULT_INSTITUTION_NUMBER
+        ? { ...prev, institutionNumber: selfInstitutionNumber }
+        : prev,
+    );
+  }, [selfInstitutionNumber]);
 
   // 保存済み QR の読込完了後にメタを反映する(初期 state 時点では未取得のため)。
   const fetchedMetaSource = needsFetch ? savedResponse.data?.data : undefined;

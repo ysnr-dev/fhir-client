@@ -1,6 +1,6 @@
 import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
-import { useOrganizationOptions } from "../api/queries";
+import { useOrganizationOptions, useSelfOrganization } from "../api/queries";
 import {
   LOCATION_STATUS_OPTIONS,
   LOCATION_TYPE_OPTIONS,
@@ -28,9 +28,14 @@ export function LocationForm({
 }: LocationFormProps) {
   const [values, setValues] = useState<LocationFormValues>(initialValues ?? emptyLocationForm);
   const [validationError, setValidationError] = useState<string | null>(null);
+  // 診察室・撮影室は自院の部屋しか登録しないので、自院が設定済みなら所属は
+  // 選ばせず固定する。自院未設定の環境だけ従来どおり選択できる。
+  const self = useSelfOrganization();
   const { organizations } = useOrganizationOptions();
 
   const update = makeFieldUpdater(setValues);
+
+  const managingOrganizationId = self.selfOrganizationId || values.managingOrganizationId;
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -40,7 +45,7 @@ export function LocationForm({
       return;
     }
     setValidationError(null);
-    onSubmit(values);
+    onSubmit({ ...values, managingOrganizationId });
   }
 
   return (
@@ -86,20 +91,22 @@ export function LocationForm({
         </select>
       </label>
 
-      <label>
-        所属医療機関
-        <select
-          value={values.managingOrganizationId}
-          onChange={(e) => update("managingOrganizationId", e.target.value)}
-        >
-          <option value="">未指定</option>
-          {organizations.map((organization) => (
-            <option key={organization.id} value={organization.id}>
-              {organizationDisplayName(organization)}
-            </option>
-          ))}
-        </select>
-      </label>
+      {!self.selfOrganizationId && (
+        <label>
+          所属医療機関
+          <select
+            value={values.managingOrganizationId}
+            onChange={(e) => update("managingOrganizationId", e.target.value)}
+          >
+            <option value="">未指定</option>
+            {organizations.map((organization) => (
+              <option key={organization.id} value={organization.id}>
+                {organizationDisplayName(organization)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <label>
         備考

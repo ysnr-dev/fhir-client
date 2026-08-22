@@ -1,19 +1,34 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { usePractitionerSearch, type PractitionerSearchParams } from "../api/queries";
+import {
+  usePractitionerRoleSearch,
+  usePractitionerSearch,
+  useSelfOrganization,
+  type PractitionerSearchParams,
+} from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Pagination } from "../components/Pagination";
 import { PractitionerTable } from "../components/PractitionerTable";
 
 const emptySearch: PractitionerSearchParams = { name: "", identifier: "" };
 
+// 自院スタッフの一覧。所属ロール(organization = 自院)を引くので、他院の医師
+// (連携先医師の画面で登録するもの)は出てこない。自院未設定の環境では従来どおり
+// Practitioner を直接検索して全員を出す。
 export function PractitionerListPage() {
   const [search, setSearch] = useState<PractitionerSearchParams>(emptySearch);
   const [inputs, setInputs] = useState<PractitionerSearchParams>(emptySearch);
   const [offset, setOffset] = useState(0);
 
-  const { practitioners, roles, total, count, hasPrevious, hasNext, isLoading, error } =
-    usePractitionerSearch(search, offset);
+  const self = useSelfOrganization();
+  const byOrganization = Boolean(self.selfOrganizationId);
+  const roleSearch = usePractitionerRoleSearch(
+    { organizationId: self.selfOrganizationId ?? undefined, ...search },
+    offset,
+    byOrganization,
+  );
+  const practitionerSearch = usePractitionerSearch(search, offset, !byOrganization);
+  const result = byOrganization ? roleSearch : practitionerSearch;
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();
@@ -61,21 +76,21 @@ export function PractitionerListPage() {
         </div>
       </form>
 
-      <ErrorBanner error={error} />
+      <ErrorBanner error={result.error} />
 
-      {isLoading ? (
+      {result.isLoading ? (
         <p>読み込み中...</p>
       ) : (
         <>
-          <PractitionerTable practitioners={practitioners} roles={roles} />
+          <PractitionerTable practitioners={result.practitioners} roles={result.roles} />
           <Pagination
             offset={offset}
-            count={count}
-            total={total}
-            hasPrevious={hasPrevious}
-            hasNext={hasNext}
-            onPrevious={() => setOffset((o) => Math.max(0, o - count))}
-            onNext={() => setOffset((o) => o + count)}
+            count={result.count}
+            total={result.total}
+            hasPrevious={result.hasPrevious}
+            hasNext={result.hasNext}
+            onPrevious={() => setOffset((o) => Math.max(0, o - result.count))}
+            onNext={() => setOffset((o) => o + result.count)}
           />
         </>
       )}

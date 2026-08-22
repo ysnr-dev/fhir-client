@@ -1,6 +1,6 @@
 import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
-import { useDepartmentList, useLocationOptions, usePractitionerOptions } from "../api/queries";
+import { useSelfDepartments, useLocationOptions, usePractitionerOptions } from "../api/queries";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
@@ -39,7 +39,7 @@ export function ScheduleForm({
 
   const { practitioners } = usePractitionerOptions();
   const { locations } = useLocationOptions();
-  const { departments } = useDepartmentList({});
+  const { departments } = useSelfDepartments();
 
   const update = makeFieldUpdater(setValues);
 

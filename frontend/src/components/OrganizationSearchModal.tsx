@@ -1,5 +1,9 @@
 import { useState, type KeyboardEvent } from "react";
-import { useOrganizationSearch, type OrganizationSearchParams } from "../api/queries";
+import {
+  useOrganizationSearch,
+  useSelfOrganization,
+  type OrganizationSearchParams,
+} from "../api/queries";
 import {
   organizationDisplayName,
   organizationInstitutionNumber,
@@ -11,6 +15,9 @@ import { Pagination } from "./Pagination";
 interface OrganizationSearchModalProps {
   onSelect: (organization: fhir4.Organization) => void;
   onClose: () => void;
+  /** 自院を候補から外す(連携先医療機関だけを選ばせる場面で使う)。 */
+  excludeSelf?: boolean;
+  title?: string;
 }
 
 const emptySearch: OrganizationSearchParams = { name: "", identifier: "" };
@@ -18,7 +25,15 @@ const emptySearch: OrganizationSearchParams = { name: "", identifier: "" };
 // マスタ検索モーダル(病名・医薬品など)は打鍵ごとに backend を引くが、
 // 医療機関は上流 FHIR サーバーへのリクエストになるため検索ボタンで確定する
 // (医療機関一覧画面と同じ inputs / search の二段構え)。
-export function OrganizationSearchModal({ onSelect, onClose }: OrganizationSearchModalProps) {
+export function OrganizationSearchModal({
+  onSelect,
+  onClose,
+  excludeSelf = false,
+  title = "医療機関を選択",
+}: OrganizationSearchModalProps) {
+  // 自院の除外はクライアント側で行う。上流の Organization 検索には「この id を
+  // 除く」条件が無く、施設と診療科を切り分ける partof:missing しか使えないため。
+  const { selfOrganizationId } = useSelfOrganization();
   const [inputs, setInputs] = useState<OrganizationSearchParams>(emptySearch);
   const [search, setSearch] = useState<OrganizationSearchParams>(emptySearch);
   const [offset, setOffset] = useState(0);
@@ -27,8 +42,9 @@ export function OrganizationSearchModal({ onSelect, onClose }: OrganizationSearc
     search,
     offset,
   );
-  const organizations =
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Organization => Boolean(r)) ?? [];
+  const organizations = (
+    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Organization => Boolean(r)) ?? []
+  ).filter((organization) => !(excludeSelf && organization.id === selfOrganizationId));
 
   function runSearch() {
     setSearch(inputs);
@@ -45,7 +61,7 @@ export function OrganizationSearchModal({ onSelect, onClose }: OrganizationSearc
   }
 
   return (
-    <Modal title="医療機関を選択" onClose={onClose} className="modal--wide">
+    <Modal title={title} onClose={onClose} className="modal--wide">
       <div className="master-search__form">
         <label>
           医療機関名(部分一致)

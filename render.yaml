@@ -105,6 +105,12 @@ services:
       - type: rewrite
         source: /reports/*
         destination: https://ysnr-fhir-client-api.onrender.com/reports/*
+      # 自院設定の参照 API(ログイン済みユーザー全員が読む)。無いと SPA
+      # フォールバックに落ちて index.html が返る。SPA ルートの
+      # /facility-settings(ハイフン)とは別パスなので衝突しない。
+      - type: rewrite
+        source: /facility_settings
+        destination: https://ysnr-fhir-client-api.onrender.com/facility_settings
       # SPA フォールバック(react-router の直リンク対応)
       - type: rewrite
         source: /*

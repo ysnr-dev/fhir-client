@@ -724,10 +724,44 @@ POMR の初期計画を **診断計画(Dx)・治療計画(Rx)・教育計画(Ex)
     （`radOrderHelpers.ts`）なので未対応で、設定が有効なテンプレートを選ぶとモーダルに
     その旨を表示します（`TemplateEntryModal` の `extractsObservations`）。
 
+## 自院と連携先
+
+本アプリはマルチテナントではありません。診療科・診察室・医療従事者（ログインするスタッフ）は
+**自院のものだけ**を登録し、他院の医療機関・医師は診療情報提供書の送付先候補として
+**連携先**に登録する、という切り分けです。
+
+「どの Organization が自院か」はヘッダーの「管理 > 自院設定」（`/facility-settings`、AdminGate 対象）で
+指定します。backend の単一行設定（`facility_settings` テーブル）に Organization.id を持ち、
+`GET /facility_settings` でログイン済みユーザー全員が読めます（変更は `/admin/facility_settings`）。
+
+この設定が入ると各画面の挙動が変わります。
+
+| 画面・機能 | 自院設定あり | 自院未設定（初期セットアップ前） |
+|---|---|---|
+| マスタメンテ > 共通 > 医療機関 | 自院 1 件のみを表示・編集 | 従来どおり全医療機関の一覧（ここから登録して自院設定へ進む） |
+| 診療科 / 診察室 / 医療従事者の登録 | 所属は自院で固定（選択 UI を出さない） | 従来どおり所属医療機関を選ぶ |
+| 医療従事者一覧 | 所属ロールが自院のスタッフだけ | 全 Practitioner |
+| 予約枠・外来一覧・部門ワークリストの診療科 | 自院配下の診療科だけ | 全医療機関の診療科 |
+| 処方箋 PDF の医療機関欄 | 自院を read | 保険医療機関番号を持つ最初の Organization（取り違えうる） |
+| テンプレートの自動入力・保険医療機関番号の初期値 | 自院の登録値 | ログイン中の医療従事者の所属 / 仮の番号 |
+
+連携先（他院）は「マスタメンテ > 連携先」配下の**連携先医療機関**（`/partner-organizations`）と
+**連携先医師**（`/partner-practitioners`）で登録します。FHIR 上の表現は自院と同じ
+Organization / Practitioner + PractitionerRole で、所属ロールの `organization` が他院になる点だけが
+違います（画面と検索条件で分けているだけで、別のリソース型は使いません）。連携先医師には自院の
+診療科もログイン設定も持たせません。
+
+- 自院の除外・限定はクライアント側で行います。上流の Organization 検索には「この id を除く」条件が
+  無く、施設と診療科を切り分ける `partof:missing` しか使えないためです。
+- 連携先医師の一覧で医療機関を「すべて」にしたときは、連携先の id を列挙した複数値検索
+  （`organization=Organization/a,Organization/b`）で引きます。画面側で間引かないので件数と
+  ページ送りが上流の結果とずれません。
+
 ## 医療機関（Organization）
 
-ヘッダーの「管理 > 医療機関」（`/organizations`）で、上流 FHIR サーバーの Organization を
-一覧・登録・編集・削除できます。JP Core の `JP_Organization` プロファイルを想定した項目構成です。
+「マスタメンテ > 共通 > 医療機関」（`/organizations`）と「マスタメンテ > 連携先 > 連携先医療機関」
+（`/partner-organizations`）で、上流 FHIR サーバーの Organization を一覧・登録・編集・削除できます。
+JP Core の `JP_Organization` プロファイルを想定した項目構成です。
 
 | 画面項目 | FHIR 要素 |
 |---|---|
@@ -750,7 +784,8 @@ POMR の初期計画を **診断計画(Dx)・治療計画(Rx)・教育計画(Ex)
 ### テンプレートへの一括入力
 
 登録した医療機関は、テンプレート回答フォームから選んで項目に流し込めます（診療情報提供書の
-紹介先・紹介元など）。テンプレート編集画面の**拡張設定**で、短文入力・複数行テキストの項目に
+紹介先・紹介元など）。この選択モーダルは自院・連携先の両方を候補に出します（宛先には他院を、
+差出人には自院を選ぶため）。テンプレート編集画面の**拡張設定**で、短文入力・複数行テキストの項目に
 **「医療機関の項目」** を設定すると、その項目を含むグループの枠内に「医療機関を選択」ボタンが出ます
 （医療従事者の選択ボタンと横に並びます）。
 
@@ -787,8 +822,10 @@ valueCode     : name | institutionNumber | addressFull | address | postalCode | 
 
 ## 医療従事者（Practitioner）
 
-ヘッダーの「管理 > 医療従事者」（`/practitioners`）で、上流 FHIR サーバーの Practitioner を
+「マスタメンテ > 共通 > 医療従事者」（`/practitioners`）で、上流 FHIR サーバーの Practitioner を
 一覧・登録・編集・削除できます。JP Core の `JP_Practitioner` プロファイルを想定した項目構成です。
+自院が設定済みなら**自院スタッフ専用**の画面で、所属は自院で固定されます（他院の医師は
+「マスタメンテ > 連携先 > 連携先医師」）。
 
 | 画面項目 | FHIR 要素 |
 |---|---|
@@ -810,20 +847,33 @@ valueCode     : name | institutionNumber | addressFull | address | postalCode | 
 ### 職種・所属医療機関（PractitionerRole）
 
 FHIR では職種・所属は Practitioner ではなく `PractitionerRole` に持ちます。画面では医療従事者フォームの
-「職種・所属」欄として一体で扱い、**1 人につき 1 件**だけ登録できます（兼務は表現できません）。
+一部として一体で扱い、1 人につき次の 2 種類を登録します。
+
+- **所属ロール** … 1 件。`organization` は医療機関（自院スタッフなら自院、連携先医師なら他院）。
+  「職種・所属」欄がこれにあたり、兼務は表現できません。
+- **診療科ロール** … 0〜N 件。`organization` は診療科 Organization で、うち 1 件が既定診療科。
+  自院スタッフの「所属診療科」欄がこれにあたります（連携先医師には持たせません）。
+
+両者はローカル拡張 `http://fhir-client.local/StructureDefinition/practitioner-role-primary-department`
+の有無で区別します（既定診療科だけ `valueBoolean = true`）。診療科は医療機関と同じ Organization なので、
+`organization` の参照先だけでは判別できないためです。カルテ画面ヘッダーの依頼科・依頼医師
+（`OrderContextPicker`）は、この診療科ロールと自院設定から選択肢を組み立てます。
 
 - 職種は `PractitionerRole.code`。コードは HL7 の `http://terminology.hl7.org/CodeSystem/practitioner-role`
   （医師 `doctor` / 歯科医師 `dentist` / 薬剤師 `pharmacist` / 看護師 `nurse` / 理学療法士 `physio` /
   言語聴覚士 `speech` / 研究者 `researcher` / 教員 `teacher`）。JP_PractitionerRole の binding は
   `JP_PractitionerRole_VS` への **preferred** なので、上流はコード値を検証しません。
-- 所属医療機関は `PractitionerRole.organization`。登録済みの医療機関を検索モーダル（医療機関画面と同じ
-  もの）から選び、`reference` に加えて `display` にも名称を入れます（一覧で Organization を引き直さずに
-  表示するため）。
+- 所属医療機関は `PractitionerRole.organization`。自院設定済みなら自院で固定され、連携先医師のときだけ
+  検索モーダル（自院を除いた一覧）から選びます。`reference` に加えて `display` にも名称を入れます
+  （一覧で Organization を引き直さずに表示するため）。
 - 保存は **Practitioner と PractitionerRole を 1 つの transaction Bundle** で行います（新規作成時は
   `urn:uuid` を介して参照を解決）。職種・所属を両方空にして保存すると PractitionerRole は削除され、
   医療従事者を削除するとぶら下がる PractitionerRole も同じ Bundle で削除されます。
-- 一覧は `_revinclude=PractitionerRole:practitioner` で職種・所属を一緒に取得して表示します。
-- 診療科（`specialty`）や勤務期間（`period`）は未対応です。
+- 一覧は自院設定があれば `PractitionerRole?organization=<自院>&_include=PractitionerRole:practitioner`
+  で引きます。所属ロールしか一致しないので、所属診療科の列を埋めるために
+  `_revinclude:iterate=PractitionerRole:practitioner` で本人の残りのロールまで辿ります。自院未設定の
+  環境では従来どおり `Practitioner?_revinclude=PractitionerRole:practitioner` です。
+- 勤務期間（`period`）は未対応です。
 
 ### テンプレートへの一括入力
 

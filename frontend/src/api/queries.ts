@@ -144,6 +144,7 @@ import {
   updateResource,
   type FhirResult,
 } from "./fhirClient";
+import { fetchFacilitySettings } from "./facilityClient";
 
 // シェーマ画像を伴う保存は、画像 Binary と本体を 1 つの transaction Bundle で
 // atomic に書く(片方だけ保存されて孤児 Binary が残ることを防ぐ)。画像がない
@@ -247,6 +248,40 @@ export function useDeletePatient() {
       queryClient.invalidateQueries({ queryKey: ["Patient", "search"] });
     },
   });
+}
+
+// --- 自院 --------------------------------------------------------------------
+//
+// 本アプリはマルチテナントではなく、診療科・診察室・スタッフは自院のものしか
+// 登録しない。他院の医療機関・医師は診療情報提供書の宛先候補として登録するので、
+// 「どれが自院か」は backend の単一行設定(管理 > 自院設定)が持つ。
+//
+// 未設定でも画面は従来どおり動く(所属を選ばせる UI が残る)。呼び出し側は
+// isUnset を見て「自院固定にするか、選ばせるか」を切り替える。
+
+export function useFacilitySettings() {
+  return useQuery({
+    queryKey: ["facility", "settings"],
+    queryFn: fetchFacilitySettings,
+    // ほぼ変わらない設定なので、画面遷移のたびに引き直さない。
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useSelfOrganization() {
+  const settings = useFacilitySettings();
+  const selfOrganizationId = settings.data?.self_organization_id ?? null;
+  const organization = useOrganization(selfOrganizationId || undefined);
+
+  return {
+    selfOrganizationId,
+    organization: organization.data?.data,
+    /** 自院が設定されていない(初期セットアップ前)。 */
+    isUnset: settings.isSuccess && !selfOrganizationId,
+    // 未設定で disabled になったクエリの isPending は true のままなので、
+    // 「自院が無い環境」で待ち続けないよう isLoading を見る。
+    isLoading: settings.isLoading || organization.isLoading,
+  };
 }
 
 export interface OrganizationSearchParams {
@@ -403,6 +438,13 @@ export function useDepartmentList(search: DepartmentSearchParams) {
   };
 }
 
+// 自院の診療科。予約枠・外来一覧・部門ワークリストのように「自院の科を選ぶ」
+// 画面はこちらを使う。自院未設定の環境では従来どおり全医療機関の診療科を返す。
+export function useSelfDepartments(name?: string) {
+  const { selfOrganizationId } = useSelfOrganization();
+  return useDepartmentList({ name, partOfId: selfOrganizationId || undefined });
+}
+
 export function useDepartmentsOf(partOfId: string | undefined) {
   return useQuery({
     queryKey: ["Organization", "search", "department", "all", partOfId],
@@ -490,9 +532,16 @@ const PRACTITIONER_ROLE_COUNT = 20;
 
 export interface PractitionerRoleFilter {
   organizationId?: string;
+  /**
+   * 複数の医療機関のいずれかに所属する、で絞る(連携先医師の一覧が「自院以外の
+   * すべて」を出すのに使う)。organizationId と併用しない。
+   */
+  organizationIds?: string[];
   roleCode?: string;
   /** 氏名(漢字・カナ)の部分一致。チェーン検索で上流に渡す。 */
   name?: string;
+  /** 医籍登録番号。氏名と同じくチェーン検索で上流に渡す。 */
+  identifier?: string;
 }
 
 // 職種・所属医療機関・氏名で医療従事者を絞り込む。PractitionerRole を検索し、
@@ -506,11 +555,19 @@ export function usePractitionerRoleSearch(
 ) {
   const params = new URLSearchParams();
   if (filter.organizationId) params.set("organization", `Organization/${filter.organizationId}`);
+  else if (filter.organizationIds?.length) {
+    params.set("organization", filter.organizationIds.map((id) => `Organization/${id}`).join(","));
+  }
   if (filter.roleCode) params.set("role", filter.roleCode);
   if (filter.name) params.set("practitioner.name:contains", filter.name);
+  if (filter.identifier) params.set("practitioner.identifier", filter.identifier);
   params.set("_count", String(PRACTITIONER_ROLE_COUNT));
   params.set("_offset", String(offset));
   params.set("_include", "PractitionerRole:practitioner");
+  // 一覧に所属診療科も出すため、_include で引いた Practitioner にぶら下がる
+  // 残りのロール(診療科ロール)まで辿る。organization で絞ると一致する所属
+  // ロールしか返らないので、iterate が無いと診療科の列が空になる。
+  params.set("_revinclude:iterate", "PractitionerRole:practitioner");
 
   const query = useQuery({
     queryKey: ["PractitionerRole", "search", filter, offset],

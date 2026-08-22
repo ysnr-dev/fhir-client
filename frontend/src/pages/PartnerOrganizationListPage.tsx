@@ -11,45 +11,23 @@ import { Pagination } from "../components/Pagination";
 
 const emptySearch: OrganizationSearchParams = { name: "", identifier: "" };
 
-// 自院の医療機関情報。自院が設定済みならその 1 件だけを扱う画面で、検索も
-// ページングも要らない。連携先(他院)は /partner-organizations 側で管理する。
-export function OrganizationListPage() {
-  const self = useSelfOrganization();
-
-  if (self.isLoading) return <div className="page">読み込み中...</div>;
-  return self.selfOrganizationId ? <SelfOrganizationView /> : <UnsetOrganizationView />;
-}
-
-function SelfOrganizationView() {
-  const { organization } = useSelfOrganization();
-
-  return (
-    <div className="page">
-      <div className="page__header">
-        <h1>医療機関</h1>
-      </div>
-      <p className="connection-settings__lead">
-        自院として設定されている医療機関です。別の医療機関を自院にするには「管理 &gt; 自院設定」で
-        切り替えてください。
-      </p>
-      <OrganizationTable organizations={organization ? [organization] : []} />
-    </div>
-  );
-}
-
-// 自院が未設定(初期セットアップ前)。従来どおり全医療機関を扱えるようにして、
-// ここから登録 →「管理 > 自院設定」で自院を選ぶ流れにする。
-function UnsetOrganizationView() {
+// 連携先医療機関(他院)の一覧。診療情報提供書の送付先候補として登録する。
+// 自院は「共通 > 医療機関」で扱うので、ここには出さない。
+export function PartnerOrganizationListPage() {
   const [search, setSearch] = useState<OrganizationSearchParams>(emptySearch);
   const [inputs, setInputs] = useState<OrganizationSearchParams>(emptySearch);
   const [offset, setOffset] = useState(0);
 
+  const { selfOrganizationId } = useSelfOrganization();
   const { bundle, total, count, hasPrevious, hasNext, isLoading, error } = useOrganizationSearch(
     search,
     offset,
   );
-  const organizations =
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Organization => Boolean(r)) ?? [];
+  // 自院の除外はクライアント側で行う(上流の Organization 検索に「この id を除く」
+  // 条件が無いため)。1 件ぶんなので total とのずれは許容する。
+  const organizations = (
+    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Organization => Boolean(r)) ?? []
+  ).filter((organization) => organization.id !== selfOrganizationId);
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();
@@ -66,17 +44,10 @@ function UnsetOrganizationView() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>医療機関一覧</h1>
-        <Link to="/organizations/new" className="button">
+        <h1>連携先医療機関一覧</h1>
+        <Link to="/partner-organizations/new" className="button">
           新規登録
         </Link>
-      </div>
-
-      <div className="error-banner" role="status">
-        <p className="error-banner__line">
-          自院が未設定です。自院の医療機関を登録したうえで、「管理 &gt; 自院設定」で選択してください。
-          設定するまで、診療科・診察室・医療従事者の所属は手動で選ぶ従来の動作になります。
-        </p>
       </div>
 
       <form className="patient-search-form" onSubmit={handleSearch}>
@@ -110,7 +81,11 @@ function UnsetOrganizationView() {
         <p>読み込み中...</p>
       ) : (
         <>
-          <OrganizationTable organizations={organizations} />
+          <OrganizationTable
+            organizations={organizations}
+            basePath="/partner-organizations"
+            showDepartments={false}
+          />
           <Pagination
             offset={offset}
             count={count}

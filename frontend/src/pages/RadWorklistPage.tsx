@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useKarteLinkState } from "../karteReturn";
 import {
-  useDepartmentList,
+  useSelfDepartments,
   useRadWorklist,
   useUpdateRadTaskStatus,
   type RadWorklistRow,
@@ -73,7 +73,7 @@ export function RadWorklistPage() {
 
   const worklist = useRadWorklist(date);
   const catalog = useRadJj1017Catalog();
-  const departments = useDepartmentList({});
+  const departments = useSelfDepartments();
   const updateStatus = useUpdateRadTaskStatus();
 
   const rows = useMemo(

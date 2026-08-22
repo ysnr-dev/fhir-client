@@ -197,6 +197,49 @@ RSpec.describe PrescriptionReport do
     expect(captured.call[:organization]).to eq(institution)
   end
 
+  describe "with a configured self organization" do
+    # 自院が設定済みなら identifier 検索ではなく read で引く。連携先医療機関に
+    # 保険医療機関番号を登録していても取り違えない。
+    def stub_batch_with_read(organization_entry)
+      stub_request(:post, "#{base_url}/")
+        .to_return(status: 200, body: {
+          "resourceType" => "Bundle", "type" => "batch-response",
+          "entry" => [
+            batch_entry(searchset([order, medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)])),
+            batch_entry(patient),
+            organization_entry
+          ]
+        }.to_json)
+    end
+
+    before { FacilitySettings.current.update!(self_organization_fhir_id: "org1") }
+
+    it "reads the configured Organization instead of searching by identifier" do
+      stub_order
+      stub_batch_with_read(batch_entry(institution))
+      captured = capture_renderer
+
+      described_class.new("o1", gateway: gateway).generate
+
+      expect(captured.call[:organization]).to eq(institution)
+      expect(
+        a_request(:post, "#{base_url}/") { |req|
+          JSON.parse(req.body)["entry"].map { |e| e.dig("request", "url") }[2] == "Organization/org1"
+        }
+      ).to have_been_made.once
+    end
+
+    it "continues with a nil organization when the configured Organization is gone" do
+      stub_order
+      stub_batch_with_read({ "response" => { "status" => "404 Not Found" } })
+      captured = capture_renderer
+
+      described_class.new("o1", gateway: gateway).generate
+
+      expect(captured.call[:organization]).to be_nil
+    end
+  end
+
   it "raises NotFound when the order does not exist" do
     stub_order(status: 404, body: {})
 

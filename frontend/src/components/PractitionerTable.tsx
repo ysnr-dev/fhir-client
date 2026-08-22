@@ -20,6 +20,8 @@ interface PractitionerTableProps {
   practitioners: fhir4.Practitioner[];
   /** 一覧と一緒に取得した PractitionerRole(職種・所属医療機関・所属診療科の表示に使う)。 */
   roles: fhir4.PractitionerRole[];
+  /** 編集画面のルート。連携先医師の一覧は /partner-practitioners を渡す。 */
+  basePath?: string;
 }
 
 // 既定診療科を先頭に出し、他にもあれば件数を添える。
@@ -30,7 +32,11 @@ function departmentSummary(departments: PractitionerDepartmentValues[] | undefin
   return rest.length ? `${label} 他${rest.length}件` : label;
 }
 
-export function PractitionerTable({ practitioners, roles }: PractitionerTableProps) {
+export function PractitionerTable({
+  practitioners,
+  roles,
+  basePath = "/practitioners",
+}: PractitionerTableProps) {
   const deletePractitioner = useDeletePractitioner();
   const roleByPractitioner = rolesByPractitionerId(roles);
   const departmentsByPractitioner = departmentsByPractitionerId(roles);
@@ -84,7 +90,7 @@ export function PractitionerTable({ practitioners, roles }: PractitionerTablePro
               <td>{practitioner.active === false ? "無効" : "有効"}</td>
               <td className="patient-table__actions">
                 <RowMenu label={`${practitionerDisplayName(practitioner)} の操作`}>
-                  <Link className="row-menu__item" to={`/practitioners/${practitioner.id}/edit`}>
+                  <Link className="row-menu__item" to={`${basePath}/${practitioner.id}/edit`}>
                     編集
                   </Link>
                   <button

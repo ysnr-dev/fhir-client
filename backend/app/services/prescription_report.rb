@@ -127,16 +127,13 @@ class PrescriptionReport
   # _revinclude を添えて取る(frontend の usePrescriptionDetail と同じ形)。
   def fetch_related_resources(order)
     patient_id = patient_id_from(order)
+    self_organization_id = FacilitySettings.self_organization_id
     entries = [
       { "request" => { "method" => "GET",
                        "url" => "ServiceRequest?_id=#{order_id}" \
                                 "&_revinclude=MedicationRequest%3Abased-on&_count=100" } },
       { "request" => { "method" => "GET", "url" => "Patient/#{patient_id}" } },
-      # 自院(保険医療機関)。identifier の system だけで引く(Organization 検索に
-      # type は無く、未知のパラメータでは全件が返ってしまうため)。
-      { "request" => { "method" => "GET",
-                       "url" => "Organization?identifier=#{CGI.escape(INSTITUTION_NO_SYSTEM)}%7C" \
-                                "&_count=10" } }
+      { "request" => { "method" => "GET", "url" => institution_url(self_organization_id) } }
     ]
 
     bundle = { "resourceType" => "Bundle", "type" => "batch", "entry" => entries }
@@ -151,7 +148,19 @@ class PrescriptionReport
 
     medication_requests = searchset_resources(results[0], "MedicationRequest", "detail search")
     patient = entry_resource!(results[1], "Patient/#{patient_id}")
-    [medication_requests, patient, find_institution(results[2])]
+    [medication_requests, patient, find_institution(results[2], self_organization_id)]
+  end
+
+  # 自院 Organization の取得 URL。自院が設定済み(管理 > 自院設定)ならそれを
+  # read する。未設定の環境では従来どおり保険医療機関番号の system だけで検索
+  # する(Organization 検索に type は無く、未知のパラメータでは全件が返るため
+  # identifier で引くしかない)。この検索は「番号を持つ最初の 1 件」を自院と
+  # みなすので、連携先医療機関に番号を登録していると取り違えうる。自院設定を
+  # 入れればその曖昧さは消える。
+  def institution_url(self_organization_id)
+    return "Organization/#{self_organization_id}" if self_organization_id
+
+    "Organization?identifier=#{CGI.escape(INSTITUTION_NO_SYSTEM)}%7C&_count=10"
   end
 
   # 処方箋の患者取り違えは重大なので、患者が引けない場合は生成を中止する
@@ -164,10 +173,20 @@ class PrescriptionReport
     patient_id
   end
 
-  # 自院の Organization。検索が空振りしても発行は止めない(医療機関欄が空欄になる
-  # だけで、処方内容は読める)。identifier を実際に持つことも確かめるのは、上流が
-  # 未知のパラメータを無視して全件を返す場合への防御。
-  def find_institution(entry)
+  # 自院の Organization。取得できなくても発行は止めない(医療機関欄が空欄になる
+  # だけで、処方内容は読める)。自院設定済みなら read の応答をそのまま使い、
+  # 未設定なら検索結果から identifier を実際に持つ 1 件を選ぶ(上流が未知の
+  # パラメータを無視して全件を返す場合への防御)。
+  def find_institution(entry, self_organization_id)
+    if self_organization_id
+      organization = begin
+        entry_resource!(entry, "Organization/#{self_organization_id}")
+      rescue UpstreamError
+        return nil
+      end
+      return organization["resourceType"] == "Organization" ? organization : nil
+    end
+
     resources = begin
       searchset_resources(entry, "Organization", "institution search")
     rescue UpstreamError

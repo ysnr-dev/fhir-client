@@ -6,6 +6,7 @@ import {
   deleteOauthClient,
   deleteQuestionnaireCategory,
   deleteReportLayout,
+  fetchAdminFacilitySettings,
   fetchAdminSession,
   fetchConnectionSettings,
   fetchOauthClients,
@@ -16,6 +17,7 @@ import {
   login,
   logout,
   testConnection,
+  updateAdminFacilitySettings,
   updateConnectionSettings,
   updateQuestionnaireCategory,
   updateReportLayout,
@@ -26,6 +28,7 @@ import {
 } from "./adminClient";
 
 const CONNECTION_SETTINGS_KEY = ["admin", "connection_settings"];
+const FACILITY_SETTINGS_KEY = ["admin", "facility_settings"];
 export const ADMIN_SESSION_KEY = ["admin", "session"];
 const OAUTH_CLIENTS_KEY = ["admin", "oauth_clients"];
 const SCOPE_OPTIONS_KEY = ["admin", "scope_options"];
@@ -85,6 +88,30 @@ export function useUpdateConnectionSettings() {
     retry: false,
     onSuccess: (data) => {
       queryClient.setQueryData(CONNECTION_SETTINGS_KEY, data);
+    },
+  });
+}
+
+// --- 自院設定 ----------------------------------------------------------------
+// 読み取りは全ユーザー向けの useFacilitySettings(api/queries.ts)が別にある。
+// 保存したらそちらのキャッシュも捨てて、各画面の所属既定値を追従させる。
+
+export function useAdminFacilitySettings() {
+  return useQuery({
+    queryKey: FACILITY_SETTINGS_KEY,
+    queryFn: fetchAdminFacilitySettings,
+    retry: false,
+  });
+}
+
+export function useUpdateFacilitySettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (selfOrganizationId: string) => updateAdminFacilitySettings(selfOrganizationId),
+    retry: false,
+    onSuccess: (data) => {
+      queryClient.setQueryData(FACILITY_SETTINGS_KEY, data);
+      queryClient.invalidateQueries({ queryKey: ["facility", "settings"] });
     },
   });
 }

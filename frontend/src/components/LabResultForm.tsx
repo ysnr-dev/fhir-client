@@ -1,6 +1,6 @@
 import { makeFieldUpdater } from "../lib/form";
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
-import { useDepartmentList, type LabOrderCandidate } from "../api/queries";
+import { useSelfDepartments, type LabOrderCandidate } from "../api/queries";
 import type { LabItem } from "../api/masterClient";
 import {
   useLabOrderResultLines,
@@ -136,7 +136,7 @@ export function LabResultForm({
   const [values, setValues] = useState<LabResultFormValues>(initialValues ?? emptyLabResultForm);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
-  const { departments } = useDepartmentList({});
+  const { departments } = useSelfDepartments();
 
   // 画面上でオーダーを選び直したときだけ検査項目を展開する(初期表示時の
   // 紐付け済みオーダーで、保存済みの検査項目を上書きしてしまわないようにする)。

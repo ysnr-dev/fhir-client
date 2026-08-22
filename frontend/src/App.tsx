@@ -9,6 +9,7 @@ import { SubMenu } from "./components/SubMenu";
 import { ThemeToggleItem } from "./components/ThemeToggleItem";
 import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
+import { FacilitySettingsPage } from "./pages/FacilitySettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
 import { LabContainerPage } from "./pages/LabContainerPage";
@@ -40,6 +41,10 @@ import { DepartmentListPage } from "./pages/DepartmentListPage";
 import { OrganizationCreatePage } from "./pages/OrganizationCreatePage";
 import { OrganizationEditPage } from "./pages/OrganizationEditPage";
 import { OrganizationListPage } from "./pages/OrganizationListPage";
+import { PartnerOrganizationListPage } from "./pages/PartnerOrganizationListPage";
+import { PartnerPractitionerCreatePage } from "./pages/PartnerPractitionerCreatePage";
+import { PartnerPractitionerEditPage } from "./pages/PartnerPractitionerEditPage";
+import { PartnerPractitionerListPage } from "./pages/PartnerPractitionerListPage";
 import { LocationCreatePage } from "./pages/LocationCreatePage";
 import { LocationEditPage } from "./pages/LocationEditPage";
 import { LocationListPage } from "./pages/LocationListPage";
@@ -115,6 +120,8 @@ function App() {
             <Link to="/master-import" className="row-menu__item">
               マスタ取込
             </Link>
+            {/* 自院のマスタ。診療科・診察室・スタッフは自院のものしか登録しない
+                (他院は下の「連携先」)。 */}
             <SubMenu label="共通">
               <Link to="/organizations" className="row-menu__item">
                 医療機関
@@ -127,6 +134,15 @@ function App() {
               </Link>
               <Link to="/locations" className="row-menu__item">
                 診察室・撮影室
+              </Link>
+            </SubMenu>
+            {/* 他院。診療情報提供書の送付先候補として登録する。 */}
+            <SubMenu label="連携先">
+              <Link to="/partner-organizations" className="row-menu__item">
+                連携先医療機関
+              </Link>
+              <Link to="/partner-practitioners" className="row-menu__item">
+                連携先医師
               </Link>
             </SubMenu>
             <SubMenu label="テンプレート">
@@ -204,6 +220,11 @@ function App() {
             <Link to="/settings" className="row-menu__item">
               接続設定
             </Link>
+            {/* どの Organization が自院かの指定。診療科・診察室・スタッフの所属や
+                帳票の自院欄がこの設定を見る。 */}
+            <Link to="/facility-settings" className="row-menu__item">
+              自院設定
+            </Link>
             <ThemeToggleItem />
           </HoverMenu>
         </nav>
@@ -228,6 +249,27 @@ function App() {
           <Route path="/organizations" element={<OrganizationListPage />} />
           <Route path="/organizations/new" element={<OrganizationCreatePage />} />
           <Route path="/organizations/:id/edit" element={<OrganizationEditPage />} />
+          {/* 連携先(他院)。リソースは自院と同じ Organization / Practitioner で、
+              画面と検索条件だけ分ける。 */}
+          <Route path="/partner-organizations" element={<PartnerOrganizationListPage />} />
+          <Route
+            path="/partner-organizations/new"
+            element={
+              <OrganizationCreatePage backTo="/partner-organizations" title="連携先医療機関登録" />
+            }
+          />
+          <Route
+            path="/partner-organizations/:id/edit"
+            element={
+              <OrganizationEditPage backTo="/partner-organizations" title="連携先医療機関編集" />
+            }
+          />
+          <Route path="/partner-practitioners" element={<PartnerPractitionerListPage />} />
+          <Route path="/partner-practitioners/new" element={<PartnerPractitionerCreatePage />} />
+          <Route
+            path="/partner-practitioners/:id/edit"
+            element={<PartnerPractitionerEditPage />}
+          />
           {/* 診療科も Organization だが、所属医療機関(partOf)を持つ点で施設と切り分ける。 */}
           <Route path="/departments" element={<DepartmentListPage />} />
           <Route path="/departments/new" element={<DepartmentCreatePage />} />
@@ -280,6 +322,14 @@ function App() {
             element={
               <AdminGate>
                 <ConnectionSettingsPage />
+              </AdminGate>
+            }
+          />
+          <Route
+            path="/facility-settings"
+            element={
+              <AdminGate>
+                <FacilitySettingsPage />
               </AdminGate>
             }
           />

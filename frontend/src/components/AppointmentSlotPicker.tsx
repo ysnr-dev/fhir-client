@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   useDaySlots,
-  useDepartmentList,
+  useSelfDepartments,
   useFreeSlotsOfMonth,
   usePractitionerOptions,
   useScheduleOptions,
@@ -87,7 +87,7 @@ export function AppointmentSlotPicker({
   // Organization.id で、枠表が持つのは SS-MIX2 コードのため)。useState の初期値に
   // すると読み込み前の空文字で固定されてしまうので、「まだ選び直していない間は
   // 既定値を使う」形にして後から反映されるようにする。
-  const { departments } = useDepartmentList({});
+  const { departments } = useSelfDepartments();
   const { practitioners } = usePractitionerOptions();
   const defaultDepartment = departments.find((d) => d.id === orderContext.departmentId);
   const [departmentFilter, setDepartmentFilter] = useState<string | null>(null);

@@ -4,7 +4,7 @@ import { useKarteLinkState } from "../karteReturn";
 import { useCurrentPractitioner } from "../api/authQueries";
 import {
   useCancelAppointment,
-  useDepartmentList,
+  useSelfDepartments,
   useLocationOptions,
   useOutpatientList,
   usePractitionerOptions,
@@ -75,7 +75,7 @@ export function OutpatientListPage() {
   }, []);
 
   const list = useOutpatientList(date);
-  const departments = useDepartmentList({});
+  const departments = useSelfDepartments();
   const practitioners = usePractitionerOptions();
   const locations = useLocationOptions();
   const updateStatus = useUpdateAppointmentStatus();

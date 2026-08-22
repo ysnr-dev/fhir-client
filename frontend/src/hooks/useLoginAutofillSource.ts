@@ -1,5 +1,10 @@
 import { useAuthSession } from "../api/authQueries";
-import { useOrganization, usePractitioner, usePractitionerRoles } from "../api/queries";
+import {
+  useOrganization,
+  usePractitioner,
+  usePractitionerRoles,
+  useSelfOrganization,
+} from "../api/queries";
 import type { LoginAutofillSource } from "../fhir/loginAutofill";
 import { parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
 
@@ -9,14 +14,26 @@ import { parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
 // 回答フォームは初期回答をマウント時に一度だけ確定するため、呼び出し側は ready を
 // 待ってからフォームを描画すること。administrator ログインや認証不要モードでは
 // 紐付く Practitioner が無く、source は undefined・ready は true になる。
+//
+// 医療機関は自院設定(管理 > 自院設定)を使う。自院未設定の環境では従来どおり
+// ログイン中の医療従事者の所属ロールから辿る。
 export function useLoginAutofillSource(): { source?: LoginAutofillSource; ready: boolean } {
   const session = useAuthSession();
   const practitionerId = session.data?.user?.practitioner_id ?? undefined;
 
   const practitionerQuery = usePractitioner(practitionerId);
   const roleQuery = usePractitionerRoles(practitionerId);
-  const organizationId = roleQuery.role ? parsePractitionerRole(roleQuery.role).organizationId : "";
-  const organizationQuery = useOrganization(organizationId || undefined);
+  const self = useSelfOrganization();
+  const roleOrganizationId = roleQuery.role
+    ? parsePractitionerRole(roleQuery.role).organizationId
+    : "";
+  // 自院が設定済みならそちらを見るので、所属ロール由来の Organization は引かない。
+  const fallbackOrganizationQuery = useOrganization(
+    self.selfOrganizationId ? undefined : roleOrganizationId || undefined,
+  );
+  const organization = self.selfOrganizationId
+    ? self.organization
+    : fallbackOrganizationQuery.data?.data;
 
   const practitioner = practitionerQuery.data?.data;
 
@@ -26,14 +43,15 @@ export function useLoginAutofillSource(): { source?: LoginAutofillSource; ready:
     !session.isLoading &&
     !practitionerQuery.isLoading &&
     !roleQuery.isLoading &&
-    !organizationQuery.isLoading;
+    !self.isLoading &&
+    !fallbackOrganizationQuery.isLoading;
 
   return {
     source: practitioner
       ? {
           practitioner,
           role: roleQuery.role,
-          organization: organizationQuery.data?.data,
+          organization,
         }
       : undefined,
     ready,

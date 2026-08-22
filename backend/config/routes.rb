@@ -30,6 +30,10 @@ Rails.application.routes.draw do
       post :test, on: :collection
     end
 
+    # 「自院」の Organization 指定(書き込み)。読み取りは全ユーザー向けに
+    # トップレベルの /facility_settings がある。
+    resource :facility_settings, only: %i[show update]
+
     # 上流 FHIR サーバーの管理API(/admin/oauth_clients、/admin/scopes)への中継。
     # ブラウザから上流を直接叩けない(CORS無効)ため、ここでサーバー間中継する。
     resources :oauth_clients, only: %i[index create destroy]
@@ -41,6 +45,10 @@ Rails.application.routes.draw do
     # テンプレートカテゴリ(独自マスタ)。Questionnaire 側は拡張に code を持つ。
     resources :questionnaire_categories, only: %i[index create update destroy]
   end
+
+  # 「自院」がどの Organization かの参照(ログイン済みユーザー全員が読む)。
+  # 変更は管理者だけなので /admin/facility_settings 側。
+  resource :facility_settings, only: :show
 
   # 帳票出力(QuestionnaireResponse の PDF 化)。FHIR リソースではないため
   # /fhir とは別のプレーン JSON / PDF エンドポイント。

@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCurrentPractitioner } from "../api/authQueries";
-import { useDepartmentDoctors, useDepartmentsOf, usePractitionerRoles } from "../api/queries";
+import {
+  useDepartmentDoctors,
+  useDepartmentsOf,
+  usePractitionerRoles,
+  useSelfOrganization,
+} from "../api/queries";
 import { departmentDisplayName, sortDepartmentsByCode } from "../fhir/departmentHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import {
@@ -35,8 +40,11 @@ export function OrderContextPicker() {
 
   const baseRole = baseRoleOf(practitionerRoles.roles);
   const baseRoleValues = baseRole ? parsePractitionerRole(baseRole) : undefined;
-  const facilityId = baseRoleValues?.organizationId || undefined;
   const isDoctor = isDoctorRoleCode(baseRoleValues?.roleCode);
+  // 診療科の母集団は自院。自院未設定の環境ではログイン中の医療従事者の所属から
+  // 辿る(所属も未登録なら科を選べないが、それは従来どおり)。
+  const { selfOrganizationId } = useSelfOrganization();
+  const facilityId = selfOrganizationId || baseRoleValues?.organizationId || undefined;
 
   // 自分に紐付く診療科(既定科が先頭)。
   const myDepartments = useMemo(

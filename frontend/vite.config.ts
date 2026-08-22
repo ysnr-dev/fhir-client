@@ -28,6 +28,12 @@ export default defineConfig({
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
         changeOrigin: true,
       },
+      // 自院設定の参照 API。SPA ルートの /facility-settings(ハイフン)とは
+      // 別パスなので、アンダースコアちょうどに限定して転送する。
+      '^/facility_settings$': {
+        target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
+        changeOrigin: true,
+      },
       '/reports': {
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
         changeOrigin: true,

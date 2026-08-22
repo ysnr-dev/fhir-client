@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useKarteLinkState } from "../karteReturn";
 import {
-  useDepartmentList,
+  useSelfDepartments,
   useLabWorklist,
   useUpdateLabTaskStatus,
   type LabWorklistRow,
@@ -79,7 +79,7 @@ export function LabWorklistPage() {
   }, []);
 
   const worklist = useLabWorklist(date);
-  const departments = useDepartmentList({});
+  const departments = useSelfDepartments();
   const updateStatus = useUpdateLabTaskStatus();
 
   const rows = useMemo(

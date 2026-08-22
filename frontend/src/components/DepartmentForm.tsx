@@ -1,6 +1,6 @@
 import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
-import { useOrganizationOptions } from "../api/queries";
+import { useOrganizationOptions, useSelfOrganization } from "../api/queries";
 import { SSMIX2_DEPARTMENT_CODES, departmentCodeDisplay } from "../fhir/departmentCodes";
 import {
   emptyDepartmentForm,
@@ -32,9 +32,14 @@ export function DepartmentForm({
     initialValues ?? { ...emptyDepartmentForm, partOfId: defaultPartOfId ?? "" },
   );
   const [validationError, setValidationError] = useState<string | null>(null);
+  // 診療科は自院にしか作らないので、自院が設定済みなら所属は選ばせず固定する。
+  // 自院未設定の環境(初期セットアップ前)だけ従来どおり選択できる。
+  const self = useSelfOrganization();
   const { organizations, isLoading: loadingOrganizations } = useOrganizationOptions();
 
   const update = makeFieldUpdater(setValues);
+
+  const partOfId = self.selfOrganizationId || values.partOfId;
 
   // コードを選んだら診療科名も入れる。名称を編集済みのときは上書きしない
   // (コード表の名称をそのまま使わず院内呼称にしている場合があるため)。
@@ -47,13 +52,13 @@ export function DepartmentForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateDepartmentForm(values);
+    const error = validateDepartmentForm({ ...values, partOfId });
     if (error) {
       setValidationError(error);
       return;
     }
     setValidationError(null);
-    onSubmit(values);
+    onSubmit({ ...values, partOfId });
   }
 
   return (
@@ -65,22 +70,24 @@ export function DepartmentForm({
       )}
       <ErrorBanner error={submitError} />
 
-      <label>
-        所属医療機関(必須)
-        <select
-          value={values.partOfId}
-          onChange={(e) => update("partOfId", e.target.value)}
-          disabled={loadingOrganizations}
-          required
-        >
-          <option value="">選択してください</option>
-          {organizations.map((organization) => (
-            <option key={organization.id} value={organization.id}>
-              {organizationDisplayName(organization)}
-            </option>
-          ))}
-        </select>
-      </label>
+      {!self.selfOrganizationId && (
+        <label>
+          所属医療機関(必須)
+          <select
+            value={values.partOfId}
+            onChange={(e) => update("partOfId", e.target.value)}
+            disabled={loadingOrganizations}
+            required
+          >
+            <option value="">選択してください</option>
+            {organizations.map((organization) => (
+              <option key={organization.id} value={organization.id}>
+                {organizationDisplayName(organization)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <label>
         診療科コード

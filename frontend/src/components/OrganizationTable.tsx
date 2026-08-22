@@ -9,7 +9,19 @@ import {
 import { ErrorBanner } from "./ErrorBanner";
 import { RowMenu } from "./RowMenu";
 
-export function OrganizationTable({ organizations }: { organizations: fhir4.Organization[] }) {
+interface OrganizationTableProps {
+  organizations: fhir4.Organization[];
+  /** 編集画面のルート。連携先医療機関の一覧は /partner-organizations を渡す。 */
+  basePath?: string;
+  /** 診療科への導線。診療科は自院にしか作らないので連携先では出さない。 */
+  showDepartments?: boolean;
+}
+
+export function OrganizationTable({
+  organizations,
+  basePath = "/organizations",
+  showDepartments = true,
+}: OrganizationTableProps) {
   const deleteOrganization = useDeleteOrganization();
 
   function handleDelete(organization: fhir4.Organization) {
@@ -49,15 +61,17 @@ export function OrganizationTable({ organizations }: { organizations: fhir4.Orga
               <td>{organization.active === false ? "無効" : "有効"}</td>
               <td className="patient-table__actions">
                 <RowMenu label={`${organizationDisplayName(organization)} の操作`}>
-                  <Link className="row-menu__item" to={`/organizations/${organization.id}/edit`}>
+                  <Link className="row-menu__item" to={`${basePath}/${organization.id}/edit`}>
                     編集
                   </Link>
-                  <Link
-                    className="row-menu__item"
-                    to={`/departments?organization=${organization.id}`}
-                  >
-                    診療科
-                  </Link>
+                  {showDepartments && (
+                    <Link
+                      className="row-menu__item"
+                      to={`/departments?organization=${organization.id}`}
+                    >
+                      診療科
+                    </Link>
+                  )}
                   <button
                     type="button"
                     className="row-menu__item row-menu__item--danger"

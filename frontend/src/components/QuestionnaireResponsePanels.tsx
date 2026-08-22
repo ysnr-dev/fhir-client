@@ -20,7 +20,9 @@ import { buildPopulateContext } from "../fhir/populateContext";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { ProblemSelect } from "./ProblemSelect";
 import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
+import { useSelfInstitutionNumber } from "../hooks/useSelfInstitutionNumber";
 import {
+  DEFAULT_INSTITUTION_NUMBER,
   buildQuestionnaireResponse,
   emptyQuestionnaireResponseMeta,
   parseQuestionnaireResponseMeta,
@@ -91,6 +93,18 @@ export function QuestionnaireResponseCreatePanel({
     if (!loginPractitionerName) return;
     setMeta((prev) => (prev.authorName ? prev : { ...prev, authorName: loginPractitionerName }));
   }, [loginPractitionerName]);
+
+  // 保険医療機関番号は自院(管理 > 自院設定)の登録値で埋める。記入者名と同じく
+  // 取得が非同期なので、仮の初期値のままのときだけ後から流し込む。
+  const selfInstitutionNumber = useSelfInstitutionNumber();
+  useEffect(() => {
+    if (!selfInstitutionNumber) return;
+    setMeta((prev) =>
+      prev.institutionNumber === DEFAULT_INSTITUTION_NUMBER
+        ? { ...prev, institutionNumber: selfInstitutionNumber }
+        : prev,
+    );
+  }, [selfInstitutionNumber]);
 
   // 初期値式(%conditions / %labResults / %prescriptions / %patient)の実行時
   // コンテキスト。取得完了までフォームを描画しない(初期回答はマウント時に確定するため)。
