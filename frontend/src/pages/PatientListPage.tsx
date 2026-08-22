@@ -10,7 +10,7 @@ export function PatientListPage() {
   const [search, setSearch] = useState<PatientSearchParams>({});
   const [offset, setOffset] = useState(0);
 
-  // 一覧の幅は外来一覧とそろえる(画面を行き来したときに表の左端が動かないように)。
+  // 一覧の幅は外来患者一覧とそろえる(画面を行き来したときに表の左端が動かないように)。
   useEffect(() => {
     document.body.classList.add("page-wide");
     return () => document.body.classList.remove("page-wide");
@@ -27,7 +27,7 @@ export function PatientListPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>患者一覧</h1>
+        <h1>全患者</h1>
         <Link to="/patients/new" className="button">
           新規登録
         </Link>

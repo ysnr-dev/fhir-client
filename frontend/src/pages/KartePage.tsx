@@ -624,7 +624,7 @@ export function KartePage() {
       <div className="karte-page__header">
         <PatientHeader patientId={patientId} />
         <Link to="/patients" className="button">
-          ← 患者一覧に戻る
+          ← 全患者に戻る
         </Link>
       </div>
 

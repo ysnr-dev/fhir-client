@@ -33,7 +33,7 @@ import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { isDoctorRoleCode, parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
 import { today } from "../fhir/scheduleHelpers";
 
-// 外来一覧(受付ワークリスト)。診察日を決めて、その日の予約患者を受付する。
+// 外来患者一覧(受付ワークリスト)。診察日を決めて、その日の予約患者を受付する。
 //
 // 1 行 = 予約(Appointment)1 件。予約なしの来院は「当日受付」で枠を持たない予約を
 // 作り、同じ一覧に載せる(登録は WalkInCheckInModal)。
@@ -119,7 +119,7 @@ export function OutpatientListPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>外来一覧</h1>
+        <h1>外来患者一覧</h1>
         <button type="button" onClick={() => setWalkInOpen(true)}>
           当日受付
         </button>

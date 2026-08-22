@@ -79,9 +79,16 @@ function App() {
           FHIR Client
         </Link>
         <nav className="app__nav">
-          <NavLink to="/patients">患者一覧</NavLink>
-          {/* 外来一覧はその日の予約患者を受付する画面。患者を探す患者一覧の隣に置く。 */}
-          <NavLink to="/outpatients">外来一覧</NavLink>
+          {/* 患者を探す入口。全患者から探すか、その日の外来予約から探すかで分ける。 */}
+          <HoverMenu label="患者一覧">
+            <Link to="/patients" className="row-menu__item">
+              全患者
+            </Link>
+            {/* 外来患者一覧はその日の予約患者を受付する画面。 */}
+            <Link to="/outpatients" className="row-menu__item">
+              外来患者一覧
+            </Link>
+          </HoverMenu>
           {/* 部門業務は「依頼を受けた側」の画面。診療科がオーダーを出す患者一覧・カルテと、
               マスタメンテの間に置く。放射線以外の部門が増えたらここに並べる。 */}
           <HoverMenu label="部門業務">
