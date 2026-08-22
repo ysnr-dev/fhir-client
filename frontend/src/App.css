@@ -7849,3 +7849,75 @@ body.page-wide #root {
   font-size: 12px;
   cursor: default;
 }
+
+/* 入院患者一覧 ----------------------------------------------------------- */
+
+/* 列が多いので、狭い画面では表だけ横に送る(外来患者一覧と同じ)。 */
+.inpatient-wrap {
+  overflow-x: auto;
+}
+
+.inpatient th,
+.inpatient td {
+  white-space: nowrap;
+}
+
+/* 特記事項は長くなりうるので、ここだけは折り返して幅を抑える。 */
+.inpatient td.inpatient__note {
+  white-space: normal;
+  max-width: 240px;
+}
+
+/* カナは列を分けず、氏名の後ろに括弧書きで添える。氏名を読む邪魔にならないよう
+   本文より少し小さくする。 */
+.inpatient__kana {
+  font-size: 10px;
+}
+
+/* 生年月日に添える年齢(と月齢)。指定を pt で受けているのでそのまま書く。 */
+.inpatient__age {
+  font-size: 10pt;
+}
+
+/* 病室セルは rowspan でその病室のベッドぶんをまとめる。 */
+.inpatient__room {
+  vertical-align: top;
+  font-weight: 600;
+}
+
+/* 空床は「そこに情報が無い」という目印でしかないので、患者の行より一段沈める。
+   色を直に指定せず opacity で落とすのは、明暗どちらのテーマでも同じ加減にするため。 */
+.inpatient__empty-bed {
+  color: var(--text);
+  opacity: 0.55;
+  font-size: 13px;
+}
+
+/* 行の操作は、既定のボタンサイズのままだと文字だけの行より高くなり、空床の行と
+   高さがそろわない。外来患者一覧と同じく文字 1 行に収まる高さまで詰める。
+   line-height を明示するのは、既定では本文の行送りを font: inherit で受け継いで
+   しまい、padding を削っただけでは縮まないため。 */
+.inpatient .patient-table__actions button,
+.inpatient .patient-table__actions .button {
+  padding: 2px 10px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* ケバブは同じ行に並ぶボタンと高さ・上下位置を揃える。三点リーダーだけなので
+   横幅はボタンより詰める。 */
+.inpatient .patient-table__actions .row-menu__trigger {
+  padding: 2px 7px;
+  font-size: 15px;
+  line-height: 20px;
+}
+
+/* 特記事項だけは 1 行に収まらないので、他の項目と同じ列に並べず幅を取る。 */
+.walk-in__fields .admission__note {
+  flex-basis: 100%;
+}
+
+.walk-in__fields .admission__note textarea {
+  width: 100%;
+  resize: vertical;
+}

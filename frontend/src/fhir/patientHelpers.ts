@@ -109,6 +109,26 @@ export function calculateAge(birthDate: string, asOf: Date = new Date()): number
   return age >= 0 ? age : undefined;
 }
 
+/**
+ * 「36歳7か月」。年だけでは粗いところ(乳幼児や、入院中の細かい経過)でも使えるよう、
+ * 満年齢に加えて誕生月からの月数を出す。
+ */
+export function ageWithMonthsLabel(
+  birthDate: string,
+  asOf: Date = new Date(),
+): string | undefined {
+  if (!birthDate) return undefined;
+  const birth = new Date(birthDate);
+  if (Number.isNaN(birth.getTime())) return undefined;
+
+  let months = (asOf.getFullYear() - birth.getFullYear()) * 12 + (asOf.getMonth() - birth.getMonth());
+  // 誕生日がまだ来ていない月はひと月数えない。
+  if (asOf.getDate() < birth.getDate()) months -= 1;
+  if (months < 0) return undefined;
+
+  return `${Math.floor(months / 12)}歳${months % 12}か月`;
+}
+
 const GENDER_LABELS: Record<string, string> = {
   male: "男性",
   female: "女性",

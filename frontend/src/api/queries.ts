@@ -19,11 +19,21 @@ import { LOCATION_TYPE_CODES } from "../fhir/locationHelpers";
 import {
   MAX_BED_COUNT,
   WARD_TYPE_CODE,
+  bedNumber,
   buildRoomDeleteBundle,
   buildRoomSaveBundle,
   countByParent,
+  partOfId,
   type RoomSaveInput,
 } from "../fhir/wardHelpers";
+import {
+  ADMISSION_CLASS_CODE,
+  ADMISSION_STATUS,
+  buildCancelledEncounter,
+  buildDischargedEncounter,
+  buildEncounterUpdateBundle,
+  latestEncounterByBed,
+} from "../fhir/encounterHelpers";
 import {
   buildLabResultBundle,
   buildLabResultDeleteBundle,
@@ -1033,6 +1043,196 @@ export function useDeleteRoom() {
       postBundle(buildRoomDeleteBundle(roomId, beds)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Location"] });
+    },
+  });
+}
+
+/** 病棟のセレクト用。使わない病棟を選べても仕方がないので active だけ返す。 */
+export function useWardOptions() {
+  const params = new URLSearchParams();
+  params.set("type", WARD_TYPE_CODE);
+  params.set("status", "active");
+  params.set("_sort", "name");
+  params.set("_count", "100");
+
+  const query = useQuery({
+    queryKey: ["Location", "wards", "options"],
+    queryFn: () => searchResource<fhir4.Location>("Location", params),
+  });
+
+  return {
+    ...query,
+    wards:
+      query.data?.data.entry
+        ?.map((e) => e.resource)
+        .filter((r): r is fhir4.Location => Boolean(r)) ?? [],
+  };
+}
+
+export interface WardGrid {
+  /** 病室名順。 */
+  rooms: fhir4.Location[];
+  /** 病室 id -> その病室のベッド(番号順)。 */
+  bedsByRoom: Map<string, fhir4.Location[]>;
+}
+
+/**
+ * 入院患者一覧のグリッド用に、1 つの病棟の病室とベッドをまとめて取る。
+ * 一覧(useRoomSearch)と違ってページングしないのは、病棟ぶんの表を 1 画面に
+ * 出しきるため。_revinclude の子は _count の対象外なのでベッドは取りこぼさない。
+ */
+async function fetchWardGrid(wardId: string): Promise<WardGrid> {
+  const PAGE = 100;
+  const rooms: fhir4.Location[] = [];
+  const beds: fhir4.Location[] = [];
+
+  for (let offset = 0; ; offset += PAGE) {
+    const params = new URLSearchParams();
+    params.set("partof", `Location/${wardId}`);
+    params.set("_sort", "name");
+    params.set("_count", String(PAGE));
+    params.set("_offset", String(offset));
+    params.set("_revinclude", "Location:partof");
+
+    const { data: bundle } = await searchResource<fhir4.Resource>("Location", params);
+    const { matches, children } = splitLocationMatches(bundle);
+    rooms.push(...matches);
+    beds.push(...children);
+    if (matches.length < PAGE) break;
+  }
+
+  const bedsByRoom = new Map<string, fhir4.Location[]>();
+  for (const bed of beds) {
+    const roomId = partOfId(bed);
+    if (!roomId) continue;
+    const list = bedsByRoom.get(roomId);
+    if (list) list.push(bed);
+    else bedsByRoom.set(roomId, [bed]);
+  }
+  for (const list of bedsByRoom.values()) {
+    list.sort((a, b) => (bedNumber(a) ?? 0) - (bedNumber(b) ?? 0));
+  }
+
+  return { rooms, bedsByRoom };
+}
+
+export function useWardGrid(wardId: string | undefined) {
+  const query = useQuery({
+    queryKey: ["Location", "ward-grid", wardId],
+    queryFn: () => fetchWardGrid(wardId as string),
+    enabled: Boolean(wardId),
+    placeholderData: keepPreviousData,
+  });
+
+  return {
+    ...query,
+    rooms: query.data?.rooms ?? [],
+    bedsByRoom: query.data?.bedsByRoom ?? new Map<string, fhir4.Location[]>(),
+  };
+}
+
+// ---- 入院(Encounter) ----
+//
+// 入院は Encounter 1 件で「その患者が今どのベッドに居るか」を表す
+// (組み立て方は fhir/encounterHelpers.ts の冒頭)。
+//
+// 病棟で絞らず院内の入院中を全部取ってからベッド id で突き合わせる。病棟の
+// ベッド id を並べた location=... で引くこともできるが、ベッドの数だけ URL が
+// 伸びる。入院中の件数はベッド総数が上限で高が知れているうえ、全部持っていれば
+// 「この患者は既に別の病棟に入院している」の判定も追加のリクエスト無しでできる。
+
+const INPATIENT_PAGE = 100;
+const INPATIENT_MAX_PAGES = 5;
+
+export interface InpatientResult {
+  /** ベッド id -> 入院中の Encounter。 */
+  byBed: Map<string, fhir4.Encounter>;
+  /** 患者 id -> 患者。_include で一緒に取ったもの。 */
+  patientsById: Map<string, fhir4.Patient>;
+  /** 入院中の Encounter 全件(既入院の判定に使う)。 */
+  encounters: fhir4.Encounter[];
+  /** 上限ページまで読んでも終わらなかった(表示が欠けている)。 */
+  truncated: boolean;
+}
+
+async function fetchInpatients(): Promise<InpatientResult> {
+  const encounters: fhir4.Encounter[] = [];
+  const patientsById = new Map<string, fhir4.Patient>();
+  let truncated = false;
+
+  for (let page = 0; page < INPATIENT_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("status", ADMISSION_STATUS);
+    params.set("class", ADMISSION_CLASS_CODE);
+    params.set("_count", String(INPATIENT_PAGE));
+    params.set("_offset", String(page * INPATIENT_PAGE));
+    // 氏名・カナ・生年月日・性別を出すのに患者の現物が要る。
+    params.set("_include", "Encounter:subject");
+
+    const { data: bundle } = await searchResource<fhir4.Resource>("Encounter", params);
+
+    let matched = 0;
+    for (const entry of bundle.entry ?? []) {
+      const resource = entry.resource;
+      if (resource?.resourceType === "Encounter") {
+        encounters.push(resource as fhir4.Encounter);
+        matched += 1;
+      } else if (resource?.resourceType === "Patient" && resource.id) {
+        patientsById.set(resource.id, resource as fhir4.Patient);
+      }
+    }
+
+    if (matched < INPATIENT_PAGE) break;
+    if (page === INPATIENT_MAX_PAGES - 1) truncated = true;
+  }
+
+  return { byBed: latestEncounterByBed(encounters), patientsById, encounters, truncated };
+}
+
+export function useInpatientEncounters() {
+  return useQuery({
+    queryKey: ["Encounter", "inpatients"],
+    queryFn: fetchInpatients,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** 空きベッドへの入院登録。 */
+export function useAdmitPatient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (encounter: fhir4.Encounter) => createResource(encounter),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Encounter"] });
+    },
+  });
+}
+
+/** 退院。入院を終える(記録は status=finished + 退院日として残る)。 */
+export function useDischargePatient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      encounter,
+      dischargeDate,
+    }: {
+      encounter: fhir4.Encounter;
+      dischargeDate: string;
+    }) => postBundle(buildEncounterUpdateBundle(buildDischargedEncounter(encounter, dischargeDate))),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Encounter"] });
+    },
+  });
+}
+
+/** 入院登録の取り消し(誤登録)。退院とは別物なので退院日は残さない。 */
+export function useCancelAdmission() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (encounter: fhir4.Encounter) =>
+      postBundle(buildEncounterUpdateBundle(buildCancelledEncounter(encounter))),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Encounter"] });
     },
   });
 }

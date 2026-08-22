@@ -113,16 +113,16 @@ RSpec.describe "FhirProxy", type: :request do
 
   describe "resource type allowlist" do
     it "returns 404 OperationOutcome for a resource type that is not allowlisted, without calling upstream" do
-      get "/fhir/Encounter/1"
+      get "/fhir/Coverage/1"
 
       expect(response).to have_http_status(:not_found)
       body = JSON.parse(response.body)
       expect(body["resourceType"]).to eq("OperationOutcome")
-      expect(body["issue"].first["diagnostics"]).to include("Encounter")
+      expect(body["issue"].first["diagnostics"]).to include("Coverage")
     end
 
-    it "allowlists DiagnosticReport, Observation, Specimen (検査結果機能)、Condition (病名機能)、Questionnaire・QuestionnaireResponse (テンプレート機能)" do
-      %w[DiagnosticReport Observation Specimen Condition Questionnaire QuestionnaireResponse].each do |type|
+    it "allowlists DiagnosticReport, Observation, Specimen (検査結果機能)、Condition (病名機能)、Questionnaire・QuestionnaireResponse (テンプレート機能)、Encounter (入院患者一覧)" do
+      %w[DiagnosticReport Observation Specimen Condition Questionnaire QuestionnaireResponse Encounter].each do |type|
         stub_request(:get, "#{upstream_base}/#{type}")
           .with(query: { "patient" => "Patient/123" })
           .to_return(status: 200, body: '{"resourceType":"Bundle"}',

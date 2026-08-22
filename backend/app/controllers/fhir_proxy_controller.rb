@@ -15,11 +15,13 @@ class FhirProxyController < ApplicationController
   # Location は診察室・撮影室のマスタで、予約枠(Schedule.actor)の主体になる。
   # Schedule / Slot は予約枠そのもの(枠表とその中の時間枠)、Appointment は
   # その枠を患者が押さえた予約。
+  # Encounter は入院。入院患者一覧が status=in-progress / class=IMP で引き、
+  # Encounter.location でベッドの Location を指す。
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
     PractitionerRole Composition Task Procedure MedicationAdministration
-    Location Schedule Slot Appointment
+    Location Schedule Slot Appointment Encounter
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 

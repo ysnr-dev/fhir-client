@@ -45,6 +45,7 @@ import { PartnerOrganizationListPage } from "./pages/PartnerOrganizationListPage
 import { PartnerPractitionerCreatePage } from "./pages/PartnerPractitionerCreatePage";
 import { PartnerPractitionerEditPage } from "./pages/PartnerPractitionerEditPage";
 import { PartnerPractitionerListPage } from "./pages/PartnerPractitionerListPage";
+import { InpatientListPage } from "./pages/InpatientListPage";
 import { LocationCreatePage } from "./pages/LocationCreatePage";
 import { LocationEditPage } from "./pages/LocationEditPage";
 import { LocationListPage } from "./pages/LocationListPage";
@@ -98,6 +99,10 @@ function App() {
             {/* 外来患者一覧はその日の予約患者を受付する画面。 */}
             <Link to="/outpatients" className="row-menu__item">
               外来患者一覧
+            </Link>
+            {/* 入院患者一覧は病棟のベッドの埋まり具合と在院患者を見る画面。 */}
+            <Link to="/inpatients" className="row-menu__item">
+              入院患者一覧
             </Link>
           </HoverMenu>
           {/* 部門業務は「依頼を受けた側」の画面。診療科がオーダーを出す患者一覧・カルテと、
@@ -306,6 +311,8 @@ function App() {
           <Route path="/schedules/:id/slots" element={<ScheduleSlotCalendarPage />} />
           {/* 外来の受付。その日の予約患者と当日受付の患者を捌くための一覧。 */}
           <Route path="/outpatients" element={<OutpatientListPage />} />
+          {/* 入院患者一覧。病棟のベッド(Location)に入院(Encounter)を突き合わせて出す。 */}
+          <Route path="/inpatients" element={<InpatientListPage />} />
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}
           <Route path="/lab-worklist" element={<LabWorklistPage />} />
           <Route path="/lab-arrivals" element={<LabArrivalPage />} />
