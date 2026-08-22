@@ -1,6 +1,7 @@
 import { today } from "../lib/dates";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { useKarteLinkState } from "../karteReturn";
 import {
   useDepartmentList,
   useRadWorklist,
@@ -326,6 +327,8 @@ function WorklistRow({
   onChangeStatus: (status: RadTaskStatus) => void;
   onPerform: () => void;
 }) {
+  // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
+  const karteLinkState = useKarteLinkState();
   const { order, patient, task } = row;
   const summary = summarizeRadOrder(order);
   const entries = orderEntries(radOrderItems(order, row.itemRequests));
@@ -341,7 +344,7 @@ function WorklistRow({
       <td>
         {patient ? (
           // 実施時に前回画像や病名を見に行けるよう、カルテへ直接飛べるようにする。
-          <Link to={`/patients/${patient.id}/karte`}>{displayName(patient)}</Link>
+          <Link to={`/patients/${patient.id}/karte`} state={karteLinkState}>{displayName(patient)}</Link>
         ) : (
           "-"
         )}

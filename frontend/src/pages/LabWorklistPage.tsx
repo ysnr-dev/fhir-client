@@ -1,6 +1,7 @@
 import { today } from "../lib/dates";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { useKarteLinkState } from "../karteReturn";
 import {
   useDepartmentList,
   useLabWorklist,
@@ -323,6 +324,8 @@ function WorklistRow({
   onEnterResult: () => void;
   onChangeStatus: (status: LabTaskStatus) => void;
 }) {
+  // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
+  const karteLinkState = useKarteLinkState();
   const { order, patient } = row;
   const summary = summarizeLabOrder(order);
   const groups = groupBySpecimen(labOrderItems(order, row.itemRequests));
@@ -337,7 +340,7 @@ function WorklistRow({
       <td>
         {patient ? (
           // 採血の前に病名や前回結果を見に行けるよう、カルテへ直接飛べるようにする。
-          <Link to={`/patients/${patient.id}/karte`}>{displayName(patient)}</Link>
+          <Link to={`/patients/${patient.id}/karte`} state={karteLinkState}>{displayName(patient)}</Link>
         ) : (
           "-"
         )}

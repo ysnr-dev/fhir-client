@@ -64,6 +64,7 @@ import {
   type KarteOtherTabKey,
   type KarteTabKey,
 } from "../karteUrl";
+import { useKarteReturnTo } from "../karteReturn";
 import {
   clampLeftWidthRatio,
   clampTopRatio,
@@ -98,6 +99,8 @@ const HIGHLIGHT_DURATION_MS = 2000;
 export function KartePage() {
   const { patientId } = useParams<{ patientId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
+  // 「戻る」はカルテを開いた元の一覧へ。遷移元が分からなければ全患者へ戻す。
+  const returnTo = useKarteReturnTo();
 
   const tab = parseKarteTab(searchParams.get(KARTE_TAB_PARAM));
   const view = searchParams.get(KARTE_VIEW_PARAM) ?? "";
@@ -623,8 +626,8 @@ export function KartePage() {
       {/* 見出しは置かず、患者情報と戻るボタンを 1 行にまとめて縦幅を左右のペインに回す。 */}
       <div className="karte-page__header">
         <PatientHeader patientId={patientId} />
-        <Link to="/patients" className="button">
-          ← 全患者に戻る
+        <Link to={returnTo} className="button">
+          ← 戻る
         </Link>
       </div>
 
