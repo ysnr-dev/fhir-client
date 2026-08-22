@@ -1,35 +1,30 @@
 import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
 import { useOrganizationOptions, useSelfOrganization } from "../api/queries";
-import {
-  LOCATION_STATUS_OPTIONS,
-  LOCATION_TYPE_OPTIONS,
-  emptyLocationForm,
-  validateLocationForm,
-  type LocationFormValues,
-} from "../fhir/locationHelpers";
+import { LOCATION_STATUS_OPTIONS } from "../fhir/locationHelpers";
 import { organizationDisplayName } from "../fhir/organizationHelpers";
+import { emptyWardForm, validateWardForm, type WardFormValues } from "../fhir/wardHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 
-interface LocationFormProps {
-  initialValues?: LocationFormValues;
-  onSubmit: (values: LocationFormValues) => void;
+interface WardFormProps {
+  initialValues?: WardFormValues;
+  onSubmit: (values: WardFormValues) => void;
   submitting: boolean;
   submitError?: unknown;
   submitLabel: string;
 }
 
-export function LocationForm({
+export function WardForm({
   initialValues,
   onSubmit,
   submitting,
   submitError,
   submitLabel,
-}: LocationFormProps) {
-  const [values, setValues] = useState<LocationFormValues>(initialValues ?? emptyLocationForm);
+}: WardFormProps) {
+  const [values, setValues] = useState<WardFormValues>(initialValues ?? emptyWardForm);
   const [validationError, setValidationError] = useState<string | null>(null);
-  // 診察室・撮影室は自院の部屋しか登録しないので、自院が設定済みなら所属は
-  // 選ばせず固定する。自院未設定の環境だけ従来どおり選択できる。
+  // 病棟は自院のものしか登録しない。自院が設定済みなら所属は選ばせず固定する
+  // (診察室・診療科と同じ扱い)。
   const self = useSelfOrganization();
   const { organizations } = useOrganizationOptions();
 
@@ -39,7 +34,7 @@ export function LocationForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateLocationForm(values);
+    const error = validateWardForm(values);
     if (error) {
       setValidationError(error);
       return;
@@ -58,25 +53,14 @@ export function LocationForm({
       <ErrorBanner error={submitError} />
 
       <label>
-        名称(必須)
+        病棟名(必須)
         <input
           type="text"
           value={values.name}
           onChange={(e) => update("name", e.target.value)}
-          placeholder="第1診察室"
+          placeholder="東3階病棟"
           required
         />
-      </label>
-
-      <label>
-        種別(必須)
-        <select value={values.typeCode} onChange={(e) => update("typeCode", e.target.value)} required>
-          {LOCATION_TYPE_OPTIONS.map((option) => (
-            <option key={option.code} value={option.code}>
-              {option.label}
-            </option>
-          ))}
-        </select>
       </label>
 
       <label>

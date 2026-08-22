@@ -1,35 +1,37 @@
 import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
 import { useOrganizationOptions, useSelfOrganization } from "../api/queries";
-import {
-  LOCATION_STATUS_OPTIONS,
-  LOCATION_TYPE_OPTIONS,
-  emptyLocationForm,
-  validateLocationForm,
-  type LocationFormValues,
-} from "../fhir/locationHelpers";
+import { LOCATION_STATUS_OPTIONS } from "../fhir/locationHelpers";
 import { organizationDisplayName } from "../fhir/organizationHelpers";
+import {
+  MAX_BED_COUNT,
+  ROOM_CLASS_OPTIONS,
+  emptyRoomForm,
+  validateRoomForm,
+  type RoomFormValues,
+} from "../fhir/wardHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 
-interface LocationFormProps {
-  initialValues?: LocationFormValues;
-  onSubmit: (values: LocationFormValues) => void;
+interface RoomFormProps {
+  initialValues?: RoomFormValues;
+  onSubmit: (values: RoomFormValues) => void;
   submitting: boolean;
   submitError?: unknown;
   submitLabel: string;
+  /** 編集時のみ true。ベッドの増減について注意書きを出す。 */
+  editing?: boolean;
 }
 
-export function LocationForm({
+export function RoomForm({
   initialValues,
   onSubmit,
   submitting,
   submitError,
   submitLabel,
-}: LocationFormProps) {
-  const [values, setValues] = useState<LocationFormValues>(initialValues ?? emptyLocationForm);
+  editing = false,
+}: RoomFormProps) {
+  const [values, setValues] = useState<RoomFormValues>(initialValues ?? emptyRoomForm);
   const [validationError, setValidationError] = useState<string | null>(null);
-  // 診察室・撮影室は自院の部屋しか登録しないので、自院が設定済みなら所属は
-  // 選ばせず固定する。自院未設定の環境だけ従来どおり選択できる。
   const self = useSelfOrganization();
   const { organizations } = useOrganizationOptions();
 
@@ -39,7 +41,7 @@ export function LocationForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateLocationForm(values);
+    const error = validateRoomForm(values);
     if (error) {
       setValidationError(error);
       return;
@@ -58,26 +60,43 @@ export function LocationForm({
       <ErrorBanner error={submitError} />
 
       <label>
-        名称(必須)
+        病室名(必須)
         <input
           type="text"
           value={values.name}
           onChange={(e) => update("name", e.target.value)}
-          placeholder="第1診察室"
+          placeholder="301号室"
           required
         />
       </label>
 
       <label>
-        種別(必須)
-        <select value={values.typeCode} onChange={(e) => update("typeCode", e.target.value)} required>
-          {LOCATION_TYPE_OPTIONS.map((option) => (
+        区分
+        <select value={values.roomClass} onChange={(e) => update("roomClass", e.target.value)}>
+          {ROOM_CLASS_OPTIONS.map((option) => (
             <option key={option.code} value={option.code}>
               {option.label}
             </option>
           ))}
         </select>
       </label>
+
+      <label>
+        ベッド数(必須)
+        <input
+          type="number"
+          min={1}
+          max={MAX_BED_COUNT}
+          value={values.bedCount}
+          onChange={(e) => update("bedCount", e.target.value)}
+          required
+        />
+      </label>
+      {editing && (
+        <p className="organization-form__hint">
+          ベッドは番号順(1、2、…)に作られます。数を減らすと番号の大きいベッドから削除されます。
+        </p>
+      )}
 
       <label>
         状態

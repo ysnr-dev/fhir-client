@@ -1,6 +1,9 @@
 // 場所(Location)の組み立て・復元。診察室・撮影室のような「院内の部屋」を登録し、
 // 予約枠(Schedule.actor)の主体として使う。
 //
+// 入院の場所(病棟・病室・ベッド)は同じ Location だが、階層を持ち使う場面も
+// 違うので wardHelpers.ts と /wards の画面が受け持つ。ここでは扱わない。
+//
 // 上流 fhir-server の LocationValidator は status / mode の値セットだけを見る
 // (JP Core に Location の必須項目は無い)。ここでは部屋を表すのに必要な最小限
 // —— 名称・種別・所属医療機関・状態 —— だけを持つ。
@@ -18,8 +21,11 @@ export const LOCATION_TYPE_OPTIONS = [
   { code: "RADDX", label: "放射線(撮影室)" },
   { code: "DX", label: "検査・処置室" },
   { code: "ER", label: "救急" },
-  { code: "HU", label: "病棟" },
 ] as const;
+
+// 一覧・選択肢はこのコードでの OR 検索で引く(入院の場所を混ぜないため。
+// useLocationSearch 参照)。種別を増やすときはここに足すだけでよい。
+export const LOCATION_TYPE_CODES = LOCATION_TYPE_OPTIONS.map((o) => o.code);
 
 export const LOCATION_STATUS_OPTIONS = [
   { code: "active", label: "使用中" },
@@ -56,6 +62,8 @@ export const emptyLocationForm: LocationFormValues = {
 
 export function validateLocationForm(values: LocationFormValues): string | null {
   if (!values.name.trim()) return "名称は必須です。";
+  // 種別は一覧の絞り込みキーでもあるので必須。未設定だと /locations に出てこない。
+  if (!values.typeCode) return "種別は必須です。";
   return null;
 }
 

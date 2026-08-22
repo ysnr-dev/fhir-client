@@ -48,6 +48,12 @@ import { PartnerPractitionerListPage } from "./pages/PartnerPractitionerListPage
 import { LocationCreatePage } from "./pages/LocationCreatePage";
 import { LocationEditPage } from "./pages/LocationEditPage";
 import { LocationListPage } from "./pages/LocationListPage";
+import { WardCreatePage } from "./pages/WardCreatePage";
+import { WardEditPage } from "./pages/WardEditPage";
+import { WardListPage } from "./pages/WardListPage";
+import { WardRoomCreatePage } from "./pages/WardRoomCreatePage";
+import { WardRoomEditPage } from "./pages/WardRoomEditPage";
+import { WardRoomListPage } from "./pages/WardRoomListPage";
 import { ScheduleCreatePage } from "./pages/ScheduleCreatePage";
 import { ScheduleEditPage } from "./pages/ScheduleEditPage";
 import { ScheduleListPage } from "./pages/ScheduleListPage";
@@ -134,6 +140,9 @@ function App() {
               </Link>
               <Link to="/locations" className="row-menu__item">
                 診察室・撮影室
+              </Link>
+              <Link to="/wards" className="row-menu__item">
+                病棟・病室
               </Link>
             </SubMenu>
             {/* 他院。診療情報提供書の送付先候補として登録する。 */}
@@ -280,6 +289,15 @@ function App() {
           <Route path="/locations" element={<LocationListPage />} />
           <Route path="/locations/new" element={<LocationCreatePage />} />
           <Route path="/locations/:id/edit" element={<LocationEditPage />} />
+
+          {/* 入院の場所。病棟(Location)の下に病室、その下にベッドをぶら下げる。
+              診察室・撮影室と同じ Location だが、階層も使う場面も別なので画面を分ける。 */}
+          <Route path="/wards" element={<WardListPage />} />
+          <Route path="/wards/new" element={<WardCreatePage />} />
+          <Route path="/wards/:id/edit" element={<WardEditPage />} />
+          <Route path="/wards/:wardId/rooms" element={<WardRoomListPage />} />
+          <Route path="/wards/:wardId/rooms/new" element={<WardRoomCreatePage />} />
+          <Route path="/wards/:wardId/rooms/:id/edit" element={<WardRoomEditPage />} />
 
           {/* 予約枠。枠表(Schedule)の下に時間枠(Slot)を週カレンダーでぶら下げる。 */}
           <Route path="/schedules" element={<ScheduleListPage />} />
