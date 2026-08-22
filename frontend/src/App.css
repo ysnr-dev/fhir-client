@@ -7857,23 +7857,123 @@ body.page-wide #root {
 
 /* 入院患者一覧 ----------------------------------------------------------- */
 
-/* 日付の送り(< >)と入力欄を 1 行に並べる。 */
+/* 日付の送り(< >)と入力欄を 1 行に並べる。
+   高さは日付入力に合わせる。既定のボタンは入力より数 px 高く、そのままだと
+   この欄だけ縦に伸びてフィルタ枠が他のタブと違う高さになるため、ボタンの
+   上下余白を入力より小さくしたうえで stretch で入力の高さまで引き伸ばす
+   (数値で高さを決め打ちにすると、字の大きさが変わったときにまたずれる)。 */
 .inpatient__date {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 4px;
+}
+
+.inpatient__date button {
+  padding: 4px 16px;
 }
 
 /* 列が多いので、狭い画面では表だけ横に送る(外来患者一覧と同じ)。
    どの列も折り返さない。特記事項や担当看護師が長いときに行の高さが変わると
-   ベッドの並びが読みにくくなるので、はみ出したぶんは表ごと横スクロールさせる。 */
+   ベッドの並びが読みにくくなるので、はみ出したぶんは表ごと横スクロールさせる。
+
+   床が多い病棟では縦にも送る。ページごと送ると列見出しまで流れてしまうので、
+   表の中だけで送れるよう高さを画面に収める(見出しの sticky はこのラップを
+   基準に貼り付くため、ここで高さを切らないと縦の固定が効かない)。
+   引く値は上のフィルタ・タブと下の件数表示のぶんの概算で、フィルタが折り返して
+   収まらないときはページ側も一緒に送る。 */
 .inpatient-wrap {
-  overflow-x: auto;
+  max-height: calc(100vh - 370px);
+  overflow: auto;
 }
 
 .inpatient th,
 .inpatient td {
   white-space: nowrap;
+}
+
+/* 横スクロールしても「誰のどの床か」と操作は残す。左は病室・ベッド・患者氏名の
+   3 列、右は操作列(カルテ / 患者選択 / ケバブ)を固定する。
+   sticky な列の left は手前の列の幅の合計で決めるしかないので、左 3 列は幅を
+   変数で決め打ちし、収まらない名前は省略記号で丸める(列が content に応じて
+   伸びると、その次の列の left がずれて重なってしまう)。 */
+.inpatient {
+  --inpatient-room-w: 96px;
+  --inpatient-bed-w: 72px;
+  --inpatient-name-w: 240px;
+  /* 罫線をセルに持たせるため collapse は使わない(collapse では罫線が表のもの
+     になり、固定した列だけ置き去りにできない。検査の時系列表と同じ理由)。 */
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.inpatient__col-room,
+.inpatient__col-bed,
+.inpatient__col-name,
+.inpatient__col-actions {
+  position: sticky;
+  z-index: 1;
+  /* 下を流れていく列が透けるので、地の色で塗りつぶす。 */
+  background: var(--bg);
+}
+
+/* 縦に送っても列見出しを残す。 */
+.inpatient thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+}
+
+/* 見出しと固定列が交わるセルは、行にも見出しにも隠れないよう一段上に出す。 */
+.inpatient thead .inpatient__col-room,
+.inpatient thead .inpatient__col-bed,
+.inpatient thead .inpatient__col-name,
+.inpatient thead .inpatient__col-actions {
+  z-index: 3;
+}
+
+/* 左 3 列。幅は width だけだと content に押し広げられるので、min/max で挟む。
+   box-sizing を border-box にするのは、既定(content-box)のままだと変数の値に
+   セルの padding が足された幅で並び、次の列の left が padding のぶんずれるため。 */
+.inpatient__col-room,
+.inpatient__col-bed,
+.inpatient__col-name {
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inpatient__col-room {
+  left: 0;
+  width: var(--inpatient-room-w);
+  min-width: var(--inpatient-room-w);
+  max-width: var(--inpatient-room-w);
+}
+
+.inpatient__col-bed {
+  left: var(--inpatient-room-w);
+  width: var(--inpatient-bed-w);
+  min-width: var(--inpatient-bed-w);
+  max-width: var(--inpatient-bed-w);
+}
+
+.inpatient__col-name {
+  left: calc(var(--inpatient-room-w) + var(--inpatient-bed-w));
+  width: var(--inpatient-name-w);
+  min-width: var(--inpatient-name-w);
+  max-width: var(--inpatient-name-w);
+}
+
+/* 操作列は幅を決めない(right 基準なので手前の列の幅に依らない)。ケバブの
+   メニューを切らないよう、ここには overflow: hidden を付けない。 */
+.inpatient__col-actions {
+  right: 0;
+}
+
+/* ケバブを開いている行だけ操作列を上に出す。sticky なセルは stacking context を
+   作るので、そのままだと下の行の固定セルが DOM 順で上に来てメニューを隠す。 */
+.inpatient tr:has(.row-menu__items) .inpatient__col-actions {
+  z-index: 4;
 }
 
 /* カナ(氏名の後ろ)と年齢(生年月日の後ろ)は、どちらも本体に添える括弧書きの補足。
@@ -7890,7 +7990,9 @@ body.page-wide #root {
 }
 
 /* 空床は「そこに情報が無い」という目印でしかないので、患者の行より一段沈める。
-   色を直に指定せず opacity で落とすのは、明暗どちらのテーマでも同じ加減にするため。 */
+   色を直に指定せず opacity で落とすのは、明暗どちらのテーマでも同じ加減にするため。
+   セルではなく中の文字に当てるのは、opacity がセル全体に効いて行の下罫線まで
+   そこだけ薄くなり、横線の濃さが列によって変わってしまうため。 */
 .inpatient__empty-bed {
   color: var(--text);
   opacity: 0.55;
@@ -7959,4 +8061,72 @@ body.page-wide #root {
 .walk-in__fields .admission__note textarea {
   width: 100%;
   resize: vertical;
+}
+
+/* フィルタと表の間の「入院予定 / 入院患者」切替。伝票の切替(.order-select__tabs)と
+   同じ下線タブにする。 */
+.inpatient-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.inpatient-tabs__tab {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.inpatient-tabs__tab:hover {
+  color: var(--accent);
+}
+
+.inpatient-tabs__tab.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* 入院予定タブの「新規登録」。行単位の操作ではないので表の上に置く。 */
+.inpatient__toolbar {
+  margin-bottom: 8px;
+}
+
+/* 特記事項セルに出す予定・外出泊のタグ。本文と見分けがつくよう小さめの枠付きにする。 */
+.inpatient__plan-tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* 外出泊モーダルの登録済み一覧。1 件ずつ削除できるよう行にして並べる。 */
+.leave-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.leave-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 13px;
 }

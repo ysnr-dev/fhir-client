@@ -30,6 +30,7 @@ import {
   ADMISSION_CLASS_CODE,
   ADMISSION_STATUS,
   DISCHARGED_STATUS,
+  PLANNED_STATUS,
   buildCancelledEncounter,
   buildDischargedEncounter,
   buildEncounterUpdateBundle,
@@ -1247,6 +1248,74 @@ export function useCancelAdmission() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Encounter"] });
     },
+  });
+}
+
+/**
+ * 組み立て済みの Encounter で上書きする汎用の更新。入院実施・予定取消・転室・
+ * 外出泊・転科転棟予定・退院予定のように「helpers で書き換えた 1 件を保存する」
+ * 操作をまとめて受ける。
+ */
+export function useUpdateEncounter() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (encounter: fhir4.Encounter) =>
+      postBundle(buildEncounterUpdateBundle(encounter)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Encounter"] });
+    },
+  });
+}
+
+export interface PlannedAdmissionsResult {
+  /** 入院予定の Encounter。入院予定日順。 */
+  encounters: fhir4.Encounter[];
+  patientsById: Map<string, fhir4.Patient>;
+  truncated: boolean;
+}
+
+// 入院予定は日付で絞れない(予定日はどこまでも先があり得る)ので全件取る。
+// ページングの形は fetchInpatients と同じ。
+async function fetchPlannedAdmissions(): Promise<PlannedAdmissionsResult> {
+  const encounters: fhir4.Encounter[] = [];
+  const patientsById = new Map<string, fhir4.Patient>();
+  let truncated = false;
+
+  for (let page = 0; page < INPATIENT_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("status", PLANNED_STATUS);
+    params.set("class", ADMISSION_CLASS_CODE);
+    params.set("_count", String(INPATIENT_PAGE));
+    params.set("_offset", String(page * INPATIENT_PAGE));
+    params.set("_include", "Encounter:subject");
+
+    const { data: bundle } = await searchResource<fhir4.Resource>("Encounter", params);
+
+    let matched = 0;
+    for (const entry of bundle.entry ?? []) {
+      const resource = entry.resource;
+      if (resource?.resourceType === "Encounter") {
+        encounters.push(resource as fhir4.Encounter);
+        matched += 1;
+      } else if (resource?.resourceType === "Patient" && resource.id) {
+        patientsById.set(resource.id, resource as fhir4.Patient);
+      }
+    }
+
+    if (matched < INPATIENT_PAGE) break;
+    if (page === INPATIENT_MAX_PAGES - 1) truncated = true;
+  }
+
+  encounters.sort((a, b) => (a.period?.start ?? "").localeCompare(b.period?.start ?? ""));
+  return { encounters, patientsById, truncated };
+}
+
+/** 入院予定(status=planned)の一覧。 */
+export function usePlannedAdmissions() {
+  return useQuery({
+    queryKey: ["Encounter", "planned-admissions"],
+    queryFn: fetchPlannedAdmissions,
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -16,10 +16,11 @@
 // ベッド数は病室リソースに持たせず、配下のベッドの件数から数える。数と実体を
 // 二重に持つと必ずどこかでずれるので、実体だけを正とする。
 
-const PHYSICAL_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/location-physical-type";
-const WARD_PHYSICAL_TYPE = { code: "wa", display: "Ward" };
-const ROOM_PHYSICAL_TYPE = { code: "ro", display: "Room" };
-const BED_PHYSICAL_TYPE = { code: "bd", display: "Bed" };
+// physicalType は Encounter.location(入院予定の病棟・病室・ベッドの区別)でも使う。
+export const PHYSICAL_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/location-physical-type";
+export const WARD_PHYSICAL_TYPE = { code: "wa", display: "Ward" };
+export const ROOM_PHYSICAL_TYPE = { code: "ro", display: "Room" };
+export const BED_PHYSICAL_TYPE = { code: "bd", display: "Bed" };
 
 // 病棟の種別。診察室と同じ v3-RoleCode の HU(Hospital unit)。
 const WARD_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/v3-RoleCode";
@@ -372,5 +373,56 @@ export function buildRoomDeleteBundle(roomId: string, beds: fhir4.Location[]): f
         .map((bed) => ({ request: { method: "DELETE" as const, url: `Location/${bed.id}` } })),
       { request: { method: "DELETE" as const, url: `Location/${roomId}` } },
     ],
+  };
+}
+
+// ---- 病棟 → 病室 → ベッドの選択(入院予定・入院実施・転室などのモーダル) ----
+
+/** 絞り込みセレクトの選択中の id。未選択は空文字。 */
+export interface BedRoomIds {
+  wardId: string;
+  roomId: string;
+  bedId: string;
+}
+
+/** 選択した場所の id と表示名。submit 時に resolveBedSelection で作る。 */
+export interface BedSelection extends BedRoomIds {
+  wardName: string;
+  roomName: string;
+  /** ベッドの表示(病室内の番号 "1" など)。 */
+  bedName: string;
+  bed?: fhir4.Location;
+}
+
+/** ベッド単体の表示。病室名と合成した bedDisplayName と違い、番号だけを返す。 */
+export function bedShortLabel(bed: fhir4.Location): string {
+  const number = bedNumber(bed);
+  return number != null ? String(number) : (bed.name ?? "-");
+}
+
+/**
+ * 選択中の id を、useWardOptions / useWardGrid で取ったマスタで表示名付きに解決する。
+ * occupiedBedIds を渡すと空床でないベッドは選ばれていないことにする(選択肢からも
+ * 消しているが、入院予定からの引き継ぎで埋まっている床の id が入っていることがある)。
+ */
+export function resolveBedSelection(
+  wards: fhir4.Location[],
+  grid: { rooms: fhir4.Location[]; bedsByRoom: Map<string, fhir4.Location[]> },
+  ids: BedRoomIds,
+  occupiedBedIds?: Set<string>,
+): BedSelection {
+  const ward = wards.find((w) => w.id === ids.wardId);
+  const room = grid.rooms.find((r) => r.id === ids.roomId);
+  const beds = room ? (grid.bedsByRoom.get(room.id ?? "") ?? []) : [];
+  let bed = beds.find((b) => b.id === ids.bedId);
+  if (bed?.id && occupiedBedIds?.has(bed.id)) bed = undefined;
+  return {
+    wardId: ward?.id ?? "",
+    wardName: ward ? (ward.name ?? "") : "",
+    roomId: room?.id ?? "",
+    roomName: room ? (room.name ?? "") : "",
+    bedId: bed?.id ?? "",
+    bedName: bed ? bedShortLabel(bed) : "",
+    bed,
   };
 }

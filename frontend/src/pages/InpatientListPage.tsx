@@ -3,23 +3,52 @@ import { Link, useSearchParams } from "react-router-dom";
 import {
   useCancelAdmission,
   useInpatientEncounters,
+  usePlannedAdmissions,
+  useUpdateEncounter,
   useWardGrid,
   useWardOptions,
 } from "../api/queries";
+import { AdmissionExecuteModal } from "../components/AdmissionExecuteModal";
 import { AdmissionModal } from "../components/AdmissionModal";
+import { BedTransferModal } from "../components/BedTransferModal";
 import { DischargeModal } from "../components/DischargeModal";
+import { DischargePlanModal } from "../components/DischargePlanModal";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { RowMenu } from "../components/RowMenu";
 import {
+  DischargePlanTable,
+  DischargedTable,
+  LeaveTable,
+  TransferPlanTable,
+  type DischargePlanRow,
+  type DischargedRow,
+  type LeaveRow,
+  type TransferPlanRow,
+} from "../components/InpatientPlanTables";
+import { LeaveModal } from "../components/LeaveModal";
+import { PlannedAdmissionModal } from "../components/PlannedAdmissionModal";
+import { RowMenu } from "../components/RowMenu";
+import { TransferPlanModal } from "../components/TransferPlanModal";
+import {
+  ADMISSION_STATUS,
+  DISCHARGED_STATUS,
+  buildPlanCancelledEncounter,
   encounterAdmissionDate,
   encounterAttendingId,
   encounterAttendingName,
+  encounterBedId,
   encounterDepartmentId,
   encounterDepartmentName,
+  encounterDischargeDate,
+  encounterDischargePlan,
+  encounterLeaves,
   encounterNote,
   encounterNurseIds,
   encounterNurseNames,
   encounterPatientId,
+  encounterTransferPlan,
+  plannedBedName,
+  plannedRoomName,
+  plannedWardId,
 } from "../fhir/encounterHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import {
@@ -29,21 +58,97 @@ import {
   genderLabel,
 } from "../fhir/patientHelpers";
 import { addDays } from "../fhir/scheduleHelpers";
-import { bedDisplayName, bedNumber } from "../fhir/wardHelpers";
+import { bedDisplayName, bedNumber, bedShortLabel } from "../fhir/wardHelpers";
 import { useKarteLinkState } from "../karteReturn";
 import { today } from "../lib/dates";
 
-// 入院患者一覧。病棟を選ぶと、その病棟の病室・ベッドを 1 行 1 床で並べ、
+// 入院患者一覧。「入院患者」と「入院予定」の 2 つのタブを持つ。
+//
+// 入院患者タブは、病棟を選ぶとその病棟の病室・ベッドを 1 行 1 床で並べ、
 // 埋まっている床には入院中の患者を、空いている床には「患者選択」を出す。
+// 入院予定タブは、選んだ病棟に入院する予定(status=planned の Encounter)を
+// 予定日順に 1 行 1 件で並べる。予定はまだ床が決まっていないことがあるので、
+// ベッドのグリッドではなく予定そのものを行にする。
 //
 // 入院は Encounter(fhir/encounterHelpers.ts)。ベッドの Location と Encounter を
 // ベッド id で突き合わせるだけなので、病室・ベッドの側は病棟マスタそのまま。
 //
-// 選んだ病棟と日付は URL の ?ward= / ?date= に持つ。カルテへ渡す戻り先(karteFrom)は
-// 検索文字列を含むので、カルテから戻ったときに同じ病棟・同じ日が開く。
+// 選んだ病棟・日付・タブは URL の ?ward= / ?date= / ?tab= に持つ。カルテへ渡す
+// 戻り先(karteFrom)は検索文字列を含むので、カルテから戻ったときに同じ表示が開く。
 //
 // 日付は「その日にベッドを使っていた人」を出すためのもの(退院済みも含む)で、
 // 診療科・主治医・担当看護師の絞り込みとは別扱い。日付を変えても空床は出す。
+// 入院予定タブは日付で絞らない(未来の予定を全部見せる)ので、日付は出さない。
+
+/**
+ * タブの並び。key はそのまま URL の ?tab= に入る(入院患者は既定なので、
+ * そのときだけパラメータを置かない)。
+ */
+const TABS = [
+  { key: "planned", label: "入院予定" },
+  { key: "current", label: "入院患者" },
+  { key: "transfer", label: "転科・転棟" },
+  { key: "leave", label: "外出泊" },
+  { key: "discharge", label: "退院予定" },
+  { key: "discharged", label: "退院患者" },
+] as const;
+
+type TabKey = (typeof TABS)[number]["key"];
+
+/**
+ * 日付を必ず 1 つ持つタブ。ここは「絞り込み」ではなく「いつの状況を見るか」なので、
+ * 空にできる他のタブの日付とは扱いを分ける(既定は今日で、日送りのボタンも付ける)。
+ */
+const DATED_TABS = ["current", "discharged"] as const;
+
+type DatedTabKey = (typeof DATED_TABS)[number];
+
+/** タブごとの日付の絞り込みが使う URL のパラメータ名。 */
+const DATE_PARAMS = {
+  planned: "plan-date",
+  transfer: "transfer-date",
+  leaveFrom: "leave-from",
+  leaveTo: "leave-to",
+  discharge: "discharge-date",
+  discharged: "discharged-date",
+} as const;
+
+/**
+ * タブごとに出す日付の絞り込み欄。入院患者タブは基準日があるので持たない。
+ * 外出泊だけは開始日と終了日の 2 つを持つ(表の日付の列がそのまま 2 つあるので、
+ * どちらでも引けるようにする)。
+ */
+const DATE_FILTERS: Record<Exclude<TabKey, DatedTabKey>, { param: string; label: string }[]> = {
+  planned: [{ param: DATE_PARAMS.planned, label: "入院予定日" }],
+  transfer: [{ param: DATE_PARAMS.transfer, label: "転科・転棟予定日" }],
+  leave: [
+    { param: DATE_PARAMS.leaveFrom, label: "外出泊開始日" },
+    { param: DATE_PARAMS.leaveTo, label: "外出泊終了日" },
+  ],
+  discharge: [{ param: DATE_PARAMS.discharge, label: "退院予定日" }],
+};
+
+function isDatedTab(tab: TabKey): tab is DatedTabKey {
+  return (DATED_TABS as readonly string[]).includes(tab);
+}
+
+/** 日付を 1 日ずつ送れる入力。基準日(入院患者)と退院日(退院患者)で使う。 */
+function DateStepper({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  return (
+    <div className="inpatient__date">
+      <button type="button" onClick={() => onChange(addDays(value, -1))} aria-label="前の日">
+        &lt;
+      </button>
+      <input type="date" value={value} onChange={(e) => onChange(e.target.value || today())} />
+      <button type="button" onClick={() => onChange(addDays(value, 1))} aria-label="次の日">
+        &gt;
+      </button>
+      <button type="button" onClick={() => onChange(today())} disabled={value === today()}>
+        今日
+      </button>
+    </div>
+  );
+}
 
 interface InpatientRow {
   room: fhir4.Location;
@@ -52,6 +157,17 @@ interface InpatientRow {
   roomRowSpan: number;
   encounter?: fhir4.Encounter;
   patient?: fhir4.Patient;
+}
+
+interface PlannedRow {
+  encounter: fhir4.Encounter;
+  patient?: fhir4.Patient;
+}
+
+/** 入院中の行のケバブから開くモーダル。 */
+interface RowAction {
+  kind: "bedTransfer" | "leave" | "transferPlan" | "dischargePlan";
+  row: InpatientRow;
 }
 
 interface Filters {
@@ -84,7 +200,7 @@ function withRoomRowSpans(rows: Omit<InpatientRow, "roomRowSpan">[]): InpatientR
 }
 
 /**
- * 入院中の Encounter から絞り込みの選択肢を作る。名前順、重複は潰す。
+ * Encounter から絞り込みの選択肢を作る。名前順、重複は潰す。
  * 担当看護師のように 1 件の Encounter が複数の候補を持つことがあるので、
  * pick は配列を返す。
  */
@@ -103,13 +219,54 @@ function filterOptions(
     .sort((a, b) => a.name.localeCompare(b.name, "ja"));
 }
 
+/** 絞り込み(診療科・主治医・担当看護師)に合うか。 */
+function matchesFilters(encounter: fhir4.Encounter, filters: Filters): boolean {
+  return (
+    (!filters.departmentId || encounterDepartmentId(encounter) === filters.departmentId) &&
+    (!filters.practitionerId || encounterAttendingId(encounter) === filters.practitionerId) &&
+    (!filters.nurseId || encounterNurseIds(encounter).includes(filters.nurseId))
+  );
+}
+
+/** 特記事項セルの先頭に出す予定・外出泊のタグ。 */
+function planTagLabels(encounter: fhir4.Encounter, date: string): string[] {
+  const tags: string[] = [];
+  const transfer = encounterTransferPlan(encounter);
+  if (transfer) tags.push(`転科・転棟予定 ${transfer.date} ${transfer.wardName}`.trim());
+  const discharge = encounterDischargePlan(encounter);
+  if (discharge) tags.push(`退院予定 ${discharge.date}`);
+  // 終わった外出泊まで並べると埋まるので、見ている日以降にかかるものだけ出す。
+  for (const leave of encounterLeaves(encounter)) {
+    if (leave.end && leave.end < date) continue;
+    tags.push(`外出泊 ${leave.start}〜${leave.end || "未定"}`);
+  }
+  return tags;
+}
+
 export function InpatientListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const wardId = searchParams.get("ward") ?? "";
   const date = searchParams.get("date") || today();
+  const tabParam = searchParams.get("tab");
+  const tab: TabKey = TABS.some((item) => item.key === tabParam)
+    ? (tabParam as TabKey)
+    : "current";
+  // タブごとの日付の絞り込み。空なら日付では絞らない(基準日と違って既定は「すべて」)。
+  // タブごとに別のパラメータで持つので、タブを行き来してもそれぞれの絞り込みが残る。
+  const plannedDate = searchParams.get(DATE_PARAMS.planned) ?? "";
+  const transferDate = searchParams.get(DATE_PARAMS.transfer) ?? "";
+  const leaveFrom = searchParams.get(DATE_PARAMS.leaveFrom) ?? "";
+  const leaveTo = searchParams.get(DATE_PARAMS.leaveTo) ?? "";
+  const dischargePlanDate = searchParams.get(DATE_PARAMS.discharge) ?? "";
+  // 退院患者タブが見る日。基準日と同じく必ず値を持つ(既定は今日)。
+  const dischargedDate = searchParams.get(DATE_PARAMS.discharged) || today();
 
-  // ward と date は URL で一緒に持つので、片方だけ変えるときも他方を残す。
-  function setParams(next: { ward?: string; date?: string }, replace = false) {
+  // 表示中のタブに出す日付の絞り込み欄(日付を必ず持つタブには出さない)。
+  const dateFields = isDatedTab(tab) ? [] : DATE_FILTERS[tab];
+
+  // ward・date・tab とタブごとの日付は URL で一緒に持つので、一部だけ変えるときも
+  // 他を残す。キーはそのままパラメータ名(日付はタブごとに違うので固定できない)。
+  function setParams(next: Record<string, string>, replace = false) {
     const params = new URLSearchParams(searchParams);
     for (const [key, value] of Object.entries(next)) {
       if (value) params.set(key, value);
@@ -122,6 +279,9 @@ export function InpatientListPage() {
     roomName: string;
   } | null>(null);
   const [dischargeTarget, setDischargeTarget] = useState<InpatientRow | null>(null);
+  const [rowAction, setRowAction] = useState<RowAction | null>(null);
+  const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [executeTarget, setExecuteTarget] = useState<PlannedRow | null>(null);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
 
   // 列が多く、既定の幅では折り返すのでこの画面だけ幅を広げる
@@ -133,8 +293,12 @@ export function InpatientListPage() {
 
   const wardOptions = useWardOptions();
   const grid = useWardGrid(wardId || undefined);
-  const inpatients = useInpatientEncounters(date);
+  // 退院患者タブは「その日に退院した人」を出すので、検索そのものを退院日で行う
+  // (退院日当日はまだ在院として引けるので、この検索結果に入ってくる)。
+  const inpatients = useInpatientEncounters(tab === "discharged" ? dischargedDate : date);
+  const planned = usePlannedAdmissions();
   const cancelAdmission = useCancelAdmission();
+  const updateEncounter = useUpdateEncounter();
 
   // 病棟が未指定なら先頭の病棟を開く。履歴を汚さないよう replace で書く。
   const initialized = useRef(false);
@@ -152,6 +316,18 @@ export function InpatientListPage() {
   const patientsById = inpatients.data?.patientsById;
 
   const filtering = Boolean(filters.departmentId || filters.practitionerId || filters.nurseId);
+  // 入院患者タブ以外は日付でも絞れるので、「絞り込み中か」の判定が入院患者タブと違う。
+  // filtering の方は入院患者タブで空床を出すかどうかの判定に使うので混ぜない。
+  const tabFiltering = filtering || dateFields.some((field) => searchParams.get(field.param));
+  const clearable = isDatedTab(tab) ? filtering : tabFiltering;
+
+  function clearFilters() {
+    setFilters(emptyFilters);
+    // 日付は今のタブに出ているものだけ消す(他のタブのぶんはそのまま残す)。
+    if (dateFields.length > 0) {
+      setParams(Object.fromEntries(dateFields.map((field) => [field.param, ""])));
+    }
+  }
 
   const rows = useMemo<InpatientRow[]>(() => {
     const all = grid.rooms.flatMap((room) => {
@@ -171,43 +347,162 @@ export function InpatientListPage() {
     // 診療科・主治医で絞るときは空床を出さない(空床はどちらも持たないので、
     // 残すと「絞ったのに一覧が変わらない」ように見えてしまう)。
     const visible = filtering
-      ? all.filter(
-          (row) =>
-            row.encounter &&
-            (!filters.departmentId ||
-              encounterDepartmentId(row.encounter) === filters.departmentId) &&
-            (!filters.practitionerId ||
-              encounterAttendingId(row.encounter) === filters.practitionerId) &&
-            (!filters.nurseId || encounterNurseIds(row.encounter).includes(filters.nurseId)),
-        )
+      ? all.filter((row) => row.encounter && matchesFilters(row.encounter, filters))
       : all;
 
     return withRoomRowSpans(visible);
   }, [grid.rooms, grid.bedsByRoom, byBed, patientsById, filtering, filters]);
 
-  // 選択肢は院内の入院中から作る。病棟を切り替えても選択が消えないよう、
-  // 表示中の病棟ではなく全病棟ぶんを見る。
+  // 入院予定は選んだ病棟のぶんだけ、予定日順(取得時に整列済み)で出す。
+  const plannedRows = useMemo<PlannedRow[]>(() => {
+    const encounters = (planned.data?.encounters ?? []).filter(
+      (encounter) =>
+        plannedWardId(encounter) === wardId &&
+        (!plannedDate || encounterAdmissionDate(encounter) === plannedDate) &&
+        (!filtering || matchesFilters(encounter, filters)),
+    );
+    return encounters.map((encounter) => {
+      const patientId = encounterPatientId(encounter);
+      return {
+        encounter,
+        patient: patientId ? planned.data?.patientsById.get(patientId) : undefined,
+      };
+    });
+  }, [planned.data, wardId, plannedDate, filtering, filters]);
+
+  // 転科・転棟/外出泊/退院予定は、入院中の患者に付けた予定を予定の側から並べ直した
+  // もの。もとの Encounter は入院患者タブと同じ検索結果なので取得は増やさない。
+  // 退院済み(finished)にはこれらの予定を出す意味がないので在院中だけを見る。
+  const admittedEncounters = useMemo(
+    () =>
+      (inpatients.data?.encounters ?? []).filter(
+        (encounter) =>
+          encounter.status === ADMISSION_STATUS &&
+          (!filtering || matchesFilters(encounter, filters)),
+      ),
+    [inpatients.data, filtering, filters],
+  );
+
+  // 選択中の病棟のベッド id -> 病室名・ベッド名。外出泊・退院予定タブで
+  // 「今どこに居るか」を出すのと、その病棟に居る人だけに絞るのに使う。
+  const bedPlaceById = useMemo(() => {
+    const map = new Map<string, { roomName: string; bedName: string }>();
+    for (const room of grid.rooms) {
+      const roomName = locationDisplayName(room);
+      for (const bed of grid.bedsByRoom.get(room.id ?? "") ?? []) {
+        if (bed.id) map.set(bed.id, { roomName, bedName: bedShortLabel(bed) });
+      }
+    }
+    return map;
+  }, [grid.rooms, grid.bedsByRoom]);
+
+  const transferRows = useMemo<TransferPlanRow[]>(() => {
+    const rows: TransferPlanRow[] = [];
+    for (const encounter of admittedEncounters) {
+      const plan = encounterTransferPlan(encounter);
+      // 「移動先に指定されている病棟」に出すので、今どこに居るかでは絞らない。
+      if (!plan || plan.wardId !== wardId) continue;
+      if (transferDate && plan.date !== transferDate) continue;
+      const patientId = encounterPatientId(encounter);
+      rows.push({
+        encounter,
+        patient: patientId ? patientsById?.get(patientId) : undefined,
+        plan,
+      });
+    }
+    return rows.sort((a, b) => a.plan.date.localeCompare(b.plan.date));
+  }, [admittedEncounters, wardId, transferDate, patientsById]);
+
+  const leaveRows = useMemo<LeaveRow[]>(() => {
+    const rows: LeaveRow[] = [];
+    for (const encounter of admittedEncounters) {
+      const bedId = encounterBedId(encounter);
+      const place = bedId ? bedPlaceById.get(bedId) : undefined;
+      // この病棟の床に居る人だけ。
+      if (!place) continue;
+      const patientId = encounterPatientId(encounter);
+      const patient = patientId ? patientsById?.get(patientId) : undefined;
+      encounterLeaves(encounter).forEach((leave, leaveIndex) => {
+        // 済んだ外出泊は残さない(基準日より前に帰院しているもの)。
+        if (leave.end && leave.end < date) return;
+        if (leaveFrom && leave.start !== leaveFrom) return;
+        if (leaveTo && leave.end !== leaveTo) return;
+        rows.push({ encounter, patient, ...place, leave, leaveIndex });
+      });
+    }
+    return rows.sort((a, b) => a.leave.start.localeCompare(b.leave.start));
+  }, [admittedEncounters, bedPlaceById, date, leaveFrom, leaveTo, patientsById]);
+
+  const dischargeRows = useMemo<DischargePlanRow[]>(() => {
+    const rows: DischargePlanRow[] = [];
+    for (const encounter of admittedEncounters) {
+      const plan = encounterDischargePlan(encounter);
+      if (!plan) continue;
+      if (dischargePlanDate && plan.date !== dischargePlanDate) continue;
+      const bedId = encounterBedId(encounter);
+      const place = bedId ? bedPlaceById.get(bedId) : undefined;
+      if (!place) continue;
+      const patientId = encounterPatientId(encounter);
+      rows.push({
+        encounter,
+        patient: patientId ? patientsById?.get(patientId) : undefined,
+        ...place,
+        plan,
+      });
+    }
+    return rows.sort((a, b) => a.plan.date.localeCompare(b.plan.date));
+  }, [admittedEncounters, bedPlaceById, dischargePlanDate, patientsById]);
+
+  const dischargedRows = useMemo<DischargedRow[]>(() => {
+    const rows: DischargedRow[] = [];
+    for (const encounter of inpatients.data?.encounters ?? []) {
+      if (encounter.status !== DISCHARGED_STATUS) continue;
+      if (encounterDischargeDate(encounter) !== dischargedDate) continue;
+      if (filtering && !matchesFilters(encounter, filters)) continue;
+      const bedId = encounterBedId(encounter);
+      // 退院したときに居た床で病棟を判定する。
+      const place = bedId ? bedPlaceById.get(bedId) : undefined;
+      if (!place) continue;
+      const patientId = encounterPatientId(encounter);
+      rows.push({
+        encounter,
+        patient: patientId ? patientsById?.get(patientId) : undefined,
+        ...place,
+      });
+    }
+    return rows.sort((a, b) => a.roomName.localeCompare(b.roomName, "ja"));
+  }, [inpatients.data, dischargedDate, filtering, filters, bedPlaceById, patientsById]);
+
+  // 選択肢は表示中のタブの Encounter から作る。病棟を切り替えても選択が
+  // 消えないよう、表示中の病棟ではなく全病棟ぶんを見る。
+  const optionSource = useMemo(
+    () =>
+      tab === "planned"
+        ? (planned.data?.encounters ?? [])
+        : (inpatients.data?.encounters ?? []),
+    [tab, planned.data, inpatients.data],
+  );
   const departmentOptions = useMemo(
     () =>
-      filterOptions(inpatients.data?.encounters ?? [], (e) => [
+      filterOptions(optionSource, (e) => [
         { id: encounterDepartmentId(e), name: encounterDepartmentName(e) },
       ]),
-    [inpatients.data],
+    [optionSource],
   );
   const practitionerOptions = useMemo(
     () =>
-      filterOptions(inpatients.data?.encounters ?? [], (e) => [
+      filterOptions(optionSource, (e) => [
         { id: encounterAttendingId(e), name: encounterAttendingName(e) },
       ]),
-    [inpatients.data],
+    [optionSource],
   );
   const nurseOptions = useMemo(
     () =>
-      filterOptions(inpatients.data?.encounters ?? [], (e) => {
+      filterOptions(optionSource, (e) => {
         const ids = encounterNurseIds(e);
         return encounterNurseNames(e).map((name, index) => ({ id: ids[index], name }));
       }),
-    [inpatients.data],
+    [optionSource],
   );
 
   // 二重入院の警告用。どの患者がどの床に居るかを患者 id で引けるようにする。
@@ -219,6 +514,17 @@ export function InpatientListPage() {
       if (patientId && label) map.set(patientId, label);
     }
     return map;
+  }, [inpatients.data]);
+
+  // いま入院中の患者が居るベッド。転室・転床や入院実施で空床だけを選ばせる。
+  const occupiedBedIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const encounter of inpatients.data?.encounters ?? []) {
+      if (encounter.status !== ADMISSION_STATUS) continue;
+      const bedId = encounterBedId(encounter);
+      if (bedId) set.add(bedId);
+    }
+    return set;
   }, [inpatients.data]);
 
   function handleCancelAdmission(row: InpatientRow) {
@@ -234,9 +540,146 @@ export function InpatientListPage() {
     cancelAdmission.mutate(row.encounter);
   }
 
+  function handleCancelPlan(row: PlannedRow) {
+    const label = row.patient ? displayName(row.patient) : "この患者";
+    if (!window.confirm(`${label} の入院予定を取り消します。よろしいですか?`)) return;
+    updateEncounter.mutate(buildPlanCancelledEncounter(row.encounter));
+  }
+
   const occupied = rows.filter((row) => row.encounter).length;
   const beds = rows.length;
-  const loading = wardOptions.isLoading || grid.isLoading || inpatients.isLoading;
+  const loading =
+    wardOptions.isLoading ||
+    grid.isLoading ||
+    (tab === "planned" ? planned.isLoading : inpatients.isLoading);
+
+  // 表はタブごとに列も操作も違うので、条件式を重ねずタブで分けて返す。
+  function renderTable() {
+    if (tab === "planned") {
+      return (
+        plannedRows.length === 0 ? (
+          <p className="patient-table__empty">
+            {tabFiltering
+              ? "絞り込みに該当する入院予定がありません。"
+              : "この病棟の入院予定はありません。"}
+          </p>
+        ) : (
+          <>
+            <div className="inpatient-wrap">
+              <table className="patient-table inpatient">
+                <thead>
+                  <tr>
+                    <th className="inpatient__col-room">病室</th>
+                    <th className="inpatient__col-bed">ベッド</th>
+                    <th className="inpatient__col-name">患者氏名</th>
+                    <th>生年月日</th>
+                    <th>性別</th>
+                    <th>診療科</th>
+                    <th>主治医</th>
+                    <th>担当看護師</th>
+                    <th>入院予定日</th>
+                    <th>特記事項</th>
+                    <th className="inpatient__col-actions"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {plannedRows.map((row) => (
+                    <PlannedTableRow
+                      key={row.encounter.id}
+                      row={row}
+                      onExecute={() => setExecuteTarget(row)}
+                      onCancelPlan={() => handleCancelPlan(row)}
+                      cancelling={updateEncounter.isPending}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="order-select__muted">入院予定 {plannedRows.length} 件</p>
+          </>
+        )
+      );
+    }
+    if (tab === "transfer") {
+      return (
+        <TransferPlanTable
+          rows={transferRows}
+          filtering={tabFiltering}
+          occupiedBedIds={occupiedBedIds}
+        />
+      );
+    }
+    if (tab === "leave") {
+      return <LeaveTable rows={leaveRows} filtering={tabFiltering} />;
+    }
+    if (tab === "discharge") {
+      return <DischargePlanTable rows={dischargeRows} filtering={tabFiltering} />;
+    }
+    if (tab === "discharged") {
+      return (
+        <DischargedTable
+          rows={dischargedRows}
+          filtering={filtering}
+          occupiedBedIds={occupiedBedIds}
+        />
+      );
+    }
+    return (
+      rows.length === 0 ? (
+        <p className="patient-table__empty">
+          {filtering
+            ? "絞り込みに該当する入院患者がいません。"
+            : "この病棟には病室・ベッドが登録されていません。"}
+        </p>
+      ) : (
+        <>
+          <div className="inpatient-wrap">
+            <table className="patient-table inpatient">
+              <thead>
+                <tr>
+                  <th className="inpatient__col-room">病室</th>
+                  <th className="inpatient__col-bed">ベッド</th>
+                  <th className="inpatient__col-name">患者氏名</th>
+                  <th>生年月日</th>
+                  <th>性別</th>
+                  <th>診療科</th>
+                  <th>主治医</th>
+                  <th>担当看護師</th>
+                  <th>入院日</th>
+                  <th>特記事項</th>
+                  <th className="inpatient__col-actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <InpatientTableRow
+                    key={row.bed.id}
+                    row={row}
+                    date={date}
+                    onAdmit={() =>
+                      setAdmissionTarget({
+                        bed: row.bed,
+                        roomName: locationDisplayName(row.room),
+                      })
+                    }
+                    onDischarge={() => setDischargeTarget(row)}
+                    onCancelAdmission={() => handleCancelAdmission(row)}
+                    onRowAction={(kind) => setRowAction({ kind, row })}
+                    cancelling={cancelAdmission.isPending}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="order-select__muted">
+            {filtering
+              ? `絞り込み結果 ${occupied} 件`
+              : `${beds} 床中 ${occupied} 床が在院(空床 ${beds - occupied})`}
+          </p>
+        </>
+      )
+    );
+  }
 
   return (
     <div className="page">
@@ -259,33 +702,33 @@ export function InpatientListPage() {
             ))}
           </select>
         </label>
-        <label>
-          基準日
-          <div className="inpatient__date">
-            <button
-              type="button"
-              onClick={() => setParams({ date: addDays(date, -1) })}
-              aria-label="前の日"
-            >
-              &lt;
-            </button>
+        {tab === "current" && (
+          <label>
+            基準日
+            <DateStepper value={date} onChange={(next) => setParams({ date: next })} />
+          </label>
+        )}
+        {tab === "discharged" && (
+          <label>
+            退院日
+            <DateStepper
+              value={dischargedDate}
+              onChange={(next) => setParams({ [DATE_PARAMS.discharged]: next })}
+            />
+          </label>
+        )}
+        {/* 予定はいつの日付にもあり得るので、既定は指定なし(すべて)。
+            基準日のような日送りは付けない(送った先に予定が無いことの方が多い)。 */}
+        {dateFields.map((field) => (
+          <label key={field.param}>
+            {field.label}
             <input
               type="date"
-              value={date}
-              onChange={(e) => setParams({ date: e.target.value || today() })}
+              value={searchParams.get(field.param) ?? ""}
+              onChange={(e) => setParams({ [field.param]: e.target.value })}
             />
-            <button
-              type="button"
-              onClick={() => setParams({ date: addDays(date, 1) })}
-              aria-label="次の日"
-            >
-              &gt;
-            </button>
-            <button type="button" onClick={() => setParams({ date: today() })} disabled={date === today()}>
-              今日
-            </button>
-          </div>
-        </label>
+          </label>
+        ))}
         <label>
           診療科
           <select
@@ -329,19 +772,50 @@ export function InpatientListPage() {
           </select>
         </label>
         <div className="patient-search-form__actions">
-          <button type="button" onClick={() => setFilters(emptyFilters)} disabled={!filtering}>
+          <button
+            type="button"
+            onClick={clearFilters}
+            disabled={!clearable}
+          >
             クリア
           </button>
         </div>
       </form>
 
-      <ErrorBanner error={wardOptions.error ?? grid.error ?? inpatients.error} />
-      <ErrorBanner error={cancelAdmission.error} />
+      <div className="inpatient-tabs" role="tablist" aria-label="入院の表示切替">
+        {TABS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.key}
+            className={`inpatient-tabs__tab${tab === item.key ? " is-active" : ""}`}
+            onClick={() => setParams({ tab: item.key === "current" ? "" : item.key })}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
 
-      {inpatients.data?.truncated && (
+      <ErrorBanner
+        error={wardOptions.error ?? grid.error ?? inpatients.error ?? planned.error}
+      />
+      <ErrorBanner error={cancelAdmission.error ?? updateEncounter.error} />
+
+      {(tab === "planned" ? planned.data?.truncated : inpatients.data?.truncated) && (
         <p className="error-banner__line error-banner__line--error" role="status">
-          入院中の患者が多いため、一部のみ表示しています。
+          {tab === "planned"
+            ? "入院予定が多いため、一部のみ表示しています。"
+            : "入院中の患者が多いため、一部のみ表示しています。"}
         </p>
+      )}
+
+      {tab === "planned" && (
+        <div className="inpatient__toolbar">
+          <button type="button" onClick={() => setPlanModalOpen(true)}>
+            新規登録
+          </button>
+        </div>
       )}
 
       {loading ? (
@@ -352,56 +826,8 @@ export function InpatientListPage() {
         </p>
       ) : !wardId ? (
         <p className="patient-table__empty">病棟を選択してください。</p>
-      ) : rows.length === 0 ? (
-        <p className="patient-table__empty">
-          {filtering
-            ? "絞り込みに該当する入院患者がいません。"
-            : "この病棟には病室・ベッドが登録されていません。"}
-        </p>
       ) : (
-        <>
-          <div className="inpatient-wrap">
-            <table className="patient-table inpatient">
-              <thead>
-                <tr>
-                  <th>病室</th>
-                  <th>ベッド</th>
-                  <th>患者氏名</th>
-                  <th>生年月日</th>
-                  <th>性別</th>
-                  <th>診療科</th>
-                  <th>主治医</th>
-                  <th>担当看護師</th>
-                  <th>入院日</th>
-                  <th>特記事項</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <InpatientTableRow
-                    key={row.bed.id}
-                    row={row}
-                    onSelectPatient={() =>
-                      setAdmissionTarget({
-                        bed: row.bed,
-                        roomName: locationDisplayName(row.room),
-                      })
-                    }
-                    onDischarge={() => setDischargeTarget(row)}
-                    onCancelAdmission={() => handleCancelAdmission(row)}
-                    cancelling={cancelAdmission.isPending}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="order-select__muted">
-            {filtering
-              ? `絞り込み結果 ${occupied} 件`
-              : `${beds} 床中 ${occupied} 床が在院(空床 ${beds - occupied})`}
-          </p>
-        </>
+        renderTable()
       )}
 
       {admissionTarget && (
@@ -427,38 +853,101 @@ export function InpatientListPage() {
           onClose={() => setDischargeTarget(null)}
         />
       )}
+
+      {rowAction?.row.encounter && rowAction.kind === "bedTransfer" && (
+        <BedTransferModal
+          encounter={rowAction.row.encounter}
+          patient={rowAction.row.patient}
+          wardId={wardId}
+          currentBedLabel={bedDisplayName(
+            rowAction.row.bed,
+            locationDisplayName(rowAction.row.room),
+          )}
+          occupiedBedIds={occupiedBedIds}
+          onClose={() => setRowAction(null)}
+        />
+      )}
+
+      {rowAction?.row.encounter && rowAction.kind === "leave" && (
+        <LeaveModal
+          encounter={rowAction.row.encounter}
+          patient={rowAction.row.patient}
+          onClose={() => setRowAction(null)}
+        />
+      )}
+
+      {rowAction?.row.encounter && rowAction.kind === "transferPlan" && (
+        <TransferPlanModal
+          encounter={rowAction.row.encounter}
+          patient={rowAction.row.patient}
+          onClose={() => setRowAction(null)}
+        />
+      )}
+
+      {rowAction?.row.encounter && rowAction.kind === "dischargePlan" && (
+        <DischargePlanModal
+          encounter={rowAction.row.encounter}
+          patient={rowAction.row.patient}
+          onClose={() => setRowAction(null)}
+        />
+      )}
+
+      {planModalOpen && (
+        <PlannedAdmissionModal
+          defaultWardId={wardId || undefined}
+          onClose={() => setPlanModalOpen(false)}
+        />
+      )}
+
+      {executeTarget && (
+        <AdmissionExecuteModal
+          plan={executeTarget.encounter}
+          patient={executeTarget.patient}
+          occupiedBedIds={occupiedBedIds}
+          admittedBedLabelByPatientId={admittedBedLabelByPatientId}
+          onClose={() => setExecuteTarget(null)}
+        />
+      )}
     </div>
   );
 }
 
 function InpatientTableRow({
   row,
-  onSelectPatient,
+  date,
+  onAdmit,
   onDischarge,
   onCancelAdmission,
+  onRowAction,
   cancelling,
 }: {
   row: InpatientRow;
-  onSelectPatient: () => void;
+  date: string;
+  /** 空床のケバブから入院登録を開く。 */
+  onAdmit: () => void;
   onDischarge: () => void;
   onCancelAdmission: () => void;
+  onRowAction: (kind: RowAction["kind"]) => void;
   cancelling: boolean;
 }) {
   const karteLinkState = useKarteLinkState();
   const { room, bed, roomRowSpan, encounter, patient } = row;
   const patientId = patient?.id;
+  const bedLabel = bedNumber(bed) ?? bed.name ?? "-";
+  const note = encounter ? encounterNote(encounter) : "";
+  const planTags = encounter ? planTagLabels(encounter, date) : [];
 
   return (
     <tr>
       {roomRowSpan > 0 && (
-        <td rowSpan={roomRowSpan} className="inpatient__room">
+        <td rowSpan={roomRowSpan} className="inpatient__room inpatient__col-room">
           {locationDisplayName(room)}
         </td>
       )}
-      <td>{bedNumber(bed) ?? bed.name ?? "-"}</td>
+      <td className="inpatient__col-bed">{bedLabel}</td>
       {encounter && patient ? (
         <>
-          <td className="inpatient__name">
+          <td className="inpatient__name inpatient__col-name">
             {/* カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
             {displayName(patient)}
             {displayKana(patient) && (
@@ -476,8 +965,15 @@ function InpatientTableRow({
           <td>{encounterAttendingName(encounter)}</td>
           <td>{encounterNurseNames(encounter).join("、") || "-"}</td>
           <td>{encounterAdmissionDate(encounter)}</td>
-          <td className="inpatient__note">{encounterNote(encounter) || "-"}</td>
-          <td className="patient-table__actions">
+          <td className="inpatient__note">
+            {planTags.map((tag) => (
+              <span key={tag} className="inpatient__plan-tag">
+                {tag}
+              </span>
+            ))}
+            {note || (planTags.length === 0 ? "-" : null)}
+          </td>
+          <td className="patient-table__actions inpatient__col-actions">
             {patientId && (
               <Link className="button" to={`/patients/${patientId}/karte`} state={karteLinkState}>
                 カルテ
@@ -489,6 +985,34 @@ function InpatientTableRow({
               label={`${patient ? displayName(patient) : "この患者"} の操作`}
               escapesClipping
             >
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => onRowAction("bedTransfer")}
+              >
+                転室・転床
+              </button>
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => onRowAction("leave")}
+              >
+                外出泊
+              </button>
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => onRowAction("transferPlan")}
+              >
+                転科・転棟予定
+              </button>
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => onRowAction("dischargePlan")}
+              >
+                退院予定
+              </button>
               <button type="button" className="row-menu__item" onClick={onDischarge}>
                 退院
               </button>
@@ -505,24 +1029,92 @@ function InpatientTableRow({
         </>
       ) : (
         <>
-          <td className="inpatient__empty-bed" colSpan={8}>
-            空床
+          {/* 「空床」は患者氏名の列に置く。固定する列を colSpan にまとめてしまうと、
+              スクロールしたときに残りの列まで一緒に貼り付いてしまう。
+              淡くするのはセルではなく文字(理由は App.css の .inpatient__empty-bed)。 */}
+          <td className="inpatient__col-name">
+            <span className="inpatient__empty-bed">空床</span>
           </td>
-          <td className="patient-table__actions">
-            <button type="button" onClick={onSelectPatient}>
-              患者選択
-            </button>
-            {/* 空床にも操作メニューを置く予定があるので、その場所を今から空けておく。
-                無いと「患者選択」だけ右端まで寄って、入院中の行の「カルテ」と
-                縦に揃わない。中身が入るまでは押せないままにする。 */}
-            <div className="row-menu">
-              <button type="button" className="row-menu__trigger" aria-label="操作" disabled>
-                ⋮
+          <td colSpan={7}></td>
+          <td className="patient-table__actions inpatient__col-actions">
+            <RowMenu label={`${locationDisplayName(room)} ${bedLabel} の操作`} escapesClipping>
+              <button type="button" className="row-menu__item" onClick={onAdmit}>
+                入院登録
               </button>
-            </div>
+            </RowMenu>
           </td>
         </>
       )}
+    </tr>
+  );
+}
+
+function PlannedTableRow({
+  row,
+  onExecute,
+  onCancelPlan,
+  cancelling,
+}: {
+  row: PlannedRow;
+  onExecute: () => void;
+  onCancelPlan: () => void;
+  cancelling: boolean;
+}) {
+  const karteLinkState = useKarteLinkState();
+  const { encounter, patient } = row;
+  const patientId = patient?.id;
+
+  return (
+    <tr>
+      <td className="inpatient__room inpatient__col-room">{plannedRoomName(encounter)}</td>
+      <td className="inpatient__col-bed">{plannedBedName(encounter)}</td>
+      <td className="inpatient__name inpatient__col-name">
+        {patient ? (
+          <>
+            {displayName(patient)}
+            {displayKana(patient) && (
+              <span className="inpatient__kana">（{displayKana(patient)}）</span>
+            )}
+          </>
+        ) : (
+          (encounter.subject?.display ?? "-")
+        )}
+      </td>
+      <td>
+        {patient?.birthDate ?? "-"}
+        {patient?.birthDate && ageWithMonthsLabel(patient.birthDate) && (
+          <span className="inpatient__age">（{ageWithMonthsLabel(patient.birthDate)}）</span>
+        )}
+      </td>
+      <td>{patient ? genderLabel(patient.gender) : "-"}</td>
+      <td>{encounterDepartmentName(encounter)}</td>
+      <td>{encounterAttendingName(encounter)}</td>
+      <td>{encounterNurseNames(encounter).join("、") || "-"}</td>
+      <td>{encounterAdmissionDate(encounter)}</td>
+      <td className="inpatient__note">{encounterNote(encounter) || "-"}</td>
+      <td className="patient-table__actions inpatient__col-actions">
+        {patientId && (
+          <Link className="button" to={`/patients/${patientId}/karte`} state={karteLinkState}>
+            カルテ
+          </Link>
+        )}
+        <RowMenu
+          label={`${patient ? displayName(patient) : "この患者"} の操作`}
+          escapesClipping
+        >
+          <button type="button" className="row-menu__item" onClick={onExecute}>
+            入院実施
+          </button>
+          <button
+            type="button"
+            className="row-menu__item row-menu__item--danger"
+            onClick={onCancelPlan}
+            disabled={cancelling}
+          >
+            入院予定取消
+          </button>
+        </RowMenu>
+      </td>
     </tr>
   );
 }
