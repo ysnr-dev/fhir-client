@@ -13,6 +13,7 @@ import {
 import { prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useInjectionInitialValues } from "../hooks/useInjectionInitialValues";
+import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 
 // 注射オーダーの登録・編集 UI。カルテ画面の右ペインから使う。
 // 送信は処方と同じ transaction Bundle の POST なので mutation(useCreatePrescription /
@@ -34,15 +35,20 @@ export function InjectionCreatePanel({
 }: InjectionCreatePanelProps) {
   const createInjection = useCreatePrescription();
   const source = useInjectionInitialValues(sourceSrId, patientId);
+  // 入外区分の初期値は入院中なら「入院」。DO でも DO 元ではなくいまの状態に合わせる。
+  const defaultSetting = useDefaultOrderSetting(patientId);
+  // DO 元と入院かどうかの読み込み完了を待ってからフォームを描画する
+  // (初期値は初回描画時のみ反映される)。
+  const waiting = (sourceSrId && !source.ready) || !defaultSetting.ready;
   // DO も新しいオーダーなので、依頼元は DO 元ではなくヘッダーで選択中のものを使う。
   const requester = useOrderContext();
 
   const initialValues = useMemo(
     () =>
       source.initialValues
-        ? buildDoInjectionForm(source.initialValues)
-        : emptyInjectionForm(defaultProblem ?? null),
-    [source.initialValues, defaultProblem],
+        ? buildDoInjectionForm(source.initialValues, defaultSetting.setting)
+        : emptyInjectionForm(defaultProblem ?? null, defaultSetting.setting),
+    [source.initialValues, defaultProblem, defaultSetting.setting],
   );
 
   function handleSubmit(values: InjectionFormValues) {
@@ -55,8 +61,7 @@ export function InjectionCreatePanel({
     <>
       <ErrorBanner error={source.error} />
 
-      {/* DO 元の読み込み完了を待ってからフォームを描画する(初期値は初回描画時のみ反映される)。 */}
-      {sourceSrId && !source.ready ? (
+      {waiting ? (
         <p>読み込み中...</p>
       ) : (
         <InjectionForm

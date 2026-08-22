@@ -10,6 +10,7 @@ import {
 } from "../fhir/labOrderHelpers";
 import { prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { useLabOrderInitialValues } from "../hooks/useLabOrderInitialValues";
+import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabOrderForm } from "./LabOrderForm";
@@ -34,15 +35,20 @@ export function LabOrderCreatePanel({
 }: LabOrderCreatePanelProps) {
   const createLabOrder = useCreatePrescription();
   const source = useLabOrderInitialValues(sourceSrId, patientId);
+  // 入外区分の初期値は入院中なら「入院」。DO でも DO 元ではなくいまの状態に合わせる。
+  const defaultSetting = useDefaultOrderSetting(patientId);
+  // DO 元と入院かどうかの読み込み完了を待ってからフォームを描画する
+  // (初期値は初回描画時のみ反映される)。
+  const waiting = (sourceSrId && !source.ready) || !defaultSetting.ready;
   // DO も新しいオーダーなので、依頼元は DO 元ではなくヘッダーで選択中のものを使う。
   const requester = useOrderContext();
 
   const initialValues = useMemo(
     () =>
       source.initialValues
-        ? buildDoLabOrderForm(source.initialValues)
-        : emptyLabOrderForm(defaultProblem ?? null),
-    [source.initialValues, defaultProblem],
+        ? buildDoLabOrderForm(source.initialValues, defaultSetting.setting)
+        : emptyLabOrderForm(defaultProblem ?? null, defaultSetting.setting),
+    [source.initialValues, defaultProblem, defaultSetting.setting],
   );
 
   function handleSubmit(values: LabOrderFormValues) {
@@ -55,8 +61,7 @@ export function LabOrderCreatePanel({
     <>
       <ErrorBanner error={source.error} />
 
-      {/* DO 元の読み込み完了を待ってからフォームを描画する(初期値は初回描画時のみ反映される)。 */}
-      {sourceSrId && !source.ready ? (
+      {waiting ? (
         <p>読み込み中...</p>
       ) : (
         <LabOrderForm

@@ -12,6 +12,7 @@ import {
   emptyMicroResultForm,
   type MicroResultFormValues,
 } from "../fhir/microResultHelpers";
+import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useMicroResultInitialValues } from "../hooks/useMicroResultInitialValues";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
@@ -136,15 +137,17 @@ function CreateForm({ patientId, onSaved }: { patientId: string; onSaved: () => 
   const createMicroResult = useCreateMicroResult();
   const orders = useMicroOrderCandidates(patientId);
   const requester = useOrderContext();
+  // 入院中なら入外区分を「入院」で開く(検体検査結果と同じ)。
+  const defaultSetting = useDefaultOrderSetting(patientId);
 
   // 診療科の既定はヘッダーで選んでいる依頼科(検体検査結果と同じ)。
   const initialValues = useMemo(
     () => ({
-      ...emptyMicroResultForm(),
+      ...emptyMicroResultForm(defaultSetting.setting),
       departmentId: requester.departmentId,
       departmentName: requester.departmentName,
     }),
-    [requester.departmentId, requester.departmentName],
+    [requester.departmentId, requester.departmentName, defaultSetting.setting],
   );
 
   function handleSubmit(values: MicroResultFormValues) {
@@ -155,14 +158,20 @@ function CreateForm({ patientId, onSaved }: { patientId: string; onSaved: () => 
     <>
       <ErrorBanner error={orders.error} />
 
-      <MicroResultForm
-        initialValues={initialValues}
-        onSubmit={handleSubmit}
-        submitting={createMicroResult.isPending}
-        submitError={createMicroResult.error}
-        orderCandidates={orders.candidates}
-        orderCandidatesLoading={orders.isLoading}
-      />
+      {/* 入院かどうかの読み込み完了を待ってからフォームを描画する
+          (初期値は初回描画時のみ反映される)。 */}
+      {!defaultSetting.ready ? (
+        <p>読み込み中...</p>
+      ) : (
+        <MicroResultForm
+          initialValues={initialValues}
+          onSubmit={handleSubmit}
+          submitting={createMicroResult.isPending}
+          submitError={createMicroResult.error}
+          orderCandidates={orders.candidates}
+          orderCandidatesLoading={orders.isLoading}
+        />
+      )}
     </>
   );
 }

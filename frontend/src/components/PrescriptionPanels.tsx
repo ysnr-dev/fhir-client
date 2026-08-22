@@ -13,6 +13,7 @@ import {
 } from "../fhir/prescriptionHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { usePrescriptionInitialValues } from "../hooks/usePrescriptionInitialValues";
+import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 
 // 処方の登録・編集 UI。ページとカルテ画面の右ペインの双方から使う。
 
@@ -34,15 +35,20 @@ export function PrescriptionCreatePanel({
 }: PrescriptionCreatePanelProps) {
   const createPrescription = useCreatePrescription();
   const source = usePrescriptionInitialValues(sourceSrId, patientId);
+  // 入外区分の初期値は入院中なら「入院」。DO でも DO 元ではなくいまの状態に合わせる。
+  const defaultSetting = useDefaultOrderSetting(patientId);
+  // DO 元と入院かどうかの読み込み完了を待ってからフォームを描画する
+  // (初期値は初回描画時のみ反映される)。
+  const waiting = (sourceSrId && !source.ready) || !defaultSetting.ready;
   // DO も新しいオーダーなので、依頼元は DO 元ではなくヘッダーで選択中のものを使う。
   const requester = useOrderContext();
 
   const initialValues = useMemo(
     () =>
       source.initialValues
-        ? buildDoPrescriptionForm(source.initialValues)
-        : emptyPrescriptionForm(defaultProblem ?? null),
-    [source.initialValues, defaultProblem],
+        ? buildDoPrescriptionForm(source.initialValues, defaultSetting.setting)
+        : emptyPrescriptionForm(defaultProblem ?? null, defaultSetting.setting),
+    [source.initialValues, defaultProblem, defaultSetting.setting],
   );
 
   function handleSubmit(values: PrescriptionFormValues) {
@@ -55,8 +61,7 @@ export function PrescriptionCreatePanel({
     <>
       <ErrorBanner error={source.error} />
 
-      {/* DO 元の読み込み完了を待ってからフォームを描画する(初期値は初回描画時のみ反映される)。 */}
-      {sourceSrId && !source.ready ? (
+      {waiting ? (
         <p>読み込み中...</p>
       ) : (
         <PrescriptionForm

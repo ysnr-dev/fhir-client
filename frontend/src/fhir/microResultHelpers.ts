@@ -286,9 +286,9 @@ export function emptyIsolate(): MicroIsolateValues {
   };
 }
 
-export function emptyMicroResultForm(): MicroResultFormValues {
+export function emptyMicroResultForm(setting: LabResultSetting = "outpatient"): MicroResultFormValues {
   return {
-    setting: "outpatient",
+    setting,
     specimenDate: today(),
     departmentId: "",
     departmentName: "",

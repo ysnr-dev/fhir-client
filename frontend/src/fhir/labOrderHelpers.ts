@@ -95,9 +95,12 @@ export interface LabOrderFormValues {
   items: LabOrderItemLine[];
 }
 
-export function emptyLabOrderForm(problem: ProblemRef | null = null): LabOrderFormValues {
+export function emptyLabOrderForm(
+  problem: ProblemRef | null = null,
+  setting: PrescriptionSetting = "outpatient",
+): LabOrderFormValues {
   return {
-    setting: "outpatient",
+    setting,
     priority: "routine",
     authoredDate: today(),
     comment: "",
@@ -561,9 +564,13 @@ export function buildLabOrderDeleteBundle(
 
 // 既存のオーダーを DO(流用)して新規登録するためのフォーム値。処方・注射と同じく
 // 明細の id を落として新規登録(POST)にし、検査日は当日にする。
-export function buildDoLabOrderForm(values: LabOrderFormValues): LabOrderFormValues {
+export function buildDoLabOrderForm(
+  values: LabOrderFormValues,
+  setting: PrescriptionSetting,
+): LabOrderFormValues {
   return {
     ...values,
+    setting,
     authoredDate: today(),
     items: values.items.map((item) => ({ ...item, id: "" })),
   };

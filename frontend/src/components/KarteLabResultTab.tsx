@@ -12,6 +12,7 @@ import {
   specimenRefsFrom,
   type LabResultFormValues,
 } from "../fhir/labResultHelpers";
+import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useLabResultInitialValues } from "../hooks/useLabResultInitialValues";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
@@ -163,16 +164,23 @@ function CreateForm({
   const source = useLabResultInitialValues(sourceReportId, patientId);
   const orders = useLabOrderCandidates(patientId);
   const requester = useOrderContext();
+  // 入外区分の初期値は入院中なら「入院」。DO でも DO 元ではなくいまの状態に合わせる。
+  const defaultSetting = useDefaultOrderSetting(patientId);
+  // DO 元と入院かどうかの読み込み完了を待ってからフォームを描画する
+  // (初期値は初回描画時のみ反映される)。
+  const waiting = (sourceReportId && !source.ready) || !defaultSetting.ready;
 
   // 診療科の既定はヘッダーで選んでいる依頼科。DO でも元の検査結果の科ではなく、
   // いま入力している科を初期値にする。
   const initialValues = useMemo(
     () => ({
-      ...(source.initialValues ? buildDoLabResultForm(source.initialValues) : emptyLabResultForm()),
+      ...(source.initialValues
+        ? buildDoLabResultForm(source.initialValues, defaultSetting.setting)
+        : emptyLabResultForm(defaultSetting.setting)),
       departmentId: requester.departmentId,
       departmentName: requester.departmentName,
     }),
-    [source.initialValues, requester.departmentId, requester.departmentName],
+    [source.initialValues, requester.departmentId, requester.departmentName, defaultSetting.setting],
   );
 
   function handleSubmit(values: LabResultFormValues) {
@@ -184,8 +192,7 @@ function CreateForm({
       <ErrorBanner error={source.error} />
       <ErrorBanner error={orders.error} />
 
-      {/* DO 元の読み込み完了を待ってからフォームを描画する(初期値は初回描画時のみ反映される)。 */}
-      {sourceReportId && !source.ready ? (
+      {waiting ? (
         <p>読み込み中...</p>
       ) : (
         <LabResultForm

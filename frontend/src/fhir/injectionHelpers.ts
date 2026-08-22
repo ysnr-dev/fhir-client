@@ -273,10 +273,13 @@ export const emptyInjectionRp: InjectionRpValues = {
   medicines: [{ ...emptyMedicineLine }],
 };
 
-export function emptyInjectionForm(problem: ProblemRef | null = null): InjectionFormValues {
+export function emptyInjectionForm(
+  problem: ProblemRef | null = null,
+  setting: PrescriptionSetting = "outpatient",
+): InjectionFormValues {
   return {
-    setting: "outpatient",
-    category: defaultCategory("outpatient"),
+    setting,
+    category: defaultCategory(setting),
     authoredDate: today(),
     comment: "",
     problem,
@@ -622,10 +625,16 @@ export function buildInjectionUpdateBundle(
 
 // 既存の注射を DO(流用)して新規登録するためのフォーム値に変換する。処方の DO と同じく
 // id を落として新規登録(POST)にし、注射日は当日にする。開始時刻は時刻だけを持ち
-// 日付は注射日から決まるので、そのまま引き継げる。
-export function buildDoInjectionForm(values: InjectionFormValues): InjectionFormValues {
+// 日付は注射日から決まるので、そのまま引き継げる。入外区分もいまの患者の状態に合わせ、
+// DO 元と変わるなら注射区分は選び直させる(選択肢が 1 つの外来はそれを入れる)。
+export function buildDoInjectionForm(
+  values: InjectionFormValues,
+  setting: PrescriptionSetting,
+): InjectionFormValues {
   return {
     ...values,
+    setting,
+    category: setting === values.setting ? values.category : defaultCategory(setting),
     authoredDate: today(),
     rps: values.rps.map((rp) => ({
       ...rp,

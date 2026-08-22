@@ -106,9 +106,12 @@ export const emptyRp: RpValues = {
 
 // problem を渡すと対象プロブレムを選択済みで開く(プロブレムリストで選んでいる
 // プロブレムをそのまま新規処方の対象にするため)。
-export function emptyPrescriptionForm(problem: ProblemRef | null = null): PrescriptionFormValues {
+export function emptyPrescriptionForm(
+  problem: ProblemRef | null = null,
+  setting: PrescriptionSetting = "outpatient",
+): PrescriptionFormValues {
   return {
-    setting: "outpatient",
+    setting,
     category: "",
     authoredDate: today(),
     comment: "",
@@ -433,12 +436,19 @@ export function buildPrescriptionUpdateBundle(
 }
 
 // 既存の処方を DO(流用)して新規登録するためのフォーム値に変換する。
-// ・入外区分/処方区分/用法/投与量/投与日数/コメント/対象プロブレムなど入力値はすべて引き継ぐ
+// ・用法/投与量/投与日数/コメント/対象プロブレムなど入力値はすべて引き継ぐ
 // ・MedicationRequest の id を落とし、既存リソースの更新(PUT)ではなく新規登録(POST)にする
 // ・処方日は DO 元ではなく当日にする
-export function buildDoPrescriptionForm(values: PrescriptionFormValues): PrescriptionFormValues {
+// ・入外区分はいまの患者の状態(setting)に合わせる。DO 元と変わる場合は処方区分の
+//   選択肢ごと変わるので、処方区分は選び直させる。
+export function buildDoPrescriptionForm(
+  values: PrescriptionFormValues,
+  setting: PrescriptionSetting,
+): PrescriptionFormValues {
   return {
     ...values,
+    setting,
+    category: setting === values.setting ? values.category : "",
     authoredDate: today(),
     rps: values.rps.map((rp) => ({
       ...rp,

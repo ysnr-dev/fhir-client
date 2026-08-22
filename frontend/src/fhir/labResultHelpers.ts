@@ -114,9 +114,9 @@ export const emptyLabResultLine: LabResultLineValues = {
   interpretation: "",
 };
 
-export function emptyLabResultForm(): LabResultFormValues {
+export function emptyLabResultForm(setting: LabResultSetting = "outpatient"): LabResultFormValues {
   return {
-    setting: "outpatient",
+    setting,
     specimenDate: today(),
     departmentId: "",
     departmentName: "",
@@ -820,9 +820,13 @@ export function parseLabResultForm(
 // ・Observation の id を落とし、既存リソースの更新ではなく新規登録にする
 // ・検体採取日は DO 元ではなく当日にする
 // ・検体検査オーダーの紐付けは引き継がない(DO 元のオーダーには既に結果があるため)
-export function buildDoLabResultForm(values: LabResultFormValues): LabResultFormValues {
+export function buildDoLabResultForm(
+  values: LabResultFormValues,
+  setting: LabResultSetting,
+): LabResultFormValues {
   return {
     ...values,
+    setting,
     specimenDate: today(),
     orderId: "",
     lines: values.lines.map((line) => ({ item: line.item, value: "", interpretation: "" })),

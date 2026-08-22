@@ -10,6 +10,7 @@ import {
 } from "../fhir/microOrderHelpers";
 import { prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { useMicroOrderInitialValues } from "../hooks/useMicroOrderInitialValues";
+import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { MicroOrderForm } from "./MicroOrderForm";
@@ -33,15 +34,20 @@ export function MicroOrderCreatePanel({
 }: MicroOrderCreatePanelProps) {
   const createMicroOrder = useCreatePrescription();
   const source = useMicroOrderInitialValues(sourceSrId, patientId);
+  // 入外区分の初期値は入院中なら「入院」。DO でも DO 元ではなくいまの状態に合わせる。
+  const defaultSetting = useDefaultOrderSetting(patientId);
+  // DO 元と入院かどうかの読み込み完了を待ってからフォームを描画する
+  // (初期値は初回描画時のみ反映される)。
+  const waiting = (sourceSrId && !source.ready) || !defaultSetting.ready;
   // DO も新しいオーダーなので、依頼元は DO 元ではなくヘッダーで選択中のものを使う。
   const requester = useOrderContext();
 
   const initialValues = useMemo(
     () =>
       source.initialValues
-        ? buildDoMicroOrderForm(source.initialValues)
-        : emptyMicroOrderForm(defaultProblem ?? null),
-    [source.initialValues, defaultProblem],
+        ? buildDoMicroOrderForm(source.initialValues, defaultSetting.setting)
+        : emptyMicroOrderForm(defaultProblem ?? null, defaultSetting.setting),
+    [source.initialValues, defaultProblem, defaultSetting.setting],
   );
 
   function handleSubmit(values: MicroOrderFormValues) {
@@ -54,8 +60,7 @@ export function MicroOrderCreatePanel({
     <>
       <ErrorBanner error={source.error} />
 
-      {/* DO 元の読み込み完了を待ってからフォームを描画する(初期値は初回描画時のみ反映される)。 */}
-      {sourceSrId && !source.ready ? (
+      {waiting ? (
         <p>読み込み中...</p>
       ) : (
         <MicroOrderForm

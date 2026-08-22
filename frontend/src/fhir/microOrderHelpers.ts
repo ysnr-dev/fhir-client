@@ -159,9 +159,12 @@ export function emptyMicroSpecimen(): MicroSpecimenValues {
   };
 }
 
-export function emptyMicroOrderForm(problem: ProblemRef | null = null): MicroOrderFormValues {
+export function emptyMicroOrderForm(
+  problem: ProblemRef | null = null,
+  setting: PrescriptionSetting = "outpatient",
+): MicroOrderFormValues {
   return {
-    setting: "outpatient",
+    setting,
     priority: "routine",
     authoredDate: today(),
     comment: "",
@@ -510,9 +513,13 @@ export function buildMicroOrderDeleteBundle(
 // 既存のオーダーを DO(流用)して新規登録するためのフォーム値。明細の id を落として
 // 新規登録(POST)にし、依頼日は当日・採取予定日時は空にする。
 // 血液培養の 2 セット目は「DO して採取部位を変える」運用なので、この形が入口になる。
-export function buildDoMicroOrderForm(values: MicroOrderFormValues): MicroOrderFormValues {
+export function buildDoMicroOrderForm(
+  values: MicroOrderFormValues,
+  setting: PrescriptionSetting,
+): MicroOrderFormValues {
   return {
     ...values,
+    setting,
     authoredDate: today(),
     specimen: { ...values.specimen, id: "", collectionDateTime: "" },
     items: values.items.map((item) => ({ ...item, id: "" })),

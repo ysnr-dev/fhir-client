@@ -165,9 +165,12 @@ export interface RadOrderFormValues {
   items: RadOrderItemLine[];
 }
 
-export function emptyRadOrderForm(problem: ProblemRef | null = null): RadOrderFormValues {
+export function emptyRadOrderForm(
+  problem: ProblemRef | null = null,
+  setting: PrescriptionSetting = "outpatient",
+): RadOrderFormValues {
   return {
-    setting: "outpatient",
+    setting,
     priority: "routine",
     authoredDate: today(),
     authoredTime: "",
@@ -793,9 +796,13 @@ export function buildRadOrderDeleteBundle(
 // テンプレートの紐付けは外す。同じ QuestionnaireResponse を 2 つのオーダーが指すと、
 // 片方で書き換えたときにもう片方の内容まで変わってしまうため。記載された文言は
 // そのまま残るので、DO 先ではフリーテキストとして直せる。
-export function buildDoRadOrderForm(values: RadOrderFormValues): RadOrderFormValues {
+export function buildDoRadOrderForm(
+  values: RadOrderFormValues,
+  setting: PrescriptionSetting,
+): RadOrderFormValues {
   return {
     ...values,
+    setting,
     authoredDate: today(),
     authoredTime: "",
     items: values.items.map((item) => ({
