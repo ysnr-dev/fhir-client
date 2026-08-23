@@ -18,6 +18,7 @@ import {
   SETTING_OPTIONS,
   orderContextSummary,
   prescriptionRequester,
+  wardOf,
 } from "../fhir/prescriptionHelpers";
 import {
   entryLabel,
@@ -46,6 +47,7 @@ import {
 interface Filters {
   modalityCode: string;
   setting: string;
+  wardId: string;
   departmentId: string;
   status: string;
 }
@@ -53,6 +55,7 @@ interface Filters {
 const emptyFilters: Filters = {
   modalityCode: "",
   setting: "",
+  wardId: "",
   departmentId: "",
   status: "",
 };
@@ -81,6 +84,22 @@ export function RadWorklistPage() {
     [worklist.data, filters],
   );
   const total = worklist.data?.rows.length ?? 0;
+
+  // 病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。病棟名はオーダー登録時に
+  // 焼き付けてあるので病棟マスタを引く必要がなく、その日に無い病棟を並べても仕方が
+  // ないのはモダリティの選択肢と同じ考え方。
+  const wardOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const row of worklist.data?.rows ?? []) {
+      const ward = wardOf(row.order);
+      if (ward.wardId && !byId.has(ward.wardId)) {
+        byId.set(ward.wardId, ward.wardName || ward.wardId);
+      }
+    }
+    return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [worklist.data]);
 
   // 「実施」で実施入力を開くかどうかは撮影項目マスタが決めるので、この日の
   // オーダーに載っている項目をまとめて引いておく。
@@ -133,6 +152,7 @@ export function RadWorklistPage() {
         date={date}
         filters={filters}
         modalities={catalog.data?.modality ?? []}
+        wards={wardOptions}
         departments={departments.departments}
         onDateChange={handleDateChange}
         onChange={setFilters}
@@ -161,6 +181,7 @@ export function RadWorklistPage() {
                   <th>患者氏名</th>
                   <th className="rad-worklist__content">撮影内容</th>
                   <th className="rad-worklist__compact">区分</th>
+                  <th className="rad-worklist__compact">病棟</th>
                   <th>依頼科 | 依頼医師</th>
                   <th className="rad-worklist__compact">ステータス</th>
                   <th className="rad-worklist__actions"></th>
@@ -181,7 +202,7 @@ export function RadWorklistPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="master-search__empty">
+                    <td colSpan={9} className="master-search__empty">
                       {total === 0
                         ? "この撮影日の放射線検査オーダーはありません"
                         : "絞り込みに該当する検査がありません"}
@@ -215,6 +236,10 @@ function matchesFilters(row: RadWorklistRow, filters: Filters): boolean {
   const summary = summarizeRadOrder(row.order);
   if (filters.setting && summary.settingCode !== filters.setting) return false;
 
+  // 病棟はオーダー登録時に焼き付けたもの。外来オーダーと、焼き付ける前に出した
+  // オーダーは病棟を持たないので、病棟で絞ると消える。
+  if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
+
   const requester = prescriptionRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
 
@@ -227,6 +252,7 @@ interface FilterFormProps {
   date: string;
   filters: Filters;
   modalities: { code: string; name: string }[];
+  wards: { id: string; name: string }[];
   departments: fhir4.Organization[];
   onDateChange: (value: string) => void;
   onChange: (filters: Filters) => void;
@@ -236,6 +262,7 @@ function FilterForm({
   date,
   filters,
   modalities,
+  wards,
   departments,
   onDateChange,
   onChange,
@@ -275,6 +302,20 @@ function FilterForm({
           {SETTING_OPTIONS.map((option) => (
             <option key={option.code} value={option.code}>
               {option.display}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        病棟
+        <select
+          value={filters.wardId}
+          onChange={(e) => onChange({ ...filters, wardId: e.target.value })}
+        >
+          <option value="">すべて</option>
+          {wards.map((ward) => (
+            <option key={ward.id} value={ward.id}>
+              {ward.name}
             </option>
           ))}
         </select>
@@ -361,6 +402,8 @@ function WorklistRow({
         {summary.settingDisplay || "-"}
         {summary.urgent && <span className="dose-conversion__badge">至急</span>}
       </td>
+      {/* オーダー登録時の入院病棟。外来オーダーと、焼き付ける前のオーダーは "-"。 */}
+      <td className="rad-worklist__compact">{wardOf(order).wardName || "-"}</td>
       <td>{orderContextSummary(requester) || "-"}</td>
       <td className="rad-worklist__compact">
         <span className={`rad-worklist__status rad-worklist__status--${status}`}>

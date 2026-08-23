@@ -31,6 +31,7 @@ import {
   SETTING_OPTIONS,
   orderContextSummary,
   prescriptionRequester,
+  wardOf,
 } from "../fhir/prescriptionHelpers";
 
 // 検体検査一覧(部門ワークリスト)。検査日を決めて、その日に検体を採る検査を並べる。
@@ -51,6 +52,7 @@ import {
 interface Filters {
   specimenCode: string;
   setting: string;
+  wardId: string;
   departmentId: string;
   status: string;
 }
@@ -58,6 +60,7 @@ interface Filters {
 const emptyFilters: Filters = {
   specimenCode: "",
   setting: "",
+  wardId: "",
   departmentId: "",
   status: "",
 };
@@ -90,6 +93,22 @@ export function LabWorklistPage() {
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const entering = worklist.data?.rows.find((row) => row.order.id === enteringId);
 
+  // 病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。病棟名はオーダー登録時に
+  // 焼き付けてあるので病棟マスタを引く必要がなく、その日に無い病棟を並べても仕方が
+  // ないのは検体・モダリティの選択肢と同じ考え方。
+  const wardOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const row of worklist.data?.rows ?? []) {
+      const ward = wardOf(row.order);
+      if (ward.wardId && !byId.has(ward.wardId)) {
+        byId.set(ward.wardId, ward.wardName || ward.wardId);
+      }
+    }
+    return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [worklist.data]);
+
   // 検体の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。マスタ全件を出しても
   // その日に採らない検体ばかりが並ぶだけなので、実際にある検体だけにする。
   const specimenOptions = useMemo(() => {
@@ -121,6 +140,7 @@ export function LabWorklistPage() {
         date={date}
         filters={filters}
         specimens={specimenOptions}
+        wards={wardOptions}
         departments={departments.departments}
         onDateChange={handleDateChange}
         onChange={setFilters}
@@ -148,6 +168,7 @@ export function LabWorklistPage() {
                   <th>患者氏名</th>
                   <th className="lab-worklist__content">検査内容</th>
                   <th className="lab-worklist__compact">区分</th>
+                  <th className="lab-worklist__compact">病棟</th>
                   <th>依頼科 | 依頼医師</th>
                   <th className="lab-worklist__compact">ステータス</th>
                   <th className="lab-worklist__actions"></th>
@@ -168,7 +189,7 @@ export function LabWorklistPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="master-search__empty">
+                    <td colSpan={8} className="master-search__empty">
                       {total === 0
                         ? "この検査日の検体検査オーダーはありません"
                         : "絞り込みに該当する検査がありません"}
@@ -201,6 +222,10 @@ function matchesFilters(row: LabWorklistRow, filters: Filters): boolean {
   const summary = summarizeLabOrder(row.order);
   if (filters.setting && summary.settingCode !== filters.setting) return false;
 
+  // 病棟はオーダー登録時に焼き付けたもの。外来オーダーと、焼き付ける前に出した
+  // オーダーは病棟を持たないので、病棟で絞ると消える。
+  if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
+
   const requester = prescriptionRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
 
@@ -213,6 +238,7 @@ interface FilterFormProps {
   date: string;
   filters: Filters;
   specimens: { code: string; name: string }[];
+  wards: { id: string; name: string }[];
   departments: fhir4.Organization[];
   onDateChange: (value: string) => void;
   onChange: (filters: Filters) => void;
@@ -222,6 +248,7 @@ function FilterForm({
   date,
   filters,
   specimens,
+  wards,
   departments,
   onDateChange,
   onChange,
@@ -261,6 +288,20 @@ function FilterForm({
           {SETTING_OPTIONS.map((option) => (
             <option key={option.code} value={option.code}>
               {option.display}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        病棟
+        <select
+          value={filters.wardId}
+          onChange={(e) => onChange({ ...filters, wardId: e.target.value })}
+        >
+          <option value="">すべて</option>
+          {wards.map((ward) => (
+            <option key={ward.id} value={ward.id}>
+              {ward.name}
             </option>
           ))}
         </select>
@@ -356,6 +397,8 @@ function WorklistRow({
         {summary.settingDisplay || "-"}
         {summary.urgent && <span className="dose-conversion__badge">至急</span>}
       </td>
+      {/* オーダー登録時の入院病棟。外来オーダーと、焼き付ける前のオーダーは "-"。 */}
+      <td className="lab-worklist__compact">{wardOf(order).wardName || "-"}</td>
       <td>{orderContextSummary(requester) || "-"}</td>
       <td className="lab-worklist__compact">
         <span className={`lab-worklist__status lab-worklist__status--${status}`}>

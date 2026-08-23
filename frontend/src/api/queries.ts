@@ -1332,6 +1332,8 @@ export function usePlannedAdmissions() {
 
 export interface PatientAdmission {
   encounter: fhir4.Encounter;
+  /** 病棟の Location.id。辿れなければ空文字。オーダーに焼き付ける病棟の参照に使う。 */
+  wardId: string;
   /** 病棟名。辿れなければ空文字。 */
   wardName: string;
   /** 病室名。辿れなければ空文字。 */
@@ -1360,7 +1362,7 @@ async function fetchPatientAdmission(patientId: string): Promise<PatientAdmissio
   if (!encounter) return null;
 
   const bedId = encounterBedId(encounter);
-  if (!bedId) return { encounter, wardName: "", roomName: "" };
+  if (!bedId) return { encounter, wardId: "", wardName: "", roomName: "" };
 
   // ベッドと、その上の病室・病棟をまとめて引く。階層は physicalType(wa/ro/bd)で
   // 見分ける。_include:iterate に応えない上流でも病室までは返るので、
@@ -1392,7 +1394,12 @@ async function fetchPatientAdmission(patientId: string): Promise<PatientAdmissio
     if (wardId) ward = (await readResource<fhir4.Location>("Location", wardId)).data;
   }
 
-  return { encounter, wardName: ward?.name ?? "", roomName: room?.name ?? "" };
+  return {
+    encounter,
+    wardId: ward?.id ?? "",
+    wardName: ward?.name ?? "",
+    roomName: room?.name ?? "",
+  };
 }
 
 /** 患者が入院中ならその入院と病棟名。入院していなければ null。 */

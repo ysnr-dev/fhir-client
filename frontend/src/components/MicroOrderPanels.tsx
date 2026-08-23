@@ -8,7 +8,7 @@ import {
   emptyMicroOrderForm,
   type MicroOrderFormValues,
 } from "../fhir/microOrderHelpers";
-import { prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
 import { useMicroOrderInitialValues } from "../hooks/useMicroOrderInitialValues";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
@@ -51,7 +51,9 @@ export function MicroOrderCreatePanel({
   );
 
   function handleSubmit(values: MicroOrderFormValues) {
-    createMicroOrder.mutate(buildMicroOrderBundle(values, patientId, requester), {
+    // 新規オーダーには登録時点の入院病棟も焼き付ける(部門の一覧が入院を引き直さずに済む)。
+    const attribution = withOrderWard(requester, values.setting, defaultSetting);
+    createMicroOrder.mutate(buildMicroOrderBundle(values, patientId, attribution), {
       onSuccess: onSaved,
     });
   }

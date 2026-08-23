@@ -21,6 +21,7 @@ import {
   orderContextSummary,
   prescriptionRequester,
   summarizeServiceRequest,
+  wardOf,
 } from "../fhir/prescriptionHelpers";
 import {
   RX_TASK_STATUS_OPTIONS,
@@ -47,6 +48,7 @@ import {
 interface Filters {
   setting: string;
   category: string;
+  wardId: string;
   departmentId: string;
   status: string;
 }
@@ -54,6 +56,7 @@ interface Filters {
 const emptyFilters: Filters = {
   setting: "",
   category: "",
+  wardId: "",
   departmentId: "",
   status: "",
 };
@@ -90,6 +93,22 @@ export function RxWorklistPage() {
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
   const dispensing = worklist.data?.rows.find((row) => row.order.id === dispensingId);
 
+  // 病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。病棟名はオーダー登録時に
+  // 焼き付けてあるので病棟マスタを引く必要がなく、その日に無い病棟を並べても仕方が
+  // ないのは処方区分の選択肢と同じ考え方。
+  const wardOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const row of worklist.data?.rows ?? []) {
+      const ward = wardOf(row.order);
+      if (ward.wardId && !byId.has(ward.wardId)) {
+        byId.set(ward.wardId, ward.wardName || ward.wardId);
+      }
+    }
+    return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [worklist.data]);
+
   function handleDateChange(value: string) {
     // 日付を空にはさせない(空で検索すると全期間になってしまう)。
     if (value) setDate(value);
@@ -104,6 +123,7 @@ export function RxWorklistPage() {
       <FilterForm
         date={date}
         filters={filters}
+        wards={wardOptions}
         departments={departments.departments}
         onDateChange={handleDateChange}
         onChange={setFilters}
@@ -131,6 +151,7 @@ export function RxWorklistPage() {
                   <th>患者氏名</th>
                   <th className="rx-worklist__content">処方内容</th>
                   <th className="lab-worklist__compact">区分</th>
+                  <th className="lab-worklist__compact">病棟</th>
                   <th>依頼科 | 依頼医師</th>
                   <th className="lab-worklist__compact">ステータス</th>
                   <th className="lab-worklist__actions"></th>
@@ -151,7 +172,7 @@ export function RxWorklistPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="master-search__empty">
+                    <td colSpan={8} className="master-search__empty">
                       {total === 0
                         ? "この処方日の処方オーダーはありません"
                         : "絞り込みに該当する処方がありません"}
@@ -178,6 +199,10 @@ function matchesFilters(row: RxWorklistRow, filters: Filters): boolean {
   if (filters.setting && summary.settingCode !== filters.setting) return false;
   if (filters.category && summary.categoryCode !== filters.category) return false;
 
+  // 病棟はオーダー登録時に焼き付けたもの。外来オーダーと、焼き付ける前に出した
+  // オーダーは病棟を持たないので、病棟で絞ると消える。
+  if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
+
   const requester = prescriptionRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
 
@@ -189,12 +214,20 @@ function matchesFilters(row: RxWorklistRow, filters: Filters): boolean {
 interface FilterFormProps {
   date: string;
   filters: Filters;
+  wards: { id: string; name: string }[];
   departments: fhir4.Organization[];
   onDateChange: (value: string) => void;
   onChange: (filters: Filters) => void;
 }
 
-function FilterForm({ date, filters, departments, onDateChange, onChange }: FilterFormProps) {
+function FilterForm({
+  date,
+  filters,
+  wards,
+  departments,
+  onDateChange,
+  onChange,
+}: FilterFormProps) {
   // 絞り込みは選んだ瞬間に効かせるので、Enter での送信は何もしない。
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -236,6 +269,20 @@ function FilterForm({ date, filters, departments, onDateChange, onChange }: Filt
           {categoryOptions.map((option) => (
             <option key={option.code} value={option.code}>
               {option.display}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        病棟
+        <select
+          value={filters.wardId}
+          onChange={(e) => onChange({ ...filters, wardId: e.target.value })}
+        >
+          <option value="">すべて</option>
+          {wards.map((ward) => (
+            <option key={ward.id} value={ward.id}>
+              {ward.name}
             </option>
           ))}
         </select>
@@ -330,6 +377,8 @@ function WorklistRow({
       <td className="lab-worklist__compact">
         {[summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" ") || "-"}
       </td>
+      {/* オーダー登録時の入院病棟。外来オーダーと、焼き付ける前のオーダーは "-"。 */}
+      <td className="lab-worklist__compact">{wardOf(order).wardName || "-"}</td>
       <td>{orderContextSummary(requester) || "-"}</td>
       <td className="lab-worklist__compact">
         <span className={`lab-worklist__status lab-worklist__status--${status}`}>

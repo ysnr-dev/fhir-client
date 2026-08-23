@@ -9,6 +9,7 @@ import {
   buildPrescriptionUpdateBundle,
   emptyPrescriptionForm,
   prescriptionRequester,
+  withOrderWard,
   type PrescriptionFormValues,
 } from "../fhir/prescriptionHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
@@ -52,7 +53,9 @@ export function PrescriptionCreatePanel({
   );
 
   function handleSubmit(values: PrescriptionFormValues) {
-    createPrescription.mutate(buildPrescriptionBundle(values, patientId, requester), {
+    // 新規オーダーには登録時点の入院病棟も焼き付ける(部門の一覧が入院を引き直さずに済む)。
+    const attribution = withOrderWard(requester, values.setting, defaultSetting);
+    createPrescription.mutate(buildPrescriptionBundle(values, patientId, attribution), {
       onSuccess: onSaved,
     });
   }

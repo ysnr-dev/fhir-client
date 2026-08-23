@@ -8,7 +8,7 @@ import {
   emptyLabOrderForm,
   type LabOrderFormValues,
 } from "../fhir/labOrderHelpers";
-import { prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
 import { useLabOrderInitialValues } from "../hooks/useLabOrderInitialValues";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
@@ -52,7 +52,9 @@ export function LabOrderCreatePanel({
   );
 
   function handleSubmit(values: LabOrderFormValues) {
-    createLabOrder.mutate(buildLabOrderBundle(values, patientId, requester), {
+    // 新規オーダーには登録時点の入院病棟も焼き付ける(部門の一覧が入院を引き直さずに済む)。
+    const attribution = withOrderWard(requester, values.setting, defaultSetting);
+    createLabOrder.mutate(buildLabOrderBundle(values, patientId, attribution), {
       onSuccess: onSaved,
     });
   }

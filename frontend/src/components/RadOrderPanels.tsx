@@ -8,7 +8,7 @@ import {
 } from "../api/queries";
 import type { SlotSelection } from "../fhir/appointmentHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
-import { prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
 import {
   buildDoRadOrderForm,
   buildRadOrderBundle,
@@ -79,9 +79,11 @@ export function RadOrderCreatePanel({
         ? { patient, selections: bookings }
         : undefined;
 
+    // 新規オーダーには登録時点の入院病棟も焼き付ける(部門の一覧が入院を引き直さずに済む)。
+    const attribution = withOrderWard(requester, values.setting, defaultSetting);
     const bundle = performs
-      ? buildRadOrderWithPerformBundle(values, patientId, requester, performs)
-      : buildRadOrderBundle(values, patientId, requester, booking);
+      ? buildRadOrderWithPerformBundle(values, patientId, attribution, performs)
+      : buildRadOrderBundle(values, patientId, attribution, booking);
 
     createRadOrder.mutate(bundle, {
       onSuccess: () => {

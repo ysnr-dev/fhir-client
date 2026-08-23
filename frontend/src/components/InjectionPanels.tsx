@@ -10,7 +10,7 @@ import {
   emptyInjectionForm,
   type InjectionFormValues,
 } from "../fhir/injectionHelpers";
-import { prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useInjectionInitialValues } from "../hooks/useInjectionInitialValues";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
@@ -52,7 +52,9 @@ export function InjectionCreatePanel({
   );
 
   function handleSubmit(values: InjectionFormValues) {
-    createInjection.mutate(buildInjectionBundle(values, patientId, requester), {
+    // 新規オーダーには登録時点の入院病棟も焼き付ける(部門の一覧が入院を引き直さずに済む)。
+    const attribution = withOrderWard(requester, values.setting, defaultSetting);
+    createInjection.mutate(buildInjectionBundle(values, patientId, attribution), {
       onSuccess: onSaved,
     });
   }
