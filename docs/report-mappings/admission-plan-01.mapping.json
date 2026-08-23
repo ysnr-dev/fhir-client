@@ -1,0 +1,16 @@
+[
+  {
+    "linkId": "nutrition_need",
+    "code": "01",
+    "show": [
+      "mark_nutrition_yes"
+    ]
+  },
+  {
+    "linkId": "nutrition_need",
+    "code": "02",
+    "show": [
+      "mark_nutrition_no"
+    ]
+  }
+]

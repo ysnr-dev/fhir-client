@@ -1,0 +1,247 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/admission-plan-01",
+  "version": "1.0.0",
+  "name": "ADM_PLAN_01",
+  "title": "入院診療計画書",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "item": [
+    {
+      "linkId": "grp_admission",
+      "type": "group",
+      "text": "入院先・担当者",
+      "item": [
+        {
+          "linkId": "ward_room",
+          "type": "string",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "入院する病棟名と病室(ベッド)。入院手続きで決まった病棟・病室を書く。"
+            }
+          ],
+          "text": "病棟（病室）"
+        },
+        {
+          "linkId": "other_staff",
+          "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "主治医以外に担当する医師・看護師・薬剤師・管理栄養士・療法士などの氏名。職種を添えて書く。"
+            }
+          ],
+          "text": "主治医以外の担当者名"
+        },
+        {
+          "linkId": "home_return_staff",
+          "type": "string",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "紙様式の「＊」欄。地域包括ケア病棟入院料(入院医療管理料)を算定する患者では必ず記入する(注3)。"
+            }
+          ],
+          "text": "在宅復帰支援担当者名"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_disease",
+      "type": "group",
+      "text": "病名・症状",
+      "item": [
+        {
+          "linkId": "disease_name",
+          "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "現時点で考えられる病名。今後の検査等で変わり得るものとして記載する(注1)。フォームを開いた時点で、転帰「継続」の傷病名(Condition)が初期値として流し込まれる(編集可)。"
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%conditions"
+              }
+            }
+          ],
+          "text": "病名"
+        },
+        {
+          "linkId": "other_disease_name",
+          "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "紙様式の「（他に考え得る病名）」欄。鑑別として残している病名を書く。"
+            }
+          ],
+          "text": "他に考え得る病名"
+        },
+        {
+          "linkId": "symptoms",
+          "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "入院時点の主訴・現症。"
+            }
+          ],
+          "text": "症状"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_plan",
+      "type": "group",
+      "text": "診療計画",
+      "item": [
+        {
+          "linkId": "treatment_plan",
+          "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "入院中に行う治療の方針。薬物療法・処置・安静度など。"
+            }
+          ],
+          "text": "治療計画"
+        },
+        {
+          "linkId": "test_plan",
+          "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "予定している検査とその実施予定日。実際のオーダーは検査オーダーで出す。"
+            }
+          ],
+          "text": "検査内容及び日程"
+        },
+        {
+          "linkId": "surgery_plan",
+          "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "予定している手術・処置とその実施予定日。予定が無ければ空欄でよい。"
+            }
+          ],
+          "text": "手術内容及び日程"
+        },
+        {
+          "linkId": "expected_stay",
+          "type": "string",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "現時点で予想される入院期間(注2)。例:「約2週間」「7日間程度」。"
+            }
+          ],
+          "text": "推定される入院期間"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_other",
+      "type": "group",
+      "text": "その他",
+      "item": [
+        {
+          "linkId": "nutrition_need",
+          "type": "choice",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "紙様式では「有・無」のどちらかに○を付ける欄。帳票では選んだ側に○が印字される(注5)。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "text": "特別な栄養管理の必要性",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "01",
+                "display": "有"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "02",
+                "display": "無"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "other_note",
+          "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "紙様式の「その他」欄。欄内に列挙されているとおり、看護計画・リハビリテーション等の計画を書く。様式を変更できない場合は特別な栄養管理の必要性もここに記載してよい(注5)。"
+            }
+          ],
+          "text": "その他（看護計画・リハビリテーション等の計画）"
+        },
+        {
+          "linkId": "home_return_plan",
+          "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "紙様式の「＊」欄。地域包括ケア病棟入院料(入院医療管理料)を算定する患者では必ず記入する(注3)。"
+            }
+          ],
+          "text": "在宅復帰支援計画"
+        },
+        {
+          "linkId": "functional_assessment",
+          "type": "text",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "紙様式の「◇」欄。総合的な機能評価を行った患者について、その評価結果を記載する(注4)。"
+            }
+          ],
+          "text": "総合的な機能評価"
+        }
+      ]
+    }
+  ],
+  "description": "診療報酬の様式「別紙2 入院診療計画書」を入力・帳票出力するためのテンプレート。入院時に患者へ交付する診療計画を、紙様式の欄立てのまま記載する。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "b41c7e28-9f56-4d03-8a17-5e2c9b04af61",
+        "display": "診療計画"
+      }
+    }
+  ]
+}
