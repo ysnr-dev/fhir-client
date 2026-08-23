@@ -1,6 +1,11 @@
 import { Link } from "react-router-dom";
 import { useDeletePatient } from "../api/queries";
-import { displayKana, displayName } from "../fhir/patientHelpers";
+import {
+  ageWithMonthsLabel,
+  displayKana,
+  displayName,
+  genderShortLabel,
+} from "../fhir/patientHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { RowMenu } from "./RowMenu";
 import { useKarteLinkState } from "../karteReturn";
@@ -42,8 +47,13 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
               <td>{patient.identifier?.[0]?.value ?? "-"}</td>
               <td>{displayName(patient)}</td>
               <td>{displayKana(patient)}</td>
-              <td>{patient.gender ?? "-"}</td>
-              <td>{patient.birthDate ?? "-"}</td>
+              <td>{genderShortLabel(patient.gender)}</td>
+              <td>
+                {patient.birthDate ?? "-"}
+                {patient.birthDate && ageWithMonthsLabel(patient.birthDate) && (
+                  <span className="patient-cells__age">（{ageWithMonthsLabel(patient.birthDate)}）</span>
+                )}
+              </td>
               <td>{patient.active === false ? "無効" : "有効"}</td>
               <td className="patient-table__actions">
                 <Link className="button" to={`/patients/${patient.id}/karte`} state={karteLinkState}>

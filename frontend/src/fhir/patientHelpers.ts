@@ -54,11 +54,16 @@ export const emptyPatientForm: PatientFormValues = {
 };
 
 export function buildPatient(values: PatientFormValues, id?: string): fhir4.Patient {
+  const identifierValue = values.identifierValue.trim();
   const patient: fhir4.Patient = {
     resourceType: "Patient",
-    identifier: [{ system: values.identifierSystem, value: values.identifierValue }],
     active: values.active,
   };
+
+  // 患者番号は空欄で登録でき、その場合は登録時に自動採番する(useCreatePatient)。
+  if (identifierValue) {
+    patient.identifier = [{ system: values.identifierSystem, value: identifierValue }];
+  }
 
   if (id) patient.id = id;
 
@@ -86,6 +91,27 @@ export function parsePatient(patient: fhir4.Patient): PatientFormValues {
     phone: patient.telecom?.find((t) => t.system === "phone")?.value ?? "",
     addressText: patient.address?.[0]?.text ?? "",
   };
+}
+
+/** 患者番号。体系の指定が無い identifier(他システム由来)も患者番号として扱う。 */
+export function patientNumberOf(patient: fhir4.Patient): string | undefined {
+  const identifier = patient.identifier?.find(
+    (i) => !i.system || i.system === DEFAULT_IDENTIFIER_SYSTEM,
+  );
+  return identifier?.value;
+}
+
+/**
+ * 患者番号を空欄で登録したときに付ける番号。数字だけの既存番号の最大値 +1(最初は 1)。
+ * 手入力の英字混じりの番号は無視する。最大値 +1 なので、途中の欠番は埋めない
+ * (削除された番号を別の患者に付け直さないため)。
+ */
+export function nextPatientNumber(patients: fhir4.Patient[]): string {
+  const max = patients.reduce((m, patient) => {
+    const value = patientNumberOf(patient);
+    return value && /^\d+$/.test(value) ? Math.max(m, Number(value)) : m;
+  }, 0);
+  return String(max + 1);
 }
 
 export function displayName(patient: fhir4.Patient): string {
@@ -139,4 +165,15 @@ const GENDER_LABELS: Record<string, string> = {
 export function genderLabel(gender: string | undefined): string {
   if (!gender) return "-";
   return GENDER_LABELS[gender] ?? gender;
+}
+
+const SHORT_GENDER_LABELS: Record<string, string> = {
+  male: "男",
+  female: "女",
+};
+
+/** 列の狭い一覧向けの「男 / 女」表記。その他・不明は genderLabel と同じ。 */
+export function genderShortLabel(gender: string | undefined): string {
+  if (!gender) return "-";
+  return SHORT_GENDER_LABELS[gender] ?? genderLabel(gender);
 }

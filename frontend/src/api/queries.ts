@@ -151,6 +151,11 @@ import {
 } from "../fhir/observationExtract";
 import { resourceFromBundleResponse, resourceWithImagesBundle } from "../fhir/schemaImage";
 import {
+  DEFAULT_IDENTIFIER_SYSTEM,
+  nextPatientNumber,
+  patientNumberOf,
+} from "../fhir/patientHelpers";
+import {
   createReportLayout,
   fetchReportLayout,
   fetchReportLayouts,
@@ -242,10 +247,54 @@ export function usePatient(id: string | undefined) {
   });
 }
 
+// 患者番号の自動採番。上流は identifier での並べ替えに対応しておらず、対応しても
+// 文字列順では "9" が "10" より後になるので、識別子だけを取り出して全件走査する。
+// 1 ページの件数は上流の上限に切られてもよい(next リンクを辿って最後まで読む)。
+const PATIENT_NUMBER_SCAN_COUNT = 500;
+// 走査するページ数の上限。ここで打ち切ると番号が重複しうるので、採番後に空きを確認する。
+const PATIENT_NUMBER_SCAN_PAGES = 40;
+
+async function fetchNextPatientNumber(): Promise<string> {
+  const patients: fhir4.Patient[] = [];
+
+  for (let page = 0; page < PATIENT_NUMBER_SCAN_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("_elements", "identifier");
+    params.set("_count", String(PATIENT_NUMBER_SCAN_COUNT));
+    params.set("_offset", String(page * PATIENT_NUMBER_SCAN_COUNT));
+    const { data } = await searchResource<fhir4.Patient>("Patient", params);
+    for (const entry of data.entry ?? []) {
+      if (entry.resource) patients.push(entry.resource);
+    }
+    if (!hasRelation(data, "next")) break;
+  }
+
+  // 走査を打ち切った場合と、同時に登録された場合に備えて空き番号まで進める。
+  let candidate = Number(nextPatientNumber(patients));
+  for (let i = 0; i < PATIENT_NUMBER_SCAN_PAGES; i += 1) {
+    const params = new URLSearchParams();
+    params.set("identifier", `${DEFAULT_IDENTIFIER_SYSTEM}|${candidate}`);
+    params.set("_summary", "count");
+    const { data } = await searchResource<fhir4.Patient>("Patient", params);
+    if (!data.total) break;
+    candidate += 1;
+  }
+
+  return String(candidate);
+}
+
 export function useCreatePatient() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (patient: fhir4.Patient) => createResource(patient),
+    // 患者番号が空欄のまま登録されたら、ここで採番してから作る。
+    mutationFn: async (patient: fhir4.Patient) => {
+      if (patientNumberOf(patient)) return createResource(patient);
+      const value = await fetchNextPatientNumber();
+      return createResource({
+        ...patient,
+        identifier: [{ system: DEFAULT_IDENTIFIER_SYSTEM, value }, ...(patient.identifier ?? [])],
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Patient", "search"] });
     },

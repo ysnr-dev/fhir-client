@@ -26,6 +26,7 @@ export function PatientCreatePage() {
         submitting={createPatient.isPending}
         submitError={createPatient.error}
         submitLabel="登録"
+        autoNumber
       />
     </div>
   );

@@ -2,6 +2,7 @@ import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
 import { emptyPatientForm, type PatientFormValues } from "../fhir/patientHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { NameKanjiInput } from "./NameKanjiInput";
 
 interface PatientFormProps {
   initialValues?: PatientFormValues;
@@ -9,6 +10,8 @@ interface PatientFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel: string;
+  /** 患者番号を空欄のまま登録できるようにする(登録時に自動採番される)。 */
+  autoNumber?: boolean;
 }
 
 export function PatientForm({
@@ -17,6 +20,7 @@ export function PatientForm({
   submitting,
   submitError,
   submitLabel,
+  autoNumber = false,
 }: PatientFormProps) {
   const [values, setValues] = useState<PatientFormValues>(initialValues ?? emptyPatientForm);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -25,7 +29,7 @@ export function PatientForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!values.identifierValue.trim()) {
+    if (!autoNumber && !values.identifierValue.trim()) {
       setValidationError("患者番号は必須です。");
       return;
     }
@@ -43,14 +47,15 @@ export function PatientForm({
       <ErrorBanner error={submitError} />
 
       <fieldset>
-        <legend>患者番号(必須)</legend>
+        <legend>{autoNumber ? "患者番号" : "患者番号(必須)"}</legend>
         <label>
           番号
           <input
             type="text"
             value={values.identifierValue}
             onChange={(e) => update("identifierValue", e.target.value)}
-            required
+            placeholder={autoNumber ? "空欄なら自動採番" : undefined}
+            required={!autoNumber}
           />
         </label>
       </fieldset>
@@ -59,11 +64,21 @@ export function PatientForm({
         <legend>氏名(漢字)</legend>
         <label>
           {"姓"}
-          <input type="text" value={values.familyKanji} onChange={(e) => update("familyKanji", e.target.value)} />
+          <NameKanjiInput
+            value={values.familyKanji}
+            onChange={(v) => update("familyKanji", v)}
+            kana={values.familyKana}
+            onKanaChange={(v) => update("familyKana", v)}
+          />
         </label>
         <label>
           {"名"}
-          <input type="text" value={values.givenKanji} onChange={(e) => update("givenKanji", e.target.value)} />
+          <NameKanjiInput
+            value={values.givenKanji}
+            onChange={(v) => update("givenKanji", v)}
+            kana={values.givenKana}
+            onKanaChange={(v) => update("givenKana", v)}
+          />
         </label>
       </fieldset>
 
