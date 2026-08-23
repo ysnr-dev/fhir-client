@@ -19,6 +19,18 @@ import {
 import { radPerformsByOrderId, type RadPerformDisplay } from "./radResultHelpers";
 import { radTaskStatus, radTasksByOrderId, type RadTaskStatus } from "./radTaskHelpers";
 import {
+  isPhysioServiceRequest,
+  physioOrderItemRequests,
+  physioOrderProblem,
+  physioOrderResponseIds,
+} from "./physioOrderHelpers";
+import { physioPerformsByOrderId, type PhysioPerformDisplay } from "./physioResultHelpers";
+import {
+  physioTaskStatus,
+  physioTasksByOrderId,
+  type PhysioTaskStatus,
+} from "./physioTaskHelpers";
+import {
   questionnaireCanonical,
   questionnaireResponseProblem,
 } from "./questionnaireResponseHelpers";
@@ -43,6 +55,7 @@ export type KarteItemKind =
   | "lab-order"
   | "micro-order"
   | "rad-order"
+  | "physio-order"
   | "qr";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
@@ -53,6 +66,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   "lab-order": "検体検査",
   "micro-order": "細菌検査",
   "rad-order": "放射線検査",
+  "physio-order": "生理検査",
   qr: "テンプレート",
 };
 
@@ -113,6 +127,18 @@ export type KarteTimelineItem = KarteItemBase &
         status: RadTaskStatus;
         /** 実施記録。未実施なら空。取消 → 再実施で複数残ることがある。 */
         performs: RadPerformDisplay[];
+      }
+    // 生理検査も明細(検査項目・セットの構成項目)が ServiceRequest なので、
+    // オーダーのヘッダにぶら下がるぶんを itemRequests に集めて渡す。
+    // 放射線と違い被曝線量は持たない。
+    | {
+        kind: "physio-order";
+        serviceRequest: fhir4.ServiceRequest;
+        itemRequests: fhir4.ServiceRequest[];
+        /** 部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
+        status: PhysioTaskStatus;
+        /** 実施記録。未実施なら空。取消 → 再実施で複数残ることがある。 */
+        performs: PhysioPerformDisplay[];
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
@@ -236,6 +262,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const linkedResponseIds = new Set([
     ...compositions.flatMap((c) => referencedResponseIds(c)),
     ...radOrderResponseIds(serviceRequests),
+    ...physioOrderResponseIds(serviceRequests),
   ]);
 
   // canonical("<url>|<version>")と url 単独の両方で引けるようにしておく
@@ -270,11 +297,20 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const labTaskByOrderId = labTasksByOrderId(tasks);
   // 放射線検査は実施記録(Procedure 一式)も「実施情報」の出力に使う。
   const radTaskByOrderId = radTasksByOrderId(tasks);
+  const procedures = pickByType<fhir4.Procedure>(prescriptionResources, "Procedure");
+  const administrations = pickByType<fhir4.MedicationAdministration>(
+    prescriptionResources,
+    "MedicationAdministration",
+  );
   const radPerformByOrderId = radPerformsByOrderId(
-    pickByType<fhir4.Procedure>(prescriptionResources, "Procedure"),
-    pickByType<fhir4.MedicationAdministration>(prescriptionResources, "MedicationAdministration"),
+    procedures,
+    administrations,
     pickByType<fhir4.Observation>(prescriptionResources, "Observation"),
   );
+  // 生理検査も同じ検索結果に Procedure が混ざって届く。振り分けは
+  // physioPerformsByOrderId が category(order-type)で行うので、同じ配列を渡してよい。
+  const physioTaskByOrderId = physioTasksByOrderId(tasks);
+  const physioPerformByOrderId = physioPerformsByOrderId(procedures, administrations);
 
   const medicationRequestsBySr = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
@@ -345,6 +381,19 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         // 検査に実施情報が残って見えてしまう。カルテに出す「実施したこと」は
         // 進捗が実施済であることと一致していなければならない。
         performs: status === "completed" ? (radPerformByOrderId.get(serviceRequest.id ?? "") ?? []) : [],
+      };
+    }
+    if (isPhysioServiceRequest(serviceRequest)) {
+      const status = physioTaskStatus(physioTaskByOrderId.get(serviceRequest.id ?? ""));
+      return {
+        ...base,
+        kind: "physio-order" as const,
+        label: KARTE_KIND_LABELS["physio-order"],
+        itemRequests: physioOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+        status,
+        // 放射線検査と同じく、実施情報は進捗が実施済のときだけ出す。
+        performs:
+          status === "completed" ? (physioPerformByOrderId.get(serviceRequest.id ?? "") ?? []) : [],
       };
     }
     const withMedications = {
@@ -518,6 +567,7 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "lab-order") return labOrderProblem(item.serviceRequest);
   if (item.kind === "micro-order") return microOrderProblem(item.serviceRequest);
   if (item.kind === "rad-order") return radOrderProblem(item.serviceRequest);
+  if (item.kind === "physio-order") return physioOrderProblem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);
   }

@@ -131,6 +131,18 @@ Rails.application.routes.draw do
     # 初期明細として展開される。
     resources :rad_datasets, only: %i[index show create update destroy]
     resources :rad_dataset_details, only: %i[index create update destroy]
+    # 生理検査オーダーのマスタ群。放射線と同じ構成だが、生理検査は JJ1017 に
+    # 収載されていないため部品コード・頻用コードを持たず、モダリティの代わりに
+    # 施設が定義する「検査種別」(physio_exam_types)を持つ。
+    resources :physio_exam_types, only: %i[index show create update destroy]
+    resources :physio_items, only: %i[index show create update destroy]
+    resources :physio_set_items, only: %i[index create update destroy]
+    resources :physio_item_layouts, only: %i[index show create update destroy]
+    resources :physio_item_layout_cells, only: %i[create update destroy]
+    # 実施入力用データセット。放射線と違い器材の参照先は特定保険医療材料
+    # (master_medical_materials)そのもので、施設内の器材マスタは持たない。
+    resources :physio_datasets, only: %i[index show create update destroy]
+    resources :physio_dataset_details, only: %i[index create update destroy]
     # 特定器材(特定保険医療材料)と医科診療行為(手技料)。どちらもレセプト電算の
     # 配布マスタを全置換で取り込むだけで、手動メンテはしない。
     resources :medical_materials, only: %i[index] do

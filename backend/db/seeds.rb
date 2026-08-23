@@ -258,3 +258,36 @@ if File.exist?(rad_codes_csv)
 else
   puts "master_rad_jj1017_codes: #{rad_codes_csv} not found, skipped"
 end
+
+# 生理検査の検査種別マスタ。db/seed_data/physio_exam_types.csv（ヘッダー無し,
+# exam_type_code,name,short_name,name_kana,display_order）から投入する。
+# 生理検査は JJ1017 に収載されておらず配布マスタも無いので、放射線のモダリティに
+# 当たる分類はここで初期値を用意する。粒度は施設で変わるため、投入後は画面で
+# 直す前提。既存行は上書きしない（施設で直した内容を消さない）。
+physio_exam_types_csv = Rails.root.join("db/seed_data/physio_exam_types.csv")
+if File.exist?(physio_exam_types_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(physio_exam_types_csv) do |row|
+    code = row[0].to_s.strip
+    name = row[1].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::PhysioExamType.exists?(exam_type_code: code)
+      skipped += 1
+      next
+    end
+
+    Master::PhysioExamType.create!(
+      exam_type_code: code,
+      name: name,
+      short_name: row[2].to_s.strip.presence,
+      name_kana: row[3].to_s.strip.presence,
+      display_order: row[4].to_s.strip.presence&.to_i
+    )
+    loaded += 1
+  end
+  puts "master_physio_exam_types: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_physio_exam_types: #{physio_exam_types_csv} not found, skipped"
+end

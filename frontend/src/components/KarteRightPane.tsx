@@ -6,6 +6,7 @@ import { LabOrderCreatePanel, LabOrderEditPanel } from "./LabOrderPanels";
 import { MicroOrderCreatePanel, MicroOrderEditPanel } from "./MicroOrderPanels";
 import { PrescriptionCreatePanel, PrescriptionEditPanel } from "./PrescriptionPanels";
 import { RadOrderCreatePanel, RadOrderEditPanel } from "./RadOrderPanels";
+import { PhysioOrderCreatePanel, PhysioOrderEditPanel } from "./PhysioOrderPanels";
 import {
   QuestionnaireResponseCreatePanel,
   QuestionnaireResponseEditPanel,
@@ -33,6 +34,8 @@ export type KartePaneState =
   | { kind: "micro-order-edit"; srId: string }
   | { kind: "rad-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "rad-order-edit"; srId: string }
+  | { kind: "physio-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "physio-order-edit"; srId: string }
   | { kind: "qr-create"; problem?: ProblemRef }
   | { kind: "qr-edit"; qrId: string }
   // 予約は枠を押さえるだけで内容の編集は無く、変えられるのは日時(押さえる枠)だけ。
@@ -56,6 +59,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "micro-order-edit": "細菌検査編集",
   "rad-order-create": "放射線検査登録",
   "rad-order-edit": "放射線検査編集",
+  "physio-order-create": "生理検査登録",
+  "physio-order-edit": "生理検査編集",
   "qr-create": "テンプレート登録",
   "qr-edit": "テンプレート編集",
   "appointment-create": "予約登録",
@@ -73,6 +78,7 @@ function paneKey(state: KartePaneState): string {
     case "lab-order-edit":
     case "micro-order-edit":
     case "rad-order-edit":
+    case "physio-order-edit":
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
@@ -87,6 +93,7 @@ function paneKey(state: KartePaneState): string {
     case "lab-order-create":
     case "micro-order-create":
     case "rad-order-create":
+    case "physio-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "note-create":
     case "qr-create":
@@ -193,6 +200,12 @@ export function KarteRightPane({
         >
           放射線検査
         </button>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "physio-order-create", problem: selectedProblem })}
+        >
+          生理検査
+        </button>
       </div>
     </section>
   );
@@ -281,6 +294,17 @@ function PaneContent({
       );
     case "rad-order-edit":
       return <RadOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "physio-order-create":
+      return (
+        <PhysioOrderCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "physio-order-edit":
+      return <PhysioOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "qr-create":
       return (
         <QuestionnaireResponseCreatePanel

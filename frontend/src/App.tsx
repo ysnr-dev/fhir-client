@@ -22,6 +22,11 @@ import { RadItemPage } from "./pages/RadItemPage";
 import { RadJj1017CodePage } from "./pages/RadJj1017CodePage";
 import { RadMaterialPage } from "./pages/RadMaterialPage";
 import { RadDatasetPage } from "./pages/RadDatasetPage";
+import { PhysioWorklistPage } from "./pages/PhysioWorklistPage";
+import { PhysioExamTypePage } from "./pages/PhysioExamTypePage";
+import { PhysioItemPage } from "./pages/PhysioItemPage";
+import { PhysioItemLayoutPage } from "./pages/PhysioItemLayoutPage";
+import { PhysioDatasetPage } from "./pages/PhysioDatasetPage";
 import { MicroOrderItemPage } from "./pages/MicroOrderItemPage";
 import { MicroOrganismPage } from "./pages/MicroOrganismPage";
 import { MicroAntimicrobialPage } from "./pages/MicroAntimicrobialPage";
@@ -116,6 +121,9 @@ function App() {
             </Link>
             <Link to="/rad-worklist" className="row-menu__item">
               放射線検査一覧
+            </Link>
+            <Link to="/physio-worklist" className="row-menu__item">
+              生理検査一覧
             </Link>
             <Link to="/rx-worklist" className="row-menu__item">
               処方一覧
@@ -226,6 +234,24 @@ function App() {
                 実施入力データセット
               </Link>
             </SubMenu>
+            {/* 生理検査。JJ1017 に収載されていないので部品コード・頻用コードは無く、
+                モダリティの代わりに施設が定義する「検査種別」を持つ。 */}
+            <SubMenu label="生理検査">
+              <Link to="/physio-items" className="row-menu__item">
+                生理検査オーダー項目
+              </Link>
+              <Link to="/physio-item-layouts" className="row-menu__item">
+                生理検査オーダーレイアウト
+              </Link>
+              {/* 心電図・超音波検査などの検査分野。放射線のモダリティに当たる。 */}
+              <Link to="/physio-exam-types" className="row-menu__item">
+                検査種別
+              </Link>
+              {/* 実施入力の初期明細。検査項目に紐付けて使う。 */}
+              <Link to="/physio-datasets" className="row-menu__item">
+                実施入力データセット
+              </Link>
+            </SubMenu>
           </HoverMenu>
           <HoverMenu label="管理">
             <Link to="/oauth-clients" className="row-menu__item">
@@ -318,6 +344,7 @@ function App() {
           <Route path="/lab-arrivals" element={<LabArrivalPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
+          <Route path="/physio-worklist" element={<PhysioWorklistPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />
@@ -330,6 +357,10 @@ function App() {
           <Route path="/rad-jj1017-codes" element={<RadJj1017CodePage />} />
           <Route path="/rad-materials" element={<RadMaterialPage />} />
           <Route path="/rad-datasets" element={<RadDatasetPage />} />
+          <Route path="/physio-items" element={<PhysioItemPage />} />
+          <Route path="/physio-item-layouts" element={<PhysioItemLayoutPage />} />
+          <Route path="/physio-exam-types" element={<PhysioExamTypePage />} />
+          <Route path="/physio-datasets" element={<PhysioDatasetPage />} />
           <Route path="/micro-order-items" element={<MicroOrderItemPage />} />
           <Route path="/micro-specimen-types" element={<MicroSpecimenTypePage />} />
           <Route path="/micro-organisms" element={<MicroOrganismPage />} />

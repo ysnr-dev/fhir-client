@@ -60,8 +60,11 @@ export function AppointmentTable({
                 {active && (
                   <RowMenu label={`${appointmentDateTimeLabel(appointment)} の予約の操作`}>
                     {exam ? (
+                      // 検査予約(オーダーにぶら下がる予約)の日時はオーダーの実施日時と
+                      // 一緒に動かすので、変更の入口はオーダーの編集画面に一本化している。
+                      // 種別は放射線・生理検査の双方があるので「検査オーダー」と呼ぶ。
                       <span className="row-menu__item row-menu__item--muted">
-                        日時変更・取消は放射線オーダーから
+                        日時変更・取消は検査オーダーから
                       </span>
                     ) : (
                       <>
