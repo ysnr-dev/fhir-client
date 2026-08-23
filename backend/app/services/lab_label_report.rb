@@ -7,7 +7,9 @@
 # 採取管 1 本の台帳は上流の Specimen リソース(docs/lab-arrival-design.md §6-1)。
 # 発行 = そのオーダー(request)と検体(type)の Specimen を作ること。番号は
 # accessionIdentifier に持たせ、再発行では既存の Specimen の番号をそのまま刷る。
-# backend 側に残るのは番号の採番(LabLabelNumber)だけ。
+# 採番も上流が行う(Fhir::AccessionAssigner。LABEL_NUMBER_SYSTEM の
+# accessionIdentifier を値なしで POST すると、作成時に連番 10 桁 + M10W3 の
+# チェックデジット 1 桁が払い出される)。backend は番号を持たない。
 class LabLabelReport
   # オーダーが上流に存在しない
   class NotFound < StandardError; end
@@ -24,6 +26,8 @@ class LabLabelReport
   LAYOUT_PATH = Rails.root.join("lib/report_layouts/lab_label.tlf").freeze
 
   # frontend の fhir/labOrderHelpers.ts・labResultHelpers.ts と同じ system 定義。
+  # LABEL_NUMBER_SYSTEM は上流の SPECIMEN_ACCESSION_SYSTEM(採番のトリガ)と同じ値。
+  LABEL_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/lab-label-number".freeze
   ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type".freeze
   LAB_ORDER_CODE = "lab".freeze
   ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/lab-order-item".freeze
@@ -140,7 +144,7 @@ class LabLabelReport
   # ラベル発行で作った Specimen(番号を持つ)。結果登録が作る Specimen は request を
   # 持たないので request 検索には掛からないが、番号の有無でも判定して取り違えを防ぐ。
   def label_specimen?(specimen)
-    specimen.dig("accessionIdentifier", "system") == LabLabelNumber::SYSTEM
+    specimen.dig("accessionIdentifier", "system") == LABEL_NUMBER_SYSTEM
   end
 
   def specimen_type_code(specimen)
@@ -156,11 +160,11 @@ class LabLabelReport
   end
 
   def create_label_specimen(group, order)
-    number = LabLabelNumber.allocate
     headers = { "Content-Type" => "application/fhir+json" }
     # 二重発行(同時クリック)で同じ管の Specimen が 2 つできないよう conditional create
-    # にする。検体未設定のグループは type で識別できないため事前検索(batch)だけで守る
-    # (稀な二重クリックで番号が 2 つ振られ得るが、どちらのラベルも読めるので実害は小さい)。
+    # にする。検体未設定のグループは type で識別できないため事前検索(batch)だけで守る。
+    # 採番は上流が作成時に行うので、合流(200)でも新規(201)でも応答の番号を使えばよく、
+    # 番号が無駄に消費されることもない。
     if group.specimen_code.present?
       headers["If-None-Exist"] =
         "request=ServiceRequest/#{order_id}&type=#{group.specimen_code}"
@@ -168,20 +172,19 @@ class LabLabelReport
 
     upstream = gateway.forward(
       method: :post, path: "/Specimen",
-      body: build_label_specimen(group, order, number).to_json, headers: headers
+      body: build_label_specimen(group, order).to_json, headers: headers
     )
     ensure_success!(upstream, "Specimen create")
-    # 200 は conditional create が既存に合流した応答(同時発行の負け側)。
-    # その場合は既存の番号を採用する(採番済みの number は欠番になるだけ)。
     accession_number(JSON.parse(upstream.body))
   end
 
   # 発行時点の Specimen。まだ採取していないので status は付けない
   # (到着確認が receivedTime と status: available を書き込む)。
-  def build_label_specimen(group, order, number)
+  # accessionIdentifier は system だけを送り、番号は上流が作成時に採番して埋める。
+  def build_label_specimen(group, order)
     resource = {
       "resourceType" => "Specimen",
-      "accessionIdentifier" => { "system" => LabLabelNumber::SYSTEM, "value" => number },
+      "accessionIdentifier" => { "system" => LABEL_NUMBER_SYSTEM },
       "subject" => { "reference" => order.dig("subject", "reference") },
       "request" => [{ "reference" => "ServiceRequest/#{order_id}" }]
     }

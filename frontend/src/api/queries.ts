@@ -164,6 +164,7 @@ import {
   readHistory,
   readResource,
   searchResource,
+  typeOperation,
   updateResource,
   type FhirResult,
 } from "./fhirClient";
@@ -1165,10 +1166,12 @@ export function useWardGrid(wardId: string | undefined) {
 // 入院は Encounter 1 件で「その患者が今どのベッドに居るか」を表す
 // (組み立て方は fhir/encounterHelpers.ts の冒頭)。
 //
-// 病棟で絞らず院内の入院を全部取ってからベッド id で突き合わせる。病棟の
-// ベッド id を並べた location=... で引くこともできるが、ベッドの数だけ URL が
-// 伸びる。件数はベッド総数が上限で高が知れているうえ、全部持っていれば
-// 「この患者は既に別の病棟に入院している」の判定も追加のリクエスト無しでできる。
+// 病棟で絞らず院内の入院を全部取ってからベッド id で突き合わせる。上流は
+// 多段チェーン検索(location.partof.partof=<病棟>)に対応したので病棟で絞る
+// こともできるが、件数はベッド総数が上限で高が知れているうえ、全部持っていれば
+// 「この患者は既に別の病棟に入院している」の判定も追加のリクエスト無しでできる
+// ため、あえて全件のままにしている(病床数が増えて truncated が出るようなら
+// チェーン検索で絞る作りに変える)。
 //
 // 「その日に在院していた患者」を出すので、退院済み(finished)も含めて期間が
 // その日に重なるものを引く。上流の date は eq が「期間を完全に含む」で重なりでは
@@ -2989,11 +2992,59 @@ export function useMicroResultEntries(patientId: string | undefined) {
   };
 }
 
+// ---- $distinct-dates(サーバー集計) ----
+
+/** 実行環境のタイムゾーンオフセット("+09:00" 形式)。$distinct-dates の日境界に使う。 */
+function localTimezoneOffset(): string {
+  const minutes = -new Date().getTimezoneOffset();
+  const sign = minutes >= 0 ? "+" : "-";
+  const abs = Math.abs(minutes);
+  return `${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
+}
+
+interface DistinctDatesResult {
+  /** 新しい順。precision=day なら "2026-08-23"、full なら UTC の dateTime。 */
+  dates: string[];
+  /** 対象パラメータの値を持たないリソースが 1 件でもあるか。 */
+  hasUndated: boolean;
+}
+
+/**
+ * GET /<型>/$distinct-dates。ある date 検索パラメータが取る値の重複なし集合を
+ * サーバー集計で取得する(上流の独自 operation)。「診療日の一覧」「直近 N 回分の
+ * 採取日」を作るために全リソースを読み切って日付だけ拾っていたページングを置き換える。
+ */
+async function fetchDistinctDates(
+  resourceType: string,
+  params: URLSearchParams,
+  dateParam: string,
+  options: { precision?: "day" | "full"; limit?: number } = {},
+): Promise<DistinctDatesResult> {
+  params.set("date-param", dateParam);
+  // day(既定)はローカルの日付に丸める。full は dateTime の実値(経過表の列)。
+  if (options.precision === "full") params.set("precision", "full");
+  else params.set("timezone", localTimezoneOffset());
+  if (options.limit) params.set("limit", String(options.limit));
+
+  const { data } = await typeOperation<fhir4.Parameters>(resourceType, "distinct-dates", params);
+  const dates: string[] = [];
+  let hasUndated = false;
+  for (const parameter of data.parameter ?? []) {
+    if (parameter.name === "date") {
+      const value = parameter.valueDate ?? parameter.valueDateTime;
+      if (value) dates.push(value);
+    } else if (parameter.name === "undated") {
+      hasUndated = Boolean(parameter.valueBoolean);
+    }
+  }
+  return { dates, hasUndated };
+}
+
 // ---- 時系列表示 ----
 
 // 上流 fhir-server の _count 上限 100 を 1 ページとして順に辿る。
 const LAB_TIMELINE_PAGE = 100;
-// 患者あたりの検査結果が極端に多い場合の暴走防止。
+// 同一期間内の件数が極端に多い場合の暴走防止。
 const LAB_TIMELINE_MAX_PAGES = 10;
 
 export interface LabTimelineResources {
@@ -3001,22 +3052,34 @@ export interface LabTimelineResources {
   observations: fhir4.Observation[];
 }
 
-// 時系列表示は「直近 dateCount 回分の検体採取日」を横軸にするため、
-// 採取日の降順で DiagnosticReport を Observation ごと(_include)取得する。
-// dateCount+1 個目の採取日が現れたら、必要な日数分は揃っているので打ち切る
-// (同じ採取日のレポートがページ境界をまたぐ場合があるため +1 まで読む)。
+// 時系列表示は「直近 dateCount 回分の検体採取日」を横軸にする。
+// まず $distinct-dates で直近 dateCount 個の採取日を集計し、いちばん古い採取日
+// 以降のレポートを Observation ごと(_include)取得する。以前は採取日が
+// dateCount+1 個現れるまで全件をページングしていた(最悪 10 リクエスト +
+// 全 Observation の転送)が、これで通常 2 リクエストに収まる。
 async function fetchLabTimelineResources(
   patientId: string,
   dateCount: number,
 ): Promise<LabTimelineResources> {
+  const dateParams = new URLSearchParams();
+  dateParams.set("patient", `Patient/${patientId}`);
+  dateParams.set("category", "LAB");
+  const { dates } = await fetchDistinctDates("DiagnosticReport", dateParams, "date", {
+    limit: dateCount,
+  });
+  if (dates.length === 0) return { reports: [], observations: [] };
+
+  // 日付だけを渡すと上流は UTC の 1 日として比べるため、期間の下限はローカルの
+  // 0 時をタイムゾーン付きで渡す。
+  const oldest = dates[dates.length - 1];
   const reports: fhir4.DiagnosticReport[] = [];
   const observations: fhir4.Observation[] = [];
-  const dates = new Set<string>();
 
   for (let page = 0; page < LAB_TIMELINE_MAX_PAGES; page += 1) {
     const params = new URLSearchParams();
     params.set("patient", `Patient/${patientId}`);
     params.set("category", "LAB");
+    params.set("date", `ge${toFhirDateTime(`${oldest}T00:00`)}`);
     params.set("_count", String(LAB_TIMELINE_PAGE));
     params.set("_offset", String(page * LAB_TIMELINE_PAGE));
     params.set("_sort", "-date");
@@ -3031,17 +3094,13 @@ async function fetchLabTimelineResources(
       const resource = entry.resource;
       if (resource?.resourceType === "DiagnosticReport") {
         pageReports += 1;
-        const report = resource as fhir4.DiagnosticReport;
-        reports.push(report);
-        const date = report.effectiveDateTime?.slice(0, 10);
-        if (date) dates.add(date);
+        reports.push(resource as fhir4.DiagnosticReport);
       } else if (resource?.resourceType === "Observation") {
         observations.push(resource as fhir4.Observation);
       }
     }
 
     if (pageReports < LAB_TIMELINE_PAGE) break;
-    if (dates.size > dateCount) break;
   }
 
   return { reports, observations };
@@ -3355,8 +3414,8 @@ function refreshedResponseIds(entries: fhir4.BundleEntry[]): string[] {
 
 /** 上記の回答から前回生成した Observation を消す DELETE エントリ。 */
 async function staleObservationEntries(entries: fhir4.BundleEntry[]): Promise<fhir4.BundleEntry[]> {
-  const refs = await Promise.all(refreshedResponseIds(entries).map(fetchDerivedObservationRefs));
-  return refs.flat().map((reference) => ({
+  const refs = await fetchDerivedObservationRefs(refreshedResponseIds(entries));
+  return refs.map((reference) => ({
     request: { method: "DELETE" as const, url: reference },
   }));
 }
@@ -3888,14 +3947,16 @@ export function usePopulateSources(patientId: string | undefined) {
 }
 
 /**
- * この回答から生成した Observation の参照。回答を更新・削除するときに、前回の
+ * これらの回答から生成した Observation の参照。回答を更新・削除するときに、前回の
  * 生成物を消すために引く(Observation.derivedFrom が唯一の根拠)。
- * 1 回答あたりの項目数は多くても数十なので 1 ページで足りる。
+ * 複数の回答はカンマ区切り(OR)の 1 検索でまとめて引く。1 回答あたりの項目数は
+ * 多くても数十、1 記載あたりのテンプレート数も数個なので 1 ページで足りる。
  */
-async function fetchDerivedObservationRefs(responseId: string): Promise<string[]> {
-  if (!responseId) return [];
+async function fetchDerivedObservationRefs(responseIds: string[]): Promise<string[]> {
+  const ids = responseIds.filter(Boolean);
+  if (ids.length === 0) return [];
   const params = new URLSearchParams();
-  params.set("derived-from", `QuestionnaireResponse/${responseId}`);
+  params.set("derived-from", ids.map((id) => `QuestionnaireResponse/${id}`).join(","));
   params.set("_elements", "id");
   params.set("_count", "100");
   const { data } = await searchResource<fhir4.Observation>("Observation", params);
@@ -3916,7 +3977,7 @@ async function saveResponse(
   etag?: string,
 ): Promise<FhirResult<fhir4.QuestionnaireResponse>> {
   const extracts = observationExtractEnabled(questionnaire);
-  const existingObservationRefs = response.id ? await fetchDerivedObservationRefs(response.id) : [];
+  const existingObservationRefs = response.id ? await fetchDerivedObservationRefs([response.id]) : [];
   if (!extracts && !existingObservationRefs.length) {
     return saveWithImages(response, imageEntries, etag);
   }
@@ -3977,7 +4038,7 @@ export function useDeleteQuestionnaireResponse() {
     // 無くなり、由来を辿れない Observation だけが残るため)。
     mutationFn: async (response: fhir4.QuestionnaireResponse) => {
       const id = response.id ?? "";
-      const observationRefs = await fetchDerivedObservationRefs(id);
+      const observationRefs = await fetchDerivedObservationRefs([id]);
       if (!observationRefs.length) return deleteResource("QuestionnaireResponse", id);
       await postBundle(responseDeleteBundle(id, observationRefs));
     },
@@ -4142,29 +4203,22 @@ export function useKarteVitalsInfinite(
 // ---- 診療日インデックス ----
 //
 // 診療日ペインには、タイムラインの読み込み状況に関係なく全診療日を最初から出す。
-// そのためにタイムラインと同じ 4 リソースを、日付だけの軽量な形(_elements)で
-// 全ページ読み切る。検索条件(プロブレム絞り込みを含む)はタイムラインの各
-// 無限クエリと揃えること。キーも同じ ["<型>", "search"] 配下に置くので、
-// 登録・削除の invalidate で一緒に再取得される。
-const KARTE_DAY_PAGE = 100;
-
+// 検索条件(プロブレム絞り込みを含む)はタイムラインの各無限クエリと揃えること。
+// キーも同じ ["<型>", "search"] 配下に置くので、登録・削除の invalidate で一緒に
+// 再取得される。
+// 診療日の集合は $distinct-dates のサーバー集計で取る。以前はリソース種別ごとに
+// 患者の全履歴を _elements 付きで最後のページまで読んでいた(日付の distinct を
+// 取るだけのフルスキャン ×4)。limit はカルテの左ペインに出す日数の実用上限。
 async function fetchKarteDays(
   resourceType: string,
-  buildParams: () => URLSearchParams,
-  dateOf: (resource: fhir4.Resource) => string | undefined,
+  params: URLSearchParams,
+  dateParam: string,
 ): Promise<string[]> {
-  const days = new Set<string>();
-  for (let offset = 0; ; offset += KARTE_DAY_PAGE) {
-    const params = buildParams();
-    params.set("_count", String(KARTE_DAY_PAGE));
-    params.set("_offset", String(offset));
-    const { data: bundle } = await searchResource<fhir4.Resource>(resourceType, params);
-    for (const entry of bundle.entry ?? []) {
-      // 日付を持たないリソースは空文字で持ち、タイムラインの「日付なし」に揃える。
-      if (entry.resource) days.add(dateOf(entry.resource)?.slice(0, 10) ?? "");
-    }
-    if (!hasRelation(bundle, "next")) return Array.from(days);
-  }
+  const { dates, hasUndated } = await fetchDistinctDates(resourceType, params, dateParam, {
+    limit: 1000,
+  });
+  // 日付を持たないリソースは空文字で持ち、タイムラインの「日付なし」に揃える。
+  return hasUndated ? [...dates, ""] : dates;
 }
 
 /** 診療日ペインに出す全診療日(降順)。 */
@@ -4180,17 +4234,14 @@ export function useKarteDayIndex(
     queryFn: () =>
       fetchKarteDays(
         "Composition",
-        () => {
+        (() => {
           const params = new URLSearchParams();
           params.set("subject", `Patient/${patientId}`);
           params.set("type", "http://loinc.org|11506-3");
           if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
-          params.set("_elements", "date");
-          // 全ページを読み切る間に順序がぶれないよう並び順を固定する(以下同)。
-          params.set("_sort", "-date");
           return params;
-        },
-        (resource) => (resource as fhir4.Composition).date,
+        })(),
+        "date",
       ),
     enabled,
   });
@@ -4200,17 +4251,15 @@ export function useKarteDayIndex(
     queryFn: () =>
       fetchKarteDays(
         "ServiceRequest",
-        () => {
+        (() => {
           const params = new URLSearchParams();
           params.set("patient", `Patient/${patientId}`);
           if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
           // タイムラインと同じく、オーダーのヘッダだけを数える(明細を含めない)。
           params.set("based-on:missing", "true");
-          params.set("_elements", "authoredOn");
-          params.set("_sort", "-authoredon");
           return params;
-        },
-        (resource) => (resource as fhir4.ServiceRequest).authoredOn,
+        })(),
+        "authoredon",
       ),
     enabled,
   });
@@ -4220,15 +4269,13 @@ export function useKarteDayIndex(
     queryFn: () =>
       fetchKarteDays(
         "QuestionnaireResponse",
-        () => {
+        (() => {
           const params = new URLSearchParams();
           params.set("patient", `Patient/${patientId}`);
           if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
-          params.set("_elements", "authored");
-          params.set("_sort", "-authored");
           return params;
-        },
-        (resource) => (resource as fhir4.QuestionnaireResponse).authored,
+        })(),
+        "authored",
       ),
     enabled,
   });
@@ -4238,17 +4285,15 @@ export function useKarteDayIndex(
     queryFn: () =>
       fetchKarteDays(
         "Observation",
-        () => {
+        (() => {
           const params = new URLSearchParams();
           params.set("patient", `Patient/${patientId}`);
           params.set("category", "vital-signs");
           params.set("derived-from:missing", "true");
           if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
-          params.set("_elements", "effectiveDateTime");
-          params.set("_sort", "-date");
           return params;
-        },
-        (resource) => (resource as fhir4.Observation).effectiveDateTime,
+        })(),
+        "date",
       ),
     enabled,
   });
@@ -4292,8 +4337,9 @@ function invalidateVitals(queryClient: QueryClient) {
 }
 
 // 経過表は「直近 N 回分の測定」を横軸にする。1 回の測定が 8 件前後の Observation に
-// 分かれるので、測定日時が N+1 個目に達した時点で打ち切る(同じ測定がページ境界を
-// またぐ場合があるため +1 まで読む)。検査結果の時系列表示と同じ流儀。
+// 分かれるので、まず $distinct-dates(precision=full)で直近 N 個の測定日時を集計し、
+// いちばん古い測定日時以降の Observation をまとめて取る。検査結果の時系列表示と
+// 同じ流儀(以前は測定日時が N+1 個現れるまで全件をページングしていた)。
 const VITAL_FLOWSHEET_PAGE = 100;
 const VITAL_FLOWSHEET_MAX_PAGES = 10;
 
@@ -4301,13 +4347,22 @@ async function fetchVitalFlowsheetObservations(
   patientId: string,
   columnCount: number,
 ): Promise<fhir4.Observation[]> {
-  const observations: fhir4.Observation[] = [];
-  const columns = new Set<string>();
+  const dateParams = new URLSearchParams();
+  dateParams.set("patient", `Patient/${patientId}`);
+  dateParams.set("category", "vital-signs");
+  const { dates: instants } = await fetchDistinctDates("Observation", dateParams, "date", {
+    precision: "full",
+    limit: columnCount,
+  });
+  if (instants.length === 0) return [];
 
+  const observations: fhir4.Observation[] = [];
   for (let page = 0; page < VITAL_FLOWSHEET_MAX_PAGES; page += 1) {
     const params = new URLSearchParams();
     params.set("patient", `Patient/${patientId}`);
     params.set("category", "vital-signs");
+    // ge は境界を含むので、N 個目の測定日時そのものも取れる。
+    params.set("date", `ge${instants[instants.length - 1]}`);
     params.set("_count", String(VITAL_FLOWSHEET_PAGE));
     params.set("_offset", String(page * VITAL_FLOWSHEET_PAGE));
     params.set("_sort", "-date");
@@ -4316,14 +4371,9 @@ async function fetchVitalFlowsheetObservations(
     const pageObservations = (bundle.entry ?? [])
       .map((entry) => entry.resource)
       .filter((r): r is fhir4.Observation => r?.resourceType === "Observation");
-
-    for (const observation of pageObservations) {
-      observations.push(observation);
-      if (observation.effectiveDateTime) columns.add(observation.effectiveDateTime);
-    }
+    observations.push(...pageObservations);
 
     if (pageObservations.length < VITAL_FLOWSHEET_PAGE) break;
-    if (columns.size > columnCount) break;
   }
 
   return observations;

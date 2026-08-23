@@ -73,88 +73,57 @@ token 再索引もマイグレーションに畳み込んである（`fhir:reind
 
 ---
 
-## 優先度 B: operation 系（レイテンシ・転送量）
+## 2026-08-23 に対応済み（旧・優先度 B）
 
-### B-1. 検査結果・バイタルのサーバー集計（Observation `$lastn` 相当）
+サーバー側の実装とクライアント側の追随が完了したもの。デプロイ時の手動操作は不要
+（migration は entrypoint の `db:prepare` で自動適用）だが、**Render の環境変数
+`SPECIMEN_ACCESSION_SYSTEM` の追加が要る**（render.yaml に定義済み。Blueprint を
+再適用しない場合はダッシュボードで手動設定。上流を fhir-client backend より先に
+デプロイすること — 未設定のまま新 backend が動くとラベル発行が失敗する）。
 
-- **現状**: 「直近 N 回分の列が揃うまでページを読む→手元でピボット」が 2 箇所。
-  - 検査結果時系列: `queries.ts:2969` の `fetchLabTimelineResources` が
-    `DiagnosticReport?...&_include=DiagnosticReport:result` を 100 件×最大 10 ページ辿り、
-    `buildLabTimeline`（`fhir/labResultHelpers.ts`）で JLAC11 コード×採取日の行列を構築
-  - バイタルフローシート: `queries.ts:4261` の `fetchVitalFlowsheetObservations` が同型で、
-    `fhir/vitalHelpers.ts` の `groupVitalEntries` が identifier で測定回に束ね直す
-- **望ましいサーバー機能**: FHIR 標準の `Observation/$lastn`（patient + code 軸で
-  「各コードの最新 n 件」）か、それに準ずる集計 operation。
-- **影響範囲**: 時系列表・グラフ・フローシートのレイテンシと転送量。患者あたりの
-  結果が数百件を超える運用で顕著（2026-08-01 調査から継続、適用範囲をバイタルに拡大）。
+1. **`$distinct-dates` operation（B-1・B-2 の集計部分）** — ある date 検索パラメータが
+   取る値の重複なし集合(新しい順)を返す独自 operation。`date-param` / `precision=day|full` /
+   `timezone=±HH:MM`(day の日境界) / `limit`。通常の検索パラメータ・コンパートメント・
+   strict handling がそのまま効く。
+   **クライアント**: 3 箇所を置き換えた。
+   - カルテの診療日インデックス: 4 リソース種別の全履歴フルスキャン → `$distinct-dates` ×4
+     (「日付なし」は応答の `undated` フラグで表現)
+   - 検査結果時系列: 「採取日が N+1 個揃うまで全件ページング」→ 直近 N 個の採取日を集計
+     してから期間下限付きの 1 検索(通常 2 リクエスト)
+   - バイタル経過表: 同型(`precision=full` で測定日時の実値を列にする)
+2. **多段チェーン検索（B-4 の 1）** — `Encounter?location.partof.partof=Location/<病棟>`
+   のような 3 セグメントまでのチェーンに対応(それ以上は unsupported 扱い、strict なら 400)。
+   **クライアント**: 入院患者一覧は**あえて全件取得のまま**(「別病棟に既入院」の判定に
+   全件が要る・件数はベッド総数上限。queries.ts の fetchInpatients コメント参照)。
+   病床数が増えて truncated が出るようになったらチェーン検索で絞る作りに変える。
+3. **`_include:iterate` の多段の回帰 spec 固定（B-4 の 3）** — ベッド→病室→病棟の
+   2 段 include が返ることを spec で固定した。クライアントの読み足しフォールバック
+   (`queries.ts` の fetchPatientAdmission)はデータ異常への防御として残置。
+4. **検体ラベル番号のサーバー採番（B-5）** — `Fhir::AccessionAssigner`。
+   `SPECIMEN_ACCESSION_SYSTEM` の accessionIdentifier が値なしで POST されたとき、
+   作成時に連番 10 桁 + M10W3 チェックデジットを払い出す(Postgres シーケンス)。
+   conditional create が既存に合流したときは採番しないので番号の空振り消費が無い。
+   **クライアント**: backend の `LabLabelNumber`(モデル・テーブル)を削除し、
+   ラベル発行は system だけ送って応答の番号を使う。
+5. **参照検索のカンマ OR の確認と N+1 解消（B-6 の即効部分）** —
+   `Observation?derived-from=QR/a,QR/b` を回帰 spec で固定し、経過記録保存前の
+   回答ごと 1 検索(N+1)を 1 検索にまとめた。
 
-### B-2. カルテタイムラインの統合フィードと診療日インデックス
+### 見送り（理由つき）
 
-- **現状**:
-  - `KartePage.tsx` は Composition / ServiceRequest / QuestionnaireResponse / Observation の
-    4 本の無限クエリを並走させ、ブラウザでマージする。各検索が独立にページングするため、
-    「全ソースが読み終わった日までしか表示しない」safe cutoff 機構が必要
-    （`fhir/karteTimeline.ts:204` の `safeCutoff`）
-  - 左ペインの診療日一覧は `queries.ts:4112` の `fetchKarteDays` が 4 リソース種別
-    それぞれで患者の**全履歴**を `_elements=<日付のみ>` でフルスキャンし、distinct を取る
-- **望ましいサーバー機能**: 日付ソート済み・マージ済みの患者タイムライン検索
-  （`Patient/$everything` の type + date 絞り込み版）。それが大きければ、まず
-  「患者の診療日の distinct 集合」を返す小さな operation だけでも 4 本のフルスキャンが消える。
-- **影響範囲**: カルテを開くたびの転送量と、safe cutoff まわりの複雑さ。履歴が長い
-  患者ほど顕著。
-
-### B-3. 検査結果詳細の前後移動のカーソル化
-
-- **現状**: `fetchLabResultOrder` が「一覧と同じ並び順の DiagnosticReport id 列」を
-  `_elements=id` で 100 件×最大 10 ページ取得し、`ids.indexOf(reportId)` で前後の id を
-  求めている。「＜ ＞」ボタン 1 つのために最大 1000 件の id 走査が要る。
-- **望ましいサーバー機能**: ソートキーに対するカーソル検索
-  （例: `date=lt<基準値>&_sort=-date&_count=1` で「次の 1 件」）。現状の `_sort` は
-  id タイブレーク済みなので、`(date, id)` の複合カーソルが表現できれば成立する。
-- **影響範囲**: 検査結果詳細画面のナビゲーション。`staleTime: 30_000` で連打を緩和して
-  おり、通常運用では許容範囲（2026-08-01 調査から継続）。
-
-### B-4. 病棟・入院系の検索とカウント
-
-- **現状**: 入院患者一覧（`frontend/src/pages/InpatientListPage.tsx`、1102 行）は
-  病院全体の入院 Encounter を全件取得し（病棟で絞るには「ベッドの数だけ location= を
-  並べる」しかなく URL が破綻する: `queries.ts:1146`）、ブラウザで
-  Location×Encounter×Patient を join、6 タブ分の絞り込みと在院/空床統計まで in-memory。
-  入院予定は日付検索自体ができず全件取得（`queries.ts:1281`）。病棟一覧の病室数・
-  ベッド数は `_revinclude` で子リソースを全部転送して数えている（`queries.ts:894`）。
-  患者ヘッダのベッド→病室→病棟解決は `_include:iterate` が効かない場合に備えて
-  1 件読み足すフォールバック付き（`queries.ts:1369`）。
-- **望ましいサーバー機能**（段階的に）:
-  1. Encounter のチェーン検索 `location.partof.partof=`（病棟でのサーバー絞り込み）
-  2. 拡張に埋まっている入院予定日・転棟予定・外出泊・退院予定の検索パラメータ化
-  3. `_include:iterate`（多段 include）の確実化
-  4. 親ごとの子リソース件数を返すカウント facet（または batch Bundle での
-     `_summary=count` 一括実行）
-- **影響範囲**: 病床規模が大きいほど顕著。1 は既存のチェーン検索基盤の延長で費用対効果が高い。
-
-### B-5. 検体ラベル番号のサーバー採番
-
-- **現状**: backend に残る唯一の採番。`backend/app/models/lab_label_number.rb` が
-  created_at しか持たないテーブルの autoincrement を消費して 10 桁＋チェックデジットを
-  発番する。台帳は既に上流 Specimen（accessionIdentifier / request / receivedTime）に
-  移行済みで、「一意な短い番号の採番」だけが FHIR で表現できないとして残存。
-  type コードの無い検体は If-None-Exist の条件一致ができず、二重クリックで番号を
-  二重消費する既知レースあり（`backend/app/services/lab_label_report.rb:161-163`）。
-- **望ましいサーバー機能**: サーバー側の採番 operation（例 `Specimen/$generate-accession`）
-  またはサーバー付与の accessionIdentifier（作成時に未設定なら採番して埋める）。
-- **影響範囲**: backend の `lab_label_numbers` テーブル・モデル・レース対策が丸ごと消え、
-  採番の一意性がサーバーのトランザクションで保証される。
-
-### B-6. `QuestionnaireResponse/$extract`（SDC）と参照検索のカンマ OR
-
-- **現状**: `frontend/src/fhir/observationExtract.ts:9` に「上流に $extract operation は
-  無いため、回答の保存時にクライアントで組み立てて同じ transaction Bundle に載せる」と
-  明記。派生 Observation は削除→再作成で更新し、編集した応答 id ごとに
-  `Observation?derived-from=` を 1 検索ずつ発行する N+1 もある（`queries.ts:3319` 付近）。
-- **望ましいサーバー機能**: SDC の `QuestionnaireResponse/$extract`（サーバー側での
-  Observation 抽出）。それが大きければ、まず reference 検索のカンマ OR
-  （`Observation?derived-from=A,B,C`）だけでも N+1 が 1 検索になる。
-- **影響範囲**: 経過記録・テンプレート保存の往復数と、抽出ロジックの二重管理リスク。
+- **B-2 の統合タイムライン検索**（4 リソースのマージ済みフィード）: 診療日インデックスの
+  フルスキャンが消えた時点で主要な痛みは解消。safe cutoff 機構は残るが、設計としては
+  安定して動いている。`Patient/$everything` の type+date 絞り込み版は必要になったら。
+- **B-3 のカーソル検索**: 調査の結果、id 列の走査は「検体採取日ペイン」(全件表示が必要)と
+  共用になっており、前後移動だけを operation 化しても要約一覧の取得は消えない。
+  ペイン自体をページングする設計に変えるときに再検討。
+- **B-4 の 2（入院系拡張の検索パラメータ化）と 4（カウント facet）**: タブ絞り込みの
+  選択肢を手元のデータから組み立てる作りのため、サーバーで絞ると候補が痩せる
+  (ワークリストと同じ理由)。病室数・ベッド数のカウントは `_revinclude` 1 往復で
+  実用上十分。規模が増えたら batch の `_summary=count` 一括か facet を検討。
+- **B-6 の `QuestionnaireResponse/$extract`**: 抽出ロジック(observationExtract.ts)は
+  テンプレートのローカル拡張仕様と密結合で、サーバーに移すと二重管理になる。
+  保存は transaction Bundle で既に原子的なので、往復数の問題も残っていない。
 
 ---
 

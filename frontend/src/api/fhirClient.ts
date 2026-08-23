@@ -55,6 +55,20 @@ export function searchResource<T extends fhir4.Resource>(
   return fhirFetch(`${BASE}/${resourceType}?${params.toString()}`).then((r) => handle(r));
 }
 
+/**
+ * 型レベルの operation(GET /<型>/$<名前>?...)。$distinct-dates のように検索条件を
+ * 受けて集計を返すものに使う。応答は operation が定める Resource(多くは Parameters)。
+ */
+export function typeOperation<T extends fhir4.Resource>(
+  resourceType: string,
+  operation: string,
+  params: URLSearchParams,
+): Promise<FhirResult<T>> {
+  return fhirFetch(`${BASE}/${resourceType}/$${operation}?${params.toString()}`).then((r) =>
+    handle(r),
+  );
+}
+
 export function readResource<T extends fhir4.Resource>(
   resourceType: string,
   id: string,

@@ -65,7 +65,7 @@ RSpec.describe LabLabelReport do
     {
       "resourceType" => "Specimen",
       "id" => id,
-      "accessionIdentifier" => { "system" => LabLabelNumber::SYSTEM, "value" => number },
+      "accessionIdentifier" => { "system" => described_class::LABEL_NUMBER_SYSTEM, "value" => number },
       "type" => { "coding" => [{ "system" => described_class::JLAC11_SPECIMEN_SYSTEM,
                                  "code" => specimen_code }] },
       "request" => [{ "reference" => "ServiceRequest/o1" }]
@@ -95,10 +95,17 @@ RSpec.describe LabLabelReport do
       }.to_json)
   end
 
-  # Specimen の conditional create。作成された(または合流した)リソースをそのまま返す。
+  # Specimen の conditional create。上流の採番(Fhir::AccessionAssigner)を模して、
+  # 値なしの accessionIdentifier に 11 桁の番号を埋めて返す。
   def stub_specimen_create
+    counter = 0
     stub_request(:post, "#{base_url}/Specimen")
-      .to_return { |request| { status: 201, body: request.body } }
+      .to_return do |request|
+        body = JSON.parse(request.body)
+        counter += 1
+        body["accessionIdentifier"]["value"] ||= format("%011d", counter)
+        { status: 201, body: body.to_json }
+      end
   end
 
   it "groups items by specimen and creates one label Specimen per new tube" do
@@ -137,7 +144,9 @@ RSpec.describe LabLabelReport do
         headers: { "If-None-Exist" => "request=ServiceRequest/o1&type=212" }
       ) { |req|
         body = JSON.parse(req.body)
-        body.dig("accessionIdentifier", "system") == LabLabelNumber::SYSTEM &&
+        # 番号は送らない(上流が作成時に採番する)。
+        body.dig("accessionIdentifier", "system") == described_class::LABEL_NUMBER_SYSTEM &&
+          body.dig("accessionIdentifier", "value").nil? &&
           body["request"] == [{ "reference" => "ServiceRequest/o1" }] &&
           body.dig("subject", "reference") == "Patient/p1" &&
           body["status"].nil?

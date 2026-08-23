@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_23_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_23_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -33,10 +33,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_23_000000) do
     t.datetime "updated_at", null: false
     t.text "fhir_admin_token"
     t.index ["singleton_guard"], name: "index_fhir_connection_settings_on_singleton_guard", unique: true
-  end
-
-  create_table "lab_label_numbers", force: :cascade do |t|
-    t.datetime "created_at", null: false
   end
 
   create_table "master_disease_indexes", force: :cascade do |t|
