@@ -6356,6 +6356,11 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
 .sticky-table-wrap {
   max-height: calc(100vh - var(--sticky-table-chrome, 300px));
   overflow: auto;
+  /* 既定のスクロールバーは幅も色も表の罫線より強く、常に出ている横のバーが行より
+     目立ってしまう。細くしたうえで、つまみを罫線と同じ色・溝を地のままにして
+     「送れる」ことだけが分かる程度に落とす。 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
 /* 罫線をセルに持たせるため collapse は使わない(collapse では罫線が表のものに
