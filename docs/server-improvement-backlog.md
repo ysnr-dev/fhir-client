@@ -9,11 +9,13 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
   ServiceRequest の `based-on` 検索と `_revinclude`〔2026-08-09〕）については
   両リポジトリのコミット履歴を参照。
-- **2026-08-23 に優先度 A（5 件）・B（operation 系）・C-1（日付／期間検索）を
-  サーバー・クライアント両側とも実装済み**（下記の「対応済み」節を参照）。
+- **2026-08-23 に優先度 A（5 件）・B（operation 系）・C-1（日付／期間検索）・C-2
+  （`_sort` と `AllergyIntolerance.onset`）をサーバー・クライアント両側とも実装済み**
+  （下記の「対応済み」節を参照）。残るは C-3〜C-5 と長期のみ。
 
 各項目は「現状のワークアラウンド → 望ましいサーバー機能 → 影響範囲」の形式。
-**残っているのは優先度 C の C-2〜C-5 と長期のみ**（優先度 A・B と C-1 は 2026-08-23 に対応済み）。
+**残っているのは優先度 C の C-3〜C-5 と長期のみ**（優先度 A・B と C-1・C-2 は
+2026-08-23 に対応済み）。
 
 ---
 
@@ -126,7 +128,7 @@ token 再索引もマイグレーションに畳み込んである（`fhir:reind
 
 ---
 
-## 2026-08-23 に対応済み（旧・優先度 C-1）
+## 2026-08-23 に対応済み（旧・優先度 C-1 / C-2）
 
 デプロイ時の手動操作は不要（migration は `db:prepare` で自動適用、`FHIR_LOCAL_TIMEZONE`
 はアプリ側の既定も `Asia/Tokyo` なので未設定でも同じ挙動。render.yaml には明示済み）。
@@ -160,20 +162,28 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 
 ---
 
-## 優先度 C: 個別の検索パラメータ・仕様適合（残り）
-
 ### C-2. `_sort` の信頼性向上と `AllergyIntolerance.onset`
 
-- **現状**: サーバーソートを信用せず画面側で並べ直す箇所が点在。
-  - Appointment 新しい順（`queries.ts` の `useAppointmentSearch` のコメント
-    「上流の _sort に依存しないため」）
-  - 入院予定の period.start 順（`fetchPlannedAdmissions`）
-  - `_history` の versionId 降順「念のため」
-  - アレルギー一覧は `onsetDateTime` を表示しつつ、検索パラメータが無いため
-    `date`（recordedDate）でソートしており、表示と並び順の基準がずれている
-- **望ましいサーバー機能**: 主要リソースの `_sort` 対応状況を CapabilityStatement で明示し、
-  対応済みのものは順序を保証する。`AllergyIntolerance.onset` 検索パラメータ（R4 標準）を追加。
-- **影響範囲**: 画面側ソートの削減と、アレルギー一覧の並び順の正確さ。
+- **サーバー**: `AllergyIntolerance.onset` 検索パラメータ（R4 標準、`onsetDateTime` を
+  索引。`onsetPeriod` / `onsetAge` などの他の onset[x] は点の時刻として比べられないので
+  索引していない）を追加。あわせて **`_sort` は値を持たない行を方向によらず末尾に置く**
+  （`NULLS LAST`）ようにした — Postgres の既定は DESC が NULLS FIRST で、「新しい順」に
+  日付未設定のものが先頭に来てしまうため。並び順の保証（Appointment / Encounter の
+  `date`、`_history` の新しい版が先）は回帰 spec で固定。`_sort` の規則は README に記載。
+- **クライアント**: 「上流の `_sort` を信用せず画面側で並べ直す」防御を 3 箇所から撤去した
+  （カルテの予約タブ、入院予定の一覧、診療記録の版履歴）。
+
+#### 訂正: アレルギー一覧の「表示と並び順のずれ」は誤り
+
+バックログには「アレルギー一覧は `onsetDateTime` を表示しつつ `date`（recordedDate）で
+ソートしており基準がずれている」と書いていたが、**これは誤り**。一覧（`AllergyTable`）が
+表示しているのは記録日で、`_sort=-date` と一致していた。発症日を出しているのは詳細
+パネルの方。一覧の並び順は記録日のまま据え置き、追加した `onset` は「発症日で絞る／
+並べる画面ができたときに使える標準パラメータ」として残している。
+
+---
+
+## 優先度 C: 個別の検索パラメータ・仕様適合（残り）
 
 ### C-3. `_elements` の choice 型対応（仕様適合）
 

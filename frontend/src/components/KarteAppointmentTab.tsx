@@ -1,7 +1,6 @@
 import { useAppointmentSearch, useCancelAppointment } from "../api/queries";
 import {
   appointmentDateTimeLabel,
-  sortAppointmentsByStartDesc,
 } from "../fhir/appointmentHelpers";
 import { AppointmentTable } from "./AppointmentTable";
 import { ErrorBanner } from "./ErrorBanner";
@@ -46,7 +45,7 @@ export function KarteAppointmentTab({ patientId, onReschedule }: KarteAppointmen
         <p>読み込み中...</p>
       ) : (
         <AppointmentTable
-          appointments={sortAppointmentsByStartDesc(appointments)}
+          appointments={appointments}
           onReschedule={onReschedule}
           onCancel={handleCancel}
           busy={cancel.isPending}

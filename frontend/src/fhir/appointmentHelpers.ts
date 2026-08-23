@@ -427,13 +427,6 @@ export function appointmentDateTimeLabel(appointment: fhir4.Appointment): string
   return `${toDateInput(start)}(${weekday}) ${time}${endTime}`;
 }
 
-/** 新しい予約が上に来る並び(過去の予約は下)。 */
-export function sortAppointmentsByStartDesc(
-  appointments: fhir4.Appointment[],
-): fhir4.Appointment[] {
-  return [...appointments].sort((a, b) => (b.start ?? "").localeCompare(a.start ?? ""));
-}
-
 export function appointmentScheduleLabel(appointment: fhir4.Appointment): string {
   return appointment.serviceType?.[0]?.text || appointment.description || "-";
 }

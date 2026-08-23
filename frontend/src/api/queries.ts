@@ -1316,6 +1316,8 @@ async function fetchPlannedAdmissions(): Promise<PlannedAdmissionsResult> {
     const params = new URLSearchParams();
     params.set("status", PLANNED_STATUS);
     params.set("class", ADMISSION_CLASS_CODE);
+    // 入院予定日(period.start)の早い順。
+    params.set("_sort", "date");
     params.set("_count", String(INPATIENT_PAGE));
     params.set("_offset", String(page * INPATIENT_PAGE));
     params.set("_include", "Encounter:subject");
@@ -1337,7 +1339,6 @@ async function fetchPlannedAdmissions(): Promise<PlannedAdmissionsResult> {
     if (page === INPATIENT_MAX_PAGES - 1) truncated = true;
   }
 
-  encounters.sort((a, b) => (a.period?.start ?? "").localeCompare(b.period?.start ?? ""));
   return { encounters, patientsById, truncated };
 }
 
@@ -1758,6 +1759,8 @@ export function useAppointmentSearch(patientId: string | undefined) {
   const params = new URLSearchParams();
   if (patientId) params.set("patient", `Patient/${patientId}`);
   params.set("_count", "100");
+  // 新しい順。上流は同値を id でタイブレークするのでページ送りをまたいでも安定する。
+  params.set("_sort", "-date");
 
   const query = useQuery({
     queryKey: ["Appointment", "search", patientId],
@@ -3409,11 +3412,10 @@ export function useClinicalNoteHistory(id: string | undefined, enabled: boolean)
 
   return {
     ...query,
-    // 新しい版が先。上流は versionId 降順で返すが、念のため並べ直す。
+    // 上流の _history は新しい版から返す(回帰 spec で固定済み)。
     versions: (query.data?.entry ?? [])
       .map((e) => e.resource)
-      .filter((r): r is fhir4.Composition => r?.resourceType === "Composition")
-      .sort((a, b) => Number(b.meta?.versionId ?? 0) - Number(a.meta?.versionId ?? 0)),
+      .filter((r): r is fhir4.Composition => r?.resourceType === "Composition"),
   };
 }
 
@@ -3538,8 +3540,8 @@ export function useAllergySearch(patientId: string | undefined, offset: number) 
   if (patientId) params.set("patient", `Patient/${patientId}`);
   params.set("_count", String(ALLERGY_COUNT));
   params.set("_offset", String(offset));
-  // 記録日の降順(新しい順)。AllergyIntolerance に発症日の検索パラメータは無いため
-  // date(= recordedDate)でソートする。
+  // 一覧に出しているのは記録日なので、並べ替えも記録日の降順で揃える
+  // (発症日で並べたい画面ができたら上流の `onset` 検索パラメータが使える)。
   params.set("_sort", "-date");
 
   const query = useQuery({
