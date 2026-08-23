@@ -16,7 +16,6 @@ import {
   DEFAULT_APPOINTMENT_TYPE,
   appointmentTypeLabel,
   scheduleName,
-  slotDate,
   slotTime,
   toDateInput,
 } from "./scheduleHelpers";
@@ -485,17 +484,6 @@ export function monthGrid(month: string): MonthCell[][] {
       return { date: toDateInput(date), inMonth: date.getMonth() === mon - 1 };
     }),
   );
-}
-
-/** 日付 → その日の空き枠数。月カレンダーのセルに出す。 */
-export function freeCountByDate(slots: fhir4.Slot[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const slot of slots) {
-    if (slot.status !== "free") continue;
-    const date = slotDate(slot);
-    counts.set(date, (counts.get(date) ?? 0) + 1);
-  }
-  return counts;
 }
 
 export interface SlotTimeGroup {

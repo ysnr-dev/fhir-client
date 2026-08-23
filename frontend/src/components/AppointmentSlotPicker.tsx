@@ -2,14 +2,13 @@ import { useMemo, useState } from "react";
 import {
   useDaySlots,
   useSelfDepartments,
-  useFreeSlotsOfMonth,
+  useFreeSlotCountsOfMonth,
   usePractitionerOptions,
   useScheduleOptions,
 } from "../api/queries";
 import {
   chainFreeSlots,
   currentMonth,
-  freeCountByDate,
   groupSlotsByTime,
   monthGrid,
   monthLabel,
@@ -131,10 +130,10 @@ export function AppointmentSlotPicker({
   const [date, setDate] = useState("");
 
   const range = useMemo(() => monthRange(month), [month]);
-  const monthSlots = useFreeSlotsOfMonth(schedule?.id, range);
+  const monthSlots = useFreeSlotCountsOfMonth(schedule?.id, range);
   const daySlots = useDaySlots(schedule?.id, date);
 
-  const freeCounts = useMemo(() => freeCountByDate(monthSlots.slots), [monthSlots.slots]);
+  const freeCounts = monthSlots.freeCounts;
   const grid = useMemo(() => monthGrid(month), [month]);
   const timeGroups = useMemo(() => groupSlotsByTime(daySlots.slots), [daySlots.slots]);
 

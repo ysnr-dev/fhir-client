@@ -13,7 +13,7 @@ import {
   vitalSaveBundle,
   VITAL_ENTRY_SYSTEM,
 } from "../fhir/vitalHelpers";
-import { buildClinicalNoteDeleteBundle, toFhirDateTime } from "../fhir/clinicalNoteHelpers";
+import { buildClinicalNoteDeleteBundle } from "../fhir/clinicalNoteHelpers";
 import { LOCATION_TYPE_CODES } from "../fhir/locationHelpers";
 import {
   MAX_BED_COUNT,
@@ -1174,8 +1174,9 @@ export function useWardGrid(wardId: string | undefined) {
 // チェーン検索で絞る作りに変える)。
 //
 // 「その日に在院していた患者」を出すので、退院済み(finished)も含めて期間が
-// その日に重なるものを引く。上流の date は eq が「期間を完全に含む」で重なりでは
-// ないため、重なりは ge と le の AND で表す(上流 period_fragment のコメント参照):
+// その日に重なるものを引く。FHIR の date 検索は期間に対して eq が「検索値の範囲が
+// 対象の期間を完全に含む」と定められていて重なりではないので、重なりは ge と le の
+// AND で表す(仕様どおりの書き方であって、上流の制限ではない):
 //   date=ge<日> → 退院していない、またはその日以降に退院した
 //   date=le<日> → その日までに入院している
 // 取り消した入院(entered-in-error)は在院ではないので status で外す。
@@ -1709,18 +1710,30 @@ export function useScheduleOptions(filter: {
  * 月ぶんの空き枠。月カレンダーの「その日の空き数」に使う。
  * status=free だけを引くので、予約が埋まるほど軽くなる。
  */
-export function useFreeSlotsOfMonth(
+/**
+ * 月カレンダーの「その日の空き枠数」バッジ。枠の現物は要らず日付ごとの件数だけ
+ * なので、$distinct-dates の件数モードで 1 リクエストにする(15 分枠なら 1 か月で
+ * 数百〜千件になるため、全件読んで数える作りだと転送量が大きい)。
+ */
+export function useFreeSlotCountsOfMonth(
   scheduleId: string | undefined,
   range: { from: string; to: string },
 ) {
   const query = useQuery({
-    queryKey: ["Slot", "month", scheduleId, range.from],
-    queryFn: () => fetchScheduleSlots(scheduleId as string, range, "free"),
+    queryKey: ["Slot", "month", "free-counts", scheduleId, range.from],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("schedule", `Schedule/${scheduleId}`);
+      params.set("status", "free");
+      params.append("start", `ge${range.from}`);
+      params.append("start", `lt${range.to}`);
+      return fetchDateCounts("Slot", params, "start");
+    },
     enabled: Boolean(scheduleId),
     placeholderData: keepPreviousData,
   });
 
-  return { ...query, slots: query.data ?? [] };
+  return { ...query, freeCounts: query.data ?? new Map<string, number>() };
 }
 
 /** 選んだ日の枠(全ステータス)。時刻ごとの「空き 2/3」を出すのに使う。 */
@@ -1882,11 +1895,10 @@ async function fetchOutpatientList(date: string): Promise<OutpatientListResult> 
 
   for (let page = 0; page < OUTPATIENT_MAX_PAGES; page += 1) {
     const params = new URLSearchParams();
-    // R4 の date は Appointment.start。「その日の予約」は ge / lt の AND で表す。
-    // 日付だけ(2026-08-18)を渡すと上流は UTC の 1 日として比べるため、朝 9 時前の
-    // 予約が前日に落ちる。ローカルの 0 時をタイムゾーン付きで渡して日の境界を合わせる。
-    params.append("date", `ge${toFhirDateTime(`${date}T00:00`)}`);
-    params.append("date", `lt${toFhirDateTime(`${addDays(date, 1)}T00:00`)}`);
+    // R4 の date は Appointment.start。上流はタイムゾーンを持たない検索値を自身の
+    // ローカルタイムゾーン(Asia/Tokyo)で解釈するので、日付をそのまま渡せば
+    // 「その日」になる(/metadata の implementation.description に設定が出る)。
+    params.set("date", date);
     // 取消・誤登録はその日の外来から外れたものなので上流で落とす。
     params.set("status:not", "cancelled,entered-in-error");
     params.set("_count", String(OUTPATIENT_PAGE));
@@ -2074,15 +2086,9 @@ function worklistParams(
 ): URLSearchParams {
   const params = new URLSearchParams();
   params.set("category", category);
-  if (dateParam === "occurrence") {
-    // occurrenceDateTime は撮影時刻まで持つことがある。日付だけを渡すと上流は UTC の
-    // 1 日として比べるため、朝 9 時前の撮影が前日に落ちる。ローカルの 0 時を
-    // タイムゾーン付きで渡して日の境界を合わせる(外来一覧の date と同じ扱い)。
-    params.append("occurrence", `ge${toFhirDateTime(`${date}T00:00`)}`);
-    params.append("occurrence", `lt${toFhirDateTime(`${addDays(date, 1)}T00:00`)}`);
-  } else {
-    params.set("authoredon", date);
-  }
+  // occurrenceDateTime は撮影時刻まで持つことがあるが、上流が日付をローカル
+  // タイムゾーンで解釈するので、そのまま渡せば「その日の撮影」になる。
+  params.set(dateParam, date);
   // 明細はオーダーそのものではないので、ヒットさせるのはヘッダだけにする。
   params.set("based-on:missing", "true");
   params.set("_count", String(WORKLIST_PAGE));
@@ -3040,6 +3046,30 @@ async function fetchDistinctDates(
   return { dates, hasUndated };
 }
 
+/**
+ * 同じ operation の件数モード(count=true)。日付 -> 件数の Map を返す。
+ * 応答は Parameters の不変条件(value と part は排他)により part 形式になる。
+ */
+async function fetchDateCounts(
+  resourceType: string,
+  params: URLSearchParams,
+  dateParam: string,
+): Promise<Map<string, number>> {
+  params.set("date-param", dateParam);
+  params.set("timezone", localTimezoneOffset());
+  params.set("count", "true");
+
+  const { data } = await typeOperation<fhir4.Parameters>(resourceType, "distinct-dates", params);
+  const counts = new Map<string, number>();
+  for (const parameter of data.parameter ?? []) {
+    if (parameter.name !== "date") continue;
+    const date = parameter.part?.find((p) => p.name === "value")?.valueDate;
+    const count = parameter.part?.find((p) => p.name === "count")?.valueInteger;
+    if (date && count !== undefined) counts.set(date, count);
+  }
+  return counts;
+}
+
 // ---- 時系列表示 ----
 
 // 上流 fhir-server の _count 上限 100 を 1 ページとして順に辿る。
@@ -3069,8 +3099,7 @@ async function fetchLabTimelineResources(
   });
   if (dates.length === 0) return { reports: [], observations: [] };
 
-  // 日付だけを渡すと上流は UTC の 1 日として比べるため、期間の下限はローカルの
-  // 0 時をタイムゾーン付きで渡す。
+  // 上流は日付をローカルタイムゾーンで解釈するので、下限はその日の 0 時になる。
   const oldest = dates[dates.length - 1];
   const reports: fhir4.DiagnosticReport[] = [];
   const observations: fhir4.Observation[] = [];
@@ -3079,7 +3108,7 @@ async function fetchLabTimelineResources(
     const params = new URLSearchParams();
     params.set("patient", `Patient/${patientId}`);
     params.set("category", "LAB");
-    params.set("date", `ge${toFhirDateTime(`${oldest}T00:00`)}`);
+    params.set("date", `ge${oldest}`);
     params.set("_count", String(LAB_TIMELINE_PAGE));
     params.set("_offset", String(page * LAB_TIMELINE_PAGE));
     params.set("_sort", "-date");
