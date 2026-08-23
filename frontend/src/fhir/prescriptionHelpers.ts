@@ -517,18 +517,23 @@ export function buildDoPrescriptionForm(
   };
 }
 
-export function buildPrescriptionDeleteBundle(
-  serviceRequestId: string,
-  medicationRequestIds: string[],
-): fhir4.Bundle {
+/**
+ * 処方の削除。明細(MedicationRequest)は条件付き削除でまとめて消すので、消す前に
+ * 明細の id を引き直す必要はない(上流は該当する全件を消す conditionalDelete に
+ * 対応している)。
+ */
+export function buildPrescriptionDeleteBundle(serviceRequestId: string): fhir4.Bundle {
   return {
     resourceType: "Bundle",
     type: "transaction",
     entry: [
       { request: { method: "DELETE", url: `ServiceRequest/${serviceRequestId}` } },
-      ...medicationRequestIds.map((id) => ({
-        request: { method: "DELETE" as const, url: `MedicationRequest/${id}` },
-      })),
+      {
+        request: {
+          method: "DELETE",
+          url: `MedicationRequest?based-on=ServiceRequest/${serviceRequestId}`,
+        },
+      },
     ],
   };
 }

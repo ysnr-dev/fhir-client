@@ -2,9 +2,9 @@
 // 医療機関(施設)と同じ Organization リソースを使い、次の規約で切り分ける。
 //   医療機関 … partOf なし
 //   診療科  … partOf あり(所属医療機関を必ず参照する)
-// 上流 fhir-server は Organization の type 検索に対応していない(検索パラメータは
-// _id / identifier / name / active / partof / _lastUpdated)ため、一覧の絞り込みは
-// partof:missing で行う。所属医療機関を必須にしているのはこのためでもある。
+// 一覧の絞り込みは partof:missing で行う。上流は type 検索にも対応しているが、
+// 診療科を診療科たらしめているのは所属医療機関を持つこと(このファイルの
+// validateDepartmentForm が必須にしている不変条件)で、type は冗長な付加情報だから。
 import {
   SSMIX2_DEPARTMENT_CODE_SYSTEM,
   departmentCodeDisplay,
@@ -97,8 +97,8 @@ export function departmentDisplayName(department: fhir4.Organization): string {
 }
 
 // コード表からの一括登録。既に同じ医療機関の下に登録済みのコードは entry に入れない
-// (上流は identifier の system 単独検索に対応しないため、重複判定は取得済みの
-// 診療科一覧を突き合わせて行う)。
+// (重複判定は、その医療機関の診療科を全件取ってコードを突き合わせて行う。
+// コード表の 87 件を 1 件ずつ問い合わせるより 1 回読み切る方が安い)。
 export function buildDepartmentSeedBundle(
   codes: readonly DepartmentCode[],
   partOfId: string,

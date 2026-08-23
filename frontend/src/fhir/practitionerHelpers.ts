@@ -218,15 +218,18 @@ export function createdPractitionerId(responseBundle: fhir4.Bundle): string | un
 }
 
 // 医療従事者の削除。ぶら下がっている PractitionerRole も同じ Bundle で消す。
-export function buildPractitionerDeleteBundle(
-  practitionerId: string,
-  roleIds: string[],
-): fhir4.Bundle {
+// 役割は条件付き削除でまとめて消すので、消す前に id を引き直す必要はない。
+export function buildPractitionerDeleteBundle(practitionerId: string): fhir4.Bundle {
   return {
     resourceType: "Bundle",
     type: "transaction",
     entry: [
-      ...roleIds.map((id) => ({ request: { method: "DELETE" as const, url: `PractitionerRole/${id}` } })),
+      {
+        request: {
+          method: "DELETE",
+          url: `PractitionerRole?practitioner=Practitioner/${practitionerId}`,
+        },
+      },
       { request: { method: "DELETE", url: `Practitioner/${practitionerId}` } },
     ],
   };

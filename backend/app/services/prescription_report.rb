@@ -121,17 +121,14 @@ class PrescriptionReport
   end
 
   # 明細・Patient read・自院 Organization 検索を 1 つの batch Bundle で取得する。
-  #
-  # 明細は MedicationRequest?based-on=... では引けない(上流に based-on 検索が無く、
-  # 未知のパラメータは黙って無視されて全件が返る)。ServiceRequest の _id 検索に
-  # _revinclude を添えて取る(frontend の usePrescriptionDetail と同じ形)。
+  # 明細は MedicationRequest.basedOn が処方オーダーを指すので based-on で直接引く。
   def fetch_related_resources(order)
     patient_id = patient_id_from(order)
     self_organization_id = FacilitySettings.self_organization_id
     entries = [
       { "request" => { "method" => "GET",
-                       "url" => "ServiceRequest?_id=#{order_id}" \
-                                "&_revinclude=MedicationRequest%3Abased-on&_count=100" } },
+                       "url" => "MedicationRequest?based-on=ServiceRequest/#{order_id}" \
+                                "&_count=100" } },
       { "request" => { "method" => "GET", "url" => "Patient/#{patient_id}" } },
       { "request" => { "method" => "GET", "url" => institution_url(self_organization_id) } }
     ]

@@ -62,10 +62,34 @@ class FhirProxyController < ApplicationController
   end
 
   def forwarded_request_headers
-    FORWARD_REQUEST_HEADERS.each_with_object({}) do |name, headers|
+    headers = FORWARD_REQUEST_HEADERS.each_with_object({}) do |name, acc|
       value = request.headers[name]
-      headers[name] = value if value.present?
+      acc[name] = value if value.present?
     end
+    headers["Prefer"] = strict_handling_preference(headers["Prefer"]) if strict_handling?
+    headers
+  end
+
+  # 上流は未知の検索パラメータ・修飾子・_include トークン・_sort キーを既定では
+  # 黙って無視するため、綴り間違いや未対応パラメータが「絞り込み無しの全件取得」に
+  # 化けて気づけない。開発環境では `Prefer: handling=strict` を付けて 400 で
+  # すぐ分かるようにする。
+  #
+  # 本番の既定は lenient のまま(検索が 1 つ通らないだけで画面が壊れるより、
+  # 従来どおり動く方を優先する)。FHIR_STRICT_HANDLING=1/0 で明示的に上書きできる。
+  def strict_handling?
+    flag = ENV["FHIR_STRICT_HANDLING"]
+    return ActiveModel::Type::Boolean.new.cast(flag) if flag.present?
+
+    Rails.env.development?
+  end
+
+  # クライアントが送ってきた Prefer は捨てずに handling だけ差し替える
+  # (return=minimal などが同居しうるため)。
+  def strict_handling_preference(existing)
+    preferences = existing.to_s.split(",").map(&:strip).reject(&:blank?)
+    preferences.reject! { |preference| preference.start_with?("handling=") }
+    (preferences + ["handling=strict"]).join(", ")
   end
 
   def forward_response_headers(upstream)

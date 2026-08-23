@@ -14,7 +14,6 @@ import {
   VITAL_ENTRY_SYSTEM,
 } from "../fhir/vitalHelpers";
 import { buildClinicalNoteDeleteBundle, toFhirDateTime } from "../fhir/clinicalNoteHelpers";
-import { sortDepartmentsByCode } from "../fhir/departmentHelpers";
 import { LOCATION_TYPE_CODES } from "../fhir/locationHelpers";
 import {
   MAX_BED_COUNT,
@@ -89,7 +88,6 @@ import {
   buildPrescriptionDeleteBundle,
   departmentOf,
   isPrescriptionServiceRequest,
-  splitPrescriptionDetailBundle,
 } from "../fhir/prescriptionHelpers";
 import {
   buildRxTaskUpdate,
@@ -316,17 +314,27 @@ export interface OrganizationSearchParams {
 
 const ORGANIZATION_COUNT = 20;
 
-export function useOrganizationSearch(search: OrganizationSearchParams, offset: number) {
+/**
+ * 医療機関(施設)の検索。excludeId を渡すとその 1 件を上流側で除く(連携先の一覧が
+ * 自院を外すのに使う)。取得後に画面側で間引くと total とページ内件数がずれるため、
+ * 除外もサーバーに任せる。
+ */
+export function useOrganizationSearch(
+  search: OrganizationSearchParams,
+  offset: number,
+  excludeId?: string | null,
+) {
   const params = new URLSearchParams();
   if (search.name) params.set("name", search.name);
   if (search.identifier) params.set("identifier", search.identifier);
   // 診療科(partOf あり)は診療科一覧の担当なので、医療機関一覧からは除く。
   params.set("partof:missing", "true");
+  if (excludeId) params.set("_id:not", excludeId);
   params.set("_count", String(ORGANIZATION_COUNT));
   params.set("_offset", String(offset));
 
   const query = useQuery({
-    queryKey: ["Organization", "search", search, offset],
+    queryKey: ["Organization", "search", search, offset, excludeId ?? ""],
     queryFn: () => searchResource<fhir4.Organization>("Organization", params),
     placeholderData: keepPreviousData,
   });
@@ -419,18 +427,18 @@ function departmentSearchParams(search: DepartmentSearchParams): URLSearchParams
   if (search.name) params.set("name", search.name);
   if (search.partOfId) params.set("partof", `Organization/${search.partOfId}`);
   // 所属医療機関の指定がなければ「親を持つ Organization」= 診療科すべて。
+  // type=dept でも引けるが、診療科を診療科たらしめているのは「所属医療機関を持つ」
+  // 方(フォームが必須にしているのはこちら)なので、判別は partOf で行う。
   else params.set("partof:missing", "false");
-  // 全ページを読み切る間に順序がぶれないよう並び順を固定する。
-  params.set("_sort", "name");
+  // 診療科コードの昇順。コード未設定の科は末尾に回り(上流は NULL を後ろに置く)、
+  // その中では名称順になる = sortDepartmentsByCode と同じ並び。
+  params.set("_sort", "identifier,name");
   return params;
 }
 
 // 条件に合う診療科を全件集める。上流の _count 上限は 100 なので、次ページが
-// 尽きるまで _offset を進めて読み切る。
-//
-// 全件取ってから並べ替えるのは、上流が _sort=identifier を無視する(指定しても
-// 既定順のまま返す)ため。診療科コード昇順はページ送りをまたいで一貫させたいので、
-// 並べ替えとページングは呼び出し側で行う。1 施設あたり数百件を超えない前提。
+// 尽きるまで _offset を進めて読み切る。セレクトの選択肢と一括登録の重複判定は
+// 全件が要るのでこちらを使う(一覧画面は useDepartmentPage)。
 async function fetchAllDepartments(search: DepartmentSearchParams): Promise<fhir4.Organization[]> {
   const PAGE = 100;
   const departments: fhir4.Organization[] = [];
@@ -447,7 +455,8 @@ async function fetchAllDepartments(search: DepartmentSearchParams): Promise<fhir
   }
 }
 
-// 一覧用。診療科コードの昇順(コード未設定は末尾)に並べた全件を返す。
+// 選択肢用。診療科コードの昇順(コード未設定は末尾)は上流が返すので、
+// ここでは並べ替えない。
 export function useDepartmentList(search: DepartmentSearchParams) {
   const query = useQuery({
     queryKey: ["Organization", "search", "department", "list", search],
@@ -457,9 +466,35 @@ export function useDepartmentList(search: DepartmentSearchParams) {
 
   return {
     ...query,
-    departments: sortDepartmentsByCode(query.data ?? []),
+    departments: query.data ?? [],
     total: query.data?.length ?? 0,
     count: DEPARTMENT_COUNT,
+  };
+}
+
+// 一覧画面用。並べ替えもページングも上流に任せる(診療科コード順の _sort に
+// 対応したので、全件読んでから画面側で切り出す必要が無くなった)。
+export function useDepartmentPage(search: DepartmentSearchParams, offset: number) {
+  const params = departmentSearchParams(search);
+  params.set("_count", String(DEPARTMENT_COUNT));
+  params.set("_offset", String(offset));
+
+  const query = useQuery({
+    queryKey: ["Organization", "search", "department", "page", search, offset],
+    queryFn: () => searchResource<fhir4.Organization>("Organization", params),
+    placeholderData: keepPreviousData,
+  });
+
+  return {
+    ...query,
+    departments:
+      query.data?.data.entry
+        ?.map((e) => e.resource)
+        .filter((r): r is fhir4.Organization => Boolean(r)) ?? [],
+    total: query.data?.data.total ?? 0,
+    count: DEPARTMENT_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
   };
 }
 
@@ -695,16 +730,6 @@ export function useDepartmentDoctors(
   };
 }
 
-async function fetchPractitionerRoleIds(practitionerId: string): Promise<string[]> {
-  const params = new URLSearchParams();
-  params.set("practitioner", `Practitioner/${practitionerId}`);
-  params.set("_elements", "id");
-  const { data: bundle } = await searchResource<fhir4.PractitionerRole>("PractitionerRole", params);
-  return (
-    bundle.entry?.map((e) => e.resource?.id).filter((id): id is string => Boolean(id)) ?? []
-  );
-}
-
 export function usePractitioner(id: string | undefined) {
   return useQuery({
     queryKey: ["Practitioner", id],
@@ -741,9 +766,7 @@ export function useDeletePractitioner() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const result = await postBundle(
-        buildPractitionerDeleteBundle(id, await fetchPractitionerRoleIds(id)),
-      );
+      const result = await postBundle(buildPractitionerDeleteBundle(id));
       // ログインアカウントが残ると削除済みの医療従事者でログインできてしまう。
       // Practitioner 本体の削除が主目的なので、こちらの失敗で全体は失敗させない。
       await deleteLoginAccount(id).catch(() => {});
@@ -1861,6 +1884,8 @@ async function fetchOutpatientList(date: string): Promise<OutpatientListResult> 
     // 予約が前日に落ちる。ローカルの 0 時をタイムゾーン付きで渡して日の境界を合わせる。
     params.append("date", `ge${toFhirDateTime(`${date}T00:00`)}`);
     params.append("date", `lt${toFhirDateTime(`${addDays(date, 1)}T00:00`)}`);
+    // 取消・誤登録はその日の外来から外れたものなので上流で落とす。
+    params.set("status:not", "cancelled,entered-in-error");
     params.set("_count", String(OUTPATIENT_PAGE));
     params.set("_offset", String(page * OUTPATIENT_PAGE));
     // 患者番号を出すのに患者の現物が要る。
@@ -1885,12 +1910,8 @@ async function fetchOutpatientList(date: string): Promise<OutpatientListResult> 
 
   const rows = appointments
     // 検査予約(オーダーにぶら下がる予約)の受付・実施は部門のワークリストが追うので
-    // 外来一覧には出さない。取消・誤登録はその日の外来から外れたものなので出さない。
+    // 外来一覧には出さない。これだけは検索パラメータで表せないので画面側で落とす。
     .filter((appointment) => !isExamAppointment(appointment))
-    .filter(
-      (appointment) =>
-        appointment.status !== "cancelled" && appointment.status !== "entered-in-error",
-    )
     .map((appointment) => ({
       appointment,
       patient: patientsById.get(appointmentActorId(appointment, "Patient")),
@@ -2035,11 +2056,30 @@ const WORKLIST_PAGE = 100;
 // 画面に「一部のみ」と出す(黙って切り捨てると全件見えているように見えるため)。
 const WORKLIST_MAX_PAGES = 5;
 
-/** ヘッダ検索の共通パラメータ。呼び出し側でドメインの _revinclude を足す。 */
-function worklistParams(category: string, date: string, page: number): URLSearchParams {
+/**
+ * ヘッダ検索の共通パラメータ。呼び出し側でドメインの _revinclude を足す。
+ *
+ * 日付を当てる先はドメインで違う。放射線・検体検査は実施予定日(撮影日・検査日)を
+ * occurrenceDateTime に持つのでそれで引く。処方は実施予定日を持たないので処方日
+ * (authoredOn)で引く。
+ */
+function worklistParams(
+  category: string,
+  date: string,
+  page: number,
+  dateParam: "occurrence" | "authoredon" = "authoredon",
+): URLSearchParams {
   const params = new URLSearchParams();
   params.set("category", category);
-  params.set("authoredon", date);
+  if (dateParam === "occurrence") {
+    // occurrenceDateTime は撮影時刻まで持つことがある。日付だけを渡すと上流は UTC の
+    // 1 日として比べるため、朝 9 時前の撮影が前日に落ちる。ローカルの 0 時を
+    // タイムゾーン付きで渡して日の境界を合わせる(外来一覧の date と同じ扱い)。
+    params.append("occurrence", `ge${toFhirDateTime(`${date}T00:00`)}`);
+    params.append("occurrence", `lt${toFhirDateTime(`${addDays(date, 1)}T00:00`)}`);
+  } else {
+    params.set("authoredon", date);
+  }
   // 明細はオーダーそのものではないので、ヒットさせるのはヘッダだけにする。
   params.set("based-on:missing", "true");
   params.set("_count", String(WORKLIST_PAGE));
@@ -2153,14 +2193,13 @@ function makeUpdateTaskStatusHook<S extends fhir4.Task["status"]>(
 // ---- 放射線検査一覧(部門ワークリスト) ----
 //
 // 撮影日で 1 日ぶんの放射線検査オーダーを読み、モダリティ・入外区分・診療科・
-// ステータスでの絞り込みは画面側で行う。上流の ServiceRequest が検索できるのは
-// category と authoredon までで、モダリティは明細に、診療科は拡張に、進捗は別リソース
-// (Task)にあるため。1 日ぶんなら数十件なので、全件読んでから絞る方が、ページごとに
-// 絞り込み結果が変わる作りより扱いやすい。
+// ステータスでの絞り込みは画面側で行う。上流は診療科・病棟(拡張)や進捗
+// (_has:Task:focus:status)でも絞れるようになったが、絞り込みの選択肢をその日の
+// オーダーから組み立てている(RadWorklistPage を参照)ため、サーバーで絞ると
+// 選んだ値しか候補に出なくなる。1 日ぶんなら数十件なので、全件読んでから絞る方が、
+// ページごとに絞り込み結果が変わる作りより扱いやすい。
 //
-// 撮影日は ServiceRequest.authoredOn で引く。オーダー画面の「撮影日」がそのまま
-// authoredOn と occurrenceDateTime の両方に入るため(radOrderHelpers を参照)。
-// 撮影日をオーダー日と別に持たせるなら、上流に occurrence の検索パラメータが要る。
+// 撮影日は ServiceRequest.occurrenceDateTime(実施予定日時)で引く。
 
 /** 放射線検査一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
 export interface RadWorklistRow {
@@ -2184,7 +2223,12 @@ async function fetchRadWorklist(date: string): Promise<RadWorklistResult> {
 
   const { patientsById, tasks, truncated } = await fetchWorklistBundles(
     (page) => {
-      const params = worklistParams(`${ORDER_TYPE_SYSTEM}|${RAD_ORDER_TYPE.code}`, date, page);
+      const params = worklistParams(
+        `${ORDER_TYPE_SYSTEM}|${RAD_ORDER_TYPE.code}`,
+        date,
+        page,
+        "occurrence",
+      );
       // 撮影項目も同じ応答に添えてもらう。
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
       params.set("_revinclude", "Task:focus");
@@ -2343,11 +2387,10 @@ export function useRegisterRadPerform() {
 // ---- 検体検査一覧(部門ワークリスト) ----
 //
 // 検査日(検体を採る日)で 1 日ぶんの検体検査オーダーを読む。作りは放射線検査一覧と
-// 同じで、上流で絞れるのは category と authoredon までなので、検体・入外区分・
-// 診療科での絞り込みは画面側で行う(理由は放射線検査一覧の節のコメントを参照)。
+// 同じで、検体・入外区分・診療科での絞り込みは画面側で行う(理由は放射線検査一覧の
+// 節のコメントを参照)。
 //
-// 検査日は ServiceRequest.authoredOn で引く。オーダー画面の「検査日」がそのまま
-// authoredOn と occurrenceDateTime の両方に入るため(labOrderHelpers を参照)。
+// 検査日は ServiceRequest.occurrenceDateTime(実施予定日時)で引く。
 
 /** 検体検査一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
 export interface LabWorklistRow {
@@ -2378,7 +2421,12 @@ async function fetchLabWorklist(date: string): Promise<LabWorklistResult> {
 
   const { patientsById, tasks, truncated } = await fetchWorklistBundles(
     (page) => {
-      const params = worklistParams(`${ORDER_TYPE_SYSTEM}|${LAB_ORDER_TYPE.code}`, date, page);
+      const params = worklistParams(
+        `${ORDER_TYPE_SYSTEM}|${LAB_ORDER_TYPE.code}`,
+        date,
+        page,
+        "occurrence",
+      );
       // 検査項目・管(発行済み Specimen)・検査結果も同じ応答に添えてもらう。
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
       params.append("_revinclude", "Task:focus");
@@ -2445,8 +2493,8 @@ export const useUpdateLabTaskStatus = makeUpdateTaskStatusHook<LabTaskStatus>(
 // ---- 処方一覧(部門ワークリスト) ----
 //
 // 処方日で 1 日ぶんの処方オーダーを読む。画面の作りは検体検査一覧と同じで、
-// 上流で絞れるのは category と authoredon までなので、入外区分・処方区分・診療科での
-// 絞り込みは画面側で行う(理由は検体検査一覧の節のコメントを参照)。
+// 入外区分・処方区分・診療科での絞り込みは画面側で行う(理由は検体検査一覧の節の
+// コメントを参照)。処方は実施予定日を持たないので、日付は処方日(authoredOn)で引く。
 //
 // 処方オーダーはオーダー種別(order-type)を持たない(注射より前から存在するため)ので、
 // 検体検査・放射線検査のように種別コードでは引けない。代わりに処方オーダーだけが持つ
@@ -2849,15 +2897,6 @@ export function useUpdatePrescription() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
     },
   });
-}
-
-async function fetchRelatedMedicationRequestIds(srId: string): Promise<string[]> {
-  const params = new URLSearchParams();
-  params.set("_id", srId);
-  params.set("_revinclude", "MedicationRequest:based-on");
-  const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-  const { medicationRequests } = splitPrescriptionDetailBundle(bundle);
-  return medicationRequests.map((mr) => mr.id).filter((id): id is string => Boolean(id));
 }
 
 export function useLabResultDetail(reportId: string | undefined) {
@@ -4326,10 +4365,7 @@ export function useDeleteVitalEntry() {
 export function useDeletePrescription() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (srId: string) => {
-      const mrIds = await fetchRelatedMedicationRequestIds(srId);
-      return postBundle(buildPrescriptionDeleteBundle(srId, mrIds));
-    },
+    mutationFn: (srId: string) => postBundle(buildPrescriptionDeleteBundle(srId)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },

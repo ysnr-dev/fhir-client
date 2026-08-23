@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
-  useDepartmentList,
+  useDepartmentPage,
   useDepartmentsOf,
   useOrganizationOptions,
   useSeedDepartments,
@@ -36,15 +36,11 @@ export function DepartmentListPage() {
   const effectiveSearch: DepartmentSearchParams = self.selfOrganizationId
     ? { ...search, partOfId: self.selfOrganizationId }
     : search;
-  // 診療科コード昇順は上流でソートできないため、全件取得して画面側で並べ替え・ページングする。
-  const {
-    departments: allDepartments,
-    total,
-    count,
-    isLoading,
-    error,
-  } = useDepartmentList(effectiveSearch);
-  const departments = allDepartments.slice(offset, offset + count);
+  // 診療科コード昇順の並べ替えもページングも上流に任せる。
+  const { departments, total, count, hasPrevious, hasNext, isLoading, error } = useDepartmentPage(
+    effectiveSearch,
+    offset,
+  );
 
   // 一括登録は「どの医療機関の下に作るか」が決まって初めて実行できる。
   const seedTargetId = effectiveSearch.partOfId ?? "";
@@ -168,8 +164,8 @@ export function DepartmentListPage() {
             offset={offset}
             count={count}
             total={total}
-            hasPrevious={offset > 0}
-            hasNext={offset + count < total}
+            hasPrevious={hasPrevious}
+            hasNext={hasNext}
             onPrevious={() => setOffset((o) => Math.max(0, o - count))}
             onNext={() => setOffset((o) => o + count)}
           />

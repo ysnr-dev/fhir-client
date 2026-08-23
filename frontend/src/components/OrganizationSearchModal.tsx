@@ -31,8 +31,7 @@ export function OrganizationSearchModal({
   excludeSelf = false,
   title = "医療機関を選択",
 }: OrganizationSearchModalProps) {
-  // 自院の除外はクライアント側で行う。上流の Organization 検索には「この id を
-  // 除く」条件が無く、施設と診療科を切り分ける partof:missing しか使えないため。
+  // 自院の除外は上流に任せる(_id:not)。取得後に落とすと total とページ内件数がずれる。
   const { selfOrganizationId } = useSelfOrganization();
   const [inputs, setInputs] = useState<OrganizationSearchParams>(emptySearch);
   const [search, setSearch] = useState<OrganizationSearchParams>(emptySearch);
@@ -41,10 +40,10 @@ export function OrganizationSearchModal({
   const { bundle, total, count, hasPrevious, hasNext, isFetching, error } = useOrganizationSearch(
     search,
     offset,
+    excludeSelf ? selfOrganizationId : undefined,
   );
-  const organizations = (
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Organization => Boolean(r)) ?? []
-  ).filter((organization) => !(excludeSelf && organization.id === selfOrganizationId));
+  const organizations =
+    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Organization => Boolean(r)) ?? [];
 
   function runSearch() {
     setSearch(inputs);

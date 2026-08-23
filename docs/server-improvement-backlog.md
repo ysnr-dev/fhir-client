@@ -18,45 +18,58 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
 
 ---
 
-## 実装済み・クライアント側の追随待ち（旧・優先度 A、2026-08-23 サーバー実装完了）
+## 2026-08-23 に対応済み（旧・優先度 A）
 
-fhir-server 側は実装・テスト済み。**デプロイ時の手動操作は不要**: migration 3 本
-（service_requests.occurrence_date_time / organizations.identifier_value / Organization の
-type token バックフィル）が、entrypoint の `bin/rails db:prepare` で起動時に自動適用される。
-Render 無料枠には Shell も cron も無く rake タスクを流せないため、token 再索引も
-マイグレーションに畳み込んである（`fhir:reindex_tokens` は開発用に残置）。
+サーバー側の実装とクライアント側の追随がどちらも完了。デプロイ時の手動操作は不要:
+migration 3 本（service_requests.occurrence_date_time / organizations.identifier_value /
+Organization の type token バックフィル）が entrypoint の `bin/rails db:prepare` で
+起動時に自動適用される。Render 無料枠には Shell も cron も無く rake タスクを流せないため、
+token 再索引もマイグレーションに畳み込んである（`fhir:reindex_tokens` は開発用に残置）。
 
 1. **`Prefer: handling=strict`** — 未知の検索パラメータ・未対応 modifier・未知の
    `_include`/`_revinclude` トークン・未知の `_sort` キーを 400 + OperationOutcome
    （問題を全件列挙）で拒否。既定は従来どおり lenient。
-   → **追随**: backend プロキシ（`fhir_proxy_controller.rb`）で strict を付与する
-   （まず開発環境のみで有効化し、既存コードの隠れた未対応パラメータを洗い出してから
-   本番へ広げるのが安全）。
-2. **Organization の `type` 検索・`_sort=identifier`** — `type=dept` で診療科だけを
-   取得でき、`_sort=identifier` で診療科コード順が返る（識別子の system 単独検索
-   `identifier=<system>|` は従来から対応済みだった）。
-   → **追随**: `DepartmentListPage` の全件取得→画面側ソート・ページングを
-   `type=dept&_sort=identifier&_count/_offset` に置換。`partof:missing` による
-   施設/診療科判別、backend `prescription_report.rb` の自院推定も `type` 検索へ。
+   **クライアント**: backend プロキシ（`fhir_proxy_controller.rb`）が開発環境でのみ
+   strict を付ける（`FHIR_STRICT_HANDLING=1/0` で明示的に上書き可）。本番を lenient の
+   ままにしたのは、検索が 1 つ通らないだけで画面が壊れるより従来どおり動く方を
+   優先したため。導入時にクライアントが投げる全パラメータ・`_include` トークン・
+   `_sort` キーを strict で検査済み（取りこぼしは無かった）。
+2. **Organization の `type` 検索・`_sort=identifier`**
+   **クライアント**: 診療科一覧を `_sort=identifier,name` + `_count`/`_offset` の
+   サーバーページングに変更（`useDepartmentPage`）。全件取得→画面側ソート→画面側
+   ページングが消えた。
+   なお**判別条件は `partof:missing` のまま**にした。診療科を診療科たらしめているのは
+   「所属医療機関を持つこと」（フォームが必須にしている不変条件）で、`type` は
+   冗長なメタデータに過ぎないため。施設側も 1 件だけ `type=prov` を持たない
+   データがあり、`type` に寄せると取りこぼす。
 3. **token 検索の `:not` 修飾子**（`_id` 含む。カンマ値は「どれでもない」、値を
-   持たないリソースも一致） —
-   → **追随**: 自院除外（`PartnerOrganizationListPage` ほか 2 画面の `_id:not=<自院>`）、
-   診察室検索の `type:not=HU,...`、外来一覧の `status:not=cancelled,entered-in-error`。
-4. **ServiceRequest の `occurrence` / `department` / `ward` 検索** — 実施予定日時
-   （R4 標準 occurrence）とローカル拡張（order-department / order-ward）の検索。
-   進捗の絞り込みは既存の `_has:Task:focus:status=`（`business-status` も可）が
-   使える（回帰 spec で固定済み。なお `category` 検索は従来から実装済みで、
-   `queries.ts:2710` のコメントが古いだけ）。
-   → **追随**: Lab/Rad/Rx ワークリストのフィルタをサーバー側パラメータに移し、
-   `matchesFilters` と `truncated` フォールバックを縮小。撮影日の authoredOn への
-   重複記載も廃止できる。
+   持たないリソースも一致）
+   **クライアント**: 連携先医療機関一覧と医療機関検索モーダルの自院除外を
+   `_id:not` に変更（取得後に間引いていたので `total` とページ内件数がずれていた）。
+   外来一覧の取消・誤登録の除外も `status:not=cancelled,entered-in-error` に変更。
+   - 診察室検索（`useLocationSearch`）は `type` の OR 列挙のまま。`type:not=HU,...` より
+     「許可する種別を挙げる」方が、未知の種別が増えても混ざらず正確なため。
+   - 連携先医師一覧の自院除外は連携先 id のカンマ OR のまま。除外対象が
+     `organization`（reference）で、`:not` は token 専用だから。
+4. **ServiceRequest の `occurrence` / `department` / `ward` 検索**
+   **クライアント**: 放射線・検体検査のワークリストを `occurrence`（実施予定日 =
+   撮影日・検査日）で引くように変更。日付境界は外来一覧と同じくローカル 0 時を
+   タイムゾーン付きで渡す `ge`/`lt` 形式（撮影時刻を持つオーダーが UTC 比較で
+   前日に落ちるのを防ぐ）。処方は実施予定日を持たないので `authoredon` のまま。
+   - 診療科・病棟・進捗（`_has:Task:focus:status`）での絞り込みは**画面側のまま**に
+     した。絞り込みの選択肢をその日のオーダーから組み立てているため、サーバーで
+     絞ると選んだ値しか候補に出なくなる。1 日ぶん数十件なので実害も無い。
+   - 撮影日・検査日を `authoredOn` にも重複記載する書き込みは**そのまま**。廃止すると
+     編集フォームの日付復元（`parseRadOrderForm` ほか）とカルテの日付軸に影響するので、
+     別途判断する（下の F-3）。
 5. **`MedicationRequest.based-on` 検索＋条件付き削除の複数マッチ**
-   （CapabilityStatement は `conditionalDelete: "multiple"`）。Bundle transaction 内の
-   条件付き DELETE も複数件を消せる。
-   → **追随**: backend `prescription_report.rb` の `_revinclude` 迂回を
-   `MedicationRequest?based-on=` に置換。処方などのカスケード削除は事前 GET を
-   やめ、`DELETE /MedicationRequest?based-on=ServiceRequest/X`（transaction 内条件付き
-   DELETE）で 1 往復に。
+   （CapabilityStatement は `conditionalDelete: "multiple"`）
+   **クライアント**: backend の処方箋帳票が `MedicationRequest?based-on=` で明細を直接
+   取得するようになった（`ServiceRequest?_id=...&_revinclude=...` の迂回を廃止）。
+   処方の削除と医療従事者の削除は、事前 GET をやめて transaction 内の条件付き DELETE
+   （`MedicationRequest?based-on=...` / `PractitionerRole?practitioner=...`）で 1 往復に。
+   - 検体検査・細菌検査のオーダー削除は事前 GET のまま。明細が
+     ヘッダ → パネル → 構成項目の 2 段で、条件付き削除では孫まで辿れないため。
 
 ---
 
@@ -246,3 +259,16 @@ Render 無料枠には Shell も cron も無く rake タスクを流せないた
   `worklistParams` は `category=` 検索を実運用している）。そのため検査結果の
   オーダー候補取得は患者の全オーダーヘッダを最大 5 ページ読んで手元で振り分けている。
 - **望ましい対応**: `category=` をサーバーに渡して絞り込み、コメントを現状に合わせて更新する。
+
+### F-3. 撮影日・検査日の `authoredOn` への重複記載の廃止
+
+- **現状**: 放射線・検体検査のオーダーは、画面の「撮影日」「検査日」を
+  `occurrenceDateTime`（実施予定日時）と `authoredOn`（オーダー発行日）の**両方**に
+  書いている。ワークリストの検索は `occurrence` に移したので、読み出し側はもう
+  `authoredOn` を日付軸に使っていない。
+- **望ましい対応**: `authoredOn` を本来の意味（オーダーを書いた日時）に戻し、
+  重複記載をやめる。そうすると「明日の撮影を今日オーダーする」が正しく表現できる。
+- **影響範囲**: 編集フォームの日付復元（`radOrderHelpers` の `parseRadOrderForm`、
+  `labOrderHelpers` の同等処理が `sr.authoredOn` から日付を取っている）と、カルテの
+  タイムラインが `-authoredon` でオーダーを並べている点。既存データは両方に
+  同じ日付が入っているので読み出しの互換は保たれるが、並び順の意味は変わる。

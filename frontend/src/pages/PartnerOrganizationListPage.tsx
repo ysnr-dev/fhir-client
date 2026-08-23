@@ -19,15 +19,14 @@ export function PartnerOrganizationListPage() {
   const [offset, setOffset] = useState(0);
 
   const { selfOrganizationId } = useSelfOrganization();
+  // 自院の除外は上流に任せる(_id:not)。画面側で間引くと total とページ内件数がずれる。
   const { bundle, total, count, hasPrevious, hasNext, isLoading, error } = useOrganizationSearch(
     search,
     offset,
+    selfOrganizationId,
   );
-  // 自院の除外はクライアント側で行う(上流の Organization 検索に「この id を除く」
-  // 条件が無いため)。1 件ぶんなので total とのずれは許容する。
-  const organizations = (
-    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Organization => Boolean(r)) ?? []
-  ).filter((organization) => organization.id !== selfOrganizationId);
+  const organizations =
+    bundle?.entry?.map((e) => e.resource).filter((r): r is fhir4.Organization => Boolean(r)) ?? [];
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();
