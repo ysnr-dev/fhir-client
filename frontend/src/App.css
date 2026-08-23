@@ -6330,6 +6330,113 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
   font-weight: 600;
 }
 
+/* 患者を行にする一覧の共通部品 --------------------------------------------- */
+
+/* 患者氏名に添えるカナ(氏名の後ろ)と年齢(生年月日の後ろ)。どちらも本体に添える
+   括弧書きの補足なので、読む邪魔にならないよう本文より小さく、2 つは同じ大きさに
+   揃える。 */
+.patient-cells__kana,
+.patient-cells__age {
+  font-size: 11px;
+}
+
+/* 列の固定(横スクロール時)と列見出しの固定(縦スクロール時)。入院患者一覧の
+   ために作った仕組みを、外来患者一覧や部門業務のワークリストでも使えるように
+   まとめたもの。
+   使い方: 表を囲む div に .sticky-table-wrap、表に .sticky-table を付け、固定
+   したいセルに左から順に .sticky-table__fix-1 / -2 / -3 を、右端の操作列に
+   .sticky-table__fix-actions を付ける。左の列の幅は表ごとに違うので、
+   --sticky-fix-1-w 〜 --sticky-fix-3-w を表の側で決める。 */
+
+/* 行が多いと縦にも送る。ページごと送ると列見出しまで流れてしまうので、表の中だけで
+   送れるよう高さを画面に収める(見出しの sticky はこのラップを基準に貼り付くため、
+   ここで高さを切らないと縦の固定が効かない)。引く値は上の見出し・絞り込みと下の
+   件数表示のぶんの概算で、それらが増える画面は --sticky-table-chrome で上書きする。
+   絞り込みが折り返して収まらないときはページ側も一緒に送る。 */
+.sticky-table-wrap {
+  max-height: calc(100vh - var(--sticky-table-chrome, 300px));
+  overflow: auto;
+}
+
+/* 罫線をセルに持たせるため collapse は使わない(collapse では罫線が表のものに
+   なり、固定した列だけ置き去りにできない。検査の時系列表と同じ理由)。 */
+.sticky-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* 縦に送っても列見出しを残す。 */
+.sticky-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* 下を流れていく行が透けるので、地の色で塗りつぶす。 */
+  background: var(--bg);
+}
+
+.sticky-table__fix-1,
+.sticky-table__fix-2,
+.sticky-table__fix-3,
+.sticky-table__fix-actions {
+  position: sticky;
+  z-index: 1;
+  background: var(--bg);
+}
+
+/* 見出しと固定列が交わるセルは、行にも見出しにも隠れないよう一段上に出す。 */
+.sticky-table thead .sticky-table__fix-1,
+.sticky-table thead .sticky-table__fix-2,
+.sticky-table thead .sticky-table__fix-3,
+.sticky-table thead .sticky-table__fix-actions {
+  z-index: 3;
+}
+
+/* 左の固定列。sticky な列の left は手前の列の幅の合計で決めるしかないので、幅は
+   変数で決め打ちし、収まらない値は省略記号で丸める(列が content に応じて伸びると、
+   その次の列の left がずれて重なってしまう)。
+   box-sizing を border-box にするのは、既定(content-box)のままだと変数の値に
+   セルの padding が足された幅で並び、次の列の left が padding のぶんずれるため。 */
+.sticky-table__fix-1,
+.sticky-table__fix-2,
+.sticky-table__fix-3 {
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sticky-table__fix-1 {
+  left: 0;
+  width: var(--sticky-fix-1-w);
+  min-width: var(--sticky-fix-1-w);
+  max-width: var(--sticky-fix-1-w);
+}
+
+.sticky-table__fix-2 {
+  left: var(--sticky-fix-1-w);
+  width: var(--sticky-fix-2-w);
+  min-width: var(--sticky-fix-2-w);
+  max-width: var(--sticky-fix-2-w);
+}
+
+.sticky-table__fix-3 {
+  left: calc(var(--sticky-fix-1-w) + var(--sticky-fix-2-w));
+  width: var(--sticky-fix-3-w);
+  min-width: var(--sticky-fix-3-w);
+  max-width: var(--sticky-fix-3-w);
+}
+
+/* 操作列は幅を決めない(right 基準なので手前の列の幅に依らない)。ケバブの
+   メニューを切らないよう、ここには overflow: hidden を付けない。 */
+.sticky-table__fix-actions {
+  right: 0;
+}
+
+/* ケバブを開いている行だけ操作列を上に出す。sticky なセルは stacking context を
+   作るので、そのままだと下の行の固定セルが DOM 順で上に来てメニューを隠す。 */
+.sticky-table tr:has(.row-menu__items) .sticky-table__fix-actions {
+  z-index: 4;
+}
+
 /* 検査一覧(部門ワークリスト) --------------------------------------------- */
 
 /* 放射線検査一覧(.rad-worklist)と検体検査一覧(.lab-worklist)は同じ作りの
@@ -6345,17 +6452,29 @@ body.page-wide #root {
 }
 
 /* 列を折り返さないぶん、画面が狭いと表がページからはみ出す。ページ全体を横に
-   スクロールさせず、表の中だけで送れるようにする。 */
-.rad-worklist-wrap,
-.lab-worklist-wrap {
-  overflow-x: auto;
-}
+   スクロールさせず、表の中だけで送れるようにする(.sticky-table-wrap)。
+   横スクロールで患者を見失わないよう左の数列を、縦スクロールで列見出しを
+   見失わないようヘッダ行を固定する。仕組みは .sticky-table を参照。 */
 
+/* 罫線・幅の取り方は .sticky-table に任せ、ここでは表ごとの寸法だけ決める。 */
 .rad-worklist,
 .lab-worklist {
   width: 100%;
-  border-collapse: collapse;
   margin-bottom: 8px;
+}
+
+/* 放射線検査一覧の固定列は 撮影時刻・患者番号・患者氏名。時刻の列は見出し
+   (撮影時刻)のほうが値より長いので、見出しが見切れない幅にする。 */
+.rad-worklist {
+  --sticky-fix-1-w: 96px;
+  --sticky-fix-2-w: 104px;
+  --sticky-fix-3-w: 240px;
+}
+
+/* 検体検査一覧・処方一覧(同じ .lab-worklist を使う)の固定列は 患者番号・患者氏名。 */
+.lab-worklist {
+  --sticky-fix-1-w: 104px;
+  --sticky-fix-2-w: 240px;
 }
 
 .rad-worklist th,
@@ -6687,15 +6806,14 @@ body.page-wide #root {
 /* 外来一覧(受付ワークリスト) --------------------------------------------- */
 
 /* 表の作りは放射線検査一覧と同じ。幅は page-wide で確保し、画面が狭いときは
-   ページ全体ではなく表の中だけを横にスクロールさせる。 */
-.outpatient-wrap {
-  overflow-x: auto;
-}
-
+   ページ全体ではなく表の中だけを横にスクロールさせる(.sticky-table-wrap)。
+   固定列は 時刻・患者番号・患者氏名で、仕組みは .sticky-table を参照。 */
 .outpatient {
   width: 100%;
-  border-collapse: collapse;
   margin-bottom: 8px;
+  --sticky-fix-1-w: 80px;
+  --sticky-fix-2-w: 104px;
+  --sticky-fix-3-w: 240px;
 }
 
 .outpatient th,
@@ -7876,14 +7994,11 @@ body.page-wide #root {
    どの列も折り返さない。特記事項や担当看護師が長いときに行の高さが変わると
    ベッドの並びが読みにくくなるので、はみ出したぶんは表ごと横スクロールさせる。
 
-   床が多い病棟では縦にも送る。ページごと送ると列見出しまで流れてしまうので、
-   表の中だけで送れるよう高さを画面に収める(見出しの sticky はこのラップを
-   基準に貼り付くため、ここで高さを切らないと縦の固定が効かない)。
-   引く値は上のフィルタ・タブと下の件数表示のぶんの概算で、フィルタが折り返して
-   収まらないときはページ側も一緒に送る。 */
+   横・縦の固定は .sticky-table(共通部品)に任せ、ここでは左に固定する 3 列
+   (病室・ベッド・患者氏名)の幅だけを決める。床が多い病棟では縦にも送るので、
+   引く高さはこの画面のぶん(絞り込み・タブ・件数表示)に合わせて上書きする。 */
 .inpatient-wrap {
-  max-height: calc(100vh - 370px);
-  overflow: auto;
+  --sticky-table-chrome: 370px;
 }
 
 .inpatient th,
@@ -7891,96 +8006,10 @@ body.page-wide #root {
   white-space: nowrap;
 }
 
-/* 横スクロールしても「誰のどの床か」と操作は残す。左は病室・ベッド・患者氏名の
-   3 列、右は操作列(カルテ / 患者選択 / ケバブ)を固定する。
-   sticky な列の left は手前の列の幅の合計で決めるしかないので、左 3 列は幅を
-   変数で決め打ちし、収まらない名前は省略記号で丸める(列が content に応じて
-   伸びると、その次の列の left がずれて重なってしまう)。 */
 .inpatient {
-  --inpatient-room-w: 96px;
-  --inpatient-bed-w: 72px;
-  --inpatient-name-w: 240px;
-  /* 罫線をセルに持たせるため collapse は使わない(collapse では罫線が表のもの
-     になり、固定した列だけ置き去りにできない。検査の時系列表と同じ理由)。 */
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-.inpatient__col-room,
-.inpatient__col-bed,
-.inpatient__col-name,
-.inpatient__col-actions {
-  position: sticky;
-  z-index: 1;
-  /* 下を流れていく列が透けるので、地の色で塗りつぶす。 */
-  background: var(--bg);
-}
-
-/* 縦に送っても列見出しを残す。 */
-.inpatient thead th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--bg);
-}
-
-/* 見出しと固定列が交わるセルは、行にも見出しにも隠れないよう一段上に出す。 */
-.inpatient thead .inpatient__col-room,
-.inpatient thead .inpatient__col-bed,
-.inpatient thead .inpatient__col-name,
-.inpatient thead .inpatient__col-actions {
-  z-index: 3;
-}
-
-/* 左 3 列。幅は width だけだと content に押し広げられるので、min/max で挟む。
-   box-sizing を border-box にするのは、既定(content-box)のままだと変数の値に
-   セルの padding が足された幅で並び、次の列の left が padding のぶんずれるため。 */
-.inpatient__col-room,
-.inpatient__col-bed,
-.inpatient__col-name {
-  box-sizing: border-box;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.inpatient__col-room {
-  left: 0;
-  width: var(--inpatient-room-w);
-  min-width: var(--inpatient-room-w);
-  max-width: var(--inpatient-room-w);
-}
-
-.inpatient__col-bed {
-  left: var(--inpatient-room-w);
-  width: var(--inpatient-bed-w);
-  min-width: var(--inpatient-bed-w);
-  max-width: var(--inpatient-bed-w);
-}
-
-.inpatient__col-name {
-  left: calc(var(--inpatient-room-w) + var(--inpatient-bed-w));
-  width: var(--inpatient-name-w);
-  min-width: var(--inpatient-name-w);
-  max-width: var(--inpatient-name-w);
-}
-
-/* 操作列は幅を決めない(right 基準なので手前の列の幅に依らない)。ケバブの
-   メニューを切らないよう、ここには overflow: hidden を付けない。 */
-.inpatient__col-actions {
-  right: 0;
-}
-
-/* ケバブを開いている行だけ操作列を上に出す。sticky なセルは stacking context を
-   作るので、そのままだと下の行の固定セルが DOM 順で上に来てメニューを隠す。 */
-.inpatient tr:has(.row-menu__items) .inpatient__col-actions {
-  z-index: 4;
-}
-
-/* カナ(氏名の後ろ)と年齢(生年月日の後ろ)は、どちらも本体に添える括弧書きの補足。
-   読む邪魔にならないよう本文より小さく、2 つは同じ大きさに揃える。 */
-.inpatient__kana,
-.inpatient__age {
-  font-size: 11px;
+  --sticky-fix-1-w: 96px;
+  --sticky-fix-2-w: 72px;
+  --sticky-fix-3-w: 240px;
 }
 
 /* 病室セルは rowspan でその病室のベッドぶんをまとめる。 */

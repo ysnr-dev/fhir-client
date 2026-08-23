@@ -13,6 +13,11 @@ import {
   type OutpatientRow,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import {
+  PatientKana,
+  PatientProfileCells,
+  PatientProfileHeadCells,
+} from "../components/PatientRowCells";
 import { RowMenu } from "../components/RowMenu";
 import { WalkInCheckInModal } from "../components/WalkInCheckInModal";
 import {
@@ -150,19 +155,21 @@ export function OutpatientListPage() {
         <p>読み込み中...</p>
       ) : (
         <>
-          <div className="outpatient-wrap">
-            <table className="outpatient">
+          <div className="outpatient-wrap sticky-table-wrap">
+            <table className="outpatient sticky-table">
               <thead>
                 <tr>
-                  <th className="outpatient__time">時刻</th>
-                  <th>患者番号</th>
-                  <th>患者氏名</th>
+                  {/* 横に送っても「いつ・誰の予約か」は残す(左 3 列を固定する)。 */}
+                  <th className="outpatient__time sticky-table__fix-1">時刻</th>
+                  <th className="sticky-table__fix-2">患者番号</th>
+                  <th className="sticky-table__fix-3">患者氏名</th>
+                  <PatientProfileHeadCells />
                   <th className="outpatient__schedule">予約枠</th>
                   <th>診療科</th>
                   <th>担当医</th>
                   <th>診察室</th>
                   <th>状態</th>
-                  <th className="outpatient__actions"></th>
+                  <th className="outpatient__actions sticky-table__fix-actions"></th>
                 </tr>
               </thead>
               <tbody>
@@ -179,7 +186,7 @@ export function OutpatientListPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="master-search__empty">
+                    <td colSpan={11} className="master-search__empty">
                       {total === 0
                         ? "この診察日の予約はありません"
                         : "絞り込みに該当する予約がありません"}
@@ -345,9 +352,14 @@ function OutpatientTableRow({
 
   return (
     <tr>
-      <td className="outpatient__time">{appointmentTimeLabel(appointment)}</td>
-      <td>{patient?.identifier?.[0]?.value ?? "-"}</td>
-      <td>{patientName || "-"}</td>
+      <td className="outpatient__time sticky-table__fix-1">{appointmentTimeLabel(appointment)}</td>
+      <td className="sticky-table__fix-2">{patient?.identifier?.[0]?.value ?? "-"}</td>
+      <td className="sticky-table__fix-3">
+        {/* カナは列を分けず、氏名の後ろに小さめの括弧書きで添える(入院患者一覧と同じ)。 */}
+        {patientName || "-"}
+        <PatientKana patient={patient} />
+      </td>
+      <PatientProfileCells patient={patient} />
       <td className="outpatient__schedule">{appointmentScheduleLabel(appointment)}</td>
       <td>{appointmentDepartmentLabel(appointment) || "-"}</td>
       <td>{appointmentActorDisplay(appointment, "Practitioner") || "-"}</td>
@@ -357,7 +369,7 @@ function OutpatientTableRow({
           {appointmentStatusLabel(appointment.status)}
         </span>
       </td>
-      <td className="outpatient__actions">
+      <td className="outpatient__actions sticky-table__fix-actions">
         {canCheckInAppointment(appointment) && (
           <button type="button" disabled={pending} onClick={() => onChangeStatus("checked-in")}>
             受付

@@ -25,6 +25,11 @@ import {
   type TransferPlanRow,
 } from "../components/InpatientPlanTables";
 import { LeaveModal } from "../components/LeaveModal";
+import {
+  PatientKana,
+  PatientProfileCells,
+  PatientProfileHeadCells,
+} from "../components/PatientRowCells";
 import { PlannedAdmissionModal } from "../components/PlannedAdmissionModal";
 import { RowMenu } from "../components/RowMenu";
 import { TransferPlanModal } from "../components/TransferPlanModal";
@@ -51,12 +56,7 @@ import {
   plannedWardId,
 } from "../fhir/encounterHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
-import {
-  ageWithMonthsLabel,
-  displayKana,
-  displayName,
-  genderLabel,
-} from "../fhir/patientHelpers";
+import { displayName } from "../fhir/patientHelpers";
 import { addDays } from "../fhir/scheduleHelpers";
 import { bedDisplayName, bedNumber, bedShortLabel } from "../fhir/wardHelpers";
 import { useKarteLinkState } from "../karteReturn";
@@ -565,21 +565,20 @@ export function InpatientListPage() {
           </p>
         ) : (
           <>
-            <div className="inpatient-wrap">
-              <table className="patient-table inpatient">
+            <div className="inpatient-wrap sticky-table-wrap">
+              <table className="patient-table inpatient sticky-table">
                 <thead>
                   <tr>
-                    <th className="inpatient__col-room">病室</th>
-                    <th className="inpatient__col-bed">ベッド</th>
-                    <th className="inpatient__col-name">患者氏名</th>
-                    <th>生年月日</th>
-                    <th>性別</th>
+                    <th className="sticky-table__fix-1">病室</th>
+                    <th className="sticky-table__fix-2">ベッド</th>
+                    <th className="sticky-table__fix-3">患者氏名</th>
+                    <PatientProfileHeadCells />
                     <th>診療科</th>
                     <th>主治医</th>
                     <th>担当看護師</th>
                     <th>入院予定日</th>
                     <th>特記事項</th>
-                    <th className="inpatient__col-actions"></th>
+                    <th className="sticky-table__fix-actions"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -633,21 +632,20 @@ export function InpatientListPage() {
         </p>
       ) : (
         <>
-          <div className="inpatient-wrap">
-            <table className="patient-table inpatient">
+          <div className="inpatient-wrap sticky-table-wrap">
+            <table className="patient-table inpatient sticky-table">
               <thead>
                 <tr>
-                  <th className="inpatient__col-room">病室</th>
-                  <th className="inpatient__col-bed">ベッド</th>
-                  <th className="inpatient__col-name">患者氏名</th>
-                  <th>生年月日</th>
-                  <th>性別</th>
+                  <th className="sticky-table__fix-1">病室</th>
+                  <th className="sticky-table__fix-2">ベッド</th>
+                  <th className="sticky-table__fix-3">患者氏名</th>
+                  <PatientProfileHeadCells />
                   <th>診療科</th>
                   <th>主治医</th>
                   <th>担当看護師</th>
                   <th>入院日</th>
                   <th>特記事項</th>
-                  <th className="inpatient__col-actions"></th>
+                  <th className="sticky-table__fix-actions"></th>
                 </tr>
               </thead>
               <tbody>
@@ -940,27 +938,19 @@ function InpatientTableRow({
   return (
     <tr>
       {roomRowSpan > 0 && (
-        <td rowSpan={roomRowSpan} className="inpatient__room inpatient__col-room">
+        <td rowSpan={roomRowSpan} className="inpatient__room sticky-table__fix-1">
           {locationDisplayName(room)}
         </td>
       )}
-      <td className="inpatient__col-bed">{bedLabel}</td>
+      <td className="sticky-table__fix-2">{bedLabel}</td>
       {encounter && patient ? (
         <>
-          <td className="inpatient__name inpatient__col-name">
+          <td className="inpatient__name sticky-table__fix-3">
             {/* カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
             {displayName(patient)}
-            {displayKana(patient) && (
-              <span className="inpatient__kana">（{displayKana(patient)}）</span>
-            )}
+            <PatientKana patient={patient} />
           </td>
-          <td>
-            {patient.birthDate ?? "-"}
-            {patient.birthDate && ageWithMonthsLabel(patient.birthDate) && (
-              <span className="inpatient__age">（{ageWithMonthsLabel(patient.birthDate)}）</span>
-            )}
-          </td>
-          <td>{genderLabel(patient.gender)}</td>
+          <PatientProfileCells patient={patient} />
           <td>{encounterDepartmentName(encounter)}</td>
           <td>{encounterAttendingName(encounter)}</td>
           <td>{encounterNurseNames(encounter).join("、") || "-"}</td>
@@ -973,7 +963,7 @@ function InpatientTableRow({
             ))}
             {note || (planTags.length === 0 ? "-" : null)}
           </td>
-          <td className="patient-table__actions inpatient__col-actions">
+          <td className="patient-table__actions sticky-table__fix-actions">
             {patientId && (
               <Link className="button" to={`/patients/${patientId}/karte`} state={karteLinkState}>
                 カルテ
@@ -1032,11 +1022,11 @@ function InpatientTableRow({
           {/* 「空床」は患者氏名の列に置く。固定する列を colSpan にまとめてしまうと、
               スクロールしたときに残りの列まで一緒に貼り付いてしまう。
               淡くするのはセルではなく文字(理由は App.css の .inpatient__empty-bed)。 */}
-          <td className="inpatient__col-name">
+          <td className="sticky-table__fix-3">
             <span className="inpatient__empty-bed">空床</span>
           </td>
           <td colSpan={7}></td>
-          <td className="patient-table__actions inpatient__col-actions">
+          <td className="patient-table__actions sticky-table__fix-actions">
             <RowMenu label={`${locationDisplayName(room)} ${bedLabel} の操作`} escapesClipping>
               <button type="button" className="row-menu__item" onClick={onAdmit}>
                 入院登録
@@ -1066,33 +1056,25 @@ function PlannedTableRow({
 
   return (
     <tr>
-      <td className="inpatient__room inpatient__col-room">{plannedRoomName(encounter)}</td>
-      <td className="inpatient__col-bed">{plannedBedName(encounter)}</td>
-      <td className="inpatient__name inpatient__col-name">
+      <td className="inpatient__room sticky-table__fix-1">{plannedRoomName(encounter)}</td>
+      <td className="sticky-table__fix-2">{plannedBedName(encounter)}</td>
+      <td className="inpatient__name sticky-table__fix-3">
         {patient ? (
           <>
             {displayName(patient)}
-            {displayKana(patient) && (
-              <span className="inpatient__kana">（{displayKana(patient)}）</span>
-            )}
+            <PatientKana patient={patient} />
           </>
         ) : (
           (encounter.subject?.display ?? "-")
         )}
       </td>
-      <td>
-        {patient?.birthDate ?? "-"}
-        {patient?.birthDate && ageWithMonthsLabel(patient.birthDate) && (
-          <span className="inpatient__age">（{ageWithMonthsLabel(patient.birthDate)}）</span>
-        )}
-      </td>
-      <td>{patient ? genderLabel(patient.gender) : "-"}</td>
+      <PatientProfileCells patient={patient} />
       <td>{encounterDepartmentName(encounter)}</td>
       <td>{encounterAttendingName(encounter)}</td>
       <td>{encounterNurseNames(encounter).join("、") || "-"}</td>
       <td>{encounterAdmissionDate(encounter)}</td>
       <td className="inpatient__note">{encounterNote(encounter) || "-"}</td>
-      <td className="patient-table__actions inpatient__col-actions">
+      <td className="patient-table__actions sticky-table__fix-actions">
         {patientId && (
           <Link className="button" to={`/patients/${patientId}/karte`} state={karteLinkState}>
             カルテ

@@ -13,6 +13,11 @@ import { useRadItemsByCodes, useRadJj1017Catalog } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { RadPerformModal } from "../components/RadPerformModal";
 import { RowMenu } from "../components/RowMenu";
+import {
+  PatientKana,
+  PatientProfileCells,
+  PatientProfileHeadCells,
+} from "../components/PatientRowCells";
 import { displayName } from "../fhir/patientHelpers";
 import {
   SETTING_OPTIONS,
@@ -172,19 +177,21 @@ export function RadWorklistPage() {
         <p>読み込み中...</p>
       ) : (
         <>
-          <div className="rad-worklist-wrap">
-            <table className="rad-worklist">
+          <div className="rad-worklist-wrap sticky-table-wrap">
+            <table className="rad-worklist sticky-table">
               <thead>
                 <tr>
-                  <th className="rad-worklist__time">撮影時刻</th>
-                  <th>患者番号</th>
-                  <th>患者氏名</th>
+                  {/* 横に送っても「いつ・誰の撮影か」は残す(左 3 列を固定する)。 */}
+                  <th className="rad-worklist__time sticky-table__fix-1">撮影時刻</th>
+                  <th className="sticky-table__fix-2">患者番号</th>
+                  <th className="sticky-table__fix-3">患者氏名</th>
+                  <PatientProfileHeadCells />
                   <th className="rad-worklist__content">撮影内容</th>
                   <th className="rad-worklist__compact">区分</th>
                   <th className="rad-worklist__compact">病棟</th>
                   <th>依頼科 | 依頼医師</th>
                   <th className="rad-worklist__compact">ステータス</th>
-                  <th className="rad-worklist__actions"></th>
+                  <th className="rad-worklist__actions sticky-table__fix-actions"></th>
                 </tr>
               </thead>
               <tbody>
@@ -202,7 +209,7 @@ export function RadWorklistPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="master-search__empty">
+                    <td colSpan={11} className="master-search__empty">
                       {total === 0
                         ? "この撮影日の放射線検査オーダーはありません"
                         : "絞り込みに該当する検査がありません"}
@@ -380,16 +387,21 @@ function WorklistRow({
 
   return (
     <tr className={summary.urgent ? "rad-worklist__row--urgent" : undefined}>
-      <td className="rad-worklist__time">{radOrderTime(order) || "-"}</td>
-      <td>{patient?.identifier?.[0]?.value ?? "-"}</td>
-      <td>
+      <td className="rad-worklist__time sticky-table__fix-1">{radOrderTime(order) || "-"}</td>
+      <td className="sticky-table__fix-2">{patient?.identifier?.[0]?.value ?? "-"}</td>
+      <td className="sticky-table__fix-3">
         {patient ? (
-          // 実施時に前回画像や病名を見に行けるよう、カルテへ直接飛べるようにする。
-          <Link to={`/patients/${patient.id}/karte`} state={karteLinkState}>{displayName(patient)}</Link>
+          <>
+            {/* 実施時に前回画像や病名を見に行けるよう、カルテへ直接飛べるようにする。
+                カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
+            <Link to={`/patients/${patient.id}/karte`} state={karteLinkState}>{displayName(patient)}</Link>
+            <PatientKana patient={patient} />
+          </>
         ) : (
           "-"
         )}
       </td>
+      <PatientProfileCells patient={patient} />
       <td className="rad-worklist__content">
         <ul className="rad-worklist__items">
           {entries.map((entry) => (
@@ -410,7 +422,7 @@ function WorklistRow({
           {radTaskStatusDisplay(status)}
         </span>
       </td>
-      <td className="rad-worklist__actions">
+      <td className="rad-worklist__actions sticky-table__fix-actions">
         {actions
           .filter((action) => !action.secondary)
           .map((action) => (

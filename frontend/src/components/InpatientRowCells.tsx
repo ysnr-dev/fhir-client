@@ -4,13 +4,9 @@ import {
   encounterDepartmentName,
   encounterNurseNames,
 } from "../fhir/encounterHelpers";
-import {
-  ageWithMonthsLabel,
-  displayKana,
-  displayName,
-  genderLabel,
-} from "../fhir/patientHelpers";
+import { displayName } from "../fhir/patientHelpers";
 import { useKarteLinkState } from "../karteReturn";
+import { PatientKana, PatientProfileCells, PatientProfileHeadCells } from "./PatientRowCells";
 
 // 入院患者一覧のどのタブでも同じ並び・同じ見た目で出す部分。
 // 日付まわりと操作はタブごとに違うので、ここには含めない。
@@ -21,11 +17,10 @@ import { useKarteLinkState } from "../karteReturn";
 export function InpatientHeadCells() {
   return (
     <>
-      <th className="inpatient__col-room">病室</th>
-      <th className="inpatient__col-bed">ベッド</th>
-      <th className="inpatient__col-name">患者氏名</th>
-      <th>生年月日</th>
-      <th>性別</th>
+      <th className="sticky-table__fix-1">病室</th>
+      <th className="sticky-table__fix-2">ベッド</th>
+      <th className="sticky-table__fix-3">患者氏名</th>
+      <PatientProfileHeadCells />
       <th>診療科</th>
       <th>主治医</th>
       <th>担当看護師</th>
@@ -50,28 +45,20 @@ export function InpatientBodyCells({
 }) {
   return (
     <>
-      <td className="inpatient__room inpatient__col-room">{roomName}</td>
-      <td className="inpatient__col-bed">{bedName}</td>
-      <td className="inpatient__name inpatient__col-name">
+      <td className="inpatient__room sticky-table__fix-1">{roomName}</td>
+      <td className="sticky-table__fix-2">{bedName}</td>
+      <td className="inpatient__name sticky-table__fix-3">
         {patient ? (
           <>
             {/* カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
             {displayName(patient)}
-            {displayKana(patient) && (
-              <span className="inpatient__kana">（{displayKana(patient)}）</span>
-            )}
+            <PatientKana patient={patient} />
           </>
         ) : (
           (encounter.subject?.display ?? "-")
         )}
       </td>
-      <td>
-        {patient?.birthDate ?? "-"}
-        {patient?.birthDate && ageWithMonthsLabel(patient.birthDate) && (
-          <span className="inpatient__age">（{ageWithMonthsLabel(patient.birthDate)}）</span>
-        )}
-      </td>
-      <td>{patient ? genderLabel(patient.gender) : "-"}</td>
+      <PatientProfileCells patient={patient} />
       <td>{departmentName || encounterDepartmentName(encounter)}</td>
       <td>{encounterAttendingName(encounter)}</td>
       <td>{encounterNurseNames(encounter).join("、") || "-"}</td>

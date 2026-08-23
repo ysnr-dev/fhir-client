@@ -11,6 +11,11 @@ import {
 import { prescriptionPdfUrl } from "../api/reportsClient";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { RowMenu } from "../components/RowMenu";
+import {
+  PatientKana,
+  PatientProfileCells,
+  PatientProfileHeadCells,
+} from "../components/PatientRowCells";
 import { RxDispenseModal } from "../components/RxDispenseModal";
 import { RxOrderViewModal } from "../components/RxOrderViewModal";
 import { displayName } from "../fhir/patientHelpers";
@@ -143,18 +148,20 @@ export function RxWorklistPage() {
         <p>読み込み中...</p>
       ) : (
         <>
-          <div className="lab-worklist-wrap">
-            <table className="lab-worklist">
+          <div className="lab-worklist-wrap sticky-table-wrap">
+            <table className="lab-worklist sticky-table">
               <thead>
                 <tr>
-                  <th>患者番号</th>
-                  <th>患者氏名</th>
+                  {/* 横に送っても「誰の処方か」は残す(左 2 列を固定する)。 */}
+                  <th className="sticky-table__fix-1">患者番号</th>
+                  <th className="sticky-table__fix-2">患者氏名</th>
+                  <PatientProfileHeadCells />
                   <th className="rx-worklist__content">処方内容</th>
                   <th className="lab-worklist__compact">区分</th>
                   <th className="lab-worklist__compact">病棟</th>
                   <th>依頼科 | 依頼医師</th>
                   <th className="lab-worklist__compact">ステータス</th>
-                  <th className="lab-worklist__actions"></th>
+                  <th className="lab-worklist__actions sticky-table__fix-actions"></th>
                 </tr>
               </thead>
               <tbody>
@@ -172,7 +179,7 @@ export function RxWorklistPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="master-search__empty">
+                    <td colSpan={10} className="master-search__empty">
                       {total === 0
                         ? "この処方日の処方オーダーはありません"
                         : "絞り込みに該当する処方がありません"}
@@ -356,15 +363,20 @@ function WorklistRow({
 
   return (
     <tr>
-      <td>{patient?.identifier?.[0]?.value ?? "-"}</td>
-      <td>
+      <td className="sticky-table__fix-1">{patient?.identifier?.[0]?.value ?? "-"}</td>
+      <td className="sticky-table__fix-2">
         {patient ? (
-          // 調剤の前に病名や検査結果を見に行けるよう、カルテへ直接飛べるようにする。
-          <Link to={`/patients/${patient.id}/karte`} state={karteLinkState}>{displayName(patient)}</Link>
+          <>
+            {/* 調剤の前に病名や検査結果を見に行けるよう、カルテへ直接飛べるようにする。
+                カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
+            <Link to={`/patients/${patient.id}/karte`} state={karteLinkState}>{displayName(patient)}</Link>
+            <PatientKana patient={patient} />
+          </>
         ) : (
           "-"
         )}
       </td>
+      <PatientProfileCells patient={patient} />
       <td className="rx-worklist__content">
         {medicineNames ? (
           <span className="rx-worklist__medicines" title={medicineNames}>
@@ -385,7 +397,7 @@ function WorklistRow({
           {rxTaskStatusDisplay(status)}
         </span>
       </td>
-      <td className="lab-worklist__actions">
+      <td className="lab-worklist__actions sticky-table__fix-actions">
         {/* 処方箋の発行が受付を兼ねる(検体検査のラベル発行と同じ)。薬剤部が最初に
             するのが処方箋の発行なので、依頼済のオーダーは PDF を開くと同時に受付済へ
             進める。院外・院内どちらの様式で刷るかは backend がオーダーの区分で決める。

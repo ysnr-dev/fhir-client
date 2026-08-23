@@ -14,6 +14,11 @@ import { LabOrderViewModal } from "../components/LabOrderViewModal";
 import { LabResultEntryModal } from "../components/LabResultEntryModal";
 import { RowMenu } from "../components/RowMenu";
 import {
+  PatientKana,
+  PatientProfileCells,
+  PatientProfileHeadCells,
+} from "../components/PatientRowCells";
+import {
   groupBySpecimen,
   labOrderItems,
   summarizeLabOrder,
@@ -160,18 +165,20 @@ export function LabWorklistPage() {
         <p>読み込み中...</p>
       ) : (
         <>
-          <div className="lab-worklist-wrap">
-            <table className="lab-worklist">
+          <div className="lab-worklist-wrap sticky-table-wrap">
+            <table className="lab-worklist sticky-table">
               <thead>
                 <tr>
-                  <th>患者番号</th>
-                  <th>患者氏名</th>
+                  {/* 横に送っても「誰の検査か」は残す(左 2 列を固定する)。 */}
+                  <th className="sticky-table__fix-1">患者番号</th>
+                  <th className="sticky-table__fix-2">患者氏名</th>
+                  <PatientProfileHeadCells />
                   <th className="lab-worklist__content">検査内容</th>
                   <th className="lab-worklist__compact">区分</th>
                   <th className="lab-worklist__compact">病棟</th>
                   <th>依頼科 | 依頼医師</th>
                   <th className="lab-worklist__compact">ステータス</th>
-                  <th className="lab-worklist__actions"></th>
+                  <th className="lab-worklist__actions sticky-table__fix-actions"></th>
                 </tr>
               </thead>
               <tbody>
@@ -189,7 +196,7 @@ export function LabWorklistPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="master-search__empty">
+                    <td colSpan={10} className="master-search__empty">
                       {total === 0
                         ? "この検査日の検体検査オーダーはありません"
                         : "絞り込みに該当する検査がありません"}
@@ -377,15 +384,20 @@ function WorklistRow({
 
   return (
     <tr className={summary.urgent ? "lab-worklist__row--urgent" : undefined}>
-      <td>{patient?.identifier?.[0]?.value ?? "-"}</td>
-      <td>
+      <td className="sticky-table__fix-1">{patient?.identifier?.[0]?.value ?? "-"}</td>
+      <td className="sticky-table__fix-2">
         {patient ? (
-          // 採血の前に病名や前回結果を見に行けるよう、カルテへ直接飛べるようにする。
-          <Link to={`/patients/${patient.id}/karte`} state={karteLinkState}>{displayName(patient)}</Link>
+          <>
+            {/* 採血の前に病名や前回結果を見に行けるよう、カルテへ直接飛べるようにする。
+                カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
+            <Link to={`/patients/${patient.id}/karte`} state={karteLinkState}>{displayName(patient)}</Link>
+            <PatientKana patient={patient} />
+          </>
         ) : (
           "-"
         )}
       </td>
+      <PatientProfileCells patient={patient} />
       <td className="lab-worklist__content">
         {groups.length > 0 ? (
           specimenNames(groups)
@@ -405,7 +417,7 @@ function WorklistRow({
           {labTaskStatusDisplay(status)}
         </span>
       </td>
-      <td className="lab-worklist__actions">
+      <td className="lab-worklist__actions sticky-table__fix-actions">
         {actions
           .filter((action) => !action.secondary)
           .map((action) => (
