@@ -5157,6 +5157,12 @@ body.karte-wide .app__header {
   margin-top: 20px;
 }
 
+/* 後続セクションが無く、すぐ下がボタン行になるセクション。放射線のように
+   セクションが続く画面と同じだけの余白を下にも空ける。 */
+.lab-order-item__section--tail {
+  margin-bottom: 20px;
+}
+
 .lab-order-item__section-head {
   display: flex;
   align-items: center;

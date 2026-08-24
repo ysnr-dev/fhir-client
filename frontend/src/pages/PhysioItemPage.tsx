@@ -657,7 +657,7 @@ function TemplateDefaults({
   };
 
   return (
-    <section className="lab-order-item__section">
+    <section className="lab-order-item__section lab-order-item__section--tail">
       <div className="lab-order-item__section-head">
         <h3>既定のテンプレート</h3>
       </div>
