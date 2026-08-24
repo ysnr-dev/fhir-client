@@ -393,6 +393,24 @@ button:disabled {
   font-size: 13px;
 }
 
+/* 全患者一覧(.patient-list)の操作は、上の既定サイズのままだと文字だけの行より
+   高くなり、外来患者一覧・入院患者一覧と 1 行の高さがそろわない。同じく文字
+   1 行に収まる高さまで詰める。line-height を明示するのは、既定では本文の行送りを
+   font: inherit で受け継いでしまい、padding を削っただけでは縮まないため。 */
+.patient-list .patient-table__actions button,
+.patient-list .patient-table__actions .button {
+  padding: 2px 10px;
+  line-height: 20px;
+}
+
+/* ケバブは同じ行に並ぶボタンと高さ・上下位置を揃える。三点リーダーだけなので
+   横幅はボタンより詰める。 */
+.patient-list .patient-table__actions .row-menu__trigger {
+  padding: 2px 7px;
+  font-size: 15px;
+  line-height: 20px;
+}
+
 .patient-table__empty {
   padding: 24px;
   text-align: center;

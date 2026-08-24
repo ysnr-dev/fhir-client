@@ -29,7 +29,7 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
   return (
     <>
       <ErrorBanner error={deletePatient.error} />
-      <table className="patient-table">
+      <table className="patient-table patient-list">
         <thead>
           <tr>
             <th>患者番号</th>
