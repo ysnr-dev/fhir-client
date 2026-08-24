@@ -8,6 +8,7 @@ import {
 } from "../api/masterQueries";
 import type { LabOrderItem, LabOrderItemLayoutCell } from "../api/masterClient";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { LabOrderItemSearchModal } from "../components/LabOrderItemSearchModal";
 import { Modal } from "../components/Modal";
 
 interface Position {
@@ -353,17 +354,21 @@ interface CellEditorProps {
 function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditorProps) {
   const [displayName, setDisplayName] = useState(cell?.display_name ?? "");
   const [labelText, setLabelText] = useState("");
+  const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
-  const candidates = useLabOrderItemSearch({ name: query }, 1, query.trim().length > 0);
+  const hasQuery = query.trim().length > 0;
+  const candidates = useLabOrderItemSearch({ name: query }, 1, hasQuery);
 
   // 選択マスが変わったら編集中の値を持ち越さない。
   useEffect(() => {
     setDisplayName(cell?.display_name ?? "");
     setLabelText("");
+    setSearching(false);
     setQuery("");
   }, [cell, position.row, position.column]);
 
   async function handlePlaceItem(item: LabOrderItem) {
+    setSearching(false);
     setQuery("");
     await mutations.create.mutateAsync({
       layout_id: layoutId,
@@ -461,8 +466,11 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
                 placeholder="名称で検索"
               />
             </label>
+            <button type="button" onClick={() => setSearching(true)}>
+              項目を選択
+            </button>
           </div>
-          {query.trim().length > 0 && (
+          {hasQuery && (
             <ul className="lab-order-item__candidates">
               {candidates.data?.items.map((item) => (
                 <li key={item.id}>
@@ -473,6 +481,13 @@ function CellEditor({ layoutId, position, cell, mutations, onClose }: CellEditor
                 </li>
               ))}
             </ul>
+          )}
+          {searching && (
+            <LabOrderItemSearchModal
+              title="マスに配置する項目を選択"
+              onSelect={handlePlaceItem}
+              onClose={() => setSearching(false)}
+            />
           )}
         </>
       )}

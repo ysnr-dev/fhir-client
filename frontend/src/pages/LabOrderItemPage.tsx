@@ -11,28 +11,8 @@ import {
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { LabItemSearchModal } from "../components/LabItemSearchModal";
+import { LAB_CATEGORIES, LAB_KIND_LABELS } from "../components/labOrderItemOptions";
 import { Modal } from "../components/Modal";
-
-const KIND_LABELS: Record<string, string> = {
-  single: "単項目",
-  panel: "パネル",
-};
-
-// 検査分野の選択肢。前半は共有項目JLACコードマスタ(JLAC11)の区分名称に合わせ、
-// 同マスタが扱わない分野(微生物・遺伝子・病理)を後ろに足している。
-const CATEGORIES = [
-  "尿・糞便等検査",
-  "血液学的検査",
-  "生化学検査",
-  "免疫学的検査",
-  "免疫血液学的検査",
-  "内分泌学的検査",
-  "感染症関連検査",
-  "微生物学的検査",
-  "遺伝子関連・染色体検査",
-  "病理学的検査",
-  "その他",
-];
 
 const MEMBER_TYPE_LABELS: Record<string, string> = {
   required: "必須",
@@ -173,7 +153,7 @@ export function LabOrderItemPage() {
             onChange={(e) => setInputs({ ...inputs, category: e.target.value })}
           >
             <option value="">すべて</option>
-            {CATEGORIES.map((category) => (
+            {LAB_CATEGORIES.map((category) => (
               <option key={category} value={category}>
                 {category}
               </option>
@@ -237,7 +217,7 @@ export function LabOrderItemPage() {
               <td>{item.name}</td>
               <td>{item.short_name}</td>
               <td>{item.category}</td>
-              <td className="lab-order-item__compact">{KIND_LABELS[item.kind] ?? item.kind}</td>
+              <td className="lab-order-item__compact">{LAB_KIND_LABELS[item.kind] ?? item.kind}</td>
               <td>
                 {item.specimen_code
                   ? (specimenNames.get(item.specimen_code) ?? item.specimen_code)
@@ -319,9 +299,9 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
   // 選択肢に無い検査分野が保存済みの場合でも、開いただけで値が消えないよう末尾に足す。
   const categoryOptions = useMemo(
     () =>
-      draft.category && !CATEGORIES.includes(draft.category)
-        ? [...CATEGORIES, draft.category]
-        : CATEGORIES,
+      draft.category && !LAB_CATEGORIES.includes(draft.category)
+        ? [...LAB_CATEGORIES, draft.category]
+        : LAB_CATEGORIES,
     [draft.category],
   );
 
