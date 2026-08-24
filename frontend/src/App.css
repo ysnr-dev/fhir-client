@@ -5,7 +5,16 @@
   text-align: left;
 }
 
+/* ヘッダーはどの画面でもスクロールに追従させる(一覧やカルテから離れずに
+   メニューへ戻れるように)。下を流れていく本文が透けないよう地の色で塗る
+   (カルテ画面は body の地を --surface-panel に落とすので、ここで塗らないと
+   ヘッダーだけ暗くなる)。z-index はページ内の重なり(最大 10)より上、
+   モーダル(100)とテンプレート選択のパネル(200)より下に置く。 */
 .app__header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
   padding: 16px 24px;
   display: flex;
@@ -3666,11 +3675,6 @@ body.karte-wide #root {
    周囲に縁取りとして残る。地もパネルの濃さに落として面の順序を揃える。 */
 body.karte-wide {
   background: var(--surface-panel);
-}
-
-/* ヘッダーだけは他の画面と同じ見た目を保つ。 */
-body.karte-wide .app__header {
-  background: var(--bg);
 }
 
 /* 左右ペインの高さ。ページ自体はスクロールさせず(中身は各ペイン内でスクロール)、
