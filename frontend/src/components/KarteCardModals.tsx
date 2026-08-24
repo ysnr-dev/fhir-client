@@ -7,6 +7,8 @@ import {
   useRadPerformDetail,
   usePhysioOrderDetail,
   usePhysioPerformDetail,
+  useEndoscopyOrderDetail,
+  useEndoscopyPerformDetail,
   useLabResultDetail,
   usePrescriptionDetail,
   useQuestionnaireResponseWithQuestionnaire,
@@ -16,6 +18,7 @@ import { labOrderItemRequests, serviceRequestsOf } from "../fhir/labOrderHelpers
 import { microOrderItemRequests } from "../fhir/microOrderHelpers";
 import { radOrderItemRequests } from "../fhir/radOrderHelpers";
 import { physioOrderItemRequests } from "../fhir/physioOrderHelpers";
+import { endoscopyOrderItemRequests } from "../fhir/endoscopyOrderHelpers";
 import { splitLabResultDetailBundle } from "../fhir/labResultHelpers";
 import { splitMicroResultDetailBundle } from "../fhir/microResultHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
@@ -34,6 +37,7 @@ import { PrescriptionDetailPanel } from "./PrescriptionDetailPanel";
 import { QuestionnaireResponseDetailPanel } from "./QuestionnaireResponseDetailPanel";
 import { RadOrderDetailPanel } from "./RadOrderDetailPanel";
 import { PhysioOrderDetailPanel } from "./PhysioOrderDetailPanel";
+import { EndoscopyOrderDetailPanel } from "./EndoscopyOrderDetailPanel";
 
 // カルテのタイムラインから開くモーダル。詳細表示は各リソースの詳細ページと同じ
 // パネルを使うので、カードでは省いている情報(処方の DI リンクなど)も参照できる。
@@ -46,6 +50,7 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   "micro-order": "細菌検査内容",
   "rad-order": "放射線検査内容",
   "physio-order": "生理検査内容",
+  "endoscopy-order": "内視鏡内容",
   "lab-result": "検査結果内容",
   "micro-result": "細菌検査結果内容",
   qr: "テンプレート表示",
@@ -80,6 +85,8 @@ export function KarteDetailModal({
         <RadOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "physio-order" ? (
         <PhysioOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+      ) : target.kind === "endoscopy-order" ? (
+        <EndoscopyOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-result" ? (
         <LabResultDetail patientId={patientId} reportId={target.id} />
       ) : target.kind === "micro-result" ? (
@@ -331,6 +338,40 @@ function PhysioOrderDetail({
   );
 }
 
+function EndoscopyOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = useEndoscopyOrderDetail(srId);
+  const requests = serviceRequestsOf(detail.data?.data);
+  const serviceRequest = requests.find((request) => request.id === srId);
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された内視鏡は別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <EndoscopyOrderDetailPanel
+          serviceRequest={serviceRequest}
+          itemRequests={endoscopyOrderItemRequests(requests, srId)}
+          problemsById={problemsById}
+        />
+      ) : (
+        !detail.error && <NotFound label="内視鏡" />
+      )}
+    </>
+  );
+}
+
 // 検体検査のカードから開く「検査結果表示」。中身は検査結果タブの内容表示と同じ
 // パネルで、患者の取り違えだけここで弾く(パネルと同じクエリなので追加の取得は無い)。
 function LabResultDetail({ patientId, reportId }: { patientId: string; reportId: string }) {
@@ -423,6 +464,8 @@ export function KarteCardJsonModal({
         <RadOrderJson srId={item.id} />
       ) : item.kind === "physio-order" ? (
         <PhysioOrderJson srId={item.id} />
+      ) : item.kind === "endoscopy-order" ? (
+        <EndoscopyOrderJson srId={item.id} />
       ) : (
         <FhirJsonView resource={jsonResource(item)} />
       )}
@@ -519,6 +562,36 @@ function RadOrderJson({ srId }: { srId: string }) {
 function PhysioOrderJson({ srId }: { srId: string }) {
   const detail = usePhysioOrderDetail(srId);
   const perform = usePhysioPerformDetail(srId);
+  const performBundle = perform.data?.data;
+  const hasPerform = (performBundle?.entry?.length ?? 0) > 0;
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      <ErrorBanner error={perform.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : hasPerform ? (
+        <>
+          <section className="karte-json__section">
+            <h3 className="karte-json__section-title">オーダー</h3>
+            <FhirJsonView resource={detail.data?.data} />
+          </section>
+          <section className="karte-json__section">
+            <h3 className="karte-json__section-title">実施記録</h3>
+            <FhirJsonView resource={performBundle} />
+          </section>
+        </>
+      ) : (
+        <FhirJsonView resource={detail.data?.data} />
+      )}
+    </>
+  );
+}
+
+function EndoscopyOrderJson({ srId }: { srId: string }) {
+  const detail = useEndoscopyOrderDetail(srId);
+  const perform = useEndoscopyPerformDetail(srId);
   const performBundle = perform.data?.data;
   const hasPerform = (performBundle?.entry?.length ?? 0) > 0;
 

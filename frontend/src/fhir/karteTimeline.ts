@@ -31,6 +31,18 @@ import {
   type PhysioTaskStatus,
 } from "./physioTaskHelpers";
 import {
+  isEndoscopyServiceRequest,
+  endoscopyOrderItemRequests,
+  endoscopyOrderProblem,
+  endoscopyOrderResponseIds,
+} from "./endoscopyOrderHelpers";
+import { endoscopyPerformsByOrderId, type EndoscopyPerformDisplay } from "./endoscopyResultHelpers";
+import {
+  endoscopyTaskStatus,
+  endoscopyTasksByOrderId,
+  type EndoscopyTaskStatus,
+} from "./endoscopyTaskHelpers";
+import {
   questionnaireCanonical,
   questionnaireResponseProblem,
 } from "./questionnaireResponseHelpers";
@@ -56,6 +68,7 @@ export type KarteItemKind =
   | "micro-order"
   | "rad-order"
   | "physio-order"
+  | "endoscopy-order"
   | "qr";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
@@ -67,6 +80,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   "micro-order": "細菌検査",
   "rad-order": "放射線検査",
   "physio-order": "生理検査",
+  "endoscopy-order": "内視鏡",
   qr: "テンプレート",
 };
 
@@ -139,6 +153,16 @@ export type KarteTimelineItem = KarteItemBase &
         status: PhysioTaskStatus;
         /** 実施記録。未実施なら空。取消 → 再実施で複数残ることがある。 */
         performs: PhysioPerformDisplay[];
+      }
+    // 内視鏡も生理検査と同型。
+    | {
+        kind: "endoscopy-order";
+        serviceRequest: fhir4.ServiceRequest;
+        itemRequests: fhir4.ServiceRequest[];
+        /** 部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
+        status: EndoscopyTaskStatus;
+        /** 実施記録。未実施なら空。取消 → 再実施で複数残ることがある。 */
+        performs: EndoscopyPerformDisplay[];
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
@@ -263,6 +287,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     ...compositions.flatMap((c) => referencedResponseIds(c)),
     ...radOrderResponseIds(serviceRequests),
     ...physioOrderResponseIds(serviceRequests),
+    ...endoscopyOrderResponseIds(serviceRequests),
   ]);
 
   // canonical("<url>|<version>")と url 単独の両方で引けるようにしておく
@@ -311,6 +336,8 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   // physioPerformsByOrderId が category(order-type)で行うので、同じ配列を渡してよい。
   const physioTaskByOrderId = physioTasksByOrderId(tasks);
   const physioPerformByOrderId = physioPerformsByOrderId(procedures, administrations);
+  const endoscopyTaskByOrderId = endoscopyTasksByOrderId(tasks);
+  const endoscopyPerformByOrderId = endoscopyPerformsByOrderId(procedures, administrations);
 
   const medicationRequestsBySr = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
@@ -394,6 +421,20 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         // 放射線検査と同じく、実施情報は進捗が実施済のときだけ出す。
         performs:
           status === "completed" ? (physioPerformByOrderId.get(serviceRequest.id ?? "") ?? []) : [],
+      };
+    }
+    if (isEndoscopyServiceRequest(serviceRequest)) {
+      const status = endoscopyTaskStatus(endoscopyTaskByOrderId.get(serviceRequest.id ?? ""));
+      return {
+        ...base,
+        kind: "endoscopy-order" as const,
+        label: KARTE_KIND_LABELS["endoscopy-order"],
+        itemRequests: endoscopyOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+        status,
+        performs:
+          status === "completed"
+            ? (endoscopyPerformByOrderId.get(serviceRequest.id ?? "") ?? [])
+            : [],
       };
     }
     const withMedications = {
@@ -568,6 +609,7 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "micro-order") return microOrderProblem(item.serviceRequest);
   if (item.kind === "rad-order") return radOrderProblem(item.serviceRequest);
   if (item.kind === "physio-order") return physioOrderProblem(item.serviceRequest);
+  if (item.kind === "endoscopy-order") return endoscopyOrderProblem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);
   }

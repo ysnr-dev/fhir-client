@@ -7,6 +7,7 @@ import { MicroOrderCreatePanel, MicroOrderEditPanel } from "./MicroOrderPanels";
 import { PrescriptionCreatePanel, PrescriptionEditPanel } from "./PrescriptionPanels";
 import { RadOrderCreatePanel, RadOrderEditPanel } from "./RadOrderPanels";
 import { PhysioOrderCreatePanel, PhysioOrderEditPanel } from "./PhysioOrderPanels";
+import { EndoscopyOrderCreatePanel, EndoscopyOrderEditPanel } from "./EndoscopyOrderPanels";
 import {
   QuestionnaireResponseCreatePanel,
   QuestionnaireResponseEditPanel,
@@ -36,6 +37,8 @@ export type KartePaneState =
   | { kind: "rad-order-edit"; srId: string }
   | { kind: "physio-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "physio-order-edit"; srId: string }
+  | { kind: "endoscopy-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "endoscopy-order-edit"; srId: string }
   | { kind: "qr-create"; problem?: ProblemRef }
   | { kind: "qr-edit"; qrId: string }
   // 予約は枠を押さえるだけで内容の編集は無く、変えられるのは日時(押さえる枠)だけ。
@@ -61,6 +64,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "rad-order-edit": "放射線検査編集",
   "physio-order-create": "生理検査登録",
   "physio-order-edit": "生理検査編集",
+  "endoscopy-order-create": "内視鏡登録",
+  "endoscopy-order-edit": "内視鏡編集",
   "qr-create": "テンプレート登録",
   "qr-edit": "テンプレート編集",
   "appointment-create": "予約登録",
@@ -79,6 +84,7 @@ function paneKey(state: KartePaneState): string {
     case "micro-order-edit":
     case "rad-order-edit":
     case "physio-order-edit":
+    case "endoscopy-order-edit":
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
@@ -94,6 +100,7 @@ function paneKey(state: KartePaneState): string {
     case "micro-order-create":
     case "rad-order-create":
     case "physio-order-create":
+    case "endoscopy-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "note-create":
     case "qr-create":
@@ -206,6 +213,12 @@ export function KarteRightPane({
         >
           生理検査
         </button>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "endoscopy-order-create", problem: selectedProblem })}
+        >
+          内視鏡
+        </button>
       </div>
     </section>
   );
@@ -305,6 +318,17 @@ function PaneContent({
       );
     case "physio-order-edit":
       return <PhysioOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "endoscopy-order-create":
+      return (
+        <EndoscopyOrderCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "endoscopy-order-edit":
+      return <EndoscopyOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "qr-create":
       return (
         <QuestionnaireResponseCreatePanel

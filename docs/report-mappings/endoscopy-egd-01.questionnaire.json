@@ -1,0 +1,453 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/endoscopy-egd-01",
+  "version": "1.0.0",
+  "name": "END_EGD_01",
+  "title": "上部内視鏡 前処置・鎮静指示",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "内視鏡オーダー(上部)の「特別指示」に貼るテンプレート。検査室が前処置・鎮静の準備をするために毎回確認する内容だけを並べる。選択肢のうち JED 用語集[基本情報]に対応する項目(挿入経路・鎮静)は JED の統一表記をそのまま転記してある。記入しなかった項目は特別指示の文面に出ないので、当てはまるものだけ埋めればよい。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "25675b10-0ef3-4425-83c4-c1f8c3015cca",
+        "display": "検査"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp-prep",
+      "type": "group",
+      "text": "前処置・患者準備",
+      "item": [
+        {
+          "linkId": "prep-fasting",
+          "type": "choice",
+          "text": "絶食指示",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "外来は前日夕食後から絶食が既定。入院や午後枠で異なるときだけ開始も書く。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "instructed",
+                "display": "指示済"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "not-yet",
+                "display": "未指示"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "grp-fasting",
+              "type": "group",
+              "text": "絶食",
+              "enableWhen": [
+                {
+                  "question": "prep-fasting",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "instructed"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "prep-fasting-from",
+                  "type": "string",
+                  "text": "絶食の開始",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "例: 前日21時から、当日6時間前から。"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "linkId": "prep-route",
+          "type": "choice",
+          "text": "挿入経路の希望",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "選択肢は JED 基本情報「挿入経路」(上部)の用語。経鼻希望でも鼻腔が狭ければ検査室判断で経口に変わることがある。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "oral",
+                "display": "経口"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "nasal",
+                "display": "経鼻"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "stoma-other",
+                "display": "経瘻孔・その他"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-antithrombotic",
+      "type": "group",
+      "text": "抗血栓薬",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "生検・処置の可否に直結するので、服用の有無は必ず確認する。"
+        }
+      ],
+      "item": [
+        {
+          "linkId": "at-status",
+          "type": "choice",
+          "text": "服用状況と指示",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "continue",
+                "display": "あり(休薬せず継続)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "withheld",
+                "display": "あり(休薬指示済)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "bridged",
+                "display": "あり(ヘパリン置換など置換指示済)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "unknown",
+                "display": "未確認"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "at-drug",
+          "type": "string",
+          "text": "薬剤名",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "「なし」以外のときに書く。薬剤の分類は JED 基本情報「抗血栓薬」の用語(アスピリン・チエノピリジン・ワルファリン・DOAC など)に合わせる。"
+            }
+          ]
+        },
+        {
+          "linkId": "at-detail",
+          "type": "string",
+          "text": "休薬・置換の内容",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "例: 3日前から休薬、ヘパリン置換で前日入院。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-sedation",
+      "type": "group",
+      "text": "鎮静・鎮痛",
+      "item": [
+        {
+          "linkId": "sed-request",
+          "type": "choice",
+          "text": "鎮静",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "requested",
+                "display": "希望あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "grp-sedation-detail",
+              "type": "group",
+              "text": "鎮静の指示",
+              "enableWhen": [
+                {
+                  "question": "sed-request",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "requested"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "sed-drug",
+                  "type": "choice",
+                  "text": "薬剤",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "radio-button"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "選択肢は JED 基本情報「鎮静・鎮痛・麻酔」の用語。施設の標準がある場合は空欄でよい。"
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "bzd",
+                        "display": "BZD"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "analgesic",
+                        "display": "鎮痛薬"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "propofol",
+                        "display": "プロポフォール"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "dex",
+                        "display": "DEX"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "general",
+                        "display": "全身麻酔"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "linkId": "sed-escort",
+                  "type": "choice",
+                  "text": "帰宅時の付き添い・車運転不可の説明",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "radio-button"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "done",
+                        "display": "説明済"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "not-yet",
+                        "display": "未説明"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "linkId": "sed-pharyngeal",
+          "type": "choice",
+          "text": "咽頭麻酔",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし(経鼻など)"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-consent",
+      "type": "group",
+      "text": "同意・その他",
+      "item": [
+        {
+          "linkId": "consent",
+          "type": "choice",
+          "text": "検査同意書",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "obtained",
+                "display": "取得済"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "not-yet",
+                "display": "未取得"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "other-note",
+          "type": "text",
+          "text": "その他の指示",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "感染症・アレルギー・生検可否など、検査室に伝えたいことを自由文で。"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

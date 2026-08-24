@@ -1,0 +1,196 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/endoscopy-purpose-egd-01",
+  "version": "1.0.0",
+  "name": "END_EGD_PUR_01",
+  "title": "上部内視鏡 検査目的",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "内視鏡オーダー(上部内視鏡検査)の「検査目的」に貼るテンプレート。JED(Japan Endoscopy Database)用語集[基本情報]の「検査目的」・「治療目的」の統一表記を選択肢に転記してある。記入しなかった項目は文面に出ない。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "25675b10-0ef3-4425-83c4-c1f8c3015cca",
+        "display": "検査"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "purpose",
+      "type": "choice",
+      "text": "検査目的",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                "code": "drop-down"
+              }
+            ]
+          }
+        },
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "選択肢は JED 用語集[基本情報] Ver5.0.3「検査目的」(上部内視鏡検査)の統一表記をそのまま転記したもの。表記を変えると JED の用語統一の意味が無くなるので、直したいときはテンプレートを改版する。"
+        }
+      ],
+      "answerOption": [
+        {
+          "valueCoding": {
+            "code": "01",
+            "display": "スクリーニング（検診）"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "02",
+            "display": "吐・下血"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "03",
+            "display": "吐・下血以外の有症状"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "04",
+            "display": "治療前精査"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "05",
+            "display": "治療後"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "06",
+            "display": "その他"
+          }
+        }
+      ]
+    },
+    {
+      "linkId": "treatment-purpose",
+      "type": "choice",
+      "text": "治療目的",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                "code": "check-box"
+              }
+            ]
+          }
+        },
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "治療オーダーのときに選ぶ。1 回の内視鏡で複数の治療を行うことがあるので複数選択にしてある。選択肢は JED「治療目的」(上部)の統一表記。診断のみの依頼では空のままでよい。"
+        }
+      ],
+      "answerOption": [
+        {
+          "valueCoding": {
+            "code": "01",
+            "display": "ポリペクトミー"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "02",
+            "display": "EMR"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "03",
+            "display": "ESD"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "04",
+            "display": "PDT"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "05",
+            "display": "腫瘍焼灼（APC含む）"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "06",
+            "display": "静脈瘤止血（予防含む）"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "07",
+            "display": "非静脈瘤止血（予防含む）"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "08",
+            "display": "拡張術、RIC"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "09",
+            "display": "ステント留置"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "10",
+            "display": "異物除去"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "11",
+            "display": "PEG、PTEG"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "12",
+            "display": "その他"
+          }
+        }
+      ]
+    },
+    {
+      "linkId": "purpose-note",
+      "type": "string",
+      "text": "補足",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "「その他」を選んだときの内容や、目的の詳細を自由文で。"
+        }
+      ]
+    }
+  ]
+}

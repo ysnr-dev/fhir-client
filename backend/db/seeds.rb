@@ -291,3 +291,38 @@ if File.exist?(physio_exam_types_csv)
 else
   puts "master_physio_exam_types: #{physio_exam_types_csv} not found, skipped"
 end
+
+# 内視鏡の検査種別マスタ。db/seed_data/endoscopy_exam_types.csv（ヘッダー無し,
+# exam_type_code,name,short_name,name_kana,display_order,jed_exam_category）から
+# 投入する。JED(Japan Endoscopy Database)の4区分(上部・小腸・下部・ERCP)を
+# 初期値とし、JED 対象外の気管支鏡も施設追加の例として含める。粒度は施設で
+# 変わるため、投入後は画面で直す前提。既存行は上書きしない（施設で直した内容を
+# 消さない）。
+endoscopy_exam_types_csv = Rails.root.join("db/seed_data/endoscopy_exam_types.csv")
+if File.exist?(endoscopy_exam_types_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(endoscopy_exam_types_csv) do |row|
+    code = row[0].to_s.strip
+    name = row[1].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::EndoscopyExamType.exists?(exam_type_code: code)
+      skipped += 1
+      next
+    end
+
+    Master::EndoscopyExamType.create!(
+      exam_type_code: code,
+      name: name,
+      short_name: row[2].to_s.strip.presence,
+      name_kana: row[3].to_s.strip.presence,
+      display_order: row[4].to_s.strip.presence&.to_i,
+      jed_exam_category: row[5].to_s.strip.presence
+    )
+    loaded += 1
+  end
+  puts "master_endoscopy_exam_types: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_endoscopy_exam_types: #{endoscopy_exam_types_csv} not found, skipped"
+end

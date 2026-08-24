@@ -27,6 +27,11 @@ import { PhysioExamTypePage } from "./pages/PhysioExamTypePage";
 import { PhysioItemPage } from "./pages/PhysioItemPage";
 import { PhysioItemLayoutPage } from "./pages/PhysioItemLayoutPage";
 import { PhysioDatasetPage } from "./pages/PhysioDatasetPage";
+import { EndoscopyWorklistPage } from "./pages/EndoscopyWorklistPage";
+import { EndoscopyExamTypePage } from "./pages/EndoscopyExamTypePage";
+import { EndoscopyItemPage } from "./pages/EndoscopyItemPage";
+import { EndoscopyItemLayoutPage } from "./pages/EndoscopyItemLayoutPage";
+import { EndoscopyDatasetPage } from "./pages/EndoscopyDatasetPage";
 import { MicroOrderItemPage } from "./pages/MicroOrderItemPage";
 import { MicroOrganismPage } from "./pages/MicroOrganismPage";
 import { MicroAntimicrobialPage } from "./pages/MicroAntimicrobialPage";
@@ -124,6 +129,9 @@ function App() {
             </Link>
             <Link to="/physio-worklist" className="row-menu__item">
               生理検査一覧
+            </Link>
+            <Link to="/endoscopy-worklist" className="row-menu__item">
+              内視鏡一覧
             </Link>
             <Link to="/rx-worklist" className="row-menu__item">
               処方一覧
@@ -252,6 +260,23 @@ function App() {
                 実施入力データセット
               </Link>
             </SubMenu>
+            {/* 内視鏡。生理検査と同じ構成。 */}
+            <SubMenu label="内視鏡">
+              <Link to="/endoscopy-items" className="row-menu__item">
+                内視鏡オーダー項目
+              </Link>
+              <Link to="/endoscopy-item-layouts" className="row-menu__item">
+                内視鏡オーダーレイアウト
+              </Link>
+              {/* 上部・下部などの検査分野。JED の4区分との対応を持てる。 */}
+              <Link to="/endoscopy-exam-types" className="row-menu__item">
+                検査種別
+              </Link>
+              {/* 実施入力の初期明細。検査項目に紐付けて使う。 */}
+              <Link to="/endoscopy-datasets" className="row-menu__item">
+                実施入力データセット
+              </Link>
+            </SubMenu>
           </HoverMenu>
           <HoverMenu label="管理">
             <Link to="/oauth-clients" className="row-menu__item">
@@ -345,6 +370,7 @@ function App() {
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
           <Route path="/physio-worklist" element={<PhysioWorklistPage />} />
+          <Route path="/endoscopy-worklist" element={<EndoscopyWorklistPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />
@@ -361,6 +387,10 @@ function App() {
           <Route path="/physio-item-layouts" element={<PhysioItemLayoutPage />} />
           <Route path="/physio-exam-types" element={<PhysioExamTypePage />} />
           <Route path="/physio-datasets" element={<PhysioDatasetPage />} />
+          <Route path="/endoscopy-items" element={<EndoscopyItemPage />} />
+          <Route path="/endoscopy-item-layouts" element={<EndoscopyItemLayoutPage />} />
+          <Route path="/endoscopy-exam-types" element={<EndoscopyExamTypePage />} />
+          <Route path="/endoscopy-datasets" element={<EndoscopyDatasetPage />} />
           <Route path="/micro-order-items" element={<MicroOrderItemPage />} />
           <Route path="/micro-specimen-types" element={<MicroSpecimenTypePage />} />
           <Route path="/micro-organisms" element={<MicroOrganismPage />} />

@@ -447,6 +447,8 @@ export function KartePage() {
     else if (item.kind === "micro-order") setPane({ kind: "micro-order-edit", srId: item.id });
     else if (item.kind === "rad-order") setPane({ kind: "rad-order-edit", srId: item.id });
     else if (item.kind === "physio-order") setPane({ kind: "physio-order-edit", srId: item.id });
+    else if (item.kind === "endoscopy-order")
+      setPane({ kind: "endoscopy-order-edit", srId: item.id });
     // バイタルの id は 1 回の測定を束ねる identifier。
     else if (item.kind === "vital") setPane({ kind: "vital-edit", entryId: item.id });
     else setPane({ kind: "qr-edit", qrId: item.id });
@@ -463,6 +465,8 @@ export function KartePage() {
       setPane({ kind: "rad-order-create", sourceSrId: item.id });
     } else if (item.kind === "physio-order") {
       setPane({ kind: "physio-order-create", sourceSrId: item.id });
+    } else if (item.kind === "endoscopy-order") {
+      setPane({ kind: "endoscopy-order-create", sourceSrId: item.id });
     }
   }
 
@@ -476,7 +480,8 @@ export function KartePage() {
             pane.kind === "lab-order-edit" ||
             pane.kind === "micro-order-edit" ||
             pane.kind === "rad-order-edit" ||
-            pane.kind === "physio-order-edit"
+            pane.kind === "physio-order-edit" ||
+            pane.kind === "endoscopy-order-edit"
           ? pane.srId
           : pane.kind === "qr-edit"
             ? pane.qrId

@@ -1,0 +1,142 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/endoscopy-purpose-cs-01",
+  "version": "1.0.0",
+  "name": "END_CS_PUR_01",
+  "title": "下部内視鏡 検査目的",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "内視鏡オーダー(下部内視鏡検査)の「検査目的」に貼るテンプレート。JED(Japan Endoscopy Database)用語集[基本情報]の「検査目的」の統一表記を選択肢に転記してある。記入しなかった項目は文面に出ない。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "25675b10-0ef3-4425-83c4-c1f8c3015cca",
+        "display": "検査"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "purpose",
+      "type": "choice",
+      "text": "検査目的",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+          "valueCodeableConcept": {
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                "code": "drop-down"
+              }
+            ]
+          }
+        },
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "選択肢は JED 用語集[基本情報] Ver5.0.3「検査目的」(下部内視鏡検査)の統一表記をそのまま転記したもの。表記を変えると JED の用語統一の意味が無くなるので、直したいときはテンプレートを改版する。"
+        }
+      ],
+      "answerOption": [
+        {
+          "valueCoding": {
+            "code": "01",
+            "display": "スクリーニング"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "02",
+            "display": "便潜血精査"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "03",
+            "display": "下血/血便"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "04",
+            "display": "下血/血便以外の有症状"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "05",
+            "display": "ポリープ経過観察"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "06",
+            "display": "治療前精査"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "07",
+            "display": "内視鏡切除"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "08",
+            "display": "内視鏡治療後サーベイランス"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "09",
+            "display": "大腸癌術後サーベイランス"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "10",
+            "display": "大腸癌化療・放射線治療後評価"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "11",
+            "display": "炎症性腸疾患サーベイランス"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "12",
+            "display": "術前(点墨)マーキング"
+          }
+        },
+        {
+          "valueCoding": {
+            "code": "13",
+            "display": "その他"
+          }
+        }
+      ]
+    },
+    {
+      "linkId": "purpose-note",
+      "type": "string",
+      "text": "補足",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "「その他」を選んだときの内容や、目的の詳細を自由文で。"
+        }
+      ]
+    }
+  ]
+}

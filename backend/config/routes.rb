@@ -143,6 +143,16 @@ Rails.application.routes.draw do
     # (master_medical_materials)そのもので、施設内の器材マスタは持たない。
     resources :physio_datasets, only: %i[index show create update destroy]
     resources :physio_dataset_details, only: %i[index create update destroy]
+    # 内視鏡オーダーのマスタ群。生理検査と同じ構成。検査種別は JED(Japan
+    # Endoscopy Database)の4区分に対応付けられる(jed_exam_category)。JED の
+    # 用語そのものはマスタに持たず、Questionnaire テンプレートの選択肢に転記する。
+    resources :endoscopy_exam_types, only: %i[index show create update destroy]
+    resources :endoscopy_items, only: %i[index show create update destroy]
+    resources :endoscopy_set_items, only: %i[index create update destroy]
+    resources :endoscopy_item_layouts, only: %i[index show create update destroy]
+    resources :endoscopy_item_layout_cells, only: %i[create update destroy]
+    resources :endoscopy_datasets, only: %i[index show create update destroy]
+    resources :endoscopy_dataset_details, only: %i[index create update destroy]
     # 特定器材(特定保険医療材料)と医科診療行為(手技料)。どちらもレセプト電算の
     # 配布マスタを全置換で取り込むだけで、手動メンテはしない。
     resources :medical_materials, only: %i[index] do
