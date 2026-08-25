@@ -2,6 +2,12 @@ import { useId, useMemo, useState } from "react";
 import type { Medicine } from "../api/masterClient";
 import { useMedicineSearch, useMedicineTypeOptions } from "../api/masterQueries";
 import { dosageFormLabel } from "../fhir/medicineHelpers";
+import {
+  DatasetPickModeTabs,
+  DatasetPickTable,
+  useDatasetPickMode,
+  type DatasetPickProps,
+} from "./DatasetPickList";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 
@@ -22,6 +28,11 @@ interface MedicineSearchModalProps {
    * 呼び出し側が入外区分・処方区分を見て渡す。
    */
   allowGeneric?: boolean;
+  /**
+   * 実施入力データセットに登録された候補から選ぶモード。渡すとモード切替が出て、
+   * 候補があるときはそちらから始まる。渡さなければ全件検索だけ。
+   */
+  datasetPick?: DatasetPickProps;
 }
 
 export function MedicineSearchModal({
@@ -31,7 +42,9 @@ export function MedicineSearchModal({
   contrastMedium,
   title = "医薬品を選択",
   allowGeneric = false,
+  datasetPick,
 }: MedicineSearchModalProps) {
+  const [mode, setMode] = useDatasetPickMode(datasetPick);
   const [name, setName] = useState("");
   // yakkoInput は入力欄の表示文字列、yakkoCode は候補確定時のみ更新する薬効分類番号。
   const [yakkoInput, setYakkoInput] = useState("");
@@ -90,116 +103,129 @@ export function MedicineSearchModal({
 
   return (
     <Modal title={title} onClose={onClose} className="modal--wide">
-      {allowGeneric && (
-        <div className="master-search__mode">
-          <span className="master-search__mode-legend">処方名</span>
-          <div className="master-search__mode-options">
-            <label className="master-search__mode-option">
+      {datasetPick && (
+        <DatasetPickModeTabs
+          mode={mode}
+          onChange={setMode}
+          count={datasetPick.options.length}
+        />
+      )}
+      {datasetPick && mode === "dataset" ? (
+        <DatasetPickTable {...datasetPick} />
+      ) : (
+        <>
+          {allowGeneric && (
+            <div className="master-search__mode">
+              <span className="master-search__mode-legend">処方名</span>
+              <div className="master-search__mode-options">
+                <label className="master-search__mode-option">
+                  <input
+                    type="radio"
+                    name="medicine-search-mode"
+                    checked={!generic}
+                    onChange={() => handleGenericChange(false)}
+                  />
+                  銘柄
+                </label>
+                <label className="master-search__mode-option">
+                  <input
+                    type="radio"
+                    name="medicine-search-mode"
+                    checked={generic}
+                    onChange={() => handleGenericChange(true)}
+                  />
+                  一般名
+                </label>
+              </div>
+            </div>
+          )}
+          <div className="master-search__form">
+            <label>
+              {generic ? "一般名" : "医薬品名"}
               <input
-                type="radio"
-                name="medicine-search-mode"
-                checked={!generic}
-                onChange={() => handleGenericChange(false)}
+                type="text"
+                value={name}
+                onChange={(e) => handleNameChange(e.target.value)}
+                placeholder="部分一致で検索(かな・全半角の違いは無視)"
               />
-              銘柄
             </label>
-            <label className="master-search__mode-option">
+            <label>
+              薬効分類
               <input
-                type="radio"
-                name="medicine-search-mode"
-                checked={generic}
-                onChange={() => handleGenericChange(true)}
+                type="text"
+                value={yakkoInput}
+                onChange={(e) => handleYakkoInputChange(e.target.value)}
+                list={yakkoListId}
+                placeholder="薬効名・番号で絞り込んで選択(例: 冠血管、2171)"
               />
-              一般名
+              <datalist id={yakkoListId}>
+                {yakkoOptions.data?.map((type) => (
+                  <option key={type.id} value={`${type.code} ${type.name ?? ""}`} />
+                ))}
+              </datalist>
             </label>
           </div>
-        </div>
+          <ErrorBanner error={error ?? yakkoOptions.error} />
+          <div className="master-search__table-wrap">
+            <table className="master-search__table">
+              <thead>
+                <tr>
+                  <th>{generic ? "一般名処方コード" : "医薬品コード"}</th>
+                  <th>名称</th>
+                  <th>単位</th>
+                  <th>剤形</th>
+                  <th>薬効分類</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {data?.items.map((medicine) => (
+                  <tr key={medicine.id}>
+                    <td>{medicine.medicine_code}</td>
+                    <td>{medicine.name}</td>
+                    <td>{medicine.unit_name}</td>
+                    <td>{dosageFormLabel(medicine.dosage_form)}</td>
+                    <td className="master-search__yakko">
+                      {medicine.yakko_name ?? medicine.yakko_code ?? ""}
+                    </td>
+                    <td className="master-search__actions">
+                      {medicine.yj_code && (
+                        <a
+                          className="master-search__medley-link"
+                          href={`https://medley.life/medicines/prescription/${medicine.yj_code}/`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          DI
+                        </a>
+                      )}
+                      <button type="button" onClick={() => onSelect(medicine)}>
+                        選択
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {data && data.items.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="master-search__empty">
+                      該当する医薬品がありません
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="master-search__pager">
+            <button type="button" onClick={() => setPage((p) => p - 1)} disabled={page <= 1 || isFetching}>
+              前へ
+            </button>
+            <span>{page} ページ目 (全 {data?.total ?? 0} 件)</span>
+            <button type="button" onClick={() => setPage((p) => p + 1)} disabled={!hasNext || isFetching}>
+              次へ
+            </button>
+          </div>
+        </>
       )}
-      <div className="master-search__form">
-        <label>
-          {generic ? "一般名" : "医薬品名"}
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => handleNameChange(e.target.value)}
-            placeholder="部分一致で検索(かな・全半角の違いは無視)"
-          />
-        </label>
-        <label>
-          薬効分類
-          <input
-            type="text"
-            value={yakkoInput}
-            onChange={(e) => handleYakkoInputChange(e.target.value)}
-            list={yakkoListId}
-            placeholder="薬効名・番号で絞り込んで選択(例: 冠血管、2171)"
-          />
-          <datalist id={yakkoListId}>
-            {yakkoOptions.data?.map((type) => (
-              <option key={type.id} value={`${type.code} ${type.name ?? ""}`} />
-            ))}
-          </datalist>
-        </label>
-      </div>
-      <ErrorBanner error={error ?? yakkoOptions.error} />
-      <div className="master-search__table-wrap">
-        <table className="master-search__table">
-          <thead>
-            <tr>
-              <th>{generic ? "一般名処方コード" : "医薬品コード"}</th>
-              <th>名称</th>
-              <th>単位</th>
-              <th>剤形</th>
-              <th>薬効分類</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.items.map((medicine) => (
-              <tr key={medicine.id}>
-                <td>{medicine.medicine_code}</td>
-                <td>{medicine.name}</td>
-                <td>{medicine.unit_name}</td>
-                <td>{dosageFormLabel(medicine.dosage_form)}</td>
-                <td className="master-search__yakko">
-                  {medicine.yakko_name ?? medicine.yakko_code ?? ""}
-                </td>
-                <td className="master-search__actions">
-                  {medicine.yj_code && (
-                    <a
-                      className="master-search__medley-link"
-                      href={`https://medley.life/medicines/prescription/${medicine.yj_code}/`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      DI
-                    </a>
-                  )}
-                  <button type="button" onClick={() => onSelect(medicine)}>
-                    選択
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {data && data.items.length === 0 && (
-              <tr>
-                <td colSpan={6} className="master-search__empty">
-                  該当する医薬品がありません
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div className="master-search__pager">
-        <button type="button" onClick={() => setPage((p) => p - 1)} disabled={page <= 1 || isFetching}>
-          前へ
-        </button>
-        <span>{page} ページ目 (全 {data?.total ?? 0} 件)</span>
-        <button type="button" onClick={() => setPage((p) => p + 1)} disabled={!hasNext || isFetching}>
-          次へ
-        </button>
-      </div>
     </Modal>
   );
 }

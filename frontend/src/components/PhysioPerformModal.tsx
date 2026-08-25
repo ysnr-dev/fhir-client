@@ -1,5 +1,11 @@
 import { useMemo, useState, type FormEvent } from "react";
-import type { Medicine, MedicalMaterial, MedicalProcedure } from "../api/masterClient";
+import type {
+  PhysioDatasetDetail,
+  PhysioDatasetDetailType,
+  Medicine,
+  MedicalMaterial,
+  MedicalProcedure,
+} from "../api/masterClient";
 import { usePhysioDatasetLinesForItems } from "../api/masterQueries";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useRegisterPhysioPerform, type PhysioWorklistRow } from "../api/queries";
@@ -9,11 +15,17 @@ import { physioOrderItems, type PhysioOrderItemLine } from "../fhir/physioOrderH
 import {
   PHYSIO_ROUTE_OPTIONS,
   buildPhysioPerformBundle,
+  physioRouteDisplay,
   type PhysioMedicineLine,
   type PhysioMaterialLine,
   type PhysioPerformFormValues,
   type PhysioProcedureLine,
 } from "../fhir/physioResultHelpers";
+import {
+  buildDatasetPick,
+  dedupeDatasetDetails,
+  type DatasetPickProps,
+} from "./DatasetPickList";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicalMaterialSearchModal } from "./MedicalMaterialSearchModal";
 import { MedicalProcedureSearchModal } from "./MedicalProcedureSearchModal";
@@ -130,10 +142,12 @@ export function PhysioPerformInputModal({
   const [comment, setComment] = useState(initialValues?.comment ?? "");
   const [adding, setAdding] = useState<Adding>(null);
 
+  const datasetDetails = useMemo(() => dedupeDatasetDetails(dataset.details), [dataset.details]);
+
   // データセット由来の初期行。読み込み後に一度だけ作り、以降は画面の編集を優先する
   // (差し替えると入力中の数量が戻ってしまう)。入力済みの内容を渡された場合は、
   // それを最初の編集内容として扱う(データセットで上書きしない)。
-  const initial = useMemo(() => initialLines(dataset.details), [dataset.details]);
+  const initial = useMemo(() => initialLines(datasetDetails), [datasetDetails]);
   const [edited, setEdited] = useState<Lines | null>(() =>
     initialValues
       ? {
@@ -147,6 +161,38 @@ export function PhysioPerformInputModal({
 
   function patch(next: Partial<Lines>) {
     setEdited({ ...lines, ...next });
+  }
+
+  /** データセットの明細を 1 行足す。3 種で同じ形なので 1 つにまとめる。 */
+  function addDatasetDetail(detail: PhysioDatasetDetail) {
+    const next: Lines = {
+      procedures: [...lines.procedures],
+      medicines: [...lines.medicines],
+      materials: [...lines.materials],
+    };
+    pushDetail(next, detail);
+    setEdited(next);
+    setAdding(null);
+  }
+
+  /**
+   * 検索モーダルに渡す「この検査のデータセットに登録されている候補」。初期値OFF で
+   * 登録した薬剤・器材は、これが無いと全件検索から名称で探すしかない。
+   */
+  function datasetPick(type: PhysioDatasetDetailType): DatasetPickProps {
+    return buildDatasetPick({
+      details: datasetDetails,
+      type,
+      addedCodes: new Set(
+        type === "procedure"
+          ? lines.procedures.map((line) => line.code)
+          : type === "medicine"
+            ? lines.medicines.map((line) => line.medicineCode)
+            : lines.materials.map((line) => line.code),
+      ),
+      routeDisplay: physioRouteDisplay,
+      onAdd: addDatasetDetail,
+    });
   }
 
   const values: PhysioPerformFormValues = {
@@ -386,6 +432,7 @@ export function PhysioPerformInputModal({
 
       {adding === "procedure" && (
         <MedicalProcedureSearchModal
+          datasetPick={datasetPick("procedure")}
           onSelect={(p: MedicalProcedure) => {
             setAdding(null);
             patch({
@@ -403,6 +450,7 @@ export function PhysioPerformInputModal({
       {adding === "medicine" && (
         <MedicineSearchModal
           title="薬剤を選択"
+          datasetPick={datasetPick("medicine")}
           onSelect={(m: Medicine) => {
             setAdding(null);
             patch({
@@ -424,6 +472,7 @@ export function PhysioPerformInputModal({
       )}
       {adding === "material" && (
         <MedicalMaterialSearchModal
+          datasetPick={datasetPick("material")}
           onSelect={(m: MedicalMaterial) => {
             setAdding(null);
             patch({
@@ -453,46 +502,39 @@ interface Lines {
 
 /**
  * 紐付くデータセットのうち「初期値」にしてある明細を初期行にする。初期値でない明細は
- * 出さない(使ったときだけ検索して足す)。
- *
- * 複数のデータセットに同じ手技・薬剤・器材が入っていることがある(負荷心電図の
- * セットと超音波のセットの両方に同じ電極が入っている等)ので、種別とコードで
- * 重複を落とす。
- * 数量は先に出てきた方を採る。
+ * 出さない(実施入力の「データセット」候補から選んだときだけ足す)。
  */
-function initialLines(details: ReturnType<typeof usePhysioDatasetLinesForItems>["details"]): Lines {
+function initialLines(details: PhysioDatasetDetail[]): Lines {
   const lines: Lines = { procedures: [], medicines: [], materials: [] };
-  const seen = new Set<string>();
-
   for (const detail of details) {
-    if (!detail.default_selected) continue;
-
-    const key = `${detail.detail_type}:${detail.code}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    const name = detail.resolved_name ?? detail.code;
-    if (detail.detail_type === "procedure") {
-      lines.procedures.push({ code: detail.code, name });
-    } else if (detail.detail_type === "medicine") {
-      lines.medicines.push({
-        medicineCode: detail.code,
-        name,
-        yjCode: detail.yj_code ?? "",
-        dose: detail.default_quantity ?? "",
-        unitName: detail.resolved_unit_name ?? "",
-        routeCode: detail.route_code ?? "",
-      });
-    } else {
-      lines.materials.push({
-        code: detail.code,
-        name,
-        quantity: detail.default_quantity ?? "",
-        unitName: detail.resolved_unit_name ?? "",
-      });
-    }
+    if (detail.default_selected) pushDetail(lines, detail);
   }
   return lines;
+}
+
+/** データセットの明細 1 件を、対応する種別の明細行として積む。 */
+function pushDetail(lines: Lines, detail: PhysioDatasetDetail) {
+  const name = detail.resolved_name ?? detail.code;
+
+  if (detail.detail_type === "procedure") {
+    lines.procedures.push({ code: detail.code, name });
+  } else if (detail.detail_type === "medicine") {
+    lines.medicines.push({
+      medicineCode: detail.code,
+      name,
+      yjCode: detail.yj_code ?? "",
+      dose: detail.default_quantity ?? "",
+      unitName: detail.resolved_unit_name ?? "",
+      routeCode: detail.route_code ?? "",
+    });
+  } else {
+    lines.materials.push({
+      code: detail.code,
+      name,
+      quantity: detail.default_quantity ?? "",
+      unitName: detail.resolved_unit_name ?? "",
+    });
+  }
 }
 
 function replaceAt<T>(list: T[], index: number, next: T): T[] {
