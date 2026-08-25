@@ -153,6 +153,14 @@ Rails.application.routes.draw do
     resources :endoscopy_item_layout_cells, only: %i[create update destroy]
     resources :endoscopy_datasets, only: %i[index show create update destroy]
     resources :endoscopy_dataset_details, only: %i[index create update destroy]
+    # 処置オーダーのマスタ群。生理検査と同じ構成だが、処置には検査種別に当たる
+    # 分類軸が無く、検査目的・特別指示の既定テンプレートも持たない。
+    resources :treatment_items, only: %i[index show create update destroy]
+    resources :treatment_set_items, only: %i[index create update destroy]
+    resources :treatment_item_layouts, only: %i[index show create update destroy]
+    resources :treatment_item_layout_cells, only: %i[create update destroy]
+    resources :treatment_datasets, only: %i[index show create update destroy]
+    resources :treatment_dataset_details, only: %i[index create update destroy]
     # 特定器材(特定保険医療材料)と医科診療行為(手技料)。どちらもレセプト電算の
     # 配布マスタを全置換で取り込むだけで、手動メンテはしない。
     resources :medical_materials, only: %i[index] do

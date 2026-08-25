@@ -27,6 +27,7 @@ const PLAIN_KINDS: KarteItemKind[] = [
   "rad-order",
   "physio-order",
   "endoscopy-order",
+  "treatment-order",
 ];
 
 export function KarteCategoryList({ filter, onSelect }: KarteCategoryListProps) {

@@ -32,6 +32,10 @@ import { EndoscopyExamTypePage } from "./pages/EndoscopyExamTypePage";
 import { EndoscopyItemPage } from "./pages/EndoscopyItemPage";
 import { EndoscopyItemLayoutPage } from "./pages/EndoscopyItemLayoutPage";
 import { EndoscopyDatasetPage } from "./pages/EndoscopyDatasetPage";
+import { TreatmentWorklistPage } from "./pages/TreatmentWorklistPage";
+import { TreatmentItemPage } from "./pages/TreatmentItemPage";
+import { TreatmentItemLayoutPage } from "./pages/TreatmentItemLayoutPage";
+import { TreatmentDatasetPage } from "./pages/TreatmentDatasetPage";
 import { MicroOrderItemPage } from "./pages/MicroOrderItemPage";
 import { MicroOrganismPage } from "./pages/MicroOrganismPage";
 import { MicroAntimicrobialPage } from "./pages/MicroAntimicrobialPage";
@@ -132,6 +136,9 @@ function App() {
             </Link>
             <Link to="/endoscopy-worklist" className="row-menu__item">
               内視鏡一覧
+            </Link>
+            <Link to="/treatment-worklist" className="row-menu__item">
+              処置一覧
             </Link>
             <Link to="/rx-worklist" className="row-menu__item">
               処方一覧
@@ -277,6 +284,19 @@ function App() {
                 実施入力データセット
               </Link>
             </SubMenu>
+            {/* 処置。生理検査と同じ構成だが、検査種別に当たる分類軸は持たない。 */}
+            <SubMenu label="処置">
+              <Link to="/treatment-items" className="row-menu__item">
+                処置オーダー項目
+              </Link>
+              <Link to="/treatment-item-layouts" className="row-menu__item">
+                処置オーダーレイアウト
+              </Link>
+              {/* 実施入力の初期明細。処置項目に紐付けて使う。 */}
+              <Link to="/treatment-datasets" className="row-menu__item">
+                実施入力データセット
+              </Link>
+            </SubMenu>
           </HoverMenu>
           <HoverMenu label="管理">
             <Link to="/oauth-clients" className="row-menu__item">
@@ -371,6 +391,7 @@ function App() {
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
           <Route path="/physio-worklist" element={<PhysioWorklistPage />} />
           <Route path="/endoscopy-worklist" element={<EndoscopyWorklistPage />} />
+          <Route path="/treatment-worklist" element={<TreatmentWorklistPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />
@@ -391,6 +412,9 @@ function App() {
           <Route path="/endoscopy-item-layouts" element={<EndoscopyItemLayoutPage />} />
           <Route path="/endoscopy-exam-types" element={<EndoscopyExamTypePage />} />
           <Route path="/endoscopy-datasets" element={<EndoscopyDatasetPage />} />
+          <Route path="/treatment-items" element={<TreatmentItemPage />} />
+          <Route path="/treatment-item-layouts" element={<TreatmentItemLayoutPage />} />
+          <Route path="/treatment-datasets" element={<TreatmentDatasetPage />} />
           <Route path="/micro-order-items" element={<MicroOrderItemPage />} />
           <Route path="/micro-specimen-types" element={<MicroSpecimenTypePage />} />
           <Route path="/micro-organisms" element={<MicroOrganismPage />} />

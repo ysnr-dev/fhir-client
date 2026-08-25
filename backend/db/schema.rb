@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_24_100300) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_25_000200) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -186,6 +186,23 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_24_100300) do
     t.index ["groupable"], name: "index_master_endoscopy_items_on_groupable"
     t.index ["item_code"], name: "index_master_endoscopy_items_on_item_code", unique: true
     t.index ["kind"], name: "index_master_endoscopy_items_on_kind"
+  end
+
+  create_table "master_endoscopy_jed_terms", force: :cascade do |t|
+    t.string "field_code", null: false
+    t.string "exam_category", default: "", null: false
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "name_english"
+    t.string "jed_version"
+    t.integer "display_order"
+    t.text "note"
+    t.string "source", default: "official", null: false
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["field_code", "exam_category", "code"], name: "index_endoscopy_jed_terms_on_field_category_code", unique: true
+    t.index ["search_name"], name: "index_master_endoscopy_jed_terms_on_search_name"
   end
 
   create_table "master_endoscopy_set_items", force: :cascade do |t|
@@ -1128,6 +1145,99 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_24_100300) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["category_id"], name: "index_master_schemas_on_category_id"
+  end
+
+  create_table "master_treatment_dataset_details", force: :cascade do |t|
+    t.string "dataset_code", null: false
+    t.string "detail_type", null: false
+    t.string "code", null: false
+    t.decimal "default_quantity", precision: 10, scale: 2
+    t.string "route_code"
+    t.integer "display_order"
+    t.boolean "default_selected", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["dataset_code", "detail_type", "code"], name: "index_treatment_dataset_details_on_dataset_type_code", unique: true
+    t.index ["dataset_code"], name: "index_master_treatment_dataset_details_on_dataset_code"
+  end
+
+  create_table "master_treatment_datasets", force: :cascade do |t|
+    t.string "dataset_code", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["dataset_code"], name: "index_master_treatment_datasets_on_dataset_code", unique: true
+  end
+
+  create_table "master_treatment_item_layout_cells", force: :cascade do |t|
+    t.integer "layout_id", null: false
+    t.integer "grid_row", null: false
+    t.integer "grid_column", null: false
+    t.string "cell_type", default: "item", null: false
+    t.string "item_code"
+    t.string "display_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["item_code"], name: "index_master_treatment_item_layout_cells_on_item_code"
+    t.index ["layout_id", "grid_row", "grid_column"], name: "index_treatment_layout_cells_on_layout_and_position", unique: true
+  end
+
+  create_table "master_treatment_item_layouts", force: :cascade do |t|
+    t.string "name", null: false
+    t.integer "row_count", default: 10, null: false
+    t.integer "column_count", default: 5, null: false
+    t.integer "display_order"
+    t.boolean "active", default: true, null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_master_treatment_item_layouts_on_name", unique: true
+  end
+
+  create_table "master_treatment_items", force: :cascade do |t|
+    t.string "item_code", null: false
+    t.string "name", null: false
+    t.string "short_name"
+    t.string "name_kana"
+    t.string "kind", default: "single", null: false
+    t.date "valid_from"
+    t.date "valid_to"
+    t.string "receipt_code"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_short_name"
+    t.string "search_kana"
+    t.boolean "groupable", default: true, null: false
+    t.string "dataset_code"
+    t.boolean "requires_perform_input", default: true, null: false
+    t.boolean "requires_appointment", default: false, null: false
+    t.integer "duration_minutes"
+    t.string "appointment_schedule_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["dataset_code"], name: "index_master_treatment_items_on_dataset_code"
+    t.index ["groupable"], name: "index_master_treatment_items_on_groupable"
+    t.index ["item_code"], name: "index_master_treatment_items_on_item_code", unique: true
+    t.index ["kind"], name: "index_master_treatment_items_on_kind"
+  end
+
+  create_table "master_treatment_set_items", force: :cascade do |t|
+    t.string "set_item_code", null: false
+    t.string "member_item_code", null: false
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["member_item_code"], name: "index_master_treatment_set_items_on_member_item_code"
+    t.index ["set_item_code", "member_item_code"], name: "index_treatment_set_items_on_set_and_member", unique: true
   end
 
   create_table "questionnaire_categories", force: :cascade do |t|

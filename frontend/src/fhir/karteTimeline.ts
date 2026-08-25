@@ -31,6 +31,17 @@ import {
   type PhysioTaskStatus,
 } from "./physioTaskHelpers";
 import {
+  isTreatmentServiceRequest,
+  treatmentOrderItemRequests,
+  treatmentOrderProblem,
+} from "./treatmentOrderHelpers";
+import { treatmentPerformsByOrderId, type TreatmentPerformDisplay } from "./treatmentResultHelpers";
+import {
+  treatmentTaskStatus,
+  treatmentTasksByOrderId,
+  type TreatmentTaskStatus,
+} from "./treatmentTaskHelpers";
+import {
   isEndoscopyServiceRequest,
   endoscopyOrderItemRequests,
   endoscopyOrderProblem,
@@ -69,6 +80,7 @@ export type KarteItemKind =
   | "rad-order"
   | "physio-order"
   | "endoscopy-order"
+  | "treatment-order"
   | "qr";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
@@ -81,6 +93,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   "rad-order": "放射線検査",
   "physio-order": "生理検査",
   "endoscopy-order": "内視鏡",
+  "treatment-order": "処置",
   qr: "テンプレート",
 };
 
@@ -163,6 +176,16 @@ export type KarteTimelineItem = KarteItemBase &
         status: EndoscopyTaskStatus;
         /** 実施記録。未実施なら空。取消 → 再実施で複数残ることがある。 */
         performs: EndoscopyPerformDisplay[];
+      }
+    // 処置も同型。違うのは明細が検査目的・特別指示(テンプレート回答)を持たないこと。
+    | {
+        kind: "treatment-order";
+        serviceRequest: fhir4.ServiceRequest;
+        itemRequests: fhir4.ServiceRequest[];
+        /** 部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
+        status: TreatmentTaskStatus;
+        /** 実施記録。未実施なら空。取消 → 再実施で複数残ることがある。 */
+        performs: TreatmentPerformDisplay[];
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
@@ -338,6 +361,8 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const physioPerformByOrderId = physioPerformsByOrderId(procedures, administrations);
   const endoscopyTaskByOrderId = endoscopyTasksByOrderId(tasks);
   const endoscopyPerformByOrderId = endoscopyPerformsByOrderId(procedures, administrations);
+  const treatmentTaskByOrderId = treatmentTasksByOrderId(tasks);
+  const treatmentPerformByOrderId = treatmentPerformsByOrderId(procedures, administrations);
 
   const medicationRequestsBySr = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
@@ -434,6 +459,20 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         performs:
           status === "completed"
             ? (endoscopyPerformByOrderId.get(serviceRequest.id ?? "") ?? [])
+            : [],
+      };
+    }
+    if (isTreatmentServiceRequest(serviceRequest)) {
+      const status = treatmentTaskStatus(treatmentTaskByOrderId.get(serviceRequest.id ?? ""));
+      return {
+        ...base,
+        kind: "treatment-order" as const,
+        label: KARTE_KIND_LABELS["treatment-order"],
+        itemRequests: treatmentOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+        status,
+        performs:
+          status === "completed"
+            ? (treatmentPerformByOrderId.get(serviceRequest.id ?? "") ?? [])
             : [],
       };
     }
@@ -610,6 +649,7 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "rad-order") return radOrderProblem(item.serviceRequest);
   if (item.kind === "physio-order") return physioOrderProblem(item.serviceRequest);
   if (item.kind === "endoscopy-order") return endoscopyOrderProblem(item.serviceRequest);
+  if (item.kind === "treatment-order") return treatmentOrderProblem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);
   }

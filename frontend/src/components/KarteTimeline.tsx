@@ -5,6 +5,7 @@ import {
   useDeleteMicroOrder,
   useDeleteRadOrder,
   useDeletePhysioOrder,
+  useDeleteTreatmentOrder,
   useDeleteEndoscopyOrder,
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
@@ -71,6 +72,15 @@ import {
 } from "../fhir/physioOrderHelpers";
 import type { PhysioPerformDisplay } from "../fhir/physioResultHelpers";
 import { physioTaskStatusDisplay } from "../fhir/physioTaskHelpers";
+import {
+  entryLabel as treatmentEntryLabel,
+  orderEntries as treatmentOrderEntries,
+  treatmentOrderItems,
+  treatmentOrderTime,
+  summarizeTreatmentOrder,
+} from "../fhir/treatmentOrderHelpers";
+import type { TreatmentPerformDisplay } from "../fhir/treatmentResultHelpers";
+import { treatmentTaskStatusDisplay } from "../fhir/treatmentTaskHelpers";
 import {
   entryLabel as endoscopyEntryLabel,
   orderEntries as endoscopyOrderEntries,
@@ -246,6 +256,7 @@ function KarteCard({
   const deleteRadOrder = useDeleteRadOrder();
   const deletePhysioOrder = useDeletePhysioOrder();
   const deleteEndoscopyOrder = useDeleteEndoscopyOrder();
+  const deleteTreatmentOrder = useDeleteTreatmentOrder();
   const deleteResponse = useDeleteQuestionnaireResponse();
   const deleteVital = useDeleteVitalEntry();
   // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
@@ -262,6 +273,7 @@ function KarteCard({
     deleteRadOrder.isPending ||
     deletePhysioOrder.isPending ||
     deleteEndoscopyOrder.isPending ||
+    deleteTreatmentOrder.isPending ||
     deleteResponse.isPending ||
     deleteVital.isPending;
   const deleteError =
@@ -272,6 +284,7 @@ function KarteCard({
     deleteRadOrder.error ??
     deletePhysioOrder.error ??
     deleteEndoscopyOrder.error ??
+    deleteTreatmentOrder.error ??
     deleteResponse.error ??
     deleteVital.error;
 
@@ -290,13 +303,14 @@ function KarteCard({
     else if (item.kind === "prescription" || item.kind === "injection") {
       deletePrescription.mutate(item.id, options);
     }
-    // 検体検査・細菌検査・放射線検査・生理検査は明細も ServiceRequest なので、
-    // 専用の削除でまとめて消す。
+    // 検体検査・細菌検査・放射線検査・生理検査・内視鏡・処置は明細も ServiceRequest
+    // なので、専用の削除でまとめて消す。
     else if (item.kind === "lab-order") deleteLabOrder.mutate(item.id, options);
     else if (item.kind === "micro-order") deleteMicroOrder.mutate(item.id, options);
     else if (item.kind === "rad-order") deleteRadOrder.mutate(item.id, options);
     else if (item.kind === "physio-order") deletePhysioOrder.mutate(item.id, options);
     else if (item.kind === "endoscopy-order") deleteEndoscopyOrder.mutate(item.id, options);
+    else if (item.kind === "treatment-order") deleteTreatmentOrder.mutate(item.id, options);
     // テンプレート回答は、生成した Observation も一緒に消すのでリソースごと渡す。
     else if (item.kind === "qr") deleteResponse.mutate(item.response, options);
     // バイタルは 1 回の測定が項目ごとの Observation に分かれるのでまとめて消す。
@@ -336,6 +350,7 @@ function KarteCard({
           {(item.kind === "rad-order" ||
             item.kind === "physio-order" ||
             item.kind === "endoscopy-order" ||
+            item.kind === "treatment-order" ||
             item.kind === "lab-order") && (
             <>
               <span className={`karte-card__status karte-card__status--${item.status}`}>
@@ -345,7 +360,9 @@ function KarteCard({
                     ? physioTaskStatusDisplay(item.status)
                     : item.kind === "endoscopy-order"
                       ? endoscopyTaskStatusDisplay(item.status)
-                      : labTaskStatusDisplay(item.status)}
+                      : item.kind === "treatment-order"
+                        ? treatmentTaskStatusDisplay(item.status)
+                        : labTaskStatusDisplay(item.status)}
               </span>
               {cardMeta(item) && <span aria-hidden="true">|</span>}
             </>
@@ -359,7 +376,8 @@ function KarteCard({
             item.kind === "micro-order" ||
             item.kind === "rad-order" ||
             item.kind === "physio-order" ||
-            item.kind === "endoscopy-order") && (
+            item.kind === "endoscopy-order" ||
+            item.kind === "treatment-order") && (
             <button
               type="button"
               className="karte-card__icon-button karte-card__icon-button--labeled"
@@ -529,8 +547,12 @@ function cardTitle(item: KarteTimelineItem): string {
     const summary = summarizeInjectionServiceRequest(item.serviceRequest);
     return [summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" | ");
   }
-  // 検体検査・細菌検査・放射線検査・生理検査は入外区分と、至急のときだけ至急区分を
-  // 並べる(通常はわざわざ出さない)。
+  // 処置は至急区分を持たないので入外区分だけ。
+  if (item.kind === "treatment-order") {
+    return summarizeTreatmentOrder(item.serviceRequest).settingDisplay;
+  }
+  // 検体検査・細菌検査・放射線検査・生理検査・内視鏡は入外区分と、至急のときだけ
+  // 至急区分を並べる(通常はわざわざ出さない)。
   if (
     item.kind === "lab-order" ||
     item.kind === "micro-order" ||
@@ -584,6 +606,11 @@ function cardMeta(item: KarteTimelineItem): string {
   if (item.kind === "endoscopy-order") {
     const examTime = endoscopyOrderTime(item.serviceRequest);
     return [examTime && `検査 ${examTime}`, requesterSummary].filter(Boolean).join(" | ");
+  }
+  // 処置も実施時刻を指定できる。同じ位置に「実施」と付けて添える。
+  if (item.kind === "treatment-order") {
+    const performTime = treatmentOrderTime(item.serviceRequest);
+    return [performTime && `実施 ${performTime}`, requesterSummary].filter(Boolean).join(" | ");
   }
   // 処方・注射は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。オーダー日は
   // 日付のみを入力する項目なので時刻は出さない(古い処方には時刻付きの authoredOn が
@@ -786,6 +813,16 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
   if (item.kind === "endoscopy-order") {
     return (
       <EndoscopyOrderCardBody
+        serviceRequest={item.serviceRequest}
+        itemRequests={item.itemRequests}
+        performs={item.performs}
+      />
+    );
+  }
+
+  if (item.kind === "treatment-order") {
+    return (
+      <TreatmentOrderCardBody
         serviceRequest={item.serviceRequest}
         itemRequests={item.itemRequests}
         performs={item.performs}
@@ -1167,6 +1204,106 @@ function PhysioPerformSection({ performs }: { performs: PhysioPerformDisplay[] }
             )}
           </div>
           {PHYSIO_PERFORM_ROWS.map(({ label, of }) => {
+            const values = of(perform);
+            if (values.length === 0) return null;
+            return (
+              <div className="karte-perform__row" key={label}>
+                <span className="karte-perform__label">{`${label}:`}</span>
+                <span className="karte-perform__values">
+                  {values.map((value, index) => (
+                    <span key={index}>{value}</span>
+                  ))}
+                </span>
+              </div>
+            );
+          })}
+          {perform.comment && <p className="karte-perform__note">{perform.comment}</p>}
+        </section>
+      ))}
+    </>
+  );
+}
+
+// 処置は GP(処置項目 1 つ、またはセット 1 つ)ごとに出す。生理検査と同じだが、
+// GP 単位の記入欄(依頼病名・検査目的・特別指示)を持たないので項目名だけを並べる。
+function TreatmentOrderCardBody({
+  serviceRequest,
+  itemRequests,
+  performs,
+}: {
+  serviceRequest: fhir4.ServiceRequest;
+  itemRequests: fhir4.ServiceRequest[];
+  performs: TreatmentPerformDisplay[];
+}) {
+  const entries = treatmentOrderEntries(treatmentOrderItems(serviceRequest, itemRequests));
+
+  // 処置項目が無いオーダーでも、実施情報が付いていれば出す。
+  if (entries.length === 0) {
+    return (
+      <>
+        <p className="karte-card__empty">処置項目がありません。</p>
+        <TreatmentPerformSection performs={performs} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      {entries.map((entry, index) => {
+        // セットは自身が処置ではないので、構成する処置を並べる。単項目はその 1 件。
+        const treatments = entry.members.length > 0 ? entry.members : [entry.item];
+        return (
+          <div className="karte-rp" key={entry.item.code || `gp-${index}`}>
+            <div className="karte-rp__head">
+              <span className="karte-rp__number">{`GP${index + 1}`}</span>
+              <span className="karte-order__group-name">{treatmentEntryLabel(entry)}</span>
+            </div>
+            <ul className="karte-rp__medicines">
+              {treatments.map((treatment) => (
+                <li key={treatment.code}>
+                  <span className="karte-rp__medicine-name">{treatment.name}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+      <TreatmentPerformSection performs={performs} />
+    </>
+  );
+}
+
+// 処置一覧から入力した実施情報。生理検査と同じ見せ方。
+const TREATMENT_PERFORM_ROWS: {
+  label: string;
+  of: (perform: TreatmentPerformDisplay) => string[];
+}[] = [
+  { label: "手技", of: (perform) => perform.procedures },
+  { label: "薬剤", of: (perform) => perform.medicines },
+  { label: "器材", of: (perform) => perform.materials },
+];
+
+function TreatmentPerformSection({ performs }: { performs: TreatmentPerformDisplay[] }) {
+  if (performs.length === 0) return null;
+
+  return (
+    <>
+      {performs.map((perform) => (
+        <section className="karte-perform" key={perform.id}>
+          <div className="karte-perform__head">
+            <span className="karte-perform__title">実施情報</span>
+            {perform.performedAt && (
+              <span className="karte-perform__meta">{perform.performedAt}</span>
+            )}
+            {perform.performerName && (
+              <span className="karte-perform__meta">{perform.performerName}</span>
+            )}
+            {/* 実施記録があるのに実施まで至っていない例外(薬剤だけ入れて中止など)。 */}
+            {perform.statusNote && (
+              <span className="karte-perform__status">{perform.statusNote}</span>
+            )}
+          </div>
+          {TREATMENT_PERFORM_ROWS.map(({ label, of }) => {
             const values = of(perform);
             if (values.length === 0) return null;
             return (

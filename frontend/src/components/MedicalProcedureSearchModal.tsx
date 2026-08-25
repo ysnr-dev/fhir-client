@@ -9,6 +9,7 @@ import { Modal } from "./Modal";
 //
 // 既定は点数表の章 E(画像診断)に絞る。全 9 万件から名称だけで引くと造影剤注入手技の
 // ような目的の手技に辿り着けないため。造影剤注入手技(E003)は E に入っている。
+// 章が変わる領域(処置は J)は defaultSection で渡す。
 
 // コード表用番号のアルファベット部 = 点数表の章。実施入力で使う範囲だけ並べる。
 const SECTIONS: { code: string; label: string }[] = [
@@ -22,12 +23,14 @@ const SECTIONS: { code: string; label: string }[] = [
 interface Props {
   onSelect: (procedure: MedicalProcedure) => void;
   onClose: () => void;
+  /** 最初に選んでおく点数表の章。省略時は E(画像診断)。 */
+  defaultSection?: string;
 }
 
-export function MedicalProcedureSearchModal({ onSelect, onClose }: Props) {
+export function MedicalProcedureSearchModal({ onSelect, onClose, defaultSection = "E" }: Props) {
   const [input, setInput] = useState("");
   const [name, setName] = useState("");
-  const [section, setSection] = useState("E");
+  const [section, setSection] = useState(defaultSection);
   const [page, setPage] = useState(1);
 
   const list = useMedicalProcedureSearch(
