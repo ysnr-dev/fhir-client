@@ -86,12 +86,6 @@ export function EndoscopyExamTypePage() {
         </div>
       </div>
 
-      <p className="dose-conversion__lead">
-        上部消化管内視鏡・下部消化管内視鏡などの検査分野です。内視鏡には JJ1017
-        のような標準コード体系が無いため、施設ごとにここで定義します。
-        内視鏡オーダー項目の分類・オーダーの絞り込み・内視鏡一覧の絞り込みに使われます。
-      </p>
-
       <form className="patient-search-form" onSubmit={handleSearch}>
         <label>
           名称・略称・カナ

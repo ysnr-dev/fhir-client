@@ -69,12 +69,6 @@ export function PhysioExamTypePage() {
         </div>
       </div>
 
-      <p className="dose-conversion__lead">
-        心電図・超音波検査などの検査分野です。生理検査には JJ1017
-        のような標準コード体系が無いため、施設ごとにここで定義します。
-        生理検査オーダー項目の分類・オーダーの絞り込み・生理検査一覧の絞り込みに使われます。
-      </p>
-
       <form className="patient-search-form" onSubmit={handleSearch}>
         <label>
           名称・略称・カナ
