@@ -1249,25 +1249,26 @@ function TreatmentOrderCardBody({
 
   return (
     <>
-      {entries.map((entry, index) => {
-        // セットは自身が処置ではないので、構成する処置を並べる。単項目はその 1 件。
-        const treatments = entry.members.length > 0 ? entry.members : [entry.item];
-        return (
-          <div className="karte-rp" key={entry.item.code || `gp-${index}`}>
-            <div className="karte-rp__head">
-              <span className="karte-rp__number">{`GP${index + 1}`}</span>
-              <span className="karte-order__group-name">{treatmentEntryLabel(entry)}</span>
-            </div>
+      {entries.map((entry, index) => (
+        // 処置は放射線・生理と違って見出しに分類軸が付かず項目名そのものなので、
+        // 単項目のときは明細を出すと同じ名前が 2 行並ぶ。セットのときだけ構成する
+        // 処置を並べる(オーダー画面のプレビューと同じ見せ方)。
+        <div className="karte-rp" key={entry.item.code || `gp-${index}`}>
+          <div className="karte-rp__head">
+            <span className="karte-rp__number">{`GP${index + 1}`}</span>
+            <span className="karte-order__group-name">{treatmentEntryLabel(entry)}</span>
+          </div>
+          {entry.members.length > 0 && (
             <ul className="karte-rp__medicines">
-              {treatments.map((treatment) => (
-                <li key={treatment.code}>
-                  <span className="karte-rp__medicine-name">{treatment.name}</span>
+              {entry.members.map((member) => (
+                <li key={member.code}>
+                  <span className="karte-rp__medicine-name">{member.name}</span>
                 </li>
               ))}
             </ul>
-          </div>
-        );
-      })}
+          )}
+        </div>
+      ))}
       <TreatmentPerformSection performs={performs} />
     </>
   );
