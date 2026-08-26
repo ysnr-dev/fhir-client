@@ -13,6 +13,7 @@ import {
   useKarteClinicalNotesInfinite,
   useKarteConditions,
   useKarteDayIndex,
+  useKartePendingOrders,
   useKartePrescriptionsInfinite,
   useKarteQuestionnaireResponsesInfinite,
   useKarteVitalsInfinite,
@@ -230,6 +231,8 @@ export function KartePage() {
   const notes = useKarteClinicalNotesInfinite(patientId, timelineProblemIds);
   const prescriptions = useKartePrescriptionsInfinite(patientId, timelineProblemIds);
   const responses = useKarteQuestionnaireResponsesInfinite(patientId, timelineProblemIds);
+  // 日付未定・未来の予定は authoredOn のページングに乗らないので別に先読みする。
+  const pendingOrders = useKartePendingOrders(patientId, timelineProblemIds);
   const vitals = useKarteVitalsInfinite(patientId, timelineProblemIds);
   // 診療日ペイン用の全診療日。タイムラインのページングとは別に日付だけを読み切る
   // ので、スクロール(読み込み状況)に関係なく過去の日付まで最初から並ぶ。
@@ -320,6 +323,7 @@ export function KartePage() {
       buildKarteTimeline({
         noteBundles: notes.data?.pages.map((page) => page.data) ?? [],
         prescriptionBundles: prescriptions.data?.pages.map((page) => page.data) ?? [],
+        pendingBundles: pendingOrders.bundles,
         responseBundles: responses.data?.pages.map((page) => page.data) ?? [],
         vitalBundles: vitals.data?.pages.map((page) => page.data) ?? [],
         noteHasNext: Boolean(notes.hasNextPage),
@@ -330,6 +334,7 @@ export function KartePage() {
     [
       notes.data,
       prescriptions.data,
+      pendingOrders.bundles,
       responses.data,
       vitals.data,
       notes.hasNextPage,
@@ -578,6 +583,7 @@ export function KartePage() {
         )}
         <ErrorBanner error={notes.error} />
         <ErrorBanner error={prescriptions.error} />
+        <ErrorBanner error={pendingOrders.error} />
         <ErrorBanner error={responses.error} />
         <ErrorBanner error={conditionsError} />
         <KarteTimeline

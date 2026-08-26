@@ -22,6 +22,7 @@ import {
 import { problemLabel, type ProblemRef } from "../fhir/conditionHelpers";
 import {
   KARTE_KIND_LABELS,
+  karteDayLabel,
   karteItemKey,
   itemProblem,
   referencesProblem,
@@ -213,7 +214,7 @@ export function KarteTimeline({
               key={dayKey}
               {...{ [KARTE_TARGET_ATTR]: dayKey }}
             >
-              <h3 className="karte-group__date">{group.day || "日付なし"}</h3>
+              <h3 className="karte-group__date">{karteDayLabel(group.day)}</h3>
               {group.items.map((item) => (
                 <KarteCard
                   key={karteItemKey(item)}
@@ -641,7 +642,7 @@ function cardMeta(item: KarteTimelineItem): string {
     const summary = summarizeSurgeryOrder(item.serviceRequest);
     const scheduled = summary.scheduledDate
       ? `予定 ${summary.scheduledDate} ${summary.scheduledTime}`.trim()
-      : "予定日未定";
+      : "日付未定";
     return [scheduled, summary.roomName, requesterSummary].filter(Boolean).join(" | ");
   }
   // 処方・注射は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。オーダー日は

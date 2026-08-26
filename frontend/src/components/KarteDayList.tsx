@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { karteItemKey, type KarteDayEntry } from "../fhir/karteTimeline";
+import { karteDayLabel, karteItemKey, type KarteDayEntry } from "../fhir/karteTimeline";
 
 // カルテ左端のペインの「診療日」表示。タイムラインの読み込み状況に関係なく、
 // データが存在する全診療日(インデックス)を並べる。展開するとその日の情報
@@ -44,7 +44,7 @@ export function KarteDayList({ entries, onSelect, onLoadDay, loadingKey }: Karte
                 type="button"
                 className="karte-daylist__toggle"
                 aria-expanded={isOpen}
-                aria-label={`${entry.day || "日付なし"} の情報を${isOpen ? "閉じる" : "開く"}`}
+                aria-label={`${karteDayLabel(entry.day)} の情報を${isOpen ? "閉じる" : "開く"}`}
                 onClick={() => {
                   // まだ読み込んでいない日は、展開と同時に読み込みを進めてもらう
                   // (項目はタイムラインの読み込みが追いつくと現れる)。
@@ -60,7 +60,7 @@ export function KarteDayList({ entries, onSelect, onLoadDay, loadingKey }: Karte
                 aria-busy={isLoading}
                 onClick={() => onSelect(day)}
               >
-                {entry.day || "日付なし"}
+                {karteDayLabel(entry.day)}
               </button>
             </div>
             {isOpen &&

@@ -4,12 +4,14 @@ import { Link } from "react-router-dom";
 import { useKarteLinkState } from "../karteReturn";
 import {
   useSelfDepartments,
+  useSurgeryUnscheduledList,
   useSurgeryWorklist,
   useUpdateSurgeryTaskStatus,
   type SurgeryWorklistRow,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { RowMenu } from "../components/RowMenu";
+import { SurgeryScheduleModal } from "../components/SurgeryScheduleModal";
 import {
   PatientKana,
   PatientProfileCells,
@@ -45,6 +47,11 @@ import {
 //
 // 「受付」は手術部が申込を受け付けて日程を確定した印。実施入力(第 2 段階)は
 // まだ無いので、進捗は 申込済 → 受付済 (→ 中止) だけ。
+//
+// タブは 2 つ。
+//   予定日別 … 予定手術日で 1 日ぶん。希望日を書いて申し込まれたものもここに出る。
+//   日程未定 … 予定手術日を入れずに申し込まれたもの(occurrence:missing)。
+//              手術部がここから日程を入れて確定する。
 
 interface Filters {
   setting: string;
@@ -62,10 +69,15 @@ const emptyFilters: Filters = {
   status: "",
 };
 
+type Tab = "scheduled" | "unscheduled";
+
 export function SurgeryWorklistPage() {
+  const [tab, setTab] = useState<Tab>("scheduled");
   // 予定手術日は必須。未選択にはできないので当日から始める。
   const [date, setDate] = useState(today);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+  // 日程を確定しようとしている申込。
+  const [scheduling, setScheduling] = useState<SurgeryWorklistRow | null>(null);
 
   // 列が多く、既定の幅では患者名や依頼科まで折り返すので、この画面だけ幅を広げる
   // (カルテと同じやり方)。
@@ -75,28 +87,32 @@ export function SurgeryWorklistPage() {
   }, []);
 
   const worklist = useSurgeryWorklist(date);
+  // 日程未定はタブを開いていなくても件数を出すので常に読む(件数は小さい)。
+  const unscheduled = useSurgeryUnscheduledList();
   const departments = useSelfDepartments();
   const updateStatus = useUpdateSurgeryTaskStatus();
 
+  const source = tab === "scheduled" ? worklist.data : unscheduled.data;
   const rows = useMemo(
-    () => (worklist.data?.rows ?? []).filter((row) => matchesFilters(row, filters)),
-    [worklist.data, filters],
+    () => (source?.rows ?? []).filter((row) => matchesFilters(row, filters, tab)),
+    [source, filters, tab],
   );
-  const total = worklist.data?.rows.length ?? 0;
+  const total = source?.rows.length ?? 0;
+  const unscheduledCount = unscheduled.data?.rows.length ?? 0;
 
   // 手術室・病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。名前はオーダーに
   // 焼き付けてあるのでマスタを引く必要がなく、その日に無い部屋を並べても仕方がない。
   const roomOptions = useMemo(
-    () => optionsFrom(worklist.data?.rows ?? [], (row) => summarizeSurgeryOrder(row.order)),
-    [worklist.data],
+    () => optionsFrom(source?.rows ?? [], (row) => summarizeSurgeryOrder(row.order)),
+    [source],
   );
   const wardOptions = useMemo(
     () =>
-      optionsFrom(worklist.data?.rows ?? [], (row) => {
+      optionsFrom(source?.rows ?? [], (row) => {
         const ward = wardOf(row.order);
         return { roomId: ward.wardId, roomName: ward.wardName };
       }),
-    [worklist.data],
+    [source],
   );
 
   function handleDateChange(value: string) {
@@ -110,8 +126,30 @@ export function SurgeryWorklistPage() {
         <h1>手術一覧</h1>
       </div>
 
+      <div className="order-select__tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "scheduled"}
+          className={tab === "scheduled" ? "order-select__tab is-active" : "order-select__tab"}
+          onClick={() => setTab("scheduled")}
+        >
+          予定日別
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "unscheduled"}
+          className={tab === "unscheduled" ? "order-select__tab is-active" : "order-select__tab"}
+          onClick={() => setTab("unscheduled")}
+        >
+          日程未定{unscheduledCount > 0 && ` (${unscheduledCount})`}
+        </button>
+      </div>
+
       <FilterForm
-        date={date}
+        // 日程未定タブは日付で絞らないので日付欄を出さない。
+        date={tab === "scheduled" ? date : null}
         filters={filters}
         rooms={roomOptions}
         wards={wardOptions}
@@ -121,16 +159,17 @@ export function SurgeryWorklistPage() {
       />
 
       <ErrorBanner error={worklist.error} />
+      <ErrorBanner error={unscheduled.error} />
       <ErrorBanner error={departments.error} />
       <ErrorBanner error={updateStatus.error} />
 
-      {worklist.data?.truncated && (
+      {source?.truncated && (
         <p className="error-banner__line error-banner__line--error" role="status">
-          この日のオーダーが多いため、一部のみ表示しています。
+          オーダーが多いため、一部のみ表示しています。
         </p>
       )}
 
-      {worklist.isLoading ? (
+      {(tab === "scheduled" ? worklist.isLoading : unscheduled.isLoading) ? (
         <p>読み込み中...</p>
       ) : (
         <>
@@ -139,7 +178,9 @@ export function SurgeryWorklistPage() {
               <thead>
                 <tr>
                   {/* 横に送っても「どの部屋で・いつ・誰の手術か」は残す(左 3 列を固定)。 */}
-                  <th className="rad-worklist__time sticky-table__fix-1">手術室 / 入室</th>
+                  <th className="rad-worklist__time sticky-table__fix-1">
+                    {tab === "scheduled" ? "手術室 / 入室" : "申込日"}
+                  </th>
                   <th className="sticky-table__fix-2">患者番号</th>
                   <th className="sticky-table__fix-3">患者氏名</th>
                   <PatientProfileHeadCells />
@@ -159,17 +200,21 @@ export function SurgeryWorklistPage() {
                   <WorklistRow
                     key={row.order.id}
                     row={row}
+                    tab={tab}
                     pending={updateStatus.isPending}
                     onChangeStatus={(status) =>
                       updateStatus.mutate({ order: row.order, task: row.task, status })
                     }
+                    onSchedule={() => setScheduling(row)}
                   />
                 ))}
                 {rows.length === 0 && (
                   <tr>
                     <td colSpan={14} className="master-search__empty">
                       {total === 0
-                        ? "この予定日の手術オーダーはありません"
+                        ? tab === "scheduled"
+                          ? "この予定日の手術オーダーはありません"
+                          : "日程未定の手術申込はありません"
                         : "絞り込みに該当する手術がありません"}
                     </td>
                   </tr>
@@ -179,6 +224,10 @@ export function SurgeryWorklistPage() {
           </div>
           <p className="order-select__muted rad-worklist__count">{rows.length} 件</p>
         </>
+      )}
+
+      {scheduling && (
+        <SurgeryScheduleModal row={scheduling} onClose={() => setScheduling(null)} />
       )}
     </div>
   );
@@ -199,10 +248,11 @@ function optionsFrom(
   );
 }
 
-function matchesFilters(row: SurgeryWorklistRow, filters: Filters): boolean {
+function matchesFilters(row: SurgeryWorklistRow, filters: Filters, tab: Tab): boolean {
   const summary = summarizeSurgeryOrder(row.order);
   if (filters.setting && summary.settingCode !== filters.setting) return false;
-  if (filters.roomId && summary.roomId !== filters.roomId) return false;
+  // 日程未定タブは手術室もステータス(全件が申込済)も絞る意味がないので見ない。
+  if (tab === "scheduled" && filters.roomId && summary.roomId !== filters.roomId) return false;
 
   // 病棟はオーダー登録時に焼き付けたもの。外来オーダーは病棟を持たないので、
   // 病棟で絞ると消える。
@@ -211,13 +261,16 @@ function matchesFilters(row: SurgeryWorklistRow, filters: Filters): boolean {
   const requester = prescriptionRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
 
-  if (filters.status && surgeryTaskStatus(row.task) !== filters.status) return false;
+  if (tab === "scheduled" && filters.status && surgeryTaskStatus(row.task) !== filters.status) {
+    return false;
+  }
 
   return true;
 }
 
 interface FilterFormProps {
-  date: string;
+  /** null なら日付で絞らないタブ(日程未定)。日付欄と手術室・ステータスを出さない。 */
+  date: string | null;
   filters: Filters;
   rooms: { id: string; name: string }[];
   wards: { id: string; name: string }[];
@@ -242,24 +295,33 @@ function FilterForm({
 
   return (
     <form className="patient-search-form" onSubmit={handleSubmit}>
-      <label>
-        予定手術日
-        <input type="date" value={date} required onChange={(e) => onDateChange(e.target.value)} />
-      </label>
-      <label>
-        手術室
-        <select
-          value={filters.roomId}
-          onChange={(e) => onChange({ ...filters, roomId: e.target.value })}
-        >
-          <option value="">すべて</option>
-          {rooms.map((room) => (
-            <option key={room.id} value={room.id}>
-              {room.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      {date !== null && (
+        <>
+          <label>
+            予定手術日
+            <input
+              type="date"
+              value={date}
+              required
+              onChange={(e) => onDateChange(e.target.value)}
+            />
+          </label>
+          <label>
+            手術室
+            <select
+              value={filters.roomId}
+              onChange={(e) => onChange({ ...filters, roomId: e.target.value })}
+            >
+              <option value="">すべて</option>
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
       <label>
         入外区分
         <select
@@ -302,20 +364,22 @@ function FilterForm({
           ))}
         </select>
       </label>
-      <label>
-        ステータス
-        <select
-          value={filters.status}
-          onChange={(e) => onChange({ ...filters, status: e.target.value })}
-        >
-          <option value="">すべて</option>
-          {SURGERY_TASK_STATUS_OPTIONS.map((option) => (
-            <option key={option.code} value={option.code}>
-              {option.display}
-            </option>
-          ))}
-        </select>
-      </label>
+      {date !== null && (
+        <label>
+          ステータス
+          <select
+            value={filters.status}
+            onChange={(e) => onChange({ ...filters, status: e.target.value })}
+          >
+            <option value="">すべて</option>
+            {SURGERY_TASK_STATUS_OPTIONS.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.display}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="patient-search-form__actions">
         <button type="button" onClick={() => onChange(emptyFilters)}>
           クリア
@@ -327,12 +391,16 @@ function FilterForm({
 
 function WorklistRow({
   row,
+  tab,
   pending,
   onChangeStatus,
+  onSchedule,
 }: {
   row: SurgeryWorklistRow;
+  tab: Tab;
   pending: boolean;
   onChangeStatus: (status: SurgeryTaskStatus) => void;
+  onSchedule: () => void;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const karteLinkState = useKarteLinkState();
@@ -349,13 +417,19 @@ function WorklistRow({
   return (
     <tr>
       <td className="rad-worklist__time sticky-table__fix-1">
-        <div>{summary.roomName || "部屋未定"}</div>
-        <div>
-          {summary.scheduledTime || "--:--"}
-          {summary.durationMinutes != null && (
-            <span className="order-select__muted">({summary.durationMinutes}分)</span>
-          )}
-        </div>
+        {tab === "scheduled" ? (
+          <>
+            <div>{summary.roomName || "部屋未定"}</div>
+            <div>
+              {summary.scheduledTime || "--:--"}
+              {summary.durationMinutes != null && (
+                <span className="order-select__muted">({summary.durationMinutes}分)</span>
+              )}
+            </div>
+          </>
+        ) : (
+          order.authoredOn?.slice(0, 10) || "-"
+        )}
       </td>
       <td className="sticky-table__fix-2">{patient?.identifier?.[0]?.value ?? "-"}</td>
       <td className="sticky-table__fix-3">
@@ -418,18 +492,24 @@ function WorklistRow({
         </span>
       </td>
       <td className="rad-worklist__actions sticky-table__fix-actions">
-        {actions
-          .filter((action) => !action.secondary)
-          .map((action) => (
-            <button
-              key={action.next}
-              type="button"
-              disabled={pending}
-              onClick={() => onChangeStatus(action.next)}
-            >
-              {action.label}
-            </button>
-          ))}
+        {tab === "unscheduled" ? (
+          <button type="button" disabled={pending} onClick={onSchedule}>
+            日程を確定
+          </button>
+        ) : (
+          actions
+            .filter((action) => !action.secondary)
+            .map((action) => (
+              <button
+                key={action.next}
+                type="button"
+                disabled={pending}
+                onClick={() => onChangeStatus(action.next)}
+              >
+                {action.label}
+              </button>
+            ))
+        )}
         {/* 訂正・取りやめは押し間違えると進捗が巻き戻るので、一段畳んで置く。
             一覧は横スクロールできるよう overflow を持つため、メニューは
             escapesClipping で領域の外に出す(でないと縁で切れる)。 */}

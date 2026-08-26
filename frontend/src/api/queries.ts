@@ -15,6 +15,8 @@ import {
 } from "../fhir/vitalHelpers";
 import { buildClinicalNoteDeleteBundle } from "../fhir/clinicalNoteHelpers";
 import { LOCATION_TYPE_CODES } from "../fhir/locationHelpers";
+import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeline";
+import { today } from "../lib/dates";
 import {
   MAX_BED_COUNT,
   PHYSICAL_TYPE_SYSTEM,
@@ -156,9 +158,12 @@ import {
 import {
   SURGERY_ORDER_TYPE,
   buildSurgeryOrderDeleteBundle,
+  buildSurgeryScheduleBundle,
+  buildSurgeryScheduleServiceRequest,
   isSurgeryServiceRequest,
   summarizeSurgeryOrder,
   surgeryOrderItemRequests,
+  type SurgeryScheduleValues,
 } from "../fhir/surgeryOrderHelpers";
 import {
   buildSurgeryTaskUpdate,
@@ -4195,6 +4200,29 @@ export function useDeleteQuestionnaireResponse() {
 // (登録後にタイムラインが自動で再取得される)。
 const KARTE_PAGE = 20;
 
+// 先読み(日付未定・未来の予定)の取得上限。どちらも未処理の仕事なので溜まらない前提。
+const KARTE_PENDING_COUNT = 100;
+
+/**
+ * カードを実施予定日(occurrence)の位置に出すオーダー種別。診療日ペインの日付も
+ * ここに挙げた種別だけ occurrence から数える(karteTimeline の orderCardDay と対)。
+ *
+ * 細菌検査は occurrence を書いていないので入れない(authoredOn で数える)。
+ * 処方・注射はそもそも実施予定日の概念を持たない。
+ */
+const OCCURRENCE_ORDER_TYPES = [
+  LAB_ORDER_TYPE.code,
+  RAD_ORDER_TYPE.code,
+  PHYSIO_ORDER_TYPE.code,
+  ENDOSCOPY_ORDER_TYPE.code,
+  TREATMENT_ORDER_TYPE.code,
+  SURGERY_ORDER_TYPE.code,
+];
+
+const OCCURRENCE_ORDER_TYPE_TOKENS = OCCURRENCE_ORDER_TYPES.map(
+  (code) => `${ORDER_TYPE_SYSTEM}|${code}`,
+).join(",");
+
 // _include / _revinclude の関連リソースも entry に混ざるため、次ページのオフセットは
 // entry 数ではなく _count 固定で進める。
 function karteNextOffset(bundle: fhir4.Bundle | undefined, lastOffset: number): number | undefined {
@@ -4285,6 +4313,68 @@ export function useKartePrescriptionsInfinite(
     getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
     enabled: Boolean(patientId) && problemIds !== undefined,
   });
+}
+
+/**
+ * 先読みするオーダー。カルテのオーダーは authoredOn の降順でページングするので、
+ * 「日付未定のもの」と「実施予定日が先のもの」は初期表示に出てこない
+ * (申込が古いほど埋もれる)。種別で切ると「手術は件数が少ないから全件取れる」という
+ * 種別依存の理屈になるので、**状態で切って**全件読む。どちらも件数は自然に小さい
+ * (未定は未処理の仕事なので溜まらず、未来の予定も有限)。
+ *
+ * ページングの結果と重複しうるが、タイムライン側が ServiceRequest.id で寄せる。
+ */
+export function useKartePendingOrders(
+  patientId: string | undefined,
+  problemIds: KarteProblemFilter = null,
+) {
+  const enabled = Boolean(patientId) && problemIds !== undefined;
+
+  function baseParams(): URLSearchParams {
+    const params = new URLSearchParams();
+    params.set("patient", `Patient/${patientId}`);
+    if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
+    // カードになるのはヘッダだけ(明細は下の :iterate で添えてもらう)。
+    params.set("based-on:missing", "true");
+    params.set("_count", String(KARTE_PENDING_COUNT));
+    params.set("_include", "ServiceRequest:subject");
+    params.append("_revinclude", "MedicationRequest:based-on");
+    params.append("_revinclude", "DiagnosticReport:based-on");
+    params.append("_revinclude", "Task:focus");
+    params.append("_revinclude", "Procedure:based-on");
+    params.append("_revinclude:iterate", "ServiceRequest:based-on");
+    params.append("_revinclude:iterate", "MedicationAdministration:part-of");
+    params.append("_revinclude:iterate", "Observation:part-of");
+    return params;
+  }
+
+  const unscheduled = useQuery({
+    queryKey: ["ServiceRequest", "search", "karte-unscheduled", patientId, problemQueryKey(problemIds)],
+    queryFn: () => {
+      const params = baseParams();
+      params.set("occurrence:missing", "true");
+      return searchResource<fhir4.Resource>("ServiceRequest", params);
+    },
+    enabled,
+  });
+
+  const upcoming = useQuery({
+    queryKey: ["ServiceRequest", "search", "karte-upcoming", patientId, problemQueryKey(problemIds)],
+    queryFn: () => {
+      const params = baseParams();
+      // 今日より後の実施予定。今日ぶんは authoredOn のページング初回で拾える。
+      params.set("occurrence", `gt${today()}`);
+      return searchResource<fhir4.Resource>("ServiceRequest", params);
+    },
+    enabled,
+  });
+
+  const bundles = useMemo(
+    () => [unscheduled.data?.data, upcoming.data?.data].filter((b): b is fhir4.Bundle => Boolean(b)),
+    [unscheduled.data, upcoming.data],
+  );
+
+  return { bundles, error: unscheduled.error ?? upcoming.error ?? null };
 }
 
 export function useKarteQuestionnaireResponsesInfinite(
@@ -4393,10 +4483,33 @@ export function useKarteDayIndex(
           if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
           // タイムラインと同じく、オーダーのヘッダだけを数える(明細を含めない)。
           params.set("based-on:missing", "true");
+          // 実施予定日でカードを出す種別は下の occurrence ソースが数えるので、ここでは外す
+          // (両方で数えるとカードの無い日が診療日ペインに並ぶ)。
+          params.set("category:not", OCCURRENCE_ORDER_TYPE_TOKENS);
           return params;
         })(),
         "authoredon",
       ),
+    enabled,
+  });
+
+  // 実施予定日でカードを出すオーダー。日付未定(undated)はタイムラインと同じ仮想日に写す。
+  const scheduledOrders = useQuery({
+    queryKey: ["ServiceRequest", "search", "karte-days-occurrence", patientId, problemKey],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
+      params.set("based-on:missing", "true");
+      params.set("category", OCCURRENCE_ORDER_TYPE_TOKENS);
+      const { dates, hasUndated } = await fetchDistinctDates(
+        "ServiceRequest",
+        params,
+        "occurrence",
+        { limit: 1000 },
+      );
+      return hasUndated ? [...dates, KARTE_UNSCHEDULED_DAY] : dates;
+    },
     enabled,
   });
 
@@ -4434,14 +4547,20 @@ export function useKarteDayIndex(
     enabled,
   });
 
-  const queries = [notes, prescriptions, responses, vitals];
+  const queries = [notes, prescriptions, scheduledOrders, responses, vitals];
   const days = useMemo(() => {
     const merged = new Set<string>();
-    for (const list of [notes.data, prescriptions.data, responses.data, vitals.data]) {
+    for (const list of [
+      notes.data,
+      prescriptions.data,
+      scheduledOrders.data,
+      responses.data,
+      vitals.data,
+    ]) {
       for (const day of list ?? []) merged.add(day);
     }
-    return Array.from(merged).sort((a, b) => b.localeCompare(a));
-  }, [notes.data, prescriptions.data, responses.data, vitals.data]);
+    return Array.from(merged).sort(compareKarteDaysDesc);
+  }, [notes.data, prescriptions.data, scheduledOrders.data, responses.data, vitals.data]);
 
   return {
     days,
@@ -5710,6 +5829,110 @@ async function fetchSurgeryWorklist(date: string): Promise<SurgeryWorklistResult
 function surgeryWorklistSortKey(row: SurgeryWorklistRow): string {
   const summary = summarizeSurgeryOrder(row.order);
   return `${summary.roomName || "〜"}|${summary.scheduledTime || "99:99"}`;
+}
+
+/**
+ * 日程未定の手術申込。予定手術日を入れずに申し込まれたもの(= 手術部が枠を割り当てる
+ * のを待っている申込)を集める。日付で絞れないので `occurrence:missing` で引く。
+ *
+ * 希望日を書いた申込は occurrence を持つのでここには出ない(予定日別タブのその日に
+ * 「申込済」として出る)。手術部の待ち行列が 2 か所に分かれるが、1 か所に集めるには
+ * 希望日と確定日を別要素で持つか登録時から Task を作る必要があり、どちらも高くつく。
+ */
+export function useSurgeryUnscheduledList() {
+  return useQuery({
+    queryKey: ["ServiceRequest", "surgery-unscheduled"],
+    queryFn: () => fetchSurgeryUnscheduled(),
+    placeholderData: keepPreviousData,
+  });
+}
+
+async function fetchSurgeryUnscheduled(): Promise<SurgeryWorklistResult> {
+  const orders: fhir4.ServiceRequest[] = [];
+  const items: fhir4.ServiceRequest[] = [];
+
+  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
+    (page) => {
+      const params = new URLSearchParams();
+      params.set("category", `${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`);
+      params.set("occurrence:missing", "true");
+      params.set("based-on:missing", "true");
+      params.set("_count", String(WORKLIST_PAGE));
+      params.set("_offset", String(page * WORKLIST_PAGE));
+      params.set("_include", "ServiceRequest:subject");
+      params.set("_revinclude:iterate", "ServiceRequest:based-on");
+      params.set("_revinclude", "Task:focus");
+      return params;
+    },
+    (resource) => {
+      if (resource.resourceType !== "ServiceRequest") return false;
+      const request = resource as fhir4.ServiceRequest;
+      if (isSurgeryServiceRequest(request) && !request.basedOn?.length) {
+        orders.push(request);
+        return true;
+      }
+      items.push(request);
+      return false;
+    },
+  );
+
+  const taskByOrderId = surgeryTasksByOrderId(tasks);
+
+  const rows = orders.map((order) => ({
+    order,
+    itemRequests: surgeryOrderItemRequests(items, order.id ?? ""),
+    patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+    task: taskByOrderId.get(order.id ?? ""),
+  }));
+
+  // 緊急を先頭に、あとは申込日の古い順(待たせている順)。
+  rows.sort((a, b) => {
+    const urgency = surgeryUrgencyRank(a.order) - surgeryUrgencyRank(b.order);
+    if (urgency !== 0) return urgency;
+    return (a.order.authoredOn ?? "").localeCompare(b.order.authoredOn ?? "");
+  });
+
+  return { rows, truncated };
+}
+
+/** 緊急 → 準緊急 → 予定 の順に小さい値を返す。 */
+function surgeryUrgencyRank(order: fhir4.ServiceRequest): number {
+  if (order.priority === "stat") return 0;
+  if (order.priority === "urgent") return 1;
+  return 2;
+}
+
+/**
+ * 日程の確定。オーダーの日程と Task(受付済 = 日程確定)を 1 transaction で書く。
+ * 片方だけ通ると「日程は入ったが未受付」「受付済だが日程未定」になってしまう。
+ */
+export function useConfirmSurgerySchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      order,
+      task,
+      values,
+    }: {
+      order: fhir4.ServiceRequest;
+      task: fhir4.Task | undefined;
+      values: SurgeryScheduleValues;
+    }) => {
+      const scheduled = buildSurgeryScheduleServiceRequest(order, values);
+      return postBundle(
+        buildSurgeryScheduleBundle(
+          order,
+          values,
+          // Task には確定後のオーダー(priority・requester)を渡す。
+          taskBundleEntry(buildSurgeryTaskUpdate(task, scheduled, "accepted")),
+        ),
+      );
+    },
+    onSuccess: () => {
+      // 予定日が入ると予定日別タブにも移るので、手術関連はまとめて読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+    },
+  });
 }
 
 /** 予定手術日 1 日ぶんの手術オーダー。日付が未選択の間は読みに行かない。 */

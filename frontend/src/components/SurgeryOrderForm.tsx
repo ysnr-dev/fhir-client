@@ -209,8 +209,11 @@ export function SurgeryOrderForm({
       setValidationError("術式を 1 つ以上選択してください。");
       return;
     }
-    if (!values.scheduledDate) {
-      setValidationError("予定手術日を入力してください。");
+    // 予定手術日は任意(希望日)。日程は手術部が確定するので、未定のまま申し込める。
+    // 時刻だけ入れて日付が無いのは矛盾するのでここで弾く(所要時間・手術室は
+    // 日付が無くても「希望」として意味があるので許す)。
+    if (!values.scheduledDate && values.scheduledTime) {
+      setValidationError("入室予定時刻を入れる場合は予定手術日も入力してください。");
       return;
     }
     if (!values.staff.some((line) => line.role === "surgeon")) {
@@ -323,8 +326,11 @@ export function SurgeryOrderForm({
             同じ部屋・同じ時間帯の重なりは手術一覧の並びで目視する。 */}
         <fieldset>
           <legend>日程・手術室</legend>
+          <p className="order-select__muted surgery-schedule-note">
+            未定のまま申し込めます(手術部が日程を確定します)。
+          </p>
           <label>
-            予定手術日
+            予定手術日(希望)
             <input
               type="date"
               value={values.scheduledDate}

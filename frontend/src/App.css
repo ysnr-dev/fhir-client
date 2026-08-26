@@ -8273,6 +8273,12 @@ body.page-wide #root {
   gap: 8px;
 }
 
+/* 日程・手術室の補足。fieldset は flex なので行を占有させる。 */
+.surgery-schedule-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 /* 術式カードの見出し行に置く操作(↑・ゴミ箱)。名称・K コードの後、右端に寄せる。 */
 .surgery-gp__actions {
   display: inline-flex;

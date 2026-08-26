@@ -750,6 +750,81 @@ export function buildSurgeryOrderUpdateBundle(
   ]);
 }
 
+/** 手術部が確定する日程。日程未定の申込に後から入れる。 */
+export interface SurgeryScheduleValues {
+  /** 予定手術日("YYYY-MM-DD")。必須。 */
+  scheduledDate: string;
+  /** 入室予定時刻("HH:mm")。任意。 */
+  scheduledTime: string;
+  /** 予定所要時間(分)。任意。 */
+  durationMinutes: string;
+  roomId: string;
+  roomName: string;
+}
+
+/**
+ * 日程の確定。オーダーヘッダの予定日時・所要時間・手術室だけを差し替える。
+ *
+ * 申込の中身(術式・スタッフ・麻酔・準備)には触らないので、フォームの値を組み立て
+ * 直さず現物の ServiceRequest を持ち回る。他の拡張を落とさないよう、差し替える 2 本
+ * (所要時間・手術室)以外の extension はそのまま残す。
+ */
+export function buildSurgeryScheduleServiceRequest(
+  order: fhir4.ServiceRequest,
+  values: SurgeryScheduleValues,
+): fhir4.ServiceRequest {
+  const next: fhir4.ServiceRequest = { ...order };
+
+  next.occurrenceDateTime = values.scheduledTime
+    ? toFhirDateTime(`${values.scheduledDate}T${values.scheduledTime}`)
+    : values.scheduledDate;
+
+  const rest = (order.extension ?? []).filter(
+    (e) => e.url !== DURATION_EXT_URL && e.url !== ROOM_EXT_URL,
+  );
+  const added: fhir4.Extension[] = [];
+
+  const minutes = Number(values.durationMinutes);
+  if (values.durationMinutes.trim() && Number.isFinite(minutes) && minutes > 0) {
+    added.push({ url: DURATION_EXT_URL, valueQuantity: { value: minutes, unit: "分" } });
+  }
+  if (values.roomId) {
+    added.push({
+      url: ROOM_EXT_URL,
+      valueReference: {
+        reference: `Location/${values.roomId}`,
+        ...(values.roomName ? { display: values.roomName } : {}),
+      },
+    });
+  }
+
+  const extension = [...rest, ...added];
+  if (extension.length > 0) next.extension = extension;
+  else delete next.extension;
+
+  return next;
+}
+
+/**
+ * 日程の確定を 1 つの transaction にする。オーダーの日程と進捗(受付済 = 日程確定)は
+ * 必ず一緒に動かす(片方だけ通ると「日程は入ったが未受付」「受付済だが日程未定」に
+ * なってしまう)。Task のエントリは呼び出し側が組み立てて渡す。
+ */
+export function buildSurgeryScheduleBundle(
+  order: fhir4.ServiceRequest,
+  values: SurgeryScheduleValues,
+  taskEntry: fhir4.BundleEntry,
+): fhir4.Bundle {
+  return transactionBundle([
+    {
+      fullUrl: `ServiceRequest/${order.id}`,
+      resource: buildSurgeryScheduleServiceRequest(order, values),
+      request: { method: "PUT", url: `ServiceRequest/${order.id}` },
+    },
+    taskEntry,
+  ]);
+}
+
 /** オーダーとその明細をまとめて消す Bundle。 */
 export function buildSurgeryOrderDeleteBundle(
   serviceRequestId: string,

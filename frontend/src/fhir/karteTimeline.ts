@@ -9,7 +9,8 @@ import {
 } from "./labOrderHelpers";
 import { labTaskStatus, labTasksByOrderId, type LabTaskStatus } from "./labTaskHelpers";
 import { isMicroServiceRequest, microOrderItemRequests, microOrderProblem } from "./microOrderHelpers";
-import { prescriptionProblem } from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM, prescriptionProblem } from "./prescriptionHelpers";
+import { categoryCoding } from "./shared";
 import {
   isRadServiceRequest,
   radOrderItemRequests,
@@ -42,6 +43,7 @@ import {
   type TreatmentTaskStatus,
 } from "./treatmentTaskHelpers";
 import {
+  SURGERY_ORDER_TYPE,
   isSurgeryServiceRequest,
   surgeryOrderItemRequests,
   surgeryOrderProblem,
@@ -218,6 +220,14 @@ export interface KarteDayGroup {
 export interface KarteTimelineInput {
   noteBundles: fhir4.Bundle[];
   prescriptionBundles: fhir4.Bundle[];
+  /**
+   * 先読みしたオーダー(日付未定 / 実施予定日が未来)。オーダーのページングは
+   * authoredOn の降順なので、日付未定のものや予定日が先のものは初期表示に出てこない。
+   * 件数で切らずに全件読めるよう、状態で切った別クエリの結果をここで受ける
+   * (未定は未処理の仕事なので溜まらず、未来の予定も有限)。
+   * ページング側と同じオーダーが入りうるが、id で寄せるので二重には出ない。
+   */
+  pendingBundles: fhir4.Bundle[];
   responseBundles: fhir4.Bundle[];
   vitalBundles: fhir4.Bundle[];
   noteHasNext: boolean;
@@ -277,6 +287,55 @@ function dayOf(dateTime: string | undefined): string {
   return dateTime?.slice(0, 10) ?? "";
 }
 
+// ---- 日付未定 ----
+//
+// 「実施予定日がまだ決まっていない」オーダーを置く仮想の診療日。時系列の最上部に出す。
+//
+// 既にある「日付なし」(day = "")とは別物。あちらは日付を持たないリソース(データ不備)を
+// 最下部に集めるもので、こちらは予定が未定という正常な状態を指す。混ぜると
+// 「入れ忘れ」と「これから決める」が同じ見た目になってしまう。
+export const KARTE_UNSCHEDULED_DAY = "unscheduled";
+
+/**
+ * 日付未定を許すオーダー種別(CodeSystem/order-type のコード)。
+ *
+ * ここに無い種別は occurrence が無ければ authoredOn の日に出す。細菌検査のように
+ * occurrence をそもそも書いていない種別や、実施予定日の概念が無い処方・注射が
+ * 「日付未定」に落ちてしまわないようにするための明示リスト。
+ * 他の種別で未定を許したくなったら、フォームの必須検証を外してここに足す。
+ */
+const UNSCHEDULABLE_ORDER_TYPES = new Set<string>([SURGERY_ORDER_TYPE.code]);
+
+/** 診療日の降順比較。日付未定は常に先頭。localeCompare の照合順に依存させない。 */
+export function compareKarteDaysDesc(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a === KARTE_UNSCHEDULED_DAY) return -1;
+  if (b === KARTE_UNSCHEDULED_DAY) return 1;
+  return b.localeCompare(a);
+}
+
+/** 診療日の表示名。タイムラインの見出しと診療日ペインで共用する。 */
+export function karteDayLabel(day: string): string {
+  if (day === KARTE_UNSCHEDULED_DAY) return "日付未定";
+  return day || "日付なし";
+}
+
+/**
+ * オーダーのカードを置く診療日。
+ *
+ * 実施予定日(occurrence)があればその日。無ければ、未定を許す種別なら「日付未定」、
+ * それ以外は従来どおりオーダー日(authoredOn)。
+ *
+ * 放射線・生理・内視鏡・処置・検体検査は occurrence に実施日と同じ値を入れているので、
+ * この規則にしてもカードは動かない。手術だけが申込日から予定手術日へ移る。
+ */
+function orderCardDay(sr: fhir4.ServiceRequest): string {
+  if (sr.occurrenceDateTime) return dayOf(sr.occurrenceDateTime);
+  const orderType = categoryCoding(sr, ORDER_TYPE_SYSTEM)?.code ?? "";
+  if (UNSCHEDULABLE_ORDER_TYPES.has(orderType)) return KARTE_UNSCHEDULED_DAY;
+  return dayOf(sr.authoredOn);
+}
+
 // ロード済みの中で最も古い診療日。まだ 1 件も無ければ undefined。
 function oldestDayOfDates(days: string[]): string | undefined {
   let oldest: string | undefined;
@@ -308,7 +367,12 @@ function safeCutoff(
 
 export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResult {
   const noteResources = resourcesOf(input.noteBundles);
-  const prescriptionResources = resourcesOf(input.prescriptionBundles);
+  // 先読み分を後ろに足す。pickByType の dedupeById は後勝ちなので、同じオーダーが
+  // 両方に入っていても先読み側(新しく読んだ方)が残る。
+  const prescriptionResources = [
+    ...resourcesOf(input.prescriptionBundles),
+    ...resourcesOf(input.pendingBundles),
+  ];
   const responseResources = resourcesOf(input.responseBundles);
   const vitalResources = resourcesOf(input.vitalBundles);
 
@@ -416,7 +480,8 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const prescriptionItems: KarteTimelineItem[] = orderRequests.map((serviceRequest) => {
     const base = {
       id: serviceRequest.id ?? "",
-      day: dayOf(serviceRequest.authoredOn),
+      day: orderCardDay(serviceRequest),
+      // 同じ日の中での並び順。日をずらしても並びが変わらないよう authoredOn のまま。
       dateTime: serviceRequest.authoredOn ?? "",
       serviceRequest,
     };
@@ -561,7 +626,9 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   );
 
   const visible = [...noteItems, ...prescriptionItems, ...qrItems, ...vitalItems].filter(
-    (item) => cutoff === undefined || item.day > cutoff,
+    // 日付未定は先読みで全件持っているので、カットオフで隠さない。
+    (item) =>
+      item.day === KARTE_UNSCHEDULED_DAY || cutoff === undefined || item.day > cutoff,
   );
 
   const byDay = new Map<string, KarteTimelineItem[]>();
@@ -576,7 +643,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
       day,
       items: items.sort((a, b) => b.dateTime.localeCompare(a.dateTime)),
     }))
-    .sort((a, b) => b.day.localeCompare(a.day));
+    .sort((a, b) => compareKarteDaysDesc(a.day, b.day));
 
   return {
     groups,
@@ -659,10 +726,12 @@ export function mergeDayIndex(
   // 登録直後などインデックスがまだ古いことがあるので、読み込み済みの日は常に足す。
   const days = new Set([...indexDays, ...groups.map((group) => group.day)]);
   return Array.from(days)
-    .sort((a, b) => b.localeCompare(a))
+    .sort(compareKarteDaysDesc)
     .map((day) => ({
       day,
-      items: byDay.get(day) ?? (cutoff === undefined || day > cutoff ? [] : null),
+      items:
+        byDay.get(day) ??
+        (day === KARTE_UNSCHEDULED_DAY || cutoff === undefined || day > cutoff ? [] : null),
     }));
 }
 
