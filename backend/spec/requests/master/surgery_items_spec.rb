@@ -85,6 +85,16 @@ RSpec.describe "Master::SurgeryItems", type: :request do
       expect(body["default_anesthesia_methods"]).to eq("general-inhalation,epidural")
     end
 
+    it "左右必須の術式を登録できる(既定は不要)" do
+      post "/master/surgery_items", params: { item_code: "S0001", name: "既定の術式" }
+      expect(body["requires_laterality"]).to be(false)
+
+      post "/master/surgery_items", params: { item_code: "S0002", name: "鼠径ヘルニア手術",
+                                              requires_laterality: true }
+      expect(response).to have_http_status(:created)
+      expect(body["requires_laterality"]).to be(true)
+    end
+
     it "所要時間は正の整数だけを受け付ける" do
       post "/master/surgery_items", params: { item_code: "S0001", name: "所要時間おかしい",
                                               default_duration_minutes: 0 }

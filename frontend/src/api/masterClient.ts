@@ -4206,6 +4206,11 @@ export interface SurgeryItem {
   default_position: string | null;
   /** 麻酔方法の既定(surgery-anesthesia-method のコード)。複数可なのでカンマ区切り。 */
   default_anesthesia_methods: string | null;
+  /**
+   * 申込時に左右の選択を必須にするか。左右のある術式(鼠径ヘルニア・人工関節置換 など)
+   * だけ true にする。左右の無い臓器まで必須にすると「指定なし」を選ぶ手数が増えるため。
+   */
+  requires_laterality: boolean;
   display_order: number | null;
   note: string | null;
   /** レセ電算コードから解決した医科診療行為の名称。一覧・詳細APIが添える。 */
@@ -4224,6 +4229,7 @@ export interface SurgeryItemPayload {
   default_approach?: string | null;
   default_position?: string | null;
   default_anesthesia_methods?: string | null;
+  requires_laterality?: boolean;
   display_order?: number | null;
   note?: string | null;
 }

@@ -1,6 +1,7 @@
 import { makeFieldUpdater } from "../lib/form";
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { SurgeryItem } from "../api/masterClient";
+import { useSurgeryItemsByCodes } from "../api/masterQueries";
 import { useLocationOptions, useSelfDepartments } from "../api/queries";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import { departmentDisplayName } from "../fhir/departmentHelpers";
@@ -100,6 +101,20 @@ export function SurgeryOrderForm({
   const [conditionTarget, setConditionTarget] = useState<string | null>(null);
 
   const problemOptions = useProblemOptions(patientId);
+  // 左右が必須かどうかは術式マスタが決める。保存済みのオーダーを開いたときは明細から
+  // 復元できないので、選択中の術式コードから今のマスタを引き直す(処置の groupable と
+  // 同じ扱い)。マスタから消えた術式は任意のままにする。
+  const selectedCodes = useMemo(() => values.items.map((item) => item.code), [values.items]);
+  const catalog = useSurgeryItemsByCodes(selectedCodes);
+  const requiresLaterality = useMemo(
+    () =>
+      new Set(
+        (catalog.data?.items ?? [])
+          .filter((item) => item.requires_laterality)
+          .map((item) => item.item_code),
+      ),
+    [catalog.data],
+  );
   const departments = useSelfDepartments();
   // 手術室。院内の部屋(Location)のうち種別が手術室のものだけを出す。
   const locations = useLocationOptions();
@@ -214,6 +229,14 @@ export function SurgeryOrderForm({
     // 日付が無くても「希望」として意味があるので許す)。
     if (!values.scheduledDate && values.scheduledTime) {
       setValidationError("入室予定時刻を入れる場合は予定手術日も入力してください。");
+      return;
+    }
+    // 左右の取り違え防止。左右のある術式(マスタで印を付けたもの)は必ず選ばせる。
+    const withoutLaterality = values.items.find(
+      (item) => requiresLaterality.has(item.code) && !item.laterality,
+    );
+    if (withoutLaterality) {
+      setValidationError(`「${withoutLaterality.name}」の左右を選択してください。`);
       return;
     }
     if (!values.staff.some((line) => line.role === "surgeon")) {
@@ -440,9 +463,9 @@ export function SurgeryOrderForm({
                     onChange={(e) => updateItem(item.code, { bodySiteText: e.target.value })}
                   />
                 </label>
-                {/* 左右。取り違え防止のため、左右のある部位では必ず選ぶ運用。 */}
+                {/* 左右。取り違え防止のため、左右のある術式ではマスタの印で必須にする。 */}
                 <label>
-                  左右
+                  左右{requiresLaterality.has(item.code) && "(必須)"}
                   <select
                     value={item.laterality}
                     onChange={(e) => updateItem(item.code, { laterality: e.target.value })}

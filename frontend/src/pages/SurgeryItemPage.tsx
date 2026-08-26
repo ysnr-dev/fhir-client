@@ -35,6 +35,7 @@ interface Draft {
   default_position: string;
   // 麻酔方法の既定(複数可)。保存時にカンマ区切りへ畳む。
   default_anesthesia_methods: string[];
+  requires_laterality: boolean;
   display_order: string;
   note: string;
 }
@@ -51,6 +52,7 @@ const emptyDraft: Draft = {
   default_approach: "",
   default_position: "",
   default_anesthesia_methods: [],
+  requires_laterality: false,
   display_order: "",
   note: "",
 };
@@ -70,6 +72,7 @@ function toPayload(draft: Draft): SurgeryItemPayload {
     default_approach: draft.default_approach || null,
     default_position: draft.default_position || null,
     default_anesthesia_methods: draft.default_anesthesia_methods.join(",") || null,
+    requires_laterality: draft.requires_laterality,
     display_order: draft.display_order ? Number(draft.display_order) : null,
     note: draft.note || null,
   };
@@ -161,6 +164,10 @@ export function SurgeryItemPage() {
               </td>
               <td className="rad-item__compact">
                 {surgeryApproachDisplay(item.default_approach ?? "")}
+                {/* 既定(任意)は印を出さず、例外の必須だけを目立たせる。 */}
+                {item.requires_laterality && (
+                  <span className="dose-conversion__badge">左右必須</span>
+                )}
               </td>
               <td className="rad-item__compact">
                 {(item.valid_from || item.valid_to) &&
@@ -240,6 +247,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       default_anesthesia_methods: (d.default_anesthesia_methods ?? "")
         .split(",")
         .filter(Boolean),
+      requires_laterality: d.requires_laterality,
       display_order: d.display_order === null ? "" : String(d.display_order),
       note: d.note ?? "",
     });
@@ -382,6 +390,19 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
                   {option.display}
                 </option>
               ))}
+            </select>
+          </label>
+          {/* 左右のある術式だけ印を付ける。申込画面はこの印を見て左右を必須にする。 */}
+          <label>
+            左右の指定
+            <select
+              value={draft.requires_laterality ? "true" : "false"}
+              onChange={(e) =>
+                setDraft({ ...draft, requires_laterality: e.target.value === "true" })
+              }
+            >
+              <option value="false">任意</option>
+              <option value="true">必須(左右のある術式)</option>
             </select>
           </label>
         </div>
