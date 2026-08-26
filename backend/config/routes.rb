@@ -161,6 +161,9 @@ Rails.application.routes.draw do
     resources :treatment_item_layout_cells, only: %i[create update destroy]
     resources :treatment_datasets, only: %i[index show create update destroy]
     resources :treatment_dataset_details, only: %i[index create update destroy]
+    # 術式マスタ。手術オーダー(申込)の項目。処置と違いセット・レイアウト・
+    # データセットのマスタは持たない(術式は検索で選び、実施入力は第2段階)。
+    resources :surgery_items, only: %i[index show create update destroy]
     # 特定器材(特定保険医療材料)と医科診療行為(手技料)。どちらもレセプト電算の
     # 配布マスタを全置換で取り込むだけで、手動メンテはしない。
     resources :medical_materials, only: %i[index] do

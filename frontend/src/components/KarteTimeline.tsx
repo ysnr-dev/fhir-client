@@ -6,6 +6,7 @@ import {
   useDeleteRadOrder,
   useDeletePhysioOrder,
   useDeleteTreatmentOrder,
+  useDeleteSurgeryOrder,
   useDeleteEndoscopyOrder,
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
@@ -81,6 +82,14 @@ import {
 } from "../fhir/treatmentOrderHelpers";
 import type { TreatmentPerformDisplay } from "../fhir/treatmentResultHelpers";
 import { treatmentTaskStatusDisplay } from "../fhir/treatmentTaskHelpers";
+import {
+  summarizeSurgeryOrder,
+  surgeryAnesthesiaMethodDisplay,
+  surgeryApproachDisplay,
+  surgeryBodySiteLabel,
+  surgeryOrderItems,
+} from "../fhir/surgeryOrderHelpers";
+import { surgeryTaskStatusDisplay } from "../fhir/surgeryTaskHelpers";
 import {
   entryLabel as endoscopyEntryLabel,
   orderEntries as endoscopyOrderEntries,
@@ -257,6 +266,7 @@ function KarteCard({
   const deletePhysioOrder = useDeletePhysioOrder();
   const deleteEndoscopyOrder = useDeleteEndoscopyOrder();
   const deleteTreatmentOrder = useDeleteTreatmentOrder();
+  const deleteSurgeryOrder = useDeleteSurgeryOrder();
   const deleteResponse = useDeleteQuestionnaireResponse();
   const deleteVital = useDeleteVitalEntry();
   // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
@@ -274,6 +284,7 @@ function KarteCard({
     deletePhysioOrder.isPending ||
     deleteEndoscopyOrder.isPending ||
     deleteTreatmentOrder.isPending ||
+    deleteSurgeryOrder.isPending ||
     deleteResponse.isPending ||
     deleteVital.isPending;
   const deleteError =
@@ -285,6 +296,7 @@ function KarteCard({
     deletePhysioOrder.error ??
     deleteEndoscopyOrder.error ??
     deleteTreatmentOrder.error ??
+    deleteSurgeryOrder.error ??
     deleteResponse.error ??
     deleteVital.error;
 
@@ -311,6 +323,7 @@ function KarteCard({
     else if (item.kind === "physio-order") deletePhysioOrder.mutate(item.id, options);
     else if (item.kind === "endoscopy-order") deleteEndoscopyOrder.mutate(item.id, options);
     else if (item.kind === "treatment-order") deleteTreatmentOrder.mutate(item.id, options);
+    else if (item.kind === "surgery-order") deleteSurgeryOrder.mutate(item.id, options);
     // テンプレート回答は、生成した Observation も一緒に消すのでリソースごと渡す。
     else if (item.kind === "qr") deleteResponse.mutate(item.response, options);
     // バイタルは 1 回の測定が項目ごとの Observation に分かれるのでまとめて消す。
@@ -351,6 +364,7 @@ function KarteCard({
             item.kind === "physio-order" ||
             item.kind === "endoscopy-order" ||
             item.kind === "treatment-order" ||
+            item.kind === "surgery-order" ||
             item.kind === "lab-order") && (
             <>
               <span className={`karte-card__status karte-card__status--${item.status}`}>
@@ -362,7 +376,9 @@ function KarteCard({
                       ? endoscopyTaskStatusDisplay(item.status)
                       : item.kind === "treatment-order"
                         ? treatmentTaskStatusDisplay(item.status)
-                        : labTaskStatusDisplay(item.status)}
+                        : item.kind === "surgery-order"
+                          ? surgeryTaskStatusDisplay(item.status)
+                          : labTaskStatusDisplay(item.status)}
               </span>
               {cardMeta(item) && <span aria-hidden="true">|</span>}
             </>
@@ -377,7 +393,8 @@ function KarteCard({
             item.kind === "rad-order" ||
             item.kind === "physio-order" ||
             item.kind === "endoscopy-order" ||
-            item.kind === "treatment-order") && (
+            item.kind === "treatment-order" ||
+            item.kind === "surgery-order") && (
             <button
               type="button"
               className="karte-card__icon-button karte-card__icon-button--labeled"
@@ -551,6 +568,13 @@ function cardTitle(item: KarteTimelineItem): string {
   if (item.kind === "treatment-order") {
     return summarizeTreatmentOrder(item.serviceRequest).settingDisplay;
   }
+  // 手術は入外区分と、緊急・準緊急のときだけ予定区分を並べる(予定はわざわざ出さない)。
+  if (item.kind === "surgery-order") {
+    const summary = summarizeSurgeryOrder(item.serviceRequest);
+    return [summary.settingDisplay, summary.priority !== "routine" ? summary.priorityDisplay : ""]
+      .filter(Boolean)
+      .join(" | ");
+  }
   // 検体検査・細菌検査・放射線検査・生理検査・内視鏡は入外区分と、至急のときだけ
   // 至急区分を並べる(通常はわざわざ出さない)。
   if (
@@ -611,6 +635,14 @@ function cardMeta(item: KarteTimelineItem): string {
   if (item.kind === "treatment-order") {
     const performTime = treatmentOrderTime(item.serviceRequest);
     return [performTime && `実施 ${performTime}`, requesterSummary].filter(Boolean).join(" | ");
+  }
+  // 手術のカードは申込日に置かれるので、予定日時と手術室をここで添える。
+  if (item.kind === "surgery-order") {
+    const summary = summarizeSurgeryOrder(item.serviceRequest);
+    const scheduled = summary.scheduledDate
+      ? `予定 ${summary.scheduledDate} ${summary.scheduledTime}`.trim()
+      : "予定日未定";
+    return [scheduled, summary.roomName, requesterSummary].filter(Boolean).join(" | ");
   }
   // 処方・注射は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。オーダー日は
   // 日付のみを入力する項目なので時刻は出さない(古い処方には時刻付きの authoredOn が
@@ -827,6 +859,12 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
         itemRequests={item.itemRequests}
         performs={item.performs}
       />
+    );
+  }
+
+  if (item.kind === "surgery-order") {
+    return (
+      <SurgeryOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />
     );
   }
 
@@ -1226,6 +1264,56 @@ function PhysioPerformSection({ performs }: { performs: PhysioPerformDisplay[] }
 
 // 処置は GP(処置項目 1 つ、またはセット 1 つ)ごとに出す。生理検査と同じだが、
 // GP 単位の記入欄(依頼病名・検査目的・特別指示)を持たないので項目名だけを並べる。
+function SurgeryOrderCardBody({
+  serviceRequest,
+  itemRequests,
+}: {
+  serviceRequest: fhir4.ServiceRequest;
+  itemRequests: fhir4.ServiceRequest[];
+}) {
+  const summary = summarizeSurgeryOrder(serviceRequest);
+  const items = surgeryOrderItems(serviceRequest, itemRequests);
+  const surgeon = summary.staff.find((line) => line.role === "surgeon");
+
+  if (items.length === 0) {
+    return <p className="karte-card__empty">術式がありません。</p>;
+  }
+
+  return (
+    <>
+      {items.map((item, index) => (
+        <div className="karte-rp" key={item.code}>
+          <div className="karte-rp__head">
+            <span className="karte-rp__number">{index === 0 ? "主" : "副"}</span>
+            <span className="karte-order__group-name">{item.name}</span>
+            {surgeryBodySiteLabel(item) && (
+              <span className="karte-rp__usage">{surgeryBodySiteLabel(item)}</span>
+            )}
+            {item.approach && (
+              <span className="karte-rp__usage">{surgeryApproachDisplay(item.approach)}</span>
+            )}
+          </div>
+        </div>
+      ))}
+      {/* 申込の要点。全部はカードに出さず(詳細表示にある)、読影ならぬ現場の
+          一目で要る「誰が執刀し、どの麻酔か」だけを 1 行で添える。 */}
+      {(surgeon || summary.anesthesiaMethods.length > 0) && (
+        <p className="karte-order__comment">
+          {[
+            surgeon && `執刀: ${surgeon.practitionerName}`,
+            summary.anesthesiaMethods.length > 0 &&
+              `麻酔: ${summary.anesthesiaMethods
+                .map(surgeryAnesthesiaMethodDisplay)
+                .join("・")}`,
+          ]
+            .filter(Boolean)
+            .join(" | ")}
+        </p>
+      )}
+    </>
+  );
+}
+
 function TreatmentOrderCardBody({
   serviceRequest,
   itemRequests,

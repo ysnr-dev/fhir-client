@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_25_000200) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_25_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -186,23 +186,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_25_000200) do
     t.index ["groupable"], name: "index_master_endoscopy_items_on_groupable"
     t.index ["item_code"], name: "index_master_endoscopy_items_on_item_code", unique: true
     t.index ["kind"], name: "index_master_endoscopy_items_on_kind"
-  end
-
-  create_table "master_endoscopy_jed_terms", force: :cascade do |t|
-    t.string "field_code", null: false
-    t.string "exam_category", default: "", null: false
-    t.string "code", null: false
-    t.string "name", null: false
-    t.string "name_english"
-    t.string "jed_version"
-    t.integer "display_order"
-    t.text "note"
-    t.string "source", default: "official", null: false
-    t.string "search_name"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["field_code", "exam_category", "code"], name: "index_endoscopy_jed_terms_on_field_category_code", unique: true
-    t.index ["search_name"], name: "index_master_endoscopy_jed_terms_on_search_name"
   end
 
   create_table "master_endoscopy_set_items", force: :cascade do |t|
@@ -1145,6 +1128,28 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_25_000200) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["category_id"], name: "index_master_schemas_on_category_id"
+  end
+
+  create_table "master_surgery_items", force: :cascade do |t|
+    t.string "item_code", null: false
+    t.string "name", null: false
+    t.string "short_name"
+    t.string "name_kana"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.string "receipt_code"
+    t.integer "default_duration_minutes"
+    t.string "default_approach"
+    t.string "default_position"
+    t.string "default_anesthesia_methods"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_short_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["item_code"], name: "index_master_surgery_items_on_item_code", unique: true
   end
 
   create_table "master_treatment_dataset_details", force: :cascade do |t|

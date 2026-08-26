@@ -33,6 +33,8 @@ import { EndoscopyItemPage } from "./pages/EndoscopyItemPage";
 import { EndoscopyItemLayoutPage } from "./pages/EndoscopyItemLayoutPage";
 import { EndoscopyDatasetPage } from "./pages/EndoscopyDatasetPage";
 import { TreatmentWorklistPage } from "./pages/TreatmentWorklistPage";
+import { SurgeryWorklistPage } from "./pages/SurgeryWorklistPage";
+import { SurgeryItemPage } from "./pages/SurgeryItemPage";
 import { TreatmentItemPage } from "./pages/TreatmentItemPage";
 import { TreatmentItemLayoutPage } from "./pages/TreatmentItemLayoutPage";
 import { TreatmentDatasetPage } from "./pages/TreatmentDatasetPage";
@@ -139,6 +141,9 @@ function App() {
             </Link>
             <Link to="/treatment-worklist" className="row-menu__item">
               処置一覧
+            </Link>
+            <Link to="/surgery-worklist" className="row-menu__item">
+              手術一覧
             </Link>
             <Link to="/rx-worklist" className="row-menu__item">
               処方一覧
@@ -297,6 +302,12 @@ function App() {
                 実施入力データセット
               </Link>
             </SubMenu>
+            {/* 手術。術式は検索で選ぶだけなのでレイアウト・データセットのマスタは無い。 */}
+            <SubMenu label="手術">
+              <Link to="/surgery-items" className="row-menu__item">
+                術式マスタ
+              </Link>
+            </SubMenu>
           </HoverMenu>
           <HoverMenu label="管理">
             <Link to="/oauth-clients" className="row-menu__item">
@@ -392,6 +403,7 @@ function App() {
           <Route path="/physio-worklist" element={<PhysioWorklistPage />} />
           <Route path="/endoscopy-worklist" element={<EndoscopyWorklistPage />} />
           <Route path="/treatment-worklist" element={<TreatmentWorklistPage />} />
+          <Route path="/surgery-worklist" element={<SurgeryWorklistPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />
@@ -415,6 +427,7 @@ function App() {
           <Route path="/treatment-items" element={<TreatmentItemPage />} />
           <Route path="/treatment-item-layouts" element={<TreatmentItemLayoutPage />} />
           <Route path="/treatment-datasets" element={<TreatmentDatasetPage />} />
+          <Route path="/surgery-items" element={<SurgeryItemPage />} />
           <Route path="/micro-order-items" element={<MicroOrderItemPage />} />
           <Route path="/micro-specimen-types" element={<MicroSpecimenTypePage />} />
           <Route path="/micro-organisms" element={<MicroOrganismPage />} />

@@ -153,6 +153,18 @@ import {
   treatmentTasksByOrderId,
   type TreatmentTaskStatus,
 } from "../fhir/treatmentTaskHelpers";
+import {
+  SURGERY_ORDER_TYPE,
+  buildSurgeryOrderDeleteBundle,
+  isSurgeryServiceRequest,
+  summarizeSurgeryOrder,
+  surgeryOrderItemRequests,
+} from "../fhir/surgeryOrderHelpers";
+import {
+  buildSurgeryTaskUpdate,
+  surgeryTasksByOrderId,
+  type SurgeryTaskStatus,
+} from "../fhir/surgeryTaskHelpers";
 import { buildPractitionerDeleteBundle } from "../fhir/practitionerHelpers";
 import {
   addDays,
@@ -5610,4 +5622,168 @@ async function fetchTreatmentAppointmentCancelEntries(srId: string): Promise<fhi
     entries.push(...buildCancelEntries(appointment, await fetchAppointmentSlots(appointment)));
   }
   return entries;
+}
+
+
+// ---- 手術オーダー ----
+//
+// 処置と同じくヘッダと明細(術式)が別リソースなので 1 リクエストにまとめて取る。
+// 第 1 段階(申込〜日程確保)では実施記録・予約を持たないため、削除で片付ける対象は
+// ヘッダと明細だけ、進捗の変更も Task 1 件の書き込みだけになる。
+
+export function useSurgeryOrderDetail(srId: string | undefined) {
+  const params = new URLSearchParams();
+  if (srId) params.set("_id", srId);
+  params.set("_revinclude:iterate", "ServiceRequest:based-on");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "detail", "surgery-order", srId],
+    queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", params),
+    enabled: Boolean(srId),
+  });
+}
+
+/** 手術一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
+export interface SurgeryWorklistRow {
+  order: fhir4.ServiceRequest;
+  /** 術式(明細)。並び順のとおりで、先頭が主術式。 */
+  itemRequests: fhir4.ServiceRequest[];
+  patient?: fhir4.Patient;
+  /** 進捗。手術部がまだ触っていないオーダーには無い(= 申込済)。 */
+  task?: fhir4.Task;
+}
+
+export interface SurgeryWorklistResult {
+  rows: SurgeryWorklistRow[];
+  /** 上限まで読んでも読み切れなかった。 */
+  truncated: boolean;
+}
+
+async function fetchSurgeryWorklist(date: string): Promise<SurgeryWorklistResult> {
+  const orders: fhir4.ServiceRequest[] = [];
+  const items: fhir4.ServiceRequest[] = [];
+
+  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
+    (page) => {
+      // 予定手術日(occurrencePeriod)で絞る。日程未定の申込は一覧の対象外
+      // (申込済のまま日程が決まっていないオーダーはカルテ側から辿る)。
+      const params = worklistParams(
+        `${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`,
+        date,
+        page,
+        "occurrence",
+      );
+      // 術式も同じ応答に添えてもらう。
+      params.set("_revinclude:iterate", "ServiceRequest:based-on");
+      params.set("_revinclude", "Task:focus");
+      return params;
+    },
+    (resource) => {
+      if (resource.resourceType !== "ServiceRequest") return false;
+      const request = resource as fhir4.ServiceRequest;
+      // 検索にヒットしたヘッダと、添えられた明細を分ける。
+      if (isSurgeryServiceRequest(request) && !request.basedOn?.length) {
+        orders.push(request);
+        return true;
+      }
+      items.push(request);
+      return false;
+    },
+  );
+
+  const taskByOrderId = surgeryTasksByOrderId(tasks);
+
+  const rows = orders.map((order) => ({
+    order,
+    itemRequests: surgeryOrderItemRequests(items, order.id ?? ""),
+    patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+    task: taskByOrderId.get(order.id ?? ""),
+  }));
+
+  // 手術室 → 入室予定時刻の順。同じ部屋の時間の重なり(ダブルブッキング)が
+  // 並びでそのまま見えるようにする(第 1 段階は枠を持たず目視で確かめるため)。
+  rows.sort((a, b) => surgeryWorklistSortKey(a).localeCompare(surgeryWorklistSortKey(b)));
+
+  return { rows, truncated };
+}
+
+function surgeryWorklistSortKey(row: SurgeryWorklistRow): string {
+  const summary = summarizeSurgeryOrder(row.order);
+  return `${summary.roomName || "〜"}|${summary.scheduledTime || "99:99"}`;
+}
+
+/** 予定手術日 1 日ぶんの手術オーダー。日付が未選択の間は読みに行かない。 */
+export function useSurgeryWorklist(date: string) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "surgery-worklist", date],
+    queryFn: () => fetchSurgeryWorklist(date),
+    enabled: Boolean(date),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 受付(日程確定)・中止などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
+ * 第 1 段階では実施記録が無いので、片付けるものは無く Task 1 件の書き込みで済む。
+ */
+export function useUpdateSurgeryTaskStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      order,
+      task,
+      status,
+    }: {
+      order: fhir4.ServiceRequest;
+      task: fhir4.Task | undefined;
+      status: SurgeryTaskStatus;
+    }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [taskBundleEntry(buildSurgeryTaskUpdate(task, order, status))],
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "surgery-worklist"] });
+      // カルテのオーダーカードも進捗を出しているので読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+    },
+  });
+}
+
+/** 手術オーダーの更新。ヘッダ + 明細の transaction を書くだけ(予約の付け替えは無い)。 */
+export function useUpdateSurgeryOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      // 予定日時が動くと手術一覧の当日ぶんも変わるので、ServiceRequest は
+      // まとめて読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+    },
+  });
+}
+
+// 手術オーダーも明細が独立した ServiceRequest なので、ヘッダだけ消すと明細が
+// 残ってしまう。消す直前に明細を引き直してからまとめて消す(処置と同じ)。
+export function useDeleteSurgeryOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (srId: string) => {
+      const params = new URLSearchParams();
+      params.set("_id", srId);
+      params.set("_revinclude:iterate", "ServiceRequest:based-on");
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      const itemIds = surgeryOrderItemRequests(serviceRequestsOf(bundle), srId)
+        .map((request) => request.id)
+        .filter((id): id is string => Boolean(id));
+
+      return postBundle(buildSurgeryOrderDeleteBundle(srId, itemIds));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
+  });
 }

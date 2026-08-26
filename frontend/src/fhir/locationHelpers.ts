@@ -21,6 +21,7 @@ export const LOCATION_TYPE_OPTIONS = [
   { code: "RADDX", label: "放射線(撮影室)" },
   { code: "DX", label: "検査・処置室" },
   { code: "ER", label: "救急" },
+  { code: "SU", label: "手術室" },
 ] as const;
 
 // 一覧・選択肢はこのコードでの OR 検索で引く(入院の場所を混ぜないため。

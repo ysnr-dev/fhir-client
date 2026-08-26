@@ -23,6 +23,8 @@ const SECTIONS: { code: string; label: string }[] = [
   { code: "D", label: "D 検査" },
   { code: "G", label: "G 注射" },
   { code: "J", label: "J 処置" },
+  { code: "K", label: "K 手術" },
+  { code: "L", label: "L 麻酔" },
   { code: "", label: "すべての章" },
 ];
 

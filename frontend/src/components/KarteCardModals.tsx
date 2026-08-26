@@ -10,6 +10,7 @@ import {
   useEndoscopyOrderDetail,
   useEndoscopyPerformDetail,
   useTreatmentOrderDetail,
+  useSurgeryOrderDetail,
   useTreatmentPerformDetail,
   useLabResultDetail,
   usePrescriptionDetail,
@@ -22,6 +23,7 @@ import { radOrderItemRequests } from "../fhir/radOrderHelpers";
 import { physioOrderItemRequests } from "../fhir/physioOrderHelpers";
 import { endoscopyOrderItemRequests } from "../fhir/endoscopyOrderHelpers";
 import { treatmentOrderItemRequests } from "../fhir/treatmentOrderHelpers";
+import { surgeryOrderItemRequests } from "../fhir/surgeryOrderHelpers";
 import { splitLabResultDetailBundle } from "../fhir/labResultHelpers";
 import { splitMicroResultDetailBundle } from "../fhir/microResultHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
@@ -42,6 +44,7 @@ import { RadOrderDetailPanel } from "./RadOrderDetailPanel";
 import { PhysioOrderDetailPanel } from "./PhysioOrderDetailPanel";
 import { EndoscopyOrderDetailPanel } from "./EndoscopyOrderDetailPanel";
 import { TreatmentOrderDetailPanel } from "./TreatmentOrderDetailPanel";
+import { SurgeryOrderDetailPanel } from "./SurgeryOrderDetailPanel";
 
 // カルテのタイムラインから開くモーダル。詳細表示は各リソースの詳細ページと同じ
 // パネルを使うので、カードでは省いている情報(処方の DI リンクなど)も参照できる。
@@ -56,6 +59,7 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   "physio-order": "生理検査内容",
   "endoscopy-order": "内視鏡内容",
   "treatment-order": "処置内容",
+  "surgery-order": "手術内容",
   "lab-result": "検査結果内容",
   "micro-result": "細菌検査結果内容",
   qr: "テンプレート表示",
@@ -94,6 +98,8 @@ export function KarteDetailModal({
         <EndoscopyOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "treatment-order" ? (
         <TreatmentOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+      ) : target.kind === "surgery-order" ? (
+        <SurgeryOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-result" ? (
         <LabResultDetail patientId={patientId} reportId={target.id} />
       ) : target.kind === "micro-result" ? (
@@ -379,6 +385,40 @@ function TreatmentOrderDetail({
   );
 }
 
+function SurgeryOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = useSurgeryOrderDetail(srId);
+  const requests = serviceRequestsOf(detail.data?.data);
+  const serviceRequest = requests.find((request) => request.id === srId);
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された手術は別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <SurgeryOrderDetailPanel
+          serviceRequest={serviceRequest}
+          itemRequests={surgeryOrderItemRequests(requests, srId)}
+          problemsById={problemsById}
+        />
+      ) : (
+        !detail.error && <NotFound label="手術" />
+      )}
+    </>
+  );
+}
+
 function EndoscopyOrderDetail({
   patientId,
   srId,
@@ -509,6 +549,8 @@ export function KarteCardJsonModal({
         <EndoscopyOrderJson srId={item.id} />
       ) : item.kind === "treatment-order" ? (
         <TreatmentOrderJson srId={item.id} />
+      ) : item.kind === "surgery-order" ? (
+        <SurgeryOrderJson srId={item.id} />
       ) : (
         <FhirJsonView resource={jsonResource(item)} />
       )}
@@ -658,6 +700,18 @@ function TreatmentOrderJson({ srId }: { srId: string }) {
       ) : (
         <FhirJsonView resource={detail.data?.data} />
       )}
+    </>
+  );
+}
+
+// 手術は第 1 段階では実施記録を持たないので、オーダー(ヘッダ + 術式)の Bundle だけ。
+function SurgeryOrderJson({ srId }: { srId: string }) {
+  const detail = useSurgeryOrderDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
     </>
   );
 }

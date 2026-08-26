@@ -4182,3 +4182,105 @@ export async function deleteTreatmentItemLayoutCell(id: number): Promise<void> {
   const res = await masterFetch(`/master/treatment_item_layout_cells/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
+
+// ---- 術式マスタ(手術オーダー) ----
+//
+// 処置と違いセット・伝票レイアウト・実施入力データセットは持たず(術式は検索で
+// 選び、実施入力は第2段階)、代わりに申込フォームの初期値になる既定値列を持つ。
+
+export interface SurgeryItem {
+  id: number;
+  item_code: string;
+  name: string;
+  short_name: string | null;
+  name_kana: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  /** レセ電算 診療行為コード(K章)。会計・DPC連携用。 */
+  receipt_code: string | null;
+  /** 予定所要時間の既定(分)。 */
+  default_duration_minutes: number | null;
+  /** 到達法の既定(surgery-approach のコード)。 */
+  default_approach: string | null;
+  /** 手術体位の既定(surgery-position のコード)。 */
+  default_position: string | null;
+  /** 麻酔方法の既定(surgery-anesthesia-method のコード)。複数可なのでカンマ区切り。 */
+  default_anesthesia_methods: string | null;
+  display_order: number | null;
+  note: string | null;
+  /** レセ電算コードから解決した医科診療行為の名称。一覧・詳細APIが添える。 */
+  receipt_procedure_name?: string | null;
+}
+
+export interface SurgeryItemPayload {
+  item_code?: string;
+  name?: string;
+  short_name?: string | null;
+  name_kana?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  receipt_code?: string | null;
+  default_duration_minutes?: number | null;
+  default_approach?: string | null;
+  default_position?: string | null;
+  default_anesthesia_methods?: string | null;
+  display_order?: number | null;
+  note?: string | null;
+}
+
+const SURGERY_ITEMS_PATH = "/master/surgery_items";
+
+export async function searchSurgeryItems(params: {
+  name?: string;
+  /** 名称・略称・カナを1つの語でまとめて探す(オーダー画面の検索欄用)。 */
+  keyword?: string;
+  /** 項目コード。カンマ区切りで複数指定できる。 */
+  item_code?: string;
+  /** true なら今日オーダーできる項目(有効期間内)だけ。 */
+  active?: boolean;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<SurgeryItem>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.keyword) search.set("keyword", params.keyword);
+  if (params.item_code) search.set("item_code", params.item_code);
+  if (params.active) search.set("active", "true");
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${SURGERY_ITEMS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<SurgeryItem>;
+}
+
+export async function fetchSurgeryItem(idOrCode: string | number): Promise<SurgeryItem> {
+  const res = await masterFetch(`${SURGERY_ITEMS_PATH}/${encodeURIComponent(String(idOrCode))}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as SurgeryItem;
+}
+
+export async function createSurgeryItem(payload: SurgeryItemPayload): Promise<SurgeryItem> {
+  const res = await masterFetch(SURGERY_ITEMS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as SurgeryItem;
+}
+
+export async function updateSurgeryItem(id: number, payload: SurgeryItemPayload): Promise<SurgeryItem> {
+  const res = await masterFetch(`${SURGERY_ITEMS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as SurgeryItem;
+}
+
+export async function deleteSurgeryItem(id: number): Promise<void> {
+  const res = await masterFetch(`${SURGERY_ITEMS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}

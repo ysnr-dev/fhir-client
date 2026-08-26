@@ -1,0 +1,458 @@
+import { today } from "../lib/dates";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import { useKarteLinkState } from "../karteReturn";
+import {
+  useSelfDepartments,
+  useSurgeryWorklist,
+  useUpdateSurgeryTaskStatus,
+  type SurgeryWorklistRow,
+} from "../api/queries";
+import { ErrorBanner } from "../components/ErrorBanner";
+import { RowMenu } from "../components/RowMenu";
+import {
+  PatientKana,
+  PatientProfileCells,
+  PatientProfileHeadCells,
+} from "../components/PatientRowCells";
+import { displayName } from "../fhir/patientHelpers";
+import {
+  SETTING_OPTIONS,
+  orderContextSummary,
+  prescriptionRequester,
+  wardOf,
+} from "../fhir/prescriptionHelpers";
+import {
+  summarizeSurgeryOrder,
+  surgeryAnesthesiaMethodDisplay,
+  surgeryBodySiteLabel,
+  surgeryOrderItems,
+  surgeryStaffRoleDisplay,
+} from "../fhir/surgeryOrderHelpers";
+import {
+  SURGERY_TASK_STATUS_OPTIONS,
+  surgeryTaskActions,
+  surgeryTaskStatus,
+  surgeryTaskStatusDisplay,
+  type SurgeryTaskStatus,
+} from "../fhir/surgeryTaskHelpers";
+
+// 手術一覧(手術部のワークリスト)。予定手術日を決めて、その日の手術を並べる。
+//
+// 1 行 = オーダー 1 件 = 手術 1 件。並びは手術室 → 入室予定時刻なので、同じ部屋の
+// 時間帯の重なり(ダブルブッキング)がそのまま見える(第 1 段階は予約枠を持たず、
+// 部屋の取り合いはこの一覧の目視で確かめる)。
+//
+// 「受付」は手術部が申込を受け付けて日程を確定した印。実施入力(第 2 段階)は
+// まだ無いので、進捗は 申込済 → 受付済 (→ 中止) だけ。
+
+interface Filters {
+  setting: string;
+  roomId: string;
+  wardId: string;
+  departmentId: string;
+  status: string;
+}
+
+const emptyFilters: Filters = {
+  setting: "",
+  roomId: "",
+  wardId: "",
+  departmentId: "",
+  status: "",
+};
+
+export function SurgeryWorklistPage() {
+  // 予定手術日は必須。未選択にはできないので当日から始める。
+  const [date, setDate] = useState(today);
+  const [filters, setFilters] = useState<Filters>(emptyFilters);
+
+  // 列が多く、既定の幅では患者名や依頼科まで折り返すので、この画面だけ幅を広げる
+  // (カルテと同じやり方)。
+  useEffect(() => {
+    document.body.classList.add("page-wide");
+    return () => document.body.classList.remove("page-wide");
+  }, []);
+
+  const worklist = useSurgeryWorklist(date);
+  const departments = useSelfDepartments();
+  const updateStatus = useUpdateSurgeryTaskStatus();
+
+  const rows = useMemo(
+    () => (worklist.data?.rows ?? []).filter((row) => matchesFilters(row, filters)),
+    [worklist.data, filters],
+  );
+  const total = worklist.data?.rows.length ?? 0;
+
+  // 手術室・病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。名前はオーダーに
+  // 焼き付けてあるのでマスタを引く必要がなく、その日に無い部屋を並べても仕方がない。
+  const roomOptions = useMemo(
+    () => optionsFrom(worklist.data?.rows ?? [], (row) => summarizeSurgeryOrder(row.order)),
+    [worklist.data],
+  );
+  const wardOptions = useMemo(
+    () =>
+      optionsFrom(worklist.data?.rows ?? [], (row) => {
+        const ward = wardOf(row.order);
+        return { roomId: ward.wardId, roomName: ward.wardName };
+      }),
+    [worklist.data],
+  );
+
+  function handleDateChange(value: string) {
+    // 日付を空にはさせない(空で検索すると全期間になってしまう)。
+    if (value) setDate(value);
+  }
+
+  return (
+    <div className="page">
+      <div className="page__header">
+        <h1>手術一覧</h1>
+      </div>
+
+      <FilterForm
+        date={date}
+        filters={filters}
+        rooms={roomOptions}
+        wards={wardOptions}
+        departments={departments.departments}
+        onDateChange={handleDateChange}
+        onChange={setFilters}
+      />
+
+      <ErrorBanner error={worklist.error} />
+      <ErrorBanner error={departments.error} />
+      <ErrorBanner error={updateStatus.error} />
+
+      {worklist.data?.truncated && (
+        <p className="error-banner__line error-banner__line--error" role="status">
+          この日のオーダーが多いため、一部のみ表示しています。
+        </p>
+      )}
+
+      {worklist.isLoading ? (
+        <p>読み込み中...</p>
+      ) : (
+        <>
+          <div className="rad-worklist-wrap sticky-table-wrap">
+            <table className="rad-worklist sticky-table">
+              <thead>
+                <tr>
+                  {/* 横に送っても「どの部屋で・いつ・誰の手術か」は残す(左 3 列を固定)。 */}
+                  <th className="rad-worklist__time sticky-table__fix-1">手術室 / 入室</th>
+                  <th className="sticky-table__fix-2">患者番号</th>
+                  <th className="sticky-table__fix-3">患者氏名</th>
+                  <PatientProfileHeadCells />
+                  <th className="rad-worklist__content">術式</th>
+                  <th>執刀医</th>
+                  <th>麻酔</th>
+                  <th className="rad-worklist__compact">予定区分</th>
+                  <th className="rad-worklist__compact">区分</th>
+                  <th className="rad-worklist__compact">病棟</th>
+                  <th>依頼科 | 依頼医師</th>
+                  <th className="rad-worklist__compact">ステータス</th>
+                  <th className="rad-worklist__actions sticky-table__fix-actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <WorklistRow
+                    key={row.order.id}
+                    row={row}
+                    pending={updateStatus.isPending}
+                    onChangeStatus={(status) =>
+                      updateStatus.mutate({ order: row.order, task: row.task, status })
+                    }
+                  />
+                ))}
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={14} className="master-search__empty">
+                      {total === 0
+                        ? "この予定日の手術オーダーはありません"
+                        : "絞り込みに該当する手術がありません"}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="order-select__muted rad-worklist__count">{rows.length} 件</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** 1 日ぶんのオーダーから重複を除いた {id, name} の選択肢を作る。 */
+function optionsFrom(
+  rows: SurgeryWorklistRow[],
+  pick: (row: SurgeryWorklistRow) => { roomId: string; roomName: string },
+): { id: string; name: string }[] {
+  const byId = new Map<string, string>();
+  for (const row of rows) {
+    const { roomId, roomName } = pick(row);
+    if (roomId && !byId.has(roomId)) byId.set(roomId, roomName || roomId);
+  }
+  return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+}
+
+function matchesFilters(row: SurgeryWorklistRow, filters: Filters): boolean {
+  const summary = summarizeSurgeryOrder(row.order);
+  if (filters.setting && summary.settingCode !== filters.setting) return false;
+  if (filters.roomId && summary.roomId !== filters.roomId) return false;
+
+  // 病棟はオーダー登録時に焼き付けたもの。外来オーダーは病棟を持たないので、
+  // 病棟で絞ると消える。
+  if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
+
+  const requester = prescriptionRequester(row.order);
+  if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
+
+  if (filters.status && surgeryTaskStatus(row.task) !== filters.status) return false;
+
+  return true;
+}
+
+interface FilterFormProps {
+  date: string;
+  filters: Filters;
+  rooms: { id: string; name: string }[];
+  wards: { id: string; name: string }[];
+  departments: fhir4.Organization[];
+  onDateChange: (value: string) => void;
+  onChange: (filters: Filters) => void;
+}
+
+function FilterForm({
+  date,
+  filters,
+  rooms,
+  wards,
+  departments,
+  onDateChange,
+  onChange,
+}: FilterFormProps) {
+  // 絞り込みは選んだ瞬間に効かせるので、Enter での送信は何もしない。
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+  }
+
+  return (
+    <form className="patient-search-form" onSubmit={handleSubmit}>
+      <label>
+        予定手術日
+        <input type="date" value={date} required onChange={(e) => onDateChange(e.target.value)} />
+      </label>
+      <label>
+        手術室
+        <select
+          value={filters.roomId}
+          onChange={(e) => onChange({ ...filters, roomId: e.target.value })}
+        >
+          <option value="">すべて</option>
+          {rooms.map((room) => (
+            <option key={room.id} value={room.id}>
+              {room.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        入外区分
+        <select
+          value={filters.setting}
+          onChange={(e) => onChange({ ...filters, setting: e.target.value })}
+        >
+          <option value="">すべて</option>
+          {SETTING_OPTIONS.map((option) => (
+            <option key={option.code} value={option.code}>
+              {option.display}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        病棟
+        <select
+          value={filters.wardId}
+          onChange={(e) => onChange({ ...filters, wardId: e.target.value })}
+        >
+          <option value="">すべて</option>
+          {wards.map((ward) => (
+            <option key={ward.id} value={ward.id}>
+              {ward.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        診療科
+        <select
+          value={filters.departmentId}
+          onChange={(e) => onChange({ ...filters, departmentId: e.target.value })}
+        >
+          <option value="">すべて</option>
+          {departments.map((department) => (
+            <option key={department.id} value={department.id}>
+              {department.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        ステータス
+        <select
+          value={filters.status}
+          onChange={(e) => onChange({ ...filters, status: e.target.value })}
+        >
+          <option value="">すべて</option>
+          {SURGERY_TASK_STATUS_OPTIONS.map((option) => (
+            <option key={option.code} value={option.code}>
+              {option.display}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="patient-search-form__actions">
+        <button type="button" onClick={() => onChange(emptyFilters)}>
+          クリア
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function WorklistRow({
+  row,
+  pending,
+  onChangeStatus,
+}: {
+  row: SurgeryWorklistRow;
+  pending: boolean;
+  onChangeStatus: (status: SurgeryTaskStatus) => void;
+}) {
+  // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
+  const karteLinkState = useKarteLinkState();
+  const { order, patient, task } = row;
+  const summary = summarizeSurgeryOrder(order);
+  const items = surgeryOrderItems(order, row.itemRequests);
+  const status = surgeryTaskStatus(task);
+  const requester = prescriptionRequester(order);
+  const actions = surgeryTaskActions(status);
+  const secondaryActions = actions.filter((action) => action.secondary);
+  const surgeon = summary.staff.find((line) => line.role === "surgeon");
+  const others = summary.staff.filter((line) => line.role !== "surgeon");
+
+  return (
+    <tr>
+      <td className="rad-worklist__time sticky-table__fix-1">
+        <div>{summary.roomName || "部屋未定"}</div>
+        <div>
+          {summary.scheduledTime || "--:--"}
+          {summary.durationMinutes != null && (
+            <span className="order-select__muted">({summary.durationMinutes}分)</span>
+          )}
+        </div>
+      </td>
+      <td className="sticky-table__fix-2">{patient?.identifier?.[0]?.value ?? "-"}</td>
+      <td className="sticky-table__fix-3">
+        {patient ? (
+          <>
+            {/* 術前情報(病名・検査結果)を見に行けるよう、カルテへ直接飛べるようにする。
+                カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
+            <Link to={`/patients/${patient.id}/karte`} state={karteLinkState}>
+              {displayName(patient)}
+            </Link>
+            <PatientKana patient={patient} />
+          </>
+        ) : (
+          "-"
+        )}
+      </td>
+      <PatientProfileCells patient={patient} />
+      <td className="rad-worklist__content">
+        <ul className="rad-worklist__items">
+          {items.map((item, index) => (
+            <li key={item.code}>
+              {index > 0 && <span className="order-select__muted">副: </span>}
+              {item.name}
+              {surgeryBodySiteLabel(item) && (
+                <span className="order-select__muted"> {surgeryBodySiteLabel(item)}</span>
+              )}
+            </li>
+          ))}
+          {items.length === 0 && <li className="order-select__muted">術式なし</li>}
+        </ul>
+      </td>
+      <td>
+        <div>{surgeon?.practitionerName || "-"}</div>
+        {others.length > 0 && (
+          <div className="order-select__muted">
+            {others
+              .map((line) => `${surgeryStaffRoleDisplay(line.role)}: ${line.practitionerName}`)
+              .join(" / ")}
+          </div>
+        )}
+      </td>
+      <td>{summary.anesthesiaMethods.map(surgeryAnesthesiaMethodDisplay).join("・") || "-"}</td>
+      <td className="rad-worklist__compact">
+        {/* 緊急・準緊急だけ目立たせる。予定は既定なのでバッジにしない。 */}
+        {summary.priority !== "routine" ? (
+          <span className="rad-worklist__status rad-worklist__status--cancelled">
+            {summary.priorityDisplay}
+          </span>
+        ) : (
+          summary.priorityDisplay
+        )}
+      </td>
+      <td className="rad-worklist__compact">{summary.settingDisplay || "-"}</td>
+      {/* オーダー登録時の入院病棟。外来オーダーと、焼き付ける前のオーダーは "-"。 */}
+      <td className="rad-worklist__compact">{wardOf(order).wardName || "-"}</td>
+      <td>{orderContextSummary(requester) || "-"}</td>
+      <td className="rad-worklist__compact">
+        <span className={`rad-worklist__status rad-worklist__status--${status}`}>
+          {surgeryTaskStatusDisplay(status)}
+        </span>
+      </td>
+      <td className="rad-worklist__actions sticky-table__fix-actions">
+        {actions
+          .filter((action) => !action.secondary)
+          .map((action) => (
+            <button
+              key={action.next}
+              type="button"
+              disabled={pending}
+              onClick={() => onChangeStatus(action.next)}
+            >
+              {action.label}
+            </button>
+          ))}
+        {/* 訂正・取りやめは押し間違えると進捗が巻き戻るので、一段畳んで置く。
+            一覧は横スクロールできるよう overflow を持つため、メニューは
+            escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
+        {secondaryActions.length > 0 && (
+          <RowMenu label="この手術の操作" escapesClipping>
+            {secondaryActions.map((action) => (
+              <button
+                key={action.next}
+                type="button"
+                // 中止は手術そのものを取りやめる操作なので目立たせる。取消は
+                // 1 つ前に戻すだけの訂正なので通常の項目にする。
+                className={`row-menu__item${
+                  action.next === "cancelled" ? " row-menu__item--danger" : ""
+                }`}
+                disabled={pending}
+                onClick={() => onChangeStatus(action.next)}
+              >
+                {action.label}
+              </button>
+            ))}
+          </RowMenu>
+        )}
+      </td>
+    </tr>
+  );
+}

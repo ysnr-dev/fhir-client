@@ -257,6 +257,12 @@ import {
   type TreatmentItemLayoutCellPayload,
   type TreatmentDatasetPayload,
   type TreatmentDatasetDetailPayload,
+  searchSurgeryItems,
+  fetchSurgeryItem,
+  createSurgeryItem,
+  updateSurgeryItem,
+  deleteSurgeryItem,
+  type SurgeryItemPayload,
 } from "./masterClient";
 
 export interface MedicineUsageFilters {
@@ -2960,6 +2966,83 @@ export function useTreatmentSetMembers(setCodes: string[]) {
     queryKey: [...TREATMENT_ITEMS_KEY, "set_members", sorted],
     queryFn: () => searchTreatmentSetItems({ set_item_code: sorted.join(","), per: 500 }),
     select: toTreatmentSetMemberMap,
+    enabled: sorted.length > 0,
+  });
+}
+
+
+// ---- 術式マスタ(手術オーダー) ----
+//
+// 処置と同じ構成からセット・レイアウト・データセットを落とし、既定値列を足したもの。
+
+const SURGERY_ITEMS_KEY = ["master", "surgery_items"];
+
+export interface SurgeryItemFilters {
+  name?: string;
+  /** 名称・略称・カナをまとめて探す1つの語。 */
+  keyword?: string;
+  active?: boolean;
+}
+
+export function useSurgeryItemSearch(filters: SurgeryItemFilters, page: number, enabled = true) {
+  return useQuery({
+    queryKey: [...SURGERY_ITEMS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchSurgeryItems({
+        name: filters.name || undefined,
+        keyword: filters.keyword || undefined,
+        active: filters.active || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+// レセ電算コードの名称を添えた詳細(編集モーダル用)。
+export function useSurgeryItem(idOrCode: string | number | null) {
+  return useQuery({
+    queryKey: [...SURGERY_ITEMS_KEY, "detail", idOrCode],
+    queryFn: () => fetchSurgeryItem(idOrCode as string | number),
+    enabled: idOrCode !== null,
+  });
+}
+
+export function useSurgeryItemMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: SURGERY_ITEMS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: SurgeryItemPayload) => createSurgeryItem(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: SurgeryItemPayload }) =>
+        updateSurgeryItem(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteSurgeryItem(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+// 手術オーダー画面用 --------------------------------------------------
+
+// 選択中の項目コードからマスタの内容(名称・略称・Kコード・既定値)を引き直す。
+// オーダー画面のプレビューと、保存時に FHIR へ写す値の取得元。
+export function useSurgeryItemsByCodes(codes: string[]) {
+  const sorted = Array.from(new Set(codes)).sort();
+
+  return useQuery({
+    queryKey: [...SURGERY_ITEMS_KEY, "by_codes", sorted],
+    queryFn: () => searchSurgeryItems({ item_code: sorted.join(","), per: 200 }),
     enabled: sorted.length > 0,
   });
 }

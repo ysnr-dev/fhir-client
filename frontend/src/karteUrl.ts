@@ -89,6 +89,7 @@ const DETAIL_KINDS: KarteDetailKind[] = [
   "physio-order",
   "endoscopy-order",
   "treatment-order",
+  "surgery-order",
   "lab-result",
   "micro-result",
   "qr",
@@ -112,6 +113,7 @@ const CARD_KINDS: KarteItemKind[] = [
   "physio-order",
   "endoscopy-order",
   "treatment-order",
+  "surgery-order",
   "qr",
 ];
 

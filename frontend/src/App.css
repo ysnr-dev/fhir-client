@@ -8191,3 +8191,100 @@ body.page-wide #root {
   border-radius: 4px;
   font-size: 13px;
 }
+
+/* ---- 手術オーダー ---- */
+
+/* 選択肢のチェックボックス群(麻酔方法・特殊機器・検体提出予定・同意書)。
+   折り返しではなく列幅を固定したグリッドにして、チェックボックスの位置を
+   縦に揃える(折り返しだとラベル幅がまちまちで、目で追う縦線ができない)。
+   幅が狭まれば自動で列が減り、右ペインを細くすれば 1 列になる。 */
+.surgery-checkbox-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 4px 16px;
+  /* 親の fieldset は flex なので、明示しないと内容幅で止まり 1 列に潰れる。 */
+  flex-basis: 100%;
+}
+
+/* .prescription-form label は縦積み(ラベルの下に入力)だが、チェックボックスは
+   ラベルの左に置かないと対応が読み取れない。この群だけ横並びに戻す。 */
+.surgery-checkbox-row label {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.surgery-checkbox-row input[type="checkbox"] {
+  flex: none;
+  margin: 0;
+}
+
+/* 見出し付きのチェックボックス群(特殊機器・検体提出予定)。見出しを 1 行使うので
+   他の入力と横に並べず、行を占有する。 */
+.surgery-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-basis: 100%;
+}
+
+.surgery-checkbox-group__label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* スタッフ(役割 + 氏名)のチップ並び。役割は小さく添え、氏名を見出し色で立てる
+   (選んだ人が一目で分かるように)。 */
+.surgery-staff {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-bottom: 8px;
+}
+
+.surgery-staff__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--surface-card);
+}
+
+/* 外す × は gap で間隔が付くので、共有クラスの左マージンは要らない。 */
+.surgery-staff__chip .order-select__remove {
+  margin-left: 0;
+}
+
+.surgery-staff__role {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.surgery-staff__name {
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.surgery-staff__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 術式カードの見出し行に置く操作(↑・ゴミ箱)。名称・K コードの後、右端に寄せる。 */
+.surgery-gp__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* 特記・申し送り。fieldset が flex なので、textarea 単体だと既定の cols 幅で
+   止まってしまう。枠いっぱいに広げる。 */
+.surgery-comment textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+}

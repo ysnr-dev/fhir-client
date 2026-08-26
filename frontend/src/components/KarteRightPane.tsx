@@ -9,6 +9,7 @@ import { RadOrderCreatePanel, RadOrderEditPanel } from "./RadOrderPanels";
 import { PhysioOrderCreatePanel, PhysioOrderEditPanel } from "./PhysioOrderPanels";
 import { EndoscopyOrderCreatePanel, EndoscopyOrderEditPanel } from "./EndoscopyOrderPanels";
 import { TreatmentOrderCreatePanel, TreatmentOrderEditPanel } from "./TreatmentOrderPanels";
+import { SurgeryOrderCreatePanel, SurgeryOrderEditPanel } from "./SurgeryOrderPanels";
 import {
   QuestionnaireResponseCreatePanel,
   QuestionnaireResponseEditPanel,
@@ -42,6 +43,8 @@ export type KartePaneState =
   | { kind: "endoscopy-order-edit"; srId: string }
   | { kind: "treatment-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "treatment-order-edit"; srId: string }
+  | { kind: "surgery-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "surgery-order-edit"; srId: string }
   | { kind: "qr-create"; problem?: ProblemRef }
   | { kind: "qr-edit"; qrId: string }
   // 予約は枠を押さえるだけで内容の編集は無く、変えられるのは日時(押さえる枠)だけ。
@@ -71,6 +74,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "endoscopy-order-edit": "内視鏡編集",
   "treatment-order-create": "処置登録",
   "treatment-order-edit": "処置編集",
+  "surgery-order-create": "手術申込",
+  "surgery-order-edit": "手術編集",
   "qr-create": "テンプレート登録",
   "qr-edit": "テンプレート編集",
   "appointment-create": "予約登録",
@@ -91,6 +96,7 @@ function paneKey(state: KartePaneState): string {
     case "physio-order-edit":
     case "endoscopy-order-edit":
     case "treatment-order-edit":
+    case "surgery-order-edit":
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
@@ -108,6 +114,7 @@ function paneKey(state: KartePaneState): string {
     case "physio-order-create":
     case "endoscopy-order-create":
     case "treatment-order-create":
+    case "surgery-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "note-create":
     case "qr-create":
@@ -232,6 +239,12 @@ export function KarteRightPane({
         >
           処置
         </button>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "surgery-order-create", problem: selectedProblem })}
+        >
+          手術
+        </button>
       </div>
     </section>
   );
@@ -353,6 +366,17 @@ function PaneContent({
       );
     case "treatment-order-edit":
       return <TreatmentOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "surgery-order-create":
+      return (
+        <SurgeryOrderCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "surgery-order-edit":
+      return <SurgeryOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "qr-create":
       return (
         <QuestionnaireResponseCreatePanel
