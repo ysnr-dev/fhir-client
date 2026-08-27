@@ -351,44 +351,48 @@ function KarteCard({
       {...{ [KARTE_TARGET_ATTR]: karteItemKey(item) }}
     >
       <header className="karte-card__header">
-        <span className={`karte-card__badge karte-card__badge--${item.kind}`}>
-          {KARTE_KIND_LABELS[item.kind]}
-        </span>
-        <span className="karte-card__title">{cardTitle(item)}</span>
-        <ProblemBadge problem={itemProblem(item)} problemsById={problemsById} />
-        {/* 細菌検査の結果が中間報告のうちは、最終化がまだなことをカードでも示す。 */}
-        {item.kind === "micro-order" && item.reportStatus === "preliminary" && (
-          <span className="micro-result__badge">結果:中間報告</span>
-        )}
-        <span className="karte-card__meta">
-          {/* 検体検査・放射線検査・生理検査は部門の進捗(依頼済・受付済・実施済・中止)が
-              カードだけで分かるよう、時刻・依頼元の先頭に添える。バッジにはせず、
-              メタデータの 1 項目として同じ区切りで並べる(理由は .karte-card__status)。 */}
-          {(item.kind === "rad-order" ||
-            item.kind === "physio-order" ||
-            item.kind === "endoscopy-order" ||
-            item.kind === "treatment-order" ||
-            item.kind === "surgery-order" ||
-            item.kind === "lab-order") && (
-            <>
-              <span className={`karte-card__status karte-card__status--${item.status}`}>
-                {item.kind === "rad-order"
-                  ? radTaskStatusDisplay(item.status)
-                  : item.kind === "physio-order"
-                    ? physioTaskStatusDisplay(item.status)
-                    : item.kind === "endoscopy-order"
-                      ? endoscopyTaskStatusDisplay(item.status)
-                      : item.kind === "treatment-order"
-                        ? treatmentTaskStatusDisplay(item.status)
-                        : item.kind === "surgery-order"
-                          ? surgeryTaskStatusDisplay(item.status)
-                          : labTaskStatusDisplay(item.status)}
-              </span>
-              {cardMeta(item) && <span aria-hidden="true">|</span>}
-            </>
+        {/* 見出し(バッジ・表題・メタ)だけが折り返す入れ物。DO とケバブは
+            この外に置いて、幅が狭くても行が増えず右上に留まるようにする。 */}
+        <div className="karte-card__header-main">
+          <span className={`karte-card__badge karte-card__badge--${item.kind}`}>
+            {KARTE_KIND_LABELS[item.kind]}
+          </span>
+          <span className="karte-card__title">{cardTitle(item)}</span>
+          <ProblemBadge problem={itemProblem(item)} problemsById={problemsById} />
+          {/* 細菌検査の結果が中間報告のうちは、最終化がまだなことをカードでも示す。 */}
+          {item.kind === "micro-order" && item.reportStatus === "preliminary" && (
+            <span className="micro-result__badge">結果:中間報告</span>
           )}
-          {cardMeta(item)}
-        </span>
+          <span className="karte-card__meta">
+            {/* 検体検査・放射線検査・生理検査は部門の進捗(依頼済・受付済・実施済・中止)が
+                カードだけで分かるよう、時刻・依頼元の先頭に添える。バッジにはせず、
+                メタデータの 1 項目として同じ区切りで並べる(理由は .karte-card__status)。 */}
+            {(item.kind === "rad-order" ||
+              item.kind === "physio-order" ||
+              item.kind === "endoscopy-order" ||
+              item.kind === "treatment-order" ||
+              item.kind === "surgery-order" ||
+              item.kind === "lab-order") && (
+              <>
+                <span className={`karte-card__status karte-card__status--${item.status}`}>
+                  {item.kind === "rad-order"
+                    ? radTaskStatusDisplay(item.status)
+                    : item.kind === "physio-order"
+                      ? physioTaskStatusDisplay(item.status)
+                      : item.kind === "endoscopy-order"
+                        ? endoscopyTaskStatusDisplay(item.status)
+                        : item.kind === "treatment-order"
+                          ? treatmentTaskStatusDisplay(item.status)
+                          : item.kind === "surgery-order"
+                            ? surgeryTaskStatusDisplay(item.status)
+                            : labTaskStatusDisplay(item.status)}
+                </span>
+                {cardMeta(item) && <span aria-hidden="true">|</span>}
+              </>
+            )}
+            {cardMeta(item)}
+          </span>
+        </div>
         <span className="karte-card__actions">
           {(item.kind === "prescription" ||
             item.kind === "injection" ||

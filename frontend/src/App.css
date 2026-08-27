@@ -4468,10 +4468,20 @@ body.karte-wide {
 
 .karte-card__header {
   display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+/* 幅が狭いときに折り返すのは見出し(バッジ・表題・メタ)側だけ。DO とケバブは
+   カードのどこを操作するかの目印なので、行を増やして下へ送らず右上に固定する。 */
+.karte-card__header-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 6px;
 }
 
 .karte-card__badge {
@@ -4514,7 +4524,7 @@ body.karte-wide {
 }
 
 .karte-card__actions {
-  margin-left: auto;
+  flex-shrink: 0;
   display: flex;
   gap: 6px;
 }
@@ -4560,6 +4570,7 @@ body.karte-wide {
 .karte-card__icon-label {
   font-size: 11px;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .karte-card__body {
