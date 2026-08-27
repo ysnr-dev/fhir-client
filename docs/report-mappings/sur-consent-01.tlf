@@ -1,0 +1,1816 @@
+{
+  "version": "0.11.0",
+  "title": "手術説明・同意書",
+  "report": {
+    "paper-type": "A4",
+    "orientation": "portrait",
+    "margin": [
+      20,
+      20,
+      20,
+      20
+    ]
+  },
+  "state": {
+    "layout-guides": []
+  },
+  "items": [
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 55.0,
+      "y": 46,
+      "width": 485.0,
+      "height": 18,
+      "texts": [
+        "手　術　説　明　・　同　意　書"
+      ],
+      "style": {
+        "font-family": [
+          "IPAGothic"
+        ],
+        "font-size": 14,
+        "font-style": [
+          "bold"
+        ],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 380,
+      "y": 74,
+      "width": 34,
+      "height": 12,
+      "texts": [
+        "説明日:"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "qr_authored",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 414,
+      "y": 74,
+      "width": 126,
+      "height": 12,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "right",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 55.0,
+      "y": 90,
+      "width": 52,
+      "height": 12,
+      "texts": [
+        "（患者氏名）"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "pt_name",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 110,
+      "y": 90,
+      "width": 150,
+      "height": 12,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 10,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 262,
+      "y": 90,
+      "width": 14,
+      "height": 12,
+      "texts": [
+        "殿"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 108,
+      "y1": 103,
+      "x2": 260,
+      "y2": 103,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 300,
+      "y": 90,
+      "width": 40,
+      "height": 12,
+      "texts": [
+        "患者番号:"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "pt_id",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 340,
+      "y": 90,
+      "width": 70,
+      "height": 12,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 420,
+      "y": 90,
+      "width": 40,
+      "height": 12,
+      "texts": [
+        "生年月日:"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "pt_birthdate",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 460,
+      "y": 90,
+      "width": 80,
+      "height": 12,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 112.0,
+      "width": 116.0,
+      "height": 22,
+      "texts": [
+        "病名（診断）"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "disease_name",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 181.0,
+      "y": 116.0,
+      "width": 355.0,
+      "height": 14,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 134.0,
+      "width": 116.0,
+      "height": 22,
+      "texts": [
+        "予定術式"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "op_name",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 181.0,
+      "y": 138.0,
+      "width": 355.0,
+      "height": 14,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 156.0,
+      "width": 116.0,
+      "height": 20,
+      "texts": [
+        "手術予定日"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "op_date",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 181.0,
+      "y": 160.0,
+      "width": 110,
+      "height": 12,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 300,
+      "y": 156.0,
+      "width": 50,
+      "height": 20,
+      "texts": [
+        "予定麻酔"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 298,
+      "y1": 156.0,
+      "x2": 298,
+      "y2": 176.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 352,
+      "y1": 156.0,
+      "x2": 352,
+      "y2": 176.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "anesthesia_plan",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 358,
+      "y": 160.0,
+      "width": 178.0,
+      "height": 12,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 179.0,
+      "width": 116.0,
+      "height": 12,
+      "texts": [
+        "手術の目的・必要性"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "purpose",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 181.0,
+      "y": 180.0,
+      "width": 355.0,
+      "height": 38,
+      "value": "",
+      "multiple-line": true,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 225.0,
+      "width": 116.0,
+      "height": 12,
+      "texts": [
+        "手術の内容・方法"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "method",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 181.0,
+      "y": 226.0,
+      "width": 355.0,
+      "height": 54,
+      "value": "",
+      "multiple-line": true,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 287.0,
+      "width": 116.0,
+      "height": 12,
+      "texts": [
+        "予想される合併症・危険性"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "risks",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 181.0,
+      "y": 288.0,
+      "width": 355.0,
+      "height": 64,
+      "value": "",
+      "multiple-line": true,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 359.0,
+      "width": 116.0,
+      "height": 12,
+      "texts": [
+        "代替可能な治療法"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "alternatives",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 181.0,
+      "y": 360.0,
+      "width": 355.0,
+      "height": 28,
+      "value": "",
+      "multiple-line": true,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 395.0,
+      "width": 116.0,
+      "height": 12,
+      "texts": [
+        "手術を行わない場合の見通し"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "no_treatment",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 181.0,
+      "y": 396.0,
+      "width": 355.0,
+      "height": 28,
+      "value": "",
+      "multiple-line": true,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 428.0,
+      "width": 116.0,
+      "height": 20,
+      "texts": [
+        "輸血の可能性"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 205,
+      "y": 428.0,
+      "width": 20,
+      "height": 20,
+      "texts": [
+        "あり"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 237,
+      "y": 428.0,
+      "width": 16,
+      "height": 20,
+      "texts": [
+        "・"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 269,
+      "y": 428.0,
+      "width": 20,
+      "height": 20,
+      "texts": [
+        "なし"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "mark_transfusion_yes",
+      "type": "ellipse",
+      "display": false,
+      "description": "",
+      "cx": 215,
+      "cy": 438.0,
+      "rx": 16,
+      "ry": 8.5,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 1,
+        "border-style": "solid",
+        "fill-color": "none"
+      }
+    },
+    {
+      "id": "mark_transfusion_no",
+      "type": "ellipse",
+      "display": false,
+      "description": "",
+      "cx": 279,
+      "cy": 438.0,
+      "rx": 16,
+      "ry": 8.5,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 1,
+        "border-style": "solid",
+        "fill-color": "none"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 330,
+      "y": 428.0,
+      "width": 206.0,
+      "height": 20,
+      "texts": [
+        "※「あり」の場合は輸血同意書を別に取得"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 7,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 451.0,
+      "width": 116.0,
+      "height": 12,
+      "texts": [
+        "術式の変更・追加の可能性"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "conversion",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 181.0,
+      "y": 452.0,
+      "width": 355.0,
+      "height": 28,
+      "value": "",
+      "multiple-line": true,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 484.0,
+      "width": 116.0,
+      "height": 20,
+      "texts": [
+        "同席者"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "attendees",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 181.0,
+      "y": 488.0,
+      "width": 355.0,
+      "height": 12,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 507.0,
+      "width": 116.0,
+      "height": 12,
+      "texts": [
+        "質問と回答"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "questions",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 181.0,
+      "y": 508.0,
+      "width": 355.0,
+      "height": 28,
+      "value": "",
+      "multiple-line": true,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 57.0,
+      "y": 543.0,
+      "width": 116.0,
+      "height": 12,
+      "texts": [
+        "備考"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "center",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "remarks",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 181.0,
+      "y": 544.0,
+      "width": 355.0,
+      "height": 22,
+      "value": "",
+      "multiple-line": true,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 112.0,
+      "x2": 540.0,
+      "y2": 112.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 134.0,
+      "x2": 540.0,
+      "y2": 134.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 156.0,
+      "x2": 540.0,
+      "y2": 156.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 176.0,
+      "x2": 540.0,
+      "y2": 176.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 222.0,
+      "x2": 540.0,
+      "y2": 222.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 284.0,
+      "x2": 540.0,
+      "y2": 284.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 356.0,
+      "x2": 540.0,
+      "y2": 356.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 392.0,
+      "x2": 540.0,
+      "y2": 392.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 428.0,
+      "x2": 540.0,
+      "y2": 428.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 448.0,
+      "x2": 540.0,
+      "y2": 448.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 484.0,
+      "x2": 540.0,
+      "y2": 484.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 504.0,
+      "x2": 540.0,
+      "y2": 504.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 540.0,
+      "x2": 540.0,
+      "y2": 540.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 570.0,
+      "x2": 540.0,
+      "y2": 570.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 55.0,
+      "y1": 112.0,
+      "x2": 55.0,
+      "y2": 570.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 540.0,
+      "y1": 112.0,
+      "x2": 540.0,
+      "y2": 570.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 175.0,
+      "y1": 112.0,
+      "x2": 175.0,
+      "y2": 570.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 55.0,
+      "y": 580.0,
+      "width": 200,
+      "height": 12,
+      "texts": [
+        "上記のとおり説明しました。"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 330,
+      "y": 580.0,
+      "width": 42,
+      "height": 12,
+      "texts": [
+        "説明医師:"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "qr_author",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 374,
+      "y": 580.0,
+      "width": 130,
+      "height": 12,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 10,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "break-word"
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 372,
+      "y1": 593.0,
+      "x2": 520,
+      "y2": 593.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 55.0,
+      "y": 606.0,
+      "width": 485.0,
+      "height": 36,
+      "texts": [
+        "私は、上記の手術について説明を受け、その目的・方法・危険性・代替可能な治療法について",
+        "十分に理解しましたので、手術を受けることに同意します。術中の所見により、やむを得ず",
+        "術式が変更・追加されることがあることについても了承します。"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 65.0,
+      "y": 650.0,
+      "width": 34,
+      "height": 14,
+      "texts": [
+        "同意日:"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 99.0,
+      "y": 650.0,
+      "width": 130,
+      "height": 14,
+      "texts": [
+        "　　　　年　　　月　　　日"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 65.0,
+      "y": 672.0,
+      "width": 44,
+      "height": 14,
+      "texts": [
+        "患者署名:"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 111.0,
+      "y1": 686.0,
+      "x2": 300,
+      "y2": 686.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 320,
+      "y": 672.0,
+      "width": 52,
+      "height": 14,
+      "texts": [
+        "代諾者署名:"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 9,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "line",
+      "display": true,
+      "description": "",
+      "x1": 374,
+      "y1": 686.0,
+      "x2": 496,
+      "y2": 686.0,
+      "style": {
+        "border-color": "#000000",
+        "border-width": 0.5,
+        "border-style": "solid"
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 498,
+      "y": 672.0,
+      "width": 64,
+      "height": 14,
+      "texts": [
+        "（続柄　　　）"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 8,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    },
+    {
+      "id": "",
+      "type": "text",
+      "display": true,
+      "description": "",
+      "x": 55.0,
+      "y": 702.0,
+      "width": 485.0,
+      "height": 12,
+      "texts": [
+        "※ 患者本人の署名が困難な場合は、代諾者が署名し続柄を記入してください。"
+      ],
+      "style": {
+        "font-family": [
+          "IPAMincho"
+        ],
+        "font-size": 7,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "middle",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": ""
+      }
+    }
+  ]
+}

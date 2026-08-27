@@ -1,0 +1,234 @@
+{
+  "url": "http://fhir-client.local/Questionnaire/sur-consent-01",
+  "item": [
+    {
+      "item": [
+        {
+          "text": "病名(診断)",
+          "type": "string",
+          "linkId": "disease_name",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "説明の対象になる病名。フォームを開いた時点で、転帰「継続」の傷病名(Condition)が初期値として流し込まれる(編集可)。"
+            },
+            {
+              "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+              "valueExpression": {
+                "language": "text/fhirpath",
+                "expression": "%conditions"
+              }
+            }
+          ]
+        },
+        {
+          "text": "予定術式",
+          "type": "string",
+          "linkId": "op_name",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "患者に伝わる正式名称で書く(略称・Kコードだけにしない)。左右のある術式は左右も書く。"
+            }
+          ]
+        },
+        {
+          "text": "手術予定日",
+          "type": "date",
+          "linkId": "op_date",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "未定なら空欄でよい(帳票も空欄になる)。"
+            }
+          ]
+        },
+        {
+          "text": "予定麻酔",
+          "type": "string",
+          "linkId": "anesthesia_plan",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "全身麻酔・脊髄くも膜下麻酔などの予定。麻酔の詳細な説明と同意は麻酔科が別に行う。"
+            }
+          ]
+        }
+      ],
+      "text": "病名・予定術式",
+      "type": "group",
+      "linkId": "grp_target"
+    },
+    {
+      "item": [
+        {
+          "text": "手術の目的・必要性",
+          "type": "text",
+          "linkId": "purpose",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "なぜこの手術が必要か。放置した場合との対比で書くと伝わる。"
+            }
+          ]
+        },
+        {
+          "text": "手術の内容・方法",
+          "type": "text",
+          "linkId": "method",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "到達法(開腹・鏡視下)・切除や再建の内容・予定時間。図を使って説明したなら、その旨も書いておく。"
+            }
+          ]
+        },
+        {
+          "text": "予想される合併症・危険性",
+          "type": "text",
+          "linkId": "risks",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "一般的な合併症(出血・感染・血栓塞栓・麻酔の偶発症)と、この術式に固有の合併症を頻度とともに。患者の併存症で上がるリスクは個別に書く。起きたときの対応(再手術・輸血・ICU管理)も。"
+            }
+          ]
+        },
+        {
+          "text": "代替可能な治療法",
+          "type": "text",
+          "linkId": "alternatives",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "保存的治療・他の術式・治療しないという選択肢と、それぞれの利害。"
+            }
+          ]
+        },
+        {
+          "text": "手術を行わない場合の見通し",
+          "type": "text",
+          "linkId": "no_treatment",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "自然経過で予想されること。"
+            }
+          ]
+        },
+        {
+          "text": "輸血の可能性",
+          "type": "choice",
+          "linkId": "transfusion",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "「あり」の場合、輸血同意書を別に取得する。帳票では選んだ側に○が印字される。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし"
+              }
+            }
+          ]
+        },
+        {
+          "text": "術式の変更・追加の可能性",
+          "type": "text",
+          "linkId": "conversion",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "術中所見による開腹移行・切除範囲の拡大など、起こりうる変更をあらかじめ説明して書いておく。"
+            }
+          ]
+        }
+      ],
+      "text": "説明内容",
+      "type": "group",
+      "linkId": "grp_explain"
+    },
+    {
+      "item": [
+        {
+          "text": "同席者",
+          "type": "string",
+          "linkId": "attendees",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "同席した家族・キーパーソンの氏名と続柄。医療者側の同席者(看護師など)もここに書く。説明した医師はメタ情報の記入者が持つ。"
+            }
+          ]
+        },
+        {
+          "text": "質問と回答",
+          "type": "text",
+          "linkId": "questions",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "患者・家族からの質問と、それへの回答の要点。質問がなかったなら「質問なし」と書く。"
+            }
+          ]
+        },
+        {
+          "text": "備考",
+          "type": "text",
+          "linkId": "remarks"
+        }
+      ],
+      "text": "説明の記録",
+      "type": "group",
+      "linkId": "grp_record"
+    }
+  ],
+  "name": "SUR_CONSENT_01",
+  "title": "手術説明・同意書",
+  "status": "active",
+  "version": "1.0.0",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "code": "9c4e1f37-8a52-4bd6-b071-3f8e2a5c9d14",
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "display": "手術"
+      }
+    }
+  ],
+  "description": "手術の説明内容を記録し、患者が署名する同意書を帳票で出すテンプレート。説明した医師をメタ情報の記入者に、説明日を記入日時に持つ。署名欄(同意日・患者署名・代諾者署名)は帳票側に印刷され、紙の上で記入する。記入しなかった項目は帳票では空欄になる。",
+  "subjectType": [
+    "Patient"
+  ],
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  }
+}

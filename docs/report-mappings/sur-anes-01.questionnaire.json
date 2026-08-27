@@ -1,0 +1,636 @@
+{
+  "url": "http://fhir-client.local/Questionnaire/sur-anes-01",
+  "item": [
+    {
+      "item": [
+        {
+          "text": "ASA-PS",
+          "type": "choice",
+          "linkId": "asa",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "3",
+                "display": "3"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "4",
+                "display": "4"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "5",
+                "display": "5"
+              }
+            }
+          ]
+        },
+        {
+          "text": "緊急(E)",
+          "type": "choice",
+          "linkId": "asa-e",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし"
+              }
+            }
+          ]
+        },
+        {
+          "text": "術前評価の要点",
+          "type": "text",
+          "linkId": "preop-note",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "気道評価(開口・Mallampati・頸部可動域・歯牙)、併存症と内服、アレルギー、絶飲食の確認。麻酔科の術前診察ワークフローができるまでは、ここに要点を書く。"
+            }
+          ]
+        }
+      ],
+      "text": "術前評価",
+      "type": "group",
+      "linkId": "grp-eval"
+    },
+    {
+      "item": [
+        {
+          "text": "麻酔法",
+          "type": "choice",
+          "linkId": "method",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "check-box",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "inhalation",
+                "display": "全身麻酔(吸入)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "tiva",
+                "display": "全身麻酔(TIVA)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "spinal",
+                "display": "脊髄くも膜下麻酔"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "epidural",
+                "display": "硬膜外麻酔"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "nerve-block",
+                "display": "末梢神経ブロック"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "local",
+                "display": "局所浸潤麻酔"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "mac",
+                "display": "監視下鎮静管理(MAC)"
+              }
+            }
+          ]
+        },
+        {
+          "text": "区域麻酔の手技",
+          "type": "text",
+          "linkId": "regional",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "穿刺部位・体位・針・薬液と量・到達レベル・穿刺時の合併症の有無。区域麻酔をしていなければ空欄でよい。"
+            }
+          ]
+        }
+      ],
+      "text": "麻酔法",
+      "type": "group",
+      "linkId": "grp-method"
+    },
+    {
+      "item": [
+        {
+          "text": "気道確保",
+          "type": "choice",
+          "linkId": "airway",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "mask",
+                "display": "フェイスマスク"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "sga",
+                "display": "声門上器具"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "oral-tube",
+                "display": "経口挿管"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "nasal-tube",
+                "display": "経鼻挿管"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "tracheostomy",
+                "display": "気管切開孔"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "natural",
+                "display": "自然気道"
+              }
+            }
+          ]
+        },
+        {
+          "text": "チューブ・デバイス",
+          "type": "string",
+          "linkId": "device",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "種類・サイズ・固定位置(例: 経口挿管チューブ 7.0mm カフ付き、門歯 21cm 固定)。"
+            }
+          ]
+        },
+        {
+          "text": "喉頭展開(Cormack-Lehane 分類)",
+          "type": "choice",
+          "linkId": "laryngoscopy",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "Grade I"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "Grade II"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "3",
+                "display": "Grade III"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "4",
+                "display": "Grade IV"
+              }
+            }
+          ]
+        },
+        {
+          "text": "喉頭鏡・補助器具",
+          "type": "string",
+          "linkId": "laryngo-device",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "マッキントッシュ(サイズ)・ビデオ喉頭鏡・気管支ファイバー・ブジーなど、実際に使ったもの。"
+            }
+          ]
+        },
+        {
+          "item": [
+            {
+              "item": [
+                {
+                  "text": "内容と対応",
+                  "type": "text",
+                  "linkId": "difficult-detail",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "換気困難/挿管困難の別、試行回数、最終的に確保した手段。次回の麻酔に必ず引き継ぐ情報なので具体的に書く。"
+                    }
+                  ]
+                }
+              ],
+              "text": "困難気道の内容",
+              "type": "group",
+              "linkId": "grp-difficult",
+              "enableWhen": [
+                {
+                  "operator": "=",
+                  "question": "difficult-airway",
+                  "answerCoding": {
+                    "code": "yes"
+                  }
+                }
+              ]
+            }
+          ],
+          "text": "困難気道",
+          "type": "choice",
+          "linkId": "difficult-airway",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            }
+          ]
+        },
+        {
+          "text": "導入",
+          "type": "text",
+          "linkId": "induction",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "前酸素化、導入薬・オピオイド・筋弛緩薬と投与量、導入中のイベント(血圧低下・誤嚥予防の対応など)。"
+            }
+          ]
+        }
+      ],
+      "text": "気道・導入",
+      "type": "group",
+      "linkId": "grp-airway"
+    },
+    {
+      "item": [
+        {
+          "text": "維持",
+          "type": "text",
+          "linkId": "maintenance",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "吸入麻酔薬の濃度、または TIVA の目標濃度・投与速度。オピオイドの持続量と追加投与。"
+            }
+          ]
+        },
+        {
+          "text": "筋弛緩と拮抗",
+          "type": "string",
+          "linkId": "relaxant",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "筋弛緩薬の追加とモニタリング(TOF)、拮抗薬と投与量。"
+            }
+          ]
+        },
+        {
+          "text": "呼吸管理",
+          "type": "string",
+          "linkId": "ventilation",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "換気モード・一回換気量・PEEP・FiO2 の代表値。"
+            }
+          ]
+        }
+      ],
+      "text": "維持",
+      "type": "group",
+      "linkId": "grp-maintain"
+    },
+    {
+      "item": [
+        {
+          "text": "術中経過",
+          "type": "text",
+          "linkId": "course",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "血圧・脈拍・SpO2・体温の推移の要約と、介入したイベント(低血圧・不整脈・低体温など)を時刻付きで。5分毎の麻酔チャートは将来の専用機能で、ここは要約でよい。"
+            }
+          ]
+        },
+        {
+          "text": "輸液",
+          "type": "text",
+          "linkId": "fluids",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "製剤ごとの投与量。出血量・尿量・輸血量は実施入力の測定値が持つので書かない(In/Outバランスの考察はここに書いてよい)。"
+            }
+          ]
+        },
+        {
+          "text": "循環作動薬",
+          "type": "string",
+          "linkId": "vasoactive",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "昇圧薬・降圧薬の使い方(単回/持続と量)。算定に載せる薬剤は実施入力の使用薬剤にも入れる。"
+            }
+          ]
+        }
+      ],
+      "text": "術中経過",
+      "type": "group",
+      "linkId": "grp-course"
+    },
+    {
+      "item": [
+        {
+          "text": "覚醒・抜管",
+          "type": "text",
+          "linkId": "emergence",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "自発呼吸・従命・抜管の経過と時刻、抜管後の気道と呼吸の状態。"
+            }
+          ]
+        },
+        {
+          "text": "退室時の気道",
+          "type": "choice",
+          "linkId": "airway-out",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "extubated",
+                "display": "抜管済"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "intubated",
+                "display": "挿管のまま"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "sga",
+                "display": "声門上器具"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "tracheostomy",
+                "display": "気管切開"
+              }
+            }
+          ]
+        },
+        {
+          "text": "退室先",
+          "type": "choice",
+          "linkId": "destination",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "ward",
+                "display": "病棟"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "hcu",
+                "display": "HCU"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "icu",
+                "display": "ICU"
+              }
+            }
+          ]
+        },
+        {
+          "text": "術後鎮痛",
+          "type": "string",
+          "linkId": "postop-analgesia",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "IV-PCA・硬膜外持続・定時の鎮痛薬。処方・注射のオーダーは別に出す(ここは記録)。"
+            }
+          ]
+        },
+        {
+          "text": "申し送り",
+          "type": "text",
+          "linkId": "handover",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "病棟・ICU への観察のポイントと、次回の麻酔への引き継ぎ(困難気道・薬剤への反応など)。"
+            }
+          ]
+        }
+      ],
+      "text": "覚醒・退室",
+      "type": "group",
+      "linkId": "grp-emergence"
+    }
+  ],
+  "name": "SUR_ANES_01",
+  "title": "麻酔記録",
+  "status": "active",
+  "version": "1.0.0",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "code": "9c4e1f37-8a52-4bd6-b071-3f8e2a5c9d14",
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "display": "手術"
+      }
+    }
+  ],
+  "description": "麻酔担当医が退室後に書く麻酔記録のサマリー。5分毎のバイタルサインを打つ麻酔チャート(術中のリアルタイム記録)は将来の専用機能で、ここでは扱わない。入退室・麻酔開始/終了の時刻、出血量・尿量・輸血量は手術の実施入力が構造化して持つので再入力しない。記入しなかった項目は記録に出ない。",
+  "subjectType": [
+    "Patient"
+  ],
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  }
+}

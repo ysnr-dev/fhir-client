@@ -1,0 +1,16 @@
+[
+  {
+    "linkId": "transfusion",
+    "code": "yes",
+    "show": [
+      "mark_transfusion_yes"
+    ]
+  },
+  {
+    "linkId": "transfusion",
+    "code": "no",
+    "show": [
+      "mark_transfusion_no"
+    ]
+  }
+]
