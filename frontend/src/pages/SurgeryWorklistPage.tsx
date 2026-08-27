@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useKarteLinkState } from "../karteReturn";
 import {
+  useAdmitUnscheduledSurgery,
   useSelfDepartments,
   useSurgeryUnscheduledList,
   useSurgeryWorklist,
@@ -11,12 +12,14 @@ import {
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { RowMenu } from "../components/RowMenu";
+import { SurgeryPerformModal } from "../components/SurgeryPerformModal";
 import { SurgeryScheduleModal } from "../components/SurgeryScheduleModal";
 import {
   PatientKana,
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { toDateTimeInput } from "../fhir/clinicalNoteHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import {
   SETTING_OPTIONS,
@@ -78,6 +81,8 @@ export function SurgeryWorklistPage() {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   // 日程を確定しようとしている申込。
   const [scheduling, setScheduling] = useState<SurgeryWorklistRow | null>(null);
+  // 実施入力を開いている行。
+  const [performing, setPerforming] = useState<SurgeryWorklistRow | null>(null);
 
   // 列が多く、既定の幅では患者名や依頼科まで折り返すので、この画面だけ幅を広げる
   // (カルテと同じやり方)。
@@ -91,6 +96,7 @@ export function SurgeryWorklistPage() {
   const unscheduled = useSurgeryUnscheduledList();
   const departments = useSelfDepartments();
   const updateStatus = useUpdateSurgeryTaskStatus();
+  const admit = useAdmitUnscheduledSurgery();
 
   const source = tab === "scheduled" ? worklist.data : unscheduled.data;
   const rows = useMemo(
@@ -162,6 +168,7 @@ export function SurgeryWorklistPage() {
       <ErrorBanner error={unscheduled.error} />
       <ErrorBanner error={departments.error} />
       <ErrorBanner error={updateStatus.error} />
+      <ErrorBanner error={admit.error} />
 
       {source?.truncated && (
         <p className="error-banner__line error-banner__line--error" role="status">
@@ -174,7 +181,7 @@ export function SurgeryWorklistPage() {
       ) : (
         <>
           <div className="rad-worklist-wrap sticky-table-wrap">
-            <table className="rad-worklist sticky-table">
+            <table className="rad-worklist surgery-worklist sticky-table">
               <thead>
                 <tr>
                   {/* 横に送っても「どの部屋で・いつ・誰の手術か」は残す(左 3 列を固定)。 */}
@@ -201,11 +208,19 @@ export function SurgeryWorklistPage() {
                     key={row.order.id}
                     row={row}
                     tab={tab}
-                    pending={updateStatus.isPending}
+                    pending={updateStatus.isPending || admit.isPending}
                     onChangeStatus={(status) =>
                       updateStatus.mutate({ order: row.order, task: row.task, status })
                     }
                     onSchedule={() => setScheduling(row)}
+                    onPerform={() => setPerforming(row)}
+                    onAdmit={() =>
+                      admit.mutate({
+                        order: row.order,
+                        task: row.task,
+                        now: toDateTimeInput(new Date()),
+                      })
+                    }
                   />
                 ))}
                 {rows.length === 0 && (
@@ -228,6 +243,10 @@ export function SurgeryWorklistPage() {
 
       {scheduling && (
         <SurgeryScheduleModal row={scheduling} onClose={() => setScheduling(null)} />
+      )}
+
+      {performing && (
+        <SurgeryPerformModal row={performing} onClose={() => setPerforming(null)} />
       )}
     </div>
   );
@@ -395,12 +414,17 @@ function WorklistRow({
   pending,
   onChangeStatus,
   onSchedule,
+  onPerform,
+  onAdmit,
 }: {
   row: SurgeryWorklistRow;
   tab: Tab;
   pending: boolean;
   onChangeStatus: (status: SurgeryTaskStatus) => void;
   onSchedule: () => void;
+  onPerform: () => void;
+  /** 日程未定のまま入室する(緊急手術)。 */
+  onAdmit: () => void;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const karteLinkState = useKarteLinkState();
@@ -493,9 +517,18 @@ function WorklistRow({
       </td>
       <td className="rad-worklist__actions sticky-table__fix-actions">
         {tab === "unscheduled" ? (
-          <button type="button" disabled={pending} onClick={onSchedule}>
-            日程を確定
-          </button>
+          <>
+            <button type="button" disabled={pending} onClick={onSchedule}>
+              日程を確定
+            </button>
+            {/* 緊急・準緊急は日程の確定を待たずに始まる。押した日時がそのまま
+                予定日時になり、以後は予定日別タブの当日ぶんに並ぶ。 */}
+            {summary.priority !== "routine" && surgeryTaskStatus(row.task) === "requested" && (
+              <button type="button" disabled={pending} onClick={onAdmit}>
+                入室
+              </button>
+            )}
+          </>
         ) : (
           actions
             .filter((action) => !action.secondary)
@@ -504,7 +537,7 @@ function WorklistRow({
                 key={action.next}
                 type="button"
                 disabled={pending}
-                onClick={() => onChangeStatus(action.next)}
+                onClick={() => (action.opensPerformInput ? onPerform() : onChangeStatus(action.next))}
               >
                 {action.label}
               </button>

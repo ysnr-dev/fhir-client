@@ -91,6 +91,7 @@ import {
   surgeryOrderItems,
 } from "../fhir/surgeryOrderHelpers";
 import { surgeryTaskStatusDisplay } from "../fhir/surgeryTaskHelpers";
+import type { SurgeryPerformDisplay } from "../fhir/surgeryResultHelpers";
 import {
   entryLabel as endoscopyEntryLabel,
   orderEntries as endoscopyOrderEntries,
@@ -865,7 +866,11 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
 
   if (item.kind === "surgery-order") {
     return (
-      <SurgeryOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />
+      <SurgeryOrderCardBody
+        serviceRequest={item.serviceRequest}
+        itemRequests={item.itemRequests}
+        performs={item.performs}
+      />
     );
   }
 
@@ -1268,16 +1273,24 @@ function PhysioPerformSection({ performs }: { performs: PhysioPerformDisplay[] }
 function SurgeryOrderCardBody({
   serviceRequest,
   itemRequests,
+  performs,
 }: {
   serviceRequest: fhir4.ServiceRequest;
   itemRequests: fhir4.ServiceRequest[];
+  performs: SurgeryPerformDisplay[];
 }) {
   const summary = summarizeSurgeryOrder(serviceRequest);
   const items = surgeryOrderItems(serviceRequest, itemRequests);
   const surgeon = summary.staff.find((line) => line.role === "surgeon");
 
+  // 術式が無い申込でも、実施情報が付いていれば出す。
   if (items.length === 0) {
-    return <p className="karte-card__empty">術式がありません。</p>;
+    return (
+      <>
+        <p className="karte-card__empty">術式がありません。</p>
+        <SurgeryPerformSection performs={performs} />
+      </>
+    );
   }
 
   return (
@@ -1311,6 +1324,60 @@ function SurgeryOrderCardBody({
             .join(" | ")}
         </p>
       )}
+      <SurgeryPerformSection performs={performs} />
+    </>
+  );
+}
+
+// 手術一覧から入力した実施情報。他部門と同じ見せ方だが、実施時刻が幅(入室〜退室)で、
+// 測定値と記録(創分類・カウント・合併症・転帰)の行が増える。
+const SURGERY_PERFORM_ROWS: {
+  label: string;
+  of: (perform: SurgeryPerformDisplay) => string[];
+}[] = [
+  { label: "術式", of: (perform) => perform.procedures },
+  { label: "スタッフ", of: (perform) => perform.staff },
+  { label: "時刻", of: (perform) => perform.times },
+  { label: "測定", of: (perform) => perform.observations },
+  { label: "記録", of: (perform) => perform.records },
+  { label: "薬剤", of: (perform) => perform.medicines },
+  { label: "材料", of: (perform) => perform.materials },
+];
+
+function SurgeryPerformSection({ performs }: { performs: SurgeryPerformDisplay[] }) {
+  if (performs.length === 0) return null;
+
+  return (
+    <>
+      {performs.map((perform) => (
+        <section className="karte-perform" key={perform.id}>
+          <div className="karte-perform__head">
+            <span className="karte-perform__title">実施情報</span>
+            {perform.periodLabel && (
+              <span className="karte-perform__meta">{perform.periodLabel}</span>
+            )}
+            {/* 実施記録があるのに実施まで至っていない例外。 */}
+            {perform.statusNote && (
+              <span className="karte-perform__status">{perform.statusNote}</span>
+            )}
+          </div>
+          {SURGERY_PERFORM_ROWS.map(({ label, of }) => {
+            const values = of(perform);
+            if (values.length === 0) return null;
+            return (
+              <div className="karte-perform__row" key={label}>
+                <span className="karte-perform__label">{label}:</span>
+                <span className="karte-perform__values">
+                  {values.map((value, index) => (
+                    <span key={`${label}-${index}`}>{value}</span>
+                  ))}
+                </span>
+              </div>
+            );
+          })}
+          {perform.comment && <p className="karte-perform__note">{perform.comment}</p>}
+        </section>
+      ))}
     </>
   );
 }

@@ -349,9 +349,6 @@ export function SurgeryOrderForm({
             同じ部屋・同じ時間帯の重なりは手術一覧の並びで目視する。 */}
         <fieldset>
           <legend>日程・手術室</legend>
-          <p className="order-select__muted surgery-schedule-note">
-            未定のまま申し込めます(手術部が日程を確定します)。
-          </p>
           <label>
             予定手術日(希望)
             <input

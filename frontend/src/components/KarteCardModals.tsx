@@ -11,6 +11,7 @@ import {
   useEndoscopyPerformDetail,
   useTreatmentOrderDetail,
   useSurgeryOrderDetail,
+  useSurgeryPerformDetail,
   useTreatmentPerformDetail,
   useLabResultDetail,
   usePrescriptionDetail,
@@ -704,14 +705,32 @@ function TreatmentOrderJson({ srId }: { srId: string }) {
   );
 }
 
-// 手術は第 1 段階では実施記録を持たないので、オーダー(ヘッダ + 術式)の Bundle だけ。
 function SurgeryOrderJson({ srId }: { srId: string }) {
   const detail = useSurgeryOrderDetail(srId);
+  const perform = useSurgeryPerformDetail(srId);
+  const performBundle = perform.data?.data;
+  const hasPerform = (performBundle?.entry?.length ?? 0) > 0;
 
   return (
     <>
       <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
+      <ErrorBanner error={perform.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : hasPerform ? (
+        <>
+          <section className="karte-json__section">
+            <h3 className="karte-json__section-title">オーダー</h3>
+            <FhirJsonView resource={detail.data?.data} />
+          </section>
+          <section className="karte-json__section">
+            <h3 className="karte-json__section-title">実施記録</h3>
+            <FhirJsonView resource={performBundle} />
+          </section>
+        </>
+      ) : (
+        <FhirJsonView resource={detail.data?.data} />
+      )}
     </>
   );
 }

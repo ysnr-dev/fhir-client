@@ -167,9 +167,11 @@ import {
 } from "../fhir/surgeryOrderHelpers";
 import {
   buildSurgeryTaskUpdate,
+  surgeryTaskStatus,
   surgeryTasksByOrderId,
   type SurgeryTaskStatus,
 } from "../fhir/surgeryTaskHelpers";
+import { buildSurgeryPerformDeleteEntries } from "../fhir/surgeryResultHelpers";
 import { buildPractitionerDeleteBundle } from "../fhir/practitionerHelpers";
 import {
   addDays,
@@ -5935,6 +5937,51 @@ export function useConfirmSurgerySchedule() {
   });
 }
 
+/**
+ * 日程未定のまま入室する(緊急手術)。押した日時をそのまま予定日時にして、
+ * Task を入室中にするところまでを 1 transaction で書く。
+ *
+ * 緊急手術は日程を決めてから始めるものではないので、「日程を確定 → 入室」の
+ * 2 操作を踏ませると現場が先に手術を始めて記録が後追いになる。入室した事実の方が
+ * 確かなので、それを予定日時として記録し、以後は予定日別タブの当日ぶんに並べる。
+ */
+export function useAdmitUnscheduledSurgery() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      order,
+      task,
+      now,
+    }: {
+      order: fhir4.ServiceRequest;
+      task: fhir4.Task | undefined;
+      /** 入室日時。datetime-local の入力形式(YYYY-MM-DDTHH:mm)。 */
+      now: string;
+    }) => {
+      const summary = summarizeSurgeryOrder(order);
+      // 日程だけを埋める。所要時間・手術室は申込で希望していればそのまま残す。
+      const values: SurgeryScheduleValues = {
+        scheduledDate: now.slice(0, 10),
+        scheduledTime: now.slice(11, 16),
+        durationMinutes: summary.durationMinutes != null ? String(summary.durationMinutes) : "",
+        roomId: summary.roomId,
+        roomName: summary.roomName,
+      };
+      const scheduled = buildSurgeryScheduleServiceRequest(order, values);
+      return postBundle(
+        buildSurgeryScheduleBundle(
+          order,
+          values,
+          taskBundleEntry(buildSurgeryTaskUpdate(task, scheduled, "in-progress")),
+        ),
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+    },
+  });
+}
+
 /** 予定手術日 1 日ぶんの手術オーダー。日付が未選択の間は読みに行かない。 */
 export function useSurgeryWorklist(date: string) {
   return useQuery({
@@ -5946,14 +5993,64 @@ export function useSurgeryWorklist(date: string) {
 }
 
 /**
- * 受付(日程確定)・中止などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
- * 第 1 段階では実施記録が無いので、片付けるものは無く Task 1 件の書き込みで済む。
+ * 実施の取消で片付ける実施記録。ハブにぶら下がる薬剤と測定値も 1 リクエストで集める。
+ *
+ * 一覧が持っている行の情報からではなく、その場で引き直す。取消は稀な操作で、
+ * 一覧を開いた後に別の端末で登録された実施記録も残さず消したいため(処置と同じ)。
+ */
+function surgeryPerformSearchParams(orderId: string): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("based-on", `ServiceRequest/${orderId}`);
+  params.set("_count", "100");
+  params.append("_revinclude", "MedicationAdministration:part-of");
+  params.append("_revinclude", "Observation:part-of");
+  return params;
+}
+
+async function fetchSurgeryPerformResources(orderId: string) {
+  const { data: bundle } = await searchResource<fhir4.Resource>(
+    "Procedure",
+    surgeryPerformSearchParams(orderId),
+  );
+
+  const procedures: fhir4.Procedure[] = [];
+  const administrations: fhir4.MedicationAdministration[] = [];
+  const observations: fhir4.Observation[] = [];
+  for (const entry of bundle.entry ?? []) {
+    const resource = entry.resource;
+    if (resource?.resourceType === "Procedure") procedures.push(resource as fhir4.Procedure);
+    else if (resource?.resourceType === "MedicationAdministration") {
+      administrations.push(resource as fhir4.MedicationAdministration);
+    } else if (resource?.resourceType === "Observation") {
+      observations.push(resource as fhir4.Observation);
+    }
+  }
+  return { procedures, administrations, observations };
+}
+
+/**
+ * 手術の実施記録(Procedure 一式)。オーダーとは別リソースでオーダーの検索から
+ * 辿れないので別に引く。カルテカードの FHIR JSON 表示で使う。
+ */
+export function useSurgeryPerformDetail(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ["Procedure", "search", "surgery-perform", orderId],
+    queryFn: () =>
+      searchResource<fhir4.Resource>("Procedure", surgeryPerformSearchParams(orderId ?? "")),
+    enabled: Boolean(orderId),
+  });
+}
+
+/**
+ * 受付(日程確定)・入室・中止などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
+ * 実施済から戻す(実施取消)ときは、実施記録も同じ transaction で消す
+ * (放射線検査と同じ理由。docs/rad-result-design.md §7-6)。
  */
 export function useUpdateSurgeryTaskStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       order,
       task,
       status,
@@ -5961,18 +6058,57 @@ export function useUpdateSurgeryTaskStatus() {
       order: fhir4.ServiceRequest;
       task: fhir4.Task | undefined;
       status: SurgeryTaskStatus;
-    }) =>
-      postBundle({
+    }) => {
+      const taskEntry = taskBundleEntry(buildSurgeryTaskUpdate(task, order, status));
+
+      const cancelsPerform = surgeryTaskStatus(task) === "completed" && status !== "completed";
+      const performed = cancelsPerform
+        ? await fetchSurgeryPerformResources(order.id ?? "")
+        : { procedures: [], administrations: [], observations: [] };
+      const performEntries = buildSurgeryPerformDeleteEntries(
+        performed.procedures,
+        performed.administrations,
+        performed.observations,
+      );
+
+      return postBundle({
         resourceType: "Bundle",
         type: "transaction",
-        entry: [taskBundleEntry(buildSurgeryTaskUpdate(task, order, status))],
-      }),
+        entry: [...performEntries, taskEntry],
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "surgery-worklist"] });
-      // カルテのオーダーカードも進捗を出しているので読み直させる。
-      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      invalidateSurgery(queryClient);
     },
   });
+}
+
+/**
+ * 手術の実施登録。実施記録一式と Task の実施済を 1 つの transaction で書き込む。
+ * Bundle の組み立ては surgeryResultHelpers を参照。
+ */
+export function useRegisterSurgeryPerform() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      invalidateSurgery(queryClient);
+    },
+  });
+}
+
+/**
+ * 手術の進捗・実施記録が動いたときに読み直させるもの。日程未定タブは
+ * 中止・入室でも中身が変わるので必ず含める。
+ */
+function invalidateSurgery(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "surgery-worklist"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "surgery-unscheduled"] });
+  // カルテのオーダーカードも進捗と実施情報を出しているので読み直させる。
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+  // 取消では実施記録も消しているので、FHIR JSON 表示の実施記録も引き直させる。
+  queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
 }
 
 /** 手術オーダーの更新。ヘッダ + 明細の transaction を書くだけ(予約の付け替えは無い)。 */

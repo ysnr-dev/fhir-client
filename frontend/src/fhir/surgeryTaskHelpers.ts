@@ -1,28 +1,39 @@
 import { createTaskHelpers } from "./taskHelpers";
 
-// 手術の進捗(受付=日程確定・中止)。オーダーそのものは ServiceRequest のままにして、
-// 「その申込が手術部でどこまで進んだか」を Task で別に持つ(他部門と同じ形。理由は
-// treatmentTaskHelpers を参照)。
+// 手術の進捗。オーダーそのものは ServiceRequest のままにして、「その申込が手術部で
+// どこまで進んだか」を Task で別に持つ(他部門と同じ形。理由は treatmentTaskHelpers
+// を参照)。
 //
 //   ServiceRequest(申込) ← focus ── Task(進捗)
 //
-// 第 1 段階(申込〜日程確保)の状態は 3 つだけ。入室(in-progress)・実施済(completed)は
-// 実施記録を作る第 2 段階で足す。
+// 他部門(依頼済 → 受付済 → 実施済)と違い、手術は受付(日程確定)から実施までが長く、
+// その間「今この患者が手術中である」ことが分からないと病棟・麻酔科・家族への説明が
+// 回らない。そこで入室(in-progress)を 1 段挟む。入室は Task を進めるだけで、
+// 実施記録は退室後にまとめて 1 回入れる(docs/surgery-result-design.md)。
 
 export const SURGERY_TASK_CODE = { code: "surgery", display: "手術" };
 
 /**
  * 手術の進捗。
  *
- * requested … 申込済(手術部はまだ受け取っていない)
- * accepted  … 受付済(手術部が申込を受け付け、日程を確定した)
- * cancelled … 中止
+ * requested   … 申込済(手術部はまだ受け取っていない)
+ * accepted    … 受付済(手術部が申込を受け付け、日程を確定した)
+ * in-progress … 入室中(患者が手術室に入った。実施記録はまだ)
+ * completed   … 実施済(退室し、実施記録を入れた)
+ * cancelled   … 中止
  */
-export type SurgeryTaskStatus = "requested" | "accepted" | "cancelled";
+export type SurgeryTaskStatus =
+  | "requested"
+  | "accepted"
+  | "in-progress"
+  | "completed"
+  | "cancelled";
 
 export const SURGERY_TASK_STATUS_OPTIONS: { code: SurgeryTaskStatus; display: string }[] = [
   { code: "requested", display: "申込済" },
   { code: "accepted", display: "受付済" },
+  { code: "in-progress", display: "入室中" },
+  { code: "completed", display: "実施済" },
   { code: "cancelled", display: "中止" },
 ];
 
@@ -38,6 +49,12 @@ export interface SurgeryTaskAction {
   label: string;
   next: SurgeryTaskStatus;
   /**
+   * 押すと実施入力を開く操作。ステータスだけを進める他の操作と違い、実施記録
+   * (時刻・実施術式・スタッフ・出血量・薬剤・材料)を入れてから Task の完了と
+   * 一緒に登録する。
+   */
+  opensPerformInput?: true;
+  /**
    * 日常の流れではない操作(押し間違いの訂正・手術の取りやめ)。一覧では
    * ケバブメニューに畳み、その行で普通に押す操作だけをボタンで出す。
    */
@@ -47,8 +64,11 @@ export interface SurgeryTaskAction {
 /**
  * 今のステータスから移れる先。
  *
- * 「取消」は受付を打ち消して申込済に戻す操作(押し間違いの訂正)、「中止」は手術
- * そのものを取りやめる操作で、別のもの。中止からは申込済に戻せる。
+ * 「取消」は 1 つ前に戻す操作(押し間違いの訂正)、「中止」は手術そのものを
+ * 取りやめる操作で、別のもの。中止からは申込済に戻せる。
+ *
+ * 「実施取消」は実施記録ごと消して入室中に戻す(他部門と違い記録を残さない。
+ * 理由は docs/surgery-result-design.md)。
  */
 export function surgeryTaskActions(status: SurgeryTaskStatus): SurgeryTaskAction[] {
   switch (status) {
@@ -59,9 +79,17 @@ export function surgeryTaskActions(status: SurgeryTaskStatus): SurgeryTaskAction
       ];
     case "accepted":
       return [
+        { label: "入室", next: "in-progress" },
         { label: "取消", next: "requested", secondary: true },
         { label: "中止", next: "cancelled", secondary: true },
       ];
+    case "in-progress":
+      return [
+        { label: "実施", next: "completed", opensPerformInput: true },
+        { label: "入室取消", next: "accepted", secondary: true },
+      ];
+    case "completed":
+      return [{ label: "実施取消", next: "in-progress", secondary: true }];
     case "cancelled":
       return [{ label: "中止を取消", next: "requested", secondary: true }];
   }

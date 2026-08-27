@@ -72,7 +72,8 @@ const APPROACH_EXT_URL = "http://fhir-client.local/StructureDefinition/surgery-a
 
 // 拡張の valueCoding が使う CodeSystem。
 const POSITION_SYSTEM = "http://fhir-client.local/CodeSystem/surgery-position";
-const STAFF_ROLE_SYSTEM = "http://fhir-client.local/CodeSystem/surgery-staff-role";
+// 実施記録の performer.function でも同じコード表を使うので export する。
+export const STAFF_ROLE_SYSTEM = "http://fhir-client.local/CodeSystem/surgery-staff-role";
 const ANESTHESIA_METHOD_SYSTEM =
   "http://fhir-client.local/CodeSystem/surgery-anesthesia-method";
 const ANESTHESIA_MANAGEMENT_SYSTEM =
@@ -115,13 +116,35 @@ export const SURGERY_APPROACH_OPTIONS = [
   { code: "other", display: "その他" },
 ] as const;
 
-/** スタッフの役割。第 1 段階は申込書に書く 3 役(器械出し・外回りは実施記録側で扱う)。 */
-export type SurgeryStaffRole = "surgeon" | "assistant" | "anesthetist";
+/**
+ * スタッフの役割。申込と実施記録で同じコード表を使う。
+ *
+ * 器械出し・外回り・臨床工学技士は「誰が入ったか」が当日決まるので申込では聞かない。
+ * 選択肢の配列を分けてあるのはそのためで(SURGERY_STAFF_ROLE_OPTIONS = 申込の 3 役 /
+ * SURGERY_PERFORM_STAFF_ROLE_OPTIONS = 実施の 6 役)、コード体系は共通なので
+ * 申込で選んだ執刀医をそのまま実施記録の初期値にできる。
+ */
+export type SurgeryStaffRole =
+  | "surgeon"
+  | "assistant"
+  | "anesthetist"
+  | "scrub-nurse"
+  | "circulating-nurse"
+  | "ce";
 
+/** 申込で選ぶ役割。 */
 export const SURGERY_STAFF_ROLE_OPTIONS: { code: SurgeryStaffRole; display: string }[] = [
   { code: "surgeon", display: "執刀医" },
   { code: "assistant", display: "助手" },
   { code: "anesthetist", display: "麻酔科医" },
+];
+
+/** 実施記録で選ぶ役割。申込の 3 役に、当日決まる 3 役を足したもの。 */
+export const SURGERY_PERFORM_STAFF_ROLE_OPTIONS: { code: SurgeryStaffRole; display: string }[] = [
+  ...SURGERY_STAFF_ROLE_OPTIONS,
+  { code: "scrub-nurse", display: "器械出し" },
+  { code: "circulating-nurse", display: "外回り" },
+  { code: "ce", display: "臨床工学技士" },
 ];
 
 export const SURGERY_ANESTHESIA_METHOD_OPTIONS = [
@@ -191,7 +214,7 @@ export function surgeryPositionDisplay(code: string): string {
 }
 
 export function surgeryStaffRoleDisplay(code: string): string {
-  return displayOf(SURGERY_STAFF_ROLE_OPTIONS, code);
+  return displayOf(SURGERY_PERFORM_STAFF_ROLE_OPTIONS, code);
 }
 
 export function surgeryAnesthesiaMethodDisplay(code: string): string {

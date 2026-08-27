@@ -53,6 +53,7 @@ import {
   surgeryTasksByOrderId,
   type SurgeryTaskStatus,
 } from "./surgeryTaskHelpers";
+import { surgeryPerformsByOrderId, type SurgeryPerformDisplay } from "./surgeryResultHelpers";
 import {
   isEndoscopyServiceRequest,
   endoscopyOrderItemRequests,
@@ -201,13 +202,15 @@ export type KarteTimelineItem = KarteItemBase &
         /** 実施記録。未実施なら空。取消 → 再実施で複数残ることがある。 */
         performs: TreatmentPerformDisplay[];
       }
-    // 手術(申込)。第 1 段階では実施記録を持たないので performs は無い。
+    // 手術(申込)。他部門と同じく実施記録を持つが、進捗に入室中が挟まる。
     | {
         kind: "surgery-order";
         serviceRequest: fhir4.ServiceRequest;
         itemRequests: fhir4.ServiceRequest[];
         /** 手術部の進捗。Task がまだ無いオーダーは申込済。 */
         status: SurgeryTaskStatus;
+        /** 実施記録。未実施なら空。 */
+        performs: SurgeryPerformDisplay[];
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
@@ -447,6 +450,12 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const endoscopyPerformByOrderId = endoscopyPerformsByOrderId(procedures, administrations);
   const treatmentTaskByOrderId = treatmentTasksByOrderId(tasks);
   const surgeryTaskByOrderId = surgeryTasksByOrderId(tasks);
+  // 手術は出血量などの測定値も持つので、放射線と同じく Observation も渡す。
+  const surgeryPerformByOrderId = surgeryPerformsByOrderId(
+    procedures,
+    administrations,
+    pickByType<fhir4.Observation>(prescriptionResources, "Observation"),
+  );
   const treatmentPerformByOrderId = treatmentPerformsByOrderId(procedures, administrations);
 
   const medicationRequestsBySr = new Map<string, fhir4.MedicationRequest[]>();
@@ -563,12 +572,16 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
       };
     }
     if (isSurgeryServiceRequest(serviceRequest)) {
+      const status = surgeryTaskStatus(surgeryTaskByOrderId.get(serviceRequest.id ?? ""));
       return {
         ...base,
         kind: "surgery-order" as const,
         label: KARTE_KIND_LABELS["surgery-order"],
         itemRequests: surgeryOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
-        status: surgeryTaskStatus(surgeryTaskByOrderId.get(serviceRequest.id ?? "")),
+        status,
+        // 他部門と同じく、実施情報は進捗が実施済のときだけ出す。
+        performs:
+          status === "completed" ? (surgeryPerformByOrderId.get(serviceRequest.id ?? "") ?? []) : [],
       };
     }
     const withMedications = {

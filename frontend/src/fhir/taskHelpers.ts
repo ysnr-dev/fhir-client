@@ -115,7 +115,9 @@ export function createTaskHelpers<S extends fhir4.Task["status"]>(config: TaskHe
     if (status === "requested" || status === "cancelled") return undefined;
 
     const start = task?.executionPeriod?.start ?? now;
-    if (status === "accepted") return { start };
+    // 受付済・作業中はまだ終わっていないので終了時刻を入れない(手術の「入室中」が
+    // これに当たる)。end が入るのは実施済・中止など「部門の手が離れた」状態だけ。
+    if (status === "accepted" || status === "in-progress") return { start };
     return { start, end: preserveEnd ? (task?.executionPeriod?.end ?? now) : now };
   }
 
