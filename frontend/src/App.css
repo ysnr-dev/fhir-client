@@ -5185,6 +5185,31 @@ body.karte-wide {
   margin-bottom: 20px;
 }
 
+/* このクラスは <section> で使うのが常だが、術式マスタの「既定の麻酔方法」だけは
+   チェックボックス群をまとめるので <fieldset> になっている。マスタの編集モーダルの
+   フォームは .prescription-form ではないため、何もしないとブラウザ既定の groove 枠と
+   本文サイズ(18px)の legend / label になり、同じチェックボックス群を持つ手術申込
+   フォームと見た目が揃わない。申込フォーム側(.prescription-form fieldset)に合わせる。 */
+fieldset.lab-order-item__section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  /* 枠のすぐ下に次の入力行(有効開始日など)が来る。.lab-order-item__fields は
+     上マージンを持たないので、枠側で間隔を空ける。 */
+  margin-bottom: 16px;
+}
+
+fieldset.lab-order-item__section > legend {
+  font-size: 13px;
+  padding: 0 4px;
+}
+
+fieldset.lab-order-item__section label {
+  font-size: 13px;
+}
+
 .lab-order-item__section-head {
   display: flex;
   align-items: center;
@@ -8214,9 +8239,12 @@ body.page-wide #root {
   flex-basis: 100%;
 }
 
-/* .prescription-form label は縦積み(ラベルの下に入力)だが、チェックボックスは
-   ラベルの左に置かないと対応が読み取れない。この群だけ横並びに戻す。 */
+/* チェックボックスはラベルの左に置かないと対応が読み取れない。
+   display を自分で持たせる(申込フォームの .prescription-form label は縦積みの
+   flex だが、術式マスタの編集モーダルの label は flex ではないので、継承に頼ると
+   gap が効かずチェックボックスと文字がくっつく)。 */
 .surgery-checkbox-row label {
+  display: flex;
   flex-direction: row;
   align-items: center;
   gap: 6px;
@@ -8305,7 +8333,7 @@ body.page-wide #root {
   flex-basis: 100%;
   width: 100%;
   margin: 4px 0 12px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface-card);
@@ -8315,18 +8343,25 @@ body.page-wide #root {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .surgery-day-schedule__title {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-h);
+}
+
+/* 入力欄の付属表示なので、入力そのものより小さく組む。日程を決めるのに要るのは
+   「その時間が空いているか」だけで、読み込む表ではない。 */
+.surgery-day-schedule .order-select__muted {
+  font-size: 11px;
+  padding: 2px 0;
 }
 
 /* 件数が増えても入力欄が押し出されないよう、高さを頭打ちにしてスクロールさせる
    (table 自体に overflow は効かないので外側の div で囲む)。 */
 .surgery-day-schedule__table-wrap {
-  max-height: 200px;
+  max-height: 168px;
   overflow-y: auto;
 }
 
@@ -8334,6 +8369,14 @@ body.page-wide #root {
    枠の地色に合わせないと行が透けて見える。 */
 .surgery-day-schedule__table th {
   background: var(--surface-card);
+}
+
+/* 共有クラス(.master-search__table)は検索モーダルの本文用で 14px / 6px 10px。
+   ここは付属表示なので詰める。 */
+.surgery-day-schedule__table th,
+.surgery-day-schedule__table td {
+  font-size: 12px;
+  padding: 3px 8px;
 }
 
 /* 入れようとしている時間帯と重なる予定。潰してはいけない行なので、警告色の
@@ -8345,16 +8388,16 @@ body.page-wide #root {
 
 .surgery-day-schedule__flag {
   margin-left: 6px;
-  padding: 0 6px;
+  padding: 0 5px;
   border-radius: 999px;
   background: var(--lab-high);
   color: #fff;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .surgery-day-schedule__warn {
-  margin: 0 0 6px;
-  font-size: 13px;
+  margin: 0 0 4px;
+  font-size: 12px;
   color: var(--lab-high);
 }
 
