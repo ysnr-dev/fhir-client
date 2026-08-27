@@ -32,6 +32,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { PractitionerSearchModal } from "./PractitionerSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
 import { SurgeryItemSearchModal } from "./SurgeryItemSearchModal";
+import { SurgeryRoomDaySchedule } from "./SurgeryRoomDaySchedule";
 
 // 手術オーダー(申込)の入力フォーム。既存 4 種のオーダーと骨格は同じだが、
 // 伝票レイアウトのタブは持たず、術式は検索モーダルから選ぶ。
@@ -45,6 +46,8 @@ import { SurgeryItemSearchModal } from "./SurgeryItemSearchModal";
 
 interface SurgeryOrderFormProps {
   patientId: string;
+  /** 編集で開いているオーダーの id。その日の予定から自分自身を外すのに使う。 */
+  orderId?: string;
   initialValues?: SurgeryOrderFormValues;
   onSubmit: (values: SurgeryOrderFormValues) => void;
   submitting: boolean;
@@ -84,6 +87,7 @@ function TrashIcon() {
 
 export function SurgeryOrderForm({
   patientId,
+  orderId,
   initialValues,
   onSubmit,
   submitting,
@@ -346,7 +350,8 @@ export function SurgeryOrderForm({
         </fieldset>
 
         {/* 日程と手術室。第 1 段階は枠(Slot)を持たず、日時と部屋の指定だけ。
-            同じ部屋・同じ時間帯の重なりは手術一覧の並びで目視する。 */}
+            同じ部屋・同じ時間帯の重なりは、入力の下に出すその日の予定で確かめる
+            (日程を入れた/変えた瞬間が、重なりの生まれる唯一の場面)。 */}
         <fieldset>
           <legend>日程・手術室</legend>
           <label>
@@ -400,6 +405,14 @@ export function SurgeryOrderForm({
               ))}
             </select>
           </label>
+          <SurgeryRoomDaySchedule
+            date={values.scheduledDate}
+            roomId={values.roomId}
+            roomName={values.roomName}
+            time={values.scheduledTime}
+            durationMinutes={values.durationMinutes}
+            excludeOrderId={orderId}
+          />
         </fieldset>
 
         {/* 術式。先頭が主術式で、DPC・手術記録の見出しになる。 */}

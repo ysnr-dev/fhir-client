@@ -8299,6 +8299,65 @@ body.page-wide #root {
   margin-left: auto;
 }
 
+/* 日程を入れている手術室の、その日の予定(SurgeryRoomDaySchedule)。
+   申込フォームの fieldset は flex なので、明示しないと内容幅で止まる。 */
+.surgery-day-schedule {
+  flex-basis: 100%;
+  width: 100%;
+  margin: 4px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-card);
+}
+
+.surgery-day-schedule__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.surgery-day-schedule__title {
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+/* 件数が増えても入力欄が押し出されないよう、高さを頭打ちにしてスクロールさせる
+   (table 自体に overflow は効かないので外側の div で囲む)。 */
+.surgery-day-schedule__table-wrap {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* 列見出しの sticky 背景。共有クラスは --bg 前提だが、この表は枠の中にあるので
+   枠の地色に合わせないと行が透けて見える。 */
+.surgery-day-schedule__table th {
+  background: var(--surface-card);
+}
+
+/* 入れようとしている時間帯と重なる予定。潰してはいけない行なので、警告色の
+   左罫線と地色で目立たせる(検査の異常値と同じ --lab-high)。 */
+.surgery-day-schedule__row--conflict {
+  background: color-mix(in srgb, var(--lab-high) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--lab-high);
+}
+
+.surgery-day-schedule__flag {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--lab-high);
+  color: #fff;
+  font-size: 11px;
+}
+
+.surgery-day-schedule__warn {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--lab-high);
+}
+
 /* 特記・申し送り。fieldset が flex なので、textarea 単体だと既定の cols 幅で
    止まってしまう。枠いっぱいに広げる。 */
 .surgery-comment textarea {

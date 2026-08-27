@@ -118,6 +118,7 @@ export function SurgeryOrderEditPanel({ patientId, srId, onSaved }: SurgeryOrder
         initialValues && (
           <SurgeryOrderForm
             patientId={patientId}
+            orderId={srId}
             initialValues={initialValues}
             onSubmit={handleSubmit}
             submitting={updateSurgeryOrder.isPending}

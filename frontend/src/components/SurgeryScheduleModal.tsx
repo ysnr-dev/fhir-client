@@ -8,12 +8,17 @@ import {
 } from "../fhir/surgeryOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
+import { SurgeryRoomDaySchedule } from "./SurgeryRoomDaySchedule";
 
 // 手術部が日程未定の申込に日程を入れて確定する。オーダーの日程と進捗(受付済 =
 // 日程確定)を 1 transaction で書く(useConfirmSurgerySchedule)。
 //
 // 「未定 → 確定」の一方向だけを扱う。確定後の日程変更はカルテカードの編集から行う
 // (申込の中身と一緒に直せる方が自然なため)。
+//
+// 手術は予約枠を持たないので、部屋のダブルブッキングが生まれるのはこの確定の瞬間
+// だけ。入力の下に同じ日・同じ部屋の予定を出して、重なりをその場で見せる
+// (SurgeryRoomDaySchedule)。
 
 interface Props {
   row: SurgeryWorklistRow;
@@ -116,6 +121,15 @@ export function SurgeryScheduleModal({ row, onClose }: Props) {
             </select>
           </label>
         </div>
+
+        <SurgeryRoomDaySchedule
+          date={values.scheduledDate}
+          roomId={values.roomId}
+          roomName={values.roomName}
+          time={values.scheduledTime}
+          durationMinutes={values.durationMinutes}
+          excludeOrderId={row.order.id}
+        />
 
         <p className="rad-code__summary">確定すると受付済になり、予定日別の一覧に並びます。</p>
 

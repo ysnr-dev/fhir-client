@@ -210,6 +210,7 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
 - ［第2段階］**緊急・準緊急の行にだけ「入室」も出す**。日程の確定を待たずに手術を
   始められるようにするためで、押した日時がそのまま予定日時になる
   (`docs/surgery-result-design.md` §4)。
+- 確定モーダルの入力欄の下に、**その日・その手術室の予定**を出す(§5.5)。
 
 ［提案］**希望日を書いた申込は日程未定タブには出ない**(`occurrence` を持つので予定日別
 タブのその日に「申込済」として出る)。手術部の待ち行列が 2 か所に分かれるが、1 か所に
@@ -241,6 +242,38 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
 
 ---
 
+### 5.5 日程を入れるときに見せる「その日・その手術室の予定」
+
+［提案］手術は予約枠(Slot)を持たないので、部屋の**ダブルブッキングが生まれるのは
+日程を入れる/変える瞬間だけ**。ところがその瞬間に手術一覧は見えず、重なりは後から
+一覧を開くまで気づけない。これが第1段階の唯一の盲点だった(§7-3)。
+
+`SurgeryRoomDaySchedule` を入力欄の直下に置き、入れようとしている日の予定を並べて
+重なりに印を付ける。置き場所は 2 か所で、いずれも日程を触れる画面。
+
+| 置き場所 | 自分自身の扱い |
+|---|---|
+| `SurgeryScheduleModal`(手術部の日程確定) | まだ occurrence が無いので出てこない |
+| `SurgeryOrderForm`(診療科の申込・カルテからの日程変更) | `orderId` で一覧から外す |
+
+- 読むのは既存の `useSurgeryWorklist(date)`。**予定日別タブと同じ queryKey** なので、
+  一覧を見た直後に確定モーダルを開けばキャッシュがそのまま効く。上流の改修は要らない。
+- **手術室を選んでいるとき**だけその部屋に絞り、重なりを判定する。未選択(部屋未定)は
+  取り合う相手がいないので、判定せずその日の全部屋を並べる(空いている部屋を探せる)。
+- 重なりの判定は入室予定時刻 + 所要時間の区間が交わるかどうか。所要時間が分からない
+  ものは入室時刻の一点(1 分幅)として扱い、他方の時間帯の中に落ちたときだけ拾う。
+  境界(前の手術の退室予定 = 次の入室予定)は重なりにしない。
+- **中止**の手術は部屋を空けるので、一覧にも重なりにも数えない。
+- ［導出］重なりがあっても**登録は止めない**。緊急の割り込みや、前の手術が早く終わる
+  読みでわざと詰めることがあり、止めると運用が回らない。出すのは警告まで。
+- 患者名は出さない。ここで要るのは「その部屋のその時間が空いているか」だけで、
+  カルテの申込フォームからも開くため、無関係な患者の氏名を並べないで済ませる。
+- 1 日ぶんを読み切れなかった(`truncated`)ときは「重なりなし」が嘘になるので、
+  読み切れていない旨を必ず出す。
+
+これは手術室カレンダー(§7-3)が入るまでの中間策ではなく、**カレンダーが入っても
+残る表示**(日程を触る画面で、その場の空きが見える)。
+
 ## 6. 実装したもの
 
 | 層 | 追加物 |
@@ -250,7 +283,7 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
 | API | `surgery_items`(index/show/create/update/destroy) |
 | spec | リクエスト 1 本(12 examples)。backend 全 984 examples green |
 | FHIR 変換 | `fhir/surgeryOrderHelpers.ts` / `surgeryTaskHelpers.ts` |
-| 画面 | `SurgeryItemPage` / `SurgeryWorklistPage` / `SurgeryOrderForm` / `SurgeryOrderPanels` / `SurgeryOrderDetailPanel` / `SurgeryItemSearchModal` / `useSurgeryOrderInitialValues` |
+| 画面 | `SurgeryItemPage` / `SurgeryWorklistPage` / `SurgeryOrderForm` / `SurgeryOrderPanels` / `SurgeryOrderDetailPanel` / `SurgeryItemSearchModal` / `SurgeryScheduleModal` / `SurgeryRoomDaySchedule` / `useSurgeryOrderInitialValues` |
 | カルテ | `karteTimeline` に `surgery-order` 種別、`KarteRightPane` の「手術」ボタン、`KarteTimeline` のカード、`KarteCardModals` の詳細/JSON、`KarteCategoryList` / `karteUrl` / `KartePage` の分岐 |
 | 共通 | `MedicalProcedureSearchModal` に K/L 章、`locationHelpers` に SU |
 
@@ -276,6 +309,13 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
 5. 編集: 保存値からのフォーム復元(日程・スタッフ・チェック群) → 更新
 6. DO: 術式・スタッフ・準備を引き継ぎ、予定手術日・入室時刻は空の申込フォームが
    開くこと
+7. その日・その手術室の予定(§5.5。2026-08-27 に追加。開発環境で以下を通した):
+   日程確定モーダルで日付だけ入れると全手術室の予定が出る → 手術室1 を選ぶと
+   その部屋に絞られ、09:00〜11:00 の手術に対し 10:00 入室で「1 件と重なっています」
+   + 行が警告色 + 「重なり」バッジ、11:00 入室(境界)では重なりなし、予定の無い日は
+   「この手術室のその日の予定はありません」。カルテの編集フォームでは自分自身が
+   一覧に出ない(08-31 14:30 手術室1 のオーダーを開いて空表示)ことと、日付を
+   08-28・09:30 に変えると重なりが出ることを確認
 
 **occurrencePeriod からの直し**: 最初の実装は予定日時を `occurrencePeriod`
 (start=入室、end=start+所要時間)にしていたが、手術一覧(occurrence 検索)に
@@ -304,9 +344,10 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
    入室時刻順に並べて重なりを隣接させること」の 2 つ。カレンダーが入れば競合する
    オーダーを作れなくなるので、それまでの中間策(一覧に警告バッジを出す 等)は
    捨て仕事になる。
-   なお**日程を確定するモーダルからは、その日その部屋の他の予定が見えない**のが
-   唯一の盲点(競合が生まれるのはこの瞬間)。カレンダーより先に運用へ載せるなら、
-   確定モーダルに「その日のその部屋の予定」を出す最小版を入れれば足りる
+   なお**「日程を確定するモーダルからその日その部屋の他の予定が見えない」という
+   盲点は塞いだ**(§5.5。確定モーダルと申込・編集フォームの両方に、その日・その部屋の
+   予定と重なりの印を出す)。残っているのはブロックスケジュールと、
+   競合するオーダーをそもそも作れなくすること
 4. **DPC / NCD**: K コード・到達法・(第2段階の)合併症は提出データの起点になるので、
    構造化を崩さないこと
 5. **共通化**: treatment §7-4 の「5 つ目が出る前に共通化を検討」は、手術の差分が
