@@ -4260,8 +4260,9 @@ export function useKarteClinicalNotesInfinite(
       const params = new URLSearchParams();
       params.set("subject", `Patient/${patientId}`);
       params.set("type", "http://loinc.org|11506-3");
-      // 対象プロブレムはローカル拡張に持つので、上流の標準外パラメータで引く。
-      if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+      // 対象プロブレムは問題リストセクション(LOINC 11450-4)の section.entry に持つので、
+      // R4 標準の entry で引ける(参照検索のカンマは OR)。
+      if (problemIds?.length) params.set("entry", problemSearchValue(problemIds));
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-date");

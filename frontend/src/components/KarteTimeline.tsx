@@ -14,6 +14,7 @@ import {
 } from "../api/queries";
 import { questionnaireResponsePdfUrl, useReportLayoutStatus } from "../api/reportsClient";
 import {
+  noteBodySections,
   sectionResponseId,
   sectionTitle,
   statusLabel,
@@ -693,7 +694,7 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
   }
 
   if (item.kind === "note") {
-    const sections = item.note.section ?? [];
+    const sections = noteBodySections(item.note);
     if (sections.length === 0) return <p className="karte-card__empty">本文がありません。</p>;
     return (
       <>

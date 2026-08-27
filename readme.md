@@ -244,7 +244,7 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   絞り込みの対象は URL の `?problem=<Condition の id>` に載せるので共有・復元できます
   (減光だけの選択は一時的な状態なので載せません)。
   - **絞り込みはサーバー検索で行います**。4 系統の無限クエリにそれぞれ
-    `Composition?problem=` / `ServiceRequest?reason-reference=` / `QuestionnaireResponse?problem=` /
+    `Composition?entry=` / `ServiceRequest?reason-reference=` / `QuestionnaireResponse?problem=` /
     `Observation?problem=`
     を付け、対象の Condition id をクエリキーにも入れます(絞り込みごとに別のページング列に
     なるので、切り替えると先頭ページから読み直します)。親プロブレムを選んだときは下位
@@ -294,21 +294,26 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   - グラフは検査結果と同じ `LabTimelineChart` を再利用し、**血圧は収縮期・拡張期の 2 系列**に
     分けて描きます。横軸は測定日時なので、同じ日の朝夕が重なりません。
 - **診療記録とプロブレムの紐付け**: POMR は「各 Problem に対して SOAP 形式で経過を記録する」ため、
-  紐付けはセクション単位ではなく**診療記録 1 件に対して 1 プロブレム**です(複数のプロブレムを扱う
-  ときは記録を分けて登録します)。base `Composition` には対象疾患を表す要素が無い(`event` は検査・
-  手術などの「行為」用)ので、アプリローカル拡張
-  `http://fhir-client.local/StructureDefinition/clinical-note-problem` の `valueReference` に持たせます。
-  `display` には保存時点の「#番号 名称」を入れておくので参照解決なしでも描画できます。表示側は現在の
-  プロブレムから名称を引き直すため、病名を編集しても過去の記録に古い名前は残りません。参照先が
-  削除済みの場合は保存済みの表示名 +「(削除済み)」でフォールバックします。プロブレムのチップを選ぶと、
-  そのプロブレムに紐付かないカードを減光します(件数が減るとページングの判定が動くため、隠さず減光に
-  とどめています)。プロブレムを選んだ状態で「診療記録」から新規登録すると、そのプロブレムを対象の
+  紐付けは**診療記録 1 件に対して 1 プロブレム**です(複数のプロブレムを扱うときは記録を分けて
+  登録します)。**参考にしている C-CDA on FHIR の Progress Note には、S/O/A/P と並ぶ
+  `problems_section`(LOINC 11450-4)が定義されている**ので、対象プロブレムはそのセクションを
+  1 つ持たせて `section.entry` で `Condition` を参照します。ローカル拡張ではなく標準要素なので、
+  絞り込みが **R4 標準の検索パラメータ `entry`** に乗ります(上流の標準外パラメータが 1 つ減ります)。
+  セクションの `text` は entry から導出した要約なので `status` は `generated` です。
+  なお `section.focus` は使いません。あれが表すのは「composition の subject ではない、subject に
+  関連する人・物(配偶者・胎児・ドナー等)」で、記述の主題を表す要素ではないためです。
+  `entry` の `display` には保存時点の「#番号 名称」を入れておくので参照解決なしでも描画できます。
+  表示側は現在のプロブレムから名称を引き直すため、病名を編集しても過去の記録に古い名前は残りません。
+  参照先が削除済みの場合は保存済みの表示名 +「(削除済み)」でフォールバックします。プロブレムのチップを
+  選ぶと、そのプロブレムに紐付かないカードを減光します(件数が減るとページングの判定が動くため、隠さず
+  減光にとどめています)。プロブレムを選んだ状態で「診療記録」から新規登録すると、そのプロブレムを対象の
   初期値にします(登録ボタンを押した時点の選択を `KartePaneState` に載せるので、選択を変えただけで
-  入力中のフォームが作り直されることはありません)。セクション単位で紐付けていた頃の `section.entry` も
-  読めるようにしてあり、保存し直せば拡張へ正規化されます。
+  入力中のフォームが作り直されることはありません)。プロブレムセクションは本文ではないので、編集欄・
+  カード・詳細表示・一覧のセクション要約からは `noteBodySections` で除きます。
 - **テンプレート回答とプロブレムの紐付け**: 単独登録のテンプレート回答(`QuestionnaireResponse`)も
-  診療記録と同じく**回答 1 件に対して 1 プロブレム**を紐付けられます。base `QuestionnaireResponse`
-  にも対象疾患を表す要素が無いため、アプリローカル拡張
+  診療記録と同じく**回答 1 件に対して 1 プロブレム**を紐付けられます。ただし
+  `QuestionnaireResponse` には診療記録の `problems_section` にあたる標準の受け皿が無いため、
+  こちらはアプリローカル拡張
   `http://fhir-client.local/StructureDefinition/questionnaire-response-problem` の `valueReference`
   に持たせます(`display` の扱い・削除済みのフォールバックは診療記録と同じ)。初期計画(Dx/Rx/Ex)の
   ように「どのプロブレムに対する記載か」が要になるテンプレートを、診療記録に貼らず単独で残せる

@@ -82,9 +82,10 @@ export function parseQuestionnaireResponseMeta(
 }
 
 /**
- * 回答が対象とするプロブレム(POMR)。診療記録の clinical-note-problem と同じ考え方の
- * アプリローカル拡張。QuestionnaireResponse には対象疾患を表す標準要素が無い
- * (basedOn は ServiceRequest/CarePlan、partOf は Observation/Procedure しか指せない)。
+ * 回答が対象とするプロブレム(POMR)。アプリローカル拡張で持つ。QuestionnaireResponse には
+ * 対象疾患を表す標準要素が無く(basedOn は ServiceRequest/CarePlan、partOf は
+ * Observation/Procedure しか指せない)、診療記録の problems_section(LOINC 11450-4)に
+ * あたる受け皿も無いため。
  *
  * display には保存時点の「#番号 名称」を入れておき、参照解決なしでも描画できるようにする
  * (表示側はプロブレム一覧が引けるなら最新の名称で上書きする)。

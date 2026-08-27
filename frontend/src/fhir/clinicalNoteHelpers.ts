@@ -10,9 +10,10 @@ import {
 // 診療記録(経過記録)を FHIR Composition で表現するためのヘルパー群。
 //
 // 設計方針:
-// - US Core Clinical Notes / C-CDA on FHIR の Progress Note を参考に、
-//   type = LOINC 11506-3 (Progress note) の base Composition として保存する
-//   (上流 fhir-server は base プロファイルで Composition に対応済み)。
+// - C-CDA on FHIR の Progress Note を参考に、type = LOINC 11506-3 (Progress note) の
+//   base Composition として保存する(上流 fhir-server は base プロファイルで
+//   Composition に対応済み)。US Core は臨床ノートを DocumentReference /
+//   DiagnosticReport で扱い Composition プロファイルを持たないので参照していない。
 // - 本文はセクション単位の Narrative (section.text.div) に XHTML で保存する。
 //   文字装飾は inline style、画像は data: URI の <img> として本文に埋め込む
 //   (FHIR の narrative 規約は data: URI の画像埋め込みを許容している)。
@@ -71,15 +72,31 @@ export const SECTION_QR_EXT_URL =
   "http://fhir-client.local/StructureDefinition/clinical-note-section-questionnaire-response";
 
 // 記録が対象とするプロブレム(Condition)。POMR は「プロブレムごとに SOAP を書く」ので、
-// 紐付けはセクションではなく診療記録 1 件に対して 1 つ持たせる(複数のプロブレムを
-// 扱うときは記録を分けて登録する)。処方と共通の参照型を使う。
+// 紐付けは診療記録 1 件に対して 1 つ持たせる(複数のプロブレムを扱うときは記録を
+// 分けて登録する)。処方と共通の参照型を使う。
 export type ClinicalNoteProblem = ProblemRef;
 
-// 対象プロブレムを記録するアプリローカル拡張。base Composition には診療記録の対象
-// 疾患を表す要素が無いため(event は検査・手術などの「行為」用)、SECTION_QR_EXT_URL
-// と同じ URL 規約で持たせる。
-export const NOTE_PROBLEM_EXT_URL =
-  "http://fhir-client.local/StructureDefinition/clinical-note-problem";
+// 対象プロブレムは C-CDA on FHIR Progress Note の problems_section (LOINC 11450-4)
+// として持ち、section.entry で Condition を参照する。ローカル拡張ではなく標準要素な
+// ので、絞り込みが R4 標準の検索パラメータ entry に乗る。本文のセクションではないので
+// 編集 UI の選択肢(SECTION_OPTIONS)には入れない。
+export const PROBLEMS_SECTION_CODE = "11450-4";
+const PROBLEMS_SECTION_TITLE = "プロブレム";
+
+function isProblemsSection(section: fhir4.CompositionSection): boolean {
+  return (
+    section.code?.coding?.some(
+      (c) => c.system === LOINC_SYSTEM && c.code === PROBLEMS_SECTION_CODE,
+    ) ?? false
+  );
+}
+
+// 本文のセクション。表示・編集・要約はプロブレムセクションを除いたこちらを見る。
+export function noteBodySections(
+  composition: fhir4.Composition | undefined,
+): fhir4.CompositionSection[] {
+  return (composition?.section ?? []).filter((s) => !isProblemsSection(s));
+}
 
 export interface ClinicalNoteSectionDraft {
   // React の key と並べ替えのための安定 ID。FHIR には保存しない。
@@ -162,6 +179,16 @@ export function htmlToXhtml(html: string): string {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const div = doc.createElementNS("http://www.w3.org/1999/xhtml", "div");
   while (doc.body.firstChild) div.appendChild(doc.body.firstChild);
+  return new XMLSerializer().serializeToString(div);
+}
+
+// 平文 1 行を Narrative にする。エスケープは DOM 側に任せる。
+function plainTextXhtml(text: string): string {
+  const doc = new DOMParser().parseFromString("", "text/html");
+  const div = doc.createElementNS("http://www.w3.org/1999/xhtml", "div");
+  const p = doc.createElementNS("http://www.w3.org/1999/xhtml", "p");
+  p.textContent = text;
+  div.appendChild(p);
   return new XMLSerializer().serializeToString(div);
 }
 
@@ -300,92 +327,106 @@ export function buildClinicalNote(
         },
       ];
 
+  // 対象プロブレム(POMR)。指定が無ければセクションごと出さない。display に保存時点の
+  // 「#番号 名称」を残しておくと参照解決なしでも描画できる(表示側は現在のプロブレム
+  // から名称を引き直すので、病名を編集しても古い名前は残らない)。
+  const problemsSection: fhir4.CompositionSection[] = values.problem
+    ? [
+        {
+          title: PROBLEMS_SECTION_TITLE,
+          code: {
+            coding: [
+              { system: LOINC_SYSTEM, code: PROBLEMS_SECTION_CODE, display: "Problem list" },
+            ],
+          },
+          // entry から導出した narrative なので generated(手入力の本文は additional)。
+          text: { status: "generated", div: plainTextXhtml(values.problem.display) },
+          entry: [
+            {
+              reference: `Condition/${values.problem.conditionId}`,
+              display: values.problem.display,
+            },
+          ],
+        },
+      ]
+    : [];
+
+  const bodySections = values.sections
+    .filter((s) => !isEmptyNoteHtml(s.html))
+    .map((s) => {
+      const option = SECTION_OPTIONS.find((o) => o.code === s.code);
+
+      // テンプレート由来セクション: QR への参照拡張を付け、未保存の記入内容が
+      // あれば QR(+シェーマ画像 Binary)を Bundle エントリに積む。
+      let extension: fhir4.Extension[] | undefined;
+      if (s.template) {
+        const { responseId, draft } = s.template;
+        let reference: string;
+        if (draft) {
+          if (responseId) {
+            // 保存済み QR の再編集 → 同じ id へ PUT(参照は実 ID のまま)。
+            reference = `QuestionnaireResponse/${responseId}`;
+            keptResponseIds.add(responseId);
+            entries.push({
+              resource: { ...draft.response, id: responseId },
+              request: { method: "PUT", url: reference },
+            });
+          } else {
+            // 新規記入 → urn:uuid プレースホルダで POST し、拡張から参照する
+            // (実 ID への書き換えは上流の transaction 処理が行う)。
+            reference = `urn:uuid:${crypto.randomUUID()}`;
+            entries.push({
+              fullUrl: reference,
+              resource: draft.response,
+              request: { method: "POST", url: "QuestionnaireResponse" },
+            });
+          }
+          entries.push(...draft.imageEntries);
+          // 「回答から Observation を生成する」テンプレートなら、単独登録と同じく
+          // 構造化データも残す(前回の生成物の削除は保存側で行う)。
+          entries.push(
+            ...draftObservationEntries({
+              questionnaire: draft.questionnaire,
+              response: draft.response,
+              responseReference: reference,
+            }),
+          );
+        } else if (responseId) {
+          // 再編集していない保存済みテンプレート → 参照だけ引き継ぐ。
+          reference = `QuestionnaireResponse/${responseId}`;
+          keptResponseIds.add(responseId);
+        } else {
+          reference = "";
+        }
+        if (reference) {
+          extension = [{ url: SECTION_QR_EXT_URL, valueReference: { reference } }];
+        }
+      }
+
+      return {
+        title: option?.title ?? s.code,
+        extension,
+        code: {
+          coding: [{ system: LOINC_SYSTEM, code: s.code, display: option?.display }],
+        },
+        text: {
+          // 手入力由来の narrative なので additional(構造化データの要約ではない)
+          status: "additional" as const,
+          div: htmlToXhtml(s.html),
+        },
+      };
+    });
+
   const composition: fhir4.Composition = {
     resourceType: "Composition",
     status,
     type: PROGRESS_NOTE_TYPE,
     attester: buildAttester(status, practitioner, existing),
-    // 対象プロブレム(POMR)。指定が無ければ拡張ごと出さない。
-    extension: values.problem
-      ? [
-          {
-            url: NOTE_PROBLEM_EXT_URL,
-            valueReference: {
-              reference: `Condition/${values.problem.conditionId}`,
-              display: values.problem.display,
-            },
-          },
-        ]
-      : undefined,
     subject: { reference: `Patient/${patientId}` },
     date: toFhirDateTime(values.date),
     author,
     title: values.title.trim(),
-    section: values.sections
-      .filter((s) => !isEmptyNoteHtml(s.html))
-      .map((s) => {
-        const option = SECTION_OPTIONS.find((o) => o.code === s.code);
-
-        // テンプレート由来セクション: QR への参照拡張を付け、未保存の記入内容が
-        // あれば QR(+シェーマ画像 Binary)を Bundle エントリに積む。
-        let extension: fhir4.Extension[] | undefined;
-        if (s.template) {
-          const { responseId, draft } = s.template;
-          let reference: string;
-          if (draft) {
-            if (responseId) {
-              // 保存済み QR の再編集 → 同じ id へ PUT(参照は実 ID のまま)。
-              reference = `QuestionnaireResponse/${responseId}`;
-              keptResponseIds.add(responseId);
-              entries.push({
-                resource: { ...draft.response, id: responseId },
-                request: { method: "PUT", url: reference },
-              });
-            } else {
-              // 新規記入 → urn:uuid プレースホルダで POST し、拡張から参照する
-              // (実 ID への書き換えは上流の transaction 処理が行う)。
-              reference = `urn:uuid:${crypto.randomUUID()}`;
-              entries.push({
-                fullUrl: reference,
-                resource: draft.response,
-                request: { method: "POST", url: "QuestionnaireResponse" },
-              });
-            }
-            entries.push(...draft.imageEntries);
-            // 「回答から Observation を生成する」テンプレートなら、単独登録と同じく
-            // 構造化データも残す(前回の生成物の削除は保存側で行う)。
-            entries.push(
-              ...draftObservationEntries({
-                questionnaire: draft.questionnaire,
-                response: draft.response,
-                responseReference: reference,
-              }),
-            );
-          } else if (responseId) {
-            // 再編集していない保存済みテンプレート → 参照だけ引き継ぐ。
-            reference = `QuestionnaireResponse/${responseId}`;
-            keptResponseIds.add(responseId);
-          } else {
-            reference = "";
-          }
-          if (reference) {
-            extension = [{ url: SECTION_QR_EXT_URL, valueReference: { reference } }];
-          }
-        }
-
-        return {
-          title: option?.title ?? s.code,
-          extension,
-          code: {
-            coding: [{ system: LOINC_SYSTEM, code: s.code, display: option?.display }],
-          },
-          text: {
-            // 手入力由来の narrative なので additional(構造化データの要約ではない)
-            status: "additional" as const,
-            div: htmlToXhtml(s.html),
-          },
-        };
-      }),
+    section: [...problemsSection, ...bodySections],
   };
 
   if (existing?.id) composition.id = existing.id;
@@ -460,19 +501,14 @@ export function stripSchemaImageNotes(div: string | undefined): string {
 }
 
 // 記録が対象としているプロブレム。編集フォームの復元とタイムライン表示の双方から使う。
-// セクション単位で紐付けていた頃のデータも読めるよう、拡張が無ければ section.entry の
-// Condition 参照にフォールバックする(保存し直せば拡張へ正規化される)。
 export function clinicalNoteProblem(
   composition: fhir4.Composition | undefined,
 ): ClinicalNoteProblem | null {
-  const ref = composition?.extension?.find((e) => e.url === NOTE_PROBLEM_EXT_URL)?.valueReference;
-  const fromExtension = problemRefFromReference(ref);
-  if (fromExtension) return fromExtension;
-
   for (const section of composition?.section ?? []) {
+    if (!isProblemsSection(section)) continue;
     for (const entry of section.entry ?? []) {
-      const fromEntry = problemRefFromReference(entry);
-      if (fromEntry) return fromEntry;
+      const ref = problemRefFromReference(entry);
+      if (ref) return ref;
     }
   }
   return null;
@@ -480,7 +516,9 @@ export function clinicalNoteProblem(
 
 export function parseClinicalNoteForm(composition: fhir4.Composition): ClinicalNoteFormValues {
   const knownCodes = new Set<string>(SECTION_OPTIONS.map((o) => o.code));
-  const sections = (composition.section ?? []).map((section) => {
+  // プロブレムセクションは本文ではないので編集欄に出さない(未知コードは自由記載に
+  // 丸められるため、除外しないと編集できてしまい記載形式の復元も狂う)。
+  const sections = noteBodySections(composition).map((section) => {
     const code = section.code?.coding?.find((c) => c.system === LOINC_SYSTEM)?.code;
     // テンプレート参照拡張(QuestionnaireResponse/<id>)があれば復元する。
     // draft は null = 「再編集されるまで QR は触らない」。
@@ -521,7 +559,7 @@ export interface ClinicalNoteSummary {
 export function summarizeClinicalNote(composition: fhir4.Composition): ClinicalNoteSummary {
   const date = composition.date ? new Date(composition.date) : null;
   const pad = (n: number) => String(n).padStart(2, "0");
-  const sections = (composition.section ?? [])
+  const sections = noteBodySections(composition)
     .map((s) => s.title || sectionTitle(s.code?.coding?.[0]?.code))
     .filter(Boolean);
   return {

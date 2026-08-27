@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import {
   clinicalNoteAttestation,
+  noteBodySections,
   sectionResponseId,
   sectionTitle,
   stripSchemaImageNotes,
@@ -49,7 +50,7 @@ export function ClinicalNoteDetailPanel({
         </dl>
       </fieldset>
 
-      {(note.section ?? []).map((section, index) => {
+      {noteBodySections(note).map((section, index) => {
         // テンプレート由来のセクションは、記入内容のシェーマ画像を本文の下に並べる
         // (カルテのカードと同じ見せ方)。
         const responseId = sectionResponseId(section);
