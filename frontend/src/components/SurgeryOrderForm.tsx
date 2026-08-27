@@ -26,6 +26,10 @@ import {
   type SurgeryStaffLine,
   type SurgeryStaffRole,
 } from "../fhir/surgeryOrderHelpers";
+import {
+  questionnaireResponsePlainText,
+  type TemplateBinding,
+} from "../fhir/questionnaireResponseHelpers";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { ConditionPickerModal } from "./ConditionPickerModal";
 import { ErrorBanner } from "./ErrorBanner";
@@ -33,6 +37,8 @@ import { PractitionerSearchModal } from "./PractitionerSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
 import { SurgeryItemSearchModal } from "./SurgeryItemSearchModal";
 import { SurgeryRoomDaySchedule } from "./SurgeryRoomDaySchedule";
+import { TemplateEntryModal } from "./TemplateEntryModal";
+import { TemplateSchemaImages } from "./SchemaImageGallery";
 
 // 手術オーダー(申込)の入力フォーム。既存 4 種のオーダーと骨格は同じだが、
 // 伝票レイアウトのタブは持たず、術式は検索モーダルから選ぶ。
@@ -103,6 +109,8 @@ export function SurgeryOrderForm({
   const [staffTarget, setStaffTarget] = useState<SurgeryStaffRole | null>(null);
   // 術前診断の選択モーダルを開いている術式(項目コード)。
   const [conditionTarget, setConditionTarget] = useState<string | null>(null);
+  // 術前指示のテンプレート記入モーダルを開いているか。
+  const [preopTemplateOpen, setPreopTemplateOpen] = useState(false);
 
   const problemOptions = useProblemOptions(patientId);
   // 左右が必須かどうかは術式マスタが決める。保存済みのオーダーを開いたときは明細から
@@ -119,6 +127,12 @@ export function SurgeryOrderForm({
       ),
     [catalog.data],
   );
+  // 術前指示の既定テンプレートは主術式の術式マスタが持つ。副術式は見ない
+  // (1 オーダー = 1 手術で、指示は手術全体に 1 つだから)。
+  const preopTemplateCanonical = values.items[0]
+    ? ((catalog.data?.items ?? []).find((item) => item.item_code === values.items[0].code)
+        ?.preop_template_canonical ?? "")
+    : "";
   const departments = useSelfDepartments();
   // 手術室。院内の部屋(Location)のうち種別が手術室のものだけを出す。
   const locations = useLocationOptions();
@@ -731,6 +745,21 @@ export function SurgeryOrderForm({
           </div>
         </fieldset>
 
+        {/* 術前指示。宛先が病棟(絶飲食・休薬・前投薬・除毛・予防抗菌薬)で、手術部への
+            申し送り(特記)とは読む人が違うので欄を分けている。テンプレートの既定は
+            主術式の術式マスタが持つ。 */}
+        <fieldset className="surgery-comment">
+          <legend>術前指示</legend>
+          <TemplateTextField
+            label="術前指示"
+            value={values.preopInstruction}
+            template={values.preopInstructionTemplate}
+            onChange={(preopInstruction) => update("preopInstruction", preopInstruction)}
+            onOpenTemplate={() => setPreopTemplateOpen(true)}
+            onClearTemplate={() => update("preopInstructionTemplate", null)}
+          />
+        </fieldset>
+
         <fieldset className="surgery-comment">
           <legend>特記・申し送り</legend>
           <textarea
@@ -770,6 +799,29 @@ export function SurgeryOrderForm({
         />
       )}
 
+      {preopTemplateOpen && (
+        <TemplateEntryModal
+          patientId={patientId}
+          draft={values.preopInstructionTemplate?.draft ?? null}
+          responseId={values.preopInstructionTemplate?.responseId ?? null}
+          defaultCanonical={preopTemplateCanonical || undefined}
+          onSubmit={(draft) => {
+            // 保存済みの回答を再編集した場合は同じ id へ書き戻す(id は保存時に使う)。
+            const binding: TemplateBinding = {
+              responseId: values.preopInstructionTemplate?.responseId ?? null,
+              draft,
+            };
+            setValues((current) => ({
+              ...current,
+              preopInstruction: questionnaireResponsePlainText(draft.questionnaire, draft.response),
+              preopInstructionTemplate: binding,
+            }));
+            setPreopTemplateOpen(false);
+          }}
+          onClose={() => setPreopTemplateOpen(false)}
+        />
+      )}
+
       {conditionTarget && (
         <ConditionPickerModal
           patientId={patientId}
@@ -781,6 +833,74 @@ export function SurgeryOrderForm({
           onClose={() => setConditionTarget(null)}
         />
       )}
+    </>
+  );
+}
+
+// テンプレートからも直接入力もできる欄。テンプレートから記載した場合は、回答との
+// 食い違いを防ぐため直接編集は不可にし、直すときはテンプレート画面を開き直す
+// (放射線・生理検査・内視鏡の特別指示と同じ扱い)。
+//
+// 「解除」でテンプレートとの紐付けを外すと、記載された文言を残したまま直接入力へ戻せる。
+// 保存すると、参照が外れた記入内容(QuestionnaireResponse)はオーダーの更新と同じ
+// transaction で削除される。
+function TemplateTextField({
+  label,
+  value,
+  template,
+  onChange,
+  onOpenTemplate,
+  onClearTemplate,
+}: {
+  label: string;
+  value: string;
+  template: TemplateBinding | null;
+  onChange: (value: string) => void;
+  onOpenTemplate: () => void;
+  onClearTemplate: () => void;
+}) {
+  const fromTemplate = Boolean(template);
+
+  return (
+    <>
+      {/* 親の fieldset は flex なので、明示しないと欄が内容幅で止まる。 */}
+      <div className="rad-gp__template-field surgery-comment__template">
+        <textarea
+          rows={6}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          readOnly={fromTemplate}
+          aria-label={label}
+          title={
+            fromTemplate
+              ? "テンプレートから記載した内容です。テンプレート編集から直します"
+              : undefined
+          }
+        />
+        <div className="rad-gp__template-actions">
+          <button
+            type="button"
+            onClick={onOpenTemplate}
+            title={
+              fromTemplate ? `${label}をテンプレートから直す` : `${label}をテンプレートから記入`
+            }
+          >
+            {fromTemplate ? "テンプレート編集" : "テンプレート"}
+          </button>
+          {fromTemplate && (
+            <button
+              type="button"
+              onClick={onClearTemplate}
+              title="テンプレートとの紐付けを外して直接入力に戻す(記載された文言は残る)"
+            >
+              解除
+            </button>
+          )}
+        </div>
+      </div>
+      {/* 記入内容にシェーマ画像があれば、平文の「あり」の印だけでは何を描いたか
+          分からないので、入力中もサムネイルを出す(登録後の表示と同じ見せ方)。 */}
+      <TemplateSchemaImages template={template} />
     </>
   );
 }

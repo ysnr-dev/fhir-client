@@ -3,6 +3,7 @@ import type { OrderContext } from "../orderContext";
 // FHIR dateTime へのタイムゾーン付与は診療記録と同じ変換でよいので共用する。
 import { toFhirDateTime } from "./clinicalNoteHelpers";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
+import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import { categoryCoding, codingBySystem, displayOf, itemNumber } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -67,6 +68,12 @@ const BLOOD_PREPARATION_EXT_URL =
 const EQUIPMENT_EXT_URL = "http://fhir-client.local/StructureDefinition/surgery-equipment";
 const SPECIMEN_PLAN_EXT_URL = "http://fhir-client.local/StructureDefinition/surgery-specimen-plan";
 const CONSENT_EXT_URL = "http://fhir-client.local/StructureDefinition/surgery-consent";
+// 術前指示(病棟への指示)の本文と、テンプレートから記載したときの回答への参照。
+// 手術部への申し送り(note)とは宛先が別なので欄を分けている。命名は放射線の
+// rad-remarks-questionnaire-response に合わせた。
+const PREOP_EXT_URL = "http://fhir-client.local/StructureDefinition/surgery-preop-instruction";
+const PREOP_QR_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/surgery-preop-instruction-questionnaire-response";
 // 明細(術式)の到達法。
 const APPROACH_EXT_URL = "http://fhir-client.local/StructureDefinition/surgery-approach";
 
@@ -313,6 +320,10 @@ export interface SurgeryOrderFormValues {
   consents: string[];
   /** 特記・申し送り。 */
   comment: string;
+  /** 術前指示(病棟への指示)。テンプレートから記載すると平文がここに入る。 */
+  preopInstruction: string;
+  /** 術前指示をテンプレートから記載したときの回答への紐付け。直接入力なら null。 */
+  preopInstructionTemplate: TemplateBinding | null;
   // 対象プロブレム(POMR)。null なら特定の問題に紐付かない手術。
   problem: ProblemRef | null;
   items: SurgeryOrderItemLine[];
@@ -345,6 +356,8 @@ export function emptySurgeryOrderForm(
     specimenPlans: [],
     consents: [],
     comment: "",
+    preopInstruction: "",
+    preopInstructionTemplate: null,
     problem,
     items: [],
   };
@@ -536,6 +549,9 @@ function buildSurgeryOrderServiceRequest(
   values: SurgeryOrderFormValues,
   patientId: string,
   requester: OrderContext,
+  // 術前指示をテンプレートから記載したときの、回答(QuestionnaireResponse)への参照。
+  // Bundle 内で解決するため呼び出し側が組み立てて渡す(新規は urn:uuid、既存は実 id)。
+  preopTemplateRef: string,
   serviceRequestId?: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -710,6 +726,14 @@ function buildSurgeryOrderServiceRequest(
     ...codingExtensions(CONSENT_EXT_URL, CONSENT_SYSTEM, values.consents, surgeryConsentDisplay),
   );
 
+  // 術前指示。本文と、テンプレートから記載したときの回答への参照。
+  if (values.preopInstruction.trim()) {
+    extension.push({ url: PREOP_EXT_URL, valueString: values.preopInstruction.trim() });
+  }
+  if (preopTemplateRef) {
+    extension.push({ url: PREOP_QR_EXT_URL, valueReference: { reference: preopTemplateRef } });
+  }
+
   if (extension.length > 0) resource.extension = extension;
 
   if (values.comment.trim()) resource.note = [{ text: values.comment.trim() }];
@@ -731,6 +755,63 @@ function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
   return { resourceType: "Bundle", type: "transaction", entry };
 }
 
+/**
+ * 術前指示のテンプレート記入内容を Bundle に積み、ヘッダから指す参照を返す。
+ *
+ * 記入内容はオーダー本体と同じ transaction で書く(先に単独 POST すると、オーダーを
+ * 保存しなかったときに回答だけが残る)。参照が外れた回答は呼び出し側が DELETE する。
+ * 放射線・生理検査・内視鏡の明細と同じ作りで、手術は 1 オーダー 1 件なのでヘッダに付く。
+ */
+function pushPreopTemplateEntry(
+  entries: fhir4.BundleEntry[],
+  binding: TemplateBinding | null,
+): { reference: string; keptResponseId: string } {
+  if (!binding) return { reference: "", keptResponseId: "" };
+  const { responseId, draft } = binding;
+  if (!draft) {
+    // 再編集していない保存済みの回答 → 参照だけ引き継ぐ。
+    return responseId
+      ? { reference: `QuestionnaireResponse/${responseId}`, keptResponseId: responseId }
+      : { reference: "", keptResponseId: "" };
+  }
+  // 保存済みの再編集は同じ id へ PUT、新規記入は urn:uuid で POST し、
+  // 実 ID への解決は上流の transaction 処理に任せる。
+  const reference = responseId
+    ? `QuestionnaireResponse/${responseId}`
+    : `urn:uuid:${crypto.randomUUID()}`;
+  if (responseId) {
+    entries.push({
+      resource: { ...draft.response, id: responseId },
+      request: { method: "PUT", url: reference },
+    });
+  } else {
+    entries.push({
+      fullUrl: reference,
+      resource: draft.response,
+      request: { method: "POST", url: "QuestionnaireResponse" },
+    });
+  }
+  entries.push(...draft.imageEntries);
+  return { reference, keptResponseId: responseId ?? "" };
+}
+
+// 1 件の ServiceRequest が参照している術前指示の回答 id。持たなければ空。
+function preopResponseIdOf(sr: fhir4.ServiceRequest): string {
+  const reference = sr.extension?.find((e) => e.url === PREOP_QR_EXT_URL)?.valueReference
+    ?.reference;
+  return reference?.match(/^QuestionnaireResponse\/(.+)$/)?.[1] ?? "";
+}
+
+/**
+ * 手術オーダーが参照している術前指示の回答 id 一覧。
+ *
+ * 更新・削除で孤児を残さないためと、カルテのタイムラインで「オーダーのカードに
+ * 描かれる回答」を単独カードから外すために使う(他部門と同じ形なので配列で受ける)。
+ */
+export function surgeryOrderResponseIds(serviceRequests: fhir4.ServiceRequest[]): string[] {
+  return serviceRequests.map(preopResponseIdOf).filter(Boolean);
+}
+
 // 新規登録。ヘッダ 1 + 明細 N を 1 つの transaction にする。
 export function buildSurgeryOrderBundle(
   values: SurgeryOrderFormValues,
@@ -738,10 +819,13 @@ export function buildSurgeryOrderBundle(
   requester: OrderContext,
 ): fhir4.Bundle {
   const headerReference = `urn:uuid:${crypto.randomUUID()}`;
+  const templateEntries: fhir4.BundleEntry[] = [];
+  const preop = pushPreopTemplateEntry(templateEntries, values.preopInstructionTemplate);
   return transactionBundle([
+    ...templateEntries,
     {
       fullUrl: headerReference,
-      resource: buildSurgeryOrderServiceRequest(values, patientId, requester),
+      resource: buildSurgeryOrderServiceRequest(values, patientId, requester, preop.reference),
       request: { method: "POST", url: "ServiceRequest" },
     },
     ...buildItemEntries(values.items, patientId, values.authoredDate, headerReference, []),
@@ -755,12 +839,23 @@ export function buildSurgeryOrderUpdateBundle(
   serviceRequestId: string,
   originalItemIds: string[],
   requester: OrderContext,
+  // 元のオーダーが参照していた術前指示の回答 id。参照が外れたら同じ transaction で消す。
+  originalResponseIds: string[] = [],
 ): fhir4.Bundle {
   const headerReference = `ServiceRequest/${serviceRequestId}`;
+  const templateEntries: fhir4.BundleEntry[] = [];
+  const preop = pushPreopTemplateEntry(templateEntries, values.preopInstructionTemplate);
   return transactionBundle([
+    ...templateEntries,
     {
       fullUrl: headerReference,
-      resource: buildSurgeryOrderServiceRequest(values, patientId, requester, serviceRequestId),
+      resource: buildSurgeryOrderServiceRequest(
+        values,
+        patientId,
+        requester,
+        preop.reference,
+        serviceRequestId,
+      ),
       request: { method: "PUT", url: headerReference },
     },
     ...buildItemEntries(
@@ -770,6 +865,11 @@ export function buildSurgeryOrderUpdateBundle(
       headerReference,
       originalItemIds,
     ),
+    ...originalResponseIds
+      .filter((id) => id !== preop.keptResponseId)
+      .map((id) => ({
+        request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` },
+      })),
   ]);
 }
 
@@ -852,11 +952,16 @@ export function buildSurgeryScheduleBundle(
 export function buildSurgeryOrderDeleteBundle(
   serviceRequestId: string,
   itemIds: string[],
+  // 術前指示のテンプレート記入内容。オーダーを消したら回答も消す(孤児を残さない)。
+  responseIds: string[] = [],
 ): fhir4.Bundle {
   return transactionBundle([
     { request: { method: "DELETE", url: `ServiceRequest/${serviceRequestId}` } },
     ...itemIds.map((id) => ({
       request: { method: "DELETE" as const, url: `ServiceRequest/${id}` },
+    })),
+    ...responseIds.map((id) => ({
+      request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` },
     })),
   ]);
 }
@@ -874,6 +979,10 @@ export function buildDoSurgeryOrderForm(
     authoredDate: today(),
     scheduledDate: "",
     scheduledTime: "",
+    // テンプレートの紐付けは外す。同じ回答を 2 つのオーダーが指すと、片方を書き換えた
+    // ときにもう片方まで変わってしまうため(放射線の DO と同じ)。文言は残るので、
+    // DO 先ではフリーテキストとして直せる。
+    preopInstructionTemplate: null,
     items: values.items.map((item) => ({ ...item, id: "" })),
   };
 }
@@ -908,6 +1017,10 @@ export interface SurgeryOrderSummary {
   specimenPlans: string[];
   consents: string[];
   comment: string;
+  /** 術前指示(病棟への指示)の本文。 */
+  preopInstruction: string;
+  /** 術前指示をテンプレートから記載したときの回答 id。直接入力なら空。 */
+  preopInstructionResponseId: string;
 }
 
 export function summarizeSurgeryOrder(sr: fhir4.ServiceRequest): SurgeryOrderSummary {
@@ -965,6 +1078,8 @@ export function summarizeSurgeryOrder(sr: fhir4.ServiceRequest): SurgeryOrderSum
     specimenPlans: codesOfExtensions(sr.extension, SPECIMEN_PLAN_EXT_URL),
     consents: codesOfExtensions(sr.extension, CONSENT_EXT_URL),
     comment: sr.note?.[0]?.text ?? "",
+    preopInstruction: sr.extension?.find((e) => e.url === PREOP_EXT_URL)?.valueString ?? "",
+    preopInstructionResponseId: preopResponseIdOf(sr),
   };
 }
 
@@ -1043,6 +1158,11 @@ export function parseSurgeryOrderForm(
     specimenPlans: summary.specimenPlans,
     consents: summary.consents,
     comment: summary.comment,
+    preopInstruction: summary.preopInstruction,
+    // 保存済みの回答は参照だけ持つ(開き直すまで draft は無い)。
+    preopInstructionTemplate: summary.preopInstructionResponseId
+      ? { responseId: summary.preopInstructionResponseId, draft: null }
+      : null,
     problem: surgeryOrderProblem(sr),
     items: surgeryOrderItems(sr, items),
   };

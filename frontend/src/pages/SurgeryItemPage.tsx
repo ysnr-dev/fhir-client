@@ -9,6 +9,9 @@ import {
 import { ErrorBanner } from "../components/ErrorBanner";
 import { MedicalProcedureSearchModal } from "../components/MedicalProcedureSearchModal";
 import { Modal } from "../components/Modal";
+import { TemplateSelect } from "../components/TemplateSelect";
+import { useQuestionnaireOptions } from "../api/queries";
+import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import {
   SURGERY_ANESTHESIA_METHOD_OPTIONS,
   SURGERY_APPROACH_OPTIONS,
@@ -36,6 +39,8 @@ interface Draft {
   // 麻酔方法の既定(複数可)。保存時にカンマ区切りへ畳む。
   default_anesthesia_methods: string[];
   requires_laterality: boolean;
+  // 術前指示の既定テンプレート(Questionnaire の canonical)。未設定は空文字。
+  preop_template_canonical: string;
   display_order: string;
   note: string;
 }
@@ -53,6 +58,7 @@ const emptyDraft: Draft = {
   default_position: "",
   default_anesthesia_methods: [],
   requires_laterality: false,
+  preop_template_canonical: "",
   display_order: "",
   note: "",
 };
@@ -73,6 +79,7 @@ function toPayload(draft: Draft): SurgeryItemPayload {
     default_position: draft.default_position || null,
     default_anesthesia_methods: draft.default_anesthesia_methods.join(",") || null,
     requires_laterality: draft.requires_laterality,
+    preop_template_canonical: draft.preop_template_canonical || null,
     display_order: draft.display_order ? Number(draft.display_order) : null,
     note: draft.note || null,
   };
@@ -248,6 +255,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
         .split(",")
         .filter(Boolean),
       requires_laterality: d.requires_laterality,
+      preop_template_canonical: d.preop_template_canonical ?? "",
       display_order: d.display_order === null ? "" : String(d.display_order),
       note: d.note ?? "",
     });
@@ -458,6 +466,11 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
           </label>
         </div>
 
+        <PreopTemplateDefault
+          value={draft.preop_template_canonical}
+          onChange={(preop_template_canonical) => setDraft({ ...draft, preop_template_canonical })}
+        />
+
         <ErrorBanner error={detail.error} />
         <ErrorBanner
           error={mutations.create.error ?? mutations.update.error ?? mutations.remove.error}
@@ -495,5 +508,44 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
         />
       )}
     </Modal>
+  );
+}
+
+// 術前指示の既定テンプレート。術式ごとに決めておくもので、申込時に別のものへ変えられる
+// (放射線・生理検査・内視鏡の「既定のテンプレート」と同じ扱い)。
+//
+// マスタは canonical("<url>|<version>")で持ち、TemplateSelect は Questionnaire.id で
+// 扱うので相互に変換する。canonical で持つのは、テンプレートを作り直しても指し先が
+// 変わらないようにするため。
+function PreopTemplateDefault({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (canonical: string) => void;
+}) {
+  const templates = useQuestionnaireOptions({ status: "active" });
+
+  const selectedId =
+    templates.questionnaires.find((q) => questionnaireCanonical(q) === value)?.id ?? "";
+
+  return (
+    <section className="lab-order-item__section lab-order-item__section--tail">
+      <div className="lab-order-item__section-head">
+        <h3>既定のテンプレート</h3>
+      </div>
+      <ErrorBanner error={templates.error} />
+      <div className="rad-item__templates">
+        <TemplateSelect
+          label="術前指示"
+          questionnaires={templates.questionnaires}
+          value={selectedId}
+          onChange={(id) => {
+            const questionnaire = templates.questionnaires.find((q) => q.id === id);
+            onChange(questionnaire ? questionnaireCanonical(questionnaire) : "");
+          }}
+        />
+      </div>
+    </section>
   );
 }

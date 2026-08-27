@@ -78,6 +78,8 @@
 | `StructureDefinition/surgery-staff` | スタッフ。複合拡張 `role`(valueCoding) + `member`(valueReference → Practitioner) を人数ぶん繰り返す |
 | `StructureDefinition/surgery-anesthesia-method` | 麻酔方法(valueCoding、複数可) |
 | `StructureDefinition/surgery-anesthesia-management` | 麻酔の管理区分(麻酔科管理/執刀医管理) |
+| `StructureDefinition/surgery-preop-instruction` | 術前指示の本文(valueString。§5.6) |
+| `StructureDefinition/surgery-preop-instruction-questionnaire-response` | 術前指示をテンプレートから記載したときの回答(valueReference → QuestionnaireResponse) |
 | `StructureDefinition/surgery-blood-preparation` | 輸血準備。複合拡張 `type`(valueCoding) + `units`(valueQuantity) |
 | `StructureDefinition/surgery-equipment` | 特殊機器(valueCoding、複数可。「その他」は display に自由記載) |
 | `StructureDefinition/surgery-specimen-plan` | 病理・培養の提出予定(valueCoding、複数可) |
@@ -104,6 +106,7 @@
 | 予定区分(予定/準緊急/緊急) | `priority` = routine / urgent / stat |
 | 対象プロブレム | `reasonReference[0]`(既存共通) |
 | 特記・申し送り | `note` |
+| 術前指示 | `extension[surgery-preop-instruction]`(+ テンプレート記入なら回答への参照) |
 | 手術室〜同意書 | §2.1 の拡張群 |
 | 入外区分・依頼科・依頼医・在院病棟 | 既存同型(`category[1]` / `applyOrderContext`) |
 
@@ -185,7 +188,8 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
 6. **準備**: 輸血準備(不要/T&S/交差適合/自己血、後2者は単位数) / 予定出血量(mL) /
    手術体位 / 特殊機器(複数+その他自由記載) / 検体提出予定(術中迅速・永久標本・培養)
 7. **同意書**: 手術/麻酔/輸血の取得済みチェック
-8. **特記・申し送り**: 自由文
+8. **術前指示**(§5.6): 病棟への指示。直接入力か、テンプレート記入モーダルから
+9. **特記・申し送り**: 自由文
 
 ### 5.2 手術一覧
 
@@ -274,15 +278,51 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
 これは手術室カレンダー(§7-3)が入るまでの中間策ではなく、**カレンダーが入っても
 残る表示**(日程を触る画面で、その場の空きが見える)。
 
+### 5.6 術前指示(第3段階)
+
+［提案］手術の申込内容が決まっても、**病棟が手術前日〜当日に何をすればよいか**は別に伝える
+必要がある。絶飲食・休薬・前投薬・除毛・予防抗菌薬で、書き漏らすとその日の手術が中止になる。
+放射線・生理検査・内視鏡の「特別指示」と同じテンプレート機構に載せた。
+
+- 欄は**ヘッダに 1 本**(`SurgeryOrderForm` の「術前指示」)。1 オーダー = 1 手術なので
+  GP 単位の他部門と違って明細には付けない。
+- **特記・申し送り(`note`)とは分ける**。特記は手術部が読み、術前指示は病棟が読む。
+  読む人が違うものを 1 つの自由文に混ぜると、どちらも読み飛ばされる。
+- テンプレートは `SUR_PREOP_01`(`docs/report-mappings/sur-preop-01.md`)。既定は
+  **主術式の術式マスタ**(`master_surgery_items.preop_template_canonical`)が持ち、
+  術式を選んだ時点で選択済みになる。
+- 平文と回答への参照をヘッダのローカル拡張に持つ。
+
+| URI | 用途 |
+|---|---|
+| `StructureDefinition/surgery-preop-instruction` | 術前指示の本文(valueString) |
+| `StructureDefinition/surgery-preop-instruction-questionnaire-response` | テンプレート記入内容(valueReference → QuestionnaireResponse) |
+
+［事実］挙動は放射線の特別指示と同じで、共通部品(`TemplateEntryModal` /
+`TemplateBinding` / `questionnaireResponsePlainText`)をそのまま使っている。
+
+- テンプレートから記載した欄は**直接編集不可**。直すときは「テンプレート編集」で開き直す。
+- 「解除」で紐付けを外すと、文言を残したまま直接入力へ戻せる。
+- 記入内容はオーダー本体と**同じ transaction** で書く(先に単独 POST すると、オーダーを
+  保存しなかったときに回答だけ残る)。参照が外れた回答は同じ transaction で DELETE する。
+- **オーダーを消すと回答も消す**(`buildSurgeryOrderDeleteBundle`)。
+- **DO では紐付けを外す**。同じ回答を 2 つのオーダーが指すと、片方の編集がもう片方に波及する。
+- カルテのタイムラインでは、この回答を**単独のテンプレートカードにしない**
+  (`karteTimeline` の `linkedResponseIds` に `surgeryOrderResponseIds` を足した)。
+  手術カードの中に全文が出るので、二重に並べない。
+- ［導出］カードでは**畳まず全文を出す**。「執刀 | 麻酔」の要点 1 行と違い、絶飲食の開始時刻や
+  休薬の指示は読み落とすと手術が止まるため。
+
 ## 6. 実装したもの
 
 | 層 | 追加物 |
 |---|---|
-| migration | `20260825100000` 術式マスタ |
+| migration | `20260825100000` 術式マスタ / `20260827000000` 左右必須 / `20260827100000` 術前指示の既定テンプレート |
 | モデル | `Master::SurgeryItem` |
 | API | `surgery_items`(index/show/create/update/destroy) |
-| spec | リクエスト 1 本(12 examples)。backend 全 984 examples green |
-| FHIR 変換 | `fhir/surgeryOrderHelpers.ts` / `surgeryTaskHelpers.ts` |
+| spec | リクエスト 1 本(14 examples)。backend 全 986 examples green |
+| FHIR 変換 | `fhir/surgeryOrderHelpers.ts` / `surgeryTaskHelpers.ts` / `surgeryResultHelpers.ts` |
+| テンプレート | `docs/report-mappings/sur-preop-01.questionnaire.json`(`SUR_PREOP_01`)。カテゴリ「手術」 |
 | 画面 | `SurgeryItemPage` / `SurgeryWorklistPage` / `SurgeryOrderForm` / `SurgeryOrderPanels` / `SurgeryOrderDetailPanel` / `SurgeryItemSearchModal` / `SurgeryScheduleModal` / `SurgeryRoomDaySchedule` / `useSurgeryOrderInitialValues` |
 | カルテ | `karteTimeline` に `surgery-order` 種別、`KarteRightPane` の「手術」ボタン、`KarteTimeline` のカード、`KarteCardModals` の詳細/JSON、`KarteCategoryList` / `karteUrl` / `KartePage` の分岐 |
 | 共通 | `MedicalProcedureSearchModal` に K/L 章、`locationHelpers` に SU |
@@ -290,7 +330,7 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
 ### 6.1 検証したこと
 
 開発環境で以下を通した。`tsc -b` clean・`oxlint` 既存 4 warnings のみ・backend 全
-984 examples green(手術 12 examples 含む)。
+986 examples green(手術 14 examples 含む)。
 
 1. マスタ: `/locations` に種別「手術室」で手術室1を登録。`/surgery-items` で
    術式 2 件登録(K 章に絞った医科診療行為検索から「腹腔鏡下胆嚢摘出術」を選び、
@@ -316,6 +356,18 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
    「この手術室のその日の予定はありません」。カルテの編集フォームでは自分自身が
    一覧に出ない(08-31 14:30 手術室1 のオーダーを開いて空表示)ことと、日付を
    08-28・09:30 に変えると重なりが出ることを確認
+8. 術前指示(§5.6。2026-08-27 に追加。開発環境で以下を通した):
+   テンプレート一覧から `SUR_PREOP_01` をインポート(JASPEHR 検証を通る。取り込み後に
+   保存された形を配布ファイルに戻し、parse→build 往復で差分が出ない正規形にした)→
+   `/surgery-items` の「既定のテンプレート > 術前指示」に設定 → 申込フォームの
+   「術前指示」で「テンプレート」を押すとそのテンプレートが選択済みで開く →
+   条件付きの枝(抗血栓薬=休薬を指示、予防抗菌薬=必要、除毛=必要)が選択で開く →
+   「記載を反映」で平文が入り欄が readOnly になる → 登録すると拡張 2 本
+   (本文・回答参照)が保存され、`urn:uuid` が実 id に解決される →
+   カルテカードに全文が出て、回答が**単独のテンプレートカードにならない** →
+   編集で復元される → 「解除」+ 更新で回答が DELETE され本文だけ残る →
+   もう一度テンプレート記入 + 更新で新しい回答が作られる → DO では紐付けが外れて
+   本文だけ残る → オーダー削除で回答も 410 になることを確認
 
 **occurrencePeriod からの直し**: 最初の実装は予定日時を `occurrencePeriod`
 (start=入室、end=start+所要時間)にしていたが、手術一覧(occurrence 検索)に
@@ -334,9 +386,9 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
 1. **第2段階(実施記録)**: **実装済み**(`docs/surgery-result-design.md`)。
    Task に入室中・実施済が加わって 5 状態になり、緊急手術は日程の確定を待たずに
    入室できるようになった
-2. **第3段階**: 手術記録・麻酔記録テンプレート + シェーマ、同意書帳票
-   (admission-plan-01 方式)、術前指示テンプレート(SUR_PREOP_01。絶飲食・前投薬・
-   抗血栓薬休薬・除毛・予防抗菌薬)を作り、既存テンプレート機構に載せる
+2. **第3段階**: **術前指示テンプレート(`SUR_PREOP_01`)は実装済み**(§5.6、
+   `docs/report-mappings/sur-preop-01.md`)。残りは手術記録・麻酔記録テンプレート +
+   シェーマと、同意書帳票(admission-plan-01 方式)
 3. **手術室カレンダー**: ブロックスケジュール(曜日ごとの科割り当て)や多資源の
    同時空き判定が要る運用になったら、予約機構の拡張として別途設計する。
    **ダブルブッキングの防止もここに含める**。予約枠(Slot)を使わない判断をしたので、

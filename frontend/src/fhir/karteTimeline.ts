@@ -47,6 +47,7 @@ import {
   isSurgeryServiceRequest,
   surgeryOrderItemRequests,
   surgeryOrderProblem,
+  surgeryOrderResponseIds,
 } from "./surgeryOrderHelpers";
 import {
   surgeryTaskStatus,
@@ -391,13 +392,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   );
   const questionnaires = pickByType<fhir4.Questionnaire>(responseResources, "Questionnaire");
 
-  // 診療記録のセクション・放射線オーダーの検査目的/特別指示から参照されている回答は、
-  // そのカードの本文として既に描画されるので単独カードにしない。
+  // 診療記録のセクション・放射線オーダーの検査目的/特別指示・手術オーダーの術前指示から
+  // 参照されている回答は、そのカードの本文として既に描画されるので単独カードにしない。
   const linkedResponseIds = new Set([
     ...compositions.flatMap((c) => referencedResponseIds(c)),
     ...radOrderResponseIds(serviceRequests),
     ...physioOrderResponseIds(serviceRequests),
     ...endoscopyOrderResponseIds(serviceRequests),
+    ...surgeryOrderResponseIds(serviceRequests),
   ]);
 
   // canonical("<url>|<version>")と url 単独の両方で引けるようにしておく

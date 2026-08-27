@@ -95,6 +95,18 @@ RSpec.describe "Master::SurgeryItems", type: :request do
       expect(body["requires_laterality"]).to be(true)
     end
 
+    it "術前指示の既定テンプレートを保存する" do
+      post "/master/surgery_items", params: {
+        item_code: "S0001", name: "腹腔鏡下胆嚢摘出術",
+        preop_template_canonical: "http://fhir-client.local/Questionnaire/sur-preop-01|1.0.0"
+      }
+
+      expect(response).to have_http_status(:created)
+      record = Master::SurgeryItem.find_by(item_code: "S0001")
+      expect(record.preop_template_canonical)
+        .to eq("http://fhir-client.local/Questionnaire/sur-preop-01|1.0.0")
+    end
+
     it "所要時間は正の整数だけを受け付ける" do
       post "/master/surgery_items", params: { item_code: "S0001", name: "所要時間おかしい",
                                               default_duration_minutes: 0 }

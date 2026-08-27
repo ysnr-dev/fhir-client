@@ -1,5 +1,6 @@
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { schemaAnnotatedLines } from "../fhir/questionnaireResponseHelpers";
 import {
   summarizeSurgeryOrder,
   surgeryAnesthesiaManagementDisplay,
@@ -14,6 +15,7 @@ import {
   surgerySpecimenPlanDisplay,
   surgeryStaffRoleDisplay,
 } from "../fhir/surgeryOrderHelpers";
+import { ResponseSchemaImages } from "./SchemaImageGallery";
 
 // 手術オーダーの内容表示。カルテ画面の詳細モーダルから使う
 // (処置の TreatmentOrderDetailPanel と同じ構成)。
@@ -99,6 +101,13 @@ export function SurgeryOrderDetailPanel({
           <dd>{summary.consents.map(surgeryConsentDisplay).join("・") || "-"}</dd>
           <dt>特記・申し送り</dt>
           <dd>{summary.comment || "-"}</dd>
+          <dt>術前指示</dt>
+          <dd className="rad-gp__text">
+            <PreopInstruction
+              text={summary.preopInstruction}
+              responseId={summary.preopInstructionResponseId}
+            />
+          </dd>
         </dl>
       </fieldset>
 
@@ -131,5 +140,20 @@ export function SurgeryOrderDetailPanel({
         {items.length === 0 && <p className="patient-table__empty">術式がありません。</p>}
       </fieldset>
     </div>
+  );
+}
+
+// 術前指示。テンプレートから記載した場合は回答に描き込み済みシェーマ画像が
+// 含まれることがあるので、平文の「あり」の印に代えて実物を続けて出す
+// (放射線・生理検査の特別指示と同じ見せ方)。
+function PreopInstruction({ text, responseId }: { text: string; responseId: string }) {
+  const lines = schemaAnnotatedLines(text);
+  if (lines.length === 0 && !responseId) return <>-</>;
+
+  return (
+    <>
+      {lines.join("\n")}
+      {responseId && <ResponseSchemaImages responseId={responseId} />}
+    </>
   );
 }

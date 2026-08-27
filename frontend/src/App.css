@@ -8358,6 +8358,13 @@ body.page-wide #root {
   color: var(--lab-high);
 }
 
+/* 術前指示の入力欄(テンプレート記入と直接入力の両対応)。特記と同じく枠いっぱいに
+   広げる。.rad-gp__template-field 自体は flex 行なので、外側の flex では伸びない。 */
+.surgery-comment__template {
+  flex-basis: 100%;
+  width: 100%;
+}
+
 /* 特記・申し送り。fieldset が flex なので、textarea 単体だと既定の cols 幅で
    止まってしまう。枠いっぱいに広げる。 */
 .surgery-comment textarea {

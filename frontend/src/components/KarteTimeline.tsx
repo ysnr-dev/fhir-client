@@ -90,6 +90,7 @@ import {
   surgeryApproachDisplay,
   surgeryBodySiteLabel,
   surgeryOrderItems,
+  type SurgeryOrderSummary,
 } from "../fhir/surgeryOrderHelpers";
 import { surgeryTaskStatusDisplay } from "../fhir/surgeryTaskHelpers";
 import type { SurgeryPerformDisplay } from "../fhir/surgeryResultHelpers";
@@ -1325,8 +1326,31 @@ function SurgeryOrderCardBody({
             .join(" | ")}
         </p>
       )}
+      {/* 術前指示は病棟が手術前日〜当日に読むもの。要点 1 行と違って畳まず全文を出す
+          (絶飲食の開始時刻や休薬の指示は、読み落とすと手術が中止になる)。 */}
+      <SurgeryPreopInstruction summary={summary} />
       <SurgeryPerformSection performs={performs} />
     </>
+  );
+}
+
+// 術前指示。テンプレートから記載したシェーマ画像は、平文の「あり」の印に代えて
+// 実物を続けて出す(放射線の特別指示と同じ見せ方)。
+function SurgeryPreopInstruction({ summary }: { summary: SurgeryOrderSummary }) {
+  const lines = schemaAnnotatedLines(summary.preopInstruction);
+  const responseId = summary.preopInstructionResponseId;
+  if (lines.length === 0 && !responseId) return null;
+
+  return (
+    <div className="karte-rp__detail karte-rp__detail--indent">
+      <span className="karte-rp__detail-label">術前指示:</span>
+      <div className="karte-rp__detail-body">
+        {lines.map((line, index) => (
+          <span key={index}>{line}</span>
+        ))}
+        {responseId && <ResponseSchemaImages responseId={responseId} />}
+      </div>
+    </div>
   );
 }
 

@@ -163,6 +163,7 @@ import {
   isSurgeryServiceRequest,
   summarizeSurgeryOrder,
   surgeryOrderItemRequests,
+  surgeryOrderResponseIds,
   type SurgeryScheduleValues,
 } from "../fhir/surgeryOrderHelpers";
 import {
@@ -6127,6 +6128,7 @@ export function useUpdateSurgeryOrder() {
 
 // 手術オーダーも明細が独立した ServiceRequest なので、ヘッダだけ消すと明細が
 // 残ってしまう。消す直前に明細を引き直してからまとめて消す(処置と同じ)。
+// 術前指示をテンプレートから書いていれば、その回答も一緒に消す(孤児を残さない)。
 export function useDeleteSurgeryOrder() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -6135,11 +6137,13 @@ export function useDeleteSurgeryOrder() {
       params.set("_id", srId);
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
       const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
-      const itemIds = surgeryOrderItemRequests(serviceRequestsOf(bundle), srId)
+      const requests = serviceRequestsOf(bundle);
+      const itemIds = surgeryOrderItemRequests(requests, srId)
         .map((request) => request.id)
         .filter((id): id is string => Boolean(id));
+      const responseIds = surgeryOrderResponseIds(requests);
 
-      return postBundle(buildSurgeryOrderDeleteBundle(srId, itemIds));
+      return postBundle(buildSurgeryOrderDeleteBundle(srId, itemIds, responseIds));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });

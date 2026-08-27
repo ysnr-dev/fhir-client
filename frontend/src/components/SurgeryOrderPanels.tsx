@@ -86,7 +86,7 @@ interface SurgeryOrderEditPanelProps {
 
 export function SurgeryOrderEditPanel({ patientId, srId, onSaved }: SurgeryOrderEditPanelProps) {
   const updateSurgeryOrder = useUpdateSurgeryOrder();
-  const { serviceRequest, itemIds, initialValues, ready, patientMismatch, error } =
+  const { serviceRequest, itemIds, responseIds, initialValues, ready, patientMismatch, error } =
     useSurgeryOrderInitialValues(srId, patientId);
 
   function handleSubmit(values: SurgeryOrderFormValues) {
@@ -102,6 +102,7 @@ export function SurgeryOrderEditPanel({ patientId, srId, onSaved }: SurgeryOrder
         srId,
         itemIds,
         prescriptionRequester(serviceRequest),
+        responseIds,
       ),
       { onSuccess: onSaved },
     );

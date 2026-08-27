@@ -4211,6 +4211,12 @@ export interface SurgeryItem {
    * だけ true にする。左右の無い臓器まで必須にすると「指定なし」を選ぶ手数が増えるため。
    */
   requires_laterality: boolean;
+  /**
+   * 術前指示の既定テンプレート(Questionnaire の canonical "<url>|<version>")。
+   * 申込画面はこれを最初から選んだ状態でテンプレート記入を開く。id ではなく
+   * canonical で持つのは、テンプレートを作り直しても指し先が変わらないため。
+   */
+  preop_template_canonical: string | null;
   display_order: number | null;
   note: string | null;
   /** レセ電算コードから解決した医科診療行為の名称。一覧・詳細APIが添える。 */
@@ -4230,6 +4236,7 @@ export interface SurgeryItemPayload {
   default_position?: string | null;
   default_anesthesia_methods?: string | null;
   requires_laterality?: boolean;
+  preop_template_canonical?: string | null;
   display_order?: number | null;
   note?: string | null;
 }

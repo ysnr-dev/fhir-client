@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_27_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_27_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1150,6 +1150,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_27_000000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.boolean "requires_laterality", default: false, null: false
+    t.string "preop_template_canonical"
     t.index ["item_code"], name: "index_master_surgery_items_on_item_code", unique: true
   end
 

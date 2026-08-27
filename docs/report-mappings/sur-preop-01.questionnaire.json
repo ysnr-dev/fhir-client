@@ -1,0 +1,1371 @@
+{
+  "url": "http://fhir-client.local/Questionnaire/sur-preop-01",
+  "item": [
+    {
+      "item": [
+        {
+          "text": "固形物",
+          "type": "choice",
+          "linkId": "fast-solid",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "固形物の絶食。当日の手術開始が遅い枠でも一律に「前日夕食後」にすると脱水と低血糖を招くので、開始時刻に合わせて選ぶ。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "制限なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "after-dinner",
+                "display": "前日夕食後から絶食"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "from-midnight",
+                "display": "前日24時から絶食"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "morning",
+                "display": "当日朝食から絶食"
+              }
+            }
+          ]
+        },
+        {
+          "text": "絶食の開始時刻",
+          "type": "string",
+          "linkId": "fast-solid-at",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "選択肢だけでは時刻が決まらないときに書く(例: 前日21:00)。病棟が下膳の時刻を決められる形で。選択肢で足りるなら空欄でよい。"
+            }
+          ]
+        },
+        {
+          "text": "水分(清澄水)",
+          "type": "choice",
+          "linkId": "fast-clear",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "清澄水(水・茶・経口補水液)は誤嚥のリスクを上げないため、麻酔科学会のガイドラインでは麻酔導入2時間前まで許容される。「禁止」にするのは腸閉塞・胃排出遅延など理由のあるときだけ。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "until-2h",
+                "display": "手術2時間前まで可"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "until-3h",
+                "display": "手術3時間前まで可"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "from-midnight",
+                "display": "前日24時から禁止"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "prohibited",
+                "display": "禁止"
+              }
+            }
+          ]
+        },
+        {
+          "text": "経口補水液の指示",
+          "type": "string",
+          "linkId": "fast-ors",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "銘柄と量・飲み終える時刻(例: OS-1 500mL を手術2時間前までに)。"
+            }
+          ]
+        }
+      ],
+      "text": "絶飲食",
+      "type": "group",
+      "linkId": "grp-fasting"
+    },
+    {
+      "item": [
+        {
+          "item": [
+            {
+              "item": [
+                {
+                  "text": "薬剤名",
+                  "type": "string",
+                  "linkId": "anticoag-drug"
+                },
+                {
+                  "text": "最終内服日",
+                  "type": "date",
+                  "linkId": "anticoag-last"
+                },
+                {
+                  "text": "ヘパリン置換",
+                  "type": "string",
+                  "linkId": "anticoag-bridge",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "置換するなら開始日と投与量。しないなら「なし」と書く(空欄だと指示忘れと区別がつかない)。"
+                    }
+                  ]
+                }
+              ],
+              "text": "抗血栓薬の指示",
+              "type": "group",
+              "linkId": "grp-anticoag",
+              "enableWhen": [
+                {
+                  "operator": "=",
+                  "question": "anticoag",
+                  "answerCoding": {
+                    "code": "stop"
+                  }
+                }
+              ]
+            },
+            {
+              "item": [
+                {
+                  "text": "薬剤名",
+                  "type": "string",
+                  "linkId": "anticoag-done-drug"
+                },
+                {
+                  "text": "最終内服日",
+                  "type": "date",
+                  "linkId": "anticoag-done-last"
+                }
+              ],
+              "text": "休薬済の内容",
+              "type": "group",
+              "linkId": "grp-anticoag-done",
+              "enableWhen": [
+                {
+                  "operator": "=",
+                  "question": "anticoag",
+                  "answerCoding": {
+                    "code": "stopped"
+                  }
+                }
+              ]
+            }
+          ],
+          "text": "抗血栓薬",
+          "type": "choice",
+          "linkId": "anticoag",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "抗血小板薬・抗凝固薬。休薬日数は薬剤ごとに違い、止めれば血栓、続ければ出血なので、判断した結果をここに残す。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "該当なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "stopped",
+                "display": "休薬済"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "stop",
+                "display": "休薬を指示"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "continue",
+                "display": "継続"
+              }
+            }
+          ]
+        },
+        {
+          "text": "糖尿病薬",
+          "type": "choice",
+          "linkId": "dm-drug",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "SGLT2 阻害薬は正常血糖ケトアシドーシスを避けるため手術数日前から、ビグアナイド系は乳酸アシドーシスを避けるため当日休薬にすることが多い。薬剤名は下の「その他の休薬」に書く。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "該当なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "hold-morning",
+                "display": "当日朝から休薬"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "hold-prev",
+                "display": "前日から休薬"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "continue",
+                "display": "継続"
+              }
+            }
+          ]
+        },
+        {
+          "text": "当日朝に内服させる薬",
+          "type": "text",
+          "linkId": "morning-dose",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "少量の水で内服させる薬(降圧薬・抗てんかん薬・ステロイドなど)。「なし」もはっきり書く。"
+            }
+          ]
+        },
+        {
+          "text": "その他の休薬",
+          "type": "text",
+          "linkId": "other-hold",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "休薬する薬剤名と最終内服日。上の 2 択に当てはまらないもの(SGLT2 阻害薬・女性ホルモン薬・漢方 など)。"
+            }
+          ]
+        }
+      ],
+      "text": "内服(休薬・当日内服)",
+      "type": "group",
+      "linkId": "grp-med"
+    },
+    {
+      "item": [
+        {
+          "item": [
+            {
+              "item": [
+                {
+                  "text": "薬剤名・投与量",
+                  "type": "string",
+                  "linkId": "premed-drug"
+                },
+                {
+                  "text": "投与時刻",
+                  "type": "time",
+                  "linkId": "premed-time"
+                },
+                {
+                  "text": "経路",
+                  "type": "choice",
+                  "linkId": "premed-route",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "code": "radio-button",
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "oral",
+                        "display": "経口"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "im",
+                        "display": "筋注"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "iv",
+                        "display": "静注"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "inhalation",
+                        "display": "吸入"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "other",
+                        "display": "その他"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "text": "前投薬の指示",
+              "type": "group",
+              "linkId": "grp-premed-detail",
+              "enableWhen": [
+                {
+                  "operator": "=",
+                  "question": "premed",
+                  "answerCoding": {
+                    "code": "yes"
+                  }
+                }
+              ]
+            }
+          ],
+          "text": "前投薬",
+          "type": "choice",
+          "linkId": "premed",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "麻酔導入前に病棟で与薬するもの(抗不安薬・制酸薬・吸入薬 など)。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            }
+          ]
+        }
+      ],
+      "text": "前投薬",
+      "type": "group",
+      "linkId": "grp-premed"
+    },
+    {
+      "item": [
+        {
+          "item": [
+            {
+              "item": [
+                {
+                  "text": "薬剤名・投与量",
+                  "type": "string",
+                  "linkId": "abx-drug"
+                },
+                {
+                  "text": "初回投与",
+                  "type": "choice",
+                  "linkId": "abx-timing",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "皮膚切開時に血中濃度が上がっているように投与する。バンコマイシン・フルオロキノロンは点滴時間が長いので60分前。"
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "code": "radio-button",
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "60min",
+                        "display": "執刀60分前"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "30min",
+                        "display": "執刀30分前"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "induction",
+                        "display": "麻酔導入時"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "text": "投与場所",
+                  "type": "choice",
+                  "linkId": "abx-place",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "code": "radio-button",
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "ward",
+                        "display": "病棟"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "or",
+                        "display": "手術室"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "text": "術中の追加投与",
+                  "type": "string",
+                  "linkId": "abx-redose",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "手術が長引いたときの再投与間隔(例: 3時間ごと)。"
+                    }
+                  ]
+                },
+                {
+                  "text": "アレルギー・代替薬",
+                  "type": "string",
+                  "linkId": "abx-allergy",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "β-ラクタムのアレルギー歴があるときの代替薬。"
+                    }
+                  ]
+                }
+              ],
+              "text": "予防抗菌薬の指示",
+              "type": "group",
+              "linkId": "grp-abx-detail",
+              "enableWhen": [
+                {
+                  "operator": "=",
+                  "question": "abx",
+                  "answerCoding": {
+                    "code": "yes"
+                  }
+                }
+              ]
+            }
+          ],
+          "text": "予防抗菌薬",
+          "type": "choice",
+          "linkId": "abx",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "SSI 予防の抗菌薬。実際の投与は注射オーダーで出す。ここに書くのは「いつ・誰が投与するか」の段取りで、薬剤の実施記録は注射側に残る。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "不要"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "必要"
+              }
+            }
+          ]
+        }
+      ],
+      "text": "予防抗菌薬",
+      "type": "group",
+      "linkId": "grp-abx"
+    },
+    {
+      "item": [
+        {
+          "item": [
+            {
+              "item": [
+                {
+                  "text": "範囲",
+                  "type": "string",
+                  "linkId": "hair-area",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "解剖のランドマークで書く(例: 臍下〜恥骨上、右鼠径部)。"
+                    }
+                  ]
+                },
+                {
+                  "text": "方法",
+                  "type": "choice",
+                  "linkId": "hair-method",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "code": "radio-button",
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "clipper",
+                        "display": "電動クリッパー"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "cream",
+                        "display": "除毛クリーム"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "text": "実施の時期",
+                  "type": "choice",
+                  "linkId": "hair-when",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "手術に近いほど SSI が少ない。"
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "code": "radio-button",
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                      "valueCode": "horizontal"
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "day-of",
+                        "display": "当日(手術室入室直前)"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "prev-day",
+                        "display": "前日"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "text": "除毛の指示",
+              "type": "group",
+              "linkId": "grp-hair",
+              "enableWhen": [
+                {
+                  "operator": "=",
+                  "question": "hair",
+                  "answerCoding": {
+                    "code": "yes"
+                  }
+                }
+              ]
+            }
+          ],
+          "text": "除毛",
+          "type": "choice",
+          "linkId": "hair",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "毛が手術操作の妨げになるときだけ行う。剃刀は皮膚に微細な傷を作り SSI を増やすため使わない。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "不要"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "必要"
+              }
+            }
+          ]
+        },
+        {
+          "item": [
+            {
+              "item": [
+                {
+                  "text": "薬剤・量",
+                  "type": "string",
+                  "linkId": "laxative-agent"
+                },
+                {
+                  "text": "実施の時刻",
+                  "type": "string",
+                  "linkId": "laxative-time",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "前日にまたがるので「前日18:00」の形で書く。"
+                    }
+                  ]
+                }
+              ],
+              "text": "下剤の指示",
+              "type": "group",
+              "linkId": "grp-laxative",
+              "enableWhen": [
+                {
+                  "operator": "=",
+                  "question": "laxative",
+                  "answerCoding": {
+                    "code": "yes"
+                  }
+                }
+              ]
+            }
+          ],
+          "text": "下剤",
+          "type": "choice",
+          "linkId": "laxative",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "大腸手術以外では原則不要。脱水と電解質異常を招くため、「念のため」では出さない。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "不要"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "必要"
+              }
+            }
+          ]
+        },
+        {
+          "item": [
+            {
+              "item": [
+                {
+                  "text": "薬剤・量",
+                  "type": "string",
+                  "linkId": "enema-agent"
+                },
+                {
+                  "text": "実施の時刻",
+                  "type": "string",
+                  "linkId": "enema-time"
+                }
+              ],
+              "text": "浣腸の指示",
+              "type": "group",
+              "linkId": "grp-enema",
+              "enableWhen": [
+                {
+                  "operator": "=",
+                  "question": "enema",
+                  "answerCoding": {
+                    "code": "yes"
+                  }
+                }
+              ]
+            }
+          ],
+          "text": "浣腸",
+          "type": "choice",
+          "linkId": "enema",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "不要"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "必要"
+              }
+            }
+          ]
+        },
+        {
+          "text": "前日の入浴・シャワー",
+          "type": "choice",
+          "linkId": "bath",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "shower",
+                "display": "シャワー"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "bath",
+                "display": "入浴"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "wipe",
+                "display": "清拭"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "不要"
+              }
+            }
+          ]
+        },
+        {
+          "text": "臍処置",
+          "type": "string",
+          "linkId": "umbilicus",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "腹腔鏡手術で臍からポートを入れるときの臍垢の除去。不要なら空欄。"
+            }
+          ]
+        }
+      ],
+      "text": "術野・腸管の準備",
+      "type": "group",
+      "linkId": "grp-prep"
+    },
+    {
+      "item": [
+        {
+          "text": "手術部位のマーキング",
+          "type": "choice",
+          "linkId": "marking",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "左右・多発部位のある手術は WHO 手術安全チェックリストの必須項目。術式マスタで左右必須にしてある術式は「不要」を選ばない。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "done",
+                "display": "済"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "day-of",
+                "display": "当日実施"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "不要"
+              }
+            }
+          ]
+        },
+        {
+          "item": [
+            {
+              "item": [
+                {
+                  "text": "サイズ・部位",
+                  "type": "string",
+                  "linkId": "iv-size",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "例: 右前腕 20G。出血が見込まれるなら太さの指定を書く。"
+                    }
+                  ]
+                }
+              ],
+              "text": "末梢ルートの指示",
+              "type": "group",
+              "linkId": "grp-iv",
+              "enableWhen": [
+                {
+                  "operator": "=",
+                  "question": "iv-line",
+                  "answerCoding": {
+                    "code": "ward"
+                  }
+                }
+              ]
+            }
+          ],
+          "text": "末梢ルート",
+          "type": "choice",
+          "linkId": "iv-line",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "ward",
+                "display": "病棟で確保"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "or",
+                "display": "手術室で確保"
+              }
+            }
+          ]
+        },
+        {
+          "text": "尿道カテーテル",
+          "type": "choice",
+          "linkId": "urinary",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "留置期間が長いほど尿路感染が増えるので、手術室での挿入を既定にする運用が多い。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "不要"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ward",
+                "display": "病棟で挿入"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "or",
+                "display": "手術室で挿入"
+              }
+            }
+          ]
+        },
+        {
+          "text": "胃管",
+          "type": "choice",
+          "linkId": "gastric",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "radio-button",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+              "valueCode": "horizontal"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "不要"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ward",
+                "display": "病棟で挿入"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "or",
+                "display": "手術室で挿入"
+              }
+            }
+          ]
+        },
+        {
+          "text": "静脈血栓塞栓症の予防",
+          "type": "choice",
+          "linkId": "dvt",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "病棟で装着まで済ませるもの。薬剤は別に処方する。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "check-box",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "stocking",
+                "display": "弾性ストッキング"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ipc",
+                "display": "間欠的空気圧迫(IPC)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "anticoagulant",
+                "display": "抗凝固薬(術後)"
+              }
+            }
+          ]
+        },
+        {
+          "text": "入室前に外すもの",
+          "type": "choice",
+          "linkId": "remove",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "マニキュアはパルスオキシメータの妨げになるので落とさせる。"
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "code": "check-box",
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "denture",
+                "display": "義歯"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "contact",
+                "display": "コンタクトレンズ"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "accessory",
+                "display": "装飾品"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "nail",
+                "display": "マニキュア・ジェルネイル"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "hearing-aid",
+                "display": "補聴器"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "wig",
+                "display": "かつら"
+              }
+            }
+          ]
+        },
+        {
+          "text": "手術室へ持参するもの",
+          "type": "string",
+          "linkId": "belongings",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "画像・持参薬・吸入薬・血糖測定器など。"
+            }
+          ]
+        }
+      ],
+      "text": "病棟での準備",
+      "type": "group",
+      "linkId": "grp-ward"
+    },
+    {
+      "item": [
+        {
+          "text": "血糖・インスリンの指示",
+          "type": "text",
+          "linkId": "glucose",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "絶食中の血糖測定の頻度と、インスリンのスライディングスケール。"
+            }
+          ]
+        },
+        {
+          "text": "観察・報告の指示",
+          "type": "text",
+          "linkId": "vital",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "報告の基準(例: 発熱38℃以上は執刀医へ連絡)。"
+            }
+          ]
+        },
+        {
+          "text": "その他の指示",
+          "type": "text",
+          "linkId": "note",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "上の欄に当てはまらない指示。テンプレートから記載すると術前指示欄が直接編集できなくなるので、自由文の逃げ場としてここを使う。"
+            }
+          ]
+        }
+      ],
+      "text": "その他",
+      "type": "group",
+      "linkId": "grp-other"
+    }
+  ],
+  "name": "SUR_PREOP_01",
+  "title": "術前指示",
+  "status": "active",
+  "version": "1.0.0",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "code": "9c4e1f37-8a52-4bd6-b071-3f8e2a5c9d14",
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "display": "手術"
+      }
+    }
+  ],
+  "description": "手術オーダーの「術前指示」に貼るテンプレート。主治医が病棟に出す、手術前日〜当日の準備の指示だけを並べる。手術そのものの内容(術式・麻酔方法・手術体位・輸血準備・同意書)は手術オーダーのヘッダが持つので、ここには書かない。記入しなかった項目は術前指示の文面に出ないので、当てはまるものだけ埋めればよい。",
+  "subjectType": [
+    "Patient"
+  ],
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  }
+}
