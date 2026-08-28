@@ -8429,6 +8429,12 @@ body.page-wide #root {
 
 /* ---- 麻酔チャート(docs/anesthesia-chart-design.md) ---- */
 
+/* カルテのカードから開くときのモーダル。グラフが横に伸びるので、
+   広幅(.modal--wide)よりさらに広く取って画面いっぱいまで使う。 */
+.modal--anes-chart {
+  width: min(1200px, 96vw);
+}
+
 /* 入力欄の見た目。このページはフォームがグラフ・表と地続きに並ぶので、
    フォーム単位ではなくページ全体に当てる(規則は .prescription-form と同じ)。 */
 .anes-chart input,
@@ -8446,6 +8452,9 @@ body.page-wide #root {
 .anes-chart fieldset {
   border: 1px solid var(--border);
   border-radius: 8px;
+  /* fieldset は既定で min-inline-size: min-content。そのままだと中の表の幅まで
+     広がってしまい、表側の横スクロール(.anes-chart__table-scroll)が効かない。 */
+  min-width: 0;
 }
 
 .anes-chart fieldset legend {

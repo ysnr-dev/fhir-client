@@ -120,6 +120,7 @@ import {
 } from "../fhir/questionnaireResponseHelpers";
 import { vitalDisplayRows } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { AnesthesiaChartModal } from "./AnesthesiaChartModal";
 import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
 import { KarteCardJsonModal } from "./KarteCardModals";
 import { PlainTextModal } from "./PlainTextModal";
@@ -278,6 +279,7 @@ function KarteCard({
   const [plainTextOpen, setPlainTextOpen] = useState(false);
   const [jsonOpen, setJsonOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [chartOpen, setChartOpen] = useState(false);
 
   const deleting =
     deleteNote.isPending ||
@@ -482,6 +484,19 @@ function KarteCard({
                 平文表示
               </button>
             )}
+            {/* 麻酔チャート(術中リアルタイム記録)。入室後に書き始め、実施済では
+                振り返りに読むので、その 2 つの進捗でだけ開ける。
+                docs/anesthesia-chart-design.md */}
+            {item.kind === "surgery-order" &&
+              (item.status === "in-progress" || item.status === "completed") && (
+                <button
+                  type="button"
+                  className="row-menu__item"
+                  onClick={() => setChartOpen(true)}
+                >
+                  麻酔チャート
+                </button>
+              )}
             {/* 診療記録は修正のたびに版が残るので、いつ誰が直したかを辿れるようにする。 */}
             {item.kind === "note" && (
               <button
@@ -526,6 +541,9 @@ function KarteCard({
       {jsonOpen && <KarteCardJsonModal item={item} onClose={() => setJsonOpen(false)} />}
       {historyOpen && item.kind === "note" && (
         <ClinicalNoteHistoryModal noteId={item.id} onClose={() => setHistoryOpen(false)} />
+      )}
+      {chartOpen && item.kind === "surgery-order" && (
+        <AnesthesiaChartModal orderId={item.id} onClose={() => setChartOpen(false)} />
       )}
     </article>
   );
