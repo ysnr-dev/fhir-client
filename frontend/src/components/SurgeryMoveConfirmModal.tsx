@@ -22,7 +22,7 @@ import {
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 
-// カレンダーでカードを掴んで動かしたときの「移動の確認」。
+// カレンダーでカードを掴んで動かした/縁を掴んで伸縮させたときの「変更の確認」。
 //
 // ［提案］ドロップで即書き込みにはしない。日程は手術部・病棟・麻酔科が見ている
 // 予定で、手が滑ったドラッグがそのまま他部署に流れると取り返しが面倒になる。
@@ -39,6 +39,11 @@ export interface SurgeryMoveTarget {
   time: string;
   roomId: string;
   roomName: string;
+  /**
+   * 変えた後の所要時間(分)。カードの縁を掴んで伸縮させたときだけ入る。
+   * 省略したときは今の所要時間のまま(移動は「いつ・どこで」だけを変える)。
+   */
+  durationMinutes?: number;
 }
 
 interface Props {
@@ -54,7 +59,15 @@ export function SurgeryMoveConfirmModal({ row, target, onClose, onMoved }: Props
   const summary = summarizeSurgeryOrder(row.order);
   const items = surgeryOrderItems(row.order, row.itemRequests);
 
-  const conflict = useTargetConflicts(row, target);
+  // 伸縮させていなければ今の所要時間のまま。重なりも割当も表示も、すべてこの値で見る。
+  const nextDuration = target.durationMinutes ?? summary.durationMinutes;
+  const conflict = useTargetConflicts(row, target, nextDuration);
+
+  // 同じ日・同じ部屋の中での変更(時刻だけ・所要時間だけ)は「移動」と呼ぶと外れる。
+  const sameSlot =
+    Boolean(summary.scheduledDate) &&
+    target.date === summary.scheduledDate &&
+    target.roomId === (summary.roomId ?? "");
 
   // 割当科の食い違い。移動先の日・部屋の割当と、このオーダーの執刀科を突き合わせる。
   const blocks = useSurgeryRoomBlocks(target.date || undefined);
@@ -64,7 +77,7 @@ export function SurgeryMoveConfirmModal({ row, target, onClose, onMoved }: Props
     : undefined;
   const outsideBlocks = conflictingBlocks(
     blocksOfRoomDay(blocks.data ?? [], target.roomId, target.date),
-    timeRange(target.time, summary.durationMinutes),
+    timeRange(target.time, nextDuration),
     orderDepartment ? departmentCode(orderDepartment) : "",
   );
 
@@ -75,8 +88,8 @@ export function SurgeryMoveConfirmModal({ row, target, onClose, onMoved }: Props
         values: {
           scheduledDate: target.date,
           scheduledTime: target.time,
-          // 所要時間と術式は動かさない。動かすのは「いつ・どこで」だけ。
-          durationMinutes: summary.durationMinutes != null ? String(summary.durationMinutes) : "",
+          // 術式は動かさない。所要時間は縁を掴んで伸縮させたときだけ変わる。
+          durationMinutes: nextDuration != null ? String(nextDuration) : "",
           roomId: target.roomId,
           roomName: target.roomName,
         },
@@ -94,7 +107,11 @@ export function SurgeryMoveConfirmModal({ row, target, onClose, onMoved }: Props
 
   // 未確定リストから格子へ落としたときは「移動」ではなく初めて日程が入る場面なので、
   // 見出しを分ける(変更前の欄が「日付未定」だけになるため、移動と読むと戸惑う)。
-  const title = summary.scheduledDate ? "手術の日程を移動" : "手術の日程を決める";
+  const title = !summary.scheduledDate
+    ? "手術の日程を決める"
+    : sameSlot
+      ? "手術の時間を変更"
+      : "手術の日程を移動";
 
   return (
     <Modal title={title} onClose={onClose} className="modal--lab-order-item">
@@ -114,7 +131,7 @@ export function SurgeryMoveConfirmModal({ row, target, onClose, onMoved }: Props
           <div className="surgery-move__side surgery-move__side--next">
             <span className="surgery-move__label">変更後</span>
             <span>{target.date || "日付未定"}</span>
-            <span>{rangeLabel(target.time, summary.durationMinutes)}</span>
+            <span>{rangeLabel(target.time, nextDuration ?? null)}</span>
             <span>{target.roomName || "部屋未定"}</span>
           </div>
         </div>
@@ -124,28 +141,29 @@ export function SurgeryMoveConfirmModal({ row, target, onClose, onMoved }: Props
         {/* 割当外は警告まで(移動は止めない)。 */}
         {outsideBlocks.length > 0 && (
           <p className="surgery-day-schedule__warn" role="status">
-            移動先は {outsideBlocks.map((b) => b.department_name || b.department_code).join(" / ")}{" "}
+            変更後の時間帯は{" "}
+            {outsideBlocks.map((b) => b.department_name || b.department_code).join(" / ")}{" "}
             の割当です({outsideBlocks.map(blockLabel).join(" / ")})。
           </p>
         )}
 
         {conflict.loading ? (
-          <p className="order-select__muted">移動先の予定を確認しています...</p>
+          <p className="order-select__muted">変更後の予定を確認しています...</p>
         ) : conflict.unknown ? (
           <p className="surgery-day-schedule__warn" role="alert">
-            移動先の予定を読めなかったため、重なりを確かめられませんでした。
+            変更後の予定を読めなかったため、重なりを確かめられませんでした。
           </p>
         ) : conflict.truncated ? (
           <p className="surgery-day-schedule__warn" role="alert">
-            移動先の日はオーダーが多く一部しか読めていません。ここに出ていない重なりがある
+            変更後の日はオーダーが多く一部しか読めていません。ここに出ていない重なりがある
             可能性があります。
           </p>
         ) : conflict.rows.length > 0 ? (
           <p className="surgery-day-schedule__warn" role="alert">
-            移動先で、同じ手術室の次の {conflict.rows.length} 件と時間帯が重なります。
+            変更後の時間帯は、同じ手術室の次の {conflict.rows.length} 件と重なります。
           </p>
         ) : (
-          <p className="order-select__muted">移動先の手術室での時間の重なりはありません。</p>
+          <p className="order-select__muted">変更後の手術室での時間の重なりはありません。</p>
         )}
 
         {conflict.rows.length > 0 && (
@@ -187,8 +205,10 @@ export function SurgeryMoveConfirmModal({ row, target, onClose, onMoved }: Props
             {move.isPending
               ? "送信中..."
               : conflict.rows.length > 0 || conflict.truncated || conflict.unknown
-                ? "重なりを承知で移動"
-                : "移動する"}
+                ? `重なりを承知で${sameSlot ? "変更" : "移動"}`
+                : sameSlot
+                  ? "変更する"
+                  : "移動する"}
           </button>
           <button type="button" onClick={onClose} disabled={move.isPending}>
             戻る
@@ -207,12 +227,19 @@ interface TargetConflicts {
 }
 
 /**
- * 移動先の日を引き直して重なりを出す。
+ * 変更後の日を引き直して重なりを出す。
  *
  * キャッシュを見ない(staleTime: 0)。カレンダーを描いた後に他端末が入れたぶんを
  * 拾うのがこの確認の目的なので、描画に使ったキャッシュを読み返しても意味がない。
+ *
+ * 所要時間は引数で受ける —— 縁を掴んで伸ばしたときは、**伸ばした後の**時間帯で
+ * 取り合いを見ないと、はみ出した先の重なりを見落とす。
  */
-function useTargetConflicts(row: SurgeryWorklistRow, target: SurgeryMoveTarget): TargetConflicts {
+function useTargetConflicts(
+  row: SurgeryWorklistRow,
+  target: SurgeryMoveTarget,
+  durationMinutes: number | null,
+): TargetConflicts {
   const queryClient = useQueryClient();
   const [state, setState] = useState<TargetConflicts>({
     loading: true,
@@ -220,9 +247,6 @@ function useTargetConflicts(row: SurgeryWorklistRow, target: SurgeryMoveTarget):
     truncated: false,
     unknown: false,
   });
-
-  const summary = summarizeSurgeryOrder(row.order);
-  const durationMinutes = summary.durationMinutes;
 
   useEffect(() => {
     let cancelled = false;

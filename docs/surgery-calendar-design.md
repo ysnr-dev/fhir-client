@@ -173,9 +173,41 @@
 - ［実装］pointermove / up は window で拾う。掴んだ要素の外(別の列)へ出ても追う
   必要があり、`setPointerCapture` だと移動先の列でイベントが要素に届かない。
 
+#### カードの縁を掴んで時間を変える(リサイズ)
+
+日ビューのカードは上下の縁を掴んで伸縮できる。**掴んだ側の端だけを動かし、反対の端は
+据え置く** —— 上端なら入室時刻(退室はそのまま)、下端なら所要時間が変わる。移動と同じ
+条件(申込済・受付済のみ)で、刻みも移動と同じ **5 分**。
+
+［導出］所要時間を直すのに編集フォームを開かせない。手術部が日程を詰めるときに触るのは
+「何時から」と「何分」で、その 2 つは格子の上で見比べながら決まる。フォームを開くと
+格子が見えなくなり、隣の予定との間合いが分からなくなる。
+
+［導出］**見えるハンドルも説明のツールチップも出さない**。カードの高さは所要時間その
+もので、短い手術では帯 1 本ぶんが本文を潰す。縁に `title` を付けるとカード全体の
+title(時刻・患者・術式)を縁の上でだけ潰してしまう。掴める幅(6px)だけ確保し、合図は
+カーソル(`ns-resize`)とホバー時の縁の色に任せる。
+
+［導出］引いている間、時刻の行を**引いている今の値**に差し替え、所要時間(分)も添える。
+高さが変わるだけでは何分になったのか読めない。カードはその場で背が伸びるので、確認
+モーダルを開く前に「これでいいか」をカードのまま決められる。
+
+［実装］縁の pointerdown は**カードの上で止める**(`stopPropagation`)。止めないと同じ指が
+カードの移動も始める。ポインタは縁自身で捕まえる(`setPointerCapture`)—— カードの外・
+列の外まで引いても追える。移動が window で拾うのと違う作りだが、伸縮は掴んだ列から
+出ない操作なので、捕まえた方が単純になる。
+
+［実装］掴んで戻しただけ(値が変わらない)なら何もしない。移動と同じ扱い。
+
+［実装］最短は 1 目盛り(`DRAG_SNAP_MINUTES`)。反対側の端を追い越させない。
+
 #### ドロップで即書き込みにはしない
 
-［提案］落とした時点では書かず、**移動の確認**(`SurgeryMoveConfirmModal`)を挟む。
+［提案］落とした時点では書かず、**変更の確認**(`SurgeryMoveConfirmModal`)を挟む。
+リサイズも同じ確認を通る —— 変更後の時間帯で重なりを引き直すので、**伸ばした先の
+重なりも拾える**(`useTargetConflicts` に所要時間を渡すのはこのため)。
+見出しと文言は変わる内容に合わせる: 日・部屋が変わらなければ「手術の時間を変更」、
+変われば「手術の日程を移動」、日程が初めて入るときは「手術の日程を決める」。
 日程は手術部・病棟・麻酔科が見ている予定で、手が滑ったドラッグがそのまま他部署へ
 流れると取り返しが面倒になる。確認では変更前 → 後を並べ、**移動先の日を引き直して**
 (キャッシュを見ない。§3-1 と同じ理由)重なりを出す。重なっていればボタンが
@@ -430,7 +462,8 @@ pointerdown の `setState` が反映される前に pointerup が走り、state 
 | 画面 | `SurgeryCalendar`(日/週)、`SurgeryConflictConfirmModal`、`SurgeryRoomBlockPage` |
 | 画面 | `SurgeryCalendarPage`(`/surgery-calendar`。日付と表示単位を持つだけの入れ物) |
 | 既存の改修 | `SurgeryWorklistPage`(カレンダータブを外した)、`SurgeryOrderForm` / `SurgeryScheduleModal`(登録前の確認)、`SurgeryRoomDaySchedule`(割当の表示 + 判定の共通化) |
-| ドラッグ | `hooks/useCardDrag.ts`、`SurgeryMoveConfirmModal`、`buildSurgeryMoveBundle` / `useMoveSurgerySchedule`、`surgeryConflictHelpers` の `isSurgeryMovable` / `snapMinutes` |
+| ドラッグ | `hooks/useCardDrag.ts`、`SurgeryMoveConfirmModal`(移動・リサイズ共通。`SurgeryMoveTarget.durationMinutes` を足した)、`buildSurgeryMoveBundle` / `useMoveSurgerySchedule`、`surgeryConflictHelpers` の `isSurgeryMovable` / `snapMinutes` |
+| リサイズ | `RoomColumn` の `startResize` / `resizedTo`、`SurgeryCard` の縁(`.surgery-calendar__card-resize`)|
 | 未確定リスト | `SurgeryPendingPanel`(§2.4)、`surgeryCalendarLayout.ts`(分割位置の保存)、`KarteSplitter` の再利用 |
 | 登録・修正 | `SurgeryOrderModals`(`SurgeryOrderCreateModal` / `SurgeryOrderEditModal`。中身はカルテと同じ `SurgeryOrderCreatePanel` / `SurgeryOrderEditPanel`、患者検索は `AdmissionPatientSearch` を再利用)、`SurgeryOrderCreatePanel` の `defaultSchedule`、`RoomColumn` の空き枠の下見・範囲選択(`SLOT_SNAP_MINUTES`)、`App` のヘッダー(`OrderContextPicker` を常時表示) |
 | カード | `SurgeryCalendar` の `SurgeryCard` / `SurgeryCardActions`(患者情報は `PatientKana` / `ageWithMonthsLabel` / `genderLabel`、操作は `surgeryTaskActions` / `useUpdateSurgeryTaskStatus` / `SurgeryPerformModal` を一覧タブと共用) |
@@ -453,10 +486,9 @@ pointerdown の `setState` が反映される前に pointerup が走り、state 
 2. **月ビュー**: 週より広い範囲の空き探し。7 本のクエリを 30 本に増やすことになるので、
    日付ごとの件数だけを返す上流の `$distinct-dates`(件数モード。予約枠の月カレンダーが
    使っている)に相当するものが `ServiceRequest` にも要る。
-3. **既存カードのリサイズ**: 新規は空き枠を引いて所要時間まで決められる(§2.6)が、
-   **登録済みのカードの下端を掴んで伸縮させる**のは持っていない。所要時間は編集フォーム
-   (カルテからでもカードのケバブからでも同じもの)で直す。空き枠の範囲選択と同じ計算
-   (`snapRange`)が使えるので、移動(§2.3)と同じ確認を挟む形にすれば足せる。
+3. **週ビューでの時間の変更**: 日ビューはカードの縁で伸縮できる(§2.3)が、週ビューの
+   チップは 1 日ぶんの箱の中の行で、縦位置が時刻を表していないので掴めない。週で
+   時間を詰めたくなったら日ビューへ降りる。
 4. **ブロックスケジュールの一括生成**: 今は 1 行ずつ登録する。`SlotGenerateModal` と
    同じ「曜日 × 時間帯をまとめて作る」が欲しくなったら足す。
 5. **祝日**: 週ビューの曜日色は土日だけ。祝日マスタを持っていないので、祝日に

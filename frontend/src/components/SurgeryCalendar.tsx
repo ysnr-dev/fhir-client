@@ -30,6 +30,7 @@ import {
   roomDayRows,
   rowIdSet,
   snapMinutes,
+  DRAG_SNAP_MINUTES,
   timeRange,
   weekdayOf,
   type MinuteRange,
@@ -61,8 +62,9 @@ import { SurgeryPerformModal } from "./SurgeryPerformModal";
 // 使わないので、カレンダーでも「そこに入れられない」表現にはしない。
 //
 // カード/チップは掴んで動かせる(申込済・受付済のみ)。日ビューは縦で時刻・横で
-// 手術室、週ビューは別セルへ落として日付と手術室を変える。ドロップで即書き込みは
-// せず、必ず移動の確認(SurgeryMoveConfirmModal)を挟む。
+// 手術室、週ビューは別セルへ落として日付と手術室を変える。日ビューのカードは
+// **上下の縁を掴んで伸縮**もでき、上端で入室時刻、下端で所要時間を変えられる。
+// ドロップで即書き込みはせず、必ず変更の確認(SurgeryMoveConfirmModal)を挟む。
 //
 // 空いているところは掴んで縦に引くと、その範囲(日・入室時刻・所要時間・手術室)を
 // 初期値にして手術オーダーを登録できる。押しただけなら所要時間は空(術式の既定に
@@ -386,6 +388,20 @@ function DayView({ date, ...split }: { date: string } & SplitProps) {
                     }
                     onPerform={setPerforming}
                     onEdit={setEditing}
+                    onResize={(row, start, end) =>
+                      // 伸縮も移動と同じ確認を通す。日・部屋は変えず、
+                      // 入室時刻と所要時間だけを変更後として渡す。
+                      setMoving({
+                        row,
+                        target: {
+                          date,
+                          time: minutesToTime(start),
+                          roomId: room.id,
+                          roomName: room.name,
+                          durationMinutes: end - start,
+                        },
+                      })
+                    }
                     onEmptySlot={(start, end) =>
                       setCreating({
                         scheduledDate: date,
@@ -440,6 +456,16 @@ interface AxisRange {
   end: number;
 }
 
+/** 掴んでいる縁。上端は入室時刻、下端は所要時間を変える。 */
+type ResizeEdge = "top" | "bottom";
+
+interface ResizeState {
+  row: SurgeryWorklistRow;
+  edge: ResizeEdge;
+  start: number;
+  end: number;
+}
+
 function RoomColumn({
   room,
   date,
@@ -453,6 +479,7 @@ function RoomColumn({
   onPerform,
   onEdit,
   onEmptySlot,
+  onResize,
   pending,
   draggingOrderId,
   preview,
@@ -475,6 +502,8 @@ function RoomColumn({
    * だけ入る(押しただけなら null = 所要時間はフォームに任せる)。
    */
   onEmptySlot: (start: number, end: number | null) => void;
+  /** カードの縁を掴んで伸縮させた。入室〜退室の分で返す。 */
+  onResize: (row: SurgeryWorklistRow, start: number, end: number) => void;
   /** 進捗の書き込み中。二重に押せないようにする。 */
   pending: boolean;
   /** 掴んでいるカード。元の位置は薄く出す。 */
@@ -511,6 +540,9 @@ function RoomColumn({
   // 中だけの話なので列で持つ。カードを掴んでいる間は出さない(落とし先の枠と紛れる)。
   const [hoverStart, setHoverStart] = useState<number | null>(null);
   const [selection, setSelection] = useState<{ from: number; to: number } | null>(null);
+  // 縁を掴んで伸縮させている最中のカードと、その入室〜退室。
+  const [resize, setResize] = useState<ResizeState | null>(null);
+  const resizeRef = useRef<ResizeState | null>(null);
   // 掴んでいる範囲は ref にも持つ。押してすぐ離すと pointerdown の setState が
   // 反映される前に pointerup が走るので、state だけだと「押しただけ」を取り落とす。
   const selectionRef = useRef<{ from: number; to: number } | null>(null);
@@ -518,6 +550,33 @@ function RoomColumn({
   function updateSelection(next: { from: number; to: number } | null) {
     selectionRef.current = next;
     setSelection(next);
+  }
+
+  function updateResize(next: ResizeState | null) {
+    resizeRef.current = next;
+    setResize(next);
+  }
+
+  /**
+   * 縁を掴んだ。掴んだ側の端だけを動かし、反対の端は据え置く —— 上端なら入室時刻
+   * (退室はそのまま)、下端なら所要時間が変わる。
+   *
+   * ポインタは**掴んだ縁で捕まえる**。カードの外・列の外まで引いても追い続ける。
+   */
+  function startResize(row: SurgeryWorklistRow, edge: ResizeEdge, event: React.PointerEvent) {
+    const summary = summarizeSurgeryOrder(row.order);
+    const range = timeRange(summary.scheduledTime, summary.durationMinutes);
+    if (!range) return;
+    updateResize({ row, edge, start: range.start, end: range.end });
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  /** 引いている先の分 → 伸縮後の入室〜退室。最短は 1 目盛り(DRAG_SNAP_MINUTES)。 */
+  function resizedTo(current: ResizeState, minute: number): ResizeState {
+    const snapped = snapMinutes(minute);
+    return current.edge === "bottom"
+      ? { ...current, end: Math.min(Math.max(snapped, current.start + DRAG_SNAP_MINUTES), 24 * 60) }
+      : { ...current, start: Math.max(Math.min(snapped, current.end - DRAG_SNAP_MINUTES), 0) };
   }
 
   // 引いている途中の Escape でやめられるようにする(カードの移動と同じ)。
@@ -531,6 +590,17 @@ function RoomColumn({
     // updateSelection は ref と setState だけなので、張り直す必要はない。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection]);
+
+  // 伸縮の途中も同じく Escape でやめられる。
+  useEffect(() => {
+    if (!resize) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") updateResize(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resize]);
 
   /** ポインタの縦位置 → 時間軸の分。 */
   function minuteAt(event: React.PointerEvent<HTMLDivElement>) {
@@ -589,6 +659,13 @@ function RoomColumn({
           e.currentTarget.setPointerCapture(e.pointerId);
         }}
         onPointerMove={(e) => {
+          // 伸縮が先。縁を掴んだ pointerdown はカードの上で止めてあるので、
+          // 空き枠の選択とは同時に起きない。
+          const sizing = resizeRef.current;
+          if (sizing) {
+            updateResize(resizedTo(sizing, minuteAt(e)));
+            return;
+          }
           const current = selectionRef.current;
           if (current) {
             updateSelection({ ...current, to: minuteAt(e) });
@@ -598,6 +675,16 @@ function RoomColumn({
           setHoverStart(onCard(e) || draggingOrderId ? null : slotStart(minuteAt(e)));
         }}
         onPointerUp={(e) => {
+          const sizing = resizeRef.current;
+          if (sizing) {
+            updateResize(null);
+            const summary = summarizeSurgeryOrder(sizing.row.order);
+            const before = timeRange(summary.scheduledTime, summary.durationMinutes);
+            // 掴んで戻しただけなら何もしない(移動と同じ)。
+            if (before && before.start === sizing.start && before.end === sizing.end) return;
+            onResize(sizing.row, sizing.start, sizing.end);
+            return;
+          }
           const current = selectionRef.current;
           if (!current) return;
           updateSelection(null);
@@ -609,7 +696,10 @@ function RoomColumn({
           const dragged = Math.abs(current.to - current.from) >= SLOT_SNAP_MINUTES / 2;
           onEmptySlot(range.start, dragged ? range.end : null);
         }}
-        onPointerCancel={() => updateSelection(null)}
+        onPointerCancel={() => {
+          updateSelection(null);
+          updateResize(null);
+        }}
         onPointerLeave={() => setHoverStart(null)}
       >
         {/* 割当科の帯。背景なので操作はしない。 */}
@@ -691,6 +781,10 @@ function RoomColumn({
           const conflict = entry.row.order.id != null && conflictIds.has(entry.row.order.id);
           const movable = isSurgeryMovable(entry.row.task);
           const isDragging = entry.row.order.id != null && entry.row.order.id === draggingOrderId;
+          // 伸縮中はその場で背を伸ばす。書き込む前の見た目が結果と同じになるので、
+          // 確認モーダルを開く前に「これでいいか」をカードのまま決められる。
+          const sizing = resize?.row.order.id === entry.row.order.id ? resize : null;
+          const range = sizing ?? entry.range;
           return (
             <SurgeryCard
               key={entry.row.order.id}
@@ -699,14 +793,16 @@ function RoomColumn({
               conflict={conflict}
               movable={movable}
               dragging={isDragging}
+              resizing={sizing ? { start: sizing.start, end: sizing.end } : null}
               onPointerDown={onCardPointerDown}
+              onResizeStart={startResize}
               onChangeStatus={onChangeStatus}
               onPerform={onPerform}
               onEdit={onEdit}
               pending={pending}
               style={{
-                top: (entry.range.start - axis.start) * PX_PER_MINUTE,
-                height: Math.max((entry.range.end - entry.range.start) * PX_PER_MINUTE, 18),
+                top: (range.start - axis.start) * PX_PER_MINUTE,
+                height: Math.max((range.end - range.start) * PX_PER_MINUTE, 18),
                 left: `${(lane.index / lane.total) * 100}%`,
                 width: `${100 / lane.total}%`,
               }}
@@ -733,7 +829,9 @@ function SurgeryCard({
   conflict,
   movable,
   dragging,
+  resizing,
   onPointerDown,
+  onResizeStart,
   onChangeStatus,
   onPerform,
   onEdit,
@@ -745,7 +843,10 @@ function SurgeryCard({
   conflict: boolean;
   movable: boolean;
   dragging: boolean;
+  /** 縁を掴んで伸縮させている最中の入室〜退室。時刻の行をこの値で置き換える。 */
+  resizing: { start: number; end: number } | null;
   onPointerDown: (row: SurgeryWorklistRow, event: React.PointerEvent) => void;
+  onResizeStart: (row: SurgeryWorklistRow, edge: ResizeEdge, event: React.PointerEvent) => void;
   onChangeStatus: (row: SurgeryWorklistRow, status: SurgeryTaskStatus) => void;
   onPerform: (row: SurgeryWorklistRow) => void;
   onEdit: (row: SurgeryWorklistRow) => void;
@@ -764,6 +865,7 @@ function SurgeryCard({
         conflict ? "surgery-calendar__card--conflict" : "",
         movable ? "surgery-calendar__card--movable" : "",
         dragging ? "surgery-calendar__card--dragging" : "",
+        resizing ? "surgery-calendar__card--resizing" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -779,13 +881,47 @@ function SurgeryCard({
         .filter(Boolean)
         .join("\n")}
     >
+      {/* 上下の縁。掴んだ側の端だけを動かす。押した指がそのままカードの移動を
+          始めないよう、pointerdown はここで止める(ケバブ・進捗ボタンと同じ)。
+          title は付けない —— カード全体の title(時刻・患者・術式)を縁に重ねて
+          潰してしまううえ、掴めることはカーソルと縁の色で足りる。 */}
+      {movable && (
+        <>
+          <span
+            className="surgery-calendar__card-resize surgery-calendar__card-resize--top"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onResizeStart(row, "top", e);
+            }}
+          />
+          <span
+            className="surgery-calendar__card-resize surgery-calendar__card-resize--bottom"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onResizeStart(row, "bottom", e);
+            }}
+          />
+        </>
+      )}
+
       <span className="surgery-calendar__card-time">
         <span className={`surgery-calendar__status is-${status}`}>
           {surgeryTaskStatusDisplay(status)}
         </span>
         {/* 終了予定まで出す。所要時間はカードの高さでも分かるが、
-            重なりを詰めるときに読みたいのは数字の方(rangeLabel は一覧・確認モーダルと同じ)。 */}
-        {rangeLabel(summary.scheduledTime, summary.durationMinutes)}
+            重なりを詰めるときに読みたいのは数字の方(rangeLabel は一覧・確認モーダルと同じ)。
+            伸縮中は**引いている今の値**に差し替え、所要時間も添える(高さだけでは
+            何分になったのか読めないため)。 */}
+        {resizing ? (
+          <>
+            {minutesToTime(resizing.start)}〜{minutesToTime(resizing.end)}
+            <span className="surgery-calendar__card-duration">
+              {resizing.end - resizing.start} 分
+            </span>
+          </>
+        ) : (
+          rangeLabel(summary.scheduledTime, summary.durationMinutes)
+        )}
         {conflict && <span className="surgery-day-schedule__flag">重なり</span>}
 
         <SurgeryCardActions

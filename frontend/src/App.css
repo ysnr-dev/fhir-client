@@ -9330,6 +9330,46 @@ body.page-wide #root {
   opacity: 0.35;
 }
 
+/* カードの上下の縁。掴むと入室時刻(上)・所要時間(下)を変えられる。
+   ［導出］見えるハンドルは出さない。カードは所要時間ぶんの高さしか無く、短い手術では
+   帯 1 本ぶんが本文を潰す。掴める幅だけ確保して、合図はカーソル(ns-resize)と
+   ホバー時の縁の色に任せる。 */
+.surgery-calendar__card-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 6px;
+  z-index: 2;
+  cursor: ns-resize;
+  touch-action: none; /* タッチで縦に引くのをスクロールに取られない */
+}
+
+.surgery-calendar__card-resize--top {
+  top: 0;
+}
+
+.surgery-calendar__card-resize--bottom {
+  bottom: 0;
+}
+
+.surgery-calendar__card-resize:hover {
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* 伸縮中のカード。書き込む前だが結果と同じ背丈になるので、確定した予定と
+   見分けが付くように縁を立てる。 */
+.surgery-calendar__card--resizing {
+  z-index: 3;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* 伸縮中に時刻の右へ添える所要時間。数字が主役なので時間帯より弱くしない。 */
+.surgery-calendar__card-duration {
+  margin-left: 4px;
+  color: var(--accent);
+}
+
 /* 落とす先の枠。実体ではないので点線で、中身は移動後の時間帯だけ。 */
 .surgery-calendar__drop-preview {
   position: absolute;
