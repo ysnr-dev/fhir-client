@@ -435,6 +435,9 @@ function WorklistRow({
   const requester = prescriptionRequester(order);
   const actions = surgeryTaskActions(status);
   const secondaryActions = actions.filter((action) => action.secondary);
+  // 麻酔チャートを開けるのは入室後(書き始める)と実施済(振り返りに読む)だけ。
+  // 日程未定タブは日程を確定する画面なので出さない。
+  const showChart = tab === "scheduled" && (status === "in-progress" || status === "completed");
   const surgeon = summary.staff.find((line) => line.role === "surgeon");
   const others = summary.staff.filter((line) => line.role !== "surgeon");
 
@@ -544,10 +547,18 @@ function WorklistRow({
             ))
         )}
         {/* 訂正・取りやめは押し間違えると進捗が巻き戻るので、一段畳んで置く。
+            麻酔チャートも毎回は開かないので同じメニューに入れる。
             一覧は横スクロールできるよう overflow を持つため、メニューは
             escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
-        {secondaryActions.length > 0 && (
+        {(secondaryActions.length > 0 || showChart) && (
           <RowMenu label="この手術の操作" escapesClipping>
+            {/* 麻酔チャート(術中リアルタイム記録)。書き始めるのは入室後、
+                実施済では振り返りに読む。docs/anesthesia-chart-design.md */}
+            {showChart && (
+              <Link className="row-menu__item" to={`/surgeries/${order.id}/anesthesia-chart`}>
+                麻酔チャート
+              </Link>
+            )}
             {secondaryActions.map((action) => (
               <button
                 key={action.next}

@@ -217,8 +217,9 @@ backend 全 985 examples green(無変更の回帰確認)。
    (`SUR_CONSENT_01`)、術前指示テンプレート(`SUR_PREOP_01`)。
    `docs/report-mappings/sur-*.md` を参照。構造化データ(時刻・スタッフ・測定値
    など)は実施入力が持ち、テンプレートには再入力させない線引きを各ドキュメントに
-   書いた。**術中のリアルタイム記録(麻酔チャート)だけは未実装**で、テンプレート
-   機構では表現できないため専用機能として別途設計する
+   書いた。**術中のリアルタイム記録(麻酔チャート)も実装済み**
+   (`docs/anesthesia-chart-design.md`。手術一覧の入室中・実施済の行から開く専用
+   ページで、打点・イベント・薬剤を 1 点ずつ保存する)
 2. **実施入力データセット**: 術式ごとの定型明細(ヘルニアならメッシュ一式 など)が
    欲しくなったら、処置と同型の `master_surgery_datasets` + 明細 + マスタ画面を足す。
    `DatasetPick` 機構と `MedicalProcedureSearchModal` の `datasetPick` prop は

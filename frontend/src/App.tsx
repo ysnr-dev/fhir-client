@@ -34,6 +34,7 @@ import { EndoscopyItemLayoutPage } from "./pages/EndoscopyItemLayoutPage";
 import { EndoscopyDatasetPage } from "./pages/EndoscopyDatasetPage";
 import { TreatmentWorklistPage } from "./pages/TreatmentWorklistPage";
 import { SurgeryWorklistPage } from "./pages/SurgeryWorklistPage";
+import { AnesthesiaChartPage } from "./pages/AnesthesiaChartPage";
 import { SurgeryItemPage } from "./pages/SurgeryItemPage";
 import { TreatmentItemPage } from "./pages/TreatmentItemPage";
 import { TreatmentItemLayoutPage } from "./pages/TreatmentItemLayoutPage";
@@ -404,6 +405,7 @@ function App() {
           <Route path="/endoscopy-worklist" element={<EndoscopyWorklistPage />} />
           <Route path="/treatment-worklist" element={<TreatmentWorklistPage />} />
           <Route path="/surgery-worklist" element={<SurgeryWorklistPage />} />
+          <Route path="/surgeries/:orderId/anesthesia-chart" element={<AnesthesiaChartPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />

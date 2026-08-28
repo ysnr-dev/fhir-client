@@ -173,6 +173,11 @@ import {
   type SurgeryTaskStatus,
 } from "../fhir/surgeryTaskHelpers";
 import { buildSurgeryPerformDeleteEntries } from "../fhir/surgeryResultHelpers";
+import {
+  buildAnesthesiaChartData,
+  isAnesthesiaChartHub,
+  type AnesthesiaChartData,
+} from "../fhir/anesthesiaChartHelpers";
 import { buildPractitionerDeleteBundle } from "../fhir/practitionerHelpers";
 import {
   addDays,
@@ -6148,6 +6153,83 @@ export function useDeleteSurgeryOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
+  });
+}
+
+
+// ---- 麻酔チャート(docs/anesthesia-chart-design.md) ----
+
+/**
+ * part-of の子を _offset でページングして全件読む。5 分毎の打点 × 数時間で
+ * 100 件を超えるのが普通なので、実施記録のような 1 ページ読みでは足りない。
+ * ページ数の上限は暴走ガード(超えたら以降を捨てる。20 ページ = 2000 件)。
+ */
+async function fetchAllByPartOf<T extends fhir4.Resource>(
+  resourceType: string,
+  hubId: string,
+): Promise<T[]> {
+  const collected: T[] = [];
+  for (let page = 0; page < 20; page += 1) {
+    const params = new URLSearchParams();
+    params.set("part-of", `Procedure/${hubId}`);
+    params.set("_count", "100");
+    params.set("_offset", String(page * 100));
+    const { data: bundle } = await searchResource<T>(resourceType, params);
+    const resources = (bundle.entry ?? [])
+      .filter((entry) => entry.search?.mode !== "include")
+      .map((entry) => entry.resource)
+      .filter((resource): resource is T => resource?.resourceType === resourceType);
+    collected.push(...resources);
+    const total = bundle.total;
+    if (resources.length < 100 || (total != null && collected.length >= total)) break;
+  }
+  return collected;
+}
+
+async function fetchAnesthesiaChart(orderId: string): Promise<AnesthesiaChartData | null> {
+  const params = new URLSearchParams();
+  params.set("based-on", `ServiceRequest/${orderId}`);
+  params.set("_count", "100");
+  const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
+  const hub = (bundle.entry ?? [])
+    .map((entry) => entry.resource)
+    .filter((resource): resource is fhir4.Procedure => resource?.resourceType === "Procedure")
+    .find(
+      (procedure) => isAnesthesiaChartHub(procedure) && procedure.status !== "entered-in-error",
+    );
+  if (!hub?.id) return null;
+
+  const [observations, administrations] = await Promise.all([
+    fetchAllByPartOf<fhir4.Observation>("Observation", hub.id),
+    fetchAllByPartOf<fhir4.MedicationAdministration>("MedicationAdministration", hub.id),
+  ]);
+  return buildAnesthesiaChartData(hub, observations, administrations);
+}
+
+/** オーダー 1 件の麻酔チャート。無ければ null(ページは「開始」ボタンを出す)。 */
+export function useAnesthesiaChart(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ["anesthesia-chart", orderId],
+    queryFn: () => fetchAnesthesiaChart(orderId ?? ""),
+    enabled: Boolean(orderId),
+  });
+}
+
+/**
+ * チャートへの書き込み。開始(ハブ POST)・打点/イベント/薬剤の追加・持続の終了や
+ * 確定(PUT)・削除まで、すべて transaction Bundle のエントリで受ける。打点は
+ * 1 時点の組を 1 transaction で書き、途中失敗で組が欠けないようにする。
+ */
+export function useAnesthesiaChartWrite(orderId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (entries: fhir4.BundleEntry[]) =>
+      postBundle({ resourceType: "Bundle", type: "transaction", entry: entries }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["anesthesia-chart", orderId] });
+      // 実施取消のフェッチ(based-on 検索)にもチャートの子が載るので読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
     },
   });
 }

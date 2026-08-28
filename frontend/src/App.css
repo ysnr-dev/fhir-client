@@ -8426,3 +8426,297 @@ body.page-wide #root {
   min-width: 0;
   resize: vertical;
 }
+
+/* ---- 麻酔チャート(docs/anesthesia-chart-design.md) ---- */
+
+/* 入力欄の見た目。このページはフォームがグラフ・表と地続きに並ぶので、
+   フォーム単位ではなくページ全体に当てる(規則は .prescription-form と同じ)。 */
+.anes-chart input,
+.anes-chart select,
+.anes-chart textarea {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.anes-chart fieldset {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.anes-chart fieldset legend {
+  font-size: 13px;
+  color: var(--text);
+  padding: 0 4px;
+}
+
+.anes-chart__order {
+  margin: 8px 0;
+  color: var(--text-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.anes-chart__empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* 横軸の倍率切り替えと凡例。グラフの上に小さく置く。 */
+.anes-chart__plot-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* 凡例はグラフの持ち物なので、倍率のボタン群とは離して右に置く。 */
+.anes-chart__legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.anes-chart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-h);
+}
+
+.anes-chart__plot-bar .anes-chart__scale {
+  padding: 2px 10px;
+  font-size: 12px;
+}
+
+.anes-chart__plot-bar .anes-chart__scale--active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* グラフは時間ぶんだけ横に伸びるのでスクロールに閉じ込める。短い手術では
+   画面より狭くなるので、枠は中身の幅に合わせる(でないと右が余白だけの
+   帯になる)。 */
+.anes-chart__plot-scroll {
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-card);
+  margin-bottom: 12px;
+}
+
+/* 「全画面」。幅いっぱいに引き伸ばすので中身は必ず収まる(横スクロールしない)。 */
+.anes-chart__plot-scroll--fit {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+.anes-plot__grid {
+  stroke: var(--surface-stripe);
+  stroke-width: 1;
+}
+
+.anes-plot__grid--major {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.anes-plot__ylabel,
+.anes-plot__xlabel {
+  fill: var(--text);
+  font-size: 10px;
+  text-anchor: end;
+}
+
+.anes-plot__xlabel {
+  text-anchor: middle;
+}
+
+.anes-plot__event {
+  fill: var(--accent);
+  font-size: 10px;
+}
+
+.anes-plot__event-label {
+  fill: var(--text-h);
+  font-size: 10px;
+}
+
+.anes-plot__event-line {
+  stroke: var(--accent-border);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+/* 血圧は ∨(収縮期)/∧(拡張期)、脈拍は ● + 折れ線。紙のチャートと同じ記号。 */
+.anes-plot__bp {
+  stroke: var(--lab-high);
+  stroke-width: 1.6;
+  fill: none;
+}
+
+.anes-plot__pulse {
+  fill: var(--lab-low);
+}
+
+.anes-plot__pulse-line {
+  stroke: var(--lab-low);
+  stroke-width: 1;
+  fill: none;
+  opacity: 0.7;
+}
+
+.anes-chart__section {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.anes-chart__table-scroll {
+  overflow-x: auto;
+}
+
+/* 列 = 時点の表。行見出しは左に固定する。 */
+.anes-chart__table {
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+.anes-chart__table th,
+.anes-chart__table td {
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  font-size: 13px;
+  text-align: center;
+  min-width: 56px;
+}
+
+.anes-chart__table tbody th {
+  position: sticky;
+  left: 0;
+  background: var(--surface-panel);
+  text-align: left;
+}
+
+/* 列(時点)の削除。見出しの数字より前に出ないよう、枠も地も持たせず沈める
+   (押す先は分かればよく、常時 4〜5 個が並ぶので目立つと表が読みにくい)。 */
+.anes-chart__table .anes-chart__cell-delete {
+  margin-left: 4px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.45;
+}
+
+.anes-chart__table .anes-chart__cell-delete:hover {
+  opacity: 1;
+  color: var(--accent);
+  background: transparent;
+}
+
+.anes-chart__entry {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.anes-chart__entry label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.anes-chart__entry input[type="number"] {
+  width: 72px;
+}
+
+.anes-chart__bp-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.anes-chart__unit-input {
+  width: 64px;
+}
+
+.anes-chart__drug-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+/* 時刻入力と「現在」ボタンの組。 */
+.anes-chart__time-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.anes-chart__time-field .anes-chart__now {
+  padding: 4px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.anes-chart__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 行は「時刻・名前・補足・操作」を 1 行に並べたもの。名前が本文と同じ大きさだと
+   一覧としては大きすぎるので、表(14px)に合わせる。 */
+.anes-chart__list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.anes-chart__list-time {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.anes-chart__list-note {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.anes-chart__footer {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.anes-chart__danger {
+  color: var(--lab-high);
+  border-color: var(--lab-high);
+}
+

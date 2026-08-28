@@ -512,6 +512,11 @@ export function buildSurgeryPerformBundle(
  *
  * 子(測定値・薬剤・2件目以降の手技)を先に消す。上流は 1 つの Bundle 内では配列順に
  * 処理するので、参照先が先に消えた状態を作らない。
+ *
+ * 測定値・薬剤は「手術の実施記録の Procedure にぶら下がるもの」だけに絞る。
+ * 同じオーダーには麻酔チャート(category = anesthesia-chart。
+ * docs/anesthesia-chart-design.md)のツリーもぶら下がり、based-on + _revinclude の
+ * 検索結果にはその子も混ざるため、無条件に消すとチャートの記録を巻き添えにする。
  */
 export function buildSurgeryPerformDeleteEntries(
   procedures: fhir4.Procedure[],
@@ -522,14 +527,22 @@ export function buildSurgeryPerformDeleteEntries(
   const children = surgeryProcedures.filter((procedure) => procedure.partOf?.length);
   const hubs = surgeryProcedures.filter((procedure) => !procedure.partOf?.length);
 
+  const surgeryIds = new Set(surgeryProcedures.map((procedure) => procedure.id).filter(Boolean));
+  const belongsToSurgery = (resource: { partOf?: fhir4.Reference[] }) =>
+    (resource.partOf ?? []).some((reference) =>
+      surgeryIds.has(referenceId(reference.reference, "Procedure")),
+    );
+
   const deleteEntry = (resourceType: string, id: string | undefined): fhir4.BundleEntry[] =>
     id ? [{ request: { method: "DELETE" as const, url: `${resourceType}/${id}` } }] : [];
 
   return [
-    ...observations.flatMap((observation) => deleteEntry("Observation", observation.id)),
-    ...administrations.flatMap((administration) =>
-      deleteEntry("MedicationAdministration", administration.id),
-    ),
+    ...observations
+      .filter(belongsToSurgery)
+      .flatMap((observation) => deleteEntry("Observation", observation.id)),
+    ...administrations
+      .filter(belongsToSurgery)
+      .flatMap((administration) => deleteEntry("MedicationAdministration", administration.id)),
     ...children.flatMap((procedure) => deleteEntry("Procedure", procedure.id)),
     ...hubs.flatMap((procedure) => deleteEntry("Procedure", procedure.id)),
   ];
