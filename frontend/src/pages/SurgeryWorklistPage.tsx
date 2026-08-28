@@ -1,7 +1,7 @@
 import { today } from "../lib/dates";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { useKarteLinkState } from "../karteReturn";
+import { useReturnLinkState } from "../returnTo";
 import {
   useAdmitUnscheduledSurgery,
   useSelfDepartments,
@@ -12,7 +12,6 @@ import {
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { RowMenu } from "../components/RowMenu";
-import { SurgeryCalendar, type CalendarMode } from "../components/SurgeryCalendar";
 import { SurgeryPerformModal } from "../components/SurgeryPerformModal";
 import { SurgeryScheduleModal } from "../components/SurgeryScheduleModal";
 import {
@@ -56,6 +55,9 @@ import {
 //   予定日別 … 予定手術日で 1 日ぶん。希望日を書いて申し込まれたものもここに出る。
 //   日程未定 … 予定手術日を入れずに申し込まれたもの(occurrence:missing)。
 //              手術部がここから日程を入れて確定する。
+//
+// 部屋の埋まり具合を見て日程を組むのは別画面(手術カレンダー /surgery-calendar)。
+// この一覧は 1 件ずつ処理する画面で、絞り込みも並びもそのためのもの。
 
 interface Filters {
   setting: string;
@@ -73,12 +75,10 @@ const emptyFilters: Filters = {
   status: "",
 };
 
-type Tab = "scheduled" | "unscheduled" | "calendar";
+type Tab = "scheduled" | "unscheduled";
 
 export function SurgeryWorklistPage() {
   const [tab, setTab] = useState<Tab>("scheduled");
-  // カレンダーの表示単位。日と週で切り替える(SurgeryCalendar)。
-  const [calendarMode, setCalendarMode] = useState<CalendarMode>("day");
   // 予定手術日は必須。未選択にはできないので当日から始める。
   const [date, setDate] = useState(today);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
@@ -154,30 +154,18 @@ export function SurgeryWorklistPage() {
         >
           日程未定{unscheduledCount > 0 && ` (${unscheduledCount})`}
         </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "calendar"}
-          className={tab === "calendar" ? "order-select__tab is-active" : "order-select__tab"}
-          onClick={() => setTab("calendar")}
-        >
-          カレンダー
-        </button>
       </div>
 
-      {/* カレンダーは日付送りと表示単位を自前で持つので、一覧の絞り込みは出さない。 */}
-      {tab !== "calendar" && (
-        <FilterForm
-          // 日程未定タブは日付で絞らないので日付欄を出さない。
-          date={tab === "scheduled" ? date : null}
-          filters={filters}
-          rooms={roomOptions}
-          wards={wardOptions}
-          departments={departments.departments}
-          onDateChange={handleDateChange}
-          onChange={setFilters}
-        />
-      )}
+      <FilterForm
+        // 日程未定タブは日付で絞らないので日付欄を出さない。
+        date={tab === "scheduled" ? date : null}
+        filters={filters}
+        rooms={roomOptions}
+        wards={wardOptions}
+        departments={departments.departments}
+        onDateChange={handleDateChange}
+        onChange={setFilters}
+      />
 
       <ErrorBanner error={worklist.error} />
       <ErrorBanner error={unscheduled.error} />
@@ -185,21 +173,13 @@ export function SurgeryWorklistPage() {
       <ErrorBanner error={updateStatus.error} />
       <ErrorBanner error={admit.error} />
 
-      {tab !== "calendar" && source?.truncated && (
+      {source?.truncated && (
         <p className="error-banner__line error-banner__line--error" role="status">
           オーダーが多いため、一部のみ表示しています。
         </p>
       )}
 
-      {tab === "calendar" ? (
-        // 日付は一覧タブと共有する。一覧で見ていた日のままカレンダーへ移れる。
-        <SurgeryCalendar
-          date={date}
-          onDateChange={handleDateChange}
-          mode={calendarMode}
-          onModeChange={setCalendarMode}
-        />
-      ) : (tab === "scheduled" ? worklist.isLoading : unscheduled.isLoading) ? (
+      {(tab === "scheduled" ? worklist.isLoading : unscheduled.isLoading) ? (
         <p>読み込み中...</p>
       ) : (
         <>
@@ -450,7 +430,7 @@ function WorklistRow({
   onAdmit: () => void;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
-  const karteLinkState = useKarteLinkState();
+  const returnLinkState = useReturnLinkState();
   const { order, patient, task } = row;
   const summary = summarizeSurgeryOrder(order);
   const items = surgeryOrderItems(order, row.itemRequests);
@@ -487,7 +467,7 @@ function WorklistRow({
           <>
             {/* 術前情報(病名・検査結果)を見に行けるよう、カルテへ直接飛べるようにする。
                 カナは列を分けず、氏名の後ろに小さめの括弧書きで添える。 */}
-            <Link to={`/patients/${patient.id}/karte`} state={karteLinkState}>
+            <Link to={`/patients/${patient.id}/karte`} state={returnLinkState}>
               {displayName(patient)}
             </Link>
             <PatientKana patient={patient} />
@@ -578,7 +558,11 @@ function WorklistRow({
             {/* 麻酔チャート(術中リアルタイム記録)。書き始めるのは入室後、
                 実施済では振り返りに読む。docs/anesthesia-chart-design.md */}
             {showChart && (
-              <Link className="row-menu__item" to={`/surgeries/${order.id}/anesthesia-chart`}>
+              <Link
+                className="row-menu__item"
+                to={`/surgeries/${order.id}/anesthesia-chart`}
+                state={returnLinkState}
+              >
                 麻酔チャート
               </Link>
             )}

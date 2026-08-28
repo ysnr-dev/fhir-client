@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AnesthesiaChartPanel } from "../components/AnesthesiaChartPanel";
+import { useChartReturnTo } from "../returnTo";
 
 // 麻酔チャート(術中リアルタイム記録)のページ。docs/anesthesia-chart-design.md。
 //
@@ -9,6 +10,8 @@ import { AnesthesiaChartPanel } from "../components/AnesthesiaChartPanel";
 
 export function AnesthesiaChartPage() {
   const { orderId } = useParams<{ orderId: string }>();
+  // 手術一覧からもカレンダーからも開くので、戻り先は開いた画面に合わせる。
+  const returnTo = useChartReturnTo();
 
   // 列・グラフが横に伸びるので、この画面だけ幅を広げる(手術一覧と同じやり方)。
   useEffect(() => {
@@ -22,7 +25,7 @@ export function AnesthesiaChartPage() {
     <div className="page anes-chart">
       <div className="page__header">
         <h1>麻酔チャート</h1>
-        <Link to="/surgery-worklist">← 手術一覧</Link>
+        <Link to={returnTo}>← 戻る</Link>
       </div>
 
       <AnesthesiaChartPanel orderId={orderId} showPatientHeader />

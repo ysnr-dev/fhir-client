@@ -65,7 +65,7 @@ import {
   type KarteOtherTabKey,
   type KarteTabKey,
 } from "../karteUrl";
-import { useKarteReturnTo } from "../karteReturn";
+import { useKarteReturnTo } from "../returnTo";
 import {
   clampLeftWidthRatio,
   clampTopRatio,

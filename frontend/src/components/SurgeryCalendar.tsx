@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { useKarteLinkState } from "../karteReturn";
+import { useReturnLinkState } from "../returnTo";
 import {
   useLocationOptions,
   useSurgeryWorklist,
@@ -847,7 +847,7 @@ function SurgeryCardActions({
   onEdit: (row: SurgeryWorklistRow) => void;
 }) {
   // カルテの「戻る」でこのカレンダーに戻れるように遷移元を渡す。
-  const karteLinkState = useKarteLinkState();
+  const returnLinkState = useReturnLinkState();
   const patient = row.patient;
   const actions = surgeryTaskActions(status);
   const primary = actions.filter((action) => !action.secondary);
@@ -880,7 +880,7 @@ function SurgeryCardActions({
           {patient ? (
             <Link
               to={`/patients/${patient.id}/karte`}
-              state={karteLinkState}
+              state={returnLinkState}
               className="row-menu__item"
             >
               カルテを表示
@@ -889,7 +889,11 @@ function SurgeryCardActions({
             <span className="row-menu__item row-menu__item--disabled">患者を読めていません</span>
           )}
           {showChart && (
-            <Link className="row-menu__item" to={`/surgeries/${row.order.id}/anesthesia-chart`}>
+            <Link
+              className="row-menu__item"
+              to={`/surgeries/${row.order.id}/anesthesia-chart`}
+              state={returnLinkState}
+            >
               麻酔チャート
             </Link>
           )}

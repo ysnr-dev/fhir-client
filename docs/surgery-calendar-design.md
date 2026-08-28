@@ -45,12 +45,20 @@
 
 ## 2. 手術室カレンダー
 
-手術一覧(`/surgery-worklist`)の 3 つ目のタブ。日付は一覧タブと共有していて、
-一覧で見ていた日のままカレンダーへ移れる。
+独立した画面(`/surgery-calendar`、部門業務メニュー)。日付と表示単位(日/週)は
+`SurgeryCalendarPage` が持つ。
+
+［改訂］当初は手術一覧(`/surgery-worklist`)の 3 つ目のタブで、日付を一覧と共有していた。
+**画面を分けた** —— 一覧は「その日の手術を 1 件ずつ処理する」画面で進捗を進めながら縦に
+読み、カレンダーは「空いているところを探して入れる」画面で部屋 × 時刻の面を横に読む。
+使う場面も見る向きも違い、一覧の絞り込み(手術室・病棟・診療科・ステータス)はカレンダーで
+1 つも使っていなかった —— タブに同居させる理由が無い。日付の共有も、一覧で見ていた日を
+そのまま持ち越したい場面が実際には無く(組むのは先の日、処理するのは当日)、失っても困らない。
 
 ［実装］読むクエリは一覧と同じ `useSurgeryWorklist(date)`。**queryKey が同じ**なので
-タブを切り替えても読み直しは起きない。週表示は `useSurgeryWorklistWeek` が同じ
-クエリを 7 本並べるだけで、週から日へ降りるときもキャッシュがそのまま効く。
+画面を移っても読み直しは起きない(タブだった頃と変わらない)。週表示は
+`useSurgeryWorklistWeek` が同じクエリを 7 本並べるだけで、週から日へ降りるときも
+キャッシュがそのまま効く。
 
 ### 2.1 日ビュー(横 = 手術室、縦 = 時刻)
 
@@ -411,7 +419,8 @@ pointerdown の `setState` が反映される前に pointerup が走り、state 
 | FHIR 変換 | `fhir/surgeryConflictHelpers.ts`(重なり・割当の判定。`SurgeryRoomDaySchedule` から移した) |
 | フック | `hooks/useSurgeryConflictCheck.ts`、`api/queries.ts` の `surgeryWorklistQuery` / `useSurgeryWorklistWeek` |
 | 画面 | `SurgeryCalendar`(日/週)、`SurgeryConflictConfirmModal`、`SurgeryRoomBlockPage` |
-| 既存の改修 | `SurgeryWorklistPage`(カレンダータブ)、`SurgeryOrderForm` / `SurgeryScheduleModal`(登録前の確認)、`SurgeryRoomDaySchedule`(割当の表示 + 判定の共通化) |
+| 画面 | `SurgeryCalendarPage`(`/surgery-calendar`。日付と表示単位を持つだけの入れ物) |
+| 既存の改修 | `SurgeryWorklistPage`(カレンダータブを外した)、`SurgeryOrderForm` / `SurgeryScheduleModal`(登録前の確認)、`SurgeryRoomDaySchedule`(割当の表示 + 判定の共通化) |
 | ドラッグ | `hooks/useCardDrag.ts`、`SurgeryMoveConfirmModal`、`buildSurgeryMoveBundle` / `useMoveSurgerySchedule`、`surgeryConflictHelpers` の `isSurgeryMovable` / `snapMinutes` |
 | 未確定リスト | `SurgeryPendingPanel`(§2.4)、`surgeryCalendarLayout.ts`(分割位置の保存)、`KarteSplitter` の再利用 |
 | 登録・修正 | `SurgeryOrderModals`(`SurgeryOrderCreateModal` / `SurgeryOrderEditModal`。中身はカルテと同じ `SurgeryOrderCreatePanel` / `SurgeryOrderEditPanel`、患者検索は `AdmissionPatientSearch` を再利用)、`SurgeryOrderCreatePanel` の `defaultSchedule`、`RoomColumn` の空き枠の下見・範囲選択(`SLOT_SNAP_MINUTES`)、`App` のヘッダー(`OrderContextPicker` を常時表示) |
@@ -420,7 +429,7 @@ pointerdown の `setState` が反映される前に pointerup が走り、state 
 ### 5.1 §5.5 の表示は残す
 
 `SurgeryRoomDaySchedule`(日程を触る画面に、その日その部屋の予定を出す)は
-カレンダーが入っても捨てない。カレンダーは別タブで、日程を入れている最中には
+カレンダーが入っても捨てない。カレンダーは別画面で、日程を入れている最中には
 見えないため。第1段階の §5.5 の判断のとおり。
 
 ---

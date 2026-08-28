@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { useKarteLinkState } from "../karteReturn";
+import { useReturnLinkState } from "../returnTo";
 import { useCurrentPractitioner } from "../api/authQueries";
 import {
   fetchLabArrivalContext,
@@ -257,7 +257,7 @@ export function LabArrivalPage() {
 
 function FeedRow({ entry, onCancel }: { entry: FeedEntry; onCancel: () => void }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
-  const karteLinkState = useKarteLinkState();
+  const returnLinkState = useReturnLinkState();
   return (
     <li className={entry.cancelled ? "lab-arrival__row--cancelled" : undefined}>
       <span className="lab-arrival__time order-select__muted">{entry.time}</span>
@@ -269,7 +269,7 @@ function FeedRow({ entry, onCancel }: { entry: FeedEntry; onCancel: () => void }
           <span>
             {entry.patientNumber ?? "-"}{" "}
             {entry.patientFhirId ? (
-              <Link to={`/patients/${entry.patientFhirId}/karte`} state={karteLinkState}>{entry.patientName}</Link>
+              <Link to={`/patients/${entry.patientFhirId}/karte`} state={returnLinkState}>{entry.patientName}</Link>
             ) : (
               (entry.patientName ?? "")
             )}

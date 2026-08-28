@@ -172,6 +172,7 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
 |---|---|---|
 | 術式マスタ | `/surgery-items` | `TreatmentItemPage`(セット・レイアウト・予約・データセット列を削除、既定値列を追加。K コードは `MedicalProcedureSearchModal` の `defaultSection="K"` から選べる) |
 | 手術一覧(手術部業務) | `/surgery-worklist` | `TreatmentWorklistPage`(並びを手術室 → 入室予定時刻に変更、手術室フィルタ追加、実施入力なし) |
+| 手術カレンダー(手術部業務) | `/surgery-calendar` | 第3段階で追加。部屋 × 時刻の面で日程を組む画面(`docs/surgery-calendar-design.md`)。当初は手術一覧のタブだったが独立させた |
 | オーダー入力 | カルテ右ペイン「手術」 | 新規(`SurgeryOrderForm`)。伝票タブ無し、術式は検索モーダル、ヘッダ入力が厚い |
 
 ### 5.1 申込フォームの構成
@@ -193,7 +194,7 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
 
 ### 5.2 手術一覧
 
-タブが 2 つ。
+タブが 2 つ。1 件ずつ処理する画面で、日程を**組む**のは別画面(手術カレンダー)。
 
 **予定日別**
 - 上流での絞り込みは**予定手術日**(`occurrence`)のみ。

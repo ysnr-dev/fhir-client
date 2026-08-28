@@ -34,6 +34,7 @@ import { EndoscopyItemLayoutPage } from "./pages/EndoscopyItemLayoutPage";
 import { EndoscopyDatasetPage } from "./pages/EndoscopyDatasetPage";
 import { TreatmentWorklistPage } from "./pages/TreatmentWorklistPage";
 import { SurgeryWorklistPage } from "./pages/SurgeryWorklistPage";
+import { SurgeryCalendarPage } from "./pages/SurgeryCalendarPage";
 import { AnesthesiaChartPage } from "./pages/AnesthesiaChartPage";
 import { SurgeryRoomBlockPage } from "./pages/SurgeryRoomBlockPage";
 import { SurgeryItemPage } from "./pages/SurgeryItemPage";
@@ -142,6 +143,11 @@ function App() {
             </Link>
             <Link to="/surgery-worklist" className="row-menu__item">
               手術一覧
+            </Link>
+            {/* 手術一覧が「その日の手術を 1 件ずつ処理する」画面なのに対し、
+                カレンダーは「空いているところを探して日程を組む」画面。 */}
+            <Link to="/surgery-calendar" className="row-menu__item">
+              手術カレンダー
             </Link>
             <Link to="/rx-worklist" className="row-menu__item">
               処方一覧
@@ -407,6 +413,7 @@ function App() {
           <Route path="/endoscopy-worklist" element={<EndoscopyWorklistPage />} />
           <Route path="/treatment-worklist" element={<TreatmentWorklistPage />} />
           <Route path="/surgery-worklist" element={<SurgeryWorklistPage />} />
+          <Route path="/surgery-calendar" element={<SurgeryCalendarPage />} />
           <Route path="/surgeries/:orderId/anesthesia-chart" element={<AnesthesiaChartPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />

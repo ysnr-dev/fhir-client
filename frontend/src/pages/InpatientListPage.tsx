@@ -59,7 +59,7 @@ import { locationDisplayName } from "../fhir/locationHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { addDays } from "../fhir/scheduleHelpers";
 import { bedDisplayName, bedNumber, bedShortLabel } from "../fhir/wardHelpers";
-import { useKarteLinkState } from "../karteReturn";
+import { useReturnLinkState } from "../returnTo";
 import { today } from "../lib/dates";
 
 // 入院患者一覧。「入院患者」と「入院予定」の 2 つのタブを持つ。
@@ -928,7 +928,7 @@ function InpatientTableRow({
   onRowAction: (kind: RowAction["kind"]) => void;
   cancelling: boolean;
 }) {
-  const karteLinkState = useKarteLinkState();
+  const returnLinkState = useReturnLinkState();
   const { room, bed, roomRowSpan, encounter, patient } = row;
   const patientId = patient?.id;
   const bedLabel = bedNumber(bed) ?? bed.name ?? "-";
@@ -965,7 +965,7 @@ function InpatientTableRow({
           </td>
           <td className="patient-table__actions sticky-table__fix-actions">
             {patientId && (
-              <Link className="button" to={`/patients/${patientId}/karte`} state={karteLinkState}>
+              <Link className="button" to={`/patients/${patientId}/karte`} state={returnLinkState}>
                 カルテ
               </Link>
             )}
@@ -1050,7 +1050,7 @@ function PlannedTableRow({
   onCancelPlan: () => void;
   cancelling: boolean;
 }) {
-  const karteLinkState = useKarteLinkState();
+  const returnLinkState = useReturnLinkState();
   const { encounter, patient } = row;
   const patientId = patient?.id;
 
@@ -1076,7 +1076,7 @@ function PlannedTableRow({
       <td className="inpatient__note">{encounterNote(encounter) || "-"}</td>
       <td className="patient-table__actions sticky-table__fix-actions">
         {patientId && (
-          <Link className="button" to={`/patients/${patientId}/karte`} state={karteLinkState}>
+          <Link className="button" to={`/patients/${patientId}/karte`} state={returnLinkState}>
             カルテ
           </Link>
         )}

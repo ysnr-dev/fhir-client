@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useKarteLinkState } from "../karteReturn";
+import { useReturnLinkState } from "../returnTo";
 import { useSurgeryUnscheduledList, type SurgeryWorklistRow } from "../api/queries";
 import { ageWithMonthsLabel, displayName, genderLabel } from "../fhir/patientHelpers";
 import { summarizeSurgeryOrder, surgeryOrderItems } from "../fhir/surgeryOrderHelpers";
@@ -186,7 +186,7 @@ function PendingCard({
   onEdit: (row: SurgeryWorklistRow) => void;
   dragging: boolean;
 }) {
-  const karteLinkState = useKarteLinkState();
+  const returnLinkState = useReturnLinkState();
   const summary = summarizeSurgeryOrder(row.order);
   const items = surgeryOrderItems(row.order, row.itemRequests);
   const status = surgeryTaskStatus(row.task);
@@ -238,7 +238,7 @@ function PendingCard({
             {patient ? (
               <Link
                 to={`/patients/${patient.id}/karte`}
-                state={karteLinkState}
+                state={returnLinkState}
                 className="row-menu__item"
               >
                 カルテを表示

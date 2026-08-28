@@ -5,7 +5,7 @@ import {
   encounterNurseNames,
 } from "../fhir/encounterHelpers";
 import { displayName } from "../fhir/patientHelpers";
-import { useKarteLinkState } from "../karteReturn";
+import { useReturnLinkState } from "../returnTo";
 import { PatientKana, PatientProfileCells, PatientProfileHeadCells } from "./PatientRowCells";
 
 // 入院患者一覧のどのタブでも同じ並び・同じ見た目で出す部分。
@@ -68,10 +68,10 @@ export function InpatientBodyCells({
 
 /** 操作列の先頭に置くカルテへのリンク。患者が取れていないときは出さない。 */
 export function KarteLink({ patient }: { patient?: fhir4.Patient }) {
-  const karteLinkState = useKarteLinkState();
+  const returnLinkState = useReturnLinkState();
   if (!patient?.id) return null;
   return (
-    <Link className="button" to={`/patients/${patient.id}/karte`} state={karteLinkState}>
+    <Link className="button" to={`/patients/${patient.id}/karte`} state={returnLinkState}>
       カルテ
     </Link>
   );

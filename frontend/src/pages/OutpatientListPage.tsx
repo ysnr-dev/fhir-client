@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { useKarteLinkState } from "../karteReturn";
+import { useReturnLinkState } from "../returnTo";
 import { useCurrentPractitioner } from "../api/authQueries";
 import {
   useCancelAppointment,
@@ -342,7 +342,7 @@ function OutpatientTableRow({
   onCancel: () => void;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
-  const karteLinkState = useKarteLinkState();
+  const returnLinkState = useReturnLinkState();
   const { appointment, patient } = row;
   const patientId = patient?.id ?? appointmentActorId(appointment, "Patient");
   const patientName = patient
@@ -376,7 +376,7 @@ function OutpatientTableRow({
           </button>
         )}
         {patientId && (
-          <Link className="button" to={`/patients/${patientId}/karte`} state={karteLinkState}>
+          <Link className="button" to={`/patients/${patientId}/karte`} state={returnLinkState}>
             カルテ
           </Link>
         )}

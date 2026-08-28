@@ -8,12 +8,12 @@ import {
 } from "../fhir/patientHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { RowMenu } from "./RowMenu";
-import { useKarteLinkState } from "../karteReturn";
+import { useReturnLinkState } from "../returnTo";
 
 export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
   const deletePatient = useDeletePatient();
   // カルテの「戻る」でこの一覧(検索条件つき)に戻れるように遷移元を渡す。
-  const karteLinkState = useKarteLinkState();
+  const returnLinkState = useReturnLinkState();
 
   function handleDelete(patient: fhir4.Patient) {
     if (!patient.id) return;
@@ -56,7 +56,7 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
               </td>
               <td>{patient.active === false ? "無効" : "有効"}</td>
               <td className="patient-table__actions">
-                <Link className="button" to={`/patients/${patient.id}/karte`} state={karteLinkState}>
+                <Link className="button" to={`/patients/${patient.id}/karte`} state={returnLinkState}>
                   カルテ
                 </Link>
                 <RowMenu label={`${displayName(patient) || patient.id} の操作`}>
