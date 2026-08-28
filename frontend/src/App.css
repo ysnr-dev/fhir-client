@@ -9231,6 +9231,9 @@ body.page-wide #root {
 .surgery-calendar__cell {
   display: flex;
   flex-direction: column;
+  /* button の UA 既定は align-items: center。打ち消さないと中身が幅いっぱいに
+     ならず、text-align: left も効かないまま中央に寄る(術式名の省略も効かない)。 */
+  align-items: stretch;
   gap: 2px;
   width: 100%;
   padding: 3px 4px;
@@ -9269,32 +9272,19 @@ body.page-wide #root {
   font-size: 10px;
 }
 
-.surgery-calendar__cell-count {
+/* 件数と空きの印はそのセルの要約なので中央に置く。手術の行(チップ)だけを
+   左にそろえて、縦に読めるようにする。 */
+.surgery-calendar__cell-count,
+.surgery-calendar__cell-empty {
   color: var(--text-h);
-}
-
-/* チップ 1 行 = 手術の見出し + ケバブ。チップ側だけを伸ばして省略を効かせる。 */
-.surgery-calendar__chip-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+  text-align: center;
 }
 
 .surgery-calendar__chip {
-  flex: 1;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text);
-}
-
-/* セルは狭いので、日ビューのカードと同じくらいまでトリガーを詰める。 */
-.surgery-calendar__chip-menu .row-menu__trigger {
-  padding: 0 3px;
-  font-size: 11px;
-  line-height: 1.2;
-  min-width: 0;
 }
 
 /* 日程確定・申込フォームに出す割当の行。警告ではないので地味に置く。 */

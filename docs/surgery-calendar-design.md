@@ -176,17 +176,25 @@
 カードのドラッグを始め、押す前にカードが動く。
 カレンダーは `overflow` の中にあるので `RowMenu` は `escapesClipping` で開く。
 
-［改訂］当初は「週ビューのチップには操作を付けない(セルが button なので入れ子に
-なる)」としていたが、§2.6 で修正の導線を入れるときにセルを `div[role=button]` へ
-変えた。チップごとのケバブは**編集だけ**に絞る —— 進捗の操作は時刻の見える日ビュー
-でするもので、週ビューは日を選ぶ画面という位置づけは変えない。
+［提案］週ビューのチップには操作を付けない。チップはセル(日ビューへ降りるボタン)の
+中にあり、button の入れ子は不正になる。週ビューは日を選ぶための画面で、1 件ごとの操作は
+日ビューへ降りてから行う。
+
+［改訂］§2.6 で修正の導線を入れたとき、一度チップごとにケバブ(編集)を置き、そのために
+セルを `div[role=button]` へ変えた。**元に戻した** —— 週ビューで 1 件ずつ触るのは
+やはり位置づけが合わず、セルも素の button に戻せた。週ビューから申込を直したいときは
+右ペイン(未確定リスト)のケバブか、日ビューへ降りる。
 
 ### 2.2 週ビュー(横 = 曜日、縦 = 手術室)
 
 日程を組むときの空き探し。格子は予約枠カレンダー(`.slot-calendar`)を借り、
 セルの中身だけを手術用に組んだ。
 
-- セルはその日その部屋の件数 + 各手術のチップ(時刻 + 主術式)。
+- セルはその日その部屋の件数 + 各手術のチップ(時刻 + 主術式)。手術の行は**左そろえ**で
+  縦に読めるようにし、そのセルの要約(件数・空きの「-」)だけ中央に置く。
+  ［実装］セルは `button`。**UA 既定の `align-items: center` を打ち消す**
+  (`align-items: stretch`)—— 打ち消さないと中身が幅いっぱいにならず、`text-align: left` も
+  効かないまま中央に寄り、長い術式名の省略(ellipsis)も働かない。
 - 重なりのある日はセルを警告色にする(週で見ても取りこぼさない)。
 - セルと日付見出しのクリックでその日の日ビューへ降りる。
 
@@ -384,8 +392,9 @@ pointerdown の `setState` が反映される前に pointerup が走り、state 
 
 #### 修正: カードのケバブから
 
-日ビューのカード・週ビューのチップ・未確定リストのカードの 3 か所のケバブに「編集」を
-足す。開くのはカルテと同じ編集フォームなので、**編集できる範囲も可否もカルテと同じ**
+日ビューのカードと未確定リストのカード、2 か所のケバブに「編集」を足す(週ビューの
+チップには操作を置かない。§2.1)。開くのはカルテと同じ編集フォームなので、
+**編集できる範囲も可否もカルテと同じ**
 (進捗では絞らない) —— 入口で差をつけると「カルテでは直せるのにカレンダーでは直せない」
 になる。患者は `_include` で来た `row.patient` を第一候補に、無ければ
 `order.subject` から拾う。
@@ -526,7 +535,7 @@ pointerdown の `setState` が反映される前に pointerup が走り、state 
 | ドラッグ | `hooks/useCardDrag.ts`、`SurgeryMoveConfirmModal`(移動・リサイズ共通。`SurgeryMoveTarget.durationMinutes` を足した)、`buildSurgeryMoveBundle` / `useMoveSurgerySchedule`、`surgeryConflictHelpers` の `isSurgeryMovable` / `snapMinutes` |
 | リサイズ | `RoomColumn` の `startResize` / `resizedTo`、`SurgeryCard` の縁(`.surgery-calendar__card-resize`)|
 | 未確定リスト | `SurgeryPendingPanel`(§2.4)、`surgeryCalendarLayout.ts`(分割位置の保存)、`KarteSplitter` の再利用 |
-| 登録・修正 | `SurgeryOrderModals`(`SurgeryOrderCreateModal` / `SurgeryOrderEditModal`。中身はカルテと同じ `SurgeryOrderCreatePanel` / `SurgeryOrderEditPanel`、患者検索は `AdmissionPatientSearch` を再利用)、`SurgeryOrderCreatePanel` の `defaultSchedule`、`RoomColumn` の空き枠の下見・範囲選択(`SLOT_SNAP_MINUTES`)、`App` のヘッダー(`OrderContextPicker` を常時表示) |
+| 登録・修正 | `SurgeryOrderModals`(`SurgeryOrderCreateModal` / `SurgeryOrderEditModal`。中身はカルテと同じ `SurgeryOrderCreatePanel` / `SurgeryOrderEditPanel`、患者検索は `AdmissionPatientSearch` を再利用。開く導線は日ビューのカードと未確定リストのケバブ)、`SurgeryOrderCreatePanel` の `defaultSchedule`、`RoomColumn` の空き枠の下見・範囲選択(`SLOT_SNAP_MINUTES`)、`App` のヘッダー(`OrderContextPicker` を常時表示) |
 | カード | `SurgeryCalendar` の `SurgeryCard` / `SurgeryCardActions`(患者情報は `PatientKana` / `ageWithMonthsLabel` / `genderLabel`、操作は `surgeryTaskActions` / `useUpdateSurgeryTaskStatus` / `SurgeryPerformModal` を一覧タブと共用) |
 
 ### 5.1 §5.5 の表示は残す

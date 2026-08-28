@@ -1297,7 +1297,6 @@ function WeekView({
                             else cellRefs.current.delete(key);
                           }}
                           onChipPointerDown={dragging.start}
-                          onEdit={setEditing}
                           draggingOrderId={dragging.drag?.item.order.id}
                           dropTarget={previewKey === `${d}|${room.id}`}
                         />
@@ -1332,7 +1331,6 @@ function WeekCell({
   onOpen,
   cellRef,
   onChipPointerDown,
-  onEdit,
   draggingOrderId,
   dropTarget,
 }: {
@@ -1343,7 +1341,6 @@ function WeekCell({
   onOpen: () => void;
   cellRef: (el: HTMLTableCellElement | null) => void;
   onChipPointerDown: (row: SurgeryWorklistRow, event: React.PointerEvent) => void;
-  onEdit: (row: SurgeryWorklistRow) => void;
   draggingOrderId?: string;
   /** ここに落ちる予定。 */
   dropTarget: boolean;
@@ -1374,22 +1371,14 @@ function WeekCell({
         .filter(Boolean)
         .join(" ")}
     >
-      {/* セルを押すとその日の日ビューへ降りる。中にチップごとのケバブ(button)を
-          置くので、押せる箱そのものは button ではなく div にする。 */}
-      <div
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
         className={
           hasConflict
             ? "surgery-calendar__cell surgery-calendar__cell--conflict"
             : "surgery-calendar__cell"
         }
         onClick={onOpen}
-        onKeyDown={(e) => {
-          if (e.key !== "Enter" && e.key !== " ") return;
-          e.preventDefault();
-          onOpen();
-        }}
         title={`${room.name} ${date} の日ビューを開く`}
       >
         {dayBlocks.length > 0 && (
@@ -1402,7 +1391,7 @@ function WeekCell({
           </span>
         )}
         {entries.length === 0 ? (
-          <span className="order-select__muted">-</span>
+          <span className="order-select__muted surgery-calendar__cell-empty">-</span>
         ) : (
           <>
             <span className="surgery-calendar__cell-count">
@@ -1414,43 +1403,24 @@ function WeekCell({
               const isDragging =
                 entry.row.order.id != null && entry.row.order.id === draggingOrderId;
               return (
-                <span key={entry.row.order.id} className="surgery-calendar__chip-row">
-                  <span
-                    className={[
-                      "surgery-calendar__chip",
-                      movable ? "surgery-calendar__chip--movable" : "",
-                      isDragging ? "surgery-calendar__chip--dragging" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    onPointerDown={movable ? (e) => onChipPointerDown(entry.row, e) : undefined}
-                  >
-                    {entry.summary.scheduledTime || "時刻未定"} {items[0]?.name ?? "術式なし"}
-                  </span>
-                  {/* pointerdown はチップのドラッグ開始を、click はセルの
-                      「日ビューを開く」を止める。どちらも止めないとメニューを
-                      押しただけで手術が動いたり日ビューへ落ちたりする。 */}
-                  <span
-                    className="surgery-calendar__chip-menu"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <RowMenu label="この手術の操作" escapesClipping>
-                      <button
-                        type="button"
-                        className="row-menu__item"
-                        onClick={() => onEdit(entry.row)}
-                      >
-                        編集
-                      </button>
-                    </RowMenu>
-                  </span>
+                <span
+                  key={entry.row.order.id}
+                  className={[
+                    "surgery-calendar__chip",
+                    movable ? "surgery-calendar__chip--movable" : "",
+                    isDragging ? "surgery-calendar__chip--dragging" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onPointerDown={movable ? (e) => onChipPointerDown(entry.row, e) : undefined}
+                >
+                  {entry.summary.scheduledTime || "時刻未定"} {items[0]?.name ?? "術式なし"}
                 </span>
               );
             })}
           </>
         )}
-      </div>
+      </button>
     </td>
   );
 }
