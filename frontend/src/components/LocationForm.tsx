@@ -108,6 +108,22 @@ export function LocationForm({
       )}
 
       <label>
+        表示順
+        <input
+          type="number"
+          min={0}
+          step={1}
+          value={values.displayOrder}
+          onChange={(e) => update("displayOrder", e.target.value)}
+          placeholder="未設定"
+        />
+        {/* 一覧・セレクト・手術室カレンダーの列がこの順に並ぶ。未設定は末尾。 */}
+        <span className="order-select__muted">
+          小さいほど先に出る。空欄なら名称順で末尾に回る。
+        </span>
+      </label>
+
+      <label>
         備考
         <input
           type="text"

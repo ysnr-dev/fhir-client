@@ -15,7 +15,7 @@ import {
   VITAL_ENTRY_SYSTEM,
 } from "../fhir/vitalHelpers";
 import { buildClinicalNoteDeleteBundle } from "../fhir/clinicalNoteHelpers";
-import { LOCATION_TYPE_CODES } from "../fhir/locationHelpers";
+import { LOCATION_TYPE_CODES, sortLocations } from "../fhir/locationHelpers";
 import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeline";
 import { today } from "../lib/dates";
 import {
@@ -978,10 +978,13 @@ export function useLocationOptions() {
 
   return {
     ...query,
-    locations:
+    // 表示順 → 名称の順。上流は独自拡張で _sort できないのでここで並べる
+    // (全件を 1 回で読む選択肢なので、読み手で並べても取りこぼしは出ない)。
+    locations: sortLocations(
       query.data?.data.entry
         ?.map((e) => e.resource)
         .filter((r): r is fhir4.Location => Boolean(r)) ?? [],
+    ),
   };
 }
 

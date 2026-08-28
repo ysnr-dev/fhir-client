@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useDeleteLocation } from "../api/queries";
 import {
   locationDisplayName,
+  locationDisplayOrder,
   locationStatusLabel,
   locationTypeCode,
   locationTypeLabel,
@@ -29,6 +30,9 @@ export function LocationTable({ locations }: { locations: fhir4.Location[] }) {
       <table className="patient-table">
         <thead>
           <tr>
+            {/* 一覧はこの順には並べない(ページングの途中で並べても嘘になる)。
+                番号を見比べて直せればよいので、値だけを出す。 */}
+            <th>表示順</th>
             <th>名称</th>
             <th>種別</th>
             <th>状態</th>
@@ -39,6 +43,7 @@ export function LocationTable({ locations }: { locations: fhir4.Location[] }) {
         <tbody>
           {locations.map((location) => (
             <tr key={location.id}>
+              <td>{locationDisplayOrder(location) ?? "-"}</td>
               <td>{locationDisplayName(location)}</td>
               <td>{locationTypeLabel(locationTypeCode(location))}</td>
               <td>{locationStatusLabel(location.status)}</td>

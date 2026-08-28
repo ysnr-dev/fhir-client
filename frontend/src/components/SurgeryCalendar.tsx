@@ -246,6 +246,10 @@ function DayView({ date, ...split }: { date: string } & SplitProps) {
   const rows = useMemo(() => roomDayRows(worklist.data?.rows ?? [], {}), [worklist.data]);
 
   // 列 = 登録済みの手術室 ∪ その日に使われている部屋。部屋未定は右の未確定リストへ。
+  //
+  // 並びは「場所」マスタの表示順(useLocationOptions が並べ済み。Map は挿入順を
+  // 保つのでここで並べ直さない)。マスタに無い部屋は後ろに付く —— 順番を決めよう
+  // にも設定する場所が無く、登録済みの並びを崩さない方が読み手の期待に合う。
   const columns = useMemo(() => {
     const byId = new Map<string, string>();
     for (const room of rooms) byId.set(room.id ?? "", locationDisplayName(room));
@@ -1100,7 +1104,8 @@ function WeekView({
   const error = results.find((result) => result.error)?.error;
   const truncated = results.some((result) => result.data?.truncated);
 
-  // 列 = 登録済みの手術室 ∪ その週に使われている部屋。
+  // 列 = 登録済みの手術室 ∪ その週に使われている部屋。並びは日ビューと同じく
+  // 「場所」マスタの表示順(useLocationOptions が並べ済み)。
   // useQueries の戻りは毎レンダー新しい配列になるので memo 化しない
   // (7 日ぶんの Map 詰めなので、そのまま数えても安い)。
   const columns = (() => {
