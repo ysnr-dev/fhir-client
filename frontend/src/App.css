@@ -8729,3 +8729,516 @@ body.page-wide #root {
   border-color: var(--lab-high);
 }
 
+
+/* ---- 手術室カレンダー(docs/surgery-calendar-design.md) ---- */
+
+.surgery-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 表示単位(日/週)と日送りを 1 行に。左右に離して押し間違えを減らす。 */
+.surgery-calendar__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 日送り・週送り。 */
+.surgery-calendar__date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 格子を見ながら何度も押すものなので、ページ操作のボタンより小さくする
+   (枠カレンダーの週送りと揃える)。 */
+.surgery-calendar__date button {
+  font-size: 13px;
+  padding: 4px 10px;
+}
+
+/* 検索フォームの外にある入力にはフォーム側のスタイルが当たらないので、
+   同じ見た目をここで与える(.patient-search-form input と揃える)。 */
+.surgery-calendar__date input[type="date"] {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+/* 日ビュー。手術室が増えると横に伸びるので、はみ出したぶんは横スクロール。 */
+.surgery-calendar__day-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.surgery-calendar__day {
+  display: flex;
+  min-width: min-content;
+}
+
+.surgery-calendar__axis {
+  flex: 0 0 56px;
+  border-right: 1px solid var(--border);
+  background: var(--surface-panel);
+}
+
+.surgery-calendar__col {
+  flex: 1 1 160px;
+  min-width: 160px;
+  border-right: 1px solid var(--border);
+}
+
+.surgery-calendar__col:last-child {
+  border-right: none;
+}
+
+/* 列見出し。横スクロールしても手術室名が上に残るよう sticky にする。 */
+.surgery-calendar__col-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-panel);
+  color: var(--text-h);
+  font-size: 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* 時刻ラベルは罫線の位置に中心を合わせる(translateY(-50%))ので、先頭の目盛りが
+   上端で欠ける。目盛り 1 行ぶんだけ下げて逃がす。軸と列で同じだけ下げるので、
+   罫線とカードの位置関係はずれない。 */
+.surgery-calendar__axis-body,
+.surgery-calendar__col-body {
+  position: relative;
+  margin-top: 8px;
+}
+
+/* 時刻の目盛り。罫線の位置に文字の上端を合わせる。 */
+.surgery-calendar__hour {
+  position: absolute;
+  left: 0;
+  right: 4px;
+  text-align: right;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-muted, var(--text));
+  font-variant-numeric: tabular-nums;
+  transform: translateY(-50%);
+}
+
+.surgery-calendar__gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--border);
+  opacity: 0.5;
+}
+
+/* ブロックスケジュールの帯。背景なので操作はせず、手術カードの下に敷く。 */
+.surgery-calendar__block {
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 2px 4px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-top: 1px dashed color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent);
+  font-size: 10px;
+  line-height: 1.2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 手術 1 件。開始時刻と所要時間で絶対配置するので、中身が溢れても枠は動かさない。 */
+.surgery-calendar__card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 4px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 4px;
+  /* 不透明にする。--accent-bg は半透明なので、背後の割当帯(診療科名)が
+     ステータスラベルに透けて重なって見える。色味は元の見た目に合わせた
+     (重なりカードが --surface-card に混ぜているのと同じ作り)。 */
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-card));
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.2;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* 重なっている手術。一覧の重なり行と同じ警告色で揃える。 */
+.surgery-calendar__card--conflict {
+  border-color: var(--lab-high);
+  background: color-mix(in srgb, var(--lab-high) 16%, var(--surface-card));
+}
+
+.surgery-calendar__card-time {
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+.surgery-calendar__card-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.surgery-calendar__card-staff {
+  color: var(--text-muted, var(--text));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 格子に置けない手術(時刻・部屋が未定)。取りこぼすと予定が消えて見えるので必ず出す。 */
+.surgery-calendar__unplaced {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-card);
+  font-size: 12px;
+}
+
+.surgery-calendar__unplaced ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+/* 週ビュー。格子は予約枠カレンダー(.slot-calendar)を借り、
+   セルの中身だけを手術用に組む。 */
+/* 予定の多い日だけ列が広がらないよう、曜日の列幅を揃える。 */
+.surgery-calendar__week {
+  table-layout: fixed;
+}
+
+.surgery-calendar__week td {
+  vertical-align: top;
+  padding: 2px;
+}
+
+.surgery-calendar__day-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.surgery-calendar__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 3px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+.surgery-calendar__cell:hover {
+  border-color: var(--border);
+  background: var(--surface-card);
+}
+
+.surgery-calendar__cell--conflict {
+  background: color-mix(in srgb, var(--lab-high) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--lab-high);
+}
+
+.surgery-calendar__cell-blocks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.surgery-calendar__cell-block {
+  padding: 0 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 10px;
+}
+
+.surgery-calendar__cell-count {
+  color: var(--text-h);
+}
+
+.surgery-calendar__chip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+/* 日程確定・申込フォームに出す割当の行。警告ではないので地味に置く。 */
+.surgery-day-schedule__blocks {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-size: 11px;
+}
+
+.surgery-day-schedule__blocks-label {
+  color: var(--text-h);
+}
+
+.surgery-day-schedule__block {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+/* 入れようとしている時間帯と食い違う割当。 */
+.surgery-day-schedule__block--outside {
+  background: color-mix(in srgb, var(--lab-high) 18%, transparent);
+  color: var(--lab-high);
+}
+
+/* ダブルブッキングの確認モーダル。 */
+.surgery-conflict__planned {
+  margin: 0 0 6px;
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+/* ---- 手術室カレンダーのドラッグ＆ドロップ ---- */
+
+/* 掴めるカード/チップ。掴めないもの(入室中・実施済)は見た目を変えないので、
+   カーソルの違いがそのまま「動かせるか」の合図になる。 */
+.surgery-calendar__card--movable,
+.surgery-calendar__chip--movable {
+  cursor: grab;
+  touch-action: none; /* タッチでのスクロールに取られないようにする */
+}
+
+.surgery-calendar__card--movable:active,
+.surgery-calendar__chip--movable:active {
+  cursor: grabbing;
+}
+
+/* 掴んでいる間の元の位置。動かした先が主役なので薄くする。 */
+.surgery-calendar__card--dragging,
+.surgery-calendar__chip--dragging {
+  opacity: 0.35;
+}
+
+/* 落とす先の枠。実体ではないので点線で、中身は移動後の時間帯だけ。 */
+.surgery-calendar__drop-preview {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  padding: 2px 4px;
+  border: 1px dashed var(--accent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+/* 落ちる先の列・セル。地色を薄く変えるだけで、罫線は動かさない。 */
+.surgery-calendar__col--drop-target .surgery-calendar__col-body,
+td.surgery-calendar__cell--drop-target {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+td.surgery-calendar__cell--drop-target {
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+}
+
+/* ドラッグ中に文字が選択されると掴み損ねたように見えるので、格子の中では選ばせない。 */
+.surgery-calendar__day,
+.surgery-calendar__week {
+  user-select: none;
+}
+
+/* 移動の確認モーダル。変更前 → 後を左右に並べる。 */
+.surgery-move__subject {
+  margin: 0 0 8px;
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.surgery-move__diff {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.surgery-move__side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-card);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 変更後を強調する(どちらが新しいかを読み違えないように)。 */
+.surgery-move__side--next {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.surgery-move__label {
+  color: var(--text-h);
+  font-size: 11px;
+}
+
+.surgery-move__arrow {
+  color: var(--text-h);
+  font-size: 18px;
+}
+
+/* ---- 手術カードの中身(ステータス・患者・ケバブ) ---- */
+
+/* 進捗の操作とケバブ。見出し行(常に見える 1 行目)の右端に寄せる。
+   短いカードでは下の行から隠れるので、操作は必ず 1 行目に置く。
+   絶対配置にせず flex で押し出すのは、時刻の文字と重ならないようにするため。 */
+.surgery-calendar__card-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  margin-left: auto;
+}
+
+/* 格子の中の操作なので、一覧の行ボタンより一段小さく。
+   直接の子だけに当てる(メニューを開いた中の項目まで縮めないため)。 */
+.surgery-calendar__card-actions > button {
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  font-weight: normal;
+}
+
+/* カード内では小さく。既定の行操作メニューより一回り詰める。 */
+.surgery-calendar__card-menu .row-menu__trigger {
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+
+.surgery-calendar__card-menu .row-menu__item--disabled {
+  color: var(--text-muted, var(--text));
+  cursor: default;
+}
+
+/* 1 行目。ケバブの下に文字が回り込まないよう右を空ける。
+   カードの見出しに当たる行なので、本文(11px)より一段大きく強める。 */
+.surgery-calendar__card-time {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-h);
+  font-weight: 600;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  /* 見出し行と本文(患者以下)の間を空ける。カードは flex + gap 1px で詰めているので、
+     ここだけ足して 2 つのまとまりに見えるようにする。 */
+  margin-bottom: 3px;
+}
+
+/* ステータス。色は「これから」→「進行中」→「済」で意味が変わるので分ける。 */
+.surgery-calendar__status {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.surgery-calendar__status.is-accepted {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+}
+
+.surgery-calendar__status.is-in-progress {
+  background: color-mix(in srgb, var(--lab-high) 32%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lab-high) 55%, transparent);
+  color: var(--lab-high);
+}
+
+.surgery-calendar__status.is-completed {
+  background: color-mix(in srgb, var(--text-h) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-h) 40%, transparent);
+  color: var(--text-h);
+}
+
+/* 患者の行。カード幅は手術室の数で決まるので、あふれたら省略する。 */
+.surgery-calendar__card-patient {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+/* 患者番号。氏名と地続きにならないよう少しだけ離す。 */
+.surgery-calendar__card-mrn {
+  margin-right: 4px;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 患者氏名。この行で最初に目が行くのは氏名なので、ここだけ強める
+   (患者番号・カナ・年齢は氏名を特定するための添え物)。 */
+.surgery-calendar__card-patient-name {
+  color: var(--text-h);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+/* カナだけは括弧書きの補足なので小さく保つ(一覧の .patient-cells__kana と同じ考え)。 */
+.surgery-calendar__card-patient .patient-cells__kana {
+  font-size: 10px;
+}
+
+/* 年齢・性別はカード本文と同じ大きさ。
+   .order-select__muted を借りると padding が付いて行が間延びするので使わない。 */
+.surgery-calendar__card-profile {
+  margin-left: 4px;
+  color: var(--text);
+}

@@ -31,11 +31,13 @@ import {
   type TemplateBinding,
 } from "../fhir/questionnaireResponseHelpers";
 import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useSurgeryConflictCheck } from "../hooks/useSurgeryConflictCheck";
 import { ConditionPickerModal } from "./ConditionPickerModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { PractitionerSearchModal } from "./PractitionerSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
 import { SurgeryItemSearchModal } from "./SurgeryItemSearchModal";
+import { SurgeryConflictConfirmModal } from "./SurgeryConflictConfirmModal";
 import { SurgeryRoomDaySchedule } from "./SurgeryRoomDaySchedule";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { TemplateSchemaImages } from "./SchemaImageGallery";
@@ -104,6 +106,7 @@ export function SurgeryOrderForm({
     initialValues ?? emptySurgeryOrderForm(),
   );
   const [validationError, setValidationError] = useState<string | null>(null);
+  const conflictCheck = useSurgeryConflictCheck();
   // 術式検索・スタッフ選択・術前診断の各モーダル。
   const [searchingItem, setSearchingItem] = useState(false);
   const [staffTarget, setStaffTarget] = useState<SurgeryStaffRole | null>(null);
@@ -236,7 +239,7 @@ export function SurgeryOrderForm({
     return list.includes(code) ? list.filter((c) => c !== code) : [...list, code];
   }
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (values.items.length === 0) {
       setValidationError("術式を 1 つ以上選択してください。");
@@ -271,6 +274,22 @@ export function SurgeryOrderForm({
     }
 
     setValidationError(null);
+
+    // 同じ手術室・同じ時間帯に他の手術が入っていないかを、登録の直前に一覧を
+    // 引き直して確かめる。重なっていれば確認モーダルを挟み、承知で登録された
+    // ときだけ通す(docs/surgery-calendar-design.md)。
+    const clear = await conflictCheck.check({
+      date: values.scheduledDate,
+      time: values.scheduledTime,
+      durationMinutes: values.durationMinutes,
+      roomId: values.roomId,
+      roomName: values.roomName,
+      excludeOrderId: orderId,
+    });
+    if (clear) save();
+  }
+
+  function save() {
     onSubmit({
       ...values,
       problem: refreshProblemDisplay(values.problem, problemOptions),
@@ -426,6 +445,7 @@ export function SurgeryOrderForm({
             time={values.scheduledTime}
             durationMinutes={values.durationMinutes}
             excludeOrderId={orderId}
+            departmentId={values.surgicalDepartmentId}
           />
         </fieldset>
 
@@ -771,14 +791,29 @@ export function SurgeryOrderForm({
         </fieldset>
 
         <div className="prescription-form__submit">
-          <button type="submit" disabled={submitting}>
-            {submitting ? "送信中..." : submitLabel}
+          <button type="submit" disabled={submitting || conflictCheck.checking}>
+            {submitting ? "送信中..." : conflictCheck.checking ? "確認中..." : submitLabel}
           </button>
         </div>
       </form>
 
       {/* 各モーダルは独自の入力を持つため、外側フォームの子孫に置かない
           (form の入れ子は不正で、送信が外へ漏れる)。 */}
+      {conflictCheck.conflict && (
+        <SurgeryConflictConfirmModal
+          rows={conflictCheck.conflict.rows}
+          plannedLabel={conflictCheck.conflict.plannedLabel}
+          truncated={conflictCheck.conflict.truncated}
+          unknown={conflictCheck.conflict.unknown}
+          submitting={submitting}
+          onConfirm={() => {
+            conflictCheck.dismiss();
+            save();
+          }}
+          onCancel={conflictCheck.dismiss}
+        />
+      )}
+
       {searchingItem && (
         <SurgeryItemSearchModal
           excludeCodes={values.items.map((item) => item.code)}

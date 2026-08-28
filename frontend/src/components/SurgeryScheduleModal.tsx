@@ -6,8 +6,10 @@ import {
   surgeryOrderItems,
   type SurgeryScheduleValues,
 } from "../fhir/surgeryOrderHelpers";
+import { useSurgeryConflictCheck } from "../hooks/useSurgeryConflictCheck";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
+import { SurgeryConflictConfirmModal } from "./SurgeryConflictConfirmModal";
 import { SurgeryRoomDaySchedule } from "./SurgeryRoomDaySchedule";
 
 // 手術部が日程未定の申込に日程を入れて確定する。オーダーの日程と進捗(受付済 =
@@ -18,7 +20,8 @@ import { SurgeryRoomDaySchedule } from "./SurgeryRoomDaySchedule";
 //
 // 手術は予約枠を持たないので、部屋のダブルブッキングが生まれるのはこの確定の瞬間
 // だけ。入力の下に同じ日・同じ部屋の予定を出して、重なりをその場で見せる
-// (SurgeryRoomDaySchedule)。
+// (SurgeryRoomDaySchedule)。さらに確定を押した時点で一覧を引き直し、重なっていれば
+// 「承知で登録」の確認を挟む(useSurgeryConflictCheck)。
 
 interface Props {
   row: SurgeryWorklistRow;
@@ -43,15 +46,30 @@ export function SurgeryScheduleModal({ row, onClose }: Props) {
     roomName: summary.roomName,
   });
   const [validationError, setValidationError] = useState<string | null>(null);
+  const conflictCheck = useSurgeryConflictCheck();
 
-  function handleSubmit(e: FormEvent) {
+  function save() {
+    confirm.mutate({ order: row.order, task: row.task, values }, { onSuccess: onClose });
+  }
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!values.scheduledDate) {
       setValidationError("予定手術日を入力してください。");
       return;
     }
     setValidationError(null);
-    confirm.mutate({ order: row.order, task: row.task, values }, { onSuccess: onClose });
+
+    // 重なりがあれば確認モーダルへ。無ければそのまま確定する。
+    const clear = await conflictCheck.check({
+      date: values.scheduledDate,
+      time: values.scheduledTime,
+      durationMinutes: values.durationMinutes,
+      roomId: values.roomId,
+      roomName: values.roomName,
+      excludeOrderId: row.order.id,
+    });
+    if (clear) save();
   }
 
   const title = items[0] ? `日程を確定: ${items[0].name}` : "日程を確定";
@@ -129,19 +147,35 @@ export function SurgeryScheduleModal({ row, onClose }: Props) {
           time={values.scheduledTime}
           durationMinutes={values.durationMinutes}
           excludeOrderId={row.order.id}
+          departmentId={summary.surgicalDepartmentId}
         />
 
         <p className="rad-code__summary">確定すると受付済になり、予定日別の一覧に並びます。</p>
 
         <div className="lab-order-item__actions">
-          <button type="submit" disabled={confirm.isPending}>
-            {confirm.isPending ? "送信中..." : "確定する"}
+          <button type="submit" disabled={confirm.isPending || conflictCheck.checking}>
+            {confirm.isPending ? "送信中..." : conflictCheck.checking ? "確認中..." : "確定する"}
           </button>
           <button type="button" onClick={onClose}>
             キャンセル
           </button>
         </div>
       </form>
+
+      {conflictCheck.conflict && (
+        <SurgeryConflictConfirmModal
+          rows={conflictCheck.conflict.rows}
+          plannedLabel={conflictCheck.conflict.plannedLabel}
+          truncated={conflictCheck.conflict.truncated}
+          unknown={conflictCheck.conflict.unknown}
+          submitting={confirm.isPending}
+          onConfirm={() => {
+            conflictCheck.dismiss();
+            save();
+          }}
+          onCancel={conflictCheck.dismiss}
+        />
+      )}
     </Modal>
   );
 }

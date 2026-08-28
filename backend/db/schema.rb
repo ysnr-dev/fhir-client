@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_27_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_28_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1152,6 +1152,22 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_27_100000) do
     t.boolean "requires_laterality", default: false, null: false
     t.string "preop_template_canonical"
     t.index ["item_code"], name: "index_master_surgery_items_on_item_code", unique: true
+  end
+
+  create_table "master_surgery_room_blocks", force: :cascade do |t|
+    t.string "location_id", null: false
+    t.string "location_name"
+    t.integer "weekday", null: false
+    t.string "start_time", null: false
+    t.string "end_time", null: false
+    t.string "department_code", null: false
+    t.string "department_name"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["location_id", "weekday"], name: "index_master_surgery_room_blocks_on_location_id_and_weekday"
   end
 
   create_table "master_treatment_dataset_details", force: :cascade do |t|

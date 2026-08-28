@@ -3,6 +3,7 @@ import {
   keepPreviousData,
   useInfiniteQuery,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
   type QueryClient,
@@ -158,6 +159,7 @@ import {
 import {
   SURGERY_ORDER_TYPE,
   buildSurgeryOrderDeleteBundle,
+  buildSurgeryMoveBundle,
   buildSurgeryScheduleBundle,
   buildSurgeryScheduleServiceRequest,
   isSurgeryServiceRequest,
@@ -5945,6 +5947,29 @@ export function useConfirmSurgerySchedule() {
 }
 
 /**
+ * 手術室カレンダーのドラッグ＆ドロップによる日程の移動。
+ *
+ * 動かすのは予定日時と手術室だけで、進捗(Task)は触らない
+ * (buildSurgeryMoveBundle 参照)。所要時間は呼び出し側が今の値をそのまま渡す。
+ */
+export function useMoveSurgerySchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      order,
+      values,
+    }: {
+      order: fhir4.ServiceRequest;
+      values: SurgeryScheduleValues;
+    }) => postBundle(buildSurgeryMoveBundle(order, values)),
+    onSuccess: () => {
+      // 日付をまたぐ移動があるので、日別のキャッシュをまとめて読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+    },
+  });
+}
+
+/**
  * 日程未定のまま入室する(緊急手術)。押した日時をそのまま予定日時にして、
  * Task を入室中にするところまでを 1 transaction で書く。
  *
@@ -5989,13 +6014,42 @@ export function useAdmitUnscheduledSurgery() {
   });
 }
 
+/**
+ * 予定手術日 1 日ぶんの手術オーダーの取得条件。
+ *
+ * 登録の直前にキャッシュを介さず引き直したい場面(ダブルブッキングの確認。
+ * useSurgeryConflictCheck)があるので、キーと取得関数を 1 か所にまとめて
+ * queryClient.fetchQuery からも同じものを使えるようにしてある。
+ */
+export function surgeryWorklistQuery(date: string) {
+  return {
+    queryKey: ["ServiceRequest", "surgery-worklist", date] as const,
+    queryFn: () => fetchSurgeryWorklist(date),
+  };
+}
+
 /** 予定手術日 1 日ぶんの手術オーダー。日付が未選択の間は読みに行かない。 */
 export function useSurgeryWorklist(date: string) {
   return useQuery({
-    queryKey: ["ServiceRequest", "surgery-worklist", date],
-    queryFn: () => fetchSurgeryWorklist(date),
+    ...surgeryWorklistQuery(date),
     enabled: Boolean(date),
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 手術室カレンダーの週表示が読む 7 日ぶん。
+ *
+ * 日別のクエリを 7 本並べるだけなので、キャッシュは一覧・日表示とそのまま共有
+ * される(週を見てから日へ降りるときに読み直しが起きない)。
+ */
+export function useSurgeryWorklistWeek(dates: string[]) {
+  return useQueries({
+    queries: dates.map((date) => ({
+      ...surgeryWorklistQuery(date),
+      enabled: Boolean(date),
+      placeholderData: keepPreviousData,
+    })),
   });
 }
 

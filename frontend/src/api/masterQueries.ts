@@ -263,6 +263,12 @@ import {
   updateSurgeryItem,
   deleteSurgeryItem,
   type SurgeryItemPayload,
+  searchSurgeryRoomBlocks,
+  fetchAllSurgeryRoomBlocks,
+  createSurgeryRoomBlock,
+  updateSurgeryRoomBlock,
+  deleteSurgeryRoomBlock,
+  type SurgeryRoomBlockPayload,
 } from "./masterClient";
 
 export interface MedicineUsageFilters {
@@ -3045,4 +3051,70 @@ export function useSurgeryItemsByCodes(codes: string[]) {
     queryFn: () => searchSurgeryItems({ item_code: sorted.join(","), per: 200 }),
     enabled: sorted.length > 0,
   });
+}
+
+// ---- 手術室のブロックスケジュール ----
+
+const SURGERY_ROOM_BLOCKS_KEY = ["master", "surgery_room_blocks"];
+
+export interface SurgeryRoomBlockFilters {
+  locationId?: string;
+  weekday?: number;
+}
+
+export function useSurgeryRoomBlockSearch(
+  filters: SurgeryRoomBlockFilters,
+  page: number,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [...SURGERY_ROOM_BLOCKS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchSurgeryRoomBlocks({
+        location_id: filters.locationId || undefined,
+        weekday: filters.weekday,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/**
+ * カレンダーの背景と申込フォームの警告が読む全件。
+ *
+ * date は有効期間の判定日。カレンダーは過去日・未来日も描くので、見ている日で
+ * 判定する。日が変わるたびに引き直しになるが、行数の少ないマスタなので許す。
+ */
+export function useSurgeryRoomBlocks(date: string | undefined) {
+  return useQuery({
+    queryKey: [...SURGERY_ROOM_BLOCKS_KEY, "all", date ?? ""],
+    queryFn: () => fetchAllSurgeryRoomBlocks({ active: true, date }),
+    enabled: Boolean(date),
+  });
+}
+
+export function useSurgeryRoomBlockMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: SURGERY_ROOM_BLOCKS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: SurgeryRoomBlockPayload) => createSurgeryRoomBlock(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: SurgeryRoomBlockPayload }) =>
+        updateSurgeryRoomBlock(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteSurgeryRoomBlock(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
 }

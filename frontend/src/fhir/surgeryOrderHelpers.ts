@@ -948,6 +948,26 @@ export function buildSurgeryScheduleBundle(
   ]);
 }
 
+/**
+ * 日程だけを動かす transaction(手術室カレンダーのドラッグ＆ドロップ)。
+ *
+ * 進捗(Task)には触らない。確定モーダルの「未定 → 確定」は受付済へ進める操作だが、
+ * こちらは既に日程の入っている手術を動かすだけで、申込済は申込済のまま・受付済は
+ * 受付済のまま(手術部が受け付けた事実は日程を動かしても変わらない)。
+ */
+export function buildSurgeryMoveBundle(
+  order: fhir4.ServiceRequest,
+  values: SurgeryScheduleValues,
+): fhir4.Bundle {
+  return transactionBundle([
+    {
+      fullUrl: `ServiceRequest/${order.id}`,
+      resource: buildSurgeryScheduleServiceRequest(order, values),
+      request: { method: "PUT", url: `ServiceRequest/${order.id}` },
+    },
+  ]);
+}
+
 /** オーダーとその明細をまとめて消す Bundle。 */
 export function buildSurgeryOrderDeleteBundle(
   serviceRequestId: string,

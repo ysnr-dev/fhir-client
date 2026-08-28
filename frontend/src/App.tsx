@@ -35,6 +35,7 @@ import { EndoscopyDatasetPage } from "./pages/EndoscopyDatasetPage";
 import { TreatmentWorklistPage } from "./pages/TreatmentWorklistPage";
 import { SurgeryWorklistPage } from "./pages/SurgeryWorklistPage";
 import { AnesthesiaChartPage } from "./pages/AnesthesiaChartPage";
+import { SurgeryRoomBlockPage } from "./pages/SurgeryRoomBlockPage";
 import { SurgeryItemPage } from "./pages/SurgeryItemPage";
 import { TreatmentItemPage } from "./pages/TreatmentItemPage";
 import { TreatmentItemLayoutPage } from "./pages/TreatmentItemLayoutPage";
@@ -308,6 +309,9 @@ function App() {
               <Link to="/surgery-items" className="row-menu__item">
                 術式マスタ
               </Link>
+              <Link to="/surgery-room-blocks" className="row-menu__item">
+                手術室 ブロックスケジュール
+              </Link>
             </SubMenu>
           </HoverMenu>
           <HoverMenu label="管理">
@@ -430,6 +434,7 @@ function App() {
           <Route path="/treatment-item-layouts" element={<TreatmentItemLayoutPage />} />
           <Route path="/treatment-datasets" element={<TreatmentDatasetPage />} />
           <Route path="/surgery-items" element={<SurgeryItemPage />} />
+          <Route path="/surgery-room-blocks" element={<SurgeryRoomBlockPage />} />
           <Route path="/micro-order-items" element={<MicroOrderItemPage />} />
           <Route path="/micro-specimen-types" element={<MicroSpecimenTypePage />} />
           <Route path="/micro-organisms" element={<MicroOrganismPage />} />

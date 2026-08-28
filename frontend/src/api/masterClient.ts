@@ -4297,3 +4297,117 @@ export async function deleteSurgeryItem(id: number): Promise<void> {
   const res = await masterFetch(`${SURGERY_ITEMS_PATH}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
+
+// ---- 手術室のブロックスケジュール ----
+//
+// 曜日ごとの科割り当て(「月曜の第1手術室 午前は外科」)。手術は予約枠(Slot)を
+// 持たない設計なので、FHIR の Schedule ではなく backend のマスタに置いている
+// (docs/surgery-calendar-design.md)。
+
+/** 手術室 × 曜日 × 時間帯 に診療科を割り当てた 1 行。 */
+export interface SurgeryRoomBlock {
+  id: number;
+  /** 手術室(FHIR Location 種別 SU)の id。 */
+  location_id: string;
+  location_name: string | null;
+  /** 0=日 … 6=土。Date#getDay と同じ並び。 */
+  weekday: number;
+  /** "09:00" 形式。 */
+  start_time: string;
+  end_time: string;
+  /** SS-MIX2 統一診療科コード。 */
+  department_code: string;
+  department_name: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  note: string | null;
+}
+
+export interface SurgeryRoomBlockPayload {
+  location_id?: string;
+  location_name?: string | null;
+  weekday?: number;
+  start_time?: string;
+  end_time?: string;
+  department_code?: string;
+  department_name?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  note?: string | null;
+}
+
+const SURGERY_ROOM_BLOCKS_PATH = "/master/surgery_room_blocks";
+
+export async function searchSurgeryRoomBlocks(params: {
+  /** 手術室。カンマ区切りで複数指定できる。 */
+  location_id?: string;
+  weekday?: number;
+  department_code?: string;
+  /** true なら有効期間内の割り当てだけ。date を添えるとその日で判定する。 */
+  active?: boolean;
+  date?: string;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<SurgeryRoomBlock>> {
+  const search = new URLSearchParams();
+  if (params.location_id) search.set("location_id", params.location_id);
+  if (params.weekday != null) search.set("weekday", String(params.weekday));
+  if (params.department_code) search.set("department_code", params.department_code);
+  if (params.active) search.set("active", "true");
+  if (params.date) search.set("date", params.date);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${SURGERY_ROOM_BLOCKS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<SurgeryRoomBlock>;
+}
+
+/**
+ * 全件。カレンダーの背景と申込フォームの警告は「その部屋のその曜日」を必ず
+ * 引き当てられないと嘘になるので、ページを最後まで読む。
+ * 1 ページの上限が 100 件(BaseController#pagination_params)なのに対し、
+ * 手術室 × 曜日 × 時間帯 は部屋が増えるとすぐ 100 を超える。
+ */
+export async function fetchAllSurgeryRoomBlocks(params: {
+  active?: boolean;
+  date?: string;
+} = {}): Promise<SurgeryRoomBlock[]> {
+  const per = 100;
+  const items: SurgeryRoomBlock[] = [];
+  for (let page = 1; ; page += 1) {
+    const result = await searchSurgeryRoomBlocks({ ...params, page, per });
+    items.push(...result.items);
+    if (items.length >= result.total || result.items.length === 0) return items;
+  }
+}
+
+export async function createSurgeryRoomBlock(
+  payload: SurgeryRoomBlockPayload,
+): Promise<SurgeryRoomBlock> {
+  const res = await masterFetch(SURGERY_ROOM_BLOCKS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as SurgeryRoomBlock;
+}
+
+export async function updateSurgeryRoomBlock(
+  id: number,
+  payload: SurgeryRoomBlockPayload,
+): Promise<SurgeryRoomBlock> {
+  const res = await masterFetch(`${SURGERY_ROOM_BLOCKS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as SurgeryRoomBlock;
+}
+
+export async function deleteSurgeryRoomBlock(id: number): Promise<void> {
+  const res = await masterFetch(`${SURGERY_ROOM_BLOCKS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}

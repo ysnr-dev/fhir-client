@@ -12,6 +12,7 @@ import {
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { RowMenu } from "../components/RowMenu";
+import { SurgeryCalendar, type CalendarMode } from "../components/SurgeryCalendar";
 import { SurgeryPerformModal } from "../components/SurgeryPerformModal";
 import { SurgeryScheduleModal } from "../components/SurgeryScheduleModal";
 import {
@@ -72,10 +73,12 @@ const emptyFilters: Filters = {
   status: "",
 };
 
-type Tab = "scheduled" | "unscheduled";
+type Tab = "scheduled" | "unscheduled" | "calendar";
 
 export function SurgeryWorklistPage() {
   const [tab, setTab] = useState<Tab>("scheduled");
+  // カレンダーの表示単位。日と週で切り替える(SurgeryCalendar)。
+  const [calendarMode, setCalendarMode] = useState<CalendarMode>("day");
   // 予定手術日は必須。未選択にはできないので当日から始める。
   const [date, setDate] = useState(today);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
@@ -98,7 +101,7 @@ export function SurgeryWorklistPage() {
   const updateStatus = useUpdateSurgeryTaskStatus();
   const admit = useAdmitUnscheduledSurgery();
 
-  const source = tab === "scheduled" ? worklist.data : unscheduled.data;
+  const source = tab === "unscheduled" ? unscheduled.data : worklist.data;
   const rows = useMemo(
     () => (source?.rows ?? []).filter((row) => matchesFilters(row, filters, tab)),
     [source, filters, tab],
@@ -151,18 +154,30 @@ export function SurgeryWorklistPage() {
         >
           日程未定{unscheduledCount > 0 && ` (${unscheduledCount})`}
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "calendar"}
+          className={tab === "calendar" ? "order-select__tab is-active" : "order-select__tab"}
+          onClick={() => setTab("calendar")}
+        >
+          カレンダー
+        </button>
       </div>
 
-      <FilterForm
-        // 日程未定タブは日付で絞らないので日付欄を出さない。
-        date={tab === "scheduled" ? date : null}
-        filters={filters}
-        rooms={roomOptions}
-        wards={wardOptions}
-        departments={departments.departments}
-        onDateChange={handleDateChange}
-        onChange={setFilters}
-      />
+      {/* カレンダーは日付送りと表示単位を自前で持つので、一覧の絞り込みは出さない。 */}
+      {tab !== "calendar" && (
+        <FilterForm
+          // 日程未定タブは日付で絞らないので日付欄を出さない。
+          date={tab === "scheduled" ? date : null}
+          filters={filters}
+          rooms={roomOptions}
+          wards={wardOptions}
+          departments={departments.departments}
+          onDateChange={handleDateChange}
+          onChange={setFilters}
+        />
+      )}
 
       <ErrorBanner error={worklist.error} />
       <ErrorBanner error={unscheduled.error} />
@@ -170,13 +185,21 @@ export function SurgeryWorklistPage() {
       <ErrorBanner error={updateStatus.error} />
       <ErrorBanner error={admit.error} />
 
-      {source?.truncated && (
+      {tab !== "calendar" && source?.truncated && (
         <p className="error-banner__line error-banner__line--error" role="status">
           オーダーが多いため、一部のみ表示しています。
         </p>
       )}
 
-      {(tab === "scheduled" ? worklist.isLoading : unscheduled.isLoading) ? (
+      {tab === "calendar" ? (
+        // 日付は一覧タブと共有する。一覧で見ていた日のままカレンダーへ移れる。
+        <SurgeryCalendar
+          date={date}
+          onDateChange={handleDateChange}
+          mode={calendarMode}
+          onModeChange={setCalendarMode}
+        />
+      ) : (tab === "scheduled" ? worklist.isLoading : unscheduled.isLoading) ? (
         <p>読み込み中...</p>
       ) : (
         <>

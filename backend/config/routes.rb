@@ -164,6 +164,9 @@ Rails.application.routes.draw do
     # 術式マスタ。手術オーダー(申込)の項目。処置と違いセット・レイアウト・
     # データセットのマスタは持たない(術式は検索で選び、実施入力は第2段階)。
     resources :surgery_items, only: %i[index show create update destroy]
+    # 手術室のブロックスケジュール(曜日ごとの科割り当て)。手術は予約枠を持たない
+    # ので FHIR の Schedule ではなくここに置く(docs/surgery-calendar-design.md)。
+    resources :surgery_room_blocks, only: %i[index show create update destroy]
     # 特定器材(特定保険医療材料)と医科診療行為(手技料)。どちらもレセプト電算の
     # 配布マスタを全置換で取り込むだけで、手動メンテはしない。
     resources :medical_materials, only: %i[index] do

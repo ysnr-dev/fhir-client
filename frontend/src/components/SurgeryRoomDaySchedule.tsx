@@ -1,7 +1,19 @@
 import { useMemo } from "react";
-import { useSurgeryWorklist } from "../api/queries";
+import { useSurgeryWorklist, useSelfDepartments } from "../api/queries";
+import { useSurgeryRoomBlocks } from "../api/masterQueries";
+import { departmentCode } from "../fhir/departmentHelpers";
 import { summarizeSurgeryOrder, surgeryOrderItems } from "../fhir/surgeryOrderHelpers";
 import { surgeryTaskStatus, surgeryTaskStatusDisplay } from "../fhir/surgeryTaskHelpers";
+import {
+  blockLabel,
+  blocksOfRoomDay,
+  conflictingBlocks,
+  conflictingRows,
+  rangeLabel,
+  roomDayRows,
+  rowIdSet,
+  timeRange,
+} from "../fhir/surgeryConflictHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 
 // 日程を入れている手術室の、その日の予定。
@@ -11,8 +23,11 @@ import { ErrorBanner } from "./ErrorBanner";
 // ので、そこで作った重なりは後から一覧で気づくまで残る。同じ日・同じ部屋の予定を
 // 入力の隣に出して、入れようとしている時間帯と重なるものに印を付ける。
 //
-// 手術室カレンダー(申し送り §7-3)が入れば競合するオーダーを作れなくなるが、それまでの
-// 間、競合が生まれる唯一の瞬間をふさぐのがこの表示。
+// 判定そのものは fhir/surgeryConflictHelpers に置いてある(登録前の確認ダイアログ・
+// 手術室カレンダーと同じ判定を使うため)。ここはその表示。
+//
+// 重なりがあっても登録は止めない。止めるのは登録の瞬間で、そこでは
+// 「重なりを承知で登録」の確認を挟む(docs/surgery-calendar-design.md)。
 //
 // 患者名は出さない。ここで知りたいのは「その部屋のその時間が空いているか」であって、
 // 別の患者が誰かではない(カルテの申込フォームからも開くので、無関係な患者の氏名を
@@ -33,6 +48,11 @@ interface Props {
    * 出てしまうのを防ぐ。
    */
   excludeOrderId?: string;
+  /**
+   * 執刀科(Organization の id)。ブロックスケジュールの割当科と突き合わせて
+   * 「割当外の科です」を出すのに使う。未指定なら割当の警告は出さない。
+   */
+  departmentId?: string;
 }
 
 export function SurgeryRoomDaySchedule({
@@ -42,34 +62,28 @@ export function SurgeryRoomDaySchedule({
   time,
   durationMinutes,
   excludeOrderId,
+  departmentId,
 }: Props) {
   const worklist = useSurgeryWorklist(date);
+  const blocks = useSurgeryRoomBlocks(date || undefined);
+  const { departments } = useSelfDepartments();
 
   const rows = useMemo(
-    () =>
-      (worklist.data?.rows ?? [])
-        .filter((row) => row.order.id !== excludeOrderId)
-        // 中止した手術は部屋を空けるので、重なりにも一覧にも数えない。
-        .filter((row) => surgeryTaskStatus(row.task) !== "cancelled")
-        .filter((row) => !roomId || summarizeSurgeryOrder(row.order).roomId === roomId),
+    () => roomDayRows(worklist.data?.rows ?? [], { roomId, excludeOrderId }),
     [worklist.data, roomId, excludeOrderId],
   );
 
   // 入れようとしている時間帯。部屋が未定なら取り合う相手がいないので判定しない。
   const planned = roomId ? timeRange(time, durationMinutes) : null;
-  const conflictIds = new Set(
-    planned
-      ? rows
-          .filter((row) => {
-            const summary = summarizeSurgeryOrder(row.order);
-            const other = timeRange(summary.scheduledTime, summary.durationMinutes);
-            return other != null && overlaps(planned, other);
-          })
-          // id で照合するので、id の無いものは入れない(空文字が全行に当たってしまう)。
-          .map((row) => row.order.id)
-          .filter((id): id is string => Boolean(id))
-      : [],
-  );
+  const conflictIds = rowIdSet(conflictingRows(rows, planned));
+
+  // その部屋のその曜日の割当と、執刀科がそこから外れているか。
+  const dayBlocks = blocksOfRoomDay(blocks.data ?? [], roomId, date);
+  const plannedDepartment = departmentId
+    ? departments.find((d) => d.id === departmentId)
+    : undefined;
+  const plannedDepartmentCode = plannedDepartment ? departmentCode(plannedDepartment) : "";
+  const outsideBlocks = conflictingBlocks(dayBlocks, planned, plannedDepartmentCode);
 
   return (
     <div className="surgery-day-schedule">
@@ -81,6 +95,7 @@ export function SurgeryRoomDaySchedule({
       </div>
 
       <ErrorBanner error={worklist.error} />
+      <ErrorBanner error={blocks.error} />
 
       {!date ? (
         <p className="order-select__muted">予定手術日を入れると、その日の予定が出ます。</p>
@@ -94,6 +109,35 @@ export function SurgeryRoomDaySchedule({
               オーダーが多いため一部しか読めていません。重なりは手術一覧で確かめてください。
             </p>
           )}
+
+          {/* 曜日ごとの科割り当て。割当外でも登録は止めない(警告まで)。 */}
+          {roomId && dayBlocks.length > 0 && (
+            <p className="surgery-day-schedule__blocks">
+              <span className="surgery-day-schedule__blocks-label">割当</span>
+              {dayBlocks.map((block) => (
+                <span
+                  key={block.id}
+                  className={
+                    outsideBlocks.some((b) => b.id === block.id)
+                      ? "surgery-day-schedule__block surgery-day-schedule__block--outside"
+                      : "surgery-day-schedule__block"
+                  }
+                >
+                  {blockLabel(block)}
+                </span>
+              ))}
+            </p>
+          )}
+          {outsideBlocks.length > 0 && (
+            <p className="surgery-day-schedule__warn" role="status">
+              この時間帯は{" "}
+              {outsideBlocks
+                .map((block) => block.department_name || block.department_code)
+                .join(" / ")}{" "}
+              の割当です。運用上問題なければそのまま登録できます。
+            </p>
+          )}
+
           {planned &&
             (conflictIds.size > 0 ? (
               <p className="surgery-day-schedule__warn" role="status">
@@ -128,7 +172,7 @@ export function SurgeryRoomDaySchedule({
                     >
                       {!roomId && <td>{summary.roomName || "部屋未定"}</td>}
                       <td>
-                        {timeLabel(summary.scheduledTime, summary.durationMinutes)}
+                        {rangeLabel(summary.scheduledTime, summary.durationMinutes)}
                         {conflict && <span className="surgery-day-schedule__flag">重なり</span>}
                       </td>
                       <td>
@@ -156,34 +200,4 @@ export function SurgeryRoomDaySchedule({
       )}
     </div>
   );
-}
-
-/** その日の何分目から何分目か。時刻が無ければ判定できないので null。 */
-function timeRange(
-  time: string,
-  durationMinutes: number | string | null | undefined,
-): { start: number; end: number } | null {
-  if (!/^\d{1,2}:\d{2}$/.test(time)) return null;
-  const [hours, minutes] = time.split(":").map(Number);
-  const start = hours * 60 + minutes;
-  const duration = Number(durationMinutes);
-  // 所要時間が分からないものは入室時刻の一点として扱う(1 分幅にすると、他方の
-  // 時間帯の中に落ちたときだけ重なりとして拾える)。
-  return {
-    start,
-    end: start + (Number.isFinite(duration) && duration > 0 ? duration : 1),
-  };
-}
-
-function overlaps(a: { start: number; end: number }, b: { start: number; end: number }): boolean {
-  return a.start < b.end && b.start < a.end;
-}
-
-function timeLabel(time: string, durationMinutes: number | null): string {
-  if (!time) return "時刻未定";
-  const range = timeRange(time, durationMinutes);
-  if (durationMinutes == null || !range) return time;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const end = range.end % (24 * 60);
-  return `${time}〜${pad(Math.floor(end / 60))}:${pad(end % 60)}`;
 }
