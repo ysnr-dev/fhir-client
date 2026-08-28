@@ -92,8 +92,12 @@ export function SurgeryMoveConfirmModal({ row, target, onClose, onMoved }: Props
 
   const blocked = conflict.loading || move.isPending;
 
+  // 未確定リストから格子へ落としたときは「移動」ではなく初めて日程が入る場面なので、
+  // 見出しを分ける(変更前の欄が「日付未定」だけになるため、移動と読むと戸惑う)。
+  const title = summary.scheduledDate ? "手術の日程を移動" : "手術の日程を決める";
+
   return (
-    <Modal title="手術の日程を移動" onClose={onClose} className="modal--lab-order-item">
+    <Modal title={title} onClose={onClose} className="modal--lab-order-item">
       <div className="surgery-conflict">
         <p className="surgery-move__subject">{items[0]?.name ?? "術式なし"}</p>
 

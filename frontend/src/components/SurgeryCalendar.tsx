@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useKarteLinkState } from "../karteReturn";
 import {
@@ -35,10 +35,13 @@ import {
   type MinuteRange,
 } from "../fhir/surgeryConflictHelpers";
 import { useCardDrag, type DragState } from "../hooks/useCardDrag";
+import { clampGridRatio, readGridRatio, storeGridRatio } from "../surgeryCalendarLayout";
 import { ageWithMonthsLabel, displayKana, displayName, genderLabel } from "../fhir/patientHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { KarteSplitter } from "./KarteSplitter";
 import { PatientKana } from "./PatientRowCells";
 import { RowMenu } from "./RowMenu";
+import { SurgeryPendingPanel } from "./SurgeryPendingPanel";
 import { SurgeryMoveConfirmModal, type SurgeryMoveTarget } from "./SurgeryMoveConfirmModal";
 import { SurgeryPerformModal } from "./SurgeryPerformModal";
 
@@ -58,6 +61,10 @@ import { SurgeryPerformModal } from "./SurgeryPerformModal";
 // カード/チップは掴んで動かせる(申込済・受付済のみ)。日ビューは縦で時刻・横で
 // 手術室、週ビューは別セルへ落として日付と手術室を変える。ドロップで即書き込みは
 // せず、必ず移動の確認(SurgeryMoveConfirmModal)を挟む。
+//
+// 右は縦分割のスプリッタで区切った未確定リスト(SurgeryPendingPanel)。格子に
+// 置けない手術(日付未定・部屋未定・時間未定)を並べ、そこから格子へドラッグして
+// 日程を決める。分割位置は日/週で共有し、localStorage に残す。
 
 /** 1 分あたりの高さ(px)。8:00-18:00 の 10 時間が 600px に収まる。 */
 const PX_PER_MINUTE = 1;
@@ -76,6 +83,15 @@ interface Props {
 }
 
 export function SurgeryCalendar({ date, onDateChange, mode, onModeChange }: Props) {
+  // 格子側が占める幅の比率。日ビュー・週ビューで同じ値を使う(モードを切り替える
+  // たびに幅が戻ると、未確定リストを広げて日程を組んでいる最中に邪魔になる)。
+  const [gridRatio, setGridRatio] = useState(readGridRatio);
+  const splitProps = {
+    gridRatio,
+    onGridRatioChange: (ratio: number) => setGridRatio(clampGridRatio(ratio)),
+    onGridRatioChangeEnd: storeGridRatio,
+  };
+
   return (
     <div className="surgery-calendar">
       <div className="surgery-calendar__toolbar">
@@ -130,17 +146,64 @@ export function SurgeryCalendar({ date, onDateChange, mode, onModeChange }: Prop
       </div>
 
       {mode === "day" ? (
-        <DayView date={date} />
+        <DayView date={date} {...splitProps} />
       ) : (
-        <WeekView date={date} onPickDate={onDateChange} onModeChange={onModeChange} />
+        <WeekView
+          date={date}
+          onPickDate={onDateChange}
+          onModeChange={onModeChange}
+          {...splitProps}
+        />
       )}
+    </div>
+  );
+}
+
+/** 格子と未確定リストの分割。日ビュー・週ビューで同じものを受ける。 */
+interface SplitProps {
+  gridRatio: number;
+  onGridRatioChange: (ratio: number) => void;
+  onGridRatioChangeEnd: (ratio: number) => void;
+}
+
+/**
+ * 格子(左) / スプリッタ / 未確定リスト(右)の 3 列。
+ *
+ * 比率はカスタムプロパティで渡す。狭い画面では CSS 側で縦積みに切り替えるため、
+ * grid-template-columns 自体はインラインで上書きしない(カルテの karte-layout と同じ)。
+ */
+function CalendarSplit({
+  gridRatio,
+  onGridRatioChange,
+  onGridRatioChangeEnd,
+  grid,
+  panel,
+}: SplitProps & { grid: React.ReactNode; panel: React.ReactNode }) {
+  const splitRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      className="surgery-calendar__split"
+      ref={splitRef}
+      style={{ "--surgery-calendar-grid-ratio": gridRatio } as CSSProperties}
+    >
+      <div className="surgery-calendar__grid-pane">{grid}</div>
+      <KarteSplitter
+        containerRef={splitRef}
+        orientation="vertical"
+        ratio={gridRatio}
+        label="カレンダーと未確定リストの幅"
+        onChange={onGridRatioChange}
+        onChangeEnd={onGridRatioChangeEnd}
+      />
+      {panel}
     </div>
   );
 }
 
 // ---- 日ビュー ----
 
-function DayView({ date }: { date: string }) {
+function DayView({ date, ...split }: { date: string } & SplitProps) {
   const worklist = useSurgeryWorklist(date);
   const blocks = useSurgeryRoomBlocks(date || undefined);
   const rooms = useSurgeryRooms();
@@ -148,6 +211,10 @@ function DayView({ date }: { date: string }) {
   // 掴んだカードを落とす先を決めるために、列の本体の位置を測る。
   // 測定は同期で行う(自動化タブでは rAF / ResizeObserver が発火しない)。
   const bodyRefs = useRef(new Map<string, HTMLDivElement>());
+  // 未確定リストから掴んだか。掴みしろ(resolveTarget 参照)は時間軸に載っている
+  // カードでしか意味を持たないので、右ペインから掴んだときは 0 にする —— 部屋未定の
+  // 手術は入室時刻を持つので、そのままだと掴んだ位置と落ちる位置がずれる。
+  const fromPanel = useRef(false);
   const [moving, setMoving] = useState<{ row: SurgeryWorklistRow; target: SurgeryMoveTarget } | null>(
     null,
   );
@@ -158,7 +225,7 @@ function DayView({ date }: { date: string }) {
   // 中止は部屋を空けるので出さない(一覧・重なり判定と同じ扱い)。
   const rows = useMemo(() => roomDayRows(worklist.data?.rows ?? [], {}), [worklist.data]);
 
-  // 列 = 登録済みの手術室 ∪ その日に使われている部屋。部屋未定は最後に別枠で出す。
+  // 列 = 登録済みの手術室 ∪ その日に使われている部屋。部屋未定は右の未確定リストへ。
   const columns = useMemo(() => {
     const byId = new Map<string, string>();
     for (const room of rooms) byId.set(room.id ?? "", locationDisplayName(room));
@@ -171,11 +238,6 @@ function DayView({ date }: { date: string }) {
     byId.delete("");
     return Array.from(byId, ([id, name]) => ({ id, name }));
   }, [rooms, rows]);
-
-  const unplaced = rows.filter((row) => {
-    const summary = summarizeSurgeryOrder(row.order);
-    return !summary.roomId || !timeRange(summary.scheduledTime, summary.durationMinutes);
-  });
 
   // 時間軸。既定は 8:00-18:00 で、はみ出す予定があればその ぶん広げる。
   const axis = useMemo(() => axisRange(rows), [rows]);
@@ -200,7 +262,7 @@ function DayView({ date }: { date: string }) {
       if (state.x < rect.left || state.x > rect.right) continue;
 
       // 列の本体はどれも同じ高さ・同じ上端なので、掴みしろはこの列の rect で測れる。
-      const grabbed = timeRange(summary.scheduledTime, null);
+      const grabbed = fromPanel.current ? null : timeRange(summary.scheduledTime, null);
       const pointerAtStart = axis.start + (state.startY - rect.top) / PX_PER_MINUTE;
       const grabOffset = grabbed ? pointerAtStart - grabbed.start : 0;
 
@@ -241,85 +303,84 @@ function DayView({ date }: { date: string }) {
         </p>
       )}
 
-      {worklist.isLoading ? (
-        <p>読み込み中...</p>
-      ) : columns.length === 0 ? (
-        <p className="patient-table__empty">
-          手術室が登録されていません。「場所」から種別 手術室 の部屋を登録してください。
-        </p>
-      ) : (
-        <div className="surgery-calendar__day-wrap">
-          <div className="surgery-calendar__day">
-            {/* 時刻の目盛り。 */}
-            <div className="surgery-calendar__axis">
-              <div className="surgery-calendar__col-head">時刻</div>
-              <div
-                className="surgery-calendar__axis-body"
-                style={{ height: (axis.end - axis.start) * PX_PER_MINUTE }}
-              >
-                {hours.map((minute) => (
+      <CalendarSplit
+        {...split}
+        panel={
+          <SurgeryPendingPanel
+            mode="day"
+            rangeRows={rows}
+            onCardPointerDown={(row, event) => {
+              fromPanel.current = true;
+              dragging.start(row, event);
+            }}
+            draggingOrderId={dragging.drag?.item.order.id}
+          />
+        }
+        grid={
+          worklist.isLoading ? (
+            <p>読み込み中...</p>
+          ) : columns.length === 0 ? (
+            <p className="patient-table__empty">
+              手術室が登録されていません。「場所」から種別 手術室 の部屋を登録してください。
+            </p>
+          ) : (
+            <div className="surgery-calendar__day-wrap">
+              <div className="surgery-calendar__day">
+                {/* 時刻の目盛り。 */}
+                <div className="surgery-calendar__axis">
+                  <div className="surgery-calendar__col-head">時刻</div>
                   <div
-                    key={minute}
-                    className="surgery-calendar__hour"
-                    style={{ top: (minute - axis.start) * PX_PER_MINUTE }}
+                    className="surgery-calendar__axis-body"
+                    style={{ height: (axis.end - axis.start) * PX_PER_MINUTE }}
                   >
-                    <span>{minutesToTime(minute)}</span>
+                    {hours.map((minute) => (
+                      <div
+                        key={minute}
+                        className="surgery-calendar__hour"
+                        style={{ top: (minute - axis.start) * PX_PER_MINUTE }}
+                      >
+                        <span>{minutesToTime(minute)}</span>
+                      </div>
+                    ))}
                   </div>
+                </div>
+
+                {columns.map((room) => (
+                  <RoomColumn
+                    key={room.id}
+                    room={room}
+                    date={date}
+                    rows={rows}
+                    blocks={blocks.data ?? []}
+                    axis={axis}
+                    hours={hours}
+                    bodyRef={(el) => {
+                      if (el) bodyRefs.current.set(room.id, el);
+                      else bodyRefs.current.delete(room.id);
+                    }}
+                    onCardPointerDown={(row, event) => {
+                      fromPanel.current = false;
+                      dragging.start(row, event);
+                    }}
+                    onChangeStatus={(target, status) =>
+                      updateStatus.mutate({ order: target.order, task: target.task, status })
+                    }
+                    onPerform={setPerforming}
+                    pending={updateStatus.isPending}
+                    draggingOrderId={dragging.drag?.item.order.id}
+                    preview={preview?.roomId === room.id ? preview : null}
+                    previewDuration={
+                      dragging.drag
+                        ? summarizeSurgeryOrder(dragging.drag.item.order).durationMinutes
+                        : null
+                    }
+                  />
                 ))}
               </div>
             </div>
-
-            {columns.map((room) => (
-              <RoomColumn
-                key={room.id}
-                room={room}
-                date={date}
-                rows={rows}
-                blocks={blocks.data ?? []}
-                axis={axis}
-                hours={hours}
-                bodyRef={(el) => {
-                  if (el) bodyRefs.current.set(room.id, el);
-                  else bodyRefs.current.delete(room.id);
-                }}
-                onCardPointerDown={dragging.start}
-                onChangeStatus={(target, status) =>
-                  updateStatus.mutate({ order: target.order, task: target.task, status })
-                }
-                onPerform={setPerforming}
-                pending={updateStatus.isPending}
-                draggingOrderId={dragging.drag?.item.order.id}
-                preview={preview?.roomId === room.id ? preview : null}
-                previewDuration={
-                  dragging.drag
-                    ? summarizeSurgeryOrder(dragging.drag.item.order).durationMinutes
-                    : null
-                }
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 時刻や部屋が決まっていない手術は格子に置けないので、下にまとめて出す。 */}
-      {unplaced.length > 0 && (
-        <div className="surgery-calendar__unplaced">
-          <span className="surgery-day-schedule__title">時刻・手術室が未定</span>
-          <ul>
-            {unplaced.map((row) => {
-              const summary = summarizeSurgeryOrder(row.order);
-              const items = surgeryOrderItems(row.order, row.itemRequests);
-              return (
-                <li key={row.order.id}>
-                  {summary.roomName || "部屋未定"} /{" "}
-                  {rangeLabel(summary.scheduledTime, summary.durationMinutes)} /{" "}
-                  {items[0]?.name ?? "術式なし"}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
+          )
+        }
+      />
 
       {moving && (
         <SurgeryMoveConfirmModal
@@ -691,11 +752,12 @@ function WeekView({
   date,
   onPickDate,
   onModeChange,
+  ...split
 }: {
   date: string;
   onPickDate: (next: string) => void;
   onModeChange: (next: CalendarMode) => void;
-}) {
+} & SplitProps) {
   const dates = weekDates(weekStart(date));
   const results = useSurgeryWorklistWeek(dates);
   const blocks = useSurgeryRoomBlocks(date || undefined);
@@ -728,6 +790,10 @@ function WeekView({
     byId.delete("");
     return Array.from(byId, ([id, name]) => ({ id, name }));
   })();
+
+  // 未確定リストに渡す 7 日ぶんの行。セルは部屋で絞るので、部屋未定の手術は
+  // 週の格子のどこにも出ない —— 右ペインが唯一の置き場になる。
+  const weekRows = results.flatMap((result) => result.data?.rows ?? []);
 
   function openDay(target: string) {
     onPickDate(target);
@@ -779,63 +845,76 @@ function WeekView({
         </p>
       )}
 
-      {loading ? (
-        <p>読み込み中...</p>
-      ) : columns.length === 0 ? (
-        <p className="patient-table__empty">
-          手術室が登録されていません。「場所」から種別 手術室 の部屋を登録してください。
-        </p>
-      ) : (
-        <div className="slot-calendar__wrap">
-          <table className="slot-calendar surgery-calendar__week">
-            <thead>
-              <tr>
-                <th className="slot-calendar__time-col">手術室</th>
-                {dates.map((d) => (
-                  <th key={d} className={weekendClass(d)}>
-                    <button
-                      type="button"
-                      className="surgery-calendar__day-link"
-                      onClick={() => openDay(d)}
-                    >
-                      {formatDateLabel(d)}
-                    </button>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {columns.map((room) => (
-                <tr key={room.id}>
-                  <th className="slot-calendar__time-col">{room.name}</th>
-                  {dates.map((d, index) => (
-                    <WeekCell
-                      key={d}
-                      date={d}
-                      room={room}
-                      rows={results[index]?.data?.rows ?? []}
-                      blocks={blocks.data ?? []}
-                      onOpen={() => {
-                        // 掴んで離した直後の click は飲む(日ビューへ落ちてしまうため)。
-                        if (dragging.consumeClick()) return;
-                        openDay(d);
-                      }}
-                      cellRef={(el) => {
-                        const key = `${d}|${room.id}`;
-                        if (el) cellRefs.current.set(key, el);
-                        else cellRefs.current.delete(key);
-                      }}
-                      onChipPointerDown={dragging.start}
-                      draggingOrderId={dragging.drag?.item.order.id}
-                      dropTarget={previewKey === `${d}|${room.id}`}
-                    />
+      <CalendarSplit
+        {...split}
+        panel={
+          <SurgeryPendingPanel
+            mode="week"
+            rangeRows={weekRows}
+            onCardPointerDown={dragging.start}
+            draggingOrderId={dragging.drag?.item.order.id}
+          />
+        }
+        grid={
+          loading ? (
+            <p>読み込み中...</p>
+          ) : columns.length === 0 ? (
+            <p className="patient-table__empty">
+              手術室が登録されていません。「場所」から種別 手術室 の部屋を登録してください。
+            </p>
+          ) : (
+            <div className="slot-calendar__wrap">
+              <table className="slot-calendar surgery-calendar__week">
+                <thead>
+                  <tr>
+                    <th className="slot-calendar__time-col">手術室</th>
+                    {dates.map((d) => (
+                      <th key={d} className={weekendClass(d)}>
+                        <button
+                          type="button"
+                          className="surgery-calendar__day-link"
+                          onClick={() => openDay(d)}
+                        >
+                          {formatDateLabel(d)}
+                        </button>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {columns.map((room) => (
+                    <tr key={room.id}>
+                      <th className="slot-calendar__time-col">{room.name}</th>
+                      {dates.map((d, index) => (
+                        <WeekCell
+                          key={d}
+                          date={d}
+                          room={room}
+                          rows={results[index]?.data?.rows ?? []}
+                          blocks={blocks.data ?? []}
+                          onOpen={() => {
+                            // 掴んで離した直後の click は飲む(日ビューへ落ちてしまうため)。
+                            if (dragging.consumeClick()) return;
+                            openDay(d);
+                          }}
+                          cellRef={(el) => {
+                            const key = `${d}|${room.id}`;
+                            if (el) cellRefs.current.set(key, el);
+                            else cellRefs.current.delete(key);
+                          }}
+                          onChipPointerDown={dragging.start}
+                          draggingOrderId={dragging.drag?.item.order.id}
+                          dropTarget={previewKey === `${d}|${room.id}`}
+                        />
+                      ))}
+                    </tr>
                   ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+      />
 
       {moving && (
         <SurgeryMoveConfirmModal

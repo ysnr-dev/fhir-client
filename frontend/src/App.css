@@ -8904,18 +8904,229 @@ body.page-wide #root {
   white-space: nowrap;
 }
 
-/* 格子に置けない手術(時刻・部屋が未定)。取りこぼすと予定が消えて見えるので必ず出す。 */
-.surgery-calendar__unplaced {
-  padding: 6px 8px;
+/* 格子(左) / スプリッタ / 未確定リスト(右)の 3 列。格子の幅の比率は
+   --surgery-calendar-grid-ratio(SurgeryCalendar が指定)で決め、右ペインが残りを取る。
+   --surgery-calendar-splitter-space はスプリッタ列 + 左右の column-gap の合計。
+   カルテの .karte-layout と同じ組み方。 */
+.surgery-calendar__split {
+  --surgery-calendar-grid-ratio: 0.74;
+  --surgery-calendar-splitter-space: 19px;
+  display: grid;
+  grid-template-columns:
+    minmax(
+      0,
+      calc(var(--surgery-calendar-grid-ratio) * (100% - var(--surgery-calendar-splitter-space)))
+    )
+    auto
+    minmax(0, 1fr);
+  column-gap: 4px;
+  row-gap: 8px;
+}
+
+/* 格子側。中の .surgery-calendar__day-wrap / .slot-calendar__wrap が
+   はみ出したぶんを横スクロールするので、ここは幅を縮められるようにするだけ。 */
+.surgery-calendar__grid-pane {
+  min-width: 0;
+}
+
+/* 狭い画面では左右に割らず縦に積む(スプリッタは意味を失うので隠す)。 */
+@media (max-width: 900px) {
+  .surgery-calendar__split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .surgery-calendar__split > .karte-splitter {
+    display: none;
+  }
+}
+
+/* ---- 未確定リスト(格子に置けない手術の待ち行列) ---- */
+
+.surgery-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  /* 格子より高くなる日があるので、ここで頭打ちにして中でスクロールさせる。 */
+  max-height: 720px;
+  overflow-y: auto;
+  padding: 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--surface-card);
+  background: var(--surface-sunken);
+  box-sizing: border-box;
+}
+
+.surgery-pending__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.surgery-pending__title {
+  color: var(--text-h);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.surgery-pending__count {
+  color: var(--text-muted, var(--text));
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.surgery-pending__empty {
+  margin: 0;
+  color: var(--text-muted, var(--text));
   font-size: 12px;
 }
 
-.surgery-calendar__unplaced ul {
-  margin: 4px 0 0;
-  padding-left: 18px;
+.surgery-pending__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 組の見出し。「何が足りないか」がこの行なので、件数を隣に置いて残りが読めるようにする。 */
+.surgery-pending__group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  color: var(--text-h);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.surgery-pending__group-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-panel);
+  color: var(--text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.surgery-pending__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 待ち行列のカード。格子のカードと違い高さは中身で決まる(隠れる行が無い)ので、
+   色味だけ揃えて詰め方は変える。 */
+.surgery-pending__card {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-card));
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.surgery-pending__card--movable {
+  cursor: grab;
+  touch-action: none; /* タッチでのスクロールに取られないようにする */
+}
+
+.surgery-pending__card--movable:active {
+  cursor: grabbing;
+}
+
+/* 掴んでいる間の元の位置。動かした先が主役なので薄くする(格子のカードと同じ)。 */
+.surgery-pending__card--dragging {
+  opacity: 0.35;
+}
+
+.surgery-pending__card-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+  color: var(--text-h);
+  font-weight: 600;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 緊急・準緊急。待ち行列ではどれから組むかがこの 1 つで決まるので、一覧と同じ警告色。 */
+.surgery-pending__priority {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lab-high) 24%, transparent);
+  color: var(--lab-high);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* 今どこまで決まっているか。組の見出しが「足りないもの」を言うので、こちらは決まっている方。 */
+.surgery-pending__card-when {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: normal;
+  font-size: 11px;
+}
+
+.surgery-pending__card-actions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  margin-left: auto;
+}
+
+.surgery-pending__card-actions .row-menu__trigger {
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.surgery-pending__card-actions .row-menu__item--disabled {
+  color: var(--text-muted, var(--text));
+  cursor: default;
+}
+
+.surgery-pending__card-patient,
+.surgery-pending__card-name,
+.surgery-pending__card-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.surgery-pending__card-mrn {
+  margin-right: 4px;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 格子のカードと同じ強弱(氏名が最初に目に入る)。 */
+.surgery-pending__card-patient-name {
+  color: var(--text-h);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.surgery-pending__card-patient .patient-cells__kana {
+  font-size: 10px;
+}
+
+.surgery-pending__card-profile {
+  margin-left: 4px;
+  color: var(--text);
+}
+
+.surgery-pending__card-meta {
+  color: var(--text-muted, var(--text));
 }
 
 /* 週ビュー。格子は予約枠カレンダー(.slot-calendar)を借り、
@@ -9078,9 +9289,10 @@ td.surgery-calendar__cell--drop-target {
   outline-offset: -1px;
 }
 
-/* ドラッグ中に文字が選択されると掴み損ねたように見えるので、格子の中では選ばせない。 */
+/* ドラッグ中に文字が選択されると掴み損ねたように見えるので、格子と待ち行列では選ばせない。 */
 .surgery-calendar__day,
-.surgery-calendar__week {
+.surgery-calendar__week,
+.surgery-pending__list {
   user-select: none;
 }
 
