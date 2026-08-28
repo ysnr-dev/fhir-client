@@ -38,6 +38,7 @@ import { SurgeryCalendarPage } from "./pages/SurgeryCalendarPage";
 import { AnesthesiaChartPage } from "./pages/AnesthesiaChartPage";
 import { SurgeryRoomBlockPage } from "./pages/SurgeryRoomBlockPage";
 import { SurgeryItemPage } from "./pages/SurgeryItemPage";
+import { MealItemPage } from "./pages/MealItemPage";
 import { TreatmentItemPage } from "./pages/TreatmentItemPage";
 import { TreatmentItemLayoutPage } from "./pages/TreatmentItemLayoutPage";
 import { TreatmentDatasetPage } from "./pages/TreatmentDatasetPage";
@@ -315,6 +316,13 @@ function App() {
                 手術室 ブロックスケジュール
               </Link>
             </SubMenu>
+            {/* 食事。オーダーが食種 1 つを指すだけなので、マスタも項目 1 本だけ
+                (食種と主食を kind で分けた 1 テーブル)。 */}
+            <SubMenu label="食事">
+              <Link to="/meal-items" className="row-menu__item">
+                食事オーダー項目
+              </Link>
+            </SubMenu>
           </HoverMenu>
           <HoverMenu label="管理">
             <Link to="/oauth-clients" className="row-menu__item">
@@ -438,6 +446,7 @@ function App() {
           <Route path="/treatment-items" element={<TreatmentItemPage />} />
           <Route path="/treatment-item-layouts" element={<TreatmentItemLayoutPage />} />
           <Route path="/treatment-datasets" element={<TreatmentDatasetPage />} />
+          <Route path="/meal-items" element={<MealItemPage />} />
           <Route path="/surgery-items" element={<SurgeryItemPage />} />
           <Route path="/surgery-room-blocks" element={<SurgeryRoomBlockPage />} />
           <Route path="/micro-order-items" element={<MicroOrderItemPage />} />

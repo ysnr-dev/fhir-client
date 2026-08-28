@@ -6,6 +6,7 @@ import {
   useDeleteRadOrder,
   useDeletePhysioOrder,
   useDeleteTreatmentOrder,
+  useDeleteMealOrder,
   useDeleteSurgeryOrder,
   useDeleteEndoscopyOrder,
   useDeletePrescription,
@@ -83,6 +84,7 @@ import {
   summarizeTreatmentOrder,
 } from "../fhir/treatmentOrderHelpers";
 import type { TreatmentPerformDisplay } from "../fhir/treatmentResultHelpers";
+import { summarizeMealOrder } from "../fhir/mealOrderHelpers";
 import { treatmentTaskStatusDisplay } from "../fhir/treatmentTaskHelpers";
 import {
   summarizeSurgeryOrder,
@@ -272,6 +274,7 @@ function KarteCard({
   const deleteEndoscopyOrder = useDeleteEndoscopyOrder();
   const deleteTreatmentOrder = useDeleteTreatmentOrder();
   const deleteSurgeryOrder = useDeleteSurgeryOrder();
+  const deleteMealOrder = useDeleteMealOrder();
   const deleteResponse = useDeleteQuestionnaireResponse();
   const deleteVital = useDeleteVitalEntry();
   // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
@@ -291,6 +294,7 @@ function KarteCard({
     deleteEndoscopyOrder.isPending ||
     deleteTreatmentOrder.isPending ||
     deleteSurgeryOrder.isPending ||
+    deleteMealOrder.isPending ||
     deleteResponse.isPending ||
     deleteVital.isPending;
   const deleteError =
@@ -303,6 +307,7 @@ function KarteCard({
     deleteEndoscopyOrder.error ??
     deleteTreatmentOrder.error ??
     deleteSurgeryOrder.error ??
+    deleteMealOrder.error ??
     deleteResponse.error ??
     deleteVital.error;
 
@@ -330,6 +335,8 @@ function KarteCard({
     else if (item.kind === "endoscopy-order") deleteEndoscopyOrder.mutate(item.id, options);
     else if (item.kind === "treatment-order") deleteTreatmentOrder.mutate(item.id, options);
     else if (item.kind === "surgery-order") deleteSurgeryOrder.mutate(item.id, options);
+    // 食事は明細を持たないので ServiceRequest 1 件を消すだけ。
+    else if (item.kind === "meal-order") deleteMealOrder.mutate(item.id, options);
     // テンプレート回答は、生成した Observation も一緒に消すのでリソースごと渡す。
     else if (item.kind === "qr") deleteResponse.mutate(item.response, options);
     // バイタルは 1 回の測定が項目ごとの Observation に分かれるのでまとめて消す。
@@ -593,6 +600,11 @@ function cardTitle(item: KarteTimelineItem): string {
   // 処置は至急区分を持たないので入外区分だけ。
   if (item.kind === "treatment-order") {
     return summarizeTreatmentOrder(item.serviceRequest).settingDisplay;
+  }
+  // 食事は入外区分が常に入院なのでタイトルに出さず、いつからいつまでかを出す。
+  if (item.kind === "meal-order") {
+    const summary = summarizeMealOrder(item.serviceRequest);
+    return `${summary.startLabel}〜${summary.continuing ? " 継続中" : ` ${summary.endLabel}`}`;
   }
   // 手術は入外区分と、緊急・準緊急のときだけ予定区分を並べる(予定はわざわざ出さない)。
   if (item.kind === "surgery-order") {
@@ -896,6 +908,10 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
         performs={item.performs}
       />
     );
+  }
+
+  if (item.kind === "meal-order") {
+    return <MealOrderCardBody serviceRequest={item.serviceRequest} />;
   }
 
   if (!item.questionnaire) {
@@ -1426,6 +1442,44 @@ function SurgeryPerformSection({ performs }: { performs: SurgeryPerformDisplay[]
         </section>
       ))}
     </>
+  );
+}
+
+// 食事は明細を持たないので、食種 1 行(+主食)とコメントだけの簡素なカード。
+// 期間はカードのタイトルに出るのでここには出さない。
+function MealOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.ServiceRequest }) {
+  const summary = summarizeMealOrder(serviceRequest);
+
+  if (!summary.dietName) {
+    return <p className="karte-card__empty">食種がありません。</p>;
+  }
+
+  return (
+    <div className="karte-rp">
+      <div className="karte-rp__head">
+        <span className="karte-order__group-name">{summary.dietName}</span>
+      </div>
+      {/* 全食同じ主食なら 1 行、朝昼夕で違う(欠食を含む)なら 3 行に分けて出す。 */}
+      {summary.stapleName && (
+        <ul className="karte-rp__medicines">
+          <li>
+            <span className="karte-rp__medicine-name">主食: {summary.stapleName}</span>
+          </li>
+        </ul>
+      )}
+      {summary.stapleLines.length > 0 && (
+        <ul className="karte-rp__medicines">
+          {summary.stapleLines.map((line) => (
+            <li key={line.timingDisplay}>
+              <span className="karte-rp__medicine-name">
+                {line.timingDisplay}: {line.text}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {summary.comment && <p className="karte-perform__note">{summary.comment}</p>}
+    </div>
   );
 }
 

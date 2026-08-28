@@ -1,0 +1,165 @@
+import { useMemo } from "react";
+import { useCreatePrescription, useMealOrderDetail, useUpdateMealOrder } from "../api/queries";
+import { useActiveMealOrders } from "../api/queries";
+import { serviceRequestsOf } from "../fhir/labOrderHelpers";
+import { isPatientMismatch } from "../fhir/patientHelpers";
+import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import type { ProblemRef } from "../fhir/conditionHelpers";
+import {
+  buildDoMealOrderForm,
+  buildMealOrderBundle,
+  buildMealOrderUpdateBundle,
+  emptyMealOrderForm,
+  parseMealOrderForm,
+  type MealOrderFormValues,
+} from "../fhir/mealOrderHelpers";
+import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
+import { useOrderContext } from "../hooks/useOrderContext";
+import { ErrorBanner } from "./ErrorBanner";
+import { MealOrderForm } from "./MealOrderForm";
+
+// 食事オーダーの登録・編集 UI。カルテ画面の右ペインから使う。
+// 送信は他のオーダーと同じ transaction Bundle の POST なので mutation を共用する。
+
+interface MealOrderCreatePanelProps {
+  patientId: string;
+  /** DO(内容を流用して新規登録)する元の ServiceRequest id。 */
+  sourceSrId?: string;
+  defaultProblem?: ProblemRef;
+  onSaved: () => void;
+}
+
+export function MealOrderCreatePanel({
+  patientId,
+  sourceSrId,
+  defaultProblem,
+  onSaved,
+}: MealOrderCreatePanelProps) {
+  const createMealOrder = useCreatePrescription();
+  const source = useMealOrderInitialValues(sourceSrId, patientId);
+  // 食事は入院患者にだけ出すオーダー。入院病棟もここから取ってオーダーに焼き付ける。
+  const admission = useDefaultOrderSetting(patientId);
+  const requester = useOrderContext();
+
+  const initialValues = useMemo(
+    () =>
+      source.initialValues
+        ? buildDoMealOrderForm(source.initialValues)
+        : { ...emptyMealOrderForm(), problem: defaultProblem ?? null },
+    [source.initialValues, defaultProblem],
+  );
+
+  // 食事変更のときに終了させる候補。新しい食事の開始日にまだ続いているものだけ。
+  const active = useActiveMealOrders(patientId, initialValues.startDate);
+
+  const waiting = (sourceSrId && !source.ready) || !admission.ready || active.isPending;
+
+  function handleSubmit(values: MealOrderFormValues, closingIds: string[]) {
+    const closing = (active.data ?? []).filter((sr) => closingIds.includes(sr.id ?? ""));
+    // 入院病棟を焼き付ける(給食部門の一覧が入院を引き直さずに病棟で束ねられる)。
+    const attribution = withOrderWard(requester, "inpatient", admission);
+
+    createMealOrder.mutate(buildMealOrderBundle(values, patientId, attribution, closing), {
+      onSuccess: onSaved,
+    });
+  }
+
+  return (
+    <>
+      <ErrorBanner error={source.error} />
+      <ErrorBanner error={active.error} />
+
+      {waiting ? (
+        <p>読み込み中...</p>
+      ) : admission.setting !== "inpatient" ? (
+        // 食事オーダーは在院している患者にだけ出す。外来の患者では登録させない。
+        <p>食事オーダーは入院中の患者にだけ登録できます。</p>
+      ) : (
+        <MealOrderForm
+          patientId={patientId}
+          initialValues={initialValues}
+          activeOrders={active.data ?? []}
+          onSubmit={handleSubmit}
+          submitting={createMealOrder.isPending}
+          submitError={createMealOrder.error}
+        />
+      )}
+    </>
+  );
+}
+
+interface MealOrderEditPanelProps {
+  patientId: string;
+  srId: string;
+  onSaved: () => void;
+}
+
+export function MealOrderEditPanel({ patientId, srId, onSaved }: MealOrderEditPanelProps) {
+  const updateMealOrder = useUpdateMealOrder();
+  const { serviceRequest, initialValues, ready, patientMismatch, error } = useMealOrderInitialValues(
+    srId,
+    patientId,
+  );
+
+  function handleSubmit(values: MealOrderFormValues) {
+    // 別患者のオーダーを更新すると subject が URL の患者に書き換わってしまうので防ぐ。
+    if (!serviceRequest || patientMismatch) return;
+
+    // 依頼科・依頼医師・病棟は登録時のものを引き継ぐ(他のオーダーの編集と同じ)。
+    updateMealOrder.mutate(
+      buildMealOrderUpdateBundle(values, patientId, srId, prescriptionRequester(serviceRequest)),
+      { onSuccess: onSaved },
+    );
+  }
+
+  return (
+    <>
+      <ErrorBanner error={error} />
+
+      {!ready ? (
+        <p>読み込み中...</p>
+      ) : (
+        serviceRequest &&
+        initialValues && (
+          <MealOrderForm
+            patientId={patientId}
+            initialValues={initialValues}
+            onSubmit={handleSubmit}
+            submitting={updateMealOrder.isPending}
+            submitError={updateMealOrder.error}
+            submitLabel="更新"
+            editing
+          />
+        )
+      )}
+    </>
+  );
+}
+
+// 保存済みの食事オーダーをフォームの初期値に復元する。編集と DO の双方から使う。
+// 明細を持たないので、他のオーダーと違いヘッダ 1 件だけを見ればよい。
+function useMealOrderInitialValues(srId: string | undefined, patientId?: string) {
+  const detail = useMealOrderDetail(srId);
+
+  const serviceRequest = useMemo(
+    () => serviceRequestsOf(detail.data?.data).find((request) => request.id === srId),
+    [detail.data, srId],
+  );
+
+  const patientMismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  const initialValues = useMemo(
+    () => (serviceRequest ? parseMealOrderForm(serviceRequest) : undefined),
+    [serviceRequest],
+  );
+
+  return {
+    serviceRequest,
+    initialValues: patientMismatch ? undefined : initialValues,
+    ready: !detail.isLoading,
+    patientMismatch,
+    error:
+      detail.error ??
+      (patientMismatch ? new Error("指定された食事オーダーは別の患者のものです。") : undefined),
+  };
+}

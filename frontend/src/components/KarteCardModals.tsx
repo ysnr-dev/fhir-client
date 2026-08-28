@@ -9,6 +9,7 @@ import {
   usePhysioPerformDetail,
   useEndoscopyOrderDetail,
   useEndoscopyPerformDetail,
+  useMealOrderDetail,
   useTreatmentOrderDetail,
   useSurgeryOrderDetail,
   useSurgeryPerformDetail,
@@ -24,6 +25,7 @@ import { radOrderItemRequests } from "../fhir/radOrderHelpers";
 import { physioOrderItemRequests } from "../fhir/physioOrderHelpers";
 import { endoscopyOrderItemRequests } from "../fhir/endoscopyOrderHelpers";
 import { treatmentOrderItemRequests } from "../fhir/treatmentOrderHelpers";
+import { MealOrderDetailPanel } from "./MealOrderDetailPanel";
 import { surgeryOrderItemRequests } from "../fhir/surgeryOrderHelpers";
 import { splitLabResultDetailBundle } from "../fhir/labResultHelpers";
 import { splitMicroResultDetailBundle } from "../fhir/microResultHelpers";
@@ -61,6 +63,7 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   "endoscopy-order": "内視鏡内容",
   "treatment-order": "処置内容",
   "surgery-order": "手術内容",
+  "meal-order": "食事内容",
   "lab-result": "検査結果内容",
   "micro-result": "細菌検査結果内容",
   qr: "テンプレート表示",
@@ -101,6 +104,8 @@ export function KarteDetailModal({
         <TreatmentOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "surgery-order" ? (
         <SurgeryOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+      ) : target.kind === "meal-order" ? (
+        <MealOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-result" ? (
         <LabResultDetail patientId={patientId} reportId={target.id} />
       ) : target.kind === "micro-result" ? (
@@ -386,6 +391,37 @@ function TreatmentOrderDetail({
   );
 }
 
+function MealOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = useMealOrderDetail(srId);
+  const serviceRequest = serviceRequestsOf(detail.data?.data).find(
+    (request) => request.id === srId,
+  );
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された食事オーダーは別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <MealOrderDetailPanel serviceRequest={serviceRequest} problemsById={problemsById} />
+      ) : (
+        !detail.error && <NotFound label="食事オーダー" />
+      )}
+    </>
+  );
+}
+
 function SurgeryOrderDetail({
   patientId,
   srId,
@@ -552,6 +588,8 @@ export function KarteCardJsonModal({
         <TreatmentOrderJson srId={item.id} />
       ) : item.kind === "surgery-order" ? (
         <SurgeryOrderJson srId={item.id} />
+      ) : item.kind === "meal-order" ? (
+        <MealOrderJson srId={item.id} />
       ) : (
         <FhirJsonView resource={jsonResource(item)} />
       )}
@@ -701,6 +739,18 @@ function TreatmentOrderJson({ srId }: { srId: string }) {
       ) : (
         <FhirJsonView resource={detail.data?.data} />
       )}
+    </>
+  );
+}
+
+// 食事オーダーは実施記録を持たないので、オーダーの ServiceRequest 1 本だけを出す。
+function MealOrderJson({ srId }: { srId: string }) {
+  const detail = useMealOrderDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
     </>
   );
 }

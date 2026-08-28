@@ -9578,3 +9578,32 @@ td.surgery-calendar__cell--drop-target {
   margin-left: 4px;
   color: var(--text);
 }
+
+/* ---- 食事オーダー(docs/meal-order-design.md) ---- */
+
+/* 食事変更で終了させるオーダーのチェック。.prescription-form label は縦並びなので、
+   そのままだとチェックボックスが文言の上に乗ってしまう。横並びに戻し、1 件 1 行にする。
+   (.prescription-form label より詳細度を上げるため label を付ける) */
+.prescription-form label.meal-active-order {
+  flex: 1 1 100%;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.prescription-form label.meal-active-order input[type="checkbox"] {
+  flex: none;
+  margin: 0;
+}
+
+/* 給食部門への指示。fieldset が flex なので、label 単体だと内容幅で止まってしまう。
+   1 行占有させて、中の textarea を枠いっぱいに広げる。 */
+.meal-comment {
+  flex: 1 1 100%;
+}
+
+.meal-comment textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}

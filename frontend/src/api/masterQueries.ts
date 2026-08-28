@@ -257,6 +257,12 @@ import {
   type TreatmentItemLayoutCellPayload,
   type TreatmentDatasetPayload,
   type TreatmentDatasetDetailPayload,
+  searchMealItems,
+  fetchMealItem,
+  createMealItem,
+  updateMealItem,
+  deleteMealItem,
+  type MealItemPayload,
   searchSurgeryItems,
   fetchSurgeryItem,
   createSurgeryItem,
@@ -2976,6 +2982,93 @@ export function useTreatmentSetMembers(setCodes: string[]) {
   });
 }
 
+
+// ---- 食事オーダーのマスタ ----
+//
+// 食種(diet)と主食(staple)は同じテーブルなのでキーも 1 つ。オーダー画面は
+// useMealItemOptions(kind) でそれぞれの選択肢を引く。
+
+const MEAL_ITEMS_KEY = ["master", "meal_items"];
+
+export interface MealItemFilters {
+  name?: string;
+  /** "diet"=食種 / "staple"=主食。 */
+  kind?: string;
+  active?: boolean;
+}
+
+export function useMealItemSearch(filters: MealItemFilters, page: number, enabled = true) {
+  return useQuery({
+    queryKey: [...MEAL_ITEMS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchMealItems({
+        name: filters.name || undefined,
+        kind: filters.kind || undefined,
+        active: filters.active || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useMealItem(idOrCode: string | number | null) {
+  return useQuery({
+    queryKey: [...MEAL_ITEMS_KEY, "detail", idOrCode],
+    queryFn: () => fetchMealItem(idOrCode as string | number),
+    enabled: idOrCode !== null,
+  });
+}
+
+/**
+ * オーダー画面の食種・主食の選択肢。施設ごとに数十件で収まるマスタなので、
+ * 検索モーダルを作らず有効期間内の全件をまとめて引いてセレクトに並べる。
+ */
+export function useMealItemOptions(kind: "diet" | "staple") {
+  return useQuery({
+    queryKey: [...MEAL_ITEMS_KEY, "options", kind],
+    queryFn: () => searchMealItems({ kind, active: true, per: 200 }),
+  });
+}
+
+/**
+ * 保存済みオーダーの食種・主食コードから項目を引き直す。マスタから消えた項目でも
+ * オーダーには名称を写してあるので、これは編集画面がセレクトの選択肢に無い項目を
+ * 補うためだけに使う。
+ */
+export function useMealItemsByCodes(codes: string[]) {
+  const key = [...codes].sort().join(",");
+  return useQuery({
+    queryKey: [...MEAL_ITEMS_KEY, "by-codes", key],
+    queryFn: () => searchMealItems({ item_code: key, per: 100 }),
+    enabled: key.length > 0,
+  });
+}
+
+export function useMealItemMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: MEAL_ITEMS_KEY });
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: MealItemPayload) => createMealItem(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: MealItemPayload }) =>
+        updateMealItem(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteMealItem(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
 
 // ---- 術式マスタ(手術オーダー) ----
 //

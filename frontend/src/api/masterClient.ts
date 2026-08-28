@@ -4183,6 +4183,100 @@ export async function deleteTreatmentItemLayoutCell(id: number): Promise<void> {
   if (!res.ok) throw await buildError(res);
 }
 
+// ---- 食事オーダーのマスタ ----
+//
+// 食種(kind = diet)と主食(kind = staple)を1テーブルに入れたもの。列構成が同じで、
+// オーダー側は FHIR の CodeSystem URI で既に区別しているため分けていない。
+// 他の部門オーダーと違いセット・レイアウト・データセット・予約枠を持たない。
+
+export interface MealItem {
+  id: number;
+  item_code: string;
+  name: string;
+  name_kana: string | null;
+  /** diet=食種(食止めを含む) / staple=主食。 */
+  kind: string;
+  /**
+   * 食止め(禁食)の食種か。オーダー画面で主食欄を無効にするために使う。
+   * SS-MIX2 が食止めを食種コード(NPO)で表すのに合わせ、食種の一種として持つ。
+   */
+  is_fasting: boolean;
+  valid_from: string | null;
+  valid_to: string | null;
+  display_order: number | null;
+  note: string | null;
+}
+
+export interface MealItemPayload {
+  item_code?: string;
+  name?: string;
+  name_kana?: string | null;
+  kind?: string;
+  is_fasting?: boolean;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  display_order?: number | null;
+  note?: string | null;
+}
+
+const MEAL_ITEMS_PATH = "/master/meal_items";
+
+export async function searchMealItems(params: {
+  name?: string;
+  /** 項目コード。カンマ区切りで複数指定できる。 */
+  item_code?: string;
+  /** "diet"=食種 / "staple"=主食。未指定なら両方。 */
+  kind?: string;
+  /** true なら今日オーダーできる項目(有効期間内)だけ。 */
+  active?: boolean;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<MealItem>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.item_code) search.set("item_code", params.item_code);
+  if (params.kind) search.set("kind", params.kind);
+  if (params.active) search.set("active", "true");
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${MEAL_ITEMS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<MealItem>;
+}
+
+// 項目コードでも id でも引ける。
+export async function fetchMealItem(idOrCode: string | number): Promise<MealItem> {
+  const res = await masterFetch(`${MEAL_ITEMS_PATH}/${encodeURIComponent(String(idOrCode))}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MealItem;
+}
+
+export async function createMealItem(payload: MealItemPayload): Promise<MealItem> {
+  const res = await masterFetch(MEAL_ITEMS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MealItem;
+}
+
+export async function updateMealItem(id: number, payload: MealItemPayload): Promise<MealItem> {
+  const res = await masterFetch(`${MEAL_ITEMS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MealItem;
+}
+
+export async function deleteMealItem(id: number): Promise<void> {
+  const res = await masterFetch(`${MEAL_ITEMS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
 // ---- 術式マスタ(手術オーダー) ----
 //
 // 処置と違いセット・伝票レイアウト・実施入力データセットは持たず(術式は検索で

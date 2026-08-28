@@ -37,6 +37,7 @@ import {
   treatmentOrderProblem,
 } from "./treatmentOrderHelpers";
 import { treatmentPerformsByOrderId, type TreatmentPerformDisplay } from "./treatmentResultHelpers";
+import { isMealServiceRequest, mealOrderProblem } from "./mealOrderHelpers";
 import {
   treatmentTaskStatus,
   treatmentTasksByOrderId,
@@ -96,6 +97,7 @@ export type KarteItemKind =
   | "endoscopy-order"
   | "treatment-order"
   | "surgery-order"
+  | "meal-order"
   | "qr";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
@@ -110,6 +112,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   "endoscopy-order": "内視鏡",
   "treatment-order": "処置",
   "surgery-order": "手術",
+  "meal-order": "食事",
   qr: "テンプレート",
 };
 
@@ -213,6 +216,9 @@ export type KarteTimelineItem = KarteItemBase &
         /** 実施記録。未実施なら空。 */
         performs: SurgeryPerformDisplay[];
       }
+    // 食事(給食)。他のオーダーと違い明細も進捗 Task も実施記録も持たないので、
+    // カードに出すものは ServiceRequest 1 本の中で完結する。
+    | { kind: "meal-order"; serviceRequest: fhir4.ServiceRequest }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
 
@@ -586,6 +592,13 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
           status === "completed" ? (surgeryPerformByOrderId.get(serviceRequest.id ?? "") ?? []) : [],
       };
     }
+    if (isMealServiceRequest(serviceRequest)) {
+      return {
+        ...base,
+        kind: "meal-order" as const,
+        label: KARTE_KIND_LABELS["meal-order"],
+      };
+    }
     const withMedications = {
       ...base,
       medicationRequests: medicationRequestsBySr.get(serviceRequest.id ?? "") ?? [],
@@ -765,6 +778,7 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "endoscopy-order") return endoscopyOrderProblem(item.serviceRequest);
   if (item.kind === "treatment-order") return treatmentOrderProblem(item.serviceRequest);
   if (item.kind === "surgery-order") return surgeryOrderProblem(item.serviceRequest);
+  if (item.kind === "meal-order") return mealOrderProblem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);
   }

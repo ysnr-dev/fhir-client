@@ -161,6 +161,10 @@ Rails.application.routes.draw do
     resources :treatment_item_layout_cells, only: %i[create update destroy]
     resources :treatment_datasets, only: %i[index show create update destroy]
     resources :treatment_dataset_details, only: %i[index create update destroy]
+    # 食事オーダーのマスタ。食種(食止めを含む)と主食を kind 列で分けた 1 テーブル。
+    # 他の部門オーダーと違いセット・レイアウト・データセット・予約枠を持たない
+    # (食事はオーダー 1 件が食種 1 つを指すだけで明細も実施入力も無い)。
+    resources :meal_items, only: %i[index show create update destroy]
     # 術式マスタ。手術オーダー(申込)の項目。処置と違いセット・レイアウト・
     # データセットのマスタは持たない(術式は検索で選び、実施入力は第2段階)。
     resources :surgery_items, only: %i[index show create update destroy]

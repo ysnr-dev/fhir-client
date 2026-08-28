@@ -155,6 +155,11 @@ import {
 } from "../fhir/treatmentOrderHelpers";
 import { buildTreatmentPerformDeleteEntries } from "../fhir/treatmentResultHelpers";
 import {
+  MEAL_ORDER_TYPE,
+  isMealOrderActiveOn,
+  isMealServiceRequest,
+} from "../fhir/mealOrderHelpers";
+import {
   buildTreatmentTaskUpdate,
   treatmentTaskStatus,
   treatmentTasksByOrderId,
@@ -4309,6 +4314,9 @@ const OCCURRENCE_ORDER_TYPES = [
   ENDOSCOPY_ORDER_TYPE.code,
   TREATMENT_ORDER_TYPE.code,
   SURGERY_ORDER_TYPE.code,
+  // 食事は開始日(occurrence)にカードを出す。オーダー日は「いつ指示したか」で、
+  // 食事そのものは開始日から始まるため。
+  MEAL_ORDER_TYPE.code,
 ];
 
 const OCCURRENCE_ORDER_TYPE_TOKENS = OCCURRENCE_ORDER_TYPES.map(
@@ -5836,6 +5844,74 @@ async function fetchTreatmentAppointmentCancelEntries(srId: string): Promise<fhi
   return entries;
 }
 
+
+// ---- 食事オーダー ----
+//
+// 明細も進捗 Task も持たないので、どの問い合わせも ServiceRequest 1 本で済む。
+
+export function useMealOrderDetail(srId: string | undefined) {
+  const params = new URLSearchParams();
+  if (srId) params.set("_id", srId);
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "detail", "meal-order", srId],
+    queryFn: () => searchResource<fhir4.ServiceRequest>("ServiceRequest", params),
+    enabled: Boolean(srId),
+  });
+}
+
+/**
+ * まだ続いている食事オーダー。食事変更のときに前のオーダーを終了させるため、
+ * 新規登録の画面が「今どの食事が出ているか」を出すのに使う。
+ *
+ * 終了はローカル拡張なので上流では絞れない。有効なオーダーを引いてから、
+ * 基準日(新しい食事の開始日)にまだ続いているものだけをここで残す。
+ */
+export function useActiveMealOrders(patientId: string | undefined, at: string) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
+  params.set("status", "active");
+  params.set("_sort", "-authoredon");
+  params.set("_count", "20");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "meal-active", patientId, at],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>(
+        "ServiceRequest",
+        params,
+      );
+      return serviceRequestsOf(bundle)
+        .filter(isMealServiceRequest)
+        .filter((sr) => isMealOrderActiveOn(sr, at));
+    },
+    enabled: Boolean(patientId) && Boolean(at),
+  });
+}
+
+export function useUpdateMealOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      // 開始日が動くとカードの載る日も変わるので、まとめて読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+    },
+  });
+}
+
+/** 明細も予約も持たないので、ヘッダ 1 件を消すだけ。 */
+export function useDeleteMealOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (srId: string) => deleteResource("ServiceRequest", srId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
+  });
+}
 
 // ---- 手術オーダー ----
 //
