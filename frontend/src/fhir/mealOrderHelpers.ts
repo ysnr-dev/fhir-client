@@ -80,6 +80,12 @@ export const DEFAULT_MEAL_TIMING: MealTiming = "breakfast";
 /** 終了の既定。「その日の夕まで」が業務上いちばん多い。 */
 export const DEFAULT_MEAL_END_TIMING: MealTiming = "dinner";
 
+/**
+ * 退院に合わせて食事を止めるときの既定。退院は午前が多く、退院日は朝食までを
+ * 出して昼から止めるのがふつうなので「朝まで」にしてある(画面で変えられる)。
+ */
+export const DEFAULT_MEAL_STOP_TIMING: MealTiming = "breakfast";
+
 function timingHour(timing: MealTiming): string {
   return MEAL_TIMING_OPTIONS.find((t) => t.code === timing)?.hour ?? "08";
 }
@@ -323,6 +329,20 @@ export function buildMealOrderCloseEntry(
 }
 
 /**
+ * 退院などで食事を止める PUT エントリ。指定の食事までで終わっていないオーダーだけを
+ * 対象にするので、退院の transaction にそのまま足せる(止める対象が無ければ空配列)。
+ */
+export function buildMealOrderStopEntries(
+  orders: fhir4.ServiceRequest[],
+  endDate: string,
+  endTiming: MealTiming,
+): fhir4.BundleEntry[] {
+  return orders
+    .filter((sr) => mealOrderNeedsStop(sr, endDate, endTiming))
+    .map((sr) => buildMealOrderCloseEntry(sr, endDate, endTiming));
+}
+
+/**
  * 新規登録。食事変更のときは、前のオーダーを終了する PUT を同じ transaction に
  * 入れる(新しい食事だけが登録されて前の食事が残り続ける状態を作らない)。
  */
@@ -491,6 +511,23 @@ export function isMealOrderRunningOn(sr: fhir4.ServiceRequest, at: string): bool
   const start = (sr.occurrenceDateTime ?? "").slice(0, 10);
   if (!start || start > at) return false;
   return mealOrderEndsOnOrAfter(sr, at);
+}
+
+/**
+ * 指定の食事より後まで続いてしまうオーダーか(= 退院で止める必要があるか)。
+ *
+ * 開始が退院日より後のオーダーも対象にする。退院日を早めたときに先の食事が
+ * 残ってしまうのを防ぐためで、そういうオーダーには開始より前の終了が入るが、
+ * どの食事にも当たらない(= 1 食も出ない)ので止めた状態になる。
+ * すでにその食事以前で終わっているオーダーは触らない(終了を後ろへ動かさない)。
+ */
+export function mealOrderNeedsStop(
+  sr: fhir4.ServiceRequest,
+  endDate: string,
+  endTiming: MealTiming,
+): boolean {
+  const end = mealOrderEnd(sr);
+  return !end || mealPointKeyOf(end) > mealPointKey(endDate, endTiming);
 }
 
 // ---- どの日のどの食事にどのオーダーが効いているか ----

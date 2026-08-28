@@ -7035,6 +7035,39 @@ body.page-wide .app__main {
   gap: 8px;
 }
 
+/* 退院モーダルの食事オーダー停止。日付欄の下に 1 かたまりで置く。 */
+.discharge__meal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-sunken);
+}
+
+.discharge__meal-toggle,
+.discharge__meal-timing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.discharge__meal-toggle input[type="checkbox"] {
+  margin: 0;
+}
+
+/* 止まるオーダーの一覧。件数はふつう 1 件なので、行を積むだけでよい。 */
+.discharge__meal-list {
+  flex: 1 1 100%;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
 /* 放射線器材マスタ ------------------------------------------------------- */
 
 /* 算定に使う特定器材の紐付け。名称・コード・操作を 1 行に並べる。 */

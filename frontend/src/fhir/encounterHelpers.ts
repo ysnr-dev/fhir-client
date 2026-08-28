@@ -346,7 +346,14 @@ export function buildCancelledEncounter(encounter: fhir4.Encounter): fhir4.Encou
  * 持っているだけで ETag が無いため、単体 PUT ではなく If-Match の付かない
  * Bundle で書く(枠の状態変更 useUpdateSlotStatus と同じ理由)。
  */
-export function buildEncounterUpdateBundle(encounter: fhir4.Encounter): fhir4.Bundle {
+export function buildEncounterUpdateBundle(
+  encounter: fhir4.Encounter,
+  /**
+   * 入院の書き換えと一緒に書きたい他リソースのエントリ。退院と食事オーダーの停止の
+   * ように、片方だけが書かれた状態を作りたくないものを同じ transaction に載せる。
+   */
+  extraEntries: fhir4.BundleEntry[] = [],
+): fhir4.Bundle {
   return {
     resourceType: "Bundle",
     type: "transaction",
@@ -355,6 +362,7 @@ export function buildEncounterUpdateBundle(encounter: fhir4.Encounter): fhir4.Bu
         resource: encounter,
         request: { method: "PUT", url: `Encounter/${encounter.id}` },
       },
+      ...extraEntries,
     ],
   };
 }

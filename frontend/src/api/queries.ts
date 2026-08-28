@@ -156,9 +156,11 @@ import {
 import { buildTreatmentPerformDeleteEntries } from "../fhir/treatmentResultHelpers";
 import {
   MEAL_ORDER_TYPE,
+  buildMealOrderStopEntries,
   isMealOrderRunningOn,
   isMealServiceRequest,
   mealOrderEndsOnOrAfter,
+  type MealTiming,
 } from "../fhir/mealOrderHelpers";
 import {
   buildTreatmentTaskUpdate,
@@ -1462,18 +1464,36 @@ export function useAdmitPatient() {
 }
 
 /** 退院。入院を終える(記録は status=finished + 退院日として残る)。 */
+/**
+ * 退院。継続する食事オーダーを一緒に止められる(退院後も食事が出続けるのを防ぐ)。
+ * 入院の書き換えと同じ transaction に載せるので、退院だけ通って食事が残ることはない。
+ */
 export function useDischargePatient() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
       encounter,
       dischargeDate,
+      mealOrders = [],
+      mealEndTiming,
     }: {
       encounter: fhir4.Encounter;
       dischargeDate: string;
-    }) => postBundle(buildEncounterUpdateBundle(buildDischargedEncounter(encounter, dischargeDate))),
+      /** 一緒に終了させる食事オーダー。画面で「終了する」を外したときは空。 */
+      mealOrders?: fhir4.ServiceRequest[];
+      /** 退院日のどの食事まで出すか。 */
+      mealEndTiming: MealTiming;
+    }) =>
+      postBundle(
+        buildEncounterUpdateBundle(
+          buildDischargedEncounter(encounter, dischargeDate),
+          buildMealOrderStopEntries(mealOrders, dischargeDate, mealEndTiming),
+        ),
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Encounter"] });
+      // 食事オーダーの終了もこの transaction で書いているので読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
     },
   });
 }
@@ -5888,6 +5908,32 @@ export function useActiveMealOrders(patientId: string | undefined, at: string) {
         .filter((sr) => isMealOrderRunningOn(sr, at));
     },
     enabled: Boolean(patientId) && Boolean(at),
+  });
+}
+
+/**
+ * その患者の有効な食事オーダー。退院で止める対象を選ぶのに使う。
+ *
+ * useActiveMealOrders と違って基準日を取らないのは、退院日を打ち替えるたびに
+ * 引き直したくないため。どれを止めるかは退院日とその日のどの食事までかで決まるので、
+ * 絞り込み(mealOrderNeedsStop)は画面側で行う。
+ */
+export function usePatientMealOrders(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
+  params.set("status", "active");
+  // 新しい順。まだ続いているオーダーは必ずこの中に入るので 1 ページで足りる。
+  params.set("_sort", "-authoredon");
+  params.set("_count", "20");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "meal-patient", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      return serviceRequestsOf(bundle).filter(isMealServiceRequest);
+    },
+    enabled: Boolean(patientId),
   });
 }
 
