@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
   useLocationOptions,
+  useMoveSurgerySchedule,
   useSurgeryWorklist,
   useSurgeryWorklistWeek,
   useUpdateSurgeryTaskStatus,
@@ -235,12 +236,33 @@ function DayView({ date, ...split }: { date: string } & SplitProps) {
   );
   // 進捗の操作は一覧タブと同じものを使う(押せる操作・遷移先は surgeryTaskActions が持つ)。
   const updateStatus = useUpdateSurgeryTaskStatus();
+  // 格子から未確定リストへ戻す(日付未定・部屋未定)。日程を書くだけなので
+  // ドラッグでの移動と同じ mutation を使う(進捗は申込済のまま動かさない)。
+  const unschedule = useMoveSurgerySchedule();
   const [performing, setPerforming] = useState<SurgeryWorklistRow | null>(null);
   // 空き枠から登録する手術の枠。掴んだ列と範囲から決めて、そのまま登録フォームの
   // 初期値になる。
   const [creating, setCreating] = useState<SurgeryDefaultSchedule | null>(null);
   // 申込内容を直す手術(カルテと同じ編集フォームを開く)。
   const [editing, setEditing] = useState<SurgeryWorklistRow | null>(null);
+
+  /**
+   * 決めた日程を外して未確定リストへ戻す。外すのは指定された片方だけで、
+   * もう片方と所要時間は据え置く —— 組み直すときの手掛かりを消さない。
+   */
+  function handleUnschedule(row: SurgeryWorklistRow, clear: "date" | "room") {
+    const summary = summarizeSurgeryOrder(row.order);
+    unschedule.mutate({
+      order: row.order,
+      values: {
+        scheduledDate: clear === "date" ? "" : summary.scheduledDate,
+        scheduledTime: clear === "date" ? "" : summary.scheduledTime,
+        durationMinutes: summary.durationMinutes != null ? String(summary.durationMinutes) : "",
+        roomId: clear === "room" ? "" : (summary.roomId ?? ""),
+        roomName: clear === "room" ? "" : (summary.roomName ?? ""),
+      },
+    });
+  }
 
   // 中止は部屋を空けるので出さない(一覧・重なり判定と同じ扱い)。
   const rows = useMemo(() => roomDayRows(worklist.data?.rows ?? [], {}), [worklist.data]);
@@ -321,6 +343,7 @@ function DayView({ date, ...split }: { date: string } & SplitProps) {
       <ErrorBanner error={worklist.error} />
       <ErrorBanner error={blocks.error} />
       <ErrorBanner error={updateStatus.error} />
+      <ErrorBanner error={unschedule.error} />
       {worklist.data?.truncated && (
         <p className="surgery-day-schedule__warn" role="status">
           オーダーが多いため一部しか読めていません。重なりの有無はこの表では確かめきれません。
@@ -392,6 +415,7 @@ function DayView({ date, ...split }: { date: string } & SplitProps) {
                     }
                     onPerform={setPerforming}
                     onEdit={setEditing}
+                    onUnschedule={handleUnschedule}
                     onResize={(row, start, end) =>
                       // 伸縮も移動と同じ確認を通す。日・部屋は変えず、
                       // 入室時刻と所要時間だけを変更後として渡す。
@@ -415,7 +439,7 @@ function DayView({ date, ...split }: { date: string } & SplitProps) {
                         roomName: room.name,
                       })
                     }
-                    pending={updateStatus.isPending}
+                    pending={updateStatus.isPending || unschedule.isPending}
                     draggingOrderId={dragging.drag?.item.order.id}
                     preview={preview?.roomId === room.id ? preview : null}
                     previewDuration={
@@ -482,6 +506,7 @@ function RoomColumn({
   onChangeStatus,
   onPerform,
   onEdit,
+  onUnschedule,
   onEmptySlot,
   onResize,
   pending,
@@ -501,6 +526,8 @@ function RoomColumn({
   onChangeStatus: (row: SurgeryWorklistRow, status: SurgeryTaskStatus) => void;
   onPerform: (row: SurgeryWorklistRow) => void;
   onEdit: (row: SurgeryWorklistRow) => void;
+  /** 決めた日程の片方を外して未確定リストへ戻す。 */
+  onUnschedule: (row: SurgeryWorklistRow, clear: "date" | "room") => void;
   /**
    * 予定の入っていないところで枠を選んだ。`end` は縦に引いて終わりまで決めたとき
    * だけ入る(押しただけなら null = 所要時間はフォームに任せる)。
@@ -803,6 +830,7 @@ function RoomColumn({
               onChangeStatus={onChangeStatus}
               onPerform={onPerform}
               onEdit={onEdit}
+              onUnschedule={onUnschedule}
               pending={pending}
               style={{
                 top: (range.start - axis.start) * PX_PER_MINUTE,
@@ -839,6 +867,7 @@ function SurgeryCard({
   onChangeStatus,
   onPerform,
   onEdit,
+  onUnschedule,
   pending,
   style,
 }: {
@@ -854,6 +883,7 @@ function SurgeryCard({
   onChangeStatus: (row: SurgeryWorklistRow, status: SurgeryTaskStatus) => void;
   onPerform: (row: SurgeryWorklistRow) => void;
   onEdit: (row: SurgeryWorklistRow) => void;
+  onUnschedule: (row: SurgeryWorklistRow, clear: "date" | "room") => void;
   pending: boolean;
   style: React.CSSProperties;
 }) {
@@ -935,6 +965,7 @@ function SurgeryCard({
           onChangeStatus={onChangeStatus}
           onPerform={onPerform}
           onEdit={onEdit}
+          onUnschedule={onUnschedule}
         />
       </span>
 
@@ -978,6 +1009,7 @@ function SurgeryCardActions({
   onChangeStatus,
   onPerform,
   onEdit,
+  onUnschedule,
 }: {
   row: SurgeryWorklistRow;
   status: SurgeryTaskStatus;
@@ -985,6 +1017,7 @@ function SurgeryCardActions({
   onChangeStatus: (row: SurgeryWorklistRow, status: SurgeryTaskStatus) => void;
   onPerform: (row: SurgeryWorklistRow) => void;
   onEdit: (row: SurgeryWorklistRow) => void;
+  onUnschedule: (row: SurgeryWorklistRow, clear: "date" | "room") => void;
 }) {
   // カルテの「戻る」でこのカレンダーに戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
@@ -1036,11 +1069,39 @@ function SurgeryCardActions({
               麻酔チャート
             </Link>
           )}
+          {/* 決めた日程を外して未確定リスト(右ペイン)へ戻す。
+              ［導出］**申込済のときだけ**出す。受付済から先は手術部が日程を確定した
+              後で、外すと病棟・麻酔科が見ている予定が黙って消える。戻すなら受付を
+              取り消してからにする(その導線は同じメニューの「受付取消」)。
+              ［実装］外すのは押した片方だけ。もう片方と所要時間は残して、組み直す
+              ときの手掛かりにする。 */}
+          {status === "requested" && (
+            <>
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={pending}
+                onClick={() => onUnschedule(row, "date")}
+              >
+                日付未定に変更
+              </button>
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={pending}
+                onClick={() => onUnschedule(row, "room")}
+              >
+                部屋未定に変更
+              </button>
+            </>
+          )}
+
           {/* 申込内容の修正。カルテへ行かなくても直せるように、カレンダーからも
               同じ編集フォームを開く(可否もカルテと同じで進捗では絞らない)。 */}
           <button type="button" className="row-menu__item" onClick={() => onEdit(row)}>
             編集
           </button>
+
           {secondary.map((action) => (
             <button
               key={action.next}

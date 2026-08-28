@@ -898,9 +898,17 @@ export function buildSurgeryScheduleServiceRequest(
 ): fhir4.ServiceRequest {
   const next: fhir4.ServiceRequest = { ...order };
 
-  next.occurrenceDateTime = values.scheduledTime
-    ? toFhirDateTime(`${values.scheduledDate}T${values.scheduledTime}`)
-    : values.scheduledDate;
+  // occurrence[x] は排他。古いデータが持つ occurrencePeriod は必ず落とす
+  // (残すと 2 つの occurrence が並び、読み手によってどちらを見るかがぶれる)。
+  delete next.occurrencePeriod;
+  if (values.scheduledDate) {
+    next.occurrenceDateTime = values.scheduledTime
+      ? toFhirDateTime(`${values.scheduledDate}T${values.scheduledTime}`)
+      : values.scheduledDate;
+  } else {
+    // 日付未定へ戻す。空文字を入れると occurrence:missing で拾えないので消す。
+    delete next.occurrenceDateTime;
+  }
 
   const rest = (order.extension ?? []).filter(
     (e) => e.url !== DURATION_EXT_URL && e.url !== ROOM_EXT_URL,

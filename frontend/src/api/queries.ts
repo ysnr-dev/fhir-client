@@ -15,7 +15,11 @@ import {
   VITAL_ENTRY_SYSTEM,
 } from "../fhir/vitalHelpers";
 import { buildClinicalNoteDeleteBundle } from "../fhir/clinicalNoteHelpers";
-import { LOCATION_TYPE_CODES, sortLocations } from "../fhir/locationHelpers";
+import {
+  LOCATION_TYPE_CODES,
+  locationDisplayName,
+  sortLocations,
+} from "../fhir/locationHelpers";
 import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeline";
 import { today } from "../lib/dates";
 import {
@@ -1353,6 +1357,81 @@ async function fetchInpatients(date: string): Promise<InpatientResult> {
   }
 
   return { byBed: latestEncounterByBed(encounters), patientsById, encounters, truncated };
+}
+
+/** ベッドが属する病棟。 */
+export interface BedWard {
+  wardId: string;
+  wardName: string;
+}
+
+/**
+ * ベッド id -> その病棟。入院中の患者に「入院病棟」を出す/病棟で絞るのに使う。
+ *
+ * ［事実］入院(Encounter)が記録するのは**ベッドだけ**で、display も「301号室 ベッド1」
+ * (bedDisplayName)なので病棟名を含まない。病棟は ベッド → 病室 → 病棟 の partOf を
+ * 辿らないと分からない。
+ *
+ * ［実装］病棟ごとに引くと病棟数だけリクエストが増えるので、**全病棟をまとめて 1 本**で
+ * 引く(partof のカンマ OR)。`_revinclude=Location:partof` の子は `_count` の対象外
+ * なので、病室のページングだけ見ればベッドは取りこぼさない(fetchWardGrid と同じ作り)。
+ */
+async function fetchBedWardIndex(): Promise<Map<string, BedWard>> {
+  const wardParams = new URLSearchParams();
+  wardParams.set("type", WARD_TYPE_CODE);
+  wardParams.set("status", "active");
+  wardParams.set("_count", "100");
+  const { data: wardBundle } = await searchResource<fhir4.Location>("Location", wardParams);
+  const wards =
+    wardBundle.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Location => r?.resourceType === "Location") ?? [];
+  if (wards.length === 0) return new Map();
+
+  const PAGE = 100;
+  const rooms: fhir4.Location[] = [];
+  const beds: fhir4.Location[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const params = new URLSearchParams();
+    params.set("partof", wards.map((ward) => `Location/${ward.id}`).join(","));
+    params.set("_count", String(PAGE));
+    params.set("_offset", String(offset));
+    params.set("_revinclude", "Location:partof");
+
+    const { data: bundle } = await searchResource<fhir4.Resource>("Location", params);
+    const { matches, children } = splitLocationMatches(bundle);
+    rooms.push(...matches);
+    beds.push(...children);
+    if (matches.length < PAGE) break;
+  }
+
+  // 病室は途中のページに散るので、全ページ読み終えてから突き合わせる。
+  const wardById = new Map(wards.map((ward) => [ward.id ?? "", ward]));
+  const wardIdByRoom = new Map<string, string>();
+  for (const room of rooms) {
+    const wardId = partOfId(room);
+    if (room.id && wardId) wardIdByRoom.set(room.id, wardId);
+  }
+
+  const index = new Map<string, BedWard>();
+  for (const bed of beds) {
+    const roomId = partOfId(bed);
+    const wardId = roomId ? wardIdByRoom.get(roomId) : undefined;
+    const ward = wardId ? wardById.get(wardId) : undefined;
+    if (!bed.id || !ward?.id) continue;
+    index.set(bed.id, { wardId: ward.id, wardName: locationDisplayName(ward) });
+  }
+  return index;
+}
+
+export function useBedWardIndex() {
+  const query = useQuery({
+    queryKey: ["Location", "bed-ward-index"],
+    queryFn: fetchBedWardIndex,
+    // 病棟の構成は日に何度も変わらない。開くたびに引き直さない。
+    staleTime: 5 * 60 * 1000,
+  });
+  return { ...query, bedWards: query.data ?? new Map<string, BedWard>() };
 }
 
 /** date(YYYY-MM-DD)にベッドを使っていた入院。既定は当日ぶん。 */

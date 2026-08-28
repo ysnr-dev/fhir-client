@@ -718,6 +718,28 @@ button:disabled {
   color: var(--text);
 }
 
+/* 条件を横 1 行に並べる版(患者検索モーダル)。縦に積むと表が下へ押し出され、
+   モーダルの中で候補が数行しか見えなくなる。狭い画面では折り返す。 */
+.master-search__form--row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.master-search__form--row label {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+/* ページ送りが無いとき(病棟で絞った一覧)に件数だけ出す。 */
+.master-search__count {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-h);
+  text-align: right;
+}
+
 .master-search__form input,
 .master-search__form select {
   font: inherit;
