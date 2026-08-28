@@ -75,9 +75,9 @@
   filter: invert(1) brightness(2);
 }
 
+/* 幅の制限は本文(.app__main)側で掛ける。ヘッダーはここで絞ると項目が入り切らず
+   折り返してしまうので、常に画面幅いっぱいのバーにする(App.css の .app__main)。 */
 #root {
-  max-width: 960px;
-  margin: 0 auto;
   min-height: 100svh;
   display: flex;
   flex-direction: column;

@@ -28,6 +28,13 @@
   gap: 16px;
 }
 
+/* 画面が狭いときに「予約枠」が 1 文字ずつ縦に折り返すのを防ぐ。入り切らないなら
+   折り返すより溢れさせる(メニューは押せる形のまま残る)。 */
+.app__title,
+.app__nav > * {
+  white-space: nowrap;
+}
+
 .app__nav a {
   color: var(--text);
   font-size: 14px;
@@ -218,6 +225,18 @@
   50% {
     opacity: 0.1;
   }
+}
+
+/* 本文の幅。以前は #root に掛けていたが、それだとヘッダーまで 960px に収まらず
+   メニューが折り返すので、本文だけを絞ってヘッダーは画面幅いっぱいに使う。
+   padding を含めた幅なので、中身の幅は従来どおり 912px。 */
+.app__main,
+/* ログイン確認中・失敗時は .app__main を通らず直接置かれるので、同じ幅に揃える。 */
+#root > .page {
+  max-width: 960px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .app__main {
@@ -3687,9 +3706,9 @@ fieldset.rp-card {
 
 /* ---- カルテ画面 ---- */
 
-/* カルテは 2 ペインで横幅を使うため、この画面だけ #root の幅制限を外す
+/* カルテは 2 ペインで横幅を使うため、この画面だけ本文の幅制限を外す
    (KartePage が body に付け外しする)。 */
-body.karte-wide #root {
+body.karte-wide .app__main {
   max-width: none;
 }
 
@@ -6535,9 +6554,9 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
    放射線検査一覧にしかないので .rad-worklist だけに当てる。 */
 
 /* 一覧は列が多く 960px では患者名や依頼科まで折り返すので、これらの画面だけ
-   #root の幅制限を外してカルテと同じ全画面にする(各ページが body に付け外しする)。
+   本文の幅制限を外してカルテと同じ全画面にする(各ページが body に付け外しする)。
    地の色は他の一覧画面と同じままにする。 */
-body.page-wide #root {
+body.page-wide .app__main {
   max-width: none;
 }
 
