@@ -1,4 +1,4 @@
-import { Link, Navigate, NavLink, Route, Routes, useMatch, useParams } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useParams } from "react-router-dom";
 import "./App.css";
 import { AdminGate } from "./components/AdminGate";
 import { AuthGate } from "./components/AuthGate";
@@ -95,10 +95,6 @@ function KarteRedirect() {
 }
 
 function App() {
-  // 依頼科・依頼医師はオーダーを登録するカルテ画面でだけ切り替えられればよいので、
-  // ヘッダーには同画面を開いている間だけ出す。
-  const onKarte = useMatch("/patients/:patientId/karte");
-
   return (
     // アプリ全体をログインゲートで包む(ADMIN_TOKEN 未設定なら素通し)。
     // ログイン中の医療従事者(Practitioner)は useCurrentPractitioner で参照できる。
@@ -329,7 +325,9 @@ function App() {
             <ThemeToggleItem />
           </HoverMenu>
         </nav>
-        {onKarte && <OrderContextPicker />}
+        {/* オーダーはカルテ以外(手術カレンダーなど)からも登録するので、
+            依頼科・依頼医師の選択はどの画面でも切り替えられるようにする。 */}
+        <OrderContextPicker />
         <CurrentUserBadge />
         <WakeButton />
       </header>

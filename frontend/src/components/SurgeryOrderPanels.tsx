@@ -15,15 +15,31 @@ import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { ErrorBanner } from "./ErrorBanner";
 import { SurgeryOrderForm } from "./SurgeryOrderForm";
 
-// 手術オーダーの登録・編集 UI。カルテ画面の右ペインから使う。
+// 手術オーダーの登録・編集 UI。カルテ画面の右ペインと、手術室カレンダーの
+// モーダル(SurgeryOrderModals)が同じものを使う。
 // 送信は他のオーダーと同じ transaction Bundle の POST なので mutation を共用する
 // (無効化キーも ServiceRequest 検索で共通)。
+
+/** 手術カレンダーの空き枠から開いたときに引き継ぐ日程・手術室。 */
+export interface SurgeryDefaultSchedule {
+  scheduledDate: string;
+  scheduledTime: string;
+  /**
+   * 枠をドラッグして終了時刻まで決めたときの所要時間(分)。押しただけのときは空。
+   * 空なら術式を選んだときにマスタの既定値が入る(SurgeryOrderForm.addItem)。
+   */
+  durationMinutes: string;
+  roomId: string;
+  roomName: string;
+}
 
 interface SurgeryOrderCreatePanelProps {
   patientId: string;
   /** DO(内容を流用して新規登録)する元の ServiceRequest id。 */
   sourceSrId?: string;
   defaultProblem?: ProblemRef;
+  /** カレンダーの空き枠から開いたときの日程・手術室の初期値。 */
+  defaultSchedule?: SurgeryDefaultSchedule;
   onSaved: () => void;
 }
 
@@ -31,6 +47,7 @@ export function SurgeryOrderCreatePanel({
   patientId,
   sourceSrId,
   defaultProblem,
+  defaultSchedule,
   onSaved,
 }: SurgeryOrderCreatePanelProps) {
   const createSurgeryOrder = useCreatePrescription();
@@ -43,13 +60,13 @@ export function SurgeryOrderCreatePanel({
   // DO も新しいオーダーなので、依頼元は DO 元ではなくヘッダーで選択中のものを使う。
   const requester = useOrderContext();
 
-  const initialValues = useMemo(
-    () =>
-      source.initialValues
-        ? buildDoSurgeryOrderForm(source.initialValues, defaultSetting.setting)
-        : emptySurgeryOrderForm(defaultProblem ?? null, defaultSetting.setting),
-    [source.initialValues, defaultProblem, defaultSetting.setting],
-  );
+  const initialValues = useMemo(() => {
+    const base = source.initialValues
+      ? buildDoSurgeryOrderForm(source.initialValues, defaultSetting.setting)
+      : emptySurgeryOrderForm(defaultProblem ?? null, defaultSetting.setting);
+    // カレンダーの空き枠から開いたときは、掴んだ枠の日時・所要時間・手術室を入れておく。
+    return defaultSchedule ? { ...base, ...defaultSchedule } : base;
+  }, [source.initialValues, defaultProblem, defaultSchedule, defaultSetting.setting]);
 
   function handleSubmit(values: SurgeryOrderFormValues) {
     // 新規オーダーには登録時点の入院病棟も焼き付ける(部門の一覧が入院を引き直さずに済む)。

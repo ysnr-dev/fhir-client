@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useKarteLinkState } from "../karteReturn";
 import {
@@ -43,6 +43,8 @@ import { PatientKana } from "./PatientRowCells";
 import { RowMenu } from "./RowMenu";
 import { SurgeryPendingPanel } from "./SurgeryPendingPanel";
 import { SurgeryMoveConfirmModal, type SurgeryMoveTarget } from "./SurgeryMoveConfirmModal";
+import { SurgeryOrderCreateModal, SurgeryOrderEditModal } from "./SurgeryOrderModals";
+import type { SurgeryDefaultSchedule } from "./SurgeryOrderPanels";
 import { SurgeryPerformModal } from "./SurgeryPerformModal";
 
 // 手術室カレンダー。手術一覧の 3 つ目のタブ。
@@ -62,6 +64,11 @@ import { SurgeryPerformModal } from "./SurgeryPerformModal";
 // 手術室、週ビューは別セルへ落として日付と手術室を変える。ドロップで即書き込みは
 // せず、必ず移動の確認(SurgeryMoveConfirmModal)を挟む。
 //
+// 空いているところは掴んで縦に引くと、その範囲(日・入室時刻・所要時間・手術室)を
+// 初期値にして手術オーダーを登録できる。押しただけなら所要時間は空(術式の既定に
+// 任せる)。カードのケバブからは修正。どちらもカルテ右ペインと同じフォーム
+// (SurgeryOrderModals)をモーダルで開くだけで、申込の中身は二重に持たない。
+//
 // 右は縦分割のスプリッタで区切った未確定リスト(SurgeryPendingPanel)。格子に
 // 置けない手術(日付未定・部屋未定・時間未定)を並べ、そこから格子へドラッグして
 // 日程を決める。分割位置は日/週で共有し、localStorage に残す。
@@ -71,6 +78,12 @@ const PX_PER_MINUTE = 1;
 /** 時間軸の既定の範囲。予定がはみ出す日はその ぶんだけ広げる。 */
 const DEFAULT_START_MINUTE = 8 * 60;
 const DEFAULT_END_MINUTE = 18 * 60;
+/**
+ * 空き枠を選ぶときの刻み(分)。カードの移動(5 分)より粗くする —— 枠を選ぶ操作では
+ * 位置ちょうどより「9:23 を押したら 9:15 から」の方が近く、時刻はフォームで直せる。
+ * 始まりは切り捨て、終わりは切り上げて、掴んだ範囲を必ず含む。
+ */
+const SLOT_SNAP_MINUTES = 15;
 
 export type CalendarMode = "day" | "week";
 
@@ -221,6 +234,11 @@ function DayView({ date, ...split }: { date: string } & SplitProps) {
   // 進捗の操作は一覧タブと同じものを使う(押せる操作・遷移先は surgeryTaskActions が持つ)。
   const updateStatus = useUpdateSurgeryTaskStatus();
   const [performing, setPerforming] = useState<SurgeryWorklistRow | null>(null);
+  // 空き枠から登録する手術の枠。掴んだ列と範囲から決めて、そのまま登録フォームの
+  // 初期値になる。
+  const [creating, setCreating] = useState<SurgeryDefaultSchedule | null>(null);
+  // 申込内容を直す手術(カルテと同じ編集フォームを開く)。
+  const [editing, setEditing] = useState<SurgeryWorklistRow | null>(null);
 
   // 中止は部屋を空けるので出さない(一覧・重なり判定と同じ扱い)。
   const rows = useMemo(() => roomDayRows(worklist.data?.rows ?? [], {}), [worklist.data]);
@@ -313,6 +331,7 @@ function DayView({ date, ...split }: { date: string } & SplitProps) {
               fromPanel.current = true;
               dragging.start(row, event);
             }}
+            onEdit={setEditing}
             draggingOrderId={dragging.drag?.item.order.id}
           />
         }
@@ -366,6 +385,16 @@ function DayView({ date, ...split }: { date: string } & SplitProps) {
                       updateStatus.mutate({ order: target.order, task: target.task, status })
                     }
                     onPerform={setPerforming}
+                    onEdit={setEditing}
+                    onEmptySlot={(start, end) =>
+                      setCreating({
+                        scheduledDate: date,
+                        scheduledTime: minutesToTime(start),
+                        durationMinutes: end != null ? String(end - start) : "",
+                        roomId: room.id,
+                        roomName: room.name,
+                      })
+                    }
                     pending={updateStatus.isPending}
                     draggingOrderId={dragging.drag?.item.order.id}
                     preview={preview?.roomId === room.id ? preview : null}
@@ -395,6 +424,13 @@ function DayView({ date, ...split }: { date: string } & SplitProps) {
       {performing && (
         <SurgeryPerformModal row={performing} onClose={() => setPerforming(null)} />
       )}
+
+      {/* 空き枠から新規登録。掴んだ範囲をフォームの日程・所要時間・手術室にする。 */}
+      {creating && (
+        <SurgeryOrderCreateModal defaultSchedule={creating} onClose={() => setCreating(null)} />
+      )}
+
+      {editing && <SurgeryOrderEditModal row={editing} onClose={() => setEditing(null)} />}
     </>
   );
 }
@@ -415,6 +451,8 @@ function RoomColumn({
   onCardPointerDown,
   onChangeStatus,
   onPerform,
+  onEdit,
+  onEmptySlot,
   pending,
   draggingOrderId,
   preview,
@@ -431,6 +469,12 @@ function RoomColumn({
   onCardPointerDown: (row: SurgeryWorklistRow, event: React.PointerEvent) => void;
   onChangeStatus: (row: SurgeryWorklistRow, status: SurgeryTaskStatus) => void;
   onPerform: (row: SurgeryWorklistRow) => void;
+  onEdit: (row: SurgeryWorklistRow) => void;
+  /**
+   * 予定の入っていないところで枠を選んだ。`end` は縦に引いて終わりまで決めたとき
+   * だけ入る(押しただけなら null = 所要時間はフォームに任せる)。
+   */
+  onEmptySlot: (start: number, end: number | null) => void;
   /** 進捗の書き込み中。二重に押せないようにする。 */
   pending: boolean;
   /** 掴んでいるカード。元の位置は薄く出す。 */
@@ -463,6 +507,63 @@ function RoomColumn({
 
   const previewRange = preview ? timeRange(preview.time, previewDuration) : null;
 
+  // 空き枠の下見(マウスの下の 1 枠)と、掴んで引いている最中の範囲。どちらも列の
+  // 中だけの話なので列で持つ。カードを掴んでいる間は出さない(落とし先の枠と紛れる)。
+  const [hoverStart, setHoverStart] = useState<number | null>(null);
+  const [selection, setSelection] = useState<{ from: number; to: number } | null>(null);
+  // 掴んでいる範囲は ref にも持つ。押してすぐ離すと pointerdown の setState が
+  // 反映される前に pointerup が走るので、state だけだと「押しただけ」を取り落とす。
+  const selectionRef = useRef<{ from: number; to: number } | null>(null);
+
+  function updateSelection(next: { from: number; to: number } | null) {
+    selectionRef.current = next;
+    setSelection(next);
+  }
+
+  // 引いている途中の Escape でやめられるようにする(カードの移動と同じ)。
+  useEffect(() => {
+    if (!selection) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") updateSelection(null);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // updateSelection は ref と setState だけなので、張り直す必要はない。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection]);
+
+  /** ポインタの縦位置 → 時間軸の分。 */
+  function minuteAt(event: React.PointerEvent<HTMLDivElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return axis.start + (event.clientY - rect.top) / PX_PER_MINUTE;
+  }
+
+  /** 枠の頭。切り捨てて 0:00〜24:00 に収める。 */
+  function slotStart(minute: number) {
+    const start = Math.floor(minute / SLOT_SNAP_MINUTES) * SLOT_SNAP_MINUTES;
+    return Math.min(Math.max(start, 0), 24 * 60 - SLOT_SNAP_MINUTES);
+  }
+
+  /** カードとその上のボタン・ケバブの上か。RowMenu は非ポータルなのでこれで見分く。 */
+  function onCard(event: React.PointerEvent) {
+    return Boolean((event.target as HTMLElement).closest(".surgery-calendar__card"));
+  }
+
+  /**
+   * 引いている範囲を枠に丸める。始まりは切り捨て、終わりは切り上げて、上へ引いても
+   * 下へ引いても掴んだぶんを含む 1 枠以上にする。
+   */
+  function snapRange(range: { from: number; to: number }) {
+    const start = slotStart(Math.min(range.from, range.to));
+    const end = Math.max(
+      Math.ceil(Math.max(range.from, range.to) / SLOT_SNAP_MINUTES) * SLOT_SNAP_MINUTES,
+      start + SLOT_SNAP_MINUTES,
+    );
+    return { start, end: Math.min(end, 24 * 60) };
+  }
+
+  const selected = selection ? snapRange(selection) : null;
+
   return (
     <div
       className={
@@ -474,6 +575,42 @@ function RoomColumn({
         ref={bodyRef}
         className="surgery-calendar__col-body"
         style={{ height: (axis.end - axis.start) * PX_PER_MINUTE }}
+        // 空いているところを掴んで縦に引くと、その範囲で手術を登録する。カード(と
+        // カードの上のボタン・ケバブ)の上は除く。割当科の帯は背景でしかないので、
+        // その上も空き枠として扱う。
+        //
+        // click ではなく pointerup で開く。カードを掴んで同じ列に落とすと click は
+        // ここまで上がってくるので、click で開くと移動確認と登録が同時に出てしまう。
+        onPointerDown={(e) => {
+          if (e.button !== 0 || onCard(e)) return;
+          const minute = minuteAt(e);
+          updateSelection({ from: minute, to: minute });
+          // 列から出ても引き続けられるようにする(下へ引くと軸の外へ出やすい)。
+          e.currentTarget.setPointerCapture(e.pointerId);
+        }}
+        onPointerMove={(e) => {
+          const current = selectionRef.current;
+          if (current) {
+            updateSelection({ ...current, to: minuteAt(e) });
+            return;
+          }
+          // カードを掴んでいる間は出さない(落とし先の枠と紛れる)。
+          setHoverStart(onCard(e) || draggingOrderId ? null : slotStart(minuteAt(e)));
+        }}
+        onPointerUp={(e) => {
+          const current = selectionRef.current;
+          if (!current) return;
+          updateSelection(null);
+          if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+          }
+          const range = snapRange(current);
+          // 引かずに押しただけなら所要時間は決めていない(術式の既定に任せる)。
+          const dragged = Math.abs(current.to - current.from) >= SLOT_SNAP_MINUTES / 2;
+          onEmptySlot(range.start, dragged ? range.end : null);
+        }}
+        onPointerCancel={() => updateSelection(null)}
+        onPointerLeave={() => setHoverStart(null)}
       >
         {/* 割当科の帯。背景なので操作はしない。 */}
         {dayBlocks.map((block) => {
@@ -502,6 +639,39 @@ function RoomColumn({
             style={{ top: (minute - axis.start) * PX_PER_MINUTE }}
           />
         ))}
+
+        {/* 空き枠の下見。マウスの下の 1 枠を薄く塗って、どこに入るのかを出す。
+            掴んで引いている間と、カードを掴んでいる間は出さない。 */}
+        {hoverStart != null && !selected && !preview && (
+          <div
+            className="surgery-calendar__slot-hover"
+            style={{
+              top: (hoverStart - axis.start) * PX_PER_MINUTE,
+              height: SLOT_SNAP_MINUTES * PX_PER_MINUTE,
+            }}
+          >
+            <span>{minutesToTime(hoverStart)}</span>
+          </div>
+        )}
+
+        {/* 引いている最中の範囲。入室〜退室と所要時間をその場で出す
+            (登録フォームに入るのと同じ値)。 */}
+        {selected && (
+          <div
+            className="surgery-calendar__slot-select"
+            style={{
+              top: (selected.start - axis.start) * PX_PER_MINUTE,
+              height: Math.max((selected.end - selected.start) * PX_PER_MINUTE, 18),
+            }}
+          >
+            <span>
+              {minutesToTime(selected.start)}〜{minutesToTime(selected.end)}
+            </span>
+            <span className="surgery-calendar__slot-duration">
+              {selected.end - selected.start} 分
+            </span>
+          </div>
+        )}
 
         {/* 落とす先。掴んでいる間だけ出す点線の枠。 */}
         {preview && previewRange && (
@@ -532,6 +702,7 @@ function RoomColumn({
               onPointerDown={onCardPointerDown}
               onChangeStatus={onChangeStatus}
               onPerform={onPerform}
+              onEdit={onEdit}
               pending={pending}
               style={{
                 top: (entry.range.start - axis.start) * PX_PER_MINUTE,
@@ -565,6 +736,7 @@ function SurgeryCard({
   onPointerDown,
   onChangeStatus,
   onPerform,
+  onEdit,
   pending,
   style,
 }: {
@@ -576,6 +748,7 @@ function SurgeryCard({
   onPointerDown: (row: SurgeryWorklistRow, event: React.PointerEvent) => void;
   onChangeStatus: (row: SurgeryWorklistRow, status: SurgeryTaskStatus) => void;
   onPerform: (row: SurgeryWorklistRow) => void;
+  onEdit: (row: SurgeryWorklistRow) => void;
   pending: boolean;
   style: React.CSSProperties;
 }) {
@@ -621,6 +794,7 @@ function SurgeryCard({
           pending={pending}
           onChangeStatus={onChangeStatus}
           onPerform={onPerform}
+          onEdit={onEdit}
         />
       </span>
 
@@ -663,12 +837,14 @@ function SurgeryCardActions({
   pending,
   onChangeStatus,
   onPerform,
+  onEdit,
 }: {
   row: SurgeryWorklistRow;
   status: SurgeryTaskStatus;
   pending: boolean;
   onChangeStatus: (row: SurgeryWorklistRow, status: SurgeryTaskStatus) => void;
   onPerform: (row: SurgeryWorklistRow) => void;
+  onEdit: (row: SurgeryWorklistRow) => void;
 }) {
   // カルテの「戻る」でこのカレンダーに戻れるように遷移元を渡す。
   const karteLinkState = useKarteLinkState();
@@ -696,6 +872,11 @@ function SurgeryCardActions({
 
       <span className="surgery-calendar__card-menu">
         <RowMenu label="この手術の操作" escapesClipping>
+          {/* 申込内容の修正。カルテへ行かなくても直せるように、カレンダーからも
+              同じ編集フォームを開く(可否もカルテと同じで進捗では絞らない)。 */}
+          <button type="button" className="row-menu__item" onClick={() => onEdit(row)}>
+            編集
+          </button>
           {patient ? (
             <Link
               to={`/patients/${patient.id}/karte`}
@@ -768,6 +949,8 @@ function WeekView({
   const [moving, setMoving] = useState<{ row: SurgeryWorklistRow; target: SurgeryMoveTarget } | null>(
     null,
   );
+  // 申込内容を直す手術。週ビューは時刻を持てないので、新規登録は日ビューだけに置く。
+  const [editing, setEditing] = useState<SurgeryWorklistRow | null>(null);
 
   const loading = results.some((result) => result.isLoading);
   const error = results.find((result) => result.error)?.error;
@@ -852,6 +1035,7 @@ function WeekView({
             mode="week"
             rangeRows={weekRows}
             onCardPointerDown={dragging.start}
+            onEdit={setEditing}
             draggingOrderId={dragging.drag?.item.order.id}
           />
         }
@@ -903,6 +1087,7 @@ function WeekView({
                             else cellRefs.current.delete(key);
                           }}
                           onChipPointerDown={dragging.start}
+                          onEdit={setEditing}
                           draggingOrderId={dragging.drag?.item.order.id}
                           dropTarget={previewKey === `${d}|${room.id}`}
                         />
@@ -923,6 +1108,8 @@ function WeekView({
           onClose={() => setMoving(null)}
         />
       )}
+
+      {editing && <SurgeryOrderEditModal row={editing} onClose={() => setEditing(null)} />}
     </>
   );
 }
@@ -935,6 +1122,7 @@ function WeekCell({
   onOpen,
   cellRef,
   onChipPointerDown,
+  onEdit,
   draggingOrderId,
   dropTarget,
 }: {
@@ -945,6 +1133,7 @@ function WeekCell({
   onOpen: () => void;
   cellRef: (el: HTMLTableCellElement | null) => void;
   onChipPointerDown: (row: SurgeryWorklistRow, event: React.PointerEvent) => void;
+  onEdit: (row: SurgeryWorklistRow) => void;
   draggingOrderId?: string;
   /** ここに落ちる予定。 */
   dropTarget: boolean;
@@ -975,14 +1164,22 @@ function WeekCell({
         .filter(Boolean)
         .join(" ")}
     >
-      <button
-        type="button"
+      {/* セルを押すとその日の日ビューへ降りる。中にチップごとのケバブ(button)を
+          置くので、押せる箱そのものは button ではなく div にする。 */}
+      <div
+        role="button"
+        tabIndex={0}
         className={
           hasConflict
             ? "surgery-calendar__cell surgery-calendar__cell--conflict"
             : "surgery-calendar__cell"
         }
         onClick={onOpen}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          e.preventDefault();
+          onOpen();
+        }}
         title={`${room.name} ${date} の日ビューを開く`}
       >
         {dayBlocks.length > 0 && (
@@ -1007,24 +1204,43 @@ function WeekCell({
               const isDragging =
                 entry.row.order.id != null && entry.row.order.id === draggingOrderId;
               return (
-                <span
-                  key={entry.row.order.id}
-                  className={[
-                    "surgery-calendar__chip",
-                    movable ? "surgery-calendar__chip--movable" : "",
-                    isDragging ? "surgery-calendar__chip--dragging" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  onPointerDown={movable ? (e) => onChipPointerDown(entry.row, e) : undefined}
-                >
-                  {entry.summary.scheduledTime || "時刻未定"} {items[0]?.name ?? "術式なし"}
+                <span key={entry.row.order.id} className="surgery-calendar__chip-row">
+                  <span
+                    className={[
+                      "surgery-calendar__chip",
+                      movable ? "surgery-calendar__chip--movable" : "",
+                      isDragging ? "surgery-calendar__chip--dragging" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onPointerDown={movable ? (e) => onChipPointerDown(entry.row, e) : undefined}
+                  >
+                    {entry.summary.scheduledTime || "時刻未定"} {items[0]?.name ?? "術式なし"}
+                  </span>
+                  {/* pointerdown はチップのドラッグ開始を、click はセルの
+                      「日ビューを開く」を止める。どちらも止めないとメニューを
+                      押しただけで手術が動いたり日ビューへ落ちたりする。 */}
+                  <span
+                    className="surgery-calendar__chip-menu"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <RowMenu label="この手術の操作" escapesClipping>
+                      <button
+                        type="button"
+                        className="row-menu__item"
+                        onClick={() => onEdit(entry.row)}
+                      >
+                        編集
+                      </button>
+                    </RowMenu>
+                  </span>
                 </span>
               );
             })}
           </>
         )}
-      </button>
+      </div>
     </td>
   );
 }

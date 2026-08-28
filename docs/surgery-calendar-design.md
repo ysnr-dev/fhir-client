@@ -120,9 +120,10 @@
 カードのドラッグを始め、押す前にカードが動く。
 カレンダーは `overflow` の中にあるので `RowMenu` は `escapesClipping` で開く。
 
-［提案］週ビューのチップには操作を付けない。チップはセル(日ビューへ降りる
-ボタン)の中にあり、button の入れ子は不正になる。週ビューは日を選ぶための画面で、
-1 件ごとの操作は日ビューへ降りてから行う。
+［改訂］当初は「週ビューのチップには操作を付けない(セルが button なので入れ子に
+なる)」としていたが、§2.6 で修正の導線を入れるときにセルを `div[role=button]` へ
+変えた。チップごとのケバブは**編集だけ**に絞る —— 進捗の操作は時刻の見える日ビュー
+でするもので、週ビューは日を選ぶ画面という位置づけは変えない。
 
 ### 2.2 週ビュー(横 = 曜日、縦 = 手術室)
 
@@ -226,6 +227,69 @@
 
 ［導出］`truncated` のときは「重なりなし」も「件数」も嘘になる。日ビュー・週ビュー
 どちらでもその旨を必ず出す(`SurgeryRoomDaySchedule` と同じ扱い)。
+
+### 2.6 カレンダーからの登録・修正
+
+［提案］**カルテ右ペインと同じフォームをモーダルで開く**(`SurgeryOrderModals` が
+`SurgeryOrderCreatePanel` / `SurgeryOrderEditPanel` をそのまま包む)。手術部が使う
+入口を増やすだけで、申込の中身(術式・スタッフ・麻酔・準備)は二重に持たない。
+できるオーダーもカルテからの申込と同じ —— `buildSurgeryOrderBundle` は Task を
+作らないので、進捗は「申込済」から始まる。
+
+#### 新規登録: 空き枠を掴む
+
+日ビューの列の空いているところを**縦に引く**と、その範囲(日付・入室時刻・所要時間・
+手術室)を初期値にした登録フォームが開く。押しただけなら所要時間は空にして、術式を
+選んだときのマスタ既定値に任せる(`SurgeryOrderForm.addItem` は
+`current.durationMinutes ||` なので、引いて決めた値は上書きされない)。
+カレンダーは患者が決まっていないので、入院登録(`AdmissionModal`)と同じ
+**患者を選ぶ → 中身を書く**の 2 段階にし、検索は `AdmissionPatientSearch` を借りる。
+
+［導出］**引いている間ずっと入室〜退室と所要時間を出す**(`.surgery-calendar__slot-select`)。
+枠を決める操作で見たいのは終わりの位置ではなく「何分か」で、それはフォームに入る値
+そのもの。見出しにも同じ範囲を出して、モーダルが開いた後もどの枠か分かるようにする。
+
+［導出］**掴む前にマウスの下の 1 枠を薄く塗る**(`.surgery-calendar__slot-hover`)。
+列の中は罫線が 1 時間おきにしか無く、どこから始まるのかが掴む前に分からないため。
+落とし先(点線)より弱い塗りにして、カードを掴んでいる間は出さない。
+
+［導出］刻みはカードの移動(5 分)より粗い **15 分**。始まりは切り捨て、終わりは
+切り上げて、掴んだ範囲を必ず含む 1 枠以上にする。上へ引いても下へ引いても同じ。
+
+［実装］カード(とカード上のボタン・ケバブ)の上は除く。`RowMenu` は非ポータルなので
+`closest(".surgery-calendar__card")` で見分けられる。割当科の帯は背景でしかないので
+その上も空き枠として扱う。
+
+［実装］**click ではなく pointerup で開く**。カードを掴んで同じ列に落とすと click は
+列の本体まで上がってくるので、click で開くと移動確認と登録が同時に出る。pointerdown
+がカードの上かどうかで入口を分ければ、両者は最初から混ざらない。
+
+［実装］掴んでいる範囲は state だけでなく **ref にも持つ**。押してすぐ離すと
+pointerdown の `setState` が反映される前に pointerup が走り、state だけだと
+「押しただけ」を取り落とす。列の外へ出ても引き続けられるように
+`setPointerCapture` する。
+
+［提案］週ビューには空き枠登録を置かない。セルは 1 日ぶんの箱で入室時刻も所要時間も
+決められず、押したら日ビューへ降りる既存の動きをそのまま残す。
+
+#### 修正: カードのケバブから
+
+日ビューのカード・週ビューのチップ・未確定リストのカードの 3 か所のケバブに「編集」を
+足す。開くのはカルテと同じ編集フォームなので、**編集できる範囲も可否もカルテと同じ**
+(進捗では絞らない) —— 入口で差をつけると「カルテでは直せるのにカレンダーでは直せない」
+になる。患者は `_include` で来た `row.patient` を第一候補に、無ければ
+`order.subject` から拾う。
+
+［実装］登録の mutation(`useCreatePrescription`)は他オーダーと共用で
+`["ServiceRequest","search"]` しか無効化しない。カレンダーは別のキーなので、
+登録直後のカードを出すために `SurgeryOrderCreateModal` の側で
+`surgery-worklist` / `surgery-unscheduled` を落とす。更新
+(`useUpdateSurgeryOrder`)は `["ServiceRequest"]` を丸ごと無効化するので何も要らない。
+
+［実装］依頼科・依頼医師はヘッダーの `OrderContextPicker` を使う。カルテ画面
+限定の表示だったものを**常時表示**にした(オーダーを作る画面がカルテだけでは
+なくなったため)。未選択でも登録は通る(`applyOrderContext` が requester を付けない
+だけ)ので、モーダルの先頭に注記を出すに留める。
 
 ---
 
@@ -350,6 +414,7 @@
 | 既存の改修 | `SurgeryWorklistPage`(カレンダータブ)、`SurgeryOrderForm` / `SurgeryScheduleModal`(登録前の確認)、`SurgeryRoomDaySchedule`(割当の表示 + 判定の共通化) |
 | ドラッグ | `hooks/useCardDrag.ts`、`SurgeryMoveConfirmModal`、`buildSurgeryMoveBundle` / `useMoveSurgerySchedule`、`surgeryConflictHelpers` の `isSurgeryMovable` / `snapMinutes` |
 | 未確定リスト | `SurgeryPendingPanel`(§2.4)、`surgeryCalendarLayout.ts`(分割位置の保存)、`KarteSplitter` の再利用 |
+| 登録・修正 | `SurgeryOrderModals`(`SurgeryOrderCreateModal` / `SurgeryOrderEditModal`。中身はカルテと同じ `SurgeryOrderCreatePanel` / `SurgeryOrderEditPanel`、患者検索は `AdmissionPatientSearch` を再利用)、`SurgeryOrderCreatePanel` の `defaultSchedule`、`RoomColumn` の空き枠の下見・範囲選択(`SLOT_SNAP_MINUTES`)、`App` のヘッダー(`OrderContextPicker` を常時表示) |
 | カード | `SurgeryCalendar` の `SurgeryCard` / `SurgeryCardActions`(患者情報は `PatientKana` / `ageWithMonthsLabel` / `genderLabel`、操作は `surgeryTaskActions` / `useUpdateSurgeryTaskStatus` / `SurgeryPerformModal` を一覧タブと共用) |
 
 ### 5.1 §5.5 の表示は残す
@@ -370,9 +435,10 @@
 2. **月ビュー**: 週より広い範囲の空き探し。7 本のクエリを 30 本に増やすことになるので、
    日付ごとの件数だけを返す上流の `$distinct-dates`(件数モード。予約枠の月カレンダーが
    使っている)に相当するものが `ServiceRequest` にも要る。
-3. **ドラッグでの所要時間の変更**: カードの下端を掴んで伸縮させる(リサイズ)は
-   持っていない。所要時間はカルテの編集フォームで直す。移動(§2.3)と同じ確認を
-   挟む形にすれば足せる。
+3. **既存カードのリサイズ**: 新規は空き枠を引いて所要時間まで決められる(§2.6)が、
+   **登録済みのカードの下端を掴んで伸縮させる**のは持っていない。所要時間は編集フォーム
+   (カルテからでもカードのケバブからでも同じもの)で直す。空き枠の範囲選択と同じ計算
+   (`snapRange`)が使えるので、移動(§2.3)と同じ確認を挟む形にすれば足せる。
 4. **ブロックスケジュールの一括生成**: 今は 1 行ずつ登録する。`SlotGenerateModal` と
    同じ「曜日 × 時間帯をまとめて作る」が欲しくなったら足す。
 5. **祝日**: 週ビューの曜日色は土日だけ。祝日マスタを持っていないので、祝日に

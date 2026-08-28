@@ -8824,6 +8824,61 @@ body.page-wide #root {
   margin-top: 8px;
 }
 
+/* 空いているところを掴んで引くとその範囲で手術を登録できる(カードの上は除く)。
+   touch-action はタッチで縦に引くのをスクロールに取られないようにする。 */
+.surgery-calendar__col-body {
+  cursor: cell;
+  touch-action: none;
+}
+
+/* 空き枠の下見。マウスの下の 1 枠を薄く塗るだけ —— これから引く範囲の起点なので、
+   落とし先(点線)より弱く、罫線は動かさない。 */
+.surgery-calendar__slot-hover {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+/* 引いている最中の範囲。登録される予定そのものなので、カードと同じ実線の箱にする
+   (点線の落とし先とは別物 —— こちらはまだ無い予定を作っている)。 */
+.surgery-calendar__slot-select {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 2px 4px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+/* 所要時間は結果の数字なので、時間帯より一段弱く添える。 */
+.surgery-calendar__slot-duration {
+  font-weight: 400;
+}
+
 /* 時刻の目盛り。罫線の位置に文字の上端を合わせる。 */
 .surgery-calendar__hour {
   position: absolute;
@@ -9196,11 +9251,28 @@ body.page-wide #root {
   color: var(--text-h);
 }
 
+/* チップ 1 行 = 手術の見出し + ケバブ。チップ側だけを伸ばして省略を効かせる。 */
+.surgery-calendar__chip-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .surgery-calendar__chip {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text);
+}
+
+/* セルは狭いので、日ビューのカードと同じくらいまでトリガーを詰める。 */
+.surgery-calendar__chip-menu .row-menu__trigger {
+  padding: 0 3px;
+  font-size: 11px;
+  line-height: 1.2;
+  min-width: 0;
 }
 
 /* 日程確定・申込フォームに出す割当の行。警告ではないので地味に置く。 */

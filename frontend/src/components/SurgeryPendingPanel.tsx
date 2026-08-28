@@ -34,6 +34,8 @@ interface Props {
    */
   rangeRows: SurgeryWorklistRow[];
   onCardPointerDown: (row: SurgeryWorklistRow, event: React.PointerEvent) => void;
+  /** 申込内容そのものを直す(カルテと同じ編集フォームを開く)。 */
+  onEdit: (row: SurgeryWorklistRow) => void;
   /** 掴んでいるカード。元の位置は薄く出す。 */
   draggingOrderId?: string;
 }
@@ -42,6 +44,7 @@ export function SurgeryPendingPanel({
   mode,
   rangeRows,
   onCardPointerDown,
+  onEdit,
   draggingOrderId,
 }: Props) {
   // 日程未定は一覧タブと同じクエリ(queryKey が同じなので読み直しは起きない)。
@@ -83,6 +86,7 @@ export function SurgeryPendingPanel({
             kind="dateless"
             onCardPointerDown={onCardPointerDown}
             onSchedule={setScheduling}
+            onEdit={onEdit}
             draggingOrderId={draggingOrderId}
           />
           <PendingGroup
@@ -91,6 +95,7 @@ export function SurgeryPendingPanel({
             kind="roomless"
             onCardPointerDown={onCardPointerDown}
             onSchedule={setScheduling}
+            onEdit={onEdit}
             draggingOrderId={draggingOrderId}
           />
           {/* 週ビューでは空配列を渡しているので、この組は出ない。 */}
@@ -100,6 +105,7 @@ export function SurgeryPendingPanel({
             kind="timeless"
             onCardPointerDown={onCardPointerDown}
             onSchedule={setScheduling}
+            onEdit={onEdit}
             draggingOrderId={draggingOrderId}
           />
         </>
@@ -120,6 +126,7 @@ function PendingGroup({
   kind,
   onCardPointerDown,
   onSchedule,
+  onEdit,
   draggingOrderId,
 }: {
   title: string;
@@ -127,6 +134,7 @@ function PendingGroup({
   kind: PendingKind;
   onCardPointerDown: (row: SurgeryWorklistRow, event: React.PointerEvent) => void;
   onSchedule: (row: SurgeryWorklistRow) => void;
+  onEdit: (row: SurgeryWorklistRow) => void;
   draggingOrderId?: string;
 }) {
   // 空の組は出さない(3 つの見出しが常に並ぶと、何が残っているのかが読みにくい)。
@@ -146,6 +154,7 @@ function PendingGroup({
               kind={kind}
               onPointerDown={onCardPointerDown}
               onSchedule={onSchedule}
+              onEdit={onEdit}
               dragging={row.order.id != null && row.order.id === draggingOrderId}
             />
           </li>
@@ -167,12 +176,14 @@ function PendingCard({
   kind,
   onPointerDown,
   onSchedule,
+  onEdit,
   dragging,
 }: {
   row: SurgeryWorklistRow;
   kind: PendingKind;
   onPointerDown: (row: SurgeryWorklistRow, event: React.PointerEvent) => void;
   onSchedule: (row: SurgeryWorklistRow) => void;
+  onEdit: (row: SurgeryWorklistRow) => void;
   dragging: boolean;
 }) {
   const karteLinkState = useKarteLinkState();
@@ -219,6 +230,10 @@ function PendingCard({
               onClick={() => onSchedule(row)}
             >
               日程を確定
+            </button>
+            {/* 日程だけでなく申込の中身を直したいとき(術式・スタッフの変更)。 */}
+            <button type="button" className="row-menu__item" onClick={() => onEdit(row)}>
+              編集
             </button>
             {patient ? (
               <Link
