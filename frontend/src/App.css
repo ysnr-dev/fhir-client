@@ -9626,3 +9626,148 @@ td.surgery-calendar__cell--drop-target {
   box-sizing: border-box;
   resize: vertical;
 }
+
+/* ---- 食事タブの月カレンダー(docs/meal-order-design.md) ---- */
+
+.meal-calendar__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.meal-calendar__toolbar button {
+  padding: 2px 10px;
+  font-size: 12px;
+}
+
+.meal-calendar__month {
+  font-size: 13px;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+  min-width: 6.5em;
+  text-align: center;
+}
+
+/* 7 列固定の暦。カルテの左ペインは幅が変わるので列幅は等分にし、
+   マスの高さだけ最低値を決めて中身(食種・主食)で伸びるようにする。 */
+.meal-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.meal-calendar__weekday {
+  background: var(--surface-panel);
+  padding: 4px;
+  font-size: 11px;
+  color: var(--text);
+  text-align: center;
+}
+
+.meal-calendar__cell {
+  background: var(--bg);
+  min-height: 76px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* 月内のマスはすべてボタン(押した日で編集か新規登録かが決まる)。暦を埋める面なので
+   ボタンらしい見た目にはせず、hover でだけ押せると分かるようにする。 */
+button.meal-calendar__cell {
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.meal-calendar__cell:hover {
+  background: var(--surface-panel);
+}
+
+/* 前後の月にはみ出したマス。日付だけ薄く置いて、週の行を揃えるためだけに使う。 */
+.meal-calendar__cell--outside {
+  background: var(--surface-panel);
+}
+
+.meal-calendar__cell--outside .meal-calendar__day-number {
+  opacity: 0.4;
+}
+
+.meal-calendar__cell--saturday .meal-calendar__day-number {
+  color: #2a78d6;
+}
+
+.meal-calendar__cell--sunday .meal-calendar__day-number {
+  color: #d32f2f;
+}
+
+.meal-calendar__cell--today {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.meal-calendar__day {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.meal-calendar__day-number {
+  font-size: 12px;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 1 マスの中の 1 オーダー。押す先はマス全体で決まるので、ここは表示だけの面。 */
+.meal-calendar__entry {
+  display: flex;
+  flex-direction: column;
+  /* グローバルの button が中央寄せなので、行を左端から始めるために明示する。 */
+  align-items: stretch;
+  gap: 1px;
+  width: 100%;
+  padding: 3px 4px;
+  border: none;
+  border-radius: 4px;
+  background: var(--surface-panel);
+  color: var(--text-h);
+  text-align: left;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* 食事が変わった日(そのオーダーが始まった日)。暦を眺めたときに変更点が
+   拾えるよう、左に色帯を立てて印を添える。 */
+.meal-calendar__entry--changed {
+  border-left: 2px solid var(--accent);
+}
+
+.meal-calendar__changed-badge {
+  align-self: flex-start;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 10px;
+}
+
+.meal-calendar__diet {
+  color: var(--text-h);
+}
+
+/* 1 日の途中で食事が変わった日に、そのオーダーが担当する食事(朝・昼 など)。 */
+.meal-calendar__timings {
+  color: var(--accent);
+  font-size: 10px;
+}
+
+.meal-calendar__staple {
+  color: var(--text);
+}

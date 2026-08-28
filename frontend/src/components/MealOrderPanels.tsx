@@ -25,6 +25,11 @@ interface MealOrderCreatePanelProps {
   patientId: string;
   /** DO(内容を流用して新規登録)する元の ServiceRequest id。 */
   sourceSrId?: string;
+  /**
+   * 開始日の既定。暦(カルテの「食事」タブ)で食事の無い日を押したときに、その日を渡す。
+   * 未指定なら当日から。
+   */
+  defaultStartDate?: string;
   defaultProblem?: ProblemRef;
   onSaved: () => void;
 }
@@ -32,6 +37,7 @@ interface MealOrderCreatePanelProps {
 export function MealOrderCreatePanel({
   patientId,
   sourceSrId,
+  defaultStartDate,
   defaultProblem,
   onSaved,
 }: MealOrderCreatePanelProps) {
@@ -41,13 +47,13 @@ export function MealOrderCreatePanel({
   const admission = useDefaultOrderSetting(patientId);
   const requester = useOrderContext();
 
-  const initialValues = useMemo(
-    () =>
-      source.initialValues
-        ? buildDoMealOrderForm(source.initialValues)
-        : { ...emptyMealOrderForm(), problem: defaultProblem ?? null },
-    [source.initialValues, defaultProblem],
-  );
+  const initialValues = useMemo(() => {
+    const base = source.initialValues
+      ? buildDoMealOrderForm(source.initialValues)
+      : { ...emptyMealOrderForm(), problem: defaultProblem ?? null };
+    // 暦から開いたときは押した日から始める(DO でも当日ではなくその日に合わせる)。
+    return defaultStartDate ? { ...base, startDate: defaultStartDate } : base;
+  }, [source.initialValues, defaultProblem, defaultStartDate]);
 
   // 食事変更のときに終了させる候補。新しい食事の開始日にまだ続いているものだけ。
   const active = useActiveMealOrders(patientId, initialValues.startDate);
@@ -94,6 +100,10 @@ interface MealOrderEditPanelProps {
   onSaved: () => void;
 }
 
+/**
+ * 編集は「そのオーダー自体を直す」だけ。その日から別の食事にしたい(食事変更)ときは、
+ * 暦で始まりの日以外を押すと内容を引き継いだ登録が開くので、そちらの担当になる。
+ */
 export function MealOrderEditPanel({ patientId, srId, onSaved }: MealOrderEditPanelProps) {
   const updateMealOrder = useUpdateMealOrder();
   const { serviceRequest, initialValues, ready, patientMismatch, error } = useMealOrderInitialValues(
@@ -128,7 +138,6 @@ export function MealOrderEditPanel({ patientId, srId, onSaved }: MealOrderEditPa
             submitting={updateMealOrder.isPending}
             submitError={updateMealOrder.error}
             submitLabel="更新"
-            editing
           />
         )
       )}

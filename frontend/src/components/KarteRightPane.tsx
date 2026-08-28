@@ -46,7 +46,8 @@ export type KartePaneState =
   | { kind: "treatment-order-edit"; srId: string }
   | { kind: "surgery-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "surgery-order-edit"; srId: string }
-  | { kind: "meal-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  // startDate: 暦(食事タブ)で食事の無い日を押したときの、その日。
+  | { kind: "meal-order-create"; sourceSrId?: string; problem?: ProblemRef; startDate?: string }
   | { kind: "meal-order-edit"; srId: string }
   | { kind: "qr-create"; problem?: ProblemRef }
   | { kind: "qr-edit"; qrId: string }
@@ -121,8 +122,10 @@ function paneKey(state: KartePaneState): string {
     case "endoscopy-order-create":
     case "treatment-order-create":
     case "surgery-order-create":
-    case "meal-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
+    // 食事は暦の別の日を押したときも初期値(開始日)が変わるので、日付もキーに入れる。
+    case "meal-order-create":
+      return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}:${state.startDate ?? ""}`;
     case "note-create":
     case "qr-create":
     case "vital-create":
@@ -395,6 +398,7 @@ function PaneContent({
         <MealOrderCreatePanel
           patientId={patientId}
           sourceSrId={state.sourceSrId}
+          defaultStartDate={state.startDate}
           defaultProblem={state.problem}
           onSaved={onSaved}
         />

@@ -152,12 +152,18 @@ export function emptyMealStaples(): MealStaples {
   return { breakfast: null, lunch: null, dinner: null };
 }
 
-/** 全食同じ主食か(違う日だけ食事ごとの行を出すための判定)。 */
-export function uniformStaple(staples: MealStaples): MealItemRef | null {
-  const first = staples[MEAL_TIMING_OPTIONS[0].code];
+/**
+ * 対象の食事すべてで同じ主食か(違うときだけ食事ごとの行を出すための判定)。
+ * timings は既定で朝・昼・夕の全部。カレンダーはオーダーが担当する食事だけを渡す。
+ */
+export function uniformStaple(
+  staples: MealStaples,
+  timings: readonly MealTiming[] = MEAL_TIMING_OPTIONS.map((t) => t.code),
+): MealItemRef | null {
+  const first = staples[timings[0]];
   if (!first || first === MEAL_SKIPPED) return null;
-  const same = MEAL_TIMING_OPTIONS.every((t) => {
-    const choice = staples[t.code];
+  const same = timings.every((timing) => {
+    const choice = staples[timing];
     return choice !== null && choice !== MEAL_SKIPPED && choice.code === first.code;
   });
   return same ? first : null;
@@ -406,28 +412,49 @@ export function mealOrderEnd(sr: fhir4.ServiceRequest): string {
   return sr.extension?.find((e) => e.url === MEAL_ORDER_END_EXT_URL)?.valueDateTime ?? "";
 }
 
-export function summarizeMealOrder(sr: fhir4.ServiceRequest): MealOrderSummary {
-  const end = mealOrderEnd(sr);
+/**
+ * 主食の表示のまとめ。対象の食事すべてで同じなら stapleName に 1 つ、違えば
+ * stapleLines に食事ごとの行を入れる(どちらか一方だけが埋まる)。
+ *
+ * timings を絞れるのはカレンダー用。1 日の途中で食事が変わった日は、オーダーが
+ * 担当する食事(朝だけ・夕だけ など)の主食だけを出したい。
+ */
+export function mealStapleSummary(
+  sr: fhir4.ServiceRequest,
+  timings: readonly MealTiming[] = MEAL_TIMING_OPTIONS.map((t) => t.code),
+): { stapleName: string; stapleLines: MealStapleLine[] } {
   const staples = parseMealStaples(sr);
-  const uniform = uniformStaple(staples);
-  // 全食同じなら 1 行にまとめ、違うところがあるときだけ朝・昼・夕を並べる。
-  const anySpecified = MEAL_TIMING_OPTIONS.some((t) => staples[t.code] !== null);
+  const uniform = uniformStaple(staples, timings);
+  const anySpecified = timings.some((timing) => staples[timing] !== null);
 
   return {
-    dietName: sr.code?.text || codingBySystem(sr.code?.coding, MEAL_TYPE_SYSTEM)?.display || "",
     stapleName: uniform?.name ?? "",
     stapleLines:
       uniform || !anySpecified
         ? []
-        : MEAL_TIMING_OPTIONS.map((t) => ({
-            timingDisplay: t.display,
-            text: mealStapleChoiceText(staples[t.code]),
+        : timings.map((timing) => ({
+            timingDisplay: mealTimingDisplay(timing),
+            text: mealStapleChoiceText(staples[timing]),
           })),
+  };
+}
+
+export function summarizeMealOrder(sr: fhir4.ServiceRequest): MealOrderSummary {
+  const end = mealOrderEnd(sr);
+
+  return {
+    dietName: mealOrderDietName(sr),
+    ...mealStapleSummary(sr),
     startLabel: mealPointLabel(sr.occurrenceDateTime ?? ""),
     endLabel: end ? `${mealPointLabel(end)}まで` : "",
     continuing: !end,
     comment: orderComment(sr),
   };
+}
+
+/** 食種の名称。 */
+export function mealOrderDietName(sr: fhir4.ServiceRequest): string {
+  return sr.code?.text || codingBySystem(sr.code?.coding, MEAL_TYPE_SYSTEM)?.display || "";
 }
 
 /** 1 食ぶんの指定の表示名。 */
@@ -446,12 +473,99 @@ export function mealStapleText(summary: MealOrderSummary): string {
 }
 
 /**
- * 指定の日時点でまだ続いている食事オーダーか。終了を持たないオーダーは常に継続中。
- * 上流に「終了拡張が未来か」を問い合わせる術が無いので、候補を引いてからここで絞る。
+ * 指定の日以降まで続くオーダーか(終了を持たないオーダーは常に true)。暦が「その月に
+ * かかるオーダー」を選ぶのに使う。上流に「終了拡張が未来か」を問い合わせる術が無いので、
+ * 候補を引いてからここで絞る。
  */
-export function isMealOrderActiveOn(sr: fhir4.ServiceRequest, at: string): boolean {
+export function mealOrderEndsOnOrAfter(sr: fhir4.ServiceRequest, at: string): boolean {
   const end = mealOrderEnd(sr);
   return !end || end.slice(0, 10) >= at;
+}
+
+/**
+ * 指定の日に出ている食事オーダーか(その日までに始まり、まだ終わっていない)。
+ * 食事変更で終了させる候補を選ぶのに使う。まだ始まっていないオーダーを候補にすると、
+ * 開始より前の終了を立ててしまうので、開始日も見る。
+ */
+export function isMealOrderRunningOn(sr: fhir4.ServiceRequest, at: string): boolean {
+  const start = (sr.occurrenceDateTime ?? "").slice(0, 10);
+  if (!start || start > at) return false;
+  return mealOrderEndsOnOrAfter(sr, at);
+}
+
+// ---- どの日のどの食事にどのオーダーが効いているか ----
+//
+// 食事オーダーは「開始した食事から、終了の食事まで(終了が無ければずっと)」続く。
+// 開始・終了はどちらも `YYYY-MM-DDTHH:mm`(時刻は 08/12/18)なので、この文字列の
+// 辞書順がそのまま時間順になる。カレンダーはこの比較だけで各食事の担当を決める。
+
+/** 比較用のキー。タイムゾーンを落とした地方時の `YYYY-MM-DDTHH:mm`。 */
+function mealPointKey(date: string, timing: MealTiming): string {
+  return `${date}T${timingHour(timing)}:00`;
+}
+
+function mealPointKeyOf(dateTime: string): string {
+  return dateTime.slice(0, 16);
+}
+
+/**
+ * 指定の日・食事に効いているオーダー。候補が複数あるとき(データが乱れて期間が
+ * 重なっているとき)は、いちばん後に始まったものを採る。
+ */
+export function mealOrderAt(
+  orders: fhir4.ServiceRequest[],
+  date: string,
+  timing: MealTiming,
+): fhir4.ServiceRequest | undefined {
+  const point = mealPointKey(date, timing);
+  let found: fhir4.ServiceRequest | undefined;
+  let foundStart = "";
+
+  for (const order of orders) {
+    const start = mealPointKeyOf(order.occurrenceDateTime ?? "");
+    if (!start || start > point) continue;
+    const end = mealOrderEnd(order);
+    if (end && mealPointKeyOf(end) < point) continue;
+    if (!found || start > foundStart) {
+      found = order;
+      foundStart = start;
+    }
+  }
+  return found;
+}
+
+/** その日に始まる(= その日に食事が変わった)オーダー。 */
+export function mealOrdersStartingOn(
+  orders: fhir4.ServiceRequest[],
+  date: string,
+): fhir4.ServiceRequest[] {
+  return orders.filter((order) => (order.occurrenceDateTime ?? "").slice(0, 10) === date);
+}
+
+/** カレンダーの 1 マスに出す、1 オーダーぶんの担当範囲。 */
+export interface MealDayEntry {
+  order: fhir4.ServiceRequest;
+  /** そのオーダーがその日に担当する食事。 */
+  timings: MealTiming[];
+}
+
+/**
+ * 1 日ぶんの食事。朝・昼・夕それぞれの担当オーダーを引き、同じオーダーが続く
+ * ぶんはまとめる(1 日の途中で食事が変わった日だけ 2 つ以上になる)。
+ */
+export function mealDayEntries(
+  orders: fhir4.ServiceRequest[],
+  date: string,
+): MealDayEntry[] {
+  const entries: MealDayEntry[] = [];
+  for (const timing of MEAL_TIMING_OPTIONS) {
+    const order = mealOrderAt(orders, date, timing.code);
+    if (!order) continue;
+    const last = entries[entries.length - 1];
+    if (last && last.order.id === order.id) last.timings.push(timing.code);
+    else entries.push({ order, timings: [timing.code] });
+  }
+  return entries;
 }
 
 // ---- 編集フォームへの復元 ----

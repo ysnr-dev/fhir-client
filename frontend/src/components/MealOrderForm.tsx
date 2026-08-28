@@ -26,14 +26,13 @@ import { ProblemSelect } from "./ProblemSelect";
 interface MealOrderFormProps {
   patientId: string;
   initialValues: MealOrderFormValues;
-  /** 継続中の食事オーダー(新規登録のみ)。食事変更で終了させる候補として出す。 */
+  /** 継続中の食事オーダー。食事変更で終了させる候補として出す。 */
   activeOrders?: fhir4.ServiceRequest[];
   /** 送信。closingIds は同時に終了させる継続中オーダーの id。 */
   onSubmit: (values: MealOrderFormValues, closingIds: string[]) => void;
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
-  editing?: boolean;
 }
 
 /** 開始・終了の前後比較に使う並び順の番号。 */
@@ -49,7 +48,6 @@ export function MealOrderForm({
   submitting,
   submitError,
   submitLabel = "登録",
-  editing = false,
 }: MealOrderFormProps) {
   const [values, setValues] = useState<MealOrderFormValues>(initialValues);
   const [validationError, setValidationError] = useState("");
@@ -124,33 +122,41 @@ export function MealOrderForm({
     return choice?.code ?? "";
   }
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-
-    if (!values.diet) return setValidationError("食種を選んでください。");
+  /**
+   * 入力の検証。startDate は「そのオーダーが始まる日」で、食事変更として登録する
+   * ときだけ暦で押した日に差し替わる(終了との前後もその日で見る)。
+   */
+  function validate(startDate: string): string {
+    if (!values.diet) return "食種を選んでください。";
     // 1 日を通して食事が出ないなら、それは欠食ではなく食止めの食種。
     if (
       !values.dietIsFasting &&
       MEAL_TIMING_OPTIONS.every((t) => values.staples[t.code] === MEAL_SKIPPED)
     ) {
-      return setValidationError(
-        "すべての食事が欠食のときは、食種で「食止め」を選んでください。",
-      );
+      return "すべての食事が欠食のときは、食種で「食止め」を選んでください。";
     }
-    if (!values.startDate) return setValidationError("開始日を入れてください。");
+    if (!startDate) return "開始日を入れてください。";
     if (values.endDate) {
       const beforeStart =
-        values.endDate < values.startDate ||
-        (values.endDate === values.startDate &&
+        values.endDate < startDate ||
+        (values.endDate === startDate &&
           timingIndex(values.endTiming) < timingIndex(values.startTiming));
-      if (beforeStart) return setValidationError("終了は開始と同じか、それより後にしてください。");
+      if (beforeStart) return "終了は開始と同じか、それより後にしてください。";
     }
-    setValidationError("");
+    return "";
+  }
 
-    onSubmit(
-      { ...values, problem: refreshProblemDisplay(values.problem, problemOptions) },
-      closingIds,
-    );
+  function submitValues(): MealOrderFormValues {
+    return { ...values, problem: refreshProblemDisplay(values.problem, problemOptions) };
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const error = validate(values.startDate);
+    setValidationError(error);
+    if (error) return;
+
+    onSubmit(submitValues(), closingIds);
   }
 
   // 前の食事をいつまでにするか。チェックの説明にそのまま出す。
@@ -293,7 +299,7 @@ export function MealOrderForm({
 
       {/* 食事変更。新しい食事を出すと同時に、いま出ている食事を直前の食事で
           終える(2 本が並んで出続けるのを防ぐ)。 */}
-      {!editing && activeOrders.length > 0 && (
+      {activeOrders.length > 0 && (
         <fieldset>
           <legend>いま出ている食事</legend>
           {activeOrders.map((sr) => {

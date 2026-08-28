@@ -22,6 +22,7 @@ import {
 import { ErrorBanner } from "../components/ErrorBanner";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
 import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
+import { KarteMealTab } from "../components/KarteMealTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteSidePane } from "../components/KarteSidePane";
 import { VitalFlowsheetPanel } from "../components/VitalFlowsheetPanel";
@@ -635,6 +636,20 @@ export function KartePage() {
       );
     }
     if (key === "micro") return <KarteMicroResultTab {...props} />;
+    // 食事オーダーの編集も、登録と同じ右ペインで開く(暦は表示に徹する)。
+    if (key === "meal") {
+      return (
+        <KarteMealTab
+          patientId={patientId}
+          // オーダーが始まった日のマスは、そのオーダーの編集。
+          onEdit={(srId) => setPane({ kind: "meal-order-edit", srId })}
+          // それ以外の日は、その日に出ている食事を引き継いだ新規登録(= その日からの食事変更)。
+          onCreate={(date, sourceSrId) =>
+            setPane({ kind: "meal-order-create", sourceSrId, startDate: date })
+          }
+        />
+      );
+    }
     // 予約の日時変更は枠を選ぶ操作なので、登録と同じ右ペインで開く。
     if (key === "appointment") {
       return (

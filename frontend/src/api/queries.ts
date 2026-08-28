@@ -156,8 +156,9 @@ import {
 import { buildTreatmentPerformDeleteEntries } from "../fhir/treatmentResultHelpers";
 import {
   MEAL_ORDER_TYPE,
-  isMealOrderActiveOn,
+  isMealOrderRunningOn,
   isMealServiceRequest,
+  mealOrderEndsOnOrAfter,
 } from "../fhir/mealOrderHelpers";
 import {
   buildTreatmentTaskUpdate,
@@ -5884,9 +5885,38 @@ export function useActiveMealOrders(patientId: string | undefined, at: string) {
       );
       return serviceRequestsOf(bundle)
         .filter(isMealServiceRequest)
-        .filter((sr) => isMealOrderActiveOn(sr, at));
+        .filter((sr) => isMealOrderRunningOn(sr, at));
     },
     enabled: Boolean(patientId) && Boolean(at),
+  });
+}
+
+/**
+ * カレンダーに出す 1 か月ぶんの食事オーダー。
+ *
+ * 食事は開始したら次の指示まで続くので、その月に始まったものだけでは足りない
+ * (前の月から続いているオーダーがその月の食事を決めていることがある)。月末までに
+ * 始まった有効なオーダーを引き、月初より前に終わったものをここで落とす。
+ * 終了はローカル拡張なので上流では絞れない(useActiveMealOrders と同じ事情)。
+ */
+export function useMealOrderMonth(patientId: string | undefined, monthStart: string, monthEnd: string) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
+  params.set("status", "active");
+  params.set("occurrence", `le${monthEnd}`);
+  // 1 患者の食事オーダーは入院 1 回でせいぜい数十件なので 1 ページで足りる。
+  params.set("_count", "100");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "meal-month", patientId, monthStart, monthEnd],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      return serviceRequestsOf(bundle)
+        .filter(isMealServiceRequest)
+        .filter((sr) => mealOrderEndsOnOrAfter(sr, monthStart));
+    },
+    enabled: Boolean(patientId) && Boolean(monthStart) && Boolean(monthEnd),
   });
 }
 
