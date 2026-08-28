@@ -34,6 +34,12 @@
   color-scheme: light;
   color: var(--text);
   background: var(--bg);
+  /* スクロールバー。既定のものは幅も色も罫線より強く、送れる場所では常に出ている
+     バーが中身より目立ってしまう。細くしたうえで、つまみを罫線と同じ色・溝を地の
+     ままにして「送れる」ことだけが分かる程度に落とす。scrollbar-* は継承される
+     ので、ここに書けばページ全体にも枠の中(表・カレンダー・一覧)にも効く。 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
