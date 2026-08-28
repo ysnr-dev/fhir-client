@@ -241,7 +241,7 @@ function PendingCard({
                 state={returnLinkState}
                 className="row-menu__item"
               >
-                カルテを表示
+                カルテ表示
               </Link>
             ) : (
               <span className="row-menu__item row-menu__item--disabled">

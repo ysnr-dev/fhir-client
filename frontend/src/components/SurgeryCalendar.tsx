@@ -871,19 +871,18 @@ function SurgeryCardActions({
       ))}
 
       <span className="surgery-calendar__card-menu">
+        {/* 並びは「別の画面へ行く → この申込を直す → 進捗を戻す」。
+            カルテ表示は**どの進捗でも先頭**に置く —— 一番よく押すうえ、進捗によって
+            出たり消えたりする項目の下に置くと、カードごとに位置が変わって探す羽目になる。
+            進捗を戻す操作(取消・中止)は押し間違えると困るので、いちばん下にまとめる。 */}
         <RowMenu label="この手術の操作" escapesClipping>
-          {/* 申込内容の修正。カルテへ行かなくても直せるように、カレンダーからも
-              同じ編集フォームを開く(可否もカルテと同じで進捗では絞らない)。 */}
-          <button type="button" className="row-menu__item" onClick={() => onEdit(row)}>
-            編集
-          </button>
           {patient ? (
             <Link
               to={`/patients/${patient.id}/karte`}
               state={returnLinkState}
               className="row-menu__item"
             >
-              カルテを表示
+              カルテ表示
             </Link>
           ) : (
             <span className="row-menu__item row-menu__item--disabled">患者を読めていません</span>
@@ -897,6 +896,11 @@ function SurgeryCardActions({
               麻酔チャート
             </Link>
           )}
+          {/* 申込内容の修正。カルテへ行かなくても直せるように、カレンダーからも
+              同じ編集フォームを開く(可否もカルテと同じで進捗では絞らない)。 */}
+          <button type="button" className="row-menu__item" onClick={() => onEdit(row)}>
+            編集
+          </button>
           {secondary.map((action) => (
             <button
               key={action.next}

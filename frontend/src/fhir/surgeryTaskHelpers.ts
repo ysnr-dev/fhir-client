@@ -64,8 +64,10 @@ export interface SurgeryTaskAction {
 /**
  * 今のステータスから移れる先。
  *
- * 「取消」は 1 つ前に戻す操作(押し間違いの訂正)、「中止」は手術そのものを
- * 取りやめる操作で、別のもの。中止からは申込済に戻せる。
+ * 「受付取消」「入室取消」「実施取消」は 1 つ前に戻す操作(押し間違いの訂正)で、
+ * **取り消す対象を名前に入れる** —— 手術は受付から実施まで段が多く、ただの「取消」だと
+ * どこまで戻るのかがメニューの中で分からない。「中止」は手術そのものを取りやめる操作で、
+ * これらとは別のもの。中止からは申込済に戻せる。
  *
  * 「実施取消」は実施記録ごと消して入室中に戻す(他部門と違い記録を残さない。
  * 理由は docs/surgery-result-design.md)。
@@ -80,7 +82,7 @@ export function surgeryTaskActions(status: SurgeryTaskStatus): SurgeryTaskAction
     case "accepted":
       return [
         { label: "入室", next: "in-progress" },
-        { label: "取消", next: "requested", secondary: true },
+        { label: "受付取消", next: "requested", secondary: true },
         { label: "中止", next: "cancelled", secondary: true },
       ];
     case "in-progress":
