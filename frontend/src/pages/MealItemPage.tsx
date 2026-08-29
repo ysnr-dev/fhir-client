@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { MealItem, MealItemPayload } from "../api/masterClient";
 import {
+  useMealCategoryOptions,
   useMealItem,
   useMealItemMutations,
   useMealItemSearch,
@@ -22,6 +23,8 @@ interface Draft {
   kind: string;
   // 食止め(禁食)の食種か。食種のときだけ選べる。
   is_fasting: boolean;
+  // 種別(master_meal_categories)。食種のときだけ選べる。
+  category_code: string;
   valid_from: string;
   valid_to: string;
   display_order: string;
@@ -34,6 +37,7 @@ const emptyDraft: Draft = {
   name_kana: "",
   kind: "diet",
   is_fasting: false,
+  category_code: "",
   valid_from: "",
   valid_to: "",
   display_order: "",
@@ -48,6 +52,8 @@ function toPayload(draft: Draft): MealItemPayload {
     kind: draft.kind,
     // 主食は食止めにできない(backend 側でも同じ規則で落とす)。
     is_fasting: draft.kind === "diet" && draft.is_fasting,
+    // 種別も食種だけのもの。
+    category_code: (draft.kind === "diet" && draft.category_code) || null,
     valid_from: draft.valid_from || null,
     valid_to: draft.valid_to || null,
     display_order: draft.display_order ? Number(draft.display_order) : null,
@@ -63,6 +69,9 @@ export function MealItemPage() {
   const [editing, setEditing] = useState<number | "new" | null>(null);
 
   const list = useMealItemSearch(filters, page);
+  // 種別は一覧の名称表示と絞り込みの両方で使う。数件なので全件引く。
+  const categories = useMealCategoryOptions();
+  const categoryItems = categories.data?.items ?? [];
 
   const hasNext = list.data ? page * list.data.per < list.data.total : false;
 
@@ -103,6 +112,21 @@ export function MealItemPage() {
             <option value="staple">主食</option>
           </select>
         </label>
+        <label>
+          種別
+          {/* 種別は食種にしか付かないので、選ぶと実質「食種だけ」になる。 */}
+          <select
+            value={inputs.categoryCode ?? ""}
+            onChange={(e) => setInputs({ ...inputs, categoryCode: e.target.value })}
+          >
+            <option value="">すべて</option>
+            {categoryItems.map((category) => (
+              <option key={category.category_code} value={category.category_code}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="dose-conversion__checkbox">
           <input
             type="checkbox"
@@ -126,7 +150,7 @@ export function MealItemPage() {
         </div>
       </form>
 
-      <ErrorBanner error={list.error} />
+      <ErrorBanner error={list.error ?? categories.error} />
 
       <table className="master-search__table">
         <thead>
@@ -135,6 +159,7 @@ export function MealItemPage() {
             <th>名称</th>
             <th>カナ</th>
             <th className="rad-item__compact">区分</th>
+            <th className="rad-item__compact">種別</th>
             <th className="rad-item__compact">有効期間</th>
           </tr>
         </thead>
@@ -150,6 +175,12 @@ export function MealItemPage() {
                 {item.is_fasting && <span className="dose-conversion__badge">食止め</span>}
               </td>
               <td className="rad-item__compact">
+                {item.category_code
+                  ? (categoryItems.find((c) => c.category_code === item.category_code)?.name ??
+                    item.category_code)
+                  : ""}
+              </td>
+              <td className="rad-item__compact">
                 {(item.valid_from || item.valid_to) &&
                   `${item.valid_from ?? ""}〜${item.valid_to ?? ""}`}
               </td>
@@ -157,7 +188,7 @@ export function MealItemPage() {
           ))}
           {list.data && list.data.items.length === 0 && (
             <tr>
-              <td colSpan={5} className="master-search__empty">
+              <td colSpan={6} className="master-search__empty">
                 食事オーダー項目がありません
               </td>
             </tr>
@@ -204,6 +235,7 @@ interface ItemEditModalProps {
 function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
   const detail = useMealItem(itemId);
   const mutations = useMealItemMutations();
+  const categories = useMealCategoryOptions();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
 
   useEffect(() => {
@@ -215,6 +247,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       name_kana: d.name_kana ?? "",
       kind: d.kind,
       is_fasting: d.is_fasting,
+      category_code: d.category_code ?? "",
       valid_from: d.valid_from ?? "",
       valid_to: d.valid_to ?? "",
       display_order: d.display_order === null ? "" : String(d.display_order),
@@ -287,12 +320,33 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
               value={draft.kind}
               onChange={(e) => {
                 const kind = e.target.value;
-                // 主食に変えたら食止めは外す(backend でも検証される)。
-                setDraft({ ...draft, kind, is_fasting: kind === "diet" && draft.is_fasting });
+                // 主食に変えたら食止め・種別は外す(backend でも検証される)。
+                setDraft({
+                  ...draft,
+                  kind,
+                  is_fasting: kind === "diet" && draft.is_fasting,
+                  category_code: kind === "diet" ? draft.category_code : "",
+                });
               }}
             >
               <option value="diet">食種</option>
               <option value="staple">主食</option>
+            </select>
+          </label>
+          {/* 種別は食種だけのもの。主食に選ばせない(backend でも検証される)。 */}
+          <label>
+            種別
+            <select
+              value={draft.category_code}
+              onChange={(e) => setDraft({ ...draft, category_code: e.target.value })}
+              disabled={!isDiet}
+            >
+              <option value="">未分類</option>
+              {(categories.data?.items ?? []).map((category) => (
+                <option key={category.category_code} value={category.category_code}>
+                  {category.name}
+                </option>
+              ))}
             </select>
           </label>
           <label>

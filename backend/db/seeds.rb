@@ -344,3 +344,37 @@ if File.exist?(endoscopy_exam_types_csv)
 else
   puts "master_endoscopy_exam_types: #{endoscopy_exam_types_csv} not found, skipped"
 end
+
+# 術式の種別(分類)マスタ。db/seed_data/surgery_categories.csv（ヘッダー無し,
+# category_code,parent_code,name,name_kana,display_order）から投入する。
+# 医科点数表 第2章第10部 手術 第1節 手術料 の「第1款〜第11款」と、その中の
+# 部位区分を初期値とする(親が先に並んでいる前提。子から先に入れると親が無くて
+# 落ちる)。分類名は改定で変わりうるうえ、施設によって使う深さも違うので、投入後は
+# 画面で直す前提。既存行は上書きしない（施設で直した内容を消さない）。
+surgery_categories_csv = Rails.root.join("db/seed_data/surgery_categories.csv")
+if File.exist?(surgery_categories_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(surgery_categories_csv) do |row|
+    code = row[0].to_s.strip
+    name = row[2].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::SurgeryCategory.exists?(category_code: code)
+      skipped += 1
+      next
+    end
+
+    Master::SurgeryCategory.create!(
+      category_code: code,
+      parent_code: row[1].to_s.strip.presence,
+      name: name,
+      name_kana: row[3].to_s.strip.presence,
+      display_order: row[4].to_s.strip.presence&.to_i
+    )
+    loaded += 1
+  end
+  puts "master_surgery_categories: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_surgery_categories: #{surgery_categories_csv} not found, skipped"
+end

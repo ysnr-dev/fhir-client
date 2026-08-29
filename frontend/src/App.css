@@ -1010,6 +1010,14 @@ button:disabled {
   padding: 16px;
 }
 
+/* 名称で絞り込んで親が結果から外れた分類に「どこの下か」を添える注記
+   (術式の種別マスタ)。字下げでは段が分からなくなるため。 */
+.master-search__parent-hint {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--text-muted, #666);
+}
+
 .master-search__pager {
   display: flex;
   align-items: center;

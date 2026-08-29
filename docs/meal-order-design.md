@@ -212,7 +212,8 @@ FHIR 上でもはっきり別物になる。
 ## 3. マスタ
 
 ```text
-master_meal_items  -- 食種(kind=diet)と主食(kind=staple)。1 テーブル
+master_meal_items      -- 食種(kind=diet)と主食(kind=staple)。1 テーブル
+master_meal_categories -- 食種の種別(一般食・特別食 など)。1 段の分類
 ```
 
 ［提案］**食種と主食を 1 テーブルに入れた**。列構成が完全に同じで、FHIR 側は
@@ -221,7 +222,8 @@ CodeSystem の URI(`meal-type` / `meal-staple-food`)で既に区別している�
 同じやり方。
 
 主な列: `item_code`(一意) / `name` / `name_kana` / `kind` / `is_fasting` /
-`valid_from` / `valid_to` / `display_order` / `note` / `search_name` / `search_kana`。
+`category_code`(種別) / `valid_from` / `valid_to` / `display_order` / `note` /
+`search_name` / `search_kana`。
 
 - `short_name` は作らない(食種名は短く、カードにそのまま出る)
 - **エネルギー kcal の列も作らない**。［提案］SS-MIX2 の例(`一般食2000kcal`)どおり名称に
@@ -233,6 +235,21 @@ CodeSystem の URI(`meal-type` / `meal-staple-food`)で既に区別している�
 
 **seed は無い**。配布マスタが無く、食種は施設ごとに違うので画面から 1 件ずつ登録する
 (処置と同じ)。取込 API も付けていない。
+
+### 3.1 種別は食種だけのもの
+
+［提案］食種をまとめる**種別マスタ**(`master_meal_categories`)を別に持ち、
+食種から `category_code` でコード参照する。一般食・特別食(治療食)のような分類で、
+生理検査の検査種別と同じ 1 段のマスタ(`category_code` 2 桁 / `name` / `name_kana` /
+`valid_*` / `display_order` / `note` / `search_*`)。手術の種別と違い**入れ子にしない**
+──「一般食か特別食か」程度の粒度で、段を持たせる実務上の理由が無い。
+
+- 種別が付くのは**食種(`kind = diet`)だけ**。主食を分類する運用が無く、種別マスタに
+  食種用と主食用が混ざると選びにくくなる。`is_fasting` と同じくモデルと画面の両方で落とす
+- 種別を消したときは食種を消さず未分類(`category_code = NULL`)に戻す
+- オーダー画面の食種セレクトは種別ごとに `<optgroup>` でまとめる(種別が 1 件も
+  登録されていない施設では見出しが増えるだけなので、そのときは平らに並べる)
+- 種別に入っていない食種(未分類・消えた種別を指したまま)は「その他」にまとめる
 
 ---
 
@@ -257,7 +274,8 @@ model・テーブル・search_definition・extraction まで要る。ServiceRequ
 
 | 画面 | パス | 元 |
 |---|---|---|
-| 食事オーダー項目マスタ | `/meal-items` | `TreatmentItemPage`(セット・データセット・レセ電算・予約を削除) |
+| 食事オーダー項目マスタ | `/meal-items` | `TreatmentItemPage`(セット・データセット・レセ電算・予約を削除。種別で絞り込める) |
+| 食種 種別 | `/meal-categories` | `PhysioExamTypePage`(略称の欄だけ落とした同じ作り) |
 | オーダー入力 | カルテ右ペイン「食事」 | 新規(`MealOrderForm`。伝票レイアウトが無いので 1 枚のフォーム) |
 | 食事カレンダー | カルテ左ペイン「食事」タブ | 新規(`KarteMealTab`) |
 

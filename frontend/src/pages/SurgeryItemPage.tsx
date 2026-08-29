@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { SurgeryItemPayload } from "../api/masterClient";
 import {
+  useSurgeryCategoryOptions,
   useSurgeryItem,
   useSurgeryItemMutations,
   useSurgeryItemSearch,
@@ -10,6 +11,11 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { MedicalProcedureSearchModal } from "../components/MedicalProcedureSearchModal";
 import { Modal } from "../components/Modal";
 import { TemplateSelect } from "../components/TemplateSelect";
+import {
+  renderSurgeryCategoryOptions,
+  surgeryCategoryName,
+  surgeryCategoryPathName,
+} from "../components/surgeryCategoryOptions";
 import { useQuestionnaireOptions } from "../api/queries";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import {
@@ -33,6 +39,7 @@ interface Draft {
   valid_from: string;
   valid_to: string;
   receipt_code: string;
+  category_code: string;
   default_duration_minutes: string;
   default_approach: string;
   default_position: string;
@@ -53,6 +60,7 @@ const emptyDraft: Draft = {
   valid_from: "",
   valid_to: "",
   receipt_code: "",
+  category_code: "",
   default_duration_minutes: "",
   default_approach: "",
   default_position: "",
@@ -72,6 +80,7 @@ function toPayload(draft: Draft): SurgeryItemPayload {
     valid_from: draft.valid_from || null,
     valid_to: draft.valid_to || null,
     receipt_code: draft.receipt_code || null,
+    category_code: draft.category_code || null,
     default_duration_minutes: draft.default_duration_minutes
       ? Number(draft.default_duration_minutes)
       : null,
@@ -93,6 +102,9 @@ export function SurgeryItemPage() {
   const [editing, setEditing] = useState<number | "new" | null>(null);
 
   const list = useSurgeryItemSearch(filters, page);
+  // 種別は名称を出すのと絞り込みの両方で使うので、木ごと全件を引いておく。
+  const categories = useSurgeryCategoryOptions();
+  const categoryItems = categories.data?.items ?? [];
 
   const hasNext = list.data ? page * list.data.per < list.data.total : false;
 
@@ -122,6 +134,18 @@ export function SurgeryItemPage() {
             onChange={(e) => setInputs({ ...inputs, name: e.target.value })}
           />
         </label>
+        <label>
+          種別
+          {/* 上位の分類を選ぶと、配下の分類の術式もまとめて出る(絞り込みは
+              サーバー側で配下を展開する)。 */}
+          <select
+            value={inputs.categoryCode ?? ""}
+            onChange={(e) => setInputs({ ...inputs, categoryCode: e.target.value })}
+          >
+            <option value="">すべて</option>
+            {renderSurgeryCategoryOptions(categoryItems)}
+          </select>
+        </label>
         <label className="dose-conversion__checkbox">
           <input
             type="checkbox"
@@ -145,7 +169,7 @@ export function SurgeryItemPage() {
         </div>
       </form>
 
-      <ErrorBanner error={list.error} />
+      <ErrorBanner error={list.error ?? categories.error} />
 
       <table className="master-search__table">
         <thead>
@@ -153,6 +177,7 @@ export function SurgeryItemPage() {
             <th>コード</th>
             <th>名称</th>
             <th>略称</th>
+            <th>種別</th>
             <th>Kコード(レセ電算)</th>
             <th className="rad-item__compact">所要時間</th>
             <th className="rad-item__compact">到達法</th>
@@ -165,6 +190,11 @@ export function SurgeryItemPage() {
               <td>{item.item_code}</td>
               <td>{item.name}</td>
               <td>{item.short_name}</td>
+              {/* 末端の分類名だけでは「胃、食道、腸、他」がどこの下か分からないので、
+                  上位からの道筋を title に持たせる。 */}
+              <td title={surgeryCategoryPathName(categoryItems, item.category_code)}>
+                {surgeryCategoryName(categoryItems, item.category_code)}
+              </td>
               <td>{item.receipt_procedure_name ?? item.receipt_code}</td>
               <td className="rad-item__compact">
                 {item.default_duration_minutes != null && `${item.default_duration_minutes}分`}
@@ -184,7 +214,7 @@ export function SurgeryItemPage() {
           ))}
           {list.data && list.data.items.length === 0 && (
             <tr>
-              <td colSpan={7} className="master-search__empty">
+              <td colSpan={8} className="master-search__empty">
                 術式がありません
               </td>
             </tr>
@@ -231,6 +261,7 @@ interface ItemEditModalProps {
 function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
   const detail = useSurgeryItem(itemId);
   const mutations = useSurgeryItemMutations();
+  const categories = useSurgeryCategoryOptions();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   // レセ電算コードを医科診療行為マスタから選ぶときの表示名。手入力なら空のまま。
   const [receiptName, setReceiptName] = useState("");
@@ -247,6 +278,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       valid_from: d.valid_from ?? "",
       valid_to: d.valid_to ?? "",
       receipt_code: d.receipt_code ?? "",
+      category_code: d.category_code ?? "",
       default_duration_minutes:
         d.default_duration_minutes === null ? "" : String(d.default_duration_minutes),
       default_approach: d.default_approach ?? "",
@@ -336,6 +368,18 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
               value={draft.name_kana}
               onChange={(e) => setDraft({ ...draft, name_kana: e.target.value })}
             />
+          </label>
+          {/* 種別は入れ子(点数表の「款 → 区分」)。どの段でも選べるが、ふつうは
+              いちばん下の区分を選ぶ。 */}
+          <label>
+            種別
+            <select
+              value={draft.category_code}
+              onChange={(e) => setDraft({ ...draft, category_code: e.target.value })}
+            >
+              <option value="">未分類</option>
+              {renderSurgeryCategoryOptions(categories.data?.items ?? [])}
+            </select>
           </label>
           {/* 術式には頻用コード表のような初期データ源が無く、項目は 1 件ずつ手で作る。
               K コードだけは医科診療行為マスタから選べるようにして打ち間違いを減らす

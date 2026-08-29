@@ -39,6 +39,15 @@ RSpec.describe "Master::MealItems", type: :request do
       expect(body["items"].map { |i| i["item_code"] }).to eq(%w[105AG A00105])
     end
 
+    it "種別(category_code)で絞り込める" do
+      Master::MealCategory.create!(category_code: "01", name: "一般食")
+      create_item("A00201", name: "糖尿病食1600kcal", category_code: "01", display_order: 40)
+
+      get "/master/meal_items", params: { category_code: "01" }
+
+      expect(body["items"].map { |i| i["item_code"] }).to eq(%w[A00201])
+    end
+
     it "名称・カナで検索できる" do
       get "/master/meal_items", params: { name: "一般食" }
       expect(body["items"].map { |i| i["item_code"] }).to eq(%w[A00105])
@@ -84,6 +93,15 @@ RSpec.describe "Master::MealItems", type: :request do
       post "/master/meal_items", params: { item_code: "NPO", name: "食止め", is_fasting: true }
       expect(response).to have_http_status(:created)
       expect(body["is_fasting"]).to be(true)
+    end
+
+    it "主食に種別は付けられない" do
+      Master::MealCategory.create!(category_code: "01", name: "一般食")
+
+      post "/master/meal_items", params: { name: "米飯180g", kind: "staple", category_code: "01" }
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("種別を設定できるのは食種だけ")
     end
 
     it "主食を食止めにはできない" do

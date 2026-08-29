@@ -137,14 +137,39 @@
 ## 3. マスタ
 
 ```text
-master_surgery_items   -- 術式マスタ。master_treatment_items から kind/セット/
-                          groupable/データセット/予約列を落とし、申込フォームの
-                          既定値列を足したもの:
-                          receipt_code(Kコード) / default_duration_minutes /
-                          default_approach / default_position /
-                          default_anesthesia_methods(カンマ区切り、複数可) /
-                          requires_laterality(左右を必須にするか。既定 false)
+master_surgery_items      -- 術式マスタ。master_treatment_items から kind/セット/
+                             groupable/データセット/予約列を落とし、申込フォームの
+                             既定値列を足したもの:
+                             receipt_code(Kコード) / default_duration_minutes /
+                             default_approach / default_position /
+                             default_anesthesia_methods(カンマ区切り、複数可) /
+                             requires_laterality(左右を必須にするか。既定 false) /
+                             category_code(種別。下記)
+master_surgery_categories -- 術式の種別(分類)。parent_code の自己参照で入れ子にする
 ```
+
+### 3.1 種別(分類)は入れ子にした
+
+［事実］医科点数表 第2章第10部 手術 第1節 手術料 は「第9款 腹部 → 胃、食道、腸、他」の
+ように**段を持つ**。生理検査・内視鏡の検査種別(`*_exam_types`)に当たる分類軸だが、
+あちらは 1 段で足りたのに対し、手術は部位の大分類だけでは粗すぎ、区分だけでは数が多い。
+
+［提案］段数を列(大分類・中分類)で固定せず、`parent_code` の**自己参照 1 テーブル**にする。
+施設によって使う深さが違い、点数表の改定でも段が増えうるため。列は
+`category_code`(一意) / `name` / `name_kana` / `parent_code`(NULL=最上位) /
+`valid_from` / `valid_to` / `display_order`(同じ親の中での並び) / `note` / `search_*`。
+
+- 術式は**どの段のコードでも**指せる(`master_surgery_items.category_code`)。ふつうは
+  いちばん下の区分を選ぶが、細分類を作っていない領域では款に直付けしてよい
+- 一覧・検索の絞り込みで**上位の分類を指定したら配下の術式もまとめて出す**
+  (「腹部」で絞ると胆道の術式も並ぶ)。再帰 CTE(`SurgeryCategory.subtree_codes`)で展開する
+- 輪ができる指定(自分自身・自分の配下を親にする)はモデルで弾く。配下がある分類は
+  削除できない(親を失った分類は木から外れて画面から触れなくなるため)。分類を消したときは
+  参照していた術式を消さず未分類(`category_code = NULL`)に戻す
+- 分類は木に組んで出すので画面は常に全件を引く。seed 込みで 70 件を超えるため、
+  この API だけ 1 ページの上限を 500 件に広げた(`paginate(scope, max_per:)`)
+- **seed がある**のはこのマスタだけ(`db/seed_data/surgery_categories.csv`、款 11 件 +
+  区分 65 件)。分類名は改定で変わりうるので、投入後は画面で直す前提。既存行は上書きしない
 
 - セットのテーブル(`master_surgery_set_items`)は**作らなかった**。術式の主・副は
   申込画面でその都度選ぶもので、定型の組み合わせが要る運用になってから足す。
@@ -170,7 +195,8 @@ master_surgery_items   -- 術式マスタ。master_treatment_items から kind/�
 
 | 画面 | パス | 元 |
 |---|---|---|
-| 術式マスタ | `/surgery-items` | `TreatmentItemPage`(セット・レイアウト・予約・データセット列を削除、既定値列を追加。K コードは `MedicalProcedureSearchModal` の `defaultSection="K"` から選べる) |
+| 術式マスタ | `/surgery-items` | `TreatmentItemPage`(セット・レイアウト・予約・データセット列を削除、既定値列を追加。K コードは `MedicalProcedureSearchModal` の `defaultSection="K"` から選べる。種別で絞り込める) |
+| 術式 種別 | `/surgery-categories` | `PhysioExamTypePage`(ページングを外して木の順に並べ、親分類の欄を追加) |
 | 手術一覧(手術部業務) | `/surgery-worklist` | `TreatmentWorklistPage`(並びを手術室 → 入室予定時刻に変更、手術室フィルタ追加、実施入力なし) |
 | 手術カレンダー(手術部業務) | `/surgery-calendar` | 第3段階で追加。部屋 × 時刻の面で日程を組む画面(`docs/surgery-calendar-design.md`)。当初は手術一覧のタブだったが独立させた |
 | オーダー入力 | カルテ右ペイン「手術」 | 新規(`SurgeryOrderForm`)。伝票タブ無し、術式は検索モーダル、ヘッダ入力が厚い |

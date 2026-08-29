@@ -9,6 +9,11 @@ module Master
       scope = Master::SurgeryItem.all
       # カンマ区切りで複数指定可(保存済みのオーダーから項目情報を一括復元するため)。
       scope = scope.where(item_code: params[:item_code].split(",")) if params[:item_code].present?
+      # 種別(分類)。入れ子なので、上位の分類を指定したら配下の分類の術式も出す
+      # (「腹部」で絞ったら「胃、食道、腸、他」の術式も並ぶ)。
+      if params[:category_code].present?
+        scope = scope.where(category_code: Master::SurgeryCategory.subtree_codes(params[:category_code]))
+      end
       # active=true は今日オーダーできる項目(有効期間内)だけに絞る。
       if params[:active] == "true"
         scope = scope

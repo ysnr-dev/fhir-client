@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_29_200000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_29_400000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -410,6 +410,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_29_200000) do
     t.index ["specimen_code"], name: "index_master_lab_specimens_on_specimen_code", unique: true
   end
 
+  create_table "master_meal_categories", force: :cascade do |t|
+    t.string "category_code", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category_code"], name: "index_master_meal_categories_on_category_code", unique: true
+  end
+
   create_table "master_meal_items", force: :cascade do |t|
     t.string "item_code", null: false
     t.string "name", null: false
@@ -424,6 +439,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_29_200000) do
     t.string "search_kana"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "category_code"
+    t.index ["category_code"], name: "index_master_meal_items_on_category_code"
     t.index ["item_code"], name: "index_master_meal_items_on_item_code", unique: true
     t.index ["kind"], name: "index_master_meal_items_on_kind"
   end
@@ -1171,6 +1188,23 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_29_200000) do
     t.index ["category_id"], name: "index_master_schemas_on_category_id"
   end
 
+  create_table "master_surgery_categories", force: :cascade do |t|
+    t.string "category_code", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.string "parent_code"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category_code"], name: "index_master_surgery_categories_on_category_code", unique: true
+    t.index ["parent_code"], name: "index_master_surgery_categories_on_parent_code"
+  end
+
   create_table "master_surgery_items", force: :cascade do |t|
     t.string "item_code", null: false
     t.string "name", null: false
@@ -1192,6 +1226,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_29_200000) do
     t.datetime "updated_at", null: false
     t.boolean "requires_laterality", default: false, null: false
     t.string "preop_template_canonical"
+    t.string "category_code"
+    t.index ["category_code"], name: "index_master_surgery_items_on_category_code"
     t.index ["item_code"], name: "index_master_surgery_items_on_item_code", unique: true
   end
 

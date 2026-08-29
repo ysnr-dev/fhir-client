@@ -1,9 +1,18 @@
 import { useState, type FormEvent } from "react";
 import type { SurgeryItem } from "../api/masterClient";
-import { useSurgeryItemSearch, type SurgeryItemFilters } from "../api/masterQueries";
+import {
+  useSurgeryCategoryOptions,
+  useSurgeryItemSearch,
+  type SurgeryItemFilters,
+} from "../api/masterQueries";
 import { surgeryApproachDisplay } from "../fhir/surgeryOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
+import {
+  renderSurgeryCategoryOptions,
+  surgeryCategoryName,
+  surgeryCategoryPathName,
+} from "./surgeryCategoryOptions";
 
 interface Props {
   /** 見出し。何に足すのかは呼び出し元で変わる。 */
@@ -30,6 +39,9 @@ export function SurgeryItemSearchModal({
   const [page, setPage] = useState(1);
 
   const list = useSurgeryItemSearch(filters, page);
+  // 術式は数が多く名称だけで探すのは辛いので、種別(部位の分類)でも絞れるようにする。
+  const categories = useSurgeryCategoryOptions();
+  const categoryItems = categories.data?.items ?? [];
   const hasNext = list.data ? page * list.data.per < list.data.total : false;
   const excluded = new Set(excludeCodes);
 
@@ -51,6 +63,23 @@ export function SurgeryItemSearchModal({
             onChange={(e) => setInputs({ ...inputs, name: e.target.value })}
           />
         </label>
+        <label>
+          種別
+          {/* 上位の分類を選ぶと配下の分類の術式もまとめて出る。 */}
+          <select
+            value={inputs.categoryCode ?? ""}
+            onChange={(e) => {
+              const categoryCode = e.target.value;
+              setInputs({ ...inputs, categoryCode });
+              // 種別は選んだその場で効かせる(名称と違い打ち終わりが無いため)。
+              setFilters({ ...inputs, categoryCode, active: true });
+              setPage(1);
+            }}
+          >
+            <option value="">すべて</option>
+            {renderSurgeryCategoryOptions(categoryItems)}
+          </select>
+        </label>
         <div className="patient-search-form__actions">
           <button type="submit">検索</button>
           <button
@@ -66,7 +95,7 @@ export function SurgeryItemSearchModal({
         </div>
       </form>
 
-      <ErrorBanner error={list.error} />
+      <ErrorBanner error={list.error ?? categories.error} />
 
       <div className="lab-order-item__table-wrap">
         <table className="master-search__table">
@@ -74,6 +103,7 @@ export function SurgeryItemSearchModal({
             <tr>
               <th>コード</th>
               <th>名称</th>
+              <th className="rad-item__compact">種別</th>
               <th className="rad-item__compact">到達法(既定)</th>
               <th></th>
             </tr>
@@ -89,6 +119,13 @@ export function SurgeryItemSearchModal({
                 >
                   <td>{item.item_code}</td>
                   <td>{item.name}</td>
+                  {/* 末端の分類名だけでは上位が分からないので、道筋は title に持たせる。 */}
+                  <td
+                    className="rad-item__compact"
+                    title={surgeryCategoryPathName(categoryItems, item.category_code)}
+                  >
+                    {surgeryCategoryName(categoryItems, item.category_code)}
+                  </td>
                   <td className="rad-item__compact">
                     {surgeryApproachDisplay(item.default_approach ?? "")}
                   </td>
@@ -100,7 +137,7 @@ export function SurgeryItemSearchModal({
             })}
             {list.data && list.data.items.length === 0 && (
               <tr>
-                <td colSpan={4} className="master-search__empty">
+                <td colSpan={5} className="master-search__empty">
                   該当する術式がありません
                 </td>
               </tr>

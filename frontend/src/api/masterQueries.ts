@@ -263,6 +263,11 @@ import {
   updateMealItem,
   deleteMealItem,
   type MealItemPayload,
+  searchMealCategories,
+  createMealCategory,
+  updateMealCategory,
+  deleteMealCategory,
+  type MealCategoryPayload,
   searchTransfusionProducts,
   fetchTransfusionProduct,
   createTransfusionProduct,
@@ -275,6 +280,11 @@ import {
   updateSurgeryItem,
   deleteSurgeryItem,
   type SurgeryItemPayload,
+  searchSurgeryCategories,
+  createSurgeryCategory,
+  updateSurgeryCategory,
+  deleteSurgeryCategory,
+  type SurgeryCategoryPayload,
   searchSurgeryRoomBlocks,
   fetchAllSurgeryRoomBlocks,
   createSurgeryRoomBlock,
@@ -3005,11 +3015,73 @@ export function useTreatmentSetMembers(setCodes: string[]) {
 // useMealItemOptions(kind) でそれぞれの選択肢を引く。
 
 const MEAL_ITEMS_KEY = ["master", "meal_items"];
+const MEAL_CATEGORIES_KEY = ["master", "meal_categories"];
+
+/** 食種の種別(分類)の検索(マスタ画面の一覧)。 */
+export function useMealCategorySearch(
+  filters: { name?: string; active?: boolean },
+  page: number,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [...MEAL_CATEGORIES_KEY, "list", filters, page],
+    queryFn: () =>
+      searchMealCategories({
+        name: filters.name || undefined,
+        active: filters.active || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/**
+ * 種別の選択肢。食事オーダー項目マスタと食事オーダー画面が共通で使う。
+ * 数件にしかならないマスタなので全件まとめて引く。
+ */
+export function useMealCategoryOptions() {
+  return useQuery({
+    queryKey: [...MEAL_CATEGORIES_KEY, "options"],
+    queryFn: () => searchMealCategories({ per: 100 }),
+  });
+}
+
+export function useMealCategoryMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: MEAL_CATEGORIES_KEY });
+    // 分類を消すと食種側の種別も外れるので、項目の一覧・選択肢も引き直す。
+    queryClient.invalidateQueries({ queryKey: MEAL_ITEMS_KEY });
+  };
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: MealCategoryPayload) => createMealCategory(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: MealCategoryPayload }) =>
+        updateMealCategory(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteMealCategory(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
 
 export interface MealItemFilters {
   name?: string;
   /** "diet"=食種 / "staple"=主食。 */
   kind?: string;
+  /** 種別(食種だけが持つ)。 */
+  categoryCode?: string;
   active?: boolean;
 }
 
@@ -3020,6 +3092,7 @@ export function useMealItemSearch(filters: MealItemFilters, page: number, enable
       searchMealItems({
         name: filters.name || undefined,
         kind: filters.kind || undefined,
+        category_code: filters.categoryCode || undefined,
         active: filters.active || undefined,
         page,
         per: 20,
@@ -3179,11 +3252,74 @@ export function useTransfusionProductMutations() {
 // 処置と同じ構成からセット・レイアウト・データセットを落とし、既定値列を足したもの。
 
 const SURGERY_ITEMS_KEY = ["master", "surgery_items"];
+const SURGERY_CATEGORIES_KEY = ["master", "surgery_categories"];
+// 種別は木に組み立てて出すので常に全件を引く。点数表の款・区分を seed した時点で
+// 70 件前後になるため、他のマスタの選択肢(200)より広めに取る。
+const SURGERY_CATEGORY_OPTIONS_PER = 500;
+
+/** 術式の種別(分類)の検索。マスタ画面の一覧は木に組むので全件をまとめて引く。 */
+export function useSurgeryCategorySearch(
+  filters: { name?: string; active?: boolean },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [...SURGERY_CATEGORIES_KEY, "list", filters],
+    queryFn: () =>
+      searchSurgeryCategories({
+        name: filters.name || undefined,
+        active: filters.active || undefined,
+        per: SURGERY_CATEGORY_OPTIONS_PER,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/**
+ * 種別の選択肢。術式マスタ・術式検索モーダルが共通で使う。親子関係を組み立てる
+ * には全件が要るので、絞り込みはせずまとめて引いてキャッシュする。
+ */
+export function useSurgeryCategoryOptions() {
+  return useQuery({
+    queryKey: [...SURGERY_CATEGORIES_KEY, "options"],
+    queryFn: () => searchSurgeryCategories({ per: SURGERY_CATEGORY_OPTIONS_PER }),
+  });
+}
+
+export function useSurgeryCategoryMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: SURGERY_CATEGORIES_KEY });
+    // 分類を消すと術式側の種別も外れるので、術式の一覧・詳細も引き直す。
+    queryClient.invalidateQueries({ queryKey: SURGERY_ITEMS_KEY });
+  };
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: SurgeryCategoryPayload) => createSurgeryCategory(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: SurgeryCategoryPayload }) =>
+        updateSurgeryCategory(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteSurgeryCategory(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
 
 export interface SurgeryItemFilters {
   name?: string;
   /** 名称・略称・カナをまとめて探す1つの語。 */
   keyword?: string;
+  /** 種別。上位の分類を指定すると配下の分類の術式もまとめて出る。 */
+  categoryCode?: string;
   active?: boolean;
 }
 
@@ -3194,6 +3330,7 @@ export function useSurgeryItemSearch(filters: SurgeryItemFilters, page: number, 
       searchSurgeryItems({
         name: filters.name || undefined,
         keyword: filters.keyword || undefined,
+        category_code: filters.categoryCode || undefined,
         active: filters.active || undefined,
         page,
         per: 20,

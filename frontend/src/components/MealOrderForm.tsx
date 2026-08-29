@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useMealItemOptions } from "../api/masterQueries";
+import { useMealCategoryOptions, useMealItemOptions } from "../api/masterQueries";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   MEAL_SKIPPED,
@@ -59,6 +59,24 @@ export function MealOrderForm({
   const staples = useMealItemOptions("staple");
 
   const dietItems = useMemo(() => diets.data?.items ?? [], [diets.data]);
+  // 食種の種別(一般食・特別食 など)。セレクトを種別ごとにまとめて選びやすくする。
+  const mealCategories = useMealCategoryOptions();
+  const dietGroups = useMemo(() => {
+    const categories = mealCategories.data?.items ?? [];
+    const groups = categories.map((category) => ({
+      label: category.name,
+      items: dietItems.filter((item) => item.category_code === category.category_code),
+    }));
+    // 種別が付いていない食種(消した種別を指したままの食種も含む)は最後にまとめる。
+    const classified = new Set(categories.map((c) => c.category_code));
+    const rest = dietItems.filter(
+      (item) => !item.category_code || !classified.has(item.category_code),
+    );
+    if (rest.length > 0) groups.push({ label: "その他", items: rest });
+    return groups.filter((group) => group.items.length > 0);
+  }, [dietItems, mealCategories.data]);
+  // 種別を 1 件も登録していない施設では、まとめても見出しが 1 つ増えるだけなので出さない。
+  const groupDiets = (mealCategories.data?.items ?? []).length > 0;
   const stapleItems = staples.data?.items ?? [];
 
   // 継続中のオーダーは既定で全部終了させる。読み込みが後から届くので id を見て入れ直す。
@@ -171,7 +189,7 @@ export function MealOrderForm({
         </div>
       )}
       <ErrorBanner error={submitError} />
-      <ErrorBanner error={diets.error ?? staples.error} />
+      <ErrorBanner error={diets.error ?? staples.error ?? mealCategories.error} />
 
       <fieldset>
         <legend>食事内容</legend>
@@ -183,11 +201,21 @@ export function MealOrderForm({
             required
           >
             <option value="">選択してください</option>
-            {dietItems.map((item) => (
-              <option key={item.item_code} value={item.item_code}>
-                {item.name}
-              </option>
-            ))}
+            {groupDiets
+              ? dietGroups.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.items.map((item) => (
+                      <option key={item.item_code} value={item.item_code}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))
+              : dietItems.map((item) => (
+                  <option key={item.item_code} value={item.item_code}>
+                    {item.name}
+                  </option>
+                ))}
             {/* マスタから消えた食種でも、保存済みの選択を失わせない。 */}
             {values.diet && !dietItems.some((i) => i.item_code === values.diet?.code) && (
               <option value={values.diet.code}>{values.diet.name} (無効)</option>

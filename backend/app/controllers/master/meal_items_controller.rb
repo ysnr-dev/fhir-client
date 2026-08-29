@@ -11,6 +11,8 @@ module Master
       scope = scope.where(item_code: params[:item_code].split(",")) if params[:item_code].present?
       # diet = 食種 / staple = 主食。オーダー画面はどちらかだけを引く。
       scope = scope.where(kind: params[:kind]) if params[:kind].present?
+      # 種別(分類)。食種にしか付かないので、指定されたら実質 kind=diet に絞られる。
+      scope = scope.where(category_code: params[:category_code]) if params[:category_code].present?
       # active=true は今日オーダーできる項目(有効期間内)だけに絞る。
       if params[:active] == "true"
         scope = scope

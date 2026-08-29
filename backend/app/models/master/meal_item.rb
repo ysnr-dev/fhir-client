@@ -16,6 +16,7 @@ module Master
     validates :kind, inclusion: { in: KINDS }
     validate :valid_period_is_ordered
     validate :fasting_is_diet
+    validate :category_is_diet
 
     before_save :set_search_columns
 
@@ -37,6 +38,15 @@ module Master
       return unless is_fasting && !diet?
 
       errors.add(:base, "食止めにできるのは食種だけです")
+    end
+
+    # 種別(master_meal_categories)を付けるのは食種だけ。主食を分類する運用が無く、
+    # 種別マスタに食種用と主食用が混ざらないようにする。画面でも食種のときしか
+    # 欄を出さないが、API から入る矛盾もここで落とす。
+    def category_is_diet
+      return if category_code.blank? || diet?
+
+      errors.add(:base, "種別を設定できるのは食種だけです")
     end
 
     def set_search_columns

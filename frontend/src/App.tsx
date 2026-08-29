@@ -38,7 +38,9 @@ import { SurgeryCalendarPage } from "./pages/SurgeryCalendarPage";
 import { AnesthesiaChartPage } from "./pages/AnesthesiaChartPage";
 import { SurgeryRoomBlockPage } from "./pages/SurgeryRoomBlockPage";
 import { SurgeryItemPage } from "./pages/SurgeryItemPage";
+import { SurgeryCategoryPage } from "./pages/SurgeryCategoryPage";
 import { MealItemPage } from "./pages/MealItemPage";
+import { MealCategoryPage } from "./pages/MealCategoryPage";
 import { TransfusionProductPage } from "./pages/TransfusionProductPage";
 import { TreatmentItemPage } from "./pages/TreatmentItemPage";
 import { TreatmentItemLayoutPage } from "./pages/TreatmentItemLayoutPage";
@@ -339,6 +341,10 @@ function App() {
               <Link to="/surgery-items" className="row-menu__item">
                 術式マスタ
               </Link>
+              {/* 術式の分類。点数表 第10部の「款 → 区分」に合わせて入れ子にできる。 */}
+              <Link to="/surgery-categories" className="row-menu__item">
+                術式種別
+              </Link>
               <Link to="/surgery-room-blocks" className="row-menu__item">
                 手術室 ブロックスケジュール
               </Link>
@@ -348,6 +354,10 @@ function App() {
             <SubMenu label="食事">
               <Link to="/meal-items" className="row-menu__item">
                 食事オーダー項目
+              </Link>
+              {/* 食種の分類(一般食・特別食 など)。主食には付けない。 */}
+              <Link to="/meal-categories" className="row-menu__item">
+                食種種別
               </Link>
             </SubMenu>
             {/* 輸血。食事と同じく製剤マスタ 1 本だけ(セット・レイアウト・
@@ -484,8 +494,10 @@ function App() {
           <Route path="/treatment-item-layouts" element={<TreatmentItemLayoutPage />} />
           <Route path="/treatment-datasets" element={<TreatmentDatasetPage />} />
           <Route path="/meal-items" element={<MealItemPage />} />
+          <Route path="/meal-categories" element={<MealCategoryPage />} />
           <Route path="/transfusion-products" element={<TransfusionProductPage />} />
           <Route path="/surgery-items" element={<SurgeryItemPage />} />
+          <Route path="/surgery-categories" element={<SurgeryCategoryPage />} />
           <Route path="/surgery-room-blocks" element={<SurgeryRoomBlockPage />} />
           <Route path="/micro-order-items" element={<MicroOrderItemPage />} />
           <Route path="/micro-specimen-types" element={<MicroSpecimenTypePage />} />

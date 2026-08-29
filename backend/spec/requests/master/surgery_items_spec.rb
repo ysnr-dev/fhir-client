@@ -40,6 +40,21 @@ RSpec.describe "Master::SurgeryItems", type: :request do
       expect(body["items"].map { |i| i["item_code"] }).to eq(%w[S0001])
     end
 
+    it "種別(category_code)で絞り込むと配下の分類の術式も出る" do
+      Master::SurgeryCategory.create!(category_code: "09", name: "腹部")
+      Master::SurgeryCategory.create!(category_code: "0901", name: "腹壁、ヘルニア", parent_code: "09")
+      Master::SurgeryCategory.create!(category_code: "10", name: "尿路系・副腎")
+      create_item("S0011", name: "鼠径ヘルニア手術", category_code: "0901", display_order: 1)
+      create_item("S0012", name: "腹部の何か", category_code: "09", display_order: 2)
+      create_item("S0013", name: "腎摘出術", category_code: "10", display_order: 3)
+
+      get "/master/surgery_items", params: { category_code: "09" }
+      expect(body["items"].map { |i| i["item_code"] }).to eq(%w[S0011 S0012])
+
+      get "/master/surgery_items", params: { category_code: "0901" }
+      expect(body["items"].map { |i| i["item_code"] }).to eq(%w[S0011])
+    end
+
     it "レセ電算コードに対応する医科診療行為の名称を添える" do
       Master::MedicalProcedure.create!(procedure_code: "150183010", name: "胆嚢摘出術")
       create_item("S0008", name: "胆嚢摘出術(開腹)", receipt_code: "150183010")

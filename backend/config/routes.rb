@@ -165,12 +165,17 @@ Rails.application.routes.draw do
     # 他の部門オーダーと違いセット・レイアウト・データセット・予約枠を持たない
     # (食事はオーダー 1 件が食種 1 つを指すだけで明細も実施入力も無い)。
     resources :meal_items, only: %i[index show create update destroy]
+    # 食種の種別(一般食・特別食 など)。主食には付けない 1 段の分類。
+    resources :meal_categories, only: %i[index show create update destroy]
     # 輸血製剤マスタ。食事と同じ単純編集型で、配布マスタの取込は持たない
     # (日赤の製品に配布形式の標準マスタが無いため。docs/transfusion-order-design.md §3)。
     resources :transfusion_products, only: %i[index show create update destroy]
     # 術式マスタ。手術オーダー(申込)の項目。処置と違いセット・レイアウト・
     # データセットのマスタは持たない(術式は検索で選び、実施入力は第2段階)。
     resources :surgery_items, only: %i[index show create update destroy]
+    # 術式の種別(分類)。医科点数表 第10部の「款 → 区分」に合わせて入れ子にできる
+    # (parent_code の自己参照)。生理検査の physio_exam_types に当たる分類軸。
+    resources :surgery_categories, only: %i[index show create update destroy]
     # 手術室のブロックスケジュール(曜日ごとの科割り当て)。手術は予約枠を持たない
     # ので FHIR の Schedule ではなくここに置く(docs/surgery-calendar-design.md)。
     resources :surgery_room_blocks, only: %i[index show create update destroy]

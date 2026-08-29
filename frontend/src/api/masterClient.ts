@@ -4189,6 +4189,80 @@ export async function deleteTreatmentItemLayoutCell(id: number): Promise<void> {
 // オーダー側は FHIR の CodeSystem URI で既に区別しているため分けていない。
 // 他の部門オーダーと違いセット・レイアウト・データセット・予約枠を持たない。
 
+/**
+ * 食種の種別(分類)。一般食・特別食(治療食)など、食種をまとめる 1 段の分類。
+ * 手術の SurgeryCategory と違い階層は持たず、主食(kind = staple)には付かない。
+ */
+export interface MealCategory {
+  id: number;
+  category_code: string;
+  name: string;
+  name_kana: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  display_order: number | null;
+  note: string | null;
+}
+
+export interface MealCategoryPayload {
+  category_code?: string;
+  name?: string;
+  name_kana?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  display_order?: number | null;
+  note?: string | null;
+}
+
+const MEAL_CATEGORIES_PATH = "/master/meal_categories";
+
+export async function searchMealCategories(params: {
+  name?: string;
+  /** 種別コード。カンマ区切りで複数指定できる。 */
+  category_code?: string;
+  /** true なら今日使える種別(有効期間内)だけ。 */
+  active?: boolean;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<MealCategory>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.category_code) search.set("category_code", params.category_code);
+  if (params.active) search.set("active", "true");
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${MEAL_CATEGORIES_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<MealCategory>;
+}
+
+export async function createMealCategory(payload: MealCategoryPayload): Promise<MealCategory> {
+  const res = await masterFetch(MEAL_CATEGORIES_PATH, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MealCategory;
+}
+
+export async function updateMealCategory(
+  id: number,
+  payload: MealCategoryPayload,
+): Promise<MealCategory> {
+  const res = await masterFetch(`${MEAL_CATEGORIES_PATH}/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MealCategory;
+}
+
+export async function deleteMealCategory(id: number): Promise<void> {
+  const res = await masterFetch(`${MEAL_CATEGORIES_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
 export interface MealItem {
   id: number;
   item_code: string;
@@ -4201,6 +4275,8 @@ export interface MealItem {
    * SS-MIX2 が食止めを食種コード(NPO)で表すのに合わせ、食種の一種として持つ。
    */
   is_fasting: boolean;
+  /** 種別(master_meal_categories.category_code)。食種だけが持つ。未分類なら null。 */
+  category_code: string | null;
   valid_from: string | null;
   valid_to: string | null;
   display_order: number | null;
@@ -4213,6 +4289,7 @@ export interface MealItemPayload {
   name_kana?: string | null;
   kind?: string;
   is_fasting?: boolean;
+  category_code?: string | null;
   valid_from?: string | null;
   valid_to?: string | null;
   display_order?: number | null;
@@ -4227,6 +4304,8 @@ export async function searchMealItems(params: {
   item_code?: string;
   /** "diet"=食種 / "staple"=主食。未指定なら両方。 */
   kind?: string;
+  /** 種別(食種だけが持つ)。 */
+  category_code?: string;
   /** true なら今日オーダーできる項目(有効期間内)だけ。 */
   active?: boolean;
   page?: number;
@@ -4236,6 +4315,7 @@ export async function searchMealItems(params: {
   if (params.name) search.set("name", params.name);
   if (params.item_code) search.set("item_code", params.item_code);
   if (params.kind) search.set("kind", params.kind);
+  if (params.category_code) search.set("category_code", params.category_code);
   if (params.active) search.set("active", "true");
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
@@ -4390,6 +4470,87 @@ export async function deleteTransfusionProduct(id: number): Promise<void> {
 // 処置と違いセット・伝票レイアウト・実施入力データセットは持たず(術式は検索で
 // 選び、実施入力は第2段階)、代わりに申込フォームの初期値になる既定値列を持つ。
 
+/**
+ * 術式の種別(分類)。医科点数表 第2章第10部 手術 第1節の「款 → 区分」のように
+ * 入れ子になるので、parent_code の自己参照で木を作る(最上位は parent_code = null)。
+ * 生理検査の PhysioExamType に当たる分類軸だが、あちらは 1 段しかない。
+ */
+export interface SurgeryCategory {
+  id: number;
+  category_code: string;
+  name: string;
+  name_kana: string | null;
+  /** 親分類の category_code。null は最上位。 */
+  parent_code: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  /** 同じ親の中での並び順。 */
+  display_order: number | null;
+  note: string | null;
+}
+
+export interface SurgeryCategoryPayload {
+  category_code?: string;
+  name?: string;
+  name_kana?: string | null;
+  parent_code?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  display_order?: number | null;
+  note?: string | null;
+}
+
+const SURGERY_CATEGORIES_PATH = "/master/surgery_categories";
+
+export async function searchSurgeryCategories(params: {
+  name?: string;
+  /** 分類コード。カンマ区切りで複数指定できる。 */
+  category_code?: string;
+  /** true なら今日使える分類(有効期間内)だけ。 */
+  active?: boolean;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<SurgeryCategory>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.category_code) search.set("category_code", params.category_code);
+  if (params.active) search.set("active", "true");
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${SURGERY_CATEGORIES_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<SurgeryCategory>;
+}
+
+export async function createSurgeryCategory(
+  payload: SurgeryCategoryPayload,
+): Promise<SurgeryCategory> {
+  const res = await masterFetch(SURGERY_CATEGORIES_PATH, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as SurgeryCategory;
+}
+
+export async function updateSurgeryCategory(
+  id: number,
+  payload: SurgeryCategoryPayload,
+): Promise<SurgeryCategory> {
+  const res = await masterFetch(`${SURGERY_CATEGORIES_PATH}/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as SurgeryCategory;
+}
+
+export async function deleteSurgeryCategory(id: number): Promise<void> {
+  const res = await masterFetch(`${SURGERY_CATEGORIES_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
 export interface SurgeryItem {
   id: number;
   item_code: string;
@@ -4400,6 +4561,8 @@ export interface SurgeryItem {
   valid_to: string | null;
   /** レセ電算 診療行為コード(K章)。会計・DPC連携用。 */
   receipt_code: string | null;
+  /** 種別(master_surgery_categories.category_code)。未分類なら null。 */
+  category_code: string | null;
   /** 予定所要時間の既定(分)。 */
   default_duration_minutes: number | null;
   /** 到達法の既定(surgery-approach のコード)。 */
@@ -4433,6 +4596,7 @@ export interface SurgeryItemPayload {
   valid_from?: string | null;
   valid_to?: string | null;
   receipt_code?: string | null;
+  category_code?: string | null;
   default_duration_minutes?: number | null;
   default_approach?: string | null;
   default_position?: string | null;
@@ -4451,6 +4615,8 @@ export async function searchSurgeryItems(params: {
   keyword?: string;
   /** 項目コード。カンマ区切りで複数指定できる。 */
   item_code?: string;
+  /** 種別。上位の分類を指定すると配下の分類の術式もまとめて返る。 */
+  category_code?: string;
   /** true なら今日オーダーできる項目(有効期間内)だけ。 */
   active?: boolean;
   page?: number;
@@ -4460,6 +4626,7 @@ export async function searchSurgeryItems(params: {
   if (params.name) search.set("name", params.name);
   if (params.keyword) search.set("keyword", params.keyword);
   if (params.item_code) search.set("item_code", params.item_code);
+  if (params.category_code) search.set("category_code", params.category_code);
   if (params.active) search.set("active", "true");
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));

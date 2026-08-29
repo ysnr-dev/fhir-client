@@ -72,16 +72,18 @@ module Master
       render json: { error: exception.message }, status: :unprocessable_content
     end
 
-    def pagination_params
+    # max_per は 1 ページの上限。分類の選択肢のように「全件をまとめて引く」使い方を
+    # するマスタだけ、呼び出し側で緩める(既定は 100 件)。
+    def pagination_params(max_per: 100)
       page = params[:page].presence&.to_i || 1
       page = 1 if page < 1
       per = params[:per].presence&.to_i || 20
-      per = per.clamp(1, 100)
+      per = per.clamp(1, max_per)
       [page, per]
     end
 
-    def paginate(scope)
-      page, per = pagination_params
+    def paginate(scope, max_per: 100)
+      page, per = pagination_params(max_per: max_per)
       # カスタム select（例: 医薬品検索の yakko_name JOIN）を含む relation でも
       # COUNT(*) になるよう count(:all) を使う。
       total = scope.count(:all)
