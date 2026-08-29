@@ -24,12 +24,14 @@ const PLAIN_KINDS: KarteItemKind[] = [
   "injection",
   "lab-order",
   "micro-order",
+  "patho-order",
   "rad-order",
   "physio-order",
   "endoscopy-order",
   "treatment-order",
   "surgery-order",
   "meal-order",
+  "transfusion-order",
 ];
 
 export function KarteCategoryList({ filter, onSelect }: KarteCategoryListProps) {

@@ -165,6 +165,9 @@ Rails.application.routes.draw do
     # 他の部門オーダーと違いセット・レイアウト・データセット・予約枠を持たない
     # (食事はオーダー 1 件が食種 1 つを指すだけで明細も実施入力も無い)。
     resources :meal_items, only: %i[index show create update destroy]
+    # 輸血製剤マスタ。食事と同じ単純編集型で、配布マスタの取込は持たない
+    # (日赤の製品に配布形式の標準マスタが無いため。docs/transfusion-order-design.md §3)。
+    resources :transfusion_products, only: %i[index show create update destroy]
     # 術式マスタ。手術オーダー(申込)の項目。処置と違いセット・レイアウト・
     # データセットのマスタは持たない(術式は検索で選び、実施入力は第2段階)。
     resources :surgery_items, only: %i[index show create update destroy]

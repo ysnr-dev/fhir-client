@@ -8,6 +8,7 @@ import {
   useDeletePhysioOrder,
   useDeleteTreatmentOrder,
   useDeleteMealOrder,
+  useDeleteTransfusionOrder,
   useDeleteSurgeryOrder,
   useDeleteEndoscopyOrder,
   useDeletePrescription,
@@ -98,6 +99,13 @@ import {
 } from "../fhir/treatmentOrderHelpers";
 import type { TreatmentPerformDisplay } from "../fhir/treatmentResultHelpers";
 import { summarizeMealOrder } from "../fhir/mealOrderHelpers";
+import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
+import {
+  productLabel,
+  summarizeTransfusionOrder,
+  transfusionOrderComment,
+  transfusionOrderProducts,
+} from "../fhir/transfusionOrderHelpers";
 import { treatmentTaskStatusDisplay } from "../fhir/treatmentTaskHelpers";
 import {
   summarizeSurgeryOrder,
@@ -289,6 +297,7 @@ function KarteCard({
   const deleteTreatmentOrder = useDeleteTreatmentOrder();
   const deleteSurgeryOrder = useDeleteSurgeryOrder();
   const deleteMealOrder = useDeleteMealOrder();
+  const deleteTransfusionOrder = useDeleteTransfusionOrder();
   const deleteResponse = useDeleteQuestionnaireResponse();
   const deleteVital = useDeleteVitalEntry();
   // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
@@ -353,6 +362,8 @@ function KarteCard({
     else if (item.kind === "surgery-order") deleteSurgeryOrder.mutate(item.id, options);
     // 食事は明細を持たないので ServiceRequest 1 件を消すだけ。
     else if (item.kind === "meal-order") deleteMealOrder.mutate(item.id, options);
+    // 輸血は製剤明細も ServiceRequest なので、専用の削除でまとめて消す。
+    else if (item.kind === "transfusion-order") deleteTransfusionOrder.mutate(item.id, options);
     // テンプレート回答は、生成した Observation も一緒に消すのでリソースごと渡す。
     else if (item.kind === "qr") deleteResponse.mutate(item.response, options);
     // バイタルは 1 回の測定が項目ごとの Observation に分かれるのでまとめて消す。
@@ -438,7 +449,8 @@ function KarteCard({
             item.kind === "physio-order" ||
             item.kind === "endoscopy-order" ||
             item.kind === "treatment-order" ||
-            item.kind === "surgery-order") && (
+            item.kind === "surgery-order" ||
+            item.kind === "transfusion-order") && (
             <button
               type="button"
               className="karte-card__icon-button karte-card__icon-button--labeled"
@@ -664,6 +676,19 @@ function cardTitle(item: KarteTimelineItem): string {
       .filter(Boolean)
       .join(" | ");
   }
+  // 輸血は検査区分(交差適合試験・T&S)が輸血部門の作業を決める軸なので、病理と同じく
+  // タイトルに並べる。同意書が未取得のオーダーは例外なので、そのことも見出しに出す。
+  if (item.kind === "transfusion-order") {
+    const summary = summarizeTransfusionOrder(item.serviceRequest);
+    return [
+      summary.settingDisplay,
+      summary.testTypeDisplay,
+      summary.urgent ? summary.priorityDisplay : "",
+      summary.consentConfirmed ? "" : "同意書未取得",
+    ]
+      .filter(Boolean)
+      .join(" | ");
+  }
   // 検体検査・細菌検査・放射線検査・生理検査・内視鏡は入外区分と、至急のときだけ
   // 至急区分を並べる(通常はわざわざ出さない)。
   if (
@@ -732,6 +757,11 @@ function cardMeta(item: KarteTimelineItem): string {
       ? `予定 ${summary.scheduledDate} ${summary.scheduledTime}`.trim()
       : "日付未定";
     return [scheduled, summary.roomName, requesterSummary].filter(Boolean).join(" | ");
+  }
+  // 輸血も投与予定時刻を指定できる。同じ位置に「投与」と付けて添える。
+  if (item.kind === "transfusion-order") {
+    const scheduled = timeOf(item.serviceRequest.occurrenceDateTime ?? "");
+    return [scheduled && `投与 ${scheduled}`, requesterSummary].filter(Boolean).join(" | ");
   }
   // 処方・注射は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。オーダー日は
   // 日付のみを入力する項目なので時刻は出さない(古い処方には時刻付きの authoredOn が
@@ -969,6 +999,15 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
 
   if (item.kind === "meal-order") {
     return <MealOrderCardBody serviceRequest={item.serviceRequest} />;
+  }
+
+  if (item.kind === "transfusion-order") {
+    return (
+      <TransfusionOrderCardBody
+        serviceRequest={item.serviceRequest}
+        itemRequests={item.itemRequests}
+      />
+    );
   }
 
   if (!item.questionnaire) {
@@ -1591,6 +1630,42 @@ function MealOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.ServiceRe
         </ul>
       )}
       {summary.comment && <p className="karte-perform__note">{summary.comment}</p>}
+    </div>
+  );
+}
+
+// 輸血は製剤の一覧が本文。検査区分と同意書の状態はタイトルに出るのでここには出さない。
+function TransfusionOrderCardBody({
+  serviceRequest,
+  itemRequests,
+}: {
+  serviceRequest: fhir4.ServiceRequest;
+  itemRequests: fhir4.ServiceRequest[];
+}) {
+  const products = transfusionOrderProducts(itemRequests);
+  const comment = transfusionOrderComment(serviceRequest);
+  const summary = summarizeTransfusionOrder(serviceRequest);
+
+  if (products.length === 0) return <p className="karte-card__empty">製剤がありません。</p>;
+
+  return (
+    <div className="karte-rp">
+      {/* 血液型はカードで真っ先に確かめるものなので、製剤より先に色付きで出す。 */}
+      {summary.bloodTypeDisplay && (
+        <div className="karte-rp__head">
+          <TransfusionBloodBadge abo={summary.aboBloodType} rhd={summary.rhdBloodType} />
+        </div>
+      )}
+      <ul className="karte-rp__medicines">
+        {products.map((product, index) => (
+          <li key={product.id || index}>
+            <span className="karte-rp__number">{index + 1}</span>
+            <span className="karte-rp__medicine-name">{productLabel(product)}</span>
+            {product.note && <span>{product.note}</span>}
+          </li>
+        ))}
+      </ul>
+      {comment && <p className="karte-perform__note">{comment}</p>}
     </div>
   );
 }

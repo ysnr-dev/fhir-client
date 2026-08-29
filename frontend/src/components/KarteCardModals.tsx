@@ -12,6 +12,7 @@ import {
   useEndoscopyOrderDetail,
   useEndoscopyPerformDetail,
   useMealOrderDetail,
+  useTransfusionOrderDetail,
   useTreatmentOrderDetail,
   useSurgeryOrderDetail,
   useSurgeryPerformDetail,
@@ -28,6 +29,7 @@ import { radOrderItemRequests } from "../fhir/radOrderHelpers";
 import { physioOrderItemRequests } from "../fhir/physioOrderHelpers";
 import { endoscopyOrderItemRequests } from "../fhir/endoscopyOrderHelpers";
 import { treatmentOrderItemRequests } from "../fhir/treatmentOrderHelpers";
+import { transfusionOrderItemRequests } from "../fhir/transfusionOrderHelpers";
 import { MealOrderDetailPanel } from "./MealOrderDetailPanel";
 import { surgeryOrderItemRequests } from "../fhir/surgeryOrderHelpers";
 import { splitLabResultDetailBundle } from "../fhir/labResultHelpers";
@@ -54,6 +56,7 @@ import { PhysioOrderDetailPanel } from "./PhysioOrderDetailPanel";
 import { EndoscopyOrderDetailPanel } from "./EndoscopyOrderDetailPanel";
 import { TreatmentOrderDetailPanel } from "./TreatmentOrderDetailPanel";
 import { SurgeryOrderDetailPanel } from "./SurgeryOrderDetailPanel";
+import { TransfusionOrderDetailPanel } from "./TransfusionOrderDetailPanel";
 
 // カルテのタイムラインから開くモーダル。詳細表示は各リソースの詳細ページと同じ
 // パネルを使うので、カードでは省いている情報(処方の DI リンクなど)も参照できる。
@@ -71,6 +74,7 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   "treatment-order": "処置内容",
   "surgery-order": "手術内容",
   "meal-order": "食事内容",
+  "transfusion-order": "輸血内容",
   "lab-result": "検査結果内容",
   "micro-result": "細菌検査結果内容",
   "patho-result": "病理診断レポート",
@@ -116,6 +120,8 @@ export function KarteDetailModal({
         <SurgeryOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "meal-order" ? (
         <MealOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+      ) : target.kind === "transfusion-order" ? (
+        <TransfusionOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-result" ? (
         <LabResultDetail patientId={patientId} reportId={target.id} />
       ) : target.kind === "micro-result" ? (
@@ -657,6 +663,10 @@ export function KarteCardJsonModal({
         <SurgeryOrderJson srId={item.id} />
       ) : item.kind === "meal-order" ? (
         <MealOrderJson srId={item.id} />
+      ) : item.kind === "patho-order" ? (
+        <PathoOrderJson srId={item.id} />
+      ) : item.kind === "transfusion-order" ? (
+        <TransfusionOrderJson srId={item.id} />
       ) : (
         <FhirJsonView resource={jsonResource(item)} />
       )}
@@ -811,6 +821,64 @@ function TreatmentOrderJson({ srId }: { srId: string }) {
 }
 
 // 食事オーダーは実施記録を持たないので、オーダーの ServiceRequest 1 本だけを出す。
+// 輸血のカードから開く内容表示。製剤明細もヘッダと一緒に取れるので、病理と同じ形。
+function TransfusionOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = useTransfusionOrderDetail(srId);
+  const requests = serviceRequestsOf(detail.data?.data);
+  const serviceRequest = requests.find((request) => request.id === srId);
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された輸血オーダーは別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <TransfusionOrderDetailPanel
+          serviceRequest={serviceRequest}
+          itemRequests={transfusionOrderItemRequests(requests, srId)}
+          problemsById={problemsById}
+        />
+      ) : (
+        !detail.error && <NotFound label="輸血オーダー" />
+      )}
+    </>
+  );
+}
+
+// 病理・輸血もオーダーのヘッダと明細をまとめた Bundle で見せる(検体検査と同じ)。
+function PathoOrderJson({ srId }: { srId: string }) {
+  const detail = usePathoOrderDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
+    </>
+  );
+}
+
+function TransfusionOrderJson({ srId }: { srId: string }) {
+  const detail = useTransfusionOrderDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
+    </>
+  );
+}
+
 function MealOrderJson({ srId }: { srId: string }) {
   const detail = useMealOrderDetail(srId);
 

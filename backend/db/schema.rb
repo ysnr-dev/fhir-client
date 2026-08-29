@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_29_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_29_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1209,6 +1209,27 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_29_100000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["location_id", "weekday"], name: "index_master_surgery_room_blocks_on_location_id_and_weekday"
+  end
+
+  create_table "master_transfusion_products", force: :cascade do |t|
+    t.string "item_code", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.string "abbreviation"
+    t.string "category", default: "rbc", null: false
+    t.string "unit_label", default: "単位", null: false
+    t.integer "default_units"
+    t.boolean "requires_crossmatch", default: true, null: false
+    t.date "valid_from"
+    t.date "valid_to"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category"], name: "index_master_transfusion_products_on_category"
+    t.index ["item_code"], name: "index_master_transfusion_products_on_item_code", unique: true
   end
 
   create_table "master_treatment_dataset_details", force: :cascade do |t|

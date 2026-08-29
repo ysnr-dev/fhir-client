@@ -9986,3 +9986,258 @@ button.meal-calendar__cell:hover {
   width: 100%;
   box-sizing: border-box;
 }
+
+/* ---- 輸血オーダー ---- */
+
+/* 血液型の選択。ラベルとチップの組を 2 つ(ABO と RhD)横に並べる。 */
+.transfusion-order__blood-type {
+  /* fieldset が flex なので、明示しないと内容幅で止まる。 */
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.transfusion-order__blood-type-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.transfusion-order__chips {
+  display: flex;
+  gap: 6px;
+}
+
+/* 血液型のチップ。未選択は他のボタンと同じ地味な見た目で、選ぶと色が付く。
+   色は日本赤十字社の製剤ラベルの区分色(A=黄 / B=白 / O=青 / AB=桃)に合わせて
+   あり、現場で見慣れた色と一致させることで取り違えに気付きやすくする。 */
+.transfusion-chip {
+  min-width: 46px;
+  /* 共通の button ルールが display: inline-flex なので、min-width で広がった余白は
+     既定の justify-content: flex-start で右に寄る。1 文字の型(A/B/O)が左に
+     ずれて見えるため、中央寄せを明示する。 */
+  justify-content: center;
+  padding: 6px 12px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.transfusion-chip:hover {
+  border-color: var(--text);
+}
+
+/* 選択中。ラベル色は明暗テーマのどちらでも同じ色で出す(見慣れた色そのものに
+   意味があるため)ので、文字色の方をそれぞれの背景に合わせて固定する。 */
+.transfusion-chip--selected {
+  border-color: transparent;
+  /* 塗りつぶしの外側に濃い輪郭を足す。罫線色(--border)だと、明るいテーマで
+     白(B型)が地と紛れて「選んである」ことが読めなくなるため、本文色で囲む。 */
+  box-shadow: 0 0 0 2px var(--text-h);
+}
+
+.transfusion-chip--abo-a.transfusion-chip--selected {
+  background: #f2c200;
+  color: #3a2f00;
+}
+
+.transfusion-chip--abo-b.transfusion-chip--selected {
+  /* 日赤のラベル区分色は白。明るいテーマの地(--surface-panel)より確実に明るく
+     するため、薄いグレーではなく純白を使う。 */
+  background: #ffffff;
+  color: #262626;
+}
+
+.transfusion-chip--abo-o.transfusion-chip--selected {
+  background: #1f6fd0;
+  color: #ffffff;
+}
+
+.transfusion-chip--abo-ab.transfusion-chip--selected {
+  background: #f0a0c0;
+  color: #45162e;
+}
+
+/* RhD は日赤のラベルに区分色が無いので、陽性・陰性の別だけが分かればよい。
+   陰性は適合する製剤が限られる(在庫を確認する必要がある)ので目立たせる。 */
+.transfusion-chip--rhd-positive.transfusion-chip--selected {
+  /* ABO の区分色が主役なので、RhD 陽性(多数派)は色で主張させない。 */
+  background: var(--accent-bg);
+  color: var(--text-h);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.transfusion-chip--rhd-negative.transfusion-chip--selected {
+  background: var(--lab-high);
+  color: #ffffff;
+}
+
+/* カード・詳細に出す読み取り専用の血液型。選択チップと同じ色で、押せないことが
+   分かるよう小さめ・枠なしにする。 */
+.transfusion-blood-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.transfusion-blood-badge--a {
+  background: #f2c200;
+  color: #3a2f00;
+}
+
+.transfusion-blood-badge--b {
+  background: #ffffff;
+  color: #262626;
+}
+
+.transfusion-blood-badge--o {
+  background: #1f6fd0;
+  color: #ffffff;
+}
+
+.transfusion-blood-badge--ab {
+  background: #f0a0c0;
+  color: #45162e;
+}
+
+/* 輸血前検査(血液型・不規則抗体)の参照表示。入力欄ではないので、値を読むだけの
+   詰まった並びにして、入力フィールドと見た目で区別する。 */
+.transfusion-order__pretest {
+  flex: 1 1 100%;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+}
+
+.transfusion-order__pretest-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.transfusion-order__pretest-label {
+  color: var(--text);
+}
+
+.transfusion-order__pretest-value {
+  font-weight: 600;
+}
+
+.transfusion-order__pretest-date {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* 未検査は「値が無い」ことを目立たせる。輸血前検査が無いまま出すのは例外なので、
+   空欄で流さず明示する。 */
+.transfusion-order__pretest-missing {
+  font-size: 12px;
+  color: var(--lab-high);
+}
+
+/* 製剤の可変リスト。病理の検体カードと同じ作りで、何番の製剤かを見失わせない。 */
+.transfusion-order__products {
+  /* fieldset が flex なので、リスト単体だと内容幅で止まってしまう。 */
+  flex: 1 1 100%;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.transfusion-order__product {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--surface-muted, transparent);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 16px;
+}
+
+.transfusion-order__product-head {
+  /* 製剤番号と削除ボタンは 1 行使い切って、番号を各カードの同じ位置に置く。 */
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.transfusion-order__product-number {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* 製剤名は長い(「照射赤血球液-LR「日赤」2単位」)ので広く取る。 */
+.transfusion-order__product-name {
+  flex: 2 1 240px;
+}
+
+.transfusion-order__product-units {
+  flex: 0 0 90px;
+}
+
+/* 単位の呼び方は製剤マスタで決まる読み取り専用の表示。入力欄の隣に添える。 */
+.transfusion-order__product-unit-label {
+  font-size: 13px;
+  padding-bottom: 6px;
+}
+
+.transfusion-order__product-note {
+  flex: 1 1 180px;
+}
+
+.transfusion-order__product-add {
+  flex: 1 1 100%;
+}
+
+/* 輸血同意書の確認。他の入力より重い意味を持つので、枠で囲って大きく出す。
+   セレクタを .prescription-form から書くのは、.prescription-form label の
+   縦積み(flex-direction: column)より詳細度を上げて打ち消すため
+   (.order-select__cell label と同じ手)。 */
+.prescription-form label.transfusion-order__consent {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 2px solid var(--lab-high);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* 取得済みにしたら注意色を外す。未チェックのときだけ目に留まればよい。 */
+.prescription-form label.transfusion-order__consent--done {
+  border-color: var(--border);
+}
+
+.transfusion-order__consent input[type="checkbox"] {
+  /* 既定のチェックボックスは小さく、押し間違いにも気付きにくい。 */
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  flex: none;
+  cursor: pointer;
+}
+
+.transfusion-order__consent-text {
+  font-size: 14px;
+  font-weight: 600;
+}

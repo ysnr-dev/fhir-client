@@ -39,6 +39,7 @@ import { AnesthesiaChartPage } from "./pages/AnesthesiaChartPage";
 import { SurgeryRoomBlockPage } from "./pages/SurgeryRoomBlockPage";
 import { SurgeryItemPage } from "./pages/SurgeryItemPage";
 import { MealItemPage } from "./pages/MealItemPage";
+import { TransfusionProductPage } from "./pages/TransfusionProductPage";
 import { TreatmentItemPage } from "./pages/TreatmentItemPage";
 import { TreatmentItemLayoutPage } from "./pages/TreatmentItemLayoutPage";
 import { TreatmentDatasetPage } from "./pages/TreatmentDatasetPage";
@@ -337,6 +338,13 @@ function App() {
                 食事オーダー項目
               </Link>
             </SubMenu>
+            {/* 輸血。食事と同じく製剤マスタ 1 本だけ(セット・レイアウト・
+                データセットは持たない)。 */}
+            <SubMenu label="輸血">
+              <Link to="/transfusion-products" className="row-menu__item">
+                輸血製剤マスタ
+              </Link>
+            </SubMenu>
           </HoverMenu>
           <HoverMenu label="管理">
             <Link to="/oauth-clients" className="row-menu__item">
@@ -462,6 +470,7 @@ function App() {
           <Route path="/treatment-item-layouts" element={<TreatmentItemLayoutPage />} />
           <Route path="/treatment-datasets" element={<TreatmentDatasetPage />} />
           <Route path="/meal-items" element={<MealItemPage />} />
+          <Route path="/transfusion-products" element={<TransfusionProductPage />} />
           <Route path="/surgery-items" element={<SurgeryItemPage />} />
           <Route path="/surgery-room-blocks" element={<SurgeryRoomBlockPage />} />
           <Route path="/micro-order-items" element={<MicroOrderItemPage />} />

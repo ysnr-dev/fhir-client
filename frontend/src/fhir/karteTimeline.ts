@@ -46,6 +46,11 @@ import {
 import { treatmentPerformsByOrderId, type TreatmentPerformDisplay } from "./treatmentResultHelpers";
 import { isMealServiceRequest, mealOrderProblem } from "./mealOrderHelpers";
 import {
+  isTransfusionServiceRequest,
+  transfusionOrderItemRequests,
+  transfusionOrderProblem,
+} from "./transfusionOrderHelpers";
+import {
   treatmentTaskStatus,
   treatmentTasksByOrderId,
   type TreatmentTaskStatus,
@@ -106,6 +111,7 @@ export type KarteItemKind =
   | "treatment-order"
   | "surgery-order"
   | "meal-order"
+  | "transfusion-order"
   | "qr";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
@@ -122,6 +128,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   "treatment-order": "処置",
   "surgery-order": "手術",
   "meal-order": "食事",
+  "transfusion-order": "輸血",
   qr: "テンプレート",
 };
 
@@ -241,6 +248,14 @@ export type KarteTimelineItem = KarteItemBase &
     // 食事(給食)。他のオーダーと違い明細も進捗 Task も実施記録も持たないので、
     // カードに出すものは ServiceRequest 1 本の中で完結する。
     | { kind: "meal-order"; serviceRequest: fhir4.ServiceRequest }
+    // 輸血。病理と同じくヘッダ + 製剤明細の 2 層。進捗 Task と実施記録は第3・第4段階
+    // (docs/transfusion-order-design.md §5)なので、いまはヘッダと明細だけを持つ。
+    | {
+        kind: "transfusion-order";
+        serviceRequest: fhir4.ServiceRequest;
+        /** 製剤明細。1 オーダーに複数の製剤を混ぜられる。 */
+        itemRequests: fhir4.ServiceRequest[];
+      }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
 
@@ -636,6 +651,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         label: KARTE_KIND_LABELS["meal-order"],
       };
     }
+    if (isTransfusionServiceRequest(serviceRequest)) {
+      return {
+        ...base,
+        kind: "transfusion-order" as const,
+        label: KARTE_KIND_LABELS["transfusion-order"],
+        itemRequests: transfusionOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+      };
+    }
     const withMedications = {
       ...base,
       medicationRequests: medicationRequestsBySr.get(serviceRequest.id ?? "") ?? [],
@@ -817,6 +840,7 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "treatment-order") return treatmentOrderProblem(item.serviceRequest);
   if (item.kind === "surgery-order") return surgeryOrderProblem(item.serviceRequest);
   if (item.kind === "meal-order") return mealOrderProblem(item.serviceRequest);
+  if (item.kind === "transfusion-order") return transfusionOrderProblem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);
   }
