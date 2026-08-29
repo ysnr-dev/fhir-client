@@ -180,7 +180,32 @@ JPEG 画像として載る）は、シェーママスタ（`master_schemas`）�
 （`karteTimeline.ts` の `linkedResponseIds` に `pathoOrderResponseIds` を含める）。
 入れ忘れると臨床経過がオーダーカードとテンプレートカードで二重に出る。
 
-### 4.5 進捗 Task
+### 4.5 レポートの画像
+
+［事実］規約 20-004 はレポートを本文セクションだけで定義しており、**画像を規定していない**
+（「画像」「シェーマ」「写真」の語がいずれも出てこない）。持ち方は自由設計になる。
+
+［決定］オーダーのシェーマと同じく **Binary + 拡張**（`patho-report-image`、0..*）で持つ。
+`DiagnosticReport.media` は `Reference(Media)` を要求するが、Media は上流プロキシの
+許可リストに無く（`FhirProxyController::ALLOWED_RESOURCE_TYPES`）、Binary は許可済みのため。
+
+種別と説明を添えるので**複合拡張**にする（手術の輸血準備と同じ形）:
+
+```
+extension[patho-report-image]
+  extension[kind]  valueCoding  … 肉眼写真 / 切り出し図 / 鏡検写真 / その他
+  extension[image] valueAttachment  … contentType, url=Binary/<id>, title=説明
+```
+
+入口は 2 つ。**ファイルから添付**（カメラ・スキャナで撮った肉眼写真・鏡検写真。
+`normalizeImageFile` で長辺 1600px に縮小）と、**シェーママスタの臓器図に描く**
+（切り出し図。オーダーのシェーマと同じ `SchemaPickerModal` → `SchemaPaintModal`）。
+詳細表示では種別ごとにまとめて並べる。
+
+［事実］Binary の扱いはオーダーのシェーマと同じ。本体と同じ transaction に積み、
+プレースホルダで指す。外した画像の Binary は削除しない（§4.4）。
+
+### 4.6 進捗 Task
 
 `CodeSystem/task-code|patho-exam`。`requested 依頼済 → accepted 受付済（検体受領）→
 completed 検査済 / cancelled 中止`。検体検査と違いラベル発行・スキャンを持たないので、
@@ -209,8 +234,8 @@ completed 検査済 / cancelled 中止`。検体検査と違いラベル発行�
 | 臓器検索 | `components/PathoOrganSearchModal.tsx` | 名称・ICD-10 で LPATHO003 全件から選ぶ |
 | オーダー内容 | `components/PathoOrderDetailPanel.tsx` | カルテ詳細モーダルと部門一覧の「表示」で共用 |
 | 部門一覧 | `pages/PathoWorklistPage.tsx` | 採取日で 1 日ぶん。区分・入外・病棟・診療科・進捗で画面側絞り込み。レポート状況の列を持つ |
-| レポート入力 | `components/PathoResultForm.tsx` | オーダーを選ぶと検体と検査区分を転記。診断欄は区分で形が変わる |
-| レポート表示 | `components/PathoResultDetailPanel.tsx` | カルテの病理タブ・詳細モーダル・部門一覧で共用 |
+| レポート入力 | `components/PathoResultForm.tsx` | オーダーを選ぶと検体と検査区分を転記。診断欄は区分で形が変わる。画像はファイル添付と切り出し図の描画 |
+| レポート表示 | `components/PathoResultDetailPanel.tsx` | カルテの病理タブ・詳細モーダル・部門一覧で共用。画像は種別ごとに並べる |
 | カルテ病理タブ | `components/KartePathoResultTab.tsx` | 報告日ペイン + 内容表示（登録・編集・削除もここから） |
 | マスタメンテ | `pages/PathoOrganPage.tsx` / `PathoCollectionMethodPage.tsx` | 臓器は頻用の印の切替が主な操作 |
 

@@ -7,13 +7,16 @@ import {
 } from "../fhir/pathoOrderHelpers";
 import {
   cytoJudgementDisplay,
+  groupReportImagesByKind,
   parsePathoResultForm,
+  pathoReportImageRefs,
   reportStatusDisplay,
   resultSpecimenLabel,
   splitPathoResultDetailBundle,
   type PathoResultFormValues,
 } from "../fhir/pathoResultHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { SchemaImageGallery } from "./SchemaImageGallery";
 
 // 病理診断レポートの内容表示。カルテ画面の病理タブと、カルテカードの詳細モーダル、
 // 部門一覧の双方から使う。操作ボタンと前後移動は呼び出し側が持つ。
@@ -146,6 +149,14 @@ export function PathoResultDetailPanel({ reportId }: { reportId: string }) {
             <FindingSection label="顕微鏡所見" value={values.microscopic} />
             <DiagnosisFieldset values={values} />
             <FindingSection label="採取法／検体処理法" value={values.procedureStep} />
+            {/* 画像は種別ごとにまとめて並べる。無いレポートの方が多いので、
+                あるときだけ枠を出す(所見セクションと同じ扱い)。 */}
+            {groupReportImagesByKind(values.images).map((group) => (
+              <fieldset key={group.kind}>
+                <legend>{group.display}</legend>
+                <SchemaImageGallery refs={pathoReportImageRefs(group.images)} />
+              </fieldset>
+            ))}
           </div>
         )
       )}

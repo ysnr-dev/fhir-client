@@ -6,6 +6,8 @@ import {
 } from "./labResultHelpers";
 import { categoryCoding, codingBySystem, findSettingDisplay } from "./shared";
 import { departmentExtension, departmentOf } from "./prescriptionHelpers";
+import type { SchemaImageRef } from "./questionnaireResponseHelpers";
+import { binaryIdFromAttachment, imageBinaryEntry } from "./schemaImage";
 import {
   ORGAN_SYSTEM,
   SPECIMEN_TYPE_SYSTEM,
@@ -52,6 +54,14 @@ const CODE_PROCEDURE_STEP = "10157-6"; // Special treatments and procedures(採�
 // 細胞診の判定。領域別の分類(ベセスダ等)は持たず、汎用の 5 段階にする
 // (docs/patho-order-design.md §8)。
 const CYTO_JUDGEMENT_SYSTEM = "http://fhir-client.local/CodeSystem/patho-cyto-judgement";
+
+// レポートに添える画像(肉眼写真・鏡検写真・切り出し図)。
+// 規約 20-004 はレポートを本文セクションだけで定義していて画像を規定していないため、
+// 持ち方はこのアプリの既定に合わせる: 画像は Binary、参照は valueAttachment。
+// DiagnosticReport.media は Reference(Media) を要求するが Media は上流で扱えないので使わない。
+// 種別と説明を添えるので複合拡張にする(手術の輸血準備と同じ形)。
+const REPORT_IMAGE_EXT_URL = "http://fhir-client.local/StructureDefinition/patho-report-image";
+const REPORT_IMAGE_KIND_SYSTEM = "http://fhir-client.local/CodeSystem/patho-report-image-kind";
 // 推定病変(細胞診の診断 Observation の component)。
 const RESULT_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/patho-result-item";
 const CODE_ESTIMATED_LESION = "estimated-lesion";
@@ -102,6 +112,18 @@ export function cytoJudgementDisplay(code: string): string {
   return code ? optionDisplay(CYTO_JUDGEMENT_OPTIONS, code) : "";
 }
 
+/** レポートに添える画像の種別。表示ではこの順に並べる。 */
+export const REPORT_IMAGE_KIND_OPTIONS: CodeOption[] = [
+  { code: "gross", display: "肉眼写真" },
+  { code: "cutup", display: "切り出し図" },
+  { code: "microscopic", display: "鏡検写真" },
+  { code: "other", display: "その他" },
+];
+
+export function reportImageKindDisplay(code: string): string {
+  return code ? optionDisplay(REPORT_IMAGE_KIND_OPTIONS, code) : "";
+}
+
 // ---- フォーム値 ----
 
 /** レポートに載せる検体 1 件。臓器・検体タイプはオーダーからの転記。 */
@@ -149,6 +171,8 @@ export interface PathoResultFormValues {
   estimatedLesion: string;
   /** 採取法・検体処理法(追加染色など)。空は未入力。 */
   procedureStep: string;
+  /** レポートに添える画像(肉眼写真・鏡検写真・切り出し図)。 */
+  images: PathoReportImageValues[];
   // 以下は編集時の id 温存用。画面からは触らない。
   grossId?: string;
   microscopicId?: string;
@@ -156,6 +180,20 @@ export interface PathoResultFormValues {
   procedureStepId?: string;
   /** 読み込んだ既存レポートの status。amended への自動遷移の判定に使う。 */
   originalStatus?: PathoReportStatus;
+}
+
+/** レポートに添える画像 1 枚。保存済みは binaryId、足したばかりは dataUrl を持つ。 */
+export interface PathoReportImageValues {
+  /** 保存済み画像の Binary id。まだ保存していなければ空。 */
+  binaryId: string;
+  /** 添付・描画したばかりの画像(dataURL)。保存済みを読み戻したときは空。 */
+  dataUrl: string;
+  /** image/png など。読み戻した画像は保存時の値。 */
+  contentType: string;
+  /** 種別(肉眼写真・切り出し図・鏡検写真・その他)。 */
+  kind: string;
+  /** 説明。空なら種別名だけをキャプションにする。 */
+  caption: string;
 }
 
 export function emptyPathoResultSpecimen(): PathoResultSpecimenValues {
@@ -186,7 +224,36 @@ export function emptyPathoResultForm(
     cytoJudgement: "",
     estimatedLesion: "",
     procedureStep: "",
+    images: [],
   };
+}
+
+/** 画像のキャプション。説明があれば「種別: 説明」、無ければ種別だけ。 */
+export function reportImageLabel(image: PathoReportImageValues): string {
+  const kind = reportImageKindDisplay(image.kind);
+  return [kind, image.caption].filter(Boolean).join(": ");
+}
+
+/** 画像を SchemaImageGallery に渡せる形にする(未保存の添付したても出せる)。 */
+export function pathoReportImageRefs(images: PathoReportImageValues[]): SchemaImageRef[] {
+  return images.map((image, index) => ({
+    key: `patho-report-image#${index}`,
+    label: reportImageLabel(image),
+    binaryId: image.binaryId || null,
+    dataUrl: image.dataUrl || null,
+  }));
+}
+
+/** 種別ごとにまとめた画像。詳細表示で「肉眼写真」「鏡検写真」と並べるのに使う。 */
+export function groupReportImagesByKind(
+  images: PathoReportImageValues[],
+): { kind: string; display: string; images: PathoReportImageValues[] }[] {
+  return REPORT_IMAGE_KIND_OPTIONS.flatMap((option) => {
+    const members = images.filter((image) => image.kind === option.code);
+    return members.length > 0
+      ? [{ kind: option.code, display: option.display, images: members }]
+      : [];
+  });
 }
 
 /**
@@ -368,6 +435,53 @@ export function resultSpecimenLabel(specimen: PathoResultSpecimenValues): string
   return specimen.typeName ? `${name}（${specimen.typeName}）` : name;
 }
 
+/**
+ * レポートに添える画像を Bundle に積み、拡張にする参照を返す。足したばかりの画像は
+ * Binary を作り、まだ id が無いのでプレースホルダ(urn:uuid)で指す(上流の transaction が
+ * 実 ID に書き換える)。保存済みの画像はそのまま参照を引き継ぐ。
+ */
+function pushReportImageEntries(
+  entries: fhir4.BundleEntry[],
+  images: PathoReportImageValues[],
+): fhir4.Extension[] {
+  return images.flatMap((image) => {
+    let url: string;
+    if (image.binaryId) {
+      url = `Binary/${image.binaryId}`;
+    } else if (image.dataUrl) {
+      const contentType = image.contentType || "image/png";
+      const { placeholder, entry } = imageBinaryEntry(image.dataUrl, contentType);
+      entries.push(entry);
+      url = placeholder;
+    } else {
+      return [];
+    }
+    return [
+      {
+        url: REPORT_IMAGE_EXT_URL,
+        extension: [
+          {
+            url: "kind",
+            valueCoding: {
+              system: REPORT_IMAGE_KIND_SYSTEM,
+              code: image.kind,
+              display: reportImageKindDisplay(image.kind),
+            },
+          },
+          {
+            url: "image",
+            valueAttachment: {
+              contentType: image.contentType || "image/png",
+              url,
+              title: image.caption || undefined,
+            },
+          },
+        ],
+      },
+    ];
+  });
+}
+
 function buildPathoResultTransactionBundle(
   values: PathoResultFormValues,
   patientId: string,
@@ -405,6 +519,10 @@ function buildPathoResultTransactionBundle(
     status,
     specimenReferences,
   };
+
+  // 画像はレポートより先に積む(レポートがプレースホルダで指すため)。
+  const imageEntries: fhir4.BundleEntry[] = [];
+  const imageExtensions = pushReportImageEntries(imageEntries, values.images);
 
   const observationEntries: fhir4.BundleEntry[] = [];
   const resultReferences: fhir4.Reference[] = [];
@@ -453,9 +571,12 @@ function buildPathoResultTransactionBundle(
     effectiveDateTime: effective,
     // 診療科。DiagnosticReport にも診療科を持つ標準要素が無いため、オーダーの
     // 依頼科と同じローカル拡張で持たせる(検体検査・細菌検査の結果と同じ)。
-    extension: values.departmentId
-      ? [departmentExtension(values.departmentId, values.departmentName)]
-      : undefined,
+    extension: [
+      ...(values.departmentId
+        ? [departmentExtension(values.departmentId, values.departmentName)]
+        : []),
+      ...imageExtensions,
+    ],
     // 元になった病理検査オーダー。オーダーの明細ではなくヘッダを指す。
     basedOn: values.orderId ? [{ reference: `ServiceRequest/${values.orderId}` }] : undefined,
     specimen: specimenReferences.length > 0 ? specimenReferences : undefined,
@@ -474,6 +595,7 @@ function buildPathoResultTransactionBundle(
     resourceType: "Bundle",
     type: "transaction",
     entry: [
+      ...imageEntries,
       {
         fullUrl: reportReference,
         resource: report,
@@ -608,6 +730,29 @@ export function reportExamCategory(report: fhir4.DiagnosticReport): PathoExamCat
   return categoryCoding(report, REPORT_CATEGORY_SYSTEM)?.code === "CP" ? "N004" : "N000";
 }
 
+/** レポートに添えられた画像。拡張の並び順(=登録順)をそのまま返す。 */
+export function pathoReportImages(
+  report: fhir4.DiagnosticReport,
+): PathoReportImageValues[] {
+  return (report.extension ?? [])
+    .filter((e) => e.url === REPORT_IMAGE_EXT_URL)
+    .flatMap((e) => {
+      const attachment = e.extension?.find((sub) => sub.url === "image")?.valueAttachment;
+      const binaryId = binaryIdFromAttachment(attachment);
+      if (!binaryId) return [];
+      const kind = e.extension?.find((sub) => sub.url === "kind")?.valueCoding?.code ?? "other";
+      return [
+        {
+          binaryId,
+          dataUrl: "",
+          contentType: attachment?.contentType ?? "image/png",
+          kind,
+          caption: attachment?.title ?? "",
+        },
+      ];
+    });
+}
+
 export function parsePathoResultForm(
   report: fhir4.DiagnosticReport,
   observations: fhir4.Observation[],
@@ -625,6 +770,7 @@ export function parsePathoResultForm(
   values.originalStatus = report.status as PathoReportStatus;
   values.examCategory = reportExamCategory(report);
   values.specimens = specimens.map(parseSpecimen);
+  values.images = pathoReportImages(report);
 
   for (const obs of observations) {
     switch (loincCodeOf(obs)) {

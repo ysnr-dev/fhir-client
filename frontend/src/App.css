@@ -9913,6 +9913,41 @@ button.meal-calendar__cell:hover {
   white-space: pre-wrap;
 }
 
+/* 病理レポートに添える画像。種別・説明の行を縦に積み、追加ボタンを下に置く。 */
+.patho-result__images {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.patho-result__image-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.patho-result__image-number {
+  font-size: 13px;
+  min-width: 1.5em;
+}
+
+/* 説明は自由文なので残り幅を吸わせる。 */
+.patho-result__image-row input[type="text"] {
+  flex: 1;
+}
+
+.patho-result__image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ファイル選択はボタンから開くので、input 自体は出さない。 */
+.patho-result__file-input {
+  display: none;
+}
+
 /* 病理レポートの所見・診断。改行を残して読ませる(規約の記述サンプルが段落単位)。 */
 .patho-result__text {
   white-space: pre-wrap;

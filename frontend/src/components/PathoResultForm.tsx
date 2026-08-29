@@ -1,7 +1,17 @@
 import { makeFieldUpdater } from "../lib/form";
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import type { LabOrderCandidate } from "../api/queries";
 import { usePathoOrderDetail, useSelfDepartments } from "../api/queries";
+import { fetchSchema } from "../api/masterClient";
 import { serviceRequestsOf } from "../fhir/labOrderHelpers";
 import { SETTING_OPTIONS, type LabResultSetting } from "../fhir/labResultHelpers";
 import {
@@ -14,15 +24,24 @@ import {
 } from "../fhir/pathoOrderHelpers";
 import {
   CYTO_JUDGEMENT_OPTIONS,
+  REPORT_IMAGE_KIND_OPTIONS,
   REPORT_STATUS_OPTIONS,
   emptyPathoResultForm,
   emptyPathoResultSpecimen,
+  pathoReportImageRefs,
   resultSpecimenLabel,
   willBecomeAmended,
+  type PathoReportImageValues,
   type PathoResultFormValues,
   type PathoResultSpecimenValues,
 } from "../fhir/pathoResultHelpers";
+import { normalizeImageFile } from "../fhir/schemaImage";
 import { ErrorBanner } from "./ErrorBanner";
+import { SchemaImageGallery } from "./SchemaImageGallery";
+import { SchemaPickerModal } from "./SchemaPickerModal";
+
+// ペイントモーダル(fabric.js)は重いので、開くまで読み込まない(オーダー側と同じ)。
+const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
 
 // 病理診断レポートの入力フォーム。カルテの病理タブと病理部門一覧の双方から使う。
 //
@@ -32,6 +51,11 @@ import { ErrorBanner } from "./ErrorBanner";
 //
 // 検体はオーダーを選んだときに転記する。病理では 1 オーダーに複数検体があるので、
 // 転記した各検体に実際の採取日を入れられるようにする(オーダー側は予定日 1 つ)。
+//
+// 画像(肉眼写真・鏡検写真・切り出し図)はファイルから添付するほか、シェーママスタの
+// 臓器図を台紙に描くこともできる(切り出し図の想定)。規約 20-004 はレポートを本文
+// セクションだけで定義していて画像を規定していないため、持ち方はこのアプリの既定
+// (Binary + 拡張)に合わせている(docs/patho-order-design.md §4.5)。
 
 interface PathoResultFormProps {
   initialValues?: PathoResultFormValues;
@@ -60,6 +84,10 @@ export function PathoResultForm({
     initialValues ?? emptyPathoResultForm(),
   );
   const [validationError, setValidationError] = useState<string | null>(null);
+  // 画像: ファイル添付と、シェーママスタの台紙に描く 2 通りの入口を持つ。
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [schemaPickOpen, setSchemaPickOpen] = useState(false);
+  const [schemaPaint, setSchemaPaint] = useState<{ name: string; background: string } | null>(null);
 
   const { departments } = useSelfDepartments();
   const update = makeFieldUpdater(setValues);
@@ -123,6 +151,61 @@ export function PathoResultForm({
     }));
   }
 
+  function addImage(image: PathoReportImageValues) {
+    setValues((v) => ({ ...v, images: [...v.images, image] }));
+  }
+
+  function updateImage(index: number, patch: Partial<PathoReportImageValues>) {
+    setValues((v) => ({
+      ...v,
+      images: v.images.map((image, i) => (i === index ? { ...image, ...patch } : image)),
+    }));
+  }
+
+  function removeImage(index: number) {
+    setValues((v) => ({ ...v, images: v.images.filter((_, i) => i !== index) }));
+  }
+
+  // ファイルから添付。長辺 1600px に縮小して dataURL にし、登録時に Binary にする。
+  async function handleFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // 同じファイルを続けて選び直せるよう、読み込み前に入力を空にしておく。
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const { dataUrl, contentType } = await normalizeImageFile(file);
+      // 種別の既定は肉眼写真。カメラで撮るのは大半が切り出し前の肉眼像のため。
+      addImage({ binaryId: "", dataUrl, contentType, kind: "gross", caption: "" });
+      setValidationError(null);
+    } catch (err) {
+      setValidationError(err instanceof Error ? err.message : "画像を読み込めませんでした。");
+    }
+  }
+
+  // シェーマ選択 → 台紙(image)を取得してペイントへ進む(オーダー側と同じ流れ)。
+  async function pickSchema(schemaId: number) {
+    try {
+      const detail = await fetchSchema(schemaId);
+      setSchemaPaint({ name: detail.name, background: detail.image });
+      setSchemaPickOpen(false);
+    } catch (err) {
+      setValidationError(err instanceof Error ? err.message : "シェーマを取得できませんでした。");
+    }
+  }
+
+  function addSchemaImage(dataUrl: string) {
+    if (!schemaPaint) return;
+    // 台紙に描いたものは切り出し図として扱い、台紙の名前を説明の既定にする。
+    addImage({
+      binaryId: "",
+      dataUrl,
+      contentType: "image/png",
+      kind: "cutup",
+      caption: schemaPaint.name,
+    });
+    setSchemaPaint(null);
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!values.reportDate) {
@@ -154,7 +237,8 @@ export function PathoResultForm({
   }
 
   return (
-    <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
+    <>
+      <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
       {validationError && (
         <div className="error-banner" role="alert">
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -383,11 +467,89 @@ export function PathoResultForm({
         </label>
       </fieldset>
 
+      <fieldset>
+        <legend>画像</legend>
+        <div className="patho-result__images">
+          {values.images.length > 0 && (
+            <SchemaImageGallery refs={pathoReportImageRefs(values.images)} />
+          )}
+          {values.images.map((image, index) => (
+            <div className="patho-result__image-row" key={index}>
+              <span className="patho-result__image-number">{index + 1}</span>
+              <select
+                value={image.kind}
+                aria-label={`画像${index + 1}の種別`}
+                onChange={(e) => updateImage(index, { kind: e.target.value })}
+              >
+                {REPORT_IMAGE_KIND_OPTIONS.map((o) => (
+                  <option key={o.code} value={o.code}>
+                    {o.display}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={image.caption}
+                aria-label={`画像${index + 1}の説明`}
+                placeholder="説明(割面の陥凹病変 など)"
+                onChange={(e) => updateImage(index, { caption: e.target.value })}
+              />
+              <button
+                type="button"
+                className="rp-card__icon-button"
+                title="この画像を外す"
+                aria-label={`画像${index + 1}を外す`}
+                onClick={() => removeImage(index)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <div className="patho-result__image-actions">
+            {/* ファイル選択は input を隠してボタンから開く(他の欄と見た目を揃える)。 */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="patho-result__file-input"
+              onChange={(e) => void handleFile(e)}
+            />
+            <button type="button" onClick={() => fileInputRef.current?.click()}>
+              ＋写真を添付
+            </button>
+            <button type="button" onClick={() => setSchemaPickOpen(true)}>
+              ＋切り出し図を描く
+            </button>
+          </div>
+        </div>
+      </fieldset>
+
       <div className="prescription-form__submit">
         <button type="submit" disabled={submitting}>
           {submitting ? "送信中..." : submitLabel}
         </button>
       </div>
-    </form>
+      </form>
+
+      {/* 各モーダルは独自の入力を持つため、外側フォームの子孫に置かない
+          (form の入れ子は不正で、送信が外へ漏れる)。 */}
+      {schemaPickOpen && (
+        <SchemaPickerModal
+          onSelect={(schemaId) => void pickSchema(schemaId)}
+          onClose={() => setSchemaPickOpen(false)}
+        />
+      )}
+      {schemaPaint && (
+        <Suspense fallback={null}>
+          <SchemaPaintModal
+            title={`切り出し図: ${schemaPaint.name}`}
+            backgroundDataUrl={schemaPaint.background}
+            saveLabel="レポートに添付"
+            onSave={addSchemaImage}
+            onClose={() => setSchemaPaint(null)}
+          />
+        </Suspense>
+      )}
+    </>
   );
 }
