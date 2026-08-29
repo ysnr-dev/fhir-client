@@ -45,6 +45,7 @@ import {
 } from "./treatmentOrderHelpers";
 import { treatmentPerformsByOrderId, type TreatmentPerformDisplay } from "./treatmentResultHelpers";
 import { isMealServiceRequest, mealOrderProblem } from "./mealOrderHelpers";
+import { isNursingServiceRequest } from "./nursingOrderHelpers";
 import {
   isTransfusionServiceRequest,
   transfusionOrderItemRequests,
@@ -575,7 +576,11 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
 
   // 検体検査・放射線検査の明細(検査項目・構成項目)は ServiceRequest だが単独の
   // カードにはしない。オーダーのヘッダに紐づけて、カードの中身として出す。
-  const orderRequests = serviceRequests.filter((sr) => !isOrderItemRequest(sr));
+  // 看護指示はカルテのカードにせず指示簿タブで見せる。ここで外さないと下の
+  // 振り分けの最後(どの種別にも当たらない SR は処方)に落ちて処方カードになる。
+  const orderRequests = serviceRequests.filter(
+    (sr) => !isOrderItemRequest(sr) && !isNursingServiceRequest(sr),
+  );
   const itemRequests = serviceRequests.filter(isOrderItemRequest);
 
   // 処方・注射・検体検査・放射線検査は同じ検索結果に混ざって届くので、category の

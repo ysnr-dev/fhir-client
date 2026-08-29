@@ -190,6 +190,19 @@ import {
   type MealTiming,
 } from "../fhir/mealOrderHelpers";
 import {
+  NURSING_ORDER_TYPE,
+  buildNursingOrderRevokeEntry,
+  buildNursingOrderStopEntries,
+  isNursingOrderRunningOn,
+  isNursingServiceRequest,
+} from "../fhir/nursingOrderHelpers";
+import {
+  buildNursingTaskUpdate,
+  isNursingTask,
+  nursingTaskEntry,
+  withTaskOwner,
+} from "../fhir/nursingTaskHelpers";
+import {
   REHAB_ORDER_TYPE,
   buildRehabOrderCloseEntry,
   buildRehabOrderStopEntries,
@@ -1525,6 +1538,7 @@ export function useDischargePatient() {
       mealOrders = [],
       mealEndTiming,
       rehabOrders = [],
+      nursingOrders = [],
     }: {
       encounter: fhir4.Encounter;
       dischargeDate: string;
@@ -1534,6 +1548,8 @@ export function useDischargePatient() {
       mealEndTiming: MealTiming;
       /** 一緒に終了させるリハビリオーダー。退院日を終了日にする。 */
       rehabOrders?: fhir4.ServiceRequest[];
+      /** 一緒に終了させる看護指示。退院日を終了日にする(指示受け Task は触らない)。 */
+      nursingOrders?: fhir4.ServiceRequest[];
     }) =>
       postBundle(
         buildEncounterUpdateBundle(
@@ -1544,6 +1560,7 @@ export function useDischargePatient() {
             // 進捗 Task はここでは触らない(部門が「終了」で締める。オーダーに終了日が
             // 入っていれば翌日以降の部門一覧には出てこない)。
             ...buildRehabOrderStopEntries(rehabOrders, dischargeDate),
+            ...buildNursingOrderStopEntries(nursingOrders, dischargeDate),
           ],
         ),
       ),
@@ -6439,6 +6456,133 @@ export function useUpdateRehabTaskStatus() {
       return postBundle({ resourceType: "Bundle", type: "transaction", entry });
     },
     onSuccess: () => invalidateRehab(queryClient),
+  });
+}
+
+// ---- 看護指示(指示簿) ----
+//
+// 1 指示行 = 1 ServiceRequest で、指示受けの Task を _revinclude で一緒に引く。
+// 終了日はローカル拡張なので上流では絞れない(食事・リハビリと同じ事情)。
+
+export interface NursingOrderSet {
+  orders: fhir4.ServiceRequest[];
+  tasks: fhir4.Task[];
+}
+
+function nursingOrderSetOf(bundle: fhir4.Bundle | undefined): NursingOrderSet {
+  const resources = (bundle?.entry ?? []).map((e) => e.resource).filter(Boolean) as fhir4.Resource[];
+  return {
+    orders: resources
+      .filter((r): r is fhir4.ServiceRequest => r.resourceType === "ServiceRequest")
+      .filter(isNursingServiceRequest),
+    tasks: resources.filter((r): r is fhir4.Task => r.resourceType === "Task").filter(isNursingTask),
+  };
+}
+
+function nursingOrderParams(patientId: string | undefined, status?: string): URLSearchParams {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${NURSING_ORDER_TYPE.code}`);
+  if (status) params.set("status", status);
+  params.set("_revinclude", "Task:focus");
+  params.set("_sort", "-authoredon");
+  params.set("_count", "200");
+  return params;
+}
+
+/** 指定日に効いている看護指示(指示簿の「現在有効」)。 */
+export function useActiveNursingOrders(patientId: string | undefined, at: string) {
+  const params = nursingOrderParams(patientId, "active");
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "nursing-active", patientId, at],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+      const set = nursingOrderSetOf(bundle);
+      return { ...set, orders: set.orders.filter((sr) => isNursingOrderRunningOn(sr, at)) };
+    },
+    enabled: Boolean(patientId) && Boolean(at),
+  });
+}
+
+/** その患者の看護指示すべて(中止・終了を含む)。履歴ビューと退院時の打ち切りに使う。 */
+export function usePatientNursingOrders(patientId: string | undefined) {
+  const params = nursingOrderParams(patientId);
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "nursing-patient", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+      return nursingOrderSetOf(bundle);
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+export function useNursingOrderDetail(srId: string | undefined) {
+  const params = new URLSearchParams();
+  if (srId) {
+    params.set("_id", srId);
+    params.set("_revinclude", "Task:focus");
+  }
+  return useQuery({
+    queryKey: ["ServiceRequest", "detail", "nursing-order", srId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+      const set = nursingOrderSetOf(bundle);
+      return { order: set.orders[0], task: set.tasks[0] };
+    },
+    enabled: Boolean(srId),
+  });
+}
+
+function invalidateNursing(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+}
+
+export function useUpdateNursingOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidateNursing(queryClient),
+  });
+}
+
+/** 中止。指示を revoked にし、指示受け Task も cancelled にする。 */
+export function useRevokeNursingOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ order, task }: { order: fhir4.ServiceRequest; task: fhir4.Task | undefined }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          buildNursingOrderRevokeEntry(order),
+          nursingTaskEntry(buildNursingTaskUpdate(task, order, "cancelled")),
+        ],
+      }),
+    onSuccess: () => invalidateNursing(queryClient),
+  });
+}
+
+/** 指示受け。選んだ行の Task をまとめて accepted にし、受けた人を owner に入れる。 */
+export function useAcceptNursingOrders() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      rows,
+      owner,
+    }: {
+      rows: { order: fhir4.ServiceRequest; task: fhir4.Task | undefined }[];
+      owner: { practitionerId: string; display: string };
+    }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: rows.map(({ order, task }) =>
+          nursingTaskEntry(withTaskOwner(buildNursingTaskUpdate(task, order, "accepted"), owner)),
+        ),
+      }),
+    onSuccess: () => invalidateNursing(queryClient),
   });
 }
 

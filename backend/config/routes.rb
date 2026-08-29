@@ -221,6 +221,24 @@ Rails.application.routes.draw do
     resources :disease_indexes, only: %i[index] do
       collection { post :import }
     end
+    # MEDIS 看護実践用語標準マスター(看護行為編・看護観察編)。配布ファイルを
+    # 取込で洗い替える読み取り専用で、CRUD は持たない。
+    resources :nursing_acts, only: %i[index] do
+      collection do
+        post :import
+        get :levels
+        get :actions
+      end
+    end
+    resources :nursing_observations, only: %i[index] do
+      collection { post :import }
+    end
+    resources :nursing_observation_results, only: %i[index] do
+      collection { post :import }
+    end
+    resources :nursing_units, only: %i[index] do
+      collection { post :import }
+    end
     # J-FAGYアレルゲンコードも検索専用(取込で全件洗い替え)のため CRUD は持たない。
     resources :jfagy_allergens, only: %i[index] do
       collection { post :import }

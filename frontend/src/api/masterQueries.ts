@@ -268,6 +268,10 @@ import {
   updateMealCategory,
   deleteMealCategory,
   type MealCategoryPayload,
+  searchNursingActs,
+  searchNursingActActions,
+  fetchNursingActLevels,
+  searchNursingObservations,
   searchTransfusionProducts,
   fetchTransfusionProduct,
   createTransfusionProduct,
@@ -3541,4 +3545,95 @@ export function usePathoCollectionMethodMutations() {
       onSuccess: invalidate,
     }),
   };
+}
+
+// ---- 看護マスタ(MEDIS 看護実践用語標準マスター) ----
+
+const NURSING_ACTS_KEY = ["master", "nursing_acts"];
+const NURSING_OBSERVATIONS_KEY = ["master", "nursing_observations"];
+
+export interface NursingActFilters {
+  name: string;
+  level1_code: string;
+  level2_code: string;
+}
+
+export function useNursingActSearch(filters: NursingActFilters, page: number, enabled = true) {
+  return useQuery({
+    queryKey: [...NURSING_ACTS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchNursingActs({
+        name: filters.name || undefined,
+        level1_code: filters.level1_code || undefined,
+        level2_code: filters.level2_code || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/** 行為(第 3 階層)の一覧。用語選択モーダルは行為までを出し、修飾語は選択後に選ばせる。 */
+export function useNursingActActionSearch(filters: NursingActFilters, page: number, enabled = true) {
+  return useQuery({
+    queryKey: [...NURSING_ACTS_KEY, "actions", filters, page],
+    queryFn: () =>
+      searchNursingActActions({
+        name: filters.name || undefined,
+        level1_code: filters.level1_code || undefined,
+        level2_code: filters.level2_code || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+/**
+ * ある行為の修飾語(第 4 階層)。行を選ばせるのではなく、選んだ行為の中で
+ * 修飾語をセレクトから選ぶために使う。1 行為あたい多くても数十件なので全件引く。
+ */
+export function useNursingActModifiers(level3Code: string | undefined) {
+  return useQuery({
+    queryKey: [...NURSING_ACTS_KEY, "modifiers", level3Code],
+    queryFn: () => searchNursingActs({ level3_code: level3Code as string, per: 100 }),
+    enabled: Boolean(level3Code),
+    staleTime: Infinity,
+  });
+}
+
+// 第 1・第 2 階層の一覧。検索の絞り込みと指示簿の見出し名に使う。
+// 取込でしか変わらないので使い回す。
+export function useNursingActLevels() {
+  return useQuery({
+    queryKey: [...NURSING_ACTS_KEY, "levels"],
+    queryFn: fetchNursingActLevels,
+    staleTime: Infinity,
+  });
+}
+
+export interface NursingObservationFilters {
+  name: string;
+  category: string;
+}
+
+export function useNursingObservationSearch(
+  filters: NursingObservationFilters,
+  page: number,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: [...NURSING_OBSERVATIONS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchNursingObservations({
+        name: filters.name || undefined,
+        category: filters.category || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
 }

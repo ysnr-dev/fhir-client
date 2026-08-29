@@ -12,6 +12,7 @@ import { EndoscopyOrderCreatePanel, EndoscopyOrderEditPanel } from "./EndoscopyO
 import { TreatmentOrderCreatePanel, TreatmentOrderEditPanel } from "./TreatmentOrderPanels";
 import { SurgeryOrderCreatePanel, SurgeryOrderEditPanel } from "./SurgeryOrderPanels";
 import { MealOrderCreatePanel, MealOrderEditPanel } from "./MealOrderPanels";
+import { NursingOrderCreatePanel, NursingOrderEditPanel } from "./NursingOrderPanels";
 import {
   TransfusionOrderCreatePanel,
   TransfusionOrderEditPanel,
@@ -61,6 +62,8 @@ export type KartePaneState =
   | { kind: "transfusion-order-edit"; srId: string }
   | { kind: "rehab-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "rehab-order-edit"; srId: string }
+  | { kind: "nursing-order-create"; problem?: ProblemRef }
+  | { kind: "nursing-order-edit"; srId: string }
   | { kind: "qr-create"; problem?: ProblemRef }
   | { kind: "qr-edit"; qrId: string }
   // 予約は枠を押さえるだけで内容の編集は無く、変えられるのは日時(押さえる枠)だけ。
@@ -100,6 +103,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "transfusion-order-edit": "輸血編集",
   "rehab-order-create": "リハビリ登録",
   "rehab-order-edit": "リハビリ編集",
+  "nursing-order-create": "看護指示登録",
+  "nursing-order-edit": "看護指示編集",
   "qr-create": "テンプレート登録",
   "qr-edit": "テンプレート編集",
   "appointment-create": "予約登録",
@@ -154,6 +159,7 @@ function paneKey(state: KartePaneState): string {
     case "qr-create":
     case "vital-create":
     case "appointment-create":
+    case "nursing-order-create":
       return `${state.kind}:${state.problem?.conditionId ?? ""}`;
     default:
       return state.kind;
@@ -304,6 +310,12 @@ export function KarteRightPane({
           onClick={() => onStateChange({ kind: "rehab-order-create", problem: selectedProblem })}
         >
           リハビリ
+        </button>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "nursing-order-create", problem: selectedProblem })}
+        >
+          看護指示
         </button>
       </div>
     </section>
@@ -460,6 +472,16 @@ function PaneContent({
       );
     case "meal-order-edit":
       return <MealOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "nursing-order-create":
+      return (
+        <NursingOrderCreatePanel
+          patientId={patientId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "nursing-order-edit":
+      return <NursingOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "transfusion-order-create":
       return (
         <TransfusionOrderCreatePanel

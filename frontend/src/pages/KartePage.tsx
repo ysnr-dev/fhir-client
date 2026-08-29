@@ -23,6 +23,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
 import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
 import { KarteMealTab } from "../components/KarteMealTab";
+import { KarteNursingTab } from "../components/KarteNursingTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteSidePane } from "../components/KarteSidePane";
 import { VitalFlowsheetPanel } from "../components/VitalFlowsheetPanel";
@@ -514,7 +515,8 @@ export function KartePage() {
             pane.kind === "surgery-order-edit" ||
             pane.kind === "meal-order-edit" ||
             pane.kind === "transfusion-order-edit" ||
-            pane.kind === "rehab-order-edit"
+            pane.kind === "rehab-order-edit" ||
+            pane.kind === "nursing-order-edit"
           ? pane.srId
           : pane.kind === "qr-edit"
             ? pane.qrId
@@ -662,6 +664,16 @@ export function KartePage() {
           onCreate={(date, sourceSrId) =>
             setPane({ kind: "meal-order-create", sourceSrId, startDate: date })
           }
+        />
+      );
+    }
+    // 指示簿。登録・編集は他のオーダーと同じ右ペインで開く。
+    if (key === "nursing") {
+      return (
+        <KarteNursingTab
+          {...props}
+          onCreate={() => setPane({ kind: "nursing-order-create", problem: selectedProblem })}
+          onEdit={(srId) => setPane({ kind: "nursing-order-edit", srId })}
         />
       );
     }

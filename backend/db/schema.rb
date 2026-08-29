@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_29_400000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_30_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -862,6 +862,109 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_29_400000) do
     t.datetime "updated_at", null: false
     t.index ["exchange_code"], name: "index_master_modifiers_on_exchange_code"
     t.index ["management_number"], name: "index_master_modifiers_on_management_number", unique: true
+  end
+
+  create_table "master_nursing_acts", force: :cascade do |t|
+    t.string "change_category", default: "0", null: false
+    t.string "manage_no", null: false
+    t.string "level1_code", null: false
+    t.string "level1_name"
+    t.text "level1_definition"
+    t.string "level2_code", null: false
+    t.string "level2_name"
+    t.text "level2_definition"
+    t.string "level3_code", null: false
+    t.string "level3_name"
+    t.text "level3_definition"
+    t.string "level4_code", null: false
+    t.string "level4_name"
+    t.text "level4_definition"
+    t.text "example"
+    t.string "updated_on"
+    t.string "successor_manage_no"
+    t.integer "sort_key"
+    t.string "code_16", null: false
+    t.boolean "active", default: true, null: false
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["active"], name: "index_master_nursing_acts_on_active"
+    t.index ["code_16"], name: "index_master_nursing_acts_on_code_16"
+    t.index ["level1_code", "level2_code", "level3_code"], name: "index_master_nursing_acts_on_levels"
+    t.index ["manage_no"], name: "index_master_nursing_acts_on_manage_no", unique: true
+  end
+
+  create_table "master_nursing_observation_results", force: :cascade do |t|
+    t.string "result_group_code", null: false
+    t.string "result_code", null: false
+    t.string "name", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["result_group_code"], name: "index_master_nursing_observation_results_on_result_group_code"
+  end
+
+  create_table "master_nursing_observations", force: :cascade do |t|
+    t.string "change_category", default: "0", null: false
+    t.string "manage_no", null: false
+    t.string "search_category_1"
+    t.string "search_category_2"
+    t.string "search_category_3"
+    t.string "search_category_4"
+    t.string "search_category_5"
+    t.string "search_category_6"
+    t.string "search_category_7"
+    t.string "search_category_8"
+    t.string "advanced_category"
+    t.string "name", null: false
+    t.string "kana"
+    t.string "focus"
+    t.string "site"
+    t.string "phase"
+    t.string "other"
+    t.string "criteria"
+    t.string "result_manage_no"
+    t.string "expression_type"
+    t.string "unit"
+    t.string "result_1"
+    t.string "result_2"
+    t.string "result_3"
+    t.string "result_4"
+    t.string "result_5"
+    t.string "result_6"
+    t.string "result_7"
+    t.string "result_8"
+    t.string "result_9"
+    t.string "result_10"
+    t.string "result_11"
+    t.string "result_12"
+    t.string "result_13"
+    t.string "result_14"
+    t.string "result_15"
+    t.string "result_16"
+    t.string "result_17"
+    t.string "result_18"
+    t.string "updated_on"
+    t.string "successor_manage_no"
+    t.string "name2"
+    t.string "unit_code"
+    t.string "result_group_code"
+    t.string "adoption_category"
+    t.string "exchange_code"
+    t.boolean "active", default: true, null: false
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["active"], name: "index_master_nursing_observations_on_active"
+    t.index ["manage_no"], name: "index_master_nursing_observations_on_manage_no"
+  end
+
+  create_table "master_nursing_units", force: :cascade do |t|
+    t.string "unit_code", null: false
+    t.string "name", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["unit_code"], name: "index_master_nursing_units_on_unit_code", unique: true
   end
 
   create_table "master_patho_collection_methods", force: :cascade do |t|

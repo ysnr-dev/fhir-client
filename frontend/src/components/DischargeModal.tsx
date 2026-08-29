@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   usePatientMealOrders,
   usePatientRehabOrders,
+  usePatientNursingOrders,
   useDischargePatient,
 } from "../api/queries";
 import {
@@ -19,6 +20,7 @@ import {
 } from "../fhir/mealOrderHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { rehabOrderNeedsStop, summarizeRehabOrder } from "../fhir/rehabOrderHelpers";
+import { nursingOrderNeedsStop, summarizeNursingOrder } from "../fhir/nursingOrderHelpers";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
@@ -59,6 +61,12 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
     rehabOrderNeedsStop(sr, dischargeDate),
   );
 
+  const [stopNursing, setStopNursing] = useState(true);
+  const nursingOrders = usePatientNursingOrders(patientId);
+  const stoppingNursing = (nursingOrders.data?.orders ?? []).filter((sr) =>
+    nursingOrderNeedsStop(sr, dischargeDate),
+  );
+
   function handleSubmit() {
     const error = validateDischargeDate(encounter, dischargeDate);
     if (error) {
@@ -73,6 +81,7 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
         mealOrders: stopMeals ? stopping : [],
         mealEndTiming,
         rehabOrders: stopRehab ? stoppingRehab : [],
+        nursingOrders: stopNursing ? stoppingNursing : [],
       },
       { onSuccess: onClose },
     );
@@ -83,6 +92,7 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
       <ErrorBanner error={discharge.error} />
       <ErrorBanner error={mealOrders.error} />
       <ErrorBanner error={rehabOrders.error} />
+      <ErrorBanner error={nursingOrders.error} />
       {validationError && (
         <div className="error-banner" role="alert">
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -166,6 +176,30 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
                   <li key={sr.id}>
                     {summary.diseaseCategoryShort} {summary.therapyTypesLabel}{" "}
                     {summary.periodLabel}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {stoppingNursing.length > 0 && (
+          <div className="discharge__meal">
+            <label className="discharge__meal-toggle">
+              <input
+                type="checkbox"
+                checked={stopNursing}
+                onChange={(e) => setStopNursing(e.target.checked)}
+              />
+              看護指示を退院日で終了する
+            </label>
+            <ul className="discharge__meal-list">
+              {stoppingNursing.map((sr) => {
+                const summary = summarizeNursingOrder(sr);
+                return (
+                  <li key={sr.id}>
+                    {summary.text}
+                    {summary.frequency ? ` (${summary.frequency})` : ""}
                   </li>
                 );
               })}

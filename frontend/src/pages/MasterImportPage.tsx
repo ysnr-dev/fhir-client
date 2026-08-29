@@ -126,6 +126,30 @@ const MASTER_OPTIONS: MasterOption[] = [
       "JANIS 検査部門 薬剤感受性検査測定法コード表 drugsusceptibilitymeasurementmethod_*.xls（最新版のシートだけを読む）。施設追加分は消えない",
     accept: ".xls,.xlsx",
   },
+  {
+    type: "nursing_acts",
+    label: "看護行為マスタ（MEDIS 看護実践用語）",
+    formatHint: "看護実践用語標準マスター 看護行為編 koui-ver.*.txt（Shift_JIS、ヘッダあり・18列）",
+    accept: ".txt,.csv",
+  },
+  {
+    type: "nursing_observations",
+    label: "看護観察マスタ（MEDIS 看護実践用語）",
+    formatHint: "看護実践用語標準マスター 看護観察編 kansatsu-ver.*.txt（Shift_JIS、ヘッダあり・46列）",
+    accept: ".txt,.csv",
+  },
+  {
+    type: "nursing_observation_results",
+    label: "看護観察 観察結果テーブル",
+    formatHint: "看護観察編 result-ver.*.txt（Shift_JIS、ヘッダあり・3列）",
+    accept: ".txt,.csv",
+  },
+  {
+    type: "nursing_units",
+    label: "看護観察 単位テーブル",
+    formatHint: "看護観察編 unit-ver.*.txt（Shift_JIS、ヘッダあり・2列）",
+    accept: ".txt,.csv",
+  },
 ];
 
 export function MasterImportPage() {
