@@ -1015,7 +1015,7 @@ button:disabled {
 .master-search__parent-hint {
   margin-left: 6px;
   font-size: 12px;
-  color: var(--text-muted, #666);
+  color: var(--text);
 }
 
 .master-search__pager {
@@ -1784,7 +1784,7 @@ fieldset.rp-card {
 .report-layout-form__file {
   margin: 4px 0 0;
   font-size: 12px;
-  color: var(--text-muted, #666);
+  color: var(--text);
 }
 
 /* レイアウトに使えるアイテム ID の対応表 */
@@ -1810,13 +1810,13 @@ fieldset.rp-card {
 .placeholder-list__hint {
   margin-left: 4px;
   font-size: 11px;
-  color: var(--text-muted, #666);
+  color: var(--text);
 }
 
 .placeholder-list__note {
   margin: 8px 0 0;
   font-size: 12px;
-  color: var(--text-muted, #666);
+  color: var(--text);
 }
 
 .placeholder-list__copy {
@@ -1888,7 +1888,7 @@ fieldset.rp-card {
 
 .mapping-editor__rule-number {
   font-size: 12px;
-  color: var(--text-muted, #666);
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -4284,7 +4284,7 @@ body.karte-wide {
 .karte-daylist__pending {
   margin: 0 0 0 14px;
   font-size: 12px;
-  color: var(--text-muted, #666);
+  color: var(--text);
 }
 
 .karte-daylist__item {
@@ -5913,7 +5913,7 @@ fieldset.lab-order-item__section label {
   padding: 0;
   border: none;
   background: none;
-  color: var(--text-muted, #666);
+  color: var(--text);
   font-size: 10px;
   cursor: pointer;
 }
@@ -6024,7 +6024,7 @@ fieldset.lab-order-item__section label {
 
 .schema-master__item-note {
   font-size: 12px;
-  color: var(--text-muted, #666);
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8319,6 +8319,25 @@ body.page-wide .app__main {
 }
 
 /* 特記事項セルに出す予定・外出泊のタグ。本文と見分けがつくよう小さめの枠付きにする。 */
+/* 未指示受けの件数。予定タグ(枠線)と違って「要対応」なので塗りつぶしで区別する。 */
+.inpatient__order-tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 11px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+/* タブ行の右に置く他画面への導線(ボタン)。タブの下線に潜らないよう少し浮かせる。 */
+.inpatient-tabs__link {
+  margin: 0 0 4px auto;
+  align-self: center;
+}
+
 .inpatient__plan-tag {
   display: inline-block;
   margin-right: 6px;
@@ -10395,20 +10414,20 @@ button.meal-calendar__cell:hover {
 
 .nursing-tab__group th {
   text-align: left;
-  background: var(--bg-muted, #f3f4f6);
+  background: var(--surface-sunken);
   color: var(--text-h);
   font-size: 12px;
   padding: 4px 8px;
 }
 
 .nursing-tab__row--inactive td {
-  color: var(--text-muted, #888);
+  color: var(--text);
 }
 
 .nursing-tab__comment,
 .nursing-tab__owner {
   font-size: 12px;
-  color: var(--text-muted, #666);
+  color: var(--text);
 }
 
 /* 期間は「08-29 〜 09-05」の 1 セル。狭い列で折り返すと日付が読めなくなる。 */
@@ -10434,7 +10453,7 @@ button.meal-calendar__cell:hover {
 }
 
 .nursing-detail dt {
-  color: var(--text-muted, #666);
+  color: var(--text);
   white-space: nowrap;
 }
 
@@ -10465,18 +10484,56 @@ button.meal-calendar__cell:hover {
   margin-left: 4px;
   min-width: 2.5em;
   padding: 0 4px;
+  border: 1px solid var(--border);
   border-radius: 3px;
   font-size: 11px;
   text-align: center;
-  background: #e5e7eb;
+  color: var(--text);
 }
 
 .nursing-tab__state--active {
-  background: #dcfce7;
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .nursing-tab__state--revoked {
-  background: #fee2e2;
+  border-color: var(--lab-high);
+  color: var(--lab-high);
+}
+
+/* 病棟の指示簿(ワークリスト)の患者見出し行。指示簿タブの区分見出しと同じ地色で、
+   右側に未指示受け件数と「この患者を指示受け」を並べる。 */
+.nursing-worklist__patient th {
+  text-align: left;
+  background: var(--surface-sunken);
+  color: var(--text-h);
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+/* チェックの列。自動配分に任せると 100px 超まで広がり、患者見出しのテキストが
+   右へ押し出されて左寄せに見えなくなるので、中身の幅まで詰める。 */
+.nursing-worklist__check {
+  width: 1px;
+  white-space: nowrap;
+}
+
+/* 病室。桁を揃えず左に流す(患者数が少ないので揃える利点より、氏名が
+   間延びしない方が読みやすい)。氏名との間だけ空ける。 */
+.nursing-worklist__room {
+  margin-right: 16px;
+  color: var(--text);
+}
+
+/* 患者氏名は見出し行の主役なので、周りの補助情報より一段大きく出す。 */
+.nursing-worklist__name {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.nursing-worklist__pending {
+  margin-left: 16px;
+  color: var(--accent);
 }
 
 /* 看護指示フォーム(複数行) */

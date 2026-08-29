@@ -16,6 +16,8 @@ interface Props {
   task: fhir4.Task | undefined;
   /** 状態の判定日(指示簿の基準日)。 */
   at: string;
+  /** 誰の指示か。患者をまたぐ一覧(病棟の指示簿)から開くときに渡す。 */
+  patientName?: string;
   /** 中止済みの指示では出さない。 */
   onEdit?: () => void;
   onClose: () => void;
@@ -26,7 +28,7 @@ interface Props {
 //
 // 一覧を背後に残したいのでモーダルにする(病名・アレルギーのように view を切り替えると
 // 一覧が消えて、指示を見比べながらの確認ができない)。編集は右ペインに任せて読むだけ。
-export function NursingOrderDetailModal({ order, task, at, onEdit, onClose }: Props) {
+export function NursingOrderDetailModal({ order, task, at, patientName, onEdit, onClose }: Props) {
   const summary = summarizeNursingOrder(order);
   const state = nursingOrderState(order, at);
   const taskStatus = nursingTaskStatus(task);
@@ -35,7 +37,7 @@ export function NursingOrderDetailModal({ order, task, at, onEdit, onClose }: Pr
   const acceptedAt = task?.executionPeriod?.start ?? "";
 
   return (
-    <Modal title="看護指示" onClose={onClose}>
+    <Modal title={patientName ? `看護指示 - ${patientName}` : "看護指示"} onClose={onClose}>
       <dl className="nursing-detail">
         <div>
           <dt>指示内容</dt>

@@ -200,6 +200,8 @@ import {
   buildNursingTaskUpdate,
   isNursingTask,
   nursingTaskEntry,
+  nursingTaskStatus,
+  nursingTasksByOrderId,
   withTaskOwner,
 } from "../fhir/nursingTaskHelpers";
 import {
@@ -6535,6 +6537,9 @@ export function useNursingOrderDetail(srId: string | undefined) {
 }
 
 function invalidateNursing(queryClient: ReturnType<typeof useQueryClient>) {
+  // 病棟の指示簿一覧(と入院患者一覧の未指示受けバッジ)も同じ Task を見ているので
+  // 一緒に読み直させる。これが無いと指示受けしても一覧の状態が変わらない。
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "nursing-worklist"] });
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
 }
@@ -6584,6 +6589,126 @@ export function useAcceptNursingOrders() {
       }),
     onSuccess: () => invalidateNursing(queryClient),
   });
+}
+
+// ---- 病棟の指示簿(看護指示のワークリスト) ----
+//
+// 他の部門一覧と違い、依頼を受けるのが部門ではなく **病棟**。そのため絞り込みの主軸が
+// 病棟で、しかも上流の ward 検索(オーダーに焼き付けた order-ward 拡張)で **サーバー側で**
+// 絞る。看護指示は退院まで status=active のまま残り続ける(締め処理を持たない、
+// docs/nursing-order-design.md §7)ので、全病院ぶんを引いてから捨てる作りにすると
+// 際限なく重くなるため。他の絞り込み(診療科・指示受け状態)は他のワークリストと同じく
+// 手元のデータに対して画面側で行う。
+//
+// 軸はリハビリ一覧と同じで、基準日に **効いている**(始まっていて、まだ終わっていない)
+// 指示を並べる。終了日はローカル拡張なので上流では絞れず、取得後に判定する。
+
+/** 病棟の指示簿の 1 行。指示 1 件ぶん。 */
+export interface NursingWorklistRow {
+  order: fhir4.ServiceRequest;
+  patient?: fhir4.Patient;
+  /** 指示受け。まだ誰も受けていなければ undefined(= 指示受け待ち)。 */
+  task?: fhir4.Task;
+}
+
+export interface NursingWorklistResult {
+  /** 患者番号順。 */
+  rows: NursingWorklistRow[];
+  /** 患者 id -> 未指示受けの件数。入院患者一覧のバッジと画面の見出しで使う。 */
+  pendingByPatientId: Map<string, number>;
+  truncated: boolean;
+}
+
+function nursingWorklistParams(
+  date: string,
+  wardId: string | undefined,
+  page: number,
+): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${NURSING_ORDER_TYPE.code}`);
+  params.set("status", "active");
+  params.set("occurrence", `le${date}`);
+  // 病棟はオーダー登録時に焼き付けた order-ward 拡張。上流の ward 検索で絞る。
+  if (wardId) params.set("ward", `Location/${wardId}`);
+  // 看護指示は 1 指示 = 1 ServiceRequest で basedOn を書かないので、他の部門一覧に
+  // ある `based-on:missing=true`(明細を弾く)は要らない。
+  params.set("_count", String(WORKLIST_PAGE));
+  params.set("_offset", String(page * WORKLIST_PAGE));
+  params.set("_include", "ServiceRequest:subject");
+  params.set("_revinclude", "Task:focus");
+  return params;
+}
+
+/** 未指示受けか(有効な指示で、まだ誰も受けていない)。 */
+function isNursingPending(row: NursingWorklistRow): boolean {
+  return row.order.status === "active" && nursingTaskStatus(row.task) === "requested";
+}
+
+async function fetchNursingWorklist(
+  date: string,
+  wardId: string | undefined,
+): Promise<NursingWorklistResult> {
+  const orders: fhir4.ServiceRequest[] = [];
+
+  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
+    (page) => nursingWorklistParams(date, wardId, page),
+    (resource) => {
+      if (resource.resourceType !== "ServiceRequest") return false;
+      const request = resource as fhir4.ServiceRequest;
+      if (!isNursingServiceRequest(request)) return false;
+      orders.push(request);
+      return true;
+    },
+  );
+
+  const taskByOrderId = nursingTasksByOrderId(tasks);
+
+  const rows = orders
+    // 開始日が基準日以前のものを引いているので、あとは終わっているかだけを見る。
+    .filter((order) => isNursingOrderRunningOn(order, date))
+    .map((order) => ({
+      order,
+      patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+      task: taskByOrderId.get(order.id ?? ""),
+    }));
+
+  rows.sort(comparePatientNumber);
+
+  // 「未指示受け」の数え方をここに閉じ込める(画面とバッジで食い違わせない)。
+  const pendingByPatientId = new Map<string, number>();
+  for (const row of rows) {
+    if (!isNursingPending(row)) continue;
+    const patientId = row.order.subject?.reference?.split("/").pop();
+    if (!patientId) continue;
+    pendingByPatientId.set(patientId, (pendingByPatientId.get(patientId) ?? 0) + 1);
+  }
+
+  return { rows, pendingByPatientId, truncated };
+}
+
+/**
+ * 基準日に効いている看護指示(病棟ぶん)。病棟を選んでいないうちは読みに行かない
+ * (病棟なしで引くと全病院ぶんになるため)。
+ */
+export function useNursingWorklist(date: string, wardId: string | undefined) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "nursing-worklist", date, wardId ?? ""],
+    queryFn: () => fetchNursingWorklist(date, wardId),
+    enabled: Boolean(date) && Boolean(wardId),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 患者ごとの未指示受け件数(入院患者一覧のバッジ用)。中で useNursingWorklist を
+ * 呼ぶだけなので、指示簿一覧と同じキャッシュに乗る(行き来してもリクエストは 1 回)。
+ */
+export function useNursingPendingCounts(date: string, wardId: string | undefined) {
+  const query = useNursingWorklist(date, wardId);
+  return {
+    countByPatientId: query.data?.pendingByPatientId ?? new Map<string, number>(),
+    error: query.error,
+  };
 }
 
 // ---- 手術オーダー ----

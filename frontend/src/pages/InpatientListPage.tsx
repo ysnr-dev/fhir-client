@@ -6,6 +6,7 @@ import {
   usePlannedAdmissions,
   useUpdateEncounter,
   useWardGrid,
+  useNursingPendingCounts,
   useWardOptions,
 } from "../api/queries";
 import { AdmissionExecuteModal } from "../components/AdmissionExecuteModal";
@@ -59,6 +60,7 @@ import { locationDisplayName } from "../fhir/locationHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { addDays } from "../fhir/scheduleHelpers";
 import { bedDisplayName, bedNumber, bedShortLabel } from "../fhir/wardHelpers";
+import { KARTE_TAB_PARAM } from "../karteUrl";
 import { useReturnLinkState } from "../returnTo";
 import { today } from "../lib/dates";
 
@@ -298,6 +300,11 @@ export function InpatientListPage() {
   const inpatients = useInpatientEncounters(tab === "discharged" ? dischargedDate : date);
   const planned = usePlannedAdmissions();
   const cancelAdmission = useCancelAdmission();
+  // 未指示受けの件数(入院患者タブだけ)。病棟の指示簿一覧と同じキャッシュに乗る。
+  const nursingPending = useNursingPendingCounts(
+    tab === "current" ? date : "",
+    tab === "current" ? wardId || undefined : undefined,
+  );
   const updateEncounter = useUpdateEncounter();
 
   // 病棟が未指定なら先頭の病棟を開く。履歴を汚さないよう replace で書く。
@@ -664,6 +671,9 @@ export function InpatientListPage() {
                     onCancelAdmission={() => handleCancelAdmission(row)}
                     onRowAction={(kind) => setRowAction({ kind, row })}
                     cancelling={cancelAdmission.isPending}
+                    pendingNursingCount={
+                      nursingPending.countByPatientId.get(row.patient?.id ?? "") ?? 0
+                    }
                   />
                 ))}
               </tbody>
@@ -793,12 +803,22 @@ export function InpatientListPage() {
             {item.label}
           </button>
         ))}
+        {/* 病棟ぶんをまとめて指示受けするときはこちら(1 人ずつはバッジからカルテへ)。 */}
+        {tab === "current" && wardId && (
+          <Link
+            className="button inpatient-tabs__link"
+            to={`/nursing-worklist?ward=${wardId}&date=${date}`}
+          >
+            指示簿
+          </Link>
+        )}
       </div>
 
       <ErrorBanner
         error={wardOptions.error ?? grid.error ?? inpatients.error ?? planned.error}
       />
       <ErrorBanner error={cancelAdmission.error ?? updateEncounter.error} />
+      <ErrorBanner error={nursingPending.error} />
 
       {(tab === "planned" ? planned.data?.truncated : inpatients.data?.truncated) && (
         <p className="error-banner__line error-banner__line--error" role="status">
@@ -918,6 +938,7 @@ function InpatientTableRow({
   onCancelAdmission,
   onRowAction,
   cancelling,
+  pendingNursingCount,
 }: {
   row: InpatientRow;
   date: string;
@@ -927,6 +948,8 @@ function InpatientTableRow({
   onCancelAdmission: () => void;
   onRowAction: (kind: RowAction["kind"]) => void;
   cancelling: boolean;
+  /** まだ看護師が受けていない看護指示の件数。0 なら出さない。 */
+  pendingNursingCount: number;
 }) {
   const returnLinkState = useReturnLinkState();
   const { room, bed, roomRowSpan, encounter, patient } = row;
@@ -956,12 +979,24 @@ function InpatientTableRow({
           <td>{encounterNurseNames(encounter).join("、") || "-"}</td>
           <td>{encounterAdmissionDate(encounter)}</td>
           <td className="inpatient__note">
+            {/* 未指示受けは「掲示」ではなく要対応なので、予定タグ(枠線)と見た目を
+                分けて先頭に置く。押すとその患者のカルテの指示簿タブが開く。 */}
+            {pendingNursingCount > 0 && patientId && (
+              <Link
+                className="inpatient__order-tag"
+                to={`/patients/${patientId}/karte?${KARTE_TAB_PARAM}=nursing`}
+                state={returnLinkState}
+              >
+                指示受け {pendingNursingCount}
+              </Link>
+            )}
             {planTags.map((tag) => (
               <span key={tag} className="inpatient__plan-tag">
                 {tag}
               </span>
             ))}
-            {note || (planTags.length === 0 ? "-" : null)}
+            {note ||
+              (planTags.length === 0 && pendingNursingCount === 0 ? "-" : null)}
           </td>
           <td className="patient-table__actions sticky-table__fix-actions">
             {patientId && (

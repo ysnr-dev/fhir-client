@@ -55,6 +55,7 @@ import { MicroSpecimenTypePage } from "./pages/MicroSpecimenTypePage";
 import { PathoWorklistPage } from "./pages/PathoWorklistPage";
 import { TransfusionWorklistPage } from "./pages/TransfusionWorklistPage";
 import { RehabWorklistPage } from "./pages/RehabWorklistPage";
+import { NursingWorklistPage } from "./pages/NursingWorklistPage";
 import { PathoOrganPage } from "./pages/PathoOrganPage";
 import { PathoCollectionMethodPage } from "./pages/PathoCollectionMethodPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
@@ -473,6 +474,7 @@ function App() {
           <Route path="/patho-worklist" element={<PathoWorklistPage />} />
           <Route path="/transfusion-worklist" element={<TransfusionWorklistPage />} />
           <Route path="/rehab-worklist" element={<RehabWorklistPage />} />
+          <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
           <Route path="/physio-worklist" element={<PhysioWorklistPage />} />
