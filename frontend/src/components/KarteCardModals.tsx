@@ -12,6 +12,7 @@ import {
   useEndoscopyOrderDetail,
   useEndoscopyPerformDetail,
   useMealOrderDetail,
+  useRehabOrderDetail,
   useTransfusionOrderDetail,
   useTransfusionPerformDetail,
   useTreatmentOrderDetail,
@@ -58,6 +59,8 @@ import { EndoscopyOrderDetailPanel } from "./EndoscopyOrderDetailPanel";
 import { TreatmentOrderDetailPanel } from "./TreatmentOrderDetailPanel";
 import { SurgeryOrderDetailPanel } from "./SurgeryOrderDetailPanel";
 import { TransfusionOrderDetailPanel } from "./TransfusionOrderDetailPanel";
+import { RehabOrderDetailPanel } from "./RehabOrderDetailPanel";
+import { rehabPerformsByOrderId } from "../fhir/rehabResultHelpers";
 
 // カルテのタイムラインから開くモーダル。詳細表示は各リソースの詳細ページと同じ
 // パネルを使うので、カードでは省いている情報(処方の DI リンクなど)も参照できる。
@@ -76,6 +79,7 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   "surgery-order": "手術内容",
   "meal-order": "食事内容",
   "transfusion-order": "輸血内容",
+  "rehab-order": "リハビリ内容",
   "lab-result": "検査結果内容",
   "micro-result": "細菌検査結果内容",
   "patho-result": "病理診断レポート",
@@ -123,6 +127,8 @@ export function KarteDetailModal({
         <MealOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "transfusion-order" ? (
         <TransfusionOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+      ) : target.kind === "rehab-order" ? (
+        <RehabOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-result" ? (
         <LabResultDetail patientId={patientId} reportId={target.id} />
       ) : target.kind === "micro-result" ? (
@@ -441,6 +447,48 @@ function MealOrderDetail({
   );
 }
 
+// リハビリは実施記録が別リソースで、オーダーの検索に _revinclude で添えてある
+// (useRehabOrderDetail)。実施履歴を全件並べたいので同じ応答から取り出す。
+function RehabOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = useRehabOrderDetail(srId);
+  const serviceRequest = serviceRequestsOf(detail.data?.data).find(
+    (request) => request.id === srId,
+  );
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  const procedures = (detail.data?.data.entry ?? [])
+    .map((entry) => entry.resource)
+    .filter((r): r is fhir4.Procedure => r?.resourceType === "Procedure");
+  const performs = rehabPerformsByOrderId(procedures).get(srId) ?? [];
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定されたリハビリオーダーは別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <RehabOrderDetailPanel
+          serviceRequest={serviceRequest}
+          performs={performs}
+          problemsById={problemsById}
+        />
+      ) : (
+        !detail.error && <NotFound label="リハビリオーダー" />
+      )}
+    </>
+  );
+}
+
 function SurgeryOrderDetail({
   patientId,
   srId,
@@ -668,6 +716,8 @@ export function KarteCardJsonModal({
         <PathoOrderJson srId={item.id} />
       ) : item.kind === "transfusion-order" ? (
         <TransfusionOrderJson srId={item.id} />
+      ) : item.kind === "rehab-order" ? (
+        <RehabOrderJson srId={item.id} />
       ) : (
         <FhirJsonView resource={jsonResource(item)} />
       )}
@@ -896,6 +946,19 @@ function TransfusionOrderJson({ srId }: { srId: string }) {
       ) : (
         <FhirJsonView resource={detail.data?.data} />
       )}
+    </>
+  );
+}
+
+// リハビリはオーダーの検索に進捗 Task と実施 Procedure を _revinclude で添えてある
+// ので、他部門のように実施記録を別に引かなくてよい。
+function RehabOrderJson({ srId }: { srId: string }) {
+  const detail = useRehabOrderDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
     </>
   );
 }

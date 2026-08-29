@@ -59,6 +59,9 @@ import {
   transfusionPerformsByOrderId,
   type TransfusionPerformDisplay,
 } from "./transfusionResultHelpers";
+import { isRehabServiceRequest, rehabOrderProblem } from "./rehabOrderHelpers";
+import { rehabTaskStatus, rehabTasksByOrderId, type RehabTaskStatus } from "./rehabTaskHelpers";
+import { rehabPerformsByOrderId, type RehabPerformDisplay } from "./rehabResultHelpers";
 import {
   treatmentTaskStatus,
   treatmentTasksByOrderId,
@@ -121,6 +124,7 @@ export type KarteItemKind =
   | "surgery-order"
   | "meal-order"
   | "transfusion-order"
+  | "rehab-order"
   | "qr";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
@@ -138,6 +142,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   "surgery-order": "手術",
   "meal-order": "食事",
   "transfusion-order": "輸血",
+  "rehab-order": "リハビリ",
   qr: "テンプレート",
 };
 
@@ -275,6 +280,16 @@ export type KarteTimelineItem = KarteItemBase &
         task: fhir4.Task | undefined;
         /** 実施記録。未実施なら空。 */
         performs: TransfusionPerformDisplay[];
+      }
+    // リハビリ。食事と同じ期間継続型で明細は持たないが、進捗 Task と実施記録は持つ。
+    // 1 オーダーに実施が何十件も積み上がるので、カードは先頭数件と件数だけを出す。
+    | {
+        kind: "rehab-order";
+        serviceRequest: fhir4.ServiceRequest;
+        /** リハ部門の受け入れ状態。Task がまだ無いオーダーは依頼済。 */
+        status: RehabTaskStatus;
+        /** 実施記録(新しい順)。 */
+        performs: RehabPerformDisplay[];
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
@@ -533,6 +548,10 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     pickByType<fhir4.Observation>(prescriptionResources, "Observation"),
   );
   const treatmentPerformByOrderId = treatmentPerformsByOrderId(procedures, administrations);
+  // リハビリも同じ検索結果に Task と Procedure が混ざって届く。振り分けは
+  // rehabPerformsByOrderId が category(order-type)で行うので同じ配列を渡してよい。
+  const rehabTaskByOrderId = rehabTasksByOrderId(tasks);
+  const rehabPerformByOrderId = rehabPerformsByOrderId(procedures);
 
   const medicationRequestsBySr = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
@@ -694,6 +713,26 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         performs:
           status === "completed"
             ? (transfusionPerformByOrderId.get(serviceRequest.id ?? "") ?? [])
+            : [],
+      };
+    }
+    if (isRehabServiceRequest(serviceRequest)) {
+      const status = rehabTaskStatus(rehabTaskByOrderId.get(serviceRequest.id ?? ""));
+      return {
+        ...base,
+        kind: "rehab-order" as const,
+        label: KARTE_KIND_LABELS["rehab-order"],
+        status,
+        // **実施情報の表示条件だけ他部門と違う**(docs/rehab-order-design.md §5)。
+        //
+        // 他部門は status === "completed" のときだけ実施情報を出す。取り消した検査に
+        // 実施情報が残らないようにするためで、1 オーダー 1 実施だから成り立つ条件。
+        // リハビリは受付済(accepted)のまま期間中ずっと実施が積み上がるので、同じ条件に
+        // すると期間中は 1 件も実施が見えない。**受付済以降は常に出す。**
+        // 他部門と揃える統一リファクタで壊さないこと。
+        performs:
+          status === "accepted" || status === "completed"
+            ? (rehabPerformByOrderId.get(serviceRequest.id ?? "") ?? [])
             : [],
       };
     }
@@ -879,6 +918,7 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "surgery-order") return surgeryOrderProblem(item.serviceRequest);
   if (item.kind === "meal-order") return mealOrderProblem(item.serviceRequest);
   if (item.kind === "transfusion-order") return transfusionOrderProblem(item.serviceRequest);
+  if (item.kind === "rehab-order") return rehabOrderProblem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);
   }

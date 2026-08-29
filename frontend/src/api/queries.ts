@@ -190,6 +190,22 @@ import {
   type MealTiming,
 } from "../fhir/mealOrderHelpers";
 import {
+  REHAB_ORDER_TYPE,
+  buildRehabOrderCloseEntry,
+  buildRehabOrderStopEntries,
+  isRehabOrderRunningOn,
+  isRehabServiceRequest,
+} from "../fhir/rehabOrderHelpers";
+import {
+  buildRehabTaskUpdate,
+  rehabTasksByOrderId,
+  type RehabTaskStatus,
+} from "../fhir/rehabTaskHelpers";
+import {
+  rehabPerformsByOrderId,
+  type RehabPerformDisplay,
+} from "../fhir/rehabResultHelpers";
+import {
   buildTreatmentTaskUpdate,
   treatmentTaskStatus,
   treatmentTasksByOrderId,
@@ -221,6 +237,7 @@ import {
 } from "../fhir/anesthesiaChartHelpers";
 import { buildPractitionerDeleteBundle } from "../fhir/practitionerHelpers";
 import {
+  SERVICE_TYPE_SYSTEM as SCHEDULE_SERVICE_TYPE_SYSTEM,
   addDays,
   buildSlotCreateBundle,
   buildSlotDeleteBundle,
@@ -230,14 +247,17 @@ import {
 } from "../fhir/scheduleHelpers";
 import {
   appointmentActorId,
+  appointmentOrderId,
   appointmentSlotIds,
   buildBookBundle,
   buildCancelBundle,
   buildCancelEntries,
+  buildRehabAppointmentBundle,
   buildRescheduleBundle,
   buildRescheduleEntries,
   isActiveAppointment,
   isExamAppointment,
+  type SlotSelection,
 } from "../fhir/appointmentHelpers";
 import {
   baseRoleOf,
@@ -1492,8 +1512,9 @@ export function useAdmitPatient() {
 
 /** 退院。入院を終える(記録は status=finished + 退院日として残る)。 */
 /**
- * 退院。継続する食事オーダーを一緒に止められる(退院後も食事が出続けるのを防ぐ)。
- * 入院の書き換えと同じ transaction に載せるので、退院だけ通って食事が残ることはない。
+ * 退院。継続する食事・リハビリオーダーを一緒に止められる(退院後も食事が出続けたり、
+ * 終わったはずのリハビリが部門一覧に並び続けるのを防ぐ)。入院の書き換えと同じ
+ * transaction に載せるので、退院だけ通ってオーダーが残ることはない。
  */
 export function useDischargePatient() {
   const queryClient = useQueryClient();
@@ -1503,6 +1524,7 @@ export function useDischargePatient() {
       dischargeDate,
       mealOrders = [],
       mealEndTiming,
+      rehabOrders = [],
     }: {
       encounter: fhir4.Encounter;
       dischargeDate: string;
@@ -1510,16 +1532,24 @@ export function useDischargePatient() {
       mealOrders?: fhir4.ServiceRequest[];
       /** 退院日のどの食事まで出すか。 */
       mealEndTiming: MealTiming;
+      /** 一緒に終了させるリハビリオーダー。退院日を終了日にする。 */
+      rehabOrders?: fhir4.ServiceRequest[];
     }) =>
       postBundle(
         buildEncounterUpdateBundle(
           buildDischargedEncounter(encounter, dischargeDate),
-          buildMealOrderStopEntries(mealOrders, dischargeDate, mealEndTiming),
+          [
+            ...buildMealOrderStopEntries(mealOrders, dischargeDate, mealEndTiming),
+            // リハビリは食事と違い時間帯を持たないので、退院日をそのまま終了日にする。
+            // 進捗 Task はここでは触らない(部門が「終了」で締める。オーダーに終了日が
+            // 入っていれば翌日以降の部門一覧には出てこない)。
+            ...buildRehabOrderStopEntries(rehabOrders, dischargeDate),
+          ],
         ),
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Encounter"] });
-      // 食事オーダーの終了もこの transaction で書いているので読み直させる。
+      // 食事・リハビリの終了もこの transaction で書いているので読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
     },
   });
@@ -4370,6 +4400,9 @@ const OCCURRENCE_ORDER_TYPES = [
   PATHO_ORDER_TYPE.code,
   // 輸血は投与予定日にカードを出す。輸血部門の一覧もその日付で引く。
   TRANSFUSION_ORDER_TYPE.code,
+  // リハビリは開始日(occurrence)にカードを出す。食事と同じ期間継続型で、
+  // オーダー日ではなくリハビリが始まる日がカードの置き場所になる。
+  REHAB_ORDER_TYPE.code,
 ];
 
 const OCCURRENCE_ORDER_TYPE_TOKENS = OCCURRENCE_ORDER_TYPES.map(
@@ -6018,6 +6051,394 @@ export function useDeleteMealOrder() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
     },
+  });
+}
+
+// ---- リハビリオーダー ----
+//
+// 食事と同じ期間継続型なので、明細を持たずヘッダ 1 本で済む。食事と違うのは進捗
+// Task と実施記録(Procedure)を持つところで、Task は「部門の受け入れ状態」を表し、
+// 日々の実施は Task を動かさず Procedure が積み上がる
+// (docs/rehab-order-design.md §4)。
+//
+// 終了日はローカル拡張なので上流では絞れない。どの問い合わせも「開始日が基準日
+// 以前の有効なオーダー」を引いてから、終了日の判定をここで行う(食事と同じ事情)。
+
+export function useRehabOrderDetail(srId: string | undefined) {
+  const params = new URLSearchParams();
+  if (srId) {
+    params.set("_id", srId);
+    // 進捗と実施履歴を詳細パネル・実施入力で使うので同時に取る。
+    params.set("_revinclude", "Task:focus");
+    params.append("_revinclude", "Procedure:based-on");
+  }
+
+  // Task と Procedure が混ざって返るので、要素の型は Resource で受ける。
+  return useQuery({
+    queryKey: ["ServiceRequest", "detail", "rehab-order", srId],
+    queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", params),
+    enabled: Boolean(srId),
+  });
+}
+
+/**
+ * その患者の有効なリハビリオーダー。退院で打ち切る対象を選ぶのに使う。
+ * どれを止めるかは退院日で決まるので、絞り込み(rehabOrderNeedsStop)は画面側で行う
+ * (usePatientMealOrders と同じ作り)。
+ */
+export function usePatientRehabOrders(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${REHAB_ORDER_TYPE.code}`);
+  params.set("status", "active");
+  params.set("_sort", "-authoredon");
+  params.set("_count", "20");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "rehab-patient", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      return serviceRequestsOf(bundle).filter(isRehabServiceRequest);
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/** 指定日に効いている(始まっていて、まだ終わっていない)リハビリオーダー。 */
+export function useActiveRehabOrders(patientId: string | undefined, at: string) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${REHAB_ORDER_TYPE.code}`);
+  params.set("status", "active");
+  params.set("occurrence", `le${at}`);
+  params.set("_count", "50");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "rehab-active", patientId, at],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      return serviceRequestsOf(bundle)
+        .filter(isRehabServiceRequest)
+        .filter((sr) => isRehabOrderRunningOn(sr, at));
+    },
+    enabled: Boolean(patientId) && Boolean(at),
+  });
+}
+
+export function useUpdateRehabOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      // 開始日が動くとカードの載る日も変わるので、まとめて読み直させる。
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+    },
+  });
+}
+
+/**
+ * オーダーを消す。明細は持たないが、リハ部門が取った予約は道連れで取り消す
+ * (放射線オーダーの削除と同じ後始末。予約だけが残って枠を塞ぐのを防ぐ)。
+ */
+export function useDeleteRehabOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (srId: string) => {
+      const appointmentEntries = await fetchRehabAppointmentCancelEntries(srId);
+      return postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          ...appointmentEntries,
+          { request: { method: "DELETE", url: `ServiceRequest/${srId}` } },
+        ],
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      invalidateAppointments(queryClient);
+    },
+  });
+}
+
+// ---- リハビリ一覧(部門ワークリスト) ----
+//
+// 他部門の一覧は「その日に実施予定のオーダー」を日付一致で引くが、リハビリは期間型
+// なので「基準日に効いている(始まっていて、まだ終わっていない)オーダー」を引く。
+// 終了日はローカル拡張で上流では絞れないため、開始日が基準日以前のものを引いてから
+// クライアントで終了判定する(useMealOrderMonth と同じ形)。
+//
+// 疾患別リハ区分・療法種別・入外区分・病棟・診療科・進捗での絞り込みは画面側で行う
+// (理由は検体検査一覧の節のコメントを参照)。
+
+/** リハビリ一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
+export interface RehabWorklistRow {
+  order: fhir4.ServiceRequest;
+  patient?: fhir4.Patient;
+  /** 進捗(= 部門の受け入れ状態)。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
+  task?: fhir4.Task;
+  /** 基準日の実施記録。期間中は何度も実施するので「その日に実施したか」で見る。 */
+  todayPerforms: RehabPerformDisplay[];
+  /** 基準日以降の予約(近い順)。先頭が「次回予約」。 */
+  appointments: fhir4.Appointment[];
+}
+
+export interface RehabWorklistResult {
+  rows: RehabWorklistRow[];
+  /** 上限まで読んでも読み切れなかった。 */
+  truncated: boolean;
+}
+
+/**
+ * 基準日に効いているリハビリオーダーのヘッダ検索。worklistParams を使わないのは
+ * 日付の当て方が違うため(他部門は実施予定日の一致、リハビリは開始日 le + 終了判定)。
+ */
+function rehabWorklistParams(date: string, page: number): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${REHAB_ORDER_TYPE.code}`);
+  params.set("status", "active");
+  params.set("occurrence", `le${date}`);
+  params.set("based-on:missing", "true");
+  params.set("_count", "100");
+  params.set("_offset", String(page * 100));
+  params.set("_include", "ServiceRequest:subject");
+  params.set("_revinclude", "Task:focus");
+  return params;
+}
+
+/** 基準日 1 日ぶんのリハビリ実施記録。オーダーの id ごとにまとめる。 */
+async function fetchRehabPerformsOn(date: string): Promise<Map<string, RehabPerformDisplay[]>> {
+  const params = new URLSearchParams();
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${REHAB_ORDER_TYPE.code}`);
+  params.set("date", date);
+  params.set("_count", "200");
+
+  const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
+  const procedures = (bundle.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r): r is fhir4.Procedure => r?.resourceType === "Procedure");
+  return rehabPerformsByOrderId(procedures);
+}
+
+async function fetchRehabWorklist(date: string): Promise<RehabWorklistResult> {
+  const orders: fhir4.ServiceRequest[] = [];
+
+  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
+    (page) => rehabWorklistParams(date, page),
+    (resource) => {
+      if (resource.resourceType !== "ServiceRequest") return false;
+      const request = resource as fhir4.ServiceRequest;
+      if (!isRehabServiceRequest(request)) return false;
+      orders.push(request);
+      return true;
+    },
+  );
+
+  // 実施記録と予約はオーダーの検索から辿れないので別に引く。1 日ぶんなので 1 往復ずつ。
+  const [performsByOrderId, appointmentsByOrderId] = await Promise.all([
+    fetchRehabPerformsOn(date),
+    fetchRehabAppointmentsFrom(date),
+  ]);
+
+  const taskByOrderId = rehabTasksByOrderId(tasks);
+
+  const rows = orders
+    // 開始日が基準日以前のものを引いているので、あとは終了しているかだけを見る。
+    .filter((order) => isRehabOrderRunningOn(order, date))
+    .map((order) => ({
+      order,
+      patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+      task: taskByOrderId.get(order.id ?? ""),
+      todayPerforms: performsByOrderId.get(order.id ?? "") ?? [],
+      appointments: appointmentsByOrderId.get(order.id ?? "") ?? [],
+    }));
+
+  // 日単位の一覧では患者番号順が扱いやすい(病理・輸血と同じ)。
+  rows.sort(comparePatientNumber);
+
+  return { rows, truncated };
+}
+
+/** 基準日に効いているリハビリオーダー。日付が未選択の間は読みに行かない。 */
+export function useRehabWorklist(date: string) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "rehab-worklist", date],
+    queryFn: () => fetchRehabWorklist(date),
+    enabled: Boolean(date),
+    placeholderData: keepPreviousData,
+  });
+}
+
+// ---- リハビリの予約 ----
+//
+// リハ室の枠(Schedule の serviceType = rehab)に対して、部門が受付後に「次回予約」を
+// 都度取る。オーダー登録の transaction には同梱しない(理由は appointmentHelpers の
+// buildRehabAppointmentBundle を参照)。
+
+/**
+ * 基準日以降のリハビリ予約を、オーダーの id ごとにまとめる(それぞれ日時の近い順)。
+ * オーダー一覧の「次回予約」列と「本日の予約」ビューを 1 回の問い合わせで賄う。
+ */
+async function fetchRehabAppointmentsFrom(
+  from: string,
+): Promise<Map<string, fhir4.Appointment[]>> {
+  const params = new URLSearchParams();
+  params.set("date", `ge${from}`);
+  params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|rehab`);
+  params.set("_count", "200");
+  params.set("_sort", "date");
+
+  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
+  const appointments = (bundle.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
+    .filter(isActiveAppointment);
+
+  const byOrderId = new Map<string, fhir4.Appointment[]>();
+  for (const appointment of appointments) {
+    const orderId = appointmentOrderId(appointment);
+    if (!orderId) continue;
+    const list = byOrderId.get(orderId);
+    if (list) list.push(appointment);
+    else byOrderId.set(orderId, [appointment]);
+  }
+  for (const list of byOrderId.values()) {
+    list.sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""));
+  }
+  return byOrderId;
+}
+
+/** オーダーヘッダに紐づく有効なリハビリ予約の取消エントリ。予約が無ければ空。 */
+async function fetchRehabAppointmentCancelEntries(srId: string): Promise<fhir4.BundleEntry[]> {
+  const params = new URLSearchParams();
+  params.set("based-on", `ServiceRequest/${srId}`);
+  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
+  const appointments = (bundle.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
+    .filter(isActiveAppointment);
+
+  const entries: fhir4.BundleEntry[] = [];
+  for (const appointment of appointments) {
+    entries.push(...buildCancelEntries(appointment, await fetchAppointmentSlots(appointment)));
+  }
+  return entries;
+}
+
+/** リハビリの予約を取る。オーダーを basedOn に持つ Appointment + 枠の busy 化。 */
+export function useBookRehabAppointment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      patient,
+      selection,
+      orderId,
+    }: {
+      patient: fhir4.Patient;
+      selection: SlotSelection;
+      orderId: string;
+    }) => postBundle(buildRehabAppointmentBundle(patient, selection, orderId)),
+    onSuccess: () => {
+      invalidateAppointments(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rehab-worklist"] });
+    },
+  });
+}
+
+// ---- リハビリの実施記録 ----
+//
+// 実施は Procedure を 1 件足すだけで進捗 Task を動かさない。他部門の実施と唯一
+// 作りが違う点(rehabResultHelpers.ts の冒頭コメント / docs/rehab-order-design.md §4)。
+
+function rehabPerformSearchParams(orderId: string): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("based-on", `ServiceRequest/${orderId}`);
+  // 1 オーダーに実施が何十件も積み上がるので多めに取る。
+  params.set("_count", "200");
+  return params;
+}
+
+/**
+ * そのオーダーの実施記録(全期間)。詳細パネルの実施履歴と FHIR JSON 表示で使う。
+ * カルテのカードはオーダー検索の _revinclude で届くのでこれを使わない。
+ */
+export function useRehabPerformDetail(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ["Procedure", "search", "rehab-perform", orderId],
+    queryFn: () =>
+      searchResource<fhir4.Resource>("Procedure", rehabPerformSearchParams(orderId ?? "")),
+    enabled: Boolean(orderId),
+  });
+}
+
+/** リハビリの進捗・実施記録・予約が動いたときに読み直させるもの。 */
+function invalidateRehab(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rehab-worklist"] });
+  // カルテのオーダーカードも進捗と実施履歴を出しているので読み直させる。
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+  queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
+}
+
+/**
+ * 実施登録。Procedure を 1 件 POST するだけで Task は動かさない。
+ * (他部門の useRegisterXxxPerform は Task を completed にする Bundle を受け取るが、
+ * リハビリは期間中ずっと受付済のままなので、それに合わせてはいけない。)
+ */
+export function useRegisterRehabPerform() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidateRehab(queryClient),
+  });
+}
+
+/** 実施の取消。Procedure を消すだけ(進捗は実施で動いていないので戻す先が無い)。 */
+export function useDeleteRehabPerform() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (procedureId: string) => deleteResource("Procedure", procedureId),
+    onSuccess: () => invalidateRehab(queryClient),
+  });
+}
+
+/**
+ * 受付・終了・中止などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
+ *
+ * 「終了」だけは ServiceRequest にも終了日を書く。Task を completed にするだけでは
+ * status=active のまま残り、部門一覧の `occurrence=le{基準日}` に永久にヒットし
+ * 続けるため(docs/rehab-order-design.md)。
+ *
+ * 逆に「終了を取消」では終了日を消さない。打ち切った期間まで巻き戻すと、その間に
+ * 積んだ実施記録との整合が取れなくなるため。期間を延ばしたいときはオーダーを編集する。
+ */
+export function useUpdateRehabTaskStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      order,
+      task,
+      status,
+      /** 終了日。status が completed のときだけ使う。 */
+      endDate,
+    }: {
+      order: fhir4.ServiceRequest;
+      task: fhir4.Task | undefined;
+      status: RehabTaskStatus;
+      endDate?: string;
+    }) => {
+      const entry: fhir4.BundleEntry[] = [taskBundleEntry(buildRehabTaskUpdate(task, order, status))];
+      if (status === "completed" && endDate) {
+        entry.push(buildRehabOrderCloseEntry(order, endDate));
+      }
+      return postBundle({ resourceType: "Bundle", type: "transaction", entry });
+    },
+    onSuccess: () => invalidateRehab(queryClient),
   });
 }
 

@@ -5042,17 +5042,24 @@ body.karte-wide {
   font-size: 13px;
 }
 
+/* オーダー種別は増えていくので、ボタン列だけがペインの高さに収まらなくなる。
+   はみ出したぶんは列の中でスクロールさせる(ペインごと伸ばすと、左ペインとの
+   高さが揃わなくなる)。 */
 .karte-right__actions {
   display: flex;
   flex-direction: column;
   gap: 8px;
   flex: none;
+  overflow-y: auto;
 }
 
+/* 縮めずにスクロールさせる。flex の既定(shrink: 1)のままだと、種別が増えるほど
+   1 つずつが薄くなって押しにくくなる。 */
 .karte-right__actions button {
   font-size: 13px;
   padding: 6px 12px;
   justify-content: center;
+  flex: none;
 }
 
 /* 右ペインのフォームはペイン幅いっぱいに使う(既定の max-width を外す)。 */
@@ -8086,6 +8093,33 @@ body.page-wide .app__main {
 
 .rad-order-frame .rad-order-frame__perform input {
   margin: 0;
+}
+
+/* リハビリの療法種別(PT/OT/ST)。1 人に PT と OT を併せて出すことが普通にあるので
+   複数選択のチェックボックスにしてある。 */
+.rehab-order__therapy-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  /* 右ペインは狭いので、3 つ並ばない幅では折り返す。 */
+  flex: 1 1 100%;
+}
+
+/* .prescription-form label の既定は縦並び(ラベル文言の下に入力欄)。チェックボックスは
+   文言と横に並べたいので、詳細度を上げて打ち消す(rad-order-frame__perform と同じ)。 */
+.prescription-form label.rehab-order__therapy-type {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+/* チェックボックスは .prescription-form input の共通スタイル(枠付きの入力欄)を
+   打ち消す(clinical-note-form__mode-option のラジオと同じ)。 */
+.rehab-order__therapy-type input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
 }
 
 /* 検査予約モーダル。右ペインより広く使えるのでカレンダーをそのまま出す。 */

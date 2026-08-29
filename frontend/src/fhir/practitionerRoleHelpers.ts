@@ -22,7 +22,11 @@ export const PRACTITIONER_ROLE_OPTIONS = [
   { code: "dentist", label: "歯科医師" },
   { code: "pharmacist", label: "薬剤師" },
   { code: "nurse", label: "看護師" },
+  // physio(理学療法士)・occupational(作業療法士)・speech(言語聴覚士)はリハビリの
+  // 療法種別 PT/OT/ST に対応する職種。実施記録の担当療法士(Procedure.performer)に
+  // 立つ。**この physio は職種のコードで、生理検査のオーダー種別 physio とは別物。**
   { code: "physio", label: "理学療法士" },
+  { code: "occupational", label: "作業療法士" },
   { code: "speech", label: "言語聴覚士" },
   { code: "researcher", label: "研究者" },
   { code: "teacher", label: "教員" },

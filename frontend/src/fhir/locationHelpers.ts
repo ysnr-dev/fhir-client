@@ -35,6 +35,9 @@ export const LOCATION_TYPE_OPTIONS = [
   { code: "DX", label: "検査・処置室" },
   { code: "ER", label: "救急" },
   { code: "SU", label: "手術室" },
+  // リハビリ室。リハビリの予約枠(Schedule.actor)の主体になる。v3-RoleCode の
+  // RHU(Rehabilitation hospital unit)を当てる。
+  { code: "RHU", label: "リハビリ室" },
 ] as const;
 
 // 一覧・選択肢はこのコードでの OR 検索で引く(入院の場所を混ぜないため。

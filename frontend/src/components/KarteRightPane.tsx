@@ -16,6 +16,7 @@ import {
   TransfusionOrderCreatePanel,
   TransfusionOrderEditPanel,
 } from "./TransfusionOrderPanels";
+import { RehabOrderCreatePanel, RehabOrderEditPanel } from "./RehabOrderPanels";
 import {
   QuestionnaireResponseCreatePanel,
   QuestionnaireResponseEditPanel,
@@ -58,6 +59,8 @@ export type KartePaneState =
   | { kind: "meal-order-edit"; srId: string }
   | { kind: "transfusion-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "transfusion-order-edit"; srId: string }
+  | { kind: "rehab-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "rehab-order-edit"; srId: string }
   | { kind: "qr-create"; problem?: ProblemRef }
   | { kind: "qr-edit"; qrId: string }
   // 予約は枠を押さえるだけで内容の編集は無く、変えられるのは日時(押さえる枠)だけ。
@@ -95,6 +98,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "meal-order-edit": "食事編集",
   "transfusion-order-create": "輸血登録",
   "transfusion-order-edit": "輸血編集",
+  "rehab-order-create": "リハビリ登録",
+  "rehab-order-edit": "リハビリ編集",
   "qr-create": "テンプレート登録",
   "qr-edit": "テンプレート編集",
   "appointment-create": "予約登録",
@@ -119,6 +124,7 @@ function paneKey(state: KartePaneState): string {
     case "surgery-order-edit":
     case "meal-order-edit":
     case "transfusion-order-edit":
+    case "rehab-order-edit":
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
@@ -139,6 +145,7 @@ function paneKey(state: KartePaneState): string {
     case "treatment-order-create":
     case "surgery-order-create":
     case "transfusion-order-create":
+    case "rehab-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     // 食事は暦の別の日を押したときも初期値(開始日)が変わるので、日付もキーに入れる。
     case "meal-order-create":
@@ -291,6 +298,12 @@ export function KarteRightPane({
           }
         >
           輸血
+        </button>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "rehab-order-create", problem: selectedProblem })}
+        >
+          リハビリ
         </button>
       </div>
     </section>
@@ -460,6 +473,17 @@ function PaneContent({
       return (
         <TransfusionOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />
       );
+    case "rehab-order-create":
+      return (
+        <RehabOrderCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "rehab-order-edit":
+      return <RehabOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "qr-create":
       return (
         <QuestionnaireResponseCreatePanel

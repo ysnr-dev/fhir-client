@@ -50,6 +50,7 @@ import { MicroSusceptibilityMethodPage } from "./pages/MicroSusceptibilityMethod
 import { MicroSpecimenTypePage } from "./pages/MicroSpecimenTypePage";
 import { PathoWorklistPage } from "./pages/PathoWorklistPage";
 import { TransfusionWorklistPage } from "./pages/TransfusionWorklistPage";
+import { RehabWorklistPage } from "./pages/RehabWorklistPage";
 import { PathoOrganPage } from "./pages/PathoOrganPage";
 import { PathoCollectionMethodPage } from "./pages/PathoCollectionMethodPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
@@ -162,6 +163,11 @@ function App() {
                 作りは他の部門一覧と同じなのでここに並べる。 */}
             <Link to="/transfusion-worklist" className="row-menu__item">
               輸血一覧
+            </Link>
+            {/* リハビリは他の部門一覧と違い「その日に効いている期間オーダー」を並べる
+                (1 オーダーが数か月続き、実施が日々積み上がる)。 */}
+            <Link to="/rehab-worklist" className="row-menu__item">
+              リハビリ一覧
             </Link>
             <Link to="/rx-worklist" className="row-menu__item">
               処方一覧
@@ -445,6 +451,7 @@ function App() {
           <Route path="/lab-arrivals" element={<LabArrivalPage />} />
           <Route path="/patho-worklist" element={<PathoWorklistPage />} />
           <Route path="/transfusion-worklist" element={<TransfusionWorklistPage />} />
+          <Route path="/rehab-worklist" element={<RehabWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
           <Route path="/physio-worklist" element={<PhysioWorklistPage />} />

@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { usePatientMealOrders, useDischargePatient } from "../api/queries";
+import {
+  usePatientMealOrders,
+  usePatientRehabOrders,
+  useDischargePatient,
+} from "../api/queries";
 import {
   encounterAdmissionDate,
   encounterPatientId,
@@ -14,6 +18,7 @@ import {
   type MealTiming,
 } from "../fhir/mealOrderHelpers";
 import { displayName } from "../fhir/patientHelpers";
+import { rehabOrderNeedsStop, summarizeRehabOrder } from "../fhir/rehabOrderHelpers";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
@@ -22,6 +27,10 @@ import { Modal } from "./Modal";
 //
 // 食事オーダーは終了を書くまで続くので、退院で一緒に止める。止める食事(退院日の
 // どこまで出すか)は施設や退院時刻で変わるため画面で選ばせ、既定は「朝まで」。
+//
+// リハビリオーダーも同じ期間継続型なので一緒に止める。こちらは食事のような時間帯を
+// 持たないので退院日をそのまま終了日にする。外来リハに切り替えて続けることもあるので、
+// 食事と別のチェックにして外せるようにしてある。
 
 interface DischargeModalProps {
   encounter: fhir4.Encounter;
@@ -35,12 +44,19 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
   const [validationError, setValidationError] = useState<string | null>(null);
   const [stopMeals, setStopMeals] = useState(true);
   const [mealEndTiming, setMealEndTiming] = useState<MealTiming>(DEFAULT_MEAL_STOP_TIMING);
+  const [stopRehab, setStopRehab] = useState(true);
   const discharge = useDischargePatient();
 
-  const mealOrders = usePatientMealOrders(encounterPatientId(encounter));
+  const patientId = encounterPatientId(encounter);
+  const mealOrders = usePatientMealOrders(patientId);
   // 退院日のその食事より後まで続くものだけが止める対象(すでに終わっているものは触らない)。
   const stopping = (mealOrders.data ?? []).filter((sr) =>
     mealOrderNeedsStop(sr, dischargeDate, mealEndTiming),
+  );
+
+  const rehabOrders = usePatientRehabOrders(patientId);
+  const stoppingRehab = (rehabOrders.data ?? []).filter((sr) =>
+    rehabOrderNeedsStop(sr, dischargeDate),
   );
 
   function handleSubmit() {
@@ -56,6 +72,7 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
         dischargeDate,
         mealOrders: stopMeals ? stopping : [],
         mealEndTiming,
+        rehabOrders: stopRehab ? stoppingRehab : [],
       },
       { onSuccess: onClose },
     );
@@ -65,6 +82,7 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
     <Modal title="退院" onClose={onClose}>
       <ErrorBanner error={discharge.error} />
       <ErrorBanner error={mealOrders.error} />
+      <ErrorBanner error={rehabOrders.error} />
       {validationError && (
         <div className="error-banner" role="alert">
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -124,6 +142,30 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
                   <li key={sr.id}>
                     {summary.dietName}
                     {staple && `(${staple})`} {summary.startLabel}〜
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {stoppingRehab.length > 0 && (
+          <div className="discharge__meal">
+            <label className="discharge__meal-toggle">
+              <input
+                type="checkbox"
+                checked={stopRehab}
+                onChange={(e) => setStopRehab(e.target.checked)}
+              />
+              リハビリオーダーを退院日で終了する
+            </label>
+            <ul className="discharge__meal-list">
+              {stoppingRehab.map((sr) => {
+                const summary = summarizeRehabOrder(sr);
+                return (
+                  <li key={sr.id}>
+                    {summary.diseaseCategoryShort} {summary.therapyTypesLabel}{" "}
+                    {summary.periodLabel}
                   </li>
                 );
               })}

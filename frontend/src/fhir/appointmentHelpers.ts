@@ -16,6 +16,7 @@ import {
   DEFAULT_APPOINTMENT_TYPE,
   appointmentTypeLabel,
   scheduleName,
+  serviceTypeCode,
   slotTime,
   toDateInput,
 } from "./scheduleHelpers";
@@ -282,9 +283,54 @@ export function buildExamAppointmentEntries(
   ];
 }
 
-/** オーダーに紐づく予約(検査予約)か。予約タブでの操作の出し分けに使う。 */
+/**
+ * リハビリの予約を取るための Bundle。オーダー登録とは別の単独 transaction。
+ *
+ * 検査予約(buildExamAppointmentEntries)との違いは書き込む時点。放射線・生理検査は
+ * 「オーダーと予約が一心同体」で、オーダー登録の transaction に同梱し、削除では
+ * 道連れにする。これは 1 オーダー 1 実施だから成り立つ形で、1 つのオーダーに予約が
+ * 何件もぶら下がるリハビリには合わない。
+ *
+ * リハビリはオーダー発行時には予約を取らず、リハ部門が受付したあと「次回予約」を
+ * 都度取る。オーダーは既に採番済みなので urn:uuid の解決も要らない
+ * (docs/rehab-order-design.md)。
+ */
+export function buildRehabAppointmentBundle(
+  patient: fhir4.Patient,
+  selection: SlotSelection,
+  orderId: string,
+): fhir4.Bundle {
+  const appointment = buildAppointment(
+    emptyAppointmentForm,
+    patient,
+    selection.schedule,
+    selection.slots,
+  );
+  appointment.basedOn = [{ reference: `ServiceRequest/${orderId}` }];
+
+  return buildBookBundle(appointment, selection.slots);
+}
+
+/** リハビリの予約か。枠の種別で見分ける(検査予約と操作の出し分けが違う)。 */
+export function isRehabAppointment(appointment: fhir4.Appointment): boolean {
+  return serviceTypeCode(appointment) === "rehab";
+}
+
+/**
+ * オーダーに紐づく予約(検査予約)か。予約タブでの操作の出し分けに使う。
+ *
+ * リハビリの予約も basedOn を持つのでここでは true になる。リハビリは予約が
+ * オーダーの日時と連動せず、部門が都度取り直すものなので、予約タブから取消・変更
+ * できてよい。**呼び出し側は isRehabAppointment を先に見て振り分けること。**
+ */
 export function isExamAppointment(appointment: fhir4.Appointment): boolean {
   return Boolean(appointment.basedOn?.length);
+}
+
+/** 予約が指しているオーダー(ServiceRequest)の id。持たなければ空。 */
+export function appointmentOrderId(appointment: fhir4.Appointment): string {
+  const reference = appointment.basedOn?.[0]?.reference ?? "";
+  return reference.startsWith("ServiceRequest/") ? reference.split("/")[1] : "";
 }
 
 /** 予約を取る。押さえた枠(複数枠の検査予約は全部)は busy にする。 */

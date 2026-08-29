@@ -5,6 +5,7 @@ import {
   appointmentStatusLabel,
   isActiveAppointment,
   isExamAppointment,
+  isRehabAppointment,
 } from "../fhir/appointmentHelpers";
 import { RowMenu } from "./RowMenu";
 
@@ -41,10 +42,16 @@ export function AppointmentTable({
         {appointments.map((appointment) => {
           // 取り消した予約・受診が済んだ予約は日時を動かせない(枠はもう空きに戻っている)。
           const active = isActiveAppointment(appointment);
+          // リハビリ予約もオーダーにぶら下がる(basedOn を持つ)ので isExamAppointment は
+          // true になる。**リハビリの判定を先に行うこと。**
+          //
+          // リハビリはオーダーの日時と予約が連動しない(期間オーダーに予約が何件も
+          // ぶら下がり、部門が都度取り直す)ので、ここから日時変更・取消をしてよい。
+          const rehab = isRehabAppointment(appointment);
           // 検査予約は放射線オーダーとひとかたまりなので、ここからは動かさない。
           // 日時変更はオーダーの編集(撮影日時と一緒に動かす)、取消はオーダーの削除
           // (予約だけ消えてオーダーが残る事故を防ぐ)でだけ行う。
-          const exam = isExamAppointment(appointment);
+          const exam = !rehab && isExamAppointment(appointment);
 
           return (
             <tr key={appointment.id}>
@@ -52,6 +59,7 @@ export function AppointmentTable({
               <td>
                 {appointmentScheduleLabel(appointment)}
                 {exam && <span className="dose-conversion__badge">検査</span>}
+                {rehab && <span className="dose-conversion__badge">リハビリ</span>}
               </td>
               <td>{appointmentActorDisplay(appointment, "Practitioner") || "-"}</td>
               <td>{appointmentActorDisplay(appointment, "Location") || "-"}</td>

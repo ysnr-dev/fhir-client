@@ -17,7 +17,7 @@ export { toDateInput, today };
 import { SSMIX2_DEPARTMENT_CODE_SYSTEM } from "./departmentCodes";
 
 const SLOT_PATTERN_EXT_URL = "http://fhir-client.local/StructureDefinition/schedule-slot-pattern";
-const SERVICE_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/schedule-service-type";
+export const SERVICE_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/schedule-service-type";
 
 // 予約種別は HL7 v2-0276(ROUTINE / WALKIN / CHECKUP …)を使う。Slot と
 // Appointment で同じ値セットを共有する。
@@ -182,14 +182,22 @@ export function slotTime(slot: fhir4.Slot): string {
 /**
  * 枠表の種別。診察予約(外来の診察)と検査予約(CT・MRI など撮影室の枠)を分ける。
  * serviceType[0].coding のコードで持ち、予約を取る画面の絞り込みに使う。
- *   診察予約 … カルテ右ペインの予約登録から。定員(同時に受ける人数)を持てる
- *   検査予約 … 放射線オーダーの予約から。1 枠 1 予約(定員 1 固定)
+ *   診察予約   … カルテ右ペインの予約登録から。定員(同時に受ける人数)を持てる
+ *   検査予約   … 放射線・生理検査オーダーの予約から。1 枠 1 予約(定員 1 固定)
+ *   リハビリ予約 … リハビリ一覧の「次回予約」から。定員を持てる
+ *
+ * リハビリを検査予約と分けて独立した種別にしているのは定員の扱いが逆だから。
+ * リハ室は同じ時間帯に複数の患者が並走する(それぞれに療法士が付く)のが普通なので、
+ * 検査予約のように定員 1 に倒してはいけない。枠の actor はリハ室(Location)だけで、
+ * 担当療法士は枠ではなく実施記録(Procedure.performer)側で持つ
+ * (docs/rehab-order-design.md)。
  */
-export type ScheduleType = "consultation" | "exam";
+export type ScheduleType = "consultation" | "exam" | "rehab";
 
 export const SCHEDULE_TYPE_OPTIONS: { code: ScheduleType; label: string }[] = [
   { code: "consultation", label: "診察予約" },
   { code: "exam", label: "検査予約" },
+  { code: "rehab", label: "リハビリ予約" },
 ];
 
 export function scheduleTypeLabel(type: ScheduleType): string {
@@ -204,7 +212,18 @@ export function scheduleTypeOf(schedule: fhir4.Schedule): ScheduleType {
   const code = schedule.serviceType?.[0]?.coding?.find(
     (c) => c.system === SERVICE_TYPE_SYSTEM,
   )?.code;
-  return code === "exam" ? "exam" : "consultation";
+  if (code === "exam") return "exam";
+  if (code === "rehab") return "rehab";
+  return "consultation";
+}
+
+/** Appointment / Schedule の serviceType に入っている枠種別のコード。 */
+export function serviceTypeCode(resource: {
+  serviceType?: fhir4.CodeableConcept[];
+}): string {
+  return (
+    resource.serviceType?.[0]?.coding?.find((c) => c.system === SERVICE_TYPE_SYSTEM)?.code ?? ""
+  );
 }
 
 export interface ScheduleFormValues {
