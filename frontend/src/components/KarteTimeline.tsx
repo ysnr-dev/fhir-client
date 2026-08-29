@@ -101,6 +101,8 @@ import type { TreatmentPerformDisplay } from "../fhir/treatmentResultHelpers";
 import { summarizeMealOrder } from "../fhir/mealOrderHelpers";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
 import { transfusionTaskStatusDisplay } from "../fhir/transfusionTaskHelpers";
+import type { TransfusionPerformDisplay } from "../fhir/transfusionResultHelpers";
+import { TransfusionPerformModal } from "./TransfusionPerformModal";
 import {
   productLabel,
   summarizeTransfusionOrder,
@@ -307,6 +309,8 @@ function KarteCard({
   const [jsonOpen, setJsonOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [chartOpen, setChartOpen] = useState(false);
+  // 輸血の実施入力。投与するのは病棟なので、部門一覧だけでなくここからも開ける。
+  const [performOpen, setPerformOpen] = useState(false);
 
   const deleting =
     deleteNote.isPending ||
@@ -558,6 +562,19 @@ function KarteCard({
                   麻酔チャート
                 </button>
               )}
+            {/* 輸血の実施入力。製剤を出すのは輸血部門だが投与するのは病棟なので、
+                病棟がその場で書けるようカルテからも開ける
+                (docs/transfusion-order-design.md §5.1)。出庫していない製剤は
+                輸血できないので、出庫済のときだけ出す。 */}
+            {item.kind === "transfusion-order" && item.status === "in-progress" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => setPerformOpen(true)}
+              >
+                実施入力
+              </button>
+            )}
             {/* 診療記録は修正のたびに版が残るので、いつ誰が直したかを辿れるようにする。 */}
             {item.kind === "note" && (
               <button
@@ -605,6 +622,14 @@ function KarteCard({
       )}
       {chartOpen && item.kind === "surgery-order" && (
         <AnesthesiaChartModal orderId={item.id} onClose={() => setChartOpen(false)} />
+      )}
+      {performOpen && item.kind === "transfusion-order" && (
+        <TransfusionPerformModal
+          order={item.serviceRequest}
+          itemRequests={item.itemRequests}
+          task={item.task}
+          onClose={() => setPerformOpen(false)}
+        />
       )}
     </article>
   );
@@ -1010,6 +1035,7 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
       <TransfusionOrderCardBody
         serviceRequest={item.serviceRequest}
         itemRequests={item.itemRequests}
+        performs={item.performs}
       />
     );
   }
@@ -1638,13 +1664,25 @@ function MealOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.ServiceRe
   );
 }
 
+// 輸血の実施情報の行。バッグと副作用は他部門の「薬剤」「器材」に当たる。
+const TRANSFUSION_PERFORM_ROWS: {
+  label: string;
+  of: (perform: TransfusionPerformDisplay) => string[];
+}[] = [
+  { label: "バッグ", of: (perform) => perform.bags },
+  // 副作用は「なし」も記録として意味があるので、値があれば必ず出す。
+  { label: "副作用", of: (perform) => (perform.reaction ? [perform.reaction] : []) },
+];
+
 // 輸血は製剤の一覧が本文。検査区分と同意書の状態はタイトルに出るのでここには出さない。
 function TransfusionOrderCardBody({
   serviceRequest,
   itemRequests,
+  performs,
 }: {
   serviceRequest: fhir4.ServiceRequest;
   itemRequests: fhir4.ServiceRequest[];
+  performs: TransfusionPerformDisplay[];
 }) {
   const products = transfusionOrderProducts(itemRequests);
   const comment = transfusionOrderComment(serviceRequest);
@@ -1653,24 +1691,58 @@ function TransfusionOrderCardBody({
   if (products.length === 0) return <p className="karte-card__empty">製剤がありません。</p>;
 
   return (
-    <div className="karte-rp">
-      {/* 血液型はカードで真っ先に確かめるものなので、製剤より先に色付きで出す。 */}
-      {summary.bloodTypeDisplay && (
-        <div className="karte-rp__head">
-          <TransfusionBloodBadge abo={summary.aboBloodType} rhd={summary.rhdBloodType} />
-        </div>
-      )}
-      <ul className="karte-rp__medicines">
-        {products.map((product, index) => (
-          <li key={product.id || index}>
-            <span className="karte-rp__number">{index + 1}</span>
-            <span className="karte-rp__medicine-name">{productLabel(product)}</span>
-            {product.note && <span>{product.note}</span>}
-          </li>
-        ))}
-      </ul>
-      {comment && <p className="karte-perform__note">{comment}</p>}
-    </div>
+    <>
+      <div className="karte-rp">
+        {/* 血液型はカードで真っ先に確かめるものなので、製剤より先に色付きで出す。 */}
+        {summary.bloodTypeDisplay && (
+          <div className="karte-rp__head">
+            <TransfusionBloodBadge abo={summary.aboBloodType} rhd={summary.rhdBloodType} />
+          </div>
+        )}
+        <ul className="karte-rp__medicines">
+          {products.map((product, index) => (
+            <li key={product.id || index}>
+              <span className="karte-rp__number">{index + 1}</span>
+              <span className="karte-rp__medicine-name">{productLabel(product)}</span>
+              {product.note && <span>{product.note}</span>}
+            </li>
+          ))}
+        </ul>
+        {comment && <p className="karte-perform__note">{comment}</p>}
+      </div>
+      {performs.map((perform) => (
+        <section className="karte-perform" key={perform.id}>
+          <div className="karte-perform__head">
+            <span className="karte-perform__title">実施情報</span>
+            {perform.performedAt && (
+              <span className="karte-perform__meta">{perform.performedAt}</span>
+            )}
+            {perform.performerName && (
+              <span className="karte-perform__meta">{perform.performerName}</span>
+            )}
+            {/* 実施記録があるのに輸血まで至っていない例外(途中で中止など)。 */}
+            {perform.statusNote && (
+              <span className="karte-perform__status">{perform.statusNote}</span>
+            )}
+          </div>
+          {TRANSFUSION_PERFORM_ROWS.map(({ label, of }) => {
+            const values = of(perform);
+            if (values.length === 0) return null;
+            return (
+              <div className="karte-perform__row" key={label}>
+                <span className="karte-perform__label">{`${label}:`}</span>
+                <span className="karte-perform__values">
+                  {values.map((value, index) => (
+                    <span key={index}>{value}</span>
+                  ))}
+                </span>
+              </div>
+            );
+          })}
+          {perform.comment && <p className="karte-perform__note">{perform.comment}</p>}
+        </section>
+      ))}
+    </>
   );
 }
 

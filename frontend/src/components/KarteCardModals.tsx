@@ -13,6 +13,7 @@ import {
   useEndoscopyPerformDetail,
   useMealOrderDetail,
   useTransfusionOrderDetail,
+  useTransfusionPerformDetail,
   useTreatmentOrderDetail,
   useSurgeryOrderDetail,
   useSurgeryPerformDetail,
@@ -868,13 +869,33 @@ function PathoOrderJson({ srId }: { srId: string }) {
   );
 }
 
+// 輸血は手術と同じく実施記録が別リソースなので、あればオーダーと並べて出す。
 function TransfusionOrderJson({ srId }: { srId: string }) {
   const detail = useTransfusionOrderDetail(srId);
+  const perform = useTransfusionPerformDetail(srId);
+  const performBundle = perform.data?.data;
+  const hasPerform = (performBundle?.entry?.length ?? 0) > 0;
 
   return (
     <>
       <ErrorBanner error={detail.error} />
-      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
+      <ErrorBanner error={perform.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : hasPerform ? (
+        <>
+          <section className="karte-json__section">
+            <h3 className="karte-json__section-title">オーダー</h3>
+            <FhirJsonView resource={detail.data?.data} />
+          </section>
+          <section className="karte-json__section">
+            <h3 className="karte-json__section-title">実施記録</h3>
+            <FhirJsonView resource={performBundle} />
+          </section>
+        </>
+      ) : (
+        <FhirJsonView resource={detail.data?.data} />
+      )}
     </>
   );
 }

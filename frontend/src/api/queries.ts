@@ -106,9 +106,11 @@ import {
 } from "../fhir/transfusionOrderHelpers";
 import {
   buildTransfusionTaskUpdate,
+  transfusionTaskStatus,
   transfusionTasksByOrderId,
   type TransfusionTaskStatus,
 } from "../fhir/transfusionTaskHelpers";
+import { buildTransfusionPerformDeleteEntries } from "../fhir/transfusionResultHelpers";
 import {
   buildPathoTaskUpdate,
   pathoTasksByOrderId,
@@ -6994,8 +6996,115 @@ export function useTransfusionWorklist(date: string) {
   });
 }
 
-/** 受付などの進捗を書き込む(組み立ては makeUpdateTaskStatusHook を参照)。 */
-export const useUpdateTransfusionTaskStatus = makeUpdateTaskStatusHook<TransfusionTaskStatus>(
-  buildTransfusionTaskUpdate,
-  "transfusion-worklist",
-);
+// ---- 輸血の実施記録 ----
+
+function transfusionPerformSearchParams(orderId: string): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("based-on", `ServiceRequest/${orderId}`);
+  params.append("_revinclude", "MedicationAdministration:part-of");
+  params.append("_revinclude", "Observation:part-of");
+  return params;
+}
+
+async function fetchTransfusionPerformResources(orderId: string) {
+  const { data: bundle } = await searchResource<fhir4.Resource>(
+    "Procedure",
+    transfusionPerformSearchParams(orderId),
+  );
+
+  const procedures: fhir4.Procedure[] = [];
+  const administrations: fhir4.MedicationAdministration[] = [];
+  const observations: fhir4.Observation[] = [];
+  for (const entry of bundle.entry ?? []) {
+    const resource = entry.resource;
+    if (resource?.resourceType === "Procedure") procedures.push(resource as fhir4.Procedure);
+    else if (resource?.resourceType === "MedicationAdministration") {
+      administrations.push(resource as fhir4.MedicationAdministration);
+    } else if (resource?.resourceType === "Observation") {
+      observations.push(resource as fhir4.Observation);
+    }
+  }
+  return { procedures, administrations, observations };
+}
+
+/**
+ * 輸血の実施記録(Procedure 一式)。オーダーとは別リソースでオーダーの検索から
+ * 辿れないので別に引く。カルテカードの FHIR JSON 表示で使う。
+ */
+export function useTransfusionPerformDetail(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ["Procedure", "search", "transfusion-perform", orderId],
+    queryFn: () =>
+      searchResource<fhir4.Resource>("Procedure", transfusionPerformSearchParams(orderId ?? "")),
+    enabled: Boolean(orderId),
+  });
+}
+
+/**
+ * 受付・出庫・中止などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
+ * 実施済から戻す(実施取消)ときは、実施記録も同じ transaction で消す
+ * (手術と同じ扱い。理由は transfusionResultHelpers の
+ * buildTransfusionPerformDeleteEntries を参照)。
+ */
+export function useUpdateTransfusionTaskStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      order,
+      task,
+      status,
+    }: {
+      order: fhir4.ServiceRequest;
+      task: fhir4.Task | undefined;
+      status: TransfusionTaskStatus;
+    }) => {
+      const next = buildTransfusionTaskUpdate(task, order, status);
+      const taskEntry: fhir4.BundleEntry = {
+        resource: next,
+        request: task?.id
+          ? { method: "PUT", url: `Task/${task.id}` }
+          : { method: "POST", url: "Task" },
+      };
+
+      const cancelsPerform = transfusionTaskStatus(task) === "completed" && status !== "completed";
+      const performed = cancelsPerform
+        ? await fetchTransfusionPerformResources(order.id ?? "")
+        : { procedures: [], administrations: [], observations: [] };
+      const performEntries = buildTransfusionPerformDeleteEntries(
+        performed.procedures,
+        performed.administrations,
+        performed.observations,
+      );
+
+      return postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [...performEntries, taskEntry],
+      });
+    },
+    onSuccess: () => invalidateTransfusion(queryClient),
+  });
+}
+
+/**
+ * 輸血の実施登録。実施記録一式と Task の実施済を 1 つの transaction で書き込む。
+ * Bundle の組み立ては transfusionResultHelpers を参照。
+ */
+export function useRegisterTransfusionPerform() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidateTransfusion(queryClient),
+  });
+}
+
+/** 輸血の進捗・実施記録が動いたときに読み直させるもの。 */
+function invalidateTransfusion(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "transfusion-worklist"] });
+  // カルテのオーダーカードも進捗と実施情報を出しているので読み直させる。
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+  // 取消では実施記録も消しているので、FHIR JSON 表示の実施記録も引き直させる。
+  queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
+}

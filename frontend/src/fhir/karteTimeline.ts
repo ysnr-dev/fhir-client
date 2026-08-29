@@ -56,6 +56,10 @@ import {
   type TransfusionTaskStatus,
 } from "./transfusionTaskHelpers";
 import {
+  transfusionPerformsByOrderId,
+  type TransfusionPerformDisplay,
+} from "./transfusionResultHelpers";
+import {
   treatmentTaskStatus,
   treatmentTasksByOrderId,
   type TreatmentTaskStatus,
@@ -253,8 +257,7 @@ export type KarteTimelineItem = KarteItemBase &
     // 食事(給食)。他のオーダーと違い明細も進捗 Task も実施記録も持たないので、
     // カードに出すものは ServiceRequest 1 本の中で完結する。
     | { kind: "meal-order"; serviceRequest: fhir4.ServiceRequest }
-    // 輸血。病理と同じくヘッダ + 製剤明細の 2 層。実施記録は第 4 段階
-    // (docs/transfusion-order-design.md §5)なので、いまは performs を持たない。
+    // 輸血。病理と同じくヘッダ + 製剤明細の 2 層で、手術と同じく実施記録を持つ。
     | {
         kind: "transfusion-order";
         serviceRequest: fhir4.ServiceRequest;
@@ -262,6 +265,16 @@ export type KarteTimelineItem = KarteItemBase &
         itemRequests: fhir4.ServiceRequest[];
         /** 輸血部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
         status: TransfusionTaskStatus;
+        /**
+         * 進捗の Task そのもの。他の種別は status しか持たないが、輸血は
+         * 投与するのが病棟なのでカルテのカードからも実施入力を開く
+         * (docs/transfusion-order-design.md §5.1)。実施登録は Task を実施済へ
+         * 更新する transaction なので、実物が要る(無いまま POST すると
+         * 既にある Task と二重になる)。
+         */
+        task: fhir4.Task | undefined;
+        /** 実施記録。未実施なら空。 */
+        performs: TransfusionPerformDisplay[];
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
@@ -504,6 +517,13 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const endoscopyTaskByOrderId = endoscopyTasksByOrderId(tasks);
   const endoscopyPerformByOrderId = endoscopyPerformsByOrderId(procedures, administrations);
   const transfusionTaskByOrderId = transfusionTasksByOrderId(tasks);
+  // 輸血も副作用の Observation を持つので、手術と同じく Observation も渡す。
+  // 振り分けは transfusionPerformsByOrderId が category(order-type)で行う。
+  const transfusionPerformByOrderId = transfusionPerformsByOrderId(
+    procedures,
+    administrations,
+    pickByType<fhir4.Observation>(prescriptionResources, "Observation"),
+  );
   const treatmentTaskByOrderId = treatmentTasksByOrderId(tasks);
   const surgeryTaskByOrderId = surgeryTasksByOrderId(tasks);
   // 手術は出血量などの測定値も持つので、放射線と同じく Observation も渡す。
@@ -660,12 +680,21 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
       };
     }
     if (isTransfusionServiceRequest(serviceRequest)) {
+      const task = transfusionTaskByOrderId.get(serviceRequest.id ?? "");
+      const status = transfusionTaskStatus(task);
       return {
         ...base,
         kind: "transfusion-order" as const,
         label: KARTE_KIND_LABELS["transfusion-order"],
         itemRequests: transfusionOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
-        status: transfusionTaskStatus(transfusionTaskByOrderId.get(serviceRequest.id ?? "")),
+        status,
+        task,
+        // 他部門と同じく、実施情報は進捗が実施済のときだけ出す。輸血は実施取消で
+        // 記録ごと消す(手術と同じ)ので、取り消した輸血の記録が残ることは無い。
+        performs:
+          status === "completed"
+            ? (transfusionPerformByOrderId.get(serviceRequest.id ?? "") ?? [])
+            : [],
       };
     }
     const withMedications = {

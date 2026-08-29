@@ -18,6 +18,7 @@ import {
 } from "../components/PatientRowCells";
 import { TransfusionBloodBadge } from "../components/TransfusionBloodBadge";
 import { TransfusionOrderDetailPanel } from "../components/TransfusionOrderDetailPanel";
+import { TransfusionPerformModal } from "../components/TransfusionPerformModal";
 import {
   TEST_TYPE_OPTIONS,
   productSummary,
@@ -53,8 +54,9 @@ import {
 //   至急と同じ強さで行そのものを目立たせる。
 // - レポートの列は無い(輸血に結果レポートは無く、記録は実施記録側)。
 //
-// 実施(completed)へ進めるボタンはまだ無い。実施記録(製剤番号・開始/終了時刻・副作用)を
-// 入れて初めて実施済にする作りにするため(第 4 段階)。それまでは出庫済で止まる。
+// 出庫済の行の「実施」は、Task を進めるだけでなく実施入力(製剤番号・開始/終了時刻・
+// 副作用)を開く。輸血は投与するのが病棟なので、この一覧のほかカルテのカードからも
+// 同じ入力を開ける(docs/transfusion-order-design.md §5.1)。
 //
 // 投与予定日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
 // (理由は queries.ts の useLabWorklist を参照)。
@@ -82,6 +84,8 @@ export function TransfusionWorklistPage() {
   // 内容を開いているオーダー。行そのものではなく id で覚えておき、読み直しの
   // たびに引き直す(受付の後に開いたままのモーダルも追い付く)。
   const [viewingId, setViewingId] = useState<string | null>(null);
+  // 実施入力を開いているオーダー。同じ理由で id で覚えておく。
+  const [performingId, setPerformingId] = useState<string | null>(null);
 
   // 製剤の列が長くなるので、この画面だけ幅を広げる(病理・検体検査一覧と同じ)。
   useEffect(() => {
@@ -99,6 +103,7 @@ export function TransfusionWorklistPage() {
   );
   const total = worklist.data?.rows.length ?? 0;
   const viewing = worklist.data?.rows.find((row) => row.order.id === viewingId);
+  const performing = worklist.data?.rows.find((row) => row.order.id === performingId);
 
   // 病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う(病理一覧と同じ考え方)。
   const wardOptions = useMemo(() => {
@@ -174,6 +179,7 @@ export function TransfusionWorklistPage() {
                     row={row}
                     pending={updateStatus.isPending}
                     onView={() => setViewingId(row.order.id ?? null)}
+                    onPerform={() => setPerformingId(row.order.id ?? null)}
                     onChangeStatus={(status) =>
                       updateStatus.mutate({ order: row.order, task: row.task, status })
                     }
@@ -196,6 +202,15 @@ export function TransfusionWorklistPage() {
       )}
 
       {viewing && <TransfusionOrderViewModal row={viewing} onClose={() => setViewingId(null)} />}
+      {performing && (
+        <TransfusionPerformModal
+          order={performing.order}
+          itemRequests={performing.itemRequests}
+          task={performing.task}
+          patientName={performing.patient ? displayName(performing.patient) : undefined}
+          onClose={() => setPerformingId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -341,11 +356,13 @@ function WorklistRow({
   row,
   pending,
   onView,
+  onPerform,
   onChangeStatus,
 }: {
   row: TransfusionWorklistRow;
   pending: boolean;
   onView: () => void;
+  onPerform: () => void;
   onChangeStatus: (status: TransfusionTaskStatus) => void;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
@@ -423,6 +440,13 @@ function WorklistRow({
               {action.label}
             </button>
           ))}
+        {/* 実施は Task を進めるだけでなく実施記録を入れるので、他の進捗ボタンとは
+            別に置く。出庫していない製剤は輸血できないので出庫済のときだけ出す。 */}
+        {status === "in-progress" && (
+          <button type="button" onClick={onPerform}>
+            実施
+          </button>
+        )}
         {/* 一覧には製剤の略称しか出さないので、備考・同意書・依頼コメントはここから開く。
             行によって数が変わる進捗のボタンより右に置いて、どの行でも同じ位置で押せるようにする。 */}
         <button type="button" onClick={onView}>

@@ -4814,6 +4814,10 @@ body.karte-wide {
 }
 
 .karte-perform__label {
+  /* 行頭の見出しなので折り返させない。既存の「薬剤:」「器材:」はたまたま収まって
+     いたが、輸血の「バッグ:」で 2 行に割れた(flex アイテムは既定で縮むため)。 */
+  flex: none;
+  white-space: nowrap;
   color: var(--text);
 }
 
@@ -10171,6 +10175,29 @@ button.meal-calendar__cell:hover {
   gap: 10px 16px;
 }
 
+/* カード内の入力欄。オーダー画面では .prescription-form label の縦積みが効くが、
+   実施入力モーダルはそのフォームの外なので、祖先に依存せずここで縦積みにする。 */
+.transfusion-order__product > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* 1 行に並ぶ欄の高さを揃える。
+   放っておくと select だけ 6〜8px 低くなる。原因はフォントサイズではなく行の高さで、
+   フォームの入力欄は `font: inherit` で根の line-height(18px/145% = 26.1px)を
+   そのまま受け取るのに対し、select は Chrome の既定で line-height: normal になり、
+   同じ padding でも中身の高さが違ってしまうため。
+   font-size を触らずに揃えるので、高さは em(その欄自身の文字サイズ基準)で指定する。
+   オーダー画面(15px)は 33px、実施入力モーダル(14px)は 30.8px と、
+   どちらもその場のフォントに比例した高さで横一列に並ぶ。 */
+.transfusion-order__product > label > select,
+.transfusion-order__product > label > input {
+  box-sizing: border-box;
+  height: 2.2em;
+}
+
 .transfusion-order__product-head {
   /* 製剤番号と削除ボタンは 1 行使い切って、番号を各カードの同じ位置に置く。 */
   flex: 1 1 100%;
@@ -10204,6 +10231,58 @@ button.meal-calendar__cell:hover {
 }
 
 .transfusion-order__product-add {
+  flex: 1 1 100%;
+}
+
+/* 実施入力モーダルの入力欄。
+   このプロジェクトは入力欄の見た目をフォームごとにスコープしている
+   (.prescription-form input / .lab-order-item__fields input[type=...])。
+   実施入力のバッグ行・副作用の内容・実施コメントはそのどちらの入れ物にも
+   入っていないので、素の input のまま残ってしまう。モーダル全体を 1 つの
+   入れ物として扱い、ここでまとめて当てる。
+   値は同じモーダル内の .lab-order-item__fields に合わせて揃えてある
+   (あちらの方が詳細度が高いので、重なっても見た目は変わらない)。 */
+.transfusion-perform input,
+.transfusion-perform select,
+.transfusion-perform textarea {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* 副作用の有無。血液型のチップと同じ作りだが、色は型の区分色と混ぜない。
+   「あり」は見落とすと事故につながるので注意色にする。 */
+.transfusion-chip--reaction-none.transfusion-chip--selected {
+  background: var(--accent-bg);
+  color: var(--text-h);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.transfusion-chip--reaction-present.transfusion-chip--selected {
+  background: var(--lab-high);
+  color: #ffffff;
+}
+
+/* 副作用の内容。チップの右に続けて置く。 */
+.transfusion-perform__reaction-note {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* バッグごとの開始・終了。製剤名より狭くてよい。 */
+.transfusion-perform__bag-time {
+  flex: 0 0 190px;
+}
+
+/* 実施コメント。fieldset ではなく素の div の中なので幅を明示する。 */
+.transfusion-perform__comment {
   flex: 1 1 100%;
 }
 
