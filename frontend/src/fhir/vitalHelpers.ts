@@ -1,4 +1,6 @@
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
+import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
+import { codingBySystem } from "./shared";
 
 // バイタルサイン(体温・血圧・脈拍・SpO2・呼吸数・身長・体重)の入力と表示。
 //
@@ -27,6 +29,28 @@ const BLOOD_PRESSURE = { code: "85354-9", display: "Blood pressure panel" } as c
 const SYSTOLIC = { code: "8480-6", display: "Systolic blood pressure" } as const;
 const DIASTOLIC = { code: "8462-4", display: "Diastolic blood pressure" } as const;
 const BP_UNIT = { unit: "mmHg", ucum: "mm[Hg]" } as const;
+
+/** 血圧(パネル)の code。看護観察の血圧型も同じ構造で作り、経過表の血圧行に合流させる。 */
+export function bloodPressureCodeableConcept(): fhir4.CodeableConcept {
+  return { coding: [{ system: LOINC, code: BLOOD_PRESSURE.code, display: BLOOD_PRESSURE.display }] };
+}
+
+/** 血圧の component(収縮期・拡張期)。 */
+export function buildBloodPressureComponents(
+  systolic: number,
+  diastolic: number,
+): fhir4.ObservationComponent[] {
+  return [
+    {
+      code: { coding: [{ system: LOINC, code: SYSTOLIC.code, display: SYSTOLIC.display }] },
+      valueQuantity: { value: systolic, unit: BP_UNIT.unit, system: UCUM, code: BP_UNIT.ucum },
+    },
+    {
+      code: { coding: [{ system: LOINC, code: DIASTOLIC.code, display: DIASTOLIC.display }] },
+      valueQuantity: { value: diastolic, unit: BP_UNIT.unit, system: UCUM, code: BP_UNIT.ucum },
+    },
+  ];
+}
 
 /** 血圧以外の測定項目。入力欄の並びもこの順。 */
 export interface VitalMeasure {
@@ -201,17 +225,8 @@ export function buildVitalObservations(args: BuildVitalObservationsArgs): fhir4.
   if (systolic !== null && diastolic !== null) {
     observations.push({
       ...base,
-      code: { coding: [{ system: LOINC, code: BLOOD_PRESSURE.code, display: BLOOD_PRESSURE.display }] },
-      component: [
-        {
-          code: { coding: [{ system: LOINC, code: SYSTOLIC.code, display: SYSTOLIC.display }] },
-          valueQuantity: { value: systolic, unit: BP_UNIT.unit, system: UCUM, code: BP_UNIT.ucum },
-        },
-        {
-          code: { coding: [{ system: LOINC, code: DIASTOLIC.code, display: DIASTOLIC.display }] },
-          valueQuantity: { value: diastolic, unit: BP_UNIT.unit, system: UCUM, code: BP_UNIT.ucum },
-        },
-      ],
+      code: bloodPressureCodeableConcept(),
+      component: buildBloodPressureComponents(systolic, diastolic),
     });
   }
 
@@ -432,6 +447,11 @@ function bloodPressureComponent(
  * 手入力のバイタルだけでなく、テンプレート回答から category を vital-signs にして
  * 抽出した Observation も同じ表に載せる(経過表は値を時系列で読む画面なので、
  * どの経路で作られたかは問わない)。identifier で束ねないのはそのため。
+ *
+ * 看護指示の観察結果(MEDIS 看護観察コード、nursingPerformHelpers)も同じ表に載せる。
+ * 真のバイタル(SpO2・体温など)は LOINC を併記してあるので既存の行に合流し、それ以外は
+ * MEDIS コードをキーにした行になる。値は数値だけでなく列挙(便量「少量」)や
+ * 2 値(創の縦×横)もあるので、valueCodeableConcept と component も読む。
  */
 export function buildVitalFlowsheet(
   observations: fhir4.Observation[],
@@ -464,8 +484,18 @@ export function buildVitalFlowsheet(
     const at = observation.effectiveDateTime ?? "";
     if (!shown.has(at)) continue;
 
-    const coding = observation.code?.coding?.find((c) => c.system === LOINC);
-    const name = FLOWSHEET_LABELS.get(coding?.code ?? "") ?? coding?.display ?? observation.code?.text ?? "";
+    // 行のキーは LOINC を最優先(バイタルの既定行に合流させる)、無ければ MEDIS の
+    // 看護観察コード、それも無ければ先頭の coding。コードを持たない値は名前で束ねる。
+    const codings = observation.code?.coding;
+    const coding =
+      codingBySystem(codings, LOINC) ??
+      codingBySystem(codings, NURSING_OBSERVATION_CODE_SYSTEM) ??
+      codings?.[0];
+    const name =
+      FLOWSHEET_LABELS.get(coding?.code ?? "") ??
+      observation.code?.text ??
+      coding?.display ??
+      "";
     const key = coding?.code ?? `name:${name}`;
 
     if (key === BLOOD_PRESSURE.code) {
@@ -478,14 +508,13 @@ export function buildVitalFlowsheet(
       continue;
     }
 
-    const quantity = observation.valueQuantity;
-    const value = quantity?.value !== undefined ? String(quantity.value) : observation.valueString ?? "";
-    if (!value) continue;
-    const row = rowFor(key, name, quantity?.unit ?? "");
+    const cell = flowsheetCell(observation);
+    if (!cell) continue;
+    const row = rowFor(key, name, cell.unit);
     // 同じ時刻に同じ項目が複数あるときは、先(=新しい)の値を採る。
     if (row.values.has(at)) continue;
-    row.values.set(at, value);
-    if (quantity?.value !== undefined) row.numbers.set(at, quantity.value);
+    row.values.set(at, cell.value);
+    if (cell.number !== undefined) row.numbers.set(at, cell.number);
   }
 
   // 既定の項目を先に、それ以外(テンプレート抽出など)を登場順で後ろに並べる。
@@ -499,6 +528,31 @@ export function buildVitalFlowsheet(
   });
 
   return { columns, rows: ordered };
+}
+
+/**
+ * 経過表の 1 マスにする値。数値(グラフにも使う)/ 文字列 / 列挙(便量「少量」)/
+ * 2 値の component(創の縦×横 → "12.5/8")。どれも無ければ null(行を作らない)。
+ */
+function flowsheetCell(
+  observation: fhir4.Observation,
+): { value: string; unit: string; number?: number } | null {
+  const quantity = observation.valueQuantity;
+  if (quantity?.value !== undefined) {
+    return { value: String(quantity.value), unit: quantity.unit ?? "", number: quantity.value };
+  }
+  if (observation.valueString) return { value: observation.valueString, unit: "" };
+  const concept = observation.valueCodeableConcept;
+  const conceptText = concept?.text ?? concept?.coding?.[0]?.display;
+  if (conceptText) return { value: conceptText, unit: "" };
+  const components = (observation.component ?? []).filter((c) => c.valueQuantity?.value !== undefined);
+  if (components.length >= 2) {
+    return {
+      value: components.map((c) => String(c.valueQuantity?.value)).join("/"),
+      unit: components[0].valueQuantity?.unit ?? "",
+    };
+  }
+  return null;
 }
 
 /** 血圧の行から、グラフ用に収縮期・拡張期の数値を取り出す。 */

@@ -25,6 +25,7 @@ import {
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { NursingOrderDetailModal } from "./NursingOrderDetailModal";
+import { NursingPerformModal } from "./NursingPerformModal";
 import { RowMenu } from "./RowMenu";
 
 interface KarteNursingTabProps {
@@ -51,6 +52,8 @@ export function KarteNursingTab({ patientId, view, onViewChange, onCreate, onEdi
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // 詳細を開いている指示。一覧は列を絞ってあるので、コード・依頼科・備考はモーダルで見る。
   const [detailId, setDetailId] = useState<string | null>(null);
+  // 実施入力。渡すのは今日効いている指示だけ(終了・中止済みには記録させない)。
+  const [performing, setPerforming] = useState(false);
 
   const active = useActiveNursingOrders(patientId, at);
   // 終了・中止も見るとき、履歴のときは全件を引く。
@@ -133,6 +136,15 @@ export function KarteNursingTab({ patientId, view, onViewChange, onCreate, onEdi
               終了・中止も表示
             </label>
           )}
+          {!isHistory && (
+            <button
+              type="button"
+              onClick={() => setPerforming(true)}
+              disabled={(active.data?.orders.length ?? 0) === 0}
+            >
+              実施入力
+            </button>
+          )}
           <button type="button" onClick={onCreate}>
             指示を追加
           </button>
@@ -180,11 +192,19 @@ export function KarteNursingTab({ patientId, view, onViewChange, onCreate, onEdi
         </>
       )}
 
+      {performing && active.data && (
+        <NursingPerformModal
+          orders={active.data.orders}
+          onClose={() => setPerforming(false)}
+        />
+      )}
+
       {detailRow && (
         <NursingOrderDetailModal
           order={detailRow.order}
           task={detailRow.task}
           at={at}
+          canDeletePerform
           onEdit={
             detailRow.order.status === "active"
               ? () => {

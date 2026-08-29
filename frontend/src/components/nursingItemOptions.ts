@@ -1,5 +1,3 @@
-import type { NursingObservation } from "../api/masterClient";
-
 // 看護観察編の検索大分類(配布ファイルの列「検索大分類１〜８」)の見出し。
 export const NURSING_OBSERVATION_CATEGORIES = [
   { code: "1", label: "バイタルサイン・全身状態" },
@@ -12,12 +10,6 @@ export const NURSING_OBSERVATION_CATEGORIES = [
   { code: "8", label: "その他" },
 ] as const;
 
-/** 列挙型の選択肢。結果 1〜18 の空でないものを並べる。 */
-export function nursingObservationResults(obs: NursingObservation): string[] {
-  const values: string[] = [];
-  for (let i = 1; i <= 18; i++) {
-    const v = obs[`result_${i}`];
-    if (v) values.push(v);
-  }
-  return values;
-}
+// 列挙型の選択肢は実施入力(fhir 層)でも使うので fhir/nursingPerformHelpers に置き、
+// マスタ画面向けにここから再公開する。
+export { nursingObservationResults } from "../fhir/nursingPerformHelpers";

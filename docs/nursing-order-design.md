@@ -51,6 +51,8 @@ Task(指示受け) ← focus
 
 - `http://fhir-client.local/StructureDefinition/nursing-order-end`(valueDate)
 - `http://fhir-client.local/Identifier/nursing-order-requisition`
+- `http://fhir-client.local/nursing-perform-entry`(実施記録 1 回ぶんを束ねる identifier)
+- `http://fhir-client.local/CodeSystem/nursing-observation-result`(列挙型の観察結果)
 
 ### 2.2 code は MEDIS の CodeSystem を二重に載せる
 
@@ -81,6 +83,36 @@ MEDIS の OID 表に従い、看護行為は
 終了日はローカル拡張なので上流では絞れない。指示簿は `status=active` の SR を引いてから
 `isNursingOrderRunningOn(sr, today)` で「まだ終わっていない」ものを残す。
 
+### 2.6 実施記録 = 観察は Observation、行為は Procedure(`fhir/nursingPerformHelpers.ts`)
+
+```
+ServiceRequest(観察の指示) ← basedOn ── Observation
+  category[0]     = order-type|nursing(**これだけ。vital-signs は付けない**)
+  code.coding     = [MEDIS 観察コード(指示から複写), LOINC(対応表にあれば)]、text = 指示の文言
+  value[x]        = 数値型 valueQuantity / 列挙型 valueCodeableConcept(text 必須、
+                    coding は result_group_code + 選択肢の順番) / 文字型 valueString /
+                    ２数値型 component×2 / 血圧型 = バイタルの血圧と同じ 85354-9 + component
+  effectiveDateTime = 記録日時、performer = 実施者(Reference[] 直)
+  identifier      = nursing-perform-entry|uuid(1 回の記録の束ね)
+ServiceRequest(行為の指示) ← basedOn ── Procedure(category order-type|nursing、performedDateTime、performer[].actor)
+```
+
+- **実施しても指示受けの Task は動かさない**(リハビリ §4 と同じ。1 指示に実施が日々積み上がる)。
+  取消は Observation / Procedure を 1 件ずつ消すだけ。
+- **category を order-type|nursing だけにする理由**: 上流は `Observation.category` の先頭の
+  concept しか索引しない。vital-signs を足しても検索には効かず、逆に先頭に置くとカルテの
+  バイタル検索(`useKarteVitalsInfinite` / `useKarteDayIndex`)に混ざってカードにならない
+  Observation で診療日だけが増える。経過表だけ `category=vital-signs,nursing` で引く
+  (`queries.ts` の `VITAL_FLOWSHEET_CATEGORY`)。
+- **LOINC 併記で経過表に合流**: 経過表の行キーは LOINC 優先なので、SpO2(31000001→2708-6)・
+  体温(31001368→8310-5)・脈拍数・呼吸数・体重・身長・血圧型(31002365→85354-9)は手入力の
+  バイタルと同じ行に並び、グラフも引ける(`NURSING_LOINC_MAP`)。収縮期・拡張期の単独項目は
+  対応表に入れない(血圧行と別行になり、グラフの系列キーが衝突する)。それ以外の観察は
+  MEDIS コードをキーにした行になる。`buildVitalFlowsheet` は valueCodeableConcept と
+  component(2 値 → "12.5/8")も読むように広げた。
+- `Observation` には `based-on` の検索パラメータが無いので、実施履歴は患者(または日付)で
+  引いてから basedOn で指示に振り分ける(`useNursingPerformsOf` / `useNursingPerformsOn`)。
+
 ## 3. マスタ(MEDIS 看護実践用語標準マスター)
 
 配布ファイル(cp932・カンマ区切り txt・ヘッダあり・引用符なし)を取込画面から全件洗い替える
@@ -97,6 +129,11 @@ MEDIS の OID 表に従い、看護行為は
   1・2・7 と、移行先管理番号を持つ行は `active=false`。検索は既定で有効のみ(`active=false` で全件)。
 - 看護観察の管理番号は一意でない(用語の統合で番号が再利用され、変更区分 7 の旧行と新行が
   同じ番号で並ぶ)ので unique index にしていない。
+- 観察編の **表現タイプは 5 種**: 列挙型 / 数値型 / 文字型 / ２数値型 / **血圧型**(仕様書に無いが
+  12 件実在、値 2 つ)。数値型の `result_1` は桁マスク("99.9")で、入力欄の step と max を
+  ここから読む(`numberMaskFormat`)。列挙型の選択肢は `result_1..18` を正とする
+  (`result_group_code` の観察結果テーブルは V 系グループ 3,773 行ぶんが存在しない)。
+  ２数値型の `unit` は "縦cm:横cm" の `:` 区切り。
 - `GET /master/nursing_acts/levels` が第 1・第 2 階層の一覧を返す。検索モーダルの絞り込みと
   指示簿のグループ見出しに使う。
 - `GET /master/nursing_acts/actions` は行為(第 3 階層)ごとに畳んだ一覧。修飾語の数と、
@@ -159,6 +196,16 @@ MEDIS の OID 表に従い、看護行為は
   予定タグ(枠線)と違って要対応なので塗りつぶしで区別する。件数は
   `useNursingPendingCounts`(ワークリストと同じキャッシュ)から取り、病棟未選択・
   他タブでは引かない。タブ行の右に指示簿へのボタンを置く。
+- **実施入力**(`NursingPerformModal`): 病棟の指示簿(患者見出し行の「実施入力」)とカルテの
+  指示簿タブ(ツールバーの「実施入力」)の両方から、**患者単位で**開く。その患者の有効な指示が
+  観察・行為に分かれて縦に並び、観察は表現タイプごとの入力欄(数値＋単位 / select /
+  文字 / 縦×横 / 収縮期÷拡張期)、行為はチェック。値の入ったものだけを 1 transaction で保存。
+  マスタ外の自由記載は文字入力。
+- 病棟の指示簿に「本日」列(その日の最新の値、行為は「実施」。複数回は吹き出し)。
+  データは `useNursingPerformsOn(date)`(ワークリスト本体とは別クエリ。入院患者一覧の
+  バッジに Observation を読ませないため)。
+- 詳細モーダルに「実施履歴」(日時・値・実施者・備考)と取消。
+- 経過表: 看護観察が行として合流する(§2.6)。
 - 退院モーダルに「看護指示を退院日で終了する」(食事・リハビリと同型)。
 - マスタメンテ > 看護: 看護行為マスタ / 看護観察マスタ(閲覧のみ)。取込は「マスタ取込」。
 
@@ -176,6 +223,12 @@ MEDIS の OID 表に従い、看護行為は
   `invalidateNursing` に worklist キーを追加)、`pages/NursingWorklistPage.tsx`、
   `NursingOrderDetailModal`(患者名を出せるように)、`pages/InpatientListPage.tsx`、
   `App.tsx` / `App.css`
+- 実施記録(第 3 段階): `fhir/nursingPerformHelpers.ts`、`fhir/vitalHelpers.ts`(血圧の
+  組み立てを export、`buildVitalFlowsheet` の行キー・値の拡張)、`queries.ts`
+  (`VITAL_FLOWSHEET_CATEGORY`、`useNursingPerformsOf` / `useNursingPerformsOn` /
+  `useRegisterNursingPerform` / `useDeleteNursingPerform`)、`masterQueries.ts`
+  (`useNursingObservationsByManageNos`)、`components/NursingPerformModal.tsx`、
+  `NursingOrderDetailModal`(実施履歴)、`KarteNursingTab` / `NursingWorklistPage`(配線・本日列)
 
 ### 6.1 検証したこと(2026-08-29)
 
@@ -195,6 +248,11 @@ MEDIS の OID 表に従い、看護行為は
   (`invalidateNursing` に worklist キーを足してあること)
 - 入院患者一覧: バッジ「指示受け 1」が出てカルテの指示簿タブへ飛べること、
   予定タグと見分けがつくこと
+- 実施記録: テスト太郎に観察指示 5 件(SpO2 / 体温 / 便量 / 自壊創範囲 / 血圧型)を足し、
+  行為 1 件と合わせて 1 回で記録 → Observation 6(LOINC 併記・列挙コード `R7031-01`・
+  component)+ Procedure 1 が 1 transaction で作られ、`category=vital-signs` の件数は不変
+- 経過表で SpO2・体温・血圧が既存行に合流、便量・自壊創範囲(12.5/8 cm)・自由記載が新規行
+- 本日列に値が出ること、詳細モーダルの実施履歴と取消が効くこと
 
 ## 7. 申し送り
 
@@ -204,8 +262,10 @@ MEDIS の OID 表に従い、看護行為は
   患者を確定して突き合わせる作りに変える
 - 指示受けの取消(accepted → requested)は未実装。カルテの指示簿タブにも無いので、
   戻す導線を足すときは両画面まとめて
-- 実施記録(行為 → Procedure、観察 → Observation)と経過表への連携は未実装。観察編の
-  表現タイプ・観察結果テーブル・単位テーブルはそのために取り込んである
+- 実施記録のまとめ単位(nursing-perform-entry)での取消・編集は未実装(1 件ずつ消す)
+- 収縮期・拡張期を単独項目で指示した場合、経過表では MEDIS コードの別行になる(血圧行に
+  合流させたければ血圧型 31002365 で指示する運用)
+- 指示受け前(requested)の指示にも実施を記録できる。受けてからに限るかは運用で決める
 - 指示簿に食事・処方など他オーダーの要約行を参照表示する案は次フェーズ
 - 終了日到来で SR を `completed` に閉じる処理は無い(有効のまま終了日で判定)。
   上流の `status=active` 検索に残り続けるので、件数が増えたら締め処理を検討

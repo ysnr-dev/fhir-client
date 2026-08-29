@@ -9,6 +9,8 @@ import {
   nursingTaskStatus,
   nursingTaskStatusDisplay,
 } from "../fhir/nursingTaskHelpers";
+import { useDeleteNursingPerform, useNursingPerformsOf } from "../api/queries";
+import { referenceId } from "../fhir/shared";
 import { Modal } from "./Modal";
 
 interface Props {
@@ -20,6 +22,8 @@ interface Props {
   patientName?: string;
   /** 中止済みの指示では出さない。 */
   onEdit?: () => void;
+  /** 実施履歴の取消を出すか。 */
+  canDeletePerform?: boolean;
   onClose: () => void;
 }
 
@@ -28,13 +32,31 @@ interface Props {
 //
 // 一覧を背後に残したいのでモーダルにする(病名・アレルギーのように view を切り替えると
 // 一覧が消えて、指示を見比べながらの確認ができない)。編集は右ペインに任せて読むだけ。
-export function NursingOrderDetailModal({ order, task, at, patientName, onEdit, onClose }: Props) {
+export function NursingOrderDetailModal({
+  order,
+  task,
+  at,
+  patientName,
+  onEdit,
+  canDeletePerform = false,
+  onClose,
+}: Props) {
   const summary = summarizeNursingOrder(order);
   const state = nursingOrderState(order, at);
   const taskStatus = nursingTaskStatus(task);
   const department = departmentOf(order).departmentName;
   const ward = wardOf(order).wardName;
   const acceptedAt = task?.executionPeriod?.start ?? "";
+  // 実施履歴。Observation には based-on 検索が無いので患者ぶんを引いて指示で絞る。
+  const patientId = referenceId(order.subject?.reference);
+  const performsQuery = useNursingPerformsOf(patientId);
+  const performs = performsQuery.data?.get(order.id ?? "") ?? [];
+  const deletePerform = useDeleteNursingPerform();
+
+  function handleDeletePerform(perform: (typeof performs)[number]) {
+    if (!window.confirm(`${perform.atLabel} の実施記録を取り消します。よろしいですか？`)) return;
+    deletePerform.mutate({ resourceType: perform.resourceType, id: perform.id });
+  }
 
   return (
     <Modal title={patientName ? `看護指示 - ${patientName}` : "看護指示"} onClose={onClose}>
@@ -90,6 +112,46 @@ export function NursingOrderDetailModal({ order, task, at, patientName, onEdit, 
           <dd>{summary.comment || "-"}</dd>
         </div>
       </dl>
+
+      <section className="nursing-detail__performs">
+        <h3>実施履歴{performs.length > 0 && ` (${performs.length} 件)`}</h3>
+        {performs.length === 0 ? (
+          <p className="patient-table__empty">実施記録がありません。</p>
+        ) : (
+          <table className="rp-card__medicines">
+            <thead>
+              <tr>
+                <th>日時</th>
+                <th>値</th>
+                <th>実施者</th>
+                <th>備考</th>
+                {canDeletePerform && <th />}
+              </tr>
+            </thead>
+            <tbody>
+              {performs.map((perform) => (
+                <tr key={`${perform.resourceType}/${perform.id}`}>
+                  <td>{perform.atLabel}</td>
+                  <td>{perform.value || "-"}</td>
+                  <td>{perform.performerName || "-"}</td>
+                  <td>{perform.note || "-"}</td>
+                  {canDeletePerform && (
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePerform(perform)}
+                        disabled={deletePerform.isPending}
+                      >
+                        取消
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
 
       {onEdit && (
         <div className="lab-order-item__actions nursing-detail__actions">

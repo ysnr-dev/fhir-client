@@ -196,6 +196,7 @@ import {
   isNursingOrderRunningOn,
   isNursingServiceRequest,
 } from "../fhir/nursingOrderHelpers";
+import { nursingPerformsByOrderId, type NursingPerformDisplay } from "../fhir/nursingPerformHelpers";
 import {
   buildNursingTaskUpdate,
   isNursingTask,
@@ -4804,13 +4805,20 @@ function invalidateVitals(queryClient: QueryClient) {
 const VITAL_FLOWSHEET_PAGE = 100;
 const VITAL_FLOWSHEET_MAX_PAGES = 10;
 
+// 経過表に載せる Observation の区分。手入力・テンプレート抽出のバイタル(vital-signs)に
+// 加えて、看護指示の観察結果(order-type の nursing。nursingPerformHelpers)も同じ表で
+// 時系列に読めるようにする。カルテのバイタルカードと診療日の索引
+// (useKarteVitalsInfinite / useKarteDayIndex)は vital-signs のままにしてある
+// (看護観察を混ぜるとカードにならない Observation で診療日だけが増える)。
+const VITAL_FLOWSHEET_CATEGORY = `vital-signs,${NURSING_ORDER_TYPE.code}`;
+
 async function fetchVitalFlowsheetObservations(
   patientId: string,
   columnCount: number,
 ): Promise<fhir4.Observation[]> {
   const dateParams = new URLSearchParams();
   dateParams.set("patient", `Patient/${patientId}`);
-  dateParams.set("category", "vital-signs");
+  dateParams.set("category", VITAL_FLOWSHEET_CATEGORY);
   const { dates: instants } = await fetchDistinctDates("Observation", dateParams, "date", {
     precision: "full",
     limit: columnCount,
@@ -4821,7 +4829,7 @@ async function fetchVitalFlowsheetObservations(
   for (let page = 0; page < VITAL_FLOWSHEET_MAX_PAGES; page += 1) {
     const params = new URLSearchParams();
     params.set("patient", `Patient/${patientId}`);
-    params.set("category", "vital-signs");
+    params.set("category", VITAL_FLOWSHEET_CATEGORY);
     // ge は境界を含むので、N 個目の測定日時そのものも取れる。
     params.set("date", `ge${instants[instants.length - 1]}`);
     params.set("_count", String(VITAL_FLOWSHEET_PAGE));
@@ -6709,6 +6717,98 @@ export function useNursingPendingCounts(date: string, wardId: string | undefined
     countByPatientId: query.data?.pendingByPatientId ?? new Map<string, number>(),
     error: query.error,
   };
+}
+
+// ---- 看護指示の実施記録 ----
+//
+// 観察は Observation、行為は Procedure(fhir/nursingPerformHelpers.ts)。どちらも
+// category が order-type の nursing で、指示(ServiceRequest)を basedOn で指す。
+// Observation には based-on の検索パラメータが無いので、患者(または日付)で引いて
+// から basedOn で指示に振り分ける。指示受けの Task は実施では動かない。
+
+function nursingPerformParams(): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${NURSING_ORDER_TYPE.code}`);
+  params.set("_sort", "-date");
+  params.set("_count", "200");
+  return params;
+}
+
+function resourcesOfType<T extends fhir4.Resource>(bundle: fhir4.Bundle, type: T["resourceType"]): T[] {
+  return (bundle.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r): r is T => r?.resourceType === type);
+}
+
+async function fetchNursingPerforms(
+  setParams: (params: URLSearchParams) => void,
+): Promise<Map<string, NursingPerformDisplay[]>> {
+  const observationParams = nursingPerformParams();
+  const procedureParams = nursingPerformParams();
+  setParams(observationParams);
+  setParams(procedureParams);
+  const [observations, procedures] = await Promise.all([
+    searchResource<fhir4.Observation>("Observation", observationParams),
+    searchResource<fhir4.Procedure>("Procedure", procedureParams),
+  ]);
+  return nursingPerformsByOrderId(
+    resourcesOfType<fhir4.Observation>(observations.data, "Observation"),
+    resourcesOfType<fhir4.Procedure>(procedures.data, "Procedure"),
+  );
+}
+
+/** その患者の実施記録(指示の id ごと、新しい順)。詳細モーダルの実施履歴に使う。 */
+export function useNursingPerformsOf(patientId: string | undefined) {
+  return useQuery({
+    // Procedure も含むが、無効化は Observation / Procedure の両方に投げるので片方のキーで足りる。
+    queryKey: ["Observation", "search", "nursing-perform", patientId],
+    queryFn: () =>
+      fetchNursingPerforms((params) => params.set("patient", `Patient/${patientId}`)),
+    enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * 基準日 1 日ぶんの実施記録を、指示の id ごとにまとめる(病棟の指示簿の「本日」列)。
+ * Observation は病棟で絞れないので日付で全患者ぶんを引き、画面の患者だけ残す。
+ * 入院患者一覧のバッジ(useNursingPendingCounts)はこれを引かない(別クエリにしてある)。
+ */
+export function useNursingPerformsOn(date: string, patientIds: string[]) {
+  const wanted = new Set(patientIds);
+  return useQuery({
+    queryKey: ["Observation", "search", "nursing-perform-day", date, [...wanted].sort().join(",")],
+    queryFn: async () => {
+      const byOrderId = await fetchNursingPerforms((params) => params.set("date", date));
+      return byOrderId;
+    },
+    enabled: Boolean(date) && wanted.size > 0,
+    placeholderData: keepPreviousData,
+  });
+}
+
+function invalidateNursingPerforms(queryClient: QueryClient) {
+  // 経過表(vital-flowsheet)・実施履歴・本日列はどれも Observation の検索に乗っている。
+  queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+  queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
+}
+
+/** 実施登録。Observation / Procedure を POST するだけで Task は動かさない。 */
+export function useRegisterNursingPerform() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidateNursingPerforms(queryClient),
+  });
+}
+
+/** 実施の取消。1 件消すだけ(進捗は実施で動いていないので戻す先が無い)。 */
+export function useDeleteNursingPerform() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ resourceType, id }: { resourceType: "Observation" | "Procedure"; id: string }) =>
+      deleteResource(resourceType, id),
+    onSuccess: () => invalidateNursingPerforms(queryClient),
+  });
 }
 
 // ---- 手術オーダー ----

@@ -5,6 +5,7 @@ import { useNursingActLevels } from "../api/masterQueries";
 import {
   useAcceptNursingOrders,
   useInpatientEncounters,
+  useNursingPerformsOn,
   useNursingWorklist,
   useRevokeNursingOrder,
   useSelfDepartments,
@@ -13,6 +14,7 @@ import {
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { NursingOrderDetailModal } from "../components/NursingOrderDetailModal";
+import { NursingPerformModal } from "../components/NursingPerformModal";
 import { PatientKana } from "../components/PatientRowCells";
 import { RowMenu } from "../components/RowMenu";
 import { encounterBedLabel, encounterPatientId } from "../fhir/encounterHelpers";
@@ -28,6 +30,7 @@ import {
   nursingTaskStatusDisplay,
 } from "../fhir/nursingTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
+import type { NursingPerformDisplay } from "../fhir/nursingPerformHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { today } from "../lib/dates";
@@ -81,6 +84,8 @@ export function NursingWorklistPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // 開いている対象は行そのものではなく id で覚え、読み直しのたびに引き直す。
   const [detailId, setDetailId] = useState<string | null>(null);
+  // 実施入力を開いている患者。id で覚えて読み直しのたびに引き直す(detailId と同じ)。
+  const [performingPatientId, setPerformingPatientId] = useState<string | null>(null);
 
   // 列が多いのでこの画面だけ幅を広げる(他のワークリストと同じ)。
   useEffect(() => {
@@ -180,7 +185,16 @@ export function NursingWorklistPage() {
     (row) => isPending(row) && selected.has(row.order.id ?? ""),
   );
 
+  // その日の実施記録(「本日」列)。ワークリスト本体とは別に引く(入院患者一覧のバッジが
+  // 同じキャッシュを使うので、そちらに Observation を読ませないため)。
+  const performs = useNursingPerformsOn(
+    date,
+    groups.map((group) => group.patientId),
+  );
+  const performsByOrderId = performs.data ?? new Map<string, NursingPerformDisplay[]>();
+
   const detailRow = allRows.find((row) => row.order.id === detailId) ?? null;
+  const performingGroup = groups.find((group) => group.patientId === performingPatientId) ?? null;
   const ownerName = me.practitioner ? displayJapaneseName(me.practitioner.name) : "";
   const canAccept = Boolean(me.practitionerId);
 
@@ -331,6 +345,7 @@ export function NursingWorklistPage() {
                   <th className="lab-worklist__compact">期間</th>
                   <th className="lab-worklist__compact">指示医</th>
                   <th className="lab-worklist__compact">指示受け</th>
+                  <th className="lab-worklist__compact">本日</th>
                   <th className="lab-worklist__actions sticky-table__fix-actions"></th>
                 </tr>
               </thead>
@@ -345,15 +360,17 @@ export function NursingWorklistPage() {
                     selected={selected}
                     pending={accept.isPending || revoke.isPending}
                     returnLinkState={returnLinkState}
+                    performsByOrderId={performsByOrderId}
                     onToggle={toggle}
                     onTogglePatient={togglePatient}
+                    onPerform={() => setPerformingPatientId(group.patientId)}
                     onView={setDetailId}
                     onRevoke={handleRevoke}
                   />
                 ))}
                 {groups.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="master-search__empty">
+                    <td colSpan={9} className="master-search__empty">
                       {allRows.length === 0
                         ? "この日に効いている看護指示はありません。"
                         : view === "pending"
@@ -372,12 +389,22 @@ export function NursingWorklistPage() {
         </>
       )}
 
+      {performingGroup && (
+        <NursingPerformModal
+          patientName={performingGroup.patient ? displayName(performingGroup.patient) : undefined}
+          // 有効な指示すべて(未指示受けビューでも、受け済みの指示に記録できるように)。
+          orders={performingGroup.rows.map((row) => row.order)}
+          onClose={() => setPerformingPatientId(null)}
+        />
+      )}
+
       {detailRow && (
         <NursingOrderDetailModal
           order={detailRow.order}
           task={detailRow.task}
           at={date}
           patientName={detailRow.patient ? displayName(detailRow.patient) : undefined}
+          canDeletePerform
           onClose={() => setDetailId(null)}
         />
       )}
@@ -496,8 +523,10 @@ interface PatientGroupProps {
   selected: Set<string>;
   pending: boolean;
   returnLinkState: ReturnType<typeof useReturnLinkState>;
+  performsByOrderId: Map<string, NursingPerformDisplay[]>;
   onToggle: (id: string) => void;
   onTogglePatient: (rows: NursingWorklistRow[], checked: boolean) => void;
+  onPerform: () => void;
   onView: (srId: string) => void;
   onRevoke: (row: NursingWorklistRow) => void;
 }
@@ -511,8 +540,10 @@ function PatientGroup({
   selected,
   pending,
   returnLinkState,
+  performsByOrderId,
   onToggle,
   onTogglePatient,
+  onPerform,
   onView,
   onRevoke,
 }: PatientGroupProps) {
@@ -541,7 +572,7 @@ function PatientGroup({
             />
           )}
         </th>
-        <th colSpan={7}>
+        <th colSpan={8}>
           <span className="nursing-worklist__room">{group.roomLabel || "-"}</span>
           {group.patient ? (
             <>
@@ -563,6 +594,10 @@ function PatientGroup({
               未指示受け {group.pendingRows.length} 件
             </span>
           )}
+          {/* 実施は患者単位でまとめて入れる(ラウンドの運用)。 */}
+          <button type="button" className="nursing-worklist__perform" onClick={onPerform}>
+            実施入力
+          </button>
         </th>
       </tr>
       {rows.map((row) => (
@@ -571,6 +606,7 @@ function PatientGroup({
           row={row}
           date={date}
           groupName={groupName}
+          todayPerforms={performsByOrderId.get(row.order.id ?? "") ?? []}
           checked={selected.has(row.order.id ?? "")}
           pending={pending}
           onToggle={() => onToggle(row.order.id ?? "")}
@@ -586,6 +622,7 @@ function OrderRow({
   row,
   date,
   groupName,
+  todayPerforms,
   checked,
   pending,
   onToggle,
@@ -595,6 +632,8 @@ function OrderRow({
   row: NursingWorklistRow;
   date: string;
   groupName: (group: NursingOrderGroup) => string;
+  /** その日の実施記録(新しい順)。 */
+  todayPerforms: NursingPerformDisplay[];
   checked: boolean;
   pending: boolean;
   onToggle: () => void;
@@ -635,6 +674,27 @@ function OrderRow({
         >
           {nursingTaskStatusDisplay(taskStatus)}
         </span>
+      </td>
+      {/* その日にもう記録したか。期間型なので「実施済かどうか」は日ごとに見る。
+          最新の値を出し、複数回なら吹き出しに全部並べる。 */}
+      <td
+        className="lab-worklist__compact"
+        title={
+          todayPerforms.length > 1
+            ? todayPerforms.map((p) => `${p.atLabel} ${p.value}`).join("\n")
+            : undefined
+        }
+      >
+        {todayPerforms.length > 0 ? (
+          <>
+            {todayPerforms[0].value}
+            {todayPerforms.length > 1 && (
+              <span className="nursing-tab__owner"> 他{todayPerforms.length - 1}</span>
+            )}
+          </>
+        ) : (
+          <span className="order-select__muted">未</span>
+        )}
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
         <button type="button" onClick={onView}>

@@ -10531,9 +10531,58 @@ button.meal-calendar__cell:hover {
   font-weight: bold;
 }
 
+.nursing-worklist__perform {
+  margin-left: 16px;
+}
+
 .nursing-worklist__pending {
   margin-left: 16px;
   color: var(--accent);
+}
+
+/* 実施入力(NursingPerformModal)。指示を縦に並べ、値・チェックをまとめて入れる表。 */
+.nursing-perform__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.nursing-perform__table th,
+.nursing-perform__table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.nursing-perform__table input[type="text"] {
+  width: 100%;
+}
+
+.nursing-perform__table input[type="number"] {
+  width: 6em;
+}
+
+.nursing-perform__value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nursing-perform__unit,
+.nursing-perform__muted {
+  color: var(--text);
+  font-size: 12px;
+}
+
+/* 詳細モーダルの実施履歴。 */
+.nursing-detail__performs {
+  margin-top: 16px;
+}
+
+.nursing-detail__performs h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
 }
 
 /* 看護指示フォーム(複数行) */

@@ -272,6 +272,7 @@ import {
   searchNursingActActions,
   fetchNursingActLevels,
   searchNursingObservations,
+  type NursingObservation,
   searchTransfusionProducts,
   fetchTransfusionProduct,
   createTransfusionProduct,
@@ -3617,6 +3618,30 @@ export function useNursingActLevels() {
 export interface NursingObservationFilters {
   name: string;
   category: string;
+}
+
+/**
+ * 管理番号でまとめて引く(実施入力が、その患者の観察指示ぶんの表現タイプ・単位・
+ * 選択肢を 1 往復で揃えるため)。管理番号は一意でない(用語の統合で番号が再利用される)が、
+ * サーバー既定の active 絞り込みで旧行は落ちるので、残ったものの先頭を採る。
+ * 引けなかった番号は実施入力側で文字入力に落とす。
+ */
+export function useNursingObservationsByManageNos(manageNos: string[]) {
+  const sorted = [...new Set(manageNos)].sort();
+  return useQuery({
+    queryKey: [...NURSING_OBSERVATIONS_KEY, "by-manage-no", sorted.join(",")],
+    queryFn: async () => {
+      // サーバーの max_per は 500。指示がそれを超えることは現実的に無い。
+      const result = await searchNursingObservations({ manage_no: sorted.join(","), per: 500 });
+      const byManageNo = new Map<string, NursingObservation>();
+      for (const obs of result.items) {
+        if (!byManageNo.has(obs.manage_no)) byManageNo.set(obs.manage_no, obs);
+      }
+      return byManageNo;
+    },
+    enabled: sorted.length > 0,
+    staleTime: Infinity,
+  });
 }
 
 export function useNursingObservationSearch(
