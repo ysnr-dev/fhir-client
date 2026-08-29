@@ -378,3 +378,46 @@ if File.exist?(surgery_categories_csv)
 else
   puts "master_surgery_categories: #{surgery_categories_csv} not found, skipped"
 end
+
+# 術式マスタ。db/seed_data/surgery_items.csv（ヘッダー有り）から投入する。
+# 一般病院で使う代表的な術式を診療科ごとに拾った初期値で、点数表 K 章の名称・
+# レセ電算コードをそのまま使う。item_code はレセ電算コード(9桁)と同じにしてある。
+#   - 施設独自採番(000001 のような連番)とぶつからない
+#   - 再投入しても同じ行を指すので、追加分だけが入る
+# 既定値(所要時間・到達法・体位・麻酔方法)と左右必須は施設の運用で変わるので、
+# 投入後は画面で直す前提。既存行は上書きしない（施設で直した内容を消さない）。
+# 種別(category_code)は surgery_categories.csv の分類コードを指す。
+surgery_items_csv = Rails.root.join("db/seed_data/surgery_items.csv")
+if File.exist?(surgery_items_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(surgery_items_csv, headers: true) do |row|
+    code = row["item_code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::SurgeryItem.exists?(item_code: code)
+      skipped += 1
+      next
+    end
+
+    Master::SurgeryItem.create!(
+      item_code: code,
+      name: name,
+      short_name: row["short_name"].to_s.strip.presence,
+      name_kana: row["name_kana"].to_s.strip.presence,
+      receipt_code: row["receipt_code"].to_s.strip.presence,
+      category_code: row["category_code"].to_s.strip.presence,
+      default_duration_minutes: row["default_duration_minutes"].to_s.strip.presence&.to_i,
+      default_approach: row["default_approach"].to_s.strip.presence,
+      default_position: row["default_position"].to_s.strip.presence,
+      default_anesthesia_methods: row["default_anesthesia_methods"].to_s.strip.presence,
+      requires_laterality: row["requires_laterality"].to_s.strip == "1",
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    )
+    loaded += 1
+  end
+  puts "master_surgery_items: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_surgery_items: #{surgery_items_csv} not found, skipped"
+end
