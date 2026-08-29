@@ -651,12 +651,24 @@ function cardTitle(item: KarteTimelineItem): string {
       .filter(Boolean)
       .join(" | ");
   }
+  // 病理は検査区分(組織診・細胞診・術中迅速)が「何を依頼したか」そのものなので、
+  // 処方区分と同じくタイトルに並べる。他の検査は検査項目がカード本文に出るが、
+  // 病理は本文が検体の一覧なので、区分が見出しに無いと何の検査か分からない。
+  if (item.kind === "patho-order") {
+    const summary = summarizePathoOrder(item.serviceRequest);
+    return [
+      summary.settingDisplay,
+      summary.examCategoryDisplay,
+      summary.urgent ? summary.priorityDisplay : "",
+    ]
+      .filter(Boolean)
+      .join(" | ");
+  }
   // 検体検査・細菌検査・放射線検査・生理検査・内視鏡は入外区分と、至急のときだけ
   // 至急区分を並べる(通常はわざわざ出さない)。
   if (
     item.kind === "lab-order" ||
     item.kind === "micro-order" ||
-    item.kind === "patho-order" ||
     item.kind === "rad-order" ||
     item.kind === "physio-order" ||
     item.kind === "endoscopy-order"
@@ -666,13 +678,11 @@ function cardTitle(item: KarteTimelineItem): string {
         ? summarizeLabOrder(item.serviceRequest)
         : item.kind === "micro-order"
           ? summarizeMicroOrder(item.serviceRequest)
-          : item.kind === "patho-order"
-            ? summarizePathoOrder(item.serviceRequest)
-            : item.kind === "rad-order"
-              ? summarizeRadOrder(item.serviceRequest)
-              : item.kind === "physio-order"
-                ? summarizePhysioOrder(item.serviceRequest)
-                : summarizeEndoscopyOrder(item.serviceRequest);
+          : item.kind === "rad-order"
+            ? summarizeRadOrder(item.serviceRequest)
+            : item.kind === "physio-order"
+              ? summarizePhysioOrder(item.serviceRequest)
+              : summarizeEndoscopyOrder(item.serviceRequest);
     return [summary.settingDisplay, summary.urgent ? summary.priorityDisplay : ""]
       .filter(Boolean)
       .join(" | ");

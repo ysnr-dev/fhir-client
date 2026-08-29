@@ -233,6 +233,7 @@ completed 検査済 / cancelled 中止`。検体検査と違いラベル発行�
 | オーダー入力 | `components/PathoOrderForm.tsx` | 検体はカード式の可変リスト。検査区分を変えると検体タイプの選択肢が変わり、既存行も補正する。術中迅速で至急＋手術室番号欄。臨床経過はテンプレートから記入可、シェーマは台紙を選んで描画 |
 | 臓器検索 | `components/PathoOrganSearchModal.tsx` | 名称・ICD-10 で LPATHO003 全件から選ぶ |
 | オーダー内容 | `components/PathoOrderDetailPanel.tsx` | カルテ詳細モーダルと部門一覧の「表示」で共用 |
+| カルテカード | `components/KarteTimeline.tsx`（`PathoOrderCardBody` / `cardTitle`） | 「病理検査」バッジの横に「入外区分 \| 検査区分」を出す（処方区分と同じ扱い）。本文は検体の一覧なので、区分が見出しに無いと何の検査か分からない |
 | 部門一覧 | `pages/PathoWorklistPage.tsx` | 採取日で 1 日ぶん。区分・入外・病棟・診療科・進捗で画面側絞り込み。レポート状況の列を持つ |
 | レポート入力 | `components/PathoResultForm.tsx` | オーダーを選ぶと検体と検査区分を転記。診断欄は区分で形が変わる。画像はファイル添付と切り出し図の描画 |
 | レポート表示 | `components/PathoResultDetailPanel.tsx` | カルテの病理タブ・詳細モーダル・部門一覧で共用。画像は種別ごとに並べる |
