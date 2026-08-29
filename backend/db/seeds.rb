@@ -123,6 +123,24 @@ end
       name: row["name"].to_s.strip,
       display_order: row["display_order"].to_s.strip.presence&.to_i
     }
+  }],
+  # 病理検査オーダーのマスタ2種。JAHIS 病理・臨床細胞データ交換規約 Ver.2.1C の
+  # 付録-3 サンプルマスタ(LPATHO003 臓器・検査材料 / LPATHO004 採取法)。
+  # 臓器は source=official(モデルの既定値)のまま入り、画面からは頻用の印だけを直せる。
+  "patho_organs" => [Master::PathoOrgan, :code, lambda { |row|
+    {
+      code: row["code"].to_s.strip,
+      name: row["name"].to_s.strip,
+      icd10: row["icd10"].to_s.strip.presence,
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    }
+  }],
+  "patho_collection_methods" => [Master::PathoCollectionMethod, :code, lambda { |row|
+    {
+      code: row["code"].to_s.strip,
+      name: row["name"].to_s.strip,
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    }
   }]
 }.each do |basename, (model, key_column, build)|
   csv_path = Rails.root.join("db/seed_data/#{basename}.csv")

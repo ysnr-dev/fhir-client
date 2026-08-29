@@ -4,6 +4,7 @@ import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePa
 import { InjectionCreatePanel, InjectionEditPanel } from "./InjectionPanels";
 import { LabOrderCreatePanel, LabOrderEditPanel } from "./LabOrderPanels";
 import { MicroOrderCreatePanel, MicroOrderEditPanel } from "./MicroOrderPanels";
+import { PathoOrderCreatePanel, PathoOrderEditPanel } from "./PathoOrderPanels";
 import { PrescriptionCreatePanel, PrescriptionEditPanel } from "./PrescriptionPanels";
 import { RadOrderCreatePanel, RadOrderEditPanel } from "./RadOrderPanels";
 import { PhysioOrderCreatePanel, PhysioOrderEditPanel } from "./PhysioOrderPanels";
@@ -36,6 +37,8 @@ export type KartePaneState =
   | { kind: "lab-order-edit"; srId: string }
   | { kind: "micro-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "micro-order-edit"; srId: string }
+  | { kind: "patho-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "patho-order-edit"; srId: string }
   | { kind: "rad-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "rad-order-edit"; srId: string }
   | { kind: "physio-order-create"; sourceSrId?: string; problem?: ProblemRef }
@@ -70,6 +73,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "lab-order-edit": "検体検査編集",
   "micro-order-create": "細菌検査登録",
   "micro-order-edit": "細菌検査編集",
+  "patho-order-create": "病理検査登録",
+  "patho-order-edit": "病理検査編集",
   "rad-order-create": "放射線検査登録",
   "rad-order-edit": "放射線検査編集",
   "physio-order-create": "生理検査登録",
@@ -98,6 +103,7 @@ function paneKey(state: KartePaneState): string {
     case "injection-edit":
     case "lab-order-edit":
     case "micro-order-edit":
+    case "patho-order-edit":
     case "rad-order-edit":
     case "physio-order-edit":
     case "endoscopy-order-edit":
@@ -117,6 +123,7 @@ function paneKey(state: KartePaneState): string {
     case "injection-create":
     case "lab-order-create":
     case "micro-order-create":
+    case "patho-order-create":
     case "rad-order-create":
     case "physio-order-create":
     case "endoscopy-order-create":
@@ -224,6 +231,12 @@ export function KarteRightPane({
           onClick={() => onStateChange({ kind: "micro-order-create", problem: selectedProblem })}
         >
           細菌検査
+        </button>
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "patho-order-create", problem: selectedProblem })}
+        >
+          病理検査
         </button>
         <button
           type="button"
@@ -338,6 +351,17 @@ function PaneContent({
       );
     case "micro-order-edit":
       return <MicroOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "patho-order-create":
+      return (
+        <PathoOrderCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "patho-order-edit":
+      return <PathoOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "rad-order-create":
       return (
         <RadOrderCreatePanel

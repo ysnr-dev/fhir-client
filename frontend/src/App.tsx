@@ -47,6 +47,9 @@ import { MicroOrganismPage } from "./pages/MicroOrganismPage";
 import { MicroAntimicrobialPage } from "./pages/MicroAntimicrobialPage";
 import { MicroSusceptibilityMethodPage } from "./pages/MicroSusceptibilityMethodPage";
 import { MicroSpecimenTypePage } from "./pages/MicroSpecimenTypePage";
+import { PathoWorklistPage } from "./pages/PathoWorklistPage";
+import { PathoOrganPage } from "./pages/PathoOrganPage";
+import { PathoCollectionMethodPage } from "./pages/PathoCollectionMethodPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
 import { PractitionerEditPage } from "./pages/PractitionerEditPage";
@@ -129,6 +132,9 @@ function App() {
             </Link>
             <Link to="/lab-arrivals" className="row-menu__item">
               検体到着確認
+            </Link>
+            <Link to="/patho-worklist" className="row-menu__item">
+              病理検査一覧
             </Link>
             <Link to="/rad-worklist" className="row-menu__item">
               放射線検査一覧
@@ -238,6 +244,14 @@ function App() {
               </Link>
               <Link to="/micro-susceptibility-methods" className="row-menu__item">
                 JANIS感受性測定法コード
+              </Link>
+            </SubMenu>
+            <SubMenu label="病理検査">
+              <Link to="/patho-organs" className="row-menu__item">
+                臓器・検査材料
+              </Link>
+              <Link to="/patho-collection-methods" className="row-menu__item">
+                採取法
               </Link>
             </SubMenu>
             <SubMenu label="放射線検査">
@@ -415,6 +429,7 @@ function App() {
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}
           <Route path="/lab-worklist" element={<LabWorklistPage />} />
           <Route path="/lab-arrivals" element={<LabArrivalPage />} />
+          <Route path="/patho-worklist" element={<PathoWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
           <Route path="/physio-worklist" element={<PhysioWorklistPage />} />
@@ -454,6 +469,8 @@ function App() {
           <Route path="/micro-organisms" element={<MicroOrganismPage />} />
           <Route path="/micro-antimicrobials" element={<MicroAntimicrobialPage />} />
           <Route path="/micro-susceptibility-methods" element={<MicroSusceptibilityMethodPage />} />
+          <Route path="/patho-organs" element={<PathoOrganPage />} />
+          <Route path="/patho-collection-methods" element={<PathoCollectionMethodPage />} />
           <Route path="/questionnaires" element={<QuestionnaireListPage />} />
           <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />
           <Route path="/questionnaires/:questionnaireId/edit" element={<QuestionnaireEditPage />} />

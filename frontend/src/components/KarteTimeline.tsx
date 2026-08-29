@@ -3,6 +3,7 @@ import {
   useDeleteClinicalNote,
   useDeleteLabOrder,
   useDeleteMicroOrder,
+  useDeletePathoOrder,
   useDeleteRadOrder,
   useDeletePhysioOrder,
   useDeleteTreatmentOrder,
@@ -54,6 +55,18 @@ import {
   specimenLabel,
   summarizeMicroOrder,
 } from "../fhir/microOrderHelpers";
+import {
+  organLabel,
+  pathoOrderClinicalInfo,
+  pathoOrderClinicalInfoTemplate,
+  pathoOrderComment,
+  pathoOrderSchemas,
+  pathoOrderSpecimens,
+  pathoSchemaImageRefs,
+  specimenTypeDisplay,
+  summarizePathoOrder,
+} from "../fhir/pathoOrderHelpers";
+import { pathoTaskStatusDisplay } from "../fhir/pathoTaskHelpers";
 import {
   bodySiteLabel,
   entryLabel,
@@ -269,6 +282,7 @@ function KarteCard({
   const deletePrescription = useDeletePrescription();
   const deleteLabOrder = useDeleteLabOrder();
   const deleteMicroOrder = useDeleteMicroOrder();
+  const deletePathoOrder = useDeletePathoOrder();
   const deleteRadOrder = useDeleteRadOrder();
   const deletePhysioOrder = useDeletePhysioOrder();
   const deleteEndoscopyOrder = useDeleteEndoscopyOrder();
@@ -289,6 +303,7 @@ function KarteCard({
     deletePrescription.isPending ||
     deleteLabOrder.isPending ||
     deleteMicroOrder.isPending ||
+    deletePathoOrder.isPending ||
     deleteRadOrder.isPending ||
     deletePhysioOrder.isPending ||
     deleteEndoscopyOrder.isPending ||
@@ -330,6 +345,7 @@ function KarteCard({
     // なので、専用の削除でまとめて消す。
     else if (item.kind === "lab-order") deleteLabOrder.mutate(item.id, options);
     else if (item.kind === "micro-order") deleteMicroOrder.mutate(item.id, options);
+    else if (item.kind === "patho-order") deletePathoOrder.mutate(item.id, options);
     else if (item.kind === "rad-order") deleteRadOrder.mutate(item.id, options);
     else if (item.kind === "physio-order") deletePhysioOrder.mutate(item.id, options);
     else if (item.kind === "endoscopy-order") deleteEndoscopyOrder.mutate(item.id, options);
@@ -372,6 +388,13 @@ function KarteCard({
           {item.kind === "micro-order" && item.reportStatus === "preliminary" && (
             <span className="micro-result__badge">結果:中間報告</span>
           )}
+          {/* 病理は中間報告と、確定後に直した修正報告をカードで見分けられるようにする。 */}
+          {item.kind === "patho-order" && item.reportStatus === "preliminary" && (
+            <span className="micro-result__badge">結果:中間報告</span>
+          )}
+          {item.kind === "patho-order" && item.reportStatus === "amended" && (
+            <span className="micro-result__badge">結果:修正報告</span>
+          )}
           <span className="karte-card__meta">
             {/* 検体検査・放射線検査・生理検査は部門の進捗(依頼済・受付済・実施済・中止)が
                 カードだけで分かるよう、時刻・依頼元の先頭に添える。バッジにはせず、
@@ -381,6 +404,7 @@ function KarteCard({
               item.kind === "endoscopy-order" ||
               item.kind === "treatment-order" ||
               item.kind === "surgery-order" ||
+              item.kind === "patho-order" ||
               item.kind === "lab-order") && (
               <>
                 <span className={`karte-card__status karte-card__status--${item.status}`}>
@@ -394,7 +418,9 @@ function KarteCard({
                           ? treatmentTaskStatusDisplay(item.status)
                           : item.kind === "surgery-order"
                             ? surgeryTaskStatusDisplay(item.status)
-                            : labTaskStatusDisplay(item.status)}
+                            : item.kind === "patho-order"
+                              ? pathoTaskStatusDisplay(item.status)
+                              : labTaskStatusDisplay(item.status)}
                 </span>
                 {cardMeta(item) && <span aria-hidden="true">|</span>}
               </>
@@ -407,6 +433,7 @@ function KarteCard({
             item.kind === "injection" ||
             item.kind === "lab-order" ||
             item.kind === "micro-order" ||
+            item.kind === "patho-order" ||
             item.kind === "rad-order" ||
             item.kind === "physio-order" ||
             item.kind === "endoscopy-order" ||
@@ -476,6 +503,17 @@ function KarteCard({
                 onClick={() => onOpenDetail({ kind: "micro-result", id: item.reportId })}
               >
                 検査結果表示
+              </button>
+            )}
+            {item.kind === "patho-order" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={!item.reportId}
+                title={item.reportId ? undefined : "この病理検査のレポートはまだ登録されていません"}
+                onClick={() => onOpenDetail({ kind: "patho-result", id: item.reportId })}
+              >
+                レポート表示
               </button>
             )}
             {/* 平文は元テンプレートの項目名と突き合わせて組み立てるので、
@@ -618,6 +656,7 @@ function cardTitle(item: KarteTimelineItem): string {
   if (
     item.kind === "lab-order" ||
     item.kind === "micro-order" ||
+    item.kind === "patho-order" ||
     item.kind === "rad-order" ||
     item.kind === "physio-order" ||
     item.kind === "endoscopy-order"
@@ -627,11 +666,13 @@ function cardTitle(item: KarteTimelineItem): string {
         ? summarizeLabOrder(item.serviceRequest)
         : item.kind === "micro-order"
           ? summarizeMicroOrder(item.serviceRequest)
-          : item.kind === "rad-order"
-            ? summarizeRadOrder(item.serviceRequest)
-            : item.kind === "physio-order"
-              ? summarizePhysioOrder(item.serviceRequest)
-              : summarizeEndoscopyOrder(item.serviceRequest);
+          : item.kind === "patho-order"
+            ? summarizePathoOrder(item.serviceRequest)
+            : item.kind === "rad-order"
+              ? summarizeRadOrder(item.serviceRequest)
+              : item.kind === "physio-order"
+                ? summarizePhysioOrder(item.serviceRequest)
+                : summarizeEndoscopyOrder(item.serviceRequest);
     return [summary.settingDisplay, summary.urgent ? summary.priorityDisplay : ""]
       .filter(Boolean)
       .join(" | ");
@@ -860,6 +901,12 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
     );
   }
 
+  if (item.kind === "patho-order") {
+    return (
+      <PathoOrderCardBody serviceRequest={item.serviceRequest} itemRequests={item.itemRequests} />
+    );
+  }
+
   if (item.kind === "rad-order") {
     return (
       <RadOrderCardBody
@@ -978,6 +1025,61 @@ function LabOrderCardBody({
           </ul>
         </div>
       ))}
+      {comment && <p className="karte-card__note">{comment}</p>}
+    </>
+  );
+}
+
+// 病理は検体を番号付きで並べ、臨床経過を添える。検体が複数あるのが普通なので、
+// 検体 1 件を 1 行にして「① 胃前庭部（生検・EMR）」の形で読めるようにする。
+function PathoOrderCardBody({
+  serviceRequest,
+  itemRequests,
+}: {
+  serviceRequest: fhir4.ServiceRequest;
+  itemRequests: fhir4.ServiceRequest[];
+}) {
+  const specimens = pathoOrderSpecimens(itemRequests);
+  const comment = pathoOrderComment(serviceRequest);
+  // テンプレートから書いた臨床経過は「(シェーマ画像あり)」の印を落として本文だけ出し、
+  // 画像は下にサムネイルで並べる(放射線オーダーのカードと同じ見せ方)。
+  const clinicalInfo = schemaAnnotatedLines(pathoOrderClinicalInfo(serviceRequest)).join("\n");
+  const clinicalInfoResponseId = pathoOrderClinicalInfoTemplate(serviceRequest)?.responseId ?? "";
+  const schemas = pathoOrderSchemas(serviceRequest);
+
+  if (specimens.length === 0) return <p className="karte-card__empty">検体がありません。</p>;
+
+  return (
+    <>
+      <div className="karte-rp">
+        <ul className="karte-rp__medicines">
+          {specimens.map((specimen, index) => {
+            const detail = [
+              specimen.typeName || specimenTypeDisplay(specimen.typeCode),
+              specimen.methodName,
+            ]
+              .filter(Boolean)
+              .join("・");
+            return (
+              <li key={specimen.id || index}>
+                <span className="karte-rp__number">{index + 1}</span>
+                <span className="karte-rp__medicine-name">{organLabel(specimen) || "臓器未設定"}</span>
+                {detail && <span className="karte-rp__detail-label">{`（${detail}）`}</span>}
+                {specimen.note && <span>{specimen.note}</span>}
+              </li>
+            );
+          })}
+        </ul>
+        {clinicalInfo && (
+          <div className="karte-rp__detail karte-rp__detail--indent">
+            <span className="karte-rp__detail-label">臨床経過:</span>
+            <span>{clinicalInfo}</span>
+          </div>
+        )}
+      </div>
+      {/* テンプレート記入内のシェーマと、オーダーに添えたシェーマ(AP-031)。 */}
+      {clinicalInfoResponseId && <ResponseSchemaImages responseId={clinicalInfoResponseId} />}
+      {schemas.length > 0 && <SchemaImageGallery refs={pathoSchemaImageRefs(schemas)} />}
       {comment && <p className="karte-card__note">{comment}</p>}
     </>
   );

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_28_200000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_29_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -845,6 +845,29 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_28_200000) do
     t.datetime "updated_at", null: false
     t.index ["exchange_code"], name: "index_master_modifiers_on_exchange_code"
     t.index ["management_number"], name: "index_master_modifiers_on_management_number", unique: true
+  end
+
+  create_table "master_patho_collection_methods", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_patho_collection_methods_on_code", unique: true
+  end
+
+  create_table "master_patho_organs", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "icd10"
+    t.string "source", default: "official", null: false
+    t.boolean "frequent", default: false, null: false
+    t.integer "display_order"
+    t.string "search_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_patho_organs_on_code", unique: true
+    t.index ["search_name"], name: "index_master_patho_organs_on_search_name"
   end
 
   create_table "master_physio_dataset_details", force: :cascade do |t|

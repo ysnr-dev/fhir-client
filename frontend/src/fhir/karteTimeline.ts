@@ -9,6 +9,13 @@ import {
 } from "./labOrderHelpers";
 import { labTaskStatus, labTasksByOrderId, type LabTaskStatus } from "./labTaskHelpers";
 import { isMicroServiceRequest, microOrderItemRequests, microOrderProblem } from "./microOrderHelpers";
+import {
+  isPathoServiceRequest,
+  pathoOrderItemRequests,
+  pathoOrderProblem,
+  pathoOrderResponseIds,
+} from "./pathoOrderHelpers";
+import { pathoTaskStatus, pathoTasksByOrderId, type PathoTaskStatus } from "./pathoTaskHelpers";
 import { ORDER_TYPE_SYSTEM, prescriptionProblem } from "./prescriptionHelpers";
 import { categoryCoding } from "./shared";
 import {
@@ -92,6 +99,7 @@ export type KarteItemKind =
   | "injection"
   | "lab-order"
   | "micro-order"
+  | "patho-order"
   | "rad-order"
   | "physio-order"
   | "endoscopy-order"
@@ -107,6 +115,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   injection: "注射",
   "lab-order": "検体検査",
   "micro-order": "細菌検査",
+  "patho-order": "病理検査",
   "rad-order": "放射線検査",
   "physio-order": "生理検査",
   "endoscopy-order": "内視鏡",
@@ -161,6 +170,19 @@ export type KarteTimelineItem = KarteItemBase &
         reportId: string;
         /** 結果の報告区分。"preliminary" なら中間報告のバッジを出す。 */
         reportStatus: string;
+      }
+    // 病理検査は明細が検体で、進捗(Task)と病理レポートの両方を持つ。
+    | {
+        kind: "patho-order";
+        serviceRequest: fhir4.ServiceRequest;
+        /** 検体明細。多部位の生検があるので複数になる。 */
+        itemRequests: fhir4.ServiceRequest[];
+        /** このオーダーを元に登録された病理レポートの id。空ならレポートはまだ無い。 */
+        reportId: string;
+        /** レポートの報告区分。"preliminary" なら中間、"amended" なら修正のバッジを出す。 */
+        reportStatus: string;
+        /** 部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
+        status: PathoTaskStatus;
       }
     // 放射線検査も明細(撮影項目・セットの構成項目)が ServiceRequest なので、
     // オーダーのヘッダにぶら下がるぶんを itemRequests に集めて渡す。
@@ -398,14 +420,16 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   );
   const questionnaires = pickByType<fhir4.Questionnaire>(responseResources, "Questionnaire");
 
-  // 診療記録のセクション・放射線オーダーの検査目的/特別指示・手術オーダーの術前指示から
-  // 参照されている回答は、そのカードの本文として既に描画されるので単独カードにしない。
+  // 診療記録のセクション・放射線オーダーの検査目的/特別指示・手術オーダーの術前指示・
+  // 病理オーダーの臨床経過から参照されている回答は、そのカードの本文として既に
+  // 描画されるので単独カードにしない。
   const linkedResponseIds = new Set([
     ...compositions.flatMap((c) => referencedResponseIds(c)),
     ...radOrderResponseIds(serviceRequests),
     ...physioOrderResponseIds(serviceRequests),
     ...endoscopyOrderResponseIds(serviceRequests),
     ...surgeryOrderResponseIds(serviceRequests),
+    ...pathoOrderResponseIds(serviceRequests),
   ]);
 
   // canonical("<url>|<version>")と url 単独の両方で引けるようにしておく
@@ -438,6 +462,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   // (Task は部門ごとに code が違うだけで同じ検索結果に混ざって届く)。
   const tasks = pickByType<fhir4.Task>(prescriptionResources, "Task");
   const labTaskByOrderId = labTasksByOrderId(tasks);
+  const pathoTaskByOrderId = pathoTasksByOrderId(tasks);
   // 放射線検査は実施記録(Procedure 一式)も「実施情報」の出力に使う。
   const radTaskByOrderId = radTasksByOrderId(tasks);
   const procedures = pickByType<fhir4.Procedure>(prescriptionResources, "Procedure");
@@ -521,6 +546,18 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         itemRequests: microOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
         reportId: report?.id ?? "",
         reportStatus: report?.status ?? "",
+      };
+    }
+    if (isPathoServiceRequest(serviceRequest)) {
+      const report = reportByOrderId.get(serviceRequest.id ?? "");
+      return {
+        ...base,
+        kind: "patho-order" as const,
+        label: KARTE_KIND_LABELS["patho-order"],
+        itemRequests: pathoOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+        reportId: report?.id ?? "",
+        reportStatus: report?.status ?? "",
+        status: pathoTaskStatus(pathoTaskByOrderId.get(serviceRequest.id ?? "")),
       };
     }
     if (isRadServiceRequest(serviceRequest)) {
@@ -773,6 +810,7 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "vital") return vitalEntryProblem(item.entry);
   if (item.kind === "lab-order") return labOrderProblem(item.serviceRequest);
   if (item.kind === "micro-order") return microOrderProblem(item.serviceRequest);
+  if (item.kind === "patho-order") return pathoOrderProblem(item.serviceRequest);
   if (item.kind === "rad-order") return radOrderProblem(item.serviceRequest);
   if (item.kind === "physio-order") return physioOrderProblem(item.serviceRequest);
   if (item.kind === "endoscopy-order") return endoscopyOrderProblem(item.serviceRequest);

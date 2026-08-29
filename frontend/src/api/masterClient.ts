@@ -4505,3 +4505,130 @@ export async function deleteSurgeryRoomBlock(id: number): Promise<void> {
   const res = await masterFetch(`${SURGERY_ROOM_BLOCKS_PATH}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
+
+// ---- 病理検査オーダーのマスタ ----
+
+// 臓器・検査材料(JAHIS テーブル LPATHO003)。規約付録由来の標準コード(official)は
+// seed で投入するため、画面から書けるのは施設追加分(local)と頻用臓器の印だけ。
+export interface PathoOrgan {
+  id: number;
+  code: string;
+  name: string;
+  /** 対応する ICD-10 コード。 */
+  icd10: string | null;
+  /** オーダー画面に直接並べる頻用臓器の印。 */
+  frequent: boolean;
+  source: "official" | "local";
+  display_order: number | null;
+}
+
+export interface PathoOrganPayload {
+  code?: string;
+  name?: string;
+  icd10?: string | null;
+  frequent?: boolean;
+  display_order?: number | null;
+}
+
+// 採取法(JAHIS テーブル LPATHO004)。
+export interface PathoCollectionMethod {
+  id: number;
+  code: string;
+  name: string;
+  display_order: number | null;
+}
+
+export interface PathoCollectionMethodPayload {
+  code?: string;
+  name?: string;
+  display_order?: number | null;
+}
+
+const PATHO_ORGANS_PATH = "/master/patho_organs";
+
+export async function searchPathoOrgans(params: {
+  name?: string;
+  frequent?: boolean;
+  source?: string;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<PathoOrgan>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.frequent) search.set("frequent", "true");
+  if (params.source) search.set("source", params.source);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${PATHO_ORGANS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<PathoOrgan>;
+}
+
+export async function createPathoOrgan(payload: PathoOrganPayload): Promise<PathoOrgan> {
+  const res = await masterFetch(PATHO_ORGANS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as PathoOrgan;
+}
+
+export async function updatePathoOrgan(
+  id: number,
+  payload: PathoOrganPayload,
+): Promise<PathoOrgan> {
+  const res = await masterFetch(`${PATHO_ORGANS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as PathoOrgan;
+}
+
+export async function deletePathoOrgan(id: number): Promise<void> {
+  const res = await masterFetch(`${PATHO_ORGANS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+const PATHO_COLLECTION_METHODS_PATH = "/master/patho_collection_methods";
+
+export async function fetchPathoCollectionMethods(): Promise<
+  MasterSearchResult<PathoCollectionMethod>
+> {
+  const res = await masterFetch(`${PATHO_COLLECTION_METHODS_PATH}?per=100`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<PathoCollectionMethod>;
+}
+
+export async function createPathoCollectionMethod(
+  payload: PathoCollectionMethodPayload,
+): Promise<PathoCollectionMethod> {
+  const res = await masterFetch(PATHO_COLLECTION_METHODS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as PathoCollectionMethod;
+}
+
+export async function updatePathoCollectionMethod(
+  id: number,
+  payload: PathoCollectionMethodPayload,
+): Promise<PathoCollectionMethod> {
+  const res = await masterFetch(`${PATHO_COLLECTION_METHODS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as PathoCollectionMethod;
+}
+
+export async function deletePathoCollectionMethod(id: number): Promise<void> {
+  const res = await masterFetch(`${PATHO_COLLECTION_METHODS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}

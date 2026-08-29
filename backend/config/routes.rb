@@ -199,6 +199,10 @@ Rails.application.routes.draw do
     resources :micro_order_items, only: %i[index create update destroy]
     resources :micro_collection_sites, only: %i[index create update destroy]
     resources :micro_collection_methods, only: %i[index create update destroy]
+    # 病理検査オーダーのマスタ2種。JAHIS 病理・臨床細胞データ交換規約 付録-3 の
+    # サンプルマスタを seed で投入し、臓器は頻用の印と施設追加分だけを画面で書ける。
+    resources :patho_organs, only: %i[index create update destroy]
+    resources :patho_collection_methods, only: %i[index create update destroy]
     resources :diseases, only: %i[index show create update destroy] do
       collection { post :import }
     end

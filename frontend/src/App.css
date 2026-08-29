@@ -9799,3 +9799,155 @@ button.meal-calendar__cell:hover {
 .meal-calendar__staple {
   color: var(--text);
 }
+
+/* ---- 病理検査オーダー ---- */
+
+/* 検体の可変リスト。病理は多部位の生検が普通なので、検体を 1 枚ずつのカードで
+   並べて「何番の検体か」を見失わないようにする。 */
+.patho-order__specimens {
+  /* fieldset が flex なので、リスト単体だと内容幅で止まってしまう。1 行占有させて
+     カードを枠いっぱいに広げる(.meal-comment と同じ手)。 */
+  flex: 1 1 100%;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.patho-order__specimen {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--surface-muted, transparent);
+  /* カードの中も fieldset と同じ折り返す横並びにする。縦積みのままだと広い
+     カードで 1 検体が縦に伸び、複数検体を見比べられなくなるため。 */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 16px;
+}
+
+.patho-order__specimen-head {
+  /* 検体番号と削除ボタンは 1 行使い切って、番号を各カードの同じ位置に置く。 */
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.patho-order__specimen-number {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.patho-order__specimen-add {
+  flex: 1 1 100%;
+}
+
+/* 臓器の検索欄と頻用ボタンはひと組。他の項目より広く取り、伸び縮みさせる。 */
+.patho-order__organ-group {
+  flex: 1 1 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 臓器は約 530 件あってセレクトに収まらないので、選択中の名前と検索ボタンを並べる。 */
+.patho-order__organ {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.patho-order__organ input {
+  flex: 1;
+}
+
+/* 頻用臓器。検索を開かずに押して選べるようにする。 */
+.patho-order__frequent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.patho-order__frequent-button {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.patho-order__frequent-button--selected {
+  border-color: var(--accent, currentColor);
+  font-weight: 600;
+}
+
+/* シェーマ(臓器図への描き込み)。追加ボタンとサムネイルを 1 行使い切って並べる。 */
+.patho-order__schemas {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.patho-order__schema-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* 補足は自由文なので、他の項目を置いた残り幅を吸わせる。 */
+.patho-order__note {
+  flex: 2 1 200px;
+}
+
+.patho-order__note input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.patho-order__multiline {
+  white-space: pre-wrap;
+}
+
+/* 病理レポートの所見・診断。改行を残して読ませる(規約の記述サンプルが段落単位)。 */
+.patho-result__text {
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+/* 長文の入力欄(臨床経過・所見、レポートの所見・診断・追加染色)。fieldset が flex なので
+   label 単体だと内容幅(20桁ぶん)で止まってしまう。1 行占有させて、中の textarea を
+   枠いっぱいに広げる(給食部門への指示 .meal-comment と同じ手)。 */
+.patho-long-text {
+  flex: 1 1 100%;
+}
+
+.patho-long-text textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+/* 病理の検体テーブル(オーダー内容・レポートの検体情報)。処方内容の --detail は
+   1 列目が薬剤名の 360px という前提の列幅を持っており、1 列目が№の病理では
+   番号だけが極端に広くなる。列の並びが違うので共用せず、専用の列幅を持つ。 */
+.rp-card__medicines--patho th:nth-child(1),
+.rp-card__medicines--patho td:nth-child(1) {
+  width: 40px;
+}
+
+/* 採取日は日付入力(または YYYY-MM-DD)がちょうど収まる幅で止め、
+   残りを臓器・検体の列に回す。 */
+.rp-card__medicines--patho th.rp-card__patho-date,
+.rp-card__medicines--patho td.rp-card__patho-date {
+  width: 170px;
+}
+
+.rp-card__medicines--patho td.rp-card__patho-date input {
+  width: 100%;
+  box-sizing: border-box;
+}

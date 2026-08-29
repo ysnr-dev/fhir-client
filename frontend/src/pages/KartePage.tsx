@@ -29,6 +29,7 @@ import { VitalFlowsheetPanel } from "../components/VitalFlowsheetPanel";
 import { KarteLabResultTab } from "../components/KarteLabResultTab";
 import { LabResultTimelinePanel } from "../components/LabResultTimelinePanel";
 import { KarteMicroResultTab } from "../components/KarteMicroResultTab";
+import { KartePathoResultTab } from "../components/KartePathoResultTab";
 import { KarteProblemList } from "../components/KarteProblemList";
 import { KarteProblemSummary } from "../components/KarteProblemSummary";
 import { KarteDetailModal } from "../components/KarteCardModals";
@@ -451,6 +452,7 @@ export function KartePage() {
     else if (item.kind === "injection") setPane({ kind: "injection-edit", srId: item.id });
     else if (item.kind === "lab-order") setPane({ kind: "lab-order-edit", srId: item.id });
     else if (item.kind === "micro-order") setPane({ kind: "micro-order-edit", srId: item.id });
+    else if (item.kind === "patho-order") setPane({ kind: "patho-order-edit", srId: item.id });
     else if (item.kind === "rad-order") setPane({ kind: "rad-order-edit", srId: item.id });
     else if (item.kind === "physio-order") setPane({ kind: "physio-order-edit", srId: item.id });
     else if (item.kind === "endoscopy-order")
@@ -471,6 +473,8 @@ export function KartePage() {
     else if (item.kind === "lab-order") setPane({ kind: "lab-order-create", sourceSrId: item.id });
     else if (item.kind === "micro-order") {
       setPane({ kind: "micro-order-create", sourceSrId: item.id });
+    } else if (item.kind === "patho-order") {
+      setPane({ kind: "patho-order-create", sourceSrId: item.id });
     } else if (item.kind === "rad-order") {
       setPane({ kind: "rad-order-create", sourceSrId: item.id });
     } else if (item.kind === "physio-order") {
@@ -495,6 +499,7 @@ export function KartePage() {
             pane.kind === "injection-edit" ||
             pane.kind === "lab-order-edit" ||
             pane.kind === "micro-order-edit" ||
+            pane.kind === "patho-order-edit" ||
             pane.kind === "rad-order-edit" ||
             pane.kind === "physio-order-edit" ||
             pane.kind === "endoscopy-order-edit" ||
@@ -636,6 +641,7 @@ export function KartePage() {
       );
     }
     if (key === "micro") return <KarteMicroResultTab {...props} />;
+    if (key === "patho") return <KartePathoResultTab {...props} />;
     // 食事オーダーの編集も、登録と同じ右ペインで開く(暦は表示に徹する)。
     if (key === "meal") {
       return (

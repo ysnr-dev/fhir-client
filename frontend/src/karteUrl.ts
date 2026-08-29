@@ -40,6 +40,7 @@ export const KARTE_TABS = [
   // 検体検査タブの中ではなく独立したタブとして持つ。
   { key: "lab-timeline", label: "検体検査時系列" },
   { key: "micro", label: "細菌検査" },
+  { key: "patho", label: "病理検査" },
   // 食事は「開始したら次の指示まで続く」ので、カードを日付順に読むだけでは
   // その日に何を食べているかが分かりにくい。暦の形で見るタブを別に持つ。
   { key: "meal", label: "食事" },
@@ -55,7 +56,7 @@ export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
  */
 export const KARTE_LAB_GROUP: { label: string; keys: readonly KarteTabKey[] } = {
   label: "検査結果",
-  keys: ["lab", "lab-timeline", "micro"],
+  keys: ["lab", "lab-timeline", "micro", "patho"],
 };
 /** 上下分割モードで下ペインに出せるタブ(カルテは常に上ペインなので除く)。 */
 export type KarteOtherTabKey = Exclude<KarteTabKey, "karte">;
@@ -75,7 +76,11 @@ export function parseKarteTab(value: string | null): KarteTabKey {
  * ならないが、モーダルの対象としては独立した種別が要る。
  */
 // バイタルはカードに測定値が全部出るので詳細モーダルを持たない。
-export type KarteDetailKind = Exclude<KarteItemKind, "vital"> | "lab-result" | "micro-result";
+export type KarteDetailKind =
+  | Exclude<KarteItemKind, "vital">
+  | "lab-result"
+  | "micro-result"
+  | "patho-result";
 
 export interface KarteDetailTarget {
   kind: KarteDetailKind;
@@ -88,6 +93,7 @@ const DETAIL_KINDS: KarteDetailKind[] = [
   "injection",
   "lab-order",
   "micro-order",
+  "patho-order",
   "rad-order",
   "physio-order",
   "endoscopy-order",
@@ -96,6 +102,7 @@ const DETAIL_KINDS: KarteDetailKind[] = [
   "meal-order",
   "lab-result",
   "micro-result",
+  "patho-result",
   "qr",
 ];
 
@@ -113,6 +120,7 @@ const CARD_KINDS: KarteItemKind[] = [
   "injection",
   "lab-order",
   "micro-order",
+  "patho-order",
   "rad-order",
   "physio-order",
   "endoscopy-order",
