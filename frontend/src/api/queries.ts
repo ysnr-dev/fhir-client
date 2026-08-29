@@ -101,8 +101,14 @@ import { buildPathoResultDeleteBundle } from "../fhir/pathoResultHelpers";
 import {
   TRANSFUSION_ORDER_TYPE,
   buildTransfusionOrderDeleteBundle,
+  isTransfusionServiceRequest,
   transfusionOrderItemRequests,
 } from "../fhir/transfusionOrderHelpers";
+import {
+  buildTransfusionTaskUpdate,
+  transfusionTasksByOrderId,
+  type TransfusionTaskStatus,
+} from "../fhir/transfusionTaskHelpers";
 import {
   buildPathoTaskUpdate,
   pathoTasksByOrderId,
@@ -6907,3 +6913,89 @@ export function usePretransfusionResults(patientId: string | undefined) {
     staleTime: 5 * 60_000,
   });
 }
+
+// ---- 輸血一覧(部門ワークリスト) ----
+//
+// 投与予定日で 1 日ぶんの輸血オーダーを読む。画面の作りは病理検査一覧と同じで、
+// 輸血検査区分・製剤区分・入外区分・病棟・診療科・進捗での絞り込みは画面側で行う
+// (理由は検体検査一覧の節のコメントを参照)。
+//
+// 病理と違い DiagnosticReport は無い(輸血に結果レポートは無く、記録は実施記録側)。
+
+/** 輸血一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
+export interface TransfusionWorklistRow {
+  order: fhir4.ServiceRequest;
+  /** 製剤明細。製剤名・単位数はここから組み立てる。 */
+  itemRequests: fhir4.ServiceRequest[];
+  patient?: fhir4.Patient;
+  /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
+  task?: fhir4.Task;
+}
+
+export interface TransfusionWorklistResult {
+  rows: TransfusionWorklistRow[];
+  /** 上限まで読んでも読み切れなかった。 */
+  truncated: boolean;
+}
+
+async function fetchTransfusionWorklist(date: string): Promise<TransfusionWorklistResult> {
+  const orders: fhir4.ServiceRequest[] = [];
+  const items: fhir4.ServiceRequest[] = [];
+
+  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
+    (page) => {
+      const params = worklistParams(
+        `${ORDER_TYPE_SYSTEM}|${TRANSFUSION_ORDER_TYPE.code}`,
+        date,
+        page,
+        "occurrence",
+      );
+      // 製剤明細と進捗も同じ応答に添えてもらう。
+      params.set("_revinclude:iterate", "ServiceRequest:based-on");
+      params.append("_revinclude", "Task:focus");
+      return params;
+    },
+    (resource) => {
+      if (resource.resourceType !== "ServiceRequest") return false;
+      const request = resource as fhir4.ServiceRequest;
+      // 検索にヒットしたヘッダと、添えられた明細を分ける。
+      if (isTransfusionServiceRequest(request) && !request.basedOn?.length) {
+        orders.push(request);
+        return true;
+      }
+      items.push(request);
+      return false;
+    },
+  );
+
+  const taskByOrderId = transfusionTasksByOrderId(tasks);
+
+  const rows = orders.map((order) => ({
+    order,
+    itemRequests: transfusionOrderItemRequests(items, order.id ?? ""),
+    patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+    task: taskByOrderId.get(order.id ?? ""),
+  }));
+
+  // 輸血オーダーは投与予定時刻を持つが、日単位の一覧では患者番号順が扱いやすい
+  // (病理・検体検査と同じ)。
+  rows.sort(comparePatientNumber);
+
+  return { rows, truncated };
+}
+
+/** 投与予定日 1 日ぶんの輸血オーダー。日付が未選択の間は読みに行かない。 */
+export function useTransfusionWorklist(date: string) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "transfusion-worklist", date],
+    queryFn: () => fetchTransfusionWorklist(date),
+    enabled: Boolean(date),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** 受付などの進捗を書き込む(組み立ては makeUpdateTaskStatusHook を参照)。 */
+export const useUpdateTransfusionTaskStatus = makeUpdateTaskStatusHook<TransfusionTaskStatus>(
+  buildTransfusionTaskUpdate,
+  "transfusion-worklist",
+);

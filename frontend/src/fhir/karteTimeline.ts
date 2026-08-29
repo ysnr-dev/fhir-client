@@ -51,6 +51,11 @@ import {
   transfusionOrderProblem,
 } from "./transfusionOrderHelpers";
 import {
+  transfusionTaskStatus,
+  transfusionTasksByOrderId,
+  type TransfusionTaskStatus,
+} from "./transfusionTaskHelpers";
+import {
   treatmentTaskStatus,
   treatmentTasksByOrderId,
   type TreatmentTaskStatus,
@@ -248,13 +253,15 @@ export type KarteTimelineItem = KarteItemBase &
     // 食事(給食)。他のオーダーと違い明細も進捗 Task も実施記録も持たないので、
     // カードに出すものは ServiceRequest 1 本の中で完結する。
     | { kind: "meal-order"; serviceRequest: fhir4.ServiceRequest }
-    // 輸血。病理と同じくヘッダ + 製剤明細の 2 層。進捗 Task と実施記録は第3・第4段階
-    // (docs/transfusion-order-design.md §5)なので、いまはヘッダと明細だけを持つ。
+    // 輸血。病理と同じくヘッダ + 製剤明細の 2 層。実施記録は第 4 段階
+    // (docs/transfusion-order-design.md §5)なので、いまは performs を持たない。
     | {
         kind: "transfusion-order";
         serviceRequest: fhir4.ServiceRequest;
         /** 製剤明細。1 オーダーに複数の製剤を混ぜられる。 */
         itemRequests: fhir4.ServiceRequest[];
+        /** 輸血部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
+        status: TransfusionTaskStatus;
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
@@ -496,6 +503,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const physioPerformByOrderId = physioPerformsByOrderId(procedures, administrations);
   const endoscopyTaskByOrderId = endoscopyTasksByOrderId(tasks);
   const endoscopyPerformByOrderId = endoscopyPerformsByOrderId(procedures, administrations);
+  const transfusionTaskByOrderId = transfusionTasksByOrderId(tasks);
   const treatmentTaskByOrderId = treatmentTasksByOrderId(tasks);
   const surgeryTaskByOrderId = surgeryTasksByOrderId(tasks);
   // 手術は出血量などの測定値も持つので、放射線と同じく Observation も渡す。
@@ -657,6 +665,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         kind: "transfusion-order" as const,
         label: KARTE_KIND_LABELS["transfusion-order"],
         itemRequests: transfusionOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+        status: transfusionTaskStatus(transfusionTaskByOrderId.get(serviceRequest.id ?? "")),
       };
     }
     const withMedications = {

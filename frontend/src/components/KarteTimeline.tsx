@@ -100,6 +100,7 @@ import {
 import type { TreatmentPerformDisplay } from "../fhir/treatmentResultHelpers";
 import { summarizeMealOrder } from "../fhir/mealOrderHelpers";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
+import { transfusionTaskStatusDisplay } from "../fhir/transfusionTaskHelpers";
 import {
   productLabel,
   summarizeTransfusionOrder,
@@ -416,6 +417,7 @@ function KarteCard({
               item.kind === "treatment-order" ||
               item.kind === "surgery-order" ||
               item.kind === "patho-order" ||
+              item.kind === "transfusion-order" ||
               item.kind === "lab-order") && (
               <>
                 <span className={`karte-card__status karte-card__status--${item.status}`}>
@@ -431,7 +433,9 @@ function KarteCard({
                             ? surgeryTaskStatusDisplay(item.status)
                             : item.kind === "patho-order"
                               ? pathoTaskStatusDisplay(item.status)
-                              : labTaskStatusDisplay(item.status)}
+                              : item.kind === "transfusion-order"
+                                ? transfusionTaskStatusDisplay(item.status)
+                                : labTaskStatusDisplay(item.status)}
                 </span>
                 {cardMeta(item) && <span aria-hidden="true">|</span>}
               </>
