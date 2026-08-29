@@ -418,7 +418,9 @@ function KarteCard({
             <span className="micro-result__badge">結果:中間報告</span>
           )}
           {item.kind === "patho-order" && item.reportStatus === "amended" && (
-            <span className="micro-result__badge">結果:修正報告</span>
+            <span className="micro-result__badge micro-result__badge--muted">
+              結果:修正報告
+            </span>
           )}
           <span className="karte-card__meta">
             {/* 検体検査・放射線検査・生理検査は部門の進捗(依頼済・受付済・実施済・中止)が

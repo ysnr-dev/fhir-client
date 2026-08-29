@@ -180,14 +180,20 @@ export function emptyTransfusionOrderForm(
   };
 }
 
-/** 「RBC-LR 2単位」の 1 行表示。カード・一覧で使う。 */
+/**
+ * 「赤血球液-LR「日赤」2単位 / 2単位」の 1 行表示。カード・一覧で使う。
+ *
+ * 製剤名には「2単位」のように規格が入っていることが多く、そのうしろに使用量を
+ * 空白だけで続けると「2単位 2単位」と読めてしまう。区切り文字を挟んで、
+ * 名称の一部ではなくオーダーした量だと分かるようにする(実施記録の bagLabel も同じ)。
+ */
 export function productLabel(product: TransfusionProductValues): string {
   const name = product.abbreviation || product.productName;
   if (!name) return "";
-  return product.units ? `${name} ${product.units}${product.unitLabel}` : name;
+  return product.units ? `${name} / ${product.units}${product.unitLabel}` : name;
 }
 
-/** 製剤を 1 行に並べたラベル(「RBC-LR 2単位, FFP-LR 4単位」)。 */
+/** 製剤を 1 行に並べたラベル(「RBC-LR / 2単位, FFP-LR / 4単位」)。 */
 export function productSummary(products: TransfusionProductValues[]): string {
   return products.map(productLabel).filter(Boolean).join(", ");
 }

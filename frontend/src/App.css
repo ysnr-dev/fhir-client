@@ -6243,6 +6243,14 @@ fieldset.lab-order-item__section label {
   white-space: nowrap;
 }
 
+/* 「まだ確定していない(中間報告)」ではなく、済んだ事実を伝えるだけの印。
+   カルテのカードは読むための面なので、異常値と同じ赤で注意を引かせず、
+   他のメタデータと同じ濃さに落とす(形はバッジのまま残して見落とさせない)。 */
+.micro-result__badge--muted {
+  border-color: var(--border);
+  color: var(--text);
+}
+
 /* 一覧の分離菌名。長くなりがちなので折り返す。 */
 .micro-result__organisms {
   white-space: normal;

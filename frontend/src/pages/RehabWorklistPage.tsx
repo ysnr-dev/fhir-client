@@ -52,8 +52,8 @@ import {
 // 毎日この一覧に出続け、実施だけが積み上がっていく。
 //
 // そのため 2 つのビューを切り替えられるようにしてある。
-// - オーダー一覧 … 基準日に効いているオーダー全部。受付・終了・次回予約の起点。
-// - 本日の予約   … その日に予約が入っている患者だけを時刻順に。日々の実施の起点。
+// - 依頼 … 基準日に効いているオーダー全部。受付・終了・次回予約の起点。
+// - 予約 … その日に予約が入っている患者だけを時刻順に。日々の実施の起点。
 //
 // 進捗(Task)は「部門の受け入れ状態」で、実施しても動かない。実施は Procedure が
 // 積み上がるだけ(docs/rehab-order-design.md §4)。そのため行のボタンは他部門と違い、
@@ -111,7 +111,7 @@ export function RehabWorklistPage() {
     [allRows, filters],
   );
 
-  // 「本日の予約」ビューは、基準日に予約が入っている行だけを予約時刻順に並べる。
+  // 「予約」ビューは、基準日に予約が入っている行だけを予約時刻順に並べる。
   // 1 オーダーにその日 2 枠入ることもあるので、予約 1 件 = 1 行に展開する。
   const appointmentRows = useMemo(() => {
     const entries = rows.flatMap((row) =>
@@ -179,7 +179,7 @@ export function RehabWorklistPage() {
           className={view === "orders" ? "order-select__tab is-active" : "order-select__tab"}
           onClick={() => setView("orders")}
         >
-          オーダー一覧
+          依頼
         </button>
         <button
           type="button"
@@ -188,7 +188,7 @@ export function RehabWorklistPage() {
           className={view === "appointments" ? "order-select__tab is-active" : "order-select__tab"}
           onClick={() => setView("appointments")}
         >
-          本日の予約{appointmentRows.length > 0 && ` (${appointmentRows.length})`}
+          予約{appointmentRows.length > 0 && ` (${appointmentRows.length})`}
         </button>
       </div>
 

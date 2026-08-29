@@ -3,7 +3,6 @@ import { useCurrentPractitioner } from "../api/authQueries";
 import { usePractitionerOptions, useRegisterRehabPerform } from "../api/queries";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import {
-  REHAB_UNIT_LABEL,
   summarizeRehabOrder,
   therapyTypeDisplay,
   type RehabTherapyType,
@@ -177,7 +176,7 @@ export function RehabPerformModal({
           </label>
         </div>
 
-        <section className="lab-order-item__section">
+        <section className="lab-order-item__section lab-order-item__section--tail">
           <div className="lab-order-item__section-head">
             <h3>訓練内容</h3>
           </div>
@@ -190,11 +189,6 @@ export function RehabPerformModal({
             />
           </label>
         </section>
-
-        <p className="order-select__muted">
-          実施を登録してもオーダーの進捗は変わりません(期間が終わるまで実施中のままです)。
-          1 単位は 20 分・{REHAB_UNIT_LABEL}数は実際に行ったぶんを入れてください。
-        </p>
 
         <div className="prescription-form__actions">
           <button type="submit" disabled={register.isPending}>

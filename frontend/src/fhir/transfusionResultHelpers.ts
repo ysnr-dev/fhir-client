@@ -340,7 +340,7 @@ export interface TransfusionPerformDisplay {
   /** 実施時間帯 "2026-08-31 14:00〜15:30"。終了が無ければ開始だけ。 */
   performedAt: string;
   performerName: string;
-  /** 輸血したバッグ。「赤血球液-LR 2単位 (No.1234)」の形。 */
+  /** 輸血したバッグ。「赤血球液-LR 2単位 / 2単位 (No.1234)」の形。 */
   bags: string[];
   /** 副作用。「なし」「あり: 発熱」。記録が無ければ空。 */
   reaction: string;
@@ -397,7 +397,10 @@ function bagLabel(administration: fhir4.MedicationAdministration): string {
   const dose = administration.dosage?.dose;
   const amount = dose?.value == null ? "" : `${dose.value}${dose.unit ?? ""}`;
   const lot = administration.extension?.find((e) => e.url === LOT_NUMBER_EXT_URL)?.valueString;
-  return [conceptLabel(administration.medicationCodeableConcept), amount, lot && `(No.${lot})`]
+  // 製剤名に規格(「2単位」)が入るので、使用量は区切り文字を挟んで名称と分ける
+  // (オーダー側の productLabel と同じ理由)。
+  const name = conceptLabel(administration.medicationCodeableConcept);
+  return [[name, amount].filter(Boolean).join(" / "), lot && `(No.${lot})`]
     .filter(Boolean)
     .join(" ");
 }
