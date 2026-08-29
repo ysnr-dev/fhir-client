@@ -19,6 +19,7 @@ import {
 } from "../fhir/transfusionOrderHelpers";
 import { makeFieldUpdater } from "../lib/form";
 import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 
@@ -57,7 +58,7 @@ export function TransfusionOrderForm({
   const [values, setValues] = useState<TransfusionOrderFormValues>(
     initialValues ?? emptyTransfusionOrderForm(""),
   );
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
 
   const problemOptions = useProblemOptions(patientId);
@@ -157,7 +158,7 @@ export function TransfusionOrderForm({
   return (
     <form className="prescription-form" onSubmit={handleSubmit}>
       {validationError && (
-        <div className="error-banner" role="alert">
+        <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
         </div>
       )}

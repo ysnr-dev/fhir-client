@@ -32,6 +32,7 @@ import {
 } from "../fhir/questionnaireResponseHelpers";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useSurgeryConflictCheck } from "../hooks/useSurgeryConflictCheck";
+import { useValidationError } from "../hooks/useValidationError";
 import { ConditionPickerModal } from "./ConditionPickerModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { PractitionerSearchModal } from "./PractitionerSearchModal";
@@ -105,7 +106,7 @@ export function SurgeryOrderForm({
   const [values, setValues] = useState<SurgeryOrderFormValues>(
     initialValues ?? emptySurgeryOrderForm(),
   );
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const conflictCheck = useSurgeryConflictCheck();
   // 術式検索・スタッフ選択・術前診断の各モーダル。
   const [searchingItem, setSearchingItem] = useState(false);
@@ -310,7 +311,7 @@ export function SurgeryOrderForm({
     <>
       <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
         {validationError && (
-          <div className="error-banner" role="alert">
+          <div className="error-banner" role="alert" ref={validationErrorRef}>
             <p className="error-banner__line error-banner__line--error">{validationError}</p>
           </div>
         )}

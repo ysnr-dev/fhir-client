@@ -24,6 +24,7 @@ import {
   type TemplateBinding,
 } from "../fhir/questionnaireResponseHelpers";
 import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { PathoOrganSearchModal } from "./PathoOrganSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
@@ -72,7 +73,7 @@ export function PathoOrderForm({
   const [values, setValues] = useState<PathoOrderFormValues>(
     initialValues ?? emptyPathoOrderForm(),
   );
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const [templateOpen, setTemplateOpen] = useState(false);
   // シェーマ: 台紙をマスタから選ぶ → その台紙を背景にペイントする、の 2 段。
@@ -187,7 +188,7 @@ export function PathoOrderForm({
     <>
       <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
       {validationError && (
-        <div className="error-banner" role="alert">
+        <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
         </div>
       )}

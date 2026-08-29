@@ -13,6 +13,7 @@ import {
 } from "../fhir/rehabOrderHelpers";
 import { makeFieldUpdater } from "../lib/form";
 import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 
@@ -48,7 +49,7 @@ export function RehabOrderForm({
   const [values, setValues] = useState<RehabOrderFormValues>(
     initialValues ?? emptyRehabOrderForm(""),
   );
-  const [validationError, setValidationError] = useState("");
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
 
   const problemOptions = useProblemOptions(patientId);
@@ -79,7 +80,7 @@ export function RehabOrderForm({
   return (
     <form className="prescription-form" onSubmit={handleSubmit}>
       {validationError && (
-        <div className="error-banner" role="alert">
+        <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
         </div>
       )}

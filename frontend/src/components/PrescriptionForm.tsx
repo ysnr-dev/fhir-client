@@ -15,6 +15,7 @@ import {
 } from "../fhir/prescriptionHelpers";
 import { presetUsageFilters } from "../fhir/usageMapping";
 import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
@@ -59,7 +60,7 @@ export function PrescriptionForm({
   submitLabel = "登録",
 }: PrescriptionFormProps) {
   const [values, setValues] = useState<PrescriptionFormValues>(initialValues ?? emptyPrescriptionForm);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const [modal, setModal] = useState<ModalState>(null);
   // コメント欄は常に入力する訳ではないため、既に値がある場合のみ初期表示し、
   // それ以外はボタン操作で表示する。
@@ -209,7 +210,7 @@ export function PrescriptionForm({
   return (
     <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
       {validationError && (
-        <div className="error-banner" role="alert">
+        <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
         </div>
       )}

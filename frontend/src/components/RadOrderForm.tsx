@@ -49,6 +49,7 @@ import { AppointmentSlotPicker } from "./AppointmentSlotPicker";
 import { Modal } from "./Modal";
 import { ConditionPickerModal } from "./ConditionPickerModal";
 import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
@@ -135,7 +136,7 @@ export function RadOrderForm({
   hasBooking = false,
 }: RadOrderFormProps) {
   const [values, setValues] = useState<RadOrderFormValues>(initialValues ?? emptyRadOrderForm);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const [active, setActive] = useState<ActiveTab | null>(null);
   const [searchCodes, setSearchCodes] = useState<string[]>([]);
   const [templateTarget, setTemplateTarget] = useState<TemplateTarget | null>(null);
@@ -570,7 +571,7 @@ export function RadOrderForm({
     <>
       <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
         {validationError && (
-          <div className="error-banner" role="alert">
+          <div className="error-banner" role="alert" ref={validationErrorRef}>
             <p className="error-banner__line error-banner__line--error">{validationError}</p>
           </div>
         )}

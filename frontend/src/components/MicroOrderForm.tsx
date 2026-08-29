@@ -26,6 +26,7 @@ import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionH
 import { useAntimicrobialSuggestions } from "../hooks/useAntimicrobialSuggestions";
 import { useConditionOptions } from "../hooks/useConditionOptions";
 import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 
@@ -57,7 +58,7 @@ export function MicroOrderForm({
   const [values, setValues] = useState<MicroOrderFormValues>(
     initialValues ?? emptyMicroOrderForm(),
   );
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
 
   const problemOptions = useProblemOptions(patientId);
@@ -171,7 +172,7 @@ export function MicroOrderForm({
   return (
     <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
       {validationError && (
-        <div className="error-banner" role="alert">
+        <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
         </div>
       )}

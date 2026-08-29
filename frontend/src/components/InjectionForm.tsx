@@ -31,6 +31,7 @@ import {
 import { presetInjectionUsageType } from "../fhir/usageMapping";
 import { useMedicineMlFactors } from "../api/masterQueries";
 import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
@@ -78,7 +79,7 @@ export function InjectionForm({
   submitLabel = "登録",
 }: InjectionFormProps) {
   const [values, setValues] = useState<InjectionFormValues>(initialValues ?? emptyInjectionForm);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const [modal, setModal] = useState<ModalState>(null);
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const [usageCommentOpen, setUsageCommentOpen] = useState<boolean[]>(() =>
@@ -287,7 +288,7 @@ export function InjectionForm({
   return (
     <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
       {validationError && (
-        <div className="error-banner" role="alert">
+        <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
         </div>
       )}

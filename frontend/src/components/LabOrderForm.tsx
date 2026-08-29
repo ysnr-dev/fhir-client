@@ -31,6 +31,7 @@ import {
 } from "../fhir/labOrderHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 
@@ -80,7 +81,7 @@ export function LabOrderForm({
   submitLabel = "登録",
 }: LabOrderFormProps) {
   const [values, setValues] = useState<LabOrderFormValues>(initialValues ?? emptyLabOrderForm);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
   const [active, setActive] = useState<ActiveTab | null>(null);
   const [searchCodes, setSearchCodes] = useState<string[]>([]);
@@ -271,7 +272,7 @@ export function LabOrderForm({
   return (
     <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
       {validationError && (
-        <div className="error-banner" role="alert">
+        <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
         </div>
       )}

@@ -39,6 +39,7 @@ import type { SlotSelection } from "../fhir/appointmentHelpers";
 import { AppointmentSlotPicker } from "./AppointmentSlotPicker";
 import { Modal } from "./Modal";
 import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 import { TreatmentPerformInputModal } from "./TreatmentPerformModal";
@@ -120,7 +121,7 @@ export function TreatmentOrderForm({
   hasBooking = false,
 }: TreatmentOrderFormProps) {
   const [values, setValues] = useState<TreatmentOrderFormValues>(initialValues ?? emptyTreatmentOrderForm);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const [active, setActive] = useState<ActiveTab | null>(null);
   const [searchCodes, setSearchCodes] = useState<string[]>([]);
   // 即実施。オーダー単位に選べる(添字はどちらも splitTreatmentOrderValues のキー)。
@@ -504,7 +505,7 @@ export function TreatmentOrderForm({
     <>
       <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
         {validationError && (
-          <div className="error-banner" role="alert">
+          <div className="error-banner" role="alert" ref={validationErrorRef}>
             <p className="error-banner__line error-banner__line--error">{validationError}</p>
           </div>
         )}

@@ -14,6 +14,7 @@ import {
   type MealTiming,
 } from "../fhir/mealOrderHelpers";
 import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 
@@ -50,7 +51,7 @@ export function MealOrderForm({
   submitLabel = "登録",
 }: MealOrderFormProps) {
   const [values, setValues] = useState<MealOrderFormValues>(initialValues);
-  const [validationError, setValidationError] = useState("");
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
   // 食事変更で終了させるオーダー。既定は全て終了(食事は同時に 1 本が原則)。
   const [closingIds, setClosingIds] = useState<string[]>([]);
 
@@ -184,7 +185,7 @@ export function MealOrderForm({
   return (
     <form className="prescription-form" onSubmit={handleSubmit}>
       {validationError && (
-        <div className="error-banner" role="alert">
+        <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
         </div>
       )}
