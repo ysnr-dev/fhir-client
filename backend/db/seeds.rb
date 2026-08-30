@@ -665,3 +665,117 @@ if File.exist?(transfusion_products_csv)
 else
   puts "master_transfusion_products: #{transfusion_products_csv} not found, skipped"
 end
+
+# 食種の種別(分類)マスタ。db/seed_data/meal_categories.csv（ヘッダー無し,
+# category_code,name,name_kana,nutrition_form,display_order）から投入する。
+# 参考仕様(名古屋第二赤十字病院「食種選択によるオーダエントリ」§1)の分類にあわせた
+# 4 分類を初期値とする。給与形態(nutrition_form)はオーダー画面が入力欄を切り替える
+# 判断軸なので、施設が分類名を変えてもこの値は保つ(docs/meal-order-design.md §3.2)。
+# 既存行は上書きしない（施設で直した内容を消さない）。
+meal_categories_csv = Rails.root.join("db/seed_data/meal_categories.csv")
+if File.exist?(meal_categories_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(meal_categories_csv) do |row|
+    code = row[0].to_s.strip
+    name = row[1].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::MealCategory.exists?(category_code: code)
+      skipped += 1
+      next
+    end
+
+    Master::MealCategory.create!(
+      category_code: code,
+      name: name,
+      name_kana: row[2].to_s.strip.presence,
+      nutrition_form: row[3].to_s.strip.presence || "oral_diet",
+      display_order: row[4].to_s.strip.presence&.to_i
+    )
+    loaded += 1
+  end
+  puts "master_meal_categories: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_meal_categories: #{meal_categories_csv} not found, skipped"
+end
+
+# 食種マスタ。db/seed_data/meal_diets.csv（ヘッダー有り）から投入する。
+# 一般病院の約束食事箋にある代表的な食種を並べた初期値で、item_code は SS-MIX2 の
+# 給食オーダ(OMD^O03)の例示に寄せた形(A001xx=一般食 / A002xx=特別食 / E001xx=経管 /
+# M001xx=調乳 / NPO=食止め)。施設独自採番(000001 のような連番)とぶつからない。
+#
+# **主成分量は施設の献立で決まるもので、ここの値は代表値にすぎない**。熱量と
+# 三大栄養素の整合(蛋白 4 + 脂質 9 + 糖質 4)は取ってあるが、実際の献立の値に
+# 栄養課が置き換える前提で投入する。適応・備考も同じく、施設の約束食事箋に
+# あわせて画面で直す(docs/meal-order-design.md §3.3)。
+# 既存行は上書きしない（施設で直した内容を消さない）。
+meal_diets_csv = Rails.root.join("db/seed_data/meal_diets.csv")
+if File.exist?(meal_diets_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(meal_diets_csv, headers: true) do |row|
+    code = row["item_code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::MealDiet.exists?(item_code: code)
+      skipped += 1
+      next
+    end
+
+    nutrients = Master::MealDiet::NUTRIENT_COLUMNS.index_with do |column|
+      row[column].to_s.strip.presence&.to_d
+    end
+
+    Master::MealDiet.create!(
+      {
+        item_code: code,
+        name: name,
+        name_kana: row["name_kana"].to_s.strip.presence,
+        is_fasting: row["is_fasting"].to_s.strip == "true",
+        category_code: row["category_code"].to_s.strip.presence,
+        indication: row["indication"].to_s.strip.presence,
+        display_order: row["display_order"].to_s.strip.presence&.to_i
+      }.merge(nutrients)
+    )
+    loaded += 1
+  end
+  puts "master_meal_diets: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_meal_diets: #{meal_diets_csv} not found, skipped"
+end
+
+# 食事オーダー項目マスタ(主食・副食形態)。db/seed_data/meal_items.csv（ヘッダー有り）
+# から投入する。主食は SS-MIX2 の ODS-1=D にあたり、item_code は例示に寄せた 105Axx。
+# 副食形態(F0x)は SS-MIX2 に対応する区分が無く、参考仕様 §2 から採った項目。
+# 主食の量(米飯180g など)は名称に焼き込む運用(docs/meal-order-design.md §3)。
+# 呼び名も刻みの段階数も施設で違うので、投入後は画面で直す前提。
+# 既存行は上書きしない（施設で直した内容を消さない）。
+meal_items_csv = Rails.root.join("db/seed_data/meal_items.csv")
+if File.exist?(meal_items_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(meal_items_csv, headers: true) do |row|
+    code = row["item_code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::MealItem.exists?(item_code: code)
+      skipped += 1
+      next
+    end
+
+    Master::MealItem.create!(
+      item_code: code,
+      name: name,
+      name_kana: row["name_kana"].to_s.strip.presence,
+      kind: row["kind"].to_s.strip.presence || "staple",
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    )
+    loaded += 1
+  end
+  puts "master_meal_items: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_meal_items: #{meal_items_csv} not found, skipped"
+end
