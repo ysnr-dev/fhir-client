@@ -9968,6 +9968,153 @@ td.surgery-calendar__cell--drop-target {
   resize: vertical;
 }
 
+/* ---- 食種の選択と主成分量(docs/meal-order-design.md §3.3) ---- */
+
+/* オーダー画面の食種欄。セレクトの代わりに「選んだ食種 + 変更ボタン」を label 相当の
+   幅で置き、その下に成分帯を出す。prescription-form の label と同じ縦並び。 */
+.prescription-form .meal-diet-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-basis: 100%;
+}
+
+.meal-diet-field__label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.meal-diet-field__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meal-diet-field__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.meal-diet-field__placeholder {
+  color: var(--text);
+}
+
+.meal-diet-field__nutrients {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.meal-diet-field__nutrient + .meal-diet-field__nutrient::before {
+  content: " ／ ";
+}
+
+.meal-diet-field__indication {
+  white-space: pre-wrap;
+}
+
+/* 食種の表(マスタ一覧・食種選択)。数値列は右寄せ、適応は 1 行に省略。 */
+.meal-diet-table__num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.meal-diet-table th small {
+  display: block;
+  font-weight: normal;
+  font-size: 0.8em;
+}
+
+/* 名称と食止めの印は折り返さない(数値列が多く名称の幅が詰められるため)。 */
+.meal-diet-table td:nth-child(2) {
+  white-space: nowrap;
+}
+
+.meal-diet-table__indication {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* マスタ一覧は件数分の高さでよい(モーダルの固定高は不要)。 */
+.master-search__table-wrap--auto {
+  height: auto;
+  overflow-x: auto;
+}
+
+.meal-diet-picker__table-wrap {
+  height: 420px;
+}
+
+/* 種別の見出し行(セレクトの optgroup にあたる)。列見出しの th は sticky なので、
+   tbody に置いたこの th には効かせない(列見出しと重なってしまう)。 */
+.meal-diet-picker__group th {
+  position: static;
+  text-align: left;
+  background: var(--surface-panel);
+  color: var(--text-h);
+  border-bottom: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.meal-diet-picker__row--selected td {
+  background: var(--accent-bg);
+}
+
+/* 食種マスタの編集モーダル: 主成分量 6 欄を横に並べる。
+   入力欄の見た目は .lab-order-item__fields の中でしか当たらないので、
+   その外に置くこの 2 節には同じ指定を書く。 */
+.meal-diet-nutrients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 12px;
+}
+
+.meal-diet-nutrients label,
+.meal-diet-indication {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.meal-diet-nutrients input,
+.meal-diet-indication textarea {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.meal-diet-nutrients input {
+  width: 100px;
+}
+
+.meal-diet-indication {
+  margin-top: 12px;
+}
+
+.meal-diet-indication textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 食止めの印は主成分量・適応とは別の性質の項目なので、上下に余白を空けて
+   ボタン行とも離す。既定の inline のままでは縦マージンが効かないので
+   inline-block にする(幅は中身のままにして、行全体が押せるようにはしない)。 */
+.meal-diet-fasting {
+  display: inline-block;
+  margin: 16px 0;
+}
+
 /* ---- 食事タブの月カレンダー(docs/meal-order-design.md) ---- */
 
 .meal-calendar__toolbar {

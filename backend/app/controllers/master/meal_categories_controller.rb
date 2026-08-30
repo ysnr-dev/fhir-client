@@ -35,7 +35,7 @@ module Master
     def destroy
       code = @record.category_code
       Master::MealCategory.transaction do
-        Master::MealItem.where(category_code: code).update_all(category_code: nil)
+        Master::MealDiet.where(category_code: code).update_all(category_code: nil)
         @record.destroy!
       end
       head :no_content

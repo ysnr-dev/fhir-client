@@ -4273,20 +4273,123 @@ export async function deleteMealCategory(id: number): Promise<void> {
   if (!res.ok) throw await buildError(res);
 }
 
-export interface MealItem {
+export interface MealDiet {
   id: number;
   item_code: string;
   name: string;
   name_kana: string | null;
-  /** diet=食種(食止めを含む) / staple=主食。 */
-  kind: string;
   /**
    * 食止め(禁食)の食種か。オーダー画面で主食欄を無効にするために使う。
    * SS-MIX2 が食止めを食種コード(NPO)で表すのに合わせ、食種の一種として持つ。
    */
   is_fasting: boolean;
-  /** 種別(master_meal_categories.category_code)。食種だけが持つ。未分類なら null。 */
+  /** 種別(master_meal_categories.category_code)。未分類なら null。 */
   category_code: string | null;
+  /**
+   * 主成分量。1 日あたり(朝昼夕の合計)の標準値で、JSON では decimal が文字列で届く。
+   * 未登録は null。オーダーには写さない(食種の性質。docs/meal-order-design.md §3.3)。
+   */
+  energy_kcal: string | null;
+  protein_g: string | null;
+  fat_g: string | null;
+  /** 画面表記は「糖質」。 */
+  carbohydrate_g: string | null;
+  water_ml: string | null;
+  /** 食種の標準塩分量。オーダーの塩分制限(患者ごとの指示)とは別物。 */
+  salt_g: string | null;
+  /** 適応・備考。オーダー画面の食種選択で医師に見せる文(note はマスタ管理者の控え)。 */
+  indication: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  display_order: number | null;
+  note: string | null;
+}
+
+export interface MealDietPayload {
+  item_code?: string;
+  name?: string;
+  name_kana?: string | null;
+  is_fasting?: boolean;
+  category_code?: string | null;
+  energy_kcal?: number | null;
+  protein_g?: number | null;
+  fat_g?: number | null;
+  carbohydrate_g?: number | null;
+  water_ml?: number | null;
+  salt_g?: number | null;
+  indication?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  display_order?: number | null;
+  note?: string | null;
+}
+
+const MEAL_DIETS_PATH = "/master/meal_diets";
+
+export async function searchMealDiets(params: {
+  name?: string;
+  /** 食種コード。カンマ区切りで複数指定できる。 */
+  item_code?: string;
+  /** 種別。 */
+  category_code?: string;
+  /** true なら今日オーダーできる食種(有効期間内)だけ。 */
+  active?: boolean;
+  page?: number;
+  /** 食種選択の表は全件を 1 ページで引くので、backend は 500 まで許す。 */
+  per?: number;
+}): Promise<MasterSearchResult<MealDiet>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.item_code) search.set("item_code", params.item_code);
+  if (params.category_code) search.set("category_code", params.category_code);
+  if (params.active) search.set("active", "true");
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${MEAL_DIETS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<MealDiet>;
+}
+
+// 食種コードでも id でも引ける。
+export async function fetchMealDiet(idOrCode: string | number): Promise<MealDiet> {
+  const res = await masterFetch(`${MEAL_DIETS_PATH}/${encodeURIComponent(String(idOrCode))}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MealDiet;
+}
+
+export async function createMealDiet(payload: MealDietPayload): Promise<MealDiet> {
+  const res = await masterFetch(MEAL_DIETS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MealDiet;
+}
+
+export async function updateMealDiet(id: number, payload: MealDietPayload): Promise<MealDiet> {
+  const res = await masterFetch(`${MEAL_DIETS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MealDiet;
+}
+
+export async function deleteMealDiet(id: number): Promise<void> {
+  const res = await masterFetch(`${MEAL_DIETS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+export interface MealItem {
+  id: number;
+  item_code: string;
+  name: string;
+  name_kana: string | null;
+  /** staple=主食 / side_dish_form=副食形態。食種は MealDiet(別テーブル)。 */
+  kind: string;
   valid_from: string | null;
   valid_to: string | null;
   display_order: number | null;
@@ -4298,8 +4401,6 @@ export interface MealItemPayload {
   name?: string;
   name_kana?: string | null;
   kind?: string;
-  is_fasting?: boolean;
-  category_code?: string | null;
   valid_from?: string | null;
   valid_to?: string | null;
   display_order?: number | null;
@@ -4312,10 +4413,8 @@ export async function searchMealItems(params: {
   name?: string;
   /** 項目コード。カンマ区切りで複数指定できる。 */
   item_code?: string;
-  /** "diet"=食種 / "staple"=主食。未指定なら両方。 */
+  /** "staple"=主食 / "side_dish_form"=副食形態。未指定なら両方。 */
   kind?: string;
-  /** 種別(食種だけが持つ)。 */
-  category_code?: string;
   /** true なら今日オーダーできる項目(有効期間内)だけ。 */
   active?: boolean;
   page?: number;
@@ -4325,7 +4424,6 @@ export async function searchMealItems(params: {
   if (params.name) search.set("name", params.name);
   if (params.item_code) search.set("item_code", params.item_code);
   if (params.kind) search.set("kind", params.kind);
-  if (params.category_code) search.set("category_code", params.category_code);
   if (params.active) search.set("active", "true");
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));

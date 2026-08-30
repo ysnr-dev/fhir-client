@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useMealCategoryOptions, useMealItemOptions } from "../api/masterQueries";
+import type { MealDiet } from "../api/masterClient";
+import { useMealCategoryOptions, useMealDietOptions, useMealItemOptions } from "../api/masterQueries";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   MEAL_FASTING_REASON_OPTIONS,
@@ -22,11 +23,19 @@ import {
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
-import { DEFAULT_MEAL_NUTRITION_FORM } from "./mealItemOptions";
+import { MealDietPickerModal } from "./MealDietPickerModal";
+import {
+  DEFAULT_MEAL_NUTRITION_FORM,
+  MEAL_NUTRIENT_COLUMNS,
+  formatMealNutrient,
+  mealDietHasNutrients,
+} from "./mealItemOptions";
 import { ProblemSelect } from "./ProblemSelect";
 
 // 食事オーダーの入力フォーム。他の部門オーダーと違い伝票レイアウトも明細も無く、
 // 食種 1 つ(+主食 1 つ)を選ぶだけなので 1 枚のフォームで完結する。
+// 食種だけは件数が多く主成分量を比べて選ぶものなので、セレクトではなく
+// 食種選択の表(MealDietPickerModal)で選ぶ(docs/meal-order-design.md §3.3)。
 //
 // 入外区分の選択欄は無い。食事は入院患者にだけ出すオーダーなので、パネル側で
 // 入院中かどうかを確かめてからこのフォームを描いている。
@@ -106,30 +115,18 @@ export function MealOrderForm({
   const [resumeIds, setResumeIds] = useState<string[]>([]);
 
   const problemOptions = useProblemOptions(patientId);
-  const diets = useMealItemOptions("diet");
+  const diets = useMealDietOptions();
   const staples = useMealItemOptions("staple");
   // 副食形態(きざみ・ミキサー など)。主食と違い朝昼夕の軸が無いのでセレクト 1 つ。
   const sideDishForms = useMealItemOptions("side_dish_form");
+  // 食種選択の表を開いているか。
+  const [pickingDiet, setPickingDiet] = useState(false);
 
   const dietItems = useMemo(() => diets.data?.items ?? [], [diets.data]);
-  // 食種の種別(一般食・特別食 など)。セレクトを種別ごとにまとめて選びやすくする。
+  // 食種の種別(一般食・特別食 など)。食種選択の表の見出しと給与形態の判定に使う。
   const mealCategories = useMealCategoryOptions();
-  const dietGroups = useMemo(() => {
-    const categories = mealCategories.data?.items ?? [];
-    const groups = categories.map((category) => ({
-      label: category.name,
-      items: dietItems.filter((item) => item.category_code === category.category_code),
-    }));
-    // 種別が付いていない食種(消した種別を指したままの食種も含む)は最後にまとめる。
-    const classified = new Set(categories.map((c) => c.category_code));
-    const rest = dietItems.filter(
-      (item) => !item.category_code || !classified.has(item.category_code),
-    );
-    if (rest.length > 0) groups.push({ label: "その他", items: rest });
-    return groups.filter((group) => group.items.length > 0);
-  }, [dietItems, mealCategories.data]);
-  // 種別を 1 件も登録していない施設では、まとめても見出しが 1 つ増えるだけなので出さない。
-  const groupDiets = (mealCategories.data?.items ?? []).length > 0;
+  // 選んだ食種のマスタ行。成分帯の表示に使う(マスタから消えた食種では undefined)。
+  const selectedDiet = dietItems.find((item) => item.item_code === values.diet?.code);
   const stapleItems = staples.data?.items ?? [];
   const sideDishFormItems = sideDishForms.data?.items ?? [];
 
@@ -178,15 +175,15 @@ export function MealOrderForm({
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleDietChange(code: string) {
-    const item = dietItems.find((i) => i.item_code === code);
+  function handleDietSelect(diet: MealDiet) {
     setValues((prev) => ({
       ...prev,
-      diet: item ? { code: item.item_code, name: item.name } : null,
-      dietIsFasting: item?.is_fasting ?? false,
+      diet: { code: diet.item_code, name: diet.name },
+      dietIsFasting: diet.is_fasting,
       // 食止めは 1 日を通して食事が出ないので、食事の中身の指定も持たない。
-      ...(item?.is_fasting ? clearedMealContent() : null),
+      ...(diet.is_fasting ? clearedMealContent() : null),
     }));
+    setPickingDiet(false);
   }
 
   function handleSideDishFormChange(code: string) {
@@ -308,35 +305,47 @@ export function MealOrderForm({
 
       <fieldset>
         <legend>食事内容</legend>
-        <label>
-          食種
-          <select
-            value={values.diet?.code ?? ""}
-            onChange={(e) => handleDietChange(e.target.value)}
-            required
-          >
-            <option value="">選択してください</option>
-            {groupDiets
-              ? dietGroups.map((group) => (
-                  <optgroup key={group.label} label={group.label}>
-                    {group.items.map((item) => (
-                      <option key={item.item_code} value={item.item_code}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))
-              : dietItems.map((item) => (
-                  <option key={item.item_code} value={item.item_code}>
-                    {item.name}
-                  </option>
-                ))}
-            {/* マスタから消えた食種でも、保存済みの選択を失わせない。 */}
-            {values.diet && !dietItems.some((i) => i.item_code === values.diet?.code) && (
-              <option value={values.diet.code}>{values.diet.name} (無効)</option>
+        {/* 食種。表で選び、選んだ食種を名称 + 主成分量 + 適応で見せる。 */}
+        <div className="meal-diet-field">
+          <span className="meal-diet-field__label">食種</span>
+          <div className="meal-diet-field__body">
+            <div className="meal-diet-field__name">
+              {values.diet ? (
+                <>
+                  <strong>{values.diet.name}</strong>
+                  {/* マスタから消えた食種でも、保存済みの選択を失わせない。 */}
+                  {dietItems.length > 0 && !selectedDiet && (
+                    <span className="dose-conversion__badge">無効</span>
+                  )}
+                </>
+              ) : (
+                <span className="meal-diet-field__placeholder">選択してください</span>
+              )}
+              <button type="button" onClick={() => setPickingDiet(true)}>
+                {values.diet ? "変更" : "食種を選択"}
+              </button>
+            </div>
+            {/* 主成分量(1 日あたりの標準値)と適応。食種の性質なのでマスタから引く
+                (オーダーには写さない)。値の無い食種では帯ごと出さない。 */}
+            {selectedDiet && mealDietHasNutrients(selectedDiet) && (
+              <div className="meal-diet-field__nutrients">
+                <span>
+                  {MEAL_NUTRIENT_COLUMNS.map((c) => (
+                    <span key={c.key} className="meal-diet-field__nutrient">
+                      {c.label} {formatMealNutrient(selectedDiet[c.key]) || "—"}
+                      {formatMealNutrient(selectedDiet[c.key]) && c.unit}
+                    </span>
+                  ))}
+                </span>
+                {selectedDiet.indication && (
+                  <span className="meal-diet-field__indication">
+                    適応: {selectedDiet.indication}
+                  </span>
+                )}
+              </div>
             )}
-          </select>
-        </label>
+          </div>
+        </div>
         {/* 副食形態(きざみ・ミキサー など)。主食と違い朝昼夕で変えることが無いので
             セレクト 1 つで全食に効く。食止めでは食事が出ないので無効にする。
             経管・経口食と調乳食は副食を持たないので欄ごと出さない(参考仕様 §1 の分類)。 */}
@@ -570,6 +579,17 @@ export function MealOrderForm({
           {submitting ? "保存中..." : submitLabel}
         </button>
       </div>
+
+      {pickingDiet && (
+        <MealDietPickerModal
+          diets={dietItems}
+          categories={mealCategories.data?.items ?? []}
+          error={diets.error}
+          selectedCode={values.diet?.code}
+          onSelect={handleDietSelect}
+          onClose={() => setPickingDiet(false)}
+        />
+      )}
     </form>
   );
 }

@@ -1,6 +1,6 @@
 module Master
   # 食種の種別(分類)。一般食・特別食(治療食)・その他 のように食種をまとめる。
-  # 食事オーダー項目マスタからは master_meal_items.category_code でコード参照する
+  # 食種マスタからは master_meal_diets.category_code でコード参照する
   # (FK は張らない)。手術の SurgeryCategory と違い階層は持たない。
   #
   # 名称は施設が自由に付けるので、それとは別に「給与形態」を固定コードで持つ

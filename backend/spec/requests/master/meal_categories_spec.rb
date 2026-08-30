@@ -74,13 +74,12 @@ RSpec.describe "Master::MealCategories", type: :request do
   describe "DELETE /master/meal_categories/:id" do
     it "参照していた食種は消さず未分類に戻す" do
       Master::MealCategory.create!(category_code: "01", name: "一般食")
-      Master::MealItem.create!(item_code: "A00105", name: "一般食2000kcal", kind: "diet",
-                               category_code: "01")
+      Master::MealDiet.create!(item_code: "A00105", name: "一般食2000kcal", category_code: "01")
 
       delete "/master/meal_categories/01"
 
       expect(response).to have_http_status(:no_content)
-      expect(Master::MealItem.find_by(item_code: "A00105").category_code).to be_nil
+      expect(Master::MealDiet.find_by(item_code: "A00105").category_code).to be_nil
     end
   end
 end

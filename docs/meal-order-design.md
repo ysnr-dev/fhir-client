@@ -21,7 +21,7 @@
 | 落としたもの | 他オーダーでの役割 | 食事で落とす理由 |
 |---|---|---|
 | 明細 ServiceRequest | 1 伝票に複数項目を載せる | ［導出］オーダー 1 件が指すのは食種 1 つ。複数項目を束ねる概念が無く、ヘッダの `code` に直接入る(朝昼夕で変わる主食は §2.3 のとおり `orderDetail` の繰り返しで足りる) |
-| 伝票レイアウト・セット・項目検索モーダル | 多数の項目から選ぶ導線 | 選択肢が施設あたり数十件で、セレクト 1 つで足りる |
+| 伝票レイアウト・セット・項目検索モーダル | 多数の項目から選ぶ導線 | 当初「選択肢が施設あたり数十件で、セレクト 1 つで足りる」とした。→ 成分量を見せる要件で**食種だけは選択の表が要る**と改めた(§3.3。主食・副食形態はセレクトのまま) |
 | 進捗 Task・部門ワークリスト | 部門が受付 → 実施と進める | ［提案］今回は給食部門の画面を作らない。作るときは §7-1 |
 | 実施記録(Procedure)・実施入力データセット | 実施内容を記録する | 配膳は記録の対象にしていない(同上) |
 | 予約枠(Appointment/Slot) | 検査室の枠を押さえる | 食事に枠の概念が無い |
@@ -438,32 +438,32 @@ S(補助食)で、**副食をどう調理するか(きざみ・ミキサー)を�
 ## 3. マスタ
 
 ```text
-master_meal_items      -- 食種(kind=diet)・主食(kind=staple)・副食形態
-                          (kind=side_dish_form)。1 テーブル
+master_meal_diets      -- 食種(食止めを含む)。種別・食止め・主成分量・適応を持つ
+master_meal_items      -- 主食(kind=staple)・副食形態(kind=side_dish_form)。1 テーブル
 master_meal_categories -- 食種の種別(一般食・特別食 など)。1 段の分類
 ```
 
-［提案］**食種・主食・副食形態を 1 テーブルに入れた**。列構成が完全に同じで、FHIR 側は
-CodeSystem の URI(`meal-type` / `meal-staple-food` / `meal-side-dish-form`)で既に
-区別しているため、テーブルを分けても model・controller・spec・API・画面が 3 式になる
-だけ。処置の `kind`(single/set)と同じやり方。
+［提案］**食種は独立したテーブル、主食・副食形態は 1 テーブル**。当初(2026-08-28)は
+3 つとも `master_meal_items` に `kind` で入れていた(列構成が同じで、FHIR 側は
+CodeSystem の URI で区別済みのため)。ところが食止め(`is_fasting`)・種別
+(`category_code`)に続いて主成分量と適応(§3.3)を持たせると**食種専用の列が共通の列より
+多くなり**、「主食には入れられない」検証を 3 つ重ねる形になったので、2026-08-30 に分けた。
+「食種」は性質を持つ実体、主食・副食形態(・将来の嗜好品・補助食 §7-3)は「食種をどう出すか」
+の修飾のコードリスト、という違いがテーブルの境界。FHIR 側は無変更
+(`meal-type` / `meal-staple-food` / `meal-side-dish-form`)。本番で食事オーダーを使う前
+だったので、既存データの移送は開発環境向けの最小限の `INSERT ... SELECT` だけ。
 
-［実装］副食形態(§2.10)を足したときも **migration は要らなかった**。`kind` は文字列列で、
-モデルの `KINDS` に 1 語、画面の区分セレクトとラベルに 1 行ずつ足すだけで済んでいる。
-`is_fasting` と `category_code` の「食種だけ」の検証がそのまま効く。
-
-主な列: `item_code`(一意) / `name` / `name_kana` / `kind` / `is_fasting` /
-`category_code`(種別) / `valid_from` / `valid_to` / `display_order` / `note` /
-`search_name` / `search_kana`。
+食種の主な列: `item_code`(一意) / `name` / `name_kana` / `is_fasting` / `category_code`
+(種別) / 主成分量 6 列 / `indication` / `valid_from` / `valid_to` / `display_order` /
+`note` / `search_name` / `search_kana`。主食・副食形態は `kind` があって
+`is_fasting` / `category_code` / 主成分量 / `indication` が無い。
 
 - `short_name` は作らない(食種名は短く、カードにそのまま出る)
-- **エネルギー kcal の列も作らない**。［提案］SS-MIX2 の例(`一般食2000kcal`)どおり名称に
-  含める運用。栄養成分での集計が要るようになったら列を足す(§7-1)
-- `is_fasting` は `kind = diet` のときだけ true にできる(モデルと画面の両方で落とす)。
-  副食形態にも同じ検証が効く
-- 採番は「数字だけのコードの最大 + 1 を 6 桁ゼロ詰め」。［実装］**英字混じりのコードは
-  計算から外す**ので、`NPO` や `A00105` のような SS-MIX2 互換コードを手入力しても
-  自動採番が壊れない
+- エネルギー kcal などの主成分量は §3.3(当初は名称に含める運用としていた)
+- 採番は「数字だけのコードの最大 + 1 を 6 桁ゼロ詰め」を両テーブルで別々に。［実装］
+  **英字混じりのコードは計算から外す**ので、`NPO` や `A00105` のような SS-MIX2 互換
+  コードを手入力しても自動採番が壊れない。一意制約もテーブルごとなので、SS-MIX2 の
+  T(食種)と D(主食)が別コード表であることに合う
 
 **seed は無い**。配布マスタが無く、食種は施設ごとに違うので画面から 1 件ずつ登録する
 (処置と同じ)。取込 API も付けていない。
@@ -530,6 +530,132 @@ CodeSystem の URI(`meal-type` / `meal-staple-food` / `meal-side-dish-form`)で�
 本数・乳首サイズ)はまだ無い**。いまはコメント(`note`)に書くことになる。作るときは
 この軸で分岐すればよい(§7-8)。
 
+### 3.3 食種の主成分量と適応
+
+実装日: 2026-08-30(検討も同日)。要件は「食種ごとに **熱量(kcal)・蛋白質(g)・脂質(g)・糖質(g)・
+水分(ml)・塩分(g)・適応・備考** を見せたい」。医師が食種を選ぶとき、`糖尿病食1600kcal`
+の名称だけでは蛋白質や塩分がいくつの食事なのか分からず、栄養課の食種一覧表(紙)を
+手元に置いて選んでいる、というのが背景。
+
+#### どこに持つか = 食種マスタの列
+
+［事実］SS-MIX2 の OMD^O03 には栄養成分を載せる席が無い(§2.10 と同じ)。FHIR で
+成分量を構造化する席は `NutritionOrder.oralDiet.nutrient`(`modifier` + `amount`)だが、
+これは「この患者に対する指示」であって「施設の食種の定義」ではない。
+
+［導出］主成分量は**食種の性質**であってオーダーごとに変わらない。`一般食2000kcal` を
+選んだ患者は全員同じ成分の食事を受け取る。オーダーに写すのは `is_fasting`・
+`nutrition_form` と同じ理由で不要(§2.5・§3.2)。
+
+［提案］`master_meal_items` に列を足す。**食種(`kind = diet`)だけが持つ**
+(`category_code` と同じ検証をモデルと画面の両方で掛ける)。
+
+| 列 | 型 | 単位 | 備考 |
+|---|---|---|---|
+| `energy_kcal` | decimal(7,1) | kcal | |
+| `protein_g` | decimal(6,1) | g | |
+| `fat_g` | decimal(6,1) | g | |
+| `carbohydrate_g` | decimal(6,1) | g | 画面表記は「糖質」 |
+| `water_ml` | decimal(7,1) | ml | 経管・経口食で特に要る |
+| `salt_g` | decimal(5,1) | g | 食種の**標準塩分量**。オーダーの塩分制限(§2.10)とは別物 |
+| `indication` | text | — | 適応・備考。**オーダー画面に見せる文** |
+
+- 全列 NULL 可。**値は「1 日あたりの標準値」**と定義する(朝昼夕の合計)。経管・経口食・
+  調乳食も同じ定義で持てる(1 日総量)。食止めは空のまま
+- 単位は列名に焼き込み、単位列は作らない(施設で単位が揺れる項目ではない)
+- 数値は `>= 0` だけ検証する。合計整合(蛋白 4 + 脂質 9 + 糖質 4 ≒ 熱量)は
+  **検証しない**(端数と食物繊維で必ずずれる)
+- `indication` と既存の `note` の使い分け: **`indication` はオーダー画面に出す文**
+  (「腎機能低下時。K 制限あり」「術後 3 日目から」)、**`note` はマスタ管理者の控え**
+  (「2026-04 献立改訂で数値更新」)。既存の `note` を流用して意味を混ぜない
+- テーブル分離と同じ migration(`create_master_meal_diets`)で列を作る。API は
+  `record_params` が列名から自動で許可する。モデルは `numericality >= 0` だけ
+
+#### 塩分は「食種の標準塩分」と「オーダーの塩分制限」の 2 つになる
+
+［導出］§2.10 の `meal-salt-limit` は「この患者は 6g 未満にせよ」という**指示**、
+`salt_g` は「この食種は標準で 8g」という**性質**。前者は後者の上書きにあたる。
+
+［提案］**オーダー画面で `salt_g` を塩分制限に自動転記しない**。標準値で足りるなら
+指示を書く必要が無く、書くのは標準と違えたいときだけ、という §2.10 の運用を変えない。
+画面では食種の標準塩分を参考表示し、塩分制限の欄はそのまま空で置く。
+
+#### 食種の選択はセレクトをやめて「食種選択」の表にする
+
+［導出］§1 で「選択肢が施設あたり数十件で、セレクト 1 つで足りる」として項目検索
+モーダルを落としたが、**成分量を見せる要件はこの前提を崩す**。
+
+- 実際の食種は「一般食 × 形態(常・軟・粥)× kcal 段階」「治療食 × 疾患 × エネルギー ×
+  蛋白 × 塩分」の掛け合わせで **100〜300 件**になるのが普通。optgroup 付きセレクトでは
+  探せない
+- 成分量は「選んだ後に確かめる」ものではなく「**比べて選ぶ**」ためのもの。セレクトは
+  横に並べた比較を構造的にできず、直下に成分帯を出すのは後付けの補助にしかならない
+- 参考仕様の表題が「**食種選択**によるオーダエントリ」であるとおり、食種の選び方が
+  この画面の中心
+
+［提案］オーダー画面の食種セレクトを**「食種選択」の表(モーダル)に置き換える**。
+処置・検査の項目検索モーダルと同じ位置づけで、食事にもやはり要った、ということ。
+
+```text
+┌ 食種選択 ─────────────────────────────────────────────────────────────┐
+│ [名称・カナ で絞り込み          ]  種別: [すべて|一般食|特別食|経管栄養]  │
+│ ┌ 一般食 ───────────────────────────────────────────────────────────┐ │
+│ │ コード   名称            熱量  蛋白  脂質  糖質  水分  塩分  適応・備考  │ │
+│ │ A00105  一般食2000kcal   2000   75    55   300     —    8  成人常食    │ │
+│ │ A00110  全粥食1600kcal   1600   65    45   240     —    7  術後・咀嚼… │ │
+│ ├ 特別食 ────────────────────────────────────────────────────────────┤ │
+│ │ A00201  糖尿病食1600kcal 1600   70    45   220     —    7  糖尿病・耐… │ │
+│ │ A00301  腎臓食1800kcal   1800   40    60   280     —    6  CKD3 以上… │ │
+│ ├ 食止め ────────────────────────────────────────────────────────────┤ │
+│ │ NPO     食止め              —    —     —     —     —    —              │ │
+│ └────────────────────────────────────────────────────────────────────┘ │
+│                                                        [閉じる]        │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+- 行を押すと選択してモーダルが閉じる。フォーム側には選んだ食種を**名称 + 成分帯 +
+  適応の 2〜3 行**で出し、「変更」で表に戻る(いまの「(無効)」の扱いも同じ場所で吸収)
+- 種別(§3.1)は表の**見出し行**(optgroup の代わり)と絞り込みのタブに使う。食止めは
+  `is_fasting` で末尾にまとめる
+- 絞り込みは名称・カナ・コード。マスタは `useMealDietOptions` で全件(`per=500`)持って
+  いるので**クライアント側で絞る**(追加の API は無い)。ひらがなで打ってもカナ名称に当たるよう
+  `toKatakana` で両側を寄せて比べる
+- 数値の無い食種は「—」。列は固定 6 + 適応で、施設が列を選ぶ仕組みは作らない
+- 幅が要るので `modal--lab-order-item` 程度の広いモーダルにし、適応・備考は 1 行に
+  省略して `title` で全文
+- 食事カレンダーの「この日の内容を引き継ぐ」(§5.1)や外出泊の連動(§2.8)は
+  食種コードで渡しているので、選択 UI が変わっても影響しない
+
+セレクトを**残さない**理由: 食種が少ない施設向けに 2 経路を持つと、フォームの復元・
+「(無効)」の扱い・給与形態の出し分けが 2 か所になる。少ない施設でも表で困らない。
+
+#### ほかの画面
+
+| 画面 | 見せ方 |
+|---|---|
+| 食種マスタ(`MealDietPage`) | 一覧に 6 列 + 適応。編集モーダルに数値 6 欄 + 適応(`textarea`)。備考は「備考(管理用)」と表記して `indication` と区別 |
+| 詳細モーダル・カード・暦 | **出さない**。オーダーとして書いた内容を見せる場所で、マスタの性質は載せない。カードは常設帯を増やさない方針(処置の申し送り) |
+
+#### 食数集計(§7-1)との関係
+
+この列がそのまま §7-1 の「kcal 等の列」になる。給食部門の画面で「その日の病棟ごとの
+総熱量」を出すときは、`isMealOrderActiveOn` で拾ったオーダーの食種コードから
+`energy_kcal` を引いて足すだけ。ただし欠食(§2.4)の日は 1 食分を引く必要があり、
+そのとき **1 日あたりの標準値を 3 で割る近似**になる。食事ごとの成分が要るなら
+朝昼夕別の列に割る(そのときは列を 6 × 3 にせず、`master_meal_item_nutrients`
+(item_code / timing / 6 値)へ正規化する方が素直)。第 1 段階では 1 日総量で始める。
+
+#### 見送ったもの
+
+- **オーダー(ServiceRequest)への写し**: 上記のとおり性質なので写さない。後から食種の
+  成分を改訂したら過去オーダーの表示も変わるが、それは「その食種の定義が変わった」
+  ことの正しい反映
+- **`NutritionOrder.oralDiet.nutrient` への載せ替え**: 患者ごとの指示(「蛋白 40g に
+  制限」)が要るようになったときの話で、食種の定義とは別。§7-2 と同じ条件で検討
+- **単位の可変化・食物繊維・カリウム・リン等の追加列**: 腎臓食の適応で K・P が要る
+  施設はあるが、まず 6 項目で始め、足すときは同じ形で列を足す(`indication` の文で
+  補える範囲は文で済ませる)
+
 ---
 
 ## 4. 上流 fhir-server の追加
@@ -553,7 +679,8 @@ model・テーブル・search_definition・extraction まで要る。ServiceRequ
 
 | 画面 | パス | 元 |
 |---|---|---|
-| 食事オーダー項目マスタ | `/meal-items` | `TreatmentItemPage`(セット・データセット・レセ電算・予約を削除。種別で絞り込める) |
+| 食種マスタ | `/meal-diets` | `MealItemPage` に種別・食止め・主成分量・適応を足したもの(§3.3) |
+| 食事オーダー項目マスタ(主食・副食形態) | `/meal-items` | `TreatmentItemPage`(セット・データセット・レセ電算・予約を削除) |
 | 食種 種別 | `/meal-categories` | `PhysioExamTypePage`(略称の欄だけ落とした同じ作り) |
 | オーダー入力 | カルテ右ペイン「食事」 | 新規(`MealOrderForm`。伝票レイアウトが無いので 1 枚のフォーム) |
 | 食事カレンダー | カルテ左ペイン「食事」タブ | 新規(`KarteMealTab`) |
@@ -631,12 +758,12 @@ UI にはしていない(切り替えの状態を持たずに済み、行が固�
 
 | 層 | 追加物 |
 |---|---|
-| migration | `20260828200000_create_master_meal_items` |
-| モデル | `Master::MealItem` |
-| API | `master/meal_items`(index の kind / active / name フィルタ、自動採番) |
-| spec | `spec/requests/master/meal_items_spec.rb`(14 examples) |
+| migration | `20260828200000_create_master_meal_items`、`20260831140000_create_master_meal_diets`(§3・§6.5) |
+| モデル | `Master::MealDiet` / `Master::MealItem` |
+| API | `master/meal_diets`(index の category_code / active / name、`per` 上限 500、自動採番)/ `master/meal_items`(index の kind / active / name、自動採番) |
+| spec | `spec/requests/master/meal_diets_spec.rb`(14 examples)/ `meal_items_spec.rb`(12 examples) |
 | FHIR 変換 | `fhir/mealOrderHelpers.ts` 1 本のみ(Task・実施記録のヘルパーは無い) |
-| 画面 | `pages/MealItemPage.tsx` / `components/MealOrderForm.tsx` / `MealOrderPanels.tsx` / `MealOrderDetailPanel.tsx` / `KarteMealTab.tsx` / `mealItemOptions.ts` |
+| 画面 | `pages/MealDietPage.tsx` / `pages/MealItemPage.tsx` / `components/MealDietPickerModal.tsx` / `components/MealOrderForm.tsx` / `MealOrderPanels.tsx` / `MealOrderDetailPanel.tsx` / `KarteMealTab.tsx` / `mealItemOptions.ts` |
 | 連動 | `fhir/mealEncounterSync.ts` / `hooks/useMealSyncContext.ts` / `components/MealSyncSummary.tsx`、`DischargeModal` / `DischargePlanModal` / `LeaveModal` / `LeaveReturnModal` / `InpatientPlanTables` の各操作 |
 | 施設設定 | `facility_settings.meal_schedule`(migration `20260831100000`、`FacilitySettingsPage` の「食事の提供時刻」) |
 | queries | `useMealOrderDetail` / `useActiveMealOrders` / `useMealOrderMonth` / `useUpdateMealOrder` / `useDeleteMealOrder`、`OCCURRENCE_ORDER_TYPES` に `meal` を追加 |
@@ -774,6 +901,45 @@ FHIR は無変更。給与形態は**マスタ側の属性で、オーダーに�
 「主食の選択肢が消えて欠食だけ残る / 副食形態の欄が消える / 見出しが『食事』になる」を
 確かめること。
 
+### 6.5 食種テーブルの分離と主成分量・食種選択(§3・§3.3)の追加 — 2026-08-30
+
+| 層 | 変更 |
+|---|---|
+| migration | `20260831140000_create_master_meal_diets`(テーブル作成 + `kind=diet` 行の移送 + `master_meal_items` から `is_fasting` / `category_code` を削除、`kind` の既定を `staple` に) |
+| モデル | `Master::MealDiet`(新規、`NUTRIENT_COLUMNS` の `numericality >= 0`、`active_on`)/ `Master::MealItem`(`KINDS` から `diet` と食種向け検証を削除) |
+| API | `master/meal_diets`(新規)/ `meal_items`(`category_code` 絞り込みを削除)/ `meal_categories#destroy` が `MealDiet` を向く |
+| spec | `meal_diets_spec.rb`(新規 14)/ `meal_items_spec.rb`(12)/ `meal_categories_spec.rb`(`MealDiet` へ) |
+| API クライアント | `masterClient.ts`: `MealDiet` / `MealDietPayload` / `searchMealDiets` 他。`MealItem` から `is_fasting` / `category_code` を削除 |
+| queries | `masterQueries.ts`: `MEAL_DIETS_KEY`、`useMealDietSearch` / `useMealDiet` / `useMealDietOptions`(`per=500`)/ `useMealDietMutations`。`fastingDietOf` / `fetchFastingDiet` / `useFastingDiet` は `MealDiet` を引くように(名前は据え置き、`useMealSyncContext` は無変更)。`useMealItemOptions` は `staple | side_dish_form` に |
+| 画面 | `MealDietPage`(新規)/ `MealItemPage`(食種の欄・列を削除、見出しに「主食・副食形態」)/ `MealDietPickerModal`(新規)/ `MealOrderForm`(食種セレクト → 選んだ食種 + 成分帯 + 適応 + 「変更」ボタン、`handleDietSelect`)/ `mealItemOptions.ts`(`MEAL_NUTRIENT_COLUMNS` / `formatMealNutrient` / `mealDietHasNutrients`)/ `App.tsx`(`/meal-diets`、メニュー「食種」「主食・副食形態」)/ `App.css`(`.meal-diet-*`) |
+
+FHIR は無変更。主成分量はオーダーに写していない(§3.3)。
+
+検証(開発環境、患者「山田 太郎」= 東3階病棟 302号室):
+
+1. migration で旧テーブルの食種 4 件(`A00105` / `A00201` / `E00101` / `NPO`)が
+   `master_meal_diets` に移り、食種マスタの一覧に種別・食止めの印つきで出ること
+2. 食種マスタの編集で糖尿病食1600kcal に 熱量 1600 / 蛋白質 70 / 脂質 45 / 糖質 220 /
+   塩分 7 / 適応「糖尿病・耐糖能異常。腎症合併例は腎臓食を選ぶ」を保存 → 一覧の数値列と
+   適応列(1 行に省略、`title` で全文)に出ること。水分の空欄は空のまま
+3. オーダー画面(カルテ右ペイン「食事」): 食種欄が「選択してください [食種を選択]」で出て、
+   押すと**食種選択**モーダルが開き、種別ごとの見出し行(一般食 / 特別食 / 経管栄養)+
+   末尾の「食止め」に食種が並び、主成分量の列が「—」を含めて揃うこと
+4. 絞り込み: 「とう」(ひらがな)でカナ名称「トウニョウビョウショク」の糖尿病食だけが残ること
+5. 行を押すとモーダルが閉じ、フォームに「**糖尿病食1600kcal** [変更]」+
+   「熱量 1600kcal ／ 蛋白質 70g ／ 脂質 45g ／ 糖質 220g ／ 水分 — ／ 塩分 7g」+
+   「適応: …」が出ること
+6. 食止めを選ぶと成分帯が出ず、副食形態・塩分制限・主食が無効になり、欠食理由の欄が
+   現れること(§2.5・§2.9 の挙動が選択 UI の変更後も同じ)
+7. 編集(カードのケバブ「編集」): 保存済みの一般食2000kcal が名称 + 成分帯で復元されること
+8. 回帰: backend `meal_diets_spec` + `meal_items_spec` + `meal_categories_spec` 36 examples
+   green、`tsc -b --force` clean、`oxlint` 変更ファイルに警告なし
+
+［申し送り］**食種選択で選んだあとの登録(FHIR の書き込み)は今回通していない**。書く経路
+(`values.diet = {code, name}`)は変えておらず、セレクトで選んだときと同じ値が入る。
+**マスタから消えた食種の「無効」印**も画面から通していない(`dietItems` が届いたうえで
+一致が無いときに出る分岐)。
+
 ---
 
 ## 7. 申し送り
@@ -787,7 +953,7 @@ FHIR は無変更。給与形態は**マスタ側の属性で、オーダーに�
      パラメータも使える(実装済だがクライアントは未使用)
    - 配膳の進捗が要るなら `createTaskHelpers({ taskCode: { code: "meal-serve", ... } })` を
      呼ぶだけで、既存の Task 機構がそのまま乗る
-   - 食数集計に栄養成分が要るなら、マスタに kcal 等の列を足す(§3)
+   - 食数集計に栄養成分が要るなら、マスタに kcal 等の列を足す(§3.3 に検討済み。同じ列を使う)
    - **欠食理由(§2.9)ははい膳表に出す前提の項目**。`mealFastingReasonLabel(sr)` を
      そのまま行に出せばよい。「その他」はコメント(`note`)と併せて読む
 2. **NutritionOrder への載せ替え**: 今回は上流に無いので ServiceRequest にした。載せ替えを

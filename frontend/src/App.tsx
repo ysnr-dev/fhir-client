@@ -39,6 +39,7 @@ import { AnesthesiaChartPage } from "./pages/AnesthesiaChartPage";
 import { SurgeryRoomBlockPage } from "./pages/SurgeryRoomBlockPage";
 import { SurgeryItemPage } from "./pages/SurgeryItemPage";
 import { SurgeryCategoryPage } from "./pages/SurgeryCategoryPage";
+import { MealDietPage } from "./pages/MealDietPage";
 import { MealItemPage } from "./pages/MealItemPage";
 import { MealCategoryPage } from "./pages/MealCategoryPage";
 import { TransfusionProductPage } from "./pages/TransfusionProductPage";
@@ -366,11 +367,14 @@ function App() {
                 手術室 ブロックスケジュール
               </Link>
             </SubMenu>
-            {/* 食事。オーダーが食種 1 つを指すだけなので、マスタも項目 1 本だけ
-                (食種と主食を kind で分けた 1 テーブル)。 */}
+            {/* 食事。食種(種別・食止め・主成分量を持つ)と、主食・副食形態のリスト。
+                セット・レイアウト・データセットは持たない。 */}
             <SubMenu label="食事">
+              <Link to="/meal-diets" className="row-menu__item">
+                食種
+              </Link>
               <Link to="/meal-items" className="row-menu__item">
-                食事オーダー項目
+                主食・副食形態
               </Link>
               {/* 食種の分類(一般食・特別食 など)。主食には付けない。 */}
               <Link to="/meal-categories" className="row-menu__item">
@@ -522,6 +526,7 @@ function App() {
           <Route path="/treatment-items" element={<TreatmentItemPage />} />
           <Route path="/treatment-item-layouts" element={<TreatmentItemLayoutPage />} />
           <Route path="/treatment-datasets" element={<TreatmentDatasetPage />} />
+          <Route path="/meal-diets" element={<MealDietPage />} />
           <Route path="/meal-items" element={<MealItemPage />} />
           <Route path="/meal-categories" element={<MealCategoryPage />} />
           <Route path="/transfusion-products" element={<TransfusionProductPage />} />

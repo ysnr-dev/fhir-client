@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_31_120000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_31_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -428,12 +428,19 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_31_120000) do
     t.index ["category_code"], name: "index_master_meal_categories_on_category_code", unique: true
   end
 
-  create_table "master_meal_items", force: :cascade do |t|
+  create_table "master_meal_diets", force: :cascade do |t|
     t.string "item_code", null: false
     t.string "name", null: false
     t.string "name_kana"
-    t.string "kind", default: "diet", null: false
     t.boolean "is_fasting", default: false, null: false
+    t.string "category_code"
+    t.decimal "energy_kcal", precision: 7, scale: 1
+    t.decimal "protein_g", precision: 6, scale: 1
+    t.decimal "fat_g", precision: 6, scale: 1
+    t.decimal "carbohydrate_g", precision: 6, scale: 1
+    t.decimal "water_ml", precision: 7, scale: 1
+    t.decimal "salt_g", precision: 5, scale: 1
+    t.text "indication"
     t.date "valid_from"
     t.date "valid_to"
     t.integer "display_order"
@@ -442,8 +449,23 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_31_120000) do
     t.string "search_kana"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.string "category_code"
-    t.index ["category_code"], name: "index_master_meal_items_on_category_code"
+    t.index ["category_code"], name: "index_master_meal_diets_on_category_code"
+    t.index ["item_code"], name: "index_master_meal_diets_on_item_code", unique: true
+  end
+
+  create_table "master_meal_items", force: :cascade do |t|
+    t.string "item_code", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.string "kind", default: "staple", null: false
+    t.date "valid_from"
+    t.date "valid_to"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["item_code"], name: "index_master_meal_items_on_item_code", unique: true
     t.index ["kind"], name: "index_master_meal_items_on_kind"
   end
