@@ -22,6 +22,7 @@ import {
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { DEFAULT_MEAL_NUTRITION_FORM } from "./mealItemOptions";
 import { ProblemSelect } from "./ProblemSelect";
 
 // 食事オーダーの入力フォーム。他の部門オーダーと違い伝票レイアウトも明細も無く、
@@ -51,6 +52,35 @@ interface MealOrderFormProps {
  */
 function clearedMealContent() {
   return { staples: emptyMealStaples(), sideDishForm: null, saltLimit: "" } as const;
+}
+
+/**
+ * 給与形態(種別マスタの `nutrition_form`、参考仕様 §1 の分類)に合わない入力を落とす。
+ * 経管・経口食と調乳食は濃厚流動食・調製乳なので**主食も副食形態も持たない**。
+ * 食種を切り替えたときに、それまでに入れた主食がそのまま残らないようにする。
+ *
+ * 欠食(その食事を出さない)はどの給与形態でも指示しうるので残す。塩分制限は
+ * 参考仕様が経管・経口食(§3)にも挙げているので残し、調乳食(§4)でだけ落とす。
+ *
+ * 変わらないときは同じ参照を返す(effect から呼ぶので、毎回新しい値を返すと回り続ける)。
+ */
+function normalizeForNutritionForm(
+  values: MealOrderFormValues,
+  nutritionForm: string,
+): MealOrderFormValues {
+  if (nutritionForm === DEFAULT_MEAL_NUTRITION_FORM) return values;
+
+  const staples = emptyMealStaples();
+  for (const timing of MEAL_TIMING_OPTIONS) {
+    if (values.staples[timing.code] === MEAL_SKIPPED) staples[timing.code] = MEAL_SKIPPED;
+  }
+  const saltLimit = nutritionForm === "infant_formula" ? "" : values.saltLimit;
+  const changed =
+    MEAL_TIMING_OPTIONS.some((t) => staples[t.code] !== values.staples[t.code]) ||
+    values.sideDishForm !== null ||
+    saltLimit !== values.saltLimit;
+
+  return changed ? { ...values, staples, sideDishForm: null, saltLimit } : values;
 }
 
 /** 開始・終了の前後比較に使う並び順の番号。 */
@@ -103,6 +133,19 @@ export function MealOrderForm({
   const stapleItems = staples.data?.items ?? [];
   const sideDishFormItems = sideDishForms.data?.items ?? [];
 
+  // 選んだ食種の給与形態(種別マスタの nutrition_form)。未分類の食種・マスタが届く前は
+  // 既定の「普通食・治療食」として扱う(この分類を入れる前のデータもこれになる)。
+  const nutritionForm = useMemo(() => {
+    const diet = dietItems.find((item) => item.item_code === values.diet?.code);
+    if (!diet?.category_code) return DEFAULT_MEAL_NUTRITION_FORM;
+    const category = (mealCategories.data?.items ?? []).find(
+      (c) => c.category_code === diet.category_code,
+    );
+    return category?.nutrition_form || DEFAULT_MEAL_NUTRITION_FORM;
+  }, [dietItems, mealCategories.data, values.diet]);
+  // 主食・副食形態を指示するのは普通食・治療食だけ(参考仕様 §2)。
+  const isOralDiet = nutritionForm === DEFAULT_MEAL_NUTRITION_FORM;
+
   // 継続中のオーダーは既定で全部終了させる。読み込みが後から届くので id を見て入れ直す。
   const activeIds = activeOrders.map((sr) => sr.id ?? "").join(",");
   useEffect(() => {
@@ -125,6 +168,11 @@ export function MealOrderForm({
       ...(master.is_fasting ? clearedMealContent() : null),
     }));
   }, [dietItems, values.diet, values.dietIsFasting]);
+
+  // 給与形態に合わない入力は、食種を選び直した時点(と、編集でマスタが届いた時点)で落とす。
+  useEffect(() => {
+    setValues((prev) => normalizeForNutritionForm(prev, nutritionForm));
+  }, [nutritionForm]);
 
   function update<K extends keyof MealOrderFormValues>(key: K, value: MealOrderFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -290,42 +338,48 @@ export function MealOrderForm({
           </select>
         </label>
         {/* 副食形態(きざみ・ミキサー など)。主食と違い朝昼夕で変えることが無いので
-            セレクト 1 つで全食に効く。食止めでは食事が出ないので無効にする。 */}
-        <label>
-          副食形態
-          <select
-            value={values.sideDishForm?.code ?? ""}
-            onChange={(e) => handleSideDishFormChange(e.target.value)}
-            disabled={values.dietIsFasting}
-          >
-            <option value="">(指定なし)</option>
-            {sideDishFormItems.map((item) => (
-              <option key={item.item_code} value={item.item_code}>
-                {item.name}
-              </option>
-            ))}
-            {/* マスタから消えた副食形態でも、保存済みの選択を失わせない。 */}
-            {values.sideDishForm &&
-              !sideDishFormItems.some((i) => i.item_code === values.sideDishForm?.code) && (
-                <option value={values.sideDishForm.code}>
-                  {values.sideDishForm.name} (無効)
+            セレクト 1 つで全食に効く。食止めでは食事が出ないので無効にする。
+            経管・経口食と調乳食は副食を持たないので欄ごと出さない(参考仕様 §1 の分類)。 */}
+        {isOralDiet && (
+          <label>
+            副食形態
+            <select
+              value={values.sideDishForm?.code ?? ""}
+              onChange={(e) => handleSideDishFormChange(e.target.value)}
+              disabled={values.dietIsFasting}
+            >
+              <option value="">(指定なし)</option>
+              {sideDishFormItems.map((item) => (
+                <option key={item.item_code} value={item.item_code}>
+                  {item.name}
                 </option>
-              )}
-          </select>
-        </label>
-        {/* 塩分制限(g/日)。食種名に含意されないことがあるので独立した欄で持つ。 */}
-        <label>
-          塩分制限(g/日)
-          <input
-            type="number"
-            min="0"
-            step="0.1"
-            value={values.saltLimit}
-            onChange={(e) => update("saltLimit", e.target.value)}
-            disabled={values.dietIsFasting}
-            placeholder="制限なしなら空欄"
-          />
-        </label>
+              ))}
+              {/* マスタから消えた副食形態でも、保存済みの選択を失わせない。 */}
+              {values.sideDishForm &&
+                !sideDishFormItems.some((i) => i.item_code === values.sideDishForm?.code) && (
+                  <option value={values.sideDishForm.code}>
+                    {values.sideDishForm.name} (無効)
+                  </option>
+                )}
+            </select>
+          </label>
+        )}
+        {/* 塩分制限(g/日)。食種名に含意されないことがあるので独立した欄で持つ。
+            参考仕様は経管・経口食(§3)にも挙げているので出し、調乳食(§4)では出さない。 */}
+        {nutritionForm !== "infant_formula" && (
+          <label>
+            塩分制限(g/日)
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={values.saltLimit}
+              onChange={(e) => update("saltLimit", e.target.value)}
+              disabled={values.dietIsFasting}
+              placeholder="制限なしなら空欄"
+            />
+          </label>
+        )}
         {/* 欠食理由。給食部門のはい膳表に出す前提の項目で、なぜ食事を出さないかを
             食種・主食とは別に持つ(参考仕様の欠食理由)。外出泊による食止めは
             入退院側の連動が「外泊」を自動で入れるので、ここで選ぶのは手で出す
@@ -358,9 +412,12 @@ export function MealOrderForm({
 
       {/* 主食は朝・昼・夕で変わることがある(米飯 → 全粥、昼だけ検査で欠食 など)ので
           常に 3 食ぶん並べる。SS-MIX2 の ODS-2(サービス時間帯)ごとの指定にあたる。
-          食止めの食種は 1 日を通して食事が出ないため、まとめて無効にする。 */}
+          食止めの食種は 1 日を通して食事が出ないため、まとめて無効にする。
+
+          経管・経口食と調乳食は主食を持たない(参考仕様 §1 の分類)。欄は残して
+          「欠食」だけ選べるようにする —— その食事を出さない指示はどの給与形態でもあるため。 */}
       <fieldset>
-        <legend>主食</legend>
+        <legend>{isOralDiet ? "主食" : "食事"}</legend>
         {MEAL_TIMING_OPTIONS.map((timing) => {
           const choice = values.staples[timing.code];
           const missing =
@@ -376,11 +433,12 @@ export function MealOrderForm({
                 disabled={values.dietIsFasting}
               >
                 <option value="">(指定なし)</option>
-                {stapleItems.map((item) => (
-                  <option key={item.item_code} value={item.item_code}>
-                    {item.name}
-                  </option>
-                ))}
+                {isOralDiet &&
+                  stapleItems.map((item) => (
+                    <option key={item.item_code} value={item.item_code}>
+                      {item.name}
+                    </option>
+                  ))}
                 {/* マスタから消えた主食でも、保存済みの選択を失わせない。 */}
                 {missing && (
                   <option value={missing.code}>{missing.name} (無効)</option>
@@ -391,11 +449,6 @@ export function MealOrderForm({
             </label>
           );
         })}
-        {values.dietIsFasting && (
-          <p className="order-select__muted">
-            食止めの食種では 1 日を通して食事が出ないので、主食は指定しません。
-          </p>
-        )}
       </fieldset>
 
       {/* 食事は「何日の何食から」始まって「何日の何食まで」続く。終了を入れなければ

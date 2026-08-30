@@ -4202,6 +4202,11 @@ export interface MealCategory {
   category_code: string;
   name: string;
   name_kana: string | null;
+  /**
+   * 給与形態(oral_diet / enteral_formula / infant_formula)。名称と違い施設が自由に
+   * 付けられない固定コードで、オーダー画面が入力欄を切り替える判断軸になる。
+   */
+  nutrition_form: string;
   valid_from: string | null;
   valid_to: string | null;
   display_order: number | null;
@@ -4212,6 +4217,7 @@ export interface MealCategoryPayload {
   category_code?: string;
   name?: string;
   name_kana?: string | null;
+  nutrition_form?: string;
   valid_from?: string | null;
   valid_to?: string | null;
   display_order?: number | null;

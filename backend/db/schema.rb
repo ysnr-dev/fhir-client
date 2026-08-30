@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_31_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_31_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -424,6 +424,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_31_100000) do
     t.string "search_kana"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "nutrition_form", default: "oral_diet", null: false
     t.index ["category_code"], name: "index_master_meal_categories_on_category_code", unique: true
   end
 

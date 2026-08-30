@@ -48,6 +48,27 @@ RSpec.describe "Master::MealCategories", type: :request do
       expect(response).to have_http_status(:created)
       expect(body["category_code"]).to eq("08")
     end
+
+    it "給与形態の既定は普通食・治療食(oral_diet)" do
+      post "/master/meal_categories", params: { name: "特別食" }
+
+      expect(response).to have_http_status(:created)
+      expect(body["nutrition_form"]).to eq("oral_diet")
+    end
+
+    it "給与形態に経管・経口食と調乳食を指定できる" do
+      post "/master/meal_categories", params: { name: "経管栄養", nutrition_form: "enteral_formula" }
+      expect(body["nutrition_form"]).to eq("enteral_formula")
+
+      post "/master/meal_categories", params: { name: "乳児食", nutrition_form: "infant_formula" }
+      expect(body["nutrition_form"]).to eq("infant_formula")
+    end
+
+    it "知らない給与形態は登録できない" do
+      post "/master/meal_categories", params: { name: "欠食", nutrition_form: "fasting" }
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
   end
 
   describe "DELETE /master/meal_categories/:id" do

@@ -2,6 +2,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { MealCategory, MealCategoryPayload } from "../api/masterClient";
 import { useMealCategoryMutations, useMealCategorySearch } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import {
+  DEFAULT_MEAL_NUTRITION_FORM,
+  MEAL_NUTRITION_FORM_OPTIONS,
+  mealNutritionFormLabel,
+} from "../components/mealItemOptions";
 import { Modal } from "../components/Modal";
 
 // 食種の種別マスタ。一般食・特別食(治療食)など、食種をまとめる 1 段の分類で、
@@ -12,6 +17,8 @@ interface Draft {
   category_code: string;
   name: string;
   name_kana: string;
+  /** 給与形態(参考仕様 §1 の分類)。オーダー画面の入力欄はここで切り替わる。 */
+  nutrition_form: string;
   valid_from: string;
   valid_to: string;
   display_order: string;
@@ -22,6 +29,7 @@ const emptyDraft: Draft = {
   category_code: "",
   name: "",
   name_kana: "",
+  nutrition_form: DEFAULT_MEAL_NUTRITION_FORM,
   valid_from: "",
   valid_to: "",
   display_order: "",
@@ -34,6 +42,7 @@ function toPayload(draft: Draft): MealCategoryPayload {
     category_code: draft.category_code || undefined,
     name: draft.name,
     name_kana: draft.name_kana || null,
+    nutrition_form: draft.nutrition_form,
     valid_from: draft.valid_from || null,
     valid_to: draft.valid_to || null,
     display_order: draft.display_order ? Number(draft.display_order) : null,
@@ -100,6 +109,7 @@ export function MealCategoryPage() {
             <th className="lab-order-item__compact">コード</th>
             <th>名称</th>
             <th>カナ</th>
+            <th className="lab-order-item__compact">給与形態</th>
             <th className="lab-order-item__compact">有効期間</th>
             <th className="lab-order-item__compact">表示順</th>
             <th>備考</th>
@@ -116,6 +126,9 @@ export function MealCategoryPage() {
               <td>{category.name}</td>
               <td>{category.name_kana}</td>
               <td className="lab-order-item__compact">
+                {mealNutritionFormLabel(category.nutrition_form)}
+              </td>
+              <td className="lab-order-item__compact">
                 {[category.valid_from, category.valid_to].some(Boolean)
                   ? `${category.valid_from ?? ""} 〜 ${category.valid_to ?? ""}`
                   : ""}
@@ -126,7 +139,7 @@ export function MealCategoryPage() {
           ))}
           {list.data && list.data.items.length === 0 && (
             <tr>
-              <td colSpan={6} className="master-search__empty">
+              <td colSpan={7} className="master-search__empty">
                 種別がありません
               </td>
             </tr>
@@ -180,6 +193,7 @@ function CategoryEditModal({ category, onClose }: CategoryEditModalProps) {
       category_code: category.category_code,
       name: category.name,
       name_kana: category.name_kana ?? "",
+      nutrition_form: category.nutrition_form || DEFAULT_MEAL_NUTRITION_FORM,
       valid_from: category.valid_from ?? "",
       valid_to: category.valid_to ?? "",
       display_order: category.display_order === null ? "" : String(category.display_order),
@@ -241,6 +255,21 @@ function CategoryEditModal({ category, onClose }: CategoryEditModalProps) {
               value={draft.name_kana}
               onChange={(e) => setDraft({ ...draft, name_kana: e.target.value })}
             />
+          </label>
+          {/* 給与形態。名称(一般食・経管栄養…)は施設が自由に付けるので、オーダー画面が
+              入力欄を切り替えるための固定コードを別に持つ(参考仕様 §1 の分類)。 */}
+          <label>
+            給与形態
+            <select
+              value={draft.nutrition_form}
+              onChange={(e) => setDraft({ ...draft, nutrition_form: e.target.value })}
+            >
+              {MEAL_NUTRITION_FORM_OPTIONS.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             有効開始日
