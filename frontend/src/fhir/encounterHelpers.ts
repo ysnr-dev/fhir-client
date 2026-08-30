@@ -860,3 +860,121 @@ export function encounterDischargePlan(encounter: fhir4.Encounter): DischargePla
     reason: found.extension?.find((c) => c.url === "reason")?.valueString ?? "",
   };
 }
+
+// ---- 入退院・移動のイベント(暦に印を付ける用) ----
+//
+// 食事カレンダーのように「その日に何があったか」を日付で並べたいとき、Encounter
+// 1 件から日付付きの出来事を取り出す。入院日・退院日は period、転室・転床・転棟は
+// location の履歴(先頭が今の床、後ろほど古い)、外出泊はローカル拡張から拾う。
+// 診療科は今の値しか持たないので、転科は出来事として取り出せない。
+//
+// 所在は病棟名だけ出す(暦のマスは狭く、食事の観点では病棟が分かれば足りる)。
+// Encounter.location の display はベッドの表示名で病棟を含まないので、ベッド id を
+// 持ち帰り、呼び出し側が Location を辿って病棟名に引き直す(withEventWards)。
+
+export type EncounterEventKind =
+  | "admission"
+  | "discharge"
+  | "transfer"
+  | "leave-start"
+  | "leave-end";
+
+export interface EncounterEvent {
+  /** 出来事の日(YYYY-MM-DD)。 */
+  date: string;
+  kind: EncounterEventKind;
+  /** 「入院」「転床」など、暦の印に出す短い名前。 */
+  label: string;
+  /** 所在(病棟名)や外出泊の理由など。無ければ空。 */
+  detail: string;
+  /** 入院・移動先のベッド Location.id。所在を病棟名に引き直すときに使う。 */
+  bedId?: string;
+  /** 移動元のベッド Location.id(移動のみ)。病棟が変わったか(転棟か転床か)の判定用。 */
+  fromBedId?: string;
+}
+
+const EVENT_LABELS: Record<EncounterEventKind, string> = {
+  admission: "入院",
+  discharge: "退院",
+  transfer: "転床",
+  "leave-start": "外出泊",
+  "leave-end": "帰院",
+};
+
+export function encounterEvents(encounter: fhir4.Encounter): EncounterEvent[] {
+  const events: EncounterEvent[] = [];
+  const admission = encounter.period?.start?.slice(0, 10);
+  if (admission) {
+    // 入院時の床は location の末尾(いちばん古い割り当て)。
+    const first = encounter.location?.[encounter.location.length - 1];
+    events.push({
+      date: admission,
+      kind: "admission",
+      label: EVENT_LABELS.admission,
+      detail: "",
+      bedId: referenceId(first?.location?.reference),
+    });
+  }
+
+  // 先頭は今の床、後ろほど古い。入院時の割り当て(末尾)以外は移動。同じ日に
+  // 2 回動いたときも起きた順に並ぶよう、古い方(末尾側)から拾う。
+  const locations = encounter.location ?? [];
+  for (let index = locations.length - 2; index >= 0; index -= 1) {
+    const entry = locations[index];
+    const date = entry.period?.start?.slice(0, 10);
+    if (!date) continue;
+    events.push({
+      date,
+      kind: "transfer",
+      label: EVENT_LABELS.transfer,
+      detail: "",
+      bedId: referenceId(entry.location?.reference),
+      fromBedId: referenceId(locations[index + 1]?.location?.reference),
+    });
+  }
+
+  for (const leave of encounterLeaves(encounter)) {
+    if (leave.start) {
+      events.push({
+        date: leave.start,
+        kind: "leave-start",
+        label: EVENT_LABELS["leave-start"],
+        detail: leave.reason,
+      });
+    }
+    if (leave.end) {
+      events.push({ date: leave.end, kind: "leave-end", label: EVENT_LABELS["leave-end"], detail: "" });
+    }
+  }
+
+  if (encounter.status === DISCHARGED_STATUS) {
+    const discharge = encounter.period?.end?.slice(0, 10);
+    if (discharge) {
+      events.push({ date: discharge, kind: "discharge", label: EVENT_LABELS.discharge, detail: "" });
+    }
+  }
+
+  // 同じ日に複数あれば、入院 → 移動 → 外出泊 → 帰院 → 退院 の順に並べる。
+  const order: EncounterEventKind[] = ["admission", "transfer", "leave-start", "leave-end", "discharge"];
+  return events.sort(
+    (a, b) => a.date.localeCompare(b.date) || order.indexOf(a.kind) - order.indexOf(b.kind),
+  );
+}
+
+/**
+ * ベッド id → 病棟名の対応で、入院・移動の所在を病棟名にする。移動は病棟が
+ * 変われば「転棟」、同じ病棟なら「転床」に読み替える。
+ */
+export function withEventWards(
+  events: EncounterEvent[],
+  wardNameByBed: Map<string, string>,
+): EncounterEvent[] {
+  return events.map((event) => {
+    if (event.kind !== "admission" && event.kind !== "transfer") return event;
+    const ward = event.bedId ? (wardNameByBed.get(event.bedId) ?? "") : "";
+    if (event.kind === "admission") return { ...event, detail: ward };
+    const from = event.fromBedId ? (wardNameByBed.get(event.fromBedId) ?? "") : "";
+    const changed = Boolean(ward) && Boolean(from) && ward !== from;
+    return { ...event, label: changed ? "転棟" : EVENT_LABELS.transfer, detail: ward };
+  });
+}

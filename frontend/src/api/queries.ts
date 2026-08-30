@@ -46,6 +46,8 @@ import {
   buildCancelledEncounter,
   buildDischargedEncounter,
   encounterBedId,
+  encounterEvents,
+  withEventWards,
   buildEncounterUpdateBundle,
   latestEncounterByBed,
 } from "../fhir/encounterHelpers";
@@ -1775,6 +1777,80 @@ export function usePatientAdmission(patientId: string | undefined) {
     queryFn: () => fetchPatientAdmission(patientId as string),
     enabled: Boolean(patientId),
   });
+}
+
+/**
+ * 食事カレンダーに印を付けるための、その月にかかる入院(入院中・退院済)。
+ * date を ge/le で 2 回渡して「期間が月と重なる」入院を引く(fetchInpatients と同じ手)。
+ * 誤登録(entered-in-error)と入院予定は出来事にならないので status で外す。
+ */
+export function usePatientEncounterEvents(
+  patientId: string | undefined,
+  monthStart: string,
+  monthEnd: string,
+) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("status", `${ADMISSION_STATUS},${DISCHARGED_STATUS}`);
+  params.set("class", ADMISSION_CLASS_CODE);
+  params.append("date", `ge${monthStart}`);
+  params.append("date", `le${monthEnd}`);
+  params.set("_count", "20");
+
+  return useQuery({
+    queryKey: ["Encounter", "patient-events", patientId, monthStart, monthEnd],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
+      const encounters =
+        bundle.entry
+          ?.map((e) => e.resource)
+          .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter") ?? [];
+      const events = encounters
+        .flatMap((encounter) => encounterEvents(encounter))
+        .filter((event) => event.date >= monthStart && event.date <= monthEnd);
+      const bedIds = Array.from(
+        new Set(events.flatMap((e) => [e.bedId, e.fromBedId]).filter((id): id is string => !!id)),
+      );
+      return withEventWards(events, await fetchWardNameByBed(bedIds));
+    },
+    enabled: Boolean(patientId) && Boolean(monthStart) && Boolean(monthEnd),
+  });
+}
+
+/**
+ * ベッド id → 病棟名。ベッドと親の病室・病棟をまとめて引き、partOf を 2 段辿る。
+ * _include:iterate に応えない上流だと病棟が欠けるので、その病室の親は 1 件ずつ読み足す。
+ */
+async function fetchWardNameByBed(bedIds: string[]): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (bedIds.length === 0) return result;
+
+  const params = new URLSearchParams();
+  params.set("_id", bedIds.join(","));
+  params.append("_include", "Location:partof");
+  params.append("_include:iterate", "Location:partof");
+  params.set("_count", String(bedIds.length));
+  const { data: bundle } = await searchResource<fhir4.Location>("Location", params);
+  const byId = new Map<string, fhir4.Location>();
+  for (const entry of bundle.entry ?? []) {
+    const r = entry.resource;
+    if (r?.resourceType === "Location" && r.id) byId.set(r.id, r);
+  }
+
+  for (const bedId of bedIds) {
+    const bed = byId.get(bedId);
+    const roomId = bed ? partOfId(bed) : undefined;
+    const room = roomId ? byId.get(roomId) : undefined;
+    const wardId = room ? partOfId(room) : undefined;
+    if (!wardId) continue;
+    let ward = byId.get(wardId);
+    if (!ward) {
+      ward = (await readResource<fhir4.Location>("Location", wardId)).data;
+      byId.set(wardId, ward);
+    }
+    if (ward.name) result.set(bedId, ward.name);
+  }
+  return result;
 }
 
 // ---- 予約枠(Schedule / Slot) ----

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { useMealOrderMonth } from "../api/queries";
+import { useMealOrderMonth, usePatientEncounterEvents } from "../api/queries";
+import type { EncounterEvent } from "../fhir/encounterHelpers";
 import {
   MEAL_TIMING_OPTIONS,
   mealDayEntries,
@@ -15,6 +16,9 @@ import { ErrorBanner } from "./ErrorBanner";
 // 食事オーダーは「開始した食事から次の指示まで」続くので、一覧にすると
 // 「いつ何を食べているか」が読み取りにくい。日付の器に流し込んで、続いている
 // 期間がそのまま面で見えるようにする。
+//
+// 入院・退院・転床・外出泊の日には印を出す。食事は入院に付いて回る(入院で始まり、
+// 退院で終わり、外出泊で止まる)ので、暦の上で食事の切れ目と突き合わせられる。
 //
 // 編集は右ペイン(MealOrderPanels)の担当。左ペインは表示と、編集を開く導線だけ持つ。
 
@@ -72,6 +76,7 @@ export function KarteMealTab({ patientId, onEdit, onCreate }: KarteMealTabProps)
 
   const { start, end } = monthRange(month);
   const orders = useMealOrderMonth(patientId, start, end);
+  const events = usePatientEncounterEvents(patientId, start, end);
   const days = useMemo(() => calendarDays(month), [month]);
   const rows = orders.data ?? [];
 
@@ -106,7 +111,7 @@ export function KarteMealTab({ patientId, onEdit, onCreate }: KarteMealTabProps)
         </div>
       </div>
 
-      <ErrorBanner error={orders.error} />
+      <ErrorBanner error={orders.error ?? events.error} />
 
       {orders.isLoading ? (
         <p>読み込み中...</p>
@@ -131,6 +136,7 @@ export function KarteMealTab({ patientId, onEdit, onCreate }: KarteMealTabProps)
                 isToday={day.date === todayDate}
                 // 月外のマスは日付だけ出す(前後の月を開けばそこで見られる)。
                 entries={day.inMonth ? mealDayEntries(rows, day.date) : []}
+                events={day.inMonth ? eventsOn(events.data ?? [], day.date) : []}
                 onEdit={onEdit}
                 onCreate={onCreate}
               />
@@ -143,6 +149,10 @@ export function KarteMealTab({ patientId, onEdit, onCreate }: KarteMealTabProps)
       )}
     </div>
   );
+}
+
+function eventsOn(events: EncounterEvent[], date: string): EncounterEvent[] {
+  return events.filter((event) => event.date === date);
 }
 
 function weekendClass(weekday: number): string {
@@ -168,6 +178,7 @@ function MealDayCell({
   weekday,
   isToday,
   entries,
+  events,
   onEdit,
   onCreate,
 }: {
@@ -176,6 +187,8 @@ function MealDayCell({
   weekday: number;
   isToday: boolean;
   entries: MealDayEntry[];
+  /** その日の入退院・移動。食事の切れ目と見比べるための印で、押す先には関わらない。 */
+  events: EncounterEvent[];
   onEdit: (srId: string) => void;
   onCreate: (date: string, sourceSrId?: string) => void;
 }) {
@@ -198,6 +211,16 @@ function MealDayCell({
       <div className="meal-calendar__day">
         <span className="meal-calendar__day-number">{dayNumber}</span>
       </div>
+      {events.map((event, index) => (
+        <span
+          key={`${event.kind}-${index}`}
+          className={`meal-calendar__event meal-calendar__event--${event.kind}`}
+          title={event.detail ? `${event.label}: ${event.detail}` : event.label}
+        >
+          <span className="meal-calendar__event-label">{event.label}</span>
+          {event.detail && <span className="meal-calendar__event-detail">{event.detail}</span>}
+        </span>
+      ))}
       {entries.map((entry) => (
         <MealEntryBlock key={entry.order.id ?? ""} entry={entry} date={date} />
       ))}

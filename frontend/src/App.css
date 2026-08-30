@@ -10109,6 +10109,43 @@ button.meal-calendar__cell:hover {
   color: var(--text);
 }
 
+/* 入退院・移動の印。食事カードより上に置き、その日から食事が変わる理由が
+   一目で分かるようにする。入院・帰院は色を立て、退院・外出泊は薄くする
+   (食事が止まる方向の出来事)。 */
+.meal-calendar__event {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.meal-calendar__event-label {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  color: var(--text-h);
+}
+
+.meal-calendar__event--admission .meal-calendar__event-label,
+.meal-calendar__event--leave-end .meal-calendar__event-label {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.meal-calendar__event--discharge .meal-calendar__event-label,
+.meal-calendar__event--leave-start .meal-calendar__event-label {
+  border-style: dashed;
+}
+
+.meal-calendar__event-detail {
+  min-width: 0;
+}
+
 /* ---- 病理検査オーダー ---- */
 
 /* 検体の可変リスト。病理は多部位の生検が普通なので、検体を 1 枚ずつのカードで
