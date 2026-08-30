@@ -33,6 +33,13 @@ export function MealOrderDetailPanel({
           <dt>主食</dt>
           {/* 全食同じなら主食名、朝昼夕で違えば「朝 米飯180g / 昼 欠食 / 夕 全粥」。 */}
           <dd>{mealStapleText(summary) || "-"}</dd>
+          {/* 欠食理由は食止め・欠食のオーダーにだけ付く項目なので、あるときだけ行を出す。 */}
+          {summary.fastingReasonLabel && (
+            <>
+              <dt>欠食理由</dt>
+              <dd>{summary.fastingReasonLabel}</dd>
+            </>
+          )}
           <dt>期間</dt>
           {/* 終了を決めていないオーダーは「継続中」。次の食事オーダーで終わる。 */}
           <dd>{`${summary.startLabel}〜${summary.continuing ? " 継続中" : ` ${summary.endLabel}`}`}</dd>

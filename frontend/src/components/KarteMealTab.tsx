@@ -5,6 +5,7 @@ import {
   MEAL_TIMING_OPTIONS,
   isMealOrderStoppedByDischarge,
   mealDayEntries,
+  mealFastingReasonLabel,
   mealOrderDietName,
   mealOrderEnd,
   mealOrderEndReasonLabel,
@@ -268,6 +269,8 @@ function MealEntryBlock({ entry, date }: { entry: MealDayEntry; date: string }) 
   const dischargeStop = endsToday && isMealOrderStoppedByDischarge(order);
   const kind = mealOrderLink(order)?.kind ?? "change";
   const staple = mealStapleSummary(order, timings);
+  // 欠食理由。なぜ食事が出ていない日なのかを暦の上で読めるようにする。
+  const fastingReason = mealFastingReasonLabel(order);
   // 1 日を通して同じオーダーなら食事の見出しは出さない(3 食ぶんと分かるため)。
   const partial = timings.length < MEAL_TIMING_OPTIONS.length;
 
@@ -284,6 +287,9 @@ function MealEntryBlock({ entry, date }: { entry: MealDayEntry; date: string }) 
         </span>
       )}
       <span className="meal-calendar__diet">{mealOrderDietName(order) || "(食種なし)"}</span>
+      {fastingReason && (
+        <span className="meal-calendar__fasting-reason">{fastingReason}</span>
+      )}
       {/* 途中で食事が変わった日は、このオーダーが担当する食事を明示する。 */}
       {partial && (
         <span className="meal-calendar__timings">

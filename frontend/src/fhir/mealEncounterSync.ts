@@ -256,6 +256,8 @@ function buildFastingEntry(
       ...emptyMealOrderForm(),
       diet,
       dietIsFasting: true,
+      // 欠食理由は連動が決める(外出泊で出す食止めなので手で選ばせるところが無い)。
+      fastingReason: "leave",
       startDate: start.date,
       startTiming: start.timing,
       endDate: end?.date ?? "",
@@ -318,7 +320,8 @@ export function describeMealSyncEntries(
 
 function orderLine(sr: fhir4.ServiceRequest): string {
   const summary = summarizeMealOrder(sr);
-  const staple = mealStapleText(summary);
+  // 食止めのオーダーには主食が無いので、そこに欠食理由を出す(「食止め(外泊) …」)。
+  const detail = mealStapleText(summary) || summary.fastingReasonLabel;
   const range = `${summary.startLabel}〜${summary.endLabel ? ` ${summary.endLabel}` : " 継続"}`;
-  return `${summary.dietName}${staple ? `(${staple})` : ""} ${range}`;
+  return `${summary.dietName}${detail ? `(${detail})` : ""} ${range}`;
 }

@@ -2,15 +2,18 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMealCategoryOptions, useMealItemOptions } from "../api/masterQueries";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
+  MEAL_FASTING_REASON_OPTIONS,
   MEAL_SKIPPED,
   MEAL_TIMING_OPTIONS,
   emptyMealStaples,
+  mealOrderHasFasting,
   mealOrderResumable,
   mealStapleText,
   mealTimingDisplay,
   nextMealPoint,
   previousMealPoint,
   summarizeMealOrder,
+  type MealFastingReason,
   type MealOrderFormValues,
   type MealStapleChoice,
   type MealTiming,
@@ -176,7 +179,15 @@ export function MealOrderForm({
   }
 
   function submitValues(): MealOrderFormValues {
-    return { ...values, problem: refreshProblemDisplay(values.problem, problemOptions) };
+    return {
+      ...values,
+      // 食事が出るだけのオーダーに欠食理由は付かない(食種を食止めから戻したときに
+      // 理由だけ残らないよう落とす)。ただし食種マスタが届く前は食止めかどうかを
+      // 判定できないので、そのときは元の値をそのまま保つ。
+      fastingReason:
+        dietItems.length === 0 || mealOrderHasFasting(values) ? values.fastingReason : "",
+      problem: refreshProblemDisplay(values.problem, problemOptions),
+    };
   }
 
   function handleSubmit(e: FormEvent) {
@@ -188,6 +199,10 @@ export function MealOrderForm({
     // 終了させないオーダーは戻す対象にもならない(チェックも出ていない)。
     onSubmit(submitValues(), closingIds, resumeIds.filter((id) => closingIds.includes(id)));
   }
+
+  // 欠食理由を出すか。食止めの食種か、1 食でも欠食があるときだけ(食事が出るだけの
+  // オーダーには付かない項目なので、欄ごと出さない)。
+  const needsFastingReason = mealOrderHasFasting(values);
 
   // 前の食事をいつまでにするか。チェックの説明にそのまま出す。
   const closePoint = previousMealPoint(values.startDate, values.startTiming);
@@ -240,6 +255,26 @@ export function MealOrderForm({
             )}
           </select>
         </label>
+        {/* 欠食理由。給食部門のはい膳表に出す前提の項目で、なぜ食事を出さないかを
+            食種・主食とは別に持つ(参考仕様の欠食理由)。外出泊による食止めは
+            入退院側の連動が「外泊」を自動で入れるので、ここで選ぶのは手で出す
+            食止め・欠食のとき。 */}
+        {needsFastingReason && (
+          <label>
+            欠食理由
+            <select
+              value={values.fastingReason}
+              onChange={(e) => update("fastingReason", e.target.value as MealFastingReason)}
+            >
+              <option value="">(入力せず)</option>
+              {MEAL_FASTING_REASON_OPTIONS.map((reason) => (
+                <option key={reason.code} value={reason.code}>
+                  {reason.display}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
           対象プロブレム
           <ProblemSelect

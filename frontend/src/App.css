@@ -10134,6 +10134,13 @@ button.meal-calendar__cell:hover {
   color: var(--text);
 }
 
+/* 欠食理由(絶食・手術絶食・外泊 など)。食事が出ない日にだけ出る行なので、
+   食種名の下に警告色で添える。 */
+.meal-calendar__fasting-reason {
+  color: var(--danger, #c0392b);
+  font-size: 10px;
+}
+
 /* 入退院・移動の印。食事カードより上に置き、その日から食事が変わる理由が
    一目で分かるようにする。入院・帰院は色を立て、退院・外出泊は薄くする
    (食事が止まる方向の出来事)。 */

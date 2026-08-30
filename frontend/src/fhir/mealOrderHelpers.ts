@@ -65,6 +65,18 @@ const MEAL_SKIPPED_TIMING_EXT_URL =
   "http://fhir-client.local/StructureDefinition/meal-skipped-timing";
 
 /**
+ * 欠食理由(なぜ食事を出さないか)。SS-MIX2 に対応する項目は無く、参考仕様
+ * (名古屋第二赤十字病院「食種選択によるオーダエントリ」§5 欠食)の欠食理由を
+ * ローカル拡張にした。給食部門のはい膳表に出す前提の項目なので、食事が出るだけの
+ * オーダーには付けない(食止めの食種か、1 食でも欠食があるオーダーだけ)。
+ *
+ * 理由はオーダー 1 件に 1 つ。朝は検査絶食・夕は手術絶食のように食事ごとに理由が
+ * 分かれるときは、期間を分けて 2 本のオーダーにする(参考仕様も欠食は期間単位)。
+ */
+const MEAL_FASTING_REASON_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/meal-fasting-reason";
+
+/**
  * オーダーの種別と由来(入退院との結びつき)。種別は手で選ばせず、登録の文脈から決める:
  *   start         食事開始(その時点に出ている食事が無い)
  *   change        食事変更(前のオーダーを終了させて始めた)。source = 終了させたオーダー
@@ -300,6 +312,30 @@ export function uniformStaple(
   return same ? first : null;
 }
 
+/**
+ * 欠食理由の選択肢(参考仕様 §5 の「ＮＰＯ、ＯＰＥ絶食、検査絶食、外泊、退院、その他」)。
+ * 「入力せず」は拡張を持たない状態("")で表す。
+ *
+ * leave(外泊)は外出泊の連動が自動で入れるが、連動を使わずに手で食止めを出すこともある
+ * ので選択肢にも残す。discharge(退院)は退院の連動が「既存オーダーの終了理由」で表す
+ * (新しいオーダーを作らない)ので、こちらは手で食止めを出すときだけ使う。
+ */
+export const MEAL_FASTING_REASON_OPTIONS = [
+  { code: "npo", display: "絶食(NPO)" },
+  { code: "ope", display: "手術絶食" },
+  { code: "exam", display: "検査絶食" },
+  { code: "leave", display: "外泊" },
+  { code: "discharge", display: "退院" },
+  { code: "other", display: "その他" },
+] as const;
+
+/** 欠食理由。"" は「入力せず」。 */
+export type MealFastingReason = (typeof MEAL_FASTING_REASON_OPTIONS)[number]["code"] | "";
+
+export function mealFastingReasonDisplay(reason: MealFastingReason): string {
+  return MEAL_FASTING_REASON_OPTIONS.find((r) => r.code === reason)?.display ?? "";
+}
+
 export interface MealOrderFormValues {
   /** 食種(必須)。食止めもここに入る。 */
   diet: MealItemRef | null;
@@ -307,6 +343,11 @@ export interface MealOrderFormValues {
   dietIsFasting: boolean;
   /** 朝・昼・夕の主食(任意)と欠食。 */
   staples: MealStaples;
+  /**
+   * 欠食理由。食止めの食種か、1 食でも欠食があるオーダーにだけ付く
+   * (mealOrderHasFasting)。"" は「入力せず」。
+   */
+  fastingReason: MealFastingReason;
   startDate: string;
   startTiming: MealTiming;
   /** 終了日。空なら継続(終了を決めずにオーダーする)。 */
@@ -321,6 +362,7 @@ export function emptyMealOrderForm(): MealOrderFormValues {
     diet: null,
     dietIsFasting: false,
     staples: emptyMealStaples(),
+    fastingReason: "",
     startDate: today(),
     startTiming: DEFAULT_MEAL_TIMING,
     endDate: "",
@@ -328,6 +370,17 @@ export function emptyMealOrderForm(): MealOrderFormValues {
     comment: "",
     problem: null,
   };
+}
+
+/**
+ * 欠食理由を入れる余地があるか(1 日を通しての食止め、または 1 食でも欠食がある)。
+ * 画面はこの判定で欄の出し入れをし、保存時にも食事が出るだけのオーダーから理由を落とす
+ * (食種を食止めから戻したときに理由だけ residual に残らないようにするため)。
+ */
+export function mealOrderHasFasting(values: MealOrderFormValues): boolean {
+  return (
+    values.dietIsFasting || MEAL_TIMING_OPTIONS.some((t) => values.staples[t.code] === MEAL_SKIPPED)
+  );
 }
 
 /** 食事オーダーの ServiceRequest か。 */
@@ -412,6 +465,12 @@ function buildMealOrderServiceRequest(
   if (stapleDetails.length > 0) resource.orderDetail = stapleDetails;
 
   const extensions: fhir4.Extension[] = [...skippedExtensions];
+  // 欠食理由。食事が出るオーダーからは画面側で落としてある(mealOrderHasFasting)ので、
+  // ここは値があればそのまま書く。連動で作る外泊食止め・帰院での書き換え(rewrite)や
+  // 再開オーダーの写しでも、この 1 行だけで理由が保たれる。
+  if (values.fastingReason) {
+    extensions.push({ url: MEAL_FASTING_REASON_EXT_URL, valueCode: values.fastingReason });
+  }
   if (values.endDate) {
     extensions.push({
       url: MEAL_ORDER_END_EXT_URL,
@@ -778,6 +837,8 @@ export interface MealOrderSummary {
   stapleName: string;
   /** 食事ごとに中身が違うときだけ、朝・昼・夕の 3 行。全食同じなら空。 */
   stapleLines: MealStapleLine[];
+  /** 欠食理由の表示名。食止め・欠食のオーダーで、理由を入れてあるときだけ。 */
+  fastingReasonLabel: string;
   /** 「8/28 朝」形式の開始。 */
   startLabel: string;
   /** 「8/30 夕まで」形式の終了。連動で決めた終了なら「8/30 朝まで(退院食止め)」。継続中なら空。 */
@@ -802,6 +863,18 @@ export function mealPointLabel(value: string): string {
 
 export function mealOrderEnd(sr: fhir4.ServiceRequest): string {
   return sr.extension?.find((e) => e.url === MEAL_ORDER_END_EXT_URL)?.valueDateTime ?? "";
+}
+
+/** 欠食理由。持たない(「入力せず」)オーダーと、知らない値は "" を返す。 */
+export function mealFastingReason(sr: fhir4.ServiceRequest): MealFastingReason {
+  const code = sr.extension?.find((e) => e.url === MEAL_FASTING_REASON_EXT_URL)?.valueCode;
+  return MEAL_FASTING_REASON_OPTIONS.some((r) => r.code === code)
+    ? (code as MealFastingReason)
+    : "";
+}
+
+export function mealFastingReasonLabel(sr: fhir4.ServiceRequest): string {
+  return mealFastingReasonDisplay(mealFastingReason(sr));
 }
 
 /**
@@ -838,6 +911,7 @@ export function summarizeMealOrder(sr: fhir4.ServiceRequest): MealOrderSummary {
   return {
     dietName: mealOrderDietName(sr),
     ...mealStapleSummary(sr),
+    fastingReasonLabel: mealFastingReasonLabel(sr),
     startLabel: mealPointLabel(sr.occurrenceDateTime ?? ""),
     endLabel: end ? `${mealPointLabel(end)}まで${reason ? `(${reason})` : ""}` : "",
     kindLabel: mealOrderKindLabel(sr),
@@ -1039,6 +1113,7 @@ export function parseMealOrderForm(sr: fhir4.ServiceRequest): MealOrderFormValue
     // 引き直して入れ直す(オーダーには写していない)。
     dietIsFasting: false,
     staples: parseMealStaples(sr),
+    fastingReason: mealFastingReason(sr),
     startDate: occurrence.slice(0, 10) || today(),
     startTiming: parseMealTiming(occurrence) ?? DEFAULT_MEAL_TIMING,
     endDate: end.slice(0, 10),
