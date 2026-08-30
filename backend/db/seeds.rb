@@ -626,3 +626,42 @@ seed_department_order_masters.call("treatment", {
   layout: Master::TreatmentItemLayout,
   layout_cell: Master::TreatmentItemLayoutCell
 })
+
+# 輸血製剤マスタ。db/seed_data/transfusion_products.csv（ヘッダー有り）から投入する。
+# 日赤の血液製剤(赤血球・血漿・血小板)を医薬品マスタの収載単位で拾った初期値で、
+# item_code はレセ電算の医薬品コード(9桁)と同じにしてある(術式・生理検査と同じ理由:
+# 施設独自採番とぶつからず、再投入で追加分だけ入る)。自己血は薬価収載が無いので
+# AUTO-xx。アルブミン等の血漿分画製剤は注射オーダーで扱う前提で入れていない。
+# 交差適合試験の要否(requires_crossmatch)は赤血球系と貯血式自己血だけ 1 にしてあるが、
+# 運用は施設で決めるので投入後は画面で直す前提。既存行は上書きしない。
+transfusion_products_csv = Rails.root.join("db/seed_data/transfusion_products.csv")
+if File.exist?(transfusion_products_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(transfusion_products_csv, headers: true) do |row|
+    code = row["item_code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::TransfusionProduct.exists?(item_code: code)
+      skipped += 1
+      next
+    end
+
+    Master::TransfusionProduct.create!(
+      item_code: code,
+      name: name,
+      name_kana: row["name_kana"].to_s.strip.presence,
+      abbreviation: row["abbreviation"].to_s.strip.presence,
+      category: row["category"].to_s.strip.presence || "rbc",
+      unit_label: row["unit_label"].to_s.strip.presence || "単位",
+      default_units: row["default_units"].to_s.strip.presence&.to_i,
+      requires_crossmatch: row["requires_crossmatch"].to_s.strip == "1",
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    )
+    loaded += 1
+  end
+  puts "master_transfusion_products: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_transfusion_products: #{transfusion_products_csv} not found, skipped"
+end
