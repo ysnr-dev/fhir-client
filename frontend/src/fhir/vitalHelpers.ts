@@ -580,6 +580,24 @@ export function flowsheetColumnLabel(at: string): { date: string; time: string; 
   return { year: match[1], date: `${match[2]}/${match[3]}`, time: `${match[4]}:${match[5]}` };
 }
 
+/**
+ * 経過表の列ヘッダで、連続する同じ値(年・日付)の列をまとめる。
+ * 値が空の列は区別できないので単独グループにする。
+ */
+export function groupFlowsheetColumns(
+  columns: string[],
+  labelOf: (at: string) => string,
+): { label: string; columns: string[] }[] {
+  const groups: { label: string; columns: string[] }[] = [];
+  for (const at of columns) {
+    const label = labelOf(at);
+    const last = groups[groups.length - 1];
+    if (last && label && last.label === label) last.columns.push(at);
+    else groups.push({ label, columns: [at] });
+  }
+  return groups;
+}
+
 /** ISO 日時 → datetime-local の値。端末のタイムゾーンで表示する。 */
 export function toDateTimeLocal(iso: string | undefined): string {
   if (!iso) return "";

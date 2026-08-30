@@ -7336,15 +7336,155 @@ body.page-wide .app__main {
   color: var(--text-h);
 }
 
+/* ---- 経過表(VitalFlowsheetPanel) ---- */
+
+/* 経過表は 1 画面に多くの測定を並べたいので、検査結果の時系列表示より行を詰める。 */
+.vital-flowsheet__table th,
+.vital-flowsheet__table td {
+  padding: 2px 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* 測定列の幅は固定し、最上段のグラフ(FLOWSHEET_COLUMN_WIDTH = 64px)と列位置を
+   揃える。余った横幅は末尾の空列(.vital-flowsheet__filler)に吸わせる。 */
+.vital-flowsheet__table th.vital-flowsheet__time-col,
+.vital-flowsheet__table td.lab-timeline__value {
+  box-sizing: border-box;
+  width: 64px;
+  min-width: 64px;
+  max-width: 64px;
+  padding-left: 6px;
+  padding-right: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vital-flowsheet__table .vital-flowsheet__filler {
+  /* 表の自動レイアウトで余った幅をこの列に全部渡す(項目・単位列が伸びない)。 */
+  width: 100%;
+  padding: 0;
+}
+
+/* 同じ日の朝夕は 1 つの日付見出しにまとめる(列自体は分けたまま)。 */
+.vital-flowsheet__table th.vital-flowsheet__date-col {
+  text-align: center;
+  padding-top: 0;
+}
+
+.vital-flowsheet__table th.vital-flowsheet__date-col + th.vital-flowsheet__date-col {
+  border-left: 1px solid var(--border);
+}
+
 /* 経過表の 3 段目ヘッダー(測定時刻)。列は測定 1 回なので、同じ日の朝夕を
    区別できるよう日付の下に時刻を出す。日付より控えめにする。 */
 .lab-timeline__table th.vital-flowsheet__time-col {
-  text-align: right;
+  text-align: center;
   font-size: 11px;
   font-weight: normal;
   color: var(--text);
   padding-top: 0;
   font-variant-numeric: tabular-nums;
+}
+
+/* 最上段のグラフ行(温度板)。セルの余白を無くしてグラフの座標を列と一致させる。 */
+.vital-flowsheet__table td.vital-flowsheet__chart-cell {
+  padding: 0;
+  vertical-align: top;
+  line-height: 0;
+}
+
+.vital-flowsheet__chart,
+.vital-flowsheet__axis {
+  display: block;
+}
+
+.vital-flowsheet__grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.vital-flowsheet__grid--minor {
+  opacity: 0.5;
+}
+
+/* 基準線(BP 120 / R 30 / P 75 / T 37)。温度板の慣例で赤。 */
+.vital-flowsheet__grid--base {
+  stroke: #d9534f;
+}
+
+.vital-flowsheet__grid--column {
+  stroke-dasharray: 2 3;
+}
+
+/* 系列の色(温度板の慣例: BP 青・P 赤・T 緑系、R は文字色)。 */
+.vital-flowsheet__series--bp {
+  color: #2b7bd6;
+}
+
+.vital-flowsheet__series--p {
+  color: #d9534f;
+}
+
+.vital-flowsheet__series--t {
+  color: #1a9c8f;
+}
+
+.vital-flowsheet__series--r {
+  color: var(--text-h);
+}
+
+.vital-flowsheet__line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.vital-flowsheet__marker {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+/* グラフ行の項目セルは軸。系列ごとの目盛りを列にして横罫線に揃える。 */
+.vital-flowsheet__table th.vital-flowsheet__axis-cell {
+  vertical-align: top;
+  padding: 0 8px;
+  line-height: 0;
+  max-width: none;
+}
+
+.vital-flowsheet__axis-name {
+  font-size: 12px;
+  font-weight: bold;
+  fill: currentColor;
+}
+
+.vital-flowsheet__axis-tick {
+  font-size: 11px;
+  fill: currentColor;
+  font-variant-numeric: tabular-nums;
+}
+
+.vital-flowsheet__axis-tick--base {
+  font-weight: bold;
+}
+
+/* 全画面。左右ペインの領域(患者情報の下)に重ねる。上端はパネル側が実測して
+   inline style で指定する。左右下の余白と見た目はペイン(.karte-left)に合わせる。 */
+.vital-flowsheet--fullscreen {
+  position: fixed;
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
+  z-index: 100;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  padding: 12px;
+  overflow: auto;
 }
 
 /* ---- 予約枠(Schedule / Slot) ---- */
