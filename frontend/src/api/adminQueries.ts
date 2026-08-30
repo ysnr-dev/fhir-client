@@ -18,6 +18,7 @@ import {
   logout,
   testConnection,
   updateAdminFacilitySettings,
+  type FacilitySettingsPayload,
   updateConnectionSettings,
   updateQuestionnaireCategory,
   updateReportLayout,
@@ -107,7 +108,7 @@ export function useAdminFacilitySettings() {
 export function useUpdateFacilitySettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (selfOrganizationId: string) => updateAdminFacilitySettings(selfOrganizationId),
+    mutationFn: (payload: FacilitySettingsPayload) => updateAdminFacilitySettings(payload),
     retry: false,
     onSuccess: (data) => {
       queryClient.setQueryData(FACILITY_SETTINGS_KEY, data);

@@ -16,7 +16,10 @@ RSpec.describe "FacilitySettings", type: :request do
       with_admin_token(nil) { get "/facility_settings" }
 
       expect(response).to have_http_status(:ok)
-      expect(JSON.parse(response.body)).to eq("self_organization_id" => nil)
+      body = JSON.parse(response.body)
+      expect(body["self_organization_id"]).to be_nil
+      # 未設定でも看護指示の既定時刻は既定値で返る
+      expect(body["nursing_schedule"]).to eq(FacilitySettings::DEFAULT_NURSING_SCHEDULE)
     end
 
     it "returns the configured self organization" do
@@ -24,7 +27,7 @@ RSpec.describe "FacilitySettings", type: :request do
 
       with_admin_token(nil) { get "/facility_settings" }
 
-      expect(JSON.parse(response.body)).to eq("self_organization_id" => "org-self")
+      expect(JSON.parse(response.body)).to include("self_organization_id" => "org-self")
     end
 
     it "is readable by a logged-in practitioner user (管理者専用ではない)" do

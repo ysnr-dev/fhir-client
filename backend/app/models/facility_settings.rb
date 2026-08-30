@@ -14,6 +14,32 @@ class FacilitySettings < ApplicationRecord
   attribute :singleton_guard, :integer, default: 0
   validates :singleton_guard, inclusion: { in: [0] }, uniqueness: true
 
+  # 看護指示の既定時刻。"daily" は「1日N回」の N ごとの時刻、"interval_start" は
+  # 「N時間毎」の起点。指示を登録するときの初期値に使うだけで、登録済みの指示には
+  # 時刻が焼き付いている(ここを変えても過去の指示は動かない)。
+  DEFAULT_NURSING_SCHEDULE = {
+    "daily" => {
+      "1" => ["10:00"],
+      "2" => ["10:00", "18:00"],
+      "3" => ["09:00", "14:00", "20:00"],
+      "4" => ["06:00", "10:00", "14:00", "18:00"]
+    },
+    "interval_start" => "06:00"
+  }.freeze
+
+  TIME_PATTERN = /\A([01]\d|2[0-3]):[0-5]\d\z/
+
+  validate :nursing_schedule_shape
+
+  # 欠けたキーを既定値で埋めた看護指示の既定時刻。読み出しは常にこちらを使う。
+  def nursing_schedule_with_defaults
+    stored = nursing_schedule.is_a?(Hash) ? nursing_schedule : {}
+    {
+      "daily" => DEFAULT_NURSING_SCHEDULE["daily"].merge(stored["daily"].is_a?(Hash) ? stored["daily"] : {}),
+      "interval_start" => stored["interval_start"].presence || DEFAULT_NURSING_SCHEDULE["interval_start"]
+    }
+  end
+
   class << self
     # 単一行を遅延生成して返す。
     def current
@@ -23,6 +49,33 @@ class FacilitySettings < ApplicationRecord
     # 自院の Organization.id。未設定なら nil(呼び出し側は従来の推測に倒す)。
     def self_organization_id
       current.self_organization_fhir_id.presence
+    end
+
+    def nursing_schedule
+      current.nursing_schedule_with_defaults
+    end
+  end
+
+  private
+
+  def nursing_schedule_shape
+    return if nursing_schedule.blank?
+    return errors.add(:nursing_schedule, "は連想配列で指定してください") unless nursing_schedule.is_a?(Hash)
+
+    daily = nursing_schedule["daily"]
+    if daily.present?
+      return errors.add(:nursing_schedule, "daily は連想配列で指定してください") unless daily.is_a?(Hash)
+
+      daily.each do |count, times|
+        unless times.is_a?(Array) && times.all? { |t| t.is_a?(String) && t.match?(TIME_PATTERN) }
+          errors.add(:nursing_schedule, "daily[#{count}] は HH:MM の配列で指定してください")
+        end
+      end
+    end
+
+    start = nursing_schedule["interval_start"]
+    if start.present? && !(start.is_a?(String) && start.match?(TIME_PATTERN))
+      errors.add(:nursing_schedule, "interval_start は HH:MM で指定してください")
     end
   end
 end

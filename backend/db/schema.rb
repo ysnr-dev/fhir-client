@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_08_30_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_08_31_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -19,6 +19,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_08_30_100000) do
     t.integer "singleton_guard", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "nursing_schedule", default: {}, null: false
     t.index ["singleton_guard"], name: "index_facility_settings_on_singleton_guard", unique: true
   end
 

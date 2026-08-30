@@ -4,6 +4,7 @@ import { useCurrentPractitioner } from "../api/authQueries";
 import { useNursingActLevels } from "../api/masterQueries";
 import {
   useAcceptNursingOrders,
+  useFacilitySettings,
   useInpatientEncounters,
   useNursingPerformsOn,
   useNursingWorklist,
@@ -31,6 +32,17 @@ import {
 } from "../fhir/nursingTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import type { NursingPerformDisplay } from "../fhir/nursingPerformHelpers";
+import {
+  DEFAULT_NURSING_SCHEDULE,
+  expandNursingSchedule,
+  isDueAround,
+  matchPerformsToSchedule,
+  minutesOfTime,
+  nextDueSlot,
+  nursingScheduleOf,
+  type NursingScheduleSlot,
+} from "../fhir/nursingScheduleHelpers";
+import { useNow } from "../hooks/useNow";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { today } from "../lib/dates";
@@ -53,7 +65,12 @@ import { useReturnLinkState } from "../returnTo";
 // 中止は置くが編集は置かない。指示の内容を変えるのは医師の操作で、カルテの右ペイン
 // (NursingOrderPanels)が担当する。
 
-type View = "pending" | "all";
+// pending = 未指示受け / all = 全指示 / due = 実施予定(いま入れるべき指示)
+type View = "pending" | "all" | "due";
+
+function parseView(value: string | null): View {
+  return value === "all" || value === "due" ? value : "pending";
+}
 
 interface Filters {
   departmentId: string;
@@ -72,13 +89,24 @@ interface PatientGroupData {
   bedLabel: string;
   rows: NursingWorklistRow[];
   pendingRows: NursingWorklistRow[];
+  /** いま実施予定のある指示(遅れ、または現在時刻の前後 1 時間に未実施の予定)。 */
+  dueRows: NursingWorklistRow[];
+}
+
+/** 予定と実施の突き合わせ結果。予定を持たない指示は slots が空。 */
+interface ScheduleState {
+  slots: NursingScheduleSlot[];
+  extra: NursingPerformDisplay[];
+  due: boolean;
+  /** 遅れている予定があるか。 */
+  late: boolean;
 }
 
 export function NursingWorklistPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const wardId = searchParams.get("ward") ?? "";
   const date = searchParams.get("date") || today();
-  const view: View = searchParams.get("view") === "all" ? "all" : "pending";
+  const view: View = parseView(searchParams.get("view"));
 
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -103,6 +131,12 @@ export function NursingWorklistPage() {
   const accept = useAcceptNursingOrders();
   const revoke = useRevokeNursingOrder();
   const returnLinkState = useReturnLinkState();
+  const facility = useFacilitySettings();
+  const scheduleSettings = facility.data?.nursing_schedule ?? DEFAULT_NURSING_SCHEDULE;
+  // 「実施予定」は現在時刻で決まるので、基準日が今日のときだけ 1 分ごとに追従する。
+  const isToday = date === today();
+  const now = useNow(isToday);
+  const nowMinutes = isToday ? now.getHours() * 60 + now.getMinutes() : null;
 
   function setParams(next: Record<string, string>, replace = false) {
     const params = new URLSearchParams(searchParams);
@@ -145,6 +179,38 @@ export function NursingWorklistPage() {
     return map;
   }, [inpatients.data]);
 
+  // その日の実施記録(「本日」列と実施予定)。ワークリスト本体とは別に引く(入院患者一覧の
+  // バッジが同じキャッシュを使うので、そちらに Observation を読ませないため)。
+  const patientIds = useMemo(
+    () => [...new Set(rows.map((row) => row.order.subject?.reference?.split("/").pop() ?? ""))],
+    [rows],
+  );
+  const performs = useNursingPerformsOn(date, patientIds);
+  const performsByOrderId = useMemo(
+    () => performs.data ?? new Map<string, NursingPerformDisplay[]>(),
+    [performs.data],
+  );
+
+  // 指示ごとの予定と実施の突き合わせ。基準日が今日でなければ「未実施の予定があるか」だけ見る。
+  const scheduleByOrderId = useMemo(() => {
+    const map = new Map<string, ScheduleState>();
+    for (const row of rows) {
+      const id = row.order.id ?? "";
+      const times = expandNursingSchedule(nursingScheduleOf(row.order), date, scheduleSettings);
+      const { slots, extra } = matchPerformsToSchedule(times, performsByOrderId.get(id) ?? []);
+      const next = nowMinutes === null ? null : nextDueSlot(slots, nowMinutes);
+      map.set(id, {
+        slots,
+        extra,
+        due:
+          slots.length > 0 &&
+          (nowMinutes === null ? slots.some((s) => !s.done) : isDueAround(slots, nowMinutes)),
+        late: Boolean(next?.late),
+      });
+    }
+    return map;
+  }, [rows, date, scheduleSettings, performsByOrderId, nowMinutes]);
+
   // 患者ごとにまとめる。並びは病室・ベッド順(引けなければ患者番号順のまま末尾へ)。
   const groups = useMemo<PatientGroupData[]>(() => {
     const byPatient = new Map<string, PatientGroupData>();
@@ -159,11 +225,13 @@ export function NursingWorklistPage() {
           roomLabel: roomOf(bedByPatientId.get(patientId) ?? ""),
           rows: [],
           pendingRows: [],
+          dueRows: [],
         };
         byPatient.set(patientId, group);
       }
       group.rows.push(row);
       if (isPending(row)) group.pendingRows.push(row);
+      if (scheduleByOrderId.get(row.order.id ?? "")?.due) group.dueRows.push(row);
     }
 
     const list = [...byPatient.values()];
@@ -171,27 +239,37 @@ export function NursingWorklistPage() {
       if (a.bedLabel && b.bedLabel) return a.bedLabel.localeCompare(b.bedLabel, "ja");
       return a.bedLabel ? -1 : b.bedLabel ? 1 : 0;
     });
-    // 未指示受けビューは、受け終わった患者を出さない。
-    return view === "pending" ? list.filter((g) => g.pendingRows.length > 0) : list;
-  }, [rows, bedByPatientId, view]);
+    // 実施予定は遅れているもの → 次の予定が早いものの順(患者の中で)。
+    const dueTime = (row: NursingWorklistRow) => {
+      const state = scheduleByOrderId.get(row.order.id ?? "");
+      const next = state && nowMinutes !== null ? nextDueSlot(state.slots, nowMinutes) : null;
+      const pending = next?.slot ?? state?.slots.find((s) => !s.done);
+      return pending ? minutesOfTime(pending.time) : 9999;
+    };
+    for (const group of list) group.dueRows.sort((a, b) => dueTime(a) - dueTime(b));
+
+    // 未指示受け・実施予定のビューは、対象の無い患者を出さない。
+    if (view === "pending") return list.filter((g) => g.pendingRows.length > 0);
+    if (view === "due") return list.filter((g) => g.dueRows.length > 0);
+    return list;
+  }, [rows, bedByPatientId, view, scheduleByOrderId, nowMinutes]);
 
   // 表に出す行(ビューで絞ったあと)。指示受けの対象もここから数える。
   const visibleRows = useMemo(
-    () => groups.flatMap((group) => (view === "pending" ? group.pendingRows : group.rows)),
+    () =>
+      groups.flatMap((group) =>
+        view === "pending" ? group.pendingRows : view === "due" ? group.dueRows : group.rows,
+      ),
     [groups, view],
   );
   const pendingRows = useMemo(() => rows.filter(isPending), [rows]);
+  const dueCount = useMemo(
+    () => rows.filter((row) => scheduleByOrderId.get(row.order.id ?? "")?.due).length,
+    [rows, scheduleByOrderId],
+  );
   const selectedRows = visibleRows.filter(
     (row) => isPending(row) && selected.has(row.order.id ?? ""),
   );
-
-  // その日の実施記録(「本日」列)。ワークリスト本体とは別に引く(入院患者一覧のバッジが
-  // 同じキャッシュを使うので、そちらに Observation を読ませないため)。
-  const performs = useNursingPerformsOn(
-    date,
-    groups.map((group) => group.patientId),
-  );
-  const performsByOrderId = performs.data ?? new Map<string, NursingPerformDisplay[]>();
 
   const detailRow = allRows.find((row) => row.order.id === detailId) ?? null;
   const performingGroup = groups.find((group) => group.patientId === performingPatientId) ?? null;
@@ -272,6 +350,15 @@ export function NursingWorklistPage() {
           onClick={() => setParams({ view: "" })}
         >
           未指示受け{pendingRows.length > 0 && ` (${pendingRows.length})`}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "due"}
+          className={view === "due" ? "order-select__tab is-active" : "order-select__tab"}
+          onClick={() => setParams({ view: "due" })}
+        >
+          実施予定{dueCount > 0 && ` (${dueCount})`}
         </button>
         <button
           type="button"
@@ -361,6 +448,8 @@ export function NursingWorklistPage() {
                     pending={accept.isPending || revoke.isPending}
                     returnLinkState={returnLinkState}
                     performsByOrderId={performsByOrderId}
+                    scheduleByOrderId={scheduleByOrderId}
+                    nowMinutes={nowMinutes}
                     onToggle={toggle}
                     onTogglePatient={togglePatient}
                     onPerform={() => setPerformingPatientId(group.patientId)}
@@ -375,7 +464,9 @@ export function NursingWorklistPage() {
                         ? "この日に効いている看護指示はありません。"
                         : view === "pending"
                           ? "指示受け待ちの指示はありません。"
-                          : "絞り込みに一致する指示がありません。"}
+                          : view === "due"
+                            ? "いま実施予定の指示はありません。"
+                            : "絞り込みに一致する指示がありません。"}
                     </td>
                   </tr>
                 )}
@@ -394,6 +485,7 @@ export function NursingWorklistPage() {
           patientName={performingGroup.patient ? displayName(performingGroup.patient) : undefined}
           // 有効な指示すべて(未指示受けビューでも、受け済みの指示に記録できるように)。
           orders={performingGroup.rows.map((row) => row.order)}
+          performsByOrderId={performsByOrderId}
           onClose={() => setPerformingPatientId(null)}
         />
       )}
@@ -524,6 +616,8 @@ interface PatientGroupProps {
   pending: boolean;
   returnLinkState: ReturnType<typeof useReturnLinkState>;
   performsByOrderId: Map<string, NursingPerformDisplay[]>;
+  scheduleByOrderId: Map<string, ScheduleState>;
+  nowMinutes: number | null;
   onToggle: (id: string) => void;
   onTogglePatient: (rows: NursingWorklistRow[], checked: boolean) => void;
   onPerform: () => void;
@@ -541,13 +635,15 @@ function PatientGroup({
   pending,
   returnLinkState,
   performsByOrderId,
+  scheduleByOrderId,
+  nowMinutes,
   onToggle,
   onTogglePatient,
   onPerform,
   onView,
   onRevoke,
 }: PatientGroupProps) {
-  const rows = view === "pending" ? group.pendingRows : group.rows;
+  const rows = view === "pending" ? group.pendingRows : view === "due" ? group.dueRows : group.rows;
   const checkedCount = group.pendingRows.filter((row) =>
     selected.has(row.order.id ?? ""),
   ).length;
@@ -607,6 +703,8 @@ function PatientGroup({
           date={date}
           groupName={groupName}
           todayPerforms={performsByOrderId.get(row.order.id ?? "") ?? []}
+          schedule={scheduleByOrderId.get(row.order.id ?? "")}
+          nowMinutes={nowMinutes}
           checked={selected.has(row.order.id ?? "")}
           pending={pending}
           onToggle={() => onToggle(row.order.id ?? "")}
@@ -623,6 +721,8 @@ function OrderRow({
   date,
   groupName,
   todayPerforms,
+  schedule,
+  nowMinutes,
   checked,
   pending,
   onToggle,
@@ -634,6 +734,9 @@ function OrderRow({
   groupName: (group: NursingOrderGroup) => string;
   /** その日の実施記録(新しい順)。 */
   todayPerforms: NursingPerformDisplay[];
+  /** 予定との突き合わせ。予定を持たない指示は slots が空。 */
+  schedule: ScheduleState | undefined;
+  nowMinutes: number | null;
   checked: boolean;
   pending: boolean;
   onToggle: () => void;
@@ -676,26 +779,48 @@ function OrderRow({
         </span>
       </td>
       {/* その日にもう記録したか。期間型なので「実施済かどうか」は日ごとに見る。
+          予定を持つ指示は「実施済/予定」の回数と、遅れていれば強調。予定の無い指示は
           最新の値を出し、複数回なら吹き出しに全部並べる。 */}
-      <td
-        className="lab-worklist__compact"
-        title={
-          todayPerforms.length > 1
-            ? todayPerforms.map((p) => `${p.atLabel} ${p.value}`).join("\n")
-            : undefined
-        }
-      >
-        {todayPerforms.length > 0 ? (
-          <>
-            {todayPerforms[0].value}
-            {todayPerforms.length > 1 && (
-              <span className="nursing-tab__owner"> 他{todayPerforms.length - 1}</span>
-            )}
-          </>
-        ) : (
-          <span className="order-select__muted">未</span>
-        )}
-      </td>
+      {schedule && schedule.slots.length > 0 ? (
+        <td
+          className={`lab-worklist__compact nursing-worklist__due${schedule.late ? " nursing-worklist__due--late" : ""}`}
+          title={[
+            ...schedule.slots.map((s) => `${s.time} ${s.done ? `✓ ${s.done.value}` : "未"}`),
+            ...schedule.extra.map((p) => `予定外 ${p.atLabel} ${p.value}`),
+          ].join("\n")}
+        >
+          {schedule.slots.filter((s) => s.done).length}/{schedule.slots.length}
+          {(() => {
+            const next = nowMinutes === null ? null : nextDueSlot(schedule.slots, nowMinutes);
+            return next ? (
+              <span className="nursing-tab__owner">
+                {" "}
+                {next.late ? "遅れ" : "次"} {next.slot.time}
+              </span>
+            ) : null;
+          })()}
+        </td>
+      ) : (
+        <td
+          className="lab-worklist__compact"
+          title={
+            todayPerforms.length > 1
+              ? todayPerforms.map((p) => `${p.atLabel} ${p.value}`).join("\n")
+              : undefined
+          }
+        >
+          {todayPerforms.length > 0 ? (
+            <>
+              {todayPerforms[0].value}
+              {todayPerforms.length > 1 && (
+                <span className="nursing-tab__owner"> 他{todayPerforms.length - 1}</span>
+              )}
+            </>
+          ) : (
+            <span className="order-select__muted">未</span>
+          )}
+        </td>
+      )}
       <td className="lab-worklist__actions sticky-table__fix-actions">
         <button type="button" onClick={onView}>
           表示

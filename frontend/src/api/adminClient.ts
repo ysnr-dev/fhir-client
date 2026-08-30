@@ -7,6 +7,7 @@
 // 秘密は書込専用: client_secret / FHIR 管理トークンはサーバーから返らず
 // (`*_set` で有無のみ)、入力があったときだけ送信する。
 
+import type { NursingScheduleSettings } from "../fhir/nursingScheduleHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 
 export interface ConnectionSettings {
@@ -31,10 +32,16 @@ export interface ConnectionSettingsUpdate {
   fhir_admin_token?: string;
 }
 
-/** 「自院」がどの Organization か。未設定なら null。 */
+/** 「自院」がどの Organization か。未設定なら null。看護指示の既定時刻も同じ行。 */
 export interface FacilitySettings {
   self_organization_id: string | null;
+  nursing_schedule: NursingScheduleSettings;
 }
+
+export type FacilitySettingsPayload = Partial<{
+  self_organization_id: string;
+  nursing_schedule: NursingScheduleSettings;
+}>;
 
 export interface ConnectionTestResult {
   ok: boolean;
@@ -196,12 +203,13 @@ export async function fetchAdminFacilitySettings(): Promise<FacilitySettings> {
   return adminJson<FacilitySettings>(FACILITY_SETTINGS);
 }
 
+// 渡した項目だけを書き換える(backend は無い項目を触らない)。
 export async function updateAdminFacilitySettings(
-  selfOrganizationId: string,
+  payload: FacilitySettingsPayload,
 ): Promise<FacilitySettings> {
   return adminJson<FacilitySettings>(FACILITY_SETTINGS, {
     method: "PATCH",
-    ...jsonBody({ self_organization_id: selfOrganizationId }),
+    ...jsonBody(payload),
   });
 }
 

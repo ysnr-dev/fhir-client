@@ -34,9 +34,10 @@
 ServiceRequest(指示 1 行)
   category        = order-type|nursing, setting|inpatient(固定)
   code            = 看護行為(16 桁コード + 管理番号) | 看護観察(管理番号) | text のみ(自由記載)
-  orderDetail[0].text = 頻度・条件(「1日3回」「38℃以上で報告」)
+  orderDetail[0].text = 条件(「38℃以上で報告」「疼痛時」。自由記載)
   occurrenceDateTime  = 開始日(日付のみ)
   extension[nursing-order-end] = 終了日(valueDate)。無ければ継続中
+  extension[nursing-order-schedule] = 頻度(valueTiming)。無ければ適宜・必要時
   requisition     = nursing-order-requisition|uuid(同時発行の束ね)
   encounter       = 入院 Encounter
   status          = active(有効) / revoked(中止) / completed(終了で閉じたもの)
@@ -51,6 +52,7 @@ Task(指示受け) ← focus
 
 - `http://fhir-client.local/StructureDefinition/nursing-order-end`(valueDate)
 - `http://fhir-client.local/Identifier/nursing-order-requisition`
+- `http://fhir-client.local/StructureDefinition/nursing-order-schedule`(valueTiming)
 - `http://fhir-client.local/nursing-perform-entry`(実施記録 1 回ぶんを束ねる identifier)
 - `http://fhir-client.local/CodeSystem/nursing-observation-result`(列挙型の観察結果)
 
@@ -66,11 +68,33 @@ MEDIS の OID 表に従い、看護行為は
 行を一意に引くために使う。看護観察は `http://medis.or.jp/CodeSystem/master-nursingObservationKeyCode`
 に観察名称管理番号を入れる。マスタに無い指示は `code.text` だけで持つ。
 
-### 2.3 頻度は orderDetail.text、Timing は使わない
+### 2.3 頻度は Timing を root 拡張で持ち、条件は orderDetail.text の自由記載
 
 `occurrence[x]` は choice なので、`occurrenceDateTime`(開始日)と `occurrenceTiming` は併用できず、
-上流も `occurrenceDateTime` しか索引しない(リハビリの §2.3 と同じ判断)。
-頻度・条件は自由記載にして、入力欄の datalist に定型候補を出す。
+上流も `occurrenceDateTime` しか索引しない(リハビリの §2.3 と同じ判断)。そこで頻度は
+root 拡張 `nursing-order-schedule` の `valueTiming` に持つ(`fhir/nursingScheduleHelpers.ts`)。
+終了日の拡張と同じ置き方なので、`buildNursingOrderCloseEntry` のように拡張を組み直す経路でも
+消えない。条件(「38℃以上で報告」)は頻度とは別物なので `orderDetail[0].text` に残す。
+
+`Timing.repeat` の形:
+
+| 頻度 | repeat | その日の予定 |
+|---|---|---|
+| 1日N回 | `frequency=N, period=1, periodUnit=d, timeOfDay=[...]` | timeOfDay そのまま |
+| N時間毎 | `period=N, periodUnit=h, timeOfDay=[起点]` | 起点から N 時間刻みで **同日 0〜24 時に入る分**(起点より前も逆算)。翌日にかかる分は翌日の展開で出る。24 で割り切れない間隔(5・7 時間)は日ごとにずれる |
+| 時刻指定 | `timeOfDay=[...]` | そのまま |
+| 週N回 | `frequency=N, period=1, periodUnit=wk, dayOfWeek=[...], timeOfDay=[時刻]` | 曜日が当たる日だけ |
+| 適宜・必要時 | (拡張なし) | 予定を持たない |
+
+- 「1日N回」の時刻は**指示に焼き付ける**。初期値は施設設定(`facility_settings.nursing_schedule`、
+  自院設定画面の「看護指示の既定時刻」)から入れるが、設定を変えても登録済みの指示は動かない。
+- 拡張を付ける前の指示は頻度も `orderDetail` に書かれているが、「条件」として読めば表示は
+  従来どおりなので移行しない。編集で開くと頻度は「適宜」・条件に旧文言が入るので、
+  頻度を選び直して条件を消せば構造化される。
+- 予定と実施の突き合わせ(`matchPerformsToSchedule`): 実施は最も近い予定に 1 対 1 で当て、
+  許容幅は min(60 分, 予定の最小間隔の半分)。固定 60 分だけだと近い予定(9:00/9:30)に同じ実施が
+  二重に当たり、間隔の半分だけだと 1 日 1 回(±12 時間)で夕方の実施が朝の予定に当たる。
+  許容幅に入らない実施は「予定外」。
 
 ### 2.4 変更 = 編集 or 「新しい指示 + 前の指示に終了日」
 
@@ -201,7 +225,16 @@ ServiceRequest(行為の指示) ← basedOn ── Procedure(category order-type
   観察・行為に分かれて縦に並び、観察は表現タイプごとの入力欄(数値＋単位 / select /
   文字 / 縦×横 / 収縮期÷拡張期)、行為はチェック。値の入ったものだけを 1 transaction で保存。
   マスタ外の自由記載は文字入力。
-- 病棟の指示簿に「本日」列(その日の最新の値、行為は「実施」。複数回は吹き出し)。
+- 指示の登録・編集フォームの頻度は select(適宜 / 1日1〜4回 / 4・6・8時間毎 / 時刻指定 /
+  週N回)＋時刻の微調整＋条件(自由記載)。
+- 病棟の指示簿に「本日」列。予定を持つ指示は「実施済/予定」(「1/3」)と次の予定
+  (「次 14:00」、遅れていれば赤で「遅れ 06:00」)。予定の無い指示はその日の最新の値。
+- 病棟の指示簿に「実施予定」タブ: 基準日が今日なら、遅れている・または現在時刻の前後
+  1 時間に未実施の予定がある指示だけを患者ごとに(1 分ごとに再計算、`hooks/useNow`)。
+  今日以外の日は「その日の未実施の予定がある指示」。
+- 実施入力モーダル: 各行に予定の消化状況(`09:00✓ 14:00● 20:00`。● は次、遅れは赤)を出し、
+  いま予定のある指示を上に並べる。予定はあるが時間でない指示は薄く出す(入力はできる。
+  臨時の測定・頓用の記録のため)。記録日時を変えると並びと強調が追従する。
   データは `useNursingPerformsOn(date)`(ワークリスト本体とは別クエリ。入院患者一覧の
   バッジに Observation を読ませないため)。
 - 詳細モーダルに「実施履歴」(日時・値・実施者・備考)と取消。
@@ -229,6 +262,11 @@ ServiceRequest(行為の指示) ← basedOn ── Procedure(category order-type
   `useRegisterNursingPerform` / `useDeleteNursingPerform`)、`masterQueries.ts`
   (`useNursingObservationsByManageNos`)、`components/NursingPerformModal.tsx`、
   `NursingOrderDetailModal`(実施履歴)、`KarteNursingTab` / `NursingWorklistPage`(配線・本日列)
+- 頻度の構造化(第 4 段階): backend `facility_settings.nursing_schedule`(jsonb、model の既定値
+  マージ・書式検証、admin PATCH は渡した項目だけ更新)、`fhir/nursingScheduleHelpers.ts`
+  (Timing 変換・展開・突き合わせ)、`nursingOrderHelpers`(schedule/condition)、
+  `NursingOrderForm`(頻度 select)、`FacilitySettingsPage`(既定時刻)、`hooks/useNow`、
+  `NursingWorklistPage`(本日列・実施予定タブ)、`NursingPerformModal`(予定バッジ・並び)
 
 ### 6.1 検証したこと(2026-08-29)
 
@@ -253,6 +291,10 @@ ServiceRequest(行為の指示) ← basedOn ── Procedure(category order-type
   component)+ Procedure 1 が 1 transaction で作られ、`category=vital-signs` の件数は不変
 - 経過表で SpO2・体温・血圧が既存行に合流、便量・自壊創範囲(12.5/8 cm)・自由記載が新規行
 - 本日列に値が出ること、詳細モーダルの実施履歴と取消が効くこと
+- 頻度の構造化(2026-08-30): 編集で「1日3回」を選ぶと施設既定の 9/14/20 時が入り、更新後の
+  SR に `nursing-order-schedule` の Timing が付くこと。SpO2 を 6 時間毎、血圧を 1 日 2 回にして
+  実施予定タブに 2 件(「0/4 遅れ 06:00」赤、「0/2 次 10:00」)、実施入力で予定のある指示が
+  上に並び予定バッジが出ること。旧データ(自由記載)は条件として従来どおり表示されること
 
 ## 7. 申し送り
 
@@ -266,6 +308,9 @@ ServiceRequest(行為の指示) ← basedOn ── Procedure(category order-type
 - 収縮期・拡張期を単独項目で指示した場合、経過表では MEDIS コードの別行になる(血圧行に
   合流させたければ血圧型 31002365 で指示する運用)
 - 指示受け前(requested)の指示にも実施を記録できる。受けてからに限るかは運用で決める
+- 拡張を付ける前の指示(頻度が自由記載)は、編集で頻度を選び直すまで予定を持たない
+- N 時間毎で 24 を割り切れない間隔(5・7 時間)は日ごとに時刻がずれる(起点固定・日単位展開)
+- 施設設定の既定時刻は自院設定画面(管理者)から変える。登録済みの指示には波及しない
 - 指示簿に食事・処方など他オーダーの要約行を参照表示する案は次フェーズ
 - 終了日到来で SR を `completed` に閉じる処理は無い(有効のまま終了日で判定)。
   上流の `status=active` 検索に残り続けるので、件数が増えたら締め処理を検討

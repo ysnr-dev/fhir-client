@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import { useNursingActModifiers } from "../api/masterQueries";
+import { useFacilitySettings } from "../api/queries";
 import {
-  NURSING_FREQUENCY_PRESETS,
+  DAY_OF_WEEK_OPTIONS,
+  DEFAULT_NURSING_SCHEDULE,
+  NURSING_SCHEDULE_PRESETS,
+  presetValueOf,
+  type NursingScheduleSettings,
+  type NursingScheduleValues,
+} from "../fhir/nursingScheduleHelpers";
+import {
   nursingActLevel3Code,
   emptyNursingOrderLine,
   validateNursingOrderForm,
@@ -26,8 +34,6 @@ interface Props {
   submitLabel?: string;
 }
 
-const FREQUENCY_LIST_ID = "nursing-frequency-presets";
-
 // 看護指示の入力。1 回の登録で複数行(安静度・清潔・観察…)をまとめて出せるよう、
 // 行を足していく表の形にする。各行は保存時に別々の ServiceRequest になる。
 export function NursingOrderForm({
@@ -44,6 +50,9 @@ export function NursingOrderForm({
   const [picking, setPicking] = useState<number | null>(null);
   const problemOptions = useProblemOptions(patientId);
   const validationErrorRef = useRef<HTMLDivElement>(null);
+  // 「1日N回」の既定時刻。読めていない間は既定値で組む(選び直せば設定値が入る)。
+  const facility = useFacilitySettings();
+  const scheduleSettings = facility.data?.nursing_schedule ?? DEFAULT_NURSING_SCHEDULE;
 
   useEffect(() => {
     if (validationError) validationErrorRef.current?.scrollIntoView({ block: "nearest" });
@@ -93,12 +102,6 @@ export function NursingOrderForm({
       )}
       <ErrorBanner error={submitError} />
 
-      <datalist id={FREQUENCY_LIST_ID}>
-        {NURSING_FREQUENCY_PRESETS.map((preset) => (
-          <option key={preset} value={preset} />
-        ))}
-      </datalist>
-
       <fieldset>
         <legend>指示</legend>
         <div className="nursing-order-form__lines">
@@ -140,14 +143,18 @@ export function NursingOrderForm({
                   placeholder="例: 車椅子移送、SpO2 測定"
                 />
               </label>
+              <NursingScheduleFields
+                schedule={line.schedule}
+                settings={scheduleSettings}
+                onChange={(schedule) => updateLine(index, { schedule })}
+              />
               <label>
-                頻度・条件
+                条件
                 <input
                   type="text"
-                  list={FREQUENCY_LIST_ID}
-                  value={line.frequency}
-                  onChange={(e) => updateLine(index, { frequency: e.target.value })}
-                  placeholder="例: 1日3回、38℃以上で報告"
+                  value={line.condition}
+                  onChange={(e) => updateLine(index, { condition: e.target.value })}
+                  placeholder="例: 38℃以上で報告、疼痛時"
                 />
               </label>
               <div className="nursing-order-form__dates">
@@ -260,5 +267,119 @@ function NursingModifierSelect({
         )}
       </select>
     </label>
+  );
+}
+
+/**
+ * 頻度の入力。select で型を選び、型ごとに時刻を微調整する。「1日N回」の初期時刻は
+ * 施設設定から入れ、指示に焼き付ける(あとで設定を変えても指示は動かない)。
+ */
+function NursingScheduleFields({
+  schedule,
+  settings,
+  onChange,
+}: {
+  schedule: NursingScheduleValues;
+  settings: NursingScheduleSettings;
+  onChange: (schedule: NursingScheduleValues) => void;
+}) {
+  const presetValue = presetValueOf(schedule);
+
+  function handlePresetChange(value: string) {
+    const preset = NURSING_SCHEDULE_PRESETS.find((p) => p.value === value);
+    onChange(preset ? preset.make(settings) : null);
+  }
+
+  function updateTimes(times: string[]) {
+    if (!schedule) return;
+    if (schedule.kind === "daily") onChange({ ...schedule, times, timesPerDay: times.length });
+    else if (schedule.kind === "times") onChange({ ...schedule, times });
+  }
+
+  return (
+    <div className="nursing-order-form__schedule">
+      <label>
+        頻度
+        <select value={presetValue} onChange={(e) => handlePresetChange(e.target.value)}>
+          {NURSING_SCHEDULE_PRESETS.map((preset) => (
+            <option key={preset.value} value={preset.value}>
+              {preset.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {schedule && (schedule.kind === "daily" || schedule.kind === "times") && (
+        <span className="nursing-order-form__times">
+          {schedule.times.map((time, index) => (
+            <span key={index} className="nursing-order-form__time">
+              <input
+                type="time"
+                value={time}
+                onChange={(e) => {
+                  const times = [...schedule.times];
+                  times[index] = e.target.value;
+                  updateTimes(times);
+                }}
+                aria-label={`${index + 1} 回目の時刻`}
+              />
+              {schedule.kind === "times" && schedule.times.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => updateTimes(schedule.times.filter((_, i) => i !== index))}
+                  aria-label="この時刻を削除"
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+          {schedule.kind === "times" && (
+            <button type="button" onClick={() => updateTimes([...schedule.times, ""])}>
+              時刻を追加
+            </button>
+          )}
+        </span>
+      )}
+
+      {schedule?.kind === "interval" && (
+        <label className="nursing-order-form__inline">
+          起点
+          <input
+            type="time"
+            value={schedule.start}
+            onChange={(e) => onChange({ ...schedule, start: e.target.value })}
+          />
+        </label>
+      )}
+
+      {schedule?.kind === "weekly" && (
+        <span className="nursing-order-form__times">
+          {DAY_OF_WEEK_OPTIONS.map((day) => (
+            <label key={day.code} className="nursing-order-form__day">
+              <input
+                type="checkbox"
+                checked={schedule.days.includes(day.code)}
+                onChange={(e) => {
+                  const days = e.target.checked
+                    ? [...schedule.days, day.code]
+                    : schedule.days.filter((d) => d !== day.code);
+                  onChange({ ...schedule, days, perWeek: Math.max(days.length, 1) });
+                }}
+              />
+              {day.label}
+            </label>
+          ))}
+          <label className="nursing-order-form__inline">
+            時刻
+            <input
+              type="time"
+              value={schedule.time}
+              onChange={(e) => onChange({ ...schedule, time: e.target.value })}
+            />
+          </label>
+        </span>
+      )}
+    </div>
   );
 }

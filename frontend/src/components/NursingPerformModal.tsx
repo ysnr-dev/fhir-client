@@ -1,7 +1,18 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useNursingObservationsByManageNos } from "../api/masterQueries";
-import { usePractitionerOptions, useRegisterNursingPerform } from "../api/queries";
+import { useFacilitySettings, usePractitionerOptions, useRegisterNursingPerform } from "../api/queries";
+import type { NursingPerformDisplay } from "../fhir/nursingPerformHelpers";
+import {
+  DEFAULT_NURSING_SCHEDULE,
+  expandNursingSchedule,
+  isDueAround,
+  matchPerformsToSchedule,
+  minutesOfDateTime,
+  nextDueSlot,
+  nursingScheduleOf,
+  type NursingScheduleSlot,
+} from "../fhir/nursingScheduleHelpers";
 import { toDateTimeInput } from "../fhir/clinicalNoteHelpers";
 import { nursingOrderItem, summarizeNursingOrder } from "../fhir/nursingOrderHelpers";
 import {
@@ -25,6 +36,8 @@ interface Props {
   orders: fhir4.ServiceRequest[];
   /** 記録日時の既定(datetime-local)。省略時は今。 */
   defaultAt?: string;
+  /** 記録日のその患者の実施記録(指示の id ごと)。予定の消化状況を出すのに使う。 */
+  performsByOrderId?: Map<string, NursingPerformDisplay[]>;
   onClose: () => void;
 }
 
@@ -34,32 +47,40 @@ interface Props {
 // 他部門の実施入力と違い、進捗 Task を動かさない(fhir/nursingPerformHelpers.ts)。
 // 観察の入力欄は MEDIS 観察マスタの表現タイプで切り替える。マスタが引けない指示
 // (自由記載)は文字入力にする。
-export function NursingPerformModal({ patientName, orders, defaultAt, onClose }: Props) {
+export function NursingPerformModal({
+  patientName,
+  orders,
+  defaultAt,
+  performsByOrderId,
+  onClose,
+}: Props) {
   const register = useRegisterNursingPerform();
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const { practitioners, error: practitionersError } = usePractitionerOptions();
 
-  const observationOrders = useMemo(() => orders.filter(isObservationOrder), [orders]);
-  const actOrders = useMemo(() => orders.filter((o) => !isObservationOrder(o)), [orders]);
+  const facility = useFacilitySettings();
+  const scheduleSettings = facility.data?.nursing_schedule ?? DEFAULT_NURSING_SCHEDULE;
+  // マスタ引きに使う元の並び。表示用の並び(予定のあるものを上に)は後で作る。
+  const observationBase = useMemo(() => orders.filter(isObservationOrder), [orders]);
 
   // 観察指示の表現タイプ・単位・選択肢はマスタにしかない(指示には管理番号だけ)。
   const manageNos = useMemo(
     () =>
-      observationOrders
+      observationBase
         .map((order) => nursingOrderItem(order))
         .flatMap((item) => (item?.kind === "observation" ? [item.manageNo] : [])),
-    [observationOrders],
+    [observationBase],
   );
   const masters = useNursingObservationsByManageNos(manageNos);
   const specs = useMemo(() => {
     const map = new Map<string, NursingObservationInputSpec>();
-    for (const order of observationOrders) {
+    for (const order of observationBase) {
       const item = nursingOrderItem(order);
       const obs = item?.kind === "observation" ? masters.data?.get(item.manageNo) : undefined;
       map.set(order.id ?? "", nursingObservationInputSpec(obs));
     }
     return map;
-  }, [observationOrders, masters.data]);
+  }, [observationBase, masters.data]);
 
   const [values, setValues] = useState<NursingPerformFormValues>(() => ({
     ...emptyNursingPerformForm(orders, defaultAt || toDateTimeInput(new Date())),
@@ -67,6 +88,41 @@ export function NursingPerformModal({ patientName, orders, defaultAt, onClose }:
     performerName: practitioner ? practitionerDisplayName(practitioner) : "",
   }));
   const [validationError, setValidationError] = useState("");
+
+  // 記録日時を基準に、指示ごとの予定の消化状況と「いま入れるべきか」を出す。
+  // 記録日時を変えれば並びと強調が追従する。
+  const recordedDate = values.recordedAt.slice(0, 10);
+  const recordedMinutes = minutesOfDateTime(values.recordedAt) ?? 0;
+  const scheduleByOrderId = useMemo(() => {
+    const map = new Map<string, { slots: NursingScheduleSlot[]; due: boolean }>();
+    for (const order of orders) {
+      const id = order.id ?? "";
+      const times = expandNursingSchedule(nursingScheduleOf(order), recordedDate, scheduleSettings);
+      const { slots } = matchPerformsToSchedule(times, performsByOrderId?.get(id) ?? []);
+      map.set(id, { slots, due: slots.length > 0 && isDueAround(slots, recordedMinutes) });
+    }
+    return map;
+  }, [orders, recordedDate, recordedMinutes, scheduleSettings, performsByOrderId]);
+
+  // いま予定のある指示を上に(安定ソートなので元の並びは保つ)。予定の無い指示も
+  // 入力はできるが薄く出す(臨時の測定・頓用の記録のため)。
+  const byDue = (a: fhir4.ServiceRequest, b: fhir4.ServiceRequest) =>
+    Number(scheduleByOrderId.get(b.id ?? "")?.due ?? false) -
+    Number(scheduleByOrderId.get(a.id ?? "")?.due ?? false);
+  const observationOrders = useMemo(
+    () => [...observationBase].sort(byDue),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [observationBase, scheduleByOrderId],
+  );
+  const actOrders = useMemo(
+    () => orders.filter((o) => !isObservationOrder(o)).sort(byDue),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [orders, scheduleByOrderId],
+  );
+  const rowClass = (order: fhir4.ServiceRequest) => {
+    const state = scheduleByOrderId.get(order.id ?? "");
+    return state && state.slots.length > 0 && !state.due ? "nursing-perform__row--idle" : undefined;
+  };
 
   function updateObservation(orderId: string, patch: Partial<NursingObservationInput>) {
     setValues((prev) => ({
@@ -174,9 +230,15 @@ export function NursingPerformModal({ patientName, orders, defaultAt, onClose }:
                     const summary = summarizeNursingOrder(order);
                     const input = values.observations[id] ?? { values: ["", ""], note: "" };
                     return (
-                      <tr key={id}>
+                      <tr key={id} className={rowClass(order)}>
                         <td>{summary.text}</td>
-                        <td className="nursing-perform__muted">{summary.frequency}</td>
+                        <td className="nursing-perform__muted">
+                          {summary.frequency}
+                          <ScheduleBadges
+                            slots={scheduleByOrderId.get(id)?.slots ?? []}
+                            nowMinutes={recordedMinutes}
+                          />
+                        </td>
                         <td>
                           <ObservationInput
                             spec={specs.get(id) ?? { kind: "text" }}
@@ -220,7 +282,7 @@ export function NursingPerformModal({ patientName, orders, defaultAt, onClose }:
                   const summary = summarizeNursingOrder(order);
                   const input = values.acts[id] ?? { done: false, note: "" };
                   return (
-                    <tr key={id}>
+                    <tr key={id} className={rowClass(order)}>
                       <td className="nursing-worklist__check">
                         <input
                           type="checkbox"
@@ -230,7 +292,13 @@ export function NursingPerformModal({ patientName, orders, defaultAt, onClose }:
                         />
                       </td>
                       <td>{summary.text}</td>
-                      <td className="nursing-perform__muted">{summary.frequency}</td>
+                      <td className="nursing-perform__muted">
+                        {summary.frequency}
+                        <ScheduleBadges
+                          slots={scheduleByOrderId.get(id)?.slots ?? []}
+                          nowMinutes={recordedMinutes}
+                        />
+                      </td>
                       <td>
                         <input
                           type="text"
@@ -347,4 +415,28 @@ function ObservationInput({
     default:
       return <input type="text" value={values[0]} onChange={(e) => onChange(0, e.target.value)} />;
   }
+}
+
+/** その日の予定の消化状況。✓ は実施済、● は次に入れる予定(遅れは赤)。 */
+function ScheduleBadges({ slots, nowMinutes }: { slots: NursingScheduleSlot[]; nowMinutes: number }) {
+  if (slots.length === 0) return null;
+  const next = nextDueSlot(slots, nowMinutes);
+  return (
+    <span className="nursing-perform__slots">
+      {slots.map((slot) => {
+        const isNext = next?.slot === slot;
+        const cls = slot.done
+          ? "nursing-perform__slot nursing-perform__slot--done"
+          : isNext
+            ? `nursing-perform__slot nursing-perform__slot--next${next?.late ? " nursing-perform__slot--late" : ""}`
+            : "nursing-perform__slot";
+        return (
+          <span key={slot.time} className={cls} title={slot.done ? `${slot.done.atLabel} ${slot.done.value}` : undefined}>
+            {slot.time}
+            {slot.done ? "✓" : isNext ? "●" : ""}
+          </span>
+        );
+      })}
+    </span>
+  );
 }

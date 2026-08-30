@@ -15,6 +15,28 @@ RSpec.describe FacilitySettings do
     end
   end
 
+  describe ".nursing_schedule" do
+    it "returns the defaults when nothing is stored" do
+      expect(described_class.nursing_schedule).to eq(described_class::DEFAULT_NURSING_SCHEDULE)
+    end
+
+    it "merges a partially stored schedule over the defaults" do
+      described_class.current.update!(nursing_schedule: { "daily" => { "3" => %w[08:00 13:00 19:00] } })
+
+      schedule = described_class.nursing_schedule
+      expect(schedule["daily"]["3"]).to eq(%w[08:00 13:00 19:00])
+      expect(schedule["daily"]["1"]).to eq(%w[10:00])
+      expect(schedule["interval_start"]).to eq("06:00")
+    end
+
+    it "rejects a time that is not HH:MM" do
+      settings = described_class.current
+      settings.nursing_schedule = { "daily" => { "1" => ["25:00"] } }
+
+      expect(settings).not_to be_valid
+    end
+  end
+
   describe ".self_organization_id" do
     it "returns nil when unset" do
       expect(described_class.self_organization_id).to be_nil

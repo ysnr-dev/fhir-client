@@ -4,6 +4,7 @@ import { useNursingActLevels } from "../api/masterQueries";
 import {
   useAcceptNursingOrders,
   useActiveNursingOrders,
+  useNursingPerformsOn,
   usePatientNursingOrders,
   useRevokeNursingOrder,
 } from "../api/queries";
@@ -54,6 +55,8 @@ export function KarteNursingTab({ patientId, view, onViewChange, onCreate, onEdi
   const [detailId, setDetailId] = useState<string | null>(null);
   // 実施入力。渡すのは今日効いている指示だけ(終了・中止済みには記録させない)。
   const [performing, setPerforming] = useState(false);
+  // 今日の実施記録(実施入力の予定バッジ用)。モーダルを開いているときだけ引く。
+  const todayPerforms = useNursingPerformsOn(at, performing ? [patientId] : []);
 
   const active = useActiveNursingOrders(patientId, at);
   // 終了・中止も見るとき、履歴のときは全件を引く。
@@ -195,6 +198,7 @@ export function KarteNursingTab({ patientId, view, onViewChange, onCreate, onEdi
       {performing && active.data && (
         <NursingPerformModal
           orders={active.data.orders}
+          performsByOrderId={todayPerforms.data}
           onClose={() => setPerforming(false)}
         />
       )}

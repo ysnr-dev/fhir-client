@@ -17,7 +17,7 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
       without_admin_token { get "/admin/facility_settings" }
 
       expect(response).to have_http_status(:ok)
-      expect(JSON.parse(response.body)).to eq("self_organization_id" => "org-self")
+      expect(JSON.parse(response.body)).to include("self_organization_id" => "org-self")
     end
   end
 
@@ -39,8 +39,38 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
       end
 
       expect(response).to have_http_status(:ok)
-      expect(JSON.parse(response.body)).to eq("self_organization_id" => nil)
+      expect(JSON.parse(response.body)).to include("self_organization_id" => nil)
       expect(FacilitySettings.self_organization_id).to be_nil
+    end
+  end
+
+  describe "PATCH /admin/facility_settings (nursing_schedule)" do
+    it "stores the nursing schedule without touching the self organization" do
+      FacilitySettings.current.update!(self_organization_fhir_id: "org-self")
+
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { nursing_schedule: { daily: { "3" => %w[08:00 13:00 19:00] } } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)
+      expect(body["self_organization_id"]).to eq("org-self")
+      expect(body["nursing_schedule"]["daily"]["3"]).to eq(%w[08:00 13:00 19:00])
+      # 渡していない回数は既定値のまま
+      expect(body["nursing_schedule"]["daily"]["2"]).to eq(%w[10:00 18:00])
+      expect(body["nursing_schedule"]["interval_start"]).to eq("06:00")
+    end
+
+    it "rejects a malformed time" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { nursing_schedule: { interval_start: "6時" } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:unprocessable_content)
     end
   end
 

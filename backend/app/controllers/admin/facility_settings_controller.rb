@@ -25,12 +25,23 @@ module Admin
     def settings_params
       # master コントローラと同様にフラットな params を許可する。
       # 空文字は「自院の指定を外す」意味なので nil に寄せる。
-      permitted = params.permit(:self_organization_id)
-      { self_organization_fhir_id: permitted[:self_organization_id].presence }
+      # 渡されなかった項目は触らない(看護指示の既定時刻だけを保存できるように)。
+      permitted = params.permit(:self_organization_id, nursing_schedule: [:interval_start, { daily: {} }])
+      attrs = {}
+      if params.key?(:self_organization_id)
+        attrs[:self_organization_fhir_id] = permitted[:self_organization_id].presence
+      end
+      if params.key?(:nursing_schedule)
+        attrs[:nursing_schedule] = permitted[:nursing_schedule].to_h
+      end
+      attrs
     end
 
     def payload(settings)
-      { self_organization_id: settings.self_organization_fhir_id.presence }
+      {
+        self_organization_id: settings.self_organization_fhir_id.presence,
+        nursing_schedule: settings.nursing_schedule_with_defaults
+      }
     end
   end
 end

@@ -10575,6 +10575,39 @@ button.meal-calendar__cell:hover {
   font-size: 12px;
 }
 
+/* 実施入力: いま予定の無い指示は薄く出す(入力はできる)。 */
+.nursing-perform__row--idle td {
+  opacity: 0.55;
+}
+
+/* 予定の消化状況(09:00✓ 14:00● 20:00)。 */
+.nursing-perform__slots {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.nursing-perform__slot {
+  margin-right: 6px;
+  color: var(--text);
+}
+
+.nursing-perform__slot--done {
+  color: var(--accent);
+}
+
+.nursing-perform__slot--next {
+  color: var(--text-h);
+  font-weight: bold;
+}
+
+.nursing-perform__slot--late,
+.nursing-worklist__due--late {
+  color: var(--lab-high);
+  font-weight: bold;
+}
+
 /* 詳細モーダルの実施履歴。 */
 .nursing-detail__performs {
   margin-top: 16px;
@@ -10623,6 +10656,50 @@ button.meal-calendar__cell:hover {
 
 .nursing-order-form__item {
   font-size: 13px;
+}
+
+.nursing-order-form__schedule {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.nursing-order-form__times {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.nursing-order-form__time {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.nursing-order-form__inline,
+.nursing-order-form__day {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+/* 自院設定: 看護指示の既定時刻。 */
+.facility-settings__schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.facility-settings__times {
+  display: inline-flex;
+  gap: 8px;
 }
 
 .nursing-order-form__dates {

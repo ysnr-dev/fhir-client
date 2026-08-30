@@ -9,6 +9,14 @@ import {
   type OrderAttribution,
 } from "./prescriptionHelpers";
 import { buildNursingTaskUpdate } from "./nursingTaskHelpers";
+import {
+  isValidTime,
+  nursingScheduleExtension,
+  nursingScheduleLabel,
+  nursingScheduleOf,
+  timingToScheduleValues,
+  type NursingScheduleValues,
+} from "./nursingScheduleHelpers";
 
 // 看護指示(指示簿)。医師が入院患者に出す看護向けの指示(安静度・清潔・観察項目など)。
 //
@@ -21,9 +29,13 @@ import { buildNursingTaskUpdate } from "./nursingTaskHelpers";
 // 行為は 16 桁コード(A/B/C/D 階層の連結)と 8 桁の管理番号を併記、観察は観察名称
 // 管理番号を入れる。マスタに無い指示は code.text だけで持つ。
 //
-// 頻度・条件(1 日 3 回 / 38℃以上で報告 など)は orderDetail[0].text。Timing を
-// 使わないのは、occurrence[x] が choice で occurrenceDateTime(開始日)と併用できず、
-// 上流も occurrenceDateTime しか索引しないため(docs/rehab-order-design.md §2.3)。
+// 頻度(1 日 3 回 / 4 時間毎)は FHIR の Timing を root 拡張 `nursing-order-schedule` の
+// valueTiming に持つ(nursingScheduleHelpers)。occurrenceTiming にしないのは、
+// occurrence[x] が choice で occurrenceDateTime(開始日)と併用できず、上流も
+// occurrenceDateTime しか索引しないため(docs/rehab-order-design.md §2.3)。
+// 条件(38℃以上で報告 など)は頻度とは別物なので orderDetail[0].text の自由記載。
+// 拡張を付ける前の指示は頻度も orderDetail に書かれているが、条件として読めば
+// 表示は変わらない(移行しない)。
 //
 // 進捗 Task は「看護師の指示受け」を表す(nursingTaskHelpers)。
 
@@ -47,20 +59,6 @@ const NURSING_ORDER_END_EXT_URL = "http://fhir-client.local/StructureDefinition/
 export const NURSING_REQUISITION_SYSTEM =
   "http://fhir-client.local/Identifier/nursing-order-requisition";
 
-/** 頻度・条件の定型候補。入力欄の datalist に出す(自由に書き換えてよい)。 */
-export const NURSING_FREQUENCY_PRESETS = [
-  "毎日",
-  "1日1回",
-  "1日2回",
-  "1日3回",
-  "4時間毎",
-  "6時間毎",
-  "8時間毎",
-  "適宜",
-  "必要時",
-  "1回のみ",
-] as const;
-
 // ---- フォームの値 ----
 
 /** マスタから選んだ用語。null は自由記載。 */
@@ -73,8 +71,10 @@ export interface NursingOrderLineValues {
   item: NursingItemRef;
   /** 指示内容の文言。マスタ選択時は用語名で埋め、自由記載ではこれが本体。 */
   text: string;
-  /** 頻度・条件。 */
-  frequency: string;
+  /** 頻度(予定)。null は適宜・必要時。 */
+  schedule: NursingScheduleValues;
+  /** 条件(自由記載)。 */
+  condition: string;
   startDate: string;
   endDate: string;
   comment: string;
@@ -86,7 +86,15 @@ export interface NursingOrderFormValues {
 }
 
 export function emptyNursingOrderLine(): NursingOrderLineValues {
-  return { item: null, text: "", frequency: "", startDate: today(), endDate: "", comment: "" };
+  return {
+    item: null,
+    text: "",
+    schedule: null,
+    condition: "",
+    startDate: today(),
+    endDate: "",
+    comment: "",
+  };
 }
 
 export function emptyNursingOrderForm(): NursingOrderFormValues {
@@ -103,8 +111,29 @@ export function validateNursingOrderForm(values: NursingOrderFormValues): string
     if (line.endDate && line.endDate < line.startDate) {
       return `${n} 行目: 終了日は開始日以降にしてください。`;
     }
+    const scheduleError = validateSchedule(line.schedule);
+    if (scheduleError) return `${n} 行目: ${scheduleError}`;
   }
   return "";
+}
+
+function validateSchedule(schedule: NursingScheduleValues): string {
+  if (!schedule) return "";
+  switch (schedule.kind) {
+    case "daily":
+    case "times":
+      if (schedule.times.length === 0) return "時刻を入れてください。";
+      if (!schedule.times.every(isValidTime)) return "時刻の形式が正しくありません。";
+      return "";
+    case "interval":
+      if (!(schedule.hours > 0)) return "間隔(時間)を入れてください。";
+      if (!isValidTime(schedule.start)) return "起点の時刻を入れてください。";
+      return "";
+    case "weekly":
+      if (schedule.days.length === 0) return "曜日を選んでください。";
+      if (schedule.time && !isValidTime(schedule.time)) return "時刻の形式が正しくありません。";
+      return "";
+  }
 }
 
 /** 看護指示の ServiceRequest か。 */
@@ -177,12 +206,15 @@ function buildNursingOrderServiceRequest(
   if (options.serviceRequestId) resource.id = options.serviceRequestId;
   if (options.encounterId) resource.encounter = { reference: `Encounter/${options.encounterId}` };
 
-  const frequency = line.frequency.trim();
-  if (frequency) resource.orderDetail = [{ text: frequency }];
+  const condition = line.condition.trim();
+  if (condition) resource.orderDetail = [{ text: condition }];
 
-  if (line.endDate) {
-    resource.extension = [{ url: NURSING_ORDER_END_EXT_URL, valueDate: line.endDate }];
-  }
+  // 終了日と頻度はどちらも root 拡張。依頼科・病棟は applyOrderContext がこの配列に足す。
+  const extensions: fhir4.Extension[] = [];
+  if (line.endDate) extensions.push({ url: NURSING_ORDER_END_EXT_URL, valueDate: line.endDate });
+  const schedule = nursingScheduleExtension(line.schedule);
+  if (schedule) extensions.push(schedule);
+  if (extensions.length > 0) resource.extension = extensions;
 
   if (line.comment.trim()) resource.note = [{ text: line.comment.trim() }];
 
@@ -376,7 +408,11 @@ export const NURSING_ORDER_STATE_LABELS: Record<NursingOrderState, string> = {
 export interface NursingOrderSummary {
   /** 指示内容(code.text、無ければ用語名)。 */
   text: string;
+  /** 頻度のラベルと条件を " / " で繋いだ表示。 */
   frequency: string;
+  /** 頻度(Timing)。適宜など予定を持たない指示は undefined。 */
+  schedule: fhir4.Timing | undefined;
+  condition: string;
   startDate: string;
   endDate: string;
   requesterName: string;
@@ -402,9 +438,13 @@ export function nursingOrderPeriodLabel(summary: NursingOrderSummary, at: string
 }
 
 export function summarizeNursingOrder(sr: fhir4.ServiceRequest): NursingOrderSummary {
+  const schedule = nursingScheduleOf(sr);
+  const condition = sr.orderDetail?.[0]?.text ?? "";
   return {
     text: sr.code?.text || nursingOrderItem(sr)?.display || "",
-    frequency: sr.orderDetail?.[0]?.text ?? "",
+    frequency: [nursingScheduleLabel(schedule), condition].filter(Boolean).join(" / "),
+    schedule,
+    condition,
     startDate: nursingOrderStart(sr),
     endDate: nursingOrderEnd(sr),
     requesterName: sr.requester?.display ?? "",
@@ -423,7 +463,8 @@ export function parseNursingOrderLine(sr: fhir4.ServiceRequest): NursingOrderLin
   return {
     item,
     text: sr.code?.text || item?.display || "",
-    frequency: sr.orderDetail?.[0]?.text ?? "",
+    schedule: timingToScheduleValues(nursingScheduleOf(sr)),
+    condition: sr.orderDetail?.[0]?.text ?? "",
     startDate: nursingOrderStart(sr) || today(),
     endDate: nursingOrderEnd(sr),
     comment: orderComment(sr),

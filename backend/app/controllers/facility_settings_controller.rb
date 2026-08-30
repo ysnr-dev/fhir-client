@@ -9,6 +9,9 @@ class FacilitySettingsController < ActionController::API
   before_action :authorize_user!
 
   def show
-    render json: { self_organization_id: FacilitySettings.self_organization_id }
+    render json: {
+      self_organization_id: FacilitySettings.self_organization_id,
+      nursing_schedule: FacilitySettings.nursing_schedule
+    }
   end
 end
