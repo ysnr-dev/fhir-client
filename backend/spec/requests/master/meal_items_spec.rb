@@ -14,11 +14,12 @@ RSpec.describe "Master::MealItems", type: :request do
       create_item("A00105", name: "一般食2000kcal", name_kana: "イッパンショク", display_order: 20)
       create_item("105AG", name: "米飯180g", kind: "staple", display_order: 10)
       create_item("A00900", name: "旧食種", valid_to: Date.current - 1, display_order: 30)
+      create_item("F02", name: "きざみ", kind: "side_dish_form", display_order: 50)
     end
 
     it "表示順で返す" do
       get "/master/meal_items"
-      expect(body["items"].map { |i| i["item_code"] }).to eq(%w[105AG A00105 A00900])
+      expect(body["items"].map { |i| i["item_code"] }).to eq(%w[105AG A00105 A00900 F02])
     end
 
     it "コードのカンマ区切りで一括取得できる" do
@@ -26,17 +27,20 @@ RSpec.describe "Master::MealItems", type: :request do
       expect(body["items"].map { |i| i["item_code"] }).to match_array(%w[A00105 105AG])
     end
 
-    it "kind で食種と主食を分けて取得できる" do
+    it "kind で食種・主食・副食形態を分けて取得できる" do
       get "/master/meal_items", params: { kind: "diet" }
       expect(body["items"].map { |i| i["item_code"] }).to eq(%w[A00105 A00900])
 
       get "/master/meal_items", params: { kind: "staple" }
       expect(body["items"].map { |i| i["item_code"] }).to eq(%w[105AG])
+
+      get "/master/meal_items", params: { kind: "side_dish_form" }
+      expect(body["items"].map { |i| i["item_code"] }).to eq(%w[F02])
     end
 
     it "active=true は有効期間内の項目だけ返す" do
       get "/master/meal_items", params: { active: "true" }
-      expect(body["items"].map { |i| i["item_code"] }).to eq(%w[105AG A00105])
+      expect(body["items"].map { |i| i["item_code"] }).to eq(%w[105AG A00105 F02])
     end
 
     it "種別(category_code)で絞り込める" do
@@ -102,6 +106,14 @@ RSpec.describe "Master::MealItems", type: :request do
 
       expect(response).to have_http_status(:unprocessable_content)
       expect(body["errors"].join).to include("種別を設定できるのは食種だけ")
+    end
+
+    it "副食形態に種別・食止めは付けられない" do
+      post "/master/meal_items", params: { item_code: "F02", name: "きざみ",
+                                           kind: "side_dish_form", is_fasting: true }
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("食止めにできるのは食種だけ")
     end
 
     it "主食を食止めにはできない" do

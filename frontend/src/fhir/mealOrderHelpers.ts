@@ -33,6 +33,13 @@ import {
 //   TQ1-8 終了日時 YYYYMMDDHH       → extension[meal-order-end]
 //
 // 嗜好品(ODS-1 = P)・補助食(ODS-1 = S)は今回扱わない。
+//
+// SS-MIX2 に対応する項目が無く、参考仕様(名古屋第二赤十字病院「食種選択による
+// オーダエントリ」)から採った項目:
+//
+//   欠食理由     → extension[meal-fasting-reason]   (§5)
+//   副食形態     → orderDetail(system = meal-side-dish-form)(§2)
+//   塩分制限(g)  → extension[meal-salt-limit]        (§2)
 
 // 他のオーダー種別の ServiceRequest と区別するオーダー種別。
 export const MEAL_ORDER_TYPE = { code: "meal", display: "食事" };
@@ -41,6 +48,12 @@ export const MEAL_ORDER_TYPE = { code: "meal", display: "食事" };
 const MEAL_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/meal-type";
 // 主食。SS-MIX2 の例でいうローカルコード表 99SSK にあたる。
 const STAPLE_FOOD_SYSTEM = "http://fhir-client.local/CodeSystem/meal-staple-food";
+/**
+ * 副食形態(きざみ・ミキサー・一口大 など)。主食と同じく orderDetail に入れ、
+ * Coding の system で主食と区別する。SS-MIX2 に副食形態の ODS-1 区分は無く、
+ * 参考仕様(名古屋第二赤十字病院「食種選択によるオーダエントリ」§2)の入力項目。
+ */
+const SIDE_DISH_FORM_SYSTEM = "http://fhir-client.local/CodeSystem/meal-side-dish-form";
 
 /**
  * 終了(いつまでその食事か)。occurrencePeriod を使わないのは、上流が
@@ -75,6 +88,14 @@ const MEAL_SKIPPED_TIMING_EXT_URL =
  */
 const MEAL_FASTING_REASON_EXT_URL =
   "http://fhir-client.local/StructureDefinition/meal-fasting-reason";
+
+/**
+ * 塩分制限(g/日)。`valueQuantity`(UCUM の g)。副食形態と違って値が連続量なので
+ * orderDetail(CodeableConcept)には入らず、拡張になる。参考仕様 §2 の入力項目。
+ */
+const MEAL_SALT_LIMIT_EXT_URL = "http://fhir-client.local/StructureDefinition/meal-salt-limit";
+
+const UCUM_SYSTEM = "http://unitsofmeasure.org";
 
 /**
  * オーダーの種別と由来(入退院との結びつき)。種別は手で選ばせず、登録の文脈から決める:
@@ -344,6 +365,13 @@ export interface MealOrderFormValues {
   /** 朝・昼・夕の主食(任意)と欠食。 */
   staples: MealStaples;
   /**
+   * 副食形態(きざみ・ミキサー など、任意)。主食と違い朝昼夕の軸を持たず、
+   * オーダー 1 件に 1 つ(参考仕様も食事ごとに分けていない)。
+   */
+  sideDishForm: MealItemRef | null;
+  /** 塩分制限(g/日、任意)。入力欄の文字列のまま持ち、組み立てで数値にする。 */
+  saltLimit: string;
+  /**
    * 欠食理由。食止めの食種か、1 食でも欠食があるオーダーにだけ付く
    * (mealOrderHasFasting)。"" は「入力せず」。
    */
@@ -362,6 +390,8 @@ export function emptyMealOrderForm(): MealOrderFormValues {
     diet: null,
     dietIsFasting: false,
     staples: emptyMealStaples(),
+    sideDishForm: null,
+    saltLimit: "",
     fastingReason: "",
     startDate: today(),
     startTiming: DEFAULT_MEAL_TIMING,
@@ -381,6 +411,17 @@ export function mealOrderHasFasting(values: MealOrderFormValues): boolean {
   return (
     values.dietIsFasting || MEAL_TIMING_OPTIONS.some((t) => values.staples[t.code] === MEAL_SKIPPED)
   );
+}
+
+/**
+ * 塩分制限の入力を数値にする。空欄・数値でない・負の値は「指定なし」(undefined)。
+ * 0 は有効な指定(無塩)なので落とさない。
+ */
+export function parseSaltLimit(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }
 
 /** 食事オーダーの ServiceRequest か。 */
@@ -462,9 +503,32 @@ function buildMealOrderServiceRequest(
       text: choice.name,
     });
   }
+  // 副食形態は「主食以外をどう調理して出すか」なので主食と同じ orderDetail に入れ、
+  // Coding の system で分ける。朝昼夕の軸は持たないので meal-timing 拡張は付けない
+  // (SS-MIX2 で ODS-2 をブランクにしたものと同じ「全食共通」)。
+  if (values.sideDishForm) {
+    stapleDetails.push({
+      coding: [
+        {
+          system: SIDE_DISH_FORM_SYSTEM,
+          code: values.sideDishForm.code,
+          display: values.sideDishForm.name,
+        },
+      ],
+      text: values.sideDishForm.name,
+    });
+  }
   if (stapleDetails.length > 0) resource.orderDetail = stapleDetails;
 
   const extensions: fhir4.Extension[] = [...skippedExtensions];
+  // 塩分制限。空欄・数値でない入力は拡張ごと出さない(画面が数値入力で弾いている)。
+  const salt = parseSaltLimit(values.saltLimit);
+  if (salt !== undefined) {
+    extensions.push({
+      url: MEAL_SALT_LIMIT_EXT_URL,
+      valueQuantity: { value: salt, unit: "g", system: UCUM_SYSTEM, code: "g" },
+    });
+  }
   // 欠食理由。食事が出るオーダーからは画面側で落としてある(mealOrderHasFasting)ので、
   // ここは値があればそのまま書く。連動で作る外泊食止め・帰院での書き換え(rewrite)や
   // 再開オーダーの写しでも、この 1 行だけで理由が保たれる。
@@ -837,6 +901,10 @@ export interface MealOrderSummary {
   stapleName: string;
   /** 食事ごとに中身が違うときだけ、朝・昼・夕の 3 行。全食同じなら空。 */
   stapleLines: MealStapleLine[];
+  /** 副食形態の名称。指定が無ければ空。 */
+  sideDishFormName: string;
+  /** 塩分制限「6g」。指定が無ければ空。 */
+  saltLimitLabel: string;
   /** 欠食理由の表示名。食止め・欠食のオーダーで、理由を入れてあるときだけ。 */
   fastingReasonLabel: string;
   /** 「8/28 朝」形式の開始。 */
@@ -863,6 +931,29 @@ export function mealPointLabel(value: string): string {
 
 export function mealOrderEnd(sr: fhir4.ServiceRequest): string {
   return sr.extension?.find((e) => e.url === MEAL_ORDER_END_EXT_URL)?.valueDateTime ?? "";
+}
+
+/** 副食形態。指定の無いオーダーは null。 */
+export function mealSideDishForm(sr: fhir4.ServiceRequest): MealItemRef | null {
+  for (const detail of sr.orderDetail ?? []) {
+    const coding = codingBySystem(detail.coding, SIDE_DISH_FORM_SYSTEM);
+    if (coding?.code) {
+      return { code: coding.code, name: detail.text || coding.display || coding.code };
+    }
+  }
+  return null;
+}
+
+/** 塩分制限(g/日)。指定の無いオーダーは undefined。 */
+export function mealSaltLimit(sr: fhir4.ServiceRequest): number | undefined {
+  const value = sr.extension?.find((e) => e.url === MEAL_SALT_LIMIT_EXT_URL)?.valueQuantity?.value;
+  return typeof value === "number" ? value : undefined;
+}
+
+/** 「6g」。指定が無ければ空文字。 */
+export function mealSaltLimitLabel(sr: fhir4.ServiceRequest): string {
+  const value = mealSaltLimit(sr);
+  return value === undefined ? "" : `${value}g`;
 }
 
 /** 欠食理由。持たない(「入力せず」)オーダーと、知らない値は "" を返す。 */
@@ -911,6 +1002,8 @@ export function summarizeMealOrder(sr: fhir4.ServiceRequest): MealOrderSummary {
   return {
     dietName: mealOrderDietName(sr),
     ...mealStapleSummary(sr),
+    sideDishFormName: mealSideDishForm(sr)?.name ?? "",
+    saltLimitLabel: mealSaltLimitLabel(sr),
     fastingReasonLabel: mealFastingReasonLabel(sr),
     startLabel: mealPointLabel(sr.occurrenceDateTime ?? ""),
     endLabel: end ? `${mealPointLabel(end)}まで${reason ? `(${reason})` : ""}` : "",
@@ -1113,6 +1206,8 @@ export function parseMealOrderForm(sr: fhir4.ServiceRequest): MealOrderFormValue
     // 引き直して入れ直す(オーダーには写していない)。
     dietIsFasting: false,
     staples: parseMealStaples(sr),
+    sideDishForm: mealSideDishForm(sr),
+    saltLimit: mealSaltLimit(sr)?.toString() ?? "",
     fastingReason: mealFastingReason(sr),
     startDate: occurrence.slice(0, 10) || today(),
     startTiming: parseMealTiming(occurrence) ?? DEFAULT_MEAL_TIMING,

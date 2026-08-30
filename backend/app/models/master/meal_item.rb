@@ -1,15 +1,19 @@
 module Master
-  # 食事オーダー項目。食種(kind = diet)と主食(kind = staple)を 1 テーブルに入れる。
-  # 列構成が同じで、オーダー側は FHIR の CodeSystem URI(meal-type /
-  # meal-staple-food)で既に区別しているため、テーブルを分ける利点が無い。
+  # 食事オーダー項目。食種(kind = diet)・主食(kind = staple)・副食形態
+  # (kind = side_dish_form)を 1 テーブルに入れる。列構成が同じで、オーダー側は
+  # FHIR の CodeSystem URI(meal-type / meal-staple-food / meal-side-dish-form)で
+  # 既に区別しているため、テーブルを分ける利点が無い。
   #
   # 食止めは食種の 1 レコード(is_fasting = true)として持つ。SS-MIX2 の給食オーダが
   # 食止めを食種コード(NPO)で表すのに合わせたもので、オーダー側に「食止めか」の
   # 印は持たない。
+  #
+  # 副食形態はきざみ・ミキサー・一口大 など「主食以外をどう調理して出すか」。
+  # 施設ごとに呼び名も刻みの段階数も違うのでマスタにしてある。
   class MealItem < ApplicationRecord
     self.table_name = "master_meal_items"
 
-    KINDS = %w[diet staple].freeze
+    KINDS = %w[diet staple side_dish_form].freeze
 
     validates :item_code, presence: true, uniqueness: true
     validates :name, presence: true

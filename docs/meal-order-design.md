@@ -85,9 +85,11 @@ ServiceRequest (category: order-type|meal)
 | `CodeSystem/order-type` の値 `meal` | `category[0]`。`isMealServiceRequest` の判定軸 | - |
 | `CodeSystem/meal-type` | `code.coding`。食種(食止めを含む)マスタのコード | ODS-3(ODS-1=T)のローカルコード表 `99SKS` / `SSMIXTF01` |
 | `CodeSystem/meal-staple-food` | `orderDetail[].coding`。主食マスタのコード | ODS-3(ODS-1=D)のローカルコード表 `99SSK` |
+| `CodeSystem/meal-side-dish-form` | `orderDetail[].coding`。副食形態マスタのコード(§2.10) | 対応なし(参考仕様 §2 から) |
 | `StructureDefinition/meal-timing` | `orderDetail[]` に付け、その主食がどの食事のものかを示す。無ければ全食共通 | ODS-2 サービス時間帯(`1:朝食` / `3:昼食` / `5:夕食`) |
 | `StructureDefinition/meal-skipped-timing` | 欠食(`valueCode`。朝昼夕ぶん繰り返す) | 時間帯を指定した食止め `ODS\|T\|3^昼食\|NPO^食止め^SSMIXTF01` |
 | `StructureDefinition/meal-fasting-reason` | 欠食理由(`valueCode`)。無ければ「入力せず」(§2.9) | 対応なし(参考仕様 §5 から) |
+| `StructureDefinition/meal-salt-limit` | 塩分制限(`valueQuantity`、UCUM の `g`)(§2.10) | 対応なし(参考仕様 §2 から) |
 | `StructureDefinition/meal-order-end` | 終了日時(`valueDateTime`)。無ければ継続中 | TQ1-8 |
 
 再利用: `CodeSystem/prescription-setting`、依頼科(`order-department`)・病棟(`order-ward`)の
@@ -360,19 +362,95 @@ id の無い旧データは次に書き換えたときに採番される。食�
 連動プレビュー**では主食の代わりに括弧で添える(`食止め(外泊) 9/1 昼〜 …`)。
 理由を持たないオーダーはどこにも増えない。
 
+### 2.10 副食形態と塩分制限
+
+実装日: 2026-08-30。§2.3(主食)への追加。
+
+［事実］SS-MIX2 の OMD^O03 が ODS-1 で区別するのは T(食種)・D(主食)・P(嗜好品)・
+S(補助食)で、**副食をどう調理するか(きざみ・ミキサー)を表す区分は無い**。塩分制限も
+同様で、数値としての栄養指示はメッセージに載らない。
+
+［事実］参考仕様 §2「普通食及び治療食」の入力項目は、主食区分・主食形態・主食量と並べて
+**副食形態(副食区分)**と**塩分制限(g)**を挙げている。現場では「きざみ」「6g 減塩」が
+食種名に含まれないことが多く、いまはコメント(`note`)に自由文で書くしかなかった。
+
+#### 副食形態 = 主食と同じ orderDetail、system で分ける
+
+［提案］副食形態は「食種をどう出すか」の追加詳細で、主食とまったく同じ性格の項目なので
+**`orderDetail` に入れ、Coding の `system`(`meal-side-dish-form`)で主食と区別する**。
+§7-3 が嗜好品・補助食について書いていた足し方をそのまま使った形になる。
+
+```jsonc
+"orderDetail": [
+  { "extension": [{ "url": ".../meal-timing", "valueCode": "breakfast" }],
+    "coding": [{ "system": ".../meal-staple-food", "code": "105AG" }], "text": "米飯180g" },
+  { "coding": [{ "system": ".../meal-side-dish-form", "code": "F02" }], "text": "きざみ" }
+]
+```
+
+［提案］**`meal-timing` 拡張は付けない**(= 全食共通)。主食は朝パン・昼めん・夕米飯と
+変わるが、副食形態は 1 日を通して同じなのがふつうで、参考仕様も食事ごとの軸を持たせて
+いない。SS-MIX2 で ODS-2 をブランクにしたものと同じ意味になる。
+
+［実装］読み書きは system で振り分けるだけなので、既存の主食の処理に手を入れていない。
+`parseMealStaples` は `meal-staple-food` の Coding だけを拾い、`mealSideDishForm` は
+`meal-side-dish-form` だけを拾う。同じ配列に共存して干渉しない。
+
+［提案］**マスタは既存の `master_meal_items` に `kind = side_dish_form` を足すだけ**
+(§3)。きざみの段階数も呼び名(軟菜・ソフト食・一口大)も施設ごとに違うので固定コードには
+できず、列構成は食種・主食と同じでよい。migration も要らない。
+
+#### 塩分制限 = ローカル拡張の valueQuantity
+
+［導出］塩分制限は連続量なので、CodeableConcept の `orderDetail` には入らない。
+
+［提案］**ローカル拡張 `meal-salt-limit`(`valueQuantity`、UCUM の `g`)**。
+`ServiceRequest.quantity[x]` は「依頼する数量」の席で、食事の成分量ではない。
+
+［提案］**成分調製・飲料区分・飲物(本)は今回入れていない**。参考仕様は同じ節でこれらも
+挙げているが、塩分制限が「治療食のほぼ全てで指示される 1 項目」なのに対し、残りは
+施設・食種によって使う・使わないが分かれる。必要になったら同じ形(数値はローカル拡張、
+コード値は `orderDetail` の system 追加)で足せる。
+
+#### 食止めでは持たせない
+
+［導出］食止めの食種では 1 日を通して食事が出ないので、副食形態も塩分制限も指示する
+先が無い。主食・欠食と同じく画面で無効にし、保存でも落とす(`clearedMealContent`)。
+食種を食止めに変えると、それまでに入れていた副食形態・塩分制限もその場で消える。
+
+#### 表示
+
+| 画面 | 出し方 |
+|---|---|
+| 暦(食事タブ) | 副食形態だけ「副食 きざみ」の 1 行。塩分制限は出さない(食種名に含意されることが多く、マスの縦が伸びるわりに読み取る場面が少ない) |
+| カルテのカード | 「副食形態: ミキサー」「塩分制限: 5.5g」を主食の下に |
+| 詳細モーダル | 「主食」と「期間」の間に 2 行 |
+
+いずれも**指定のあるオーダーだけ**。指定なしの「-」でどのオーダーも 2 行増えるのを避ける
+(§2.9 の欠食理由と同じ扱い)。
+
+［実装］コメント欄のプレースホルダを「アレルギー対応・**きざみ** など」から
+「アレルギー対応・**配膳先** など」に変えた。副食形態に専用の欄ができた以上、
+コメントに書くよう誘導するのは誤り。
+
 ---
 
 ## 3. マスタ
 
 ```text
-master_meal_items      -- 食種(kind=diet)と主食(kind=staple)。1 テーブル
+master_meal_items      -- 食種(kind=diet)・主食(kind=staple)・副食形態
+                          (kind=side_dish_form)。1 テーブル
 master_meal_categories -- 食種の種別(一般食・特別食 など)。1 段の分類
 ```
 
-［提案］**食種と主食を 1 テーブルに入れた**。列構成が完全に同じで、FHIR 側は
-CodeSystem の URI(`meal-type` / `meal-staple-food`)で既に区別しているため、テーブルを
-分けても model・controller・spec・API・画面が 2 式になるだけ。処置の `kind`(single/set)と
-同じやり方。
+［提案］**食種・主食・副食形態を 1 テーブルに入れた**。列構成が完全に同じで、FHIR 側は
+CodeSystem の URI(`meal-type` / `meal-staple-food` / `meal-side-dish-form`)で既に
+区別しているため、テーブルを分けても model・controller・spec・API・画面が 3 式になる
+だけ。処置の `kind`(single/set)と同じやり方。
+
+［実装］副食形態(§2.10)を足したときも **migration は要らなかった**。`kind` は文字列列で、
+モデルの `KINDS` に 1 語、画面の区分セレクトとラベルに 1 行ずつ足すだけで済んでいる。
+`is_fasting` と `category_code` の「食種だけ」の検証がそのまま効く。
 
 主な列: `item_code`(一意) / `name` / `name_kana` / `kind` / `is_fasting` /
 `category_code`(種別) / `valid_from` / `valid_to` / `display_order` / `note` /
@@ -381,7 +459,8 @@ CodeSystem の URI(`meal-type` / `meal-staple-food`)で既に区別している�
 - `short_name` は作らない(食種名は短く、カードにそのまま出る)
 - **エネルギー kcal の列も作らない**。［提案］SS-MIX2 の例(`一般食2000kcal`)どおり名称に
   含める運用。栄養成分での集計が要るようになったら列を足す(§7-1)
-- `is_fasting` は `kind = diet` のときだけ true にできる(モデルと画面の両方で落とす)
+- `is_fasting` は `kind = diet` のときだけ true にできる(モデルと画面の両方で落とす)。
+  副食形態にも同じ検証が効く
 - 採番は「数字だけのコードの最大 + 1 を 6 桁ゼロ詰め」。［実装］**英字混じりのコードは
   計算から外す**ので、`NPO` や `A00105` のような SS-MIX2 互換コードを手入力しても
   自動採番が壊れない
@@ -595,6 +674,35 @@ UI にはしていない(切り替えの状態を持たずに済み、行が固�
 ［申し送り］**外出泊を実際に登録した状態での暦・詳細表示は通していない**(プレビューまで)。
 プレビューと同じ `buildMealOrderCreateEntry` を通る経路なので、書かれる拡張は 2. と同じ。
 
+### 6.3 副食形態・塩分制限(§2.10)の追加 — 2026-08-30
+
+| 層 | 変更 |
+|---|---|
+| モデル | `Master::MealItem::KINDS` に `side_dish_form`(migration なし) |
+| spec | `master/meal_items_spec.rb` に副食形態の kind 絞り込みと検証を追加(17 examples) |
+| FHIR 変換 | `mealOrderHelpers.ts`: `meal-side-dish-form` の system / `meal-salt-limit` 拡張、`MealOrderFormValues.sideDishForm` / `.saltLimit`、`mealSideDishForm` / `mealSaltLimit` / `mealSaltLimitLabel` / `parseSaltLimit`、`MealOrderSummary.sideDishFormName` / `.saltLimitLabel` |
+| 画面 | `MealOrderForm`(2 欄 + 食止めでのクリア `clearedMealContent` + 塩分の検証 + コメントのプレースホルダ) / `MealOrderDetailPanel` / `KarteTimeline` の `MealOrderCardBody` / `KarteMealTab` / `MealItemPage`(区分セレクト 2 か所) / `mealItemOptions.ts` / `masterQueries.ts`(`useMealItemOptions` の型) |
+
+検証(開発環境、患者「山田 太郎」= 東3階病棟 302号室):
+
+1. マスタ: 副食形態 5 件(`F01 軟菜` / `F02 きざみ` / `F03 極きざみ` / `F04 ミキサー` /
+   `F05 一口大`)を登録し、一覧の「区分」列が「副食形態」で出ること。区分セレクトで絞れること
+2. 新規登録: 一般食2000kcal + 主食(朝昼夕とも米飯180g)+ 副食形態きざみ + 塩分制限 6 で登録。
+   FHIR 上で `orderDetail` が 4 要素になり、**副食形態の要素だけ `meal-timing` 拡張を
+   持たない**こと。`meal-salt-limit` が `valueQuantity {value: 6, unit: "g", system: UCUM}`
+   で入ること
+3. 暦(食事タブ): そのオーダーが担当する 9/10・9/11 に「米飯180g」(全食共通で 1 行)と
+   「副食 きざみ」が出て、9/12 から元のオーダーに戻ると副食の行が消えること
+4. 編集: 保存値から副食形態・塩分制限が復元されること
+5. 食止め: 食種を「食止め」に変えると**主食・副食形態・塩分制限がまとめてクリアされて
+   無効**になり、欠食理由の欄が現れること
+6. カード・詳細モーダル: 「副食形態: ミキサー」「塩分制限: 5.5g」が主食の下 /
+   主食と期間の間に出ること。指定の無いオーダーでは行が増えないこと
+7. 回帰: `meal_items_spec` 17 examples green、`tsc -b` clean、`oxlint` 既存 4 warning のみ
+
+［申し送り］**塩分制限の不正入力(負値・非数値)は画面から通していない**。`type="number"`
+`min="0"` でブラウザが先に弾くため。`validate` 側の判定は二重の守りとして残してある。
+
 ---
 
 ## 7. 申し送り
@@ -618,7 +726,8 @@ UI にはしていない(切り替えの状態を持たずに済み、行が固�
    決め打ち)なので、§7-1 の進捗を先に作っていると影響が出る
 3. **嗜好品・補助食(おやつ)**: SS-MIX2 は ODS-1=P / S で表せるが今回は扱っていない。
    足すなら `orderDetail` を配列のまま使い、Coding の system で種別を分けるのが素直
-   (時間帯の軸は `meal-timing` 拡張がそのまま使える)。ODS-2 の
+   (時間帯の軸は `meal-timing` 拡張がそのまま使える)。**副食形態(§2.10)が同じやり方の
+   先例**になっているので、マスタの `kind` と system を 1 つずつ足す形をなぞればよい。ODS-2 の
    `2:午前のおやつ` / `4:午後のおやつ` / `6:軽い夜食` を足すことになるので、
    `MEAL_TIMING_OPTIONS` に食事以外のタイミングが混ざる点だけ注意が要る
    (開始・終了のタイミング選択にも同じ配列を使っているため)
@@ -639,7 +748,12 @@ UI にはしていない(切り替えの状態を持たずに済み、行が固�
    - 外出泊の期間を後から直す操作は無い(削除して登録し直す。連動もそれで戻って掛かり直る)
 7. **共通化**: 食事は明細も Task も持たない薄い型なので、処置の申し送り §7-4 が挙げていた
    「5 つ目の同型オーダー」には**当たらない**。ファクトリを作るときの対象からは外してよい
-8. **欠食理由(§2.9)の自動入力**: いまは外出泊の連動が `leave` を入れるだけで、`ope`(手術絶食)・
+8. **参考仕様 §2 の残りの入力項目**: 成分調製・飲料区分・飲物(本)・主食量(g)・主食形態
+   (おにぎり等)は入れていない(§2.10)。塩分制限と違い施設・食種で使う使わないが分かれる。
+   足すときは同じ形 —— 数値はローカル拡張の `valueQuantity`、コード値は `orderDetail` の
+   system 追加 + マスタの `kind` 追加。主食量は主食マスタの名称(`米飯180g`)に量を焼き込む
+   いまの運用で足りているかを先に確かめる
+9. **欠食理由(§2.9)の自動入力**: いまは外出泊の連動が `leave` を入れるだけで、`ope`(手術絶食)・
    `exam`(検査絶食)は手入力。手術・検査オーダーから食事を止める連動(術前の絶食指示)を
    作るなら、§2.8 と同じ形(`mealEncounterSync` にあたる純関数 + `MealSyncSummary`)に
    乗せられ、理由コードもそこで自動で入る。参考仕様が挙げる「スケジュール食を選んだときは

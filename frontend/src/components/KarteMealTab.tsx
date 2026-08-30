@@ -11,6 +11,7 @@ import {
   mealOrderEndReasonLabel,
   mealOrderKindLabel,
   mealOrderLink,
+  mealSideDishForm,
   mealStapleSummary,
   type MealDayEntry,
 } from "../fhir/mealOrderHelpers";
@@ -271,6 +272,9 @@ function MealEntryBlock({ entry, date }: { entry: MealDayEntry; date: string }) 
   const staple = mealStapleSummary(order, timings);
   // 欠食理由。なぜ食事が出ていない日なのかを暦の上で読めるようにする。
   const fastingReason = mealFastingReasonLabel(order);
+  // 副食形態は配膳の形そのものなので暦にも出す。塩分制限は食種名に含意されることが
+  // 多く、マスの縦が伸びるわりに読み取る場面が少ないのでカード・詳細に任せる。
+  const sideDishForm = mealSideDishForm(order);
   // 1 日を通して同じオーダーなら食事の見出しは出さない(3 食ぶんと分かるため)。
   const partial = timings.length < MEAL_TIMING_OPTIONS.length;
 
@@ -302,6 +306,8 @@ function MealEntryBlock({ entry, date }: { entry: MealDayEntry; date: string }) 
           {line.timingDisplay} {line.text}
         </span>
       ))}
+      {/* 主食の行と見分けが付くよう「副食」を冠する。 */}
+      {sideDishForm && <span className="meal-calendar__staple">副食 {sideDishForm.name}</span>}
     </div>
   );
 }

@@ -3,8 +3,12 @@
 //
 // diet / staple は SS-MIX2 の給食オーダ(OMD^O03)の ODS-1 でいう T(食種、食止めを
 // 含む) / D(主食)にあたる。嗜好品(P)・補助食(S)は今回扱わない。
+//
+// side_dish_form(副食形態: きざみ・ミキサー など)は SS-MIX2 に対応する ODS-1 区分が
+// 無く、参考仕様(名古屋第二赤十字病院「食種選択によるオーダエントリ」§2)から採った。
 
 export const MEAL_ITEM_KIND_LABELS: Record<string, string> = {
   diet: "食種",
   staple: "主食",
+  side_dish_form: "副食形態",
 };

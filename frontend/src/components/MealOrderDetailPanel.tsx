@@ -33,6 +33,20 @@ export function MealOrderDetailPanel({
           <dt>主食</dt>
           {/* 全食同じなら主食名、朝昼夕で違えば「朝 米飯180g / 昼 欠食 / 夕 全粥」。 */}
           <dd>{mealStapleText(summary) || "-"}</dd>
+          {/* 副食形態・塩分制限は治療食で使う任意項目。指定のあるオーダーだけ行を出す
+              (指定なしの「-」でどのオーダーも 2 行増えるのを避ける)。 */}
+          {summary.sideDishFormName && (
+            <>
+              <dt>副食形態</dt>
+              <dd>{summary.sideDishFormName}</dd>
+            </>
+          )}
+          {summary.saltLimitLabel && (
+            <>
+              <dt>塩分制限</dt>
+              <dd>{summary.saltLimitLabel}</dd>
+            </>
+          )}
           {/* 欠食理由は食止め・欠食のオーダーにだけ付く項目なので、あるときだけ行を出す。 */}
           {summary.fastingReasonLabel && (
             <>

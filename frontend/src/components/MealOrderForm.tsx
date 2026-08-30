@@ -11,6 +11,7 @@ import {
   mealStapleText,
   mealTimingDisplay,
   nextMealPoint,
+  parseSaltLimit,
   previousMealPoint,
   summarizeMealOrder,
   type MealFastingReason,
@@ -44,6 +45,14 @@ interface MealOrderFormProps {
   submitLabel?: string;
 }
 
+/**
+ * 食止めの食種を選んだときに落とす「食事の中身」。1 日を通して食事が出ないので、
+ * 主食・欠食も副食形態も塩分制限も指示する先が無い。
+ */
+function clearedMealContent() {
+  return { staples: emptyMealStaples(), sideDishForm: null, saltLimit: "" } as const;
+}
+
 /** 開始・終了の前後比較に使う並び順の番号。 */
 function timingIndex(timing: MealTiming): number {
   return MEAL_TIMING_OPTIONS.findIndex((t) => t.code === timing);
@@ -69,6 +78,8 @@ export function MealOrderForm({
   const problemOptions = useProblemOptions(patientId);
   const diets = useMealItemOptions("diet");
   const staples = useMealItemOptions("staple");
+  // 副食形態(きざみ・ミキサー など)。主食と違い朝昼夕の軸が無いのでセレクト 1 つ。
+  const sideDishForms = useMealItemOptions("side_dish_form");
 
   const dietItems = useMemo(() => diets.data?.items ?? [], [diets.data]);
   // 食種の種別(一般食・特別食 など)。セレクトを種別ごとにまとめて選びやすくする。
@@ -90,6 +101,7 @@ export function MealOrderForm({
   // 種別を 1 件も登録していない施設では、まとめても見出しが 1 つ増えるだけなので出さない。
   const groupDiets = (mealCategories.data?.items ?? []).length > 0;
   const stapleItems = staples.data?.items ?? [];
+  const sideDishFormItems = sideDishForms.data?.items ?? [];
 
   // 継続中のオーダーは既定で全部終了させる。読み込みが後から届くので id を見て入れ直す。
   const activeIds = activeOrders.map((sr) => sr.id ?? "").join(",");
@@ -110,7 +122,7 @@ export function MealOrderForm({
     setValues((prev) => ({
       ...prev,
       dietIsFasting: master.is_fasting,
-      staples: master.is_fasting ? emptyMealStaples() : prev.staples,
+      ...(master.is_fasting ? clearedMealContent() : null),
     }));
   }, [dietItems, values.diet, values.dietIsFasting]);
 
@@ -124,8 +136,21 @@ export function MealOrderForm({
       ...prev,
       diet: item ? { code: item.item_code, name: item.name } : null,
       dietIsFasting: item?.is_fasting ?? false,
-      // 食止めは 1 日を通して食事が出ないので、食事ごとの指定も持たない。
-      staples: item?.is_fasting ? emptyMealStaples() : prev.staples,
+      // 食止めは 1 日を通して食事が出ないので、食事の中身の指定も持たない。
+      ...(item?.is_fasting ? clearedMealContent() : null),
+    }));
+  }
+
+  function handleSideDishFormChange(code: string) {
+    const item = sideDishFormItems.find((i) => i.item_code === code);
+    setValues((prev) => ({
+      ...prev,
+      // マスタから消えた副食形態は選択肢に残してあるので、選び直せるようにする。
+      sideDishForm: item
+        ? { code: item.item_code, name: item.name }
+        : prev.sideDishForm?.code === code
+          ? prev.sideDishForm
+          : null,
     }));
   }
 
@@ -167,6 +192,10 @@ export function MealOrderForm({
     ) {
       return "すべての食事が欠食のときは、食種で「食止め」を選んでください。";
     }
+    // 数値でない・負の入力は保存で黙って落ちてしまうので、ここで止める。
+    if (values.saltLimit.trim() && parseSaltLimit(values.saltLimit) === undefined) {
+      return "塩分制限は 0 以上の数値で入れてください。";
+    }
     if (!startDate) return "開始日を入れてください。";
     if (values.endDate) {
       const beforeStart =
@@ -186,6 +215,9 @@ export function MealOrderForm({
       // 判定できないので、そのときは元の値をそのまま保つ。
       fastingReason:
         dietItems.length === 0 || mealOrderHasFasting(values) ? values.fastingReason : "",
+      // 食止めでは食事が出ないので、副食形態・塩分制限は持たせない(欄も無効にして
+      // あるが、食種を食止めに変える前に入れた値がここに残っているため)。
+      ...(values.dietIsFasting ? clearedMealContent() : null),
       problem: refreshProblemDisplay(values.problem, problemOptions),
     };
   }
@@ -222,7 +254,9 @@ export function MealOrderForm({
         </div>
       )}
       <ErrorBanner error={submitError} />
-      <ErrorBanner error={diets.error ?? staples.error ?? mealCategories.error} />
+      <ErrorBanner
+        error={diets.error ?? staples.error ?? sideDishForms.error ?? mealCategories.error}
+      />
 
       <fieldset>
         <legend>食事内容</legend>
@@ -254,6 +288,43 @@ export function MealOrderForm({
               <option value={values.diet.code}>{values.diet.name} (無効)</option>
             )}
           </select>
+        </label>
+        {/* 副食形態(きざみ・ミキサー など)。主食と違い朝昼夕で変えることが無いので
+            セレクト 1 つで全食に効く。食止めでは食事が出ないので無効にする。 */}
+        <label>
+          副食形態
+          <select
+            value={values.sideDishForm?.code ?? ""}
+            onChange={(e) => handleSideDishFormChange(e.target.value)}
+            disabled={values.dietIsFasting}
+          >
+            <option value="">(指定なし)</option>
+            {sideDishFormItems.map((item) => (
+              <option key={item.item_code} value={item.item_code}>
+                {item.name}
+              </option>
+            ))}
+            {/* マスタから消えた副食形態でも、保存済みの選択を失わせない。 */}
+            {values.sideDishForm &&
+              !sideDishFormItems.some((i) => i.item_code === values.sideDishForm?.code) && (
+                <option value={values.sideDishForm.code}>
+                  {values.sideDishForm.name} (無効)
+                </option>
+              )}
+          </select>
+        </label>
+        {/* 塩分制限(g/日)。食種名に含意されないことがあるので独立した欄で持つ。 */}
+        <label>
+          塩分制限(g/日)
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            value={values.saltLimit}
+            onChange={(e) => update("saltLimit", e.target.value)}
+            disabled={values.dietIsFasting}
+            placeholder="制限なしなら空欄"
+          />
         </label>
         {/* 欠食理由。給食部門のはい膳表に出す前提の項目で、なぜ食事を出さないかを
             食種・主食とは別に持つ(参考仕様の欠食理由)。外出泊による食止めは
@@ -436,7 +507,7 @@ export function MealOrderForm({
             value={values.comment}
             onChange={(e) => update("comment", e.target.value)}
             rows={2}
-            placeholder="アレルギー対応・きざみ など"
+            placeholder="アレルギー対応・配膳先 など"
           />
         </label>
       </fieldset>

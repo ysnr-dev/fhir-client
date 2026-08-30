@@ -3018,8 +3018,8 @@ export function useTreatmentSetMembers(setCodes: string[]) {
 
 // ---- 食事オーダーのマスタ ----
 //
-// 食種(diet)と主食(staple)は同じテーブルなのでキーも 1 つ。オーダー画面は
-// useMealItemOptions(kind) でそれぞれの選択肢を引く。
+// 食種(diet)・主食(staple)・副食形態(side_dish_form)は同じテーブルなのでキーも
+// 1 つ。オーダー画面は useMealItemOptions(kind) でそれぞれの選択肢を引く。
 
 const MEAL_ITEMS_KEY = ["master", "meal_items"];
 const MEAL_CATEGORIES_KEY = ["master", "meal_categories"];
@@ -3118,10 +3118,10 @@ export function useMealItem(idOrCode: string | number | null) {
 }
 
 /**
- * オーダー画面の食種・主食の選択肢。施設ごとに数十件で収まるマスタなので、
+ * オーダー画面の食種・主食・副食形態の選択肢。施設ごとに数十件で収まるマスタなので、
  * 検索モーダルを作らず有効期間内の全件をまとめて引いてセレクトに並べる。
  */
-export function useMealItemOptions(kind: "diet" | "staple") {
+export function useMealItemOptions(kind: "diet" | "staple" | "side_dish_form") {
   return useQuery({
     queryKey: [...MEAL_ITEMS_KEY, "options", kind],
     queryFn: () => searchMealItems({ kind, active: true, per: 200 }),

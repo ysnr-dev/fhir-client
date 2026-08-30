@@ -13,7 +13,7 @@ import { MEAL_ITEM_KIND_LABELS } from "../components/mealItemOptions";
 
 // 食事オーダー項目マスタ。処置の TreatmentItemPage から、セット構成・実施入力
 // データセット・レセ電算コード・予約枠を全て落とした最小の作り。
-// 食種(diet)と主食(staple)を kind で切り替えて 1 画面で管理する。
+// 食種(diet)・主食(staple)・副食形態(side_dish_form)を kind で切り替えて 1 画面で管理する。
 
 // 編集フォームの値。input で扱うため全て文字列で持ち、保存時に payload へ変換する。
 interface Draft {
@@ -110,6 +110,7 @@ export function MealItemPage() {
             <option value="">すべて</option>
             <option value="diet">食種</option>
             <option value="staple">主食</option>
+            <option value="side_dish_form">副食形態</option>
           </select>
         </label>
         <label>
@@ -320,7 +321,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
               value={draft.kind}
               onChange={(e) => {
                 const kind = e.target.value;
-                // 主食に変えたら食止め・種別は外す(backend でも検証される)。
+                // 食種以外に変えたら食止め・種別は外す(backend でも検証される)。
                 setDraft({
                   ...draft,
                   kind,
@@ -331,6 +332,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
             >
               <option value="diet">食種</option>
               <option value="staple">主食</option>
+              <option value="side_dish_form">副食形態</option>
             </select>
           </label>
           {/* 種別は食種だけのもの。主食に選ばせない(backend でも検証される)。 */}
