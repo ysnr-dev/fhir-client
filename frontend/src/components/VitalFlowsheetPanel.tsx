@@ -343,14 +343,16 @@ function FlowsheetChart({ columns, series }: { columns: string[]; series: ChartS
           y2={y}
         />
       ))}
+      {/* 列の区切り線。表のセルの縦罫線と同じ位置に引いて、グラフの点がどの列の
+          測定かを目で追えるようにする(点は列の中央に載る)。 */}
       {columns.map((at, index) => (
         <line
           key={at}
           className="vital-flowsheet__grid vital-flowsheet__grid--column"
-          x1={xOf(index)}
-          x2={xOf(index)}
-          y1={CHART_PAD.top}
-          y2={CHART_PAD.top + PLOT_H}
+          x1={(index + 1) * FLOWSHEET_COLUMN_WIDTH}
+          x2={(index + 1) * FLOWSHEET_COLUMN_WIDTH}
+          y1={0}
+          y2={CHART_HEIGHT}
         />
       ))}
       {series.map((s) => {

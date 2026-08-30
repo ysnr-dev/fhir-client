@@ -7338,12 +7338,19 @@ body.page-wide .app__main {
 
 /* ---- 経過表(VitalFlowsheetPanel) ---- */
 
-/* 経過表は 1 画面に多くの測定を並べたいので、検査結果の時系列表示より行を詰める。 */
+/* 経過表は 1 画面に多くの測定を並べたいので、検査結果の時系列表示より行を詰める。
+   列が多く値が縦に並ぶので、横罫線だけでなく列の区切りにも縦罫線を引く。 */
 .vital-flowsheet__table th,
 .vital-flowsheet__table td {
   padding: 2px 8px;
   font-size: 13px;
   line-height: 1.4;
+  border-right: 1px solid var(--border);
+}
+
+/* 右端の余白列は表の外なので線を引かない。 */
+.vital-flowsheet__table .vital-flowsheet__filler {
+  border-right: none;
 }
 
 /* 測定列の幅は固定し、最上段のグラフ(FLOWSHEET_COLUMN_WIDTH = 64px)と列位置を
@@ -7360,7 +7367,8 @@ body.page-wide .app__main {
   text-overflow: ellipsis;
 }
 
-.vital-flowsheet__table .vital-flowsheet__filler {
+.vital-flowsheet__table td.vital-flowsheet__filler,
+.vital-flowsheet__table th.vital-flowsheet__filler {
   /* 表の自動レイアウトで余った幅をこの列に全部渡す(項目・単位列が伸びない)。 */
   width: 100%;
   padding: 0;
@@ -7413,8 +7421,9 @@ body.page-wide .app__main {
   stroke: #d9534f;
 }
 
+/* 列の区切りは表の縦罫線の続きなので実線。 */
 .vital-flowsheet__grid--column {
-  stroke-dasharray: 2 3;
+  stroke: var(--border);
 }
 
 /* 系列の色(温度板の慣例: BP 青・P 赤・T 緑系、R は文字色)。 */
