@@ -2426,6 +2426,7 @@ export function useUpdateInjectionTaskStatus() {
         ),
       }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "injection-worklist"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
     },
@@ -3062,6 +3063,98 @@ async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
   rows.sort(comparePatientNumber);
 
   return { rows, truncated };
+}
+
+// ---- 注射一覧(部門ワークリスト) ----
+//
+// 注射日で 1 日ぶんの注射オーダーを読む。注射は 1 日 1 オーダー(連日は日ごとに
+// 展開済み)なので、処方一覧と同じく authoredOn(注射日)で引けばその日の施用ぶんが
+// そのまま並ぶ。残りの絞り込みは画面側(理由は useRxWorklist と同じ)。
+
+export interface InjectionWorklistRow {
+  order: fhir4.ServiceRequest;
+  medicationRequests: fhir4.MedicationRequest[];
+  patient?: fhir4.Patient;
+  /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
+  task?: fhir4.Task;
+}
+
+async function fetchInjectionWorklist(date: string): Promise<RxWorklistResultLike<InjectionWorklistRow>> {
+  const orders: fhir4.ServiceRequest[] = [];
+  const medicationRequests: fhir4.MedicationRequest[] = [];
+
+  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
+    (page) => {
+      const params = worklistParams(`${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`, date, page);
+      params.set("_revinclude", "MedicationRequest:based-on");
+      params.append("_revinclude", "Task:focus");
+      return params;
+    },
+    (resource) => {
+      if (resource.resourceType === "MedicationRequest") {
+        medicationRequests.push(resource as fhir4.MedicationRequest);
+      } else if (resource.resourceType === "ServiceRequest") {
+        const request = resource as fhir4.ServiceRequest;
+        if (isInjectionServiceRequest(request)) {
+          orders.push(request);
+          return true;
+        }
+      }
+      return false;
+    },
+  );
+
+  const taskByOrderId = injectionTasksByOrderId(tasks);
+  const mrsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
+  for (const mr of medicationRequests) {
+    for (const reference of mr.basedOn ?? []) {
+      const orderId = reference.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
+      if (!orderId) continue;
+      const list = mrsByOrderId.get(orderId);
+      if (list) list.push(mr);
+      else mrsByOrderId.set(orderId, [mr]);
+    }
+  }
+
+  const rows = orders.map((order) => ({
+    order,
+    medicationRequests: mrsByOrderId.get(order.id ?? "") ?? [],
+    patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+    task: taskByOrderId.get(order.id ?? ""),
+  }));
+  rows.sort(comparePatientNumber);
+  return { rows, truncated };
+}
+
+interface RxWorklistResultLike<Row> {
+  rows: Row[];
+  truncated: boolean;
+}
+
+/** 注射日 1 日ぶんの注射オーダー。日付が未選択の間は読みに行かない。 */
+export function useInjectionWorklist(date: string) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "injection-worklist", date],
+    queryFn: () => fetchInjectionWorklist(date),
+    enabled: Boolean(date),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 注射の払出登録。払出結果(MedicationDispense)と払出済の Task を 1 つの transaction で
+ * 書き込む。Bundle の組み立ては injectionDispenseHelpers を参照。
+ */
+export function useRegisterInjectionDispense() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "injection-worklist"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
+  });
 }
 
 /** 処方日 1 日ぶんの処方オーダー。日付が未選択の間は読みに行かない。 */

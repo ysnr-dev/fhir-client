@@ -24,8 +24,9 @@ export const INJECTION_TASK_CODE = { code: "injection", display: "注射" };
  *
  * 払出済を completed ではなく in-progress にするのは、実施済(施用)を後から足すため。
  * FHIR Task の状態機械(requested→accepted→in-progress→completed)にもこの順で乗る。
- * 受付済・払出済・実施済へ進める導線(注射ワークリスト・払出・実施入力)はまだ無く、
- * 状態だけ先に定義してある。カルテから押せるのは中止とその取り消しだけ。
+ * 受付済へは注射一覧(InjectionWorklistPage)の「受付」、払出済へは「払出登録」
+ * (InjectionDispenseModal)、実施済へはカルテの「実施入力」(InjectionPerformModal)で進む。
+ * カルテから押せるのは実施入力と、中止とその取り消し。
  */
 export type InjectionTaskStatus =
   | "requested"
@@ -66,6 +67,44 @@ export const injectionTasksByOrderId = helpers.tasksByOrderId;
  * executionPeriod は受付で start、払出で end。
  */
 export const buildInjectionTaskUpdate = helpers.buildTaskUpdate;
+
+/** 一覧の行から押せる操作。処方の RxTaskAction と同じ形。 */
+export interface InjectionTaskAction {
+  label: string;
+  next: InjectionTaskStatus;
+  /** 日常の流れではない操作(押し間違いの訂正・注射の取りやめ)。ケバブメニューに畳む。 */
+  secondary?: true;
+}
+
+/**
+ * 今のステータスから移れる先(注射一覧用)。
+ *
+ * 受付済への通常の遷移は一覧の「受付」ボタン、払出済へは「払出登録」が行うので、
+ * ここに出るのは訂正(取消)と中止だけ。実施済の取消はカルテの「実施取消」
+ * (実施記録ごと消す)で行うので、一覧からは戻さない。
+ */
+export function injectionTaskActions(status: InjectionTaskStatus): InjectionTaskAction[] {
+  switch (status) {
+    case "requested":
+      return [{ label: "中止", next: "cancelled", secondary: true }];
+    case "accepted":
+      return [
+        { label: "受付取消", next: "requested", secondary: true },
+        { label: "中止", next: "cancelled", secondary: true },
+      ];
+    case "in-progress":
+      // 戻しても登録済みの払出(MedicationDispense)は残る。進捗だけを戻す
+      // (払出結果の訂正・削除は別タスク。処方の調剤と同じ扱い)。
+      return [
+        { label: "払出取消", next: "accepted", secondary: true },
+        { label: "中止", next: "cancelled", secondary: true },
+      ];
+    case "completed":
+      return [];
+    case "cancelled":
+      return [{ label: "中止を取消", next: "requested", secondary: true }];
+  }
+}
 
 /**
  * カルテのカードから中止できるか。

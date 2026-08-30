@@ -486,6 +486,11 @@ JP Core の `JP_MedicationRequest_Injection` プロファイルを参考にし�
   1 日に複数回の施用(開始時刻が複数)があるので、実施記録はオーダーに複数付き、予定回数に達した
   ときに Task を実施済にします。「実施取消」は記録をすべて消して Task を依頼済に戻します。
   詳細は `docs/injection-order-design.md` §6。
+- **注射一覧(部門ワークリスト)と払出**: 部門業務メニューの「注射一覧」(`/injection-worklist`)で
+  注射日 1 日ぶんを並べ、「受付」→「払出登録」で進めます。払出は薬剤ごとに `MedicationDispense`
+  (`authorizingPrescription` = その `MedicationRequest`、数量の既定は投与量 × その日の施用回数、
+  銘柄変更は `substitution.wasSubstituted`)を作り、払出済の Task と同じ transaction で書きます。
+  疑義照会は `Task.note`。詳細は `docs/injection-order-design.md` §5.3。
 - テンプレートへの一括入力(`%prescriptions`)は最新の「処方」を対象とし、注射オーダーは
   対象外です(検索結果から category で除外)。
 

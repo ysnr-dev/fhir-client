@@ -190,6 +190,35 @@ ServiceRequest(1 日分) ← focus ── Task(進捗)
 - カード: メタ行の先頭に進捗(`karte-card__status`)。中止だけ色を変える既存のスタイルに乗る。
 - 詳細モーダル: 「進捗」の行。
 
+## 5.3 注射一覧(部門ワークリスト)と払出
+
+`/injection-worklist`(`pages/InjectionWorklistPage.tsx`)。作りは処方一覧(`RxWorklistPage`)と
+同じで、注射日(`authoredon`)で 1 日ぶんを読み、入外区分・注射区分・病棟・診療科・進捗は
+画面側で絞る。注射は 1 日 1 オーダーに展開済みなので、その日の施用ぶんがそのまま並ぶ。
+連日オーダーは「連日 N日目」を添える(明日も同じものが出る、という段取りの手がかり)。
+
+| 進捗 | 一覧の操作 |
+|---|---|
+| 依頼済 | 「受付」→ 受付済(注射箋の帳票はまだ無いので受付だけ進める) |
+| 受付済 | 「払出登録」→ 払出済(`InjectionDispenseModal`) |
+| 払出済 | (カルテの実施入力で実施済へ) |
+| ケバブ | 受付取消 / 払出取消 / 中止 / 中止を取消 |
+
+### 払出(MedicationDispense)
+
+`fhir/injectionDispenseHelpers.ts`。処方の調剤(`rxDispenseHelpers`)と同じ考え方:
+薬剤(`MedicationRequest`)1 件につき `MedicationDispense` 1 件、`authorizingPrescription` で
+紐付け、銘柄を変えたら `substitution.wasSubstituted`、疑義照会は `Task.note`、
+払出済の Task と 1 transaction。
+
+処方と違うのは**数量の意味**。注射は 1 日 1 オーダーで RP の開始時刻の数だけ施用があるので、
+払出数量の既定は「投与量 × その日の施用回数」(開始時刻が無ければ 1 回)。用法(経路・手技・
+速度)は医師の指示なので払出では変えない(出すだけ)。混注の準備(ミキシング)そのものは
+記録しない — 払い出した薬剤と数量が記録の対象で、誰がいつ混ぜたかは実施記録側の関心事。
+
+払出取消は進捗を受付済に戻すだけで `MedicationDispense` は残す(処方の調剤取消と同じ。
+払出結果の訂正・削除は別タスク)。
+
 ## 6. 実施記録(施用)
 
 輸血(docs/transfusion-order-design.md)と同じ形。実施 1 回を `Procedure` のハブにし、
@@ -272,14 +301,17 @@ RP の開始時刻が「10:00、20:30」のように複数あるので、ハブ�
 | 実施記録の FHIR 変換・表示 | `frontend/src/fhir/injectionPerformHelpers.ts` |
 | 実施入力 | `frontend/src/components/InjectionPerformModal.tsx` |
 | 実施登録・実施取消 | `frontend/src/api/queries.ts`(`useRegisterInjectionPerform` / `useCancelInjectionPerforms`) |
+| 注射一覧 | `frontend/src/pages/InjectionWorklistPage.tsx`、`api/queries.ts`(`useInjectionWorklist`) |
+| 払出 | `frontend/src/fhir/injectionDispenseHelpers.ts`、`components/InjectionDispenseModal.tsx` |
+| 一覧の内容表示 | `frontend/src/components/InjectionOrderViewModal.tsx` |
 
 ## 8. 未実装・今後
 
 - 「◯回で終了」の回数指定(いまは期間指定のみ)。展開の日付列を作る `injectionDates` に
   停止条件を足せば済む。
 - 既存の束ねへの日数の追加(いまは DO で新しい束ねを作る)。
-- 注射ワークリスト(部門画面)・払出(MedicationDispense)・帳票。いずれも 1 日 1 SR を
-  前提に処方の仕組みを流用する。進捗の受付済・払出済は §5 で定義済みで、進める導線だけが無い。
+- 帳票(注射箋・注射指示票・注射ラベル)。一覧の「受付」を発行が兼ねる形にする(処方箋発行と同じ)。
+- 払出結果(MedicationDispense)の表示・訂正・削除(いまは登録のみ。取消は進捗を戻すだけ)。
 - 実施記録の詳細モーダルへの表示(いまはカードのみ。詳細は SR + MR + Task しか引いていない)。
 - 実施記録 1 件だけの取消・訂正(いまは全件取消して入れ直す)。
 - 連日オーダーを「束ね単位」で 1 枚のカードにまとめる表示(いまは日ごとにカード)。

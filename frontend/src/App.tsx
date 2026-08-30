@@ -100,6 +100,7 @@ import { LabArrivalPage } from "./pages/LabArrivalPage";
 import { LabWorklistPage } from "./pages/LabWorklistPage";
 import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { RxWorklistPage } from "./pages/RxWorklistPage";
+import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 
 // 患者配下の未定義パスをその患者のカルテへ寄せる。
@@ -186,6 +187,9 @@ function App() {
             </Link>
             <Link to="/rx-worklist" className="row-menu__item">
               処方一覧
+            </Link>
+            <Link to="/injection-worklist" className="row-menu__item">
+              注射一覧
             </Link>
           </HoverMenu>
           {/* 予約枠は診療科がオーダーを出す前段(いつ診るかを決める)なので、
@@ -488,6 +492,7 @@ function App() {
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
+          <Route path="/injection-worklist" element={<InjectionWorklistPage />} />
           <Route path="/physio-worklist" element={<PhysioWorklistPage />} />
           <Route path="/endoscopy-worklist" element={<EndoscopyWorklistPage />} />
           <Route path="/treatment-worklist" element={<TreatmentWorklistPage />} />
