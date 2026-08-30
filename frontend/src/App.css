@@ -9941,6 +9941,21 @@ td.surgery-calendar__cell--drop-target {
   margin: 0;
 }
 
+/* 1 件ぶんの束(終了のチェックと、その下の「元の食事に戻す」のチェック)。
+   fieldset の flex 項目になるのはこの束なので、1 行占有はここで指定する。 */
+.meal-active-order-group {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 戻すチェックは終了チェックへの追従なので、字下げして従属を見せる。 */
+.prescription-form label.meal-active-order--resume {
+  padding-left: 24px;
+  color: var(--text-muted, var(--text));
+}
+
 /* 給食部門への指示。fieldset が flex なので、label 単体だと内容幅で止まってしまう。
    1 行占有させて、中の textarea を枠いっぱいに広げる。 */
 .meal-comment {

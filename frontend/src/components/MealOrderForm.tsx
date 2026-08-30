@@ -5,8 +5,10 @@ import {
   MEAL_SKIPPED,
   MEAL_TIMING_OPTIONS,
   emptyMealStaples,
+  mealOrderResumable,
   mealStapleText,
   mealTimingDisplay,
+  nextMealPoint,
   previousMealPoint,
   summarizeMealOrder,
   type MealOrderFormValues,
@@ -29,8 +31,11 @@ interface MealOrderFormProps {
   initialValues: MealOrderFormValues;
   /** 継続中の食事オーダー。食事変更で終了させる候補として出す。 */
   activeOrders?: fhir4.ServiceRequest[];
-  /** 送信。closingIds は同時に終了させる継続中オーダーの id。 */
-  onSubmit: (values: MealOrderFormValues, closingIds: string[]) => void;
+  /**
+   * 送信。closingIds は同時に終了させる継続中オーダーの id、resumeIds はこの
+   * オーダーの終了後に元の食事へ戻す(再開オーダーを作る)オーダーの id。
+   */
+  onSubmit: (values: MealOrderFormValues, closingIds: string[], resumeIds: string[]) => void;
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
@@ -54,6 +59,9 @@ export function MealOrderForm({
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
   // 食事変更で終了させるオーダー。既定は全て終了(食事は同時に 1 本が原則)。
   const [closingIds, setClosingIds] = useState<string[]>([]);
+  // このオーダーの終了後に元の食事へ戻すオーダー。既定は戻す(外泊中の食止めのように
+  // 期限付きの食事を挟んだあとは、元の食事に戻るのがふつう)。
+  const [resumeIds, setResumeIds] = useState<string[]>([]);
 
   const problemOptions = useProblemOptions(patientId);
   const diets = useMealItemOptions("diet");
@@ -83,7 +91,9 @@ export function MealOrderForm({
   // 継続中のオーダーは既定で全部終了させる。読み込みが後から届くので id を見て入れ直す。
   const activeIds = activeOrders.map((sr) => sr.id ?? "").join(",");
   useEffect(() => {
-    setClosingIds(activeOrders.map((sr) => sr.id ?? "").filter(Boolean));
+    const ids = activeOrders.map((sr) => sr.id ?? "").filter(Boolean);
+    setClosingIds(ids);
+    setResumeIds(ids);
     // activeOrders は毎回新しい配列で届くので、id の並びが変わったときだけ入れ直す。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIds]);
@@ -175,12 +185,19 @@ export function MealOrderForm({
     setValidationError(error);
     if (error) return;
 
-    onSubmit(submitValues(), closingIds);
+    // 終了させないオーダーは戻す対象にもならない(チェックも出ていない)。
+    onSubmit(submitValues(), closingIds, resumeIds.filter((id) => closingIds.includes(id)));
   }
 
   // 前の食事をいつまでにするか。チェックの説明にそのまま出す。
   const closePoint = previousMealPoint(values.startDate, values.startTiming);
   const closeLabel = `${closePoint.date} ${mealTimingDisplay(closePoint.timing)}まで`;
+  // このオーダーが終わったあと、元の食事に戻す点(終了の次の食事)。終了を決めて
+  // いなければ戻す先が無いので、チェックごと出さない。
+  const resumePoint = values.endDate ? nextMealPoint(values.endDate, values.endTiming) : null;
+  const resumeLabel = resumePoint
+    ? `${resumePoint.date} ${mealTimingDisplay(resumePoint.timing)}から`
+    : "";
 
   return (
     <form className="prescription-form" onSubmit={handleSubmit}>
@@ -334,21 +351,42 @@ export function MealOrderForm({
           {activeOrders.map((sr) => {
             const summary = summarizeMealOrder(sr);
             const id = sr.id ?? "";
+            const closing = closingIds.includes(id);
+            // 終了を決めたオーダー(外泊中の食止め など)は、終わったあとに元の食事へ
+            // 戻さないと食事が無い日が続いてしまう。戻す余地があるときだけ出す。
+            const canResume =
+              closing && mealOrderResumable(sr, values.endDate, values.endTiming);
             return (
-              <label key={id} className="meal-active-order">
-                <input
-                  type="checkbox"
-                  checked={closingIds.includes(id)}
-                  onChange={(e) =>
-                    setClosingIds((prev) =>
-                      e.target.checked ? [...prev, id] : prev.filter((x) => x !== id),
-                    )
-                  }
-                />
-                {summary.dietName}
-                {mealStapleText(summary) && `(${mealStapleText(summary)})`} {summary.startLabel}〜
-                を {closeLabel} で終了する
-              </label>
+              <div key={id} className="meal-active-order-group">
+                <label className="meal-active-order">
+                  <input
+                    type="checkbox"
+                    checked={closing}
+                    onChange={(e) =>
+                      setClosingIds((prev) =>
+                        e.target.checked ? [...prev, id] : prev.filter((x) => x !== id),
+                      )
+                    }
+                  />
+                  {summary.dietName}
+                  {mealStapleText(summary) && `(${mealStapleText(summary)})`} {summary.startLabel}〜
+                  を {closeLabel} で終了する
+                </label>
+                {canResume && (
+                  <label className="meal-active-order meal-active-order--resume">
+                    <input
+                      type="checkbox"
+                      checked={resumeIds.includes(id)}
+                      onChange={(e) =>
+                        setResumeIds((prev) =>
+                          e.target.checked ? [...prev, id] : prev.filter((x) => x !== id),
+                        )
+                      }
+                    />
+                    このオーダーの終了後、{resumeLabel} この食事に戻す
+                  </label>
+                )}
+              </div>
             );
           })}
         </fieldset>

@@ -1,4 +1,4 @@
-import { today } from "../lib/dates";
+import { addDays, today } from "../lib/dates";
 // FHIR dateTime へのタイムゾーン付与は診療記録と同じ変換でよいので共用する。
 import { toFhirDateTime } from "./clinicalNoteHelpers";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
@@ -127,13 +127,23 @@ export function previousMealPoint(
   if (index > 0) {
     return { date, timing: MEAL_TIMING_OPTIONS[index - 1].code };
   }
-  // 朝の直前は前日の夕。ローカル日付の引き算なのでタイムゾーンは考えなくてよい。
-  const previous = new Date(`${date}T00:00:00`);
-  previous.setDate(previous.getDate() - 1);
-  const yyyy = previous.getFullYear();
-  const mm = String(previous.getMonth() + 1).padStart(2, "0");
-  const dd = String(previous.getDate()).padStart(2, "0");
-  return { date: `${yyyy}-${mm}-${dd}`, timing: "dinner" };
+  // 朝の直前は前日の夕。
+  return { date: addDays(date, -1), timing: "dinner" };
+}
+
+/**
+ * 終了した食事の次の食事。期限付きのオーダー(外泊中の食止め など)が終わった
+ * あとに元の食事へ戻す、再開オーダーの開始に使う(夕まで → 翌日の朝から)。
+ */
+export function nextMealPoint(
+  date: string,
+  timing: MealTiming,
+): { date: string; timing: MealTiming } {
+  const index = timingIndex(timing);
+  if (index >= 0 && index < MEAL_TIMING_OPTIONS.length - 1) {
+    return { date, timing: MEAL_TIMING_OPTIONS[index + 1].code };
+  }
+  return { date: addDays(date, 1), timing: "breakfast" };
 }
 
 /** マスタから写した食種・主食 1 件。 */
@@ -343,8 +353,50 @@ export function buildMealOrderStopEntries(
 }
 
 /**
+ * 終了を決めた新しいオーダーの後に「戻す先」になり得るオーダーか。
+ *
+ * 外泊中の食止めのように期限付きの食事を挟むと、終了させた元のオーダーは復活しない
+ * ので、そのままでは終了の翌食から食事が無くなる。新しいオーダーの終了より後まで
+ * 続くはずだったオーダー(= 終了を立てて縮めたぶんが残っているもの)だけが対象。
+ * 判定は退院で止める対象と同じ条件なので mealOrderNeedsStop を使い回す。
+ */
+export function mealOrderResumable(
+  sr: fhir4.ServiceRequest,
+  endDate: string,
+  endTiming: MealTiming,
+): boolean {
+  return Boolean(endDate) && mealOrderNeedsStop(sr, endDate, endTiming);
+}
+
+/**
+ * 元の食事に戻す再開オーダーの POST エントリ。中身(食種・主食・欠食・コメント・
+ * プロブレム・終了)は元のオーダーから写し、開始だけを差し替える。
+ *
+ * 元のオーダーを延長するのではなく別オーダーを作るのは、食事オーダーが
+ * 「開始した食事から終了の食事まで」の 1 区間しか表せないため(1 本で
+ * 8/1〜8/9 と 8/12〜 の 2 区間は持てない)。
+ *
+ * 依頼医師・科・病棟は写さず、いま登録している人のものを入れる(DO と同じ扱い)。
+ */
+export function buildMealOrderResumeEntry(
+  sr: fhir4.ServiceRequest,
+  startDate: string,
+  startTiming: MealTiming,
+  patientId: string,
+  requester: OrderAttribution,
+): fhir4.BundleEntry {
+  const values: MealOrderFormValues = { ...parseMealOrderForm(sr), startDate, startTiming };
+  return {
+    resource: buildMealOrderServiceRequest(values, patientId, requester),
+    request: { method: "POST", url: "ServiceRequest" },
+  };
+}
+
+/**
  * 新規登録。食事変更のときは、前のオーダーを終了する PUT を同じ transaction に
  * 入れる(新しい食事だけが登録されて前の食事が残り続ける状態を作らない)。
+ * 終了を決めたオーダー(外泊中の食止め など)では、終了の次の食事から元の食事に
+ * 戻す再開オーダーの POST も同じ transaction に入れられる。
  */
 export function buildMealOrderBundle(
   values: MealOrderFormValues,
@@ -352,14 +404,25 @@ export function buildMealOrderBundle(
   requester: OrderAttribution,
   /** 同時に終了する継続中のオーダー。画面のチェックで選ばれたもの。 */
   closing: fhir4.ServiceRequest[] = [],
+  /** 終了後に元の食事へ戻すオーダー。画面のチェックで選ばれたもの。 */
+  resuming: fhir4.ServiceRequest[] = [],
 ): fhir4.Bundle {
   const end = previousMealPoint(values.startDate, values.startTiming);
+  const resume = nextMealPoint(values.endDate, values.endTiming);
   return transactionBundle([
     {
       resource: buildMealOrderServiceRequest(values, patientId, requester),
       request: { method: "POST", url: "ServiceRequest" },
     },
     ...closing.map((sr) => buildMealOrderCloseEntry(sr, end.date, end.timing)),
+    // 終了を決めていないオーダーには戻す先が無い(次の指示まで続くので不要)。
+    ...(values.endDate
+      ? resuming
+          .filter((sr) => mealOrderResumable(sr, values.endDate, values.endTiming))
+          .map((sr) =>
+            buildMealOrderResumeEntry(sr, resume.date, resume.timing, patientId, requester),
+          )
+      : []),
   ]);
 }
 

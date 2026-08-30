@@ -60,14 +60,17 @@ export function MealOrderCreatePanel({
 
   const waiting = (sourceSrId && !source.ready) || !admission.ready || active.isPending;
 
-  function handleSubmit(values: MealOrderFormValues, closingIds: string[]) {
+  function handleSubmit(values: MealOrderFormValues, closingIds: string[], resumeIds: string[]) {
     const closing = (active.data ?? []).filter((sr) => closingIds.includes(sr.id ?? ""));
+    // 終了を決めたオーダーの後に元の食事へ戻すもの(外泊中の食止め など)。
+    const resuming = (active.data ?? []).filter((sr) => resumeIds.includes(sr.id ?? ""));
     // 入院病棟を焼き付ける(給食部門の一覧が入院を引き直さずに病棟で束ねられる)。
     const attribution = withOrderWard(requester, "inpatient", admission);
 
-    createMealOrder.mutate(buildMealOrderBundle(values, patientId, attribution, closing), {
-      onSuccess: onSaved,
-    });
+    createMealOrder.mutate(
+      buildMealOrderBundle(values, patientId, attribution, closing, resuming),
+      { onSuccess: onSaved },
+    );
   }
 
   return (
