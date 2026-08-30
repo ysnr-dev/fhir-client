@@ -421,3 +421,179 @@ if File.exist?(surgery_items_csv)
 else
   puts "master_surgery_items: #{surgery_items_csv} not found, skipped"
 end
+
+# 生理検査オーダー項目マスタ。db/seed_data/physio_items.csv（ヘッダー有り）から投入する。
+# 生理検査は JJ1017 のような配布マスタが無いので、一般病院で使う代表的な検査を
+# 医科点数表 D 章(生体検査)から拾った初期値。item_code はレセ電算コード(9桁)と
+# 同じにしてある(術式マスタと同じ理由: 施設独自採番とぶつからず、再投入で追加分だけ
+# 入る)。1つのレセ電算コードを複数の検査に分ける場合(断層撮影法(その他)を
+# 頸動脈・甲状腺・乳腺… に分ける等)は「コード-枝番」にしてある。セットは
+# SET-nn で、レセ電算コードを持たない。
+# 予約必須・所要時間・予約枠は施設の運用で決まるので初期値には入れない(全て
+# まとめてオーダー可・予約不要)。投入後は画面で直す前提。既存行は上書きしない。
+physio_items_csv = Rails.root.join("db/seed_data/physio_items.csv")
+if File.exist?(physio_items_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(physio_items_csv, headers: true) do |row|
+    code = row["item_code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::PhysioItem.exists?(item_code: code)
+      skipped += 1
+      next
+    end
+
+    Master::PhysioItem.create!(
+      item_code: code,
+      name: name,
+      short_name: row["short_name"].to_s.strip.presence,
+      name_kana: row["name_kana"].to_s.strip.presence,
+      kind: row["kind"].to_s.strip.presence || "single",
+      exam_type_code: row["exam_type_code"].to_s.strip.presence,
+      receipt_code: row["receipt_code"].to_s.strip.presence,
+      dataset_code: row["dataset_code"].to_s.strip.presence,
+      requires_perform_input: row["requires_perform_input"].to_s.strip != "0",
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    )
+    loaded += 1
+  end
+  puts "master_physio_items: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_physio_items: #{physio_items_csv} not found, skipped"
+end
+
+# セットの構成。db/seed_data/physio_set_items.csv（ヘッダー有り,
+# set_item_code,member_item_code,display_order）。セット・構成項目とも
+# physio_items.csv の item_code を指す。同じ組み合わせがあれば上書きしない
+# (施設で構成を減らしたセットに戻さないよう、セット単位ではなく行単位で見る)。
+physio_set_items_csv = Rails.root.join("db/seed_data/physio_set_items.csv")
+if File.exist?(physio_set_items_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(physio_set_items_csv, headers: true) do |row|
+    set_code = row["set_item_code"].to_s.strip
+    member_code = row["member_item_code"].to_s.strip
+    next if set_code.blank? || member_code.blank?
+
+    if Master::PhysioSetItem.exists?(set_item_code: set_code, member_item_code: member_code)
+      skipped += 1
+      next
+    end
+
+    Master::PhysioSetItem.create!(
+      set_item_code: set_code,
+      member_item_code: member_code,
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    )
+    loaded += 1
+  end
+  puts "master_physio_set_items: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_physio_set_items: #{physio_set_items_csv} not found, skipped"
+end
+
+# 実施入力データセットと明細。db/seed_data/physio_datasets.csv（ヘッダー有り）と
+# physio_dataset_details.csv（ヘッダー有り, dataset_code,detail_type,code,
+# default_selected,display_order）。実施入力の手技明細はデータセットからしか
+# 展開されない(項目の receipt_code は実施時に使わない)ので、検査ごとに自身の
+# 手技料を初期値ON、点数表上の加算を初期値OFF、判断料を初期値ONで添える。
+# dataset_code は項目の receipt_code と同じにしてあり、枝番で分けた項目は同じ
+# データセットを共有する。薬剤・器材は施設で違うので入れない。
+# 明細は診療行為マスタ(master_medical_procedures)のコードを指すだけで存在は
+# 確かめない(未取込でも投入され、取込後に名称が出る)。
+# 既存のデータセットは明細ごと触らない(施設で直した明細を戻さない)。
+physio_datasets_csv = Rails.root.join("db/seed_data/physio_datasets.csv")
+physio_dataset_details_csv = Rails.root.join("db/seed_data/physio_dataset_details.csv")
+if File.exist?(physio_datasets_csv) && File.exist?(physio_dataset_details_csv)
+  details_by_dataset = Hash.new { |h, k| h[k] = [] }
+  CSV.foreach(physio_dataset_details_csv, headers: true) do |row|
+    dataset_code = row["dataset_code"].to_s.strip
+    code = row["code"].to_s.strip
+    next if dataset_code.blank? || code.blank?
+
+    details_by_dataset[dataset_code] << {
+      detail_type: row["detail_type"].to_s.strip,
+      code: code,
+      default_selected: row["default_selected"].to_s.strip != "0",
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    }
+  end
+
+  loaded = 0
+  skipped = 0
+  detail_count = 0
+  CSV.foreach(physio_datasets_csv, headers: true) do |row|
+    code = row["dataset_code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::PhysioDataset.exists?(dataset_code: code)
+      skipped += 1
+      next
+    end
+
+    Master::PhysioDataset.transaction do
+      Master::PhysioDataset.create!(
+        dataset_code: code,
+        name: name,
+        name_kana: row["name_kana"].to_s.strip.presence,
+        display_order: row["display_order"].to_s.strip.presence&.to_i
+      )
+      details_by_dataset[code].each do |detail|
+        Master::PhysioDatasetDetail.create!(detail.merge(dataset_code: code))
+        detail_count += 1
+      end
+    end
+    loaded += 1
+  end
+  puts "master_physio_datasets: seeded #{loaded} rows with #{detail_count} details (kept #{skipped})"
+else
+  puts "master_physio_datasets: #{physio_datasets_csv} or #{physio_dataset_details_csv} not found, skipped"
+end
+
+# 伝票レイアウト。db/seed_data/physio_item_layout_cells.csv（ヘッダー有り,
+# layout_name,grid_row,grid_column,cell_type,item_code,display_name）から、
+# layout_name ごとにレイアウトを作り、行数・列数はマスの最大位置から決める。
+# 検査種別ごとに 1 行(左端がラベル)の並びを初期値にしてある。
+# 同名のレイアウトがあればマスごと触らない(施設で並べ替えた伝票を戻さない)。
+physio_layout_cells_csv = Rails.root.join("db/seed_data/physio_item_layout_cells.csv")
+if File.exist?(physio_layout_cells_csv)
+  cells_by_layout = Hash.new { |h, k| h[k] = [] }
+  CSV.foreach(physio_layout_cells_csv, headers: true) do |row|
+    layout_name = row["layout_name"].to_s.strip
+    next if layout_name.blank?
+
+    cells_by_layout[layout_name] << {
+      grid_row: row["grid_row"].to_i,
+      grid_column: row["grid_column"].to_i,
+      cell_type: row["cell_type"].to_s.strip.presence || "item",
+      item_code: row["item_code"].to_s.strip.presence,
+      display_name: row["display_name"].to_s.strip.presence
+    }
+  end
+
+  loaded = 0
+  skipped = 0
+  cells_by_layout.each_with_index do |(layout_name, cells), index|
+    if Master::PhysioItemLayout.exists?(name: layout_name)
+      skipped += 1
+      next
+    end
+
+    Master::PhysioItemLayout.transaction do
+      layout = Master::PhysioItemLayout.create!(
+        name: layout_name,
+        row_count: cells.map { |c| c[:grid_row] }.max,
+        column_count: cells.map { |c| c[:grid_column] }.max,
+        display_order: (index + 1) * 10
+      )
+      cells.each { |cell| Master::PhysioItemLayoutCell.create!(cell.merge(layout_id: layout.id)) }
+    end
+    loaded += 1
+  end
+  puts "master_physio_item_layouts: seeded #{loaded} layouts (kept #{skipped})"
+else
+  puts "master_physio_item_layouts: #{physio_layout_cells_csv} not found, skipped"
+end
