@@ -10011,6 +10011,11 @@ button.meal-calendar__cell {
   color: inherit;
   text-align: left;
   cursor: pointer;
+  /* グローバルの button は nowrap。マスは幅が狭いので食種名を折り返させる。 */
+  white-space: normal;
+  min-width: 0;
+  /* グローバルの button は align-items: center。日付行やカードをマス幅いっぱいに置く。 */
+  align-items: stretch;
 }
 
 button.meal-calendar__cell:hover {
@@ -10058,6 +10063,8 @@ button.meal-calendar__cell:hover {
   align-items: stretch;
   gap: 1px;
   width: 100%;
+  /* padding 込みでマスの内側に収める(content-box だと余白にはみ出して当日の枠線を隠す)。 */
+  box-sizing: border-box;
   padding: 3px 4px;
   border: none;
   border-radius: 4px;
@@ -10067,6 +10074,10 @@ button.meal-calendar__cell:hover {
   font: inherit;
   font-size: 11px;
   line-height: 1.35;
+  /* 「2000kcal」「180g」のような英数字の塊も、マス幅に収まらなければ途中で折る。 */
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* 食事が変わった日(そのオーダーが始まった日)。暦を眺めたときに変更点が
