@@ -94,7 +94,7 @@ export function QuestionnaireResponseCreatePanel({
     setMeta((prev) => (prev.authorName ? prev : { ...prev, authorName: loginPractitionerName }));
   }, [loginPractitionerName]);
 
-  // 保険医療機関番号は自院(管理 > 自院設定)の登録値で埋める。記入者名と同じく
+  // 保険医療機関番号は自院(管理 > 施設設定)の登録値で埋める。記入者名と同じく
   // 取得が非同期なので、仮の初期値のままのときだけ後から流し込む。
   const selfInstitutionNumber = useSelfInstitutionNumber();
   useEffect(() => {

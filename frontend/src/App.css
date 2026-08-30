@@ -629,7 +629,8 @@ button:disabled {
   color: var(--text);
 }
 
-.connection-settings-form input {
+.connection-settings-form input,
+.connection-settings-form select {
   font: inherit;
   font-size: 15px;
   padding: 6px 8px;
@@ -10687,14 +10688,26 @@ button.meal-calendar__cell:hover {
   font-size: 12px;
 }
 
-/* 自院設定: 看護指示の既定時刻。 */
+/* 施設設定: 看護指示の既定時刻(折り畳み)。details 自体は display を変えない
+   (flex にすると閉じていても中身が出るブラウザがある)。 */
 .facility-settings__schedule {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 12px;
+}
+
+.facility-settings__schedule > summary {
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  width: fit-content;
+}
+
+.facility-settings__schedule-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .facility-settings__times {

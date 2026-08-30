@@ -8,7 +8,7 @@ export const JASPEHR_QUESTIONNAIRE_RESPONSE_PROFILE_URL =
   "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaireresponse";
 
 // 保険医療機関番号(10桁: 都道府県2桁 + 点数表1桁 + 医療機関コード7桁)。
-// 初期値は自院(管理 > 自院設定)の Organization が持つ番号。自院が未設定か、
+// 初期値は自院(管理 > 施設設定)の Organization が持つ番号。自院が未設定か、
 // 自院に番号を登録していない環境では仮の番号を初期値にする。
 export const INSTITUTION_NUMBER_PATTERN = /^[0-4][0-9][1-3][0-9]{7}$/;
 export const DEFAULT_INSTITUTION_NUMBER = "1310000001";

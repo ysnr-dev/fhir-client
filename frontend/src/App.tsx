@@ -390,7 +390,7 @@ function App() {
             {/* どの Organization が自院かの指定。診療科・診察室・スタッフの所属や
                 帳票の自院欄がこの設定を見る。 */}
             <Link to="/facility-settings" className="row-menu__item">
-              自院設定
+              施設設定
             </Link>
             <ThemeToggleItem />
           </HoverMenu>

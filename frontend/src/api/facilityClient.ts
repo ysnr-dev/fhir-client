@@ -11,6 +11,6 @@ export type { FacilitySettings };
 export async function fetchFacilitySettings(): Promise<FacilitySettings> {
   const res = await fetch("/facility_settings");
   if (res.status === 401) notifyUnauthorized();
-  if (!res.ok) throw new Error(`自院設定を取得できませんでした (HTTP ${res.status})`);
+  if (!res.ok) throw new Error(`施設設定を取得できませんでした (HTTP ${res.status})`);
   return (await res.json()) as FacilitySettings;
 }

@@ -15,7 +15,7 @@ import { parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
 // 待ってからフォームを描画すること。administrator ログインや認証不要モードでは
 // 紐付く Practitioner が無く、source は undefined・ready は true になる。
 //
-// 医療機関は自院設定(管理 > 自院設定)を使う。自院未設定の環境では従来どおり
+// 医療機関は施設設定(管理 > 施設設定)を使う。自院未設定の環境では従来どおり
 // ログイン中の医療従事者の所属ロールから辿る。
 export function useLoginAutofillSource(): { source?: LoginAutofillSource; ready: boolean } {
   const session = useAuthSession();

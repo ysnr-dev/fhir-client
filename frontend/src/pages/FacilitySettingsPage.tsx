@@ -48,13 +48,8 @@ export function FacilitySettingsPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>自院設定</h1>
+        <h1>施設設定</h1>
       </div>
-      <p className="connection-settings__lead">
-        登録済みの医療機関のうち、どれが自院かを指定します。診療科・診察室・医療従事者は
-        ここで選んだ医療機関に所属するものとして登録され、処方箋の医療機関欄や帳票の
-        自院欄にもこの医療機関の情報が入ります。
-      </p>
       {(settings.isLoading || loadingOrganizations) && <p>読み込み中...</p>}
       <ErrorBanner error={settings.error} />
 
@@ -69,47 +64,47 @@ export function FacilitySettingsPage() {
               </option>
             ))}
           </select>
-          <span className="connection-settings-form__field-hint">
-            候補に無い場合は「マスタメンテ &gt; 共通 &gt; 医療機関」から先に登録してください。
-          </span>
         </label>
 
         {/* 看護指示の「1日N回」の既定時刻と「N時間毎」の起点。指示を登録するときの
-            初期値で、登録済みの指示には時刻が焼き付いているのでここを変えても動かない。 */}
-        <fieldset className="facility-settings__schedule">
-          <legend>看護指示の既定時刻</legend>
-          {["1", "2", "3", "4"].map((count) => (
-            <label key={count}>
-              1日{count}回
-              <span className="facility-settings__times">
-                {(schedule.daily[count] ?? []).map((time, index) => (
-                  <input
-                    key={index}
-                    type="time"
-                    value={time}
-                    onChange={(e) => updateDailyTime(count, index, e.target.value)}
-                    aria-label={`1日${count}回の ${index + 1} 回目`}
-                    required
-                  />
-                ))}
+            初期値で、登録済みの指示には時刻が焼き付いているのでここを変えても動かない。
+            普段は触らない設定なので折り畳んでおく。閉じている間はブラウザの必須チェックが
+            効かない(非表示の入力にフォーカスできない)ため、required は付けずに
+            scheduleValid で保存ボタンを止める。 */}
+        <details className="facility-settings__schedule">
+          <summary>看護指示の既定時刻</summary>
+          <div className="facility-settings__schedule-body">
+            {["1", "2", "3", "4"].map((count) => (
+              <label key={count}>
+                1日{count}回
+                <span className="facility-settings__times">
+                  {(schedule.daily[count] ?? []).map((time, index) => (
+                    <input
+                      key={index}
+                      type="time"
+                      value={time}
+                      onChange={(e) => updateDailyTime(count, index, e.target.value)}
+                      aria-label={`1日${count}回の ${index + 1} 回目`}
+                    />
+                  ))}
+                </span>
+              </label>
+            ))}
+            <label>
+              N時間毎の起点
+              <input
+                type="time"
+                value={schedule.interval_start}
+                onChange={(e) =>
+                  setScheduleDraft({ ...(scheduleDraft ?? savedSchedule), interval_start: e.target.value })
+                }
+              />
+              <span className="connection-settings-form__field-hint">
+                4時間毎ならこの時刻から 4 時間刻みで、その日の予定を組みます。
               </span>
             </label>
-          ))}
-          <label>
-            N時間毎の起点
-            <input
-              type="time"
-              value={schedule.interval_start}
-              onChange={(e) =>
-                setScheduleDraft({ ...(scheduleDraft ?? savedSchedule), interval_start: e.target.value })
-              }
-              required
-            />
-            <span className="connection-settings-form__field-hint">
-              4時間毎ならこの時刻から 4 時間刻みで、その日の予定を組みます。
-            </span>
-          </label>
-        </fieldset>
+          </div>
+        </details>
 
         <div className="connection-settings-form__actions">
           <button type="submit" disabled={update.isPending || !scheduleValid}>
@@ -117,9 +112,15 @@ export function FacilitySettingsPage() {
           </button>
         </div>
 
+        {!scheduleValid && (
+          <p className="connection-settings-form__field-hint" role="status">
+            「看護指示の既定時刻」に空欄があります。
+          </p>
+        )}
+
         {update.isSuccess && (
           <p className="connection-settings-form__success" role="status">
-            自院設定を保存しました
+            施設設定を保存しました
           </p>
         )}
         <ErrorBanner error={update.error} />

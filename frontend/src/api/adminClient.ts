@@ -192,7 +192,7 @@ export async function testConnection(): Promise<ConnectionTestResult> {
   return adminJson<ConnectionTestResult>(`${SETTINGS}/test`, { method: "POST" });
 }
 
-// --- 自院設定 ----------------------------------------------------------------
+// --- 施設設定 ----------------------------------------------------------------
 
 // 「どの Organization が自院か」の指定。書き込みは管理者だけなので /admin 配下に
 // あるが、読み取りはログイン済みユーザー全員が使う /facility_settings 側

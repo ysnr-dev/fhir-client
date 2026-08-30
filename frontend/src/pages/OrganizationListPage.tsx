@@ -29,7 +29,7 @@ function SelfOrganizationView() {
         <h1>医療機関</h1>
       </div>
       <p className="connection-settings__lead">
-        自院として設定されている医療機関です。別の医療機関を自院にするには「管理 &gt; 自院設定」で
+        自院として設定されている医療機関です。別の医療機関を自院にするには「管理 &gt; 施設設定」で
         切り替えてください。
       </p>
       <OrganizationTable organizations={organization ? [organization] : []} />
@@ -38,7 +38,7 @@ function SelfOrganizationView() {
 }
 
 // 自院が未設定(初期セットアップ前)。従来どおり全医療機関を扱えるようにして、
-// ここから登録 →「管理 > 自院設定」で自院を選ぶ流れにする。
+// ここから登録 →「管理 > 施設設定」で自院を選ぶ流れにする。
 function UnsetOrganizationView() {
   const [search, setSearch] = useState<OrganizationSearchParams>(emptySearch);
   const [inputs, setInputs] = useState<OrganizationSearchParams>(emptySearch);
@@ -74,7 +74,7 @@ function UnsetOrganizationView() {
 
       <div className="error-banner" role="status">
         <p className="error-banner__line">
-          自院が未設定です。自院の医療機関を登録したうえで、「管理 &gt; 自院設定」で選択してください。
+          自院が未設定です。自院の医療機関を登録したうえで、「管理 &gt; 施設設定」で選択してください。
           設定するまで、診療科・診察室・医療従事者の所属は手動で選ぶ従来の動作になります。
         </p>
       </div>
