@@ -460,6 +460,17 @@ JP Core の `JP_MedicationRequest_Injection` プロファイルを参考にし�
   1 つでもあれば点滴**とします。用法種別を手で選んだ RP は、以降医薬品を変えても上書きしません。
   点滴になったときは投与経路の既定として静脈内(`IV`)を入れます(自動判定・手動選択のどちらでも)。
   投与経路が選択済みなら上書きしないので、手で選んだ経路が医薬品の入れ替えで戻ることはありません。
+- **期間・実施パターン(連日オーダー)**: 注射日(開始日)と終了日、実施パターン
+  (**毎日 / N日ごと(隔日など) / 曜日指定**)を指定すると、該当する日ぶんを 1 日 1 オーダー
+  (`ServiceRequest` + `MedicationRequest`)に展開し、1 つの transaction で登録します
+  (一度に 14 件・期間 90 日まで。上限超過は打ち切らず入力エラーにします)。
+  展開した各日は `requisition`(`.../Identifier/injection-series`、同じ uuid)で束ね、開始日を
+  root 拡張 `.../StructureDefinition/injection-series-start`(valueDate)、実施パターンを
+  `.../StructureDefinition/injection-series-schedule`(valueTiming。N日ごと=`period/periodUnit`、
+  曜日=`dayOfWeek`、`boundsPeriod` に期間)に持ちます(毎日は拡張を付けず、無いものは毎日と読みます)。
+  カードには「連日 N日目(開始日〜)」「隔日(開始日〜)」を添え、編集・削除では後続日があるとき
+  「この日のみ / この日以降すべて」を選べます。方針の検討(オリジナルオーダー方式との比較)は
+  `docs/injection-order-design.md`。
 - テンプレートへの一括入力(`%prescriptions`)は最新の「処方」を対象とし、注射オーダーは
   対象外です(検索結果から category で除外)。
 

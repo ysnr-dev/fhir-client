@@ -39,6 +39,7 @@ import type { KarteDetailTarget } from "../karteUrl";
 import {
   groupInjectionByRp,
   injectionComment,
+  injectionSeriesLabel,
   summarizeInjectionServiceRequest,
   type InjectionRpDisplay,
 } from "../fhir/injectionHelpers";
@@ -155,6 +156,7 @@ import { vitalDisplayRows } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { AnesthesiaChartModal } from "./AnesthesiaChartModal";
 import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
+import { InjectionDeleteModal } from "./InjectionDeleteModal";
 import { KarteCardJsonModal } from "./KarteCardModals";
 import { PlainTextModal } from "./PlainTextModal";
 import { RichTextView } from "./RichTextView";
@@ -316,6 +318,7 @@ function KarteCard({
   // 詳細表示は URL に載せるので親に任せる。
   const [plainTextOpen, setPlainTextOpen] = useState(false);
   const [jsonOpen, setJsonOpen] = useState(false);
+  const [injectionDeleteOpen, setInjectionDeleteOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [chartOpen, setChartOpen] = useState(false);
   // 輸血の実施入力。投与するのは病棟なので、部門一覧だけでなくここからも開ける。
@@ -361,13 +364,15 @@ function KarteCard({
   const pdfReady = Boolean(layoutStatus?.registered && item.id);
 
   function handleDelete() {
+    // 注射は連日オーダーの後続日も一緒に消すか選ばせるので、専用の確認モーダルにする。
+    if (item.kind === "injection") {
+      setInjectionDeleteOpen(true);
+      return;
+    }
     if (!window.confirm(`この${KARTE_KIND_LABELS[item.kind]}を削除します。よろしいですか?`)) return;
     const options = { onSuccess: () => onDeleted(item) };
     if (item.kind === "note") deleteNote.mutate(item.id, options);
-    // 注射も処方と同じ ServiceRequest + MedicationRequest 構成なので削除処理を共用する。
-    else if (item.kind === "prescription" || item.kind === "injection") {
-      deletePrescription.mutate(item.id, options);
-    }
+    else if (item.kind === "prescription") deletePrescription.mutate(item.id, options);
     // 検体検査・細菌検査・放射線検査・生理検査・内視鏡・処置は明細も ServiceRequest
     // なので、専用の削除でまとめて消す。
     else if (item.kind === "lab-order") deleteLabOrder.mutate(item.id, options);
@@ -664,6 +669,16 @@ function KarteCard({
         />
       )}
       {jsonOpen && <KarteCardJsonModal item={item} onClose={() => setJsonOpen(false)} />}
+      {injectionDeleteOpen && item.kind === "injection" && (
+        <InjectionDeleteModal
+          serviceRequest={item.serviceRequest}
+          onClose={() => setInjectionDeleteOpen(false)}
+          onDeleted={() => {
+            setInjectionDeleteOpen(false);
+            onDeleted(item);
+          }}
+        />
+      )}
       {historyOpen && item.kind === "note" && (
         <ClinicalNoteHistoryModal noteId={item.id} onClose={() => setHistoryOpen(false)} />
       )}
@@ -870,6 +885,10 @@ function cardMeta(item: KarteTimelineItem): string {
     ]
       .filter(Boolean)
       .join(" | ");
+  }
+  // 連日オーダーの注射は「何日目」かを添える(単日のオーダーでは出ない)。
+  if (item.kind === "injection") {
+    return [injectionSeriesLabel(item.serviceRequest), requesterSummary].filter(Boolean).join(" | ");
   }
   // 処方・注射は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。オーダー日は
   // 日付のみを入力する項目なので時刻は出さない(古い処方には時刻付きの authoredOn が

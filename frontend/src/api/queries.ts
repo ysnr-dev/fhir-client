@@ -62,7 +62,14 @@ import {
   type LabResultSummary,
   type SpecimenRef,
 } from "../fhir/labResultHelpers";
-import { isInjectionServiceRequest } from "../fhir/injectionHelpers";
+import { referenceId } from "../fhir/shared";
+import {
+  INJECTION_ORDER_TYPE,
+  buildInjectionSeriesDeleteBundle,
+  injectionSeriesOf,
+  isInjectionServiceRequest,
+  type InjectionDayTarget,
+} from "../fhir/injectionHelpers";
 import {
   LAB_ORDER_TYPE,
   buildLabOrderDeleteBundle,
@@ -2328,6 +2335,61 @@ export function usePrescriptionDetail(srId: string | undefined) {
     queryKey: ["ServiceRequest", "detail", srId],
     queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", params),
     enabled: Boolean(srId),
+  });
+}
+
+// 連日オーダーの後続日。編集中・削除中の注射と同じ束ね(requisition)で、その日より
+// 後の日付のオーダーを薬剤ごと返す。上流に requisition 検索が無いので、患者 + 注射 +
+// 日付(authoredon)で引いてから requisition を突き合わせる。一括で展開できるのは
+// 14 日までなので _count は余裕を見た固定値で足りる。
+export function useInjectionSeriesLater(sr: fhir4.ServiceRequest | undefined) {
+  const series = sr ? injectionSeriesOf(sr) : null;
+  const patientId = referenceId(sr?.subject?.reference);
+  const date = sr?.authoredOn?.slice(0, 10);
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", patientId);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`);
+  if (date) params.set("authoredon", `gt${date}`);
+  params.set("_revinclude", "MedicationRequest:based-on");
+  params.set("_count", "100");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "injection-series-later", sr?.id],
+    queryFn: async (): Promise<InjectionDayTarget[]> => {
+      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+      const resources = (bundle.entry ?? []).map((e) => e.resource).filter(Boolean);
+      const mrsBySr = new Map<string, fhir4.MedicationRequest[]>();
+      for (const r of resources) {
+        if (r?.resourceType !== "MedicationRequest") continue;
+        const mr = r as fhir4.MedicationRequest;
+        const parent = referenceId(mr.basedOn?.[0]?.reference);
+        if (!parent) continue;
+        mrsBySr.set(parent, [...(mrsBySr.get(parent) ?? []), mr]);
+      }
+      return resources
+        .filter((r): r is fhir4.ServiceRequest => r?.resourceType === "ServiceRequest")
+        .filter(
+          (s) =>
+            s.id !== sr?.id &&
+            injectionSeriesOf(s)?.requisition === series?.requisition &&
+            (s.authoredOn?.slice(0, 10) ?? "") > (date ?? ""),
+        )
+        .sort((a, b) => (a.authoredOn ?? "").localeCompare(b.authoredOn ?? ""))
+        .map((s) => ({ serviceRequest: s, medicationRequests: mrsBySr.get(s.id ?? "") ?? [] }));
+    },
+    enabled: Boolean(sr && series && patientId && date),
+  });
+}
+
+/** 連日オーダーを複数日まとめて削除する。 */
+export function useDeleteInjectionSeries() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (srIds: string[]) => postBundle(buildInjectionSeriesDeleteBundle(srIds)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
   });
 }
 

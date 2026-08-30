@@ -1,4 +1,4 @@
-import { today } from "../lib/dates";
+import { addDays, diffDays, today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { toFhirDateTime } from "./clinicalNoteHelpers";
@@ -41,6 +41,142 @@ export const INJECTION_ORDER_TYPE = { code: "injection", display: "注射" };
 
 // 注射区分。処方区分(処方の CATEGORY_SYSTEM)と選択肢が違うので別のコードシステムにする。
 const CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/injection-category";
+
+// ---- 連日オーダー(期間展開) ----
+//
+// 注射は 1 施行(= 1 日)ごとに実施入力・払出・算定をするので、「◯日間」と指定された
+// 注射は 1 日 1 オーダー(ServiceRequest + MedicationRequest)に展開して一括登録する
+// (docs/injection-order-design.md §3)。展開した各日のオーダーは同じ requisition
+// (uuid)で束ね、開始日を root 拡張に焼き付けて「何日目」かを出せるようにする。
+// 束ねの検索は上流に requisition パラメータが無いので、患者 + 注射 + 日付で引いて
+// クライアント側で requisition を突き合わせる(queries.ts の useInjectionSeriesLater)。
+export const INJECTION_SERIES_SYSTEM = "http://fhir-client.local/Identifier/injection-series";
+export const SERIES_START_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/injection-series-start";
+// 実施パターン(毎日・N日ごと・曜日指定)。看護指示の頻度と同じく root 拡張の valueTiming
+// で持つ(occurrence[x] は choice で occurrenceDateTime と併用できないため)。
+export const SERIES_SCHEDULE_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/injection-series-schedule";
+/** 一度に展開できるオーダー数の上限。 */
+export const MAX_INJECTION_ORDERS = 14;
+/** 開始日から終了日までに指定できる期間の上限(日)。曜日指定で長い期間を張れるようにする。 */
+export const MAX_INJECTION_SPAN_DAYS = 90;
+
+/** FHIR の Timing.repeat.dayOfWeek と同じコード。 */
+export const DAY_OF_WEEK_OPTIONS: { code: string; label: string }[] = [
+  { code: "mon", label: "月" },
+  { code: "tue", label: "火" },
+  { code: "wed", label: "水" },
+  { code: "thu", label: "木" },
+  { code: "fri", label: "金" },
+  { code: "sat", label: "土" },
+  { code: "sun", label: "日" },
+];
+
+/** 実施パターン。期間(開始日〜終了日)の中で、どの日にオーダーを立てるか。 */
+export type InjectionSchedule =
+  /** 毎日。 */
+  | { kind: "daily" }
+  /** N 日ごと(2 なら隔日)。開始日を 1 回目とする。 */
+  | { kind: "interval"; intervalDays: number }
+  /** 指定した曜日。 */
+  | { kind: "weekly"; days: string[] };
+
+export const DAILY_SCHEDULE: InjectionSchedule = { kind: "daily" };
+
+export interface InjectionSeries {
+  /** 同時に展開したオーダー群を束ねる uuid(ServiceRequest.requisition)。 */
+  requisition: string;
+  /** 展開の開始日(YYYY-MM-DD)。 */
+  start: string;
+  /** 展開の終了日。単日の束ねでは開始日と同じ。 */
+  end: string;
+  /** 実施パターン。古いデータ・単日のオーダーは毎日として扱う。 */
+  schedule: InjectionSchedule;
+}
+
+// 束ねを FHIR の Timing にする。毎日は Timing で表現するものが無いので持たせない
+// (拡張が無い = 毎日。古いデータもそう読める)。
+function scheduleTiming(series: InjectionSeries): fhir4.Timing | null {
+  const { schedule, start, end } = series;
+  const bounds: fhir4.Period = { start, end };
+  if (schedule.kind === "interval") {
+    return { repeat: { boundsPeriod: bounds, period: schedule.intervalDays, periodUnit: "d" } };
+  }
+  if (schedule.kind === "weekly") {
+    return {
+      repeat: {
+        boundsPeriod: bounds,
+        period: 1,
+        periodUnit: "wk",
+        dayOfWeek: schedule.days as fhir4.TimingRepeat["dayOfWeek"],
+      },
+    };
+  }
+  return null;
+}
+
+function scheduleFromTiming(timing: fhir4.Timing | undefined): InjectionSchedule {
+  const repeat = timing?.repeat;
+  if (repeat?.dayOfWeek?.length) return { kind: "weekly", days: [...repeat.dayOfWeek] };
+  if (repeat?.periodUnit === "d" && (repeat.period ?? 1) > 1) {
+    return { kind: "interval", intervalDays: repeat.period ?? 1 };
+  }
+  return DAILY_SCHEDULE;
+}
+
+/** 保存済みの注射から連日オーダーの束ね情報を読む。単日で登録したものも 1 日の束ねを持つ。 */
+export function injectionSeriesOf(sr: fhir4.ServiceRequest): InjectionSeries | null {
+  const requisition =
+    sr.requisition?.system === INJECTION_SERIES_SYSTEM ? sr.requisition.value : undefined;
+  const start = sr.extension?.find((e) => e.url === SERIES_START_EXT_URL)?.valueDate;
+  if (!requisition || !start) return null;
+  const timing = sr.extension?.find((e) => e.url === SERIES_SCHEDULE_EXT_URL)?.valueTiming;
+  return {
+    requisition,
+    start,
+    end: timing?.repeat?.boundsPeriod?.end ?? start,
+    schedule: scheduleFromTiming(timing),
+  };
+}
+
+/** 連日オーダーの「N日目」(1 始まり)。束ね情報が無ければ null。 */
+export function injectionSeriesDay(sr: fhir4.ServiceRequest): number | null {
+  const series = injectionSeriesOf(sr);
+  const date = sr.authoredOn?.slice(0, 10);
+  if (!series || !date) return null;
+  return diffDays(series.start, date) + 1;
+}
+
+/** 実施パターンの短い表示(「毎日」「2日ごと」「月・水・金」)。 */
+export function scheduleLabel(schedule: InjectionSchedule): string {
+  if (schedule.kind === "interval") {
+    return schedule.intervalDays === 2 ? "隔日" : `${schedule.intervalDays}日ごと`;
+  }
+  if (schedule.kind === "weekly") {
+    const labels = DAY_OF_WEEK_OPTIONS.filter((o) => schedule.days.includes(o.code)).map(
+      (o) => o.label,
+    );
+    return labels.length ? `毎週 ${labels.join("・")}` : "毎週";
+  }
+  return "毎日";
+}
+
+// カード・詳細に添える連日オーダーの要約(「連日 3日目(8/30〜)」「隔日(8/30〜)」)。
+// 総日数は保存していない(後続日の削除で変わる)ので出さない。毎日のときだけ「N日目」を
+// 出せる(間引きのあるパターンは開始日からの差が回数と一致しないため)。開始日そのものの
+// オーダーは単日の注射と見分けが付かないので、毎日なら空にする。
+export function injectionSeriesLabel(sr: fhir4.ServiceRequest): string {
+  const series = injectionSeriesOf(sr);
+  const day = injectionSeriesDay(sr);
+  if (!series || day == null) return "";
+  const [, m, d] = series.start.split("-");
+  const from = `${Number(m)}/${Number(d)}〜`;
+  if (series.schedule.kind === "daily") {
+    return day === 1 ? "" : `連日 ${day}日目(${from})`;
+  }
+  return `${scheduleLabel(series.schedule)}(${from})`;
+}
 
 // 用法種別(点滴/ワンショット)。JAHIS・JP Core に対応するコード表が無いためローカル定義。
 const USAGE_TYPE_EXT_URL = "http://fhir-client.local/StructureDefinition/injection-usage-type";
@@ -247,11 +383,18 @@ export interface InjectionRpValues {
 export interface InjectionFormValues {
   setting: PrescriptionSetting;
   category: string;
+  /** 注射日。連日オーダーではその開始日。 */
   authoredDate: string;
+  /** 期間の終了日。新規登録でのみ意味を持ち、編集では注射日と同じ(1 日分を直す)。 */
+  endDate: string;
+  /** 実施パターン。新規登録でのみ意味を持つ。 */
+  schedule: InjectionSchedule;
   comment: string;
   // 対象プロブレム(POMR)。null なら特定の問題に紐付かない注射。
   problem: ProblemRef | null;
   rps: InjectionRpValues[];
+  /** 保存済みオーダーの束ね情報。編集時に引き継ぎ、新規・DO では null(登録時に採番)。 */
+  series: InjectionSeries | null;
 }
 
 /** 入外区分に対応する注射区分。選択肢が 1 つだけならそれを既定にする。 */
@@ -281,9 +424,12 @@ export function emptyInjectionForm(
     setting,
     category: defaultCategory(setting),
     authoredDate: today(),
+    endDate: today(),
+    schedule: DAILY_SCHEDULE,
     comment: "",
     problem,
     rps: [{ ...emptyInjectionRp, startTimes: [], medicines: [{ ...emptyMedicineLine }] }],
+    series: null,
   };
 }
 
@@ -478,14 +624,18 @@ function buildInjectionMedicationRequest(
 const ORDER_DETAIL_MR_EXT_URL =
   "http://fhir-client.local/StructureDefinition/prescription-medication-request";
 
-function buildInjectionTransactionBundle(
+// 1 日分(ServiceRequest 1 本 + 薬剤の MedicationRequest)の transaction entry を組む。
+// 連日オーダーは日ごとにこれを呼んで entry を 1 つの Bundle に連ねる。
+function buildInjectionDayEntries(
   values: InjectionFormValues,
   patientId: string,
   requester: OrderContext,
+  series: InjectionSeries,
   serviceRequestId?: string,
   originalMedicationRequestIds?: string[],
-): fhir4.Bundle {
+): fhir4.BundleEntry[] {
   const authoredOn = values.authoredDate;
+  const seriesTiming = scheduleTiming(series);
   const serviceRequestReference = serviceRequestId
     ? `ServiceRequest/${serviceRequestId}`
     : `urn:uuid:${crypto.randomUUID()}`;
@@ -562,6 +712,12 @@ function buildInjectionTransactionBundle(
     subject: { reference: `Patient/${patientId}` },
     authoredOn,
     orderDetail,
+    requisition: { system: INJECTION_SERIES_SYSTEM, value: series.requisition },
+    extension: [
+      { url: SERIES_START_EXT_URL, valueDate: series.start },
+      // 実施パターンは束ね全体の性質なので、展開した全日に同じものを焼き付ける。
+      ...(seriesTiming ? [{ url: SERIES_SCHEDULE_EXT_URL, valueTiming: seriesTiming }] : []),
+    ],
   };
 
   if (serviceRequestId) serviceRequest.id = serviceRequestId;
@@ -582,31 +738,77 @@ function buildInjectionTransactionBundle(
     .filter((id) => !keptMedicationRequestIds.has(id))
     .map((id) => ({ request: { method: "DELETE", url: `MedicationRequest/${id}` } }));
 
-  return {
-    resourceType: "Bundle",
-    type: "transaction",
-    entry: [
-      {
-        fullUrl: serviceRequestReference,
-        resource: serviceRequest,
-        request: serviceRequestId
-          ? { method: "PUT", url: `ServiceRequest/${serviceRequestId}` }
-          : { method: "POST", url: "ServiceRequest" },
-      },
-      ...medicationEntries,
-      ...removedMedicationRequestEntries,
-    ],
-  };
+  return [
+    {
+      fullUrl: serviceRequestReference,
+      resource: serviceRequest,
+      request: serviceRequestId
+        ? { method: "PUT", url: `ServiceRequest/${serviceRequestId}` }
+        : { method: "POST", url: "ServiceRequest" },
+    },
+    ...medicationEntries,
+    ...removedMedicationRequestEntries,
+  ];
 }
 
+function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
+  return { resourceType: "Bundle", type: "transaction", entry };
+}
+
+/** YYYY-MM-DD の曜日コード(Timing.repeat.dayOfWeek と同じ)。 */
+function dayOfWeekCode(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  // getDay() は 0=日曜。DAY_OF_WEEK_OPTIONS は月曜始まりなので 1 つずらす。
+  return DAY_OF_WEEK_OPTIONS[(new Date(y, m - 1, d).getDay() + 6) % 7].code;
+}
+
+// 期間(注射日〜終了日)を実施パターンで間引いた、オーダーを立てる日付。開始日は
+// パターンの起点なので、毎日・N 日ごとでは必ず入る(曜日指定では曜日が合うときだけ)。
+export function injectionDates(
+  values: Pick<InjectionFormValues, "authoredDate" | "endDate" | "schedule">,
+): string[] {
+  const start = values.authoredDate;
+  if (!start) return [];
+  const end = values.endDate && values.endDate > start ? values.endDate : start;
+  const span = Math.min(diffDays(start, end), MAX_INJECTION_SPAN_DAYS);
+  const schedule = values.schedule;
+
+  const dates: string[] = [];
+  for (let i = 0; i <= span && dates.length < MAX_INJECTION_ORDERS; i++) {
+    const date = addDays(start, i);
+    if (schedule.kind === "interval") {
+      if (i % Math.max(Math.trunc(schedule.intervalDays) || 1, 1) !== 0) continue;
+    } else if (schedule.kind === "weekly") {
+      if (!schedule.days.includes(dayOfWeekCode(date))) continue;
+    }
+    dates.push(date);
+  }
+  return dates.length ? dates : [start];
+}
+
+// 新規登録。投与日数ぶんを 1 日 1 オーダーに展開し、同じ requisition で束ねて
+// 1 つの transaction で登録する(全日成功か全日失敗か)。
 export function buildInjectionBundle(
   values: InjectionFormValues,
   patientId: string,
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildInjectionTransactionBundle(values, patientId, requester);
+  const dates = injectionDates(values);
+  const series: InjectionSeries = {
+    requisition: crypto.randomUUID(),
+    start: values.authoredDate,
+    // 実際に展開した最後の日を終了日にする(上限で打ち切ったときに入力値と食い違わない)。
+    end: dates[dates.length - 1],
+    schedule: values.schedule,
+  };
+  return transactionBundle(
+    dates.flatMap((date) =>
+      buildInjectionDayEntries({ ...values, authoredDate: date }, patientId, requester, series),
+    ),
+  );
 }
 
+// 1 日分の更新。束ね情報は保存済みのものを引き継ぐ(古いデータで無ければ単日の束ねを作る)。
 export function buildInjectionUpdateBundle(
   values: InjectionFormValues,
   patientId: string,
@@ -614,12 +816,83 @@ export function buildInjectionUpdateBundle(
   originalMedicationRequestIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildInjectionTransactionBundle(
-    values,
-    patientId,
-    requester,
-    serviceRequestId,
-    originalMedicationRequestIds,
+  // 束ね情報は保存済みのものをそのまま戻す(1 日分の更新でパターン・期間は変えない)。
+  const series = values.series ?? {
+    requisition: crypto.randomUUID(),
+    start: values.authoredDate,
+    end: values.authoredDate,
+    schedule: DAILY_SCHEDULE,
+  };
+  return transactionBundle(
+    buildInjectionDayEntries(
+      values,
+      patientId,
+      requester,
+      series,
+      serviceRequestId,
+      originalMedicationRequestIds,
+    ),
+  );
+}
+
+/** 連日オーダーの 1 日分(ヘッダと薬剤)。 */
+export interface InjectionDayTarget {
+  serviceRequest: fhir4.ServiceRequest;
+  medicationRequests: fhir4.MedicationRequest[];
+}
+
+// 「この日以降」の一括更新。編集中の日と同じ束ねの後続日すべてに、同じ内容
+// (注射日だけは各日のもの)を書き込む。各日の MedicationRequest は差し替え
+// (id を持つ薬剤行は編集中の日のものなので後続日では新規扱いにし、元の行は消す)。
+export function buildInjectionSeriesUpdateBundle(
+  values: InjectionFormValues,
+  patientId: string,
+  targets: InjectionDayTarget[],
+  requester: OrderContext,
+): fhir4.Bundle {
+  const fallback: InjectionSeries = {
+    requisition: crypto.randomUUID(),
+    start: values.authoredDate,
+    end: values.authoredDate,
+    schedule: DAILY_SCHEDULE,
+  };
+  return transactionBundle(
+    targets.flatMap((target) => {
+      const sr = target.serviceRequest;
+      const date = sr.authoredOn?.slice(0, 10) ?? values.authoredDate;
+      const own = date === values.authoredDate;
+      const dayValues: InjectionFormValues = own
+        ? { ...values, authoredDate: date }
+        : {
+            ...values,
+            authoredDate: date,
+            rps: values.rps.map((rp) => ({
+              ...rp,
+              medicines: rp.medicines.map(({ id: _id, ...rest }) => rest),
+            })),
+          };
+      const originalIds = target.medicationRequests
+        .map((mr) => mr.id)
+        .filter((id): id is string => Boolean(id));
+      return buildInjectionDayEntries(
+        dayValues,
+        patientId,
+        requester,
+        injectionSeriesOf(sr) ?? values.series ?? fallback,
+        sr.id,
+        originalIds,
+      );
+    }),
+  );
+}
+
+/** 複数日のオーダーをまとめて削除する(処方の削除 Bundle と同じ組み立てを日数ぶん連ねる)。 */
+export function buildInjectionSeriesDeleteBundle(serviceRequestIds: string[]): fhir4.Bundle {
+  return transactionBundle(
+    serviceRequestIds.flatMap((id) => [
+      { request: { method: "DELETE" as const, url: `ServiceRequest/${id}` } },
+      { request: { method: "DELETE" as const, url: `MedicationRequest?based-on=ServiceRequest/${id}` } },
+    ]),
   );
 }
 
@@ -636,6 +909,9 @@ export function buildDoInjectionForm(
     setting,
     category: setting === values.setting ? values.category : defaultCategory(setting),
     authoredDate: today(),
+    endDate: today(),
+    schedule: DAILY_SCHEDULE,
+    series: null,
     rps: values.rps.map((rp) => ({
       ...rp,
       medicines: rp.medicines.map(({ id: _id, ...rest }) => rest),
@@ -799,10 +1075,13 @@ export function parseInjectionForm(
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
     category: categoryCoding(sr, CATEGORY_SYSTEM)?.code ?? "",
     authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
+    endDate: sr.authoredOn?.slice(0, 10) ?? today(),
+    schedule: injectionSeriesOf(sr)?.schedule ?? DAILY_SCHEDULE,
     comment: injectionComment(sr),
     problem: injectionProblem(sr),
     rps: rps.length
       ? rps
       : [{ ...emptyInjectionRp, startTimes: [], medicines: [{ ...emptyMedicineLine }] }],
+    series: injectionSeriesOf(sr),
   };
 }

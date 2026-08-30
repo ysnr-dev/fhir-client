@@ -17,3 +17,16 @@ export function formatDateTime(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString("ja-JP");
 }
+
+/** YYYY-MM-DD に日数を足す(負も可)。 */
+export function addDays(date: string, days: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return toDateInput(new Date(y, m - 1, d + days));
+}
+
+/** 2 つの YYYY-MM-DD の差(to - from)を日数で返す。 */
+export function diffDays(from: string, to: string): number {
+  const [fy, fm, fd] = from.split("-").map(Number);
+  const [ty, tm, td] = to.split("-").map(Number);
+  return Math.round((new Date(ty, tm - 1, td).getTime() - new Date(fy, fm - 1, fd).getTime()) / 86400000);
+}

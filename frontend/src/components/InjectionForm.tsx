@@ -1,4 +1,5 @@
 import { makeFieldUpdater } from "../lib/form";
+import { diffDays } from "../lib/dates";
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Medicine } from "../api/masterClient";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
@@ -7,6 +8,12 @@ import {
   DRIP_DEFAULT_ROUTE,
   INFUSION_HOURS_OPTIONS,
   LINE_OPTIONS,
+  DAILY_SCHEDULE,
+  DAY_OF_WEEK_OPTIONS,
+  MAX_INJECTION_ORDERS,
+  MAX_INJECTION_SPAN_DAYS,
+  injectionDates,
+  scheduleLabel,
   METHOD_OPTIONS,
   ROUTE_OPTIONS,
   SITE_OPTIONS,
@@ -19,6 +26,7 @@ import {
   rpDoseTotal,
   type InjectionFormValues,
   type InjectionRpValues,
+  type InjectionSchedule,
   type InjectionUsageType,
   type RpDoseTotal,
 } from "../fhir/injectionHelpers";
@@ -46,13 +54,42 @@ interface InjectionFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /** 編集(1 日分を直す)では投与日数を出さない。 */
+  mode?: "create" | "edit";
 }
 
 type ModalState = { kind: "medicine"; rpIndex: number; medIndex: number } | null;
 
+// 期間とパターンから展開されるオーダー数。injectionDates は上限で打ち切るので、
+// 「上限を超えている」と伝えるために打ち切らずに数え直す(上限 + 1 で止める)。
+function countDates(start: string, end: string, schedule: InjectionSchedule): number {
+  if (!start || !end || end < start) return 1;
+  const span = Math.min(diffDays(start, end), MAX_INJECTION_SPAN_DAYS);
+  let count = 0;
+  for (let i = 0; i <= span; i++) {
+    if (schedule.kind === "interval") {
+      if (i % Math.max(Math.trunc(schedule.intervalDays) || 1, 1) !== 0) continue;
+    } else if (schedule.kind === "weekly") {
+      const [y, m, d] = start.split("-").map(Number);
+      const date = new Date(y, m - 1, d + i);
+      if (!schedule.days.includes(DAY_OF_WEEK_OPTIONS[(date.getDay() + 6) % 7].code)) continue;
+    }
+    count++;
+    if (count > MAX_INJECTION_ORDERS) break;
+  }
+  return count || 1;
+}
+
 // 総投与量。端数が出るのは濃度からの換算だけなので小数第 1 位まで出す。
 function formatMl(ml: number): string {
   return (Math.round(ml * 10) / 10).toLocaleString();
+}
+
+/** 曜日指定に切り替えたときの初期選択(注射日の曜日)。 */
+function defaultWeekday(date: string): string {
+  if (!date) return DAY_OF_WEEK_OPTIONS[0].code;
+  const [y, m, d] = date.split("-").map(Number);
+  return DAY_OF_WEEK_OPTIONS[(new Date(y, m - 1, d).getDay() + 6) % 7].code;
 }
 
 function TrashIcon() {
@@ -77,6 +114,7 @@ export function InjectionForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  mode = "create",
 }: InjectionFormProps) {
   const [values, setValues] = useState<InjectionFormValues>(initialValues ?? emptyInjectionForm);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
@@ -110,6 +148,49 @@ export function InjectionForm({
   }
 
   const update = makeFieldUpdater(setValues);
+
+  const weekdays = values.schedule.kind === "weekly" ? values.schedule.days : [];
+
+  // 注射日を後ろにずらしたら終了日も連れて動かす(期間が逆転したままにしない)。
+  function handleAuthoredDate(date: string) {
+    setValues((v) => ({
+      ...v,
+      authoredDate: date,
+      endDate: !v.endDate || v.endDate < date ? date : v.endDate,
+    }));
+  }
+
+  // パターンを変えたときは、そのパターンの既定値で入れ直す(隔日・曜日は未選択だと
+  // 展開できないので、隔日は 2 日ごと、曜日は注射日の曜日を初期選択にする)。
+  function handleScheduleKind(kind: InjectionSchedule["kind"]) {
+    if (kind === "interval") update("schedule", { kind, intervalDays: 2 });
+    else if (kind === "weekly") update("schedule", { kind, days: [defaultWeekday(values.authoredDate)] });
+    else update("schedule", DAILY_SCHEDULE);
+  }
+
+  function toggleWeekday(code: string) {
+    const next = weekdays.includes(code)
+      ? weekdays.filter((c) => c !== code)
+      : DAY_OF_WEEK_OPTIONS.filter((o) => o.code === code || weekdays.includes(o.code)).map(
+          (o) => o.code,
+        );
+    update("schedule", { kind: "weekly", days: next });
+  }
+
+  const expansionNote = (() => {
+    if (!values.authoredDate) return "";
+    const dates = injectionDates(values);
+    const count = countDates(values.authoredDate, values.endDate, values.schedule);
+    if (count > MAX_INJECTION_ORDERS) {
+      return `${scheduleLabel(values.schedule)}: ${MAX_INJECTION_ORDERS}件を超えます。期間を短くしてください。`;
+    }
+    // 1 件だけ(単日)のときは注射日を見れば分かるので何も出さない。
+    if (dates.length <= 1) return "";
+    return `${scheduleLabel(values.schedule)}: ${dates[dates.length - 1]} まで ${dates.length} 件のオーダーを登録します(${dates
+      .slice(0, 5)
+      .map((d) => d.slice(5).replace("-", "/"))
+      .join("、")}${dates.length > 5 ? "…" : ""})`;
+  })();
 
   // 注射区分の選択肢は入外区分で変わるので選び直させる。外来のように選択肢が
   // 1 つしかないときは既定値を入れておく。
@@ -233,6 +314,28 @@ export function InjectionForm({
 
   function validate(): string | null {
     if (!values.authoredDate) return "注射日は必須です。";
+    if (mode === "create") {
+      if (!values.endDate) return "終了日は必須です。";
+      if (values.endDate < values.authoredDate) return "終了日は注射日以降にしてください。";
+      if (diffDays(values.authoredDate, values.endDate) > MAX_INJECTION_SPAN_DAYS) {
+        return `期間は${MAX_INJECTION_SPAN_DAYS}日までです。`;
+      }
+      if (values.schedule.kind === "interval") {
+        const n = values.schedule.intervalDays;
+        if (!Number.isInteger(n) || n < 2) return "間隔は2以上の整数で入力してください。";
+      }
+      if (values.schedule.kind === "weekly" && values.schedule.days.length === 0) {
+        return "曜日を1つ以上選択してください。";
+      }
+      // 展開数の上限を超えるときは、黙って打ち切らず期間を縮めてもらう。
+      const span = diffDays(values.authoredDate, values.endDate);
+      const wanted = countDates(values.authoredDate, values.endDate, values.schedule);
+      if (wanted > MAX_INJECTION_ORDERS) {
+        return `一度に登録できるのは${MAX_INJECTION_ORDERS}件までです(いまの指定は${wanted}件${
+          span > MAX_INJECTION_SPAN_DAYS ? "以上" : ""
+        })。期間を短くしてください。`;
+      }
+    }
     if (!values.setting) return "入外区分は必須です。";
     if (!values.category) return "注射区分は必須です。";
     if (values.rps.length === 0) return "RPを1件以上登録してください。";
@@ -335,9 +438,67 @@ export function InjectionForm({
           <input
             type="date"
             value={values.authoredDate}
-            onChange={(e) => update("authoredDate", e.target.value)}
+            onChange={(e) => handleAuthoredDate(e.target.value)}
           />
         </label>
+        {mode === "create" && (
+          <>
+            <label>
+              終了日
+              <input
+                type="date"
+                value={values.endDate}
+                min={values.authoredDate}
+                onChange={(e) => update("endDate", e.target.value)}
+              />
+            </label>
+            <label>
+              実施パターン
+              <select
+                value={values.schedule.kind}
+                onChange={(e) => handleScheduleKind(e.target.value as InjectionSchedule["kind"])}
+              >
+                <option value="daily">毎日</option>
+                <option value="interval">N日ごと</option>
+                <option value="weekly">曜日指定</option>
+              </select>
+            </label>
+            {values.schedule.kind === "interval" && (
+              <label>
+                間隔
+                <span className="injection-days">
+                  <input
+                    type="number"
+                    min={2}
+                    step={1}
+                    value={values.schedule.intervalDays}
+                    onChange={(e) =>
+                      update("schedule", { kind: "interval", intervalDays: Number(e.target.value) })
+                    }
+                  />
+                  <span className="injection-days__unit">日ごと</span>
+                </span>
+              </label>
+            )}
+            {values.schedule.kind === "weekly" && (
+              <fieldset className="injection-weekdays">
+                <legend>曜日</legend>
+                {DAY_OF_WEEK_OPTIONS.map((o) => (
+                  <label key={o.code} className="injection-weekdays__option">
+                    <input
+                      type="checkbox"
+                      checked={weekdays.includes(o.code)}
+                      onChange={() => toggleWeekday(o.code)}
+                    />
+                    {o.label}
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            {/* 複数日に展開されるときだけ、何日にいくつ立つのかを登録前に見せる。 */}
+            {expansionNote && <p className="injection-days__note">{expansionNote}</p>}
+          </>
+        )}
         {commentOpen ? (
           <div className="prescription-form__comment-field">
             <label>

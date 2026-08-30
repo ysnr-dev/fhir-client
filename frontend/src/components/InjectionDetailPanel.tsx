@@ -4,6 +4,9 @@ import {
   groupInjectionByRp,
   injectionComment,
   injectionProblem,
+  injectionSeriesLabel,
+  injectionSeriesOf,
+  scheduleLabel,
   summarizeInjectionServiceRequest,
 } from "../fhir/injectionHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
@@ -25,6 +28,8 @@ export function InjectionDetailPanel({
   children,
 }: InjectionDetailPanelProps) {
   const summary = summarizeInjectionServiceRequest(serviceRequest);
+  const series = injectionSeriesOf(serviceRequest);
+  const seriesLabel = injectionSeriesLabel(serviceRequest);
   const rps = groupInjectionByRp(medicationRequests);
   const comment = injectionComment(serviceRequest);
 
@@ -40,7 +45,19 @@ export function InjectionDetailPanel({
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
           <dt>注射日</dt>
-          <dd>{serviceRequest.authoredOn?.slice(0, 10) ?? "-"}</dd>
+          <dd>
+            {serviceRequest.authoredOn?.slice(0, 10) ?? "-"}
+            {seriesLabel && <span className="injection-series-label">{seriesLabel}</span>}
+          </dd>
+          <dt>実施パターン</dt>
+          {/* 束ねを持たない古いオーダーは単日なので「-」。期間はその束ねの登録時のもの。 */}
+          <dd>
+            {series
+              ? `${scheduleLabel(series.schedule)}${
+                  series.end > series.start ? `(${series.start} 〜 ${series.end})` : ""
+                }`
+              : "-"}
+          </dd>
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay || "-"}</dd>
           <dt>注射区分</dt>
