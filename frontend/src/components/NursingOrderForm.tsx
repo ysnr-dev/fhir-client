@@ -94,123 +94,128 @@ export function NursingOrderForm({
   }
 
   return (
-    <form className="prescription-form" onSubmit={handleSubmit}>
-      {validationError && (
-        <div className="error-banner" role="alert" ref={validationErrorRef}>
-          <p className="error-banner__line error-banner__line--error">{validationError}</p>
-        </div>
-      )}
-      <ErrorBanner error={submitError} />
-
-      <fieldset>
-        <legend>指示</legend>
-        <div className="nursing-order-form__lines">
-          {values.lines.map((line, index) => (
-            <div key={index} className="nursing-order-form__line">
-              <div className="nursing-order-form__line-head">
-                <span className="nursing-order-form__line-no">{index + 1}</span>
-                <button type="button" onClick={() => setPicking(index)}>
-                  {line.item ? "用語を変更" : "用語を選択"}
-                </button>
-                <span className="nursing-order-form__item">
-                  {line.item
-                    ? `${line.item.kind === "act" ? "行為" : "観察"}: ${line.item.display}`
-                    : "自由記載"}
-                </span>
-                {line.item && (
-                  <button type="button" onClick={() => updateLine(index, { item: null })}>
-                    用語を外す
-                  </button>
-                )}
-                {line.item?.kind === "act" && (
-                  <NursingModifierSelect
-                    item={line.item}
-                    onChange={(item, display) => updateLine(index, { item, text: display })}
-                  />
-                )}
-                {!singleLine && values.lines.length > 1 && (
-                  <button type="button" onClick={() => removeLine(index)}>
-                    行を削除
-                  </button>
-                )}
-              </div>
-              <label>
-                指示内容
-                <input
-                  type="text"
-                  value={line.text}
-                  onChange={(e) => updateLine(index, { text: e.target.value })}
-                  placeholder="例: 車椅子移送、SpO2 測定"
-                />
-              </label>
-              <NursingScheduleFields
-                schedule={line.schedule}
-                settings={scheduleSettings}
-                onChange={(schedule) => updateLine(index, { schedule })}
-              />
-              <label>
-                条件
-                <input
-                  type="text"
-                  value={line.condition}
-                  onChange={(e) => updateLine(index, { condition: e.target.value })}
-                  placeholder="例: 38℃以上で報告、疼痛時"
-                />
-              </label>
-              <div className="nursing-order-form__dates">
-                <label>
-                  開始日
-                  <input
-                    type="date"
-                    value={line.startDate}
-                    onChange={(e) => updateLine(index, { startDate: e.target.value })}
-                    required
-                  />
-                </label>
-                <label>
-                  終了日
-                  <input
-                    type="date"
-                    value={line.endDate}
-                    onChange={(e) => updateLine(index, { endDate: e.target.value })}
-                  />
-                </label>
-              </div>
-              <label>
-                備考
-                <input
-                  type="text"
-                  value={line.comment}
-                  onChange={(e) => updateLine(index, { comment: e.target.value })}
-                />
-              </label>
-            </div>
-          ))}
-        </div>
-        {!singleLine && (
-          <button type="button" onClick={addLine}>
-            行を追加
-          </button>
+    // 用語検索モーダルは <form> の外に出す。Modal はポータルではないので、中に置くと
+    // モーダル内の検索フォームが入れ子の <form> になり、検索ボタンで外側の指示登録
+    // フォームがネイティブ送信されてしまう(処置・生理のオーダー画面と同じ作り)。
+    <>
+      <form className="prescription-form" onSubmit={handleSubmit}>
+        {validationError && (
+          <div className="error-banner" role="alert" ref={validationErrorRef}>
+            <p className="error-banner__line error-banner__line--error">{validationError}</p>
+          </div>
         )}
-      </fieldset>
+        <ErrorBanner error={submitError} />
 
-      <fieldset>
-        <legend>対象</legend>
-        <label>
-          対象プロブレム
-          <ProblemSelect
-            value={values.problem}
-            options={problemOptions}
-            onChange={(problem) => setValues((prev) => ({ ...prev, problem }))}
-          />
-        </label>
-      </fieldset>
+        <fieldset>
+          <legend>指示</legend>
+          <div className="nursing-order-form__lines">
+            {values.lines.map((line, index) => (
+              <div key={index} className="nursing-order-form__line">
+                <div className="nursing-order-form__line-head">
+                  <span className="nursing-order-form__line-no">{index + 1}</span>
+                  <button type="button" onClick={() => setPicking(index)}>
+                    {line.item ? "用語を変更" : "用語を選択"}
+                  </button>
+                  <span className="nursing-order-form__item">
+                    {line.item
+                      ? `${line.item.kind === "act" ? "行為" : "観察"}: ${line.item.display}`
+                      : "自由記載"}
+                  </span>
+                  {line.item && (
+                    <button type="button" onClick={() => updateLine(index, { item: null })}>
+                      用語を外す
+                    </button>
+                  )}
+                  {line.item?.kind === "act" && (
+                    <NursingModifierSelect
+                      item={line.item}
+                      onChange={(item, display) => updateLine(index, { item, text: display })}
+                    />
+                  )}
+                  {!singleLine && values.lines.length > 1 && (
+                    <button type="button" onClick={() => removeLine(index)}>
+                      行を削除
+                    </button>
+                  )}
+                </div>
+                <label>
+                  指示内容
+                  <input
+                    type="text"
+                    value={line.text}
+                    onChange={(e) => updateLine(index, { text: e.target.value })}
+                    placeholder="例: 車椅子移送、SpO2 測定"
+                  />
+                </label>
+                <NursingScheduleFields
+                  schedule={line.schedule}
+                  settings={scheduleSettings}
+                  onChange={(schedule) => updateLine(index, { schedule })}
+                />
+                <label>
+                  条件
+                  <input
+                    type="text"
+                    value={line.condition}
+                    onChange={(e) => updateLine(index, { condition: e.target.value })}
+                    placeholder="例: 38℃以上で報告、疼痛時"
+                  />
+                </label>
+                <div className="nursing-order-form__dates">
+                  <label>
+                    開始日
+                    <input
+                      type="date"
+                      value={line.startDate}
+                      onChange={(e) => updateLine(index, { startDate: e.target.value })}
+                      required
+                    />
+                  </label>
+                  <label>
+                    終了日
+                    <input
+                      type="date"
+                      value={line.endDate}
+                      onChange={(e) => updateLine(index, { endDate: e.target.value })}
+                    />
+                  </label>
+                </div>
+                <label>
+                  備考
+                  <input
+                    type="text"
+                    value={line.comment}
+                    onChange={(e) => updateLine(index, { comment: e.target.value })}
+                  />
+                </label>
+              </div>
+            ))}
+          </div>
+          {!singleLine && (
+            <button type="button" onClick={addLine}>
+              行を追加
+            </button>
+          )}
+        </fieldset>
 
-      <div className="prescription-form__actions">
-        <button type="submit" disabled={submitting}>
-          {submitting ? "送信中..." : submitLabel}
-        </button>
-      </div>
+        <fieldset>
+          <legend>対象</legend>
+          <label>
+            対象プロブレム
+            <ProblemSelect
+              value={values.problem}
+              options={problemOptions}
+              onChange={(problem) => setValues((prev) => ({ ...prev, problem }))}
+            />
+          </label>
+        </fieldset>
+
+        <div className="prescription-form__actions">
+          <button type="submit" disabled={submitting}>
+            {submitting ? "送信中..." : submitLabel}
+          </button>
+        </div>
+      </form>
 
       {picking !== null && (
         <NursingItemSearchModal
@@ -218,7 +223,7 @@ export function NursingOrderForm({
           onClose={() => setPicking(null)}
         />
       )}
-    </form>
+    </>
   );
 }
 
