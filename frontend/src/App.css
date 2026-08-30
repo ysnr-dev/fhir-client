@@ -1195,6 +1195,31 @@ fieldset.rp-card {
   gap: 4px;
 }
 
+.injection-perform__dose {
+  width: 6em;
+}
+
+/* 実施時に足した薬剤の印。オーダーとの差がひと目で分かるように。 */
+.injection-perform__added {
+  margin-left: 6px;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+}
+
+/* 「施用」列はチェックボックスだけなので幅を取らせず中央に置く。 */
+.injection-perform__given {
+  width: 4em;
+  text-align: center;
+}
+
+.injection-perform__given input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
 .injection-series-label {
   margin-left: 8px;
   font-size: 12px;

@@ -190,7 +190,73 @@ ServiceRequest(1 日分) ← focus ── Task(進捗)
 - カード: メタ行の先頭に進捗(`karte-card__status`)。中止だけ色を変える既存のスタイルに乗る。
 - 詳細モーダル: 「進捗」の行。
 
-## 6. ファイル
+## 6. 実施記録(施用)
+
+輸血(docs/transfusion-order-design.md)と同じ形。実施 1 回を `Procedure` のハブにし、
+薬剤ごとの `MedicationAdministration` をぶら下げる(`fhir/injectionPerformHelpers.ts`)。
+
+```
+ServiceRequest(1 日分)
+ └ basedOn ← Procedure (実施 1 回。施用のたびに 1 件)
+      │  category        = order-type|injection(処置・手術・輸血の Procedure と振り分け)
+      │  performedPeriod = 施用の開始/終了(ワンショットは開始だけ)
+      │  performer       = 実施者(ログイン中の医療従事者)
+      │  status          = completed(実施) / stopped(途中で中止) / not-done(実施せず)
+      │  statusReason    = 中止・未実施の理由(text)
+      └ partOf ← MedicationAdministration (薬剤 1 件ごと。実施せず のときは作らない)
+           request = その薬剤の MedicationRequest
+           status  = completed / stopped
+           dosage  = 実施量 + オーダーから写した経路・部位・手技・速度
+```
+
+### 6.1 なぜ MedicationAdministration だけで持たないか
+
+FHIR としては `request → MedicationRequest` を持つ `MedicationAdministration` だけで
+足りる。それでも `Procedure` をハブに置くのは、このコードベースの実施記録がすべて
+「Procedure(basedOn オーダー) + partOf の子」で揃っていて、カルテの読み出し
+(`_revinclude=Procedure:based-on` → `_revinclude:iterate=MedicationAdministration:part-of`)
+も実施取消もその形に乗っているため。注射だけ別の形にすると読み出しの経路が増える。
+`request` は FHIR としての意味を保つために併記する(将来 MedicationAdministration を
+薬剤単位で引く用途に使える)。
+
+### 6.2 1 日に複数回の施用
+
+RP の開始時刻が「10:00、20:30」のように複数あるので、ハブはオーダー 1 件に複数付く。
+実施入力はそのたびに開き、カードには施用時刻の順に並ぶ。
+
+**Task を実施済にするのは、「実施」または「途中で中止」の記録が予定回数
+(RP の開始時刻の最大数。無ければ 1)に達したとき**(`buildInjectionPerformBundle`)。
+「実施せず」は回数に数えない(その日の施用が済んだわけではない)。実施記録と Task は
+1 transaction で書き、記録だけあって進捗が止まる状態を作らない。
+
+### 6.3 入力
+
+- 開始時刻の既定は「今」。オーダーの予定時刻にしないのは、実施入力は施用した直後に
+  その場で入れる想定で、予定を既定にすると予定どおりでなかったときに直し忘れて予定が
+  実績になるため。
+- 薬剤の行はオーダーの薬剤を初期値にする。実施量は直せる、混注のうち一部を入れなかった
+  なら「施用」を外す(オーダーの行は消せない — 施用しなかった記録として残す)。
+- **オーダーに無い薬剤も RP ごとに追加できる**。注射は依頼時と実施時で内容が変わることが
+  多い(側管からの追加、溶解液の変更、医師の口頭指示)ため、実施記録は「実際に入れたもの」を
+  そのまま書けなければならない。追加した薬剤の `MedicationAdministration` は `request` を
+  持たない(元になった `MedicationRequest` が無い)ので、カードでは「(追加)」と印を付け、
+  **依頼と実施の差**が後から読めるようにする。追加した行は取り消せる(足したまま入力
+  しなかった行を残さないため)。
+- オーダー側は書き換えない。実施時の変更をオーダーに反映すると「何を依頼したか」が
+  消えるので、差は実施記録側にだけ残す。
+- 結果(実施 / 途中で中止 / 実施せず)は必ず選ぶ。実施 以外は理由が必須。
+
+### 6.4 実施取消
+
+そのオーダーの実施記録を**すべて消す**(輸血と同じ。放射線検査などが Task を戻すだけで
+記録を残すのとは違う)。注射の実施記録は「この薬をこの量入れた」という事実の記録で、
+取り消したのに残っているとその記録が嘘になる。実施済になっていた Task は依頼済に戻す
+(払出済だったかは分からないので、いちばん手前に戻す)。
+
+記録が複数あるとき 1 件だけ消す操作は持たない(取り消すのは誤登録で、誤登録なら
+入れ直せばよい)。
+
+## 7. ファイル
 
 | 役割 | ファイル |
 |---|---|
@@ -203,15 +269,19 @@ ServiceRequest(1 日分) ← focus ── Task(進捗)
 | 進捗 Task | `frontend/src/fhir/injectionTaskHelpers.ts` |
 | 中止(範囲選択) | `frontend/src/components/InjectionCancelModal.tsx` |
 | 進捗の書き込み | `frontend/src/api/queries.ts`(`useUpdateInjectionTaskStatus`) |
+| 実施記録の FHIR 変換・表示 | `frontend/src/fhir/injectionPerformHelpers.ts` |
+| 実施入力 | `frontend/src/components/InjectionPerformModal.tsx` |
+| 実施登録・実施取消 | `frontend/src/api/queries.ts`(`useRegisterInjectionPerform` / `useCancelInjectionPerforms`) |
 
-## 7. 未実装・今後
+## 8. 未実装・今後
 
 - 「◯回で終了」の回数指定(いまは期間指定のみ)。展開の日付列を作る `injectionDates` に
   停止条件を足せば済む。
 - 既存の束ねへの日数の追加(いまは DO で新しい束ねを作る)。
-- 注射ワークリスト(部門画面)・払出(MedicationDispense)・実施記録
-  (MedicationAdministration)・帳票。いずれも 1 日 1 SR を前提に処方の仕組みを流用する。
-  進捗の状態(受付済・払出済・実施済)は §5 で定義済みで、進める導線だけが無い。
+- 注射ワークリスト(部門画面)・払出(MedicationDispense)・帳票。いずれも 1 日 1 SR を
+  前提に処方の仕組みを流用する。進捗の受付済・払出済は §5 で定義済みで、進める導線だけが無い。
+- 実施記録の詳細モーダルへの表示(いまはカードのみ。詳細は SR + MR + Task しか引いていない)。
+- 実施記録 1 件だけの取消・訂正(いまは全件取消して入れ直す)。
 - 連日オーダーを「束ね単位」で 1 枚のカードにまとめる表示(いまは日ごとにカード)。
 - オーダーを削除しても進捗の Task は残る(検体検査・放射線検査など既存の部門と同じ挙動)。
   中止してから削除する流れがある注射では起きやすいので、部門横断で片付けるときに直す。

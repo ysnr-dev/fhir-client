@@ -62,6 +62,10 @@ import {
   type InjectionTaskStatus,
 } from "./injectionTaskHelpers";
 import {
+  injectionPerformsByOrderId,
+  type InjectionPerformDisplay,
+} from "./injectionPerformHelpers";
+import {
   isTransfusionServiceRequest,
   transfusionOrderItemRequests,
   transfusionOrderProblem,
@@ -195,6 +199,11 @@ export type KarteTimelineItem = KarteItemBase &
          * 既にある Task を渡す必要がある(status だけだと二重に作ってしまう)。
          */
         task: fhir4.Task | undefined;
+        /**
+         * 実施記録(施用)。1 日に複数回の施用があるので配列。進捗に関わらず常に出す
+         * (実施せず の記録は Task を動かさないが、記録としては見せる)。
+         */
+        performs: InjectionPerformDisplay[];
       }
     // 検体検査の明細(検査項目・パネルの構成項目)も ServiceRequest なので、
     // オーダーのヘッダにぶら下がるぶんを itemRequests に集めて渡す。
@@ -590,6 +599,8 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   // 他科依頼は実施記録を持たない(返ってくるのは回答の診療記録)ので Task だけ。
   const consultTaskByOrderId = consultTasksByOrderId(tasks);
   const injectionTaskByOrderId = injectionTasksByOrderId(tasks);
+  // 注射の実施記録も同じ検索結果の Procedure + MedicationAdministration に混ざって届く。
+  const injectionPerformByOrderId = injectionPerformsByOrderId(procedures, administrations);
 
   const medicationRequestsBySr = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
@@ -798,6 +809,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         label: KARTE_KIND_LABELS.injection,
         status: injectionTaskStatus(task),
         task,
+        performs: injectionPerformByOrderId.get(serviceRequest.id ?? "") ?? [],
       };
     }
     return { ...withMedications, kind: "prescription" as const, label: KARTE_KIND_LABELS.prescription };

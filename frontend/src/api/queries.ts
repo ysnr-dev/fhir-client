@@ -69,6 +69,10 @@ import {
   type InjectionTaskStatus,
 } from "../fhir/injectionTaskHelpers";
 import {
+  buildInjectionPerformDeleteEntries,
+  type InjectionPerformDisplay,
+} from "../fhir/injectionPerformHelpers";
+import {
   INJECTION_ORDER_TYPE,
   buildInjectionSeriesDeleteBundle,
   injectionSeriesOf,
@@ -2421,6 +2425,51 @@ export function useUpdateInjectionTaskStatus() {
           taskBundleEntry(buildInjectionTaskUpdate(task, serviceRequest, status)),
         ),
       }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
+  });
+}
+
+/**
+ * 注射の実施登録。実施記録一式と(予定回数に達したら)Task の実施済を 1 つの
+ * transaction で書き込む。Bundle の組み立ては injectionPerformHelpers を参照。
+ */
+export function useRegisterInjectionPerform() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
+  });
+}
+
+/**
+ * 注射の実施取消。そのオーダーの実施記録をすべて消し、実施済になっていた Task は
+ * 依頼済に戻す(払出済だったかは分からないので、いちばん手前に戻す)。
+ * 記録を消す理由は buildInjectionPerformDeleteEntries を参照。
+ */
+export function useCancelInjectionPerforms() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      order,
+      task,
+      performs,
+    }: {
+      order: fhir4.ServiceRequest;
+      task: fhir4.Task | undefined;
+      performs: InjectionPerformDisplay[];
+    }) => {
+      const entries = buildInjectionPerformDeleteEntries(performs);
+      if (task?.id && task.status === "completed") {
+        entries.push(taskBundleEntry(buildInjectionTaskUpdate(task, order, "requested")));
+      }
+      return postBundle({ resourceType: "Bundle", type: "transaction", entry: entries });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });

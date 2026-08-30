@@ -13,6 +13,7 @@ import {
   useDeleteTransfusionOrder,
   useDeleteSurgeryOrder,
   useDeleteEndoscopyOrder,
+  useCancelInjectionPerforms,
   useDeletePrescription,
   useDeleteQuestionnaireResponse,
   useDeleteVitalEntry,
@@ -40,8 +41,8 @@ import {
   groupInjectionByRp,
   injectionComment,
   injectionSeriesLabel,
+  injectionUsageSummary,
   summarizeInjectionServiceRequest,
-  type InjectionRpDisplay,
 } from "../fhir/injectionHelpers";
 import {
   groupBySpecimen,
@@ -109,6 +110,7 @@ import {
   canRestoreInjection,
   injectionTaskStatusDisplay,
 } from "../fhir/injectionTaskHelpers";
+import type { InjectionPerformDisplay } from "../fhir/injectionPerformHelpers";
 import { summarizeRehabOrder } from "../fhir/rehabOrderHelpers";
 import type { RehabPerformDisplay } from "../fhir/rehabResultHelpers";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
@@ -162,6 +164,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { AnesthesiaChartModal } from "./AnesthesiaChartModal";
 import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
 import { InjectionCancelModal } from "./InjectionCancelModal";
+import { InjectionPerformModal } from "./InjectionPerformModal";
 import { InjectionDeleteModal } from "./InjectionDeleteModal";
 import { KarteCardJsonModal } from "./KarteCardModals";
 import { PlainTextModal } from "./PlainTextModal";
@@ -327,6 +330,8 @@ function KarteCard({
   const [injectionDeleteOpen, setInjectionDeleteOpen] = useState(false);
   // 注射の中止・中止取消。開いているときだけモーダルを出す。
   const [injectionCancel, setInjectionCancel] = useState<"cancel" | "restore" | null>(null);
+  const [injectionPerformOpen, setInjectionPerformOpen] = useState(false);
+  const cancelInjectionPerforms = useCancelInjectionPerforms();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [chartOpen, setChartOpen] = useState(false);
   // 輸血の実施入力。投与するのは病棟なので、部門一覧だけでなくここからも開ける。
@@ -651,6 +656,35 @@ function KarteCard({
             {/* 注射の中止。注射は薬剤部・病棟が動く前に「明日からやめる」形で止まる
                 ことが多いので、部門画面(注射ワークリストは別タスク)を待たずカルテから
                 押せるようにする。実施済(施用した)注射は中止できない。 */}
+            {/* 注射の実施入力。施用するのは病棟なので、その場で書けるようカルテから
+                開ける(注射ワークリストは別タスク)。中止した注射には出さない。
+                1 日に複数回の施用があるので、実施済になっても押せる。 */}
+            {item.kind === "injection" && item.status !== "cancelled" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => setInjectionPerformOpen(true)}
+              >
+                実施入力
+              </button>
+            )}
+            {item.kind === "injection" && item.performs.length > 0 && (
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={cancelInjectionPerforms.isPending}
+                onClick={() => {
+                  if (!window.confirm("この注射の実施記録をすべて取り消します。よろしいですか?")) return;
+                  cancelInjectionPerforms.mutate({
+                    order: item.serviceRequest,
+                    task: item.task,
+                    performs: item.performs,
+                  });
+                }}
+              >
+                実施取消
+              </button>
+            )}
             {item.kind === "injection" && canCancelInjection(item.status) && (
               <button
                 type="button"
@@ -688,6 +722,7 @@ function KarteCard({
       </header>
 
       <ErrorBanner error={deleteError} />
+      {item.kind === "injection" && <ErrorBanner error={cancelInjectionPerforms.error} />}
 
       <CollapsibleBody>
         <KarteCardBody item={item} />
@@ -701,6 +736,15 @@ function KarteCard({
         />
       )}
       {jsonOpen && <KarteCardJsonModal item={item} onClose={() => setJsonOpen(false)} />}
+      {injectionPerformOpen && item.kind === "injection" && (
+        <InjectionPerformModal
+          order={item.serviceRequest}
+          medicationRequests={item.medicationRequests}
+          task={item.task}
+          performs={item.performs}
+          onClose={() => setInjectionPerformOpen(false)}
+        />
+      )}
       {injectionCancel && item.kind === "injection" && (
         <InjectionCancelModal
           serviceRequest={item.serviceRequest}
@@ -937,19 +981,6 @@ function cardMeta(item: KarteTimelineItem): string {
   return requesterSummary;
 }
 
-// 注射カードの用法 1 行(「点滴 | 静脈注射 | 静脈内 | 100mL/h」)。
-function injectionUsageSummary(rp: InjectionRpDisplay): string {
-  return [
-    rp.usageTypeDisplay,
-    rp.methodDisplay,
-    rp.routeDisplay,
-    rp.siteDisplay,
-    rp.lineDisplay,
-    rp.rate != null ? `${rp.rate}mL/h` : "",
-  ]
-    .filter(Boolean)
-    .join(" | ");
-}
 
 // 診療日はグループ見出しに出るのでカードには時刻だけを添える。
 // 日付のみ(処方の authoredOn)は時刻を持たないので空文字。
@@ -1095,6 +1126,9 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
           </div>
         ))}
         {comment && <p className="karte-card__note">{comment}</p>}
+        {item.performs.map((perform) => (
+          <InjectionPerformSection perform={perform} key={perform.id} />
+        ))}
       </>
     );
   }
@@ -1915,6 +1949,40 @@ function ConsultOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.Servic
 }
 
 // 輸血の実施情報の行。バッグと副作用は他部門の「薬剤」「器材」に当たる。
+// 注射の実施情報(施用 1 回ぶん)。輸血と同じ見た目で、薬剤と結果・理由を出す。
+function InjectionPerformSection({ perform }: { perform: InjectionPerformDisplay }) {
+  const rows: { label: string; values: string[] }[] = [
+    { label: "薬剤", values: perform.medicines },
+    { label: "理由", values: perform.reason ? [perform.reason] : [] },
+  ];
+  return (
+    <section className="karte-perform">
+      <div className="karte-perform__head">
+        <span className="karte-perform__title">実施情報</span>
+        {perform.performedAt && <span className="karte-perform__meta">{perform.performedAt}</span>}
+        {perform.performerName && (
+          <span className="karte-perform__meta">{perform.performerName}</span>
+        )}
+        {/* 施用まで至らなかった記録(途中で中止・実施せず)。 */}
+        {perform.statusNote && <span className="karte-perform__status">{perform.statusNote}</span>}
+      </div>
+      {rows.map(({ label, values }) =>
+        values.length === 0 ? null : (
+          <div className="karte-perform__row" key={label}>
+            <span className="karte-perform__label">{`${label}:`}</span>
+            <span className="karte-perform__values">
+              {values.map((value, index) => (
+                <span key={index}>{value}</span>
+              ))}
+            </span>
+          </div>
+        ),
+      )}
+      {perform.comment && <p className="karte-perform__note">{perform.comment}</p>}
+    </section>
+  );
+}
+
 const TRANSFUSION_PERFORM_ROWS: {
   label: string;
   of: (perform: TransfusionPerformDisplay) => string[];

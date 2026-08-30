@@ -477,6 +477,15 @@ JP Core の `JP_MedicationRequest_Injection` プロファイルを参考にし�
   ケバブから中止・中止取消ができ、連日オーダーでは「この日のみ / この日以降すべて」を選べます
   (実施済の注射は中止できません)。受付済・払出済・実施済へ進める導線(注射ワークリスト・
   払出・実施入力)は未実装です。詳細は `docs/injection-order-design.md` §5。
+- **実施記録(施用)**: カードのケバブ「実施入力」から、施用の開始・終了時刻、実施者、結果
+  (実施 / 途中で中止 / 実施せず)と理由、薬剤ごとの実施量を登録します。オーダーに無い薬剤も
+  RP ごとに追加でき(依頼時と実施時で内容が変わることが多いため)、その `MedicationAdministration`
+  は `request` を持たず、カードでは「(追加)」と印が付きます。輸血と同じく実施 1 回を
+  `Procedure`(`category = order-type|injection`、`basedOn` = オーダー)のハブにし、薬剤ごとの
+  `MedicationAdministration`(`partOf` = ハブ、`request` = その `MedicationRequest`)をぶら下げます。
+  1 日に複数回の施用(開始時刻が複数)があるので、実施記録はオーダーに複数付き、予定回数に達した
+  ときに Task を実施済にします。「実施取消」は記録をすべて消して Task を依頼済に戻します。
+  詳細は `docs/injection-order-design.md` §6。
 - テンプレートへの一括入力(`%prescriptions`)は最新の「処方」を対象とし、注射オーダーは
   対象外です(検索結果から category で除外)。
 

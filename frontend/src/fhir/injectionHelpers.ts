@@ -945,6 +945,20 @@ function extensionCoding(
   return extensions?.find((e) => e.url === url)?.valueCodeableConcept?.coding?.[0];
 }
 
+/** カード・実施入力に出す用法 1 行(「点滴 | 静脈注射 | 静脈内 | 100mL/h」)。 */
+export function injectionUsageSummary(rp: InjectionRpDisplay): string {
+  return [
+    rp.usageTypeDisplay,
+    rp.methodDisplay,
+    rp.routeDisplay,
+    rp.siteDisplay,
+    rp.lineDisplay,
+    rp.rate != null ? `${rp.rate}mL/h` : "",
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
+
 export function groupInjectionByRp(mrs: fhir4.MedicationRequest[]): InjectionRpDisplay[] {
   const groups = new Map<number, InjectionRpDisplay>();
 
