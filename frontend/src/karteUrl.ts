@@ -105,6 +105,7 @@ const DETAIL_KINDS: KarteDetailKind[] = [
   "meal-order",
   "transfusion-order",
   "rehab-order",
+  "consult-order",
   "lab-result",
   "micro-result",
   "patho-result",

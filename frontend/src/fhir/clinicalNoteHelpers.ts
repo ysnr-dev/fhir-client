@@ -1,5 +1,6 @@
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 import { draftObservationEntries } from "./observationExtract";
+import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 import { practitionerDisplayName } from "./practitionerHelpers";
 import {
   SCHEMA_IMAGE_NOTE,
@@ -25,6 +26,66 @@ export const PROGRESS_NOTE_TYPE: fhir4.CodeableConcept = {
   coding: [{ system: LOINC_SYSTEM, code: "11506-3", display: "Progress note" }],
   text: "経過記録",
 };
+
+/**
+ * 他科依頼の回答として書いた診療記録の種別(LOINC 11488-4 Consult note)。
+ * 回答は専用の様式を作らず通常の診療記録として書くので、経過記録と違うのは
+ * type と event(下記)だけ(docs/consult-order-design.md §5)。
+ */
+export const CONSULT_NOTE_TYPE: fhir4.CodeableConcept = {
+  coding: [{ system: LOINC_SYSTEM, code: "11488-4", display: "Consult note" }],
+  text: "他科依頼回答",
+};
+
+/**
+ * カルテのタイムライン・診療日ペインに出す診療記録の種別(token 検索のカンマ = OR)。
+ *
+ * 経過記録に加えて他科依頼の回答も出す。回答は依頼先科の医師が書いた診療記録で、
+ * 依頼のカードからも開けるが、**カルテを時系列に読む人にも見えている必要がある**
+ * (docs/consult-order-design.md §5)。種別を増やしたらここに足す — 検索から漏れると
+ * 記録は保存されているのにカルテに出ない、という気付きにくい欠落になる。
+ */
+export const KARTE_NOTE_TYPE_SEARCH = `${LOINC_SYSTEM}|11506-3,${LOINC_SYSTEM}|11488-4`;
+
+const CONSULT_NOTE_EVENT_SYSTEM = "http://fhir-client.local/CodeSystem/consult-note-event";
+
+/**
+ * この記録が記述している出来事(Composition.event)。他科依頼の回答では
+ * `event.detail` が回答した依頼(ServiceRequest)を指す。
+ *
+ * R4 の Composition に basedOn は無く、`event`(この文書が記述している臨床上の
+ * 出来事)がその位置づけに当たる標準の場所なので、ローカル拡張を作らずここを使う
+ * (docs/consult-order-design.md §2.3)。
+ */
+function consultNoteEvent(serviceRequestId: string): fhir4.CompositionEvent[] {
+  return [
+    {
+      code: [
+        {
+          coding: [
+            { system: CONSULT_NOTE_EVENT_SYSTEM, code: "reply", display: "他科依頼への回答" },
+          ],
+        },
+      ],
+      detail: [{ reference: `ServiceRequest/${serviceRequestId}` }],
+    },
+  ];
+}
+
+/** 回答が答えている他科依頼の ServiceRequest id。回答でなければ空。 */
+export function clinicalNoteConsultOrderId(composition: fhir4.Composition | undefined): string {
+  for (const event of composition?.event ?? []) {
+    const isReply = event.code?.some((c) =>
+      c.coding?.some((coding) => coding.system === CONSULT_NOTE_EVENT_SYSTEM),
+    );
+    if (!isReply) continue;
+    for (const detail of event.detail ?? []) {
+      const id = detail.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
+      if (id) return id;
+    }
+  }
+  return "";
+}
 
 // セクションの選択肢。コードは C-CDA on FHIR Progress Note のセクション定義に合わせた
 // LOINC (Subjective 61150-9 / Objective 61149-1 / Assessment 51848-0 /
@@ -304,9 +365,20 @@ export function buildClinicalNote(
     // 新規作成時の author。編集時(existing あり)は既存の author を保持するので不要。
     practitioner?: fhir4.Practitioner | null;
     existing?: fhir4.Composition;
+    /**
+     * 他科依頼の回答として書くときの、回答する依頼の ServiceRequest id。
+     * type と event が変わるだけで、本文の作りは通常の診療記録と同じ
+     * (docs/consult-order-design.md §5)。
+     */
+    consultOrderId?: string;
+    /**
+     * 回答した診療科。オーダーの依頼科・検査結果の実施科と同じローカル拡張に入れる
+     * (どの科が答えたかを、参照を引き直さずに一覧・カードで出せるように)。
+     */
+    department?: { departmentId: string; departmentName: string };
   },
 ): ClinicalNoteSave {
-  const { patientId, practitioner, existing } = options;
+  const { patientId, practitioner, existing, consultOrderId, department } = options;
   const entries: fhir4.BundleEntry[] = [];
   // 保存後も参照され続ける保存済み QR の id。既存 Composition が参照していたものとの
   // 差分で「参照が外れた QR」を求め、同じ transaction で削除する(孤児を残さない)。
@@ -417,10 +489,16 @@ export function buildClinicalNote(
       };
     });
 
+  // 他科依頼の回答は種別と event が違う。編集(existing あり)では呼び出し側が
+  // consultOrderId を渡さないので、保存済みの値をそのまま引き継ぐ
+  // (回答を編集し直しても依頼との紐付きが外れないように)。
+  const event = consultOrderId ? consultNoteEvent(consultOrderId) : existing?.event;
+  const type = consultOrderId ? CONSULT_NOTE_TYPE : (existing?.type ?? PROGRESS_NOTE_TYPE);
+
   const composition: fhir4.Composition = {
     resourceType: "Composition",
     status,
-    type: PROGRESS_NOTE_TYPE,
+    type,
     attester: buildAttester(status, practitioner, existing),
     subject: { reference: `Patient/${patientId}` },
     date: toFhirDateTime(values.date),
@@ -428,6 +506,16 @@ export function buildClinicalNote(
     title: values.title.trim(),
     section: [...problemsSection, ...bodySections],
   };
+
+  if (event?.length) composition.event = event;
+
+  // 診療科も同じく、新規は渡されたもの・編集は保存済みのものを引き継ぐ。
+  const noteDepartment = department?.departmentId ? department : departmentOf(existing ?? {});
+  if (noteDepartment.departmentId) {
+    composition.extension = [
+      departmentExtension(noteDepartment.departmentId, noteDepartment.departmentName),
+    ];
+  }
 
   if (existing?.id) composition.id = existing.id;
 

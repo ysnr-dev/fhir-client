@@ -1,0 +1,314 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/consult-purpose-01",
+  "version": "1.0.0",
+  "name": "CONSULT_PUR_01",
+  "title": "他科依頼 依頼目的",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "他科依頼の「依頼目的」に貼る汎用テンプレート。自由文だけで書くと「何を聞かれているのか」が読み取れず、依頼先が経過を辿り直すことになる。訊かれる側が答えるために要る項目(経過の要点・依頼したいこと・背景・希望)を並べてある。記入しなかった項目は依頼目的の文面に出ないので、当てはまるものだけ埋めればよい。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "b63bbd98-bc3d-4787-90ba-990a7b9c5f4e",
+        "display": "他科依頼"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp-clinical",
+      "type": "group",
+      "text": "経過・現症",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "依頼先はカルテを最初から読み直せない。この依頼を判断するのに要る範囲だけを要約する。"
+        }
+      ],
+      "item": [
+        {
+          "linkId": "clinical-course",
+          "type": "text",
+          "text": "経過の要点",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "いつから何があって今どうなっているか。日付を入れて書く。"
+            }
+          ]
+        },
+        {
+          "linkId": "clinical-findings",
+          "type": "text",
+          "text": "現在の所見",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "身体所見・バイタルのうち、この依頼に関係するもの。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-ask",
+      "type": "group",
+      "text": "依頼したいこと",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "依頼種別(診察依頼・意見のみ など)は「何をしてほしいか」の大枠。ここには具体的に答えてほしい問いを書く。"
+        }
+      ],
+      "item": [
+        {
+          "linkId": "ask-kind",
+          "type": "choice",
+          "text": "依頼の内容",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "複数に当てはまることがあるのでチェックボックス。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "diagnosis",
+                "display": "診断の評価"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "treatment",
+                "display": "治療方針"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "exam",
+                "display": "検査の適応・実施"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "procedure",
+                "display": "手術・処置の可否"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "perioperative",
+                "display": "周術期・併存疾患の管理"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "transfer",
+                "display": "転科・転院の相談"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "other",
+                "display": "その他"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "ask-question",
+          "type": "text",
+          "text": "具体的にお聞きしたいこと",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "「◯◯は可能か」「◯◯の適応があるか」のように、答えの形が決まる書き方にする。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-background",
+      "type": "group",
+      "text": "背景情報",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "検査結果・処方はカルテから辿れるが、依頼先が見落とすと危ないものはここに書き出す。"
+        }
+      ],
+      "item": [
+        {
+          "linkId": "bg-tests",
+          "type": "text",
+          "text": "関連する検査所見",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "この依頼の根拠になった値。日付と値を添える(例: 8/28 Cr 1.8)。"
+            }
+          ]
+        },
+        {
+          "linkId": "bg-medication",
+          "type": "text",
+          "text": "関係する投薬",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "抗血栓薬・ステロイド・免疫抑制薬など、依頼先の判断を変えるもの。"
+            }
+          ]
+        },
+        {
+          "linkId": "bg-caution",
+          "type": "text",
+          "text": "アレルギー・注意点",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "造影剤・薬剤アレルギー、感染対策、認知機能や ADL の制限など。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-request",
+      "type": "group",
+      "text": "希望・患者への説明",
+      "item": [
+        {
+          "linkId": "req-timing",
+          "type": "choice",
+          "text": "診ていただきたい時期",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "オーダーの緊急度(通常・至急)と希望日で足りるときは空でよい。運用上の事情はここに書く。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "today",
+                "display": "本日中"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "days",
+                "display": "数日以内"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "next-visit",
+                "display": "次回外来まで"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "before-op",
+                "display": "手術までに"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "anytime",
+                "display": "指定なし"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "req-explained",
+          "type": "choice",
+          "text": "患者への説明",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "依頼先が患者に会ったときの前提が変わるので必ず選ぶ。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "explained",
+                "display": "依頼することを説明済み"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "not-explained",
+                "display": "未説明"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ask-target",
+                "display": "説明も依頼先にお願いしたい"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "req-note",
+          "type": "text",
+          "text": "その他の申し送り",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "連絡先、家族の来院予定、他科依頼を重ねている場合の順序など。"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

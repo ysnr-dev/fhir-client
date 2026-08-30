@@ -8,6 +8,7 @@ import {
   useDeletePhysioOrder,
   useDeleteTreatmentOrder,
   useDeleteMealOrder,
+  useDeleteConsultOrder,
   useDeleteRehabOrder,
   useDeleteTransfusionOrder,
   useDeleteSurgeryOrder,
@@ -100,6 +101,8 @@ import {
 } from "../fhir/treatmentOrderHelpers";
 import type { TreatmentPerformDisplay } from "../fhir/treatmentResultHelpers";
 import { summarizeMealOrder } from "../fhir/mealOrderHelpers";
+import { consultReply, summarizeConsultOrder } from "../fhir/consultOrderHelpers";
+import { consultTaskStatusDisplay } from "../fhir/consultTaskHelpers";
 import { summarizeRehabOrder } from "../fhir/rehabOrderHelpers";
 import type { RehabPerformDisplay } from "../fhir/rehabResultHelpers";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
@@ -306,6 +309,7 @@ function KarteCard({
   const deleteMealOrder = useDeleteMealOrder();
   const deleteTransfusionOrder = useDeleteTransfusionOrder();
   const deleteRehabOrder = useDeleteRehabOrder();
+  const deleteConsultOrder = useDeleteConsultOrder();
   const deleteResponse = useDeleteQuestionnaireResponse();
   const deleteVital = useDeleteVitalEntry();
   // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
@@ -330,6 +334,7 @@ function KarteCard({
     deleteSurgeryOrder.isPending ||
     deleteMealOrder.isPending ||
     deleteRehabOrder.isPending ||
+    deleteConsultOrder.isPending ||
     deleteResponse.isPending ||
     deleteVital.isPending;
   const deleteError =
@@ -344,6 +349,7 @@ function KarteCard({
     deleteSurgeryOrder.error ??
     deleteMealOrder.error ??
     deleteRehabOrder.error ??
+    deleteConsultOrder.error ??
     deleteResponse.error ??
     deleteVital.error;
 
@@ -378,6 +384,9 @@ function KarteCard({
     else if (item.kind === "transfusion-order") deleteTransfusionOrder.mutate(item.id, options);
     // リハビリは明細を持たないが、リハ部門が取った予約を道連れで取り消す。
     else if (item.kind === "rehab-order") deleteRehabOrder.mutate(item.id, options);
+    // 他科依頼も明細を持たないが、回答済のものは消させない(回答という別の医師の
+    // 記録がぶら下がっているため。mutation 側で拒否してエラー帯に出す)。
+    else if (item.kind === "consult-order") deleteConsultOrder.mutate(item.id, options);
     // テンプレート回答は、生成した Observation も一緒に消すのでリソースごと渡す。
     else if (item.kind === "qr") deleteResponse.mutate(item.response, options);
     // バイタルは 1 回の測定が項目ごとの Observation に分かれるのでまとめて消す。
@@ -434,6 +443,7 @@ function KarteCard({
               item.kind === "patho-order" ||
               item.kind === "transfusion-order" ||
               item.kind === "rehab-order" ||
+              item.kind === "consult-order" ||
               item.kind === "lab-order") && (
               <>
                 <span className={`karte-card__status karte-card__status--${item.status}`}>
@@ -453,7 +463,9 @@ function KarteCard({
                                 ? transfusionTaskStatusDisplay(item.status)
                                 : item.kind === "rehab-order"
                                   ? rehabTaskStatusDisplay(item.status)
-                                  : labTaskStatusDisplay(item.status)}
+                                  : item.kind === "consult-order"
+                                    ? consultTaskStatusDisplay(item.status)
+                                    : labTaskStatusDisplay(item.status)}
                 </span>
                 {cardMeta(item) && <span aria-hidden="true">|</span>}
               </>
@@ -473,7 +485,8 @@ function KarteCard({
             item.kind === "treatment-order" ||
             item.kind === "surgery-order" ||
             item.kind === "transfusion-order" ||
-            item.kind === "rehab-order") && (
+            item.kind === "rehab-order" ||
+            item.kind === "consult-order") && (
             <button
               type="button"
               className="karte-card__icon-button karte-card__icon-button--labeled"
@@ -549,6 +562,25 @@ function KarteCard({
                 onClick={() => onOpenDetail({ kind: "patho-result", id: item.reportId })}
               >
                 レポート表示
+              </button>
+            )}
+            {/* 他科依頼の回答は診療記録なので、専用の詳細ではなく診療記録として開く
+                (docs/consult-order-design.md §5)。まだ回答が無い依頼では無効化する。 */}
+            {item.kind === "consult-order" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={!consultReplyId(item.serviceRequest)}
+                title={
+                  consultReplyId(item.serviceRequest)
+                    ? undefined
+                    : "この他科依頼にはまだ回答がありません"
+                }
+                onClick={() =>
+                  onOpenDetail({ kind: "note", id: consultReplyId(item.serviceRequest) })
+                }
+              >
+                回答表示
               </button>
             )}
             {/* 平文は元テンプレートの項目名と突き合わせて組み立てるので、
@@ -678,6 +710,11 @@ function DocumentIcon() {
   );
 }
 
+/** 他科依頼の回答(診療記録)の id。まだ回答が無ければ空。 */
+function consultReplyId(sr: fhir4.ServiceRequest): string {
+  return consultReply(sr).replyId;
+}
+
 function cardTitle(item: KarteTimelineItem): string {
   if (item.kind === "note") return item.note.title ?? "";
   // バイタルは種別バッジだけで内容が分かるので、タイトルは持たない。
@@ -705,6 +742,14 @@ function cardTitle(item: KarteTimelineItem): string {
   if (item.kind === "rehab-order") {
     const summary = summarizeRehabOrder(item.serviceRequest);
     return [summary.settingDisplay, summary.periodLabel].filter(Boolean).join(" | ");
+  }
+  // 他科依頼は「どこへ出したか」が見出しそのもの。至急のときだけ緊急度も並べる
+  // (手術と同じ流儀で、通常はわざわざ出さない)。
+  if (item.kind === "consult-order") {
+    const summary = summarizeConsultOrder(item.serviceRequest);
+    return [summary.settingDisplay, summary.targetLabel, summary.urgent ? "至急" : ""]
+      .filter(Boolean)
+      .join(" | ");
   }
   // 手術は入外区分と、緊急・準緊急のときだけ予定区分を並べる(予定はわざわざ出さない)。
   if (item.kind === "surgery-order") {
@@ -812,6 +857,19 @@ function cardMeta(item: KarteTimelineItem): string {
   if (item.kind === "transfusion-order") {
     const scheduled = timeOf(item.serviceRequest.occurrenceDateTime ?? "");
     return [scheduled && `投与 ${scheduled}`, requesterSummary].filter(Boolean).join(" | ");
+  }
+  // 他科依頼は希望日を入れなければ依頼日にカードが載るので、希望日を入れたときだけ
+  // 「希望」と付けて添える(日付そのものはカードの載る日で分かるが、希望として
+  // 指定された日なのか依頼日なのかがカードだけでは分からないため)。
+  if (item.kind === "consult-order") {
+    const summary = summarizeConsultOrder(item.serviceRequest);
+    return [
+      summary.desiredDate && `希望 ${summary.desiredDate}`,
+      summary.replierName && `回答 ${summary.replierName}`,
+      requesterSummary,
+    ]
+      .filter(Boolean)
+      .join(" | ");
   }
   // 処方・注射は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。オーダー日は
   // 日付のみを入力する項目なので時刻は出さない(古い処方には時刻付きの authoredOn が
@@ -1063,6 +1121,10 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
 
   if (item.kind === "rehab-order") {
     return <RehabOrderCardBody serviceRequest={item.serviceRequest} performs={item.performs} />;
+  }
+
+  if (item.kind === "consult-order") {
+    return <ConsultOrderCardBody serviceRequest={item.serviceRequest} />;
   }
 
   if (!item.questionnaire) {
@@ -1761,6 +1823,34 @@ function RehabOrderCardBody({
         </section>
       )}
     </>
+  );
+}
+
+// 他科依頼は「依頼種別 / 依頼目的 / 補足」+ 回答済なら回答者が本文。
+//
+// 回答の本文はここに出さない。回答は診療記録として独立したカードにもなるので、
+// 同じ文章を 2 か所に出すと読むときにどちらが正本か分からなくなる
+// (docs/consult-order-design.md §5)。ここからはケバブメニューの「回答表示」で開く。
+function ConsultOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.ServiceRequest }) {
+  const summary = summarizeConsultOrder(serviceRequest);
+
+  if (!summary.targetDepartmentId) {
+    return <p className="karte-card__empty">依頼先の診療科がありません。</p>;
+  }
+
+  return (
+    <div className="karte-rp">
+      <div className="karte-rp__head">
+        <span className="karte-order__group-name">{summary.requestTypeDisplay}</span>
+        {summary.urgent && <span className="micro-result__badge">至急</span>}
+        {summary.replyId && (
+          <span className="micro-result__badge micro-result__badge--muted">回答済</span>
+        )}
+      </div>
+      {/* 依頼目的は複数行で書かれるので改行を残す。 */}
+      <p className="karte-perform__note consult-card__purpose">{summary.purpose || "(目的の記載なし)"}</p>
+      {summary.comment && <p className="karte-perform__note">{summary.comment}</p>}
+    </div>
   );
 }
 

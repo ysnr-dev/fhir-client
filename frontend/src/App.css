@@ -10868,3 +10868,54 @@ button.meal-calendar__cell:hover {
   display: flex;
   gap: 12px;
 }
+
+/* ---- 他科依頼(docs/consult-order-design.md) ---- */
+
+/* 依頼目的は複数行で書かれるので、詳細とカードでは改行をそのまま出す
+   (細菌検査の前投与抗菌薬と同じ扱い)。 */
+.consult-detail__purpose,
+.consult-card__purpose {
+  white-space: pre-wrap;
+}
+
+/* 一覧の依頼目的は 1 行に丸める。全文は行の「表示」で見る(title 属性にも入れて
+   あるので、マウスを載せれば途中までは読める)。 */
+.consult-worklist__purpose {
+  max-width: 24em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 絞り込み欄のチェックボックス。他の項目がラベル + 入力の縦並びなのに対し、
+   チェックは横並びが読みやすいので、ラベルの向きだけを変えて下端で揃える
+   (.patient-search-form label より詳細度を上げるため label を付ける)。 */
+.patient-search-form label.patient-search-form__check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+/* 他科依頼の入力フォーム。伝票フォームの fieldset は flex-wrap で入力欄を横に
+   並べるが、依頼目的(複数行)と説明文は 1 行を占めないと読みにくいので、
+   この画面だけ行を丸ごと使わせる。 */
+.consult-form fieldset > p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* 依頼目的は 1 行を丸ごと使う。テンプレート操作のボタンを右に置くので中身は
+   label ではなく div で組んでおり、セレクタも要素ではなくクラスで指す。 */
+.consult-form .consult-form__wide {
+  flex-basis: 100%;
+}
+
+/* 依頼目的はテンプレート操作のボタンを右に置くので、label ではなく div に
+   見出しを添える(.prescription-form label の縦並びをここだけ手で組む)。 */
+.consult-form__field-label {
+  display: block;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 4px;
+}

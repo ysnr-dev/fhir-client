@@ -47,6 +47,16 @@ import { treatmentPerformsByOrderId, type TreatmentPerformDisplay } from "./trea
 import { isMealServiceRequest, mealOrderProblem } from "./mealOrderHelpers";
 import { isNursingServiceRequest } from "./nursingOrderHelpers";
 import {
+  consultOrderProblem,
+  consultOrderResponseIds,
+  isConsultServiceRequest,
+} from "./consultOrderHelpers";
+import {
+  consultTaskStatus,
+  consultTasksByOrderId,
+  type ConsultTaskStatus,
+} from "./consultTaskHelpers";
+import {
   isTransfusionServiceRequest,
   transfusionOrderItemRequests,
   transfusionOrderProblem,
@@ -126,6 +136,7 @@ export type KarteItemKind =
   | "meal-order"
   | "transfusion-order"
   | "rehab-order"
+  | "consult-order"
   | "qr";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
@@ -144,6 +155,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   "meal-order": "食事",
   "transfusion-order": "輸血",
   "rehab-order": "リハビリ",
+  "consult-order": "他科依頼",
   qr: "テンプレート",
 };
 
@@ -291,6 +303,15 @@ export type KarteTimelineItem = KarteItemBase &
         status: RehabTaskStatus;
         /** 実施記録(新しい順)。 */
         performs: RehabPerformDisplay[];
+      }
+    // 他科依頼。明細も実施記録も持たず、返ってくるのは回答の診療記録。
+    // 回答への参照はオーダー自身が持つ(ServiceRequest のローカル拡張。
+    // docs/consult-order-design.md §2.3)ので、ここで別に突き合わせる必要は無い。
+    | {
+        kind: "consult-order";
+        serviceRequest: fhir4.ServiceRequest;
+        /** 依頼先科の対応状況。Task がまだ無いオーダーは依頼済。 */
+        status: ConsultTaskStatus;
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
   );
@@ -481,6 +502,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     ...endoscopyOrderResponseIds(serviceRequests),
     ...surgeryOrderResponseIds(serviceRequests),
     ...pathoOrderResponseIds(serviceRequests),
+    ...consultOrderResponseIds(serviceRequests),
   ]);
 
   // canonical("<url>|<version>")と url 単独の両方で引けるようにしておく
@@ -553,6 +575,8 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   // rehabPerformsByOrderId が category(order-type)で行うので同じ配列を渡してよい。
   const rehabTaskByOrderId = rehabTasksByOrderId(tasks);
   const rehabPerformByOrderId = rehabPerformsByOrderId(procedures);
+  // 他科依頼は実施記録を持たない(返ってくるのは回答の診療記録)ので Task だけ。
+  const consultTaskByOrderId = consultTasksByOrderId(tasks);
 
   const medicationRequestsBySr = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
@@ -741,6 +765,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
             : [],
       };
     }
+    if (isConsultServiceRequest(serviceRequest)) {
+      return {
+        ...base,
+        kind: "consult-order" as const,
+        label: KARTE_KIND_LABELS["consult-order"],
+        status: consultTaskStatus(consultTaskByOrderId.get(serviceRequest.id ?? "")),
+      };
+    }
     const withMedications = {
       ...base,
       medicationRequests: medicationRequestsBySr.get(serviceRequest.id ?? "") ?? [],
@@ -924,6 +956,7 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "meal-order") return mealOrderProblem(item.serviceRequest);
   if (item.kind === "transfusion-order") return transfusionOrderProblem(item.serviceRequest);
   if (item.kind === "rehab-order") return rehabOrderProblem(item.serviceRequest);
+  if (item.kind === "consult-order") return consultOrderProblem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);
   }

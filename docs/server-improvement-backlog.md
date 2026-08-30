@@ -3,7 +3,8 @@
 fhir-client のワークアラウンド調査で見つかった「fhir-server 側を直した方が効率がよい」
 項目のうち、**未実装のもの**の記録。
 
-- 調査履歴: 2026-08-01（初回、6 項目）、2026-08-23（frontend/backend 全面再調査で拡充）。
+- 調査履歴: 2026-08-01（初回、6 項目）、2026-08-23（frontend/backend 全面再調査で拡充）、
+  2026-08-30（他科依頼の実装で C-6 を追加）。
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
@@ -11,10 +12,10 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   両リポジトリのコミット履歴を参照。
 - **2026-08-23 に優先度 A（5 件）・B（operation 系）・C-1（日付／期間検索）・C-2
   （`_sort` と `AllergyIntolerance.onset`）をサーバー・クライアント両側とも実装済み**
-  （下記の「対応済み」節を参照）。残るは C-3〜C-5 と長期のみ。
+  （下記の「対応済み」節を参照）。残るは C-3〜C-6 と長期のみ。
 
 各項目は「現状のワークアラウンド → 望ましいサーバー機能 → 影響範囲」の形式。
-**残っているのは優先度 C の C-3〜C-5 と長期のみ**（優先度 A・B と C-1・C-2 は
+**残っているのは優先度 C の C-3〜C-6 と長期のみ**（優先度 A・B と C-1・C-2 は
 2026-08-23 に対応済み）。
 
 ---
@@ -210,6 +211,18 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 - **望ましいサーバー機能**: `Schedule?specialty=`（R4 標準）の実装（または対応済みなら
   CapabilityStatement での明示とクライアント側の移行）。
 - **影響範囲**: 予約画面の転送量。Schedule 件数が少ないうちは軽微。
+
+### C-6. `ServiceRequest.performer` 検索の実装
+
+- **現状**: 他科依頼(`docs/consult-order-design.md`)は依頼先の診療科を標準の
+  `ServiceRequest.performer`(Organization)に持つが、上流が索引していないため
+  (`handling=strict` で `Unsupported search parameter 'performer'` を確認済み)、
+  他科依頼一覧は `status` で絞った全件を読んでからクライアントで依頼先科を絞っている
+  (`fetchConsultWorklist` + `matchesFilters`)。
+- **望ましいサーバー機能**: `ServiceRequest?performer=`(R4 標準)。
+- **影響範囲**: 他科依頼一覧。未回答の件数は「いま溜まっている仕事」に比例するので
+  当面は破綻しないが、科ごとに絞ってページングしたくなった時点で必要になる。
+  医師単位の受信箱(`performer=Practitioner/...`)を作るときも前提になる。
 
 ---
 

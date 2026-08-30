@@ -12,6 +12,7 @@ import {
   useEndoscopyOrderDetail,
   useEndoscopyPerformDetail,
   useMealOrderDetail,
+  useConsultOrderDetail,
   useRehabOrderDetail,
   useTransfusionOrderDetail,
   useTransfusionPerformDetail,
@@ -60,6 +61,7 @@ import { TreatmentOrderDetailPanel } from "./TreatmentOrderDetailPanel";
 import { SurgeryOrderDetailPanel } from "./SurgeryOrderDetailPanel";
 import { TransfusionOrderDetailPanel } from "./TransfusionOrderDetailPanel";
 import { RehabOrderDetailPanel } from "./RehabOrderDetailPanel";
+import { ConsultOrderDetailPanel } from "./ConsultOrderDetailPanel";
 import { rehabPerformsByOrderId } from "../fhir/rehabResultHelpers";
 
 // カルテのタイムラインから開くモーダル。詳細表示は各リソースの詳細ページと同じ
@@ -80,6 +82,7 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   "meal-order": "食事内容",
   "transfusion-order": "輸血内容",
   "rehab-order": "リハビリ内容",
+  "consult-order": "他科依頼内容",
   "lab-result": "検査結果内容",
   "micro-result": "細菌検査結果内容",
   "patho-result": "病理診断レポート",
@@ -129,6 +132,8 @@ export function KarteDetailModal({
         <TransfusionOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "rehab-order" ? (
         <RehabOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+      ) : target.kind === "consult-order" ? (
+        <ConsultOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
       ) : target.kind === "lab-result" ? (
         <LabResultDetail patientId={patientId} reportId={target.id} />
       ) : target.kind === "micro-result" ? (
@@ -718,6 +723,8 @@ export function KarteCardJsonModal({
         <TransfusionOrderJson srId={item.id} />
       ) : item.kind === "rehab-order" ? (
         <RehabOrderJson srId={item.id} />
+      ) : item.kind === "consult-order" ? (
+        <ConsultOrderJson srId={item.id} />
       ) : (
         <FhirJsonView resource={jsonResource(item)} />
       )}
@@ -946,6 +953,50 @@ function TransfusionOrderJson({ srId }: { srId: string }) {
       ) : (
         <FhirJsonView resource={detail.data?.data} />
       )}
+    </>
+  );
+}
+
+// 他科依頼は明細も実施記録も持たないので、ヘッダ 1 件だけを見る。
+// 回答(診療記録)はここには出さず、カードの「回答表示」から診療記録として開く。
+function ConsultOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const detail = useConsultOrderDetail(srId);
+  const serviceRequest = serviceRequestsOf(detail.data?.data).find(
+    (request) => request.id === srId,
+  );
+  const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された他科依頼は別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <ConsultOrderDetailPanel serviceRequest={serviceRequest} problemsById={problemsById} />
+      ) : (
+        !detail.error && <NotFound label="他科依頼" />
+      )}
+    </>
+  );
+}
+
+function ConsultOrderJson({ srId }: { srId: string }) {
+  const detail = useConsultOrderDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
     </>
   );
 }

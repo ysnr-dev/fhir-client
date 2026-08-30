@@ -55,6 +55,7 @@ import { MicroSpecimenTypePage } from "./pages/MicroSpecimenTypePage";
 import { PathoWorklistPage } from "./pages/PathoWorklistPage";
 import { TransfusionWorklistPage } from "./pages/TransfusionWorklistPage";
 import { RehabWorklistPage } from "./pages/RehabWorklistPage";
+import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
 import { NursingWorklistPage } from "./pages/NursingWorklistPage";
 import { PathoOrganPage } from "./pages/PathoOrganPage";
 import { PathoCollectionMethodPage } from "./pages/PathoCollectionMethodPage";
@@ -130,6 +131,15 @@ function App() {
             {/* 入院患者一覧は病棟のベッドの埋まり具合と在院患者を見る画面。 */}
             <Link to="/inpatients" className="row-menu__item">
               入院患者一覧
+            </Link>
+          </HoverMenu>
+          {/* 診療業務は「診療科の医師が捌く仕事」の画面。部門業務(検査室・薬剤部など、
+              依頼を受ける部門の仕事)とは受け手が違うのでメニューを分ける
+              — 他科依頼を受けるのは技師ではなく他科の医師で、返すのは結果ではなく
+              診療記録(docs/consult-order-design.md §1)。 */}
+          <HoverMenu label="診療業務">
+            <Link to="/consult-worklist" className="row-menu__item">
+              他科依頼一覧
             </Link>
           </HoverMenu>
           {/* 部門業務は「依頼を受けた側」の画面。診療科がオーダーを出す患者一覧・カルテと、
@@ -474,6 +484,7 @@ function App() {
           <Route path="/patho-worklist" element={<PathoWorklistPage />} />
           <Route path="/transfusion-worklist" element={<TransfusionWorklistPage />} />
           <Route path="/rehab-worklist" element={<RehabWorklistPage />} />
+          <Route path="/consult-worklist" element={<ConsultWorklistPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />

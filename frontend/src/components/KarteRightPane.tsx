@@ -18,6 +18,7 @@ import {
   TransfusionOrderEditPanel,
 } from "./TransfusionOrderPanels";
 import { RehabOrderCreatePanel, RehabOrderEditPanel } from "./RehabOrderPanels";
+import { ConsultOrderCreatePanel, ConsultOrderEditPanel } from "./ConsultOrderPanels";
 import {
   QuestionnaireResponseCreatePanel,
   QuestionnaireResponseEditPanel,
@@ -62,6 +63,8 @@ export type KartePaneState =
   | { kind: "transfusion-order-edit"; srId: string }
   | { kind: "rehab-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "rehab-order-edit"; srId: string }
+  | { kind: "consult-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "consult-order-edit"; srId: string }
   | { kind: "nursing-order-create"; problem?: ProblemRef }
   | { kind: "nursing-order-edit"; srId: string }
   | { kind: "qr-create"; problem?: ProblemRef }
@@ -103,6 +106,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "transfusion-order-edit": "輸血編集",
   "rehab-order-create": "リハビリ登録",
   "rehab-order-edit": "リハビリ編集",
+  "consult-order-create": "他科依頼登録",
+  "consult-order-edit": "他科依頼編集",
   "nursing-order-create": "看護指示登録",
   "nursing-order-edit": "看護指示編集",
   "qr-create": "テンプレート登録",
@@ -130,6 +135,7 @@ function paneKey(state: KartePaneState): string {
     case "meal-order-edit":
     case "transfusion-order-edit":
     case "rehab-order-edit":
+    case "consult-order-edit":
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
       return `${state.kind}:${state.qrId}`;
@@ -151,6 +157,7 @@ function paneKey(state: KartePaneState): string {
     case "surgery-order-create":
     case "transfusion-order-create":
     case "rehab-order-create":
+    case "consult-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     // 食事は暦の別の日を押したときも初期値(開始日)が変わるので、日付もキーに入れる。
     case "meal-order-create":
@@ -316,6 +323,14 @@ export function KarteRightPane({
           onClick={() => onStateChange({ kind: "nursing-order-create", problem: selectedProblem })}
         >
           看護指示
+        </button>
+        {/* 他科依頼は部門ではなく人(他の診療科の医師)への依頼なので、部門オーダーを
+            並べた最後に置く。 */}
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "consult-order-create", problem: selectedProblem })}
+        >
+          他科依頼
         </button>
       </div>
     </section>
@@ -506,6 +521,17 @@ function PaneContent({
       );
     case "rehab-order-edit":
       return <RehabOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "consult-order-create":
+      return (
+        <ConsultOrderCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "consult-order-edit":
+      return <ConsultOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "qr-create":
       return (
         <QuestionnaireResponseCreatePanel
