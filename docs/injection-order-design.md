@@ -142,7 +142,55 @@ ServiceRequest(1 日分)
 - 詳細モーダル: 注射日の横に同じラベル、「実施パターン」に期間付きで出す。
 - DO(流用): 束ねは引き継がず(新しい requisition を採番)、単日・毎日で始める。
 
-## 5. ファイル
+## 5. 進捗(Task)と中止
+
+他部門と同じく、オーダーの `ServiceRequest` はそのままにして進捗を `Task` に持つ。
+
+```
+ServiceRequest(1 日分) ← focus ── Task(進捗)
+  Task.code   = task-code|injection
+  Task.status = requested / accepted / in-progress / completed / cancelled
+```
+
+| Task.status | 表示 | 意味 | 進める導線 |
+|---|---|---|---|
+| requested | 依頼済 | まだ誰も触っていない | (Task を作らない状態) |
+| accepted | 受付済 | 薬剤部が受け取った | **未実装**(注射ワークリスト) |
+| in-progress | 払出済 | 混注・払出が済んだ | **未実装**(払出登録) |
+| completed | 実施済 | 施用した | **未実装**(実施入力) |
+| cancelled | 中止 | 行わないことにした | カルテのカード → ケバブ「中止」 |
+
+- **Task はオーダー登録時には作らない**。最初のステータス変更(いまは中止)で作り、
+  それまでは「Task が無い = 依頼済」として扱う(この機能より前の注射もそのまま並ぶ)。
+  実装は共通の `createTaskHelpers`(`fhir/taskHelpers.ts`)。
+- **払出済を `completed` ではなく `in-progress` にする**のは、実施済(施用)を後から
+  足すため。`preserveEnd: true` で、実施済へ進めても `executionPeriod.end`
+  (薬剤部の手が離れた時刻)は動かさない(処方の調剤と同じ)。
+- **`ServiceRequest.status` は動かさない**(検体検査・放射線検査・処方と同じ)。
+  部門一覧が進捗で絞るときは上流の `_has:Task:focus:status` を使う。他科依頼だけが
+  SR の status も動かすのは、日付軸を持たず status でしか絞れないため
+  (docs/consult-order-design.md §4)。注射は日付軸があるので要らない。
+
+### 5.1 中止は「この日のみ / この日以降すべて」
+
+注射の中止は「明日からやめる」という形で起きるので、削除と同じ範囲選択にする
+(`InjectionCancelModal`)。後続日は `useInjectionSeriesLater` が Task ごと返し、
+選んだ日ぶんの Task を **1 つの transaction** で書く(途中の日だけ中止済み、という
+半端な状態を作らない)。
+
+- **実施済の注射は中止できない**(`canCancelInjection`)。中止は「これから行わない」
+  という指示で、済んだ事実は消せない。訂正は実施記録側の取り消しで行う(未実装)。
+- 中止を取り消すと **依頼済に戻る**(`canRestoreInjection`)。受付済・払出済には戻さない
+  — 中止の連絡を受けた薬剤部がどこまで戻したかはこちらから決められないため。
+- カルテからの中止をカードのケバブに置いたのは、注射ワークリスト(部門画面)がまだ
+  無いため。部門画面ができたら、受付・払出・実施はそちらに置く。
+
+### 5.2 表示
+
+- カード: メタ行の先頭に進捗(`karte-card__status`)。中止だけ色を変える既存のスタイルに乗る。
+- 詳細モーダル: 「進捗」の行。
+
+## 6. ファイル
 
 | 役割 | ファイル |
 |---|---|
@@ -152,12 +200,18 @@ ServiceRequest(1 日分)
 | 削除確認(範囲選択) | `frontend/src/components/InjectionDeleteModal.tsx` |
 | フォーム(投与日数) | `frontend/src/components/InjectionForm.tsx` |
 | 日付演算 | `frontend/src/lib/dates.ts`(`addDays` / `diffDays`) |
+| 進捗 Task | `frontend/src/fhir/injectionTaskHelpers.ts` |
+| 中止(範囲選択) | `frontend/src/components/InjectionCancelModal.tsx` |
+| 進捗の書き込み | `frontend/src/api/queries.ts`(`useUpdateInjectionTaskStatus`) |
 
-## 6. 未実装・今後
+## 7. 未実装・今後
 
 - 「◯回で終了」の回数指定(いまは期間指定のみ)。展開の日付列を作る `injectionDates` に
   停止条件を足せば済む。
 - 既存の束ねへの日数の追加(いまは DO で新しい束ねを作る)。
-- Task(進捗・中止)、払出(MedicationDispense)、実施記録(MedicationAdministration)、
-  注射ワークリスト、帳票。いずれも 1 日 1 SR を前提に処方の仕組みを流用する。
+- 注射ワークリスト(部門画面)・払出(MedicationDispense)・実施記録
+  (MedicationAdministration)・帳票。いずれも 1 日 1 SR を前提に処方の仕組みを流用する。
+  進捗の状態(受付済・払出済・実施済)は §5 で定義済みで、進める導線だけが無い。
 - 連日オーダーを「束ね単位」で 1 枚のカードにまとめる表示(いまは日ごとにカード)。
+- オーダーを削除しても進捗の Task は残る(検体検査・放射線検査など既存の部門と同じ挙動)。
+  中止してから削除する流れがある注射では起きやすいので、部門横断で片付けるときに直す。

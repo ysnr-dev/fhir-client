@@ -603,16 +603,20 @@ export function orderContextSummary(requester: OrderContext): string {
 export interface PrescriptionDetailBundle {
   serviceRequest?: fhir4.ServiceRequest;
   medicationRequests: fhir4.MedicationRequest[];
+  /** 進捗の Task(注射の詳細で進捗を出すのに使う。処方の詳細では見ていない)。 */
+  tasks: fhir4.Task[];
 }
 
 export function splitPrescriptionDetailBundle(bundle: fhir4.Bundle): PrescriptionDetailBundle {
-  const result: PrescriptionDetailBundle = { medicationRequests: [] };
+  const result: PrescriptionDetailBundle = { medicationRequests: [], tasks: [] };
   for (const entry of bundle.entry ?? []) {
     const resource = entry.resource;
     if (resource?.resourceType === "ServiceRequest") {
       result.serviceRequest = resource as fhir4.ServiceRequest;
     } else if (resource?.resourceType === "MedicationRequest") {
       result.medicationRequests.push(resource as fhir4.MedicationRequest);
+    } else if (resource?.resourceType === "Task") {
+      result.tasks.push(resource as fhir4.Task);
     }
   }
   return result;

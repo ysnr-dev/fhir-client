@@ -64,6 +64,11 @@ import {
 } from "../fhir/labResultHelpers";
 import { referenceId } from "../fhir/shared";
 import {
+  buildInjectionTaskUpdate,
+  injectionTasksByOrderId,
+  type InjectionTaskStatus,
+} from "../fhir/injectionTaskHelpers";
+import {
   INJECTION_ORDER_TYPE,
   buildInjectionSeriesDeleteBundle,
   injectionSeriesOf,
@@ -2329,7 +2334,9 @@ export function useWalkInCheckIn() {
 export function usePrescriptionDetail(srId: string | undefined) {
   const params = new URLSearchParams();
   if (srId) params.set("_id", srId);
-  params.set("_revinclude", "MedicationRequest:based-on");
+  params.append("_revinclude", "MedicationRequest:based-on");
+  // 注射の詳細に進捗(依頼済・中止…)を出すため、Task も同じ応答で受け取る。
+  params.append("_revinclude", "Task:focus");
 
   return useQuery({
     queryKey: ["ServiceRequest", "detail", srId],
@@ -2350,7 +2357,10 @@ export function useInjectionSeriesLater(sr: fhir4.ServiceRequest | undefined) {
   if (patientId) params.set("patient", patientId);
   params.set("category", `${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`);
   if (date) params.set("authoredon", `gt${date}`);
-  params.set("_revinclude", "MedicationRequest:based-on");
+  params.append("_revinclude", "MedicationRequest:based-on");
+  // 中止を「この日以降」まとめて書くとき、後続日に既にある Task が要る
+  // (status だけだと Task を二重に作ってしまう)。
+  params.append("_revinclude", "Task:focus");
   params.set("_count", "100");
 
   return useQuery({
@@ -2366,6 +2376,9 @@ export function useInjectionSeriesLater(sr: fhir4.ServiceRequest | undefined) {
         if (!parent) continue;
         mrsBySr.set(parent, [...(mrsBySr.get(parent) ?? []), mr]);
       }
+      const taskBySr = injectionTasksByOrderId(
+        resources.filter((r): r is fhir4.Task => r?.resourceType === "Task"),
+      );
       return resources
         .filter((r): r is fhir4.ServiceRequest => r?.resourceType === "ServiceRequest")
         .filter(
@@ -2375,9 +2388,43 @@ export function useInjectionSeriesLater(sr: fhir4.ServiceRequest | undefined) {
             (s.authoredOn?.slice(0, 10) ?? "") > (date ?? ""),
         )
         .sort((a, b) => (a.authoredOn ?? "").localeCompare(b.authoredOn ?? ""))
-        .map((s) => ({ serviceRequest: s, medicationRequests: mrsBySr.get(s.id ?? "") ?? [] }));
+        .map((s) => ({
+          serviceRequest: s,
+          medicationRequests: mrsBySr.get(s.id ?? "") ?? [],
+          task: taskBySr.get(s.id ?? ""),
+        }));
     },
     enabled: Boolean(sr && series && patientId && date),
+  });
+}
+
+/**
+ * 注射の進捗を書き込む。連日オーダーは「この日のみ」でも「この日以降すべて」でも
+ * 同じ形(日ごとの Task)なので、対象の配列を受け取って 1 つの transaction で書く
+ * (途中の日だけ中止済み、という half-done を作らない)。
+ */
+export function useUpdateInjectionTaskStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      targets,
+      status,
+    }: {
+      targets: { serviceRequest: fhir4.ServiceRequest; task: fhir4.Task | undefined }[];
+      status: InjectionTaskStatus;
+    }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: targets.map(({ serviceRequest, task }) =>
+          taskBundleEntry(buildInjectionTaskUpdate(task, serviceRequest, status)),
+        ),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
   });
 }
 

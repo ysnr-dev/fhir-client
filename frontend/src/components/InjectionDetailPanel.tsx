@@ -9,6 +9,10 @@ import {
   scheduleLabel,
   summarizeInjectionServiceRequest,
 } from "../fhir/injectionHelpers";
+import {
+  injectionTaskStatus,
+  injectionTaskStatusDisplay,
+} from "../fhir/injectionTaskHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
 
 // 注射オーダーの内容表示。カルテ画面の詳細モーダルから使う(処方の
@@ -17,6 +21,8 @@ import { orderContextSummary, prescriptionRequester } from "../fhir/prescription
 interface InjectionDetailPanelProps {
   serviceRequest: fhir4.ServiceRequest;
   medicationRequests: fhir4.MedicationRequest[];
+  /** この注射の進捗 Task。無ければ依頼済として出す。 */
+  task?: fhir4.Task;
   problemsById?: Map<string, fhir4.Condition>;
   children?: ReactNode;
 }
@@ -24,6 +30,7 @@ interface InjectionDetailPanelProps {
 export function InjectionDetailPanel({
   serviceRequest,
   medicationRequests,
+  task,
   problemsById,
   children,
 }: InjectionDetailPanelProps) {
@@ -58,6 +65,8 @@ export function InjectionDetailPanel({
                 }`
               : "-"}
           </dd>
+          <dt>進捗</dt>
+          <dd>{injectionTaskStatusDisplay(injectionTaskStatus(task))}</dd>
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay || "-"}</dd>
           <dt>注射区分</dt>

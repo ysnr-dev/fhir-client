@@ -57,6 +57,11 @@ import {
   type ConsultTaskStatus,
 } from "./consultTaskHelpers";
 import {
+  injectionTaskStatus,
+  injectionTasksByOrderId,
+  type InjectionTaskStatus,
+} from "./injectionTaskHelpers";
+import {
   isTransfusionServiceRequest,
   transfusionOrderItemRequests,
   transfusionOrderProblem,
@@ -183,6 +188,13 @@ export type KarteTimelineItem = KarteItemBase &
         kind: "injection";
         serviceRequest: fhir4.ServiceRequest;
         medicationRequests: fhir4.MedicationRequest[];
+        /** 注射の進捗。Task がまだ無いオーダー(誰も触っていない)は依頼済。 */
+        status: InjectionTaskStatus;
+        /**
+         * 進捗の Task そのもの。輸血と同じく、カルテのカードから中止を書き込むのに
+         * 既にある Task を渡す必要がある(status だけだと二重に作ってしまう)。
+         */
+        task: fhir4.Task | undefined;
       }
     // 検体検査の明細(検査項目・パネルの構成項目)も ServiceRequest なので、
     // オーダーのヘッダにぶら下がるぶんを itemRequests に集めて渡す。
@@ -577,6 +589,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const rehabPerformByOrderId = rehabPerformsByOrderId(procedures);
   // 他科依頼は実施記録を持たない(返ってくるのは回答の診療記録)ので Task だけ。
   const consultTaskByOrderId = consultTasksByOrderId(tasks);
+  const injectionTaskByOrderId = injectionTasksByOrderId(tasks);
 
   const medicationRequestsBySr = new Map<string, fhir4.MedicationRequest[]>();
   for (const mr of medicationRequests) {
@@ -777,9 +790,17 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
       ...base,
       medicationRequests: medicationRequestsBySr.get(serviceRequest.id ?? "") ?? [],
     };
-    return isInjectionServiceRequest(serviceRequest)
-      ? { ...withMedications, kind: "injection" as const, label: KARTE_KIND_LABELS.injection }
-      : { ...withMedications, kind: "prescription" as const, label: KARTE_KIND_LABELS.prescription };
+    if (isInjectionServiceRequest(serviceRequest)) {
+      const task = injectionTaskByOrderId.get(serviceRequest.id ?? "");
+      return {
+        ...withMedications,
+        kind: "injection" as const,
+        label: KARTE_KIND_LABELS.injection,
+        status: injectionTaskStatus(task),
+        task,
+      };
+    }
+    return { ...withMedications, kind: "prescription" as const, label: KARTE_KIND_LABELS.prescription };
   });
 
   const vitalEntries = groupVitalEntries(

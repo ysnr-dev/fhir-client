@@ -835,10 +835,12 @@ export function buildInjectionUpdateBundle(
   );
 }
 
-/** 連日オーダーの 1 日分(ヘッダと薬剤)。 */
+/** 連日オーダーの 1 日分(ヘッダと薬剤、あればその日の進捗 Task)。 */
 export interface InjectionDayTarget {
   serviceRequest: fhir4.ServiceRequest;
   medicationRequests: fhir4.MedicationRequest[];
+  /** 進捗の Task。まだ誰も触っていない日には無い。 */
+  task?: fhir4.Task;
 }
 
 // 「この日以降」の一括更新。編集中の日と同じ束ねの後続日すべてに、同じ内容

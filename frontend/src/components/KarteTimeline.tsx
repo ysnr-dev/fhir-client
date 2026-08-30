@@ -104,6 +104,11 @@ import type { TreatmentPerformDisplay } from "../fhir/treatmentResultHelpers";
 import { summarizeMealOrder } from "../fhir/mealOrderHelpers";
 import { consultReply, summarizeConsultOrder } from "../fhir/consultOrderHelpers";
 import { consultTaskStatusDisplay } from "../fhir/consultTaskHelpers";
+import {
+  canCancelInjection,
+  canRestoreInjection,
+  injectionTaskStatusDisplay,
+} from "../fhir/injectionTaskHelpers";
 import { summarizeRehabOrder } from "../fhir/rehabOrderHelpers";
 import type { RehabPerformDisplay } from "../fhir/rehabResultHelpers";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
@@ -156,6 +161,7 @@ import { vitalDisplayRows } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { AnesthesiaChartModal } from "./AnesthesiaChartModal";
 import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
+import { InjectionCancelModal } from "./InjectionCancelModal";
 import { InjectionDeleteModal } from "./InjectionDeleteModal";
 import { KarteCardJsonModal } from "./KarteCardModals";
 import { PlainTextModal } from "./PlainTextModal";
@@ -319,6 +325,8 @@ function KarteCard({
   const [plainTextOpen, setPlainTextOpen] = useState(false);
   const [jsonOpen, setJsonOpen] = useState(false);
   const [injectionDeleteOpen, setInjectionDeleteOpen] = useState(false);
+  // 注射の中止・中止取消。開いているときだけモーダルを出す。
+  const [injectionCancel, setInjectionCancel] = useState<"cancel" | "restore" | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [chartOpen, setChartOpen] = useState(false);
   // 輸血の実施入力。投与するのは病棟なので、部門一覧だけでなくここからも開ける。
@@ -441,6 +449,7 @@ function KarteCard({
                 カードだけで分かるよう、時刻・依頼元の先頭に添える。バッジにはせず、
                 メタデータの 1 項目として同じ区切りで並べる(理由は .karte-card__status)。 */}
             {(item.kind === "rad-order" ||
+              item.kind === "injection" ||
               item.kind === "physio-order" ||
               item.kind === "endoscopy-order" ||
               item.kind === "treatment-order" ||
@@ -452,7 +461,9 @@ function KarteCard({
               item.kind === "lab-order") && (
               <>
                 <span className={`karte-card__status karte-card__status--${item.status}`}>
-                  {item.kind === "rad-order"
+                  {item.kind === "injection"
+                    ? injectionTaskStatusDisplay(item.status)
+                    : item.kind === "rad-order"
                     ? radTaskStatusDisplay(item.status)
                     : item.kind === "physio-order"
                       ? physioTaskStatusDisplay(item.status)
@@ -637,6 +648,27 @@ function KarteCard({
                 変更履歴
               </button>
             )}
+            {/* 注射の中止。注射は薬剤部・病棟が動く前に「明日からやめる」形で止まる
+                ことが多いので、部門画面(注射ワークリストは別タスク)を待たずカルテから
+                押せるようにする。実施済(施用した)注射は中止できない。 */}
+            {item.kind === "injection" && canCancelInjection(item.status) && (
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => setInjectionCancel("cancel")}
+              >
+                中止
+              </button>
+            )}
+            {item.kind === "injection" && canRestoreInjection(item.status) && (
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => setInjectionCancel("restore")}
+              >
+                中止を取消
+              </button>
+            )}
             <button type="button" className="row-menu__item" onClick={() => setJsonOpen(true)}>
               FHIR JSON 表示
             </button>
@@ -669,6 +701,15 @@ function KarteCard({
         />
       )}
       {jsonOpen && <KarteCardJsonModal item={item} onClose={() => setJsonOpen(false)} />}
+      {injectionCancel && item.kind === "injection" && (
+        <InjectionCancelModal
+          serviceRequest={item.serviceRequest}
+          task={item.task}
+          mode={injectionCancel}
+          onClose={() => setInjectionCancel(null)}
+          onDone={() => setInjectionCancel(null)}
+        />
+      )}
       {injectionDeleteOpen && item.kind === "injection" && (
         <InjectionDeleteModal
           serviceRequest={item.serviceRequest}

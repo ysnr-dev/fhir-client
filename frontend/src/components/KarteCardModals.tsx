@@ -45,6 +45,7 @@ import { ClinicalNoteDetailPanel } from "./ClinicalNoteDetailPanel";
 import { ErrorBanner } from "./ErrorBanner";
 import { FhirJsonView } from "./FhirJsonView";
 import { InjectionDetailPanel } from "./InjectionDetailPanel";
+import { isInjectionTask } from "../fhir/injectionTaskHelpers";
 import { LabOrderDetailPanel } from "./LabOrderDetailPanel";
 import { LabResultDetailPanel } from "./LabResultDetailPanel";
 import { Modal } from "./Modal";
@@ -222,9 +223,9 @@ function InjectionDetail({
   problemsById: Map<string, fhir4.Condition>;
 }) {
   const detail = usePrescriptionDetail(srId);
-  const { serviceRequest, medicationRequests } = detail.data
+  const { serviceRequest, medicationRequests, tasks } = detail.data
     ? splitPrescriptionDetailBundle(detail.data.data)
-    : { serviceRequest: undefined, medicationRequests: [] };
+    : { serviceRequest: undefined, medicationRequests: [], tasks: [] };
   const mismatch = isPatientMismatch(patientId, serviceRequest?.subject);
 
   return (
@@ -238,6 +239,7 @@ function InjectionDetail({
         <InjectionDetailPanel
           serviceRequest={serviceRequest}
           medicationRequests={medicationRequests}
+          task={tasks.find(isInjectionTask)}
           problemsById={problemsById}
         />
       ) : (
