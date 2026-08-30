@@ -5,16 +5,20 @@ import {
   buildDischargePlanEncounter,
   buildLeaveRemovedEncounter,
   buildTransferPlanEncounter,
-  encounterAdmissionDate,
   encounterBedId,
   encounterBedLabel,
-  encounterDischargeDate,
   encounterNote,
   type DischargePlan,
   type LeaveValues,
   type TransferPlan,
 } from "../fhir/encounterHelpers";
+import {
+  buildDischargeRestoreEntries,
+  buildLeaveCancelEntries,
+} from "../fhir/mealEncounterSync";
 import { displayName } from "../fhir/patientHelpers";
+import { useMealSyncContextLoader } from "../hooks/useMealSyncContext";
+import { dateTimeLabel } from "../lib/dates";
 import { DischargeModal } from "./DischargeModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { InpatientBodyCells, InpatientHeadCells, KarteLink } from "./InpatientRowCells";
@@ -30,7 +34,9 @@ import { TransferExecuteModal } from "./TransferExecuteModal";
 // どれも入院患者タブと同じ検索結果なので、取得は増やさずページ側で振り分ける。
 //
 // 「実施」はモーダルで日付などを確かめてから書く。「取消」は消す/戻すだけなので
-// 確認ダイアログで済ませる(入院予定取消と同じ扱い)。
+// 確認ダイアログで済ませる(入院予定取消と同じ扱い)。外出泊取消・退院予定取消・
+// 退院取消は、その操作で止めた食事オーダーも同じ transaction で元に戻す
+// (fhir/mealEncounterSync)。押されたときに患者の食事オーダーを読みに行く。
 
 /** 行のもとになる患者ぶんの情報。どのタブでも要る。 */
 interface RowBase {
@@ -47,8 +53,6 @@ export interface LeaveRow extends RowBase {
   roomName: string;
   bedName: string;
   leave: LeaveValues;
-  /** encounterLeaves の並びでの位置。1 人が複数の外出泊を持てるので要る。 */
-  leaveIndex: number;
 }
 
 export interface DischargePlanRow extends RowBase {
@@ -169,13 +173,22 @@ export function TransferPlanTable({
 export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: boolean }) {
   const [returnTarget, setReturnTarget] = useState<LeaveRow | null>(null);
   const cancelLeave = useUpdateEncounter();
+  const loadMealSync = useMealSyncContextLoader();
 
-  function handleCancel(row: LeaveRow) {
+  async function handleCancel(row: LeaveRow) {
     const label = row.patient ? displayName(row.patient) : "この患者";
-    if (!window.confirm(`${label} の外出泊(${row.leave.start}〜)を取り消します。よろしいですか?`)) {
+    if (
+      !window.confirm(
+        `${label} の外出泊(${dateTimeLabel(row.leave.start)}〜)を取り消します。外出泊で止めた食事オーダーも元に戻します。よろしいですか?`,
+      )
+    ) {
       return;
     }
-    cancelLeave.mutate(buildLeaveRemovedEncounter(row.encounter, row.leaveIndex));
+    const ctx = await loadMealSync(row.encounter);
+    cancelLeave.mutate({
+      encounter: buildLeaveRemovedEncounter(row.encounter, row.leave.id),
+      extraEntries: row.leave.id ? buildLeaveCancelEntries(ctx, row.leave.id) : [],
+    });
   }
 
   if (rows.length === 0) return <EmptyMessage filtering={filtering} name="外出泊" />;
@@ -188,8 +201,8 @@ export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: b
           <thead>
             <tr>
               <InpatientHeadCells />
-              <th>外出泊開始日</th>
-              <th>外出泊終了日</th>
+              <th>外出泊開始日時</th>
+              <th>外出泊終了日時</th>
               <th>外出泊理由</th>
               <th className="inpatient__col-actions"></th>
             </tr>
@@ -197,15 +210,15 @@ export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: b
           <tbody>
             {rows.map((row) => (
               // 1 人が複数の外出泊を持てるので、行の key は Encounter だけでは足りない。
-              <tr key={`${row.encounter.id}-${row.leaveIndex}`}>
+              <tr key={`${row.encounter.id}-${row.leave.id || row.leave.start}`}>
                 <InpatientBodyCells
                   roomName={row.roomName}
                   bedName={row.bedName}
                   encounter={row.encounter}
                   patient={row.patient}
                 />
-                <td>{row.leave.start}</td>
-                <td>{row.leave.end || "未定"}</td>
+                <td>{dateTimeLabel(row.leave.start)}</td>
+                <td>{row.leave.end ? dateTimeLabel(row.leave.end) : "未定"}</td>
                 <td className="inpatient__note">{row.leave.reason || "-"}</td>
                 <td className="patient-table__actions inpatient__col-actions">
                   <KarteLink patient={row.patient} />
@@ -242,7 +255,6 @@ export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: b
           encounter={returnTarget.encounter}
           patient={returnTarget.patient}
           leave={returnTarget.leave}
-          leaveIndex={returnTarget.leaveIndex}
           onClose={() => setReturnTarget(null)}
         />
       )}
@@ -261,11 +273,22 @@ export function DischargePlanTable({
 }) {
   const [dischargeTarget, setDischargeTarget] = useState<DischargePlanRow | null>(null);
   const cancelPlan = useUpdateEncounter();
+  const loadMealSync = useMealSyncContextLoader();
 
-  function handleCancel(row: DischargePlanRow) {
+  async function handleCancel(row: DischargePlanRow) {
     const label = row.patient ? displayName(row.patient) : "この患者";
-    if (!window.confirm(`${label} の退院予定を取り消します。よろしいですか?`)) return;
-    cancelPlan.mutate(buildDischargePlanEncounter(row.encounter, null));
+    if (
+      !window.confirm(
+        `${label} の退院予定を取り消します。退院予定で止めた食事オーダーは元に戻ります。よろしいですか?`,
+      )
+    ) {
+      return;
+    }
+    const ctx = await loadMealSync(row.encounter);
+    cancelPlan.mutate({
+      encounter: buildDischargePlanEncounter(row.encounter, null),
+      extraEntries: buildDischargeRestoreEntries(ctx, ["discharge-plan"]),
+    });
   }
 
   if (rows.length === 0) return <EmptyMessage filtering={filtering} name="退院予定" />;
@@ -278,7 +301,7 @@ export function DischargePlanTable({
           <thead>
             <tr>
               <InpatientHeadCells />
-              <th>退院予定日</th>
+              <th>退院予定日時</th>
               <th>退院理由</th>
               <th className="inpatient__col-actions"></th>
             </tr>
@@ -292,7 +315,7 @@ export function DischargePlanTable({
                   encounter={row.encounter}
                   patient={row.patient}
                 />
-                <td>{row.plan.date}</td>
+                <td>{dateTimeLabel(row.plan.at)}</td>
                 <td className="inpatient__note">{row.plan.reason || "-"}</td>
                 <td className="patient-table__actions inpatient__col-actions">
                   <KarteLink patient={row.patient} />
@@ -351,8 +374,9 @@ export function DischargedTable({
   occupiedBedIds: Set<string>;
 }) {
   const cancelDischarge = useUpdateEncounter();
+  const loadMealSync = useMealSyncContextLoader();
 
-  function handleCancel(row: DischargedRow) {
+  async function handleCancel(row: DischargedRow) {
     const label = row.patient ? displayName(row.patient) : "この患者";
     const bedId = encounterBedId(row.encounter);
     // 退院したあとに同じ床へ別の患者を入れていることがある。止めはしないが、
@@ -360,10 +384,15 @@ export function DischargedTable({
     const taken = bedId ? occupiedBedIds.has(bedId) : false;
     const bedLabel = encounterBedLabel(row.encounter);
     const message = taken
-      ? `${label} の退院を取り消して入院中に戻します。${bedLabel} には別の患者が入院しています。よろしいですか?`
-      : `${label} の退院を取り消して入院中に戻します。よろしいですか?`;
+      ? `${label} の退院を取り消して入院中に戻します。${bedLabel} には別の患者が入院しています。退院で止めた食事オーダーは元に戻ります。よろしいですか?`
+      : `${label} の退院を取り消して入院中に戻します。退院で止めた食事オーダーは元に戻ります。よろしいですか?`;
     if (!window.confirm(message)) return;
-    cancelDischarge.mutate(buildDischargeCancelledEncounter(row.encounter));
+    // 退院予定で止めたまま退院した分も「退院」に上書きしてあるが、旧データに備えて両方を戻す。
+    const ctx = await loadMealSync(row.encounter);
+    cancelDischarge.mutate({
+      encounter: buildDischargeCancelledEncounter(row.encounter),
+      extraEntries: buildDischargeRestoreEntries(ctx, ["discharge", "discharge-plan"]),
+    });
   }
 
   if (rows.length === 0) return <EmptyMessage filtering={filtering} name="退院患者" />;
@@ -376,8 +405,8 @@ export function DischargedTable({
           <thead>
             <tr>
               <InpatientHeadCells />
-              <th>入院日</th>
-              <th>退院日</th>
+              <th>入院日時</th>
+              <th>退院日時</th>
               <th>特記事項</th>
               <th className="inpatient__col-actions"></th>
             </tr>
@@ -391,8 +420,8 @@ export function DischargedTable({
                   encounter={row.encounter}
                   patient={row.patient}
                 />
-                <td>{encounterAdmissionDate(row.encounter)}</td>
-                <td>{encounterDischargeDate(row.encounter)}</td>
+                <td>{dateTimeLabel(row.encounter.period?.start)}</td>
+                <td>{dateTimeLabel(row.encounter.period?.end)}</td>
                 <td className="inpatient__note">{encounterNote(row.encounter) || "-"}</td>
                 <td className="patient-table__actions inpatient__col-actions">
                   <KarteLink patient={row.patient} />

@@ -7,6 +7,7 @@
 // 秘密は書込専用: client_secret / FHIR 管理トークンはサーバーから返らず
 // (`*_set` で有無のみ)、入力があったときだけ送信する。
 
+import type { MealScheduleSettings } from "../fhir/mealOrderHelpers";
 import type { NursingScheduleSettings } from "../fhir/nursingScheduleHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 
@@ -36,11 +37,13 @@ export interface ConnectionSettingsUpdate {
 export interface FacilitySettings {
   self_organization_id: string | null;
   nursing_schedule: NursingScheduleSettings;
+  meal_schedule: MealScheduleSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
   self_organization_id: string;
   nursing_schedule: NursingScheduleSettings;
+  meal_schedule: MealScheduleSettings;
 }>;
 
 export interface ConnectionTestResult {

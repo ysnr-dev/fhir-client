@@ -262,6 +262,7 @@ import {
   createMealItem,
   updateMealItem,
   deleteMealItem,
+  type MealItem,
   type MealItemPayload,
   searchMealCategories,
   createMealCategory,
@@ -307,6 +308,7 @@ import {
   type PathoOrganPayload,
   type PathoCollectionMethodPayload,
 } from "./masterClient";
+import type { MealItemRef } from "../fhir/mealOrderHelpers";
 
 export interface MedicineUsageFilters {
   basicUsageCategory?: string;
@@ -3124,6 +3126,25 @@ export function useMealItemOptions(kind: "diet" | "staple") {
     queryKey: [...MEAL_ITEMS_KEY, "options", kind],
     queryFn: () => searchMealItems({ kind, active: true, per: 200 }),
   });
+}
+
+/**
+ * 食止めの食種(is_fasting の先頭)。外出泊の連動が食止めオーダーを作るのに使う。
+ * 登録が無ければ null(連動は食止めオーダーを省く)。
+ */
+export function fastingDietOf(items: MealItem[] | undefined): MealItemRef | null {
+  const item = items?.find((i) => i.is_fasting);
+  return item ? { code: item.item_code, name: item.name } : null;
+}
+
+export async function fetchFastingDiet(): Promise<MealItemRef | null> {
+  const result = await searchMealItems({ kind: "diet", active: true, per: 200 });
+  return fastingDietOf(result.items);
+}
+
+export function useFastingDiet() {
+  const diets = useMealItemOptions("diet");
+  return { ...diets, fastingDiet: fastingDietOf(diets.data?.items) };
 }
 
 /**

@@ -74,6 +74,26 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /admin/facility_settings (meal_schedule)" do
+    it "stores the meal schedule and fills the rest with defaults" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { meal_schedule: { lunch: "11:30" } }, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)
+      expect(body["meal_schedule"]).to eq("breakfast" => "08:00", "lunch" => "11:30", "dinner" => "18:00")
+    end
+
+    it "rejects a malformed time" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { meal_schedule: { dinner: "夕方" } }, as: :json
+      end
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "with ADMIN_TOKEN configured" do
     it "rejects a request without credentials" do
       ENV["ADMIN_TOKEN"] = "s3cret-admin-passphrase"

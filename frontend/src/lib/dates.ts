@@ -30,3 +30,33 @@ export function diffDays(from: string, to: string): number {
   const [ty, tm, td] = to.split("-").map(Number);
   return Math.round((new Date(ty, tm - 1, td).getTime() - new Date(fy, fm - 1, fd).getTime()) / 86400000);
 }
+
+/**
+ * FHIR の date / dateTime を一覧向けの「YYYY-MM-DD HH:mm」にする。時刻を持たない値
+ * (時刻を付ける前に登録した入退院・外出泊)は日付だけ返す。タイムゾーンは変換しない
+ * (入退院の日時はローカル時刻 + オフセットで書いているので、文字列のまま切り出せる)。
+ */
+export function dateTimeLabel(value: string | undefined): string {
+  if (!value) return "";
+  const date = value.slice(0, 10);
+  const time = value.slice(11, 16);
+  return /^\d\d:\d\d$/.test(time) ? `${date} ${time}` : date;
+}
+
+/**
+ * FHIR の date / dateTime を input[type=datetime-local] の値(YYYY-MM-DDTHH:mm)にする。
+ * 日付だけの値は 00:00 を補う(new Date("YYYY-MM-DD") は UTC 解釈で日付がずれるので使わない)。
+ */
+export function toDateTimeInputValue(value: string | undefined): string {
+  if (!value) return "";
+  const date = value.slice(0, 10);
+  const time = value.slice(11, 16);
+  return /^\d\d:\d\d$/.test(time) ? `${date}T${time}` : `${date}T00:00`;
+}
+
+/** 現在時刻(YYYY-MM-DDTHH:mm、分単位)。 */
+export function nowDateTimeInput(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${toDateInput(now)}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}

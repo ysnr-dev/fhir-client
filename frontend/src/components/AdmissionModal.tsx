@@ -23,7 +23,7 @@ import { SETTING_OPTIONS } from "../fhir/shared";
 import { displayKana, displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { bedDisplayName } from "../fhir/wardHelpers";
-import { today } from "../lib/dates";
+import { nowDateTimeInput, today } from "../lib/dates";
 import { makeFieldUpdater } from "../lib/form";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
@@ -37,7 +37,7 @@ import { PatientKana, PatientProfileCells, PatientProfileHeadCells } from "./Pat
 interface AdmissionModalProps {
   bed: fhir4.Location;
   roomName: string;
-  /** 入院日の既定値。一覧で見ている日を渡す。 */
+  /** 入院日の既定値(YYYY-MM-DD)。一覧で見ている日を渡す。時刻は今の時刻にする。 */
   defaultAdmissionDate?: string;
   /** 患者 id -> 既に入院しているベッドの表示名。二重入院の警告に使う。 */
   admittedBedLabelByPatientId: Map<string, string>;
@@ -56,7 +56,10 @@ export function AdmissionModal({
     departmentId: "",
     practitionerId: "",
     nurseIds: [],
-    admissionDate: defaultAdmissionDate || today(),
+    admissionDate:
+      defaultAdmissionDate && defaultAdmissionDate !== today()
+        ? `${defaultAdmissionDate}T${nowDateTimeInput().slice(11)}`
+        : nowDateTimeInput(),
     note: "",
   });
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -168,9 +171,9 @@ export function AdmissionModal({
             />
 
             <label>
-              入院日(必須)
+              入院日時(必須)
               <input
-                type="date"
+                type="datetime-local"
                 value={values.admissionDate}
                 onChange={(e) => update("admissionDate", e.target.value)}
               />

@@ -62,7 +62,7 @@ import { addDays } from "../fhir/scheduleHelpers";
 import { bedDisplayName, bedNumber, bedShortLabel } from "../fhir/wardHelpers";
 import { KARTE_TAB_PARAM } from "../karteUrl";
 import { useReturnLinkState } from "../returnTo";
-import { today } from "../lib/dates";
+import { dateTimeLabel, today } from "../lib/dates";
 
 // 入院患者一覧。「入院患者」と「入院予定」の 2 つのタブを持つ。
 //
@@ -236,11 +236,11 @@ function planTagLabels(encounter: fhir4.Encounter, date: string): string[] {
   const transfer = encounterTransferPlan(encounter);
   if (transfer) tags.push(`転科・転棟予定 ${transfer.date} ${transfer.wardName}`.trim());
   const discharge = encounterDischargePlan(encounter);
-  if (discharge) tags.push(`退院予定 ${discharge.date}`);
+  if (discharge) tags.push(`退院予定 ${dateTimeLabel(discharge.at)}`);
   // 終わった外出泊まで並べると埋まるので、見ている日以降にかかるものだけ出す。
   for (const leave of encounterLeaves(encounter)) {
-    if (leave.end && leave.end < date) continue;
-    tags.push(`外出泊 ${leave.start}〜${leave.end || "未定"}`);
+    if (leave.end && leave.end.slice(0, 10) < date) continue;
+    tags.push(`外出泊 ${dateTimeLabel(leave.start)}〜${leave.end ? dateTimeLabel(leave.end) : "未定"}`);
   }
   return tags;
 }
@@ -429,13 +429,13 @@ export function InpatientListPage() {
       if (!place) continue;
       const patientId = encounterPatientId(encounter);
       const patient = patientId ? patientsById?.get(patientId) : undefined;
-      encounterLeaves(encounter).forEach((leave, leaveIndex) => {
+      for (const leave of encounterLeaves(encounter)) {
         // 済んだ外出泊は残さない(基準日より前に帰院しているもの)。
-        if (leave.end && leave.end < date) return;
-        if (leaveFrom && leave.start !== leaveFrom) return;
-        if (leaveTo && leave.end !== leaveTo) return;
-        rows.push({ encounter, patient, ...place, leave, leaveIndex });
-      });
+        if (leave.end && leave.end.slice(0, 10) < date) continue;
+        if (leaveFrom && leave.start.slice(0, 10) !== leaveFrom) continue;
+        if (leaveTo && leave.end.slice(0, 10) !== leaveTo) continue;
+        rows.push({ encounter, patient, ...place, leave });
+      }
     }
     return rows.sort((a, b) => a.leave.start.localeCompare(b.leave.start));
   }, [admittedEncounters, bedPlaceById, date, leaveFrom, leaveTo, patientsById]);
@@ -445,7 +445,7 @@ export function InpatientListPage() {
     for (const encounter of admittedEncounters) {
       const plan = encounterDischargePlan(encounter);
       if (!plan) continue;
-      if (dischargePlanDate && plan.date !== dischargePlanDate) continue;
+      if (dischargePlanDate && plan.at.slice(0, 10) !== dischargePlanDate) continue;
       const bedId = encounterBedId(encounter);
       const place = bedId ? bedPlaceById.get(bedId) : undefined;
       if (!place) continue;
@@ -457,7 +457,7 @@ export function InpatientListPage() {
         plan,
       });
     }
-    return rows.sort((a, b) => a.plan.date.localeCompare(b.plan.date));
+    return rows.sort((a, b) => a.plan.at.localeCompare(b.plan.at));
   }, [admittedEncounters, bedPlaceById, dischargePlanDate, patientsById]);
 
   const dischargedRows = useMemo<DischargedRow[]>(() => {

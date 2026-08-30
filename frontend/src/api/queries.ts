@@ -203,12 +203,11 @@ import {
 } from "../fhir/treatmentOrderHelpers";
 import { buildTreatmentPerformDeleteEntries } from "../fhir/treatmentResultHelpers";
 import {
+  DEFAULT_MEAL_SCHEDULE,
   MEAL_ORDER_TYPE,
-  buildMealOrderStopEntries,
   isMealOrderRunningOn,
   isMealServiceRequest,
   mealOrderEndsOnOrAfter,
-  type MealTiming,
 } from "../fhir/mealOrderHelpers";
 import {
   NURSING_ORDER_TYPE,
@@ -1561,47 +1560,47 @@ export function useAdmitPatient() {
   });
 }
 
-/** 退院。入院を終える(記録は status=finished + 退院日として残る)。 */
 /**
- * 退院。継続する食事・リハビリオーダーを一緒に止められる(退院後も食事が出続けたり、
- * 終わったはずのリハビリが部門一覧に並び続けるのを防ぐ)。入院の書き換えと同じ
- * transaction に載せるので、退院だけ通ってオーダーが残ることはない。
+ * 退院。入院を終える(記録は status=finished + 退院日時として残る)。継続する食事・
+ * リハビリ・看護指示を一緒に止められる(退院後も食事が出続けたり、終わったはずの
+ * リハビリが部門一覧に並び続けるのを防ぐ)。入院の書き換えと同じ transaction に
+ * 載せるので、退院だけ通ってオーダーが残ることはない。
+ *
+ * 食事のエントリは画面が fhir/mealEncounterSync で組んで渡す(退院時刻までに出た
+ * 最後の食事で止め、退院予定で止めていたものは理由を退院に上書きする)。
  */
 export function useDischargePatient() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
       encounter,
-      dischargeDate,
-      mealOrders = [],
-      mealEndTiming,
+      dischargeAt,
+      mealEntries = [],
       rehabOrders = [],
       nursingOrders = [],
     }: {
       encounter: fhir4.Encounter;
-      dischargeDate: string;
-      /** 一緒に終了させる食事オーダー。画面で「終了する」を外したときは空。 */
-      mealOrders?: fhir4.ServiceRequest[];
-      /** 退院日のどの食事まで出すか。 */
-      mealEndTiming: MealTiming;
+      /** 退院日時(YYYY-MM-DDTHH:mm)。 */
+      dischargeAt: string;
+      /** 食事オーダーの連動エントリ(buildDischargeSyncEntries)。画面で外したときは空。 */
+      mealEntries?: fhir4.BundleEntry[];
       /** 一緒に終了させるリハビリオーダー。退院日を終了日にする。 */
       rehabOrders?: fhir4.ServiceRequest[];
       /** 一緒に終了させる看護指示。退院日を終了日にする(指示受け Task は触らない)。 */
       nursingOrders?: fhir4.ServiceRequest[];
-    }) =>
-      postBundle(
-        buildEncounterUpdateBundle(
-          buildDischargedEncounter(encounter, dischargeDate),
-          [
-            ...buildMealOrderStopEntries(mealOrders, dischargeDate, mealEndTiming),
-            // リハビリは食事と違い時間帯を持たないので、退院日をそのまま終了日にする。
-            // 進捗 Task はここでは触らない(部門が「終了」で締める。オーダーに終了日が
-            // 入っていれば翌日以降の部門一覧には出てこない)。
-            ...buildRehabOrderStopEntries(rehabOrders, dischargeDate),
-            ...buildNursingOrderStopEntries(nursingOrders, dischargeDate),
-          ],
-        ),
-      ),
+    }) => {
+      const dischargeDate = dischargeAt.slice(0, 10);
+      return postBundle(
+        buildEncounterUpdateBundle(buildDischargedEncounter(encounter, dischargeAt), [
+          ...mealEntries,
+          // リハビリは食事と違い時間帯を持たないので、退院日をそのまま終了日にする。
+          // 進捗 Task はここでは触らない(部門が「終了」で締める。オーダーに終了日が
+          // 入っていれば翌日以降の部門一覧には出てこない)。
+          ...buildRehabOrderStopEntries(rehabOrders, dischargeDate),
+          ...buildNursingOrderStopEntries(nursingOrders, dischargeDate),
+        ]),
+      );
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["Encounter"] });
       // 食事・リハビリの終了もこの transaction で書いているので読み直させる。
@@ -1626,14 +1625,24 @@ export function useCancelAdmission() {
  * 組み立て済みの Encounter で上書きする汎用の更新。入院実施・予定取消・転室・
  * 外出泊・転科転棟予定・退院予定のように「helpers で書き換えた 1 件を保存する」
  * 操作をまとめて受ける。
+ *
+ * 外出泊・退院予定のように食事オーダーも一緒に書くときは `{ encounter, extraEntries }` で
+ * 渡す(同じ transaction に載る)。
  */
 export function useUpdateEncounter() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (encounter: fhir4.Encounter) =>
-      postBundle(buildEncounterUpdateBundle(encounter)),
-    onSuccess: () => {
+    mutationFn: (
+      input: fhir4.Encounter | { encounter: fhir4.Encounter; extraEntries: fhir4.BundleEntry[] },
+    ) =>
+      "resourceType" in input
+        ? postBundle(buildEncounterUpdateBundle(input))
+        : postBundle(buildEncounterUpdateBundle(input.encounter, input.extraEntries)),
+    onSuccess: (_data, input) => {
       queryClient.invalidateQueries({ queryKey: ["Encounter"] });
+      if (!("resourceType" in input) && input.extraEntries.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      }
     },
   });
 }
@@ -6354,23 +6363,30 @@ export function useActiveMealOrders(patientId: string | undefined, at: string) {
  * 引き直したくないため。どれを止めるかは退院日とその日のどの食事までかで決まるので、
  * 絞り込み(mealOrderNeedsStop)は画面側で行う。
  */
-export function usePatientMealOrders(patientId: string | undefined) {
+export async function fetchPatientMealOrders(patientId: string): Promise<fhir4.ServiceRequest[]> {
   const params = new URLSearchParams();
-  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("subject", `Patient/${patientId}`);
   params.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
   params.set("status", "active");
   // 新しい順。まだ続いているオーダーは必ずこの中に入るので 1 ページで足りる。
   params.set("_sort", "-authoredon");
-  params.set("_count", "20");
+  params.set("_count", "50");
+  const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+  return serviceRequestsOf(bundle).filter(isMealServiceRequest);
+}
 
+export function usePatientMealOrders(patientId: string | undefined) {
   return useQuery({
     queryKey: ["ServiceRequest", "search", "meal-patient", patientId],
-    queryFn: async () => {
-      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
-      return serviceRequestsOf(bundle).filter(isMealServiceRequest);
-    },
+    queryFn: () => fetchPatientMealOrders(patientId as string),
     enabled: Boolean(patientId),
   });
+}
+
+/** 施設の食事提供時刻。設定が読めるまでは既定値(08/12/18)で動く。 */
+export function useMealSchedule() {
+  const settings = useFacilitySettings();
+  return settings.data?.meal_schedule ?? DEFAULT_MEAL_SCHEDULE;
 }
 
 /**

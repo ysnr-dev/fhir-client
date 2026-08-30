@@ -25,6 +25,9 @@ export function MealOrderDetailPanel({
       <fieldset>
         <legend>食事内容</legend>
         <dl className="prescription-detail__common">
+          <dt>種別</dt>
+          {/* 開始 / 変更 / 再開 / 外泊食止め。登録の文脈から自動で決まる。 */}
+          <dd>{summary.kindLabel}</dd>
           <dt>食種</dt>
           <dd>{summary.dietName || "-"}</dd>
           <dt>主食</dt>

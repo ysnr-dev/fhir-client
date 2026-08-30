@@ -37,6 +37,32 @@ RSpec.describe FacilitySettings do
     end
   end
 
+  describe ".meal_schedule" do
+    it "returns the defaults when nothing is stored" do
+      expect(described_class.meal_schedule).to eq(described_class::DEFAULT_MEAL_SCHEDULE)
+    end
+
+    it "fills missing meals with the defaults" do
+      described_class.current.update!(meal_schedule: { "lunch" => "11:30" })
+
+      expect(described_class.meal_schedule).to eq("breakfast" => "08:00", "lunch" => "11:30", "dinner" => "18:00")
+    end
+
+    it "rejects a time that is not HH:MM" do
+      settings = described_class.current
+      settings.meal_schedule = { "dinner" => "18時" }
+
+      expect(settings).not_to be_valid
+    end
+
+    it "rejects an unknown meal" do
+      settings = described_class.current
+      settings.meal_schedule = { "snack" => "15:00" }
+
+      expect(settings).not_to be_valid
+    end
+  end
+
   describe ".self_organization_id" do
     it "returns nil when unset" do
       expect(described_class.self_organization_id).to be_nil

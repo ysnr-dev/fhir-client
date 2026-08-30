@@ -4,6 +4,11 @@ import { useFacilitySettings, useOrganizationOptions } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { organizationDisplayName } from "../fhir/organizationHelpers";
 import {
+  DEFAULT_MEAL_SCHEDULE,
+  MEAL_TIMING_OPTIONS,
+  type MealScheduleSettings,
+} from "../fhir/mealOrderHelpers";
+import {
   DEFAULT_NURSING_SCHEDULE,
   isValidTime,
   type NursingScheduleSettings,
@@ -39,10 +44,23 @@ export function FacilitySettingsPage() {
     });
   }
 
+  // 食事の提供時刻。退院・外出泊の時刻から「どの食事まで / どの食事から」を決めるのに使う。
+  const [mealDraft, setMealDraft] = useState<MealScheduleSettings | undefined>(undefined);
+  const savedMeal = settings.data?.meal_schedule ?? DEFAULT_MEAL_SCHEDULE;
+  const mealSchedule = mealDraft ?? savedMeal;
+  const mealValid =
+    MEAL_TIMING_OPTIONS.every((t) => isValidTime(mealSchedule[t.code])) &&
+    mealSchedule.breakfast < mealSchedule.lunch &&
+    mealSchedule.lunch < mealSchedule.dinner;
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!scheduleValid) return;
-    update.mutate({ self_organization_id: value, nursing_schedule: schedule });
+    if (!scheduleValid || !mealValid) return;
+    update.mutate({
+      self_organization_id: value,
+      nursing_schedule: schedule,
+      meal_schedule: mealSchedule,
+    });
   }
 
   return (
@@ -106,8 +124,33 @@ export function FacilitySettingsPage() {
           </div>
         </details>
 
+        {/* 食事の提供時刻。退院・外出泊の時刻と突き合わせて「退院日は朝食まで」
+            「帰院後は夕食から」を自動で決める。食事オーダーの時刻(08/12/18)は SS-MIX2 の
+            コードなので、ここを変えても登録済みのオーダーは動かない。 */}
+        <details className="facility-settings__schedule">
+          <summary>食事の提供時刻</summary>
+          <div className="facility-settings__schedule-body">
+            {MEAL_TIMING_OPTIONS.map((timing) => (
+              <label key={timing.code}>
+                {timing.display}食
+                <input
+                  type="time"
+                  value={mealSchedule[timing.code]}
+                  onChange={(e) =>
+                    setMealDraft({ ...(mealDraft ?? savedMeal), [timing.code]: e.target.value })
+                  }
+                />
+              </label>
+            ))}
+            <span className="connection-settings-form__field-hint">
+              退院・外出泊の時刻と比べて、その時刻までに出た最後の食事で止め、その時刻以降に
+              出る最初の食事から戻します。
+            </span>
+          </div>
+        </details>
+
         <div className="connection-settings-form__actions">
-          <button type="submit" disabled={update.isPending || !scheduleValid}>
+          <button type="submit" disabled={update.isPending || !scheduleValid || !mealValid}>
             {update.isPending ? "保存中..." : "保存"}
           </button>
         </div>
@@ -115,6 +158,11 @@ export function FacilitySettingsPage() {
         {!scheduleValid && (
           <p className="connection-settings-form__field-hint" role="status">
             「看護指示の既定時刻」に空欄があります。
+          </p>
+        )}
+        {!mealValid && (
+          <p className="connection-settings-form__field-hint" role="status">
+            「食事の提供時刻」は朝・昼・夕の順に、すべて入れてください。
           </p>
         )}
 

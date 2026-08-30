@@ -27,9 +27,19 @@ class FacilitySettings < ApplicationRecord
     "interval_start" => "06:00"
   }.freeze
 
+  # 食事の提供時刻。退院・外出泊の日時から「その時刻までに出た最後の食事」「その時刻以降の
+  # 最初の食事」を決めるのに使う。食事オーダーの occurrenceDateTime に焼く 08/12/18 は
+  # SS-MIX2 のコードで、ここの時刻とは別物(この設定を変えてもオーダーの時刻は動かない)。
+  DEFAULT_MEAL_SCHEDULE = {
+    "breakfast" => "08:00",
+    "lunch" => "12:00",
+    "dinner" => "18:00"
+  }.freeze
+
   TIME_PATTERN = /\A([01]\d|2[0-3]):[0-5]\d\z/
 
   validate :nursing_schedule_shape
+  validate :meal_schedule_shape
 
   # 欠けたキーを既定値で埋めた看護指示の既定時刻。読み出しは常にこちらを使う。
   def nursing_schedule_with_defaults
@@ -38,6 +48,15 @@ class FacilitySettings < ApplicationRecord
       "daily" => DEFAULT_NURSING_SCHEDULE["daily"].merge(stored["daily"].is_a?(Hash) ? stored["daily"] : {}),
       "interval_start" => stored["interval_start"].presence || DEFAULT_NURSING_SCHEDULE["interval_start"]
     }
+  end
+
+  # 欠けたキーを既定値で埋めた食事の提供時刻。
+  def meal_schedule_with_defaults
+    stored = meal_schedule.is_a?(Hash) ? meal_schedule : {}
+    DEFAULT_MEAL_SCHEDULE.transform_values.with_index do |default, index|
+      key = DEFAULT_MEAL_SCHEDULE.keys[index]
+      stored[key].presence || default
+    end
   end
 
   class << self
@@ -54,9 +73,28 @@ class FacilitySettings < ApplicationRecord
     def nursing_schedule
       current.nursing_schedule_with_defaults
     end
+
+    def meal_schedule
+      current.meal_schedule_with_defaults
+    end
   end
 
   private
+
+  def meal_schedule_shape
+    return if meal_schedule.blank?
+    return errors.add(:meal_schedule, "は連想配列で指定してください") unless meal_schedule.is_a?(Hash)
+
+    meal_schedule.each do |timing, time|
+      unless DEFAULT_MEAL_SCHEDULE.key?(timing)
+        errors.add(:meal_schedule, "#{timing} は朝・昼・夕(breakfast/lunch/dinner)のいずれかで指定してください")
+        next
+      end
+      unless time.is_a?(String) && time.match?(TIME_PATTERN)
+        errors.add(:meal_schedule, "#{timing} は HH:MM で指定してください")
+      end
+    end
+  end
 
   def nursing_schedule_shape
     return if nursing_schedule.blank?

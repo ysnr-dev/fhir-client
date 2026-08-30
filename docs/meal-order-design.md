@@ -246,6 +246,54 @@ FHIR 上でもはっきり別物になる。
 (既定 ON、字下げ)。出るのは**終了させるチェックが ON かつ終了日が入っているとき**だけで、
 「継続」で登録するあいだは現れない。外すと再開オーダーは作られない。
 
+### 2.8 入退院・外出泊との連動
+
+［導出］食事は入院に付いて回る(入院で始まり、退院で終わり、外出泊で止まる)ので、
+入退院の操作から食事オーダーを自動で書き換え、取り消せば元に戻るようにした。
+種別を手で選ばせず、**登録の文脈から決める**。
+
+追加したローカル要素(`mealOrderHelpers.ts`):
+
+| 要素 | 置き場 | 中身 |
+|---|---|---|
+| 入院との結びつき | `ServiceRequest.encounter`(標準) | 看護指示と同じ |
+| 種別 | 拡張 `meal-order-link` | `kind`: `start`(開始) / `change`(変更) / `resume`(再開) / `leave-fasting`(外泊食止め)。`source` = 終了させた前オーダー・写し元。`leave` = 外出泊 id |
+| 終了の理由 | 拡張 `meal-order-end-reason` | `reason`: `change` / `discharge-plan` / `discharge` / `leave`。`leave` = 外出泊 id。`previousEnd` = 上書き前の終了(無ければ継続だった) |
+
+**退院食止めはオーダーではなく、既存オーダーの終了に付く理由**(SS-MIX2 のとおり食止めは
+食種側の情報で、退院では新しい食事を出さないため)。手で入れた終了は理由を持たない。
+
+［実装］「どの食事まで / どの食事から」は施設設定の**食事提供時刻**(`facility_settings.meal_schedule`、
+既定 08:00 / 12:00 / 18:00)と退院・外出泊の**時刻**から決める(`lastMealAtOrBefore` /
+`firstMealAtOrAfter`)。このために入院・退院・退院予定・外出泊(開始・帰院)は日時になった
+(`encounterHelpers.ts`。旧データの日付だけの値も読める)。`occurrenceDateTime` の 08/12/18 は
+SS-MIX2 のコードで、提供時刻とは別物。
+
+［実装］連動の組み立ては `fhir/mealEncounterSync.ts`(純関数)。入院の書き換えと同じ
+transaction に載せる(`buildEncounterUpdateBundle` の第 2 引数、`useUpdateEncounter` の
+`{ encounter, extraEntries }` 形)。材料(患者の食事オーダー・提供時刻・食止め食種・登録者)は
+`hooks/useMealSyncContext.ts` が揃える(モーダル用の hook と、行メニュー用の loader)。
+
+| 操作 | 食事オーダー |
+|---|---|
+| 退院予定の登録・変更 | 予定時刻までに出た最後の食事で終了、`reason=discharge-plan`。予定を動かせば上書き前の終了を基準に立て直す |
+| 退院予定の取消 | `discharge-plan` の終了を `previousEnd` に戻す |
+| 退院の実施 | 同じ計算で `reason=discharge`(予定からの上書きでも `previousEnd` は保つ = 同じ系統 `isSameEndCauseFamily`) |
+| 退院の取消 | `discharge` の終了を戻す |
+| 外出泊の登録 | 出発までの最後の食事で終了(`reason=leave`)、**外泊食止めオーダー**(`kind=leave-fasting`、食種はマスタの `is_fasting`)を出し、帰院が決まっていれば帰院後の最初の食事から**再開オーダー**(`kind=resume`)を作る |
+| 帰院の実施 | 食止めに終了を書き、再開オーダーを作る(既にあれば開始を動かす) |
+| 外出泊の取消 | 食止め・再開オーダーを DELETE、止めたオーダーを戻す |
+| 入院取消(誤登録)・転床・転科転棟 | 触らない |
+
+外出泊は子拡張 `id` を持ち、食事側はこの id で結び付く(配列の位置は削除で動く)。
+id の無い旧データは次に書き換えたときに採番される。食止めの食種がマスタに無い施設では
+食止めオーダーだけを省く(終了と再開は行う)。どのモーダルにも「食事オーダーも一緒に…」の
+一覧とチェックを出し、外せる(`MealSyncSummary`)。
+
+［実装］種別は暦のマスの印(開始 / 変更 / 再開 / 外泊食止め)と、退院(予定)で止めた最後の日の
+「退院食止め」の印、カードの期間「9/2 昼まで(退院食止め)」、詳細の「種別」行に出る。
+種別を持たない連動前のオーダーは従来どおり「変更」。
+
 ---
 
 ## 3. マスタ
@@ -362,25 +410,6 @@ model・テーブル・search_definition・extraction まで要る。ServiceRequ
 出し分けで同じことが暦の操作だけでできるようになったので外した。編集パネルは
 「更新」だけの素直な形に戻っている。
 
-［提案］暦から開いた編集パネルには、**「更新」と「食事変更として登録」の 2 つ**を置く。
-同じ内容を見ながらでも、やりたいことが 2 通りあるため:
-
-| 押すもの | 何が起きるか | 使う場面 |
-|---|---|---|
-| 更新 | そのオーダーを直す。開始日は元のまま | 入力間違いの訂正(遡って直る) |
-| 食事変更として登録 | **暦で押した日から始まる別のオーダー**を作り、継続中のオーダーを直前の食事で終了する | その日から食事を変える |
-
-［実装］新しいオーダーの開始は「**暦で押した日**(`changeFrom`)+ フォームの『開始』欄の食事」。
-日付を暦から取るのは、マスを押す操作がそのまま「この日から」を表しているため。
-食事(朝/昼/夕)だけはフォームで選べるようにし、ボタンの下に
-「8/30 昼食から始まる新しいオーダーを作ります」と解決後の点を出して取り違えを防ぐ。
-開始日の欄は更新用に元のオーダーの開始日を出したままにする。
-
-［実装］終了させる継続中オーダーは登録画面と同じチェック(§2.6)。編集パネルでは
-「更新」には効かないので、その旨を節に添える。`changeFrom` を渡さない経路
-(カルテのカードから開く編集)にはボタンもチェックも出さない — そちらは DO が
-同じ役割を持つため。
-
 ［実装］取得は `useMealOrderMonth`。**その月に始まったオーダーだけでは足りない**
 (前の月から続いているオーダーがその月の食事を決めている)ので、`occurrence=le{月末}` で
 月末までに始まった有効なオーダーを引き、月初より前に終わったものをクライアント側で
@@ -415,7 +444,9 @@ UI にはしていない(切り替えの状態を持たずに済み、行が固�
 | API | `master/meal_items`(index の kind / active / name フィルタ、自動採番) |
 | spec | `spec/requests/master/meal_items_spec.rb`(14 examples) |
 | FHIR 変換 | `fhir/mealOrderHelpers.ts` 1 本のみ(Task・実施記録のヘルパーは無い) |
-| 画面 | `pages/MealItemPage.tsx` / `components/MealOrderForm.tsx`(更新と食事変更登録の 2 つの送信) / `MealOrderPanels.tsx` / `MealOrderDetailPanel.tsx` / `KarteMealTab.tsx` / `mealItemOptions.ts` |
+| 画面 | `pages/MealItemPage.tsx` / `components/MealOrderForm.tsx` / `MealOrderPanels.tsx` / `MealOrderDetailPanel.tsx` / `KarteMealTab.tsx` / `mealItemOptions.ts` |
+| 連動 | `fhir/mealEncounterSync.ts` / `hooks/useMealSyncContext.ts` / `components/MealSyncSummary.tsx`、`DischargeModal` / `DischargePlanModal` / `LeaveModal` / `LeaveReturnModal` / `InpatientPlanTables` の各操作 |
+| 施設設定 | `facility_settings.meal_schedule`(migration `20260831100000`、`FacilitySettingsPage` の「食事の提供時刻」) |
 | queries | `useMealOrderDetail` / `useActiveMealOrders` / `useMealOrderMonth` / `useUpdateMealOrder` / `useDeleteMealOrder`、`OCCURRENCE_ORDER_TYPES` に `meal` を追加 |
 | カルテ | `KARTE_TABS` に「食事」タブ、`karteTimeline` に `meal-order` 種別、`KarteRightPane` の起動ボタンとパネル、`KarteTimeline` のカード本体・タイトル・削除、`KarteCardModals` の詳細/JSON、`KarteCategoryList` / `karteUrl` / `KartePage` の分岐 |
 
@@ -501,16 +532,13 @@ UI にはしていない(切り替えの状態を持たずに済み、行が固�
    足りるが、長期入院で 100 件を超えると**古い月の暦が欠ける**(その月を決めている
    オーダーが取りこぼされる)。ページングするか、`occurrence=ge{月初の少し前}` で
    下限も切るかは、実運用の件数を見てから決める
-6. **入院・退院との連動**: 退院(`DischargeModal`)で継続中の食事オーダーを一緒に終了する。
-   退院日のどの食事まで出すかは画面の選択(既定は「朝食まで」)で、終了は入院の書き換えと
-   同じ transaction に載せる(`buildEncounterUpdateBundle` の第 2 引数 +
-   `buildMealOrderStopEntries`)。対象は「その食事より後まで続くオーダー」だけで、退院日より
-   後に始まる先の分も含めて止める。残っている注意点:
-   - **退院取消では食事は戻らない**。どのオーダーを止めたかを記録していないため。戻すには
-     食事オーダーの編集で終了日を消す
+6. **入院・退院との連動**(§2.8): 退院予定・退院・外出泊・帰院とその取消で食事オーダーが
+   自動で書き換わり、戻る。残っている注意点:
    - 入院取消(誤登録)は食事に触らない。誤登録なら食事オーダーも消す扱いが素直だが、
      取り消しの操作に確認ダイアログ 1 つで消し込みまで乗せるかは決めていない
+   - 連動前に登録した外出泊(id 無し)は、帰院実施で食事を戻せない(画面に注意文を出す)
    - 給食部門の画面を作るときは、退院済み患者の食事が残っていても出さない作りにしておくと
      過去データ(この連動より前に退院した分)にも耐えられる
+   - 外出泊の期間を後から直す操作は無い(削除して登録し直す。連動もそれで戻って掛かり直る)
 7. **共通化**: 食事は明細も Task も持たない薄い型なので、処置の申し送り §7-4 が挙げていた
    「5 つ目の同型オーダー」には**当たらない**。ファクトリを作るときの対象からは外してよい

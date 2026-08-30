@@ -11,7 +11,8 @@ class FacilitySettingsController < ActionController::API
   def show
     render json: {
       self_organization_id: FacilitySettings.self_organization_id,
-      nursing_schedule: FacilitySettings.nursing_schedule
+      nursing_schedule: FacilitySettings.nursing_schedule,
+      meal_schedule: FacilitySettings.meal_schedule
     }
   end
 end

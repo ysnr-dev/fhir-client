@@ -12,16 +12,17 @@
 //   participant     : 主治医(種別 ATND)と担当看護師(種別はローカル code の nurse。
 //                     看護師を表す標準コードが ParticipationType に無いため)。複数可。
 //                     どちらも未指定なら要素ごと付けない
-//   period.start    : 入院日(時刻を持たない日付のみ)
+//   period.start    : 入院日時。時刻を付ける前に登録したものは日付だけ
 //
 // 特記事項は R4 の Encounter に置き場所が無いのでローカル拡張にする。上流の
 // プロファイル検証は extension の中身を見ないが、R4 に無い要素(note など)は
 // 将来 enforce にしたときに弾かれるため使わない。
 //
-// 退院すると status=finished + period.end(退院日)。誤登録の取り消しは
+// 退院すると status=finished + period.end(退院日時)。誤登録の取り消しは
 // status=entered-in-error で、退院とは区別する(退院日を持たない)。どちらも
 // in-progress ではなくなるので入院患者一覧からは外れる。
 
+import { toFhirDateTime } from "./clinicalNoteHelpers";
 import { referenceId } from "./shared";
 import {
   BED_PHYSICAL_TYPE,
@@ -61,7 +62,7 @@ export interface AdmissionFormValues {
   practitionerId: string;
   /** 担当看護師。Practitioner の id。複数可、任意。 */
   nurseIds: string[];
-  /** 入院日(YYYY-MM-DD)。 */
+  /** 入院日時(YYYY-MM-DDTHH:mm)。食事開始の既定タイミングをこの時刻から出す。 */
   admissionDate: string;
   /** 特記事項。任意。 */
   note: string;
@@ -69,7 +70,7 @@ export interface AdmissionFormValues {
 
 export function validateAdmissionForm(values: AdmissionFormValues): string | null {
   if (!values.departmentId) return "診療科は必須です。";
-  if (!values.admissionDate) return "入院日は必須です。";
+  if (!values.admissionDate) return "入院日時は必須です。";
   return null;
 }
 
@@ -101,7 +102,7 @@ export function buildAdmissionEncounter(
       reference: `Patient/${patient.id}`,
       display: patientDisplay(patient),
     },
-    period: { start: values.admissionDate },
+    period: { start: encounterDateTime(values.admissionDate) },
     location: [
       {
         location: { reference: `Location/${target.bedId}`, display: target.bedLabel },
@@ -112,6 +113,14 @@ export function buildAdmissionEncounter(
 
   applyAdmissionDetails(encounter, target, values);
   return encounter;
+}
+
+/**
+ * 画面の日時(YYYY-MM-DDTHH:mm)を FHIR dateTime にする。日付だけの値(時刻を付ける前の
+ * 形)はそのまま date として通す。
+ */
+export function encounterDateTime(value: string): string {
+  return value.length > 10 ? toFhirDateTime(value) : value;
 }
 
 /**
@@ -267,7 +276,7 @@ export function encounterNurseIds(encounter: fhir4.Encounter): string[] {
     .filter((id): id is string => Boolean(id));
 }
 
-/** 入院日。時刻付きで入っていても日付だけ返す。 */
+/** 入院日。時刻付きで入っていても日付だけ返す(時刻まで要るときは encounterAdmissionAt)。 */
 export function encounterAdmissionDate(encounter: fhir4.Encounter): string {
   const start = encounter.period?.start;
   return start ? start.slice(0, 10) : "-";
@@ -279,6 +288,16 @@ export function encounterDischargeDate(encounter: fhir4.Encounter): string {
   return end ? end.slice(0, 10) : "-";
 }
 
+/** 入院日時(FHIR dateTime そのまま。時刻を付ける前のものは日付だけ)。 */
+export function encounterAdmissionAt(encounter: fhir4.Encounter): string {
+  return encounter.period?.start ?? "";
+}
+
+/** 退院日時(FHIR dateTime そのまま)。退院していなければ空。 */
+export function encounterDischargeAt(encounter: fhir4.Encounter): string {
+  return encounter.period?.end ?? "";
+}
+
 export function encounterNote(encounter: fhir4.Encounter): string {
   const extension = encounter.extension?.find((e) => e.url === ENCOUNTER_NOTE_EXTENSION_URL);
   return extension?.valueString ?? "";
@@ -288,11 +307,11 @@ export function encounterNote(encounter: fhir4.Encounter): string {
 
 export function validateDischargeDate(
   encounter: fhir4.Encounter,
-  dischargeDate: string,
+  dischargeAt: string,
 ): string | null {
-  if (!dischargeDate) return "退院日は必須です。";
+  if (!dischargeAt) return "退院日時は必須です。";
   const admission = encounter.period?.start?.slice(0, 10);
-  if (admission && dischargeDate < admission) {
+  if (admission && dischargeAt.slice(0, 10) < admission) {
     return `退院日は入院日(${admission})より前にはできません。`;
   }
   return null;
@@ -301,12 +320,13 @@ export function validateDischargeDate(
 /** 退院。ベッドの割り当ても終わるので location の status も閉じる。 */
 export function buildDischargedEncounter(
   encounter: fhir4.Encounter,
-  dischargeDate: string,
+  /** 退院日時(YYYY-MM-DDTHH:mm)。 */
+  dischargeAt: string,
 ): fhir4.Encounter {
   const discharged: fhir4.Encounter = {
     ...encounter,
     status: DISCHARGED_STATUS,
-    period: { ...encounter.period, end: dischargeDate },
+    period: { ...encounter.period, end: encounterDateTime(dischargeAt) },
     location: encounter.location?.map((entry, index) =>
       index === 0 ? { ...entry, status: "completed" as const } : entry,
     ),
@@ -531,7 +551,7 @@ export function buildAdmissionFromPlan(
   const encounter: fhir4.Encounter = {
     ...plan,
     status: ADMISSION_STATUS,
-    period: { start: values.admissionDate },
+    period: { start: encounterDateTime(values.admissionDate) },
     location: [
       {
         location: { reference: `Location/${target.bedId}`, display: target.bedLabel },
@@ -604,92 +624,117 @@ export function buildBedTransferEncounter(
 // R4 の Encounter に外出泊の置き場が無い(status=onleave はあるが期間・理由を
 // 持てず、予定の外出泊も表せない)ので、特記事項と同じくローカル拡張にする。
 // 1 回ごとに拡張 1 件で、複数回の外出泊を並べられる。
+//
+// 開始・終了は日時(valueDateTime)。食事オーダーが「出発までに出た最後の食事で止め、
+// 帰院後に出る最初の食事から戻す」ために時刻が要る。時刻を付ける前の valueDate も読める。
+// 各外出泊は id(子拡張 `id`)を持ち、食事オーダー側がこの id で結び付く(取消で戻す先を
+// 突き止めるため。配列の位置は削除で動くので使わない)。id の無い旧データは、次に
+// その入院の外出泊を書き換えるときに採番される。
 
 export const ENCOUNTER_LEAVE_EXTENSION_URL =
   "http://fhir-client.local/StructureDefinition/encounter-leave";
 
 export interface LeaveValues {
-  /** 外出泊開始日(YYYY-MM-DD)。 */
+  /** 外出泊の id。登録時に採番。旧データでは空のことがある。 */
+  id: string;
+  /** 外出泊開始日時(YYYY-MM-DDTHH:mm)。旧データは日付だけ。 */
   start: string;
-  /** 外出泊終了日(YYYY-MM-DD)。未定なら空。 */
+  /** 外出泊終了(帰院)日時。未定なら空。 */
   end: string;
   reason: string;
 }
 
 export function validateLeaveForm(values: LeaveValues): string | null {
-  if (!values.start) return "外出泊開始日は必須です。";
+  if (!values.start) return "外出泊開始日時は必須です。";
   if (values.end && values.end < values.start) {
-    return "外出泊終了日は開始日より前にはできません。";
+    return "外出泊終了日時は開始より前にはできません。";
   }
   return null;
 }
 
+export function newLeaveId(): string {
+  return crypto.randomUUID();
+}
+
 function buildLeaveExtension(values: LeaveValues): fhir4.Extension {
-  const children: fhir4.Extension[] = [{ url: "start", valueDate: values.start }];
-  if (values.end) children.push({ url: "end", valueDate: values.end });
+  const children: fhir4.Extension[] = [
+    { url: "id", valueString: values.id || newLeaveId() },
+    { url: "start", valueDateTime: encounterDateTime(values.start) },
+  ];
+  if (values.end) children.push({ url: "end", valueDateTime: encounterDateTime(values.end) });
   if (values.reason.trim()) children.push({ url: "reason", valueString: values.reason.trim() });
   return { url: ENCOUNTER_LEAVE_EXTENSION_URL, extension: children };
+}
+
+/** 外出泊の拡張を丸ごと組み直す(id の無い旧データにも id が付く)。 */
+function withLeaves(encounter: fhir4.Encounter, leaves: LeaveValues[]): fhir4.Encounter {
+  const rest = (encounter.extension ?? []).filter((e) => e.url !== ENCOUNTER_LEAVE_EXTENSION_URL);
+  const extension = [...rest, ...leaves.map(buildLeaveExtension)];
+  return { ...encounter, extension: extension.length > 0 ? extension : undefined };
+}
+
+/** id の無い外出泊に id を付けて返す(書き込みの前に呼ぶ)。 */
+export function leavesWithIds(encounter: fhir4.Encounter): LeaveValues[] {
+  return encounterLeaves(encounter).map((leave) => ({ ...leave, id: leave.id || newLeaveId() }));
 }
 
 export function buildLeaveAddedEncounter(
   encounter: fhir4.Encounter,
   values: LeaveValues,
 ): fhir4.Encounter {
-  return {
-    ...encounter,
-    extension: [...(encounter.extension ?? []), buildLeaveExtension(values)],
-  };
+  return withLeaves(encounter, [...leavesWithIds(encounter), values]);
 }
 
-/** index 番目(encounterLeaves の並び)の外出泊を取り除く。 */
+/** id の外出泊を取り除く。 */
 export function buildLeaveRemovedEncounter(
   encounter: fhir4.Encounter,
-  index: number,
+  leaveId: string,
 ): fhir4.Encounter {
-  let seen = -1;
-  const extension = (encounter.extension ?? []).filter((e) => {
-    if (e.url !== ENCOUNTER_LEAVE_EXTENSION_URL) return true;
-    seen += 1;
-    return seen !== index;
-  });
-  return { ...encounter, extension: extension.length > 0 ? extension : undefined };
+  return withLeaves(
+    encounter,
+    leavesWithIds(encounter).filter((leave) => leave.id !== leaveId),
+  );
 }
 
-export function validateLeaveReturn(leave: LeaveValues, returnDate: string): string | null {
-  if (!returnDate) return "帰院日は必須です。";
-  if (returnDate < leave.start) {
-    return `帰院日は外出泊開始日(${leave.start})より前にはできません。`;
+export function validateLeaveReturn(leave: LeaveValues, returnAt: string): string | null {
+  if (!returnAt) return "帰院日時は必須です。";
+  if (returnAt < leave.start) {
+    return `帰院日時は外出泊開始(${leave.start.replace("T", " ")})より前にはできません。`;
   }
   return null;
 }
 
 /**
- * 帰院。index 番目(encounterLeaves の並び)の外出泊の終了日を、実際に戻った日で
- * 確定する。外出泊が終わったことは終了日そのもので表すので、別の目印は持たない。
+ * 帰院。id の外出泊の終了を、実際に戻った日時で確定する。外出泊が終わったことは
+ * 終了そのもので表すので、別の目印は持たない。
  */
 export function buildLeaveReturnedEncounter(
   encounter: fhir4.Encounter,
-  index: number,
-  returnDate: string,
+  leaveId: string,
+  returnAt: string,
 ): fhir4.Encounter {
-  const current = encounterLeaves(encounter)[index];
-  if (!current) return encounter;
-  const returned = buildLeaveExtension({ ...current, end: returnDate });
-  let seen = -1;
-  const extension = (encounter.extension ?? []).map((e) => {
-    if (e.url !== ENCOUNTER_LEAVE_EXTENSION_URL) return e;
-    seen += 1;
-    return seen === index ? returned : e;
-  });
-  return { ...encounter, extension };
+  return withLeaves(
+    encounter,
+    leavesWithIds(encounter).map((leave) =>
+      leave.id === leaveId ? { ...leave, end: returnAt } : leave,
+    ),
+  );
+}
+
+/** 拡張の date / dateTime を画面の形(YYYY-MM-DD または YYYY-MM-DDTHH:mm)にする。 */
+function leaveInputValue(child: fhir4.Extension | undefined): string {
+  if (!child) return "";
+  if (child.valueDateTime) return child.valueDateTime.slice(0, 16);
+  return child.valueDate ?? "";
 }
 
 export function encounterLeaves(encounter: fhir4.Encounter): LeaveValues[] {
   return (encounter.extension ?? [])
     .filter((e) => e.url === ENCOUNTER_LEAVE_EXTENSION_URL)
     .map((e) => ({
-      start: e.extension?.find((c) => c.url === "start")?.valueDate ?? "",
-      end: e.extension?.find((c) => c.url === "end")?.valueDate ?? "",
+      id: e.extension?.find((c) => c.url === "id")?.valueString ?? "",
+      start: leaveInputValue(e.extension?.find((c) => c.url === "start")),
+      end: leaveInputValue(e.extension?.find((c) => c.url === "end")),
       reason: e.extension?.find((c) => c.url === "reason")?.valueString ?? "",
     }));
 }
@@ -818,8 +863,8 @@ export const DISCHARGE_PLAN_EXTENSION_URL =
   "http://fhir-client.local/StructureDefinition/encounter-discharge-plan";
 
 export interface DischargePlan {
-  /** 退院予定日(YYYY-MM-DD)。必須。 */
-  date: string;
+  /** 退院予定日時(YYYY-MM-DDTHH:mm)。必須。時刻を付ける前のデータは日付だけ。 */
+  at: string;
   reason: string;
 }
 
@@ -827,9 +872,9 @@ export function validateDischargePlan(
   encounter: fhir4.Encounter,
   plan: DischargePlan,
 ): string | null {
-  if (!plan.date) return "退院予定日は必須です。";
+  if (!plan.at) return "退院予定日時は必須です。";
   const admission = encounter.period?.start?.slice(0, 10);
-  if (admission && plan.date < admission) {
+  if (admission && plan.at.slice(0, 10) < admission) {
     return `退院予定日は入院日(${admission})より前にはできません。`;
   }
   return null;
@@ -842,7 +887,9 @@ export function buildDischargePlanEncounter(
 ): fhir4.Encounter {
   let next: fhir4.Extension | null = null;
   if (plan) {
-    const children: fhir4.Extension[] = [{ url: "date", valueDate: plan.date }];
+    const children: fhir4.Extension[] = [
+      { url: "date", valueDateTime: encounterDateTime(plan.at) },
+    ];
     if (plan.reason.trim()) children.push({ url: "reason", valueString: plan.reason.trim() });
     next = { url: DISCHARGE_PLAN_EXTENSION_URL, extension: children };
   }
@@ -855,8 +902,9 @@ export function buildDischargePlanEncounter(
 export function encounterDischargePlan(encounter: fhir4.Encounter): DischargePlan | undefined {
   const found = encounter.extension?.find((e) => e.url === DISCHARGE_PLAN_EXTENSION_URL);
   if (!found) return undefined;
+  const date = found.extension?.find((c) => c.url === "date");
   return {
-    date: found.extension?.find((c) => c.url === "date")?.valueDate ?? "",
+    at: date?.valueDateTime?.slice(0, 16) ?? date?.valueDate ?? "",
     reason: found.extension?.find((c) => c.url === "reason")?.valueString ?? "",
   };
 }
@@ -936,14 +984,19 @@ export function encounterEvents(encounter: fhir4.Encounter): EncounterEvent[] {
   for (const leave of encounterLeaves(encounter)) {
     if (leave.start) {
       events.push({
-        date: leave.start,
+        date: leave.start.slice(0, 10),
         kind: "leave-start",
         label: EVENT_LABELS["leave-start"],
         detail: leave.reason,
       });
     }
     if (leave.end) {
-      events.push({ date: leave.end, kind: "leave-end", label: EVENT_LABELS["leave-end"], detail: "" });
+      events.push({
+        date: leave.end.slice(0, 10),
+        kind: "leave-end",
+        label: EVENT_LABELS["leave-end"],
+        detail: "",
+      });
     }
   }
 

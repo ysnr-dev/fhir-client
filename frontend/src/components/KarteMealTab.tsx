@@ -3,8 +3,13 @@ import { useMealOrderMonth, usePatientEncounterEvents } from "../api/queries";
 import type { EncounterEvent } from "../fhir/encounterHelpers";
 import {
   MEAL_TIMING_OPTIONS,
+  isMealOrderStoppedByDischarge,
   mealDayEntries,
   mealOrderDietName,
+  mealOrderEnd,
+  mealOrderEndReasonLabel,
+  mealOrderKindLabel,
+  mealOrderLink,
   mealStapleSummary,
   type MealDayEntry,
 } from "../fhir/mealOrderHelpers";
@@ -253,18 +258,31 @@ function MealDayCell({
 
 /**
  * 1 マスの中の 1 オーダー。押す先はマス全体で決まるので、ここは表示だけ。
- * その日に始まったオーダー(= その日に食事が変わった)には印を付ける。
+ * その日に始まったオーダーには種別(開始 / 変更 / 再開 / 外泊食止め)の印を、
+ * 退院(予定)で止められたオーダーの最後の日には「退院食止め」の印を付ける。
  */
 function MealEntryBlock({ entry, date }: { entry: MealDayEntry; date: string }) {
   const { order, timings } = entry;
   const startsToday = (order.occurrenceDateTime ?? "").slice(0, 10) === date;
+  const endsToday = mealOrderEnd(order).slice(0, 10) === date;
+  const dischargeStop = endsToday && isMealOrderStoppedByDischarge(order);
+  const kind = mealOrderLink(order)?.kind ?? "change";
   const staple = mealStapleSummary(order, timings);
   // 1 日を通して同じオーダーなら食事の見出しは出さない(3 食ぶんと分かるため)。
   const partial = timings.length < MEAL_TIMING_OPTIONS.length;
 
   return (
     <div className={`meal-calendar__entry${startsToday ? " meal-calendar__entry--changed" : ""}`}>
-      {startsToday && <span className="meal-calendar__changed-badge">変更</span>}
+      {startsToday && (
+        <span className={`meal-calendar__changed-badge meal-calendar__changed-badge--${kind}`}>
+          {mealOrderKindLabel(order)}
+        </span>
+      )}
+      {dischargeStop && (
+        <span className="meal-calendar__changed-badge meal-calendar__changed-badge--discharge">
+          {mealOrderEndReasonLabel(order)}
+        </span>
+      )}
       <span className="meal-calendar__diet">{mealOrderDietName(order) || "(食種なし)"}</span>
       {/* 途中で食事が変わった日は、このオーダーが担当する食事を明示する。 */}
       {partial && (

@@ -22,7 +22,7 @@ import {
 import { displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { bedDisplayName, resolveBedSelection, type BedRoomIds } from "../fhir/wardHelpers";
-import { today } from "../lib/dates";
+import { nowDateTimeInput } from "../lib/dates";
 import { makeFieldUpdater } from "../lib/form";
 import { BedRoomSelects } from "./BedRoomSelects";
 import { ErrorBanner } from "./ErrorBanner";
@@ -58,7 +58,7 @@ export function AdmissionExecuteModal({
     practitionerId: encounterAttendingId(plan) ?? "",
     nurseIds: encounterNurseIds(plan),
     // 予定日ではなく今日を既定にする。実施はその日のうちに登録するのが普通なので。
-    admissionDate: today(),
+    admissionDate: nowDateTimeInput(),
     note: encounterNote(plan),
   });
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -179,9 +179,9 @@ export function AdmissionExecuteModal({
             onChange={(nurseIds) => update("nurseIds", nurseIds)}
           />
           <label>
-            入院日(必須)
+            入院日時(必須)
             <input
-              type="date"
+              type="datetime-local"
               value={values.admissionDate}
               onChange={(e) => update("admissionDate", e.target.value)}
             />

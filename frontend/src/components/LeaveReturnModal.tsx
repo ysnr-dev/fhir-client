@@ -1,51 +1,68 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useUpdateEncounter } from "../api/queries";
 import {
   buildLeaveReturnedEncounter,
   validateLeaveReturn,
   type LeaveValues,
 } from "../fhir/encounterHelpers";
+import { buildLeaveReturnEntries } from "../fhir/mealEncounterSync";
+import { firstMealAtOrAfter, mealPointDisplay } from "../fhir/mealOrderHelpers";
 import { displayName } from "../fhir/patientHelpers";
-import { today } from "../lib/dates";
+import { useMealSyncContext } from "../hooks/useMealSyncContext";
+import { dateTimeLabel, nowDateTimeInput } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
+import { MealSyncSummary } from "./MealSyncSummary";
 import { Modal } from "./Modal";
 
-// 帰院実施。外出泊の終了日を、実際に戻った日で確定する。
-// 予定として入れてあった終了日があれば、それを初期値にする。
+// 帰院実施。外出泊の終了日時を、実際に戻った日時で確定する。
+// 予定として入れてあった終了日時があれば、それを初期値にする。
+// 食事は帰院後に出る最初の食事から元の食事に戻す(食止めオーダーの終了を書き、
+// 再開オーダーを作る。帰院予定で既に作ってあれば開始を動かす)。
 
 export function LeaveReturnModal({
   encounter,
   patient,
   leave,
-  leaveIndex,
   onClose,
 }: {
   encounter: fhir4.Encounter;
   patient?: fhir4.Patient;
   leave: LeaveValues;
-  /** encounterLeaves の並びでの位置。同じ患者に外出泊が複数あるので要る。 */
-  leaveIndex: number;
   onClose: () => void;
 }) {
-  const [returnDate, setReturnDate] = useState(leave.end || today());
+  const [returnAt, setReturnAt] = useState(leave.end || nowDateTimeInput());
+  const [syncMeals, setSyncMeals] = useState(true);
   const [validationError, setValidationError] = useState<string | null>(null);
   const save = useUpdateEncounter();
 
+  const meal = useMealSyncContext(encounter);
+  const mealEntries = useMemo(
+    () =>
+      returnAt && leave.id ? buildLeaveReturnEntries(meal.ctx, { ...leave, end: returnAt }) : [],
+    [meal.ctx, leave, returnAt],
+  );
+  const resume = returnAt ? firstMealAtOrAfter(returnAt, meal.ctx.schedule) : null;
+
   function handleSubmit() {
-    const error = validateLeaveReturn(leave, returnDate);
+    const error = validateLeaveReturn(leave, returnAt);
     if (error) {
       setValidationError(error);
       return;
     }
     setValidationError(null);
-    save.mutate(buildLeaveReturnedEncounter(encounter, leaveIndex, returnDate), {
-      onSuccess: onClose,
-    });
+    save.mutate(
+      {
+        encounter: buildLeaveReturnedEncounter(encounter, leave.id, returnAt),
+        extraEntries: syncMeals ? mealEntries : [],
+      },
+      { onSuccess: onClose },
+    );
   }
 
   return (
     <Modal title="帰院実施" onClose={onClose}>
       <ErrorBanner error={save.error} />
+      <ErrorBanner error={meal.error} />
       {validationError && (
         <div className="error-banner" role="alert">
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -59,15 +76,15 @@ export function LeaveReturnModal({
 
         <div className="walk-in__fields">
           <label>
-            外出泊開始日
-            <input type="text" value={leave.start} readOnly />
+            外出泊開始日時
+            <input type="text" value={dateTimeLabel(leave.start)} readOnly />
           </label>
           <label>
-            帰院日(必須)
+            帰院日時(必須)
             <input
-              type="date"
-              value={returnDate}
-              onChange={(e) => setReturnDate(e.target.value)}
+              type="datetime-local"
+              value={returnAt}
+              onChange={(e) => setReturnAt(e.target.value)}
             />
           </label>
           {leave.reason && (
@@ -78,8 +95,21 @@ export function LeaveReturnModal({
           )}
         </div>
 
+        <MealSyncSummary
+          title={`食事を ${resume ? mealPointDisplay(resume) : ""}食から元に戻す`}
+          entries={mealEntries}
+          orders={meal.ctx.orders}
+          enabled={syncMeals}
+          onToggle={setSyncMeals}
+          note={
+            leave.id
+              ? undefined
+              : "この外出泊は食事オーダーと結び付いていない(時刻を付ける前の登録)ため、食事は手で戻してください。"
+          }
+        />
+
         <div className="walk-in__actions">
-          <button type="button" onClick={handleSubmit} disabled={save.isPending}>
+          <button type="button" onClick={handleSubmit} disabled={save.isPending || !meal.ready}>
             {save.isPending ? "登録中..." : "帰院実施"}
           </button>
           <button type="button" onClick={onClose} disabled={save.isPending}>

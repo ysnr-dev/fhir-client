@@ -8,6 +8,7 @@ import {
   SETTING_OPTIONS,
   SETTING_SYSTEM,
   applyOrderContext,
+  prescriptionRequester,
   type OrderAttribution,
 } from "./prescriptionHelpers";
 
@@ -62,6 +63,61 @@ const MEAL_TIMING_EXT_URL = "http://fhir-client.local/StructureDefinition/meal-t
  */
 const MEAL_SKIPPED_TIMING_EXT_URL =
   "http://fhir-client.local/StructureDefinition/meal-skipped-timing";
+
+/**
+ * オーダーの種別と由来(入退院との結びつき)。種別は手で選ばせず、登録の文脈から決める:
+ *   start         食事開始(その時点に出ている食事が無い)
+ *   change        食事変更(前のオーダーを終了させて始めた)。source = 終了させたオーダー
+ *   resume        再開(期限付きの食事のあとに元の食事へ戻す)。source = 写し元
+ *   leave-fasting 外出泊中の食止め。leave = 外出泊 id
+ * 退院食止めはオーダーではなく、既存オーダーの終了に付く理由(meal-order-end-reason)で表す
+ * (SS-MIX2 と同じく食止めは食種側の情報で、退院では新しい食事を出さないため)。
+ */
+const MEAL_ORDER_LINK_EXT_URL = "http://fhir-client.local/StructureDefinition/meal-order-link";
+
+/**
+ * 終了が入退院の連動で書かれたものであることと、戻すための情報。手で入れた終了は
+ * この拡張を持たない(それ以前のデータもそのまま)。
+ *   reason      change / discharge-plan / discharge / leave
+ *   leave       外出泊 id(reason=leave のとき)
+ *   previousEnd 上書き前の終了。無ければ「継続だった」
+ * 退院予定の取消・退院取消・外出泊取消は、この理由が一致するオーダーだけを previousEnd に戻す。
+ */
+const MEAL_ORDER_END_REASON_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/meal-order-end-reason";
+
+export type MealOrderKind = "start" | "change" | "resume" | "leave-fasting";
+
+export interface MealOrderLink {
+  kind: MealOrderKind;
+  /** change: 終了させた前オーダー、resume: 写し元のオーダーの id。 */
+  sourceId?: string;
+  /** 外出泊 id(外泊食止め・外泊後の再開)。 */
+  leaveId?: string;
+}
+
+export type MealOrderEndReason = "change" | "discharge-plan" | "discharge" | "leave";
+
+export interface MealOrderEndCause {
+  reason: MealOrderEndReason;
+  leaveId?: string;
+  /** 上書き前の終了(FHIR dateTime)。空なら継続だった。 */
+  previousEnd: string;
+}
+
+const MEAL_ORDER_KIND_LABELS: Record<MealOrderKind, string> = {
+  start: "開始",
+  change: "変更",
+  resume: "再開",
+  "leave-fasting": "外泊食止め",
+};
+
+const MEAL_ORDER_END_REASON_LABELS: Record<MealOrderEndReason, string> = {
+  change: "変更",
+  "discharge-plan": "退院食止め(予定)",
+  discharge: "退院食止め",
+  leave: "外泊",
+};
 
 /**
  * 食事のタイミング。SS-MIX2 が TQ1-7 / TQ1-8 の時刻に使うことを推奨している値
@@ -146,6 +202,65 @@ export function nextMealPoint(
   return { date: addDays(date, 1), timing: "breakfast" };
 }
 
+// ---- 食事の提供時刻(施設設定) ----
+//
+// 退院・外出泊は時刻を持つので、「その時刻までに出た最後の食事」「その時刻以降に出る
+// 最初の食事」を施設の提供時刻で決める。occurrenceDateTime に焼く 08/12/18 は
+// SS-MIX2 のコードで、ここの提供時刻とは別物(設定を変えてもオーダーの時刻は動かない)。
+
+/** 施設の食事提供時刻(backend の facility_settings.meal_schedule)。HH:mm。 */
+export type MealScheduleSettings = Record<MealTiming, string>;
+
+/** 設定が読めていないときの既定。backend の DEFAULT_MEAL_SCHEDULE と同じ値。 */
+export const DEFAULT_MEAL_SCHEDULE: MealScheduleSettings = {
+  breakfast: "08:00",
+  lunch: "12:00",
+  dinner: "18:00",
+};
+
+export interface MealPoint {
+  date: string;
+  timing: MealTiming;
+}
+
+/** `YYYY-MM-DD` / `YYYY-MM-DDTHH:mm(…)` の時刻部分(HH:mm)。日付だけなら 00:00 扱い。 */
+function timeOf(dateTime: string): string {
+  const time = dateTime.slice(11, 16);
+  return /^\d\d:\d\d$/.test(time) ? time : "00:00";
+}
+
+/**
+ * その時刻までに提供済みの最後の食事(退院 10:30 → 朝、06:00 → 前日の夕)。
+ * 退院・外出泊で「どの食事まで出すか」に使う。
+ */
+export function lastMealAtOrBefore(dateTime: string, schedule: MealScheduleSettings): MealPoint {
+  const date = dateTime.slice(0, 10);
+  const time = timeOf(dateTime);
+  for (let index = MEAL_TIMING_OPTIONS.length - 1; index >= 0; index -= 1) {
+    const timing = MEAL_TIMING_OPTIONS[index].code;
+    if (schedule[timing] <= time) return { date, timing };
+  }
+  return { date: addDays(date, -1), timing: "dinner" };
+}
+
+/**
+ * 提供時刻がその時刻以降の最初の食事(帰院 15:00 → 夕、20:00 → 翌日の朝)。
+ * 帰院・退院取消で「どの食事から戻すか」に使う。
+ */
+export function firstMealAtOrAfter(dateTime: string, schedule: MealScheduleSettings): MealPoint {
+  const date = dateTime.slice(0, 10);
+  const time = timeOf(dateTime);
+  for (const option of MEAL_TIMING_OPTIONS) {
+    if (schedule[option.code] >= time) return { date, timing: option.code };
+  }
+  return { date: addDays(date, 1), timing: "breakfast" };
+}
+
+/** 「8/30 朝」。 */
+export function mealPointDisplay(point: MealPoint): string {
+  return mealPointLabel(mealPointKey(point.date, point.timing));
+}
+
 /** マスタから写した食種・主食 1 件。 */
 export interface MealItemRef {
   code: string;
@@ -222,12 +337,23 @@ export function isMealServiceRequest(sr: fhir4.ServiceRequest): boolean {
 
 // ---- 組み立て ----
 
+export interface MealOrderBuildOptions {
+  serviceRequestId?: string;
+  /** 入院 Encounter の id。入退院の連動(退院予定の取消で戻す など)が突き合わせる。 */
+  encounterId?: string;
+  /** 種別と由来。新規登録・連動で作るオーダーに付ける(更新では元の値を引き継ぐ)。 */
+  link?: MealOrderLink;
+  /** 終了の理由。連動で終了を決めたオーダーに付ける。 */
+  endCause?: MealOrderEndCause;
+}
+
 function buildMealOrderServiceRequest(
   values: MealOrderFormValues,
   patientId: string,
   requester: OrderAttribution,
-  serviceRequestId?: string,
+  options: MealOrderBuildOptions = {},
 ): fhir4.ServiceRequest {
+  const { serviceRequestId, encounterId, link, endCause } = options;
   const resource: fhir4.ServiceRequest = {
     resourceType: "ServiceRequest",
     status: "active",
@@ -254,6 +380,7 @@ function buildMealOrderServiceRequest(
   };
 
   if (serviceRequestId) resource.id = serviceRequestId;
+  if (encounterId) resource.encounter = { reference: `Encounter/${encounterId}` };
 
   if (values.diet) {
     resource.code = {
@@ -290,7 +417,9 @@ function buildMealOrderServiceRequest(
       url: MEAL_ORDER_END_EXT_URL,
       valueDateTime: mealDateTime(values.endDate, values.endTiming),
     });
+    if (endCause) extensions.push(endCauseExtension(endCause));
   }
+  if (link) extensions.push(linkExtension(link));
   // 依頼科・病棟は applyOrderContext がこの配列に足す。
   if (extensions.length > 0) resource.extension = extensions;
 
@@ -316,24 +445,129 @@ function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
   return { resourceType: "Bundle", type: "transaction", entry };
 }
 
+function linkExtension(link: MealOrderLink): fhir4.Extension {
+  const children: fhir4.Extension[] = [{ url: "kind", valueCode: link.kind }];
+  if (link.sourceId) {
+    children.push({ url: "source", valueReference: { reference: `ServiceRequest/${link.sourceId}` } });
+  }
+  if (link.leaveId) children.push({ url: "leave", valueString: link.leaveId });
+  return { url: MEAL_ORDER_LINK_EXT_URL, extension: children };
+}
+
+function endCauseExtension(cause: MealOrderEndCause): fhir4.Extension {
+  const children: fhir4.Extension[] = [{ url: "reason", valueCode: cause.reason }];
+  if (cause.leaveId) children.push({ url: "leave", valueString: cause.leaveId });
+  if (cause.previousEnd) children.push({ url: "previousEnd", valueDateTime: cause.previousEnd });
+  return { url: MEAL_ORDER_END_REASON_EXT_URL, extension: children };
+}
+
+export function mealOrderLink(sr: fhir4.ServiceRequest): MealOrderLink | undefined {
+  const found = sr.extension?.find((e) => e.url === MEAL_ORDER_LINK_EXT_URL);
+  const kind = found?.extension?.find((c) => c.url === "kind")?.valueCode;
+  if (!kind || !(kind in MEAL_ORDER_KIND_LABELS)) return undefined;
+  const source = found?.extension?.find((c) => c.url === "source")?.valueReference?.reference;
+  return {
+    kind: kind as MealOrderKind,
+    sourceId: source?.split("/").pop() || undefined,
+    leaveId: found?.extension?.find((c) => c.url === "leave")?.valueString || undefined,
+  };
+}
+
+/** 種別の表示。種別を持たない(連動を入れる前の)オーダーは従来どおり「変更」。 */
+export function mealOrderKindLabel(sr: fhir4.ServiceRequest): string {
+  return MEAL_ORDER_KIND_LABELS[mealOrderLink(sr)?.kind ?? "change"];
+}
+
+export function mealOrderEndCause(sr: fhir4.ServiceRequest): MealOrderEndCause | undefined {
+  const found = sr.extension?.find((e) => e.url === MEAL_ORDER_END_REASON_EXT_URL);
+  const reason = found?.extension?.find((c) => c.url === "reason")?.valueCode;
+  if (!reason || !(reason in MEAL_ORDER_END_REASON_LABELS)) return undefined;
+  return {
+    reason: reason as MealOrderEndReason,
+    leaveId: found?.extension?.find((c) => c.url === "leave")?.valueString || undefined,
+    previousEnd: found?.extension?.find((c) => c.url === "previousEnd")?.valueDateTime ?? "",
+  };
+}
+
+export function mealOrderEndReasonLabel(sr: fhir4.ServiceRequest): string {
+  const cause = mealOrderEndCause(sr);
+  return cause ? MEAL_ORDER_END_REASON_LABELS[cause.reason] : "";
+}
+
+/** 退院(予定)で止められているオーダーか。暦に「退院食止め」の印を出す判定。 */
+export function isMealOrderStoppedByDischarge(sr: fhir4.ServiceRequest): boolean {
+  const reason = mealOrderEndCause(sr)?.reason;
+  return reason === "discharge" || reason === "discharge-plan";
+}
+
+/**
+ * 連動で書き換える前の終了(FHIR dateTime、継続なら空)。終了理由を持つオーダーは
+ * previousEnd、持たなければ今の終了そのもの。
+ */
+export function mealOrderOriginalEnd(sr: fhir4.ServiceRequest): string {
+  const cause = mealOrderEndCause(sr);
+  return cause ? cause.previousEnd : mealOrderEnd(sr);
+}
+
 /**
  * 継続中のオーダーに終了を書き足す PUT エントリ。食事変更(新しい食事を出すと同時に
  * 前の食事を終える)を 1 transaction で行うために使う。
  *
  * 終了は「新しい食事の直前の食事まで」。オーダー全体を置き換える PUT なので、
- * 元のリソースを基に拡張だけ差し替える。
+ * 元のリソースを基に拡張だけ差し替える。cause を渡すと終了の理由も書く(戻せるように
+ * 上書き前の終了も残す。理由が同じ系統の上書きなら、さらに前の終了を引き継ぐ)。
  */
 export function buildMealOrderCloseEntry(
   sr: fhir4.ServiceRequest,
   endDate: string,
   endTiming: MealTiming,
+  cause?: Omit<MealOrderEndCause, "previousEnd">,
 ): fhir4.BundleEntry {
+  const extension = (sr.extension ?? []).filter(
+    (e) => e.url !== MEAL_ORDER_END_EXT_URL && e.url !== MEAL_ORDER_END_REASON_EXT_URL,
+  );
+  extension.push({ url: MEAL_ORDER_END_EXT_URL, valueDateTime: mealDateTime(endDate, endTiming) });
+  if (cause) {
+    const current = mealOrderEndCause(sr);
+    const sameFamily = current && isSameEndCauseFamily(current, cause);
+    extension.push(
+      endCauseExtension({
+        ...cause,
+        previousEnd: sameFamily ? current.previousEnd : mealOrderEnd(sr),
+      }),
+    );
+  }
+  const next: fhir4.ServiceRequest = { ...sr, extension };
+  return { resource: next, request: { method: "PUT", url: `ServiceRequest/${sr.id}` } };
+}
+
+/**
+ * 同じ系統の理由か。退院予定 → 退院予定の日付変更 → 退院実施 は 1 つの流れなので、
+ * 上書きしても「連動の前の終了」を保ち続ける。外出泊は同じ外出泊 id のときだけ。
+ */
+export function isSameEndCauseFamily(
+  a: Pick<MealOrderEndCause, "reason" | "leaveId">,
+  b: Pick<MealOrderEndCause, "reason" | "leaveId">,
+): boolean {
+  const discharge = (r: MealOrderEndReason) => r === "discharge" || r === "discharge-plan";
+  if (discharge(a.reason) && discharge(b.reason)) return true;
+  if (a.reason === "leave" && b.reason === "leave") return a.leaveId === b.leaveId;
+  return a.reason === b.reason;
+}
+
+/**
+ * 連動で書いた終了を取り消して、書く前の終了に戻す PUT エントリ(退院予定の取消・
+ * 退院取消・外出泊取消)。上書き前が継続なら終了拡張ごと外す。
+ */
+export function buildMealOrderRestoreEntry(sr: fhir4.ServiceRequest): fhir4.BundleEntry {
+  const previousEnd = mealOrderOriginalEnd(sr);
+  const extension = (sr.extension ?? []).filter(
+    (e) => e.url !== MEAL_ORDER_END_EXT_URL && e.url !== MEAL_ORDER_END_REASON_EXT_URL,
+  );
+  if (previousEnd) extension.push({ url: MEAL_ORDER_END_EXT_URL, valueDateTime: previousEnd });
   const next: fhir4.ServiceRequest = {
     ...sr,
-    extension: [
-      ...(sr.extension ?? []).filter((e) => e.url !== MEAL_ORDER_END_EXT_URL),
-      { url: MEAL_ORDER_END_EXT_URL, valueDateTime: mealDateTime(endDate, endTiming) },
-    ],
+    extension: extension.length > 0 ? extension : undefined,
   };
   return { resource: next, request: { method: "PUT", url: `ServiceRequest/${sr.id}` } };
 }
@@ -384,12 +618,64 @@ export function buildMealOrderResumeEntry(
   startTiming: MealTiming,
   patientId: string,
   requester: OrderAttribution,
+  options: { encounterId?: string; leaveId?: string; endDate?: string; endTiming?: MealTiming } = {},
 ): fhir4.BundleEntry {
   const values: MealOrderFormValues = { ...parseMealOrderForm(sr), startDate, startTiming };
+  if (options.endDate !== undefined) {
+    values.endDate = options.endDate;
+    values.endTiming = options.endTiming ?? DEFAULT_MEAL_END_TIMING;
+  }
   return {
-    resource: buildMealOrderServiceRequest(values, patientId, requester),
+    resource: buildMealOrderServiceRequest(values, patientId, requester, {
+      encounterId: options.encounterId ?? mealOrderEncounterId(sr),
+      link: { kind: "resume", sourceId: sr.id, leaveId: options.leaveId },
+    }),
     request: { method: "POST", url: "ServiceRequest" },
   };
+}
+
+/** FHIR dateTime(08/12/18 の時刻)を食事点に読み戻す。時刻が食事に当たらなければ undefined。 */
+export function parseMealPoint(dateTime: string): MealPoint | undefined {
+  const timing = parseMealTiming(dateTime);
+  return timing ? { date: dateTime.slice(0, 10), timing } : undefined;
+}
+
+/** 連動で作る新規オーダー(外泊食止め など)の POST エントリ。 */
+export function buildMealOrderCreateEntry(
+  values: MealOrderFormValues,
+  patientId: string,
+  requester: OrderAttribution,
+  options: MealOrderBuildOptions = {},
+): fhir4.BundleEntry {
+  return {
+    resource: buildMealOrderServiceRequest(values, patientId, requester, options),
+    request: { method: "POST", url: "ServiceRequest" },
+  };
+}
+
+/**
+ * 保存済みオーダーの一部(開始・終了)を書き換える PUT エントリ。種別・入院との結びつき・
+ * 終了理由・依頼科などはそのまま引き継ぐ(帰院で再開オーダーの開始を動かす、
+ * 外泊食止めに終了を書く など、連動が自分で作ったオーダーを直すのに使う)。
+ */
+export function buildMealOrderRewriteEntry(
+  sr: fhir4.ServiceRequest,
+  patch: Partial<MealOrderFormValues>,
+): fhir4.BundleEntry {
+  const values = { ...parseMealOrderForm(sr), ...patch };
+  const resource = buildMealOrderServiceRequest(values, sr.subject?.reference?.split("/").pop() ?? "", prescriptionRequester(sr), {
+    serviceRequestId: sr.id,
+    encounterId: mealOrderEncounterId(sr),
+    link: mealOrderLink(sr),
+    endCause: mealOrderEndCause(sr),
+  });
+  // authoredOn は登録日のまま(書き換えで今日に動かさない)。
+  if (sr.authoredOn) resource.authoredOn = sr.authoredOn;
+  return { resource, request: { method: "PUT", url: `ServiceRequest/${sr.id}` } };
+}
+
+export function mealOrderEncounterId(sr: fhir4.ServiceRequest): string | undefined {
+  return sr.encounter?.reference?.split("/").pop() || undefined;
 }
 
 /**
@@ -406,36 +692,57 @@ export function buildMealOrderBundle(
   closing: fhir4.ServiceRequest[] = [],
   /** 終了後に元の食事へ戻すオーダー。画面のチェックで選ばれたもの。 */
   resuming: fhir4.ServiceRequest[] = [],
+  /** 入院 Encounter の id。 */
+  encounterId?: string,
 ): fhir4.Bundle {
   const end = previousMealPoint(values.startDate, values.startTiming);
   const resume = nextMealPoint(values.endDate, values.endTiming);
+  // 種別は文脈で決める: いま出ている食事を終了させるなら「変更」、そうでなければ「開始」。
+  const link: MealOrderLink =
+    closing.length > 0 ? { kind: "change", sourceId: closing[0].id } : { kind: "start" };
   return transactionBundle([
     {
-      resource: buildMealOrderServiceRequest(values, patientId, requester),
+      resource: buildMealOrderServiceRequest(values, patientId, requester, { encounterId, link }),
       request: { method: "POST", url: "ServiceRequest" },
     },
-    ...closing.map((sr) => buildMealOrderCloseEntry(sr, end.date, end.timing)),
+    ...closing.map((sr) => buildMealOrderCloseEntry(sr, end.date, end.timing, { reason: "change" })),
     // 終了を決めていないオーダーには戻す先が無い(次の指示まで続くので不要)。
     ...(values.endDate
       ? resuming
           .filter((sr) => mealOrderResumable(sr, values.endDate, values.endTiming))
           .map((sr) =>
-            buildMealOrderResumeEntry(sr, resume.date, resume.timing, patientId, requester),
+            buildMealOrderResumeEntry(sr, resume.date, resume.timing, patientId, requester, {
+              encounterId,
+            }),
           )
       : []),
   ]);
 }
 
-/** 更新。明細が無いので既存ヘッダ 1 件への PUT だけ。 */
+/**
+ * 更新。明細が無いので既存ヘッダ 1 件への PUT だけ。種別・入院との結びつきは元の
+ * オーダーから引き継ぐ。終了の理由は、終了を変えていなければ引き継ぎ、手で変えたら外す
+ * (手で決め直した終了は連動の取消で戻さない)。
+ */
 export function buildMealOrderUpdateBundle(
   values: MealOrderFormValues,
   patientId: string,
   serviceRequestId: string,
   requester: OrderAttribution,
+  current?: fhir4.ServiceRequest,
 ): fhir4.Bundle {
+  const cause = current ? mealOrderEndCause(current) : undefined;
+  const endUnchanged =
+    current &&
+    (values.endDate ? mealDateTime(values.endDate, values.endTiming) : "") === mealOrderEnd(current);
   return transactionBundle([
     {
-      resource: buildMealOrderServiceRequest(values, patientId, requester, serviceRequestId),
+      resource: buildMealOrderServiceRequest(values, patientId, requester, {
+        serviceRequestId,
+        encounterId: current ? mealOrderEncounterId(current) : undefined,
+        link: current ? mealOrderLink(current) : undefined,
+        endCause: endUnchanged ? cause : undefined,
+      }),
       request: { method: "PUT", url: `ServiceRequest/${serviceRequestId}` },
     },
   ]);
@@ -473,15 +780,17 @@ export interface MealOrderSummary {
   stapleLines: MealStapleLine[];
   /** 「8/28 朝」形式の開始。 */
   startLabel: string;
-  /** 「8/30 夕まで」形式の終了。継続中なら空。 */
+  /** 「8/30 夕まで」形式の終了。連動で決めた終了なら「8/30 朝まで(退院食止め)」。継続中なら空。 */
   endLabel: string;
+  /** 種別(開始 / 変更 / 再開 / 外泊食止め)。 */
+  kindLabel: string;
   /** 終了を決めていないオーダーか。 */
   continuing: boolean;
   comment: string;
 }
 
 /** 「8/28 朝」。タイミングが 08/12/18 でないデータは時刻をそのまま出す。 */
-function mealPointLabel(value: string): string {
+export function mealPointLabel(value: string): string {
   if (!value) return "";
   const date = value.slice(0, 10);
   const [, month, day] = date.split("-");
@@ -524,12 +833,14 @@ export function mealStapleSummary(
 
 export function summarizeMealOrder(sr: fhir4.ServiceRequest): MealOrderSummary {
   const end = mealOrderEnd(sr);
+  const reason = mealOrderEndReasonLabel(sr);
 
   return {
     dietName: mealOrderDietName(sr),
     ...mealStapleSummary(sr),
     startLabel: mealPointLabel(sr.occurrenceDateTime ?? ""),
-    endLabel: end ? `${mealPointLabel(end)}まで` : "",
+    endLabel: end ? `${mealPointLabel(end)}まで${reason ? `(${reason})` : ""}` : "",
+    kindLabel: mealOrderKindLabel(sr),
     continuing: !end,
     comment: orderComment(sr),
   };
@@ -600,11 +911,11 @@ export function mealOrderNeedsStop(
 // 辞書順がそのまま時間順になる。カレンダーはこの比較だけで各食事の担当を決める。
 
 /** 比較用のキー。タイムゾーンを落とした地方時の `YYYY-MM-DDTHH:mm`。 */
-function mealPointKey(date: string, timing: MealTiming): string {
+export function mealPointKey(date: string, timing: MealTiming): string {
   return `${date}T${timingHour(timing)}:00`;
 }
 
-function mealPointKeyOf(dateTime: string): string {
+export function mealPointKeyOf(dateTime: string): string {
   return dateTime.slice(0, 16);
 }
 

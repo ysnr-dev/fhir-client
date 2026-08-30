@@ -10110,6 +10110,16 @@ button.meal-calendar__cell:hover {
   font-size: 10px;
 }
 
+/* 種別ごとの色。開始と変更は同じ系(食事が出る)、再開は薄め、食止め系は警告色。 */
+.meal-calendar__changed-badge--resume {
+  background: var(--text-muted, #7a8a99);
+}
+
+.meal-calendar__changed-badge--leave-fasting,
+.meal-calendar__changed-badge--discharge {
+  background: var(--danger, #c0392b);
+}
+
 .meal-calendar__diet {
   color: var(--text-h);
 }

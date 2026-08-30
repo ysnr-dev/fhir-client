@@ -1,6 +1,11 @@
 import { useMemo } from "react";
-import { useCreatePrescription, useMealOrderDetail, useUpdateMealOrder } from "../api/queries";
-import { useActiveMealOrders } from "../api/queries";
+import {
+  useActiveMealOrders,
+  useCreatePrescription,
+  useMealOrderDetail,
+  usePatientAdmission,
+  useUpdateMealOrder,
+} from "../api/queries";
 import { serviceRequestsOf } from "../fhir/labOrderHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
@@ -43,8 +48,10 @@ export function MealOrderCreatePanel({
 }: MealOrderCreatePanelProps) {
   const createMealOrder = useCreatePrescription();
   const source = useMealOrderInitialValues(sourceSrId, patientId);
-  // 食事は入院患者にだけ出すオーダー。入院病棟もここから取ってオーダーに焼き付ける。
+  // 食事は入院患者にだけ出すオーダー。入院病棟もここから取ってオーダーに焼き付け、
+  // 入院(Encounter)そのものも結び付ける(退院・外出泊の連動が突き合わせる)。
   const admission = useDefaultOrderSetting(patientId);
+  const patientAdmission = usePatientAdmission(patientId);
   const requester = useOrderContext();
 
   const initialValues = useMemo(() => {
@@ -67,8 +74,16 @@ export function MealOrderCreatePanel({
     // 入院病棟を焼き付ける(給食部門の一覧が入院を引き直さずに病棟で束ねられる)。
     const attribution = withOrderWard(requester, "inpatient", admission);
 
+    // 種別(開始 / 変更)は buildMealOrderBundle が「終了させる食事があるか」で決める。
     createMealOrder.mutate(
-      buildMealOrderBundle(values, patientId, attribution, closing, resuming),
+      buildMealOrderBundle(
+        values,
+        patientId,
+        attribution,
+        closing,
+        resuming,
+        patientAdmission.data?.encounter.id,
+      ),
       { onSuccess: onSaved },
     );
   }
@@ -118,9 +133,15 @@ export function MealOrderEditPanel({ patientId, srId, onSaved }: MealOrderEditPa
     // 別患者のオーダーを更新すると subject が URL の患者に書き換わってしまうので防ぐ。
     if (!serviceRequest || patientMismatch) return;
 
-    // 依頼科・依頼医師・病棟は登録時のものを引き継ぐ(他のオーダーの編集と同じ)。
+    // 依頼科・依頼医師・病棟・種別・入院との結びつきは登録時のものを引き継ぐ。
     updateMealOrder.mutate(
-      buildMealOrderUpdateBundle(values, patientId, srId, prescriptionRequester(serviceRequest)),
+      buildMealOrderUpdateBundle(
+        values,
+        patientId,
+        srId,
+        prescriptionRequester(serviceRequest),
+        serviceRequest,
+      ),
       { onSuccess: onSaved },
     );
   }
