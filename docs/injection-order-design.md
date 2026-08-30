@@ -199,10 +199,10 @@ ServiceRequest(1 日分) ← focus ── Task(進捗)
 
 | 進捗 | 一覧の操作 |
 |---|---|
-| 依頼済 | 「受付」→ 受付済(注射箋の帳票はまだ無いので受付だけ進める) |
+| 依頼済 | 「注射箋発行」→ PDF を開くと同時に受付済(発行が受付を兼ねる。処方箋と同じ) |
 | 受付済 | 「払出登録」→ 払出済(`InjectionDispenseModal`) |
 | 払出済 | (カルテの実施入力で実施済へ) |
-| ケバブ | 受付取消 / 払出取消 / 中止 / 中止を取消 |
+| ケバブ | 注射箋再発行 / 注射ラベル発行 / 受付取消 / 払出取消 / 中止 / 中止を取消 |
 
 ### 払出(MedicationDispense)
 
@@ -218,6 +218,34 @@ ServiceRequest(1 日分) ← focus ── Task(進捗)
 
 払出取消は進捗を受付済に戻すだけで `MedicationDispense` は残す(処方の調剤取消と同じ。
 払出結果の訂正・削除は別タスク)。
+
+## 5.4 帳票(注射箋・注射ラベル)
+
+処方箋(docs/prescription-report-design.md)と同じ基盤(ThinReports、同梱 `.tlf`、
+`/reports/*` を Cookie セッションで GET)。プレースホルダーは docs/report-mappings/injection-01.md。
+
+```
+InjectionWorklistPage「注射箋発行」<a target="_blank">
+  → GET /reports/injections/:order_id/pdf        → InjectionReport#generate_order
+  → GET /reports/injection_labels/:order_id/pdf  → InjectionReport#generate_labels
+      ① GET /ServiceRequest/{id}
+      ② batch: ServiceRequest?_id&_revinclude=MedicationRequest:based-on / Patient / 自院 Organization
+```
+
+- **注射箋と注射指示票は 1 様式**(`injection_order.tlf`、A5、1 オーダー = 1 日分 = 1 枚)。
+  どちらも「その日のこの患者の注射」の一覧で中身が同じ。薬剤部は払出の指示書として、
+  病棟は下段の実施記録欄(時刻・実施者を手書き)を使って指示票として読む。様式を分けると
+  同じ内容を 2 回刷ることになる。
+- **注射ラベルは RP ごと 1 枚**(`injection_label.tlf`、60×40mm、検体ラベルと同じ用紙)。
+  混注したボトル・シリンジに貼る単位が RP だから。ベッドサイドの本人確認に使うので
+  漢字氏名も出し、バーコードは患者番号(ラベル番号の採番・台帳は持たない)。緊急の
+  注射区分は「至急」を出す。
+- **発行が受付を兼ねる**(処方箋と同じ)。PDF エンドポイントは Task に触らず、受付の遷移は
+  frontend のリンクが行う。再発行はケバブ。ラベルは進捗を動かさず、どの進捗でも刷れる
+  (混注の準備で払出の前に使う)。
+- 連日オーダーは**その日の分だけ**を刷る(1 日 1 SR なので自然にそうなる)。用紙に
+  「※連日オーダーはこの日の分のみ」と入れ、「連日 3日目(8/30〜)」を添える。
+- 内容が枠を超えたら同じレイアウトで続紙(処方箋と同じ `lines_per_page` 方式)。
 
 ## 6. 実施記録(施用)
 
@@ -304,13 +332,14 @@ RP の開始時刻が「10:00、20:30」のように複数あるので、ハブ�
 | 注射一覧 | `frontend/src/pages/InjectionWorklistPage.tsx`、`api/queries.ts`(`useInjectionWorklist`) |
 | 払出 | `frontend/src/fhir/injectionDispenseHelpers.ts`、`components/InjectionDispenseModal.tsx` |
 | 一覧の内容表示 | `frontend/src/components/InjectionOrderViewModal.tsx` |
+| 帳票 | `backend/app/services/injection_report.rb`、`reports/injection_renderer.rb`、`reports/injection_label_renderer.rb`、`reports/injection_meta.rb`、`lib/report_layouts/injection_{order,label}.tlf` |
 
 ## 8. 未実装・今後
 
 - 「◯回で終了」の回数指定(いまは期間指定のみ)。展開の日付列を作る `injectionDates` に
   停止条件を足せば済む。
 - 既存の束ねへの日数の追加(いまは DO で新しい束ねを作る)。
-- 帳票(注射箋・注射指示票・注射ラベル)。一覧の「受付」を発行が兼ねる形にする(処方箋発行と同じ)。
+- 注射ラベルの薬剤欄は 3 行(4 剤以上は切れる)。TPN など多剤の混注が増えたらラベルを大きくするか 2 枚に分ける。
 - 払出結果(MedicationDispense)の表示・訂正・削除(いまは登録のみ。取消は進捗を戻すだけ)。
 - 実施記録の詳細モーダルへの表示(いまはカードのみ。詳細は SR + MR + Task しか引いていない)。
 - 実施記録 1 件だけの取消・訂正(いまは全件取消して入れ直す)。

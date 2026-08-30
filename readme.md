@@ -491,6 +491,10 @@ JP Core の `JP_MedicationRequest_Injection` プロファイルを参考にし�
   (`authorizingPrescription` = その `MedicationRequest`、数量の既定は投与量 × その日の施用回数、
   銘柄変更は `substitution.wasSubstituted`)を作り、払出済の Task と同じ transaction で書きます。
   疑義照会は `Task.note`。詳細は `docs/injection-order-design.md` §5.3。
+- **帳票**: 注射一覧の「注射箋発行」(`GET /reports/injections/:order_id/pdf`、A5、注射指示票を兼ねる。
+  発行が受付を兼ねる)と「注射ラベル発行」(`GET /reports/injection_labels/:order_id/pdf`、RP ごと 1 枚、
+  60×40mm、患者番号バーコード)。処方箋と同じ帳票基盤(同梱 `.tlf`)で、プレースホルダーは
+  `docs/report-mappings/injection-01.md`。
 - テンプレートへの一括入力(`%prescriptions`)は最新の「処方」を対象とし、注射オーダーは
   対象外です(検索結果から category で除外)。
 

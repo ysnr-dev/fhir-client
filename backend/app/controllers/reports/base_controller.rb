@@ -37,6 +37,18 @@ module Reports
       render json: { error: "no_prescription_content" }, status: :unprocessable_content
     end
 
+    rescue_from InjectionReport::NotFound do
+      render json: { error: "order_not_found" }, status: :not_found
+    end
+
+    rescue_from InjectionReport::NotInjectionOrder do
+      render json: { error: "not_injection_order" }, status: :unprocessable_content
+    end
+
+    rescue_from InjectionReport::NoMedication do
+      render json: { error: "no_injection_content" }, status: :unprocessable_content
+    end
+
     rescue_from QuestionnaireResponseReport::LayoutNotRegistered do
       render json: { error: "layout_not_registered" }, status: :not_found
     end
@@ -50,7 +62,7 @@ module Reports
     end
 
     rescue_from QuestionnaireResponseReport::UpstreamError, LabLabelReport::UpstreamError,
-                PrescriptionReport::UpstreamError,
+                PrescriptionReport::UpstreamError, InjectionReport::UpstreamError,
                 Faraday::ConnectionFailed, Faraday::TimeoutError do
       render json: { error: "upstream_unreachable" }, status: :bad_gateway
     end

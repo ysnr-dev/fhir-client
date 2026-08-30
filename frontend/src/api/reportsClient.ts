@@ -34,6 +34,16 @@ export function prescriptionPdfUrl(orderId: string): string {
   return `/reports/prescriptions/${encodeURIComponent(orderId)}/pdf`;
 }
 
+/** 注射オーダー(1 日分)1 件ぶんの注射箋(注射指示票を兼ねる)PDF の URL。 */
+export function injectionPdfUrl(orderId: string): string {
+  return `/reports/injections/${encodeURIComponent(orderId)}/pdf`;
+}
+
+/** 注射オーダー 1 件ぶんの注射ラベル PDF の URL(1 ページ = RP 1 つ)。 */
+export function injectionLabelPdfUrl(orderId: string): string {
+  return `/reports/injection_labels/${encodeURIComponent(orderId)}/pdf`;
+}
+
 /** canonical(url|version)に帳票レイアウトが登録されているかを照会する。 */
 export function useReportLayoutStatus(canonical: string | undefined) {
   return useQuery({

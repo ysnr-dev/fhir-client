@@ -8,6 +8,7 @@ import {
   useUpdateInjectionTaskStatus,
   type InjectionWorklistRow,
 } from "../api/queries";
+import { injectionLabelPdfUrl, injectionPdfUrl } from "../api/reportsClient";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { InjectionDispenseModal } from "../components/InjectionDispenseModal";
 import { InjectionOrderViewModal } from "../components/InjectionOrderViewModal";
@@ -42,9 +43,10 @@ import { SETTING_SYSTEM } from "../fhir/prescriptionHelpers";
 // 注射一覧(部門ワークリスト)。注射日を決めて、その日に払い出す注射を並べる。
 // 作りは処方一覧(RxWorklistPage)に合わせてある。
 //
-// 進捗は 依頼済 → 受付済 → 払出済 → 実施済 と進む。受付は「受付」ボタン(処方箋発行の
-// ような帳票はまだ無いので、受付だけを進める)。払出済へは「払出登録」で進み、払出結果の
-// MedicationDispense と一緒に書き込む。実施済へはカルテの実施入力(病棟)で進む。
+// 進捗は 依頼済 → 受付済 → 払出済 → 実施済 と進む。注射箋の発行が受付を兼ねていて、
+// 依頼済のオーダーは発行と同時に受付済へ進む(処方箋発行と同じ)。払出済へは「払出登録」で
+// 進み、払出結果の MedicationDispense と一緒に書き込む。実施済へはカルテの実施入力(病棟)で進む。
+// 注射ラベル(RP ごと 1 枚)はどの進捗でも刷れる(混注の準備で使うので払出の前に刷ることが多い)。
 //
 // 注射日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る。
 
@@ -314,6 +316,8 @@ function WorklistRow({
   const settingDisplay = categoryCoding(order, SETTING_SYSTEM)?.display ?? "";
   const categoryDisplay = categoryCoding(order, INJECTION_CATEGORY_SYSTEM)?.display ?? "";
   const seriesLabel = injectionSeriesLabel(order);
+  // 発行済み(受付済以降)は注射箋を刷り直せる。中止した注射は刷らせない。
+  const canReissue = status === "accepted" || status === "in-progress" || status === "completed";
 
   // 注射内容の列。払い出す側が何を揃えるかが分かればよいので医薬品の名前だけを並べ、
   // 用法・用量は「表示」か「払出登録」で開く。
@@ -360,11 +364,19 @@ function WorklistRow({
         </span>
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
-        {/* 依頼済は「受付」で受付済へ。注射箋の発行(帳票)はまだ無いので受付だけを進める。 */}
+        {/* 注射箋の発行が受付を兼ねる(処方箋発行と同じ)。依頼済のオーダーは PDF を
+            開くと同時に受付済へ進める。再発行はケバブメニューへ畳む。 */}
         {status === "requested" && (
-          <button type="button" disabled={pending} onClick={() => onChangeStatus("accepted")}>
-            受付
-          </button>
+          <a
+            className="button"
+            href={injectionPdfUrl(order.id ?? "")}
+            target="_blank"
+            rel="noopener"
+            title="注射箋の PDF を新規タブで開く"
+            onClick={() => onChangeStatus("accepted")}
+          >
+            注射箋発行
+          </a>
         )}
         {status === "accepted" && (
           <button type="button" disabled={!patient?.id} onClick={onDispense}>
@@ -374,8 +386,29 @@ function WorklistRow({
         <button type="button" onClick={onView}>
           表示
         </button>
-        {actions.length > 0 && (
+        {(actions.length > 0 || canReissue || status !== "cancelled") && (
           <RowMenu label="この注射の操作" escapesClipping>
+            {canReissue && (
+              <a
+                className="row-menu__item"
+                href={injectionPdfUrl(order.id ?? "")}
+                target="_blank"
+                rel="noopener"
+              >
+                注射箋再発行
+              </a>
+            )}
+            {/* ラベルは進捗を動かさない。混注の準備で使うので払出前でも刷れる。 */}
+            {status !== "cancelled" && (
+              <a
+                className="row-menu__item"
+                href={injectionLabelPdfUrl(order.id ?? "")}
+                target="_blank"
+                rel="noopener"
+              >
+                注射ラベル発行
+              </a>
+            )}
             {actions.map((action) => (
               <button
                 key={action.next}
