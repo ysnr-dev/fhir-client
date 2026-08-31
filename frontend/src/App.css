@@ -4314,11 +4314,23 @@ body.karte-wide {
   font-weight: 600;
 }
 
+/* 見出し(タブ)は固定し、一覧だけがスクロールするように縦の flex にする。 */
 .karte-daylist {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px;
   background: var(--surface-panel);
+  overflow: hidden;
+}
+
+/* スクロールするのは一覧(診療日ツリー・種別・検体採取日)だけ。 */
+.karte-daylist__years,
+.karte-daylist > .karte-catlist,
+.karte-daylist > .karte-daylist__days {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -4333,6 +4345,7 @@ body.karte-wide {
 
 .karte-daylist__header {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 4px;
   margin-bottom: 8px;
@@ -4379,6 +4392,26 @@ body.karte-wide {
   padding: 0;
 }
 
+/* 診療日は年ごとにまとめ、行には月日と曜日だけを出す(KarteDayList)。 */
+.karte-daylist__year + .karte-daylist__year {
+  margin-top: 8px;
+}
+
+/* スクロール中も今見ている年が分かるように、年の見出しは一覧の上端に貼り付ける
+   (section 単位の sticky なので、次の年に入れ替わる)。 */
+.karte-daylist__year-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  /* 貼り付いている間に下から行が覗かないよう、余白は margin ではなく padding で取る。 */
+  margin: 0;
+  padding: 2px 0 4px;
+  background: var(--surface-panel);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
 .karte-daylist__items {
   margin-left: 14px;
 }
@@ -4411,6 +4444,7 @@ body.karte-wide {
 
 .karte-daylist__date {
   font-weight: 600;
+  font-size: 12px;
   color: var(--text-h);
 }
 
@@ -4426,8 +4460,11 @@ body.karte-wide {
   color: var(--text);
 }
 
-.karte-daylist__item {
-  font-size: 12px;
+/* 日付配下のオーダー種別。一日分が縦に伸びないよう、日付より小さく行間も詰める。 */
+.karte-daylist .karte-daylist__item {
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .karte-daylist__item::before {

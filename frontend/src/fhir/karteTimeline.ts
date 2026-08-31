@@ -445,6 +445,29 @@ export function karteDayLabel(day: string): string {
   return day || "日付なし";
 }
 
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
+/** 診療日の年(YYYY)。日付未定・日付なしは年が無いので undefined。 */
+export function karteDayYear(day: string): string | undefined {
+  const parts = /^(\d{4})-\d{2}-\d{2}$/.exec(day);
+  return parts ? parts[1] : undefined;
+}
+
+/**
+ * 診療日ペイン用の短い表示名(例: 09/01(火))。
+ *
+ * 年はペイン側の見出しにまとめて出すので、ここでは月日と曜日だけにする。
+ * 曜日はローカル時刻の Date で求める(日付だけの文字列を new Date に渡すと UTC
+ * 解釈になって前日にずれるため、年月日を分解して渡す)。
+ */
+export function karteDayShortLabel(day: string): string {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!parts) return karteDayLabel(day);
+  const [, year, month, date] = parts;
+  const weekday = WEEKDAY_LABELS[new Date(Number(year), Number(month) - 1, Number(date)).getDay()];
+  return `${month}/${date}(${weekday})`;
+}
+
 /**
  * オーダーのカードを置く診療日。
  *
