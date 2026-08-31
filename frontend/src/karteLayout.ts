@@ -20,6 +20,8 @@ const PROBLEM_LIST_STORAGE_KEY = "fhir-client.karte.problemListVisible";
 const RESOLVED_PROBLEMS_STORAGE_KEY = "fhir-client.karte.resolvedProblemsVisible";
 const PROBLEM_MODE_STORAGE_KEY = "fhir-client.karte.problemMode";
 const SIDE_PANE_MODE_STORAGE_KEY = "fhir-client.karte.sidePaneMode";
+const TODAY_PANE_STORAGE_KEY = "fhir-client.karte.todayPaneVisible";
+const TODAY_RATIO_STORAGE_KEY = "fhir-client.karte.todayPaneRatio";
 
 // 上下どちらのペインも潰れないように、上ペインが占める比率を制限する。
 const MIN_TOP_RATIO = 0.2;
@@ -31,6 +33,12 @@ const MIN_LEFT_WIDTH_RATIO = 0.3;
 const MAX_LEFT_WIDTH_RATIO = 0.75;
 export const DEFAULT_LEFT_WIDTH_RATIO = 0.56;
 
+// 左ペインを縦に割ったときに、手前(既存のカルテ・他タブ)側が占める比率。
+// 本日のカルテは 1 日分しか出さないので、既定では手前を広めに取る。
+const MIN_TODAY_MAIN_RATIO = 0.3;
+const MAX_TODAY_MAIN_RATIO = 0.85;
+export const DEFAULT_TODAY_MAIN_RATIO = 0.62;
+
 export function clampTopRatio(ratio: number): number {
   if (!Number.isFinite(ratio)) return DEFAULT_TOP_RATIO;
   return Math.min(MAX_TOP_RATIO, Math.max(MIN_TOP_RATIO, ratio));
@@ -39,6 +47,11 @@ export function clampTopRatio(ratio: number): number {
 export function clampLeftWidthRatio(ratio: number): number {
   if (!Number.isFinite(ratio)) return DEFAULT_LEFT_WIDTH_RATIO;
   return Math.min(MAX_LEFT_WIDTH_RATIO, Math.max(MIN_LEFT_WIDTH_RATIO, ratio));
+}
+
+export function clampTodayMainRatio(ratio: number): number {
+  if (!Number.isFinite(ratio)) return DEFAULT_TODAY_MAIN_RATIO;
+  return Math.min(MAX_TODAY_MAIN_RATIO, Math.max(MIN_TODAY_MAIN_RATIO, ratio));
 }
 
 export function readLeftPaneMode(): KarteLeftPaneMode {
@@ -177,5 +190,39 @@ export function storeSidePaneMode(mode: KarteSidePaneMode) {
     localStorage.setItem(SIDE_PANE_MODE_STORAGE_KEY, mode);
   } catch {
     // 保存できなくてもその場の表示は切り替える。
+  }
+}
+
+// 左ペインの縦分割(本日のカルテ)の表示・非表示。既定は非表示。
+export function readTodayPaneVisible(): boolean {
+  try {
+    return localStorage.getItem(TODAY_PANE_STORAGE_KEY) === "visible";
+  } catch {
+    return false;
+  }
+}
+
+export function storeTodayPaneVisible(visible: boolean) {
+  try {
+    localStorage.setItem(TODAY_PANE_STORAGE_KEY, visible ? "visible" : "hidden");
+  } catch {
+    // 保存できなくてもその場の表示は切り替える。
+  }
+}
+
+export function readTodayMainRatio(): number {
+  try {
+    const value = localStorage.getItem(TODAY_RATIO_STORAGE_KEY);
+    return value ? clampTodayMainRatio(Number(value)) : DEFAULT_TODAY_MAIN_RATIO;
+  } catch {
+    return DEFAULT_TODAY_MAIN_RATIO;
+  }
+}
+
+export function storeTodayMainRatio(ratio: number) {
+  try {
+    localStorage.setItem(TODAY_RATIO_STORAGE_KEY, String(clampTodayMainRatio(ratio)));
+  } catch {
+    // 保存できなくてもその場の表示は変える。
   }
 }

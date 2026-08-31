@@ -3893,9 +3893,17 @@ body.karte-wide {
   overflow-x: auto;
 }
 
-/* 表示モード切替(タブ切替 / 上下分割)。タブ行の右端に置く。 */
-.karte-tabs__mode {
+/* タブ行の右端に寄せる分割の切り替えボタン(縦分割 / 上下分割)。 */
+.karte-tabs__actions {
   margin-left: auto;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 表示モード切替(タブ切替 / 上下分割 / 本日のカルテ)。 */
+.karte-tabs__mode {
   align-self: center;
   padding: 4px 6px;
   margin-bottom: 4px;
@@ -3938,6 +3946,61 @@ body.karte-wide {
 
 .karte-left__split-bottom {
   flex: 1 1 0;
+}
+
+/* 左ペインの縦分割: 手前に既存のカルテ(上下分割ならその一式)、奥に本日のカルテ。
+   手前側の幅は --karte-today-main-ratio(KartePage が指定)で決め、本日のカルテが
+   残りを取る。 */
+.karte-left__vsplit {
+  --karte-today-main-ratio: 0.62;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.karte-left__vsplit-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 0 0 calc(var(--karte-today-main-ratio) * 100%);
+}
+
+/* 本日のカルテ。1 日分だけを出すので追加読み込みは無い。
+   左の余白の起点はスプリッタの線、右はペインの枠。線の中心からの距離が右側の余白
+   (.karte-left の padding 12px + .karte-timeline の余白 4px)と同じに見えるよう、
+   スプリッタの掴み代の半分(約 6px)を差し引いた値を入れる。 */
+.karte-today {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding-left: 10px;
+}
+
+.karte-today__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  /* タブ行と高さをそろえて、左のタイムラインと上端が並ぶようにする。 */
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+}
+
+.karte-today__title {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.karte-today__date {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* 日付は見出しに出しているので、中の診療日の見出しは省く。 */
+.karte-today .karte-group__date {
+  display: none;
 }
 
 /* ペインの境界。細い線の周りに掴みやすい余白を持たせる。 */
@@ -5176,9 +5239,20 @@ body.karte-wide {
     max-height: var(--karte-pane-height);
   }
 
-  /* 上下分割は上ペインの高さを % で決めるため、高さを確定させておく。 */
-  .karte-left--split {
+  /* 上下分割・縦分割は中のペインの大きさを % で決めるため、高さを確定させておく。 */
+  .karte-left--split,
+  .karte-left--today {
     height: var(--karte-pane-height);
+  }
+
+  /* 左ペインの中も横に並べる余裕が無いので、本日のカルテは下に積む
+     (幅の調整も意味を持たなくなるので、中のスプリッタは上の規則で消える)。 */
+  .karte-left__vsplit {
+    flex-direction: column;
+  }
+
+  .karte-left__vsplit-main {
+    flex: 1 1 0;
   }
 }
 

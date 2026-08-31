@@ -36,6 +36,7 @@ import { KarteProblemSummary } from "../components/KarteProblemSummary";
 import { KarteDetailModal } from "../components/KarteCardModals";
 import { KarteRightPane, type KartePaneState } from "../components/KarteRightPane";
 import { KarteSplitter } from "../components/KarteSplitter";
+import { KarteTodayPane } from "../components/KarteTodayPane";
 import { KARTE_TARGET_ATTR, KarteTimeline } from "../components/KarteTimeline";
 import { PatientHeader } from "../components/PatientHeader";
 import {
@@ -68,9 +69,11 @@ import {
   type KarteOtherTabKey,
   type KarteTabKey,
 } from "../karteUrl";
+import { today } from "../lib/dates";
 import { useKarteReturnTo } from "../returnTo";
 import {
   clampLeftWidthRatio,
+  clampTodayMainRatio,
   clampTopRatio,
   readDayListVisible,
   readLeftPaneMode,
@@ -79,6 +82,8 @@ import {
   readProblemMode,
   readResolvedProblemsVisible,
   readSidePaneMode,
+  readTodayMainRatio,
+  readTodayPaneVisible,
   readTopRatio,
   storeDayListVisible,
   storeLeftPaneMode,
@@ -87,6 +92,8 @@ import {
   storeProblemMode,
   storeResolvedProblemsVisible,
   storeSidePaneMode,
+  storeTodayMainRatio,
+  storeTodayPaneVisible,
   storeTopRatio,
   type KarteLeftPaneMode,
   type KarteProblemMode,
@@ -177,6 +184,9 @@ export function KartePage() {
   const [mode, setMode] = useState<KarteLeftPaneMode>(readLeftPaneMode);
   const [topRatio, setTopRatio] = useState(readTopRatio);
   const [leftWidthRatio, setLeftWidthRatio] = useState(readLeftWidthRatio);
+  // 左ペインの縦分割(右側に本日のカルテ)。手前側(既存のカルテ・他タブ)の幅の比率。
+  const [todayVisible, setTodayVisible] = useState(readTodayPaneVisible);
+  const [todayMainRatio, setTodayMainRatio] = useState(readTodayMainRatio);
   const [dayListVisible, setDayListVisible] = useState(readDayListVisible);
   const [problemListVisible, setProblemListVisible] = useState(readProblemListVisible);
   const [resolvedProblemsVisible, setResolvedProblemsVisible] = useState(
@@ -194,6 +204,7 @@ export function KartePage() {
   // 減光と絞り込みのどちらであれ、いま選ばれているプロブレム。
   const activeProblemId = filterProblemId ?? selectedProblemId;
   const splitRef = useRef<HTMLDivElement>(null);
+  const vsplitRef = useRef<HTMLDivElement>(null);
   const layoutRef = useRef<HTMLDivElement>(null);
 
   // カルテは 2 ペインで横幅を使うため、この画面だけ #root の幅制限を外す。
@@ -359,6 +370,16 @@ export function KartePage() {
   const dayEntries = useMemo(
     () => mergeDayIndex(filteredGroups, dayIndex.days, timeline.cutoff),
     [filteredGroups, dayIndex.days, timeline.cutoff],
+  );
+
+  // 本日のカルテのペインに出す 1 日分。タイムラインは新しい順に読むので、本日の分は
+  // 常に最初のページに入っている(追加読み込みを待つ必要が無い)。
+  // 種別の絞り込み(左端のペイン)は左のタイムラインを絞るためのものなので、ここには
+  // 効かせない。本日の分は常に全部見えるようにしておく。
+  const todayDay = today();
+  const todayGroup = useMemo(
+    () => timeline.groups.find((group) => group.day === todayDay),
+    [timeline.groups, todayDay],
   );
 
   // 表示範囲を押し下げているソースだけ次ページを読む。
@@ -547,6 +568,12 @@ export function KartePage() {
     storeResolvedProblemsVisible(next);
   }
 
+  function toggleTodayPane() {
+    const next = !todayVisible;
+    setTodayVisible(next);
+    storeTodayPaneVisible(next);
+  }
+
   function toggleMode() {
     const next = mode === "split" ? "tabs" : "split";
     setMode(next);
@@ -693,7 +720,61 @@ export function KartePage() {
     return <KarteLabResultTab {...props} />;
   }
 
-  const modeToggle = <KarteModeToggleButton mode={mode} onToggle={toggleMode} />;
+  // タブ行の右端に置く分割の切り替え。左右の分割(本日のカルテ)と上下の分割。
+  const tabActions = (
+    <div className="karte-tabs__actions">
+      <KarteTodayToggleButton visible={todayVisible} onToggle={toggleTodayPane} />
+      <KarteModeToggleButton mode={mode} onToggle={toggleMode} />
+    </div>
+  );
+
+  // 左ペインの中身(縦分割していないときはこれだけ)。上下分割のときはカルテと
+  // 他タブをこの中でまとめて持つので、縦分割を足しても組み方は変わらない。
+  const leftMain =
+    mode === "tabs" ? (
+      <>
+        <KarteTabs tabs={KARTE_TABS} active={tab} onSelect={selectTab} trailing={tabActions} />
+        {tab === "karte" ? karteBody : renderTabPanel(tab)}
+      </>
+    ) : (
+      // 上: カルテ / 下: それ以外のタブ。タブ行は操作対象の下ペイン側に置く。
+      <div className="karte-left__split" ref={splitRef}>
+        <div className="karte-left__split-top" style={{ flexBasis: `${topRatio * 100}%` }}>
+          {karteBody}
+        </div>
+        <KarteSplitter
+          containerRef={splitRef}
+          orientation="horizontal"
+          ratio={topRatio}
+          label="カルテと他タブの高さ"
+          onChange={(ratio) => setTopRatio(clampTopRatio(ratio))}
+          onChangeEnd={storeTopRatio}
+        />
+        <div className="karte-left__split-bottom">
+          <KarteTabs
+            tabs={KARTE_OTHER_TABS}
+            active={otherTab}
+            onSelect={selectOtherTab}
+            trailing={tabActions}
+          />
+          {renderTabPanel(otherTab)}
+        </div>
+      </div>
+    );
+
+  const todayPane = (
+    <KarteTodayPane
+      group={todayGroup}
+      day={todayDay}
+      isLoading={isLoading && timeline.groups.length === 0}
+      onEdit={handleEdit}
+      onDo={handleDo}
+      onOpenDetail={openDetail}
+      onDeleted={handleDeleted}
+      problemsById={problemsById}
+      selectedProblemIds={activeProblemIds}
+    />
+  );
 
   return (
     <div className="page karte-page">
@@ -712,36 +793,32 @@ export function KartePage() {
         ref={layoutRef}
         style={{ "--karte-left-ratio": leftWidthRatio } as CSSProperties}
       >
-        <section className={`karte-left${mode === "split" ? " karte-left--split" : ""}`}>
-          {mode === "tabs" ? (
-            <>
-              <KarteTabs tabs={KARTE_TABS} active={tab} onSelect={selectTab} trailing={modeToggle} />
-              {tab === "karte" ? karteBody : renderTabPanel(tab)}
-            </>
-          ) : (
-            // 上: カルテ / 下: それ以外のタブ。タブ行は操作対象の下ペイン側に置く。
-            <div className="karte-left__split" ref={splitRef}>
-              <div className="karte-left__split-top" style={{ flexBasis: `${topRatio * 100}%` }}>
-                {karteBody}
-              </div>
+        <section
+          className={`karte-left${mode === "split" ? " karte-left--split" : ""}${
+            todayVisible ? " karte-left--today" : ""
+          }`}
+        >
+          {todayVisible ? (
+            // 左ペインの縦分割。手前に既存のカルテ(上下分割ならその一式)、
+            // 奥に本日のカルテを単独のペインとして並べる。
+            <div
+              className="karte-left__vsplit"
+              ref={vsplitRef}
+              style={{ "--karte-today-main-ratio": todayMainRatio } as CSSProperties}
+            >
+              <div className="karte-left__vsplit-main">{leftMain}</div>
               <KarteSplitter
-                containerRef={splitRef}
-                orientation="horizontal"
-                ratio={topRatio}
-                label="カルテと他タブの高さ"
-                onChange={(ratio) => setTopRatio(clampTopRatio(ratio))}
-                onChangeEnd={storeTopRatio}
+                containerRef={vsplitRef}
+                orientation="vertical"
+                ratio={todayMainRatio}
+                label="カルテと本日のカルテの幅"
+                onChange={(ratio) => setTodayMainRatio(clampTodayMainRatio(ratio))}
+                onChangeEnd={storeTodayMainRatio}
               />
-              <div className="karte-left__split-bottom">
-                <KarteTabs
-                  tabs={KARTE_OTHER_TABS}
-                  active={otherTab}
-                  onSelect={selectOtherTab}
-                  trailing={modeToggle}
-                />
-                {renderTabPanel(otherTab)}
-              </div>
+              {todayPane}
             </div>
+          ) : (
+            leftMain
           )}
         </section>
 
@@ -925,6 +1002,42 @@ function KarteTabGroup<K extends string>({
         </div>
       )}
     </div>
+  );
+}
+
+// 左ペインの縦分割(本日のカルテ)の切り替え。上下分割のボタンと並べて置く。
+function KarteTodayToggleButton({
+  visible,
+  onToggle,
+}: {
+  visible: boolean;
+  onToggle: () => void;
+}) {
+  const label = visible ? "本日のカルテのペインを閉じる" : "本日のカルテを右に並べる";
+  return (
+    <button
+      type="button"
+      className={`karte-tabs__mode${visible ? " karte-tabs__mode--active" : ""}`}
+      aria-pressed={visible}
+      title={label}
+      aria-label={label}
+      onClick={onToggle}
+    >
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+        <rect
+          x="1.5"
+          y="2.5"
+          width="13"
+          height="11"
+          rx="1.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+        />
+        {/* 分割中は 1 枚に戻すアイコン、通常時は左右に割るアイコンを出す。 */}
+        {!visible && <path d="M10 2.5v11" stroke="currentColor" strokeWidth="1.2" />}
+      </svg>
+    </button>
   );
 }
 
