@@ -102,7 +102,14 @@ ServiceRequest
 
 ---
 
-## 2. 代行入力(入力者)が記録されていない
+## 2. 代行入力(入力者)が記録されていない — **記録は対応済み(2026-09-01)。承認は未対応**
+
+> 決定: **Provenance に一本化**し、ローカル拡張(§2.3 の第 1 段階)は採らなかった — 上流が
+> Provenance に対応済みで、履歴も承認も同じ器に載るため二重管理を避けた。オーダーの**新規登録時**に
+> Provenance を 1 件書き(`useCreatePrescription` が 16 種別すべての登録を通るのでそこ 1 か所)、
+> 入力者 = 指示医師でも常に残す。表示は詳細モーダルの「代行入力」行で、入力者 ≠ 依頼医師のときだけ。
+> 実装は `fhir/provenanceHelpers.ts` / `components/OrderDetailRows.tsx`、ルールは readme「オーダーの日付」の隣。
+> **編集時の記録と承認(§2.5)は未対応。**
 
 ### 2.1 現状
 
@@ -120,8 +127,9 @@ extension[order-department]  = 依頼科
 extension[order-ward]        = 在院病棟
 ```
 
-**ログイン中のユーザー(実際に入力した人)はどのリソースにも入らない。** 代行入力で登録した
-オーダーと、指示医師本人が入力したオーダーは、保存されたデータ上まったく区別が付かない。
+**ログイン中のユーザー(実際に入力した人)はどのリソースにも入らなかった。** 代行入力で登録した
+オーダーと、指示医師本人が入力したオーダーが、保存されたデータ上まったく区別が付かなかった
+(2026-09-01 に Provenance で解消。以下は当時の状況)。
 全種別(処方・注射・検体検査・細菌・病理・放射線・生理・内視鏡・処置・手術・輸血・リハビリ・
 栄養指導・食事・看護指示・他科依頼)が同じ `applyOrderContext` を通るので、種別による差もない。
 
@@ -141,28 +149,17 @@ extension[order-ward]        = 在院病棟
 (1) 誰が代行入力したか (2) 誰の指示によるか (3) 指示した医師が後から確認・承認した記録
 の 3 点を残すことが求められる。現状は (2) だけで、(1) と (3) が無い。
 
-### 2.3 直し方
+### 2.3 検討したが採らなかった案: ローカル拡張
 
-**最小の変更で全種別に効く**。入力者は `applyOrderContext` 1 か所に足せば、そこを通る全種別に
-一度に入る。
+当初は `applyOrderContext` 1 か所に `extension[order-enterer]` を足す第 1 段階を想定していた
+(上流が Provenance を持っていなかったため)。上流が対応した時点で不要になったので**採用していない**。
+拡張だと編集ごとの履歴と署名(承認)が表現できず、Provenance と併用すると二重管理になる。
 
-```
-extension[order-enterer] = Practitioner/{ログインユーザー}   ← 新設
-```
+なお `MedicationRequest.recorder` は定義そのものが「口頭指示・電話指示などで、他人に代わって
+オーダーを入力した人」で代行入力者に一致するが、`ServiceRequest` には無い。処方・注射だけ標準要素・
+他の 14 種別は Provenance、と持ち方が割れると読み出しが面倒なので、**全種別で Provenance に統一**した。
 
-- **指示医師と同じ人でも常に付ける**。後から「代行だったか」を判定でき、付け忘れも起きない。
-- 表示は「入力者 ≠ 依頼医師」のときだけ「代行入力: ○○」と出す。
-- 標準に寄せるなら `Provenance` が正解だが、上流が対応しておらず読み出しにも手が入るので、
-  まずはローカル拡張で足元を埋める(§2.4)。
-
-**処方・注射だけは標準要素がある**。`MedicationRequest.recorder` は定義そのものが「口頭指示・
-電話指示などで、他人に代わってオーダーを入力した人」で代行入力者に一致する。ただし
-`ServiceRequest` には `recorder` が無いので、処方・注射だけ標準要素・他の 14 種別は拡張、と
-持ち方が割れると読み出し側が面倒になる。**第 1 段階は全種別で拡張に統一**し、
-`MedicationRequest.recorder` は FHIR としての意味を保つための併記に留める(注射の実施記録で
-`MedicationAdministration.request` を併記しているのと同じ考え方)。
-
-### 2.4 Provenance に移す場合(第 2 段階)
+### 2.4 Provenance の形(実装済み)
 
 #### 紐付けは `Provenance.target` — Provenance 側からの一方向参照
 
@@ -208,11 +205,20 @@ Provenance
    読む前提で、fhir-client は Backend Services トークンなので実害は無い。
 6. **バージョン付き参照は引けない**(上流は参照を文字列一致で照合する)。POST は通るが警告が返る。
 
-#### 拡張との関係
+#### 実装で決めたこと
 
-第 2 段階に移っても**拡張は残して併記でよい**。拡張は「いま誰が入れたか」の即値、Provenance は
-履歴、と役割が分かれる。`Provenance.signature`(電子署名)と `agent.type = verifier` は §2.5 の
-承認フローにそのまま使えるので、承認まで作るなら Provenance は避けて通れない。
+- **書く場所**: `useCreatePrescription`(`api/queries.ts`)。名前は処方由来だが 16 種別すべての登録が
+  ここを通る。`fhir/*.ts` は React 非依存でログインユーザーを見られず、`postBundle` はマスタ・予約枠まで
+  通るので広すぎる。組み立ては `fhir/provenanceHelpers.ts` の `buildOrderProvenanceEntry`(純関数)。
+- **target**: ヘッダの `fullUrl`(新規は `urn:uuid:` で transaction 内に解決される)＋ 同じ Bundle の
+  `MedicationRequest`。検体検査などの明細 ServiceRequest は 1 オーダーで 20 件以上になりうるので入れない。
+- **agent**: `author` = オーダーに実際に入る `requester`(OrderContext を読み直すと保存値と食い違いうる)、
+  `enterer` = ログイン中の医療従事者、`onBehalfOf` = 同じ requester。`who.display` に氏名を焼き付ける
+  (この codebase は表示時に Practitioner を引き直さない)。
+- **読む場所**: 詳細を開いたときだけ `useOrderProvenance`(`Provenance?target=`)で 1 本引く。
+  カルテ本流(1 ページ 20 件)と先読み(100 件 × 2 本)には足していない。
+- Practitioner に紐付かないアカウント(管理者)では入力者を名乗れないので付けない。
+- `Provenance.signature` と `agent.type = verifier` は §2.5 の承認にそのまま使える。
 
 ### 2.5 承認フロー(別タスク・規模大)
 

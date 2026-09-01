@@ -1,5 +1,5 @@
 import { departmentOf, wardOf } from "../fhir/prescriptionHelpers";
-import { RegisteredAtRow } from "./OrderDetailRows";
+import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import {
   NURSING_ORDER_STATE_LABELS,
   nursingOrderState,
@@ -102,6 +102,7 @@ export function NursingOrderDetailModal({
         </div>
         <div>
           <RegisteredAtRow authoredOn={summary.authoredOn} />
+          <EnteredByRow serviceRequestId={order.id} />
         </div>
         <div>
           <dt>対象プロブレム</dt>

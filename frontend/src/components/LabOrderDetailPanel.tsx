@@ -9,7 +9,7 @@ import {
 } from "../fhir/labOrderHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { orderDay } from "../fhir/shared";
-import { RegisteredAtRow } from "./OrderDetailRows";
+import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
 // 検体検査オーダーの内容表示。カルテ画面の詳細モーダルから使う
 // (処方の PrescriptionDetailPanel と同じ構成)。
@@ -52,6 +52,7 @@ export function LabOrderDetailPanel({
           <dt>検査コメント</dt>
           <dd>{comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
+          <EnteredByRow serviceRequestId={serviceRequest.id} />
         </dl>
       </fieldset>
 

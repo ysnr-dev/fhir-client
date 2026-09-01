@@ -1,3 +1,5 @@
+import { useOrderProvenance } from "../api/queries";
+import { orderProxyEntry, provenancesOf } from "../fhir/provenanceHelpers";
 import { dateTimeLabel } from "../lib/dates";
 
 /**
@@ -10,6 +12,24 @@ export function RegisteredAtRow({ authoredOn }: { authoredOn: string | undefined
     <>
       <dt>登録日時</dt>
       <dd>{dateTimeLabel(authoredOn) || "-"}</dd>
+    </>
+  );
+}
+
+/**
+ * オーダー詳細の「代行入力」行。医師以外が指示医師を選んで入力したときだけ出す
+ * (入力者 = 依頼医師なら真正性の観点で書くことが無いので何も出さない)。
+ * 来歴は詳細を開いたときだけ引く(useOrderProvenance)。
+ */
+export function EnteredByRow({ serviceRequestId }: { serviceRequestId: string | undefined }) {
+  const provenance = useOrderProvenance(serviceRequestId);
+  const proxy = orderProxyEntry(provenancesOf(provenance.data?.data));
+  if (!proxy) return null;
+
+  return (
+    <>
+      <dt>代行入力</dt>
+      <dd>{`${proxy.entererName}（指示: ${proxy.authorName}）`}</dd>
     </>
   );
 }

@@ -24,6 +24,9 @@ import {
   sortLocations,
 } from "../fhir/locationHelpers";
 import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeline";
+import { buildOrderProvenanceEntry } from "../fhir/provenanceHelpers";
+import { practitionerDisplayName } from "../fhir/practitionerHelpers";
+import { useCurrentPractitioner } from "./authQueries";
 import { today } from "../lib/dates";
 import {
   MAX_BED_COUNT,
@@ -3579,13 +3582,53 @@ export function useMicroOrderCandidates(
   );
 }
 
+/**
+ * オーダーの新規登録。名前は処方由来だが、**16 種別すべての登録がこのフックを通る**
+ * (組み立て済みの transaction Bundle を受け取って POST するだけなので共用している)。
+ *
+ * ここで「誰が入力したか」の Provenance を 1 件足す。代行入力(医師以外のログインが
+ * 指示医師を選んで入力する)を残すには、オーダー本体に入る requester(= 指示医師)とは別に
+ * ログイン中の本人を記録する必要があるが、resource を組み立てる fhir/*.ts は React 非依存で
+ * ログインユーザーを見られない。Bundle に entry を足せて、かつオーダーの登録だけを通る
+ * 場所はここしかない(postBundle はマスタ・予約枠まで通るので広すぎる)。
+ */
 export function useCreatePrescription() {
   const queryClient = useQueryClient();
+  const { practitionerId, practitioner } = useCurrentPractitioner();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: (bundle: fhir4.Bundle) => {
+      // Practitioner に紐付かないアカウント(管理者)では入力者を名乗れないので付けない
+      // (検体到着の記録者と同じ扱い)。
+      const entry =
+        practitionerId && practitioner
+          ? buildOrderProvenanceEntry(bundle, {
+              practitionerId,
+              display: practitionerDisplayName(practitioner),
+            })
+          : null;
+      return postBundle(entry ? { ...bundle, entry: [...(bundle.entry ?? []), entry] } : bundle);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },
+  });
+}
+
+/**
+ * そのオーダーの来歴。詳細を開いたときだけ引く(カルテ本流は 1 ページ 20 件・先読みは
+ * 100 件 × 2 本をカルテを開くたびに叩くので、そこに _revinclude を足すと編集回数ぶん膨らむ。
+ * 入力者は詳細でだけ見えればよい情報)。
+ */
+export function useOrderProvenance(serviceRequestId: string | undefined) {
+  const params = new URLSearchParams();
+  if (serviceRequestId) params.set("target", `ServiceRequest/${serviceRequestId}`);
+  params.set("_sort", "recorded");
+  params.set("_count", "20");
+
+  return useQuery({
+    queryKey: ["Provenance", "search", "order", serviceRequestId],
+    queryFn: () => searchResource<fhir4.Provenance>("Provenance", params),
+    enabled: Boolean(serviceRequestId),
   });
 }
 

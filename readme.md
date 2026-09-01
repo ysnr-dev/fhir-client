@@ -370,6 +370,25 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
 - 既存データは上流 `fhir-server` の migration(`20260901000001`)がヘッダの `occurrenceDateTime` に
   `authoredOn` を写して補完しました(手術は対象外、`authoredOn` は書き換えません)。
 
+### 代行入力の記録
+
+医師以外がログインしてオーダーを入力する場合(カルテ画面ヘッダーで依頼科と**指示医師**を選ぶ、
+`OrderContextPicker`)、オーダー本体に入るのは指示医師(`requester`)だけなので、**実際に入力した本人**を
+`Provenance` に残します(2026-09-01。検討の経緯は `docs/order-common-backlog.md` §2)。
+
+- **書くのは新規登録時の 1 件だけ**。`useCreatePrescription`(名前は処方由来ですが 16 種別すべての登録が
+  ここを通ります)が、組み立て済みの transaction Bundle に `Provenance` の entry を足します
+  (`fhir/provenanceHelpers.ts` の `buildOrderProvenanceEntry`)。編集時は書きません。
+- `target` はオーダーのヘッダ(新規は `urn:uuid:` なので transaction 内で解決されます)と、同じ Bundle の
+  `MedicationRequest`(処方・注射の明細)。`agent` は `author`(= オーダーの `requester`)と
+  `enterer`(= ログイン中の医療従事者、`onBehalfOf` に指示医師)の 2 件で、氏名は `who.display` に焼き付けます。
+- **入力者 = 指示医師でも常に残します**(後から「代行だったか」を判定でき、付け忘れも起きません)。
+  表示は逆に、**入力者 ≠ 依頼医師のときだけ**詳細モーダルに「代行入力」の行を出します
+  (`components/OrderDetailRows.tsx` の `EnteredByRow`)。
+- **読むのは詳細を開いたときだけ**(`useOrderProvenance`)。カルテのタイムラインは 1 ページ 20 件・
+  先読みは 100 件 × 2 本をカルテを開くたびに叩くので、そこに `_revinclude` は足していません。
+- 承認(`agent.type = verifier` と `signature[]`)は未実装です。上流の対応は済んでいます。
+
 ### 日付未定オーダー
 
 「依頼だけ立てて実施日は後で決める」オーダーを、種別に依存しない形で扱えるようにしてあります

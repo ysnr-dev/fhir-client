@@ -1,6 +1,6 @@
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
-import { RegisteredAtRow } from "./OrderDetailRows";
+import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
 import {
   summarizeTransfusionOrder,
@@ -63,6 +63,7 @@ export function TransfusionOrderDetailPanel({
           <dt>依頼コメント</dt>
           <dd>{comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
+          <EnteredByRow serviceRequestId={serviceRequest.id} />
         </dl>
       </fieldset>
 

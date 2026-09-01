@@ -16,7 +16,7 @@ import {
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { schemaAnnotatedLines } from "../fhir/questionnaireResponseHelpers";
 import { ResponseSchemaImages, SchemaImageGallery } from "./SchemaImageGallery";
-import { RegisteredAtRow } from "./OrderDetailRows";
+import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
 // 病理検査オーダーの内容表示。カルテ画面の詳細モーダルと部門一覧から使う
 // (検体検査・細菌検査の DetailPanel と同じ構成)。
@@ -80,6 +80,7 @@ export function PathoOrderDetailPanel({
           <dt>依頼コメント</dt>
           <dd>{comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
+          <EnteredByRow serviceRequestId={serviceRequest.id} />
         </dl>
       </fieldset>
 

@@ -15,7 +15,7 @@ import {
   injectionTaskStatusDisplay,
 } from "../fhir/injectionTaskHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
-import { RegisteredAtRow } from "./OrderDetailRows";
+import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
 // 注射オーダーの内容表示。カルテ画面の詳細モーダルから使う(処方の
 // PrescriptionDetailPanel と同じ構成)。
@@ -78,6 +78,7 @@ export function InjectionDetailPanel({
           <dt>注射コメント</dt>
           <dd>{comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
+          <EnteredByRow serviceRequestId={serviceRequest.id} />
         </dl>
       </fieldset>
 

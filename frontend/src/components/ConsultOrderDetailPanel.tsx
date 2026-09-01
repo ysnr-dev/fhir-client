@@ -5,7 +5,7 @@ import {
   summarizeConsultOrder,
 } from "../fhir/consultOrderHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
-import { RegisteredAtRow } from "./OrderDetailRows";
+import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
 // 他科依頼の内容表示。カルテの詳細モーダルと部門一覧・回答モーダルから使う
 // (リハビリ・輸血の DetailPanel と同じ構成)。
@@ -56,6 +56,7 @@ export function ConsultOrderDetailPanel({
           <dt>回答</dt>
           <dd>{summary.replyId ? `回答済${summary.replierName ? ` | ${summary.replierName}` : ""}` : "未回答"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
+          <EnteredByRow serviceRequestId={serviceRequest.id} />
         </dl>
       </fieldset>
     </div>

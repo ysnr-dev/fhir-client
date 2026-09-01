@@ -13,7 +13,7 @@ import {
 } from "../fhir/microOrderHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { orderDay } from "../fhir/shared";
-import { RegisteredAtRow } from "./OrderDetailRows";
+import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
 // 細菌検査オーダーの内容表示。カルテ画面の詳細モーダルから使う
 // (検体検査・放射線検査の DetailPanel と同じ構成)。
@@ -62,6 +62,7 @@ export function MicroOrderDetailPanel({
           <dt>依頼コメント</dt>
           <dd>{comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
+          <EnteredByRow serviceRequestId={serviceRequest.id} />
         </dl>
       </fieldset>
 

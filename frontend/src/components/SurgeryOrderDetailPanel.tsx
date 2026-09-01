@@ -1,6 +1,6 @@
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
-import { RegisteredAtRow } from "./OrderDetailRows";
+import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import { schemaAnnotatedLines } from "../fhir/questionnaireResponseHelpers";
 import {
   summarizeSurgeryOrder,
@@ -108,6 +108,7 @@ export function SurgeryOrderDetailPanel({
             />
           </dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
+          <EnteredByRow serviceRequestId={serviceRequest.id} />
         </dl>
       </fieldset>
 

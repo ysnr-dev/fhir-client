@@ -1,6 +1,6 @@
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
-import { RegisteredAtRow } from "./OrderDetailRows";
+import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import {
   REHAB_UNIT_LABEL,
   rehabElapsedDays,
@@ -76,6 +76,7 @@ export function RehabOrderDetailPanel({
           <dt>リハ部門への指示</dt>
           <dd>{comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
+          <EnteredByRow serviceRequestId={serviceRequest.id} />
         </dl>
       </fieldset>
 

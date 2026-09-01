@@ -1,6 +1,6 @@
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
-import { RegisteredAtRow } from "./OrderDetailRows";
+import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 import {
   nutritionGuidanceOrderComment,
   nutritionGuidanceOrderProblem,
@@ -65,6 +65,7 @@ export function NutritionGuidanceOrderDetailPanel({
           <dt>栄養部門への指示</dt>
           <dd>{comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
+          <EnteredByRow serviceRequestId={serviceRequest.id} />
         </dl>
       </fieldset>
 
