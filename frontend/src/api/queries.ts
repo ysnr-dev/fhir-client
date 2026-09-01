@@ -24,7 +24,13 @@ import {
   sortLocations,
 } from "../fhir/locationHelpers";
 import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeline";
-import { buildOrderProvenanceEntry } from "../fhir/provenanceHelpers";
+import {
+  approvalBundleEntry,
+  buildApprovedProvenance,
+  buildOrderProvenanceEntry,
+  pendingApprovalRows,
+  type OrderEnterer,
+} from "../fhir/provenanceHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useCurrentPractitioner } from "./authQueries";
 import { today } from "../lib/dates";
@@ -3583,33 +3589,52 @@ export function useMicroOrderCandidates(
 }
 
 /**
+ * ログイン中の医療従事者。オーダーの来歴(Provenance)に入力者・承認者として名乗る相手。
+ * Practitioner に紐付かないアカウント(管理者)では名乗れないので null(検体到着の記録者と
+ * 同じ扱い)。
+ */
+function useOrderEnterer(): OrderEnterer | null {
+  const { practitionerId, practitioner } = useCurrentPractitioner();
+  return practitionerId && practitioner
+    ? { practitionerId, display: practitionerDisplayName(practitioner) }
+    : null;
+}
+
+/**
+ * オーダーの登録・編集 Bundle に「誰が入力したか」の Provenance を 1 件足す。
+ *
+ * 代行入力(医師以外のログインが指示医師を選んで入力する)を残すには、オーダー本体に入る
+ * requester(= 指示医師)とは別にログイン中の本人を記録する必要があるが、resource を組み立てる
+ * fhir/*.ts は React 非依存でログインユーザーを見られない。そこで登録(useCreatePrescription)と
+ * 各種別の更新フックが、組み立て済みの Bundle をこれに通してから POST する
+ * (postBundle はマスタ・予約枠まで通るので、そこに仕込むのは広すぎる)。
+ */
+function useWithOrderProvenance(): (bundle: fhir4.Bundle) => fhir4.Bundle {
+  const enterer = useOrderEnterer();
+  return (bundle) => {
+    const entry = enterer ? buildOrderProvenanceEntry(bundle, enterer) : null;
+    return entry ? { ...bundle, entry: [...(bundle.entry ?? []), entry] } : bundle;
+  };
+}
+
+/** 来歴を書いた・承認したあとに、詳細の来歴と承認待ち一覧を読み直させる。 */
+function invalidateProvenance(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["Provenance"] });
+}
+
+/**
  * オーダーの新規登録。名前は処方由来だが、**16 種別すべての登録がこのフックを通る**
  * (組み立て済みの transaction Bundle を受け取って POST するだけなので共用している)。
- *
- * ここで「誰が入力したか」の Provenance を 1 件足す。代行入力(医師以外のログインが
- * 指示医師を選んで入力する)を残すには、オーダー本体に入る requester(= 指示医師)とは別に
- * ログイン中の本人を記録する必要があるが、resource を組み立てる fhir/*.ts は React 非依存で
- * ログインユーザーを見られない。Bundle に entry を足せて、かつオーダーの登録だけを通る
- * 場所はここしかない(postBundle はマスタ・予約枠まで通るので広すぎる)。
+ * 来歴(入力者)は useWithOrderProvenance で添える。
  */
 export function useCreatePrescription() {
   const queryClient = useQueryClient();
-  const { practitionerId, practitioner } = useCurrentPractitioner();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => {
-      // Practitioner に紐付かないアカウント(管理者)では入力者を名乗れないので付けない
-      // (検体到着の記録者と同じ扱い)。
-      const entry =
-        practitionerId && practitioner
-          ? buildOrderProvenanceEntry(bundle, {
-              practitionerId,
-              display: practitionerDisplayName(practitioner),
-            })
-          : null;
-      return postBundle(entry ? { ...bundle, entry: [...(bundle.entry ?? []), entry] } : bundle);
-    },
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      invalidateProvenance(queryClient);
     },
   });
 }
@@ -3623,7 +3648,7 @@ export function useOrderProvenance(serviceRequestId: string | undefined) {
   const params = new URLSearchParams();
   if (serviceRequestId) params.set("target", `ServiceRequest/${serviceRequestId}`);
   params.set("_sort", "recorded");
-  params.set("_count", "20");
+  params.set("_count", "50");
 
   return useQuery({
     queryKey: ["Provenance", "search", "order", serviceRequestId],
@@ -3632,13 +3657,68 @@ export function useOrderProvenance(serviceRequestId: string | undefined) {
   });
 }
 
+/**
+ * ログイン中の医師あての承認待ち。「その医師が author で、署名の無い」来歴を引き、
+ * 対象オーダーと患者を _include で一緒に取る。医師本人が入力した活動(承認不要)は
+ * 検索では除けないので pendingApprovalRows が落とす。
+ *
+ * 承認待ちは溜めずに捌く前提で 1 ページ(100 件)だけ引く。それ以上ある場合は
+ * 承認して減らせば次が出てくる。
+ */
+export function usePendingApprovals(practitionerId: string | null | undefined) {
+  const params = new URLSearchParams();
+  if (practitionerId) params.set("agent", `Practitioner/${practitionerId}`);
+  params.set("signature-type:missing", "true");
+  params.append("_include", "Provenance:target");
+  params.append("_include:iterate", "ServiceRequest:subject");
+  params.set("_sort", "-recorded");
+  params.set("_count", "100");
+
+  return useQuery({
+    queryKey: ["Provenance", "search", "pending-approval", practitionerId],
+    queryFn: () => searchResource<fhir4.Resource>("Provenance", params),
+    select: (result) => ({ rows: pendingApprovalRows(result.data), total: result.data.total }),
+    enabled: Boolean(practitionerId),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * 承認。渡された来歴すべてに verifier と署名を足して 1 つの transaction で PUT する
+ * (1 オーダーに登録と編集の承認待ちが並んでいれば、まとめて「いまの内容を確認した」ことになる)。
+ * 承認できるのは author(指示医師)本人だけで、判定は呼ぶ側(canApprove)が行う。
+ */
+export function useApproveOrderProvenances() {
+  const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
+  return useMutation({
+    mutationFn: (provenances: fhir4.Provenance[]) => {
+      if (!enterer) throw new Error("医療従事者に紐付いたアカウントでログインしてください");
+      return postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: provenances.map((p) => approvalBundleEntry(buildApprovedProvenance(p, enterer))),
+      });
+    },
+    onSuccess: () => invalidateProvenance(queryClient),
+  });
+}
+
+/** 承認ボタンを出すかどうか。ログイン中の医療従事者が指示医師(author)本人のときだけ。 */
+export function useCanApproveOrder(authorReference: string | undefined): boolean {
+  const { practitionerId } = useCurrentPractitioner();
+  return Boolean(practitionerId && authorReference === `Practitioner/${practitionerId}`);
+}
+
 export function useUpdatePrescription() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      invalidateProvenance(queryClient);
     },
   });
 }
@@ -5345,6 +5425,7 @@ export interface RadBookingChange {
  */
 export function useUpdateRadOrder() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
     mutationFn: async ({
       bundle,
@@ -5353,20 +5434,21 @@ export function useUpdateRadOrder() {
       bundle: fhir4.Bundle;
       booking: RadBookingChange | null;
     }) => {
-      if (!booking) return postBundle(bundle);
+      if (!booking) return postBundle(withProvenance(bundle));
       // 空きに戻す元の枠は参照しか持っていないので、ここで引き直す(取消と同じ)。
       const entries = buildRescheduleEntries(
         booking.appointment,
         await fetchAppointmentSlots(booking.appointment),
         booking.slots,
       );
-      return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...entries] });
+      return postBundle(withProvenance({ ...bundle, entry: [...(bundle.entry ?? []), ...entries] }));
     },
     onSuccess: () => {
       // 撮影日時が動くと放射線検査一覧の当日ぶんも変わるので、ServiceRequest は
       // まとめて読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
       invalidateAppointments(queryClient);
+      invalidateProvenance(queryClient);
     },
   });
 }
@@ -5658,6 +5740,7 @@ export function usePhysioOrderAppointment(srId: string | undefined) {
  */
 export function useUpdatePhysioOrder() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
     mutationFn: async ({
       bundle,
@@ -5666,20 +5749,21 @@ export function useUpdatePhysioOrder() {
       bundle: fhir4.Bundle;
       booking: RadBookingChange | null;
     }) => {
-      if (!booking) return postBundle(bundle);
+      if (!booking) return postBundle(withProvenance(bundle));
       // 空きに戻す元の枠は参照しか持っていないので、ここで引き直す(取消と同じ)。
       const entries = buildRescheduleEntries(
         booking.appointment,
         await fetchAppointmentSlots(booking.appointment),
         booking.slots,
       );
-      return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...entries] });
+      return postBundle(withProvenance({ ...bundle, entry: [...(bundle.entry ?? []), ...entries] }));
     },
     onSuccess: () => {
       // 実施日時が動くと生理検査一覧の当日ぶんも変わるので、ServiceRequest は
       // まとめて読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
       invalidateAppointments(queryClient);
+      invalidateProvenance(queryClient);
     },
   });
 }
@@ -5968,6 +6052,7 @@ export function useEndoscopyOrderAppointment(srId: string | undefined) {
  */
 export function useUpdateEndoscopyOrder() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
     mutationFn: async ({
       bundle,
@@ -5976,20 +6061,21 @@ export function useUpdateEndoscopyOrder() {
       bundle: fhir4.Bundle;
       booking: RadBookingChange | null;
     }) => {
-      if (!booking) return postBundle(bundle);
+      if (!booking) return postBundle(withProvenance(bundle));
       // 空きに戻す元の枠は参照しか持っていないので、ここで引き直す(取消と同じ)。
       const entries = buildRescheduleEntries(
         booking.appointment,
         await fetchAppointmentSlots(booking.appointment),
         booking.slots,
       );
-      return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...entries] });
+      return postBundle(withProvenance({ ...bundle, entry: [...(bundle.entry ?? []), ...entries] }));
     },
     onSuccess: () => {
       // 実施日時が動くと内視鏡一覧の当日ぶんも変わるので、ServiceRequest は
       // まとめて読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
       invalidateAppointments(queryClient);
+      invalidateProvenance(queryClient);
     },
   });
 }
@@ -6280,6 +6366,7 @@ export function useTreatmentOrderAppointment(srId: string | undefined) {
  */
 export function useUpdateTreatmentOrder() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
     mutationFn: async ({
       bundle,
@@ -6288,20 +6375,21 @@ export function useUpdateTreatmentOrder() {
       bundle: fhir4.Bundle;
       booking: RadBookingChange | null;
     }) => {
-      if (!booking) return postBundle(bundle);
+      if (!booking) return postBundle(withProvenance(bundle));
       // 空きに戻す元の枠は参照しか持っていないので、ここで引き直す(取消と同じ)。
       const entries = buildRescheduleEntries(
         booking.appointment,
         await fetchAppointmentSlots(booking.appointment),
         booking.slots,
       );
-      return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...entries] });
+      return postBundle(withProvenance({ ...bundle, entry: [...(bundle.entry ?? []), ...entries] }));
     },
     onSuccess: () => {
       // 実施日時が動くと処置一覧の当日ぶんも変わるので、ServiceRequest は
       // まとめて読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
       invalidateAppointments(queryClient);
+      invalidateProvenance(queryClient);
     },
   });
 }
@@ -6461,11 +6549,13 @@ export function useMealOrderMonth(patientId: string | undefined, monthStart: str
 
 export function useUpdateMealOrder() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
     onSuccess: () => {
       // 開始日が動くとカードの載る日も変わるので、まとめて読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      invalidateProvenance(queryClient);
     },
   });
 }
@@ -6555,11 +6645,13 @@ export function useActiveRehabOrders(patientId: string | undefined, at: string) 
 
 export function useUpdateRehabOrder() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
     onSuccess: () => {
       // 開始日が動くとカードの載る日も変わるので、まとめて読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      invalidateProvenance(queryClient);
     },
   });
 }
@@ -6924,11 +7016,13 @@ export function usePatientNutritionGuidanceOrders(patientId: string | undefined)
 
 export function useUpdateNutritionGuidanceOrder() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
     onSuccess: () => {
       // 開始日が動くとカードの載る日も変わるので、まとめて読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      invalidateProvenance(queryClient);
     },
   });
 }
@@ -7271,13 +7365,15 @@ export function useConsultOrderDetail(srId: string | undefined) {
 
 export function useUpdateConsultOrder() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
     onSuccess: () => {
       // 希望日が動くとカードの載る日も変わるので、まとめて読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
       // 依頼目的のテンプレート記入内容も同じ transaction で作り直している。
       queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
+      invalidateProvenance(queryClient);
     },
   });
 }
@@ -7573,9 +7669,13 @@ function invalidateNursing(queryClient: ReturnType<typeof useQueryClient>) {
 
 export function useUpdateNursingOrder() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
-    onSuccess: () => invalidateNursing(queryClient),
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
+    onSuccess: () => {
+      invalidateNursing(queryClient);
+      invalidateProvenance(queryClient);
+    },
   });
 }
 
@@ -8250,12 +8350,14 @@ function invalidateSurgery(queryClient: ReturnType<typeof useQueryClient>) {
 /** 手術オーダーの更新。ヘッダ + 明細の transaction を書くだけ(予約の付け替えは無い)。 */
 export function useUpdateSurgeryOrder() {
   const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
     onSuccess: () => {
       // 予定日時が動くと手術一覧の当日ぶんも変わるので、ServiceRequest は
       // まとめて読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      invalidateProvenance(queryClient);
     },
   });
 }

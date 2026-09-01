@@ -370,24 +370,46 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
 - 既存データは上流 `fhir-server` の migration(`20260901000001`)がヘッダの `occurrenceDateTime` に
   `authoredOn` を写して補完しました(手術は対象外、`authoredOn` は書き換えません)。
 
-### 代行入力の記録
+### 代行入力の記録と承認
 
 医師以外がログインしてオーダーを入力する場合(カルテ画面ヘッダーで依頼科と**指示医師**を選ぶ、
-`OrderContextPicker`)、オーダー本体に入るのは指示医師(`requester`)だけなので、**実際に入力した本人**を
-`Provenance` に残します(2026-09-01。検討の経緯は `docs/order-common-backlog.md` §2)。
+`OrderContextPicker`)、オーダー本体に入るのは指示医師(`requester`)だけなので、**実際に入力した本人**と
+**指示医師の承認**を `Provenance` に残します(記録 2026-09-01、編集時の記録と承認 2026-09-02。
+検討の経緯は `docs/order-common-backlog.md` §2)。厚労省の安全管理ガイドラインが代行入力に求める
+「誰が入力し・誰の指示で・指示した医師が確認したか」の 3 点をこれで揃えます。
 
-- **書くのは新規登録時の 1 件だけ**。`useCreatePrescription`(名前は処方由来ですが 16 種別すべての登録が
-  ここを通ります)が、組み立て済みの transaction Bundle に `Provenance` の entry を足します
-  (`fhir/provenanceHelpers.ts` の `buildOrderProvenanceEntry`)。編集時は書きません。
-- `target` はオーダーのヘッダ(新規は `urn:uuid:` なので transaction 内で解決されます)と、同じ Bundle の
-  `MedicationRequest`(処方・注射の明細)。`agent` は `author`(= オーダーの `requester`)と
-  `enterer`(= ログイン中の医療従事者、`onBehalfOf` に指示医師)の 2 件で、氏名は `who.display` に焼き付けます。
-- **入力者 = 指示医師でも常に残します**(後から「代行だったか」を判定でき、付け忘れも起きません)。
-  表示は逆に、**入力者 ≠ 依頼医師のときだけ**詳細モーダルに「代行入力」の行を出します
-  (`components/OrderDetailRows.tsx` の `EnteredByRow`)。
+- **1 回の操作 = Provenance 1 件**。登録(`activity = CREATE`)と編集(`UPDATE`)のたびに 1 件書きます。
+  登録は `useCreatePrescription`(名前は処方由来ですが 16 種別すべての登録がここを通ります)、編集は
+  各種別の更新フック(`useUpdatePrescription` ほか 10 本)が、組み立て済みの transaction Bundle を
+  `useWithOrderProvenance` に通して entry を足します(`fhir/provenanceHelpers.ts` の
+  `buildOrderProvenanceEntry`)。中止・削除には書きません(削除は対象そのものが消えます)。
+- `target` はオーダーのヘッダ(`basedOn` を持たない `ServiceRequest`。新規は `urn:uuid:` なので transaction
+  内で解決、編集は PUT 先。注射の連日オーダーは日ごとのヘッダを全部)と、同じ Bundle の
+  `MedicationRequest`(処方・注射の明細)。検体検査などの明細 `ServiceRequest` は入れません。
+- `agent` は `author`(= オーダーの `requester`)と `enterer`(= ログイン中の医療従事者、`onBehalfOf` に
+  指示医師)の 2 件で、氏名は `who.display` に焼き付けます。**入力者 = 指示医師でも常に残します**
+  (後から「代行だったか」を判定でき、付け忘れも起きません)。
+- **承認は活動ごと**。`enterer ≠ author` の活動だけが承認待ちで、指示医師本人が入力・編集した活動は
+  承認不要です。承認すると同じ Provenance に `agent(type = verifier)` と `signature[]`(ASTM E1762 の
+  Verification Signature。`when` / `who` だけで暗号署名 `data` は持たない、操作の記録)を足して PUT します
+  (`buildApprovedProvenance`)。承認済みのオーダーを代行者が編集すると、その編集ぶんだけがまた承認待ちに
+  なります。承認できるのは `author` 本人のみ(`useCanApproveOrder`)。
+- **承認待ちの取り方**は `Provenance?agent=Practitioner/{医師}&signature-type:missing=true&_include=Provenance:target&_include:iterate=ServiceRequest:subject`
+  の 1 本(`usePendingApprovals`)。検索は署名の有無しか見られないので、医師本人の活動(承認不要)は
+  クライアント側で落とします(`pendingApprovalRows`)。
+- **画面**は 2 か所。詳細モーダルの来歴の行(`components/OrderDetailRows.tsx` の `EnteredByRow`。
+  登録が代行なら「代行入力」、編集があれば「最終更新」、代行の活動があれば「承認」の行で、未承認かつ
+  指示医師本人には「承認する」ボタン)と、診療業務メニューの「オーダー承認」(`pages/OrderApprovalPage.tsx`。
+  自分あての承認待ちを活動単位で並べ、カルテの詳細モーダルで内容を確認してから承認するか、一覧から直接・
+  一括で承認する。メニューには件数を添える)。
+- **承認前でもオーダーは部門に流れます**(`ServiceRequest.status = draft` は部門一覧から消えるので使えず、
+  緊急オーダーが止まると危ないため)。部門一覧・カルテのタイムラインに未承認の印は出していません
+  (`_revinclude` を足すと編集回数ぶん膨らむので、必要になった時点で Task を持つか `_revinclude` するかを
+  決める)。
 - **読むのは詳細を開いたときだけ**(`useOrderProvenance`)。カルテのタイムラインは 1 ページ 20 件・
   先読みは 100 件 × 2 本をカルテを開くたびに叩くので、そこに `_revinclude` は足していません。
-- 承認(`agent.type = verifier` と `signature[]`)は未実装です。上流の対応は済んでいます。
+- 上流の `AuditEvent` は依然 OAuth クライアントしか記録せず、エンドユーザーは Provenance でしか追えません
+  (認証回りの変更になるので別課題)。
 
 ### 日付未定オーダー
 
@@ -959,8 +981,8 @@ FHIR では職種・所属は Practitioner ではなく `PractitionerRole` に�
 の有無で区別します（既定診療科だけ `valueBoolean = true`）。診療科は医療機関と同じ Organization なので、
 `organization` の参照先だけでは判別できないためです。カルテ画面ヘッダーの依頼科・依頼医師
 （`OrderContextPicker`）は、この診療科ロールと自院設定から選択肢を組み立てます。医師以外の
-ログインは代行入力として指示医師も選びますが、**代行入力した本人はオーダーに記録していません**
-（`docs/order-common-backlog.md` §2）。
+ログインは代行入力として指示医師も選び、入力した本人と指示医師の承認は `Provenance` に残します
+（「代行入力の記録と承認」）。
 
 - 職種は `PractitionerRole.code`。コードは HL7 の `http://terminology.hl7.org/CodeSystem/practitioner-role`
   （医師 `doctor` / 歯科医師 `dentist` / 薬剤師 `pharmacist` / 看護師 `nurse` / 理学療法士 `physio` /

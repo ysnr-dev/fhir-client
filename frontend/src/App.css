@@ -11358,3 +11358,10 @@ button.meal-calendar__cell:hover {
 .nutrition-guidance-form .nutrition-guidance-form__wide {
   flex-basis: 100%;
 }
+
+/* オーダー詳細の「承認」行。未承認の文言と承認ボタンを 1 行に並べる。 */
+.order-approval__pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}

@@ -102,14 +102,15 @@ ServiceRequest
 
 ---
 
-## 2. 代行入力(入力者)が記録されていない — **記録は対応済み(2026-09-01)。承認は未対応**
+## 2. 代行入力(入力者)が記録されていない — **記録・編集時の記録・承認まで対応済み(2026-09-02)**
 
 > 決定: **Provenance に一本化**し、ローカル拡張(§2.3 の第 1 段階)は採らなかった — 上流が
-> Provenance に対応済みで、履歴も承認も同じ器に載るため二重管理を避けた。オーダーの**新規登録時**に
-> Provenance を 1 件書き(`useCreatePrescription` が 16 種別すべての登録を通るのでそこ 1 か所)、
-> 入力者 = 指示医師でも常に残す。表示は詳細モーダルの「代行入力」行で、入力者 ≠ 依頼医師のときだけ。
-> 実装は `fhir/provenanceHelpers.ts` / `components/OrderDetailRows.tsx`、ルールは readme「オーダーの日付」の隣。
-> **編集時の記録と承認(§2.5)は未対応。**
+> Provenance に対応済みで、履歴も承認も同じ器に載るため二重管理を避けた。登録(2026-09-01)と
+> 編集(2026-09-02)のたびに Provenance を 1 件書き(`activity` = CREATE / UPDATE)、入力者 = 指示医師でも
+> 常に残す。承認(§2.5)は同じ Provenance に `verifier` と `signature` を足す PUT で、承認待ち一覧は
+> `signature-type:missing=true` で引く。実装は `fhir/provenanceHelpers.ts` / `components/OrderDetailRows.tsx` /
+> `pages/OrderApprovalPage.tsx`、ルールは readme「代行入力の記録と承認」。
+> **残り**: 部門一覧・タイムラインの未承認バッジ(必要になったら)、上流 AuditEvent のエンドユーザー記録(別課題)。
 
 ### 2.1 現状
 
@@ -220,11 +221,41 @@ Provenance
 - Practitioner に紐付かないアカウント(管理者)では入力者を名乗れないので付けない。
 - `Provenance.signature` と `agent.type = verifier` は §2.5 の承認にそのまま使える。
 
-### 2.5 承認フロー(別タスク・規模大)
+### 2.5 承認フロー — **対応済み(2026-09-02)**
 
-代行入力を実運用するなら避けて通れないが、2.3 / 2.4 とは切り離す。
+真正性の 3 点目「指示した医師が後から確認・承認した記録」。§2.4 の Provenance にそのまま載せた。
 
-- 未承認の状態を持たせる。`ServiceRequest.status = draft` は「オーダーとして成立していない」意味に
-  なり部門一覧から消えるので使えない。承認状態はローカル拡張か Task で持つ。
-- 医師の承認画面と、未承認オーダーの一覧。
-- 承認前に部門へ流すかどうかの運用判断(緊急のオーダーが承認待ちで止まると困る)。
+#### 承認状態の持ち方 — Provenance 単体で閉じる(Task・ローカル拡張は持たない)
+
+- 承認 = その活動の Provenance に `agent(type = verifier)` と `signature[]`(ASTM E1762
+  `1.2.840.10065.1.12.1.5` Verification Signature、`when` / `who`。`data` は持たない)を足して PUT。
+- 未承認 = 「`enterer ≠ author` かつ署名無し」の Provenance が存在すること。
+- 承認待ち一覧 = `Provenance?agent=Practitioner/{医師}&signature-type:missing=true&_include=Provenance:target&_include:iterate=ServiceRequest:subject`
+  の 1 本。上流は `:missing` と `_include:iterate` に対応済みで、開発サーバーで動作確認した。
+  医師本人の活動(承認不要)は検索で除けないのでクライアント側で落とす。
+- **承認は活動ごと**。編集時にも Provenance を書くようにした(§2.4 の「書く場所」に 11 本の更新フックを
+  追加)ので、「承認済みのオーダーを代行者が編集 → 編集ぶんが新たに承認待ち」が別の状態管理無しで
+  表現できる。これが Provenance 一本化の一番の利点。
+- Task 案(`code = order-approval`、`owner` = 医師)は、タイムラインと部門一覧が既に
+  `_revinclude=Task:focus` を引いているので一覧に「未承認」バッジを出すのが無料、という利点があったが、
+  Provenance と二重管理になり編集後の再承認も別途組む必要が出るので採らなかった。バッジが必要になった
+  時点で、一覧に `_revinclude=Provenance:target` を足すか Task を足すかを決める。
+
+#### 決めたこと
+
+- **承認できる人は `author`(= `requester`)本人のみ**。ガイドラインの趣旨が「指示した医師が確認」。
+  代理承認(不在時に同科の医師)は運用要件が出てから。
+- **承認前でもオーダーは部門へ流す**。`ServiceRequest.status = draft` は部門一覧から消えるので使えず、
+  緊急オーダーが承認待ちで止まると危ない。部門側に未承認の印は出していない(上記バッジの判断と同じ)。
+- **画面**は詳細モーダルの「承認」行(未承認なら指示医師本人に「承認する」ボタン。登録・編集の承認待ちが
+  並んでいればまとめて承認)と、診療業務メニューの「オーダー承認」(自分あての承認待ちを活動単位で並べ、
+  「カルテで確認」で詳細モーダルを開いた状態のカルテへ。一覧からの直接承認・一括承認も可。メニューに件数)。
+  一括承認は真正性の趣旨からは避けたいが、運用上ほぼ確実に要望が出るので用意した。
+- 署名は「誰がいつ承認操作をしたか」の電子記録に留め、暗号署名ではないことを readme に明記。
+
+#### 残っている課題
+
+- 部門一覧・タイムラインの未承認バッジ(上記)。
+- 中止・削除の活動は Provenance に書いていない(削除は target が消えて孤児になる。§2.4 障壁 4)。
+- 上流 `AuditEvent` のエンドユーザー記録(認証回りの変更。`docs/server-improvement-backlog.md`)。
+

@@ -184,6 +184,33 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   qr: "テンプレート",
 };
 
+/**
+ * オーダーのヘッダ ServiceRequest の種別。buildKarteTimeline の振り分けと同じ順で判定する
+ * (明細と看護指示を先に外し、どの種別にも当たらない SR は処方)。カルテ外の一覧
+ * (承認待ち)が種別名と詳細モーダルの kind を出すために使う。明細なら null。
+ */
+export function orderKindOf(
+  sr: fhir4.ServiceRequest,
+): Exclude<KarteItemKind, "note" | "vital" | "qr"> | "nursing-order" | null {
+  if (isOrderItemRequest(sr)) return null;
+  if (isNursingServiceRequest(sr)) return "nursing-order";
+  if (isLabServiceRequest(sr)) return "lab-order";
+  if (isMicroServiceRequest(sr)) return "micro-order";
+  if (isPathoServiceRequest(sr)) return "patho-order";
+  if (isRadServiceRequest(sr)) return "rad-order";
+  if (isPhysioServiceRequest(sr)) return "physio-order";
+  if (isEndoscopyServiceRequest(sr)) return "endoscopy-order";
+  if (isTreatmentServiceRequest(sr)) return "treatment-order";
+  if (isSurgeryServiceRequest(sr)) return "surgery-order";
+  if (isMealServiceRequest(sr)) return "meal-order";
+  if (isTransfusionServiceRequest(sr)) return "transfusion-order";
+  if (isRehabServiceRequest(sr)) return "rehab-order";
+  if (isNutritionGuidanceServiceRequest(sr)) return "nutrition-guidance-order";
+  if (isConsultServiceRequest(sr)) return "consult-order";
+  if (isInjectionServiceRequest(sr)) return "injection";
+  return "prescription";
+}
+
 interface KarteItemBase {
   id: string;
   /** 診療日 "YYYY-MM-DD"。日付を持たないリソースは空文字。 */
