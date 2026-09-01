@@ -10,6 +10,7 @@ import {
   useDeleteMealOrder,
   useDeleteConsultOrder,
   useDeleteRehabOrder,
+  useDeleteNutritionGuidanceOrder,
   useDeleteTransfusionOrder,
   useDeleteSurgeryOrder,
   useDeleteEndoscopyOrder,
@@ -112,10 +113,13 @@ import {
 } from "../fhir/injectionTaskHelpers";
 import type { InjectionPerformDisplay } from "../fhir/injectionPerformHelpers";
 import { summarizeRehabOrder } from "../fhir/rehabOrderHelpers";
+import { summarizeNutritionGuidanceOrder } from "../fhir/nutritionGuidanceOrderHelpers";
 import type { RehabPerformDisplay } from "../fhir/rehabResultHelpers";
+import type { NutritionGuidancePerformDisplay } from "../fhir/nutritionGuidanceResultHelpers";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
 import { transfusionTaskStatusDisplay } from "../fhir/transfusionTaskHelpers";
 import { rehabTaskStatusDisplay } from "../fhir/rehabTaskHelpers";
+import { nutritionGuidanceTaskStatusDisplay } from "../fhir/nutritionGuidanceTaskHelpers";
 import type { TransfusionPerformDisplay } from "../fhir/transfusionResultHelpers";
 import { TransfusionPerformModal } from "./TransfusionPerformModal";
 import {
@@ -320,6 +324,7 @@ function KarteCard({
   const deleteMealOrder = useDeleteMealOrder();
   const deleteTransfusionOrder = useDeleteTransfusionOrder();
   const deleteRehabOrder = useDeleteRehabOrder();
+  const deleteNutritionGuidanceOrder = useDeleteNutritionGuidanceOrder();
   const deleteConsultOrder = useDeleteConsultOrder();
   const deleteResponse = useDeleteQuestionnaireResponse();
   const deleteVital = useDeleteVitalEntry();
@@ -350,6 +355,7 @@ function KarteCard({
     deleteSurgeryOrder.isPending ||
     deleteMealOrder.isPending ||
     deleteRehabOrder.isPending ||
+    deleteNutritionGuidanceOrder.isPending ||
     deleteConsultOrder.isPending ||
     deleteResponse.isPending ||
     deleteVital.isPending;
@@ -365,6 +371,7 @@ function KarteCard({
     deleteSurgeryOrder.error ??
     deleteMealOrder.error ??
     deleteRehabOrder.error ??
+    deleteNutritionGuidanceOrder.error ??
     deleteConsultOrder.error ??
     deleteResponse.error ??
     deleteVital.error;
@@ -402,6 +409,8 @@ function KarteCard({
     else if (item.kind === "transfusion-order") deleteTransfusionOrder.mutate(item.id, options);
     // リハビリは明細を持たないが、リハ部門が取った予約を道連れで取り消す。
     else if (item.kind === "rehab-order") deleteRehabOrder.mutate(item.id, options);
+    else if (item.kind === "nutrition-guidance-order")
+      deleteNutritionGuidanceOrder.mutate(item.id, options);
     // 他科依頼も明細を持たないが、回答済のものは消させない(回答という別の医師の
     // 記録がぶら下がっているため。mutation 側で拒否してエラー帯に出す)。
     else if (item.kind === "consult-order") deleteConsultOrder.mutate(item.id, options);
@@ -462,6 +471,7 @@ function KarteCard({
               item.kind === "patho-order" ||
               item.kind === "transfusion-order" ||
               item.kind === "rehab-order" ||
+              item.kind === "nutrition-guidance-order" ||
               item.kind === "consult-order" ||
               item.kind === "lab-order") && (
               <>
@@ -484,9 +494,11 @@ function KarteCard({
                                 ? transfusionTaskStatusDisplay(item.status)
                                 : item.kind === "rehab-order"
                                   ? rehabTaskStatusDisplay(item.status)
-                                  : item.kind === "consult-order"
-                                    ? consultTaskStatusDisplay(item.status)
-                                    : labTaskStatusDisplay(item.status)}
+                                  : item.kind === "nutrition-guidance-order"
+                                    ? nutritionGuidanceTaskStatusDisplay(item.status)
+                                    : item.kind === "consult-order"
+                                      ? consultTaskStatusDisplay(item.status)
+                                      : labTaskStatusDisplay(item.status)}
                 </span>
                 {cardMeta(item) && <span aria-hidden="true">|</span>}
               </>
@@ -507,6 +519,7 @@ function KarteCard({
             item.kind === "surgery-order" ||
             item.kind === "transfusion-order" ||
             item.kind === "rehab-order" ||
+            item.kind === "nutrition-guidance-order" ||
             item.kind === "consult-order") && (
             <button
               type="button"
@@ -841,6 +854,11 @@ function cardTitle(item: KarteTimelineItem): string {
   // (食事と同じ。ただし入外区分は入院・外来どちらもありうるので出す)。
   if (item.kind === "rehab-order") {
     const summary = summarizeRehabOrder(item.serviceRequest);
+    return [summary.settingDisplay, summary.periodLabel].filter(Boolean).join(" | ");
+  }
+  // 栄養指導もリハビリと同じ期間継続型なので、入外区分と期間を見出しに出す。
+  if (item.kind === "nutrition-guidance-order") {
+    const summary = summarizeNutritionGuidanceOrder(item.serviceRequest);
     return [summary.settingDisplay, summary.periodLabel].filter(Boolean).join(" | ");
   }
   // 他科依頼は「どこへ出したか」が見出しそのもの。至急のときだけ緊急度も並べる
@@ -1215,6 +1233,15 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
 
   if (item.kind === "rehab-order") {
     return <RehabOrderCardBody serviceRequest={item.serviceRequest} performs={item.performs} />;
+  }
+
+  if (item.kind === "nutrition-guidance-order") {
+    return (
+      <NutritionGuidanceOrderCardBody
+        serviceRequest={item.serviceRequest}
+        performs={item.performs}
+      />
+    );
   }
 
   if (item.kind === "consult-order") {
@@ -1862,6 +1889,7 @@ function MealOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.ServiceRe
 
 /** カードに出す実施履歴の件数。期間中に何十件も積み上がるので直近だけ出す。 */
 const REHAB_PERFORM_PREVIEW = 3;
+const NUTRITION_GUIDANCE_PERFORM_PREVIEW = 3;
 
 // リハビリは「区分 / 療法種別 / 期間 / 週N回・1回M単位」+ 実施履歴が本文。
 //
@@ -1913,6 +1941,76 @@ function RehabOrderCardBody({
             <span className="karte-perform__title">実施</span>
             <span className="karte-perform__meta">
               {performs.length}回 計{totalUnits}単位
+            </span>
+          </div>
+          {recent.map((perform) => (
+            <div className="karte-perform__row" key={perform.id}>
+              <span className="karte-perform__values">
+                <span>{perform.label}</span>
+                {perform.note && <span>{perform.note}</span>}
+              </span>
+            </div>
+          ))}
+          {/* 直近ぶんしか出していないことを黙って隠さない(全件は詳細で見る)。 */}
+          {performs.length > recent.length && (
+            <p className="karte-perform__note">
+              ほか {performs.length - recent.length} 件(詳細で全件を表示)
+            </p>
+          )}
+        </section>
+      )}
+    </>
+  );
+}
+
+// 栄養指導は「指導形態 / 期間 / 対象疾患・指示食種」+ 実施履歴が本文。
+//
+// 実施履歴を出す条件は karteTimeline.ts の栄養指導分岐が決めている(リハビリと同じで
+// 受付済以降は常に出す)。ここでは渡されたものをそのまま並べる。
+function NutritionGuidanceOrderCardBody({
+  serviceRequest,
+  performs,
+}: {
+  serviceRequest: fhir4.ServiceRequest;
+  performs: NutritionGuidancePerformDisplay[];
+}) {
+  const summary = summarizeNutritionGuidanceOrder(serviceRequest);
+
+  if (!summary.formatDisplay) {
+    return <p className="karte-card__empty">指導形態がありません。</p>;
+  }
+
+  const recent = performs.slice(0, NUTRITION_GUIDANCE_PERFORM_PREVIEW);
+  const totalMinutes = performs.reduce((sum, perform) => sum + (perform.minutes ?? 0), 0);
+
+  return (
+    <>
+      <div className="karte-rp">
+        <div className="karte-rp__head">
+          <span className="karte-order__group-name">{summary.formatDisplay}</span>
+        </div>
+        <ul className="karte-rp__medicines">
+          <li>
+            <span className="karte-rp__medicine-name">{summary.periodLabel}</span>
+          </li>
+          {summary.targetDisease && (
+            <li>
+              <span className="karte-rp__medicine-name">
+                対象: {summary.targetDisease}
+                {summary.targetDiet && ` / ${summary.targetDiet}`}
+              </span>
+            </li>
+          )}
+        </ul>
+        {summary.purpose && <p className="karte-perform__note">{summary.purpose}</p>}
+        {summary.comment && <p className="karte-perform__note">{summary.comment}</p>}
+      </div>
+      {performs.length > 0 && (
+        <section className="karte-perform">
+          <div className="karte-perform__head">
+            <span className="karte-perform__title">実施</span>
+            <span className="karte-perform__meta">
+              {performs.length}回 計{totalMinutes}分
             </span>
           </div>
           {recent.map((perform) => (

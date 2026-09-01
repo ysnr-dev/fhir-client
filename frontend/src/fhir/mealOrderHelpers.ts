@@ -45,7 +45,8 @@ import {
 export const MEAL_ORDER_TYPE = { code: "meal", display: "食事" };
 
 // 食種(食止めを含む)。SS-MIX2 の例でいうローカルコード表 99SKS / SSMIXTF01 にあたる。
-const MEAL_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/meal-type";
+/** 食種のコード体系。栄養指導オーダーの「指示食種」も同じ食種マスタを指す。 */
+export const MEAL_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/meal-type";
 // 主食。SS-MIX2 の例でいうローカルコード表 99SSK にあたる。
 const STAPLE_FOOD_SYSTEM = "http://fhir-client.local/CodeSystem/meal-staple-food";
 /**
@@ -1013,6 +1014,14 @@ export function summarizeMealOrder(sr: fhir4.ServiceRequest): MealOrderSummary {
   };
 }
 
+/** 食種の参照(コード + 名称)。食種を選んでいなければ null。 */
+export function mealOrderDietRef(sr: fhir4.ServiceRequest): MealItemRef | null {
+  const diet = codingBySystem(sr.code?.coding, MEAL_TYPE_SYSTEM);
+  return diet?.code
+    ? { code: diet.code, name: sr.code?.text || diet.display || diet.code }
+    : null;
+}
+
 /** 食種の名称。 */
 export function mealOrderDietName(sr: fhir4.ServiceRequest): string {
   return sr.code?.text || codingBySystem(sr.code?.coding, MEAL_TYPE_SYSTEM)?.display || "";
@@ -1194,14 +1203,11 @@ function mealTimingOf(value: string | undefined): MealTiming | undefined {
 }
 
 export function parseMealOrderForm(sr: fhir4.ServiceRequest): MealOrderFormValues {
-  const diet = codingBySystem(sr.code?.coding, MEAL_TYPE_SYSTEM);
   const occurrence = sr.occurrenceDateTime ?? "";
   const end = mealOrderEnd(sr);
 
   return {
-    diet: diet?.code
-      ? { code: diet.code, name: sr.code?.text || diet.display || diet.code }
-      : null,
+    diet: mealOrderDietRef(sr),
     // 食止めかどうかはマスタ側の属性なので、フォームを開いた画面がマスタから
     // 引き直して入れ直す(オーダーには写していない)。
     dietIsFasting: false,

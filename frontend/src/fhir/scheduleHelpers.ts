@@ -185,19 +185,22 @@ export function slotTime(slot: fhir4.Slot): string {
  *   診察予約   … カルテ右ペインの予約登録から。定員(同時に受ける人数)を持てる
  *   検査予約   … 放射線・生理検査オーダーの予約から。1 枠 1 予約(定員 1 固定)
  *   リハビリ予約 … リハビリ一覧の「次回予約」から。定員を持てる
+ *   栄養指導予約 … 栄養指導一覧の「次回予約」から。定員を持てる
  *
- * リハビリを検査予約と分けて独立した種別にしているのは定員の扱いが逆だから。
- * リハ室は同じ時間帯に複数の患者が並走する(それぞれに療法士が付く)のが普通なので、
- * 検査予約のように定員 1 に倒してはいけない。枠の actor はリハ室(Location)だけで、
- * 担当療法士は枠ではなく実施記録(Procedure.performer)側で持つ
- * (docs/rehab-order-design.md)。
+ * リハビリ・栄養指導を検査予約と分けて独立した種別にしているのは定員の扱いが逆だから。
+ * リハ室は同じ時間帯に複数の患者が並走する(それぞれに療法士が付く)のが普通で、栄養
+ * 相談室も集団指導では 1 枠に複数の患者が入る。検査予約のように定員 1 に倒しては
+ * いけない。枠の actor は部屋(Location)だけで、担当者は枠ではなく実施記録
+ * (Procedure.performer)側で持つ
+ * (docs/rehab-order-design.md / docs/nutrition-guidance-order-design.md §6)。
  */
-export type ScheduleType = "consultation" | "exam" | "rehab";
+export type ScheduleType = "consultation" | "exam" | "rehab" | "nutrition-guidance";
 
 export const SCHEDULE_TYPE_OPTIONS: { code: ScheduleType; label: string }[] = [
   { code: "consultation", label: "診察予約" },
   { code: "exam", label: "検査予約" },
   { code: "rehab", label: "リハビリ予約" },
+  { code: "nutrition-guidance", label: "栄養指導予約" },
 ];
 
 export function scheduleTypeLabel(type: ScheduleType): string {
@@ -214,6 +217,7 @@ export function scheduleTypeOf(schedule: fhir4.Schedule): ScheduleType {
   )?.code;
   if (code === "exam") return "exam";
   if (code === "rehab") return "rehab";
+  if (code === "nutrition-guidance") return "nutrition-guidance";
   return "consultation";
 }
 

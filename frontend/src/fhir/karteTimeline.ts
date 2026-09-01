@@ -83,6 +83,20 @@ import { isRehabServiceRequest, rehabOrderProblem } from "./rehabOrderHelpers";
 import { rehabTaskStatus, rehabTasksByOrderId, type RehabTaskStatus } from "./rehabTaskHelpers";
 import { rehabPerformsByOrderId, type RehabPerformDisplay } from "./rehabResultHelpers";
 import {
+  isNutritionGuidanceServiceRequest,
+  nutritionGuidanceOrderProblem,
+  nutritionGuidanceOrderResponseIds,
+} from "./nutritionGuidanceOrderHelpers";
+import {
+  nutritionGuidanceTaskStatus,
+  nutritionGuidanceTasksByOrderId,
+  type NutritionGuidanceTaskStatus,
+} from "./nutritionGuidanceTaskHelpers";
+import {
+  nutritionGuidancePerformsByOrderId,
+  type NutritionGuidancePerformDisplay,
+} from "./nutritionGuidanceResultHelpers";
+import {
   treatmentTaskStatus,
   treatmentTasksByOrderId,
   type TreatmentTaskStatus,
@@ -145,6 +159,7 @@ export type KarteItemKind =
   | "meal-order"
   | "transfusion-order"
   | "rehab-order"
+  | "nutrition-guidance-order"
   | "consult-order"
   | "qr";
 
@@ -164,6 +179,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   "meal-order": "食事",
   "transfusion-order": "輸血",
   "rehab-order": "リハビリ",
+  "nutrition-guidance-order": "栄養指導",
   "consult-order": "他科依頼",
   qr: "テンプレート",
 };
@@ -324,6 +340,16 @@ export type KarteTimelineItem = KarteItemBase &
         status: RehabTaskStatus;
         /** 実施記録(新しい順)。 */
         performs: RehabPerformDisplay[];
+      }
+    // 栄養指導。リハビリと同じ期間継続型で、進捗 Task と実施記録(指導 1 回ぶん)を持つ。
+    // カードは先頭数件と件数だけを出す。
+    | {
+        kind: "nutrition-guidance-order";
+        serviceRequest: fhir4.ServiceRequest;
+        /** 栄養部門の受け入れ状態。Task がまだ無いオーダーは依頼済。 */
+        status: NutritionGuidanceTaskStatus;
+        /** 実施記録(新しい順)。 */
+        performs: NutritionGuidancePerformDisplay[];
       }
     // 他科依頼。明細も実施記録も持たず、返ってくるのは回答の診療記録。
     // 回答への参照はオーダー自身が持つ(ServiceRequest のローカル拡張。
@@ -537,8 +563,8 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const questionnaires = pickByType<fhir4.Questionnaire>(responseResources, "Questionnaire");
 
   // 診療記録のセクション・放射線オーダーの検査目的/特別指示・手術オーダーの術前指示・
-  // 病理オーダーの臨床経過から参照されている回答は、そのカードの本文として既に
-  // 描画されるので単独カードにしない。
+  // 病理オーダーの臨床経過・栄養指導オーダーの指導目的から参照されている回答は、
+  // そのカードの本文として既に描画されるので単独カードにしない。
   const linkedResponseIds = new Set([
     ...compositions.flatMap((c) => referencedResponseIds(c)),
     ...radOrderResponseIds(serviceRequests),
@@ -547,6 +573,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     ...surgeryOrderResponseIds(serviceRequests),
     ...pathoOrderResponseIds(serviceRequests),
     ...consultOrderResponseIds(serviceRequests),
+    ...nutritionGuidanceOrderResponseIds(serviceRequests),
   ]);
 
   // canonical("<url>|<version>")と url 単独の両方で引けるようにしておく
@@ -619,6 +646,9 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   // rehabPerformsByOrderId が category(order-type)で行うので同じ配列を渡してよい。
   const rehabTaskByOrderId = rehabTasksByOrderId(tasks);
   const rehabPerformByOrderId = rehabPerformsByOrderId(procedures);
+  // 栄養指導もリハビリと同じ形(Task + Procedure がまとめて届く)。
+  const nutritionGuidanceTaskByOrderId = nutritionGuidanceTasksByOrderId(tasks);
+  const nutritionGuidancePerformByOrderId = nutritionGuidancePerformsByOrderId(procedures);
   // 他科依頼は実施記録を持たない(返ってくるのは回答の診療記録)ので Task だけ。
   const consultTaskByOrderId = consultTasksByOrderId(tasks);
   const injectionTaskByOrderId = injectionTasksByOrderId(tasks);
@@ -809,6 +839,23 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         performs:
           status === "accepted" || status === "completed"
             ? (rehabPerformByOrderId.get(serviceRequest.id ?? "") ?? [])
+            : [],
+      };
+    }
+    if (isNutritionGuidanceServiceRequest(serviceRequest)) {
+      const status = nutritionGuidanceTaskStatus(
+        nutritionGuidanceTaskByOrderId.get(serviceRequest.id ?? ""),
+      );
+      return {
+        ...base,
+        kind: "nutrition-guidance-order" as const,
+        label: KARTE_KIND_LABELS["nutrition-guidance-order"],
+        status,
+        // リハビリと同じ期間継続型なので、実施情報の表示条件も同じ(受付済以降は
+        // 常に出す)。理由は上のリハビリ分岐のコメントを参照。
+        performs:
+          status === "accepted" || status === "completed"
+            ? (nutritionGuidancePerformByOrderId.get(serviceRequest.id ?? "") ?? [])
             : [],
       };
     }
@@ -1012,6 +1059,9 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "meal-order") return mealOrderProblem(item.serviceRequest);
   if (item.kind === "transfusion-order") return transfusionOrderProblem(item.serviceRequest);
   if (item.kind === "rehab-order") return rehabOrderProblem(item.serviceRequest);
+  if (item.kind === "nutrition-guidance-order") {
+    return nutritionGuidanceOrderProblem(item.serviceRequest);
+  }
   if (item.kind === "consult-order") return consultOrderProblem(item.serviceRequest);
   if (item.kind === "prescription" || item.kind === "injection") {
     return prescriptionProblem(item.serviceRequest);

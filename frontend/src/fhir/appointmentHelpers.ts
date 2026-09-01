@@ -311,17 +311,44 @@ export function buildRehabAppointmentBundle(
   return buildBookBundle(appointment, selection.slots);
 }
 
+/**
+ * 栄養指導の予約を取るための Bundle。リハビリと同じく、オーダー登録とは別の単独
+ * transaction で栄養部門が受付後に都度取る
+ * (docs/nutrition-guidance-order-design.md §6)。
+ */
+export function buildNutritionGuidanceAppointmentBundle(
+  patient: fhir4.Patient,
+  selection: SlotSelection,
+  orderId: string,
+): fhir4.Bundle {
+  const appointment = buildAppointment(
+    emptyAppointmentForm,
+    patient,
+    selection.schedule,
+    selection.slots,
+  );
+  appointment.basedOn = [{ reference: `ServiceRequest/${orderId}` }];
+
+  return buildBookBundle(appointment, selection.slots);
+}
+
 /** リハビリの予約か。枠の種別で見分ける(検査予約と操作の出し分けが違う)。 */
 export function isRehabAppointment(appointment: fhir4.Appointment): boolean {
   return serviceTypeCode(appointment) === "rehab";
 }
 
+/** 栄養指導の予約か。リハビリと同じく枠の種別で見分ける。 */
+export function isNutritionGuidanceAppointment(appointment: fhir4.Appointment): boolean {
+  return serviceTypeCode(appointment) === "nutrition-guidance";
+}
+
 /**
  * オーダーに紐づく予約(検査予約)か。予約タブでの操作の出し分けに使う。
  *
- * リハビリの予約も basedOn を持つのでここでは true になる。リハビリは予約が
+ * リハビリ・栄養指導の予約も basedOn を持つのでここでは true になる。どちらも予約が
  * オーダーの日時と連動せず、部門が都度取り直すものなので、予約タブから取消・変更
- * できてよい。**呼び出し側は isRehabAppointment を先に見て振り分けること。**
+ * できてよい。**呼び出し側は isRehabAppointment / isNutritionGuidanceAppointment を
+ * 先に見て振り分けること。**
  */
 export function isExamAppointment(appointment: fhir4.Appointment): boolean {
   return Boolean(appointment.basedOn?.length);

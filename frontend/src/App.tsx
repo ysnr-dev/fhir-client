@@ -56,6 +56,7 @@ import { MicroSpecimenTypePage } from "./pages/MicroSpecimenTypePage";
 import { PathoWorklistPage } from "./pages/PathoWorklistPage";
 import { TransfusionWorklistPage } from "./pages/TransfusionWorklistPage";
 import { RehabWorklistPage } from "./pages/RehabWorklistPage";
+import { NutritionGuidanceWorklistPage } from "./pages/NutritionGuidanceWorklistPage";
 import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
 import { NursingWorklistPage } from "./pages/NursingWorklistPage";
 import { PathoOrganPage } from "./pages/PathoOrganPage";
@@ -185,6 +186,11 @@ function App() {
                 (1 オーダーが数か月続き、実施が日々積み上がる)。 */}
             <Link to="/rehab-worklist" className="row-menu__item">
               リハビリ一覧
+            </Link>
+            {/* 栄養指導もリハビリと同じ期間継続型(1 オーダーに初回・継続の指導が
+                積み上がる)なので、リハビリの隣に置く。 */}
+            <Link to="/nutrition-guidance-worklist" className="row-menu__item">
+              栄養指導一覧
             </Link>
             <Link to="/rx-worklist" className="row-menu__item">
               処方一覧
@@ -492,6 +498,10 @@ function App() {
           <Route path="/patho-worklist" element={<PathoWorklistPage />} />
           <Route path="/transfusion-worklist" element={<TransfusionWorklistPage />} />
           <Route path="/rehab-worklist" element={<RehabWorklistPage />} />
+          <Route
+            path="/nutrition-guidance-worklist"
+            element={<NutritionGuidanceWorklistPage />}
+          />
           <Route path="/consult-worklist" element={<ConsultWorklistPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />

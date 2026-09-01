@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { usePatientRehabOrders, usePatientNursingOrders, useDischargePatient } from "../api/queries";
+import {
+  usePatientRehabOrders,
+  usePatientNutritionGuidanceOrders,
+  usePatientNursingOrders,
+  useDischargePatient,
+} from "../api/queries";
 import {
   encounterAdmissionDate,
   encounterPatientId,
@@ -9,6 +14,10 @@ import { buildDischargeSyncEntries, dischargeStopPoint } from "../fhir/mealEncou
 import { mealPointDisplay } from "../fhir/mealOrderHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { rehabOrderNeedsStop, summarizeRehabOrder } from "../fhir/rehabOrderHelpers";
+import {
+  nutritionGuidanceOrderNeedsStop,
+  summarizeNutritionGuidanceOrder,
+} from "../fhir/nutritionGuidanceOrderHelpers";
 import { nursingOrderNeedsStop, summarizeNursingOrder } from "../fhir/nursingOrderHelpers";
 import { useMealSyncContext } from "../hooks/useMealSyncContext";
 import { nowDateTimeInput } from "../lib/dates";
@@ -22,9 +31,9 @@ import { Modal } from "./Modal";
 // 退院時刻と施設の食事提供時刻から決める(手で選ばせない)。退院予定で既に止めて
 // いれば理由を「退院」に上書きする。退院取消で戻せるよう理由を残す。
 //
-// リハビリオーダーも同じ期間継続型なので一緒に止める。こちらは食事のような時間帯を
-// 持たないので退院日をそのまま終了日にする。外来リハに切り替えて続けることもあるので、
-// 食事と別のチェックにして外せるようにしてある。
+// リハビリ・栄養指導のオーダーも同じ期間継続型なので一緒に止める。こちらは食事のような
+// 時間帯を持たないので退院日をそのまま終了日にする。外来リハ・外来栄養指導に切り替えて
+// 続けることもあるので、食事と別のチェックにして外せるようにしてある。
 
 interface DischargeModalProps {
   encounter: fhir4.Encounter;
@@ -54,6 +63,12 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
     rehabOrderNeedsStop(sr, dischargeDate),
   );
 
+  const [stopNutritionGuidance, setStopNutritionGuidance] = useState(true);
+  const nutritionGuidanceOrders = usePatientNutritionGuidanceOrders(patientId);
+  const stoppingNutritionGuidance = (nutritionGuidanceOrders.data ?? []).filter((sr) =>
+    nutritionGuidanceOrderNeedsStop(sr, dischargeDate),
+  );
+
   const [stopNursing, setStopNursing] = useState(true);
   const nursingOrders = usePatientNursingOrders(patientId);
   const stoppingNursing = (nursingOrders.data?.orders ?? []).filter((sr) =>
@@ -73,6 +88,7 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
         dischargeAt,
         mealEntries: stopMeals ? mealEntries : [],
         rehabOrders: stopRehab ? stoppingRehab : [],
+        nutritionGuidanceOrders: stopNutritionGuidance ? stoppingNutritionGuidance : [],
         nursingOrders: stopNursing ? stoppingNursing : [],
       },
       { onSuccess: onClose },
@@ -84,6 +100,7 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
       <ErrorBanner error={discharge.error} />
       <ErrorBanner error={meal.error} />
       <ErrorBanner error={rehabOrders.error} />
+      <ErrorBanner error={nutritionGuidanceOrders.error} />
       <ErrorBanner error={nursingOrders.error} />
       {validationError && (
         <div className="error-banner" role="alert">
@@ -137,6 +154,29 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
                   <li key={sr.id}>
                     {summary.diseaseCategoryShort} {summary.therapyTypesLabel}{" "}
                     {summary.periodLabel}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {stoppingNutritionGuidance.length > 0 && (
+          <div className="discharge__meal">
+            <label className="discharge__meal-toggle">
+              <input
+                type="checkbox"
+                checked={stopNutritionGuidance}
+                onChange={(e) => setStopNutritionGuidance(e.target.checked)}
+              />
+              栄養指導オーダーを退院日で終了する
+            </label>
+            <ul className="discharge__meal-list">
+              {stoppingNutritionGuidance.map((sr) => {
+                const summary = summarizeNutritionGuidanceOrder(sr);
+                return (
+                  <li key={sr.id}>
+                    {summary.formatShort} {summary.targetDisease} {summary.periodLabel}
                   </li>
                 );
               })}

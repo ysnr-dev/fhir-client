@@ -1,0 +1,235 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/nutrition-guidance-record-01",
+  "version": "1.0.0",
+  "name": "NUTGUIDE_REC_01",
+  "title": "栄養指導 指導記録",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "栄養食事指導の実施記録に貼る汎用テンプレート。自由文だけで書くと、次回の指導者が「前回どこまで話して、患者が何をどこまで理解したか」を辿れない。継続指導で引き継ぐべき項目(摂取状況・身体計測・指導した内容・患者と決めた目標・理解度・次回の予定)を並べてある。記入しなかった項目は指導内容の文面に出ないので、当てはまるものだけ埋めればよい。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "00000000-0000-0000-0000-000000000000",
+        "display": "栄養指導"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp-assessment",
+      "type": "group",
+      "text": "栄養評価",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+          "valueMarkdown": "指導の前提。継続指導では前回からの変化が読み取れるように書く。"
+        }
+      ],
+      "item": [
+        {
+          "linkId": "intake",
+          "type": "text",
+          "text": "食事摂取状況",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "普段の食事内容・回数・間食・飲酒。継続では前回指導後の変化。"
+            }
+          ]
+        },
+        {
+          "linkId": "body-measure",
+          "type": "string",
+          "text": "身体計測",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "体重・BMI など。バイタルに入れてあるものを再掲する必要はない。"
+            }
+          ]
+        },
+        {
+          "linkId": "lab-values",
+          "type": "string",
+          "text": "参考にした検査値",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "HbA1c・血糖・脂質・アルブミンなど、この指導の根拠にしたもの。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-guidance",
+      "type": "group",
+      "text": "指導内容",
+      "item": [
+        {
+          "linkId": "guidance-topics",
+          "type": "choice",
+          "text": "指導した項目",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "1 回の指導で複数を扱うのが普通なのでチェックボックス。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "energy",
+                "display": "エネルギー量・適正体重"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "nutrient",
+                "display": "栄養素の配分(塩分・蛋白・脂質など)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "menu",
+                "display": "献立・調理方法"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "eating-out",
+                "display": "外食・中食の選び方"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "texture",
+                "display": "食形態・嚥下調整"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "supplement",
+                "display": "補助食品・経腸栄養"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "guidance-detail",
+          "type": "text",
+          "text": "指導の内容",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "何をどう説明したか。使った資料があれば併せて書く。"
+            }
+          ]
+        },
+        {
+          "linkId": "goal",
+          "type": "text",
+          "text": "患者と決めた目標",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "次回までに実行してもらうこと。患者が言える形(具体的な行動)にする。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-followup",
+      "type": "group",
+      "text": "理解度・次回",
+      "item": [
+        {
+          "linkId": "understanding",
+          "type": "choice",
+          "text": "理解度",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "次の指導者が「どこから話すか」を決める手がかり。厳密な尺度ではない。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "good",
+                "display": "良好(自分の言葉で説明できる)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "partial",
+                "display": "一部(要点は分かるが実行に不安)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "poor",
+                "display": "不十分(再指導が必要)"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "patient-response",
+          "type": "text",
+          "text": "患者の反応・訴え",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "実行できそうにない事情・家族の協力・経済的な制約など、次回に効くもの。"
+            }
+          ]
+        },
+        {
+          "linkId": "next-plan",
+          "type": "text",
+          "text": "次回の予定",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "次に何を扱うか。日時そのものは予約で持つのでここには書かない。"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

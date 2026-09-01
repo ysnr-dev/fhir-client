@@ -18,6 +18,10 @@ import {
   TransfusionOrderEditPanel,
 } from "./TransfusionOrderPanels";
 import { RehabOrderCreatePanel, RehabOrderEditPanel } from "./RehabOrderPanels";
+import {
+  NutritionGuidanceOrderCreatePanel,
+  NutritionGuidanceOrderEditPanel,
+} from "./NutritionGuidanceOrderPanels";
 import { ConsultOrderCreatePanel, ConsultOrderEditPanel } from "./ConsultOrderPanels";
 import {
   QuestionnaireResponseCreatePanel,
@@ -63,6 +67,8 @@ export type KartePaneState =
   | { kind: "transfusion-order-edit"; srId: string }
   | { kind: "rehab-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "rehab-order-edit"; srId: string }
+  | { kind: "nutrition-guidance-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "nutrition-guidance-order-edit"; srId: string }
   | { kind: "consult-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "consult-order-edit"; srId: string }
   | { kind: "nursing-order-create"; problem?: ProblemRef }
@@ -106,6 +112,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "transfusion-order-edit": "輸血編集",
   "rehab-order-create": "リハビリ登録",
   "rehab-order-edit": "リハビリ編集",
+  "nutrition-guidance-order-create": "栄養指導登録",
+  "nutrition-guidance-order-edit": "栄養指導編集",
   "consult-order-create": "他科依頼登録",
   "consult-order-edit": "他科依頼編集",
   "nursing-order-create": "看護指示登録",
@@ -135,6 +143,7 @@ function paneKey(state: KartePaneState): string {
     case "meal-order-edit":
     case "transfusion-order-edit":
     case "rehab-order-edit":
+    case "nutrition-guidance-order-edit":
     case "consult-order-edit":
       return `${state.kind}:${state.srId}`;
     case "qr-edit":
@@ -157,6 +166,7 @@ function paneKey(state: KartePaneState): string {
     case "surgery-order-create":
     case "transfusion-order-create":
     case "rehab-order-create":
+    case "nutrition-guidance-order-create":
     case "consult-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
     // 食事は暦の別の日を押したときも初期値(開始日)が変わるので、日付もキーに入れる。
@@ -317,6 +327,14 @@ export function KarteRightPane({
           onClick={() => onStateChange({ kind: "rehab-order-create", problem: selectedProblem })}
         >
           リハビリ
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onStateChange({ kind: "nutrition-guidance-order-create", problem: selectedProblem })
+          }
+        >
+          栄養指導
         </button>
         <button
           type="button"
@@ -521,6 +539,23 @@ function PaneContent({
       );
     case "rehab-order-edit":
       return <RehabOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "nutrition-guidance-order-create":
+      return (
+        <NutritionGuidanceOrderCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "nutrition-guidance-order-edit":
+      return (
+        <NutritionGuidanceOrderEditPanel
+          patientId={patientId}
+          srId={state.srId}
+          onSaved={onSaved}
+        />
+      );
     case "consult-order-create":
       return (
         <ConsultOrderCreatePanel

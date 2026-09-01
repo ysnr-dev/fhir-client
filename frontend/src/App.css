@@ -11332,3 +11332,29 @@ button.meal-calendar__cell:hover {
   color: var(--text);
   margin-bottom: 4px;
 }
+
+/* ---- 栄養指導(docs/nutrition-guidance-order-design.md) ---- */
+
+/* 指示食種の「現在の食事オーダー」行に添える転記ボタン。文中に並ぶので
+   .comment-add-button と同じくボタンらしい枠を持たせない。 */
+.nutrition-guidance-form__diet-copy {
+  margin-left: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+/* 指導内容・指導目的は改行を含む(テンプレートから書くと項目ごとに改行される)ので、
+   詳細の表では折り返して全文を出す。 */
+.nutrition-guidance-detail__note {
+  white-space: pre-wrap;
+}
+
+/* 指導目的はテンプレート操作のボタンを右に置くので 1 行を丸ごと使う
+   (伝票フォームの fieldset は flex-wrap で入力欄を横に並べるため)。 */
+.nutrition-guidance-form .nutrition-guidance-form__wide {
+  flex-basis: 100%;
+}
