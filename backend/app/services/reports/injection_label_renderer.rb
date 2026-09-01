@@ -50,7 +50,8 @@ module Reports
         "pt_kana" => PatientMeta.display_kana(@patient),
         "pt_gender" => PatientMeta.gender_label(@patient),
         "pt_birthdate" => PatientMeta.format_date(@patient["birthDate"]),
-        "order_date" => PatientMeta.format_date(@order["authoredOn"].to_s.first(10)),
+        # 注射日(オーダー開始日 = occurrenceDateTime)。
+        "order_date" => PatientMeta.format_date(OrderDates.order_day(@order)),
         "rp_label" => rp_label(rp),
         "medicines" => rp.medicines.map { |m| medicine_line(m) }.join("\n"),
         "usage" => InjectionMeta.usage_summary(rp)

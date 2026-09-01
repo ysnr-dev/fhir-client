@@ -1,6 +1,12 @@
 import { today } from "../lib/dates";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
-import { categoryCoding, codingBySystem, displayOf, orderComment } from "./shared";
+import {
+  categoryCoding,
+  codingBySystem,
+  displayOf,
+  orderComment,
+  registrationAuthoredOn,
+} from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
@@ -150,7 +156,7 @@ interface BuildOptions {
   requisition: string;
   problem: ProblemRef | null;
   serviceRequestId?: string;
-  /** 編集時に元のリソースから引き継ぐもの。 */
+  /** 登録日時。編集時に元のリソースから引き継ぐ(新規は省略して「いま」)。 */
   authoredOn?: string;
 }
 
@@ -198,7 +204,7 @@ function buildNursingOrderServiceRequest(
     ],
     code: itemCodeableConcept(line),
     subject: { reference: `Patient/${patientId}` },
-    authoredOn: options.authoredOn ?? today(),
+    authoredOn: options.authoredOn ?? registrationAuthoredOn(),
     occurrenceDateTime: line.startDate,
     requisition: { system: NURSING_REQUISITION_SYSTEM, value: options.requisition },
   };

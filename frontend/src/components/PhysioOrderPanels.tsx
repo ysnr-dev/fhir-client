@@ -154,7 +154,7 @@ export function PhysioOrderEditPanel({ patientId, srId, onSaved }: PhysioOrderEd
         bundle: buildPhysioOrderUpdateBundle(
           values,
           patientId,
-          srId,
+          serviceRequest,
           itemIds,
           responseIds,
           prescriptionRequester(serviceRequest),

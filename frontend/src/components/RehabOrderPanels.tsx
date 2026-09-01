@@ -99,7 +99,12 @@ export function RehabOrderEditPanel({ patientId, srId, onSaved }: RehabOrderEdit
 
     // 依頼科・依頼医師・病棟は登録時のものを引き継ぐ(他のオーダーの編集と同じ)。
     updateRehabOrder.mutate(
-      buildRehabOrderUpdateBundle(values, patientId, srId, prescriptionRequester(serviceRequest)),
+      buildRehabOrderUpdateBundle(
+        values,
+        patientId,
+        serviceRequest,
+        prescriptionRequester(serviceRequest),
+      ),
       { onSuccess: onSaved },
     );
   }

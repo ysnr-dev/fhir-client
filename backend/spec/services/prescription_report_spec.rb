@@ -22,7 +22,8 @@ RSpec.describe PrescriptionReport do
         { "coding" => [{ "system" => described_class::PRESCRIPTION_CATEGORY_SYSTEM, "code" => category }] }
       ],
       "subject" => { "reference" => "Patient/p1" },
-      "authoredOn" => "2026-08-20"
+      "authoredOn" => "2026-08-20T09:15:30+09:00",
+      "occurrenceDateTime" => "2026-08-21"
     }
   end
 

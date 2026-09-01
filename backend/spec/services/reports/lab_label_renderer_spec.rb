@@ -10,7 +10,8 @@ RSpec.describe Reports::LabLabelRenderer do
       container_code: "T03", container_name: "EDTA管", item_labels: %w[CBC AST]
     )
   end
-  let(:order) { { "authoredOn" => "2026-08-20T09:00:00+09:00" } }
+  # 登録日時(authoredOn)と検査日(occurrenceDateTime)は別の日。刷るのは検査日。
+  let(:order) { { "authoredOn" => "2026-08-19T17:30:00+09:00", "occurrenceDateTime" => "2026-08-20" } }
   let(:patient) do
     {
       "birthDate" => "1980-01-02",
@@ -30,6 +31,24 @@ RSpec.describe Reports::LabLabelRenderer do
     pdf = render([{ group: group, number: "12345678901" }])
 
     expect(pdf).to start_with("%PDF-")
+  end
+
+  it "prints the occurrence day as the order date, not the authoredOn day" do
+    page = PDF::Inspector::Page.analyze(render([{ group: group, number: "12345678901" }])).pages[0][:strings].join
+
+    expect(page).to include("2026/08/20")
+    expect(page).not_to include("2026/08/19")
+  end
+
+  it "falls back to the authoredOn day when the order has no occurrenceDateTime" do
+    pdf = described_class.new(
+      layout_path: LabLabelReport::LAYOUT_PATH,
+      order: { "authoredOn" => "2026-08-19T17:30:00+09:00" }, patient: patient,
+      labels: [{ group: group, number: "12345678901" }]
+    ).render
+    page = PDF::Inspector::Page.analyze(pdf).pages[0][:strings].join
+
+    expect(page).to include("2026/08/19")
   end
 
   it "prints one page per tube" do

@@ -8,8 +8,9 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
-  ServiceRequest の `based-on` 検索と `_revinclude`〔2026-08-09〕）については
-  両リポジトリのコミット履歴を参照。
+  ServiceRequest の `based-on` 検索と `_revinclude`〔2026-08-09〕、オーダー日付の統一に伴う
+  `occurrenceDateTime` の backfill migration `20260901000001`〔2026-09-01、client 側は
+  readme「オーダーの日付」〕）については両リポジトリのコミット履歴を参照。
 - **2026-08-23 に優先度 A（5 件）・B（operation 系）・C-1（日付／期間検索）・C-2
   （`_sort` と `AllergyIntolerance.onset`）をサーバー・クライアント両側とも実装済み**
   （下記の「対応済み」節を参照）。残るは C-3〜C-7 と長期のみ。

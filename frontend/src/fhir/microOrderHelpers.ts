@@ -1,7 +1,8 @@
 import { today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
-import { categoryCoding, displayOf, itemNumber, orderComment, PRIORITY_OPTIONS } from "./shared";
+import { PRIORITY_OPTIONS, categoryCoding, displayOf, itemNumber, orderComment, orderDay, registrationAuthoredOn } from "./shared";
+import { toFhirDateTime } from "../lib/dates";
 
 export { PRIORITY_OPTIONS };
 import { labOrderItemRequests } from "./labOrderHelpers";
@@ -29,8 +30,10 @@ import {
 //   指す(検体検査と同じ方式)。検体種別は JANIS 材料コード、採取部位・左右は
 //   collection.bodySite、採取方法は collection.method。まだ採っていないので
 //   status は付けない。
-// - 採取予定日時は occurrenceDateTime。Specimen.collection.collectedDateTime は
-//   「実際に採取した日時」で意味が違うため使わない。
+// - ヘッダの occurrenceDateTime は検査日(採取予定日)。カルテのカードの位置と部門の
+//   日付軸はこれ。authoredOn は登録日時で、フォームでは入力しない(shared.ts を参照)。
+// - 検体グループの occurrenceDateTime は採取予定日時(時刻付き)。未定ならヘッダの検査日を
+//   写す。Specimen.collection.collectedDateTime は「実際に採取した日時」で意味が違うため使わない。
 // - 目的菌は orderDetail(オーダーの追加指示そのもの)。JANIS 感染症病原体コード。
 // - 疑い病名は放射線の依頼病名と同じ形: 登録病名から選んだなら
 //   reasonReference(Condition)、フリーテキストなら reasonCode.text。
@@ -126,8 +129,8 @@ export interface MicroSpecimenValues {
 export interface MicroOrderFormValues {
   setting: PrescriptionSetting;
   priority: MicroOrderPriority;
-  /** 依頼日。 */
-  authoredDate: string;
+  /** 検査日(採取予定日)。ServiceRequest.occurrenceDateTime に入る。 */
+  startDate: string;
   /** 依頼コメント。 */
   comment: string;
   /** 前投与抗菌薬(自由文字列。処方から取り込んでも最終的には文字列)。 */
@@ -166,7 +169,7 @@ export function emptyMicroOrderForm(
   return {
     setting,
     priority: "routine",
-    authoredDate: today(),
+    startDate: today(),
     comment: "",
     priorAntimicrobial: "",
     examPurpose: "diagnostic",
@@ -281,6 +284,7 @@ function buildSpecimenGroupRequest(
   sequence: number,
   patientId: string,
   authoredOn: string,
+  headerOccurrence: string,
   headerReference: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -300,9 +304,11 @@ function buildSpecimenGroupRequest(
   };
   if (specimen.id) resource.id = specimen.id;
 
-  if (specimen.collectionDateTime) {
-    resource.occurrenceDateTime = specimen.collectionDateTime;
-  }
+  // 採取予定日時(時刻付き)。FHIR の dateTime は時刻を持つならタイムゾーン必須なので
+  // datetime-local の値にオフセットを付ける。未定ならヘッダの検査日を写す(日付のみ)。
+  resource.occurrenceDateTime = specimen.collectionDateTime
+    ? toFhirDateTime(specimen.collectionDateTime)
+    : headerOccurrence;
   if (specimen.organisms.length > 0) {
     resource.orderDetail = specimen.organisms.map((organism) => ({
       coding: [{ system: ORGANISM_SYSTEM, code: organism.code, display: organism.name }],
@@ -330,6 +336,7 @@ function buildItemRequest(
   sequence: number,
   patientId: string,
   authoredOn: string,
+  occurrenceDateTime: string,
   parentReference: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -338,7 +345,9 @@ function buildItemRequest(
     intent: "order",
     identifier: [{ system: ITEM_NUMBER_SYSTEM, value: String(sequence) }],
     subject: { reference: `Patient/${patientId}` },
+    // 登録日時と検査日はヘッダと同じ値を写す。
     authoredOn,
+    occurrenceDateTime,
     code: {
       coding: [{ system: ORDER_ITEM_SYSTEM, code: item.code, display: item.name }],
       text: item.name,
@@ -353,6 +362,7 @@ function buildMicroOrderServiceRequest(
   values: MicroOrderFormValues,
   patientId: string,
   requester: OrderContext,
+  authoredOn: string,
   serviceRequestId?: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -377,7 +387,10 @@ function buildMicroOrderServiceRequest(
         : []),
     ],
     subject: { reference: `Patient/${patientId}` },
-    authoredOn: values.authoredDate,
+    // 登録日時。フォームでは入力せず、新規はいま・更新は元の値。
+    authoredOn,
+    // 検査日(採取予定日)。カルテのカードの位置と部門の日付軸はこちら。
+    occurrenceDateTime: values.startDate,
   };
 
   if (serviceRequestId) resource.id = serviceRequestId;
@@ -414,6 +427,7 @@ function buildMicroOrderTransactionBundle(
   values: MicroOrderFormValues,
   patientId: string,
   requester: OrderContext,
+  authoredOn: string,
   serviceRequestId?: string,
   originalItemIds: string[] = [],
 ): fhir4.Bundle {
@@ -430,7 +444,13 @@ function buildMicroOrderTransactionBundle(
   const entries: fhir4.BundleEntry[] = [
     {
       fullUrl: headerReference,
-      resource: buildMicroOrderServiceRequest(values, patientId, requester, serviceRequestId),
+      resource: buildMicroOrderServiceRequest(
+        values,
+        patientId,
+        requester,
+        authoredOn,
+        serviceRequestId,
+      ),
       request: serviceRequestId
         ? { method: "PUT", url: `ServiceRequest/${serviceRequestId}` }
         : { method: "POST", url: "ServiceRequest" },
@@ -441,7 +461,8 @@ function buildMicroOrderTransactionBundle(
         values.specimen,
         1,
         patientId,
-        values.authoredDate,
+        authoredOn,
+        values.startDate,
         headerReference,
       ),
       request: values.specimen.id
@@ -454,7 +475,14 @@ function buildMicroOrderTransactionBundle(
     if (item.id) kept.add(item.id);
     entries.push({
       fullUrl: item.id ? `ServiceRequest/${item.id}` : `urn:uuid:${crypto.randomUUID()}`,
-      resource: buildItemRequest(item, index + 2, patientId, values.authoredDate, specimenReference),
+      resource: buildItemRequest(
+        item,
+        index + 2,
+        patientId,
+        authoredOn,
+        values.startDate,
+        specimenReference,
+      ),
       request: item.id
         ? { method: "PUT", url: `ServiceRequest/${item.id}` }
         : { method: "POST", url: "ServiceRequest" },
@@ -473,13 +501,14 @@ export function buildMicroOrderBundle(
   patientId: string,
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildMicroOrderTransactionBundle(values, patientId, requester);
+  return buildMicroOrderTransactionBundle(values, patientId, requester, registrationAuthoredOn());
 }
 
+// 更新は元の ServiceRequest を受け取り、登録日時をそこから引き継ぐ(編集で動かさない)。
 export function buildMicroOrderUpdateBundle(
   values: MicroOrderFormValues,
   patientId: string,
-  serviceRequestId: string,
+  original: fhir4.ServiceRequest,
   /** 元の明細(検体グループ・検査項目)の id。外されたものを DELETE するために使う。 */
   originalItemIds: string[],
   requester: OrderContext,
@@ -488,7 +517,8 @@ export function buildMicroOrderUpdateBundle(
     values,
     patientId,
     requester,
-    serviceRequestId,
+    registrationAuthoredOn(original),
+    original.id,
     originalItemIds,
   );
 }
@@ -511,7 +541,7 @@ export function buildMicroOrderDeleteBundle(
 }
 
 // 既存のオーダーを DO(流用)して新規登録するためのフォーム値。明細の id を落として
-// 新規登録(POST)にし、依頼日は当日・採取予定日時は空にする。
+// 新規登録(POST)にし、検査日は当日・採取予定日時は空にする(登録日時は保存時に採る)。
 // 血液培養の 2 セット目は「DO して採取部位を変える」運用なので、この形が入口になる。
 export function buildDoMicroOrderForm(
   values: MicroOrderFormValues,
@@ -520,7 +550,7 @@ export function buildDoMicroOrderForm(
   return {
     ...values,
     setting,
-    authoredDate: today(),
+    startDate: today(),
     specimen: { ...values.specimen, id: "", collectionDateTime: "" },
     items: values.items.map((item) => ({ ...item, id: "" })),
   };
@@ -579,8 +609,9 @@ function parseSpecimenGroupRequest(request: fhir4.ServiceRequest): MicroSpecimen
     lateralityCode: laterality?.code ?? "",
     methodCode: method?.code ?? "",
     methodName: method?.display ?? "",
-    // datetime-local の入力値に合わせて分までに丸める。
-    collectionDateTime: request.occurrenceDateTime?.slice(0, 16) ?? "",
+    // datetime-local の入力値に合わせて分までに丸める。日付だけ(未定でヘッダの検査日を
+    // 写したもの)は採取予定日時としては未入力なので空にする。
+    collectionDateTime: collectionDateTimeInput(request.occurrenceDateTime),
     organisms: (request.orderDetail ?? []).flatMap((detail) => {
       const coding = codingBySystem(detail.coding, ORGANISM_SYSTEM);
       return coding?.code ? [{ code: coding.code, name: coding.display ?? detail.text ?? "" }] : [];
@@ -626,11 +657,16 @@ export function microOrderContents(itemRequests: fhir4.ServiceRequest[]): {
  * オーダー選択肢と、結果内容表示の紐付けオーダー表示に使う。
  * 検査項目名自体が「・」を含むため、項目の区切りは「/」にする。
  */
+/** 時刻付きの dateTime だけを datetime-local の値(YYYY-MM-DDTHH:mm)にする。日付のみは空。 */
+function collectionDateTimeInput(value: string | undefined): string {
+  return value && value.length > 10 ? value.slice(0, 16) : "";
+}
+
 export function microOrderLabel(
   header: fhir4.ServiceRequest,
   itemRequests: fhir4.ServiceRequest[],
 ): string {
-  const date = header.authoredOn?.slice(0, 10) ?? "";
+  const date = orderDay(header);
   const contents = microOrderContents(itemRequests);
   const items = contents.items.map((item) => item.name).join("/");
   return [date, contents.specimen.typeName, items].filter(Boolean).join(" ");
@@ -667,7 +703,7 @@ export function parseMicroOrderForm(
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as MicroOrderPriority,
-    authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
+    startDate: orderDay(sr) || today(),
     comment: microOrderComment(sr),
     priorAntimicrobial: microOrderPriorAntimicrobial(sr),
     examPurpose: microOrderExamPurpose(sr),

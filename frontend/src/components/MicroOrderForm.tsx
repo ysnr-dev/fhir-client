@@ -152,8 +152,8 @@ export function MicroOrderForm({
       setValidationError("検査項目を 1 つ以上選択してください。");
       return;
     }
-    if (!values.authoredDate) {
-      setValidationError("依頼日を入力してください。");
+    if (!values.startDate) {
+      setValidationError("検査日を入力してください。");
       return;
     }
     setValidationError(null);
@@ -219,11 +219,11 @@ export function MicroOrderForm({
           </select>
         </label>
         <label>
-          依頼日
+          検査日
           <input
             type="date"
-            value={values.authoredDate}
-            onChange={(e) => update("authoredDate", e.target.value)}
+            value={values.startDate}
+            onChange={(e) => update("startDate", e.target.value)}
           />
         </label>
         {commentOpen ? (

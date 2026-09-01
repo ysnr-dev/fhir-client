@@ -54,7 +54,7 @@ ServiceRequest (category[0]=order-type|nutrition-guidance, category[1]=setting|�
   status = active / intent = order
   code               = 指導形態(個別 / 集団)
   subject            = Patient
-  authoredOn         = 依頼日
+  authoredOn         = 登録日時(システム時刻。全種別共通、readme「オーダーの日付」)
   occurrenceDateTime = 開始日(指導希望日。日付のみ)
   reasonCode         = 指導目的(任意。テンプレートからも書ける)
   extension[nutrition-guidance-order-end]        = 終了日(無ければ継続中)

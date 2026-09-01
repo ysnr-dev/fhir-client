@@ -97,7 +97,7 @@ export function PathoOrderEditPanel({ patientId, srId, onSaved }: PathoOrderEdit
       buildPathoOrderUpdateBundle(
         values,
         patientId,
-        srId,
+        serviceRequest,
         itemIds,
         prescriptionRequester(serviceRequest),
         responseIds,

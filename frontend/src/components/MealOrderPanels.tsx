@@ -138,9 +138,8 @@ export function MealOrderEditPanel({ patientId, srId, onSaved }: MealOrderEditPa
       buildMealOrderUpdateBundle(
         values,
         patientId,
-        srId,
-        prescriptionRequester(serviceRequest),
         serviceRequest,
+        prescriptionRequester(serviceRequest),
       ),
       { onSuccess: onSaved },
     );

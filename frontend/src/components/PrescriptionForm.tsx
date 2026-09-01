@@ -157,7 +157,7 @@ export function PrescriptionForm({
   }
 
   function validate(): string | null {
-    if (!values.authoredDate) return "処方日は必須です。";
+    if (!values.startDate) return "投与開始日は必須です。";
     if (!values.setting) return "入外区分は必須です。";
     if (!values.category) return "処方区分は必須です。";
     if (values.rps.length === 0) return "RPを1件以上登録してください。";
@@ -253,11 +253,11 @@ export function PrescriptionForm({
           </select>
         </label>
         <label>
-          処方日
+          投与開始日
           <input
             type="date"
-            value={values.authoredDate}
-            onChange={(e) => update("authoredDate", e.target.value)}
+            value={values.startDate}
+            onChange={(e) => update("startDate", e.target.value)}
           />
         </label>
         {commentOpen ? (

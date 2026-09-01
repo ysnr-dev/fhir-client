@@ -1,5 +1,6 @@
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { RegisteredAtRow } from "./OrderDetailRows";
 import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
 import {
   summarizeTransfusionOrder,
@@ -48,8 +49,6 @@ export function TransfusionOrderDetailPanel({
           </dd>
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
-          <dt>依頼日</dt>
-          <dd>{serviceRequest.authoredOn?.slice(0, 10) ?? "-"}</dd>
           <dt>投与予定日時</dt>
           <dd>{serviceRequest.occurrenceDateTime?.slice(0, 16).replace("T", " ") || "-"}</dd>
           <dt>入外区分</dt>
@@ -63,6 +62,7 @@ export function TransfusionOrderDetailPanel({
           <dd>{summary.consentConfirmed ? "取得済" : "未取得"}</dd>
           <dt>依頼コメント</dt>
           <dd>{comment || "-"}</dd>
+          <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
         </dl>
       </fieldset>
 

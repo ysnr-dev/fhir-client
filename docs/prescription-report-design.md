@@ -78,7 +78,7 @@ token 検索の `system|` 形式と同じ扱い)。検索が空振りしても�
 | 欄 | 出どころ |
 |---|---|
 | 患者(氏名・カナ・生年月日・性別) | Patient(Reports::PatientMeta) |
-| 交付年月日 | ServiceRequest.authoredOn(処方日)。発行操作の日ではないので、再発行しても同じ日付になる |
+| 交付年月日 | ServiceRequest.authoredOn(登録日時)の日付。投与開始日(occurrenceDateTime)ではない。発行操作の日でもないので、再発行しても同じ日付になる |
 | 保険医氏名 | ServiceRequest.requester.display |
 | 依頼科 | order-department 拡張の display |
 | 医療機関(名称・住所・電話) | 自院 Organization |

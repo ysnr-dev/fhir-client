@@ -10,6 +10,7 @@ import {
 import {
   groupInjectionByRp,
   injectionComment,
+  injectionDayOf,
   injectionUsageSummary,
   summarizeInjectionServiceRequest,
 } from "../fhir/injectionHelpers";
@@ -93,7 +94,7 @@ export function InjectionDispenseModal({ row, onClose }: Props) {
   // 一覧から開くので、どの患者の注射を払い出しているかを必ず頭に出す。
   const meta = [
     patient ? `${patient.identifier?.[0]?.value ?? "-"} ${displayName(patient)}` : "",
-    order.authoredOn?.slice(0, 10),
+    injectionDayOf(order),
     summary.settingDisplay,
     summary.categoryDisplay,
     orderContextSummary(prescriptionRequester(order)),

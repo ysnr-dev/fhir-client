@@ -97,7 +97,7 @@ export function MicroOrderEditPanel({ patientId, srId, onSaved }: MicroOrderEdit
       buildMicroOrderUpdateBundle(
         values,
         patientId,
-        srId,
+        serviceRequest,
         itemIds,
         prescriptionRequester(serviceRequest),
       ),

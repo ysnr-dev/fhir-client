@@ -1,11 +1,18 @@
-import { today } from "../lib/dates";
+import { today, toFhirDateTime } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { buildExamAppointmentEntries, type SlotSelection } from "./appointmentHelpers";
 import { slotDate, slotTime } from "./scheduleHelpers";
 // FHIR dateTime へのタイムゾーン付与は診療記録と同じ変換でよいので共用する。
-import { toFhirDateTime } from "./clinicalNoteHelpers";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
-import { categoryCoding, displayOf, itemNumber, parentRequestId, PRIORITY_OPTIONS } from "./shared";
+import {
+  categoryCoding,
+  displayOf,
+  itemNumber,
+  parentRequestId,
+  PRIORITY_OPTIONS,
+  orderDay,
+  registrationAuthoredOn,
+} from "./shared";
 
 export { PRIORITY_OPTIONS };
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
@@ -131,13 +138,16 @@ export interface PhysioOrderFormValues {
   setting: PrescriptionSetting;
   /** 至急区分。オーダー枠ごとの入力で、これはまとめ枠のぶん(単独枠は行が持つ)。 */
   priority: PhysioOrderPriority;
-  /** 実施日。 */
-  authoredDate: string;
+  /**
+   * 実施日。オーダー開始日として ServiceRequest.occurrenceDateTime に入る。
+   * 登録日時(authoredOn)はフォームでは持たず、保存時にシステム時刻で決まる。
+   */
+  startDate: string;
   /**
    * 実施時刻(HH:mm)。検査の予定時刻を指定する場合だけ入れる任意入力で、
    * 空なら実施日だけのオーダー(時間帯は部門側に任せる)。
    */
-  authoredTime: string;
+  startTime: string;
   // 対象プロブレム(POMR)。null なら特定の問題に紐付かない検査。
   problem: ProblemRef | null;
   items: PhysioOrderItemLine[];
@@ -150,8 +160,8 @@ export function emptyPhysioOrderForm(
   return {
     setting,
     priority: "routine",
-    authoredDate: today(),
-    authoredTime: "",
+    startDate: today(),
+    startTime: "",
     problem,
     items: [],
   };
@@ -216,6 +226,7 @@ function buildItemRequest(
   sequence: number,
   patientId: string,
   authoredOn: string,
+  occurrenceDateTime: string,
   parentReference: string,
   // テンプレート記入内容(QuestionnaireResponse)への参照。Bundle 内で解決するため
   // 呼び出し側が組み立てて渡す(新規は urn:uuid、既存は QuestionnaireResponse/{id})。
@@ -235,6 +246,7 @@ function buildItemRequest(
     identifier: [{ system: ITEM_NUMBER_SYSTEM, value: String(sequence) }],
     subject: { reference: `Patient/${patientId}` },
     authoredOn,
+    occurrenceDateTime,
     code: { coding, text: item.name },
     basedOn: [{ reference: parentReference }],
   };
@@ -342,6 +354,7 @@ function buildItemEntries(
   items: PhysioOrderItemLine[],
   patientId: string,
   authoredOn: string,
+  occurrenceDateTime: string,
   headerReference: string,
   originalItemIds: string[],
   originalResponseIds: string[],
@@ -401,6 +414,7 @@ function buildItemEntries(
         sequence,
         patientId,
         authoredOn,
+        occurrenceDateTime,
         parentReference,
         templateRefs,
       ),
@@ -453,10 +467,24 @@ function parseItemRequests(
     });
 }
 
+/**
+ * 実施日時(ServiceRequest.occurrenceDateTime = オーダー開始日)。実施時刻を指定したときだけ
+ * 時刻まで入れる(FHIR の dateTime は時刻を持つならタイムゾーンが必須なので、実行環境の
+ * オフセットを付ける)。登録日時(authoredOn)とは別物で、こちらがカルテのカードの位置と
+ * 部門一覧の日付軸になる。
+ */
+function physioOrderOccurrence(values: PhysioOrderFormValues): string {
+  return values.startTime
+    ? toFhirDateTime(`${values.startDate}T${values.startTime}`)
+    : values.startDate;
+}
+
 function buildPhysioOrderServiceRequest(
   values: PhysioOrderFormValues,
   patientId: string,
   requester: OrderContext,
+  authoredOn: string,
+  occurrenceDateTime: string,
   serviceRequestId?: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -483,13 +511,9 @@ function buildPhysioOrderServiceRequest(
         : []),
     ],
     subject: { reference: `Patient/${patientId}` },
-    authoredOn: values.authoredDate,
-    // 実施日時。オーダー日と同じ日を入れる(実施日として 1 つだけ入力する)。
-    // 実施時刻を指定したときだけ時刻まで入れる(FHIR の dateTime は時刻を持つなら
-    // タイムゾーンが必須なので、実行環境のオフセットを付ける)。
-    occurrenceDateTime: values.authoredTime
-      ? toFhirDateTime(`${values.authoredDate}T${values.authoredTime}`)
-      : values.authoredDate,
+    // 登録日時(authoredOn)と実施日時(occurrenceDateTime)は buildPhysioOrderEntries が決めて渡す。
+    authoredOn,
+    occurrenceDateTime,
   };
 
   if (serviceRequestId) resource.id = serviceRequestId;
@@ -521,14 +545,25 @@ export function buildPhysioOrderEntries(
   values: PhysioOrderFormValues,
   patientId: string,
   requester: OrderContext,
-  serviceRequestId?: string,
+  // 更新のときは元の ServiceRequest。id と登録日時(authoredOn)をここから引き継ぐ。
+  original?: fhir4.ServiceRequest,
   originalItemIds: string[] = [],
   originalResponseIds: string[] = [],
 ): PhysioOrderEntries {
+  const serviceRequestId = original?.id;
+  const authoredOn = registrationAuthoredOn(original);
+  const occurrenceDateTime = physioOrderOccurrence(values);
   const headerReference = serviceRequestId
     ? `ServiceRequest/${serviceRequestId}`
     : `urn:uuid:${crypto.randomUUID()}`;
-  const header = buildPhysioOrderServiceRequest(values, patientId, requester, serviceRequestId);
+  const header = buildPhysioOrderServiceRequest(
+    values,
+    patientId,
+    requester,
+    authoredOn,
+    occurrenceDateTime,
+    serviceRequestId,
+  );
 
   return {
     header,
@@ -544,7 +579,8 @@ export function buildPhysioOrderEntries(
       ...buildItemEntries(
         values.items,
         patientId,
-        values.authoredDate,
+        authoredOn,
+        occurrenceDateTime,
         headerReference,
         originalItemIds,
         originalResponseIds,
@@ -595,8 +631,8 @@ export function splitPhysioOrderValues(values: PhysioOrderFormValues): PhysioOrd
           ...values,
           items: lines,
           priority: item.priority,
-          authoredDate: item.date || values.authoredDate,
-          authoredTime: item.date ? item.time : values.authoredTime,
+          startDate: item.date || values.startDate,
+          startTime: item.date ? item.time : values.startTime,
         },
       });
     }
@@ -638,7 +674,7 @@ export function buildPhysioOrderSplitEntries(
   // 予約したオーダーの実施日時は予約の枠が正。行の入力値ではなく枠から写す。
   const slot = selection.slots[0];
   const built = buildPhysioOrderEntries(
-    { ...split.values, authoredDate: slotDate(slot), authoredTime: slotTime(slot) },
+    { ...split.values, startDate: slotDate(slot), startTime: slotTime(slot) },
     patientId,
     requester,
   );
@@ -671,7 +707,7 @@ export function buildPhysioOrderBundle(
 export function buildPhysioOrderUpdateBundle(
   values: PhysioOrderFormValues,
   patientId: string,
-  serviceRequestId: string,
+  original: fhir4.ServiceRequest,
   originalItemIds: string[],
   originalResponseIds: string[],
   requester: OrderContext,
@@ -681,7 +717,7 @@ export function buildPhysioOrderUpdateBundle(
       values,
       patientId,
       requester,
-      serviceRequestId,
+      original,
       originalItemIds,
       originalResponseIds,
     ).entries,
@@ -728,8 +764,8 @@ export function buildDoPhysioOrderForm(
   return {
     ...values,
     setting,
-    authoredDate: today(),
-    authoredTime: "",
+    startDate: today(),
+    startTime: "",
     items: values.items.map((item) => ({
       ...item,
       id: "",
@@ -817,8 +853,8 @@ export function parsePhysioOrderForm(
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as PhysioOrderPriority,
-    authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
-    authoredTime: physioOrderTime(sr),
+    startDate: orderDay(sr) || today(),
+    startTime: physioOrderTime(sr),
     problem: physioOrderProblem(sr),
     items: physioOrderItems(sr, items),
   };

@@ -1,6 +1,7 @@
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { mealOrderProblem, mealStapleText, summarizeMealOrder } from "../fhir/mealOrderHelpers";
+import { RegisteredAtRow } from "./OrderDetailRows";
 
 // 食事オーダーの内容表示。カルテ画面の詳細モーダルから使う。
 // 明細を持たないオーダーなので、他の部門オーダーのような GP ごとの表は無い。
@@ -61,10 +62,9 @@ export function MealOrderDetailPanel({
           <dd>{summary.comment || "-"}</dd>
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
-          <dt>オーダー日</dt>
-          <dd>{serviceRequest.authoredOn?.slice(0, 10) ?? "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
           <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
         </dl>
       </fieldset>
     </div>

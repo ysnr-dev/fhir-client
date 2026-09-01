@@ -1,7 +1,7 @@
 import { today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
-import { categoryCoding, displayOf, itemNumber, orderComment, parentRequestId, PRIORITY_OPTIONS } from "./shared";
+import { PRIORITY_OPTIONS, categoryCoding, displayOf, itemNumber, orderComment, orderDay, parentRequestId, registrationAuthoredOn } from "./shared";
 
 export { PRIORITY_OPTIONS };
 import { ABBREVIATION_SYSTEM, JLAC11_SPECIMEN_SYSTEM, JLAC11_SYSTEM } from "./labResultHelpers";
@@ -87,8 +87,8 @@ export interface LabOrderItemLine {
 export interface LabOrderFormValues {
   setting: PrescriptionSetting;
   priority: LabOrderPriority;
-  /** 検査日(検体を採る日)。 */
-  authoredDate: string;
+  /** 検査日(検体を採る日)。ServiceRequest.occurrenceDateTime に入る。 */
+  startDate: string;
   comment: string;
   // 対象プロブレム(POMR)。null なら特定の問題に紐付かない検査。
   problem: ProblemRef | null;
@@ -102,7 +102,7 @@ export function emptyLabOrderForm(
   return {
     setting,
     priority: "routine",
-    authoredDate: today(),
+    startDate: today(),
     comment: "",
     problem,
     items: [],
@@ -184,7 +184,7 @@ const LABEL_ITEM_COUNT = 3;
  * オーダーの中身を展開できない狭い場所で使う。
  */
 export function labOrderLabel(sr: fhir4.ServiceRequest, items: LabOrderItemLine[]): string {
-  const date = (sr.occurrenceDateTime ?? sr.authoredOn ?? "").slice(0, 10);
+  const date = orderDay(sr);
   const names = topLevelItems(items)
     .map((item) => item.name)
     .filter(Boolean);
@@ -221,6 +221,7 @@ function buildItemRequest(
   sequence: number,
   patientId: string,
   authoredOn: string,
+  occurrenceDateTime: string,
   parentReference: string,
 ): fhir4.ServiceRequest {
   const coding: fhir4.Coding[] = [
@@ -239,7 +240,9 @@ function buildItemRequest(
     intent: "order",
     identifier: [{ system: ITEM_NUMBER_SYSTEM, value: String(sequence) }],
     subject: { reference: `Patient/${patientId}` },
+    // 登録日時と検査日はヘッダと同じ値を写す(明細だけを引いたときも日付が分かるように)。
     authoredOn,
+    occurrenceDateTime,
     code: { coding, text: item.name },
     basedOn: [{ reference: parentReference }],
   };
@@ -350,6 +353,7 @@ function buildItemEntries(
   items: LabOrderItemLine[],
   patientId: string,
   authoredOn: string,
+  occurrenceDateTime: string,
   headerReference: string,
   originalItemIds: string[],
 ): fhir4.BundleEntry[] {
@@ -364,7 +368,14 @@ function buildItemEntries(
 
     entries.push({
       fullUrl,
-      resource: buildItemRequest(item, sequence, patientId, authoredOn, parentReference),
+      resource: buildItemRequest(
+        item,
+        sequence,
+        patientId,
+        authoredOn,
+        occurrenceDateTime,
+        parentReference,
+      ),
       request: item.id
         ? { method: "PUT", url: `ServiceRequest/${item.id}` }
         : { method: "POST", url: "ServiceRequest" },
@@ -438,6 +449,7 @@ function buildLabOrderServiceRequest(
   values: LabOrderFormValues,
   patientId: string,
   requester: OrderContext,
+  authoredOn: string,
   serviceRequestId?: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -464,9 +476,10 @@ function buildLabOrderServiceRequest(
         : []),
     ],
     subject: { reference: `Patient/${patientId}` },
-    authoredOn: values.authoredDate,
-    // 検体を採る日。オーダー日と同じ日を入れる(検査日として 1 つだけ入力する)。
-    occurrenceDateTime: values.authoredDate,
+    // 登録日時。フォームでは入力せず、新規はいま・更新は元の値(shared.ts の説明を参照)。
+    authoredOn,
+    // 検査日(検体を採る日)。カルテのカードの位置と検体検査一覧の日付軸はこちら。
+    occurrenceDateTime: values.startDate,
   };
 
   if (serviceRequestId) resource.id = serviceRequestId;
@@ -492,6 +505,7 @@ function buildLabOrderTransactionBundle(
   values: LabOrderFormValues,
   patientId: string,
   requester: OrderContext,
+  authoredOn: string,
   serviceRequestId?: string,
   originalItemIds: string[] = [],
 ): fhir4.Bundle {
@@ -505,7 +519,13 @@ function buildLabOrderTransactionBundle(
     entry: [
       {
         fullUrl: headerReference,
-        resource: buildLabOrderServiceRequest(values, patientId, requester, serviceRequestId),
+        resource: buildLabOrderServiceRequest(
+          values,
+          patientId,
+          requester,
+          authoredOn,
+          serviceRequestId,
+        ),
         request: serviceRequestId
           ? { method: "PUT", url: `ServiceRequest/${serviceRequestId}` }
           : { method: "POST", url: "ServiceRequest" },
@@ -513,7 +533,8 @@ function buildLabOrderTransactionBundle(
       ...buildItemEntries(
         values.items,
         patientId,
-        values.authoredDate,
+        authoredOn,
+        values.startDate,
         headerReference,
         originalItemIds,
       ),
@@ -526,13 +547,14 @@ export function buildLabOrderBundle(
   patientId: string,
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildLabOrderTransactionBundle(values, patientId, requester);
+  return buildLabOrderTransactionBundle(values, patientId, requester, registrationAuthoredOn());
 }
 
+// 更新は元の ServiceRequest を受け取り、登録日時をそこから引き継ぐ(編集で動かさない)。
 export function buildLabOrderUpdateBundle(
   values: LabOrderFormValues,
   patientId: string,
-  serviceRequestId: string,
+  original: fhir4.ServiceRequest,
   originalItemIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
@@ -540,7 +562,8 @@ export function buildLabOrderUpdateBundle(
     values,
     patientId,
     requester,
-    serviceRequestId,
+    registrationAuthoredOn(original),
+    original.id,
     originalItemIds,
   );
 }
@@ -563,7 +586,7 @@ export function buildLabOrderDeleteBundle(
 }
 
 // 既存のオーダーを DO(流用)して新規登録するためのフォーム値。処方・注射と同じく
-// 明細の id を落として新規登録(POST)にし、検査日は当日にする。
+// 明細の id を落として新規登録(POST)にし、検査日は当日にする(登録日時は保存時に採る)。
 export function buildDoLabOrderForm(
   values: LabOrderFormValues,
   setting: PrescriptionSetting,
@@ -571,7 +594,7 @@ export function buildDoLabOrderForm(
   return {
     ...values,
     setting,
-    authoredDate: today(),
+    startDate: today(),
     items: values.items.map((item) => ({ ...item, id: "" })),
   };
 }
@@ -663,7 +686,7 @@ export function parseLabOrderForm(
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as LabOrderPriority,
-    authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
+    startDate: orderDay(sr) || today(),
     comment: labOrderComment(sr),
     problem: labOrderProblem(sr),
     items: labOrderItems(sr, items),

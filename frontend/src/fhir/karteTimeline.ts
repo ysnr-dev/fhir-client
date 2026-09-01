@@ -372,10 +372,10 @@ export interface KarteTimelineInput {
   noteBundles: fhir4.Bundle[];
   prescriptionBundles: fhir4.Bundle[];
   /**
-   * 先読みしたオーダー(日付未定 / 実施予定日が未来)。オーダーのページングは
-   * authoredOn の降順なので、日付未定のものや予定日が先のものは初期表示に出てこない。
-   * 件数で切らずに全件読めるよう、状態で切った別クエリの結果をここで受ける
-   * (未定は未処理の仕事なので溜まらず、未来の予定も有限)。
+   * 先読みしたオーダー(日付未定 / 開始日が今日より後)。オーダーのページングは
+   * 開始日(occurrence)が今日以前のものを新しい順に読むので、日付未定のものや開始日が
+   * 先のものはそこに含まれない。件数で切らずに全件読めるよう、状態で切った別クエリの
+   * 結果をここで受ける(未定は未処理の仕事なので溜まらず、未来の予定も有限)。
    * ページング側と同じオーダーが入りうるが、id で寄せるので二重には出ない。
    */
   pendingBundles: fhir4.Bundle[];
@@ -450,9 +450,9 @@ export const KARTE_UNSCHEDULED_DAY = "unscheduled";
 /**
  * 日付未定を許すオーダー種別(CodeSystem/order-type のコード)。
  *
- * ここに無い種別は occurrence が無ければ authoredOn の日に出す。細菌検査のように
- * occurrence をそもそも書いていない種別や、実施予定日の概念が無い処方・注射が
- * 「日付未定」に落ちてしまわないようにするための明示リスト。
+ * 全種別が開始日を occurrence に書く(fhir/shared.ts 冒頭)ので、occurrence が無いのは
+ * 「未定」か「occurrence を書く前に登録された旧データ」のどちらか。ここに無い種別は
+ * 後者とみなして登録日(authoredOn)の日に出し、「日付未定」には落とさない。
  * 他の種別で未定を許したくなったら、フォームの必須検証を外してここに足す。
  */
 const UNSCHEDULABLE_ORDER_TYPES = new Set<string>([SURGERY_ORDER_TYPE.code]);
@@ -495,13 +495,12 @@ export function karteDayShortLabel(day: string): string {
 }
 
 /**
- * オーダーのカードを置く診療日。
+ * オーダーのカードを置く診療日 = オーダー開始日(occurrence)。
  *
- * 実施予定日(occurrence)があればその日。無ければ、未定を許す種別なら「日付未定」、
- * それ以外は従来どおりオーダー日(authoredOn)。
- *
- * 放射線・生理・内視鏡・処置・検体検査は occurrence に実施日と同じ値を入れているので、
- * この規則にしてもカードは動かない。手術だけが申込日から予定手術日へ移る。
+ * 無ければ、未定を許す種別なら「日付未定」、それ以外は登録日(authoredOn の日付)。後者は
+ * occurrence を書く前に登録された旧データのためのフォールバックで、上流の backfill
+ * (2026-09-01)後は起きない。本流の検索もこの軸(occurrence)で読む(api/queries.ts の
+ * useKartePrescriptionsInfinite)ので、カットオフ判定と配置が食い違わない。
  */
 function orderCardDay(sr: fhir4.ServiceRequest): string {
   if (sr.occurrenceDateTime) return dayOf(sr.occurrenceDateTime);

@@ -249,7 +249,7 @@ API: `resources :micro_specimen_types / :micro_organisms / :micro_order_items /
 | `note` | 依頼コメント |
 | `extension[micro-prior-antimicrobial]` | 前投与抗菌薬（valueString。「処方から取り込み」も最終的に文字列） |
 | `extension[micro-exam-purpose]` | 検査目的区分（valueCode: `diagnostic` / `surveillance`） |
-| 入外区分・至急区分・依頼日 | 既存オーダーと同じ表現 |
+| 入外区分・至急区分・検査日(`occurrenceDateTime`) | 既存オーダーと同じ表現 |
 
 検体グループ明細 ServiceRequest:
 
@@ -292,7 +292,7 @@ contained Specimen（JP_Specimen_Common）:
 ［提案］`MicroOrderForm`。カルテ右ペインに「細菌検査」を追加し、
 カードの DO / 編集 / 詳細表示 / FHIR JSON表示 / 削除は既存オーダーと同じ導線。
 
-- **検査共通**: 対象プロブレム / 入外区分 / 至急区分 / 依頼日 / 依頼コメント
+- **検査共通**: 対象プロブレム / 入外区分 / 至急区分 / 検査日 / 依頼コメント
 - **検体**: 検体種別（セレクト＋検索）/ 採取部位（セレクト。`laterality_applicable` の部位を
   選んだときだけ左右セレクトを活性化）/ 採取方法 / 採取予定日時
 - **検査項目**: 9項目のチェックボックス（レイアウト機能なし、§4）

@@ -6,7 +6,9 @@ require "pdf/inspector"
 RSpec.describe Reports::InjectionRenderer do
   let(:order) do
     {
-      "authoredOn" => "2026-09-01",
+      # 登録日時(authoredOn)と注射日(occurrenceDateTime)は別の日。刷るのは注射日。
+      "authoredOn" => "2026-08-31T16:20:45+09:00",
+      "occurrenceDateTime" => "2026-09-01",
       "category" => [
         { "coding" => [{ "system" => InjectionReport::SETTING_SYSTEM, "code" => "inpatient", "display" => "入院" }] },
         { "coding" => [{ "system" => InjectionReport::INJECTION_CATEGORY_SYSTEM, "code" => "regular", "display" => "定時" }] }
@@ -52,9 +54,19 @@ RSpec.describe Reports::InjectionRenderer do
     # (処方箋の renderer spec と同じ)。
     expect(texts).to include("太郎").and include("2026/09/01").and include("東3階病棟")
     expect(texts).to include("生理食塩液").and include("100mL/h").and include("10:00")
-    # 連日 3 日目(9/1 は 8/30 開始の 3 日目)。
+    # 連日 3 日目(9/1 は 8/30 開始の 3 日目)。登録日 8/31 基準なら 2 日目になってしまう。
     expect(texts).to include("3日目")
+    expect(texts).not_to include("2026/08/31")
+    expect(texts).not_to include("2日目")
     expect(page_texts(pdf).size).to eq(1)
+  end
+
+  it "falls back to the authoredOn day when the order has no occurrenceDateTime" do
+    order.delete("occurrenceDateTime")
+    pdf = render([rp(1, medicines: [["生理食塩液", 1, "袋"]])])
+    texts = page_texts(pdf)[0].join
+    expect(texts).to include("2026/08/31").and include("2日目")
+    expect(texts).not_to include("2026/09/01")
   end
 
   it "starts a continuation page when the content exceeds lines_per_page" do

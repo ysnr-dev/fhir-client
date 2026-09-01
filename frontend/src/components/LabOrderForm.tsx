@@ -254,7 +254,7 @@ export function LabOrderForm({
       setValidationError("検査項目を 1 つ以上選択してください。");
       return;
     }
-    if (!values.authoredDate) {
+    if (!values.startDate) {
       setValidationError("検査日を入力してください。");
       return;
     }
@@ -320,8 +320,8 @@ export function LabOrderForm({
           検査日
           <input
             type="date"
-            value={values.authoredDate}
-            onChange={(e) => update("authoredDate", e.target.value)}
+            value={values.startDate}
+            onChange={(e) => update("startDate", e.target.value)}
           />
         </label>
         {commentOpen ? (

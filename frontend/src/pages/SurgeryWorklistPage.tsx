@@ -189,7 +189,7 @@ export function SurgeryWorklistPage() {
                 <tr>
                   {/* 横に送っても「どの部屋で・いつ・誰の手術か」は残す(左 3 列を固定)。 */}
                   <th className="rad-worklist__time sticky-table__fix-1">
-                    {tab === "scheduled" ? "手術室 / 入室" : "申込日"}
+                    {tab === "scheduled" ? "手術室 / 入室" : "登録日"}
                   </th>
                   <th className="sticky-table__fix-2">患者番号</th>
                   <th className="sticky-table__fix-3">患者氏名</th>

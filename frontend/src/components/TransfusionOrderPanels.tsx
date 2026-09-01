@@ -104,7 +104,7 @@ export function TransfusionOrderEditPanel({
       buildTransfusionOrderUpdateBundle(
         values,
         patientId,
-        srId,
+        serviceRequest,
         itemIds,
         prescriptionRequester(serviceRequest),
       ),

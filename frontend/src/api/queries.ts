@@ -64,7 +64,7 @@ import {
   type LabResultSummary,
   type SpecimenRef,
 } from "../fhir/labResultHelpers";
-import { referenceId } from "../fhir/shared";
+import { orderDay, referenceId } from "../fhir/shared";
 import {
   buildInjectionTaskUpdate,
   injectionTasksByOrderId,
@@ -2459,17 +2459,19 @@ export function usePrescriptionDetail(srId: string | undefined) {
 }
 
 // 連日オーダーの後続日。編集中・削除中の注射と同じ束ね(requisition)で、その日より
-// 後の日付のオーダーを薬剤ごと返す。上流に requisition 検索が無いので、患者 + 注射 +
-// 日付(authoredon)で引いてから requisition を突き合わせる。一括で展開できるのは
+// 後の注射日のオーダーを薬剤ごと返す。上流に requisition 検索が無いので、患者 + 注射 +
+// 注射日(occurrence)で引いてから requisition を突き合わせる。一括で展開できるのは
 // 14 日までなので _count は余裕を見た固定値で足りる。
+// 注射日は occurrence(登録日時 authoredOn ではない。同時に展開した日はすべて同じ
+// 登録日時を持つので、authoredOn では後続日を区別できない)。
 export function useInjectionSeriesLater(sr: fhir4.ServiceRequest | undefined) {
   const series = sr ? injectionSeriesOf(sr) : null;
   const patientId = referenceId(sr?.subject?.reference);
-  const date = sr?.authoredOn?.slice(0, 10);
+  const date = sr ? orderDay(sr) : "";
   const params = new URLSearchParams();
   if (patientId) params.set("patient", patientId);
   params.set("category", `${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`);
-  if (date) params.set("authoredon", `gt${date}`);
+  if (date) params.set("occurrence", `gt${date}`);
   params.append("_revinclude", "MedicationRequest:based-on");
   // 中止を「この日以降」まとめて書くとき、後続日に既にある Task が要る
   // (status だけだと Task を二重に作ってしまう)。
@@ -2498,9 +2500,9 @@ export function useInjectionSeriesLater(sr: fhir4.ServiceRequest | undefined) {
           (s) =>
             s.id !== sr?.id &&
             injectionSeriesOf(s)?.requisition === series?.requisition &&
-            (s.authoredOn?.slice(0, 10) ?? "") > (date ?? ""),
+            orderDay(s) > date,
         )
-        .sort((a, b) => (a.authoredOn ?? "").localeCompare(b.authoredOn ?? ""))
+        .sort((a, b) => orderDay(a).localeCompare(orderDay(b)))
         .map((s) => ({
           serviceRequest: s,
           medicationRequests: mrsBySr.get(s.id ?? "") ?? [],
@@ -2667,15 +2669,15 @@ const WORKLIST_MAX_PAGES = 5;
 /**
  * ヘッダ検索の共通パラメータ。呼び出し側でドメインの _revinclude を足す。
  *
- * 日付を当てる先はドメインで違う。放射線・検体検査は実施予定日(撮影日・検査日)を
- * occurrenceDateTime に持つのでそれで引く。処方は実施予定日を持たないので処方日
- * (authoredOn)で引く。
+ * 日付はオーダー開始日(occurrenceDateTime: 撮影日・検査日・注射日・投与予定日 …)で引く。
+ * 全種別で occurrence が開始日、authoredOn が登録日時(fhir/shared.ts 冒頭)。
+ * 例外は処方一覧だけで、交付日(登録日)で引く(理由は useRxWorklist のコメント)。
  */
 function worklistParams(
   category: string,
   date: string,
   page: number,
-  dateParam: "occurrence" | "authoredon" = "authoredon",
+  dateParam: "occurrence" | "authoredon" = "occurrence",
 ): URLSearchParams {
   const params = new URLSearchParams();
   params.set("category", category);
@@ -3094,9 +3096,14 @@ export const useUpdateLabTaskStatus = makeUpdateTaskStatusHook<LabTaskStatus>(
 
 // ---- 処方一覧(部門ワークリスト) ----
 //
-// 処方日で 1 日ぶんの処方オーダーを読む。画面の作りは検体検査一覧と同じで、
-// 入外区分・処方区分・診療科での絞り込みは画面側で行う(理由は検体検査一覧の節の
-// コメントを参照)。処方は実施予定日を持たないので、日付は処方日(authoredOn)で引く。
+// 処方日(交付日 = 登録日 authoredOn の日付)で 1 日ぶんの処方オーダーを読む。画面の作りは
+// 検体検査一覧と同じで、入外区分・処方区分・診療科での絞り込みは画面側で行う(理由は
+// 検体検査一覧の節のコメントを参照)。
+//
+// 他の部門一覧と違って開始日(occurrence = 投与開始日)で引かないのは、薬剤部は「今日交付
+// された処方」を当日に受け取って開始日の前日までに調剤するため。入院の定期処方は木曜に
+// 出して月曜開始のような形になるので、開始日で引くと月曜まで一覧に出てこない。開始日は
+// 一覧の列で見せる。
 //
 // 処方オーダーはオーダー種別(order-type)を持たない(注射より前から存在するため)ので、
 // 検体検査・放射線検査のように種別コードでは引けない。代わりに処方オーダーだけが持つ
@@ -3127,7 +3134,7 @@ async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
       // 処方オーダーはオーダー種別(order-type)を持たない(注射より前から存在する)ので、
       // 処方オーダーだけが持つ処方区分の CodeSystem を system だけ指定して引く
       // (FHIR token 検索の `system|` 形式。注射は別の CodeSystem なので混ざらない)。
-      const params = worklistParams(`${PRESCRIPTION_CATEGORY_SYSTEM}|`, date, page);
+      const params = worklistParams(`${PRESCRIPTION_CATEGORY_SYSTEM}|`, date, page, "authoredon");
       // 処方明細も同じ応答に添えてもらう。
       params.set("_revinclude", "MedicationRequest:based-on");
       params.append("_revinclude", "Task:focus");
@@ -3176,9 +3183,9 @@ async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
 
 // ---- 注射一覧(部門ワークリスト) ----
 //
-// 注射日で 1 日ぶんの注射オーダーを読む。注射は 1 日 1 オーダー(連日は日ごとに
-// 展開済み)なので、処方一覧と同じく authoredOn(注射日)で引けばその日の施用ぶんが
-// そのまま並ぶ。残りの絞り込みは画面側(理由は useRxWorklist と同じ)。
+// 注射日(occurrence)で 1 日ぶんの注射オーダーを読む。注射は 1 日 1 オーダー(連日は
+// 日ごとに展開済み)なので、注射日で引けばその日の施用ぶんがそのまま並ぶ。
+// 残りの絞り込みは画面側(理由は useRxWorklist と同じ)。
 
 export interface InjectionWorklistRow {
   order: fhir4.ServiceRequest;
@@ -4776,37 +4783,11 @@ const KARTE_PAGE = 20;
 const KARTE_PENDING_COUNT = 100;
 
 /**
- * カードを実施予定日(occurrence)の位置に出すオーダー種別。診療日ペインの日付も
- * ここに挙げた種別だけ occurrence から数える(karteTimeline の orderCardDay と対)。
- *
- * 細菌検査は occurrence を書いていないので入れない(authoredOn で数える)。
- * 処方・注射はそもそも実施予定日の概念を持たない。
+ * カルテのオーダー検索から外す種別。看護指示はカルテのカードにせず指示簿タブで見せる
+ * (karteTimeline 側でも落としているが、サーバー側で外さないと診療日ペインに
+ * 看護指示しか無い日が空の日として並ぶ)。
  */
-const OCCURRENCE_ORDER_TYPES = [
-  LAB_ORDER_TYPE.code,
-  RAD_ORDER_TYPE.code,
-  PHYSIO_ORDER_TYPE.code,
-  ENDOSCOPY_ORDER_TYPE.code,
-  TREATMENT_ORDER_TYPE.code,
-  SURGERY_ORDER_TYPE.code,
-  // 食事は開始日(occurrence)にカードを出す。オーダー日は「いつ指示したか」で、
-  // 食事そのものは開始日から始まるため。
-  MEAL_ORDER_TYPE.code,
-  // 病理は採取(予定)日にカードを出す。検体を採る日が病理部門の作業の起点で、
-  // 部門一覧もその日付で引くため(細菌検査と違い occurrence を必ず書く)。
-  PATHO_ORDER_TYPE.code,
-  // 輸血は投与予定日にカードを出す。輸血部門の一覧もその日付で引く。
-  TRANSFUSION_ORDER_TYPE.code,
-  // リハビリは開始日(occurrence)にカードを出す。食事と同じ期間継続型で、
-  // オーダー日ではなくリハビリが始まる日がカードの置き場所になる。
-  REHAB_ORDER_TYPE.code,
-  // 栄養指導も同じ期間継続型で、開始日(occurrence)にカードを出す。
-  NUTRITION_GUIDANCE_ORDER_TYPE.code,
-];
-
-const OCCURRENCE_ORDER_TYPE_TOKENS = OCCURRENCE_ORDER_TYPES.map(
-  (code) => `${ORDER_TYPE_SYSTEM}|${code}`,
-).join(",");
+const KARTE_EXCLUDED_ORDER_TYPE_TOKENS = `${ORDER_TYPE_SYSTEM}|${NURSING_ORDER_TYPE.code}`;
 
 // _include / _revinclude の関連リソースも entry に混ざるため、次ページのオフセットは
 // entry 数ではなく _count 固定で進める。
@@ -4859,12 +4840,22 @@ export function useKarteClinicalNotesInfinite(
   });
 }
 
+/**
+ * カルテのオーダー本流。**取得軸 = 配置軸 = オーダー開始日(occurrence)** で、今日以前を
+ * 新しい順にページングする。カードを置く日(karteTimeline の orderCardDay)と同じ軸で
+ * 読むから、「この日より新しい日は読み切った」というカットオフ判定が厳密に成り立つ
+ * (登録日時 authoredOn で読むと、先に登録した開始日の新しいオーダーが、その日を
+ * 読み切った後に届いて欠ける)。今日より後の予定と日付未定は useKartePendingOrders が
+ * 全件先読みする。
+ */
 export function useKartePrescriptionsInfinite(
   patientId: string | undefined,
   problemIds: KarteProblemFilter = null,
 ) {
+  // 日を跨いで開きっぱなしのタブが古い境界で読み続けないよう、キーに今日を含める。
+  const todayDay = today();
   return useInfiniteQuery({
-    queryKey: ["ServiceRequest", "search", "karte", patientId, problemQueryKey(problemIds)],
+    queryKey: ["ServiceRequest", "search", "karte", patientId, problemQueryKey(problemIds), todayDay],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
@@ -4873,7 +4864,11 @@ export function useKartePrescriptionsInfinite(
       if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
-      params.set("_sort", "-authoredon");
+      params.set("_sort", "-occurrence");
+      // 今日以前の開始日。上流は日付だけの値をローカル日で解釈するので、le{今日} で
+      // 「今日の終わりまで」になる。先読み側の gt{今日} と合わせて過不足なく分割される。
+      params.set("occurrence", `le${todayDay}`);
+      params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
       // 検体検査・放射線検査は明細も ServiceRequest なので、オーダーのヘッダだけを
       // 1 ページの対象にする(明細がカードとして紛れ込まず、ページ数も項目数に
       // 左右されない)。
@@ -4902,13 +4897,14 @@ export function useKartePrescriptionsInfinite(
 }
 
 /**
- * 先読みするオーダー。カルテのオーダーは authoredOn の降順でページングするので、
- * 「日付未定のもの」と「実施予定日が先のもの」は初期表示に出てこない
- * (申込が古いほど埋もれる)。種別で切ると「手術は件数が少ないから全件取れる」という
- * 種別依存の理屈になるので、**状態で切って**全件読む。どちらも件数は自然に小さい
- * (未定は未処理の仕事なので溜まらず、未来の予定も有限)。
+ * 先読みするオーダー。カルテの本流は開始日(occurrence)が今日以前のものを新しい順に
+ * ページングするので、「日付未定のもの」と「開始日が今日より後のもの」はそこに含まれない。
+ * 種別で切ると「手術は件数が少ないから全件取れる」という種別依存の理屈になるので、
+ * **状態で切って**全件読む。どちらも件数は自然に小さい(未定は未処理の仕事なので溜まらず、
+ * 未来の予定も有限)。
  *
- * ページングの結果と重複しうるが、タイムライン側が ServiceRequest.id で寄せる。
+ * occurrence を書く前に登録された旧データ(上流の backfill 前)も occurrence:missing に
+ * 入り、タイムライン側で登録日の位置に落ちる。
  */
 export function useKartePendingOrders(
   patientId: string | undefined,
@@ -4922,6 +4918,7 @@ export function useKartePendingOrders(
     if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
     // カードになるのはヘッダだけ(明細は下の :iterate で添えてもらう)。
     params.set("based-on:missing", "true");
+    params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
     params.set("_count", String(KARTE_PENDING_COUNT));
     params.set("_include", "ServiceRequest:subject");
     params.append("_revinclude", "MedicationRequest:based-on");
@@ -4948,7 +4945,7 @@ export function useKartePendingOrders(
     queryKey: ["ServiceRequest", "search", "karte-upcoming", patientId, problemQueryKey(problemIds)],
     queryFn: () => {
       const params = baseParams();
-      // 今日より後の実施予定。今日ぶんは authoredOn のページング初回で拾える。
+      // 今日より後の開始日。今日以前は本流(occurrence=le{今日})が読む。
       params.set("occurrence", `gt${today()}`);
       return searchResource<fhir4.Resource>("ServiceRequest", params);
     },
@@ -5058,36 +5055,17 @@ export function useKarteDayIndex(
     enabled,
   });
 
-  const prescriptions = useQuery({
-    queryKey: ["ServiceRequest", "search", "karte-days", patientId, problemKey],
-    queryFn: () =>
-      fetchKarteDays(
-        "ServiceRequest",
-        (() => {
-          const params = new URLSearchParams();
-          params.set("patient", `Patient/${patientId}`);
-          if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
-          // タイムラインと同じく、オーダーのヘッダだけを数える(明細を含めない)。
-          params.set("based-on:missing", "true");
-          // 実施予定日でカードを出す種別は下の occurrence ソースが数えるので、ここでは外す
-          // (両方で数えるとカードの無い日が診療日ペインに並ぶ)。
-          params.set("category:not", OCCURRENCE_ORDER_TYPE_TOKENS);
-          return params;
-        })(),
-        "authoredon",
-      ),
-    enabled,
-  });
-
-  // 実施予定日でカードを出すオーダー。日付未定(undated)はタイムラインと同じ仮想日に写す。
-  const scheduledOrders = useQuery({
+  // オーダーはすべて開始日(occurrence)にカードを出すので、診療日もその 1 本で数える
+  // (タイムラインと同じくヘッダだけ、看護指示は除く)。日付未定(undated)はタイムラインと
+  // 同じ仮想日に写す。
+  const orders = useQuery({
     queryKey: ["ServiceRequest", "search", "karte-days-occurrence", patientId, problemKey],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
       params.set("based-on:missing", "true");
-      params.set("category", OCCURRENCE_ORDER_TYPE_TOKENS);
+      params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
       const { dates, hasUndated } = await fetchDistinctDates(
         "ServiceRequest",
         params,
@@ -5133,20 +5111,14 @@ export function useKarteDayIndex(
     enabled,
   });
 
-  const queries = [notes, prescriptions, scheduledOrders, responses, vitals];
+  const queries = [notes, orders, responses, vitals];
   const days = useMemo(() => {
     const merged = new Set<string>();
-    for (const list of [
-      notes.data,
-      prescriptions.data,
-      scheduledOrders.data,
-      responses.data,
-      vitals.data,
-    ]) {
+    for (const list of [notes.data, orders.data, responses.data, vitals.data]) {
       for (const day of list ?? []) merged.add(day);
     }
     return Array.from(merged).sort(compareKarteDaysDesc);
-  }, [notes.data, prescriptions.data, scheduledOrders.data, responses.data, vitals.data]);
+  }, [notes.data, orders.data, responses.data, vitals.data]);
 
   return {
     days,

@@ -154,7 +154,7 @@ export function RadOrderEditPanel({ patientId, srId, onSaved }: RadOrderEditPane
         bundle: buildRadOrderUpdateBundle(
           values,
           patientId,
-          srId,
+          serviceRequest,
           itemIds,
           responseIds,
           prescriptionRequester(serviceRequest),

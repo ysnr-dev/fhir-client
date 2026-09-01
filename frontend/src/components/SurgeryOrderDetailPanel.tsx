@@ -1,5 +1,6 @@
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { RegisteredAtRow } from "./OrderDetailRows";
 import { schemaAnnotatedLines } from "../fhir/questionnaireResponseHelpers";
 import {
   summarizeSurgeryOrder,
@@ -56,8 +57,6 @@ export function SurgeryOrderDetailPanel({
         <dl className="prescription-detail__common">
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
-          <dt>申込日</dt>
-          <dd>{serviceRequest.authoredOn?.slice(0, 10) ?? "-"}</dd>
           <dt>予定区分</dt>
           <dd>{summary.priorityDisplay}</dd>
           <dt>予定日時</dt>
@@ -108,6 +107,7 @@ export function SurgeryOrderDetailPanel({
               responseId={summary.preopInstructionResponseId}
             />
           </dd>
+          <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
         </dl>
       </fieldset>
 

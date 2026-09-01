@@ -255,14 +255,6 @@ export function NutritionGuidanceOrderForm({
               ))}
             </select>
           </label>
-          <label>
-            依頼日
-            <input
-              type="date"
-              value={values.authoredDate}
-              onChange={(e) => update("authoredDate", e.target.value)}
-            />
-          </label>
           {commentOpen ? (
             <div className="prescription-form__comment-field">
               <label>

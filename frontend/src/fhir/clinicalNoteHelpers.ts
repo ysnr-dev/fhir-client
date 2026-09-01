@@ -211,17 +211,11 @@ export function emptyClinicalNoteForm(
 
 // ---- 日時変換 ----
 
-// FHIR dateTime は時刻を含む場合タイムゾーン必須。datetime-local の値(ローカル時刻)に
-// 実行環境のオフセットを付けて "+09:00" 形式にする。
-export function toFhirDateTime(input: string): string {
-  if (!input) return "";
-  const offsetMinutes = -new Date(input).getTimezoneOffset();
-  const sign = offsetMinutes >= 0 ? "+" : "-";
-  const abs = Math.abs(offsetMinutes);
-  const hh = String(Math.floor(abs / 60)).padStart(2, "0");
-  const mm = String(abs % 60).padStart(2, "0");
-  return `${input.length === 16 ? `${input}:00` : input}${sign}${hh}:${mm}`;
-}
+// toFhirDateTime は lib/dates.ts に移した(オーダーの登録日時 nowFhirDateTime と同じ場所)。
+// 既存の import 元を変えずに済むようここからも出す。
+import { toFhirDateTime } from "../lib/dates";
+
+export { toFhirDateTime };
 
 export function toDateTimeInput(value: Date | string | undefined): string {
   if (!value) return "";

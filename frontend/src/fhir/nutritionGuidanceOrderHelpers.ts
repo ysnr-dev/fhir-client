@@ -2,7 +2,14 @@ import { today } from "../lib/dates";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { MEAL_TYPE_SYSTEM, type MealItemRef } from "./mealOrderHelpers";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
-import { categoryCoding, codingBySystem, displayOf, orderComment } from "./shared";
+import {
+  categoryCoding,
+  codingBySystem,
+  displayOf,
+  orderComment,
+  orderDay,
+  registrationAuthoredOn,
+} from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
@@ -123,7 +130,6 @@ export function guidanceFormatShort(code: string): string {
 
 export interface NutritionGuidanceOrderFormValues {
   setting: PrescriptionSetting;
-  authoredDate: string;
   /** 指導形態(必須)。 */
   format: NutritionGuidanceFormat | "";
   startDate: string;
@@ -148,7 +154,6 @@ export function emptyNutritionGuidanceOrderForm(
 ): NutritionGuidanceOrderFormValues {
   return {
     setting,
-    authoredDate: today(),
     format: "individual",
     startDate: today(),
     endDate: "",
@@ -190,6 +195,7 @@ function buildNutritionGuidanceServiceRequest(
   patientId: string,
   requester: OrderAttribution,
   purposeTemplateRef: string,
+  authoredOn: string,
   serviceRequestId?: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -213,7 +219,8 @@ function buildNutritionGuidanceServiceRequest(
         : []),
     ],
     subject: { reference: `Patient/${patientId}` },
-    authoredOn: values.authoredDate,
+    // 登録日時(全種別共通の意味。fhir/shared.ts)。フォームでは入力しない。
+    authoredOn,
     // 開始日。部門一覧はこの日付でオーダーを拾い、カルテカードもこの日に置く。
     // 時刻は持たない(何時に指導するかは予約 Appointment / 実施 Procedure の担当)。
     occurrenceDateTime: values.startDate,
@@ -346,13 +353,14 @@ export function buildNutritionGuidanceOrderBundle(
       patientId,
       requester,
       template.reference,
+      registrationAuthoredOn(),
     ),
     request: { method: "POST", url: "ServiceRequest" },
   });
   return transactionBundle(entries);
 }
 
-/** 更新。既存ヘッダへの PUT と、テンプレートを解除した回答の後始末。 */
+/** 更新。既存ヘッダへの PUT と、テンプレートを解除した回答の後始末。登録日時は元から引き継ぐ。 */
 export function buildNutritionGuidanceOrderUpdateBundle(
   values: NutritionGuidanceOrderFormValues,
   patientId: string,
@@ -370,6 +378,7 @@ export function buildNutritionGuidanceOrderUpdateBundle(
       patientId,
       requester,
       template.reference,
+      registrationAuthoredOn(existing),
       serviceRequestId,
     ),
     request: { method: "PUT", url: `ServiceRequest/${serviceRequestId}` },
@@ -438,7 +447,6 @@ export function buildDoNutritionGuidanceOrderForm(
   return {
     ...values,
     setting,
-    authoredDate: today(),
     startDate: today(),
     endDate: "",
     purposeTemplate: null,
@@ -609,9 +617,8 @@ export function parseNutritionGuidanceOrderForm(
 ): NutritionGuidanceOrderFormValues {
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
-    authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
     format: nutritionGuidanceFormat(sr) as NutritionGuidanceFormat | "",
-    startDate: (sr.occurrenceDateTime ?? "").slice(0, 10) || today(),
+    startDate: orderDay(sr) || today(),
     endDate: nutritionGuidanceOrderEnd(sr),
     targetDisease: nutritionGuidanceTargetDisease(sr),
     targetConditionId: nutritionGuidanceTargetConditionId(sr),

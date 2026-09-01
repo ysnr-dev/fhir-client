@@ -134,10 +134,6 @@ export function PathoOrderForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!values.authoredDate) {
-      setValidationError("依頼日を入力してください。");
-      return;
-    }
     if (!values.collectionDateTime) {
       setValidationError("採取(予定)日時を入力してください。");
       return;
@@ -244,14 +240,6 @@ export function PathoOrderForm({
               </option>
             ))}
           </select>
-        </label>
-        <label>
-          依頼日
-          <input
-            type="date"
-            value={values.authoredDate}
-            onChange={(e) => update("authoredDate", e.target.value)}
-          />
         </label>
         <label>
           採取(予定)日時 *

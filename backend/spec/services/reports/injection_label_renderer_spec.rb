@@ -3,7 +3,8 @@ require "pdf/inspector"
 
 RSpec.describe Reports::InjectionLabelRenderer do
   let(:order) do
-    { "authoredOn" => "2026-08-30",
+    { "authoredOn" => "2026-08-29T17:05:10+09:00",
+      "occurrenceDateTime" => "2026-08-30",
       "category" => [{ "coding" => [{ "system" => InjectionReport::INJECTION_CATEGORY_SYSTEM, "code" => "emergency" }] }] }
   end
   let(:patient) do
@@ -30,5 +31,16 @@ RSpec.describe Reports::InjectionLabelRenderer do
     expect(pages[0]).to include("RP1").and include("生理食塩液").and include("KCL").and include("10:00")
     expect(pages[1]).to include("RP2").and include("セファゾリン")
     expect(pages[0]).to include("太郎")
+    # 注射日は occurrenceDateTime。登録日時(authoredOn)の日付ではない。
+    expect(pages[0]).to include("2026/08/30")
+    expect(pages[0]).not_to include("2026/08/29")
+  end
+
+  it "falls back to the authoredOn day when the order has no occurrenceDateTime" do
+    order.delete("occurrenceDateTime")
+    pdf = described_class.new(layout_path: InjectionReport::LABEL_LAYOUT_PATH, order: order, patient: patient,
+                              rps: [rp(1, %w[生理食塩液])]).render
+    page = PDF::Inspector::Page.analyze(pdf).pages[0][:strings].join
+    expect(page).to include("2026/08/29")
   end
 end

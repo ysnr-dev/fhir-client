@@ -50,7 +50,8 @@ module Reports
         "pt_kana" => PatientMeta.display_kana(@patient),
         "pt_gender" => PatientMeta.gender_label(@patient),
         "pt_birthdate" => PatientMeta.format_date(@patient["birthDate"]),
-        "order_date" => PatientMeta.format_date(@order["authoredOn"].to_s.first(10)),
+        # 検査日(オーダー開始日 = occurrenceDateTime)。
+        "order_date" => PatientMeta.format_date(OrderDates.order_day(@order)),
         "specimen_name" => group.specimen_name.presence || "検体未設定",
         "container_name" => container_display(group),
         "items" => group.item_labels.join("・"),

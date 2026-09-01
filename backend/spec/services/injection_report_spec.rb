@@ -21,7 +21,8 @@ RSpec.describe InjectionReport do
         { "coding" => [{ "system" => described_class::INJECTION_CATEGORY_SYSTEM, "code" => "regular", "display" => "定時" }] }
       ],
       "subject" => { "reference" => "Patient/p1" },
-      "authoredOn" => "2026-08-30"
+      "authoredOn" => "2026-08-29T17:05:10+09:00",
+      "occurrenceDateTime" => "2026-08-30"
     }
   end
   let(:patient) { { "resourceType" => "Patient", "id" => "p1" } }

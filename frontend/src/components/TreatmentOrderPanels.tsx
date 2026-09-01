@@ -154,7 +154,7 @@ export function TreatmentOrderEditPanel({ patientId, srId, onSaved }: TreatmentO
         bundle: buildTreatmentOrderUpdateBundle(
           values,
           patientId,
-          srId,
+          serviceRequest,
           itemIds,
           prescriptionRequester(serviceRequest),
         ),

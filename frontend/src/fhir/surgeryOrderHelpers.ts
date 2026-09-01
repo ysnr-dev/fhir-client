@@ -1,10 +1,15 @@
-import { today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 // FHIR dateTime へのタイムゾーン付与は診療記録と同じ変換でよいので共用する。
 import { toFhirDateTime } from "./clinicalNoteHelpers";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
-import { categoryCoding, codingBySystem, displayOf, itemNumber } from "./shared";
+import {
+  categoryCoding,
+  codingBySystem,
+  displayOf,
+  itemNumber,
+  registrationAuthoredOn,
+} from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
@@ -24,8 +29,8 @@ import {
 // - ヘッダが厚い。手術室・執刀科・体位・予定出血量・スタッフ(役割つき複数人)・
 //   麻酔・輸血準備・特殊機器・検体提出予定・同意書と、申込書の記載事項を
 //   ローカル拡張で持つ。標準要素に置き場所が無いため(依頼科の拡張と同じ理由)。
-// - authoredOn は申込日。既存 4 種は実施日を入れているが、手術は申込から実施まで
-//   日が空くのが普通なので、予定日時は occurrence に分ける。
+// - authoredOn は登録日時、予定日時は occurrenceDateTime(全種別共通の意味。fhir/shared.ts)。
+//   日付未定を許すのは手術だけで、occurrence を出さないことで表す。
 //   ［事実］上流の occurrence 検索は occurrenceDateTime だけを抽出する
 //   (extraction_definitions/service_request.rb。Period は索引されない)ので、
 //   入室予定は occurrencePeriod ではなく occurrenceDateTime に入れ、予定所要時間は
@@ -284,9 +289,7 @@ export interface SurgeryOrderItemLine {
 
 export interface SurgeryOrderFormValues {
   setting: PrescriptionSetting;
-  /** 申込日。 */
-  authoredDate: string;
-  /** 予定手術日と入室予定時刻(HH:mm、任意)。 */
+  /** 予定手術日と入室予定時刻(HH:mm、任意)。空なら日付未定。 */
   scheduledDate: string;
   scheduledTime: string;
   /** 予定所要時間(分)。 */
@@ -335,7 +338,6 @@ export function emptySurgeryOrderForm(
 ): SurgeryOrderFormValues {
   return {
     setting,
-    authoredDate: today(),
     scheduledDate: "",
     scheduledTime: "",
     durationMinutes: "",
@@ -382,6 +384,7 @@ function buildItemRequest(
   sequence: number,
   patientId: string,
   authoredOn: string,
+  occurrenceDateTime: string | undefined,
   parentReference: string,
 ): fhir4.ServiceRequest {
   const coding: fhir4.Coding[] = [
@@ -400,7 +403,9 @@ function buildItemRequest(
     intent: "order",
     identifier: [{ system: ITEM_NUMBER_SYSTEM, value: String(sequence) }],
     subject: { reference: `Patient/${patientId}` },
+    // 登録日時・予定日時はヘッダと同じ値を写す(日付未定ならヘッダ同様に出さない)。
     authoredOn,
+    ...(occurrenceDateTime ? { occurrenceDateTime } : {}),
     code: { coding, text: item.name },
     basedOn: [{ reference: parentReference }],
   };
@@ -493,7 +498,7 @@ function parseItemRequest(request: fhir4.ServiceRequest): SurgeryOrderItemLine {
 function buildItemEntries(
   items: SurgeryOrderItemLine[],
   patientId: string,
-  authoredOn: string,
+  header: fhir4.ServiceRequest,
   headerReference: string,
   originalItemIds: string[],
 ): fhir4.BundleEntry[] {
@@ -506,7 +511,14 @@ function buildItemEntries(
 
     entries.push({
       fullUrl,
-      resource: buildItemRequest(item, index + 1, patientId, authoredOn, headerReference),
+      resource: buildItemRequest(
+        item,
+        index + 1,
+        patientId,
+        header.authoredOn ?? "",
+        header.occurrenceDateTime,
+        headerReference,
+      ),
       request: item.id
         ? { method: "PUT", url: `ServiceRequest/${item.id}` }
         : { method: "POST", url: "ServiceRequest" },
@@ -552,6 +564,7 @@ function buildSurgeryOrderServiceRequest(
   // 術前指示をテンプレートから記載したときの、回答(QuestionnaireResponse)への参照。
   // Bundle 内で解決するため呼び出し側が組み立てて渡す(新規は urn:uuid、既存は実 id)。
   preopTemplateRef: string,
+  authoredOn: string,
   serviceRequestId?: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -578,9 +591,8 @@ function buildSurgeryOrderServiceRequest(
         : []),
     ],
     subject: { reference: `Patient/${patientId}` },
-    // 申込日。予定日時は occurrencePeriod に分ける(既存 4 種と違い、申込から実施
-    // まで日が空くのが普通なので実施日を authoredOn に入れない)。
-    authoredOn: values.authoredDate,
+    // 登録日時(全種別共通の意味。fhir/shared.ts)。フォームでは入力しない。
+    authoredOn,
   };
 
   if (serviceRequestId) resource.id = serviceRequestId;
@@ -821,50 +833,55 @@ export function buildSurgeryOrderBundle(
   const headerReference = `urn:uuid:${crypto.randomUUID()}`;
   const templateEntries: fhir4.BundleEntry[] = [];
   const preop = pushPreopTemplateEntry(templateEntries, values.preopInstructionTemplate);
+  const header = buildSurgeryOrderServiceRequest(
+    values,
+    patientId,
+    requester,
+    preop.reference,
+    registrationAuthoredOn(),
+  );
   return transactionBundle([
     ...templateEntries,
     {
       fullUrl: headerReference,
-      resource: buildSurgeryOrderServiceRequest(values, patientId, requester, preop.reference),
+      resource: header,
       request: { method: "POST", url: "ServiceRequest" },
     },
-    ...buildItemEntries(values.items, patientId, values.authoredDate, headerReference, []),
+    ...buildItemEntries(values.items, patientId, header, headerReference, []),
   ]);
 }
 
 // 更新。ヘッダは PUT、明細は PUT/POST/差分 DELETE の混在した transaction。
+// 登録日時は元のリソースから引き継ぐ(編集で動かさない)。
 export function buildSurgeryOrderUpdateBundle(
   values: SurgeryOrderFormValues,
   patientId: string,
-  serviceRequestId: string,
+  original: fhir4.ServiceRequest,
   originalItemIds: string[],
   requester: OrderContext,
   // 元のオーダーが参照していた術前指示の回答 id。参照が外れたら同じ transaction で消す。
   originalResponseIds: string[] = [],
 ): fhir4.Bundle {
+  const serviceRequestId = original.id ?? "";
   const headerReference = `ServiceRequest/${serviceRequestId}`;
   const templateEntries: fhir4.BundleEntry[] = [];
   const preop = pushPreopTemplateEntry(templateEntries, values.preopInstructionTemplate);
+  const header = buildSurgeryOrderServiceRequest(
+    values,
+    patientId,
+    requester,
+    preop.reference,
+    registrationAuthoredOn(original),
+    serviceRequestId,
+  );
   return transactionBundle([
     ...templateEntries,
     {
       fullUrl: headerReference,
-      resource: buildSurgeryOrderServiceRequest(
-        values,
-        patientId,
-        requester,
-        preop.reference,
-        serviceRequestId,
-      ),
+      resource: header,
       request: { method: "PUT", url: headerReference },
     },
-    ...buildItemEntries(
-      values.items,
-      patientId,
-      values.authoredDate,
-      headerReference,
-      originalItemIds,
-    ),
+    ...buildItemEntries(values.items, patientId, header, headerReference, originalItemIds),
     ...originalResponseIds
       .filter((id) => id !== preop.keptResponseId)
       .map((id) => ({
@@ -995,8 +1012,8 @@ export function buildSurgeryOrderDeleteBundle(
 }
 
 // 既存のオーダーを DO(流用)して新規登録するためのフォーム値。明細の id を落として
-// 新規登録(POST)にし、申込日は当日、予定日時は入れ直す(同じ日にもう一度手術する
-// ことは無いので引き継がない)。
+// 新規登録(POST)にし、予定日時は入れ直す(同じ日にもう一度手術することは無いので
+// 引き継がない)。登録日時は保存時に採る。
 export function buildDoSurgeryOrderForm(
   values: SurgeryOrderFormValues,
   setting: PrescriptionSetting,
@@ -1004,7 +1021,6 @@ export function buildDoSurgeryOrderForm(
   return {
     ...values,
     setting,
-    authoredDate: today(),
     scheduledDate: "",
     scheduledTime: "",
     // テンプレートの紐付けは外す。同じ回答を 2 つのオーダーが指すと、片方を書き換えた
@@ -1155,7 +1171,6 @@ export function parseSurgeryOrderForm(
   const summary = summarizeSurgeryOrder(sr);
   return {
     setting: (summary.settingCode || "") as PrescriptionSetting,
-    authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
     scheduledDate: summary.scheduledDate,
     scheduledTime: summary.scheduledTime,
     durationMinutes: summary.durationMinutes != null ? String(summary.durationMinutes) : "",

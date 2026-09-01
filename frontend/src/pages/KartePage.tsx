@@ -245,7 +245,7 @@ export function KartePage() {
   const notes = useKarteClinicalNotesInfinite(patientId, timelineProblemIds);
   const prescriptions = useKartePrescriptionsInfinite(patientId, timelineProblemIds);
   const responses = useKarteQuestionnaireResponsesInfinite(patientId, timelineProblemIds);
-  // 日付未定・未来の予定は authoredOn のページングに乗らないので別に先読みする。
+  // 日付未定・開始日が今日より後のオーダーは本流(開始日が今日以前)に乗らないので別に先読みする。
   const pendingOrders = useKartePendingOrders(patientId, timelineProblemIds);
   const vitals = useKarteVitalsInfinite(patientId, timelineProblemIds);
   // 診療日ペイン用の全診療日。タイムラインのページングとは別に日付だけを読み切る
@@ -372,8 +372,8 @@ export function KartePage() {
     [filteredGroups, dayIndex.days, timeline.cutoff],
   );
 
-  // 本日のカルテのペインに出す 1 日分。タイムラインは新しい順に読むので、本日の分は
-  // 常に最初のページに入っている(追加読み込みを待つ必要が無い)。
+  // 本日のカルテのペインに出す 1 日分。オーダーの本流は開始日が今日以前のものを新しい順に
+  // 読むので、本日の分は常に最初のページに入っている(追加読み込みを待つ必要が無い)。
   // 種別の絞り込み(左端のペイン)は左のタイムラインを絞るためのものなので、ここには
   // 効かせない。本日の分は常に全部見えるようにしておく。
   const todayDay = today();

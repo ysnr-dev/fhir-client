@@ -9,7 +9,9 @@ require "pdf/inspector"
 RSpec.describe Reports::PrescriptionRenderer do
   let(:order) do
     {
-      "authoredOn" => "2026-08-20",
+      # 交付年月日は登録日時(authoredOn)の日付。投与開始日(occurrenceDateTime)ではない。
+      "authoredOn" => "2026-08-20T09:15:30+09:00",
+      "occurrenceDateTime" => "2026-08-21",
       "category" => [
         { "coding" => [{ "system" => PrescriptionReport::SETTING_SYSTEM,
                          "code" => "outpatient", "display" => "外来" }] },
@@ -84,6 +86,15 @@ RSpec.describe Reports::PrescriptionRenderer do
       expect(text).to include("7日分")
       expect(text).to include("義憲")
       expect(text).to include("テスト病院")
+    end
+  end
+
+  it "prints the authoredOn day as 交付年月日, not the occurrence day" do
+    %i[external internal].each do |key|
+      text = page_texts(render(key, simple_rps)).flatten.join
+
+      expect(text).to include("2026/08/20")
+      expect(text).not_to include("2026/08/21")
     end
   end
 

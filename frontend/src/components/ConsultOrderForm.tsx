@@ -198,6 +198,7 @@ export function ConsultOrderForm({
           希望日
           <input
             type="date"
+            required
             value={values.desiredDate}
             onChange={(e) => update("desiredDate", e.target.value)}
           />
@@ -270,14 +271,6 @@ export function ConsultOrderForm({
               </option>
             ))}
           </select>
-        </label>
-        <label>
-          依頼日
-          <input
-            type="date"
-            value={values.authoredDate}
-            onChange={(e) => update("authoredDate", e.target.value)}
-          />
         </label>
         {commentOpen ? (
           <div className="prescription-form__comment-field">

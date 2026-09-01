@@ -12,6 +12,7 @@ import { useLabOrderResultLines } from "../hooks/useLabOrderResultLines";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabResultForm } from "./LabResultForm";
 import { Modal } from "./Modal";
+import { orderDay } from "../fhir/shared";
 
 // 検体検査一覧の「結果登録」。検体が全部着いた(実施済)オーダーの結果を、一覧から
 // そのまま入力する画面。入力欄はカルテの検査結果タブと同じ LabResultForm で、
@@ -58,8 +59,8 @@ export function LabResultEntryModal({
     return {
       ...emptyLabResultForm(),
       setting: (summary.settingCode || "outpatient") as LabResultSetting,
-      // 検体を採る日として出したオーダーなので、検査日をそのまま採取日にする。
-      specimenDate: order.authoredOn?.slice(0, 10) || emptyLabResultForm().specimenDate,
+      // 検体を採る日として出したオーダーなので、検査日(occurrence)をそのまま採取日にする。
+      specimenDate: orderDay(order) || emptyLabResultForm().specimenDate,
       ...departmentOf(order),
       orderId,
       lines: expansion.lines.length > 0 ? expansion.lines : emptyLabResultForm().lines,

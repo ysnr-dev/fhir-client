@@ -3,6 +3,7 @@ import { problemLabel } from "../fhir/conditionHelpers";
 import {
   groupInjectionByRp,
   injectionComment,
+  injectionDayOf,
   injectionProblem,
   injectionSeriesLabel,
   injectionSeriesOf,
@@ -14,6 +15,7 @@ import {
   injectionTaskStatusDisplay,
 } from "../fhir/injectionTaskHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { RegisteredAtRow } from "./OrderDetailRows";
 
 // 注射オーダーの内容表示。カルテ画面の詳細モーダルから使う(処方の
 // PrescriptionDetailPanel と同じ構成)。
@@ -53,7 +55,7 @@ export function InjectionDetailPanel({
           <dd>{problemText}</dd>
           <dt>注射日</dt>
           <dd>
-            {serviceRequest.authoredOn?.slice(0, 10) ?? "-"}
+            {injectionDayOf(serviceRequest) || "-"}
             {seriesLabel && <span className="injection-series-label">{seriesLabel}</span>}
           </dd>
           <dt>実施パターン</dt>
@@ -75,6 +77,7 @@ export function InjectionDetailPanel({
           <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
           <dt>注射コメント</dt>
           <dd>{comment || "-"}</dd>
+          <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
         </dl>
       </fieldset>
 

@@ -116,7 +116,7 @@ export function SurgeryOrderEditPanel({ patientId, srId, onSaved }: SurgeryOrder
       buildSurgeryOrderUpdateBundle(
         values,
         patientId,
-        srId,
+        serviceRequest,
         itemIds,
         prescriptionRequester(serviceRequest),
         responseIds,

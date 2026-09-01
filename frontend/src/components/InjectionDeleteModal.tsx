@@ -1,5 +1,5 @@
 import { useDeleteInjectionSeries, useInjectionSeriesLater } from "../api/queries";
-import { injectionSeriesLabel } from "../fhir/injectionHelpers";
+import { injectionDayOf, injectionSeriesLabel } from "../fhir/injectionHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 
@@ -17,8 +17,9 @@ export function InjectionDeleteModal({ serviceRequest, onClose, onDeleted }: Inj
   const later = useInjectionSeriesLater(serviceRequest);
   const remove = useDeleteInjectionSeries();
   const laterTargets = later.data ?? [];
-  const date = serviceRequest.authoredOn?.slice(0, 10) ?? "";
-  const lastDate = laterTargets[laterTargets.length - 1]?.serviceRequest.authoredOn?.slice(0, 10) ?? "";
+  const date = injectionDayOf(serviceRequest);
+  const last = laterTargets[laterTargets.length - 1]?.serviceRequest;
+  const lastDate = last ? injectionDayOf(last) : "";
   const seriesLabel = injectionSeriesLabel(serviceRequest);
 
   function handleDelete(ids: string[]) {

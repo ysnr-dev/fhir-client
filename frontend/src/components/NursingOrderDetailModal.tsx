@@ -1,4 +1,5 @@
 import { departmentOf, wardOf } from "../fhir/prescriptionHelpers";
+import { RegisteredAtRow } from "./OrderDetailRows";
 import {
   NURSING_ORDER_STATE_LABELS,
   nursingOrderState,
@@ -100,8 +101,7 @@ export function NursingOrderDetailModal({
           <dd>{[department, ward].filter(Boolean).join(" / ") || "-"}</dd>
         </div>
         <div>
-          <dt>発行日</dt>
-          <dd>{summary.authoredOn.slice(0, 10) || "-"}</dd>
+          <RegisteredAtRow authoredOn={summary.authoredOn} />
         </div>
         <div>
           <dt>対象プロブレム</dt>

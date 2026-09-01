@@ -104,7 +104,8 @@ module Reports
         "pt_kana" => PatientMeta.display_kana(@patient),
         "pt_gender" => PatientMeta.gender_label(@patient),
         "pt_birthdate" => PatientMeta.format_date(@patient["birthDate"]),
-        # 交付年月日は処方日(authoredOn)。発行操作の日ではないので、再発行しても
+        # 交付年月日は登録日時(authoredOn)の日付。オーダー開始日(投与開始日 =
+        # occurrenceDateTime)ではない。発行操作の日でもないので、再発行しても
         # 同じ日付が刷られる(docs/prescription-report-design.md)。
         "issue_date" => PatientMeta.format_date(@order["authoredOn"].to_s.first(10)),
         "doctor_name" => @order.dig("requester", "display").to_s,

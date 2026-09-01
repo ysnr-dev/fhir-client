@@ -292,8 +292,8 @@ function PendingCard({
 function whenLabel(row: SurgeryWorklistRow, kind: PendingKind): string {
   const summary = summarizeSurgeryOrder(row.order);
   if (kind === "dateless") {
-    // 日付が無いので、待たせている長さが読めるよう申込日を出す。
-    return `申込 ${row.order.authoredOn?.slice(0, 10) || "-"}`;
+    // 日付が無いので、待たせている長さが読めるよう登録日(authoredOn の日付)を出す。
+    return `登録 ${row.order.authoredOn?.slice(0, 10) || "-"}`;
   }
   if (kind === "roomless") {
     return `${summary.scheduledDate} ${rangeLabel(summary.scheduledTime, summary.durationMinutes)}`;

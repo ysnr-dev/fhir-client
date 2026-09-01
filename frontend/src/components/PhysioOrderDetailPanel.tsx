@@ -1,4 +1,6 @@
 import { problemLabel } from "../fhir/conditionHelpers";
+import { orderDay } from "../fhir/shared";
+import { RegisteredAtRow } from "./OrderDetailRows";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { schemaAnnotatedLines } from "../fhir/questionnaireResponseHelpers";
 import {
@@ -43,7 +45,7 @@ export function PhysioOrderDetailPanel({
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
           <dt>実施日</dt>
-          <dd>{serviceRequest.authoredOn?.slice(0, 10) ?? "-"}</dd>
+          <dd>{orderDay(serviceRequest) || "-"}</dd>
           <dt>実施時刻</dt>
           {/* 日付は実施日として上に出るので時刻だけを並べる(注射の開始時刻と同じ)。 */}
           <dd>{physioOrderTime(serviceRequest) || "-"}</dd>
@@ -53,6 +55,7 @@ export function PhysioOrderDetailPanel({
           <dd>{summary.priorityDisplay || "-"}</dd>
           <dt>依頼科 | 依頼医師</dt>
           <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
         </dl>
       </fieldset>
 

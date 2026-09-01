@@ -963,7 +963,7 @@ function cardMeta(item: KarteTimelineItem): string {
     const performTime = treatmentOrderTime(item.serviceRequest);
     return [performTime && `実施 ${performTime}`, requesterSummary].filter(Boolean).join(" | ");
   }
-  // 手術のカードは申込日に置かれるので、予定日時と手術室をここで添える。
+  // 手術は入室予定時刻と手術室を添える(日付はカードの載る日で分かる。未定なら明示)。
   if (item.kind === "surgery-order") {
     const summary = summarizeSurgeryOrder(item.serviceRequest);
     const scheduled = summary.scheduledDate
@@ -976,16 +976,10 @@ function cardMeta(item: KarteTimelineItem): string {
     const scheduled = timeOf(item.serviceRequest.occurrenceDateTime ?? "");
     return [scheduled && `投与 ${scheduled}`, requesterSummary].filter(Boolean).join(" | ");
   }
-  // 他科依頼は希望日を入れなければ依頼日にカードが載るので、希望日を入れたときだけ
-  // 「希望」と付けて添える(日付そのものはカードの載る日で分かるが、希望として
-  // 指定された日なのか依頼日なのかがカードだけでは分からないため)。
+  // 他科依頼は希望日が必須でカードもその日に載るので、日付は添えない。
   if (item.kind === "consult-order") {
     const summary = summarizeConsultOrder(item.serviceRequest);
-    return [
-      summary.desiredDate && `希望 ${summary.desiredDate}`,
-      summary.replierName && `回答 ${summary.replierName}`,
-      requesterSummary,
-    ]
+    return [summary.replierName && `回答 ${summary.replierName}`, requesterSummary]
       .filter(Boolean)
       .join(" | ");
   }
@@ -993,15 +987,15 @@ function cardMeta(item: KarteTimelineItem): string {
   if (item.kind === "injection") {
     return [injectionSeriesLabel(item.serviceRequest), requesterSummary].filter(Boolean).join(" | ");
   }
-  // 処方・注射は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。オーダー日は
-  // 日付のみを入力する項目なので時刻は出さない(古い処方には時刻付きの authoredOn が
-  // あり、意味のない「00:00」が出てしまうため)。
+  // 処方・注射は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。登録日時
+  // (authoredOn)はカードには出さない(カードの日はオーダー開始日で、いつ登録したかは
+  // 詳細の「登録日時」で見る)。
   return requesterSummary;
 }
 
 
 // 診療日はグループ見出しに出るのでカードには時刻だけを添える。
-// 日付のみ(処方の authoredOn)は時刻を持たないので空文字。
+// 日付のみの値(時刻を指定していない開始日)は時刻を持たないので空文字。
 function timeOf(dateTime: string): string {
   if (dateTime.length <= 10) return "";
   const date = new Date(dateTime);

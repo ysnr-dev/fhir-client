@@ -8,6 +8,7 @@ import {
   buildInjectionBundle,
   buildInjectionSeriesUpdateBundle,
   buildInjectionUpdateBundle,
+  injectionDayOf,
   injectionSeriesLabel,
   emptyInjectionForm,
   type InjectionFormValues,
@@ -118,7 +119,7 @@ export function InjectionEditPanel({ patientId, srId, onSaved }: InjectionEditPa
         : buildInjectionUpdateBundle(
             values,
             patientId,
-            srId,
+            sr,
             mrs.map((mr) => mr.id).filter((id): id is string => Boolean(id)),
             requester,
           );
@@ -143,7 +144,7 @@ export function InjectionEditPanel({ patientId, srId, onSaved }: InjectionEditPa
                 <p className="injection-scope__note">
                   {seriesLabel || "連日オーダー"}
                   {`。この後に ${laterTargets.length} 日分(〜${
-                    laterTargets[laterTargets.length - 1].serviceRequest.authoredOn?.slice(0, 10) ?? ""
+                    injectionDayOf(laterTargets[laterTargets.length - 1].serviceRequest)
                   })があります。`}
                 </p>
                 <label className="injection-scope__option">

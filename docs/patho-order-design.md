@@ -140,8 +140,8 @@ DiagnosticReport (code = LOINC 11526-1, status = preliminary|final|amended)
 （`dateParam: "occurrence"`）。カルテカードもこの日に出す（`OCCURRENCE_ORDER_TYPES` に追加）。
 
 理由: 検体を採る日が病理部門の作業の起点であること、上流が `occurrenceDateTime` しか
-索引しない（Period は索引されない）こと。細菌検査は occurrence を書かないので
-authoredOn で引いているが、病理は必ず書かせる。
+索引しない（Period は索引されない）こと。2026-09-01 に全種別で occurrence = 開始日、
+authoredOn = 登録日時に統一したので、細菌検査も検査日を occurrence に書く。
 
 ### 4.4 臨床経過のテンプレートとシェーマ
 

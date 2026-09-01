@@ -8,6 +8,8 @@ import {
   summarizeLabOrder,
 } from "../fhir/labOrderHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderDay } from "../fhir/shared";
+import { RegisteredAtRow } from "./OrderDetailRows";
 
 // 検体検査オーダーの内容表示。カルテ画面の詳細モーダルから使う
 // (処方の PrescriptionDetailPanel と同じ構成)。
@@ -40,7 +42,7 @@ export function LabOrderDetailPanel({
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
           <dt>検査日</dt>
-          <dd>{serviceRequest.authoredOn?.slice(0, 10) ?? "-"}</dd>
+          <dd>{orderDay(serviceRequest) || "-"}</dd>
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay || "-"}</dd>
           <dt>至急区分</dt>
@@ -49,6 +51,7 @@ export function LabOrderDetailPanel({
           <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
           <dt>検査コメント</dt>
           <dd>{comment || "-"}</dd>
+          <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
         </dl>
       </fieldset>
 

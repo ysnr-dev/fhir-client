@@ -30,7 +30,7 @@
 | `pt_kana` | text-block | ○ | ○ | カナ氏名(氏名の上に小さく) |
 | `pt_birthdate` | text-block | ○ | ○ | 生年月日(YYYY/MM/DD) |
 | `pt_gender` | text-block | ○ | ○ | 性別(男性/女性) |
-| `issue_date` | text-block | ○(交付年月日) | ○(処方日) | オーダーの authoredOn |
+| `issue_date` | text-block | ○(交付年月日) | ○(処方日) | 登録日時(authoredOn)の日付 = 交付年月日。オーダー開始日(occurrenceDateTime)ではない |
 | `doctor_name` | text-block | ○(保険医氏名) | ○(依頼医師) | requester の display |
 | `department_name` | text-block | − | ○(依頼科) | 依頼科拡張の display |
 | `rx_category` | text-block | − | ○(区分) | 「外来 院内」「入院 定期」など |

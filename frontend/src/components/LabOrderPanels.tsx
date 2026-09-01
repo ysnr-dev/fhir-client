@@ -98,7 +98,7 @@ export function LabOrderEditPanel({ patientId, srId, onSaved }: LabOrderEditPane
       buildLabOrderUpdateBundle(
         values,
         patientId,
-        srId,
+        serviceRequest,
         itemIds,
         prescriptionRequester(serviceRequest),
       ),

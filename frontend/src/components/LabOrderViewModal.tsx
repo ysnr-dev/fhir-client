@@ -13,6 +13,7 @@ import { labTaskStatus, labTaskStatusDisplay } from "../fhir/labTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { Modal } from "./Modal";
+import { orderDay } from "../fhir/shared";
 
 // 検体検査一覧の「表示」で開くオーダー内容。カルテのカード(KarteTimeline の
 // LabOrderCardBody)と同じ組み方で、検体(採血管)ごとに検査項目を並べる。
@@ -48,7 +49,7 @@ export function LabOrderViewModal({ row, onClose }: { row: LabWorklistRow; onClo
   // 一覧から開くので、どの患者のオーダーを見ているかを必ず頭に出す。
   const meta = [
     patient ? `${patient.identifier?.[0]?.value ?? "-"} ${displayName(patient)}` : "",
-    order.authoredOn?.slice(0, 10) ?? "",
+    orderDay(order),
     summary.settingDisplay,
     summary.urgent ? summary.priorityDisplay : "",
     orderContextSummary(prescriptionRequester(order)),

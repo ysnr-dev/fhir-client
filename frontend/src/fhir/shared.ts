@@ -1,6 +1,38 @@
 // オーダー・結果ヘルパー(処方・注射・検体検査・細菌検査・放射線)で共通の部品。
 // ドメイン固有の CodeSystem/IdSystem はここに置かず、必要なら引数で受け取る。
 
+import { nowFhirDateTime } from "../lib/dates";
+
+// ---- オーダーの日付(全種別で共通の意味) ----
+//
+//   ServiceRequest.authoredOn         = オーダー登録日時(システム時刻。編集で動かさない)
+//   ServiceRequest.occurrenceDateTime = オーダー開始日(実施予定日。種別ごとの「検査日」「注射日」
+//                                       「投与開始日」「開始日」などがここに入る)
+//
+// 日付未定を許すのは手術だけ(occurrence を出さない = 日付未定)。カルテのカードの位置・部門一覧の
+// 日付軸はすべて occurrence。登録日時はフォームで入力するものではなく、初回保存時に採る。
+
+/**
+ * オーダーの登録日時(authoredOn)。新規登録はいま、更新は元のリソースの値をそのまま引き継ぐ
+ * (編集で登録日時が動くと「いつ出したオーダーか」が消える)。DO(流用)は新規なので引数なし。
+ */
+export function registrationAuthoredOn(
+  original?: Pick<fhir4.ServiceRequest, "authoredOn"> | null,
+): string {
+  return original?.authoredOn || nowFhirDateTime();
+}
+
+/**
+ * オーダーの開始日(YYYY-MM-DD)。occurrence 優先、無ければ登録日時の日付
+ * (occurrence を書く前に登録された旧データのフォールバック。上流の backfill 後は
+ * 手術の日付未定以外では起きない)。
+ */
+export function orderDay(
+  sr: Pick<fhir4.ServiceRequest, "occurrenceDateTime" | "authoredOn">,
+): string {
+  return (sr.occurrenceDateTime ?? sr.authoredOn ?? "").slice(0, 10);
+}
+
 /** codings から指定 system の Coding を探す。 */
 export function codingBySystem(
   codings: fhir4.Coding[] | undefined,

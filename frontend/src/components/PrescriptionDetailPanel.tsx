@@ -8,6 +8,7 @@ import {
   prescriptionRequester,
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
+import { RegisteredAtRow } from "./OrderDetailRows";
 
 // 処方の内容表示。処方内容ページとカルテ画面の詳細モーダルの双方から使う。
 // DO・編集・削除の操作ボタンは、遷移先が異なるので呼び出し側が持つ。
@@ -45,8 +46,8 @@ export function PrescriptionDetailPanel({
         <dl className="prescription-detail__common">
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
-          <dt>処方日</dt>
-          <dd>{summary.date}</dd>
+          <dt>投与開始日</dt>
+          <dd>{summary.startDate || "-"}</dd>
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay}</dd>
           <dt>処方区分</dt>
@@ -55,6 +56,7 @@ export function PrescriptionDetailPanel({
           <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
           <dt>処方箋コメント</dt>
           <dd>{comment || "-"}</dd>
+          <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
         </dl>
       </fieldset>
 

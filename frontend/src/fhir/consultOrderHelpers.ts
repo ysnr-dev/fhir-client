@@ -1,7 +1,15 @@
 import { today } from "../lib/dates";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
-import { categoryCoding, codingBySystem, displayOf, orderComment, referenceId } from "./shared";
+import {
+  categoryCoding,
+  codingBySystem,
+  displayOf,
+  orderComment,
+  orderDay,
+  referenceId,
+  registrationAuthoredOn,
+} from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
@@ -83,7 +91,6 @@ export function consultPriorityDisplay(code: string): string {
 
 export interface ConsultOrderFormValues {
   setting: PrescriptionSetting;
-  authoredDate: string;
   /** 依頼先の診療科(Organization.id)。必須。 */
   targetDepartmentId: string;
   /** 一覧・カードで引き直さずに描くための名称。参照の display に埋める。 */
@@ -93,7 +100,7 @@ export interface ConsultOrderFormValues {
   targetPractitionerName: string;
   requestType: ConsultRequestType | "";
   priority: ConsultPriority;
-  /** 希望日(任意)。入れるとカルテのカードもこの日に載る。 */
+  /** 希望日(必須)。オーダー開始日としてカルテのカードもこの日に載る。既定は今日(=なるべく早く)。 */
   desiredDate: string;
   /** 依頼目的(必須)。テンプレートから書いた場合も平文はここに入る。 */
   purpose: string;
@@ -106,14 +113,13 @@ export interface ConsultOrderFormValues {
 export function emptyConsultOrderForm(setting: PrescriptionSetting): ConsultOrderFormValues {
   return {
     setting,
-    authoredDate: today(),
     targetDepartmentId: "",
     targetDepartmentName: "",
     targetPractitionerId: "",
     targetPractitionerName: "",
     requestType: "consult",
     priority: "routine",
-    desiredDate: "",
+    desiredDate: today(),
     purpose: "",
     purposeTemplate: null,
     comment: "",
@@ -126,9 +132,7 @@ export function validateConsultOrderForm(values: ConsultOrderFormValues): string
   if (!values.targetDepartmentId) return "依頼先の診療科を選んでください。";
   if (!values.requestType) return "依頼種別を選んでください。";
   if (!values.purpose.trim()) return "依頼目的を入れてください。";
-  if (values.desiredDate && values.authoredDate && values.desiredDate < values.authoredDate) {
-    return "希望日は依頼日と同じか、それより後にしてください。";
-  }
+  if (!values.desiredDate) return "希望日を入れてください。";
   return "";
 }
 
@@ -145,6 +149,7 @@ function buildConsultOrderServiceRequest(
   requester: OrderAttribution,
   /** 依頼目的の記入内容への参照。新規は urn:uuid、既存は QuestionnaireResponse/{id}。 */
   purposeTemplateRef: string,
+  authoredOn: string,
   serviceRequestId?: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -169,14 +174,15 @@ function buildConsultOrderServiceRequest(
         : []),
     ],
     subject: { reference: `Patient/${patientId}` },
-    authoredOn: values.authoredDate,
+    // 登録日時(全種別共通の意味。fhir/shared.ts)。フォームでは入力しない。
+    authoredOn,
+    // 希望日 = オーダー開始日。他科依頼は日付軸を持たない種別だが、カルテのカードの位置と
+    // 全種別共通の「開始日」の意味を揃えるため必ず入れる(既定は今日 = なるべく早く)。
+    occurrenceDateTime: values.desiredDate,
     priority: values.priority,
   };
 
   if (serviceRequestId) resource.id = serviceRequestId;
-
-  // 希望日。任意なので、入れなかったオーダーはカルテの依頼日にカードが載る。
-  if (values.desiredDate) resource.occurrenceDateTime = values.desiredDate;
 
   if (values.requestType) {
     const display = requestTypeDisplay(values.requestType);
@@ -291,7 +297,13 @@ export function buildConsultOrderBundle(
   const entries: fhir4.BundleEntry[] = [];
   const template = pushPurposeTemplateEntry(entries, values.purposeTemplate);
   entries.push({
-    resource: buildConsultOrderServiceRequest(values, patientId, requester, template.reference),
+    resource: buildConsultOrderServiceRequest(
+      values,
+      patientId,
+      requester,
+      template.reference,
+      registrationAuthoredOn(),
+    ),
     request: { method: "POST", url: "ServiceRequest" },
   });
   return transactionBundle(entries);
@@ -299,7 +311,7 @@ export function buildConsultOrderBundle(
 
 /**
  * 更新。status と回答への参照は編集フォームの管理外なので、既存の値を引き継ぐ
- * (編集で回答済の依頼が未回答に戻ってしまわないように)。
+ * (編集で回答済の依頼が未回答に戻ってしまわないように)。登録日時も元から引き継ぐ。
  */
 export function buildConsultOrderUpdateBundle(
   values: ConsultOrderFormValues,
@@ -317,6 +329,7 @@ export function buildConsultOrderUpdateBundle(
     patientId,
     requester,
     template.reference,
+    registrationAuthoredOn(existing),
     serviceRequestId,
   );
   resource.status = existing.status;
@@ -402,8 +415,8 @@ export function buildConsultOrderStatusEntry(
 }
 
 /**
- * 既存のオーダーを DO(流用)して新規登録するためのフォーム値。依頼日を当日に戻し、
- * 希望日は引き継がない(前の依頼の希望日をそのまま持ってくると過去日になる)。
+ * 既存のオーダーを DO(流用)して新規登録するためのフォーム値。希望日は当日に戻す
+ * (前の依頼の希望日をそのまま持ってくると過去日になる)。
  * 依頼先と目的は同じ科へもう一度聞く場面がそのまま多いので引き継ぐ。
  */
 export function buildDoConsultOrderForm(
@@ -413,8 +426,7 @@ export function buildDoConsultOrderForm(
   return {
     ...values,
     setting,
-    authoredDate: today(),
-    desiredDate: "",
+    desiredDate: today(),
     // テンプレートの記入内容は引き継がない。同じ回答を 2 つのオーダーが指すと、
     // 片方を消したときにもう片方が壊れるため(病理・手術と同じ)。文言だけは
     // purpose に残るので下書きとして使える。
@@ -538,7 +550,7 @@ export function summarizeConsultOrder(sr: fhir4.ServiceRequest): ConsultOrderSum
     priority,
     priorityDisplay: consultPriorityDisplay(priority),
     urgent: priority === "urgent",
-    desiredDate: (sr.occurrenceDateTime ?? "").slice(0, 10),
+    desiredDate: orderDay(sr),
     purpose: consultOrderPurpose(sr),
     comment: orderComment(sr),
     replyId: reply.replyId,
@@ -568,7 +580,6 @@ export function parseConsultOrderForm(sr: fhir4.ServiceRequest): ConsultOrderFor
 
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
-    authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
     targetDepartmentId: department.departmentId,
     targetDepartmentName: department.departmentName,
     targetPractitionerId: practitioner.practitionerId,

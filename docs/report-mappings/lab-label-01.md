@@ -37,7 +37,7 @@
 | `pt_kana` | text-block | カナ氏名 |
 | `pt_gender` | text-block | 性別(男性/女性) |
 | `pt_birthdate` | text-block | 生年月日(YYYY/MM/DD) |
-| `order_date` | text-block | 検査日(オーダーの authoredOn) |
+| `order_date` | text-block | 検査日(オーダー開始日 = occurrenceDateTime。無ければ authoredOn の日付) |
 | `specimen_name` | text-block | 検体名(未設定なら「検体未設定」) |
 | `container_name` | text-block | 採取管(色)。「EDTA管（紫）」。採取管マスタの short_name と cap_color |
 | `items` | text-block | グループ内の検査項目(略称優先、「・」区切り) |

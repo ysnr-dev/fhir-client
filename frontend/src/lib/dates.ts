@@ -60,3 +60,29 @@ export function nowDateTimeInput(): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${toDateInput(now)}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 }
+
+/**
+ * ローカル時刻の文字列(YYYY-MM-DDTHH:mm または YYYY-MM-DDTHH:mm:ss)に実行環境のオフセットを
+ * 付けて FHIR dateTime にする("2026-09-01T10:30:00+09:00")。FHIR の dateTime は時刻を含むなら
+ * タイムゾーン必須。分までの入力(datetime-local)には秒 :00 を補う。空文字はそのまま返す。
+ */
+export function toFhirDateTime(input: string): string {
+  if (!input) return "";
+  const offsetMinutes = -new Date(input).getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const abs = Math.abs(offsetMinutes);
+  const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+  const mm = String(abs % 60).padStart(2, "0");
+  return `${input.length === 16 ? `${input}:00` : input}${sign}${hh}:${mm}`;
+}
+
+/**
+ * いまの時刻を FHIR dateTime(秒 + オフセット)で返す。オーダーの登録日時(authoredOn)に使う。
+ * 秒まで持つのは、同じ日に数分おきに登録したオーダーの日内順序を安定させるため。
+ */
+export function nowFhirDateTime(now: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return toFhirDateTime(
+    `${toDateInput(now)}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
+  );
+}

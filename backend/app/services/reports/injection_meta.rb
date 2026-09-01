@@ -29,10 +29,11 @@ module Reports
     # 連日オーダーの「連日 3日目(8/30〜)」「隔日(8/30〜)」。frontend の injectionSeriesLabel と
     # 同じ規則: 毎日は開始日からの日数で「N日目」、間引きのあるパターンはパターン名だけ。
     # 開始日そのもの(毎日)は単日と見分けが付かないので空。
+    # 「N日目」の起点はこのオーダーの注射日(occurrenceDateTime)であって登録日時ではない。
     def series_label(order)
       start = Array(order["extension"]).find { |e| e["url"] == InjectionReport::SERIES_START_EXT_URL }
                                        &.dig("valueDate")
-      date = order["authoredOn"].to_s.first(10)
+      date = OrderDates.order_day(order)
       return "" if start.blank? || date.blank?
 
       from = "#{Date.parse(start).month}/#{Date.parse(start).day}〜"

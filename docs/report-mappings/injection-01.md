@@ -23,7 +23,7 @@ backend が直接読む(`InjectionReport::ORDER_LAYOUT` / `LABEL_LAYOUT_PATH`)�
 | ID | 種類 | 内容 |
 |---|---|---|
 | `pt_id` / `pt_name` / `pt_kana` / `pt_birthdate` / `pt_gender` | text-block | 患者 |
-| `issue_date` | text-block | 注射日(オーダーの authoredOn) |
+| `issue_date` | text-block | 注射日(オーダー開始日 = occurrenceDateTime。無ければ authoredOn の日付) |
 | `rx_category` | text-block | 「入院 定時」など(入外区分 + 注射区分) |
 | `ward_name` | text-block | 病棟(order-ward 拡張の display) |
 | `doctor_line` | text-block | 「内科 \| 児玉 義憲」(依頼科 \| 依頼医師) |
@@ -69,6 +69,6 @@ RP 見出しの用法はカルテの注射カードと同じ並び(`Reports::Inj
 | `pt_id` / `pt_name` / `pt_kana` / `pt_birthdate` / `pt_gender` | text-block | 患者(漢字氏名も出す。検体ラベルと違いベッドサイドで本人確認に使うため) |
 | `medicines` | text-block(複数行、3 行) | 薬剤名と量。4 剤以上は truncate で切れるので注射箋を併用 |
 | `usage` | text-block | 用法 1 行 |
-| `order_date` | text-block | 注射日 |
+| `order_date` | text-block | 注射日(occurrenceDateTime) |
 
 ラベル番号の採番は持たない(RP はオーダー内の連番で、検体ラベルのような台帳が要らない)。

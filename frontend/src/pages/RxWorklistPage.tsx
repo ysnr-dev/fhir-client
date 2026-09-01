@@ -157,6 +157,9 @@ export function RxWorklistPage() {
                   <th className="sticky-table__fix-2">患者氏名</th>
                   <PatientProfileHeadCells />
                   <th className="rx-worklist__content">処方内容</th>
+                  {/* 一覧は処方日(交付日)で引くので、入院の定期・退院処方のように投与が先の
+                      日から始まるものは開始日を見て調剤の段取りを付ける。 */}
+                  <th className="lab-worklist__compact">投与開始日</th>
                   <th className="lab-worklist__compact">区分</th>
                   <th className="lab-worklist__compact">病棟</th>
                   <th>依頼科 | 依頼医師</th>
@@ -179,7 +182,7 @@ export function RxWorklistPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="master-search__empty">
+                    <td colSpan={11} className="master-search__empty">
                       {total === 0
                         ? "この処方日の処方オーダーはありません"
                         : "絞り込みに該当する処方がありません"}
@@ -386,6 +389,7 @@ function WorklistRow({
           <span className="order-select__muted">医薬品なし</span>
         )}
       </td>
+      <td className="lab-worklist__compact">{summary.startDate || "-"}</td>
       <td className="lab-worklist__compact">
         {[summary.settingDisplay, summary.categoryDisplay].filter(Boolean).join(" ") || "-"}
       </td>

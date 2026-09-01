@@ -1,10 +1,18 @@
-import { today } from "../lib/dates";
+import { toFhirDateTime } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { binaryIdFromAttachment, imageBinaryEntry } from "./schemaImage";
 import type { SchemaImageRef } from "./questionnaireResponseHelpers";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
-import { categoryCoding, displayOf, itemNumber, orderComment, PRIORITY_OPTIONS } from "./shared";
+import {
+  categoryCoding,
+  displayOf,
+  itemNumber,
+  orderComment,
+  PRIORITY_OPTIONS,
+  orderDay,
+  registrationAuthoredOn,
+} from "./shared";
 
 export { PRIORITY_OPTIONS };
 import { labOrderItemRequests } from "./labOrderHelpers";
@@ -37,8 +45,9 @@ import {
 //
 // ヘッダの載せ方:
 // - 検査区分は code。JAHIS テーブル LPATHO001(検査目的群)のコードをそのまま使う。
-// - 採取(予定)日時は occurrenceDateTime。部門一覧の日付軸とカルテカードの置き場所を
-//   兼ねる(上流は occurrenceDateTime しか索引しないので Period は使わない)。
+// - 採取(予定)日時は occurrenceDateTime(オーダー開始日)。部門一覧の日付軸とカルテカードの
+//   置き場所を兼ねる(上流は occurrenceDateTime しか索引しないので Period は使わない)。
+//   authoredOn は登録日時で、フォームでは入力しない(shared.ts を参照)。
 //   検体ごとの実採取日時は結果レポート側の Specimen.collection.collectedDateTime で持つ。
 // - 臨床経過・所見、報告希望日、手術室番号はローカル拡張。臨床病名は放射線・細菌検査と
 //   同じく登録病名からの参照(reasonReference)。
@@ -155,11 +164,9 @@ export interface PathoSpecimenValues {
 export interface PathoOrderFormValues {
   setting: PrescriptionSetting;
   priority: PathoOrderPriority;
-  /** 依頼日。 */
-  authoredDate: string;
   /** 検査区分(LPATHO001 検査目的群)。 */
   examCategory: PathoExamCategory;
-  /** 採取(予定)日時("YYYY-MM-DDTHH:mm")。空なら未定。 */
+  /** 採取(予定)日時("YYYY-MM-DDTHH:mm")。オーダー開始日(occurrenceDateTime)になる。 */
   collectionDateTime: string;
   /** 臨床経過・所見(自由文)。 */
   clinicalInfo: string;
@@ -214,7 +221,6 @@ export function emptyPathoOrderForm(
   return {
     setting,
     priority: "routine",
-    authoredDate: today(),
     examCategory: "N000",
     collectionDateTime: "",
     clinicalInfo: "",
@@ -336,6 +342,7 @@ function buildSpecimenRequest(
   sequence: number,
   patientId: string,
   authoredOn: string,
+  occurrenceDateTime: string,
   headerReference: string,
 ): fhir4.ServiceRequest {
   const label = organLabel(specimen) || specimen.typeName || "検体";
@@ -345,7 +352,9 @@ function buildSpecimenRequest(
     intent: "order",
     identifier: [{ system: ITEM_NUMBER_SYSTEM, value: String(sequence) }],
     subject: { reference: `Patient/${patientId}` },
+    // 登録日時と採取(予定)日時はヘッダと同じ値を写す。
     authoredOn,
+    occurrenceDateTime,
     // 検体そのものは検査ではないので、表示用の text だけを持つ。
     code: { text: label },
     basedOn: [{ reference: headerReference }],
@@ -366,6 +375,7 @@ function buildPathoOrderServiceRequest(
   clinicalInfoTemplateRef: string,
   /** シェーマ画像の参照(保存済みは Binary/<id>、新規は Bundle 内のプレースホルダ)。 */
   schemaRefs: { url: string; name: string }[],
+  authoredOn: string,
   serviceRequestId?: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -401,12 +411,14 @@ function buildPathoOrderServiceRequest(
       text: examCategoryDisplay(values.examCategory),
     },
     subject: { reference: `Patient/${patientId}` },
-    authoredOn: values.authoredDate,
+    // 登録日時。フォームでは入力せず、新規はいま・更新は元の値。
+    authoredOn,
+    // 採取(予定)日時。部門一覧はこの日付でオーダーを拾う。FHIR の dateTime は時刻を持つなら
+    // タイムゾーン必須なので、datetime-local の値にオフセットを付ける。
+    occurrenceDateTime: toFhirDateTime(values.collectionDateTime),
   };
 
   if (serviceRequestId) resource.id = serviceRequestId;
-  // 採取(予定)日時。部門一覧はこの日付でオーダーを拾う。
-  if (values.collectionDateTime) resource.occurrenceDateTime = values.collectionDateTime;
   if (values.problem) {
     resource.reasonReference = [
       {
@@ -517,6 +529,7 @@ function buildPathoOrderTransactionBundle(
   values: PathoOrderFormValues,
   patientId: string,
   requester: OrderContext,
+  authoredOn: string,
   serviceRequestId?: string,
   originalItemIds: string[] = [],
   /** 元のオーダーが参照していた記入内容の回答 id。外れたら同じ transaction で消す。 */
@@ -541,6 +554,7 @@ function buildPathoOrderTransactionBundle(
       requester,
       template.reference,
       schemaRefs,
+      authoredOn,
       serviceRequestId,
     ),
     request: serviceRequestId
@@ -558,7 +572,8 @@ function buildPathoOrderTransactionBundle(
         specimen,
         index + 1,
         patientId,
-        values.authoredDate,
+        authoredOn,
+        toFhirDateTime(values.collectionDateTime),
         headerReference,
       ),
       request: specimen.id
@@ -586,13 +601,14 @@ export function buildPathoOrderBundle(
   patientId: string,
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildPathoOrderTransactionBundle(values, patientId, requester);
+  return buildPathoOrderTransactionBundle(values, patientId, requester, registrationAuthoredOn());
 }
 
+// 更新は元の ServiceRequest を受け取り、登録日時をそこから引き継ぐ(編集で動かさない)。
 export function buildPathoOrderUpdateBundle(
   values: PathoOrderFormValues,
   patientId: string,
-  serviceRequestId: string,
+  original: fhir4.ServiceRequest,
   /** 元の検体明細の id。外されたものを DELETE するために使う。 */
   originalItemIds: string[],
   requester: OrderContext,
@@ -603,7 +619,8 @@ export function buildPathoOrderUpdateBundle(
     values,
     patientId,
     requester,
-    serviceRequestId,
+    registrationAuthoredOn(original),
+    original.id,
     originalItemIds,
     originalResponseIds,
   );
@@ -632,7 +649,7 @@ export function buildPathoOrderDeleteBundle(
 }
 
 // 既存のオーダーを DO(流用)して新規登録するためのフォーム値。明細の id を落として
-// 新規登録(POST)にし、依頼日は当日・採取予定日時は空にする。
+// 新規登録(POST)にし、採取予定日時は空にする(登録日時は保存時に採る)。
 export function buildDoPathoOrderForm(
   values: PathoOrderFormValues,
   setting: PrescriptionSetting,
@@ -640,7 +657,6 @@ export function buildDoPathoOrderForm(
   return {
     ...values,
     setting,
-    authoredDate: today(),
     collectionDateTime: "",
     specimens: values.specimens.map((specimen) => ({ ...specimen, id: "" })),
     // テンプレートの記入内容とシェーマは引き継がない。同じ回答・画像を 2 つの
@@ -727,7 +743,7 @@ export function pathoOrderLabel(
   header: fhir4.ServiceRequest,
   itemRequests: fhir4.ServiceRequest[],
 ): string {
-  const date = header.occurrenceDateTime?.slice(0, 10) ?? header.authoredOn?.slice(0, 10) ?? "";
+  const date = orderDay(header);
   const specimens = specimenSummary(pathoOrderSpecimens(itemRequests));
   return [date, examCategoryDisplay(pathoOrderExamCategory(header)), specimens]
     .filter(Boolean)
@@ -822,10 +838,13 @@ export function parsePathoOrderForm(
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as PathoOrderPriority,
-    authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
     examCategory,
-    // datetime-local の入力値に合わせて分までに丸める。
-    collectionDateTime: sr.occurrenceDateTime?.slice(0, 16) ?? "",
+    // datetime-local の入力値に合わせて分までに丸める。時刻を持たない値(旧データ)は
+    // datetime-local に入らないので空にし、入れ直してもらう。
+    collectionDateTime:
+      sr.occurrenceDateTime && sr.occurrenceDateTime.length > 10
+        ? sr.occurrenceDateTime.slice(0, 16)
+        : "",
     clinicalInfo: pathoOrderClinicalInfo(sr),
     clinicalInfoTemplate: pathoOrderClinicalInfoTemplate(sr),
     reportDueDate: pathoOrderReportDueDate(sr),

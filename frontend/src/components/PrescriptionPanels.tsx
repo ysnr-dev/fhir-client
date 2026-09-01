@@ -104,7 +104,7 @@ export function PrescriptionEditPanel({ patientId, srId, onSaved }: Prescription
     // 上書きしない)。診療記録の author と同じ考え方。
     const originalIds = mrs.map((mr) => mr.id).filter((id): id is string => Boolean(id));
     updatePrescription.mutate(
-      buildPrescriptionUpdateBundle(values, patientId, srId, originalIds, prescriptionRequester(sr)),
+      buildPrescriptionUpdateBundle(values, patientId, sr, originalIds, prescriptionRequester(sr)),
       { onSuccess: onSaved },
     );
   }

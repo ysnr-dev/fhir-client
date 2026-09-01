@@ -2,7 +2,14 @@ import { today } from "../lib/dates";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
 import { emptyOrderContext, type OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
-import { codingBySystem, findSettingDisplay, orderComment, SETTING_OPTIONS } from "./shared";
+import {
+  codingBySystem,
+  findSettingDisplay,
+  orderComment,
+  orderDay,
+  registrationAuthoredOn,
+  SETTING_OPTIONS,
+} from "./shared";
 
 export { codingBySystem, SETTING_OPTIONS };
 
@@ -92,7 +99,11 @@ export interface RpValues {
 export interface PrescriptionFormValues {
   setting: PrescriptionSetting;
   category: string;
-  authoredDate: string;
+  /**
+   * 投与開始日(occurrenceDateTime)。外来は処方日と同じ日でよいが、入院の定期・継続・退院処方は
+   * 先の日付になる。処方日(交付日)は登録日時(authoredOn)の日付で、フォームでは入力しない。
+   */
+  startDate: string;
   comment: string;
   // 対象プロブレム(POMR)。null なら特定の問題に紐付かない処方。
   problem: ProblemRef | null;
@@ -118,7 +129,7 @@ export function emptyPrescriptionForm(
   return {
     setting,
     category: "",
-    authoredDate: today(),
+    startDate: today(),
     comment: "",
     problem,
     rps: [{ ...emptyRp, medicines: [{ ...emptyMedicineLine }] }],
@@ -356,11 +367,12 @@ function buildPrescriptionTransactionBundle(
   values: PrescriptionFormValues,
   patientId: string,
   requester: OrderContext,
+  // 登録日時。新規は registrationAuthoredOn()、更新は元の SR の値(編集で動かさない)。
+  // SR と全 MedicationRequest に同じ値を入れる。
+  authoredOn: string,
   serviceRequestId?: string,
   originalMedicationRequestIds?: string[],
 ): fhir4.Bundle {
-  // FHIR の dateTime は日付のみ(YYYY-MM-DD)を許容し、fhir-server もそのまま受理する。
-  const authoredOn = values.authoredDate;
   const serviceRequestReference = serviceRequestId
     ? `ServiceRequest/${serviceRequestId}`
     : `urn:uuid:${crypto.randomUUID()}`;
@@ -428,6 +440,8 @@ function buildPrescriptionTransactionBundle(
     ],
     subject: { reference: `Patient/${patientId}` },
     authoredOn,
+    // 投与開始日。カルテのカードの位置はこの日(部門一覧は交付日=authoredOn で引く)。
+    occurrenceDateTime: values.startDate,
     orderDetail,
   };
 
@@ -476,21 +490,24 @@ export function buildPrescriptionBundle(
   patientId: string,
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildPrescriptionTransactionBundle(values, patientId, requester);
+  return buildPrescriptionTransactionBundle(values, patientId, requester, registrationAuthoredOn());
 }
 
+// 更新は元の ServiceRequest を受け取る。id のほかに登録日時(authoredOn)を引き継ぐため。
 export function buildPrescriptionUpdateBundle(
   values: PrescriptionFormValues,
   patientId: string,
-  serviceRequestId: string,
+  original: fhir4.ServiceRequest,
   originalMedicationRequestIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
+  if (!original.id) throw new Error("更新する処方に id がありません");
   return buildPrescriptionTransactionBundle(
     values,
     patientId,
     requester,
-    serviceRequestId,
+    registrationAuthoredOn(original),
+    original.id,
     originalMedicationRequestIds,
   );
 }
@@ -498,7 +515,7 @@ export function buildPrescriptionUpdateBundle(
 // 既存の処方を DO(流用)して新規登録するためのフォーム値に変換する。
 // ・用法/投与量/投与日数/コメント/対象プロブレムなど入力値はすべて引き継ぐ
 // ・MedicationRequest の id を落とし、既存リソースの更新(PUT)ではなく新規登録(POST)にする
-// ・処方日は DO 元ではなく当日にする
+// ・投与開始日は DO 元ではなく当日にする(登録日時は保存時に採るのでフォームには無い)
 // ・入外区分はいまの患者の状態(setting)に合わせる。DO 元と変わる場合は処方区分の
 //   選択肢ごと変わるので、処方区分は選び直させる。
 export function buildDoPrescriptionForm(
@@ -509,7 +526,7 @@ export function buildDoPrescriptionForm(
     ...values,
     setting,
     category: setting === values.setting ? values.category : "",
-    authoredDate: today(),
+    startDate: today(),
     rps: values.rps.map((rp) => ({
       ...rp,
       medicines: rp.medicines.map(({ id: _id, ...rest }) => rest),
@@ -542,7 +559,10 @@ export function buildPrescriptionDeleteBundle(serviceRequestId: string): fhir4.B
 
 export interface PrescriptionSummary {
   id: string;
+  /** 処方日(交付日)= 登録日時の日付。処方箋の交付年月日と同じ。 */
   date: string;
+  /** 投与開始日(occurrenceDateTime)。旧データは処方日と同じ。 */
+  startDate: string;
   settingCode: string;
   settingDisplay: string;
   categoryCode: string;
@@ -568,6 +588,7 @@ export function summarizeServiceRequest(sr: fhir4.ServiceRequest): PrescriptionS
   return {
     id: sr.id ?? "",
     date: sr.authoredOn?.slice(0, 10) ?? "",
+    startDate: orderDay(sr),
     settingCode: setting?.code ?? "",
     settingDisplay: setting?.display ?? "",
     categoryCode: category?.code ?? "",
@@ -802,7 +823,7 @@ export function parsePrescriptionForm(
   return {
     setting,
     category,
-    authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
+    startDate: orderDay(sr) || today(),
     comment: prescriptionComment(sr),
     problem: prescriptionProblem(sr),
     rps: rps.length ? rps : [{ ...emptyRp, medicines: [{ ...emptyMedicineLine }] }],

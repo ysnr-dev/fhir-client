@@ -154,7 +154,7 @@ export function EndoscopyOrderEditPanel({ patientId, srId, onSaved }: EndoscopyO
         bundle: buildEndoscopyOrderUpdateBundle(
           values,
           patientId,
-          srId,
+          serviceRequest,
           itemIds,
           responseIds,
           prescriptionRequester(serviceRequest),

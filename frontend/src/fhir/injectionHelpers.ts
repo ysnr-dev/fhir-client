@@ -1,8 +1,7 @@
-import { addDays, diffDays, today } from "../lib/dates";
+import { addDays, diffDays, toFhirDateTime, today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
-import { toFhirDateTime } from "./clinicalNoteHelpers";
-import { categoryCoding, displayOf, orderComment } from "./shared";
+import { categoryCoding, displayOf, orderComment, orderDay, registrationAuthoredOn } from "./shared";
 import {
   MEDICINE_CODE_SYSTEM,
   ORDER_IN_RP_SYSTEM,
@@ -140,10 +139,18 @@ export function injectionSeriesOf(sr: fhir4.ServiceRequest): InjectionSeries | n
   };
 }
 
+/**
+ * 注射日(YYYY-MM-DD)。連日オーダーでは展開されたその日。occurrenceDateTime に持つ
+ * (authoredOn はオーダー登録日時で、展開した全日で同じ値になる)。
+ */
+export function injectionDayOf(sr: fhir4.ServiceRequest): string {
+  return orderDay(sr);
+}
+
 /** 連日オーダーの「N日目」(1 始まり)。束ね情報が無ければ null。 */
 export function injectionSeriesDay(sr: fhir4.ServiceRequest): number | null {
   const series = injectionSeriesOf(sr);
-  const date = sr.authoredOn?.slice(0, 10);
+  const date = injectionDayOf(sr);
   if (!series || !date) return null;
   return diffDays(series.start, date) + 1;
 }
@@ -383,8 +390,8 @@ export interface InjectionRpValues {
 export interface InjectionFormValues {
   setting: PrescriptionSetting;
   category: string;
-  /** 注射日。連日オーダーではその開始日。 */
-  authoredDate: string;
+  /** 注射日(occurrenceDateTime)。連日オーダーではその開始日。 */
+  startDate: string;
   /** 期間の終了日。新規登録でのみ意味を持ち、編集では注射日と同じ(1 日分を直す)。 */
   endDate: string;
   /** 実施パターン。新規登録でのみ意味を持つ。 */
@@ -423,7 +430,7 @@ export function emptyInjectionForm(
   return {
     setting,
     category: defaultCategory(setting),
-    authoredDate: today(),
+    startDate: today(),
     endDate: today(),
     schedule: DAILY_SCHEDULE,
     comment: "",
@@ -479,6 +486,9 @@ function buildInjectionMedicationRequest(
   rpNumber: number,
   orderInRp: number,
   patientId: string,
+  /** 注射日。開始時刻の日付に使う。 */
+  day: string,
+  /** 登録日時。ヘッダの ServiceRequest と同じ値。 */
   authoredOn: string,
   serviceRequestReference: string,
   requester: OrderContext,
@@ -519,7 +529,7 @@ function buildInjectionMedicationRequest(
 
   if (rp.startTimes.length) {
     dosageInstruction.timing = {
-      event: rp.startTimes.map((time) => toFhirDateTime(`${authoredOn}T${time}`)),
+      event: rp.startTimes.map((time) => toFhirDateTime(`${day}T${time}`)),
     };
   }
   if (rp.routeCode) {
@@ -630,11 +640,13 @@ function buildInjectionDayEntries(
   values: InjectionFormValues,
   patientId: string,
   requester: OrderContext,
+  // 登録日時。新規は全日で同じ値(1 回の登録)、更新は各日の元の SR から引き継ぐ。
+  authoredOn: string,
   series: InjectionSeries,
   serviceRequestId?: string,
   originalMedicationRequestIds?: string[],
 ): fhir4.BundleEntry[] {
-  const authoredOn = values.authoredDate;
+  const day = values.startDate;
   const seriesTiming = scheduleTiming(series);
   const serviceRequestReference = serviceRequestId
     ? `ServiceRequest/${serviceRequestId}`
@@ -654,6 +666,7 @@ function buildInjectionDayEntries(
         rpNumber,
         orderInRp,
         patientId,
+        day,
         authoredOn,
         serviceRequestReference,
         requester,
@@ -711,6 +724,8 @@ function buildInjectionDayEntries(
     ],
     subject: { reference: `Patient/${patientId}` },
     authoredOn,
+    // 注射日。1 日 1 オーダーなので、カルテのカードも注射一覧もこの日で引く。
+    occurrenceDateTime: day,
     orderDetail,
     requisition: { system: INJECTION_SERIES_SYSTEM, value: series.requisition },
     extension: [
@@ -765,9 +780,9 @@ function dayOfWeekCode(date: string): string {
 // 期間(注射日〜終了日)を実施パターンで間引いた、オーダーを立てる日付。開始日は
 // パターンの起点なので、毎日・N 日ごとでは必ず入る(曜日指定では曜日が合うときだけ)。
 export function injectionDates(
-  values: Pick<InjectionFormValues, "authoredDate" | "endDate" | "schedule">,
+  values: Pick<InjectionFormValues, "startDate" | "endDate" | "schedule">,
 ): string[] {
-  const start = values.authoredDate;
+  const start = values.startDate;
   if (!start) return [];
   const end = values.endDate && values.endDate > start ? values.endDate : start;
   const span = Math.min(diffDays(start, end), MAX_INJECTION_SPAN_DAYS);
@@ -796,31 +811,35 @@ export function buildInjectionBundle(
   const dates = injectionDates(values);
   const series: InjectionSeries = {
     requisition: crypto.randomUUID(),
-    start: values.authoredDate,
+    start: values.startDate,
     // 実際に展開した最後の日を終了日にする(上限で打ち切ったときに入力値と食い違わない)。
     end: dates[dates.length - 1],
     schedule: values.schedule,
   };
+  // 登録日時は 1 回の登録で展開した全日に同じ値を入れる(同じ操作で出したオーダー)。
+  const authoredOn = registrationAuthoredOn();
   return transactionBundle(
     dates.flatMap((date) =>
-      buildInjectionDayEntries({ ...values, authoredDate: date }, patientId, requester, series),
+      buildInjectionDayEntries({ ...values, startDate: date }, patientId, requester, authoredOn, series),
     ),
   );
 }
 
 // 1 日分の更新。束ね情報は保存済みのものを引き継ぐ(古いデータで無ければ単日の束ねを作る)。
+// 元の ServiceRequest を受け取るのは、id のほかに登録日時(authoredOn)を引き継ぐため。
 export function buildInjectionUpdateBundle(
   values: InjectionFormValues,
   patientId: string,
-  serviceRequestId: string,
+  original: fhir4.ServiceRequest,
   originalMedicationRequestIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
+  if (!original.id) throw new Error("更新する注射に id がありません");
   // 束ね情報は保存済みのものをそのまま戻す(1 日分の更新でパターン・期間は変えない)。
   const series = values.series ?? {
     requisition: crypto.randomUUID(),
-    start: values.authoredDate,
-    end: values.authoredDate,
+    start: values.startDate,
+    end: values.startDate,
     schedule: DAILY_SCHEDULE,
   };
   return transactionBundle(
@@ -828,8 +847,9 @@ export function buildInjectionUpdateBundle(
       values,
       patientId,
       requester,
+      registrationAuthoredOn(original),
       series,
-      serviceRequestId,
+      original.id,
       originalMedicationRequestIds,
     ),
   );
@@ -854,20 +874,20 @@ export function buildInjectionSeriesUpdateBundle(
 ): fhir4.Bundle {
   const fallback: InjectionSeries = {
     requisition: crypto.randomUUID(),
-    start: values.authoredDate,
-    end: values.authoredDate,
+    start: values.startDate,
+    end: values.startDate,
     schedule: DAILY_SCHEDULE,
   };
   return transactionBundle(
     targets.flatMap((target) => {
       const sr = target.serviceRequest;
-      const date = sr.authoredOn?.slice(0, 10) ?? values.authoredDate;
-      const own = date === values.authoredDate;
+      const date = injectionDayOf(sr) || values.startDate;
+      const own = date === values.startDate;
       const dayValues: InjectionFormValues = own
-        ? { ...values, authoredDate: date }
+        ? { ...values, startDate: date }
         : {
             ...values,
-            authoredDate: date,
+            startDate: date,
             rps: values.rps.map((rp) => ({
               ...rp,
               medicines: rp.medicines.map(({ id: _id, ...rest }) => rest),
@@ -880,6 +900,8 @@ export function buildInjectionSeriesUpdateBundle(
         dayValues,
         patientId,
         requester,
+        // 登録日時は各日の元の値を保つ(一括更新は編集であって登録し直しではない)。
+        registrationAuthoredOn(sr),
         injectionSeriesOf(sr) ?? values.series ?? fallback,
         sr.id,
         originalIds,
@@ -910,7 +932,7 @@ export function buildDoInjectionForm(
     ...values,
     setting,
     category: setting === values.setting ? values.category : defaultCategory(setting),
-    authoredDate: today(),
+    startDate: today(),
     endDate: today(),
     schedule: DAILY_SCHEDULE,
     series: null,
@@ -1090,8 +1112,8 @@ export function parseInjectionForm(
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
     category: categoryCoding(sr, CATEGORY_SYSTEM)?.code ?? "",
-    authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
-    endDate: sr.authoredOn?.slice(0, 10) ?? today(),
+    startDate: injectionDayOf(sr) || today(),
+    endDate: injectionDayOf(sr) || today(),
     schedule: injectionSeriesOf(sr)?.schedule ?? DAILY_SCHEDULE,
     comment: injectionComment(sr),
     problem: injectionProblem(sr),

@@ -31,8 +31,8 @@
 - **予定手術日は任意(希望日)で、手術部が確定する**。診療科は日程未定のまま申し込め、
   手術部が手術一覧の「日程未定」タブから日程・手術室を入れて確定する(§5.2)。
   日程を入れて申し込むこともでき、その場合は予定日別タブでそのまま受付する。
-- **authoredOn は申込日**。既存 4 種は実施日を入れているが、手術は申込から実施まで
-  日が空くのが普通なので、予定日時は `occurrence` に分けた。
+- **authoredOn は登録日時、予定日時は `occurrence`**。手術は申込から実施まで日が空くのが
+  普通なので当初から分けていた(2026-09-01 に全種別をこの形に統一。readme「オーダーの日付」)。
   ［事実］上流の occurrence 検索は `occurrenceDateTime` だけを抽出する
   (`extraction_definitions/service_request.rb`。Period は索引されない)ため、
   `occurrencePeriod`(入室〜退室)ではなく **`occurrenceDateTime`(入室予定) +
@@ -100,7 +100,7 @@
 
 | 画面項目 | FHIR 要素 |
 |---|---|
-| 申込日 | `authoredOn` |
+| (登録日時。入力欄なし) | `authoredOn`(システム時刻、編集で不変) |
 | 予定手術日・入室予定時刻 | `occurrenceDateTime`(時刻なしなら日付のみ)。**未定なら要素ごと出さない** |
 | 予定所要時間 | `extension[surgery-duration]`(valueQuantity 分) |
 | 予定区分(予定/準緊急/緊急) | `priority` = routine / urgent / stat |

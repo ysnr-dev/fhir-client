@@ -415,14 +415,14 @@ export function PhysioOrderForm({
 
     // 至急のオーダーは当日実施に倒す(予約も取らない)。至急区分はオーダー枠ごとの
     // 入力なので、まとめ枠と単独枠をそれぞれ見る。
-    const authoredDate = values.priority === "urgent" ? today() : values.authoredDate;
+    const startDate = values.priority === "urgent" ? today() : values.startDate;
     items = items.map((line) =>
       !line.parentCode && !line.groupable && line.priority === "urgent"
         ? { ...line, date: today() }
         : line,
     );
 
-    if (values.priority !== "urgent" && groups.some((line) => line.groupable) && !authoredDate) {
+    if (values.priority !== "urgent" && groups.some((line) => line.groupable) && !startDate) {
       setValidationError("実施日を入力してください。");
       return;
     }
@@ -476,7 +476,7 @@ export function PhysioOrderForm({
     onSubmit(
       {
         ...values,
-        authoredDate,
+        startDate,
         items,
         problem: refreshProblemDisplay(values.problem, problemOptions),
       },
@@ -530,8 +530,8 @@ export function PhysioOrderForm({
       const slot = pendingBooking.slots[0];
       setValues((current) => ({
         ...current,
-        authoredDate: slotDate(slot),
-        authoredTime: slotTime(slot),
+        startDate: slotDate(slot),
+        startTime: slotTime(slot),
       }));
     }
     setBookingTarget(null);
@@ -684,11 +684,11 @@ export function PhysioOrderForm({
               }
               schedule={
                 <FrameDateTime
-                  date={values.authoredDate}
-                  time={values.authoredTime}
+                  date={values.startDate}
+                  time={values.startTime}
                   urgent={values.priority === "urgent"}
-                  onChangeDate={(date) => update("authoredDate", date)}
-                  onChangeTime={(time) => update("authoredTime", time)}
+                  onChangeDate={(date) => update("startDate", date)}
+                  onChangeTime={(time) => update("startTime", time)}
                 />
               }
             >
@@ -746,7 +746,7 @@ export function PhysioOrderForm({
                       // 同期しているヘッダの値で、枠を選び直すとその枠の日時になる。
                       <span className="rad-order-frame__booking">
                         <span className="rad-order-frame__booked">
-                          実施日時 {values.authoredDate} {values.authoredTime}
+                          実施日時 {values.startDate} {values.startTime}
                         </span>
                         {hasBooking ? (
                           <button type="button" onClick={() => openBooking(code)}>
@@ -773,14 +773,14 @@ export function PhysioOrderForm({
                     )
                   ) : (
                     <FrameDateTime
-                      date={editing ? values.authoredDate : urgent ? today() : entry.item.date}
-                      time={editing ? values.authoredTime : entry.item.time}
+                      date={editing ? values.startDate : urgent ? today() : entry.item.date}
+                      time={editing ? values.startTime : entry.item.time}
                       urgent={urgent}
                       onChangeDate={(date) =>
-                        editing ? update("authoredDate", date) : updateItem(code, { date })
+                        editing ? update("startDate", date) : updateItem(code, { date })
                       }
                       onChangeTime={(time) =>
-                        editing ? update("authoredTime", time) : updateItem(code, { time })
+                        editing ? update("startTime", time) : updateItem(code, { time })
                       }
                     />
                   )

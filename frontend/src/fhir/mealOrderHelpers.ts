@@ -1,8 +1,12 @@
-import { addDays, today } from "../lib/dates";
-// FHIR dateTime へのタイムゾーン付与は診療記録と同じ変換でよいので共用する。
-import { toFhirDateTime } from "./clinicalNoteHelpers";
+import { addDays, toFhirDateTime, today } from "../lib/dates";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
-import { categoryCoding, codingBySystem, displayOf, orderComment } from "./shared";
+import {
+  categoryCoding,
+  codingBySystem,
+  displayOf,
+  orderComment,
+  registrationAuthoredOn,
+} from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
@@ -434,6 +438,11 @@ export function isMealServiceRequest(sr: fhir4.ServiceRequest): boolean {
 
 export interface MealOrderBuildOptions {
   serviceRequestId?: string;
+  /**
+   * 登録日時。保存済みオーダーを書き換えるときは元の値を渡す(渡さないと「いま」になり、
+   * 編集のたびに登録日時が今日へ動いてしまう)。新規・連動で作るオーダーは省略してよい。
+   */
+  authoredOn?: string;
   /** 入院 Encounter の id。入退院の連動(退院予定の取消で戻す など)が突き合わせる。 */
   encounterId?: string;
   /** 種別と由来。新規登録・連動で作るオーダーに付ける(更新では元の値を引き継ぐ)。 */
@@ -448,7 +457,7 @@ function buildMealOrderServiceRequest(
   requester: OrderAttribution,
   options: MealOrderBuildOptions = {},
 ): fhir4.ServiceRequest {
-  const { serviceRequestId, encounterId, link, endCause } = options;
+  const { serviceRequestId, authoredOn, encounterId, link, endCause } = options;
   const resource: fhir4.ServiceRequest = {
     resourceType: "ServiceRequest",
     status: "active",
@@ -469,7 +478,8 @@ function buildMealOrderServiceRequest(
       },
     ],
     subject: { reference: `Patient/${patientId}` },
-    authoredOn: today(),
+    // 登録日時(全種別共通の意味。fhir/shared.ts)。フォームでは入力しない。
+    authoredOn: authoredOn ?? registrationAuthoredOn(),
     // 開始日 + 食事のタイミング(SS-MIX2 の TQ1-7)。
     occurrenceDateTime: mealDateTime(values.startDate, values.startTiming),
   };
@@ -787,14 +797,19 @@ export function buildMealOrderRewriteEntry(
   patch: Partial<MealOrderFormValues>,
 ): fhir4.BundleEntry {
   const values = { ...parseMealOrderForm(sr), ...patch };
-  const resource = buildMealOrderServiceRequest(values, sr.subject?.reference?.split("/").pop() ?? "", prescriptionRequester(sr), {
-    serviceRequestId: sr.id,
-    encounterId: mealOrderEncounterId(sr),
-    link: mealOrderLink(sr),
-    endCause: mealOrderEndCause(sr),
-  });
-  // authoredOn は登録日のまま(書き換えで今日に動かさない)。
-  if (sr.authoredOn) resource.authoredOn = sr.authoredOn;
+  const resource = buildMealOrderServiceRequest(
+    values,
+    sr.subject?.reference?.split("/").pop() ?? "",
+    prescriptionRequester(sr),
+    {
+      serviceRequestId: sr.id,
+      // 登録日時は元のまま(書き換えで今日に動かさない)。
+      authoredOn: registrationAuthoredOn(sr),
+      encounterId: mealOrderEncounterId(sr),
+      link: mealOrderLink(sr),
+      endCause: mealOrderEndCause(sr),
+    },
+  );
   return { resource, request: { method: "PUT", url: `ServiceRequest/${sr.id}` } };
 }
 
@@ -844,30 +859,30 @@ export function buildMealOrderBundle(
 }
 
 /**
- * 更新。明細が無いので既存ヘッダ 1 件への PUT だけ。種別・入院との結びつきは元の
- * オーダーから引き継ぐ。終了の理由は、終了を変えていなければ引き継ぎ、手で変えたら外す
+ * 更新。明細が無いので既存ヘッダ 1 件への PUT だけ。登録日時・種別・入院との結びつきは
+ * 元のオーダーから引き継ぐ。終了の理由は、終了を変えていなければ引き継ぎ、手で変えたら外す
  * (手で決め直した終了は連動の取消で戻さない)。
  */
 export function buildMealOrderUpdateBundle(
   values: MealOrderFormValues,
   patientId: string,
-  serviceRequestId: string,
+  original: fhir4.ServiceRequest,
   requester: OrderAttribution,
-  current?: fhir4.ServiceRequest,
 ): fhir4.Bundle {
-  const cause = current ? mealOrderEndCause(current) : undefined;
+  const cause = mealOrderEndCause(original);
   const endUnchanged =
-    current &&
-    (values.endDate ? mealDateTime(values.endDate, values.endTiming) : "") === mealOrderEnd(current);
+    (values.endDate ? mealDateTime(values.endDate, values.endTiming) : "") ===
+    mealOrderEnd(original);
   return transactionBundle([
     {
       resource: buildMealOrderServiceRequest(values, patientId, requester, {
-        serviceRequestId,
-        encounterId: current ? mealOrderEncounterId(current) : undefined,
-        link: current ? mealOrderLink(current) : undefined,
+        serviceRequestId: original.id,
+        authoredOn: registrationAuthoredOn(original),
+        encounterId: mealOrderEncounterId(original),
+        link: mealOrderLink(original),
         endCause: endUnchanged ? cause : undefined,
       }),
-      request: { method: "PUT", url: `ServiceRequest/${serviceRequestId}` },
+      request: { method: "PUT", url: `ServiceRequest/${original.id}` },
     },
   ]);
 }

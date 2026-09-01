@@ -68,8 +68,9 @@ module Reports
         "pt_kana" => PatientMeta.display_kana(@patient),
         "pt_gender" => PatientMeta.gender_label(@patient),
         "pt_birthdate" => PatientMeta.format_date(@patient["birthDate"]),
-        # 注射日(authoredOn)。発行操作の日ではないので、再発行しても同じ日付になる。
-        "issue_date" => PatientMeta.format_date(@order["authoredOn"].to_s.first(10)),
+        # 注射日(オーダー開始日 = occurrenceDateTime)。登録日時(authoredOn)でも
+        # 発行操作の日でもないので、再発行しても同じ日付になる。
+        "issue_date" => PatientMeta.format_date(OrderDates.order_day(@order)),
         "doctor_line" => [InjectionMeta.department_name(@order),
                           @order.dig("requester", "display").to_s].compact_blank.join(" | "),
         "ward_name" => InjectionMeta.ward_name(@order),

@@ -16,6 +16,7 @@ import {
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { schemaAnnotatedLines } from "../fhir/questionnaireResponseHelpers";
 import { ResponseSchemaImages, SchemaImageGallery } from "./SchemaImageGallery";
+import { RegisteredAtRow } from "./OrderDetailRows";
 
 // 病理検査オーダーの内容表示。カルテ画面の詳細モーダルと部門一覧から使う
 // (検体検査・細菌検査の DetailPanel と同じ構成)。
@@ -52,8 +53,6 @@ export function PathoOrderDetailPanel({
           <dd>{summary.examCategoryDisplay || "-"}</dd>
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
-          <dt>依頼日</dt>
-          <dd>{serviceRequest.authoredOn?.slice(0, 10) ?? "-"}</dd>
           <dt>採取(予定)日時</dt>
           <dd>{serviceRequest.occurrenceDateTime?.slice(0, 16).replace("T", " ") || "-"}</dd>
           <dt>入外区分</dt>
@@ -80,6 +79,7 @@ export function PathoOrderDetailPanel({
           </dd>
           <dt>依頼コメント</dt>
           <dd>{comment || "-"}</dd>
+          <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
         </dl>
       </fieldset>
 

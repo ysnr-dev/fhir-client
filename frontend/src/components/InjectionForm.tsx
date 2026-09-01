@@ -152,10 +152,10 @@ export function InjectionForm({
   const weekdays = values.schedule.kind === "weekly" ? values.schedule.days : [];
 
   // 注射日を後ろにずらしたら終了日も連れて動かす(期間が逆転したままにしない)。
-  function handleAuthoredDate(date: string) {
+  function handleStartDate(date: string) {
     setValues((v) => ({
       ...v,
-      authoredDate: date,
+      startDate: date,
       endDate: !v.endDate || v.endDate < date ? date : v.endDate,
     }));
   }
@@ -164,7 +164,7 @@ export function InjectionForm({
   // 展開できないので、隔日は 2 日ごと、曜日は注射日の曜日を初期選択にする)。
   function handleScheduleKind(kind: InjectionSchedule["kind"]) {
     if (kind === "interval") update("schedule", { kind, intervalDays: 2 });
-    else if (kind === "weekly") update("schedule", { kind, days: [defaultWeekday(values.authoredDate)] });
+    else if (kind === "weekly") update("schedule", { kind, days: [defaultWeekday(values.startDate)] });
     else update("schedule", DAILY_SCHEDULE);
   }
 
@@ -178,9 +178,9 @@ export function InjectionForm({
   }
 
   const expansionNote = (() => {
-    if (!values.authoredDate) return "";
+    if (!values.startDate) return "";
     const dates = injectionDates(values);
-    const count = countDates(values.authoredDate, values.endDate, values.schedule);
+    const count = countDates(values.startDate, values.endDate, values.schedule);
     if (count > MAX_INJECTION_ORDERS) {
       return `${scheduleLabel(values.schedule)}: ${MAX_INJECTION_ORDERS}件を超えます。期間を短くしてください。`;
     }
@@ -313,11 +313,11 @@ export function InjectionForm({
   }
 
   function validate(): string | null {
-    if (!values.authoredDate) return "注射日は必須です。";
+    if (!values.startDate) return "注射日は必須です。";
     if (mode === "create") {
       if (!values.endDate) return "終了日は必須です。";
-      if (values.endDate < values.authoredDate) return "終了日は注射日以降にしてください。";
-      if (diffDays(values.authoredDate, values.endDate) > MAX_INJECTION_SPAN_DAYS) {
+      if (values.endDate < values.startDate) return "終了日は注射日以降にしてください。";
+      if (diffDays(values.startDate, values.endDate) > MAX_INJECTION_SPAN_DAYS) {
         return `期間は${MAX_INJECTION_SPAN_DAYS}日までです。`;
       }
       if (values.schedule.kind === "interval") {
@@ -328,8 +328,8 @@ export function InjectionForm({
         return "曜日を1つ以上選択してください。";
       }
       // 展開数の上限を超えるときは、黙って打ち切らず期間を縮めてもらう。
-      const span = diffDays(values.authoredDate, values.endDate);
-      const wanted = countDates(values.authoredDate, values.endDate, values.schedule);
+      const span = diffDays(values.startDate, values.endDate);
+      const wanted = countDates(values.startDate, values.endDate, values.schedule);
       if (wanted > MAX_INJECTION_ORDERS) {
         return `一度に登録できるのは${MAX_INJECTION_ORDERS}件までです(いまの指定は${wanted}件${
           span > MAX_INJECTION_SPAN_DAYS ? "以上" : ""
@@ -437,8 +437,8 @@ export function InjectionForm({
           注射日
           <input
             type="date"
-            value={values.authoredDate}
-            onChange={(e) => handleAuthoredDate(e.target.value)}
+            value={values.startDate}
+            onChange={(e) => handleStartDate(e.target.value)}
           />
         </label>
         {mode === "create" && (
@@ -448,7 +448,7 @@ export function InjectionForm({
               <input
                 type="date"
                 value={values.endDate}
-                min={values.authoredDate}
+                min={values.startDate}
                 onChange={(e) => update("endDate", e.target.value)}
               />
             </label>

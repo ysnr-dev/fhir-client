@@ -1,4 +1,4 @@
-import { today } from "../lib/dates";
+import { toFhirDateTime } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { labOrderItemRequests } from "./labOrderHelpers";
@@ -10,7 +10,15 @@ import {
   codingBySystem,
   type PrescriptionSetting,
 } from "./prescriptionHelpers";
-import { categoryCoding, displayOf, itemNumber, orderComment, PRIORITY_OPTIONS } from "./shared";
+import {
+  categoryCoding,
+  displayOf,
+  itemNumber,
+  orderComment,
+  orderDay,
+  PRIORITY_OPTIONS,
+  registrationAuthoredOn,
+} from "./shared";
 
 export { PRIORITY_OPTIONS };
 
@@ -26,8 +34,9 @@ export { PRIORITY_OPTIONS };
 // ヘッダの載せ方:
 // - 輸血検査区分(T&S / 交差適合試験)は code。病理の検査区分と同じ位置づけで、
 //   1 オーダーに 1 つだけ選び、部門一覧の絞り込み軸にもなる。
-// - 投与予定日時は occurrenceDateTime。部門一覧の日付軸とカルテカードの置き場所を
-//   兼ねる(上流は occurrenceDateTime しか索引しないので Period は使わない)。
+// - authoredOn は登録日時、投与予定日時は occurrenceDateTime(全種別共通の意味。fhir/shared.ts)。
+//   occurrence が部門一覧の日付軸とカルテカードの置き場所を兼ねる(上流は occurrenceDateTime
+//   しか索引しないので Period は使わない)。
 //   実際に投与した時間帯は実施記録の Procedure.performedPeriod で持つ。
 // - 輸血同意書の確認済フラグはローカル拡張。臨床病名は他オーダーと同じく登録病名
 //   からの参照(reasonReference)。
@@ -135,7 +144,6 @@ export interface TransfusionProductValues {
 export interface TransfusionOrderFormValues {
   setting: PrescriptionSetting;
   priority: TransfusionOrderPriority;
-  authoredDate: string;
   testType: TransfusionTestType;
   /** ABO 血液型。未確定のうちは空。 */
   aboBloodType: AboBloodType | "";
@@ -168,7 +176,6 @@ export function emptyTransfusionOrderForm(
   return {
     setting,
     priority: "routine",
-    authoredDate: today(),
     testType: "crossmatch",
     aboBloodType: "",
     rhdBloodType: "",
@@ -215,6 +222,7 @@ function buildProductRequest(
   sequence: number,
   patientId: string,
   authoredOn: string,
+  occurrenceDateTime: string | undefined,
   headerReference: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -223,7 +231,9 @@ function buildProductRequest(
     intent: "order",
     identifier: [{ system: ITEM_NUMBER_SYSTEM, value: String(sequence) }],
     subject: { reference: `Patient/${patientId}` },
+    // 登録日時・投与予定日時はヘッダと同じ値を写す(明細だけで引いたときに日付が分かるように)。
     authoredOn,
+    ...(occurrenceDateTime ? { occurrenceDateTime } : {}),
     code: {
       coding: [
         { system: PRODUCT_SYSTEM, code: product.productCode, display: product.productName },
@@ -248,6 +258,7 @@ function buildTransfusionOrderServiceRequest(
   values: TransfusionOrderFormValues,
   patientId: string,
   requester: OrderContext,
+  authoredOn: string,
   serviceRequestId?: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -283,12 +294,17 @@ function buildTransfusionOrderServiceRequest(
       text: testTypeDisplay(values.testType),
     },
     subject: { reference: `Patient/${patientId}` },
-    authoredOn: values.authoredDate,
+    // 登録日時(全種別共通の意味。fhir/shared.ts)。フォームでは入力しない。
+    authoredOn,
   };
 
   if (serviceRequestId) resource.id = serviceRequestId;
-  // 投与予定日時。部門一覧はこの日付でオーダーを拾う。
-  if (values.scheduledDateTime) resource.occurrenceDateTime = values.scheduledDateTime;
+  // 投与予定日時 = オーダー開始日。部門一覧はこの日付でオーダーを拾う。datetime-local の
+  // 値はタイムゾーンを持たないので、実行環境のオフセットを付けて保存する(付けないと上流が
+  // UTC として読む)。
+  if (values.scheduledDateTime) {
+    resource.occurrenceDateTime = toFhirDateTime(values.scheduledDateTime);
+  }
   if (values.problem) {
     resource.reasonReference = [
       {
@@ -336,6 +352,7 @@ function buildTransfusionOrderTransactionBundle(
   values: TransfusionOrderFormValues,
   patientId: string,
   requester: OrderContext,
+  authoredOn: string,
   serviceRequestId?: string,
   originalItemIds: string[] = [],
 ): fhir4.Bundle {
@@ -343,16 +360,18 @@ function buildTransfusionOrderTransactionBundle(
     ? `ServiceRequest/${serviceRequestId}`
     : `urn:uuid:${crypto.randomUUID()}`;
 
+  const header = buildTransfusionOrderServiceRequest(
+    values,
+    patientId,
+    requester,
+    authoredOn,
+    serviceRequestId,
+  );
   const kept = new Set<string>();
   const entries: fhir4.BundleEntry[] = [
     {
       fullUrl: headerReference,
-      resource: buildTransfusionOrderServiceRequest(
-        values,
-        patientId,
-        requester,
-        serviceRequestId,
-      ),
+      resource: header,
       request: serviceRequestId
         ? { method: "PUT", url: `ServiceRequest/${serviceRequestId}` }
         : { method: "POST", url: "ServiceRequest" },
@@ -369,7 +388,8 @@ function buildTransfusionOrderTransactionBundle(
         product,
         index + 1,
         patientId,
-        values.authoredDate,
+        authoredOn,
+        header.occurrenceDateTime,
         headerReference,
       ),
       request: product.id
@@ -391,13 +411,14 @@ export function buildTransfusionOrderBundle(
   patientId: string,
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildTransfusionOrderTransactionBundle(values, patientId, requester);
+  return buildTransfusionOrderTransactionBundle(values, patientId, requester, registrationAuthoredOn());
 }
 
+/** 更新。登録日時は元のリソースから引き継ぐ(編集で動かさない)。 */
 export function buildTransfusionOrderUpdateBundle(
   values: TransfusionOrderFormValues,
   patientId: string,
-  serviceRequestId: string,
+  original: fhir4.ServiceRequest,
   /** 元の製剤明細の id。外されたものを DELETE するために使う。 */
   originalItemIds: string[],
   requester: OrderContext,
@@ -406,7 +427,8 @@ export function buildTransfusionOrderUpdateBundle(
     values,
     patientId,
     requester,
-    serviceRequestId,
+    registrationAuthoredOn(original),
+    original.id,
     originalItemIds,
   );
 }
@@ -429,7 +451,7 @@ export function buildTransfusionOrderDeleteBundle(
 }
 
 // 既存のオーダーを DO(流用)して新規登録するためのフォーム値。明細の id を落として
-// 新規登録(POST)にし、依頼日は当日・投与予定日時は空にする。
+// 新規登録(POST)にし、投与予定日時は空にする(登録日時は保存時に採る)。
 export function buildDoTransfusionOrderForm(
   values: TransfusionOrderFormValues,
   setting: PrescriptionSetting,
@@ -437,7 +459,6 @@ export function buildDoTransfusionOrderForm(
   return {
     ...values,
     setting,
-    authoredDate: today(),
     scheduledDateTime: "",
     // 血液型は患者の属性なのでそのまま引き継ぐ。同意書の確認は輸血ごとに
     // 取り直すものなので引き継がない。
@@ -557,7 +578,7 @@ export function transfusionOrderLabel(
   header: fhir4.ServiceRequest,
   itemRequests: fhir4.ServiceRequest[],
 ): string {
-  const date = header.occurrenceDateTime?.slice(0, 10) ?? header.authoredOn?.slice(0, 10) ?? "";
+  const date = orderDay(header);
   const products = productSummary(transfusionOrderProducts(itemRequests));
   return [date, testTypeDisplay(transfusionOrderTestType(header)), products]
     .filter(Boolean)
@@ -574,7 +595,6 @@ export function parseTransfusionOrderForm(
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as TransfusionOrderPriority,
-    authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
     testType: transfusionOrderTestType(sr),
     aboBloodType: transfusionOrderAbo(sr),
     rhdBloodType: transfusionOrderRhd(sr),

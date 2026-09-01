@@ -55,7 +55,7 @@
 | 生年月日 | `Patient.birthDate` | 既存レンダラの `pt_birthdate` と同じ |
 | 検体 | 明細 contained Specimen の JLAC11 材料名 | 「血清」など |
 | 採取管(色) | 採取管マスタの `short_name` + `cap_color` | 「EDTA管（紫）」の形 |
-| 検査日 | ヘッダ `ServiceRequest.authoredOn` | 貼り間違い・日またぎの確認用 |
+| 検査日 | ヘッダ `ServiceRequest.occurrenceDateTime`(無ければ `authoredOn` の日付) | 貼り間違い・日またぎの確認用 |
 | 至急 | `ServiceRequest.priority` | urgent のときだけ「至急」を出す |
 | 検査項目の略称 | グループ内の項目の略称(WBC など) | 何を採る管かの目視確認用。入り切らない分は省略 |
 

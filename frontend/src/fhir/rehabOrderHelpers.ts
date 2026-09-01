@@ -1,6 +1,13 @@
 import { today } from "../lib/dates";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
-import { categoryCoding, codingBySystem, displayOf, orderComment } from "./shared";
+import {
+  categoryCoding,
+  codingBySystem,
+  displayOf,
+  orderComment,
+  orderDay,
+  registrationAuthoredOn,
+} from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
@@ -159,7 +166,6 @@ function normalizeTherapyTypes(types: readonly string[]): RehabTherapyType[] {
 
 export interface RehabOrderFormValues {
   setting: PrescriptionSetting;
-  authoredDate: string;
   /** 疾患別リハ区分(必須)。 */
   diseaseCategory: RehabDiseaseCategory | "";
   /** 療法種別(1 つ以上必須)。PT と OT の併用がありうるので配列。 */
@@ -182,7 +188,6 @@ export interface RehabOrderFormValues {
 export function emptyRehabOrderForm(setting: PrescriptionSetting): RehabOrderFormValues {
   return {
     setting,
-    authoredDate: today(),
     diseaseCategory: "",
     therapyTypes: [],
     unitsPerSession: "",
@@ -240,6 +245,7 @@ function buildRehabOrderServiceRequest(
   values: RehabOrderFormValues,
   patientId: string,
   requester: OrderAttribution,
+  authoredOn: string,
   serviceRequestId?: string,
 ): fhir4.ServiceRequest {
   const resource: fhir4.ServiceRequest = {
@@ -263,7 +269,8 @@ function buildRehabOrderServiceRequest(
         : []),
     ],
     subject: { reference: `Patient/${patientId}` },
-    authoredOn: values.authoredDate,
+    // 登録日時(全種別共通の意味。fhir/shared.ts)。フォームでは入力しない。
+    authoredOn,
     // 開始日。部門一覧はこの日付でオーダーを拾い、カルテカードもこの日に置く。
     // 時刻は持たない(何時に行うかは予約 Appointment / 実施 Procedure の担当)。
     occurrenceDateTime: values.startDate,
@@ -345,23 +352,29 @@ export function buildRehabOrderBundle(
 ): fhir4.Bundle {
   return transactionBundle([
     {
-      resource: buildRehabOrderServiceRequest(values, patientId, requester),
+      resource: buildRehabOrderServiceRequest(values, patientId, requester, registrationAuthoredOn()),
       request: { method: "POST", url: "ServiceRequest" },
     },
   ]);
 }
 
-/** 更新。明細が無いので既存ヘッダ 1 件への PUT だけ。 */
+/** 更新。明細が無いので既存ヘッダ 1 件への PUT だけ。登録日時は元のリソースから引き継ぐ。 */
 export function buildRehabOrderUpdateBundle(
   values: RehabOrderFormValues,
   patientId: string,
-  serviceRequestId: string,
+  original: fhir4.ServiceRequest,
   requester: OrderAttribution,
 ): fhir4.Bundle {
   return transactionBundle([
     {
-      resource: buildRehabOrderServiceRequest(values, patientId, requester, serviceRequestId),
-      request: { method: "PUT", url: `ServiceRequest/${serviceRequestId}` },
+      resource: buildRehabOrderServiceRequest(
+        values,
+        patientId,
+        requester,
+        registrationAuthoredOn(original),
+        original.id,
+      ),
+      request: { method: "PUT", url: `ServiceRequest/${original.id}` },
     },
   ]);
 }
@@ -422,7 +435,6 @@ export function buildDoRehabOrderForm(
   return {
     ...values,
     setting,
-    authoredDate: today(),
     startDate: today(),
     endDate: "",
   };
@@ -595,12 +607,11 @@ export function parseRehabOrderForm(sr: fhir4.ServiceRequest): RehabOrderFormVal
 
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
-    authoredDate: sr.authoredOn?.slice(0, 10) ?? today(),
     diseaseCategory: rehabOrderDiseaseCategory(sr) as RehabDiseaseCategory | "",
     therapyTypes: rehabOrderTherapyTypes(sr),
     unitsPerSession: units == null ? "" : String(units),
     frequencyPerWeek: frequency == null ? "" : String(frequency),
-    startDate: (sr.occurrenceDateTime ?? "").slice(0, 10) || today(),
+    startDate: orderDay(sr) || today(),
     endDate: rehabOrderEnd(sr),
     onsetDate: rehabOrderOnsetDate(sr),
     targetDisease: rehabOrderTargetDisease(sr),

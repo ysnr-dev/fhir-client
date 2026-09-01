@@ -21,7 +21,8 @@ RSpec.describe LabLabelReport do
         { "coding" => [{ "system" => described_class::ORDER_TYPE_SYSTEM, "code" => "lab" }] }
       ],
       "subject" => { "reference" => "Patient/p1" },
-      "authoredOn" => "2026-08-09"
+      "authoredOn" => "2026-08-08T16:40:00+09:00",
+      "occurrenceDateTime" => "2026-08-09"
     }
   end
   let(:patient) { { "resourceType" => "Patient", "id" => "p1" } }

@@ -381,9 +381,9 @@ export function TreatmentOrderForm({
       return;
     }
 
-    const authoredDate = values.authoredDate;
+    const startDate = values.startDate;
 
-    if (groups.some((line) => line.groupable) && !authoredDate) {
+    if (groups.some((line) => line.groupable) && !startDate) {
       setValidationError("実施日を入力してください。");
       return;
     }
@@ -431,7 +431,7 @@ export function TreatmentOrderForm({
     onSubmit(
       {
         ...values,
-        authoredDate,
+        startDate,
         items,
         problem: refreshProblemDisplay(values.problem, problemOptions),
       },
@@ -485,8 +485,8 @@ export function TreatmentOrderForm({
       const slot = pendingBooking.slots[0];
       setValues((current) => ({
         ...current,
-        authoredDate: slotDate(slot),
-        authoredTime: slotTime(slot),
+        startDate: slotDate(slot),
+        startTime: slotTime(slot),
       }));
     }
     setBookingTarget(null);
@@ -617,10 +617,10 @@ export function TreatmentOrderForm({
               }
               schedule={
                 <FrameDateTime
-                  date={values.authoredDate}
-                  time={values.authoredTime}
-                  onChangeDate={(date) => update("authoredDate", date)}
-                  onChangeTime={(time) => update("authoredTime", time)}
+                  date={values.startDate}
+                  time={values.startTime}
+                  onChangeDate={(date) => update("startDate", date)}
+                  onChangeTime={(time) => update("startTime", time)}
                 />
               }
             >
@@ -672,7 +672,7 @@ export function TreatmentOrderForm({
                       // 同期しているヘッダの値で、枠を選び直すとその枠の日時になる。
                       <span className="rad-order-frame__booking">
                         <span className="rad-order-frame__booked">
-                          実施日時 {values.authoredDate} {values.authoredTime}
+                          実施日時 {values.startDate} {values.startTime}
                         </span>
                         {hasBooking ? (
                           <button type="button" onClick={() => openBooking(code)}>
@@ -699,13 +699,13 @@ export function TreatmentOrderForm({
                     )
                   ) : (
                     <FrameDateTime
-                      date={editing ? values.authoredDate : entry.item.date}
-                      time={editing ? values.authoredTime : entry.item.time}
+                      date={editing ? values.startDate : entry.item.date}
+                      time={editing ? values.startTime : entry.item.time}
                       onChangeDate={(date) =>
-                        editing ? update("authoredDate", date) : updateItem(code, { date })
+                        editing ? update("startDate", date) : updateItem(code, { date })
                       }
                       onChangeTime={(time) =>
-                        editing ? update("authoredTime", time) : updateItem(code, { time })
+                        editing ? update("startTime", time) : updateItem(code, { time })
                       }
                     />
                   )

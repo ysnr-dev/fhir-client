@@ -12,6 +12,8 @@ import {
   summarizeMicroOrder,
 } from "../fhir/microOrderHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { orderDay } from "../fhir/shared";
+import { RegisteredAtRow } from "./OrderDetailRows";
 
 // 細菌検査オーダーの内容表示。カルテ画面の詳細モーダルから使う
 // (検体検査・放射線検査の DetailPanel と同じ構成)。
@@ -43,8 +45,8 @@ export function MicroOrderDetailPanel({
         <dl className="prescription-detail__common">
           <dt>対象プロブレム</dt>
           <dd>{problemText}</dd>
-          <dt>依頼日</dt>
-          <dd>{serviceRequest.authoredOn?.slice(0, 10) ?? "-"}</dd>
+          <dt>検査日</dt>
+          <dd>{orderDay(serviceRequest) || "-"}</dd>
           <dt>入外区分</dt>
           <dd>{summary.settingDisplay || "-"}</dd>
           <dt>至急区分</dt>
@@ -59,6 +61,7 @@ export function MicroOrderDetailPanel({
           <dd>{examPurposeDisplay(microOrderExamPurpose(serviceRequest)) || "-"}</dd>
           <dt>依頼コメント</dt>
           <dd>{comment || "-"}</dd>
+          <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />
         </dl>
       </fieldset>
 

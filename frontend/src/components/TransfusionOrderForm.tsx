@@ -281,14 +281,6 @@ export function TransfusionOrderForm({
           </select>
         </label>
         <label>
-          依頼日
-          <input
-            type="date"
-            value={values.authoredDate}
-            onChange={(e) => update("authoredDate", e.target.value)}
-          />
-        </label>
-        <label>
           投与予定日時 *
           <input
             type="datetime-local"

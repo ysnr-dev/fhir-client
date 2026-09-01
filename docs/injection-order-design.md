@@ -45,7 +45,8 @@ B の弱点(修正・削除が 1 本ずつ)は、展開した SR を `requisitio
 
 ```
 ServiceRequest(1 日分)
-  authoredOn   = その日の注射日(日付のみ。従来どおり)
+  authoredOn         = オーダー登録日時(全日で同じ値。全種別共通の意味、readme「オーダーの日付」)
+  occurrenceDateTime = その日の注射日(日付のみ)
   requisition  = injection-series|<uuid>       ← 同時に展開した全日で同じ値
   extension[injection-series-start]    = valueDate 開始日
   extension[injection-series-schedule] = valueTiming 実施パターン(毎日のときは付けない)
@@ -106,7 +107,7 @@ ServiceRequest(1 日分)
 
 ## 3. 編集・削除の範囲選択
 
-後続日(同じ requisition で authoredOn がその日より後)は
+後続日(同じ requisition で注射日 occurrence がその日より後)は
 `useInjectionSeriesLater`(`api/queries.ts`)で引く。上流に `requisition` 検索が無いので、
 `ServiceRequest?patient=&category=order-type|injection&authoredon=gt<日付>&_revinclude=MedicationRequest:based-on`
 で引いてクライアントで requisition を突き合わせる(展開は 14 日までなので `_count=100`
@@ -337,8 +338,8 @@ RP の開始時刻が「10:00、20:30」のように複数あるので、ハブ�
 ## 8. 未実装・今後
 
 2026-09-01 に不足機能を洗い出して整理した。着手の推奨順は A → C-1 → B-1 → B-2/B-3 → C の訂正系。
-オーダー種別をまたぐ課題(オーダー日と注射日を `authoredOn` 1 つで兼ねている件・代行入力の
-記録が無い件)は `docs/order-common-backlog.md` に分けてある。
+オーダー種別をまたぐ課題は `docs/order-common-backlog.md` に分けてある(オーダー日と注射日を
+`authoredOn` 1 つで兼ねていた件は 2026-09-01 に対応済み: authoredOn = 登録日時、occurrence = 注射日)。
 
 ### A. 安全性チェック(フォームに薬剤の警告が一切無い)
 
@@ -379,9 +380,9 @@ RP の開始時刻が「10:00、20:30」のように複数あるので、ハブ�
 ### D. 表示・後片付け
 
 - **連日オーダーを束ね単位で 1 枚のカードにまとめる表示**(いまは日ごとにカード。14 日展開で 14 枚)。
-  束ねの本体をどの日に置くかは、注射が `authoredOn` を施行日に転用していて「オーダーした日」を
-  持たないことに引っかかる(`docs/order-common-backlog.md` §1)。日ごとに進捗・払出・実施が違うので、
-  本体は開始日に置き、2 日目以降にはその日の状態だけを出す 1 行の参照カードを残す形が現実的。
+  日ごとに進捗・払出・実施が違うので、本体は開始日に置き、2 日目以降にはその日の状態だけを出す
+  1 行の参照カードを残す形が現実的。登録日時は `authoredOn` に残るようになった(2026-09-01)ので、
+  「オーダーした日に本体を置く」案も選べる。
 - **経過表(フローシート)への注射欄**: `VitalFlowsheetPanel` はバイタルのみ。同じ時間軸に
   注射の予定・実施を並べる。
 - **オーダーを削除しても進捗の Task が残る**(検体検査・放射線検査など既存の部門と同じ挙動)。
