@@ -4,7 +4,7 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
 項目のうち、**未実装のもの**の記録。
 
 - 調査履歴: 2026-08-01（初回、6 項目）、2026-08-23（frontend/backend 全面再調査で拡充）、
-  2026-08-30（他科依頼の実装で C-6 を追加）。
+  2026-08-30（他科依頼の実装で C-6 を追加）、2026-09-01（オーダー横断の課題整理で C-7 を追加）。
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
@@ -12,10 +12,10 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   両リポジトリのコミット履歴を参照。
 - **2026-08-23 に優先度 A（5 件）・B（operation 系）・C-1（日付／期間検索）・C-2
   （`_sort` と `AllergyIntolerance.onset`）をサーバー・クライアント両側とも実装済み**
-  （下記の「対応済み」節を参照）。残るは C-3〜C-6 と長期のみ。
+  （下記の「対応済み」節を参照）。残るは C-3〜C-7 と長期のみ。
 
 各項目は「現状のワークアラウンド → 望ましいサーバー機能 → 影響範囲」の形式。
-**残っているのは優先度 C の C-3〜C-6 と長期のみ**（優先度 A・B と C-1・C-2 は
+**残っているのは優先度 C の C-3〜C-7 と長期のみ**（優先度 A・B と C-1・C-2 は
 2026-08-23 に対応済み）。
 
 ---
@@ -223,6 +223,27 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 - **影響範囲**: 他科依頼一覧。未回答の件数は「いま溜まっている仕事」に比例するので
   当面は破綻しないが、科ごとに絞ってページングしたくなった時点で必要になる。
   医師単位の受信箱(`performer=Practitioner/...`)を作るときも前提になる。
+
+### C-7. `Provenance` リソースの実装（代行入力・承認の記録）
+
+- **現状**: オーダーの `requester` には指示医師しか入らず、**代行入力した本人（ログイン
+  ユーザー）はどのリソースにも記録されていない**（`applyOrderContext` が書くのは
+  `requester` / 依頼科 / 在院病棟の 3 つだけ）。サーバー側の `AuditEvent` も
+  `agent.who` は OAuth クライアント（`fhir_auditing.rb` の `client_name`）で、
+  エンドユーザーではないため監査ログからも追えない。詳細は
+  `docs/order-common-backlog.md` §2。
+- **望ましいサーバー機能**: `Provenance`（R4）の保存・検索。`Provenance.target` が
+  `ServiceRequest` などを指す一方向参照なので、model / validator /
+  `SearchDefinitions::Provenance::PARAMS`（`target`・`agent`・`recorded`・`patient`）/
+  抽出定義に加えて、`_revinclude=Provenance:target` の逆参照定義が要る。JP Core に
+  プロファイルが無いので、Task / Group / Composition と同じく基底 HL7 定義に載せ、
+  検証は手書きの `ProvenanceValidator` が行う形になる。
+- **影響範囲**: これが無いと代行入力の記録は client 側のローカル拡張
+  （`extension[order-enterer]`）で代替するしかない。拡張でも「誰が入力したか」は残せるが、
+  編集ごとの履歴と `Provenance.signature`（医師の承認・電子署名）は表現できないので、
+  真正性の要件を満たす承認フローを作る段階で必要になる。カルテのタイムラインは
+  `_revinclude` を既に重ねているので、Provenance は一覧では引かず詳細を開いたときだけ
+  引く前提でよい。
 
 ---
 

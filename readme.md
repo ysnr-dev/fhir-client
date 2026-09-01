@@ -363,7 +363,9 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   採りません。上流は `:missing`・`$distinct-dates` の `undated` に対応済みです。
 - **カードを置く診療日**は「実施予定日(`occurrence`)があればその日、無ければ、未定を許す種別なら
   『日付未定』、それ以外はオーダー日(`authoredOn`)」です(`orderCardDay`)。細菌検査は `occurrence` を
-  書いていないので `authoredOn` に落ちます。処方・注射はそもそも実施予定日を持ちません。
+  書いていないので `authoredOn` に落ちます。処方・注射はそもそも実施予定日を持たず、入力した
+  「処方日」「注射日」が `authoredOn` になります(オーダーした日を別に持ちません。この兼用が
+  入院の定期処方や注射の連日オーダーで問題になる件は `docs/order-common-backlog.md` §1)。
 - **「日付未定」は時系列の最上部**に出します(`KARTE_UNSCHEDULED_DAY` / `compareKarteDaysDesc`)。
   既にある「日付なし」(`day` が空文字、最下部)とは別概念で、あちらは日付を持たないリソース(データ不備)、
   こちらは予定がまだ決まっていない正常な状態です。表示名はどちらも `karteDayLabel` が返します。
@@ -920,7 +922,9 @@ FHIR では職種・所属は Practitioner ではなく `PractitionerRole` に�
 両者はローカル拡張 `http://fhir-client.local/StructureDefinition/practitioner-role-primary-department`
 の有無で区別します（既定診療科だけ `valueBoolean = true`）。診療科は医療機関と同じ Organization なので、
 `organization` の参照先だけでは判別できないためです。カルテ画面ヘッダーの依頼科・依頼医師
-（`OrderContextPicker`）は、この診療科ロールと自院設定から選択肢を組み立てます。
+（`OrderContextPicker`）は、この診療科ロールと自院設定から選択肢を組み立てます。医師以外の
+ログインは代行入力として指示医師も選びますが、**代行入力した本人はオーダーに記録していません**
+（`docs/order-common-backlog.md` §2）。
 
 - 職種は `PractitionerRole.code`。コードは HL7 の `http://terminology.hl7.org/CodeSystem/practitioner-role`
   （医師 `doctor` / 歯科医師 `dentist` / 薬剤師 `pharmacist` / 看護師 `nurse` / 理学療法士 `physio` /
