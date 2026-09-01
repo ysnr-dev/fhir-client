@@ -44,6 +44,21 @@ export function dateTimeLabel(value: string | undefined): string {
 }
 
 /**
+ * FHIR の dateTime を「YYYY-MM-DD HH:mm:ss」にする。秒を持たない値は分まで、時刻を持たない値は
+ * 日付だけ返す。dateTimeLabel と同じくタイムゾーンは変換しない(ローカル時刻 + オフセットで
+ * 書いているので文字列のまま切り出せる)。オーダーの登録日時のように、同じ分に何件も並びうる
+ * ものに使う。
+ */
+export function dateTimeSecondsLabel(value: string | undefined): string {
+  const label = dateTimeLabel(value);
+  if (!value || label.length <= 10) return label;
+  // 秒まで含めて判定する。分までの値("...T22:55+09:00")で 17-18 文字目だけを見ると、
+  // オフセットの時("09")を秒として拾ってしまう。
+  const time = value.slice(11, 19);
+  return /^\d\d:\d\d:\d\d$/.test(time) ? `${value.slice(0, 10)} ${time}` : label;
+}
+
+/**
  * FHIR の date / dateTime を input[type=datetime-local] の値(YYYY-MM-DDTHH:mm)にする。
  * 日付だけの値は 00:00 を補う(new Date("YYYY-MM-DD") は UTC 解釈で日付がずれるので使わない)。
  */
