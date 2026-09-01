@@ -17,11 +17,13 @@ class FhirProxyController < ApplicationController
   # その枠を患者が押さえた予約。
   # Encounter は入院。入院患者一覧が status=in-progress / class=IMP で引き、
   # Encounter.location でベッドの Location を指す。
+  # Provenance はオーダーの来歴(誰が代行入力し、誰の指示で、誰が承認したか)。読み出しは
+  # オーダーと一緒の _revinclude=Provenance:target が主で、書き込みは登録の transaction に混ぜる。
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
     PractitionerRole Composition Task Procedure MedicationAdministration
-    Location Schedule Slot Appointment Encounter
+    Location Schedule Slot Appointment Encounter Provenance
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 

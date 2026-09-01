@@ -128,7 +128,8 @@ extension[order-ward]        = 在院病棟
 **上流の監査ログからも追えない**。`AuditEvent.agent.who` に入るのは OAuth クライアント
 (`fhir-server/app/controllers/concerns/fhir_auditing.rb:47` の `client_name` / `client_id`)で、
 エンドユーザーではない。fhir-client は 1 つのクライアントとしてアクセスするため、監査を見ても
-「fhir-client が書いた」までしか分からない。
+「fhir-client が書いた」までしか分からない。**この点は Provenance を足した後も未解決**で、
+解消するにはトークンかヘッダで操作者を上流に伝える必要がある(認証回りの変更になるので別課題)。
 
 **実施系とは非対称になっている**。実施記録の `Procedure.performer`(実施者)や検体到着の
 `lab-arrival-recorder` 拡張はログインユーザーを残している。「実際に手を動かした人」は残すのに、
@@ -187,12 +188,11 @@ Provenance
 
 #### 障壁
 
-1. **上流が Provenance を持っていない(最大)**。`fhir-server/app/lib/fhir/resource_registry.rb` の
-   対応リソースは 33 型で Provenance は含まれず、POST しても弾かれる。model / validator /
-   `SearchDefinitions::Provenance::PARAMS`(`target`・`agent`・`recorded`・`patient`)/ 抽出定義 /
-   `_revinclude` の逆参照を足す必要がある。JP Core にプロファイルが無いので、Task と同じく
-   基底 HL7 定義 + 手書きバリデータの形になる
-   (`docs/server-improvement-backlog.md` C-7)。
+1. ~~**上流が Provenance を持っていない(最大)**~~ → **2026-09-01 に上流へ実装済み**。
+   `target` / `patient` / `agent` / `recorded` / `agent-type` / `signature-type` の検索、
+   `_revinclude=Provenance:target`、`_has:Provenance:target:agent-type=verifier`、署名(`signature[]`)の
+   検証まで揃っている。fhir-client backend のプロキシ許可リストにも追加済み。
+   詳細は fhir-server の README「Provenance の例(代行入力・承認)」。
 2. **1 活動 = 1 件なので件数が増える**。Provenance は create / update という活動の記録で、
    編集のたびに 1 件増えるのが本来の姿(`target` もバージョン付き参照
    `ServiceRequest/123/_history/2` にするのが正しい)。注射の連日オーダーは 1 回の登録なら
@@ -204,6 +204,9 @@ Provenance
    情報なので、**一覧では引かない**設計にする。
 4. **削除時に取り残される**。オーダーを削除しても Provenance が残る(Task と同じ問題。
    `docs/injection-order-design.md` §8 D に既出)。
+5. **患者コンパートメントに入らない**(`target` が 0..* なので上流の判定対象外)。システムスコープで
+   読む前提で、fhir-client は Backend Services トークンなので実害は無い。
+6. **バージョン付き参照は引けない**(上流は参照を文字列一致で照合する)。POST は通るが警告が返る。
 
 #### 拡張との関係
 
