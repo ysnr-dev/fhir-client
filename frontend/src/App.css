@@ -7709,6 +7709,35 @@ body.page-wide .app__main {
   fill: currentColor;
 }
 
+/* 境目 1 つぶんのクリック範囲。▼ とラベルだけでは当たり判定が細すぎる。 */
+.vital-flowsheet__event-hit {
+  fill: transparent;
+}
+
+.vital-flowsheet__event {
+  cursor: pointer;
+}
+
+.vital-flowsheet__event:hover .vital-flowsheet__event-hit,
+.vital-flowsheet__event:focus-visible .vital-flowsheet__event-hit,
+.vital-flowsheet__event--selected .vital-flowsheet__event-hit {
+  fill: var(--accent-bg);
+}
+
+.vital-flowsheet__event:focus {
+  outline: none;
+}
+
+.vital-flowsheet__event:focus-visible .vital-flowsheet__event-hit {
+  stroke: var(--accent-border);
+}
+
+/* イベント一覧モーダル。日時は等幅の数字で揃え、行は詰める。 */
+.flowsheet-event-modal__table td.flowsheet-event-modal__at {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .vital-flowsheet__event-label {
   font-size: 11px;
   fill: currentColor;

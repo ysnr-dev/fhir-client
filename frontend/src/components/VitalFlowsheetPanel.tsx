@@ -8,6 +8,7 @@ import {
 } from "../api/queries";
 import {
   buildFlowsheetEvents,
+  flowsheetEventAtLabel,
   groupFlowsheetEvents,
   hospitalDayLabel,
   hospitalDayOf,
@@ -18,7 +19,9 @@ import {
   type FlowsheetEventGroup,
 } from "../fhir/flowsheetEventHelpers";
 import { interpretationClass } from "../fhir/labResultHelpers";
+import type { KarteDetailTarget } from "../karteUrl";
 import { today } from "../lib/dates";
+import { FlowsheetEventModal } from "./FlowsheetEventModal";
 import {
   BLOOD_PRESSURE_SERIES,
   bloodPressureNumbers,
@@ -45,9 +48,18 @@ import { ErrorBanner } from "./ErrorBanner";
 const DEFAULT_COLUMN_COUNT = 10;
 const MAX_COLUMN_COUNT = 100;
 
-export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
+export function VitalFlowsheetPanel({
+  patientId,
+  onOpenDetail,
+}: {
+  patientId: string;
+  /** イベント一覧からカルテのオーダー詳細モーダルを開く。 */
+  onOpenDetail?: (target: KarteDetailTarget) => void;
+}) {
   const [columnCount, setColumnCount] = useState(DEFAULT_COLUMN_COUNT);
   const [fullscreen, setFullscreen] = useState(false);
+  // 帯で選んだ境目。選ぶとその境目のイベント一覧をモーダルで出す。
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   // 全画面はビューポート全体ではなく「患者情報の下」から始める。開始位置は
   // カルテのレイアウト(左右ペインの上端)を実測して決める。全画面のときこの
   // 要素自体は fixed で流れから外れるが、レイアウトの上端は上の行(アプリ
@@ -77,7 +89,7 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
       buildFlowsheetEvents(
         encounters.data?.events ?? [],
         surgeries.data ?? [],
-        examOrders.data ?? [],
+        examOrders.data ?? { headers: [], items: [] },
       ),
     [encounters.data, surgeries.data, examOrders.data],
   );
@@ -85,6 +97,8 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
     () => groupFlowsheetEvents(columns, events),
     [columns, events],
   );
+  // 表示数を変えると境目の位置が変わるので、選択は取り直す。
+  const selectedGroup = eventGroups.find((group) => group.slot === selectedSlot);
 
   const stays = encounters.data?.stays ?? [];
   // 手術日(YYYY-MM-DD)。術後日数の行を出すかの判定にも使う。
@@ -263,7 +277,12 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
                         イベント
                       </th>
                       <td className="vital-flowsheet__event-cell" colSpan={columns.length}>
-                        <FlowsheetEventBand columns={columns} groups={eventGroups} />
+                        <FlowsheetEventBand
+                          columns={columns}
+                          groups={eventGroups}
+                          selectedSlot={selectedSlot}
+                          onSelect={setSelectedSlot}
+                        />
                       </td>
                       <td className="vital-flowsheet__filler" />
                     </tr>
@@ -311,6 +330,14 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
               </table>
             </div>
           )}
+
+          {selectedGroup && (
+            <FlowsheetEventModal
+              events={selectedGroup.events}
+              onOpenDetail={onOpenDetail}
+              onClose={() => setSelectedSlot(null)}
+            />
+          )}
         </>
       )}
     </div>
@@ -332,16 +359,8 @@ function truncateLabel(label: string): string {
 }
 
 function eventTitle(event: FlowsheetEvent): string {
-  // 日付だけで登録されたイベント(検査オーダー・入院日など)には時刻を出さない。
-  // 日付は localDateOf で出す(flowsheetColumnLabel は日付だけの値を UTC 0 時と
-  // 読むので、時差によっては前日にずれる)。
-  const hasTime = !/^\d{4}-\d{2}-\d{2}$/.test(event.at);
-  const date = localDateOf(event.at).slice(5).replace("-", "/");
-  const when = [date, hasTime ? flowsheetColumnLabel(event.at).time : ""]
-    .filter(Boolean)
-    .join(" ");
-  const name = event.count > 1 ? `${event.label}×${event.count}` : event.label;
-  return [name, event.detail].filter(Boolean).join(" ") + (when ? ` (${when})` : "");
+  const when = flowsheetEventAtLabel(event.at);
+  return [event.name, event.detail].filter(Boolean).join(" ") + (when ? ` (${when})` : "");
 }
 
 /**
@@ -352,9 +371,13 @@ function eventTitle(event: FlowsheetEvent): string {
 function FlowsheetEventBand({
   columns,
   groups,
+  selectedSlot,
+  onSelect,
 }: {
   columns: string[];
   groups: FlowsheetEventGroup[];
+  selectedSlot: number | null;
+  onSelect: (slot: number) => void;
 }) {
   const width = columns.length * FLOWSHEET_COLUMN_WIDTH;
   const rows = Math.min(
@@ -379,12 +402,33 @@ function FlowsheetEventBand({
         const shown = overflow ? group.labels.slice(0, EVENT_LABEL_ROWS - 1) : group.labels;
         // 端の境目はラベルが SVG からはみ出すので、寄せ方を変える。
         const anchor = x <= 0 ? "start" : x >= width ? "end" : "middle";
+        const selected = group.slot === selectedSlot;
         return (
           <g
             key={group.slot}
-            className={`vital-flowsheet__event vital-flowsheet__event--${group.labels[0].kind}`}
+            className={`vital-flowsheet__event vital-flowsheet__event--${group.labels[0].kind}${
+              selected ? " vital-flowsheet__event--selected" : ""
+            }`}
+            role="button"
+            tabIndex={0}
+            aria-label={`${group.labels.map((l) => l.text).join("・")} の一覧を開く`}
+            onClick={() => onSelect(group.slot)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect(group.slot);
+              }
+            }}
           >
             <title>{group.events.map(eventTitle).join("\n")}</title>
+            {/* クリックできる範囲。▼ とラベルだけだと当たり判定が細すぎる。 */}
+            <rect
+              className="vital-flowsheet__event-hit"
+              x={x - FLOWSHEET_COLUMN_WIDTH / 2}
+              y={0}
+              width={FLOWSHEET_COLUMN_WIDTH}
+              height={height}
+            />
             <path
               className="vital-flowsheet__event-mark"
               d={`M${x - 4},2 L${x + 4},2 L${x},9 Z`}

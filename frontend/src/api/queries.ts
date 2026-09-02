@@ -1927,16 +1927,23 @@ export function usePatientExamOrders(
         "category",
         FLOWSHEET_EXAM_TYPES.map((type) => `${ORDER_TYPE_SYSTEM}|${type.code}`).join(","),
       );
-      // カードになるのはヘッダだけ(明細は日時を持たない)。
+      // 日時を持つのはヘッダだけ(明細は持たない)。ヘッダは code も持たないので、
+      // 検査名はぶら下がる明細から採る(イベント一覧の「内容」に出す)。
       params.set("based-on:missing", "true");
       params.append("occurrence", `ge${rangeStart}`);
       params.append("occurrence", `le${rangeEnd}`);
       params.set("_count", "100");
+      params.append("_revinclude:iterate", "ServiceRequest:based-on");
       const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
-      return (bundle.entry ?? [])
+      const all = (bundle.entry ?? [])
         .map((entry) => entry.resource)
         .filter((r): r is fhir4.ServiceRequest => r?.resourceType === "ServiceRequest")
         .filter((sr) => sr.status !== "revoked" && sr.status !== "entered-in-error");
+      // _revinclude で明細も混ざって返るので、ヘッダ(basedOn 無し)と分けて返す。
+      return {
+        headers: all.filter((sr) => !sr.basedOn?.length),
+        items: all.filter((sr) => sr.basedOn?.length),
+      };
     },
     enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
   });

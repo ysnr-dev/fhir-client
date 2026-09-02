@@ -679,7 +679,10 @@ export function KartePage() {
     if (key === "condition") return <KarteConditionTab {...props} />;
     if (key === "allergy") return <KarteAllergyTab {...props} />;
     // 経過表・検査結果時系列は読み取り専用で、詳細を開く導線が無いので view は使わない。
-    if (key === "flowsheet") return <VitalFlowsheetPanel patientId={patientId} />;
+    // 経過表のイベント一覧からは、カルテのカードと同じオーダー詳細モーダルを開く。
+    if (key === "flowsheet") {
+      return <VitalFlowsheetPanel patientId={patientId} onOpenDetail={openDetail} />;
+    }
     if (key === "lab-timeline") {
       return (
         <div className="karte-tabpanel">
