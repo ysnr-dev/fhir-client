@@ -912,9 +912,9 @@ export function encounterDischargePlan(encounter: fhir4.Encounter): DischargePla
 // ---- 入退院・移動のイベント(暦に印を付ける用) ----
 //
 // 食事カレンダーのように「その日に何があったか」を日付で並べたいとき、Encounter
-// 1 件から日付付きの出来事を取り出す。入院日・退院日は period、転室・転床・転棟は
+// 1 件から日付付きのイベントを取り出す。入院日・退院日は period、転室・転床・転棟は
 // location の履歴(先頭が今の床、後ろほど古い)、外出泊はローカル拡張から拾う。
-// 診療科は今の値しか持たないので、転科は出来事として取り出せない。
+// 診療科は今の値しか持たないので、転科はイベントとして取り出せない。
 //
 // 所在は病棟名だけ出す(暦のマスは狭く、食事の観点では病棟が分かれば足りる)。
 // Encounter.location の display はベッドの表示名で病棟を含まないので、ベッド id を
@@ -928,8 +928,13 @@ export type EncounterEventKind =
   | "leave-end";
 
 export interface EncounterEvent {
-  /** 出来事の日(YYYY-MM-DD)。 */
+  /** イベントの日(YYYY-MM-DD)。 */
   date: string;
+  /**
+   * イベントの日時(登録された値そのまま)。時刻を持たない登録では日付だけになる。
+   * 暦の印は日で足りるが、経過表の帯は測定日時の列に載せるので時刻まで要る。
+   */
+  at: string;
   kind: EncounterEventKind;
   /** 「入院」「転床」など、暦の印に出す短い名前。 */
   label: string;
@@ -951,12 +956,14 @@ const EVENT_LABELS: Record<EncounterEventKind, string> = {
 
 export function encounterEvents(encounter: fhir4.Encounter): EncounterEvent[] {
   const events: EncounterEvent[] = [];
-  const admission = encounter.period?.start?.slice(0, 10);
-  if (admission) {
+  const admissionAt = encounter.period?.start;
+  const admission = admissionAt?.slice(0, 10);
+  if (admissionAt && admission) {
     // 入院時の床は location の末尾(いちばん古い割り当て)。
     const first = encounter.location?.[encounter.location.length - 1];
     events.push({
       date: admission,
+      at: admissionAt,
       kind: "admission",
       label: EVENT_LABELS.admission,
       detail: "",
@@ -969,10 +976,12 @@ export function encounterEvents(encounter: fhir4.Encounter): EncounterEvent[] {
   const locations = encounter.location ?? [];
   for (let index = locations.length - 2; index >= 0; index -= 1) {
     const entry = locations[index];
-    const date = entry.period?.start?.slice(0, 10);
-    if (!date) continue;
+    const at = entry.period?.start;
+    const date = at?.slice(0, 10);
+    if (!at || !date) continue;
     events.push({
       date,
+      at,
       kind: "transfer",
       label: EVENT_LABELS.transfer,
       detail: "",
@@ -985,6 +994,7 @@ export function encounterEvents(encounter: fhir4.Encounter): EncounterEvent[] {
     if (leave.start) {
       events.push({
         date: leave.start.slice(0, 10),
+        at: leave.start,
         kind: "leave-start",
         label: EVENT_LABELS["leave-start"],
         detail: leave.reason,
@@ -993,6 +1003,7 @@ export function encounterEvents(encounter: fhir4.Encounter): EncounterEvent[] {
     if (leave.end) {
       events.push({
         date: leave.end.slice(0, 10),
+        at: leave.end,
         kind: "leave-end",
         label: EVENT_LABELS["leave-end"],
         detail: "",
@@ -1001,9 +1012,16 @@ export function encounterEvents(encounter: fhir4.Encounter): EncounterEvent[] {
   }
 
   if (encounter.status === DISCHARGED_STATUS) {
-    const discharge = encounter.period?.end?.slice(0, 10);
-    if (discharge) {
-      events.push({ date: discharge, kind: "discharge", label: EVENT_LABELS.discharge, detail: "" });
+    const dischargeAt = encounter.period?.end;
+    const discharge = dischargeAt?.slice(0, 10);
+    if (dischargeAt && discharge) {
+      events.push({
+        date: discharge,
+        at: dischargeAt,
+        kind: "discharge",
+        label: EVENT_LABELS.discharge,
+        detail: "",
+      });
     }
   }
 

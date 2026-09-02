@@ -7646,6 +7646,101 @@ body.page-wide .app__main {
   font-variant-numeric: tabular-nums;
 }
 
+/* 病日・術後日数(見出しの 4・5 段目)。時刻と同じ大きさで、日付より控えめにする。 */
+.lab-timeline__table th.vital-flowsheet__day-col {
+  text-align: center;
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--text);
+  padding-top: 0;
+  padding-bottom: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-timeline__table th.vital-flowsheet__day-head {
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--text);
+  padding-top: 0;
+  padding-bottom: 2px;
+}
+
+/* イベントの帯。グラフ行と同じくセルの余白を無くし、▼ の x を列の境目に合わせる。 */
+.vital-flowsheet__table td.vital-flowsheet__event-cell {
+  padding: 0;
+  vertical-align: bottom;
+  line-height: 0;
+}
+
+.vital-flowsheet__table th.vital-flowsheet__event-head {
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--text);
+  vertical-align: middle;
+  /* 項目列 + 単位列にまたがるので、項目列の決め打ち幅は使わない。 */
+  width: auto;
+  min-width: 0;
+  max-width: none;
+}
+
+.vital-flowsheet__event-band {
+  display: block;
+}
+
+/* 帯とグラフの tbody には縞を掛けない(測定の行だけを 1 行おきに濃くする)。 */
+.karte-tabpanel .vital-flowsheet__table .vital-flowsheet__chart-body tr:nth-child(even) {
+  background: none;
+}
+
+.karte-tabpanel
+  .vital-flowsheet__table
+  .vital-flowsheet__chart-body
+  tr:nth-child(even)
+  .lab-timeline__item-col,
+.karte-tabpanel
+  .vital-flowsheet__table
+  .vital-flowsheet__chart-body
+  tr:nth-child(even)
+  .lab-timeline__unit-col {
+  background-image: none;
+}
+
+.vital-flowsheet__event-mark {
+  fill: currentColor;
+}
+
+.vital-flowsheet__event-label {
+  font-size: 11px;
+  fill: currentColor;
+}
+
+/* イベントの色。手術はいちばん強く、入退院は本文色、検査は控えめ。 */
+.vital-flowsheet__event--surgery {
+  color: var(--lab-high);
+}
+
+.vital-flowsheet__event--encounter {
+  color: var(--text-h);
+}
+
+.vital-flowsheet__event--exam {
+  color: var(--text);
+}
+
+/* 同じ境目に種類の違うイベントが並ぶので、ラベルは 1 つずつ色を持たせる。 */
+.vital-flowsheet__event-label--surgery {
+  fill: var(--lab-high);
+}
+
+.vital-flowsheet__event-label--encounter {
+  fill: var(--text-h);
+}
+
+.vital-flowsheet__event-label--exam,
+.vital-flowsheet__event-label--more {
+  fill: var(--text);
+}
+
 /* 最上段のグラフ行(温度板)。セルの余白を無くしてグラフの座標を列と一致させる。 */
 .vital-flowsheet__table td.vital-flowsheet__chart-cell {
   padding: 0;
@@ -7675,6 +7770,12 @@ body.page-wide .app__main {
 /* 列の区切りは表の縦罫線の続きなので実線。 */
 .vital-flowsheet__grid--column {
   stroke: var(--border);
+}
+
+/* イベントの縦線。列の区切りと同じ位置に来ることがあるので、破線で見分ける。 */
+.vital-flowsheet__grid--event {
+  stroke: var(--text);
+  stroke-dasharray: 3 3;
 }
 
 /* 系列の色(温度板の慣例: BP 青・P 赤・T 緑系、R は文字色)。 */

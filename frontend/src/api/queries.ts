@@ -60,6 +60,7 @@ import {
   withEventWards,
   buildEncounterUpdateBundle,
   latestEncounterByBed,
+  type EncounterEvent,
 } from "../fhir/encounterHelpers";
 import {
   buildLabResultBundle,
@@ -307,7 +308,15 @@ import {
   surgeryTasksByOrderId,
   type SurgeryTaskStatus,
 } from "../fhir/surgeryTaskHelpers";
-import { buildSurgeryPerformDeleteEntries } from "../fhir/surgeryResultHelpers";
+import {
+  buildSurgeryPerformDeleteEntries,
+  isSurgeryProcedure,
+} from "../fhir/surgeryResultHelpers";
+import {
+  FLOWSHEET_EXAM_TYPES,
+  encounterStays,
+  type EncounterStay,
+} from "../fhir/flowsheetEventHelpers";
 import {
   buildAnesthesiaChartData,
   isAnesthesiaChartHub,
@@ -1823,26 +1832,30 @@ export function usePatientAdmission(patientId: string | undefined) {
 }
 
 /**
- * 食事カレンダーに印を付けるための、その月にかかる入院(入院中・退院済)。
- * date を ge/le で 2 回渡して「期間が月と重なる」入院を引く(fetchInpatients と同じ手)。
- * 誤登録(entered-in-error)と入院予定は出来事にならないので status で外す。
+ * その期間にかかる入院(入院中・退院済)から、イベントと入院期間を取り出す。
+ * date を ge/le で 2 回渡して「期間が範囲と重なる」入院を引く(fetchInpatients と同じ手)。
+ * 誤登録(entered-in-error)と入院予定はイベントにならないので status で外す。
+ *
+ * 食事カレンダー(月の暦の印)と経過表(イベントの帯・病日)の両方が使う。
+ * イベントは範囲内に絞るが、**入院期間は絞らない**。範囲より前に始まった入院でも、
+ * 範囲内の列の病日を数えるのに要るため。
  */
 export function usePatientEncounterEvents(
   patientId: string | undefined,
-  monthStart: string,
-  monthEnd: string,
+  rangeStart: string,
+  rangeEnd: string,
 ) {
   const params = new URLSearchParams();
   if (patientId) params.set("subject", `Patient/${patientId}`);
   params.set("status", `${ADMISSION_STATUS},${DISCHARGED_STATUS}`);
   params.set("class", ADMISSION_CLASS_CODE);
-  params.append("date", `ge${monthStart}`);
-  params.append("date", `le${monthEnd}`);
+  params.append("date", `ge${rangeStart}`);
+  params.append("date", `le${rangeEnd}`);
   params.set("_count", "20");
 
   return useQuery({
-    queryKey: ["Encounter", "patient-events", patientId, monthStart, monthEnd],
-    queryFn: async () => {
+    queryKey: ["Encounter", "patient-events", patientId, rangeStart, rangeEnd],
+    queryFn: async (): Promise<{ events: EncounterEvent[]; stays: EncounterStay[] }> => {
       const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
       const encounters =
         bundle.entry
@@ -1850,13 +1863,82 @@ export function usePatientEncounterEvents(
           .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter") ?? [];
       const events = encounters
         .flatMap((encounter) => encounterEvents(encounter))
-        .filter((event) => event.date >= monthStart && event.date <= monthEnd);
+        .filter((event) => event.date >= rangeStart && event.date <= rangeEnd);
       const bedIds = Array.from(
         new Set(events.flatMap((e) => [e.bedId, e.fromBedId]).filter((id): id is string => !!id)),
       );
-      return withEventWards(events, await fetchWardNameByBed(bedIds));
+      return {
+        events: withEventWards(events, await fetchWardNameByBed(bedIds)),
+        stays: encounterStays(encounters),
+      };
     },
-    enabled: Boolean(patientId) && Boolean(monthStart) && Boolean(monthEnd),
+    enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
+  });
+}
+
+/**
+ * 経過表のイベントの帯に出す手術の実施記録(ハブ Procedure)。
+ *
+ * 上流の `Procedure?date=` は performedDateTime しか索引しない(手術は
+ * performedPeriod なので日付で絞れない)。患者あたりの件数は多くないので、
+ * 患者と区分だけで引いてから期間はクライアントで見る。
+ */
+export function usePatientSurgeryPerforms(patientId: string | undefined) {
+  return useQuery({
+    queryKey: ["Procedure", "search", "surgery-patient", patientId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("category", `${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`);
+      params.set("_count", "100");
+      const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
+      return (bundle.entry ?? [])
+        .map((entry) => entry.resource)
+        .filter((r): r is fhir4.Procedure => r?.resourceType === "Procedure")
+        // 2 件目以降の術式(partOf 付き)はハブと同じ日時なので、ハブだけをイベントにする。
+        .filter(
+          (procedure) =>
+            isSurgeryProcedure(procedure) &&
+            !procedure.partOf?.length &&
+            procedure.status !== "entered-in-error" &&
+            procedure.status !== "not-done",
+        );
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * 経過表のイベントの帯に出す検査オーダー(放射線・内視鏡・生理)のヘッダ。
+ * 検体・細菌・病理は患者が動かないうえ毎日の採血で帯が埋まるので出さない
+ * (そちらは検体検査時系列タブに表がある)。
+ */
+export function usePatientExamOrders(
+  patientId: string | undefined,
+  rangeStart: string,
+  rangeEnd: string,
+) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "flowsheet-exams", patientId, rangeStart, rangeEnd],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set(
+        "category",
+        FLOWSHEET_EXAM_TYPES.map((type) => `${ORDER_TYPE_SYSTEM}|${type.code}`).join(","),
+      );
+      // カードになるのはヘッダだけ(明細は日時を持たない)。
+      params.set("based-on:missing", "true");
+      params.append("occurrence", `ge${rangeStart}`);
+      params.append("occurrence", `le${rangeEnd}`);
+      params.set("_count", "100");
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      return (bundle.entry ?? [])
+        .map((entry) => entry.resource)
+        .filter((r): r is fhir4.ServiceRequest => r?.resourceType === "ServiceRequest")
+        .filter((sr) => sr.status !== "revoked" && sr.status !== "entered-in-error");
+    },
+    enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
   });
 }
 

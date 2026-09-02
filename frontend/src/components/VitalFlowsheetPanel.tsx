@@ -1,6 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useVitalFlowsheet, useVitalThresholds } from "../api/queries";
+import {
+  usePatientEncounterEvents,
+  usePatientExamOrders,
+  usePatientSurgeryPerforms,
+  useVitalFlowsheet,
+  useVitalThresholds,
+} from "../api/queries";
+import {
+  buildFlowsheetEvents,
+  groupFlowsheetEvents,
+  hospitalDayLabel,
+  hospitalDayOf,
+  localDateOf,
+  postOpDayLabel,
+  postOpDayOf,
+  type FlowsheetEvent,
+  type FlowsheetEventGroup,
+} from "../fhir/flowsheetEventHelpers";
 import { interpretationClass } from "../fhir/labResultHelpers";
+import { today } from "../lib/dates";
 import {
   BLOOD_PRESSURE_SERIES,
   bloodPressureNumbers,
@@ -20,6 +38,9 @@ import { ErrorBanner } from "./ErrorBanner";
 // 表の操作系は検査結果の時系列表示(LabResultTimelinePanel)に合わせるが、
 // グラフは温度板にならって表の最上段に常設し、体温・血圧・脈拍・呼吸数を
 // 表の列位置に揃えて描く(項目を選んでモーダルで開く方式は採らない)。
+//
+// グラフの上にはイベントの帯(入退院・転棟・外出泊・手術・放射線/内視鏡/生理検査)、
+// 日付の見出しの下には病日・術後日数を出す(fhir/flowsheetEventHelpers.ts)。
 
 const DEFAULT_COLUMN_COUNT = 10;
 const MAX_COLUMN_COUNT = 100;
@@ -41,6 +62,49 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
     () => buildVitalFlowsheet(observations ?? [], columnCount, thresholds),
     [observations, columnCount, thresholds],
   );
+  const { columns } = flowsheet;
+
+  // イベントと病日は「表に出ている期間」だけ引く(いちばん古い列 〜 今日)。
+  // 列が無ければ引かない。入院期間は範囲より前に始まっていても返る(病日を数えるため)。
+  const rangeStart = columns.length > 0 ? localDateOf(columns[columns.length - 1]) : "";
+  const rangeEnd = today();
+  const encounters = usePatientEncounterEvents(patientId, rangeStart, rangeEnd);
+  const surgeries = usePatientSurgeryPerforms(patientId);
+  const examOrders = usePatientExamOrders(patientId, rangeStart, rangeEnd);
+
+  const events = useMemo(
+    () =>
+      buildFlowsheetEvents(
+        encounters.data?.events ?? [],
+        surgeries.data ?? [],
+        examOrders.data ?? [],
+      ),
+    [encounters.data, surgeries.data, examOrders.data],
+  );
+  const eventGroups = useMemo(
+    () => groupFlowsheetEvents(columns, events),
+    [columns, events],
+  );
+
+  const stays = encounters.data?.stays ?? [];
+  // 手術日(YYYY-MM-DD)。術後日数の行を出すかの判定にも使う。
+  const surgeryDates = useMemo(
+    () =>
+      (surgeries.data ?? [])
+        .map((procedure) => procedure.performedPeriod?.start ?? procedure.performedDateTime ?? "")
+        .filter(Boolean)
+        .map(localDateOf)
+        .filter(Boolean),
+    [surgeries.data],
+  );
+  // 列ごとの端末ローカル日付。病日・術後日数はこれで数える。
+  const columnDates = useMemo(() => columns.map(localDateOf), [columns]);
+  const hospitalDays = columnDates.map((date) => hospitalDayOf(date, stays));
+  const postOpDays = columnDates.map((date) => postOpDayOf(date, surgeryDates));
+  const showHospitalDays = hospitalDays.some((day) => day !== undefined);
+  const showPostOpDays = postOpDays.some((day) => day !== undefined);
+  // 見出しは 年 / 日付 / 時刻 の 3 段。病日・術後日数を出すぶんだけ rowSpan を伸ばす。
+  const headerRowSpan = 3 + (showHospitalDays ? 1 : 0) + (showPostOpDays ? 1 : 0);
 
   // 全画面は Escape でも抜けられるようにする(モーダルと同じ作法)。
   useEffect(() => {
@@ -73,7 +137,6 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
     [flowsheet, observations, thresholds],
   );
 
-  const { columns } = flowsheet;
   const yearGroups = groupFlowsheetColumns(columns, (at) => flowsheetColumnLabel(at).year);
   // 同じ日の朝夕は列を分けたまま、日付の見出しだけ 1 つにまとめる。
   const dateGroups = groupFlowsheetColumns(
@@ -90,7 +153,9 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
       className={`karte-tabpanel vital-flowsheet${fullscreen ? " vital-flowsheet--fullscreen" : ""}`}
       style={fullscreen ? { top: fullscreenTop } : undefined}
     >
-      <ErrorBanner error={error} />
+      <ErrorBanner
+        error={error ?? encounters.error ?? surgeries.error ?? examOrders.error}
+      />
 
       {isLoading ? (
         <p>読み込み中...</p>
@@ -137,7 +202,7 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
                         {group.label}年
                       </th>
                     ))}
-                    <th className="vital-flowsheet__filler" rowSpan={3} />
+                    <th className="vital-flowsheet__filler" rowSpan={headerRowSpan} />
                   </tr>
                   <tr>
                     {dateGroups.map((group) => (
@@ -158,17 +223,66 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
                       </th>
                     ))}
                   </tr>
+                  {/* 病日・術後日数。入院・手術があるときだけ行を出す。見出しの中に
+                      置いてあるので、縦に送っても列の日付と一緒に残る。 */}
+                  {showHospitalDays && (
+                    <tr>
+                      <th className="lab-timeline__item-col vital-flowsheet__day-head">病日</th>
+                      <th className="lab-timeline__unit-col" />
+                      {columns.map((at, index) => (
+                        <th key={at} className="vital-flowsheet__day-col" title="入院からの日数">
+                          {hospitalDayLabel(hospitalDays[index])}
+                        </th>
+                      ))}
+                    </tr>
+                  )}
+                  {showPostOpDays && (
+                    <tr>
+                      <th className="lab-timeline__item-col vital-flowsheet__day-head">術後</th>
+                      <th className="lab-timeline__unit-col" />
+                      {columns.map((at, index) => (
+                        <th key={at} className="vital-flowsheet__day-col" title="手術からの日数">
+                          {postOpDayLabel(postOpDays[index])}
+                        </th>
+                      ))}
+                    </tr>
+                  )}
                 </thead>
-                <tbody>
+                {/* イベントの帯とグラフは測定の行と性質が違うので tbody を分ける。
+                    1 行おきの濃淡(tbody tr:nth-child(even))が測定の行だけに当たり、
+                    帯の有無で縞の向きが入れ替わらない。 */}
+                <tbody className="vital-flowsheet__chart-body">
+                  {/* イベントの帯。グラフの真上に置き、同じ x にグラフの縦線を落とす。
+                      イベントが 1 件も無ければ行ごと出さない。 */}
+                  {eventGroups.length > 0 && (
+                    <tr className="vital-flowsheet__event-row">
+                      <th
+                        className="lab-timeline__item-col vital-flowsheet__event-head"
+                        colSpan={2}
+                      >
+                        イベント
+                      </th>
+                      <td className="vital-flowsheet__event-cell" colSpan={columns.length}>
+                        <FlowsheetEventBand columns={columns} groups={eventGroups} />
+                      </td>
+                      <td className="vital-flowsheet__filler" />
+                    </tr>
+                  )}
                   <tr className="vital-flowsheet__chart-row">
                     <th className="lab-timeline__item-col vital-flowsheet__axis-cell" colSpan={2}>
                       <FlowsheetAxis series={chartSeries} />
                     </th>
                     <td className="vital-flowsheet__chart-cell" colSpan={columns.length}>
-                      <FlowsheetChart columns={columns} series={chartSeries} />
+                      <FlowsheetChart
+                        columns={columns}
+                        series={chartSeries}
+                        eventSlots={eventGroups.map((group) => group.slot)}
+                      />
                     </td>
                     <td className="vital-flowsheet__filler" />
                   </tr>
+                </tbody>
+                <tbody>
                   {flowsheet.rows.map((row) => (
                     <tr key={row.key}>
                       {/* 項目列・単位列は幅固定で左に貼り付く(CSS)。長い項目名は省略されるので title で。 */}
@@ -200,6 +314,106 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
         </>
       )}
     </div>
+  );
+}
+
+// ---- イベントの帯 ----
+
+/** 1 つの境目に積むラベルの上限。これを超えたら最後の行を「他N件」にする。 */
+const EVENT_LABEL_ROWS = 3;
+const EVENT_ROW_HEIGHT = 13;
+/** ▼ とラベルの間。 */
+const EVENT_MARK_HEIGHT = 12;
+/** ラベルの文字数の上限。列幅(64px)に収まる長さで丸め、全文は title に出す。 */
+const EVENT_LABEL_CHARS = 5;
+
+function truncateLabel(label: string): string {
+  return label.length > EVENT_LABEL_CHARS ? `${label.slice(0, EVENT_LABEL_CHARS)}…` : label;
+}
+
+function eventTitle(event: FlowsheetEvent): string {
+  // 日付だけで登録されたイベント(検査オーダー・入院日など)には時刻を出さない。
+  // 日付は localDateOf で出す(flowsheetColumnLabel は日付だけの値を UTC 0 時と
+  // 読むので、時差によっては前日にずれる)。
+  const hasTime = !/^\d{4}-\d{2}-\d{2}$/.test(event.at);
+  const date = localDateOf(event.at).slice(5).replace("-", "/");
+  const when = [date, hasTime ? flowsheetColumnLabel(event.at).time : ""]
+    .filter(Boolean)
+    .join(" ");
+  const name = event.count > 1 ? `${event.label}×${event.count}` : event.label;
+  return [name, event.detail].filter(Boolean).join(" ") + (when ? ` (${when})` : "");
+}
+
+/**
+ * イベントの帯。列は等間隔で時間に比例しないので、イベントは列の**境目**に置く
+ * (列の中央に置くと、その測定のときに起きたように見えてしまう)。
+ * 同じ境目に集まったイベントはラベルを縦に積む。
+ */
+function FlowsheetEventBand({
+  columns,
+  groups,
+}: {
+  columns: string[];
+  groups: FlowsheetEventGroup[];
+}) {
+  const width = columns.length * FLOWSHEET_COLUMN_WIDTH;
+  const rows = Math.min(
+    EVENT_LABEL_ROWS,
+    Math.max(1, ...groups.map((group) => group.labels.length)),
+  );
+  const height = EVENT_MARK_HEIGHT + rows * EVENT_ROW_HEIGHT;
+
+  return (
+    <svg
+      className="vital-flowsheet__event-band"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label="入退院・手術・検査のイベント"
+    >
+      {groups.map((group) => {
+        const x = group.slot * FLOWSHEET_COLUMN_WIDTH;
+        // 4 種類以上あるときは 2 行だけ出し、残りを最後の行にまとめる。
+        const overflow = group.labels.length > EVENT_LABEL_ROWS;
+        const shown = overflow ? group.labels.slice(0, EVENT_LABEL_ROWS - 1) : group.labels;
+        // 端の境目はラベルが SVG からはみ出すので、寄せ方を変える。
+        const anchor = x <= 0 ? "start" : x >= width ? "end" : "middle";
+        return (
+          <g
+            key={group.slot}
+            className={`vital-flowsheet__event vital-flowsheet__event--${group.labels[0].kind}`}
+          >
+            <title>{group.events.map(eventTitle).join("\n")}</title>
+            <path
+              className="vital-flowsheet__event-mark"
+              d={`M${x - 4},2 L${x + 4},2 L${x},9 Z`}
+            />
+            {shown.map((label, index) => (
+              <text
+                key={label.text}
+                className={`vital-flowsheet__event-label vital-flowsheet__event-label--${label.kind}`}
+                x={x}
+                y={EVENT_MARK_HEIGHT + (index + 1) * EVENT_ROW_HEIGHT - 3}
+                textAnchor={anchor}
+              >
+                {truncateLabel(label.text)}
+              </text>
+            ))}
+            {overflow && (
+              <text
+                className="vital-flowsheet__event-label vital-flowsheet__event-label--more"
+                x={x}
+                y={EVENT_MARK_HEIGHT + EVENT_LABEL_ROWS * EVENT_ROW_HEIGHT - 3}
+                textAnchor={anchor}
+              >
+                他{group.labels.length - shown.length}件
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -335,7 +549,16 @@ function markerShape(marker: ChartMarker, x: number, y: number) {
   }
 }
 
-function FlowsheetChart({ columns, series }: { columns: string[]; series: ChartSeries[] }) {
+function FlowsheetChart({
+  columns,
+  series,
+  eventSlots,
+}: {
+  columns: string[];
+  series: ChartSeries[];
+  /** イベントの帯の ▼ と同じ位置に落とす縦線(列の境目)。 */
+  eventSlots: number[];
+}) {
   const width = columns.length * FLOWSHEET_COLUMN_WIDTH;
   const xOf = (index: number) => (index + 0.5) * FLOWSHEET_COLUMN_WIDTH;
   const yOf = (s: ChartSeries, value: number) =>
@@ -375,6 +598,17 @@ function FlowsheetChart({ columns, series }: { columns: string[]; series: ChartS
           className="vital-flowsheet__grid vital-flowsheet__grid--column"
           x1={(index + 1) * FLOWSHEET_COLUMN_WIDTH}
           x2={(index + 1) * FLOWSHEET_COLUMN_WIDTH}
+          y1={0}
+          y2={CHART_HEIGHT}
+        />
+      ))}
+      {/* イベントの縦線。帯の ▼ から折れ線まで目で追えるよう、破線で通す。 */}
+      {eventSlots.map((slot) => (
+        <line
+          key={`event-${slot}`}
+          className="vital-flowsheet__grid vital-flowsheet__grid--event"
+          x1={slot * FLOWSHEET_COLUMN_WIDTH}
+          x2={slot * FLOWSHEET_COLUMN_WIDTH}
           y1={0}
           y2={CHART_HEIGHT}
         />

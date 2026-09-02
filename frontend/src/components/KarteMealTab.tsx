@@ -143,7 +143,7 @@ export function KarteMealTab({ patientId, onEdit, onCreate }: KarteMealTabProps)
                 isToday={day.date === todayDate}
                 // 月外のマスは日付だけ出す(前後の月を開けばそこで見られる)。
                 entries={day.inMonth ? mealDayEntries(rows, day.date) : []}
-                events={day.inMonth ? eventsOn(events.data ?? [], day.date) : []}
+                events={day.inMonth ? eventsOn(events.data?.events ?? [], day.date) : []}
                 onEdit={onEdit}
                 onCreate={onCreate}
               />
