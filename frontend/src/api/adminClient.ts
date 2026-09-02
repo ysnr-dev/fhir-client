@@ -9,6 +9,7 @@
 
 import type { MealScheduleSettings } from "../fhir/mealOrderHelpers";
 import type { NursingScheduleSettings } from "../fhir/nursingScheduleHelpers";
+import type { VitalThresholdSettings } from "../fhir/vitalHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 
 export interface ConnectionSettings {
@@ -38,12 +39,15 @@ export interface FacilitySettings {
   self_organization_id: string | null;
   nursing_schedule: NursingScheduleSettings;
   meal_schedule: MealScheduleSettings;
+  /** 経過表でバイタルを異常値として強調するしきい値(LOINC コード → 下限・上限)。 */
+  vital_thresholds: VitalThresholdSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
   self_organization_id: string;
   nursing_schedule: NursingScheduleSettings;
   meal_schedule: MealScheduleSettings;
+  vital_thresholds: VitalThresholdSettings;
 }>;
 
 export interface ConnectionTestResult {

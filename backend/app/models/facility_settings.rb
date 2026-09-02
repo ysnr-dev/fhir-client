@@ -36,10 +36,24 @@ class FacilitySettings < ApplicationRecord
     "dinner" => "18:00"
   }.freeze
 
+  # 経過表でバイタルを異常値として強調するしきい値。キーは LOINC コード、値は下限(low)と
+  # 上限(high)で、下限以下を L・上限以上を H とする。どちらかを省けばその側は判定しない。
+  # 判定は表示時に行う(Observation.interpretation には書かない)ので、ここを変えれば
+  # 過去の測定にもそのまま効く。
+  DEFAULT_VITAL_THRESHOLDS = {
+    "8480-6" => { "low" => 90, "high" => 180 }, # 収縮期血圧
+    "8462-4" => { "high" => 110 },              # 拡張期血圧
+    "8310-5" => { "high" => 37.5 },             # 体温
+    "8867-4" => { "low" => 50, "high" => 100 }, # 脈拍
+    "2708-6" => { "low" => 90 },                # SpO2
+    "9279-1" => { "low" => 10, "high" => 25 }   # 呼吸数
+  }.freeze
+
   TIME_PATTERN = /\A([01]\d|2[0-3]):[0-5]\d\z/
 
   validate :nursing_schedule_shape
   validate :meal_schedule_shape
+  validate :vital_thresholds_shape
 
   # 欠けたキーを既定値で埋めた看護指示の既定時刻。読み出しは常にこちらを使う。
   def nursing_schedule_with_defaults
@@ -56,6 +70,15 @@ class FacilitySettings < ApplicationRecord
     DEFAULT_MEAL_SCHEDULE.transform_values.with_index do |default, index|
       key = DEFAULT_MEAL_SCHEDULE.keys[index]
       stored[key].presence || default
+    end
+  end
+
+  # 欠けた項目を既定値で埋めたバイタルのしきい値。項目単位で置き換える(項目の中の
+  # low / high はマージしない。「上限を空にする」を保存できるようにするため)。
+  def vital_thresholds_with_defaults
+    stored = vital_thresholds.is_a?(Hash) ? vital_thresholds : {}
+    DEFAULT_VITAL_THRESHOLDS.merge(stored.slice(*DEFAULT_VITAL_THRESHOLDS.keys)).transform_values do |bounds|
+      bounds.is_a?(Hash) ? bounds.slice("low", "high").compact : {}
     end
   end
 
@@ -77,9 +100,36 @@ class FacilitySettings < ApplicationRecord
     def meal_schedule
       current.meal_schedule_with_defaults
     end
+
+    def vital_thresholds
+      current.vital_thresholds_with_defaults
+    end
   end
 
   private
+
+  def vital_thresholds_shape
+    return if vital_thresholds.blank?
+    return errors.add(:vital_thresholds, "は連想配列で指定してください") unless vital_thresholds.is_a?(Hash)
+
+    vital_thresholds.each do |code, bounds|
+      unless DEFAULT_VITAL_THRESHOLDS.key?(code)
+        errors.add(:vital_thresholds, "#{code} は対象外の項目です")
+        next
+      end
+      unless bounds.is_a?(Hash) && (bounds.keys - %w[low high]).empty?
+        errors.add(:vital_thresholds, "#{code} は low / high で指定してください")
+        next
+      end
+      low = bounds["low"]
+      high = bounds["high"]
+      unless [low, high].all? { |v| v.nil? || v.is_a?(Numeric) }
+        errors.add(:vital_thresholds, "#{code} の下限・上限は数値で指定してください")
+        next
+      end
+      errors.add(:vital_thresholds, "#{code} は下限 < 上限にしてください") if low && high && low >= high
+    end
+  end
 
   def meal_schedule_shape
     return if meal_schedule.blank?

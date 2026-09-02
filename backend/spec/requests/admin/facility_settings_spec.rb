@@ -94,6 +94,34 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /admin/facility_settings (vital_thresholds)" do
+    it "stores the thresholds without touching the other settings" do
+      FacilitySettings.current.update!(self_organization_fhir_id: "org-self")
+
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { vital_thresholds: { "8310-5" => { high: 38.0 }, "2708-6" => { low: 93 } } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)
+      expect(body["self_organization_id"]).to eq("org-self")
+      expect(body["vital_thresholds"]["8310-5"]).to eq("high" => 38.0)
+      expect(body["vital_thresholds"]["2708-6"]).to eq("low" => 93)
+      # 渡していない項目は既定値のまま
+      expect(body["vital_thresholds"]["8867-4"]).to eq("low" => 50, "high" => 100)
+    end
+
+    it "rejects a non-numeric bound" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { vital_thresholds: { "8310-5" => { high: "38度" } } }, as: :json
+      end
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "with ADMIN_TOKEN configured" do
     it "rejects a request without credentials" do
       ENV["ADMIN_TOKEN"] = "s3cret-admin-passphrase"

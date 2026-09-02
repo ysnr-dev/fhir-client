@@ -405,6 +405,8 @@ export interface VitalFlowsheetRow {
   values: Map<string, string>;
   /** 測定日時 → グラフ用の数値。系列名を分けたい血圧は含めない。 */
   numbers: Map<string, number>;
+  /** 測定日時 → 異常値の判定(血圧は収縮期・拡張期のどちらかが外れていれば付く)。 */
+  interpretations: Map<string, VitalInterpretation>;
 }
 
 export interface VitalFlowsheet {
@@ -418,6 +420,62 @@ export const BLOOD_PRESSURE_SERIES = [
   { key: SYSTOLIC.code, name: "収縮期血圧", unit: BP_UNIT.unit },
   { key: DIASTOLIC.code, name: "拡張期血圧", unit: BP_UNIT.unit },
 ] as const;
+
+// ---- 異常値のしきい値 ----
+//
+// 経過表で発熱や SpO2 低下を目立たせるための判定。Observation.interpretation には
+// 書かず、施設設定のしきい値(backend の FacilitySettings::DEFAULT_VITAL_THRESHOLDS と
+// 同じ既定値)で表示時に判定する。しきい値を変えれば過去の測定にもそのまま効く。
+
+/** 異常値の判定。H: 上限以上 / L: 下限以下 / "": 正常または判定対象外。 */
+export type VitalInterpretation = "H" | "L" | "";
+
+/** 1 項目のしきい値。片方だけでもよく、無い側は判定しない。 */
+export interface VitalThresholdBounds {
+  low?: number | null;
+  high?: number | null;
+}
+
+/** LOINC コード → しきい値。 */
+export type VitalThresholdSettings = Record<string, VitalThresholdBounds>;
+
+function thresholdMeasure(key: VitalMeasureKey): { code: string; label: string; step: string } {
+  const measure = VITAL_MEASURES.find((m) => m.key === key);
+  if (!measure) throw new Error(`unknown vital measure: ${key}`);
+  return { code: measure.code, label: measure.label, step: measure.step };
+}
+
+/** しきい値を持てる項目。施設設定の入力欄もこの順。 */
+export const VITAL_THRESHOLD_ITEMS: { code: string; label: string; step: string }[] = [
+  { code: SYSTOLIC.code, label: "収縮期血圧", step: "1" },
+  { code: DIASTOLIC.code, label: "拡張期血圧", step: "1" },
+  thresholdMeasure("temperature"),
+  thresholdMeasure("pulse"),
+  thresholdMeasure("spo2"),
+  thresholdMeasure("respiration"),
+];
+
+export const DEFAULT_VITAL_THRESHOLDS: VitalThresholdSettings = {
+  [SYSTOLIC.code]: { low: 90, high: 180 },
+  [DIASTOLIC.code]: { high: 110 },
+  [thresholdMeasure("temperature").code]: { high: 37.5 },
+  [thresholdMeasure("pulse").code]: { low: 50, high: 100 },
+  [thresholdMeasure("spo2").code]: { low: 90 },
+  [thresholdMeasure("respiration").code]: { low: 10, high: 25 },
+};
+
+/** 上限以上なら H、下限以下なら L。しきい値の無い項目・側は判定しない。 */
+export function vitalInterpretationOf(
+  code: string,
+  value: number,
+  thresholds: VitalThresholdSettings,
+): VitalInterpretation {
+  const bounds = thresholds[code];
+  if (!bounds) return "";
+  if (bounds.high != null && value >= bounds.high) return "H";
+  if (bounds.low != null && value <= bounds.low) return "L";
+  return "";
+}
 
 /** 経過表の行の並び。入力欄と同じ順を先頭に置き、それ以外は登場順で後ろへ。 */
 const FLOWSHEET_ORDER = [
@@ -456,6 +514,7 @@ function bloodPressureComponent(
 export function buildVitalFlowsheet(
   observations: fhir4.Observation[],
   columnCount: number,
+  thresholds: VitalThresholdSettings = DEFAULT_VITAL_THRESHOLDS,
 ): VitalFlowsheet {
   const allColumns: string[] = [];
   for (const observation of observations) {
@@ -475,7 +534,14 @@ export function buildVitalFlowsheet(
       if (!existing.unit && unit) existing.unit = unit;
       return existing;
     }
-    const row: VitalFlowsheetRow = { key, name, unit, values: new Map(), numbers: new Map() };
+    const row: VitalFlowsheetRow = {
+      key,
+      name,
+      unit,
+      values: new Map(),
+      numbers: new Map(),
+      interpretations: new Map(),
+    };
     rows.set(key, row);
     return row;
   }
@@ -505,6 +571,13 @@ export function buildVitalFlowsheet(
       const row = rowFor(key, name, BP_UNIT.unit);
       if (row.values.has(at)) continue;
       row.values.set(at, `${systolic}/${diastolic}`);
+      // 収縮期・拡張期のどちらかが外れていれば異常。両方外れて向きが違えば H を優先する。
+      const marks = [
+        vitalInterpretationOf(SYSTOLIC.code, systolic, thresholds),
+        vitalInterpretationOf(DIASTOLIC.code, diastolic, thresholds),
+      ];
+      const mark = marks.includes("H") ? "H" : marks.includes("L") ? "L" : "";
+      if (mark) row.interpretations.set(at, mark);
       continue;
     }
 
@@ -514,7 +587,11 @@ export function buildVitalFlowsheet(
     // 同じ時刻に同じ項目が複数あるときは、先(=新しい)の値を採る。
     if (row.values.has(at)) continue;
     row.values.set(at, cell.value);
-    if (cell.number !== undefined) row.numbers.set(at, cell.number);
+    if (cell.number !== undefined) {
+      row.numbers.set(at, cell.number);
+      const mark = vitalInterpretationOf(key, cell.number, thresholds);
+      if (mark) row.interpretations.set(at, mark);
+    }
   }
 
   // 既定の項目を先に、それ以外(テンプレート抽出など)を登場順で後ろに並べる。

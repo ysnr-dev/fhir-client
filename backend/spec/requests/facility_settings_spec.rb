@@ -21,6 +21,7 @@ RSpec.describe "FacilitySettings", type: :request do
       # 未設定でも看護指示の既定時刻は既定値で返る
       expect(body["nursing_schedule"]).to eq(FacilitySettings::DEFAULT_NURSING_SCHEDULE)
       expect(body["meal_schedule"]).to eq(FacilitySettings::DEFAULT_MEAL_SCHEDULE)
+      expect(body["vital_thresholds"]).to eq(FacilitySettings::DEFAULT_VITAL_THRESHOLDS)
     end
 
     it "returns the configured self organization" do

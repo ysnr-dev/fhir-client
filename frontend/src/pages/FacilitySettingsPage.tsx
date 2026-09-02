@@ -13,6 +13,11 @@ import {
   isValidTime,
   type NursingScheduleSettings,
 } from "../fhir/nursingScheduleHelpers";
+import {
+  DEFAULT_VITAL_THRESHOLDS,
+  VITAL_THRESHOLD_ITEMS,
+  type VitalThresholdSettings,
+} from "../fhir/vitalHelpers";
 
 // 「どの Organization が自院か」を指定する。本アプリはマルチテナントではなく、
 // 診療科・診察室・スタッフは自院のものしか登録しない。他院は診療情報提供書の
@@ -53,13 +58,33 @@ export function FacilitySettingsPage() {
     mealSchedule.breakfast < mealSchedule.lunch &&
     mealSchedule.lunch < mealSchedule.dinner;
 
+  // 経過表の異常値のしきい値。項目ごとに下限・上限を持ち、空欄はその側を判定しない。
+  const [thresholdDraft, setThresholdDraft] = useState<VitalThresholdSettings | undefined>(undefined);
+  const savedThresholds = settings.data?.vital_thresholds ?? DEFAULT_VITAL_THRESHOLDS;
+  const thresholds = thresholdDraft ?? savedThresholds;
+  const thresholdsValid = VITAL_THRESHOLD_ITEMS.every((item) => {
+    const { low, high } = thresholds[item.code] ?? {};
+    return low == null || high == null || low < high;
+  });
+
+  function updateThreshold(code: string, side: "low" | "high", raw: string) {
+    setThresholdDraft((prev) => {
+      const base = prev ?? savedThresholds;
+      const bounds = { ...(base[code] ?? {}) };
+      if (raw === "") delete bounds[side];
+      else bounds[side] = Number(raw);
+      return { ...base, [code]: bounds };
+    });
+  }
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!scheduleValid || !mealValid) return;
+    if (!scheduleValid || !mealValid || !thresholdsValid) return;
     update.mutate({
       self_organization_id: value,
       nursing_schedule: schedule,
       meal_schedule: mealSchedule,
+      vital_thresholds: thresholds,
     });
   }
 
@@ -149,8 +174,42 @@ export function FacilitySettingsPage() {
           </div>
         </details>
 
+        {/* 経過表でバイタルを異常値(H/L)として色付けするしきい値。上限以上で H、下限以下で L。
+            空欄はその側を判定しない。表示時に判定するので、変えれば過去の測定にも効く。 */}
+        <details className="facility-settings__schedule">
+          <summary>バイタルの異常値</summary>
+          <div className="facility-settings__schedule-body">
+            {VITAL_THRESHOLD_ITEMS.map((item) => (
+              <label key={item.code}>
+                {item.label}
+                <span className="facility-settings__times">
+                  <input
+                    type="number"
+                    step={item.step}
+                    value={thresholds[item.code]?.low ?? ""}
+                    onChange={(e) => updateThreshold(item.code, "low", e.target.value)}
+                    aria-label={`${item.label}の下限`}
+                    placeholder="下限"
+                  />
+                  <input
+                    type="number"
+                    step={item.step}
+                    value={thresholds[item.code]?.high ?? ""}
+                    onChange={(e) => updateThreshold(item.code, "high", e.target.value)}
+                    aria-label={`${item.label}の上限`}
+                    placeholder="上限"
+                  />
+                </span>
+              </label>
+            ))}
+          </div>
+        </details>
+
         <div className="connection-settings-form__actions">
-          <button type="submit" disabled={update.isPending || !scheduleValid || !mealValid}>
+          <button
+            type="submit"
+            disabled={update.isPending || !scheduleValid || !mealValid || !thresholdsValid}
+          >
             {update.isPending ? "保存中..." : "保存"}
           </button>
         </div>
@@ -163,6 +222,11 @@ export function FacilitySettingsPage() {
         {!mealValid && (
           <p className="connection-settings-form__field-hint" role="status">
             「食事の提供時刻」は朝・昼・夕の順に、すべて入れてください。
+          </p>
+        )}
+        {!thresholdsValid && (
+          <p className="connection-settings-form__field-hint" role="status">
+            「バイタルの異常値」は下限より上限を大きくしてください。
           </p>
         )}
 

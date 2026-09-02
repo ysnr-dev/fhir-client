@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useVitalFlowsheet } from "../api/queries";
+import { useVitalFlowsheet, useVitalThresholds } from "../api/queries";
+import { interpretationClass } from "../fhir/labResultHelpers";
 import {
   BLOOD_PRESSURE_SERIES,
   bloodPressureNumbers,
   buildVitalFlowsheet,
   flowsheetColumnLabel,
   groupFlowsheetColumns,
+  vitalInterpretationOf,
   type VitalFlowsheetRow,
+  type VitalInterpretation,
+  type VitalThresholdSettings,
 } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 
@@ -31,9 +35,11 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
   const [fullscreenTop, setFullscreenTop] = useState(0);
 
   const { data: observations, isLoading, error } = useVitalFlowsheet(patientId, columnCount);
+  // 異常値(H/L)の色付けは施設設定のしきい値で表示時に判定する。
+  const thresholds = useVitalThresholds();
   const flowsheet = useMemo(
-    () => buildVitalFlowsheet(observations ?? [], columnCount),
-    [observations, columnCount],
+    () => buildVitalFlowsheet(observations ?? [], columnCount, thresholds),
+    [observations, columnCount, thresholds],
   );
 
   // 全画面は Escape でも抜けられるようにする(モーダルと同じ作法)。
@@ -63,8 +69,8 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
   }
 
   const chartSeries = useMemo(
-    () => buildChartSeries(flowsheet.rows, observations ?? []),
-    [flowsheet, observations],
+    () => buildChartSeries(flowsheet.rows, observations ?? [], thresholds),
+    [flowsheet, observations, thresholds],
   );
 
   const { columns } = flowsheet;
@@ -165,13 +171,22 @@ export function VitalFlowsheetPanel({ patientId }: { patientId: string }) {
                   </tr>
                   {flowsheet.rows.map((row) => (
                     <tr key={row.key}>
-                      <td className="lab-timeline__item-col">
+                      {/* 項目列・単位列は幅固定で左に貼り付く(CSS)。長い項目名は省略されるので title で。 */}
+                      <td className="lab-timeline__item-col" title={row.name}>
                         <span className="lab-timeline__item-label">{row.name}</span>
                       </td>
                       <td className="lab-timeline__unit-col">{row.unit}</td>
                       {columns.map((at) => (
                         // 列幅は固定なので、長い文字値(観察結果)は省略される。全文は title で。
-                        <td key={at} className="lab-timeline__value" title={row.values.get(at)}>
+                        // 異常値は検査結果の時系列表示と同じ修飾子(--high / --low)で色付けする。
+                        <td
+                          key={at}
+                          className={interpretationClass(
+                            row.interpretations.get(at) ?? "",
+                            "lab-timeline__value",
+                          )}
+                          title={row.values.get(at)}
+                        >
                           {row.values.get(at) ?? ""}
                         </td>
                       ))}
@@ -220,6 +235,8 @@ interface ChartSpec {
 interface ChartSeries extends ChartSpec {
   max: number;
   numbers: Map<string, number>;
+  /** 測定日時 → 異常値の判定。点の色を変える。 */
+  interpretations: Map<string, VitalInterpretation>;
 }
 
 // 温度板の慣例的な目盛り(BP 0–240 / R 0–60 / P 0–150 / T 34–40)。系列ごとにスケールが
@@ -235,12 +252,19 @@ const CHART_SPECS: ChartSpec[] = [
 function buildChartSeries(
   rows: VitalFlowsheetRow[],
   observations: fhir4.Observation[],
+  thresholds: VitalThresholdSettings,
 ): ChartSeries[] {
   const bpKeys = BLOOD_PRESSURE_SERIES.map((series) => series.key as string);
   return CHART_SPECS.map((spec) => {
     const numbers = bpKeys.includes(spec.key)
       ? bloodPressureNumbers(observations, spec.key)
       : (rows.find((row) => row.key === spec.key)?.numbers ?? new Map<string, number>());
+    // 表の血圧行は収縮期・拡張期をまとめて判定しているので、グラフは系列ごとに判定し直す。
+    const interpretations = new Map<string, VitalInterpretation>();
+    for (const [at, value] of numbers) {
+      const mark = vitalInterpretationOf(spec.key, value, thresholds);
+      if (mark) interpretations.set(at, mark);
+    }
     // 目盛りの区間数は固定なので、範囲外の測定があれば目盛りごと平行移動して収める
     // (上側を優先。上下両方にはみ出す極端な場合は下側が切れる)。
     let { min } = spec;
@@ -252,7 +276,7 @@ function buildChartSeries(
       while (min > low) min -= spec.step;
       while (min + span < high) min += spec.step;
     }
-    return { ...spec, min, max: min + span, numbers };
+    return { ...spec, min, max: min + span, numbers, interpretations };
   });
 }
 
@@ -368,7 +392,13 @@ function FlowsheetChart({ columns, series }: { columns: string[]; series: ChartS
           <g key={s.key} className={`vital-flowsheet__series vital-flowsheet__series--${s.className}`}>
             <path className="vital-flowsheet__line" d={path} />
             {points.map((p) => (
-              <g key={p.at} className="vital-flowsheet__marker">
+              <g
+                key={p.at}
+                className={interpretationClass(
+                  s.interpretations.get(p.at) ?? "",
+                  "vital-flowsheet__marker",
+                )}
+              >
                 <title>
                   {s.name} {p.value}
                   {s.unit} ({flowsheetColumnLabel(p.at).date} {flowsheetColumnLabel(p.at).time})

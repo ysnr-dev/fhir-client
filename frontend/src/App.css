@@ -7524,6 +7524,71 @@ body.page-wide .app__main {
 
 /* ---- 経過表(VitalFlowsheetPanel) ---- */
 
+/* 縦スクロールの基準をパネル全体から表のラップに移し、見出し(thead)を上に貼り付ける。
+   パネル(.karte-tabpanel)の overflow-y: auto のままだと、ラップ(overflow-x: auto)が
+   sticky の基準になるのに高さを持たず、縦の固定が効かない。操作行の高さは固定し、
+   ラップに残りを渡して中だけを送る。全画面も同じ(パネル自体が fixed で高さを持つ)。 */
+.vital-flowsheet {
+  /* 左に貼り付ける項目列・単位列の幅。sticky の left は手前の列幅の合計で決めるしか
+     ないので決め打ちする(.sticky-table__fix-* と同じ理由)。グラフ行の軸セルは
+     2 列にまたがるので、合計が軸の幅(144px + 余白)を下回らないようにする。 */
+  --vital-flowsheet-item-w: 120px;
+  --vital-flowsheet-unit-w: 60px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vital-flowsheet .lab-timeline__controls {
+  flex: none;
+}
+
+.vital-flowsheet .lab-timeline__table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  margin-bottom: 0;
+}
+
+/* 3 段の見出しは行ごとの top を計算せず thead ごと貼り付ける。 */
+.vital-flowsheet__table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* 項目列は幅を決め打ちし、単位列もその右に貼り付ける。列の区切り線は単位列側に移す。 */
+.vital-flowsheet__table .lab-timeline__item-col {
+  box-sizing: border-box;
+  width: var(--vital-flowsheet-item-w);
+  min-width: var(--vital-flowsheet-item-w);
+  max-width: var(--vital-flowsheet-item-w);
+  box-shadow: none;
+}
+
+.vital-flowsheet__table .lab-timeline__unit-col {
+  position: sticky;
+  left: var(--vital-flowsheet-item-w);
+  z-index: 1;
+  box-sizing: border-box;
+  width: var(--vital-flowsheet-unit-w);
+  min-width: var(--vital-flowsheet-unit-w);
+  max-width: var(--vital-flowsheet-unit-w);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--bg);
+  box-shadow: inset -1px 0 0 var(--border);
+}
+
+/* 単位列も項目列と同じく、表の地色と 1 行おきの縞を自前で塗る(sticky で行の上に重なるため)。 */
+.karte-tabpanel .vital-flowsheet__table tbody .lab-timeline__unit-col {
+  background-color: var(--surface-card);
+}
+
+.karte-tabpanel .vital-flowsheet__table tbody tr:nth-child(even) .lab-timeline__unit-col {
+  background-image: linear-gradient(var(--surface-stripe), var(--surface-stripe));
+}
+
 /* 経過表は 1 画面に多くの測定を並べたいので、検査結果の時系列表示より行を詰める。
    列が多く値が縦に並ぶので、横罫線だけでなく列の区切りにも縦罫線を引く。 */
 .vital-flowsheet__table th,
@@ -7642,11 +7707,26 @@ body.page-wide .app__main {
   stroke-width: 1.5;
 }
 
+/* 異常値の点。塗りは系列色のまま(体温の異常点を赤で塗ると脈拍の点と見分けが
+   つかない)、外周だけ表と同じ H/L の色の太いリングにして目立たせる。 */
+.vital-flowsheet__marker--high {
+  stroke: var(--lab-high);
+  stroke-width: 3;
+}
+
+.vital-flowsheet__marker--low {
+  stroke: var(--lab-low);
+  stroke-width: 3;
+}
+
 /* グラフ行の項目セルは軸。系列ごとの目盛りを列にして横罫線に揃える。 */
 .vital-flowsheet__table th.vital-flowsheet__axis-cell {
   vertical-align: top;
   padding: 0 8px;
   line-height: 0;
+  /* 項目列 + 単位列にまたがるので、項目列の決め打ち幅は使わない。 */
+  width: auto;
+  min-width: 0;
   max-width: none;
 }
 
@@ -7679,7 +7759,8 @@ body.page-wide .app__main {
   border-radius: 8px;
   background: var(--surface-sunken);
   padding: 12px;
-  overflow: auto;
+  /* 送るのは表のラップ(上の .vital-flowsheet と同じ)。 */
+  overflow: hidden;
 }
 
 /* ---- 予約枠(Schedule / Slot) ---- */

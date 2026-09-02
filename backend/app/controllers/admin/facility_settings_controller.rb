@@ -29,7 +29,8 @@ module Admin
       permitted = params.permit(
         :self_organization_id,
         nursing_schedule: [:interval_start, { daily: {} }],
-        meal_schedule: %i[breakfast lunch dinner]
+        meal_schedule: %i[breakfast lunch dinner],
+        vital_thresholds: {}
       )
       attrs = {}
       if params.key?(:self_organization_id)
@@ -41,6 +42,9 @@ module Admin
       if params.key?(:meal_schedule)
         attrs[:meal_schedule] = permitted[:meal_schedule].to_h
       end
+      if params.key?(:vital_thresholds)
+        attrs[:vital_thresholds] = permitted[:vital_thresholds].to_h
+      end
       attrs
     end
 
@@ -48,7 +52,8 @@ module Admin
       {
         self_organization_id: settings.self_organization_fhir_id.presence,
         nursing_schedule: settings.nursing_schedule_with_defaults,
-        meal_schedule: settings.meal_schedule_with_defaults
+        meal_schedule: settings.meal_schedule_with_defaults,
+        vital_thresholds: settings.vital_thresholds_with_defaults
       }
     end
   end

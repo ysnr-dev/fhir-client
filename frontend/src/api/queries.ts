@@ -13,6 +13,7 @@ import {
   vitalDeleteBundle,
   vitalSaveBundle,
   VITAL_ENTRY_SYSTEM,
+  DEFAULT_VITAL_THRESHOLDS,
 } from "../fhir/vitalHelpers";
 import {
   KARTE_NOTE_TYPE_SEARCH,
@@ -6516,6 +6517,12 @@ export function usePatientMealOrders(patientId: string | undefined) {
 export function useMealSchedule() {
   const settings = useFacilitySettings();
   return settings.data?.meal_schedule ?? DEFAULT_MEAL_SCHEDULE;
+}
+
+/** 経過表でバイタルを異常値として強調するしきい値。設定が読めるまでは既定値で判定する。 */
+export function useVitalThresholds() {
+  const settings = useFacilitySettings();
+  return settings.data?.vital_thresholds ?? DEFAULT_VITAL_THRESHOLDS;
 }
 
 /**
