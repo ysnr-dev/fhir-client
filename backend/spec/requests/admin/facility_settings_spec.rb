@@ -147,6 +147,54 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /admin/facility_settings (medication_schedule)" do
+    it "stores the offsets and times without touching the other settings" do
+      FacilitySettings.current.update!(self_organization_fhir_id: "org-self")
+
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: {
+                medication_schedule: {
+                  before_meal_minutes: 15,
+                  after_meal_minutes: 45,
+                  bedtime: "22:30",
+                  wake_time: "05:30"
+                }
+              },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)
+      expect(body["self_organization_id"]).to eq("org-self")
+      expect(body["medication_schedule"]).to eq(
+        "before_meal_minutes" => 15,
+        "after_meal_minutes" => 45,
+        "bedtime" => "22:30",
+        "wake_time" => "05:30"
+      )
+    end
+
+    it "accepts offsets sent as strings (フォームからの送信)" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { medication_schedule: { before_meal_minutes: "20" } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["medication_schedule"]["before_meal_minutes"]).to eq(20)
+    end
+
+    it "rejects a time that is not HH:MM" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { medication_schedule: { bedtime: "abc" } }, as: :json
+      end
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "with ADMIN_TOKEN configured" do
     it "rejects a request without credentials" do
       ENV["ADMIN_TOKEN"] = "s3cret-admin-passphrase"

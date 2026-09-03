@@ -22,6 +22,13 @@ export { codingBySystem, SETTING_OPTIONS };
 // 存在するため、種別を持たない ServiceRequest は処方として扱う)。
 export const ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type";
 
+/**
+ * 処方のオーダー種別。**ServiceRequest には付けない**(種別を持たない ServiceRequest が
+ * 処方という上の取り決めを壊すため)。内服の与薬の実施記録(Procedure /
+ * MedicationAdministration)を注射・処置の記録と振り分けるのに使う。
+ */
+export const PRESCRIPTION_ORDER_TYPE = { code: "prescription", display: "処方" };
+
 export const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting";
 // 処方区分。処方オーダーだけが持つ CodeSystem なので、処方一覧では上流の
 // category 検索(system のみ指定)で処方オーダーだけを絞り込むのにも使う。

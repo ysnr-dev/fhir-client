@@ -13,7 +13,13 @@ import type { EncounterEvent } from "./encounterHelpers";
 // 読み違える。時刻は title と一覧モーダルで見せる)。
 
 /** イベントの種類。色分けにだけ使う。`injection` / `exam` は一覧モーダルの行でのみ使う。 */
-export type FlowsheetEventKind = "encounter" | "surgery" | "exam" | "injection" | "nursing";
+export type FlowsheetEventKind =
+  | "encounter"
+  | "surgery"
+  | "exam"
+  | "injection"
+  | "oral"
+  | "nursing";
 
 export interface FlowsheetEvent {
   /** イベントの日時。時刻を持たない登録では YYYY-MM-DD。 */
@@ -104,9 +110,17 @@ export function markModalEvents(
   selectedKey?: string,
 ): { events: FlowsheetEvent[]; highlightIndex: number; selected?: FlowsheetMark } {
   const marks: FlowsheetMark[] = [];
+  // 1 件の実施記録はオーダーのすべての行(薬剤の組ごと)に印が付くので、行を跨いで
+  // 同じ内容の印が集まる。一覧では同じ内容を 1 行にまとめる(押した印を突き止める
+  // markKey は行に依らないので、まとめても強調の対象は変わらない)。
+  const seen = new Set<string>();
   for (const row of rows) {
     for (const mark of row.marks) {
-      if (mark.groupId === groupId) marks.push(mark);
+      if (mark.groupId !== groupId) continue;
+      const key = [mark.at, mark.end ?? "", mark.kind, mark.event.name, mark.event.detail].join("/");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      marks.push(mark);
     }
   }
   marks.sort((a, b) => a.at.localeCompare(b.at));

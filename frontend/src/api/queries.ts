@@ -318,6 +318,18 @@ import {
   type EncounterStay,
 } from "../fhir/flowsheetEventHelpers";
 import type { FlowsheetInjectionData } from "../fhir/flowsheetInjectionHelpers";
+import type { FlowsheetOralData } from "../fhir/flowsheetOralHelpers";
+import {
+  buildOralPerformDeleteEntries,
+  type OralPerformDisplay,
+} from "../fhir/oralPerformHelpers";
+import { DEFAULT_MEDICATION_SCHEDULE } from "../fhir/medicationScheduleHelpers";
+
+/**
+ * 内服の予定を出すのに遡る日数。処方の投与日数には上限が無いが、上流は投与日数を
+ * 索引しないので「これより前に始まった処方は引かない」線を引く必要がある。
+ */
+const ORAL_LOOKBACK_DAYS = 92;
 import {
   buildAnesthesiaChartData,
   isAnesthesiaChartHub,
@@ -1952,6 +1964,85 @@ export function usePatientInjectionOrders(
       };
     },
     enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
+  });
+}
+
+/**
+ * 経過表の内服欄に出す、その期間にかかる入院処方と与薬の記録。
+ *
+ * 処方の ServiceRequest は order-type の category を持たない(持たないこと自体が処方の
+ * 印)ので、注射のように種別で絞れない。処方だけが持つ `PRESCRIPTION_CATEGORY_SYSTEM` を
+ * **system だけ指定**して絞り(処方ワークリストと同じ手)、入外区分と処方かどうかの最終
+ * 判定はクライアントで行う。
+ *
+ * 処方は 1 件が投与日数ぶん続くので、期間の開始より前に始まったものも要る。投与日数は
+ * 上流で索引できないため、下限は「期間の開始 − 92 日」で引く(注射の連日展開の上限
+ * 90 日に合わせた経験則。これを超える長期処方は期間を過去に送れば読める)。
+ */
+export function usePatientOralPrescriptions(
+  patientId: string | undefined,
+  rangeStart: string,
+  rangeEnd: string,
+) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "flowsheet-oral", patientId, rangeStart, rangeEnd],
+    queryFn: async (): Promise<FlowsheetOralData> => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|`);
+      params.append("occurrence", `ge${addDays(rangeStart, -ORAL_LOOKBACK_DAYS)}`);
+      params.append("occurrence", `le${rangeEnd}`);
+      params.append("_revinclude", "MedicationRequest:based-on");
+      params.append("_revinclude", "Task:focus");
+      params.append("_revinclude", "Procedure:based-on");
+      params.append("_revinclude:iterate", "MedicationAdministration:part-of");
+      params.set("_count", "100");
+
+      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+      const resources = (bundle.entry ?? [])
+        .map((entry) => entry.resource)
+        .filter((r): r is fhir4.Resource => Boolean(r));
+      const of = <T extends fhir4.Resource>(type: T["resourceType"]) =>
+        resources.filter((r): r is T => r.resourceType === type);
+
+      return {
+        orders: of<fhir4.ServiceRequest>("ServiceRequest"),
+        medicationRequests: of<fhir4.MedicationRequest>("MedicationRequest"),
+        tasks: of<fhir4.Task>("Task"),
+        procedures: of<fhir4.Procedure>("Procedure"),
+        administrations: of<fhir4.MedicationAdministration>("MedicationAdministration"),
+      };
+    },
+    enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
+  });
+}
+
+/** 与薬の記録(1 枠ぶん)。ハブと薬剤の記録を 1 transaction で作る。 */
+export function useRegisterOralPerform() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
+  });
+}
+
+/** 与薬の取消。記録ごと消す(進捗 Task は動かしていないので戻す先が無い)。 */
+export function useCancelOralPerforms() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (performs: OralPerformDisplay[]) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: buildOralPerformDeleteEntries(performs),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+    },
   });
 }
 
@@ -6759,6 +6850,12 @@ export function usePatientMealOrders(patientId: string | undefined) {
 export function useMealSchedule() {
   const settings = useFacilitySettings();
   return settings.data?.meal_schedule ?? DEFAULT_MEAL_SCHEDULE;
+}
+
+/** 内服の与薬時刻(食前・食後のずらしと就寝前・起床時)。設定が読めるまでは既定値。 */
+export function useMedicationSchedule() {
+  const settings = useFacilitySettings();
+  return settings.data?.medication_schedule ?? DEFAULT_MEDICATION_SCHEDULE;
 }
 
 /** 経過表でバイタルを異常値として強調するしきい値。設定が読めるまでは既定値で判定する。 */

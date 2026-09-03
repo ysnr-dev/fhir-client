@@ -22,6 +22,10 @@ import {
   EMPTY_WATER_BALANCE,
   type WaterBalanceSettings,
 } from "../fhir/flowsheetWaterBalanceHelpers";
+import {
+  DEFAULT_MEDICATION_SCHEDULE,
+  type MedicationScheduleSettings,
+} from "../fhir/medicationScheduleHelpers";
 import { useNursingObservationsByManageNos } from "../api/masterQueries";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
 
@@ -83,6 +87,26 @@ export function FacilitySettingsPage() {
     });
   }
 
+  // 内服の与薬の予定時刻。食事の時刻からのずらしと、就寝前・起床時の時刻。
+  const [medicationDraft, setMedicationDraft] = useState<MedicationScheduleSettings | undefined>(
+    undefined,
+  );
+  const savedMedication = settings.data?.medication_schedule ?? DEFAULT_MEDICATION_SCHEDULE;
+  const medicationSchedule = medicationDraft ?? savedMedication;
+  const medicationValid =
+    isValidTime(medicationSchedule.bedtime) &&
+    isValidTime(medicationSchedule.wake_time) &&
+    [medicationSchedule.before_meal_minutes, medicationSchedule.after_meal_minutes].every(
+      (minutes) => Number.isFinite(minutes) && minutes >= 0,
+    );
+
+  function updateMedication<K extends keyof MedicationScheduleSettings>(
+    key: K,
+    value: MedicationScheduleSettings[K],
+  ) {
+    setMedicationDraft((prev) => ({ ...(prev ?? savedMedication), [key]: value }));
+  }
+
   // 水分出納に数える看護観察。管理番号だけを保存し、名前はマスタから引く。
   const [balanceDraft, setBalanceDraft] = useState<WaterBalanceSettings | undefined>(undefined);
   const savedBalance = settings.data?.water_balance ?? EMPTY_WATER_BALANCE;
@@ -108,13 +132,14 @@ export function FacilitySettingsPage() {
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!scheduleValid || !mealValid || !thresholdsValid) return;
+    if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid) return;
     update.mutate({
       self_organization_id: value,
       nursing_schedule: schedule,
       meal_schedule: mealSchedule,
       vital_thresholds: thresholds,
       water_balance: balance,
+      medication_schedule: medicationSchedule,
     });
   }
 
@@ -235,6 +260,59 @@ export function FacilitySettingsPage() {
           </div>
         </details>
 
+        {/* 内服の与薬の予定時刻。処方は「1日3回・食後」までしか持たないので、食事の
+            時刻(上の設定)からのずらしと、就寝前・起床時の時刻をここで決める。表示時に
+            計算するので、変えれば過去の処方の予定にも効く。 */}
+        <details className="facility-settings__schedule">
+          <summary>内服の与薬の時刻</summary>
+          <div className="facility-settings__schedule-body">
+            <label>
+              食前・食直前
+              <span className="facility-settings__times">
+                <input
+                  type="number"
+                  min={0}
+                  step={5}
+                  value={medicationSchedule.before_meal_minutes}
+                  onChange={(e) => updateMedication("before_meal_minutes", Number(e.target.value))}
+                  aria-label="食前の分"
+                />
+                <span className="facility-settings__unit">分前</span>
+              </span>
+            </label>
+            <label>
+              食直後・食後
+              <span className="facility-settings__times">
+                <input
+                  type="number"
+                  min={0}
+                  step={5}
+                  value={medicationSchedule.after_meal_minutes}
+                  onChange={(e) => updateMedication("after_meal_minutes", Number(e.target.value))}
+                  aria-label="食後の分"
+                />
+                <span className="facility-settings__unit">分後</span>
+              </span>
+            </label>
+            <label>
+              就寝前
+              <input
+                type="time"
+                value={medicationSchedule.bedtime}
+                onChange={(e) => updateMedication("bedtime", e.target.value)}
+              />
+            </label>
+            <label>
+              起床時
+              <input
+                type="time"
+                value={medicationSchedule.wake_time}
+                onChange={(e) => updateMedication("wake_time", e.target.value)}
+              />
+            </label>
+          </div>
+        </details>
+
         {/* 経過表の水分出納に数える看護観察。同じ名前で単位違いの項目(尿量 mL / g)が
             あるので管理番号で持つ。集計できるのは mL の項目だけなので候補も mL に絞る。 */}
         <details className="facility-settings__schedule">
@@ -274,7 +352,13 @@ export function FacilitySettingsPage() {
         <div className="connection-settings-form__actions">
           <button
             type="submit"
-            disabled={update.isPending || !scheduleValid || !mealValid || !thresholdsValid}
+            disabled={
+              update.isPending ||
+              !scheduleValid ||
+              !mealValid ||
+              !thresholdsValid ||
+              !medicationValid
+            }
           >
             {update.isPending ? "保存中..." : "保存"}
           </button>
@@ -296,6 +380,11 @@ export function FacilitySettingsPage() {
           </p>
         )}
 
+        {!medicationValid && (
+          <p className="connection-settings-form__field-hint" role="status">
+            「内服の与薬の時刻」は 0 以上の分と、HH:MM の時刻で入れてください。
+          </p>
+        )}
         {update.isSuccess && (
           <p className="connection-settings-form__success" role="status">
             施設設定を保存しました

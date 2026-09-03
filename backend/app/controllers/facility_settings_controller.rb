@@ -14,7 +14,8 @@ class FacilitySettingsController < ActionController::API
       nursing_schedule: FacilitySettings.nursing_schedule,
       meal_schedule: FacilitySettings.meal_schedule,
       vital_thresholds: FacilitySettings.vital_thresholds,
-      water_balance: FacilitySettings.water_balance
+      water_balance: FacilitySettings.water_balance,
+      medication_schedule: FacilitySettings.medication_schedule
     }
   end
 end

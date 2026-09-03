@@ -131,6 +131,66 @@ RSpec.describe FacilitySettings do
     end
   end
 
+  describe ".medication_schedule" do
+    it "returns the defaults when nothing is stored" do
+      expect(described_class.medication_schedule).to eq(described_class::DEFAULT_MEDICATION_SCHEDULE)
+    end
+
+    it "fills the missing keys with the defaults" do
+      described_class.current.update!(medication_schedule: { "bedtime" => "22:00" })
+
+      expect(described_class.medication_schedule).to eq(
+        described_class::DEFAULT_MEDICATION_SCHEDULE.merge("bedtime" => "22:00")
+      )
+    end
+
+    it "stores the offsets and times" do
+      described_class.current.update!(
+        medication_schedule: {
+          "before_meal_minutes" => 15,
+          "after_meal_minutes" => 45,
+          "bedtime" => "22:30",
+          "wake_time" => "05:30"
+        }
+      )
+
+      expect(described_class.medication_schedule).to eq(
+        "before_meal_minutes" => 15,
+        "after_meal_minutes" => 45,
+        "bedtime" => "22:30",
+        "wake_time" => "05:30"
+      )
+    end
+
+    it "rejects a time that is not HH:MM" do
+      settings = described_class.current
+      settings.medication_schedule = { "bedtime" => "21時" }
+
+      expect(settings).not_to be_valid
+    end
+
+    it "rejects a negative offset" do
+      settings = described_class.current
+      settings.medication_schedule = { "before_meal_minutes" => -10 }
+
+      expect(settings).not_to be_valid
+    end
+
+    it "rejects an offset that is not a number" do
+      settings = described_class.current
+      settings.medication_schedule = { "after_meal_minutes" => "30分" }
+
+      expect(settings).not_to be_valid
+    end
+
+    it "rejects an unknown key" do
+      settings = described_class.current
+      settings.medication_schedule = { "lunch_minutes" => 10 }
+
+      expect(settings).not_to be_valid
+    end
+  end
+
   describe ".self_organization_id" do
     it "returns nil when unset" do
       expect(described_class.self_organization_id).to be_nil

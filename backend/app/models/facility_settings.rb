@@ -49,6 +49,20 @@ class FacilitySettings < ApplicationRecord
     "9279-1" => { "low" => 10, "high" => 25 }   # 呼吸数
   }.freeze
 
+  # 内服の与薬の予定時刻。処方は「1 日 3 回・食後」までしか持たないので、食事の時刻
+  # (meal_schedule)からのずらしと、就寝前・起床時の時刻を持つ。経過表の内服欄が
+  # 用法コードを展開して予定の印を置くのに使う(表示時に計算するので、ここを変えれば
+  # 過去の処方の予定にも効く)。
+  DEFAULT_MEDICATION_SCHEDULE = {
+    "before_meal_minutes" => 30,
+    "after_meal_minutes" => 30,
+    "bedtime" => "21:00",
+    "wake_time" => "06:00"
+  }.freeze
+
+  MEDICATION_SCHEDULE_MINUTE_KEYS = %w[before_meal_minutes after_meal_minutes].freeze
+  MEDICATION_SCHEDULE_TIME_KEYS = %w[bedtime wake_time].freeze
+
   # 経過表の水分出納(In/Out)に数える看護観察の項目(MEDIS の管理番号)。
   # 何を数えるかは施設の運用で違うので既定は空にし、施設設定で選ばせる
   # (尿量だけで 29 件、ドレーン排液は 200 件超あり、汎用の既定値は作れない)。
@@ -66,6 +80,7 @@ class FacilitySettings < ApplicationRecord
   validate :meal_schedule_shape
   validate :vital_thresholds_shape
   validate :water_balance_shape
+  validate :medication_schedule_shape
 
   # 欠けたキーを既定値で埋めた看護指示の既定時刻。読み出しは常にこちらを使う。
   def nursing_schedule_with_defaults
@@ -91,6 +106,15 @@ class FacilitySettings < ApplicationRecord
     stored = vital_thresholds.is_a?(Hash) ? vital_thresholds : {}
     DEFAULT_VITAL_THRESHOLDS.merge(stored.slice(*DEFAULT_VITAL_THRESHOLDS.keys)).transform_values do |bounds|
       bounds.is_a?(Hash) ? bounds.slice("low", "high").compact : {}
+    end
+  end
+
+  # 欠けたキーを既定値で埋めた与薬の時刻。
+  def medication_schedule_with_defaults
+    stored = medication_schedule.is_a?(Hash) ? medication_schedule : {}
+    DEFAULT_MEDICATION_SCHEDULE.to_h do |key, default|
+      value = stored[key]
+      [key, value.nil? || value == "" ? default : value]
     end
   end
 
@@ -129,9 +153,34 @@ class FacilitySettings < ApplicationRecord
     def water_balance
       current.water_balance_with_defaults
     end
+
+    def medication_schedule
+      current.medication_schedule_with_defaults
+    end
   end
 
   private
+
+  def medication_schedule_shape
+    return if medication_schedule.blank?
+    unless medication_schedule.is_a?(Hash)
+      return errors.add(:medication_schedule, "は連想配列で指定してください")
+    end
+
+    medication_schedule.each do |key, value|
+      if MEDICATION_SCHEDULE_MINUTE_KEYS.include?(key)
+        unless value.is_a?(Numeric) && value >= 0
+          errors.add(:medication_schedule, "#{key} は 0 以上の分で指定してください")
+        end
+      elsif MEDICATION_SCHEDULE_TIME_KEYS.include?(key)
+        unless value.is_a?(String) && value.match?(TIME_PATTERN)
+          errors.add(:medication_schedule, "#{key} は HH:MM で指定してください")
+        end
+      else
+        errors.add(:medication_schedule, "#{key} は対象外の項目です")
+      end
+    end
+  end
 
   def water_balance_shape
     return if water_balance.blank?

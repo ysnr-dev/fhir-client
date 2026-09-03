@@ -31,7 +31,8 @@ module Admin
         nursing_schedule: [:interval_start, { daily: {} }],
         meal_schedule: %i[breakfast lunch dinner],
         vital_thresholds: {},
-        water_balance: { in: [], out: [] }
+        water_balance: { in: [], out: [] },
+        medication_schedule: %i[before_meal_minutes after_meal_minutes bedtime wake_time]
       )
       attrs = {}
       if params.key?(:self_organization_id)
@@ -49,7 +50,21 @@ module Admin
       if params.key?(:water_balance)
         attrs[:water_balance] = permitted[:water_balance].to_h
       end
+      if params.key?(:medication_schedule)
+        attrs[:medication_schedule] = medication_schedule_attrs(permitted[:medication_schedule])
+      end
       attrs
+    end
+
+    # 分は数値で保存する(JSON で文字列で来ても数値に寄せる。時刻は文字列のまま)。
+    def medication_schedule_attrs(permitted)
+      permitted.to_h.to_h do |key, value|
+        if FacilitySettings::MEDICATION_SCHEDULE_MINUTE_KEYS.include?(key.to_s)
+          [key, value.to_s.match?(/\A-?\d+\z/) ? value.to_i : value]
+        else
+          [key, value]
+        end
+      end
     end
 
     def payload(settings)
@@ -58,7 +73,8 @@ module Admin
         nursing_schedule: settings.nursing_schedule_with_defaults,
         meal_schedule: settings.meal_schedule_with_defaults,
         vital_thresholds: settings.vital_thresholds_with_defaults,
-        water_balance: settings.water_balance_with_defaults
+        water_balance: settings.water_balance_with_defaults,
+        medication_schedule: settings.medication_schedule_with_defaults
       }
     end
   end

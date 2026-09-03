@@ -8,6 +8,7 @@
     食事摂取量(朝・昼・夕の主食 / 副食)
     水分出納(枠ごとの IN / OUT / バランス)
     注射(薬剤の組ごとの予定・実施)
+    内服(薬剤の組ごとの与薬の予定・実施)
     看護観察 / 看護行為(指示ごとの予定・実施)
     検査(放射線・内視鏡・生理)
 
@@ -20,7 +21,8 @@
 病日・印の共通型)、`fhir/flowsheetInjectionHelpers.ts`(注射)、
 `fhir/flowsheetNursingHelpers.ts`(看護観察・看護行為)、
 `fhir/flowsheetWaterBalanceHelpers.ts`(水分出納)、
-`fhir/flowsheetMealHelpers.ts`(食事摂取量)。
+`fhir/flowsheetMealHelpers.ts`(食事摂取量)、`fhir/flowsheetOralHelpers.ts`・
+`fhir/medicationScheduleHelpers.ts`・`fhir/oralPerformHelpers.ts`(内服の与薬)。
 
 ## 1. 横軸 = 枠 × 測定。期間表示(1 週間〜1 か月)と 24 時間表示
 
@@ -344,7 +346,94 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
 1 か月の定食に対する「実施済」が定まらない(看護指示のカードに状態が無いのと同じ理由)。
 摂取量は経過表で読むものと割り切る。
 
-## 9. 一覧モーダルと詳細への導線
+## 9. 内服の欄(与薬)
+
+薬剤の組(RP)ごとに 1 行で、印は**与薬の予定と実施**。注射と同じ印(空丸 = 予定、
+塗り丸 = 与薬、丸 + × = 与薬せず、薄い丸 + × = 中止した処方)。
+
+**注射との違いは 1 件のオーダーが何日も続くこと**。注射は 1 施行 = 1 オーダーで
+オーダー自体が時刻を持つが、処方は投与開始日から投与日数ぶん毎日決まった回数を飲ませ、
+**何時に飲ませるかはどこにも無い**。そこで予定は用法コードから組み立てる(§9.1)。
+
+対象は**入院処方だけ**(`prescription-setting` が inpatient)で、RP は内服のものだけ。
+外来・院内処方は病棟が与薬しないので出さない。
+
+### 9.1 予定は用法コードから出す
+
+`MedicationRequest.dosageInstruction[0].timing.code` の用法コード(電子処方箋用法マスタ、
+16 桁)を読み、施設の食事時刻(`meal_schedule`)と与薬の時刻(`medication_schedule`)で
+`HH:mm` に展開する(`expandUsageSchedule`)。桁の意味は開発 DB の内服 253 件で突合して
+確認した:
+
+| 桁 | 意味 |
+|---|---|
+| 1 | 基本区分。`1` = 内服 |
+| 2 | 詳細区分(`0` 経口 `1` 舌下 `3` 口腔内塗布)。区別しない |
+| 3 | タイミング区分。`1` 食事ベース `2` 等間隔 `3` 時刻指定 `4` イベント `5` 頓用 `7` 回数のみ |
+| 4 | 1 日の回数(`Z` = 不定) |
+| 5〜9 | **食事ベース型**は 就寝 / 夕 / 昼 / 朝 / 起床 のスロット(`0` 無し、就寝〜朝は `1` 食前 `2` 食直前 `3` 食直後 `4` 食後 `5` 食後 2 時間 `6` 食事中、起床は `9`)。**時刻指定型**は 1 文字 1 回の時刻(`A` = 0 時 … `X` = 23 時、`Z` = 決まった時刻) |
+| 10〜16 | 食事ベース型で食事以外の時刻も足すとき(`101514440P` = 朝昼夕食後 + 15 時 + 就寝前)。それ以外は `0` |
+
+- 食事ベース型: 朝昼夕は食事の時刻 ± ずらし、就寝・起床は設定の時刻。
+- 等間隔型: 回数から間隔を出し、看護指示の `interval_start` を起点に刻む。
+- 回数のみ指定型: 時刻の手がかりが無いので看護指示の「1日N回」の既定時刻を借りる。
+- **頓用・イベント型・「決まった時刻に」(`Z`)は予定を出さない**。時刻が決まらないため
+  (処方フォームに時刻を自由入力する欄も無い)。実施の印だけが並ぶ。
+
+食前・食後のずらし(既定 30 分)と就寝前・起床時の時刻は `facility_settings.medication_schedule`。
+**食前と食直前、食直後と食後は同じずらしに丸める**(設定を 2 段階にしたため)。
+
+有効な日は投与開始日(`ServiceRequest.occurrenceDateTime`)から投与日数ぶん。投与日数は
+RP ごとに `MedicationRequest.dispenseRequest.expectedSupplyDuration` にある。
+
+### 9.2 記録は「処方 × 予定枠」
+
+与薬 1 回 = ハブ `Procedure`(`category` = `order-type|prescription`、`basedOn` = 処方、
+`status` = completed / not-done、`performedDateTime` = 実際に飲ませた時刻)+ 薬剤ごとの
+`MedicationAdministration`(`partOf` = ハブ、`request` = その `MedicationRequest`)。
+注射の実施と同じ骨格(`docs/prescription-order-design.md`)。
+
+**どの予定枠の記録かはローカル拡張 `medication-schedule-slot` に焼く**。処方 1 件に何十枠も
+あり(朝昼夕 × 7 日 = 21 枠)、実際に飲ませた時刻は予定と数十分ずれるのが普通なので、
+時刻の近さで突き合わせると取り違える。予定の印は**その枠の記録があれば出さない**。
+
+- **実施の印は予定枠の位置に置く**。読むのは「朝の薬を飲んだか」なので枠で揃えたほうが
+  並びが読める(実際の時刻は一覧と `title` で見せる)。
+- 実施は処方 1 件の記録なので、その処方の**すべての RP 行**に付ける(注射と同じ粒度)。
+  一覧モーダルは同じ内容の印を 1 行に畳む(`markModalEvents`)。
+- 「途中で中止」は無い。内服は飲むか飲まないかで、点滴のような途中停止が無い。一部の
+  薬剤だけ飲ませなかったときは、その薬剤の `MedicationAdministration` を作らない。
+- **進捗 Task は動かさない**。処方の Task は薬剤部の進捗(受付 → 調剤)で、与薬とは別の軸。
+  継続処方に「実施済」という 1 つの状態は定まらない。
+
+### 9.3 一覧のまとまりは「処方 + 枠」
+
+注射は 1 施行 = 1 オーダーなので一覧を処方 id でまとめれば「その日の施用」に収まるが、
+内服は処方でまとめると全枠(数十件)が並んで読めない。`oralGroupId` で
+`処方 id#枠の日時` をまとめる単位にし、押した枠の予定と実施だけを見せる。
+
+一覧の「与薬入力」で押した枠を記録し、記録済みの枠なら「与薬を取消」が出る
+(処方はカルテのカードに実施を出さないので、取消の導線は経過表のここだけ)。
+
+### 9.4 取得
+
+処方の `ServiceRequest` は **order-type の category を持たない**(持たないこと自体が処方の
+印)ので、注射のように種別で絞れない。処方だけが持つ `prescription-category` を system だけ
+指定して絞り(処方ワークリストと同じ手)、入外区分と処方かどうかはクライアントで判定する。
+
+```
+ServiceRequest?patient=…&category={prescription-category}|
+  &occurrence=ge{期間の開始-92日}&occurrence=le{期間の終わり}
+  &_revinclude=MedicationRequest:based-on
+  &_revinclude=Task:focus
+  &_revinclude=Procedure:based-on
+  &_revinclude:iterate=MedicationAdministration:part-of
+```
+
+下限を 92 日遡るのは、処方が投与日数ぶん続くのに**上流が投与日数を索引しない**ため
+(注射の連日展開の上限 90 日に合わせた経験則)。これを超える長期処方は期間を過去に送れば読める。
+
+## 10. 一覧モーダルと詳細への導線
 
 注射・検査の印を選ぶと、**そのまとまり(注射はその日のオーダー、検査はそのオーダー)**の
 予定・実施を一覧で出す(`FlowsheetEventModal` をイベントと共用)。
@@ -370,7 +459,7 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
   記録すると経過表の看護欄がすぐ更新される(`invalidateNursingPerforms` が
   看護欄のクエリも無効化する。キーが `ServiceRequest` 側なので明示的に足してある)。
 
-## 10. ファイル
+## 11. ファイル
 
 | ファイル | 役割 |
 |---|---|
@@ -382,11 +471,15 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
 | `fhir/flowsheetNursingHelpers.ts` | 看護観察・看護行為の行(予定・実施の印) |
 | `fhir/flowsheetWaterBalanceHelpers.ts` | 水分出納の集計と対象項目の設定 |
 | `fhir/flowsheetMealHelpers.ts` | 食事摂取量の枠と記録、入力の transaction |
+| `fhir/medicationScheduleHelpers.ts` | 用法コードの復号と予定時刻の展開、投与終了日 |
+| `fhir/oralPerformHelpers.ts` | 与薬の記録の組み立て・削除・読み戻し |
+| `fhir/flowsheetOralHelpers.ts` | 内服の行(予定・実施の印) |
+| `components/OralPerformModal.tsx` | 与薬入力(押した 1 枠だけ) |
 | `components/MealIntakeModal.tsx` | 食事摂取量の入力(押した 1 食の主食・副食だけ) |
-| `api/queries.ts` | `useVitalFlowsheet` / `usePatientEncounterEvents` / `usePatientSurgeryPerforms` / `usePatientExamOrders` / `usePatientInjectionOrders` / `usePatientNursingFlowsheet` / `usePatientMealIntake` / `useSaveMealIntake` / `useVitalThresholds` |
-| backend | `facility_settings.vital_thresholds` / `water_balance`(migration `20260903000000` / `20260903120000`)とモデル・コントローラ |
+| `api/queries.ts` | `useVitalFlowsheet` / `usePatientEncounterEvents` / `usePatientSurgeryPerforms` / `usePatientExamOrders` / `usePatientInjectionOrders` / `usePatientNursingFlowsheet` / `usePatientMealIntake` / `useSaveMealIntake` / `usePatientOralPrescriptions` / `useRegisterOralPerform` / `useCancelOralPerforms` / `useVitalThresholds` |
+| backend | `facility_settings.vital_thresholds` / `water_balance` / `medication_schedule`(migration `20260903000000` / `20260903120000` / `20260904000000`)とモデル・コントローラ |
 
-## 11. 未実装・今後
+## 12. 未実装・今後
 
 - **「日 × 定時枠」モード**: 朝・昼・夕・夜の枠で列を固定し、未測定を空セルで出す。
   看護指示の予定(`nursingScheduleHelpers`)から未実施の枠も出せる。
@@ -394,12 +487,10 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
   一覧から指示簿タブへ飛ばすか、看護にも詳細モーダルを用意するかの判断が要る。
 - **行の選択・並び替えの保持**: 看護指示が増えると行が長くなる。表示行と順序を
   `karteLayout.ts` と同じ流儀で localStorage に持たせる。
-- **内服の与薬実施**: 1 回ごとの服薬を表すリソースが無い(処方の進捗 Task は薬剤部の
-  払出の進捗で、内服の `MedicationAdministration` はどこにも作っていない)。予定は用法
-  コードから出せる(5〜9 桁目が就寝/夕/昼/朝/起床のスロット、時刻指定型は 10 桁目以降が
-  時刻)。作るなら注射の実施と同じ骨格(ハブ `Procedure` + 薬剤ごとの
-  `MedicationAdministration`)になるが、Task の「実施済」を「払出済」に読み替えるかなど
-  処方側の状態設計に手が入るので、`docs/prescription-*` 側の設計として起こす。
+- **頓用・イベント型の与薬**: 予定枠が決まらないので入力の起点が無い(§9.1)。
+  「臨時の与薬」のような、枠に紐づかない記録の導線が要る。
+- **病棟の与薬ワークリスト**: 「今から 1 時間の与薬」を病棟単位で並べる画面。いまは
+  患者ごとの経過表からしか記録できない。配薬(薬剤部 → 病棟)の段階も持っていない。
 - **印刷・書き出し**: 帳票基盤はオーダー単位のみで、患者 × 期間のエンドポイントが無い。
   温度板の PDF は backend の新設が要る。
 - **枠の中を時間比例にする**: いまは枠(日・時)の中は測定の並びで等間隔。24 時間表示を

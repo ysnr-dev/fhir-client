@@ -23,6 +23,7 @@ RSpec.describe "FacilitySettings", type: :request do
       expect(body["meal_schedule"]).to eq(FacilitySettings::DEFAULT_MEAL_SCHEDULE)
       expect(body["vital_thresholds"]).to eq(FacilitySettings::DEFAULT_VITAL_THRESHOLDS)
       expect(body["water_balance"]).to eq(FacilitySettings::DEFAULT_WATER_BALANCE)
+      expect(body["medication_schedule"]).to eq(FacilitySettings::DEFAULT_MEDICATION_SCHEDULE)
     end
 
     it "returns the configured self organization" do

@@ -5,6 +5,9 @@ import {
   usePatientInjectionOrders,
   usePatientMealIntake,
   usePatientNursingFlowsheet,
+  usePatientOralPrescriptions,
+  useCancelOralPerforms,
+  useMedicationSchedule,
   usePatientSurgeryPerforms,
   useFacilitySettings,
   useVitalFlowsheet,
@@ -18,7 +21,9 @@ import {
   type MealIntakeKind,
   type MealIntakeSlot,
 } from "../fhir/flowsheetMealHelpers";
-import { mealOrderDietRef } from "../fhir/mealOrderHelpers";
+import { DEFAULT_MEAL_SCHEDULE, mealOrderDietRef } from "../fhir/mealOrderHelpers";
+import { buildOralRows, oralGroupOrderId } from "../fhir/flowsheetOralHelpers";
+import { oralPerformsByOrderId } from "../fhir/oralPerformHelpers";
 import { buildNursingRows } from "../fhir/flowsheetNursingHelpers";
 import {
   EMPTY_WATER_BALANCE,
@@ -59,6 +64,7 @@ import { addDays, toDateTimeInputValue, today } from "../lib/dates";
 import { FlowsheetEventModal } from "./FlowsheetEventModal";
 import { InjectionPerformModal } from "./InjectionPerformModal";
 import { MealIntakeModal } from "./MealIntakeModal";
+import { OralPerformModal } from "./OralPerformModal";
 import { NursingPerformModal } from "./NursingPerformModal";
 import {
   BLOOD_PRESSURE_SERIES,
@@ -88,6 +94,7 @@ import { ErrorBanner } from "./ErrorBanner";
 /** 印の欄と見出し。並べる順もこの通り。 */
 const MARK_SECTIONS = {
   injection: "注射",
+  oral: "内服",
   observation: "看護観察",
   act: "看護行為",
   exam: "検査",
@@ -221,6 +228,9 @@ export function VitalFlowsheetPanel({
   const [nursingPerform, setNursingPerform] = useState<{ orderId: string; at: string } | null>(null);
   // 食事摂取量の入力。押した 1 食ぶん(主食・副食)だけを出す。
   const [selectedMealSlot, setSelectedMealSlot] = useState<MealIntakeSlot | null>(null);
+  // 内服の与薬入力。**押した予定枠 1 つ**を記録する(処方は 1 件が何日も続くので、
+  // 処方 id だけでは対象の枠が決まらない)。
+  const [oralPerform, setOralPerform] = useState<{ srId: string; slotAt: string } | null>(null);
   // 全画面はビューポート全体ではなく「患者情報の下」から始める。開始位置は
   // カルテのレイアウト(左右ペインの上端)を実測して決める。
   const panelRef = useRef<HTMLDivElement>(null);
@@ -306,6 +316,25 @@ export function VitalFlowsheetPanel({
   /** 日時 → 枠のキー。印を置く位置を決める。 */
   const slotKeyOf = (at: string) => groupKeyOf(at, Boolean(dayMode));
 
+  // 内服の与薬。処方は 1 件が投与日数ぶん続くので、用法コードを日ごとの時刻に展開して
+  // 予定の印を作る(注射のようにオーダーが時刻を持たない)。
+  const oralPrescriptions = usePatientOralPrescriptions(patientId, rangeStart, rangeEnd);
+  const medicationSchedule = useMedicationSchedule();
+  const mealSchedule = facility.data?.meal_schedule ?? DEFAULT_MEAL_SCHEDULE;
+  const oralRows = useMemo(
+    () =>
+      oralPrescriptions.data
+        ? buildOralRows(
+            oralPrescriptions.data,
+            days,
+            mealSchedule,
+            medicationSchedule,
+            nursingSchedule,
+          )
+        : [],
+    [oralPrescriptions.data, days, mealSchedule, medicationSchedule, nursingSchedule],
+  );
+
   // 食事摂取量。食止めは食種の側の情報なので、期間に出ている食種をマスタで引いて判定する。
   const meal = usePatientMealIntake(patientId, rangeStart, rangeEnd);
   const fastingDietCodes = useFastingDietCodes(
@@ -356,8 +385,14 @@ export function VitalFlowsheetPanel({
 
   /** 印の欄。見出しと、選んだ印を突き合わせる行の集合。 */
   const markSectionRows: Record<MarkSectionKey, FlowsheetMarkRow[]> = useMemo(
-    () => ({ injection: injectionRows, exam: examRows, observation: observationRows, act: actRows }),
-    [injectionRows, examRows, observationRows, actRows],
+    () => ({
+      injection: injectionRows,
+      oral: oralRows,
+      exam: examRows,
+      observation: observationRows,
+      act: actRows,
+    }),
+    [injectionRows, oralRows, examRows, observationRows, actRows],
   );
 
   const markModal = useMemo(() => {
@@ -372,7 +407,7 @@ export function VitalFlowsheetPanel({
     const heading = MARK_SECTIONS[selectedMark.rows];
     // 見出しは押した 1 件の日時。どれを押したかが一覧を見る前に分かる。
     const when = selected ? flowsheetEventAtLabel(selected.at) : flowsheetEventRangeLabel(events);
-    // 中止した注射は実施入力を出さない(印は cancelled になっている)。
+    // 中止したオーダーには実施入力を出さない(印は cancelled になっている)。
     const canPerform =
       selectedMark.rows === "injection" && !events.some((event) => event.label === "中止");
     // 看護は指示をまたいで 1 回で記録するので、押した印の日時を既定にして開く。
@@ -380,15 +415,59 @@ export function VitalFlowsheetPanel({
       selectedMark.rows === "observation" || selectedMark.rows === "act"
         ? (selected?.at ?? events[0]?.at ?? "")
         : "";
+    // 内服は**押した予定枠**に記録する(処方 1 件に何十枠もあるため)。
+    const oralAt =
+      selectedMark.rows === "oral" && !events.some((event) => event.label === "中止")
+        ? (selected?.at ?? "")
+        : "";
+    // 記録済みの枠を押したときは取消を出す(処方はカルテのカードに実施を出さないので、
+    // 取消の導線は経過表のここだけ)。
+    const oralCancel =
+      selectedMark.rows === "oral" && selected && selected.kind !== "planned"
+        ? { srId: oralGroupOrderId(selectedMark.groupId), slotAt: selected.at }
+        : null;
     return {
       events,
       highlightIndex,
       title: `${heading}（${when}）`,
       canPerform,
-      srId: selectedMark.groupId,
+      // 内服は groupId が「処方 + 枠」なので、処方 id だけを取り出して渡す。
+      srId:
+        selectedMark.rows === "oral"
+          ? oralGroupOrderId(selectedMark.groupId)
+          : selectedMark.groupId,
       nursingAt,
+      oralAt,
+      oralCancel,
+      performLabel: selectedMark.rows === "oral" ? "与薬入力" : "実施入力",
     };
   }, [selectedMark, markSectionRows]);
+
+  /** 与薬入力に渡す処方 1 件と、その薬剤。 */
+  const oralPerformTarget = useMemo(() => {
+    const data = oralPrescriptions.data;
+    if (!oralPerform || !data) return null;
+    const order = data.orders.find((sr) => sr.id === oralPerform.srId);
+    if (!order) return null;
+    return {
+      order,
+      medicationRequests: data.medicationRequests.filter(
+        (mr) => referenceId(mr.basedOn?.[0]?.reference) === oralPerform.srId,
+      ),
+      slotAt: oralPerform.slotAt,
+    };
+  }, [oralPrescriptions.data, oralPerform]);
+
+  const cancelOralPerforms = useCancelOralPerforms();
+  /** 押した枠の与薬記録を消す。その枠の記録だけで、同じ処方の他の枠は残す。 */
+  const cancelOralSlot = (srId: string, slotAt: string) => {
+    const data = oralPrescriptions.data;
+    if (!data) return;
+    const performs = (oralPerformsByOrderId(data.procedures, data.administrations).get(srId) ?? [])
+      .filter((perform) => perform.slotAt === slotAt);
+    if (performs.length === 0) return;
+    cancelOralPerforms.mutate(performs);
+  };
 
   /** 看護の実施入力で開く指示。押した印の指示 1 件。 */
   const nursingPerformOrder = nursingPerform
@@ -974,21 +1053,43 @@ export function VitalFlowsheetPanel({
                 // 施用するのは病棟なので、経過表からその場で書けるようにする
                 // (カルテのカードと同じモーダル)。中止した注射には出さない。
                 // 1 日に複数回の施用があるので、実施済になっても押せる。
-                markModal.canPerform || markModal.nursingAt ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // 一覧は役目を終えるので閉じてから開く(「詳細」と同じ作法)。
-                      setSelectedMark(null);
-                      if (markModal.nursingAt) {
-                        setNursingPerform({ orderId: markModal.srId, at: markModal.nursingAt });
-                      } else {
-                        setPerformSrId(markModal.srId);
-                      }
-                    }}
-                  >
-                    実施入力
-                  </button>
+                markModal.canPerform ||
+                markModal.nursingAt ||
+                markModal.oralAt ||
+                markModal.oralCancel ? (
+                  <>
+                    {(markModal.canPerform || markModal.nursingAt || markModal.oralAt) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // 一覧は役目を終えるので閉じてから開く(「詳細」と同じ作法)。
+                          setSelectedMark(null);
+                          if (markModal.nursingAt) {
+                            setNursingPerform({ orderId: markModal.srId, at: markModal.nursingAt });
+                          } else if (markModal.oralAt) {
+                            setOralPerform({ srId: markModal.srId, slotAt: markModal.oralAt });
+                          } else {
+                            setPerformSrId(markModal.srId);
+                          }
+                        }}
+                      >
+                        {markModal.performLabel}
+                      </button>
+                    )}
+                    {markModal.oralCancel && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const target = markModal.oralCancel;
+                          setSelectedMark(null);
+                          if (target) cancelOralSlot(target.srId, target.slotAt);
+                        }}
+                        disabled={cancelOralPerforms.isPending}
+                      >
+                        与薬を取消
+                      </button>
+                    )}
+                  </>
                 ) : undefined
               }
               onClose={() => setSelectedMark(null)}
@@ -1014,6 +1115,15 @@ export function VitalFlowsheetPanel({
               defaultAt={toDateTimeInputValue(nursingPerform.at)}
               performsByOrderId={nursing.data.performsByOrderId}
               onClose={() => setNursingPerform(null)}
+            />
+          )}
+
+          {oralPerformTarget && (
+            <OralPerformModal
+              order={oralPerformTarget.order}
+              medicationRequests={oralPerformTarget.medicationRequests}
+              slotAt={oralPerformTarget.slotAt}
+              onClose={() => setOralPerform(null)}
             />
           )}
 

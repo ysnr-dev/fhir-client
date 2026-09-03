@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_03_120000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_04_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -23,6 +23,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_03_120000) do
     t.jsonb "meal_schedule", default: {}, null: false
     t.jsonb "vital_thresholds", default: {}, null: false
     t.jsonb "water_balance", default: {}, null: false
+    t.jsonb "medication_schedule", default: {}, null: false
     t.index ["singleton_guard"], name: "index_facility_settings_on_singleton_guard", unique: true
   end
 
