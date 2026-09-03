@@ -2,13 +2,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   usePatientEncounterEvents,
   usePatientExamOrders,
+  usePatientInjectionOrders,
   usePatientSurgeryPerforms,
   useVitalFlowsheet,
   useVitalThresholds,
 } from "../api/queries";
 import {
+  buildInjectionRows,
+  injectionModalEvents,
+  type InjectionMark,
+  type InjectionRow,
+} from "../fhir/flowsheetInjectionHelpers";
+import {
   buildFlowsheetEvents,
   flowsheetEventAtLabel,
+  flowsheetEventRangeLabel,
+  flowsheetEventSlot,
   groupFlowsheetEvents,
   hospitalDayLabel,
   hospitalDayOf,
@@ -44,6 +53,7 @@ import { ErrorBanner } from "./ErrorBanner";
 //
 // グラフの上にはイベントの帯(入退院・転棟・外出泊・手術・放射線/内視鏡/生理検査)、
 // 日付の見出しの下には病日・術後日数を出す(fhir/flowsheetEventHelpers.ts)。
+// グラフの下には注射の行(薬剤の組ごとに予定・実施を並べる。fhir/flowsheetInjectionHelpers.ts)。
 
 const DEFAULT_COLUMN_COUNT = 10;
 const MAX_COLUMN_COUNT = 100;
@@ -60,6 +70,8 @@ export function VitalFlowsheetPanel({
   const [fullscreen, setFullscreen] = useState(false);
   // 帯で選んだ境目。選ぶとその境目のイベント一覧をモーダルで出す。
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
+  // 注射欄で選んだ印。その日の注射(オーダー 1 件)の予定・実施を一覧で出す。
+  const [selectedInjectionSr, setSelectedInjectionSr] = useState<string | null>(null);
   // 全画面はビューポート全体ではなく「患者情報の下」から始める。開始位置は
   // カルテのレイアウト(左右ペインの上端)を実測して決める。全画面のときこの
   // 要素自体は fixed で流れから外れるが、レイアウトの上端は上の行(アプリ
@@ -83,6 +95,19 @@ export function VitalFlowsheetPanel({
   const encounters = usePatientEncounterEvents(patientId, rangeStart, rangeEnd);
   const surgeries = usePatientSurgeryPerforms(patientId);
   const examOrders = usePatientExamOrders(patientId, rangeStart, rangeEnd);
+  const injections = usePatientInjectionOrders(patientId, rangeStart, rangeEnd);
+
+  const injectionRows = useMemo(
+    () =>
+      injections.data
+        ? buildInjectionRows(injections.data)
+        : ([] as InjectionRow[]),
+    [injections.data],
+  );
+  const injectionModal = useMemo(
+    () => (selectedInjectionSr ? injectionModalEvents(injectionRows, selectedInjectionSr) : []),
+    [injectionRows, selectedInjectionSr],
+  );
 
   const events = useMemo(
     () =>
@@ -300,6 +325,38 @@ export function VitalFlowsheetPanel({
                     </td>
                     <td className="vital-flowsheet__filler" />
                   </tr>
+
+                  {/* 注射欄。薬剤の組ごとに 1 行。予定は点、実施は終了があればバー。
+                      注射のオーダーが無ければ区切りごと出さない。 */}
+                  {injectionRows.length > 0 && (
+                    <tr className="vital-flowsheet__section-row">
+                      <th className="lab-timeline__item-col vital-flowsheet__section-head" colSpan={2}>
+                        注射
+                      </th>
+                      <td colSpan={columns.length} />
+                      <td className="vital-flowsheet__filler" />
+                    </tr>
+                  )}
+                  {injectionRows.map((row) => (
+                    <tr key={row.key} className="vital-flowsheet__injection-row">
+                      <th
+                        className="lab-timeline__item-col vital-flowsheet__injection-head"
+                        colSpan={2}
+                        title={row.title}
+                      >
+                        {row.label}
+                      </th>
+                      <td className="vital-flowsheet__injection-cell" colSpan={columns.length}>
+                        <FlowsheetInjectionRow
+                          columns={columns}
+                          marks={row.marks}
+                          selectedSrId={selectedInjectionSr}
+                          onSelect={setSelectedInjectionSr}
+                        />
+                      </td>
+                      <td className="vital-flowsheet__filler" />
+                    </tr>
+                  ))}
                 </tbody>
                 <tbody>
                   {flowsheet.rows.map((row) => (
@@ -336,6 +393,15 @@ export function VitalFlowsheetPanel({
               events={selectedGroup.events}
               onOpenDetail={onOpenDetail}
               onClose={() => setSelectedSlot(null)}
+            />
+          )}
+
+          {injectionModal.length > 0 && (
+            <FlowsheetEventModal
+              events={injectionModal}
+              title={`注射（${flowsheetEventRangeLabel(injectionModal)}）`}
+              onOpenDetail={onOpenDetail}
+              onClose={() => setSelectedInjectionSr(null)}
             />
           )}
         </>
@@ -453,6 +519,138 @@ function FlowsheetEventBand({
               >
                 他{group.labels.length - shown.length}件
               </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ---- 注射欄 ----
+
+const INJECTION_ROW_HEIGHT = 18;
+/** 印の半径。列の境目に置くので、隣の列にはみ出さない大きさにする。 */
+const INJECTION_MARK_R = 4.5;
+/** 開始と終了が同じ境目に来たときのバーの最小幅。 */
+const INJECTION_BAR_MIN_WIDTH = 12;
+/** 同じ境目に重なった点をずらす間隔。 */
+const INJECTION_MARK_GAP = 11;
+
+/**
+ * 印の x を決める。同じ日に 2 回投与する予定や、予定とその実施は同じ境目に落ちて
+ * 重なるので、境目の左右に均等にずらして数が見えるようにする(ずれ幅は列幅より
+ * ずっと小さいので、どの境目の印かは変わらない)。
+ */
+function placeInjectionMarks(
+  columns: string[],
+  marks: InjectionMark[],
+): { mark: InjectionMark; x: number; endX?: number }[] {
+  const placed = marks.map((mark) => ({
+    mark,
+    x: flowsheetEventSlot(columns, mark.at) * FLOWSHEET_COLUMN_WIDTH,
+    // 列は新しい順(左が新しい)なので、終了の方が左に来る。
+    endX: mark.end
+      ? flowsheetEventSlot(columns, mark.end) * FLOWSHEET_COLUMN_WIDTH
+      : undefined,
+  }));
+
+  const byX = new Map<number, typeof placed>();
+  for (const item of placed) {
+    const list = byX.get(item.x);
+    if (list) list.push(item);
+    else byX.set(item.x, [item]);
+  }
+  for (const list of byX.values()) {
+    if (list.length < 2) continue;
+    list.forEach((item, index) => {
+      const shift = (index - (list.length - 1) / 2) * INJECTION_MARK_GAP;
+      item.x += shift;
+      if (item.endX !== undefined) item.endX += shift;
+    });
+  }
+  return placed;
+}
+
+/**
+ * 注射 1 行(薬剤の組 1 つ)。印はイベントの帯と同じく**列の境目**に置く
+ * (列は測定 1 回で時間に比例しないため、列の中央に置くとその測定時に投与した
+ * ように見える)。実施に終了が記録されていればバー、無ければ点。
+ */
+function FlowsheetInjectionRow({
+  columns,
+  marks,
+  selectedSrId,
+  onSelect,
+}: {
+  columns: string[];
+  marks: InjectionMark[];
+  selectedSrId: string | null;
+  onSelect: (srId: string) => void;
+}) {
+  const width = columns.length * FLOWSHEET_COLUMN_WIDTH;
+  const y = INJECTION_ROW_HEIGHT / 2;
+  const placed = placeInjectionMarks(columns, marks);
+
+  return (
+    <svg
+      className="vital-flowsheet__injection-band"
+      width={width}
+      height={INJECTION_ROW_HEIGHT}
+      viewBox={`0 0 ${width} ${INJECTION_ROW_HEIGHT}`}
+      role="img"
+      aria-label="注射の予定と実施"
+    >
+      {placed.map(({ mark, x, endX }, index) => {
+        const selected = mark.srId === selectedSrId;
+        return (
+          <g
+            key={`${mark.srId}/${mark.at}/${mark.kind}/${index}`}
+            className={`vital-flowsheet__injection vital-flowsheet__injection--${mark.kind}${
+              selected ? " vital-flowsheet__injection--selected" : ""
+            }`}
+            role="button"
+            tabIndex={0}
+            aria-label={`${mark.title} の一覧を開く`}
+            onClick={() => onSelect(mark.srId)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect(mark.srId);
+              }
+            }}
+          >
+            <title>{mark.title}</title>
+            <rect
+              className="vital-flowsheet__injection-hit"
+              x={Math.min(x, endX ?? x) - FLOWSHEET_COLUMN_WIDTH / 2}
+              y={0}
+              width={Math.abs(x - (endX ?? x)) + FLOWSHEET_COLUMN_WIDTH}
+              height={INJECTION_ROW_HEIGHT}
+            />
+            {endX !== undefined &&
+              (() => {
+                // 開始(古い = 右)から終了(新しい = 左)へ。同じ境目に収まったときは
+                // 開始から左へ最小幅ぶん伸ばす(右へ伸ばすと過去に向かって見える)。
+                const span = x - endX;
+                const barWidth = Math.max(INJECTION_BAR_MIN_WIDTH, span);
+                return (
+                  <rect
+                    className="vital-flowsheet__injection-bar"
+                    x={x - barWidth}
+                    y={y - 4}
+                    width={barWidth}
+                    height={8}
+                    rx={4}
+                  />
+                );
+              })()}
+            <circle className="vital-flowsheet__injection-mark" cx={x} cy={y} r={INJECTION_MARK_R} />
+            {(mark.kind === "not-done" || mark.kind === "cancelled") && (
+              <path
+                className="vital-flowsheet__injection-cross"
+                d={`M${x - 3},${y - 3} L${x + 3},${y + 3} M${x + 3},${y - 3} L${x - 3},${y + 3}`}
+              />
             )}
           </g>
         );

@@ -12,8 +12,11 @@ import type { EncounterEvent } from "./encounterHelpers";
 // (中央に置くと、その測定のときに起きたイベントに見えてしまう)。表示数が少ないと
 // 同じ境目に何件も集まるので、境目ごとにまとめて縦に積む。
 
-/** イベントの種類。色分けにだけ使う。 */
-export type FlowsheetEventKind = "encounter" | "surgery" | "exam";
+/**
+ * イベントの種類。色分けにだけ使う。
+ * `injection` は帯には出さず、注射欄の一覧モーダル(flowsheetInjectionHelpers)でのみ使う。
+ */
+export type FlowsheetEventKind = "encounter" | "surgery" | "exam" | "injection";
 
 export interface FlowsheetEvent {
   /** イベントの日時。時刻を持たない登録では YYYY-MM-DD。 */

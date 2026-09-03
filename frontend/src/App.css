@@ -7732,6 +7732,120 @@ body.page-wide .app__main {
   stroke: var(--accent-border);
 }
 
+/* グラフの下に足す区切り(注射など)。表の見出しではないので控えめにする。 */
+.vital-flowsheet__table th.vital-flowsheet__section-head {
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+  box-sizing: border-box;
+  width: calc(var(--vital-flowsheet-item-w) + var(--vital-flowsheet-unit-w));
+  min-width: calc(var(--vital-flowsheet-item-w) + var(--vital-flowsheet-unit-w));
+  max-width: calc(var(--vital-flowsheet-item-w) + var(--vital-flowsheet-unit-w));
+}
+
+.vital-flowsheet__table .vital-flowsheet__section-row td {
+  border-top: 1px solid var(--border);
+}
+
+/* 注射の行。印の x を列の境目に合わせるのでセルの余白は無くす。 */
+.vital-flowsheet__table td.vital-flowsheet__injection-cell {
+  padding: 0;
+  line-height: 0;
+}
+
+/* 薬剤名は長いので、項目列 + 単位列の幅に丸める(全文は title)。ここで幅を決め打ち
+   しないと、名前の長さにつられて左の 2 列が広がり測定列が潰れる。 */
+.vital-flowsheet__table th.vital-flowsheet__injection-head {
+  box-sizing: border-box;
+  font-size: 13px;
+  font-weight: normal;
+  color: var(--text-h);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: calc(var(--vital-flowsheet-item-w) + var(--vital-flowsheet-unit-w));
+  min-width: calc(var(--vital-flowsheet-item-w) + var(--vital-flowsheet-unit-w));
+  max-width: calc(var(--vital-flowsheet-item-w) + var(--vital-flowsheet-unit-w));
+}
+
+.vital-flowsheet__injection-band {
+  display: block;
+}
+
+.vital-flowsheet__injection {
+  cursor: pointer;
+}
+
+.vital-flowsheet__injection:focus {
+  outline: none;
+}
+
+.vital-flowsheet__injection-hit {
+  fill: transparent;
+}
+
+.vital-flowsheet__injection:hover .vital-flowsheet__injection-hit,
+.vital-flowsheet__injection:focus-visible .vital-flowsheet__injection-hit,
+.vital-flowsheet__injection--selected .vital-flowsheet__injection-hit {
+  fill: var(--accent-bg);
+}
+
+.vital-flowsheet__injection:focus-visible .vital-flowsheet__injection-hit {
+  stroke: var(--accent-border);
+}
+
+/* 印は currentColor。予定は塗らない丸、実施は塗りつぶし。 */
+.vital-flowsheet__injection-mark {
+  stroke: currentColor;
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.vital-flowsheet__injection-bar {
+  stroke: currentColor;
+  stroke-width: 1;
+  fill: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.vital-flowsheet__injection-cross {
+  stroke: currentColor;
+  stroke-width: 1.5;
+  fill: none;
+}
+
+/* 予定は本文色、実施はアクセント、途中で中止は異常値と同じ赤。 */
+.vital-flowsheet__injection--planned {
+  color: var(--text);
+}
+
+.vital-flowsheet__injection--performed {
+  color: var(--accent);
+}
+
+.vital-flowsheet__injection--performed .vital-flowsheet__injection-mark {
+  fill: currentColor;
+}
+
+.vital-flowsheet__injection--stopped {
+  color: var(--lab-high);
+}
+
+.vital-flowsheet__injection--stopped .vital-flowsheet__injection-mark {
+  fill: currentColor;
+}
+
+.vital-flowsheet__injection--not-done {
+  color: var(--lab-high);
+}
+
+/* 中止した日の予定は残すが、済んだ話なので薄くする。 */
+.vital-flowsheet__injection--cancelled {
+  color: var(--text);
+  opacity: 0.45;
+}
+
 /* イベント一覧モーダル。日時は等幅の数字で揃え、行は詰める。 */
 .flowsheet-event-modal__table td.flowsheet-event-modal__at {
   white-space: nowrap;

@@ -9,6 +9,8 @@ import { Modal } from "./Modal";
 interface Props {
   /** 選んだ境目のイベント。重い順(手術 → 入退院 → 検査)に並んでいる。 */
   events: FlowsheetEvent[];
+  /** 見出し。省略すると「イベント（期間）」。注射欄からは「注射（MM/DD）」で開く。 */
+  title?: string;
   /** オーダーの詳細モーダルを開く。渡されなければ「詳細」を出さない。 */
   onOpenDetail?: (target: KarteDetailTarget) => void;
   onClose: () => void;
@@ -21,11 +23,12 @@ interface Props {
 // 詳細モーダルへ渡す(経過表に部門ごとの詳細表示を作らないため)。
 //
 // 入退院・転棟・外出泊はカルテのカードにならないので、詳細への導線を持たない。
-export function FlowsheetEventModal({ events, onOpenDetail, onClose }: Props) {
+export function FlowsheetEventModal({ events, title, onOpenDetail, onClose }: Props) {
   const range = flowsheetEventRangeLabel(events);
+  const heading = title ?? (range ? `イベント（${range}）` : "イベント");
 
   return (
-    <Modal title={range ? `イベント（${range}）` : "イベント"} onClose={onClose}>
+    <Modal title={heading} onClose={onClose}>
       <table className="patient-table flowsheet-event-modal__table">
         <thead>
           <tr>

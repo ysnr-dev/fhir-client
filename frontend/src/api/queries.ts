@@ -317,6 +317,7 @@ import {
   encounterStays,
   type EncounterStay,
 } from "../fhir/flowsheetEventHelpers";
+import type { FlowsheetInjectionData } from "../fhir/flowsheetInjectionHelpers";
 import {
   buildAnesthesiaChartData,
   isAnesthesiaChartHub,
@@ -1905,6 +1906,52 @@ export function usePatientSurgeryPerforms(patientId: string | undefined) {
         );
     },
     enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * 経過表の注射欄に出す、その期間の注射オーダー一式。
+ *
+ * 注射は 1 施行(= 1 日)= 1 ServiceRequest で、薬剤(用法・開始時刻)・進捗・実施記録が
+ * それぞれ別リソースに分かれる。カルテのタイムラインと同じ `_revinclude` の組みで
+ * 1 回の検索にまとめて取る(上流で動作を確認済み)。
+ */
+export function usePatientInjectionOrders(
+  patientId: string | undefined,
+  rangeStart: string,
+  rangeEnd: string,
+) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "flowsheet-injections", patientId, rangeStart, rangeEnd],
+    queryFn: async (): Promise<FlowsheetInjectionData> => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("category", `${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`);
+      params.set("based-on:missing", "true");
+      params.append("occurrence", `ge${rangeStart}`);
+      params.append("occurrence", `le${rangeEnd}`);
+      params.append("_revinclude", "MedicationRequest:based-on");
+      params.append("_revinclude", "Task:focus");
+      params.append("_revinclude", "Procedure:based-on");
+      params.append("_revinclude:iterate", "MedicationAdministration:part-of");
+      params.set("_count", "100");
+
+      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+      const resources = (bundle.entry ?? [])
+        .map((entry) => entry.resource)
+        .filter((r): r is fhir4.Resource => Boolean(r));
+      const of = <T extends fhir4.Resource>(type: T["resourceType"]) =>
+        resources.filter((r): r is T => r.resourceType === type);
+
+      return {
+        orders: of<fhir4.ServiceRequest>("ServiceRequest"),
+        medicationRequests: of<fhir4.MedicationRequest>("MedicationRequest"),
+        tasks: of<fhir4.Task>("Task"),
+        procedures: of<fhir4.Procedure>("Procedure"),
+        administrations: of<fhir4.MedicationAdministration>("MedicationAdministration"),
+      };
+    },
+    enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
   });
 }
 
