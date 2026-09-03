@@ -5420,7 +5420,8 @@ function invalidateVitals(queryClient: QueryClient) {
 // 期間で絞った Observation をまとめて取る。1 回の測定が 8 件前後に分かれるので、
 // 1 週間でも数百件になりうる。ページングで取り切る。
 const VITAL_FLOWSHEET_PAGE = 100;
-const VITAL_FLOWSHEET_MAX_PAGES = 10;
+// 1 か月表示だと、測定の多い患者で 1000 件を超えうるので余裕を持たせる。
+const VITAL_FLOWSHEET_MAX_PAGES = 20;
 
 // 経過表に載せる Observation の区分。手入力・テンプレート抽出のバイタル(vital-signs)に
 // 加えて、看護指示の観察結果(order-type の nursing。nursingPerformHelpers)も同じ表で

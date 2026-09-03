@@ -64,12 +64,20 @@ import { ErrorBanner } from "./ErrorBanner";
 // 置く(1 日の中の位置は測定の並びで決まり時間に比例しないため。時刻は title と
 // 一覧モーダルで見せる)。
 
-/** 1 週間表示の日数。基準日を含む。 */
-const WEEK_DAYS = 7;
+/** 期間表示で選べる日数。基準日を含む。 */
+const PERIOD_OPTIONS: { days: number; label: string }[] = [
+  { days: 7, label: "1週間" },
+  { days: 14, label: "2週間" },
+  { days: 30, label: "1か月" },
+];
+const DEFAULT_PERIOD_DAYS = 7;
+/** これを超える期間は日付の見出しから曜日を落とし、列幅の下限も下げる(列が多いため)。 */
+const LONG_PERIOD_DAYS = 14;
 /** 24 時間表示の枠数。 */
 const DAY_HOURS = 24;
-/** 列幅の下限(px)。これより狭くなるときは横に送る。24 時間表示は見出しが 2 桁なので詰める。 */
+/** 列幅の下限(px)。これより狭くなるときは横に送る。見出しが短いほど詰められる。 */
 const MIN_COLUMN_WIDTH = 64;
+const MIN_SHORT_COLUMN_WIDTH = 46;
 const MIN_HOUR_COLUMN_WIDTH = 34;
 /** 項目列 + 単位列の幅(px)。CSS の --vital-flowsheet-item-w / -unit-w と一致させること。 */
 const LABEL_COLUMNS_WIDTH = 180;
@@ -130,12 +138,9 @@ export function VitalFlowsheetPanel({
   // 無い(タブの外から使う)ときだけ内部の状態で持つ。
   const parsedView = parseFlowsheetView(view);
   const [localView, setLocalView] = useState<FlowsheetView>(() => ({ baseDate: today() }));
+  // URL の view をそのまま使う(項目が増えても取りこぼさないよう、既定は基準日だけ埋める)。
   const current: FlowsheetView = onViewChange
-    ? {
-        baseDate: parsedView.baseDate ?? today(),
-        day: parsedView.day,
-        fullscreen: parsedView.fullscreen,
-      }
+    ? { ...parsedView, baseDate: parsedView.baseDate ?? today() }
     : localView;
   const baseDate = current.baseDate;
   const fullscreen = Boolean(current.fullscreen);
@@ -160,9 +165,16 @@ export function VitalFlowsheetPanel({
     (on: boolean) => updateView({ ...viewRef.current, fullscreen: on }),
     [updateView],
   );
-  /** 日付の見出しを押したときの切り替え。同じ日をもう一度押せば 1 週間表示に戻る。 */
+  /** 日付の見出しを押したときの切り替え。同じ日をもう一度押せば期間表示に戻る。 */
   const toggleDay = (day: string) =>
     updateView({ ...viewRef.current, day: viewRef.current.day === day ? undefined : day });
+  /** 期間の長さ。24 時間表示のときは解いて期間表示に戻す。 */
+  const setPeriodDays = (value: number) =>
+    updateView({
+      ...viewRef.current,
+      days: value === DEFAULT_PERIOD_DAYS ? undefined : value,
+      day: undefined,
+    });
   // 帯で選んだ日。選ぶとその日のイベント一覧をモーダルで出す。
   const [selectedEventDay, setSelectedEventDay] = useState<string | null>(null);
   // 注射・検査の行で選んだ印。一覧は同じまとまり(その日のオーダー)ぶんを出し、
@@ -181,13 +193,17 @@ export function VitalFlowsheetPanel({
   const [fullscreenTop, setFullscreenTop] = useState(0);
   const [wrapWidth, setWrapWidth] = useState(0);
 
-  // 24 時間表示ではその日だけを引く。1 週間表示は基準日までの 7 日。
+  // 24 時間表示ではその日だけを引く。期間表示は基準日までの N 日。
   const dayMode = current.day;
-  const rangeStart = dayMode ?? addDays(baseDate, -(WEEK_DAYS - 1));
+  const periodDays = current.days ?? DEFAULT_PERIOD_DAYS;
+  // 列が多い期間は日付の見出しを短く(曜日は土日の色で分かる)。
+  const shortDates = periodDays > LONG_PERIOD_DAYS;
+  const rangeStart = dayMode ?? addDays(baseDate, -(periodDays - 1));
   const rangeEnd = dayMode ?? baseDate;
   const days = useMemo(
-    () => (dayMode ? [dayMode] : Array.from({ length: WEEK_DAYS }, (_, i) => addDays(rangeStart, i))),
-    [dayMode, rangeStart],
+    () =>
+      dayMode ? [dayMode] : Array.from({ length: periodDays }, (_, i) => addDays(rangeStart, i)),
+    [dayMode, periodDays, rangeStart],
   );
 
   const { data: observations, isLoading, error } = useVitalFlowsheet(patientId, rangeStart, rangeEnd);
@@ -209,8 +225,8 @@ export function VitalFlowsheetPanel({
           return { key: `${dayMode}T${label}`, label, day: dayMode, weekday: undefined };
         })
       : days.map((day) => {
-          const { label, weekday } = flowsheetDayLabel(day);
-          return { key: day, label, day, weekday };
+          const { label, short, weekday } = flowsheetDayLabel(day);
+          return { key: day, label: shortDates ? short : label, day, weekday };
         });
 
     for (const slot of slots) {
@@ -221,7 +237,7 @@ export function VitalFlowsheetPanel({
       dayGroups.push({ ...slot, start, count: Math.max(1, instants.length) });
     }
     return { columns, dayGroups };
-  }, [dayMode, days, flowsheet.columns]);
+  }, [dayMode, days, shortDates, flowsheet.columns]);
 
   const encounters = usePatientEncounterEvents(patientId, rangeStart, rangeEnd);
   const surgeries = usePatientSurgeryPerforms(patientId);
@@ -341,8 +357,13 @@ export function VitalFlowsheetPanel({
     };
   }, [fullscreen, isLoading]);
 
+  const minColumnWidth = dayMode
+    ? MIN_HOUR_COLUMN_WIDTH
+    : shortDates
+      ? MIN_SHORT_COLUMN_WIDTH
+      : MIN_COLUMN_WIDTH;
   const columnWidth = Math.max(
-    dayMode ? MIN_HOUR_COLUMN_WIDTH : MIN_COLUMN_WIDTH,
+    minColumnWidth,
     Math.floor((wrapWidth - LABEL_COLUMNS_WIDTH) / Math.max(1, columns.length)),
   );
 
@@ -415,8 +436,13 @@ export function VitalFlowsheetPanel({
   /** 日時 → 枠のキー。印を置く位置を決める。 */
   const slotKeyOf = (at: string) => groupKeyOf(at, Boolean(dayMode));
 
-  function shiftWeek(delta: number) {
-    setBaseDate(addDays(baseDate, delta * WEEK_DAYS));
+  /** 前後の期間へ。24 時間表示なら 1 日ずつ動かす。 */
+  function shiftPeriod(delta: number) {
+    if (dayMode) {
+      updateView({ ...viewRef.current, day: addDays(dayMode, delta) });
+      return;
+    }
+    setBaseDate(addDays(baseDate, delta * periodDays));
   }
 
   return (
@@ -425,7 +451,10 @@ export function VitalFlowsheetPanel({
     // 重ねるだけ(患者情報の帯までは残り、右ペインなどは覆われて見えなくなる)。
     <div
       ref={panelRef}
-      className={`karte-tabpanel vital-flowsheet${fullscreen ? " vital-flowsheet--fullscreen" : ""}`}
+      className={`karte-tabpanel vital-flowsheet${fullscreen ? " vital-flowsheet--fullscreen" : ""}${
+        // 列が狭いと「128/82」が省略されるので、値の字を詰める。
+        columnWidth < MIN_COLUMN_WIDTH ? " vital-flowsheet--narrow" : ""
+      }`}
       style={{
         ...(fullscreen ? { top: fullscreenTop } : {}),
         ["--vital-flowsheet-col-w" as string]: `${columnWidth}px`,
@@ -449,26 +478,41 @@ export function VitalFlowsheetPanel({
         <button
           type="button"
           className="vital-flowsheet__week-button"
-          onClick={() => shiftWeek(-1)}
-          title="前の週"
-          aria-label="前の週"
+          onClick={() => shiftPeriod(-1)}
+          title="前へ"
+          aria-label="前へ"
         >
           ◀
         </button>
         <button
           type="button"
           className="vital-flowsheet__week-button"
-          onClick={() => shiftWeek(1)}
-          title="次の週"
-          aria-label="次の週"
+          onClick={() => shiftPeriod(1)}
+          title="次へ"
+          aria-label="次へ"
         >
           ▶
         </button>
         <button type="button" onClick={() => setBaseDate(today())}>
           今日
         </button>
+        {/* 期間の長さ。24 時間表示のときは日付の見出しから戻る操作になるので伏せる。 */}
+        {!dayMode && (
+          <label className="lab-timeline__count">
+            <select
+              aria-label="表示する期間"
+              value={periodDays}
+              onChange={(e) => setPeriodDays(Number(e.target.value))}
+            >
+              {PERIOD_OPTIONS.map((option) => (
+                <option key={option.days} value={option.days}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <span className="lab-timeline__hint" />
-        <FlowsheetLegend />
         <button type="button" onClick={() => setFullscreen(!fullscreen)}>
           {fullscreen ? "全画面を終了" : "全画面"}
         </button>
@@ -1100,36 +1144,12 @@ function FlowsheetMarkRowSvg({
 
 // ---- グラフ(温度板) ----
 
-/**
- * 凡例。グラフと**同じクラス**の SVG で描くので、系列の色・形を変えても凡例が
- * ずれない(麻酔チャートの PlotLegend と同じ作り)。
- */
-function FlowsheetLegend() {
-  return (
-    <span className="vital-flowsheet__legend">
-      {CHART_SPECS.map((spec) => (
-        <span key={`${spec.key}/${spec.marker}`} className="vital-flowsheet__legend-item">
-          <svg
-            className={`vital-flowsheet__series vital-flowsheet__series--${spec.className}`}
-            width={14}
-            height={12}
-            viewBox="0 0 14 12"
-            aria-hidden="true"
-          >
-            <path className="vital-flowsheet__line" d="M1,6 L13,6" />
-            <g className="vital-flowsheet__marker">{markerShape(spec.marker, 7, 6)}</g>
-          </svg>
-          {spec.legend}
-        </span>
-      ))}
-    </span>
-  );
-}
-
 // ---- グラフ本体 ----
 
-const CHART_HEIGHT = 190;
-const CHART_PAD = { top: 22, bottom: 12 };
+const CHART_HEIGHT = 206;
+// 上の余白は軸の見出し(記号 + 略称)の高さぶん。ここを詰めると目盛りに近づきすぎる
+// (略称と最初の目盛りの間に少し空きが要る)。折れ線の高さ(PLOT_H)は変えない。
+const CHART_PAD = { top: 38, bottom: 12 };
 const PLOT_H = CHART_HEIGHT - CHART_PAD.top - CHART_PAD.bottom;
 /** 目盛りの区間数。全系列で共通(同じ横罫線に各系列の目盛りを揃える)。 */
 const TICK_INTERVALS = 6;
@@ -1205,24 +1225,50 @@ function buildChartSeries(
 
 const tickY = (index: number) => CHART_PAD.top + PLOT_H - (PLOT_H * index) / TICK_INTERVALS;
 
-/** 左端の軸。系列ごとの目盛りを列にして、グラフと同じ高さの横罫線に揃える。 */
+/**
+ * 左端の軸。系列ごとの目盛りを列にして、グラフと同じ高さの横罫線に揃える。
+ *
+ * 系列の記号(▼▲■●)は**ここに描く**。操作行に凡例を並べると、左ペインの幅では
+ * 折り返して読めなくなるうえ、軸には既に系列の名前と色があるので二重になる。
+ * 記号を軸に載せれば折り返しようがなく、対応がグラフの真横で分かる。
+ * 日本語の名前(収縮期・脈拍…)はホバーに出す。
+ */
 function FlowsheetAxis({ series }: { series: ChartSeries[] }) {
   const columns = series.filter((s) => s.axis);
   const colWidth = 36;
   const width = columns.length * colWidth;
+  /** その軸の列に描く記号。血圧は収縮期 ▼ と拡張期 ▲ の 2 つ。 */
+  const markersOf = (spec: ChartSeries) =>
+    series.filter((candidate) => candidate.className === spec.className);
   return (
     <svg
       className="vital-flowsheet__axis"
       width={width}
       height={CHART_HEIGHT}
       viewBox={`0 0 ${width} ${CHART_HEIGHT}`}
-      aria-hidden="true"
+      role="img"
+      aria-label="グラフの目盛り"
     >
       {columns.map((s, col) => {
         const x = width - (columns.length - col - 0.5) * colWidth;
+        const markers = markersOf(s);
         return (
           <g key={s.key} className={`vital-flowsheet__series vital-flowsheet__series--${s.className}`}>
-            <text className="vital-flowsheet__axis-name" x={x} y={12} textAnchor="middle">
+            <title>{markers.map((marker) => marker.legend).join(" / ")}</title>
+            {markers.map((marker, index) => (
+              <g
+                key={marker.key}
+                className="vital-flowsheet__marker vital-flowsheet__axis-marker"
+              >
+                {markerShape(
+                  marker.marker,
+                  // 2 つあるときは左右に振り分ける(▼▲)。
+                  x + (index - (markers.length - 1) / 2) * 10,
+                  7,
+                )}
+              </g>
+            ))}
+            <text className="vital-flowsheet__axis-name" x={x} y={24} textAnchor="middle">
               {s.name}
             </text>
             {Array.from({ length: TICK_INTERVALS + 1 }, (_, i) => (

@@ -121,22 +121,32 @@ export function formatKarteDetail(target: KarteDetailTarget): string {
 //
 // 経過表は「どの週を見ているか」が読む位置そのものなので、他タブの view(開いている
 // もの の id)と同じ枠に載せる。リロードで今日に戻らず、特定の週をリンクで共有できる。
-// 形は「YYYY-MM-DD」、24 時間表示なら「YYYY-MM-DD/YYYY-MM-DD」(週の基準日 / 見ている日)、
-// 全画面なら末尾に「!」。入力途中の状態ではないので載せてよい。**週の基準日を残す**のは、
-// 24 時間表示から戻ったときに元の週へ帰るため(見ていた日で週を作り直すとずれる)。
+// 形は「基準日[~日数][/見ている日][!]」。日数は既定(1 週間)なら省き、末尾の「!」は全画面。
+// 入力途中の状態ではないので載せてよい。**基準日と日数を残す**のは、24 時間表示から
+// 戻ったときに元の期間へ帰るため(見ていた日で期間を作り直すとずれる)。
+// 区切りに「+」を使わないのは、クエリ文字列の「+」が空白に解釈されるため。
 
 export interface FlowsheetView {
-  /** 1 週間表示の基準日(表の右端)。24 時間表示のときも、戻る先として保つ。 */
+  /** 期間表示の基準日(表の右端)。24 時間表示のときも、戻る先として保つ。 */
   baseDate: string;
-  /** 24 時間表示している日。無ければ 1 週間表示。 */
+  /** 表示する日数(既定は 1 週間)。 */
+  days?: number;
+  /** 24 時間表示している日。無ければ期間表示。 */
   day?: string;
   fullscreen?: boolean;
 }
 
 export function parseFlowsheetView(value: string | undefined): Partial<FlowsheetView> {
-  const match = /^(\d{4}-\d{2}-\d{2})(?:\/(\d{4}-\d{2}-\d{2}))?(!)?$/.exec(value ?? "");
+  const match = /^(\d{4}-\d{2}-\d{2})(?:~(\d+))?(?:\/(\d{4}-\d{2}-\d{2}))?(!)?$/.exec(
+    value ?? "",
+  );
   if (!match) return {};
-  return { baseDate: match[1], day: match[2], fullscreen: Boolean(match[3]) };
+  return {
+    baseDate: match[1],
+    days: match[2] ? Number(match[2]) : undefined,
+    day: match[3],
+    fullscreen: Boolean(match[4]),
+  };
 }
 
 /**
@@ -144,8 +154,13 @@ export function parseFlowsheetView(value: string | undefined): Partial<Flowsheet
  * (URL に既定値を残さない。他タブの「何も開いていない = view 無し」と揃える)。
  */
 export function formatFlowsheetView(view: FlowsheetView, today: string): string | null {
-  if (view.baseDate === today && !view.day && !view.fullscreen) return null;
-  return `${view.baseDate}${view.day ? `/${view.day}` : ""}${view.fullscreen ? "!" : ""}`;
+  if (view.baseDate === today && !view.days && !view.day && !view.fullscreen) return null;
+  return [
+    view.baseDate,
+    view.days ? `~${view.days}` : "",
+    view.day ? `/${view.day}` : "",
+    view.fullscreen ? "!" : "",
+  ].join("");
 }
 
 // ---- 種別での絞り込み ----

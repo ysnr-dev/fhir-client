@@ -669,15 +669,20 @@ export function flowsheetColumnLabel(at: string): { date: string; time: string; 
   return { year: match[1], date: `${match[2]}/${match[3]}`, time: `${match[4]}:${match[5]}` };
 }
 
-/** 日付(YYYY-MM-DD)の見出し。"MM/DD(曜)" と、土日の色分けに使う曜日番号。 */
-export function flowsheetDayLabel(day: string): { year: string; label: string; weekday: number } {
+/**
+ * 日付(YYYY-MM-DD)の見出し。`label` は "MM/DD(曜)"、`short` は曜日を落とした "MM/DD"
+ * (列が多い期間で使う。曜日は土日の色で分かる)。`weekday` は色分けに使う。
+ */
+export function flowsheetDayLabel(day: string): {
+  year: string;
+  label: string;
+  short: string;
+  weekday: number;
+} {
   const [y, m, d] = day.split("-").map(Number);
   const weekday = new Date(y, m - 1, d).getDay();
-  return {
-    year: String(y),
-    label: `${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}(${WEEKDAY_LABELS[weekday]})`,
-    weekday,
-  };
+  const short = `${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}`;
+  return { year: String(y), label: `${short}(${WEEKDAY_LABELS[weekday]})`, short, weekday };
 }
 
 /**

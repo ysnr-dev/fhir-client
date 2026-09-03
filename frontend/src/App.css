@@ -7626,10 +7626,17 @@ body.page-wide .app__main {
   width: var(--vital-flowsheet-col-w, 64px);
   min-width: var(--vital-flowsheet-col-w, 64px);
   max-width: var(--vital-flowsheet-col-w, 64px);
-  padding-left: 6px;
-  padding-right: 6px;
+  padding-left: 2px;
+  padding-right: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 列が狭い期間(1 か月など)は値も詰める。「128/82」が省略されないようにする。 */
+.vital-flowsheet--narrow .vital-flowsheet__table th.vital-flowsheet__time-col,
+.vital-flowsheet--narrow .vital-flowsheet__table td.lab-timeline__value {
+  font-size: 11px;
+  letter-spacing: -0.02em;
 }
 
 .vital-flowsheet__table td.vital-flowsheet__filler,
@@ -7671,6 +7678,17 @@ body.page-wide .app__main {
   font-size: 12px;
 }
 
+/* 期間の選択。日付欄と同じ高さに揃える。 */
+.vital-flowsheet .lab-timeline__count select {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
 .vital-flowsheet .lab-timeline__count input[type="date"] {
   width: auto;
   min-width: 9.5em;
@@ -7687,25 +7705,6 @@ body.page-wide .app__main {
 .vital-flowsheet .lab-timeline__controls .vital-flowsheet__week-button {
   padding-left: 7px;
   padding-right: 7px;
-}
-
-/* 凡例。グラフと同じクラスの SVG を並べるので、系列の色・形を変えても追従する。 */
-.vital-flowsheet__legend {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-  color: var(--text);
-}
-
-.vital-flowsheet__legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.vital-flowsheet__legend-item svg {
-  display: block;
 }
 
 /* 測定の時刻。手入力のバイタルはここからバイタル編集を開けるので、押せると分かる
@@ -8147,6 +8146,14 @@ body.page-wide .app__main {
   font-size: 12px;
   font-weight: bold;
   fill: currentColor;
+}
+
+/* 軸に添える系列の記号(凡例を兼ねる)。グラフの点と同じクラスなので色・形が追従する。
+   目盛りの数字より小さくならないよう、線の太さは点と同じにする。 */
+.vital-flowsheet__axis-marker {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.5;
 }
 
 .vital-flowsheet__axis-tick {
