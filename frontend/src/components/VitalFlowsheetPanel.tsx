@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   usePatientEncounterEvents,
   usePatientExamOrders,
@@ -7,36 +7,35 @@ import {
   useVitalFlowsheet,
   useVitalThresholds,
 } from "../api/queries";
+import { buildInjectionRows } from "../fhir/flowsheetInjectionHelpers";
 import {
-  buildInjectionRows,
-  injectionModalEvents,
-  type InjectionMark,
-  type InjectionRow,
-} from "../fhir/flowsheetInjectionHelpers";
-import {
+  buildExamRows,
   buildFlowsheetEvents,
   flowsheetEventAtLabel,
   flowsheetEventRangeLabel,
-  flowsheetEventSlot,
-  groupFlowsheetEvents,
+  groupFlowsheetEventsByDay,
   hospitalDayLabel,
   hospitalDayOf,
   localDateOf,
+  markKey,
+  markModalEvents,
   postOpDayLabel,
   postOpDayOf,
   type FlowsheetEvent,
   type FlowsheetEventGroup,
+  type FlowsheetMark,
+  type FlowsheetMarkRow,
 } from "../fhir/flowsheetEventHelpers";
 import { interpretationClass } from "../fhir/labResultHelpers";
 import type { KarteDetailTarget } from "../karteUrl";
-import { today } from "../lib/dates";
+import { addDays, today } from "../lib/dates";
 import { FlowsheetEventModal } from "./FlowsheetEventModal";
 import {
   BLOOD_PRESSURE_SERIES,
   bloodPressureNumbers,
   buildVitalFlowsheet,
   flowsheetColumnLabel,
-  groupFlowsheetColumns,
+  flowsheetDayLabel,
   vitalInterpretationOf,
   type VitalFlowsheetRow,
   type VitalInterpretation,
@@ -47,16 +46,36 @@ import { ErrorBanner } from "./ErrorBanner";
 // バイタルの経過表(POMR のフローシート)。読み取り専用で、編集はカルテの
 // バイタルカードから行う(編集の導線を 2 つ持つと同期の負債になるため)。
 //
-// 表の操作系は検査結果の時系列表示(LabResultTimelinePanel)に合わせるが、
-// グラフは温度板にならって表の最上段に常設し、体温・血圧・脈拍・呼吸数を
-// 表の列位置に揃えて描く(項目を選んでモーダルで開く方式は採らない)。
+// 横軸は**基準日から 1 週間**(左が古く、右端が基準日)。1 日の中は測定ごとに列が
+// 分かれ、測定の無い日も 1 列は置く(紙の温度板と同じで、空いている日が見える)。
+// 列の幅はパネルの幅を列数で割って使い切る(列が多い週だけ横に送る)。
 //
-// グラフの上にはイベントの帯(入退院・転棟・外出泊・手術・放射線/内視鏡/生理検査)、
-// 日付の見出しの下には病日・術後日数を出す(fhir/flowsheetEventHelpers.ts)。
-// グラフの下には注射の行(薬剤の組ごとに予定・実施を並べる。fhir/flowsheetInjectionHelpers.ts)。
+// 上から順に、イベントの帯(手術・入退院・転棟・外出泊)、温度板グラフ、測定項目、
+// 注射(薬剤の組ごと)、検査(種別ごと)。帯・注射・検査の印は**その日の列の中央**に
+// 置く(1 日の中の位置は測定の並びで決まり時間に比例しないため。時刻は title と
+// 一覧モーダルで見せる)。
 
-const DEFAULT_COLUMN_COUNT = 10;
-const MAX_COLUMN_COUNT = 100;
+/** 表に出す日数。基準日を含む。 */
+const WEEK_DAYS = 7;
+/** 列幅の下限(px)。これより狭くなる週は横に送る。 */
+const MIN_COLUMN_WIDTH = 64;
+/** 項目列 + 単位列の幅(px)。CSS の --vital-flowsheet-item-w / -unit-w と一致させること。 */
+const LABEL_COLUMNS_WIDTH = 180;
+
+/** 表の 1 列。測定があればその日時、無い日は日付だけの空き列。 */
+interface DayColumn {
+  key: string;
+  day: string;
+  at?: string;
+}
+
+/** 同じ日の列のまとまり。 */
+interface DayGroup {
+  day: string;
+  /** columns の中での先頭の位置。 */
+  start: number;
+  count: number;
+}
 
 export function VitalFlowsheetPanel({
   patientId,
@@ -66,64 +85,87 @@ export function VitalFlowsheetPanel({
   /** イベント一覧からカルテのオーダー詳細モーダルを開く。 */
   onOpenDetail?: (target: KarteDetailTarget) => void;
 }) {
-  const [columnCount, setColumnCount] = useState(DEFAULT_COLUMN_COUNT);
+  const [baseDate, setBaseDate] = useState(today());
   const [fullscreen, setFullscreen] = useState(false);
-  // 帯で選んだ境目。選ぶとその境目のイベント一覧をモーダルで出す。
-  const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
-  // 注射欄で選んだ印。その日の注射(オーダー 1 件)の予定・実施を一覧で出す。
-  const [selectedInjectionSr, setSelectedInjectionSr] = useState<string | null>(null);
+  // 帯で選んだ日。選ぶとその日のイベント一覧をモーダルで出す。
+  const [selectedEventDay, setSelectedEventDay] = useState<string | null>(null);
+  // 注射・検査の行で選んだ印。一覧は同じまとまり(その日のオーダー)ぶんを出し、
+  // 押した 1 件は markKey で突き止めて色を付ける。
+  const [selectedMark, setSelectedMark] = useState<{
+    rows: "injection" | "exam";
+    groupId: string;
+    key: string;
+  } | null>(null);
   // 全画面はビューポート全体ではなく「患者情報の下」から始める。開始位置は
-  // カルテのレイアウト(左右ペインの上端)を実測して決める。全画面のときこの
-  // 要素自体は fixed で流れから外れるが、レイアウトの上端は上の行(アプリ
-  // ヘッダー + 患者情報)で決まるので測り直しても動かない。
+  // カルテのレイアウト(左右ペインの上端)を実測して決める。
   const panelRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const [fullscreenTop, setFullscreenTop] = useState(0);
+  const [wrapWidth, setWrapWidth] = useState(0);
 
-  const { data: observations, isLoading, error } = useVitalFlowsheet(patientId, columnCount);
+  const rangeStart = addDays(baseDate, -(WEEK_DAYS - 1));
+  const rangeEnd = baseDate;
+  const days = useMemo(
+    () => Array.from({ length: WEEK_DAYS }, (_, i) => addDays(rangeStart, i)),
+    [rangeStart],
+  );
+
+  const { data: observations, isLoading, error } = useVitalFlowsheet(patientId, rangeStart, rangeEnd);
   // 異常値(H/L)の色付けは施設設定のしきい値で表示時に判定する。
   const thresholds = useVitalThresholds();
   const flowsheet = useMemo(
-    () => buildVitalFlowsheet(observations ?? [], columnCount, thresholds),
-    [observations, columnCount, thresholds],
+    () => buildVitalFlowsheet(observations ?? [], thresholds),
+    [observations, thresholds],
   );
-  const { columns } = flowsheet;
 
-  // イベントと病日は「表に出ている期間」だけ引く(いちばん古い列 〜 今日)。
-  // 列が無ければ引かない。入院期間は範囲より前に始まっていても返る(病日を数えるため)。
-  const rangeStart = columns.length > 0 ? localDateOf(columns[columns.length - 1]) : "";
-  const rangeEnd = today();
+  // 日ごとの列。測定があればその日時ごと、無ければ空き列を 1 つ。
+  const { columns, dayGroups } = useMemo(() => {
+    const columns: DayColumn[] = [];
+    const dayGroups: DayGroup[] = [];
+    for (const day of days) {
+      const instants = flowsheet.columns.filter((at) => localDateOf(at) === day);
+      const start = columns.length;
+      if (instants.length === 0) columns.push({ key: `day:${day}`, day });
+      else for (const at of instants) columns.push({ key: at, day, at });
+      dayGroups.push({ day, start, count: Math.max(1, instants.length) });
+    }
+    return { columns, dayGroups };
+  }, [days, flowsheet.columns]);
+
   const encounters = usePatientEncounterEvents(patientId, rangeStart, rangeEnd);
   const surgeries = usePatientSurgeryPerforms(patientId);
   const examOrders = usePatientExamOrders(patientId, rangeStart, rangeEnd);
   const injections = usePatientInjectionOrders(patientId, rangeStart, rangeEnd);
 
   const injectionRows = useMemo(
-    () =>
-      injections.data
-        ? buildInjectionRows(injections.data)
-        : ([] as InjectionRow[]),
+    () => (injections.data ? buildInjectionRows(injections.data) : []),
     [injections.data],
   );
-  const injectionModal = useMemo(
-    () => (selectedInjectionSr ? injectionModalEvents(injectionRows, selectedInjectionSr) : []),
-    [injectionRows, selectedInjectionSr],
+  const examRows = useMemo(
+    () => (examOrders.data ? buildExamRows(examOrders.data) : []),
+    [examOrders.data],
   );
+  const markModal = useMemo(() => {
+    if (!selectedMark) return null;
+    const rows = selectedMark.rows === "injection" ? injectionRows : examRows;
+    const { events, highlightIndex, selected } = markModalEvents(
+      rows,
+      selectedMark.groupId,
+      selectedMark.key,
+    );
+    if (events.length === 0) return null;
+    const heading = selectedMark.rows === "injection" ? "注射" : "検査";
+    // 見出しは押した 1 件の日時。どれを押したかが一覧を見る前に分かる。
+    const when = selected ? flowsheetEventAtLabel(selected.at) : flowsheetEventRangeLabel(events);
+    return { events, highlightIndex, title: `${heading}（${when}）` };
+  }, [selectedMark, injectionRows, examRows]);
 
   const events = useMemo(
-    () =>
-      buildFlowsheetEvents(
-        encounters.data?.events ?? [],
-        surgeries.data ?? [],
-        examOrders.data ?? { headers: [], items: [] },
-      ),
-    [encounters.data, surgeries.data, examOrders.data],
+    () => buildFlowsheetEvents(encounters.data?.events ?? [], surgeries.data ?? []),
+    [encounters.data, surgeries.data],
   );
-  const eventGroups = useMemo(
-    () => groupFlowsheetEvents(columns, events),
-    [columns, events],
-  );
-  // 表示数を変えると境目の位置が変わるので、選択は取り直す。
-  const selectedGroup = eventGroups.find((group) => group.slot === selectedSlot);
+  const eventGroups = useMemo(() => groupFlowsheetEventsByDay(events), [events]);
+  const selectedEventGroup = eventGroups.find((group) => group.day === selectedEventDay);
 
   const stays = encounters.data?.stays ?? [];
   // 手術日(YYYY-MM-DD)。術後日数の行を出すかの判定にも使う。
@@ -136,10 +178,8 @@ export function VitalFlowsheetPanel({
         .filter(Boolean),
     [surgeries.data],
   );
-  // 列ごとの端末ローカル日付。病日・術後日数はこれで数える。
-  const columnDates = useMemo(() => columns.map(localDateOf), [columns]);
-  const hospitalDays = columnDates.map((date) => hospitalDayOf(date, stays));
-  const postOpDays = columnDates.map((date) => postOpDayOf(date, surgeryDates));
+  const hospitalDays = days.map((day) => hospitalDayOf(day, stays));
+  const postOpDays = days.map((day) => postOpDayOf(day, surgeryDates));
   const showHospitalDays = hospitalDays.some((day) => day !== undefined);
   const showPostOpDays = postOpDays.some((day) => day !== undefined);
   // 見出しは 年 / 日付 / 時刻 の 3 段。病日・術後日数を出すぶんだけ rowSpan を伸ばす。
@@ -166,22 +206,72 @@ export function VitalFlowsheetPanel({
     return () => window.removeEventListener("resize", measure);
   }, [fullscreen]);
 
-  function handleColumnCountChange(raw: number) {
-    if (!Number.isFinite(raw)) return;
-    setColumnCount(Math.min(MAX_COLUMN_COUNT, Math.max(1, Math.round(raw))));
-  }
+  // 列幅はパネルの幅から決める。ペインの分割やウィンドウの幅で変わるので、
+  // 描画のたびに同期で測り、以後は ResizeObserver で追う。
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    function measure() {
+      if (wrapRef.current) setWrapWidth(wrapRef.current.clientWidth);
+    }
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(wrap);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [fullscreen, isLoading]);
+
+  const columnWidth = Math.max(
+    MIN_COLUMN_WIDTH,
+    Math.floor((wrapWidth - LABEL_COLUMNS_WIDTH) / Math.max(1, columns.length)),
+  );
 
   const chartSeries = useMemo(
     () => buildChartSeries(flowsheet.rows, observations ?? [], thresholds),
     [flowsheet, observations, thresholds],
   );
 
-  const yearGroups = groupFlowsheetColumns(columns, (at) => flowsheetColumnLabel(at).year);
-  // 同じ日の朝夕は列を分けたまま、日付の見出しだけ 1 つにまとめる。
-  const dateGroups = groupFlowsheetColumns(
-    columns,
-    (at) => `${flowsheetColumnLabel(at).year}/${flowsheetColumnLabel(at).date}`,
+  // 年の見出し。連続する同じ年の日をまとめる。
+  const yearGroups = useMemo(() => {
+    const groups: { year: string; count: number }[] = [];
+    for (const group of dayGroups) {
+      const { year } = flowsheetDayLabel(group.day);
+      const last = groups[groups.length - 1];
+      if (last && last.year === year) last.count += group.count;
+      else groups.push({ year, count: group.count });
+    }
+    return groups;
+  }, [dayGroups]);
+
+  /**
+   * 日の区切り x(px)。注射・検査の行は 1 セルを SVG で描くので表の縦罫線が入らない。
+   * 日ごとに読めるよう、同じ位置に自前で線を引く(末尾はセルの外枠と重なるので除く)。
+   */
+  const dayLineXs = useMemo(
+    () => dayGroups.slice(0, -1).map((group) => (group.start + group.count) * columnWidth),
+    [dayGroups, columnWidth],
   );
+
+  /** 日の列のまとまりの幅(px)。同じ日に重なる印をどこまで広げてよいかに使う。 */
+  const dayWidth = (day: string): number => {
+    const group = dayGroups.find((candidate) => candidate.day === day);
+    return (group?.count ?? 1) * columnWidth;
+  };
+
+  /** 日の列のまとまりの中央 x(px)。範囲外の日は端に寄せる。 */
+  const dayCenterX = (day: string): number => {
+    if (day < rangeStart) return 0;
+    if (day > rangeEnd) return columns.length * columnWidth;
+    const group = dayGroups.find((candidate) => candidate.day === day);
+    return group ? (group.start + group.count / 2) * columnWidth : 0;
+  };
+
+  function shiftWeek(delta: number) {
+    setBaseDate((prev) => addDays(prev, delta * WEEK_DAYS));
+  }
 
   return (
     // 表の地色・見出し行・1 行おきの濃淡は他のタブ(検査結果の時系列表示)と同じ
@@ -190,218 +280,266 @@ export function VitalFlowsheetPanel({
     <div
       ref={panelRef}
       className={`karte-tabpanel vital-flowsheet${fullscreen ? " vital-flowsheet--fullscreen" : ""}`}
-      style={fullscreen ? { top: fullscreenTop } : undefined}
+      style={{
+        ...(fullscreen ? { top: fullscreenTop } : {}),
+        ["--vital-flowsheet-col-w" as string]: `${columnWidth}px`,
+      }}
     >
       <ErrorBanner
-        error={error ?? encounters.error ?? surgeries.error ?? examOrders.error}
+        error={error ?? encounters.error ?? surgeries.error ?? examOrders.error ?? injections.error}
       />
+
+      <div className="lab-timeline__controls">
+        <label className="lab-timeline__count">
+          基準日
+          <input
+            type="date"
+            value={baseDate}
+            onChange={(e) => {
+              if (e.target.value) setBaseDate(e.target.value);
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          className="vital-flowsheet__week-button"
+          onClick={() => shiftWeek(-1)}
+          title="前の週"
+          aria-label="前の週"
+        >
+          ◀
+        </button>
+        <button
+          type="button"
+          className="vital-flowsheet__week-button"
+          onClick={() => shiftWeek(1)}
+          title="次の週"
+          aria-label="次の週"
+        >
+          ▶
+        </button>
+        <button type="button" onClick={() => setBaseDate(today())}>
+          今日
+        </button>
+        <span className="lab-timeline__hint" />
+        <button type="button" onClick={() => setFullscreen((prev) => !prev)}>
+          {fullscreen ? "全画面を終了" : "全画面"}
+        </button>
+      </div>
 
       {isLoading ? (
         <p>読み込み中...</p>
       ) : (
         <>
-          <div className="lab-timeline__controls">
-            <label className="lab-timeline__count">
-              履歴の表示数
-              <input
-                type="number"
-                min={1}
-                max={MAX_COLUMN_COUNT}
-                value={columnCount}
-                onChange={(e) => handleColumnCountChange(e.target.valueAsNumber)}
-              />
-            </label>
-            <span className="lab-timeline__hint" />
-            <button type="button" onClick={() => setFullscreen((prev) => !prev)}>
-              {fullscreen ? "全画面を終了" : "全画面"}
-            </button>
-          </div>
+          <div ref={wrapRef} className="lab-timeline__table-wrap">
+            <table className="lab-timeline__table vital-flowsheet__table">
+              <thead>
+                {/* 1 日 = 列のまとまり。測定ごとに列が分かれるので、日付の下に時刻を出す。
+                    末尾の空列は列幅の端数を吸収する。 */}
+                <tr>
+                  <th className="lab-timeline__item-col" rowSpan={3}>
+                    測定項目
+                  </th>
+                  <th className="lab-timeline__unit-col" rowSpan={3}>
+                    単位
+                  </th>
+                  {yearGroups.map((group, index) => (
+                    <th key={index} className="lab-timeline__year-col" colSpan={group.count}>
+                      {group.year}年
+                    </th>
+                  ))}
+                  <th className="vital-flowsheet__filler" rowSpan={headerRowSpan} />
+                </tr>
+                <tr>
+                  {dayGroups.map((group) => {
+                    const { label, weekday } = flowsheetDayLabel(group.day);
+                    const weekendClass =
+                      weekday === 0
+                        ? " vital-flowsheet__date-col--sunday"
+                        : weekday === 6
+                          ? " vital-flowsheet__date-col--saturday"
+                          : "";
+                    return (
+                      <th
+                        key={group.day}
+                        className={`lab-timeline__date-col vital-flowsheet__date-col${weekendClass}${
+                          group.day === baseDate ? " vital-flowsheet__date-col--base" : ""
+                        }`}
+                        colSpan={group.count}
+                        title={group.day}
+                      >
+                        {label}
+                      </th>
+                    );
+                  })}
+                </tr>
+                <tr>
+                  {columns.map((column) => (
+                    <th key={column.key} className="vital-flowsheet__time-col" title={column.at}>
+                      {column.at ? flowsheetColumnLabel(column.at).time : ""}
+                    </th>
+                  ))}
+                </tr>
+                {/* 病日・術後日数。入院・手術があるときだけ行を出す。日の単位なので
+                    日のまとまりごとに 1 セル。見出しの中にあるので縦に送っても残る。 */}
+                {showHospitalDays && (
+                  <tr>
+                    <th className="lab-timeline__item-col vital-flowsheet__day-head">病日</th>
+                    <th className="lab-timeline__unit-col" />
+                    {dayGroups.map((group, index) => (
+                      <th
+                        key={group.day}
+                        className="vital-flowsheet__day-col"
+                        colSpan={group.count}
+                        title="入院からの日数"
+                      >
+                        {hospitalDayLabel(hospitalDays[index])}
+                      </th>
+                    ))}
+                  </tr>
+                )}
+                {showPostOpDays && (
+                  <tr>
+                    <th className="lab-timeline__item-col vital-flowsheet__day-head">術後</th>
+                    <th className="lab-timeline__unit-col" />
+                    {dayGroups.map((group, index) => (
+                      <th
+                        key={group.day}
+                        className="vital-flowsheet__day-col"
+                        colSpan={group.count}
+                        title="手術からの日数"
+                      >
+                        {postOpDayLabel(postOpDays[index])}
+                      </th>
+                    ))}
+                  </tr>
+                )}
+              </thead>
 
-          {flowsheet.rows.length === 0 ? (
-            <p className="patient-table__empty">バイタルの記録がありません</p>
-          ) : (
-            <div className="lab-timeline__table-wrap">
-              <table className="lab-timeline__table vital-flowsheet__table">
-                <thead>
-                  {/* 列は測定 1 回。同じ日の朝夕を潰さないよう、日付の下に時刻を出す。
-                      末尾の空列は余白を吸収する(測定列の幅を固定してグラフと揃えるため)。 */}
-                  <tr>
-                    <th className="lab-timeline__item-col" rowSpan={3}>
-                      測定項目
+              {/* イベントの帯とグラフは測定の行と性質が違うので tbody を分ける。
+                  1 行おきの濃淡(tbody tr:nth-child(even))が測定の行だけに当たり、
+                  帯の有無で縞の向きが入れ替わらない。 */}
+              <tbody className="vital-flowsheet__chart-body">
+                {eventGroups.some((group) => group.day >= rangeStart && group.day <= rangeEnd) && (
+                  <tr className="vital-flowsheet__event-row">
+                    <th className="lab-timeline__item-col vital-flowsheet__event-head" colSpan={2}>
+                      イベント
                     </th>
-                    <th className="lab-timeline__unit-col" rowSpan={3}>
-                      単位
-                    </th>
-                    {yearGroups.map((group) => (
-                      <th
-                        key={group.columns[0]}
-                        className="lab-timeline__year-col"
-                        colSpan={group.columns.length}
-                      >
-                        {group.label}年
-                      </th>
-                    ))}
-                    <th className="vital-flowsheet__filler" rowSpan={headerRowSpan} />
-                  </tr>
-                  <tr>
-                    {dateGroups.map((group) => (
-                      <th
-                        key={group.columns[0]}
-                        className="lab-timeline__date-col vital-flowsheet__date-col"
-                        colSpan={group.columns.length}
-                        title={group.columns.join("\n")}
-                      >
-                        {flowsheetColumnLabel(group.columns[0]).date}
-                      </th>
-                    ))}
-                  </tr>
-                  <tr>
-                    {columns.map((at) => (
-                      <th key={at} className="vital-flowsheet__time-col" title={at}>
-                        {flowsheetColumnLabel(at).time}
-                      </th>
-                    ))}
-                  </tr>
-                  {/* 病日・術後日数。入院・手術があるときだけ行を出す。見出しの中に
-                      置いてあるので、縦に送っても列の日付と一緒に残る。 */}
-                  {showHospitalDays && (
-                    <tr>
-                      <th className="lab-timeline__item-col vital-flowsheet__day-head">病日</th>
-                      <th className="lab-timeline__unit-col" />
-                      {columns.map((at, index) => (
-                        <th key={at} className="vital-flowsheet__day-col" title="入院からの日数">
-                          {hospitalDayLabel(hospitalDays[index])}
-                        </th>
-                      ))}
-                    </tr>
-                  )}
-                  {showPostOpDays && (
-                    <tr>
-                      <th className="lab-timeline__item-col vital-flowsheet__day-head">術後</th>
-                      <th className="lab-timeline__unit-col" />
-                      {columns.map((at, index) => (
-                        <th key={at} className="vital-flowsheet__day-col" title="手術からの日数">
-                          {postOpDayLabel(postOpDays[index])}
-                        </th>
-                      ))}
-                    </tr>
-                  )}
-                </thead>
-                {/* イベントの帯とグラフは測定の行と性質が違うので tbody を分ける。
-                    1 行おきの濃淡(tbody tr:nth-child(even))が測定の行だけに当たり、
-                    帯の有無で縞の向きが入れ替わらない。 */}
-                <tbody className="vital-flowsheet__chart-body">
-                  {/* イベントの帯。グラフの真上に置き、同じ x にグラフの縦線を落とす。
-                      イベントが 1 件も無ければ行ごと出さない。 */}
-                  {eventGroups.length > 0 && (
-                    <tr className="vital-flowsheet__event-row">
-                      <th
-                        className="lab-timeline__item-col vital-flowsheet__event-head"
-                        colSpan={2}
-                      >
-                        イベント
-                      </th>
-                      <td className="vital-flowsheet__event-cell" colSpan={columns.length}>
-                        <FlowsheetEventBand
-                          columns={columns}
-                          groups={eventGroups}
-                          selectedSlot={selectedSlot}
-                          onSelect={setSelectedSlot}
-                        />
-                      </td>
-                      <td className="vital-flowsheet__filler" />
-                    </tr>
-                  )}
-                  <tr className="vital-flowsheet__chart-row">
-                    <th className="lab-timeline__item-col vital-flowsheet__axis-cell" colSpan={2}>
-                      <FlowsheetAxis series={chartSeries} />
-                    </th>
-                    <td className="vital-flowsheet__chart-cell" colSpan={columns.length}>
-                      <FlowsheetChart
-                        columns={columns}
-                        series={chartSeries}
-                        eventSlots={eventGroups.map((group) => group.slot)}
+                    <td className="vital-flowsheet__event-cell" colSpan={columns.length}>
+                      <FlowsheetEventBand
+                        width={columns.length * columnWidth}
+                        groups={eventGroups.filter(
+                          (group) => group.day >= rangeStart && group.day <= rangeEnd,
+                        )}
+                        xOf={dayCenterX}
+                        selectedDay={selectedEventDay}
+                        onSelect={setSelectedEventDay}
                       />
                     </td>
                     <td className="vital-flowsheet__filler" />
                   </tr>
+                )}
+                <tr className="vital-flowsheet__chart-row">
+                  <th className="lab-timeline__item-col vital-flowsheet__axis-cell" colSpan={2}>
+                    <FlowsheetAxis series={chartSeries} />
+                  </th>
+                  <td className="vital-flowsheet__chart-cell" colSpan={columns.length}>
+                    <FlowsheetChart
+                      columns={columns}
+                      columnWidth={columnWidth}
+                      series={chartSeries}
+                      eventXs={eventGroups
+                        .filter((group) => group.day >= rangeStart && group.day <= rangeEnd)
+                        .map((group) => dayCenterX(group.day))}
+                    />
+                  </td>
+                  <td className="vital-flowsheet__filler" />
+                </tr>
+              </tbody>
 
-                  {/* 注射欄。薬剤の組ごとに 1 行。予定は点、実施は終了があればバー。
-                      注射のオーダーが無ければ区切りごと出さない。 */}
-                  {injectionRows.length > 0 && (
-                    <tr className="vital-flowsheet__section-row">
-                      <th className="lab-timeline__item-col vital-flowsheet__section-head" colSpan={2}>
-                        注射
-                      </th>
-                      <td colSpan={columns.length} />
-                      <td className="vital-flowsheet__filler" />
-                    </tr>
-                  )}
-                  {injectionRows.map((row) => (
-                    <tr key={row.key} className="vital-flowsheet__injection-row">
-                      <th
-                        className="lab-timeline__item-col vital-flowsheet__injection-head"
-                        colSpan={2}
-                        title={row.title}
+              <tbody>
+                {flowsheet.rows.length === 0 && (
+                  <tr>
+                    <td className="lab-timeline__item-col vital-flowsheet__empty" colSpan={2}>
+                      バイタルの記録がありません
+                    </td>
+                    <td colSpan={columns.length} />
+                    <td className="vital-flowsheet__filler" />
+                  </tr>
+                )}
+                {flowsheet.rows.map((row) => (
+                  <tr key={row.key}>
+                    {/* 項目列・単位列は幅固定で左に貼り付く(CSS)。長い項目名は省略されるので title で。 */}
+                    <td className="lab-timeline__item-col" title={row.name}>
+                      <span className="lab-timeline__item-label">{row.name}</span>
+                    </td>
+                    <td className="lab-timeline__unit-col">{row.unit}</td>
+                    {columns.map((column) => (
+                      // 列幅は固定なので、長い文字値(観察結果)は省略される。全文は title で。
+                      // 異常値は検査結果の時系列表示と同じ修飾子(--high / --low)で色付けする。
+                      <td
+                        key={column.key}
+                        className={interpretationClass(
+                          (column.at && row.interpretations.get(column.at)) || "",
+                          "lab-timeline__value",
+                        )}
+                        title={column.at ? row.values.get(column.at) : undefined}
                       >
-                        {row.label}
-                      </th>
-                      <td className="vital-flowsheet__injection-cell" colSpan={columns.length}>
-                        <FlowsheetInjectionRow
-                          columns={columns}
-                          marks={row.marks}
-                          selectedSrId={selectedInjectionSr}
-                          onSelect={setSelectedInjectionSr}
-                        />
+                        {column.at ? (row.values.get(column.at) ?? "") : ""}
                       </td>
-                      <td className="vital-flowsheet__filler" />
-                    </tr>
-                  ))}
-                </tbody>
-                <tbody>
-                  {flowsheet.rows.map((row) => (
-                    <tr key={row.key}>
-                      {/* 項目列・単位列は幅固定で左に貼り付く(CSS)。長い項目名は省略されるので title で。 */}
-                      <td className="lab-timeline__item-col" title={row.name}>
-                        <span className="lab-timeline__item-label">{row.name}</span>
-                      </td>
-                      <td className="lab-timeline__unit-col">{row.unit}</td>
-                      {columns.map((at) => (
-                        // 列幅は固定なので、長い文字値(観察結果)は省略される。全文は title で。
-                        // 異常値は検査結果の時系列表示と同じ修飾子(--high / --low)で色付けする。
-                        <td
-                          key={at}
-                          className={interpretationClass(
-                            row.interpretations.get(at) ?? "",
-                            "lab-timeline__value",
-                          )}
-                          title={row.values.get(at)}
-                        >
-                          {row.values.get(at) ?? ""}
-                        </td>
-                      ))}
-                      <td className="vital-flowsheet__filler" />
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    ))}
+                    <td className="vital-flowsheet__filler" />
+                  </tr>
+                ))}
+              </tbody>
 
-          {selectedGroup && (
+              {/* 注射・検査。薬剤の組・検査の種別ごとに 1 行で、印はその日の列の中央。
+                  測定の行とは読むものが違うので下にまとめ、tbody を分けて縞を掛けない。
+                  オーダーが無ければ区切りごと出さない。 */}
+              <FlowsheetMarkSection
+                heading="注射"
+                rows={injectionRows}
+                columnCount={columns.length}
+                width={columns.length * columnWidth}
+                dayLineXs={dayLineXs}
+                xOf={dayCenterX}
+                dayWidthOf={dayWidth}
+                selectedKey={selectedMark?.rows === "injection" ? selectedMark.key : null}
+                onSelect={(mark) =>
+                  setSelectedMark({ rows: "injection", groupId: mark.groupId, key: markKey(mark) })
+                }
+              />
+              <FlowsheetMarkSection
+                heading="検査"
+                rows={examRows}
+                columnCount={columns.length}
+                width={columns.length * columnWidth}
+                dayLineXs={dayLineXs}
+                xOf={dayCenterX}
+                dayWidthOf={dayWidth}
+                selectedKey={selectedMark?.rows === "exam" ? selectedMark.key : null}
+                onSelect={(mark) =>
+                  setSelectedMark({ rows: "exam", groupId: mark.groupId, key: markKey(mark) })
+                }
+              />
+            </table>
+          </div>
+
+          {selectedEventGroup && (
             <FlowsheetEventModal
-              events={selectedGroup.events}
+              events={selectedEventGroup.events}
               onOpenDetail={onOpenDetail}
-              onClose={() => setSelectedSlot(null)}
+              onClose={() => setSelectedEventDay(null)}
             />
           )}
 
-          {injectionModal.length > 0 && (
+          {markModal && (
             <FlowsheetEventModal
-              events={injectionModal}
-              title={`注射（${flowsheetEventRangeLabel(injectionModal)}）`}
+              events={markModal.events}
+              title={markModal.title}
+              highlightIndex={markModal.highlightIndex}
               onOpenDetail={onOpenDetail}
-              onClose={() => setSelectedInjectionSr(null)}
+              onClose={() => setSelectedMark(null)}
             />
           )}
         </>
@@ -412,12 +550,12 @@ export function VitalFlowsheetPanel({
 
 // ---- イベントの帯 ----
 
-/** 1 つの境目に積むラベルの上限。これを超えたら最後の行を「他N件」にする。 */
+/** 1 つの日に積むラベルの上限。これを超えたら最後の行を「他N件」にする。 */
 const EVENT_LABEL_ROWS = 3;
 const EVENT_ROW_HEIGHT = 13;
 /** ▼ とラベルの間。 */
 const EVENT_MARK_HEIGHT = 12;
-/** ラベルの文字数の上限。列幅(64px)に収まる長さで丸め、全文は title に出す。 */
+/** ラベルの文字数の上限。列幅に収まる長さで丸め、全文は title に出す。 */
 const EVENT_LABEL_CHARS = 5;
 
 function truncateLabel(label: string): string {
@@ -430,26 +568,22 @@ function eventTitle(event: FlowsheetEvent): string {
 }
 
 /**
- * イベントの帯。列は等間隔で時間に比例しないので、イベントは列の**境目**に置く
- * (列の中央に置くと、その測定のときに起きたように見えてしまう)。
- * 同じ境目に集まったイベントはラベルを縦に積む。
+ * イベントの帯。印はその日の列のまとまりの中央に置き、同じ日のイベントは縦に積む。
  */
 function FlowsheetEventBand({
-  columns,
+  width,
   groups,
-  selectedSlot,
+  xOf,
+  selectedDay,
   onSelect,
 }: {
-  columns: string[];
+  width: number;
   groups: FlowsheetEventGroup[];
-  selectedSlot: number | null;
-  onSelect: (slot: number) => void;
+  xOf: (day: string) => number;
+  selectedDay: string | null;
+  onSelect: (day: string) => void;
 }) {
-  const width = columns.length * FLOWSHEET_COLUMN_WIDTH;
-  const rows = Math.min(
-    EVENT_LABEL_ROWS,
-    Math.max(1, ...groups.map((group) => group.labels.length)),
-  );
+  const rows = Math.min(EVENT_LABEL_ROWS, Math.max(1, ...groups.map((group) => group.labels.length)));
   const height = EVENT_MARK_HEIGHT + rows * EVENT_ROW_HEIGHT;
 
   return (
@@ -459,30 +593,28 @@ function FlowsheetEventBand({
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label="入退院・手術・検査のイベント"
+      aria-label="入退院・手術のイベント"
     >
       {groups.map((group) => {
-        const x = group.slot * FLOWSHEET_COLUMN_WIDTH;
-        // 4 種類以上あるときは 2 行だけ出し、残りを最後の行にまとめる。
+        const x = xOf(group.day);
+        // 4 件以上あるときは 2 行だけ出し、残りを最後の行にまとめる。
         const overflow = group.labels.length > EVENT_LABEL_ROWS;
         const shown = overflow ? group.labels.slice(0, EVENT_LABEL_ROWS - 1) : group.labels;
-        // 端の境目はラベルが SVG からはみ出すので、寄せ方を変える。
-        const anchor = x <= 0 ? "start" : x >= width ? "end" : "middle";
-        const selected = group.slot === selectedSlot;
+        const selected = group.day === selectedDay;
         return (
           <g
-            key={group.slot}
+            key={group.day}
             className={`vital-flowsheet__event vital-flowsheet__event--${group.labels[0].kind}${
               selected ? " vital-flowsheet__event--selected" : ""
             }`}
             role="button"
             tabIndex={0}
             aria-label={`${group.labels.map((l) => l.text).join("・")} の一覧を開く`}
-            onClick={() => onSelect(group.slot)}
+            onClick={() => onSelect(group.day)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                onSelect(group.slot);
+                onSelect(group.day);
               }
             }}
           >
@@ -490,22 +622,19 @@ function FlowsheetEventBand({
             {/* クリックできる範囲。▼ とラベルだけだと当たり判定が細すぎる。 */}
             <rect
               className="vital-flowsheet__event-hit"
-              x={x - FLOWSHEET_COLUMN_WIDTH / 2}
+              x={x - MIN_COLUMN_WIDTH / 2}
               y={0}
-              width={FLOWSHEET_COLUMN_WIDTH}
+              width={MIN_COLUMN_WIDTH}
               height={height}
             />
-            <path
-              className="vital-flowsheet__event-mark"
-              d={`M${x - 4},2 L${x + 4},2 L${x},9 Z`}
-            />
+            <path className="vital-flowsheet__event-mark" d={`M${x - 4},2 L${x + 4},2 L${x},9 Z`} />
             {shown.map((label, index) => (
               <text
-                key={label.text}
+                key={`${label.text}/${index}`}
                 className={`vital-flowsheet__event-label vital-flowsheet__event-label--${label.kind}`}
                 x={x}
                 y={EVENT_MARK_HEIGHT + (index + 1) * EVENT_ROW_HEIGHT - 3}
-                textAnchor={anchor}
+                textAnchor="middle"
               >
                 {truncateLabel(label.text)}
               </text>
@@ -515,7 +644,7 @@ function FlowsheetEventBand({
                 className="vital-flowsheet__event-label vital-flowsheet__event-label--more"
                 x={x}
                 y={EVENT_MARK_HEIGHT + EVENT_LABEL_ROWS * EVENT_ROW_HEIGHT - 3}
-                textAnchor={anchor}
+                textAnchor="middle"
               >
                 他{group.labels.length - shown.length}件
               </text>
@@ -527,33 +656,103 @@ function FlowsheetEventBand({
   );
 }
 
-// ---- 注射欄 ----
+// ---- 印の行(注射・検査) ----
 
-const INJECTION_ROW_HEIGHT = 18;
-/** 印の半径。列の境目に置くので、隣の列にはみ出さない大きさにする。 */
-const INJECTION_MARK_R = 4.5;
-/** 開始と終了が同じ境目に来たときのバーの最小幅。 */
-const INJECTION_BAR_MIN_WIDTH = 12;
-/** 同じ境目に重なった点をずらす間隔。 */
-const INJECTION_MARK_GAP = 11;
+const MARK_ROW_HEIGHT = 18;
+/** 印の半径。 */
+const MARK_R = 4;
+/** 開始と終了が同じ位置に来たときのバーの最小幅。 */
+const MARK_BAR_MIN_WIDTH = 12;
+/** 同じ位置に重なった点をずらす間隔。印の直径 + 隙間。 */
+const MARK_GAP = 13;
+/** その日に印が多いときの間隔の下限。これ以下には詰めない(重なって読めなくなる)。 */
+const MARK_MIN_GAP = 7;
+/** 当たり判定の最小幅。 */
+const MARK_HIT_WIDTH = 13;
+
+/** 区切り行 + 行の並び。行が無ければ何も出さない。 */
+function FlowsheetMarkSection({
+  heading,
+  rows,
+  columnCount,
+  width,
+  dayLineXs,
+  xOf,
+  dayWidthOf,
+  selectedKey,
+  onSelect,
+}: {
+  heading: string;
+  rows: FlowsheetMarkRow[];
+  columnCount: number;
+  width: number;
+  /** 日の区切りに引く縦線の x。 */
+  dayLineXs: number[];
+  xOf: (day: string) => number;
+  dayWidthOf: (day: string) => number;
+  /** 押した印。色を付ける 1 件を選ぶ。 */
+  selectedKey: string | null;
+  onSelect: (mark: FlowsheetMark) => void;
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <tbody className="vital-flowsheet__injection-body">
+      <tr className="vital-flowsheet__section-row">
+        <th className="lab-timeline__item-col vital-flowsheet__section-head" colSpan={2}>
+          {heading}
+        </th>
+        <td colSpan={columnCount} />
+        <td className="vital-flowsheet__filler" />
+      </tr>
+      {rows.map((row) => (
+        <tr key={row.key} className="vital-flowsheet__injection-row">
+          <th
+            className="lab-timeline__item-col vital-flowsheet__injection-head"
+            colSpan={2}
+            title={row.title}
+          >
+            {row.label}
+          </th>
+          <td className="vital-flowsheet__injection-cell" colSpan={columnCount}>
+            <FlowsheetMarkRowSvg
+              width={width}
+              marks={row.marks}
+              dayLineXs={dayLineXs}
+              xOf={xOf}
+              dayWidthOf={dayWidthOf}
+              selectedKey={selectedKey}
+              onSelect={onSelect}
+            />
+          </td>
+          <td className="vital-flowsheet__filler" />
+        </tr>
+      ))}
+    </tbody>
+  );
+}
 
 /**
- * 印の x を決める。同じ日に 2 回投与する予定や、予定とその実施は同じ境目に落ちて
- * 重なるので、境目の左右に均等にずらして数が見えるようにする(ずれ幅は列幅より
- * ずっと小さいので、どの境目の印かは変わらない)。
+ * 印の x を決める。印はその日の列のまとまりの中央。同じ日に 2 回投与する予定や、
+ * 予定とその実施は同じ位置に落ちて重なるので、左右に均等にずらして数が見えるようにする。
+ * ずらす間隔はその日の幅に収める(はみ出すと隣の日の印に見える)。
  */
-function placeInjectionMarks(
-  columns: string[],
-  marks: InjectionMark[],
-): { mark: InjectionMark; x: number; endX?: number }[] {
-  const placed = marks.map((mark) => ({
-    mark,
-    x: flowsheetEventSlot(columns, mark.at) * FLOWSHEET_COLUMN_WIDTH,
-    // 列は新しい順(左が新しい)なので、終了の方が左に来る。
-    endX: mark.end
-      ? flowsheetEventSlot(columns, mark.end) * FLOWSHEET_COLUMN_WIDTH
-      : undefined,
-  }));
+function placeMarks(
+  marks: FlowsheetMark[],
+  xOf: (day: string) => number,
+  dayWidthOf: (day: string) => number,
+): { mark: FlowsheetMark; x: number; endX?: number }[] {
+  // バーを描くのは**日をまたぐ**ときだけ。横軸は 1 日単位なので、同じ日に収まる
+  // 点滴の長さは描き分けられず、短いバーを出すと隣の印に重なって鎖のように見える
+  // (同じ日の開始〜終了は title と一覧モーダルで読む)。
+  const placed = marks.map((mark) => {
+    const day = localDateOf(mark.at);
+    const endDay = mark.end ? localDateOf(mark.end) : "";
+    return {
+      mark,
+      x: xOf(day),
+      endX: endDay && endDay !== day ? xOf(endDay) : undefined,
+    };
+  });
 
   const byX = new Map<number, typeof placed>();
   for (const item of placed) {
@@ -563,8 +762,12 @@ function placeInjectionMarks(
   }
   for (const list of byX.values()) {
     if (list.length < 2) continue;
+    // 時刻順に並べて左から置く(左が古い)。
+    list.sort((a, b) => a.mark.at.localeCompare(b.mark.at));
+    const dayWidth = dayWidthOf(localDateOf(list[0].mark.at));
+    const gap = Math.max(MARK_MIN_GAP, Math.min(MARK_GAP, dayWidth / list.length));
     list.forEach((item, index) => {
-      const shift = (index - (list.length - 1) / 2) * INJECTION_MARK_GAP;
+      const shift = (index - (list.length - 1) / 2) * gap;
       item.x += shift;
       if (item.endX !== undefined) item.endX += shift;
     });
@@ -572,84 +775,91 @@ function placeInjectionMarks(
   return placed;
 }
 
-/**
- * 注射 1 行(薬剤の組 1 つ)。印はイベントの帯と同じく**列の境目**に置く
- * (列は測定 1 回で時間に比例しないため、列の中央に置くとその測定時に投与した
- * ように見える)。実施に終了が記録されていればバー、無ければ点。
- */
-function FlowsheetInjectionRow({
-  columns,
+/** 印 1 行(薬剤の組 1 つ、検査の種別 1 つ)。終了があればバー、無ければ点。 */
+function FlowsheetMarkRowSvg({
+  width,
   marks,
-  selectedSrId,
+  dayLineXs,
+  xOf,
+  dayWidthOf,
+  selectedKey,
   onSelect,
 }: {
-  columns: string[];
-  marks: InjectionMark[];
-  selectedSrId: string | null;
-  onSelect: (srId: string) => void;
+  width: number;
+  marks: FlowsheetMark[];
+  dayLineXs: number[];
+  xOf: (day: string) => number;
+  dayWidthOf: (day: string) => number;
+  selectedKey: string | null;
+  onSelect: (mark: FlowsheetMark) => void;
 }) {
-  const width = columns.length * FLOWSHEET_COLUMN_WIDTH;
-  const y = INJECTION_ROW_HEIGHT / 2;
-  const placed = placeInjectionMarks(columns, marks);
+  const y = MARK_ROW_HEIGHT / 2;
+  const placed = placeMarks(marks, xOf, dayWidthOf);
 
   return (
     <svg
       className="vital-flowsheet__injection-band"
       width={width}
-      height={INJECTION_ROW_HEIGHT}
-      viewBox={`0 0 ${width} ${INJECTION_ROW_HEIGHT}`}
+      height={MARK_ROW_HEIGHT}
+      viewBox={`0 0 ${width} ${MARK_ROW_HEIGHT}`}
       role="img"
-      aria-label="注射の予定と実施"
+      aria-label="予定と実施"
     >
-      {placed.map(({ mark, x: rawX, endX }, index) => {
-        // いちばん新しい測定より後の予定は左端(境目 0)に来る。そのままだと印が
-        // 半分切れるので、印の半径ぶんだけ内側に寄せて必ず見えるようにする。
-        const x = Math.min(Math.max(rawX, INJECTION_MARK_R), width - INJECTION_MARK_R);
-        const selected = mark.srId === selectedSrId;
+      {/* 日の区切り。印より先に描いて背面に置く。 */}
+      {dayLineXs.map((x) => (
+        <line
+          key={x}
+          className="vital-flowsheet__grid vital-flowsheet__grid--column"
+          x1={x}
+          x2={x}
+          y1={0}
+          y2={MARK_ROW_HEIGHT}
+        />
+      ))}
+      {placed.map(({ mark, x: rawX, endX: rawEndX }, index) => {
+        // 端に来た印が半分切れないよう、半径ぶんだけ内側に寄せる。
+        const x = Math.min(Math.max(rawX, MARK_R), width - MARK_R);
+        const endX =
+          rawEndX === undefined ? undefined : Math.min(Math.max(rawEndX, MARK_R), width - MARK_R);
+        const selected = markKey(mark) === selectedKey;
+        // 左が古いので、バーは開始(x)から終了(endX)へ右に伸びる。
+        const barWidth = endX === undefined ? 0 : Math.max(MARK_BAR_MIN_WIDTH, endX - x);
         return (
           <g
-            key={`${mark.srId}/${mark.at}/${mark.kind}/${index}`}
+            key={`${mark.groupId}/${mark.at}/${mark.kind}/${index}`}
             className={`vital-flowsheet__injection vital-flowsheet__injection--${mark.kind}${
               selected ? " vital-flowsheet__injection--selected" : ""
             }`}
             role="button"
             tabIndex={0}
             aria-label={`${mark.title} の一覧を開く`}
-            onClick={() => onSelect(mark.srId)}
+            onClick={() => onSelect(mark)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                onSelect(mark.srId);
+                onSelect(mark);
               }
             }}
           >
             <title>{mark.title}</title>
             <rect
               className="vital-flowsheet__injection-hit"
-              x={Math.min(x, endX ?? x) - FLOWSHEET_COLUMN_WIDTH / 2}
+              x={x - MARK_HIT_WIDTH / 2}
               y={0}
-              width={Math.abs(x - (endX ?? x)) + FLOWSHEET_COLUMN_WIDTH}
-              height={INJECTION_ROW_HEIGHT}
+              width={barWidth + MARK_HIT_WIDTH}
+              height={MARK_ROW_HEIGHT}
             />
-            {endX !== undefined &&
-              (() => {
-                // 開始(古い = 右)から終了(新しい = 左)へ。同じ境目に収まったときは
-                // 開始から左へ最小幅ぶん伸ばす(右へ伸ばすと過去に向かって見える)。
-                // 左端をはみ出すぶんは右へ寄せる(左端の予定でもバーが見えるように)。
-                const span = x - Math.min(endX, x);
-                const barWidth = Math.max(INJECTION_BAR_MIN_WIDTH, span);
-                return (
-                  <rect
-                    className="vital-flowsheet__injection-bar"
-                    x={Math.max(0, x - barWidth)}
-                    y={y - 4}
-                    width={barWidth}
-                    height={8}
-                    rx={4}
-                  />
-                );
-              })()}
-            <circle className="vital-flowsheet__injection-mark" cx={x} cy={y} r={INJECTION_MARK_R} />
+            {endX !== undefined && (
+              <rect
+                className="vital-flowsheet__injection-bar"
+                x={x}
+                y={y - 4}
+                width={Math.min(barWidth, width - x)}
+                height={8}
+                rx={4}
+              />
+            )}
+            <circle className="vital-flowsheet__injection-mark" cx={x} cy={y} r={MARK_R} />
             {(mark.kind === "not-done" || mark.kind === "cancelled") && (
               <path
                 className="vital-flowsheet__injection-cross"
@@ -665,8 +875,6 @@ function FlowsheetInjectionRow({
 
 // ---- グラフ(温度板) ----
 
-/** 測定列 1 つの幅(px)。表のセル幅(CSS の .vital-flowsheet__table)と一致させること。 */
-export const FLOWSHEET_COLUMN_WIDTH = 64;
 const CHART_HEIGHT = 190;
 const CHART_PAD = { top: 22, bottom: 12 };
 const PLOT_H = CHART_HEIGHT - CHART_PAD.top - CHART_PAD.bottom;
@@ -797,16 +1005,18 @@ function markerShape(marker: ChartMarker, x: number, y: number) {
 
 function FlowsheetChart({
   columns,
+  columnWidth,
   series,
-  eventSlots,
+  eventXs,
 }: {
-  columns: string[];
+  columns: DayColumn[];
+  columnWidth: number;
   series: ChartSeries[];
-  /** イベントの帯の ▼ と同じ位置に落とす縦線(列の境目)。 */
-  eventSlots: number[];
+  /** イベントの帯の ▼ と同じ位置に落とす縦線(その日の中央)。 */
+  eventXs: number[];
 }) {
-  const width = columns.length * FLOWSHEET_COLUMN_WIDTH;
-  const xOf = (index: number) => (index + 0.5) * FLOWSHEET_COLUMN_WIDTH;
+  const width = columns.length * columnWidth;
+  const xOf = (index: number) => (index + 0.5) * columnWidth;
   const yOf = (s: ChartSeries, value: number) =>
     CHART_PAD.top + PLOT_H - ((value - s.min) / (s.max - s.min)) * PLOT_H;
 
@@ -838,31 +1048,33 @@ function FlowsheetChart({
       ))}
       {/* 列の区切り線。表のセルの縦罫線と同じ位置に引いて、グラフの点がどの列の
           測定かを目で追えるようにする(点は列の中央に載る)。 */}
-      {columns.map((at, index) => (
+      {columns.map((column, index) => (
         <line
-          key={at}
+          key={column.key}
           className="vital-flowsheet__grid vital-flowsheet__grid--column"
-          x1={(index + 1) * FLOWSHEET_COLUMN_WIDTH}
-          x2={(index + 1) * FLOWSHEET_COLUMN_WIDTH}
+          x1={(index + 1) * columnWidth}
+          x2={(index + 1) * columnWidth}
           y1={0}
           y2={CHART_HEIGHT}
         />
       ))}
       {/* イベントの縦線。帯の ▼ から折れ線まで目で追えるよう、破線で通す。 */}
-      {eventSlots.map((slot) => (
+      {eventXs.map((x, index) => (
         <line
-          key={`event-${slot}`}
+          key={`event-${index}`}
           className="vital-flowsheet__grid vital-flowsheet__grid--event"
-          x1={slot * FLOWSHEET_COLUMN_WIDTH}
-          x2={slot * FLOWSHEET_COLUMN_WIDTH}
+          x1={x}
+          x2={x}
           y1={0}
           y2={CHART_HEIGHT}
         />
       ))}
       {series.map((s) => {
-        const points = columns.flatMap((at, index) => {
-          const value = s.numbers.get(at);
-          return value == null ? [] : [{ at, value, x: xOf(index), y: yOf(s, value) }];
+        const points = columns.flatMap((column, index) => {
+          const value = column.at ? s.numbers.get(column.at) : undefined;
+          return value == null || !column.at
+            ? []
+            : [{ at: column.at, value, x: xOf(index), y: yOf(s, value) }];
         });
         if (points.length === 0) return null;
         const path = points

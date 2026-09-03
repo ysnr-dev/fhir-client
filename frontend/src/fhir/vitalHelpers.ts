@@ -410,7 +410,7 @@ export interface VitalFlowsheetRow {
 }
 
 export interface VitalFlowsheet {
-  /** 表示対象の測定日時。新しい順。 */
+  /** 表示対象の測定日時。古い順(左 → 右で新しくなる)。 */
   columns: string[];
   rows: VitalFlowsheetRow[];
 }
@@ -513,17 +513,16 @@ function bloodPressureComponent(
  */
 export function buildVitalFlowsheet(
   observations: fhir4.Observation[],
-  columnCount: number,
   thresholds: VitalThresholdSettings = DEFAULT_VITAL_THRESHOLDS,
 ): VitalFlowsheet {
-  const allColumns: string[] = [];
+  const columns: string[] = [];
   for (const observation of observations) {
     const at = observation.effectiveDateTime ?? "";
-    if (at && !allColumns.includes(at)) allColumns.push(at);
+    if (at && !columns.includes(at)) columns.push(at);
   }
-  // 取得は -date 順だが、同じ時刻のリソースの並びは保証されないので明示的に整える。
-  allColumns.sort((a, b) => b.localeCompare(a));
-  const columns = allColumns.slice(0, columnCount);
+  // 列は古い順(左が古く、右が新しい。紙の温度板と同じ向き)。取得順は当てにならないので
+  // 明示的に整える。期間は取得側で絞ってあるので、ここでは件数で切らない。
+  columns.sort((a, b) => a.localeCompare(b));
   const shown = new Set(columns);
 
   const rows = new Map<string, VitalFlowsheetRow>();
@@ -650,11 +649,24 @@ export function bloodPressureNumbers(
   return numbers;
 }
 
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
+
 /** 列ヘッダに出す "MM/DD" と "HH:mm"。 */
 export function flowsheetColumnLabel(at: string): { date: string; time: string; year: string } {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(toDateTimeLocal(at));
   if (!match) return { date: at.slice(0, 10), time: "", year: at.slice(0, 4) };
   return { year: match[1], date: `${match[2]}/${match[3]}`, time: `${match[4]}:${match[5]}` };
+}
+
+/** 日付(YYYY-MM-DD)の見出し。"MM/DD(曜)" と、土日の色分けに使う曜日番号。 */
+export function flowsheetDayLabel(day: string): { year: string; label: string; weekday: number } {
+  const [y, m, d] = day.split("-").map(Number);
+  const weekday = new Date(y, m - 1, d).getDay();
+  return {
+    year: String(y),
+    label: `${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}(${WEEKDAY_LABELS[weekday]})`,
+    weekday,
+  };
 }
 
 /**

@@ -7,10 +7,15 @@ import type { KarteDetailTarget } from "../karteUrl";
 import { Modal } from "./Modal";
 
 interface Props {
-  /** 選んだ境目のイベント。重い順(手術 → 入退院 → 検査)に並んでいる。 */
+  /** 選んだ日のイベント。重い順(手術 → 入退院)に並んでいる。 */
   events: FlowsheetEvent[];
-  /** 見出し。省略すると「イベント（期間）」。注射欄からは「注射（MM/DD）」で開く。 */
+  /** 見出し。省略すると「イベント（期間）」。注射欄からは「注射（MM/DD HH:mm）」で開く。 */
   title?: string;
+  /**
+   * 押した 1 件の位置(events の添字)。同じ日に施用が複数あると一覧が同じ内容に
+   * なるので、どれを押したかを行の色で示す。
+   */
+  highlightIndex?: number;
   /** オーダーの詳細モーダルを開く。渡されなければ「詳細」を出さない。 */
   onOpenDetail?: (target: KarteDetailTarget) => void;
   onClose: () => void;
@@ -23,7 +28,17 @@ interface Props {
 // 詳細モーダルへ渡す(経過表に部門ごとの詳細表示を作らないため)。
 //
 // 入退院・転棟・外出泊はカルテのカードにならないので、詳細への導線を持たない。
-export function FlowsheetEventModal({ events, title, onOpenDetail, onClose }: Props) {
+//
+// 注射・検査からは「その日のオーダー」単位で開くので、同じ日に施用が 2 回あると
+// どちらの印を押しても同じ一覧になる。押した 1 件は highlightIndex で色を付ける
+// (一覧を 1 件に絞らないのは、予定 2 回と実施を並べて突き合わせるため)。
+export function FlowsheetEventModal({
+  events,
+  title,
+  highlightIndex,
+  onOpenDetail,
+  onClose,
+}: Props) {
   const range = flowsheetEventRangeLabel(events);
   const heading = title ?? (range ? `イベント（${range}）` : "イベント");
 
@@ -40,7 +55,12 @@ export function FlowsheetEventModal({ events, title, onOpenDetail, onClose }: Pr
         </thead>
         <tbody>
           {events.map((event, index) => (
-            <tr key={`${event.at}/${event.name}/${index}`}>
+            <tr
+              key={`${event.at}/${event.name}/${index}`}
+              className={
+                index === highlightIndex ? "flowsheet-event-modal__row--selected" : undefined
+              }
+            >
               <td className="flowsheet-event-modal__at">{flowsheetEventAtLabel(event.at)}</td>
               <td>{event.name}</td>
               <td>{event.detail}</td>

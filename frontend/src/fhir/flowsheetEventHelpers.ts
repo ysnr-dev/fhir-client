@@ -1,35 +1,32 @@
 import type { KarteDetailTarget } from "../karteUrl";
 import type { EncounterEvent } from "./encounterHelpers";
 
-// 経過表(温度板)のイベントの帯と、病日・術後日数。
+// 経過表(温度板)のイベントの帯・検査の行と、病日・術後日数。
 //
 // 紙の温度板は、バイタルの折れ線の上に「入院」「手術」などのイベントを縦線で入れ、
 // 日付の下に病日を書く。同じ画面で「いつ入院して、今が術後何日目か」を読むための
 // 情報なので、経過表にも同じものを載せる。
 //
-// 経過表の列は「測定 1 回」で等間隔(FLOWSHEET_COLUMN_WIDTH)であり、時間に比例
-// しない。イベントは測定と同時刻とは限らないので、**列の中央ではなく列の境目**に置く
-// (中央に置くと、その測定のときに起きたイベントに見えてしまう)。表示数が少ないと
-// 同じ境目に何件も集まるので、境目ごとにまとめて縦に積む。
+// 経過表の横軸は「基準日から 1 週間」で、1 日の中は測定ごとに列が分かれる(測定の
+// 無い日も 1 列は置く)。イベント・検査・注射の印は**その日の列のまとまりの中央**に置く
+// (1 日の中の位置は測定の並びで決まり時間に比例しないため、時刻で細かく置いても
+// 読み違える。時刻は title と一覧モーダルで見せる)。
 
-/**
- * イベントの種類。色分けにだけ使う。
- * `injection` は帯には出さず、注射欄の一覧モーダル(flowsheetInjectionHelpers)でのみ使う。
- */
+/** イベントの種類。色分けにだけ使う。`injection` / `exam` は一覧モーダルの行でのみ使う。 */
 export type FlowsheetEventKind = "encounter" | "surgery" | "exam" | "injection";
 
 export interface FlowsheetEvent {
   /** イベントの日時。時刻を持たない登録では YYYY-MM-DD。 */
   at: string;
   kind: FlowsheetEventKind;
-  /** 帯に出す短い名前(入院・転棟・手術・放射線 など)。列幅に収まる長さにする。 */
+  /** 帯に出す短い名前(入院・転棟・手術 など)。列幅に収まる長さにする。 */
   label: string;
   /** 一覧に出す名前(放射線検査 など)。帯より詳しくてよい。 */
   name: string;
   /** 補足(病棟名・術式名・外出泊の理由など)。無ければ空。 */
   detail: string;
   /**
-   * カルテのオーダー詳細モーダルを開く先。手術と検査オーダーだけが持ち、
+   * カルテのオーダー詳細モーダルを開く先。手術・検査・注射のオーダーだけが持ち、
    * 入退院(Encounter)はカルテのカードにならないので持たない。
    */
   target?: KarteDetailTarget;
@@ -45,14 +42,69 @@ export interface EncounterStay {
 
 /**
  * 経過表に出す検査オーダーの種別。患者が動く検査だけを出す(検体系は出さない)。
- * `label` は帯(列幅 64px)に収まる短縮、`name` は一覧に出す正式名、
- * `detailKind` はカルテのオーダー詳細モーダルの種別。
+ * `label` は行の見出し、`detailKind` はカルテのオーダー詳細モーダルの種別。
  */
 export const FLOWSHEET_EXAM_TYPES = [
-  { code: "rad", label: "放射線", name: "放射線検査", detailKind: "rad-order" },
-  { code: "endoscopy", label: "内視鏡", name: "内視鏡", detailKind: "endoscopy-order" },
-  { code: "physio", label: "生理", name: "生理検査", detailKind: "physio-order" },
+  { code: "rad", label: "放射線検査", detailKind: "rad-order" },
+  { code: "endoscopy", label: "内視鏡", detailKind: "endoscopy-order" },
+  { code: "physio", label: "生理検査", detailKind: "physio-order" },
 ] as const;
+
+// ---- 印の行(注射・検査で共用) ----
+
+/** 印の種類。色と形で状態を出す。`exam` は検査オーダー(予定・実施の区別なし)。 */
+export type FlowsheetMarkKind = "planned" | "performed" | "stopped" | "not-done" | "cancelled" | "exam";
+
+export interface FlowsheetMark {
+  /** 開始(ローカルの日時文字列)。時刻の無いものは YYYY-MM-DD。 */
+  at: string;
+  /** 終了。あればバーになる。 */
+  end?: string;
+  kind: FlowsheetMarkKind;
+  /** 一覧モーダルでまとめる単位(注射ならその日のオーダー、検査ならオーダー)。 */
+  groupId: string;
+  /** ホバーに出す説明。 */
+  title: string;
+  /** 一覧モーダルに出す 1 行。 */
+  event: FlowsheetEvent;
+}
+
+export interface FlowsheetMarkRow {
+  key: string;
+  /** 行ラベル。 */
+  label: string;
+  /** 全文など。項目列は幅が狭いので title で読ませる。 */
+  title: string;
+  marks: FlowsheetMark[];
+}
+
+/** 印を一覧で示すときの並び順のキー。押した 1 件を突き止めるのにも使う。 */
+export function markKey(mark: FlowsheetMark): string {
+  return `${mark.groupId}/${mark.at}/${mark.kind}`;
+}
+
+/**
+ * 選んだ印と同じまとまりの印を、一覧モーダルに渡せる形にする(時刻の古い順。
+ * 表の左→右と同じ向き)。押した印が一覧の何番目かも返す。
+ */
+export function markModalEvents(
+  rows: FlowsheetMarkRow[],
+  groupId: string,
+  selectedKey?: string,
+): { events: FlowsheetEvent[]; highlightIndex: number; selected?: FlowsheetMark } {
+  const marks: FlowsheetMark[] = [];
+  for (const row of rows) {
+    for (const mark of row.marks) {
+      if (mark.groupId === groupId) marks.push(mark);
+    }
+  }
+  marks.sort((a, b) => a.at.localeCompare(b.at));
+  return {
+    events: marks.map((mark) => mark.event),
+    highlightIndex: selectedKey ? marks.findIndex((mark) => markKey(mark) === selectedKey) : -1,
+    selected: marks.find((mark) => (selectedKey ? markKey(mark) === selectedKey : false)),
+  };
+}
 
 const DAY_MS = 86_400_000;
 /** 術後日数を出す上限。これを超えたら「前回の手術」ではなく既往なので出さない。 */
@@ -61,9 +113,9 @@ const POST_OP_DAY_LIMIT = 90;
 /**
  * 日時 → epoch(ms)。日付だけの値(YYYY-MM-DD)は端末ローカルの 0 時として読む。
  * `new Date("2026-08-22")` は仕様上 UTC 0 時なので、そのまま使うと時差のぶんだけ
- * イベントが別の列にずれる。
+ * 日がずれる。
  */
-function epochOf(value: string): number {
+export function epochOf(value: string): number {
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   const date = dateOnly
     ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
@@ -86,101 +138,60 @@ function diffDays(from: string, to: string): number {
   return Math.round((epochOf(to) - epochOf(from)) / DAY_MS);
 }
 
-/**
- * イベントが入る列の境目。columns は測定日時の新しい順。
- *
- * 「at 以上の列の数」を返す。0 なら左端(いちばん新しい測定より後に起きた)、
- * columns.length なら右端(いちばん古い測定より前)。i なら列 i-1(新しい側)と
- * 列 i(古い側)の間。
- */
-export function flowsheetEventSlot(columns: string[], at: string): number {
-  const target = epochOf(at);
-  let slot = 0;
-  for (const column of columns) {
-    // 新しい順なので、1 つでも at より古い列が出たらそれ以降もすべて古い。
-    if (epochOf(column) < target) break;
-    slot += 1;
-  }
-  return slot;
-}
-
 /** 帯に 1 行として出すラベル。 */
 export interface FlowsheetEventLabel {
   kind: FlowsheetEventKind;
   text: string;
 }
 
-/** 同じ境目に入るイベントをまとめたもの。 */
+/** 同じ日に入るイベントをまとめたもの。 */
 export interface FlowsheetEventGroup {
-  slot: number;
-  /** その境目のイベントすべて。title に出す(新しい順)。 */
+  /** YYYY-MM-DD。 */
+  day: string;
+  /** その日のイベントすべて。title・一覧に出す。 */
   events: FlowsheetEvent[];
-  /** 帯に積むラベル。重い順(手術 → 入退院 → 検査)で、同じ名前の検査はまとめる。 */
+  /** 帯に積むラベル。重い順(手術 → 入退院)。 */
   labels: FlowsheetEventLabel[];
 }
 
-/** 手術・入退院・検査の順に並べる(境目に積むとき、重いイベントを上にする)。 */
-const KIND_ORDER: FlowsheetEventKind[] = ["surgery", "encounter", "exam"];
+/** 手術・入退院の順に並べる(積むとき、重いイベントを上にする)。 */
+const KIND_ORDER: FlowsheetEventKind[] = ["surgery", "encounter", "exam", "injection"];
 
-/**
- * イベントを列の境目ごとにまとめる。境目は左(新しい)から順。
- *
- * 表示数が少ないと 1 つの境目に何日ぶんも集まるので、ラベルは重い順に並べ替え、
- * 同じ名前の検査(日をまたいだ「放射線」など)は 1 行にまとめて件数を足す
- * (「放射線×3」が 3 行並んでも読めないため)。日ごとの内訳は title に残る。
- */
-export function groupFlowsheetEvents(
-  columns: string[],
-  events: FlowsheetEvent[],
-): FlowsheetEventGroup[] {
-  const bySlot = new Map<number, FlowsheetEvent[]>();
+/** イベントを日ごとにまとめる。日は古い順(列と同じ向き)。 */
+export function groupFlowsheetEventsByDay(events: FlowsheetEvent[]): FlowsheetEventGroup[] {
+  const byDay = new Map<string, FlowsheetEvent[]>();
   for (const event of events) {
-    const slot = flowsheetEventSlot(columns, event.at);
-    const list = bySlot.get(slot);
+    const day = localDateOf(event.at);
+    if (!day) continue;
+    const list = byDay.get(day);
     if (list) list.push(event);
-    else bySlot.set(slot, [event]);
+    else byDay.set(day, [event]);
   }
-
-  return [...bySlot.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([slot, list]) => {
+  return [...byDay.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([day, list]) => {
       const ordered = [...list].sort(
-        (a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || epochOf(b.at) - epochOf(a.at),
+        (a, b) =>
+          KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || epochOf(a.at) - epochOf(b.at),
       );
-      const merged = new Map<string, { kind: FlowsheetEventKind; label: string; count: number }>();
-      for (const event of ordered) {
-        const key = `${event.kind}/${event.label}`;
-        const existing = merged.get(key);
-        if (existing) existing.count += 1;
-        else merged.set(key, { kind: event.kind, label: event.label, count: 1 });
-      }
       return {
-        slot,
+        day,
         events: ordered,
-        labels: [...merged.values()].map(({ kind, label, count }) => ({
-          kind,
-          text: count > 1 ? `${label}×${count}` : label,
-        })),
+        labels: ordered.map((event) => ({ kind: event.kind, text: event.label })),
       };
     });
 }
 
 /**
- * 帯に出すイベントを組み立てる。
+ * 帯に出すイベント(手術・入退院・転棟・外出泊)を組み立てる。
  *
  * - 入退院・転棟・外出泊は `encounterEvents`(encounterHelpers)の結果をそのまま使う。
  * - 手術は実施記録のハブ Procedure。入室時刻(`performedPeriod.start`)に置く。
- * - 検査は放射線・内視鏡・生理のオーダー。ヘッダの `ServiceRequest` は `code` を
- *   持たない(検査名は明細側)ので、名前は種別名だけになる。
- * - 未来のイベント(予定の検査)は出さない。経過表は起きたことを読む画面なので。
- *
- * **1 オーダー = 1 件のまま返す**。帯では `groupFlowsheetEvents` が同じ種類を
- * 「放射線×7」にまとめるが、一覧モーダルは 1 件ずつ出してオーダーの詳細へ飛ばすため。
+ * - 未来のイベントは出さない。経過表は起きたことを読む画面なので。
  */
 export function buildFlowsheetEvents(
   encounterEvents: EncounterEvent[],
   surgeries: fhir4.Procedure[],
-  examOrders: { headers: fhir4.ServiceRequest[]; items: fhir4.ServiceRequest[] },
   now: Date = new Date(),
 ): FlowsheetEvent[] {
   const limit = now.getTime();
@@ -212,6 +223,20 @@ export function buildFlowsheetEvents(
     });
   }
 
+  return events
+    .filter((event) => epochOf(event.at) <= limit)
+    .sort((a, b) => epochOf(a.at) - epochOf(b.at));
+}
+
+/**
+ * 検査の行(放射線・内視鏡・生理)。種別ごとに 1 行で、オーダー 1 件が印 1 つ。
+ * ヘッダの `ServiceRequest` は `code` を持たない(検査名は明細側)ので、明細から名前を採る。
+ * 予定(未来)も出す。検査は予定を見て準備する情報なので。
+ */
+export function buildExamRows(examOrders: {
+  headers: fhir4.ServiceRequest[];
+  items: fhir4.ServiceRequest[];
+}): FlowsheetMarkRow[] {
   // 明細をヘッダ id で束ねる。ヘッダ → 明細 → セットの構成項目まであるので、
   // 直下だけでなく孫も同じヘッダに寄せる。
   const itemsByHeader = new Map<string, fhir4.ServiceRequest[]>();
@@ -230,36 +255,46 @@ export function buildFlowsheetEvents(
     }
   }
 
+  const rows = new Map<string, FlowsheetMarkRow>();
   for (const order of examOrders.headers) {
     const at = order.occurrenceDateTime;
-    if (!at) continue;
+    if (!at || !order.id) continue;
     const type = FLOWSHEET_EXAM_TYPES.find((candidate) =>
       (order.category ?? []).some((category) =>
         category.coding?.some((coding) => coding.code === candidate.code),
       ),
     );
     if (!type) continue;
-    const names = (itemsByHeader.get(order.id ?? "") ?? [])
+    const names = (itemsByHeader.get(order.id) ?? [])
       .map((item) => item.code?.text ?? item.code?.coding?.[0]?.display ?? "")
       .filter(Boolean);
-    events.push({
+    const detail = [...new Set(names)].join("、");
+
+    let row = rows.get(type.code);
+    if (!row) {
+      row = { key: type.code, label: type.label, title: type.label, marks: [] };
+      rows.set(type.code, row);
+    }
+    row.marks.push({
       at,
       kind: "exam",
-      label: type.label,
-      name: type.name,
-      // 検査名は明細にある(ヘッダは code を持たない)。セットは構成項目まで並ぶ。
-      detail: [...new Set(names)].join("、"),
-      target: order.id ? { kind: type.detailKind, id: order.id } : undefined,
+      groupId: order.id,
+      title: [type.label, detail, flowsheetEventAtLabel(at)].filter(Boolean).join(" "),
+      event: {
+        at,
+        kind: "exam",
+        label: type.label,
+        name: type.label,
+        detail,
+        target: { kind: type.detailKind, id: order.id },
+      },
     });
   }
 
-  return events
-    .filter((event) => epochOf(event.at) <= limit)
-    .sort(
-      (a, b) =>
-        epochOf(b.at) - epochOf(a.at) ||
-        KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind),
-    );
+  // 種別の並びは FLOWSHEET_EXAM_TYPES の順。
+  return FLOWSHEET_EXAM_TYPES.map((type) => rows.get(type.code)).filter(
+    (row): row is FlowsheetMarkRow => Boolean(row),
+  );
 }
 
 /** 入院中の Encounter から、病日を数えるための入院期間を取り出す。 */

@@ -7617,14 +7617,15 @@ body.page-wide .app__main {
   border-right: none;
 }
 
-/* 測定列の幅は固定し、最上段のグラフ(FLOWSHEET_COLUMN_WIDTH = 64px)と列位置を
-   揃える。余った横幅は末尾の空列(.vital-flowsheet__filler)に吸わせる。 */
+/* 測定列の幅はパネルの幅を列数で割った値(--vital-flowsheet-col-w。パネル側が
+   inline style で入れる)。グラフや帯の SVG も同じ幅で描くので列位置が揃う。
+   端数は末尾の空列(.vital-flowsheet__filler)に吸わせる。 */
 .vital-flowsheet__table th.vital-flowsheet__time-col,
 .vital-flowsheet__table td.lab-timeline__value {
   box-sizing: border-box;
-  width: 64px;
-  min-width: 64px;
-  max-width: 64px;
+  width: var(--vital-flowsheet-col-w, 64px);
+  min-width: var(--vital-flowsheet-col-w, 64px);
+  max-width: var(--vital-flowsheet-col-w, 64px);
   padding-left: 6px;
   padding-right: 6px;
   overflow: hidden;
@@ -7633,15 +7634,83 @@ body.page-wide .app__main {
 
 .vital-flowsheet__table td.vital-flowsheet__filler,
 .vital-flowsheet__table th.vital-flowsheet__filler {
-  /* 表の自動レイアウトで余った幅をこの列に全部渡す(項目・単位列が伸びない)。 */
-  width: 100%;
+  /* 列幅はパネルの幅を割り切って決めるので、余白列は端数(数 px)しか持たない。
+     100% にすると表が幅を超えて横に送られるので auto にする。 */
+  width: auto;
   padding: 0;
 }
 
-/* 同じ日の朝夕は 1 つの日付見出しにまとめる(列自体は分けたまま)。 */
+/* 表の幅は列幅の合計で決める(親の min-width: 100% で列が引き伸ばされると
+   SVG の座標と列位置がずれる)。 */
+.vital-flowsheet__table {
+  min-width: 0;
+}
+
+/* 同じ日の朝夕は 1 つの日付見出しにまとめる(列自体は分けたまま)。
+   "MM/DD(曜)" が測定 1 列(下限 64px)に収まるよう、左右の余白と文字を詰める
+   (見出しが列より広いと、列が見出しに引きずられて SVG とずれる)。 */
 .vital-flowsheet__table th.vital-flowsheet__date-col {
   text-align: center;
-  padding-top: 0;
+  padding: 0 2px 2px;
+  font-size: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* 基準日の入力。表示数の数値欄と同じ枠だが、日付は幅が要る。前後の週へ送る
+   ボタンは記号 1 文字なので詰める。 */
+/* 経過表の操作行は表の付属なので、他の画面のボタンより一段小さくする
+   (表示のための操作が並ぶだけで、登録などの主要な操作ではない)。 */
+.vital-flowsheet .lab-timeline__controls {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.vital-flowsheet .lab-timeline__count {
+  gap: 6px;
+  font-size: 12px;
+}
+
+.vital-flowsheet .lab-timeline__count input[type="date"] {
+  width: auto;
+  min-width: 9.5em;
+  font-size: 13px;
+  padding: 3px 6px;
+}
+
+.vital-flowsheet .lab-timeline__controls button {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+/* 週送りは記号 1 文字なので左右を詰める。 */
+.vital-flowsheet .lab-timeline__controls .vital-flowsheet__week-button {
+  padding-left: 7px;
+  padding-right: 7px;
+}
+
+/* 曜日の色。土曜は青、日曜は赤(暦の慣例)。基準日(右端)は下線で示す。 */
+.vital-flowsheet__table th.vital-flowsheet__date-col--saturday {
+  color: var(--lab-low);
+}
+
+.vital-flowsheet__table th.vital-flowsheet__date-col--sunday {
+  color: var(--lab-high);
+}
+
+.vital-flowsheet__table th.vital-flowsheet__date-col--base {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* 測定が 1 件も無い週の案内。 */
+.vital-flowsheet__table td.vital-flowsheet__empty {
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  width: auto;
+  min-width: 0;
+  max-width: none;
 }
 
 .vital-flowsheet__table th.vital-flowsheet__date-col + th.vital-flowsheet__date-col {
@@ -7700,8 +7769,9 @@ body.page-wide .app__main {
   display: block;
 }
 
-/* 帯とグラフの tbody には縞を掛けない(測定の行だけを 1 行おきに濃くする)。 */
-.karte-tabpanel .vital-flowsheet__table .vital-flowsheet__chart-body tr:nth-child(even) {
+/* 帯・グラフ・注射の tbody には縞を掛けない(測定の行だけを 1 行おきに濃くする)。 */
+.karte-tabpanel .vital-flowsheet__table .vital-flowsheet__chart-body tr:nth-child(even),
+.karte-tabpanel .vital-flowsheet__table .vital-flowsheet__injection-body tr:nth-child(even) {
   background: none;
 }
 
@@ -7714,7 +7784,12 @@ body.page-wide .app__main {
   .vital-flowsheet__table
   .vital-flowsheet__chart-body
   tr:nth-child(even)
-  .lab-timeline__unit-col {
+  .lab-timeline__unit-col,
+.karte-tabpanel
+  .vital-flowsheet__table
+  .vital-flowsheet__injection-body
+  tr:nth-child(even)
+  .lab-timeline__item-col {
   background-image: none;
 }
 
@@ -7809,11 +7884,13 @@ body.page-wide .app__main {
   stroke: var(--accent-border);
 }
 
-/* 印は currentColor。予定は塗らない丸、実施は塗りつぶし。 */
+/* 印は currentColor。予定は表の地色で塗った丸(実施は下の指定で currentColor)。
+   地色で塗るのは、同じ日に重なった丸どうしが輪の連なりに見えないようにするため
+   (前の丸が後ろの丸を隠す)。 */
 .vital-flowsheet__injection-mark {
   stroke: currentColor;
   stroke-width: 1.5;
-  fill: none;
+  fill: var(--surface-card);
 }
 
 .vital-flowsheet__injection-bar {
@@ -7859,10 +7936,25 @@ body.page-wide .app__main {
   opacity: 0.45;
 }
 
-/* イベント一覧モーダル。日時は等幅の数字で揃え、行は詰める。 */
+/* 一覧で押した 1 件。同じ日に施用が複数あると一覧が同じ内容になるので、
+   どれを押したかを行の色で示す(表の他の選択と同じアクセントの地色)。 */
+.flowsheet-event-modal__table tbody tr.flowsheet-event-modal__row--selected {
+  background: var(--accent-bg);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* イベント一覧モーダル。日時は等幅の数字で揃え、行は詰める。
+   日時・種別は短いので折り返さない(内容だけを折り返して幅を吸わせる)。 */
 .flowsheet-event-modal__table td.flowsheet-event-modal__at {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+.flowsheet-event-modal__table th:nth-child(1),
+.flowsheet-event-modal__table th:nth-child(2),
+.flowsheet-event-modal__table td:nth-child(2) {
+  white-space: nowrap;
+  width: 1%;
 }
 
 .vital-flowsheet__event-label {

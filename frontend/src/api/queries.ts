@@ -5409,10 +5409,9 @@ function invalidateVitals(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
 }
 
-// 経過表は「直近 N 回分の測定」を横軸にする。1 回の測定が 8 件前後の Observation に
-// 分かれるので、まず $distinct-dates(precision=full)で直近 N 個の測定日時を集計し、
-// いちばん古い測定日時以降の Observation をまとめて取る。検査結果の時系列表示と
-// 同じ流儀(以前は測定日時が N+1 個現れるまで全件をページングしていた)。
+// 経過表は「基準日から 1 週間」を横軸にする(1 日の中は測定ごとに列が分かれる)。
+// 期間で絞った Observation をまとめて取る。1 回の測定が 8 件前後に分かれるので、
+// 1 週間でも数百件になりうる。ページングで取り切る。
 const VITAL_FLOWSHEET_PAGE = 100;
 const VITAL_FLOWSHEET_MAX_PAGES = 10;
 
@@ -5425,27 +5424,20 @@ const VITAL_FLOWSHEET_CATEGORY = `vital-signs,${NURSING_ORDER_TYPE.code}`;
 
 async function fetchVitalFlowsheetObservations(
   patientId: string,
-  columnCount: number,
+  rangeStart: string,
+  rangeEnd: string,
 ): Promise<fhir4.Observation[]> {
-  const dateParams = new URLSearchParams();
-  dateParams.set("patient", `Patient/${patientId}`);
-  dateParams.set("category", VITAL_FLOWSHEET_CATEGORY);
-  const { dates: instants } = await fetchDistinctDates("Observation", dateParams, "date", {
-    precision: "full",
-    limit: columnCount,
-  });
-  if (instants.length === 0) return [];
-
   const observations: fhir4.Observation[] = [];
   for (let page = 0; page < VITAL_FLOWSHEET_MAX_PAGES; page += 1) {
     const params = new URLSearchParams();
     params.set("patient", `Patient/${patientId}`);
     params.set("category", VITAL_FLOWSHEET_CATEGORY);
-    // ge は境界を含むので、N 個目の測定日時そのものも取れる。
-    params.set("date", `ge${instants[instants.length - 1]}`);
+    // 日付だけの値は上流が施設のタイムゾーンで日の範囲に広げて解釈する。
+    params.append("date", `ge${rangeStart}`);
+    params.append("date", `le${rangeEnd}`);
     params.set("_count", String(VITAL_FLOWSHEET_PAGE));
     params.set("_offset", String(page * VITAL_FLOWSHEET_PAGE));
-    params.set("_sort", "-date");
+    params.set("_sort", "date");
 
     const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
     const pageObservations = (bundle.entry ?? [])
@@ -5459,13 +5451,17 @@ async function fetchVitalFlowsheetObservations(
   return observations;
 }
 
-export function useVitalFlowsheet(patientId: string | undefined, columnCount: number) {
+export function useVitalFlowsheet(
+  patientId: string | undefined,
+  rangeStart: string,
+  rangeEnd: string,
+) {
   return useQuery({
     // 登録・更新・削除の invalidateQueries(["Observation", "search"]) でまとめて
     // 無効化されるよう search 配下のキーにしている。
-    queryKey: ["Observation", "search", "vital-flowsheet", patientId, columnCount],
-    queryFn: () => fetchVitalFlowsheetObservations(patientId ?? "", columnCount),
-    enabled: Boolean(patientId),
+    queryKey: ["Observation", "search", "vital-flowsheet", patientId, rangeStart, rangeEnd],
+    queryFn: () => fetchVitalFlowsheetObservations(patientId ?? "", rangeStart, rangeEnd),
+    enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
     placeholderData: keepPreviousData,
   });
 }
