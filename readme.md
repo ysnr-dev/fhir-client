@@ -316,13 +316,15 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
       持ちません。
   - **注射の欄**: グラフの下に、薬剤の組(RP)ごとの行を出します(`fhir/flowsheetInjectionHelpers.ts`)。
     連日オーダーは 1 日 1 件の `ServiceRequest` ですが、薬剤・用法・経路が同じなら同じ行に並びます。
-    - **予定**は空丸、**実施**は塗り丸で、実施に終了時刻があればバーになります。注射は
-      **終了予定時刻を保存しない**(投与速度だけを持つ)ので、予定はバーになりません。
+    - **予定**は空丸、**実施**は塗り丸で、終了時刻があればバーになります。持続点滴は
+      オーダーで終了予定時刻を入れられるので、予定もバーで出ます。
     - 状態で色を変えます。予定は本文色、実施はアクセント、途中で中止・実施せずは赤、
       中止したオーダーの予定は薄くして × を重ねます。
-    - 予定の開始時刻はオーダーの `ServiceRequest` ではなく `MedicationRequest` の
-      `dosageInstruction[0].timing.event` にあります(オーダーは日付しか持ちません)。
-      進捗(依頼済〜中止)は `Task`、実施はハブ `Procedure` の `performedPeriod` です。
+    - 予定の時刻はオーダーの `ServiceRequest` ではなく `MedicationRequest` の
+      `dosageInstruction` にあります(オーダーは日付しか持ちません)。開始は
+      `timing.event`、終了はローカル拡張で、開始の値を鍵にして組にします
+      (docs/injection-order-design.md §2.2)。進捗(依頼済〜中止)は `Task`、
+      実施はハブ `Procedure` の `performedPeriod` です。
     - 印を選ぶと、その日の注射の予定・実施を一覧で出し、「詳細」から注射内容モーダルへ飛べます。
       同じ境目に重なる印は少しずらして、本数が見えるようにしています。
   - **病日・術後日数**: 時刻の見出しの下に出します。病日は入院日を 1 日目とし、入院前・退院後の

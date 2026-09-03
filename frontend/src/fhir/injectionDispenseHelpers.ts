@@ -60,7 +60,7 @@ export function dispenseLinesFromOrder(
     mrByKey.set(`${rp}-${order}`, mr);
   }
   return rps.flatMap((rp) => {
-    const times = Math.max(1, rp.startTimes.length);
+    const times = Math.max(1, rp.times.length);
     return rp.medicines.flatMap((med) => {
       const mr = mrByKey.get(`${rp.rpNumber}-${med.orderInRp}`);
       const medicine = mr ? medicineFromCoding(mr) : null;

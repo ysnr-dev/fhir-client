@@ -280,7 +280,7 @@ function performEntries(
 
 /** その日に予定された施用の回数(RP の開始時刻の最大数。無ければ 1)。 */
 export function scheduledPerformCount(mrs: fhir4.MedicationRequest[]): number {
-  const counts = groupInjectionByRp(mrs).map((rp) => rp.startTimes.length);
+  const counts = groupInjectionByRp(mrs).map((rp) => rp.times.length);
   return Math.max(1, ...counts);
 }
 

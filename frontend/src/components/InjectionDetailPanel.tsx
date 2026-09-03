@@ -7,6 +7,7 @@ import {
   injectionProblem,
   injectionSeriesLabel,
   injectionSeriesOf,
+  injectionTimesLabel,
   scheduleLabel,
   summarizeInjectionServiceRequest,
 } from "../fhir/injectionHelpers";
@@ -131,9 +132,9 @@ export function InjectionDetailPanel({
             <dd>{rp.lineDisplay ?? "-"}</dd>
             <dt>投与速度</dt>
             <dd>{rp.rate != null ? `${rp.rate} mL/h` : "-"}</dd>
-            <dt>開始時刻</dt>
-            {/* 日付は注射日なので時刻だけを並べる。 */}
-            <dd>{rp.startTimes.join("、") || "-"}</dd>
+            <dt>開始・終了時刻</dt>
+            {/* 日付は注射日なので時刻だけを並べる。終了が翌日に回る場合は「翌」を付ける。 */}
+            <dd>{injectionTimesLabel(rp.times) || "-"}</dd>
             <dt>用法コメント</dt>
             <dd>{rp.usageComment || "-"}</dd>
           </dl>

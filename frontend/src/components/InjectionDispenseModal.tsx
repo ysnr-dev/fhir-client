@@ -11,6 +11,7 @@ import {
   groupInjectionByRp,
   injectionComment,
   injectionDayOf,
+  injectionTimesLabel,
   injectionUsageSummary,
   summarizeInjectionServiceRequest,
 } from "../fhir/injectionHelpers";
@@ -176,8 +177,8 @@ export function InjectionDispenseModal({ row, onClose }: Props) {
             <div className="karte-rp__detail">
               <span className="karte-rp__detail-label">用法:</span>
               <span>{injectionUsageSummary(rp) || "-"}</span>
-              {rp.startTimes.length > 0 && (
-                <span className="karte-rp__dose">{`開始 ${rp.startTimes.join("、")}`}</span>
+              {rp.times.length > 0 && (
+                <span className="karte-rp__dose">{`開始 ${injectionTimesLabel(rp.times)}`}</span>
               )}
               {rp.usageComment && (
                 <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>

@@ -368,6 +368,49 @@ export function infusionRate(totalMl: number, hours: string): string {
   return String(Math.round((totalMl / h) * 10) / 10);
 }
 
+/**
+ * 1 回の施用にかかる時間(h)。終了時刻の初期値を出すのに使う。
+ * 投与時間を選んでいればそれ、なければ総投与量と投与速度から求める。
+ * どちらも出せなければ undefined(終了時刻は自動で埋めない)。
+ */
+export function infusionDurationHours(
+  infusionHours: string,
+  totalMl: number,
+  rate: string,
+): number | undefined {
+  const chosen = Number(infusionHours);
+  if (infusionHours && Number.isFinite(chosen) && chosen > 0) return chosen;
+  const rateValue = Number(rate);
+  if (!totalMl || !rate || !Number.isFinite(rateValue) || rateValue <= 0) return undefined;
+  return totalMl / rateValue;
+}
+
+/**
+ * 開始時刻(HH:mm)に時間(h)を足した終了時刻(HH:mm)。日をまたいでも時刻だけを返す
+ * (日付は「終了が開始以下なら翌日」の規則で決まる)。24 時間以上は 24 で丸めた
+ * 残りになる(点滴を 1 日以上続けるオーダーはその日ごとに立てる運用のため)。
+ */
+export function infusionEndTime(startTime: string, durationHours: number): string {
+  if (!startTime || !Number.isFinite(durationHours) || durationHours <= 0) return "";
+  const [hh, mm] = startTime.split(":").map(Number);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return "";
+  const total = Math.round(hh * 60 + mm + durationHours * 60);
+  const minutes = ((total % 1440) + 1440) % 1440;
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+/**
+ * 1 回の施用の時刻(HH:mm)。日付は注射日を使う。
+ *
+ * 終了時刻は任意(ワンショットや、いつ終わるか決めない点滴では空)。開始以下の
+ * 終了は**翌日**として扱う(夜からの持続点滴は日をまたぐのが普通なので、
+ * 前後関係のエラーにはしない)。24 時間ちょうどは開始と同じ時刻になる。
+ */
+export interface InjectionTimeValues {
+  start: string;
+  end: string;
+}
+
 export interface InjectionRpValues {
   usageType: InjectionUsageType | "";
   routeCode: string;
@@ -381,8 +424,8 @@ export interface InjectionRpValues {
    * (保存するのは計算結果の投与速度)。空なら投与速度を直接入力する。
    */
   infusionHours: string;
-  /** 開始時刻(HH:mm)。日付は注射日を使う。複数設定可能。 */
-  startTimes: string[];
+  /** 施用の時刻。複数設定可能。 */
+  times: InjectionTimeValues[];
   usageComment: string;
   medicines: MedicineLineValues[];
 }
@@ -418,7 +461,7 @@ export const emptyInjectionRp: InjectionRpValues = {
   lineCode: "",
   rate: "",
   infusionHours: "",
-  startTimes: [],
+  times: [],
   usageComment: "",
   medicines: [{ ...emptyMedicineLine }],
 };
@@ -435,7 +478,7 @@ export function emptyInjectionForm(
     schedule: DAILY_SCHEDULE,
     comment: "",
     problem,
-    rps: [{ ...emptyInjectionRp, startTimes: [], medicines: [{ ...emptyMedicineLine }] }],
+    rps: [{ ...emptyInjectionRp, times: [], medicines: [{ ...emptyMedicineLine }] }],
     series: null,
   };
 }
@@ -448,6 +491,50 @@ export function emptyInjectionForm(
 /** FHIR の dateTime から時刻(HH:mm)だけを取り出す。 */
 function toLocalTime(fhirDateTime: string): string {
   return fhirDateTime.slice(11, 16);
+}
+
+/**
+ * 施用の予定期間(開始・終了)。開始は timing.event と同じ値で、これで組を突き合わせる
+ * (配列の位置で対応させると、終了の無い施用が混ざったときにずれる)。
+ */
+const SCHEDULED_PERIOD_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/injection-scheduled-period";
+
+/** 終了時刻が開始以下なら翌日。夜からの持続点滴は日をまたぐのが普通。 */
+function scheduledEndDay(day: string, time: InjectionTimeValues): string {
+  return time.end > time.start ? day : addDays(day, 1);
+}
+
+/** 開始の FHIR dateTime → 終了の FHIR dateTime。拡張が無ければ undefined。 */
+function scheduledEndByStart(dosage: fhir4.Dosage | undefined): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const extension of dosage?.extension ?? []) {
+    if (extension.url !== SCHEDULED_PERIOD_EXT_URL) continue;
+    const start = extension.extension?.find((e) => e.url === "start")?.valueDateTime;
+    const end = extension.extension?.find((e) => e.url === "end")?.valueDateTime;
+    if (start && end) result.set(start, end);
+  }
+  return result;
+}
+
+/** 施用の予定時刻を読み出す。終了は拡張から、開始と組にして拾う。 */
+function scheduledTimes(dosage: fhir4.Dosage | undefined): InjectionTimeValues[] {
+  const endByStart = scheduledEndByStart(dosage);
+  return (dosage?.timing?.event ?? []).map((start) => ({
+    start: toLocalTime(start),
+    end: toLocalTime(endByStart.get(start) ?? ""),
+  }));
+}
+
+/** 「10:00〜12:00」。終了が翌日に回るときは「10:00〜翌02:00」。 */
+export function injectionTimeLabel(time: InjectionTimeValues): string {
+  if (!time.end) return time.start;
+  return `${time.start}〜${time.end > time.start ? "" : "翌"}${time.end}`;
+}
+
+/** 施用の時刻を「10:00〜12:00、20:30〜翌02:30」の形にまとめる。 */
+export function injectionTimesLabel(times: InjectionTimeValues[]): string {
+  return times.map(injectionTimeLabel).join("、");
 }
 
 // ---- FHIR リソースの組み立て ----
@@ -527,10 +614,26 @@ function buildInjectionMedicationRequest(
     ];
   }
 
-  if (rp.startTimes.length) {
+  if (rp.times.length) {
+    // 開始時刻は従来どおり timing.event に置く(実施入力・カルテのカードが読んでいる)。
     dosageInstruction.timing = {
-      event: rp.startTimes.map((time) => toFhirDateTime(`${day}T${time}`)),
+      event: rp.times.map((time) => toFhirDateTime(`${day}T${time.start}`)),
     };
+    // 終了予定時刻は FHIR に置き場所が無い(timing.event は時点の配列で、
+    // repeat.duration は施用ごとに違う長さを表せない)ので、開始と組にした
+    // ローカル拡張で持つ。終了を入れた施用のぶんだけ足す。
+    const periods = rp.times
+      .filter((time) => time.end)
+      .map((time) => ({
+        url: SCHEDULED_PERIOD_EXT_URL,
+        extension: [
+          { url: "start", valueDateTime: toFhirDateTime(`${day}T${time.start}`) },
+          { url: "end", valueDateTime: toFhirDateTime(`${scheduledEndDay(day, time)}T${time.end}`) },
+        ],
+      }));
+    if (periods.length) {
+      dosageInstruction.extension = [...(dosageInstruction.extension ?? []), ...periods];
+    }
   }
   if (rp.routeCode) {
     dosageInstruction.route = {
@@ -954,8 +1057,8 @@ export interface InjectionRpDisplay {
   lineDisplay?: string;
   /** 投与速度(mL/h)。 */
   rate?: number;
-  /** 開始時刻(HH:mm)。 */
-  startTimes: string[];
+  /** 施用の時刻(HH:mm)。終了は予定していれば入る。 */
+  times: InjectionTimeValues[];
   usageComment?: string;
   medicines: MedicineLineDisplay[];
 }
@@ -1000,7 +1103,7 @@ export function groupInjectionByRp(mrs: fhir4.MedicationRequest[]): InjectionRpD
         methodDisplay: dosage?.method?.coding?.[0]?.display,
         lineDisplay: extensionCoding(dosage?.extension, LINE_EXT_URL)?.display,
         rate: doseAndRate?.rateQuantity?.value,
-        startTimes: (dosage?.timing?.event ?? []).map(toLocalTime),
+        times: scheduledTimes(dosage),
         usageComment: dosage?.additionalInstruction?.[0]?.text,
         medicines: [],
       };
@@ -1075,7 +1178,7 @@ export function parseInjectionForm(
           doseAndRate?.rateQuantity?.value != null ? String(doseAndRate.rateQuantity.value) : "",
         // 投与時間は保存していないので、編集時は投与速度を直接入力する状態に戻す。
         infusionHours: "",
-        startTimes: (dosage?.timing?.event ?? []).map(toLocalTime),
+        times: scheduledTimes(dosage),
         usageComment: dosage?.additionalInstruction?.[0]?.text ?? "",
         medicines: [],
         medicinesByOrder: new Map(),
@@ -1102,7 +1205,7 @@ export function parseInjectionForm(
       lineCode: group.lineCode,
       rate: group.rate,
       infusionHours: group.infusionHours,
-      startTimes: group.startTimes,
+      times: group.times,
       usageComment: group.usageComment,
       medicines: Array.from(group.medicinesByOrder.entries())
         .sort(([a], [b]) => a - b)
@@ -1119,7 +1222,7 @@ export function parseInjectionForm(
     problem: injectionProblem(sr),
     rps: rps.length
       ? rps
-      : [{ ...emptyInjectionRp, startTimes: [], medicines: [{ ...emptyMedicineLine }] }],
+      : [{ ...emptyInjectionRp, times: [], medicines: [{ ...emptyMedicineLine }] }],
     series: injectionSeriesOf(sr),
   };
 }

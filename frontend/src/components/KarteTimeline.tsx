@@ -42,6 +42,7 @@ import {
   groupInjectionByRp,
   injectionComment,
   injectionSeriesLabel,
+  injectionTimesLabel,
   injectionUsageSummary,
   summarizeInjectionServiceRequest,
 } from "../fhir/injectionHelpers";
@@ -1129,10 +1130,10 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
                 <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>
               )}
             </div>
-            {rp.startTimes.length > 0 && (
+            {rp.times.length > 0 && (
               <div className="karte-rp__detail">
-                <span className="karte-rp__detail-label">開始:</span>
-                <span>{rp.startTimes.join("、")}</span>
+                <span className="karte-rp__detail-label">時刻:</span>
+                <span>{injectionTimesLabel(rp.times)}</span>
               </div>
             )}
           </div>

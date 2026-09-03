@@ -21,6 +21,8 @@ import {
   defaultCategory,
   emptyInjectionForm,
   emptyInjectionRp,
+  infusionDurationHours,
+  infusionEndTime,
   infusionRate,
   methodForRoute,
   rpDoseTotal,
@@ -147,6 +149,34 @@ export function InjectionForm({
     return rp.infusionHours ? infusionRate(doseTotalOf(rp).ml, rp.infusionHours) : rp.rate;
   }
 
+  /** その RP の 1 回ぶんの投与時間(h)。終了時刻の初期値に使う。 */
+  function durationOf(rp: InjectionRpValues): number | undefined {
+    if (rp.usageType !== "drip") return undefined;
+    return infusionDurationHours(rp.infusionHours, doseTotalOf(rp).ml, effectiveRate(rp));
+  }
+
+  /** 開始時刻から自動で決まる終了時刻。決められなければ空。 */
+  function autoEndOf(rp: InjectionRpValues, startTime: string): string {
+    const hours = durationOf(rp);
+    return hours === undefined ? "" : infusionEndTime(startTime, hours);
+  }
+
+  /**
+   * 投与時間・投与速度・投与量を変えたときに、終了時刻を新しい値へ追従させる。
+   * 自動で入れた値(変更前の条件での計算結果)のままの行だけを差し替え、
+   * 手で直した終了時刻は残す。
+   */
+  function withRecalculatedEnds(before: InjectionRpValues, after: InjectionRpValues): InjectionRpValues {
+    return {
+      ...after,
+      times: after.times.map((time, index) => {
+        const previousAuto = autoEndOf(before, before.times[index]?.start ?? time.start);
+        if (time.end && time.end !== previousAuto) return time;
+        return { ...time, end: autoEndOf(after, time.start) };
+      }),
+    };
+  }
+
   const update = makeFieldUpdater(setValues);
 
   const weekdays = values.schedule.kind === "weekly" ? values.schedule.days : [];
@@ -198,21 +228,33 @@ export function InjectionForm({
     setValues((v) => ({ ...v, setting, category: defaultCategory(setting) }));
   }
 
+  /** 投与時間の元になる項目。これらが変わったら終了時刻を計算し直す。 */
+  const DURATION_KEYS = ["usageType", "rate", "infusionHours"] as const;
+
   function updateRp(rpIndex: number, patch: Partial<InjectionRpValues>) {
+    const touchesDuration = DURATION_KEYS.some((key) => key in patch);
     setValues((v) => ({
       ...v,
-      rps: v.rps.map((rp, i) => (i === rpIndex ? { ...rp, ...patch } : rp)),
+      rps: v.rps.map((rp, i) => {
+        if (i !== rpIndex) return rp;
+        const next = { ...rp, ...patch };
+        return touchesDuration ? withRecalculatedEnds(rp, next) : next;
+      }),
     }));
   }
 
   function updateMedicine(rpIndex: number, medIndex: number, patch: Partial<MedicineLineValues>) {
     setValues((v) => ({
       ...v,
-      rps: v.rps.map((rp, i) =>
-        i === rpIndex
-          ? { ...rp, medicines: rp.medicines.map((m, j) => (j === medIndex ? { ...m, ...patch } : m)) }
-          : rp,
-      ),
+      rps: v.rps.map((rp, i) => {
+        if (i !== rpIndex) return rp;
+        // 投与量が変われば総投与量が変わり、投与時間(= 終了時刻)も動く。
+        const next = {
+          ...rp,
+          medicines: rp.medicines.map((m, j) => (j === medIndex ? { ...m, ...patch } : m)),
+        };
+        return withRecalculatedEnds(rp, next);
+      }),
     }));
   }
 
@@ -223,7 +265,15 @@ export function InjectionForm({
     rp: InjectionRpValues,
     usageType: InjectionUsageType | "",
   ): Partial<InjectionRpValues> {
-    if (usageType !== "drip") return { usageType, rate: "", infusionHours: "" };
+    // ワンショットは一瞬で終わるので、終了時刻も落とす。
+    if (usageType !== "drip") {
+      return {
+        usageType,
+        rate: "",
+        infusionHours: "",
+        times: rp.times.map((time) => ({ ...time, end: "" })),
+      };
+    }
     return { usageType, ...(rp.routeCode ? {} : { routeCode: DRIP_DEFAULT_ROUTE }) };
   }
 
@@ -241,7 +291,7 @@ export function InjectionForm({
         const medicines = updater(rp.medicines);
         if (touched) return { ...rp, medicines };
         const preset = presetInjectionUsageType(medicines.map((m) => m.medicine));
-        return { ...rp, medicines, ...usageTypePatch(rp, preset) };
+        return withRecalculatedEnds(rp, { ...rp, medicines, ...usageTypePatch(rp, preset) });
       }),
     }));
   }
@@ -296,19 +346,33 @@ export function InjectionForm({
     setModal(null);
   }
 
-  function addStartTime(rpIndex: number) {
-    updateRp(rpIndex, { startTimes: [...values.rps[rpIndex].startTimes, ""] });
+  function addTime(rpIndex: number) {
+    updateRp(rpIndex, { times: [...values.rps[rpIndex].times, { start: "", end: "" }] });
   }
 
+  /** 開始時刻。自動で入れた終了時刻はいっしょに動かし、手で直したものは残す。 */
   function updateStartTime(rpIndex: number, timeIndex: number, value: string) {
+    const rp = values.rps[rpIndex];
     updateRp(rpIndex, {
-      startTimes: values.rps[rpIndex].startTimes.map((t, i) => (i === timeIndex ? value : t)),
+      times: rp.times.map((time, i) => {
+        if (i !== timeIndex) return time;
+        const wasAuto = !time.end || time.end === autoEndOf(rp, time.start);
+        return { start: value, end: wasAuto ? autoEndOf(rp, value) : time.end };
+      }),
     });
   }
 
-  function removeStartTime(rpIndex: number, timeIndex: number) {
+  function updateEndTime(rpIndex: number, timeIndex: number, value: string) {
     updateRp(rpIndex, {
-      startTimes: values.rps[rpIndex].startTimes.filter((_, i) => i !== timeIndex),
+      times: values.rps[rpIndex].times.map((time, i) =>
+        i === timeIndex ? { ...time, end: value } : time,
+      ),
+    });
+  }
+
+  function removeTime(rpIndex: number, timeIndex: number) {
+    updateRp(rpIndex, {
+      times: values.rps[rpIndex].times.filter((_, i) => i !== timeIndex),
     });
   }
 
@@ -352,7 +416,7 @@ export function InjectionForm({
       if (rp.usageType === "drip" && rp.infusionHours && !rate) {
         return `${rpLabel}: 総投与量を mL 換算できないため投与速度を計算できません。投与時間の選択を外して直接入力してください。`;
       }
-      if (rp.startTimes.some((t) => !t)) {
+      if (rp.times.some((t) => !t.start)) {
         return `${rpLabel}: 開始時刻が未入力の行があります。入力するか削除してください。`;
       }
       if (rp.medicines.length === 0) return `${rpLabel}: 医薬品を1件以上登録してください。`;
@@ -756,21 +820,35 @@ export function InjectionForm({
           </div>
 
           <div className="injection-start-times">
-            <span className="rp-card__usage-label">開始時刻</span>
-            {rp.startTimes.map((time, timeIndex) => (
+            <span className="rp-card__usage-label">開始・終了時刻</span>
+            {rp.times.map((time, timeIndex) => (
               <div className="injection-start-times__row" key={timeIndex}>
                 {/* 日付は注射日を使うので時刻だけを入力する。 */}
                 <input
                   type="time"
-                  value={time}
+                  value={time.start}
+                  aria-label={`${timeIndex + 1} 回目の開始時刻`}
                   onChange={(e) => updateStartTime(rpIndex, timeIndex, e.target.value)}
                 />
+                <span className="injection-start-times__separator">〜</span>
+                {/* 終了は任意。投与時間・投与速度が入っていれば初期値を自動で入れる。
+                    開始以下の時刻は翌日として扱う(夜からの持続点滴)。 */}
+                <input
+                  type="time"
+                  value={time.end}
+                  aria-label={`${timeIndex + 1} 回目の終了時刻`}
+                  disabled={rp.usageType !== "drip"}
+                  onChange={(e) => updateEndTime(rpIndex, timeIndex, e.target.value)}
+                />
+                {time.end !== "" && time.start !== "" && time.end <= time.start && (
+                  <span className="injection-start-times__nextday">翌日</span>
+                )}
                 <button
                   type="button"
                   className="rp-card__icon-button"
-                  title="この開始時刻を削除"
-                  aria-label="この開始時刻を削除"
-                  onClick={() => removeStartTime(rpIndex, timeIndex)}
+                  title="この時刻を削除"
+                  aria-label="この時刻を削除"
+                  onClick={() => removeTime(rpIndex, timeIndex)}
                 >
                   <TrashIcon />
                 </button>
@@ -780,7 +858,7 @@ export function InjectionForm({
               <button
                 type="button"
                 className="rp-card__compact-button"
-                onClick={() => addStartTime(rpIndex)}
+                onClick={() => addTime(rpIndex)}
               >
                 + 開始時刻追加
               </button>

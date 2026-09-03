@@ -2,7 +2,11 @@ import { useState, type FormEvent } from "react";
 import type { Medicine } from "../api/masterClient";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useRegisterInjectionPerform } from "../api/queries";
-import { groupInjectionByRp, injectionUsageSummary } from "../fhir/injectionHelpers";
+import {
+  groupInjectionByRp,
+  injectionTimeLabel,
+  injectionUsageSummary,
+} from "../fhir/injectionHelpers";
 import {
   OUTCOME_OPTIONS,
   buildInjectionPerformBundle,
@@ -149,7 +153,7 @@ export function InjectionPerformModal({
           <span className="rad-perform__items-label">施用</span>
           {scheduled > 1
             ? `${done + 1} 回目 / 予定 ${scheduled} 回(${rps
-                .flatMap((rp) => rp.startTimes)
+                .flatMap((rp) => rp.times.map(injectionTimeLabel))
                 .join("、")})`
             : done > 0
               ? `${done + 1} 回目(予定は 1 回)`

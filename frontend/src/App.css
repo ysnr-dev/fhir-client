@@ -1294,6 +1294,19 @@ fieldset.rp-card {
   gap: 8px;
 }
 
+/* 開始と終了の間の「〜」。入力欄どうしの間隔を詰めて 1 組に見せる。 */
+.injection-start-times__separator {
+  margin: 0 -4px;
+  color: var(--text);
+}
+
+/* 終了が開始以下のときの「翌日」。持続点滴が日をまたぐのは普通なので、
+   警告ではなく解釈の表示にする。 */
+.injection-start-times__nextday {
+  font-size: 12px;
+  color: var(--text);
+}
+
 /* 常時表示の補助的なボタン(用法選択・医薬品追加)は、入力欄より控えめな大きさにする。 */
 .rp-card__compact-button {
   font-size: 13px;

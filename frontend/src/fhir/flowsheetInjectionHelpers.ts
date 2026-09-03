@@ -1,3 +1,4 @@
+import { addDays } from "../lib/dates";
 import type { FlowsheetEvent } from "./flowsheetEventHelpers";
 import { localDateOf } from "./flowsheetEventHelpers";
 import {
@@ -142,15 +143,27 @@ export function buildInjectionRows(data: FlowsheetInjectionData): InjectionRow[]
         rows.set(key, row);
       }
 
-      // 予定。開始時刻はローカルの HH:mm なので、その日と組んで日時にする。
-      const plannedAts = rp.startTimes.length > 0 ? rp.startTimes.map((t) => `${day}T${t}`) : [day];
-      for (const at of plannedAts) {
+      // 予定。時刻はローカルの HH:mm なので、その日と組んで日時にする。終了が
+      // 開始以下なら翌日(夜からの持続点滴)。時刻が無ければその日 1 件だけ置く。
+      const planned =
+        rp.times.length > 0
+          ? rp.times.map((time) => ({
+              at: `${day}T${time.start}`,
+              end: time.end
+                ? `${time.end > time.start ? day : addDays(day, 1)}T${time.end}`
+                : undefined,
+            }))
+          : [{ at: day, end: undefined }];
+      for (const { at, end } of planned) {
         row.marks.push({
           at,
+          end,
           kind: cancelled ? "cancelled" : "planned",
           srId,
           title: [
-            `${cancelled ? MARK_LABELS.cancelled : MARK_LABELS.planned} ${flowsheetTimeLabel(at)}`,
+            `${cancelled ? MARK_LABELS.cancelled : MARK_LABELS.planned} ${flowsheetTimeLabel(at)}${
+              end ? `〜${flowsheetTimeLabel(end)}` : ""
+            }`,
             label,
             usage,
           ]

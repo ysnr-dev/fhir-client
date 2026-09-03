@@ -601,7 +601,10 @@ function FlowsheetInjectionRow({
       role="img"
       aria-label="注射の予定と実施"
     >
-      {placed.map(({ mark, x, endX }, index) => {
+      {placed.map(({ mark, x: rawX, endX }, index) => {
+        // いちばん新しい測定より後の予定は左端(境目 0)に来る。そのままだと印が
+        // 半分切れるので、印の半径ぶんだけ内側に寄せて必ず見えるようにする。
+        const x = Math.min(Math.max(rawX, INJECTION_MARK_R), width - INJECTION_MARK_R);
         const selected = mark.srId === selectedSrId;
         return (
           <g
@@ -632,12 +635,13 @@ function FlowsheetInjectionRow({
               (() => {
                 // 開始(古い = 右)から終了(新しい = 左)へ。同じ境目に収まったときは
                 // 開始から左へ最小幅ぶん伸ばす(右へ伸ばすと過去に向かって見える)。
-                const span = x - endX;
+                // 左端をはみ出すぶんは右へ寄せる(左端の予定でもバーが見えるように)。
+                const span = x - Math.min(endX, x);
                 const barWidth = Math.max(INJECTION_BAR_MIN_WIDTH, span);
                 return (
                   <rect
                     className="vital-flowsheet__injection-bar"
-                    x={x - barWidth}
+                    x={Math.max(0, x - barWidth)}
                     y={y - 4}
                     width={barWidth}
                     height={8}
