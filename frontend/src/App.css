@@ -7936,6 +7936,13 @@ body.page-wide .app__main {
   opacity: 0.45;
 }
 
+/* 一覧の下の操作(注射の実施入力)。表と離して右に寄せる。 */
+.flowsheet-event-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
 /* 一覧で押した 1 件。同じ日に施用が複数あると一覧が同じ内容になるので、
    どれを押したかを行の色で示す(表の他の選択と同じアクセントの地色)。 */
 .flowsheet-event-modal__table tbody tr.flowsheet-event-modal__row--selected {

@@ -3,6 +3,7 @@ import {
   flowsheetEventRangeLabel,
   type FlowsheetEvent,
 } from "../fhir/flowsheetEventHelpers";
+import type { ReactNode } from "react";
 import type { KarteDetailTarget } from "../karteUrl";
 import { Modal } from "./Modal";
 
@@ -18,6 +19,8 @@ interface Props {
   highlightIndex?: number;
   /** オーダーの詳細モーダルを開く。渡されなければ「詳細」を出さない。 */
   onOpenDetail?: (target: KarteDetailTarget) => void;
+  /** 一覧の下に出す操作(注射の実施入力など)。無ければ出さない。 */
+  actions?: ReactNode;
   onClose: () => void;
 }
 
@@ -37,6 +40,7 @@ export function FlowsheetEventModal({
   title,
   highlightIndex,
   onOpenDetail,
+  actions,
   onClose,
 }: Props) {
   const range = flowsheetEventRangeLabel(events);
@@ -82,6 +86,7 @@ export function FlowsheetEventModal({
           ))}
         </tbody>
       </table>
+      {actions && <div className="flowsheet-event-modal__actions">{actions}</div>}
     </Modal>
   );
 }

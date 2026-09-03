@@ -8,6 +8,9 @@ import {
   useVitalThresholds,
 } from "../api/queries";
 import { buildInjectionRows } from "../fhir/flowsheetInjectionHelpers";
+import { injectionPerformsByOrderId } from "../fhir/injectionPerformHelpers";
+import { injectionTasksByOrderId } from "../fhir/injectionTaskHelpers";
+import { referenceId } from "../fhir/shared";
 import {
   buildExamRows,
   buildFlowsheetEvents,
@@ -30,6 +33,7 @@ import { interpretationClass } from "../fhir/labResultHelpers";
 import type { KarteDetailTarget } from "../karteUrl";
 import { addDays, today } from "../lib/dates";
 import { FlowsheetEventModal } from "./FlowsheetEventModal";
+import { InjectionPerformModal } from "./InjectionPerformModal";
 import {
   BLOOD_PRESSURE_SERIES,
   bloodPressureNumbers,
@@ -96,6 +100,8 @@ export function VitalFlowsheetPanel({
     groupId: string;
     key: string;
   } | null>(null);
+  // 注射の実施入力を開いているオーダー。一覧モーダルから開く。
+  const [performSrId, setPerformSrId] = useState<string | null>(null);
   // 全画面はビューポート全体ではなく「患者情報の下」から始める。開始位置は
   // カルテのレイアウト(左右ペインの上端)を実測して決める。
   const panelRef = useRef<HTMLDivElement>(null);
@@ -157,8 +163,34 @@ export function VitalFlowsheetPanel({
     const heading = selectedMark.rows === "injection" ? "注射" : "検査";
     // 見出しは押した 1 件の日時。どれを押したかが一覧を見る前に分かる。
     const when = selected ? flowsheetEventAtLabel(selected.at) : flowsheetEventRangeLabel(events);
-    return { events, highlightIndex, title: `${heading}（${when}）` };
+    // 中止した注射は実施入力を出さない(印は cancelled になっている)。
+    const canPerform =
+      selectedMark.rows === "injection" && !events.some((event) => event.label === "中止");
+    return {
+      events,
+      highlightIndex,
+      title: `${heading}（${when}）`,
+      canPerform,
+      srId: selectedMark.groupId,
+    };
   }, [selectedMark, injectionRows, examRows]);
+
+  // 実施入力に渡す一式。注射の取得結果(SR + 薬剤 + Task + 実施記録)から組み直す。
+  const performTarget = useMemo(() => {
+    const data = injections.data;
+    if (!performSrId || !data) return null;
+    const order = data.orders.find((sr) => sr.id === performSrId);
+    if (!order) return null;
+    return {
+      order,
+      medicationRequests: data.medicationRequests.filter(
+        (mr) => referenceId(mr.basedOn?.[0]?.reference) === performSrId,
+      ),
+      task: injectionTasksByOrderId(data.tasks).get(performSrId),
+      performs:
+        injectionPerformsByOrderId(data.procedures, data.administrations).get(performSrId) ?? [],
+    };
+  }, [injections.data, performSrId]);
 
   const events = useMemo(
     () => buildFlowsheetEvents(encounters.data?.events ?? [], surgeries.data ?? []),
@@ -539,7 +571,34 @@ export function VitalFlowsheetPanel({
               title={markModal.title}
               highlightIndex={markModal.highlightIndex}
               onOpenDetail={onOpenDetail}
+              actions={
+                // 施用するのは病棟なので、経過表からその場で書けるようにする
+                // (カルテのカードと同じモーダル)。中止した注射には出さない。
+                // 1 日に複数回の施用があるので、実施済になっても押せる。
+                markModal.canPerform ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // 一覧は役目を終えるので閉じてから開く(「詳細」と同じ作法)。
+                      setSelectedMark(null);
+                      setPerformSrId(markModal.srId);
+                    }}
+                  >
+                    実施入力
+                  </button>
+                ) : undefined
+              }
               onClose={() => setSelectedMark(null)}
+            />
+          )}
+
+          {performTarget && (
+            <InjectionPerformModal
+              order={performTarget.order}
+              medicationRequests={performTarget.medicationRequests}
+              task={performTarget.task}
+              performs={performTarget.performs}
+              onClose={() => setPerformSrId(null)}
             />
           )}
         </>
