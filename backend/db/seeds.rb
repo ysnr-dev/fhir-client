@@ -779,3 +779,38 @@ if File.exist?(meal_items_csv)
 else
   puts "master_meal_items: #{meal_items_csv} not found, skipped"
 end
+
+# 経過表の水分出納(In/Out)に数える看護観察。db/seed_data/water_balance_items.csv
+# （ヘッダー有り, side,manage_no,name）から施設設定(facility_settings.water_balance)に
+# 入れる。値は MEDIS の観察名称管理番号で、name は読むための列(投入では使わない)。
+#
+# 一般病棟の温度板で数える代表的な項目を並べた初期値で、**施設の運用で足し引きする
+# 前提**(導尿・膀胱瘻を分けるか、ドレーンをどこまで数えるかは施設で違う。ドレーン
+# 排液は 200 件超あるので既定には入れない)。設定画面の「水分出納の対象項目」で直す。
+#
+# **輸液量(31000014)は入れていない**。点滴は注射の実施記録から mL に換算して IN に
+# 足すので(docs/flowsheet-design.md §7.2)、観察としても数えると二重計上になる。
+#
+# 既に対象項目を選んである施設は上書きしない（施設で直した内容を消さない）。
+water_balance_csv = Rails.root.join("db/seed_data/water_balance_items.csv")
+if File.exist?(water_balance_csv)
+  settings = FacilitySettings.current
+  stored = settings.water_balance_with_defaults
+  if stored.values.any?(&:present?)
+    puts "facility_settings.water_balance: already configured, kept"
+  else
+    items = FacilitySettings::WATER_BALANCE_KEYS.index_with { [] }
+    CSV.foreach(water_balance_csv, headers: true) do |row|
+      side = row["side"].to_s.strip
+      manage_no = row["manage_no"].to_s.strip
+      next if manage_no.blank? || !items.key?(side)
+
+      items[side] << manage_no unless items[side].include?(manage_no)
+    end
+
+    settings.update!(water_balance: items)
+    puts "facility_settings.water_balance: seeded in #{items['in'].size} / out #{items['out'].size} items"
+  end
+else
+  puts "facility_settings.water_balance: #{water_balance_csv} not found, skipped"
+end

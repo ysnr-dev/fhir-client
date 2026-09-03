@@ -52,6 +52,8 @@ class FacilitySettings < ApplicationRecord
   # 経過表の水分出納(In/Out)に数える看護観察の項目(MEDIS の管理番号)。
   # 何を数えるかは施設の運用で違うので既定は空にし、施設設定で選ばせる
   # (尿量だけで 29 件、ドレーン排液は 200 件超あり、汎用の既定値は作れない)。
+  # 空のままだと経過表に欄が出ないので、代表的な項目は db:seed で入れる
+  # (db/seed_data/water_balance_items.csv。選んである施設は上書きしない)。
   DEFAULT_WATER_BALANCE = { "in" => [], "out" => [] }.freeze
 
   WATER_BALANCE_KEYS = %w[in out].freeze
