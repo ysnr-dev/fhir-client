@@ -678,11 +678,19 @@ export function KartePage() {
     const props = { patientId, view: tab === key ? view : "", onViewChange: selectView };
     if (key === "condition") return <KarteConditionTab {...props} />;
     if (key === "allergy") return <KarteAllergyTab {...props} />;
-    // 経過表・検査結果時系列は読み取り専用で、詳細を開く導線が無いので view は使わない。
-    // 経過表のイベント一覧からは、カルテのカードと同じオーダー詳細モーダルを開く。
+    // 経過表は view に「基準日(と全画面)」を載せる(どの週を見ているかが読む位置
+    // そのものなので、リロード・共有で戻れるようにする)。イベント一覧からはカルテの
+    // カードと同じオーダー詳細モーダル、測定の時刻からはバイタル編集を開く。
     if (key === "flowsheet") {
-      return <VitalFlowsheetPanel patientId={patientId} onOpenDetail={openDetail} />;
+      return (
+        <VitalFlowsheetPanel
+          {...props}
+          onOpenDetail={openDetail}
+          onOpenVital={(entryId) => setPane({ kind: "vital-edit", entryId })}
+        />
+      );
     }
+    // 検査結果時系列は読み取り専用で、詳細を開く導線が無いので view は使わない。
     if (key === "lab-timeline") {
       return (
         <div className="karte-tabpanel">

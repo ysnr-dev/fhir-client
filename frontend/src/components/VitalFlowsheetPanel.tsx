@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   usePatientEncounterEvents,
   usePatientExamOrders,
@@ -31,6 +31,11 @@ import {
 } from "../fhir/flowsheetEventHelpers";
 import { interpretationClass } from "../fhir/labResultHelpers";
 import type { KarteDetailTarget } from "../karteUrl";
+import {
+  formatFlowsheetView,
+  parseFlowsheetView,
+  type FlowsheetView,
+} from "../karteUrl";
 import { addDays, today } from "../lib/dates";
 import { FlowsheetEventModal } from "./FlowsheetEventModal";
 import { InjectionPerformModal } from "./InjectionPerformModal";
@@ -83,14 +88,46 @@ interface DayGroup {
 
 export function VitalFlowsheetPanel({
   patientId,
+  view,
+  onViewChange,
   onOpenDetail,
+  onOpenVital,
 }: {
   patientId: string;
+  /** URL の view。基準日(YYYY-MM-DD)と全画面を載せる(`parseFlowsheetView`)。 */
+  view?: string;
+  onViewChange?: (view: string | null) => void;
   /** イベント一覧からカルテのオーダー詳細モーダルを開く。 */
   onOpenDetail?: (target: KarteDetailTarget) => void;
+  /** 測定の列からバイタル編集(右ペイン)を開く。 */
+  onOpenVital?: (entryId: string) => void;
 }) {
-  const [baseDate, setBaseDate] = useState(today());
-  const [fullscreen, setFullscreen] = useState(false);
+  // 基準日と全画面は URL に載せる(リロード・共有で同じ週が開く)。onViewChange が
+  // 無い(タブの外から使う)ときだけ内部の状態で持つ。
+  const parsedView = parseFlowsheetView(view);
+  const [localView, setLocalView] = useState<FlowsheetView>(() => ({ baseDate: today() }));
+  const current = onViewChange ? { baseDate: parsedView.baseDate ?? today(), fullscreen: parsedView.fullscreen } : localView;
+  const baseDate = current.baseDate;
+  const fullscreen = Boolean(current.fullscreen);
+
+  // いまの表示状態。Escape の購読(useEffect)から読むので ref に写しておく
+  // (current は毎回作り直されるため、依存に入れると購読を張り直すことになる)。
+  const viewRef = useRef(current);
+  viewRef.current = current;
+
+  const updateView = useCallback(
+    (next: FlowsheetView) => {
+      if (onViewChange) onViewChange(formatFlowsheetView(next, today()));
+      else setLocalView(next);
+    },
+    [onViewChange],
+  );
+
+  const setBaseDate = (date: string) => updateView({ ...viewRef.current, baseDate: date });
+  const setFullscreen = useCallback(
+    (on: boolean) => updateView({ ...viewRef.current, fullscreen: on }),
+    [updateView],
+  );
   // 帯で選んだ日。選ぶとその日のイベント一覧をモーダルで出す。
   const [selectedEventDay, setSelectedEventDay] = useState<string | null>(null);
   // 注射・検査の行で選んだ印。一覧は同じまとまり(その日のオーダー)ぶんを出し、
@@ -225,7 +262,7 @@ export function VitalFlowsheetPanel({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [fullscreen]);
+  }, [fullscreen, setFullscreen]);
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -302,7 +339,7 @@ export function VitalFlowsheetPanel({
   };
 
   function shiftWeek(delta: number) {
-    setBaseDate((prev) => addDays(prev, delta * WEEK_DAYS));
+    setBaseDate(addDays(baseDate, delta * WEEK_DAYS));
   }
 
   return (
@@ -354,7 +391,8 @@ export function VitalFlowsheetPanel({
           今日
         </button>
         <span className="lab-timeline__hint" />
-        <button type="button" onClick={() => setFullscreen((prev) => !prev)}>
+        <FlowsheetLegend />
+        <button type="button" onClick={() => setFullscreen(!fullscreen)}>
           {fullscreen ? "全画面を終了" : "全画面"}
         </button>
       </div>
@@ -406,11 +444,29 @@ export function VitalFlowsheetPanel({
                   })}
                 </tr>
                 <tr>
-                  {columns.map((column) => (
-                    <th key={column.key} className="vital-flowsheet__time-col" title={column.at}>
-                      {column.at ? flowsheetColumnLabel(column.at).time : ""}
-                    </th>
-                  ))}
+                  {columns.map((column) => {
+                    // 手入力のバイタルだけ、時刻からバイタル編集(右ペイン)を開ける。
+                    // 看護観察・テンプレート抽出の値は束ね id が無いので開けない。
+                    const entryId = column.at ? flowsheet.entryIds.get(column.at) : undefined;
+                    return (
+                      <th key={column.key} className="vital-flowsheet__time-col" title={column.at}>
+                        {entryId && onOpenVital ? (
+                          <button
+                            type="button"
+                            className="vital-flowsheet__time-button"
+                            title={`${flowsheetColumnLabel(column.at as string).date} ${flowsheetColumnLabel(column.at as string).time} の測定を編集`}
+                            onClick={() => onOpenVital(entryId)}
+                          >
+                            {flowsheetColumnLabel(column.at as string).time}
+                          </button>
+                        ) : column.at ? (
+                          flowsheetColumnLabel(column.at).time
+                        ) : (
+                          ""
+                        )}
+                      </th>
+                    );
+                  })}
                 </tr>
                 {/* 病日・術後日数。入院・手術があるときだけ行を出す。日の単位なので
                     日のまとまりごとに 1 セル。見出しの中にあるので縦に送っても残る。 */}
@@ -934,6 +990,34 @@ function FlowsheetMarkRowSvg({
 
 // ---- グラフ(温度板) ----
 
+/**
+ * 凡例。グラフと**同じクラス**の SVG で描くので、系列の色・形を変えても凡例が
+ * ずれない(麻酔チャートの PlotLegend と同じ作り)。
+ */
+function FlowsheetLegend() {
+  return (
+    <span className="vital-flowsheet__legend">
+      {CHART_SPECS.map((spec) => (
+        <span key={`${spec.key}/${spec.marker}`} className="vital-flowsheet__legend-item">
+          <svg
+            className={`vital-flowsheet__series vital-flowsheet__series--${spec.className}`}
+            width={14}
+            height={12}
+            viewBox="0 0 14 12"
+            aria-hidden="true"
+          >
+            <path className="vital-flowsheet__line" d="M1,6 L13,6" />
+            <g className="vital-flowsheet__marker">{markerShape(spec.marker, 7, 6)}</g>
+          </svg>
+          {spec.legend}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+// ---- グラフ本体 ----
+
 const CHART_HEIGHT = 190;
 const CHART_PAD = { top: 22, bottom: 12 };
 const PLOT_H = CHART_HEIGHT - CHART_PAD.top - CHART_PAD.bottom;
@@ -957,6 +1041,8 @@ interface ChartSpec {
   step: number;
   /** 軸の列に出す系列。血圧の拡張期は収縮期と同じ列を使う。 */
   axis: boolean;
+  /** 凡例に出す名前。 */
+  legend: string;
 }
 
 interface ChartSeries extends ChartSpec {
@@ -969,11 +1055,11 @@ interface ChartSeries extends ChartSpec {
 // 温度板の慣例的な目盛り(BP 0–240 / R 0–60 / P 0–150 / T 34–40)。系列ごとにスケールが
 // 違うので 1 つの軸に重ねず、同じ横罫線に各系列の目盛りを割り当てる。
 const CHART_SPECS: ChartSpec[] = [
-  { key: "8480-6", name: "BP", unit: "mmHg", className: "bp", marker: "triangle-down", min: 0, step: 40, axis: true },
-  { key: "8462-4", name: "BP", unit: "mmHg", className: "bp", marker: "triangle-up", min: 0, step: 40, axis: false },
-  { key: "9279-1", name: "R", unit: "/分", className: "r", marker: "square", min: 0, step: 10, axis: true },
-  { key: "8867-4", name: "P", unit: "/分", className: "p", marker: "circle", min: 0, step: 25, axis: true },
-  { key: "8310-5", name: "T", unit: "℃", className: "t", marker: "circle", min: 34, step: 1, axis: true },
+  { key: "8480-6", name: "BP", unit: "mmHg", className: "bp", marker: "triangle-down", min: 0, step: 40, axis: true, legend: "収縮期" },
+  { key: "8462-4", name: "BP", unit: "mmHg", className: "bp", marker: "triangle-up", min: 0, step: 40, axis: false, legend: "拡張期" },
+  { key: "9279-1", name: "R", unit: "/分", className: "r", marker: "square", min: 0, step: 10, axis: true, legend: "呼吸数" },
+  { key: "8867-4", name: "P", unit: "/分", className: "p", marker: "circle", min: 0, step: 25, axis: true, legend: "脈拍" },
+  { key: "8310-5", name: "T", unit: "℃", className: "t", marker: "circle", min: 34, step: 1, axis: true, legend: "体温" },
 ];
 
 function buildChartSeries(

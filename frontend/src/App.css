@@ -7689,6 +7689,44 @@ body.page-wide .app__main {
   padding-right: 7px;
 }
 
+/* 凡例。グラフと同じクラスの SVG を並べるので、系列の色・形を変えても追従する。 */
+.vital-flowsheet__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.vital-flowsheet__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.vital-flowsheet__legend-item svg {
+  display: block;
+}
+
+/* 測定の時刻。手入力のバイタルはここからバイタル編集を開けるので、押せると分かる
+   見た目にする(見出しの文字と同じ大きさのまま、下線とカーソルだけ変える)。 */
+.vital-flowsheet__time-button {
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.vital-flowsheet__time-button:hover,
+.vital-flowsheet__time-button:focus-visible {
+  color: var(--accent);
+  text-decoration-style: solid;
+}
+
 /* 曜日の色。土曜は青、日曜は赤(暦の慣例)。基準日(右端)は下線で示す。 */
 .vital-flowsheet__table th.vital-flowsheet__date-col--saturday {
   color: var(--lab-low);

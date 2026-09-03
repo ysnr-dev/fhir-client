@@ -413,6 +413,11 @@ export interface VitalFlowsheet {
   /** 表示対象の測定日時。古い順(左 → 右で新しくなる)。 */
   columns: string[];
   rows: VitalFlowsheetRow[];
+  /**
+   * 測定日時 → 手入力バイタルの束ね id(`VITAL_ENTRY_SYSTEM`)。列からバイタル編集を
+   * 開くのに使う。看護観察・テンプレート抽出の値は束ね id を持たないので入らない。
+   */
+  entryIds: Map<string, string>;
 }
 
 /** 血圧はグラフでは収縮期・拡張期の 2 系列に分ける。 */
@@ -526,6 +531,9 @@ export function buildVitalFlowsheet(
   const shown = new Set(columns);
 
   const rows = new Map<string, VitalFlowsheetRow>();
+  // 列からバイタル編集を開くための束ね id。1 回の測定は複数の Observation に分かれ、
+  // どれも同じ identifier を持つので、最初に見つけたものを採る。
+  const entryIds = new Map<string, string>();
 
   function rowFor(key: string, name: string, unit: string): VitalFlowsheetRow {
     const existing = rows.get(key);
@@ -548,6 +556,9 @@ export function buildVitalFlowsheet(
   for (const observation of observations) {
     const at = observation.effectiveDateTime ?? "";
     if (!shown.has(at)) continue;
+
+    const entryId = vitalEntryId(observation);
+    if (entryId && !entryIds.has(at)) entryIds.set(at, entryId);
 
     // 行のキーは LOINC を最優先(バイタルの既定行に合流させる)、無ければ MEDIS の
     // 看護観察コード、それも無ければ先頭の coding。コードを持たない値は名前で束ねる。
@@ -603,7 +614,7 @@ export function buildVitalFlowsheet(
     return 0;
   });
 
-  return { columns, rows: ordered };
+  return { columns, rows: ordered, entryIds };
 }
 
 /**
