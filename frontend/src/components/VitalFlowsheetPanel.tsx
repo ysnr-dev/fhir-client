@@ -3,11 +3,15 @@ import {
   usePatientEncounterEvents,
   usePatientExamOrders,
   usePatientInjectionOrders,
+  usePatientNursingFlowsheet,
   usePatientSurgeryPerforms,
+  useFacilitySettings,
   useVitalFlowsheet,
   useVitalThresholds,
 } from "../api/queries";
 import { buildInjectionRows } from "../fhir/flowsheetInjectionHelpers";
+import { buildNursingRows } from "../fhir/flowsheetNursingHelpers";
+import { DEFAULT_NURSING_SCHEDULE } from "../fhir/nursingScheduleHelpers";
 import { injectionPerformsByOrderId } from "../fhir/injectionPerformHelpers";
 import { injectionTasksByOrderId } from "../fhir/injectionTaskHelpers";
 import { referenceId } from "../fhir/shared";
@@ -63,6 +67,15 @@ import { ErrorBanner } from "./ErrorBanner";
 // 注射(薬剤の組ごと)、検査(種別ごと)。帯・注射・検査の印は**その日の列の中央**に
 // 置く(1 日の中の位置は測定の並びで決まり時間に比例しないため。時刻は title と
 // 一覧モーダルで見せる)。
+
+/** 印の欄と見出し。並べる順もこの通り。 */
+const MARK_SECTIONS = {
+  injection: "注射",
+  observation: "看護観察",
+  act: "看護行為",
+  exam: "検査",
+} as const;
+type MarkSectionKey = keyof typeof MARK_SECTIONS;
 
 /** 期間表示で選べる日数。基準日を含む。 */
 const PERIOD_OPTIONS: { days: number; label: string }[] = [
@@ -180,7 +193,7 @@ export function VitalFlowsheetPanel({
   // 注射・検査の行で選んだ印。一覧は同じまとまり(その日のオーダー)ぶんを出し、
   // 押した 1 件は markKey で突き止めて色を付ける。
   const [selectedMark, setSelectedMark] = useState<{
-    rows: "injection" | "exam";
+    rows: MarkSectionKey;
     groupId: string;
     key: string;
   } | null>(null);
@@ -243,6 +256,10 @@ export function VitalFlowsheetPanel({
   const surgeries = usePatientSurgeryPerforms(patientId);
   const examOrders = usePatientExamOrders(patientId, rangeStart, rangeEnd);
   const injections = usePatientInjectionOrders(patientId, rangeStart, rangeEnd);
+  const nursing = usePatientNursingFlowsheet(patientId, rangeStart, rangeEnd);
+  // 看護指示の予定時刻(「1日N回」の既定時刻)。実施入力と同じ設定を使う。
+  const facility = useFacilitySettings();
+  const nursingSchedule = facility.data?.nursing_schedule ?? DEFAULT_NURSING_SCHEDULE;
 
   const injectionRows = useMemo(
     () => (injections.data ? buildInjectionRows(injections.data) : []),
@@ -252,16 +269,34 @@ export function VitalFlowsheetPanel({
     () => (examOrders.data ? buildExamRows(examOrders.data) : []),
     [examOrders.data],
   );
+  const nursingData = useMemo(
+    () => (nursing.data ? { ...nursing.data, schedule: nursingSchedule } : null),
+    [nursing.data, nursingSchedule],
+  );
+  const observationRows = useMemo(
+    () => (nursingData ? buildNursingRows(nursingData, days, "observation") : []),
+    [nursingData, days],
+  );
+  const actRows = useMemo(
+    () => (nursingData ? buildNursingRows(nursingData, days, "act") : []),
+    [nursingData, days],
+  );
+  /** 印の欄。見出しと、選んだ印を突き合わせる行の集合。 */
+  const markSectionRows: Record<MarkSectionKey, FlowsheetMarkRow[]> = useMemo(
+    () => ({ injection: injectionRows, exam: examRows, observation: observationRows, act: actRows }),
+    [injectionRows, examRows, observationRows, actRows],
+  );
+
   const markModal = useMemo(() => {
     if (!selectedMark) return null;
-    const rows = selectedMark.rows === "injection" ? injectionRows : examRows;
+    const rows = markSectionRows[selectedMark.rows];
     const { events, highlightIndex, selected } = markModalEvents(
       rows,
       selectedMark.groupId,
       selectedMark.key,
     );
     if (events.length === 0) return null;
-    const heading = selectedMark.rows === "injection" ? "注射" : "検査";
+    const heading = MARK_SECTIONS[selectedMark.rows];
     // 見出しは押した 1 件の日時。どれを押したかが一覧を見る前に分かる。
     const when = selected ? flowsheetEventAtLabel(selected.at) : flowsheetEventRangeLabel(events);
     // 中止した注射は実施入力を出さない(印は cancelled になっている)。
@@ -274,7 +309,7 @@ export function VitalFlowsheetPanel({
       canPerform,
       srId: selectedMark.groupId,
     };
-  }, [selectedMark, injectionRows, examRows]);
+  }, [selectedMark, markSectionRows]);
 
   // 実施入力に渡す一式。注射の取得結果(SR + 薬剤 + Task + 実施記録)から組み直す。
   const performTarget = useMemo(() => {
@@ -726,34 +761,23 @@ export function VitalFlowsheetPanel({
               {/* 注射・検査。薬剤の組・検査の種別ごとに 1 行で、印はその日の列の中央。
                   測定の行とは読むものが違うので下にまとめ、tbody を分けて縞を掛けない。
                   オーダーが無ければ区切りごと出さない。 */}
-              <FlowsheetMarkSection
-                heading="注射"
-                rows={injectionRows}
-                columnCount={columns.length}
-                width={columns.length * columnWidth}
-                dayLineXs={dayLineXs}
-                xOf={slotCenterX}
-                slotKeyOf={slotKeyOf}
-                slotWidthOf={slotWidth}
-                selectedKey={selectedMark?.rows === "injection" ? selectedMark.key : null}
-                onSelect={(mark) =>
-                  setSelectedMark({ rows: "injection", groupId: mark.groupId, key: markKey(mark) })
-                }
-              />
-              <FlowsheetMarkSection
-                heading="検査"
-                rows={examRows}
-                columnCount={columns.length}
-                width={columns.length * columnWidth}
-                dayLineXs={dayLineXs}
-                xOf={slotCenterX}
-                slotKeyOf={slotKeyOf}
-                slotWidthOf={slotWidth}
-                selectedKey={selectedMark?.rows === "exam" ? selectedMark.key : null}
-                onSelect={(mark) =>
-                  setSelectedMark({ rows: "exam", groupId: mark.groupId, key: markKey(mark) })
-                }
-              />
+              {(Object.keys(MARK_SECTIONS) as MarkSectionKey[]).map((key) => (
+                <FlowsheetMarkSection
+                  key={key}
+                  heading={MARK_SECTIONS[key]}
+                  rows={markSectionRows[key]}
+                  columnCount={columns.length}
+                  width={columns.length * columnWidth}
+                  dayLineXs={dayLineXs}
+                  xOf={slotCenterX}
+                  slotKeyOf={slotKeyOf}
+                  slotWidthOf={slotWidth}
+                  selectedKey={selectedMark?.rows === key ? selectedMark.key : null}
+                  onSelect={(mark) =>
+                    setSelectedMark({ rows: key, groupId: mark.groupId, key: markKey(mark) })
+                  }
+                />
+              ))}
             </table>
           </div>
 

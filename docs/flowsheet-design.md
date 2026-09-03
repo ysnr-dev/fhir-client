@@ -4,8 +4,9 @@
 
     イベントの帯(入退院・転棟・外出泊・手術)
     温度板グラフ(体温・血圧・脈拍・呼吸数)
-    測定項目(バイタル + 看護観察)
+    測定項目(バイタル + 看護観察の値)
     注射(薬剤の組ごとの予定・実施)
+    看護観察 / 看護行為(指示ごとの予定・実施)
     検査(放射線・内視鏡・生理)
 
 を同じ横軸に並べる。POMR 5 要素の 1 つで、カルテ画面の「経過表」タブに出す。
@@ -14,7 +15,8 @@
 
 実装: `frontend/src/components/VitalFlowsheetPanel.tsx`(表示)、
 `fhir/vitalHelpers.ts`(測定のマトリクス)、`fhir/flowsheetEventHelpers.ts`(イベント・検査・
-病日)、`fhir/flowsheetInjectionHelpers.ts`(注射)。
+病日・印の共通型)、`fhir/flowsheetInjectionHelpers.ts`(注射)、
+`fhir/flowsheetNursingHelpers.ts`(看護観察・看護行為)。
 
 ## 1. 横軸 = 枠 × 測定。期間表示(1 週間〜1 か月)と 24 時間表示
 
@@ -224,7 +226,30 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
 - **印は実施した日に置く**。予定と違う日に実施されたら実施日へ動かす(実施記録の
   `performedDateTime` を採る)。同じオーダーに実施が複数あれば最初の 1 件。
 
-## 6. 一覧モーダルと詳細への導線
+## 6. 看護観察・看護行為の欄
+
+看護指示 1 件が 1 行。**観察と行為で欄を分ける**(`buildNursingRows`)。印は注射・検査と
+同じ(空丸 = 予定、塗り丸 = 実施)。
+
+注射・検査と違う点が 2 つある。
+
+1. **指示自体が日時を持たない**。期間(開始日〜終了日)と頻度(`nursing-order-schedule` の
+   `Timing`)だけなので、予定の印は**表示している日ごとに頻度から時刻を展開**して作る
+   (`expandNursingSchedule`。指示簿の実施入力と同じ関数・同じ施設設定を使うので、
+   予定時刻が画面ごとに食い違わない)。頻度を持たない指示(「38℃以上で報告」のような
+   自由記載の条件)は時刻が決まらないので、予定の印を出さない。
+2. **観察は測定項目の表にも出る**。SpO2・体温のように LOINC を併記した観察はバイタルの
+   行に合流する(§2)。看護観察の欄は「どの指示をいつ記録したか」を指示の単位で見るための
+   もので、値は `title` と一覧で読む。
+
+**同じ時刻に実施があれば予定の印は出さない**(予定と実施が重なると数を読み違えるため)。
+未来の予定は出す(これから実施するものを見る欄なので、イベント帯とは扱いが違う)。
+
+実施は Observation(観察)と Procedure(行為)に分かれるので、既存の実施履歴と同じ
+取り方をする。ただし**表示している期間で絞る**(患者の全期間を引くと、長期入院で
+上限 200 件に当たって古い記録しか返らない)。
+
+## 7. 一覧モーダルと詳細への導線
 
 注射・検査の印を選ぶと、**そのまとまり(注射はその日のオーダー、検査はそのオーダー)**の
 予定・実施を一覧で出す(`FlowsheetEventModal` をイベントと共用)。
@@ -233,11 +258,13 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
   行の色で示す**(`markKey` で突き止める)。一覧を 1 件に絞らないのは、予定 2 回と実施を
   並べて突き合わせるため。
 - 「詳細」からカルテと同じオーダー詳細モーダルへ飛ぶ。経過表に部門ごとの詳細表示は作らない。
+  **看護には「詳細」を出さない**。看護指示はカルテのカードにならず(タイムラインから
+  除いてある)、`detail=` で開ける詳細モーダルが無いため。詳細は指示簿タブで見る。
 - 注射は「実施入力」からカルテと同じ実施入力モーダルを開く。施用するのは病棟なので
   経過表からその場で書ける。中止した注射には出さない。1 日に複数回の施用があるので、
   実施済になっても押せる(カルテのカードと同じ条件)。
 
-## 7. ファイル
+## 8. ファイル
 
 | ファイル | 役割 |
 |---|---|
@@ -246,16 +273,21 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
 | `fhir/vitalHelpers.ts` | 測定のマトリクス(`buildVitalFlowsheet`)、しきい値と判定、見出しの整形 |
 | `fhir/flowsheetEventHelpers.ts` | イベント・検査の行、病日・術後日数、印の共通型 |
 | `fhir/flowsheetInjectionHelpers.ts` | 注射の行(予定・実施の印) |
-| `api/queries.ts` | `useVitalFlowsheet` / `usePatientEncounterEvents` / `usePatientSurgeryPerforms` / `usePatientExamOrders` / `usePatientInjectionOrders` / `useVitalThresholds` |
+| `fhir/flowsheetNursingHelpers.ts` | 看護観察・看護行為の行(予定・実施の印) |
+| `api/queries.ts` | `useVitalFlowsheet` / `usePatientEncounterEvents` / `usePatientSurgeryPerforms` / `usePatientExamOrders` / `usePatientInjectionOrders` / `usePatientNursingFlowsheet` / `useVitalThresholds` |
 | backend | `facility_settings.vital_thresholds`(migration `20260903000000`)とモデル・コントローラ |
 
-## 8. 未実装・今後
+## 9. 未実装・今後
 
 - **水分出納(In/Out)と日計**: 注射の投与量と看護観察の尿量・飲水量を集計する。
   どの観察項目を In/Out に数えるかの対応表が要る。
 - **「日 × 定時枠」モード**: 朝・昼・夕・夜の枠で列を固定し、未測定を空セルで出す。
   看護指示の予定(`nursingScheduleHelpers`)から未実施の枠も出せる。
-- **行の選択・並び替えの保持**: 看護観察が増えると行が長くなる。表示行と順序を
+- **経過表からの実施入力**: 看護観察・看護行為の欄ができて押す対象が生まれたので、
+  一覧モーダルから `NursingPerformModal` を開けるようにする(注射と同じ形)。
+- **看護指示の詳細への導線**: 看護指示は `detail=` で開ける詳細モーダルを持たないので、
+  一覧から指示簿タブへ飛ばすか、看護にも詳細モーダルを用意するかの判断が要る。
+- **行の選択・並び替えの保持**: 看護指示が増えると行が長くなる。表示行と順序を
   `karteLayout.ts` と同じ流儀で localStorage に持たせる。
 - **食事摂取量・内服の与薬実施**: どちらも記録する手段が無く、入力側の設計が先。
 - **印刷・書き出し**: 帳票基盤はオーダー単位のみで、患者 × 期間のエンドポイントが無い。

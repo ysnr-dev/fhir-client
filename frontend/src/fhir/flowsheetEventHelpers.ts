@@ -13,7 +13,7 @@ import type { EncounterEvent } from "./encounterHelpers";
 // 読み違える。時刻は title と一覧モーダルで見せる)。
 
 /** イベントの種類。色分けにだけ使う。`injection` / `exam` は一覧モーダルの行でのみ使う。 */
-export type FlowsheetEventKind = "encounter" | "surgery" | "exam" | "injection";
+export type FlowsheetEventKind = "encounter" | "surgery" | "exam" | "injection" | "nursing";
 
 export interface FlowsheetEvent {
   /** イベントの日時。時刻を持たない登録では YYYY-MM-DD。 */

@@ -1956,6 +1956,45 @@ export function usePatientInjectionOrders(
 }
 
 /**
+ * 経過表の看護欄に出す、その期間に有効な看護指示と実施記録。
+ *
+ * 指示は「期間 + 頻度」で持ち日時を持たないので、期間の各日に有効なものを
+ * クライアントで絞る(`isNursingOrderRunningOn`)。実施は Observation(観察)と
+ * Procedure(行為)に分かれるので、既存の `useNursingPerformsOf` と同じ取り方をする。
+ */
+export function usePatientNursingFlowsheet(
+  patientId: string | undefined,
+  rangeStart: string,
+  rangeEnd: string,
+) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "flowsheet-nursing", patientId, rangeStart, rangeEnd],
+    queryFn: async () => {
+      const params = nursingOrderParams(patientId, "active");
+      const [{ data: bundle }, performsByOrderId] = await Promise.all([
+        searchResource<fhir4.Resource>("ServiceRequest", params),
+        // 実施は**表示している期間だけ**引く(患者の全期間を引くと、長期入院で
+        // 200 件の上限に当たって古い記録しか返らない)。
+        fetchNursingPerforms((p) => {
+          p.set("patient", `Patient/${patientId}`);
+          p.append("date", `ge${rangeStart}`);
+          p.append("date", `le${rangeEnd}`);
+        }),
+      ]);
+      const set = nursingOrderSetOf(bundle);
+      return {
+        // 期間のどこかに掛かっている指示だけ残す(開始が期間の後、終了が期間の前は除く)。
+        orders: set.orders.filter(
+          (sr) => isNursingOrderRunningOn(sr, rangeStart) || isNursingOrderRunningOn(sr, rangeEnd),
+        ),
+        performsByOrderId,
+      };
+    },
+    enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
+  });
+}
+
+/**
  * 経過表のイベントの帯に出す検査オーダー(放射線・内視鏡・生理)のヘッダ。
  * 検体・細菌・病理は患者が動かないうえ毎日の採血で帯が埋まるので出さない
  * (そちらは検体検査時系列タブに表がある)。
