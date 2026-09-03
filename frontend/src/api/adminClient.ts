@@ -10,6 +10,7 @@
 import type { MealScheduleSettings } from "../fhir/mealOrderHelpers";
 import type { NursingScheduleSettings } from "../fhir/nursingScheduleHelpers";
 import type { VitalThresholdSettings } from "../fhir/vitalHelpers";
+import type { WaterBalanceSettings } from "../fhir/flowsheetWaterBalanceHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 
 export interface ConnectionSettings {
@@ -41,6 +42,8 @@ export interface FacilitySettings {
   meal_schedule: MealScheduleSettings;
   /** 経過表でバイタルを異常値として強調するしきい値(LOINC コード → 下限・上限)。 */
   vital_thresholds: VitalThresholdSettings;
+  /** 経過表の水分出納に数える看護観察(MEDIS の管理番号)。 */
+  water_balance: WaterBalanceSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -48,6 +51,7 @@ export type FacilitySettingsPayload = Partial<{
   nursing_schedule: NursingScheduleSettings;
   meal_schedule: MealScheduleSettings;
   vital_thresholds: VitalThresholdSettings;
+  water_balance: WaterBalanceSettings;
 }>;
 
 export interface ConnectionTestResult {

@@ -1971,15 +1971,21 @@ export function usePatientNursingFlowsheet(
     queryKey: ["ServiceRequest", "search", "flowsheet-nursing", patientId, rangeStart, rangeEnd],
     queryFn: async () => {
       const params = nursingOrderParams(patientId, "active");
-      const [{ data: bundle }, performsByOrderId] = await Promise.all([
+      // 実施は**表示している期間だけ**引く(患者の全期間を引くと、長期入院で
+      // 200 件の上限に当たって古い記録しか返らない)。
+      const setRange = (p: URLSearchParams) => {
+        p.set("patient", `Patient/${patientId}`);
+        p.append("date", `ge${rangeStart}`);
+        p.append("date", `le${rangeEnd}`);
+      };
+      const observationParams = nursingPerformParams();
+      setRange(observationParams);
+
+      const [{ data: bundle }, performsByOrderId, { data: observationBundle }] = await Promise.all([
         searchResource<fhir4.Resource>("ServiceRequest", params),
-        // 実施は**表示している期間だけ**引く(患者の全期間を引くと、長期入院で
-        // 200 件の上限に当たって古い記録しか返らない)。
-        fetchNursingPerforms((p) => {
-          p.set("patient", `Patient/${patientId}`);
-          p.append("date", `ge${rangeStart}`);
-          p.append("date", `le${rangeEnd}`);
-        }),
+        fetchNursingPerforms(setRange),
+        // 水分出納は値(mL)を足すので、整形前の Observation も要る。
+        searchResource<fhir4.Observation>("Observation", observationParams),
       ]);
       const set = nursingOrderSetOf(bundle);
       return {
@@ -1988,6 +1994,7 @@ export function usePatientNursingFlowsheet(
           (sr) => isNursingOrderRunningOn(sr, rangeStart) || isNursingOrderRunningOn(sr, rangeEnd),
         ),
         performsByOrderId,
+        observations: resourcesOfType<fhir4.Observation>(observationBundle, "Observation"),
       };
     },
     enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),

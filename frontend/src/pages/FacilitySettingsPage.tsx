@@ -18,6 +18,12 @@ import {
   VITAL_THRESHOLD_ITEMS,
   type VitalThresholdSettings,
 } from "../fhir/vitalHelpers";
+import {
+  EMPTY_WATER_BALANCE,
+  type WaterBalanceSettings,
+} from "../fhir/flowsheetWaterBalanceHelpers";
+import { useNursingObservationsByManageNos } from "../api/masterQueries";
+import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
 
 // 「どの Organization が自院か」を指定する。本アプリはマルチテナントではなく、
 // 診療科・診察室・スタッフは自院のものしか登録しない。他院は診療情報提供書の
@@ -77,6 +83,29 @@ export function FacilitySettingsPage() {
     });
   }
 
+  // 水分出納に数える看護観察。管理番号だけを保存し、名前はマスタから引く。
+  const [balanceDraft, setBalanceDraft] = useState<WaterBalanceSettings | undefined>(undefined);
+  const savedBalance = settings.data?.water_balance ?? EMPTY_WATER_BALANCE;
+  const balance = balanceDraft ?? savedBalance;
+  // 選択中の項目を選ぶモーダル。開いている側("in" / "out")を持つ。
+  const [pickingSide, setPickingSide] = useState<keyof WaterBalanceSettings | null>(null);
+  const balanceNames = useNursingObservationsByManageNos([...balance.in, ...balance.out]);
+
+  function addBalanceItem(side: keyof WaterBalanceSettings, manageNo: string) {
+    setBalanceDraft((prev) => {
+      const base = prev ?? savedBalance;
+      if (base[side].includes(manageNo)) return base;
+      return { ...base, [side]: [...base[side], manageNo] };
+    });
+  }
+
+  function removeBalanceItem(side: keyof WaterBalanceSettings, manageNo: string) {
+    setBalanceDraft((prev) => {
+      const base = prev ?? savedBalance;
+      return { ...base, [side]: base[side].filter((code) => code !== manageNo) };
+    });
+  }
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid) return;
@@ -85,6 +114,7 @@ export function FacilitySettingsPage() {
       nursing_schedule: schedule,
       meal_schedule: mealSchedule,
       vital_thresholds: thresholds,
+      water_balance: balance,
     });
   }
 
@@ -205,6 +235,38 @@ export function FacilitySettingsPage() {
           </div>
         </details>
 
+        {/* 経過表の水分出納に数える看護観察。同じ名前で単位違いの項目(尿量 mL / g)が
+            あるので管理番号で持つ。集計できるのは mL の項目だけなので候補も mL に絞る。 */}
+        <details className="facility-settings__schedule">
+          <summary>水分出納の対象項目</summary>
+          <div className="facility-settings__schedule-body">
+            {(["in", "out"] as const).map((side) => (
+              <div key={side} className="facility-settings__balance">
+                <span className="facility-settings__balance-label">
+                  {side === "in" ? "IN（摂取）" : "OUT（排泄）"}
+                </span>
+                <ul className="facility-settings__balance-list">
+                  {balance[side].map((manageNo) => (
+                    <li key={manageNo}>
+                      <span>{balanceNames.data?.get(manageNo)?.name ?? manageNo}</span>
+                      <button type="button" onClick={() => removeBalanceItem(side, manageNo)}>
+                        削除
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  className="rp-card__compact-button"
+                  onClick={() => setPickingSide(side)}
+                >
+                  + 項目を追加
+                </button>
+              </div>
+            ))}
+          </div>
+        </details>
+
         <div className="connection-settings-form__actions">
           <button
             type="submit"
@@ -237,6 +299,17 @@ export function FacilitySettingsPage() {
         )}
         <ErrorBanner error={update.error} />
       </form>
+
+      {pickingSide && (
+        <NursingItemSearchModal
+          only="observation"
+          onSelect={(item) => {
+            if (item?.kind === "observation") addBalanceItem(pickingSide, item.manageNo);
+            setPickingSide(null);
+          }}
+          onClose={() => setPickingSide(null)}
+        />
+      )}
     </div>
   );
 }

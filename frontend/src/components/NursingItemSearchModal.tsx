@@ -11,6 +11,11 @@ import { NURSING_OBSERVATION_CATEGORIES, nursingObservationResults } from "./nur
 
 interface Props {
   onSelect: (item: NursingItemRef, display: string) => void;
+  /**
+   * 観察だけを選ばせるとき("observation")。タブと自由記載を出さない
+   * (水分出納の対象項目のように、観察に限る設定から開く)。
+   */
+  only?: Tab;
   onClose: () => void;
 }
 
@@ -18,8 +23,8 @@ type Tab = "act" | "observation";
 
 // 看護指示の用語を MEDIS 看護実践用語標準マスター(看護行為編・看護観察編)から
 // 探して 1 件選ぶ。マスタに無い指示は「自由記載」で戻す(item = null)。
-export function NursingItemSearchModal({ onSelect, onClose }: Props) {
-  const [tab, setTab] = useState<Tab>("act");
+export function NursingItemSearchModal({ onSelect, only, onClose }: Props) {
+  const [tab, setTab] = useState<Tab>(only ?? "act");
   const [nameInput, setNameInput] = useState("");
   const [name, setName] = useState("");
   const [level1, setLevel1] = useState("");
@@ -52,6 +57,7 @@ export function NursingItemSearchModal({ onSelect, onClose }: Props) {
 
   return (
     <Modal title="看護指示の用語を選択" onClose={onClose} className="modal--lab-order-item">
+      {!only && (
       <div className="karte-tabs" role="tablist">
         <button
           type="button"
@@ -74,6 +80,7 @@ export function NursingItemSearchModal({ onSelect, onClose }: Props) {
           看護観察
         </button>
       </div>
+      )}
 
       <form className="patient-search-form" onSubmit={handleSearch}>
         {tab === "act" ? (
@@ -140,9 +147,13 @@ export function NursingItemSearchModal({ onSelect, onClose }: Props) {
         </label>
         <div className="patient-search-form__actions">
           <button type="submit">検索</button>
-          <button type="button" onClick={() => onSelect(null, "")}>
-            自由記載
-          </button>
+          {/* 自由記載はマスタに無い指示のための逃げ道。観察を選ぶ用途(水分出納の
+              対象項目など)では管理番号が要るので出さない。 */}
+          {!only && (
+            <button type="button" onClick={() => onSelect(null, "")}>
+              自由記載
+            </button>
+          )}
         </div>
       </form>
 

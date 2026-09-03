@@ -11,7 +11,13 @@ import {
 } from "../api/queries";
 import { buildInjectionRows } from "../fhir/flowsheetInjectionHelpers";
 import { buildNursingRows } from "../fhir/flowsheetNursingHelpers";
+import {
+  EMPTY_WATER_BALANCE,
+  buildWaterBalance,
+  waterBalanceLabel,
+} from "../fhir/flowsheetWaterBalanceHelpers";
 import { DEFAULT_NURSING_SCHEDULE } from "../fhir/nursingScheduleHelpers";
+import { useMedicineMlFactors } from "../api/masterQueries";
 import { injectionPerformsByOrderId } from "../fhir/injectionPerformHelpers";
 import { injectionTasksByOrderId } from "../fhir/injectionTaskHelpers";
 import { referenceId } from "../fhir/shared";
@@ -285,6 +291,35 @@ export function VitalFlowsheetPanel({
     () => (nursingData ? buildNursingRows(nursingData, days, "act") : []),
     [nursingData, days],
   );
+  /** 日時 → 枠のキー。印を置く位置を決める。 */
+  const slotKeyOf = (at: string) => groupKeyOf(at, Boolean(dayMode));
+
+  // 水分出納。注射の投与量は薬価算定単位なので、mL 換算マスタで直してから足す。
+  const balanceSettings = facility.data?.water_balance ?? EMPTY_WATER_BALANCE;
+  const balanceEnabled = balanceSettings.in.length > 0 || balanceSettings.out.length > 0;
+  const administrations = balanceEnabled ? (injections.data?.administrations ?? []) : [];
+  const mlFactors = useMedicineMlFactors(
+    administrations
+      .map((administration) => administration.medicationCodeableConcept?.coding?.[0]?.code ?? "")
+      .filter(Boolean),
+  );
+  const waterBalance = useMemo(
+    () =>
+      balanceEnabled
+        ? buildWaterBalance({
+            settings: balanceSettings,
+            observations: nursing.data?.observations ?? [],
+            administrations,
+            mlFactors: mlFactors.data ?? new Map(),
+            slotKeyOf,
+          })
+        : null,
+    // slotKeyOf は毎回作り直されるが、依存に入れないと 24 時間表示に切り替えても
+    // 集計の枠が変わらない。dayMode を代わりに見る。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [balanceEnabled, balanceSettings, nursing.data, administrations, mlFactors.data, dayMode],
+  );
+
   /** 印の欄。見出しと、選んだ印を突き合わせる行の集合。 */
   const markSectionRows: Record<MarkSectionKey, FlowsheetMarkRow[]> = useMemo(
     () => ({ injection: injectionRows, exam: examRows, observation: observationRows, act: actRows }),
@@ -482,9 +517,6 @@ export function VitalFlowsheetPanel({
     if (day > rangeEnd) return columns.length * columnWidth;
     return 0;
   };
-
-  /** 日時 → 枠のキー。印を置く位置を決める。 */
-  const slotKeyOf = (at: string) => groupKeyOf(at, Boolean(dayMode));
 
   /** 前後の期間へ。24 時間表示なら 1 日ずつ動かす。 */
   function shiftPeriod(delta: number) {
@@ -776,6 +808,57 @@ export function VitalFlowsheetPanel({
               {/* 注射・検査。薬剤の組・検査の種別ごとに 1 行で、印はその日の列の中央。
                   測定の行とは読むものが違うので下にまとめ、tbody を分けて縞を掛けない。
                   オーダーが無ければ区切りごと出さない。 */}
+              {/* 水分出納。印ではなく枠ごとの合計(mL)なので、測定項目と同じ値の行にする。
+                  施設設定で対象の観察項目を選んでいなければ出さない。 */}
+              {waterBalance && (
+                <tbody className="vital-flowsheet__injection-body">
+                  <tr className="vital-flowsheet__section-row">
+                    <th
+                      className="lab-timeline__item-col vital-flowsheet__section-head"
+                      colSpan={2}
+                      title={
+                        waterBalance.unconvertible > 0
+                          ? `mL に換算できない薬剤が ${waterBalance.unconvertible} 件あり、IN に数えていません`
+                          : undefined
+                      }
+                    >
+                      水分出納{waterBalance.unconvertible > 0 ? " *" : ""}
+                    </th>
+                    <td colSpan={columns.length} />
+                    <td className="vital-flowsheet__filler" />
+                  </tr>
+                  {(
+                    [
+                      { key: "in", label: "IN", unit: "mL", totals: waterBalance.in },
+                      { key: "out", label: "OUT", unit: "mL", totals: waterBalance.out },
+                      { key: "balance", label: "バランス", unit: "mL", totals: waterBalance.balance },
+                    ] as const
+                  ).map((row) => (
+                    <tr key={row.key}>
+                      <td className="lab-timeline__item-col" title={row.label}>
+                        <span className="lab-timeline__item-label">{row.label}</span>
+                      </td>
+                      <td className="lab-timeline__unit-col">{row.unit}</td>
+                      {dayGroups.map((group) => (
+                        <td
+                          key={group.key}
+                          className={`lab-timeline__value${
+                            // バランスは負(出が多い)を異常値と同じ赤で示す。
+                            row.key === "balance" && (row.totals.get(group.key) ?? 0) < 0
+                              ? " lab-timeline__value--high"
+                              : ""
+                          }`}
+                          colSpan={group.count}
+                        >
+                          {waterBalanceLabel(row.totals.get(group.key))}
+                        </td>
+                      ))}
+                      <td className="vital-flowsheet__filler" />
+                    </tr>
+                  ))}
+                </tbody>
+              )}
+
               {(Object.keys(MARK_SECTIONS) as MarkSectionKey[]).map((key) => (
                 <FlowsheetMarkSection
                   key={key}

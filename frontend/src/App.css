@@ -11773,6 +11773,41 @@ button.meal-calendar__cell:hover {
   margin-top: 8px;
 }
 
+/* 水分出納の対象項目。IN / OUT ごとに選んだ観察を並べる。 */
+.facility-settings__balance {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.facility-settings__balance-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.facility-settings__balance-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.facility-settings__balance-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.facility-settings__balance-list button {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
 .facility-settings__times {
   display: inline-flex;
   gap: 8px;

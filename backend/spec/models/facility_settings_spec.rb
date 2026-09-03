@@ -99,6 +99,38 @@ RSpec.describe FacilitySettings do
     end
   end
 
+  describe ".water_balance" do
+    it "returns empty lists when nothing is stored" do
+      expect(described_class.water_balance).to eq(described_class::DEFAULT_WATER_BALANCE)
+    end
+
+    it "stores the chosen manage numbers" do
+      described_class.current.update!(water_balance: { "in" => %w[31000010], "out" => %w[31000021 31000042] })
+
+      expect(described_class.water_balance).to eq("in" => %w[31000010], "out" => %w[31000021 31000042])
+    end
+
+    it "fills the missing side with an empty list" do
+      described_class.current.update!(water_balance: { "out" => %w[31000021] })
+
+      expect(described_class.water_balance).to eq("in" => [], "out" => %w[31000021])
+    end
+
+    it "rejects an unknown key" do
+      settings = described_class.current
+      settings.water_balance = { "both" => %w[31000021] }
+
+      expect(settings).not_to be_valid
+    end
+
+    it "rejects a value that is not a manage number" do
+      settings = described_class.current
+      settings.water_balance = { "in" => %w[尿量] }
+
+      expect(settings).not_to be_valid
+    end
+  end
+
   describe ".self_organization_id" do
     it "returns nil when unset" do
       expect(described_class.self_organization_id).to be_nil

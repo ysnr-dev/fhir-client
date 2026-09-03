@@ -7,6 +7,7 @@
     測定項目(バイタル + 看護観察の値)
     注射(薬剤の組ごとの予定・実施)
     看護観察 / 看護行為(指示ごとの予定・実施)
+    水分出納(枠ごとの IN / OUT / バランス)
     検査(放射線・内視鏡・生理)
 
 を同じ横軸に並べる。POMR 5 要素の 1 つで、カルテ画面の「経過表」タブに出す。
@@ -16,7 +17,8 @@
 実装: `frontend/src/components/VitalFlowsheetPanel.tsx`(表示)、
 `fhir/vitalHelpers.ts`(測定のマトリクス)、`fhir/flowsheetEventHelpers.ts`(イベント・検査・
 病日・印の共通型)、`fhir/flowsheetInjectionHelpers.ts`(注射)、
-`fhir/flowsheetNursingHelpers.ts`(看護観察・看護行為)。
+`fhir/flowsheetNursingHelpers.ts`(看護観察・看護行為)、
+`fhir/flowsheetWaterBalanceHelpers.ts`(水分出納)。
 
 ## 1. 横軸 = 枠 × 測定。期間表示(1 週間〜1 か月)と 24 時間表示
 
@@ -249,7 +251,42 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
 取り方をする。ただし**表示している期間で絞る**(患者の全期間を引くと、長期入院で
 上限 200 件に当たって古い記録しか返らない)。
 
-## 7. 一覧モーダルと詳細への導線
+## 7. 水分出納(In/Out)
+
+枠(日・時)ごとに IN・OUT・バランス(IN − OUT)を合計した**値の行**。印ではないので
+測定項目と同じ作り。設定で対象の観察項目を選んでいなければ欄ごと出さない。
+バランスが負(出が多い)の枠は異常値と同じ赤で示す。
+
+### 7.1 観察項目と In/Out の紐づけ
+
+**施設設定に MEDIS の管理番号を並べて持つ**(`facility_settings.water_balance`、
+`{ "in": [...], "out": [...] }`)。設定画面では看護項目検索モーダルを観察タブに固定して
+選ばせる(`NursingItemSearchModal` の `only="observation"`。管理番号が要るので
+「自由記載」は出さない)。
+
+コードに焼き付けた対応表にしなかった理由:
+
+- **何を数えるかが施設の運用**。導尿と膀胱瘻を分けて数えるか合算するか、ドレーンを
+  どこまで含めるかは施設で違う。
+- **候補が多すぎる**。MEDIS の観察マスタは尿量だけで 29 件、ドレーン排液は 200 件超、
+  出血量 56 件。網羅した固定表は作れない。
+- **同じ名前で単位違いが並ぶ**(尿量 mL / 尿量 g、出血量 mL / g、嘔吐量 なし / mL)。
+  名前では紐づけられないので**管理番号**で持つ。
+
+**集計できるのは mL の項目だけ**(g・回/日・kcal/日は足し合わせられない)。マスタには
+「総輸液量」「総水分摂取量(経管)」のような日計そのものの項目もあり、個別項目と一緒に
+選ぶと二重計上になるが、選ぶのは施設なので「選んだものを足すだけ」と割り切る。
+
+### 7.2 注射(点滴)を IN に数える
+
+注射の実施(`MedicationAdministration.dosage.dose`)は**袋・管・瓶といった薬価算定単位**で
+記録されており mL ではない。投与量換算マスタ(`useMedicineMlFactors`)で mL に直してから
+足す。注射フォームの総投与量と同じ仕組みで、**換算行の無い薬剤(粉末バイアルなど)は
+数えられない**。その件数を数えて、欄の見出しに `*` と注記(ホバー)を出す。
+
+数えるのは**実施記録だけ**で、予定は数えない(実際に入った量が出納なので)。
+
+## 8. 一覧モーダルと詳細への導線
 
 注射・検査の印を選ぶと、**そのまとまり(注射はその日のオーダー、検査はそのオーダー)**の
 予定・実施を一覧で出す(`FlowsheetEventModal` をイベントと共用)。
@@ -275,7 +312,7 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
   記録すると経過表の看護欄がすぐ更新される(`invalidateNursingPerforms` が
   看護欄のクエリも無効化する。キーが `ServiceRequest` 側なので明示的に足してある)。
 
-## 8. ファイル
+## 9. ファイル
 
 | ファイル | 役割 |
 |---|---|
@@ -285,13 +322,12 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
 | `fhir/flowsheetEventHelpers.ts` | イベント・検査の行、病日・術後日数、印の共通型 |
 | `fhir/flowsheetInjectionHelpers.ts` | 注射の行(予定・実施の印) |
 | `fhir/flowsheetNursingHelpers.ts` | 看護観察・看護行為の行(予定・実施の印) |
+| `fhir/flowsheetWaterBalanceHelpers.ts` | 水分出納の集計と対象項目の設定 |
 | `api/queries.ts` | `useVitalFlowsheet` / `usePatientEncounterEvents` / `usePatientSurgeryPerforms` / `usePatientExamOrders` / `usePatientInjectionOrders` / `usePatientNursingFlowsheet` / `useVitalThresholds` |
-| backend | `facility_settings.vital_thresholds`(migration `20260903000000`)とモデル・コントローラ |
+| backend | `facility_settings.vital_thresholds` / `water_balance`(migration `20260903000000` / `20260903120000`)とモデル・コントローラ |
 
-## 9. 未実装・今後
+## 10. 未実装・今後
 
-- **水分出納(In/Out)と日計**: 注射の投与量と看護観察の尿量・飲水量を集計する。
-  どの観察項目を In/Out に数えるかの対応表が要る。
 - **「日 × 定時枠」モード**: 朝・昼・夕・夜の枠で列を固定し、未測定を空セルで出す。
   看護指示の予定(`nursingScheduleHelpers`)から未実施の枠も出せる。
 - **看護指示の詳細への導線**: 看護指示は `detail=` で開ける詳細モーダルを持たないので、

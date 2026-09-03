@@ -122,6 +122,31 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /admin/facility_settings (water_balance)" do
+    it "stores the chosen items without touching the other settings" do
+      FacilitySettings.current.update!(self_organization_fhir_id: "org-self")
+
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { water_balance: { in: %w[31000010], out: %w[31000021] } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)
+      expect(body["self_organization_id"]).to eq("org-self")
+      expect(body["water_balance"]).to eq("in" => %w[31000010], "out" => %w[31000021])
+    end
+
+    it "rejects a value that is not a manage number" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { water_balance: { in: %w[abc] } }, as: :json
+      end
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "with ADMIN_TOKEN configured" do
     it "rejects a request without credentials" do
       ENV["ADMIN_TOKEN"] = "s3cret-admin-passphrase"

@@ -49,11 +49,21 @@ class FacilitySettings < ApplicationRecord
     "9279-1" => { "low" => 10, "high" => 25 }   # 呼吸数
   }.freeze
 
+  # 経過表の水分出納(In/Out)に数える看護観察の項目(MEDIS の管理番号)。
+  # 何を数えるかは施設の運用で違うので既定は空にし、施設設定で選ばせる
+  # (尿量だけで 29 件、ドレーン排液は 200 件超あり、汎用の既定値は作れない)。
+  DEFAULT_WATER_BALANCE = { "in" => [], "out" => [] }.freeze
+
+  WATER_BALANCE_KEYS = %w[in out].freeze
+  # MEDIS の管理番号は 8 桁の数字。
+  MANAGE_NO_PATTERN = /\A\d{8}\z/
+
   TIME_PATTERN = /\A([01]\d|2[0-3]):[0-5]\d\z/
 
   validate :nursing_schedule_shape
   validate :meal_schedule_shape
   validate :vital_thresholds_shape
+  validate :water_balance_shape
 
   # 欠けたキーを既定値で埋めた看護指示の既定時刻。読み出しは常にこちらを使う。
   def nursing_schedule_with_defaults
@@ -82,6 +92,15 @@ class FacilitySettings < ApplicationRecord
     end
   end
 
+  # 欠けたキーを既定値で埋めた水分出納の対象項目。
+  def water_balance_with_defaults
+    stored = water_balance.is_a?(Hash) ? water_balance : {}
+    WATER_BALANCE_KEYS.index_with do |key|
+      value = stored[key]
+      value.is_a?(Array) ? value.map(&:to_s) : []
+    end
+  end
+
   class << self
     # 単一行を遅延生成して返す。
     def current
@@ -104,9 +123,31 @@ class FacilitySettings < ApplicationRecord
     def vital_thresholds
       current.vital_thresholds_with_defaults
     end
+
+    def water_balance
+      current.water_balance_with_defaults
+    end
   end
 
   private
+
+  def water_balance_shape
+    return if water_balance.blank?
+    return errors.add(:water_balance, "は連想配列で指定してください") unless water_balance.is_a?(Hash)
+
+    water_balance.each do |key, codes|
+      unless WATER_BALANCE_KEYS.include?(key)
+        errors.add(:water_balance, "#{key} は in / out のいずれかで指定してください")
+        next
+      end
+      unless codes.is_a?(Array)
+        errors.add(:water_balance, "#{key} は管理番号の配列で指定してください")
+        next
+      end
+      invalid = codes.reject { |code| code.to_s.match?(MANAGE_NO_PATTERN) }
+      errors.add(:water_balance, "#{key} に管理番号でない値があります") if invalid.any?
+    end
+  end
 
   def vital_thresholds_shape
     return if vital_thresholds.blank?
