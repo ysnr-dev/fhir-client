@@ -5,9 +5,10 @@
     イベントの帯(入退院・転棟・外出泊・手術)
     温度板グラフ(体温・血圧・脈拍・呼吸数)
     測定項目(バイタル + 看護観察の値)
+    食事摂取量(朝・昼・夕の主食 / 副食)
+    水分出納(枠ごとの IN / OUT / バランス)
     注射(薬剤の組ごとの予定・実施)
     看護観察 / 看護行為(指示ごとの予定・実施)
-    水分出納(枠ごとの IN / OUT / バランス)
     検査(放射線・内視鏡・生理)
 
 を同じ横軸に並べる。POMR 5 要素の 1 つで、カルテ画面の「経過表」タブに出す。
@@ -18,7 +19,8 @@
 `fhir/vitalHelpers.ts`(測定のマトリクス)、`fhir/flowsheetEventHelpers.ts`(イベント・検査・
 病日・印の共通型)、`fhir/flowsheetInjectionHelpers.ts`(注射)、
 `fhir/flowsheetNursingHelpers.ts`(看護観察・看護行為)、
-`fhir/flowsheetWaterBalanceHelpers.ts`(水分出納)。
+`fhir/flowsheetWaterBalanceHelpers.ts`(水分出納)、
+`fhir/flowsheetMealHelpers.ts`(食事摂取量)。
 
 ## 1. 横軸 = 枠 × 測定。期間表示(1 週間〜1 か月)と 24 時間表示
 
@@ -292,7 +294,57 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
 
 数えるのは**実施記録だけ**で、予定は数えない(実際に入った量が出納なので)。
 
-## 8. 一覧モーダルと詳細への導線
+## 8. 食事摂取量
+
+主食・副食の 2 行で、日の枠の中に**朝・昼・夕**を並べる(24 時間表示では 08/12/18 の枠に
+1 つずつ落ちる)。値は**割**(0〜10)で、押すとその食事の入力を開く。印ではなく値なので
+水分出納と同じ作りにした。
+
+### 8.1 記録は食事オーダーの実施
+
+「摂取量の指示」を別に立てさせない。看護指示のように指示を登録させると、入院ごとに
+主食・副食の観察指示を立てる手間が増えるだけで、**食事は既にオーダーがある**。
+
+| 要素 | 決め |
+|---|---|
+| リソース | 1 食 × 主食/副食 = `Observation` 2 件 |
+| `basedOn` | その日のその食事を出している食事オーダー(`mealOrderAt` で引く) |
+| `category` | `order-type\|meal` |
+| `code` | MEDIS 看護観察マスタの 31003419 食事摂取量（主食）/ 31003420（副食） |
+| `valueQuantity` | `%`(マスタの単位) |
+| `effectiveDateTime` | 食事オーダーと同じ **08/12/18** の時刻 |
+
+**どの食事かは時刻が持つ**(SS-MIX2 の ODS-2 と同じ規約で、食事オーダーの
+`occurrenceDateTime` に合わせてある)。専用の拡張は足していない。24 時間表示でその時間の
+枠に落ちるのも同じ理屈。
+
+同名で単位違いの項目(g・5 段階)もあるが、温度板は割合で読むものなので**％の項目**を採る。
+入力は 0〜10 割の 11 段階で、保存で 10 倍して％にする(8 割 → 80%)。列幅 64px に朝昼夕の
+3 つを並べるので、100 という 3 桁は入らない。押し直しで解除すると記録を消す
+(**0 割は「摂取なし」という記録**なので、未記録とは別)。
+
+### 8.2 枠を出さない食事
+
+- **オーダーが無い日**(入院前・退院後)
+- **食止めの食種**。食止めはオーダーではなく食種の側の情報なので、期間に出ている食種を
+  マスタで引いて `is_fasting` で判定する(`useFastingDietCodes`)
+- **欠食**(その食事だけ出さない)。`meal-skipped-timing` 拡張を `parseMealStaples` で読む
+
+### 8.3 取得
+
+食事オーダーは継続オーダー(開始した食事から終了まで毎日 3 食)で、**前の月から続いている
+オーダーがその日の食事を決めている**ことがある。暦(`useMealOrderMonth`)と同じ 2 段構えで、
+`status=active & occurrence=le{期間の終わり}` で引いてから、期間より前に終わったものを
+クライアントで落とす(終了はローカル拡張なので上流では絞れない)。記録は
+`category=order-type|meal & date=ge/le` の 1 本。
+
+### 8.4 カルテには出さない
+
+食事オーダーのカードに状態(「実施済」など)は出さない。食事は継続オーダーなので、
+1 か月の定食に対する「実施済」が定まらない(看護指示のカードに状態が無いのと同じ理由)。
+摂取量は経過表で読むものと割り切る。
+
+## 9. 一覧モーダルと詳細への導線
 
 注射・検査の印を選ぶと、**そのまとまり(注射はその日のオーダー、検査はそのオーダー)**の
 予定・実施を一覧で出す(`FlowsheetEventModal` をイベントと共用)。
@@ -318,7 +370,7 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
   記録すると経過表の看護欄がすぐ更新される(`invalidateNursingPerforms` が
   看護欄のクエリも無効化する。キーが `ServiceRequest` 側なので明示的に足してある)。
 
-## 9. ファイル
+## 10. ファイル
 
 | ファイル | 役割 |
 |---|---|
@@ -329,10 +381,12 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
 | `fhir/flowsheetInjectionHelpers.ts` | 注射の行(予定・実施の印) |
 | `fhir/flowsheetNursingHelpers.ts` | 看護観察・看護行為の行(予定・実施の印) |
 | `fhir/flowsheetWaterBalanceHelpers.ts` | 水分出納の集計と対象項目の設定 |
-| `api/queries.ts` | `useVitalFlowsheet` / `usePatientEncounterEvents` / `usePatientSurgeryPerforms` / `usePatientExamOrders` / `usePatientInjectionOrders` / `usePatientNursingFlowsheet` / `useVitalThresholds` |
+| `fhir/flowsheetMealHelpers.ts` | 食事摂取量の枠と記録、入力の transaction |
+| `components/MealIntakeModal.tsx` | 食事摂取量の入力(押した 1 食の主食・副食だけ) |
+| `api/queries.ts` | `useVitalFlowsheet` / `usePatientEncounterEvents` / `usePatientSurgeryPerforms` / `usePatientExamOrders` / `usePatientInjectionOrders` / `usePatientNursingFlowsheet` / `usePatientMealIntake` / `useSaveMealIntake` / `useVitalThresholds` |
 | backend | `facility_settings.vital_thresholds` / `water_balance`(migration `20260903000000` / `20260903120000`)とモデル・コントローラ |
 
-## 10. 未実装・今後
+## 11. 未実装・今後
 
 - **「日 × 定時枠」モード**: 朝・昼・夕・夜の枠で列を固定し、未測定を空セルで出す。
   看護指示の予定(`nursingScheduleHelpers`)から未実施の枠も出せる。
@@ -340,7 +394,12 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
   一覧から指示簿タブへ飛ばすか、看護にも詳細モーダルを用意するかの判断が要る。
 - **行の選択・並び替えの保持**: 看護指示が増えると行が長くなる。表示行と順序を
   `karteLayout.ts` と同じ流儀で localStorage に持たせる。
-- **食事摂取量・内服の与薬実施**: どちらも記録する手段が無く、入力側の設計が先。
+- **内服の与薬実施**: 1 回ごとの服薬を表すリソースが無い(処方の進捗 Task は薬剤部の
+  払出の進捗で、内服の `MedicationAdministration` はどこにも作っていない)。予定は用法
+  コードから出せる(5〜9 桁目が就寝/夕/昼/朝/起床のスロット、時刻指定型は 10 桁目以降が
+  時刻)。作るなら注射の実施と同じ骨格(ハブ `Procedure` + 薬剤ごとの
+  `MedicationAdministration`)になるが、Task の「実施済」を「払出済」に読み替えるかなど
+  処方側の状態設計に手が入るので、`docs/prescription-*` 側の設計として起こす。
 - **印刷・書き出し**: 帳票基盤はオーダー単位のみで、患者 × 期間のエンドポイントが無い。
   温度板の PDF は backend の新設が要る。
 - **枠の中を時間比例にする**: いまは枠(日・時)の中は測定の並びで等間隔。24 時間表示を

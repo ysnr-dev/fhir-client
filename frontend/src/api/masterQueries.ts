@@ -3150,6 +3150,24 @@ export function useFastingDiet() {
   return { ...diets, fastingDiet: fastingDietOf(diets.data?.items) };
 }
 
+/**
+ * 食種コードのうち食止めのものだけを集める。経過表が「摂取量の枠を出さない食事」を
+ * 判定するのに使う(食止めは食種の側の情報で、オーダーには焼いていない)。
+ * 期間に出ている食種は数件なので、コードを指定して引く。
+ */
+export function useFastingDietCodes(itemCodes: string[]) {
+  const sorted = [...new Set(itemCodes)].sort();
+  return useQuery({
+    queryKey: [...MEAL_DIETS_KEY, "fasting-codes", sorted.join(",")],
+    queryFn: async () => {
+      const result = await searchMealDiets({ item_code: sorted.join(","), per: 500 });
+      return new Set(result.items.filter((d) => d.is_fasting).map((d) => d.item_code));
+    },
+    enabled: sorted.length > 0,
+    staleTime: Infinity,
+  });
+}
+
 export function useMealDietMutations() {
   const queryClient = useQueryClient();
   const invalidate = () => queryClient.invalidateQueries({ queryKey: MEAL_DIETS_KEY });

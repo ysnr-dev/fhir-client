@@ -3,6 +3,7 @@ import {
   usePatientEncounterEvents,
   usePatientExamOrders,
   usePatientInjectionOrders,
+  usePatientMealIntake,
   usePatientNursingFlowsheet,
   usePatientSurgeryPerforms,
   useFacilitySettings,
@@ -10,6 +11,14 @@ import {
   useVitalThresholds,
 } from "../api/queries";
 import { buildInjectionRows } from "../fhir/flowsheetInjectionHelpers";
+import {
+  buildMealIntakeRows,
+  mealIntakeLabel,
+  mealIntakeSlotLabel,
+  type MealIntakeKind,
+  type MealIntakeSlot,
+} from "../fhir/flowsheetMealHelpers";
+import { mealOrderDietRef } from "../fhir/mealOrderHelpers";
 import { buildNursingRows } from "../fhir/flowsheetNursingHelpers";
 import {
   EMPTY_WATER_BALANCE,
@@ -17,7 +26,7 @@ import {
   waterBalanceLabel,
 } from "../fhir/flowsheetWaterBalanceHelpers";
 import { DEFAULT_NURSING_SCHEDULE } from "../fhir/nursingScheduleHelpers";
-import { useMedicineMlFactors } from "../api/masterQueries";
+import { useFastingDietCodes, useMedicineMlFactors } from "../api/masterQueries";
 import { injectionPerformsByOrderId } from "../fhir/injectionPerformHelpers";
 import { injectionTasksByOrderId } from "../fhir/injectionTaskHelpers";
 import { referenceId } from "../fhir/shared";
@@ -49,6 +58,7 @@ import {
 import { addDays, toDateTimeInputValue, today } from "../lib/dates";
 import { FlowsheetEventModal } from "./FlowsheetEventModal";
 import { InjectionPerformModal } from "./InjectionPerformModal";
+import { MealIntakeModal } from "./MealIntakeModal";
 import { NursingPerformModal } from "./NursingPerformModal";
 import {
   BLOOD_PRESSURE_SERIES,
@@ -209,6 +219,8 @@ export function VitalFlowsheetPanel({
   // 看護の実施入力。**押した指示 1 件**を、押した印の日時で開く。指示簿から開く
   // ラウンドの記録(患者 1 人ぶんをまとめて入れる)とは意図が違うので、絞って渡す。
   const [nursingPerform, setNursingPerform] = useState<{ orderId: string; at: string } | null>(null);
+  // 食事摂取量の入力。押した 1 食ぶん(主食・副食)だけを出す。
+  const [selectedMealSlot, setSelectedMealSlot] = useState<MealIntakeSlot | null>(null);
   // 全画面はビューポート全体ではなく「患者情報の下」から始める。開始位置は
   // カルテのレイアウト(左右ペインの上端)を実測して決める。
   const panelRef = useRef<HTMLDivElement>(null);
@@ -293,6 +305,28 @@ export function VitalFlowsheetPanel({
   );
   /** 日時 → 枠のキー。印を置く位置を決める。 */
   const slotKeyOf = (at: string) => groupKeyOf(at, Boolean(dayMode));
+
+  // 食事摂取量。食止めは食種の側の情報なので、期間に出ている食種をマスタで引いて判定する。
+  const meal = usePatientMealIntake(patientId, rangeStart, rangeEnd);
+  const fastingDietCodes = useFastingDietCodes(
+    (meal.data?.orders ?? []).map((order) => mealOrderDietRef(order)?.code ?? "").filter(Boolean),
+  );
+  // 記録の subject・encounter は、その食事を出しているオーダーからそのまま採る
+  // (看護の実施と同じ。経過表は患者の参照を持たない)。
+  const mealSubject = meal.data?.orders[0]?.subject;
+  const mealEncounter = meal.data?.orders[0]?.encounter;
+  const mealRows = useMemo(
+    () =>
+      meal.data
+        ? buildMealIntakeRows({
+            orders: meal.data.orders,
+            observations: meal.data.observations,
+            days,
+            fastingDietCodes: fastingDietCodes.data ?? new Set<string>(),
+          })
+        : [],
+    [meal.data, days, fastingDietCodes.data],
+  );
 
   // 水分出納。注射の投与量は薬価算定単位なので、mL 換算マスタで直してから足す。
   const balanceSettings = facility.data?.water_balance ?? EMPTY_WATER_BALANCE;
@@ -808,6 +842,49 @@ export function VitalFlowsheetPanel({
               {/* 注射・検査。薬剤の組・検査の種別ごとに 1 行で、印はその日の列の中央。
                   測定の行とは読むものが違うので下にまとめ、tbody を分けて縞を掛けない。
                   オーダーが無ければ区切りごと出さない。 */}
+              {/* 食事摂取量。枠の中に朝・昼・夕を並べる(24 時間表示では 08/12/18 の枠に
+                  1 つずつ落ちる)。値は割で、押すとその食事の入力を開く。オーダーの無い日・
+                  欠食・食止めの食事は枠を出さない。 */}
+              {mealRows[0]?.cells.length ? (
+                <tbody className="vital-flowsheet__injection-body">
+                  <tr className="vital-flowsheet__section-row">
+                    <th className="lab-timeline__item-col vital-flowsheet__section-head" colSpan={2}>
+                      食事
+                    </th>
+                    <td colSpan={columns.length} />
+                    <td className="vital-flowsheet__filler" />
+                  </tr>
+                  {mealRows.map((row) => (
+                    <tr key={row.kind}>
+                      <td className="lab-timeline__item-col" title={row.label}>
+                        <span className="lab-timeline__item-label">{row.label}</span>
+                      </td>
+                      <td className="lab-timeline__unit-col">割</td>
+                      {dayGroups.map((group) => (
+                        <td key={group.key} className="lab-timeline__value" colSpan={group.count}>
+                          <span className="vital-flowsheet__meal-cell">
+                            {row.cells
+                              .filter((cell) => slotKeyOf(cell.slot.at) === group.key)
+                              .map((cell) => (
+                                <button
+                                  key={cell.slot.at}
+                                  type="button"
+                                  className="vital-flowsheet__meal-value"
+                                  title={`${mealIntakeSlotLabel(cell.slot)} ${row.label}`}
+                                  onClick={() => setSelectedMealSlot(cell.slot)}
+                                >
+                                  {mealIntakeLabel(cell.percent) || "・"}
+                                </button>
+                              ))}
+                          </span>
+                        </td>
+                      ))}
+                      <td className="vital-flowsheet__filler" />
+                    </tr>
+                  ))}
+                </tbody>
+              ) : null}
+
               {/* 水分出納。印ではなく枠ごとの合計(mL)なので、測定項目と同じ値の行にする。
                   施設設定で対象の観察項目を選んでいなければ出さない。 */}
               {waterBalance && (
@@ -939,10 +1016,36 @@ export function VitalFlowsheetPanel({
               onClose={() => setNursingPerform(null)}
             />
           )}
+
+          {selectedMealSlot && mealSubject && (
+            <MealIntakeModal
+              slot={selectedMealSlot}
+              recorded={mealRecordedOf(mealRows, selectedMealSlot)}
+              subject={mealSubject}
+              encounter={mealEncounter}
+              onSaved={() => setSelectedMealSlot(null)}
+              onClose={() => setSelectedMealSlot(null)}
+            />
+          )}
         </>
       )}
     </div>
   );
+}
+
+/** 押した食事の既存の記録。項目ごとに値と Observation の id を渡す。 */
+function mealRecordedOf(
+  rows: ReturnType<typeof buildMealIntakeRows>,
+  slot: MealIntakeSlot,
+): Partial<Record<MealIntakeKind, { percent: number; observationId: string }>> {
+  const recorded: Partial<Record<MealIntakeKind, { percent: number; observationId: string }>> = {};
+  for (const row of rows) {
+    const cell = row.cells.find((candidate) => candidate.slot.at === slot.at);
+    if (cell?.percent !== undefined && cell.observationId) {
+      recorded[row.kind] = { percent: cell.percent, observationId: cell.observationId };
+    }
+  }
+  return recorded;
 }
 
 // ---- イベントの帯 ----

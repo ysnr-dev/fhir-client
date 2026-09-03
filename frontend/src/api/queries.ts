@@ -2002,6 +2002,62 @@ export function usePatientNursingFlowsheet(
 }
 
 /**
+ * 経過表の食事摂取量。期間にかかる食事オーダーと、記録の Observation を引く。
+ *
+ * 食事オーダーは継続オーダーで、前の月から続いているものがその日の食事を決めている
+ * ことがあるので、`useMealOrderMonth` と同じ 2 段構えにする(月末までに始まった有効な
+ * オーダーを引き、期間より前に終わったものをクライアントで落とす。終了はローカル拡張
+ * なので上流では絞れない)。
+ */
+export function usePatientMealIntake(
+  patientId: string | undefined,
+  rangeStart: string,
+  rangeEnd: string,
+) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "flowsheet-meal", patientId, rangeStart, rangeEnd],
+    queryFn: async () => {
+      const orderParams = new URLSearchParams();
+      orderParams.set("subject", `Patient/${patientId}`);
+      orderParams.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
+      orderParams.set("status", "active");
+      orderParams.set("occurrence", `le${rangeEnd}`);
+      orderParams.set("_count", "100");
+
+      const observationParams = new URLSearchParams();
+      observationParams.set("patient", `Patient/${patientId}`);
+      observationParams.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
+      observationParams.append("date", `ge${rangeStart}`);
+      observationParams.append("date", `le${rangeEnd}`);
+      observationParams.set("_count", "200");
+
+      const [{ data: orderBundle }, { data: observationBundle }] = await Promise.all([
+        searchResource<fhir4.ServiceRequest>("ServiceRequest", orderParams),
+        searchResource<fhir4.Observation>("Observation", observationParams),
+      ]);
+      return {
+        orders: serviceRequestsOf(orderBundle)
+          .filter(isMealServiceRequest)
+          .filter((sr) => mealOrderEndsOnOrAfter(sr, rangeStart)),
+        observations: resourcesOfType<fhir4.Observation>(observationBundle, "Observation"),
+      };
+    },
+    enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
+  });
+}
+
+/** 食事摂取量の記録(1 食ぶん)。作成・上書き・削除を 1 transaction で送る。 */
+export function useSaveMealIntake() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search", "flowsheet-meal"] });
+    },
+  });
+}
+
+/**
  * 経過表のイベントの帯に出す検査オーダー(放射線・内視鏡・生理)のヘッダ。
  * 検体・細菌・病理は患者が動かないうえ毎日の採血で帯が埋まるので出さない
  * (そちらは検体検査時系列タブに表がある)。

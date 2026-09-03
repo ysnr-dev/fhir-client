@@ -7888,6 +7888,30 @@ body.page-wide .app__main {
   max-width: calc(var(--vital-flowsheet-item-w) + var(--vital-flowsheet-unit-w));
 }
 
+/* 食事摂取量。1 日の枠に朝・昼・夕の 3 つが並ぶので、等間隔に置いて詰める
+   (24 時間表示では枠が 1 時間なので 1 つだけ入る)。 */
+.vital-flowsheet__meal-cell {
+  display: flex;
+  justify-content: space-around;
+  gap: 1px;
+}
+
+.vital-flowsheet__meal-value {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* 未記録の枠は「・」だけなので、押せることが分かるよう控えめな色にする。 */
+.vital-flowsheet__meal-value:hover,
+.vital-flowsheet__meal-value:focus-visible {
+  color: var(--text-h);
+  text-decoration: underline;
+}
+
 .vital-flowsheet__table .vital-flowsheet__section-row td {
   border-top: 1px solid var(--border);
 }
@@ -11602,6 +11626,62 @@ button.meal-calendar__cell:hover {
 .nursing-worklist__pending {
   margin-left: 16px;
   color: var(--accent);
+}
+
+/* 食事摂取量の入力(MealIntakeModal)。0〜10 割を横に並べたボタンで選ぶ。 */
+.meal-intake {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.meal-intake > label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 項目名の幅を揃えて、主食・副食のボタンの先頭を縦に並べる。 */
+.meal-intake__label {
+  flex: 0 0 4em;
+}
+
+.meal-intake__steps {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* button の既定が inline-flex(flex-start)なので、数字を中央に置くには指定が要る。 */
+.meal-intake__step {
+  justify-content: center;
+  min-width: 28px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.meal-intake__step--on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.meal-intake__unit {
+  margin-left: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 入力欄の見た目は他のフォーム(処方など)と揃える。 */
+.meal-intake select {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
 }
 
 /* 実施入力(NursingPerformModal)。指示を縦に並べ、値・チェックをまとめて入れる表。 */
