@@ -121,18 +121,22 @@ export function formatKarteDetail(target: KarteDetailTarget): string {
 //
 // 経過表は「どの週を見ているか」が読む位置そのものなので、他タブの view(開いている
 // もの の id)と同じ枠に載せる。リロードで今日に戻らず、特定の週をリンクで共有できる。
-// 形は「YYYY-MM-DD」、全画面なら「YYYY-MM-DD!」。入力途中の状態ではないので載せてよい。
+// 形は「YYYY-MM-DD」、24 時間表示なら「YYYY-MM-DD/YYYY-MM-DD」(週の基準日 / 見ている日)、
+// 全画面なら末尾に「!」。入力途中の状態ではないので載せてよい。**週の基準日を残す**のは、
+// 24 時間表示から戻ったときに元の週へ帰るため(見ていた日で週を作り直すとずれる)。
 
 export interface FlowsheetView {
-  /** 基準日(表の右端)。 */
+  /** 1 週間表示の基準日(表の右端)。24 時間表示のときも、戻る先として保つ。 */
   baseDate: string;
+  /** 24 時間表示している日。無ければ 1 週間表示。 */
+  day?: string;
   fullscreen?: boolean;
 }
 
 export function parseFlowsheetView(value: string | undefined): Partial<FlowsheetView> {
-  const match = /^(\d{4}-\d{2}-\d{2})(!)?$/.exec(value ?? "");
+  const match = /^(\d{4}-\d{2}-\d{2})(?:\/(\d{4}-\d{2}-\d{2}))?(!)?$/.exec(value ?? "");
   if (!match) return {};
-  return { baseDate: match[1], fullscreen: Boolean(match[2]) };
+  return { baseDate: match[1], day: match[2], fullscreen: Boolean(match[3]) };
 }
 
 /**
@@ -140,8 +144,8 @@ export function parseFlowsheetView(value: string | undefined): Partial<Flowsheet
  * (URL に既定値を残さない。他タブの「何も開いていない = view 無し」と揃える)。
  */
 export function formatFlowsheetView(view: FlowsheetView, today: string): string | null {
-  if (view.baseDate === today && !view.fullscreen) return null;
-  return `${view.baseDate}${view.fullscreen ? "!" : ""}`;
+  if (view.baseDate === today && !view.day && !view.fullscreen) return null;
+  return `${view.baseDate}${view.day ? `/${view.day}` : ""}${view.fullscreen ? "!" : ""}`;
 }
 
 // ---- 種別での絞り込み ----

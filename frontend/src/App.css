@@ -7727,6 +7727,25 @@ body.page-wide .app__main {
   text-decoration-style: solid;
 }
 
+/* 日付の見出し。押すとその日の 24 時間表示に切り替わる(24 時間表示では最上段の
+   日付を押して戻る)。見出しの文字はそのままに、押せることだけを示す。 */
+.vital-flowsheet__day-toggle {
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.vital-flowsheet__day-toggle:hover,
+.vital-flowsheet__day-toggle:focus-visible {
+  color: var(--accent);
+  text-decoration-style: solid;
+}
+
 /* 曜日の色。土曜は青、日曜は赤(暦の慣例)。基準日(右端)は下線で示す。 */
 .vital-flowsheet__table th.vital-flowsheet__date-col--saturday {
   color: var(--lab-low);

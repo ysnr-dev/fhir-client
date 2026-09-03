@@ -64,26 +64,50 @@ import { ErrorBanner } from "./ErrorBanner";
 // 置く(1 日の中の位置は測定の並びで決まり時間に比例しないため。時刻は title と
 // 一覧モーダルで見せる)。
 
-/** 表に出す日数。基準日を含む。 */
+/** 1 週間表示の日数。基準日を含む。 */
 const WEEK_DAYS = 7;
-/** 列幅の下限(px)。これより狭くなる週は横に送る。 */
+/** 24 時間表示の枠数。 */
+const DAY_HOURS = 24;
+/** 列幅の下限(px)。これより狭くなるときは横に送る。24 時間表示は見出しが 2 桁なので詰める。 */
 const MIN_COLUMN_WIDTH = 64;
+const MIN_HOUR_COLUMN_WIDTH = 34;
 /** 項目列 + 単位列の幅(px)。CSS の --vital-flowsheet-item-w / -unit-w と一致させること。 */
 const LABEL_COLUMNS_WIDTH = 180;
 
-/** 表の 1 列。測定があればその日時、無い日は日付だけの空き列。 */
+/**
+ * 表の 1 列。測定があればその日時、無い枠は空き列。
+ *
+ * 1 週間表示では「1 日 = 枠、その中を測定ごとに分ける」、24 時間表示では
+ * 「1 時間 = 枠、その中を測定ごとに分ける」。枠の単位が違うだけで構造は同じ。
+ */
 interface DayColumn {
   key: string;
-  day: string;
+  /** 枠のキー(週: YYYY-MM-DD / 日: YYYY-MM-DDTHH)。 */
+  group: string;
   at?: string;
 }
 
-/** 同じ日の列のまとまり。 */
-interface DayGroup {
+/** 枠(1 週間表示なら 1 日、24 時間表示なら 1 時間)。 */
+interface ColumnGroup {
+  key: string;
+  /** 見出しに出す文字(週: MM/DD(曜) / 日: HH)。 */
+  label: string;
+  /** その枠が属する日。病日・曜日の色に使う。 */
   day: string;
+  /** 曜日(0=日)。1 週間表示だけ。 */
+  weekday?: number;
   /** columns の中での先頭の位置。 */
   start: number;
   count: number;
+}
+
+/** 日時 → 枠のキー。時刻を持たない値(検査オーダーなど)は日のキーのまま。 */
+function groupKeyOf(at: string, dayMode: boolean): string {
+  const day = localDateOf(at);
+  if (!dayMode || /^\d{4}-\d{2}-\d{2}$/.test(at)) return day;
+  const time = new Date(at);
+  if (Number.isNaN(time.getTime())) return day;
+  return `${day}T${String(time.getHours()).padStart(2, "0")}`;
 }
 
 export function VitalFlowsheetPanel({
@@ -106,7 +130,13 @@ export function VitalFlowsheetPanel({
   // 無い(タブの外から使う)ときだけ内部の状態で持つ。
   const parsedView = parseFlowsheetView(view);
   const [localView, setLocalView] = useState<FlowsheetView>(() => ({ baseDate: today() }));
-  const current = onViewChange ? { baseDate: parsedView.baseDate ?? today(), fullscreen: parsedView.fullscreen } : localView;
+  const current: FlowsheetView = onViewChange
+    ? {
+        baseDate: parsedView.baseDate ?? today(),
+        day: parsedView.day,
+        fullscreen: parsedView.fullscreen,
+      }
+    : localView;
   const baseDate = current.baseDate;
   const fullscreen = Boolean(current.fullscreen);
 
@@ -123,11 +153,16 @@ export function VitalFlowsheetPanel({
     [onViewChange],
   );
 
-  const setBaseDate = (date: string) => updateView({ ...viewRef.current, baseDate: date });
+  const setBaseDate = (date: string) =>
+    // 基準日を変えたら 24 時間表示は解く(見ていた日は新しい週に無いかもしれない)。
+    updateView({ ...viewRef.current, baseDate: date, day: undefined });
   const setFullscreen = useCallback(
     (on: boolean) => updateView({ ...viewRef.current, fullscreen: on }),
     [updateView],
   );
+  /** 日付の見出しを押したときの切り替え。同じ日をもう一度押せば 1 週間表示に戻る。 */
+  const toggleDay = (day: string) =>
+    updateView({ ...viewRef.current, day: viewRef.current.day === day ? undefined : day });
   // 帯で選んだ日。選ぶとその日のイベント一覧をモーダルで出す。
   const [selectedEventDay, setSelectedEventDay] = useState<string | null>(null);
   // 注射・検査の行で選んだ印。一覧は同じまとまり(その日のオーダー)ぶんを出し、
@@ -146,11 +181,13 @@ export function VitalFlowsheetPanel({
   const [fullscreenTop, setFullscreenTop] = useState(0);
   const [wrapWidth, setWrapWidth] = useState(0);
 
-  const rangeStart = addDays(baseDate, -(WEEK_DAYS - 1));
-  const rangeEnd = baseDate;
+  // 24 時間表示ではその日だけを引く。1 週間表示は基準日までの 7 日。
+  const dayMode = current.day;
+  const rangeStart = dayMode ?? addDays(baseDate, -(WEEK_DAYS - 1));
+  const rangeEnd = dayMode ?? baseDate;
   const days = useMemo(
-    () => Array.from({ length: WEEK_DAYS }, (_, i) => addDays(rangeStart, i)),
-    [rangeStart],
+    () => (dayMode ? [dayMode] : Array.from({ length: WEEK_DAYS }, (_, i) => addDays(rangeStart, i))),
+    [dayMode, rangeStart],
   );
 
   const { data: observations, isLoading, error } = useVitalFlowsheet(patientId, rangeStart, rangeEnd);
@@ -161,19 +198,30 @@ export function VitalFlowsheetPanel({
     [observations, thresholds],
   );
 
-  // 日ごとの列。測定があればその日時ごと、無ければ空き列を 1 つ。
+  // 枠ごとの列。測定があればその日時ごと、無ければ空き列を 1 つ。
   const { columns, dayGroups } = useMemo(() => {
     const columns: DayColumn[] = [];
-    const dayGroups: DayGroup[] = [];
-    for (const day of days) {
-      const instants = flowsheet.columns.filter((at) => localDateOf(at) === day);
+    const dayGroups: ColumnGroup[] = [];
+    // 枠の一覧。1 週間表示は 7 日、24 時間表示はその日の 24 時間。
+    const slots = dayMode
+      ? Array.from({ length: DAY_HOURS }, (_, hour) => {
+          const label = String(hour).padStart(2, "0");
+          return { key: `${dayMode}T${label}`, label, day: dayMode, weekday: undefined };
+        })
+      : days.map((day) => {
+          const { label, weekday } = flowsheetDayLabel(day);
+          return { key: day, label, day, weekday };
+        });
+
+    for (const slot of slots) {
+      const instants = flowsheet.columns.filter((at) => groupKeyOf(at, Boolean(dayMode)) === slot.key);
       const start = columns.length;
-      if (instants.length === 0) columns.push({ key: `day:${day}`, day });
-      else for (const at of instants) columns.push({ key: at, day, at });
-      dayGroups.push({ day, start, count: Math.max(1, instants.length) });
+      if (instants.length === 0) columns.push({ key: `slot:${slot.key}`, group: slot.key });
+      else for (const at of instants) columns.push({ key: at, group: slot.key, at });
+      dayGroups.push({ ...slot, start, count: Math.max(1, instants.length) });
     }
     return { columns, dayGroups };
-  }, [days, flowsheet.columns]);
+  }, [dayMode, days, flowsheet.columns]);
 
   const encounters = usePatientEncounterEvents(patientId, rangeStart, rangeEnd);
   const surgeries = usePatientSurgeryPerforms(patientId);
@@ -294,7 +342,7 @@ export function VitalFlowsheetPanel({
   }, [fullscreen, isLoading]);
 
   const columnWidth = Math.max(
-    MIN_COLUMN_WIDTH,
+    dayMode ? MIN_HOUR_COLUMN_WIDTH : MIN_COLUMN_WIDTH,
     Math.floor((wrapWidth - LABEL_COLUMNS_WIDTH) / Math.max(1, columns.length)),
   );
 
@@ -303,17 +351,18 @@ export function VitalFlowsheetPanel({
     [flowsheet, observations, thresholds],
   );
 
-  // 年の見出し。連続する同じ年の日をまとめる。
-  const yearGroups = useMemo(() => {
-    const groups: { year: string; count: number }[] = [];
+  // 最上段の見出し。1 週間表示は年(連続する同じ年をまとめる)、24 時間表示は日付。
+  const topGroups = useMemo(() => {
+    const groups: { label: string; count: number }[] = [];
     for (const group of dayGroups) {
-      const { year } = flowsheetDayLabel(group.day);
+      const { year, label } = flowsheetDayLabel(group.day);
+      const text = dayMode ? `${year}年 ${label}` : `${year}年`;
       const last = groups[groups.length - 1];
-      if (last && last.year === year) last.count += group.count;
-      else groups.push({ year, count: group.count });
+      if (last && last.label === text) last.count += group.count;
+      else groups.push({ label: text, count: group.count });
     }
     return groups;
-  }, [dayGroups]);
+  }, [dayMode, dayGroups]);
 
   /**
    * 日の区切り x(px)。注射・検査の行は 1 セルを SVG で描くので表の縦罫線が入らない。
@@ -324,19 +373,47 @@ export function VitalFlowsheetPanel({
     [dayGroups, columnWidth],
   );
 
-  /** 日の列のまとまりの幅(px)。同じ日に重なる印をどこまで広げてよいかに使う。 */
-  const dayWidth = (day: string): number => {
-    const group = dayGroups.find((candidate) => candidate.day === day);
+  /**
+   * 病日・術後日数は日の単位なので、日ごとの列数をまとめる
+   * (24 時間表示では 1 日 = 全列)。
+   */
+  const dayColSpans = useMemo(() => {
+    const spans: { day: string; count: number }[] = [];
+    for (const group of dayGroups) {
+      const last = spans[spans.length - 1];
+      if (last && last.day === group.day) last.count += group.count;
+      else spans.push({ day: group.day, count: group.count });
+    }
+    return spans;
+  }, [dayGroups]);
+
+  /** イベントの帯・グラフに出す枠。範囲内のものだけ。 */
+  const shownEventGroups = eventGroups.filter(
+    (group) => group.day >= rangeStart && group.day <= rangeEnd,
+  );
+
+  /** 枠の幅(px)。同じ枠に重なる印をどこまで広げてよいかに使う。 */
+  const slotWidth = (key: string): number => {
+    const group = dayGroups.find((candidate) => candidate.key === key);
     return (group?.count ?? 1) * columnWidth;
   };
 
-  /** 日の列のまとまりの中央 x(px)。範囲外の日は端に寄せる。 */
-  const dayCenterX = (day: string): number => {
+  /**
+   * 枠の中央 x(px)。範囲外は端に寄せる。24 時間表示で時刻を持たない値
+   * (検査オーダーなど)は枠が決まらないので、その日の真ん中に置く。
+   */
+  const slotCenterX = (key: string): number => {
+    const group = dayGroups.find((candidate) => candidate.key === key);
+    if (group) return (group.start + group.count / 2) * columnWidth;
+    const day = key.slice(0, 10);
+    if (dayMode) return day === dayMode ? (columns.length * columnWidth) / 2 : 0;
     if (day < rangeStart) return 0;
     if (day > rangeEnd) return columns.length * columnWidth;
-    const group = dayGroups.find((candidate) => candidate.day === day);
-    return group ? (group.start + group.count / 2) * columnWidth : 0;
+    return 0;
   };
+
+  /** 日時 → 枠のキー。印を置く位置を決める。 */
+  const slotKeyOf = (at: string) => groupKeyOf(at, Boolean(dayMode));
 
   function shiftWeek(delta: number) {
     setBaseDate(addDays(baseDate, delta * WEEK_DAYS));
@@ -413,32 +490,54 @@ export function VitalFlowsheetPanel({
                   <th className="lab-timeline__unit-col" rowSpan={3}>
                     単位
                   </th>
-                  {yearGroups.map((group, index) => (
+                  {topGroups.map((group, index) => (
                     <th key={index} className="lab-timeline__year-col" colSpan={group.count}>
-                      {group.year}年
+                      {dayMode ? (
+                        <button
+                          type="button"
+                          className="vital-flowsheet__day-toggle"
+                          title="1 週間表示に戻る"
+                          onClick={() => toggleDay(dayMode)}
+                        >
+                          {group.label}
+                        </button>
+                      ) : (
+                        group.label
+                      )}
                     </th>
                   ))}
                   <th className="vital-flowsheet__filler" rowSpan={headerRowSpan} />
                 </tr>
                 <tr>
                   {dayGroups.map((group) => {
-                    const { label, weekday } = flowsheetDayLabel(group.day);
                     const weekendClass =
-                      weekday === 0
+                      group.weekday === 0
                         ? " vital-flowsheet__date-col--sunday"
-                        : weekday === 6
+                        : group.weekday === 6
                           ? " vital-flowsheet__date-col--saturday"
                           : "";
                     return (
                       <th
-                        key={group.day}
+                        key={group.key}
                         className={`lab-timeline__date-col vital-flowsheet__date-col${weekendClass}${
-                          group.day === baseDate ? " vital-flowsheet__date-col--base" : ""
+                          !dayMode && group.day === baseDate ? " vital-flowsheet__date-col--base" : ""
                         }`}
                         colSpan={group.count}
-                        title={group.day}
+                        title={dayMode ? `${group.day} ${group.label}時` : group.day}
                       >
-                        {label}
+                        {/* 1 週間表示では日付を押すとその日の 24 時間表示に切り替わる。 */}
+                        {dayMode ? (
+                          group.label
+                        ) : (
+                          <button
+                            type="button"
+                            className="vital-flowsheet__day-toggle"
+                            title={`${group.label} の 24 時間表示に切り替える`}
+                            onClick={() => toggleDay(group.day)}
+                          >
+                            {group.label}
+                          </button>
+                        )}
                       </th>
                     );
                   })}
@@ -474,11 +573,11 @@ export function VitalFlowsheetPanel({
                   <tr>
                     <th className="lab-timeline__item-col vital-flowsheet__day-head">病日</th>
                     <th className="lab-timeline__unit-col" />
-                    {dayGroups.map((group, index) => (
+                    {dayColSpans.map((span, index) => (
                       <th
-                        key={group.day}
+                        key={span.day}
                         className="vital-flowsheet__day-col"
-                        colSpan={group.count}
+                        colSpan={span.count}
                         title="入院からの日数"
                       >
                         {hospitalDayLabel(hospitalDays[index])}
@@ -490,11 +589,11 @@ export function VitalFlowsheetPanel({
                   <tr>
                     <th className="lab-timeline__item-col vital-flowsheet__day-head">術後</th>
                     <th className="lab-timeline__unit-col" />
-                    {dayGroups.map((group, index) => (
+                    {dayColSpans.map((span, index) => (
                       <th
-                        key={group.day}
+                        key={span.day}
                         className="vital-flowsheet__day-col"
-                        colSpan={group.count}
+                        colSpan={span.count}
                         title="手術からの日数"
                       >
                         {postOpDayLabel(postOpDays[index])}
@@ -508,7 +607,7 @@ export function VitalFlowsheetPanel({
                   1 行おきの濃淡(tbody tr:nth-child(even))が測定の行だけに当たり、
                   帯の有無で縞の向きが入れ替わらない。 */}
               <tbody className="vital-flowsheet__chart-body">
-                {eventGroups.some((group) => group.day >= rangeStart && group.day <= rangeEnd) && (
+                {shownEventGroups.length > 0 && (
                   <tr className="vital-flowsheet__event-row">
                     <th className="lab-timeline__item-col vital-flowsheet__event-head" colSpan={2}>
                       イベント
@@ -516,10 +615,9 @@ export function VitalFlowsheetPanel({
                     <td className="vital-flowsheet__event-cell" colSpan={columns.length}>
                       <FlowsheetEventBand
                         width={columns.length * columnWidth}
-                        groups={eventGroups.filter(
-                          (group) => group.day >= rangeStart && group.day <= rangeEnd,
-                        )}
-                        xOf={dayCenterX}
+                        groups={shownEventGroups}
+                        xOf={slotCenterX}
+                        slotKeyOf={slotKeyOf}
                         selectedDay={selectedEventDay}
                         onSelect={setSelectedEventDay}
                       />
@@ -536,9 +634,9 @@ export function VitalFlowsheetPanel({
                       columns={columns}
                       columnWidth={columnWidth}
                       series={chartSeries}
-                      eventXs={eventGroups
-                        .filter((group) => group.day >= rangeStart && group.day <= rangeEnd)
-                        .map((group) => dayCenterX(group.day))}
+                      eventXs={shownEventGroups.map((group) =>
+                        slotCenterX(slotKeyOf(group.events[0]?.at ?? group.day)),
+                      )}
                     />
                   </td>
                   <td className="vital-flowsheet__filler" />
@@ -590,8 +688,9 @@ export function VitalFlowsheetPanel({
                 columnCount={columns.length}
                 width={columns.length * columnWidth}
                 dayLineXs={dayLineXs}
-                xOf={dayCenterX}
-                dayWidthOf={dayWidth}
+                xOf={slotCenterX}
+                slotKeyOf={slotKeyOf}
+                slotWidthOf={slotWidth}
                 selectedKey={selectedMark?.rows === "injection" ? selectedMark.key : null}
                 onSelect={(mark) =>
                   setSelectedMark({ rows: "injection", groupId: mark.groupId, key: markKey(mark) })
@@ -603,8 +702,9 @@ export function VitalFlowsheetPanel({
                 columnCount={columns.length}
                 width={columns.length * columnWidth}
                 dayLineXs={dayLineXs}
-                xOf={dayCenterX}
-                dayWidthOf={dayWidth}
+                xOf={slotCenterX}
+                slotKeyOf={slotKeyOf}
+                slotWidthOf={slotWidth}
                 selectedKey={selectedMark?.rows === "exam" ? selectedMark.key : null}
                 onSelect={(mark) =>
                   setSelectedMark({ rows: "exam", groupId: mark.groupId, key: markKey(mark) })
@@ -689,12 +789,14 @@ function FlowsheetEventBand({
   width,
   groups,
   xOf,
+  slotKeyOf,
   selectedDay,
   onSelect,
 }: {
   width: number;
   groups: FlowsheetEventGroup[];
-  xOf: (day: string) => number;
+  xOf: (slotKey: string) => number;
+  slotKeyOf: (at: string) => string;
   selectedDay: string | null;
   onSelect: (day: string) => void;
 }) {
@@ -711,7 +813,8 @@ function FlowsheetEventBand({
       aria-label="入退院・手術のイベント"
     >
       {groups.map((group) => {
-        const x = xOf(group.day);
+        // 24 時間表示では、その日のイベントを最初の 1 件の時刻の枠に置く。
+        const x = xOf(slotKeyOf(group.events[0]?.at ?? group.day));
         // 4 件以上あるときは 2 行だけ出し、残りを最後の行にまとめる。
         const overflow = group.labels.length > EVENT_LABEL_ROWS;
         const shown = overflow ? group.labels.slice(0, EVENT_LABEL_ROWS - 1) : group.labels;
@@ -793,7 +896,8 @@ function FlowsheetMarkSection({
   width,
   dayLineXs,
   xOf,
-  dayWidthOf,
+  slotKeyOf,
+  slotWidthOf,
   selectedKey,
   onSelect,
 }: {
@@ -803,8 +907,9 @@ function FlowsheetMarkSection({
   width: number;
   /** 日の区切りに引く縦線の x。 */
   dayLineXs: number[];
-  xOf: (day: string) => number;
-  dayWidthOf: (day: string) => number;
+  xOf: (slotKey: string) => number;
+  slotKeyOf: (at: string) => string;
+  slotWidthOf: (slotKey: string) => number;
   /** 押した印。色を付ける 1 件を選ぶ。 */
   selectedKey: string | null;
   onSelect: (mark: FlowsheetMark) => void;
@@ -834,7 +939,8 @@ function FlowsheetMarkSection({
               marks={row.marks}
               dayLineXs={dayLineXs}
               xOf={xOf}
-              dayWidthOf={dayWidthOf}
+              slotKeyOf={slotKeyOf}
+              slotWidthOf={slotWidthOf}
               selectedKey={selectedKey}
               onSelect={onSelect}
             />
@@ -853,19 +959,21 @@ function FlowsheetMarkSection({
  */
 function placeMarks(
   marks: FlowsheetMark[],
-  xOf: (day: string) => number,
-  dayWidthOf: (day: string) => number,
+  xOf: (slotKey: string) => number,
+  slotKeyOf: (at: string) => string,
+  slotWidthOf: (slotKey: string) => number,
 ): { mark: FlowsheetMark; x: number; endX?: number }[] {
-  // バーを描くのは**日をまたぐ**ときだけ。横軸は 1 日単位なので、同じ日に収まる
+  // バーを描くのは**枠をまたぐ**ときだけ。1 週間表示の枠は 1 日なので、同じ日に収まる
   // 点滴の長さは描き分けられず、短いバーを出すと隣の印に重なって鎖のように見える
-  // (同じ日の開始〜終了は title と一覧モーダルで読む)。
+  // (同じ枠の開始〜終了は title と一覧モーダルで読む)。24 時間表示の枠は 1 時間なので、
+  // 同じ日の点滴でも開始〜終了がバーになる。
   const placed = marks.map((mark) => {
-    const day = localDateOf(mark.at);
-    const endDay = mark.end ? localDateOf(mark.end) : "";
+    const slot = slotKeyOf(mark.at);
+    const endSlot = mark.end ? slotKeyOf(mark.end) : "";
     return {
       mark,
-      x: xOf(day),
-      endX: endDay && endDay !== day ? xOf(endDay) : undefined,
+      x: xOf(slot),
+      endX: endSlot && endSlot !== slot ? xOf(endSlot) : undefined,
     };
   });
 
@@ -879,8 +987,8 @@ function placeMarks(
     if (list.length < 2) continue;
     // 時刻順に並べて左から置く(左が古い)。
     list.sort((a, b) => a.mark.at.localeCompare(b.mark.at));
-    const dayWidth = dayWidthOf(localDateOf(list[0].mark.at));
-    const gap = Math.max(MARK_MIN_GAP, Math.min(MARK_GAP, dayWidth / list.length));
+    const slotWidth = slotWidthOf(slotKeyOf(list[0].mark.at));
+    const gap = Math.max(MARK_MIN_GAP, Math.min(MARK_GAP, slotWidth / list.length));
     list.forEach((item, index) => {
       const shift = (index - (list.length - 1) / 2) * gap;
       item.x += shift;
@@ -896,20 +1004,22 @@ function FlowsheetMarkRowSvg({
   marks,
   dayLineXs,
   xOf,
-  dayWidthOf,
+  slotKeyOf,
+  slotWidthOf,
   selectedKey,
   onSelect,
 }: {
   width: number;
   marks: FlowsheetMark[];
   dayLineXs: number[];
-  xOf: (day: string) => number;
-  dayWidthOf: (day: string) => number;
+  xOf: (slotKey: string) => number;
+  slotKeyOf: (at: string) => string;
+  slotWidthOf: (slotKey: string) => number;
   selectedKey: string | null;
   onSelect: (mark: FlowsheetMark) => void;
 }) {
   const y = MARK_ROW_HEIGHT / 2;
-  const placed = placeMarks(marks, xOf, dayWidthOf);
+  const placed = placeMarks(marks, xOf, slotKeyOf, slotWidthOf);
 
   return (
     <svg
