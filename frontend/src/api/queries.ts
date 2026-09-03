@@ -8092,9 +8092,12 @@ export function useNursingPerformsOn(date: string, patientIds: string[]) {
 }
 
 function invalidateNursingPerforms(queryClient: QueryClient) {
-  // 経過表(vital-flowsheet)・実施履歴・本日列はどれも Observation の検索に乗っている。
+  // 経過表のバイタル・実施履歴・本日列はどれも Observation の検索に乗っている。
   queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
   queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
+  // 経過表の看護欄は指示と実施をまとめて 1 つのクエリにしてあり、キーが
+  // ServiceRequest 側なので上の 2 つでは無効化されない。
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search", "flowsheet-nursing"] });
 }
 
 /** 実施登録。Observation / Procedure を POST するだけで Task は動かさない。 */

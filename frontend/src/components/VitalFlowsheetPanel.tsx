@@ -40,9 +40,10 @@ import {
   parseFlowsheetView,
   type FlowsheetView,
 } from "../karteUrl";
-import { addDays, today } from "../lib/dates";
+import { addDays, toDateTimeInputValue, today } from "../lib/dates";
 import { FlowsheetEventModal } from "./FlowsheetEventModal";
 import { InjectionPerformModal } from "./InjectionPerformModal";
+import { NursingPerformModal } from "./NursingPerformModal";
 import {
   BLOOD_PRESSURE_SERIES,
   bloodPressureNumbers,
@@ -199,6 +200,9 @@ export function VitalFlowsheetPanel({
   } | null>(null);
   // 注射の実施入力を開いているオーダー。一覧モーダルから開く。
   const [performSrId, setPerformSrId] = useState<string | null>(null);
+  // 看護の実施入力。**押した指示 1 件**を、押した印の日時で開く。指示簿から開く
+  // ラウンドの記録(患者 1 人ぶんをまとめて入れる)とは意図が違うので、絞って渡す。
+  const [nursingPerform, setNursingPerform] = useState<{ orderId: string; at: string } | null>(null);
   // 全画面はビューポート全体ではなく「患者情報の下」から始める。開始位置は
   // カルテのレイアウト(左右ペインの上端)を実測して決める。
   const panelRef = useRef<HTMLDivElement>(null);
@@ -302,14 +306,25 @@ export function VitalFlowsheetPanel({
     // 中止した注射は実施入力を出さない(印は cancelled になっている)。
     const canPerform =
       selectedMark.rows === "injection" && !events.some((event) => event.label === "中止");
+    // 看護は指示をまたいで 1 回で記録するので、押した印の日時を既定にして開く。
+    const nursingAt =
+      selectedMark.rows === "observation" || selectedMark.rows === "act"
+        ? (selected?.at ?? events[0]?.at ?? "")
+        : "";
     return {
       events,
       highlightIndex,
       title: `${heading}（${when}）`,
       canPerform,
       srId: selectedMark.groupId,
+      nursingAt,
     };
   }, [selectedMark, markSectionRows]);
+
+  /** 看護の実施入力で開く指示。押した印の指示 1 件。 */
+  const nursingPerformOrder = nursingPerform
+    ? nursing.data?.orders.find((sr) => sr.id === nursingPerform.orderId)
+    : undefined;
 
   // 実施入力に渡す一式。注射の取得結果(SR + 薬剤 + Task + 実施記録)から組み直す。
   const performTarget = useMemo(() => {
@@ -799,13 +814,17 @@ export function VitalFlowsheetPanel({
                 // 施用するのは病棟なので、経過表からその場で書けるようにする
                 // (カルテのカードと同じモーダル)。中止した注射には出さない。
                 // 1 日に複数回の施用があるので、実施済になっても押せる。
-                markModal.canPerform ? (
+                markModal.canPerform || markModal.nursingAt ? (
                   <button
                     type="button"
                     onClick={() => {
                       // 一覧は役目を終えるので閉じてから開く(「詳細」と同じ作法)。
                       setSelectedMark(null);
-                      setPerformSrId(markModal.srId);
+                      if (markModal.nursingAt) {
+                        setNursingPerform({ orderId: markModal.srId, at: markModal.nursingAt });
+                      } else {
+                        setPerformSrId(markModal.srId);
+                      }
                     }}
                   >
                     実施入力
@@ -823,6 +842,18 @@ export function VitalFlowsheetPanel({
               task={performTarget.task}
               performs={performTarget.performs}
               onClose={() => setPerformSrId(null)}
+            />
+          )}
+
+          {nursingPerformOrder && nursingPerform && nursing.data && (
+            // 指示簿タブと同じモーダルに、押した指示 1 件だけを渡す。押した印の日時を
+            // 記録日時の既定にするので、未実施の予定を押せばその時刻で開く
+            // (過去の分を後から入れる運用に合う)。
+            <NursingPerformModal
+              orders={[nursingPerformOrder]}
+              defaultAt={toDateTimeInputValue(nursingPerform.at)}
+              performsByOrderId={nursing.data.performsByOrderId}
+              onClose={() => setNursingPerform(null)}
             />
           )}
         </>
