@@ -249,8 +249,12 @@ export function FacilitySettingsPage() {
                   {balance[side].map((manageNo) => (
                     <li key={manageNo}>
                       <span>{balanceNames.data?.get(manageNo)?.name ?? manageNo}</span>
-                      <button type="button" onClick={() => removeBalanceItem(side, manageNo)}>
-                        削除
+                      <button
+                        type="button"
+                        aria-label={`${balanceNames.data?.get(manageNo)?.name ?? manageNo} を削除`}
+                        onClick={() => removeBalanceItem(side, manageNo)}
+                      >
+                        ×
                       </button>
                     </li>
                   ))}

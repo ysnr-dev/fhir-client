@@ -11803,9 +11803,19 @@ button.meal-calendar__cell:hover {
   color: var(--text-h);
 }
 
+/* 行の削除は病名の修飾語チップと同じ、枠の無い × にする(項目名より目立たせない)。 */
 .facility-settings__balance-list button {
-  font-size: 12px;
-  padding: 2px 8px;
+  border: none;
+  background: none;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.facility-settings__balance-list button:hover {
+  color: var(--text-h);
 }
 
 .facility-settings__times {
