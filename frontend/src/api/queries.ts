@@ -1981,15 +1981,22 @@ export function usePatientExamOrders(
       params.append("occurrence", `le${rangeEnd}`);
       params.set("_count", "100");
       params.append("_revinclude:iterate", "ServiceRequest:based-on");
-      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
-      const all = (bundle.entry ?? [])
+      // 実施記録(ハブ Procedure)。予定と実施を印で塗り分けるのに使う。
+      params.append("_revinclude", "Procedure:based-on");
+      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+      const resources = (bundle.entry ?? [])
         .map((entry) => entry.resource)
-        .filter((r): r is fhir4.ServiceRequest => r?.resourceType === "ServiceRequest")
+        .filter((r): r is fhir4.Resource => Boolean(r));
+      const all = resources
+        .filter((r): r is fhir4.ServiceRequest => r.resourceType === "ServiceRequest")
         .filter((sr) => sr.status !== "revoked" && sr.status !== "entered-in-error");
       // _revinclude で明細も混ざって返るので、ヘッダ(basedOn 無し)と分けて返す。
       return {
         headers: all.filter((sr) => !sr.basedOn?.length),
         items: all.filter((sr) => sr.basedOn?.length),
+        procedures: resources.filter(
+          (r): r is fhir4.Procedure => r.resourceType === "Procedure",
+        ),
       };
     },
     enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),

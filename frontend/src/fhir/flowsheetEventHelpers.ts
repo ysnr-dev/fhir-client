@@ -50,10 +50,21 @@ export const FLOWSHEET_EXAM_TYPES = [
   { code: "physio", label: "生理検査", detailKind: "physio-order" },
 ] as const;
 
+/** 検査の印に添える状態。予定は無印(オーダーがあるだけ)。 */
+const EXAM_STATE_LABELS: Partial<Record<FlowsheetMarkKind, string>> = {
+  performed: "実施済",
+  stopped: "途中で中止",
+  "not-done": "実施せず",
+};
+
 // ---- 印の行(注射・検査で共用) ----
 
-/** 印の種類。色と形で状態を出す。`exam` は検査オーダー(予定・実施の区別なし)。 */
-export type FlowsheetMarkKind = "planned" | "performed" | "stopped" | "not-done" | "cancelled" | "exam";
+/**
+ * 印の種類。色と形で状態を出す。注射と検査で共用する
+ * (`planned` = 予定、`performed` = 実施、`stopped` / `not-done` = 途中で中止・実施せず、
+ * `cancelled` = オーダーごと中止)。
+ */
+export type FlowsheetMarkKind = "planned" | "performed" | "stopped" | "not-done" | "cancelled";
 
 export interface FlowsheetMark {
   /** 開始(ローカルの日時文字列)。時刻の無いものは YYYY-MM-DD。 */
@@ -236,6 +247,7 @@ export function buildFlowsheetEvents(
 export function buildExamRows(examOrders: {
   headers: fhir4.ServiceRequest[];
   items: fhir4.ServiceRequest[];
+  procedures?: fhir4.Procedure[];
 }): FlowsheetMarkRow[] {
   // 明細をヘッダ id で束ねる。ヘッダ → 明細 → セットの構成項目まであるので、
   // 直下だけでなく孫も同じヘッダに寄せる。
@@ -253,6 +265,21 @@ export function buildExamRows(examOrders: {
       if (list) list.push(item);
       else itemsByHeader.set(header, [item]);
     }
+  }
+
+  // 実施記録(ハブ Procedure)をオーダーごとに。取消済み(誤登録)は実施と見なさない。
+  // 部門ごとに category が違う(rad / endoscopy / physio)が、ここでは basedOn だけを見る
+  // (検索が既にこの 3 種別に絞ってあるため)。子の手技は partOf を持つので除く。
+  const performedByOrder = new Map<string, fhir4.Procedure>();
+  for (const procedure of examOrders.procedures ?? []) {
+    if (procedure.status === "entered-in-error" || procedure.partOf?.length) continue;
+    const orderId = procedure.basedOn?.[0]?.reference?.split("/")[1] ?? "";
+    if (!orderId) continue;
+    const existing = performedByOrder.get(orderId);
+    // 同じオーダーに複数あれば早い方(最初の実施)を採る。
+    const at = procedure.performedDateTime ?? procedure.performedPeriod?.start ?? "";
+    const existingAt = existing?.performedDateTime ?? existing?.performedPeriod?.start ?? "";
+    if (!existing || (at && existingAt && at < existingAt)) performedByOrder.set(orderId, procedure);
   }
 
   const rows = new Map<string, FlowsheetMarkRow>();
@@ -275,16 +302,33 @@ export function buildExamRows(examOrders: {
       row = { key: type.code, label: type.label, title: type.label, marks: [] };
       rows.set(type.code, row);
     }
+
+    // 実施記録があれば実施(塗り丸)、無ければ予定(空丸)。実施の日時は記録の方を採る
+    // (予定と違う日に実施されたら、実施した日に印を置く)。
+    const performed = performedByOrder.get(order.id);
+    const performedAt = performed
+      ? (performed.performedDateTime ?? performed.performedPeriod?.start ?? at)
+      : "";
+    const kind: FlowsheetMarkKind = performed
+      ? performed.status === "not-done"
+        ? "not-done"
+        : performed.status === "stopped"
+          ? "stopped"
+          : "performed"
+      : "planned";
+    const markAt = performedAt || at;
+    const state = EXAM_STATE_LABELS[kind];
+
     row.marks.push({
-      at,
-      kind: "exam",
+      at: markAt,
+      kind,
       groupId: order.id,
-      title: [type.label, detail, flowsheetEventAtLabel(at)].filter(Boolean).join(" "),
+      title: [type.label, state, detail, flowsheetEventAtLabel(markAt)].filter(Boolean).join(" "),
       event: {
-        at,
+        at: markAt,
         kind: "exam",
         label: type.label,
-        name: type.label,
+        name: [type.label, state].filter(Boolean).join(" "),
         detail,
         target: { kind: type.detailKind, id: order.id },
       },

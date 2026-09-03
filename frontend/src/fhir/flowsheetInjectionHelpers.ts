@@ -46,7 +46,6 @@ const MARK_LABELS: Record<FlowsheetMarkKind, string> = {
   stopped: "途中で中止",
   "not-done": "実施せず",
   cancelled: "中止",
-  exam: "検査",
 };
 
 /** 薬剤名を「・」で連結。長さは表示側(CSS の省略)に任せる。 */
