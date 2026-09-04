@@ -44,6 +44,9 @@ export const LOCATION_TYPE_OPTIONS = [
 // useLocationSearch 参照)。種別を増やすときはここに足すだけでよい。
 export const LOCATION_TYPE_CODES = LOCATION_TYPE_OPTIONS.map((o) => o.code);
 
+/** 外来の診察室。受付先に選べる場所はこれだけ(ReceptionFields)。 */
+export const OUTPATIENT_ROOM_TYPE_CODE = "OF";
+
 export const LOCATION_STATUS_OPTIONS = [
   { code: "active", label: "使用中" },
   { code: "suspended", label: "一時停止" },

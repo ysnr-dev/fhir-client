@@ -14,6 +14,11 @@ import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { Pagination } from "./Pagination";
+import {
+  ReceptionFields,
+  emptyReceptionSelects,
+  type ReceptionSelects,
+} from "./ReceptionFields";
 
 // 当日受付。予約なしで来院した患者を探して、その場で受付済の予約を作る。
 //
@@ -25,17 +30,9 @@ interface WalkInCheckInModalProps {
   onClose: () => void;
 }
 
-interface WalkInSelects {
-  departmentId: string;
-  practitionerId: string;
-  locationId: string;
-}
-
-const emptySelects: WalkInSelects = { departmentId: "", practitionerId: "", locationId: "" };
-
 export function WalkInCheckInModal({ onClose }: WalkInCheckInModalProps) {
   const [patient, setPatient] = useState<fhir4.Patient | null>(null);
-  const [selects, setSelects] = useState<WalkInSelects>(emptySelects);
+  const [selects, setSelects] = useState<ReceptionSelects>(emptyReceptionSelects);
 
   const departments = useSelfDepartments();
   const practitioners = usePractitionerOptions();
@@ -78,50 +75,11 @@ export function WalkInCheckInModal({ onClose }: WalkInCheckInModalProps) {
             </button>
           </div>
 
-          <div className="walk-in__fields">
-            <label>
-              診療科
-              <select
-                value={selects.departmentId}
-                onChange={(e) => setSelects({ ...selects, departmentId: e.target.value })}
-              >
-                <option value="">未指定</option>
-                {departments.departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {departmentDisplayName(department)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              担当医
-              <select
-                value={selects.practitionerId}
-                onChange={(e) => setSelects({ ...selects, practitionerId: e.target.value })}
-              >
-                <option value="">未指定</option>
-                {practitioners.practitioners.map((practitioner) => (
-                  <option key={practitioner.id} value={practitioner.id}>
-                    {practitionerDisplayName(practitioner)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              診察室
-              <select
-                value={selects.locationId}
-                onChange={(e) => setSelects({ ...selects, locationId: e.target.value })}
-              >
-                <option value="">未指定</option>
-                {locations.locations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <ReceptionFields
+            className="walk-in__fields"
+            values={selects}
+            onChange={setSelects}
+          />
 
           <div className="walk-in__actions">
             <button type="button" onClick={handleSubmit} disabled={checkIn.isPending}>

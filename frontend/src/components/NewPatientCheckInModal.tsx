@@ -20,6 +20,11 @@ import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { NameKanjiInput } from "./NameKanjiInput";
 import { PostalCodeInput } from "./PostalCodeInput";
+import {
+  ReceptionFields,
+  emptyReceptionSelects,
+  type ReceptionSelects,
+} from "./ReceptionFields";
 
 // 新患登録。初診で来院した患者を登録し、そのまま当日受付まで済ませる。
 //
@@ -35,17 +40,9 @@ interface NewPatientCheckInModalProps {
   onClose: () => void;
 }
 
-interface WalkInSelects {
-  departmentId: string;
-  practitionerId: string;
-  locationId: string;
-}
-
-const emptySelects: WalkInSelects = { departmentId: "", practitionerId: "", locationId: "" };
-
 export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps) {
   const [values, setValues] = useState<PatientFormValues>(emptyPatientForm);
-  const [selects, setSelects] = useState<WalkInSelects>(emptySelects);
+  const [selects, setSelects] = useState<ReceptionSelects>(emptyReceptionSelects);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const departments = useSelfDepartments();
@@ -281,50 +278,11 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
 
         {/* ここから受付内容。患者情報と続けて読ませたくないので見出しで分ける。 */}
         <h3 className="new-patient__section">受付情報</h3>
-        <div className="new-patient__row">
-          <label>
-            診療科
-            <select
-              value={selects.departmentId}
-              onChange={(e) => setSelects({ ...selects, departmentId: e.target.value })}
-            >
-              <option value="">未指定</option>
-              {departments.departments.map((department) => (
-                <option key={department.id} value={department.id}>
-                  {departmentDisplayName(department)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            担当医
-            <select
-              value={selects.practitionerId}
-              onChange={(e) => setSelects({ ...selects, practitionerId: e.target.value })}
-            >
-              <option value="">未指定</option>
-              {practitioners.practitioners.map((practitioner) => (
-                <option key={practitioner.id} value={practitioner.id}>
-                  {practitionerDisplayName(practitioner)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            診察室
-            <select
-              value={selects.locationId}
-              onChange={(e) => setSelects({ ...selects, locationId: e.target.value })}
-            >
-              <option value="">未指定</option>
-              {locations.locations.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        <ReceptionFields
+          className="new-patient__row"
+          values={selects}
+          onChange={setSelects}
+        />
 
         <div className="walk-in__actions new-patient__actions">
           <button type="submit" disabled={submitting}>
