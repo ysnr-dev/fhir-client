@@ -126,6 +126,15 @@ export function TransferPlanTable({
                 <td>{row.plan.date}</td>
                 <td>{encounterBedLabel(row.encounter)}</td>
                 <td className="patient-table__actions inpatient__col-actions">
+                  {/* 実施はこのタブでいちばん使う操作なので、ケバブに畳まず
+                      カルテの左に独立したボタンでも出す(ケバブにも残す)。 */}
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => setExecuteTarget(row)}
+                  >
+                    転科・転棟実施
+                  </button>
                   <KarteLink patient={row.patient} />
                   <RowMenu
                     label={`${row.patient ? displayName(row.patient) : "この患者"} の操作`}
@@ -221,6 +230,15 @@ export function LeaveTable({ rows, filtering }: { rows: LeaveRow[]; filtering: b
                 <td>{row.leave.end ? dateTimeLabel(row.leave.end) : "未定"}</td>
                 <td className="inpatient__note">{row.leave.reason || "-"}</td>
                 <td className="patient-table__actions inpatient__col-actions">
+                  {/* 実施はこのタブでいちばん使う操作なので、ケバブに畳まず
+                      カルテの左に独立したボタンでも出す(ケバブにも残す)。 */}
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => setReturnTarget(row)}
+                  >
+                    帰院実施
+                  </button>
                   <KarteLink patient={row.patient} />
                   <RowMenu
                     label={`${row.patient ? displayName(row.patient) : "この患者"} の操作`}
@@ -318,6 +336,15 @@ export function DischargePlanTable({
                 <td>{dateTimeLabel(row.plan.at)}</td>
                 <td className="inpatient__note">{row.plan.reason || "-"}</td>
                 <td className="patient-table__actions inpatient__col-actions">
+                  {/* 実施はこのタブでいちばん使う操作なので、ケバブに畳まず
+                      カルテの左に独立したボタンでも出す(ケバブにも残す)。 */}
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => setDischargeTarget(row)}
+                  >
+                    退院実施
+                  </button>
                   <KarteLink patient={row.patient} />
                   <RowMenu
                     label={`${row.patient ? displayName(row.patient) : "この患者"} の操作`}

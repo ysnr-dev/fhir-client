@@ -1110,6 +1110,11 @@ function PlannedTableRow({
       <td>{encounterAdmissionDate(encounter)}</td>
       <td className="inpatient__note">{encounterNote(encounter) || "-"}</td>
       <td className="patient-table__actions sticky-table__fix-actions">
+        {/* 入院実施はこのタブでいちばん使う操作なので、ケバブに畳まずカルテの左に
+            独立したボタンでも出す(ケバブにも残す)。 */}
+        <button type="button" className="button" onClick={onExecute}>
+          入院実施
+        </button>
         {patientId && (
           <Link className="button" to={`/patients/${patientId}/karte`} state={returnLinkState}>
             カルテ
