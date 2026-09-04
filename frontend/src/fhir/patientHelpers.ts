@@ -66,6 +66,19 @@ export const emptyPatientForm: PatientFormValues = {
   email: "",
 };
 
+/**
+ * 新患登録(窓口で患者を登録しながら受付する)の必須条件。名寄せと受付一覧の
+ * 並びに使うので、氏名・カナ・性別・生年月日まで揃っていることを求める。
+ * 患者登録画面(PatientForm)は後から埋められるので、ここは通さない。
+ */
+export function validateNewPatientForm(values: PatientFormValues): string | null {
+  if (!values.familyKanji.trim() || !values.givenKanji.trim()) return "患者氏名は必須です。";
+  if (!values.familyKana.trim() || !values.givenKana.trim()) return "カナ氏名は必須です。";
+  if (!values.gender) return "性別は必須です。";
+  if (!values.birthDate) return "生年月日は必須です。";
+  return null;
+}
+
 export function buildPatient(values: PatientFormValues, id?: string): fhir4.Patient {
   const identifierValue = values.identifierValue.trim();
   const patient: fhir4.Patient = {

@@ -252,6 +252,11 @@ Rails.application.routes.draw do
     resources :jfagy_drugs, only: %i[index] do
       collection { post :import }
     end
+    # 郵便番号マスタ(日本郵便 utf_ken_all.csv)。住所補完で郵便番号から引くだけなので
+    # 検索専用(取込で全件洗い替え)。
+    resources :postal_codes, only: %i[index] do
+      collection { post :import }
+    end
     # シェーマ(診療記録に描き込む台紙画像)。カテゴリは parent_id の隣接リストで
     # 任意の深さの階層を持つ。
     resources :schema_categories, only: %i[index show create update destroy]

@@ -279,6 +279,7 @@ import {
   searchNursingActActions,
   fetchNursingActLevels,
   searchNursingObservations,
+  searchPostalCodes,
   type NursingObservation,
   searchTransfusionProducts,
   fetchTransfusionProduct,
@@ -3754,5 +3755,16 @@ export function useNursingObservationSearch(
       }),
     placeholderData: keepPreviousData,
     enabled,
+  });
+}
+
+/**
+ * 郵便番号から住所を引く。入力のたびではなくボタンで引くので mutation にする
+ * (同じ郵便番号をもう一度押したときも引き直せる)。
+ * 1 つの郵便番号が複数の町域を表すことがあるので、返るのは常に一覧。
+ */
+export function usePostalCodeLookup() {
+  return useMutation({
+    mutationFn: (digits: string) => searchPostalCodes({ postal_code: digits, per: 100 }),
   });
 }

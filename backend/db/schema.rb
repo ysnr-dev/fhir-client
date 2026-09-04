@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_04_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_05_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1131,6 +1131,20 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_04_000000) do
     t.datetime "updated_at", null: false
     t.index ["member_item_code"], name: "index_master_physio_set_items_on_member_item_code"
     t.index ["set_item_code", "member_item_code"], name: "index_physio_set_items_on_set_and_member", unique: true
+  end
+
+  create_table "master_postal_codes", force: :cascade do |t|
+    t.string "postal_code", null: false
+    t.string "jis_code"
+    t.string "prefecture", null: false
+    t.string "city", null: false
+    t.string "town", default: "", null: false
+    t.string "prefecture_kana"
+    t.string "city_kana"
+    t.string "town_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["postal_code"], name: "index_master_postal_codes_on_postal_code"
   end
 
   create_table "master_rad_dataset_details", force: :cascade do |t|

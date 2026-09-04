@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { emptyPatientForm, type PatientFormValues } from "../fhir/patientHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { NameKanjiInput } from "./NameKanjiInput";
+import { PostalCodeInput } from "./PostalCodeInput";
 
 interface PatientFormProps {
   initialValues?: PatientFormValues;
@@ -26,6 +27,17 @@ export function PatientForm({
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const update = makeFieldUpdater(setValues);
+
+  // 郵便番号から引けた住所。番地方書は町域に続けて手入力するので、
+  // 既に何か書かれていれば触らない。
+  function applyPostalAddress(address: { prefecture: string; city: string; town: string }) {
+    setValues((current) => ({
+      ...current,
+      prefecture: address.prefecture,
+      city: address.city,
+      addressLine: current.addressLine || address.town,
+    }));
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -120,10 +132,10 @@ export function PatientForm({
         <div className="patient-form__row">
           <label>
             郵便番号
-            <input
-              type="text"
+            <PostalCodeInput
               value={values.postalCode}
-              onChange={(e) => update("postalCode", e.target.value)}
+              onChange={(v) => update("postalCode", v)}
+              onResolved={applyPostalAddress}
             />
           </label>
           <label>

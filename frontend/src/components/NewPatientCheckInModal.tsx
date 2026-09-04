@@ -8,12 +8,18 @@ import {
 } from "../api/queries";
 import { buildWalkInAppointment } from "../fhir/appointmentHelpers";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
-import { emptyPatientForm, buildPatient, type PatientFormValues } from "../fhir/patientHelpers";
+import {
+  emptyPatientForm,
+  buildPatient,
+  validateNewPatientForm,
+  type PatientFormValues,
+} from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { makeFieldUpdater } from "../lib/form";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { NameKanjiInput } from "./NameKanjiInput";
+import { PostalCodeInput } from "./PostalCodeInput";
 
 // 新患登録。初診で来院した患者を登録し、そのまま当日受付まで済ませる。
 //
@@ -40,6 +46,7 @@ const emptySelects: WalkInSelects = { departmentId: "", practitionerId: "", loca
 export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps) {
   const [values, setValues] = useState<PatientFormValues>(emptyPatientForm);
   const [selects, setSelects] = useState<WalkInSelects>(emptySelects);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const departments = useSelfDepartments();
   const practitioners = usePractitionerOptions();
@@ -50,8 +57,27 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
   const update = makeFieldUpdater(setValues);
   const submitting = createPatient.isPending || checkIn.isPending;
 
+  // 郵便番号から引けた住所。番地方書は町域に続けて手入力するので、
+  // 既に何か書かれていれば触らない。
+  function applyPostalAddress(address: { prefecture: string; city: string; town: string }) {
+    setValues((current) => ({
+      ...current,
+      prefecture: address.prefecture,
+      city: address.city,
+      addressLine: current.addressLine || address.town,
+    }));
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    const error = validateNewPatientForm(values);
+    if (error) {
+      setValidationError(error);
+      return;
+    }
+    setValidationError(null);
+
     createPatient.mutate(buildPatient(values), {
       onSuccess: (result) => {
         const department = departments.departments.find((d) => d.id === selects.departmentId);
@@ -81,6 +107,11 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
     <Modal title="新患登録" onClose={onClose}>
       <ErrorBanner error={departments.error ?? practitioners.error ?? locations.error} />
       <ErrorBanner error={createPatient.error ?? checkIn.error} />
+      {validationError && (
+        <div className="error-banner" role="alert">
+          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+        </div>
+      )}
 
       <form className="new-patient" onSubmit={handleSubmit}>
         <div className="new-patient__row">
@@ -98,7 +129,10 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
         <div className="new-patient__row">
           <span className="new-patient__group">患者氏名</span>
           <label>
-            姓
+            <span>
+              姓
+              <span className="new-patient__required">必須</span>
+            </span>
             <NameKanjiInput
               value={values.familyKanji}
               onChange={(v) => update("familyKanji", v)}
@@ -107,7 +141,10 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
             />
           </label>
           <label>
-            名
+            <span>
+              名
+              <span className="new-patient__required">必須</span>
+            </span>
             <NameKanjiInput
               value={values.givenKanji}
               onChange={(v) => update("givenKanji", v)}
@@ -120,7 +157,10 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
         <div className="new-patient__row">
           <span className="new-patient__group">カナ氏名</span>
           <label>
-            セイ
+            <span>
+              セイ
+              <span className="new-patient__required">必須</span>
+            </span>
             <input
               type="text"
               value={values.familyKana}
@@ -128,7 +168,10 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
             />
           </label>
           <label>
-            メイ
+            <span>
+              メイ
+              <span className="new-patient__required">必須</span>
+            </span>
             <input
               type="text"
               value={values.givenKana}
@@ -139,7 +182,10 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
 
         <div className="new-patient__row">
           <label className="new-patient__field--gender">
-            性別
+            <span>
+              性別
+              <span className="new-patient__required">必須</span>
+            </span>
             <select
               value={values.gender}
               onChange={(e) => update("gender", e.target.value as PatientFormValues["gender"])}
@@ -152,7 +198,10 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
             </select>
           </label>
           <label>
-            生年月日
+            <span>
+              生年月日
+              <span className="new-patient__required">必須</span>
+            </span>
             <input
               type="date"
               value={values.birthDate}
@@ -165,10 +214,10 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
         <div className="new-patient__row new-patient__row--indent">
           <label>
             郵便番号
-            <input
-              type="text"
+            <PostalCodeInput
               value={values.postalCode}
-              onChange={(e) => update("postalCode", e.target.value)}
+              onChange={(v) => update("postalCode", v)}
+              onResolved={applyPostalAddress}
             />
           </label>
           <label>

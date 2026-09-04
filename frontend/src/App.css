@@ -549,6 +549,27 @@ button:disabled {
   padding: 0 4px;
 }
 
+/* 郵便番号の欄と「住所検索」ボタン。ラベルの下に横並びで置く。 */
+.postal-code {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.postal-code input {
+  width: 110px;
+}
+
+/* 入力欄に添えるだけのボタンなので、既定(15px / 8px 16px)より小さくする。 */
+.postal-code button {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.postal-code__message {
+  font-size: 12px;
+}
+
 /* 住所は「郵便番号・都道府県・市区町村」と「住所」の 2 段になるので、
    fieldset の横並び(.patient-form fieldset)を縦積みに戻す。 */
 .patient-form__address {
@@ -557,6 +578,7 @@ button:disabled {
 
 .patient-form__row {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
 }
 
@@ -7313,6 +7335,19 @@ body.page-wide .app__main {
 .new-patient__row > .new-patient__group {
   align-self: flex-end;
   padding-bottom: 8px;
+}
+
+/* 必須の印。ラベルに添える小さなバッジ。 */
+.new-patient__required {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--accent-border);
+  border-radius: 3px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 10px;
+  line-height: 1.6;
+  vertical-align: 1px;
 }
 
 .new-patient__field--number input {

@@ -145,6 +145,12 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".txt,.csv",
   },
   {
+    type: "postal_codes",
+    label: "郵便番号マスタ",
+    formatHint: "日本郵便 住所の郵便番号 utf_ken_all.csv（UTF-8、ヘッダなし・15列）",
+    accept: ".csv",
+  },
+  {
     type: "nursing_units",
     label: "看護観察 単位テーブル",
     formatHint: "看護観察編 unit-ver.*.txt（Shift_JIS、ヘッダあり・2列）",
