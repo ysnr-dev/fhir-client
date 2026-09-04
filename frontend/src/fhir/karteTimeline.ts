@@ -521,6 +521,31 @@ export function karteDayShortLabel(day: string): string {
   return `${month}/${date}(${weekday})`;
 }
 
+export interface KarteDayYearGroup<T> {
+  /** 年(YYYY)。日付未定・日付なしは年が無いので undefined(見出しを出さない)。 */
+  year: string | undefined;
+  entries: T[];
+}
+
+/**
+ * 日付の並び順を保ったまま、年の変わり目で区切る。年ごとの見出しを出す一覧
+ * (カルテの診療日ペイン・検査結果の検体採取日ペイン)で共用する。
+ * 年を持たない日付未定・日付なしはそれぞれ単独の区切りになる。
+ */
+export function groupByKarteDayYear<T>(
+  entries: readonly T[],
+  dayOf: (entry: T) => string,
+): KarteDayYearGroup<T>[] {
+  const groups: KarteDayYearGroup<T>[] = [];
+  for (const entry of entries) {
+    const year = karteDayYear(dayOf(entry));
+    const last = groups[groups.length - 1];
+    if (last && year !== undefined && last.year === year) last.entries.push(entry);
+    else groups.push({ year, entries: [entry] });
+  }
+  return groups;
+}
+
 /**
  * オーダーのカードを置く診療日 = オーダー開始日(occurrence)。
  *

@@ -1530,6 +1530,13 @@ fieldset.rp-card {
   padding: 4px 10px;
 }
 
+/* ケバブは横に並ぶボタンと高さを揃える。三点リーダーだけなので横幅は詰める
+   (上の button 指定より詳細度を上げて上書きする)。 */
+.lab-result-detail__actions .row-menu__trigger {
+  padding: 4px 7px;
+  font-size: 14px;
+}
+
 .lab-result-detail__copy-result {
   font-size: 12px;
   color: var(--text);
@@ -5131,11 +5138,11 @@ body.karte-wide {
 /* 検査結果・細菌検査タブ: カルテタブの診療日パネルと同様に、左端に検体採取日の
    ペイン、右に内容表示を並べる。タブ全体のスクロールはやめて列ごとにスクロール
    させる。 */
-/* ペインは検体採取日(10 桁)が 1 行に収まればよいので、カルテタブの診療日パネル
-   (160px)より詰めて内容表示に幅を回す。 */
+/* ペインは月日と曜日(例: 08/23(土))が 1 行に収まればよいので、カルテタブの
+   診療日パネル(160px)より詰めて内容表示に幅を回す。 */
 .karte-lab {
   display: grid;
-  grid-template-columns: 116px minmax(0, 1fr);
+  grid-template-columns: 100px minmax(0, 1fr);
   gap: 12px;
   overflow-y: visible;
 }

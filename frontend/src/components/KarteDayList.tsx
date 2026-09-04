@@ -1,8 +1,8 @@
 import { useState } from "react";
 import {
+  groupByKarteDayYear,
   karteDayLabel,
   karteDayShortLabel,
-  karteDayYear,
   karteItemKey,
   type KarteDayEntry,
 } from "../fhir/karteTimeline";
@@ -40,7 +40,7 @@ export function KarteDayList({ entries, onSelect, onLoadDay, loadingKey }: Karte
 
   return (
     <div className="karte-daylist__years">
-      {groupByYear(entries).map((group) => (
+      {groupByKarteDayYear(entries, (entry) => entry.day).map((group) => (
         // 日付未定・日付なしは年が無いので、キーは先頭の日付から作る。
         <section key={group.year ?? (group.entries[0].day || "no-date")} className="karte-daylist__year">
           {group.year !== undefined && (
@@ -109,25 +109,4 @@ export function KarteDayList({ entries, onSelect, onLoadDay, loadingKey }: Karte
       ))}
     </div>
   );
-}
-
-interface KarteDayYearGroup {
-  /** 年(YYYY)。日付未定・日付なしは年が無いので undefined(見出しを出さない)。 */
-  year: string | undefined;
-  entries: KarteDayEntry[];
-}
-
-/**
- * 並び順(降順・日付未定が先頭・日付なしが末尾)を保ったまま、年の変わり目で区切る。
- * 年を持たない日付未定・日付なしはそれぞれ単独の区切りになる。
- */
-function groupByYear(entries: KarteDayEntry[]): KarteDayYearGroup[] {
-  const groups: KarteDayYearGroup[] = [];
-  for (const entry of entries) {
-    const year = karteDayYear(entry.day);
-    const last = groups[groups.length - 1];
-    if (last && year !== undefined && last.year === year) last.entries.push(entry);
-    else groups.push({ year, entries: [entry] });
-  }
-  return groups;
 }

@@ -18,6 +18,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { FhirJsonView } from "./FhirJsonView";
 import { LabResultTimelinePanel } from "./LabResultTimelinePanel";
 import { Modal } from "./Modal";
+import { RowMenu } from "./RowMenu";
 
 // 検査結果の内容表示。詳細ページとカルテ画面の検査結果タブの双方から使う。
 // DO・編集・削除の操作ボタンと前後移動は、遷移先が異なるので呼び出し側が持つ。
@@ -44,12 +45,14 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
   const [checkedIds, setCheckedIds] = useState<ReadonlySet<string>>(new Set());
   const [copyResult, setCopyResult] = useState<"copied" | "failed" | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [jsonOpen, setJsonOpen] = useState(false);
 
   // 前後移動などで別の検査結果に切り替わったら選択状態をリセットする。
   useEffect(() => {
     setCheckedIds(new Set());
     setCopyResult(null);
     setTimelineOpen(false);
+    setJsonOpen(false);
   }, [reportId]);
 
   const { report, observations, specimens } = useMemo(
@@ -150,6 +153,16 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
               >
                 時系列表示
               </button>
+              {/* 普段は使わない FHIR JSON 表示はケバブに畳む。 */}
+              <RowMenu label="この検査結果の操作">
+                <button
+                  type="button"
+                  className="row-menu__item"
+                  onClick={() => setJsonOpen(true)}
+                >
+                  FHIR JSON を表示
+                </button>
+              </RowMenu>
             </div>
 
             <table className="rp-card__medicines rp-card__medicines--detail rp-card__medicines--lab">
@@ -197,10 +210,15 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
               </tbody>
             </table>
 
-            <details className="prescription-detail__raw">
-              <summary>FHIR JSON を表示</summary>
-              <FhirJsonView resource={detail.data?.data} />
-            </details>
+            {jsonOpen && (
+              <Modal
+                title="FHIR JSON(検査結果)"
+                onClose={() => setJsonOpen(false)}
+                className="modal--wide"
+              >
+                <FhirJsonView resource={detail.data?.data} />
+              </Modal>
+            )}
 
             {timelineOpen && (
               <Modal
