@@ -2502,6 +2502,26 @@ fieldset.rp-card {
   padding-top: 2px;
 }
 
+/* 日付が多いと値と列の対応が追いにくいので、検体検査の時系列表では日付カラムの
+   間に縦罫線を引く(同じ class を使う経過表は独自の罫線を持つため対象外)。 */
+.lab-timeline__table--ruled th.lab-timeline__year-col,
+.lab-timeline__table--ruled th.lab-timeline__date-col,
+.lab-timeline__table--ruled td.lab-timeline__value {
+  border-left: 1px solid var(--border);
+}
+
+/* 曜日を付けたぶん列幅が広がらないよう、日付だけ少し小さくする。 */
+.lab-timeline__table--ruled th.lab-timeline__date-col {
+  font-size: 12px;
+}
+
+/* 一度に見える検査項目を増やすため、行の上下を詰める。 */
+.lab-timeline__table--ruled th,
+.lab-timeline__table--ruled td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
 /* 2 段ヘッダーで rowspan するセルは縦位置を揃える。 */
 .lab-timeline__table thead th[rowspan] {
   vertical-align: bottom;

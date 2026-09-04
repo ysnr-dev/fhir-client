@@ -8,6 +8,7 @@ import {
   interpretationClass,
   type LabTimelineRow,
 } from "../fhir/labResultHelpers";
+import { flowsheetDayLabel } from "../fhir/vitalHelpers";
 
 // 検査結果の時系列表示。時系列表示ページとカルテ画面の「検体検査時系列」タブの双方から使う。
 
@@ -108,7 +109,7 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
             <p className="patient-table__empty">検査結果がありません</p>
           ) : (
             <div className="lab-timeline__table-wrap" ref={tableWrapRef}>
-              <table className="lab-timeline__table">
+              <table className="lab-timeline__table lab-timeline__table--ruled">
                 <thead>
                   {/* 日付カラムは mm/dd のみ表示し、年は上段にまとめる。 */}
                   <tr>
@@ -131,7 +132,7 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
                   <tr>
                     {timeline.dates.map((date) => (
                       <th key={date} className="lab-timeline__date-col" title={date}>
-                        {monthDay(date)}
+                        {monthDayWeekday(date)}
                       </th>
                     ))}
                   </tr>
@@ -162,10 +163,10 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
   );
 }
 
-// "YYYY-MM-DD" -> "MM/DD"。想定外の形式はそのまま返す。
-function monthDay(date: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
-  return m ? `${m[2]}/${m[3]}` : date;
+// "YYYY-MM-DD" -> "MM/DD(曜)"。想定外の形式はそのまま返す。
+function monthDayWeekday(date: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(date)) return date;
+  return flowsheetDayLabel(date.slice(0, 10)).label;
 }
 
 // 連続する同じ年の日付をまとめる。年不明の日付は単独グループにする。
