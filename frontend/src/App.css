@@ -368,6 +368,8 @@ button:disabled {
 .patient-search-form select,
 .patient-form input,
 .patient-form select,
+.new-patient__row input,
+.new-patient__row select,
 .walk-in__fields input,
 .walk-in__fields select,
 .walk-in__fields textarea {
@@ -545,6 +547,17 @@ button:disabled {
   font-size: 13px;
   color: var(--text);
   padding: 0 4px;
+}
+
+/* 住所は「郵便番号・都道府県・市区町村」と「住所」の 2 段になるので、
+   fieldset の横並び(.patient-form fieldset)を縦積みに戻す。 */
+.patient-form__address {
+  flex-direction: column;
+}
+
+.patient-form__row {
+  display: flex;
+  gap: 16px;
 }
 
 .patient-form__checkbox {
@@ -7260,6 +7273,75 @@ body.page-wide .app__main {
   color: var(--text);
   border-color: var(--border);
   background: var(--surface-sunken);
+}
+
+/* 新患登録モーダル。1 行に収まる項目は横に並べ、住所・電話番号はまとまりの名前を
+   出して次の行に下げる。 */
+.new-patient {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.new-patient__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+/* 住所・電話番号の中身。まとまりの名前の下に一段下げて置く。 */
+.new-patient__row--indent {
+  padding-left: 16px;
+}
+
+.new-patient__row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+/* 「患者氏名」「住所」などのまとまりの名前。入力欄のラベルと同じ大きさで置く。 */
+.new-patient__group {
+  align-self: flex-start;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 行の中に並べるときだけ、入力欄の高さに合わせて下に寄せる。 */
+.new-patient__row > .new-patient__group {
+  align-self: flex-end;
+  padding-bottom: 8px;
+}
+
+.new-patient__field--number input {
+  width: 160px;
+}
+
+.new-patient__field--gender select {
+  width: 120px;
+}
+
+.new-patient__field--email input {
+  width: 280px;
+}
+
+.new-patient__field--wide {
+  flex: 1;
+}
+
+/* 受付情報の見出し。患者情報の続きに読まれないよう、上に余白と罫線を置く。 */
+.new-patient__section {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.new-patient__actions {
+  margin-top: 16px;
 }
 
 /* 当日受付モーダル。患者を選んだ後の受付内容。 */

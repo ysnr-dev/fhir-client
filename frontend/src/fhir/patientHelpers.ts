@@ -35,8 +35,16 @@ export interface PatientFormValues {
   gender: Gender;
   birthDate: string;
   active: boolean;
-  phone: string;
-  addressText: string;
+  postalCode: string;
+  /** 都道府県。Address.state。 */
+  prefecture: string;
+  /** 市区町村。Address.city。 */
+  city: string;
+  /** 番地方書(町名・番地・建物名)。Address.line。 */
+  addressLine: string;
+  homePhone: string;
+  mobilePhone: string;
+  email: string;
 }
 
 export const emptyPatientForm: PatientFormValues = {
@@ -49,8 +57,13 @@ export const emptyPatientForm: PatientFormValues = {
   gender: "",
   birthDate: "",
   active: true,
-  phone: "",
-  addressText: "",
+  postalCode: "",
+  prefecture: "",
+  city: "",
+  addressLine: "",
+  homePhone: "",
+  mobilePhone: "",
+  email: "",
 };
 
 export function buildPatient(values: PatientFormValues, id?: string): fhir4.Patient {
@@ -72,10 +85,36 @@ export function buildPatient(values: PatientFormValues, id?: string): fhir4.Pati
 
   if (values.gender) patient.gender = values.gender;
   if (values.birthDate) patient.birthDate = values.birthDate;
-  if (values.phone) patient.telecom = [{ system: "phone", value: values.phone }];
-  if (values.addressText) patient.address = [{ text: values.addressText }];
+  // 固定電話と携帯電話はどちらも system=phone。区別は use(home / mobile)で持つ。
+  const telecom: fhir4.ContactPoint[] = [];
+  if (values.homePhone) telecom.push({ system: "phone", value: values.homePhone, use: "home" });
+  if (values.mobilePhone) {
+    telecom.push({ system: "phone", value: values.mobilePhone, use: "mobile" });
+  }
+  if (values.email) telecom.push({ system: "email", value: values.email });
+  if (telecom.length) patient.telecom = telecom;
+
+  const address = buildAddress(values);
+  if (address) patient.address = [address];
 
   return patient;
+}
+
+/**
+ * 住所。都道府県・市区町村・それ以降を分けて持ち、続けて書いた text も添える
+ * (一覧や帳票は text だけを見るため)。郵便番号しか入っていない場合は text を作らない。
+ */
+function buildAddress(values: PatientFormValues): fhir4.Address | undefined {
+  const address: fhir4.Address = {};
+  if (values.postalCode) address.postalCode = values.postalCode;
+  if (values.prefecture) address.state = values.prefecture;
+  if (values.city) address.city = values.city;
+  if (values.addressLine) address.line = [values.addressLine];
+
+  const text = [values.prefecture, values.city, values.addressLine].filter(Boolean).join("");
+  if (text) address.text = text;
+
+  return Object.keys(address).length ? address : undefined;
 }
 
 export function parsePatient(patient: fhir4.Patient): PatientFormValues {
@@ -88,8 +127,29 @@ export function parsePatient(patient: fhir4.Patient): PatientFormValues {
     gender: (patient.gender as Gender) ?? "",
     birthDate: patient.birthDate ?? "",
     active: patient.active ?? true,
-    phone: patient.telecom?.find((t) => t.system === "phone")?.value ?? "",
-    addressText: patient.address?.[0]?.text ?? "",
+    // use の無い電話番号(他システム由来や、分ける前に登録した患者)は固定電話として扱う。
+    homePhone:
+      patient.telecom?.find((t) => t.system === "phone" && t.use !== "mobile")?.value ?? "",
+    mobilePhone:
+      patient.telecom?.find((t) => t.system === "phone" && t.use === "mobile")?.value ?? "",
+    email: patient.telecom?.find((t) => t.system === "email")?.value ?? "",
+    ...parseAddress(patient.address?.[0]),
+  };
+}
+
+/**
+ * 住所。都道府県・市区町村に分かれていない住所(text だけ)は、編集で消えてしまわない
+ * よう、まるごと「番地方書」の欄に入れる。
+ */
+function parseAddress(address: fhir4.Address | undefined) {
+  const line = address?.line?.join("") ?? "";
+  const divided = Boolean(address?.state || address?.city || line);
+
+  return {
+    postalCode: address?.postalCode ?? "",
+    prefecture: address?.state ?? "",
+    city: address?.city ?? "",
+    addressLine: divided ? line : (address?.text ?? ""),
   };
 }
 

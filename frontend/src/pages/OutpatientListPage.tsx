@@ -18,6 +18,7 @@ import {
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { NewPatientCheckInModal } from "../components/NewPatientCheckInModal";
 import { RowMenu } from "../components/RowMenu";
 import { WalkInCheckInModal } from "../components/WalkInCheckInModal";
 import {
@@ -71,6 +72,7 @@ export function OutpatientListPage() {
   const [date, setDate] = useState(today);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [walkInOpen, setWalkInOpen] = useState(false);
+  const [newPatientOpen, setNewPatientOpen] = useState(false);
 
   // 列が多く、既定の幅では患者名や予約枠まで折り返すので、この画面だけ幅を広げる
   // (放射線検査一覧と同じやり方)。
@@ -126,9 +128,15 @@ export function OutpatientListPage() {
     <div className="page">
       <div className="page__header">
         <h1>外来患者一覧</h1>
-        <button type="button" onClick={() => setWalkInOpen(true)}>
-          当日受付
-        </button>
+        <div>
+          <button type="button" onClick={() => setWalkInOpen(true)}>
+            当日受付
+          </button>
+          {/* 初診は患者登録から要るので、登録と受付をまとめて行う入口を隣に置く。 */}
+          <button type="button" onClick={() => setNewPatientOpen(true)}>
+            新患登録
+          </button>
+        </div>
       </div>
 
       <FilterForm
@@ -201,6 +209,7 @@ export function OutpatientListPage() {
       )}
 
       {walkInOpen && <WalkInCheckInModal onClose={() => setWalkInOpen(false)} />}
+      {newPatientOpen && <NewPatientCheckInModal onClose={() => setNewPatientOpen(false)} />}
     </div>
   );
 }

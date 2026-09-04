@@ -115,14 +115,67 @@ export function PatientForm({
         有効(active)
       </label>
 
-      <label>
-        電話番号
-        <input type="text" value={values.phone} onChange={(e) => update("phone", e.target.value)} />
-      </label>
+      <fieldset className="patient-form__address">
+        <legend>住所</legend>
+        <div className="patient-form__row">
+          <label>
+            郵便番号
+            <input
+              type="text"
+              value={values.postalCode}
+              onChange={(e) => update("postalCode", e.target.value)}
+            />
+          </label>
+          <label>
+            都道府県
+            <input
+              type="text"
+              value={values.prefecture}
+              onChange={(e) => update("prefecture", e.target.value)}
+            />
+          </label>
+          <label>
+            市区町村
+            <input
+              type="text"
+              value={values.city}
+              onChange={(e) => update("city", e.target.value)}
+            />
+          </label>
+        </div>
+        <label>
+          番地方書
+          <input
+            type="text"
+            value={values.addressLine}
+            onChange={(e) => update("addressLine", e.target.value)}
+          />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>電話番号</legend>
+        <label>
+          固定電話
+          <input
+            type="text"
+            value={values.homePhone}
+            onChange={(e) => update("homePhone", e.target.value)}
+          />
+        </label>
+        <label>
+          携帯電話
+          <input
+            type="text"
+            value={values.mobilePhone}
+            onChange={(e) => update("mobilePhone", e.target.value)}
+          />
+        </label>
+      </fieldset>
 
       <label>
-        住所
-        <input type="text" value={values.addressText} onChange={(e) => update("addressText", e.target.value)} />
+        EMail
+        <input type="email" value={values.email} onChange={(e) => update("email", e.target.value)} />
       </label>
 
       <div className="patient-form__actions">
