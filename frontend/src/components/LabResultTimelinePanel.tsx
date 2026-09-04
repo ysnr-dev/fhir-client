@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLabResultTimeline } from "../api/queries";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabTimelineChart, type LabTimelineSeries } from "./LabTimelineChart";
@@ -25,6 +25,7 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
   const [dateCount, setDateCount] = useState(DEFAULT_DATE_COUNT);
   const [checkedKeys, setCheckedKeys] = useState<ReadonlySet<string>>(new Set());
   const [chartOpen, setChartOpen] = useState(false);
+  const tableWrapRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading, error } = useLabResultTimeline(patientId, dateCount);
   const timeline = useMemo(
@@ -35,6 +36,12 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
     () => (filterKeys ? timeline.rows.filter((row) => filterKeys.has(row.key)) : timeline.rows),
     [timeline, filterKeys],
   );
+
+  // 日付の列は古い順に並ぶため、開いた時点では右端(最新)が見えるようにする。
+  useLayoutEffect(() => {
+    const wrap = tableWrapRef.current;
+    if (wrap) wrap.scrollLeft = wrap.scrollWidth;
+  }, [timeline.dates, rows]);
 
   function handleDateCountChange(raw: number) {
     if (!Number.isFinite(raw)) return;
@@ -54,15 +61,14 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
   }
 
   const chartSeries: LabTimelineSeries[] = useMemo(() => {
-    // グラフの X 軸は古い順に並べる。
-    const datesAscending = [...timeline.dates].reverse();
     return rows
       .filter((row) => checkedKeys.has(row.key) && row.numbers.size > 0)
       .map((row) => ({
         key: row.key,
         name: row.name || row.abbreviation,
         unit: row.unit,
-        points: datesAscending.flatMap((date) => {
+        // timeline.dates は古い順なので、グラフの X 軸もそのまま古い順になる。
+        points: timeline.dates.flatMap((date) => {
           const value = row.numbers.get(date);
           return value != null ? [{ date, value }] : [];
         }),
@@ -101,7 +107,7 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
           {rows.length === 0 ? (
             <p className="patient-table__empty">検査結果がありません</p>
           ) : (
-            <div className="lab-timeline__table-wrap">
+            <div className="lab-timeline__table-wrap" ref={tableWrapRef}>
               <table className="lab-timeline__table">
                 <thead>
                   {/* 日付カラムは mm/dd のみ表示し、年は上段にまとめる。 */}

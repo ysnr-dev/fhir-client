@@ -677,7 +677,7 @@ export interface LabTimelineRow {
 }
 
 export interface LabTimeline {
-  // 表示対象の検体採取日。新しい順。
+  // 表示対象の検体採取日。古い順。
   dates: string[];
   rows: LabTimelineRow[];
 }
@@ -691,6 +691,7 @@ export function labTimelineKeyOf(obs: fhir4.Observation): string {
 
 // DiagnosticReport(検体採取日の降順) と _include で取得した Observation から、
 // 「検査項目 × 検体採取日」のマトリクスを組み立てる。
+// 日付は新しい方から dateCount 件を対象にし、列は古い順(旧→新)で返す。
 // 行の並びは新しいレポートでの登場順(= 登録時の項目順)になる。
 export function buildLabTimeline(
   reports: fhir4.DiagnosticReport[],
@@ -704,7 +705,8 @@ export function buildLabTimeline(
     const date = report.effectiveDateTime?.slice(0, 10);
     if (date && !dates.includes(date)) dates.push(date);
   }
-  const shownDates = dates.slice(0, dateCount);
+  // 新しい方から dateCount 件を選んだうえで、表示用に古い順へ並べ替える。
+  const shownDates = dates.slice(0, dateCount).reverse();
   const shown = new Set(shownDates);
 
   const rows = new Map<string, LabTimelineRow>();
