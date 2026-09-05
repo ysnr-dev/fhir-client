@@ -92,252 +92,269 @@ export function PatientForm({
       )}
       <ErrorBanner error={submitError} />
 
-      <div className="patient-fields__row">
-        <label className="patient-fields__field--number">
-          <span>
-            患者番号
-            {!autoNumber && <span className="patient-fields__required">必須</span>}
-          </span>
-          <input
-            type="text"
-            value={values.identifierValue}
-            onChange={(e) => update("identifierValue", e.target.value)}
-            placeholder={autoNumber ? "空欄なら自動採番" : undefined}
-            required={!autoNumber}
-          />
-        </label>
-      </div>
+      <fieldset className="patient-fields__group-box">
+        <legend>属性</legend>
 
-      <div className="patient-fields__row">
-        <span className="patient-fields__group">患者氏名</span>
-        <label>
-          姓
-          <NameKanjiInput
-            value={values.familyKanji}
-            onChange={(v) => update("familyKanji", v)}
-            kana={values.familyKana}
-            onKanaChange={(v) => update("familyKana", v)}
-          />
-        </label>
-        <label>
-          名
-          <NameKanjiInput
-            value={values.givenKanji}
-            onChange={(v) => update("givenKanji", v)}
-            kana={values.givenKana}
-            onKanaChange={(v) => update("givenKana", v)}
-          />
-        </label>
-      </div>
+        <div className="patient-fields__row">
+          <label className="patient-fields__field--number">
+            <span>
+              患者番号
+              {!autoNumber && <span className="patient-fields__required">必須</span>}
+            </span>
+            <input
+              type="text"
+              value={values.identifierValue}
+              onChange={(e) => update("identifierValue", e.target.value)}
+              placeholder={autoNumber ? "空欄なら自動採番" : undefined}
+              required={!autoNumber}
+            />
+          </label>
+        </div>
 
-      <div className="patient-fields__row">
-        <span className="patient-fields__group">カナ氏名</span>
-        <label>
-          セイ
-          <input
-            type="text"
-            value={values.familyKana}
-            onChange={(e) => update("familyKana", e.target.value)}
-          />
-        </label>
-        <label>
-          メイ
-          <input
-            type="text"
-            value={values.givenKana}
-            onChange={(e) => update("givenKana", e.target.value)}
-          />
-        </label>
-      </div>
+        <div className="patient-fields__row">
+          <span className="patient-fields__group">患者氏名</span>
+          <label>
+            姓
+            <NameKanjiInput
+              value={values.familyKanji}
+              onChange={(v) => update("familyKanji", v)}
+              kana={values.familyKana}
+              onKanaChange={(v) => update("familyKana", v)}
+            />
+          </label>
+          <label>
+            名
+            <NameKanjiInput
+              value={values.givenKanji}
+              onChange={(v) => update("givenKanji", v)}
+              kana={values.givenKana}
+              onKanaChange={(v) => update("givenKana", v)}
+            />
+          </label>
+        </div>
 
-      <div className="patient-fields__row">
-        <span className="patient-fields__group">旧姓・通称名</span>
-        <label>
-          旧姓
-          <input
-            type="text"
-            value={values.maidenFamily}
-            onChange={(e) => update("maidenFamily", e.target.value)}
-          />
-        </label>
-        <label>
-          通称名
-          <input
-            type="text"
-            value={values.nickname}
-            onChange={(e) => update("nickname", e.target.value)}
-          />
-        </label>
-      </div>
+        <div className="patient-fields__row">
+          <span className="patient-fields__group">カナ氏名</span>
+          <label>
+            セイ
+            <input
+              type="text"
+              value={values.familyKana}
+              onChange={(e) => update("familyKana", e.target.value)}
+            />
+          </label>
+          <label>
+            メイ
+            <input
+              type="text"
+              value={values.givenKana}
+              onChange={(e) => update("givenKana", e.target.value)}
+            />
+          </label>
+        </div>
 
-      <div className="patient-fields__row">
-        <label className="patient-fields__field--gender">
-          性別
-          <select
-            value={values.gender}
-            onChange={(e) => update("gender", e.target.value as PatientFormValues["gender"])}
-          >
-            <option value="">未指定</option>
-            <option value="male">男性</option>
-            <option value="female">女性</option>
-            <option value="other">その他</option>
-            <option value="unknown">不明</option>
-          </select>
-        </label>
-        <label>
-          生年月日
-          <input
-            type="date"
-            value={values.birthDate}
-            onChange={(e) => update("birthDate", e.target.value)}
-          />
-        </label>
-        <label>
-          死亡日
-          <input
-            type="date"
-            value={values.deceasedDate}
-            onChange={(e) => update("deceasedDate", e.target.value)}
-          />
-        </label>
-      </div>
+        <div className="patient-fields__row">
+          <span className="patient-fields__group">旧姓・通称名</span>
+          <label>
+            旧姓
+            <input
+              type="text"
+              value={values.maidenFamily}
+              onChange={(e) => update("maidenFamily", e.target.value)}
+            />
+          </label>
+          <label>
+            通称名
+            <input
+              type="text"
+              value={values.nickname}
+              onChange={(e) => update("nickname", e.target.value)}
+            />
+          </label>
+        </div>
 
-      <div className="patient-fields__row">
-        <label className="patient-fields__field--gender">
-          使用言語
-          <select
-            value={values.language}
-            onChange={(e) => update("language", e.target.value as PatientFormValues["language"])}
-          >
-            {LANGUAGE_OPTIONS.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.display}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="patient-fields__checkbox">
-          <input
-            type="checkbox"
-            checked={values.interpreterNeeded}
-            onChange={(e) => update("interpreterNeeded", e.target.checked)}
-          />
-          通訳が必要
-        </label>
-        <label className="patient-fields__checkbox">
-          <input
-            type="checkbox"
-            checked={values.active}
-            onChange={(e) => update("active", e.target.checked)}
-          />
-          有効(active)
-        </label>
-      </div>
+        <div className="patient-fields__row">
+          <label className="patient-fields__field--gender">
+            性別
+            <select
+              value={values.gender}
+              onChange={(e) => update("gender", e.target.value as PatientFormValues["gender"])}
+            >
+              <option value="">未指定</option>
+              <option value="male">男性</option>
+              <option value="female">女性</option>
+              <option value="other">その他</option>
+              <option value="unknown">不明</option>
+            </select>
+          </label>
+          <label>
+            生年月日
+            <input
+              type="date"
+              value={values.birthDate}
+              onChange={(e) => update("birthDate", e.target.value)}
+            />
+          </label>
+          <label>
+            死亡日
+            <input
+              type="date"
+              value={values.deceasedDate}
+              onChange={(e) => update("deceasedDate", e.target.value)}
+            />
+          </label>
+        </div>
 
-      <span className="patient-fields__group">住所</span>
-      <div className="patient-fields__row patient-fields__row--indent">
-        <label>
-          郵便番号
-          <PostalCodeInput
-            value={values.postalCode}
-            onChange={(v) => update("postalCode", v)}
-            onResolved={applyPostalAddress}
-          />
-        </label>
-        <label>
-          都道府県
-          <input
-            type="text"
-            value={values.prefecture}
-            onChange={(e) => update("prefecture", e.target.value)}
-          />
-        </label>
-        <label>
-          市区町村
-          <input
-            type="text"
-            value={values.city}
-            onChange={(e) => update("city", e.target.value)}
-          />
-        </label>
-      </div>
-      <div className="patient-fields__row patient-fields__row--indent">
-        <label className="patient-fields__field--wide">
-          番地方書
-          <input
-            type="text"
-            value={values.addressLine}
-            onChange={(e) => update("addressLine", e.target.value)}
-          />
-        </label>
-      </div>
+        <div className="patient-fields__row">
+          <label className="patient-fields__field--gender">
+            使用言語
+            <select
+              value={values.language}
+              onChange={(e) => update("language", e.target.value as PatientFormValues["language"])}
+            >
+              {LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.display}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="patient-fields__checkbox">
+            <input
+              type="checkbox"
+              checked={values.interpreterNeeded}
+              onChange={(e) => update("interpreterNeeded", e.target.checked)}
+            />
+            通訳が必要
+          </label>
+          <label className="patient-fields__checkbox">
+            <input
+              type="checkbox"
+              checked={values.active}
+              onChange={(e) => update("active", e.target.checked)}
+            />
+            有効(active)
+          </label>
+        </div>
+      </fieldset>
 
-      <span className="patient-fields__group">電話番号</span>
-      <div className="patient-fields__row patient-fields__row--indent">
-        <label>
-          固定電話
-          <input
-            type="text"
-            value={values.homePhone}
-            onChange={(e) => update("homePhone", e.target.value)}
+      <fieldset className="patient-fields__group-box">
+        <legend>住所</legend>
+
+        <div className="patient-fields__row">
+          <label>
+            郵便番号
+            <PostalCodeInput
+              value={values.postalCode}
+              onChange={(v) => update("postalCode", v)}
+              onResolved={applyPostalAddress}
+            />
+          </label>
+          <label>
+            都道府県
+            <input
+              type="text"
+              value={values.prefecture}
+              onChange={(e) => update("prefecture", e.target.value)}
+            />
+          </label>
+          <label>
+            市区町村
+            <input
+              type="text"
+              value={values.city}
+              onChange={(e) => update("city", e.target.value)}
+            />
+          </label>
+        </div>
+        <div className="patient-fields__row">
+          <label className="patient-fields__field--wide">
+            番地方書
+            <input
+              type="text"
+              value={values.addressLine}
+              onChange={(e) => update("addressLine", e.target.value)}
+            />
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset className="patient-fields__group-box">
+        <legend>本人の連絡先</legend>
+
+        <div className="patient-fields__row">
+          <label>
+            固定電話
+            <input
+              type="text"
+              value={values.homePhone}
+              onChange={(e) => update("homePhone", e.target.value)}
+            />
+          </label>
+          <label>
+            携帯電話
+            <input
+              type="text"
+              value={values.mobilePhone}
+              onChange={(e) => update("mobilePhone", e.target.value)}
+            />
+          </label>
+          <label className="patient-fields__field--email">
+            EMail
+            <input
+              type="email"
+              value={values.email}
+              onChange={(e) => update("email", e.target.value)}
+            />
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset className="patient-fields__group-box">
+        <legend>緊急連絡先・キーパーソン</legend>
+
+        {values.contacts.map((contact, index) => (
+          <ContactFields
+            key={index}
+            contact={contact}
+            onChange={(next) => updateContact(index, next)}
+            onRemove={() => removeContact(index)}
           />
-        </label>
-        <label>
-          携帯電話
-          <input
-            type="text"
-            value={values.mobilePhone}
-            onChange={(e) => update("mobilePhone", e.target.value)}
-          />
-        </label>
-      </div>
-
-      <div className="patient-fields__row">
-        <label className="patient-fields__field--email">
-          EMail
-          <input type="email" value={values.email} onChange={(e) => update("email", e.target.value)} />
-        </label>
-      </div>
-
-      <span className="patient-fields__group">連絡先(緊急連絡先・キーパーソン)</span>
-      {values.contacts.map((contact, index) => (
-        <ContactFields
-          key={index}
-          contact={contact}
-          onChange={(next) => updateContact(index, next)}
-          onRemove={() => removeContact(index)}
-        />
-      ))}
-      <div className="patient-fields__row patient-fields__row--indent">
-        <button type="button" onClick={addContact}>
-          連絡先を追加
-        </button>
-      </div>
-
-      <span className="patient-fields__group">かかりつけ医・紹介元</span>
-      <div className="patient-fields__row patient-fields__row--indent">
-        <label className="patient-fields__field--email">
-          選択中
-          <input type="text" value={values.generalPractitionerName} readOnly />
-        </label>
-        <button type="button" onClick={() => setOpenModal("organization")}>
-          医療機関から選ぶ
-        </button>
-        <button type="button" onClick={() => setOpenModal("practitioner")}>
-          医師から選ぶ
-        </button>
-        {values.generalPractitionerRef && (
-          <button
-            type="button"
-            onClick={() => {
-              update("generalPractitionerRef", "");
-              update("generalPractitionerName", "");
-            }}
-          >
-            解除
+        ))}
+        <div className="patient-fields__row">
+          <button type="button" onClick={addContact}>
+            連絡先を追加
           </button>
-        )}
-      </div>
+        </div>
+      </fieldset>
+
+      <fieldset className="patient-fields__group-box">
+        <legend>かかりつけ医・紹介元</legend>
+
+        <div className="patient-fields__row">
+          <label className="patient-fields__field--email">
+            選択中
+            <input type="text" value={values.generalPractitionerName} readOnly />
+          </label>
+          <button type="button" onClick={() => setOpenModal("organization")}>
+            医療機関から選ぶ
+          </button>
+          <button type="button" onClick={() => setOpenModal("practitioner")}>
+            医師から選ぶ
+          </button>
+          {values.generalPractitionerRef && (
+            <button
+              type="button"
+              onClick={() => {
+                update("generalPractitionerRef", "");
+                update("generalPractitionerName", "");
+              }}
+            >
+              解除
+            </button>
+          )}
+        </div>
+      </fieldset>
 
       {openModal === "organization" && (
         <OrganizationSearchModal

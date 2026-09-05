@@ -7461,6 +7461,31 @@ body.page-wide .app__main {
   padding-left: 16px;
 }
 
+/* 情報のかたまり(氏名・住所・連絡先など)を枠で囲む。項目数が増えると
+   まとまりの名前だけでは切れ目が読めなくなるので、枠で区切る。
+   受付の最中に書く新患登録モーダルは項目が少なく、枠を足すと縦に伸びて
+   受付情報まで届かなくなるので、あちらは枠を使わない(名前と一段下げのまま)。 */
+.patient-fields__group-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.patient-fields__group-box > legend {
+  padding: 0 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 枠の中では、まとまりの名前は入れ子のかたまり(連絡先の中の 1 件など)にだけ使う。 */
+.patient-fields__group-box .patient-fields__group {
+  margin-top: 4px;
+}
+
 .patient-fields__row label {
   display: flex;
   flex-direction: column;
@@ -7534,12 +7559,12 @@ body.page-wide .app__main {
   height: 13px;
 }
 
-/* 連絡先 1 件。何件目かを見分けられるよう枠で区切り、一段下げて置く。 */
+/* 連絡先 1 件。「緊急連絡先・キーパーソン」の枠の中で、何件目かを
+   見分けられるよう内側にもう一段の枠を置く。 */
 .patient-fields__contact {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-left: 16px;
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
