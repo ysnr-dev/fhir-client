@@ -31,8 +31,8 @@ import {
   WARD_PHYSICAL_TYPE,
 } from "./wardHelpers";
 
-const ACT_CODE_SYSTEM = "http://terminology.hl7.org/CodeSystem/v3-ActCode";
-const PARTICIPATION_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/v3-ParticipationType";
+export const ACT_CODE_SYSTEM = "http://terminology.hl7.org/CodeSystem/v3-ActCode";
+export const PARTICIPATION_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/v3-ParticipationType";
 
 /** 入院を表す Encounter.class のコード。 */
 export const ADMISSION_CLASS_CODE = "IMP";

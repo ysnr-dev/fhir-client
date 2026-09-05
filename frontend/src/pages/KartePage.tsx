@@ -8,7 +8,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   useKarteClinicalNotesInfinite,
   useKarteConditions,
@@ -17,6 +17,8 @@ import {
   useKartePrescriptionsInfinite,
   useKarteQuestionnaireResponsesInfinite,
   useKarteVitalsInfinite,
+  usePatientOutpatientExam,
+  useUpdateOutpatientExam,
   type KarteProblemFilter,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -70,7 +72,8 @@ import {
   type KarteOtherTabKey,
   type KarteTabKey,
 } from "../karteUrl";
-import { today } from "../lib/dates";
+import { buildFinishedOutpatientEncounter } from "../fhir/outpatientEncounterHelpers";
+import { nowFhirDateTime, today } from "../lib/dates";
 import { useKarteReturnTo } from "../returnTo";
 import {
   clampLeftWidthRatio,
@@ -113,6 +116,28 @@ export function KartePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   // 「戻る」はカルテを開いた元の一覧へ。遷移元が分からなければ全患者へ戻す。
   const returnTo = useKarteReturnTo();
+  const navigate = useNavigate();
+
+  // 外来で診察中なら、ヘッダから診察を終えられるようにする。診察中でなければ
+  // (入院患者や、外来受付を経ずに開いたカルテ)null が返り、ボタンは出ない。
+  const outpatientExam = usePatientOutpatientExam(patientId);
+  const finishExam = useUpdateOutpatientExam();
+
+  function handleFinishExam() {
+    const exam = outpatientExam.data;
+    if (!exam) return;
+    if (!window.confirm("診察を終了します。よろしいですか?")) return;
+    finishExam.mutate(
+      {
+        encounter: buildFinishedOutpatientEncounter(exam.encounter, nowFhirDateTime()),
+        appointment: exam.appointment,
+        appointmentStatus: exam.appointment ? "fulfilled" : undefined,
+      },
+      // 診察が終わったら次に見るのは外来患者一覧なので、どの入口から開いていても
+      // そこへ戻す(useKarteReturnTo の戻り先とは別)。
+      { onSuccess: () => navigate("/outpatients") },
+    );
+  }
 
   const tab = parseKarteTab(searchParams.get(KARTE_TAB_PARAM));
   const view = searchParams.get(KARTE_VIEW_PARAM) ?? "";
@@ -799,10 +824,16 @@ export function KartePage() {
       {/* 見出しは置かず、患者情報と戻るボタンを 1 行にまとめて縦幅を左右のペインに回す。 */}
       <div className="karte-page__header">
         <PatientHeader patientId={patientId} />
+        {outpatientExam.data && (
+          <button type="button" disabled={finishExam.isPending} onClick={handleFinishExam}>
+            診察終了
+          </button>
+        )}
         <Link to={returnTo} className="button">
           ← 戻る
         </Link>
       </div>
+      <ErrorBanner error={finishExam.error} />
 
       {/* 左右の幅はカスタムプロパティで渡す。狭い画面では CSS 側で縦積みに切り替える
           ため、grid-template-columns 自体はインラインで上書きしない。 */}

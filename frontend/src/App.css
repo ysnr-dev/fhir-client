@@ -7548,12 +7548,19 @@ body.page-wide .app__main {
   white-space: nowrap;
 }
 
-/* 受付済(待合にいる)だけを塗りつぶしで強調し、診療済は落ち着かせ、
-   未来院は地に沈める(放射線検査一覧の進捗と同じ使い分け)。 */
+/* いま手が要る状態(受付済=待合にいる / 診察中)を塗りつぶしで強調し、診療済は
+   落ち着かせ、未来院は地に沈める(放射線検査一覧の進捗と同じ使い分け)。
+   受付済と診察中はどちらも塗るので、色を変えて並んだときに見分けられるようにする。 */
 .outpatient__status--checked-in {
   color: var(--bg);
   border-color: var(--accent);
   background: var(--accent);
+}
+
+.outpatient__status--in-exam {
+  color: var(--bg);
+  border-color: var(--lab-low);
+  background: var(--lab-low);
 }
 
 .outpatient__status--fulfilled {

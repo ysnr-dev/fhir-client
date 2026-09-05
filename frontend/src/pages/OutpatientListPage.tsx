@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import { useCurrentPractitioner } from "../api/authQueries";
 import {
@@ -9,7 +9,9 @@ import {
   useOutpatientList,
   usePractitionerOptions,
   usePractitionerRoles,
+  useStartOutpatientExam,
   useUpdateAppointmentStatus,
+  useUpdateOutpatientExam,
   type OutpatientRow,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -29,11 +31,24 @@ import {
   appointmentDepartmentCode,
   appointmentDepartmentLabel,
   appointmentScheduleLabel,
-  appointmentStatusLabel,
   appointmentTimeLabel,
   canCheckInAppointment,
   isActiveAppointment,
 } from "../fhir/appointmentHelpers";
+import {
+  IN_EXAM_LABEL,
+  IN_EXAM_STATUS,
+  buildExamFinishCancelledEncounter,
+  buildExamStartCancelledEncounter,
+  buildFinishedOutpatientEncounter,
+  buildOutpatientEncounter,
+  canStartExam,
+  isExamFinished,
+  isExamInProgress,
+  outpatientStatusCode,
+  outpatientStatusLabel,
+} from "../fhir/outpatientEncounterHelpers";
+import { nowFhirDateTime } from "../lib/dates";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
@@ -62,12 +77,24 @@ const emptyFilters: Filters = {
   status: "",
 };
 
-// 取消・誤登録は一覧に出さないので、絞り込みの選択肢にも出さない。
-const STATUS_OPTIONS = APPOINTMENT_STATUS_OPTIONS.filter(
+// 取消・誤登録は一覧に出さないので、絞り込みの選択肢にも出さない。「診察中」は
+// Appointment.status に無い状態なので、受付済と診療済の間に差し込む。
+const STATUS_OPTIONS: { code: string; label: string }[] = APPOINTMENT_STATUS_OPTIONS.filter(
   (option) => !["cancelled", "entered-in-error"].includes(option.code),
+).flatMap((option) =>
+  option.code === "checked-in"
+    ? [
+        { code: option.code, label: option.label },
+        { code: IN_EXAM_STATUS, label: IN_EXAM_LABEL },
+      ]
+    : [{ code: option.code, label: option.label }],
 );
 
 export function OutpatientListPage() {
+  const navigate = useNavigate();
+  // 診察を始めたら続けてカルテを開く。カルテの「戻る」でこの一覧に戻れるよう、
+  // 行の「カルテ」リンクと同じ遷移元を渡す。
+  const returnLinkState = useReturnLinkState();
   // 診察日は必須。未選択にはできないので当日から始める。
   const [date, setDate] = useState(today);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
@@ -87,6 +114,8 @@ export function OutpatientListPage() {
   const locations = useLocationOptions();
   const updateStatus = useUpdateAppointmentStatus();
   const cancel = useCancelAppointment();
+  const startExam = useStartOutpatientExam();
+  const updateExam = useUpdateOutpatientExam();
 
   // ログイン中の医師には自分の予約から見せる(受付や代行入力の職種はすべての予約)。
   const { practitionerId } = useCurrentPractitioner();
@@ -111,6 +140,50 @@ export function OutpatientListPage() {
   function handleDateChange(value: string) {
     // 日付を空にはさせない(空で検索すると全期間になってしまう)。
     if (value) setDate(value);
+  }
+
+  // 診察開始・診察終了は受付ボタンと同じく 1 クリック(現在時刻をそのまま記録する)。
+  // 巻き戻しになる取消だけ確認を挟む。
+  function handleStartExam(row: OutpatientRow) {
+    const patientId = row.patient?.id ?? appointmentActorId(row.appointment, "Patient");
+    startExam.mutate(
+      buildOutpatientEncounter(row.appointment, row.patient, nowFhirDateTime()),
+      {
+        // 診察を始めたら次にやることはカルテを書くことなので、そのまま開く。
+        // 患者が辿れないときだけ一覧に留まる(開き先が決まらないため)。
+        onSuccess: () => {
+          if (patientId) {
+            navigate(`/patients/${patientId}/karte`, { state: returnLinkState });
+          }
+        },
+      },
+    );
+  }
+
+  function handleFinishExam(row: OutpatientRow) {
+    if (!row.encounter) return;
+    updateExam.mutate({
+      encounter: buildFinishedOutpatientEncounter(row.encounter, nowFhirDateTime()),
+      appointment: row.appointment,
+      appointmentStatus: "fulfilled",
+    });
+  }
+
+  function handleCancelExamStart(row: OutpatientRow) {
+    if (!row.encounter) return;
+    if (!window.confirm("診察開始を取り消して受付済に戻します。よろしいですか?")) return;
+    // 予約は受付済のままなので触らない。
+    updateExam.mutate({ encounter: buildExamStartCancelledEncounter(row.encounter) });
+  }
+
+  function handleCancelExamFinish(row: OutpatientRow) {
+    if (!row.encounter) return;
+    if (!window.confirm("診察終了を取り消して診察中に戻します。よろしいですか?")) return;
+    updateExam.mutate({
+      encounter: buildExamFinishCancelledEncounter(row.encounter),
+      appointment: row.appointment,
+      appointmentStatus: "checked-in",
+    });
   }
 
   function handleCancel(appointment: fhir4.Appointment) {
@@ -151,7 +224,9 @@ export function OutpatientListPage() {
 
       <ErrorBanner error={list.error} />
       <ErrorBanner error={departments.error ?? practitioners.error ?? locations.error} />
-      <ErrorBanner error={updateStatus.error ?? cancel.error} />
+      <ErrorBanner
+        error={updateStatus.error ?? cancel.error ?? startExam.error ?? updateExam.error}
+      />
 
       {list.data?.truncated && (
         <p className="error-banner__line error-banner__line--error" role="status">
@@ -185,10 +260,19 @@ export function OutpatientListPage() {
                   <OutpatientTableRow
                     key={row.appointment.id}
                     row={row}
-                    pending={updateStatus.isPending || cancel.isPending}
+                    pending={
+                      updateStatus.isPending ||
+                      cancel.isPending ||
+                      startExam.isPending ||
+                      updateExam.isPending
+                    }
                     onChangeStatus={(status) =>
                       updateStatus.mutate({ appointment: row.appointment, status })
                     }
+                    onStartExam={() => handleStartExam(row)}
+                    onFinishExam={() => handleFinishExam(row)}
+                    onCancelExamStart={() => handleCancelExamStart(row)}
+                    onCancelExamFinish={() => handleCancelExamFinish(row)}
                     onCancel={() => handleCancel(row.appointment)}
                   />
                 ))}
@@ -228,7 +312,9 @@ function matchesFilters(row: OutpatientRow, filters: Filters): boolean {
   if (filters.locationId && appointmentActorId(appointment, "Location") !== filters.locationId) {
     return false;
   }
-  if (filters.status && appointment.status !== filters.status) return false;
+  if (filters.status && outpatientStatusCode(appointment, row.encounter) !== filters.status) {
+    return false;
+  }
   return true;
 }
 
@@ -343,21 +429,33 @@ function OutpatientTableRow({
   row,
   pending,
   onChangeStatus,
+  onStartExam,
+  onFinishExam,
+  onCancelExamStart,
+  onCancelExamFinish,
   onCancel,
 }: {
   row: OutpatientRow;
   pending: boolean;
   onChangeStatus: (status: fhir4.Appointment["status"]) => void;
+  onStartExam: () => void;
+  onFinishExam: () => void;
+  onCancelExamStart: () => void;
+  onCancelExamFinish: () => void;
   onCancel: () => void;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
-  const { appointment, patient } = row;
+  const { appointment, patient, encounter } = row;
   const patientId = patient?.id ?? appointmentActorId(appointment, "Patient");
   const patientName = patient
     ? displayName(patient)
     : appointmentActorDisplay(appointment, "Patient");
-  const checkedIn = appointment.status === "checked-in";
+  const inExam = isExamInProgress(encounter);
+  const examFinished = isExamFinished(encounter);
+  // 受付の取消・予約の取消は、診察が始まる前に限る(始まってからの巻き戻しは
+  // 診察開始の取消が先)。
+  const checkedIn = appointment.status === "checked-in" && !encounter;
 
   return (
     <tr>
@@ -374,14 +472,27 @@ function OutpatientTableRow({
       <td>{appointmentActorDisplay(appointment, "Practitioner") || "-"}</td>
       <td>{appointmentActorDisplay(appointment, "Location") || "-"}</td>
       <td>
-        <span className={`outpatient__status outpatient__status--${appointment.status}`}>
-          {appointmentStatusLabel(appointment.status)}
+        <span
+          className={`outpatient__status outpatient__status--${outpatientStatusCode(appointment, encounter)}`}
+        >
+          {outpatientStatusLabel(appointment, encounter)}
         </span>
       </td>
       <td className="outpatient__actions sticky-table__fix-actions">
+        {/* 受付 → 診察開始 → 診察終了 と、同じ位置でボタンが入れ替わる。 */}
         {canCheckInAppointment(appointment) && (
           <button type="button" disabled={pending} onClick={() => onChangeStatus("checked-in")}>
             受付
+          </button>
+        )}
+        {canStartExam(appointment, encounter) && (
+          <button type="button" disabled={pending} onClick={onStartExam}>
+            診察開始
+          </button>
+        )}
+        {inExam && (
+          <button type="button" disabled={pending} onClick={onFinishExam}>
+            診察終了
           </button>
         )}
         {patientId && (
@@ -389,10 +500,10 @@ function OutpatientTableRow({
             カルテ
           </Link>
         )}
-        {/* 受付取消・予約取消は押し間違えると受付が巻き戻るので、一段畳んで置く。
-            一覧は横スクロールできるよう overflow を持つため、メニューは
+        {/* 受付取消・診察の取消・予約取消は押し間違えると進捗が巻き戻るので、一段畳んで
+            置く。一覧は横スクロールできるよう overflow を持つため、メニューは
             escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
-        {isActiveAppointment(appointment) && (
+        {(isActiveAppointment(appointment) || examFinished) && (
           <RowMenu label="この予約の操作" escapesClipping>
             {checkedIn && (
               <button
@@ -404,14 +515,37 @@ function OutpatientTableRow({
                 受付を取り消す
               </button>
             )}
-            <button
-              type="button"
-              className="row-menu__item row-menu__item--danger"
-              disabled={pending}
-              onClick={onCancel}
-            >
-              予約を取り消す
-            </button>
+            {inExam && (
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={pending}
+                onClick={onCancelExamStart}
+              >
+                診察開始を取り消す
+              </button>
+            )}
+            {examFinished && (
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={pending}
+                onClick={onCancelExamFinish}
+              >
+                診察終了を取り消す
+              </button>
+            )}
+            {/* 診察が始まった予約は取り消せない(先に診察開始を取り消す)。 */}
+            {isActiveAppointment(appointment) && !encounter && (
+              <button
+                type="button"
+                className="row-menu__item row-menu__item--danger"
+                disabled={pending}
+                onClick={onCancel}
+              >
+                予約を取り消す
+              </button>
+            )}
           </RowMenu>
         )}
       </td>

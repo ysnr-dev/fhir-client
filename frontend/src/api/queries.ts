@@ -361,6 +361,12 @@ import {
   type SlotSelection,
 } from "../fhir/appointmentHelpers";
 import {
+  EXAM_IN_PROGRESS_STATUS,
+  OUTPATIENT_CLASS_CODE,
+  latestExamByAppointment,
+  outpatientEncounterAppointmentId,
+} from "../fhir/outpatientEncounterHelpers";
+import {
   baseRoleOf,
   isDoctorRoleCode,
   parsePractitionerRole,
@@ -2676,12 +2682,48 @@ const OUTPATIENT_MAX_PAGES = 5;
 export interface OutpatientRow {
   appointment: fhir4.Appointment;
   patient?: fhir4.Patient;
+  /** この予約の診察(外来 Encounter)。診察が始まっていなければ無い。 */
+  encounter?: fhir4.Encounter;
 }
 
 export interface OutpatientListResult {
   rows: OutpatientRow[];
   /** 上限まで読んでも読み切れなかった。 */
   truncated: boolean;
+}
+
+/**
+ * その日の外来の診察(Encounter)を予約 id ごとに引く。
+ *
+ * status では絞らない(診察中と診察終了の両方が要る)。取り消した診察開始
+ * (entered-in-error)は latestExamByAppointment が落とす — 上流の Encounter が
+ * status:not 修飾子に応えるか未確認なので、画面側で落とす方を採る。
+ *
+ * 予約からの逆引き(Encounter.appointment 検索)は使わず、入院一覧と同じ
+ * 「日付 + class」で 1 日ぶんを読んでから突き合わせる(上流の対応状況に依存しない)。
+ */
+async function fetchOutpatientExams(date: string): Promise<Map<string, fhir4.Encounter>> {
+  const encounters: fhir4.Encounter[] = [];
+
+  for (let page = 0; page < OUTPATIENT_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("class", OUTPATIENT_CLASS_CODE);
+    // 同じ名前を 2 回渡すと AND(期間の重なり)になる。fetchInpatients と同じ手。
+    params.append("date", `ge${date}`);
+    params.append("date", `le${date}`);
+    params.set("_count", String(OUTPATIENT_PAGE));
+    params.set("_offset", String(page * OUTPATIENT_PAGE));
+
+    const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
+    const matched =
+      bundle.entry
+        ?.map((e) => e.resource)
+        .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter") ?? [];
+    encounters.push(...matched);
+    if (matched.length < OUTPATIENT_PAGE) break;
+  }
+
+  return latestExamByAppointment(encounters);
 }
 
 async function fetchOutpatientList(date: string): Promise<OutpatientListResult> {
@@ -2719,6 +2761,8 @@ async function fetchOutpatientList(date: string): Promise<OutpatientListResult> 
     if (page === OUTPATIENT_MAX_PAGES - 1) truncated = true;
   }
 
+  const examByAppointment = await fetchOutpatientExams(date);
+
   const rows = appointments
     // 検査予約(オーダーにぶら下がる予約)の受付・実施は部門のワークリストが追うので
     // 外来一覧には出さない。これだけは検索パラメータで表せないので画面側で落とす。
@@ -2726,6 +2770,7 @@ async function fetchOutpatientList(date: string): Promise<OutpatientListResult> 
     .map((appointment) => ({
       appointment,
       patient: patientsById.get(appointmentActorId(appointment, "Patient")),
+      encounter: appointment.id ? examByAppointment.get(appointment.id) : undefined,
     }));
 
   // 診察の順に並べたいので開始時刻の早い順(予約タブの新しい順とは逆)。
@@ -2777,6 +2822,111 @@ export function useUpdateAppointmentStatus() {
       });
     },
     onSuccess: () => invalidateAppointments(queryClient),
+  });
+}
+
+// ---- 診察の開始・終了(外来 Encounter) ----
+//
+// 診察中は Appointment.status では表せないので、診察開始で外来 Encounter を建てる
+// (理由は fhir/outpatientEncounterHelpers.ts の冒頭)。診察を書き換えるときに予約も
+// 一緒に動かすものは、片方だけが通ることのないよう必ず同じ transaction に載せる。
+
+function invalidateOutpatientExams(queryClient: QueryClient) {
+  invalidateAppointments(queryClient);
+  queryClient.invalidateQueries({ queryKey: ["Encounter"] });
+}
+
+/** 診察開始。予約は受付済(checked-in)のままなので触らない。 */
+export function useStartOutpatientExam() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (encounter: fhir4.Encounter) => createResource(encounter),
+    onSuccess: () => invalidateOutpatientExams(queryClient),
+  });
+}
+
+/**
+ * 診察を書き換える。診察終了(Encounter を finished + 予約を fulfilled)・
+ * 診察終了の取消(in-progress + checked-in)・診察開始の取消(entered-in-error、
+ * 予約は据え置き)をこれ 1 本で賄う。
+ *
+ * 予約も動かすときは appointment を渡す。診察だけが進んで予約が受付済のまま、
+ * といった食い違いを作らないよう 1 本の transaction で書く。一覧は検索結果の
+ * リソースを持っているだけで ETag が無いため、単体 PUT ではなく Bundle で書く。
+ */
+export function useUpdateOutpatientExam() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      encounter,
+      appointment,
+      appointmentStatus,
+    }: {
+      encounter: fhir4.Encounter;
+      appointment?: fhir4.Appointment;
+      appointmentStatus?: fhir4.Appointment["status"];
+    }) => {
+      const extraEntries: fhir4.BundleEntry[] = [];
+      if (appointment && appointmentStatus) {
+        // BundleEntry.resource は基底の Resource 型なので、更新後の予約は
+        // Appointment として組んでから渡す(useUpdateAppointmentStatus と同じ)。
+        const updated: fhir4.Appointment = { ...appointment, status: appointmentStatus };
+        extraEntries.push({
+          resource: updated,
+          request: { method: "PUT", url: `Appointment/${appointment.id}` },
+        });
+      }
+      return postBundle(buildEncounterUpdateBundle(encounter, extraEntries));
+    },
+    onSuccess: () => invalidateOutpatientExams(queryClient),
+  });
+}
+
+/** カルテのヘッダに「診察終了」を出すのに要るもの。 */
+export interface OutpatientExam {
+  encounter: fhir4.Encounter;
+  /** 診察のもとになった予約。診察終了で fulfilled に書き換えるので現物が要る。 */
+  appointment?: fhir4.Appointment;
+}
+
+async function fetchPatientOutpatientExam(patientId: string): Promise<OutpatientExam | null> {
+  const params = new URLSearchParams();
+  params.set("subject", `Patient/${patientId}`);
+  params.set("status", EXAM_IN_PROGRESS_STATUS);
+  params.set("class", OUTPATIENT_CLASS_CODE);
+  params.set("_count", "10");
+
+  const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
+  const encounters =
+    bundle.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter") ?? [];
+  // 同じ患者の診察が 2 件並ぶことは無い想定だが、あれば開始が新しい方を採る
+  // (データがおかしくてもカルテの見出しが壊れないように)。
+  const encounter = encounters.reduce<fhir4.Encounter | undefined>(
+    (latest, current) =>
+      !latest || (current.period?.start ?? "") > (latest.period?.start ?? "") ? current : latest,
+    undefined,
+  );
+  if (!encounter) return null;
+
+  const appointmentId = outpatientEncounterAppointmentId(encounter);
+  if (!appointmentId) return { encounter };
+  const { data: appointment } = await readResource<fhir4.Appointment>(
+    "Appointment",
+    appointmentId,
+  );
+  return { encounter, appointment };
+}
+
+/** その患者がいま診察中ならその診察。診察中でなければ null。 */
+export function usePatientOutpatientExam(patientId: string | undefined) {
+  return useQuery({
+    queryKey: ["Encounter", "patient-outpatient-exam", patientId],
+    queryFn: () => fetchPatientOutpatientExam(patientId as string),
+    enabled: Boolean(patientId),
   });
 }
 
