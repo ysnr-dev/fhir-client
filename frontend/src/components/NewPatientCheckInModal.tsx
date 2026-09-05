@@ -110,9 +110,9 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
         </div>
       )}
 
-      <form className="new-patient" onSubmit={handleSubmit}>
-        <div className="new-patient__row">
-          <label className="new-patient__field--number">
+      <form className="patient-fields" onSubmit={handleSubmit}>
+        <div className="patient-fields__row">
+          <label className="patient-fields__field--number">
             患者番号
             <input
               type="text"
@@ -123,12 +123,12 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
           </label>
         </div>
 
-        <div className="new-patient__row">
-          <span className="new-patient__group">患者氏名</span>
+        <div className="patient-fields__row">
+          <span className="patient-fields__group">患者氏名</span>
           <label>
             <span>
               姓
-              <span className="new-patient__required">必須</span>
+              <span className="patient-fields__required">必須</span>
             </span>
             <NameKanjiInput
               value={values.familyKanji}
@@ -140,7 +140,7 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
           <label>
             <span>
               名
-              <span className="new-patient__required">必須</span>
+              <span className="patient-fields__required">必須</span>
             </span>
             <NameKanjiInput
               value={values.givenKanji}
@@ -151,12 +151,12 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
           </label>
         </div>
 
-        <div className="new-patient__row">
-          <span className="new-patient__group">カナ氏名</span>
+        <div className="patient-fields__row">
+          <span className="patient-fields__group">カナ氏名</span>
           <label>
             <span>
               セイ
-              <span className="new-patient__required">必須</span>
+              <span className="patient-fields__required">必須</span>
             </span>
             <input
               type="text"
@@ -167,7 +167,7 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
           <label>
             <span>
               メイ
-              <span className="new-patient__required">必須</span>
+              <span className="patient-fields__required">必須</span>
             </span>
             <input
               type="text"
@@ -177,11 +177,11 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
           </label>
         </div>
 
-        <div className="new-patient__row">
-          <label className="new-patient__field--gender">
+        <div className="patient-fields__row">
+          <label className="patient-fields__field--gender">
             <span>
               性別
-              <span className="new-patient__required">必須</span>
+              <span className="patient-fields__required">必須</span>
             </span>
             <select
               value={values.gender}
@@ -197,7 +197,7 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
           <label>
             <span>
               生年月日
-              <span className="new-patient__required">必須</span>
+              <span className="patient-fields__required">必須</span>
             </span>
             <input
               type="date"
@@ -207,8 +207,8 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
           </label>
         </div>
 
-        <span className="new-patient__group">住所</span>
-        <div className="new-patient__row new-patient__row--indent">
+        <span className="patient-fields__group">住所</span>
+        <div className="patient-fields__row patient-fields__row--indent">
           <label>
             郵便番号
             <PostalCodeInput
@@ -234,8 +234,8 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
             />
           </label>
         </div>
-        <div className="new-patient__row new-patient__row--indent">
-          <label className="new-patient__field--wide">
+        <div className="patient-fields__row patient-fields__row--indent">
+          <label className="patient-fields__field--wide">
             番地方書
             <input
               type="text"
@@ -245,8 +245,8 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
           </label>
         </div>
 
-        <span className="new-patient__group">電話番号</span>
-        <div className="new-patient__row new-patient__row--indent">
+        <span className="patient-fields__group">電話番号</span>
+        <div className="patient-fields__row patient-fields__row--indent">
           <label>
             固定電話
             <input
@@ -265,8 +265,8 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
           </label>
         </div>
 
-        <div className="new-patient__row">
-          <label className="new-patient__field--email">
+        <div className="patient-fields__row">
+          <label className="patient-fields__field--email">
             EMail
             <input
               type="email"
@@ -277,14 +277,14 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
         </div>
 
         {/* ここから受付内容。患者情報と続けて読ませたくないので見出しで分ける。 */}
-        <h3 className="new-patient__section">受付情報</h3>
+        <h3 className="patient-fields__section">受付情報</h3>
         <ReceptionFields
-          className="new-patient__row"
+          className="patient-fields__row"
           values={selects}
           onChange={setSelects}
         />
 
-        <div className="walk-in__actions new-patient__actions">
+        <div className="walk-in__actions patient-fields__actions">
           <button type="submit" disabled={submitting}>
             {submitting ? "登録中..." : "登録して受付"}
           </button>

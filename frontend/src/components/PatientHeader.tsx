@@ -3,7 +3,13 @@ import { usePatientCautions } from "../api/masterQueries";
 import { useActiveFlags, usePatient, usePatientAdmission } from "../api/queries";
 import type { PatientCaution } from "../api/masterClient";
 import { summarizeFlag } from "../fhir/flagHelpers";
-import { calculateAge, displayKana, displayName, genderLabel } from "../fhir/patientHelpers";
+import {
+  calculateAge,
+  displayKana,
+  displayName,
+  genderLabel,
+  languageLabel,
+} from "../fhir/patientHelpers";
 import { CautionPictogram } from "./icons/cautionPictograms";
 
 interface PatientHeaderProps {
@@ -25,6 +31,19 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
   const kana = displayKana(p);
   const age = p.birthDate ? calculateAge(p.birthDate) : undefined;
   const birth = p.birthDate ? `${p.birthDate}${age !== undefined ? `（${age}歳）` : ""}` : "-";
+  // 死亡は「その患者に今からオーダーを出してよいか」に直結するので帯に出す。
+  const deceasedDate = p.deceasedDateTime?.slice(0, 10) ?? "";
+  const deceased = deceasedDate || p.deceasedBoolean === true;
+  // 通訳の要否は窓口・病棟が最初に知りたいので、言語と併せて帯に出す。
+  const communication = p.communication?.[0];
+  const languageCode = communication?.language?.coding?.[0]?.code ?? "";
+  const interpreter = communication?.preferred === true;
+  const languageText = [
+    languageCode && languageCode !== "und" ? languageLabel(languageCode) : "",
+    interpreter ? "通訳必要" : "",
+  ]
+    .filter(Boolean)
+    .join(" / ");
 
   return (
     <div className="patient-header">
@@ -50,6 +69,20 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
         <span className="patient-header__label">性別</span>
         <span className="patient-header__value">{genderLabel(p.gender)}</span>
       </span>
+      {deceased && (
+        <span className="patient-header__item">
+          <span className="patient-header__label">死亡</span>
+          <span className="patient-header__value patient-header__value--deceased">
+            {deceasedDate || "あり"}
+          </span>
+        </span>
+      )}
+      {languageText && (
+        <span className="patient-header__item">
+          <span className="patient-header__label">言語</span>
+          <span className="patient-header__value">{languageText}</span>
+        </span>
+      )}
       {admissionPlace && (
         <span className="patient-header__item">
           <span className="patient-header__label">入院</span>

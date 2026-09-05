@@ -6,6 +6,7 @@ import {
   displayName,
   genderShortLabel,
 } from "../fhir/patientHelpers";
+import { PatientDeceasedMark } from "./PatientRowCells";
 import { ErrorBanner } from "./ErrorBanner";
 import { RowMenu } from "./RowMenu";
 import { useReturnLinkState } from "../returnTo";
@@ -45,7 +46,10 @@ export function PatientTable({ patients }: { patients: fhir4.Patient[] }) {
           {patients.map((patient) => (
             <tr key={patient.id}>
               <td>{patient.identifier?.[0]?.value ?? "-"}</td>
-              <td>{displayName(patient)}</td>
+              <td>
+                {displayName(patient)}
+                <PatientDeceasedMark patient={patient} />
+              </td>
               <td>{displayKana(patient)}</td>
               <td>{genderShortLabel(patient.gender)}</td>
               <td>

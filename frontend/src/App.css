@@ -321,6 +321,22 @@
   font-weight: 600;
 }
 
+/* 一覧の死亡の印。氏名の後ろに小さく添える。 */
+.patient-cells__deceased {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid #c62828;
+  border-radius: 3px;
+  color: #c62828;
+  font-size: 11px;
+}
+
+/* 死亡は見落とすと生存前提の操作をしてしまうので、注意と同じ赤で出す。 */
+.patient-header__value--deceased {
+  color: #c62828;
+  font-weight: 600;
+}
+
 /* 診療上の注意のピクトグラム。帯の行を増やさないよう、文字は出さず図柄だけを
    並べる(名称と内容は title / aria-label で読む)。区分ごとに色を分ける。 */
 .patient-header__cautions {
@@ -391,6 +407,11 @@
 .flag-table__pictogram--administrative,
 .flag-form__pictogram--administrative {
   color: #6b7280;
+}
+
+/* プロファイルタブは区画を縦に積む。区画の間は見出しが埋もれない程度に空ける。 */
+.karte-profile__section + .karte-profile__section {
+  margin-top: 24px;
 }
 
 /* 「終了したものも表示」。常設の絞り込みなので、隣の新規登録ボタンより小さくして
@@ -473,8 +494,8 @@ button:disabled {
 .patient-search-form select,
 .patient-form input,
 .patient-form select,
-.new-patient__row input,
-.new-patient__row select,
+.patient-fields__row input,
+.patient-fields__row select,
 .walk-in__fields input,
 .walk-in__fields select,
 .walk-in__fields textarea {
@@ -673,18 +694,6 @@ button:disabled {
 
 .postal-code__message {
   font-size: 12px;
-}
-
-/* 住所は「郵便番号・都道府県・市区町村」と「住所」の 2 段になるので、
-   fieldset の横並び(.patient-form fieldset)を縦積みに戻す。 */
-.patient-form__address {
-  flex-direction: column;
-}
-
-.patient-form__row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
 }
 
 .patient-form__checkbox {
@@ -7404,24 +7413,27 @@ body.page-wide .app__main {
 
 /* 新患登録モーダル。1 行に収まる項目は横に並べ、住所・電話番号はまとまりの名前を
    出して次の行に下げる。 */
-.new-patient {
+/* 患者の入力欄の並び。新患登録モーダルと患者登録・編集フォームで共有する
+   (同じ患者属性を同じ並びで書けるようにするため)。枠(fieldset)は使わず、
+   まとまりの名前(__group)と一段下げ(--indent)で区切る。 */
+.patient-fields {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.new-patient__row {
+.patient-fields__row {
   display: flex;
   align-items: flex-end;
   gap: 16px;
 }
 
 /* 住所・電話番号の中身。まとまりの名前の下に一段下げて置く。 */
-.new-patient__row--indent {
+.patient-fields__row--indent {
   padding-left: 16px;
 }
 
-.new-patient__row label {
+.patient-fields__row label {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -7430,20 +7442,20 @@ body.page-wide .app__main {
 }
 
 /* 「患者氏名」「住所」などのまとまりの名前。入力欄のラベルと同じ大きさで置く。 */
-.new-patient__group {
+.patient-fields__group {
   align-self: flex-start;
   font-size: 13px;
   color: var(--text);
 }
 
 /* 行の中に並べるときだけ、入力欄の高さに合わせて下に寄せる。 */
-.new-patient__row > .new-patient__group {
+.patient-fields__row > .patient-fields__group {
   align-self: flex-end;
   padding-bottom: 8px;
 }
 
 /* 必須の印。ラベルに添える小さなバッジ。 */
-.new-patient__required {
+.patient-fields__required {
   margin-left: 6px;
   padding: 0 4px;
   border: 1px solid var(--accent-border);
@@ -7455,24 +7467,58 @@ body.page-wide .app__main {
   vertical-align: 1px;
 }
 
-.new-patient__field--number input {
+.patient-fields__field--number input {
   width: 160px;
 }
 
-.new-patient__field--gender select {
+.patient-fields__field--gender select {
   width: 120px;
 }
 
-.new-patient__field--email input {
+.patient-fields__field--email input {
   width: 280px;
 }
 
-.new-patient__field--wide {
+.patient-fields__field--wide {
   flex: 1;
 }
 
+/* 行の中に並べるボタン(連絡先の追加・削除、かかりつけ医の選択)。
+   入力欄の高さに合わせて下に寄せる。 */
+.patient-fields__row > button {
+  align-self: flex-end;
+}
+
+/* 「通訳が必要」「有効」のような、ラベルを右に置くチェック。
+   .patient-fields__row label の縦積み(ラベルが上、入力が下)を 1 行に戻し、
+   隣の入力欄と下端を揃える。 */
+.patient-fields__checkbox {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+  align-self: flex-end;
+  height: 33px;
+  white-space: nowrap;
+}
+
+.patient-fields__checkbox input {
+  width: 13px;
+  height: 13px;
+}
+
+/* 連絡先 1 件。何件目かを見分けられるよう枠で区切り、一段下げて置く。 */
+.patient-fields__contact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-left: 16px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
 /* 受付情報の見出し。患者情報の続きに読まれないよう、上に余白と罫線を置く。 */
-.new-patient__section {
+.patient-fields__section {
   margin: 12px 0 0;
   padding-top: 12px;
   border-top: 1px solid var(--border);
@@ -7480,7 +7526,7 @@ body.page-wide .app__main {
   color: var(--text-h);
 }
 
-.new-patient__actions {
+.patient-fields__actions {
   margin-top: 16px;
 }
 

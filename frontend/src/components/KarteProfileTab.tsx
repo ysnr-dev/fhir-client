@@ -2,15 +2,29 @@ import { useEffect, useState } from "react";
 import { FhirError } from "../api/fhirClient";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { usePatientCautions } from "../api/masterQueries";
-import { useCreateFlag, useFlag, useFlagSearch, useUpdateFlag } from "../api/queries";
+import {
+  useCreateFlag,
+  useFlag,
+  useFlagSearch,
+  usePatient,
+  useUpdateFlag,
+  useUpdatePatient,
+} from "../api/queries";
 import type { PatientCaution } from "../api/masterClient";
 import { buildFlag, parseFlagForm, type FlagFormValues } from "../fhir/flagHelpers";
-import { isPatientMismatch } from "../fhir/patientHelpers";
+import {
+  buildPatient,
+  isPatientMismatch,
+  parsePatient,
+  type PatientFormValues,
+} from "../fhir/patientHelpers";
+import { PatientForm } from "./PatientForm";
 import { ErrorBanner } from "./ErrorBanner";
 import { FlagDetailPanel } from "./FlagDetailPanel";
 import { FlagForm } from "./FlagForm";
 import { FlagTable } from "./FlagTable";
 import { Pagination } from "./Pagination";
+import { PatientBasicSection } from "./PatientBasicSection";
 
 /**
  * カルテ画面の「プロファイル」タブ。時系列ではなく、患者の「現在の状態」を
@@ -27,15 +41,21 @@ type Mode =
   | { kind: "list" }
   | { kind: "detail"; flagId: string }
   | { kind: "create" }
-  | { kind: "edit"; flagId: string };
+  | { kind: "edit"; flagId: string }
+  | { kind: "edit-patient" };
 
-type FormMode = Extract<Mode, { kind: "create" } | { kind: "edit" }> | null;
+// 入力途中のフォームは URL に載せない(復元しても入力内容は戻らないため)ので、
+// 登録・編集はこのコンポーネントの状態で持つ(karteUrl.ts 冒頭の方針)。
+type FormMode =
+  | Extract<Mode, { kind: "create" } | { kind: "edit" } | { kind: "edit-patient" }>
+  | null;
 
 const MODE_TITLES: Record<Mode["kind"], string> = {
   list: "プロファイル",
   detail: "注意の詳細",
   create: "注意の登録",
   edit: "注意の編集",
+  "edit-patient": "患者情報の編集",
 };
 
 interface KarteProfileTabProps {
@@ -81,6 +101,8 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
           <FlagDetailPanel patientId={patientId} flagId={mode.flagId} onEnded={backToList} />
         ) : mode.kind === "create" ? (
           <CreateForm patientId={patientId} onSaved={backToList} />
+        ) : mode.kind === "edit-patient" ? (
+          <PatientEditForm patientId={patientId} onSaved={backToList} />
         ) : (
           <EditForm patientId={patientId} flagId={mode.flagId} onSaved={backToList} />
         )}
@@ -95,6 +117,10 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
         onView={(flagId) => onViewChange(`${CAUTION_VIEW_PREFIX}${flagId}`)}
         onCreate={() => setForm({ kind: "create" })}
         onEdit={(flagId) => setForm({ kind: "edit", flagId })}
+      />
+      <PatientBasicSection
+        patientId={patientId}
+        onEdit={() => setForm({ kind: "edit-patient" })}
       />
     </div>
   );
@@ -258,6 +284,59 @@ function EditForm({
             submitError={conflict ? undefined : updateFlag.error}
             submitLabel="更新"
             editing
+          />
+        )
+      )}
+    </>
+  );
+}
+
+/**
+ * 患者情報の編集。患者編集画面へ遷移せずタブの中で開く(カルテを見ている
+ * ところから離れずに連絡先やかかりつけ医を直せるようにするため)。
+ * 楽観ロックと競合時の扱いは患者編集画面と同じ。
+ */
+function PatientEditForm({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {
+  const { data: result, isLoading, error: loadError } = usePatient(patientId);
+  const updatePatient = useUpdatePatient();
+  const [conflict, setConflict] = useState(false);
+
+  function handleSubmit(values: PatientFormValues) {
+    if (!result?.etag) return;
+    setConflict(false);
+    updatePatient.mutate(
+      { patient: buildPatient(values, patientId), etag: result.etag },
+      {
+        onSuccess: onSaved,
+        onError: (err) => {
+          if (err instanceof FhirError && err.status === 412) setConflict(true);
+        },
+      },
+    );
+  }
+
+  return (
+    <>
+      <ErrorBanner error={loadError} />
+
+      {conflict && (
+        <div className="error-banner" role="alert">
+          <p className="error-banner__line error-banner__line--error">
+            この患者情報は他の操作によって更新されています。画面を再読込してから再度編集してください。
+          </p>
+        </div>
+      )}
+
+      {isLoading ? (
+        <p>読み込み中...</p>
+      ) : (
+        result && (
+          <PatientForm
+            initialValues={parsePatient(result.data)}
+            onSubmit={handleSubmit}
+            submitting={updatePatient.isPending}
+            submitError={conflict ? undefined : updatePatient.error}
+            submitLabel="更新"
           />
         )
       )}

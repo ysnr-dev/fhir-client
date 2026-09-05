@@ -9,6 +9,51 @@ import { referenceId } from "./shared";
 // JP-Core: 医療記関番号(Medical Record Number)の標準 OID。デフォルトの識別子体系として使用する。
 export const DEFAULT_IDENTIFIER_SYSTEM = "urn:oid:1.2.392.100495.20.3.51";
 
+// 連絡先の続柄。Patient.contact.relationship の標準値集合(extensible)。
+// 「キーパーソン」に当たる単独のコードは無いので、緊急連絡先(C)・近親者(N)を
+// 別々に登録し、続柄の組み合わせで表す(N + C なら「近親者かつ緊急連絡先」)。
+const CONTACT_RELATIONSHIP_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0131";
+
+export const CONTACT_RELATIONSHIP_OPTIONS = [
+  { code: "C", display: "緊急連絡先" },
+  { code: "N", display: "近親者(キーパーソン)" },
+  { code: "BP", display: "支払・保証人" },
+  { code: "E", display: "勤務先" },
+  { code: "U", display: "不明" },
+] as const;
+
+export type ContactRelationship = (typeof CONTACT_RELATIONSHIP_OPTIONS)[number]["code"];
+
+export function contactRelationshipLabel(code: string | undefined): string {
+  return CONTACT_RELATIONSHIP_OPTIONS.find((o) => o.code === code)?.display ?? "";
+}
+
+// 使用言語。BCP-47(FHIR の languages 値集合)。日本語を既定に、窓口で当たりの
+// つく範囲だけを選択肢に出す(必要になったら足す)。
+const LANGUAGE_SYSTEM = "urn:ietf:bcp:47";
+
+export const LANGUAGE_OPTIONS = [
+  { code: "", display: "未指定" },
+  { code: "ja", display: "日本語" },
+  { code: "en", display: "英語" },
+  { code: "zh", display: "中国語" },
+  { code: "ko", display: "韓国語" },
+  { code: "pt", display: "ポルトガル語" },
+  { code: "es", display: "スペイン語" },
+  { code: "vi", display: "ベトナム語" },
+  { code: "tl", display: "タガログ語" },
+] as const;
+
+export type PatientLanguage = (typeof LANGUAGE_OPTIONS)[number]["code"];
+
+export function languageLabel(code: string | undefined): string {
+  return LANGUAGE_OPTIONS.find((o) => o.code === code)?.display ?? code ?? "";
+}
+
+// 旧姓・通称名の use。旧姓は maiden、通称は nickname(FHIR の標準コード)。
+const MAIDEN_NAME_USE = "maiden";
+const NICKNAME_USE = "nickname";
+
 export type Gender = "male" | "female" | "other" | "unknown" | "";
 
 // "Patient/123" 形式(サーバーによっては絶対 URL)の参照から患者 id を取り出す。
@@ -25,6 +70,35 @@ export function isPatientMismatch(
   return Boolean(patientId && sourcePatientId && sourcePatientId !== patientId);
 }
 
+/**
+ * 連絡先(緊急連絡先・キーパーソン・保証人)。Patient.contact の 1 件。
+ *
+ * `Patient.contact.name` は 0..1 で、漢字名とカナ名を別の HumanName に分ける
+ * 本人の氏名(humanName.ts)のやり方が使えない。連絡先に要るのは続柄・氏名・
+ * 電話までなので、カナは持たない(必要になったら RelatedPerson に切り出す)。
+ */
+export interface PatientContactValues {
+  /** 続柄。複数選べる(近親者かつ緊急連絡先など)。 */
+  relationships: string[];
+  family: string;
+  given: string;
+  /** 続柄の補足(「長女」「義弟」など)。標準コードでは表せないので自由記載。 */
+  relationshipNote: string;
+  homePhone: string;
+  mobilePhone: string;
+  address: string;
+}
+
+export const emptyPatientContact: PatientContactValues = {
+  relationships: [],
+  family: "",
+  given: "",
+  relationshipNote: "",
+  homePhone: "",
+  mobilePhone: "",
+  address: "",
+};
+
 export interface PatientFormValues {
   identifierSystem: string;
   identifierValue: string;
@@ -32,9 +106,19 @@ export interface PatientFormValues {
   givenKanji: string;
   familyKana: string;
   givenKana: string;
+  /** 旧姓(姓のみ)。保険証との照合・名寄せに使う。 */
+  maidenFamily: string;
+  /** 通称名(呼び名)。 */
+  nickname: string;
   gender: Gender;
   birthDate: string;
   active: boolean;
+  /** 死亡日時(日付のみ)。空なら生存として扱う。 */
+  deceasedDate: string;
+  /** 使用言語(BCP-47)。 */
+  language: PatientLanguage;
+  /** 通訳が要るか。communication.preferred の裏返しではなく、独立した印。 */
+  interpreterNeeded: boolean;
   postalCode: string;
   /** 都道府県。Address.state。 */
   prefecture: string;
@@ -45,6 +129,12 @@ export interface PatientFormValues {
   homePhone: string;
   mobilePhone: string;
   email: string;
+  /** 連絡先。0 件でもよい。 */
+  contacts: PatientContactValues[];
+  /** かかりつけ医・紹介元。Practitioner または Organization の参照。 */
+  generalPractitionerRef: string;
+  /** 参照先の表示名(再選択されるまで保持するだけの控え)。 */
+  generalPractitionerName: string;
 }
 
 export const emptyPatientForm: PatientFormValues = {
@@ -54,9 +144,14 @@ export const emptyPatientForm: PatientFormValues = {
   givenKanji: "",
   familyKana: "",
   givenKana: "",
+  maidenFamily: "",
+  nickname: "",
   gender: "",
   birthDate: "",
   active: true,
+  deceasedDate: "",
+  language: "",
+  interpreterNeeded: false,
   postalCode: "",
   prefecture: "",
   city: "",
@@ -64,6 +159,9 @@ export const emptyPatientForm: PatientFormValues = {
   homePhone: "",
   mobilePhone: "",
   email: "",
+  contacts: [],
+  generalPractitionerRef: "",
+  generalPractitionerName: "",
 };
 
 /**
@@ -93,11 +191,28 @@ export function buildPatient(values: PatientFormValues, id?: string): fhir4.Pati
 
   if (id) patient.id = id;
 
-  const names = buildJapaneseNames(values);
+  const names = [...buildJapaneseNames(values), ...buildExtraNames(values)];
   if (names.length) patient.name = names;
 
   if (values.gender) patient.gender = values.gender;
   if (values.birthDate) patient.birthDate = values.birthDate;
+  // 死亡は deceasedDateTime だけを使う(deceasedBoolean と併記すると上流で弾かれる)。
+  if (values.deceasedDate) patient.deceasedDateTime = values.deceasedDate;
+
+  const communication = buildCommunication(values);
+  if (communication) patient.communication = [communication];
+
+  const contacts = values.contacts.map(buildContact).filter((c): c is fhir4.PatientContact => Boolean(c));
+  if (contacts.length) patient.contact = contacts;
+
+  if (values.generalPractitionerRef) {
+    patient.generalPractitioner = [
+      {
+        reference: values.generalPractitionerRef,
+        display: values.generalPractitionerName || undefined,
+      },
+    ];
+  }
   // 固定電話と携帯電話はどちらも system=phone。区別は use(home / mobile)で持つ。
   const telecom: fhir4.ContactPoint[] = [];
   if (values.homePhone) telecom.push({ system: "phone", value: values.homePhone, use: "home" });
@@ -111,6 +226,78 @@ export function buildPatient(values: PatientFormValues, id?: string): fhir4.Pati
   if (address) patient.address = [address];
 
   return patient;
+}
+
+/**
+ * 旧姓・通称名。漢字名・カナ名(buildJapaneseNames)の後ろに足す。
+ * 上流は use="official" が無いとき先頭の name を検索用に採るので、
+ * 本名より後ろに置く必要がある。
+ */
+function buildExtraNames(values: PatientFormValues): fhir4.HumanName[] {
+  const names: fhir4.HumanName[] = [];
+  if (values.maidenFamily.trim()) {
+    names.push({ use: MAIDEN_NAME_USE, family: values.maidenFamily.trim() });
+  }
+  if (values.nickname.trim()) {
+    names.push({ use: NICKNAME_USE, text: values.nickname.trim() });
+  }
+  return names;
+}
+
+/**
+ * 使用言語。通訳要否は「日本語以外を話す」とは別の判断(日本語が話せても
+ * 手話通訳が要ることがある)なので、言語が空でも単独で保存できるようにする。
+ * その場合の language は不明(und)にする(communication.language は 1..1 のため)。
+ */
+function buildCommunication(values: PatientFormValues): fhir4.PatientCommunication | undefined {
+  if (!values.language && !values.interpreterNeeded) return undefined;
+
+  const code = values.language || "und";
+  return {
+    language: {
+      coding: [{ system: LANGUAGE_SYSTEM, code, display: languageLabel(values.language) || undefined }],
+    },
+    // 通訳が要る = この言語での対応を要する、と読む。
+    preferred: values.interpreterNeeded ? true : undefined,
+  };
+}
+
+function buildContact(values: PatientContactValues): fhir4.PatientContact | undefined {
+  const contact: fhir4.PatientContact = {};
+
+  const relationships: fhir4.CodeableConcept[] = values.relationships.map((code) => ({
+    coding: [
+      {
+        system: CONTACT_RELATIONSHIP_SYSTEM,
+        code,
+        display: contactRelationshipLabel(code) || undefined,
+      },
+    ],
+  }));
+  // 「長女」のような続柄の補足は標準コードで表せないので、text だけの concept で添える。
+  if (values.relationshipNote.trim()) {
+    relationships.push({ text: values.relationshipNote.trim() });
+  }
+  if (relationships.length) contact.relationship = relationships;
+
+  if (values.family.trim() || values.given.trim()) {
+    contact.name = {
+      family: values.family.trim() || undefined,
+      given: values.given.trim() ? [values.given.trim()] : undefined,
+    };
+  }
+
+  const telecom: fhir4.ContactPoint[] = [];
+  if (values.homePhone) telecom.push({ system: "phone", value: values.homePhone, use: "home" });
+  if (values.mobilePhone) {
+    telecom.push({ system: "phone", value: values.mobilePhone, use: "mobile" });
+  }
+  if (telecom.length) contact.telecom = telecom;
+
+  if (values.address.trim()) contact.address = { text: values.address.trim() };
+
+  // 何も入っていない行は保存しない(フォームの空行がそのまま増えていくのを防ぐ)。
+  return Object.keys(contact).length ? contact : undefined;
 }
 
 /**
@@ -137,9 +324,16 @@ export function parsePatient(patient: fhir4.Patient): PatientFormValues {
     identifierSystem: identifier?.system ?? DEFAULT_IDENTIFIER_SYSTEM,
     identifierValue: identifier?.value ?? "",
     ...parseJapaneseNames(patient.name),
+    ...parseExtraNames(patient.name),
     gender: (patient.gender as Gender) ?? "",
     birthDate: patient.birthDate ?? "",
     active: patient.active ?? true,
+    // deceasedBoolean だけの患者(他システム由来)は日付が無いので空のまま。
+    deceasedDate: patient.deceasedDateTime?.slice(0, 10) ?? "",
+    ...parseCommunication(patient.communication),
+    contacts: (patient.contact ?? []).map(parseContact),
+    generalPractitionerRef: patient.generalPractitioner?.[0]?.reference ?? "",
+    generalPractitionerName: patient.generalPractitioner?.[0]?.display ?? "",
     // use の無い電話番号(他システム由来や、分ける前に登録した患者)は固定電話として扱う。
     homePhone:
       patient.telecom?.find((t) => t.system === "phone" && t.use !== "mobile")?.value ?? "",
@@ -147,6 +341,39 @@ export function parsePatient(patient: fhir4.Patient): PatientFormValues {
       patient.telecom?.find((t) => t.system === "phone" && t.use === "mobile")?.value ?? "",
     email: patient.telecom?.find((t) => t.system === "email")?.value ?? "",
     ...parseAddress(patient.address?.[0]),
+  };
+}
+
+function parseExtraNames(names: fhir4.HumanName[] | undefined) {
+  return {
+    maidenFamily: names?.find((n) => n.use === MAIDEN_NAME_USE)?.family ?? "",
+    nickname: names?.find((n) => n.use === NICKNAME_USE)?.text ?? "",
+  };
+}
+
+function parseCommunication(communications: fhir4.PatientCommunication[] | undefined) {
+  const communication = communications?.[0];
+  const code = communication?.language?.coding?.[0]?.code ?? "";
+
+  return {
+    // 通訳の印だけを保存したときの und は、言語としては未指定に戻す。
+    language: (code === "und" ? "" : code) as PatientLanguage,
+    interpreterNeeded: communication?.preferred === true,
+  };
+}
+
+function parseContact(contact: fhir4.PatientContact): PatientContactValues {
+  const concepts = contact.relationship ?? [];
+
+  return {
+    relationships: concepts.flatMap((c) => c.coding?.map((coding) => coding.code ?? "") ?? []).filter(Boolean),
+    // コードを持たない concept は続柄の補足(「長女」など)。
+    relationshipNote: concepts.find((c) => !c.coding?.length)?.text ?? "",
+    family: contact.name?.family ?? "",
+    given: contact.name?.given?.[0] ?? "",
+    homePhone: contact.telecom?.find((t) => t.system === "phone" && t.use !== "mobile")?.value ?? "",
+    mobilePhone: contact.telecom?.find((t) => t.system === "phone" && t.use === "mobile")?.value ?? "",
+    address: contact.address?.text ?? "",
   };
 }
 

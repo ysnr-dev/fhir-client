@@ -7,6 +7,23 @@ import { ageWithMonthsLabel, displayKana, genderLabel } from "../fhir/patientHel
 // Encounter や Appointment に控えた名前で代わりに出す)ので、ここに含めるのは
 // 氏名に添えるカナだけにする。
 
+/**
+ * 死亡した患者の印。氏名の後ろに添える。生存前提の操作(オーダー・予約)を
+ * 一覧の段階で思いとどまれるようにするためのもの。
+ */
+export function PatientDeceasedMark({ patient }: { patient?: fhir4.Patient }) {
+  if (!patient) return null;
+  const date = patient.deceasedDateTime?.slice(0, 10) ?? "";
+  if (!date && patient.deceasedBoolean !== true) return null;
+
+  const label = date ? `死亡 ${date}` : "死亡";
+  return (
+    <span className="patient-cells__deceased" title={label}>
+      死亡
+    </span>
+  );
+}
+
 /** 氏名の後ろに小さめの括弧書きで添えるカナ。カナが無ければ何も出さない。 */
 export function PatientKana({ patient }: { patient?: fhir4.Patient }) {
   const kana = patient ? displayKana(patient) : "";
