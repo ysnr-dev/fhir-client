@@ -1,24 +1,30 @@
-import { useBloodType } from "../api/queries";
+import { useBloodType, usePregnancy } from "../api/queries";
 import { summarizeBloodType } from "../fhir/bloodTypeHelpers";
+import { summarizePregnancy } from "../fhir/pregnancyHelpers";
 import { bloodTypeLabel } from "../fhir/transfusionOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 
 /**
- * プロファイルタブの「身体」区画。今は血液型だけで、身長・体重(バイタルの
- * 最新値)・妊娠/授乳・腎機能を後から足す。
+ * プロファイルタブの「身体」区画。今は血液型と妊娠・授乳で、身長・体重
+ * (バイタルの最新値)・腎機能を後から足す。
  *
  * 血液型は輸血オーダーの初期値として使うので、検査で確定した型かどうかを
- * 必ず併記する(申告のままの型で製剤は出せないため)。
+ * 必ず併記する(申告のままの型で製剤は出せないため)。妊娠・授乳は状態が
+ * 変わるので、いつ時点の確認かを必ず併記する。
  */
 export function PatientBodySection({
   patientId,
   onEditBloodType,
+  onEditPregnancy,
 }: {
   patientId: string;
   onEditBloodType: () => void;
+  onEditPregnancy: () => void;
 }) {
   const { observations, isLoading, error } = useBloodType(patientId);
   const summary = summarizeBloodType(observations);
+  const pregnancy = usePregnancy(patientId);
+  const pregnancySummary = summarizePregnancy(pregnancy.observations);
 
   return (
     <section className="karte-profile__section">
@@ -28,10 +34,13 @@ export function PatientBodySection({
           <button type="button" onClick={onEditBloodType}>
             {summary ? "血液型を編集" : "血液型を登録"}
           </button>
+          <button type="button" onClick={onEditPregnancy}>
+            {pregnancySummary ? "妊娠・授乳を編集" : "妊娠・授乳を登録"}
+          </button>
         </div>
       </div>
 
-      <ErrorBanner error={error} />
+      <ErrorBanner error={error ?? pregnancy.error} />
 
       {isLoading ? (
         <p>読み込み中...</p>
@@ -59,6 +68,38 @@ export function PatientBodySection({
               </dl>
             ) : (
               <p className="patient-table__empty">血液型が登録されていません。</p>
+            )}
+          </fieldset>
+
+          <fieldset>
+            <legend>妊娠・授乳</legend>
+            {pregnancySummary ? (
+              <dl className="prescription-detail__common">
+                <dt>妊娠</dt>
+                <dd>
+                  <span className={pregnancySummary.pregnant ? "pregnancy__value--pregnant" : ""}>
+                    {pregnancySummary.statusLabel || "-"}
+                  </span>
+                </dd>
+                {pregnancySummary.pregnant && (
+                  <>
+                    <dt>分娩予定日</dt>
+                    <dd>{pregnancySummary.dueDate || "-"}</dd>
+                  </>
+                )}
+                <dt>授乳</dt>
+                <dd>
+                  <span className={pregnancySummary.lactating ? "pregnancy__value--pregnant" : ""}>
+                    {pregnancySummary.lactationLabel || "-"}
+                  </span>
+                </dd>
+                <dt>確認日</dt>
+                <dd>{pregnancySummary.effectiveDate || "-"}</dd>
+                <dt>備考</dt>
+                <dd>{pregnancySummary.note || "-"}</dd>
+              </dl>
+            ) : (
+              <p className="patient-table__empty">妊娠・授乳が登録されていません。</p>
             )}
           </fieldset>
         </div>

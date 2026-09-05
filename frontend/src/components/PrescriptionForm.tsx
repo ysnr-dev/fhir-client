@@ -17,6 +17,7 @@ import { presetUsageFilters } from "../fhir/usageMapping";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { PregnancyNotice } from "./PregnancyNotice";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
 import { UsageSearchModal } from "./UsageSearchModal";
@@ -215,6 +216,8 @@ export function PrescriptionForm({
         </div>
       )}
       <ErrorBanner error={submitError} />
+      {/* 催奇形性・乳汁移行の判断に要るので、妊娠中・授乳中なら入力欄の前に出す。 */}
+      <PregnancyNotice patientId={patientId} />
 
       <fieldset>
         <legend>処方共通</legend>

@@ -52,6 +52,7 @@ import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { ErrorBanner } from "./ErrorBanner";
+import { PregnancyNotice } from "./PregnancyNotice";
 import { ProblemSelect } from "./ProblemSelect";
 import { RadPerformInputModal } from "./RadPerformModal";
 import { TemplateTextField } from "./TemplateTextField";
@@ -577,6 +578,8 @@ export function RadOrderForm({
         )}
         <ErrorBanner error={submitError} />
         <ErrorBanner error={layouts.error ?? setMembers.error ?? catalog.error} />
+        {/* 被曝の判断に要るので、妊娠中・授乳中なら入力欄の前に出す。 */}
+        <PregnancyNotice patientId={patientId} />
 
         <fieldset>
           <legend>検査共通</legend>

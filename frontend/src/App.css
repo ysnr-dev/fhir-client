@@ -422,6 +422,24 @@
   font-weight: 600;
 }
 
+/* 処方・放射線検査のオーダー画面に出す妊娠中・授乳中の注意。オーダーは妨げないので
+   エラーの赤ではなく、注意の橙で枠を付ける。 */
+.pregnancy-notice {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 1px solid #e07000;
+  border-radius: 4px;
+  color: #e07000;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* 妊娠中・授乳中。処方と放射線検査で真っ先に確かめる状態なので目立たせる。 */
+.pregnancy__value--pregnant {
+  color: #c62828;
+  font-weight: 600;
+}
+
 /* 血液型。輸血の判断で真っ先に読むので、値だけ大きめに出す。 */
 .blood-type__value {
   font-weight: 600;

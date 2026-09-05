@@ -4896,6 +4896,57 @@ export function useSaveBloodType() {
   });
 }
 
+// ---- 妊娠・授乳(Observation) ----
+
+/**
+ * 妊娠状態と授乳状態。血液型と同じく LOINC 2 つを 1 回の検索でまとめて引く。
+ * 状態が変わる情報なので、確認日の新しいものを画面側で採る(summarizePregnancy)。
+ */
+export function usePregnancy(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("code", `http://loinc.org|82810-3,http://loinc.org|63895-7`);
+  params.set("_count", "20");
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["Observation", "search", patientId, "pregnancy"],
+    queryFn: () => searchResource<fhir4.Observation>("Observation", params),
+    enabled: Boolean(patientId),
+    staleTime: 30 * 1000,
+  });
+
+  const observations =
+    query.data?.data.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Observation => Boolean(r)) ?? [];
+
+  return { ...query, observations };
+}
+
+/** 妊娠・授乳の保存。血液型と同じく transaction でまとめて送る。 */
+export function useSavePregnancy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (observations: fhir4.Observation[]) => {
+      const bundle: fhir4.Bundle = {
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: observations.map((observation) => ({
+          resource: observation,
+          request: observation.id
+            ? { method: "PUT", url: `Observation/${observation.id}` }
+            : { method: "POST", url: "Observation" },
+        })),
+      };
+      return postBundle(bundle);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+    },
+  });
+}
+
 const QUESTIONNAIRE_COUNT = 20;
 
 // canonical (url, version) の一意性は上流の Questionnaire バリデーション + DB 制約が

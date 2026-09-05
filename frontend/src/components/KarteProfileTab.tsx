@@ -8,10 +8,19 @@ import {
   useFlag,
   useFlagSearch,
   usePatient,
+  usePregnancy,
   useSaveBloodType,
+  useSavePregnancy,
   useUpdateFlag,
   useUpdatePatient,
 } from "../api/queries";
+import {
+  buildPregnancyObservations,
+  parsePregnancyForm,
+  summarizePregnancy,
+  type PregnancyFormValues,
+} from "../fhir/pregnancyHelpers";
+import { PregnancyForm } from "./PregnancyForm";
 import {
   buildBloodTypeObservations,
   parseBloodTypeForm,
@@ -53,7 +62,8 @@ type Mode =
   | { kind: "create" }
   | { kind: "edit"; flagId: string }
   | { kind: "edit-patient" }
-  | { kind: "edit-blood-type" };
+  | { kind: "edit-blood-type" }
+  | { kind: "edit-pregnancy" };
 
 // 入力途中のフォームは URL に載せない(復元しても入力内容は戻らないため)ので、
 // 登録・編集はこのコンポーネントの状態で持つ(karteUrl.ts 冒頭の方針)。
@@ -64,6 +74,7 @@ type FormMode =
       | { kind: "edit" }
       | { kind: "edit-patient" }
       | { kind: "edit-blood-type" }
+      | { kind: "edit-pregnancy" }
     >
   | null;
 
@@ -74,6 +85,7 @@ const MODE_TITLES: Record<Mode["kind"], string> = {
   edit: "注意の編集",
   "edit-patient": "患者情報の編集",
   "edit-blood-type": "血液型",
+  "edit-pregnancy": "妊娠・授乳",
 };
 
 interface KarteProfileTabProps {
@@ -123,6 +135,8 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
           <PatientEditForm patientId={patientId} onSaved={backToList} />
         ) : mode.kind === "edit-blood-type" ? (
           <BloodTypeEditForm patientId={patientId} onSaved={backToList} />
+        ) : mode.kind === "edit-pregnancy" ? (
+          <PregnancyEditForm patientId={patientId} onSaved={backToList} />
         ) : (
           <EditForm patientId={patientId} flagId={mode.flagId} onSaved={backToList} />
         )}
@@ -145,6 +159,7 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
       <PatientBodySection
         patientId={patientId}
         onEditBloodType={() => setForm({ kind: "edit-blood-type" })}
+        onEditPregnancy={() => setForm({ kind: "edit-pregnancy" })}
       />
     </div>
   );
@@ -401,6 +416,44 @@ function BloodTypeEditForm({ patientId, onSaved }: { patientId: string; onSaved:
           onSubmit={handleSubmit}
           submitting={saveBloodType.isPending}
           submitError={saveBloodType.error}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * 妊娠・授乳の登録・編集。血液型と同じく、既に登録があればその id を
+ * 引き継いで更新する(「いつ時点の状態か」は確認日で持つ)。
+ */
+function PregnancyEditForm({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {
+  const { observations, isLoading, error } = usePregnancy(patientId);
+  const savePregnancy = useSavePregnancy();
+
+  const summary = summarizePregnancy(observations);
+
+  function handleSubmit(values: PregnancyFormValues) {
+    savePregnancy.mutate(
+      buildPregnancyObservations(values, patientId, {
+        pregnancyId: summary?.pregnancyId || undefined,
+        lactationId: summary?.lactationId || undefined,
+      }),
+      { onSuccess: onSaved },
+    );
+  }
+
+  return (
+    <>
+      <ErrorBanner error={error} />
+
+      {isLoading ? (
+        <p>読み込み中...</p>
+      ) : (
+        <PregnancyForm
+          initialValues={parsePregnancyForm(observations)}
+          onSubmit={handleSubmit}
+          submitting={savePregnancy.isPending}
+          submitError={savePregnancy.error}
         />
       )}
     </>
