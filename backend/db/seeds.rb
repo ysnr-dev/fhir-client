@@ -92,6 +92,127 @@ else
   puts "master_lab_specimens defaults: #{defaults_csv} not found, skipped"
 end
 
+# 検体検査オーダーのマスタ一式(db/seed_data/lab_order_items.csv /
+# lab_panel_items.csv / lab_order_item_layout_cells.csv)。一般病院で日常的に出す
+# 検体検査を医科点数表 第2章第3部 第1節 検体検査料(D000〜D015)から拾った初期値。
+#   - order_item_code はレセ電算コード(9桁)と同じにしてある(術式・生理検査と同じ理由:
+#     施設独自採番とぶつからず、再投入で追加分だけ入る)。1つのレセ電算コードが複数の
+#     結果に分かれる包括項目(末梢血液一般検査 → 白血球数・赤血球数…)は「コード-枝番」、
+#     レセ電算コードを持たない施設セットは SET-nn。
+#   - 名称は点数表の略号(「ＴＰ」「ＢＩＬ／総」)ではなく臨床検査マスターの名称にしてある
+#     (docs/lab-order-master-design.md §7 の名称の優先順)。点数表との対応は receipt_code。
+#   - jlac_code が入るのは共有項目JLACコードマスタ(JLAC11)の公開分 43+5 項目だけ(§9-1)。
+#     JLAC11 の測定法コードは試薬・機器の販売名単位なので(§2)、入れてあるのは
+#     「測定法=その他」の代表コードで、施設で使う試薬にあわせて直す前提(§9-3)。
+#   - 検体・採取管・院内実施/外注は施設の運用で決まるので、投入後は画面で直す前提。
+#     採取管は検体の既定採取管で足りる項目には持たせず、分ける項目(血糖=フッ化管、
+#     アンモニア=EDTA管 など)だけに入れてある。
+#   - 既存行は上書きしない。パネル構成は行単位、伝票は同名があればマスごとスキップする
+#     (施設で直した内容を戻さない)。
+lab_order_items_csv = Rails.root.join("db/seed_data/lab_order_items.csv")
+if File.exist?(lab_order_items_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(lab_order_items_csv, headers: true) do |row|
+    code = row["order_item_code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::LabOrderItem.exists?(order_item_code: code)
+      skipped += 1
+      next
+    end
+
+    Master::LabOrderItem.create!(
+      order_item_code: code,
+      name: name,
+      short_name: row["short_name"].to_s.strip.presence,
+      name_kana: row["name_kana"].to_s.strip.presence,
+      category: row["category"].to_s.strip.presence,
+      specimen_code: row["specimen_code"].to_s.strip.presence,
+      container_code: row["container_code"].to_s.strip.presence,
+      kind: row["kind"].to_s.strip.presence || "single",
+      jlac_code: row["jlac_code"].to_s.strip.presence,
+      jlac_code_system: row["jlac_code_system"].to_s.strip.presence,
+      execution_type: row["execution_type"].to_s.strip.presence,
+      receipt_code: row["receipt_code"].to_s.strip.presence,
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    )
+    loaded += 1
+  end
+  puts "master_lab_order_items: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_lab_order_items: #{lab_order_items_csv} not found, skipped"
+end
+
+lab_panel_items_csv = Rails.root.join("db/seed_data/lab_panel_items.csv")
+if File.exist?(lab_panel_items_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(lab_panel_items_csv, headers: true) do |row|
+    panel_code = row["panel_item_code"].to_s.strip
+    member_code = row["member_item_code"].to_s.strip
+    next if panel_code.blank? || member_code.blank?
+
+    if Master::LabPanelItem.exists?(panel_item_code: panel_code, member_item_code: member_code)
+      skipped += 1
+      next
+    end
+
+    Master::LabPanelItem.create!(
+      panel_item_code: panel_code,
+      member_item_code: member_code,
+      member_type: row["member_type"].to_s.strip.presence || "required",
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    )
+    loaded += 1
+  end
+  puts "master_lab_panel_items: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_lab_panel_items: #{lab_panel_items_csv} not found, skipped"
+end
+
+# 伝票は layout_name ごとに作り、行数・列数はマスの最大位置から決める(部門オーダーと同じ)。
+lab_layout_cells_csv = Rails.root.join("db/seed_data/lab_order_item_layout_cells.csv")
+if File.exist?(lab_layout_cells_csv)
+  cells_by_layout = Hash.new { |hash, key| hash[key] = [] }
+  CSV.foreach(lab_layout_cells_csv, headers: true) do |row|
+    layout_name = row["layout_name"].to_s.strip
+    next if layout_name.blank?
+
+    cells_by_layout[layout_name] << {
+      grid_row: row["grid_row"].to_i,
+      grid_column: row["grid_column"].to_i,
+      cell_type: row["cell_type"].to_s.strip.presence || "item",
+      order_item_code: row["order_item_code"].to_s.strip.presence,
+      display_name: row["display_name"].to_s.strip.presence
+    }
+  end
+
+  loaded = 0
+  skipped = 0
+  cells_by_layout.each_with_index do |(layout_name, cells), index|
+    if Master::LabOrderItemLayout.exists?(name: layout_name)
+      skipped += 1
+      next
+    end
+
+    Master::LabOrderItemLayout.transaction do
+      layout = Master::LabOrderItemLayout.create!(
+        name: layout_name,
+        row_count: cells.map { |cell| cell[:grid_row] }.max,
+        column_count: cells.map { |cell| cell[:grid_column] }.max,
+        display_order: (index + 1) * 10
+      )
+      cells.each { |cell| Master::LabOrderItemLayoutCell.create!(cell.merge(layout_id: layout.id)) }
+    end
+    loaded += 1
+  end
+  puts "master_lab_order_item_layouts: seeded #{loaded} layouts (kept #{skipped})"
+else
+  puts "master_lab_order_item_layouts: #{lab_layout_cells_csv} not found, skipped"
+end
+
 # JJ1017 の部品コードのうち、配布 Excel の別表に無いもの。
 # db/seed_data/rad_jj1017_codes.csv（ヘッダー有り）から投入する。
 #   - 種別(モダリティ)と左右等は指針本文の表5.2 / 表5.5 にしかコード表が無い
