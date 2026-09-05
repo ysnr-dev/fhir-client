@@ -32,6 +32,9 @@ export const KARTE_TABS = [
   { key: "karte", label: "カルテ" },
   { key: "condition", label: "病名" },
   { key: "allergy", label: "アレルギー" },
+  // 患者の「現在の状態」を区画ごとに読むタブ(時系列ではない)。今は診療上の注意
+  // だけで、身体・感染症・生活などの区画を後から足す。
+  { key: "profile", label: "プロファイル" },
   // 経過表(POMR のフローシート)。上下分割で「上にカルテ、下に経過表」と並べて
   // 読めるよう、カルテ以外のタブとして持つ。
   { key: "flowsheet", label: "経過表" },

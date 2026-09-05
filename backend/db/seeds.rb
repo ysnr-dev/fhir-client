@@ -262,6 +262,16 @@ end
       name: row["name"].to_s.strip,
       display_order: row["display_order"].to_s.strip.presence&.to_i
     }
+  }],
+  # 患者の診療上の注意の区分。pictogram が空の行は患者帯に出ない。
+  "patient_cautions" => [Master::PatientCaution, :code, lambda { |row|
+    {
+      code: row["code"].to_s.strip,
+      name: row["name"].to_s.strip,
+      category: row["category"].to_s.strip,
+      pictogram: row["pictogram"].to_s.strip.presence,
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    }
   }]
 }.each do |basename, (model, key_column, build)|
   csv_path = Rails.root.join("db/seed_data/#{basename}.csv")

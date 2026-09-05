@@ -205,6 +205,27 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 
 ---
 
+## 2026-09-05 に対応済み
+
+### `Flag` リソースの実装（患者の診療上の注意）
+
+- **背景**: 患者の「転倒リスク」「体内金属」「DNAR」のような注意を持つ置き場所が無かった
+  （`fhir-client` の `docs/patient-profile-design.md` §2.2）。
+- **対応**: `Flag` をレジストリに追加（35 リソース目）。検索は `identifier` / `status` /
+  `category` / `code`（token_or_text）/ `subject`（別名 `patient`）/ `encounter` / `author` /
+  `date`（`period_start` + `end_column: period_end`）。`_include` / `_revinclude`
+  （`SearchReferences::MAP`）と `Provenance.target` の対象にも追加。手書きの `FlagValidator`
+  （`status` 必須＋値セット・`code` 必須・`subject` 必須・`period` の日時形式）。
+  migration は `20260905000001_create_flags.rb`。
+- **決めたこと**: JP Core に Flag のプロファイルが無いので、`Group` と同じく HL7 の基本定義
+  （`http://hl7.org/fhir/StructureDefinition/Flag`）で登録し、プロファイル検証は走らせない
+  （`known_profile?` が false のため `:enforce` でも読み飛ばされる）。`subject` は R4 では
+  Patient 以外（Location / Group など）も許すので、Patient 以外の参照は存在確認せず通す
+  （`on_non_patient: :skip`）。`subject` が Patient を指す単一列参照なので、患者コンパートメント
+  （`Patient/$everything`）には自動で入る。
+
+---
+
 ## 優先度 C: 個別の検索パラメータ・仕様適合（残り）
 
 ### C-3. `_elements` の choice 型対応（仕様適合）

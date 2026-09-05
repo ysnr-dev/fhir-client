@@ -4750,6 +4750,98 @@ export function useDeleteAllergy() {
   });
 }
 
+// ---- 診療上の注意(Flag) ----
+
+const FLAG_COUNT = 20;
+
+/**
+ * カルテのプロファイルタブに出す一覧。既定は有効なものだけで、
+ * 「終了したものも表示」を選ぶと全件になる。
+ */
+export function useFlagSearch(
+  patientId: string | undefined,
+  offset: number,
+  activeOnly: boolean,
+) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  if (activeOnly) params.set("status", "active");
+  params.set("_count", String(FLAG_COUNT));
+  params.set("_offset", String(offset));
+  // 一覧に出しているのは期間なので、開始日の新しい順に並べる。
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["Flag", "search", patientId, activeOnly, offset],
+    queryFn: () => searchResource<fhir4.Flag>("Flag", params),
+    placeholderData: keepPreviousData,
+    enabled: Boolean(patientId),
+  });
+
+  return {
+    ...query,
+    bundle: query.data?.data,
+    total: query.data?.data.total ?? 0,
+    count: FLAG_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+/**
+ * 患者帯のピクトグラム用。有効な注意を 1 回の検索でまとめて取る
+ * (帯はページングしないので _count を大きめに取り、件数で切らない)。
+ */
+export function useActiveFlags(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("status", "active");
+  params.set("_count", "100");
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["Flag", "search", patientId, "active"],
+    queryFn: () => searchResource<fhir4.Flag>("Flag", params),
+    enabled: Boolean(patientId),
+    staleTime: 30 * 1000,
+  });
+
+  const flags =
+    query.data?.data.entry?.map((e) => e.resource).filter((r): r is fhir4.Flag => Boolean(r)) ?? [];
+
+  return { ...query, flags };
+}
+
+export function useFlag(id: string | undefined) {
+  return useQuery({
+    queryKey: ["Flag", id],
+    queryFn: () => readResource<fhir4.Flag>("Flag", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useCreateFlag() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (flag: fhir4.Flag) => createResource(flag),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Flag", "search"] });
+    },
+  });
+}
+
+// 削除は用意しない。誤登録も「終了」で残し、帯から消えれば運用上は足りる。
+export function useUpdateFlag() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ flag, etag }: { flag: fhir4.Flag; etag: string }) => updateResource(flag, etag),
+    onSuccess: (result: FhirResult<fhir4.Flag>) => {
+      queryClient.invalidateQueries({ queryKey: ["Flag", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["Flag", result.data.id] });
+    },
+  });
+}
+
 const QUESTIONNAIRE_COUNT = 20;
 
 // canonical (url, version) の一意性は上流の Questionnaire バリデーション + DB 制約が

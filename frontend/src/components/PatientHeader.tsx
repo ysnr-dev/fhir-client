@@ -1,5 +1,10 @@
-import { usePatient, usePatientAdmission } from "../api/queries";
+import { Link } from "react-router-dom";
+import { usePatientCautions } from "../api/masterQueries";
+import { useActiveFlags, usePatient, usePatientAdmission } from "../api/queries";
+import type { PatientCaution } from "../api/masterClient";
+import { summarizeFlag } from "../fhir/flagHelpers";
 import { calculateAge, displayKana, displayName, genderLabel } from "../fhir/patientHelpers";
+import { CautionPictogram } from "./icons/cautionPictograms";
 
 interface PatientHeaderProps {
   patientId: string | undefined;
@@ -51,6 +56,79 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
           <span className="patient-header__value">{admissionPlace}</span>
         </span>
       )}
+      <CautionPictograms patientId={patientId} />
     </div>
+  );
+}
+
+interface CautionBadge {
+  pictogram: string;
+  category: string;
+  /** ホバーと読み上げに出す文言。同じ図柄が複数あれば改行で連ねる。 */
+  tooltip: string;
+  count: number;
+  order: number;
+}
+
+/**
+ * 有効な注意のピクトグラム。文言は帯に出さず、ホバー(title)と読み上げ
+ * (aria-label)で読む。帯の行を増やさないための作りなので、ここに文字は置かない。
+ *
+ * ピクトグラムを持たない区分と、マスタから消えたコードの注意は帯に出さない
+ * (プロファイルタブには出る)。
+ */
+function CautionPictograms({ patientId }: { patientId: string | undefined }) {
+  const { flags } = useActiveFlags(patientId);
+  const cautions = usePatientCautions();
+
+  if (!patientId || flags.length === 0) return null;
+
+  const cautionsByCode = new Map<string, PatientCaution>(
+    (cautions.data?.items ?? []).map((c) => [c.code, c]),
+  );
+
+  // 同じ図柄はひとつにまとめ、件数を右肩に添える。
+  const badges = new Map<string, CautionBadge>();
+  for (const flag of flags) {
+    const summary = summarizeFlag(flag, cautionsByCode);
+    if (!summary.pictogram) continue;
+
+    const line = summary.text ? `${summary.name}: ${summary.text}` : summary.name;
+    const existing = badges.get(summary.pictogram);
+    if (existing) {
+      existing.count += 1;
+      existing.tooltip = `${existing.tooltip}\n${line}`;
+      continue;
+    }
+    badges.set(summary.pictogram, {
+      pictogram: summary.pictogram,
+      category: summary.category,
+      tooltip: line,
+      count: 1,
+      order: cautionsByCode.get(summary.cautionCode)?.display_order ?? Number.MAX_SAFE_INTEGER,
+    });
+  }
+
+  if (badges.size === 0) return null;
+
+  const sorted = [...badges.values()].sort(
+    (a, b) => a.order - b.order || a.pictogram.localeCompare(b.pictogram),
+  );
+
+  return (
+    <span className="patient-header__item patient-header__cautions">
+      {sorted.map((badge) => (
+        <Link
+          key={badge.pictogram}
+          to={`/patients/${patientId}/karte?tab=profile`}
+          className={`patient-header__caution patient-header__caution--${badge.category}`}
+          title={badge.tooltip}
+          aria-label={badge.tooltip}
+        >
+          <CautionPictogram pictogram={badge.pictogram} />
+          {badge.count > 1 && <span className="patient-header__caution-count">{badge.count}</span>}
+        </Link>
+      ))}
+    </span>
   );
 }

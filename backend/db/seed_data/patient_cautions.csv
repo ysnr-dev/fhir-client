@@ -1,0 +1,16 @@
+code,name,category,pictogram,display_order
+fall,転倒リスク,safety,fall,10
+violence,暴力・粗暴歴,safety,violence,20
+elopement,離院リスク,safety,elopement,30
+implant,体内金属・ペースメーカー,clinical,implant,40
+contrast,造影剤注意,clinical,contrast,50
+anticoagulant,抗凝固薬内服,clinical,anticoagulant,60
+cognition,認知症・せん妄,clinical,cognition,70
+wheelchair,車椅子・移動介助,clinical,wheelchair,80
+hearing,聴覚障害,clinical,hearing,90
+vision,視覚障害,clinical,vision,100
+dnar,DNAR,advance-directive,dnar,110
+no-transfusion,輸血拒否,advance-directive,no-transfusion,120
+unpaid,未収金,administrative,unpaid,130
+privacy,要配慮(個人情報制限),administrative,privacy,140
+alert,その他の注意,administrative,alert,150

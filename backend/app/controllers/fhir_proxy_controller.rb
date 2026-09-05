@@ -19,11 +19,13 @@ class FhirProxyController < ApplicationController
   # Encounter.location でベッドの Location を指す。
   # Provenance はオーダーの来歴(誰が代行入力し、誰の指示で、誰が承認したか)。読み出しは
   # オーダーと一緒の _revinclude=Provenance:target が主で、書き込みは登録の transaction に混ぜる。
+  # Flag は患者の診療上の注意(転倒リスク・体内金属・DNAR など)。患者帯のピクトグラムと
+  # カルテのプロファイルタブが患者ごとに引く。
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
     PractitionerRole Composition Task Procedure MedicationAdministration
-    Location Schedule Slot Appointment Encounter Provenance
+    Location Schedule Slot Appointment Encounter Provenance Flag
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 

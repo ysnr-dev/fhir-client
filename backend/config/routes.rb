@@ -216,6 +216,9 @@ Rails.application.routes.draw do
     # サンプルマスタを seed で投入し、臓器は頻用の印と施設追加分だけを画面で書ける。
     resources :patho_organs, only: %i[index create update destroy]
     resources :patho_collection_methods, only: %i[index create update destroy]
+    # 患者の診療上の注意(転倒リスク・DNAR など)の区分。実体の注意は上流の
+    # FHIR Flag が持ち、このマスタは選択肢と患者帯のピクトグラムを決める。
+    resources :patient_cautions, only: %i[index create update destroy]
     resources :diseases, only: %i[index show create update destroy] do
       collection { post :import }
     end

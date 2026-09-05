@@ -63,6 +63,7 @@ import { OrderApprovalNavLink } from "./components/OrderApprovalNavLink";
 import { NursingWorklistPage } from "./pages/NursingWorklistPage";
 import { PathoOrganPage } from "./pages/PathoOrganPage";
 import { PathoCollectionMethodPage } from "./pages/PathoCollectionMethodPage";
+import { PatientCautionPage } from "./pages/PatientCautionPage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
 import { PractitionerEditPage } from "./pages/PractitionerEditPage";
@@ -231,6 +232,9 @@ function App() {
               </Link>
               <Link to="/wards" className="row-menu__item">
                 病棟・病室
+              </Link>
+              <Link to="/patient-cautions" className="row-menu__item">
+                注意区分
               </Link>
             </SubMenu>
             {/* 他院。診療情報提供書の送付先候補として登録する。 */}
@@ -558,6 +562,7 @@ function App() {
           <Route path="/micro-susceptibility-methods" element={<MicroSusceptibilityMethodPage />} />
           <Route path="/patho-organs" element={<PathoOrganPage />} />
           <Route path="/patho-collection-methods" element={<PathoCollectionMethodPage />} />
+          <Route path="/patient-cautions" element={<PatientCautionPage />} />
           <Route path="/questionnaires" element={<QuestionnaireListPage />} />
           <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />
           <Route path="/questionnaires/:questionnaireId/edit" element={<QuestionnaireEditPage />} />

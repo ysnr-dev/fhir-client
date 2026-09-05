@@ -321,6 +321,111 @@
   font-weight: 600;
 }
 
+/* 診療上の注意のピクトグラム。帯の行を増やさないよう、文字は出さず図柄だけを
+   並べる(名称と内容は title / aria-label で読む)。区分ごとに色を分ける。 */
+.patient-header__cautions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.patient-header__caution {
+  display: inline-flex;
+  align-items: center;
+  /* 帯は baseline 揃えなので、アイコンの高さは文字行に収める。 */
+  height: 16px;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.patient-header__caution:hover {
+  opacity: 0.7;
+}
+
+.patient-header__caution--safety {
+  color: #c62828;
+}
+
+.patient-header__caution--clinical {
+  color: #e07000;
+}
+
+.patient-header__caution--advance-directive {
+  color: #7b3fb5;
+}
+
+.patient-header__caution--administrative {
+  color: #6b7280;
+}
+
+.patient-header__caution-count {
+  font-size: 10px;
+  margin-left: 1px;
+  line-height: 1;
+}
+
+/* プロファイルタブ・注意区分マスタのピクトグラム。帯と同じ色分けを使う。 */
+.flag-table__pictogram,
+.flag-form__pictogram {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.flag-table__pictogram--safety,
+.flag-form__pictogram--safety {
+  color: #c62828;
+}
+
+.flag-table__pictogram--clinical,
+.flag-form__pictogram--clinical {
+  color: #e07000;
+}
+
+.flag-table__pictogram--advance-directive,
+.flag-form__pictogram--advance-directive {
+  color: #7b3fb5;
+}
+
+.flag-table__pictogram--administrative,
+.flag-form__pictogram--administrative {
+  color: #6b7280;
+}
+
+/* 「終了したものも表示」。常設の絞り込みなので、隣の新規登録ボタンより小さくして
+   一覧の見出し行を主張させない(指示簿タブの nursing-tab__toggle と同じ寸法)。 */
+.profile-tab__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.profile-tab__toggle input {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+}
+
+.flag-form__caution {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.patient-caution__pictogram,
+.patient-caution__pictogram-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.patient-caution__pictogram-preview {
+  display: inline-flex;
+  align-items: center;
+}
+
 .button,
 button {
   font: inherit;

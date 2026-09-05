@@ -4958,6 +4958,28 @@ export interface PathoCollectionMethodPayload {
   display_order?: number | null;
 }
 
+// 患者の診療上の注意の区分。実体の注意は上流の FHIR Flag が患者ごとに持ち、
+// このマスタは選択肢と患者帯のピクトグラムを決める。pictogram が null の
+// 区分は患者帯に出さない。
+export interface PatientCaution {
+  id: number;
+  code: string;
+  name: string;
+  /** safety / clinical / advance-directive / administrative */
+  category: string;
+  /** 患者帯のアイコンキー(cautionPictograms.tsx)。null なら帯に出さない。 */
+  pictogram: string | null;
+  display_order: number | null;
+}
+
+export interface PatientCautionPayload {
+  code?: string;
+  name?: string;
+  category?: string;
+  pictogram?: string | null;
+  display_order?: number | null;
+}
+
 const PATHO_ORGANS_PATH = "/master/patho_organs";
 
 export async function searchPathoOrgans(params: {
@@ -5044,6 +5066,42 @@ export async function updatePathoCollectionMethod(
 
 export async function deletePathoCollectionMethod(id: number): Promise<void> {
   const res = await masterFetch(`${PATHO_COLLECTION_METHODS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+const PATIENT_CAUTIONS_PATH = "/master/patient_cautions";
+
+export async function fetchPatientCautions(): Promise<MasterSearchResult<PatientCaution>> {
+  const res = await masterFetch(`${PATIENT_CAUTIONS_PATH}?per=100`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<PatientCaution>;
+}
+
+export async function createPatientCaution(payload: PatientCautionPayload): Promise<PatientCaution> {
+  const res = await masterFetch(PATIENT_CAUTIONS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as PatientCaution;
+}
+
+export async function updatePatientCaution(
+  id: number,
+  payload: PatientCautionPayload,
+): Promise<PatientCaution> {
+  const res = await masterFetch(`${PATIENT_CAUTIONS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as PatientCaution;
+}
+
+export async function deletePatientCaution(id: number): Promise<void> {
+  const res = await masterFetch(`${PATIENT_CAUTIONS_PATH}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
 
