@@ -7567,11 +7567,9 @@ body.page-wide .app__main {
   background: var(--surface-sunken);
 }
 
-/* 新患登録モーダル。1 行に収まる項目は横に並べ、住所・電話番号はまとまりの名前を
-   出して次の行に下げる。 */
 /* 患者の入力欄の並び。新患登録モーダルと患者登録・編集フォームで共有する
-   (同じ患者属性を同じ並びで書けるようにするため)。枠(fieldset)は使わず、
-   まとまりの名前(__group)と一段下げ(--indent)で区切る。 */
+   (同じ患者属性を同じ並びで書けるようにするため)。情報のまとまりごとに
+   枠(.patient-fields__group-box)で区切る。 */
 .patient-fields {
   display: flex;
   flex-direction: column;
@@ -7584,15 +7582,9 @@ body.page-wide .app__main {
   gap: 16px;
 }
 
-/* 住所・電話番号の中身。まとまりの名前の下に一段下げて置く。 */
-.patient-fields__row--indent {
-  padding-left: 16px;
-}
-
-/* 情報のかたまり(氏名・住所・連絡先など)を枠で囲む。項目数が増えると
+/* 情報のかたまり(属性・住所・連絡先など)を枠で囲む。項目数が増えると
    まとまりの名前だけでは切れ目が読めなくなるので、枠で区切る。
-   受付の最中に書く新患登録モーダルは項目が少なく、枠を足すと縦に伸びて
-   受付情報まで届かなくなるので、あちらは枠を使わない(名前と一段下げのまま)。 */
+   新患登録モーダルは受付情報も同じ枠のひとまとまりとして最後に置く。 */
 .patient-fields__group-box {
   display: flex;
   flex-direction: column;
@@ -7696,15 +7688,6 @@ body.page-wide .app__main {
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
-}
-
-/* 受付情報の見出し。患者情報の続きに読まれないよう、上に余白と罫線を置く。 */
-.patient-fields__section {
-  margin: 12px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  font-size: 15px;
-  color: var(--text-h);
 }
 
 .patient-fields__actions {
