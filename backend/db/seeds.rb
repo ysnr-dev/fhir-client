@@ -763,28 +763,31 @@ else
   puts "master_surgery_items: #{surgery_items_csv} not found, skipped"
 end
 
-# 部門オーダー(生理検査・処置)の項目マスタ一式を CSV から投入する共通処理。
-# どちらも「項目 → セット構成 → 実施入力データセット＋明細 → 伝票レイアウト」の
+# 部門オーダー(生理検査・処置・内視鏡)の項目マスタ一式を CSV から投入する共通処理。
+# いずれも「項目 → セット構成 → 実施入力データセット＋明細 → 伝票レイアウト」の
 # 同型 4 テーブルなので、モデルと CSV の接頭辞だけ差し替えて使う。
 #
 #   #{prefix}_items.csv              (ヘッダー有り) item_code,name,short_name,name_kana,kind,
 #                                    [exam_type_code,]receipt_code,dataset_code,
-#                                    requires_perform_input,display_order
+#                                    requires_perform_input,[groupable,requires_appointment,
+#                                    duration_minutes,]display_order
 #   #{prefix}_set_items.csv          set_item_code,member_item_code,display_order
 #   #{prefix}_datasets.csv           dataset_code,name,name_kana,display_order
-#   #{prefix}_dataset_details.csv    dataset_code,detail_type,code,default_selected,display_order
+#   #{prefix}_dataset_details.csv    dataset_code,detail_type,code,[default_quantity,route_code,]
+#                                    default_selected,display_order
 #   #{prefix}_item_layout_cells.csv  layout_name,grid_row,grid_column,cell_type,item_code,display_name
+#
+# [ ] の列は部門ごとに有る無しが分かれる(検査種別は生理検査・内視鏡だけ、単独オーダー/予約と
+# 薬剤の数量・経路は内視鏡だけ)。CSV に列が無ければモデルの既定値のままにする。
 #
 # 共通の考え方:
 #   - item_code はレセ電算コード(9桁)と同じにしてある(術式マスタと同じ理由: 施設独自採番と
 #     ぶつからず、再投入で追加分だけ入る)。1つのレセ電算コードを複数の項目に分ける場合は
-#     「コード-枝番」、セットは SET-nn(レセ電算コードを持たない)。
+#     「コード-枝番」、セットは SET-nn(レセ電算コードを持たない)。内視鏡だけは項目コードを
+#     画面の自動採番と同じ数字6桁にしてある(§内視鏡のコメント)。
 #   - 実施入力の手技明細はデータセットからしか展開されない(項目の receipt_code は実施時に
 #     使わない)ので、項目ごとに自身の手技料を初期値ONで持つデータセットを添える。
-#     dataset_code は receipt_code と同じで、枝番で分けた項目は同じデータセットを共有する。
-#     薬剤・器材は施設で違うので入れない。明細は診療行為マスタの存在を確かめない
-#     (未取込でも投入され、取込後に名称が出る)。
-#   - 予約必須・所要時間・予約枠は施設の運用で決まるので初期値には入れない。
+#     明細は診療行為マスタの存在を確かめない(未取込でも投入され、取込後に名称が出る)。
 #   - 既存行は上書きしない。データセットは明細ごと、レイアウトは同名があればマスごと、
 #     セット構成は行単位でスキップする(施設で直した内容を戻さない)。
 seed_department_order_masters = lambda do |prefix, models|
@@ -813,8 +816,16 @@ seed_department_order_masters = lambda do |prefix, models|
         requires_perform_input: row["requires_perform_input"].to_s.strip != "0",
         display_order: row["display_order"].to_s.strip.presence&.to_i
       }
-      # 検査種別は生理検査だけが持つ(処置の CSV には列が無い)。
+      # 検査種別は生理検査・内視鏡だけが持つ(処置の CSV には列が無い)。
       attrs[:exam_type_code] = row["exam_type_code"].to_s.strip.presence if row.include?("exam_type_code")
+      # 単独オーダー・予約は内視鏡だけが持つ(生理検査・処置はモデルの既定値のまま)。
+      attrs[:groupable] = row["groupable"].to_s.strip != "0" if row.include?("groupable")
+      if row.include?("requires_appointment")
+        attrs[:requires_appointment] = row["requires_appointment"].to_s.strip == "1"
+      end
+      if row.include?("duration_minutes")
+        attrs[:duration_minutes] = row["duration_minutes"].to_s.strip.presence&.to_i
+      end
       models[:item].create!(attrs)
       loaded += 1
     end
@@ -858,12 +869,18 @@ seed_department_order_masters = lambda do |prefix, models|
       code = row["code"].to_s.strip
       next if dataset_code.blank? || code.blank?
 
-      details_by_dataset[dataset_code] << {
+      detail = {
         detail_type: row["detail_type"].to_s.strip,
         code: code,
         default_selected: row["default_selected"].to_s.strip != "0",
         display_order: row["display_order"].to_s.strip.presence&.to_i
       }
+      # 数量・経路は薬剤と器材を持つ部門(内視鏡)だけが列に持つ。
+      if row.include?("default_quantity")
+        detail[:default_quantity] = row["default_quantity"].to_s.strip.presence
+      end
+      detail[:route_code] = row["route_code"].to_s.strip.presence if row.include?("route_code")
+      details_by_dataset[dataset_code] << detail
     end
 
     loaded = 0
@@ -966,6 +983,33 @@ seed_department_order_masters.call("treatment", {
   dataset_detail: Master::TreatmentDatasetDetail,
   layout: Master::TreatmentItemLayout,
   layout_cell: Master::TreatmentItemLayoutCell
+})
+
+# 内視鏡オーダーのマスタ一式(db/seed_data/endoscopy_*.csv)。一般病院で日常的に出す
+# 内視鏡の検査と治療を、医科点数表 D 章(内視鏡検査 D295〜D325)と K 章(内視鏡的〜の手術)から
+# 拾った初期値。検査種別(exam_type_code)は上の endoscopy_exam_types.csv のコード。
+#   - **項目コードは画面の自動採番と同じ数字6桁の連番**(セットは S00001〜)。内視鏡は
+#     1つのレセ電算コードに経口/経鼻/鎮静下のような運用上の区別がぶら下がり(JED にも
+#     オーダー項目のコード体系が無い / docs/endoscopy-order-design.md §1)、レセ電算コードを
+#     項目コードにすると枝番だらけになるため。点数表との対応は receipt_code。
+#   - **内視鏡室の枠を使う検査・治療は予約必須(=単独オーダー)、その場で行うものは予約不要**。
+#     予約不要なのは緊急内視鏡・直腸鏡・肛門鏡・喉頭/鼻咽腔/嚥下内視鏡・膀胱鏡で、
+#     セットに入れられるのはこの予約不要の項目だけ(予約必須は単独オーダーになる)。
+#     所要時間は予約枠を押さえる目安で、予約枠(appointment_schedule_id)は施設ごとに作る
+#     ものなので入れていない。
+#   - データセットは検査・治療ごとに 1 つ。手技料に加えて、内視鏡で実際に使う
+#     前処置(消泡剤・咽頭麻酔)・鎮痙剤・鎮静剤・拮抗剤・色素・前処置薬と、
+#     粘膜下注入材・結紮セット・カプセル・胆道ドレナージ材料を並べてある。
+#     **使ったときだけ足すものは初期値OFF**(鎮静剤・生検・色素・前処置薬など)で、
+#     実施入力の「薬剤を追加」「器材を追加」はこの候補から開く(§3.1)。
+#   - 検査目的・特別指示の既定テンプレートは検査種別ごとに施設で決めるものなので入れない。
+seed_department_order_masters.call("endoscopy", {
+  item: Master::EndoscopyItem,
+  set_item: Master::EndoscopySetItem,
+  dataset: Master::EndoscopyDataset,
+  dataset_detail: Master::EndoscopyDatasetDetail,
+  layout: Master::EndoscopyItemLayout,
+  layout_cell: Master::EndoscopyItemLayoutCell
 })
 
 # 輸血製剤マスタ。db/seed_data/transfusion_products.csv（ヘッダー有り）から投入する。
