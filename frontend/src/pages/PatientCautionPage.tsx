@@ -4,7 +4,7 @@ import { usePatientCautionMutations, usePatientCautions } from "../api/masterQue
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import {
-  CAUTION_PICTOGRAM_KEYS,
+  CAUTION_MASTER_PICTOGRAM_KEYS,
   CAUTION_PICTOGRAM_LABELS,
   CautionPictogram,
 } from "../components/icons/cautionPictograms";
@@ -26,10 +26,6 @@ export function PatientCautionPage() {
           </button>
         </div>
       </div>
-
-      <p className="dose-conversion__lead">
-        カルテのプロファイルタブで選べる「診療上の注意」の選択肢です。ピクトグラムを設定した区分だけが患者帯にアイコンで出ます。行をクリックすると編集できます。
-      </p>
 
       <ErrorBanner error={list.error} />
 
@@ -63,7 +59,7 @@ export function PatientCautionPage() {
           {list.data && list.data.items.length === 0 && (
             <tr>
               <td colSpan={5} className="master-search__empty">
-                注意区分がありません。db:seed で初期値を投入できます。
+                注意区分がありません。
               </td>
             </tr>
           )}
@@ -167,7 +163,7 @@ function CautionEditModal({ caution, onClose }: CautionEditModalProps) {
                 onChange={(e) => setDraft({ ...draft, pictogram: e.target.value })}
               >
                 <option value="">(帯に出さない)</option>
-                {CAUTION_PICTOGRAM_KEYS.map((key) => (
+                {CAUTION_MASTER_PICTOGRAM_KEYS.map((key) => (
                   <option key={key} value={key}>
                     {key}（{CAUTION_PICTOGRAM_LABELS[key]}）
                   </option>

@@ -1,8 +1,15 @@
 import { Link } from "react-router-dom";
 import { usePatientCautions } from "../api/masterQueries";
-import { useActiveFlags, usePatient, usePatientAdmission } from "../api/queries";
+import {
+  useActiveFlags,
+  useLabInfectionResults,
+  useManualInfections,
+  usePatient,
+  usePatientAdmission,
+} from "../api/queries";
 import type { PatientCaution } from "../api/masterClient";
 import { summarizeFlag } from "../fhir/flagHelpers";
+import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../fhir/infectionHelpers";
 import {
   calculateAge,
   displayKana,
@@ -11,6 +18,7 @@ import {
   languageLabel,
 } from "../fhir/patientHelpers";
 import { CautionPictogram } from "./icons/cautionPictograms";
+import { PictogramPopover } from "./PictogramPopover";
 
 interface PatientHeaderProps {
   patientId: string | undefined;
@@ -90,22 +98,28 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
         </span>
       )}
       <CautionPictograms patientId={patientId} />
+      <InfectionPictogram patientId={patientId} />
     </div>
   );
 }
 
+/**
+ * 帯のピクトグラムの大きさ。文字(14px)より少し大きくして、離れた席からでも
+ * 図柄が読めるようにする。帯の高さは行の高さで決まるので、この程度なら伸びない。
+ */
+const HEADER_PICTOGRAM_SIZE = 20;
+
 interface CautionBadge {
   pictogram: string;
   category: string;
-  /** ホバーと読み上げに出す文言。同じ図柄が複数あれば改行で連ねる。 */
-  tooltip: string;
-  count: number;
+  /** 吹き出しに並べる注意。同じ図柄が複数あれば行が増える。 */
+  lines: { name: string; text: string }[];
   order: number;
 }
 
 /**
- * 有効な注意のピクトグラム。文言は帯に出さず、ホバー(title)と読み上げ
- * (aria-label)で読む。帯の行を増やさないための作りなので、ここに文字は置かない。
+ * 有効な注意のピクトグラム。文言は帯に出さず、押して開く吹き出しで読む。
+ * 帯の行を増やさないための作りなので、ここに文字は置かない。
  *
  * ピクトグラムを持たない区分と、マスタから消えたコードの注意は帯に出さない
  * (プロファイルタブには出る)。
@@ -126,18 +140,16 @@ function CautionPictograms({ patientId }: { patientId: string | undefined }) {
     const summary = summarizeFlag(flag, cautionsByCode);
     if (!summary.pictogram) continue;
 
-    const line = summary.text ? `${summary.name}: ${summary.text}` : summary.name;
+    const line = { name: summary.name, text: summary.text };
     const existing = badges.get(summary.pictogram);
     if (existing) {
-      existing.count += 1;
-      existing.tooltip = `${existing.tooltip}\n${line}`;
+      existing.lines.push(line);
       continue;
     }
     badges.set(summary.pictogram, {
       pictogram: summary.pictogram,
       category: summary.category,
-      tooltip: line,
-      count: 1,
+      lines: [line],
       order: cautionsByCode.get(summary.cautionCode)?.display_order ?? Number.MAX_SAFE_INTEGER,
     });
   }
@@ -151,17 +163,78 @@ function CautionPictograms({ patientId }: { patientId: string | undefined }) {
   return (
     <span className="patient-header__item patient-header__cautions">
       {sorted.map((badge) => (
-        <Link
+        <PictogramPopover
           key={badge.pictogram}
-          to={`/patients/${patientId}/karte?tab=profile`}
-          className={`patient-header__caution patient-header__caution--${badge.category}`}
-          title={badge.tooltip}
-          aria-label={badge.tooltip}
+          label={badge.lines.map((line) => (line.text ? `${line.name}: ${line.text}` : line.name)).join(" / ")}
+          className={`patient-header__caution--${badge.category}`}
+          icon={<CautionPictogram pictogram={badge.pictogram} size={HEADER_PICTOGRAM_SIZE} />}
+          count={badge.lines.length}
         >
-          <CautionPictogram pictogram={badge.pictogram} />
-          {badge.count > 1 && <span className="patient-header__caution-count">{badge.count}</span>}
-        </Link>
+          <ul className="patient-header__popover-list">
+            {badge.lines.map((line, index) => (
+              <li key={index}>
+                <span className="patient-header__popover-name">{line.name}</span>
+                {line.text && <span className="patient-header__popover-text">{line.text}</span>}
+              </li>
+            ))}
+          </ul>
+          <ProfileLink patientId={patientId} />
+        </PictogramPopover>
       ))}
+    </span>
+  );
+}
+
+/** 吹き出しの下に置く、プロファイルタブへの導線。 */
+function ProfileLink({ patientId }: { patientId: string }) {
+  return (
+    <Link to={`/patients/${patientId}/karte?tab=profile`} className="patient-header__popover-link">
+      プロファイルを開く
+    </Link>
+  );
+}
+
+/**
+ * 陽性の感染症のピクトグラム。標準予防策に加えるかの判断に直結するので帯に出す。
+ *
+ * 注意(Flag)とは別に持つ。感染症は注意区分マスタに登録するものではなく、
+ * 検査結果と手入力から組み立てた一覧(感染症の区画)がもとになるため。
+ * 種類が複数あってもアイコンは 1 つで、名前はまとめて吹き出しに出す
+ * (帯にバイオハザードが並ぶと、どれが何か読めないまま場所だけ取る)。
+ */
+function InfectionPictogram({ patientId }: { patientId: string | undefined }) {
+  const manual = useManualInfections(patientId);
+  const lab = useLabInfectionResults(patientId, HAS_LAB_MAPPED_TYPES);
+
+  if (!patientId) return null;
+
+  const positives = summarizeInfections(manual.observations, lab.observations).filter(
+    (row) => row.result === "positive",
+  );
+  if (positives.length === 0) return null;
+
+  const label = positives.map((row) => `${row.typeLabel} 陽性`).join(" / ");
+
+  return (
+    <span className="patient-header__item patient-header__cautions">
+      <PictogramPopover
+        label={label}
+        className="patient-header__caution--infection"
+        icon={<CautionPictogram pictogram="infection" size={HEADER_PICTOGRAM_SIZE} />}
+        count={positives.length}
+      >
+        <ul className="patient-header__popover-list">
+          {positives.map((row) => (
+            <li key={row.type}>
+              <span className="patient-header__popover-name">{row.typeLabel} 陽性</span>
+              <span className="patient-header__popover-text">
+                {[row.sourceLabel, row.effectiveDate].filter(Boolean).join(" ")}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <ProfileLink patientId={patientId} />
+      </PictogramPopover>
     </span>
   );
 }

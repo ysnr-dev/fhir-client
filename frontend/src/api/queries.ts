@@ -4947,6 +4947,91 @@ export function useSavePregnancy() {
   });
 }
 
+// ---- 感染症(Observation) ----
+
+/**
+ * 手入力の感染症。検体検査の結果と混ざらないよう category=exam で絞る
+ * (検査結果は下の useLabInfectionResults が JLAC11 コードで引く)。
+ */
+export function useManualInfections(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", "exam");
+  params.set("_count", "50");
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["Observation", "search", patientId, "infection-manual"],
+    queryFn: () => searchResource<fhir4.Observation>("Observation", params),
+    enabled: Boolean(patientId),
+    staleTime: 30 * 1000,
+  });
+
+  const observations =
+    query.data?.data.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Observation => Boolean(r)) ?? [];
+
+  return { ...query, observations };
+}
+
+/** 感染症の判定に読む検体検査の結果の件数。新しい順にこの件数まで見る。 */
+const INFECTION_LAB_COUNT = 500;
+
+/**
+ * 感染症の判定に使う検体検査の結果。
+ *
+ * 感染症かどうかは JLAC11 の分析物コード(先頭 5 桁)で決まるが、上流の
+ * コード検索は完全一致なので前方一致で引けない。材料・測定法の違いを展開すると
+ * 1 種類で数百コードになり URL に入らないため、患者の検体検査の結果を新しい順に
+ * まとめて引き、分析物コードの突き合わせは画面側で行う(summarizeInfections)。
+ */
+export function useLabInfectionResults(patientId: string | undefined, enabled: boolean) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", "laboratory");
+  params.set("_count", String(INFECTION_LAB_COUNT));
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["Observation", "search", patientId, "infection-lab"],
+    queryFn: () => searchResource<fhir4.Observation>("Observation", params),
+    enabled: Boolean(patientId) && enabled,
+    staleTime: 30 * 1000,
+  });
+
+  const observations =
+    query.data?.data.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Observation => Boolean(r)) ?? [];
+
+  return { ...query, observations };
+}
+
+/** 手入力の感染症の保存。1 件ずつなので transaction は使わない。 */
+export function useSaveInfection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ observation, etag }: { observation: fhir4.Observation; etag?: string }) =>
+      observation.id && etag
+        ? updateResource(observation, etag)
+        : createResource(observation),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+    },
+  });
+}
+
+export function useDeleteInfection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteResource("Observation", id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+    },
+  });
+}
+
 const QUESTIONNAIRE_COUNT = 20;
 
 // canonical (url, version) の一意性は上流の Questionnaire バリデーション + DB 制約が

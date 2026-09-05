@@ -27,6 +27,9 @@ export const CAUTION_PICTOGRAM_KEYS = [
   "unpaid",
   "privacy",
   "alert",
+  // 感染症(陽性)。注意区分マスタでは選ばせず、患者帯が感染症の区画から
+  // 直接使う(注意とは別の情報なので、区分として登録させると二重管理になる)。
+  "infection",
 ] as const;
 
 export type CautionPictogramKey = (typeof CAUTION_PICTOGRAM_KEYS)[number];
@@ -48,6 +51,7 @@ export const CAUTION_PICTOGRAM_LABELS: Record<CautionPictogramKey, string> = {
   unpaid: "硬貨に感嘆符",
   privacy: "鍵",
   alert: "三角の感嘆符",
+  infection: "バイオハザード",
 };
 
 // 線画の共通属性。塗りは持たず、太さは他の画面のアイコンと揃える。
@@ -180,6 +184,18 @@ const SHAPES: Record<CautionPictogramKey, ReactNode> = {
       <circle cx="8" cy="10.6" r=".9" {...STROKE} />
     </>
   ),
+  // バイオハザード。中心の輪と 3 つの弧で、標準の記号に寄せた形。
+  infection: (
+    <>
+      <circle cx="8" cy="8" r="1.7" {...STROKE} />
+      <path d="M6.6 6.6A4.6 4.6 0 0 1 5.1 2.2" {...STROKE} />
+      <path d="M9.4 6.6a4.6 4.6 0 0 0 1.5-4.4" {...STROKE} />
+      <path d="M6.8 9.4a4.6 4.6 0 0 1-3.9 2.3" {...STROKE} />
+      <path d="M9.2 9.4a4.6 4.6 0 0 0 3.9 2.3" {...STROKE} />
+      <path d="M8 9.7v4.5" {...STROKE} />
+      <circle cx="8" cy="8" r="6.4" {...STROKE} />
+    </>
+  ),
   // 三角の感嘆符(汎用。区分に合う図柄が無いときの既定)。
   alert: (
     <>
@@ -189,6 +205,14 @@ const SHAPES: Record<CautionPictogramKey, ReactNode> = {
     </>
   ),
 };
+
+/**
+ * 注意区分マスタの選択肢に出す図柄。感染症は注意とは別の情報(感染症の区画で
+ * 管理する)なので、区分として登録できないよう外してある。
+ */
+export const CAUTION_MASTER_PICTOGRAM_KEYS = CAUTION_PICTOGRAM_KEYS.filter(
+  (key) => key !== "infection",
+);
 
 export function isCautionPictogramKey(value: string | null | undefined): value is CautionPictogramKey {
   return CAUTION_PICTOGRAM_KEYS.includes(value as CautionPictogramKey);

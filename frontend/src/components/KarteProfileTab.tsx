@@ -5,15 +5,25 @@ import { usePatientCautions } from "../api/masterQueries";
 import {
   useBloodType,
   useCreateFlag,
+  useDeleteInfection,
   useFlag,
   useFlagSearch,
+  useManualInfections,
   usePatient,
   usePregnancy,
   useSaveBloodType,
+  useSaveInfection,
   useSavePregnancy,
   useUpdateFlag,
   useUpdatePatient,
 } from "../api/queries";
+import {
+  buildInfectionObservation,
+  parseInfectionForm,
+  type InfectionFormValues,
+} from "../fhir/infectionHelpers";
+import { InfectionForm } from "./InfectionForm";
+import { PatientInfectionSection } from "./PatientInfectionSection";
 import {
   buildPregnancyObservations,
   parsePregnancyForm,
@@ -63,7 +73,9 @@ type Mode =
   | { kind: "edit"; flagId: string }
   | { kind: "edit-patient" }
   | { kind: "edit-blood-type" }
-  | { kind: "edit-pregnancy" };
+  | { kind: "edit-pregnancy" }
+  | { kind: "create-infection" }
+  | { kind: "edit-infection"; observationId: string };
 
 // 入力途中のフォームは URL に載せない(復元しても入力内容は戻らないため)ので、
 // 登録・編集はこのコンポーネントの状態で持つ(karteUrl.ts 冒頭の方針)。
@@ -75,6 +87,8 @@ type FormMode =
       | { kind: "edit-patient" }
       | { kind: "edit-blood-type" }
       | { kind: "edit-pregnancy" }
+      | { kind: "create-infection" }
+      | { kind: "edit-infection" }
     >
   | null;
 
@@ -86,6 +100,8 @@ const MODE_TITLES: Record<Mode["kind"], string> = {
   "edit-patient": "患者情報の編集",
   "edit-blood-type": "血液型",
   "edit-pregnancy": "妊娠・授乳",
+  "create-infection": "感染症の登録",
+  "edit-infection": "感染症の編集",
 };
 
 interface KarteProfileTabProps {
@@ -137,6 +153,14 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
           <BloodTypeEditForm patientId={patientId} onSaved={backToList} />
         ) : mode.kind === "edit-pregnancy" ? (
           <PregnancyEditForm patientId={patientId} onSaved={backToList} />
+        ) : mode.kind === "create-infection" ? (
+          <InfectionEditForm patientId={patientId} onSaved={backToList} />
+        ) : mode.kind === "edit-infection" ? (
+          <InfectionEditForm
+            patientId={patientId}
+            observationId={mode.observationId}
+            onSaved={backToList}
+          />
         ) : (
           <EditForm patientId={patientId} flagId={mode.flagId} onSaved={backToList} />
         )}
@@ -160,6 +184,11 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
         patientId={patientId}
         onEditBloodType={() => setForm({ kind: "edit-blood-type" })}
         onEditPregnancy={() => setForm({ kind: "edit-pregnancy" })}
+      />
+      <PatientInfectionSection
+        patientId={patientId}
+        onAdd={() => setForm({ kind: "create-infection" })}
+        onEdit={(observationId) => setForm({ kind: "edit-infection", observationId })}
       />
     </div>
   );
@@ -454,6 +483,59 @@ function PregnancyEditForm({ patientId, onSaved }: { patientId: string; onSaved:
           onSubmit={handleSubmit}
           submitting={savePregnancy.isPending}
           submitError={savePregnancy.error}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * 手入力の感染症。`observationId` があれば編集、無ければ新規。
+ * 検査結果由来の行はここに来ない(正本は検査結果側なので編集させない)。
+ */
+function InfectionEditForm({
+  patientId,
+  observationId,
+  onSaved,
+}: {
+  patientId: string;
+  observationId?: string;
+  onSaved: () => void;
+}) {
+  const { observations, isLoading, error } = useManualInfections(patientId);
+  const saveInfection = useSaveInfection();
+  const deleteInfection = useDeleteInfection();
+
+  const target = observationId ? observations.find((o) => o.id === observationId) : undefined;
+
+  function handleSubmit(values: InfectionFormValues) {
+    saveInfection.mutate(
+      { observation: buildInfectionObservation(values, patientId, observationId) },
+      { onSuccess: onSaved },
+    );
+  }
+
+  function handleDelete() {
+    if (!observationId || !target) return;
+    if (!window.confirm("この感染症の記録を削除します。よろしいですか?")) return;
+
+    deleteInfection.mutate(observationId, { onSuccess: onSaved });
+  }
+
+  return (
+    <>
+      <ErrorBanner error={error} />
+
+      {isLoading ? (
+        <p>読み込み中...</p>
+      ) : (
+        <InfectionForm
+          initialValues={target ? parseInfectionForm(target) : undefined}
+          onSubmit={handleSubmit}
+          submitting={saveInfection.isPending}
+          submitError={saveInfection.error ?? deleteInfection.error}
+          onDelete={observationId ? handleDelete : undefined}
+          deleting={deleteInfection.isPending}
         />
       )}
     </>

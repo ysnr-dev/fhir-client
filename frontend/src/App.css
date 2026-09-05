@@ -343,15 +343,25 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  /* 帯全体は baseline 揃えだが、アイコンには基準線が無いので下寄りに見える。
+     文字より大きい図柄なので、行の中央に合わせる。 */
+  align-self: center;
 }
 
+/* ピクトグラムのボタン。グローバルの button の枠・背景・余白は打ち消して、
+   図柄だけが見えるようにする。 */
 .patient-header__caution {
   display: inline-flex;
   align-items: center;
-  /* 帯は baseline 揃えなので、アイコンの高さは文字行に収める。 */
-  height: 16px;
+  /* 帯は baseline 揃えなので、アイコンの高さを固定して行に収める
+     (大きさは PatientHeader の HEADER_PICTOGRAM_SIZE と合わせる)。 */
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: none;
   line-height: 1;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .patient-header__caution:hover {
@@ -374,10 +384,71 @@
   color: #6b7280;
 }
 
+/* 感染症(陽性)。区分の色とは別に、標準予防策の合図として赤で出す。 */
+.patient-header__caution--infection {
+  color: #c62828;
+}
+
 .patient-header__caution-count {
-  font-size: 10px;
+  font-size: 11px;
   margin-left: 1px;
   line-height: 1;
+}
+
+/* ピクトグラムと吹き出しの入れ物。吹き出しをアイコンの真下に置くための基準。 */
+.patient-header__pictogram {
+  position: relative;
+  display: inline-flex;
+}
+
+/* 押して開く吹き出し。帯は狭いので、内容は縦に積んで折り返さない幅にする。 */
+.patient-header__popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 200px;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+
+.patient-header__popover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.patient-header__popover-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.patient-header__popover-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.patient-header__popover-text {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.patient-header__popover-link {
+  align-self: flex-start;
+  font-size: 12px;
 }
 
 /* プロファイルタブ・注意区分マスタのピクトグラム。帯と同じ色分けを使う。 */
@@ -432,6 +503,18 @@
   color: #e07000;
   font-size: 13px;
   font-weight: 600;
+}
+
+/* 感染症の陽性。標準予防策に加える判断に直結するので目立たせる。 */
+.infection__result--positive {
+  color: #c62828;
+  font-weight: 600;
+}
+
+/* 値から陽性・陰性を読み取れなかった結果。陰性と紛れないよう色を分ける
+   (数値で返る抗体価など。実際の値は検査結果タブで読む)。 */
+.infection__result--undetermined {
+  color: #e07000;
 }
 
 /* 妊娠中・授乳中。処方と放射線検査で真っ先に確かめる状態なので目立たせる。 */
@@ -544,7 +627,11 @@ button:disabled {
 .patient-fields__row select,
 .walk-in__fields input,
 .walk-in__fields select,
-.walk-in__fields textarea {
+.walk-in__fields textarea,
+/* 一覧表の中に置く入力欄(感染症の検査項目の種類など)。フォームの外なので
+   上のセレクタでは当たらず、素の見た目のまま残ってしまう。 */
+.master-search__table select,
+.master-search__table input {
   font: inherit;
   font-size: 15px;
   padding: 6px 8px;
