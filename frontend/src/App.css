@@ -389,6 +389,11 @@
   color: #c62828;
 }
 
+/* アレルギー。禁忌の合図なので感染症と同じ赤で出す。 */
+.patient-header__caution--allergy {
+  color: #c62828;
+}
+
 .patient-header__caution-count {
   font-size: 11px;
   margin-left: 1px;

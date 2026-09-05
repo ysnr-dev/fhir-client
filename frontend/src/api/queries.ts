@@ -4710,6 +4710,32 @@ export function useAllergySearch(patientId: string | undefined, offset: number) 
   };
 }
 
+/**
+ * 患者帯に出す活動中のアレルギー。1 回の検索でまとめて取る(帯はページングしない)。
+ * 解消済み・非活動のものは出さない(今の禁忌ではないため)。
+ */
+export function useActiveAllergies(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("clinical-status", "active");
+  params.set("_count", "100");
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["AllergyIntolerance", "search", patientId, "active"],
+    queryFn: () => searchResource<fhir4.AllergyIntolerance>("AllergyIntolerance", params),
+    enabled: Boolean(patientId),
+    staleTime: 30 * 1000,
+  });
+
+  const allergies =
+    query.data?.data.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.AllergyIntolerance => Boolean(r)) ?? [];
+
+  return { ...query, allergies };
+}
+
 export function useAllergy(id: string | undefined) {
   return useQuery({
     queryKey: ["AllergyIntolerance", id],

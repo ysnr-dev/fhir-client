@@ -1,12 +1,14 @@
 import { Link } from "react-router-dom";
 import { usePatientCautions } from "../api/masterQueries";
 import {
+  useActiveAllergies,
   useActiveFlags,
   useLabInfectionResults,
   useManualInfections,
   usePatient,
   usePatientAdmission,
 } from "../api/queries";
+import { summarizeAllergy } from "../fhir/allergyHelpers";
 import type { PatientCaution } from "../api/masterClient";
 import { summarizeFlag } from "../fhir/flagHelpers";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../fhir/infectionHelpers";
@@ -98,6 +100,7 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
         </span>
       )}
       <CautionPictograms patientId={patientId} />
+      <AllergyPictograms patientId={patientId} />
       <InfectionPictogram patientId={patientId} />
     </div>
   );
@@ -236,5 +239,68 @@ function InfectionPictogram({ patientId }: { patientId: string | undefined }) {
         <ProfileLink patientId={patientId} />
       </PictogramPopover>
     </span>
+  );
+}
+
+/**
+ * 活動中のアレルギーのピクトグラム。処方・注射・食事の前に確かめるものなので帯に出す。
+ *
+ * **薬剤とそれ以外で図柄を分ける**。薬剤禁忌は処方・注射で真っ先に確かめるもので、
+ * 食物・環境のアレルギーとは見るべき場面が違うため。それぞれの中では種類が複数でも
+ * アイコンは 1 つにまとめ、件数を添えて中身は吹き出しで読ませる。
+ *
+ * 解消済み・非活動のものは出さない(今の禁忌ではないため)。
+ */
+function AllergyPictograms({ patientId }: { patientId: string | undefined }) {
+  const { allergies } = useActiveAllergies(patientId);
+
+  if (!patientId || allergies.length === 0) return null;
+
+  const rows = allergies.map((allergy) => ({
+    summary: summarizeAllergy(allergy),
+    medication: allergy.category?.includes("medication") ?? false,
+  }));
+
+  const groups = [
+    { key: "allergy-medication", label: "薬剤アレルギー", rows: rows.filter((r) => r.medication) },
+    // 食物・環境などをまとめた側。区分は吹き出しの各行に出るので、ここでは括らない。
+    { key: "allergy-other", label: "アレルギー", rows: rows.filter((r) => !r.medication) },
+  ].filter((group) => group.rows.length > 0);
+
+  return (
+    <span className="patient-header__item patient-header__cautions">
+      {groups.map((group) => (
+        <PictogramPopover
+          key={group.key}
+          label={`${group.label}: ${group.rows.map((r) => r.summary.name).join(" / ")}`}
+          className="patient-header__caution--allergy"
+          icon={<CautionPictogram pictogram={group.key} size={HEADER_PICTOGRAM_SIZE} />}
+          count={group.rows.length}
+        >
+          <ul className="patient-header__popover-list">
+            {group.rows.map((row) => (
+              <li key={row.summary.id}>
+                <span className="patient-header__popover-name">{row.summary.name}</span>
+                <span className="patient-header__popover-text">
+                  {[row.summary.categoryLabel, row.summary.criticalityLabel && `重篤化リスク ${row.summary.criticalityLabel}`, row.summary.reaction]
+                    .filter(Boolean)
+                    .join(" ・ ")}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <AllergyLink patientId={patientId} />
+        </PictogramPopover>
+      ))}
+    </span>
+  );
+}
+
+/** アレルギーの本体はアレルギータブなので、吹き出しからはそちらへ送る。 */
+function AllergyLink({ patientId }: { patientId: string }) {
+  return (
+    <Link to={`/patients/${patientId}/karte?tab=allergy`} className="patient-header__popover-link">
+      アレルギーを開く
+    </Link>
   );
 }

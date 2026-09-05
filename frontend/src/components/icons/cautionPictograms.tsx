@@ -30,6 +30,12 @@ export const CAUTION_PICTOGRAM_KEYS = [
   // 感染症(陽性)。注意区分マスタでは選ばせず、患者帯が感染症の区画から
   // 直接使う(注意とは別の情報なので、区分として登録させると二重管理になる)。
   "infection",
+  // アレルギー。感染症と同じく注意区分マスタでは選ばせず、患者帯が
+  // AllergyIntolerance から直接使う。薬剤とそれ以外で図柄を分ける
+  // (薬剤禁忌は処方・注射で真っ先に確かめるもので、食物アレルギーとは
+  // 見るべき場面が違うため)。
+  "allergy-medication",
+  "allergy-other",
 ] as const;
 
 export type CautionPictogramKey = (typeof CAUTION_PICTOGRAM_KEYS)[number];
@@ -52,6 +58,8 @@ export const CAUTION_PICTOGRAM_LABELS: Record<CautionPictogramKey, string> = {
   privacy: "鍵",
   alert: "三角の感嘆符",
   infection: "バイオハザード",
+  "allergy-medication": "カプセルに禁止記号",
+  "allergy-other": "皿に禁止記号",
 };
 
 // 線画の共通属性。塗りは持たず、太さは他の画面のアイコンと揃える。
@@ -196,6 +204,33 @@ const SHAPES: Record<CautionPictogramKey, ReactNode> = {
       <circle cx="8" cy="8" r="6.4" {...STROKE} />
     </>
   ),
+  // カプセルに禁止記号(薬剤アレルギー・薬剤禁忌)。斜めに置いて、
+  // 皿(allergy-other)の丸い輪郭と見分けやすくする。
+  "allergy-medication": (
+    <>
+      <rect
+        x="0.4"
+        y="4.2"
+        width="10.4"
+        height="4.6"
+        rx="2.3"
+        transform="rotate(-35 5.6 6.5)"
+        {...STROKE}
+      />
+      <path d="M4 8.2 7.2 4.8" transform="rotate(-35 5.6 6.5)" {...STROKE} />
+      {banCircle}
+    </>
+  ),
+  // 皿の上の食べ物に禁止記号(薬剤以外のアレルギー。食物・環境など)。
+  // 食物アレルギーが最も多く、絵として一目で分かるので皿にした。
+  "allergy-other": (
+    <>
+      <circle cx="6.4" cy="5.6" r="2" {...STROKE} />
+      <path d="M1.4 9.2h10" {...STROKE} />
+      <path d="M2.6 9.2a3.8 3.8 0 0 0 7.6 0" {...STROKE} />
+      {banCircle}
+    </>
+  ),
   // 三角の感嘆符(汎用。区分に合う図柄が無いときの既定)。
   alert: (
     <>
@@ -207,11 +242,17 @@ const SHAPES: Record<CautionPictogramKey, ReactNode> = {
 };
 
 /**
- * 注意区分マスタの選択肢に出す図柄。感染症は注意とは別の情報(感染症の区画で
- * 管理する)なので、区分として登録できないよう外してある。
+ * 注意区分マスタの選択肢に出す図柄。感染症とアレルギーは注意とは別の情報
+ * (それぞれの区画・タブで管理する)なので、区分として登録できないよう外してある。
  */
+const NON_MASTER_KEYS: readonly CautionPictogramKey[] = [
+  "infection",
+  "allergy-medication",
+  "allergy-other",
+];
+
 export const CAUTION_MASTER_PICTOGRAM_KEYS = CAUTION_PICTOGRAM_KEYS.filter(
-  (key) => key !== "infection",
+  (key) => !NON_MASTER_KEYS.includes(key),
 );
 
 export function isCautionPictogramKey(value: string | null | undefined): value is CautionPictogramKey {
