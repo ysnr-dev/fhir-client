@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTransfusionProductOptions } from "../api/masterQueries";
-import { usePretransfusionResults } from "../api/queries";
+import { useBloodType, usePretransfusionResults } from "../api/queries";
+import { summarizeBloodType } from "../fhir/bloodTypeHelpers";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import {
@@ -8,6 +9,7 @@ import {
   PRIORITY_OPTIONS,
   RHD_OPTIONS,
   TEST_TYPE_OPTIONS,
+  bloodTypeLabel,
   emptyTransfusionOrderForm,
   emptyTransfusionProduct,
   type AboBloodType,
@@ -45,6 +47,11 @@ interface TransfusionOrderFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /**
+   * 患者に登録された血液型を初期値に入れる。新規登録のときだけ真にする
+   * (編集で空欄のまま保存しようとしているオーダーに、後から型を書き足さない)。
+   */
+  prefillBloodType?: boolean;
 }
 
 export function TransfusionOrderForm({
@@ -54,6 +61,7 @@ export function TransfusionOrderForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  prefillBloodType = false,
 }: TransfusionOrderFormProps) {
   const [values, setValues] = useState<TransfusionOrderFormValues>(
     initialValues ?? emptyTransfusionOrderForm(""),
@@ -64,6 +72,41 @@ export function TransfusionOrderForm({
   const problemOptions = useProblemOptions(patientId);
   const products = useTransfusionProductOptions();
   const pretransfusion = usePretransfusionResults(patientId);
+  // 患者に登録された血液型(プロファイルタブ)。新規オーダーの初期値と、
+  // 選んだ型との食い違いの警告に使う。
+  const patientBloodType = summarizeBloodType(useBloodType(patientId).observations);
+  const prefilled = useRef(false);
+
+  const patientAbo = patientBloodType?.abo ?? "";
+  const patientRhd = patientBloodType?.rhd ?? "";
+  const patientTested = patientBloodType?.tested ?? false;
+
+  // 検査で確定した型だけを初期値にする。申告のままの型を黙って入れると、
+  // その型で製剤が払い出されうるため(申告値は下の一覧で読ませるに留める)。
+  // DO で型が写っている場合は上書きしない。一度入れたら追わない
+  // (医師が外した型を書き戻さない)。
+  useEffect(() => {
+    if (!prefillBloodType || prefilled.current) return;
+    if (!patientTested || (!patientAbo && !patientRhd)) return;
+
+    prefilled.current = true;
+    setValues((v) =>
+      v.aboBloodType || v.rhdBloodType
+        ? v
+        : {
+            ...v,
+            aboBloodType: (patientAbo as AboBloodType) || "",
+            rhdBloodType: (patientRhd as RhdBloodType) || "",
+          },
+    );
+  }, [prefillBloodType, patientTested, patientAbo, patientRhd]);
+
+  // 患者の血液型と食い違う型を選んでいるか。取り違えは重大なので、
+  // 選択を妨げずに気付かせる(意図して別の型を出すこともあるため)。
+  const bloodTypeMismatch =
+    patientBloodType &&
+    ((patientBloodType.abo && values.aboBloodType && patientBloodType.abo !== values.aboBloodType) ||
+      (patientBloodType.rhd && values.rhdBloodType && patientBloodType.rhd !== values.rhdBloodType));
 
   const productItems = products.data?.items ?? [];
   const update = makeFieldUpdater(setValues);
@@ -211,6 +254,19 @@ export function TransfusionOrderForm({
             })}
           </div>
         </div>
+
+        {/* 患者に登録された血液型。オーダーの型と食い違うときだけ注意を出す。 */}
+        {patientBloodType && (
+          <p
+            className={`transfusion-order__patient-blood-type${
+              bloodTypeMismatch ? " transfusion-order__patient-blood-type--mismatch" : ""
+            }`}
+          >
+            患者登録: {bloodTypeLabel(patientBloodType.abo, patientBloodType.rhd) || "未登録"}
+            {patientBloodType.sourceLabel && `（${patientBloodType.sourceLabel}）`}
+            {bloodTypeMismatch && " — 選択した型と異なります"}
+          </p>
+        )}
 
         {/* 検体検査の結果。選んだ型と見比べられるよう、選択欄のすぐ下に置く。 */}
         <ul className="transfusion-order__pretest">

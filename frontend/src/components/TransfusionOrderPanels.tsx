@@ -74,6 +74,7 @@ export function TransfusionOrderCreatePanel({
           onSubmit={handleSubmit}
           submitting={createTransfusionOrder.isPending}
           submitError={createTransfusionOrder.error}
+          prefillBloodType
         />
       )}
     </>

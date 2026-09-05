@@ -3,13 +3,23 @@ import { FhirError } from "../api/fhirClient";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { usePatientCautions } from "../api/masterQueries";
 import {
+  useBloodType,
   useCreateFlag,
   useFlag,
   useFlagSearch,
   usePatient,
+  useSaveBloodType,
   useUpdateFlag,
   useUpdatePatient,
 } from "../api/queries";
+import {
+  buildBloodTypeObservations,
+  parseBloodTypeForm,
+  summarizeBloodType,
+  type BloodTypeFormValues,
+} from "../fhir/bloodTypeHelpers";
+import { BloodTypeForm } from "./BloodTypeForm";
+import { PatientBodySection } from "./PatientBodySection";
 import type { PatientCaution } from "../api/masterClient";
 import { buildFlag, parseFlagForm, type FlagFormValues } from "../fhir/flagHelpers";
 import {
@@ -42,12 +52,19 @@ type Mode =
   | { kind: "detail"; flagId: string }
   | { kind: "create" }
   | { kind: "edit"; flagId: string }
-  | { kind: "edit-patient" };
+  | { kind: "edit-patient" }
+  | { kind: "edit-blood-type" };
 
 // 入力途中のフォームは URL に載せない(復元しても入力内容は戻らないため)ので、
 // 登録・編集はこのコンポーネントの状態で持つ(karteUrl.ts 冒頭の方針)。
 type FormMode =
-  | Extract<Mode, { kind: "create" } | { kind: "edit" } | { kind: "edit-patient" }>
+  | Extract<
+      Mode,
+      | { kind: "create" }
+      | { kind: "edit" }
+      | { kind: "edit-patient" }
+      | { kind: "edit-blood-type" }
+    >
   | null;
 
 const MODE_TITLES: Record<Mode["kind"], string> = {
@@ -56,6 +73,7 @@ const MODE_TITLES: Record<Mode["kind"], string> = {
   create: "注意の登録",
   edit: "注意の編集",
   "edit-patient": "患者情報の編集",
+  "edit-blood-type": "血液型",
 };
 
 interface KarteProfileTabProps {
@@ -103,6 +121,8 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
           <CreateForm patientId={patientId} onSaved={backToList} />
         ) : mode.kind === "edit-patient" ? (
           <PatientEditForm patientId={patientId} onSaved={backToList} />
+        ) : mode.kind === "edit-blood-type" ? (
+          <BloodTypeEditForm patientId={patientId} onSaved={backToList} />
         ) : (
           <EditForm patientId={patientId} flagId={mode.flagId} onSaved={backToList} />
         )}
@@ -121,6 +141,10 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
       <PatientBasicSection
         patientId={patientId}
         onEdit={() => setForm({ kind: "edit-patient" })}
+      />
+      <PatientBodySection
+        patientId={patientId}
+        onEditBloodType={() => setForm({ kind: "edit-blood-type" })}
       />
     </div>
   );
@@ -339,6 +363,45 @@ function PatientEditForm({ patientId, onSaved }: { patientId: string; onSaved: (
             submitLabel="更新"
           />
         )
+      )}
+    </>
+  );
+}
+
+/**
+ * 血液型の登録・編集。ABO と RhD は別リソースなので、保存は transaction で
+ * まとめて送る(useSaveBloodType)。既に登録があればその id を引き継いで
+ * 更新し、履歴を増やさない(「いつ確認したか」は確認日で持つ)。
+ */
+function BloodTypeEditForm({ patientId, onSaved }: { patientId: string; onSaved: () => void }) {
+  const { observations, isLoading, error } = useBloodType(patientId);
+  const saveBloodType = useSaveBloodType();
+
+  const summary = summarizeBloodType(observations);
+
+  function handleSubmit(values: BloodTypeFormValues) {
+    saveBloodType.mutate(
+      buildBloodTypeObservations(values, patientId, {
+        aboId: summary?.aboId || undefined,
+        rhdId: summary?.rhdId || undefined,
+      }),
+      { onSuccess: onSaved },
+    );
+  }
+
+  return (
+    <>
+      <ErrorBanner error={error} />
+
+      {isLoading ? (
+        <p>読み込み中...</p>
+      ) : (
+        <BloodTypeForm
+          initialValues={parseBloodTypeForm(observations)}
+          onSubmit={handleSubmit}
+          submitting={saveBloodType.isPending}
+          submitError={saveBloodType.error}
+        />
       )}
     </>
   );

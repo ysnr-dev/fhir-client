@@ -409,6 +409,34 @@
   color: #6b7280;
 }
 
+/* 輸血オーダーに出す「患者に登録された血液型」。選んだ型と食い違うときだけ
+   赤くする(食い違い自体は妨げない。意図して別の型を出すことがあるため)。 */
+.transfusion-order__patient-blood-type {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.transfusion-order__patient-blood-type--mismatch {
+  color: #c62828;
+  font-weight: 600;
+}
+
+/* 血液型。輸血の判断で真っ先に読むので、値だけ大きめに出す。 */
+.blood-type__value {
+  font-weight: 600;
+}
+
+/* 検査で確定していない型の印。この型のままでは製剤を出せないことを示す。 */
+.blood-type__unconfirmed {
+  margin-left: 8px;
+  padding: 0 4px;
+  border: 1px solid #e07000;
+  border-radius: 3px;
+  color: #e07000;
+  font-size: 11px;
+}
+
 /* プロファイルタブは区画を縦に積む。区画の間は見出しが埋もれない程度に空ける。 */
 .karte-profile__section + .karte-profile__section {
   margin-top: 24px;

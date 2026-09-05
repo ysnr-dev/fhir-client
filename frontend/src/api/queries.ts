@@ -4842,6 +4842,60 @@ export function useUpdateFlag() {
   });
 }
 
+// ---- 血液型(ABO / RhD の Observation) ----
+
+/**
+ * 患者の血液型。ABO と RhD を LOINC のコード 2 つで 1 回の検索にまとめる
+ * (`code` はカンマ区切りで OR になる)。件数が少ないのでページングはしない。
+ */
+export function useBloodType(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("code", `http://loinc.org|883-9,http://loinc.org|10331-7`);
+  params.set("_count", "20");
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["Observation", "search", patientId, "blood-type"],
+    queryFn: () => searchResource<fhir4.Observation>("Observation", params),
+    enabled: Boolean(patientId),
+    staleTime: 30 * 1000,
+  });
+
+  const observations =
+    query.data?.data.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Observation => Boolean(r)) ?? [];
+
+  return { ...query, observations };
+}
+
+/**
+ * 血液型の保存。ABO と RhD は別リソースなので transaction でまとめて送る
+ * (片方だけ保存されて型が食い違う状態を作らないため)。
+ */
+export function useSaveBloodType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (observations: fhir4.Observation[]) => {
+      const bundle: fhir4.Bundle = {
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: observations.map((observation) => ({
+          resource: observation,
+          request: observation.id
+            ? { method: "PUT", url: `Observation/${observation.id}` }
+            : { method: "POST", url: "Observation" },
+        })),
+      };
+      return postBundle(bundle);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+    },
+  });
+}
+
 const QUESTIONNAIRE_COUNT = 20;
 
 // canonical (url, version) の一意性は上流の Questionnaire バリデーション + DB 制約が
