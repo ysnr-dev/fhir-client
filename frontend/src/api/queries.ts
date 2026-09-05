@@ -5058,6 +5058,60 @@ export function useDeleteInfection() {
   });
 }
 
+// ---- 身体計測・腎機能(プロファイルの読み取り専用の区画) ----
+
+/**
+ * 身長・体重の最新値。バイタルの中からコードで絞って引く
+ * (経過表のように全項目を読む必要がない)。
+ */
+export function useBodyMeasures(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("code", `http://loinc.org|8302-2,http://loinc.org|29463-7`);
+  params.set("_count", "20");
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["Observation", "search", patientId, "body-measure"],
+    queryFn: () => searchResource<fhir4.Observation>("Observation", params),
+    enabled: Boolean(patientId),
+    staleTime: 60 * 1000,
+  });
+
+  const observations =
+    query.data?.data.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Observation => Boolean(r)) ?? [];
+
+  return { ...query, observations };
+}
+
+/**
+ * 腎機能の検査結果。感染症と同じく、分析物コード(先頭 5 桁)での突き合わせは
+ * 画面側で行うので、ここでは患者の検体検査の結果を新しい順に引く。
+ */
+export function useRenalResults(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", "laboratory");
+  params.set("_count", "200");
+  params.set("_sort", "-date");
+
+  const query = useQuery({
+    queryKey: ["Observation", "search", patientId, "renal"],
+    queryFn: () => searchResource<fhir4.Observation>("Observation", params),
+    enabled: Boolean(patientId),
+    staleTime: 60 * 1000,
+  });
+
+  const observations =
+    query.data?.data.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Observation => Boolean(r)) ?? [];
+
+  return { ...query, observations };
+}
+
 const QUESTIONNAIRE_COUNT = 20;
 
 // canonical (url, version) の一意性は上流の Questionnaire バリデーション + DB 制約が

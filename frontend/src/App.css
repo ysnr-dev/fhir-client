@@ -331,6 +331,11 @@
   font-size: 11px;
 }
 
+/* 血液型。輸血・手術で真っ先に読むので、帯の中でも値を強めに出す。 */
+.patient-header__value--blood-type {
+  font-weight: 600;
+}
+
 /* 死亡は見落とすと生存前提の操作をしてしまうので、注意と同じ赤で出す。 */
 .patient-header__value--deceased {
   color: #c62828;
@@ -520,6 +525,19 @@
    (数値で返る抗体価など。実際の値は検査結果タブで読む)。 */
 .infection__result--undetermined {
   color: #e07000;
+}
+
+/* 測定日。値の後ろに小さく添える(いつの値かで読み方が変わるため)。 */
+.body-measure__date {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* eGFR を算出できなかった理由。空欄で済ませず、なぜ出ないかを読ませる。 */
+.body-measure__unavailable {
+  font-size: 12px;
+  color: var(--text);
 }
 
 /* 妊娠中・授乳中。処方と放射線検査で真っ先に確かめる状態なので目立たせる。 */

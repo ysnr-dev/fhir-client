@@ -1,12 +1,19 @@
-import { useBloodType, usePregnancy } from "../api/queries";
+import { useBloodType, useBodyMeasures, usePatient, usePregnancy, useRenalResults } from "../api/queries";
 import { summarizeBloodType } from "../fhir/bloodTypeHelpers";
+import {
+  measurementLabel,
+  summarizeBodyMeasures,
+  summarizeRenal,
+} from "../fhir/bodyMeasureHelpers";
+import { calculateAge } from "../fhir/patientHelpers";
 import { summarizePregnancy } from "../fhir/pregnancyHelpers";
 import { bloodTypeLabel } from "../fhir/transfusionOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 
 /**
- * プロファイルタブの「身体」区画。今は血液型と妊娠・授乳で、身長・体重
- * (バイタルの最新値)・腎機能を後から足す。
+ * プロファイルタブの「身体」区画。血液型・妊娠/授乳はここで編集し、
+ * 身長・体重(バイタル)と腎機能(検体検査)は**読み取り専用**で最新値を出す
+ * (本体はそれぞれの画面で、同じ情報を 2 経路に持たない)。
  *
  * 血液型は輸血オーダーの初期値として使うので、検査で確定した型かどうかを
  * 必ず併記する(申告のままの型で製剤は出せないため)。妊娠・授乳は状態が
@@ -26,6 +33,17 @@ export function PatientBodySection({
   const pregnancy = usePregnancy(patientId);
   const pregnancySummary = summarizePregnancy(pregnancy.observations);
 
+  const bodyMeasures = useBodyMeasures(patientId);
+  const body = summarizeBodyMeasures(bodyMeasures.observations);
+
+  // eGFR の算出に年齢と性別が要るので患者本体も読む。
+  const patient = usePatient(patientId).data?.data;
+  const renalResults = useRenalResults(patientId);
+  const renal = summarizeRenal(renalResults.observations, {
+    age: patient?.birthDate ? calculateAge(patient.birthDate) : undefined,
+    gender: patient?.gender,
+  });
+
   return (
     <section className="karte-profile__section">
       <div className="karte-tabpanel__header">
@@ -40,7 +58,7 @@ export function PatientBodySection({
         </div>
       </div>
 
-      <ErrorBanner error={error ?? pregnancy.error} />
+      <ErrorBanner error={error ?? pregnancy.error ?? bodyMeasures.error ?? renalResults.error} />
 
       {isLoading ? (
         <p>読み込み中...</p>
@@ -100,6 +118,67 @@ export function PatientBodySection({
               </dl>
             ) : (
               <p className="patient-table__empty">妊娠・授乳が登録されていません。</p>
+            )}
+          </fieldset>
+
+          {/* ここから下は読み取り専用。編集はバイタル・検体検査で行う。 */}
+          <fieldset>
+            <legend>身長・体重</legend>
+            {body.height || body.weight ? (
+              <dl className="prescription-detail__common">
+                <dt>身長</dt>
+                <dd>
+                  {measurementLabel(body.height) || "-"}
+                  {body.height?.date && (
+                    <span className="body-measure__date">{body.height.date}</span>
+                  )}
+                </dd>
+                <dt>体重</dt>
+                <dd>
+                  {measurementLabel(body.weight) || "-"}
+                  {body.weight?.date && (
+                    <span className="body-measure__date">{body.weight.date}</span>
+                  )}
+                </dd>
+                <dt>BMI</dt>
+                <dd>{body.bmi ?? "-"}</dd>
+              </dl>
+            ) : (
+              <p className="patient-table__empty">身長・体重の測定がありません。</p>
+            )}
+          </fieldset>
+
+          <fieldset>
+            <legend>腎機能</legend>
+            {renal.creatinine || renal.cystatinC ? (
+              <dl className="prescription-detail__common">
+                <dt>血清クレアチニン</dt>
+                <dd>
+                  {measurementLabel(renal.creatinine) || "-"}
+                  {renal.creatinine?.date && (
+                    <span className="body-measure__date">{renal.creatinine.date}</span>
+                  )}
+                </dd>
+                <dt>eGFR</dt>
+                <dd>
+                  {renal.egfr !== null ? (
+                    `${renal.egfr} mL/分/1.73m²`
+                  ) : (
+                    <span className="body-measure__unavailable">{renal.egfrUnavailable || "-"}</span>
+                  )}
+                </dd>
+                {renal.cystatinC && (
+                  <>
+                    <dt>シスタチンC</dt>
+                    <dd>
+                      {measurementLabel(renal.cystatinC)}
+                      <span className="body-measure__date">{renal.cystatinC.date}</span>
+                    </dd>
+                  </>
+                )}
+              </dl>
+            ) : (
+              <p className="patient-table__empty">腎機能の検査結果がありません。</p>
             )}
           </fieldset>
         </div>

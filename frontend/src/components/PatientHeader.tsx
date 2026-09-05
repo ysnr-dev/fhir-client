@@ -3,11 +3,14 @@ import { usePatientCautions } from "../api/masterQueries";
 import {
   useActiveAllergies,
   useActiveFlags,
+  useBloodType,
   useLabInfectionResults,
   useManualInfections,
   usePatient,
   usePatientAdmission,
 } from "../api/queries";
+import { summarizeBloodType } from "../fhir/bloodTypeHelpers";
+import { bloodTypeLabel } from "../fhir/transfusionOrderHelpers";
 import { summarizeAllergy } from "../fhir/allergyHelpers";
 import type { PatientCaution } from "../api/masterClient";
 import { summarizeFlag } from "../fhir/flagHelpers";
@@ -93,6 +96,7 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
           <span className="patient-header__value">{languageText}</span>
         </span>
       )}
+      <BloodType patientId={patientId} />
       {admissionPlace && (
         <span className="patient-header__item">
           <span className="patient-header__label">入院</span>
@@ -302,5 +306,30 @@ function AllergyLink({ patientId }: { patientId: string }) {
     <Link to={`/patients/${patientId}/karte?tab=allergy`} className="patient-header__popover-link">
       アレルギーを開く
     </Link>
+  );
+}
+
+/**
+ * 血液型。輸血・手術の場面で真っ先に確かめるので帯に出す。
+ *
+ * **検査で確定していない型には印を付ける**。申告のままの型で製剤は出せないので、
+ * 値だけを見て確定と思われないようにする(プロファイルタブの身体区画と同じ扱い)。
+ * 確認日は帯には出さない(行を増やさないため)。詳細はプロファイルタブで読む。
+ */
+function BloodType({ patientId }: { patientId: string | undefined }) {
+  const { observations } = useBloodType(patientId);
+  const summary = summarizeBloodType(observations);
+
+  const label = summary ? bloodTypeLabel(summary.abo, summary.rhd) : "";
+  if (!label) return null;
+
+  return (
+    <span className="patient-header__item">
+      <span className="patient-header__label">血液型</span>
+      <span className="patient-header__value patient-header__value--blood-type">
+        {label}
+        {!summary?.tested && <span className="blood-type__unconfirmed">検査未確定</span>}
+      </span>
+    </span>
   );
 }
