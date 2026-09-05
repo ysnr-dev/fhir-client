@@ -30,8 +30,9 @@ import {
   appointmentDateTimeLabel,
   appointmentDepartmentCode,
   appointmentDepartmentLabel,
+  appointmentBookedTimeLabel,
+  appointmentCheckedInTimeLabel,
   appointmentScheduleLabel,
-  appointmentTimeLabel,
   canCheckInAppointment,
   isActiveAppointment,
 } from "../fhir/appointmentHelpers";
@@ -242,10 +243,13 @@ export function OutpatientListPage() {
             <table className="outpatient sticky-table">
               <thead>
                 <tr>
-                  {/* 横に送っても「いつ・誰の予約か」は残す(左 3 列を固定する)。 */}
-                  <th className="outpatient__time sticky-table__fix-1">時刻</th>
-                  <th className="sticky-table__fix-2">患者番号</th>
-                  <th className="sticky-table__fix-3">患者氏名</th>
+                  {/* 横に送っても「いつ・誰の予約か」は残す(左 4 列を固定する)。
+                      予約時間(枠の時刻)と受付時間(実際に来て受付した時刻)は
+                      別物なので列を分ける。 */}
+                  <th className="outpatient__time sticky-table__fix-1">予約時間</th>
+                  <th className="outpatient__time sticky-table__fix-2">受付時間</th>
+                  <th className="sticky-table__fix-3">患者番号</th>
+                  <th className="sticky-table__fix-4">患者氏名</th>
                   <PatientProfileHeadCells />
                   <th className="outpatient__schedule">予約枠</th>
                   <th>診療科</th>
@@ -278,7 +282,7 @@ export function OutpatientListPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="master-search__empty">
+                    <td colSpan={12} className="master-search__empty">
                       {total === 0
                         ? "この診察日の予約はありません"
                         : "絞り込みに該当する予約がありません"}
@@ -459,9 +463,14 @@ function OutpatientTableRow({
 
   return (
     <tr>
-      <td className="outpatient__time sticky-table__fix-1">{appointmentTimeLabel(appointment)}</td>
-      <td className="sticky-table__fix-2">{patient?.identifier?.[0]?.value ?? "-"}</td>
-      <td className="sticky-table__fix-3">
+      <td className="outpatient__time sticky-table__fix-1">
+        {appointmentBookedTimeLabel(appointment)}
+      </td>
+      <td className="outpatient__time sticky-table__fix-2">
+        {appointmentCheckedInTimeLabel(appointment)}
+      </td>
+      <td className="sticky-table__fix-3">{patient?.identifier?.[0]?.value ?? "-"}</td>
+      <td className="sticky-table__fix-4">
         {/* カナは列を分けず、氏名の後ろに小さめの括弧書きで添える(入院患者一覧と同じ)。 */}
         {patientName || "-"}
         <PatientKana patient={patient} />

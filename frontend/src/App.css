@@ -7008,9 +7008,9 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
    ために作った仕組みを、外来患者一覧や部門業務のワークリストでも使えるように
    まとめたもの。
    使い方: 表を囲む div に .sticky-table-wrap、表に .sticky-table を付け、固定
-   したいセルに左から順に .sticky-table__fix-1 / -2 / -3 を、右端の操作列に
-   .sticky-table__fix-actions を付ける。左の列の幅は表ごとに違うので、
-   --sticky-fix-1-w 〜 --sticky-fix-3-w を表の側で決める。 */
+   したいセルに左から順に .sticky-table__fix-1 〜 -4 を、右端の操作列に
+   .sticky-table__fix-actions を付ける(-4 まで使うかは表しだい)。左の列の幅は
+   表ごとに違うので、--sticky-fix-1-w 〜 --sticky-fix-4-w を表の側で決める。 */
 
 /* 行が多いと縦にも送る。ページごと送ると列見出しまで流れてしまうので、表の中だけで
    送れるよう高さを画面に収める(見出しの sticky はこのラップを基準に貼り付くため、
@@ -7041,6 +7041,7 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
 .sticky-table__fix-1,
 .sticky-table__fix-2,
 .sticky-table__fix-3,
+.sticky-table__fix-4,
 .sticky-table__fix-actions {
   position: sticky;
   z-index: 1;
@@ -7051,6 +7052,7 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
 .sticky-table thead .sticky-table__fix-1,
 .sticky-table thead .sticky-table__fix-2,
 .sticky-table thead .sticky-table__fix-3,
+.sticky-table thead .sticky-table__fix-4,
 .sticky-table thead .sticky-table__fix-actions {
   z-index: 3;
 }
@@ -7062,7 +7064,8 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
    セルの padding が足された幅で並び、次の列の left が padding のぶんずれるため。 */
 .sticky-table__fix-1,
 .sticky-table__fix-2,
-.sticky-table__fix-3 {
+.sticky-table__fix-3,
+.sticky-table__fix-4 {
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7087,6 +7090,13 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
   width: var(--sticky-fix-3-w);
   min-width: var(--sticky-fix-3-w);
   max-width: var(--sticky-fix-3-w);
+}
+
+.sticky-table__fix-4 {
+  left: calc(var(--sticky-fix-1-w) + var(--sticky-fix-2-w) + var(--sticky-fix-3-w));
+  width: var(--sticky-fix-4-w);
+  min-width: var(--sticky-fix-4-w);
+  max-width: var(--sticky-fix-4-w);
 }
 
 /* 操作列は幅を決めない(right 基準なので手前の列の幅に依らない)。ケバブの
@@ -7474,9 +7484,11 @@ body.page-wide .app__main {
 .outpatient {
   width: 100%;
   margin-bottom: 8px;
-  --sticky-fix-1-w: 80px;
-  --sticky-fix-2-w: 104px;
-  --sticky-fix-3-w: 240px;
+  /* 予約時間 / 受付時間 / 患者番号 / 患者氏名。 */
+  --sticky-fix-1-w: 92px;
+  --sticky-fix-2-w: 92px;
+  --sticky-fix-3-w: 104px;
+  --sticky-fix-4-w: 240px;
 }
 
 .outpatient th,

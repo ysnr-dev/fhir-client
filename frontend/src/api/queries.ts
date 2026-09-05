@@ -34,7 +34,7 @@ import {
 } from "../fhir/provenanceHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useCurrentPractitioner } from "./authQueries";
-import { today } from "../lib/dates";
+import { nowFhirDateTime, today } from "../lib/dates";
 import {
   MAX_BED_COUNT,
   PHYSICAL_TYPE_SYSTEM,
@@ -358,6 +358,7 @@ import {
   buildRescheduleEntries,
   isActiveAppointment,
   isExamAppointment,
+  withCheckedInAt,
   type SlotSelection,
 } from "../fhir/appointmentHelpers";
 import {
@@ -2793,6 +2794,9 @@ export function useOutpatientList(date: string) {
  * 受付・受付取消を予約の status に書き込む。単体の PUT には If-Match(ETag)が
  * 要るが、一覧は検索結果から Appointment を持っているだけで ETag を持たないので、
  * If-Match の付かない transaction Bundle の PUT で書く(放射線 Task の進捗と同じ)。
+ *
+ * 受付では受付時刻も一緒に残す(予約時間とは別の列で出すため)。受付取消では
+ * 消して、受付していない予約に受付時刻が残らないようにする。
  */
 export function useUpdateAppointmentStatus() {
   const queryClient = useQueryClient();
@@ -2808,7 +2812,10 @@ export function useUpdateAppointmentStatus() {
       // BundleEntry.resource は基底の Resource 型なので、更新後の予約は
       // Appointment として組んでから渡す(直接書くと status が余剰プロパティに
       // なる)。appointmentHelpers の slotEntry と同じ形。
-      const updated: fhir4.Appointment = { ...appointment, status };
+      const updated: fhir4.Appointment = withCheckedInAt(
+        { ...appointment, status },
+        status === "checked-in" ? nowFhirDateTime() : "",
+      );
 
       return postBundle({
         resourceType: "Bundle",

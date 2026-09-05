@@ -51,6 +51,55 @@ export function canCheckInAppointment(appointment: fhir4.Appointment): boolean {
   return ["proposed", "pending", "booked", "arrived", "waitlist"].includes(appointment.status);
 }
 
+// ---- 受付時刻 ----
+//
+// 「何時の予約か(start)」と「何時に受付したか」は別物なので、外来一覧では列を分けて
+// 出す。R4 の Appointment に受付時刻の置き場が無い(status が checked-in になった
+// ことしか残らない)ので、特記事項などと同じくローカル拡張にする。
+//
+// 当日受付は枠を持たず start に受付時刻から起こした名目の時間が入るため、start を
+// 受付時刻として読むことはできない。当日受付でもここに実際の受付時刻を書く。
+
+export const APPOINTMENT_CHECKED_IN_AT_EXTENSION_URL =
+  "http://fhir-client.local/StructureDefinition/appointment-checked-in-at";
+
+/** 受付時刻を書き込む(at が空なら受付取消として取り除く)。 */
+export function withCheckedInAt(
+  appointment: fhir4.Appointment,
+  at: string,
+): fhir4.Appointment {
+  const rest = (appointment.extension ?? []).filter(
+    (e) => e.url !== APPOINTMENT_CHECKED_IN_AT_EXTENSION_URL,
+  );
+  const extension = at
+    ? [...rest, { url: APPOINTMENT_CHECKED_IN_AT_EXTENSION_URL, valueDateTime: at }]
+    : rest;
+  return { ...appointment, extension: extension.length > 0 ? extension : undefined };
+}
+
+/** 受付時刻(FHIR dateTime そのまま)。受付していなければ空。 */
+export function appointmentCheckedInAt(appointment: fhir4.Appointment): string {
+  return (
+    appointment.extension?.find((e) => e.url === APPOINTMENT_CHECKED_IN_AT_EXTENSION_URL)
+      ?.valueDateTime ?? ""
+  );
+}
+
+/** 受付時刻「09:12」。受付していなければ "-"。 */
+export function appointmentCheckedInTimeLabel(appointment: fhir4.Appointment): string {
+  return appointmentCheckedInAt(appointment).slice(11, 16) || "-";
+}
+
+/** 当日受付(枠を持たない予約)か。予約時間を持たないので一覧では "-" を出す。 */
+export function isWalkInAppointment(appointment: fhir4.Appointment): boolean {
+  return appointment.appointmentType?.coding?.some((c) => c.code === "WALKIN") ?? false;
+}
+
+/** 予約時間「09:00」。当日受付は枠を持たないので "-"。 */
+export function appointmentBookedTimeLabel(appointment: fhir4.Appointment): string {
+  return isWalkInAppointment(appointment) ? "-" : appointmentTimeLabel(appointment);
+}
+
 export interface AppointmentFormValues {
   comment: string;
 }
@@ -206,6 +255,15 @@ export function buildWalkInAppointment(
     minutesDuration: WALK_IN_MINUTES,
     participant,
   };
+
+  // 受付時刻。当日受付の start は名目の時間なので、実際に受付した時刻は拡張に持つ
+  // (予約から受付した場合と同じ読み方ができるようにする)。
+  appointment.extension = [
+    {
+      url: APPOINTMENT_CHECKED_IN_AT_EXTENSION_URL,
+      valueDateTime: toFhirDateTime(toDateTimeInput(receivedAt)),
+    },
+  ];
 
   // 診療科。コードのある科は枠から取った予約(buildSchedule)と同じ形にし、
   // コード未設定の院内独自科は名前だけ残す。
