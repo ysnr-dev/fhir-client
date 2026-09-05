@@ -398,6 +398,226 @@ else
   puts "master_rad_jj1017_codes: #{rad_codes_csv} not found, skipped"
 end
 
+# 放射線検査の器材マスタ(db/seed_data/rad_materials.csv)。施設が採用している製品を
+# 登録する台帳なので、ここに入れるのは一般病院で使う代表的な物品の初期値。
+# receipt_material_code はレセプト電算の特定器材コードで、算定対象でない物品(留置針・
+# 三方活栓など)は空。製品名・メーカー・型番は施設で入れ替える前提なので入れていない。
+# 既存行は上書きしない。
+rad_materials_csv = Rails.root.join("db/seed_data/rad_materials.csv")
+if File.exist?(rad_materials_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(rad_materials_csv, headers: true) do |row|
+    code = row["material_code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::RadMaterial.exists?(material_code: code)
+      skipped += 1
+      next
+    end
+
+    Master::RadMaterial.create!(
+      material_code: code,
+      name: name,
+      name_kana: row["name_kana"].to_s.strip.presence,
+      unit_name: row["unit_name"].to_s.strip.presence,
+      receipt_material_code: row["receipt_material_code"].to_s.strip.presence,
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    )
+    loaded += 1
+  end
+  puts "master_rad_materials: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_rad_materials: #{rad_materials_csv} not found, skipped"
+end
+
+# 放射線検査の実施入力用データセット(db/seed_data/rad_datasets.csv /
+# rad_dataset_details.csv)。実施入力に初期表示する手技料・造影剤・器材の組み合わせで、
+# 撮影項目からは master_rad_items.dataset_code で参照する。
+#   - 手技(procedure)は点数表 第2章第4部(画像診断)の写真診断・撮影・電子画像管理加算・
+#     造影剤注入手技。**CT/MRI の撮影料は装置の列数・テスラ数で点数が変わる**ので、
+#     入れてあるのは代表的な区分(CT=64列以上128列未満 / MRI=1.5T以上3T未満)。
+#     施設の装置にあわせて画面で差し替える前提。画像診断管理加算は月単位の算定なので入れない。
+#   - 造影剤(medicine)は薬価収載の製剤単位。数量は製剤の単位(シリンジなら1筒、散剤ならg)。
+#   - 「使ったときだけ足す」明細は初期値OFF(default_selected=0)で候補として並べてある
+#     (単純CTの造影剤一式・MRIの造影加算など)。実施入力の「造影剤を追加」等はこの候補から選ぶ。
+#   - 明細は参照先マスタ(診療行為・医薬品・器材)の存在を確かめない(未取込でも投入され、
+#     取込後に名称が出る)。処置・生理検査のデータセットと同じ扱い。
+#   - 既存のデータセットは明細ごとスキップする(施設で直した内容を戻さない)。
+rad_datasets_csv = Rails.root.join("db/seed_data/rad_datasets.csv")
+rad_dataset_details_csv = Rails.root.join("db/seed_data/rad_dataset_details.csv")
+if File.exist?(rad_datasets_csv) && File.exist?(rad_dataset_details_csv)
+  details_by_dataset = Hash.new { |hash, key| hash[key] = [] }
+  CSV.foreach(rad_dataset_details_csv, headers: true) do |row|
+    dataset_code = row["dataset_code"].to_s.strip
+    code = row["code"].to_s.strip
+    next if dataset_code.blank? || code.blank?
+
+    details_by_dataset[dataset_code] << {
+      detail_type: row["detail_type"].to_s.strip,
+      code: code,
+      default_quantity: row["default_quantity"].to_s.strip.presence,
+      route_code: row["route_code"].to_s.strip.presence,
+      default_selected: row["default_selected"].to_s.strip != "0",
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    }
+  end
+
+  loaded = 0
+  skipped = 0
+  detail_count = 0
+  CSV.foreach(rad_datasets_csv, headers: true) do |row|
+    code = row["dataset_code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::RadDataset.exists?(dataset_code: code)
+      skipped += 1
+      next
+    end
+
+    Master::RadDataset.transaction do
+      Master::RadDataset.create!(
+        dataset_code: code,
+        name: name,
+        name_kana: row["name_kana"].to_s.strip.presence,
+        display_order: row["display_order"].to_s.strip.presence&.to_i
+      )
+      details_by_dataset[code].each do |detail|
+        Master::RadDatasetDetail.create!(detail.merge(dataset_code: code))
+        detail_count += 1
+      end
+    end
+    loaded += 1
+  end
+  puts "master_rad_datasets: seeded #{loaded} rows with #{detail_count} details (kept #{skipped})"
+else
+  puts "master_rad_datasets: #{rad_datasets_csv} or #{rad_dataset_details_csv} not found, skipped"
+end
+
+# 放射線オーダーのマスタ一式(db/seed_data/rad_items.csv / rad_set_items.csv /
+# rad_item_layout_cells.csv)。一般病院で日常的に出す撮影を、頻用コード表(別表F)の
+# 32桁コードを要素に分解して作った初期値。
+#   - item_code は数字6桁の連番(画面の自動採番と同じ形)、セットは S00001〜。
+#     名称は頻用コード表のコード意味そのままで、現場の呼び名は short_name に置く。
+#   - jj1017_code は要素から保存時に合成されるので CSV には持たせない(セットは要素を持たない)。
+#   - **単純撮影(種別1、およびポータブルG)はグループ化可・予約不要**、それ以外の
+#     モダリティ(CT・MRI・透視・血管撮影・核医学・骨塩定量・乳房)は**単独オーダー・予約必須**。
+#     予約必須の項目は単独オーダーでなければならない(Master::RadItem の検証)ので、この2つは連動する。
+#     セットの構成にできるのはグループ化可の項目だけなので、セットは単純撮影だけで組んである。
+#   - Ver3.3 の頻用コード表に無い種別(F=乳房X線撮影 / G=ポータブル)は、対応する単純撮影の
+#     要素を借りて種別だけ差し替えてある(Ver3.4 で新設された種別。db/seed_data/rad_jj1017_codes.csv 参照)。
+#   - 所要時間は予約枠を押さえる目安の初期値。予約枠(appointment_schedule_id)は施設ごとに
+#     作るものなので入れていない。実施入力のデータセット(dataset_code)は撮影区分ごとに
+#     上の rad_datasets.csv のものを割り当ててある(セットは撮影そのものではないので持たない)。
+#   - 既存行は上書きしない。セット構成は行単位、伝票は同名があればマスごとスキップする
+#     (施設で直した内容を戻さない)。
+rad_items_csv = Rails.root.join("db/seed_data/rad_items.csv")
+if File.exist?(rad_items_csv)
+  # 要素の列は「要素名 + _code」の規則で決まるので、要素が増えてもここは触らずに済む。
+  rad_element_columns = Master::RadItem::ELEMENT_COLUMNS.values + [:generic_extension_code]
+  loaded = 0
+  skipped = 0
+  CSV.foreach(rad_items_csv, headers: true) do |row|
+    code = row["item_code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::RadItem.exists?(item_code: code)
+      skipped += 1
+      next
+    end
+
+    attrs = {
+      item_code: code,
+      name: name,
+      short_name: row["short_name"].to_s.strip.presence,
+      name_kana: row["name_kana"].to_s.strip.presence,
+      kind: row["kind"].to_s.strip.presence || "single",
+      groupable: row["groupable"].to_s.strip != "0",
+      requires_appointment: row["requires_appointment"].to_s.strip == "1",
+      requires_perform_input: row["requires_perform_input"].to_s.strip != "0",
+      dataset_code: row["dataset_code"].to_s.strip.presence,
+      duration_minutes: row["duration_minutes"].to_s.strip.presence&.to_i,
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    }
+    rad_element_columns.each { |column| attrs[column] = row[column.to_s].to_s.strip.presence }
+    Master::RadItem.create!(attrs)
+    loaded += 1
+  end
+  puts "master_rad_items: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_rad_items: #{rad_items_csv} not found, skipped"
+end
+
+rad_set_items_csv = Rails.root.join("db/seed_data/rad_set_items.csv")
+if File.exist?(rad_set_items_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(rad_set_items_csv, headers: true) do |row|
+    set_code = row["set_item_code"].to_s.strip
+    member_code = row["member_item_code"].to_s.strip
+    next if set_code.blank? || member_code.blank?
+
+    if Master::RadSetItem.exists?(set_item_code: set_code, member_item_code: member_code)
+      skipped += 1
+      next
+    end
+
+    Master::RadSetItem.create!(
+      set_item_code: set_code,
+      member_item_code: member_code,
+      display_order: row["display_order"].to_s.strip.presence&.to_i
+    )
+    loaded += 1
+  end
+  puts "master_rad_set_items: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_rad_set_items: #{rad_set_items_csv} not found, skipped"
+end
+
+# 伝票は layout_name ごとに作り、行数・列数はマスの最大位置から決める(検体検査と同じ)。
+rad_layout_cells_csv = Rails.root.join("db/seed_data/rad_item_layout_cells.csv")
+if File.exist?(rad_layout_cells_csv)
+  cells_by_layout = Hash.new { |hash, key| hash[key] = [] }
+  CSV.foreach(rad_layout_cells_csv, headers: true) do |row|
+    layout_name = row["layout_name"].to_s.strip
+    next if layout_name.blank?
+
+    cells_by_layout[layout_name] << {
+      grid_row: row["grid_row"].to_i,
+      grid_column: row["grid_column"].to_i,
+      cell_type: row["cell_type"].to_s.strip.presence || "item",
+      item_code: row["item_code"].to_s.strip.presence,
+      display_name: row["display_name"].to_s.strip.presence
+    }
+  end
+
+  loaded = 0
+  skipped = 0
+  cells_by_layout.each_with_index do |(layout_name, cells), index|
+    if Master::RadItemLayout.exists?(name: layout_name)
+      skipped += 1
+      next
+    end
+
+    Master::RadItemLayout.transaction do
+      layout = Master::RadItemLayout.create!(
+        name: layout_name,
+        row_count: cells.map { |cell| cell[:grid_row] }.max,
+        column_count: cells.map { |cell| cell[:grid_column] }.max,
+        display_order: (index + 1) * 10
+      )
+      cells.each { |cell| Master::RadItemLayoutCell.create!(cell.merge(layout_id: layout.id)) }
+    end
+    loaded += 1
+  end
+  puts "master_rad_item_layouts: seeded #{loaded} layouts (kept #{skipped})"
+else
+  puts "master_rad_item_layouts: #{rad_layout_cells_csv} not found, skipped"
+end
+
 # 生理検査の検査種別マスタ。db/seed_data/physio_exam_types.csv（ヘッダー無し,
 # exam_type_code,name,short_name,name_kana,display_order）から投入する。
 # 生理検査は JJ1017 に収載されておらず配布マスタも無いので、放射線のモダリティに
