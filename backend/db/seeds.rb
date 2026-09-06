@@ -1209,3 +1209,150 @@ if File.exist?(water_balance_csv)
 else
   puts "facility_settings.water_balance: #{water_balance_csv} not found, skipped"
 end
+
+# 化学療法レジメンのサンプル(db/seed_data/regimens.csv ほか、いずれもヘッダー有り)。
+#
+#   regimens.csv                本体。regimen_code は 9000xx(施設の採番 6 桁と分ける)
+#   regimen_indications.csv     適応疾患。病名マスタの管理番号 + 表示用の名称・ICD10
+#   regimen_steps.csv           投与ステップ。step_no は CSV 内の並び、days は "1,8" のように複数可
+#   regimen_drugs.csv           ステップの薬剤(regimen_code + step_no で親を引く)
+#   regimen_lab_criteria.csv    適応基準の検査値
+#   regimen_adverse_events.csv  想定される副作用(CTCAE 用語 + Grade)
+#
+# ［決定］レジメンは審査委員会で承認する施設固有のもので、本来は配布する性質のデータでは
+# ない(docs/chemo-regimen-design.md §1)。ここに置くのは**開発とデモのためのサンプル**で、
+# 状態を「下書き(draft)」で入れる。実際に使う施設は内容を確かめて承認する。
+# 既存のレジメン(同じ regimen_code)は上書きしない。
+regimens_csv = Rails.root.join("db/seed_data/regimens.csv")
+if File.exist?(regimens_csv)
+  # 子は親ごとにまとめてから作る(親が既にあれば子も作らない)。
+  children = {
+    indications: Hash.new { |h, k| h[k] = [] },
+    steps: Hash.new { |h, k| h[k] = [] },
+    drugs: Hash.new { |h, k| h[k] = [] },
+    lab_criteria: Hash.new { |h, k| h[k] = [] },
+    adverse_events: Hash.new { |h, k| h[k] = [] }
+  }
+
+  %i[indications steps drugs lab_criteria adverse_events].each do |kind|
+    path = Rails.root.join("db/seed_data/regimen_#{kind}.csv")
+    next unless File.exist?(path)
+
+    CSV.foreach(path, headers: true) do |row|
+      code = row["regimen_code"].to_s.strip
+      children[kind][code] << row.to_h if code.present?
+    end
+  end
+
+  loaded = 0
+  skipped = 0
+  CSV.foreach(regimens_csv, headers: true) do |row|
+    code = row["regimen_code"].to_s.strip
+    name = row["name"].to_s.strip
+    next if code.blank? || name.blank?
+
+    if Master::Regimen.exists?(regimen_code: code)
+      skipped += 1
+      next
+    end
+
+    ActiveRecord::Base.transaction do
+      Master::Regimen.create!(
+        regimen_code: code,
+        name: name,
+        short_name: row["short_name"].to_s.strip.presence,
+        name_kana: row["name_kana"].to_s.strip.presence,
+        purpose: row["purpose"].to_s.strip.presence,
+        setting: row["setting"].to_s.strip.presence,
+        treatment_days: row["treatment_days"].to_s.strip.presence&.to_i,
+        rest_days: row["rest_days"].to_s.strip.presence&.to_i,
+        planned_cycles: row["planned_cycles"].to_s.strip.presence&.to_i,
+        emetic_risk: row["emetic_risk"].to_s.strip.presence,
+        # サンプルなので承認しない。施設が中身を確かめて承認する。
+        status: "draft",
+        indication_note: row["indication_note"].to_s.strip.presence,
+        discontinuation_criteria: row["discontinuation_criteria"].to_s.strip.presence,
+        dose_reduction_criteria: row["dose_reduction_criteria"].to_s.strip.presence,
+        references_note: row["references_note"].to_s.strip.presence
+      )
+
+      children[:indications][code].each_with_index do |item, index|
+        Master::RegimenIndication.create!(
+          regimen_code: code,
+          display_order: index + 1,
+          management_number: item["management_number"].to_s.strip,
+          name: item["name"].to_s.strip,
+          icd10: item["icd10"].to_s.strip.presence
+        )
+      end
+
+      # ステップは CSV の並びで作り、step_no で薬剤を結ぶ。
+      step_ids = {}
+      children[:steps][code].each_with_index do |item, index|
+        step = Master::RegimenStep.create!(
+          regimen_code: code,
+          display_order: index + 1,
+          name: item["name"].to_s.strip.presence,
+          days: item["days"].to_s.split(",").map { |d| d.strip.to_i }.reject(&:zero?),
+          usage_type: item["usage_type"].to_s.strip.presence || "drip",
+          route_code: item["route_code"].to_s.strip.presence,
+          infusion_minutes: item["infusion_minutes"].to_s.strip.presence&.to_i,
+          device_note: item["device_note"].to_s.strip.presence,
+          usage_code: item["usage_code"].to_s.strip.presence,
+          dose_days: item["dose_days"].to_s.strip.presence&.to_i,
+          note: item["note"].to_s.strip.presence
+        )
+        step_ids[item["step_no"].to_s.strip] = step.id
+      end
+
+      children[:drugs][code].group_by { |d| d["step_no"].to_s.strip }.each do |step_no, drugs|
+        step_id = step_ids[step_no]
+        next if step_id.blank?
+
+        drugs.each_with_index do |item, index|
+          Master::RegimenDrug.create!(
+            regimen_code: code,
+            step_id: step_id,
+            display_order: index + 1,
+            drug_role: item["drug_role"].to_s.strip.presence || "anticancer",
+            medicine_code: item["medicine_code"].to_s.strip,
+            dose_basis: item["dose_basis"].to_s.strip.presence || "bsa",
+            dose_value: item["dose_value"].to_s.strip.presence,
+            dose_unit: item["dose_unit"].to_s.strip.presence,
+            dose_max: item["dose_max"].to_s.strip.presence,
+            note: item["note"].to_s.strip.presence
+          )
+        end
+      end
+
+      children[:lab_criteria][code].each_with_index do |item, index|
+        Master::RegimenLabCriterion.create!(
+          regimen_code: code,
+          display_order: index + 1,
+          category: item["category"].to_s.strip.presence || "other",
+          analyte_code: item["analyte_code"].to_s.strip.presence,
+          item_name: item["item_name"].to_s.strip,
+          unit: item["unit"].to_s.strip.presence,
+          lower_limit: item["lower_limit"].to_s.strip.presence,
+          upper_limit: item["upper_limit"].to_s.strip.presence,
+          note: item["note"].to_s.strip.presence
+        )
+      end
+
+      children[:adverse_events][code].each_with_index do |item, index|
+        Master::RegimenAdverseEvent.create!(
+          regimen_code: code,
+          display_order: index + 1,
+          term: item["term"].to_s.strip,
+          grade: item["grade"].to_s.strip.presence&.to_i,
+          note: item["note"].to_s.strip.presence
+        )
+      end
+    end
+
+    loaded += 1
+  end
+  puts "master_regimens: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_regimens: #{regimens_csv} not found, skipped"
+end

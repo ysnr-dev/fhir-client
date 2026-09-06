@@ -1,0 +1,11 @@
+regimen_code,name,short_name,name_kana,purpose,setting,treatment_days,rest_days,planned_cycles,emetic_risk,indication_note,discontinuation_criteria,dose_reduction_criteria,references_note
+900001,mFOLFOX6,FOLFOX,えむふぉるふぉっくす,palliative,both,3,11,12,moderate,切除不能進行・再発大腸癌の一次治療,Grade 3 以上の非血液毒性、PD、患者の同意撤回,オキサリプラチン: Grade 2 の末梢神経障害が次サイクルまでに回復しなければ 65 mg/m² へ減量,大腸癌治療ガイドライン 医師用 2024年版
+900002,FOLFIRI,FOLFIRI,ふぉるふぃり,palliative,both,3,11,12,moderate,切除不能進行・再発大腸癌の一次または二次治療,Grade 3 以上の非血液毒性、PD、患者の同意撤回,イリノテカン: Grade 3 以上の下痢または好中球減少で 150 mg/m² へ減量,大腸癌治療ガイドライン 医師用 2024年版
+900003,CapeOX,XELOX,かぺおっくす,palliative,outpatient,14,7,8,moderate,切除不能進行・再発大腸癌の一次治療,手足症候群 Grade 3、Grade 3 以上の非血液毒性、PD,カペシタビン: 手足症候群 Grade 2 の再発で 1 段階減量する,大腸癌治療ガイドライン 医師用 2024年版
+900004,AC療法,AC,えーしー,adjuvant,outpatient,1,20,4,high,乳癌の術前・術後薬物療法,左室駆出率の低下、Grade 3 以上の非血液毒性、PD,ドキソルビシン: 発熱性好中球減少で 45 mg/m² へ減量,乳癌診療ガイドライン 2022年版
+900005,R-CHOP,R-CHOP,あーちょっぷ,curative,both,1,20,6,moderate,CD20 陽性 B 細胞性非ホジキンリンパ腫,Grade 3 以上の非血液毒性、PD、患者の同意撤回,ビンクリスチン: Grade 2 以上の末梢神経障害で 1 mg へ減量,造血器腫瘍診療ガイドライン 2023年版
+900006,GC療法,GC,じーしー,palliative,both,8,13,6,high,尿路上皮癌・膵癌,腎機能の悪化(CCr 40 mL/分未満)、Grade 3 以上の非血液毒性、PD,シスプラチン: CCr 45-60 mL/分で 50 mg/m² へ減量,腎癌・尿路上皮癌診療ガイドライン 2023年版
+900007,カルボプラチン + パクリタキセル,TC,てぃーしー,curative,outpatient,1,20,6,moderate,卵巣癌・非小細胞肺癌,Grade 3 以上の末梢神経障害、過敏反応、PD,パクリタキセル: Grade 2 以上の末梢神経障害で 150 mg/m² へ減量,産婦人科診療ガイドライン 2023年版
+900008,ペムブロリズマブ単剤,Pembro,ぺむぶろりずまぶ,palliative,outpatient,1,20,35,minimal,PD-L1 陽性の非小細胞肺癌ほか,Grade 3 以上の免疫関連有害事象、PD,免疫関連有害事象では減量せず休薬・中止で対応する,肺癌診療ガイドライン 2023年版
+900009,ゲムシタビン単剤,GEM,げむしたびん,palliative,outpatient,15,6,12,low,膵癌・胆道癌,Grade 3 以上の非血液毒性、間質性肺炎、PD,好中球数 1000/μL 未満で 800 mg/m² へ減量,膵癌診療ガイドライン 2022年版
+900010,カペシタビン単剤,Cape,かぺしたびん,adjuvant,outpatient,14,7,8,minimal,大腸癌・乳癌,手足症候群 Grade 3、Grade 3 以上の下痢、PD,手足症候群 Grade 2 の再発で 1 段階減量する,大腸癌治療ガイドライン 医師用 2024年版
