@@ -1,13 +1,13 @@
 # 化学療法レジメンの設計
 
-**状態: 第 1 段階(レジメンマスタの登録)実装済(2026-09-06)。レジメンオーダー(患者への適用)は未実装。**
+**状態: 第 1 段階(レジメンマスタの登録)、第 2 段階(レジメンオーダー = 患者への適用、§7)とも実装済(2026-09-06)。**
 本文中の区別は他の設計書と同じ(［事実］/［導出］/［決定］/［提案］)。
 
 ---
 
 ## 1. レジメンとは何か = マスタであってオーダーではない
 
-| | オーダーセット | レジメンマスタ | レジメンオーダー(未実装) |
+| | オーダーセット | レジメンマスタ | レジメンオーダー(§7) |
 |---|---|---|---|
 | 何を表すか | 医師が育てる「いつも出す組み合わせ」 | 審査委員会で承認した施設共通の治療計画の雛形 | 患者に対する化学療法の指示 |
 | 保存先 | backend DB(jsonb のフォーム値) | backend DB(正規化テーブル) | 上流 FHIR(ServiceRequest / MedicationRequest ほか) |
@@ -134,32 +134,130 @@ master_regimen_adverse_events    … 副作用(term = CTCAE 用語の自由記�
 
 ---
 
-## 7. 未実装・今後
+## 7. レジメンオーダー(患者への適用)
 
-### A. レジメンオーダー(患者への適用)
+### 7.1 FHIR の構造
 
-- 適用日(= Day 1)を指定して、ステップの `days` を実日付に展開する。注射ステップは 1 日 1 オーダー(`ServiceRequest` + `MedicationRequest`、
-  `InjectionRpValues` に写す)、内服ステップは処方 1 件。束ねは注射の `injection-series` と同じ `requisition` + 拡張で、
-  レジメン印(`CodeSystem/regimen` の code / display)と クール番号 / Day を拡張に持つ。相対日の表示は `injectionSeriesDay` の流儀。
-- **投与量の計算**: 直近の身長・体重(`bodyMeasureHelpers.ts`、LOINC 8302-2 / 29463-7)から体表面積(DuBois 式)を出し、
-  mg/m² × BSA → mg → 製剤数(`master_hot_codes.standard_unit` を `Master::StandardUnitParser` で読んだ力価)。上限値で頭打ち。
-  AUC はカルボプラチンの Calvert 式(eGFR は `calculateEgfr` がある)。丸め規則(バイアル単位・有効数字)はレジメンごとに要る。
-- **投与前チェック**: `lab_criteria` を患者の直近の検査結果(`useRenalResults` と同じく分析物 5 桁で突き合わせ)と比べて警告。
-  中止・減量基準は表示のみ。
-- 承認済(`status = approved`)かつ有効期間内のレジメンだけを適用の候補にする。
-- 化学療法の実施記録(投与開始・終了・実施量・副作用の Grade)と、クール進行の管理(何クール目か、休止・中止)。
+```text
+ServiceRequest(ヘッダ = 適用 1 件)          intent = plan、status = active | revoked
+  category      order-type|chemo-regimen、prescription-setting|inpatient/outpatient
+  code          CodeSystem/regimen(code = レジメンコード、display = 名前)
+  identifier    Identifier/regimen-instance = 適用 1 件の uuid
+  instantiatesUri  http://fhir-client.local/regimen/{code}(マスタは backend。FHIR 上は URI で指すだけ)
+  occurrenceDateTime  最初のクールの Day 1
+  extension     StructureDefinition/regimen { cycleDays, treatmentDays, plannedCycles, bsa, height, weight }
+  reasonReference / requester / order-department / order-ward / note  他のオーダーと同じ
+ServiceRequest + MedicationRequest(日オーダー)  通常の注射・処方そのもの
+  requisition   Identifier/regimen-instance = 上と同じ uuid
+  extension     StructureDefinition/regimen-order { regimen(→ヘッダ), cycle, day, code, name }
+```
 
-### B. マスタ側
+- ［決定］日オーダーは**通常の注射・処方そのもの**にする。注射一覧・払出・実施入力・経過表・処方箋・承認は
+  何も変えずに動く。どの適用の何クール目の何日目かは、ヘッダに焼く `regimen-order` 拡張と requisition で読む。
+- ［決定］日オーダーはヘッダを `basedOn` で指さない。この codebase は「basedOn を持たない ServiceRequest = オーダーのヘッダ」を
+  至る所で使っており(`isHeaderEntry`、カルテの `based-on:missing`、部門一覧の振り分け)、basedOn を付けると日オーダーが
+  明細扱いになって全部の画面から消える。参照は拡張に置き、上流で検索できない分は患者 + 開始日以降のオーダーを読んで
+  画面側で拡張を見る(`useRegimenDayOrders`。1 患者の化学療法は多くても数十件)。
+- ［決定］注射の連日展開(`injection-series`)は使わない。Day 1, 8, 15 のような間引きは `InjectionSchedule` で表せず、
+  `injectionSeriesDay` が「連日 8 日目」と誤読するため。日オーダーの requisition をレジメンの uuid に差し替え、series の
+  拡張は落とす(`stampRegimenOrder`)。注射の編集・中止に出る「この日以降」はレジメンでは出ない(レジメン側が担う)。
+- ［決定］ヘッダはカルテのカードにしない(看護指示と同じで、化学療法タブの暦で見る)。`karteTimeline` で外す。
+  承認画面には「化学療法」として出る(`orderKindOf`)。
+- ［決定］日オーダーのカードは、**種別バッジも「化学療法」**にする(`karteItemKindLabel`)。注射/処方であることより
+  「化学療法の一部」であることが先に読めた方がよい。どちらのオーダーかは副題に「mFOLFOX6 C1 Day1 | 注射」と添える。
+- ［決定］同じ日の注射ステップは 1 つの注射オーダー(RP = ステップ)、内服ステップは 1 つの処方にまとめる。ステップの
+  見出し・器材・投与時注意は RP の用法コメントに写す(注射箋・ラベルに出る)。
+- 来歴(Provenance)は `useCreatePrescription` が付ける(ヘッダ + 日オーダーの全ヘッダ + MedicationRequest が target)。
 
-- CTCAE 用語マスタ(JCOG の CTCAE v5.0 日本語訳)の取込と、副作用の用語をそこから選ぶこと。
-- 減量レベル表(レベル −1 / −2 × 薬剤 × %)。減量オーダーの自動計算に要る。
-- 治療前検査セット(検体検査オーダー項目との紐付け)。
-- 版管理・改訂履歴(いまは編集で上書き。承認済の改訂は複製 → 承認 → 旧版を廃止 の運用)。
-- 併用注意薬、血管外漏出リスク分類(起壊死性 / 炎症性 / 非壊死性)、投与時の観察項目。
-- 器材のマスタ化(いまは自由記述。注射側にも器材のマスタが無い)。
-- エクスポート / インポート(他施設のレジメン集からの取込)。
+### 7.2 投与量の算出
+
+- 体表面積は DuBois 式(`bodySurfaceArea`)。身長・体重の初期値は直近のバイタル(`useBodyMeasures`)で、画面で直せる。
+  変えると全薬剤を出し直す(手で直した投与量も上書きされる)。
+- 基準 × 体格 = 量(mg など)→ 上限値で頭打ち → 投与量換算マスタ(`master_medicine_dose_conversions` の `from_unit` = 基準の単位)で
+  製剤数(薬価算定単位)に直す(`planDrugDose`)。製剤数は小数第 2 位までで、丸めは薬剤部の運用に任せる。
+  ［決定］薬剤コメントに写すのは**力価だけ**(「148.75 mg」)。オーダーに載るのは製剤数(1.49 瓶)なので、
+  指示の実体である力価を添える。算出の式は書かない — 体表面積・体重は適用のヘッダに、基準はレジメンマスタに
+  残っており、カードや注射箋で毎回読ませるほどの情報ではない。
+- ［決定］**入力は力価が基本**。抗がん剤も補液も、指示は「148.75 mg」「250 mL」の形で出すものなので、
+  換算マスタで製剤数に直せる薬剤はすべて力価で入力し、製剤数は換算して下に併記する(「≒ 1.49 瓶(1 瓶 = 100 mg)」)。
+  「1.49 瓶」だけでは何 mg か読めない。力価を直すと製剤数が追随する。
+  - 製剤単位が基準のレジメン設定(補液の「1 袋」)でも、画面では容量・力価に直して入れる。単位は換算マスタにある
+    ものから mL → mg → g … の順で選ぶ(`PACK_BASIS_UNITS`)。輸液は容量で指示するのが自然なため。
+  - AUC(カルボプラチン)は Calvert 式に GFR が要るので自動では出さないが、力価(mg)を手で入れれば製剤数は出る。
+  - 換算を持たない薬剤(規格が読めない粉末バイアルなど)だけ、製剤数を直接入れる(力価は目安として出す)。
+- ［決定］**オーダーに保存するのは製剤数**(`doseQuantity` は瓶・錠・袋)。注射・処方の既存フォームは単位を
+  `medicine.unit_name` で表示するので、mg で保存すると注射編集画面が「148.75 瓶」と出して破綻する。
+  力価は入力と表示のためのもので、下流(カード・注射箋・払出・実施入力)は従来どおり製剤数 + コメントで読む。
+- ［決定］**内服の基準値は 1 日量**(処方の用量が 1 日量なので揃える)。カペシタビン 1000 mg/m² なら 1 日 1750 mg → 錠数。
+- AUC(カルボプラチン)は Calvert 式に GFR が要るので自動では出さず、手入力を促す(「AUC は手で入力してください」)。
+- 換算行が無い薬剤(粉末バイアルで力価が読めないなど)も手入力。理由を行に出す。
+- 使った身長・体重・体表面積はヘッダに残す(後から「どの体格で出したか」を辿れる)。
+
+### 7.3 クール
+
+- 適用は「開始日(Day 1)から N クール」を登録する(一度に 3 クールまで)。次のクールは詳細パネルの「第 n クールを登録」で、
+  既定の Day 1 は前のクールの Day 1 + 1 クールの日数(移動していればそれに追随)。投与量はそのときの体格で出し直す。
+- クールの Day 1 は保存せず、日オーダーの日付 − (Day − 1) から逆算する(`cycleStartDates`)。移動しても矛盾しない。
+- 予定クール数に達すると登録ボタンを止める(継続なら止めない)。
+
+### 7.4 中止・移動
+
+- **中止**(日): 注射は注射の Task、処方は処方の Task を `cancelled` にする(既存の中止と同じ器)。「この日のみ / この日以降すべて」。
+  実施済は止めない。中止取消は `requested` に戻す。
+- **移動**(日): 内容は変えず日付だけ差し替えて同じ id へ PUT(`buildRegimenMoveBundle`。注射の時刻も注射日から決まるので一緒に動く)。
+  「この日以降すべて」で後続の日も同じ日数ずらす(延期)。実施済は動かさない。
+  - 入口は 2 つ。右ペインの投与日パネル(日付を入れて「移動」)と、**暦のドラッグ＆ドロップ**。
+  - ［決定］暦の D&D は HTML5 の drag イベントで、投与日のマス(実施済だけの日は掴めない)を月内の別の日に
+    落とすと確認モーダル(`RegimenMoveModal`)が開き、反映範囲(この日のみ / この日以降すべて)を選んで書き込む。
+    落とし先は決まっているので、残る選択は範囲だけ。注射の中止と同じ 3 ボタンの形にした。
+  - 「暦は表示に徹する」方針の例外。日を掴んで別の日に落とすのは暦でしかできない操作なので、
+    ドラッグ状態と確認モーダルだけ暦が持ち、書き込みはモーダルが行う(暦自身は mutation を持たない)。
+- **レジメンの中止**: ヘッダを `revoked` にし、未実施の日オーダーをすべて中止にする(1 transaction)。
+
+### 7.5 画面
+
+- **化学療法タブ**(`KarteChemoTab`): 食事と同じ月の暦。適用が複数あればヘッダのタブで切り替える(1 つの暦に重ねない)。
+  - ［決定］マスに出すのは**ステップ名**(「前投薬」「オキサリプラチン＋レボホリナート」)で、薬剤名は出さない。
+    マスの幅では薬剤名(「オキサリプラチン１００ｍｇ２０ｍＬ注射液」)が読めないため。ステップ名は適用時に
+    用法コメントへ写してあるので、マスタを引き直さずに読める(`dayOrderStepNames`)。3 つまでで残りは件数。
+  - ［決定］**休薬期間を地の色で示す**。登録済みクールの Day 1(`cycleStartDates`)から各日のクール内の位置を出し
+    (`cyclePositionOf`)、投与期間(`treatmentDays`)を過ぎた日に「休薬」と薄い地を敷く。投与の無い日でも
+    「C1 Day8」を控えめに出すので、クールの周期が面で読める。
+  - 押すと右ペインにその日の操作が開く(オーダーのある日だけ)。掴んで別の日に落とすと移動(§7.4)。
+- **右ペイン**: 「化学療法」ボタン → レジメン選択(承認済かつ有効期間内)→ 適用フォーム(`RegimenApplyPanel`)。
+  投与内容の表は「種類 / 医薬品 / 基準 / 投与量(力価入力 + 製剤数の併記)」の 4 列(§7.2)。算出の式は画面に出さず
+  (基準と投与量があれば読めるので冗長)、薬剤コメントにだけ残す。ステップごとに別のテーブルなので、
+  `table-layout: fixed` と明示幅でどのステップでも列位置が揃うようにする(処方内容の表と同じ考え方)。
+  暦の「詳細・操作」→ `RegimenDetailPanel`(クール一覧・次クール・レジメン中止)。暦のマス → `RegimenDayPanel`
+  (その日のオーダー・編集(注射編集 / 処方編集へ)・移動・中止)。暦は表示に徹し、操作は右ペインに集める(食事と同じ)。
+  ［決定］投与日パネルのオーダーの中身は、カルテのカードと同じ組み(`.karte-rp` で RP ごとに薬剤 → 用法)にする。
+  同じオーダーを 2 か所で違う形に見せない。「反映範囲」の fieldset は素のままだと周りと揃わないので
+  `.injection-scope` にスタイルを当て、注射の編集パネルと共用する。
+
+### 7.6 未実装・今後
+
+- 投与前チェック(`lab_criteria` と直近の検査結果の突き合わせ)。中止・減量基準は表示のみ。
+- 減量オーダー(減量レベル表から投与量を出す)。いまは適用時に投与量を手で直す。
+- 次クール登録の注射区分・処方区分の既定を前のクールから引き継ぐ(いまは選び直す)。
+- クールの完了・レジメン全体の完了(`completed`)。実施記録からクール進行を自動で追う。
+- 副作用(CTCAE Grade)の記録。実施入力に Grade を足すか、AdverseEvent を持つか。
+- 暦から空いている日に直接オーダーを足す操作(いまはクール単位の登録だけ)。
+- 暦の D&D で月をまたぐ移動(いまは表示中の月の中だけ。前後の月に落とすには月を送ってから掴み直す)。
+- CTCAE 用語マスタ、治療前検査セット、版管理、併用注意薬、血管外漏出リスク、器材のマスタ化、エクスポート/インポート(第 1 段階からの積み残し)。
 
 ## 8. 実装したもの(2026-09-06)
+
+### 8.0 レジメンオーダー(§7)
+
+- backend: `regimens_controller.rb` の詳細で内服の用法をオブジェクト(`usage`)で返す(処方に写すため区分が要る)
+- frontend: `fhir/regimenOrderHelpers.ts`(FHIR の構造・投与量の算出・Bundle の組み立て・移動・中止)、
+  `fhir/injectionHelpers.ts`(`buildInjectionSingleDayEntries` を公開)、`api/queries.ts`(`useRegimenApplications` /
+  `useRegimenDayOrders` / `useUpdateRegimenDayStatus` / `useRevokeRegimen`)、`api/masterQueries.ts`(`useMedicineDoseFactors` /
+  `useApplicableRegimens`)、`components/RegimenApplyPanel.tsx`(選択・適用・次クール)、`components/RegimenPanels.tsx`
+  (詳細・投与日)、`components/KarteChemoTab.tsx`(暦)、`KarteRightPane.tsx`(`regimen-apply` / `regimen-detail` / `regimen-day`
+  と「化学療法」ボタン)、`KartePage.tsx` / `karteUrl.ts`(タブ)、`fhir/karteTimeline.ts`(ヘッダを外す・`orderKindOf`)、
+  `KarteTimeline.tsx`(カードの印)、`OrderApprovalPage.tsx`(種別名)、`App.css`
+
 
 - backend: `db/migrate/20260906100000〜100500`(6 テーブル)、`app/models/master/regimen*.rb`(6 モデル)、
   `app/controllers/master/regimens_controller.rb`(index / show / create / update / copy / destroy)、`config/routes.rb`、
@@ -183,7 +281,25 @@ master_regimen_adverse_events    … 副作用(term = CTCAE 用語の自由記�
 - 一覧: 「ふぉるふぉっくす」(カナ)でヒット、状態 = 下書きで 0 件、承認済 + 内科 + 有効期間内で 1 件。
 - `RAILS_ENV=test ADMIN_TOKEN= bundle exec rspec` 1191 件成功、コンテナ内 `npx tsc -b` 成功。
 
+### 8.2 検証したこと(レジメンオーダー、2026-09-06、テスト太郎)
+
+- mFOLFOX6 を 9/8 開始・入院・定時で適用 → ヘッダ 1 + 注射 1 日(RP 4・薬剤 8)。体表面積 1.75 m²(170 cm / 64.4 kg)、
+  オキサリプラチン 85 mg/m² → 148.75 mg → 1.49 瓶、レボホリナート 3.5 瓶、5-FU 0.7 / 4.2 瓶。薬剤コメントに計算根拠。
+- 暦に「9 C1 Day1」と薬剤名、マスを押すと右ペインに投与日の操作。移動(9/8 → 9/9)で SR と MR 8 件が同じ id で PUT され、
+  拡張・requisition が残る。Provenance は CREATE 10 target + UPDATE 9 target。中止 → 暦に打ち消し線と「中止」、中止取消で戻る。
+- 詳細パネル: 第 1 クール Day 1 = 9/9(移動に追随)。「第 2 クールを登録」の既定 Day 1 = 9/23、登録すると暦に「C2 Day1」。
+- カルテタブの注射カードに「mFOLFOX6 C2 Day1」。ヘッダはカードにならない。
+- CapeOX(内服)を 9/10 開始で適用 → 処方 1 件(カペシタビン 6 錠、用法「1 日 2 回朝夕食後」、14 日分、コメントに 1750 mg の根拠)。
+  暦のタブが CapeOX / mFOLFOX6 の 2 つになり切り替わる。
+- `RAILS_ENV=test ADMIN_TOKEN= bundle exec rspec spec/requests/master/regimens_spec.rb` 14 件、コンテナ内 `npx tsc -b` 成功。
+
 ## 9. 申し送り
+
+- 開発環境のテスト太郎に mFOLFOX6(9/9・9/23 の 2 クール)と CapeOX(9/10)を適用済み。CapeOX は検証のため DB で承認済にした。
+- 日オーダーの検索は「患者 + 最初の適用の開始日以降 + ヘッダのみ」を最大 10 ページ読んで画面側で拡張を見る。他のオーダーが
+  非常に多い患者では読み切れない可能性がある(上流に拡張の検索パラメータを足すのが本筋。`docs/server-improvement-backlog.md`)。
+- 移動は `parseInjectionForm` → `buildInjectionUpdateBundle` で組み直すので、フォームが持たない要素(オーダーセットの印など)は
+  引き継がれない。レジメンから出た日オーダーは他の印を持たないので今は問題にならない。
 
 - 薬剤の種類・算出基準の既定は「注射容量 100 mL 以上の袋・瓶・キット → 補液」の推定なので、50 mL の制吐剤バッグなどは抗がん剤に
   なる。選び直せばよいが、種類の既定を薬効分類(YJ 上 4 桁 421〜429 = 抗悪性腫瘍薬)で決める改良は安い。

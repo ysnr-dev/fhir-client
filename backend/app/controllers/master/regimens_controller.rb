@@ -97,6 +97,10 @@ module Master
     DRUG_ATTRS = %w[drug_role medicine_code dose_basis dose_value dose_unit dose_max note].freeze
     LAB_CRITERION_ATTRS = %w[category analyte_code item_name unit lower_limit upper_limit note].freeze
     ADVERSE_EVENT_ATTRS = %w[term grade note].freeze
+    USAGE_ATTRS = %i[
+      id usage_code usage_name basic_usage_category_code basic_usage_category
+      detailed_usage_category_code detailed_usage_category timing_category_code timing_category
+    ].freeze
 
     def record_params
       params.permit(*REGIMEN_ATTRS)
@@ -198,12 +202,17 @@ module Master
     def detail(regimen)
       steps = regimen.steps.to_a
       drugs_by_step = Master::RegimenDrug.with_names.where(step_id: steps.map(&:id)).in_display_order.group_by(&:step_id)
-      usage_names = Master::MedicineUsage.where(usage_code: steps.filter_map(&:usage_code))
-                                         .pluck(:usage_code, :usage_name).to_h
+      # 内服の用法は名称だけでなく区分も添える(レジメンオーダーが処方に写すとき、
+      # 用法マスタを引き直さずに済むように)。
+      usages = Master::MedicineUsage.where(usage_code: steps.filter_map(&:usage_code))
+                                    .index_by(&:usage_code)
       summary(regimen).merge(
         "indications" => regimen.indications.as_json,
         "steps" => steps.map do |s|
-          s.as_json.merge("usage_name" => usage_names[s.usage_code], "drugs" => (drugs_by_step[s.id] || []).as_json)
+          s.as_json.merge(
+            "usage" => usages[s.usage_code]&.as_json(only: USAGE_ATTRS),
+            "drugs" => (drugs_by_step[s.id] || []).as_json,
+          )
         end,
         "lab_criteria" => regimen.lab_criteria.as_json,
         "adverse_events" => regimen.adverse_events.as_json,

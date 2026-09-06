@@ -29,6 +29,8 @@ import {
 } from "./QuestionnaireResponsePanels";
 import { VitalCreatePanel, VitalEditPanel } from "./VitalPanels";
 import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
+import { RegimenApplyPanel } from "./RegimenApplyPanel";
+import { RegimenDayPanel, RegimenDetailPanel } from "./RegimenPanels";
 
 // カルテ画面の右ペイン。登録・編集 UI は既存ページと共通のパネルを使う。
 
@@ -81,7 +83,13 @@ export type KartePaneState =
   | { kind: "appointment-create"; problem?: ProblemRef }
   | { kind: "appointment-reschedule"; appointmentId: string }
   // オーダーセットの適用。setId 未指定はセット選択の状態(ペイン内のツリーから選ぶ)。
-  | { kind: "order-set"; setId?: number; problem?: ProblemRef };
+  | { kind: "order-set"; setId?: number; problem?: ProblemRef }
+  // 化学療法レジメンの適用。regimenId 未指定はレジメン選択の状態。
+  | { kind: "regimen-apply"; regimenId?: number; problem?: ProblemRef }
+  // 適用済みレジメンの詳細(クール一覧・次クール登録・中止)。regimenSrId はヘッダ ServiceRequest。
+  | { kind: "regimen-detail"; regimenSrId: string }
+  // 暦の 1 日(その日のオーダーの編集・移動・中止)。
+  | { kind: "regimen-day"; regimenSrId: string; date: string };
 
 const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   empty: "",
@@ -126,6 +134,9 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "appointment-create": "予約登録",
   "appointment-reschedule": "予約の日時変更",
   "order-set": "セット適用",
+  "regimen-apply": "化学療法(レジメン適用)",
+  "regimen-detail": "化学療法",
+  "regimen-day": "化学療法(投与日)",
 };
 
 // 対象が切り替わったらフォームを作り直すためのキー。各フォームは初期値を useState の
@@ -159,6 +170,12 @@ function paneKey(state: KartePaneState): string {
     // 別のセットを選び直したらフォームを作り直す(初期値は初回描画時のみ反映される)。
     case "order-set":
       return `${state.kind}:${state.setId ?? ""}:${state.problem?.conditionId ?? ""}`;
+    case "regimen-apply":
+      return `${state.kind}:${state.regimenId ?? ""}:${state.problem?.conditionId ?? ""}`;
+    case "regimen-detail":
+      return `${state.kind}:${state.regimenSrId}`;
+    case "regimen-day":
+      return `${state.kind}:${state.regimenSrId}:${state.date}`;
     // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
     // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
     case "prescription-create":
@@ -280,6 +297,13 @@ export function KarteRightPane({
         >
           注射
         </button>
+        {/* レジメン(化学療法)の適用。注射・処方に展開されるので、その隣に置く。 */}
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "regimen-apply", problem: selectedProblem })}
+        >
+          化学療法
+        </button>
         <button
           type="button"
           onClick={() => onStateChange({ kind: "lab-order-create", problem: selectedProblem })}
@@ -395,6 +419,37 @@ function PaneContent({
           defaultProblem={state.problem}
           onSelectSet={(setId) => onStateChange({ ...state, setId })}
           onBack={() => onStateChange({ ...state, setId: undefined })}
+          onSaved={onSaved}
+        />
+      );
+    case "regimen-apply":
+      return (
+        <RegimenApplyPanel
+          patientId={patientId}
+          regimenId={state.regimenId}
+          defaultProblem={state.problem}
+          onSelectRegimen={(regimenId) => onStateChange({ ...state, regimenId })}
+          onBack={() => onStateChange({ ...state, regimenId: undefined })}
+          onSaved={onSaved}
+        />
+      );
+    case "regimen-detail":
+      return (
+        <RegimenDetailPanel
+          patientId={patientId}
+          regimenSrId={state.regimenSrId}
+          onOpenDay={(date) => onStateChange({ kind: "regimen-day", regimenSrId: state.regimenSrId, date })}
+          onSaved={onSaved}
+        />
+      );
+    case "regimen-day":
+      return (
+        <RegimenDayPanel
+          patientId={patientId}
+          regimenSrId={state.regimenSrId}
+          date={state.date}
+          onEditInjection={(srId) => onStateChange({ kind: "injection-edit", srId })}
+          onEditPrescription={(srId) => onStateChange({ kind: "prescription-edit", srId })}
           onSaved={onSaved}
         />
       );

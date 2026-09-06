@@ -928,6 +928,26 @@ export function buildInjectionBundle(
   );
 }
 
+/**
+ * 単日(束ねない)の注射 1 件ぶんの transaction entry。化学療法レジメンの適用が、
+ * 相対日を実日付に展開した 1 日ずつをこれで組み、束ねの印(requisition)は
+ * レジメン側のものに差し替える(regimenOrderHelpers.ts)。
+ */
+export function buildInjectionSingleDayEntries(
+  values: InjectionFormValues,
+  patientId: string,
+  requester: OrderContext,
+  authoredOn: string,
+): fhir4.BundleEntry[] {
+  const series: InjectionSeries = {
+    requisition: crypto.randomUUID(),
+    start: values.startDate,
+    end: values.startDate,
+    schedule: DAILY_SCHEDULE,
+  };
+  return buildInjectionDayEntries(values, patientId, requester, authoredOn, series);
+}
+
 // 1 日分の更新。束ね情報は保存済みのものを引き継ぐ(古いデータで無ければ単日の束ねを作る)。
 // 元の ServiceRequest を受け取るのは、id のほかに登録日時(authoredOn)を引き継ぐため。
 export function buildInjectionUpdateBundle(

@@ -30,6 +30,7 @@ import {
 import { problemLabel, type ProblemRef } from "../fhir/conditionHelpers";
 import {
   KARTE_KIND_LABELS,
+  karteItemKindLabel,
   karteDayLabel,
   karteItemKey,
   itemProblem,
@@ -168,6 +169,7 @@ import { vitalDisplayRows } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { AnesthesiaChartModal } from "./AnesthesiaChartModal";
 import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
+import { regimenOrderLabel } from "../fhir/regimenOrderHelpers";
 import { InjectionCancelModal } from "./InjectionCancelModal";
 import { InjectionPerformModal } from "./InjectionPerformModal";
 import { InjectionDeleteModal } from "./InjectionDeleteModal";
@@ -390,7 +392,7 @@ function KarteCard({
       setInjectionDeleteOpen(true);
       return;
     }
-    if (!window.confirm(`この${KARTE_KIND_LABELS[item.kind]}を削除します。よろしいですか?`)) return;
+    if (!window.confirm(`この${karteItemKindLabel(item)}を削除します。よろしいですか?`)) return;
     const options = { onSuccess: () => onDeleted(item) };
     if (item.kind === "note") deleteNote.mutate(item.id, options);
     else if (item.kind === "prescription") deletePrescription.mutate(item.id, options);
@@ -442,7 +444,7 @@ function KarteCard({
             この外に置いて、幅が狭くても行が増えず右上に留まるようにする。 */}
         <div className="karte-card__header-main">
           <span className={`karte-card__badge karte-card__badge--${item.kind}`}>
-            {KARTE_KIND_LABELS[item.kind]}
+            {karteItemKindLabel(item)}
           </span>
           <span className="karte-card__title">{cardTitle(item)}</span>
           <ProblemBadge problem={itemProblem(item)} problemsById={problemsById} />
@@ -525,8 +527,8 @@ function KarteCard({
             <button
               type="button"
               className="karte-card__icon-button karte-card__icon-button--labeled"
-              title={`DO(この${KARTE_KIND_LABELS[item.kind]}を複写して新規登録)`}
-              aria-label={`DO(この${KARTE_KIND_LABELS[item.kind]}を複写して新規登録)`}
+              title={`DO(この${karteItemKindLabel(item)}を複写して新規登録)`}
+              aria-label={`DO(この${karteItemKindLabel(item)}を複写して新規登録)`}
               onClick={() => onDo(item)}
             >
               <CopyIcon />
@@ -558,7 +560,7 @@ function KarteCard({
                 <span className="karte-card__icon-label">PDF</span>
               </button>
             ))}
-          <RowMenu label={`${cardTitle(item) || KARTE_KIND_LABELS[item.kind]} の操作`}>
+          <RowMenu label={`${cardTitle(item) || karteItemKindLabel(item)} の操作`}>
             {/* バイタルはカードに測定値が全部出るので詳細モーダルを持たない。 */}
             {item.kind !== "vital" && (
               <button type="button" className="row-menu__item" onClick={() => onOpenDetail(item)}>
@@ -984,9 +986,25 @@ function cardMeta(item: KarteTimelineItem): string {
       .filter(Boolean)
       .join(" | ");
   }
-  // 連日オーダーの注射は「何日目」かを添える(単日のオーダーでは出ない)。
+  // 連日オーダーの注射は「何日目」かを添える(単日のオーダーでは出ない)。レジメンから
+  // 出た注射・処方は「レジメン名 C1 Day8」を添え、種別バッジが「化学療法」になるぶん
+  // どちらのオーダーかもここに出す。
   if (item.kind === "injection") {
-    return [injectionSeriesLabel(item.serviceRequest), requesterSummary].filter(Boolean).join(" | ");
+    const regimen = regimenOrderLabel(item.serviceRequest);
+    return [
+      regimen,
+      regimen ? KARTE_KIND_LABELS[item.kind] : "",
+      injectionSeriesLabel(item.serviceRequest),
+      requesterSummary,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+  }
+  if (item.kind === "prescription") {
+    const regimen = regimenOrderLabel(item.serviceRequest);
+    return [regimen, regimen ? KARTE_KIND_LABELS[item.kind] : "", requesterSummary]
+      .filter(Boolean)
+      .join(" | ");
   }
   // 処方・注射は診療記録の作成者と同じ位置に、依頼科・依頼医師を出す。登録日時
   // (authoredOn)はカードには出さない(カードの日はオーダー開始日で、いつ登録したかは

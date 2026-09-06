@@ -161,6 +161,16 @@ import {
   type RxTaskStatus,
 } from "../fhir/rxTaskHelpers";
 import {
+  REGIMEN_ORDER_TYPE,
+  isRegimenServiceRequest,
+  parseRegimenApplication,
+  regimenDayOrderKind,
+  regimenOrderOf,
+  revokeRegimenEntry,
+  type RegimenApplication,
+  type RegimenDayOrder,
+} from "../fhir/regimenOrderHelpers";
+import {
   RAD_ORDER_TYPE,
   buildRadOrderDeleteBundle,
   isRadServiceRequest,
@@ -9924,4 +9934,165 @@ function invalidateTransfusion(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
   // 取消では実施記録も消しているので、FHIR JSON 表示の実施記録も引き直させる。
   queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
+}
+
+// ---- 化学療法レジメンオーダー(docs/chemo-regimen-design.md §7) ----
+
+/**
+ * 患者に適用されたレジメン(ヘッダ)。中止・完了も含めて全件返す(タブで切り替える)。
+ * 1 患者のレジメン適用は多くても十数件なので 1 ページで足りる。
+ */
+export function useRegimenApplications(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${REGIMEN_ORDER_TYPE.code}`);
+  params.set("_sort", "-occurrence");
+  params.set("_count", "100");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "regimen-applications", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      const headers = serviceRequestsOf(bundle).filter(isRegimenServiceRequest);
+      return {
+        headers,
+        applications: headers
+          .map(parseRegimenApplication)
+          .filter((a): a is RegimenApplication => a !== null),
+      };
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+const REGIMEN_ORDERS_PAGE = 100;
+const REGIMEN_ORDERS_MAX_PAGES = 10;
+
+/**
+ * レジメンから出た日オーダー(注射・処方)を患者ぶんまとめて引く。上流は拡張で検索
+ * できないので、最初の適用の開始日以降のオーダーのヘッダを日付順に読み、レジメンの
+ * 印(regimen-order 拡張)を持つものだけ残す。進捗の Task と薬剤も同じレスポンスで受ける。
+ */
+export function useRegimenDayOrders(patientId: string | undefined, earliestStart: string | undefined) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "regimen-orders", patientId, earliestStart],
+    queryFn: async (): Promise<RegimenDayOrder[]> => {
+      const requests: fhir4.ServiceRequest[] = [];
+      const medicationRequests: fhir4.MedicationRequest[] = [];
+      const tasks: fhir4.Task[] = [];
+      for (let page = 0; page < REGIMEN_ORDERS_MAX_PAGES; page += 1) {
+        const params = new URLSearchParams();
+        params.set("patient", `Patient/${patientId}`);
+        params.set("occurrence", `ge${earliestStart}`);
+        params.set("based-on:missing", "true");
+        params.set("_sort", "occurrence");
+        params.set("_count", String(REGIMEN_ORDERS_PAGE));
+        params.set("_offset", String(page * REGIMEN_ORDERS_PAGE));
+        params.append("_revinclude", "MedicationRequest:based-on");
+        params.append("_revinclude", "Task:focus");
+        const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+        let matched = 0;
+        for (const entry of bundle.entry ?? []) {
+          const resource = entry.resource;
+          if (!resource) continue;
+          if (resource.resourceType === "ServiceRequest") {
+            matched += 1;
+            const sr = resource as fhir4.ServiceRequest;
+            if (regimenOrderOf(sr)) requests.push(sr);
+          } else if (resource.resourceType === "MedicationRequest") {
+            medicationRequests.push(resource as fhir4.MedicationRequest);
+          } else if (resource.resourceType === "Task") {
+            tasks.push(resource as fhir4.Task);
+          }
+        }
+        if (matched < REGIMEN_ORDERS_PAGE) break;
+      }
+
+      const mrsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
+      for (const mr of medicationRequests) {
+        for (const reference of mr.basedOn ?? []) {
+          const orderId = referenceId(reference.reference);
+          if (!orderId) continue;
+          mrsByOrderId.set(orderId, [...(mrsByOrderId.get(orderId) ?? []), mr]);
+        }
+      }
+      const injectionTasks = injectionTasksByOrderId(tasks);
+      const rxTasks = rxTasksByOrderId(tasks);
+
+      return requests
+        .map((sr): RegimenDayOrder | null => {
+          const ref = regimenOrderOf(sr);
+          if (!ref || !sr.id) return null;
+          const kind = regimenDayOrderKind(sr);
+          const task = kind === "injection" ? injectionTasks.get(sr.id) : rxTasks.get(sr.id);
+          const status = (task?.status ?? "requested") as RegimenDayOrder["status"];
+          return {
+            kind,
+            serviceRequest: sr,
+            medicationRequests: mrsByOrderId.get(sr.id) ?? [],
+            task,
+            ref,
+            date: orderDay(sr),
+            status,
+          };
+        })
+        .filter((o): o is RegimenDayOrder => o !== null)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
+    },
+    enabled: Boolean(patientId) && Boolean(earliestStart),
+  });
+}
+
+function regimenDayTaskEntry(order: RegimenDayOrder, status: InjectionTaskStatus): fhir4.BundleEntry {
+  return taskBundleEntry(
+    order.kind === "injection"
+      ? buildInjectionTaskUpdate(order.task, order.serviceRequest, status)
+      : buildRxTaskUpdate(order.task, order.serviceRequest, status as RxTaskStatus),
+  );
+}
+
+function invalidateRegimen(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "injection-worklist"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rx-worklist"] });
+}
+
+/**
+ * レジメンの日オーダーの中止・中止取消。注射は注射の Task、処方は処方の Task に
+ * 同じ状態を書く。複数日をまとめて 1 つの transaction で書く(半端に止まらない)。
+ */
+export function useUpdateRegimenDayStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ targets, status }: { targets: RegimenDayOrder[]; status: "cancelled" | "requested" }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: targets.map((order) => regimenDayTaskEntry(order, status)),
+      }),
+    onSuccess: () => invalidateRegimen(queryClient),
+  });
+}
+
+/**
+ * レジメンの中止。ヘッダを revoked にし、まだ実施していない日オーダーを中止にする
+ * (実施済は事実なので触らない)。
+ */
+export function useRevokeRegimen() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ header, targets }: { header: fhir4.ServiceRequest; targets: RegimenDayOrder[] }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          revokeRegimenEntry(header),
+          ...targets
+            .filter((order) => order.status !== "completed" && order.status !== "cancelled")
+            .map((order) => regimenDayTaskEntry(order, "cancelled")),
+        ],
+      }),
+    onSuccess: () => invalidateRegimen(queryClient),
+  });
 }

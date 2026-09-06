@@ -656,6 +656,32 @@ export function useMedicineMlFactors(medicineCodes: string[]) {
   });
 }
 
+/**
+ * 医薬品コード → 入力単位(mg・g・単位…)→ 1 [薬価算定単位] あたりの量。化学療法の
+ * 投与量(mg/m² から出した mg)を製剤数に直すのに使う。mL 行も含めて全単位を引く。
+ */
+export function useMedicineDoseFactors(medicineCodes: string[]) {
+  const codes = Array.from(new Set(medicineCodes)).sort();
+
+  return useQuery({
+    queryKey: ["master", "medicine_dose_conversions", "all-units", codes],
+    queryFn: async () => {
+      const result = await searchMedicineDoseConversions({ medicine_code: codes.join(","), per: 100 });
+      const factors = new Map<string, Map<string, number>>();
+      for (const row of result.items) {
+        const factor = Number(row.factor);
+        if (!(factor > 0)) continue;
+        const byUnit = factors.get(row.medicine_code) ?? new Map<string, number>();
+        byUnit.set(row.from_unit, factor);
+        factors.set(row.medicine_code, byUnit);
+      }
+      return factors;
+    },
+    staleTime: Infinity,
+    enabled: codes.length > 0,
+  });
+}
+
 // 検査結果の編集画面用。保存済みの JLAC11 コードからマスタ情報
 // (コード型の選択肢など)を一括で引き直す。
 export function useLabItemsByCodes(codes: string[]) {
@@ -3947,4 +3973,13 @@ export function useRegimenMutations() {
       onSuccess: invalidate,
     }),
   };
+}
+
+/** 適用の候補にするレジメン(承認済かつ有効期間内)。 */
+export function useApplicableRegimens(name: string) {
+  return useQuery({
+    queryKey: [...REGIMENS_KEY, "applicable", name],
+    queryFn: () => searchRegimens({ name, status: "approved", active: true, per: 100 }),
+    placeholderData: keepPreviousData,
+  });
 }

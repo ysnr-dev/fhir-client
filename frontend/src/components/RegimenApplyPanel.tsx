@@ -1,0 +1,627 @@
+import { useEffect, useMemo, useState } from "react";
+import type { Regimen, RegimenDetail } from "../api/masterClient";
+import { useApplicableRegimens, useMedicineDoseFactors, useRegimen } from "../api/masterQueries";
+import { useBodyMeasures, useCreatePrescription } from "../api/queries";
+import { summarizeBodyMeasures } from "../fhir/bodyMeasureHelpers";
+import type { ProblemRef } from "../fhir/conditionHelpers";
+import { CATEGORY_OPTIONS as INJECTION_CATEGORY_OPTIONS } from "../fhir/injectionHelpers";
+import {
+  CATEGORY_OPTIONS as PRESCRIPTION_CATEGORY_OPTIONS,
+  withOrderWard,
+  type PrescriptionSetting,
+} from "../fhir/prescriptionHelpers";
+import {
+  REGIMEN_DRUG_ROLE_OPTIONS,
+  REGIMEN_PURPOSE_OPTIONS,
+  REGIMEN_STEP_USAGE_TYPE_OPTIONS,
+  displayOfOption,
+  doseUnitSuffix,
+} from "../fhir/regimenHelpers";
+import {
+  MAX_REGIMEN_CYCLES_AT_ONCE,
+  bsaOf,
+  buildRegimenApplicationBundle,
+  buildRegimenCycleBundle,
+  planPacks,
+  planSteps,
+  regimenHasInjection,
+  regimenHasOral,
+  validateRegimenApply,
+  type RegimenApplication,
+  type RegimenApplyValues,
+  type RegimenDrugPlan,
+} from "../fhir/regimenOrderHelpers";
+import { SETTING_OPTIONS } from "../fhir/shared";
+import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
+import { useOrderContext } from "../hooks/useOrderContext";
+import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
+import { today } from "../lib/dates";
+import { ErrorBanner } from "./ErrorBanner";
+import { ProblemSelect } from "./ProblemSelect";
+
+// カルテ右ペインの「化学療法」。レジメンを選び、開始日(Day 1)と体格から投与量を
+// 出して、クール単位で注射・処方オーダーに展開して登録する。クールの追加登録も
+// 同じフォーム(ヘッダは既存のものを指す)。設計は docs/chemo-regimen-design.md §7。
+
+interface RegimenApplyPanelProps {
+  patientId: string;
+  /** 未選択ならレジメン選択の一覧を出す。 */
+  regimenId?: number;
+  defaultProblem?: ProblemRef;
+  onSelectRegimen: (regimenId: number) => void;
+  onBack: () => void;
+  onSaved: () => void;
+}
+
+export function RegimenApplyPanel({
+  patientId,
+  regimenId,
+  defaultProblem,
+  onSelectRegimen,
+  onBack,
+  onSaved,
+}: RegimenApplyPanelProps) {
+  if (!regimenId) return <RegimenPicker onSelect={onSelectRegimen} />;
+  return (
+    <RegimenApplyLoader
+      patientId={patientId}
+      regimenId={regimenId}
+      defaultProblem={defaultProblem}
+      onBack={onBack}
+      onSaved={onSaved}
+    />
+  );
+}
+
+/** 承認済で有効期間内のレジメンから選ぶ。 */
+function RegimenPicker({ onSelect }: { onSelect: (regimenId: number) => void }) {
+  const [name, setName] = useState("");
+  const list = useApplicableRegimens(name);
+  const items = list.data?.items ?? [];
+
+  return (
+    <div className="regimen-picker">
+      <label className="regimen-picker__search">
+        レジメン名
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="部分一致で検索(かな・全半角の違いは無視)"
+        />
+      </label>
+      <ErrorBanner error={list.error} />
+      <ul className="regimen-picker__list">
+        {items.map((regimen: Regimen) => (
+          <li key={regimen.id}>
+            <button type="button" className="regimen-picker__item" onClick={() => onSelect(regimen.id)}>
+              <span className="regimen-picker__name">
+                {regimen.name}
+                {regimen.short_name && <span className="lab-order-item__code">（{regimen.short_name}）</span>}
+              </span>
+              <span className="regimen-picker__meta">
+                {[
+                  regimen.department_name,
+                  displayOfOption(REGIMEN_PURPOSE_OPTIONS, regimen.purpose),
+                  regimen.cycle_days > 0 ? `${regimen.cycle_days} 日/クール` : "",
+                  regimen.planned_cycles !== null ? `${regimen.planned_cycles} クール` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </button>
+          </li>
+        ))}
+        {list.data && items.length === 0 && (
+          <li className="regimen-picker__empty">承認済のレジメンがありません</li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function RegimenApplyLoader({
+  patientId,
+  regimenId,
+  defaultProblem,
+  onBack,
+  onSaved,
+}: {
+  patientId: string;
+  regimenId: number;
+  defaultProblem?: ProblemRef;
+  onBack: () => void;
+  onSaved: () => void;
+}) {
+  const detail = useRegimen(regimenId);
+  const create = useCreatePrescription();
+  const requester = useOrderContext();
+  const defaultSetting = useDefaultOrderSetting(patientId);
+
+  if (detail.isPending) return <p>読み込み中...</p>;
+  if (!detail.data) return <ErrorBanner error={detail.error} />;
+  const regimen = detail.data;
+
+  return (
+    <>
+      <div className="order-set-apply__head">
+        <span className="regimen-apply__title">{regimen.name}</span>
+        <button type="button" className="order-set-apply__back" onClick={onBack}>
+          ← レジメン選択
+        </button>
+      </div>
+      <RegimenApplyForm
+        patientId={patientId}
+        regimen={regimen}
+        mode="apply"
+        firstCycle={1}
+        defaultStartDate={today()}
+        defaultProblem={defaultProblem}
+        submitting={create.isPending}
+        submitError={create.error}
+        onSubmit={(values) => {
+          const attribution = withOrderWard(requester, values.setting, defaultSetting);
+          create.mutate(buildRegimenApplicationBundle(values, regimen, patientId, attribution), {
+            onSuccess: onSaved,
+          });
+        }}
+      />
+    </>
+  );
+}
+
+interface RegimenCyclePanelProps {
+  patientId: string;
+  application: RegimenApplication;
+  cycle: number;
+  startDate: string;
+  onSaved: () => void;
+}
+
+/** 適用済みのレジメンに次のクールを登録する。投与量はいまの体格で出し直す。 */
+export function RegimenCyclePanel({ patientId, application, cycle, startDate, onSaved }: RegimenCyclePanelProps) {
+  const detail = useRegimen(application.code || null);
+  const create = useCreatePrescription();
+  const requester = useOrderContext();
+  const defaultSetting = useDefaultOrderSetting(patientId);
+
+  if (detail.isPending) return <p>読み込み中...</p>;
+  if (!detail.data) return <ErrorBanner error={detail.error} />;
+  const regimen = detail.data;
+
+  return (
+    <>
+      <div className="order-set-apply__head">
+        <span className="regimen-apply__title">
+          {application.name} 第 {cycle} クール
+        </span>
+      </div>
+      <RegimenApplyForm
+        patientId={patientId}
+        regimen={regimen}
+        mode="cycle"
+        firstCycle={cycle}
+        defaultStartDate={startDate}
+        defaultProblem={application.problem ?? undefined}
+        defaultSettingOverride={application.setting || undefined}
+        submitting={create.isPending}
+        submitError={create.error}
+        onSubmit={(values) => {
+          const attribution = withOrderWard(requester, values.setting, defaultSetting);
+          create.mutate(buildRegimenCycleBundle(values, regimen, application, patientId, attribution), {
+            onSuccess: onSaved,
+          });
+        }}
+      />
+    </>
+  );
+}
+
+interface RegimenApplyFormProps {
+  patientId: string;
+  regimen: RegimenDetail;
+  mode: "apply" | "cycle";
+  firstCycle: number;
+  defaultStartDate: string;
+  defaultProblem?: ProblemRef;
+  /** クール追加では最初の適用の入外区分を既定にする。 */
+  defaultSettingOverride?: PrescriptionSetting;
+  submitting: boolean;
+  submitError: unknown;
+  onSubmit: (values: RegimenApplyValues) => void;
+}
+
+function RegimenApplyForm({
+  patientId,
+  regimen,
+  mode,
+  firstCycle,
+  defaultStartDate,
+  defaultProblem,
+  defaultSettingOverride,
+  submitting,
+  submitError,
+  onSubmit,
+}: RegimenApplyFormProps) {
+  const defaultSetting = useDefaultOrderSetting(patientId);
+  const body = useBodyMeasures(patientId);
+  const codes = useMemo(() => regimen.steps.flatMap((s) => s.drugs.map((d) => d.medicine_code)), [regimen]);
+  const factors = useMedicineDoseFactors(codes);
+  const problems = useProblemOptions(patientId);
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+
+  const measures = useMemo(() => summarizeBodyMeasures(body.observations), [body.observations]);
+  const setting: PrescriptionSetting = defaultSettingOverride ?? defaultSetting.setting;
+
+  const [values, setValues] = useState<RegimenApplyValues | null>(null);
+  function update<K extends keyof RegimenApplyValues>(key: K, value: RegimenApplyValues[K]) {
+    setValues((v) => (v ? { ...v, [key]: value } : v));
+  }
+
+  // 体格と換算係数が読めてから初期値を作る(投与量は最初から埋まっている状態で出す)。
+  useEffect(() => {
+    if (values || body.isPending || !defaultSetting.ready) return;
+    if (codes.length > 0 && factors.isPending) return;
+    const height = measures.height ? String(measures.height.value) : "";
+    const weight = measures.weight ? String(measures.weight.value) : "";
+    const bsa = bsaOf({ height, weight });
+    const injectionOptions = setting ? INJECTION_CATEGORY_OPTIONS[setting] : [];
+    const prescriptionOptions = setting ? PRESCRIPTION_CATEGORY_OPTIONS[setting] : [];
+    setValues({
+      startDate: defaultStartDate,
+      firstCycle,
+      cycleCount: "1",
+      plannedCycles: regimen.planned_cycles !== null ? String(regimen.planned_cycles) : "",
+      setting,
+      injectionCategory: injectionOptions.length === 1 ? injectionOptions[0].code : "",
+      prescriptionCategory: prescriptionOptions.length === 1 ? prescriptionOptions[0].code : "",
+      problem: defaultProblem ?? null,
+      height,
+      weight,
+      comment: "",
+      steps: planSteps(regimen, { bsa, weight: Number(weight) || null }, factors.data ?? new Map()),
+    });
+  }, [
+    values,
+    body.isPending,
+    defaultSetting.ready,
+    factors.isPending,
+    factors.data,
+    codes.length,
+    measures,
+    setting,
+    defaultStartDate,
+    firstCycle,
+    regimen,
+    defaultProblem,
+  ]);
+
+  if (!values) {
+    return (
+      <>
+        <ErrorBanner error={body.error ?? factors.error} />
+        <p>読み込み中...</p>
+      </>
+    );
+  }
+
+  const bsa = bsaOf(values);
+  const hasInjection = regimenHasInjection(regimen);
+  const hasOral = regimenHasOral(regimen);
+  const injectionOptions = values.setting ? INJECTION_CATEGORY_OPTIONS[values.setting] : [];
+  const prescriptionOptions = values.setting ? PRESCRIPTION_CATEGORY_OPTIONS[values.setting] : [];
+  const cycleDays = (regimen.treatment_days ?? 0) + (regimen.rest_days ?? 0);
+
+  /** 身長・体重を変えたら投与量を出し直す(手で直した投与量も上書きされる)。 */
+  function recalc(next: Pick<RegimenApplyValues, "height" | "weight">) {
+    setValues((v) =>
+      v
+        ? {
+            ...v,
+            ...next,
+            steps: planSteps(
+              regimen,
+              { bsa: bsaOf(next), weight: Number(next.weight) || null },
+              factors.data ?? new Map(),
+            ),
+          }
+        : v,
+    );
+  }
+
+  function changeSetting(next: PrescriptionSetting) {
+    const inj = next ? INJECTION_CATEGORY_OPTIONS[next] : [];
+    const rx = next ? PRESCRIPTION_CATEGORY_OPTIONS[next] : [];
+    setValues((v) =>
+      v
+        ? {
+            ...v,
+            setting: next,
+            injectionCategory: inj.length === 1 ? inj[0].code : "",
+            prescriptionCategory: rx.length === 1 ? rx[0].code : "",
+          }
+        : v,
+    );
+  }
+
+  function updateDrug(stepIndex: number, drugIndex: number, patch: Partial<RegimenDrugPlan>) {
+    setValues((v) =>
+      v
+        ? {
+            ...v,
+            steps: v.steps.map((plan, si) =>
+              si === stepIndex
+                ? { ...plan, drugs: plan.drugs.map((d, di) => (di === drugIndex ? { ...d, ...patch } : d)) }
+                : plan,
+            ),
+          }
+        : v,
+    );
+  }
+
+  function handleSubmit() {
+    if (!values) return;
+    const message = validateRegimenApply(values, regimen);
+    setValidationError(message);
+    if (message) return;
+    onSubmit(values);
+  }
+
+  const count = Number(values.cycleCount) || 1;
+  const lastCycle = values.firstCycle + count - 1;
+
+  return (
+    <div className="regimen-apply">
+      {validationError && (
+        <div className="error-banner" role="alert" ref={validationErrorRef}>
+          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+        </div>
+      )}
+      <ErrorBanner error={submitError} />
+
+      <fieldset className="regimen-apply__fields">
+        <legend>スケジュール</legend>
+        <div className="lab-order-item__fields">
+          <label>
+            開始日(第 {values.firstCycle} クール Day 1)
+            <input type="date" value={values.startDate} onChange={(e) => update("startDate", e.target.value)} />
+          </label>
+          <label>
+            登録するクール数
+            <select value={values.cycleCount} onChange={(e) => update("cycleCount", e.target.value)}>
+              {Array.from({ length: MAX_REGIMEN_CYCLES_AT_ONCE }, (_, i) => String(i + 1)).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          {mode === "apply" && (
+            <label>
+              予定クール数
+              <input
+                type="number"
+                min="1"
+                value={values.plannedCycles}
+                onChange={(e) => update("plannedCycles", e.target.value)}
+                placeholder="空欄は継続"
+              />
+            </label>
+          )}
+          <div className="regimen-editor__derived">
+            1 クール
+            <strong>{cycleDays > 0 ? `${cycleDays} 日` : "—"}</strong>
+          </div>
+          {count > 1 && (
+            <div className="regimen-editor__derived">
+              登録範囲
+              <strong>
+                第 {values.firstCycle}〜{lastCycle} クール
+              </strong>
+            </div>
+          )}
+        </div>
+      </fieldset>
+
+      <fieldset className="regimen-apply__fields">
+        <legend>オーダー</legend>
+        <div className="lab-order-item__fields">
+          <label>
+            入外区分
+            <select value={values.setting} onChange={(e) => changeSetting(e.target.value as PrescriptionSetting)}>
+              <option value="">選択</option>
+              {SETTING_OPTIONS.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.display}
+                </option>
+              ))}
+            </select>
+          </label>
+          {hasInjection && (
+            <label>
+              注射区分
+              <select value={values.injectionCategory} onChange={(e) => update("injectionCategory", e.target.value)}>
+                <option value="">選択</option>
+                {injectionOptions.map((o) => (
+                  <option key={o.code} value={o.code}>
+                    {o.display}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {hasOral && (
+            <label>
+              処方区分
+              <select
+                value={values.prescriptionCategory}
+                onChange={(e) => update("prescriptionCategory", e.target.value)}
+              >
+                <option value="">選択</option>
+                {prescriptionOptions.map((o) => (
+                  <option key={o.code} value={o.code}>
+                    {o.display}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label>
+            対象プロブレム
+            <ProblemSelect value={values.problem} options={problems} onChange={(p) => update("problem", p)} />
+          </label>
+          <label>
+            コメント
+            <input type="text" value={values.comment} onChange={(e) => update("comment", e.target.value)} />
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset className="regimen-apply__fields">
+        <legend>体格</legend>
+        <div className="lab-order-item__fields">
+          <label>
+            身長(cm)
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              value={values.height}
+              onChange={(e) => recalc({ height: e.target.value, weight: values.weight })}
+            />
+          </label>
+          <label>
+            体重(kg)
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              value={values.weight}
+              onChange={(e) => recalc({ height: values.height, weight: e.target.value })}
+            />
+          </label>
+          <div className="regimen-editor__derived">
+            体表面積
+            <strong>{bsa !== null ? `${bsa} m²` : "—"}</strong>
+          </div>
+          {(measures.height || measures.weight) && (
+            <div className="regimen-editor__derived">
+              直近の測定
+              <strong>
+                {[
+                  measures.height ? `身長 ${measures.height.value}${measures.height.unit}(${measures.height.date})` : "",
+                  measures.weight ? `体重 ${measures.weight.value}${measures.weight.unit}(${measures.weight.date})` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" / ")}
+              </strong>
+            </div>
+          )}
+        </div>
+      </fieldset>
+
+      <fieldset className="regimen-apply__fields">
+        <legend>投与内容</legend>
+        {values.steps.map((plan, stepIndex) => (
+          <section key={plan.step.id} className="regimen-apply__step">
+            <div className="regimen-apply__step-head">
+              <span className="regimen-apply__step-index">{stepIndex + 1}</span>
+              <span className="regimen-apply__step-name">{plan.step.name || "(見出しなし)"}</span>
+              <span className="regimen-apply__step-meta">
+                {[
+                  `Day ${plan.step.days.join(", ")}`,
+                  displayOfOption(REGIMEN_STEP_USAGE_TYPE_OPTIONS, plan.step.usage_type),
+                  plan.step.usage_type === "drip" && plan.step.infusion_minutes ? `${plan.step.infusion_minutes} 分` : "",
+                  plan.step.usage_type === "oral" && plan.step.usage ? plan.step.usage.usage_name : "",
+                  plan.step.usage_type === "oral" && plan.step.dose_days ? `${plan.step.dose_days} 日分` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </div>
+            <table className="master-search__table regimen-apply__drugs">
+              <thead>
+                <tr>
+                  <th>種類</th>
+                  <th>医薬品</th>
+                  <th>基準</th>
+                  <th>投与量</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plan.drugs.map((d, drugIndex) => (
+                  <tr key={d.drug.id}>
+                    <td>{displayOfOption(REGIMEN_DRUG_ROLE_OPTIONS, d.drug.drug_role)}</td>
+                    <td>{d.drug.resolved_name ?? d.drug.medicine_code}</td>
+                    <td>
+                      {d.drug.dose_value !== null
+                        ? `${Number(d.drug.dose_value)} ${doseUnitSuffix(d.drug.dose_basis, d.drug.dose_unit ?? "")}`
+                        : ""}
+                      {d.drug.dose_max !== null && (
+                        <span className="lab-order-item__code">（上限 {Number(d.drug.dose_max)}）</span>
+                      )}
+                    </td>
+                    {/* 抗がん剤の指示は力価(mg)なので入力欄は力価にし、オーダーに載る
+                        製剤数(瓶・錠)は換算して下に添える。製剤単位が基準の補液などは
+                        製剤数をそのまま入れる。 */}
+                    <td>
+                      {d.input === "amount" ? (
+                        <>
+                          <span className="regimen-apply__dose">
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              className="regimen-editor__num-input"
+                              value={d.amount}
+                              onChange={(e) => updateDrug(stepIndex, drugIndex, { amount: e.target.value })}
+                            />
+                            {d.unit}
+                          </span>
+                          <span className="regimen-apply__packs-hint">
+                            ≒ {planPacks(d) || "—"} {d.packUnit}
+                            <span className="regimen-apply__strength">
+                              （1 {d.packUnit} = {d.factor} {d.unit}）
+                            </span>
+                          </span>
+                          {d.capped && <span className="regimen-apply__packs-hint">上限で止めています</span>}
+                        </>
+                      ) : (
+                        <>
+                          <span className="regimen-apply__dose">
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              className="regimen-editor__num-input"
+                              value={d.packs}
+                              onChange={(e) => updateDrug(stepIndex, drugIndex, { packs: e.target.value })}
+                            />
+                            {d.packUnit}
+                          </span>
+                          {d.amount && (
+                            <span className="regimen-apply__packs-hint">
+                              {d.amount} {d.unit} 相当
+                            </span>
+                          )}
+                        </>
+                      )}
+                      {d.manualReason && <span className="regimen-apply__manual">{d.manualReason}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ))}
+      </fieldset>
+
+      <div className="lab-order-item__actions">
+        <button type="button" onClick={handleSubmit} disabled={submitting}>
+          {mode === "apply" ? "レジメンを適用" : "クールを登録"}
+        </button>
+      </div>
+    </div>
+  );
+}

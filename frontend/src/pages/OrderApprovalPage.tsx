@@ -207,7 +207,9 @@ type OrderKind = ReturnType<typeof orderKindOf>;
 
 function kindLabel(kind: OrderKind): string {
   if (!kind) return "-";
-  return kind === "nursing-order" ? "看護指示" : KARTE_KIND_LABELS[kind];
+  if (kind === "nursing-order") return "看護指示";
+  if (kind === "chemo-regimen") return "化学療法";
+  return KARTE_KIND_LABELS[kind];
 }
 
 /**
@@ -217,6 +219,7 @@ function kindLabel(kind: OrderKind): string {
 function karteLink(patientId: string, kind: OrderKind, orderId: string | undefined): string {
   const params = new URLSearchParams();
   if (kind === "nursing-order") params.set(KARTE_TAB_PARAM, "nursing");
+  else if (kind === "chemo-regimen") params.set(KARTE_TAB_PARAM, "chemo");
   else if (kind && orderId) params.set(KARTE_DETAIL_PARAM, formatKarteDetail({ kind, id: orderId }));
   const query = params.toString();
   return `/patients/${patientId}/karte${query ? `?${query}` : ""}`;

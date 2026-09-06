@@ -329,7 +329,7 @@ export function draftFromRegimen(detail: RegimenDetail): RegimenDraft {
       infusionMinutes: str(s.infusion_minutes),
       rate: str(s.rate),
       deviceNote: str(s.device_note),
-      usage: s.usage_code ? { code: s.usage_code, name: s.usage_name ?? "" } : null,
+      usage: s.usage_code ? { code: s.usage_code, name: s.usage?.usage_name ?? "" } : null,
       doseDays: str(s.dose_days),
       note: str(s.note),
       drugs: s.drugs.map((d) => ({

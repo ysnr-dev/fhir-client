@@ -89,7 +89,8 @@ RSpec.describe "Master::Regimens", type: :request do
       Master::RegimenAdverseEvent.create!(regimen_code: "000001", term: "末梢性感覚ニューロパチー", grade: 2)
       Master::RegimenStep.create!(regimen_code: "000001", name: "カペシタビン", usage_type: "oral", days: [1],
                                   usage_code: "1013044400000000", dose_days: 14, display_order: 2)
-      Master::MedicineUsage.create!(usage_code: "1013044400000000", usage_name: "１日２回朝夕食後に服用")
+      Master::MedicineUsage.create!(usage_code: "1013044400000000", usage_name: "１日２回朝夕食後に服用",
+                                    basic_usage_category_code: "1", basic_usage_category: "内服")
       # 別レジメンの子は混ざらない。
       Master::RegimenStep.create!(regimen_code: "000002", usage_type: "drip", days: [1])
     end
@@ -101,7 +102,8 @@ RSpec.describe "Master::Regimens", type: :request do
       expect(body["cycle_days"]).to eq(14)
       expect(body["indications"].map { |i| i["name"] }).to eq(["結腸癌"])
       expect(body["steps"].size).to eq(2)
-      expect(body["steps"][1]["usage_name"]).to eq("１日２回朝夕食後に服用")
+      expect(body["steps"][1]["usage"]["usage_name"]).to eq("１日２回朝夕食後に服用")
+      expect(body["steps"][1]["usage"]["basic_usage_category"]).to eq("内服")
       drug = body["steps"][0]["drugs"][0]
       expect(drug["resolved_name"]).to eq("オキサリプラチン点滴静注液１００ｍｇ")
       expect(drug["resolved_unit_name"]).to eq("瓶")

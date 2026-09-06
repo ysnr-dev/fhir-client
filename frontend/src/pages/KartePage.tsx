@@ -25,6 +25,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
 import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
 import { KarteMealTab } from "../components/KarteMealTab";
+import { KarteChemoTab } from "../components/KarteChemoTab";
 import { KarteNursingTab } from "../components/KarteNursingTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteProfileTab } from "../components/KarteProfileTab";
@@ -738,6 +739,17 @@ export function KartePage() {
           onCreate={(date, sourceSrId) =>
             setPane({ kind: "meal-order-create", sourceSrId, startDate: date })
           }
+        />
+      );
+    }
+    // 化学療法。暦は表示だけで、適用・次クール・移動・中止は右ペインで行う。
+    if (key === "chemo") {
+      return (
+        <KarteChemoTab
+          patientId={patientId}
+          onApply={() => setPane({ kind: "regimen-apply", problem: selectedProblem })}
+          onOpenRegimen={(regimenSrId) => setPane({ kind: "regimen-detail", regimenSrId })}
+          onOpenDay={(regimenSrId, date) => setPane({ kind: "regimen-day", regimenSrId, date })}
         />
       );
     }

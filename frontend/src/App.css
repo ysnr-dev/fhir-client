@@ -1487,6 +1487,25 @@ fieldset.rp-card {
 }
 
 .injection-days__note,
+/* 反映範囲(この日のみ / この日以降すべて)。素の fieldset はブラウザ既定の
+   groove 枠と本文サイズの legend になり、周りのフォームと揃わないので当てる。
+   注射の編集パネルと化学療法の投与日パネルで共用する。 */
+.injection-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px 10px;
+  margin: 0 0 12px;
+}
+
+.injection-scope > legend {
+  font-size: 13px;
+  padding: 0 4px;
+  color: var(--text);
+}
+
 .injection-scope__note {
   font-size: 12px;
   color: var(--text-muted, var(--text));
@@ -13065,4 +13084,485 @@ button.meal-calendar__cell:hover {
 .regimen-editor .regimen-editor__rows input[type="number"],
 .regimen-editor .regimen-editor__rows select {
   height: 26px;
+}
+
+/* ---- 化学療法(レジメンオーダー)(docs/chemo-regimen-design.md §7) ---- */
+
+/* 右ペインのレジメン選択。 */
+.regimen-picker__search {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.regimen-picker__search input {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.regimen-picker__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.regimen-picker__item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 8px 10px;
+  white-space: normal;
+}
+
+.regimen-picker__name {
+  font-size: 14px;
+}
+
+.regimen-picker__meta {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.regimen-picker__empty {
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.regimen-apply__title {
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+}
+
+/* 適用フォームの区画。マスタ編集モーダルの fieldset と同じ見た目。 */
+.regimen-apply__fields {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px 4px;
+  margin: 0 0 12px;
+}
+
+.regimen-apply__fields > legend {
+  font-size: 13px;
+  padding: 0 4px;
+}
+
+.regimen-apply__fields .lab-order-item__fields {
+  margin-bottom: 8px;
+}
+
+.regimen-apply__fields input[type="text"],
+.regimen-apply__fields input[type="number"],
+.regimen-apply__fields input[type="date"],
+.regimen-apply__fields select {
+  height: 30px;
+  box-sizing: border-box;
+}
+
+.regimen-apply__step {
+  margin-bottom: 10px;
+}
+
+.regimen-apply__step-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.regimen-apply__step-index {
+  font-weight: 600;
+}
+
+.regimen-apply__step-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.regimen-apply__step-meta {
+  color: var(--text);
+}
+
+/* ステップごとに別のテーブルなので、そのままだと内容によって列位置がずれる。
+   table-layout: fixed + 明示幅で、どのステップでも列が揃うようにする
+   (処方内容の .rp-card__medicines--detail と同じ考え方)。医薬品名の列だけが
+   残り幅を吸収して折り返す。 */
+.regimen-apply__drugs {
+  table-layout: fixed;
+}
+
+.regimen-apply__drugs th,
+.regimen-apply__drugs td {
+  font-size: 13px;
+  padding: 4px 8px;
+  vertical-align: top;
+}
+
+.regimen-apply__drugs th:nth-child(1),
+.regimen-apply__drugs td:nth-child(1) {
+  width: 104px;
+}
+
+.regimen-apply__drugs th:nth-child(3),
+.regimen-apply__drugs td:nth-child(3) {
+  width: 110px;
+}
+
+.regimen-apply__drugs th:nth-child(4),
+.regimen-apply__drugs td:nth-child(4) {
+  width: 190px;
+}
+
+.regimen-apply__manual {
+  display: block;
+  font-size: 12px;
+  color: var(--danger, #c0392b);
+}
+
+/* 投与量の欄。上に力価(mg)の入力、下に換算した製剤数。 */
+.regimen-apply__dose {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 換算した製剤数の併記。主役は力価(入力欄)なので、読めるだけの控えめな出し方にする。 */
+.regimen-apply__packs-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.regimen-apply__strength {
+  margin-left: 2px;
+  font-size: 10px;
+}
+
+.regimen-apply__dose input {
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  width: 80px;
+  height: 26px;
+  box-sizing: border-box;
+}
+
+/* 適用の詳細。 */
+.regimen-detail__summary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.regimen-detail__summary dt {
+  color: var(--text);
+}
+
+.regimen-detail__summary dd {
+  margin: 0;
+}
+
+.regimen-detail__cycles {
+  margin-bottom: 10px;
+}
+
+.regimen-detail__days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.master-search__table button.regimen-detail__day {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.master-search__table button.regimen-detail__day--completed {
+  opacity: 0.7;
+}
+
+.master-search__table button.regimen-detail__day--cancelled {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* 投与日の操作。 */
+.regimen-day__title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.regimen-day__date {
+  margin-left: 6px;
+  font-weight: normal;
+  color: var(--text);
+}
+
+.regimen-day__orders {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.regimen-day__order {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.regimen-day__order-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.regimen-day__kind {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.regimen-day__status {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.regimen-day__status--completed {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.regimen-day__status--cancelled {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.regimen-day__order-head .rp-card__compact-button {
+  margin-left: auto;
+}
+
+/* カード風に出した中身(.karte-rp)は上の見出し行と間を空ける。 */
+.regimen-day__order .karte-rp {
+  margin-top: 4px;
+}
+
+.regimen-day__empty {
+  font-size: 13px;
+}
+
+.regimen-day__move {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px 8px;
+  margin: 8px 0;
+}
+
+.regimen-day__move > legend {
+  font-size: 13px;
+  padding: 0 4px;
+}
+
+.regimen-day__move-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.regimen-day__move-row input[type="date"] {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* 暦(化学療法タブ)。食事の暦を土台に、適用の切り替えと Day の印を足す。 */
+.chemo-calendar__regimens {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.chemo-calendar__regimen {
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.chemo-calendar__regimen--active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.chemo-calendar__regimen--inactive {
+  opacity: 0.7;
+}
+
+.chemo-calendar__regimen-status {
+  margin-left: 4px;
+  font-size: 11px;
+}
+
+.chemo-calendar__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.chemo-calendar__toolbar {
+  margin-bottom: 6px;
+}
+
+.chemo-calendar__cell--day1 .meal-calendar__day-number {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.chemo-calendar__cycle-day {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* 投与の無い日(休薬期間・クールの中の空き日)の Day 表示は控えめに。 */
+.chemo-calendar__cycle-day--quiet {
+  color: var(--text);
+  opacity: 0.6;
+}
+
+/* 休薬期間。投与の無い日が「クールの中の休み」なのか「クールの外」なのかを
+   地の色で分ける。 */
+.chemo-calendar__cell--rest {
+  background: var(--surface-panel);
+}
+
+.chemo-calendar__rest {
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+/* ドラッグ＆ドロップで投与日を動かす。掴めるマスはカーソルで合図し、掴んでいる間の
+   元の位置は薄く、落とせる先は破線で示す(手術カレンダーと同じ見せ方)。 */
+button.chemo-calendar__cell[draggable="true"] {
+  cursor: grab;
+}
+
+.chemo-calendar__cell--dragging {
+  opacity: 0.35;
+}
+
+.chemo-calendar__cell--drop-target {
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+/* ドラッグ中に文字が選択されると掴み損ねたように見えるので、暦では選ばせない。 */
+.chemo-calendar {
+  user-select: none;
+}
+
+/* マスに出すステップ名。薬剤名より短く、医師が組んだ単位なので読み取りやすい。 */
+.chemo-calendar__step {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chemo-calendar__step--more {
+  opacity: 0.7;
+}
+
+.chemo-calendar__order {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 4px;
+  border-radius: 4px;
+  background: var(--surface-panel);
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.chemo-calendar__order--completed {
+  border-left: 3px solid var(--accent);
+}
+
+.chemo-calendar__order--cancelled {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.chemo-calendar__order-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chemo-calendar__kind {
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+.chemo-calendar__status {
+  font-size: 10px;
+}
+
+.chemo-calendar__drug {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chemo-calendar__drug--more {
+  color: var(--text);
+  font-size: 10px;
 }

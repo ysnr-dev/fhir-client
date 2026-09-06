@@ -1,0 +1,433 @@
+import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { usePatientEncounterEvents, useRegimenApplications, useRegimenDayOrders } from "../api/queries";
+import type { EncounterEvent } from "../fhir/encounterHelpers";
+import {
+  cycleDayLabel,
+  cyclePositionOf,
+  cycleStartDates,
+  dayOrderDrugNames,
+  dayOrderStepNames,
+  regimenDayStatusLabel,
+  regimenStatusLabel,
+  type CyclePosition,
+  type RegimenApplication,
+  type RegimenDayOrder,
+} from "../fhir/regimenOrderHelpers";
+import { toDateInput, today } from "../lib/dates";
+import { ErrorBanner } from "./ErrorBanner";
+import { RegimenMoveModal } from "./RegimenPanels";
+
+// カルテ画面の「化学療法」タブ。適用中のレジメンの投与スケジュールを月の暦で見る。
+//
+// 食事タブと同じ器(月送り + 7 列の暦)。1 マスにはその日の日オーダー(注射・処方)を
+// 「C1 Day8」の印と薬剤名で並べる。適用が複数あるときはヘッダのタブで切り替える
+// (1 つの暦に 2 レジメンを重ねると、どちらの Day かが読めない)。
+//
+// 操作(適用・次クール・移動・中止・編集)は右ペインの担当。暦は表示と導線だけ持つ。
+
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+/** 暦の 1 マスに出すステップの上限。 */
+const MAX_STEPS_IN_CELL = 3;
+
+interface KarteChemoTabProps {
+  patientId: string;
+  /** 新しいレジメンの適用を右ペインで開く。 */
+  onApply: () => void;
+  /** 適用の詳細(クール一覧・次クール・中止)を右ペインで開く。 */
+  onOpenRegimen: (regimenSrId: string) => void;
+  /** 暦の 1 日(その日のオーダーの操作)を右ペインで開く。 */
+  onOpenDay: (regimenSrId: string, date: string) => void;
+}
+
+function calendarDays(month: Date): { date: string; inMonth: boolean; weekday: number }[] {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+  const days: { date: string; inMonth: boolean; weekday: number }[] = [];
+  const cursor = new Date(first);
+  cursor.setDate(cursor.getDate() - first.getDay());
+  const endCursor = new Date(last);
+  endCursor.setDate(endCursor.getDate() + (6 - last.getDay()));
+  while (cursor <= endCursor) {
+    days.push({
+      date: toDateInput(cursor),
+      inMonth: cursor.getMonth() === month.getMonth(),
+      weekday: cursor.getDay(),
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+}
+
+function monthRange(month: Date): { start: string; end: string } {
+  return {
+    start: toDateInput(new Date(month.getFullYear(), month.getMonth(), 1)),
+    end: toDateInput(new Date(month.getFullYear(), month.getMonth() + 1, 0)),
+  };
+}
+
+function monthOf(date: string): Date {
+  const [y, m] = date.split("-").map(Number);
+  return new Date(y, m - 1, 1);
+}
+
+export function KarteChemoTab({ patientId, onApply, onOpenRegimen, onOpenDay }: KarteChemoTabProps) {
+  const applications = useRegimenApplications(patientId);
+  const list = applications.data?.applications ?? [];
+  // 適用中を先に、同じ状態なら新しい開始日を先に。
+  const sorted = useMemo(
+    () =>
+      [...list].sort((a, b) => {
+        const rank = (s: string) => (s === "active" ? 0 : 1);
+        return rank(a.status) - rank(b.status) || b.startDate.localeCompare(a.startDate);
+      }),
+    [list],
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected: RegimenApplication | null =
+    sorted.find((a) => a.id === selectedId) ?? sorted[0] ?? null;
+
+  const earliest = list.reduce<string | undefined>(
+    (min, a) => (min === undefined || a.startDate < min ? a.startDate : min),
+    undefined,
+  );
+  const orders = useRegimenDayOrders(patientId, earliest);
+  const own = useMemo(
+    () => (orders.data ?? []).filter((o) => o.ref.regimenSrId === selected?.id),
+    [orders.data, selected?.id],
+  );
+
+  const [month, setMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  // 選んだ適用を変えたら、その開始月(過去なら今月)へ暦を合わせる。
+  useEffect(() => {
+    if (!selected) return;
+    const start = monthOf(selected.startDate);
+    const now = new Date();
+    const current = new Date(now.getFullYear(), now.getMonth(), 1);
+    setMonth(start > current ? start : current);
+  }, [selected?.id, selected?.startDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const { start, end } = monthRange(month);
+  const events = usePatientEncounterEvents(patientId, start, end);
+  const days = useMemo(() => calendarDays(month), [month]);
+  const byDate = useMemo(() => {
+    const map = new Map<string, RegimenDayOrder[]>();
+    for (const order of own) map.set(order.date, [...(map.get(order.date) ?? []), order]);
+    return map;
+  }, [own]);
+
+  // 休薬期間を暦に出すため、登録済みのクールから「その日がクールのどこか」を引く。
+  const cycleStarts = useMemo(() => cycleStartDates(own), [own]);
+  const positionOf = (date: string): CyclePosition | null =>
+    selected ? cyclePositionOf(date, cycleStarts, selected.cycleDays, selected.treatmentDays) : null;
+
+  // ドラッグ＆ドロップで投与日を動かす。掴んでいる日・かざしている先・落とした後の確認。
+  // 暦は表示に徹する方針だが、「日を掴んで別の日に落とす」は暦でしかできない操作なので
+  // ここだけ持つ(実際の書き込みは確認モーダルが行う)。
+  const [dragFrom, setDragFrom] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ from: string; to: string } | null>(null);
+
+  function handleDrop(to: string) {
+    const from = dragFrom;
+    setDragFrom(null);
+    setDragOver(null);
+    if (!from || from === to) return;
+    setPendingMove({ from, to });
+  }
+
+  const todayDate = today();
+  const monthLabel = `${month.getFullYear()}年${month.getMonth() + 1}月`;
+
+  function shiftMonth(delta: number) {
+    setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  }
+
+  return (
+    <div className="karte-tabpanel">
+      <div className="karte-tabpanel__header">
+        <h3>化学療法</h3>
+        <div className="karte-tabpanel__actions">
+          <button type="button" onClick={onApply}>
+            レジメンを適用
+          </button>
+        </div>
+      </div>
+
+      <ErrorBanner error={applications.error ?? orders.error ?? events.error} />
+
+      {sorted.length > 0 && (
+        <div className="chemo-calendar__regimens" role="tablist" aria-label="適用中のレジメン">
+          {sorted.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              role="tab"
+              aria-selected={a.id === selected?.id}
+              className={`chemo-calendar__regimen${a.id === selected?.id ? " chemo-calendar__regimen--active" : ""}${
+                a.status !== "active" ? " chemo-calendar__regimen--inactive" : ""
+              }`}
+              onClick={() => setSelectedId(a.id)}
+            >
+              {a.name}
+              {a.status !== "active" && (
+                <span className="chemo-calendar__regimen-status">{regimenStatusLabel(a.status)}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {selected && (
+        <div className="chemo-calendar__summary">
+          <span>
+            開始 {selected.startDate}
+            {selected.cycleDays > 0 ? ` · ${selected.cycleDays} 日/クール` : ""}
+            {selected.plannedCycles !== null ? ` · 予定 ${selected.plannedCycles} クール` : " · 継続"}
+          </span>
+          <button type="button" className="rp-card__compact-button" onClick={() => onOpenRegimen(selected.id)}>
+            詳細・操作
+          </button>
+        </div>
+      )}
+
+      <div className="meal-calendar__toolbar chemo-calendar__toolbar">
+        <button type="button" onClick={() => shiftMonth(-1)} aria-label="前の月">
+          ‹
+        </button>
+        <span className="meal-calendar__month">{monthLabel}</span>
+        <button type="button" onClick={() => shiftMonth(1)} aria-label="次の月">
+          ›
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const now = new Date();
+            setMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+          }}
+        >
+          今月
+        </button>
+      </div>
+
+      {applications.isPending ? (
+        <p>読み込み中...</p>
+      ) : (
+        <>
+          <div className="meal-calendar chemo-calendar">
+            {WEEKDAY_LABELS.map((label, index) => (
+              <div key={label} className={`meal-calendar__weekday${weekendClass(index)}`} aria-hidden="true">
+                {label}
+              </div>
+            ))}
+            {days.map((day) => (
+              <ChemoDayCell
+                key={day.date}
+                date={day.date}
+                inMonth={day.inMonth}
+                weekday={day.weekday}
+                isToday={day.date === todayDate}
+                orders={day.inMonth ? (byDate.get(day.date) ?? []) : []}
+                position={day.inMonth ? positionOf(day.date) : null}
+                events={day.inMonth ? eventsOn(events.data?.events ?? [], day.date) : []}
+                onOpen={selected ? () => onOpenDay(selected.id, day.date) : undefined}
+                dragging={dragFrom === day.date}
+                dropTarget={dragFrom !== null && dragOver === day.date && dragFrom !== day.date}
+                canDrop={dragFrom !== null && day.inMonth && dragFrom !== day.date}
+                onDragStart={() => setDragFrom(day.date)}
+                onDragEnd={() => {
+                  setDragFrom(null);
+                  setDragOver(null);
+                }}
+                onDragOver={() => setDragOver(day.date)}
+                onDrop={() => handleDrop(day.date)}
+              />
+            ))}
+          </div>
+          {pendingMove && (
+            <RegimenMoveModal
+              patientId={patientId}
+              from={pendingMove.from}
+              to={pendingMove.to}
+              todays={own.filter((o) => o.date === pendingMove.from)}
+              following={own.filter((o) => o.date > pendingMove.from)}
+              onClose={() => setPendingMove(null)}
+              onDone={() => setPendingMove(null)}
+            />
+          )}
+          {sorted.length === 0 && (
+            <p className="patient-table__empty">適用されたレジメンはありません。「レジメンを適用」から始めます。</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function eventsOn(events: EncounterEvent[], date: string): EncounterEvent[] {
+  return events.filter((event) => event.date === date);
+}
+
+function weekendClass(weekday: number): string {
+  if (weekday === 0) return " meal-calendar__cell--sunday";
+  if (weekday === 6) return " meal-calendar__cell--saturday";
+  return "";
+}
+
+/**
+ * 暦の 1 マス。オーダーのある日はボタンで、押すと右ペインにその日の操作が開く。
+ * オーダーの無い日は押せない(暦から直接オーダーを足す操作は無く、クールの追加は
+ * 詳細パネルから行う)。クールの中の日には「C1 Day5」を、投与期間を過ぎた日には
+ * 休薬の地を敷いて、治療の周期が面で読めるようにする。
+ */
+function ChemoDayCell({
+  date,
+  inMonth,
+  weekday,
+  isToday,
+  orders,
+  position,
+  events,
+  onOpen,
+  dragging,
+  dropTarget,
+  canDrop,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+}: {
+  date: string;
+  inMonth: boolean;
+  weekday: number;
+  isToday: boolean;
+  orders: RegimenDayOrder[];
+  position: CyclePosition | null;
+  events: EncounterEvent[];
+  onOpen?: () => void;
+  /** このマスを掴んでいる(元の位置)。 */
+  dragging: boolean;
+  /** 掴んだ日をこのマスにかざしている。 */
+  dropTarget: boolean;
+  /** 落とせるマスか(月内で、掴んだ日と別の日)。 */
+  canDrop: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDragOver: () => void;
+  onDrop: () => void;
+}) {
+  const dayNumber = Number(date.slice(8, 10));
+  const first = orders[0];
+  const isDay1 = orders.some((o) => o.ref.day === 1) || position?.day === 1;
+  const label = first ? cycleDayLabel(first.ref) : position ? cycleDayLabel(position) : "";
+  // 実施済しか無い日は動かせない(済んだ事実)。中止済は動かせる。
+  const draggable = orders.some((o) => o.status !== "completed");
+  const className = [
+    "meal-calendar__cell",
+    "chemo-calendar__cell",
+    inMonth ? "" : "meal-calendar__cell--outside",
+    isToday ? "meal-calendar__cell--today" : "",
+    isDay1 ? "chemo-calendar__cell--day1" : "",
+    position?.rest ? "chemo-calendar__cell--rest" : "",
+    dragging ? "chemo-calendar__cell--dragging" : "",
+    dropTarget ? "chemo-calendar__cell--drop-target" : "",
+    weekendClass(weekday).trim(),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  // 落とす側。HTML5 の D&D は dragover で preventDefault しないと drop が来ない。
+  const dropHandlers = canDrop
+    ? {
+        onDragOver: (e: DragEvent) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          onDragOver();
+        },
+        onDrop: (e: DragEvent) => {
+          e.preventDefault();
+          onDrop();
+        },
+      }
+    : {};
+
+  const body = (
+    <>
+      <div className="meal-calendar__day">
+        <span className="meal-calendar__day-number">{dayNumber}</span>
+        {label && (
+          <span className={`chemo-calendar__cycle-day${orders.length === 0 ? " chemo-calendar__cycle-day--quiet" : ""}`}>
+            {label}
+          </span>
+        )}
+      </div>
+      {position?.rest && orders.length === 0 && <span className="chemo-calendar__rest">休薬</span>}
+      {events.map((event, index) => (
+        <span
+          key={`${event.kind}-${index}`}
+          className={`meal-calendar__event meal-calendar__event--${event.kind}`}
+          title={event.detail ? `${event.label}: ${event.detail}` : event.label}
+        >
+          <span className="meal-calendar__event-label">{event.label}</span>
+        </span>
+      ))}
+      {orders.map((order) => (
+        <div
+          key={order.serviceRequest.id}
+          className={`chemo-calendar__order chemo-calendar__order--${order.status}`}
+          title={dayOrderDrugNames(order).join(" / ")}
+        >
+          <span className="chemo-calendar__order-head">
+            <span className="chemo-calendar__kind">{order.kind === "injection" ? "注" : "内"}</span>
+            {order.status !== "requested" && (
+              <span className="chemo-calendar__status">{regimenDayStatusLabel(order.status)}</span>
+            )}
+          </span>
+          {/* 薬剤名を並べても幅に収まらないので、医師が組んだ単位であるステップ名を出す。
+              縦に伸びすぎないよう 3 つまでで、残りは件数にする。 */}
+          {dayOrderStepNames(order)
+            .slice(0, MAX_STEPS_IN_CELL)
+            .map((name, i) => (
+              <span key={i} className="chemo-calendar__step">
+                {name}
+              </span>
+            ))}
+          {dayOrderStepNames(order).length > MAX_STEPS_IN_CELL && (
+            <span className="chemo-calendar__step chemo-calendar__step--more">
+              他 {dayOrderStepNames(order).length - MAX_STEPS_IN_CELL} 件
+            </span>
+          )}
+        </div>
+      ))}
+    </>
+  );
+
+  if (!inMonth || orders.length === 0 || !onOpen) {
+    return (
+      <div className={className} {...dropHandlers}>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={onOpen}
+      title={draggable ? `${date} のオーダーを開く(ドラッグで移動)` : `${date} のオーダーを開く`}
+      draggable={draggable}
+      onDragStart={(e) => {
+        // Firefox はデータを置かないとドラッグが始まらない。
+        e.dataTransfer.setData("text/plain", date);
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
+      {...dropHandlers}
+    >
+      {body}
+    </button>
+  );
+}

@@ -5513,8 +5513,8 @@ export interface RegimenStep {
   rate: string | null;
   device_note: string | null;
   usage_code: string | null;
-  /** 内服の用法名。詳細 API が用法マスタから付与する(未取込なら null)。 */
-  usage_name?: string | null;
+  /** 内服の用法。詳細 API が用法マスタから付与する(未取込なら null)。 */
+  usage?: MedicineUsage | null;
   dose_days: number | null;
   note: string | null;
   drugs: RegimenDrug[];
