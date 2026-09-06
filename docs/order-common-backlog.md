@@ -259,3 +259,19 @@ Provenance
 - 中止・削除の活動は Provenance に書いていない(削除は target が消えて孤児になる。§2.4 障壁 4)。
 - 上流 `AuditEvent` のエンドユーザー記録(認証回りの変更。`docs/server-improvement-backlog.md`)。
 
+---
+
+## 3. 薬剤オーダーの安全性チェックが種別ごとに無い(未対応)
+
+2026-09-06 にレジメンオーダーの不足機能を洗い出す過程で確認した。処方・注射・レジメンのどのフォームにも、
+医薬品を選んだときの警告が一切無い。個別の設計書(注射 §8 A、化学療法 §7.6 A-4)に同じ項目が並ぶので、
+**器は 1 つ**にする。
+
+- **アレルギー照合**: 患者の `AllergyIntolerance`(`fhir/allergyHelpers.ts` の `allergenFromMedicine` で薬剤マスタ →
+  YJ コードのアレルゲンに変換できる)と `useActiveAllergies` を突き合わせて、薬剤の行に警告を出す。
+  医薬品検索モーダル(`MedicineSearchModal`)か、薬剤行を描く共通部品に置けば処方・注射・レジメンの
+  3 か所で同時に効く。
+- 同じ場所に載せるもの: 麻薬・向精神薬・生物由来製剤の印(`master_medicines.narcotic_category` /
+  `biological_product_flag`。注射 §8 A)、造影剤(`contrast_medium_category`)。
+- 看護ワークシートへの注射予定の表示(注射 §8 C、化学療法 §7.6 E-4)も種別をまたぐが、これは
+  看護指示側の設計(`docs/nursing-order-design.md`)で扱う。
