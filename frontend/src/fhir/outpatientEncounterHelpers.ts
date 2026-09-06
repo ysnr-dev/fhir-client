@@ -43,6 +43,33 @@ export const EXAM_FINISHED_STATUS = "finished";
 /** 診察開始を取り消した(誤登録)Encounter.status。 */
 export const EXAM_CANCELLED_STATUS = "entered-in-error";
 
+/** 担当医(種別 ATND)の participant。指定が無ければ空。 */
+function attendingParticipants(
+  practitionerId: string,
+  practitionerName: string,
+): fhir4.EncounterParticipant[] {
+  if (!practitionerId) return [];
+  return [
+    {
+      type: [
+        {
+          coding: [
+            {
+              system: PARTICIPATION_TYPE_SYSTEM,
+              code: ATTENDING_PARTICIPANT_CODE,
+              display: "attender",
+            },
+          ],
+        },
+      ],
+      individual: {
+        reference: `Practitioner/${practitionerId}`,
+        display: practitionerName || undefined,
+      },
+    },
+  ];
+}
+
 /**
  * 診察開始。予約 1 件に対して診察の Encounter を建てる。
  *
@@ -76,25 +103,10 @@ export function buildOutpatientEncounter(
 
   const practitionerId = appointmentActorId(appointment, "Practitioner");
   if (practitionerId) {
-    encounter.participant = [
-      {
-        type: [
-          {
-            coding: [
-              {
-                system: PARTICIPATION_TYPE_SYSTEM,
-                code: ATTENDING_PARTICIPANT_CODE,
-                display: "attender",
-              },
-            ],
-          },
-        ],
-        individual: {
-          reference: `Practitioner/${practitionerId}`,
-          display: appointmentActorDisplay(appointment, "Practitioner") || undefined,
-        },
-      },
-    ];
+    encounter.participant = attendingParticipants(
+      practitionerId,
+      appointmentActorDisplay(appointment, "Practitioner"),
+    );
   }
 
   const locationId = appointmentActorId(appointment, "Location");
@@ -111,6 +123,47 @@ export function buildOutpatientEncounter(
   }
 
   return encounter;
+}
+
+/**
+ * 担当医・診察室の差し替え。外来一覧から受付内容を変えたときに、既に建てて
+ * ある診察の Encounter も合わせるために使う(予約だけ変えると、診察の記録が
+ * 前の担当医・診察室のまま残る)。
+ *
+ * 診察室の割り当ての status は今のものを引き継ぐ。終了済みの診察を開き直したり、
+ * 診察中の割り当てを閉じたりしないため。
+ */
+export function withExamAssignment(
+  encounter: fhir4.Encounter,
+  values: { practitionerId: string; practitionerName: string; locationId: string; locationName: string },
+): fhir4.Encounter {
+  // 担当医(ATND)だけを入れ替える。他の参加者(将来の代行入力など)は残す。
+  const others = (encounter.participant ?? []).filter(
+    (p) => !p.individual?.reference?.startsWith("Practitioner/"),
+  );
+  const participant = [...others, ...attendingParticipants(values.practitionerId, values.practitionerName)];
+
+  const current = encounter.location?.[0];
+  const location = values.locationId
+    ? [
+        {
+          location: {
+            reference: `Location/${values.locationId}`,
+            display: values.locationName || undefined,
+          },
+          status:
+            current?.status ??
+            (encounter.status === EXAM_FINISHED_STATUS ? "completed" : "active"),
+        } as fhir4.EncounterLocation,
+        ...(encounter.location ?? []).slice(1),
+      ]
+    : (encounter.location ?? []).slice(1);
+
+  return {
+    ...encounter,
+    participant: participant.length > 0 ? participant : undefined,
+    location: location.length > 0 ? location : undefined,
+  };
 }
 
 /** 診察終了。診察室の割り当ても終わるので location の status も閉じる(退院と同じ)。 */

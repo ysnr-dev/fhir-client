@@ -2891,6 +2891,44 @@ export function useUpdateOutpatientExam() {
   });
 }
 
+/**
+ * 受付内容(診療科・担当医・診察室)の変更。外来一覧のケバブメニューから、受付の
+ * 前後を問わず変えられるようにするためのもの。
+ *
+ * 診察が始まっている予約では、診察の Encounter が持つ担当医・診察室も一緒に
+ * 書き換える(予約だけ変わって診察の記録が前のままになるのを防ぐため、同じ
+ * transaction に載せる)。一覧は検索結果のリソースを持っているだけで ETag が
+ * 無いため、単体 PUT ではなく Bundle で書く(useUpdateAppointmentStatus と同じ)。
+ */
+export function useUpdateOutpatientReception() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      appointment,
+      encounter,
+    }: {
+      appointment: fhir4.Appointment;
+      encounter?: fhir4.Encounter;
+    }) => {
+      const entry: fhir4.BundleEntry[] = [
+        {
+          resource: appointment,
+          request: { method: "PUT", url: `Appointment/${appointment.id}` },
+        },
+      ];
+      if (encounter) {
+        entry.push({
+          resource: encounter,
+          request: { method: "PUT", url: `Encounter/${encounter.id}` },
+        });
+      }
+      return postBundle({ resourceType: "Bundle", type: "transaction", entry });
+    },
+    onSuccess: () => invalidateOutpatientExams(queryClient),
+  });
+}
+
 /** カルテのヘッダに「診察終了」を出すのに要るもの。 */
 export interface OutpatientExam {
   encounter: fhir4.Encounter;

@@ -186,7 +186,11 @@ export function buildAppointment(
 /** 当日受付の予約が押さえる名目の時間(分)。 */
 const WALK_IN_MINUTES = 15;
 
-export interface WalkInFormValues {
+/**
+ * 受付内容(診療科・担当医・診察室)。当日受付で入力するものと、あとから外来一覧で
+ * 変えるもの(withReceptionAssignment)で同じ形を使う。
+ */
+export interface ReceptionAssignment {
   /** SS-MIX2 統一診療科コード。院内独自の科は空になり得る。 */
   departmentCode: string;
   departmentName: string;
@@ -196,26 +200,11 @@ export interface WalkInFormValues {
   locationName: string;
 }
 
-/**
- * 当日受付。予約なしで来院した患者を、枠(Slot)を持たない予約として受付済で作る。
- * 枠がないので Slot の status を動かす transaction は要らず、単体の POST でよい。
- *
- * app-2 / app-3 により受付済(checked-in)の予約は start / end が必須なので、
- * 受付時刻から名目の時間を入れる(診察の実時間を表すものではない)。
- */
-export function buildWalkInAppointment(
-  patient: fhir4.Patient,
-  values: WalkInFormValues,
-  receivedAt: Date,
-): fhir4.Appointment {
-  const participant: fhir4.AppointmentParticipant[] = [
-    // participant の先頭は必ず患者(buildAppointment と同じ理由)。
-    {
-      actor: { reference: `Patient/${patient.id}`, display: displayName(patient) },
-      required: "required",
-      status: "accepted",
-    },
-  ];
+/** 担当医・診察室の participant。指定のないものは行ごと作らない。 */
+function receptionParticipants(
+  values: ReceptionAssignment,
+): fhir4.AppointmentParticipant[] {
+  const participant: fhir4.AppointmentParticipant[] = [];
   if (values.practitionerId) {
     participant.push({
       actor: {
@@ -228,11 +217,86 @@ export function buildWalkInAppointment(
   }
   if (values.locationId) {
     participant.push({
-      actor: { reference: `Location/${values.locationId}`, display: values.locationName || undefined },
+      actor: {
+        reference: `Location/${values.locationId}`,
+        display: values.locationName || undefined,
+      },
       required: "required",
       status: "accepted",
     });
   }
+  return participant;
+}
+
+/**
+ * 診療科。コードのある科は枠から取った予約(buildSchedule)と同じ形にし、
+ * コード未設定の院内独自科は名前だけ残す。どちらも無ければ持たない。
+ */
+function receptionSpecialty(
+  values: ReceptionAssignment,
+): fhir4.CodeableConcept[] | undefined {
+  if (values.departmentCode) {
+    return [
+      {
+        coding: [
+          {
+            system: SSMIX2_DEPARTMENT_CODE_SYSTEM,
+            code: values.departmentCode,
+            display: values.departmentName || undefined,
+          },
+        ],
+        text: values.departmentName || undefined,
+      },
+    ];
+  }
+  if (values.departmentName) return [{ text: values.departmentName }];
+  return undefined;
+}
+
+/**
+ * 受付内容を差し替えた予約。外来一覧から診療科・担当医・診察室を変えるのに使う。
+ *
+ * participant の先頭は患者でなければならない(buildAppointment と同じ理由)ので、
+ * 担当医・診察室だけを入れ替えて、患者とそれ以外の参加者は元の並びのまま残す。
+ * 未指定にしたものは participant ごと落とす(display だけが残らないように)。
+ */
+export function withReceptionAssignment(
+  appointment: fhir4.Appointment,
+  values: ReceptionAssignment,
+): fhir4.Appointment {
+  const others = (appointment.participant ?? []).filter((p) => {
+    const reference = p.actor?.reference ?? "";
+    return !reference.startsWith("Practitioner/") && !reference.startsWith("Location/");
+  });
+
+  return {
+    ...appointment,
+    participant: [...others, ...receptionParticipants(values)],
+    specialty: receptionSpecialty(values),
+  };
+}
+
+/**
+ * 当日受付。予約なしで来院した患者を、枠(Slot)を持たない予約として受付済で作る。
+ * 枠がないので Slot の status を動かす transaction は要らず、単体の POST でよい。
+ *
+ * app-2 / app-3 により受付済(checked-in)の予約は start / end が必須なので、
+ * 受付時刻から名目の時間を入れる(診察の実時間を表すものではない)。
+ */
+export function buildWalkInAppointment(
+  patient: fhir4.Patient,
+  values: ReceptionAssignment,
+  receivedAt: Date,
+): fhir4.Appointment {
+  const participant: fhir4.AppointmentParticipant[] = [
+    // participant の先頭は必ず患者(buildAppointment と同じ理由)。
+    {
+      actor: { reference: `Patient/${patient.id}`, display: displayName(patient) },
+      required: "required",
+      status: "accepted",
+    },
+    ...receptionParticipants(values),
+  ];
 
   const appointment: fhir4.Appointment = {
     resourceType: "Appointment",
@@ -265,24 +329,7 @@ export function buildWalkInAppointment(
     },
   ];
 
-  // 診療科。コードのある科は枠から取った予約(buildSchedule)と同じ形にし、
-  // コード未設定の院内独自科は名前だけ残す。
-  if (values.departmentCode) {
-    appointment.specialty = [
-      {
-        coding: [
-          {
-            system: SSMIX2_DEPARTMENT_CODE_SYSTEM,
-            code: values.departmentCode,
-            display: values.departmentName || undefined,
-          },
-        ],
-        text: values.departmentName || undefined,
-      },
-    ];
-  } else if (values.departmentName) {
-    appointment.specialty = [{ text: values.departmentName }];
-  }
+  appointment.specialty = receptionSpecialty(values);
 
   return appointment;
 }

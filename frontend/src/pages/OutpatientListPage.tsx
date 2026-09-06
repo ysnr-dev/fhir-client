@@ -21,6 +21,7 @@ import {
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
 import { NewPatientCheckInModal } from "../components/NewPatientCheckInModal";
+import { OutpatientReceptionModal } from "../components/OutpatientReceptionModal";
 import { RowMenu } from "../components/RowMenu";
 import { WalkInCheckInModal } from "../components/WalkInCheckInModal";
 import {
@@ -101,6 +102,8 @@ export function OutpatientListPage() {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [newPatientOpen, setNewPatientOpen] = useState(false);
+  // 受付内容(診療科・担当医・診察室)を変える行。
+  const [receptionTarget, setReceptionTarget] = useState<OutpatientRow | null>(null);
 
   // 列が多く、既定の幅では患者名や予約枠まで折り返すので、この画面だけ幅を広げる
   // (放射線検査一覧と同じやり方)。
@@ -278,6 +281,7 @@ export function OutpatientListPage() {
                     onCancelExamStart={() => handleCancelExamStart(row)}
                     onCancelExamFinish={() => handleCancelExamFinish(row)}
                     onCancel={() => handleCancel(row.appointment)}
+                    onEditReception={() => setReceptionTarget(row)}
                   />
                 ))}
                 {rows.length === 0 && (
@@ -296,6 +300,12 @@ export function OutpatientListPage() {
         </>
       )}
 
+      {receptionTarget && (
+        <OutpatientReceptionModal
+          row={receptionTarget}
+          onClose={() => setReceptionTarget(null)}
+        />
+      )}
       {walkInOpen && <WalkInCheckInModal onClose={() => setWalkInOpen(false)} />}
       {newPatientOpen && <NewPatientCheckInModal onClose={() => setNewPatientOpen(false)} />}
     </div>
@@ -438,6 +448,7 @@ function OutpatientTableRow({
   onCancelExamStart,
   onCancelExamFinish,
   onCancel,
+  onEditReception,
 }: {
   row: OutpatientRow;
   pending: boolean;
@@ -447,6 +458,7 @@ function OutpatientTableRow({
   onCancelExamStart: () => void;
   onCancelExamFinish: () => void;
   onCancel: () => void;
+  onEditReception: () => void;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
@@ -509,54 +521,62 @@ function OutpatientTableRow({
             カルテ
           </Link>
         )}
-        {/* 受付取消・診察の取消・予約取消は押し間違えると進捗が巻き戻るので、一段畳んで
-            置く。一覧は横スクロールできるよう overflow を持つため、メニューは
-            escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
-        {(isActiveAppointment(appointment) || examFinished) && (
-          <RowMenu label="この予約の操作" escapesClipping>
-            {checkedIn && (
-              <button
-                type="button"
-                className="row-menu__item"
-                disabled={pending}
-                onClick={() => onChangeStatus("booked")}
-              >
-                受付を取り消す
-              </button>
-            )}
-            {inExam && (
-              <button
-                type="button"
-                className="row-menu__item"
-                disabled={pending}
-                onClick={onCancelExamStart}
-              >
-                診察開始を取り消す
-              </button>
-            )}
-            {examFinished && (
-              <button
-                type="button"
-                className="row-menu__item"
-                disabled={pending}
-                onClick={onCancelExamFinish}
-              >
-                診察終了を取り消す
-              </button>
-            )}
-            {/* 診察が始まった予約は取り消せない(先に診察開始を取り消す)。 */}
-            {isActiveAppointment(appointment) && !encounter && (
-              <button
-                type="button"
-                className="row-menu__item row-menu__item--danger"
-                disabled={pending}
-                onClick={onCancel}
-              >
-                予約を取り消す
-              </button>
-            )}
-          </RowMenu>
-        )}
+        {/* 受付内容の編集と、受付取消・診察の取消・予約取消。取消は押し間違えると進捗が
+            巻き戻るので、一段畳んで置く。一覧は横スクロールできるよう overflow を
+            持つため、メニューは escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
+        <RowMenu label="この予約の操作" escapesClipping>
+          {/* 診療科・担当医・診察室の編集。枠から引き継いだあとでも、当日に担当医が
+              替わる・別の診察室に回すことがあるので、受付の前後を問わず編集できる。 */}
+          <button
+            type="button"
+            className="row-menu__item"
+            disabled={pending}
+            onClick={onEditReception}
+          >
+            編集
+          </button>
+          {checkedIn && (
+            <button
+              type="button"
+              className="row-menu__item"
+              disabled={pending}
+              onClick={() => onChangeStatus("booked")}
+            >
+              受付を取り消す
+            </button>
+          )}
+          {inExam && (
+            <button
+              type="button"
+              className="row-menu__item"
+              disabled={pending}
+              onClick={onCancelExamStart}
+            >
+              診察開始を取り消す
+            </button>
+          )}
+          {examFinished && (
+            <button
+              type="button"
+              className="row-menu__item"
+              disabled={pending}
+              onClick={onCancelExamFinish}
+            >
+              診察終了を取り消す
+            </button>
+          )}
+          {/* 診察が始まった予約は取り消せない(先に診察開始を取り消す)。 */}
+          {isActiveAppointment(appointment) && !encounter && (
+            <button
+              type="button"
+              className="row-menu__item row-menu__item--danger"
+              disabled={pending}
+              onClick={onCancel}
+            >
+              予約を取り消す
+            </button>
+          )}
+        </RowMenu>
       </td>
     </tr>
   );
