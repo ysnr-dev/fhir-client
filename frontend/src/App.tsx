@@ -22,6 +22,8 @@ import { RadItemPage } from "./pages/RadItemPage";
 import { RadJj1017CodePage } from "./pages/RadJj1017CodePage";
 import { RadMaterialPage } from "./pages/RadMaterialPage";
 import { RadDatasetPage } from "./pages/RadDatasetPage";
+import { RegimenListPage } from "./pages/RegimenListPage";
+import { RegimenEditorPage } from "./pages/RegimenEditorPage";
 import { PhysioWorklistPage } from "./pages/PhysioWorklistPage";
 import { PhysioExamTypePage } from "./pages/PhysioExamTypePage";
 import { PhysioItemPage } from "./pages/PhysioItemPage";
@@ -266,6 +268,13 @@ function App() {
             <SubMenu label="医薬品">
               <Link to="/medicine-dose-conversions" className="row-menu__item">
                 投与量換算
+              </Link>
+            </SubMenu>
+            {/* 化学療法のマスタ。レジメンは審査委員会で承認する施設共通の参照表なので
+                マスタメンテに置く(docs/chemo-regimen-design.md)。 */}
+            <SubMenu label="化学療法">
+              <Link to="/regimens" className="row-menu__item">
+                レジメン
               </Link>
             </SubMenu>
             <SubMenu label="検体検査">
@@ -542,6 +551,9 @@ function App() {
           <Route path="/rad-jj1017-codes" element={<RadJj1017CodePage />} />
           <Route path="/rad-materials" element={<RadMaterialPage />} />
           <Route path="/rad-datasets" element={<RadDatasetPage />} />
+          <Route path="/regimens" element={<RegimenListPage />} />
+          <Route path="/regimens/new" element={<RegimenEditorPage />} />
+          <Route path="/regimens/:regimenId" element={<RegimenEditorPage />} />
           <Route path="/physio-items" element={<PhysioItemPage />} />
           <Route path="/physio-item-layouts" element={<PhysioItemLayoutPage />} />
           <Route path="/physio-exam-types" element={<PhysioExamTypePage />} />

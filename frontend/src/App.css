@@ -12791,3 +12791,278 @@ button.meal-calendar__cell:hover {
 .order-set-editor .prescription-form {
   max-width: none;
 }
+
+/* ---- 化学療法レジメンマスタ(docs/chemo-regimen-design.md) ---- */
+
+.regimen-editor__name {
+  min-width: 260px;
+}
+
+/* 投与期間 + 休薬期間から導いた 1 クールの日数。入力欄と同じ高さに揃える。 */
+.regimen-editor__derived {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.regimen-editor__derived strong {
+  font-size: 14px;
+  padding: 5px 0;
+}
+
+/* 行テーブルの入力欄。表の中なので余白を詰める。 */
+.regimen-editor__rows input[type="text"],
+.regimen-editor__rows input[type="number"],
+.regimen-editor__rows select {
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.regimen-editor__rows input.regimen-editor__num-input {
+  width: 90px;
+}
+
+.regimen-editor__rows input.regimen-editor__unit-input {
+  width: 72px;
+}
+
+.regimen-editor__rows input.regimen-editor__code-input {
+  width: 80px;
+}
+
+.regimen-editor__suffix {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.regimen-editor__pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.regimen-editor__pick input[type="text"] {
+  flex: 1;
+}
+
+.regimen-editor__texts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.regimen-editor__texts label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.regimen-editor__texts textarea {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+}
+
+.regimen-editor__footer {
+  margin-top: 8px;
+}
+
+/* 投与ステップのカード。注射の RP カードと同じ「見出し行 + 用法 + 薬剤表」の構成。 */
+.regimen-step {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.regimen-step__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.regimen-step__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* 見出し欄はラベルがステップ番号。番号は行の目印なので太字にする。 */
+.regimen-step__name-field {
+  flex: 1;
+  min-width: 200px;
+  font-weight: 600;
+}
+
+.regimen-step__name {
+  width: 100%;
+}
+
+.regimen-step__field input,
+.regimen-step__field select {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.regimen-step__days {
+  width: 110px;
+}
+
+.regimen-step__tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding-bottom: 2px;
+}
+
+/* 用法は医薬品の下(処方・注射のオーダー画面と同じ並び)。 */
+.regimen-step__usage,
+.regimen-step__oral-usage {
+  margin-top: 10px;
+}
+
+.regimen-step__usage label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.regimen-step__usage input,
+.regimen-step__usage select {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* 投与時注意は用法の下に 1 行まるごと使う。 */
+.regimen-step__note-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.regimen-step__note-field input {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.regimen-step__drugs {
+  margin-bottom: 6px;
+}
+
+/* 種類・算出基準の select は表示名が長い(「補液・溶解液」「体表面積(/m²)」)ので
+   詰めすぎない。 */
+.regimen-step__drugs select {
+  min-width: 120px;
+}
+
+/* 薬剤 1 件は 2 行(1 行目 = 医薬品名、2 行目 = 種類ほかの入力)で 1 組。名前行と
+   入力行の間には罫線を引かず、組の終わり(入力行の下)だけを区切りにする。
+   医薬品名はその組が何の薬かを示す見出しなので、入力欄より少し強く見せる。 */
+.regimen-drug__name td {
+  border-bottom: none;
+  padding-bottom: 2px;
+  font-weight: 600;
+}
+
+/* 2 件目以降は前の組との間を空ける。 */
+.regimen-drug + .regimen-drug .regimen-drug__name td {
+  padding-top: 10px;
+}
+
+/* Day 表。日の列は幅を揃えて中央寄せ、入る日だけ色を付ける。 */
+.regimen-day-table th.regimen-day-table__day,
+.regimen-day-table td.regimen-day-table__day {
+  width: 28px;
+  min-width: 28px;
+  text-align: center;
+  padding-left: 2px;
+  padding-right: 2px;
+  font-size: 12px;
+}
+
+.regimen-day-table td.regimen-day-table__day--on {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.regimen-day-table__label {
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 一覧の状態バッジ。 */
+.regimen-status {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+}
+
+.regimen-status--approved {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.regimen-status--retired {
+  color: var(--text-muted);
+}
+
+/* select はブラウザ既定の内部余白が input と違い、同じ padding を与えても高さが
+   揃わない。レジメン画面の中だけ実寸で固定して、並んだ入力欄の高さを合わせる。 */
+.regimen-editor input[type="text"],
+.regimen-editor input[type="number"],
+.regimen-editor input[type="date"],
+.regimen-editor select {
+  height: 30px;
+  box-sizing: border-box;
+}
+
+/* 表の中は 1 行が低いので、そちらに合わせた高さにする。 */
+.regimen-editor .regimen-editor__rows input[type="text"],
+.regimen-editor .regimen-editor__rows input[type="number"],
+.regimen-editor .regimen-editor__rows select {
+  height: 26px;
+}
