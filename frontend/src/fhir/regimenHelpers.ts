@@ -97,6 +97,21 @@ export function doseUnitSuffix(basis: RegimenDoseBasis, doseUnit: string): strin
   }
 }
 
+/**
+ * 投与量の基準の表示(「85 mg/m²」「AUC 5」「1 瓶」)。
+ *
+ * AUC は「AUC 5」で読むもので、単位を後ろに付けるものではない(`dose_unit` には
+ * Calvert 式で出した**力価の単位**(mg)を入れる。換算マスタを引くのに要る)。
+ */
+export function doseBasisLabel(
+  basis: RegimenDoseBasis,
+  value: number | string,
+  doseUnit: string,
+): string {
+  if (basis === "auc") return `AUC ${value}`;
+  return `${value} ${doseUnitSuffix(basis, doseUnit)}`;
+}
+
 /** 「1, 8, 15」→ [1, 8, 15]。数字以外はそのまま NaN として残し、検証で弾く。 */
 export function parseDays(text: string): number[] {
   return text

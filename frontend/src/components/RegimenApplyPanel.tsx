@@ -3,7 +3,7 @@ import type { Regimen, RegimenDetail } from "../api/masterClient";
 import { useApplicableRegimens, useMedicineDoseFactors, useRegimen } from "../api/masterQueries";
 import { useBodyMeasures, useCreatePrescription, usePatient, useRecentLabResults, useRegimenAdverseEvents } from "../api/queries";
 import { adverseEventsOf, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
-import { summarizeBodyMeasures, summarizeRenal } from "../fhir/bodyMeasureHelpers";
+import { summarizeBodyMeasures, summarizeRenal, uncorrectedGfr } from "../fhir/bodyMeasureHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { calculateAge } from "../fhir/patientHelpers";
 import { checkLabCriteria, compareWeight, summarizeLabChecks } from "../fhir/regimenCheckHelpers";
@@ -18,21 +18,25 @@ import {
   REGIMEN_PURPOSE_OPTIONS,
   REGIMEN_STEP_USAGE_TYPE_OPTIONS,
   displayOfOption,
-  doseUnitSuffix,
+  doseBasisLabel,
 } from "../fhir/regimenHelpers";
 import {
   MAX_REGIMEN_CYCLES_AT_ONCE,
   bsaOf,
   buildRegimenApplicationBundle,
   buildRegimenCycleBundle,
+  GFR_SOURCE_OPTIONS,
   canReduceDose,
+  gfrOf,
   hasReducedDose,
   planDrugDose,
   planPacks,
   planSteps,
+  regimenHasAuc,
   regimenHasInjection,
   regimenHasOral,
   validateRegimenApply,
+  type GfrSource,
   type PreviousCycle,
   type RegimenApplication,
   type RegimenApplyValues,
@@ -300,11 +304,19 @@ function RegimenApplyForm({
 
   // 体格と換算係数が読めてから初期値を作る(投与量は最初から埋まっている状態で出す)。
   useEffect(() => {
-    if (values || body.isPending || !defaultSetting.ready) return;
+    if (values || body.isPending || labResults.isPending || !defaultSetting.ready) return;
     if (codes.length > 0 && factors.isPending) return;
     const height = measures.height ? String(measures.height.value) : "";
     const weight = measures.weight ? String(measures.weight.value) : "";
     const bsa = bsaOf({ height, weight });
+    // Calvert 式の GFR。CCr(非補正)を既定にし、無ければ eGFR を非補正に換算して使う。
+    const initialRenal = summarizeRenal(labResults.observations, {
+      age: patient?.birthDate ? calculateAge(patient.birthDate) : undefined,
+      gender: patient?.gender,
+      weight: Number(weight) || null,
+    });
+    const initialGfr = initialRenal.ccr ?? uncorrectedGfr(initialRenal.egfr, bsa);
+    const gfrSource: GfrSource = initialRenal.ccr !== null ? "ccr" : "egfr";
     const injectionOptions = setting ? INJECTION_CATEGORY_OPTIONS[setting] : [];
     const prescriptionOptions = setting ? PRESCRIPTION_CATEGORY_OPTIONS[setting] : [];
     // ［決定］前クールがあれば**既定で引き継ぐ**。2 クール目以降で体格から出し直すと、
@@ -321,12 +333,14 @@ function RegimenApplyForm({
       problem: defaultProblem ?? null,
       height,
       weight,
+      gfr: initialGfr !== null ? String(initialGfr) : "",
+      gfrSource,
       comment: "",
       reductionReason: previousCycle?.reduction ?? "",
       carryOver,
       steps: planSteps(
         regimen,
-        { bsa, weight: Number(weight) || null },
+        { bsa, weight: Number(weight) || null, gfr: initialGfr },
         factors.data?.factors ?? new Map(),
         carryOver ? previousCycle?.doses : undefined,
       ),
@@ -345,6 +359,9 @@ function RegimenApplyForm({
     regimen,
     defaultProblem,
     previousCycle,
+    // 検査結果は「読めたか」だけを見る(observations は毎回新しい配列で、依存に入れると
+    // 毎レンダリングで効果が走る)。値そのものは values を作る 1 回だけ使う。
+    labResults.isPending,
   ]);
 
   if (!values) {
@@ -377,6 +394,7 @@ function RegimenApplyForm({
   const checkSummary = summarizeLabChecks(checks);
   const weightChange = previousBody ? compareWeight(previousBody.weight, weightValue) : null;
   const reduced = hasReducedDose(values);
+  const hasAuc = regimenHasAuc(regimen);
   const hasInjection = regimenHasInjection(regimen);
   const hasOral = regimenHasOral(regimen);
   const injectionOptions = values.setting ? INJECTION_CATEGORY_OPTIONS[values.setting] : [];
@@ -388,14 +406,69 @@ function RegimenApplyForm({
    * 前クールを引き継いでいる間は量を動かさない(体格は体表面積と CCr の表示に効く)。
    */
   function recalc(next: Pick<RegimenApplyValues, "height" | "weight">) {
+    setValues((v) => {
+      if (!v) return v;
+      const bsa = bsaOf(next);
+      const weight = Number(next.weight) || null;
+      // CCr は体重で、eGFR の非補正換算は体表面積で変わる。手入力の GFR は動かさない。
+      const nextRenal = summarizeRenal(labResults.observations, {
+        age: patient?.birthDate ? calculateAge(patient.birthDate) : undefined,
+        gender: patient?.gender,
+        weight,
+      });
+      const derived =
+        v.gfrSource === "ccr"
+          ? nextRenal.ccr
+          : v.gfrSource === "egfr"
+            ? uncorrectedGfr(nextRenal.egfr, bsa)
+            : null;
+      const gfr = v.gfrSource === "manual" ? v.gfr : derived !== null ? String(derived) : "";
+      return {
+        ...v,
+        ...next,
+        gfr,
+        steps: planSteps(
+          regimen,
+          { bsa, weight, gfr: Number(gfr) || null },
+          factors.data?.factors ?? new Map(),
+          v.carryOver ? previousCycle?.doses : undefined,
+        ),
+      };
+    });
+  }
+
+  /** GFR の出どころを変える(値を入れ直して投与量を出し直す)。 */
+  function changeGfrSource(source: GfrSource) {
+    setValues((v) => {
+      if (!v) return v;
+      const bsa = bsaOf(v);
+      const derived = source === "ccr" ? renal.ccr : source === "egfr" ? uncorrectedGfr(renal.egfr, bsa) : null;
+      const gfr = source === "manual" ? v.gfr : derived !== null ? String(derived) : "";
+      return {
+        ...v,
+        gfrSource: source,
+        gfr,
+        steps: planSteps(
+          regimen,
+          { bsa, weight: Number(v.weight) || null, gfr: Number(gfr) || null },
+          factors.data?.factors ?? new Map(),
+          v.carryOver ? previousCycle?.doses : undefined,
+        ),
+      };
+    });
+  }
+
+  /** GFR を手で直す(出どころは手入力になる)。 */
+  function changeGfr(gfr: string) {
     setValues((v) =>
       v
         ? {
             ...v,
-            ...next,
+            gfr,
+            gfrSource: "manual",
             steps: planSteps(
               regimen,
-              { bsa: bsaOf(next), weight: Number(next.weight) || null },
+              { bsa: bsaOf(v), weight: Number(v.weight) || null, gfr: Number(gfr) || null },
               factors.data?.factors ?? new Map(),
               v.carryOver ? previousCycle?.doses : undefined,
             ),
@@ -413,7 +486,7 @@ function RegimenApplyForm({
             carryOver,
             steps: planSteps(
               regimen,
-              { bsa: bsaOf(v), weight: Number(v.weight) || null },
+              { bsa: bsaOf(v), weight: Number(v.weight) || null, gfr: gfrOf(v) },
               factors.data?.factors ?? new Map(),
               carryOver ? previousCycle?.doses : undefined,
             ),
@@ -426,7 +499,7 @@ function RegimenApplyForm({
   function changeRatio(stepIndex: number, drugIndex: number, ratio: string) {
     setValues((v) => {
       if (!v) return v;
-      const body = { bsa: bsaOf(v), weight: Number(v.weight) || null };
+      const body = { bsa: bsaOf(v), weight: Number(v.weight) || null, gfr: gfrOf(v) };
       return {
         ...v,
         carryOver: false,
@@ -625,6 +698,30 @@ function RegimenApplyForm({
             体表面積
             <strong>{bsa !== null ? `${bsa} m²` : "—"}</strong>
           </div>
+          {hasAuc && (
+            <>
+              <label>
+                GFR(mL/分)
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={values.gfr}
+                  onChange={(e) => changeGfr(e.target.value)}
+                />
+              </label>
+              <label>
+                GFR の出どころ
+                <select value={values.gfrSource} onChange={(e) => changeGfrSource(e.target.value as GfrSource)}>
+                  {GFR_SOURCE_OPTIONS.map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.display}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
           {previousBody && <RegimenBodyChange previous={previousBody} change={weightChange} />}
           {(measures.height || measures.weight) && (
             <div className="regimen-editor__derived">
@@ -702,7 +799,7 @@ function RegimenApplyForm({
                     <td>{d.drug.resolved_name ?? d.drug.medicine_code}</td>
                     <td>
                       {d.drug.dose_value !== null
-                        ? `${Number(d.drug.dose_value)} ${doseUnitSuffix(d.drug.dose_basis, d.drug.dose_unit ?? "")}`
+                        ? doseBasisLabel(d.drug.dose_basis, Number(d.drug.dose_value), d.drug.dose_unit ?? "")
                         : ""}
                       {d.drug.dose_max !== null && (
                         <span className="lab-order-item__code">（上限 {Number(d.drug.dose_max)}）</span>

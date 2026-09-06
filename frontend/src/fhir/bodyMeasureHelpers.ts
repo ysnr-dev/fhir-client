@@ -154,6 +154,18 @@ export function calculateCreatinineClearance(
   return { ccr: Math.round(value * 10) / 10, reason: "" };
 }
 
+/**
+ * eGFR(mL/分/1.73m²)を体表面積で補正しない GFR(mL/分)に戻す。
+ *
+ * Calvert 式(カルボプラチンの投与量)が使うのは**個別の GFR** で、体表面積で標準化した
+ * eGFR をそのまま入れると小柄な患者で過量、大柄な患者で過少になる。CCr(Cockcroft-Gault)は
+ * もともと非補正なのでこの換算は要らない。
+ */
+export function uncorrectedGfr(egfr: number | null, bsa: number | null): number | null {
+  if (egfr === null || !bsa || bsa <= 0) return null;
+  return Math.round(((egfr * bsa) / 1.73) * 10) / 10;
+}
+
 export function summarizeRenal(
   observations: fhir4.Observation[],
   patient: { age?: number; gender?: string; weight?: number | null },

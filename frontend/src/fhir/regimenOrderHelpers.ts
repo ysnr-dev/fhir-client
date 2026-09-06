@@ -64,6 +64,11 @@ export const REGIMEN_DOSE_EXT_URL = "http://fhir-client.local/StructureDefinitio
 /** ヘッダの instantiatesUri。マスタは backend にあるので FHIR 上は URI で指すだけ。 */
 export const REGIMEN_URI_PREFIX = "http://fhir-client.local/regimen/";
 
+/**
+ * Calvert 式の定数(非腎排泄クリアランス、mL/分)。投与量 = AUC × (GFR + 25)。
+ */
+export const CALVERT_ADD = 25;
+
 /** 一度に登録できるクール数の上限(1 クールが長いレジメンで transaction が膨らみすぎないように)。 */
 export const MAX_REGIMEN_CYCLES_AT_ONCE = 3;
 
@@ -235,6 +240,14 @@ export function bodySurfaceArea(heightCm: number | null, weightKg: number | null
 /** 医薬品コード → 入力単位(mg など)→ 1 [薬価算定単位] あたりの量。 */
 export type DoseFactorMap = Map<string, Map<string, number>>;
 
+/** 投与量の算出に使う患者の値。GFR は AUC(Calvert 式)のときだけ要る。 */
+export interface RegimenBody {
+  bsa: number | null;
+  weight: number | null;
+  /** Calvert 式に使う GFR(mL/分、体表面積の補正なし)。 */
+  gfr?: number | null;
+}
+
 /**
  * 薬剤 1 件の投与量。
  *
@@ -349,7 +362,7 @@ function pickPackBasisUnit(byUnit: Map<string, number> | undefined): { unit: str
  */
 export function planDrugDose(
   drug: RegimenDrug,
-  body: { bsa: number | null; weight: number | null },
+  body: RegimenBody,
   factors: DoseFactorMap,
   /** 投与率(%)。減量するときに 100 未満を渡す。 */
   ratio = 100,
@@ -396,21 +409,26 @@ export function planDrugDose(
 
   const factor = byUnit?.get(unit) ?? null;
 
-  // AUC は Calvert 式に GFR が要るので自動では出さない。力価(mg)を手で入れてもらい、
-  // 製剤数はそこから出す。
-  if (drug.dose_basis === "auc") {
-    return {
-      ...base,
-      input: factor ? "amount" : "pack",
-      factor,
-      basis: `AUC ${value}`,
-      manualReason: factor ? "AUC は Calvert 式で計算して入力してください" : noConversion,
-    };
-  }
-
   let amount: number;
   let basis: string;
   switch (drug.dose_basis) {
+    // Calvert 式: 投与量(mg) = AUC × (GFR + 25)。GFR は体表面積で補正しない値で、
+    // 画面で出どころ(CCr / eGFR)を選び、手で直せる(§7.6 B-3)。
+    case "auc": {
+      const gfr = body.gfr ?? null;
+      if (gfr === null) {
+        return {
+          ...base,
+          input: factor ? "amount" : "pack",
+          factor,
+          basis: `AUC ${value}`,
+          manualReason: factor ? "GFR が出せません。力価(mg)を入力してください" : noConversion,
+        };
+      }
+      amount = value * (gfr + CALVERT_ADD);
+      basis = `AUC ${value} × (GFR ${gfr} + ${CALVERT_ADD})`;
+      break;
+    }
     case "bsa":
       if (body.bsa === null) return { ...base, manualReason: "体表面積が出せません" };
       amount = value * body.bsa;
@@ -471,12 +489,30 @@ export interface RegimenApplyValues {
   problem: ProblemRef | null;
   height: string;
   weight: string;
+  /** Calvert 式に使う GFR(mL/分)。AUC の薬剤があるレジメンでだけ使う。 */
+  gfr: string;
+  /** GFR の出どころ。手で直したら "manual" になり、体格を変えても追随しない。 */
+  gfrSource: GfrSource;
   comment: string;
   /** 減量した理由(そのクールの日オーダーに焼く)。減量していなければ空。 */
   reductionReason: string;
   /** 前クールと同じ量で出しているか(次クール登録のみ。§7.6 B-2)。 */
   carryOver: boolean;
   steps: RegimenStepPlan[];
+}
+
+export type GfrSource = "ccr" | "egfr" | "manual";
+
+export const GFR_SOURCE_OPTIONS: { code: GfrSource; display: string }[] = [
+  { code: "ccr", display: "CCr(Cockcroft-Gault)" },
+  { code: "egfr", display: "eGFR(補正なしに換算)" },
+  { code: "manual", display: "手入力" },
+];
+
+/** 入力値から Calvert 式に使う GFR。 */
+export function gfrOf(values: Pick<RegimenApplyValues, "gfr">): number | null {
+  const value = Number(values.gfr);
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 /** 前クールの投与量(薬剤 1 件ぶん)。MedicationRequest の拡張から読む。 */
@@ -500,7 +536,7 @@ export function bsaOf(values: Pick<RegimenApplyValues, "height" | "weight">): nu
  */
 export function planSteps(
   regimen: RegimenDetail,
-  body: { bsa: number | null; weight: number | null },
+  body: RegimenBody,
   factors: DoseFactorMap,
   previous?: Map<number, PreviousDose>,
 ): RegimenStepPlan[] {
@@ -536,6 +572,11 @@ export function hasReducedDose(values: Pick<RegimenApplyValues, "steps">): boole
 
 export function regimenHasInjection(regimen: RegimenDetail): boolean {
   return regimen.steps.some((s) => s.usage_type !== "oral");
+}
+
+/** AUC(Calvert 式)で量を出す薬剤があるか。GFR の入力欄を出すかの判定。 */
+export function regimenHasAuc(regimen: RegimenDetail): boolean {
+  return regimen.steps.some((s) => s.drugs.some((d) => d.dose_basis === "auc"));
 }
 
 export function regimenHasOral(regimen: RegimenDetail): boolean {
