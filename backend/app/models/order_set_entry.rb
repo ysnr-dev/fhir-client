@@ -2,7 +2,9 @@
 # 入力値そのもの(患者への参照はフロントが保存前に落とす)。backend は中身を見ない。
 class OrderSetEntry < ApplicationRecord
   # フロントの OrderSetOrderType(fhir/orderSetHelpers.ts)と同じ綴り。
+  # condition は病名(FHIR Condition)。オーダーではないが、セットのエントリとして同列に扱う。
   ORDER_TYPES = %w[
+    condition
     prescription injection lab-order micro-order patho-order rad-order physio-order
     endoscopy-order treatment-order surgery-order meal-order transfusion-order
     rehab-order nutrition-guidance-order consult-order nursing-order

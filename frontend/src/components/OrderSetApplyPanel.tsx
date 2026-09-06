@@ -2,12 +2,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import type { OrderSetDetail, OrderSetScope } from "../api/masterClient";
 import { useOrderSet, useOrderSets } from "../api/masterQueries";
-import { useCreatePrescription, usePatient } from "../api/queries";
-import type { ProblemRef } from "../fhir/conditionHelpers";
+import { useCreatePrescription, useKarteConditions, usePatient } from "../api/queries";
+import { nextProblemNumber, splitConditions, type ProblemRef } from "../fhir/conditionHelpers";
 import {
   isOrderSetOrderType,
   mergeTransactionBundles,
   migrateEntryValues,
+  sortConditionsFirst,
   stampOrderSetInstance,
   type OrderSetOrderType,
 } from "../fhir/orderSetHelpers";
@@ -149,7 +150,7 @@ function OrderSetPicker({ onSelect }: { onSelect: (setId: number) => void }) {
   );
 }
 
-// セットの中身と患者の在院状況が揃ってからフォームを積む(初期値は初回描画時のみ)。
+// セットの中身・患者の在院状況・患者の病名が揃ってからフォームを積む(初期値は初回描画時のみ)。
 function OrderSetApplyLoader({
   patientId,
   setId,
@@ -166,7 +167,11 @@ function OrderSetApplyLoader({
   const detail = useOrderSet(setId);
   const defaultSetting = useDefaultOrderSetting(patientId);
   const { data: patientResult, isPending: patientPending } = usePatient(patientId);
-  if (detail.isPending || !defaultSetting.ready || patientPending) return <p>読み込み中...</p>;
+  // 病名エントリの重複判定(同じ病名が継続中か)と親プロブレム候補に使う。
+  const karte = useKarteConditions(patientId);
+  if (detail.isPending || !defaultSetting.ready || patientPending || karte.isPending) {
+    return <p>読み込み中...</p>;
+  }
   if (!detail.data) return <ErrorBanner error={detail.error} />;
   return (
     <OrderSetApplyForms
@@ -175,6 +180,7 @@ function OrderSetApplyLoader({
       defaultProblem={defaultProblem}
       defaultSetting={defaultSetting}
       patient={patientResult?.data}
+      conditions={karte.conditions}
       onBack={onBack}
       onSaved={onSaved}
     />
@@ -189,6 +195,8 @@ interface ApplyEntry {
   /** セット側の入外区分(患者の在院状況と食い違うときに注意を出す)。 */
   setting: string;
   unsupported: boolean;
+  /** 患者に同じものが既にあって登録しない理由(病名)。あればチェックを入れさせない。 */
+  duplicateNote: string | null;
   included: boolean;
   collapsed: boolean;
 }
@@ -199,6 +207,7 @@ function OrderSetApplyForms({
   defaultProblem,
   defaultSetting,
   patient,
+  conditions,
   onBack,
   onSaved,
 }: {
@@ -207,6 +216,7 @@ function OrderSetApplyForms({
   defaultProblem?: ProblemRef;
   defaultSetting: ReturnType<typeof useDefaultOrderSetting>;
   patient?: fhir4.Patient;
+  conditions: fhir4.Condition[];
   onBack: () => void;
   onSaved: () => void;
 }) {
@@ -218,9 +228,10 @@ function OrderSetApplyForms({
   // セット全体の適用日。変えると各フォームの開始日に入る(予約する項目は動かない)。
   const [applyDate, setApplyDate] = useState(today());
 
+  // 病名はオーダーより上に出す(登録画面と同じ並び)。
   const initialEntries = useMemo<ApplyEntry[]>(
     () =>
-      set.entries.map((entry) => {
+      sortConditionsFirst(set.entries.map((entry) => {
         const orderType = isOrderSetOrderType(entry.order_type) ? entry.order_type : null;
         const def = orderType ? ORDER_SET_TYPES[orderType] : undefined;
         const migrated = orderType
@@ -236,6 +247,8 @@ function OrderSetApplyForms({
                 problem: defaultProblem ?? null,
               }
             : null;
+        const duplicateNote =
+          def && !unsupported && values ? (def.duplicateNote?.(values, { conditions }) ?? null) : null;
         return {
           id: entry.id,
           orderType: orderType ?? "prescription",
@@ -243,12 +256,14 @@ function OrderSetApplyForms({
           label: entry.label ?? "",
           setting: def && !unsupported ? def.settingOf(migrated.values) : "",
           unsupported,
-          included: !unsupported,
+          duplicateNote,
+          // 患者に同じものが既にあるエントリは外しておく(病名の二重登録を防ぐ)。
+          included: !unsupported && duplicateNote === null,
           // 一覧として見渡せるよう既定は閉じておき、直したいものだけ開く。
           collapsed: true,
         };
-      }),
-    [set, defaultSetting.setting, defaultProblem],
+      })),
+    [set, defaultSetting.setting, defaultProblem, conditions],
   );
   const [entries, setEntries] = useState(initialEntries);
 
@@ -265,7 +280,7 @@ function OrderSetApplyForms({
   function handleRegister() {
     const included = entries.filter((e) => e.included && !e.unsupported);
     if (included.length === 0) {
-      setError("登録するオーダーを 1 件以上選んでください。");
+      setError("登録する項目を 1 件以上選んでください。");
       return;
     }
     const result = stack.submitAll(included.map((e) => e.id));
@@ -279,7 +294,24 @@ function OrderSetApplyForms({
       return;
     }
     const { collected } = result;
+
+    // 画面で直した結果、患者に既にあるものと同じになったエントリは登録しない
+    // (初期化時の判定は元の値に対するものなので、ここで最終値を見直す)。
+    for (const entry of included) {
+      const def = ORDER_SET_TYPES[entry.orderType]!;
+      const note = def.duplicateNote?.(collected.get(entry.id)!.values, { conditions });
+      if (note) {
+        setError(`「${ORDER_SET_TYPE_LABELS[entry.orderType]}」: ${note}`);
+        patch(entry.id, { collapsed: false });
+        stack.scrollTo(entry.id);
+        return;
+      }
+    }
     setError(null);
+
+    // プロブレム番号は既存の最大値 +1 から、この適用の中で順に振る。
+    let nextNumber = nextProblemNumber(splitConditions(conditions).problems);
+    const allocateProblemNumber = () => nextNumber++;
 
     const built = included.map((entry) => {
       const def = ORDER_SET_TYPES[entry.orderType]!;
@@ -291,6 +323,7 @@ function OrderSetApplyForms({
         requester,
         defaultSetting,
         patient,
+        allocateProblemNumber,
       });
     });
     // 全種別を 1 つの transaction にまとめ、ヘッダにどのセットから出したかの印を焼く。
@@ -348,7 +381,7 @@ function OrderSetApplyForms({
                   <input
                     type="checkbox"
                     checked={entry.included}
-                    disabled={entry.unsupported}
+                    disabled={entry.unsupported || entry.duplicateNote !== null}
                     onChange={(e) => patch(entry.id, { included: e.target.checked })}
                   />
                   <span className="order-set-stack__type">{ORDER_SET_TYPE_LABELS[entry.orderType]}</span>
@@ -360,6 +393,9 @@ function OrderSetApplyForms({
                   このセットは「{findSettingDisplay(entry.setting)}」で作られています。患者はいま
                   「{findSettingDisplay(defaultSetting.setting)}」なので、区分を確認してください。
                 </p>
+              )}
+              {entry.duplicateNote && (
+                <p className="order-set-stack__warning">{entry.duplicateNote}</p>
               )}
               {/* 除外・折りたたみはアンマウントせず隠すだけ(入力中の値を保つ)。 */}
               <div
@@ -377,6 +413,7 @@ function OrderSetApplyForms({
                     submitting: create.isPending,
                     mode: "order",
                     bulkStartDate: applyDate,
+                    conditions,
                   })
                 )}
               </div>

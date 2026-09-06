@@ -1,6 +1,6 @@
 # オーダーセットの設計
 
-**状態: Phase 1 実装済(2026-09-06)。処方・注射・検体検査・放射線検査・生理検査・処置の 6 種別。**
+**状態: Phase 1 実装済(2026-09-06)。処方・注射・検体検査・放射線検査・生理検査・処置の 6 種別 + 病名(§4.2)。**
 本文中の区別は他の設計書と同じ(［事実］/［導出］/［提案］)。
 
 ---
@@ -51,8 +51,8 @@ order_sets                      … フォルダとセット(parent_id の隣接
   owner_id   診療科 Organization.id / Practitioner.id(facility は NULL)
   owner_name 表示用の非正規化
   name, display_order, active
-order_set_entries               … セット 1 件に含まれるオーダー 1 件ぶん
-  order_type   "prescription" / "lab-order" …(KartePaneState の種別接頭辞)
+order_set_entries               … セット 1 件に含まれるエントリ(オーダー or 病名)1 件ぶん
+  order_type   "prescription" / "lab-order" …(KartePaneState の種別接頭辞)、"condition"(病名、§4.2)
   label        一覧の要約(保存時にフロントが作る)
   values       jsonb = そのオーダー種別のフォーム値(PrescriptionFormValues など)そのもの
   schema_version
@@ -101,6 +101,7 @@ order_set_entries               … セット 1 件に含まれるオーダー 1
 - 共通: 対象プロブレム、明細の id、日付・時刻(空に)
 - 放射線・生理: 依頼病名(Condition)、検査目的・特別指示のテンプレート回答、単独枠の日時
 - 注射: 束ね(`series`)、期間
+- 病名: 開始日・終了日・転帰・親プロブレム・引き継ぎ先(経過と関連は患者のもの)
 
 適用時は既存の `buildDoXxxForm`(DO と同じ正規化)を通す。日付を当日で、入外区分を患者の在院状況で埋めるので、
 空のまま画面に出て検証に落ちることはない。
@@ -120,6 +121,33 @@ order_set_entries               … セット 1 件に含まれるオーダー 1
 ［決定］入外区分・処方区分は**セット自身が持つ**(「外来の院外処方セット」は種類として意味がある)。適用時に患者の
 在院状況と食い違うと `buildDo` が処方区分を空にするので、そのエントリの上に注意を出す
 (「このセットは『外来』で作られています。患者はいま『入院』なので、区分を確認してください」)。
+
+### 4.2 病名
+
+［決定］病名(FHIR Condition)もセットのエントリ種別の 1 つ(`order_type = "condition"`)として、オーダーと同列に扱う。
+「この症状ならこの病名でこの処方」をひとまとめにするのが目的で、種別を分けて別の仕組みにする理由がない。
+`values` は `ConditionFormValues` そのもの(区分・入力方法・病名マスタ・修飾語を持つ)。`ConditionForm` に
+`setMode` / `hideSubmit` / `bulkStartDate` を足し、set モードでは「経過」と「プロブレムの関連」の fieldset を出さない。
+
+適用時の規則:
+
+- 適用パネルは `useKarteConditions` で患者の病名も読んでから積む。病名エントリは `buildDoConditionForm` で
+  開始日を当日(適用日に連動)・転帰を継続にし、order モードの `ConditionForm` として出す(区分や開始日はその場で直せる)。
+- ［決定］**同じ病名が継続中なら登録しない**。「同じ」は接頭語+病名+接尾語の表示名(`Condition.code.text`)の完全一致
+  (修飾語違い・「の疑い」付きは別の病名)で、区分(保険病名/プロブレム/既往歴)は問わない。継続中は
+  `clinicalStatus = active`。該当すればエントリの上に「同じ病名「○○」が継続中のため登録しません(開始日 …)」と出し、
+  チェックを外して **disabled** にする(別区分で重ねたいときは病名タブから手動で登録する)。
+  無ければ既定でチェック済み = 自動登録。一括登録の直前にも最終値で判定し直す(画面で直して重複になった場合の保険)。
+- 判定は種別レジストリの `duplicateNote`(任意)に閉じ、適用パネルは種別分岐を持たない。
+- ［決定］**病名はオーダーより上にまとめて出す**(登録画面・適用パネルとも `sortConditionsFirst`)。「この病名でこのオーダー」と
+  読める並びにするため。登録画面では「＋病名」は病名の束の末尾に入り、↑↓は束をまたがない。保存はこの並びのままなので、
+  病名が末尾にある保存済みセットも次の保存で `display_order` が揃う(それまでは読み込み時の並べ替えで同じ見え方)。
+- プロブレム区分の病名には `allocateProblemNumber`(適用 1 回ぶんのクロージャ。既存の最大値 +1 から順に採番)で番号を付ける。
+  同じ適用に問題区分の病名が複数あっても連番になる。
+- 病名の Bundle(`buildConditionBundle`、POST Condition 1 件)は他種別と `mergeTransactionBundles` で 1 本にまとめる。
+  `stampOrderSetInstance` はヘッダ ServiceRequest だけを対象にし、Provenance もヘッダ SR から作るので、
+  病名にはセット印も来歴も付かず、承認画面にも出ない(申し送り)。オーダーを全部外して病名だけ登録することもできる。
+- 入外区分は持たないので、`settingOf` は "" を返し、入外区分の食い違い警告は出ない。
 
 ## 5. 登録と適用 = 積んだフォームを一括 submit する
 
@@ -162,8 +190,8 @@ requisition 空いているときだけ同じ uuid
 
 ## 7. 実装フェーズ
 
-- **Phase 1(実装済)**: backend(テーブル・API・request spec 18 件)、セット登録画面、カルテの適用パネル、
-  処方・注射・検体検査・放射線検査・生理検査・処置の set モード、承認画面の種別列。
+- **Phase 1(実装済)**: backend(テーブル・API・request spec 19 件)、セット登録画面、カルテの適用パネル、
+  処方・注射・検体検査・放射線検査・生理検査・処置の set モード、承認画面の種別列、病名エントリ(§4.2)。
 - **Phase 2(未実装)**: 細菌・病理・内視鏡・手術・輸血・リハビリ・栄養指導・他科依頼・食事・看護指示。
   各フォームに `setMode` / `hideSubmit` を足し、`orderSetRegistry.tsx` に定義を 1 つ足せば画面は変えなくてよい。
   注意点: 輸血は血液型を `useEffect` で後から流し込む(`TransfusionOrderForm.tsx`)ので「事前入力が終わるまで
@@ -190,7 +218,10 @@ requisition 空いているときだけ同じ uuid
   `pages/OrderSetPage.tsx`、`components/OrderSetApplyPanel.tsx`、`components/KarteRightPane.tsx`(「セット」ボタンと
   `order-set` ペイン)、`App.tsx`(診療業務 > セット登録、`/order-sets`)、`App.css`
 - フォームの `setMode` / `hideSubmit`: `PrescriptionForm` / `InjectionForm` / `LabOrderForm` / `RadOrderForm` /
-  `PhysioOrderForm` / `TreatmentOrderForm`、`TemplateTextField`(`onOpenTemplate` 省略でテンプレート操作を出さない)
+  `PhysioOrderForm` / `TreatmentOrderForm` / `ConditionForm`、`TemplateTextField`(`onOpenTemplate` 省略でテンプレート操作を出さない)
+- 病名エントリ: `fhir/conditionHelpers.ts`(`isActiveCondition` / `buildDoConditionForm` / `findActiveSameCondition` /
+  `buildConditionBundle`)、`orderSetRegistry.tsx` の `condition` 定義と `duplicateNote` / `allocateProblemNumber`、
+  `OrderSetApplyPanel.tsx`(患者の病名を待つ・重複エントリの除外)、`KarteProblemList.tsx`(`isActiveCondition` に統一)
 - `fhir/provenanceHelpers.ts` の `isHeaderEntry` を export(セット印の対象判定と共用)
 - `pages/OrderApprovalPage.tsx` の種別列
 
@@ -205,8 +236,20 @@ requisition 空いているときだけ同じ uuid
 - 処方区分を選んで一括登録 → POST /fhir が 1 回、カルテに 3 枚のカード(09/05)、ヘッダ SR に identifier・
   `order-set` 拡張・requisition、Provenance 1 件が 3 ヘッダ + MedicationRequest を target。
 - `RAILS_ENV=test ADMIN_TOKEN= bundle exec rspec` 1176 件成功、`npx tsc -b` 成功。
+- 病名エントリ(2026-09-06): 感冒セットに「＋病名」で保険病名「感冒」とプロブレム「急性上気道炎」を追加・保存
+  (set モードでは「経過」「プロブレムの関連」が出ない)。DB の values は `startDate: ""` / `parentId: ""` /
+  `succeededByIds: []` / `outcome: "active"`。テスト太郎に適用: 病名 2 件が既定でチェック済み、適用日を 09/04 に変えると
+  両方の開始日が追随。オーダー 3 件を外して病名だけ一括登録 → Condition 2 件(onset 2026-09-04、急性上気道炎は `#4`、
+  管理番号・交換用・レセ電算・ICD10 の 4 coding)、Provenance は作られない。同じセットをもう一度開くと 2 件とも
+  「同じ病名「○○」が継続中のため登録しません(開始日 2026-09-04)」でチェック外れ・disabled、件数は 3 件。
+  プロブレムリストの「解決済み 1 件を表示」は従前どおり。`order_sets_spec` 19 件成功、コンテナ内 `tsc -b` 成功。
 
 ## 9. 申し送り
+
+- 病名エントリで登録した Condition には、セット印(identifier / `order-set` 拡張)も来歴(Provenance)も付かない。
+  必要になったら `buildOrderProvenanceEntry` の target に Condition を足す(§4.2)。
+- 病名の重複判定は表示名の完全一致。`code.text` を持たない古い Condition は管理番号 coding の display(修飾語なし)で
+  比較されるので見逃しうる。`useKarteConditions` は 100 件までなのでプロブレムリストと同じ制限がある。
 
 - 医師以外のログイン(nurse)での閲覧のみ・指示医師のセット表示は、ブラウザ自動化でパスワードを入れられないため
   画面では未確認(backend の 403 は spec で確認済み)。

@@ -4,6 +4,15 @@ import type { OrderContext } from "../orderContext";
 import type { DefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import type { SlotSelection } from "../fhir/appointmentHelpers";
 import {
+  buildConditionBundle,
+  buildDoConditionForm,
+  emptyConditionForm,
+  findActiveSameCondition,
+  splitConditions,
+  summarizeCondition,
+  type ConditionFormValues,
+} from "../fhir/conditionHelpers";
+import {
   ORDER_SET_ORDER_TYPES,
   sanitizeValuesForSet,
   summarizeOrderSetValues,
@@ -56,6 +65,7 @@ import {
   buildTreatmentOrderWithPerformBundle,
   type TreatmentImmediatePerforms,
 } from "../fhir/treatmentResultHelpers";
+import { ConditionForm } from "./ConditionForm";
 import { InjectionForm } from "./InjectionForm";
 import { LabOrderForm } from "./LabOrderForm";
 import { PhysioOrderForm } from "./PhysioOrderForm";
@@ -81,6 +91,8 @@ export interface OrderSetFormRenderProps {
   mode: "order" | "set";
   /** セット適用日。適用パネルが「開始日をまとめて入れる」ために渡す。 */
   bulkStartDate?: string;
+  /** 適用先患者の病名(病名エントリの親プロブレム候補)。セット登録画面では無し。 */
+  conditions?: fhir4.Condition[];
 }
 
 export interface BuildBundleArgs {
@@ -92,6 +104,16 @@ export interface BuildBundleArgs {
   defaultSetting: DefaultOrderSetting;
   /** 予約を同梱する種別が participant の表示名に使う。 */
   patient?: fhir4.Patient;
+  /**
+   * プロブレム区分の病名に付ける番号を 1 つ採る。適用 1 回ぶんのクロージャなので、
+   * 同じ適用に病名が複数あっても順に連番になる。
+   */
+  allocateProblemNumber: () => number;
+}
+
+/** 「患者に同じものが既にあるので登録しない」の判定に渡す材料。 */
+export interface DuplicateContext {
+  conditions: fhir4.Condition[];
 }
 
 export interface OrderSetTypeDef {
@@ -105,8 +127,13 @@ export interface OrderSetTypeDef {
   sanitize: (values: unknown) => unknown;
   /** 一覧に出す 1 行の要約。 */
   summarize: (values: unknown) => string;
-  /** フォーム値が持つ入外区分。 */
-  settingOf: (values: unknown) => PrescriptionSetting;
+  /** フォーム値が持つ入外区分。持たない種別(病名)は ""。 */
+  settingOf: (values: unknown) => PrescriptionSetting | "";
+  /**
+   * 適用先の患者に同じものが既にあって登録しない理由。無ければ null。
+   * 適用パネルはこれが非 null のエントリを既定で除外し、チェックも入れさせない。
+   */
+  duplicateNote?: (values: unknown, ctx: DuplicateContext) => string | null;
   /** onSubmit の引数から transaction Bundle を作る。invalidate は登録後に読み直すキー。 */
   buildBundle: (args: BuildBundleArgs) => { bundle: fhir4.Bundle; invalidate: QueryKey[] };
 }
@@ -121,10 +148,12 @@ interface TypedDef<V, X extends unknown[]> {
     submitError?: unknown;
     setMode: boolean;
     bulkStartDate?: string;
+    conditions?: fhir4.Condition[];
   }) => ReactNode;
   emptyValues: (setting: PrescriptionSetting) => V;
   buildDoValues: (values: V, setting: PrescriptionSetting) => V;
-  settingOf: (values: V) => PrescriptionSetting;
+  settingOf?: (values: V) => PrescriptionSetting;
+  duplicateNote?: (values: V, ctx: DuplicateContext) => string | null;
   buildBundle: (
     values: V,
     extra: X,
@@ -149,10 +178,48 @@ function defineOrderSetType<V, X extends unknown[]>(
     buildDoValues: (values, setting) => def.buildDoValues(values as V, setting),
     sanitize: (values) => sanitizeValuesForSet(orderType, values),
     summarize: (values) => summarizeOrderSetValues(orderType, values),
-    settingOf: (values) => def.settingOf(values as V),
+    settingOf: (values) => def.settingOf?.(values as V) ?? "",
+    duplicateNote: def.duplicateNote
+      ? (values, ctx) => def.duplicateNote!(values as V, ctx)
+      : undefined,
     buildBundle: ({ values, extra, ...ctx }) => def.buildBundle(values as V, extra as X, ctx),
   };
 }
+
+// 病名はオーダーではないが、セットのエントリとして同列に扱う(「この症状ならこの病名で
+// この処方」をひとまとめにする)。入外区分は無いので settingOf を持たない。
+const condition = defineOrderSetType<ConditionFormValues, []>("condition", {
+  label: "病名",
+  renderForm: (props) => (
+    <ConditionForm
+      initialValues={props.initialValues}
+      onSubmit={props.onSubmit}
+      submitting={props.submitting}
+      submitError={props.submitError}
+      bulkStartDate={props.bulkStartDate}
+      setMode={props.setMode}
+      hideSubmit
+      problems={splitConditions(props.conditions ?? []).problems}
+    />
+  ),
+  emptyValues: () => emptyConditionForm(),
+  buildDoValues: (values) => buildDoConditionForm(values),
+  // 同じ病名が継続中なら登録しない(区分は問わない。別区分で重ねたいときは病名タブから)。
+  duplicateNote: (values, { conditions }) => {
+    const found = findActiveSameCondition(values, conditions);
+    if (!found) return null;
+    const { name, startDate } = summarizeCondition(found);
+    return `同じ病名「${name}」が継続中のため登録しません${startDate ? `(開始日 ${startDate})` : ""}。`;
+  },
+  buildBundle: (values, _extra, { patientId, allocateProblemNumber }) => ({
+    bundle: buildConditionBundle(
+      values,
+      patientId,
+      values.category === "problem" ? allocateProblemNumber() : undefined,
+    ),
+    invalidate: [["Condition", "search"]],
+  }),
+});
 
 const prescription = defineOrderSetType<PrescriptionFormValues, []>("prescription", {
   label: "処方",
@@ -354,6 +421,7 @@ const treatmentOrder = defineOrderSetType<
 
 /** 対応済みの種別。未対応の種別はここに無く、登録画面の追加ボタンにも出ない。 */
 export const ORDER_SET_TYPES: Partial<Record<OrderSetOrderType, OrderSetTypeDef>> = {
+  condition,
   prescription,
   injection,
   "lab-order": labOrder,
@@ -369,6 +437,7 @@ export const ORDER_SET_TYPE_ORDER: OrderSetOrderType[] = ORDER_SET_ORDER_TYPES.f
 
 /** 全種別の表示名(未対応の種別も一覧では名前を出す)。 */
 export const ORDER_SET_TYPE_LABELS: Record<OrderSetOrderType, string> = {
+  condition: "病名",
   prescription: "処方",
   injection: "注射",
   "lab-order": "検体検査",

@@ -1,3 +1,4 @@
+import { conditionDisplayName, type ConditionFormValues } from "./conditionHelpers";
 import type { InjectionFormValues } from "./injectionHelpers";
 import type { LabOrderFormValues } from "./labOrderHelpers";
 import type { PhysioOrderFormValues } from "./physioOrderHelpers";
@@ -15,8 +16,12 @@ import type { TreatmentOrderFormValues } from "./treatmentOrderHelpers";
 //   3. 登録したオーダーに「どのセットから出したか」の印を焼くこと(stampOrderSetInstance)
 // の 3 つ。種別ごとのフォーム・builder との対応表は components/orderSetRegistry.tsx。
 
-/** セットに含められるオーダー種別。KartePaneState の種別接頭辞と同じ綴り。 */
+/**
+ * セットに含められるエントリの種別。オーダーは KartePaneState の種別接頭辞と同じ綴り。
+ * condition は病名(Condition)で、オーダーではないがエントリとして同列に扱う。
+ */
 export type OrderSetOrderType =
+  | "condition"
   | "prescription"
   | "injection"
   | "lab-order"
@@ -35,6 +40,7 @@ export type OrderSetOrderType =
   | "nursing-order";
 
 export const ORDER_SET_ORDER_TYPES: readonly OrderSetOrderType[] = [
+  "condition",
   "prescription",
   "injection",
   "lab-order",
@@ -55,6 +61,18 @@ export const ORDER_SET_ORDER_TYPES: readonly OrderSetOrderType[] = [
 
 export function isOrderSetOrderType(value: string): value is OrderSetOrderType {
   return (ORDER_SET_ORDER_TYPES as readonly string[]).includes(value);
+}
+
+/**
+ * 病名はオーダーより上にまとめて出す(「この病名でこのオーダー」と読める並び)。
+ * 保存順は保ったまま病名を先頭に寄せるだけで、病名同士・オーダー同士の順は変えない。
+ * 登録画面はこの並びのまま保存するので、DB の display_order も次の保存で同じ並びになる。
+ */
+export function sortConditionsFirst<T extends { orderType: OrderSetOrderType }>(entries: T[]): T[] {
+  return [
+    ...entries.filter((e) => e.orderType === "condition"),
+    ...entries.filter((e) => e.orderType !== "condition"),
+  ];
 }
 
 /**
@@ -142,10 +160,22 @@ export function orderSetInstanceOf(sr: fhir4.ServiceRequest): string {
  * ・日付・時刻は空にする。読み込み時に buildDoXxxForm が当日で埋めるので、空のまま
  *   画面に出て検証に落ちることはない。
  * ・入外区分・処方区分は残す(「外来の院外処方セット」は種類として意味がある)。
+ * ・病名は開始日・終了日・転帰・親プロブレム・引き継ぎ先を落とす(経過と関連は患者のもの)。
  * ・未対応の種別は対象プロブレムだけ落とす(Phase 2 で種別ごとに足す)。
  */
 export function sanitizeValuesForSet(orderType: OrderSetOrderType, values: unknown): unknown {
   switch (orderType) {
+    case "condition": {
+      const v = values as ConditionFormValues;
+      return {
+        ...v,
+        startDate: "",
+        endDate: "",
+        outcome: "active",
+        parentId: "",
+        succeededByIds: [],
+      } satisfies ConditionFormValues;
+    }
     case "prescription": {
       const v = values as PrescriptionFormValues;
       return {
@@ -244,6 +274,8 @@ function joinNames(names: string[], max = 4): string {
 /** 一覧に出す 1 行の要約(保存時に label へ入れる)。 */
 export function summarizeOrderSetValues(orderType: OrderSetOrderType, values: unknown): string {
   switch (orderType) {
+    case "condition":
+      return conditionDisplayName(values as ConditionFormValues);
     case "prescription":
     case "injection": {
       const v = values as PrescriptionFormValues | InjectionFormValues;

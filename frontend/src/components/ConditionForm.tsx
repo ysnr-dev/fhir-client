@@ -16,6 +16,7 @@ import {
   type DiseaseInputMode,
   type OutcomeCode,
 } from "../fhir/conditionHelpers";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { ErrorBanner } from "./ErrorBanner";
 import { DiseaseSearchModal } from "./DiseaseSearchModal";
 import { ModifierSearchModal } from "./ModifierSearchModal";
@@ -30,6 +31,15 @@ interface ConditionFormProps {
   problems?: fhir4.Condition[];
   /** 編集中のプロブレム自身の id。自分と配下を候補から外すのに使う。 */
   selfId?: string;
+  /**
+   * オーダーセットへの登録(患者なし)。経過(開始日・終了日・転帰)とプロブレムの関連は
+   * 患者のものなので出さず、開始日の検証も外す。
+   */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(オーダーセットが外から一括 submit する)。 */
+  hideSubmit?: boolean;
+  /** セット適用日。変わったときだけ開始日に入れる。 */
+  bulkStartDate?: string;
 }
 
 type ModalState = { kind: "disease" } | { kind: "prefix" } | { kind: "postfix" } | null;
@@ -42,12 +52,16 @@ export function ConditionForm({
   submitLabel = "登録",
   problems = [],
   selfId,
+  setMode = false,
+  hideSubmit = false,
+  bulkStartDate,
 }: ConditionFormProps) {
   const [values, setValues] = useState<ConditionFormValues>(initialValues ?? emptyConditionForm);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
 
   const update = makeFieldUpdater(setValues);
+  useBulkStartDate(bulkStartDate, (date) => update("startDate", date));
 
   // フリー入力では修飾語(疑い病名を含む)を使わないので、切り替えたときに落とす。
   // 残したまま隠すと、画面に出ていない語が病名に付いたまま保存されてしまう。
@@ -98,7 +112,7 @@ export function ConditionForm({
         ? "病名を入力してください。"
         : "病名を選択してください。";
     }
-    if (!values.startDate) return "開始日は必須です。";
+    if (!setMode && !values.startDate) return "開始日は必須です。";
     if (values.endDate && values.endDate < values.startDate) {
       return "終了日は開始日以降の日付を入力してください。";
     }
@@ -307,37 +321,39 @@ export function ConditionForm({
         )}
       </fieldset>
 
-      <fieldset>
-        <legend>経過</legend>
-        <label>
-          開始日
-          <input
-            type="date"
-            value={values.startDate}
-            onChange={(e) => update("startDate", e.target.value)}
-          />
-        </label>
-        <label>
-          終了日
-          <input type="date" value={values.endDate} onChange={(e) => update("endDate", e.target.value)} />
-        </label>
-        <label>
-          転帰区分
-          <select value={values.outcome} onChange={(e) => update("outcome", e.target.value as OutcomeCode)}>
-            {OUTCOME_OPTIONS.map((o) => (
-              <option key={o.code} value={o.code}>
-                {o.display}
-              </option>
-            ))}
-          </select>
-        </label>
-      </fieldset>
+      {!setMode && (
+        <fieldset>
+          <legend>経過</legend>
+          <label>
+            開始日
+            <input
+              type="date"
+              value={values.startDate}
+              onChange={(e) => update("startDate", e.target.value)}
+            />
+          </label>
+          <label>
+            終了日
+            <input type="date" value={values.endDate} onChange={(e) => update("endDate", e.target.value)} />
+          </label>
+          <label>
+            転帰区分
+            <select value={values.outcome} onChange={(e) => update("outcome", e.target.value as OutcomeCode)}>
+              {OUTCOME_OPTIONS.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.display}
+                </option>
+              ))}
+            </select>
+          </label>
+        </fieldset>
+      )}
 
       {/* プロブレム同士の関連。POMR では症状で立てたプロブレムが 1 つの診断に
           まとまったり(統合)、1 つが複数に分かれたり(分割)、下位のプロブレムが
           ぶら下がったりする。統合と分割は「引き継ぎ先」1 つで表す
           (複数の旧が同じ先を指せば統合、1 つの旧が複数を指せば分割)。 */}
-      {values.category === "problem" && (
+      {values.category === "problem" && !setMode && (
         <fieldset>
           <legend>プロブレムの関連</legend>
           <label>
@@ -392,11 +408,13 @@ export function ConditionForm({
         </fieldset>
       )}
 
-      <div className="prescription-form__submit">
-        <button type="submit" disabled={submitting}>
-          {submitting ? "送信中..." : submitLabel}
-        </button>
-      </div>
+      {!hideSubmit && (
+        <div className="prescription-form__submit">
+          <button type="submit" disabled={submitting}>
+            {submitting ? "送信中..." : submitLabel}
+          </button>
+        </div>
+      )}
 
       {modal?.kind === "disease" && (
         <DiseaseSearchModal onSelect={handleDiseaseSelect} onClose={() => setModal(null)} />

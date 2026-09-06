@@ -70,6 +70,16 @@ RSpec.describe "Master::OrderSets", type: :request do
       expect(body["entries"].map { |e| [e["order_type"], e["display_order"]] }).to eq([["prescription", 1], ["lab-order", 2]])
     end
 
+    it "病名(condition)のエントリも同梱して作れる" do
+      post "/master/order_sets",
+           params: { kind: "set", scope: "facility", name: "感冒",
+                     entries: [{ order_type: "condition", label: "感冒", values: { category: "billing", diseaseMode: "master" } },
+                               { order_type: "prescription", values: { rps: [] } }] },
+           as: :json
+      expect(response).to have_http_status(:created)
+      expect(body["entries"].map { |e| [e["order_type"], e["display_order"]] }).to eq([["condition", 1], ["prescription", 2]])
+    end
+
     it "院内共通に owner_id を付けると 422" do
       post "/master/order_sets", params: { kind: "set", scope: "facility", owner_id: "x", name: "A" }, as: :json
       expect(response).to have_http_status(:unprocessable_content)

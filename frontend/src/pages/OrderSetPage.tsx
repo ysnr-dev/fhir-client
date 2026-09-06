@@ -20,6 +20,7 @@ import {
   ORDER_SET_SCHEMA_VERSION,
   isOrderSetOrderType,
   migrateEntryValues,
+  sortConditionsFirst,
   type OrderSetOrderType,
 } from "../fhir/orderSetHelpers";
 import {
@@ -434,6 +435,10 @@ interface LocalEntry {
 
 let nextLocalId = 1;
 
+function isCondition(entry: LocalEntry): boolean {
+  return entry.orderType === "condition";
+}
+
 function SetEditor({
   owner,
   set,
@@ -455,7 +460,7 @@ function SetEditor({
   const [active, setActive] = useState(set?.active ?? true);
   const [error, setError] = useState<string | null>(null);
   const [entries, setEntries] = useState<LocalEntry[]>(() =>
-    (set?.entries ?? []).map((entry) => {
+    sortConditionsFirst((set?.entries ?? []).map((entry) => {
       const orderType = isOrderSetOrderType(entry.order_type) ? entry.order_type : null;
       const def = orderType ? ORDER_SET_TYPES[orderType] : undefined;
       const migrated = orderType
@@ -475,7 +480,7 @@ function SetEditor({
         unsupported,
         collapsed: false,
       };
-    }),
+    })),
   );
 
   const folderOptions = flattenFoldersForSelect(buildOrderSetTree(items, owner.scope, owner.ownerId));
@@ -486,25 +491,34 @@ function SetEditor({
   function addEntry(orderType: OrderSetOrderType) {
     const def = ORDER_SET_TYPES[orderType];
     if (!def) return;
-    setEntries((prev) => [
-      ...prev,
-      {
-        localId: nextLocalId++,
-        orderType,
-        initialValues: def.emptyValues("outpatient"),
-        label: "",
-        raw: null,
-        unsupported: false,
-        collapsed: false,
-      },
-    ]);
+    // 病名は病名の束の末尾(オーダーより上)、オーダーは全体の末尾に足す。
+    setEntries((prev) =>
+      sortConditionsFirst([
+        ...prev,
+        {
+          localId: nextLocalId++,
+          orderType,
+          initialValues: def.emptyValues("outpatient"),
+          label: "",
+          raw: null,
+          unsupported: false,
+          collapsed: false,
+        },
+      ]),
+    );
+  }
+
+  // 病名とオーダーは別の束なので、↑↓で束をまたいで入れ替えない。
+  function canMove(index: number, direction: -1 | 1): boolean {
+    const target = entries[index + direction];
+    return Boolean(target) && isCondition(target) === isCondition(entries[index]);
   }
 
   function moveEntry(index: number, direction: -1 | 1) {
     setEntries((prev) => {
       const next = [...prev];
       const target = next[index + direction];
-      if (!target) return prev;
+      if (!target || isCondition(target) !== isCondition(next[index])) return prev;
       next[index + direction] = next[index];
       next[index] = target;
       return next;
@@ -654,7 +668,7 @@ function SetEditor({
                   <button
                     type="button"
                     aria-label="上へ"
-                    disabled={index === 0 || readOnly}
+                    disabled={!canMove(index, -1) || readOnly}
                     onClick={() => moveEntry(index, -1)}
                   >
                     ↑
@@ -662,7 +676,7 @@ function SetEditor({
                   <button
                     type="button"
                     aria-label="下へ"
-                    disabled={index === entries.length - 1 || readOnly}
+                    disabled={!canMove(index, 1) || readOnly}
                     onClick={() => moveEntry(index, 1)}
                   >
                     ↓

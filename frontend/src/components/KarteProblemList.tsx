@@ -1,4 +1,5 @@
 import {
+  isActiveCondition,
   problemLabel,
   problemParentId,
   problemSucceededByIds,
@@ -32,11 +33,6 @@ const MODE_ITEMS: { mode: KarteProblemMode; label: string }[] = [
   { mode: "dim", label: "関連しない記録を減光" },
   { mode: "filter", label: "関連する記録のみ表示" },
 ];
-
-// 継続(active)以外は解決済み・中止として扱う。
-function isActiveProblem(problem: fhir4.Condition): boolean {
-  return problem.clinicalStatus?.coding?.[0]?.code === "active";
-}
 
 /**
  * 親の直後に下位プロブレムを並べた順序。番号順のままだと親子が離れて読みにくい。
@@ -141,11 +137,11 @@ export function KarteProblemList({
   const ordered = orderByHierarchy(problems);
   const numbersById = new Map(problems.map((p) => [p.id ?? "", problemLabel(p)]));
 
-  const resolvedCount = problems.filter((problem) => !isActiveProblem(problem)).length;
+  const resolvedCount = problems.filter((problem) => !isActiveCondition(problem)).length;
   // 解決済みを隠していても、選択中のものはタイムラインの減光・絞り込みの理由が
   // 分かるよう残す。
   const shownProblems = ordered.filter(
-    (problem) => isActiveProblem(problem) || resolvedVisible || problem.id === selectedId,
+    (problem) => isActiveCondition(problem) || resolvedVisible || problem.id === selectedId,
   );
   const resolvedLabel = resolvedVisible
     ? "解決済みを隠す"
@@ -164,7 +160,7 @@ export function KarteProblemList({
         <ul className="karte-problems__list">
           {shownProblems.map((problem) => {
             const summary = summarizeCondition(problem);
-            const isActive = isActiveProblem(problem);
+            const isActive = isActiveCondition(problem);
             const isSelected = selectedId === summary.id;
             // 下位プロブレムは 1 段下げ、引き継がれたものは行き先を併記する。
             const isChild = Boolean(problemParentId(problem) && numbersById.has(problemParentId(problem) ?? ""));

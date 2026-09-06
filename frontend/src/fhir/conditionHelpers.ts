@@ -180,6 +180,11 @@ export function invalidParentIds(problems: fhir4.Condition[], selfId: string): S
   return problemWithDescendantIds(problems, selfId);
 }
 
+/** 継続中(clinicalStatus = active)か。それ以外は解決済み・中止として扱う。 */
+export function isActiveCondition(condition: fhir4.Condition): boolean {
+  return condition.clinicalStatus?.coding?.[0]?.code === "active";
+}
+
 // 次に採番するプロブレム番号。欠番は再利用しない(番号の指す先を変えないため)。
 export function nextProblemNumber(problems: fhir4.Condition[]): number {
   return problems.reduce((max, c) => Math.max(max, problemNumberOf(c) ?? 0), 0) + 1;
@@ -469,6 +474,57 @@ export function buildCondition(
   if (values.endDate) condition.abatementDateTime = values.endDate;
 
   return condition;
+}
+
+/**
+ * オーダーセットに保存した病名 → 画面に出すフォーム値(DO と同じ正規化)。
+ * 保存値は開始日・転帰・関連を持たないので、開始日を当日・転帰を継続で埋める。
+ */
+export function buildDoConditionForm(values: ConditionFormValues): ConditionFormValues {
+  return {
+    ...values,
+    startDate: today(),
+    endDate: "",
+    outcome: "active",
+    parentId: "",
+    succeededByIds: [],
+  };
+}
+
+/**
+ * フォーム値と同じ病名で継続中の既存 Condition。オーダーセットの適用で、既に付いている
+ * 病名を二重に登録しないために使う。「同じ病名」は接頭語+病名+接尾語の表示名
+ * (code.text)の完全一致(修飾語違い・「の疑い」付きは別の病名)。区分は問わない。
+ */
+export function findActiveSameCondition(
+  values: ConditionFormValues,
+  conditions: fhir4.Condition[],
+): fhir4.Condition | undefined {
+  const name = conditionDisplayName(values);
+  if (!name) return undefined;
+  return conditions.find((c) => isActiveCondition(c) && summarizeCondition(c).name === name);
+}
+
+/**
+ * 病名 1 件の新規登録を transaction Bundle にしたもの。オーダーセットの適用が他種別の
+ * Bundle と 1 本にまとめて POST する(病名タブからの単独登録は createResource のまま)。
+ */
+export function buildConditionBundle(
+  values: ConditionFormValues,
+  patientId: string,
+  problemNumber?: number,
+): fhir4.Bundle {
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [
+      {
+        fullUrl: `urn:uuid:${crypto.randomUUID()}`,
+        resource: buildCondition(values, patientId, undefined, problemNumber),
+        request: { method: "POST", url: "Condition" },
+      },
+    ],
+  };
 }
 
 // ---- 一覧・詳細表示のための parse ----
