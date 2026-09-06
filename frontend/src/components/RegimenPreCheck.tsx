@@ -1,4 +1,5 @@
 import type { RegimenDetail } from "../api/masterClient";
+import { adverseEventLabel, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import type { BodyChange, LabCheckSummary, LabCriterionCheck } from "../fhir/regimenCheckHelpers";
 import { LAB_RESULT_STALE_DAYS } from "../fhir/regimenCheckHelpers";
 import {
@@ -183,5 +184,28 @@ export function RegimenBodyChange({
         </span>
       )}
     </div>
+  );
+}
+
+/** 前クールの有害事象(次クール登録で減量・継続の判断材料にする。§7.6 C-3)。 */
+export function RegimenPreviousAdverseEvents({ cycle, records }: { cycle: number; records: AdverseEventRecord[] }) {
+  if (records.length === 0) return null;
+  return (
+    <fieldset className="regimen-apply__fields">
+      <legend>第 {cycle} クールの有害事象</legend>
+      <ul className="regimen-adverse__list regimen-adverse__list--compact">
+        {records.map((r) => (
+          <li key={r.id} className="regimen-adverse__item">
+            <span className={`regimen-adverse__grade regimen-adverse__grade--${r.grade}`}>G{r.grade}</span>
+            <span className="regimen-adverse__term">{adverseEventLabel(r).replace(/ G\d$/, "")}</span>
+            <span className="regimen-adverse__period">
+              {r.onset}
+              {r.resolved ? ` 〜 ${r.resolved}` : " 〜（継続中）"}
+            </span>
+            {r.note && <span className="regimen-adverse__note">{r.note}</span>}
+          </li>
+        ))}
+      </ul>
+    </fieldset>
   );
 }

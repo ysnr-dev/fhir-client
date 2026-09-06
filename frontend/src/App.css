@@ -13813,3 +13813,91 @@ button.chemo-calendar__cell[draggable="true"] {
   font-size: 11px;
   opacity: 0.7;
 }
+
+/* 有害事象(CTCAE Grade)。Grade は色で読む(1〜2 は控えめ、3 以上は赤)。 */
+.regimen-adverse__list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.regimen-adverse__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.regimen-adverse__item--editing {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.regimen-adverse__list--compact .regimen-adverse__item {
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.regimen-adverse__grade {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.regimen-adverse__grade--3,
+.regimen-adverse__grade--4,
+.regimen-adverse__grade--5 {
+  color: var(--danger, #c0392b);
+  border-color: var(--danger, #c0392b);
+}
+
+.regimen-adverse__term {
+  font-weight: 600;
+}
+
+.regimen-adverse__period {
+  font-size: 12px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.regimen-adverse__note {
+  flex-basis: 100%;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.regimen-adverse__actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.regimen-adverse__ongoing {
+  margin-left: 3px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+/* レジメン詳細のクール一覧の有害事象列。ラベルを並べ、末尾に記録の入口。 */
+.regimen-detail__adverse {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.regimen-detail__adverse .regimen-adverse__grade {
+  font-weight: 500;
+}

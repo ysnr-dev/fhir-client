@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useUpdateRegimenStatus } from "../api/queries";
+import { adverseEventLabel, adverseEventsOf, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import {
   cycleProgressOf,
   cycleStartDates,
@@ -29,6 +30,10 @@ interface RegimenDetailViewProps {
   onOpenDay: (date: string) => void;
   /** 次クールの登録を右ペインで開く。 */
   onAddCycle: () => void;
+  /** 患者の有害事象(適用で絞る前)。 */
+  adverseEvents: AdverseEventRecord[];
+  /** クールの有害事象の記録を右ペインで開く。 */
+  onOpenAdverseEvents: (cycle: number) => void;
 }
 
 function progressLabel(p: CycleProgress | undefined): string {
@@ -46,6 +51,8 @@ export function RegimenDetailView({
   error,
   onOpenDay,
   onAddCycle,
+  adverseEvents,
+  onOpenAdverseEvents,
 }: RegimenDetailViewProps) {
   const updateStatus = useUpdateRegimenStatus();
   const [revoking, setRevoking] = useState(false);
@@ -140,6 +147,7 @@ export function RegimenDetailView({
             <th className="rad-item__compact">Day 1</th>
             <th className="rad-item__compact">進捗</th>
             <th>投与日</th>
+            <th>有害事象</th>
           </tr>
         </thead>
         <tbody>
@@ -154,7 +162,8 @@ export function RegimenDetailView({
                 <td className={`rad-item__compact regimen-detail__progress${p?.done ? " regimen-detail__progress--done" : ""}`}>
                   {progressLabel(p)}
                 </td>
-                <td className="regimen-detail__days">
+                <td>
+                  <div className="regimen-detail__days">
                   {dates.map((date) => {
                     const statuses = own.filter((o) => o.date === date).map((o) => o.status);
                     const cls = statuses.every((s) => s === "cancelled")
@@ -174,13 +183,38 @@ export function RegimenDetailView({
                       </button>
                     );
                   })}
+                  </div>
+                </td>
+                {/* td 自体を flex にすると table-cell でなくなり罫線がズレるので、中に箱を置く
+                    (投与日の列も同じ)。 */}
+                <td>
+                  <div className="regimen-detail__adverse">
+                  {adverseEventsOf(adverseEvents, application.id, cycle).map((ae) => (
+                    <span
+                      key={ae.id}
+                      className={`regimen-adverse__grade regimen-adverse__grade--${ae.grade}`}
+                      title={ae.note}
+                    >
+                      {adverseEventLabel(ae)}
+                      {!ae.resolved && <span className="regimen-adverse__ongoing">継続</span>}
+                    </span>
+                  ))}
+                  <button
+                    type="button"
+                    className="rp-card__compact-button"
+                    onClick={() => onOpenAdverseEvents(cycle)}
+                    title={`第 ${cycle} クールの有害事象を記録`}
+                  >
+                    記録
+                  </button>
+                  </div>
                 </td>
               </tr>
             );
           })}
           {cycles.length === 0 && (
             <tr>
-              <td colSpan={4} className="master-search__empty">
+              <td colSpan={5} className="master-search__empty">
                 登録されたクールがありません
               </td>
             </tr>

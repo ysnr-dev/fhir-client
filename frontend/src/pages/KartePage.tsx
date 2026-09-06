@@ -750,6 +750,7 @@ export function KartePage() {
           {...props}
           onAddCycle={(regimenSrId) => setPane({ kind: "regimen-cycle", regimenSrId })}
           onOpenDay={(regimenSrId, date) => setPane({ kind: "regimen-day", regimenSrId, date })}
+          onOpenAdverseEvents={(regimenSrId, cycle) => setPane({ kind: "regimen-adverse", regimenSrId, cycle })}
         />
       );
     }

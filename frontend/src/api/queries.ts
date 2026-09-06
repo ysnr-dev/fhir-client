@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { ADVERSE_EVENT_CATEGORY, parseAdverseEvent, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -10125,6 +10126,63 @@ export function useRevokeRegimen() {
         ],
       }),
     onSuccess: () => invalidateRegimen(queryClient),
+  });
+}
+
+// ---- 有害事象(CTCAE Grade。§7.6 C-3) ----
+
+/** 患者の有害事象の記録。適用・クールでの絞り込みは画面側(1 患者で多くても数十件)。 */
+export function useRegimenAdverseEvents(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("category", ADVERSE_EVENT_CATEGORY.code);
+  params.set("_count", "200");
+  params.set("_sort", "-date");
+
+  return useQuery({
+    queryKey: ["Observation", "search", patientId, "adverse-event"],
+    queryFn: async (): Promise<AdverseEventRecord[]> => {
+      const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
+      return (bundle.entry ?? [])
+        .map((e) => e.resource)
+        .filter((r): r is fhir4.Observation => r?.resourceType === "Observation")
+        .map(parseAdverseEvent)
+        .filter((r): r is AdverseEventRecord => r !== null);
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+function invalidateAdverseEvents(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+}
+
+/** 有害事象の登録・更新(id があれば PUT)。楽観ロックは使わない(同時編集する場面がない)。 */
+export function useSaveAdverseEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (observation: fhir4.Observation) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          {
+            resource: observation,
+            request: observation.id
+              ? { method: "PUT", url: `Observation/${observation.id}` }
+              : { method: "POST", url: "Observation" },
+          },
+        ],
+      }),
+    onSuccess: () => invalidateAdverseEvents(queryClient),
+  });
+}
+
+export function useDeleteAdverseEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteResource("Observation", id),
+    onSuccess: () => invalidateAdverseEvents(queryClient),
   });
 }
 

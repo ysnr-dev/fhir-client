@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Regimen, RegimenDetail } from "../api/masterClient";
 import { useApplicableRegimens, useMedicineDoseFactors, useRegimen } from "../api/masterQueries";
-import { useBodyMeasures, useCreatePrescription, usePatient, useRecentLabResults } from "../api/queries";
+import { useBodyMeasures, useCreatePrescription, usePatient, useRecentLabResults, useRegimenAdverseEvents } from "../api/queries";
+import { adverseEventsOf, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import { summarizeBodyMeasures, summarizeRenal } from "../fhir/bodyMeasureHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { calculateAge } from "../fhir/patientHelpers";
@@ -45,7 +46,7 @@ import { useValidationError } from "../hooks/useValidationError";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
-import { RegimenBodyChange, RegimenInfoView, RegimenLabCheck } from "./RegimenPreCheck";
+import { RegimenBodyChange, RegimenInfoView, RegimenLabCheck, RegimenPreviousAdverseEvents } from "./RegimenPreCheck";
 
 // カルテ右ペインの「化学療法」。レジメンを選び、開始日(Day 1)と体格から投与量を
 // 出して、クール単位で注射・処方オーダーに展開して登録する。クールの追加登録も
@@ -201,6 +202,10 @@ export function RegimenCyclePanel({
   onSaved,
 }: RegimenCyclePanelProps) {
   const detail = useRegimen(application.code || null);
+  const adverseEvents = useRegimenAdverseEvents(patientId);
+  const previousAdverse = previousCycle
+    ? adverseEventsOf(adverseEvents.data ?? [], application.id, previousCycle.cycle)
+    : [];
   const create = useCreatePrescription();
   const requester = useOrderContext();
   const defaultSetting = useDefaultOrderSetting(patientId);
@@ -226,6 +231,7 @@ export function RegimenCyclePanel({
         defaultSettingOverride={application.setting || undefined}
         previousBody={{ height: application.height, weight: application.weight, bsa: application.bsa }}
         previousCycle={previousCycle}
+        previousAdverse={previousAdverse}
         submitting={create.isPending}
         submitError={create.error}
         onSubmit={(values) => {
@@ -252,6 +258,8 @@ interface RegimenApplyFormProps {
   previousBody?: { height: number | null; weight: number | null; bsa: number | null };
   /** クール追加では前クールの投与量。既定でこれを引き継ぐ(§7.6 B-2)。 */
   previousCycle?: PreviousCycle | null;
+  /** 前クールの有害事象(減量・継続の判断材料)。 */
+  previousAdverse?: AdverseEventRecord[];
   submitting: boolean;
   submitError: unknown;
   onSubmit: (values: RegimenApplyValues) => void;
@@ -267,6 +275,7 @@ function RegimenApplyForm({
   defaultSettingOverride,
   previousBody,
   previousCycle,
+  previousAdverse = [],
   submitting,
   submitError,
   onSubmit,
@@ -489,6 +498,7 @@ function RegimenApplyForm({
       <ErrorBanner error={submitError ?? labResults.error} />
 
       <RegimenLabCheck checks={checks} summary={checkSummary} />
+      {previousCycle && <RegimenPreviousAdverseEvents cycle={previousCycle.cycle} records={previousAdverse} />}
 
       <fieldset className="regimen-apply__fields">
         <legend>スケジュール</legend>

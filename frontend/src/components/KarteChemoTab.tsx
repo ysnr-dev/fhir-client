@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
-import { usePatientEncounterEvents, useRegimenApplications, useRegimenDayOrders } from "../api/queries";
+import { usePatientEncounterEvents, useRegimenAdverseEvents, useRegimenApplications, useRegimenDayOrders } from "../api/queries";
 import type { EncounterEvent } from "../fhir/encounterHelpers";
 import {
   cycleDayLabel,
@@ -49,6 +49,8 @@ interface KarteChemoTabProps {
   onAddCycle: (regimenSrId: string) => void;
   /** 暦の 1 日(その日のオーダーの操作)を右ペインで開く。 */
   onOpenDay: (regimenSrId: string, date: string) => void;
+  /** クールの有害事象の記録を右ペインで開く。 */
+  onOpenAdverseEvents: (regimenSrId: string, cycle: number) => void;
 }
 
 function calendarDays(month: Date): { date: string; inMonth: boolean; weekday: number }[] {
@@ -88,8 +90,10 @@ export function KarteChemoTab({
   onViewChange,
   onAddCycle,
   onOpenDay,
+  onOpenAdverseEvents,
 }: KarteChemoTabProps) {
   const applications = useRegimenApplications(patientId);
+  const adverseEvents = useRegimenAdverseEvents(patientId);
   const list = applications.data?.applications ?? [];
   // 適用中を先に、同じ状態なら新しい開始日を先に。
   const sorted = useMemo(
@@ -251,8 +255,10 @@ export function KarteChemoTab({
             header={selectedHeader}
             orders={own}
             error={orders.error}
+            adverseEvents={adverseEvents.data ?? []}
             onOpenDay={(date) => onOpenDay(selected.id, date)}
             onAddCycle={() => onAddCycle(selected.id)}
+            onOpenAdverseEvents={(cycle) => onOpenAdverseEvents(selected.id, cycle)}
           />
         ) : (
           <p className="patient-table__empty">適用されたレジメンはありません。右ペインの「化学療法」から始めます。</p>
