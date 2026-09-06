@@ -56,9 +56,9 @@ export const REGIMEN_EXT_URL = "http://fhir-client.local/StructureDefinition/reg
 /** 日オーダーの拡張(どの適用の何クール目の何日目か)。 */
 export const REGIMEN_ORDER_EXT_URL = "http://fhir-client.local/StructureDefinition/regimen-order";
 /**
- * 薬剤 1 件の投与量の拡張(MedicationRequest に付ける)。減量の投与率と、指示の実体である
- * 力価を残す。オーダーに載る `doseQuantity` は製剤数(瓶・錠)なので、次のクールが
- * 「前クールと同じ量で」を再現するには力価と率が要る(§7.6 B-1 / B-2)。
+ * 薬剤 1 件の投与量の拡張(MedicationRequest に付ける)。減量の投与率と、力価・製剤数を
+ * 残す。`doseQuantity` は力価(換算を持たない薬剤は製剤数)なので、次のクールが
+ * 「前クールと同じ量で」を再現するには率と、どちらの単位で出したかが要る(§7.6 B-1 / B-2)。
  */
 export const REGIMEN_DOSE_EXT_URL = "http://fhir-client.local/StructureDefinition/regimen-dose";
 /** ヘッダの instantiatesUri。マスタは backend にあるので FHIR 上は URI で指すだけ。 */
@@ -261,14 +261,20 @@ export function planPacks(plan: RegimenDrugPlan): string {
  * ほどの情報ではない。製剤単位が基準の薬剤(補液)は製剤数そのものが指示なので何も添えない。
  */
 export function planNote(plan: RegimenDrugPlan): string {
-  // 製剤単位が基準の薬剤(補液)は、製剤数と名前(「大塚糖液５％ ２５０ｍＬ」)で足りる。
-  if (plan.drug.dose_basis === "unit") return "";
-  // 減量したときだけ率を添える(「119 mg（80%）」)。基準はレジメンマスタで読めるので
-  // 式は書かないが、標準量でないことは指示そのものなので薬剤部・病棟に伝える。
+  // 減量したときだけ率を添える。基準はレジメンマスタで読めるので式は書かないが、
+  // 標準量でないことは指示そのものなので薬剤部・病棟に伝える。
   const ratio = ratioOf(plan);
   const reduced = canReduceDose(plan.drug) && ratio !== 100 ? `（${ratio}%）` : "";
+  if (plan.input === "amount") {
+    // オーダーには力価が載るので、製剤数の目安を添える(「≒ 1.19 瓶」。払出の当たりになる)。
+    const packs = planPacks(plan);
+    if (packs) return `≒ ${packs} ${plan.packUnit}${reduced}`;
+    // 力価を出せないもの(AUC)は基準をそのまま残す。
+    return `${plan.basis}${reduced}`;
+  }
+  // 製剤数で出す薬剤(換算を持たないもの)。力価の目安があれば添える。
+  if (plan.drug.dose_basis === "unit") return reduced;
   if (plan.amount.trim() !== "") return `${plan.amount} ${plan.unit}${reduced}`;
-  // 力価を出せないもの(AUC)は基準をそのまま残す。
   return `${plan.basis}${reduced}`;
 }
 
@@ -533,14 +539,18 @@ export function validateRegimenApply(values: RegimenApplyValues, regimen: Regime
 
 // ---- FHIR の組み立て ----
 
-function medicineOf(drug: RegimenDrug): Medicine {
+/**
+ * オーダーに載せる薬剤。`unit_name` は**投与量の単位**として `doseQuantity.unit` に写るので、
+ * 力価で出す薬剤は力価の単位(mg)、製剤数で出す薬剤は薬価算定単位(瓶)を入れる。
+ */
+function medicineOf(drug: RegimenDrug, unitName: string | null): Medicine {
   return {
     id: 0,
     medicine_code: drug.medicine_code,
     name: drug.resolved_name ?? drug.medicine_code,
     name_kana: null,
     unit_code: null,
-    unit_name: drug.resolved_unit_name,
+    unit_name: unitName,
     dosage_form: drug.dosage_form,
     injection_volume: null,
     yakka_code: null,
@@ -555,9 +565,11 @@ function medicineOf(drug: RegimenDrug): Medicine {
 
 function medicineLines(plan: RegimenStepPlan): MedicineLineValues[] {
   return plan.drugs.map((d) => ({
-    medicine: medicineOf(d.drug),
-    // 保存は製剤数(注射・処方の既存フォームと同じ単位)。力価は計算根拠としてコメントに残す。
-    dose: planPacks(d),
+    // ［決定］保存は**力価**(148.75 mg)。指示の実体が力価で、カード・実施入力・帳票は
+    // `doseQuantity.unit` を尊重して出す。製剤数は払出で換算マスタから出す
+    // (`doseConversionHelpers`)。換算を持たない薬剤だけ製剤数のまま。
+    medicine: medicineOf(d.drug, d.input === "amount" ? d.unit : d.packUnit),
+    dose: d.input === "amount" ? d.amount : d.packs,
     comment: planNote(d),
   }));
 }
@@ -623,9 +635,8 @@ function regimenOrderExtension(ref: StampRef): fhir4.Extension {
 }
 
 /**
- * 薬剤 1 件の投与量を MedicationRequest に焼く。オーダーに載る `doseQuantity` は製剤数
- * (瓶・錠)なので、次のクールが「前クールと同じ量で」を再現するには力価と率が要る。
- * レジメンマスタの薬剤 id を一緒に持たせて、クールをまたいでも取り違えないようにする。
+ * 薬剤 1 件の投与量を MedicationRequest に焼く。レジメンマスタの薬剤 id を一緒に
+ * 持たせて、クールをまたいでも取り違えないようにする。
  */
 function regimenDoseExtension(plan: RegimenDrugPlan): fhir4.Extension {
   const parts: fhir4.Extension[] = [

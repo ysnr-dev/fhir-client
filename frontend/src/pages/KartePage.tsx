@@ -748,7 +748,6 @@ export function KartePage() {
       return (
         <KarteChemoTab
           {...props}
-          onApply={() => setPane({ kind: "regimen-apply", problem: selectedProblem })}
           onAddCycle={(regimenSrId) => setPane({ kind: "regimen-cycle", regimenSrId })}
           onOpenDay={(regimenSrId, date) => setPane({ kind: "regimen-day", regimenSrId, date })}
         />

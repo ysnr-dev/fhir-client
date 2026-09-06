@@ -1,4 +1,5 @@
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
+import { toPackQuantity, type MedicineDoseConversionMap } from "./doseConversionHelpers";
 import { groupInjectionByRp } from "./injectionHelpers";
 import { buildInjectionTaskUpdate } from "./injectionTaskHelpers";
 import {
@@ -51,6 +52,8 @@ export interface InjectionDispenseLine {
  */
 export function dispenseLinesFromOrder(
   mrs: fhir4.MedicationRequest[],
+  /** 力価で出たオーダー(化学療法)を製剤数に直すための換算マップ。 */
+  conversions?: MedicineDoseConversionMap,
 ): InjectionDispenseLine[] {
   const rps = groupInjectionByRp(mrs);
   const mrByKey = new Map<string, fhir4.MedicationRequest>();
@@ -63,9 +66,15 @@ export function dispenseLinesFromOrder(
     const times = Math.max(1, rp.times.length);
     return rp.medicines.flatMap((med) => {
       const mr = mrByKey.get(`${rp.rpNumber}-${med.orderInRp}`);
-      const medicine = mr ? medicineFromCoding(mr) : null;
-      if (!mr?.id || !medicine) return [];
+      const restored = mr ? medicineFromCoding(mr) : null;
+      if (!mr?.id || !restored) return [];
       const dose = med.dose ?? 0;
+      // 払出は製剤数(瓶・袋)で出す。力価(148.75 mg)で出たオーダーは換算マスタで製剤数に
+      // 直し、単位も薬価算定単位に差し替える(MedicationDispense.quantity.unit になる)。
+      // 換算できなければ数量を空にして手入力してもらう。
+      const pack = dose > 0 ? toPackQuantity(dose, med.unit ?? "", med.code, conversions) : null;
+      const packUnit = pack?.unit ?? conversions?.packUnits.get(med.code) ?? restored.unit_name;
+      const medicine: Medicine = { ...restored, unit_name: packUnit };
       return [
         {
           medicationRequestId: mr.id,
@@ -74,7 +83,7 @@ export function dispenseLinesFromOrder(
           medicine,
           ordered: { code: med.code, name: med.name, dose: med.dose, unit: med.unit },
           times,
-          quantity: dose > 0 ? String(Math.round(dose * times * 1e6) / 1e6) : "",
+          quantity: pack ? String(Math.round(pack.value * times * 1e6) / 1e6) : "",
         },
       ];
     });

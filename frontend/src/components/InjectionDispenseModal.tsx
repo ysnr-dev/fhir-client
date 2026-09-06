@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { Medicine } from "../api/masterClient";
 import { useCurrentPractitioner } from "../api/authQueries";
+import { useMedicineDoseFactors } from "../api/masterQueries";
 import { useRegisterInjectionDispense, type InjectionWorklistRow } from "../api/queries";
 import {
   buildInjectionDispenseBundle,
@@ -39,13 +40,40 @@ interface Props {
 }
 
 export function InjectionDispenseModal({ row, onClose }: Props) {
+  // 力価で出たオーダー(化学療法)を製剤数に直すため、換算マップを読んでから初期値を作る。
+  const codes = useMemo(
+    () => groupInjectionByRp(row.medicationRequests).flatMap((rp) => rp.medicines.map((m) => m.code)),
+    [row.medicationRequests],
+  );
+  const conversions = useMedicineDoseFactors(codes);
+  if (codes.length > 0 && conversions.isPending) {
+    return (
+      <Modal title="払出登録" onClose={onClose} className="modal--wide">
+        <p>読み込み中...</p>
+      </Modal>
+    );
+  }
+  return (
+    <InjectionDispenseForm
+      row={row}
+      initialLines={dispenseLinesFromOrder(row.medicationRequests, conversions.data)}
+      loadError={conversions.error}
+      onClose={onClose}
+    />
+  );
+}
+
+function InjectionDispenseForm({
+  row,
+  initialLines,
+  loadError,
+  onClose,
+}: Props & { initialLines: InjectionDispenseLine[]; loadError: unknown }) {
   const { order, patient } = row;
   const register = useRegisterInjectionDispense();
   const { practitionerId, practitioner } = useCurrentPractitioner();
 
-  const [lines, setLines] = useState<InjectionDispenseLine[]>(() =>
-    dispenseLinesFromOrder(row.medicationRequests),
-  );
+  const [lines, setLines] = useState<InjectionDispenseLine[]>(initialLines);
   const [query, setQuery] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [changingIndex, setChangingIndex] = useState<number | null>(null);
@@ -109,7 +137,7 @@ export function InjectionDispenseModal({ row, onClose }: Props) {
             <p className="error-banner__line error-banner__line--error">{validationError}</p>
           </div>
         )}
-        <ErrorBanner error={register.error} />
+        <ErrorBanner error={register.error ?? loadError} />
 
         <fieldset>
           <legend>注射共通</legend>

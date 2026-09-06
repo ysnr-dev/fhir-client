@@ -318,7 +318,7 @@ function RegimenApplyForm({
       steps: planSteps(
         regimen,
         { bsa, weight: Number(weight) || null },
-        factors.data ?? new Map(),
+        factors.data?.factors ?? new Map(),
         carryOver ? previousCycle?.doses : undefined,
       ),
     });
@@ -387,7 +387,7 @@ function RegimenApplyForm({
             steps: planSteps(
               regimen,
               { bsa: bsaOf(next), weight: Number(next.weight) || null },
-              factors.data ?? new Map(),
+              factors.data?.factors ?? new Map(),
               v.carryOver ? previousCycle?.doses : undefined,
             ),
           }
@@ -405,7 +405,7 @@ function RegimenApplyForm({
             steps: planSteps(
               regimen,
               { bsa: bsaOf(v), weight: Number(v.weight) || null },
-              factors.data ?? new Map(),
+              factors.data?.factors ?? new Map(),
               carryOver ? previousCycle?.doses : undefined,
             ),
           }
@@ -428,7 +428,7 @@ function RegimenApplyForm({
                 drugs: plan.drugs.map((d, di) =>
                   di === drugIndex
                     ? // 入力途中の文字列(空欄・「8」)はそのまま持つ。量は 100% として出す。
-                      { ...planDrugDose(d.drug, body, factors.data ?? new Map(), Number(ratio) || 100), ratio }
+                      { ...planDrugDose(d.drug, body, factors.data?.factors ?? new Map(), Number(ratio) || 100), ratio }
                     : d,
                 ),
               }

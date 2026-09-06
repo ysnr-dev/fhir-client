@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { MedicineDoseConversionMap } from "../fhir/doseConversionHelpers";
 import {
   copyOrderSet,
   createOrderSet,
@@ -665,17 +666,19 @@ export function useMedicineDoseFactors(medicineCodes: string[]) {
 
   return useQuery({
     queryKey: ["master", "medicine_dose_conversions", "all-units", codes],
-    queryFn: async () => {
+    queryFn: async (): Promise<MedicineDoseConversionMap> => {
       const result = await searchMedicineDoseConversions({ medicine_code: codes.join(","), per: 100 });
       const factors = new Map<string, Map<string, number>>();
+      const packUnits = new Map<string, string>();
       for (const row of result.items) {
         const factor = Number(row.factor);
         if (!(factor > 0)) continue;
         const byUnit = factors.get(row.medicine_code) ?? new Map<string, number>();
         byUnit.set(row.from_unit, factor);
         factors.set(row.medicine_code, byUnit);
+        if (row.to_unit) packUnits.set(row.medicine_code, row.to_unit);
       }
-      return factors;
+      return { factors, packUnits };
     },
     staleTime: Infinity,
     enabled: codes.length > 0,

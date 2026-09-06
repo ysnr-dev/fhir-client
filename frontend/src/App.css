@@ -1516,6 +1516,8 @@ fieldset.rp-card {
   flex-direction: row;
   align-items: center;
   gap: 6px;
+  /* 見出し(legend)と同じ大きさ。素のままだと本文サイズで、周りの注記より大きく見える。 */
+  font-size: 13px;
 }
 
 .injection-weekdays {
@@ -13545,13 +13547,6 @@ button.chemo-calendar__cell[draggable="true"] {
   gap: 4px;
 }
 
-.chemo-calendar__kind {
-  font-weight: 600;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 0 3px;
-}
-
 .chemo-calendar__status {
   font-size: 10px;
 }
@@ -13739,4 +13734,9 @@ button.chemo-calendar__cell[draggable="true"] {
 
 .regimen-apply__reason {
   flex: 1 1 100%;
+}
+
+/* 次クールの登録は月送りの行の右端に置く(高さは他のボタンと同じ)。 */
+.chemo-calendar__add-cycle {
+  margin-left: auto;
 }

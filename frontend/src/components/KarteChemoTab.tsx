@@ -5,6 +5,7 @@ import {
   cycleDayLabel,
   cyclePositionOf,
   cycleStartDates,
+  nextCycleOf,
   dayOrderDrugNames,
   dayOrderStepNames,
   regimenDayStatusLabel,
@@ -41,8 +42,6 @@ interface KarteChemoTabProps {
   /** URL から渡される表示。"detail" ならレジメン詳細、空なら暦。 */
   view: string;
   onViewChange: (view: string | null) => void;
-  /** 新しいレジメンの適用を右ペインで開く。 */
-  onApply: () => void;
   /** 次クールの登録を右ペインで開く。 */
   onAddCycle: (regimenSrId: string) => void;
   /** 暦の 1 日(その日のオーダーの操作)を右ペインで開く。 */
@@ -84,7 +83,6 @@ export function KarteChemoTab({
   patientId,
   view,
   onViewChange,
-  onApply,
   onAddCycle,
   onOpenDay,
 }: KarteChemoTabProps) {
@@ -138,6 +136,13 @@ export function KarteChemoTab({
     return map;
   }, [own]);
 
+  // 次に登録するクール(暦のツールバーの登録ボタン)。予定クール数に達したら止める。
+  const nextCycle = selected ? nextCycleOf(selected, own) : { cycle: 1, startDate: "" };
+  const reachedPlanned =
+    selected?.plannedCycles !== null &&
+    selected !== null &&
+    nextCycle.cycle > (selected.plannedCycles ?? 0);
+
   // 休薬期間を暦に出すため、登録済みのクールから「その日がクールのどこか」を引く。
   const cycleStarts = useMemo(() => cycleStartDates(own), [own]);
   const positionOf = (date: string): CyclePosition | null =>
@@ -186,11 +191,6 @@ export function KarteChemoTab({
             ))}
           </div>
         </div>
-        <div className="karte-tabpanel__actions">
-          <button type="button" onClick={onApply}>
-            レジメンを適用
-          </button>
-        </div>
       </div>
 
       <ErrorBanner error={applications.error ?? orders.error ?? events.error} />
@@ -238,7 +238,7 @@ export function KarteChemoTab({
             onAddCycle={() => onAddCycle(selected.id)}
           />
         ) : (
-          <p className="patient-table__empty">適用されたレジメンはありません。「レジメンを適用」から始めます。</p>
+          <p className="patient-table__empty">適用されたレジメンはありません。右ペインの「化学療法」から始めます。</p>
         )
       ) : (
         renderCalendar()
@@ -267,6 +267,18 @@ export function KarteChemoTab({
         >
           今月
         </button>
+        {/* 次クールの登録は暦を見ながら決めるので、月送りと同じ行の右端に置く
+            (レジメン詳細にも同じ入口がある)。 */}
+        {selected && selected.status === "active" && (
+          <button
+            type="button"
+            className="chemo-calendar__add-cycle"
+            onClick={() => onAddCycle(selected.id)}
+            disabled={reachedPlanned}
+          >
+            第 {nextCycle.cycle} クールを登録
+          </button>
+        )}
       </div>
 
       {applications.isPending ? (
@@ -315,7 +327,7 @@ export function KarteChemoTab({
             />
           )}
           {sorted.length === 0 && (
-            <p className="patient-table__empty">適用されたレジメンはありません。「レジメンを適用」から始めます。</p>
+            <p className="patient-table__empty">適用されたレジメンはありません。右ペインの「化学療法」から始めます。</p>
           )}
         </>
       )}
@@ -437,12 +449,12 @@ function ChemoDayCell({
           className={`chemo-calendar__order chemo-calendar__order--${order.status}`}
           title={dayOrderDrugNames(order).join(" / ")}
         >
-          <span className="chemo-calendar__order-head">
-            <span className="chemo-calendar__kind">{order.kind === "injection" ? "注" : "内"}</span>
-            {order.status !== "requested" && (
+          {/* 注射か内服かはマスに出さない(ステップ名で読める)。進捗は依頼済のときだけ省く。 */}
+          {order.status !== "requested" && (
+            <span className="chemo-calendar__order-head">
               <span className="chemo-calendar__status">{regimenDayStatusLabel(order.status)}</span>
-            )}
-          </span>
+            </span>
+          )}
           {/* 薬剤名を並べても幅に収まらないので、医師が組んだ単位であるステップ名を出す。
               縦に伸びすぎないよう 3 つまでで、残りは件数にする。 */}
           {dayOrderStepNames(order)
