@@ -10,6 +10,7 @@ import {
 } from "../components/PatientRowCells";
 import { KARTE_KIND_LABELS, orderKindOf } from "../fhir/karteTimeline";
 import { displayName, patientNumberOf } from "../fhir/patientHelpers";
+import { orderSetOf } from "../fhir/orderSetHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
 import type { PendingApprovalRow } from "../fhir/provenanceHelpers";
 import { orderDay } from "../fhir/shared";
@@ -158,6 +159,10 @@ interface ApprovalRowProps {
 function ApprovalRow({ row, checked, pending, linkState, onToggle, onApprove }: ApprovalRowProps) {
   const order = row.orders[0];
   const kind = orderKindOf(order);
+  // オーダーセットの適用は 1 回の操作で複数種別を登録する(来歴も 1 件)。種別列には
+  // 含まれる種別を重複なく並べ、どのセットから出したかも添える。
+  const kinds = Array.from(new Set(row.orders.map(orderKindOf)));
+  const orderSet = orderSetOf(order);
   const patientId = order.subject?.reference?.split("/").pop() ?? "";
   // 注射の連日オーダーは 1 回の登録で日ごとのヘッダが並ぶ。開始日は最初の日〜最後の日。
   const days = row.orders.map(orderDay).filter(Boolean).sort();
@@ -175,7 +180,10 @@ function ApprovalRow({ row, checked, pending, linkState, onToggle, onApprove }: 
         <PatientKana patient={row.patient} />
       </td>
       <PatientProfileCells patient={row.patient} />
-      <td className="lab-worklist__compact">{kindLabel(kind)}</td>
+      <td className="lab-worklist__compact">
+        {kinds.map(kindLabel).join(" / ")}
+        {orderSet && <span className="order-select__muted">{` セット「${orderSet.name}」`}</span>}
+      </td>
       <td className="lab-worklist__compact">{dayLabel}</td>
       <td className="lab-worklist__compact">{row.activity === "CREATE" ? "登録" : "編集"}</td>
       <td className="lab-worklist__compact">{dateTimeSecondsLabel(row.recorded)}</td>

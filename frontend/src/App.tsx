@@ -59,6 +59,7 @@ import { RehabWorklistPage } from "./pages/RehabWorklistPage";
 import { NutritionGuidanceWorklistPage } from "./pages/NutritionGuidanceWorklistPage";
 import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
 import { OrderApprovalPage } from "./pages/OrderApprovalPage";
+import { OrderSetPage } from "./pages/OrderSetPage";
 import { OrderApprovalNavLink } from "./components/OrderApprovalNavLink";
 import { NursingWorklistPage } from "./pages/NursingWorklistPage";
 import { PathoOrganPage } from "./pages/PathoOrganPage";
@@ -150,6 +151,11 @@ function App() {
             {/* 代行入力されたオーダーを指示医師が確認・承認する画面。承認するのは
                 部門ではなく指示した医師なので診療業務に置く(readme「代行入力の記録と承認」)。 */}
             <OrderApprovalNavLink />
+            {/* よく出すオーダーのひとまとめ(オーダーセット)の登録。出すのは診療科の
+                医師なので部門業務ではなくここに置く(docs/order-set-design.md §1)。 */}
+            <Link to="/order-sets" className="row-menu__item">
+              セット登録
+            </Link>
           </HoverMenu>
           {/* 部門業務は「依頼を受けた側」の画面。診療科がオーダーを出す患者一覧・カルテと、
               マスタメンテの間に置く。放射線以外の部門が増えたらここに並べる。 */}
@@ -513,6 +519,7 @@ function App() {
           />
           <Route path="/consult-worklist" element={<ConsultWorklistPage />} />
           <Route path="/order-approvals" element={<OrderApprovalPage />} />
+          <Route path="/order-sets" element={<OrderSetPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />

@@ -38,6 +38,7 @@ import { scheduleSummary, slotDate, slotTime, today } from "../fhir/scheduleHelp
 import type { SlotSelection } from "../fhir/appointmentHelpers";
 import { AppointmentSlotPicker } from "./AppointmentSlotPicker";
 import { Modal } from "./Modal";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
@@ -91,6 +92,19 @@ interface TreatmentOrderFormProps {
    * 日時の変更を出す(付け替える先の予約が無ければ変えようがない)。
    */
   hasBooking?: boolean;
+  /**
+   * オーダーセットの適用日。外から開始日をまとめて入れるときに渡す(値が変わった
+   * ときだけ反映し、他の入力は保つ)。
+   */
+  bulkStartDate?: string;
+  /**
+   * オーダーセットの内容として入力する(既定は患者に出すオーダー)。患者と日付に
+   * 依存する入力を出さず、その検証も外す。値そのものは既定値のまま残り、保存時に
+   * サニタイザが落とす(fhir/orderSetHelpers.ts)。
+   */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 type ActiveTab = { kind: "layout"; id: number } | { kind: "search" };
@@ -119,6 +133,9 @@ export function TreatmentOrderForm({
   submitLabel = "登録",
   editing = false,
   hasBooking = false,
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: TreatmentOrderFormProps) {
   const [values, setValues] = useState<TreatmentOrderFormValues>(initialValues ?? emptyTreatmentOrderForm);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
@@ -342,6 +359,20 @@ export function TreatmentOrderForm({
     [catalogByCode],
   );
 
+  // セット適用で実施日をまとめて入れる。まとめ枠と単独枠の両方に入れるが、予約する項目は
+  // 予約した枠の日時が正なので動かさない。
+  useBulkStartDate(bulkStartDate, (date) =>
+    setValues((v) => ({
+      ...v,
+      startDate: date,
+      items: v.items.map((line) =>
+        line.parentCode || line.groupable || requiresBooking(line.code)
+          ? line
+          : { ...line, date },
+      ),
+    })),
+  );
+
   // 予約必須の処置は予約した日時に行うものなので、登録と同時に実施済にはできない。
   // 判定はオーダー単位。
   const canPerformNow = useCallback(
@@ -383,11 +414,12 @@ export function TreatmentOrderForm({
 
     const startDate = values.startDate;
 
-    if (groups.some((line) => line.groupable) && !startDate) {
+    // セットの内容としての入力では日付・予約を持たない(適用時に入れる)。
+    if (!setMode && groups.some((line) => line.groupable) && !startDate) {
       setValidationError("実施日を入力してください。");
       return;
     }
-    if (!editing) {
+    if (!editing && !setMode) {
       const soloGroups = groups.filter((line) => !line.groupable);
       const withoutDate = soloGroups.find((line) => !requiresBooking(line.code) && !line.date);
       if (withoutDate) {
@@ -514,14 +546,16 @@ export function TreatmentOrderForm({
 
         <fieldset>
           <legend>処置共通</legend>
-          <label>
-            対象プロブレム
-            <ProblemSelect
-              value={values.problem}
-              options={problemOptions}
-              onChange={(problem) => update("problem", problem)}
-            />
-          </label>
+          {!setMode && (
+            <label>
+              対象プロブレム
+              <ProblemSelect
+                value={values.problem}
+                options={problemOptions}
+                onChange={(problem) => update("problem", problem)}
+              />
+            </label>
+          )}
           <label>
             入外区分
             <select
@@ -599,10 +633,11 @@ export function TreatmentOrderForm({
               オーダー単位の設定なので枠の中に置く。 */}
           {groupedEntries.length > 0 && (
             <OrderFrame
+              setMode={setMode}
               number={groupedEntries.length > 0 && soloEntries.length > 0 ? 1 : undefined}
               onRemove={() => removeCodes(groupedEntries.map((entry) => entry.item.code))}
               perform={
-                editing
+                editing || setMode
                   ? null
                   : {
                       split: splits.find((split) => split.key === "") ?? null,
@@ -644,6 +679,7 @@ export function TreatmentOrderForm({
             return (
               <OrderFrame
                 key={code}
+                setMode={setMode}
                 number={
                   entries.length > 1
                     ? (groupedEntries.length > 0 ? 1 : 0) + index + 1
@@ -651,7 +687,7 @@ export function TreatmentOrderForm({
                 }
                 onRemove={() => remove(code)}
                 perform={
-                  editing
+                  editing || setMode
                     ? null
                     : {
                         split: splits.find((split) => split.key === code) ?? null,
@@ -717,11 +753,13 @@ export function TreatmentOrderForm({
           })}
         </section>
 
-        <div className="prescription-form__submit">
-          <button type="submit" disabled={submitting}>
-            {submitting ? "送信中..." : submitLabel}
-          </button>
-        </div>
+        {!hideSubmit && (
+          <div className="prescription-form__submit">
+            <button type="submit" disabled={submitting}>
+              {submitting ? "送信中..." : submitLabel}
+            </button>
+          </div>
+        )}
       </form>
 
       {/* 実施入力は独自の <form> を持つため、外側フォームの子孫に置かない
@@ -801,12 +839,15 @@ interface FramePerform {
  * オーダー単位の設定を上下に置き、間に GP を並べる。
  */
 function OrderFrame({
+  setMode = false,
   number,
   schedule,
   perform,
   onRemove,
   children,
 }: {
+  /** セットの内容としての入力(日時・予約・即実施は出さない)。 */
+  setMode?: boolean;
   /** オーダーが複数に分かれるときだけ振る通し番号。1 件なら付けない。 */
   number?: number;
   /** 実施日時の入力、または予約の操作。 */
@@ -824,7 +865,7 @@ function OrderFrame({
     <div className="rad-order-frame">
       <div className="rad-order-frame__head">
         {number !== undefined && <span className="rad-order-frame__number">{number}</span>}
-        {schedule}
+        {!setMode && schedule}
         {/* このオーダーを丸ごと外す。GP 単位で外すときは GP の × を使う。 */}
         <button
           type="button"

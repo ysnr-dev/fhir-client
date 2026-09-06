@@ -12469,3 +12469,302 @@ button.meal-calendar__cell:hover {
   align-items: center;
   gap: 10px;
 }
+
+/* ---- オーダーセット(セット登録画面・カルテの適用パネル) ---- */
+
+/* 登録画面はシェーママスタと同じ 2 ペイン。右ペインにオーダーフォームを縦に積むので広めに取る。 */
+.order-set .order-set__tree {
+  flex: 0 0 360px;
+}
+
+/* 追加ボタンは常に見せる(行にポインタを乗せる前に入口が分かるように)。 */
+.order-set__root-actions {
+  opacity: 1;
+}
+
+.order-set__tree-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.order-set__tree-head select {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+/* 追加ボタンは行の右端に寄せる。 */
+.order-set__tree-head .order-set__root-actions {
+  margin-left: auto;
+}
+
+.order-set-tree__row.is-selected {
+  background: var(--accent-bg);
+}
+
+.order-set-tree__row.is-selected .order-set-tree__name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 行の操作ボタン群は普段は薄く、行にポインタが乗ったときに濃くする。 */
+.order-set-tree__row .schema-master__cat-actions {
+  opacity: 0.35;
+}
+
+.order-set-tree__row:hover .schema-master__cat-actions,
+.order-set-tree__row:focus-within .schema-master__cat-actions {
+  opacity: 1;
+}
+
+.order-set__row--inactive .order-set-tree__name {
+  color: var(--text);
+  text-decoration: line-through;
+}
+
+/* セット選択(カルテの適用パネル)。持ち主はタブ、中身はツリー。 */
+.order-set-picker__tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.order-set-picker__tab {
+  padding: 4px 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.order-set-picker__tab:hover {
+  color: var(--accent);
+}
+
+.order-set-picker__tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.order-set-tree,
+.order-set-tree__children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* 入れ子は縦線で親子を示す(字下げだけだと階層が読み取りにくい)。 */
+.order-set-tree__children {
+  margin-left: 9px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+
+.order-set-tree__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 4px;
+}
+
+.order-set-tree__row:hover {
+  background: var(--accent-bg);
+}
+
+.order-set-tree__toggle {
+  flex: none;
+  width: 18px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+/* セット(葉)の位置を、フォルダの開閉ボタンと同じ幅だけ空けて縦にそろえる。 */
+.order-set-tree__leaf {
+  flex: none;
+  width: 18px;
+}
+
+.order-set-tree__leaf::before {
+  content: "・";
+  opacity: 0.6;
+}
+
+.order-set-tree__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  padding: 3px 4px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-set-tree__row--folder .order-set-tree__name {
+  font-weight: 600;
+}
+
+.order-set__empty {
+  margin: 4px 0 0 26px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.order-set__notice {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.order-set-editor__fields {
+  margin-bottom: 12px;
+}
+
+.order-set-editor__add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.order-set-editor__add button {
+  font-size: 13px;
+  padding: 4px 10px;
+}
+
+/* 縦に積んだオーダーフォーム(登録画面・適用パネル共通) */
+.order-set-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.order-set-stack__item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-panel);
+}
+
+.order-set-stack__item--excluded {
+  opacity: 0.6;
+}
+
+.order-set-stack__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-sunken);
+  border-radius: 6px 6px 0 0;
+}
+
+.order-set-stack__include {
+  margin: 0;
+}
+
+.order-set-stack__type {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.order-set-stack__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-set-stack__actions {
+  opacity: 1;
+}
+
+.order-set-stack__body {
+  padding: 8px;
+}
+
+.order-set-stack__body[hidden] {
+  display: none;
+}
+
+.order-set-stack__unsupported {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.order-set-stack__warning {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--warning-text, #8a5a00);
+  background: var(--warning-bg, #fff6e0);
+}
+
+/* 適用日と一括開閉。オーダーの並びの上に置く。ここは .prescription-form の外なので、
+   入力欄の見た目はフォームの規則(:1364)に合わせて自前で当てる。 */
+.order-set-apply__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.order-set-apply__date {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.order-set-apply__date input {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+/* セット選択に戻る。一括開閉の右に置き、同じ大きさにそろえる。 */
+.order-set-apply__back,
+/* 一括開閉は補助的な操作なので、登録ボタンより小さくする。 */
+.order-set-apply__toggle {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+/* 積んだオーダーと登録ボタンの間を空ける(押し間違いを防ぐ)。 */
+.order-set-apply__submit {
+  margin-top: 16px;
+}
+
+/* 右ペインに積んだフォームはペイン幅いっぱいに使う(既定の max-width を外す)。 */
+.karte-right .order-set-stack .prescription-form,
+.order-set-editor .prescription-form {
+  max-width: none;
+}

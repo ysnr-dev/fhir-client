@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_05_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_06_000100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1515,6 +1515,35 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_05_100000) do
     t.datetime "updated_at", null: false
     t.index ["member_item_code"], name: "index_master_treatment_set_items_on_member_item_code"
     t.index ["set_item_code", "member_item_code"], name: "index_treatment_set_items_on_set_and_member", unique: true
+  end
+
+  create_table "order_set_entries", force: :cascade do |t|
+    t.bigint "order_set_id", null: false
+    t.integer "display_order"
+    t.string "order_type", null: false
+    t.string "label"
+    t.jsonb "values", default: {}, null: false
+    t.integer "schema_version", default: 1, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["order_set_id", "display_order"], name: "index_order_set_entries_on_order_set_id_and_display_order"
+  end
+
+  create_table "order_sets", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "kind", null: false
+    t.bigint "parent_id"
+    t.string "scope", null: false
+    t.string "owner_id"
+    t.string "owner_name"
+    t.string "name", null: false
+    t.integer "display_order"
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_order_sets_on_code", unique: true
+    t.index ["parent_id"], name: "index_order_sets_on_parent_id"
+    t.index ["scope", "owner_id", "parent_id"], name: "index_order_sets_on_scope_and_owner_id_and_parent_id"
   end
 
   create_table "questionnaire_categories", force: :cascade do |t|

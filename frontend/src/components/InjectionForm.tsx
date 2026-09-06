@@ -40,6 +40,7 @@ import {
 } from "../fhir/prescriptionHelpers";
 import { presetInjectionUsageType } from "../fhir/usageMapping";
 import { useMedicineMlFactors } from "../api/masterQueries";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
@@ -58,6 +59,19 @@ interface InjectionFormProps {
   submitLabel?: string;
   /** 編集(1 日分を直す)では投与日数を出さない。 */
   mode?: "create" | "edit";
+  /**
+   * オーダーセットの内容として入力する(既定は患者に出すオーダー)。患者と日付に
+   * 依存する入力を出さず、その検証も外す。値そのものは既定値のまま残り、保存時に
+   * サニタイザが落とす(fhir/orderSetHelpers.ts)。
+   */
+  /**
+   * オーダーセットの適用日。外から開始日をまとめて入れるときに渡す(値が変わった
+   * ときだけ反映し、他の入力は保つ)。
+   */
+  bulkStartDate?: string;
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 type ModalState = { kind: "medicine"; rpIndex: number; medIndex: number } | null;
@@ -117,6 +131,9 @@ export function InjectionForm({
   submitError,
   submitLabel = "登録",
   mode = "create",
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: InjectionFormProps) {
   const [values, setValues] = useState<InjectionFormValues>(initialValues ?? emptyInjectionForm);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
@@ -178,6 +195,9 @@ export function InjectionForm({
   }
 
   const update = makeFieldUpdater(setValues);
+
+  // セット適用で注射日をまとめて入れる(終了日も handleStartDate の規則で追従する)。
+  useBulkStartDate(bulkStartDate, (date) => handleStartDate(date));
 
   const weekdays = values.schedule.kind === "weekly" ? values.schedule.days : [];
 
@@ -377,8 +397,9 @@ export function InjectionForm({
   }
 
   function validate(): string | null {
-    if (!values.startDate) return "注射日は必須です。";
-    if (mode === "create") {
+    // セットの内容としての入力では日付・期間を持たない(適用時に入れる)。
+    if (!setMode && !values.startDate) return "注射日は必須です。";
+    if (mode === "create" && !setMode) {
       if (!values.endDate) return "終了日は必須です。";
       if (values.endDate < values.startDate) return "終了日は注射日以降にしてください。";
       if (diffDays(values.startDate, values.endDate) > MAX_INJECTION_SPAN_DAYS) {
@@ -463,14 +484,16 @@ export function InjectionForm({
 
       <fieldset>
         <legend>注射共通</legend>
-        <label>
-          対象プロブレム
-          <ProblemSelect
-            value={values.problem}
-            options={problemOptions}
-            onChange={(problem) => update("problem", problem)}
-          />
-        </label>
+        {!setMode && (
+          <label>
+            対象プロブレム
+            <ProblemSelect
+              value={values.problem}
+              options={problemOptions}
+              onChange={(problem) => update("problem", problem)}
+            />
+          </label>
+        )}
         <label>
           入外区分
           <select
@@ -497,15 +520,17 @@ export function InjectionForm({
               ))}
           </select>
         </label>
-        <label>
-          注射日
-          <input
-            type="date"
-            value={values.startDate}
-            onChange={(e) => handleStartDate(e.target.value)}
-          />
-        </label>
-        {mode === "create" && (
+        {!setMode && (
+          <label>
+            注射日
+            <input
+              type="date"
+              value={values.startDate}
+              onChange={(e) => handleStartDate(e.target.value)}
+            />
+          </label>
+        )}
+        {mode === "create" && !setMode && (
           <>
             <label>
               終了日
@@ -920,11 +945,13 @@ export function InjectionForm({
         </button>
       </div>
 
-      <div className="prescription-form__submit">
-        <button type="submit" disabled={submitting}>
-          {submitting ? "送信中..." : submitLabel}
-        </button>
-      </div>
+      {!hideSubmit && (
+        <div className="prescription-form__submit">
+          <button type="submit" disabled={submitting}>
+            {submitting ? "送信中..." : submitLabel}
+          </button>
+        </div>
+      )}
 
       {modal?.kind === "medicine" && (
         <MedicineSearchModal

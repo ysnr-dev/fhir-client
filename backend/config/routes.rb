@@ -264,5 +264,14 @@ Rails.application.routes.draw do
     # 任意の深さの階層を持つ。
     resources :schema_categories, only: %i[index show create update destroy]
     resources :schemas, only: %i[index show create update destroy]
+    # オーダーセット(よく出すオーダーのひとまとめ)。施設の参照表ではなく現場が
+    # 育てる運用データだが、ログイン認証・CSRF・エラー整形を /master の基底と
+    # 共有するためここに置く(docs/order-set-design.md §1.2)。
+    resources :order_sets, only: %i[index show create update destroy] do
+      member do
+        put :entries
+        post :copy
+      end
+    end
   end
 end

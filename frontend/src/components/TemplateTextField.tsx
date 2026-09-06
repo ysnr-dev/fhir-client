@@ -23,7 +23,8 @@ export function TemplateTextField({
   value: string;
   template: TemplateBinding | null;
   onChange: (value: string) => void;
-  onOpenTemplate: () => void;
+  /** 省略するとテンプレート記入を出さない(オーダーセットの内容としての入力)。 */
+  onOpenTemplate?: () => void;
   onClearTemplate: () => void;
 }) {
   const fromTemplate = Boolean(template);
@@ -41,10 +42,11 @@ export function TemplateTextField({
             fromTemplate ? "テンプレートから記載した内容です。テンプレート編集から直します" : undefined
           }
         />
-        <div className="rad-gp__template-actions">
-          <button
-            type="button"
-            onClick={onOpenTemplate}
+        {onOpenTemplate && (
+          <div className="rad-gp__template-actions">
+            <button
+              type="button"
+              onClick={onOpenTemplate}
             title={fromTemplate ? `${label}をテンプレートから直す` : `${label}をテンプレートから記入`}
           >
             {fromTemplate ? "テンプレート編集" : "テンプレート"}
@@ -58,7 +60,8 @@ export function TemplateTextField({
               解除
             </button>
           )}
-        </div>
+          </div>
+        )}
       </div>
       {/* 記入内容にシェーマ画像があれば、平文の「あり」の印だけでは何を描いたか
           分からないので、入力中もサムネイルを出す(登録後の表示と同じ見せ方)。 */}

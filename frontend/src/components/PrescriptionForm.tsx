@@ -14,6 +14,7 @@ import {
   type RpValues,
 } from "../fhir/prescriptionHelpers";
 import { presetUsageFilters } from "../fhir/usageMapping";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
@@ -30,6 +31,19 @@ interface PrescriptionFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /**
+   * オーダーセットの内容として入力する(既定は患者に出すオーダー)。患者と日付に
+   * 依存する入力を出さず、その検証も外す。値そのものは既定値のまま残り、保存時に
+   * サニタイザが落とす(fhir/orderSetHelpers.ts)。
+   */
+  /**
+   * オーダーセットの適用日。外から開始日をまとめて入れるときに渡す(値が変わった
+   * ときだけ反映し、他の入力は保つ)。
+   */
+  bulkStartDate?: string;
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 type ModalState =
@@ -59,6 +73,9 @@ export function PrescriptionForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: PrescriptionFormProps) {
   const [values, setValues] = useState<PrescriptionFormValues>(initialValues ?? emptyPrescriptionForm);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
@@ -78,6 +95,9 @@ export function PrescriptionForm({
   const allowGeneric = values.setting === "outpatient" && values.category === "external";
 
   const update = makeFieldUpdater(setValues);
+
+  // セット適用で投与開始日をまとめて入れる。
+  useBulkStartDate(bulkStartDate, (date) => update("startDate", date));
 
   function updateRp(rpIndex: number, patch: Partial<RpValues>) {
     setValues((v) => ({
@@ -158,7 +178,8 @@ export function PrescriptionForm({
   }
 
   function validate(): string | null {
-    if (!values.startDate) return "投与開始日は必須です。";
+    // セットの内容としての入力では投与開始日を持たない(適用時に入れる)。
+    if (!setMode && !values.startDate) return "投与開始日は必須です。";
     if (!values.setting) return "入外区分は必須です。";
     if (!values.category) return "処方区分は必須です。";
     if (values.rps.length === 0) return "RPを1件以上登録してください。";
@@ -217,18 +238,20 @@ export function PrescriptionForm({
       )}
       <ErrorBanner error={submitError} />
       {/* 催奇形性・乳汁移行の判断に要るので、妊娠中・授乳中なら入力欄の前に出す。 */}
-      <PregnancyNotice patientId={patientId} />
+      {!setMode && <PregnancyNotice patientId={patientId} />}
 
       <fieldset>
         <legend>処方共通</legend>
-        <label>
-          対象プロブレム
-          <ProblemSelect
-            value={values.problem}
-            options={problemOptions}
-            onChange={(problem) => update("problem", problem)}
-          />
-        </label>
+        {!setMode && (
+          <label>
+            対象プロブレム
+            <ProblemSelect
+              value={values.problem}
+              options={problemOptions}
+              onChange={(problem) => update("problem", problem)}
+            />
+          </label>
+        )}
         <label>
           入外区分
           <select
@@ -255,14 +278,16 @@ export function PrescriptionForm({
               ))}
           </select>
         </label>
-        <label>
-          投与開始日
-          <input
-            type="date"
-            value={values.startDate}
-            onChange={(e) => update("startDate", e.target.value)}
-          />
-        </label>
+        {!setMode && (
+          <label>
+            投与開始日
+            <input
+              type="date"
+              value={values.startDate}
+              onChange={(e) => update("startDate", e.target.value)}
+            />
+          </label>
+        )}
         {commentOpen ? (
           <div className="prescription-form__comment-field">
             <label>
@@ -479,11 +504,13 @@ export function PrescriptionForm({
         </button>
       </div>
 
-      <div className="prescription-form__submit">
-        <button type="submit" disabled={submitting}>
-          {submitting ? "送信中..." : submitLabel}
-        </button>
-      </div>
+      {!hideSubmit && (
+        <div className="prescription-form__submit">
+          <button type="submit" disabled={submitting}>
+            {submitting ? "送信中..." : submitLabel}
+          </button>
+        </div>
+      )}
 
       {modal?.kind === "usage" && (
         <UsageSearchModal

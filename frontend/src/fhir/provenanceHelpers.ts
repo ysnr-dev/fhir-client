@@ -91,7 +91,7 @@ function entryReference(entry: fhir4.BundleEntry): string | undefined {
  * ので、basedOn を持たない ServiceRequest がヘッダ(注射の連日オーダーは日ごとに
  * ヘッダが並ぶ。他科依頼はテンプレート回答の entry がヘッダより前に積まれる)。
  */
-function isHeaderEntry(entry: fhir4.BundleEntry): entry is fhir4.BundleEntry & {
+export function isHeaderEntry(entry: fhir4.BundleEntry): entry is fhir4.BundleEntry & {
   resource: fhir4.ServiceRequest;
 } {
   const resource = entry.resource;

@@ -28,6 +28,7 @@ import {
   QuestionnaireResponseEditPanel,
 } from "./QuestionnaireResponsePanels";
 import { VitalCreatePanel, VitalEditPanel } from "./VitalPanels";
+import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
 
 // カルテ画面の右ペイン。登録・編集 UI は既存ページと共通のパネルを使う。
 
@@ -78,7 +79,9 @@ export type KartePaneState =
   // 予約は枠を押さえるだけで内容の編集は無く、変えられるのは日時(押さえる枠)だけ。
   // 日時変更は予約タブの一覧から開く。
   | { kind: "appointment-create"; problem?: ProblemRef }
-  | { kind: "appointment-reschedule"; appointmentId: string };
+  | { kind: "appointment-reschedule"; appointmentId: string }
+  // オーダーセットの適用。setId 未指定はセット選択の状態(ペイン内のツリーから選ぶ)。
+  | { kind: "order-set"; setId?: number; problem?: ProblemRef };
 
 const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   empty: "",
@@ -122,6 +125,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "qr-edit": "テンプレート編集",
   "appointment-create": "予約登録",
   "appointment-reschedule": "予約の日時変更",
+  "order-set": "セット適用",
 };
 
 // 対象が切り替わったらフォームを作り直すためのキー。各フォームは初期値を useState の
@@ -152,6 +156,9 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.appointmentId}`;
     case "vital-edit":
       return `${state.kind}:${state.entryId}`;
+    // 別のセットを選び直したらフォームを作り直す(初期値は初回描画時のみ反映される)。
+    case "order-set":
+      return `${state.kind}:${state.setId ?? ""}:${state.problem?.conditionId ?? ""}`;
     // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
     // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
     case "prescription-create":
@@ -216,7 +223,12 @@ export function KarteRightPane({
             </div>
             {/* 対象切替でフォームを作り直す(初期値は初回描画時のみ反映されるため)。 */}
             <div key={paneKey(state)}>
-              <PaneContent patientId={patientId} state={state} onSaved={close} />
+              <PaneContent
+                patientId={patientId}
+                state={state}
+                onSaved={close}
+                onStateChange={onStateChange}
+              />
             </div>
           </>
         )}
@@ -247,6 +259,14 @@ export function KarteRightPane({
           onClick={() => onStateChange({ kind: "appointment-create", problem: selectedProblem })}
         >
           予約
+        </button>
+        {/* よく出すオーダーをまとめて出す入口。個別の種別ボタンより前に置く
+            (「セットにあればセット、無ければ個別」の順で探すため)。 */}
+        <button
+          type="button"
+          onClick={() => onStateChange({ kind: "order-set", problem: selectedProblem })}
+        >
+          セット
         </button>
         <button
           type="button"
@@ -359,12 +379,25 @@ function PaneContent({
   patientId,
   state,
   onSaved,
+  onStateChange,
 }: {
   patientId: string;
   state: KartePaneState;
   onSaved: () => void;
+  onStateChange: (state: KartePaneState) => void;
 }) {
   switch (state.kind) {
+    case "order-set":
+      return (
+        <OrderSetApplyPanel
+          patientId={patientId}
+          setId={state.setId}
+          defaultProblem={state.problem}
+          onSelectSet={(setId) => onStateChange({ ...state, setId })}
+          onBack={() => onStateChange({ ...state, setId: undefined })}
+          onSaved={onSaved}
+        />
+      );
     case "note-create":
       return (
         <ClinicalNoteCreatePanel

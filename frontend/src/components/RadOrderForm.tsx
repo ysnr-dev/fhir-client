@@ -48,6 +48,7 @@ import type { SlotSelection } from "../fhir/appointmentHelpers";
 import { AppointmentSlotPicker } from "./AppointmentSlotPicker";
 import { Modal } from "./Modal";
 import { ConditionPickerModal } from "./ConditionPickerModal";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { TemplateEntryModal } from "./TemplateEntryModal";
@@ -104,6 +105,19 @@ interface RadOrderFormProps {
    * 日時の変更を出す(付け替える先の予約が無ければ変えようがない)。
    */
   hasBooking?: boolean;
+  /**
+   * オーダーセットの適用日。外から開始日をまとめて入れるときに渡す(値が変わった
+   * ときだけ反映し、他の入力は保つ)。
+   */
+  bulkStartDate?: string;
+  /**
+   * オーダーセットの内容として入力する(既定は患者に出すオーダー)。患者と日付に
+   * 依存する入力を出さず、その検証も外す。値そのものは既定値のまま残り、保存時に
+   * サニタイザが落とす(fhir/orderSetHelpers.ts)。
+   */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 type ActiveTab = { kind: "layout"; id: number } | { kind: "search" };
@@ -135,6 +149,9 @@ export function RadOrderForm({
   submitLabel = "登録",
   editing = false,
   hasBooking = false,
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: RadOrderFormProps) {
   const [values, setValues] = useState<RadOrderFormValues>(initialValues ?? emptyRadOrderForm);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
@@ -378,6 +395,20 @@ export function RadOrderForm({
     [catalogByCode],
   );
 
+  // セット適用で撮影日をまとめて入れる。まとめ枠と単独枠の両方に入れるが、予約する項目は
+  // 予約した枠の日時が正なので動かさない。
+  useBulkStartDate(bulkStartDate, (date) =>
+    setValues((v) => ({
+      ...v,
+      startDate: date,
+      items: v.items.map((line) =>
+        line.parentCode || line.groupable || requiresBooking(line.code)
+          ? line
+          : { ...line, date },
+      ),
+    })),
+  );
+
   // 予約必須の検査は予約した日時に撮るものなので、登録と同時に実施済にはできない。
   // 至急(予約なしの当日撮影)なら可。判定はオーダー単位。
   const canPerformNow = useCallback(
@@ -427,11 +458,12 @@ export function RadOrderForm({
         : line,
     );
 
-    if (values.priority !== "urgent" && groups.some((line) => line.groupable) && !startDate) {
+    // セットの内容としての入力では日付・予約を持たない(適用時に入れる)。
+    if (!setMode && values.priority !== "urgent" && groups.some((line) => line.groupable) && !startDate) {
       setValidationError("撮影日を入力してください。");
       return;
     }
-    if (!editing) {
+    if (!editing && !setMode) {
       const soloGroups = groups.filter((line) => !line.groupable);
       const withoutDate = soloGroups.find(
         (line) => line.priority !== "urgent" && !requiresBooking(line.code) && !line.date,
@@ -579,18 +611,20 @@ export function RadOrderForm({
         <ErrorBanner error={submitError} />
         <ErrorBanner error={layouts.error ?? setMembers.error ?? catalog.error} />
         {/* 被曝の判断に要るので、妊娠中・授乳中なら入力欄の前に出す。 */}
-        <PregnancyNotice patientId={patientId} />
+        {!setMode && <PregnancyNotice patientId={patientId} />}
 
         <fieldset>
           <legend>検査共通</legend>
-          <label>
-            対象プロブレム
-            <ProblemSelect
-              value={values.problem}
-              options={problemOptions}
-              onChange={(problem) => update("problem", problem)}
-            />
-          </label>
+          {!setMode && (
+            <label>
+              対象プロブレム
+              <ProblemSelect
+                value={values.problem}
+                options={problemOptions}
+                onChange={(problem) => update("problem", problem)}
+              />
+            </label>
+          )}
           <label>
             入外区分
             <select
@@ -671,12 +705,13 @@ export function RadOrderForm({
               オーダー単位の設定なので枠の中に置く。 */}
           {groupedEntries.length > 0 && (
             <OrderFrame
+              setMode={setMode}
               number={groupedEntries.length > 0 && soloEntries.length > 0 ? 1 : undefined}
               priority={values.priority}
               onChangePriority={(priority) => update("priority", priority)}
               onRemove={() => removeCodes(groupedEntries.map((entry) => entry.item.code))}
               perform={
-                editing
+                editing || setMode
                   ? null
                   : {
                       split: splits.find((split) => split.key === "") ?? null,
@@ -701,6 +736,7 @@ export function RadOrderForm({
             >
               {groupedEntries.map((entry, index) => (
                 <GroupEditor
+                  setMode={setMode}
                   key={entry.item.code}
                   entry={entry}
                   number={index + 1}
@@ -723,6 +759,7 @@ export function RadOrderForm({
             return (
               <OrderFrame
                 key={code}
+                setMode={setMode}
                 number={
                   entries.length > 1
                     ? (groupedEntries.length > 0 ? 1 : 0) + index + 1
@@ -732,7 +769,7 @@ export function RadOrderForm({
                 onChangePriority={(priority) => updateItem(code, { priority })}
                 onRemove={() => remove(code)}
                 perform={
-                  editing
+                  editing || setMode
                     ? null
                     : {
                         split: splits.find((split) => split.key === code) ?? null,
@@ -794,6 +831,7 @@ export function RadOrderForm({
                 }
               >
                 <GroupEditor
+                  setMode={setMode}
                   entry={entry}
                   number={1}
                   solo
@@ -807,11 +845,13 @@ export function RadOrderForm({
           })}
         </section>
 
-        <div className="prescription-form__submit">
-          <button type="submit" disabled={submitting}>
-            {submitting ? "送信中..." : submitLabel}
-          </button>
-        </div>
+        {!hideSubmit && (
+          <div className="prescription-form__submit">
+            <button type="submit" disabled={submitting}>
+              {submitting ? "送信中..." : submitLabel}
+            </button>
+          </div>
+        )}
       </form>
 
       {/* モーダル内の QuestionnaireResponseForm は独自の <form> を持つため、
@@ -931,6 +971,7 @@ interface FramePerform {
  * オーダー単位の設定を上下に置き、間に GP を並べる。
  */
 function OrderFrame({
+  setMode = false,
   number,
   priority,
   onChangePriority,
@@ -939,6 +980,8 @@ function OrderFrame({
   onRemove,
   children,
 }: {
+  /** セットの内容としての入力(日時・予約・即実施は出さない)。 */
+  setMode?: boolean;
   /** オーダーが複数に分かれるときだけ振る通し番号。1 件なら付けない。 */
   number?: number;
   priority: RadOrderPriority;
@@ -971,7 +1014,7 @@ function OrderFrame({
             ))}
           </select>
         </label>
-        {schedule}
+        {!setMode && schedule}
         {/* このオーダーを丸ごと外す。GP 単位で外すときは GP の × を使う。 */}
         <button
           type="button"
@@ -1064,6 +1107,7 @@ function FrameDateTime({
 // GP 1 つぶんの確認と記入。セットなら構成する撮影を並べ、依頼病名・検査目的・
 // 特別指示は GP 単位で入力する(FHIR では GP を表す明細に載る)。
 function GroupEditor({
+  setMode = false,
   entry,
   number,
   solo,
@@ -1072,6 +1116,8 @@ function GroupEditor({
   onOpenTemplate,
   onOpenConditionPicker,
 }: {
+  /** セットの内容としての入力(依頼病名の選択とテンプレート記入は出さない)。 */
+  setMode?: boolean;
   entry: RadOrderEntry;
   number: number;
   /** 単独オーダーの項目(登録時にこの GP だけで 1 オーダーになる)。 */
@@ -1125,8 +1171,9 @@ function GroupEditor({
       )}
 
       <div className="rad-gp__fields">
-        <label>
-          依頼病名
+        {!setMode && (
+          <label>
+            依頼病名
           <div className="rad-gp__reason">
             <input
               type="text"
@@ -1151,13 +1198,16 @@ function GroupEditor({
             </div>
           </div>
         </label>
+        )}
 
         <TemplateTextField
           label="検査目的"
           value={item.purpose}
           template={item.purposeTemplate}
           onChange={(purpose) => onChange(item.code, { purpose })}
-          onOpenTemplate={() => onOpenTemplate({ code: item.code, field: "purpose" })}
+          onOpenTemplate={
+            setMode ? undefined : () => onOpenTemplate({ code: item.code, field: "purpose" })
+          }
           onClearTemplate={() => onChange(item.code, { purposeTemplate: null })}
         />
         <TemplateTextField
@@ -1165,7 +1215,9 @@ function GroupEditor({
           value={item.remarks}
           template={item.remarksTemplate}
           onChange={(remarks) => onChange(item.code, { remarks })}
-          onOpenTemplate={() => onOpenTemplate({ code: item.code, field: "remarks" })}
+          onOpenTemplate={
+            setMode ? undefined : () => onOpenTemplate({ code: item.code, field: "remarks" })
+          }
           onClearTemplate={() => onChange(item.code, { remarksTemplate: null })}
         />
       </div>
