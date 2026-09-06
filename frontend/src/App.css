@@ -683,6 +683,20 @@ button:disabled {
   font-size: 14px;
 }
 
+/* 一覧でマウスが乗っている行に色を敷く。どの一覧も列が多く横に長いので、目で
+   追っている行が右端までどう続いているか見失いやすい。一覧の表(.patient-table)と
+   固定列付きの表(.sticky-table)にまとめて当てる。
+   行(tr)ではなくセルに当てるのは、固定列が地の色で塗ってあり行の色がその下に
+   隠れてしまうため。背景色ではなく background-image で薄い色を重ねるのは、
+   固定列の地の色(--bg)や 1 行おきの縞を残したまま同じ濃さにするため。
+   rowspan のセル(入院患者一覧の病室など)は 1 行ぶんの目印にならないので塗らない。
+   マスタ一覧はクリックできる行にだけ色を敷くので、そちらは .master-search__row で
+   別に当てている。 */
+.patient-table tbody tr:hover > td:not([rowspan]),
+.sticky-table tbody tr:hover > td:not([rowspan]) {
+  background-image: linear-gradient(var(--accent-bg), var(--accent-bg));
+}
+
 /* td に display: flex を当てるとテーブルレイアウトから外れて行の下罫線がズレるため、
    table-cell のまま右寄せ+余白で並べる。
    td 付きにしているのは .patient-table td { text-align: left } より詳細度を上げるため。 */
