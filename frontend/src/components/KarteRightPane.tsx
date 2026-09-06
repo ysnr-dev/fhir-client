@@ -30,7 +30,7 @@ import {
 import { VitalCreatePanel, VitalEditPanel } from "./VitalPanels";
 import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
 import { RegimenApplyPanel } from "./RegimenApplyPanel";
-import { RegimenDayPanel, RegimenDetailPanel } from "./RegimenPanels";
+import { RegimenCycleLoader, RegimenDayPanel } from "./RegimenPanels";
 
 // カルテ画面の右ペイン。登録・編集 UI は既存ページと共通のパネルを使う。
 
@@ -86,8 +86,8 @@ export type KartePaneState =
   | { kind: "order-set"; setId?: number; problem?: ProblemRef }
   // 化学療法レジメンの適用。regimenId 未指定はレジメン選択の状態。
   | { kind: "regimen-apply"; regimenId?: number; problem?: ProblemRef }
-  // 適用済みレジメンの詳細(クール一覧・次クール登録・中止)。regimenSrId はヘッダ ServiceRequest。
-  | { kind: "regimen-detail"; regimenSrId: string }
+  // 適用済みレジメンへの次クールの登録。regimenSrId はヘッダ ServiceRequest。
+  | { kind: "regimen-cycle"; regimenSrId: string }
   // 暦の 1 日(その日のオーダーの編集・移動・中止)。
   | { kind: "regimen-day"; regimenSrId: string; date: string };
 
@@ -135,7 +135,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "appointment-reschedule": "予約の日時変更",
   "order-set": "セット適用",
   "regimen-apply": "化学療法(レジメン適用)",
-  "regimen-detail": "化学療法",
+  "regimen-cycle": "化学療法(クール登録)",
   "regimen-day": "化学療法(投与日)",
 };
 
@@ -172,7 +172,7 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.setId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "regimen-apply":
       return `${state.kind}:${state.regimenId ?? ""}:${state.problem?.conditionId ?? ""}`;
-    case "regimen-detail":
+    case "regimen-cycle":
       return `${state.kind}:${state.regimenSrId}`;
     case "regimen-day":
       return `${state.kind}:${state.regimenSrId}:${state.date}`;
@@ -433,15 +433,8 @@ function PaneContent({
           onSaved={onSaved}
         />
       );
-    case "regimen-detail":
-      return (
-        <RegimenDetailPanel
-          patientId={patientId}
-          regimenSrId={state.regimenSrId}
-          onOpenDay={(date) => onStateChange({ kind: "regimen-day", regimenSrId: state.regimenSrId, date })}
-          onSaved={onSaved}
-        />
-      );
+    case "regimen-cycle":
+      return <RegimenCycleLoader patientId={patientId} regimenSrId={state.regimenSrId} onSaved={onSaved} />;
     case "regimen-day":
       return (
         <RegimenDayPanel

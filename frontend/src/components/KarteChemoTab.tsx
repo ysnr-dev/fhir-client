@@ -15,6 +15,7 @@ import {
 } from "../fhir/regimenOrderHelpers";
 import { toDateInput, today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
+import { RegimenDetailView } from "./RegimenDetailView";
 import { RegimenMoveModal } from "./RegimenPanels";
 
 // カルテ画面の「化学療法」タブ。適用中のレジメンの投与スケジュールを月の暦で見る。
@@ -29,12 +30,21 @@ const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 /** 暦の 1 マスに出すステップの上限。 */
 const MAX_STEPS_IN_CELL = 3;
 
+/** 左ペインの中の切り替え。暦と、適用そのものの詳細。 */
+const CHEMO_VIEWS = [
+  { key: "", label: "カレンダー" },
+  { key: "detail", label: "レジメン詳細" },
+] as const;
+
 interface KarteChemoTabProps {
   patientId: string;
+  /** URL から渡される表示。"detail" ならレジメン詳細、空なら暦。 */
+  view: string;
+  onViewChange: (view: string | null) => void;
   /** 新しいレジメンの適用を右ペインで開く。 */
   onApply: () => void;
-  /** 適用の詳細(クール一覧・次クール・中止)を右ペインで開く。 */
-  onOpenRegimen: (regimenSrId: string) => void;
+  /** 次クールの登録を右ペインで開く。 */
+  onAddCycle: (regimenSrId: string) => void;
   /** 暦の 1 日(その日のオーダーの操作)を右ペインで開く。 */
   onOpenDay: (regimenSrId: string, date: string) => void;
 }
@@ -70,7 +80,14 @@ function monthOf(date: string): Date {
   return new Date(y, m - 1, 1);
 }
 
-export function KarteChemoTab({ patientId, onApply, onOpenRegimen, onOpenDay }: KarteChemoTabProps) {
+export function KarteChemoTab({
+  patientId,
+  view,
+  onViewChange,
+  onApply,
+  onAddCycle,
+  onOpenDay,
+}: KarteChemoTabProps) {
   const applications = useRegimenApplications(patientId);
   const list = applications.data?.applications ?? [];
   // 適用中を先に、同じ状態なら新しい開始日を先に。
@@ -95,6 +112,9 @@ export function KarteChemoTab({ patientId, onApply, onOpenRegimen, onOpenDay }: 
     () => (orders.data ?? []).filter((o) => o.ref.regimenSrId === selected?.id),
     [orders.data, selected?.id],
   );
+  // 中止はヘッダの ServiceRequest をそのまま書き換えるので、生のリソースも要る。
+  const selectedHeader = applications.data?.headers.find((h) => h.id === selected?.id) ?? null;
+  const isDetail = view === "detail";
 
   const [month, setMonth] = useState(() => {
     const now = new Date();
@@ -148,7 +168,24 @@ export function KarteChemoTab({ patientId, onApply, onOpenRegimen, onOpenDay }: 
   return (
     <div className="karte-tabpanel">
       <div className="karte-tabpanel__header">
-        <h3>化学療法</h3>
+        <div className="karte-tabpanel__title">
+          <h3>化学療法</h3>
+          {/* 暦と詳細は「その適用を読む」同じ面なので、右ペインに出し分けず左ペインで切り替える。 */}
+          <div className="chemo-views" role="tablist" aria-label="表示">
+            {CHEMO_VIEWS.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                role="tab"
+                aria-selected={view === item.key}
+                className={`chemo-views__tab${view === item.key ? " chemo-views__tab--active" : ""}`}
+                onClick={() => onViewChange(item.key || null)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="karte-tabpanel__actions">
           <button type="button" onClick={onApply}>
             レジメンを適用
@@ -180,19 +217,39 @@ export function KarteChemoTab({ patientId, onApply, onOpenRegimen, onOpenDay }: 
         </div>
       )}
 
-      {selected && (
+      {selected && !isDetail && (
         <div className="chemo-calendar__summary">
           <span>
             開始 {selected.startDate}
             {selected.cycleDays > 0 ? ` · ${selected.cycleDays} 日/クール` : ""}
             {selected.plannedCycles !== null ? ` · 予定 ${selected.plannedCycles} クール` : " · 継続"}
           </span>
-          <button type="button" className="rp-card__compact-button" onClick={() => onOpenRegimen(selected.id)}>
-            詳細・操作
-          </button>
         </div>
       )}
 
+      {isDetail ? (
+        selected && selectedHeader ? (
+          <RegimenDetailView
+            application={selected}
+            header={selectedHeader}
+            orders={own}
+            error={orders.error}
+            onOpenDay={(date) => onOpenDay(selected.id, date)}
+            onAddCycle={() => onAddCycle(selected.id)}
+          />
+        ) : (
+          <p className="patient-table__empty">適用されたレジメンはありません。「レジメンを適用」から始めます。</p>
+        )
+      ) : (
+        renderCalendar()
+      )}
+    </div>
+  );
+
+  /** 暦の本体。表示の切り替えで丸ごと入れ替わる。 */
+  function renderCalendar() {
+    return (
+      <>
       <div className="meal-calendar__toolbar chemo-calendar__toolbar">
         <button type="button" onClick={() => shiftMonth(-1)} aria-label="前の月">
           ‹
@@ -262,8 +319,9 @@ export function KarteChemoTab({ patientId, onApply, onOpenRegimen, onOpenDay }: 
           )}
         </>
       )}
-    </div>
-  );
+      </>
+    );
+  }
 }
 
 function eventsOn(events: EncounterEvent[], date: string): EncounterEvent[] {

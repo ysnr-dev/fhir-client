@@ -13566,3 +13566,30 @@ button.chemo-calendar__cell[draggable="true"] {
   color: var(--text);
   font-size: 10px;
 }
+
+/* 化学療法タブの中の表示切り替え(カレンダー / レジメン詳細)。見出しの右に置く
+   小さめのタブで、適用の選択(.chemo-calendar__regimens)とは段を分ける。 */
+.chemo-views {
+  display: flex;
+  gap: 4px;
+}
+
+.chemo-views__tab {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.chemo-views__tab--active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+/* 左ペインに置くレジメン詳細。右ペインより幅があるので、概要は 2 列で読ませる。 */
+.karte-tabpanel .regimen-detail__summary {
+  grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
+}

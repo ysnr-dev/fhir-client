@@ -742,13 +742,14 @@ export function KartePage() {
         />
       );
     }
-    // 化学療法。暦は表示だけで、適用・次クール・移動・中止は右ペインで行う。
+    // 化学療法。暦とレジメン詳細は左ペインのタブで切り替え、オーダーを作る操作
+    // (適用・次クールの登録)と投与日の操作は右ペインで行う。
     if (key === "chemo") {
       return (
         <KarteChemoTab
-          patientId={patientId}
+          {...props}
           onApply={() => setPane({ kind: "regimen-apply", problem: selectedProblem })}
-          onOpenRegimen={(regimenSrId) => setPane({ kind: "regimen-detail", regimenSrId })}
+          onAddCycle={(regimenSrId) => setPane({ kind: "regimen-cycle", regimenSrId })}
           onOpenDay={(regimenSrId, date) => setPane({ kind: "regimen-day", regimenSrId, date })}
         />
       );

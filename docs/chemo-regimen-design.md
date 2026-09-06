@@ -224,11 +224,17 @@ ServiceRequest + MedicationRequest(日オーダー)  通常の注射・処方そ
     (`cyclePositionOf`)、投与期間(`treatmentDays`)を過ぎた日に「休薬」と薄い地を敷く。投与の無い日でも
     「C1 Day8」を控えめに出すので、クールの周期が面で読める。
   - 押すと右ペインにその日の操作が開く(オーダーのある日だけ)。掴んで別の日に落とすと移動(§7.4)。
-- **右ペイン**: 「化学療法」ボタン → レジメン選択(承認済かつ有効期間内)→ 適用フォーム(`RegimenApplyPanel`)。
+  - ［決定］タブの中を **カレンダー / レジメン詳細** で切り替える(`view` パラメータ。URL に残るのでリロード・共有で戻れる)。
+    暦も詳細も「その適用を読む」ための面なので、右ペインに出し分けず左ペインに並べる。
+    **レジメン詳細**(`RegimenDetailView`)は適用の概要(レジメン・状態・開始日・クール・体格・プロブレム・コメント)と
+    クール一覧(クール / Day 1 / 投与日)で、投与日を押すと右ペインの投与日パネルが開く。左ペインは幅があるので
+    概要は 2 列で読ませる。レジメンの中止もここに置く(確認だけで済む操作で、フォームを持たないため)。
+- **右ペイン**(オーダーを作る・直す操作): 「化学療法」ボタン → レジメン選択(承認済かつ有効期間内)→ 適用フォーム(`RegimenApplyPanel`)。
   投与内容の表は「種類 / 医薬品 / 基準 / 投与量(力価入力 + 製剤数の併記)」の 4 列(§7.2)。算出の式は画面に出さず
   (基準と投与量があれば読めるので冗長)、薬剤コメントにだけ残す。ステップごとに別のテーブルなので、
   `table-layout: fixed` と明示幅でどのステップでも列位置が揃うようにする(処方内容の表と同じ考え方)。
-  暦の「詳細・操作」→ `RegimenDetailPanel`(クール一覧・次クール・レジメン中止)。暦のマス → `RegimenDayPanel`
+  レジメン詳細の「第 N クールを登録」→ `RegimenCycleLoader`(ヘッダの id だけ渡し、何クール目か・Day 1 はそこで出す)。
+  暦のマス → `RegimenDayPanel`
   (その日のオーダー・編集(注射編集 / 処方編集へ)・移動・中止)。暦は表示に徹し、操作は右ペインに集める(食事と同じ)。
   ［決定］投与日パネルのオーダーの中身は、カルテのカードと同じ組み(`.karte-rp` で RP ごとに薬剤 → 用法)にする。
   同じオーダーを 2 か所で違う形に見せない。「反映範囲」の fieldset は素のままだと周りと揃わないので
@@ -254,8 +260,9 @@ ServiceRequest + MedicationRequest(日オーダー)  通常の注射・処方そ
   `fhir/injectionHelpers.ts`(`buildInjectionSingleDayEntries` を公開)、`api/queries.ts`(`useRegimenApplications` /
   `useRegimenDayOrders` / `useUpdateRegimenDayStatus` / `useRevokeRegimen`)、`api/masterQueries.ts`(`useMedicineDoseFactors` /
   `useApplicableRegimens`)、`components/RegimenApplyPanel.tsx`(選択・適用・次クール)、`components/RegimenPanels.tsx`
-  (詳細・投与日)、`components/KarteChemoTab.tsx`(暦)、`KarteRightPane.tsx`(`regimen-apply` / `regimen-detail` / `regimen-day`
-  と「化学療法」ボタン)、`KartePage.tsx` / `karteUrl.ts`(タブ)、`fhir/karteTimeline.ts`(ヘッダを外す・`orderKindOf`)、
+  (クール登録のローダー・投与日・移動の確認)、`components/RegimenDetailView.tsx`(左ペインの詳細)、
+  `components/KarteChemoTab.tsx`(暦とビュー切り替え)、`hooks/useRegimenApplication.ts`(適用と日オーダーの取得)、
+  `KarteRightPane.tsx`(`regimen-apply` / `regimen-cycle` / `regimen-day` と「化学療法」ボタン)、`KartePage.tsx` / `karteUrl.ts`(タブ)、`fhir/karteTimeline.ts`(ヘッダを外す・`orderKindOf`)、
   `KarteTimeline.tsx`(カードの印)、`OrderApprovalPage.tsx`(種別名)、`App.css`
 
 
