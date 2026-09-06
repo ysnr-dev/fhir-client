@@ -808,6 +808,8 @@ function RegimenApplyForm({
                   .join(" · ")}
               </span>
             </div>
+            {/* マスタの投与時注意。同時に開始する組(混注ではない)もここに書いてある。 */}
+            {plan.step.note && <p className="regimen-apply__step-note">{plan.step.note}</p>}
             <table className="master-search__table regimen-apply__drugs">
               <thead>
                 <tr>

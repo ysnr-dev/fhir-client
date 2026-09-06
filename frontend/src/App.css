@@ -14053,3 +14053,10 @@ button.chemo-calendar__cell[draggable="true"] {
   flex: 1 1 auto;
   min-width: 0;
 }
+
+/* 投与ステップの注意書き(マスタの note)。 */
+.regimen-apply__step-note {
+  margin: 2px 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
