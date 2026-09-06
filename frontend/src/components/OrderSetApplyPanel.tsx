@@ -395,7 +395,7 @@ function OrderSetApplyForms({
                 </p>
               )}
               {entry.duplicateNote && (
-                <p className="order-set-stack__warning">{entry.duplicateNote}</p>
+                <p className="order-set-stack__note">{entry.duplicateNote}</p>
               )}
               {/* 除外・折りたたみはアンマウントせず隠すだけ(入力中の値を保つ)。 */}
               <div

@@ -12737,6 +12737,15 @@ button.meal-calendar__cell:hover {
   background: var(--warning-bg, #fff6e0);
 }
 
+/* 「同じ病名が継続中のため登録しません」のような、既に除外済みの理由。警告ではなく
+   控えめな注記にする(除外行は淡色なので、帯にするとそこだけ浮く)。 */
+.order-set-stack__note {
+  margin: 0;
+  padding: 4px 8px 6px 34px;
+  font-size: 12px;
+  color: var(--text);
+}
+
 /* 適用日と一括開閉。オーダーの並びの上に置く。ここは .prescription-form の外なので、
    入力欄の見た目はフォームの規則(:1364)に合わせて自前で当てる。 */
 .order-set-apply__head {
