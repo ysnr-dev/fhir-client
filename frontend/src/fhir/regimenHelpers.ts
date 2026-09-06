@@ -1,4 +1,5 @@
 import type {
+  Medicine,
   RegimenDetail,
   RegimenDoseBasis,
   RegimenDrugRole,
@@ -279,6 +280,65 @@ export function emptyDrugDraft(): RegimenDrugDraft {
     doseMax: "",
     note: "",
   };
+}
+
+/**
+ * 薬効分類番号(薬価基準収載医薬品コードの上 4 桁)から、薬剤の種類と算出基準の既定を決める。
+ * 長い接頭辞から順に見る(2391 は 239 より先)。
+ */
+const ROLE_BY_YAKKO: { prefix: string; role: RegimenDrugRole; basis: RegimenDoseBasis }[] = [
+  // 2391 鎮吐剤(5-HT3 拮抗薬・NK1 拮抗薬)。1 回量が決まっているので固定量。
+  { prefix: "2391", role: "antiemetic", basis: "fixed" },
+  // 245 副腎ホルモン剤(デキサメタゾンなど)。化学療法では制吐の前投薬として使う。
+  { prefix: "245", role: "premedication", basis: "fixed" },
+  // 331 血液代用剤(生理食塩液・リンゲル液)、323 糖類剤、325 たん白アミノ酸製剤。
+  { prefix: "331", role: "fluid", basis: "unit" },
+  { prefix: "323", role: "fluid", basis: "unit" },
+  { prefix: "325", role: "fluid", basis: "unit" },
+  // 42 腫瘍用薬(421 アルキル化剤 / 422 代謝拮抗剤 / 423 抗腫瘍性抗生物質 / 424 植物成分 / 429 その他)。
+  { prefix: "42", role: "anticancer", basis: "bsa" },
+];
+
+/** 輸液バッグ・ボトルか(注射容量 100mL 以上で、袋・瓶・キットの包装)。 */
+function isInfusionFluid(medicine: Medicine): boolean {
+  const volume = Number(medicine.injection_volume ?? "") || 0;
+  const unit = medicine.unit_name ?? "";
+  return volume >= 100 && ["袋", "瓶", "キット"].some((u) => unit.includes(u));
+}
+
+export interface DrugDefaults {
+  drugRole: RegimenDrugRole;
+  doseBasis: RegimenDoseBasis;
+  doseValue: string;
+  doseUnit: string;
+}
+
+/**
+ * レジメンに薬剤を足したときの種類・算出基準の既定。
+ *
+ * ［決定］**薬効分類を先に見る**。以前は「注射容量 100 mL 以上の袋・瓶・キットなら補液、
+ * それ以外は抗がん剤」の推定だけだったので、50 mL の制吐剤バッグが抗がん剤(体表面積あたり)に
+ * なっていた。容量での判定は、薬効分類が分からない薬剤の補助として残す(名称の「点滴静注用」では
+ * 判定しない。レボホリナート点滴静注用のような主薬も点滴になるため)。どちらも後から直せる。
+ */
+export function defaultDrugSettings(medicine: Medicine, usageType: RegimenStepUsageType): DrugDefaults {
+  const fallback: DrugDefaults = { drugRole: "anticancer", doseBasis: "bsa", doseValue: "", doseUnit: "mg" };
+  const asFluid: DrugDefaults = {
+    drugRole: "fluid",
+    doseBasis: "unit",
+    doseValue: "1",
+    doseUnit: medicine.unit_name ?? "",
+  };
+
+  const yakko = medicine.yakko_code || (medicine.yakka_code ?? "").slice(0, 4);
+  const matched = yakko ? ROLE_BY_YAKKO.find((r) => yakko.startsWith(r.prefix)) : undefined;
+  if (matched) {
+    if (matched.basis === "unit") return asFluid;
+    return { drugRole: matched.role, doseBasis: matched.basis, doseValue: "", doseUnit: "mg" };
+  }
+  // 薬効分類が分からない薬剤は、注射のときだけ容量で補液を拾う。
+  if (usageType !== "oral" && isInfusionFluid(medicine)) return asFluid;
+  return fallback;
 }
 
 export function emptyLabCriterionDraft(): RegimenLabCriterionDraft {

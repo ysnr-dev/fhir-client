@@ -24,6 +24,7 @@ import {
   doseUnitSuffix,
   draftFromRegimen,
   emptyAdverseEventDraft,
+  defaultDrugSettings,
   emptyDrugDraft,
   emptyLabCriterionDraft,
   emptyRegimenDraft,
@@ -69,13 +70,6 @@ type Picker =
   | { kind: "usage"; stepKey: number }
   | { kind: "lab"; criterionKey: number }
   | null;
-
-// 輸液バッグ・ボトルか(注射容量 100mL 以上で、袋・瓶・キットの包装)。
-function isInfusionFluid(medicine: Medicine): boolean {
-  const volume = Number(medicine.injection_volume ?? "") || 0;
-  const unit = medicine.unit_name ?? "";
-  return volume >= 100 && ["袋", "瓶", "キット"].some((u) => unit.includes(u));
-}
 
 function moveItem<T>(items: T[], index: number, delta: number): T[] {
   const target = index + delta;
@@ -170,17 +164,9 @@ export function RegimenEditorPage() {
 
   function addMedicine(stepKey: number, medicine: Medicine) {
     const step = draft.steps.find((s) => s.key === stepKey);
-    const drug = emptyDrugDraft();
+    // 種類と算出基準の既定は薬効分類から決める(`defaultDrugSettings`)。どちらも後から直せる。
+    const drug = { ...emptyDrugDraft(), ...defaultDrugSettings(medicine, step?.usageType ?? "drip") };
     drug.medicine = { code: medicine.medicine_code, name: medicine.name, unitName: medicine.unit_name ?? "" };
-    // 輸液(袋・瓶・キットで注射容量 100mL 以上)は補液として製剤単位で 1 つ、それ以外は
-    // 抗がん剤として体表面積あたり mg を既定にする。名称の「点滴静注用」では判定しない
-    // (レボホリナート点滴静注用のような主薬も点滴になるため)。種類も基準も後から直せる。
-    if (step?.usageType !== "oral" && isInfusionFluid(medicine)) {
-      drug.drugRole = "fluid";
-      drug.doseBasis = "unit";
-      drug.doseValue = "1";
-      drug.doseUnit = medicine.unit_name ?? "";
-    }
     setDraft((d) => ({
       ...d,
       steps: d.steps.map((s) => (s.key === stepKey ? { ...s, drugs: [...s.drugs, drug] } : s)),
