@@ -19,6 +19,7 @@ import {
   applyOrderContext,
   buildPrescriptionBundle,
   buildPrescriptionUpdateBundle,
+  ORDER_IN_RP_SYSTEM,
   RP_NUMBER_SYSTEM,
   identifierValue,
   parsePrescriptionForm,
@@ -54,6 +55,12 @@ export const REGIMEN_INSTANCE_SYSTEM = "http://fhir-client.local/Identifier/regi
 export const REGIMEN_EXT_URL = "http://fhir-client.local/StructureDefinition/regimen";
 /** 日オーダーの拡張(どの適用の何クール目の何日目か)。 */
 export const REGIMEN_ORDER_EXT_URL = "http://fhir-client.local/StructureDefinition/regimen-order";
+/**
+ * 薬剤 1 件の投与量の拡張(MedicationRequest に付ける)。減量の投与率と、指示の実体である
+ * 力価を残す。オーダーに載る `doseQuantity` は製剤数(瓶・錠)なので、次のクールが
+ * 「前クールと同じ量で」を再現するには力価と率が要る(§7.6 B-1 / B-2)。
+ */
+export const REGIMEN_DOSE_EXT_URL = "http://fhir-client.local/StructureDefinition/regimen-dose";
 /** ヘッダの instantiatesUri。マスタは backend にあるので FHIR 上は URI で指すだけ。 */
 export const REGIMEN_URI_PREFIX = "http://fhir-client.local/regimen/";
 
@@ -143,6 +150,8 @@ export interface RegimenOrderRef {
   day: number;
   code: string;
   name: string;
+  /** そのクールの減量理由(§7.6 B-1)。減量していなければ空。 */
+  reduction: string;
 }
 
 /** 日オーダー(注射・処方のヘッダ)に焼いてあるレジメンの印。無ければ null。 */
@@ -161,6 +170,7 @@ export function regimenOrderOf(sr: fhir4.ServiceRequest): RegimenOrderRef | null
     day,
     code: ext.extension?.find((e) => e.url === "code")?.valueString ?? "",
     name: ext.extension?.find((e) => e.url === "name")?.valueString ?? "",
+    reduction: ext.extension?.find((e) => e.url === "reduction")?.valueString ?? "",
   };
 }
 
@@ -215,6 +225,25 @@ export interface RegimenDrugPlan {
   basis: string;
   /** 自動で出せなかった理由(手入力を促す)。 */
   manualReason: string;
+  /**
+   * 投与率(%)。減量したときに 100 未満になる(§7.6 B-1)。基準 × 体格 × 率 で力価を出す。
+   * 減量レベル表(レベル × 薬剤 × %)はマスタに持たず、率を直接入れる運用にした。
+   */
+  ratio: string;
+}
+
+/**
+ * 減量(投与率)を入れられる薬剤か。基準から量を出せるものだけで、補液(製剤単位)と
+ * AUC は対象外(補液は減らすものではなく、AUC は Calvert 式の目標値そのものが指示)。
+ */
+export function canReduceDose(drug: RegimenDrug): boolean {
+  return drug.dose_basis === "bsa" || drug.dose_basis === "weight" || drug.dose_basis === "fixed";
+}
+
+/** 投与率(%)。空や不正なら 100。 */
+export function ratioOf(plan: Pick<RegimenDrugPlan, "ratio">): number {
+  const value = Number(plan.ratio);
+  return Number.isFinite(value) && value > 0 ? value : 100;
 }
 
 /** オーダーに載せる製剤数(薬価算定単位)。力価で入れているなら換算して出す。 */
@@ -234,9 +263,13 @@ export function planPacks(plan: RegimenDrugPlan): string {
 export function planNote(plan: RegimenDrugPlan): string {
   // 製剤単位が基準の薬剤(補液)は、製剤数と名前(「大塚糖液５％ ２５０ｍＬ」)で足りる。
   if (plan.drug.dose_basis === "unit") return "";
-  if (plan.amount.trim() !== "") return `${plan.amount} ${plan.unit}`;
+  // 減量したときだけ率を添える(「119 mg（80%）」)。基準はレジメンマスタで読めるので
+  // 式は書かないが、標準量でないことは指示そのものなので薬剤部・病棟に伝える。
+  const ratio = ratioOf(plan);
+  const reduced = canReduceDose(plan.drug) && ratio !== 100 ? `（${ratio}%）` : "";
+  if (plan.amount.trim() !== "") return `${plan.amount} ${plan.unit}${reduced}`;
   // 力価を出せないもの(AUC)は基準をそのまま残す。
-  return plan.basis;
+  return `${plan.basis}${reduced}`;
 }
 
 function round(value: number, digits: number): number {
@@ -274,6 +307,8 @@ export function planDrugDose(
   drug: RegimenDrug,
   body: { bsa: number | null; weight: number | null },
   factors: DoseFactorMap,
+  /** 投与率(%)。減量するときに 100 未満を渡す。 */
+  ratio = 100,
 ): RegimenDrugPlan {
   const unit = drug.dose_unit ?? "";
   const value = drug.dose_value !== null ? Number(drug.dose_value) : null;
@@ -293,6 +328,7 @@ export function planDrugDose(
     capped: false,
     basis: "",
     manualReason: "",
+    ratio: String(canReduceDose(drug) ? ratio : 100),
   };
   const noConversion = `${unit || "力価"} から ${packUnit || "製剤単位"} への換算がありません`;
 
@@ -347,6 +383,13 @@ export function planDrugDose(
       break;
   }
 
+  // 減量(§7.6 B-1)。上限値は「体格から計算しても超えない量」なので、率を掛けた**後**に
+  // 当てる(減量したのに上限で戻る、ということが起きない)。
+  if (canReduceDose(drug) && ratio !== 100) {
+    amount = (amount * ratio) / 100;
+    basis = `${basis} × ${ratio}%`;
+  }
+
   let capped = false;
   if (max !== null && amount > max) {
     amount = max;
@@ -385,7 +428,21 @@ export interface RegimenApplyValues {
   height: string;
   weight: string;
   comment: string;
+  /** 減量した理由(そのクールの日オーダーに焼く)。減量していなければ空。 */
+  reductionReason: string;
+  /** 前クールと同じ量で出しているか(次クール登録のみ。§7.6 B-2)。 */
+  carryOver: boolean;
   steps: RegimenStepPlan[];
+}
+
+/** 前クールの投与量(薬剤 1 件ぶん)。MedicationRequest の拡張から読む。 */
+export interface PreviousDose {
+  ratio: number;
+  /** 力価。製剤数で入れた薬剤は null。 */
+  amount: number | null;
+  unit: string;
+  /** 製剤数(オーダーに載った値)。 */
+  packs: number | null;
 }
 
 /** 入力値から体表面積。 */
@@ -393,16 +450,44 @@ export function bsaOf(values: Pick<RegimenApplyValues, "height" | "weight">): nu
   return bodySurfaceArea(Number(values.height) || null, Number(values.weight) || null);
 }
 
-/** ステップの薬剤をすべて体格から算出し直す。 */
+/**
+ * ステップの薬剤をすべて算出し直す。`previous` を渡すと**前クールと同じ量**で出す
+ * (§7.6 B-2)。渡さなければそのときの体格から出し直す。
+ */
 export function planSteps(
   regimen: RegimenDetail,
   body: { bsa: number | null; weight: number | null },
   factors: DoseFactorMap,
+  previous?: Map<number, PreviousDose>,
 ): RegimenStepPlan[] {
   return regimen.steps.map((step) => ({
     step,
-    drugs: step.drugs.map((drug) => planDrugDose(drug, body, factors)),
+    drugs: step.drugs.map((drug) => {
+      const prev = previous?.get(drug.id);
+      const plan = planDrugDose(drug, body, factors, prev ? prev.ratio : 100);
+      return prev ? carryOverDose(plan, prev) : plan;
+    }),
   }));
+}
+
+/**
+ * 前クールの投与量を写す。率だけでなく**力価そのもの**を引き継ぐ(端数調整や
+ * 手入力をそのまま持ち越すため)。単位が変わっていれば率だけを引き継いで、
+ * 量は今の体格から出した値を残す(単位違いの数字をそのまま入れる方が危ない)。
+ */
+function carryOverDose(plan: RegimenDrugPlan, prev: PreviousDose): RegimenDrugPlan {
+  if (plan.input === "amount") {
+    if (prev.amount === null) return plan;
+    if (prev.unit && plan.unit && prev.unit !== plan.unit) return plan;
+    return { ...plan, amount: fmt(prev.amount) };
+  }
+  if (prev.packs === null) return plan;
+  return { ...plan, packs: fmt(prev.packs) };
+}
+
+/** 標準量から減らした薬剤があるか。減量理由の入力欄を出すかどうかの判定に使う。 */
+export function hasReducedDose(values: Pick<RegimenApplyValues, "steps">): boolean {
+  return values.steps.some((plan) => plan.drugs.some((d) => canReduceDose(d.drug) && ratioOf(d) !== 100));
 }
 
 export function regimenHasInjection(regimen: RegimenDetail): boolean {
@@ -519,6 +604,8 @@ interface StampRef {
   day: number;
   code: string;
   name: string;
+  /** そのクールの減量理由。空なら焼かない。 */
+  reduction: string;
 }
 
 function regimenOrderExtension(ref: StampRef): fhir4.Extension {
@@ -530,8 +617,64 @@ function regimenOrderExtension(ref: StampRef): fhir4.Extension {
       { url: "day", valueInteger: ref.day },
       { url: "code", valueString: ref.code },
       { url: "name", valueString: ref.name },
+      ...(ref.reduction ? [{ url: "reduction", valueString: ref.reduction }] : []),
     ],
   };
+}
+
+/**
+ * 薬剤 1 件の投与量を MedicationRequest に焼く。オーダーに載る `doseQuantity` は製剤数
+ * (瓶・錠)なので、次のクールが「前クールと同じ量で」を再現するには力価と率が要る。
+ * レジメンマスタの薬剤 id を一緒に持たせて、クールをまたいでも取り違えないようにする。
+ */
+function regimenDoseExtension(plan: RegimenDrugPlan): fhir4.Extension {
+  const parts: fhir4.Extension[] = [
+    { url: "drug", valueInteger: plan.drug.id },
+    { url: "ratio", valueDecimal: ratioOf(plan) },
+  ];
+  const amount = Number(plan.amount);
+  if (plan.amount.trim() !== "" && Number.isFinite(amount) && amount > 0) {
+    parts.push({ url: "amount", valueDecimal: amount });
+    if (plan.unit) parts.push({ url: "unit", valueString: plan.unit });
+  }
+  const packs = Number(planPacks(plan));
+  if (Number.isFinite(packs) && packs > 0) parts.push({ url: "packs", valueDecimal: packs });
+  return { url: REGIMEN_DOSE_EXT_URL, extension: parts };
+}
+
+/** 薬剤 1 件の投与量の拡張を読む。レジメンから出たオーダーでなければ null。 */
+export function regimenDoseOf(mr: fhir4.MedicationRequest): (PreviousDose & { drugId: number }) | null {
+  const ext = mr.extension?.find((e) => e.url === REGIMEN_DOSE_EXT_URL);
+  const drugId = ext?.extension?.find((e) => e.url === "drug")?.valueInteger;
+  if (!ext || drugId === undefined) return null;
+  const decimal = (url: string) => ext.extension?.find((e) => e.url === url)?.valueDecimal ?? null;
+  return {
+    drugId,
+    ratio: decimal("ratio") ?? 100,
+    amount: decimal("amount"),
+    unit: ext.extension?.find((e) => e.url === "unit")?.valueString ?? "",
+    packs: decimal("packs"),
+  };
+}
+
+/**
+ * 日オーダーの MedicationRequest に投与量の拡張を焼く。RP 番号と RP 内の順で薬剤に
+ * 引き当てる(`buildCycleEntries` が RP の並びをステップの並びと一致させている)。
+ */
+function stampRegimenDrugs(entries: fhir4.BundleEntry[], plans: RegimenStepPlan[]): fhir4.BundleEntry[] {
+  return entries.map((entry) => {
+    const resource = entry.resource;
+    if (resource?.resourceType !== "MedicationRequest") return entry;
+    const mr = resource as fhir4.MedicationRequest;
+    const rp = Number(identifierValue(mr, RP_NUMBER_SYSTEM) ?? "0");
+    const order = Number(identifierValue(mr, ORDER_IN_RP_SYSTEM) ?? "0");
+    const plan = plans[rp - 1]?.drugs[order - 1];
+    if (!plan) return entry;
+    return {
+      ...entry,
+      resource: { ...mr, extension: [...(mr.extension ?? []), regimenDoseExtension(plan)] },
+    };
+  });
 }
 
 /**
@@ -561,6 +704,41 @@ function stampRegimenOrder(entries: fhir4.BundleEntry[], ref: StampRef): fhir4.B
   });
 }
 
+function rpKeyOf(mr: fhir4.MedicationRequest): string {
+  return `${identifierValue(mr, RP_NUMBER_SYSTEM) ?? ""}:${identifierValue(mr, ORDER_IN_RP_SYSTEM) ?? ""}`;
+}
+
+/**
+ * 移動で MedicationRequest を組み直すときに、投与量の拡張(`regimen-dose`)を写す。
+ * フォーム(`parseInjectionForm`)は拡張を持たないので、写さないと日を動かしただけで
+ * 減量の記録が消える。RP 番号と RP 内の順で引き当てるので、並びに依存しない。
+ */
+function carryRegimenDoses(
+  entries: fhir4.BundleEntry[],
+  originals: fhir4.MedicationRequest[],
+): fhir4.BundleEntry[] {
+  const byKey = new Map<string, fhir4.Extension>();
+  for (const mr of originals) {
+    const ext = mr.extension?.find((e) => e.url === REGIMEN_DOSE_EXT_URL);
+    if (ext) byKey.set(rpKeyOf(mr), ext);
+  }
+  if (byKey.size === 0) return entries;
+  return entries.map((entry) => {
+    const resource = entry.resource;
+    if (resource?.resourceType !== "MedicationRequest") return entry;
+    const mr = resource as fhir4.MedicationRequest;
+    const ext = byKey.get(rpKeyOf(mr));
+    if (!ext) return entry;
+    return {
+      ...entry,
+      resource: {
+        ...mr,
+        extension: [...(mr.extension ?? []).filter((e) => e.url !== REGIMEN_DOSE_EXT_URL), ext],
+      },
+    };
+  });
+}
+
 /**
  * 1 クールぶんの日オーダー。ステップの相対日を Day 1 の実日付から展開し、同じ日の
  * 注射ステップは 1 つの注射オーダー(RP = ステップ)、内服ステップは 1 つの処方にまとめる。
@@ -576,14 +754,16 @@ function buildCycleEntries(
   requester: OrderAttribution,
   authoredOn: string,
 ): fhir4.BundleEntry[] {
-  const injectionByDay = new Map<number, InjectionRpValues[]>();
-  const oralByDay = new Map<number, RpValues[]>();
+  // RP の並び = ステップの並び。投与量の拡張(`stampRegimenDrugs`)がこの順で薬剤に
+  // 引き当てるので、値ではなく plan を積んで順を保つ。
+  const injectionByDay = new Map<number, RegimenStepPlan[]>();
+  const oralByDay = new Map<number, RegimenStepPlan[]>();
   for (const plan of values.steps) {
     for (const day of plan.step.days) {
       if (plan.step.usage_type === "oral") {
-        oralByDay.set(day, [...(oralByDay.get(day) ?? []), oralRpOf(plan)]);
+        oralByDay.set(day, [...(oralByDay.get(day) ?? []), plan]);
       } else {
-        injectionByDay.set(day, [...(injectionByDay.get(day) ?? []), injectionRpOf(plan)]);
+        injectionByDay.set(day, [...(injectionByDay.get(day) ?? []), plan]);
       }
     }
   }
@@ -595,13 +775,15 @@ function buildCycleEntries(
     day,
     code: regimen.regimen_code,
     name: regimen.name,
+    // 出し直して標準量に戻したときは、引き継いだ理由をそのまま焼かない。
+    reduction: hasReducedDose(values) ? values.reductionReason.trim() : "",
   });
   const entries: fhir4.BundleEntry[] = [];
   const days = Array.from(new Set([...injectionByDay.keys(), ...oralByDay.keys()])).sort((a, b) => a - b);
   for (const day of days) {
     const date = addDays(day1, day - 1);
-    const rps = injectionByDay.get(day);
-    if (rps) {
+    const injectionPlans = injectionByDay.get(day);
+    if (injectionPlans) {
       const injection: InjectionFormValues = {
         setting: values.setting,
         category: values.injectionCategory,
@@ -610,25 +792,31 @@ function buildCycleEntries(
         schedule: DAILY_SCHEDULE,
         comment: values.comment,
         problem: values.problem,
-        rps,
+        rps: injectionPlans.map(injectionRpOf),
         series: null,
       };
       entries.push(
-        ...stampRegimenOrder(buildInjectionSingleDayEntries(injection, patientId, requester, authoredOn), ref(day)),
+        ...stampRegimenDrugs(
+          stampRegimenOrder(buildInjectionSingleDayEntries(injection, patientId, requester, authoredOn), ref(day)),
+          injectionPlans,
+        ),
       );
     }
-    const oral = oralByDay.get(day);
-    if (oral) {
+    const oralPlans = oralByDay.get(day);
+    if (oralPlans) {
       const prescription: PrescriptionFormValues = {
         setting: values.setting,
         category: values.prescriptionCategory,
         startDate: date,
         comment: values.comment,
         problem: values.problem,
-        rps: oral,
+        rps: oralPlans.map(oralRpOf),
       };
       entries.push(
-        ...stampRegimenOrder(buildPrescriptionBundle(prescription, patientId, requester).entry ?? [], ref(day)),
+        ...stampRegimenDrugs(
+          stampRegimenOrder(buildPrescriptionBundle(prescription, patientId, requester).entry ?? [], ref(day)),
+          oralPlans,
+        ),
       );
     }
   }
@@ -786,6 +974,43 @@ export function cycleStartDates(orders: RegimenDayOrder[]): Map<number, string> 
   return result;
 }
 
+/** 直前のクールの投与量。次のクールを「前クールと同じ量で」出すために読む(§7.6 B-2)。 */
+export interface PreviousCycle {
+  cycle: number;
+  doses: Map<number, PreviousDose>;
+  /** そのクールの減量理由。 */
+  reduction: string;
+  /** 標準量から減らした薬剤があるか。 */
+  reduced: boolean;
+}
+
+/**
+ * `beforeCycle` より前で最も新しいクールの投与量を集める。同じ薬剤が複数の日に出る
+ * (Day 1, 8, 15)ときは同じ量なので、どの日から読んでも変わらない。
+ */
+export function previousCycleOf(orders: RegimenDayOrder[], beforeCycle: number): PreviousCycle | null {
+  const earlier = orders.filter((o) => o.ref.cycle < beforeCycle);
+  if (earlier.length === 0) return null;
+  const cycle = Math.max(...earlier.map((o) => o.ref.cycle));
+  const doses = new Map<number, PreviousDose>();
+  let reduction = "";
+  for (const order of earlier) {
+    if (order.ref.cycle !== cycle) continue;
+    if (!reduction) reduction = order.ref.reduction;
+    for (const mr of order.medicationRequests) {
+      const dose = regimenDoseOf(mr);
+      if (dose) doses.set(dose.drugId, dose);
+    }
+  }
+  if (doses.size === 0 && !reduction) return null;
+  return {
+    cycle,
+    doses,
+    reduction,
+    reduced: Array.from(doses.values()).some((d) => d.ratio !== 100),
+  };
+}
+
 /** 次に登録するクールの番号と既定の Day 1。 */
 export function nextCycleOf(
   application: RegimenApplication,
@@ -880,6 +1105,7 @@ export function buildRegimenMoveBundle(
       day: order.ref.day,
       code: order.ref.code,
       name: order.ref.name,
+      reduction: order.ref.reduction,
     };
     if (order.kind === "injection") {
       const values = parseInjectionForm(sr, order.medicationRequests);
@@ -890,11 +1116,11 @@ export function buildRegimenMoveBundle(
         mrIds,
         requester,
       );
-      return stampRegimenOrder(bundle.entry ?? [], ref);
+      return carryRegimenDoses(stampRegimenOrder(bundle.entry ?? [], ref), order.medicationRequests);
     }
     const values = parsePrescriptionForm(sr, order.medicationRequests);
     const bundle = buildPrescriptionUpdateBundle({ ...values, startDate: newDate }, patientId, sr, mrIds, requester);
-    return stampRegimenOrder(bundle.entry ?? [], ref);
+    return carryRegimenDoses(stampRegimenOrder(bundle.entry ?? [], ref), order.medicationRequests);
   });
   return { resourceType: "Bundle", type: "transaction", entry: entries };
 }

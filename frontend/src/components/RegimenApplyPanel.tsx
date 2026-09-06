@@ -24,11 +24,15 @@ import {
   bsaOf,
   buildRegimenApplicationBundle,
   buildRegimenCycleBundle,
+  canReduceDose,
+  hasReducedDose,
+  planDrugDose,
   planPacks,
   planSteps,
   regimenHasInjection,
   regimenHasOral,
   validateRegimenApply,
+  type PreviousCycle,
   type RegimenApplication,
   type RegimenApplyValues,
   type RegimenDrugPlan,
@@ -179,11 +183,23 @@ interface RegimenCyclePanelProps {
   application: RegimenApplication;
   cycle: number;
   startDate: string;
+  /** 前クールの投与量(既定でこれを引き継ぐ)。 */
+  previousCycle: PreviousCycle | null;
   onSaved: () => void;
 }
 
-/** 適用済みのレジメンに次のクールを登録する。投与量はいまの体格で出し直す。 */
-export function RegimenCyclePanel({ patientId, application, cycle, startDate, onSaved }: RegimenCyclePanelProps) {
+/**
+ * 適用済みのレジメンに次のクールを登録する。投与量は**前クールと同じ量**が既定で、
+ * 「いまの体格で出し直す」を選べる(§7.6 B-2)。
+ */
+export function RegimenCyclePanel({
+  patientId,
+  application,
+  cycle,
+  startDate,
+  previousCycle,
+  onSaved,
+}: RegimenCyclePanelProps) {
   const detail = useRegimen(application.code || null);
   const create = useCreatePrescription();
   const requester = useOrderContext();
@@ -209,6 +225,7 @@ export function RegimenCyclePanel({ patientId, application, cycle, startDate, on
         defaultProblem={application.problem ?? undefined}
         defaultSettingOverride={application.setting || undefined}
         previousBody={{ height: application.height, weight: application.weight, bsa: application.bsa }}
+        previousCycle={previousCycle}
         submitting={create.isPending}
         submitError={create.error}
         onSubmit={(values) => {
@@ -233,6 +250,8 @@ interface RegimenApplyFormProps {
   defaultSettingOverride?: PrescriptionSetting;
   /** クール追加では前回の投与量を出した体格。体重の変化を出して見直しを促す。 */
   previousBody?: { height: number | null; weight: number | null; bsa: number | null };
+  /** クール追加では前クールの投与量。既定でこれを引き継ぐ(§7.6 B-2)。 */
+  previousCycle?: PreviousCycle | null;
   submitting: boolean;
   submitError: unknown;
   onSubmit: (values: RegimenApplyValues) => void;
@@ -247,6 +266,7 @@ function RegimenApplyForm({
   defaultProblem,
   defaultSettingOverride,
   previousBody,
+  previousCycle,
   submitting,
   submitError,
   onSubmit,
@@ -278,6 +298,9 @@ function RegimenApplyForm({
     const bsa = bsaOf({ height, weight });
     const injectionOptions = setting ? INJECTION_CATEGORY_OPTIONS[setting] : [];
     const prescriptionOptions = setting ? PRESCRIPTION_CATEGORY_OPTIONS[setting] : [];
+    // ［決定］前クールがあれば**既定で引き継ぐ**。2 クール目以降で体格から出し直すと、
+    // 手で入れた減量が黙って標準量に戻る(いちばん危ない側に倒れる)ため。
+    const carryOver = Boolean(previousCycle);
     setValues({
       startDate: defaultStartDate,
       firstCycle,
@@ -290,7 +313,14 @@ function RegimenApplyForm({
       height,
       weight,
       comment: "",
-      steps: planSteps(regimen, { bsa, weight: Number(weight) || null }, factors.data ?? new Map()),
+      reductionReason: previousCycle?.reduction ?? "",
+      carryOver,
+      steps: planSteps(
+        regimen,
+        { bsa, weight: Number(weight) || null },
+        factors.data ?? new Map(),
+        carryOver ? previousCycle?.doses : undefined,
+      ),
     });
   }, [
     values,
@@ -305,6 +335,7 @@ function RegimenApplyForm({
     firstCycle,
     regimen,
     defaultProblem,
+    previousCycle,
   ]);
 
   if (!values) {
@@ -336,13 +367,17 @@ function RegimenApplyForm({
   );
   const checkSummary = summarizeLabChecks(checks);
   const weightChange = previousBody ? compareWeight(previousBody.weight, weightValue) : null;
+  const reduced = hasReducedDose(values);
   const hasInjection = regimenHasInjection(regimen);
   const hasOral = regimenHasOral(regimen);
   const injectionOptions = values.setting ? INJECTION_CATEGORY_OPTIONS[values.setting] : [];
   const prescriptionOptions = values.setting ? PRESCRIPTION_CATEGORY_OPTIONS[values.setting] : [];
   const cycleDays = (regimen.treatment_days ?? 0) + (regimen.rest_days ?? 0);
 
-  /** 身長・体重を変えたら投与量を出し直す(手で直した投与量も上書きされる)。 */
+  /**
+   * 身長・体重を変えたら投与量を出し直す(手で直した投与量も上書きされる)。
+   * 前クールを引き継いでいる間は量を動かさない(体格は体表面積と CCr の表示に効く)。
+   */
   function recalc(next: Pick<RegimenApplyValues, "height" | "weight">) {
     setValues((v) =>
       v
@@ -353,10 +388,54 @@ function RegimenApplyForm({
               regimen,
               { bsa: bsaOf(next), weight: Number(next.weight) || null },
               factors.data ?? new Map(),
+              v.carryOver ? previousCycle?.doses : undefined,
             ),
           }
         : v,
     );
+  }
+
+  /** 前クールと同じ量にする / いまの体格で出し直す(§7.6 B-2)。 */
+  function changeCarryOver(carryOver: boolean) {
+    setValues((v) =>
+      v
+        ? {
+            ...v,
+            carryOver,
+            steps: planSteps(
+              regimen,
+              { bsa: bsaOf(v), weight: Number(v.weight) || null },
+              factors.data ?? new Map(),
+              carryOver ? previousCycle?.doses : undefined,
+            ),
+          }
+        : v,
+    );
+  }
+
+  /** 投与率を変えたら、その薬剤だけ基準 × 体格 × 率 で出し直す。 */
+  function changeRatio(stepIndex: number, drugIndex: number, ratio: string) {
+    setValues((v) => {
+      if (!v) return v;
+      const body = { bsa: bsaOf(v), weight: Number(v.weight) || null };
+      return {
+        ...v,
+        carryOver: false,
+        steps: v.steps.map((plan, si) =>
+          si === stepIndex
+            ? {
+                ...plan,
+                drugs: plan.drugs.map((d, di) =>
+                  di === drugIndex
+                    ? // 入力途中の文字列(空欄・「8」)はそのまま持つ。量は 100% として出す。
+                      { ...planDrugDose(d.drug, body, factors.data ?? new Map(), Number(ratio) || 100), ratio }
+                    : d,
+                ),
+              }
+            : plan,
+        ),
+      };
+    });
   }
 
   function changeSetting(next: PrescriptionSetting) {
@@ -557,6 +636,29 @@ function RegimenApplyForm({
 
       <fieldset className="regimen-apply__fields">
         <legend>投与内容</legend>
+        {previousCycle && (
+          <div className="regimen-apply__carry">
+            <label>
+              <input
+                type="radio"
+                name="regimen-carry-over"
+                checked={values.carryOver}
+                onChange={() => changeCarryOver(true)}
+              />
+              第 {previousCycle.cycle} クールと同じ量
+              {previousCycle.reduced && <span className="regimen-check__verdict--out">減量中</span>}
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="regimen-carry-over"
+                checked={!values.carryOver}
+                onChange={() => changeCarryOver(false)}
+              />
+              いまの体格で出し直す
+            </label>
+          </div>
+        )}
         {values.steps.map((plan, stepIndex) => (
           <section key={plan.step.id} className="regimen-apply__step">
             <div className="regimen-apply__step-head">
@@ -580,7 +682,7 @@ function RegimenApplyForm({
                   <th>種類</th>
                   <th>医薬品</th>
                   <th>基準</th>
-                  <th>投与量</th>
+                  <th>投与率・投与量</th>
                 </tr>
               </thead>
               <tbody>
@@ -600,6 +702,20 @@ function RegimenApplyForm({
                         製剤数(瓶・錠)は換算して下に添える。製剤単位が基準の補液などは
                         製剤数をそのまま入れる。 */}
                     <td>
+                      {canReduceDose(d.drug) && (
+                        <span className="regimen-apply__ratio">
+                          <input
+                            type="number"
+                            step="1"
+                            min="1"
+                            max="100"
+                            className="regimen-editor__num-input"
+                            value={d.ratio}
+                            onChange={(e) => changeRatio(stepIndex, drugIndex, e.target.value)}
+                          />
+                          %
+                        </span>
+                      )}
                       {d.input === "amount" ? (
                         <>
                           <span className="regimen-apply__dose">
@@ -650,6 +766,22 @@ function RegimenApplyForm({
           </section>
         ))}
       </fieldset>
+
+      {reduced && (
+        <fieldset className="regimen-apply__fields">
+          <legend>減量</legend>
+          <div className="lab-order-item__fields">
+            <label className="regimen-apply__reason">
+              減量理由
+              <input
+                type="text"
+                value={values.reductionReason}
+                onChange={(e) => update("reductionReason", e.target.value)}
+              />
+            </label>
+          </div>
+        </fieldset>
+      )}
 
       <div className="lab-order-item__actions">
         <button type="button" onClick={handleSubmit} disabled={submitting}>

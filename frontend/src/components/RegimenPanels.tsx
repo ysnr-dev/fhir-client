@@ -6,6 +6,7 @@ import {
   buildRegimenMoveBundle,
   cycleDayLabel,
   nextCycleOf,
+  previousCycleOf,
   regimenDayStatusLabel,
   type RegimenDayOrder,
 } from "../fhir/regimenOrderHelpers";
@@ -48,6 +49,7 @@ export function RegimenCycleLoader({
         application={application}
         cycle={next.cycle}
         startDate={next.startDate}
+        previousCycle={previousCycleOf(orders, next.cycle)}
         onSaved={onSaved}
       />
     </>

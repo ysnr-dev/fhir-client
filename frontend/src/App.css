@@ -13694,3 +13694,49 @@ button.chemo-calendar__cell[draggable="true"] {
   margin-left: 4px;
   opacity: 0.7;
 }
+
+/* 減量(投与率)。投与量の欄の上に置き、力価と縦に並べる。 */
+.regimen-apply__ratio {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 3px;
+  font-size: 12px;
+}
+
+.regimen-apply__ratio input {
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  width: 56px;
+  height: 26px;
+  box-sizing: border-box;
+}
+
+/* 前クールと同じ量にするかの選択(次クール登録のみ)。 */
+.regimen-apply__carry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.regimen-apply__carry label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.regimen-apply__carry .regimen-check__verdict--out {
+  margin-left: 2px;
+  font-size: 11px;
+}
+
+.regimen-apply__reason {
+  flex: 1 1 100%;
+}
