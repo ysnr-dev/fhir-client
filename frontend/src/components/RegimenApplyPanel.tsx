@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Regimen, RegimenDetail } from "../api/masterClient";
 import { useApplicableRegimens, useMedicineDoseFactors, useRegimen } from "../api/masterQueries";
-import { useBodyMeasures, useCreatePrescription } from "../api/queries";
-import { summarizeBodyMeasures } from "../fhir/bodyMeasureHelpers";
+import { useBodyMeasures, useCreatePrescription, usePatient, useRecentLabResults } from "../api/queries";
+import { summarizeBodyMeasures, summarizeRenal } from "../fhir/bodyMeasureHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
+import { calculateAge } from "../fhir/patientHelpers";
+import { checkLabCriteria, compareWeight, summarizeLabChecks } from "../fhir/regimenCheckHelpers";
 import { CATEGORY_OPTIONS as INJECTION_CATEGORY_OPTIONS } from "../fhir/injectionHelpers";
 import {
   CATEGORY_OPTIONS as PRESCRIPTION_CATEGORY_OPTIONS,
@@ -39,6 +41,7 @@ import { useValidationError } from "../hooks/useValidationError";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
+import { RegimenBodyChange, RegimenInfoView, RegimenLabCheck } from "./RegimenPreCheck";
 
 // カルテ右ペインの「化学療法」。レジメンを選び、開始日(Day 1)と体格から投与量を
 // 出して、クール単位で注射・処方オーダーに展開して登録する。クールの追加登録も
@@ -205,6 +208,7 @@ export function RegimenCyclePanel({ patientId, application, cycle, startDate, on
         defaultStartDate={startDate}
         defaultProblem={application.problem ?? undefined}
         defaultSettingOverride={application.setting || undefined}
+        previousBody={{ height: application.height, weight: application.weight, bsa: application.bsa }}
         submitting={create.isPending}
         submitError={create.error}
         onSubmit={(values) => {
@@ -227,6 +231,8 @@ interface RegimenApplyFormProps {
   defaultProblem?: ProblemRef;
   /** クール追加では最初の適用の入外区分を既定にする。 */
   defaultSettingOverride?: PrescriptionSetting;
+  /** クール追加では前回の投与量を出した体格。体重の変化を出して見直しを促す。 */
+  previousBody?: { height: number | null; weight: number | null; bsa: number | null };
   submitting: boolean;
   submitError: unknown;
   onSubmit: (values: RegimenApplyValues) => void;
@@ -240,6 +246,7 @@ function RegimenApplyForm({
   defaultStartDate,
   defaultProblem,
   defaultSettingOverride,
+  previousBody,
   submitting,
   submitError,
   onSubmit,
@@ -249,6 +256,9 @@ function RegimenApplyForm({
   const codes = useMemo(() => regimen.steps.flatMap((s) => s.drugs.map((d) => d.medicine_code)), [regimen]);
   const factors = useMedicineDoseFactors(codes);
   const problems = useProblemOptions(patientId);
+  // 投与前チェック(§7.6 A-1)。CCr は年齢・性別と、この画面で直した体重から出す。
+  const labResults = useRecentLabResults(patientId);
+  const patient = usePatient(patientId).data?.data;
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
 
   const measures = useMemo(() => summarizeBodyMeasures(body.observations), [body.observations]);
@@ -307,6 +317,25 @@ function RegimenApplyForm({
   }
 
   const bsa = bsaOf(values);
+  const weightValue = Number(values.weight) || null;
+  const renal = summarizeRenal(labResults.observations, {
+    age: patient?.birthDate ? calculateAge(patient.birthDate) : undefined,
+    gender: patient?.gender,
+    weight: weightValue,
+  });
+  const checks = checkLabCriteria(
+    regimen.lab_criteria,
+    labResults.observations,
+    {
+      ccr: renal.ccr,
+      egfr: renal.egfr,
+      date: renal.creatinine?.date ?? "",
+      unavailable: renal.ccrUnavailable || renal.egfrUnavailable || "クレアチニンの結果がありません",
+    },
+    values.startDate,
+  );
+  const checkSummary = summarizeLabChecks(checks);
+  const weightChange = previousBody ? compareWeight(previousBody.weight, weightValue) : null;
   const hasInjection = regimenHasInjection(regimen);
   const hasOral = regimenHasOral(regimen);
   const injectionOptions = values.setting ? INJECTION_CATEGORY_OPTIONS[values.setting] : [];
@@ -378,7 +407,9 @@ function RegimenApplyForm({
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
         </div>
       )}
-      <ErrorBanner error={submitError} />
+      <ErrorBanner error={submitError ?? labResults.error} />
+
+      <RegimenLabCheck checks={checks} summary={checkSummary} />
 
       <fieldset className="regimen-apply__fields">
         <legend>スケジュール</legend>
@@ -505,6 +536,7 @@ function RegimenApplyForm({
             体表面積
             <strong>{bsa !== null ? `${bsa} m²` : "—"}</strong>
           </div>
+          {previousBody && <RegimenBodyChange previous={previousBody} change={weightChange} />}
           {(measures.height || measures.weight) && (
             <div className="regimen-editor__derived">
               直近の測定
@@ -520,6 +552,8 @@ function RegimenApplyForm({
           )}
         </div>
       </fieldset>
+
+      <RegimenInfoView regimen={regimen} />
 
       <fieldset className="regimen-apply__fields">
         <legend>投与内容</legend>

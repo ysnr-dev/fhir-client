@@ -13593,3 +13593,104 @@ button.chemo-calendar__cell[draggable="true"] {
 .karte-tabpanel .regimen-detail__summary {
   grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
 }
+
+/* 投与前チェック(適応基準 × 直近の検査結果)。基準外でも登録は止めないので、
+   赤は「読め」の印であって「進めない」印ではない。 */
+.regimen-check__summary {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.8;
+}
+
+.regimen-check__summary--out {
+  color: var(--danger, #c0392b);
+  opacity: 1;
+  font-weight: 600;
+}
+
+.regimen-check__table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.regimen-check__table th,
+.regimen-check__table td {
+  font-size: 12px;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.regimen-check__table th:nth-child(2),
+.regimen-check__table td:nth-child(2),
+.regimen-check__table th:nth-child(3),
+.regimen-check__table td:nth-child(3) {
+  width: 20%;
+}
+
+.regimen-check__table th:nth-child(4),
+.regimen-check__table td:nth-child(4) {
+  width: 17%;
+}
+
+.regimen-check__table th:nth-child(5),
+.regimen-check__table td:nth-child(5) {
+  width: 15%;
+}
+
+.regimen-check__verdict--out {
+  color: var(--danger, #c0392b);
+  font-weight: 600;
+}
+
+.regimen-check__verdict--ok {
+  opacity: 0.7;
+}
+
+.regimen-check__verdict--unknown,
+.regimen-check__note {
+  display: block;
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.regimen-check__stale {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--danger, #c0392b);
+}
+
+/* レジメンマスタの臨床情報(適応疾患・中止基準・副作用)。右ペインは狭いので 1 列。 */
+.regimen-info {
+  margin: 0;
+  font-size: 12px;
+}
+
+.regimen-info__row {
+  display: grid;
+  grid-template-columns: 8em minmax(0, 1fr);
+  gap: 2px 8px;
+  margin-bottom: 4px;
+}
+
+.regimen-info__row dt {
+  color: var(--text);
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.regimen-info__row dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.regimen-info__list {
+  margin: 0;
+  padding-left: 1.1em;
+}
+
+.regimen-info__note {
+  margin-left: 4px;
+  opacity: 0.7;
+}

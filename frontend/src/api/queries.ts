@@ -5292,10 +5292,11 @@ export function useBodyMeasures(patientId: string | undefined) {
 }
 
 /**
- * 腎機能の検査結果。感染症と同じく、分析物コード(先頭 5 桁)での突き合わせは
- * 画面側で行うので、ここでは患者の検体検査の結果を新しい順に引く。
+ * 直近の検体検査の結果(新しい順)。分析物コード(先頭 5 桁)での突き合わせは画面側で
+ * 行うので、ここでは患者の検査結果をまとめて引く。プロファイルの腎機能と、
+ * 化学療法レジメンの投与前チェック(`regimenCheckHelpers.ts`)が同じ結果を読む。
  */
-export function useRenalResults(patientId: string | undefined) {
+export function useRecentLabResults(patientId: string | undefined) {
   const params = new URLSearchParams();
   if (patientId) params.set("subject", `Patient/${patientId}`);
   params.set("category", "laboratory");
@@ -5303,7 +5304,7 @@ export function useRenalResults(patientId: string | undefined) {
   params.set("_sort", "-date");
 
   const query = useQuery({
-    queryKey: ["Observation", "search", patientId, "renal"],
+    queryKey: ["Observation", "search", patientId, "lab-recent"],
     queryFn: () => searchResource<fhir4.Observation>("Observation", params),
     enabled: Boolean(patientId),
     staleTime: 60 * 1000,

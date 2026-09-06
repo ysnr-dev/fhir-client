@@ -94,6 +94,10 @@ export interface RenalSummary {
   egfr: number | null;
   /** eGFR を算出できなかった理由。画面に出して、黙って空欄にしない。 */
   egfrUnavailable: string;
+  /** Cockcroft-Gault の推算クレアチニンクリアランス(mL/分)。算出できなければ null。 */
+  ccr: number | null;
+  /** CCr を算出できなかった理由。 */
+  ccrUnavailable: string;
 }
 
 /**
@@ -121,16 +125,48 @@ function calculateEgfr(
   return { egfr: Math.round(value * 10) / 10, reason: "" };
 }
 
+/**
+ * 推算クレアチニンクリアランス(Cockcroft-Gault)。
+ *   男性: (140 − 年齢) × 体重 ÷ (72 × Cr)
+ *   女性: 上記 × 0.85
+ *
+ * eGFR(体表面積 1.73 m² で補正した値)とは**別物**で、抗がん剤の腎機能基準や
+ * カルボプラチンの Calvert 式は CCr を使う。どちらの値かが読めるよう、画面では
+ * 必ず名前を添えて出す。体重は実体重を使う(肥満での補正体重は施設の運用に任せる)。
+ */
+export function calculateCreatinineClearance(
+  creatinine: number,
+  patient: { age?: number; gender?: string; weight?: number | null },
+): { ccr: number | null; reason: string } {
+  if (patient.gender !== "male" && patient.gender !== "female") {
+    return { ccr: null, reason: "性別が未登録のため算出できません" };
+  }
+  if (patient.age === undefined || patient.age <= 0) {
+    return { ccr: null, reason: "生年月日が未登録のため算出できません" };
+  }
+  if (!patient.weight || patient.weight <= 0) {
+    return { ccr: null, reason: "体重が無いため算出できません" };
+  }
+  if (creatinine <= 0) return { ccr: null, reason: "" };
+
+  const base = ((140 - patient.age) * patient.weight) / (72 * creatinine);
+  const value = patient.gender === "female" ? base * 0.85 : base;
+  return { ccr: Math.round(value * 10) / 10, reason: "" };
+}
+
 export function summarizeRenal(
   observations: fhir4.Observation[],
-  patient: { age?: number; gender?: string },
+  patient: { age?: number; gender?: string; weight?: number | null },
 ): RenalSummary {
   const sorted = newestFirst(observations);
   const creatinine = measurementOf(sorted.find((o) => analyteOf(o) === CREATININE_ANALYTE));
   const cystatinC = measurementOf(sorted.find((o) => analyteOf(o) === CYSTATIN_C_ANALYTE));
 
-  if (!creatinine) return { creatinine, cystatinC, egfr: null, egfrUnavailable: "" };
+  if (!creatinine) {
+    return { creatinine, cystatinC, egfr: null, egfrUnavailable: "", ccr: null, ccrUnavailable: "" };
+  }
 
   const { egfr, reason } = calculateEgfr(creatinine.value, patient.age, patient.gender);
-  return { creatinine, cystatinC, egfr, egfrUnavailable: reason };
+  const { ccr, reason: ccrReason } = calculateCreatinineClearance(creatinine.value, patient);
+  return { creatinine, cystatinC, egfr, egfrUnavailable: reason, ccr, ccrUnavailable: ccrReason };
 }
