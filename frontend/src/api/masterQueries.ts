@@ -54,6 +54,8 @@ import {
   searchLabOrderItems,
   searchLabPanelItems,
   searchLabSpecimens,
+  fetchCtcaeSocs,
+  searchCtcaeTerms,
   searchMedicineDoseConversions,
   searchMedicineUsages,
   searchMedicines,
@@ -661,6 +663,28 @@ export function useMedicineMlFactors(medicineCodes: string[]) {
  * 医薬品コード → 入力単位(mg・g・単位…)→ 1 [薬価算定単位] あたりの量。化学療法の
  * 投与量(mg/m² から出した mg)を製剤数に直すのに使う。mL 行も含めて全単位を引く。
  */
+export function useCtcaeTermSearch(
+  filters: { name?: string; soc?: string },
+  page: number,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["master", "ctcae_terms", filters, page],
+    queryFn: () => searchCtcaeTerms({ ...filters, page, per: MASTER_SEARCH_PER }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useCtcaeSocs(enabled: boolean) {
+  return useQuery({
+    queryKey: ["master", "ctcae_terms", "socs"],
+    queryFn: fetchCtcaeSocs,
+    staleTime: Infinity,
+    enabled,
+  });
+}
+
 export function useMedicineDoseFactors(medicineCodes: string[]) {
   const codes = Array.from(new Set(medicineCodes)).sort();
 

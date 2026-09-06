@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_06_100500) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_06_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -38,6 +38,36 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_06_100500) do
     t.datetime "updated_at", null: false
     t.text "fhir_admin_token"
     t.index ["singleton_guard"], name: "index_fhir_connection_settings_on_singleton_guard", unique: true
+  end
+
+  create_table "master_ctcae_terms", force: :cascade do |t|
+    t.string "meddra_code", null: false
+    t.string "soc_en"
+    t.string "soc_ja"
+    t.string "term_en"
+    t.string "term_ja", null: false
+    t.text "grade1_en"
+    t.text "grade1_ja"
+    t.text "grade2_en"
+    t.text "grade2_ja"
+    t.text "grade3_en"
+    t.text "grade3_ja"
+    t.text "grade4_en"
+    t.text "grade4_ja"
+    t.text "grade5_en"
+    t.text "grade5_ja"
+    t.text "definition_en"
+    t.text "definition_ja"
+    t.text "navigational_note_en"
+    t.text "navigational_note_ja"
+    t.integer "display_order"
+    t.string "search_term"
+    t.string "search_soc"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["meddra_code"], name: "index_master_ctcae_terms_on_meddra_code", unique: true
+    t.index ["search_term"], name: "index_master_ctcae_terms_on_search_term"
+    t.index ["soc_ja"], name: "index_master_ctcae_terms_on_soc_ja"
   end
 
   create_table "master_disease_indexes", force: :cascade do |t|

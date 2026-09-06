@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import type { Disease, LabItem, Medicine, MedicineUsage } from "../api/masterClient";
+import type { CtcaeTerm, Disease, LabItem, Medicine, MedicineUsage } from "../api/masterClient";
 import { useRegimen, useRegimenMutations } from "../api/masterQueries";
 import { useSelfDepartments } from "../api/queries";
 import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { CtcaeTermSearchModal } from "../components/CtcaeTermSearchModal";
 import { LabItemSearchModal } from "../components/LabItemSearchModal";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { UsageSearchModal } from "../components/UsageSearchModal";
@@ -69,6 +70,7 @@ type Picker =
   | { kind: "medicine"; stepKey: number }
   | { kind: "usage"; stepKey: number }
   | { kind: "lab"; criterionKey: number }
+  | { kind: "ctcae"; adverseEventKey: number }
   | null;
 
 function moveItem<T>(items: T[], index: number, delta: number): T[] {
@@ -659,12 +661,21 @@ export function RegimenEditorPage() {
             {draft.adverseEvents.map((row) => (
               <tr key={row.key}>
                 <td>
-                  <input
-                    type="text"
-                    value={row.term}
-                    onChange={(e) => updateAdverseEvent(row.key, { term: e.target.value })}
-                    placeholder="末梢性感覚ニューロパチー など"
-                  />
+                  <div className="regimen-editor__with-picker">
+                    <input
+                      type="text"
+                      value={row.term}
+                      onChange={(e) => updateAdverseEvent(row.key, { term: e.target.value })}
+                      placeholder="末梢性感覚ニューロパチー など"
+                    />
+                    <button
+                      type="button"
+                      className="rp-card__compact-button"
+                      onClick={() => setPicker({ kind: "ctcae", adverseEventKey: row.key })}
+                    >
+                      選択
+                    </button>
+                  </div>
                 </td>
                 <td className="rad-item__compact">
                   <select value={row.grade} onChange={(e) => updateAdverseEvent(row.key, { grade: e.target.value })}>
@@ -780,6 +791,15 @@ export function RegimenEditorPage() {
           onSelect={(usage: MedicineUsage) => {
             setPicker(null);
             updateStep(picker.stepKey, { usage: { code: usage.usage_code, name: usage.usage_name } });
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {picker?.kind === "ctcae" && (
+        <CtcaeTermSearchModal
+          onSelect={(term: CtcaeTerm) => {
+            setPicker(null);
+            updateAdverseEvent(picker.adverseEventKey, { term: term.term_ja });
           }}
           onClose={() => setPicker(null)}
         />

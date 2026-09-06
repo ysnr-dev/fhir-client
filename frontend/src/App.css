@@ -13987,3 +13987,69 @@ button.chemo-calendar__cell[draggable="true"] {
   font-weight: 600;
   color: var(--danger, #c0392b);
 }
+
+/* CTCAE 用語の選択。用語の行と、開いた Grade の定義の行を 1 組にする。 */
+.ctcae-search__table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.ctcae-search__group + .ctcae-search__group td {
+  border-top: 1px solid var(--border);
+}
+
+.master-search__table button.ctcae-search__term {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.ctcae-search__detail-row td {
+  padding-top: 0;
+  background: var(--bg-soft, rgba(127, 127, 127, 0.05));
+}
+
+.ctcae-search__definition {
+  margin: 0 0 6px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.ctcae-search__grades {
+  margin: 0;
+  font-size: 12px;
+}
+
+.ctcae-search__grade {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr);
+  gap: 2px 8px;
+  margin-bottom: 3px;
+}
+
+.ctcae-search__grade dt {
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.ctcae-search__grade dd {
+  margin: 0;
+}
+
+/* 用語欄と「CTCAE から選択」ボタンを横に並べる。 */
+.regimen-adverse__term-row,
+.regimen-editor__with-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.regimen-adverse__term-row input,
+.regimen-editor__with-picker input {
+  flex: 1 1 auto;
+  min-width: 0;
+}

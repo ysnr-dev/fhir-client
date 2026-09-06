@@ -255,6 +255,13 @@ Rails.application.routes.draw do
     resources :jfagy_drugs, only: %i[index] do
       collection { post :import }
     end
+    # CTCAE(有害事象共通用語規準)v5.0 日本語訳 JCOG 版。検索専用(取込で全件洗い替え)。
+    resources :ctcae_terms, only: %i[index] do
+      collection do
+        post :import
+        get :socs
+      end
+    end
     # 郵便番号マスタ(日本郵便 utf_ken_all.csv)。住所補完で郵便番号から引くだけなので
     # 検索専用(取込で全件洗い替え)。
     resources :postal_codes, only: %i[index] do

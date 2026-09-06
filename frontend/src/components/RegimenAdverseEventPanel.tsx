@@ -15,6 +15,7 @@ import { CTCAE_GRADE_OPTIONS } from "../fhir/regimenHelpers";
 import { useRegimenApplication } from "../hooks/useRegimenApplication";
 import { useValidationError } from "../hooks/useValidationError";
 import { today } from "../lib/dates";
+import { CtcaeTermSearchModal } from "./CtcaeTermSearchModal";
 import { ErrorBanner } from "./ErrorBanner";
 
 // カルテ右ペインの「化学療法(有害事象)」。適用 1 件のクールに対して有害事象
@@ -39,6 +40,7 @@ export function RegimenAdverseEventPanel({ patientId, regimenSrId, cycle }: Regi
   const remove = useDeleteAdverseEvent();
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
   const [values, setValues] = useState<AdverseEventFormValues>(() => emptyAdverseEventForm(today()));
 
   if (isPending) return <p>読み込み中...</p>;
@@ -120,12 +122,19 @@ export function RegimenAdverseEventPanel({ patientId, regimenSrId, cycle }: Regi
         <div className="lab-order-item__fields">
           <label className="regimen-apply__reason">
             用語(CTCAE)
-            <input
-              type="text"
-              list="regimen-adverse-terms"
-              value={values.term}
-              onChange={(e) => update("term", e.target.value)}
-            />
+            <span className="regimen-adverse__term-row">
+              <input
+                type="text"
+                list="regimen-adverse-terms"
+                value={values.term}
+                onChange={(e) => update("term", e.target.value)}
+              />
+              {/* マスタから選ぶと Grade の定義を読みながら決められる。マスタを取り込んで
+                  いない施設でも入力できるよう、自由入力とレジメンの候補は残す。 */}
+              <button type="button" className="rp-card__compact-button" onClick={() => setPicking(true)}>
+                CTCAE から選択
+              </button>
+            </span>
             <datalist id="regimen-adverse-terms">
               {candidates.map((term) => (
                 <option key={term} value={term} />
@@ -156,6 +165,16 @@ export function RegimenAdverseEventPanel({ patientId, regimenSrId, cycle }: Regi
           </label>
         </div>
       </fieldset>
+
+      {picking && (
+        <CtcaeTermSearchModal
+          onSelect={(term) => {
+            update("term", term.term_ja);
+            setPicking(false);
+          }}
+          onClose={() => setPicking(false)}
+        />
+      )}
 
       <div className="lab-order-item__actions">
         <button type="button" onClick={handleSubmit} disabled={save.isPending}>
