@@ -13740,3 +13740,76 @@ button.chemo-calendar__cell[draggable="true"] {
 .chemo-calendar__add-cycle {
   margin-left: auto;
 }
+
+/* レジメンの状態(適用中 / 休止 / 完了 / 中止)。マスタの承認状態と同じ器を使う。 */
+.regimen-status--active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.regimen-status--on-hold {
+  color: var(--warning, #b7791f);
+  border-color: var(--warning, #b7791f);
+}
+
+.regimen-status--completed {
+  opacity: 0.8;
+}
+
+.regimen-status--revoked {
+  color: var(--danger, #c0392b);
+  border-color: var(--danger, #c0392b);
+}
+
+.regimen-detail__since {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.regimen-detail__progress {
+  white-space: nowrap;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.regimen-detail__progress--done {
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* 治療歴(患者の全適用)。行を押すとその適用の詳細へ。 */
+.regimen-history__row {
+  cursor: pointer;
+}
+
+.regimen-history__row:hover td {
+  background: var(--bg-hover, rgba(127, 127, 127, 0.08));
+}
+
+.master-search__table button.regimen-history__name {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.regimen-history__period {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.regimen-history__note {
+  display: block;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* 投与日の中止理由(投与日パネル)。 */
+.regimen-day__reason {
+  display: block;
+  font-size: 11px;
+  opacity: 0.7;
+}

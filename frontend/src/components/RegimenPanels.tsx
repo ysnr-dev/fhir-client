@@ -1,13 +1,16 @@
 import { useState } from "react";
-import { useUpdatePrescription, useUpdateRegimenDayStatus } from "../api/queries";
+import { useRevokeRegimen, useUpdatePrescription, useUpdateRegimenDayStatus } from "../api/queries";
 import { groupInjectionByRp, injectionTimesLabel, injectionUsageSummary } from "../fhir/injectionHelpers";
 import { groupByRp } from "../fhir/prescriptionHelpers";
 import {
+  REGIMEN_DISCONTINUATION_REASON_OPTIONS,
   buildRegimenMoveBundle,
   cycleDayLabel,
+  dayOrderCancelReason,
   nextCycleOf,
   previousCycleOf,
   regimenDayStatusLabel,
+  type RegimenApplication,
   type RegimenDayOrder,
 } from "../fhir/regimenOrderHelpers";
 import { diffDays } from "../lib/dates";
@@ -79,6 +82,7 @@ export function RegimenDayPanel({
   const updateStatus = useUpdateRegimenDayStatus();
   const move = useUpdatePrescription();
   const [scope, setScope] = useState<Scope>("one");
+  const [cancelReason, setCancelReason] = useState("");
   const [moveTo, setMoveTo] = useState(date);
 
   if (isPending) return <p>読み込み中...</p>;
@@ -107,7 +111,7 @@ export function RegimenDayPanel({
   function handleCancel() {
     if (cancellable.length === 0) return;
     if (!window.confirm(`${cancellable.length} 件のオーダーを中止します。よろしいですか？`)) return;
-    updateStatus.mutate({ targets: cancellable, status: "cancelled" }, { onSuccess: onSaved });
+    updateStatus.mutate({ targets: cancellable, status: "cancelled", reason: cancelReason }, { onSuccess: onSaved });
   }
 
   function handleRestore() {
@@ -129,6 +133,9 @@ export function RegimenDayPanel({
               <span className="regimen-day__kind">{order.kind === "injection" ? "注射" : "処方"}</span>
               <span className={`regimen-day__status regimen-day__status--${order.status}`}>
                 {regimenDayStatusLabel(order.status)}
+                {dayOrderCancelReason(order) && (
+                  <span className="regimen-day__reason">{dayOrderCancelReason(order)}</span>
+                )}
               </span>
               <button
                 type="button"
@@ -190,6 +197,14 @@ export function RegimenDayPanel({
             )}
           </fieldset>
 
+          {cancellable.length > 0 && (
+            <div className="lab-order-item__fields">
+              <label className="regimen-apply__reason">
+                中止理由
+                <input type="text" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
+              </label>
+            </div>
+          )}
           <div className="lab-order-item__actions">
             <button type="button" onClick={handleCancel} disabled={cancellable.length === 0 || updateStatus.isPending}>
               中止
@@ -342,3 +357,60 @@ export function RegimenMoveModal({ patientId, from, todays, following, to, onClo
   );
 }
 
+
+interface RegimenRevokeModalProps {
+  application: RegimenApplication;
+  header: fhir4.ServiceRequest;
+  orders: RegimenDayOrder[];
+  onClose: () => void;
+  onDone: () => void;
+}
+
+/**
+ * レジメンの中止の確認(§7.6 C-2)。理由の区分と自由記述を残すので、確認だけの
+ * `window.confirm` ではなくモーダルにする。未実施の日オーダーは一緒に中止になる。
+ */
+export function RegimenRevokeModal({ application, header, orders, onClose, onDone }: RegimenRevokeModalProps) {
+  const revoke = useRevokeRegimen();
+  const [reason, setReason] = useState<string>(REGIMEN_DISCONTINUATION_REASON_OPTIONS[0].code);
+  const [note, setNote] = useState("");
+  const pending = orders.filter((o) => o.status !== "completed" && o.status !== "cancelled");
+
+  function run() {
+    revoke.mutate({ header, targets: orders, discontinuation: { reason, note } }, { onSuccess: onDone });
+  }
+
+  return (
+    <Modal title="レジメンの中止" onClose={onClose}>
+      <ErrorBanner error={revoke.error} />
+      <p>{`${application.name} を中止します。`}</p>
+      {pending.length > 0 && (
+        <p className="injection-scope__note">{`未実施の ${pending.length} 件のオーダーも中止になります。`}</p>
+      )}
+      <div className="lab-order-item__fields">
+        <label>
+          理由
+          <select value={reason} onChange={(e) => setReason(e.target.value)}>
+            {REGIMEN_DISCONTINUATION_REASON_OPTIONS.map((o) => (
+              <option key={o.code} value={o.code}>
+                {o.display}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="regimen-apply__reason">
+          詳細
+          <input type="text" value={note} onChange={(e) => setNote(e.target.value)} />
+        </label>
+      </div>
+      <div className="plain-text-modal__actions">
+        <button type="button" onClick={onClose} disabled={revoke.isPending}>
+          キャンセル
+        </button>
+        <button type="button" onClick={run} disabled={revoke.isPending}>
+          中止する
+        </button>
+      </div>
+    </Modal>
+  );
+}

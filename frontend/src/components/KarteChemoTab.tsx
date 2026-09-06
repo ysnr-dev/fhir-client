@@ -17,6 +17,7 @@ import {
 import { toDateInput, today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { RegimenDetailView } from "./RegimenDetailView";
+import { RegimenHistoryView } from "./RegimenHistoryView";
 import { RegimenMoveModal } from "./RegimenPanels";
 
 // カルテ画面の「化学療法」タブ。適用中のレジメンの投与スケジュールを月の暦で見る。
@@ -35,6 +36,8 @@ const MAX_STEPS_IN_CELL = 3;
 const CHEMO_VIEWS = [
   { key: "", label: "カレンダー" },
   { key: "detail", label: "レジメン詳細" },
+  // 患者の全適用を並べる面(§7.6 C-4)。暦と詳細は 1 つの適用を読む面。
+  { key: "history", label: "治療歴" },
 ] as const;
 
 interface KarteChemoTabProps {
@@ -92,7 +95,7 @@ export function KarteChemoTab({
   const sorted = useMemo(
     () =>
       [...list].sort((a, b) => {
-        const rank = (s: string) => (s === "active" ? 0 : 1);
+        const rank = (s: string) => (s === "active" || s === "on-hold" ? 0 : 1);
         return rank(a.status) - rank(b.status) || b.startDate.localeCompare(a.startDate);
       }),
     [list],
@@ -113,6 +116,7 @@ export function KarteChemoTab({
   // 中止はヘッダの ServiceRequest をそのまま書き換えるので、生のリソースも要る。
   const selectedHeader = applications.data?.headers.find((h) => h.id === selected?.id) ?? null;
   const isDetail = view === "detail";
+  const isHistory = view === "history";
 
   const [month, setMonth] = useState(() => {
     const now = new Date();
@@ -195,7 +199,7 @@ export function KarteChemoTab({
 
       <ErrorBanner error={applications.error ?? orders.error ?? events.error} />
 
-      {sorted.length > 0 && (
+      {sorted.length > 0 && !isHistory && (
         <div className="chemo-calendar__regimens" role="tablist" aria-label="適用中のレジメン">
           {sorted.map((a) => (
             <button
@@ -217,7 +221,7 @@ export function KarteChemoTab({
         </div>
       )}
 
-      {selected && !isDetail && (
+      {selected && !isDetail && !isHistory && (
         <div className="chemo-calendar__summary">
           <span>
             開始 {selected.startDate}
@@ -227,7 +231,20 @@ export function KarteChemoTab({
         </div>
       )}
 
-      {isDetail ? (
+      {isHistory ? (
+        applications.isPending ? (
+          <p>読み込み中...</p>
+        ) : (
+          <RegimenHistoryView
+            applications={list}
+            orders={orders.data ?? []}
+            onSelect={(id) => {
+              setSelectedId(id);
+              onViewChange("detail");
+            }}
+          />
+        )
+      ) : isDetail ? (
         selected && selectedHeader ? (
           <RegimenDetailView
             application={selected}

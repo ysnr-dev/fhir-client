@@ -166,7 +166,11 @@ import {
   parseRegimenApplication,
   regimenDayOrderKind,
   regimenOrderOf,
+  completeRegimenEntry,
+  discontinuationReasonLabel,
+  holdRegimenEntry,
   revokeRegimenEntry,
+  type RegimenDiscontinuation,
   type RegimenApplication,
   type RegimenDayOrder,
 } from "../fhir/regimenOrderHelpers";
@@ -10044,12 +10048,20 @@ export function useRegimenDayOrders(patientId: string | undefined, earliestStart
   });
 }
 
-function regimenDayTaskEntry(order: RegimenDayOrder, status: InjectionTaskStatus): fhir4.BundleEntry {
-  return taskBundleEntry(
+function regimenDayTaskEntry(
+  order: RegimenDayOrder,
+  status: InjectionTaskStatus,
+  /** 中止の理由(Task.statusReason)。中止以外では消す(中止取消で古い理由が残らないように)。 */
+  reason?: string,
+): fhir4.BundleEntry {
+  const task =
     order.kind === "injection"
       ? buildInjectionTaskUpdate(order.task, order.serviceRequest, status)
-      : buildRxTaskUpdate(order.task, order.serviceRequest, status as RxTaskStatus),
-  );
+      : buildRxTaskUpdate(order.task, order.serviceRequest, status as RxTaskStatus);
+  const { statusReason: _dropped, ...rest } = task;
+  const next: fhir4.Task =
+    status === "cancelled" && reason?.trim() ? { ...rest, statusReason: { text: reason.trim() } } : rest;
+  return taskBundleEntry(next);
 }
 
 function invalidateRegimen(queryClient: ReturnType<typeof useQueryClient>) {
@@ -10066,11 +10078,19 @@ function invalidateRegimen(queryClient: ReturnType<typeof useQueryClient>) {
 export function useUpdateRegimenDayStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ targets, status }: { targets: RegimenDayOrder[]; status: "cancelled" | "requested" }) =>
+    mutationFn: ({
+      targets,
+      status,
+      reason,
+    }: {
+      targets: RegimenDayOrder[];
+      status: "cancelled" | "requested";
+      reason?: string;
+    }) =>
       postBundle({
         resourceType: "Bundle",
         type: "transaction",
-        entry: targets.map((order) => regimenDayTaskEntry(order, status)),
+        entry: targets.map((order) => regimenDayTaskEntry(order, status, reason)),
       }),
     onSuccess: () => invalidateRegimen(queryClient),
   });
@@ -10083,16 +10103,59 @@ export function useUpdateRegimenDayStatus() {
 export function useRevokeRegimen() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ header, targets }: { header: fhir4.ServiceRequest; targets: RegimenDayOrder[] }) =>
+    mutationFn: ({
+      header,
+      targets,
+      discontinuation,
+    }: {
+      header: fhir4.ServiceRequest;
+      targets: RegimenDayOrder[];
+      discontinuation: Pick<RegimenDiscontinuation, "reason" | "note">;
+    }) =>
       postBundle({
         resourceType: "Bundle",
         type: "transaction",
         entry: [
-          revokeRegimenEntry(header),
+          revokeRegimenEntry(header, discontinuation),
           ...targets
             .filter((order) => order.status !== "completed" && order.status !== "cancelled")
-            .map((order) => regimenDayTaskEntry(order, "cancelled")),
+            .map((order) =>
+              regimenDayTaskEntry(order, "cancelled", discontinuationReasonLabel(discontinuation.reason)),
+            ),
         ],
+      }),
+    onSuccess: () => invalidateRegimen(queryClient),
+  });
+}
+
+/**
+ * レジメンの完了・休止・再開(§7.6 C-1)。完了は中止と同じく未実施の日オーダーを止める
+ * (完了したのに予定が残るのは矛盾)。休止・再開はヘッダの状態だけを変える(可逆)。
+ */
+export function useUpdateRegimenStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      header,
+      status,
+      targets,
+    }: {
+      header: fhir4.ServiceRequest;
+      status: "completed" | "on-hold" | "active";
+      targets: RegimenDayOrder[];
+    }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry:
+          status === "completed"
+            ? [
+                completeRegimenEntry(header),
+                ...targets
+                  .filter((order) => order.status !== "completed" && order.status !== "cancelled")
+                  .map((order) => regimenDayTaskEntry(order, "cancelled", "レジメン完了")),
+              ]
+            : [holdRegimenEntry(header, status === "on-hold")],
       }),
     onSuccess: () => invalidateRegimen(queryClient),
   });

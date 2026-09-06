@@ -1,5 +1,5 @@
 import type { Medicine, MedicineUsage, RegimenDetail, RegimenDrug, RegimenStep } from "../api/masterClient";
-import { addDays, diffDays } from "../lib/dates";
+import { addDays, diffDays, today } from "../lib/dates";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import {
   DAILY_SCHEDULE,
@@ -93,6 +93,35 @@ export interface RegimenApplication {
   setting: PrescriptionSetting;
   comment: string;
   problem: ProblemRef | null;
+  /** 中止したときの理由と日付(§7.6 C-2)。中止していなければ null。 */
+  discontinuation: RegimenDiscontinuation | null;
+  /** 完了にした日(§7.6 C-1)。完了していなければ null。 */
+  completedOn: string | null;
+}
+
+export interface RegimenDiscontinuation {
+  /** `REGIMEN_DISCONTINUATION_REASON_OPTIONS` のコード。 */
+  reason: string;
+  note: string;
+  date: string;
+}
+
+/** レジメンを中止する理由の区分。完遂は中止ではなく「完了」で扱う。 */
+export const REGIMEN_DISCONTINUATION_REASON_OPTIONS = [
+  { code: "progression", display: "病勢進行" },
+  { code: "adverse-event", display: "有害事象" },
+  { code: "patient-request", display: "患者希望" },
+  { code: "change", display: "治療変更" },
+  { code: "other", display: "その他" },
+] as const;
+
+export function discontinuationReasonLabel(code: string): string {
+  return REGIMEN_DISCONTINUATION_REASON_OPTIONS.find((o) => o.code === code)?.display ?? code;
+}
+
+function extString(ext: fhir4.Extension | undefined, url: string): string {
+  const e = ext?.extension?.find((x) => x.url === url);
+  return e?.valueString ?? e?.valueCode ?? e?.valueDate ?? "";
 }
 
 function extInt(ext: fhir4.Extension | undefined, url: string): number | null {
@@ -125,6 +154,15 @@ export function parseRegimenApplication(sr: fhir4.ServiceRequest): RegimenApplic
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
     comment: orderComment(sr),
     problem: orderProblem(sr),
+    discontinuation:
+      sr.status === "revoked"
+        ? {
+            reason: extString(ext, "discontinuationReason"),
+            note: extString(ext, "discontinuationNote"),
+            date: extString(ext, "discontinuedOn"),
+          }
+        : null,
+    completedOn: sr.status === "completed" ? extString(ext, "completedOn") || null : null,
   };
 }
 
@@ -1137,9 +1175,101 @@ export function buildRegimenMoveBundle(
 }
 
 /** ヘッダを中止(revoked)にする entry。 */
-export function revokeRegimenEntry(header: fhir4.ServiceRequest): fhir4.BundleEntry {
-  const resource: fhir4.ServiceRequest = { ...header, status: "revoked" };
+/** ヘッダの `regimen` 拡張に、状態遷移の記録(中止理由・完了日)を足して返す。 */
+function withRegimenExtension(header: fhir4.ServiceRequest, parts: fhir4.Extension[]): fhir4.Extension[] {
+  const others = (header.extension ?? []).filter((e) => e.url !== REGIMEN_EXT_URL);
+  const current = header.extension?.find((e) => e.url === REGIMEN_EXT_URL);
+  const urls = new Set(parts.map((p) => p.url));
+  return [
+    ...others,
+    {
+      url: REGIMEN_EXT_URL,
+      extension: [...(current?.extension ?? []).filter((e) => !urls.has(e.url)), ...parts],
+    },
+  ];
+}
+
+function regimenStatusEntry(
+  header: fhir4.ServiceRequest,
+  status: fhir4.ServiceRequest["status"],
+  parts: fhir4.Extension[],
+): fhir4.BundleEntry {
+  const resource: fhir4.ServiceRequest = {
+    ...header,
+    status,
+    extension: withRegimenExtension(header, parts),
+  };
   return { resource, request: { method: "PUT", url: `ServiceRequest/${header.id}` } };
+}
+
+/** レジメンの中止。理由は `regimen` 拡張に残す(治療歴で読む。§7.6 C-2)。 */
+export function revokeRegimenEntry(
+  header: fhir4.ServiceRequest,
+  discontinuation: Pick<RegimenDiscontinuation, "reason" | "note">,
+): fhir4.BundleEntry {
+  return regimenStatusEntry(header, "revoked", [
+    { url: "discontinuationReason", valueCode: discontinuation.reason },
+    ...(discontinuation.note.trim() ? [{ url: "discontinuationNote", valueString: discontinuation.note.trim() }] : []),
+    { url: "discontinuedOn", valueDate: today() },
+  ]);
+}
+
+/** レジメンの完了。予定どおり終えたときに医師が押す(自動では完了にしない。§7.6 C-1)。 */
+export function completeRegimenEntry(header: fhir4.ServiceRequest): fhir4.BundleEntry {
+  return regimenStatusEntry(header, "completed", [{ url: "completedOn", valueDate: today() }]);
+}
+
+/** 休止(on-hold)と再開(active)。登録済みの日オーダーは触らない(可逆な操作にする)。 */
+export function holdRegimenEntry(header: fhir4.ServiceRequest, hold: boolean): fhir4.BundleEntry {
+  return regimenStatusEntry(header, hold ? "on-hold" : "active", []);
+}
+
+/** クール 1 つの進み具合(レジメン詳細のクール一覧・治療歴で使う)。 */
+export interface CycleProgress {
+  cycle: number;
+  /** 日オーダーの数と、実施済・中止の数。 */
+  total: number;
+  completed: number;
+  cancelled: number;
+  /** 全部が実施済か中止で、少なくとも 1 件は実施済(= 投与したクール)。 */
+  done: boolean;
+  /** 全部が中止(投与しなかったクール)。 */
+  skipped: boolean;
+}
+
+export function cycleProgressOf(orders: RegimenDayOrder[]): Map<number, CycleProgress> {
+  const result = new Map<number, CycleProgress>();
+  for (const order of orders) {
+    const p = result.get(order.ref.cycle) ?? {
+      cycle: order.ref.cycle,
+      total: 0,
+      completed: 0,
+      cancelled: 0,
+      done: false,
+      skipped: false,
+    };
+    p.total += 1;
+    if (order.status === "completed") p.completed += 1;
+    if (order.status === "cancelled") p.cancelled += 1;
+    result.set(order.ref.cycle, p);
+  }
+  for (const p of result.values()) {
+    p.skipped = p.total > 0 && p.cancelled === p.total;
+    p.done = p.total > 0 && p.completed > 0 && p.completed + p.cancelled === p.total;
+  }
+  return result;
+}
+
+/** 最後の投与日(中止したオーダーは数えない)。無ければ空。 */
+export function lastAdministrationDate(orders: RegimenDayOrder[]): string {
+  return orders
+    .filter((o) => o.status !== "cancelled")
+    .reduce((max, o) => (o.date > max ? o.date : max), "");
+}
+
+/** 日オーダーを中止した理由(Task.statusReason)。無ければ空。 */
+export function dayOrderCancelReason(order: RegimenDayOrder): string {
+  return order.status === "cancelled" ? (order.task?.statusReason?.text ?? "") : "";
 }
 
 /** 日オーダーの種別(注射か処方か)。レジメンの日オーダーはこの 2 つしか無い。 */
