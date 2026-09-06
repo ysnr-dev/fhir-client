@@ -267,10 +267,13 @@ Provenance
 医薬品を選んだときの警告が一切無い。個別の設計書(注射 §8 A、化学療法 §7.6 A-4)に同じ項目が並ぶので、
 **器は 1 つ**にする。
 
-- **アレルギー照合**: 患者の `AllergyIntolerance`(`fhir/allergyHelpers.ts` の `allergenFromMedicine` で薬剤マスタ →
-  YJ コードのアレルゲンに変換できる)と `useActiveAllergies` を突き合わせて、薬剤の行に警告を出す。
-  医薬品検索モーダル(`MedicineSearchModal`)か、薬剤行を描く共通部品に置けば処方・注射・レジメンの
-  3 か所で同時に効く。
+- **アレルギー照合** — **照合そのものは実装済み(2026-09-06)。残るのは処方・注射の画面への適用。**
+  `fhir/allergyHelpers.ts` の `matchMedicationAllergies(yjCode, allergies)` が薬剤 1 件に当たるアレルギーを返す
+  (銘柄 YCM と成分 GCM の両方を見る。否定 refuted は外す)。いまは化学療法の適用画面だけが使っている
+  (`docs/chemo-regimen-design.md` §8.10)。処方・注射のフォームでも同じ関数を薬剤の行に当てれば済む。
+  医薬品検索モーダル(`MedicineSearchModal`)か、薬剤行を描く共通部品に置けば 3 か所で同時に効く。
+  **YJ コードを持たない薬剤(HOT コードマスタに無いもの)は照合できず黙って通る**ので、薬剤マスタの
+  取り込み範囲が穴になることを併せて見ておく。
 - 同じ場所に載せるもの: 麻薬・向精神薬・生物由来製剤の印(`master_medicines.narcotic_category` /
   `biological_product_flag`。注射 §8 A)、造影剤(`contrast_medium_category`)。
 - 看護ワークシートへの注射予定の表示(注射 §8 C、化学療法 §7.6 E-4)も種別をまたぐが、これは

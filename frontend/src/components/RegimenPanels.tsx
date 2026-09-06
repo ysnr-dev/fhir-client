@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { useRevokeRegimen, useUpdatePrescription, useUpdateRegimenDayStatus } from "../api/queries";
+import {
+  useCancelAppointment,
+  useOrderAppointments,
+  usePatient,
+  useRevokeRegimen,
+  useUpdatePrescription,
+  useUpdateRegimenDayStatus,
+} from "../api/queries";
+import { appointmentDateTimeLabel } from "../fhir/appointmentHelpers";
 import { groupInjectionByRp, injectionTimesLabel, injectionUsageSummary } from "../fhir/injectionHelpers";
 import { groupByRp } from "../fhir/prescriptionHelpers";
 import {
@@ -17,6 +25,7 @@ import { diffDays } from "../lib/dates";
 import { useRegimenApplication } from "../hooks/useRegimenApplication";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
+import { ChemoBookModal } from "./ChemoBookModal";
 import { RegimenCyclePanel } from "./RegimenApplyPanel";
 
 // カルテ右ペインの、適用済みレジメンに対する操作。
@@ -84,6 +93,12 @@ export function RegimenDayPanel({
   const [scope, setScope] = useState<Scope>("one");
   const [cancelReason, setCancelReason] = useState("");
   const [moveTo, setMoveTo] = useState(date);
+  // 外来化学療法室の予約(§7.6 D-3)。注射のオーダーに対して日ごとに取る。
+  const [booking, setBooking] = useState<{ order: fhir4.ServiceRequest; appointment?: fhir4.Appointment } | null>(null);
+  const patient = usePatient(patientId).data?.data;
+  const injectionOrders = orders.filter((o) => o.date === date && o.kind === "injection");
+  const appointments = useOrderAppointments(injectionOrders.map((o) => o.serviceRequest.id ?? ""));
+  const cancelAppointment = useCancelAppointment();
 
   if (isPending) return <p>読み込み中...</p>;
   if (!application) return <ErrorBanner error={error ?? new Error("レジメンの適用が見つかりません")} />;
@@ -157,6 +172,26 @@ export function RegimenDayPanel({
         {todays.length === 0 && <li className="regimen-day__empty">この日のオーダーはありません</li>}
       </ul>
 
+      {/* 予約はオーダーの中身ではなく「その日に化学療法室をいつ押さえるか」なので、
+          注射オーダーの枠の外に専用の欄として置く(§7.6 D-3)。 */}
+      {injectionOrders.length > 0 && (
+        <fieldset className="regimen-day__booking-fields">
+          <legend>外来化学療法室</legend>
+          {injectionOrders.map((order) => (
+            <RegimenDayBooking
+              key={order.serviceRequest.id}
+              appointment={appointments.data?.get(order.serviceRequest.id ?? "")}
+              onBook={() => setBooking({ order: order.serviceRequest })}
+              onReschedule={(appointment) => setBooking({ order: order.serviceRequest, appointment })}
+              onCancel={(appointment) => {
+                if (!window.confirm("この予約を取り消します。よろしいですか？")) return;
+                cancelAppointment.mutate(appointment);
+              }}
+            />
+          ))}
+        </fieldset>
+      )}
+
       {todays.length > 0 && (
         <>
           <fieldset className="injection-scope">
@@ -197,7 +232,17 @@ export function RegimenDayPanel({
             )}
           </fieldset>
 
-          {cancellable.length > 0 && (
+          {booking && (
+        <ChemoBookModal
+          order={booking.order}
+          patient={patient}
+          appointment={booking.appointment}
+          label={`${application.name} ${label} ${date}`}
+          onClose={() => setBooking(null)}
+        />
+      )}
+
+      {cancellable.length > 0 && (
             <div className="lab-order-item__fields">
               <label className="regimen-apply__reason">
                 中止理由
@@ -412,5 +457,42 @@ export function RegimenRevokeModal({ application, header, orders, onClose, onDon
         </button>
       </div>
     </Modal>
+  );
+}
+
+/** 投与日の予約(外来化学療法室)。予約済みなら日時と操作、無ければ「予約」ボタン。 */
+function RegimenDayBooking({
+  appointment,
+  onBook,
+  onReschedule,
+  onCancel,
+}: {
+  appointment?: fhir4.Appointment;
+  onBook: () => void;
+  onReschedule: (appointment: fhir4.Appointment) => void;
+  onCancel: (appointment: fhir4.Appointment) => void;
+}) {
+  return (
+    <div className="regimen-day__booking">
+      {appointment ? (
+        <>
+          <span className="regimen-day__booking-time">{appointmentDateTimeLabel(appointment)}</span>
+          <span className="regimen-day__booking-status">予約済み</span>
+          <button type="button" className="rp-card__compact-button" onClick={() => onReschedule(appointment)}>
+            日時変更
+          </button>
+          <button type="button" className="rp-card__compact-button" onClick={() => onCancel(appointment)}>
+            予約取消
+          </button>
+        </>
+      ) : (
+        <>
+          <span className="regimen-day__booking-status">未予約</span>
+          <button type="button" className="rp-card__compact-button" onClick={onBook}>
+            予約
+          </button>
+        </>
+      )}
+    </div>
   );
 }

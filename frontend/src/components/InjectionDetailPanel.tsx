@@ -15,7 +15,19 @@ import {
   injectionTaskStatus,
   injectionTaskStatusDisplay,
 } from "../fhir/injectionTaskHelpers";
-import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import {
+  ORDER_IN_RP_SYSTEM,
+  RP_NUMBER_SYSTEM,
+  identifierValue,
+  orderContextSummary,
+  prescriptionRequester,
+} from "../fhir/prescriptionHelpers";
+import {
+  cycleDayLabel,
+  regimenDoseOf,
+  regimenOrderOf,
+  type RegimenApplication,
+} from "../fhir/regimenOrderHelpers";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
 // 注射オーダーの内容表示。カルテ画面の詳細モーダルから使う(処方の
@@ -27,7 +39,18 @@ interface InjectionDetailPanelProps {
   /** この注射の進捗 Task。無ければ依頼済として出す。 */
   task?: fhir4.Task;
   problemsById?: Map<string, fhir4.Condition>;
+  /**
+   * 化学療法の適用ヘッダ(薬剤部の監査。§7.6 E-1)。渡すと体格と、体表面積あたりの
+   * 逆算を薬剤の行に出す。渡さなければ従来どおり。
+   */
+  regimenApplication?: RegimenApplication | null;
   children?: ReactNode;
+}
+
+/** 力価から体表面積あたりの量を逆算する(「85.0 mg/m²」)。薬剤部が基準と突き合わせる。 */
+function perBsaLabel(dose: number | undefined, unit: string | undefined, bsa: number | null): string {
+  if (dose === undefined || !bsa || bsa <= 0) return "";
+  return `${Math.round((dose / bsa) * 10) / 10} ${unit ?? ""}/m²`;
 }
 
 export function InjectionDetailPanel({
@@ -35,8 +58,20 @@ export function InjectionDetailPanel({
   medicationRequests,
   task,
   problemsById,
+  regimenApplication,
   children,
 }: InjectionDetailPanelProps) {
+  const regimenRef = regimenOrderOf(serviceRequest);
+  // 減量率は MedicationRequest の拡張にある。RP 番号 + RP 内の順で薬剤の行に当てる。
+  const doseByRp = new Map(
+    medicationRequests.flatMap((mr) => {
+      const dose = regimenDoseOf(mr);
+      if (!dose) return [];
+      const rp = identifierValue(mr, RP_NUMBER_SYSTEM) ?? "";
+      const order = identifierValue(mr, ORDER_IN_RP_SYSTEM) ?? "";
+      return [[`${rp}-${order}`, dose] as const];
+    }),
+  );
   const summary = summarizeInjectionServiceRequest(serviceRequest);
   const series = injectionSeriesOf(serviceRequest);
   const seriesLabel = injectionSeriesLabel(serviceRequest);
@@ -59,6 +94,28 @@ export function InjectionDetailPanel({
             {injectionDayOf(serviceRequest) || "-"}
             {seriesLabel && <span className="injection-series-label">{seriesLabel}</span>}
           </dd>
+          {regimenRef && (
+            <>
+              <dt>化学療法</dt>
+              <dd>
+                {`${regimenRef.name} ${cycleDayLabel(regimenRef)}`}
+                {regimenApplication?.bsa !== null && regimenApplication?.bsa !== undefined && (
+                  <span className="injection-detail__body">
+                    {[
+                      `体表面積 ${regimenApplication.bsa} m²`,
+                      regimenApplication.height !== null ? `身長 ${regimenApplication.height} cm` : "",
+                      regimenApplication.weight !== null ? `体重 ${regimenApplication.weight} kg` : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" / ")}
+                  </span>
+                )}
+                {regimenRef.reduction && (
+                  <span className="injection-worklist__reduced">{`減量: ${regimenRef.reduction}`}</span>
+                )}
+              </dd>
+            </>
+          )}
           <dt>実施パターン</dt>
           {/* 束ねを持たない古いオーダーは単日なので「-」。期間はその束ねの登録時のもの。 */}
           <dd>
@@ -97,10 +154,21 @@ export function InjectionDetailPanel({
               </tr>
             </thead>
             <tbody>
-              {rp.medicines.map((med) => (
+              {rp.medicines.map((med) => {
+                const dose = doseByRp.get(`${rp.rpNumber}-${med.orderInRp}`);
+                const perBsa = perBsaLabel(med.dose, med.unit, regimenApplication?.bsa ?? null);
+                return (
                 <tr key={med.orderInRp}>
                   <td>{med.name}</td>
-                  <td>{med.dose ?? "-"}</td>
+                  <td>
+                    {med.dose ?? "-"}
+                    {/* 薬剤部の監査(§7.6 E-1)。指示は力価なので、レジメンの基準
+                        (mg/m²)と突き合わせられるよう体表面積あたりを添える。 */}
+                    {perBsa && <span className="injection-detail__per-bsa">{perBsa}</span>}
+                    {dose && dose.ratio !== 100 && (
+                      <span className="injection-worklist__reduced">{`${dose.ratio}%`}</span>
+                    )}
+                  </td>
                   <td>{med.unit ?? "-"}</td>
                   <td>{med.comment || "-"}</td>
                   <td className="rp-card__medicine-di">
@@ -116,7 +184,8 @@ export function InjectionDetailPanel({
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           <dl className="prescription-detail__common">

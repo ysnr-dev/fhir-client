@@ -1,4 +1,6 @@
 import type { InjectionWorklistRow } from "../api/queries";
+import { useRegimenHeaders } from "../api/queries";
+import { regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { InjectionDetailPanel } from "./InjectionDetailPanel";
 import { injectionTaskQueryNotes } from "../fhir/injectionDispenseHelpers";
 import { injectionTaskStatus, injectionTaskStatusDisplay } from "../fhir/injectionTaskHelpers";
@@ -18,6 +20,9 @@ export function InjectionOrderViewModal({
   const { order, patient } = row;
   const status = injectionTaskStatus(row.task);
   const queryNotes = injectionTaskQueryNotes(row.task);
+  // 化学療法から出たオーダーなら、監査に要る体格を適用ヘッダから引く(§7.6 E-1)。
+  const regimenSrId = regimenOrderOf(order)?.regimenSrId ?? "";
+  const headers = useRegimenHeaders(regimenSrId ? [regimenSrId] : []);
 
   return (
     <Modal title="注射内容" onClose={onClose} className="modal--wide">
@@ -35,6 +40,7 @@ export function InjectionOrderViewModal({
           serviceRequest={order}
           medicationRequests={row.medicationRequests}
           task={row.task}
+          regimenApplication={headers.data?.get(regimenSrId) ?? null}
         >
           {queryNotes.length > 0 && (
             <div className="rx-dispense__notes">

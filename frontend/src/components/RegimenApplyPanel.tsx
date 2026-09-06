@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Regimen, RegimenDetail } from "../api/masterClient";
 import { useApplicableRegimens, useMedicineDoseFactors, useRegimen } from "../api/masterQueries";
-import { useBodyMeasures, useCreatePrescription, usePatient, useRecentLabResults, useRegimenAdverseEvents } from "../api/queries";
+import {
+  useActiveAllergies,
+  useBodyMeasures,
+  useCreatePrescription,
+  usePatient,
+  useRecentLabResults,
+  useRegimenAdverseEvents,
+} from "../api/queries";
 import { adverseEventsOf, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
+import { allergyMatchLabel, matchMedicationAllergies, type AllergyMatch } from "../fhir/allergyHelpers";
 import { summarizeBodyMeasures, summarizeRenal, uncorrectedGfr } from "../fhir/bodyMeasureHelpers";
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { calculateAge } from "../fhir/patientHelpers";
@@ -292,6 +300,18 @@ function RegimenApplyForm({
   // 投与前チェック(§7.6 A-1)。CCr は年齢・性別と、この画面で直した体重から出す。
   const labResults = useRecentLabResults(patientId);
   const patient = usePatient(patientId).data?.data;
+  // アレルギー照合(§7.6 A-4)。薬剤の YJ コードで銘柄・成分の両方を見る。
+  const allergies = useActiveAllergies(patientId);
+  const allergyMatches = useMemo(() => {
+    const map = new Map<number, AllergyMatch[]>();
+    for (const step of regimen.steps) {
+      for (const drug of step.drugs) {
+        const matches = matchMedicationAllergies(drug.yj_code, allergies.allergies);
+        if (matches.length > 0) map.set(drug.id, matches);
+      }
+    }
+    return map;
+  }, [regimen, allergies.allergies]);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
 
   const measures = useMemo(() => summarizeBodyMeasures(body.observations), [body.observations]);
@@ -571,6 +591,11 @@ function RegimenApplyForm({
       <ErrorBanner error={submitError ?? labResults.error} />
 
       <RegimenLabCheck checks={checks} summary={checkSummary} />
+      {allergyMatches.size > 0 && (
+        <p className="regimen-apply__allergy-summary">
+          {`アレルギーに当たる薬剤が ${allergyMatches.size} 件あります(投与内容の欄に出しています)。`}
+        </p>
+      )}
       {previousCycle && <RegimenPreviousAdverseEvents cycle={previousCycle.cycle} records={previousAdverse} />}
 
       <fieldset className="regimen-apply__fields">
@@ -865,6 +890,15 @@ function RegimenApplyForm({
                         </>
                       )}
                       {d.manualReason && <span className="regimen-apply__manual">{d.manualReason}</span>}
+                      {(allergyMatches.get(d.drug.id) ?? []).map((m) => (
+                        <span
+                          key={m.allergyId}
+                          className={`regimen-apply__allergy${m.high ? " regimen-apply__allergy--high" : ""}`}
+                          title={m.reaction}
+                        >
+                          アレルギー {allergyMatchLabel(m)}
+                        </span>
+                      ))}
                     </td>
                   </tr>
                 ))}

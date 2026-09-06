@@ -368,6 +368,7 @@ import {
   buildCancelBundle,
   buildCancelEntries,
   buildNutritionGuidanceAppointmentBundle,
+  buildChemoAppointmentBundle,
   buildRehabAppointmentBundle,
   buildRescheduleBundle,
   buildRescheduleEntries,
@@ -9968,6 +9969,75 @@ export function useRegimenApplications(patientId: string | undefined) {
       };
     },
     enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * レジメンの適用ヘッダを id で引く(薬剤部の監査。§7.6 E-1)。日オーダーの `regimen-order`
+ * 拡張から得た id をまとめて 1 回で読む。患者単位の `useRegimenApplications` と違い、
+ * 別々の患者のオーダーが並ぶワークリストから使える。
+ */
+/**
+ * 外来化学療法室の予約(§7.6 D-3)。投与日の注射オーダーを `basedOn` にして日ごとに取る。
+ * 予約タブと投与日パネルの両方から読み直させる。
+ */
+export function useBookChemoAppointment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      patient,
+      selection,
+      orderId,
+    }: {
+      patient: fhir4.Patient;
+      selection: SlotSelection;
+      orderId: string;
+    }) => postBundle(buildChemoAppointmentBundle(patient, selection, orderId)),
+    onSuccess: () => invalidateAppointments(queryClient),
+  });
+}
+
+/** 投与日の注射オーダーに紐づく予約(1 件)。投与日パネルで「予約済み」を出すのに使う。 */
+export function useOrderAppointments(orderIds: string[]) {
+  const ids = Array.from(new Set(orderIds.filter(Boolean))).sort();
+  return useQuery({
+    queryKey: ["Appointment", "search", "by-order", ids],
+    queryFn: async (): Promise<Map<string, fhir4.Appointment>> => {
+      const params = new URLSearchParams();
+      params.set("based-on", ids.map((id) => `ServiceRequest/${id}`).join(","));
+      params.set("_count", String(ids.length * 2));
+      const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
+      const result = new Map<string, fhir4.Appointment>();
+      for (const entry of bundle.entry ?? []) {
+        const appointment = entry.resource;
+        if (appointment?.resourceType !== "Appointment" || !isActiveAppointment(appointment)) continue;
+        const orderId = appointmentOrderId(appointment);
+        if (orderId) result.set(orderId, appointment);
+      }
+      return result;
+    },
+    enabled: ids.length > 0,
+  });
+}
+
+export function useRegimenHeaders(regimenSrIds: string[]) {
+  const ids = Array.from(new Set(regimenSrIds.filter(Boolean))).sort();
+  return useQuery({
+    queryKey: ["ServiceRequest", "detail", "regimen-headers", ids],
+    queryFn: async (): Promise<Map<string, RegimenApplication>> => {
+      const params = new URLSearchParams();
+      params.set("_id", ids.join(","));
+      params.set("_count", String(ids.length));
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      const result = new Map<string, RegimenApplication>();
+      for (const sr of serviceRequestsOf(bundle)) {
+        const application = parseRegimenApplication(sr);
+        if (application) result.set(application.id, application);
+      }
+      return result;
+    },
+    enabled: ids.length > 0,
+    staleTime: 60 * 1000,
   });
 }
 

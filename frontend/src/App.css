@@ -13901,3 +13901,89 @@ button.chemo-calendar__cell[draggable="true"] {
 .regimen-detail__adverse .regimen-adverse__grade {
   font-weight: 500;
 }
+
+/* 投与日の予約(外来化学療法室)。オーダーの内容とは別の関心事なので専用の枠に置く。 */
+.regimen-day__booking-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px 10px;
+  margin: 0 0 12px;
+}
+
+.regimen-day__booking-fields > legend {
+  font-size: 13px;
+  padding: 0 4px;
+  color: var(--text);
+}
+
+.regimen-day__booking {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.regimen-day__booking-status {
+  color: var(--text);
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.regimen-day__booking-time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 注射一覧・詳細での化学療法の印(薬剤部の監査)。 */
+.injection-worklist__chemo {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.injection-worklist__reduced {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid var(--danger, #c0392b);
+  color: var(--danger, #c0392b);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.injection-detail__body {
+  margin-left: 8px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+/* 力価から逆算した体表面積あたりの量。レジメンの基準と突き合わせる。 */
+.injection-detail__per-bsa {
+  display: block;
+  font-size: 11px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+/* アレルギー照合の警告(投与内容の薬剤行)。登録は止めないので、赤は「読め」の印。 */
+.regimen-apply__allergy {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--warning-text, #8a5a00);
+}
+
+.regimen-apply__allergy--high {
+  color: var(--danger, #c0392b);
+  font-weight: 600;
+}
+
+.regimen-apply__allergy-summary {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--danger, #c0392b);
+}

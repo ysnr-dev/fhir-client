@@ -437,6 +437,35 @@ export function buildNutritionGuidanceAppointmentBundle(
   return buildBookBundle(appointment, selection.slots);
 }
 
+/**
+ * 外来化学療法室の予約を取るための Bundle(docs/chemo-regimen-design.md §7.6 D-3)。
+ *
+ * ［決定］レジメンの適用と**同じ transaction には入れない**。1 つの適用に投与日が
+ * 何日もあり、日ごとに枠を取るものなので、リハビリ・栄養指導と同じ「オーダーは先に立て、
+ * 予約は投与日ごとに都度取る」形にした。`basedOn` は**その日の注射オーダー**を指す
+ * (適用ヘッダではない。予約は日単位で、移動・中止もその日のオーダーに従う)。
+ */
+export function buildChemoAppointmentBundle(
+  patient: fhir4.Patient,
+  selection: SlotSelection,
+  orderId: string,
+): fhir4.Bundle {
+  const appointment = buildAppointment(
+    emptyAppointmentForm,
+    patient,
+    selection.schedule,
+    selection.slots,
+  );
+  appointment.basedOn = [{ reference: `ServiceRequest/${orderId}` }];
+
+  return buildBookBundle(appointment, selection.slots);
+}
+
+/** 化学療法の予約か。枠の種別で見分ける。 */
+export function isChemoAppointment(appointment: fhir4.Appointment): boolean {
+  return serviceTypeCode(appointment) === "chemo";
+}
+
 /** リハビリの予約か。枠の種別で見分ける(検査予約と操作の出し分けが違う)。 */
 export function isRehabAppointment(appointment: fhir4.Appointment): boolean {
   return serviceTypeCode(appointment) === "rehab";
