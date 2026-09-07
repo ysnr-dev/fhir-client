@@ -22,7 +22,6 @@ import {
   displayKana,
   displayName,
   genderLabel,
-  languageLabel,
 } from "../fhir/patientHelpers";
 import { CautionPictogram } from "./icons/cautionPictograms";
 import { PictogramPopover } from "./PictogramPopover";
@@ -49,16 +48,9 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
   // 死亡は「その患者に今からオーダーを出してよいか」に直結するので帯に出す。
   const deceasedDate = p.deceasedDateTime?.slice(0, 10) ?? "";
   const deceased = deceasedDate || p.deceasedBoolean === true;
-  // 通訳の要否は窓口・病棟が最初に知りたいので、言語と併せて帯に出す。
-  const communication = p.communication?.[0];
-  const languageCode = communication?.language?.coding?.[0]?.code ?? "";
-  const interpreter = communication?.preferred === true;
-  const languageText = [
-    languageCode && languageCode !== "und" ? languageLabel(languageCode) : "",
-    interpreter ? "通訳必要" : "",
-  ]
-    .filter(Boolean)
-    .join(" / ");
+  // ［決定］使用言語・通訳の要否は帯に出さない(2026-09-08)。窓口で毎回見るものではなく、
+  // 帯の横幅は患者番号・氏名・生年月日・在院場所と、注意のピクトグラムに使う。
+  // プロファイルタブの「使用言語」で読む(通訳必要もそこに出る)。
 
   return (
     <div className="patient-header">
@@ -90,12 +82,6 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
           <span className="patient-header__value patient-header__value--deceased">
             {deceasedDate || "あり"}
           </span>
-        </span>
-      )}
-      {languageText && (
-        <span className="patient-header__item">
-          <span className="patient-header__label">言語</span>
-          <span className="patient-header__value">{languageText}</span>
         </span>
       )}
       <BloodType patientId={patientId} />
