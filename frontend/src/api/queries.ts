@@ -3150,14 +3150,22 @@ export function useCancelInjectionPerforms() {
   });
 }
 
-/** 連日オーダーを複数日まとめて削除する。 */
+/**
+ * 連日オーダーを複数日まとめて削除する。予約(化学療法の日オーダーに取ってある外来化学療法室)も
+ * 一緒に取り消す —— オーダーが消えたのに枠が埋まったままになるのを防ぐ(§8.15 N-13)。
+ */
 export function useDeleteInjectionSeries() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (srIds: string[]) => postBundle(buildInjectionSeriesDeleteBundle(srIds)),
+    mutationFn: async (srIds: string[]) => {
+      const bundle = buildInjectionSeriesDeleteBundle(srIds);
+      const cancels = await orderAppointmentCancelEntries(srIds);
+      return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...cancels] });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      invalidateAppointments(queryClient);
     },
   });
 }
@@ -10045,18 +10053,25 @@ export function useOrderAppointments(orderIds: string[]) {
 }
 
 /**
- * 日オーダーに紐づく化学療法室の予約を取り消す entry(押さえていた枠は空きに戻す)。
- * 投与日の移動・中止、レジメンの中止・完了に同梱する(§8.13 N-5)。予約が無ければ空。
+ * オーダーに紐づく予約を取り消す entry(押さえていた枠は空きに戻す)。オーダーを消す・止める
+ * ときに予約だけが残ると、枠が埋まったままになり患者も呼ばれてしまう。
  */
-async function chemoAppointmentCancelEntries(orders: RegimenDayOrder[]): Promise<fhir4.BundleEntry[]> {
-  const ids = orders.map((o) => o.serviceRequest.id).filter((id): id is string => Boolean(id));
-  const appointments = await fetchOrderAppointments(Array.from(new Set(ids)));
+async function orderAppointmentCancelEntries(orderIds: string[]): Promise<fhir4.BundleEntry[]> {
+  const appointments = await fetchOrderAppointments(Array.from(new Set(orderIds.filter(Boolean))));
   const entries = await Promise.all(
     Array.from(appointments.values()).map(async (appointment) =>
       buildCancelEntries(appointment, await fetchAppointmentSlots(appointment)),
     ),
   );
   return entries.flat();
+}
+
+/**
+ * 日オーダーに紐づく化学療法室の予約を取り消す entry。投与日の移動・中止、レジメンの
+ * 中止・完了・クール取消に同梱する(§8.13 N-5)。予約が無ければ空。
+ */
+function chemoAppointmentCancelEntries(orders: RegimenDayOrder[]): Promise<fhir4.BundleEntry[]> {
+  return orderAppointmentCancelEntries(orders.map((o) => o.serviceRequest.id ?? ""));
 }
 
 export function useRegimenHeaders(regimenSrIds: string[]) {
@@ -10365,6 +10380,48 @@ export function useDeleteAdverseEvent() {
     onSuccess: () => invalidateAdverseEvents(queryClient),
   });
 }
+
+/**
+ * クールごと取り消す(§7.6 C-7)。登録した日オーダーを薬剤・進捗ごと消し、化学療法室の予約も
+ * 取り消す。誤って登録したクールを片付けるための操作なので、部門が動き出した日を含むクールは
+ * 呼ぶ側(`canDeleteCycle`)が弾く。
+ *
+ * ［決定］中止(Task を cancelled にする)ではなく**削除**にする。中止だと暦に打ち消し線の行が
+ * 残り続け、「予定していたが止めた」と「そもそも登録が誤りだった」が区別できなくなる。
+ */
+export function useDeleteRegimenCycle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (targets: RegimenDayOrder[]) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          ...targets.flatMap((order) => [
+            { request: { method: "DELETE" as const, url: `ServiceRequest/${order.serviceRequest.id}` } },
+            {
+              request: {
+                method: "DELETE" as const,
+                url: `MedicationRequest?based-on=ServiceRequest/${order.serviceRequest.id}`,
+              },
+            },
+            // 進捗の Task は残すと孤児になる(他種別の削除では残っている既知の課題)。
+            // ここは対象が手元にあるので一緒に消す。
+            ...(order.task?.id
+              ? [{ request: { method: "DELETE" as const, url: `Task/${order.task.id}` } }]
+              : []),
+          ]),
+          ...(await chemoAppointmentCancelEntries(targets)),
+        ],
+      }),
+    onSuccess: () => invalidateRegimen(queryClient),
+  });
+}
+
+/**
+ * ヘッダの編集(§7.6 C-6)。予定クール数の延長・入外区分・プロブレム・コメントを直す。
+ * 登録・編集と同じ来歴(UPDATE)が付くよう `useUpdatePrescription` を通す。
+ */
 
 /**
  * レジメンの完了・休止・再開(§7.6 C-1)。完了は中止と同じく未実施の日オーダーを止め、

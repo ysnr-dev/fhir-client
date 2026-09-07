@@ -5,14 +5,21 @@ import {
   useOrderAppointments,
   usePatient,
   useRevokeRegimen,
+  useUpdatePrescription,
   useUpdateRegimenDayStatus,
 } from "../api/queries";
 import { appointmentDateTimeLabel } from "../fhir/appointmentHelpers";
 import { groupInjectionByRp, injectionTimesLabel, injectionUsageSummary } from "../fhir/injectionHelpers";
-import { groupByRp } from "../fhir/prescriptionHelpers";
+import { groupByRp, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import {
   REGIMEN_DISCONTINUATION_REASON_OPTIONS,
+  buildRegimenHeaderUpdateBundle,
   cycleDayLabel,
+  cycleStartDates,
+  headerValuesOf,
+  lastAdministrationDate,
+  validateRegimenHeader,
+  type RegimenHeaderValues,
   dayOrderCancelReason,
   nextCycleOf,
   previousCycleOf,
@@ -20,9 +27,13 @@ import {
   type RegimenApplication,
   type RegimenDayOrder,
 } from "../fhir/regimenOrderHelpers";
+import { SETTING_OPTIONS } from "../fhir/shared";
 import { diffDays } from "../lib/dates";
 import { useRegimenApplication } from "../hooks/useRegimenApplication";
+import { useProblemOptions } from "../hooks/useProblemOptions";
+import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { ProblemSelect } from "./ProblemSelect";
 import { Modal } from "./Modal";
 import { ChemoBookModal } from "./ChemoBookModal";
 import { RegimenCyclePanel } from "./RegimenApplyPanel";
@@ -61,6 +72,7 @@ export function RegimenCycleLoader({
         cycle={next.cycle}
         startDate={next.startDate}
         previousCycle={previousCycleOf(orders, next.cycle)}
+        lastAdministered={lastAdministrationDate(orders)}
         onSaved={onSaved}
       />
     </>
@@ -524,6 +536,109 @@ function RegimenDayBooking({
           </button>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * 適用のヘッダの編集(右ペイン、§7.6 C-6)。左ペインの詳細ビューから開く。
+ *
+ * ［決定］直せるのは**適用の枠**(入外区分・予定クール数・プロブレム・コメント)だけ。投与内容は
+ * レジメンマスタのもので、体格は登録済みの投与量の根拠なので直させない(§7.6 B-8)。
+ * 予定クール数を延ばせることがこの画面の主目的で、いままでは予定数に達すると適用し直すしか
+ * 続ける手が無かった。
+ */
+export function RegimenHeaderPanel({
+  patientId,
+  regimenSrId,
+  onSaved,
+}: {
+  patientId: string;
+  regimenSrId: string;
+  onSaved: () => void;
+}) {
+  const { application, header, orders, isPending, error } = useRegimenApplication(patientId, regimenSrId);
+  const update = useUpdatePrescription();
+  const problems = useProblemOptions(patientId);
+  const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  const [values, setValues] = useState<RegimenHeaderValues | null>(null);
+
+  if (isPending) return <p>読み込み中...</p>;
+  if (!application || !header) return <ErrorBanner error={error ?? new Error("レジメンの適用が見つかりません")} />;
+
+  const current = values ?? headerValuesOf(application);
+  const registered = cycleStartDates(orders).size;
+
+  function set<K extends keyof RegimenHeaderValues>(key: K, value: RegimenHeaderValues[K]) {
+    setValues({ ...current, [key]: value });
+  }
+
+  function handleSubmit() {
+    if (!header) return;
+    const message = validateRegimenHeader(current);
+    setValidationError(message);
+    if (message) return;
+    // 登録済みのクールより少ない予定数にすると「予定を超えて登録済み」の状態になるので止める。
+    if (current.plannedCycles.trim() !== "" && Number(current.plannedCycles) < registered) {
+      setValidationError(`第 ${registered} クールまで登録済みです。予定クール数はそれ以上にしてください`);
+      return;
+    }
+    update.mutate(buildRegimenHeaderUpdateBundle(header, current), { onSuccess: onSaved });
+  }
+
+  return (
+    <div className="regimen-detail">
+      {validationError && (
+        <div className="error-banner" role="alert" ref={validationErrorRef}>
+          <p className="error-banner__line error-banner__line--error">{validationError}</p>
+        </div>
+      )}
+      <ErrorBanner error={error ?? update.error} />
+      <p className="regimen-day__title">{`${application.name}（開始 ${application.startDate}）`}</p>
+
+      <fieldset className="regimen-apply__fields">
+        <legend>適用</legend>
+        <div className="lab-order-item__fields">
+          <label>
+            入外区分
+            <select value={current.setting} onChange={(e) => set("setting", e.target.value as PrescriptionSetting)}>
+              <option value="">選択</option>
+              {SETTING_OPTIONS.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.display}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            予定クール数
+            <input
+              type="number"
+              min="1"
+              value={current.plannedCycles}
+              onChange={(e) => set("plannedCycles", e.target.value)}
+              placeholder="空欄は継続"
+            />
+          </label>
+          <label>
+            対象プロブレム
+            <ProblemSelect value={current.problem} options={problems} onChange={(p) => set("problem", p)} />
+          </label>
+          <label>
+            コメント
+            <input type="text" value={current.comment} onChange={(e) => set("comment", e.target.value)} />
+          </label>
+        </div>
+      </fieldset>
+      <p className="injection-scope__note">
+        入外区分は次に登録するクールから使います。登録済みの投与日はそのままです。
+      </p>
+
+      <div className="lab-order-item__actions">
+        <button type="button" onClick={handleSubmit} disabled={update.isPending}>
+          更新
+        </button>
+      </div>
     </div>
   );
 }

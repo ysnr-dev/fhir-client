@@ -30,7 +30,7 @@ import {
 import { VitalCreatePanel, VitalEditPanel } from "./VitalPanels";
 import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
 import { RegimenApplyPanel } from "./RegimenApplyPanel";
-import { RegimenCycleLoader, RegimenDayPanel } from "./RegimenPanels";
+import { RegimenCycleLoader, RegimenDayPanel, RegimenHeaderPanel } from "./RegimenPanels";
 import { RegimenAdverseEventPanel } from "./RegimenAdverseEventPanel";
 
 // カルテ画面の右ペイン。登録・編集 UI は既存ページと共通のパネルを使う。
@@ -92,7 +92,9 @@ export type KartePaneState =
   // 暦の 1 日(その日のオーダーの編集・移動・中止)。
   | { kind: "regimen-day"; regimenSrId: string; date: string }
   // クールの有害事象(CTCAE Grade)の記録。
-  | { kind: "regimen-adverse"; regimenSrId: string; cycle: number };
+  | { kind: "regimen-adverse"; regimenSrId: string; cycle: number }
+  // 適用のヘッダ(予定クール数・入外区分・プロブレム・コメント)の編集。
+  | { kind: "regimen-header"; regimenSrId: string };
 
 const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   empty: "",
@@ -141,6 +143,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "regimen-cycle": "化学療法(クール登録)",
   "regimen-day": "化学療法(投与日)",
   "regimen-adverse": "化学療法(有害事象)",
+  "regimen-header": "化学療法(適用の編集)",
 };
 
 // 対象が切り替わったらフォームを作り直すためのキー。各フォームは初期値を useState の
@@ -182,6 +185,8 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.regimenSrId}:${state.date}`;
     case "regimen-adverse":
       return `${state.kind}:${state.regimenSrId}:${state.cycle}`;
+    case "regimen-header":
+      return `${state.kind}:${state.regimenSrId}`;
     // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
     // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
     case "prescription-create":
@@ -456,6 +461,8 @@ function PaneContent({
       return (
         <RegimenAdverseEventPanel patientId={patientId} regimenSrId={state.regimenSrId} cycle={state.cycle} />
       );
+    case "regimen-header":
+      return <RegimenHeaderPanel patientId={patientId} regimenSrId={state.regimenSrId} onSaved={onSaved} />;
     case "note-create":
       return (
         <ClinicalNoteCreatePanel

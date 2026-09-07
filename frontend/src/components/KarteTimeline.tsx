@@ -400,7 +400,7 @@ function KarteCard({
     // 化学療法の日オーダーを消すとクールが歯抜けになり、化学療法室の予約も残る。
     // 投与を止めるだけなら化学療法タブの投与日パネルの「中止」を使う(§8.14 N-13)。
     const regimenNote = regimenDay
-      ? `\n${regimenDay.name} ${cycleDayLabel(regimenDay)} の投与日です。削除するとクールから抜け、化学療法室の予約も残ります。投与を止めるだけなら化学療法タブで中止してください。`
+      ? `\n${regimenDay.name} ${cycleDayLabel(regimenDay)} の投与日です。削除するとクールから抜けます。投与を止めるだけなら化学療法タブで中止、クールごと消すならレジメン詳細の「取消」を使ってください。`
       : "";
     if (!window.confirm(`この${karteItemKindLabel(item)}を削除します。${regimenNote}よろしいですか?`)) return;
     const options = { onSuccess: () => onDeleted(item) };

@@ -1307,6 +1307,133 @@ export function buildRegimenMoveBundle(
   return { resourceType: "Bundle", type: "transaction", entry: entries };
 }
 
+// ---- 重なり・重複の検出(§7.6 A-7) ----
+
+/**
+ * 新規適用のときの注意。
+ * ［決定］**止めない**(投与前チェックと同じ。§8.3)。同じレジメンを続けて 2 本立てる運用
+ * (前の適用を閉じ忘れたまま新しく作る)も、別のレジメンとの併用も、あり得ないとは言えない。
+ * 気付ける形にすることだけを担う。
+ */
+export function applicationConflicts(code: string, existing: RegimenApplication[]): string[] {
+  const running = existing.filter((a) => a.status === "active" || a.status === "on-hold");
+  const same = running.filter((a) => a.code === code);
+  const others = running.filter((a) => a.code !== code);
+  const warnings: string[] = [];
+  if (same.length > 0) {
+    warnings.push(
+      `このレジメンは${regimenStatusLabel(same[0].status)}です(${same[0].name}、開始 ${same[0].startDate})。二重に適用しようとしていないか確かめてください。`,
+    );
+  }
+  if (others.length > 0) {
+    warnings.push(`ほかに進行中のレジメンがあります(${others.map((a) => a.name).join("・")})。`);
+  }
+  return warnings;
+}
+
+/**
+ * 開始日の注意。過去日はどちらのモードでも、重なりは次クールの登録で見る
+ * (前のクールの最終投与日以前に Day 1 を置くと、暦の休薬期間もクールの進捗も読めなくなる)。
+ */
+export function startDateWarnings(startDate: string, lastAdministered: string): string[] {
+  const warnings: string[] = [];
+  if (startDate && startDate < today()) warnings.push(`開始日が過去の日付です(${startDate})。`);
+  if (lastAdministered && startDate && startDate <= lastAdministered) {
+    warnings.push(`登録済みの投与日(${lastAdministered})と重なります。開始日を確かめてください。`);
+  }
+  return warnings;
+}
+
+// ---- ヘッダの編集(§7.6 C-6) ----
+
+/**
+ * 適用のヘッダで後から直せる項目。投与内容(ステップ・薬剤)は直せない —— それはレジメン
+ * マスタのものだから。体格も直さない(出し直すと登録済みの投与量と食い違う。§7.6 B-8)。
+ */
+export interface RegimenHeaderValues {
+  setting: PrescriptionSetting;
+  /** 予定クール数。空は「継続」。 */
+  plannedCycles: string;
+  problem: ProblemRef | null;
+  comment: string;
+}
+
+export function headerValuesOf(application: RegimenApplication): RegimenHeaderValues {
+  return {
+    setting: application.setting,
+    plannedCycles: application.plannedCycles !== null ? String(application.plannedCycles) : "",
+    problem: application.problem,
+    comment: application.comment,
+  };
+}
+
+export function validateRegimenHeader(values: RegimenHeaderValues): string | null {
+  if (!values.setting) return "入外区分を選択してください";
+  if (values.plannedCycles.trim() !== "") {
+    const planned = Number(values.plannedCycles);
+    if (!Number.isInteger(planned) || planned < 1) return "予定クール数は 1 以上の整数で入力してください";
+  }
+  return null;
+}
+
+/**
+ * ヘッダの更新。**登録済みの日オーダーは触らない**(入外区分を変えても、既に出したオーダーは
+ * その時の区分のまま。次に登録するクールから新しい区分になる)。
+ */
+export function buildRegimenHeaderUpdateBundle(
+  header: fhir4.ServiceRequest,
+  values: RegimenHeaderValues,
+): fhir4.Bundle {
+  const planned = values.plannedCycles.trim() === "" ? null : Number(values.plannedCycles);
+  const current = header.extension?.find((e) => e.url === REGIMEN_EXT_URL);
+  const parts = (current?.extension ?? []).filter((e) => e.url !== "plannedCycles");
+  const resource: fhir4.ServiceRequest = {
+    ...header,
+    category: [
+      { coding: [{ system: ORDER_TYPE_SYSTEM, ...REGIMEN_ORDER_TYPE }] },
+      {
+        coding: [{ system: SETTING_SYSTEM, code: values.setting, display: findSettingDisplay(values.setting) }],
+      },
+    ],
+    extension: [
+      ...(header.extension ?? []).filter((e) => e.url !== REGIMEN_EXT_URL),
+      {
+        url: REGIMEN_EXT_URL,
+        extension: planned !== null ? [...parts, { url: "plannedCycles", valueInteger: planned }] : parts,
+      },
+    ],
+  };
+  if (values.problem) {
+    resource.reasonReference = [
+      { reference: `Condition/${values.problem.conditionId}`, display: values.problem.display },
+    ];
+  } else {
+    delete resource.reasonReference;
+  }
+  if (values.comment.trim()) resource.note = [{ text: values.comment.trim() }];
+  else delete resource.note;
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [{ resource, request: { method: "PUT", url: `ServiceRequest/${header.id}` } }],
+  };
+}
+
+// ---- クール単位の取消(§7.6 C-7) ----
+
+/** そのクールの日オーダー。 */
+export function cycleOrdersOf(orders: RegimenDayOrder[], cycle: number): RegimenDayOrder[] {
+  return orders.filter((o) => o.ref.cycle === cycle);
+}
+
+/**
+ * クールごと取り消せるか。**部門が動き出した日が 1 つでもあれば消させない**
+ * (受付・払出・実施の記録が宙に浮くため)。その場合は日ごとの中止を使う。
+ */
+export function canDeleteCycle(orders: RegimenDayOrder[]): boolean {
+  return orders.length > 0 && orders.every((o) => o.status === "requested" || o.status === "cancelled");
+}
+
 /** ヘッダを中止(revoked)にする entry。 */
 /** ヘッダの `regimen` 拡張に、状態遷移の記録(中止理由・完了日)を足して返す。 */
 function withRegimenExtension(header: fhir4.ServiceRequest, parts: fhir4.Extension[]): fhir4.Extension[] {

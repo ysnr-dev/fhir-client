@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { useUpdateRegimenStatus } from "../api/queries";
+import { useDeleteRegimenCycle, useUpdateRegimenStatus } from "../api/queries";
 import { adverseEventLabel, adverseEventsOf, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import {
+  canDeleteCycle,
+  cycleOrdersOf,
   cycleProgressOf,
   cycleStartDates,
   discontinuationReasonLabel,
@@ -34,6 +36,8 @@ interface RegimenDetailViewProps {
   adverseEvents: AdverseEventRecord[];
   /** クールの有害事象の記録を右ペインで開く。 */
   onOpenAdverseEvents: (cycle: number) => void;
+  /** 適用の編集(予定クール数・入外区分・プロブレム・コメント)を右ペインで開く。 */
+  onEditHeader: () => void;
 }
 
 function progressLabel(p: CycleProgress | undefined): string {
@@ -53,8 +57,10 @@ export function RegimenDetailView({
   onAddCycle,
   adverseEvents,
   onOpenAdverseEvents,
+  onEditHeader,
 }: RegimenDetailViewProps) {
   const updateStatus = useUpdateRegimenStatus();
+  const deleteCycle = useDeleteRegimenCycle();
   const [revoking, setRevoking] = useState(false);
 
   const starts = cycleStartDates(orders);
@@ -79,9 +85,18 @@ export function RegimenDetailView({
     updateStatus.mutate({ header, status: hold ? "on-hold" : "active", targets: orders });
   }
 
+  /** クールごと取り消す(§7.6 C-7)。誤って登録したクールを暦から消すための操作。 */
+  function handleDeleteCycle(cycle: number) {
+    const targets = cycleOrdersOf(orders, cycle);
+    const dates = Array.from(new Set(targets.map((o) => o.date))).sort();
+    const message = `第 ${cycle} クール(${dates.length} 日分・${targets.length} 件)を取り消します。\nオーダーは削除され、化学療法室の予約も取り消します。よろしいですか？`;
+    if (!window.confirm(message)) return;
+    deleteCycle.mutate(targets);
+  }
+
   return (
     <div className="regimen-detail">
-      <ErrorBanner error={error ?? updateStatus.error} />
+      <ErrorBanner error={error ?? updateStatus.error ?? deleteCycle.error} />
       <dl className="regimen-detail__summary">
         <dt>レジメン</dt>
         <dd>
@@ -148,6 +163,7 @@ export function RegimenDetailView({
             <th className="rad-item__compact">進捗</th>
             <th>投与日</th>
             <th>有害事象</th>
+            <th className="rad-item__compact"></th>
           </tr>
         </thead>
         <tbody>
@@ -209,12 +225,27 @@ export function RegimenDetailView({
                   </button>
                   </div>
                 </td>
+                {/* 取り消せるのは部門が動き出していないクールだけ。実施・受付・払出が
+                    あるクールは日ごとの中止を使う(記録が宙に浮くため)。 */}
+                <td className="rad-item__compact">
+                  {(active || held) && canDeleteCycle(own) && (
+                    <button
+                      type="button"
+                      className="rp-card__compact-button"
+                      onClick={() => handleDeleteCycle(cycle)}
+                      disabled={deleteCycle.isPending}
+                      title={`第 ${cycle} クールのオーダーを削除する`}
+                    >
+                      取消
+                    </button>
+                  )}
+                </td>
               </tr>
             );
           })}
           {cycles.length === 0 && (
             <tr>
-              <td colSpan={5} className="master-search__empty">
+              <td colSpan={6} className="master-search__empty">
                 登録されたクールがありません
               </td>
             </tr>
@@ -238,6 +269,9 @@ export function RegimenDetailView({
               再開
             </button>
           )}
+          <button type="button" onClick={onEditHeader}>
+            適用を編集
+          </button>
           <button type="button" onClick={handleComplete} disabled={updateStatus.isPending}>
             完了にする
           </button>
@@ -249,6 +283,7 @@ export function RegimenDetailView({
       {reachedPlanned && active && (
         <p className="injection-scope__note">
           予定クール数({application.plannedCycles})まで登録済みです。すべて実施したら「完了にする」で閉じます。
+          続ける場合は「適用を編集」で予定クール数を増やします。
         </p>
       )}
       {held && <p className="injection-scope__note">休止中は次クールを登録できません。登録済みの投与日はそのまま残ります。</p>}

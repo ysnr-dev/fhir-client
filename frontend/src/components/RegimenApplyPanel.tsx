@@ -8,6 +8,7 @@ import {
   usePatient,
   useRecentLabResults,
   useRegimenAdverseEvents,
+  useRegimenApplications,
 } from "../api/queries";
 import { adverseEventsOf, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import { allergyMatchLabel, matchMedicationAllergies, type AllergyMatch } from "../fhir/allergyHelpers";
@@ -30,6 +31,7 @@ import {
 } from "../fhir/regimenHelpers";
 import {
   MAX_REGIMEN_CYCLES_AT_ONCE,
+  applicationConflicts,
   bsaOf,
   buildRegimenApplicationBundle,
   buildRegimenCycleBundle,
@@ -43,6 +45,7 @@ import {
   regimenHasAuc,
   regimenHasInjection,
   regimenHasOral,
+  startDateWarnings,
   validateRegimenApply,
   type GfrSource,
   type PreviousCycle,
@@ -155,6 +158,7 @@ function RegimenApplyLoader({
   onSaved: () => void;
 }) {
   const detail = useRegimen(regimenId);
+  const applications = useRegimenApplications(patientId);
   const create = useCreatePrescription();
   const requester = useOrderContext();
   const defaultSetting = useDefaultOrderSetting(patientId);
@@ -178,6 +182,7 @@ function RegimenApplyLoader({
         firstCycle={1}
         defaultStartDate={today()}
         defaultProblem={defaultProblem}
+        conflicts={applicationConflicts(regimen.regimen_code, applications.data?.applications ?? [])}
         submitting={create.isPending}
         submitError={create.error}
         onSubmit={(values) => {
@@ -228,6 +233,8 @@ interface RegimenCyclePanelProps {
   startDate: string;
   /** 前クールの投与量(既定でこれを引き継ぐ)。 */
   previousCycle: PreviousCycle | null;
+  /** 登録済みの最後の投与日。開始日が重なっていないかを見る(§7.6 A-7)。 */
+  lastAdministered: string;
   onSaved: () => void;
 }
 
@@ -241,6 +248,7 @@ export function RegimenCyclePanel({
   cycle,
   startDate,
   previousCycle,
+  lastAdministered,
   onSaved,
 }: RegimenCyclePanelProps) {
   const detail = useRegimen(application.code || null);
@@ -280,6 +288,7 @@ export function RegimenCyclePanel({
         previousCycle={previousCycle}
         previousAdverse={previousAdverse}
         masterChangedOn={masterChangedOn(regimen.updated_at, application.authoredOn)}
+        lastAdministered={lastAdministered}
         submitting={create.isPending}
         submitError={create.error}
         onSubmit={(values) => {
@@ -314,6 +323,10 @@ interface RegimenApplyFormProps {
    * 投与内容を見直すよう促す(§8.13 N-2)。
    */
   masterChangedOn?: string;
+  /** 新規適用のときの注意(二重適用・併用)。 */
+  conflicts?: string[];
+  /** 登録済みの最後の投与日(次クールの登録で重なりを見る)。 */
+  lastAdministered?: string;
   submitting: boolean;
   submitError: unknown;
   onSubmit: (values: RegimenApplyValues) => void;
@@ -331,6 +344,8 @@ function RegimenApplyForm({
   previousCycle,
   previousAdverse = [],
   masterChangedOn = "",
+  conflicts = [],
+  lastAdministered = "",
   submitting,
   submitError,
   onSubmit,
@@ -645,6 +660,12 @@ function RegimenApplyForm({
         </p>
       )}
       {previousCycle && <RegimenPreviousAdverseEvents cycle={previousCycle.cycle} records={previousAdverse} />}
+
+      {[...conflicts, ...startDateWarnings(values.startDate, lastAdministered)].map((warning) => (
+        <p key={warning} className="regimen-check__summary regimen-check__summary--out">
+          {warning}
+        </p>
+      ))}
 
       <fieldset className="regimen-apply__fields">
         <legend>スケジュール</legend>

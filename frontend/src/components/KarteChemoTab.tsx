@@ -51,6 +51,8 @@ interface KarteChemoTabProps {
   onOpenDay: (regimenSrId: string, date: string) => void;
   /** クールの有害事象の記録を右ペインで開く。 */
   onOpenAdverseEvents: (regimenSrId: string, cycle: number) => void;
+  /** 適用のヘッダの編集を右ペインで開く。 */
+  onEditHeader: (regimenSrId: string) => void;
 }
 
 function calendarDays(month: Date): { date: string; inMonth: boolean; weekday: number }[] {
@@ -91,6 +93,7 @@ export function KarteChemoTab({
   onAddCycle,
   onOpenDay,
   onOpenAdverseEvents,
+  onEditHeader,
 }: KarteChemoTabProps) {
   const applications = useRegimenApplications(patientId);
   const adverseEvents = useRegimenAdverseEvents(patientId);
@@ -259,6 +262,7 @@ export function KarteChemoTab({
             onOpenDay={(date) => onOpenDay(selected.id, date)}
             onAddCycle={() => onAddCycle(selected.id)}
             onOpenAdverseEvents={(cycle) => onOpenAdverseEvents(selected.id, cycle)}
+            onEditHeader={() => onEditHeader(selected.id)}
           />
         ) : (
           <p className="patient-table__empty">適用されたレジメンはありません。右ペインの「化学療法」から始めます。</p>

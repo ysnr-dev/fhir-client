@@ -52,7 +52,7 @@ export function InjectionDeleteModal({ serviceRequest, onClose, onDeleted }: Inj
           {/* 化学療法の日オーダーは、消すとクールが歯抜けになり予約も残る(§8.14 N-13)。 */}
           {regimenDay && (
             <p className="injection-scope__note">
-              {`${regimenDay.name} ${cycleDayLabel(regimenDay)} の投与日です。削除するとクールから抜け、外来化学療法室の予約も残ります。投与を止めるだけなら化学療法タブの投与日パネルで中止してください。`}
+              {`${regimenDay.name} ${cycleDayLabel(regimenDay)} の投与日です。削除するとクールから抜けます(外来化学療法室の予約は一緒に取り消します)。投与を止めるだけなら化学療法タブの投与日パネルで中止、クールごと消すならレジメン詳細の「取消」を使ってください。`}
             </p>
           )}
           <div className="plain-text-modal__actions">
