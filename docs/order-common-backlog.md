@@ -278,3 +278,11 @@ Provenance
   `biological_product_flag`。注射 §8 A)、造影剤(`contrast_medium_category`)。
 - 看護ワークシートへの注射予定の表示(注射 §8 C、化学療法 §7.6 E-4)も種別をまたぐが、これは
   看護指示側の設計(`docs/nursing-order-design.md`)で扱う。
+
+### 3.1 投与量の単位が混在するようになった(2026-09-07 に対応済み)
+
+化学療法レジメンのオーダーは投与量を力価(mg)や容量(mL)で持ち(`docs/chemo-regimen-design.md` §8.5)、
+手入力の注射・処方は製剤数(薬価算定単位)で持つ。「投与量 = 製剤数」を前提に mL の係数を掛けていた
+経過表の水分出納と注射フォームの総投与量が力価のオーダーで桁違いになっていたので、
+`fhir/doseConversionHelpers.ts` の `toMilliliters` に寄せて単位を見るようにした(同 §8.13 N-3 / N-4)。
+**投与量を数量として扱う処理を新しく書くときは `doseQuantity.unit` を必ず見る**(払出は `toPackQuantity`、mL は `toMilliliters`)。

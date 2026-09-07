@@ -14,6 +14,7 @@ import {
   type InjectionFormValues,
 } from "../fhir/injectionHelpers";
 import { prescriptionRequester, withOrderWard } from "../fhir/prescriptionHelpers";
+import { preserveRegimenStamp } from "../fhir/regimenOrderHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useInjectionInitialValues } from "../hooks/useInjectionInitialValues";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
@@ -123,7 +124,12 @@ export function InjectionEditPanel({ patientId, srId, onSaved }: InjectionEditPa
             mrs.map((mr) => mr.id).filter((id): id is string => Boolean(id)),
             requester,
           );
-    updateInjection.mutate(bundle, { onSuccess: onSaved });
+    // レジメンの日オーダーなら、フォームが持たないレジメンの印(拡張・requisition・投与量)を
+    // 元のオーダーから写す。写さないと編集しただけで化学療法の暦から消える。
+    updateInjection.mutate(
+      { ...bundle, entry: preserveRegimenStamp(bundle.entry ?? [], sr, mrs) },
+      { onSuccess: onSaved },
+    );
   }
 
   const seriesLabel = sr ? injectionSeriesLabel(sr) : "";

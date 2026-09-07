@@ -634,35 +634,6 @@ export function useDeleteMedicineDoseConversion() {
   });
 }
 
-// 注射オーダーの総投与量計算用。医薬品コード → 「1[薬価算定単位] が何 mL か」の係数。
-// 換算行を持たない医薬品(粉末バイアル等、容量がマスタに無いもの)は Map に入らない。
-export function useMedicineMlFactors(medicineCodes: string[]) {
-  const codes = Array.from(new Set(medicineCodes)).sort();
-
-  return useQuery({
-    queryKey: ["master", "medicine_dose_conversions", "ml", codes],
-    queryFn: async () => {
-      const result = await searchMedicineDoseConversions({
-        medicine_code: codes.join(","),
-        from_unit: "mL",
-        per: 100,
-      });
-      const factors = new Map<string, number>();
-      for (const row of result.items) {
-        const factor = Number(row.factor);
-        if (factor > 0) factors.set(row.medicine_code, factor);
-      }
-      return factors;
-    },
-    staleTime: Infinity,
-    enabled: codes.length > 0,
-  });
-}
-
-/**
- * 医薬品コード → 入力単位(mg・g・単位…)→ 1 [薬価算定単位] あたりの量。化学療法の
- * 投与量(mg/m² から出した mg)を製剤数に直すのに使う。mL 行も含めて全単位を引く。
- */
 export function useCtcaeTermSearch(
   filters: { name?: string; soc?: string },
   page: number,
@@ -685,6 +656,11 @@ export function useCtcaeSocs(enabled: boolean) {
   });
 }
 
+/**
+ * 医薬品コード → 入力単位(mg・g・mL…)→ 1 [薬価算定単位] あたりの量と、薬価算定単位。
+ * 化学療法の投与量(mg/m² から出した mg)を製剤数に直す払出、注射の総投与量・経過表の
+ * 水分出納(製剤数・力価 → mL)が使う。mL 行も含めて全単位を引く。
+ */
 export function useMedicineDoseFactors(medicineCodes: string[]) {
   const codes = Array.from(new Set(medicineCodes)).sort();
 

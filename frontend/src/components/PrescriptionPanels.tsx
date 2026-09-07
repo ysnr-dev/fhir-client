@@ -12,6 +12,7 @@ import {
   withOrderWard,
   type PrescriptionFormValues,
 } from "../fhir/prescriptionHelpers";
+import { preserveRegimenStamp } from "../fhir/regimenOrderHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { usePrescriptionInitialValues } from "../hooks/usePrescriptionInitialValues";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
@@ -103,8 +104,11 @@ export function PrescriptionEditPanel({ patientId, srId, onSaved }: Prescription
     // 依頼科・依頼医師は登録時のものを引き継ぐ(編集した人・その時のヘッダーの選択で
     // 上書きしない)。診療記録の author と同じ考え方。
     const originalIds = mrs.map((mr) => mr.id).filter((id): id is string => Boolean(id));
+    const bundle = buildPrescriptionUpdateBundle(values, patientId, sr, originalIds, prescriptionRequester(sr));
+    // レジメンの内服の日オーダーなら、フォームが持たないレジメンの印を元のオーダーから写す
+    // (注射の編集と同じ。写さないと化学療法の暦から消える)。
     updatePrescription.mutate(
-      buildPrescriptionUpdateBundle(values, patientId, sr, originalIds, prescriptionRequester(sr)),
+      { ...bundle, entry: preserveRegimenStamp(bundle.entry ?? [], sr, mrs) },
       { onSuccess: onSaved },
     );
   }

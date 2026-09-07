@@ -1212,7 +1212,7 @@ end
 
 # 化学療法レジメンのサンプル(db/seed_data/regimens.csv ほか、いずれもヘッダー有り)。
 #
-#   regimens.csv                本体。regimen_code は 9000xx(施設の採番 6 桁と分ける)
+#   regimens.csv                本体。regimen_code は 9000xx(施設の採番 6 桁と分ける。自動採番は 900000 未満で行う)
 #   regimen_indications.csv     適応疾患。病名マスタの管理番号 + 表示用の名称・ICD10
 #   regimen_steps.csv           投与ステップ。step_no は CSV 内の並び、days は "1,8" のように複数可
 #   regimen_drugs.csv           ステップの薬剤(regimen_code + step_no で親を引く)

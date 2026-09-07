@@ -106,9 +106,14 @@ module Master
       params.permit(*REGIMEN_ATTRS)
     end
 
-    # 数字だけのレジメンコードの最大値の次(他マスタと同じ採番)。
+    # サンプル(db/seed_data/regimens.csv)が使う帯。施設の採番はこの手前で行う。
+    SAMPLE_CODE_FLOOR = 900_000
+
+    # 数字だけのレジメンコードの最大値の次(他マスタと同じ採番)。サンプルの 9000xx は
+    # 数えない(数えると seed 投入後の 1 件目が 900011 になり、帯を分けた意味が無くなる)。
     def next_regimen_code
       max = Master::Regimen.where("regimen_code ~ '^[0-9]+$'")
+                           .where("regimen_code::bigint < ?", SAMPLE_CODE_FLOOR)
                            .maximum(Arel.sql("regimen_code::bigint"))
       ((max || 0) + 1).to_s.rjust(6, "0")
     end

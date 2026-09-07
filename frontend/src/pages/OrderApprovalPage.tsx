@@ -12,6 +12,7 @@ import { KARTE_KIND_LABELS, orderKindOf } from "../fhir/karteTimeline";
 import { displayName, patientNumberOf } from "../fhir/patientHelpers";
 import { orderSetOf } from "../fhir/orderSetHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
+import { regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import type { PendingApprovalRow } from "../fhir/provenanceHelpers";
 import { orderDay } from "../fhir/shared";
 import { KARTE_DETAIL_PARAM, KARTE_TAB_PARAM, formatKarteDetail } from "../karteUrl";
@@ -158,10 +159,10 @@ interface ApprovalRowProps {
 
 function ApprovalRow({ row, checked, pending, linkState, onToggle, onApprove }: ApprovalRowProps) {
   const order = row.orders[0];
-  const kind = orderKindOf(order);
+  const kind = approvalKindOf(order);
   // オーダーセットの適用は 1 回の操作で複数種別を登録する(来歴も 1 件)。種別列には
   // 含まれる種別を重複なく並べ、どのセットから出したかも添える。
-  const kinds = Array.from(new Set(row.orders.map(orderKindOf)));
+  const kinds = Array.from(new Set(row.orders.map(approvalKindOf)));
   const orderSet = orderSetOf(order);
   const patientId = order.subject?.reference?.split("/").pop() ?? "";
   // 注射の連日オーダーは 1 回の登録で日ごとのヘッダが並ぶ。開始日は最初の日〜最後の日。
@@ -204,6 +205,15 @@ function ApprovalRow({ row, checked, pending, linkState, onToggle, onApprove }: 
 }
 
 type OrderKind = ReturnType<typeof orderKindOf>;
+
+/**
+ * 承認一覧での種別。化学療法の次クール登録はヘッダを含まない(日オーダーだけの transaction)ので、
+ * 日オーダーの `regimen-order` 拡張を見て「化学療法」に寄せる(§8.13 N-6)。カルテのカードの種別
+ * (`orderKindOf`)は変えない — そこで化学療法にすると日オーダーがカードから消える。
+ */
+function approvalKindOf(order: fhir4.ServiceRequest): OrderKind {
+  return regimenOrderOf(order) ? "chemo-regimen" : orderKindOf(order);
+}
 
 function kindLabel(kind: OrderKind): string {
   if (!kind) return "-";

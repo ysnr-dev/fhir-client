@@ -1,4 +1,5 @@
 import type { NursingObservation } from "../api/masterClient";
+import { toMilliliters, type MedicineDoseConversionMap } from "./doseConversionHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
 import { codingBySystem } from "./shared";
 
@@ -12,9 +13,11 @@ import { codingBySystem } from "./shared";
 // 同じ名前で単位違いの項目が並ぶ(尿量 mL / 尿量 g、出血量 mL / g)ため、**名前ではなく
 // 管理番号**で持つ。集計できるのは mL の項目だけなので、設定画面の候補も mL に絞る。
 //
-// 注射(点滴)を IN に数えるには別の換算が要る。投与量は袋・管・瓶といった薬価算定
-// 単位で記録されており mL ではないので、投与量換算マスタで直す(注射フォームの
-// 総投与量と同じ仕組み)。換算行の無い薬剤は数えられないので、その件数を返す。
+// 注射(点滴)を IN に数えるには別の換算が要る。手入力の注射の投与量は袋・管・瓶といった
+// 薬価算定単位で、化学療法レジメンから出た注射は力価(mg)や容量(mL)で記録される
+// (docs/chemo-regimen-design.md §8.5)ので、単位を見て投与量換算マスタで mL に直す
+// (注射フォームの総投与量と同じ `toMilliliters`)。換算できない薬剤は数えられないので、
+// その件数を返す。
 
 /** In / Out に数える看護観察(MEDIS の管理番号)。 */
 export interface WaterBalanceSettings {
@@ -59,8 +62,8 @@ export function buildWaterBalance(args: {
   observations: fhir4.Observation[];
   /** 注射の実施(薬剤ごと)。 */
   administrations: fhir4.MedicationAdministration[];
-  /** 医薬品コード → 1 薬価算定単位あたりの mL。 */
-  mlFactors: Map<string, number>;
+  /** 投与量換算マスタ(力価・製剤数 → mL)。 */
+  conversions: MedicineDoseConversionMap | undefined;
   /** 日時 → 枠のキー。 */
   slotKeyOf: (at: string) => string;
 }): WaterBalanceTotals {
@@ -84,15 +87,15 @@ export function buildWaterBalance(args: {
   for (const administration of args.administrations) {
     if (administration.status !== "completed" && administration.status !== "stopped") continue;
     const at = administration.effectivePeriod?.start ?? administration.effectiveDateTime;
-    const dose = administration.dosage?.dose?.value;
-    if (!at || dose === undefined) continue;
-    const code = administration.medicationCodeableConcept?.coding?.[0]?.code;
-    const factor = code ? args.mlFactors.get(code) : undefined;
-    if (factor === undefined) {
+    const dose = administration.dosage?.dose;
+    if (!at || dose?.value === undefined) continue;
+    const code = administration.medicationCodeableConcept?.coding?.[0]?.code ?? "";
+    const ml = code ? toMilliliters(dose.value, dose.unit, code, args.conversions) : null;
+    if (ml === null) {
       unconvertible += 1;
       continue;
     }
-    add(inTotals, args.slotKeyOf(at), dose * factor);
+    add(inTotals, args.slotKeyOf(at), ml);
   }
 
   const balance = new Map<string, number>();

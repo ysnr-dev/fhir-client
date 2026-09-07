@@ -19,6 +19,7 @@ import {
   applyOrderContext,
   buildPrescriptionBundle,
   buildPrescriptionUpdateBundle,
+  MEDICINE_CODE_SYSTEM,
   ORDER_IN_RP_SYSTEM,
   RP_NUMBER_SYSTEM,
   identifierValue,
@@ -33,7 +34,14 @@ import {
 import { isHeaderEntry } from "./provenanceHelpers";
 import { doseUnitSuffix } from "./regimenHelpers";
 import type { RxTaskStatus } from "./rxTaskHelpers";
-import { categoryCoding, findSettingDisplay, orderComment, orderDay, registrationAuthoredOn } from "./shared";
+import {
+  categoryCoding,
+  codingBySystem,
+  findSettingDisplay,
+  orderComment,
+  orderDay,
+  registrationAuthoredOn,
+} from "./shared";
 
 // 化学療法レジメンオーダー(患者への適用)。docs/chemo-regimen-design.md §7。
 //
@@ -86,6 +94,8 @@ export interface RegimenApplication {
   name: string;
   /** 最初のクールの Day 1。 */
   startDate: string;
+  /** 適用を登録した日時(authoredOn)。マスタがその後に変わったかの判定に使う(§8.13 N-2)。 */
+  authoredOn: string;
   cycleDays: number;
   treatmentDays: number;
   /** 予定クール数。null は継続。 */
@@ -149,6 +159,7 @@ export function parseRegimenApplication(sr: fhir4.ServiceRequest): RegimenApplic
     code: coding?.code ?? "",
     name: coding?.display ?? sr.code?.text ?? "",
     startDate: orderDay(sr),
+    authoredOn: sr.authoredOn ?? "",
     cycleDays: extInt(ext, "cycleDays") ?? 0,
     treatmentDays: extInt(ext, "treatmentDays") ?? 0,
     plannedCycles: extInt(ext, "plannedCycles"),
@@ -306,10 +317,10 @@ export function planPacks(plan: RegimenDrugPlan): string {
 }
 
 /**
- * 薬剤コメントに写す投与量。オーダーに載るのは製剤数(1.49 瓶)なので、指示の実体である
- * **力価だけ**を添える(「148.75 mg」)。算出の式は書かない — 体表面積・体重は適用の
- * ヘッダに残してあり、基準はレジメンマスタで読めるので、カードや注射箋で毎回読ませる
- * ほどの情報ではない。製剤単位が基準の薬剤(補液)は製剤数そのものが指示なので何も添えない。
+ * 薬剤コメントに写す投与量の目安。オーダーに載るのは力価(148.75 mg。§8.5)なので、払出の
+ * 当たりになる**製剤数**を添える(「≒ 1.49 瓶」)。算出の式は書かない — 体表面積・体重は
+ * 適用のヘッダに残してあり、基準はレジメンマスタで読めるので、カードや注射箋で毎回読ませる
+ * ほどの情報ではない。換算を持たず製剤数で出す薬剤は逆に力価の目安を添える。
  */
 export function planNote(plan: RegimenDrugPlan): string {
   // 減量したときだけ率を添える。基準はレジメンマスタで読めるので式は書かないが、
@@ -538,12 +549,16 @@ export function planSteps(
   regimen: RegimenDetail,
   body: RegimenBody,
   factors: DoseFactorMap,
-  previous?: Map<number, PreviousDose>,
+  previous?: Pick<PreviousCycle, "doses" | "byMedicine"> | null,
 ): RegimenStepPlan[] {
+  // マスタの薬剤 id で引けなければ医薬品コードで引く(§8.13 N-2)。同じ医薬品が複数の
+  // ステップにあるとき(mFOLFOX6 の 5-FU 急速静注と持続点滴)は RP の順に消費して対応づける。
+  const byMedicine = new Map<string, PreviousDose[]>();
+  for (const [code, doses] of previous?.byMedicine ?? []) byMedicine.set(code, [...doses]);
   return regimen.steps.map((step) => ({
     step,
     drugs: step.drugs.map((drug) => {
-      const prev = previous?.get(drug.id);
+      const prev = previous?.doses.get(drug.id) ?? byMedicine.get(drug.medicine_code)?.shift();
       const plan = planDrugDose(drug, body, factors, prev ? prev.ratio : 100);
       return prev ? carryOverDose(plan, prev) : plan;
     }),
@@ -653,9 +668,21 @@ function medicineLines(plan: RegimenStepPlan): MedicineLineValues[] {
   }));
 }
 
-/** ステップの見出し・器材・注意を用法コメントにまとめる(注射箋・ラベルに出る)。 */
+/**
+ * マスタの点滴時間(分)を用法コメントに添える。注射のフォームの「投与時間」は総投与量から
+ * 投与速度を出すための画面内の値で FHIR には残らない(残るのは速度と開始・終了時刻)ので、
+ * 時間そのものは文字で運ぶ(§8.13 N-8)。46 時間の持続点滴のように選択肢に無い長さも書ける。
+ */
+function infusionNote(step: RegimenStep): string {
+  if (step.usage_type !== "drip" || !step.infusion_minutes) return "";
+  const hours = step.infusion_minutes / 60;
+  const hoursLabel = Number.isInteger(hours) ? `${hours} 時間` : Number.isInteger(hours * 2) ? `${hours} 時間` : "";
+  return `点滴時間 ${step.infusion_minutes} 分${hoursLabel ? `(${hoursLabel})` : ""}`;
+}
+
+/** ステップの見出し・点滴時間・器材・注意を用法コメントにまとめる(注射箋・ラベルに出る)。 */
 function stepComment(step: RegimenStep): string {
-  return [step.name, step.device_note ? `器材: ${step.device_note}` : "", step.note]
+  return [step.name, infusionNote(step), step.device_note ? `器材: ${step.device_note}` : "", step.note]
     .filter((s): s is string => Boolean(s))
     .join(" / ");
 }
@@ -668,6 +695,8 @@ function injectionRpOf(plan: RegimenStepPlan): InjectionRpValues {
     siteCode: "",
     methodCode: step.method_code ?? "",
     lineCode: step.line_code ?? "",
+    // 速度はマスタの値。点滴時間はフォーム内だけの値なので用法コメントに書く(`infusionNote`)。
+    // 投与時刻は病棟・化学療法室が決めるもの(予約 §7.6 D-3)で、オーダーには載せない。
     rate: step.rate ? String(Number(step.rate)) : "",
     infusionHours: "",
     times: [],
@@ -827,6 +856,39 @@ function carryRegimenDoses(
       },
     };
   });
+}
+
+/** 保存済みの日オーダーの印(`regimenOrderOf`)から、組み直した entry に焼き直すための参照を作る。 */
+function stampRefOf(ref: RegimenOrderRef): StampRef {
+  return {
+    headerReference: `ServiceRequest/${ref.regimenSrId}`,
+    instanceId: ref.instanceId,
+    cycle: ref.cycle,
+    day: ref.day,
+    code: ref.code,
+    name: ref.name,
+    reduction: ref.reduction,
+  };
+}
+
+/**
+ * 通常の注射編集・処方編集で組み直した entry に、元のオーダーが持っていたレジメンの印
+ * (`regimen-order` 拡張・requisition・薬剤の `regimen-dose`)を写す。レジメンの日オーダーで
+ * なければ何もしない(手入力の注射・処方はそのまま)。
+ *
+ * フォーム(`parseInjectionForm` / `parsePrescriptionForm`)は拡張を持たないので、写さないと
+ * 編集しただけで暦・治療歴・ワークリストの印から消え、減量の記録も失われる(§8.13 N-1)。
+ * 編集で力価を変えても `regimen-dose` の amount は写したままにする(拡張は前クールを再現する
+ * ための記録で、指示の実体は `doseQuantity`)。
+ */
+export function preserveRegimenStamp(
+  entries: fhir4.BundleEntry[],
+  originalSr: fhir4.ServiceRequest,
+  originalMrs: fhir4.MedicationRequest[],
+): fhir4.BundleEntry[] {
+  const ref = regimenOrderOf(originalSr);
+  if (!ref) return entries;
+  return carryRegimenDoses(stampRegimenOrder(entries, stampRefOf(ref)), originalMrs);
 }
 
 /**
@@ -1067,11 +1129,34 @@ export function cycleStartDates(orders: RegimenDayOrder[]): Map<number, string> 
 /** 直前のクールの投与量。次のクールを「前クールと同じ量で」出すために読む(§7.6 B-2)。 */
 export interface PreviousCycle {
   cycle: number;
+  /** レジメンマスタの薬剤 id → 投与量。 */
   doses: Map<number, PreviousDose>;
+  /**
+   * 医薬品コード → 投与量(RP 番号・RP 内の順)。マスタを編集すると薬剤 id が振り直される
+   * (backend はステップ・薬剤を作り直す)ので、id で引けないときの当て(§8.13 N-2)。
+   */
+  byMedicine: Map<string, PreviousDose[]>;
   /** そのクールの減量理由。 */
   reduction: string;
   /** 標準量から減らした薬剤があるか。 */
   reduced: boolean;
+}
+
+/** RP 番号 → RP 内の順 で並べるための数値の組。 */
+function rpOrderOf(mr: fhir4.MedicationRequest): [number, number] {
+  return [Number(identifierValue(mr, RP_NUMBER_SYSTEM) ?? "0"), Number(identifierValue(mr, ORDER_IN_RP_SYSTEM) ?? "0")];
+}
+
+/**
+ * 薬剤を RP 番号 → RP 内の順 に並べる。上流の応答順は保存順(編集で差し替えた薬剤が
+ * 後ろに来る)なので、暦のステップ名や前クールの引き当てが RP の順で読めるように揃える。
+ */
+export function sortByRp(mrs: fhir4.MedicationRequest[]): fhir4.MedicationRequest[] {
+  return [...mrs].sort((a, b) => {
+    const [rpA, orderA] = rpOrderOf(a);
+    const [rpB, orderB] = rpOrderOf(b);
+    return rpA - rpB || orderA - orderB;
+  });
 }
 
 /**
@@ -1083,19 +1168,24 @@ export function previousCycleOf(orders: RegimenDayOrder[], beforeCycle: number):
   if (earlier.length === 0) return null;
   const cycle = Math.max(...earlier.map((o) => o.ref.cycle));
   const doses = new Map<number, PreviousDose>();
+  const byMedicine = new Map<string, PreviousDose[]>();
   let reduction = "";
   for (const order of earlier) {
     if (order.ref.cycle !== cycle) continue;
     if (!reduction) reduction = order.ref.reduction;
-    for (const mr of order.medicationRequests) {
+    for (const mr of sortByRp(order.medicationRequests)) {
       const dose = regimenDoseOf(mr);
-      if (dose) doses.set(dose.drugId, dose);
+      if (!dose || doses.has(dose.drugId)) continue;
+      doses.set(dose.drugId, dose);
+      const code = codingBySystem(mr.medicationCodeableConcept?.coding, MEDICINE_CODE_SYSTEM)?.code;
+      if (code) byMedicine.set(code, [...(byMedicine.get(code) ?? []), dose]);
     }
   }
   if (doses.size === 0 && !reduction) return null;
   return {
     cycle,
     doses,
+    byMedicine,
     reduction,
     reduced: Array.from(doses.values()).some((d) => d.ratio !== 100),
   };
@@ -1188,15 +1278,7 @@ export function buildRegimenMoveBundle(
     const newDate = addDays(order.date, deltaDays);
     const requester = prescriptionRequester(sr);
     const mrIds = order.medicationRequests.map((mr) => mr.id).filter((id): id is string => Boolean(id));
-    const ref: StampRef = {
-      headerReference: `ServiceRequest/${order.ref.regimenSrId}`,
-      instanceId: order.ref.instanceId,
-      cycle: order.ref.cycle,
-      day: order.ref.day,
-      code: order.ref.code,
-      name: order.ref.name,
-      reduction: order.ref.reduction,
-    };
+    const ref = stampRefOf(order.ref);
     if (order.kind === "injection") {
       const values = parseInjectionForm(sr, order.medicationRequests);
       const bundle = buildInjectionUpdateBundle(

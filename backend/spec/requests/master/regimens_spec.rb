@@ -144,6 +144,15 @@ RSpec.describe "Master::Regimens", type: :request do
       expect(body["adverse_events"][0]["note"]).to eq("保湿")
     end
 
+    it "自動採番はサンプルの 9000xx 帯を数えない" do
+      create_regimen("900010", "サンプル")
+
+      post "/master/regimens", params: { name: "施設の 1 件目", treatment_days: 1, rest_days: 20 }, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(body["regimen_code"]).to eq("000001")
+    end
+
     it "投与日は「1,8,15」の文字列でも受ける" do
       post "/master/regimens", params: {
         name: "週 1 回",

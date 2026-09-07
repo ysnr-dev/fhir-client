@@ -1,10 +1,10 @@
 import { useState } from "react";
 import {
   useCancelAppointment,
+  useMoveRegimenDays,
   useOrderAppointments,
   usePatient,
   useRevokeRegimen,
-  useUpdatePrescription,
   useUpdateRegimenDayStatus,
 } from "../api/queries";
 import { appointmentDateTimeLabel } from "../fhir/appointmentHelpers";
@@ -12,7 +12,6 @@ import { groupInjectionByRp, injectionTimesLabel, injectionUsageSummary } from "
 import { groupByRp } from "../fhir/prescriptionHelpers";
 import {
   REGIMEN_DISCONTINUATION_REASON_OPTIONS,
-  buildRegimenMoveBundle,
   cycleDayLabel,
   dayOrderCancelReason,
   nextCycleOf,
@@ -89,7 +88,7 @@ export function RegimenDayPanel({
 }: RegimenDayPanelProps) {
   const { application, orders, isPending, error } = useRegimenApplication(patientId, regimenSrId);
   const updateStatus = useUpdateRegimenDayStatus();
-  const move = useUpdatePrescription();
+  const move = useMoveRegimenDays();
   const [scope, setScope] = useState<Scope>("one");
   const [cancelReason, setCancelReason] = useState("");
   const [moveTo, setMoveTo] = useState(date);
@@ -97,7 +96,10 @@ export function RegimenDayPanel({
   const [booking, setBooking] = useState<{ order: fhir4.ServiceRequest; appointment?: fhir4.Appointment } | null>(null);
   const patient = usePatient(patientId).data?.data;
   const injectionOrders = orders.filter((o) => o.date === date && o.kind === "injection");
-  const appointments = useOrderAppointments(injectionOrders.map((o) => o.serviceRequest.id ?? ""));
+  // 予約は「この日以降すべて」の移動・中止で後続日のぶんも取り消すので、適用の全注射オーダーぶん読む。
+  const appointments = useOrderAppointments(
+    orders.filter((o) => o.kind === "injection").map((o) => o.serviceRequest.id ?? ""),
+  );
   const cancelAppointment = useCancelAppointment();
 
   if (isPending) return <p>読み込み中...</p>;
@@ -113,19 +115,31 @@ export function RegimenDayPanel({
   const delta = diffDays(date, moveTo);
   const label = todays[0] ? cycleDayLabel(todays[0].ref) : "";
 
+  /** 対象のオーダーに取ってある化学療法室の予約の数(移動・中止で一緒に取り消す)。 */
+  function bookedCount(list: RegimenDayOrder[]): number {
+    return list.filter((o) => appointments.data?.has(o.serviceRequest.id ?? "")).length;
+  }
+
+  function bookingNote(list: RegimenDayOrder[], after: string): string {
+    const count = bookedCount(list);
+    return count > 0 ? `\n外来化学療法室の予約 ${count} 件も取り消します。${after}` : "";
+  }
+
   function handleMove() {
     if (delta === 0 || movable.length === 0) return;
     const text =
       scope === "following"
-        ? `${date} 以降の ${movable.length} 件を ${delta > 0 ? `${delta} 日後` : `${-delta} 日前`}に移動します。よろしいですか？`
-        : `${date} のオーダーを ${moveTo} に移動します。よろしいですか？`;
-    if (!window.confirm(text)) return;
-    move.mutate(buildRegimenMoveBundle(movable, delta, patientId), { onSuccess: onSaved });
+        ? `${date} 以降の ${movable.length} 件を ${delta > 0 ? `${delta} 日後` : `${-delta} 日前`}に移動します。`
+        : `${date} のオーダーを ${moveTo} に移動します。`;
+    if (!window.confirm(`${text}${bookingNote(movable, "移動後に予約し直してください。")}よろしいですか？`)) return;
+    move.mutate({ targets: movable, deltaDays: delta, patientId }, { onSuccess: onSaved });
   }
 
   function handleCancel() {
     if (cancellable.length === 0) return;
-    if (!window.confirm(`${cancellable.length} 件のオーダーを中止します。よろしいですか？`)) return;
+    if (!window.confirm(`${cancellable.length} 件のオーダーを中止します。${bookingNote(cancellable, "")}よろしいですか？`)) {
+      return;
+    }
     updateStatus.mutate({ targets: cancellable, status: "cancelled", reason: cancelReason }, { onSuccess: onSaved });
   }
 
@@ -357,17 +371,23 @@ interface RegimenMoveModalProps {
  * 実施済は動かさない(済んだ事実)。
  */
 export function RegimenMoveModal({ patientId, from, todays, following, to, onClose, onDone }: RegimenMoveModalProps) {
-  const move = useUpdatePrescription();
+  const move = useMoveRegimenDays();
   const delta = diffDays(from, to);
   const movableToday = todays.filter((o) => o.status !== "completed");
   const movableFollowing = following.filter((o) => o.status !== "completed");
   const label = todays[0] ? cycleDayLabel(todays[0].ref) : "";
   const direction = delta > 0 ? `${delta} 日後` : `${-delta} 日前`;
+  // 動かす日に取ってある化学療法室の予約は取り消す(日時が変わるので取り直してもらう)。
+  const appointments = useOrderAppointments(
+    [...movableToday, ...movableFollowing].filter((o) => o.kind === "injection").map((o) => o.serviceRequest.id ?? ""),
+  );
+  const bookedToday = movableToday.filter((o) => appointments.data?.has(o.serviceRequest.id ?? "")).length;
+  const bookedFollowing = movableFollowing.filter((o) => appointments.data?.has(o.serviceRequest.id ?? "")).length;
 
   function run(withFollowing: boolean) {
     const targets = withFollowing ? [...movableToday, ...movableFollowing] : movableToday;
     if (targets.length === 0) return;
-    move.mutate(buildRegimenMoveBundle(targets, delta, patientId), { onSuccess: onDone });
+    move.mutate({ targets, deltaDays: delta, patientId }, { onSuccess: onDone });
   }
 
   return (
@@ -377,6 +397,11 @@ export function RegimenMoveModal({ patientId, from, todays, following, to, onClo
         {label && <span className="injection-series-label">{label}</span>}
         {`${from} のオーダーを ${to}(${direction})へ移動します。`}
       </p>
+      {bookedToday + bookedFollowing > 0 && (
+        <p className="injection-scope__note">
+          {`外来化学療法室の予約(この日 ${bookedToday} 件${bookedFollowing > 0 ? `、この日以降 ${bookedFollowing} 件` : ""})は取り消します。移動後に予約し直してください。`}
+        </p>
+      )}
       {movableFollowing.length > 0 && (
         <p className="injection-scope__note">
           {`この後に ${movableFollowing.length} 件のオーダーがあります。まとめて同じ日数ずらすこともできます。`}
@@ -420,6 +445,10 @@ export function RegimenRevokeModal({ application, header, orders, onClose, onDon
   const [reason, setReason] = useState<string>(REGIMEN_DISCONTINUATION_REASON_OPTIONS[0].code);
   const [note, setNote] = useState("");
   const pending = orders.filter((o) => o.status !== "completed" && o.status !== "cancelled");
+  const appointments = useOrderAppointments(
+    pending.filter((o) => o.kind === "injection").map((o) => o.serviceRequest.id ?? ""),
+  );
+  const booked = pending.filter((o) => appointments.data?.has(o.serviceRequest.id ?? "")).length;
 
   function run() {
     revoke.mutate({ header, targets: orders, discontinuation: { reason, note } }, { onSuccess: onDone });
@@ -430,7 +459,9 @@ export function RegimenRevokeModal({ application, header, orders, onClose, onDon
       <ErrorBanner error={revoke.error} />
       <p>{`${application.name} を中止します。`}</p>
       {pending.length > 0 && (
-        <p className="injection-scope__note">{`未実施の ${pending.length} 件のオーダーも中止になります。`}</p>
+        <p className="injection-scope__note">
+          {`未実施の ${pending.length} 件のオーダーも中止になります。${booked > 0 ? `外来化学療法室の予約 ${booked} 件も取り消します。` : ""}`}
+        </p>
       )}
       <div className="lab-order-item__fields">
         <label>

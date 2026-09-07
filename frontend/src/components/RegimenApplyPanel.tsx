@@ -55,7 +55,7 @@ import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
-import { today } from "../lib/dates";
+import { toDateInput, today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 import { RegimenBodyChange, RegimenInfoView, RegimenLabCheck, RegimenPreviousAdverseEvents } from "./RegimenPreCheck";
@@ -191,6 +191,17 @@ function RegimenApplyLoader({
   );
 }
 
+/**
+ * レジメンマスタが適用の後に変わっていれば、その日(YYYY-MM-DD)。マスタの `updated_at` は UTC の
+ * ISO 文字列、適用の `authoredOn` は JST つきの文字列なので、文字列比較ではなく時刻で比べる。
+ */
+function masterChangedOn(updatedAt: string, authoredOn: string): string {
+  const updated = Date.parse(updatedAt);
+  const authored = Date.parse(authoredOn);
+  if (!Number.isFinite(updated) || !Number.isFinite(authored) || updated <= authored) return "";
+  return toDateInput(new Date(updated));
+}
+
 interface RegimenCyclePanelProps {
   patientId: string;
   application: RegimenApplication;
@@ -244,6 +255,7 @@ export function RegimenCyclePanel({
         previousBody={{ height: application.height, weight: application.weight, bsa: application.bsa }}
         previousCycle={previousCycle}
         previousAdverse={previousAdverse}
+        masterChangedOn={masterChangedOn(regimen.updated_at, application.authoredOn)}
         submitting={create.isPending}
         submitError={create.error}
         onSubmit={(values) => {
@@ -272,6 +284,12 @@ interface RegimenApplyFormProps {
   previousCycle?: PreviousCycle | null;
   /** 前クールの有害事象(減量・継続の判断材料)。 */
   previousAdverse?: AdverseEventRecord[];
+  /**
+   * 適用した後にレジメンマスタが変更された日(YYYY-MM-DD)。空なら変更なし。
+   * マスタを編集すると薬剤 id が振り直されて前クールの引き当てが医薬品コード頼みになるので、
+   * 投与内容を見直すよう促す(§8.13 N-2)。
+   */
+  masterChangedOn?: string;
   submitting: boolean;
   submitError: unknown;
   onSubmit: (values: RegimenApplyValues) => void;
@@ -288,6 +306,7 @@ function RegimenApplyForm({
   previousBody,
   previousCycle,
   previousAdverse = [],
+  masterChangedOn = "",
   submitting,
   submitError,
   onSubmit,
@@ -362,7 +381,7 @@ function RegimenApplyForm({
         regimen,
         { bsa, weight: Number(weight) || null, gfr: initialGfr },
         factors.data?.factors ?? new Map(),
-        carryOver ? previousCycle?.doses : undefined,
+        carryOver ? previousCycle : undefined,
       ),
     });
   }, [
@@ -451,7 +470,7 @@ function RegimenApplyForm({
           regimen,
           { bsa, weight, gfr: Number(gfr) || null },
           factors.data?.factors ?? new Map(),
-          v.carryOver ? previousCycle?.doses : undefined,
+          v.carryOver ? previousCycle : undefined,
         ),
       };
     });
@@ -472,7 +491,7 @@ function RegimenApplyForm({
           regimen,
           { bsa, weight: Number(v.weight) || null, gfr: Number(gfr) || null },
           factors.data?.factors ?? new Map(),
-          v.carryOver ? previousCycle?.doses : undefined,
+          v.carryOver ? previousCycle : undefined,
         ),
       };
     });
@@ -490,7 +509,7 @@ function RegimenApplyForm({
               regimen,
               { bsa: bsaOf(v), weight: Number(v.weight) || null, gfr: Number(gfr) || null },
               factors.data?.factors ?? new Map(),
-              v.carryOver ? previousCycle?.doses : undefined,
+              v.carryOver ? previousCycle : undefined,
             ),
           }
         : v,
@@ -508,7 +527,7 @@ function RegimenApplyForm({
               regimen,
               { bsa: bsaOf(v), weight: Number(v.weight) || null, gfr: gfrOf(v) },
               factors.data?.factors ?? new Map(),
-              carryOver ? previousCycle?.doses : undefined,
+              carryOver ? previousCycle : undefined,
             ),
           }
         : v,
@@ -768,6 +787,11 @@ function RegimenApplyForm({
 
       <fieldset className="regimen-apply__fields">
         <legend>投与内容</legend>
+        {masterChangedOn && (
+          <p className="regimen-check__summary regimen-check__summary--out">
+            {`このレジメンは適用後(${masterChangedOn})に変更されています。投与内容を確かめてください。`}
+          </p>
+        )}
         {previousCycle && (
           <div className="regimen-apply__carry">
             <label>
