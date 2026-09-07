@@ -7,6 +7,7 @@ import {
   SERIES_START_EXT_URL,
   buildInjectionSingleDayEntries,
   buildInjectionUpdateBundle,
+  injectionCategoryOf,
   isInjectionServiceRequest,
   parseInjectionForm,
   type InjectionFormValues,
@@ -24,6 +25,7 @@ import {
   RP_NUMBER_SYSTEM,
   identifierValue,
   parsePrescriptionForm,
+  prescriptionCategoryOf,
   prescriptionRequester,
   type MedicineLineValues,
   type OrderAttribution,
@@ -1140,6 +1142,9 @@ export interface PreviousCycle {
   reduction: string;
   /** 標準量から減らした薬剤があるか。 */
   reduced: boolean;
+  /** そのクールで使った注射区分・処方区分。次クールの既定にする(§7.6 B-4)。 */
+  injectionCategory: string;
+  prescriptionCategory: string;
 }
 
 /** RP 番号 → RP 内の順 で並べるための数値の組。 */
@@ -1182,12 +1187,17 @@ export function previousCycleOf(orders: RegimenDayOrder[], beforeCycle: number):
     }
   }
   if (doses.size === 0 && !reduction) return null;
+  const ofCycle = earlier.filter((o) => o.ref.cycle === cycle);
+  const injection = ofCycle.find((o) => o.kind === "injection")?.serviceRequest;
+  const prescription = ofCycle.find((o) => o.kind === "prescription")?.serviceRequest;
   return {
     cycle,
     doses,
     byMedicine,
     reduction,
     reduced: Array.from(doses.values()).some((d) => d.ratio !== 100),
+    injectionCategory: injection ? injectionCategoryOf(injection) : "",
+    prescriptionCategory: prescription ? prescriptionCategoryOf(prescription) : "",
   };
 }
 

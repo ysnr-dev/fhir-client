@@ -257,6 +257,9 @@ Provenance
 
 - 部門一覧・タイムラインの未承認バッジ(上記)。
 - 中止・削除の活動は Provenance に書いていない(削除は target が消えて孤児になる。§2.4 障壁 4)。
+  **中止・完了・休止・再開は器だけ作ってある**(`buildActivityProvenanceEntry`。活動は v3-DataOperation の
+  CANCEL / REACTIVATE / COMPLETE / SUSPEND / RESUME、target は対象のオーダー)。いま呼んでいるのは化学療法だけなので
+  (`docs/chemo-regimen-design.md` §8.14)、他種別の中止・実施取消からも同じ器を呼べば揃う。
 - 上流 `AuditEvent` のエンドユーザー記録(認証回りの変更。`docs/server-improvement-backlog.md`)。
 
 ---

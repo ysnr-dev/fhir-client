@@ -12,6 +12,10 @@ import { REGIMEN_ORDER_EXT_URL } from "./regimenOrderHelpers";
  * - valueInteger: Grade(1〜5)
  * - effectivePeriod: start = 発現日、end = 回復日(継続中なら無し)
  * - extension `regimen-order`: 適用ヘッダへの参照とクール(日は持たない)
+ * - performer: 記録した医療従事者
+ *
+ * ［決定］記録者は Provenance ではなく `performer` に置く。オーダーではなく**臨床上の観察**で、
+ * 「誰が診て記録したか」は観察そのものの属性だから(承認の対象にもしない。§8.14 N-10)。
  */
 
 const OBSERVATION_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/observation-category";
@@ -28,6 +32,8 @@ export interface AdverseEventRecord {
   /** 回復日。継続中なら空。 */
   resolved: string;
   note: string;
+  /** 記録した医療従事者。編集で上書きしないよう読み書きする(§8.14 N-10)。 */
+  performer: fhir4.Reference | undefined;
 }
 
 export interface AdverseEventFormValues {
@@ -64,6 +70,7 @@ export function parseAdverseEvent(observation: fhir4.Observation): AdverseEventR
     onset: observation.effectivePeriod?.start?.slice(0, 10) ?? observation.effectiveDateTime?.slice(0, 10) ?? "",
     resolved: observation.effectivePeriod?.end?.slice(0, 10) ?? "",
     note: observation.note?.[0]?.text ?? "",
+    performer: observation.performer?.[0],
   };
 }
 
@@ -79,6 +86,8 @@ export function buildAdverseEvent(
   patientId: string,
   ref: AdverseEventRef,
   id?: string,
+  /** 記録者。編集では元の記録者をそのまま渡す(編集した人で上書きしない)。 */
+  performer?: fhir4.Reference,
 ): fhir4.Observation {
   const observation: fhir4.Observation = {
     resourceType: "Observation",
@@ -104,6 +113,7 @@ export function buildAdverseEvent(
     ],
   };
   if (id) observation.id = id;
+  if (performer) observation.performer = [performer];
   if (values.note.trim()) observation.note = [{ text: values.note.trim() }];
   return observation;
 }

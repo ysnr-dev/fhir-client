@@ -73,6 +73,8 @@ export function RegimenAdverseEventPanel({ patientId, regimenSrId, cycle }: Regi
       patientId,
       { regimenSrId, cycle, code: application.code, name: application.name },
       editingId ?? undefined,
+      // 編集では元の記録者を残す(編集した人で上書きしない)。新規は保存時に入る。
+      own.find((record) => record.id === editingId)?.performer,
     );
     save.mutate(observation, { onSuccess: reset });
   }

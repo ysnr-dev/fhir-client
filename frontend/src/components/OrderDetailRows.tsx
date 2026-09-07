@@ -1,5 +1,5 @@
 import { useApproveOrderProvenances, useCanApproveOrder, useOrderProvenance } from "../api/queries";
-import { provenancesOf, summarizeOrderProvenance } from "../fhir/provenanceHelpers";
+import { orderActivityLabel, provenancesOf, summarizeOrderProvenance } from "../fhir/provenanceHelpers";
 import { dateTimeSecondsLabel } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 
@@ -48,7 +48,8 @@ export function EnteredByRow({ serviceRequestId }: { serviceRequestId: string | 
       )}
       {lastUpdate && (
         <>
-          <dt>最終更新</dt>
+          {/* 編集以外(中止・完了・休止・再開)は何をしたかを見出しに出す。 */}
+          <dt>{lastUpdate.activity === "UPDATE" ? "最終更新" : orderActivityLabel(lastUpdate.activity)}</dt>
           <dd>{`${lastUpdate.name}　${dateTimeSecondsLabel(lastUpdate.at)}`}</dd>
         </>
       )}

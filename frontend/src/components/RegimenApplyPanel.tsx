@@ -191,6 +191,25 @@ function RegimenApplyLoader({
   );
 }
 
+/** 前クールの区分を引き継ぐ。いまの入外区分の選択肢に無ければ引き継がない。 */
+function pickCategory(code: string | undefined, options: { code: string }[]): string {
+  return code && options.some((o) => o.code === code) ? code : "";
+}
+
+/**
+ * 適用の候補から外れたレジメン(下書きに戻された・廃止・有効期間外)の注意文。
+ * ［決定］**次クールの登録は止めない**。治療中の患者は続ける必要があり、マスタの都合で
+ * 塞ぐ方が危ない。読める形にするだけにする(投与前チェックと同じ考え方。§7.6 の N-15)。
+ */
+function regimenAvailabilityNotice(regimen: RegimenDetail): string {
+  const day = today();
+  if (regimen.status === "draft") return "このレジメンは下書きに戻されています。";
+  if (regimen.status === "retired") return "このレジメンは廃止されています。";
+  if (regimen.valid_from && regimen.valid_from > day) return `このレジメンの有効期間は ${regimen.valid_from} からです。`;
+  if (regimen.valid_to && regimen.valid_to < day) return `このレジメンは ${regimen.valid_to} で有効期間が終わっています。`;
+  return "";
+}
+
 /**
  * レジメンマスタが適用の後に変わっていれば、その日(YYYY-MM-DD)。マスタの `updated_at` は UTC の
  * ISO 文字列、適用の `authoredOn` は JST つきの文字列なので、文字列比較ではなく時刻で比べる。
@@ -244,6 +263,11 @@ export function RegimenCyclePanel({
           {application.name} 第 {cycle} クール
         </span>
       </div>
+      {regimenAvailabilityNotice(regimen) && (
+        <p className="regimen-check__summary regimen-check__summary--out">
+          {`${regimenAvailabilityNotice(regimen)}投与内容を確かめてください。`}
+        </p>
+      )}
       <RegimenApplyForm
         patientId={patientId}
         regimen={regimen}
@@ -358,6 +382,10 @@ function RegimenApplyForm({
     const gfrSource: GfrSource = initialRenal.ccr !== null ? "ccr" : "egfr";
     const injectionOptions = setting ? INJECTION_CATEGORY_OPTIONS[setting] : [];
     const prescriptionOptions = setting ? PRESCRIPTION_CATEGORY_OPTIONS[setting] : [];
+    // 注射区分・処方区分は前クールのものを引き継ぐ(§7.6 B-4)。入外区分が変わって
+    // 選択肢から外れていれば引き継がない(入院の「定時」は外来には無い)。
+    const carriedInjection = pickCategory(previousCycle?.injectionCategory, injectionOptions);
+    const carriedPrescription = pickCategory(previousCycle?.prescriptionCategory, prescriptionOptions);
     // ［決定］前クールがあれば**既定で引き継ぐ**。2 クール目以降で体格から出し直すと、
     // 手で入れた減量が黙って標準量に戻る(いちばん危ない側に倒れる)ため。
     const carryOver = Boolean(previousCycle);
@@ -367,8 +395,9 @@ function RegimenApplyForm({
       cycleCount: "1",
       plannedCycles: regimen.planned_cycles !== null ? String(regimen.planned_cycles) : "",
       setting,
-      injectionCategory: injectionOptions.length === 1 ? injectionOptions[0].code : "",
-      prescriptionCategory: prescriptionOptions.length === 1 ? prescriptionOptions[0].code : "",
+      injectionCategory: carriedInjection || (injectionOptions.length === 1 ? injectionOptions[0].code : ""),
+      prescriptionCategory:
+        carriedPrescription || (prescriptionOptions.length === 1 ? prescriptionOptions[0].code : ""),
       problem: defaultProblem ?? null,
       height,
       weight,

@@ -169,7 +169,7 @@ import { vitalDisplayRows } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { AnesthesiaChartModal } from "./AnesthesiaChartModal";
 import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
-import { regimenOrderLabel } from "../fhir/regimenOrderHelpers";
+import { cycleDayLabel, regimenOrderLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { InjectionCancelModal } from "./InjectionCancelModal";
 import { InjectionPerformModal } from "./InjectionPerformModal";
 import { InjectionDeleteModal } from "./InjectionDeleteModal";
@@ -314,6 +314,11 @@ function KarteCard({
   selectedProblemIds: ReadonlySet<string> | null;
   highlighted: boolean;
 }) {
+  // 化学療法の日オーダー(レジメンの印が焼いてある注射・処方)。DO を出さず、削除には注意を添える。
+  const regimenDay =
+    (item.kind === "injection" || item.kind === "prescription") && item.serviceRequest
+      ? regimenOrderOf(item.serviceRequest)
+      : null;
   const deleteNote = useDeleteClinicalNote();
   const deletePrescription = useDeletePrescription();
   const deleteLabOrder = useDeleteLabOrder();
@@ -392,7 +397,12 @@ function KarteCard({
       setInjectionDeleteOpen(true);
       return;
     }
-    if (!window.confirm(`この${karteItemKindLabel(item)}を削除します。よろしいですか?`)) return;
+    // 化学療法の日オーダーを消すとクールが歯抜けになり、化学療法室の予約も残る。
+    // 投与を止めるだけなら化学療法タブの投与日パネルの「中止」を使う(§8.14 N-13)。
+    const regimenNote = regimenDay
+      ? `\n${regimenDay.name} ${cycleDayLabel(regimenDay)} の投与日です。削除するとクールから抜け、化学療法室の予約も残ります。投与を止めるだけなら化学療法タブで中止してください。`
+      : "";
+    if (!window.confirm(`この${karteItemKindLabel(item)}を削除します。${regimenNote}よろしいですか?`)) return;
     const options = { onSuccess: () => onDeleted(item) };
     if (item.kind === "note") deleteNote.mutate(item.id, options);
     else if (item.kind === "prescription") deletePrescription.mutate(item.id, options);
@@ -510,7 +520,13 @@ function KarteCard({
           </span>
         </div>
         <span className="karte-card__actions">
-          {(item.kind === "prescription" ||
+          {/* ［決定］化学療法の日オーダーには DO を出さない。複写しても印が付かないので、
+              暦にも治療歴にも進捗にも乗らない「化学療法でない抗がん剤オーダー」ができるうえ、
+              投与前チェック・アレルギー照合・体格からの再計算をすべて素通りする。
+              同じ内容をもう一度出す操作は「次クールの登録」で、レジメン側が持っている
+              (docs/chemo-regimen-design.md §8.14 N-13)。 */}
+          {!regimenDay &&
+            (item.kind === "prescription" ||
             item.kind === "injection" ||
             item.kind === "lab-order" ||
             item.kind === "micro-order" ||

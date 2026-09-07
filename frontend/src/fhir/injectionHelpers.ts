@@ -147,6 +147,11 @@ export function injectionDayOf(sr: fhir4.ServiceRequest): string {
   return orderDay(sr);
 }
 
+/** 保存済みの注射の注射区分(定時・臨時・緊急)のコード。無ければ空。 */
+export function injectionCategoryOf(sr: fhir4.ServiceRequest): string {
+  return categoryCoding(sr, CATEGORY_SYSTEM)?.code ?? "";
+}
+
 /** 連日オーダーの「N日目」(1 始まり)。束ね情報が無ければ null。 */
 export function injectionSeriesDay(sr: fhir4.ServiceRequest): number | null {
   const series = injectionSeriesOf(sr);

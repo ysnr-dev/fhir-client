@@ -1,5 +1,6 @@
 import { useDeleteInjectionSeries, useInjectionSeriesLater } from "../api/queries";
 import { injectionDayOf, injectionSeriesLabel } from "../fhir/injectionHelpers";
+import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 
@@ -21,6 +22,7 @@ export function InjectionDeleteModal({ serviceRequest, onClose, onDeleted }: Inj
   const last = laterTargets[laterTargets.length - 1]?.serviceRequest;
   const lastDate = last ? injectionDayOf(last) : "";
   const seriesLabel = injectionSeriesLabel(serviceRequest);
+  const regimenDay = regimenOrderOf(serviceRequest);
 
   function handleDelete(ids: string[]) {
     remove.mutate(ids, { onSuccess: onDeleted });
@@ -45,6 +47,12 @@ export function InjectionDeleteModal({ serviceRequest, onClose, onDeleted }: Inj
           {laterTargets.length > 0 && (
             <p className="injection-scope__note">
               {`この後に ${laterTargets.length} 日分(〜${lastDate})の同じオーダーがあります。`}
+            </p>
+          )}
+          {/* 化学療法の日オーダーは、消すとクールが歯抜けになり予約も残る(§8.14 N-13)。 */}
+          {regimenDay && (
+            <p className="injection-scope__note">
+              {`${regimenDay.name} ${cycleDayLabel(regimenDay)} の投与日です。削除するとクールから抜け、外来化学療法室の予約も残ります。投与を止めるだけなら化学療法タブの投与日パネルで中止してください。`}
             </p>
           )}
           <div className="plain-text-modal__actions">

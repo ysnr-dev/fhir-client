@@ -13,7 +13,7 @@ import { displayName, patientNumberOf } from "../fhir/patientHelpers";
 import { orderSetOf } from "../fhir/orderSetHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
 import { regimenOrderOf } from "../fhir/regimenOrderHelpers";
-import type { PendingApprovalRow } from "../fhir/provenanceHelpers";
+import { orderActivityLabel, type PendingApprovalRow } from "../fhir/provenanceHelpers";
 import { orderDay } from "../fhir/shared";
 import { KARTE_DETAIL_PARAM, KARTE_TAB_PARAM, formatKarteDetail } from "../karteUrl";
 import { dateTimeSecondsLabel } from "../lib/dates";
@@ -23,8 +23,9 @@ import { useReturnLinkState } from "../returnTo";
 //
 // 医師以外が指示医師を選んで入力(代行入力)したオーダーを、指示医師本人が確認して承認する
 // 画面。ログイン中の医師あての承認待ち(自分が author で署名の無い来歴)だけを出す。
-// 行の単位はオーダーではなく **活動**(登録・編集)で、承認済みのオーダーを代行者が編集すると
-// その編集ぶんがまた並ぶ(readme「代行入力の記録と承認」)。
+// 行の単位はオーダーではなく **活動**(登録・編集・中止・完了…)で、承認済みのオーダーを代行者が
+// 編集すると、その編集ぶんがまた並ぶ(readme「代行入力の記録と承認」)。内容を変えない活動
+// (化学療法の投与日の中止・レジメンの完了など)も指示の一部なので同じように並ぶ。
 //
 // 内容の確認はカルテの詳細モーダルで行う(種別ごとの詳細表示をここに複製しない)。
 // 詳細モーダルにも同じ承認ボタンがあるので、確認してそのまま承認できる。
@@ -186,7 +187,7 @@ function ApprovalRow({ row, checked, pending, linkState, onToggle, onApprove }: 
         {orderSet && <span className="order-select__muted">{` セット「${orderSet.name}」`}</span>}
       </td>
       <td className="lab-worklist__compact">{dayLabel}</td>
-      <td className="lab-worklist__compact">{row.activity === "CREATE" ? "登録" : "編集"}</td>
+      <td className="lab-worklist__compact">{orderActivityLabel(row.activity)}</td>
       <td className="lab-worklist__compact">{dateTimeSecondsLabel(row.recorded)}</td>
       <td>{row.entererName || "-"}</td>
       <td>{orderContextSummary(prescriptionRequester(order)) || "-"}</td>

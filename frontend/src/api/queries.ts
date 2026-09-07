@@ -28,9 +28,11 @@ import {
 import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeline";
 import {
   approvalBundleEntry,
+  buildActivityProvenanceEntry,
   buildApprovedProvenance,
   buildOrderProvenanceEntry,
   pendingApprovalRows,
+  type OrderActivity,
   type OrderEnterer,
 } from "../fhir/provenanceHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
@@ -4164,6 +4166,22 @@ function useWithOrderProvenance(): (bundle: fhir4.Bundle) => fhir4.Bundle {
   return (bundle) => {
     const entry = enterer ? buildOrderProvenanceEntry(bundle, enterer) : null;
     return entry ? { ...bundle, entry: [...(bundle.entry ?? []), entry] } : bundle;
+  };
+}
+
+/**
+ * 進捗・状態だけを変える活動(中止・完了・休止・再開)の来歴を作る。対象のオーダーと
+ * 指示医師は呼ぶ側が渡す(Bundle には Task やヘッダの状態しか入らないため)。
+ */
+function useActivityProvenance(): (
+  targets: string[],
+  requester: fhir4.Reference | undefined,
+  activity: OrderActivity,
+) => fhir4.BundleEntry[] {
+  const enterer = useOrderEnterer();
+  return (targets, requester, activity) => {
+    const entry = enterer ? buildActivityProvenanceEntry(targets, requester, activity, enterer) : null;
+    return entry ? [entry] : [];
   };
 }
 
@@ -10206,6 +10224,7 @@ export function useMoveRegimenDays() {
  */
 export function useUpdateRegimenDayStatus() {
   const queryClient = useQueryClient();
+  const activityProvenance = useActivityProvenance();
   return useMutation({
     mutationFn: async ({
       targets,
@@ -10222,9 +10241,18 @@ export function useUpdateRegimenDayStatus() {
         entry: [
           ...targets.map((order) => regimenDayTaskEntry(order, status, reason)),
           ...(status === "cancelled" ? await chemoAppointmentCancelEntries(targets) : []),
+          // 誰がどの投与日を止めたか(代行なら指示医師の承認待ちに並ぶ)。
+          ...activityProvenance(
+            targets.map((order) => `ServiceRequest/${order.serviceRequest.id}`),
+            targets[0]?.serviceRequest.requester,
+            status === "cancelled" ? "CANCEL" : "REACTIVATE",
+          ),
         ],
       }),
-    onSuccess: () => invalidateRegimen(queryClient),
+    onSuccess: () => {
+      invalidateRegimen(queryClient);
+      invalidateProvenance(queryClient);
+    },
   });
 }
 
@@ -10234,6 +10262,7 @@ export function useUpdateRegimenDayStatus() {
  */
 export function useRevokeRegimen() {
   const queryClient = useQueryClient();
+  const activityProvenance = useActivityProvenance();
   return useMutation({
     mutationFn: async ({
       header,
@@ -10254,10 +10283,15 @@ export function useRevokeRegimen() {
             regimenDayTaskEntry(order, "cancelled", discontinuationReasonLabel(discontinuation.reason)),
           ),
           ...(await chemoAppointmentCancelEntries(pending)),
+          // 中止はレジメン全体への判断なので、対象はヘッダだけにする(日オーダーはヘッダから辿れる)。
+          ...activityProvenance([`ServiceRequest/${header.id}`], header.requester, "CANCEL"),
         ],
       });
     },
-    onSuccess: () => invalidateRegimen(queryClient),
+    onSuccess: () => {
+      invalidateRegimen(queryClient);
+      invalidateProvenance(queryClient);
+    },
   });
 }
 
@@ -10289,12 +10323,25 @@ function invalidateAdverseEvents(queryClient: ReturnType<typeof useQueryClient>)
   queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
 }
 
-/** 有害事象の登録・更新(id があれば PUT)。楽観ロックは使わない(同時編集する場面がない)。 */
+/**
+ * 有害事象の登録・更新(id があれば PUT)。楽観ロックは使わない(同時編集する場面がない)。
+ * 記録者(performer)が入っていなければログイン中の医療従事者を入れる(§8.14 N-10)。
+ */
 export function useSaveAdverseEvent() {
   const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
   return useMutation({
-    mutationFn: (observation: fhir4.Observation) =>
-      postBundle({
+    mutationFn: (input: fhir4.Observation) => {
+      const observation: fhir4.Observation =
+        input.performer?.length || !enterer
+          ? input
+          : {
+              ...input,
+              performer: [
+                { reference: `Practitioner/${enterer.practitionerId}`, display: enterer.display || undefined },
+              ],
+            };
+      return postBundle({
         resourceType: "Bundle",
         type: "transaction",
         entry: [
@@ -10305,7 +10352,8 @@ export function useSaveAdverseEvent() {
               : { method: "POST", url: "Observation" },
           },
         ],
-      }),
+      });
+    },
     onSuccess: () => invalidateAdverseEvents(queryClient),
   });
 }
@@ -10325,6 +10373,7 @@ export function useDeleteAdverseEvent() {
  */
 export function useUpdateRegimenStatus() {
   const queryClient = useQueryClient();
+  const activityProvenance = useActivityProvenance();
   return useMutation({
     mutationFn: async ({
       header,
@@ -10336,19 +10385,26 @@ export function useUpdateRegimenStatus() {
       targets: RegimenDayOrder[];
     }) => {
       const pending = status === "completed" ? pendingRegimenOrders(targets) : [];
+      const activity: OrderActivity =
+        status === "completed" ? "COMPLETE" : status === "on-hold" ? "SUSPEND" : "RESUME";
       return postBundle({
         resourceType: "Bundle",
         type: "transaction",
-        entry:
-          status === "completed"
+        entry: [
+          ...(status === "completed"
             ? [
                 completeRegimenEntry(header),
                 ...pending.map((order) => regimenDayTaskEntry(order, "cancelled", "レジメン完了")),
                 ...(await chemoAppointmentCancelEntries(pending)),
               ]
-            : [holdRegimenEntry(header, status === "on-hold")],
+            : [holdRegimenEntry(header, status === "on-hold")]),
+          ...activityProvenance([`ServiceRequest/${header.id}`], header.requester, activity),
+        ],
       });
     },
-    onSuccess: () => invalidateRegimen(queryClient),
+    onSuccess: () => {
+      invalidateRegimen(queryClient);
+      invalidateProvenance(queryClient);
+    },
   });
 }

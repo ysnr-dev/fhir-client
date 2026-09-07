@@ -4,7 +4,7 @@ import { nowFhirDateTime } from "../lib/dates";
 // オーダー本体を書き換えずに残す。医師以外のログインは代行入力になり(orderContext.ts 冒頭)、
 // その場合入力した本人と指示医師が別人になる。
 //
-//   activity  CREATE(登録) / UPDATE(編集)。1 回の操作 = 1 件
+//   activity  CREATE(登録) / UPDATE(編集) / CANCEL(中止) …。1 回の操作 = 1 件
 //   agent[0]  type = author    who = 指示医師(オーダーの requester)
 //   agent[1]  type = enterer   who = 入力した本人  onBehalfOf = 指示医師
 //   agent[2]  type = verifier  who = 承認した医師(承認後に足す)
@@ -23,7 +23,35 @@ const AUTHOR = "author";
 const ENTERER = "enterer";
 const VERIFIER = "verifier";
 
-export type OrderActivity = "CREATE" | "UPDATE";
+/**
+ * 活動の種類。すべて v3-DataOperation の語彙。
+ *
+ * 登録・編集はオーダー本体を書く操作、それ以外は**進捗(Task)や状態だけを書き換える操作**で、
+ * オーダーの内容は変わらない(中止・完了・休止・再開・中止取消)。後者も指示の一部なので、
+ * 代行で行われたら指示医師の承認待ちに並べる(`buildActivityProvenanceEntry`)。
+ */
+export type OrderActivity =
+  | "CREATE"
+  | "UPDATE"
+  | "CANCEL"
+  | "REACTIVATE"
+  | "COMPLETE"
+  | "SUSPEND"
+  | "RESUME";
+
+const ORDER_ACTIVITY_LABELS: Record<OrderActivity, string> = {
+  CREATE: "登録",
+  UPDATE: "編集",
+  CANCEL: "中止",
+  REACTIVATE: "中止取消",
+  COMPLETE: "完了",
+  SUSPEND: "休止",
+  RESUME: "再開",
+};
+
+export function orderActivityLabel(activity: OrderActivity): string {
+  return ORDER_ACTIVITY_LABELS[activity];
+}
 
 /** 代行入力・承認を記録する相手。ログイン中の医療従事者。 */
 export interface OrderEnterer {
@@ -47,8 +75,8 @@ function agentName(agent: fhir4.ProvenanceAgent | undefined): string {
 
 /** 活動の種類。activity を持たない旧データ(2026-09-01 の登録ぶん)は登録とみなす。 */
 export function provenanceActivity(provenance: fhir4.Provenance): OrderActivity {
-  const code = provenance.activity?.coding?.find((c) => c.system === ACTIVITY_SYSTEM)?.code;
-  return code === "UPDATE" ? "UPDATE" : "CREATE";
+  const code = provenance.activity?.coding?.find((c) => c.system === ACTIVITY_SYSTEM)?.code ?? "";
+  return code in ORDER_ACTIVITY_LABELS ? (code as OrderActivity) : "CREATE";
 }
 
 /** その活動が代行(入力者 ≠ 指示医師)か。どちらかが欠けていれば判定できないので false。 */
@@ -129,7 +157,33 @@ export function buildOrderProvenanceEntry(
   if (!requester?.reference) return null;
 
   const activity: OrderActivity = header.request?.method === "PUT" ? "UPDATE" : "CREATE";
+  return provenanceEntry(targets, requester, activity, enterer);
+}
 
+/**
+ * 進捗や状態だけを書き換える活動(中止・完了・休止・再開・中止取消)の来歴。
+ *
+ * こうした操作の Bundle は Task やヘッダの状態しか持たず、`buildOrderProvenanceEntry` が
+ * 見る「登録・編集されたヘッダ」が無い。そこで**対象のオーダー(ServiceRequest)を呼ぶ側が渡す**。
+ * target がオーダーであることは承認待ち一覧の前提でもある(行はオーダーから組む)。
+ * 指示医師はオーダーに保存済みの requester をそのまま使う(登録・編集と同じ)。
+ */
+export function buildActivityProvenanceEntry(
+  targets: string[],
+  requester: fhir4.Reference | undefined,
+  activity: OrderActivity,
+  enterer: OrderEnterer,
+): fhir4.BundleEntry | null {
+  if (targets.length === 0 || !requester?.reference) return null;
+  return provenanceEntry(targets, requester, activity, enterer);
+}
+
+function provenanceEntry(
+  targets: string[],
+  requester: fhir4.Reference,
+  activity: OrderActivity,
+  enterer: OrderEnterer,
+): fhir4.BundleEntry {
   const provenance: fhir4.Provenance = {
     resourceType: "Provenance",
     target: targets.map((reference) => ({ reference })),
@@ -189,8 +243,8 @@ export interface ProvenanceActor {
 export interface OrderProvenanceSummary {
   /** 登録が代行だったとき、その入力者と指示医師。医師本人の登録なら null。 */
   proxyEntry: { entererName: string; authorName: string } | null;
-  /** 編集があれば最後の編集。誰が・いつ。 */
-  lastUpdate: ProvenanceActor | null;
+  /** 登録より後の活動があれば最後のもの(編集・中止・完了…)。誰が・いつ・何を。 */
+  lastUpdate: (ProvenanceActor & { activity: OrderActivity }) | null;
   /** 承認待ちの活動。空なら承認は不要か済んでいる。 */
   pending: fhir4.Provenance[];
   /** 最後の承認。承認が要る活動が一つも無ければ null。 */
@@ -206,7 +260,8 @@ function byRecorded(a: fhir4.Provenance, b: fhir4.Provenance): number {
 export function summarizeOrderProvenance(provenances: fhir4.Provenance[]): OrderProvenanceSummary {
   const sorted = [...provenances].sort(byRecorded);
   const creation = sorted.find((p) => provenanceActivity(p) === "CREATE") ?? sorted[0];
-  const updates = sorted.filter((p) => provenanceActivity(p) === "UPDATE");
+  // 登録より後の活動(編集・中止・完了・休止・再開)。最後の 1 件を出す。
+  const updates = sorted.filter((p) => provenanceActivity(p) !== "CREATE");
   const lastUpdateProvenance = updates[updates.length - 1];
 
   const proxyEntry =
@@ -218,7 +273,11 @@ export function summarizeOrderProvenance(provenances: fhir4.Provenance[]): Order
       : null;
 
   const lastUpdate = lastUpdateProvenance
-    ? { name: agentName(agentOfType(lastUpdateProvenance, ENTERER)), at: lastUpdateProvenance.recorded ?? "" }
+    ? {
+        name: agentName(agentOfType(lastUpdateProvenance, ENTERER)),
+        at: lastUpdateProvenance.recorded ?? "",
+        activity: provenanceActivity(lastUpdateProvenance),
+      }
     : null;
 
   const pending = sorted.filter(needsApproval);
