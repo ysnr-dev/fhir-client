@@ -17,6 +17,7 @@ import {
 } from "../fhir/prescriptionHelpers";
 import { buildRxDispenseBundle, dispenseValuesFromOrder } from "../fhir/rxDispenseHelpers";
 import { presetUsageFilters } from "../fhir/usageMapping";
+import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
@@ -95,6 +96,7 @@ function RxDispenseForm({
 
   const summary = summarizeServiceRequest(order);
   const comment = prescriptionComment(order);
+  const regimen = regimenOrderOf(order);
   // 一般名処方(【般】〜)は外来の院外処方でだけ出せる。調剤で銘柄を選び直すときも
   // 同じ制限を掛ける(処方オーダー登録と同じ判定)。
   const allowGeneric = summary.settingCode === "outpatient" && summary.categoryCode === "external";
@@ -200,6 +202,21 @@ function RxDispenseForm({
           <dl className="prescription-detail__common">
             <dt>患者 | 処方日 | 区分 | 依頼科</dt>
             <dd>{meta.join(" | ")}</dd>
+            {/* 化学療法の内服は投与量が力価で出ているので、調剤の前にレジメンとクールが
+                読めるようにする(§7.6 E-5)。 */}
+            {regimen && (
+              <>
+                <dt>化学療法</dt>
+                <dd>
+                  {`${regimen.name} ${cycleDayLabel(regimen)}`}
+                  {regimen.reduction && (
+                    <span className="injection-worklist__reduced" title={regimen.reduction}>
+                      減量
+                    </span>
+                  )}
+                </dd>
+              </>
+            )}
             <dt>処方箋コメント</dt>
             <dd>{comment || "-"}</dd>
             <dt>調剤者</dt>

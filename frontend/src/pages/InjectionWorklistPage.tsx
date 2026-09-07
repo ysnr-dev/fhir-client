@@ -57,6 +57,8 @@ interface Filters {
   wardId: string;
   departmentId: string;
   status: string;
+  /** 化学療法(レジメンから出た日オーダー)だけに絞る。§7.6 E-7。 */
+  chemoOnly: boolean;
 }
 
 const emptyFilters: Filters = {
@@ -65,6 +67,7 @@ const emptyFilters: Filters = {
   wardId: "",
   departmentId: "",
   status: "",
+  chemoOnly: false,
 };
 
 const INJECTION_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/injection-category";
@@ -197,6 +200,8 @@ function matchesFilters(row: InjectionWorklistRow, filters: Filters): boolean {
   const requester = prescriptionRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
   if (filters.status && injectionTaskStatus(row.task) !== filters.status) return false;
+  // 化学療法は調製・監査の手順が違うので、その日のぶんだけを抜き出せるようにする。
+  if (filters.chemoOnly && !regimenOrderOf(row.order)) return false;
   return true;
 }
 
@@ -275,6 +280,14 @@ function FilterForm({ date, filters, wards, departments, onDateChange, onChange 
             </option>
           ))}
         </select>
+      </label>
+      <label className="dose-conversion__checkbox">
+        <input
+          type="checkbox"
+          checked={filters.chemoOnly}
+          onChange={(e) => onChange({ ...filters, chemoOnly: e.target.checked })}
+        />
+        化学療法のみ
       </label>
       <label>
         ステータス

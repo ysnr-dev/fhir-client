@@ -399,6 +399,11 @@
   color: #c62828;
 }
 
+/* 化学療法中。禁忌ではなく「いま何をしている患者か」の情報なので、赤とは分けた色にする。 */
+.patient-header__caution--chemo {
+  color: #7e57c2;
+}
+
 .patient-header__caution-count {
   font-size: 11px;
   margin-left: 1px;

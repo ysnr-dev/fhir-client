@@ -67,8 +67,11 @@ RP 見出しの用法はカルテの注射カードと同じ並び(`Reports::Inj
 | `urgent` | text(静的) | 「至急」。注射区分が緊急(emergency)のとき show |
 | `rp_label` | text-block | 「RP1 / 2　10:00、20:30」(RP 番号 / RP 総数 + 開始時刻) |
 | `pt_id` / `pt_name` / `pt_kana` / `pt_birthdate` / `pt_gender` | text-block | 患者(漢字氏名も出す。検体ラベルと違いベッドサイドで本人確認に使うため) |
-| `medicines` | text-block(複数行、3 行) | 薬剤名と量。4 剤以上は truncate で切れるので注射箋を併用 |
+| `medicines` | text-block(複数行、4 行) | 薬剤名と量。**化学療法のときだけ最後に用法コメント**(ステップ名 / 点滴時間 / 器材 / 投与時注意)の行が入る。溢れは truncate で切れるので注射箋を併用 |
 | `usage` | text-block | 用法 1 行 |
+| `regimen` | text-block | 「mFOLFOX6 C1 Day8 ｜ 減量」。化学療法の日オーダーだけ入る(`regimen-order` 拡張。`docs/chemo-regimen-design.md` §8.16) |
 | `order_date` | text-block | 注射日(occurrenceDateTime) |
+
+1 行に入るのは 6pt で全角 26 文字ほど。長い投与時注意は行末で切れる(全文は注射箋の用法の後ろに出る)。
 
 ラベル番号の採番は持たない(RP はオーダー内の連番で、検体ラベルのような台帳が要らない)。

@@ -282,9 +282,40 @@
       "display": true,
       "description": "",
       "x": 5,
-      "y": 97,
+      "y": 96,
       "width": 160,
-      "height": 9,
+      "height": 8,
+      "value": "",
+      "multiple-line": false,
+      "format": {
+        "base": "",
+        "type": ""
+      },
+      "style": {
+        "font-family": [
+          "IPAGothic"
+        ],
+        "font-size": 6,
+        "font-style": [],
+        "color": "#000000",
+        "text-align": "left",
+        "vertical-align": "top",
+        "letter-spacing": "",
+        "line-height": "",
+        "line-height-ratio": "",
+        "overflow": "truncate",
+        "word-wrap": "none"
+      }
+    },
+    {
+      "id": "regimen",
+      "type": "text-block",
+      "display": true,
+      "description": "",
+      "x": 5,
+      "y": 104,
+      "width": 160,
+      "height": 8,
       "value": "",
       "multiple-line": false,
       "format": {

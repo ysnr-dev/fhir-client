@@ -10310,6 +10310,95 @@ export function useRevokeRegimen() {
   });
 }
 
+/**
+ * 外来化学療法室の当日一覧(§7.6 E-7)。その日の化学療法予約を、患者・注射オーダー・進捗と
+ * 一緒に並べる。化学療法室は「予約の時間割」で回るので、注射一覧(オーダー軸)ではなく
+ * **予約軸**の面にする。
+ *
+ * 予約 → 患者は `_include`、予約 → 注射オーダーは `basedOn` の id で引き直す
+ * (進捗の Task も同じ応答で受ける)。
+ */
+export interface ChemoRoomRow {
+  appointment: fhir4.Appointment;
+  patient?: fhir4.Patient;
+  order?: fhir4.ServiceRequest;
+  medicationRequests: fhir4.MedicationRequest[];
+  task?: fhir4.Task;
+}
+
+export function useChemoRoomList(date: string) {
+  return useQuery({
+    queryKey: ["Appointment", "search", "chemo-room", date],
+    queryFn: async (): Promise<ChemoRoomRow[]> => {
+      const params = new URLSearchParams();
+      params.set("date", date);
+      params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|chemo`);
+      params.set("_count", "200");
+      params.set("_sort", "date");
+      params.append("_include", "Appointment:patient");
+      const { data: bundle } = await searchResource<fhir4.Resource>("Appointment", params);
+
+      const appointments: fhir4.Appointment[] = [];
+      const patientsById = new Map<string, fhir4.Patient>();
+      for (const entry of bundle.entry ?? []) {
+        const resource = entry.resource;
+        if (resource?.resourceType === "Appointment") {
+          const appointment = resource as fhir4.Appointment;
+          if (isActiveAppointment(appointment)) appointments.push(appointment);
+        } else if (resource?.resourceType === "Patient" && resource.id) {
+          patientsById.set(resource.id, resource as fhir4.Patient);
+        }
+      }
+
+      const orderIds = Array.from(
+        new Set(appointments.map((a) => appointmentOrderId(a)).filter(Boolean)),
+      );
+      const ordersById = new Map<string, fhir4.ServiceRequest>();
+      const tasksByOrderId = new Map<string, fhir4.Task>();
+      const mrsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
+      if (orderIds.length > 0) {
+        const orderParams = new URLSearchParams();
+        orderParams.set("_id", orderIds.join(","));
+        orderParams.set("_count", String(orderIds.length));
+        orderParams.append("_revinclude", "Task:focus");
+        orderParams.append("_revinclude", "MedicationRequest:based-on");
+        const { data: orderBundle } = await searchResource<fhir4.Resource>("ServiceRequest", orderParams);
+        const tasks: fhir4.Task[] = [];
+        for (const entry of orderBundle.entry ?? []) {
+          const resource = entry.resource;
+          if (resource?.resourceType === "ServiceRequest" && resource.id) {
+            ordersById.set(resource.id, resource as fhir4.ServiceRequest);
+          } else if (resource?.resourceType === "Task") {
+            tasks.push(resource as fhir4.Task);
+          } else if (resource?.resourceType === "MedicationRequest") {
+            const mr = resource as fhir4.MedicationRequest;
+            for (const reference of mr.basedOn ?? []) {
+              const id = referenceId(reference.reference);
+              if (id) mrsByOrderId.set(id, [...(mrsByOrderId.get(id) ?? []), mr]);
+            }
+          }
+        }
+        for (const [orderId, task] of injectionTasksByOrderId(tasks)) tasksByOrderId.set(orderId, task);
+      }
+
+      return appointments
+        .map((appointment) => {
+          const orderId = appointmentOrderId(appointment);
+          const patientId = appointmentActorId(appointment, "Patient");
+          return {
+            appointment,
+            patient: patientId ? patientsById.get(patientId) : undefined,
+            order: orderId ? ordersById.get(orderId) : undefined,
+            medicationRequests: orderId ? sortByRp(mrsByOrderId.get(orderId) ?? []) : [],
+            task: orderId ? tasksByOrderId.get(orderId) : undefined,
+          };
+        })
+        .sort((a, b) => (a.appointment.start ?? "").localeCompare(b.appointment.start ?? ""));
+    },
+    enabled: Boolean(date),
+  });
+}
+
 // ---- 有害事象(CTCAE Grade。§7.6 C-3) ----
 
 /** 患者の有害事象の記録。適用・クールでの絞り込みは画面側(1 患者で多くても数十件)。 */

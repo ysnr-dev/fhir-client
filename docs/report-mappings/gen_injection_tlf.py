@@ -53,6 +53,8 @@ items=[image("barcode_img",8,4,114,24), text(128,6,36,14,"至急",11,True,id="ur
        block("pt_name",5,52,100,11,9), block("pt_birthdate",108,53,40,10,7), block("pt_gender",150,53,18,10,7),
        block("medicines",5,64,160,32,7,lh=8),
        # 用法は 1 行に収まるよう幅いっぱい。注射日はバーコード下の RP 行の右端に置く。
-       block("usage",5,97,160,9,6), block("order_date",125,29,42,8,6,"right")]
+       # 最下段はレジメン名(化学療法のときだけ入る。それ以外は空行になる)。
+       block("usage",5,96,160,8,6), block("regimen",5,104,160,8,6),
+       block("order_date",125,29,42,8,6,"right")]
 json.dump(doc("注射ラベル",170.1,113.4,items),open("lib/report_layouts/injection_label.tlf","w"),ensure_ascii=False,indent=2)
 print("generated")

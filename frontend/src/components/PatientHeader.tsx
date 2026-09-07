@@ -8,12 +8,14 @@ import {
   useManualInfections,
   usePatient,
   usePatientAdmission,
+  useRegimenApplications,
 } from "../api/queries";
 import { summarizeBloodType } from "../fhir/bloodTypeHelpers";
 import { bloodTypeLabel } from "../fhir/transfusionOrderHelpers";
 import { summarizeAllergy } from "../fhir/allergyHelpers";
 import type { PatientCaution } from "../api/masterClient";
 import { summarizeFlag } from "../fhir/flagHelpers";
+import { regimenStatusLabel } from "../fhir/regimenOrderHelpers";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../fhir/infectionHelpers";
 import {
   calculateAge,
@@ -106,6 +108,7 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
       <CautionPictograms patientId={patientId} />
       <AllergyPictograms patientId={patientId} />
       <InfectionPictogram patientId={patientId} />
+      <ChemotherapyPictogram patientId={patientId} />
     </div>
   );
 }
@@ -241,6 +244,55 @@ function InfectionPictogram({ patientId }: { patientId: string | undefined }) {
           ))}
         </ul>
         <ProfileLink patientId={patientId} />
+      </PictogramPopover>
+    </span>
+  );
+}
+
+/**
+ * 化学療法中のピクトグラム(§7.6 E-8)。適用中・休止中のレジメンがあるときだけ出す。
+ *
+ * 抗がん剤の曝露対策・血管外漏出の観察・易感染への配慮は、化学療法タブを開かなくても
+ * 分かっている必要があるので帯に置く。中身(レジメン名・クール・状態)は吹き出しで読む。
+ * 完了・中止した適用は出さない(いまの状態ではないため。治療歴は化学療法タブで読む)。
+ */
+function ChemotherapyPictogram({ patientId }: { patientId: string | undefined }) {
+  const applications = useRegimenApplications(patientId);
+
+  if (!patientId) return null;
+
+  const running = (applications.data?.applications ?? []).filter(
+    (a) => a.status === "active" || a.status === "on-hold",
+  );
+  if (running.length === 0) return null;
+
+  const label = running.map((a) => `化学療法: ${a.name}（${regimenStatusLabel(a.status)}）`).join(" / ");
+
+  return (
+    <span className="patient-header__item patient-header__cautions">
+      <PictogramPopover
+        label={label}
+        className="patient-header__caution--chemo"
+        icon={<CautionPictogram pictogram="chemotherapy" size={HEADER_PICTOGRAM_SIZE} />}
+        count={running.length}
+      >
+        <ul className="patient-header__popover-list">
+          {running.map((application) => (
+            <li key={application.id}>
+              <span className="patient-header__popover-name">{application.name}</span>
+              <span className="patient-header__popover-text">
+                {[
+                  regimenStatusLabel(application.status),
+                  `開始 ${application.startDate}`,
+                  application.plannedCycles !== null ? `予定 ${application.plannedCycles} クール` : "継続",
+                ].join(" / ")}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <Link className="patient-header__popover-link" to={`/patients/${patientId}/karte?tab=chemo`}>
+          化学療法タブを開く
+        </Link>
       </PictogramPopover>
     </span>
   );

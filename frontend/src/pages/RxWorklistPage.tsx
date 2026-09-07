@@ -28,6 +28,7 @@ import {
   summarizeServiceRequest,
   wardOf,
 } from "../fhir/prescriptionHelpers";
+import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import {
   RX_TASK_STATUS_OPTIONS,
   rxTaskActions,
@@ -363,6 +364,8 @@ function WorklistRow({
     .flatMap((rp) => rp.medicines.map((medicine) => medicine.name))
     .filter(Boolean)
     .join("・");
+  // 化学療法(レジメン)から出た内服オーダーか。日オーダーの拡張で判る。
+  const regimen = regimenOrderOf(order);
 
   return (
     <tr>
@@ -387,6 +390,18 @@ function WorklistRow({
           </span>
         ) : (
           <span className="order-select__muted">医薬品なし</span>
+        )}
+        {/* 化学療法(内服)は投与量が力価で、休薬期間の管理もあるので一覧で見分けられるようにする
+            (注射一覧と同じ形。§7.6 E-5)。 */}
+        {regimen && (
+          <span className="injection-worklist__chemo">
+            {`${regimen.name} ${cycleDayLabel(regimen)}`}
+            {regimen.reduction && (
+              <span className="injection-worklist__reduced" title={regimen.reduction}>
+                減量
+              </span>
+            )}
+          </span>
         )}
       </td>
       <td className="lab-worklist__compact">{summary.startDate || "-"}</td>

@@ -21,6 +21,34 @@ module Reports
       extension_reference_display(order, InjectionReport::ORDER_WARD_EXT_URL)
     end
 
+    # 化学療法の日オーダーなら「mFOLFOX6 C1 Day1」。レジメンから出ていなければ空
+    # (frontend の regimenOrderLabel と同じ組み立て)。
+    def regimen_label(order)
+      ext = regimen_extension(order)
+      return "" if ext.nil?
+
+      name = part_value(ext, "name", "valueString")
+      cycle = part_value(ext, "cycle", "valueInteger")
+      day = part_value(ext, "day", "valueInteger")
+      return "" if name.blank? || cycle.blank? || day.blank?
+
+      "#{name} C#{cycle} Day#{day}"
+    end
+
+    # そのクールの減量理由。減量していなければ空(拡張自体が焼かれていない)。
+    def regimen_reduction(order)
+      ext = regimen_extension(order)
+      ext.nil? ? "" : part_value(ext, "reduction", "valueString").to_s
+    end
+
+    def regimen_extension(order)
+      Array(order["extension"]).find { |e| e["url"] == InjectionReport::REGIMEN_ORDER_EXT_URL }
+    end
+
+    def part_value(ext, url, key)
+      Array(ext["extension"]).find { |e| e["url"] == url }&.dig(key).to_s
+    end
+
     def extension_reference_display(order, url)
       ext = Array(order["extension"]).find { |e| e["url"] == url }
       ext&.dig("valueReference", "display").to_s
