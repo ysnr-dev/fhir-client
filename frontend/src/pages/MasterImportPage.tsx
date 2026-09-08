@@ -67,6 +67,13 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".csv",
   },
   {
+    type: "ctcae_terms",
+    label: "CTCAE(有害事象共通用語規準)",
+    formatHint:
+      "有害事象共通用語規準 v5.0 日本語訳JCOG版 CTCAEv5J_*.xlsx（JCOG のサイトから取得。本体のみの Excel）",
+    accept: ".xlsx",
+  },
+  {
     type: "rad_jj1017_codes",
     label: "JJ1017コードマスタ",
     formatHint:

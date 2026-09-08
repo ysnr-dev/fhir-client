@@ -1,4 +1,5 @@
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
+import { toPackQuantity, type MedicineDoseConversionMap } from "./doseConversionHelpers";
 import {
   medicationCodeableConcept,
   medicineFromCoding,
@@ -23,6 +24,35 @@ import { buildRxTaskUpdate } from "./rxTaskHelpers";
 export interface RxDispensePerformer {
   practitionerId: string;
   practitionerName: string;
+}
+
+/**
+ * 調剤の初期値。処方の内容をそのまま写すが、力価(1750 mg)で出たオーダー(化学療法の内服)は
+ * 換算マスタで製剤数(錠)に直し、単位も薬価算定単位に差し替える。調剤は製剤数で出すため。
+ * 換算できなければ用量を空にして手入力してもらう。
+ */
+export function dispenseValuesFromOrder(
+  values: PrescriptionFormValues,
+  conversions: MedicineDoseConversionMap | undefined,
+): PrescriptionFormValues {
+  return {
+    ...values,
+    rps: values.rps.map((rp) => ({
+      ...rp,
+      medicines: rp.medicines.map((med) => {
+        if (!med.medicine) return med;
+        const code = med.medicine.medicine_code;
+        const dose = Number(med.dose);
+        const pack = dose > 0 ? toPackQuantity(dose, med.medicine.unit_name ?? "", code, conversions) : null;
+        const packUnit = pack?.unit ?? conversions?.packUnits.get(code) ?? med.medicine.unit_name;
+        return {
+          ...med,
+          dose: pack ? String(pack.value) : dose > 0 ? "" : med.dose,
+          medicine: { ...med.medicine, unit_name: packUnit },
+        };
+      }),
+    })),
+  };
 }
 
 /**

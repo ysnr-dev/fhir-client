@@ -34,6 +34,8 @@ class InjectionReport
   LINE_EXT_URL = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_MedicationDosage_Line".freeze
   SERIES_START_EXT_URL = "http://fhir-client.local/StructureDefinition/injection-series-start".freeze
   SERIES_SCHEDULE_EXT_URL = "http://fhir-client.local/StructureDefinition/injection-series-schedule".freeze
+  # 化学療法レジメンの日オーダーに焼いてある印(docs/chemo-regimen-design.md §7.1)。
+  REGIMEN_ORDER_EXT_URL = "http://fhir-client.local/StructureDefinition/regimen-order".freeze
   INSTITUTION_NO_SYSTEM = PrescriptionReport::INSTITUTION_NO_SYSTEM
   INJECTION_CODE = "injection".freeze
 

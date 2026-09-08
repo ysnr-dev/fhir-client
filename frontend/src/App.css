@@ -399,6 +399,20 @@
   color: #c62828;
 }
 
+/* レジメン編集の内容部分。承認済は fieldset[disabled] で丸ごと止めるので、
+   枠線・余白は出さず、通常の表示のままにする(止まっていることは注意文で伝える)。 */
+.regimen-editor__content {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+
+/* 化学療法中。禁忌ではなく「いま何をしている患者か」の情報なので、赤とは分けた色にする。 */
+.patient-header__caution--chemo {
+  color: #7e57c2;
+}
+
 .patient-header__caution-count {
   font-size: 11px;
   margin-left: 1px;
@@ -1487,6 +1501,25 @@ fieldset.rp-card {
 }
 
 .injection-days__note,
+/* 反映範囲(この日のみ / この日以降すべて)。素の fieldset はブラウザ既定の
+   groove 枠と本文サイズの legend になり、周りのフォームと揃わないので当てる。
+   注射の編集パネルと化学療法の投与日パネルで共用する。 */
+.injection-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px 10px;
+  margin: 0 0 12px;
+}
+
+.injection-scope > legend {
+  font-size: 13px;
+  padding: 0 4px;
+  color: var(--text);
+}
+
 .injection-scope__note {
   font-size: 12px;
   color: var(--text-muted, var(--text));
@@ -1497,6 +1530,8 @@ fieldset.rp-card {
   flex-direction: row;
   align-items: center;
   gap: 6px;
+  /* 見出し(legend)と同じ大きさ。素のままだと本文サイズで、周りの注記より大きく見える。 */
+  font-size: 13px;
 }
 
 .injection-weekdays {
@@ -12790,4 +12825,1252 @@ button.meal-calendar__cell:hover {
 .karte-right .order-set-stack .prescription-form,
 .order-set-editor .prescription-form {
   max-width: none;
+}
+
+/* ---- 化学療法レジメンマスタ(docs/chemo-regimen-design.md) ---- */
+
+.regimen-editor__name {
+  min-width: 260px;
+}
+
+/* 投与期間 + 休薬期間から導いた 1 クールの日数。入力欄と同じ高さに揃える。 */
+.regimen-editor__derived {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.regimen-editor__derived strong {
+  font-size: 14px;
+  padding: 5px 0;
+}
+
+/* 行テーブルの入力欄。表の中なので余白を詰める。 */
+.regimen-editor__rows input[type="text"],
+.regimen-editor__rows input[type="number"],
+.regimen-editor__rows select {
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.regimen-editor__rows input.regimen-editor__num-input {
+  width: 90px;
+}
+
+.regimen-editor__rows input.regimen-editor__unit-input {
+  width: 72px;
+}
+
+.regimen-editor__rows input.regimen-editor__code-input {
+  width: 80px;
+}
+
+.regimen-editor__suffix {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.regimen-editor__pick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.regimen-editor__pick input[type="text"] {
+  flex: 1;
+}
+
+.regimen-editor__texts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.regimen-editor__texts label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.regimen-editor__texts textarea {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+}
+
+.regimen-editor__footer {
+  margin-top: 8px;
+}
+
+/* 投与ステップのカード。注射の RP カードと同じ「見出し行 + 用法 + 薬剤表」の構成。 */
+.regimen-step {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.regimen-step__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.regimen-step__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* 見出し欄はラベルがステップ番号。番号は行の目印なので太字にする。 */
+.regimen-step__name-field {
+  flex: 1;
+  min-width: 200px;
+  font-weight: 600;
+}
+
+.regimen-step__name {
+  width: 100%;
+}
+
+.regimen-step__field input,
+.regimen-step__field select {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.regimen-step__days {
+  width: 110px;
+}
+
+.regimen-step__tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding-bottom: 2px;
+}
+
+/* 用法は医薬品の下(処方・注射のオーダー画面と同じ並び)。 */
+.regimen-step__usage,
+.regimen-step__oral-usage {
+  margin-top: 10px;
+}
+
+.regimen-step__usage label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.regimen-step__usage input,
+.regimen-step__usage select {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* 投与時注意は用法の下に 1 行まるごと使う。 */
+.regimen-step__note-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.regimen-step__note-field input {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.regimen-step__drugs {
+  margin-bottom: 6px;
+}
+
+/* 種類・算出基準の select は表示名が長い(「補液・溶解液」「体表面積(/m²)」)ので
+   詰めすぎない。 */
+.regimen-step__drugs select {
+  min-width: 120px;
+}
+
+/* 薬剤 1 件は 2 行(1 行目 = 医薬品名、2 行目 = 種類ほかの入力)で 1 組。名前行と
+   入力行の間には罫線を引かず、組の終わり(入力行の下)だけを区切りにする。
+   医薬品名はその組が何の薬かを示す見出しなので、入力欄より少し強く見せる。 */
+.regimen-drug__name td {
+  border-bottom: none;
+  padding-bottom: 2px;
+  font-weight: 600;
+}
+
+/* 2 件目以降は前の組との間を空ける。 */
+.regimen-drug + .regimen-drug .regimen-drug__name td {
+  padding-top: 10px;
+}
+
+/* Day 表。日の列は幅を揃えて中央寄せ、入る日だけ色を付ける。 */
+.regimen-day-table th.regimen-day-table__day,
+.regimen-day-table td.regimen-day-table__day {
+  width: 28px;
+  min-width: 28px;
+  text-align: center;
+  padding-left: 2px;
+  padding-right: 2px;
+  font-size: 12px;
+}
+
+.regimen-day-table td.regimen-day-table__day--on {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.regimen-day-table__label {
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 一覧の状態バッジ。 */
+.regimen-status {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+}
+
+.regimen-status--approved {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.regimen-status--retired {
+  color: var(--text-muted);
+}
+
+/* select はブラウザ既定の内部余白が input と違い、同じ padding を与えても高さが
+   揃わない。レジメン画面の中だけ実寸で固定して、並んだ入力欄の高さを合わせる。 */
+.regimen-editor input[type="text"],
+.regimen-editor input[type="number"],
+.regimen-editor input[type="date"],
+.regimen-editor select {
+  height: 30px;
+  box-sizing: border-box;
+}
+
+/* 表の中は 1 行が低いので、そちらに合わせた高さにする。 */
+.regimen-editor .regimen-editor__rows input[type="text"],
+.regimen-editor .regimen-editor__rows input[type="number"],
+.regimen-editor .regimen-editor__rows select {
+  height: 26px;
+}
+
+/* ---- 化学療法(レジメンオーダー)(docs/chemo-regimen-design.md §7) ---- */
+
+/* 右ペインのレジメン選択。 */
+.regimen-picker__search {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.regimen-picker__search input {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.regimen-picker__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.regimen-picker__item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  padding: 8px 10px;
+  white-space: normal;
+}
+
+.regimen-picker__name {
+  font-size: 14px;
+}
+
+.regimen-picker__meta {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.regimen-picker__empty {
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.regimen-apply__title {
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+}
+
+/* 適用フォームの区画。マスタ編集モーダルの fieldset と同じ見た目。 */
+.regimen-apply__fields {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px 4px;
+  margin: 0 0 12px;
+}
+
+.regimen-apply__fields > legend {
+  font-size: 13px;
+  padding: 0 4px;
+}
+
+.regimen-apply__fields .lab-order-item__fields {
+  margin-bottom: 8px;
+}
+
+.regimen-apply__fields input[type="text"],
+.regimen-apply__fields input[type="number"],
+.regimen-apply__fields input[type="date"],
+.regimen-apply__fields select {
+  height: 30px;
+  box-sizing: border-box;
+}
+
+.regimen-apply__step {
+  margin-bottom: 10px;
+}
+
+.regimen-apply__step-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.regimen-apply__step-index {
+  font-weight: 600;
+}
+
+.regimen-apply__step-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.regimen-apply__step-meta {
+  color: var(--text);
+}
+
+/* ステップごとに別のテーブルなので、そのままだと内容によって列位置がずれる。
+   table-layout: fixed + 明示幅で、どのステップでも列が揃うようにする
+   (処方内容の .rp-card__medicines--detail と同じ考え方)。医薬品名の列だけが
+   残り幅を吸収して折り返す。 */
+.regimen-apply__drugs {
+  table-layout: fixed;
+}
+
+.regimen-apply__drugs th,
+.regimen-apply__drugs td {
+  font-size: 13px;
+  padding: 4px 8px;
+  vertical-align: top;
+}
+
+.regimen-apply__drugs th:nth-child(1),
+.regimen-apply__drugs td:nth-child(1) {
+  width: 104px;
+}
+
+.regimen-apply__drugs th:nth-child(3),
+.regimen-apply__drugs td:nth-child(3) {
+  width: 110px;
+}
+
+.regimen-apply__drugs th:nth-child(4),
+.regimen-apply__drugs td:nth-child(4) {
+  width: 190px;
+}
+
+.regimen-apply__manual {
+  display: block;
+  font-size: 12px;
+  color: var(--danger, #c0392b);
+}
+
+/* 投与量の欄。上に力価(mg)の入力、下に換算した製剤数。 */
+.regimen-apply__dose {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 換算した製剤数の併記。主役は力価(入力欄)なので、読めるだけの控えめな出し方にする。 */
+.regimen-apply__packs-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.regimen-apply__strength {
+  margin-left: 2px;
+  font-size: 10px;
+}
+
+.regimen-apply__dose input {
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  width: 80px;
+  height: 26px;
+  box-sizing: border-box;
+}
+
+/* 適用の詳細。 */
+.regimen-detail__summary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.regimen-detail__summary dt {
+  color: var(--text);
+}
+
+.regimen-detail__summary dd {
+  margin: 0;
+}
+
+.regimen-detail__cycles {
+  margin-bottom: 10px;
+}
+
+.regimen-detail__days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.master-search__table button.regimen-detail__day {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.master-search__table button.regimen-detail__day--completed {
+  opacity: 0.7;
+}
+
+.master-search__table button.regimen-detail__day--cancelled {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* 投与日の操作。 */
+.regimen-day__title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.regimen-day__date {
+  margin-left: 6px;
+  font-weight: normal;
+  color: var(--text);
+}
+
+.regimen-day__orders {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.regimen-day__order {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.regimen-day__order-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.regimen-day__kind {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.regimen-day__status {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.regimen-day__status--completed {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.regimen-day__status--cancelled {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.regimen-day__order-head .rp-card__compact-button {
+  margin-left: auto;
+}
+
+/* カード風に出した中身(.karte-rp)は上の見出し行と間を空ける。 */
+.regimen-day__order .karte-rp {
+  margin-top: 4px;
+}
+
+.regimen-day__empty {
+  font-size: 13px;
+}
+
+.regimen-day__move {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px 8px;
+  margin: 8px 0;
+}
+
+.regimen-day__move > legend {
+  font-size: 13px;
+  padding: 0 4px;
+}
+
+.regimen-day__move-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.regimen-day__move-row input[type="date"] {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* 暦(化学療法タブ)。食事の暦を土台に、適用の切り替えと Day の印を足す。 */
+.chemo-calendar__regimens {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.chemo-calendar__regimen {
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.chemo-calendar__regimen--active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.chemo-calendar__regimen--inactive {
+  opacity: 0.7;
+}
+
+.chemo-calendar__regimen-status {
+  margin-left: 4px;
+  font-size: 11px;
+}
+
+.chemo-calendar__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.chemo-calendar__toolbar {
+  margin-bottom: 6px;
+}
+
+.chemo-calendar__cell--day1 .meal-calendar__day-number {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.chemo-calendar__cycle-day {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* 投与の無い日(休薬期間・クールの中の空き日)の Day 表示は控えめに。 */
+.chemo-calendar__cycle-day--quiet {
+  color: var(--text);
+  opacity: 0.6;
+}
+
+/* 休薬期間。投与の無い日が「クールの中の休み」なのか「クールの外」なのかを
+   地の色で分ける。 */
+.chemo-calendar__cell--rest {
+  background: var(--surface-panel);
+}
+
+.chemo-calendar__rest {
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+/* ドラッグ＆ドロップで投与日を動かす。掴めるマスはカーソルで合図し、掴んでいる間の
+   元の位置は薄く、落とせる先は破線で示す(手術カレンダーと同じ見せ方)。 */
+button.chemo-calendar__cell[draggable="true"] {
+  cursor: grab;
+}
+
+.chemo-calendar__cell--dragging {
+  opacity: 0.35;
+}
+
+.chemo-calendar__cell--drop-target {
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+/* ドラッグ中に文字が選択されると掴み損ねたように見えるので、暦では選ばせない。 */
+.chemo-calendar {
+  user-select: none;
+}
+
+/* マスに出すステップ名。薬剤名より短く、医師が組んだ単位なので読み取りやすい。 */
+.chemo-calendar__step {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chemo-calendar__step--more {
+  opacity: 0.7;
+}
+
+.chemo-calendar__order {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px 4px;
+  border-radius: 4px;
+  background: var(--surface-panel);
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.chemo-calendar__order--completed {
+  border-left: 3px solid var(--accent);
+}
+
+.chemo-calendar__order--cancelled {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.chemo-calendar__order-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chemo-calendar__status {
+  font-size: 10px;
+}
+
+.chemo-calendar__drug {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chemo-calendar__drug--more {
+  color: var(--text);
+  font-size: 10px;
+}
+
+/* 化学療法タブの中の表示切り替え(カレンダー / レジメン詳細)。見出しの右に置く
+   小さめのタブで、適用の選択(.chemo-calendar__regimens)とは段を分ける。 */
+.chemo-views {
+  display: flex;
+  gap: 4px;
+}
+
+.chemo-views__tab {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.chemo-views__tab--active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+/* 左ペインに置くレジメン詳細。右ペインより幅があるので、概要は 2 列で読ませる。 */
+.karte-tabpanel .regimen-detail__summary {
+  grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
+}
+
+/* 投与前チェック(適応基準 × 直近の検査結果)。基準外でも登録は止めないので、
+   赤は「読め」の印であって「進めない」印ではない。 */
+.regimen-check__summary {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.8;
+}
+
+.regimen-check__summary--out {
+  color: var(--danger, #c0392b);
+  opacity: 1;
+  font-weight: 600;
+}
+
+.regimen-check__table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.regimen-check__table th,
+.regimen-check__table td {
+  font-size: 12px;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.regimen-check__table th:nth-child(2),
+.regimen-check__table td:nth-child(2),
+.regimen-check__table th:nth-child(3),
+.regimen-check__table td:nth-child(3) {
+  width: 20%;
+}
+
+.regimen-check__table th:nth-child(4),
+.regimen-check__table td:nth-child(4) {
+  width: 17%;
+}
+
+.regimen-check__table th:nth-child(5),
+.regimen-check__table td:nth-child(5) {
+  width: 15%;
+}
+
+.regimen-check__verdict--out {
+  color: var(--danger, #c0392b);
+  font-weight: 600;
+}
+
+.regimen-check__verdict--ok {
+  opacity: 0.7;
+}
+
+.regimen-check__verdict--unknown,
+.regimen-check__note {
+  display: block;
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.regimen-check__stale {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--danger, #c0392b);
+}
+
+/* レジメンマスタの臨床情報(適応疾患・中止基準・副作用)。右ペインは狭いので 1 列。 */
+.regimen-info {
+  margin: 0;
+  font-size: 12px;
+}
+
+.regimen-info__row {
+  display: grid;
+  grid-template-columns: 8em minmax(0, 1fr);
+  gap: 2px 8px;
+  margin-bottom: 4px;
+}
+
+.regimen-info__row dt {
+  color: var(--text);
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.regimen-info__row dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.regimen-info__list {
+  margin: 0;
+  padding-left: 1.1em;
+}
+
+.regimen-info__note {
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+/* 減量(投与率)。投与量の欄の上に置き、力価と縦に並べる。 */
+.regimen-apply__ratio {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 3px;
+  font-size: 12px;
+}
+
+.regimen-apply__ratio input {
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  width: 56px;
+  height: 26px;
+  box-sizing: border-box;
+}
+
+/* 前クールと同じ量にするかの選択(次クール登録のみ)。 */
+.regimen-apply__carry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.regimen-apply__carry label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.regimen-apply__carry .regimen-check__verdict--out {
+  margin-left: 2px;
+  font-size: 11px;
+}
+
+.regimen-apply__reason {
+  flex: 1 1 100%;
+}
+
+/* 次クールの登録は月送りの行の右端に置く(高さは他のボタンと同じ)。 */
+.chemo-calendar__add-cycle {
+  margin-left: auto;
+}
+
+/* レジメンの状態(適用中 / 休止 / 完了 / 中止)。マスタの承認状態と同じ器を使う。 */
+.regimen-status--active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.regimen-status--on-hold {
+  color: var(--warning, #b7791f);
+  border-color: var(--warning, #b7791f);
+}
+
+.regimen-status--completed {
+  opacity: 0.8;
+}
+
+.regimen-status--revoked {
+  color: var(--danger, #c0392b);
+  border-color: var(--danger, #c0392b);
+}
+
+.regimen-detail__since {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.regimen-detail__progress {
+  white-space: nowrap;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.regimen-detail__progress--done {
+  opacity: 1;
+  font-weight: 600;
+}
+
+/* 治療歴(患者の全適用)。行を押すとその適用の詳細へ。 */
+.regimen-history__row {
+  cursor: pointer;
+}
+
+.regimen-history__row:hover td {
+  background: var(--bg-hover, rgba(127, 127, 127, 0.08));
+}
+
+.master-search__table button.regimen-history__name {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.regimen-history__period {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.regimen-history__note {
+  display: block;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* 投与日の中止理由(投与日パネル)。 */
+.regimen-day__reason {
+  display: block;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* 有害事象(CTCAE Grade)。Grade は色で読む(1〜2 は控えめ、3 以上は赤)。 */
+.regimen-adverse__list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.regimen-adverse__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.regimen-adverse__item--editing {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.regimen-adverse__list--compact .regimen-adverse__item {
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.regimen-adverse__grade {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.regimen-adverse__grade--3,
+.regimen-adverse__grade--4,
+.regimen-adverse__grade--5 {
+  color: var(--danger, #c0392b);
+  border-color: var(--danger, #c0392b);
+}
+
+.regimen-adverse__term {
+  font-weight: 600;
+}
+
+.regimen-adverse__period {
+  font-size: 12px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.regimen-adverse__note {
+  flex-basis: 100%;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.regimen-adverse__actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.regimen-adverse__ongoing {
+  margin-left: 3px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+/* レジメン詳細のクール一覧の有害事象列。ラベルを並べ、末尾に記録の入口。 */
+.regimen-detail__adverse {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.regimen-detail__adverse .regimen-adverse__grade {
+  font-weight: 500;
+}
+
+/* 投与日の予約(外来化学療法室)。オーダーの内容とは別の関心事なので専用の枠に置く。 */
+.regimen-day__booking-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px 10px;
+  margin: 0 0 12px;
+}
+
+.regimen-day__booking-fields > legend {
+  font-size: 13px;
+  padding: 0 4px;
+  color: var(--text);
+}
+
+.regimen-day__booking {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.regimen-day__booking-status {
+  color: var(--text);
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.regimen-day__booking-time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 注射一覧・詳細での化学療法の印(薬剤部の監査)。 */
+.injection-worklist__chemo {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.injection-worklist__reduced {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid var(--danger, #c0392b);
+  color: var(--danger, #c0392b);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.injection-detail__body {
+  margin-left: 8px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+/* 力価から逆算した体表面積あたりの量。レジメンの基準と突き合わせる。 */
+.injection-detail__per-bsa {
+  display: block;
+  font-size: 11px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+/* アレルギー照合の警告(投与内容の薬剤行)。登録は止めないので、赤は「読め」の印。 */
+.regimen-apply__allergy {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--warning-text, #8a5a00);
+}
+
+.regimen-apply__allergy--high {
+  color: var(--danger, #c0392b);
+  font-weight: 600;
+}
+
+.regimen-apply__allergy-summary {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--danger, #c0392b);
+}
+
+/* CTCAE 用語の選択。用語の行と、開いた Grade の定義の行を 1 組にする。 */
+.ctcae-search__table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.ctcae-search__group + .ctcae-search__group td {
+  border-top: 1px solid var(--border);
+}
+
+.master-search__table button.ctcae-search__term {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.ctcae-search__detail-row td {
+  padding-top: 0;
+  background: var(--bg-soft, rgba(127, 127, 127, 0.05));
+}
+
+.ctcae-search__definition {
+  margin: 0 0 6px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.ctcae-search__grades {
+  margin: 0;
+  font-size: 12px;
+}
+
+.ctcae-search__grade {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr);
+  gap: 2px 8px;
+  margin-bottom: 3px;
+}
+
+.ctcae-search__grade dt {
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.ctcae-search__grade dd {
+  margin: 0;
+}
+
+/* 用語欄と「CTCAE から選択」ボタンを横に並べる。 */
+.regimen-adverse__term-row,
+.regimen-editor__with-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.regimen-adverse__term-row input,
+.regimen-editor__with-picker input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 投与ステップの注意書き(マスタの note)。 */
+.regimen-apply__step-note {
+  margin: 2px 0 6px;
+  font-size: 12px;
+  color: var(--muted);
 }

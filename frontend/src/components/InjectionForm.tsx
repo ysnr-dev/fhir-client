@@ -39,7 +39,7 @@ import {
   type PrescriptionSetting,
 } from "../fhir/prescriptionHelpers";
 import { presetInjectionUsageType } from "../fhir/usageMapping";
-import { useMedicineMlFactors } from "../api/masterQueries";
+import { useMedicineDoseFactors } from "../api/masterQueries";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
@@ -150,15 +150,15 @@ export function InjectionForm({
 
   const problemOptions = useProblemOptions(patientId);
 
-  // 総投与量の計算に使う mL 換算係数。フォーム上の全医薬品分をまとめて引く。
-  const { data: mlFactors } = useMedicineMlFactors(
+  // 総投与量の計算に使う換算(製剤数・力価 → mL)。フォーム上の全医薬品分をまとめて引く。
+  const { data: conversions } = useMedicineDoseFactors(
     values.rps.flatMap((rp) =>
       rp.medicines.map((m) => m.medicine?.medicine_code).filter((c): c is string => Boolean(c)),
     ),
   );
 
   function doseTotalOf(rp: InjectionRpValues): RpDoseTotal {
-    return rpDoseTotal(rp.medicines, mlFactors ?? new Map());
+    return rpDoseTotal(rp.medicines, conversions);
   }
 
   // 投与時間を選んでいる間は投与速度を自動計算で埋める(直接入力は投与時間が空のときだけ)。

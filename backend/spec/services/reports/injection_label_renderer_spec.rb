@@ -36,6 +36,34 @@ RSpec.describe Reports::InjectionLabelRenderer do
     expect(pages[0]).not_to include("2026/08/29")
   end
 
+  it "prints the regimen, the reduction mark and the usage comment for a chemotherapy order" do
+    order["extension"] = [
+      { "url" => InjectionReport::REGIMEN_ORDER_EXT_URL,
+        "extension" => [
+          { "url" => "regimen", "valueReference" => { "reference" => "ServiceRequest/abc" } },
+          { "url" => "cycle", "valueInteger" => 1 },
+          { "url" => "day", "valueInteger" => 8 },
+          { "url" => "name", "valueString" => "mFOLFOX6" },
+          { "url" => "reduction", "valueString" => "Grade 2 の末梢神経障害" }
+        ] }
+    ]
+    step = rp(1, %w[オキサリプラチン])
+    step.usage_comment = "オキサリプラチン / 器材: 遮光カバー / 血管外漏出注意"
+    pdf = described_class.new(layout_path: InjectionReport::LABEL_LAYOUT_PATH, order: order, patient: patient,
+                              rps: [step]).render
+    page = PDF::Inspector::Page.analyze(pdf).pages[0][:strings].join
+    expect(page).to include("mFOLFOX6").and include("Day8").and include("減量")
+    # 用法コメント(ステップ名・器材・投与時注意)は薬剤欄の最後の行に入る。
+    expect(page).to include("器材")
+  end
+
+  it "leaves the regimen line empty for an ordinary injection" do
+    pdf = described_class.new(layout_path: InjectionReport::LABEL_LAYOUT_PATH, order: order, patient: patient,
+                              rps: [rp(1, %w[生理食塩液])]).render
+    page = PDF::Inspector::Page.analyze(pdf).pages[0][:strings].join
+    expect(page).not_to include("Day")
+  end
+
   it "falls back to the authoredOn day when the order has no occurrenceDateTime" do
     order.delete("occurrenceDateTime")
     pdf = described_class.new(layout_path: InjectionReport::LABEL_LAYOUT_PATH, order: order, patient: patient,

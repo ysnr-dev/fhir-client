@@ -1,4 +1,4 @@
-import { useBloodType, useBodyMeasures, usePatient, usePregnancy, useRenalResults } from "../api/queries";
+import { useBloodType, useBodyMeasures, usePatient, usePregnancy, useRecentLabResults } from "../api/queries";
 import { summarizeBloodType } from "../fhir/bloodTypeHelpers";
 import {
   measurementLabel,
@@ -38,10 +38,11 @@ export function PatientBodySection({
 
   // eGFR の算出に年齢と性別が要るので患者本体も読む。
   const patient = usePatient(patientId).data?.data;
-  const renalResults = useRenalResults(patientId);
+  const renalResults = useRecentLabResults(patientId);
   const renal = summarizeRenal(renalResults.observations, {
     age: patient?.birthDate ? calculateAge(patient.birthDate) : undefined,
     gender: patient?.gender,
+    weight: body.weight?.value ?? null,
   });
 
   return (
@@ -165,6 +166,14 @@ export function PatientBodySection({
                     `${renal.egfr} mL/分/1.73m²`
                   ) : (
                     <span className="body-measure__unavailable">{renal.egfrUnavailable || "-"}</span>
+                  )}
+                </dd>
+                <dt>CCr</dt>
+                <dd>
+                  {renal.ccr !== null ? (
+                    `${renal.ccr} mL/分`
+                  ) : (
+                    <span className="body-measure__unavailable">{renal.ccrUnavailable || "-"}</span>
                   )}
                 </dd>
                 {renal.cystatinC && (

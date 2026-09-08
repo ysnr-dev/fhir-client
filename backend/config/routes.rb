@@ -255,6 +255,13 @@ Rails.application.routes.draw do
     resources :jfagy_drugs, only: %i[index] do
       collection { post :import }
     end
+    # CTCAE(有害事象共通用語規準)v5.0 日本語訳 JCOG 版。検索専用(取込で全件洗い替え)。
+    resources :ctcae_terms, only: %i[index] do
+      collection do
+        post :import
+        get :socs
+      end
+    end
     # 郵便番号マスタ(日本郵便 utf_ken_all.csv)。住所補完で郵便番号から引くだけなので
     # 検索専用(取込で全件洗い替え)。
     resources :postal_codes, only: %i[index] do
@@ -272,6 +279,11 @@ Rails.application.routes.draw do
         put :entries
         post :copy
       end
+    end
+    # 化学療法レジメンマスタ。本体と子(適応疾患・投与ステップ・薬剤・検査基準・
+    # 副作用)を 1 リクエストで読み書きする(docs/chemo-regimen-design.md)。
+    resources :regimens, only: %i[index show create update destroy] do
+      member { post :copy }
     end
   end
 end

@@ -321,3 +321,79 @@ export function parseAllergyForm(allergy: fhir4.AllergyIntolerance): AllergyForm
     note: allergy.note?.[0]?.text ?? "",
   };
 }
+
+// ---- 薬剤とアレルギーの照合(docs/order-common-backlog.md §3) ----
+//
+// 患者のアレルギーは銘柄指定(YCM + YJ コード 12 桁)と成分指定(GCM + 一般名コード)の
+// 2 系統で登録される。一般名コードは YJ コードの規格・銘柄部を ZZZ にした形なので
+// (「GCM4291410A1ZZZ オキサリプラチン」に対し YJ は「4291410A1070」)、薬剤 1 件から
+// 両方のコードを作って突き合わせる。銘柄だけを見ると成分で登録されたアレルギーを
+// 取りこぼす。
+
+/** 一般名コードの規格・銘柄部の長さ(YJ コード 12 桁の末尾 3 桁)。 */
+const GENERIC_SUFFIX = "ZZZ";
+const YJ_GENERIC_LENGTH = 9;
+
+export interface MedicationAllergenCodes {
+  /** 銘柄指定(YCM + YJ コード)。 */
+  brand: string;
+  /** 成分指定(GCM + 一般名コード)。 */
+  generic: string;
+}
+
+/** 医薬品の YJ コードから、照合に使う JFAGY のアレルゲンコードを作る。 */
+export function medicationAllergenCodes(yjCode: string | null | undefined): MedicationAllergenCodes | null {
+  const yj = (yjCode ?? "").trim();
+  if (yj.length < YJ_GENERIC_LENGTH) return null;
+  return { brand: `YCM${yj}`, generic: `GCM${yj.slice(0, YJ_GENERIC_LENGTH)}${GENERIC_SUFFIX}` };
+}
+
+export interface AllergyMatch {
+  allergyId: string;
+  /** 銘柄一致(その薬そのもの)か、成分一致(同じ成分の別銘柄)か。 */
+  kind: "brand" | "generic";
+  /** アレルゲンの名前。 */
+  name: string;
+  /** 重篤度のラベル。 */
+  criticalityLabel: string;
+  /** 重篤度が「高」か(強く出す判定に使う)。 */
+  high: boolean;
+  reaction: string;
+}
+
+/**
+ * 医薬品 1 件に当たるアレルギーを探す。
+ *
+ * ［決定］**否定(refuted)は外す**。「疑ったが違った」記録なので、警告に出すと
+ * 本当の警告が埋もれる。`clinicalStatus` の絞り込みは呼び出し側(`useActiveAllergies`)に任せる。
+ */
+export function matchMedicationAllergies(
+  yjCode: string | null | undefined,
+  allergies: fhir4.AllergyIntolerance[],
+): AllergyMatch[] {
+  const codes = medicationAllergenCodes(yjCode);
+  if (!codes) return [];
+  const matches: AllergyMatch[] = [];
+  for (const allergy of allergies) {
+    if (allergy.verificationStatus?.coding?.[0]?.code === "refuted") continue;
+    const summary = summarizeAllergy(allergy);
+    const kind =
+      summary.jfagyCode === codes.brand ? "brand" : summary.jfagyCode === codes.generic ? "generic" : null;
+    if (!kind) continue;
+    matches.push({
+      allergyId: summary.id,
+      kind,
+      name: summary.name,
+      criticalityLabel: summary.criticalityLabel,
+      high: allergy.criticality === "high",
+      reaction: summary.reaction,
+    });
+  }
+  return matches;
+}
+
+/** 「アスピリン(高)」。警告の 1 行に出す。 */
+export function allergyMatchLabel(match: AllergyMatch): string {
+  const suffix = match.kind === "generic" ? "・同成分" : "";
+  return match.criticalityLabel ? `${match.name}（${match.criticalityLabel}${suffix}）` : `${match.name}${suffix}`;
+}

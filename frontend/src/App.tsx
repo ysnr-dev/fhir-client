@@ -22,6 +22,8 @@ import { RadItemPage } from "./pages/RadItemPage";
 import { RadJj1017CodePage } from "./pages/RadJj1017CodePage";
 import { RadMaterialPage } from "./pages/RadMaterialPage";
 import { RadDatasetPage } from "./pages/RadDatasetPage";
+import { RegimenListPage } from "./pages/RegimenListPage";
+import { RegimenEditorPage } from "./pages/RegimenEditorPage";
 import { PhysioWorklistPage } from "./pages/PhysioWorklistPage";
 import { PhysioExamTypePage } from "./pages/PhysioExamTypePage";
 import { PhysioItemPage } from "./pages/PhysioItemPage";
@@ -55,6 +57,7 @@ import { MicroSusceptibilityMethodPage } from "./pages/MicroSusceptibilityMethod
 import { MicroSpecimenTypePage } from "./pages/MicroSpecimenTypePage";
 import { PathoWorklistPage } from "./pages/PathoWorklistPage";
 import { TransfusionWorklistPage } from "./pages/TransfusionWorklistPage";
+import { ChemoRoomWorklistPage } from "./pages/ChemoRoomWorklistPage";
 import { RehabWorklistPage } from "./pages/RehabWorklistPage";
 import { NutritionGuidanceWorklistPage } from "./pages/NutritionGuidanceWorklistPage";
 import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
@@ -210,6 +213,11 @@ function App() {
             <Link to="/injection-worklist" className="row-menu__item">
               注射一覧
             </Link>
+            {/* 化学療法室は注射一覧(オーダー軸)と違い、その日の予約(時間割)で回る部門なので
+                別の面にする(docs/chemo-regimen-design.md §7.6 E-7)。 */}
+            <Link to="/chemo-room-worklist" className="row-menu__item">
+              外来化学療法室
+            </Link>
           </HoverMenu>
           {/* 予約枠は診療科がオーダーを出す前段(いつ診るかを決める)なので、
               部門業務とマスタメンテの間に独立して置く。 */}
@@ -266,6 +274,13 @@ function App() {
             <SubMenu label="医薬品">
               <Link to="/medicine-dose-conversions" className="row-menu__item">
                 投与量換算
+              </Link>
+            </SubMenu>
+            {/* 化学療法のマスタ。レジメンは審査委員会で承認する施設共通の参照表なので
+                マスタメンテに置く(docs/chemo-regimen-design.md)。 */}
+            <SubMenu label="化学療法">
+              <Link to="/regimens" className="row-menu__item">
+                レジメン
               </Link>
             </SubMenu>
             <SubMenu label="検体検査">
@@ -524,6 +539,7 @@ function App() {
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
           <Route path="/injection-worklist" element={<InjectionWorklistPage />} />
+          <Route path="/chemo-room-worklist" element={<ChemoRoomWorklistPage />} />
           <Route path="/physio-worklist" element={<PhysioWorklistPage />} />
           <Route path="/endoscopy-worklist" element={<EndoscopyWorklistPage />} />
           <Route path="/treatment-worklist" element={<TreatmentWorklistPage />} />
@@ -542,6 +558,9 @@ function App() {
           <Route path="/rad-jj1017-codes" element={<RadJj1017CodePage />} />
           <Route path="/rad-materials" element={<RadMaterialPage />} />
           <Route path="/rad-datasets" element={<RadDatasetPage />} />
+          <Route path="/regimens" element={<RegimenListPage />} />
+          <Route path="/regimens/new" element={<RegimenEditorPage />} />
+          <Route path="/regimens/:regimenId" element={<RegimenEditorPage />} />
           <Route path="/physio-items" element={<PhysioItemPage />} />
           <Route path="/physio-item-layouts" element={<PhysioItemLayoutPage />} />
           <Route path="/physio-exam-types" element={<PhysioExamTypePage />} />

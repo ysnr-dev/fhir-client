@@ -25,6 +25,7 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
 import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
 import { KarteMealTab } from "../components/KarteMealTab";
+import { KarteChemoTab } from "../components/KarteChemoTab";
 import { KarteNursingTab } from "../components/KarteNursingTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteProfileTab } from "../components/KarteProfileTab";
@@ -738,6 +739,19 @@ export function KartePage() {
           onCreate={(date, sourceSrId) =>
             setPane({ kind: "meal-order-create", sourceSrId, startDate: date })
           }
+        />
+      );
+    }
+    // 化学療法。暦とレジメン詳細は左ペインのタブで切り替え、オーダーを作る操作
+    // (適用・次クールの登録)と投与日の操作は右ペインで行う。
+    if (key === "chemo") {
+      return (
+        <KarteChemoTab
+          {...props}
+          onAddCycle={(regimenSrId) => setPane({ kind: "regimen-cycle", regimenSrId })}
+          onOpenDay={(regimenSrId, date) => setPane({ kind: "regimen-day", regimenSrId, date })}
+          onOpenAdverseEvents={(regimenSrId, cycle) => setPane({ kind: "regimen-adverse", regimenSrId, cycle })}
+          onEditHeader={(regimenSrId) => setPane({ kind: "regimen-header", regimenSrId })}
         />
       );
     }

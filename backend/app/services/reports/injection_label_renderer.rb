@@ -53,8 +53,10 @@ module Reports
         # 注射日(オーダー開始日 = occurrenceDateTime)。
         "order_date" => PatientMeta.format_date(OrderDates.order_day(@order)),
         "rp_label" => rp_label(rp),
-        "medicines" => rp.medicines.map { |m| medicine_line(m) }.join("\n"),
-        "usage" => InjectionMeta.usage_summary(rp)
+        "medicines" => medicines_block(rp),
+        "usage" => InjectionMeta.usage_summary(rp),
+        # 化学療法はレジメンとクールが分かると調製・監査の手順が決まる(§7.6 E-6)。
+        "regimen" => regimen_line
       }
     end
 
@@ -62,6 +64,24 @@ module Reports
     def rp_label(rp)
       times = rp.start_times.any? ? "　#{rp.start_times.join('、')}" : ""
       "RP#{rp.rp_number} / #{@rps.size}#{times}"
+    end
+
+    # 薬剤欄(4 行)。化学療法のときだけ、最後に用法コメント(ステップ名 / 器材 /
+    # 投与時注意)の行を足す —— ボトルを混ぜる人が「血管外漏出注意」に気付けるように。
+    # ラベルは 60×40mm しか無いので長い注意は行末で切れる(全文は注射箋にある)。
+    # 手入力の注射では足さない(4 剤の混注で薬剤名が押し出されるため)。
+    def medicines_block(rp)
+      lines = rp.medicines.map { |m| medicine_line(m) }
+      lines << rp.usage_comment if regimen_line.present? && rp.usage_comment.present?
+      lines.join("\n")
+    end
+
+    # 「mFOLFOX6 C1 Day1 ｜ 減量」。化学療法でなければ空(ラベルの行が空になるだけ)。
+    def regimen_line
+      label = InjectionMeta.regimen_label(@order)
+      return "" if label.blank?
+
+      InjectionMeta.regimen_reduction(@order).present? ? "#{label} ｜ 減量" : label
     end
 
     def medicine_line(medicine)

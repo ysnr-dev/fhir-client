@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_06_000100) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_08_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -38,6 +38,36 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_06_000100) do
     t.datetime "updated_at", null: false
     t.text "fhir_admin_token"
     t.index ["singleton_guard"], name: "index_fhir_connection_settings_on_singleton_guard", unique: true
+  end
+
+  create_table "master_ctcae_terms", force: :cascade do |t|
+    t.string "meddra_code", null: false
+    t.string "soc_en"
+    t.string "soc_ja"
+    t.string "term_en"
+    t.string "term_ja", null: false
+    t.text "grade1_en"
+    t.text "grade1_ja"
+    t.text "grade2_en"
+    t.text "grade2_ja"
+    t.text "grade3_en"
+    t.text "grade3_ja"
+    t.text "grade4_en"
+    t.text "grade4_ja"
+    t.text "grade5_en"
+    t.text "grade5_ja"
+    t.text "definition_en"
+    t.text "definition_ja"
+    t.text "navigational_note_en"
+    t.text "navigational_note_ja"
+    t.integer "display_order"
+    t.string "search_term"
+    t.string "search_soc"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["meddra_code"], name: "index_master_ctcae_terms_on_meddra_code", unique: true
+    t.index ["search_term"], name: "index_master_ctcae_terms_on_search_term"
+    t.index ["soc_ja"], name: "index_master_ctcae_terms_on_soc_ja"
   end
 
   create_table "master_disease_indexes", force: :cascade do |t|
@@ -1321,6 +1351,118 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_06_000100) do
     t.datetime "updated_at", null: false
     t.index ["member_item_code"], name: "index_master_rad_set_items_on_member_item_code"
     t.index ["set_item_code", "member_item_code"], name: "index_rad_set_items_on_set_and_member", unique: true
+  end
+
+  create_table "master_regimen_adverse_events", force: :cascade do |t|
+    t.string "regimen_code", null: false
+    t.integer "display_order"
+    t.string "term", null: false
+    t.integer "grade"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["regimen_code"], name: "index_master_regimen_adverse_events_on_regimen_code"
+  end
+
+  create_table "master_regimen_drugs", force: :cascade do |t|
+    t.string "regimen_code", null: false
+    t.bigint "step_id", null: false
+    t.integer "display_order"
+    t.string "drug_role", null: false
+    t.string "medicine_code", null: false
+    t.string "dose_basis", null: false
+    t.decimal "dose_value", precision: 12, scale: 3
+    t.string "dose_unit"
+    t.decimal "dose_max", precision: 12, scale: 3
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["medicine_code"], name: "index_master_regimen_drugs_on_medicine_code"
+    t.index ["regimen_code"], name: "index_master_regimen_drugs_on_regimen_code"
+    t.index ["step_id", "display_order"], name: "index_master_regimen_drugs_on_step_id_and_display_order"
+  end
+
+  create_table "master_regimen_indications", force: :cascade do |t|
+    t.string "regimen_code", null: false
+    t.integer "display_order"
+    t.string "management_number", null: false
+    t.string "name", null: false
+    t.string "icd10"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["regimen_code"], name: "index_master_regimen_indications_on_regimen_code"
+  end
+
+  create_table "master_regimen_lab_criteria", force: :cascade do |t|
+    t.string "regimen_code", null: false
+    t.integer "display_order"
+    t.string "category", null: false
+    t.string "analyte_code"
+    t.string "item_name", null: false
+    t.string "unit"
+    t.decimal "lower_limit", precision: 12, scale: 3
+    t.decimal "upper_limit", precision: 12, scale: 3
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["analyte_code"], name: "index_master_regimen_lab_criteria_on_analyte_code"
+    t.index ["regimen_code"], name: "index_master_regimen_lab_criteria_on_regimen_code"
+  end
+
+  create_table "master_regimen_steps", force: :cascade do |t|
+    t.string "regimen_code", null: false
+    t.integer "display_order"
+    t.string "name"
+    t.jsonb "days", default: [], null: false
+    t.string "usage_type", null: false
+    t.string "route_code"
+    t.string "method_code"
+    t.string "line_code"
+    t.integer "infusion_minutes"
+    t.decimal "rate", precision: 10, scale: 1
+    t.string "device_note"
+    t.string "usage_code"
+    t.integer "dose_days"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["regimen_code", "display_order"], name: "index_master_regimen_steps_on_regimen_code_and_display_order"
+  end
+
+  create_table "master_regimens", force: :cascade do |t|
+    t.string "regimen_code", null: false
+    t.string "name", null: false
+    t.string "short_name"
+    t.string "name_kana"
+    t.string "department_code"
+    t.string "department_name"
+    t.string "purpose"
+    t.string "setting"
+    t.integer "treatment_days"
+    t.integer "rest_days"
+    t.integer "planned_cycles"
+    t.string "emetic_risk"
+    t.string "status", default: "draft", null: false
+    t.date "approved_on"
+    t.string "approved_by"
+    t.text "indication_note"
+    t.text "discontinuation_criteria"
+    t.text "dose_reduction_criteria"
+    t.text "references_note"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.string "search_short_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "copied_from_code"
+    t.index ["copied_from_code"], name: "index_master_regimens_on_copied_from_code"
+    t.index ["department_code"], name: "index_master_regimens_on_department_code"
+    t.index ["regimen_code"], name: "index_master_regimens_on_regimen_code", unique: true
+    t.index ["status"], name: "index_master_regimens_on_status"
   end
 
   create_table "master_schema_categories", force: :cascade do |t|

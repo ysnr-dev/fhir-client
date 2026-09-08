@@ -36,6 +36,8 @@ export const CAUTION_PICTOGRAM_KEYS = [
   // 見るべき場面が違うため)。
   "allergy-medication",
   "allergy-other",
+  // 化学療法中。注意区分マスタでは選ばせず、患者帯が適用中のレジメンから直接使う。
+  "chemotherapy",
 ] as const;
 
 export type CautionPictogramKey = (typeof CAUTION_PICTOGRAM_KEYS)[number];
@@ -59,6 +61,7 @@ export const CAUTION_PICTOGRAM_LABELS: Record<CautionPictogramKey, string> = {
   alert: "三角の感嘆符",
   infection: "バイオハザード",
   "allergy-medication": "カプセルに禁止記号",
+  chemotherapy: "点滴バッグ",
   "allergy-other": "皿に禁止記号",
 };
 
@@ -231,6 +234,18 @@ const SHAPES: Record<CautionPictogramKey, ReactNode> = {
       {banCircle}
     </>
   ),
+  // 点滴バッグ(化学療法中)。吊り下げたバッグから管が伸びる形。抗がん剤の
+  // 曝露対策・血管外漏出の観察が要る患者だと一目で分かればよいので、
+  // 薬の種類までは描き分けない。
+  chemotherapy: (
+    <>
+      <path d="M8 1.2v1.4" {...STROKE} />
+      <path d="M5.6 2.6h4.8l-.6 6.2a1.6 1.6 0 0 1-1.6 1.4H7.8a1.6 1.6 0 0 1-1.6-1.4Z" {...STROKE} />
+      <path d="M6 5.6h4" {...STROKE} />
+      <path d="M8 11.2v1.6" {...STROKE} />
+      <circle cx="8" cy="14" r="1.2" {...STROKE} />
+    </>
+  ),
   // 三角の感嘆符(汎用。区分に合う図柄が無いときの既定)。
   alert: (
     <>
@@ -249,6 +264,7 @@ const NON_MASTER_KEYS: readonly CautionPictogramKey[] = [
   "infection",
   "allergy-medication",
   "allergy-other",
+  "chemotherapy",
 ];
 
 export const CAUTION_MASTER_PICTOGRAM_KEYS = CAUTION_PICTOGRAM_KEYS.filter(

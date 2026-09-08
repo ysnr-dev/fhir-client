@@ -31,6 +31,7 @@ import {
   type InjectionTaskStatus,
 } from "../fhir/injectionTaskHelpers";
 import { displayName } from "../fhir/patientHelpers";
+import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import {
   SETTING_OPTIONS,
   orderContextSummary,
@@ -56,6 +57,8 @@ interface Filters {
   wardId: string;
   departmentId: string;
   status: string;
+  /** 化学療法(レジメンから出た日オーダー)だけに絞る。§7.6 E-7。 */
+  chemoOnly: boolean;
 }
 
 const emptyFilters: Filters = {
@@ -64,6 +67,7 @@ const emptyFilters: Filters = {
   wardId: "",
   departmentId: "",
   status: "",
+  chemoOnly: false,
 };
 
 const INJECTION_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/injection-category";
@@ -196,6 +200,8 @@ function matchesFilters(row: InjectionWorklistRow, filters: Filters): boolean {
   const requester = prescriptionRequester(row.order);
   if (filters.departmentId && requester.departmentId !== filters.departmentId) return false;
   if (filters.status && injectionTaskStatus(row.task) !== filters.status) return false;
+  // 化学療法は調製・監査の手順が違うので、その日のぶんだけを抜き出せるようにする。
+  if (filters.chemoOnly && !regimenOrderOf(row.order)) return false;
   return true;
 }
 
@@ -275,6 +281,14 @@ function FilterForm({ date, filters, wards, departments, onDateChange, onChange 
           ))}
         </select>
       </label>
+      <label className="dose-conversion__checkbox">
+        <input
+          type="checkbox"
+          checked={filters.chemoOnly}
+          onChange={(e) => onChange({ ...filters, chemoOnly: e.target.checked })}
+        />
+        化学療法のみ
+      </label>
       <label>
         ステータス
         <select value={filters.status} onChange={(e) => onChange({ ...filters, status: e.target.value })}>
@@ -316,6 +330,8 @@ function WorklistRow({
   const settingDisplay = categoryCoding(order, SETTING_SYSTEM)?.display ?? "";
   const categoryDisplay = categoryCoding(order, INJECTION_CATEGORY_SYSTEM)?.display ?? "";
   const seriesLabel = injectionSeriesLabel(order);
+  // 化学療法(レジメン)から出たオーダーか。日オーダーの拡張で判る(§7.6 E-1)。
+  const regimen = regimenOrderOf(order);
   // 発行済み(受付済以降)は注射箋を刷り直せる。中止した注射は刷らせない。
   const canReissue = status === "accepted" || status === "in-progress" || status === "completed";
 
@@ -352,6 +368,18 @@ function WorklistRow({
         )}
         {/* 連日オーダーの何日目かは払出の段取り(明日も同じものが出る)に関わるので添える。 */}
         {seriesLabel && <span className="injection-series-label">{seriesLabel}</span>}
+        {/* 化学療法は調製・監査の手順が違うので、一覧で見分けられるようにする。
+            減量しているクールはその印も出す(薬剤部が疑義照会するかの判断材料)。 */}
+        {regimen && (
+          <span className="injection-worklist__chemo">
+            {`${regimen.name} ${cycleDayLabel(regimen)}`}
+            {regimen.reduction && (
+              <span className="injection-worklist__reduced" title={regimen.reduction}>
+                減量
+              </span>
+            )}
+          </span>
+        )}
       </td>
       <td className="lab-worklist__compact">
         {[settingDisplay, categoryDisplay].filter(Boolean).join(" ") || "-"}

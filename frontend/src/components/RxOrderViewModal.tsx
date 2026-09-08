@@ -7,6 +7,7 @@ import {
   prescriptionRequester,
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
+import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { rxTaskQueryNotes } from "../fhir/rxDispenseHelpers";
 import { rxTaskStatus, rxTaskStatusDisplay } from "../fhir/rxTaskHelpers";
 import { Modal } from "./Modal";
@@ -25,6 +26,9 @@ export function RxOrderViewModal({ row, onClose }: { row: RxWorklistRow; onClose
   const status = rxTaskStatus(row.task);
   const queryNotes = rxTaskQueryNotes(row.task);
 
+  // 化学療法から出た内服は、レジメンとクールで調剤・監査の手順が決まる(§7.6 E-5)。
+  const regimen = regimenOrderOf(order);
+
   // 一覧から開くので、どの患者のオーダーを見ているかを必ず頭に出す。
   const meta = [
     patient ? `${patient.identifier?.[0]?.value ?? "-"} ${displayName(patient)}` : "",
@@ -32,6 +36,7 @@ export function RxOrderViewModal({ row, onClose }: { row: RxWorklistRow; onClose
     summary.settingDisplay,
     summary.categoryDisplay,
     orderContextSummary(prescriptionRequester(order)),
+    regimen ? `${regimen.name} ${cycleDayLabel(regimen)}` : "",
   ].filter(Boolean);
 
   return (
@@ -42,6 +47,11 @@ export function RxOrderViewModal({ row, onClose }: { row: RxWorklistRow; onClose
           <span className={`lab-worklist__status lab-worklist__status--${status}`}>
             {rxTaskStatusDisplay(status)}
           </span>
+          {regimen?.reduction && (
+            <span className="injection-worklist__reduced" title={regimen.reduction}>
+              減量
+            </span>
+          )}
         </p>
 
         {rps.map((rp) => (

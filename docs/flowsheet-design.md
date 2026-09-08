@@ -289,10 +289,13 @@ ServiceRequest?patient=…&category={order-type}|injection&based-on:missing=true
 
 ### 7.2 注射(点滴)を IN に数える
 
-注射の実施(`MedicationAdministration.dosage.dose`)は**袋・管・瓶といった薬価算定単位**で
-記録されており mL ではない。投与量換算マスタ(`useMedicineMlFactors`)で mL に直してから
-足す。注射フォームの総投与量と同じ仕組みで、**換算行の無い薬剤(粉末バイアルなど)は
-数えられない**。その件数を数えて、欄の見出しに `*` と注記(ホバー)を出す。
+注射の実施(`MedicationAdministration.dosage.dose`)は、手入力の注射なら**袋・管・瓶といった
+薬価算定単位**、化学療法レジメンから出た注射なら**力価(mg)か容量(mL)**で記録される
+(`docs/chemo-regimen-design.md` §8.5)。単位を見て投与量換算マスタで mL に直してから足す
+(`doseConversionHelpers.toMilliliters`。2026-09-07 までは単位を見ずに製剤数 × mL を掛けていたので、
+力価のオーダーで桁違いになっていた。同 §8.13 N-3)。注射フォームの総投与量と同じ仕組みで、
+**mL の換算行の無い薬剤(粉末バイアルなど)は数えられない**。その件数を数えて、欄の見出しに `*` と
+注記(ホバー)を出す。
 
 数えるのは**実施記録だけ**で、予定は数えない(実際に入った量が出納なので)。
 

@@ -31,7 +31,7 @@ import {
   waterBalanceLabel,
 } from "../fhir/flowsheetWaterBalanceHelpers";
 import { DEFAULT_NURSING_SCHEDULE } from "../fhir/nursingScheduleHelpers";
-import { useFastingDietCodes, useMedicineMlFactors } from "../api/masterQueries";
+import { useFastingDietCodes, useMedicineDoseFactors } from "../api/masterQueries";
 import { injectionPerformsByOrderId } from "../fhir/injectionPerformHelpers";
 import { injectionTasksByOrderId } from "../fhir/injectionTaskHelpers";
 import { referenceId } from "../fhir/shared";
@@ -357,11 +357,11 @@ export function VitalFlowsheetPanel({
     [meal.data, days, fastingDietCodes.data],
   );
 
-  // 水分出納。注射の投与量は薬価算定単位なので、mL 換算マスタで直してから足す。
+  // 水分出納。注射の投与量は製剤数(手入力)か力価(レジメン)なので、換算マスタで mL に直してから足す。
   const balanceSettings = facility.data?.water_balance ?? EMPTY_WATER_BALANCE;
   const balanceEnabled = balanceSettings.in.length > 0 || balanceSettings.out.length > 0;
   const administrations = balanceEnabled ? (injections.data?.administrations ?? []) : [];
-  const mlFactors = useMedicineMlFactors(
+  const conversions = useMedicineDoseFactors(
     administrations
       .map((administration) => administration.medicationCodeableConcept?.coding?.[0]?.code ?? "")
       .filter(Boolean),
@@ -373,14 +373,14 @@ export function VitalFlowsheetPanel({
             settings: balanceSettings,
             observations: nursing.data?.observations ?? [],
             administrations,
-            mlFactors: mlFactors.data ?? new Map(),
+            conversions: conversions.data,
             slotKeyOf,
           })
         : null,
     // slotKeyOf は毎回作り直されるが、依存に入れないと 24 時間表示に切り替えても
     // 集計の枠が変わらない。dayMode を代わりに見る。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [balanceEnabled, balanceSettings, nursing.data, administrations, mlFactors.data, dayMode],
+    [balanceEnabled, balanceSettings, nursing.data, administrations, conversions.data, dayMode],
   );
 
   /** 印の欄。見出しと、選んだ印を突き合わせる行の集合。 */

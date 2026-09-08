@@ -46,6 +46,7 @@ import {
 import { treatmentPerformsByOrderId, type TreatmentPerformDisplay } from "./treatmentResultHelpers";
 import { isMealServiceRequest, mealOrderProblem } from "./mealOrderHelpers";
 import { isNursingServiceRequest } from "./nursingOrderHelpers";
+import { isRegimenServiceRequest, regimenOrderOf } from "./regimenOrderHelpers";
 import {
   consultOrderProblem,
   consultOrderResponseIds,
@@ -191,9 +192,10 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
  */
 export function orderKindOf(
   sr: fhir4.ServiceRequest,
-): Exclude<KarteItemKind, "note" | "vital" | "qr"> | "nursing-order" | null {
+): Exclude<KarteItemKind, "note" | "vital" | "qr"> | "nursing-order" | "chemo-regimen" | null {
   if (isOrderItemRequest(sr)) return null;
   if (isNursingServiceRequest(sr)) return "nursing-order";
+  if (isRegimenServiceRequest(sr)) return "chemo-regimen";
   if (isLabServiceRequest(sr)) return "lab-order";
   if (isMicroServiceRequest(sr)) return "micro-order";
   if (isPathoServiceRequest(sr)) return "patho-order";
@@ -209,6 +211,18 @@ export function orderKindOf(
   if (isConsultServiceRequest(sr)) return "consult-order";
   if (isInjectionServiceRequest(sr)) return "injection";
   return "prescription";
+}
+
+/**
+ * カードに出す種別名。レジメンから出た注射・処方は、注射/処方であることより
+ * 「化学療法の一部」であることが先に読めた方がよいので「化学療法」と出す
+ * (どちらのオーダーかは副題に添える)。
+ */
+export function karteItemKindLabel(item: Pick<KarteTimelineItem, "kind"> & { serviceRequest?: fhir4.ServiceRequest }): string {
+  if ((item.kind === "injection" || item.kind === "prescription") && item.serviceRequest) {
+    if (regimenOrderOf(item.serviceRequest)) return "化学療法";
+  }
+  return KARTE_KIND_LABELS[item.kind];
 }
 
 interface KarteItemBase {
@@ -730,8 +744,10 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   // カードにはしない。オーダーのヘッダに紐づけて、カードの中身として出す。
   // 看護指示はカルテのカードにせず指示簿タブで見せる。ここで外さないと下の
   // 振り分けの最後(どの種別にも当たらない SR は処方)に落ちて処方カードになる。
+  // 化学療法のレジメン適用(ヘッダ)も同じで、化学療法タブの暦で見せる(日ごとの
+  // 注射・処方は通常のカードとして出る)。
   const orderRequests = serviceRequests.filter(
-    (sr) => !isOrderItemRequest(sr) && !isNursingServiceRequest(sr),
+    (sr) => !isOrderItemRequest(sr) && !isNursingServiceRequest(sr) && !isRegimenServiceRequest(sr),
   );
   const itemRequests = serviceRequests.filter(isOrderItemRequest);
 

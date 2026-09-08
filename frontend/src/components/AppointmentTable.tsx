@@ -5,6 +5,7 @@ import {
   appointmentStatusLabel,
   isActiveAppointment,
   isExamAppointment,
+  isChemoAppointment,
   isRehabAppointment,
   isNutritionGuidanceAppointment,
 } from "../fhir/appointmentHelpers";
@@ -50,10 +51,13 @@ export function AppointmentTable({
           // ぶら下がり、部門が都度取り直す)ので、ここから日時変更・取消をしてよい。
           const rehab = isRehabAppointment(appointment);
           const nutritionGuidance = isNutritionGuidanceAppointment(appointment);
+          // 化学療法の予約も投与日のオーダーにぶら下がるが、日時変更・取消は投与日パネル
+          // (オーダーと一緒に動かす面)で行うので、ここからは動かさない。
+          const chemo = isChemoAppointment(appointment);
           // 検査予約は放射線オーダーとひとかたまりなので、ここからは動かさない。
           // 日時変更はオーダーの編集(撮影日時と一緒に動かす)、取消はオーダーの削除
           // (予約だけ消えてオーダーが残る事故を防ぐ)でだけ行う。
-          const exam = !rehab && !nutritionGuidance && isExamAppointment(appointment);
+          const exam = !rehab && !nutritionGuidance && !chemo && isExamAppointment(appointment);
 
           return (
             <tr key={appointment.id}>
@@ -65,6 +69,7 @@ export function AppointmentTable({
                 {nutritionGuidance && (
                   <span className="dose-conversion__badge">栄養指導</span>
                 )}
+                {chemo && <span className="dose-conversion__badge">化学療法</span>}
               </td>
               <td>{appointmentActorDisplay(appointment, "Practitioner") || "-"}</td>
               <td>{appointmentActorDisplay(appointment, "Location") || "-"}</td>
@@ -72,7 +77,12 @@ export function AppointmentTable({
               <td className="patient-table__actions">
                 {active && (
                   <RowMenu label={`${appointmentDateTimeLabel(appointment)} の予約の操作`}>
-                    {exam ? (
+                    {chemo ? (
+                      // 予約は投与日のオーダーと一組なので、入口を投与日パネルに一本化する。
+                      <span className="row-menu__item row-menu__item--muted">
+                        日時変更・取消は化学療法タブの投与日から
+                      </span>
+                    ) : exam ? (
                       // 検査予約(オーダーにぶら下がる予約)の日時はオーダーの実施日時と
                       // 一緒に動かすので、変更の入口はオーダーの編集画面に一本化している。
                       // 種別は放射線・生理検査の双方があるので「検査オーダー」と呼ぶ。

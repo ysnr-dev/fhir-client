@@ -8,19 +8,20 @@ import {
   useManualInfections,
   usePatient,
   usePatientAdmission,
+  useRegimenApplications,
 } from "../api/queries";
 import { summarizeBloodType } from "../fhir/bloodTypeHelpers";
 import { bloodTypeLabel } from "../fhir/transfusionOrderHelpers";
 import { summarizeAllergy } from "../fhir/allergyHelpers";
 import type { PatientCaution } from "../api/masterClient";
 import { summarizeFlag } from "../fhir/flagHelpers";
+import { regimenStatusLabel } from "../fhir/regimenOrderHelpers";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../fhir/infectionHelpers";
 import {
   calculateAge,
   displayKana,
   displayName,
   genderLabel,
-  languageLabel,
 } from "../fhir/patientHelpers";
 import { CautionPictogram } from "./icons/cautionPictograms";
 import { PictogramPopover } from "./PictogramPopover";
@@ -47,16 +48,9 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
   // 死亡は「その患者に今からオーダーを出してよいか」に直結するので帯に出す。
   const deceasedDate = p.deceasedDateTime?.slice(0, 10) ?? "";
   const deceased = deceasedDate || p.deceasedBoolean === true;
-  // 通訳の要否は窓口・病棟が最初に知りたいので、言語と併せて帯に出す。
-  const communication = p.communication?.[0];
-  const languageCode = communication?.language?.coding?.[0]?.code ?? "";
-  const interpreter = communication?.preferred === true;
-  const languageText = [
-    languageCode && languageCode !== "und" ? languageLabel(languageCode) : "",
-    interpreter ? "通訳必要" : "",
-  ]
-    .filter(Boolean)
-    .join(" / ");
+  // ［決定］使用言語・通訳の要否は帯に出さない(2026-09-08)。窓口で毎回見るものではなく、
+  // 帯の横幅は患者番号・氏名・生年月日・在院場所と、注意のピクトグラムに使う。
+  // プロファイルタブの「使用言語」で読む(通訳必要もそこに出る)。
 
   return (
     <div className="patient-header">
@@ -90,12 +84,6 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
           </span>
         </span>
       )}
-      {languageText && (
-        <span className="patient-header__item">
-          <span className="patient-header__label">言語</span>
-          <span className="patient-header__value">{languageText}</span>
-        </span>
-      )}
       <BloodType patientId={patientId} />
       {admissionPlace && (
         <span className="patient-header__item">
@@ -106,6 +94,7 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
       <CautionPictograms patientId={patientId} />
       <AllergyPictograms patientId={patientId} />
       <InfectionPictogram patientId={patientId} />
+      <ChemotherapyPictogram patientId={patientId} />
     </div>
   );
 }
@@ -241,6 +230,55 @@ function InfectionPictogram({ patientId }: { patientId: string | undefined }) {
           ))}
         </ul>
         <ProfileLink patientId={patientId} />
+      </PictogramPopover>
+    </span>
+  );
+}
+
+/**
+ * 化学療法中のピクトグラム(§7.6 E-8)。適用中・休止中のレジメンがあるときだけ出す。
+ *
+ * 抗がん剤の曝露対策・血管外漏出の観察・易感染への配慮は、化学療法タブを開かなくても
+ * 分かっている必要があるので帯に置く。中身(レジメン名・クール・状態)は吹き出しで読む。
+ * 完了・中止した適用は出さない(いまの状態ではないため。治療歴は化学療法タブで読む)。
+ */
+function ChemotherapyPictogram({ patientId }: { patientId: string | undefined }) {
+  const applications = useRegimenApplications(patientId);
+
+  if (!patientId) return null;
+
+  const running = (applications.data?.applications ?? []).filter(
+    (a) => a.status === "active" || a.status === "on-hold",
+  );
+  if (running.length === 0) return null;
+
+  const label = running.map((a) => `化学療法: ${a.name}（${regimenStatusLabel(a.status)}）`).join(" / ");
+
+  return (
+    <span className="patient-header__item patient-header__cautions">
+      <PictogramPopover
+        label={label}
+        className="patient-header__caution--chemo"
+        icon={<CautionPictogram pictogram="chemotherapy" size={HEADER_PICTOGRAM_SIZE} />}
+        count={running.length}
+      >
+        <ul className="patient-header__popover-list">
+          {running.map((application) => (
+            <li key={application.id}>
+              <span className="patient-header__popover-name">{application.name}</span>
+              <span className="patient-header__popover-text">
+                {[
+                  regimenStatusLabel(application.status),
+                  `開始 ${application.startDate}`,
+                  application.plannedCycles !== null ? `予定 ${application.plannedCycles} クール` : "継続",
+                ].join(" / ")}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <Link className="patient-header__popover-link" to={`/patients/${patientId}/karte?tab=chemo`}>
+          化学療法タブを開く
+        </Link>
       </PictogramPopover>
     </span>
   );

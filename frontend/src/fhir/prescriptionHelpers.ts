@@ -730,6 +730,11 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
 // FHIR リソースにはマスタの全項目(id, 剤形など)は保存されていないため、フォーム上で
 // 再選択されない限り、コード・名称・単位など保存済みの項目のみを持つ簡易オブジェクトとして復元する。
 
+/** 保存済みの処方の処方区分(院内・院外…)のコード。無ければ空。 */
+export function prescriptionCategoryOf(sr: fhir4.ServiceRequest): string {
+  return codingBySystem(sr.category?.[1]?.coding, PRESCRIPTION_CATEGORY_SYSTEM)?.code ?? "";
+}
+
 export function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null {
   const codings = mr.medicationCodeableConcept?.coding;
   // 一般名処方は一般名処方コードだけを持ち、レセ電コードは無い。

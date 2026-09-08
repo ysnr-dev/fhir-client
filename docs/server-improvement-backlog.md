@@ -267,6 +267,19 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   医師単位の受信箱(`performer=Practitioner/...`)を作るときも前提になる。
 
 
+### C-8. `ServiceRequest` のローカル拡張(`regimen-order`)の検索
+
+- **現状**: 化学療法レジメンの日オーダー(`docs/chemo-regimen-design.md` §7.1)は、通常の注射・処方の
+  ServiceRequest に `regimen-order` 拡張(適用ヘッダへの参照・クール・Day)と `requisition`(適用の uuid)を
+  持たせている。`basedOn` でヘッダを指すと既存画面が明細扱いにして消えるため、参照は拡張に置いた。
+  上流は拡張も `requisition` も索引しないので、`useRegimenDayOrders` は「患者 + 最初の適用の開始日以降 +
+  ヘッダのみ」を最大 10 ページ(1000 件)読んでクライアントで拡張を見ている。
+- **望ましいサーバー機能**: `ServiceRequest?requisition=`(R4 標準の `requisition` 検索。オーダーセットの
+  `requisition` でも使える)。あれば拡張を索引するカスタム検索パラメータ(`regimen=ServiceRequest/xxx`)。
+- **影響範囲**: 化学療法タブ・投与日パネル・次クール登録。他のオーダーが非常に多い患者では読み切れない
+  可能性がある(化学療法は 1 患者で多くても数十件なので、`requisition` で引ければ 1 リクエストで済む)。
+
+
 ## 長期（アーキテクチャ）
 
 ### L-1. マスタ群のターミノロジーサーバー化の検討

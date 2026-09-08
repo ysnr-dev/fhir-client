@@ -257,5 +257,35 @@ Provenance
 
 - 部門一覧・タイムラインの未承認バッジ(上記)。
 - 中止・削除の活動は Provenance に書いていない(削除は target が消えて孤児になる。§2.4 障壁 4)。
+  **中止・完了・休止・再開は器だけ作ってある**(`buildActivityProvenanceEntry`。活動は v3-DataOperation の
+  CANCEL / REACTIVATE / COMPLETE / SUSPEND / RESUME、target は対象のオーダー)。いま呼んでいるのは化学療法だけなので
+  (`docs/chemo-regimen-design.md` §8.14)、他種別の中止・実施取消からも同じ器を呼べば揃う。
 - 上流 `AuditEvent` のエンドユーザー記録(認証回りの変更。`docs/server-improvement-backlog.md`)。
 
+---
+
+## 3. 薬剤オーダーの安全性チェックが種別ごとに無い(未対応)
+
+2026-09-06 にレジメンオーダーの不足機能を洗い出す過程で確認した。処方・注射・レジメンのどのフォームにも、
+医薬品を選んだときの警告が一切無い。個別の設計書(注射 §8 A、化学療法 §7.6 A-4)に同じ項目が並ぶので、
+**器は 1 つ**にする。
+
+- **アレルギー照合** — **照合そのものは実装済み(2026-09-06)。残るのは処方・注射の画面への適用。**
+  `fhir/allergyHelpers.ts` の `matchMedicationAllergies(yjCode, allergies)` が薬剤 1 件に当たるアレルギーを返す
+  (銘柄 YCM と成分 GCM の両方を見る。否定 refuted は外す)。いまは化学療法の適用画面だけが使っている
+  (`docs/chemo-regimen-design.md` §8.10)。処方・注射のフォームでも同じ関数を薬剤の行に当てれば済む。
+  医薬品検索モーダル(`MedicineSearchModal`)か、薬剤行を描く共通部品に置けば 3 か所で同時に効く。
+  **YJ コードを持たない薬剤(HOT コードマスタに無いもの)は照合できず黙って通る**ので、薬剤マスタの
+  取り込み範囲が穴になることを併せて見ておく。
+- 同じ場所に載せるもの: 麻薬・向精神薬・生物由来製剤の印(`master_medicines.narcotic_category` /
+  `biological_product_flag`。注射 §8 A)、造影剤(`contrast_medium_category`)。
+- 看護ワークシートへの注射予定の表示(注射 §8 C、化学療法 §7.6 E-4)も種別をまたぐが、これは
+  看護指示側の設計(`docs/nursing-order-design.md`)で扱う。
+
+### 3.1 投与量の単位が混在するようになった(2026-09-07 に対応済み)
+
+化学療法レジメンのオーダーは投与量を力価(mg)や容量(mL)で持ち(`docs/chemo-regimen-design.md` §8.5)、
+手入力の注射・処方は製剤数(薬価算定単位)で持つ。「投与量 = 製剤数」を前提に mL の係数を掛けていた
+経過表の水分出納と注射フォームの総投与量が力価のオーダーで桁違いになっていたので、
+`fhir/doseConversionHelpers.ts` の `toMilliliters` に寄せて単位を見るようにした(同 §8.13 N-3 / N-4)。
+**投与量を数量として扱う処理を新しく書くときは `doseQuantity.unit` を必ず見る**(払出は `toPackQuantity`、mL は `toMilliliters`)。

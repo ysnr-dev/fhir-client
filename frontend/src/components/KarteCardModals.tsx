@@ -25,7 +25,7 @@ import {
   usePrescriptionDetail,
   useQuestionnaireResponseWithQuestionnaire,
 } from "../api/queries";
-import { KARTE_KIND_LABELS, type KarteTimelineItem } from "../fhir/karteTimeline";
+import { karteItemKindLabel, type KarteTimelineItem } from "../fhir/karteTimeline";
 import { labOrderItemRequests, serviceRequestsOf } from "../fhir/labOrderHelpers";
 import { microOrderItemRequests } from "../fhir/microOrderHelpers";
 import { pathoOrderItemRequests } from "../fhir/pathoOrderHelpers";
@@ -749,7 +749,7 @@ export function KarteCardJsonModal({
 }) {
   return (
     <Modal
-      title={`FHIR JSON(${KARTE_KIND_LABELS[item.kind]})`}
+      title={`FHIR JSON(${karteItemKindLabel(item)})`}
       onClose={onClose}
       className="modal--wide"
     >

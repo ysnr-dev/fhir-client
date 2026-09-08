@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { ADVERSE_EVENT_CATEGORY, parseAdverseEvent, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -27,9 +28,11 @@ import {
 import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeline";
 import {
   approvalBundleEntry,
+  buildActivityProvenanceEntry,
   buildApprovedProvenance,
   buildOrderProvenanceEntry,
   pendingApprovalRows,
+  type OrderActivity,
   type OrderEnterer,
 } from "../fhir/provenanceHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
@@ -160,6 +163,22 @@ import {
   rxTasksByOrderId,
   type RxTaskStatus,
 } from "../fhir/rxTaskHelpers";
+import {
+  REGIMEN_ORDER_TYPE,
+  buildRegimenMoveBundle,
+  isRegimenServiceRequest,
+  parseRegimenApplication,
+  regimenDayOrderKind,
+  regimenOrderOf,
+  sortByRp,
+  completeRegimenEntry,
+  discontinuationReasonLabel,
+  holdRegimenEntry,
+  revokeRegimenEntry,
+  type RegimenDiscontinuation,
+  type RegimenApplication,
+  type RegimenDayOrder,
+} from "../fhir/regimenOrderHelpers";
 import {
   RAD_ORDER_TYPE,
   buildRadOrderDeleteBundle,
@@ -353,6 +372,7 @@ import {
   buildCancelBundle,
   buildCancelEntries,
   buildNutritionGuidanceAppointmentBundle,
+  buildChemoAppointmentBundle,
   buildRehabAppointmentBundle,
   buildRescheduleBundle,
   buildRescheduleEntries,
@@ -3130,14 +3150,22 @@ export function useCancelInjectionPerforms() {
   });
 }
 
-/** 連日オーダーを複数日まとめて削除する。 */
+/**
+ * 連日オーダーを複数日まとめて削除する。予約(化学療法の日オーダーに取ってある外来化学療法室)も
+ * 一緒に取り消す —— オーダーが消えたのに枠が埋まったままになるのを防ぐ(§8.15 N-13)。
+ */
 export function useDeleteInjectionSeries() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (srIds: string[]) => postBundle(buildInjectionSeriesDeleteBundle(srIds)),
+    mutationFn: async (srIds: string[]) => {
+      const bundle = buildInjectionSeriesDeleteBundle(srIds);
+      const cancels = await orderAppointmentCancelEntries(srIds);
+      return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...cancels] });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+      invalidateAppointments(queryClient);
     },
   });
 }
@@ -4146,6 +4174,22 @@ function useWithOrderProvenance(): (bundle: fhir4.Bundle) => fhir4.Bundle {
   return (bundle) => {
     const entry = enterer ? buildOrderProvenanceEntry(bundle, enterer) : null;
     return entry ? { ...bundle, entry: [...(bundle.entry ?? []), entry] } : bundle;
+  };
+}
+
+/**
+ * 進捗・状態だけを変える活動(中止・完了・休止・再開)の来歴を作る。対象のオーダーと
+ * 指示医師は呼ぶ側が渡す(Bundle には Task やヘッダの状態しか入らないため)。
+ */
+function useActivityProvenance(): (
+  targets: string[],
+  requester: fhir4.Reference | undefined,
+  activity: OrderActivity,
+) => fhir4.BundleEntry[] {
+  const enterer = useOrderEnterer();
+  return (targets, requester, activity) => {
+    const entry = enterer ? buildActivityProvenanceEntry(targets, requester, activity, enterer) : null;
+    return entry ? [entry] : [];
   };
 }
 
@@ -5282,10 +5326,11 @@ export function useBodyMeasures(patientId: string | undefined) {
 }
 
 /**
- * 腎機能の検査結果。感染症と同じく、分析物コード(先頭 5 桁)での突き合わせは
- * 画面側で行うので、ここでは患者の検体検査の結果を新しい順に引く。
+ * 直近の検体検査の結果(新しい順)。分析物コード(先頭 5 桁)での突き合わせは画面側で
+ * 行うので、ここでは患者の検査結果をまとめて引く。プロファイルの腎機能と、
+ * 化学療法レジメンの投与前チェック(`regimenCheckHelpers.ts`)が同じ結果を読む。
  */
-export function useRenalResults(patientId: string | undefined) {
+export function useRecentLabResults(patientId: string | undefined) {
   const params = new URLSearchParams();
   if (patientId) params.set("subject", `Patient/${patientId}`);
   params.set("category", "laboratory");
@@ -5293,7 +5338,7 @@ export function useRenalResults(patientId: string | undefined) {
   params.set("_sort", "-date");
 
   const query = useQuery({
-    queryKey: ["Observation", "search", patientId, "renal"],
+    queryKey: ["Observation", "search", patientId, "lab-recent"],
     queryFn: () => searchResource<fhir4.Observation>("Observation", params),
     enabled: Boolean(patientId),
     staleTime: 60 * 1000,
@@ -9924,4 +9969,588 @@ function invalidateTransfusion(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
   // 取消では実施記録も消しているので、FHIR JSON 表示の実施記録も引き直させる。
   queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
+}
+
+// ---- 化学療法レジメンオーダー(docs/chemo-regimen-design.md §7) ----
+
+/**
+ * 患者に適用されたレジメン(ヘッダ)。中止・完了も含めて全件返す(タブで切り替える)。
+ * 1 患者のレジメン適用は多くても十数件なので 1 ページで足りる。
+ */
+export function useRegimenApplications(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${REGIMEN_ORDER_TYPE.code}`);
+  params.set("_sort", "-occurrence");
+  params.set("_count", "100");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "regimen-applications", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      const headers = serviceRequestsOf(bundle).filter(isRegimenServiceRequest);
+      return {
+        headers,
+        applications: headers
+          .map(parseRegimenApplication)
+          .filter((a): a is RegimenApplication => a !== null),
+      };
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * レジメンの適用ヘッダを id で引く(薬剤部の監査。§7.6 E-1)。日オーダーの `regimen-order`
+ * 拡張から得た id をまとめて 1 回で読む。患者単位の `useRegimenApplications` と違い、
+ * 別々の患者のオーダーが並ぶワークリストから使える。
+ */
+/**
+ * 外来化学療法室の予約(§7.6 D-3)。投与日の注射オーダーを `basedOn` にして日ごとに取る。
+ * 予約タブと投与日パネルの両方から読み直させる。
+ */
+export function useBookChemoAppointment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      patient,
+      selection,
+      orderId,
+    }: {
+      patient: fhir4.Patient;
+      selection: SlotSelection;
+      orderId: string;
+    }) => postBundle(buildChemoAppointmentBundle(patient, selection, orderId)),
+    onSuccess: () => invalidateAppointments(queryClient),
+  });
+}
+
+/** オーダー id → 有効な予約(1 件)。`basedOn` で引く。 */
+async function fetchOrderAppointments(ids: string[]): Promise<Map<string, fhir4.Appointment>> {
+  const result = new Map<string, fhir4.Appointment>();
+  if (ids.length === 0) return result;
+  const params = new URLSearchParams();
+  params.set("based-on", ids.map((id) => `ServiceRequest/${id}`).join(","));
+  params.set("_count", String(ids.length * 2));
+  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
+  for (const entry of bundle.entry ?? []) {
+    const appointment = entry.resource;
+    if (appointment?.resourceType !== "Appointment" || !isActiveAppointment(appointment)) continue;
+    const orderId = appointmentOrderId(appointment);
+    if (orderId) result.set(orderId, appointment);
+  }
+  return result;
+}
+
+/** 投与日の注射オーダーに紐づく予約(1 件)。投与日パネルで「予約済み」を出すのに使う。 */
+export function useOrderAppointments(orderIds: string[]) {
+  const ids = Array.from(new Set(orderIds.filter(Boolean))).sort();
+  return useQuery({
+    queryKey: ["Appointment", "search", "by-order", ids],
+    queryFn: () => fetchOrderAppointments(ids),
+    enabled: ids.length > 0,
+  });
+}
+
+/**
+ * オーダーに紐づく予約を取り消す entry(押さえていた枠は空きに戻す)。オーダーを消す・止める
+ * ときに予約だけが残ると、枠が埋まったままになり患者も呼ばれてしまう。
+ */
+async function orderAppointmentCancelEntries(orderIds: string[]): Promise<fhir4.BundleEntry[]> {
+  const appointments = await fetchOrderAppointments(Array.from(new Set(orderIds.filter(Boolean))));
+  const entries = await Promise.all(
+    Array.from(appointments.values()).map(async (appointment) =>
+      buildCancelEntries(appointment, await fetchAppointmentSlots(appointment)),
+    ),
+  );
+  return entries.flat();
+}
+
+/**
+ * 日オーダーに紐づく化学療法室の予約を取り消す entry。投与日の移動・中止、レジメンの
+ * 中止・完了・クール取消に同梱する(§8.13 N-5)。予約が無ければ空。
+ */
+function chemoAppointmentCancelEntries(orders: RegimenDayOrder[]): Promise<fhir4.BundleEntry[]> {
+  return orderAppointmentCancelEntries(orders.map((o) => o.serviceRequest.id ?? ""));
+}
+
+export function useRegimenHeaders(regimenSrIds: string[]) {
+  const ids = Array.from(new Set(regimenSrIds.filter(Boolean))).sort();
+  return useQuery({
+    queryKey: ["ServiceRequest", "detail", "regimen-headers", ids],
+    queryFn: async (): Promise<Map<string, RegimenApplication>> => {
+      const params = new URLSearchParams();
+      params.set("_id", ids.join(","));
+      params.set("_count", String(ids.length));
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      const result = new Map<string, RegimenApplication>();
+      for (const sr of serviceRequestsOf(bundle)) {
+        const application = parseRegimenApplication(sr);
+        if (application) result.set(application.id, application);
+      }
+      return result;
+    },
+    enabled: ids.length > 0,
+    staleTime: 60 * 1000,
+  });
+}
+
+const REGIMEN_ORDERS_PAGE = 100;
+const REGIMEN_ORDERS_MAX_PAGES = 10;
+
+/**
+ * レジメンから出た日オーダー(注射・処方)を患者ぶんまとめて引く。上流は拡張で検索
+ * できないので、最初の適用の開始日以降のオーダーのヘッダを日付順に読み、レジメンの
+ * 印(regimen-order 拡張)を持つものだけ残す。進捗の Task と薬剤も同じレスポンスで受ける。
+ */
+export function useRegimenDayOrders(patientId: string | undefined, earliestStart: string | undefined) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "regimen-orders", patientId, earliestStart],
+    queryFn: async (): Promise<RegimenDayOrder[]> => {
+      const requests: fhir4.ServiceRequest[] = [];
+      const medicationRequests: fhir4.MedicationRequest[] = [];
+      const tasks: fhir4.Task[] = [];
+      for (let page = 0; page < REGIMEN_ORDERS_MAX_PAGES; page += 1) {
+        const params = new URLSearchParams();
+        params.set("patient", `Patient/${patientId}`);
+        params.set("occurrence", `ge${earliestStart}`);
+        params.set("based-on:missing", "true");
+        params.set("_sort", "occurrence");
+        params.set("_count", String(REGIMEN_ORDERS_PAGE));
+        params.set("_offset", String(page * REGIMEN_ORDERS_PAGE));
+        params.append("_revinclude", "MedicationRequest:based-on");
+        params.append("_revinclude", "Task:focus");
+        const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+        let matched = 0;
+        for (const entry of bundle.entry ?? []) {
+          const resource = entry.resource;
+          if (!resource) continue;
+          if (resource.resourceType === "ServiceRequest") {
+            matched += 1;
+            const sr = resource as fhir4.ServiceRequest;
+            if (regimenOrderOf(sr)) requests.push(sr);
+          } else if (resource.resourceType === "MedicationRequest") {
+            medicationRequests.push(resource as fhir4.MedicationRequest);
+          } else if (resource.resourceType === "Task") {
+            tasks.push(resource as fhir4.Task);
+          }
+        }
+        if (matched < REGIMEN_ORDERS_PAGE) break;
+      }
+
+      const mrsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
+      for (const mr of medicationRequests) {
+        for (const reference of mr.basedOn ?? []) {
+          const orderId = referenceId(reference.reference);
+          if (!orderId) continue;
+          mrsByOrderId.set(orderId, [...(mrsByOrderId.get(orderId) ?? []), mr]);
+        }
+      }
+      const injectionTasks = injectionTasksByOrderId(tasks);
+      const rxTasks = rxTasksByOrderId(tasks);
+
+      return requests
+        .map((sr): RegimenDayOrder | null => {
+          const ref = regimenOrderOf(sr);
+          if (!ref || !sr.id) return null;
+          const kind = regimenDayOrderKind(sr);
+          const task = kind === "injection" ? injectionTasks.get(sr.id) : rxTasks.get(sr.id);
+          const status = (task?.status ?? "requested") as RegimenDayOrder["status"];
+          return {
+            kind,
+            serviceRequest: sr,
+            medicationRequests: sortByRp(mrsByOrderId.get(sr.id) ?? []),
+            task,
+            ref,
+            date: orderDay(sr),
+            status,
+          };
+        })
+        .filter((o): o is RegimenDayOrder => o !== null)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
+    },
+    enabled: Boolean(patientId) && Boolean(earliestStart),
+  });
+}
+
+function regimenDayTaskEntry(
+  order: RegimenDayOrder,
+  status: InjectionTaskStatus,
+  /** 中止の理由(Task.statusReason)。中止以外では消す(中止取消で古い理由が残らないように)。 */
+  reason?: string,
+): fhir4.BundleEntry {
+  const task =
+    order.kind === "injection"
+      ? buildInjectionTaskUpdate(order.task, order.serviceRequest, status)
+      : buildRxTaskUpdate(order.task, order.serviceRequest, status as RxTaskStatus);
+  const { statusReason: _dropped, ...rest } = task;
+  const next: fhir4.Task =
+    status === "cancelled" && reason?.trim() ? { ...rest, statusReason: { text: reason.trim() } } : rest;
+  return taskBundleEntry(next);
+}
+
+function invalidateRegimen(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "injection-worklist"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rx-worklist"] });
+  // 移動・中止で化学療法室の予約も取り消すので、予約タブと投与日パネルにも読み直させる。
+  invalidateAppointments(queryClient);
+}
+
+/** まだ止めていない(実施済でも中止でもない)日オーダー。 */
+function pendingRegimenOrders(targets: RegimenDayOrder[]): RegimenDayOrder[] {
+  return targets.filter((order) => order.status !== "completed" && order.status !== "cancelled");
+}
+
+/**
+ * 投与日の移動(§7.4)。内容は変えず日付だけ差し替えて同じ id へ PUT する。その日に取ってあった
+ * 化学療法室の予約は取り消す(日時が変わるので自動では取り直さない。§8.13 N-5)。
+ * 来歴は注射・処方の更新と同じく付ける。
+ */
+export function useMoveRegimenDays() {
+  const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
+  return useMutation({
+    mutationFn: async ({
+      targets,
+      deltaDays,
+      patientId,
+    }: {
+      targets: RegimenDayOrder[];
+      deltaDays: number;
+      patientId: string;
+    }) => {
+      const bundle = withProvenance(buildRegimenMoveBundle(targets, deltaDays, patientId));
+      const cancels = await chemoAppointmentCancelEntries(targets);
+      return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...cancels] });
+    },
+    onSuccess: () => {
+      invalidateRegimen(queryClient);
+      invalidateProvenance(queryClient);
+    },
+  });
+}
+
+/**
+ * レジメンの日オーダーの中止・中止取消。注射は注射の Task、処方は処方の Task に
+ * 同じ状態を書く。複数日をまとめて 1 つの transaction で書く(半端に止まらない)。
+ * 中止では化学療法室の予約も取り消す(中止取消で予約は戻さない。取り直す)。
+ */
+export function useUpdateRegimenDayStatus() {
+  const queryClient = useQueryClient();
+  const activityProvenance = useActivityProvenance();
+  return useMutation({
+    mutationFn: async ({
+      targets,
+      status,
+      reason,
+    }: {
+      targets: RegimenDayOrder[];
+      status: "cancelled" | "requested";
+      reason?: string;
+    }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          ...targets.map((order) => regimenDayTaskEntry(order, status, reason)),
+          ...(status === "cancelled" ? await chemoAppointmentCancelEntries(targets) : []),
+          // 誰がどの投与日を止めたか(代行なら指示医師の承認待ちに並ぶ)。
+          ...activityProvenance(
+            targets.map((order) => `ServiceRequest/${order.serviceRequest.id}`),
+            targets[0]?.serviceRequest.requester,
+            status === "cancelled" ? "CANCEL" : "REACTIVATE",
+          ),
+        ],
+      }),
+    onSuccess: () => {
+      invalidateRegimen(queryClient);
+      invalidateProvenance(queryClient);
+    },
+  });
+}
+
+/**
+ * レジメンの中止。ヘッダを revoked にし、まだ実施していない日オーダーを中止にする
+ * (実施済は事実なので触らない)。止める日の化学療法室の予約も取り消す。
+ */
+export function useRevokeRegimen() {
+  const queryClient = useQueryClient();
+  const activityProvenance = useActivityProvenance();
+  return useMutation({
+    mutationFn: async ({
+      header,
+      targets,
+      discontinuation,
+    }: {
+      header: fhir4.ServiceRequest;
+      targets: RegimenDayOrder[];
+      discontinuation: Pick<RegimenDiscontinuation, "reason" | "note">;
+    }) => {
+      const pending = pendingRegimenOrders(targets);
+      return postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          revokeRegimenEntry(header, discontinuation),
+          ...pending.map((order) =>
+            regimenDayTaskEntry(order, "cancelled", discontinuationReasonLabel(discontinuation.reason)),
+          ),
+          ...(await chemoAppointmentCancelEntries(pending)),
+          // 中止はレジメン全体への判断なので、対象はヘッダだけにする(日オーダーはヘッダから辿れる)。
+          ...activityProvenance([`ServiceRequest/${header.id}`], header.requester, "CANCEL"),
+        ],
+      });
+    },
+    onSuccess: () => {
+      invalidateRegimen(queryClient);
+      invalidateProvenance(queryClient);
+    },
+  });
+}
+
+/**
+ * 外来化学療法室の当日一覧(§7.6 E-7)。その日の化学療法予約を、患者・注射オーダー・進捗と
+ * 一緒に並べる。化学療法室は「予約の時間割」で回るので、注射一覧(オーダー軸)ではなく
+ * **予約軸**の面にする。
+ *
+ * 予約 → 患者は `_include`、予約 → 注射オーダーは `basedOn` の id で引き直す
+ * (進捗の Task も同じ応答で受ける)。
+ */
+export interface ChemoRoomRow {
+  appointment: fhir4.Appointment;
+  patient?: fhir4.Patient;
+  order?: fhir4.ServiceRequest;
+  medicationRequests: fhir4.MedicationRequest[];
+  task?: fhir4.Task;
+}
+
+export function useChemoRoomList(date: string) {
+  return useQuery({
+    queryKey: ["Appointment", "search", "chemo-room", date],
+    queryFn: async (): Promise<ChemoRoomRow[]> => {
+      const params = new URLSearchParams();
+      params.set("date", date);
+      params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|chemo`);
+      params.set("_count", "200");
+      params.set("_sort", "date");
+      params.append("_include", "Appointment:patient");
+      const { data: bundle } = await searchResource<fhir4.Resource>("Appointment", params);
+
+      const appointments: fhir4.Appointment[] = [];
+      const patientsById = new Map<string, fhir4.Patient>();
+      for (const entry of bundle.entry ?? []) {
+        const resource = entry.resource;
+        if (resource?.resourceType === "Appointment") {
+          const appointment = resource as fhir4.Appointment;
+          if (isActiveAppointment(appointment)) appointments.push(appointment);
+        } else if (resource?.resourceType === "Patient" && resource.id) {
+          patientsById.set(resource.id, resource as fhir4.Patient);
+        }
+      }
+
+      const orderIds = Array.from(
+        new Set(appointments.map((a) => appointmentOrderId(a)).filter(Boolean)),
+      );
+      const ordersById = new Map<string, fhir4.ServiceRequest>();
+      const tasksByOrderId = new Map<string, fhir4.Task>();
+      const mrsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
+      if (orderIds.length > 0) {
+        const orderParams = new URLSearchParams();
+        orderParams.set("_id", orderIds.join(","));
+        orderParams.set("_count", String(orderIds.length));
+        orderParams.append("_revinclude", "Task:focus");
+        orderParams.append("_revinclude", "MedicationRequest:based-on");
+        const { data: orderBundle } = await searchResource<fhir4.Resource>("ServiceRequest", orderParams);
+        const tasks: fhir4.Task[] = [];
+        for (const entry of orderBundle.entry ?? []) {
+          const resource = entry.resource;
+          if (resource?.resourceType === "ServiceRequest" && resource.id) {
+            ordersById.set(resource.id, resource as fhir4.ServiceRequest);
+          } else if (resource?.resourceType === "Task") {
+            tasks.push(resource as fhir4.Task);
+          } else if (resource?.resourceType === "MedicationRequest") {
+            const mr = resource as fhir4.MedicationRequest;
+            for (const reference of mr.basedOn ?? []) {
+              const id = referenceId(reference.reference);
+              if (id) mrsByOrderId.set(id, [...(mrsByOrderId.get(id) ?? []), mr]);
+            }
+          }
+        }
+        for (const [orderId, task] of injectionTasksByOrderId(tasks)) tasksByOrderId.set(orderId, task);
+      }
+
+      return appointments
+        .map((appointment) => {
+          const orderId = appointmentOrderId(appointment);
+          const patientId = appointmentActorId(appointment, "Patient");
+          return {
+            appointment,
+            patient: patientId ? patientsById.get(patientId) : undefined,
+            order: orderId ? ordersById.get(orderId) : undefined,
+            medicationRequests: orderId ? sortByRp(mrsByOrderId.get(orderId) ?? []) : [],
+            task: orderId ? tasksByOrderId.get(orderId) : undefined,
+          };
+        })
+        .sort((a, b) => (a.appointment.start ?? "").localeCompare(b.appointment.start ?? ""));
+    },
+    enabled: Boolean(date),
+  });
+}
+
+// ---- 有害事象(CTCAE Grade。§7.6 C-3) ----
+
+/** 患者の有害事象の記録。適用・クールでの絞り込みは画面側(1 患者で多くても数十件)。 */
+export function useRegimenAdverseEvents(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("category", ADVERSE_EVENT_CATEGORY.code);
+  params.set("_count", "200");
+  params.set("_sort", "-date");
+
+  return useQuery({
+    queryKey: ["Observation", "search", patientId, "adverse-event"],
+    queryFn: async (): Promise<AdverseEventRecord[]> => {
+      const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
+      return (bundle.entry ?? [])
+        .map((e) => e.resource)
+        .filter((r): r is fhir4.Observation => r?.resourceType === "Observation")
+        .map(parseAdverseEvent)
+        .filter((r): r is AdverseEventRecord => r !== null);
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+function invalidateAdverseEvents(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+}
+
+/**
+ * 有害事象の登録・更新(id があれば PUT)。楽観ロックは使わない(同時編集する場面がない)。
+ * 記録者(performer)が入っていなければログイン中の医療従事者を入れる(§8.14 N-10)。
+ */
+export function useSaveAdverseEvent() {
+  const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
+  return useMutation({
+    mutationFn: (input: fhir4.Observation) => {
+      const observation: fhir4.Observation =
+        input.performer?.length || !enterer
+          ? input
+          : {
+              ...input,
+              performer: [
+                { reference: `Practitioner/${enterer.practitionerId}`, display: enterer.display || undefined },
+              ],
+            };
+      return postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          {
+            resource: observation,
+            request: observation.id
+              ? { method: "PUT", url: `Observation/${observation.id}` }
+              : { method: "POST", url: "Observation" },
+          },
+        ],
+      });
+    },
+    onSuccess: () => invalidateAdverseEvents(queryClient),
+  });
+}
+
+export function useDeleteAdverseEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteResource("Observation", id),
+    onSuccess: () => invalidateAdverseEvents(queryClient),
+  });
+}
+
+/**
+ * クールごと取り消す(§7.6 C-7)。登録した日オーダーを薬剤・進捗ごと消し、化学療法室の予約も
+ * 取り消す。誤って登録したクールを片付けるための操作なので、部門が動き出した日を含むクールは
+ * 呼ぶ側(`canDeleteCycle`)が弾く。
+ *
+ * ［決定］中止(Task を cancelled にする)ではなく**削除**にする。中止だと暦に打ち消し線の行が
+ * 残り続け、「予定していたが止めた」と「そもそも登録が誤りだった」が区別できなくなる。
+ */
+export function useDeleteRegimenCycle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (targets: RegimenDayOrder[]) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          ...targets.flatMap((order) => [
+            { request: { method: "DELETE" as const, url: `ServiceRequest/${order.serviceRequest.id}` } },
+            {
+              request: {
+                method: "DELETE" as const,
+                url: `MedicationRequest?based-on=ServiceRequest/${order.serviceRequest.id}`,
+              },
+            },
+            // 進捗の Task は残すと孤児になる(他種別の削除では残っている既知の課題)。
+            // ここは対象が手元にあるので一緒に消す。
+            ...(order.task?.id
+              ? [{ request: { method: "DELETE" as const, url: `Task/${order.task.id}` } }]
+              : []),
+          ]),
+          ...(await chemoAppointmentCancelEntries(targets)),
+        ],
+      }),
+    onSuccess: () => invalidateRegimen(queryClient),
+  });
+}
+
+/**
+ * ヘッダの編集(§7.6 C-6)。予定クール数の延長・入外区分・プロブレム・コメントを直す。
+ * 登録・編集と同じ来歴(UPDATE)が付くよう `useUpdatePrescription` を通す。
+ */
+
+/**
+ * レジメンの完了・休止・再開(§7.6 C-1)。完了は中止と同じく未実施の日オーダーを止め、
+ * その日の化学療法室の予約も取り消す(完了したのに予定が残るのは矛盾)。
+ * 休止・再開はヘッダの状態だけを変える(可逆)。
+ */
+export function useUpdateRegimenStatus() {
+  const queryClient = useQueryClient();
+  const activityProvenance = useActivityProvenance();
+  return useMutation({
+    mutationFn: async ({
+      header,
+      status,
+      targets,
+    }: {
+      header: fhir4.ServiceRequest;
+      status: "completed" | "on-hold" | "active";
+      targets: RegimenDayOrder[];
+    }) => {
+      const pending = status === "completed" ? pendingRegimenOrders(targets) : [];
+      const activity: OrderActivity =
+        status === "completed" ? "COMPLETE" : status === "on-hold" ? "SUSPEND" : "RESUME";
+      return postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          ...(status === "completed"
+            ? [
+                completeRegimenEntry(header),
+                ...pending.map((order) => regimenDayTaskEntry(order, "cancelled", "レジメン完了")),
+                ...(await chemoAppointmentCancelEntries(pending)),
+              ]
+            : [holdRegimenEntry(header, status === "on-hold")]),
+          ...activityProvenance([`ServiceRequest/${header.id}`], header.requester, activity),
+        ],
+      });
+    },
+    onSuccess: () => {
+      invalidateRegimen(queryClient);
+      invalidateProvenance(queryClient);
+    },
+  });
 }

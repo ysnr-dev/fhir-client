@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
 import { useCurrentPractitioner } from "../api/authQueries";
+import { useMedicineDoseFactors } from "../api/masterQueries";
 import { useRegisterRxDispense, type RxWorklistRow } from "../api/queries";
 import { displayName } from "../fhir/patientHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
@@ -14,8 +15,9 @@ import {
   type PrescriptionFormValues,
   type RpValues,
 } from "../fhir/prescriptionHelpers";
-import { buildRxDispenseBundle } from "../fhir/rxDispenseHelpers";
+import { buildRxDispenseBundle, dispenseValuesFromOrder } from "../fhir/rxDispenseHelpers";
 import { presetUsageFilters } from "../fhir/usageMapping";
+import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
@@ -46,20 +48,55 @@ type ModalState =
   | null;
 
 export function RxDispenseModal({ row, onClose }: Props) {
+  // 処方の内容をそのまま初期値にする(調剤は処方どおりに出すのが既定)。力価で出た
+  // オーダー(化学療法の内服)は製剤数に直すため、換算マップを読んでから初期値を作る。
+  const parsed = useMemo(
+    () => parsePrescriptionForm(row.order, row.medicationRequests),
+    [row.order, row.medicationRequests],
+  );
+  const codes = useMemo(
+    () =>
+      parsed.rps.flatMap((rp) =>
+        rp.medicines.map((m) => m.medicine?.medicine_code ?? "").filter(Boolean),
+      ),
+    [parsed],
+  );
+  const conversions = useMedicineDoseFactors(codes);
+  if (codes.length > 0 && conversions.isPending) {
+    return (
+      <Modal title="調剤登録" onClose={onClose} className="modal--wide">
+        <p>読み込み中...</p>
+      </Modal>
+    );
+  }
+  return (
+    <RxDispenseForm
+      row={row}
+      initialValues={dispenseValuesFromOrder(parsed, conversions.data)}
+      loadError={conversions.error}
+      onClose={onClose}
+    />
+  );
+}
+
+function RxDispenseForm({
+  row,
+  initialValues,
+  loadError,
+  onClose,
+}: Props & { initialValues: PrescriptionFormValues; loadError: unknown }) {
   const { order, patient } = row;
   const register = useRegisterRxDispense();
   const { practitionerId, practitioner } = useCurrentPractitioner();
 
-  // 処方の内容をそのまま初期値にする(調剤は処方どおりに出すのが既定)。
-  const [values, setValues] = useState<PrescriptionFormValues>(() =>
-    parsePrescriptionForm(order, row.medicationRequests),
-  );
+  const [values, setValues] = useState<PrescriptionFormValues>(initialValues);
   const [query, setQuery] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
 
   const summary = summarizeServiceRequest(order);
   const comment = prescriptionComment(order);
+  const regimen = regimenOrderOf(order);
   // 一般名処方(【般】〜)は外来の院外処方でだけ出せる。調剤で銘柄を選び直すときも
   // 同じ制限を掛ける(処方オーダー登録と同じ判定)。
   const allowGeneric = summary.settingCode === "outpatient" && summary.categoryCode === "external";
@@ -158,13 +195,28 @@ export function RxDispenseModal({ row, onClose }: Props) {
             <p className="error-banner__line error-banner__line--error">{validationError}</p>
           </div>
         )}
-        <ErrorBanner error={register.error} />
+        <ErrorBanner error={register.error ?? loadError} />
 
         <fieldset>
           <legend>処方共通</legend>
           <dl className="prescription-detail__common">
             <dt>患者 | 処方日 | 区分 | 依頼科</dt>
             <dd>{meta.join(" | ")}</dd>
+            {/* 化学療法の内服は投与量が力価で出ているので、調剤の前にレジメンとクールが
+                読めるようにする(§7.6 E-5)。 */}
+            {regimen && (
+              <>
+                <dt>化学療法</dt>
+                <dd>
+                  {`${regimen.name} ${cycleDayLabel(regimen)}`}
+                  {regimen.reduction && (
+                    <span className="injection-worklist__reduced" title={regimen.reduction}>
+                      減量
+                    </span>
+                  )}
+                </dd>
+              </>
+            )}
             <dt>処方箋コメント</dt>
             <dd>{comment || "-"}</dd>
             <dt>調剤者</dt>

@@ -147,6 +147,11 @@ export function injectionDayOf(sr: fhir4.ServiceRequest): string {
   return orderDay(sr);
 }
 
+/** 保存済みの注射の注射区分(定時・臨時・緊急)のコード。無ければ空。 */
+export function injectionCategoryOf(sr: fhir4.ServiceRequest): string {
+  return categoryCoding(sr, CATEGORY_SYSTEM)?.code ?? "";
+}
+
 /** 連日オーダーの「N日目」(1 始まり)。束ね情報が無ければ null。 */
 export function injectionSeriesDay(sr: fhir4.ServiceRequest): number | null {
   const series = injectionSeriesOf(sr);
@@ -340,13 +345,17 @@ export interface RpDoseTotal {
   unconvertible: number;
 }
 
+import { toMilliliters, type MedicineDoseConversionMap } from "./doseConversionHelpers";
+
 /**
- * RP の総投与量。投与量は薬価算定単位(管・瓶・袋…)で入力するので、投与量換算マスタの
- * 係数(1[薬価算定単位] = factor[mL])を掛けて mL に揃えてから合計する。
+ * RP の総投与量(mL)。手入力の注射は投与量を薬価算定単位(管・瓶・袋…)で入れるが、
+ * 化学療法レジメンから出た注射は力価(mg)や容量(mL)で持つ(§8.5)ので、行の単位
+ * (`medicine.unit_name` = 保存済みなら `doseQuantity.unit`)を見て投与量換算マスタで
+ * mL に揃えてから合計する(`toMilliliters`)。
  */
 export function rpDoseTotal(
   medicines: MedicineLineValues[],
-  mlFactors: Map<string, number>,
+  conversions: MedicineDoseConversionMap | undefined,
 ): RpDoseTotal {
   let ml = 0;
   let unconvertible = 0;
@@ -354,9 +363,9 @@ export function rpDoseTotal(
     const code = line.medicine?.medicine_code;
     const dose = Number(line.dose);
     if (!code || !line.dose || !Number.isFinite(dose)) continue;
-    const factor = mlFactors.get(code);
-    if (factor === undefined) unconvertible += 1;
-    else ml += dose * factor;
+    const converted = toMilliliters(dose, line.medicine?.unit_name, code, conversions);
+    if (converted === null) unconvertible += 1;
+    else ml += converted;
   }
   return { ml, unconvertible };
 }
@@ -926,6 +935,26 @@ export function buildInjectionBundle(
       buildInjectionDayEntries({ ...values, startDate: date }, patientId, requester, authoredOn, series),
     ),
   );
+}
+
+/**
+ * 単日(束ねない)の注射 1 件ぶんの transaction entry。化学療法レジメンの適用が、
+ * 相対日を実日付に展開した 1 日ずつをこれで組み、束ねの印(requisition)は
+ * レジメン側のものに差し替える(regimenOrderHelpers.ts)。
+ */
+export function buildInjectionSingleDayEntries(
+  values: InjectionFormValues,
+  patientId: string,
+  requester: OrderContext,
+  authoredOn: string,
+): fhir4.BundleEntry[] {
+  const series: InjectionSeries = {
+    requisition: crypto.randomUUID(),
+    start: values.startDate,
+    end: values.startDate,
+    schedule: DAILY_SCHEDULE,
+  };
+  return buildInjectionDayEntries(values, patientId, requester, authoredOn, series);
 }
 
 // 1 日分の更新。束ね情報は保存済みのものを引き継ぐ(古いデータで無ければ単日の束ねを作る)。

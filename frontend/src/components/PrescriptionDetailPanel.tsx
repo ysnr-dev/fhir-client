@@ -8,6 +8,7 @@ import {
   prescriptionRequester,
   summarizeServiceRequest,
 } from "../fhir/prescriptionHelpers";
+import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { EnteredByRow, RegisteredAtRow } from "./OrderDetailRows";
 
 // 処方の内容表示。処方内容ページとカルテ画面の詳細モーダルの双方から使う。
@@ -34,6 +35,7 @@ export function PrescriptionDetailPanel({
   const summary = summarizeServiceRequest(serviceRequest);
   const rps = groupByRp(medicationRequests);
   const comment = prescriptionComment(serviceRequest);
+  const regimen = regimenOrderOf(serviceRequest);
 
   const problem = prescriptionProblem(serviceRequest);
   const currentProblem = problem ? problemsById?.get(problem.conditionId) : undefined;
@@ -54,6 +56,21 @@ export function PrescriptionDetailPanel({
           <dd>{summary.categoryDisplay}</dd>
           <dt>依頼科 | 依頼医師</dt>
           <dd>{orderContextSummary(prescriptionRequester(serviceRequest)) || "-"}</dd>
+          {/* 化学療法から出た内服オーダーは、レジメンとクールが分かると調剤・監査の
+              手順が決まる(注射の詳細と同じ。§7.6 E-5)。 */}
+          {regimen && (
+            <>
+              <dt>化学療法</dt>
+              <dd>
+                {`${regimen.name} ${cycleDayLabel(regimen)}`}
+                {regimen.reduction && (
+                  <span className="injection-worklist__reduced" title={regimen.reduction}>
+                    減量
+                  </span>
+                )}
+              </dd>
+            </>
+          )}
           <dt>処方箋コメント</dt>
           <dd>{comment || "-"}</dd>
           <RegisteredAtRow authoredOn={serviceRequest.authoredOn} />

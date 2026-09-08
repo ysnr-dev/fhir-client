@@ -12,7 +12,8 @@ import { KARTE_KIND_LABELS, orderKindOf } from "../fhir/karteTimeline";
 import { displayName, patientNumberOf } from "../fhir/patientHelpers";
 import { orderSetOf } from "../fhir/orderSetHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
-import type { PendingApprovalRow } from "../fhir/provenanceHelpers";
+import { regimenOrderOf } from "../fhir/regimenOrderHelpers";
+import { orderActivityLabel, type PendingApprovalRow } from "../fhir/provenanceHelpers";
 import { orderDay } from "../fhir/shared";
 import { KARTE_DETAIL_PARAM, KARTE_TAB_PARAM, formatKarteDetail } from "../karteUrl";
 import { dateTimeSecondsLabel } from "../lib/dates";
@@ -22,8 +23,9 @@ import { useReturnLinkState } from "../returnTo";
 //
 // 医師以外が指示医師を選んで入力(代行入力)したオーダーを、指示医師本人が確認して承認する
 // 画面。ログイン中の医師あての承認待ち(自分が author で署名の無い来歴)だけを出す。
-// 行の単位はオーダーではなく **活動**(登録・編集)で、承認済みのオーダーを代行者が編集すると
-// その編集ぶんがまた並ぶ(readme「代行入力の記録と承認」)。
+// 行の単位はオーダーではなく **活動**(登録・編集・中止・完了…)で、承認済みのオーダーを代行者が
+// 編集すると、その編集ぶんがまた並ぶ(readme「代行入力の記録と承認」)。内容を変えない活動
+// (化学療法の投与日の中止・レジメンの完了など)も指示の一部なので同じように並ぶ。
 //
 // 内容の確認はカルテの詳細モーダルで行う(種別ごとの詳細表示をここに複製しない)。
 // 詳細モーダルにも同じ承認ボタンがあるので、確認してそのまま承認できる。
@@ -158,10 +160,10 @@ interface ApprovalRowProps {
 
 function ApprovalRow({ row, checked, pending, linkState, onToggle, onApprove }: ApprovalRowProps) {
   const order = row.orders[0];
-  const kind = orderKindOf(order);
+  const kind = approvalKindOf(order);
   // オーダーセットの適用は 1 回の操作で複数種別を登録する(来歴も 1 件)。種別列には
   // 含まれる種別を重複なく並べ、どのセットから出したかも添える。
-  const kinds = Array.from(new Set(row.orders.map(orderKindOf)));
+  const kinds = Array.from(new Set(row.orders.map(approvalKindOf)));
   const orderSet = orderSetOf(order);
   const patientId = order.subject?.reference?.split("/").pop() ?? "";
   // 注射の連日オーダーは 1 回の登録で日ごとのヘッダが並ぶ。開始日は最初の日〜最後の日。
@@ -185,7 +187,7 @@ function ApprovalRow({ row, checked, pending, linkState, onToggle, onApprove }: 
         {orderSet && <span className="order-select__muted">{` セット「${orderSet.name}」`}</span>}
       </td>
       <td className="lab-worklist__compact">{dayLabel}</td>
-      <td className="lab-worklist__compact">{row.activity === "CREATE" ? "登録" : "編集"}</td>
+      <td className="lab-worklist__compact">{orderActivityLabel(row.activity)}</td>
       <td className="lab-worklist__compact">{dateTimeSecondsLabel(row.recorded)}</td>
       <td>{row.entererName || "-"}</td>
       <td>{orderContextSummary(prescriptionRequester(order)) || "-"}</td>
@@ -205,9 +207,20 @@ function ApprovalRow({ row, checked, pending, linkState, onToggle, onApprove }: 
 
 type OrderKind = ReturnType<typeof orderKindOf>;
 
+/**
+ * 承認一覧での種別。化学療法の次クール登録はヘッダを含まない(日オーダーだけの transaction)ので、
+ * 日オーダーの `regimen-order` 拡張を見て「化学療法」に寄せる(§8.13 N-6)。カルテのカードの種別
+ * (`orderKindOf`)は変えない — そこで化学療法にすると日オーダーがカードから消える。
+ */
+function approvalKindOf(order: fhir4.ServiceRequest): OrderKind {
+  return regimenOrderOf(order) ? "chemo-regimen" : orderKindOf(order);
+}
+
 function kindLabel(kind: OrderKind): string {
   if (!kind) return "-";
-  return kind === "nursing-order" ? "看護指示" : KARTE_KIND_LABELS[kind];
+  if (kind === "nursing-order") return "看護指示";
+  if (kind === "chemo-regimen") return "化学療法";
+  return KARTE_KIND_LABELS[kind];
 }
 
 /**
@@ -217,6 +230,7 @@ function kindLabel(kind: OrderKind): string {
 function karteLink(patientId: string, kind: OrderKind, orderId: string | undefined): string {
   const params = new URLSearchParams();
   if (kind === "nursing-order") params.set(KARTE_TAB_PARAM, "nursing");
+  else if (kind === "chemo-regimen") params.set(KARTE_TAB_PARAM, "chemo");
   else if (kind && orderId) params.set(KARTE_DETAIL_PARAM, formatKarteDetail({ kind, id: orderId }));
   const query = params.toString();
   return `/patients/${patientId}/karte${query ? `?${query}` : ""}`;

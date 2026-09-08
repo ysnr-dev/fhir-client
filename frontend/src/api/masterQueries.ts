@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { MedicineDoseConversionMap } from "../fhir/doseConversionHelpers";
 import {
   copyOrderSet,
   createOrderSet,
@@ -10,6 +11,16 @@ import {
   type OrderSetCopyPayload,
   type OrderSetEntryPayload,
   type OrderSetPayload,
+} from "./masterClient";
+import {
+  copyRegimen,
+  createRegimen,
+  deleteRegimen,
+  fetchRegimen,
+  searchRegimens,
+  updateRegimen,
+  type RegimenPayload,
+  type RegimenSearchParams,
 } from "./masterClient";
 import {
   createLabContainer,
@@ -43,6 +54,8 @@ import {
   searchLabOrderItems,
   searchLabPanelItems,
   searchLabSpecimens,
+  fetchCtcaeSocs,
+  searchCtcaeTerms,
   searchMedicineDoseConversions,
   searchMedicineUsages,
   searchMedicines,
@@ -621,25 +634,51 @@ export function useDeleteMedicineDoseConversion() {
   });
 }
 
-// 注射オーダーの総投与量計算用。医薬品コード → 「1[薬価算定単位] が何 mL か」の係数。
-// 換算行を持たない医薬品(粉末バイアル等、容量がマスタに無いもの)は Map に入らない。
-export function useMedicineMlFactors(medicineCodes: string[]) {
+export function useCtcaeTermSearch(
+  filters: { name?: string; soc?: string },
+  page: number,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["master", "ctcae_terms", filters, page],
+    queryFn: () => searchCtcaeTerms({ ...filters, page, per: MASTER_SEARCH_PER }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+export function useCtcaeSocs(enabled: boolean) {
+  return useQuery({
+    queryKey: ["master", "ctcae_terms", "socs"],
+    queryFn: fetchCtcaeSocs,
+    staleTime: Infinity,
+    enabled,
+  });
+}
+
+/**
+ * 医薬品コード → 入力単位(mg・g・mL…)→ 1 [薬価算定単位] あたりの量と、薬価算定単位。
+ * 化学療法の投与量(mg/m² から出した mg)を製剤数に直す払出、注射の総投与量・経過表の
+ * 水分出納(製剤数・力価 → mL)が使う。mL 行も含めて全単位を引く。
+ */
+export function useMedicineDoseFactors(medicineCodes: string[]) {
   const codes = Array.from(new Set(medicineCodes)).sort();
 
   return useQuery({
-    queryKey: ["master", "medicine_dose_conversions", "ml", codes],
-    queryFn: async () => {
-      const result = await searchMedicineDoseConversions({
-        medicine_code: codes.join(","),
-        from_unit: "mL",
-        per: 100,
-      });
-      const factors = new Map<string, number>();
+    queryKey: ["master", "medicine_dose_conversions", "all-units", codes],
+    queryFn: async (): Promise<MedicineDoseConversionMap> => {
+      const result = await searchMedicineDoseConversions({ medicine_code: codes.join(","), per: 100 });
+      const factors = new Map<string, Map<string, number>>();
+      const packUnits = new Map<string, string>();
       for (const row of result.items) {
         const factor = Number(row.factor);
-        if (factor > 0) factors.set(row.medicine_code, factor);
+        if (!(factor > 0)) continue;
+        const byUnit = factors.get(row.medicine_code) ?? new Map<string, number>();
+        byUnit.set(row.from_unit, factor);
+        factors.set(row.medicine_code, byUnit);
+        if (row.to_unit) packUnits.set(row.medicine_code, row.to_unit);
       }
-      return factors;
+      return { factors, packUnits };
     },
     staleTime: Infinity,
     enabled: codes.length > 0,
@@ -3885,4 +3924,65 @@ export function useOrderSetMutations() {
       onSuccess: invalidate,
     }),
   };
+}
+
+// ---- 化学療法レジメンマスタ ----
+
+const REGIMENS_KEY = ["master", "regimens"];
+
+export function useRegimenSearch(filters: Omit<RegimenSearchParams, "page" | "per">, page: number) {
+  return useQuery({
+    queryKey: [...REGIMENS_KEY, "list", filters, page],
+    queryFn: () => searchRegimens({ ...filters, page, per: 20 }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useRegimen(idOrCode: number | string | null) {
+  return useQuery({
+    queryKey: [...REGIMENS_KEY, "detail", idOrCode],
+    queryFn: () => fetchRegimen(idOrCode as number | string),
+    enabled: idOrCode !== null,
+    // 存在しない id を開いたときに再試行で「読み込み中」を引き延ばさない。
+    retry: false,
+  });
+}
+
+export function useRegimenMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: REGIMENS_KEY });
+  };
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: RegimenPayload) => createRegimen(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: RegimenPayload }) => updateRegimen(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    copy: useMutation({
+      mutationFn: ({ id, name }: { id: number; name?: string }) => copyRegimen(id, name),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteRegimen(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+/** 適用の候補にするレジメン(承認済かつ有効期間内)。 */
+export function useApplicableRegimens(name: string) {
+  return useQuery({
+    queryKey: [...REGIMENS_KEY, "applicable", name],
+    queryFn: () => searchRegimens({ name, status: "approved", active: true, per: 100 }),
+    placeholderData: keepPreviousData,
+  });
 }
