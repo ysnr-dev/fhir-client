@@ -132,11 +132,36 @@ export interface RegimenDrugDraft {
   drugRole: RegimenDrugRole;
   /** 薬剤マスタから選んだ薬剤。名称・単位は表示用。 */
   medicine: { code: string; name: string; unitName: string } | null;
+  /** 薬価基準から削除・経過措置になった薬剤の注記(承認できない。§8.17)。空なら現行品。 */
+  medicineRetirement: string;
   doseBasis: RegimenDoseBasis;
   doseValue: string;
   doseUnit: string;
   doseMax: string;
   note: string;
+}
+
+/**
+ * 薬価基準からの削除・経過措置の注記。現行品なら空。
+ *
+ * 日付欄は「なし」を 99999999 や 0 で表す(空欄にならない)ので、8 桁の実在する
+ * 日付だけを見る。backend の承認時の検証(`retirement_date`)と同じ規則。
+ */
+function retirementDate(value: string | null | undefined): string {
+  const raw = (value ?? "").trim();
+  if (!/^\d{8}$/.test(raw) || raw === "99999999") return "";
+  return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+}
+
+export function medicineRetirementNote(drug: {
+  abolished_on: string | null;
+  /** 医薬品検索の結果(Medicine)は経過措置日を持たないので任意。 */
+  transitional_measure_on?: string | null;
+}): string {
+  const abolished = retirementDate(drug.abolished_on);
+  if (abolished) return `${abolished} 削除`;
+  const transitional = retirementDate(drug.transitional_measure_on);
+  return transitional ? `${transitional} 経過措置` : "";
 }
 
 export interface RegimenStepDraft {
@@ -196,8 +221,11 @@ export interface RegimenDraft {
   plannedCycles: string;
   emeticRisk: RegimenEmeticRisk | "";
   status: RegimenStatus;
+  /** 承認日・承認者はサーバーが入れる(画面は表示だけ)。 */
   approvedOn: string;
   approvedBy: string;
+  /** 複製元のレジメンコード。複製したときにサーバーが入れる。 */
+  copiedFromCode: string;
   indicationNote: string;
   discontinuationCriteria: string;
   doseReductionCriteria: string;
@@ -235,6 +263,7 @@ export function emptyRegimenDraft(): RegimenDraft {
     status: "draft",
     approvedOn: "",
     approvedBy: "",
+    copiedFromCode: "",
     indicationNote: "",
     discontinuationCriteria: "",
     doseReductionCriteria: "",
@@ -274,6 +303,7 @@ export function emptyDrugDraft(): RegimenDrugDraft {
     key: newDraftKey(),
     drugRole: "anticancer",
     medicine: null,
+    medicineRetirement: "",
     doseBasis: "bsa",
     doseValue: "",
     doseUnit: "mg",
@@ -379,6 +409,7 @@ export function draftFromRegimen(detail: RegimenDetail): RegimenDraft {
     status: detail.status,
     approvedOn: str(detail.approved_on),
     approvedBy: str(detail.approved_by),
+    copiedFromCode: str(detail.copied_from_code),
     indicationNote: str(detail.indication_note),
     discontinuationCriteria: str(detail.discontinuation_criteria),
     doseReductionCriteria: str(detail.dose_reduction_criteria),
@@ -415,6 +446,7 @@ export function draftFromRegimen(detail: RegimenDetail): RegimenDraft {
           name: d.resolved_name ?? "(マスタ未取込のコード)",
           unitName: d.resolved_unit_name ?? "",
         },
+        medicineRetirement: medicineRetirementNote(d),
         doseBasis: d.dose_basis,
         doseValue: str(d.dose_value),
         doseUnit: str(d.dose_unit),
@@ -452,6 +484,19 @@ function textOrNull(text: string): string | null {
   return text.trim() === "" ? null : text;
 }
 
+/**
+ * 承認済・廃止のレジメンで送る値。内容は凍結されているので**運用の項目だけ**にする
+ * (子を送ると backend が「内容の変更」とみなして弾く。§8.17)。
+ */
+export function operationalPayloadFromDraft(draft: RegimenDraft): RegimenPayload {
+  return {
+    status: draft.status,
+    valid_from: textOrNull(draft.validFrom),
+    valid_to: textOrNull(draft.validTo),
+    display_order: numOrNull(draft.displayOrder),
+  };
+}
+
 export function payloadFromDraft(draft: RegimenDraft): RegimenPayload {
   return {
     regimen_code: draft.regimenCode.trim() || undefined,
@@ -467,8 +512,6 @@ export function payloadFromDraft(draft: RegimenDraft): RegimenPayload {
     planned_cycles: numOrNull(draft.plannedCycles),
     emetic_risk: draft.emeticRisk || null,
     status: draft.status,
-    approved_on: textOrNull(draft.approvedOn),
-    approved_by: textOrNull(draft.approvedBy),
     indication_note: textOrNull(draft.indicationNote),
     discontinuation_criteria: textOrNull(draft.discontinuationCriteria),
     dose_reduction_criteria: textOrNull(draft.doseReductionCriteria),

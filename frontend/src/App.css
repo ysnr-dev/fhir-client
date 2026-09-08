@@ -399,6 +399,15 @@
   color: #c62828;
 }
 
+/* レジメン編集の内容部分。承認済は fieldset[disabled] で丸ごと止めるので、
+   枠線・余白は出さず、通常の表示のままにする(止まっていることは注意文で伝える)。 */
+.regimen-editor__content {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+
 /* 化学療法中。禁忌ではなく「いま何をしている患者か」の情報なので、赤とは分けた色にする。 */
 .patient-header__caution--chemo {
   color: #7e57c2;

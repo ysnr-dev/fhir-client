@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { CtcaeTerm, Disease, LabItem, Medicine, MedicineUsage } from "../api/masterClient";
 import { useRegimen, useRegimenMutations } from "../api/masterQueries";
-import { useSelfDepartments } from "../api/queries";
+import { usePractitionerOptions, useSelfDepartments } from "../api/queries";
 import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { CtcaeTermSearchModal } from "../components/CtcaeTermSearchModal";
@@ -10,6 +10,7 @@ import { LabItemSearchModal } from "../components/LabItemSearchModal";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { UsageSearchModal } from "../components/UsageSearchModal";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
+import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { LINE_OPTIONS, METHOD_OPTIONS, ROUTE_OPTIONS, methodForRoute } from "../fhir/injectionHelpers";
 import {
   CTCAE_GRADE_OPTIONS,
@@ -27,11 +28,13 @@ import {
   emptyAdverseEventDraft,
   defaultDrugSettings,
   emptyDrugDraft,
+  medicineRetirementNote,
   emptyLabCriterionDraft,
   emptyRegimenDraft,
   emptyStepDraft,
   newDraftKey,
   parseDays,
+  operationalPayloadFromDraft,
   payloadFromDraft,
   validateRegimenDraft,
   type RegimenAdverseEventDraft,
@@ -88,6 +91,8 @@ export function RegimenEditorPage() {
   const detail = useRegimen(isNew ? null : regimenId);
   const mutations = useRegimenMutations();
   const { departments } = useSelfDepartments();
+  // 承認者は practitioner の id で保存されるので、表示名は一覧から引く。
+  const { practitioners } = usePractitionerOptions();
 
   const [draft, setDraft] = useState<RegimenDraft>(emptyRegimenDraft);
   // 読み込んだレジメンの id。同じ id の再取得(フォーカス復帰など)で入力中の draft を
@@ -107,13 +112,22 @@ export function RegimenEditorPage() {
 
   const savedId = detail.data?.id ?? null;
   const cycleDays = cycleDaysOf(draft);
+  // 保存済みの状態で判定する(画面で状態を変えただけでは凍結は解けない)。
+  const frozen = detail.data ? detail.data.status !== "draft" : false;
+  // 承認を取り消せないので、凍結中は下書きを選べない(使うのをやめるときは廃止)。
+  const statusOptions = frozen
+    ? REGIMEN_STATUS_OPTIONS.filter((o) => o.code !== "draft")
+    : REGIMEN_STATUS_OPTIONS;
+  const approver = practitioners.find((p) => p.id === draft.approvedBy);
+  const approverName = approver ? practitionerDisplayName(approver) : draft.approvedBy;
 
   async function handleSave() {
-    const message = validateRegimenDraft(draft);
+    // 凍結中は内容を送らないので、内容の検証もしない(直せないものを咎めても仕方ない)。
+    const message = frozen ? null : validateRegimenDraft(draft);
     setValidationError(message);
     if (message) return;
 
-    const payload = payloadFromDraft(draft);
+    const payload = frozen ? operationalPayloadFromDraft(draft) : payloadFromDraft(draft);
     if (savedId === null) {
       const created = await mutations.create.mutateAsync(payload);
       navigate(`/regimens/${created.id}`, { replace: true });
@@ -169,6 +183,7 @@ export function RegimenEditorPage() {
     // 種類と算出基準の既定は薬効分類から決める(`defaultDrugSettings`)。どちらも後から直せる。
     const drug = { ...emptyDrugDraft(), ...defaultDrugSettings(medicine, step?.usageType ?? "drip") };
     drug.medicine = { code: medicine.medicine_code, name: medicine.name, unitName: medicine.unit_name ?? "" };
+    drug.medicineRetirement = medicineRetirementNote(medicine);
     setDraft((d) => ({
       ...d,
       steps: d.steps.map((s) => (s.key === stepKey ? { ...s, drugs: [...s.drugs, drug] } : s)),
@@ -221,6 +236,20 @@ export function RegimenEditorPage() {
         error={mutations.create.error ?? mutations.update.error ?? mutations.copy.error ?? mutations.remove.error}
       />
 
+      {frozen && (
+        <p className="regimen-check__summary regimen-check__summary--out">
+          {`${draft.status === "retired" ? "廃止" : "承認済"}のレジメンは内容を変更できません。直すときは「複製」して新しいレジメンとして作り、承認してから、こちらを廃止にします。`}
+        </p>
+      )}
+      {draft.copiedFromCode && (
+        <p className="injection-scope__note">
+          {`複製元: `}
+          <Link to={`/regimens/${draft.copiedFromCode}`}>{draft.copiedFromCode}</Link>
+        </p>
+      )}
+
+      {/* 内容(オーダーに影響するもの)は承認済・廃止で凍結する(§8.17)。 */}
+      <fieldset className="regimen-editor__content" disabled={frozen}>
       {/* ---- 基本情報 ---- */}
       <section className="lab-order-item__section">
         <div className="lab-order-item__section-head">
@@ -308,51 +337,11 @@ export function RegimenEditorPage() {
         </div>
         <div className="lab-order-item__fields">
           <label>
-            状態
-            <select value={draft.status} onChange={(e) => update("status", e.target.value as RegimenStatus)}>
-              {REGIMEN_STATUS_OPTIONS.map((o) => (
-                <option key={o.code} value={o.code}>
-                  {o.display}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            承認日
-            <input type="date" value={draft.approvedOn} onChange={(e) => update("approvedOn", e.target.value)} />
-          </label>
-          <label>
-            承認者
-            <input
-              type="text"
-              value={draft.approvedBy}
-              onChange={(e) => update("approvedBy", e.target.value)}
-              placeholder="レジメン審査委員会 など"
-            />
-          </label>
-          <label>
-            有効開始日
-            <input type="date" value={draft.validFrom} onChange={(e) => update("validFrom", e.target.value)} />
-          </label>
-          <label>
-            有効終了日
-            <input type="date" value={draft.validTo} onChange={(e) => update("validTo", e.target.value)} />
-          </label>
-          <label>
-            表示順
-            <input
-              type="number"
-              value={draft.displayOrder}
-              onChange={(e) => update("displayOrder", e.target.value)}
-            />
-          </label>
-          <label>
             備考
             <input type="text" value={draft.note} onChange={(e) => update("note", e.target.value)} />
           </label>
         </div>
       </section>
-
       {/* ---- 適応疾患 ---- */}
       <section className="lab-order-item__section">
         <div className="lab-order-item__section-head">
@@ -740,6 +729,48 @@ export function RegimenEditorPage() {
         </div>
       </section>
 
+      </fieldset>
+
+      {/* ---- 運用(凍結中も動かせる。使うのをやめる・並び順を変える操作) ---- */}
+      <section className="lab-order-item__section">
+        <div className="lab-order-item__section-head">
+          <h3>運用</h3>
+        </div>
+        <div className="lab-order-item__fields">
+          <label>
+            状態
+            <select value={draft.status} onChange={(e) => update("status", e.target.value as RegimenStatus)}>
+              {statusOptions.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.display}
+                </option>
+              ))}
+            </select>
+          </label>
+          {/* 承認日・承認者はサーバーが入れる(承認した人と日を後から書き換えさせない)。 */}
+          <div className="regimen-editor__derived">
+            承認
+            <strong>{draft.approvedOn ? `${draft.approvedOn}${approverName ? ` / ${approverName}` : ""}` : "—"}</strong>
+          </div>
+          <label>
+            有効開始日
+            <input type="date" value={draft.validFrom} onChange={(e) => update("validFrom", e.target.value)} />
+          </label>
+          <label>
+            有効終了日
+            <input type="date" value={draft.validTo} onChange={(e) => update("validTo", e.target.value)} />
+          </label>
+          <label>
+            表示順
+            <input
+              type="number"
+              value={draft.displayOrder}
+              onChange={(e) => update("displayOrder", e.target.value)}
+            />
+          </label>
+        </div>
+      </section>
+
       <div className="lab-order-item__actions regimen-editor__footer">
         <button type="button" onClick={handleSave} disabled={saving}>
           保存
@@ -749,9 +780,12 @@ export function RegimenEditorPage() {
             <button type="button" onClick={handleCopy} disabled={mutations.copy.isPending}>
               複製
             </button>
-            <button type="button" onClick={handleDelete} disabled={mutations.remove.isPending}>
-              削除
-            </button>
+            {/* 削除できるのは下書きだけ(承認済・廃止は施設の記録で、適用が指している)。 */}
+            {!frozen && (
+              <button type="button" onClick={handleDelete} disabled={mutations.remove.isPending}>
+                削除
+              </button>
+            )}
           </>
         )}
       </div>
@@ -956,6 +990,12 @@ function StepCard({
                 {drug.medicine?.name}
                 {drug.medicine?.unitName && (
                   <span className="lab-order-item__code">（{drug.medicine.unitName}）</span>
+                )}
+                {/* 削除・経過措置の薬剤は承認できない(§8.17)。選んだ時点で気付けるように印を出す。 */}
+                {drug.medicineRetirement && (
+                  <span className="injection-worklist__reduced" title="承認できません。現行の医薬品に差し替えてください">
+                    {drug.medicineRetirement}
+                  </span>
                 )}
               </td>
             </tr>

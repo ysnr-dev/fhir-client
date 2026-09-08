@@ -200,7 +200,7 @@ RSpec.describe "Master::Regimens", type: :request do
   end
 
   describe "PUT /master/regimens/:id" do
-    let!(:regimen) { create_regimen("000001", "mFOLFOX6", status: "approved") }
+    let!(:regimen) { create_regimen("000001", "mFOLFOX6", status: "draft") }
 
     before do
       step = Master::RegimenStep.create!(regimen_code: "000001", usage_type: "drip", days: [1], display_order: 1)
@@ -226,6 +226,115 @@ RSpec.describe "Master::Regimens", type: :request do
     end
   end
 
+  describe "PUT /master/regimens/:id(承認済の凍結)" do
+    let!(:regimen) do
+      create_regimen("000001", "mFOLFOX6", status: "approved", treatment_days: 3, rest_days: 11)
+    end
+
+    it "承認済は内容を変更できない" do
+      put "/master/regimens/000001", params: { name: "直した名前" }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("複製")
+      expect(regimen.reload.name).to eq("mFOLFOX6")
+    end
+
+    it "承認済でも子は置き換えられない" do
+      put "/master/regimens/000001", params: { adverse_events: [{ term: "後から足した" }] }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(Master::RegimenAdverseEvent.count).to eq(0)
+    end
+
+    it "承認済でも廃止・有効期間は変えられる" do
+      put "/master/regimens/000001", params: { status: "retired", valid_to: "2026-12-31" }, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(regimen.reload.status).to eq("retired")
+      expect(regimen.valid_to.to_s).to eq("2026-12-31")
+    end
+  end
+
+  describe "承認の記録" do
+    it "承認したときに承認日をサーバーが入れ、下書きには戻せない" do
+      create_regimen("000001", "mFOLFOX6", status: "draft", treatment_days: 3, rest_days: 11)
+      step = Master::RegimenStep.create!(regimen_code: "000001", usage_type: "drip", days: [1], display_order: 1)
+      Master::RegimenDrug.create!(regimen_code: "000001", step_id: step.id, drug_role: "anticancer",
+                                  medicine_code: "622480401", dose_basis: "bsa", dose_value: 85, dose_unit: "mg")
+
+      put "/master/regimens/000001", params: { status: "approved", approved_by: "practitioner-1" }, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(body["approved_on"]).to eq(Date.current.to_s)
+      expect(body["approved_by"]).to eq("practitioner-1")
+
+      # 下書きに戻せると「下書きにしてから直す」で凍結をすり抜けられる。
+      put "/master/regimens/000001", params: { status: "draft" }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("廃止")
+      expect(Master::Regimen.find_by(regimen_code: "000001").status).to eq("approved")
+    end
+  end
+
+  describe "内容の検証" do
+    it "1 クールを超える投与日は保存できない" do
+      post "/master/regimens", params: {
+        name: "はみ出すレジメン", treatment_days: 3, rest_days: 11,
+        steps: [{ name: "投与", days: [1, 20], usage_type: "drip",
+                  drugs: [{ drug_role: "anticancer", medicine_code: "622480401", dose_basis: "bsa",
+                            dose_value: 85, dose_unit: "mg" }] }],
+      }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("1 クール")
+      expect(Master::Regimen.count).to eq(0)
+    end
+
+    it "内服が 1 クールをはみ出すと保存できない" do
+      post "/master/regimens", params: {
+        name: "内服がはみ出す", treatment_days: 3, rest_days: 4,
+        steps: [{ name: "内服", days: [1], usage_type: "oral", usage_code: "1013044400000000", dose_days: 14,
+                  drugs: [{ drug_role: "anticancer", medicine_code: "622200701", dose_basis: "bsa",
+                            dose_value: 1000, dose_unit: "mg" }] }],
+      }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("はみ出します")
+    end
+
+    it "経過措置の医薬品を含むレジメンは承認できない(薬価基準の 99999999 は「なし」)" do
+      Master::Medicine.create!(medicine_code: "622480401", name: "オキサリプラチン", unit_name: "瓶",
+                               abolished_on: "99999999", transitional_measure_on: "20260331")
+      create_regimen("000001", "経過措置入り", status: "draft", treatment_days: 3, rest_days: 11)
+      step = Master::RegimenStep.create!(regimen_code: "000001", usage_type: "drip", days: [1], display_order: 1)
+      Master::RegimenDrug.create!(regimen_code: "000001", step_id: step.id, drug_role: "anticancer",
+                                  medicine_code: "622480401", dose_basis: "bsa", dose_value: 85, dose_unit: "mg")
+
+      put "/master/regimens/000001", params: { status: "approved" }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("2026-03-31 で経過措置")
+      # 削除日の 99999999 は「なし」なので、削除のメッセージは出ない。
+      expect(body["errors"].join).not_to include("削除された")
+    end
+
+    it "承認するときは基準値と単位を求める(下書きなら保存できる)" do
+      params = {
+        name: "書きかけ", treatment_days: 3, rest_days: 11,
+        steps: [{ name: "投与", days: [1], usage_type: "drip",
+                  drugs: [{ drug_role: "anticancer", medicine_code: "622480401", dose_basis: "bsa" }] }],
+      }
+
+      post "/master/regimens", params: params, as: :json
+      expect(response).to have_http_status(:created)
+
+      put "/master/regimens/#{body['regimen_code']}", params: { status: "approved" }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("基準値")
+    end
+  end
+
   describe "POST /master/regimens/:id/copy" do
     it "新しいコードで全部写し、承認は引き継がず下書きになる" do
       create_regimen("000001", "mFOLFOX6", status: "approved", approved_on: "2026-09-01", approved_by: "委員会",
@@ -246,6 +355,8 @@ RSpec.describe "Master::Regimens", type: :request do
       expect(body["indications"].size).to eq(1)
       expect(body["steps"][0]["drugs"][0]["medicine_code"]).to eq("622480401")
       expect(body["steps"][0]["drugs"][0]["step_id"]).not_to eq(step.id)
+      # 改訂の系列を辿れるよう、複製元のコードを残す。
+      expect(body["copied_from_code"]).to eq("000001")
     end
   end
 
@@ -267,6 +378,16 @@ RSpec.describe "Master::Regimens", type: :request do
       expect(Master::RegimenDrug.count).to eq(0)
       expect(Master::RegimenLabCriterion.count).to eq(0)
       expect(Master::RegimenStep.where(regimen_code: "000002").count).to eq(1)
+    end
+
+    it "承認済・廃止は削除できない" do
+      create_regimen("000001", "mFOLFOX6", status: "approved")
+
+      delete "/master/regimens/000001"
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("廃止")
+      expect(Master::Regimen.count).to eq(1)
     end
   end
 end

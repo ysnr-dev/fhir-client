@@ -28,6 +28,9 @@ module Master
           "master_medicines.name AS resolved_name",
           "master_medicines.unit_name AS resolved_unit_name",
           "master_medicines.dosage_form AS dosage_form",
+          # 経過措置・削除済みの医薬品は、承認と適用で警告に使う(§8.17)。
+          "master_medicines.abolished_on AS abolished_on",
+          "master_medicines.transitional_measure_on AS transitional_measure_on",
           "(SELECT hc.individual_medicine_code FROM master_hot_codes hc " \
           "WHERE hc.receipt_code_1 = master_medicines.medicine_code " \
           "AND hc.individual_medicine_code <> '' LIMIT 1) AS yj_code",

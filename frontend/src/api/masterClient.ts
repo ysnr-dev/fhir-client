@@ -5524,6 +5524,8 @@ export interface Regimen {
   note: string | null;
   /** 投与期間 + 休薬期間。API が導出して添える。 */
   cycle_days: number;
+  /** 複製元のレジメンコード。改訂の系列を辿る(承認済は凍結し、直すときは複製する)。 */
+  copied_from_code: string | null;
   updated_at: string;
 }
 
@@ -5553,6 +5555,9 @@ export interface RegimenDrug {
   resolved_unit_name: string | null;
   dosage_form: string | null;
   yj_code: string | null;
+  /** 薬価基準からの削除日・経過措置日。入っていれば使い続けられない薬剤。 */
+  abolished_on: string | null;
+  transitional_measure_on: string | null;
 }
 
 export interface RegimenStep {
@@ -5655,7 +5660,8 @@ export interface RegimenAdverseEventPayload {
 /** 子の配列は送った種別だけ丸ごと置換される(配列の順が表示順)。 */
 export interface RegimenPayload {
   regimen_code?: string;
-  name: string;
+  /** 凍結中(承認済・廃止)の更新では運用の項目だけを送るので任意。 */
+  name?: string;
   short_name?: string | null;
   name_kana?: string | null;
   department_code?: string | null;

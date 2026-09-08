@@ -32,25 +32,34 @@ module Master
     end
 
     def create
-      record = Master::Regimen.new(record_params)
+      record = Master::Regimen.new(record_params.merge(approval_attrs(nil, record_params[:status])))
       record.regimen_code = next_regimen_code if record.regimen_code.blank?
       Master::Regimen.transaction do
         record.save!
         replace_children(record)
+        validate_content!(record)
       end
       render json: detail(record), status: :created
     rescue ActiveRecord::RecordInvalid => e
       render_validation_errors(e.record)
+    rescue ContentInvalid => e
+      render json: { errors: e.messages }, status: :unprocessable_content
     end
 
     def update
+      return render_frozen if frozen_change?
+      return render_unapproval if unapproving?
+
       Master::Regimen.transaction do
-        @record.update!(record_params.except(:regimen_code))
+        @record.update!(update_params)
         replace_children(@record)
+        validate_content!(@record)
       end
       render json: detail(@record)
     rescue ActiveRecord::RecordInvalid => e
       render_validation_errors(e.record)
+    rescue ContentInvalid => e
+      render json: { errors: e.messages }, status: :unprocessable_content
     end
 
     # 複製。派生レジメン(減量版・隔週版)の作り方。コードは新しく採番し、
@@ -64,6 +73,12 @@ module Master
       target.regimen_code = next_regimen_code
       target.name = params[:name].presence || "#{@record.name}のコピー"
       target.status = "draft"
+      # 改訂の系列を辿れるようにする(承認済は凍結し、直すときは複製するため)。
+      target.copied_from_code = @record.regimen_code
+      # 有効期間・表示順は複製元の都合なので引き継がない(新しい版として決め直す)。
+      target.valid_from = nil
+      target.valid_to = nil
+      target.display_order = nil
       Master::Regimen.transaction do
         target.save!
         copy_children(@record, target)
@@ -73,7 +88,14 @@ module Master
       render_validation_errors(e.record)
     end
 
+    # 削除できるのは下書きだけ。承認済・廃止は施設の記録で、患者への適用が
+    # `instantiatesUri` で指しているため残す(§8.17)。
     def destroy
+      if @record.status != "draft"
+        return render json: { errors: ["承認済・廃止のレジメンは削除できません。廃止にして使わないようにしてください"] },
+                      status: :unprocessable_content
+      end
+
       Master::Regimen.transaction do
         delete_children(@record.regimen_code)
         @record.destroy!
@@ -83,14 +105,28 @@ module Master
 
     private
 
+    # 内容の検証に落ちたとき(モデル単体では判定できないもの)。
+    class ContentInvalid < StandardError
+      attr_reader :messages
+
+      def initialize(messages)
+        @messages = messages
+        super(messages.join(" / "))
+      end
+    end
+
     SEARCH_COLUMNS = %w[search_name search_kana search_short_name].freeze
 
     REGIMEN_ATTRS = %i[
       regimen_code name short_name name_kana department_code department_name purpose setting
       treatment_days rest_days planned_cycles emetic_risk status approved_on approved_by
       indication_note discontinuation_criteria dose_reduction_criteria references_note
-      valid_from valid_to display_order note
+      valid_from valid_to display_order note copied_from_code
     ].freeze
+
+    # 承認済・廃止でも動かせる項目。内容(オーダーに影響するもの)は凍結し、
+    # 「使うのをやめる」「並び順を変える」操作だけ残す(§8.17)。
+    FROZEN_EDITABLE_ATTRS = %i[status valid_from valid_to display_order].freeze
     INDICATION_ATTRS = %w[management_number name icd10].freeze
     STEP_ATTRS = %w[name days usage_type route_code method_code line_code infusion_minutes rate
                     device_note usage_code dose_days note].freeze
@@ -104,6 +140,60 @@ module Master
 
     def record_params
       params.permit(*REGIMEN_ATTRS)
+    end
+
+    # 更新で受ける値。承認日・承認者はサーバーが決める(画面からは送らせない)。
+    def update_params
+      permitted = record_params.except(:regimen_code, :approved_on, :approved_by)
+      permitted = permitted.slice(*FROZEN_EDITABLE_ATTRS) if frozen_record?
+      permitted.merge(approval_attrs(@record.status, permitted[:status]))
+    end
+
+    # 承認済・廃止のレジメンか(= 内容を凍結する)。
+    def frozen_record?
+      %w[approved retired].include?(@record.status)
+    end
+
+    # 凍結中に内容を変えようとしているか。子が 1 種類でも送られていれば内容の変更。
+    def frozen_change?
+      return false unless frozen_record?
+
+      children_sent = %i[indications steps lab_criteria adverse_events].any? { |k| params.key?(k) }
+      content_sent = record_params.except(:regimen_code, :approved_on, :approved_by, *FROZEN_EDITABLE_ATTRS)
+                                  .to_h.any? { |k, v| @record[k].to_s != v.to_s }
+      children_sent || content_sent
+    end
+
+    # 承認済・廃止から下書きへは戻せない。戻せると「下書きにしてから直す」で凍結を
+    # すり抜けられるため(§8.17)。使うのをやめるときは廃止にする。
+    def unapproving?
+      frozen_record? && record_params[:status] == "draft"
+    end
+
+    def render_unapproval
+      render json: {
+        errors: ["承認を取り消せません。使わないようにするには廃止にしてください"],
+      }, status: :unprocessable_content
+    end
+
+    def render_frozen
+      render json: {
+        errors: ["承認済・廃止のレジメンは内容を変更できません。複製して新しいレジメンとして直してください"],
+      }, status: :unprocessable_content
+    end
+
+    # 承認の記録はサーバーが入れる(画面の手入力にしない)。下書き・廃止へ戻したら消す。
+    def approval_attrs(previous_status, next_status)
+      return {} if next_status.blank? || previous_status == next_status
+
+      next_status == "approved" ? { approved_on: Date.current, approved_by: approver_id } : {}
+    end
+
+    # 承認者。認証なしモード(開発)ではパラメータを通す(order_sets の持ち主と同じ扱い)。
+    def approver_id
+      return params[:approved_by].presence if @user_auth == :none
+
+      current_user&.practitioner_fhir_id
     end
 
     # サンプル(db/seed_data/regimens.csv)が使う帯。施設の採番はこの手前で行う。
@@ -157,6 +247,74 @@ module Master
       each_row(params[:adverse_events]) do |row, index|
         Master::RegimenAdverseEvent.create!(row.slice(*ADVERSE_EVENT_ATTRS).merge(regimen_code: code, display_order: index + 1))
       end
+    end
+
+    # 画面でしか分からない検証ではなく、**どの入口から来ても効かせたい検証**をここに置く
+    # (画面の validateRegimenDraft は入力中の案内で、API を直に叩けば素通りする)。
+    #
+    # ［決定］下書きは緩く、承認で厳しくする。書きかけを保存できるのは編集の前提で、
+    # 承認は「これで運用する」という宣言だから(§8.17)。
+    def validate_content!(record)
+      messages = always_invalid_messages(record)
+      messages += approval_invalid_messages(record) if record.status == "approved"
+      raise ContentInvalid, messages if messages.any?
+    end
+
+    # 下書きでも通さないもの。1 クールに収まらない投与日は、暦にもクールの進捗にも
+    # 載せられない(オーダーに展開できない)。
+    def always_invalid_messages(record)
+      cycle = record.cycle_days
+      return [] if cycle <= 0
+
+      record.steps.flat_map do |step|
+        label = step_label(step)
+        days = Array(step.days).select { |d| d.is_a?(Integer) }
+        over = days.select { |d| d > cycle }
+        last = step.usage_type == "oral" && days.any? ? days.max + step.dose_days.to_i - 1 : 0
+        [
+          over.any? ? "#{label} の投与日 #{over.join(', ')} が 1 クール(#{cycle} 日)を超えています" : nil,
+          last > cycle ? "#{label} の内服が 1 クール(#{cycle} 日)をはみ出します(#{days.max} 日目から #{step.dose_days} 日分)" : nil,
+        ].compact
+      end
+    end
+
+    # 承認するときだけ求める完全性。ここを通ったレジメンは、患者に適用したときに
+    # 投与量が出せる(手入力に落ちない)。
+    def approval_invalid_messages(record)
+      steps = record.steps.to_a
+      return ["投与ステップがありません"] if steps.empty?
+
+      drugs = Master::RegimenDrug.with_names.where(step_id: steps.map(&:id)).to_a
+      by_step = drugs.group_by(&:step_id)
+      messages = steps.filter_map { |s| "#{step_label(s)} に薬剤がありません" if by_step[s.id].blank? }
+      messages + drugs.flat_map { |drug| drug_approval_messages(drug) }
+    end
+
+    def drug_approval_messages(drug)
+      name = drug.resolved_name.presence || drug.medicine_code
+      abolished = retirement_date(drug.abolished_on)
+      transitional = retirement_date(drug.transitional_measure_on)
+      [
+        drug.dose_value.blank? ? "#{name} の基準値がありません" : nil,
+        drug.dose_unit.blank? ? "#{name} の単位がありません" : nil,
+        # 経過措置・削除済みの医薬品は、承認したレジメンで使い続けられない。
+        abolished ? "#{name} は #{abolished} で薬価基準から削除された医薬品です" : nil,
+        transitional ? "#{name} は #{transitional} で経過措置になった医薬品です" : nil,
+      ].compact
+    end
+
+    # 薬価基準の日付欄は「なし」を 99999999 や 0 で表す(空欄にならない)。実在する
+    # 日付のときだけ YYYY-MM-DD にして返す。
+    def retirement_date(value)
+      raw = value.to_s
+      return nil unless raw.match?(/\A\d{8}\z/) && raw != "99999999"
+
+      "#{raw[0, 4]}-#{raw[4, 2]}-#{raw[6, 2]}"
+    end
+
+    def step_label(step)
+      order = step.display_order || "?"
+      step.name.present? ? "ステップ #{order}(#{step.name})" : "ステップ #{order}"
     end
 
     def each_row(raw)
