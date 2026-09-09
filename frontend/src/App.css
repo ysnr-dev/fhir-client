@@ -9662,6 +9662,22 @@ body.page-wide .app__main {
 }
 
 /* 特記事項だけは 1 行に収まらないので、他の項目と同じ列に並べず幅を取る。 */
+/* 入院予定の「日付未定」。日付欄の横に並べる行向きのチェック(列向きの label と、
+   入力欄に付く枠・余白を打ち消す)。 */
+.walk-in__fields .admission__undated {
+  flex-direction: row;
+  align-items: center;
+  align-self: flex-end;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+.walk-in__fields .admission__undated input {
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+
 .walk-in__fields .admission__note {
   flex-basis: 100%;
 }
@@ -14991,6 +15007,11 @@ button.chemo-calendar__cell[draggable="true"] {
 
 .ward-map__planned-card {
   cursor: grab;
+}
+
+/* 当日ぶんの下に続く「日付未定」の見出し。 */
+.ward-map__planned h3:not(:first-child) {
+  margin-top: 12px;
 }
 
 /* 吹き出しやケバブのメニューを開いている間は、隣のベッドや病室より手前に出す

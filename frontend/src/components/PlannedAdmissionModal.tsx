@@ -25,7 +25,8 @@ import { NursePicker } from "./NursePicker";
 
 // 入院予定の新規登録。入院登録(AdmissionModal)と同じ二段構えだが、こちらは
 // 行(ベッド)からではなく一覧のボタンから開くので、病棟・病室・ベッドも選ぶ。
-// 病棟と入院予定日だけ必須で、病室・ベッドはまだ決めなくてよい。
+// 病棟だけ必須で、病室・ベッドはまだ決めなくてよい。入院予定日も「日付未定」に
+// できる(検査待ち・ベッド待ちなど)。未定のまま入院実施できる。
 
 export function PlannedAdmissionModal({
   defaultWardId,
@@ -51,6 +52,8 @@ export function PlannedAdmissionModal({
     plannedDate: today(),
     note: "",
   });
+  // 日付未定。日付欄の値は消さずに置いておき、外したときに戻せるようにする。
+  const [undated, setUndated] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const wardOptions = useWardOptions();
@@ -70,8 +73,11 @@ export function PlannedAdmissionModal({
       wardId: selection.wardId,
       roomId: selection.roomId,
       bedId: selection.bedId,
+      plannedDate: undated ? "" : values.plannedDate,
     };
-    const error = validatePlannedAdmissionForm(merged);
+    const error =
+      validatePlannedAdmissionForm(merged) ??
+      (!undated && !values.plannedDate ? "入院予定日を入力するか、日付未定にしてください。" : null);
     if (error) {
       setValidationError(error);
       return;
@@ -161,12 +167,21 @@ export function PlannedAdmissionModal({
               onChange={(nurseIds) => update("nurseIds", nurseIds)}
             />
             <label>
-              入院予定日(必須)
+              入院予定日
               <input
                 type="date"
                 value={values.plannedDate}
+                disabled={undated}
                 onChange={(e) => update("plannedDate", e.target.value)}
               />
+            </label>
+            <label className="admission__undated">
+              <input
+                type="checkbox"
+                checked={undated}
+                onChange={(e) => setUndated(e.target.checked)}
+              />
+              日付未定
             </label>
             <label className="admission__note">
               特記事項

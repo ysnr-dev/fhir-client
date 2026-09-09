@@ -56,6 +56,7 @@ import {
   ADMISSION_STATUS,
   DISCHARGED_STATUS,
   PLANNED_STATUS,
+  sortPlannedAdmissions,
   buildCancelledEncounter,
   buildDischargedEncounter,
   encounterBedId,
@@ -1746,7 +1747,7 @@ export function useUpdateEncounter() {
 }
 
 export interface PlannedAdmissionsResult {
-  /** 入院予定の Encounter。入院予定日順。 */
+  /** 入院予定の Encounter。日付未定を先頭に、あとは入院予定日順。 */
   encounters: fhir4.Encounter[];
   patientsById: Map<string, fhir4.Patient>;
   truncated: boolean;
@@ -1786,7 +1787,7 @@ async function fetchPlannedAdmissions(): Promise<PlannedAdmissionsResult> {
     if (page === INPATIENT_MAX_PAGES - 1) truncated = true;
   }
 
-  return { encounters, patientsById, truncated };
+  return { encounters: sortPlannedAdmissions(encounters), patientsById, truncated };
 }
 
 /** 入院予定(status=planned)の一覧。 */

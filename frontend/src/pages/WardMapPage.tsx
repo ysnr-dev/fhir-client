@@ -46,13 +46,13 @@ import {
 } from "../fhir/bedMovePlanHelpers";
 import {
   admittedBedLabelByPatient,
-  encounterAdmissionDate,
   encounterBedId,
   encounterDischargePlan,
   encounterLeaves,
   encounterPatientId,
   encounterTransferPlan,
   occupiedBedIds as occupiedBedIdSet,
+  plannedAdmissionDate,
   plannedWardId,
 } from "../fhir/encounterHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
@@ -219,17 +219,27 @@ export function WardMapPage() {
   const [confirming, setConfirming] = useState(false);
   const applied = useMemo(() => applyMoves(byBedOriginal, plan), [byBedOriginal, plan]);
 
-  // ---- 当日の入院予定(この病棟宛て、または病棟未定) ----
+  // ---- 当日と日付未定の入院予定(この病棟宛て、または病棟未定) ----
+  //
+  // 日付未定の予定はいつ来てもおかしくないので、当日ぶんと一緒に並べて
+  // そのまま入院実施できるようにする(日付を確定する段階は置かない)。
 
   const planned = usePlannedAdmissions();
-  const plannedToday = useMemo(() => {
+  const plannedForWard = useMemo(() => {
     if (!movable) return [];
     return (planned.data?.encounters ?? []).filter((encounter) => {
-      if (encounterAdmissionDate(encounter) !== date) return false;
       const ward = plannedWardId(encounter);
       return !ward || ward === wardId;
     });
-  }, [planned.data, movable, date, wardId]);
+  }, [planned.data, movable, wardId]);
+  const plannedToday = useMemo(
+    () => plannedForWard.filter((encounter) => plannedAdmissionDate(encounter) === date),
+    [plannedForWard, date],
+  );
+  const plannedUndated = useMemo(
+    () => plannedForWard.filter((encounter) => !plannedAdmissionDate(encounter)),
+    [plannedForWard],
+  );
   const [executeTarget, setExecuteTarget] = useState<ExecuteTarget | null>(null);
 
   // ---- ピクトグラム(マップに出ている患者ぶんをまとめて引く) ----
@@ -581,6 +591,7 @@ export function WardMapPage() {
               />
               <WardMapPlannedPanel
                 encounters={plannedToday}
+                undated={plannedUndated}
                 patientsById={planned.data?.patientsById}
                 onPointerDown={(encounter, event) => start({ kind: "planned", encounter }, event)}
                 onExecute={(encounter) =>

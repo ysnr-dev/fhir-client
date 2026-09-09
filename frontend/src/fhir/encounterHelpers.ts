@@ -457,6 +457,10 @@ function isNewer(a: fhir4.Encounter, b: fhir4.Encounter): boolean {
 // 決まっていないことがあるので、location には病棟(必須)・病室・ベッド(任意)を
 // physicalType(wa/ro/bd)付きで並べ、どの階層の場所かを参照先を引かずに判別する。
 //
+// 入院予定日は period.start に置く。日付が決まっていない予定(検査待ち・ベッド待ち
+// など)は period を付けない。日付が無くてもそのまま入院実施できる(実施日時は
+// 実施時に入れる)ので、「日付を確定してから実施」という段階は設けない。
+//
 // 入院実施は同じリソースを in-progress に書き換える(location も入院登録と同じ
 // 「ベッド 1 件」の形に組み直す)。予定の取り消しは status=cancelled。入院取消の
 // entered-in-error(誤登録)とは区別する。予定が無くなるのは誤りではないため。
@@ -476,7 +480,7 @@ export interface PlannedAdmissionFormValues {
   departmentId: string;
   practitionerId: string;
   nurseIds: string[];
-  /** 入院予定日(YYYY-MM-DD)。 */
+  /** 入院予定日(YYYY-MM-DD)。空なら日付未定。 */
   plannedDate: string;
   note: string;
 }
@@ -485,7 +489,6 @@ export function validatePlannedAdmissionForm(
   values: PlannedAdmissionFormValues,
 ): string | null {
   if (!values.wardId) return "病棟は必須です。";
-  if (!values.plannedDate) return "入院予定日は必須です。";
   return null;
 }
 
@@ -537,11 +540,27 @@ export function buildPlannedAdmissionEncounter(
       reference: `Patient/${patient.id}`,
       display: patientDisplay(patient),
     },
-    period: { start: values.plannedDate },
     location,
   };
+  if (values.plannedDate) encounter.period = { start: values.plannedDate };
   applyAdmissionDetails(encounter, target, values);
   return encounter;
+}
+
+/** 入院予定日(YYYY-MM-DD)。日付未定なら空。 */
+export function plannedAdmissionDate(encounter: fhir4.Encounter): string {
+  return encounter.period?.start?.slice(0, 10) ?? "";
+}
+
+/**
+ * 入院予定を日付未定 → 予定日順に並べ直す。上流の _sort=date は period の無いものを
+ * 末尾に置く(NULLS LAST)が、日付未定はいつ来てもおかしくない予定なので先頭に出す
+ * (カルテの「日付未定」を最上部に置くのと同じ)。日付のある側の順は崩さない。
+ */
+export function sortPlannedAdmissions(encounters: fhir4.Encounter[]): fhir4.Encounter[] {
+  const undated = encounters.filter((encounter) => !plannedAdmissionDate(encounter));
+  const dated = encounters.filter((encounter) => plannedAdmissionDate(encounter));
+  return [...undated, ...dated];
 }
 
 // 予定の location から階層(病棟・病室・ベッド)ごとの 1 件を探す。

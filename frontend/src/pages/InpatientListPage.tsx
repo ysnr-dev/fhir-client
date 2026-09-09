@@ -55,6 +55,7 @@ import {
   encounterPatientId,
   encounterTransferPlan,
   occupiedBedIds as occupiedBedIdSet,
+  plannedAdmissionDate,
   plannedBedName,
   plannedRoomName,
   plannedWardId,
@@ -71,8 +72,8 @@ import { dateTimeLabel, today } from "../lib/dates";
 // 入院患者タブは、病棟を選ぶとその病棟の病室・ベッドを 1 行 1 床で並べ、
 // 埋まっている床には入院中の患者を、空いている床には「患者選択」を出す。
 // 入院予定タブは、選んだ病棟に入院する予定(status=planned の Encounter)を
-// 予定日順に 1 行 1 件で並べる。予定はまだ床が決まっていないことがあるので、
-// ベッドのグリッドではなく予定そのものを行にする。
+// 予定日順に 1 行 1 件で並べる(日付未定は先頭)。予定はまだ床が決まっていない
+// ことがあるので、ベッドのグリッドではなく予定そのものを行にする。
 //
 // 入院は Encounter(fhir/encounterHelpers.ts)。ベッドの Location と Encounter を
 // ベッド id で突き合わせるだけなので、病室・ベッドの側は病棟マスタそのまま。
@@ -344,12 +345,13 @@ export function InpatientListPage() {
     return withRoomRowSpans(visible);
   }, [grid.rooms, grid.bedsByRoom, byBed, patientsById, filtering, filters]);
 
-  // 入院予定は選んだ病棟のぶんだけ、予定日順(取得時に整列済み)で出す。
+  // 入院予定は選んだ病棟のぶんだけ、予定日順(取得時に整列済み。日付未定が先頭)で
+  // 出す。予定日で絞ると日付未定は外れる(その日に来る予定ではないので)。
   const plannedRows = useMemo<PlannedRow[]>(() => {
     const encounters = (planned.data?.encounters ?? []).filter(
       (encounter) =>
         plannedWardId(encounter) === wardId &&
-        (!plannedDate || encounterAdmissionDate(encounter) === plannedDate) &&
+        (!plannedDate || plannedAdmissionDate(encounter) === plannedDate) &&
         (!filtering || matchesFilters(encounter, filters)),
     );
     return encounters.map((encounter) => {
@@ -1086,7 +1088,7 @@ function PlannedTableRow({
       <td>{encounterDepartmentName(encounter)}</td>
       <td>{encounterAttendingName(encounter)}</td>
       <td>{encounterNurseNames(encounter).join("、") || "-"}</td>
-      <td>{encounterAdmissionDate(encounter)}</td>
+      <td>{plannedAdmissionDate(encounter) || "未定"}</td>
       <td className="inpatient__note">{encounterNote(encounter) || "-"}</td>
       <td className="patient-table__actions sticky-table__fix-actions">
         {/* 入院実施はこのタブでいちばん使う操作なので、ケバブに畳まずカルテの左に
