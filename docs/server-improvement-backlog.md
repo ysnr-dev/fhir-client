@@ -4,7 +4,9 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
 項目のうち、**未実装のもの**の記録。
 
 - 調査履歴: 2026-08-01（初回、6 項目）、2026-08-23（frontend/backend 全面再調査で拡充）、
-  2026-08-30（他科依頼の実装で C-6 を追加）、2026-09-01（オーダー横断の課題整理で C-7 を追加し、同日実装）。
+  2026-08-30（他科依頼の実装で C-6 を追加）、2026-09-01（オーダー横断の課題整理で C-7 を追加し、同日実装）、
+  2026-09-09（パフォーマンス観点の再調査で 6 項目を追加し、C-6・C-8 と合わせて同日サーバー側を実装。
+  クライアント側の追随は未着手 — 下の「2026-09-09 に対応済み」節の F 項目）。
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
@@ -16,8 +18,70 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   （下記の「対応済み」節を参照）。**C-7（Provenance）も 2026-09-01 に実装済み**。残るは C-3〜C-6 と長期のみ。
 
 各項目は「現状のワークアラウンド → 望ましいサーバー機能 → 影響範囲」の形式。
-**残っているのは優先度 C の C-3〜C-6 と長期のみ**（優先度 A・B と C-1・C-2 は
-2026-08-23 に、C-7 は 2026-09-01 に対応済み）。
+**残っているのは優先度 C の C-3〜C-5 と長期のみ**（優先度 A・B と C-1・C-2 は
+2026-08-23 に、C-7 は 2026-09-01 に、C-6・C-8 と 2026-09-09 追加分は同日に対応済み）。
+
+---
+
+## 2026-09-09 に対応済み（サーバー側。クライアントの追随は F-4〜F-9）
+
+fhir-client のパフォーマンス監査で「上流を直した方が効率がよい」と判定した項目。サーバー側の
+実装と回帰 spec は完了。migration 2 本（`service_requests.order_end` / `procedures.performed_end`、
+どちらも既存データの backfill 付き）は entrypoint の `db:prepare` で起動時に自動適用される。
+デプロイ時の手動操作は無い。**上流を fhir-client より先にデプロイすること**（クライアントが
+新パラメータを使い始めた時点で上流が旧版だと、lenient 既定では黙って全件が返る）。
+
+1. **`_count` の上限を 100 → 500 に**（`Fhir::Search::MAX_COUNT`）。クライアントの逐次
+   `_offset` ループ 13 箇所の主因。なおクライアントは `_count=500` を 3 箇所で指定しており
+   （`fetchByPatientChunks`・患者番号の走査）、これまでは黙って 100 に切られていた
+   （検査結果を患者 5 人分まとめて取る `fetchByPatientChunks` は 100 件超が無言で欠落していた）。
+2. **`ServiceRequest?performer=`**（C-6、R4 標準）。0..* 参照を jsonb 包含で引く。型を省いた id は
+   `Organization`。`_include=ServiceRequest:performer` も可（Organization / Practitioner / PractitionerRole）。
+3. **`ServiceRequest?requisition=`**（C-8、R4 標準）。Identifier を `system|value` の token として索引。
+   `requisition:missing=true` も効く。
+4. **`ServiceRequest?order-period=`**（ローカル）。開始 = `occurrenceDateTime`、終了 = ローカル拡張
+   `nursing-order-end` / `meal-order-end` / `rehab-order-end` / `nutrition-guidance-order-end`
+   （`valueDate` / `valueDateTime`）を `order_end` 列に抽出し、`Encounter.date` と同じ期間検索の
+   意味論で引く。終了の無い指示は継続中（開いた区間）。
+   `order-period=ge{日}&order-period=le{日}` が「その日に効いている指示」。
+5. **`Procedure?date=` が `performedPeriod` を索引**。`performedDateTime` は開始 = 終了の点として
+   同じ 2 列に入るので、既存の点検索の結果は変わらない。手術（Period）は `ge`+`le` で重なり、
+   終了なしは進行中。`_sort=date` は開始順。
+6. **`GET /{Type}/$next-identifier?system=`**（ローカル operation）。`resource_identifiers` の
+   数字だけの値を数値として比べ、「払い出し済みの最大値（(型, system) ごとの Postgres シーケンス）」と
+   「登録済みの最大値（論理削除済みを含む）」の大きい方 + 1 を advisory lock の下で返す。
+   同時に呼んでも同じ番号は返らず、手入力で飛ばした番号の先から続く。払い出したが登録されなかった
+   番号は欠番になる（番号に意味を持たせない前提）。write スコープ。応答は `Parameters`
+   （`value` = valueString、`system` = valueUri）。
+
+### クライアント側の追随（未着手）
+
+- **F-4. 患者番号の採番を `$next-identifier` に置き換える**: `fetchNextPatientNumber`
+  （`queries.ts`、最大 40 ページの identifier 走査 + 最大 40 回の `_summary=count`）を
+  `GET /Patient/$next-identifier?system={DEFAULT_IDENTIFIER_SYSTEM}` 1 回に。`nextPatientNumber`
+  （`patientHelpers.ts`）は不要になる。
+- **F-5. 継続的な指示の一覧を `order-period` で絞る**: 「基準日以前に始まった有効オーダーを全部読んでから
+  終わったものを捨てる」7 箇所（`useActiveMealOrders` / `usePatientMealIntake` / `useMealOrderMonth` /
+  リハビリ・栄養指導・看護の一覧）を `order-period=ge{日}&order-period=le{日}` に。看護指示は退院まで
+  `active` のままなので、ここが最も効く。
+- **F-6. 他科依頼一覧を `performer=` で絞る**: `fetchConsultWorklist` + `matchesFilters` の
+  クライアント側絞り込みをサーバーへ。医師単位の受信箱（`performer=Practitioner/...`）も可能になる。
+- **F-7. レジメンの日オーダーを `requisition=` で引く**: `useRegimenDayOrders` の最大 10 ページ走査
+  （`REGIMEN_ORDERS_MAX_PAGES`）を 1 検索に。オーダーセットの適用も同じ `requisition` で束ねられる。
+- **F-8. 手術の実施記録を `date` で絞る**: `usePatientSurgeryPerforms` の「患者と区分で全件引いてから
+  期間はクライアントで見る」を `date=ge&date=le` に。
+- **F-9. `_count` 上限 500 に合わせてページ定数を見直す**: `INPATIENT_PAGE` / `WORKLIST_PAGE` /
+  `LAB_*_PAGE` / `VITAL_FLOWSHEET_PAGE`（すべて 100）を上げ、`*_MAX_PAGES` を減らす。
+  `fetchAllByPartOf` などは `total` を見て 2 ページ目以降を並列に読める。
+
+### 見送り（理由つき）
+
+- **`MedicationRequest` の投与期間終端の索引**（内服の予定表示が「期間開始 − 92 日」の経験則で下限を
+  引いている件）: 投与日数は明細（`MedicationRequest.dispenseRequest.expectedSupplyDuration`）にあり、
+  検索の主軸はヘッダ（`ServiceRequest`）なので、ヘッダ側に終端を持たせるには書き込み時に明細の
+  最大値を写す必要がある。サーバーだけでは閉じないため、クライアントのデータ設計と合わせて別途判断する。
+- **検査結果コードの前方一致**（感染症判定の JLAC11 分析物コード 5 桁）: `code:below` の実装か
+  派生 token の索引が要る。患者あたりの検査結果は直近 N 件で足りており優先度が低い。
 
 ---
 
@@ -254,7 +318,7 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   CapabilityStatement での明示とクライアント側の移行）。
 - **影響範囲**: 予約画面の転送量。Schedule 件数が少ないうちは軽微。
 
-### C-6. `ServiceRequest.performer` 検索の実装
+### C-6. `ServiceRequest.performer` 検索の実装 — **対応済み（2026-09-09、上の節を参照）**
 
 - **現状**: 他科依頼(`docs/consult-order-design.md`)は依頼先の診療科を標準の
   `ServiceRequest.performer`(Organization)に持つが、上流が索引していないため
@@ -267,7 +331,7 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   医師単位の受信箱(`performer=Practitioner/...`)を作るときも前提になる。
 
 
-### C-8. `ServiceRequest` のローカル拡張(`regimen-order`)の検索
+### C-8. `ServiceRequest` のローカル拡張(`regimen-order`)の検索 — **`requisition` 検索で対応済み（2026-09-09、上の節を参照）**
 
 - **現状**: 化学療法レジメンの日オーダー(`docs/chemo-regimen-design.md` §7.1)は、通常の注射・処方の
   ServiceRequest に `regimen-order` 拡張(適用ヘッダへの参照・クール・Day)と `requisition`(適用の uuid)を
