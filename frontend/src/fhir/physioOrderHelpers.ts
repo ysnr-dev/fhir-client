@@ -9,12 +9,13 @@ import {
   displayOf,
   itemNumber,
   parentRequestId,
-  PRIORITY_OPTIONS,
+  EXAM_PRIORITY_OPTIONS,
+  RETRO_PRIORITY,
   orderDay,
   registrationAuthoredOn,
 } from "./shared";
 
-export { PRIORITY_OPTIONS };
+export { EXAM_PRIORITY_OPTIONS, RETRO_PRIORITY };
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import {
   ORDER_TYPE_SYSTEM,
@@ -78,7 +79,7 @@ const REMARKS_QR_EXT_URL =
 // 順番を明細自身に持たせる(検体検査・処方の RP 番号と同じ考え方)。
 const ITEM_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/physio-order-item-number";
 
-export type PhysioOrderPriority = "routine" | "urgent";
+export type PhysioOrderPriority = "routine" | "urgent" | typeof RETRO_PRIORITY;
 
 /** オーダーした検査 1 件。マスタの写しなので、表示に必要な値をすべて持つ。 */
 export interface PhysioOrderItemLine {
@@ -168,7 +169,7 @@ export function emptyPhysioOrderForm(
 }
 
 export function priorityDisplay(priority: string | undefined): string {
-  return priority ? displayOf(PRIORITY_OPTIONS, priority) : "";
+  return priority ? displayOf(EXAM_PRIORITY_OPTIONS, priority) : "";
 }
 
 // ---- オーダーの単位(GP) ----
@@ -852,7 +853,9 @@ export function parsePhysioOrderForm(
 ): PhysioOrderFormValues {
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
-    priority: (sr.priority === "urgent" ? "urgent" : "routine") as PhysioOrderPriority,
+    priority: (sr.priority === "urgent" || sr.priority === RETRO_PRIORITY
+      ? sr.priority
+      : "routine") as PhysioOrderPriority,
     startDate: orderDay(sr) || today(),
     startTime: physioOrderTime(sr),
     problem: physioOrderProblem(sr),
