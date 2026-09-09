@@ -13,7 +13,7 @@ import { PractitionerTable } from "../components/PractitionerTable";
 const emptySearch: PractitionerSearchParams = { name: "", identifier: "" };
 
 // 自院スタッフの一覧。所属ロール(organization = 自院)を引くので、他院の医師
-// (連携先医師の画面で登録するもの)は出てこない。自院未設定の環境では従来どおり
+// (連携先医師の画面で登録するもの)は出てこない。自院未設定の環境では
 // Practitioner を直接検索して全員を出す。
 export function PractitionerListPage() {
   const [search, setSearch] = useState<PractitionerSearchParams>(emptySearch);

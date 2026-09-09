@@ -157,7 +157,7 @@ export function storeResolvedProblemsVisible(visible: boolean) {
   }
 }
 
-// プロブレムを選んだときの見せ方。既定は従来どおりの減光。
+// プロブレムを選んだときの見せ方。既定は減光。
 export function readProblemMode(): KarteProblemMode {
   try {
     return localStorage.getItem(PROBLEM_MODE_STORAGE_KEY) === "filter" ? "filter" : "dim";
@@ -174,7 +174,7 @@ export function storeProblemMode(mode: KarteProblemMode) {
   }
 }
 
-// 左端のペインの中身。既定は従来どおり診療日。
+// 左端のペインの中身。既定は診療日。
 export function readSidePaneMode(): KarteSidePaneMode {
   try {
     return localStorage.getItem(SIDE_PANE_MODE_STORAGE_KEY) === "categories"

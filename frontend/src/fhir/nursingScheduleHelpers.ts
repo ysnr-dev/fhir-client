@@ -8,8 +8,8 @@ import type { NursingPerformDisplay } from "./nursingPerformHelpers";
 // occurrence[x] が choice で occurrenceDateTime(開始日)と併用できず、上流の索引も
 // occurrenceDateTime だけだから(終了日の拡張と同じ判断)。
 //
-// 条件(「38℃以上で報告」)は頻度とは別物なので、従来どおり orderDetail[0].text の
-// 自由記載に残す。Timing を持たない指示(適宜・必要時・拡張を付ける前の指示)は
+// 条件(「38℃以上で報告」)は頻度とは別物なので、orderDetail[0].text の
+// 自由記載に残す。Timing を持たない指示(適宜・必要時・拡張の無い指示)は
 // 予定を持たず、実施入力ではいつでも入れられる。
 //
 // repeat の形:

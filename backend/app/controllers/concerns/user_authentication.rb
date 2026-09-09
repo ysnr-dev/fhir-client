@@ -6,8 +6,8 @@
 #      Auth::SessionsController が検証する。
 #   2. Authorization: Bearer / X-Admin-Token ヘッダ(値は ADMIN_TOKEN)。
 #      curl・CI・運用ツール向け。Cookie を使わないので CSRF 検査の対象外。
-#   3. ADMIN_TOKEN 未設定 -- 認証なし(docker compose up の摩擦をゼロに保つ
-#      後方互換。auth_required=false としてフロントもログイン画面を出さない)。
+#   3. ADMIN_TOKEN 未設定 -- 認証なし(docker compose up の摩擦をゼロに保つ。
+#      auth_required=false としてフロントもログイン画面を出さない)。
 #
 # セッションは管理画面と同じ Cookie(path=/)に同居するが、キーは user_* で
 # 分離し、互いのログイン/ログアウトで消し合わないようにする。

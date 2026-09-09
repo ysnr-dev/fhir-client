@@ -46,7 +46,7 @@ const MATERIAL_QUANTITY_EXT_URL =
 /**
  * 薬剤の投与経路。局所麻酔・外用薬(消毒・軟膏)が処置の主役なので外用(TOP)を持ち、
  * 鎮痛・鎮静の静注・筋注・皮下注、内服、吸入(ネブライザー)、坐剤(直腸内)を並べる。
- * 生理検査にある動注(IA)は処置では使わないので外した。
+ * 生理検査にある動注(IA)は処置では使わないので含めない。
  * コード表は注射・放射線・生理検査と同じ JP Core route-codes。
  */
 export const TREATMENT_ROUTE_OPTIONS: CodeOption[] = [

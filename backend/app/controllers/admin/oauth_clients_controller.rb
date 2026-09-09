@@ -35,8 +35,8 @@ module Admin
 
     # OAuth クライアントを発行・削除できる画面が無認証で開いていてはいけない。
     # 起動時チェックにできないのは、管理トークンが DB にある可能性があるため
-    # (初期化子からは見えない)。既存の設定画面の後方互換はそのまま残すので、
-    # このガードはこのコントローラだけに置く。
+    # (初期化子からは見えない)。他の設定画面は ADMIN_TOKEN 未設定でも開けるままに
+    # するので、このガードはこのコントローラだけに置く。
     def require_admin_auth_configured!
       return unless Rails.env.production?
       return if ENV["ADMIN_TOKEN"].present?

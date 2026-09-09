@@ -24,8 +24,7 @@ export function registrationAuthoredOn(
 
 /**
  * オーダーの開始日(YYYY-MM-DD)。occurrence 優先、無ければ登録日時の日付
- * (occurrence を書く前に登録された旧データのフォールバック。上流の backfill 後は
- * 手術の日付未定以外では起きない)。
+ * (occurrence を持たない旧データのフォールバック。手術の日付未定以外では起きない)。
  */
 export function orderDay(
   sr: Pick<fhir4.ServiceRequest, "occurrenceDateTime" | "authoredOn">,

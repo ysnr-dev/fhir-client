@@ -74,7 +74,7 @@ function attendingParticipants(
  * 診察開始。予約 1 件に対して診察の Encounter を建てる。
  *
  * 診療科(serviceProvider)は入れない。Appointment.specialty は SS-MIX2 の診療科コード
- * しか持たず、参照に要る Organization の id が引けないため。一覧の診療科列は従来どおり
+ * しか持たず、参照に要る Organization の id が引けないため。一覧の診療科列は
  * 予約から出しているので、ここで持たなくても表示は欠けない。
  */
 export function buildOutpatientEncounter(

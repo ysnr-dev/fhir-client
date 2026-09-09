@@ -70,7 +70,7 @@ module Auth
       auth_required = ENV["ADMIN_TOKEN"].present?
 
       {
-        # ADMIN_TOKEN 未設定なら常に認証済み扱い(管理画面と同じ後方互換)。
+        # ADMIN_TOKEN 未設定なら常に認証済み扱い(管理画面と同じ)。
         authenticated: !auth_required || user_session_authenticated?,
         auth_required: auth_required,
         csrf_token: session[:csrf_token],

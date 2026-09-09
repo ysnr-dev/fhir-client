@@ -437,7 +437,7 @@ import { fetchFacilitySettings } from "./facilityClient";
 
 // シェーマ画像を伴う保存は、画像 Binary と本体を 1 つの transaction Bundle で
 // atomic に書く(片方だけ保存されて孤児 Binary が残ることを防ぐ)。画像がない
-// 保存は従来どおり単体リソースの POST / PUT。戻り値は両者で同じ形に揃える。
+// 保存は単体リソースの POST / PUT。戻り値は両者で同じ形に揃える。
 async function saveWithImages<T extends fhir4.Resource & { id?: string }>(
   resource: T,
   imageEntries: fhir4.BundleEntry[] | undefined,
@@ -589,7 +589,7 @@ export function useDeletePatient() {
 // 登録しない。他院の医療機関・医師は診療情報提供書の宛先候補として登録するので、
 // 「どれが自院か」は backend の単一行設定(管理 > 施設設定)が持つ。
 //
-// 未設定でも画面は従来どおり動く(所属を選ばせる UI が残る)。呼び出し側は
+// 未設定でも画面は動く(所属を選ばせる UI になる)。呼び出し側は
 // isUnset を見て「自院固定にするか、選ばせるか」を切り替える。
 
 export function useFacilitySettings() {
@@ -782,8 +782,8 @@ export function useDepartmentList(search: DepartmentSearchParams) {
   };
 }
 
-// 一覧画面用。並べ替えもページングも上流に任せる(診療科コード順の _sort に
-// 対応したので、全件読んでから画面側で切り出す必要が無くなった)。
+// 一覧画面用。並べ替えもページングも上流に任せる(上流は診療科コード順の _sort に
+// 対応している)。
 export function useDepartmentPage(search: DepartmentSearchParams, offset: number) {
   const params = departmentSearchParams(search);
   params.set("_count", String(DEPARTMENT_COUNT));
@@ -809,7 +809,7 @@ export function useDepartmentPage(search: DepartmentSearchParams, offset: number
 }
 
 // 自院の診療科。予約枠・外来一覧・部門ワークリストのように「自院の科を選ぶ」
-// 画面はこちらを使う。自院未設定の環境では従来どおり全医療機関の診療科を返す。
+// 画面はこちらを使う。自院未設定の環境では全医療機関の診療科を返す。
 export function useSelfDepartments(name?: string) {
   const { selfOrganizationId } = useSelfOrganization();
   return useDepartmentList({ name, partOfId: selfOrganizationId || undefined });
@@ -1478,8 +1478,8 @@ export function useWardGrid(wardId: string | undefined) {
 // 入院は Encounter 1 件で「その患者が今どのベッドに居るか」を表す
 // (組み立て方は fhir/encounterHelpers.ts の冒頭)。
 //
-// 病棟で絞らず院内の入院を全部取ってからベッド id で突き合わせる。上流は
-// 多段チェーン検索(location.partof.partof=<病棟>)に対応したので病棟で絞る
+// 病棟で絞らず院内の入院を全部取ってからベッド id で突き合わせる。上流の
+// 多段チェーン検索(location.partof.partof=<病棟>)で病棟で絞る
 // こともできるが、件数はベッド総数が上限で高が知れているうえ、全部持っていれば
 // 「この患者は既に別の病棟に入院している」の判定も追加のリクエスト無しでできる
 // ため、あえて全件のままにしている(病床数が増えて truncated が出るようなら
@@ -3383,7 +3383,7 @@ function makeUpdateTaskStatusHook<S extends fhir4.Task["status"]>(
 //
 // 撮影日で 1 日ぶんの放射線検査オーダーを読み、モダリティ・入外区分・診療科・
 // ステータスでの絞り込みは画面側で行う。上流は診療科・病棟(拡張)や進捗
-// (_has:Task:focus:status)でも絞れるようになったが、絞り込みの選択肢をその日の
+// (_has:Task:focus:status)でも絞れるが、絞り込みの選択肢をその日の
 // オーダーから組み立てている(RadWorklistPage を参照)ため、サーバーで絞ると
 // 選んだ値しか候補に出なくなる。1 日ぶんなら数十件なので、全件読んでから絞る方が、
 // ページごとに絞り込み結果が変わる作りより扱いやすい。
@@ -4425,7 +4425,7 @@ interface DistinctDatesResult {
 /**
  * GET /<型>/$distinct-dates。ある date 検索パラメータが取る値の重複なし集合を
  * サーバー集計で取得する(上流の独自 operation)。「診療日の一覧」「直近 N 回分の
- * 採取日」を作るために全リソースを読み切って日付だけ拾っていたページングを置き換える。
+ * 採取日」を作るのに使う。
  */
 async function fetchDistinctDates(
   resourceType: string,
@@ -4491,9 +4491,7 @@ export interface LabTimelineResources {
 
 // 時系列表示は「直近 dateCount 回分の検体採取日」を横軸にする。
 // まず $distinct-dates で直近 dateCount 個の採取日を集計し、いちばん古い採取日
-// 以降のレポートを Observation ごと(_include)取得する。以前は採取日が
-// dateCount+1 個現れるまで全件をページングしていた(最悪 10 リクエスト +
-// 全 Observation の転送)が、これで通常 2 リクエストに収まる。
+// 以降のレポートを Observation ごと(_include)取得する。通常 2 リクエストに収まる。
 async function fetchLabTimelineResources(
   patientId: string,
   dateCount: number,
@@ -5913,7 +5911,7 @@ async function fetchDerivedObservationRefs(responseIds: string[]): Promise<strin
 }
 
 // 回答から Observation を生成するテンプレートは、回答・画像・Observation を 1 つの
-// transaction で書く。生成しないテンプレートは従来どおりの保存経路のまま
+// transaction で書く。生成しないテンプレートは単体リソースの保存経路のまま
 // (無駄に Bundle にしない)。ただし抽出を後から無効にしたテンプレートでは、前回
 // 生成した Observation を消すために Bundle 経路へ回る。
 async function saveResponse(
@@ -6129,7 +6127,7 @@ export function useKartePrescriptionsInfinite(
  * **状態で切って**全件読む。どちらも件数は自然に小さい(未定は未処理の仕事なので溜まらず、
  * 未来の予定も有限)。
  *
- * occurrence を書く前に登録された旧データ(上流の backfill 前)も occurrence:missing に
+ * occurrence を持たない旧データも occurrence:missing に
  * 入り、タイムライン側で登録日の位置に落ちる。
  */
 export function useKartePendingOrders(
@@ -6241,9 +6239,8 @@ export function useKarteVitalsInfinite(
 // 検索条件(プロブレム絞り込みを含む)はタイムラインの各無限クエリと揃えること。
 // キーも同じ ["<型>", "search"] 配下に置くので、登録・削除の invalidate で一緒に
 // 再取得される。
-// 診療日の集合は $distinct-dates のサーバー集計で取る。以前はリソース種別ごとに
-// 患者の全履歴を _elements 付きで最後のページまで読んでいた(日付の distinct を
-// 取るだけのフルスキャン ×4)。limit はカルテの左ペインに出す日数の実用上限。
+// 診療日の集合は $distinct-dates のサーバー集計で取る。limit はカルテの左ペインに
+// 出す日数の実用上限。
 async function fetchKarteDays(
   resourceType: string,
   params: URLSearchParams,

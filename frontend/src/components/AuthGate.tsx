@@ -9,7 +9,7 @@ import { ErrorBanner } from "./ErrorBanner";
 // どこかの API で 401 が出ると main.tsx のハンドラがセッションクエリを
 // invalidate する。refetch で authenticated が false に反転し、アプリ全体が
 // ログイン画面へ切り替わる。ADMIN_TOKEN 未設定のサーバーでは authenticated が
-// 常に true なので、ログイン画面は出ない(従来どおり認証なしで使える)。
+// 常に true なので、ログイン画面は出ない(認証なしで使える)。
 export function AuthGate({ children }: { children: ReactNode }) {
   const { data, isLoading, error } = useAuthSession();
 

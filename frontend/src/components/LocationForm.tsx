@@ -29,7 +29,7 @@ export function LocationForm({
   const [values, setValues] = useState<LocationFormValues>(initialValues ?? emptyLocationForm);
   const [validationError, setValidationError] = useState<string | null>(null);
   // 診察室・撮影室は自院の部屋しか登録しないので、自院が設定済みなら所属は
-  // 選ばせず固定する。自院未設定の環境だけ従来どおり選択できる。
+  // 選ばせず固定する。自院未設定の環境だけ選択できる。
   const self = useSelfOrganization();
   const { organizations } = useOrganizationOptions();
 

@@ -1,6 +1,6 @@
 // 医療従事者の職種・所属(PractitionerRole)。1 人につき次の 2 種類を扱う。
 //
-//   所属ロール … 1 件。organization = 所属医療機関。従来からある「職種・所属」。
+//   所属ロール … 1 件。organization = 所属医療機関。「職種・所属」。
 //   診療科ロール … 0〜N 件。organization = 診療科 Organization。うち 1 件が既定診療科。
 //
 // 両者は下の PRIMARY_DEPARTMENT_EXT_URL 拡張の有無で区別する。診療科ロールには

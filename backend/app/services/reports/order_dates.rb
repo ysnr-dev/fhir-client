@@ -4,8 +4,7 @@ module Reports
   #                         またはオフセット付き dateTime)。帳票に刷る臨床上の日付。
   #   - authoredOn:         オーダー登録日時(オフセット付きのシステムタイムスタンプ)。
   #                         いつ登録したかであって、いつ実施するかではない。
-  # occurrenceDateTime を持たない移行前のオーダーは authoredOn の日付で代用する
-  # (当時は登録日 = 実施日として運用していたため)。
+  # occurrenceDateTime を持たないオーダーは authoredOn の日付で代用する。
   module OrderDates
     module_function
 

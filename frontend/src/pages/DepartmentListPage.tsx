@@ -19,7 +19,7 @@ const emptySearch: DepartmentSearchParams = { name: "", partOfId: "" };
 
 export function DepartmentListPage() {
   // 診療科は自院にしか作らない。自院が設定済みなら所属で絞る UI は出さず、
-  // 常に自院配下だけを見せる(自院未設定の環境では従来どおり選べる)。
+  // 常に自院配下だけを見せる(自院未設定の環境では選べる)。
   const self = useSelfOrganization();
   // 医療機関一覧から「診療科」で来たときは、その施設で絞った状態から始める。
   const [searchParams] = useSearchParams();

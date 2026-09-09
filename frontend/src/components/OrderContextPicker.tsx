@@ -42,7 +42,7 @@ export function OrderContextPicker() {
   const baseRoleValues = baseRole ? parsePractitionerRole(baseRole) : undefined;
   const isDoctor = isDoctorRoleCode(baseRoleValues?.roleCode);
   // 診療科の母集団は自院。自院未設定の環境ではログイン中の医療従事者の所属から
-  // 辿る(所属も未登録なら科を選べないが、それは従来どおり)。
+  // 辿る(所属も未登録なら科は選べない)。
   const { selfOrganizationId } = useSelfOrganization();
   const facilityId = selfOrganizationId || baseRoleValues?.organizationId || undefined;
 

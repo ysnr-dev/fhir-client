@@ -624,7 +624,7 @@ function buildInjectionMedicationRequest(
   }
 
   if (rp.times.length) {
-    // 開始時刻は従来どおり timing.event に置く(実施入力・カルテのカードが読んでいる)。
+    // 開始時刻は timing.event に置く(実施入力・カルテのカードが読んでいる)。
     dosageInstruction.timing = {
       event: rp.times.map((time) => toFhirDateTime(`${day}T${time.start}`)),
     };

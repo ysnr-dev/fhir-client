@@ -43,7 +43,7 @@ class ReportLayout < ApplicationRecord
   end
 
   # マッピング定義(Reports::LayoutMapping)。未設定なら nil を返し、
-  # レンダラーは従来どおり ItemIdMapper の命名規約のみで対応する。
+  # レンダラーは ItemIdMapper の命名規約のみで対応する。
   def parsed_mapping
     Reports::LayoutMapping.parse(mapping)
   end

@@ -41,7 +41,7 @@ interface InjectionDetailPanelProps {
   problemsById?: Map<string, fhir4.Condition>;
   /**
    * 化学療法の適用ヘッダ(薬剤部の監査。§7.6 E-1)。渡すと体格と、体表面積あたりの
-   * 逆算を薬剤の行に出す。渡さなければ従来どおり。
+   * 逆算を薬剤の行に出す。渡さなければ出さない。
    */
   regimenApplication?: RegimenApplication | null;
   children?: ReactNode;

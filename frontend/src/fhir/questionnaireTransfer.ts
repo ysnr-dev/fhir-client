@@ -6,7 +6,7 @@
 // id とサーバー採番のメタ情報は移行先では意味を持たないため取り除く。
 // 帳票レイアウト(report_layouts)が登録済みのテンプレートは、.tlf 本文と
 // マッピング定義を同梱したラッパー形式で書き出す(移行先での手作業コピペを
-// 不要にする)。未登録なら従来どおり素の Questionnaire JSON。
+// 不要にする)。未登録なら素の Questionnaire JSON。
 //
 // インポートはエクスポートしたファイル(両形式)を読み、新規作成フォームと同じ
 // 中間表現(QuestionnaireFormValues)へ変換する。埋め込み画像は「選択直後の
@@ -88,7 +88,7 @@ export function questionnaireExportFileName(questionnaire: fhir4.Questionnaire):
 }
 
 // エクスポートファイルの内容を組み立てる。帳票レイアウトがあればラッパー形式、
-// なければ素の Questionnaire(従来形式のまま)。
+// なければ素の Questionnaire。
 export function buildTransferExport(
   questionnaire: fhir4.Questionnaire,
   reportLayout?: TransferReportLayout,
@@ -115,7 +115,7 @@ export interface TransferImportResult {
 }
 
 // インポートファイルを検証し、新規作成フォームの中間表現へ変換する。
-// 素の Questionnaire(従来形式)と帳票レイアウト同梱のラッパー形式の両方を
+// 素の Questionnaire と帳票レイアウト同梱のラッパー形式の両方を
 // 受け付ける。形式不備・JASPEHR 制約違反はユーザー向けメッセージの Error として
 // 投げるが、同梱レイアウト側の不備はテンプレート本体の取り込みを優先して
 // layoutWarning に落とす。

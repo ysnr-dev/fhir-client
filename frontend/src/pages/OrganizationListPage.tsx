@@ -37,7 +37,7 @@ function SelfOrganizationView() {
   );
 }
 
-// 自院が未設定(初期セットアップ前)。従来どおり全医療機関を扱えるようにして、
+// 自院が未設定(初期セットアップ前)。全医療機関を扱えるようにして、
 // ここから登録 →「管理 > 施設設定」で自院を選ぶ流れにする。
 function UnsetOrganizationView() {
   const [search, setSearch] = useState<OrganizationSearchParams>(emptySearch);

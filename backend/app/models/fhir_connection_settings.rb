@@ -1,8 +1,7 @@
 # 上流 FHIR サーバーへの接続設定(SMART Backend Services / client_credentials)を
 # 画面から編集できるようにするための単一行モデル。
 #
-# 値が入っていれば env より優先し、空なら env(現行のデフォルト)へフォールバックする。
-# これにより未設定のデプロイは従来と完全に同じ挙動になる。
+# 値が入っていれば env より優先し、空なら env へフォールバックする。
 class FhirConnectionSettings < ApplicationRecord
   # client_secret / fhir_admin_token はブラウザへ返さず、DB では暗号化して保持する。
   # 値で検索しないので非決定的(デフォルト)暗号化でよい。

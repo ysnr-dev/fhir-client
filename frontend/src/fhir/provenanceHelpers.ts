@@ -73,7 +73,7 @@ function agentName(agent: fhir4.ProvenanceAgent | undefined): string {
   return agent?.who?.display || agent?.who?.reference || "";
 }
 
-/** 活動の種類。activity を持たない旧データ(2026-09-01 の登録ぶん)は登録とみなす。 */
+/** 活動の種類。activity を持たない旧データは登録とみなす。 */
 export function provenanceActivity(provenance: fhir4.Provenance): OrderActivity {
   const code = provenance.activity?.coding?.find((c) => c.system === ACTIVITY_SYSTEM)?.code ?? "";
   return code in ORDER_ACTIVITY_LABELS ? (code as OrderActivity) : "CREATE";

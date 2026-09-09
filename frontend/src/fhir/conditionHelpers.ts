@@ -42,7 +42,7 @@ const PROBLEM_SUCCEEDED_BY_EXT_URL =
   "http://fhir-client.local/StructureDefinition/problem-succeeded-by";
 
 // 病名の区分。POMR のプロブレムリスト・既往歴・レセプト用の保険病名を同じ
-// Condition で区分管理する。category が無い既存データは保険病名として扱う(移行不要)。
+// Condition で区分管理する。category が無いデータは保険病名として扱う。
 export type ConditionCategory = "problem" | "billing" | "past";
 
 const CATEGORY_CODES: Record<"problem" | "billing", { code: string; display: string }> = {

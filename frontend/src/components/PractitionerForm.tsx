@@ -61,7 +61,7 @@ export function PractitionerForm({
   const [departmentToAdd, setDepartmentToAdd] = useState("");
 
   // 自院スタッフの所属は自院で固定する(マルチテナントではないので選ばせない)。
-  // 連携先医師は他院を選ぶので固定しない。自院未設定の環境では従来どおり選ぶ。
+  // 連携先医師は他院を選ぶので固定しない。自院未設定の環境では選ぶ。
   const self = useSelfOrganization();
   const fixedToSelf = !partner && Boolean(self.selfOrganizationId);
   const organizationId = fixedToSelf ? (self.selfOrganizationId as string) : values.organizationId;

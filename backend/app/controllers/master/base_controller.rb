@@ -4,7 +4,7 @@ module Master
   # are domestic reference tables, not FHIR resources, so they don't use
   # OperationOutcome or FHIR content types.
   class BaseController < ActionController::API
-    # アプリ本体のログイン認証(ADMIN_TOKEN 未設定なら従来どおり認証なし)。
+    # アプリ本体のログイン認証(ADMIN_TOKEN 未設定なら認証なし)。
     include UserAuthentication
 
     before_action :authorize_user!
@@ -17,7 +17,7 @@ module Master
     # 各マスタ共通の素朴な CRUD。index は絞り込みがマスタごとに違うため共通化
     # しない。挙動を変えたいコントローラは該当アクションだけオーバーライドする。
     # set_record を使うアクションは、各コントローラの
-    # `before_action :set_record, only: ...` で従来どおり配線する。
+    # `before_action :set_record, only: ...` で配線する。
 
     def show
       render json: @record

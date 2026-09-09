@@ -1,6 +1,6 @@
 class FhirProxyController < ApplicationController
-  # 上流 FHIR サーバーへの中継はログイン必須(ADMIN_TOKEN 未設定なら従来どおり
-  # 認証なし)。ここで返す 401 はこのアプリ自身のセッション失効を意味する
+  # 上流 FHIR サーバーへの中継はログイン必須(ADMIN_TOKEN 未設定なら認証なし)。
+  # ここで返す 401 はこのアプリ自身のセッション失効を意味する
   # (上流の 401 は FhirGateway 側で 502 に読み替えられる)。
   include UserAuthentication
 
@@ -80,7 +80,7 @@ class FhirProxyController < ApplicationController
   # すぐ分かるようにする。
   #
   # 本番の既定は lenient のまま(検索が 1 つ通らないだけで画面が壊れるより、
-  # 従来どおり動く方を優先する)。FHIR_STRICT_HANDLING=1/0 で明示的に上書きできる。
+  # 動く方を優先する)。FHIR_STRICT_HANDLING=1/0 で明示的に上書きできる。
   def strict_handling?
     flag = ENV["FHIR_STRICT_HANDLING"]
     return ActiveModel::Type::Boolean.new.cast(flag) if flag.present?

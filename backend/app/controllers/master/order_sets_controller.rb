@@ -108,7 +108,7 @@ module Master
     end
 
     # 医師スコープの持ち主はログイン中の本人に固定する(他人の owner_id を送られても
-    # 無視する)。認証なしモード(ADMIN_TOKEN 未設定)は開発の摩擦を無くす後方互換なので
+    # 無視する)。認証なしモード(ADMIN_TOKEN 未設定)は開発の摩擦を無くすためのものなので
     # パラメータの owner_id を通す。administrator は医療従事者と紐付かないので nil に
     # なり、呼び出し側で 403 にする。
     def forced_owner_id(scope)

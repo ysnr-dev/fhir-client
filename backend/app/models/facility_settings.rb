@@ -133,7 +133,7 @@ class FacilitySettings < ApplicationRecord
       first_or_create!
     end
 
-    # 自院の Organization.id。未設定なら nil(呼び出し側は従来の推測に倒す)。
+    # 自院の Organization.id。未設定なら nil(呼び出し側は推測に倒す)。
     def self_organization_id
       current.self_organization_fhir_id.presence
     end

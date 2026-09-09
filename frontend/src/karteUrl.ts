@@ -60,7 +60,7 @@ export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
 
 /**
  * タブ行で「検査結果」1 つのドロップダウンにまとめるタブ。タブ自体は独立のまま
- * (URL の tab= も従来どおり)で、タブ行の見た目だけを階層化する。
+ * (URL の tab= もタブごと)で、タブ行の見た目だけを階層化する。
  */
 export const KARTE_LAB_GROUP: { label: string; keys: readonly KarteTabKey[] } = {
   label: "検査結果",

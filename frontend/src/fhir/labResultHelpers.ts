@@ -191,7 +191,7 @@ function buildObservationValue(line: LabResultLineValues): Partial<fhir4.Observa
 // オーダーに紐付く結果では、ラベル発行が作った管の Specimen(labelSpecimens)を
 // そのまま参照する(referenceOnly)。実際に採った検体は管として 1 つしか無いのに、
 // 結果側にもう 1 つ Specimen を作ると同じ検体が二重になるため。ラベルの無い材料
-// (発行前に結果が来た・オーダー未紐付け)は従来どおり結果側で作って所有する。
+// (発行前に結果が来た・オーダー未紐付け)は結果側で作って所有する。
 interface SpecimenPlan {
   code: string;
   display: string;

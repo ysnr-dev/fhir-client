@@ -211,8 +211,8 @@ export function emptyClinicalNoteForm(
 
 // ---- 日時変換 ----
 
-// toFhirDateTime は lib/dates.ts に移した(オーダーの登録日時 nowFhirDateTime と同じ場所)。
-// 既存の import 元を変えずに済むようここからも出す。
+// toFhirDateTime の実体は lib/dates.ts(オーダーの登録日時 nowFhirDateTime と同じ場所)。
+// ここからも出す。
 import { toFhirDateTime } from "../lib/dates";
 
 export { toFhirDateTime };

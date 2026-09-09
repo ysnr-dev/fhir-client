@@ -8,8 +8,8 @@ import { createTaskHelpers } from "./taskHelpers";
 // Task は最初のステータス変更(受付・中止)で作る。オーダー登録時には作らないので、
 // 一覧では「Task が無い = 依頼済(未受付)」として扱う。
 //
-// 検体検査と違って検体ラベルの発行・スキャンを持たないため(今回は見送り。
-// docs/patho-order-design.md §8)、受付済・検査済は一覧のボタンで直接進める。
+// 検体検査と違って検体ラベルの発行・スキャンを持たないため
+// (docs/patho-order-design.md §8)、受付済・検査済は一覧のボタンで直接進める。
 
 export const PATHO_TASK_CODE = { code: "patho-exam", display: "病理検査" };
 

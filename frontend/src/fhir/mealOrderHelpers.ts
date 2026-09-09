@@ -23,7 +23,7 @@ import {
 // 実施記録も予約も持たない:
 // - 明細が無いのは、オーダー 1 件が指すのが食種 1 つ(+主食 1 つ)だからで、
 //   検体検査のように複数項目を 1 伝票にまとめる概念が無い。
-// - Task が無いのは、給食部門のワークリストを今回作らないため。作るときは
+// - Task が無いのは、給食部門のワークリストを作らないため。作るときは
 //   createTaskHelpers に taskCode を渡すだけで足せる(docs/meal-order-design.md)。
 //
 // SS-MIX2 との対応:
@@ -36,7 +36,7 @@ import {
 //   TQ1-7 開始日時 YYYYMMDDHH       → occurrenceDateTime (HH = 08/12/18)
 //   TQ1-8 終了日時 YYYYMMDDHH       → extension[meal-order-end]
 //
-// 嗜好品(ODS-1 = P)・補助食(ODS-1 = S)は今回扱わない。
+// 嗜好品(ODS-1 = P)・補助食(ODS-1 = S)は扱わない。
 //
 // SS-MIX2 に対応する項目が無く、参考仕様(名古屋第二赤十字病院「食種選択による
 // オーダエントリ」)から採った項目:
@@ -115,7 +115,7 @@ const MEAL_ORDER_LINK_EXT_URL = "http://fhir-client.local/StructureDefinition/me
 
 /**
  * 終了が入退院の連動で書かれたものであることと、戻すための情報。手で入れた終了は
- * この拡張を持たない(それ以前のデータもそのまま)。
+ * この拡張を持たない。
  *   reason      change / discharge-plan / discharge / leave
  *   leave       外出泊 id(reason=leave のとき)
  *   previousEnd 上書き前の終了。無ければ「継続だった」
@@ -607,7 +607,7 @@ export function mealOrderLink(sr: fhir4.ServiceRequest): MealOrderLink | undefin
   };
 }
 
-/** 種別の表示。種別を持たない(連動を入れる前の)オーダーは従来どおり「変更」。 */
+/** 種別の表示。種別を持たないオーダーは「変更」。 */
 export function mealOrderKindLabel(sr: fhir4.ServiceRequest): string {
   return MEAL_ORDER_KIND_LABELS[mealOrderLink(sr)?.kind ?? "change"];
 }

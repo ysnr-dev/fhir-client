@@ -3,7 +3,6 @@
 # ReportLayout で PDF を組む。
 #   1. GET /QuestionnaireResponse/{id} -- 中身を見ないと canonical・患者・画像が分からない
 #   2. batch Bundle POST / -- 元 Questionnaire 検索 + Patient read + シェーマ画像 Binary read ×N
-# 以前は Binary を 1 枚ずつ直列 GET していたため 3+N 往復かかっていた。
 class QuestionnaireResponseReport
   # QR が上流に存在しない
   class NotFound < StandardError; end

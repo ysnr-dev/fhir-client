@@ -33,7 +33,7 @@ export function DepartmentForm({
   );
   const [validationError, setValidationError] = useState<string | null>(null);
   // 診療科は自院にしか作らないので、自院が設定済みなら所属は選ばせず固定する。
-  // 自院未設定の環境(初期セットアップ前)だけ従来どおり選択できる。
+  // 自院未設定の環境(初期セットアップ前)だけ選択できる。
   const self = useSelfOrganization();
   const { organizations, isLoading: loadingOrganizations } = useOrganizationOptions();
 

@@ -5,7 +5,7 @@ module Admin
   class ReportLayoutsController < BaseController
     # 帳票レイアウトの登録・差し替えは日常運用で行うため、管理者認証ではなく
     # /master・/reports と同じアプリ本体のログイン認証で保護する
-    # (ADMIN_TOKEN 未設定なら従来どおり認証なし)。
+    # (ADMIN_TOKEN 未設定なら認証なし)。
     skip_before_action :authorize_admin!
     skip_before_action :verify_admin_csrf!
     include UserAuthentication

@@ -6,7 +6,7 @@
 // transaction Bundle にして、片方だけが通ることを防ぐ。
 //
 // なお Bundle の中の PUT には If-Match が付かないので、二人が同じ枠を同時に押さえる
-// 取り合いまでは防げない。1 施設で予約を取る端末が限られる前提で今回は許容している。
+// 取り合いまでは防げない。1 施設で予約を取る端末が限られる前提で許容している。
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import type { ProblemRef } from "./conditionHelpers";
 import { SSMIX2_DEPARTMENT_CODE_SYSTEM } from "./departmentCodes";

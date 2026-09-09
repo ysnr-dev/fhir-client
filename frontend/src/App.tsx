@@ -470,8 +470,8 @@ function App() {
           {/* 診療記録・処方・病名・アレルギー・検査結果・テンプレート回答は
               患者ごとの一覧ページを持たず、カルテ画面(タブと右ペイン)で扱う。 */}
           <Route path="/patients/:patientId/karte" element={<KartePage />} />
-          {/* 廃止した一覧・詳細ページ(/patients/:id/prescriptions など)のブックマークを
-              空白画面にせず、その患者のカルテへ寄せる。 */}
+          {/* 患者配下のその他の URL(/patients/:id/prescriptions など)は空白画面にせず、
+              その患者のカルテへ寄せる。 */}
           <Route path="/patients/:patientId/*" element={<KarteRedirect />} />
           {/* 医療機関・医療従事者は上流 FHIR サーバーの Organization / Practitioner を
               直接操作するため、backend 管理API(AdminGate)の対象外。 */}

@@ -40,8 +40,8 @@ import {
 // occurrence[x] が choice で occurrenceDateTime(開始日)と併用できず、上流も
 // occurrenceDateTime しか索引しないため(docs/rehab-order-design.md §2.3)。
 // 条件(38℃以上で報告 など)は頻度とは別物なので orderDetail[0].text の自由記載。
-// 拡張を付ける前の指示は頻度も orderDetail に書かれているが、条件として読めば
-// 表示は変わらない(移行しない)。
+// 拡張を持たない指示は頻度も orderDetail に書かれているが、条件として読めば
+// 表示は変わらない。
 //
 // 進捗 Task は「看護師の指示受け」を表す(nursingTaskHelpers)。
 

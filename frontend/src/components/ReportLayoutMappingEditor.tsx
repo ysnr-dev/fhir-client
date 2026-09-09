@@ -47,7 +47,7 @@ function convertRule(rule: MappingRule, kind: RuleKind): MappingRule {
 }
 
 // マッピング定義の行エディタ。ルールを 1 行 1 フォームで編集し、常に
-// serializeMappingRules で文字列化して親へ返す(保存ペイロードは従来どおり
+// serializeMappingRules で文字列化して親へ返す(保存ペイロードは
 // mapping テキスト)。生 JSON 編集にも切り替えられ、エディタで扱えない内容
 // (手書きの不正 JSON 等)は自動で JSON 編集へフォールバックする。
 export function ReportLayoutMappingEditor({

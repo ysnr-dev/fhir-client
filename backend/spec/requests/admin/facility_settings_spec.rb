@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe "Admin::FacilitySettings", type: :request do
-  # 管理APIは ADMIN_TOKEN 未設定なら認証なし(後方互換)。CRUD の確認は
+  # 管理APIは ADMIN_TOKEN 未設定なら認証なし。CRUD の確認は
   # その状態で行い、認証の確認だけ token を設定して別に行う。
   def without_admin_token
     previous = ENV.delete("ADMIN_TOKEN")

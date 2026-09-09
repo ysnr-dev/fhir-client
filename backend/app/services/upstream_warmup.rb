@@ -32,9 +32,8 @@ module UpstreamWarmup
     false
   end
 
-  # 失敗理由は握り潰さずログに残す。ここが黙って false を返していたせいで、
-  # 「上流が起きない」原因(backend からのプローブが起動トリガーにならないこと)が
-  # 本番のログから一切見えなかった。
+  # 失敗理由は握り潰さずログに残す。「上流が起きない」原因(backend からのプローブが
+  # 起動トリガーにならないこと)を本番のログから追えるようにするため。
   def ready?(connection)
     connection.get.success?
   rescue StandardError => e

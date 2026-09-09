@@ -149,7 +149,7 @@ class PrescriptionReport
   end
 
   # 自院 Organization の取得 URL。自院が設定済み(管理 > 施設設定)ならそれを
-  # read する。未設定の環境では従来どおり保険医療機関番号の system だけで検索
+  # read する。未設定の環境では保険医療機関番号の system だけで検索
   # する(Organization 検索に type は無く、未知のパラメータでは全件が返るため
   # identifier で引くしかない)。この検索は「番号を持つ最初の 1 件」を自院と
   # みなすので、連携先医療機関に番号を登録していると取り違えうる。自院設定を

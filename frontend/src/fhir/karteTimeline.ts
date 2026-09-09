@@ -492,7 +492,7 @@ export const KARTE_UNSCHEDULED_DAY = "unscheduled";
  * 日付未定を許すオーダー種別(CodeSystem/order-type のコード)。
  *
  * 全種別が開始日を occurrence に書く(fhir/shared.ts 冒頭)ので、occurrence が無いのは
- * 「未定」か「occurrence を書く前に登録された旧データ」のどちらか。ここに無い種別は
+ * 「未定」か「occurrence を持たない旧データ」のどちらか。ここに無い種別は
  * 後者とみなして登録日(authoredOn)の日に出し、「日付未定」には落とさない。
  * 他の種別で未定を許したくなったら、フォームの必須検証を外してここに足す。
  */
@@ -564,8 +564,7 @@ export function groupByKarteDayYear<T>(
  * オーダーのカードを置く診療日 = オーダー開始日(occurrence)。
  *
  * 無ければ、未定を許す種別なら「日付未定」、それ以外は登録日(authoredOn の日付)。後者は
- * occurrence を書く前に登録された旧データのためのフォールバックで、上流の backfill
- * (2026-09-01)後は起きない。本流の検索もこの軸(occurrence)で読む(api/queries.ts の
+ * occurrence を持たない旧データのためのフォールバック。本流の検索もこの軸(occurrence)で読む(api/queries.ts の
  * useKartePrescriptionsInfinite)ので、カットオフ判定と配置が食い違わない。
  */
 function orderCardDay(sr: fhir4.ServiceRequest): string {

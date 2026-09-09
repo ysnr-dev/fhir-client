@@ -22,7 +22,7 @@ module Admin
     #   2. Authorization: Bearer / X-Admin-Token ヘッダ。curl・CI・既存の運用
     #      ツール向け。この経路は CSRF 検査の対象外(Cookie を使わないので
     #      ブラウザが勝手に付けることがない)。
-    #   3. ADMIN_TOKEN 未設定 -- 従来どおり認証なし(後方互換)。
+    #   3. ADMIN_TOKEN 未設定 -- 認証なし。
     #
     # 本番公開前は ADMIN_TOKEN の設定を強く推奨(secret 上書き・向き先変更・
     # OAuthクライアントの発行/削除が可能なため)。

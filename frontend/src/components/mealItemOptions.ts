@@ -2,7 +2,7 @@
 // 画面が同じ見せ方をするためにここへまとめる。
 //
 // staple は SS-MIX2 の給食オーダ(OMD^O03)の ODS-1 でいう D(主食)にあたる。食種
-// (T、食止めを含む)は別マスタ(MealDiet)。嗜好品(P)・補助食(S)は今回扱わない。
+// (T、食止めを含む)は別マスタ(MealDiet)。嗜好品(P)・補助食(S)は扱わない。
 //
 // side_dish_form(副食形態: きざみ・ミキサー など)は SS-MIX2 に対応する ODS-1 区分が
 // 無く、参考仕様(名古屋第二赤十字病院「食種選択によるオーダエントリ」§2)から採った。
@@ -53,7 +53,7 @@ export const MEAL_NUTRITION_FORM_OPTIONS = [
   { code: "infant_formula", label: "調乳食" },
 ] as const;
 
-/** 未設定・知らない値は既定の「普通食・治療食」として扱う(後方互換)。 */
+/** 未設定・知らない値は既定の「普通食・治療食」として扱う。 */
 export const DEFAULT_MEAL_NUTRITION_FORM = "oral_diet";
 
 export function mealNutritionFormLabel(
