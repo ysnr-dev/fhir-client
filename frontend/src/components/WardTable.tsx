@@ -54,6 +54,9 @@ export function WardTable({
                   <Link className="row-menu__item" to={`/wards/${ward.id}/edit`}>
                     編集
                   </Link>
+                  <Link className="row-menu__item" to={`/wards/${ward.id}/map/edit`}>
+                    マップ編集
+                  </Link>
                   <button
                     type="button"
                     className="row-menu__item row-menu__item--danger"

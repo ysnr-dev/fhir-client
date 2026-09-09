@@ -38,6 +38,7 @@ export function AdmissionExecuteModal({
   patient,
   occupiedBedIds,
   admittedBedLabelByPatientId,
+  initialPlace,
   onClose,
 }: {
   plan: fhir4.Encounter;
@@ -46,13 +47,17 @@ export function AdmissionExecuteModal({
   occupiedBedIds: Set<string>;
   /** 患者 id -> 既に入院しているベッドの表示名。二重入院の警告に使う。 */
   admittedBedLabelByPatientId: Map<string, string>;
+  /** 最初に選んでおく床。病棟マップで空床へ落としたときに渡す(既定は予定の床)。 */
+  initialPlace?: BedRoomIds;
   onClose: () => void;
 }) {
-  const [place, setPlace] = useState<BedRoomIds>({
-    wardId: plannedWardId(plan) ?? "",
-    roomId: plannedRoomId(plan) ?? "",
-    bedId: plannedBedId(plan) ?? "",
-  });
+  const [place, setPlace] = useState<BedRoomIds>(
+    initialPlace ?? {
+      wardId: plannedWardId(plan) ?? "",
+      roomId: plannedRoomId(plan) ?? "",
+      bedId: plannedBedId(plan) ?? "",
+    },
+  );
   const [values, setValues] = useState<AdmissionFormValues>({
     departmentId: encounterDepartmentId(plan) ?? "",
     practitionerId: encounterAttendingId(plan) ?? "",

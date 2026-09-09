@@ -374,17 +374,54 @@ export function buildEncounterUpdateBundle(
    */
   extraEntries: fhir4.BundleEntry[] = [],
 ): fhir4.Bundle {
+  return buildEncountersUpdateBundle([encounter], extraEntries);
+}
+
+/**
+ * 複数の入院をまとめて書き換える transaction。病棟マップの転床(入れ替え)のように、
+ * 片方だけ動いた状態を作りたくないときに使う。
+ */
+export function buildEncountersUpdateBundle(
+  encounters: fhir4.Encounter[],
+  extraEntries: fhir4.BundleEntry[] = [],
+): fhir4.Bundle {
   return {
     resourceType: "Bundle",
     type: "transaction",
     entry: [
-      {
+      ...encounters.map((encounter) => ({
         resource: encounter,
-        request: { method: "PUT", url: `Encounter/${encounter.id}` },
-      },
+        request: { method: "PUT" as const, url: `Encounter/${encounter.id}` },
+      })),
       ...extraEntries,
     ],
   };
+}
+
+/**
+ * いま入院中の患者が居るベッドの id。転室・転床や入院実施で空床だけを選ばせる。
+ */
+export function occupiedBedIds(encounters: fhir4.Encounter[]): Set<string> {
+  const set = new Set<string>();
+  for (const encounter of encounters) {
+    if (encounter.status !== ADMISSION_STATUS) continue;
+    const bedId = encounterBedId(encounter);
+    if (bedId) set.add(bedId);
+  }
+  return set;
+}
+
+/**
+ * 患者 id → 既に入院しているベッドの表示名。二重入院の警告に使う。
+ */
+export function admittedBedLabelByPatient(encounters: fhir4.Encounter[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const encounter of encounters) {
+    const patientId = encounterPatientId(encounter);
+    const label = encounter.location?.[0]?.location?.display;
+    if (patientId && label) map.set(patientId, label);
+  }
+  return map;
 }
 
 /**

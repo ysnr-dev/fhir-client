@@ -79,6 +79,7 @@ import {
   type SpecimenRef,
 } from "../fhir/labResultHelpers";
 import { orderDay, referenceId } from "../fhir/shared";
+import { HAS_LAB_MAPPED_TYPES, summarizeInfections, type InfectionRow } from "../fhir/infectionHelpers";
 import {
   buildInjectionTaskUpdate,
   injectionTasksByOrderId,
@@ -1505,7 +1506,7 @@ export interface InpatientResult {
   truncated: boolean;
 }
 
-async function fetchInpatients(date: string): Promise<InpatientResult> {
+export async function fetchInpatients(date: string): Promise<InpatientResult> {
   const encounters: fhir4.Encounter[] = [];
   const patientsById = new Map<string, fhir4.Patient>();
   let truncated = false;
@@ -1624,6 +1625,20 @@ export function useInpatientEncounters(date: string) {
     queryFn: () => fetchInpatients(date),
     enabled: Boolean(date),
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 病棟マップの転床の一括確定。組み立て済みの transaction Bundle(複数の Encounter の PUT)を
+ * そのまま送る。組み立ては fhir/bedMovePlanHelpers.ts。
+ */
+export function useCommitBedMoves() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Encounter"] });
+    },
   });
 }
 
@@ -5075,6 +5090,154 @@ export function useActiveFlags(patientId: string | undefined) {
     query.data?.data.entry?.map((e) => e.resource).filter((r): r is fhir4.Flag => Boolean(r)) ?? [];
 
   return { ...query, flags };
+}
+
+// ---- 複数患者の一括取得(病棟マップのベッドカード用) ----
+//
+// 患者帯は 1 人ぶんを個別に引くが、病棟マップは 1 画面に 40〜60 人並ぶので、患者 id を
+// カンマで OR にしてまとめて引く。参照パラメータのカンマ OR は PractitionerRole の
+// organization= で使っている形と同じ。URL が長くなりすぎないよう患者を分割して並列に引く。
+
+/**
+ * 複数患者ぶんのリソースを患者 id ごとに振り分けて返す。buildParams は 1 塊ぶんの
+ * 検索条件(患者以外)、subjectOf はリソースから患者 id を取る関数。
+ */
+async function fetchByPatientChunks<T extends fhir4.Resource>(
+  resourceType: string,
+  patientIds: string[],
+  chunkSize: number,
+  patientParam: string,
+  buildParams: (params: URLSearchParams) => void,
+  subjectOf: (resource: T) => string | undefined,
+): Promise<Map<string, T[]>> {
+  const result = new Map<string, T[]>();
+  const chunks: string[][] = [];
+  for (let i = 0; i < patientIds.length; i += chunkSize) chunks.push(patientIds.slice(i, i + chunkSize));
+
+  const bundles = await Promise.all(
+    chunks.map((ids) => {
+      const params = new URLSearchParams();
+      params.set(patientParam, ids.map((id) => `Patient/${id}`).join(","));
+      params.set("_count", "500");
+      buildParams(params);
+      return searchResource<T>(resourceType, params);
+    }),
+  );
+  for (const { data: bundle } of bundles) {
+    for (const entry of bundle.entry ?? []) {
+      const resource = entry.resource;
+      if (!resource || resource.resourceType !== resourceType) continue;
+      const patientId = subjectOf(resource);
+      if (!patientId) continue;
+      const list = result.get(patientId);
+      if (list) list.push(resource);
+      else result.set(patientId, [resource]);
+    }
+  }
+  return result;
+}
+
+/** 患者 id を並べ替えて queryKey にする(順序が違うだけで引き直さない)。 */
+function patientIdsKey(patientIds: string[]): string {
+  return [...new Set(patientIds)].sort().join(",");
+}
+
+const PATIENT_CHUNK = 50;
+/** 検査結果は 1 人あたりの件数が多いので、塊を小さくして _count の上限に当たりにくくする。 */
+const LAB_PATIENT_CHUNK = 5;
+
+/** 複数患者の有効な注意(Flag)。患者 id → Flag[]。 */
+export function useFlagsForPatients(patientIds: string[]) {
+  const key = patientIdsKey(patientIds);
+  const query = useQuery({
+    queryKey: ["Flag", "search", "by-patients", key],
+    queryFn: () =>
+      fetchByPatientChunks<fhir4.Flag>(
+        "Flag",
+        key.split(","),
+        PATIENT_CHUNK,
+        "patient",
+        (params) => params.set("status", "active"),
+        (flag) => referenceId(flag.subject?.reference),
+      ),
+    enabled: key.length > 0,
+    staleTime: 60 * 1000,
+  });
+  return { ...query, byPatient: query.data ?? new Map<string, fhir4.Flag[]>() };
+}
+
+/** 複数患者の活動中のアレルギー。患者 id → AllergyIntolerance[]。 */
+export function useAllergiesForPatients(patientIds: string[]) {
+  const key = patientIdsKey(patientIds);
+  const query = useQuery({
+    queryKey: ["AllergyIntolerance", "search", "by-patients", key],
+    queryFn: () =>
+      fetchByPatientChunks<fhir4.AllergyIntolerance>(
+        "AllergyIntolerance",
+        key.split(","),
+        PATIENT_CHUNK,
+        "patient",
+        (params) => params.set("clinical-status", "active"),
+        (allergy) => referenceId(allergy.patient?.reference),
+      ),
+    enabled: key.length > 0,
+    staleTime: 60 * 1000,
+  });
+  return { ...query, byPatient: query.data ?? new Map<string, fhir4.AllergyIntolerance[]>() };
+}
+
+/**
+ * 複数患者の感染症(手入力 + 検査由来)。患者 id → 陽性の行。
+ * 検査由来は患者ごとに新しい順で上限までしか見ないので、古い陽性は落ちることがある
+ * (患者帯と同じ INFECTION_LAB_COUNT の考え方を塊単位にしたもの)。
+ */
+export function useInfectionsForPatients(patientIds: string[]) {
+  const key = patientIdsKey(patientIds);
+  const manual = useQuery({
+    queryKey: ["Observation", "search", "by-patients", "infection-manual", key],
+    queryFn: () =>
+      fetchByPatientChunks<fhir4.Observation>(
+        "Observation",
+        key.split(","),
+        PATIENT_CHUNK,
+        "subject",
+        (params) => params.set("category", "exam"),
+        (observation) => referenceId(observation.subject?.reference),
+      ),
+    enabled: key.length > 0,
+    staleTime: 60 * 1000,
+  });
+  const lab = useQuery({
+    queryKey: ["Observation", "search", "by-patients", "infection-lab", key],
+    queryFn: () =>
+      fetchByPatientChunks<fhir4.Observation>(
+        "Observation",
+        key.split(","),
+        LAB_PATIENT_CHUNK,
+        "subject",
+        (params) => {
+          params.set("category", "laboratory");
+          params.set("_sort", "-date");
+        },
+        (observation) => referenceId(observation.subject?.reference),
+      ),
+    enabled: key.length > 0 && HAS_LAB_MAPPED_TYPES,
+    staleTime: 60 * 1000,
+  });
+
+  const byPatient = useMemo(() => {
+    const result = new Map<string, InfectionRow[]>();
+    const ids = new Set([...(manual.data?.keys() ?? []), ...(lab.data?.keys() ?? [])]);
+    for (const id of ids) {
+      const rows = summarizeInfections(manual.data?.get(id) ?? [], lab.data?.get(id) ?? []).filter(
+        (row) => row.result === "positive",
+      );
+      if (rows.length > 0) result.set(id, rows);
+    }
+    return result;
+  }, [manual.data, lab.data]);
+
+  return { byPatient, error: manual.error ?? lab.error, isPending: manual.isPending || lab.isPending };
 }
 
 export function useFlag(id: string | undefined) {

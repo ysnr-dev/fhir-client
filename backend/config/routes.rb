@@ -184,6 +184,9 @@ Rails.application.routes.draw do
     # 手術室のブロックスケジュール(曜日ごとの科割り当て)。手術は予約枠を持たない
     # ので FHIR の Schedule ではなくここに置く(docs/surgery-calendar-design.md)。
     resources :surgery_room_blocks, only: %i[index show create update destroy]
+    # 病棟マップのレイアウト(設備・病室・ベッドの配置)。設備は FHIR に置き場が無く、
+    # 座標も Location の本来の情報ではないので backend に持つ(1 病棟 1 行)。
+    resources :ward_maps, only: %i[index show create update destroy]
     # 特定器材(特定保険医療材料)と医科診療行為(手技料)。どちらもレセプト電算の
     # 配布マスタを全置換で取り込むだけで、手動メンテはしない。
     resources :medical_materials, only: %i[index] do

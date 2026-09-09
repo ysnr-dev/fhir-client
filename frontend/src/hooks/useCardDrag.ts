@@ -38,7 +38,17 @@ export function useCardDrag<T>({ onDrop }: CardDragOptions<T>) {
   const [drag, setDrag] = useState<DragState<T> | null>(null);
   // ドラッグ直後の click を飲むためのフラグ(週ビューのセルは押すと日ビューへ
   // 降りるので、掴んで離しただけで画面が変わってしまうのを防ぐ)。
+  // click は pointerup と同じイベント処理の中で続けて来るので、その処理が終わったら
+  // 下ろす(setTimeout 0)。離した先で click が起きない操作(キャンバスの空白で
+  // 離す・Escape で取りやめる)のあとに立ったまま残ると、次に別の場所を押した
+  // 正当な click まで飲んでしまう。
   const justDragged = useRef(false);
+  const markJustDragged = useCallback(() => {
+    justDragged.current = true;
+    setTimeout(() => {
+      justDragged.current = false;
+    }, 0);
+  }, []);
   // onDrop を effect の依存から外すための箱(毎レンダー作り直される関数のため)。
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
@@ -76,7 +86,7 @@ export function useCardDrag<T>({ onDrop }: CardDragOptions<T>) {
     function finish(event: PointerEvent, dropped: boolean) {
       setDrag((current) => {
         if (current?.moved) {
-          justDragged.current = true;
+          markJustDragged();
           if (dropped) {
             onDropRef.current({ ...current, x: event.clientX, y: event.clientY });
           }
@@ -97,7 +107,7 @@ export function useCardDrag<T>({ onDrop }: CardDragOptions<T>) {
     function handleKey(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       setDrag((current) => {
-        if (current?.moved) justDragged.current = true;
+        if (current?.moved) markJustDragged();
         return null;
       });
     }
@@ -112,7 +122,7 @@ export function useCardDrag<T>({ onDrop }: CardDragOptions<T>) {
       window.removeEventListener("pointercancel", handleCancel);
       window.removeEventListener("keydown", handleKey);
     };
-  }, [drag]);
+  }, [drag, markJustDragged]);
 
   /** ドラッグ直後の click なら true を返して、フラグを下ろす。 */
   const consumeClick = useCallback(() => {

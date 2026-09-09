@@ -9720,10 +9720,16 @@ body.page-wide .app__main {
   text-decoration: none;
 }
 
-/* タブ行の右に置く他画面への導線(ボタン)。タブの下線に潜らないよう少し浮かせる。 */
+/* タブ行の右に置く他画面への導線(ボタン)。タブの下線に潜らないよう少し浮かせる。
+   2 つ以上あるときは、右端でまとめて並べる(それぞれに auto を効かせると
+   空きが分け合われて、間のボタンが行の中途半端な位置に出る)。 */
 .inpatient-tabs__link {
   margin: 0 0 4px auto;
   align-self: center;
+}
+
+.inpatient-tabs__link + .inpatient-tabs__link {
+  margin-left: 0;
 }
 
 .inpatient__plan-tag {
@@ -14073,4 +14079,928 @@ button.chemo-calendar__cell[draggable="true"] {
   margin: 2px 0 6px;
   font-size: 12px;
   color: var(--muted);
+}
+
+/* 病棟マップ ------------------------------------------------------------------ */
+
+/* 病棟の間取り(設備・病室・ベッド)の上に、その日の入院患者を出す画面。
+   オブジェクトはマス座標 × 1 マスの px(--ward-map-grid)で絶対配置し、拡大縮小は
+   キャンバスの transform(scale)で行う。ドラッグ像は作らず、元のカードを薄くして
+   落とし先に点線枠を出す(手術カレンダーと同じ)。 */
+
+.ward-map__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  margin-bottom: 8px;
+}
+
+.ward-map__toolbar > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+/* この行の操作子(病棟の選択・日付・ズーム・他画面への導線)は高さを揃える。
+   セレクトと日付入力の高さはブラウザが内部で決めていて余白や行の高さでは
+   揃わないので、ここだけは高さを 1 か所に決めて全部に効かせる
+   (日付送りの「今日」が収まる高さ)。 */
+.ward-map__toolbar,
+.ward-map-edit__toolbar {
+  --ward-map-control-height: 34px;
+}
+
+.ward-map__toolbar select,
+.ward-map__toolbar input[type="date"],
+.ward-map__toolbar button,
+.ward-map__toolbar .button,
+.ward-map-edit__toolbar button,
+.ward-map-edit__toolbar .button {
+  box-sizing: border-box;
+  height: var(--ward-map-control-height);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.ward-map__toolbar select,
+.ward-map__toolbar input[type="date"] {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+/* 押せるものは他の画面のボタンと同じ色にする(枠だけ上で揃えている)。 */
+.ward-map__toolbar button,
+.ward-map__toolbar .button,
+.ward-map-edit__toolbar button,
+.ward-map-edit__toolbar .button {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+/* 文字だけの項目も、操作子と同じ行の高さにして中心を合わせる。 */
+.ward-map__counts,
+.ward-map__readonly {
+  align-self: flex-end;
+  line-height: var(--ward-map-control-height);
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.ward-map__zoom {
+  display: inline-flex;
+  gap: 4px;
+  align-self: flex-end;
+}
+
+/* 他画面への導線は行の右端へ寄せる(見出しを置かないぶんここが受け皿)。 */
+.ward-map__toolbar-links {
+  display: inline-flex;
+  gap: 8px;
+  align-self: flex-end;
+  margin-left: auto;
+}
+
+.ward-map-edit__toolbar-group {
+  display: inline-flex;
+  gap: 4px;
+  align-self: center;
+}
+
+.ward-map__notice {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.ward-map__body {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+/* キャンバスを収めるスクロール領域。画面の残りの高さを使う。 */
+.ward-map__scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: calc(100vh - 175px);
+  min-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-sunken);
+}
+
+.ward-map__scroll.is-panning {
+  cursor: grabbing;
+}
+
+.ward-map__side {
+  flex: 0 0 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ward-map__panel {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-card);
+}
+
+.ward-map__panel h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+/* 外側は拡大後の大きさ(スクロール範囲)、内側は等倍の大きさに scale を掛ける。 */
+.ward-map__canvas-outer {
+  position: relative;
+  margin: 8px;
+}
+
+.ward-map__canvas {
+  position: relative;
+  transform-origin: 0 0;
+  background-color: var(--surface-panel);
+  background-image:
+    linear-gradient(to right, var(--surface-stripe) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--surface-stripe) 1px, transparent 1px);
+  user-select: none;
+  touch-action: none;
+}
+
+.ward-map__object {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+/* 病室 → 設備 → ベッドの順で手前にする(押したときの優先順位と同じ)。 */
+.ward-map__object--fixture {
+  z-index: 1;
+}
+
+.ward-map__object--room {
+  z-index: 0;
+}
+
+.ward-map__object--bed {
+  z-index: 2;
+}
+
+/* 病室の枠。上 1 マスは病室名の帯。 */
+.ward-map__room {
+  height: 100%;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-card) 55%, transparent);
+  box-sizing: border-box;
+}
+
+.ward-map__room--stale {
+  border-color: var(--lab-high);
+  border-style: dashed;
+}
+
+.ward-map__room-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: calc(var(--ward-map-grid) - 2px);
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-h);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ward-map__room-name {
+  font-weight: 600;
+}
+
+.ward-map__room-class {
+  color: var(--text);
+}
+
+/* 設備。種別ごとに色を分け、色を指定したものは inline style で上書きされる。 */
+.ward-map__fixture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-card);
+  color: var(--text-h);
+  font-size: 12px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-align: center;
+}
+
+.ward-map__fixture-label {
+  padding: 2px 4px;
+}
+
+.ward-map__fixture--vertical .ward-map__fixture-label {
+  writing-mode: vertical-rl;
+}
+
+.ward-map__fixture--nurse_station {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  font-weight: 600;
+}
+
+.ward-map__fixture--toilet,
+.ward-map__fixture--bath {
+  background: rgba(42, 120, 214, 0.15);
+}
+
+.ward-map__fixture--stairs {
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--surface-card) 0,
+    var(--surface-card) 6px,
+    var(--surface-sunken) 6px,
+    var(--surface-sunken) 8px
+  );
+}
+
+.ward-map__fixture--elevator {
+  background: var(--surface-sunken);
+  border-style: double;
+  border-width: 3px;
+}
+
+.ward-map__fixture--corridor {
+  background: var(--surface-sunken);
+  border-style: dashed;
+  color: var(--text);
+}
+
+.ward-map__fixture--wall {
+  background: var(--text-h);
+  border-color: var(--text-h);
+  border-radius: 0;
+}
+
+.ward-map__fixture--door {
+  background: var(--accent);
+  border-color: var(--accent);
+  border-radius: 0;
+}
+
+.ward-map__fixture--treatment {
+  background: rgba(211, 47, 47, 0.12);
+}
+
+.ward-map__fixture--dayroom {
+  background: rgba(46, 160, 67, 0.15);
+}
+
+.ward-map__fixture--label {
+  background: transparent;
+  border-color: transparent;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ward-map__fixture--area {
+  background: transparent;
+  border-style: dashed;
+  align-items: flex-start;
+}
+
+/* ベッド 1 床。患者の要点を 4 行に収める。 */
+.ward-map__bed {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-card-shadow);
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--text);
+  overflow: hidden;
+}
+
+.ward-map__bed--empty {
+  background: color-mix(in srgb, var(--surface-panel) 70%, transparent);
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.ward-map__bed--edit {
+  background: var(--surface-card);
+  border-style: solid;
+}
+
+.ward-map__bed--stale {
+  border-color: var(--lab-high);
+  border-style: dashed;
+}
+
+/* 病室の枠から外れたベッド(編集時の注意)。 */
+.ward-map__bed--outside {
+  border-color: #e0a100;
+  border-width: 2px;
+}
+
+.ward-map__bed--movable {
+  cursor: grab;
+}
+
+.ward-map__bed[role="button"] {
+  cursor: pointer;
+}
+
+.ward-map__bed--movable[role="button"] {
+  cursor: grab;
+}
+
+/* 掴んでいる元のカード。薄くするだけでは他の空床と見分けにくいので、点線枠も付ける。 */
+.ward-map__bed--dragging {
+  opacity: 0.35;
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+/* 掴んでいる間ポインタに付いて回る札(誰をどこから運んでいるか)。
+   ページ内の重なり(最大 10)の一番手前。ヘッダー(50)より下でよい。 */
+.ward-map__drag-ghost {
+  position: fixed;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface-card);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ward-map__drag-ghost-name {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.ward-map__drag-ghost-from {
+  font-size: 11px;
+  color: var(--text);
+}
+
+.ward-map__bed--drop-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+  background: var(--accent-bg);
+}
+
+.ward-map__bed--moved-away {
+  opacity: 0.45;
+}
+
+.ward-map__bed--moved-in {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.ward-map__bed--workspace {
+  background: var(--surface-card);
+}
+
+.ward-map__bed-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 16px;
+}
+
+.ward-map__bed-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-h);
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.ward-map__bed-patient-no {
+  font-size: 10px;
+  color: var(--text);
+}
+
+.ward-map__bed-menu {
+  margin-left: auto;
+}
+
+.ward-map__bed-menu .row-menu__button {
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.ward-map__bed-name {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.ward-map__bed-name a {
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ward-map__bed-name a:hover {
+  text-decoration: underline;
+}
+
+.ward-map__bed-age {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.ward-map__bed-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ward-map__bed-meta--bottom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+}
+
+/* ピクトグラムは日数の下の独立した行。種類が増えたら折り返す(横にはみ出さない)。 */
+.ward-map__bed-pictograms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-height: 16px;
+}
+
+.ward-map__bed-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.ward-map__bed-tag {
+  padding: 0 4px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.ward-map__bed-tag--leave {
+  border-color: var(--lab-low);
+  color: var(--lab-low);
+}
+
+.ward-map__bed-empty {
+  margin: auto;
+  color: var(--text);
+}
+
+.ward-map__bed-note {
+  font-size: 10px;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 病室名はカードには出さない(病室の帯にある)。読み上げと検索のためだけに持つ。 */
+.ward-map__bed-room {
+  display: none;
+}
+
+/* 凡例。ベッドの修飾クラスをそのまま見本に使う。 */
+.ward-map__legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ward-map__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ward-map__legend-swatch {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--surface-card);
+}
+
+/* 病棟マップ編集 -------------------------------------------------------------- */
+
+.ward-map-edit__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* 見出しの代わりにツールバーの左端に出す病棟名。 */
+.ward-map-edit__ward {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: var(--ward-map-control-height);
+  color: var(--text-h);
+  margin-right: 4px;
+}
+
+.ward-map-edit__dirty {
+  font-size: 13px;
+  line-height: var(--ward-map-control-height);
+  color: var(--accent);
+}
+
+.ward-map-edit__toolbar-link {
+  margin-left: auto;
+}
+
+/* 左: パレット / 中: キャンバス / 右: プロパティ。 */
+.ward-map-edit__body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 280px;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.ward-map-edit__palette,
+.ward-map-edit__props {
+  height: calc(100vh - 175px);
+  min-height: 360px;
+  overflow: auto;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-card);
+}
+
+.ward-map-edit__palette-section + .ward-map-edit__palette-section,
+.ward-map-edit__props-section + .ward-map-edit__props-section {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.ward-map-edit__palette-section h3,
+.ward-map-edit__props-section h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.ward-map-edit__palette-section--stale {
+  padding: 8px;
+  border: 1px solid var(--lab-high);
+  border-radius: 6px;
+}
+
+.ward-map-edit__palette-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* パレットの項目。掴んでキャンバスへ運べる(押せば表示中央に置く)。 */
+.ward-map-edit__palette-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 12px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.ward-map-edit__palette-item:hover {
+  border-color: var(--accent);
+}
+
+.ward-map-edit__palette-item--room {
+  border-width: 2px;
+}
+
+.ward-map-edit__palette-sub {
+  font-size: 10px;
+  color: var(--text);
+}
+
+.ward-map-edit__props-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.ward-map-edit__props-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.ward-map-edit__props-row input[type="number"],
+.ward-map-edit__props-row input[type="text"],
+.ward-map-edit__props-row select {
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.ward-map-edit__props-row input[type="number"] {
+  width: 64px;
+}
+
+.ward-map-edit__props-row input[type="text"] {
+  width: 200px;
+}
+
+.ward-map-edit__color {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ward-map-edit__props-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 選択枠。オブジェクトの上に重ね、押す操作は素通しにする(ハンドルだけ受ける)。 */
+.ward-map-edit__selection {
+  position: absolute;
+  box-sizing: border-box;
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.ward-map-edit__handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  background: var(--bg);
+  pointer-events: auto;
+  touch-action: none;
+  z-index: 4;
+}
+
+.ward-map-edit__handle--n { top: -5px; left: calc(50% - 5px); cursor: ns-resize; }
+.ward-map-edit__handle--s { bottom: -5px; left: calc(50% - 5px); cursor: ns-resize; }
+.ward-map-edit__handle--e { right: -5px; top: calc(50% - 5px); cursor: ew-resize; }
+.ward-map-edit__handle--w { left: -5px; top: calc(50% - 5px); cursor: ew-resize; }
+.ward-map-edit__handle--ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.ward-map-edit__handle--sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.ward-map-edit__handle--nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.ward-map-edit__handle--se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+
+/* パレットから運んでいる間の、置く位置の枠。 */
+.ward-map-edit__preview {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px dashed var(--accent);
+  background: var(--accent-bg);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.ward-map-edit__scroll .ward-map__canvas {
+  cursor: default;
+}
+
+.ward-map-edit__scroll .ward-map__object {
+  cursor: move;
+}
+
+.ward-map-edit__scroll .ward-map__canvas.is-dragging .ward-map__object {
+  cursor: grabbing;
+}
+
+@media (max-width: 1280px) {
+  .ward-map-edit__body {
+    grid-template-columns: 180px minmax(0, 1fr) 240px;
+  }
+}
+
+/* 病棟マップ: 移動プラン ---------------------------------------------------- */
+
+
+
+.ward-map__panel h3 span {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 11px;
+}
+
+.ward-map__workspace-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* 掴んでいるものを落とせるとき、退避の枠を点線で強調する。 */
+.ward-map__workspace--drop-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+  background: var(--accent-bg);
+}
+
+.ward-map__workspace-list,
+.ward-map__move-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ward-map__workspace-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  font-size: 12px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.ward-map__workspace-name {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.ward-map__workspace-from {
+  color: var(--text);
+}
+
+.ward-map__workspace-card button,
+.ward-map__move-row button {
+  margin-left: auto;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ward-map__move-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  font-size: 12px;
+}
+
+.ward-map__move-name {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.ward-map__move-path {
+  color: var(--text);
+}
+
+.ward-map__move-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ward-map__confirm-table {
+  margin: 8px 0;
+}
+
+/* 掴んでいる間はカードのリンクや押下を効かせない(落とし先の判定を邪魔しない)。 */
+.ward-map__canvas-outer.is-dragging .ward-map__bed {
+  pointer-events: none;
+}
+
+/* 病棟マップ: ベッドカードの札・ピクトグラム・ケバブ ------------------------- */
+
+/* 吹き出しとケバブのメニューがカードからはみ出せるように、カード自体は切らない
+   (各行が nowrap + ellipsis で自分の幅に収まる)。開いている間は隣より手前に出す。 */
+.ward-map__bed {
+  overflow: visible;
+}
+
+.ward-map__object--bed:hover,
+.ward-map__object--bed:focus-within {
+  z-index: 6;
+}
+
+.ward-map__bed-tags {
+  max-height: 32px;
+  overflow: hidden;
+}
+
+.ward-map__bed-tag--discharge {
+  border-color: var(--lab-high);
+  color: var(--lab-high);
+}
+
+.ward-map__bed-pictograms .patient-header__cautions {
+  gap: 2px;
+}
+
+.ward-map__bed-pictograms .patient-header__caution {
+  padding: 0;
+  min-width: 0;
+}
+
+.ward-map__bed-menu .row-menu__trigger {
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1;
+  min-width: 0;
+}
+
+.ward-map__planned-card {
+  cursor: grab;
+}
+
+/* 吹き出しやケバブのメニューを開いている間は、隣のベッドや病室より手前に出す
+   (:focus-within だけだと、押した直後にフォーカスが外れたときに隠れる)。 */
+.ward-map__object--bed:has(.patient-header__popover),
+.ward-map__object--bed:has(.row-menu__items) {
+  z-index: 7;
+}
+
+/* ピクトグラムの行は吹き出しがはみ出せるように切らない(入院日数は短いので溢れない)。 */
+.ward-map__bed-meta--bottom {
+  overflow: visible;
 }

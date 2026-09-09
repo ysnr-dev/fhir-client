@@ -93,6 +93,8 @@ import { LocationListPage } from "./pages/LocationListPage";
 import { WardCreatePage } from "./pages/WardCreatePage";
 import { WardEditPage } from "./pages/WardEditPage";
 import { WardListPage } from "./pages/WardListPage";
+import { WardMapEditPage } from "./pages/WardMapEditPage";
+import { WardMapPage } from "./pages/WardMapPage";
 import { WardRoomCreatePage } from "./pages/WardRoomCreatePage";
 import { WardRoomEditPage } from "./pages/WardRoomEditPage";
 import { WardRoomListPage } from "./pages/WardRoomListPage";
@@ -141,6 +143,10 @@ function App() {
             {/* 入院患者一覧は病棟のベッドの埋まり具合と在院患者を見る画面。 */}
             <Link to="/inpatients" className="row-menu__item">
               入院患者一覧
+            </Link>
+            {/* 病棟マップは入院患者一覧の別の見え方(間取りの上に患者を出す)。 */}
+            <Link to="/ward-map" className="row-menu__item">
+              病棟マップ
             </Link>
           </HoverMenu>
           {/* 診療業務は「診療科の医師が捌く仕事」の画面。部門業務(検査室・薬剤部など、
@@ -512,6 +518,8 @@ function App() {
           <Route path="/wards/:wardId/rooms" element={<WardRoomListPage />} />
           <Route path="/wards/:wardId/rooms/new" element={<WardRoomCreatePage />} />
           <Route path="/wards/:wardId/rooms/:id/edit" element={<WardRoomEditPage />} />
+          <Route path="/wards/:wardId/map/edit" element={<WardMapEditPage />} />
+          <Route path="/ward-map" element={<WardMapPage />} />
 
           {/* 予約枠。枠表(Schedule)の下に時間枠(Slot)を週カレンダーでぶら下げる。 */}
           <Route path="/schedules" element={<ScheduleListPage />} />

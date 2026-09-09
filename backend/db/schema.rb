@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_08_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_09_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1657,6 +1657,16 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_08_100000) do
     t.datetime "updated_at", null: false
     t.index ["member_item_code"], name: "index_master_treatment_set_items_on_member_item_code"
     t.index ["set_item_code", "member_item_code"], name: "index_treatment_set_items_on_set_and_member", unique: true
+  end
+
+  create_table "master_ward_maps", force: :cascade do |t|
+    t.string "ward_location_id", null: false
+    t.string "ward_name"
+    t.jsonb "layout", default: {}, null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["ward_location_id"], name: "index_master_ward_maps_on_ward_location_id", unique: true
   end
 
   create_table "order_set_entries", force: :cascade do |t|

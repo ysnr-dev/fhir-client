@@ -14,6 +14,7 @@ import { AdmissionModal } from "../components/AdmissionModal";
 import { BedTransferModal } from "../components/BedTransferModal";
 import { DischargeModal } from "../components/DischargeModal";
 import { DischargePlanModal } from "../components/DischargePlanModal";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import {
   DischargePlanTable,
@@ -37,6 +38,7 @@ import { TransferPlanModal } from "../components/TransferPlanModal";
 import {
   ADMISSION_STATUS,
   DISCHARGED_STATUS,
+  admittedBedLabelByPatient,
   buildPlanCancelledEncounter,
   encounterAdmissionDate,
   encounterAttendingId,
@@ -52,13 +54,13 @@ import {
   encounterNurseNames,
   encounterPatientId,
   encounterTransferPlan,
+  occupiedBedIds as occupiedBedIdSet,
   plannedBedName,
   plannedRoomName,
   plannedWardId,
 } from "../fhir/encounterHelpers";
 import { locationDisplayName } from "../fhir/locationHelpers";
 import { displayName } from "../fhir/patientHelpers";
-import { addDays } from "../fhir/scheduleHelpers";
 import { bedDisplayName, bedNumber, bedShortLabel } from "../fhir/wardHelpers";
 import { KARTE_TAB_PARAM } from "../karteUrl";
 import { useReturnLinkState } from "../returnTo";
@@ -132,24 +134,6 @@ const DATE_FILTERS: Record<Exclude<TabKey, DatedTabKey>, { param: string; label:
 
 function isDatedTab(tab: TabKey): tab is DatedTabKey {
   return (DATED_TABS as readonly string[]).includes(tab);
-}
-
-/** 日付を 1 日ずつ送れる入力。基準日(入院患者)と退院日(退院患者)で使う。 */
-function DateStepper({ value, onChange }: { value: string; onChange: (next: string) => void }) {
-  return (
-    <div className="inpatient__date">
-      <button type="button" onClick={() => onChange(addDays(value, -1))} aria-label="前の日">
-        &lt;
-      </button>
-      <input type="date" value={value} onChange={(e) => onChange(e.target.value || today())} />
-      <button type="button" onClick={() => onChange(addDays(value, 1))} aria-label="次の日">
-        &gt;
-      </button>
-      <button type="button" onClick={() => onChange(today())} disabled={value === today()}>
-        今日
-      </button>
-    </div>
-  );
 }
 
 interface InpatientRow {
@@ -513,26 +497,16 @@ export function InpatientListPage() {
   );
 
   // 二重入院の警告用。どの患者がどの床に居るかを患者 id で引けるようにする。
-  const admittedBedLabelByPatientId = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const encounter of inpatients.data?.encounters ?? []) {
-      const patientId = encounterPatientId(encounter);
-      const label = encounter.location?.[0]?.location?.display;
-      if (patientId && label) map.set(patientId, label);
-    }
-    return map;
-  }, [inpatients.data]);
+  const admittedBedLabelByPatientId = useMemo(
+    () => admittedBedLabelByPatient(inpatients.data?.encounters ?? []),
+    [inpatients.data],
+  );
 
   // いま入院中の患者が居るベッド。転室・転床や入院実施で空床だけを選ばせる。
-  const occupiedBedIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const encounter of inpatients.data?.encounters ?? []) {
-      if (encounter.status !== ADMISSION_STATUS) continue;
-      const bedId = encounterBedId(encounter);
-      if (bedId) set.add(bedId);
-    }
-    return set;
-  }, [inpatients.data]);
+  const occupiedBedIds = useMemo(
+    () => occupiedBedIdSet(inpatients.data?.encounters ?? []),
+    [inpatients.data],
+  );
 
   function handleCancelAdmission(row: InpatientRow) {
     if (!row.encounter) return;
@@ -810,6 +784,11 @@ export function InpatientListPage() {
             to={`/nursing-worklist?ward=${wardId}&date=${date}`}
           >
             指示簿
+          </Link>
+        )}
+        {tab === "current" && wardId && (
+          <Link className="button inpatient-tabs__link" to={`/ward-map?ward=${wardId}&date=${date}`}>
+            病棟マップ
           </Link>
         )}
       </div>
