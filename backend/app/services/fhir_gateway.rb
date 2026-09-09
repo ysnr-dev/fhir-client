@@ -14,6 +14,44 @@ class FhirGateway
   # from ever touching the DB.
   UNSET = Object.new
 
+  # 上流への接続はプロセスで共有する。リクエストごとに Faraday::Connection を作ると
+  # 毎回 TCP + TLS のハンドシェイクが走り、Render 間の往復ではそれが 1 リクエストの
+  # 大半を占める。net_http_persistent アダプタは接続をスレッドごとに持つので、
+  # Puma の複数スレッドから同じ Connection を使っても安全。接続先(base_url)と
+  # Host ヘッダの組ごとに 1 つ。
+  @connections = {}
+  @connections_mutex = Mutex.new
+
+  class << self
+    def connection_for(base_url, host_header)
+      key = [base_url, host_header]
+      @connections_mutex.synchronize do
+        @connections[key] ||= build_connection(base_url, host_header)
+      end
+    end
+
+    # 共有接続を捨てる(spec が接続を差し替えた後の後片付け用)。
+    def reset_connections!
+      @connections_mutex.synchronize { @connections.clear }
+    end
+
+    private
+
+    def build_connection(base_url, host_header)
+      Faraday.new(url: base_url) do |f|
+        f.options.open_timeout = 2
+        f.options.timeout = 15
+        # FHIR は同じ検索パラメータの繰り返しを AND として使う(生年月日の範囲指定
+        # birthdate=ge...&birthdate=le... や、_include の複数指定など)。Faraday 既定の
+        # NestedParamsEncoder は繰り返しキーを最後の1つに潰してしまうため、
+        # 繰り返しをそのまま保持する FlatParamsEncoder を使う。
+        f.options.params_encoder = Faraday::FlatParamsEncoder
+        f.headers["Host"] = host_header if host_header.present?
+        f.adapter :net_http_persistent
+      end
+    end
+  end
+
   def initialize(
     base_url: UNSET,
     host_header: UNSET,
@@ -26,17 +64,7 @@ class FhirGateway
     end
 
     @token_provider = token_provider
-    @connection = Faraday.new(url: base_url) do |f|
-      f.options.open_timeout = 2
-      f.options.timeout = 15
-      # FHIR は同じ検索パラメータの繰り返しを AND として使う(生年月日の範囲指定
-      # birthdate=ge...&birthdate=le... や、_include の複数指定など)。Faraday 既定の
-      # NestedParamsEncoder は繰り返しキーを最後の1つに潰してしまうため、
-      # 繰り返しをそのまま保持する FlatParamsEncoder を使う。
-      f.options.params_encoder = Faraday::FlatParamsEncoder
-      f.headers["Host"] = host_header if host_header.present?
-      f.adapter Faraday.default_adapter
-    end
+    @connection = self.class.connection_for(base_url, host_header)
   end
 
   def forward(method:, path:, query: nil, body: nil, headers: {})

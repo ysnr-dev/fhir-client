@@ -21,10 +21,32 @@ class FhirConnectionSettings < ApplicationRecord
     keyword_init: true
   )
 
+  # 実効設定は FHIR の中継 1 回ごとに読まれる(FhirGateway.new と FhirTokenProvider.default)ので、
+  # 行をプロセス内に短時間だけ持って DB(Neon)への往復を省く。管理画面での保存は
+  # 同じプロセスには reset_cache! で即時に、他のプロセスには TTL 経過後に反映される。
+  CACHE_TTL = 30.seconds
+
+  @cache_mutex = Mutex.new
+
   class << self
-    # 単一行を遅延生成して返す。
+    # 単一行を遅延生成して返す。テストではトランザクションで行が巻き戻るのでキャッシュしない。
     def current
-      first_or_create!
+      return first_or_create! if Rails.env.test?
+
+      @cache_mutex.synchronize do
+        if @cached_row.nil? || @cached_at < CACHE_TTL.ago
+          @cached_row = first_or_create!
+          @cached_at = Time.current
+        end
+        @cached_row
+      end
+    end
+
+    def reset_cache!
+      @cache_mutex.synchronize do
+        @cached_row = nil
+        @cached_at = nil
+      end
     end
 
     # env フォールバック込みの実効設定。

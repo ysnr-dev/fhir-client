@@ -495,7 +495,8 @@ export function KartePage() {
     setPendingDay((prev) => (prev?.key === key ? prev : { key, scroll: false }));
   }, []);
 
-  function handleEdit(item: KarteTimelineItem) {
+  // 3 つのハンドラはカード(memo)に渡すので同一性を保つ。setPane は安定している。
+  const handleEdit = useCallback((item: KarteTimelineItem) => {
     if (item.kind === "note") setPane({ kind: "note-edit", noteId: item.id });
     else if (item.kind === "prescription") setPane({ kind: "prescription-edit", srId: item.id });
     else if (item.kind === "injection") setPane({ kind: "injection-edit", srId: item.id });
@@ -519,10 +520,10 @@ export function KartePage() {
     // バイタルの id は 1 回の測定を束ねる identifier。
     else if (item.kind === "vital") setPane({ kind: "vital-edit", entryId: item.id });
     else setPane({ kind: "qr-edit", qrId: item.id });
-  }
+  }, []);
 
   // DO(複写して新規登録)。処方・注射・検体検査で開くフォームが違う。
-  function handleDo(item: KarteTimelineItem) {
+  const handleDo = useCallback((item: KarteTimelineItem) => {
     if (item.kind === "prescription") setPane({ kind: "prescription-create", sourceSrId: item.id });
     else if (item.kind === "injection") setPane({ kind: "injection-create", sourceSrId: item.id });
     else if (item.kind === "lab-order") setPane({ kind: "lab-order-create", sourceSrId: item.id });
@@ -551,36 +552,41 @@ export function KartePage() {
     } else if (item.kind === "consult-order") {
       setPane({ kind: "consult-order-create", sourceSrId: item.id });
     }
-  }
+  }, []);
 
   // 開いている情報が消えたら、それを見ている UI も閉じる。
-  function handleDeleted(item: KarteTimelineItem) {
-    const openId =
-      pane.kind === "note-edit"
-        ? pane.noteId
-        : pane.kind === "prescription-edit" ||
-            pane.kind === "injection-edit" ||
-            pane.kind === "lab-order-edit" ||
-            pane.kind === "micro-order-edit" ||
-            pane.kind === "patho-order-edit" ||
-            pane.kind === "rad-order-edit" ||
-            pane.kind === "physio-order-edit" ||
-            pane.kind === "endoscopy-order-edit" ||
-            pane.kind === "treatment-order-edit" ||
-            pane.kind === "surgery-order-edit" ||
-            pane.kind === "meal-order-edit" ||
-            pane.kind === "transfusion-order-edit" ||
-            pane.kind === "rehab-order-edit" ||
-            pane.kind === "nutrition-guidance-order-edit" ||
-            pane.kind === "consult-order-edit" ||
-            pane.kind === "nursing-order-edit"
-          ? pane.srId
-          : pane.kind === "qr-edit"
-            ? pane.qrId
-            : undefined;
-    if (openId === item.id) setPane({ kind: "empty" });
-    if (detailTarget?.kind === item.kind && detailTarget.id === item.id) closeDetail();
-  }
+  const handleDeleted = useCallback(
+    (item: KarteTimelineItem) => {
+      setPane((current) => {
+        const openId =
+          current.kind === "note-edit"
+            ? current.noteId
+            : current.kind === "prescription-edit" ||
+                current.kind === "injection-edit" ||
+                current.kind === "lab-order-edit" ||
+                current.kind === "micro-order-edit" ||
+                current.kind === "patho-order-edit" ||
+                current.kind === "rad-order-edit" ||
+                current.kind === "physio-order-edit" ||
+                current.kind === "endoscopy-order-edit" ||
+                current.kind === "treatment-order-edit" ||
+                current.kind === "surgery-order-edit" ||
+                current.kind === "meal-order-edit" ||
+                current.kind === "transfusion-order-edit" ||
+                current.kind === "rehab-order-edit" ||
+                current.kind === "nutrition-guidance-order-edit" ||
+                current.kind === "consult-order-edit" ||
+                current.kind === "nursing-order-edit"
+              ? current.srId
+              : current.kind === "qr-edit"
+                ? current.qrId
+                : undefined;
+        return openId === item.id ? { kind: "empty" } : current;
+      });
+      if (detailTarget?.kind === item.kind && detailTarget.id === item.id) closeDetail();
+    },
+    [detailTarget, closeDetail],
+  );
 
   function toggleDayList() {
     const next = !dayListVisible;

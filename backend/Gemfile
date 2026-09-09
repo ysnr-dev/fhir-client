@@ -14,6 +14,8 @@ gem "puma", ">= 5.0"
 
 # HTTP client used to relay requests to the upstream FHIR server
 gem "faraday", "~> 2.9"
+# 上流 FHIR サーバーへの接続を keep-alive で使い回す(FhirGateway)。
+gem "faraday-net_http_persistent", "~> 2.3"
 
 # Use Kredis to get higher-level data types in Redis [https://github.com/rails/kredis]
 # gem "kredis"

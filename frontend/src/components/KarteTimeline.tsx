@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
   useDeleteClinicalNote,
   useDeleteLabOrder,
@@ -228,6 +228,7 @@ export function KarteTimeline({
 }: KarteTimelineProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [sentinelVisible, setSentinelVisible] = useState(false);
+  const { remove, deletingKey, failure } = useKarteItemDelete(onDeleted);
 
   // 追加読み込みの実体は毎レンダリングで作り直されるため、ref 経由で最新を呼ぶ
   // (effect の依存を loadToken だけに保つ)。
@@ -270,19 +271,25 @@ export function KarteTimeline({
               {...{ [KARTE_TARGET_ATTR]: dayKey }}
             >
               <h3 className="karte-group__date">{karteDayLabel(group.day)}</h3>
-              {group.items.map((item) => (
-                <KarteCard
-                  key={karteItemKey(item)}
-                  item={item}
-                  onEdit={onEdit}
-                  onDo={onDo}
-                  onOpenDetail={onOpenDetail}
-                  onDeleted={onDeleted}
-                  problemsById={problemsById}
-                  selectedProblemIds={selectedProblemIds}
-                  highlighted={highlightKey === karteItemKey(item)}
-                />
-              ))}
+              {group.items.map((item) => {
+                const key = karteItemKey(item);
+                return (
+                  <KarteCard
+                    key={key}
+                    item={item}
+                    onEdit={onEdit}
+                    onDo={onDo}
+                    onOpenDetail={onOpenDetail}
+                    onDelete={remove}
+                    onDeleted={onDeleted}
+                    deleting={deletingKey === key}
+                    deleteError={failure?.key === key ? failure.error : null}
+                    problemsById={problemsById}
+                    selectedProblemIds={selectedProblemIds}
+                    highlighted={highlightKey === key}
+                  />
+                );
+              })}
             </section>
           );
         })
@@ -295,12 +302,105 @@ export function KarteTimeline({
   );
 }
 
-function KarteCard({
+/**
+ * カードの削除。種別ごとの mutation を一覧で 1 組だけ持ち(カードごとに持つと
+ * 表示枚数 × 17 本の購読になる)、どのカードを消している最中か・どのカードで失敗したかは
+ * カードのキーで覚えてカードに配る。
+ */
+function useKarteItemDelete(onDeleted: (item: KarteTimelineItem) => void) {
+  const mutations = {
+    note: useDeleteClinicalNote(),
+    prescription: useDeletePrescription(),
+    // 検体検査・細菌検査・放射線検査・生理検査・内視鏡・処置は明細も ServiceRequest
+    // なので、専用の削除でまとめて消す。
+    "lab-order": useDeleteLabOrder(),
+    "micro-order": useDeleteMicroOrder(),
+    "patho-order": useDeletePathoOrder(),
+    "rad-order": useDeleteRadOrder(),
+    "physio-order": useDeletePhysioOrder(),
+    "endoscopy-order": useDeleteEndoscopyOrder(),
+    "treatment-order": useDeleteTreatmentOrder(),
+    "surgery-order": useDeleteSurgeryOrder(),
+    // 食事は明細を持たないので ServiceRequest 1 件を消すだけ。
+    "meal-order": useDeleteMealOrder(),
+    // 輸血は製剤明細も ServiceRequest なので、専用の削除でまとめて消す。
+    "transfusion-order": useDeleteTransfusionOrder(),
+    // リハビリは明細を持たないが、リハ部門が取った予約を道連れで取り消す。
+    "rehab-order": useDeleteRehabOrder(),
+    "nutrition-guidance-order": useDeleteNutritionGuidanceOrder(),
+    // 他科依頼も明細を持たないが、回答済のものは消させない(回答という別の医師の
+    // 記録がぶら下がっているため。mutation 側で拒否してエラー帯に出す)。
+    "consult-order": useDeleteConsultOrder(),
+    qr: useDeleteQuestionnaireResponse(),
+    vital: useDeleteVitalEntry(),
+  };
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ key: string; error: unknown } | null>(null);
+
+  // remove の同一性を保つため(カードの memo が効くように)、最新の mutation と
+  // コールバックは ref 経由で呼ぶ。
+  const mutationsRef = useRef(mutations);
+  mutationsRef.current = mutations;
+  const onDeletedRef = useRef(onDeleted);
+  onDeletedRef.current = onDeleted;
+
+  const remove = useCallback((item: KarteTimelineItem) => {
+    const key = karteItemKey(item);
+    const m = mutationsRef.current;
+    setDeletingKey(key);
+    setFailure(null);
+    const options = {
+      onSuccess: () => onDeletedRef.current(item),
+      onError: (error: unknown) => setFailure({ key, error }),
+      onSettled: () => setDeletingKey((current) => (current === key ? null : current)),
+    };
+    switch (item.kind) {
+      case "note":
+      case "prescription":
+      case "lab-order":
+      case "micro-order":
+      case "patho-order":
+      case "rad-order":
+      case "physio-order":
+      case "endoscopy-order":
+      case "treatment-order":
+      case "surgery-order":
+      case "meal-order":
+      case "transfusion-order":
+      case "rehab-order":
+      case "nutrition-guidance-order":
+      case "consult-order":
+        m[item.kind].mutate(item.id, options);
+        break;
+      // テンプレート回答は、生成した Observation も一緒に消すのでリソースごと渡す。
+      case "qr":
+        m.qr.mutate(item.response, options);
+        break;
+      // バイタルは 1 回の測定が項目ごとの Observation に分かれるのでまとめて消す。
+      case "vital":
+        m.vital.mutate(
+          item.entry.observations.map((observation) => observation.id ?? "").filter(Boolean),
+          options,
+        );
+        break;
+      // 注射は専用の確認モーダル(InjectionDeleteModal)が消す。
+      case "injection":
+        break;
+    }
+  }, []);
+
+  return { remove, deletingKey, failure };
+}
+
+const KarteCard = memo(function KarteCard({
   item,
   onEdit,
   onDo,
   onOpenDetail,
+  onDelete,
   onDeleted,
+  deleting,
+  deleteError,
   problemsById,
   selectedProblemIds,
   highlighted,
@@ -309,7 +409,11 @@ function KarteCard({
   onEdit: (item: KarteTimelineItem) => void;
   onDo: (item: KarteTimelineItem) => void;
   onOpenDetail: (target: KarteDetailTarget) => void;
+  /** 確認の後に呼ぶ削除。実行状態は deleting / deleteError で戻ってくる。 */
+  onDelete: (item: KarteTimelineItem) => void;
   onDeleted: (item: KarteTimelineItem) => void;
+  deleting: boolean;
+  deleteError: unknown;
   problemsById: Map<string, fhir4.Condition>;
   selectedProblemIds: ReadonlySet<string> | null;
   highlighted: boolean;
@@ -319,23 +423,6 @@ function KarteCard({
     (item.kind === "injection" || item.kind === "prescription") && item.serviceRequest
       ? regimenOrderOf(item.serviceRequest)
       : null;
-  const deleteNote = useDeleteClinicalNote();
-  const deletePrescription = useDeletePrescription();
-  const deleteLabOrder = useDeleteLabOrder();
-  const deleteMicroOrder = useDeleteMicroOrder();
-  const deletePathoOrder = useDeletePathoOrder();
-  const deleteRadOrder = useDeleteRadOrder();
-  const deletePhysioOrder = useDeletePhysioOrder();
-  const deleteEndoscopyOrder = useDeleteEndoscopyOrder();
-  const deleteTreatmentOrder = useDeleteTreatmentOrder();
-  const deleteSurgeryOrder = useDeleteSurgeryOrder();
-  const deleteMealOrder = useDeleteMealOrder();
-  const deleteTransfusionOrder = useDeleteTransfusionOrder();
-  const deleteRehabOrder = useDeleteRehabOrder();
-  const deleteNutritionGuidanceOrder = useDeleteNutritionGuidanceOrder();
-  const deleteConsultOrder = useDeleteConsultOrder();
-  const deleteResponse = useDeleteQuestionnaireResponse();
-  const deleteVital = useDeleteVitalEntry();
   // 平文表示・FHIR JSON 表示はモーダルで開く(カルテの読み位置を動かさない)。
   // 詳細表示は URL に載せるので親に任せる。
   const [plainTextOpen, setPlainTextOpen] = useState(false);
@@ -350,39 +437,6 @@ function KarteCard({
   // 輸血の実施入力。投与するのは病棟なので、部門一覧だけでなくここからも開ける。
   const [performOpen, setPerformOpen] = useState(false);
 
-  const deleting =
-    deleteNote.isPending ||
-    deletePrescription.isPending ||
-    deleteLabOrder.isPending ||
-    deleteMicroOrder.isPending ||
-    deletePathoOrder.isPending ||
-    deleteRadOrder.isPending ||
-    deletePhysioOrder.isPending ||
-    deleteEndoscopyOrder.isPending ||
-    deleteTreatmentOrder.isPending ||
-    deleteSurgeryOrder.isPending ||
-    deleteMealOrder.isPending ||
-    deleteRehabOrder.isPending ||
-    deleteNutritionGuidanceOrder.isPending ||
-    deleteConsultOrder.isPending ||
-    deleteResponse.isPending ||
-    deleteVital.isPending;
-  const deleteError =
-    deleteNote.error ??
-    deletePrescription.error ??
-    deleteLabOrder.error ??
-    deleteMicroOrder.error ??
-    deleteRadOrder.error ??
-    deletePhysioOrder.error ??
-    deleteEndoscopyOrder.error ??
-    deleteTreatmentOrder.error ??
-    deleteSurgeryOrder.error ??
-    deleteMealOrder.error ??
-    deleteRehabOrder.error ??
-    deleteNutritionGuidanceOrder.error ??
-    deleteConsultOrder.error ??
-    deleteResponse.error ??
-    deleteVital.error;
 
   // テンプレートは帳票レイアウトが登録されているものだけ PDF 出力できる。
   // 他の種別では canonical を渡さないので照会自体が走らない。
@@ -403,39 +457,7 @@ function KarteCard({
       ? `\n${regimenDay.name} ${cycleDayLabel(regimenDay)} の投与日です。削除するとクールから抜けます。投与を止めるだけなら化学療法タブで中止、クールごと消すならレジメン詳細の「取消」を使ってください。`
       : "";
     if (!window.confirm(`この${karteItemKindLabel(item)}を削除します。${regimenNote}よろしいですか?`)) return;
-    const options = { onSuccess: () => onDeleted(item) };
-    if (item.kind === "note") deleteNote.mutate(item.id, options);
-    else if (item.kind === "prescription") deletePrescription.mutate(item.id, options);
-    // 検体検査・細菌検査・放射線検査・生理検査・内視鏡・処置は明細も ServiceRequest
-    // なので、専用の削除でまとめて消す。
-    else if (item.kind === "lab-order") deleteLabOrder.mutate(item.id, options);
-    else if (item.kind === "micro-order") deleteMicroOrder.mutate(item.id, options);
-    else if (item.kind === "patho-order") deletePathoOrder.mutate(item.id, options);
-    else if (item.kind === "rad-order") deleteRadOrder.mutate(item.id, options);
-    else if (item.kind === "physio-order") deletePhysioOrder.mutate(item.id, options);
-    else if (item.kind === "endoscopy-order") deleteEndoscopyOrder.mutate(item.id, options);
-    else if (item.kind === "treatment-order") deleteTreatmentOrder.mutate(item.id, options);
-    else if (item.kind === "surgery-order") deleteSurgeryOrder.mutate(item.id, options);
-    // 食事は明細を持たないので ServiceRequest 1 件を消すだけ。
-    else if (item.kind === "meal-order") deleteMealOrder.mutate(item.id, options);
-    // 輸血は製剤明細も ServiceRequest なので、専用の削除でまとめて消す。
-    else if (item.kind === "transfusion-order") deleteTransfusionOrder.mutate(item.id, options);
-    // リハビリは明細を持たないが、リハ部門が取った予約を道連れで取り消す。
-    else if (item.kind === "rehab-order") deleteRehabOrder.mutate(item.id, options);
-    else if (item.kind === "nutrition-guidance-order")
-      deleteNutritionGuidanceOrder.mutate(item.id, options);
-    // 他科依頼も明細を持たないが、回答済のものは消させない(回答という別の医師の
-    // 記録がぶら下がっているため。mutation 側で拒否してエラー帯に出す)。
-    else if (item.kind === "consult-order") deleteConsultOrder.mutate(item.id, options);
-    // テンプレート回答は、生成した Observation も一緒に消すのでリソースごと渡す。
-    else if (item.kind === "qr") deleteResponse.mutate(item.response, options);
-    // バイタルは 1 回の測定が項目ごとの Observation に分かれるのでまとめて消す。
-    else if (item.kind === "vital") {
-      deleteVital.mutate(
-        item.entry.observations.map((observation) => observation.id ?? "").filter(Boolean),
-        options,
-      );
-    }
+    onDelete(item);
   }
 
   // プロブレム選択中は、そのプロブレムを参照しない情報を控えめに表示する
@@ -812,7 +834,7 @@ function KarteCard({
       )}
     </article>
   );
-}
+});
 
 // DO・PDF は 1 行に並ぶので、アイコンに短いラベルを添えて幅を詰める。
 // それ以外の操作(詳細表示・FHIR JSON 表示・編集・削除)はケバブメニューに畳む。

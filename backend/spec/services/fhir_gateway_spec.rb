@@ -6,6 +6,8 @@ RSpec.describe FhirGateway do
 
   # A token fetch first warms the (possibly spun-down) upstream via /up.
   before { stub_request(:get, "#{base_url}/up").to_return(status: 200, body: "ok") }
+  # 接続はプロセスで共有されるので、test アダプタに差し替えた例の後始末をする。
+  after { described_class.reset_connections! }
 
   def build_gateway(provider)
     described_class.new(base_url: base_url, host_header: nil, token_provider: provider)

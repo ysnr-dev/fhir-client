@@ -26,8 +26,9 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
 ## 2026-09-09 に対応済み（サーバー側・クライアント側とも）
 
 fhir-client のパフォーマンス監査で「上流を直した方が効率がよい」と判定した項目。サーバー側の
-実装と回帰 spec は完了。migration 2 本（`service_requests.order_end` / `procedures.performed_end`、
-どちらも既存データの backfill 付き）は entrypoint の `db:prepare` で起動時に自動適用される。
+実装と回帰 spec は完了。migration 3 本（`service_requests.order_end` / `procedures.performed_end`、
+どちらも既存データの backfill 付き。`requisition` token の再索引）は entrypoint の `db:prepare` で
+起動時に自動適用される。
 デプロイ時の手動操作は無い。**上流を fhir-client より先にデプロイすること**（クライアントが
 新パラメータを使い始めた時点で上流が旧版だと、lenient 既定では黙って全件が返る）。
 
@@ -38,7 +39,8 @@ fhir-client のパフォーマンス監査で「上流を直した方が効率�
 2. **`ServiceRequest?performer=`**（C-6、R4 標準）。0..* 参照を jsonb 包含で引く。型を省いた id は
    `Organization`。`_include=ServiceRequest:performer` も可（Organization / Practitioner / PractitionerRole）。
 3. **`ServiceRequest?requisition=`**（C-8、R4 標準）。Identifier を `system|value` の token として索引。
-   `requisition:missing=true` も効く。
+   `requisition:missing=true` も効く。resource_tokens は書き込み時にしか埋まらないので、既存データは
+   migration `20260909000003` が再索引する（Organization の type と同じ方式。開発 DB で 83 件を確認）。
 4. **`ServiceRequest?order-period=`**（ローカル）。開始 = `occurrenceDateTime`、終了 = ローカル拡張
    `nursing-order-end` / `meal-order-end` / `rehab-order-end` / `nutrition-guidance-order-end`
    （`valueDate` / `valueDateTime`）を `order_end` 列に抽出し、`Encounter.date` と同じ期間検索の
@@ -54,7 +56,12 @@ fhir-client のパフォーマンス監査で「上流を直した方が効率�
    番号は欠番になる（番号に意味を持たせない前提）。write スコープ。応答は `Parameters`
    （`value` = valueString、`system` = valueUri）。
 
-### クライアント側の追随（2026-09-09 実装済み。`tsc -b` 通過、ブラウザ確認は未実施）
+### クライアント側の追随（2026-09-09 実装済み。`tsc -b` 通過、開発環境のブラウザで確認済み）
+
+確認した画面: 指示簿（病棟の看護指示一覧）・他科依頼一覧・化学療法タブ（3 クール分の日オーダー）・
+経過表（看護・食事の order-period と手術の date 範囲）・食事タブの暦・リハビリ一覧・栄養指導一覧。
+いずれも新パラメータの検索が 200 で返り、コンソールエラー無し。患者登録の採番は上流への直接
+呼び出しで確認（登録済み最大 16 に対し 17）。
 
 - **F-4. 患者番号の採番**: `fetchNextPatientNumber`（`queries.ts`）を
   `GET /Patient/$next-identifier?system={DEFAULT_IDENTIFIER_SYSTEM}` 1 回に置き換えた。最大 80 往復 → 1 往復。

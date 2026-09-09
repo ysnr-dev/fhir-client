@@ -10,9 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_09_000000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_09_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+  enable_extension "pg_trgm"
 
   create_table "facility_settings", force: :cascade do |t|
     t.string "self_organization_fhir_id"
@@ -83,6 +84,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_09_000000) do
     t.string "search_term"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["search_term"], name: "idx_master_disease_indexes_search_term_trgm", opclass: :gin_trgm_ops, using: :gin
     t.index ["search_term"], name: "index_master_disease_indexes_on_search_term"
     t.index ["target_code"], name: "index_master_disease_indexes_on_target_code"
   end
@@ -115,6 +117,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_09_000000) do
     t.index ["exchange_code"], name: "index_master_diseases_on_exchange_code"
     t.index ["icd10_2013"], name: "index_master_diseases_on_icd10_2013"
     t.index ["management_number"], name: "index_master_diseases_on_management_number", unique: true
+    t.index ["search_kana"], name: "idx_master_diseases_search_kana_trgm", opclass: :gin_trgm_ops, using: :gin
+    t.index ["search_name"], name: "idx_master_diseases_search_name_trgm", opclass: :gin_trgm_ops, using: :gin
   end
 
   create_table "master_endoscopy_dataset_details", force: :cascade do |t|
@@ -266,6 +270,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_09_000000) do
     t.index ["individual_medicine_code"], name: "index_master_hot_codes_on_individual_medicine_code"
     t.index ["jan_code"], name: "index_master_hot_codes_on_jan_code"
     t.index ["receipt_code_1"], name: "index_master_hot_codes_on_receipt_code_1"
+    t.index ["sales_name"], name: "idx_master_hot_codes_sales_name_trgm", opclass: :gin_trgm_ops, using: :gin
     t.index ["sales_name"], name: "index_master_hot_codes_on_sales_name"
     t.index ["yakka_code"], name: "index_master_hot_codes_on_yakka_code"
   end
@@ -710,6 +715,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_09_000000) do
     t.index ["code_table_number_alpha"], name: "index_master_medical_procedures_on_code_table_number_alpha"
     t.index ["name"], name: "index_master_medical_procedures_on_name"
     t.index ["procedure_code"], name: "index_master_medical_procedures_on_procedure_code", unique: true
+    t.index ["publication_order"], name: "index_master_medical_procedures_on_publication_order"
+    t.index ["search_kana"], name: "idx_master_medical_procedures_search_kana_trgm", opclass: :gin_trgm_ops, using: :gin
+    t.index ["search_name"], name: "idx_master_medical_procedures_search_name_trgm", opclass: :gin_trgm_ops, using: :gin
   end
 
   create_table "master_medicine_dose_conversions", force: :cascade do |t|
@@ -733,6 +741,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_09_000000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["code"], name: "index_master_medicine_types_on_code", unique: true
+    t.index ["search_name"], name: "idx_master_medicine_types_search_name_trgm", opclass: :gin_trgm_ops, using: :gin
   end
 
   create_table "master_medicine_usages", force: :cascade do |t|
@@ -806,6 +815,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_09_000000) do
     t.index ["generic_name_code"], name: "index_master_medicines_on_generic_name_code"
     t.index ["medicine_code"], name: "index_master_medicines_on_medicine_code", unique: true
     t.index ["name"], name: "index_master_medicines_on_name"
+    t.index ["search_generic"], name: "idx_master_medicines_search_generic_trgm", opclass: :gin_trgm_ops, using: :gin
+    t.index ["search_kana"], name: "idx_master_medicines_search_kana_trgm", opclass: :gin_trgm_ops, using: :gin
+    t.index ["search_name"], name: "idx_master_medicines_search_name_trgm", opclass: :gin_trgm_ops, using: :gin
     t.index ["yakka_code"], name: "index_master_medicines_on_yakka_code"
   end
 
@@ -1462,6 +1474,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_09_000000) do
     t.index ["copied_from_code"], name: "index_master_regimens_on_copied_from_code"
     t.index ["department_code"], name: "index_master_regimens_on_department_code"
     t.index ["regimen_code"], name: "index_master_regimens_on_regimen_code", unique: true
+    t.index ["search_kana"], name: "idx_master_regimens_search_kana_trgm", opclass: :gin_trgm_ops, using: :gin
+    t.index ["search_name"], name: "idx_master_regimens_search_name_trgm", opclass: :gin_trgm_ops, using: :gin
+    t.index ["search_short_name"], name: "idx_master_regimens_search_short_name_trgm", opclass: :gin_trgm_ops, using: :gin
     t.index ["status"], name: "index_master_regimens_on_status"
   end
 

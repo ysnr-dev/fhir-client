@@ -373,9 +373,15 @@ const DOSE_CONVERSION_PER = 20;
 const DOSE_CONVERSIONS_KEY = ["master", "medicine_dose_conversions"];
 
 export function useImportMaster() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ masterType, file }: { masterType: MasterType; file: File }) =>
       importMaster(masterType, file),
+    // 取込は複数のマスタに波及しうる(頻用コードと部品コードなど)ので、選択肢の
+    // キャッシュ(staleTime: Infinity)ごとマスタ全体を引き直させる。
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["master"] });
+    },
   });
 }
 
@@ -832,6 +838,7 @@ export function useLabSpecimenSearch(filters: LabSpecimenFilters, page: number) 
 export function useLabSpecimenCategories() {
   return useQuery({
     queryKey: [...LAB_SPECIMENS_KEY, "categories"],
+    staleTime: Infinity,
     queryFn: fetchLabSpecimenCategories,
   });
 }
@@ -840,6 +847,7 @@ export function useLabSpecimenCategories() {
 export function useLabSpecimenOptions() {
   return useQuery({
     queryKey: [...LAB_SPECIMENS_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchLabSpecimens({ per: 500 }),
   });
 }
@@ -876,6 +884,7 @@ export function useLabSpecimenMutations() {
 export function useLabContainers() {
   return useQuery({
     queryKey: [...LAB_CONTAINERS_KEY, "list"],
+    staleTime: Infinity,
     queryFn: () => searchLabContainers({ per: 100 }),
   });
 }
@@ -910,6 +919,7 @@ export function useLabContainerMutations() {
 export function useLabOrderItemLayouts() {
   return useQuery({
     queryKey: [...LAB_LAYOUTS_KEY, "list"],
+    staleTime: Infinity,
     queryFn: fetchLabOrderItemLayouts,
   });
 }
@@ -979,6 +989,7 @@ export function useLabOrderItemsByCodes(codes: string[]) {
 
   return useQuery({
     queryKey: [...LAB_ORDER_ITEMS_KEY, "by_codes", sorted],
+    staleTime: Infinity,
     queryFn: () => searchLabOrderItems({ order_item_code: sorted.join(","), per: 200 }),
     enabled: sorted.length > 0,
   });
@@ -1156,6 +1167,7 @@ export function useRadDatasetSearch(
 export function useRadDatasetOptions() {
   return useQuery({
     queryKey: [...RAD_DATASETS_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchRadDatasets({ per: 200 }),
   });
 }
@@ -1233,6 +1245,7 @@ export function useRadDatasetLinesForItems(itemCodes: string[]) {
 
   const items = useQuery({
     queryKey: [...RAD_ITEMS_KEY, "dataset-codes", codes],
+    staleTime: Infinity,
     queryFn: () => searchRadItems({ item_code: codes.join(","), per: RAD_DATASET_DETAIL_PER }),
     enabled: codes.length > 0,
   });
@@ -1450,6 +1463,7 @@ export function useRadSetItemMutations() {
 export function useRadItemLayouts() {
   return useQuery({
     queryKey: [...RAD_LAYOUTS_KEY, "list"],
+    staleTime: Infinity,
     queryFn: fetchRadItemLayouts,
   });
 }
@@ -1520,6 +1534,7 @@ export function useRadItemsByCodes(codes: string[]) {
 
   return useQuery({
     queryKey: [...RAD_ITEMS_KEY, "by_codes", sorted],
+    staleTime: Infinity,
     queryFn: () => searchRadItems({ item_code: sorted.join(","), per: 200 }),
     enabled: sorted.length > 0,
   });
@@ -1602,6 +1617,7 @@ export function usePhysioExamTypeSearch(
 export function usePhysioExamTypeOptions() {
   return useQuery({
     queryKey: [...PHYSIO_EXAM_TYPES_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchPhysioExamTypes({ per: 200 }),
   });
 }
@@ -1719,6 +1735,7 @@ export function usePhysioSetItemMutations() {
 export function usePhysioItemLayouts() {
   return useQuery({
     queryKey: [...PHYSIO_LAYOUTS_KEY, "list"],
+    staleTime: Infinity,
     queryFn: fetchPhysioItemLayouts,
   });
 }
@@ -1803,6 +1820,7 @@ export function usePhysioDatasetSearch(
 export function usePhysioDatasetOptions() {
   return useQuery({
     queryKey: [...PHYSIO_DATASETS_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchPhysioDatasets({ per: 200 }),
   });
 }
@@ -1880,6 +1898,7 @@ export function usePhysioDatasetLinesForItems(itemCodes: string[]) {
 
   const items = useQuery({
     queryKey: [...PHYSIO_ITEMS_KEY, "dataset-codes", codes],
+    staleTime: Infinity,
     queryFn: () =>
       searchPhysioItems({ item_code: codes.join(","), per: PHYSIO_DATASET_DETAIL_PER }),
     enabled: codes.length > 0,
@@ -1917,6 +1936,7 @@ export function usePhysioItemsByCodes(codes: string[]) {
 
   return useQuery({
     queryKey: [...PHYSIO_ITEMS_KEY, "by_codes", sorted],
+    staleTime: Infinity,
     queryFn: () => searchPhysioItems({ item_code: sorted.join(","), per: 200 }),
     enabled: sorted.length > 0,
   });
@@ -1999,6 +2019,7 @@ export function useEndoscopyExamTypeSearch(
 export function useEndoscopyExamTypeOptions() {
   return useQuery({
     queryKey: [...ENDOSCOPY_EXAM_TYPES_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchEndoscopyExamTypes({ per: 200 }),
   });
 }
@@ -2116,6 +2137,7 @@ export function useEndoscopySetItemMutations() {
 export function useEndoscopyItemLayouts() {
   return useQuery({
     queryKey: [...ENDOSCOPY_LAYOUTS_KEY, "list"],
+    staleTime: Infinity,
     queryFn: fetchEndoscopyItemLayouts,
   });
 }
@@ -2200,6 +2222,7 @@ export function useEndoscopyDatasetSearch(
 export function useEndoscopyDatasetOptions() {
   return useQuery({
     queryKey: [...ENDOSCOPY_DATASETS_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchEndoscopyDatasets({ per: 200 }),
   });
 }
@@ -2277,6 +2300,7 @@ export function useEndoscopyDatasetLinesForItems(itemCodes: string[]) {
 
   const items = useQuery({
     queryKey: [...ENDOSCOPY_ITEMS_KEY, "dataset-codes", codes],
+    staleTime: Infinity,
     queryFn: () =>
       searchEndoscopyItems({ item_code: codes.join(","), per: ENDOSCOPY_DATASET_DETAIL_PER }),
     enabled: codes.length > 0,
@@ -2314,6 +2338,7 @@ export function useEndoscopyItemsByCodes(codes: string[]) {
 
   return useQuery({
     queryKey: [...ENDOSCOPY_ITEMS_KEY, "by_codes", sorted],
+    staleTime: Infinity,
     queryFn: () => searchEndoscopyItems({ item_code: sorted.join(","), per: 200 }),
     enabled: sorted.length > 0,
   });
@@ -2367,6 +2392,7 @@ const SCHEMAS_KEY = ["master", "schemas"];
 export function useSchemaCategories() {
   return useQuery({
     queryKey: [...SCHEMA_CATEGORIES_KEY, "list"],
+    staleTime: Infinity,
     queryFn: fetchSchemaCategories,
   });
 }
@@ -2537,6 +2563,7 @@ export function useMicroSpecimenTypeMutations() {
 export function useMicroOrderItems() {
   return useQuery({
     queryKey: [...MICRO_ORDER_ITEMS_KEY, "list"],
+    staleTime: Infinity,
     queryFn: fetchMicroOrderItems,
   });
 }
@@ -2568,6 +2595,7 @@ export function useMicroOrderItemMutations() {
 export function useMicroCollectionSites() {
   return useQuery({
     queryKey: [...MICRO_COLLECTION_SITES_KEY, "list"],
+    staleTime: Infinity,
     queryFn: fetchMicroCollectionSites,
   });
 }
@@ -2599,6 +2627,7 @@ export function useMicroCollectionSiteMutations() {
 export function useMicroCollectionMethods() {
   return useQuery({
     queryKey: [...MICRO_COLLECTION_METHODS_KEY, "list"],
+    staleTime: Infinity,
     queryFn: fetchMicroCollectionMethods,
   });
 }
@@ -2632,6 +2661,7 @@ export function useMicroCollectionMethodMutations() {
 export function useMicroSpecimenTypeOptions() {
   return useQuery({
     queryKey: [...MICRO_SPECIMEN_TYPES_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchMicroSpecimenTypes({ per: 100 }),
   });
 }
@@ -2754,6 +2784,7 @@ export function useFrequentMicroAntimicrobials() {
 export function useMicroSusceptibilityMethodOptions() {
   return useQuery({
     queryKey: [...MICRO_SUSCEPTIBILITY_METHODS_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchMicroSusceptibilityMethods({ per: 100 }),
   });
 }
@@ -2852,6 +2883,7 @@ export function useTreatmentSetItemMutations() {
 export function useTreatmentItemLayouts() {
   return useQuery({
     queryKey: [...TREATMENT_LAYOUTS_KEY, "list"],
+    staleTime: Infinity,
     queryFn: fetchTreatmentItemLayouts,
   });
 }
@@ -2936,6 +2968,7 @@ export function useTreatmentDatasetSearch(
 export function useTreatmentDatasetOptions() {
   return useQuery({
     queryKey: [...TREATMENT_DATASETS_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchTreatmentDatasets({ per: 200 }),
   });
 }
@@ -3013,6 +3046,7 @@ export function useTreatmentDatasetLinesForItems(itemCodes: string[]) {
 
   const items = useQuery({
     queryKey: [...TREATMENT_ITEMS_KEY, "dataset-codes", codes],
+    staleTime: Infinity,
     queryFn: () =>
       searchTreatmentItems({ item_code: codes.join(","), per: TREATMENT_DATASET_DETAIL_PER }),
     enabled: codes.length > 0,
@@ -3049,6 +3083,7 @@ export function useTreatmentItemsByCodes(codes: string[]) {
 
   return useQuery({
     queryKey: [...TREATMENT_ITEMS_KEY, "by_codes", sorted],
+    staleTime: Infinity,
     queryFn: () => searchTreatmentItems({ item_code: sorted.join(","), per: 200 }),
     enabled: sorted.length > 0,
   });
@@ -3120,6 +3155,7 @@ export function useMealCategorySearch(
 export function useMealCategoryOptions() {
   return useQuery({
     queryKey: [...MEAL_CATEGORIES_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchMealCategories({ per: 100 }),
   });
 }
@@ -3189,6 +3225,7 @@ export function useMealDiet(idOrCode: string | number | null) {
 export function useMealDietOptions() {
   return useQuery({
     queryKey: [...MEAL_DIETS_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchMealDiets({ active: true, per: 500 }),
   });
 }
@@ -3292,6 +3329,7 @@ export function useMealItem(idOrCode: string | number | null) {
 export function useMealItemOptions(kind: "staple" | "side_dish_form") {
   return useQuery({
     queryKey: [...MEAL_ITEMS_KEY, "options", kind],
+    staleTime: Infinity,
     queryFn: () => searchMealItems({ kind, active: true, per: 200 }),
   });
 }
@@ -3366,6 +3404,7 @@ export function useTransfusionProduct(idOrCode: string | number | null) {
 export function useTransfusionProductOptions() {
   return useQuery({
     queryKey: [...TRANSFUSION_PRODUCTS_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchTransfusionProducts({ active: true, per: 200 }),
   });
 }
@@ -3443,6 +3482,7 @@ export function useSurgeryCategorySearch(
 export function useSurgeryCategoryOptions() {
   return useQuery({
     queryKey: [...SURGERY_CATEGORIES_KEY, "options"],
+    staleTime: Infinity,
     queryFn: () => searchSurgeryCategories({ per: SURGERY_CATEGORY_OPTIONS_PER }),
   });
 }
@@ -3543,6 +3583,7 @@ export function useSurgeryItemsByCodes(codes: string[]) {
 
   return useQuery({
     queryKey: [...SURGERY_ITEMS_KEY, "by_codes", sorted],
+    staleTime: Infinity,
     queryFn: () => searchSurgeryItems({ item_code: sorted.join(","), per: 200 }),
     enabled: sorted.length > 0,
   });
@@ -3711,6 +3752,7 @@ export function useFrequentPathoOrgans() {
 export function usePathoCollectionMethods() {
   return useQuery({
     queryKey: [...PATHO_COLLECTION_METHODS_KEY, "list"],
+    staleTime: Infinity,
     queryFn: fetchPathoCollectionMethods,
   });
 }

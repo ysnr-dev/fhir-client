@@ -15,8 +15,9 @@ module Admin
       attrs = attrs.except(:fhir_admin_token) if attrs[:fhir_admin_token].blank?
 
       if @settings.update(attrs)
-        # このプロセスのシングルトンを即時に作り直させる。他プロセスは次リクエスト時に
-        # config_version の変化で遅延リビルドする。
+        # このプロセスの設定キャッシュとシングルトンを即時に作り直させる。他プロセスは
+        # キャッシュの TTL 経過後、config_version の変化で遅延リビルドする。
+        FhirConnectionSettings.reset_cache!
         FhirTokenProvider.reset_default!
         render json: masked(@settings)
       else
