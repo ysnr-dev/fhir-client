@@ -682,6 +682,11 @@ export interface LabTimeline {
   rows: LabTimelineRow[];
 }
 
+// Observation の JLAC11 コード。検査分野などマスタ側にしか無い情報を引き当てるのに使う。
+export function labJlac11CodeOf(obs: fhir4.Observation): string {
+  return codingBySystem(obs.code.coding, JLAC11_SYSTEM)?.code ?? "";
+}
+
 // 時系列表示で同じ検査項目を1行にまとめるキー(LabTimelineRow.key)。
 // 検査結果内容ページの「選択項目のみ時系列表示」で行の絞り込みにも使う。
 export function labTimelineKeyOf(obs: fhir4.Observation): string {

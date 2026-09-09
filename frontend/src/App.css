@@ -1834,6 +1834,22 @@ fieldset.rp-card {
   width: 72px;
 }
 
+/* 単位は結果値に添える補助情報なので、一段小さく落ち着いた色にして結果値と見分けやすくする。 */
+.rp-card__medicines--detail td.rp-card__lab-unit {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* 検査分野(生化学検査・血液学的検査など)の見出し行。分野ごとに tbody を分けており、
+   その先頭行に置く。地色はアクセント色を薄く敷いて、列見出し(thead)とも表の外の
+   地とも取り違えないようにする。 */
+.rp-card__medicines--lab tbody tr.lab-result-detail__category th {
+  background: var(--accent-bg);
+  color: var(--text-h);
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
 /* 検査結果(詳細)は先頭にチェックボックス列があるため、--detail の nth-child
    幅指定を 1 列ずらして上書きする(同じ詳細度なので --detail より後に置く)。 */
 .rp-card__medicines--lab th.rp-card__lab-check,
