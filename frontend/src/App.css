@@ -5328,7 +5328,25 @@ body.karte-wide {
 }
 
 .karte-rp__detail-label {
+  flex: none;
   color: var(--text);
+}
+
+/* 用法行の右側。用法名や日数は途中で折らず、長いコメントだけを次の行へ回す。 */
+.karte-rp__usage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  min-width: 0;
+}
+
+.karte-rp__usage > span {
+  white-space: nowrap;
+}
+
+.karte-rp__usage > .karte-rp__comment {
+  min-width: 0;
+  white-space: normal;
 }
 
 /* 見出しの右側。複数行の記載やシェーマ画像が入るので縦に積む。 */

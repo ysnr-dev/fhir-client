@@ -318,8 +318,10 @@ function RegimenOrderBody({ order }: { order: RegimenDayOrder }) {
             </ul>
             <div className="karte-rp__detail">
               <span className="karte-rp__detail-label">用法:</span>
-              <span>{injectionUsageSummary(rp) || "-"}</span>
-              {rp.usageComment && <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>}
+              <span className="karte-rp__usage">
+                <span>{injectionUsageSummary(rp) || "-"}</span>
+                {rp.usageComment && <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>}
+              </span>
             </div>
             {rp.times.length > 0 && (
               <div className="karte-rp__detail">
@@ -355,9 +357,11 @@ function RegimenOrderBody({ order }: { order: RegimenDayOrder }) {
           </ul>
           <div className="karte-rp__detail">
             <span className="karte-rp__detail-label">用法:</span>
-            <span>{rp.usageName ?? "-"}</span>
-            {rp.doseDays != null && <span className="karte-rp__dose">{`${rp.doseDays}日分`}</span>}
-            {rp.usageComment && <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>}
+            <span className="karte-rp__usage">
+              <span>{rp.usageName ?? "-"}</span>
+              {rp.doseDays != null && <span className="karte-rp__dose">{`${rp.doseDays}日分`}</span>}
+              {rp.usageComment && <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>}
+            </span>
           </div>
         </div>
       ))}

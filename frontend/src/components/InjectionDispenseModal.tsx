@@ -204,13 +204,15 @@ function InjectionDispenseForm({
             </table>
             <div className="karte-rp__detail">
               <span className="karte-rp__detail-label">用法:</span>
-              <span>{injectionUsageSummary(rp) || "-"}</span>
-              {rp.times.length > 0 && (
-                <span className="karte-rp__dose">{`開始 ${injectionTimesLabel(rp.times)}`}</span>
-              )}
-              {rp.usageComment && (
-                <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>
-              )}
+              <span className="karte-rp__usage">
+                <span>{injectionUsageSummary(rp) || "-"}</span>
+                {rp.times.length > 0 && (
+                  <span className="karte-rp__dose">{`開始 ${injectionTimesLabel(rp.times)}`}</span>
+                )}
+                {rp.usageComment && (
+                  <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>
+                )}
+              </span>
             </div>
           </fieldset>
         ))}

@@ -1135,16 +1135,18 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
             {/* 紙の処方箋と同じく、用法は薬剤の後ろに置く。 */}
             <div className="karte-rp__detail">
               <span className="karte-rp__detail-label">用法:</span>
-              <span>{rp.usageName ?? "-"}</span>
-              {rp.basicCategory === "内服" && rp.doseDays != null && (
-                <span className="karte-rp__dose">{`${rp.doseDays}日分`}</span>
-              )}
-              {rp.basicCategory === "頓服" && rp.doseCount != null && (
-                <span className="karte-rp__dose">{`${rp.doseCount}回分`}</span>
-              )}
-              {rp.usageComment && (
-                <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>
-              )}
+              <span className="karte-rp__usage">
+                <span>{rp.usageName ?? "-"}</span>
+                {rp.basicCategory === "内服" && rp.doseDays != null && (
+                  <span className="karte-rp__dose">{`${rp.doseDays}日分`}</span>
+                )}
+                {rp.basicCategory === "頓服" && rp.doseCount != null && (
+                  <span className="karte-rp__dose">{`${rp.doseCount}回分`}</span>
+                )}
+                {rp.usageComment && (
+                  <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>
+                )}
+              </span>
             </div>
           </div>
         ))}
@@ -1181,10 +1183,12 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
             </ul>
             <div className="karte-rp__detail">
               <span className="karte-rp__detail-label">用法:</span>
-              <span>{injectionUsageSummary(rp) || "-"}</span>
-              {rp.usageComment && (
-                <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>
-              )}
+              <span className="karte-rp__usage">
+                <span>{injectionUsageSummary(rp) || "-"}</span>
+                {rp.usageComment && (
+                  <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>
+                )}
+              </span>
             </div>
             {rp.times.length > 0 && (
               <div className="karte-rp__detail">
