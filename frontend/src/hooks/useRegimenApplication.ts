@@ -5,9 +5,8 @@ import type { RegimenApplication, RegimenDayOrder } from "../fhir/regimenOrderHe
 /**
  * 適用 1 件(ヘッダ)と、その適用から出た日オーダー。
  *
- * 日オーダーは患者ぶんをまとめて引く(上流は拡張で検索できないため)ので、患者の
- * いちばん早い適用の開始日を起点にして、読んだ後に適用で絞る。左ペインの詳細ビューと
- * 右ペインの投与日パネル・クール登録が同じ形で使う。
+ * 日オーダーは患者の全適用ぶんを 1 検索で引き(requisition のカンマ OR)、読んだ後に
+ * 適用で絞る。左ペインの詳細ビューと右ペインの投与日パネル・クール登録が同じ形で使う。
  */
 export function useRegimenApplication(
   patientId: string,
@@ -22,11 +21,11 @@ export function useRegimenApplication(
   const applications = useRegimenApplications(patientId);
   const application = applications.data?.applications.find((a) => a.id === regimenSrId) ?? null;
   const header = applications.data?.headers.find((h) => h.id === regimenSrId) ?? null;
-  const earliest = applications.data?.applications.reduce<string | undefined>(
-    (min, a) => (min === undefined || a.startDate < min ? a.startDate : min),
-    undefined,
+  const instanceIds = useMemo(
+    () => (applications.data?.applications ?? []).map((a) => a.instanceId),
+    [applications.data],
   );
-  const orders = useRegimenDayOrders(patientId, earliest);
+  const orders = useRegimenDayOrders(patientId, instanceIds);
   const own = useMemo(
     () => (orders.data ?? []).filter((o) => o.ref.regimenSrId === regimenSrId),
     [orders.data, regimenSrId],
@@ -36,7 +35,7 @@ export function useRegimenApplication(
     application,
     header,
     orders: own,
-    isPending: applications.isPending || (Boolean(earliest) && orders.isPending),
+    isPending: applications.isPending || (instanceIds.length > 0 && orders.isPending),
     error: applications.error ?? orders.error,
   };
 }

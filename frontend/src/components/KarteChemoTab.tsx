@@ -111,11 +111,8 @@ export function KarteChemoTab({
   const selected: RegimenApplication | null =
     sorted.find((a) => a.id === selectedId) ?? sorted[0] ?? null;
 
-  const earliest = list.reduce<string | undefined>(
-    (min, a) => (min === undefined || a.startDate < min ? a.startDate : min),
-    undefined,
-  );
-  const orders = useRegimenDayOrders(patientId, earliest);
+  const instanceIds = useMemo(() => list.map((a) => a.instanceId), [list]);
+  const orders = useRegimenDayOrders(patientId, instanceIds);
   const own = useMemo(
     () => (orders.data ?? []).filter((o) => o.ref.regimenSrId === selected?.id),
     [orders.data, selected?.id],

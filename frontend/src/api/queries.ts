@@ -172,6 +172,7 @@ import {
   parseRegimenApplication,
   regimenDayOrderKind,
   regimenOrderOf,
+  REGIMEN_INSTANCE_SYSTEM,
   sortByRp,
   completeRegimenEntry,
   discontinuationReasonLabel,
@@ -237,15 +238,12 @@ import { buildTreatmentPerformDeleteEntries } from "../fhir/treatmentResultHelpe
 import {
   DEFAULT_MEAL_SCHEDULE,
   MEAL_ORDER_TYPE,
-  isMealOrderRunningOn,
   isMealServiceRequest,
-  mealOrderEndsOnOrAfter,
 } from "../fhir/mealOrderHelpers";
 import {
   NURSING_ORDER_TYPE,
   buildNursingOrderRevokeEntry,
   buildNursingOrderStopEntries,
-  isNursingOrderRunningOn,
   isNursingServiceRequest,
 } from "../fhir/nursingOrderHelpers";
 import { nursingPerformsByOrderId, type NursingPerformDisplay } from "../fhir/nursingPerformHelpers";
@@ -261,7 +259,6 @@ import {
   REHAB_ORDER_TYPE,
   buildRehabOrderCloseEntry,
   buildRehabOrderStopEntries,
-  isRehabOrderRunningOn,
   isRehabServiceRequest,
 } from "../fhir/rehabOrderHelpers";
 import {
@@ -273,7 +270,6 @@ import {
   NUTRITION_GUIDANCE_ORDER_TYPE,
   buildNutritionGuidanceOrderCloseEntry,
   buildNutritionGuidanceOrderStopEntries,
-  isNutritionGuidanceOrderRunningOn,
   isNutritionGuidanceServiceRequest,
   nutritionGuidanceOrderResponseIds,
 } from "../fhir/nutritionGuidanceOrderHelpers";
@@ -412,7 +408,6 @@ import {
 import { resourceFromBundleResponse, resourceWithImagesBundle } from "../fhir/schemaImage";
 import {
   DEFAULT_IDENTIFIER_SYSTEM,
-  nextPatientNumber,
   patientNumberOf,
 } from "../fhir/patientHelpers";
 import {
@@ -507,40 +502,15 @@ export function usePatient(id: string | undefined) {
   });
 }
 
-// 患者番号の自動採番。上流は identifier での並べ替えに対応しておらず、対応しても
-// 文字列順では "9" が "10" より後になるので、識別子だけを取り出して全件走査する。
-// 1 ページの件数は上流の上限に切られてもよい(next リンクを辿って最後まで読む)。
-const PATIENT_NUMBER_SCAN_COUNT = 500;
-// 走査するページ数の上限。ここで打ち切ると番号が重複しうるので、採番後に空きを確認する。
-const PATIENT_NUMBER_SCAN_PAGES = 40;
-
+// 患者番号の自動採番。上流の $next-identifier が「登録済み(削除済み含む)と払い出し済みの
+// 最大値 + 1」を直列化して返すので、同時に登録しても同じ番号にはならない。
 async function fetchNextPatientNumber(): Promise<string> {
-  const patients: fhir4.Patient[] = [];
-
-  for (let page = 0; page < PATIENT_NUMBER_SCAN_PAGES; page += 1) {
-    const params = new URLSearchParams();
-    params.set("_elements", "identifier");
-    params.set("_count", String(PATIENT_NUMBER_SCAN_COUNT));
-    params.set("_offset", String(page * PATIENT_NUMBER_SCAN_COUNT));
-    const { data } = await searchResource<fhir4.Patient>("Patient", params);
-    for (const entry of data.entry ?? []) {
-      if (entry.resource) patients.push(entry.resource);
-    }
-    if (!hasRelation(data, "next")) break;
-  }
-
-  // 走査を打ち切った場合と、同時に登録された場合に備えて空き番号まで進める。
-  let candidate = Number(nextPatientNumber(patients));
-  for (let i = 0; i < PATIENT_NUMBER_SCAN_PAGES; i += 1) {
-    const params = new URLSearchParams();
-    params.set("identifier", `${DEFAULT_IDENTIFIER_SYSTEM}|${candidate}`);
-    params.set("_summary", "count");
-    const { data } = await searchResource<fhir4.Patient>("Patient", params);
-    if (!data.total) break;
-    candidate += 1;
-  }
-
-  return String(candidate);
+  const params = new URLSearchParams();
+  params.set("system", DEFAULT_IDENTIFIER_SYSTEM);
+  const { data } = await typeOperation<fhir4.Parameters>("Patient", "next-identifier", params);
+  const value = data.parameter?.find((p) => p.name === "value")?.valueString;
+  if (!value) throw new Error("患者番号を採番できませんでした。");
+  return value;
 }
 
 export function useCreatePatient() {
@@ -659,12 +629,12 @@ export function useOrganizationSearch(
   };
 }
 
-// 選択肢用に医療機関をまとめて取得する(上流の _count 上限 100 まで。
+// 選択肢用に医療機関をまとめて取得する(上流の _count 上限 500 まで。
 // それ以上の施設数は運用上想定しない)。
 export function useOrganizationOptions() {
   const params = new URLSearchParams();
   params.set("partof:missing", "true");
-  params.set("_count", "100");
+  params.set("_count", "500");
   params.set("_sort", "name");
 
   const query = useQuery({
@@ -746,11 +716,11 @@ function departmentSearchParams(search: DepartmentSearchParams): URLSearchParams
   return params;
 }
 
-// 条件に合う診療科を全件集める。上流の _count 上限は 100 なので、次ページが
+// 条件に合う診療科を全件集める。上流の _count 上限は 500 なので、次ページが
 // 尽きるまで _offset を進めて読み切る。セレクトの選択肢と一括登録の重複判定は
 // 全件が要るのでこちらを使う(一覧画面は useDepartmentPage)。
 async function fetchAllDepartments(search: DepartmentSearchParams): Promise<fhir4.Organization[]> {
-  const PAGE = 100;
+  const PAGE = 500;
   const departments: fhir4.Organization[] = [];
 
   for (let offset = 0; ; offset += PAGE) {
@@ -1493,8 +1463,8 @@ export function useWardGrid(wardId: string | undefined) {
 //   date=le<日> → その日までに入院している
 // 取り消した入院(entered-in-error)は在院ではないので status で外す。
 
-const INPATIENT_PAGE = 100;
-const INPATIENT_MAX_PAGES = 5;
+const INPATIENT_PAGE = 500;
+const INPATIENT_MAX_PAGES = 2;
 
 export interface InpatientResult {
   /** ベッド id -> 入院中の Encounter。 */
@@ -1935,17 +1905,19 @@ export function usePatientEncounterEvents(
 /**
  * 経過表のイベントの帯に出す手術の実施記録(ハブ Procedure)。
  *
- * 上流の `Procedure?date=` は performedDateTime しか索引しない(手術は
- * performedPeriod なので日付で絞れない)。患者あたりの件数は多くないので、
- * 患者と区分だけで引いてから期間はクライアントで見る。
+ * 手術は performedPeriod を持ち、上流の `date` は期間として索引しているので、
+ * from〜to に掛かる手術だけを引く(術後日数の行のために表示期間より前の手術も要るので、
+ * 呼び出し側が from を術後日数の上限ぶん前にずらす)。
  */
-export function usePatientSurgeryPerforms(patientId: string | undefined) {
+export function usePatientSurgeryPerforms(patientId: string | undefined, from: string, to: string) {
   return useQuery({
-    queryKey: ["Procedure", "search", "surgery-patient", patientId],
+    queryKey: ["Procedure", "search", "surgery-patient", patientId, from, to],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       params.set("category", `${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`);
+      params.append("date", `ge${from}`);
+      params.append("date", `le${to}`);
       params.set("_count", "100");
       const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
       return (bundle.entry ?? [])
@@ -1960,7 +1932,7 @@ export function usePatientSurgeryPerforms(patientId: string | undefined) {
             procedure.status !== "not-done",
         );
     },
-    enabled: Boolean(patientId),
+    enabled: Boolean(patientId) && Boolean(from) && Boolean(to),
   });
 }
 
@@ -2092,9 +2064,9 @@ export function useCancelOralPerforms() {
 /**
  * 経過表の看護欄に出す、その期間に有効な看護指示と実施記録。
  *
- * 指示は「期間 + 頻度」で持ち日時を持たないので、期間の各日に有効なものを
- * クライアントで絞る(`isNursingOrderRunningOn`)。実施は Observation(観察)と
- * Procedure(行為)に分かれるので、既存の `useNursingPerformsOf` と同じ取り方をする。
+ * 指示は「期間 + 頻度」で持ち日時を持たないので、期間に掛かっているものを
+ * order-period で引く。実施は Observation(観察)と Procedure(行為)に分かれるので、
+ * 既存の `useNursingPerformsOf` と同じ取り方をする。
  */
 export function usePatientNursingFlowsheet(
   patientId: string | undefined,
@@ -2105,6 +2077,7 @@ export function usePatientNursingFlowsheet(
     queryKey: ["ServiceRequest", "search", "flowsheet-nursing", patientId, rangeStart, rangeEnd],
     queryFn: async () => {
       const params = nursingOrderParams(patientId, "active");
+      setOrderPeriod(params, rangeStart, rangeEnd);
       // 実施は**表示している期間だけ**引く(患者の全期間を引くと、長期入院で
       // 200 件の上限に当たって古い記録しか返らない)。
       const setRange = (p: URLSearchParams) => {
@@ -2123,10 +2096,7 @@ export function usePatientNursingFlowsheet(
       ]);
       const set = nursingOrderSetOf(bundle);
       return {
-        // 期間のどこかに掛かっている指示だけ残す(開始が期間の後、終了が期間の前は除く)。
-        orders: set.orders.filter(
-          (sr) => isNursingOrderRunningOn(sr, rangeStart) || isNursingOrderRunningOn(sr, rangeEnd),
-        ),
+        orders: set.orders,
         performsByOrderId,
         observations: resourcesOfType<fhir4.Observation>(observationBundle, "Observation"),
       };
@@ -2139,9 +2109,7 @@ export function usePatientNursingFlowsheet(
  * 経過表の食事摂取量。期間にかかる食事オーダーと、記録の Observation を引く。
  *
  * 食事オーダーは継続オーダーで、前の月から続いているものがその日の食事を決めている
- * ことがあるので、`useMealOrderMonth` と同じ 2 段構えにする(月末までに始まった有効な
- * オーダーを引き、期間より前に終わったものをクライアントで落とす。終了はローカル拡張
- * なので上流では絞れない)。
+ * ことがあるので、`useMealOrderMonth` と同じく期間に掛かっているオーダーを引く。
  */
 export function usePatientMealIntake(
   patientId: string | undefined,
@@ -2155,7 +2123,7 @@ export function usePatientMealIntake(
       orderParams.set("subject", `Patient/${patientId}`);
       orderParams.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
       orderParams.set("status", "active");
-      orderParams.set("occurrence", `le${rangeEnd}`);
+      setOrderPeriod(orderParams, rangeStart, rangeEnd);
       orderParams.set("_count", "100");
 
       const observationParams = new URLSearchParams();
@@ -2170,9 +2138,7 @@ export function usePatientMealIntake(
         searchResource<fhir4.Observation>("Observation", observationParams),
       ]);
       return {
-        orders: serviceRequestsOf(orderBundle)
-          .filter(isMealServiceRequest)
-          .filter((sr) => mealOrderEndsOnOrAfter(sr, rangeStart)),
+        orders: serviceRequestsOf(orderBundle).filter(isMealServiceRequest),
         observations: resourcesOfType<fhir4.Observation>(observationBundle, "Observation"),
       };
     },
@@ -2710,10 +2676,10 @@ export function useRescheduleAppointment() {
 // 上流は specialty や actor でも検索できるが、1 日ぶんなら数十件なので、全件読んで
 // から絞る方が絞り込みの切り替えで結果がぶれない(放射線検査一覧と同じ理由)。
 
-const OUTPATIENT_PAGE = 100;
+const OUTPATIENT_PAGE = 500;
 // 1 日の予約がこの件数を超えることは想定していない。超えた場合は読むのをやめ、
 // 画面に「一部のみ」と出す(黙って切り捨てると全件見えているように見えるため)。
-const OUTPATIENT_MAX_PAGES = 5;
+const OUTPATIENT_MAX_PAGES = 2;
 
 /** 外来一覧の 1 行。予約(Appointment)1 件ぶん。 */
 export interface OutpatientRow {
@@ -3246,10 +3212,10 @@ export function useRadPerformDetail(orderId: string | undefined) {
 // 同じ応答から回収する、という骨格が共通。ドメインごとの明細の回収と行の
 // 組み立てはコールバックで注入する。
 
-const WORKLIST_PAGE = 100;
+const WORKLIST_PAGE = 500;
 // 1 日のオーダーがこの件数を超えることは想定していない。超えた場合は読むのをやめ、
 // 画面に「一部のみ」と出す(黙って切り捨てると全件見えているように見えるため)。
-const WORKLIST_MAX_PAGES = 5;
+const WORKLIST_MAX_PAGES = 2;
 
 /**
  * ヘッダ検索の共通パラメータ。呼び出し側でドメインの _revinclude を足す。
@@ -4021,10 +3987,10 @@ export function useUpdateLabArrival() {
 
 // ---- 検査結果に紐付けるオーダー(検体検査・細菌検査)の候補 ----
 
-// 上流 fhir-server の _count 上限 100 を 1 ページとして順に辿る。
-const LAB_ORDER_CANDIDATE_PAGE = 100;
+// 上流 fhir-server の _count 上限 500 を 1 ページとして順に辿る。
+const LAB_ORDER_CANDIDATE_PAGE = 500;
 // オーダーが極端に多い患者での暴走防止。
-const LAB_ORDER_CANDIDATE_MAX_PAGES = 5;
+const LAB_ORDER_CANDIDATE_MAX_PAGES = 2;
 // プルダウンに並べる未紐付けオーダーの上限。これだけ集まったら読むのをやめる。
 const LAB_ORDER_CANDIDATE_LIMIT = 50;
 
@@ -4328,10 +4294,10 @@ export function useLabResultDetail(reportId: string | undefined) {
   });
 }
 
-// 上流 fhir-server の _count 上限が 100 のため、それを 1 ページとして順に辿る。
-const LAB_RESULT_ORDER_PAGE = 100;
+// 上流 fhir-server の _count 上限が 500 のため、それを 1 ページとして順に辿る。
+const LAB_RESULT_ORDER_PAGE = 500;
 // 患者あたりの検査結果が極端に多い場合の暴走防止（最大 1000 件まで前後移動できる）。
-const LAB_RESULT_ORDER_MAX_PAGES = 10;
+const LAB_RESULT_ORDER_MAX_PAGES = 2;
 
 // 検体採取日の降順で全検査結果の要約(id・採取日・入外区分)を取得する。
 // 上流の _sort は同値時に id 昇順で安定するため、ページ境界をまたいでも並びが一致する。
@@ -4479,10 +4445,10 @@ async function fetchDateCounts(
 
 // ---- 時系列表示 ----
 
-// 上流 fhir-server の _count 上限 100 を 1 ページとして順に辿る。
-const LAB_TIMELINE_PAGE = 100;
+// 上流 fhir-server の _count 上限 500 を 1 ページとして順に辿る。
+const LAB_TIMELINE_PAGE = 500;
 // 同一期間内の件数が極端に多い場合の暴走防止。
-const LAB_TIMELINE_MAX_PAGES = 10;
+const LAB_TIMELINE_MAX_PAGES = 2;
 
 export interface LabTimelineResources {
   reports: fhir4.DiagnosticReport[];
@@ -5677,11 +5643,11 @@ export function useDeleteQuestionnaire() {
 }
 
 // テンプレート選択用に Questionnaire をまとめて取得する。
-// 上流 fhir-server の _count 上限 100 を上限とした簡易版(それ以上は運用上想定しない)。
+// 上流 fhir-server の _count 上限 500 を上限とした簡易版(それ以上は運用上想定しない)。
 export function useQuestionnaireOptions(options?: { status?: fhir4.Questionnaire["status"] }) {
   const params = new URLSearchParams();
   if (options?.status) params.set("status", options.status);
-  params.set("_count", "100");
+  params.set("_count", "500");
   params.set("_sort", "-_lastUpdated");
 
   const query = useQuery({
@@ -5830,7 +5796,7 @@ function latestPrescriptionBundle(bundle: fhir4.Bundle): fhir4.Bundle {
 }
 
 // テンプレート回答フォームの初期値式(%conditions / %labResults / %prescriptions)の
-// 元データ取得。傷病名はアクティブなもの全件(上流の _count 上限 100 まで)、
+// 元データ取得。傷病名はアクティブなもの全件(上流の _count 上限 500 まで)、
 // 検査結果・処方は最新 1 件を _sort + _count + _include/_revinclude の 1 リクエスト
 // で関連リソースごと取る(この組み合わせは上流の回帰 spec で保証済み)。
 export function usePopulateSources(patientId: string | undefined) {
@@ -5838,7 +5804,7 @@ export function usePopulateSources(patientId: string | undefined) {
   if (patientId) conditionParams.set("patient", `Patient/${patientId}`);
   // 初期値式が対象にするのはアクティブな傷病名のみ(populateContext 参照)。
   conditionParams.set("clinical-status", "active");
-  conditionParams.set("_count", "100");
+  conditionParams.set("_count", "500");
   conditionParams.set("_sort", "-onset-date");
   const conditions = useQuery({
     queryKey: ["Condition", "populate", patientId],
@@ -6375,9 +6341,9 @@ function invalidateVitals(queryClient: QueryClient) {
 // 経過表は「基準日から 1 週間」を横軸にする(1 日の中は測定ごとに列が分かれる)。
 // 期間で絞った Observation をまとめて取る。1 回の測定が 8 件前後に分かれるので、
 // 1 週間でも数百件になりうる。ページングで取り切る。
-const VITAL_FLOWSHEET_PAGE = 100;
+const VITAL_FLOWSHEET_PAGE = 500;
 // 1 か月表示だと、測定の多い患者で 1000 件を超えうるので余裕を持たせる。
-const VITAL_FLOWSHEET_MAX_PAGES = 20;
+const VITAL_FLOWSHEET_MAX_PAGES = 4;
 
 // 経過表に載せる Observation の区分。手入力・テンプレート抽出のバイタル(vital-signs)に
 // 加えて、看護指示の観察結果(order-type の nursing。nursingPerformHelpers)も同じ表で
@@ -7537,6 +7503,17 @@ async function fetchTreatmentAppointmentCancelEntries(srId: string): Promise<fhi
 }
 
 
+/**
+ * 期間継続型のオーダー(食事・リハビリ・栄養指導・看護指示)を「from〜to の期間に
+ * 掛かっているもの」に絞る。開始は occurrenceDateTime、終了は各種別の *-order-end
+ * 拡張を上流が order-period として索引している。終了の無いオーダーは継続中として掛かる。
+ * from と to に同じ日を渡すと「その日に効いている」になる。
+ */
+function setOrderPeriod(params: URLSearchParams, from: string, to: string): void {
+  params.append("order-period", `ge${from}`);
+  params.append("order-period", `le${to}`);
+}
+
 // ---- 食事オーダー ----
 //
 // 明細も進捗 Task も持たないので、どの問い合わせも ServiceRequest 1 本で済む。
@@ -7555,15 +7532,13 @@ export function useMealOrderDetail(srId: string | undefined) {
 /**
  * まだ続いている食事オーダー。食事変更のときに前のオーダーを終了させるため、
  * 新規登録の画面が「今どの食事が出ているか」を出すのに使う。
- *
- * 終了はローカル拡張なので上流では絞れない。有効なオーダーを引いてから、
- * 基準日(新しい食事の開始日)にまだ続いているものだけをここで残す。
  */
 export function useActiveMealOrders(patientId: string | undefined, at: string) {
   const params = new URLSearchParams();
   if (patientId) params.set("subject", `Patient/${patientId}`);
   params.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
   params.set("status", "active");
+  setOrderPeriod(params, at, at);
   params.set("_sort", "-authoredon");
   params.set("_count", "20");
 
@@ -7574,9 +7549,7 @@ export function useActiveMealOrders(patientId: string | undefined, at: string) {
         "ServiceRequest",
         params,
       );
-      return serviceRequestsOf(bundle)
-        .filter(isMealServiceRequest)
-        .filter((sr) => isMealOrderRunningOn(sr, at));
+      return serviceRequestsOf(bundle).filter(isMealServiceRequest);
     },
     enabled: Boolean(patientId) && Boolean(at),
   });
@@ -7631,16 +7604,15 @@ export function useVitalThresholds() {
  * カレンダーに出す 1 か月ぶんの食事オーダー。
  *
  * 食事は開始したら次の指示まで続くので、その月に始まったものだけでは足りない
- * (前の月から続いているオーダーがその月の食事を決めていることがある)。月末までに
- * 始まった有効なオーダーを引き、月初より前に終わったものをここで落とす。
- * 終了はローカル拡張なので上流では絞れない(useActiveMealOrders と同じ事情)。
+ * (前の月から続いているオーダーがその月の食事を決めていることがある)。
+ * その月に掛かっている(月末までに始まり、月初より前に終わっていない)オーダーを引く。
  */
 export function useMealOrderMonth(patientId: string | undefined, monthStart: string, monthEnd: string) {
   const params = new URLSearchParams();
   if (patientId) params.set("subject", `Patient/${patientId}`);
   params.set("category", `${ORDER_TYPE_SYSTEM}|${MEAL_ORDER_TYPE.code}`);
   params.set("status", "active");
-  params.set("occurrence", `le${monthEnd}`);
+  setOrderPeriod(params, monthStart, monthEnd);
   // 1 患者の食事オーダーは入院 1 回でせいぜい数十件なので 1 ページで足りる。
   params.set("_count", "100");
 
@@ -7648,9 +7620,7 @@ export function useMealOrderMonth(patientId: string | undefined, monthStart: str
     queryKey: ["ServiceRequest", "search", "meal-month", patientId, monthStart, monthEnd],
     queryFn: async () => {
       const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
-      return serviceRequestsOf(bundle)
-        .filter(isMealServiceRequest)
-        .filter((sr) => mealOrderEndsOnOrAfter(sr, monthStart));
+      return serviceRequestsOf(bundle).filter(isMealServiceRequest);
     },
     enabled: Boolean(patientId) && Boolean(monthStart) && Boolean(monthEnd),
   });
@@ -7688,8 +7658,8 @@ export function useDeleteMealOrder() {
 // 日々の実施は Task を動かさず Procedure が積み上がる
 // (docs/rehab-order-design.md §4)。
 //
-// 終了日はローカル拡張なので上流では絞れない。どの問い合わせも「開始日が基準日
-// 以前の有効なオーダー」を引いてから、終了日の判定をここで行う(食事と同じ事情)。
+// 「基準日に効いている(始まっていて、まだ終わっていない)」は order-period で引く
+// (開始は occurrenceDateTime、終了は rehab-order-end 拡張を上流が索引している)。
 
 export function useRehabOrderDetail(srId: string | undefined) {
   const params = new URLSearchParams();
@@ -7737,16 +7707,14 @@ export function useActiveRehabOrders(patientId: string | undefined, at: string) 
   if (patientId) params.set("subject", `Patient/${patientId}`);
   params.set("category", `${ORDER_TYPE_SYSTEM}|${REHAB_ORDER_TYPE.code}`);
   params.set("status", "active");
-  params.set("occurrence", `le${at}`);
+  setOrderPeriod(params, at, at);
   params.set("_count", "50");
 
   return useQuery({
     queryKey: ["ServiceRequest", "search", "rehab-active", patientId, at],
     queryFn: async () => {
       const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
-      return serviceRequestsOf(bundle)
-        .filter(isRehabServiceRequest)
-        .filter((sr) => isRehabOrderRunningOn(sr, at));
+      return serviceRequestsOf(bundle).filter(isRehabServiceRequest);
     },
     enabled: Boolean(patientId) && Boolean(at),
   });
@@ -7794,9 +7762,8 @@ export function useDeleteRehabOrder() {
 // ---- リハビリ一覧(部門ワークリスト) ----
 //
 // 他部門の一覧は「その日に実施予定のオーダー」を日付一致で引くが、リハビリは期間型
-// なので「基準日に効いている(始まっていて、まだ終わっていない)オーダー」を引く。
-// 終了日はローカル拡張で上流では絞れないため、開始日が基準日以前のものを引いてから
-// クライアントで終了判定する(useMealOrderMonth と同じ形)。
+// なので「基準日に効いている(始まっていて、まだ終わっていない)オーダー」を
+// order-period で引く。
 //
 // 疾患別リハ区分・療法種別・入外区分・病棟・診療科・進捗での絞り込みは画面側で行う
 // (理由は検体検査一覧の節のコメントを参照)。
@@ -7821,16 +7788,16 @@ export interface RehabWorklistResult {
 
 /**
  * 基準日に効いているリハビリオーダーのヘッダ検索。worklistParams を使わないのは
- * 日付の当て方が違うため(他部門は実施予定日の一致、リハビリは開始日 le + 終了判定)。
+ * 日付の当て方が違うため(他部門は実施予定日の一致、リハビリは期間の重なり)。
  */
 function rehabWorklistParams(date: string, page: number): URLSearchParams {
   const params = new URLSearchParams();
   params.set("category", `${ORDER_TYPE_SYSTEM}|${REHAB_ORDER_TYPE.code}`);
   params.set("status", "active");
-  params.set("occurrence", `le${date}`);
+  setOrderPeriod(params, date, date);
   params.set("based-on:missing", "true");
-  params.set("_count", "100");
-  params.set("_offset", String(page * 100));
+  params.set("_count", String(WORKLIST_PAGE));
+  params.set("_offset", String(page * WORKLIST_PAGE));
   params.set("_include", "ServiceRequest:subject");
   params.set("_revinclude", "Task:focus");
   return params;
@@ -7873,8 +7840,6 @@ async function fetchRehabWorklist(date: string): Promise<RehabWorklistResult> {
   const taskByOrderId = rehabTasksByOrderId(tasks);
 
   const rows = orders
-    // 開始日が基準日以前のものを引いているので、あとは終了しているかだけを見る。
-    .filter((order) => isRehabOrderRunningOn(order, date))
     .map((order) => ({
       order,
       patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
@@ -8079,9 +8044,7 @@ export function useUpdateRehabTaskStatus() {
 // リハビリと同じ期間継続型なので、明細を持たずヘッダ 1 本 + 進捗 Task + 実施記録
 // (Procedure)で構成する。Task は「部門の受け入れ状態」を表し、日々の指導は Task を
 // 動かさず Procedure が積み上がる(docs/nutrition-guidance-order-design.md §3)。
-//
-// 終了日はローカル拡張なので上流では絞れない。どの問い合わせも「開始日が基準日
-// 以前の有効なオーダー」を引いてから、終了日の判定をここで行う(リハビリと同じ事情)。
+// 「基準日に効いている」はリハビリと同じく order-period で引く。
 
 export function useNutritionGuidanceOrderDetail(srId: string | undefined) {
   const params = new URLSearchParams();
@@ -8206,10 +8169,10 @@ function nutritionGuidanceWorklistParams(date: string, page: number): URLSearchP
   const params = new URLSearchParams();
   params.set("category", `${ORDER_TYPE_SYSTEM}|${NUTRITION_GUIDANCE_ORDER_TYPE.code}`);
   params.set("status", "active");
-  params.set("occurrence", `le${date}`);
+  setOrderPeriod(params, date, date);
   params.set("based-on:missing", "true");
-  params.set("_count", "100");
-  params.set("_offset", String(page * 100));
+  params.set("_count", String(WORKLIST_PAGE));
+  params.set("_offset", String(page * WORKLIST_PAGE));
   params.set("_include", "ServiceRequest:subject");
   params.set("_revinclude", "Task:focus");
   return params;
@@ -8289,8 +8252,6 @@ async function fetchNutritionGuidanceWorklist(
   const taskByOrderId = nutritionGuidanceTasksByOrderId(tasks);
 
   const rows = orders
-    // 開始日が基準日以前のものを引いているので、あとは終了しているかだけを見る。
-    .filter((order) => isNutritionGuidanceOrderRunningOn(order, date))
     .map((order) => ({
       order,
       patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
@@ -8524,8 +8485,7 @@ export function useDeleteConsultOrder() {
 //   未回答 … status=active(依頼済・対応中)。いま溜まっている仕事なので有限。
 //   回答済 … status=completed の直近ぶん(-authoredon)。
 //
-// 依頼先科での絞り込みは上流が performer を索引していないのでクライアント側
-// (§2.1。サーバー改善バックログに起票済み)。
+// 依頼先科は ServiceRequest.performer(Organization)に持ち、上流の performer 検索で絞る。
 
 /** 一覧のビュー。未回答は「捌く」画面、回答済は「振り返る」画面。 */
 export type ConsultWorklistView = "open" | "answered";
@@ -8544,16 +8504,21 @@ export interface ConsultWorklistResult {
   truncated: boolean;
 }
 
-function consultWorklistParams(view: ConsultWorklistView, page: number): URLSearchParams {
+function consultWorklistParams(
+  view: ConsultWorklistView,
+  targetDepartmentId: string | undefined,
+  page: number,
+): URLSearchParams {
   const params = new URLSearchParams();
   params.set("category", `${ORDER_TYPE_SYSTEM}|${CONSULT_ORDER_TYPE.code}`);
   // 未回答は取消(revoked)も拾う。依頼済・対応中・取消は「まだ閉じていない仕事」
   // として同じ画面で見るため(取消は行の進捗で分かる)。
   if (view === "open") params.set("status", "active,revoked");
   else params.set("status", "completed");
+  if (targetDepartmentId) params.set("performer", `Organization/${targetDepartmentId}`);
   params.set("based-on:missing", "true");
-  params.set("_count", "100");
-  params.set("_offset", String(page * 100));
+  params.set("_count", String(WORKLIST_PAGE));
+  params.set("_offset", String(page * WORKLIST_PAGE));
   params.set("_sort", "-authoredon");
   params.set("_include", "ServiceRequest:subject");
   params.set("_revinclude", "Task:focus");
@@ -8562,11 +8527,12 @@ function consultWorklistParams(view: ConsultWorklistView, page: number): URLSear
 
 async function fetchConsultWorklist(
   view: ConsultWorklistView,
+  targetDepartmentId: string | undefined,
 ): Promise<ConsultWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
 
   const { patientsById, tasks, truncated } = await fetchWorklistBundles(
-    (page) => consultWorklistParams(view, page),
+    (page) => consultWorklistParams(view, targetDepartmentId, page),
     (resource) => {
       if (resource.resourceType !== "ServiceRequest") return false;
       const request = resource as fhir4.ServiceRequest;
@@ -8587,10 +8553,11 @@ async function fetchConsultWorklist(
   return { rows, truncated };
 }
 
-export function useConsultWorklist(view: ConsultWorklistView) {
+/** 他科依頼一覧。targetDepartmentId を渡すとその科あての依頼だけを上流で絞る。 */
+export function useConsultWorklist(view: ConsultWorklistView, targetDepartmentId?: string) {
   return useQuery({
-    queryKey: ["ServiceRequest", "consult-worklist", view],
-    queryFn: () => fetchConsultWorklist(view),
+    queryKey: ["ServiceRequest", "consult-worklist", view, targetDepartmentId ?? ""],
+    queryFn: () => fetchConsultWorklist(view, targetDepartmentId || undefined),
     placeholderData: keepPreviousData,
   });
 }
@@ -8696,7 +8663,7 @@ export function useSaveConsultReply() {
 // ---- 看護指示(指示簿) ----
 //
 // 1 指示行 = 1 ServiceRequest で、指示受けの Task を _revinclude で一緒に引く。
-// 終了日はローカル拡張なので上流では絞れない(食事・リハビリと同じ事情)。
+// 「指定日に効いている」は order-period で引く(食事・リハビリと同じ)。
 
 export interface NursingOrderSet {
   orders: fhir4.ServiceRequest[];
@@ -8727,12 +8694,12 @@ function nursingOrderParams(patientId: string | undefined, status?: string): URL
 /** 指定日に効いている看護指示(指示簿の「現在有効」)。 */
 export function useActiveNursingOrders(patientId: string | undefined, at: string) {
   const params = nursingOrderParams(patientId, "active");
+  setOrderPeriod(params, at, at);
   return useQuery({
     queryKey: ["ServiceRequest", "search", "nursing-active", patientId, at],
     queryFn: async () => {
       const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-      const set = nursingOrderSetOf(bundle);
-      return { ...set, orders: set.orders.filter((sr) => isNursingOrderRunningOn(sr, at)) };
+      return nursingOrderSetOf(bundle);
     },
     enabled: Boolean(patientId) && Boolean(at),
   });
@@ -8837,7 +8804,7 @@ export function useAcceptNursingOrders() {
 // 手元のデータに対して画面側で行う。
 //
 // 軸はリハビリ一覧と同じで、基準日に **効いている**(始まっていて、まだ終わっていない)
-// 指示を並べる。終了日はローカル拡張なので上流では絞れず、取得後に判定する。
+// 指示を order-period で引いて並べる。
 
 /** 病棟の指示簿の 1 行。指示 1 件ぶん。 */
 export interface NursingWorklistRow {
@@ -8863,7 +8830,7 @@ function nursingWorklistParams(
   const params = new URLSearchParams();
   params.set("category", `${ORDER_TYPE_SYSTEM}|${NURSING_ORDER_TYPE.code}`);
   params.set("status", "active");
-  params.set("occurrence", `le${date}`);
+  setOrderPeriod(params, date, date);
   // 病棟はオーダー登録時に焼き付けた order-ward 拡張。上流の ward 検索で絞る。
   if (wardId) params.set("ward", `Location/${wardId}`);
   // 看護指示は 1 指示 = 1 ServiceRequest で basedOn を書かないので、他の部門一覧に
@@ -8900,8 +8867,6 @@ async function fetchNursingWorklist(
   const taskByOrderId = nursingTasksByOrderId(tasks);
 
   const rows = orders
-    // 開始日が基準日以前のものを引いているので、あとは終わっているかだけを見る。
-    .filter((order) => isNursingOrderRunningOn(order, date))
     .map((order) => ({
       order,
       patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
@@ -9503,31 +9468,42 @@ export function useDeleteSurgeryOrder() {
 
 // ---- 麻酔チャート(docs/anesthesia-chart-design.md) ----
 
+const PART_OF_PAGE = 500;
+// ページ数の上限は暴走ガード(超えたら以降を捨てる。4 ページ = 2000 件)。
+const PART_OF_MAX_PAGES = 4;
+
 /**
- * part-of の子を _offset でページングして全件読む。5 分毎の打点 × 数時間で
- * 100 件を超えるのが普通なので、実施記録のような 1 ページ読みでは足りない。
- * ページ数の上限は暴走ガード(超えたら以降を捨てる。20 ページ = 2000 件)。
+ * part-of の子を全件読む。5 分毎の打点 × 数時間で 1 ページに収まらないことがあるので、
+ * 1 ページ目の total から残りのページ数を決め、2 ページ目以降は並列に読む。
  */
 async function fetchAllByPartOf<T extends fhir4.Resource>(
   resourceType: string,
   hubId: string,
 ): Promise<T[]> {
-  const collected: T[] = [];
-  for (let page = 0; page < 20; page += 1) {
+  const fetchPage = async (page: number) => {
     const params = new URLSearchParams();
     params.set("part-of", `Procedure/${hubId}`);
-    params.set("_count", "100");
-    params.set("_offset", String(page * 100));
+    params.set("_count", String(PART_OF_PAGE));
+    params.set("_offset", String(page * PART_OF_PAGE));
     const { data: bundle } = await searchResource<T>(resourceType, params);
-    const resources = (bundle.entry ?? [])
-      .filter((entry) => entry.search?.mode !== "include")
-      .map((entry) => entry.resource)
-      .filter((resource): resource is T => resource?.resourceType === resourceType);
-    collected.push(...resources);
-    const total = bundle.total;
-    if (resources.length < 100 || (total != null && collected.length >= total)) break;
-  }
-  return collected;
+    return {
+      total: bundle.total,
+      resources: (bundle.entry ?? [])
+        .filter((entry) => entry.search?.mode !== "include")
+        .map((entry) => entry.resource)
+        .filter((resource): resource is T => resource?.resourceType === resourceType),
+    };
+  };
+
+  const first = await fetchPage(0);
+  const total = first.total ?? first.resources.length;
+  const pages = Math.min(Math.ceil(total / PART_OF_PAGE), PART_OF_MAX_PAGES);
+  if (pages <= 1) return first.resources;
+
+  const rest = await Promise.all(
+    Array.from({ length: pages - 1 }, (_, i) => fetchPage(i + 1).then((r) => r.resources)),
+  );
+  return [...first.resources, ...rest.flat()];
 }
 
 async function fetchAnesthesiaChart(orderId: string): Promise<AnesthesiaChartData | null> {
@@ -10256,47 +10232,40 @@ export function useRegimenHeaders(regimenSrIds: string[]) {
   });
 }
 
-const REGIMEN_ORDERS_PAGE = 100;
-const REGIMEN_ORDERS_MAX_PAGES = 10;
-
 /**
- * レジメンから出た日オーダー(注射・処方)を患者ぶんまとめて引く。上流は拡張で検索
- * できないので、最初の適用の開始日以降のオーダーのヘッダを日付順に読み、レジメンの
- * 印(regimen-order 拡張)を持つものだけ残す。進捗の Task と薬剤も同じレスポンスで受ける。
+ * レジメンから出た日オーダー(注射・処方)を、適用(instanceId = 日オーダーの requisition)
+ * ごとにまとめて引く。requisition はカンマで OR にできるので患者の全適用を 1 検索で読める。
+ * 進捗の Task と薬剤も同じレスポンスで受ける。1 患者の日オーダーは多くても数百件なので
+ * 1 ページで足りる。
  */
-export function useRegimenDayOrders(patientId: string | undefined, earliestStart: string | undefined) {
+export function useRegimenDayOrders(patientId: string | undefined, instanceIds: string[]) {
+  const ids = [...new Set(instanceIds.filter(Boolean))].sort();
   return useQuery({
-    queryKey: ["ServiceRequest", "search", "regimen-orders", patientId, earliestStart],
+    queryKey: ["ServiceRequest", "search", "regimen-orders", patientId, ids.join(",")],
     queryFn: async (): Promise<RegimenDayOrder[]> => {
       const requests: fhir4.ServiceRequest[] = [];
       const medicationRequests: fhir4.MedicationRequest[] = [];
       const tasks: fhir4.Task[] = [];
-      for (let page = 0; page < REGIMEN_ORDERS_MAX_PAGES; page += 1) {
-        const params = new URLSearchParams();
-        params.set("patient", `Patient/${patientId}`);
-        params.set("occurrence", `ge${earliestStart}`);
-        params.set("based-on:missing", "true");
-        params.set("_sort", "occurrence");
-        params.set("_count", String(REGIMEN_ORDERS_PAGE));
-        params.set("_offset", String(page * REGIMEN_ORDERS_PAGE));
-        params.append("_revinclude", "MedicationRequest:based-on");
-        params.append("_revinclude", "Task:focus");
-        const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-        let matched = 0;
-        for (const entry of bundle.entry ?? []) {
-          const resource = entry.resource;
-          if (!resource) continue;
-          if (resource.resourceType === "ServiceRequest") {
-            matched += 1;
-            const sr = resource as fhir4.ServiceRequest;
-            if (regimenOrderOf(sr)) requests.push(sr);
-          } else if (resource.resourceType === "MedicationRequest") {
-            medicationRequests.push(resource as fhir4.MedicationRequest);
-          } else if (resource.resourceType === "Task") {
-            tasks.push(resource as fhir4.Task);
-          }
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("requisition", ids.map((id) => `${REGIMEN_INSTANCE_SYSTEM}|${id}`).join(","));
+      params.set("based-on:missing", "true");
+      params.set("_sort", "occurrence");
+      params.set("_count", "500");
+      params.append("_revinclude", "MedicationRequest:based-on");
+      params.append("_revinclude", "Task:focus");
+      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+      for (const entry of bundle.entry ?? []) {
+        const resource = entry.resource;
+        if (!resource) continue;
+        if (resource.resourceType === "ServiceRequest") {
+          const sr = resource as fhir4.ServiceRequest;
+          if (regimenOrderOf(sr)) requests.push(sr);
+        } else if (resource.resourceType === "MedicationRequest") {
+          medicationRequests.push(resource as fhir4.MedicationRequest);
+        } else if (resource.resourceType === "Task") {
+          tasks.push(resource as fhir4.Task);
         }
-        if (matched < REGIMEN_ORDERS_PAGE) break;
       }
 
       const mrsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
@@ -10330,7 +10299,7 @@ export function useRegimenDayOrders(patientId: string | undefined, earliestStart
         .filter((o): o is RegimenDayOrder => o !== null)
         .sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
     },
-    enabled: Boolean(patientId) && Boolean(earliestStart),
+    enabled: Boolean(patientId) && ids.length > 0,
   });
 }
 

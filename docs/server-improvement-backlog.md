@@ -6,7 +6,7 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
 - 調査履歴: 2026-08-01（初回、6 項目）、2026-08-23（frontend/backend 全面再調査で拡充）、
   2026-08-30（他科依頼の実装で C-6 を追加）、2026-09-01（オーダー横断の課題整理で C-7 を追加し、同日実装）、
   2026-09-09（パフォーマンス観点の再調査で 6 項目を追加し、C-6・C-8 と合わせて同日サーバー側を実装。
-  クライアント側の追随は未着手 — 下の「2026-09-09 に対応済み」節の F 項目）。
+  クライアント側の追随 F-4〜F-9 も同日実装）。
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
@@ -23,7 +23,7 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
 
 ---
 
-## 2026-09-09 に対応済み（サーバー側。クライアントの追随は F-4〜F-9）
+## 2026-09-09 に対応済み（サーバー側・クライアント側とも）
 
 fhir-client のパフォーマンス監査で「上流を直した方が効率がよい」と判定した項目。サーバー側の
 実装と回帰 spec は完了。migration 2 本（`service_requests.order_end` / `procedures.performed_end`、
@@ -54,25 +54,33 @@ fhir-client のパフォーマンス監査で「上流を直した方が効率�
    番号は欠番になる（番号に意味を持たせない前提）。write スコープ。応答は `Parameters`
    （`value` = valueString、`system` = valueUri）。
 
-### クライアント側の追随（未着手）
+### クライアント側の追随（2026-09-09 実装済み。`tsc -b` 通過、ブラウザ確認は未実施）
 
-- **F-4. 患者番号の採番を `$next-identifier` に置き換える**: `fetchNextPatientNumber`
-  （`queries.ts`、最大 40 ページの identifier 走査 + 最大 40 回の `_summary=count`）を
-  `GET /Patient/$next-identifier?system={DEFAULT_IDENTIFIER_SYSTEM}` 1 回に。`nextPatientNumber`
-  （`patientHelpers.ts`）は不要になる。
-- **F-5. 継続的な指示の一覧を `order-period` で絞る**: 「基準日以前に始まった有効オーダーを全部読んでから
-  終わったものを捨てる」7 箇所（`useActiveMealOrders` / `usePatientMealIntake` / `useMealOrderMonth` /
-  リハビリ・栄養指導・看護の一覧）を `order-period=ge{日}&order-period=le{日}` に。看護指示は退院まで
-  `active` のままなので、ここが最も効く。
-- **F-6. 他科依頼一覧を `performer=` で絞る**: `fetchConsultWorklist` + `matchesFilters` の
-  クライアント側絞り込みをサーバーへ。医師単位の受信箱（`performer=Practitioner/...`）も可能になる。
-- **F-7. レジメンの日オーダーを `requisition=` で引く**: `useRegimenDayOrders` の最大 10 ページ走査
-  （`REGIMEN_ORDERS_MAX_PAGES`）を 1 検索に。オーダーセットの適用も同じ `requisition` で束ねられる。
-- **F-8. 手術の実施記録を `date` で絞る**: `usePatientSurgeryPerforms` の「患者と区分で全件引いてから
-  期間はクライアントで見る」を `date=ge&date=le` に。
-- **F-9. `_count` 上限 500 に合わせてページ定数を見直す**: `INPATIENT_PAGE` / `WORKLIST_PAGE` /
-  `LAB_*_PAGE` / `VITAL_FLOWSHEET_PAGE`（すべて 100）を上げ、`*_MAX_PAGES` を減らす。
-  `fetchAllByPartOf` などは `total` を見て 2 ページ目以降を並列に読める。
+- **F-4. 患者番号の採番**: `fetchNextPatientNumber`（`queries.ts`）を
+  `GET /Patient/$next-identifier?system={DEFAULT_IDENTIFIER_SYSTEM}` 1 回に置き換えた。最大 80 往復 → 1 往復。
+  `nextPatientNumber`（`patientHelpers.ts`）は不要になったので削除。
+- **F-5. 継続的な指示の一覧**: `setOrderPeriod(params, from, to)`（`queries.ts`）で
+  `order-period=ge{from}&order-period=le{to}` を付け、取得後の終了判定を外した。対象は
+  `useActiveMealOrders` / `useMealOrderMonth` / `usePatientMealIntake` / `usePatientNursingFlowsheet` /
+  `useActiveRehabOrders` / リハビリ・栄養指導・看護の部門一覧 / `useActiveNursingOrders` の 9 箇所。
+  不要になった `isMealOrderRunningOn` / `mealOrderEndsOnOrAfter` / `isRehabOrderRunningOn` /
+  `rehabOrderEndsOnOrAfter` / `isNutritionGuidanceOrderRunningOn` / `nutritionGuidanceOrderEndsOnOrAfter` を
+  削除（`isNursingOrderRunningOn` は経過表の日ごとの判定で使うので残置）。
+- **F-6. 他科依頼一覧**: `useConsultWorklist(view, targetDepartmentId)` が `performer=Organization/{id}` を
+  上流に渡す。依頼先科の選択肢は診療科マスタ（`useSelfDepartments`）から出しているので、サーバーで
+  絞っても候補は痩せない。他の絞り込み（依頼種別・入外・病棟・依頼元科・進捗）は画面側のまま。
+- **F-7. レジメンの日オーダー**: `useRegimenDayOrders(patientId, instanceIds)` が
+  `requisition={REGIMEN_INSTANCE_SYSTEM}|{id},...`（カンマ OR）で患者の全適用ぶんを 1 検索で引く。
+  呼び出し側（`useRegimenApplication` / `KarteChemoTab`）は「いちばん早い開始日」ではなく適用の
+  `instanceId` 一覧を渡す。
+- **F-8. 手術の実施記録**: `usePatientSurgeryPerforms(patientId, from, to)` が `date=ge{from}&date=le{to}` で
+  引く。経過表は術後日数の行のために `from` を `POST_OP_DAY_LIMIT`（90 日）ぶん前にずらして呼ぶ。
+- **F-9. ページ定数**: `INPATIENT_PAGE` / `OUTPATIENT_PAGE` / `WORKLIST_PAGE` / `LAB_ORDER_CANDIDATE_PAGE` /
+  `LAB_RESULT_ORDER_PAGE` / `LAB_TIMELINE_PAGE` / `VITAL_FLOWSHEET_PAGE` を 100 → 500 にし、`*_MAX_PAGES` を
+  読み切れる総件数が減らないように下げた。リハビリ・栄養指導・他科依頼の一覧が独自に持っていた 100 は
+  `WORKLIST_PAGE` に揃えた（`fetchWorklistBundles` の打ち切り判定と食い違っていた）。
+  麻酔チャートの `fetchAllByPartOf` は 1 ページ目の `total` から残りページ数を決めて並列に読む。
+  医療機関・Questionnaire・傷病名の「全件 1 ページ」取得も 500 に上げた。
 
 ### 見送り（理由つき）
 

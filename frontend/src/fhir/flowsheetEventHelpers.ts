@@ -133,7 +133,7 @@ export function markModalEvents(
 
 const DAY_MS = 86_400_000;
 /** 術後日数を出す上限。これを超えたら「前回の手術」ではなく既往なので出さない。 */
-const POST_OP_DAY_LIMIT = 90;
+export const POST_OP_DAY_LIMIT = 90;
 
 /**
  * 日時 → epoch(ms)。日付だけの値(YYYY-MM-DD)は端末ローカルの 0 時として読む。

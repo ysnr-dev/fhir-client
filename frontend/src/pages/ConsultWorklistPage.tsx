@@ -47,8 +47,8 @@ import { useOrderContext } from "../hooks/useOrderContext";
 // - 未回答 … status=active / revoked。いま溜まっている仕事なので件数は有限。
 // - 回答済 … status=completed の直近ぶん(依頼日の降順)。振り返り用。
 //
-// 依頼先科の絞り込みだけは上流が performer を索引していないためクライアント側で行う
-// (§2.1)。既定はヘッダーで選択中の診療科 = 「自分の科あての依頼」。
+// 依頼先科は ServiceRequest.performer を上流の performer 検索で絞る(他の絞り込みは
+// 読んだ行に対して画面側)。既定はヘッダーで選択中の診療科 = 「自分の科あての依頼」。
 //
 // 「回答」は状態を選ぶ操作ではなく診療記録を書く操作なので、進捗ボタンではなく
 // 専用のモーダル(ConsultReplyModal)を開く。保存で回答済になる。
@@ -96,7 +96,7 @@ export function ConsultWorklistPage() {
     return () => document.body.classList.remove("page-wide");
   }, []);
 
-  const worklist = useConsultWorklist(view);
+  const worklist = useConsultWorklist(view, effectiveFilters.targetDepartmentId);
   const departments = useSelfDepartments();
   const updateStatus = useUpdateConsultTaskStatus();
 
@@ -253,10 +253,6 @@ export function ConsultWorklistPage() {
 function matchesFilters(row: ConsultWorklistRow, filters: Filters): boolean {
   const summary = summarizeConsultOrder(row.order);
 
-  // 依頼先科。上流が performer を索引していないのでここで絞る(§2.1)。
-  if (filters.targetDepartmentId && summary.targetDepartmentId !== filters.targetDepartmentId) {
-    return false;
-  }
   if (filters.requestType && summary.requestType !== filters.requestType) return false;
   if (filters.urgentOnly && !summary.urgent) return false;
 

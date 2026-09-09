@@ -401,19 +401,6 @@ export function patientNumberOf(patient: fhir4.Patient): string | undefined {
   return identifier?.value;
 }
 
-/**
- * 患者番号を空欄で登録したときに付ける番号。数字だけの既存番号の最大値 +1(最初は 1)。
- * 手入力の英字混じりの番号は無視する。最大値 +1 なので、途中の欠番は埋めない
- * (削除された番号を別の患者に付け直さないため)。
- */
-export function nextPatientNumber(patients: fhir4.Patient[]): string {
-  const max = patients.reduce((m, patient) => {
-    const value = patientNumberOf(patient);
-    return value && /^\d+$/.test(value) ? Math.max(m, Number(value)) : m;
-  }, 0);
-  return String(max + 1);
-}
-
 export function displayName(patient: fhir4.Patient): string {
   return displayJapaneseName(patient.name) || "(氏名未登録)";
 }

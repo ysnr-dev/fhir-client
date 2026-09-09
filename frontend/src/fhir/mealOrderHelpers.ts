@@ -1058,27 +1058,6 @@ export function mealStapleText(summary: MealOrderSummary): string {
 }
 
 /**
- * 指定の日以降まで続くオーダーか(終了を持たないオーダーは常に true)。暦が「その月に
- * かかるオーダー」を選ぶのに使う。上流に「終了拡張が未来か」を問い合わせる術が無いので、
- * 候補を引いてからここで絞る。
- */
-export function mealOrderEndsOnOrAfter(sr: fhir4.ServiceRequest, at: string): boolean {
-  const end = mealOrderEnd(sr);
-  return !end || end.slice(0, 10) >= at;
-}
-
-/**
- * 指定の日に出ている食事オーダーか(その日までに始まり、まだ終わっていない)。
- * 食事変更で終了させる候補を選ぶのに使う。まだ始まっていないオーダーを候補にすると、
- * 開始より前の終了を立ててしまうので、開始日も見る。
- */
-export function isMealOrderRunningOn(sr: fhir4.ServiceRequest, at: string): boolean {
-  const start = (sr.occurrenceDateTime ?? "").slice(0, 10);
-  if (!start || start > at) return false;
-  return mealOrderEndsOnOrAfter(sr, at);
-}
-
-/**
  * 指定の食事より後まで続いてしまうオーダーか(= 退院で止める必要があるか)。
  *
  * 開始が退院日より後のオーダーも対象にする。退院日を早めたときに先の食事が

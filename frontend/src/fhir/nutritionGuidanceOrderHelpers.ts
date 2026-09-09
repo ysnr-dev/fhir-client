@@ -562,29 +562,6 @@ export function summarizeNutritionGuidanceOrder(
 }
 
 /**
- * 指定の日以降まで続くオーダーか(終了日を持たないオーダーは常に true)。
- * 上流に「終了拡張が未来か」を問い合わせる術が無いので、候補を引いてからここで絞る
- * (リハビリの rehabOrderEndsOnOrAfter と同じ)。
- */
-export function nutritionGuidanceOrderEndsOnOrAfter(
-  sr: fhir4.ServiceRequest,
-  at: string,
-): boolean {
-  const end = nutritionGuidanceOrderEnd(sr);
-  return !end || end >= at;
-}
-
-/** 指定の日に効いている栄養指導オーダーか(その日までに始まり、まだ終わっていない)。 */
-export function isNutritionGuidanceOrderRunningOn(
-  sr: fhir4.ServiceRequest,
-  at: string,
-): boolean {
-  const start = (sr.occurrenceDateTime ?? "").slice(0, 10);
-  if (!start || start > at) return false;
-  return nutritionGuidanceOrderEndsOnOrAfter(sr, at);
-}
-
-/**
  * 指定の日より後まで続いてしまうオーダーか(= 退院・終了で打ち切る必要があるか)。
  * すでにその日以前で終わっているオーダーは触らない(終了を後ろへ動かさない)。
  */

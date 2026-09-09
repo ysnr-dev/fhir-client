@@ -48,6 +48,7 @@ import {
   markModalEvents,
   postOpDayLabel,
   postOpDayOf,
+  POST_OP_DAY_LIMIT,
   type FlowsheetEvent,
   type FlowsheetEventGroup,
   type FlowsheetMark,
@@ -285,7 +286,12 @@ export function VitalFlowsheetPanel({
   }, [dayMode, days, shortDates, flowsheet.columns]);
 
   const encounters = usePatientEncounterEvents(patientId, rangeStart, rangeEnd);
-  const surgeries = usePatientSurgeryPerforms(patientId);
+  // 術後日数の行は表示期間より前の手術からも数えるので、その上限ぶん前から引く。
+  const surgeries = usePatientSurgeryPerforms(
+    patientId,
+    addDays(rangeStart, -POST_OP_DAY_LIMIT),
+    rangeEnd,
+  );
   const examOrders = usePatientExamOrders(patientId, rangeStart, rangeEnd);
   const injections = usePatientInjectionOrders(patientId, rangeStart, rangeEnd);
   const nursing = usePatientNursingFlowsheet(patientId, rangeStart, rangeEnd);
