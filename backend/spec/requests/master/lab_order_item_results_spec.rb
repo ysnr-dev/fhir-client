@@ -61,6 +61,61 @@ RSpec.describe "Master::LabOrderItemResults", type: :request do
     expect(response).to have_http_status(:unprocessable_content)
   end
 
+  describe "expand_panels=true" do
+    before do
+      # セット(SET) → パネル(P0001) → 単項目(O0002 / O0003) の入れ子。
+      Master::LabOrderItem.create!(order_item_code: "SET", name: "生化学セット", kind: "panel")
+      Master::LabOrderItem.create!(order_item_code: "P0001", name: "ナトリウム及びクロール", kind: "panel")
+      Master::LabOrderItem.create!(order_item_code: "O0002", name: "ナトリウム")
+      Master::LabOrderItem.create!(order_item_code: "O0003", name: "クロール")
+      Master::LabResultItem.create!(result_item_code: "R0003", name: "ナトリウム(Na)")
+      Master::LabResultItem.create!(result_item_code: "R0004", name: "クロール(Cl)")
+      Master::LabPanelItem.create!(panel_item_code: "SET", member_item_code: "P0001", display_order: 1)
+      Master::LabPanelItem.create!(panel_item_code: "P0001", member_item_code: "O0003", display_order: 2)
+      Master::LabPanelItem.create!(panel_item_code: "P0001", member_item_code: "O0002", display_order: 1)
+      Master::LabOrderItemResult.create!(order_item_code: "O0002", result_item_code: "R0003")
+      Master::LabOrderItemResult.create!(order_item_code: "O0003", result_item_code: "R0004")
+    end
+
+    it "パネルをたどって結果項目まで解決し、要求元のコードを添える" do
+      get "/master/lab_order_item_results", params: { order_item_code: "P0001", expand_panels: "true" }
+
+      expect(body["items"].map { |m| m["result_item"]["name"] }).to eq(["ナトリウム(Na)", "クロール(Cl)"])
+      expect(body["items"].map { |m| m["requested_order_item_code"] }).to eq(%w[P0001 P0001])
+    end
+
+    it "セットの中のパネルも解決する(入れ子の深さを問わない)" do
+      get "/master/lab_order_item_results", params: { order_item_code: "SET", expand_panels: "true" }
+
+      expect(body["items"].map { |m| m["result_item_code"] }).to eq(%w[R0003 R0004])
+    end
+
+    it "自分の対応表がある項目はパネルをたどらない" do
+      Master::LabOrderItemResult.create!(order_item_code: "P0001", result_item_code: "R0001")
+
+      get "/master/lab_order_item_results", params: { order_item_code: "P0001", expand_panels: "true" }
+
+      expect(body["items"].map { |m| m["result_item_code"] }).to eq(%w[R0001])
+    end
+
+    it "対応表もパネル構成も無い項目は行を返さない" do
+      Master::LabOrderItem.create!(order_item_code: "O0009", name: "対応なし")
+
+      get "/master/lab_order_item_results", params: { order_item_code: "O0009,O0002", expand_panels: "true" }
+
+      expect(body["items"].map { |m| m["requested_order_item_code"] }).to eq(%w[O0002])
+    end
+
+    it "パネルが循環していても止まる" do
+      Master::LabPanelItem.create!(panel_item_code: "P0001", member_item_code: "SET", display_order: 3)
+
+      get "/master/lab_order_item_results", params: { order_item_code: "SET", expand_panels: "true" }
+
+      expect(response).to have_http_status(:ok)
+      expect(body["items"].map { |m| m["result_item_code"] }).to eq(%w[R0003 R0004])
+    end
+  end
+
   it "更新・削除できる" do
     mapping = Master::LabOrderItemResult.create!(order_item_code: "O0001", result_item_code: "R0001")
 

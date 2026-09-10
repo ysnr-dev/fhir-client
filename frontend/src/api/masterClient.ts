@@ -808,6 +808,9 @@ export interface LabOrderItemResult {
   display_order: number | null;
   note: string | null;
   result_item: LabResultItem | null;
+  // expand_panels で解決したときの要求元のオーダー項目コード(パネルをたどった場合は
+  // order_item_code と異なる)。画面はこれでオーダーの項目ごとに行をまとめる。
+  requested_order_item_code?: string;
 }
 
 export interface LabOrderItemResultPayload {
@@ -1075,12 +1078,15 @@ export async function searchLabOrderItemResults(params: {
   /** オーダー項目コード・結果項目コード。いずれもカンマ区切りで複数指定できる。 */
   order_item_code?: string;
   result_item_code?: string;
+  /** 対応が無いオーダー項目をパネル構成でたどって結果項目まで解決する。 */
+  expand_panels?: boolean;
   page?: number;
   per?: number;
 }): Promise<MasterSearchResult<LabOrderItemResult>> {
   const search = new URLSearchParams();
   if (params.order_item_code) search.set("order_item_code", params.order_item_code);
   if (params.result_item_code) search.set("result_item_code", params.result_item_code);
+  if (params.expand_panels) search.set("expand_panels", "true");
   if (params.page) search.set("page", String(params.page));
   if (params.per) search.set("per", String(params.per));
 

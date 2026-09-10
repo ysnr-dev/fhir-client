@@ -59,14 +59,15 @@ function expand(
   items: LabOrderItemLine[],
   mappings: LabOrderItemResult[],
 ): { lines: ExpandedResultLine[]; unmatchedNames: string[] } {
+  // パネルをたどって解決した行は、要求元(オーダーの項目)のコードでまとめる。
+  // 並びはサーバーが解決した順(パネル構成 → 対応表の表示順)なのでそのまま使う。
   const byOrderCode = new Map<string, LabOrderItemResult[]>();
   for (const mapping of mappings) {
-    const list = byOrderCode.get(mapping.order_item_code);
+    const code = mapping.requested_order_item_code ?? mapping.order_item_code;
+    const list = byOrderCode.get(code);
     if (list) list.push(mapping);
-    else byOrderCode.set(mapping.order_item_code, [mapping]);
+    else byOrderCode.set(code, [mapping]);
   }
-  const byDisplayOrder = (a: LabOrderItemResult, b: LabOrderItemResult) =>
-    (a.display_order ?? Infinity) - (b.display_order ?? Infinity) || a.id - b.id;
 
   const lines: ExpandedResultLine[] = [];
   const unmatchedNames: string[] = [];
@@ -74,9 +75,9 @@ function expand(
 
   for (const item of items) {
     // 対応表の行はあるが結果項目がマスタから消えている場合も「対応なし」に数える。
-    const resultItems = (byOrderCode.get(item.code) ?? [])
-      .sort(byDisplayOrder)
-      .flatMap((mapping) => (mapping.result_item ? [mapping.result_item] : []));
+    const resultItems = (byOrderCode.get(item.code) ?? []).flatMap((mapping) =>
+      mapping.result_item ? [mapping.result_item] : [],
+    );
     if (resultItems.length === 0) {
       unmatchedNames.push(item.name);
       continue;

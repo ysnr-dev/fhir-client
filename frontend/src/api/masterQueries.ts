@@ -897,14 +897,17 @@ export function useLabResultItemsByJlac11Codes(codes: string[]) {
 
 // オーダー項目 → 結果項目の対応(結果項目を入れ子で持つ)。検体検査オーダーから
 // 検査結果の項目を展開するときに、オーダーの項目コードをまとめて引く。
+// 対応が無い項目はパネル構成をたどって解決する(セットの中のパネルは明細に展開されないため)。
+// 並びはサーバーが解決した順なので、画面側で並べ替えない。
 export function useLabOrderItemResults(orderItemCodes: string[]) {
-  const sorted = Array.from(new Set(orderItemCodes)).sort();
+  const codes = Array.from(new Set(orderItemCodes));
 
   return useQuery({
-    queryKey: [...LAB_RESULT_ITEMS_KEY, "order_item_results", sorted],
-    queryFn: () => searchLabOrderItemResults({ order_item_code: sorted.join(","), per: 500 }),
+    queryKey: [...LAB_RESULT_ITEMS_KEY, "order_item_results", codes],
+    queryFn: () =>
+      searchLabOrderItemResults({ order_item_code: codes.join(","), expand_panels: true, per: 500 }),
     staleTime: Infinity,
-    enabled: sorted.length > 0,
+    enabled: codes.length > 0,
   });
 }
 
