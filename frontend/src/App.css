@@ -1786,7 +1786,7 @@ fieldset.rp-card {
 }
 
 /* テーブル内では .rp-card__medicines button の padding 指定を上書きする必要がある。 */
-.rp-card__medicines--form button.rp-card__icon-button {
+.rp-card__medicines button.rp-card__icon-button {
   padding: 4px;
 }
 
@@ -1914,12 +1914,14 @@ fieldset.rp-card {
 /* H/L 判定による結果値の色分け。H(高値): 赤字 / L(低値): 青字。
    ベースの td 色指定より詳細度を上げて上書きする。 */
 .rp-card__medicines--detail td.rp-card__lab-value--high,
+.lab-result-history__table td.rp-card__lab-value--high,
 .lab-timeline__table td.lab-timeline__value--high {
   color: var(--lab-high);
   font-weight: 700;
 }
 
 .rp-card__medicines--detail td.rp-card__lab-value--low,
+.lab-result-history__table td.rp-card__lab-value--low,
 .lab-timeline__table td.lab-timeline__value--low {
   color: var(--lab-low);
   font-weight: 700;
@@ -2015,8 +2017,10 @@ fieldset.rp-card {
 
 /* パニック値(緊急異常値)の HH / LL。H / L と一目で区別できるよう、色を反転して塗る。 */
 .rp-card__medicines--detail td.rp-card__lab-value--critical-high,
+.lab-result-history__table td.rp-card__lab-value--critical-high,
 .lab-timeline__table td.lab-timeline__value--critical-high,
 .rp-card__medicines--detail td.rp-card__lab-value--critical-low,
+.lab-result-history__table td.rp-card__lab-value--critical-low,
 .lab-timeline__table td.lab-timeline__value--critical-low {
   font-weight: 700;
   color: #fff;
@@ -2024,13 +2028,92 @@ fieldset.rp-card {
 }
 
 .rp-card__medicines--detail td.rp-card__lab-value--critical-high,
+.lab-result-history__table td.rp-card__lab-value--critical-high,
 .lab-timeline__table td.lab-timeline__value--critical-high {
   background: var(--lab-high);
 }
 
 .rp-card__medicines--detail td.rp-card__lab-value--critical-low,
+.lab-result-history__table td.rp-card__lab-value--critical-low,
 .lab-timeline__table td.lab-timeline__value--critical-low {
   background: var(--lab-low);
+}
+
+/* 内容表示のコメント。入る項目が限られるので列にはせず、行の右端に印を出して
+   押したときに吹き出しで読ませる(列は空のまま確保しておく)。 */
+.rp-card__medicines--detail th.rp-card__lab-note,
+.rp-card__medicines--detail td.rp-card__lab-note {
+  width: 24px;
+  padding-left: 0;
+}
+
+.lab-result-detail__note-icon {
+  color: var(--text);
+}
+
+/* 表の右端の列なので、吹き出しは左ではなく右端に揃えてはみ出させない。 */
+.rp-card__lab-note .patient-header__popover {
+  left: auto;
+  right: 0;
+}
+
+/* 登録フォームのコメント欄。項目の行の下に 1 行で足し、間に線を引かずに
+   1 つの項目の続きとして読ませる。 */
+.rp-card__medicines tr:has(+ .lab-result-form__note-row) td {
+  border-bottom: 0;
+}
+
+.rp-card__medicines .lab-result-form__note-row td {
+  padding-top: 0;
+}
+
+/* ラベルは入力欄の左に置く(.prescription-form label の縦並びを打ち消す)。 */
+.prescription-form label.lab-result-form__note {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.lab-result-form__note input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 検査室の総合所見。改行をそのまま出す。 */
+.lab-result-detail__conclusion {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+/* 登録フォームの行末: コメントの開閉と削除のアイコンを横に並べる。 */
+.lab-result-form__row-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* 日付入力は行の高さの扱いが select と違って背が高くなるので、同じ行に並ぶ
+   入外区分・診療科・報告区分の選択欄に高さを合わせる。 */
+.lab-result-form__date input {
+  line-height: normal;
+}
+
+/* 総合所見は長文が入るので、入力欄を枠いっぱいに広げ、消すアイコンを右に添える。 */
+.lab-result-form__conclusion {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1 1 100%;
+}
+
+.lab-result-form__conclusion textarea {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  /* 長文をまとめて読む欄なので、1 行の入力欄より一段小さい字にする。 */
+  font-size: 13px;
 }
 
 /* 登録フォームの結果値セル: 結果値入力と H/L プルダウンを横に並べる。 */
@@ -2051,13 +2134,19 @@ fieldset.rp-card {
 }
 
 /* 検体検査オーダーの選択肢は検査項目名を並べるので長くなりがち。選択肢の幅に
-   引きずられてフォームが横に広がらないよう、行の残り幅に収める。 */
-.lab-result-form__order {
-  flex: 1 1 240px;
+   引きずられてフォームが横に広がらないよう、単独の行を丸ごと使う。高さを食わない
+   よう、この行だけラベルを左に置く(.prescription-form label の縦並びを打ち消す)。 */
+.prescription-form label.lab-result-form__order {
+  flex: 1 1 100%;
   min-width: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 
 .lab-result-form__order select {
+  flex: 1;
+  min-width: 0;
   max-width: 100%;
 }
 
@@ -2138,18 +2227,18 @@ fieldset.rp-card {
   font-size: 14px;
 }
 
-/* 検査結果の検査共通。検体採取日・入外区分・診療科は短いので 1 行に 3 組並べ、
-   幅を食う検体検査オーダーだけを次の行で残り幅いっぱいに置く。 */
+/* 検査結果の検査共通。採取日・入外区分・診療科・報告区分と、報告日時・実施施設・実施者を
+   4 組ずつ 2 行に並べ、幅を食う検体検査オーダーだけを次の行で残り幅いっぱいに置く。 */
 .prescription-detail__common--lab {
-  grid-template-columns: repeat(5, max-content) minmax(0, 1fr);
+  grid-template-columns: repeat(7, max-content) minmax(0, 1fr);
   column-gap: 24px;
 }
 
-.prescription-detail__common--lab dt:nth-of-type(4) {
+.prescription-detail__common--lab dt:nth-of-type(8) {
   grid-column: 1;
 }
 
-.prescription-detail__common--lab dd:nth-of-type(4) {
+.prescription-detail__common--lab dd:nth-of-type(8) {
   grid-column: 2 / -1;
 }
 
@@ -2966,6 +3055,37 @@ fieldset.rp-card {
 .lab-timeline__table td.lab-timeline__value {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* 中間報告・訂正報告の印。列を増やさずに示すため、値の右肩に小さな記号を重ねる
+   (凡例は表の上の hint に出す)。 */
+.lab-timeline__table td.lab-timeline__value--preliminary,
+.lab-timeline__table td.lab-timeline__value--corrected {
+  position: relative;
+}
+
+.lab-timeline__table td.lab-timeline__value--preliminary::after,
+.lab-timeline__table td.lab-timeline__value--corrected::after {
+  position: absolute;
+  top: 0;
+  right: 1px;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--text);
+}
+
+/* パニック値のセルは背景を塗りつぶすので、印も反転した文字色に合わせる。 */
+.lab-timeline__table td.lab-timeline__value--critical-high::after,
+.lab-timeline__table td.lab-timeline__value--critical-low::after {
+  color: #fff;
+}
+
+.lab-timeline__table td.lab-timeline__value--preliminary::after {
+  content: "◦";
+}
+
+.lab-timeline__table td.lab-timeline__value--corrected::after {
+  content: "▴";
 }
 
 /* 年をまとめる上段ヘッダー。年の切り替わりが分かるよう左側に区切り線を引く。 */
@@ -6981,6 +7101,36 @@ fieldset.lab-order-item__section label {
    他のメタデータと同じ濃さに落とす(形はバッジのまま残して見落とさせない)。 */
 .micro-result__badge--muted {
   border-color: var(--border);
+  color: var(--text);
+}
+
+/* 検査項目の変更履歴。項目ごとに見出し + 版の表を積む。 */
+.lab-result-history__item + .lab-result-history__item {
+  margin-top: 16px;
+}
+
+.lab-result-history__name {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.lab-result-history__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.lab-result-history__table th,
+.lab-result-history__table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.lab-result-history__table th {
+  font-size: 12px;
   color: var(--text);
 }
 

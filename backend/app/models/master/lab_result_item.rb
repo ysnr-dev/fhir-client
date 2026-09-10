@@ -3,6 +3,7 @@ module Master
   # データ型・単位・選択肢など結果値を表現するための属性を持つ。
   # オーダー項目(LabOrderItem)との対応は LabOrderItemResult が持つ。
   # JLAC11 / JLAC10 / LOINC は任意の属性で、Observation.code に併記する。
+  # 測定法(method_name)は試薬・機器の名称で、Observation.method に写す。
   class LabResultItem < ApplicationRecord
     self.table_name = "master_lab_result_items"
 

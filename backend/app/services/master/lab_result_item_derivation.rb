@@ -12,7 +12,7 @@ module Master
   #      作って対応づける。包括項目の構成項目(末梢血液一般検査 → 白血球数…)は seed で
   #      「コード-枝番」の単項目になっているので、これで CBC の各結果も覆える。
   #      オーダー項目に JLAC があれば、配布の共有項目JLACコードマスタからデータ型・単位・
-  #      選択肢を写す。A で対応づいた項目には 1:1 の placeholder を作らない。
+  #      選択肢・測定法を写す。A で対応づいた項目には 1:1 の placeholder を作らない。
   class LabResultItemDerivation
     Result = Struct.new(:csv_items, :csv_mappings, :created, :mapped, :kept, keyword_init: true)
 
@@ -26,7 +26,7 @@ module Master
     ITEM_COLUMNS = %w[
       name short_name name_kana category specimen_code data_type display_unit ucum_unit
       code_value_list value_code_system decimal_places jlac11_code jlac10_code loinc_code
-      valid_from valid_to display_order note
+      method_name valid_from valid_to display_order note
     ].freeze
 
     def self.call(items_csv: Rails.root.join(ITEMS_CSV), mappings_csv: Rails.root.join(MAPPINGS_CSV))
@@ -145,6 +145,8 @@ module Master
       attrs[:value_code_system] = lab_item.code_oid.presence
       attrs[:jlac10_code] ||= lab_item.jlac10_code.presence
       attrs[:short_name] ||= lab_item.abbreviation.presence
+      # 測定法名称。JLAC11 の測定法コード 3 桁が指す試薬・機器の製品名。
+      attrs[:method_name] = lab_item.jlac11_method.presence
     end
   end
 end

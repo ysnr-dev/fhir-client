@@ -727,6 +727,8 @@ export interface LabResultItem {
   jlac11_code: string | null;
   jlac10_code: string | null;
   loinc_code: string | null;
+  // 測定法(試薬・機器の名称)。結果登録時に Observation.method へ写す。
+  method_name: string | null;
   valid_from: string | null;
   valid_to: string | null;
   display_order: number | null;
@@ -798,6 +800,7 @@ export interface LabResultItemPayload {
   jlac11_code?: string | null;
   jlac10_code?: string | null;
   loinc_code?: string | null;
+  method_name?: string | null;
   valid_from?: string | null;
   valid_to?: string | null;
   display_order?: number | null;

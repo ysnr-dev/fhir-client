@@ -4530,6 +4530,35 @@ export function useLabResultTimeline(patientId: string | undefined, dateCount: n
   });
 }
 
+/** 選んだ検査項目の版履歴。訂正で値がどう変わったかを読むために引く。 */
+export interface LabObservationHistory {
+  id: string;
+  /** 新しい版から順(上流の _history の並びのまま)。 */
+  versions: fhir4.Observation[];
+}
+
+// 版履歴は 1 項目 1 リクエストになるので、内容表示で選んだ項目だけを引く
+// (1 レポートの全項目を引くと数十回の照会になる)。
+export function useLabObservationHistories(observationIds: string[]) {
+  return useQuery({
+    queryKey: ["Observation", "history", observationIds.join(",")],
+    queryFn: async (): Promise<LabObservationHistory[]> => {
+      const params = new URLSearchParams();
+      params.set("_count", String(HISTORY_COUNT));
+      const results = await Promise.all(
+        observationIds.map((id) => readHistory<fhir4.Observation>("Observation", id, params)),
+      );
+      return results.map(({ data }, index) => ({
+        id: observationIds[index],
+        versions: (data.entry ?? [])
+          .map((entry) => entry.resource)
+          .filter((r): r is fhir4.Observation => r?.resourceType === "Observation"),
+      }));
+    },
+    enabled: observationIds.length > 0,
+  });
+}
+
 // 検査結果を保存・削除するとオーダーの紐付け状況が変わるため、
 // 検体検査オーダーの候補(["ServiceRequest", "search"] 配下)も無効化する。
 // パニック値(緊急異常値)の通知 -------------------------------------------------

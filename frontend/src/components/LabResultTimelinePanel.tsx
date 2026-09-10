@@ -7,6 +7,8 @@ import { Modal } from "./Modal";
 import {
   buildLabTimeline,
   interpretationClass,
+  isCorrectedReport,
+  labReportStatusDisplay,
   legacyJlac11CodesOf,
   resultItemAliases,
   type LabTimelineRow,
@@ -48,6 +50,9 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
     () => (filterKeys ? timeline.rows.filter((row) => filterKeys.has(row.key)) : timeline.rows),
     [timeline, filterKeys],
   );
+
+  // 中間報告・訂正報告の印の凡例を出すかどうか。
+  const hasMarkedValues = useMemo(() => rows.some((row) => row.statuses.size > 0), [rows]);
 
   // 日付の列は古い順に並ぶため、開いた時点では右端(最新)が見えるようにする。
   useLayoutEffect(() => {
@@ -113,7 +118,10 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
             >
               グラフ表示
             </button>
-            <span className="lab-timeline__hint" />
+            {/* 印の意味は凡例が無いと伝わらないので、印の付いた値があるときだけ添える。 */}
+            <span className="lab-timeline__hint">
+              {hasMarkedValues && "◦ 中間報告 / ▴ 訂正報告"}
+            </span>
           </div>
 
           {rows.length === 0 ? (
@@ -222,17 +230,26 @@ function TimelineRow({ row, dates, checked, onToggle }: TimelineRowProps) {
       </td>
       <td className="lab-timeline__unit-col">{row.unit}</td>
       <td className="lab-timeline__unit-col">{row.referenceRange}</td>
-      {dates.map((date) => (
-        <td
-          key={date}
-          className={interpretationClass(
-            row.interpretations.get(date) ?? "",
-            "lab-timeline__value",
-          )}
-        >
-          {row.values.get(date) ?? ""}
-        </td>
-      ))}
+      {dates.map((date) => {
+        // 中間報告・訂正報告は値の読み方が変わるので、列を増やさずセルの印で示す。
+        const status = row.statuses.get(date) ?? "";
+        const mark = status
+          ? isCorrectedReport(status)
+            ? " lab-timeline__value--corrected"
+            : " lab-timeline__value--preliminary"
+          : "";
+        return (
+          <td
+            key={date}
+            className={
+              interpretationClass(row.interpretations.get(date) ?? "", "lab-timeline__value") + mark
+            }
+            title={status ? labReportStatusDisplay(status) : undefined}
+          >
+            {row.values.get(date) ?? ""}
+          </td>
+        );
+      })}
     </tr>
   );
 }

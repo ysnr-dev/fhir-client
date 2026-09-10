@@ -1,6 +1,7 @@
 import { makeFieldUpdater } from "../lib/form";
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
-import { useSelfDepartments, type LabOrderCandidate } from "../api/queries";
+import { Fragment, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCurrentPractitioner } from "../api/authQueries";
+import { useSelfDepartments, useSelfOrganization, type LabOrderCandidate } from "../api/queries";
 import type { LabResultItem } from "../api/masterClient";
 import {
   useLabOrderResultLines,
@@ -10,11 +11,14 @@ import {
   emptyLabResultForm,
   emptyLabResultLine,
   INTERPRETATION_OPTIONS,
+  isPreliminaryReport,
   judgeInterpretation,
+  labReportStatusDisplay,
   lineKeyOf,
   matchReferenceRange,
   parseCodeValueList,
   referenceRangeLabel,
+  REPORT_STATUS_OPTIONS,
   SETTING_OPTIONS,
   type LabInterpretation,
   type LabResultFormValues,
@@ -22,6 +26,8 @@ import {
   type LabResultSetting,
   type LabResultSubject,
 } from "../fhir/labResultHelpers";
+import { organizationDisplayName } from "../fhir/organizationHelpers";
+import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabResultItemSearchModal } from "./LabResultItemSearchModal";
 
@@ -44,6 +50,35 @@ interface LabResultFormProps {
 }
 
 type ModalState = { lineIndex: number } | null;
+
+function NoteIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M2.5 3.5h11v7.5h-6.2L4.5 13.5V11h-2z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 /**
  * オーダーから展開した項目を、いま入力中の行に反映する。
@@ -144,7 +179,42 @@ export function LabResultForm({
   const [values, setValues] = useState<LabResultFormValues>(initialValues ?? emptyLabResultForm);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
+  // コメント欄を開いている行。すでにコメントが入っている行は常に開くので、ここに
+  // 入るのは「まだ空だが人が開いた」行だけ。
+  const [noteOpen, setNoteOpen] = useState<ReadonlySet<number>>(new Set());
+  // 総合所見は書かない結果の方が多いので畳んでおく(保存済みの所見があれば開く)。
+  const [conclusionOpen, setConclusionOpen] = useState(Boolean(initialValues?.conclusion));
   const { departments } = useSelfDepartments();
+
+  // 実施施設・実施者。画面には出さず、自院とログインユーザーを保存時に焼き付ける
+  // (空欄のときだけ入れるので、編集しても最初に登録した人が残る)。
+  const selfOrganization = useSelfOrganization();
+  const { practitionerId, practitioner } = useCurrentPractitioner();
+
+  useEffect(() => {
+    const organization = selfOrganization.organization;
+    setValues((v) => {
+      const performer = v.performer;
+      const organizationId = performer.organizationId || (organization?.id ?? "");
+      const practitionerRef = performer.practitionerId || (practitionerId ?? "");
+      if (organizationId === performer.organizationId && practitionerRef === performer.practitionerId) {
+        return v;
+      }
+      return {
+        ...v,
+        performer: {
+          organizationId,
+          organizationName:
+            performer.organizationName ||
+            (organization ? organizationDisplayName(organization) : ""),
+          practitionerId: practitionerRef,
+          practitionerName:
+            performer.practitionerName ||
+            (practitioner ? practitionerDisplayName(practitioner) : ""),
+        },
+      };
+    });
+  }, [selfOrganization.organization, practitionerId, practitioner]);
 
   // 画面上でオーダーを選び直したときだけ検査項目を展開する(初期表示時の
   // 紐付け済みオーダーで、保存済みの検査項目を上書きしてしまわないようにする)。
@@ -184,6 +254,16 @@ export function LabResultForm({
 
   function removeLine(lineIndex: number) {
     setValues((v) => ({ ...v, lines: v.lines.filter((_, i) => i !== lineIndex) }));
+    setNoteOpen(new Set());
+  }
+
+  function toggleNote(lineIndex: number) {
+    setNoteOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(lineIndex)) next.delete(lineIndex);
+      else next.add(lineIndex);
+      return next;
+    });
   }
 
   // 結果値を入れたら基準値と突き合わせて H/L を入れる(数値型で基準値が当たるときだけ)。
@@ -312,13 +392,35 @@ export function LabResultForm({
               )}
           </select>
         </label>
-        <label>
+        <label className="lab-result-form__date">
           検体採取日
           <input
             type="date"
             value={values.specimenDate}
             onChange={(e) => update("specimenDate", e.target.value)}
           />
+        </label>
+        {/* 確定済みの結果を編集しているときは、保存すると訂正報告になるので選ばせない。 */}
+        <label>
+          報告区分
+          {values.originalStatus && !isPreliminaryReport(values.originalStatus) ? (
+            <span className="lab-result-form__order-locked">
+              {labReportStatusDisplay("corrected")}
+            </span>
+          ) : (
+            <select
+              value={values.reportStatus}
+              onChange={(e) =>
+                update("reportStatus", e.target.value as "preliminary" | "final")
+              }
+            >
+              {REPORT_STATUS_OPTIONS.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.display}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
         {/*
           元になった検体検査オーダー。紐付けは検査項目単位ではなくオーダー単位で、
@@ -370,6 +472,7 @@ export function LabResultForm({
             <col style={{ width: "220px" }} />
             <col style={{ width: "96px" }} />
             <col style={{ width: "110px" }} />
+            {/* コメント欄の開閉と削除のアイコンボタンが並ぶ分の幅。 */}
             <col style={{ width: "72px" }} />
           </colgroup>
           <thead>
@@ -387,8 +490,10 @@ export function LabResultForm({
               const range = line.item?.data_type === "PQ"
                 ? matchReferenceRange(line.item, subject, values.specimenDate)
                 : undefined;
+              const noteShown = Boolean(line.note) || noteOpen.has(lineIndex);
               return (
-              <tr key={lineIndex}>
+              <Fragment key={lineIndex}>
+              <tr>
                 <td>
                   <div className="rp-card__medicine-cell">
                     <button type="button" onClick={() => setModal({ lineIndex })}>
@@ -441,13 +546,47 @@ export function LabResultForm({
                 <td>{line.item?.data_type === "PQ" ? line.item.display_unit || "-" : "-"}</td>
                 <td>{range ? referenceRangeLabel(range.lower_limit, range.upper_limit) : "-"}</td>
                 <td>
-                  {values.lines.length > 1 && (
-                    <button type="button" onClick={() => removeLine(lineIndex)}>
-                      削除
+                  <div className="lab-result-form__row-actions">
+                    {/* コメントは入る行が限られるので、列にせず開閉式の 1 行にする。 */}
+                    <button
+                      type="button"
+                      className="rp-card__icon-button"
+                      aria-pressed={noteShown}
+                      title="コメント"
+                      aria-label="コメント"
+                      onClick={() => toggleNote(lineIndex)}
+                    >
+                      <NoteIcon />
                     </button>
-                  )}
+                    {values.lines.length > 1 && (
+                      <button
+                        type="button"
+                        className="rp-card__icon-button"
+                        title="この検査項目を削除"
+                        aria-label="この検査項目を削除"
+                        onClick={() => removeLine(lineIndex)}
+                      >
+                        <TrashIcon />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
+              {noteShown && (
+                <tr className="lab-result-form__note-row">
+                  <td colSpan={6}>
+                    <label className="lab-result-form__note">
+                      コメント
+                      <input
+                        type="text"
+                        value={line.note}
+                        onChange={(e) => updateLine(lineIndex, { note: e.target.value })}
+                      />
+                    </label>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
               );
             })}
           </tbody>
@@ -459,6 +598,43 @@ export function LabResultForm({
           </button>
         </div>
       </fieldset>
+
+      {/* 総合所見は検査項目を見てから書くものなので、項目の下に単独で置く。 */}
+      {conclusionOpen ? (
+        <fieldset>
+          <legend>総合所見</legend>
+          <div className="lab-result-form__conclusion">
+            <textarea
+              rows={3}
+              aria-label="総合所見"
+              value={values.conclusion}
+              onChange={(e) => update("conclusion", e.target.value)}
+            />
+            <button
+              type="button"
+              className="rp-card__icon-button"
+              title="総合所見を削除"
+              aria-label="総合所見を削除"
+              onClick={() => {
+                setConclusionOpen(false);
+                update("conclusion", "");
+              }}
+            >
+              <TrashIcon />
+            </button>
+          </div>
+        </fieldset>
+      ) : (
+        <div className="prescription-form__comment-toggle">
+          <button
+            type="button"
+            className="comment-add-button"
+            onClick={() => setConclusionOpen(true)}
+          >
+            ＋総合所見
+          </button>
+        </div>
+      )}
 
       <div className="prescription-form__submit">
         <button type="submit" disabled={submitting}>

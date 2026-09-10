@@ -270,6 +270,8 @@ export type KarteTimelineItem = KarteItemBase &
         itemRequests: fhir4.ServiceRequest[];
         /** このオーダーを元に登録された検査結果の id。空なら結果はまだ無い。 */
         reportId: string;
+        /** 結果の報告区分。"preliminary" なら中間、"corrected" なら訂正のバッジを出す。 */
+        reportStatus: string;
         /** 部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
         status: LabTaskStatus;
       }
@@ -652,7 +654,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
 
   // オーダー id → そのオーダーを元にした検査結果(検体検査・細菌検査)の id と status
   // (DiagnosticReport.basedOn。カードの「検査結果表示」を出せるかの判定と、
-  // 細菌検査の中間報告バッジに使う)。
+  // 中間報告・訂正報告のバッジに使う)。
   const reportByOrderId = new Map<string, { id: string; status: string }>();
   for (const report of pickByType<fhir4.DiagnosticReport>(
     prescriptionResources,
@@ -762,12 +764,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
       serviceRequest,
     };
     if (isLabServiceRequest(serviceRequest)) {
+      const report = reportByOrderId.get(serviceRequest.id ?? "");
       return {
         ...base,
         kind: "lab-order" as const,
         label: KARTE_KIND_LABELS["lab-order"],
         itemRequests: labOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
-        reportId: reportByOrderId.get(serviceRequest.id ?? "")?.id ?? "",
+        reportId: report?.id ?? "",
+        reportStatus: report?.status ?? "",
         status: labTaskStatus(labTaskByOrderId.get(serviceRequest.id ?? "")),
       };
     }

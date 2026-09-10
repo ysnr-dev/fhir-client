@@ -480,6 +480,15 @@ const KarteCard = memo(function KarteCard({
           </span>
           <span className="karte-card__title">{cardTitle(item)}</span>
           <ProblemBadge problem={itemProblem(item)} problemsById={problemsById} />
+          {/* 検体検査は中間報告と、確定後に直した訂正報告をカードで見分けられるようにする。 */}
+          {item.kind === "lab-order" && item.reportStatus === "preliminary" && (
+            <span className="micro-result__badge">結果:中間報告</span>
+          )}
+          {item.kind === "lab-order" && item.reportStatus === "corrected" && (
+            <span className="micro-result__badge micro-result__badge--muted">
+              結果:訂正報告
+            </span>
+          )}
           {/* 細菌検査の結果が中間報告のうちは、最終化がまだなことをカードでも示す。 */}
           {item.kind === "micro-order" && item.reportStatus === "preliminary" && (
             <span className="micro-result__badge">結果:中間報告</span>

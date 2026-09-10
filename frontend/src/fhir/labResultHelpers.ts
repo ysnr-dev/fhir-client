@@ -45,6 +45,104 @@ export function isLabelSpecimen(specimen: fhir4.Specimen): boolean {
   return specimen.accessionIdentifier?.system === LAB_LABEL_NUMBER_SYSTEM;
 }
 
+/**
+ * 報告区分。中間報告(preliminary)→ 最終報告(final)→ 確定後に値を直したら訂正(corrected)。
+ * 訂正への遷移は build 側が行うので、フォームの選択肢は中間・最終の 2 つ(病理
+ * pathoResultHelpers・診療記録 clinicalNoteHelpers と同じ規約)。
+ *
+ * 病理は修正を amended で表すが、検体検査は corrected を使う。検体検査の訂正報告は
+ * JAHIS 臨床検査データ交換規約(HL7 v2 の OBX-11 = "C" 訂正)に当たる概念で、
+ * FHIR でこれに対応するコードが corrected のため。
+ */
+export type LabReportStatus = "preliminary" | "final" | "corrected";
+
+export const REPORT_STATUS_OPTIONS: { code: "preliminary" | "final"; display: string }[] = [
+  { code: "preliminary", display: "中間報告" },
+  { code: "final", display: "最終報告" },
+];
+
+export function labReportStatusDisplay(status: string | undefined): string {
+  // amended は病理・診療記録の語彙だが、外から届いた結果にあり得るので訂正として読む。
+  if (status === "corrected" || status === "amended") return "訂正報告";
+  return REPORT_STATUS_OPTIONS.find((o) => o.code === status)?.display ?? "";
+}
+
+/** 中間報告のまま確定していない結果か(カルテのカード・累積表の印に使う)。 */
+export function isPreliminaryReport(status: string | undefined): boolean {
+  return status === "preliminary";
+}
+
+/** 訂正された結果か(同上)。 */
+export function isCorrectedReport(status: string | undefined): boolean {
+  return status === "corrected" || status === "amended";
+}
+
+/** 最終報告か(中間・訂正だけを目立たせるための判定)。 */
+export function isFinalReport(status: string | undefined): boolean {
+  return status === "final";
+}
+
+/**
+ * 保存後の報告区分。確定(final)・訂正済(corrected)の結果を編集保存したら訂正へ遷移させる。
+ * 確定した結果を直したのに final のままだと、後から見て「一度も直していない結果」と
+ * 区別が付かなくなるため。
+ */
+export function nextLabReportStatus(values: LabResultFormValues): LabReportStatus {
+  const original = values.originalStatus;
+  return original && !isPreliminaryReport(original) ? "corrected" : values.reportStatus;
+}
+
+/**
+ * 実施施設と実施者(DiagnosticReport.performer)。どこで・誰が測ったかは結果の読み方に
+ * 効くので焼き付ける。実施施設は自院で固定(外注は docs/lab-backlog.md B-2 で未実装)、
+ * 実施者は結果を登録したログインユーザー。編集では最初の実施者を残す。
+ */
+export interface LabResultPerformer {
+  organizationId: string;
+  organizationName: string;
+  practitionerId: string;
+  practitionerName: string;
+}
+
+export const emptyLabResultPerformer: LabResultPerformer = {
+  organizationId: "",
+  organizationName: "",
+  practitionerId: "",
+  practitionerName: "",
+};
+
+function buildPerformerReferences(performer: LabResultPerformer): fhir4.Reference[] {
+  const references: fhir4.Reference[] = [];
+  if (performer.organizationId) {
+    references.push({
+      reference: `Organization/${performer.organizationId}`,
+      display: performer.organizationName || undefined,
+    });
+  }
+  if (performer.practitionerId) {
+    references.push({
+      reference: `Practitioner/${performer.practitionerId}`,
+      display: performer.practitionerName || undefined,
+    });
+  }
+  return references;
+}
+
+function parsePerformer(report: fhir4.DiagnosticReport): LabResultPerformer {
+  const performer = { ...emptyLabResultPerformer };
+  for (const reference of report.performer ?? []) {
+    const [type, id] = reference.reference?.split("/") ?? [];
+    if (type === "Organization" && id) {
+      performer.organizationId = id;
+      performer.organizationName = reference.display ?? "";
+    } else if (type === "Practitioner" && id) {
+      performer.practitionerId = id;
+      performer.practitionerName = reference.display ?? "";
+    }
+  }
+  return performer;
+}
+
 // Observation.interpretation(H/L/N)。JP-CLINS の JP-Observation-LabResult-eCS が
 // 参照する v3 ObservationInterpretation コードシステム。
 export const INTERPRETATION_SYSTEM =
@@ -178,6 +276,8 @@ export interface LabResultLineValues {
   value: string;
   // H/L 判定。空値は FHIR 上 "N"(Normal) として記録する。
   interpretation: LabInterpretation;
+  // 項目ごとのコメント(溶血・乳び・再検など)。空なら Observation.note を書かない。
+  note: string;
 }
 
 export interface LabResultFormValues {
@@ -194,6 +294,14 @@ export interface LabResultFormValues {
    * 紐付けは検査項目単位ではなく「オーダー 1 件 ↔ 結果レポート 1 件」で持つ。
    */
   orderId: string;
+  /** 報告区分。フォームで選ぶのは中間・最終で、訂正は保存時に決まる(nextLabReportStatus)。 */
+  reportStatus: "preliminary" | "final";
+  /** 保存済みの報告区分。新規は空。訂正へ遷移させるかの判定にだけ使う。 */
+  originalStatus: string;
+  /** 検査室の総合所見(DiagnosticReport.conclusion)。 */
+  conclusion: string;
+  /** 実施施設・実施者。空欄は登録画面が自院とログインユーザーで埋める。 */
+  performer: LabResultPerformer;
   lines: LabResultLineValues[];
 }
 
@@ -201,6 +309,7 @@ export const emptyLabResultLine: LabResultLineValues = {
   item: null,
   value: "",
   interpretation: "",
+  note: "",
 };
 
 export function emptyLabResultForm(setting: LabResultSetting = "outpatient"): LabResultFormValues {
@@ -210,6 +319,10 @@ export function emptyLabResultForm(setting: LabResultSetting = "outpatient"): La
     departmentId: "",
     departmentName: "",
     orderId: "",
+    reportStatus: "final",
+    originalStatus: "",
+    conclusion: "",
+    performer: { ...emptyLabResultPerformer },
     lines: [{ ...emptyLabResultLine }],
   };
 }
@@ -398,6 +511,7 @@ function buildObservation(
   line: LabResultLineValues,
   patientId: string,
   effective: string,
+  status: LabReportStatus,
   specimenReference?: string,
   range?: LabReferenceRange,
 ): fhir4.Observation {
@@ -408,7 +522,8 @@ function buildObservation(
   const resource: fhir4.Observation = {
     resourceType: "Observation",
     meta: { profile: [OBSERVATION_PROFILE] },
-    status: "final",
+    // 報告区分はレポートと項目で揃える(項目だけ中間・レポートだけ確定にはしない)。
+    status,
     category: [
       {
         coding: [
@@ -440,6 +555,10 @@ function buildObservation(
   if (item && range && item.data_type === "PQ") {
     resource.referenceRange = [buildReferenceRange(item, range)];
   }
+  // 測定法(試薬・機器)。JLAC11 の測定法コード 3 桁は単独では引ける表が無いので、
+  // 結果項目マスタが持つ名称を text として残す。
+  if (item?.method_name) resource.method = { text: item.method_name };
+  if (line.note.trim()) resource.note = [{ text: line.note.trim() }];
   if (line.id) resource.id = line.id;
   return resource;
 }
@@ -500,6 +619,10 @@ function buildLabResultTransactionBundle(
 ): fhir4.Bundle {
   // FHIR の dateTime は日付のみ(YYYY-MM-DD)を許容し、fhir-server もそのまま受理する。
   const effective = values.specimenDate;
+  // 保存するたびに決まる報告区分と報告日時。訂正のたびに「いつ出し直したか」が残る。
+  const status = nextLabReportStatus(values);
+  const issued = new Date().toISOString();
+  const performers = buildPerformerReferences(values.performer);
   const reportReference = reportId
     ? `DiagnosticReport/${reportId}`
     : `urn:uuid:${crypto.randomUUID()}`;
@@ -528,7 +651,7 @@ function buildLabResultTransactionBundle(
   for (const line of values.lines) {
     const specimenReference = specimenPlans.get(specimenCodeOf(line.item))?.fullUrl;
     const range = matchReferenceRange(line.item, subject, values.specimenDate);
-    const resource = buildObservation(line, patientId, effective, specimenReference, range);
+    const resource = buildObservation(line, patientId, effective, status, specimenReference, range);
     const fullUrl = line.id ? `Observation/${line.id}` : `urn:uuid:${crypto.randomUUID()}`;
     if (line.id) keptObservationIds.add(line.id);
 
@@ -548,7 +671,7 @@ function buildLabResultTransactionBundle(
   const report: fhir4.DiagnosticReport = {
     resourceType: "DiagnosticReport",
     meta: { profile: [REPORT_PROFILE] },
-    status: "final",
+    status,
     category: [
       { coding: [{ system: REPORT_CATEGORY_SYSTEM, code: "LAB", display: "Laboratory" }] },
       {
@@ -563,6 +686,11 @@ function buildLabResultTransactionBundle(
     },
     subject: { reference: `Patient/${patientId}` },
     effectiveDateTime: effective,
+    // 報告日時。採取日(effective)しか無いと、いつ報告されたか・いつ訂正したかが残らない。
+    issued,
+    // 実施施設(自院)と実施者(登録したログインユーザー)。
+    performer: performers.length ? performers : undefined,
+    conclusion: values.conclusion.trim() || undefined,
     // 診療科。DiagnosticReport にも診療科を持つ標準要素が無いため、オーダーの
     // 依頼科と同じローカル拡張で持たせる。
     extension: values.departmentId
@@ -748,6 +876,39 @@ export function summarizeDiagnosticReport(report: fhir4.DiagnosticReport): LabRe
   };
 }
 
+/** 内容表示の「検査共通」に出すレポートの情報(報告区分・報告日時・実施者・総合所見)。 */
+export interface LabReportInfo {
+  status: string;
+  statusDisplay: string;
+  /** 報告日時("YYYY-MM-DD HH:mm")。未記録なら空。 */
+  issued: string;
+  conclusion: string;
+  performer: LabResultPerformer;
+}
+
+export function labReportInfo(report: fhir4.DiagnosticReport): LabReportInfo {
+  return {
+    status: report.status ?? "",
+    statusDisplay: labReportStatusDisplay(report.status),
+    // instant(タイムゾーン付き)なので、表示は実行環境のローカル時刻に直す。
+    issued: report.issued ? labInstantLabel(report.issued) : "",
+    conclusion: report.conclusion ?? "",
+    performer: parsePerformer(report),
+  };
+}
+
+// instant("2026-09-10T05:00:00.000Z")→ "2026-09-10 14:00"(ローカル時刻)。
+// 読めない値はそのまま返す。報告日時と版履歴の更新日時で使う。
+export function labInstantLabel(instant: string): string {
+  const date = new Date(instant);
+  if (Number.isNaN(date.getTime())) return instant;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
+}
+
 export interface LabResultDetailBundle {
   report?: fhir4.DiagnosticReport;
   observations: fhir4.Observation[];
@@ -791,6 +952,10 @@ export interface LabResultLineDisplay {
   referenceRange: string;
   // H/L 判定("H" | "L" | "")。表示の色分けに使う。
   interpretation: LabInterpretation;
+  // 測定法(試薬・機器)。列を増やさないよう、項目名のツールチップに添える。
+  method: string;
+  // 項目ごとのコメント。あれば項目の下に 1 行で出す。
+  note: string;
 }
 
 function specimenName(specimen: fhir4.Specimen): string {
@@ -852,6 +1017,8 @@ export function observationLineDisplay(
     unit,
     referenceRange: observationReferenceRangeLabel(obs),
     interpretation: formInterpretationOf(obs),
+    method: obs.method?.text ?? obs.method?.coding?.[0]?.display ?? "",
+    note: (obs.note ?? []).map((note) => note.text).filter(Boolean).join(" / "),
   };
 }
 
@@ -871,6 +1038,9 @@ export interface LabTimelineRow {
   numbers: Map<string, number>;
   // 検体採取日 → H/L 判定。H は赤字、L は青字で表示する。N は登録しない。
   interpretations: Map<string, LabInterpretation>;
+  // 検体採取日 → 報告区分。中間報告・訂正報告のセルに印を出すために持つ
+  // (最終報告は印を出さないので登録しない)。
+  statuses: Map<string, string>;
 }
 
 export interface LabTimeline {
@@ -987,6 +1157,7 @@ export function buildLabTimeline(
           values: new Map(),
           numbers: new Map(),
           interpretations: new Map(),
+          statuses: new Map(),
         };
         rows.set(key, row);
       }
@@ -1001,6 +1172,8 @@ export function buildLabTimeline(
       if (obs.valueQuantity?.value != null) row.numbers.set(date, obs.valueQuantity.value);
       const interpretation = formInterpretationOf(obs);
       if (interpretation) row.interpretations.set(date, interpretation);
+      const status = obs.status ?? "";
+      if (isPreliminaryReport(status) || isCorrectedReport(status)) row.statuses.set(date, status);
     }
   }
 
@@ -1046,6 +1219,7 @@ function resultItemFromObservation(
     jlac11_code: jlac11Coding?.code ?? null,
     jlac10_code: codingBySystem(obs.code.coding, JLAC10_SYSTEM)?.code ?? null,
     loinc_code: null,
+    method_name: obs.method?.text ?? null,
     valid_from: null,
     valid_to: null,
     display_order: null,
@@ -1074,6 +1248,7 @@ export function parseLabResultForm(
     item: resultItemFromObservation(obs, specimenNames),
     value: lineValueFromObservation(obs),
     interpretation: formInterpretationOf(obs),
+    note: (obs.note ?? []).map((note) => note.text).filter(Boolean).join(" / "),
   }));
 
   return {
@@ -1081,6 +1256,12 @@ export function parseLabResultForm(
     specimenDate: report.effectiveDateTime?.slice(0, 10) ?? today(),
     ...departmentOf(report),
     orderId: labOrderIdFromReport(report),
+    // 訂正済みの結果を開き直したときも、選択肢は中間・最終の 2 つに落とす
+    // (訂正のままか最終へ戻すかは originalStatus が決める)。
+    reportStatus: isPreliminaryReport(report.status) ? "preliminary" : "final",
+    originalStatus: report.status ?? "",
+    conclusion: report.conclusion ?? "",
+    performer: parsePerformer(report),
     lines: lines.length ? lines : [{ ...emptyLabResultLine }],
   };
 }
@@ -1091,6 +1272,7 @@ export function parseLabResultForm(
 // ・Observation の id を落とし、既存リソースの更新ではなく新規登録にする
 // ・検体採取日は DO 元ではなく当日にする
 // ・検体検査オーダーの紐付けは引き継がない(DO 元のオーダーには既に結果があるため)
+// ・報告区分・総合所見・項目コメント・実施者は結果そのものなので引き継がない
 export function buildDoLabResultForm(
   values: LabResultFormValues,
   setting: LabResultSetting,
@@ -1100,7 +1282,16 @@ export function buildDoLabResultForm(
     setting,
     specimenDate: today(),
     orderId: "",
-    lines: values.lines.map((line) => ({ item: line.item, value: "", interpretation: "" })),
+    reportStatus: "final",
+    originalStatus: "",
+    conclusion: "",
+    performer: { ...emptyLabResultPerformer },
+    lines: values.lines.map((line) => ({
+      item: line.item,
+      value: "",
+      interpretation: "",
+      note: "",
+    })),
   };
 }
 

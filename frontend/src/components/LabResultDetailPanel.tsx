@@ -9,6 +9,8 @@ import {
 } from "../fhir/labOrderHelpers";
 import {
   interpretationClass,
+  isFinalReport,
+  labReportInfo,
   labResultItemCodeOf,
   labTimelineKeyOf,
   legacyJlac11CodesOf,
@@ -21,8 +23,10 @@ import {
 import { ErrorBanner } from "./ErrorBanner";
 import { FhirJsonView } from "./FhirJsonView";
 import { LAB_CATEGORIES } from "./labOrderItemOptions";
+import { LabResultHistoryModal } from "./LabResultHistoryModal";
 import { LabResultTimelinePanel } from "./LabResultTimelinePanel";
 import { Modal } from "./Modal";
+import { PictogramPopover } from "./PictogramPopover";
 import { RowMenu } from "./RowMenu";
 
 // 検査結果の内容表示。詳細ページとカルテ画面の検査結果タブの双方から使う。
@@ -47,6 +51,39 @@ function useLabOrderLabel(orderId: string | undefined): string {
 
 // 検査分野が引けなかった項目(結果項目コードなし・マスタに無いコード)のまとめ先。
 const UNKNOWN_CATEGORY = "その他";
+
+// 項目名セルのツールチップ。列を増やさずに済むよう、正式名称と測定法をここで読ませる。
+function itemTooltip(name: string, method: string): string | undefined {
+  return [name, method && `測定法: ${method}`].filter(Boolean).join("\n") || undefined;
+}
+
+function NoteIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M2.5 3.5h11v7.5h-6.2L4.5 13.5V11h-2z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// 項目のコメント。列を増やさないよう行の右端に印だけ出し、押すとその場で中身を開く
+// (患者帯のピクトグラムと同じ吹き出し)。
+function LabResultNoteButton({ note }: { note: string }) {
+  return (
+    <PictogramPopover
+      label={`コメント: ${note}`}
+      className="lab-result-detail__note-icon"
+      icon={<NoteIcon />}
+    >
+      <span className="patient-header__popover-text">{note}</span>
+    </PictogramPopover>
+  );
+}
 
 interface LabResultCategoryGroup {
   category: string;
@@ -84,6 +121,7 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
   const [checkedIds, setCheckedIds] = useState<ReadonlySet<string>>(new Set());
   const [copyResult, setCopyResult] = useState<"copied" | "failed" | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [jsonOpen, setJsonOpen] = useState(false);
 
   // 前後移動などで別の検査結果に切り替わったら選択状態をリセットする。
@@ -91,6 +129,7 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
     setCheckedIds(new Set());
     setCopyResult(null);
     setTimelineOpen(false);
+    setHistoryOpen(false);
     setJsonOpen(false);
   }, [reportId]);
 
@@ -102,6 +141,7 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
     [detail.data],
   );
   const summary = report ? summarizeDiagnosticReport(report) : undefined;
+  const info = report ? labReportInfo(report) : undefined;
   const specimenNames = specimenNamesById(specimens);
   const orderLabel = useLabOrderLabel(summary?.orderId);
 
@@ -196,7 +236,7 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
           <div className="prescription-detail">
             <fieldset>
               <legend>検査共通</legend>
-              {/* 短い 3 項目を 1 行に並べ、長い検体検査オーダーだけを次の行に置く。 */}
+              {/* 短い項目を 4 組ずつ 2 行に並べ、長い検体検査オーダーだけを次の行に置く。 */}
               <dl className="prescription-detail__common prescription-detail__common--lab">
                 <dt>検体採取日</dt>
                 <dd>{summary.date}</dd>
@@ -204,10 +244,26 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                 <dd>{summary.settingDisplay}</dd>
                 <dt>診療科</dt>
                 <dd>{summary.departmentName || "-"}</dd>
+                <dt>報告区分</dt>
+                <dd>
+                  {/* 最終報告は素の文字、中間・訂正は最終化されていないことが分かるよう目立たせる。 */}
+                  {info && !isFinalReport(info.status) ? (
+                    <span className="micro-result__badge">{info.statusDisplay}</span>
+                  ) : (
+                    (info?.statusDisplay ?? "-")
+                  )}
+                </dd>
+                <dt>報告日時</dt>
+                <dd>{info?.issued || "-"}</dd>
+                <dt>実施施設</dt>
+                <dd>{info?.performer.organizationName || "-"}</dd>
+                <dt>実施者</dt>
+                <dd>{info?.performer.practitionerName || "-"}</dd>
                 <dt>検体検査オーダー</dt>
                 <dd>{summary.orderId ? orderLabel : "紐付けなし"}</dd>
               </dl>
             </fieldset>
+
 
             <div className="lab-result-detail__actions">
               <span className="lab-result-detail__copy-result" role="status">
@@ -228,8 +284,21 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
               >
                 時系列表示
               </button>
-              {/* 普段は使わない FHIR JSON 表示はケバブに畳む。 */}
+              {/* 普段は使わない変更履歴・FHIR JSON 表示はケバブに畳む。 */}
               <RowMenu label="この検査結果の操作">
+                <button
+                  type="button"
+                  className="row-menu__item"
+                  disabled={checkedObservations.length === 0}
+                  title={
+                    checkedObservations.length === 0
+                      ? "履歴を見る検査項目を選んでください"
+                      : undefined
+                  }
+                  onClick={() => setHistoryOpen(true)}
+                >
+                  選択項目の変更履歴
+                </button>
                 <button
                   type="button"
                   className="row-menu__item"
@@ -249,6 +318,8 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                   <th className="rp-card__lab-value">結果値</th>
                   <th className="rp-card__lab-unit">単位</th>
                   <th className="rp-card__lab-unit">基準値</th>
+                  {/* 項目のコメント。入る項目が限られるので、列は空のまま確保して印だけ出す。 */}
+                  <th className="rp-card__lab-note" />
                 </tr>
               </thead>
               {/* 分野ごとに tbody を分け、その先頭行を分野の見出しにする。 */}
@@ -256,7 +327,7 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                 <tbody key={group.category}>
                   {group.category && (
                     <tr className="lab-result-detail__category">
-                      <th colSpan={6}>{group.category}</th>
+                      <th colSpan={7}>{group.category}</th>
                     </tr>
                   )}
                   {group.observations.map((obs, index) => {
@@ -272,7 +343,7 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                           />
                         </td>
                         <td>
-                          <span title={line.name || undefined}>
+                          <span title={itemTooltip(line.name, line.method)}>
                             {line.abbreviation || line.name || "-"}
                           </span>
                         </td>
@@ -292,12 +363,24 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                         </td>
                         <td className="rp-card__lab-unit">{line.unit || "-"}</td>
                         <td className="rp-card__lab-unit">{line.referenceRange || "-"}</td>
+                        <td className="rp-card__lab-note">
+                          {line.note && <LabResultNoteButton note={line.note} />}
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               ))}
             </table>
+
+            {/* 検査室の総合所見。検査項目を見てから読むものなので表の下に置く
+                (書かれている結果だけ枠を出す)。 */}
+            {info?.conclusion && (
+              <fieldset>
+                <legend>総合所見</legend>
+                <p className="lab-result-detail__conclusion">{info.conclusion}</p>
+              </fieldset>
+            )}
 
             {jsonOpen && (
               <Modal
@@ -317,6 +400,14 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
               >
                 <LabResultTimelinePanel patientId={patientId} filterKeys={timelineKeys} />
               </Modal>
+            )}
+
+            {historyOpen && (
+              <LabResultHistoryModal
+                observations={checkedObservations}
+                specimenNames={specimenNames}
+                onClose={() => setHistoryOpen(false)}
+              />
             )}
           </div>
         )

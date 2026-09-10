@@ -47,6 +47,7 @@ interface Draft {
   jlac11_code: string;
   jlac10_code: string;
   loinc_code: string;
+  method_name: string;
   valid_from: string;
   valid_to: string;
   display_order: string;
@@ -69,6 +70,7 @@ const emptyDraft: Draft = {
   jlac11_code: "",
   jlac10_code: "",
   loinc_code: "",
+  method_name: "",
   valid_from: "",
   valid_to: "",
   display_order: "",
@@ -92,6 +94,7 @@ function toPayload(draft: Draft): LabResultItemPayload {
     jlac11_code: draft.jlac11_code || null,
     jlac10_code: draft.jlac10_code || null,
     loinc_code: draft.loinc_code || null,
+    method_name: draft.method_name || null,
     valid_from: draft.valid_from || null,
     valid_to: draft.valid_to || null,
     display_order: draft.display_order ? Number(draft.display_order) : null,
@@ -283,6 +286,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       jlac11_code: d.jlac11_code ?? "",
       jlac10_code: d.jlac10_code ?? "",
       loinc_code: d.loinc_code ?? "",
+      method_name: d.method_name ?? "",
       valid_from: d.valid_from ?? "",
       valid_to: d.valid_to ?? "",
       display_order: d.display_order === null ? "" : String(d.display_order),
@@ -300,7 +304,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
   );
 
   // 配布の共有項目JLACコードマスタからの引き当て。結果値を表現する属性(データ型・単位・
-  // 選択肢)と標準コードは配布側が正なので上書きし、名称・略称は空のときだけ補完する。
+  // 選択肢・測定法)と標準コードは配布側が正なので上書きし、名称・略称は空のときだけ補完する。
   // 材料は JLAC11 の 10〜12 桁目から入れる(検体マスタも同じ JLAC11 材料コードで持つ)。
   function handleSelectJlacItem(item: JlacItem) {
     setSearchingJlac(false);
@@ -318,6 +322,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       short_name: prev.short_name || (item.abbreviation ?? ""),
       category: item.category_name || prev.category,
       specimen_code: specimenCode || prev.specimen_code,
+      method_name: item.jlac11_method ?? "",
     }));
   }
 
@@ -507,6 +512,14 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
               type="text"
               value={draft.loinc_code}
               onChange={(e) => setDraft({ ...draft, loinc_code: e.target.value })}
+            />
+          </label>
+          <label>
+            測定法
+            <input
+              type="text"
+              value={draft.method_name}
+              onChange={(e) => setDraft({ ...draft, method_name: e.target.value })}
             />
           </label>
           <label>

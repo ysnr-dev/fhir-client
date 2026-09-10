@@ -451,7 +451,7 @@ function WorklistRow({
         {/* 検体が着いたら結果を入力できる。紐付け先はこの行のオーダーで決まっているので、
             モーダルの中でオーダーを選ばせない(LabResultEntryModal)。
             結果が登録済みのオーダーは 1 件目と二重にならないよう押させない
-            (訂正はカルテの検査結果タブで行う)。 */}
+            (中間報告の確定・訂正はカルテの検査結果タブで行う)。 */}
         {status === "completed" &&
           (row.reportId ? (
             <button type="button" disabled title="この検査の結果は登録済みです">
