@@ -4,6 +4,7 @@ import { useCreateLabResult, type LabWorklistRow } from "../api/queries";
 import { labOrderItems, labOrderLabel, summarizeLabOrder } from "../fhir/labOrderHelpers";
 import {
   emptyLabResultForm,
+  labResultSubjectOf,
   type LabResultFormValues,
   type LabResultSetting,
 } from "../fhir/labResultHelpers";
@@ -67,10 +68,12 @@ export function LabResultEntryModal({
     };
   }, [order, orderId, expansion.lines]);
 
+  const subject = labResultSubjectOf(patient);
+
   function handleSubmit(values: LabResultFormValues) {
     if (!patient?.id) return;
     createLabResult.mutate(
-      { values, patientId: patient.id },
+      { values, patientId: patient.id, subject },
       {
         onSuccess: () => {
           // 結果が付いた行の「結果登録」を閉じる(一覧は結果の有無も読んでいる)。
@@ -95,6 +98,7 @@ export function LabResultEntryModal({
           {notice && <p className="lab-result-form__notice">{notice}</p>}
           <LabResultForm
             initialValues={initialValues}
+            subject={subject}
             onSubmit={handleSubmit}
             submitting={createLabResult.isPending}
             submitError={createLabResult.error}

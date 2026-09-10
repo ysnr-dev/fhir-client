@@ -130,6 +130,9 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
                     <th className="lab-timeline__unit-col" rowSpan={2}>
                       単位
                     </th>
+                    <th className="lab-timeline__unit-col" rowSpan={2}>
+                      基準値
+                    </th>
                     {groupDatesByYear(timeline.dates).map((group) => (
                       <th
                         key={group.dates[0]}
@@ -218,6 +221,7 @@ function TimelineRow({ row, dates, checked, onToggle }: TimelineRowProps) {
         </label>
       </td>
       <td className="lab-timeline__unit-col">{row.unit}</td>
+      <td className="lab-timeline__unit-col">{row.referenceRange}</td>
       {dates.map((date) => (
         <td
           key={date}

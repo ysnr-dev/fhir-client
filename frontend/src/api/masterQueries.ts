@@ -70,15 +70,19 @@ import {
   updateLabSpecimen,
   updateMedicineDoseConversion,
   createLabOrderItemResult,
+  createLabReferenceRange,
   createLabResultItem,
   deleteLabOrderItemResult,
+  deleteLabReferenceRange,
   deleteLabResultItem,
   fetchLabResultItem,
   searchLabOrderItemResults,
   searchLabResultItems,
   updateLabOrderItemResult,
+  updateLabReferenceRange,
   updateLabResultItem,
   type LabOrderItemResultPayload,
+  type LabReferenceRangePayload,
   type LabResultItemPayload,
   type LabContainerPayload,
   type LabItemDrilldown,
@@ -926,6 +930,34 @@ export function useLabOrderItemResultMutations() {
     }),
     remove: useMutation({
       mutationFn: (id: number) => deleteLabOrderItemResult(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+// 基準値は結果項目の詳細・一覧・対応表の入れ子に添えて返るため、結果項目側のキーを破棄する。
+export function useLabReferenceRangeMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: LAB_RESULT_ITEMS_KEY });
+    queryClient.invalidateQueries({ queryKey: LAB_ORDER_ITEMS_KEY });
+  };
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: LabReferenceRangePayload) => createLabReferenceRange(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: Partial<LabReferenceRangePayload> }) =>
+        updateLabReferenceRange(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteLabReferenceRange(id),
       retry: false,
       onSuccess: invalidate,
     }),

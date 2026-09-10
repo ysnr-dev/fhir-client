@@ -28,3 +28,10 @@ export const LAB_DATA_TYPE_LABELS: Record<string, string> = {
   CO: "順序コード",
   ST: "文字列",
 };
+
+// 基準値の性別区分。空は共通。
+export const LAB_REFERENCE_SEX_LABELS: Record<string, string> = {
+  "": "共通",
+  male: "男性",
+  female: "女性",
+};

@@ -4,11 +4,13 @@ import {
   useDeleteLabResult,
   useLabOrderCandidates,
   useLabResultEntries,
+  usePatient,
   useUpdateLabResult,
 } from "../api/queries";
 import {
   buildDoLabResultForm,
   emptyLabResultForm,
+  labResultSubjectOf,
   specimenRefsFrom,
   type LabResultFormValues,
 } from "../fhir/labResultHelpers";
@@ -164,6 +166,9 @@ function CreateForm({
   const source = useLabResultInitialValues(sourceReportId, patientId);
   const orders = useLabOrderCandidates(patientId);
   const requester = useOrderContext();
+  // 基準値の適用(性別・採取日の年齢)に患者の属性が要る。
+  const patient = usePatient(patientId);
+  const subject = labResultSubjectOf(patient.data?.data);
   // 入外区分の初期値は入院中なら「入院」。DO でも DO 元ではなくいまの状態に合わせる。
   const defaultSetting = useDefaultOrderSetting(patientId);
   // DO 元と入院かどうかの読み込み完了を待ってからフォームを描画する
@@ -184,7 +189,7 @@ function CreateForm({
   );
 
   function handleSubmit(values: LabResultFormValues) {
-    createLabResult.mutate({ values, patientId }, { onSuccess: onSaved });
+    createLabResult.mutate({ values, patientId, subject }, { onSuccess: onSaved });
   }
 
   return (
@@ -197,6 +202,7 @@ function CreateForm({
       ) : (
         <LabResultForm
           initialValues={initialValues}
+          subject={subject}
           onSubmit={handleSubmit}
           submitting={createLabResult.isPending}
           submitError={createLabResult.error}
@@ -222,6 +228,8 @@ function EditForm({
     useLabResultInitialValues(reportId, patientId);
   // 編集中の検査結果が紐付けているオーダーは、候補から落とさない。
   const orders = useLabOrderCandidates(patientId, reportId);
+  const patient = usePatient(patientId);
+  const subject = labResultSubjectOf(patient.data?.data);
 
   function handleSubmit(values: LabResultFormValues) {
     // 別患者の検査結果を更新すると subject が書き換わり、検査結果が付け替わってしまう。
@@ -235,6 +243,7 @@ function EditForm({
         originalObservationIds: originalIds,
         // 結果側が所有する Specimen だけ(ラベル由来はオーダー側の台帳)。
         originalSpecimens: specimenRefsFrom(specimens),
+        subject,
       },
       { onSuccess: onSaved },
     );
@@ -252,6 +261,7 @@ function EditForm({
         initialValues && (
           <LabResultForm
             initialValues={initialValues}
+            subject={subject}
             onSubmit={handleSubmit}
             submitting={updateLabResult.isPending}
             submitError={updateLabResult.error}

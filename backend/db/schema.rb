@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_10_000200) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_10_000300) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -439,6 +439,20 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_10_000200) do
     t.datetime "updated_at", null: false
     t.index ["member_item_code"], name: "index_master_lab_panel_items_on_member_item_code"
     t.index ["panel_item_code", "member_item_code"], name: "index_lab_panel_items_on_panel_and_member", unique: true
+  end
+
+  create_table "master_lab_reference_ranges", force: :cascade do |t|
+    t.string "result_item_code", null: false
+    t.string "sex"
+    t.integer "age_from"
+    t.integer "age_to"
+    t.decimal "lower_limit", precision: 12, scale: 3
+    t.decimal "upper_limit", precision: 12, scale: 3
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["result_item_code"], name: "index_master_lab_reference_ranges_on_result_item_code"
   end
 
   create_table "master_lab_result_items", force: :cascade do |t|

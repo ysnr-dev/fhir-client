@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { LabItem, LabResultItemPayload } from "../api/masterClient";
+import type { LabItem, LabReferenceRange, LabResultItemPayload } from "../api/masterClient";
 import {
+  useLabReferenceRangeMutations,
   useLabResultItem,
   useLabResultItemMutations,
   useLabResultItemSearch,
@@ -9,7 +10,11 @@ import {
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { LabItemSearchModal } from "../components/LabItemSearchModal";
-import { LAB_CATEGORIES, LAB_DATA_TYPE_LABELS } from "../components/labOrderItemOptions";
+import {
+  LAB_CATEGORIES,
+  LAB_DATA_TYPE_LABELS,
+  LAB_REFERENCE_SEX_LABELS,
+} from "../components/labOrderItemOptions";
 import { Modal } from "../components/Modal";
 
 // 検体検査の結果項目(施設マスタ)のメンテナンス。検査結果として返ってくる単位で、
@@ -556,6 +561,15 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
         </div>
       </form>
 
+      {/* 基準値は数値型だけ。性別・年齢帯ごとに複数行持てる。 */}
+      {itemId !== null && detail.data && draft.data_type === "PQ" && (
+        <ReferenceRangesEditor
+          resultItemCode={detail.data.result_item_code}
+          unit={draft.display_unit}
+          ranges={detail.data.reference_ranges}
+        />
+      )}
+
       {itemId !== null && detail.data && (
         <section className="lab-order-item__section">
           <div className="lab-order-item__section-head">
@@ -593,5 +607,211 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
         <LabItemSearchModal onSelect={handleSelectLabItem} onClose={() => setSearchingJlac(false)} />
       )}
     </Modal>
+  );
+}
+
+interface ReferenceRangesEditorProps {
+  resultItemCode: string;
+  unit: string;
+  ranges: LabReferenceRange[];
+}
+
+// 基準値の編集。行ごとに入力欄を持ち、欄を離れたときに保存する(プルダウンは即時)。
+// 適用は「性別が一致(または共通)し、採取日の満年齢が年齢帯に入る行のうち表示順の先頭」なので、
+// 男女別の行と共通の行を混ぜるときは並びに注意する(labResultHelpers の matchReferenceRange)。
+function ReferenceRangesEditor({ resultItemCode, unit, ranges }: ReferenceRangesEditorProps) {
+  const mutations = useLabReferenceRangeMutations();
+
+  async function add() {
+    await mutations.create.mutateAsync({ result_item_code: resultItemCode, lower_limit: 0 });
+  }
+
+  async function move(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= ranges.length) return;
+    const reordered = [...ranges];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    await Promise.all(
+      reordered.flatMap((range, position) =>
+        range.display_order === position + 1
+          ? []
+          : [mutations.update.mutateAsync({ id: range.id, payload: { display_order: position + 1 } })],
+      ),
+    );
+  }
+
+  return (
+    <section className="lab-order-item__section">
+      <div className="lab-order-item__section-head">
+        <h3>基準値{unit ? `(${unit})` : ""}</h3>
+        <button type="button" onClick={add} disabled={mutations.create.isPending}>
+          行を追加
+        </button>
+      </div>
+
+      <ErrorBanner error={mutations.create.error ?? mutations.update.error ?? mutations.remove.error} />
+
+      <div className="lab-order-item__table-wrap">
+        <table className="master-search__table">
+          <thead>
+            <tr>
+              <th className="lab-order-item__compact">性別</th>
+              <th className="lab-order-item__compact">年齢(歳)</th>
+              <th className="lab-order-item__compact">下限</th>
+              <th className="lab-order-item__compact">上限</th>
+              <th>備考</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {ranges.map((range, index) => (
+              <ReferenceRangeRow
+                key={range.id}
+                range={range}
+                onChange={(payload) => mutations.update.mutate({ id: range.id, payload })}
+                onMoveUp={index > 0 ? () => move(index, -1) : undefined}
+                onMoveDown={index < ranges.length - 1 ? () => move(index, 1) : undefined}
+                onRemove={() => mutations.remove.mutate(range.id)}
+              />
+            ))}
+            {ranges.length === 0 && (
+              <tr>
+                <td colSpan={6} className="master-search__empty">
+                  基準値がありません。「行を追加」で下限・上限を登録すると、結果登録時に H/L を自動判定します。
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+interface ReferenceRangeRowProps {
+  range: LabReferenceRange;
+  onChange: (payload: {
+    sex?: string | null;
+    age_from?: number | null;
+    age_to?: number | null;
+    lower_limit?: number | null;
+    upper_limit?: number | null;
+    note?: string | null;
+  }) => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  onRemove: () => void;
+}
+
+function ReferenceRangeRow({ range, onChange, onMoveUp, onMoveDown, onRemove }: ReferenceRangeRowProps) {
+  // 入力中の値。欄を離れたときに保存済みの値と違えば更新する。
+  const [draft, setDraft] = useState({
+    age_from: range.age_from === null ? "" : String(range.age_from),
+    age_to: range.age_to === null ? "" : String(range.age_to),
+    lower_limit: range.lower_limit === null ? "" : String(Number(range.lower_limit)),
+    upper_limit: range.upper_limit === null ? "" : String(Number(range.upper_limit)),
+    note: range.note ?? "",
+  });
+
+  useEffect(() => {
+    setDraft({
+      age_from: range.age_from === null ? "" : String(range.age_from),
+      age_to: range.age_to === null ? "" : String(range.age_to),
+      lower_limit: range.lower_limit === null ? "" : String(Number(range.lower_limit)),
+      upper_limit: range.upper_limit === null ? "" : String(Number(range.upper_limit)),
+      note: range.note ?? "",
+    });
+  }, [range]);
+
+  function commitNumber(field: "age_from" | "age_to" | "lower_limit" | "upper_limit") {
+    const raw = draft[field].trim();
+    const next = raw === "" ? null : Number(raw);
+    if (raw !== "" && Number.isNaN(next)) return;
+    const current = range[field] === null ? null : Number(range[field]);
+    if (next === current) return;
+    onChange({ [field]: next });
+  }
+
+  function commitNote() {
+    const next = draft.note.trim() || null;
+    if (next === (range.note ?? null)) return;
+    onChange({ note: next });
+  }
+
+  return (
+    <tr>
+      <td className="lab-order-item__compact">
+        <select value={range.sex ?? ""} onChange={(e) => onChange({ sex: e.target.value || null })}>
+          {Object.entries(LAB_REFERENCE_SEX_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td className="lab-order-item__compact">
+        <span className="lab-order-item__range">
+          <input
+            type="number"
+            min={0}
+            value={draft.age_from}
+            placeholder="0"
+            onChange={(e) => setDraft({ ...draft, age_from: e.target.value })}
+            onBlur={() => commitNumber("age_from")}
+            aria-label="開始年齢"
+          />
+          〜
+          <input
+            type="number"
+            min={0}
+            value={draft.age_to}
+            placeholder="上限なし"
+            onChange={(e) => setDraft({ ...draft, age_to: e.target.value })}
+            onBlur={() => commitNumber("age_to")}
+            aria-label="終了年齢"
+          />
+        </span>
+      </td>
+      <td className="lab-order-item__compact">
+        <input
+          type="number"
+          step="any"
+          value={draft.lower_limit}
+          onChange={(e) => setDraft({ ...draft, lower_limit: e.target.value })}
+          onBlur={() => commitNumber("lower_limit")}
+          aria-label="下限"
+        />
+      </td>
+      <td className="lab-order-item__compact">
+        <input
+          type="number"
+          step="any"
+          value={draft.upper_limit}
+          onChange={(e) => setDraft({ ...draft, upper_limit: e.target.value })}
+          onBlur={() => commitNumber("upper_limit")}
+          aria-label="上限"
+        />
+      </td>
+      <td>
+        <input
+          type="text"
+          value={draft.note}
+          onChange={(e) => setDraft({ ...draft, note: e.target.value })}
+          onBlur={commitNote}
+          aria-label="備考"
+        />
+      </td>
+      <td className="master-search__actions">
+        <button type="button" onClick={onMoveUp} disabled={!onMoveUp}>
+          ↑
+        </button>
+        <button type="button" onClick={onMoveDown} disabled={!onMoveDown}>
+          ↓
+        </button>
+        <button type="button" onClick={onRemove}>
+          外す
+        </button>
+      </td>
+    </tr>
   );
 }

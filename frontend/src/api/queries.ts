@@ -76,6 +76,7 @@ import {
   splitLabResultDetailBundle,
   summarizeDiagnosticReport,
   type LabResultFormValues,
+  type LabResultSubject,
   type LabResultSummary,
   type SpecimenRef,
 } from "../fhir/labResultHelpers";
@@ -4526,9 +4527,18 @@ export function useCreateLabResult() {
   return useMutation({
     // オーダーに紐付く結果は、ラベル発行が作った管の Specimen を参照するので、
     // 組み立ての前にオーダーの管を引く(labResultHelpers の planSpecimens を参照)。
-    mutationFn: async ({ values, patientId }: { values: LabResultFormValues; patientId: string }) => {
+    // subject(性別・生年月日)は基準値の適用に使う。無ければ referenceRange を書かない。
+    mutationFn: async ({
+      values,
+      patientId,
+      subject,
+    }: {
+      values: LabResultFormValues;
+      patientId: string;
+      subject?: LabResultSubject;
+    }) => {
       const labelSpecimens = await fetchLabelSpecimens(values.orderId);
-      return postBundle(buildLabResultBundle(values, patientId, labelSpecimens));
+      return postBundle(buildLabResultBundle(values, patientId, labelSpecimens, subject));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
@@ -4546,12 +4556,14 @@ export function useUpdateLabResult() {
       reportId,
       originalObservationIds,
       originalSpecimens,
+      subject,
     }: {
       values: LabResultFormValues;
       patientId: string;
       reportId: string;
       originalObservationIds: string[];
       originalSpecimens: SpecimenRef[];
+      subject?: LabResultSubject;
     }) => {
       const labelSpecimens = await fetchLabelSpecimens(values.orderId);
       return postBundle(
@@ -4562,6 +4574,7 @@ export function useUpdateLabResult() {
           originalObservationIds,
           originalSpecimens,
           labelSpecimens,
+          subject,
         ),
       );
     },

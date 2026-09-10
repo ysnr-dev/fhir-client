@@ -15,12 +15,22 @@ module Master
 
     before_save :set_search_columns
 
-    # 材料名(master_lab_specimens.name)を添えた JSON。対応表(LabOrderItemResult)に入れ子で
-    # 返すときに使う。一覧 API は JOIN で添えるが、入れ子には JOIN が効かないのでまとめて引く。
-    def self.as_json_with_specimen_names(items)
-      codes = items.map(&:specimen_code).compact.uniq
-      names = codes.empty? ? {} : Master::LabSpecimen.where(specimen_code: codes).pluck(:specimen_code, :name).to_h
-      items.map { |item| item.as_json.merge("specimen_name" => names[item.specimen_code]) }
+    # 材料名(master_lab_specimens.name)と基準値(LabReferenceRange)を添えた JSON。一覧 API と、
+    # 対応表(LabOrderItemResult)に入れ子で返すときに使う。結果登録画面はこの JSON だけで
+    # 材料の表示と H/L の自動判定ができる。
+    def self.as_json_with_details(items)
+      specimen_codes = items.map(&:specimen_code).compact.uniq
+      names = specimen_codes.empty? ? {} : Master::LabSpecimen.where(specimen_code: specimen_codes).pluck(:specimen_code, :name).to_h
+      codes = items.map(&:result_item_code)
+      ranges = codes.empty? ? {} : Master::LabReferenceRange.where(result_item_code: codes)
+                                                             .order(Arel.sql("display_order NULLS LAST"), :id)
+                                                             .group_by(&:result_item_code)
+      items.map do |item|
+        item.as_json.merge(
+          "specimen_name" => names[item.specimen_code],
+          "reference_ranges" => (ranges[item.result_item_code] || []).as_json
+        )
+      end
     end
 
     private

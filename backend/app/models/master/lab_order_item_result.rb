@@ -18,7 +18,7 @@ module Master
     # 結果項目がマスタから消えていれば result_item は null。
     def self.as_json_with_result_items(mappings)
       result_items = mappings.filter_map(&:result_item)
-      by_code = Master::LabResultItem.as_json_with_specimen_names(result_items)
+      by_code = Master::LabResultItem.as_json_with_details(result_items)
                                      .index_by { |json| json["result_item_code"] }
       mappings.map { |mapping| mapping.as_json.merge("result_item" => by_code[mapping.result_item_code]) }
     end

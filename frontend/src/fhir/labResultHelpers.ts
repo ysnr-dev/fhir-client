@@ -2,7 +2,8 @@ import { today } from "../lib/dates";
 import { categoryCoding, codingBySystem, findSettingDisplay, SETTING_OPTIONS } from "./shared";
 
 export { SETTING_OPTIONS };
-import type { LabResultItem } from "../api/masterClient";
+import type { LabReferenceRange, LabResultItem } from "../api/masterClient";
+import { calculateAge } from "./patientHelpers";
 import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 
 // ローカル拡張・コードシステム。正式な CodeSystem が定義されていない(または
@@ -43,6 +44,8 @@ const INTERPRETATION_SYSTEM =
   "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation";
 
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
+// Observation.referenceRange.type(normal = 基準範囲)。
+const REFERENCE_RANGE_MEANING_SYSTEM = "http://terminology.hl7.org/CodeSystem/referencerange-meaning";
 const REPORT_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0074";
 const LOINC_SYSTEM = "http://loinc.org";
 const LOINC_LAB_REPORT_CODE = "11502-2"; // Laboratory report
@@ -86,6 +89,69 @@ const INTERPRETATION_DISPLAYS: Record<string, string> = {
   L: "Low",
   N: "Normal",
 };
+
+// 基準値の適用に要る患者の属性(性別と生年月日)。採取日の満年齢で年齢帯を選ぶ。
+export interface LabResultSubject {
+  gender?: string;
+  birthDate?: string;
+}
+
+export function labResultSubjectOf(patient: fhir4.Patient | undefined): LabResultSubject | undefined {
+  if (!patient) return undefined;
+  return { gender: patient.gender, birthDate: patient.birthDate };
+}
+
+// 結果項目の基準値のうち、この患者・この採取日に適用する行。性別が一致(または共通)し、
+// 採取日の満年齢が年齢帯に入る行のうち、マスタの並び(表示順)で先に来たもの。
+// 性別・生年月日が分からない患者には、性別・年齢帯の指定が無い行だけが当たる。
+export function matchReferenceRange(
+  item: LabResultItem | null | undefined,
+  subject: LabResultSubject | undefined,
+  specimenDate: string,
+): LabReferenceRange | undefined {
+  const ranges = item?.reference_ranges ?? [];
+  if (ranges.length === 0) return undefined;
+  const gender = subject?.gender;
+  const asOf = specimenDate ? new Date(specimenDate) : new Date();
+  const age = subject?.birthDate
+    ? calculateAge(subject.birthDate, Number.isNaN(asOf.getTime()) ? new Date() : asOf)
+    : undefined;
+
+  return ranges.find((range) => {
+    if (range.sex && range.sex !== gender) return false;
+    if (range.age_from != null && (age == null || age < range.age_from)) return false;
+    if (range.age_to != null && (age == null || age > range.age_to)) return false;
+    return true;
+  });
+}
+
+// 結果値と基準値の突き合わせ。下限未満なら L、上限超なら H、範囲内(または判定できない)なら空。
+export function judgeInterpretation(value: string, range: LabReferenceRange | undefined): LabInterpretation {
+  if (!range || value.trim() === "") return "";
+  const n = Number(value);
+  if (Number.isNaN(n)) return "";
+  if (range.lower_limit != null && n < Number(range.lower_limit)) return "L";
+  if (range.upper_limit != null && n > Number(range.upper_limit)) return "H";
+  return "";
+}
+
+// 「6.6〜8.1」「〜0.14」「3.3〜」。どちらも無ければ空。
+export function referenceRangeLabel(
+  lower: string | number | null | undefined,
+  upper: string | number | null | undefined,
+): string {
+  const low = lower == null || lower === "" ? "" : String(Number(lower));
+  const high = upper == null || upper === "" ? "" : String(Number(upper));
+  if (!low && !high) return "";
+  return `${low}〜${high}`;
+}
+
+// 保存済み Observation の基準値の表示(referenceRange の先頭)。
+export function observationReferenceRangeLabel(obs: fhir4.Observation): string {
+  const range = obs.referenceRange?.[0];
+  if (!range) return "";
+  return referenceRangeLabel(range.low?.value, range.high?.value);
+}
 
 export interface LabResultLineValues {
   id?: string;
@@ -290,11 +356,32 @@ function buildCodeCodings(item: LabResultItem): fhir4.Coding[] {
   return codings;
 }
 
+// 適用した基準値を Observation.referenceRange に写す(数値型のみ)。単位は結果値と同じ。
+function buildReferenceRange(
+  item: LabResultItem,
+  range: LabReferenceRange,
+): fhir4.ObservationReferenceRange {
+  const quantity = (value: string): fhir4.Quantity => ({
+    value: Number(value),
+    unit: item.display_unit ?? undefined,
+    ...(item.ucum_unit ? { system: UNITS_OF_MEASURE_SYSTEM, code: item.ucum_unit } : {}),
+  });
+  return {
+    ...(range.lower_limit != null ? { low: quantity(range.lower_limit) } : {}),
+    ...(range.upper_limit != null ? { high: quantity(range.upper_limit) } : {}),
+    type: {
+      coding: [{ system: REFERENCE_RANGE_MEANING_SYSTEM, code: "normal", display: "Normal Range" }],
+    },
+    text: referenceRangeLabel(range.lower_limit, range.upper_limit),
+  };
+}
+
 function buildObservation(
   line: LabResultLineValues,
   patientId: string,
   effective: string,
   specimenReference?: string,
+  range?: LabReferenceRange,
 ): fhir4.Observation {
   const item = line.item;
   // 未選択(空)は "N"(Normal) として記録する。
@@ -332,6 +419,9 @@ function buildObservation(
   };
 
   if (specimenReference) resource.specimen = { reference: specimenReference };
+  if (item && range && item.data_type === "PQ") {
+    resource.referenceRange = [buildReferenceRange(item, range)];
+  }
   if (line.id) resource.id = line.id;
   return resource;
 }
@@ -340,6 +430,7 @@ function buildLabResultTransactionBundle(
   values: LabResultFormValues,
   patientId: string,
   labelSpecimens: fhir4.Specimen[],
+  subject?: LabResultSubject,
   reportId?: string,
   originalObservationIds?: string[],
   originalSpecimens?: SpecimenRef[],
@@ -373,7 +464,8 @@ function buildLabResultTransactionBundle(
 
   for (const line of values.lines) {
     const specimenReference = specimenPlans.get(specimenCodeOf(line.item))?.fullUrl;
-    const resource = buildObservation(line, patientId, effective, specimenReference);
+    const range = matchReferenceRange(line.item, subject, values.specimenDate);
+    const resource = buildObservation(line, patientId, effective, specimenReference, range);
     const fullUrl = line.id ? `Observation/${line.id}` : `urn:uuid:${crypto.randomUUID()}`;
     if (line.id) keptObservationIds.add(line.id);
 
@@ -460,8 +552,9 @@ export function buildLabResultBundle(
   values: LabResultFormValues,
   patientId: string,
   labelSpecimens: fhir4.Specimen[] = [],
+  subject?: LabResultSubject,
 ): fhir4.Bundle {
-  return buildLabResultTransactionBundle(values, patientId, labelSpecimens);
+  return buildLabResultTransactionBundle(values, patientId, labelSpecimens, subject);
 }
 
 export function buildLabResultUpdateBundle(
@@ -471,11 +564,13 @@ export function buildLabResultUpdateBundle(
   originalObservationIds: string[],
   originalSpecimens: SpecimenRef[],
   labelSpecimens: fhir4.Specimen[] = [],
+  subject?: LabResultSubject,
 ): fhir4.Bundle {
   return buildLabResultTransactionBundle(
     values,
     patientId,
     labelSpecimens,
+    subject,
     reportId,
     originalObservationIds,
     originalSpecimens,
@@ -615,6 +710,8 @@ export interface LabResultLineDisplay {
   specimen: string;
   value: string;
   unit: string;
+  // 保存時に適用した基準値(「6.6〜8.1」)。無ければ空。
+  referenceRange: string;
   // H/L 判定("H" | "L" | "")。表示の色分けに使う。
   interpretation: LabInterpretation;
 }
@@ -676,6 +773,7 @@ export function observationLineDisplay(
     specimen: (specimenId && specimenNames?.get(specimenId)) || "",
     value,
     unit,
+    referenceRange: observationReferenceRangeLabel(obs),
     interpretation: formInterpretationOf(obs),
   };
 }
@@ -688,6 +786,8 @@ export interface LabTimelineRow {
   name: string;
   abbreviation: string;
   unit: string;
+  // 基準値。並びが先(=新しい結果)のものを採る(年齢帯で変わるため最新を出す)。
+  referenceRange: string;
   // 検体採取日(YYYY-MM-DD) → 表示値
   values: Map<string, string>;
   // 検体採取日 → 数値。PQ(valueQuantity) のみ。グラフ描画に使う。
@@ -806,6 +906,7 @@ export function buildLabTimeline(
           name: observationItemName(obs),
           abbreviation: codingBySystem(obs.code.coding, ABBREVIATION_SYSTEM)?.display ?? "",
           unit: "",
+          referenceRange: "",
           values: new Map(),
           numbers: new Map(),
           interpretations: new Map(),
@@ -815,6 +916,7 @@ export function buildLabTimeline(
 
       const { value, unit } = observationValueDisplay(obs);
       if (!row.unit && unit) row.unit = unit;
+      if (!row.referenceRange) row.referenceRange = observationReferenceRangeLabel(obs);
       // 同じ日に同じ項目が複数ある場合(同日の別レポートなど)は、
       // 並びが先(=新しいレポート)の値を採用する。
       if (row.values.has(date)) continue;

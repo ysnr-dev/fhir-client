@@ -5815,6 +5815,17 @@ body.karte-wide {
   white-space: nowrap;
 }
 
+/* 基準値の年齢帯(開始〜終了)。2 つの数値欄を 1 マスに並べる。 */
+.lab-order-item__range {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.lab-order-item__range input {
+  width: 4.5em;
+}
+
 /* モーダル内のパネル構成表。件数が振れるので max-height で抑える。 */
 .lab-order-item__table-wrap {
   max-height: 260px;

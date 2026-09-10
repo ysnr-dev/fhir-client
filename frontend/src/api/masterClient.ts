@@ -731,6 +731,35 @@ export interface LabResultItem {
   valid_to: string | null;
   display_order: number | null;
   note: string | null;
+  // 基準値(性別・年齢帯ごと、表示順)。一覧・詳細・対応表の入れ子で API が添える。
+  reference_ranges?: LabReferenceRange[];
+}
+
+// 結果項目の基準値。数値型(PQ)の結果項目に対する性別・年齢帯ごとの下限・上限。
+// 下限・上限は Rails の decimal がそのまま文字列で届く。
+export interface LabReferenceRange {
+  id: number;
+  result_item_code: string;
+  // null = 共通 / male / female
+  sex: string | null;
+  // 適用する満年齢(歳)。null は開区間。
+  age_from: number | null;
+  age_to: number | null;
+  lower_limit: string | null;
+  upper_limit: string | null;
+  display_order: number | null;
+  note: string | null;
+}
+
+export interface LabReferenceRangePayload {
+  result_item_code: string;
+  sex?: string | null;
+  age_from?: number | null;
+  age_to?: number | null;
+  lower_limit?: number | null;
+  upper_limit?: number | null;
+  display_order?: number | null;
+  note?: string | null;
 }
 
 // この結果項目を返すオーダー項目。詳細 API がオーダー項目マスタから名称を添える。
@@ -744,6 +773,7 @@ export interface LabResultItemOrderRef {
 
 export interface LabResultItemDetail extends LabResultItem {
   specimen_name: string | null;
+  reference_ranges: LabReferenceRange[];
   order_items: LabResultItemOrderRef[];
 }
 
@@ -1086,6 +1116,38 @@ export async function updateLabOrderItemResult(
 
 export async function deleteLabOrderItemResult(id: number): Promise<void> {
   const res = await masterFetch(`${LAB_ORDER_ITEM_RESULTS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+const LAB_REFERENCE_RANGES_PATH = "/master/lab_reference_ranges";
+
+export async function createLabReferenceRange(
+  payload: LabReferenceRangePayload,
+): Promise<LabReferenceRange> {
+  const res = await masterFetch(LAB_REFERENCE_RANGES_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as LabReferenceRange;
+}
+
+export async function updateLabReferenceRange(
+  id: number,
+  payload: Partial<LabReferenceRangePayload>,
+): Promise<LabReferenceRange> {
+  const res = await masterFetch(`${LAB_REFERENCE_RANGES_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as LabReferenceRange;
+}
+
+export async function deleteLabReferenceRange(id: number): Promise<void> {
+  const res = await masterFetch(`${LAB_REFERENCE_RANGES_PATH}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
 

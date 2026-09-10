@@ -179,6 +179,67 @@ derivation = Master::LabResultItemDerivation.call
 puts "master_lab_result_items: csv #{derivation.csv_items} items / #{derivation.csv_mappings} mappings, " \
      "derived #{derivation.created} items / #{derivation.mapped} mappings (kept #{derivation.kept})"
 
+# 基準値を入れる結果項目の単位。1:1 派生で作った結果項目のうち、配布マスタに JLAC が無くて
+# 単位が入らなかったものを埋める(基準値は単位が無いと読めないため)。未設定のときだけ入れる。
+lab_result_item_units_csv = Rails.root.join("db/seed_data/lab_result_item_units.csv")
+if File.exist?(lab_result_item_units_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(lab_result_item_units_csv, headers: true) do |row|
+    item = Master::LabResultItem.find_by(result_item_code: row["result_item_code"].to_s.strip)
+    if item.nil? || item.display_unit.present?
+      skipped += 1
+      next
+    end
+
+    item.update!(
+      display_unit: row["display_unit"].to_s.strip.presence,
+      ucum_unit: row["ucum_unit"].to_s.strip.presence
+    )
+    loaded += 1
+  end
+  puts "master_lab_result_items(unit): filled #{loaded} rows (kept #{skipped})"
+else
+  puts "master_lab_result_items(unit): #{lab_result_item_units_csv} not found, skipped"
+end
+
+# 結果項目の基準値。JCCLS 共用基準範囲を初期値として同梱する(施設の測定系で値は変わるので、
+# 運用前に画面で確認・修正する前提)。同じ項目・性別・年齢帯の行があれば上書きしない。
+# 本番の migration からは呼ばない(基準値は施設が決める値のため、初期値の投入は db:seed だけ)。
+lab_reference_ranges_csv = Rails.root.join("db/seed_data/lab_reference_ranges.csv")
+if File.exist?(lab_reference_ranges_csv)
+  loaded = 0
+  skipped = 0
+  CSV.foreach(lab_reference_ranges_csv, headers: true) do |row|
+    code = row["result_item_code"].to_s.strip
+    next if code.blank?
+
+    key = {
+      result_item_code: code,
+      sex: row["sex"].to_s.strip.presence,
+      age_from: row["age_from"].to_s.strip.presence&.to_i,
+      age_to: row["age_to"].to_s.strip.presence&.to_i,
+    }
+    if Master::LabReferenceRange.exists?(key)
+      skipped += 1
+      next
+    end
+
+    Master::LabReferenceRange.create!(
+      key.merge(
+        lower_limit: row["lower_limit"].to_s.strip.presence,
+        upper_limit: row["upper_limit"].to_s.strip.presence,
+        display_order: row["display_order"].to_s.strip.presence&.to_i,
+        note: row["note"].to_s.strip.presence
+      )
+    )
+    loaded += 1
+  end
+  puts "master_lab_reference_ranges: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_lab_reference_ranges: #{lab_reference_ranges_csv} not found, skipped"
+end
+
 # 伝票は layout_name ごとに作り、行数・列数はマスの最大位置から決める(部門オーダーと同じ)。
 lab_layout_cells_csv = Rails.root.join("db/seed_data/lab_order_item_layout_cells.csv")
 if File.exist?(lab_layout_cells_csv)

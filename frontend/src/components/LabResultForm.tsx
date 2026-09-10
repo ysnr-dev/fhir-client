@@ -10,19 +10,25 @@ import {
   emptyLabResultForm,
   emptyLabResultLine,
   INTERPRETATION_OPTIONS,
+  judgeInterpretation,
   lineKeyOf,
+  matchReferenceRange,
   parseCodeValueList,
+  referenceRangeLabel,
   SETTING_OPTIONS,
   type LabInterpretation,
   type LabResultFormValues,
   type LabResultLineValues,
   type LabResultSetting,
+  type LabResultSubject,
 } from "../fhir/labResultHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabResultItemSearchModal } from "./LabResultItemSearchModal";
 
 interface LabResultFormProps {
   initialValues?: LabResultFormValues;
+  /** 基準値の適用に使う患者の性別・生年月日。無ければ H/L の自動判定はしない。 */
+  subject?: LabResultSubject;
   onSubmit: (values: LabResultFormValues) => void;
   submitting: boolean;
   submitError?: unknown;
@@ -126,6 +132,7 @@ function expandNoticeOf(lineCount: number, unmatchedNames: string[]): string | n
 
 export function LabResultForm({
   initialValues,
+  subject,
   onSubmit,
   submitting,
   submitError,
@@ -177,6 +184,16 @@ export function LabResultForm({
 
   function removeLine(lineIndex: number) {
     setValues((v) => ({ ...v, lines: v.lines.filter((_, i) => i !== lineIndex) }));
+  }
+
+  // 結果値を入れたら基準値と突き合わせて H/L を入れる(数値型で基準値が当たるときだけ)。
+  // 判定は入力のたびに上書きするが、プルダウンで手で直した値は次に結果値を変えるまで残る。
+  function handleValueChange(lineIndex: number, value: string) {
+    const line = values.lines[lineIndex];
+    const range = line?.item?.data_type === "PQ"
+      ? matchReferenceRange(line.item, subject, values.specimenDate)
+      : undefined;
+    updateLine(lineIndex, range ? { value, interpretation: judgeInterpretation(value, range) } : { value });
   }
 
   // オーダーを選び直したら、オーダー項目 → 結果項目の対応表で検査項目を展開し直す。
@@ -349,24 +366,28 @@ export function LabResultForm({
           <colgroup>
             <col />
             <col style={{ width: "18%" }} />
-            <col style={{ width: "18%" }} />
             {/* 結果値入力 + H/L プルダウンの2つが並ぶ分の幅。 */}
             <col style={{ width: "220px" }} />
             <col style={{ width: "96px" }} />
+            <col style={{ width: "110px" }} />
             <col style={{ width: "72px" }} />
           </colgroup>
           <thead>
             <tr>
               <th>検査項目</th>
-              <th>略称</th>
               <th>材料</th>
               <th>結果値</th>
               <th>単位</th>
+              <th>基準値</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {values.lines.map((line, lineIndex) => (
+            {values.lines.map((line, lineIndex) => {
+              const range = line.item?.data_type === "PQ"
+                ? matchReferenceRange(line.item, subject, values.specimenDate)
+                : undefined;
+              return (
               <tr key={lineIndex}>
                 <td>
                   <div className="rp-card__medicine-cell">
@@ -374,19 +395,28 @@ export function LabResultForm({
                       {line.item ? "変更" : "選択"}
                     </button>
                     {line.item ? (
-                      <span className="rp-card__medicine-name">{line.item.name}</span>
+                      <span className="rp-card__medicine-name" title={line.item.name}>
+                        {line.item.short_name || line.item.name}
+                      </span>
                     ) : (
                       <span className="rp-card__usage-value--empty">未選択</span>
                     )}
                   </div>
                 </td>
-                <td>{line.item?.short_name ?? "-"}</td>
-                <td>{line.item?.specimen_name ?? "-"}</td>
+                {/* 材料名は長いものがあるので、はみ出す分は見切って全文はツールチップで読む。 */}
+                <td>
+                  <span
+                    className="lab-result-detail__specimen"
+                    title={line.item?.specimen_name || undefined}
+                  >
+                    {line.item?.specimen_name ?? "-"}
+                  </span>
+                </td>
                 <td>
                   <div className="lab-result-form__value-cell">
                     <ResultValueInput
                       line={line}
-                      onChange={(value) => updateLine(lineIndex, { value })}
+                      onChange={(value) => handleValueChange(lineIndex, value)}
                     />
                     {/* H/L 判定。未選択(空)は FHIR 上 "N" として記録される。 */}
                     <select
@@ -409,6 +439,7 @@ export function LabResultForm({
                   </div>
                 </td>
                 <td>{line.item?.data_type === "PQ" ? line.item.display_unit || "-" : "-"}</td>
+                <td>{range ? referenceRangeLabel(range.lower_limit, range.upper_limit) : "-"}</td>
                 <td>
                   {values.lines.length > 1 && (
                     <button type="button" onClick={() => removeLine(lineIndex)}>
@@ -417,7 +448,8 @@ export function LabResultForm({
                   )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
 

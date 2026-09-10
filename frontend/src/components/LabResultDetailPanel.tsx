@@ -245,10 +245,10 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                 <tr>
                   <th className="rp-card__lab-check" />
                   <th>検査項目</th>
-                  <th>略称</th>
                   <th>材料</th>
                   <th className="rp-card__lab-value">結果値</th>
                   <th className="rp-card__lab-unit">単位</th>
+                  <th className="rp-card__lab-unit">基準値</th>
                 </tr>
               </thead>
               {/* 分野ごとに tbody を分け、その先頭行を分野の見出しにする。 */}
@@ -271,8 +271,11 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                             onChange={() => line.id && toggleChecked(line.id)}
                           />
                         </td>
-                        <td>{line.name || "-"}</td>
-                        <td>{line.abbreviation || "-"}</td>
+                        <td>
+                          <span title={line.name || undefined}>
+                            {line.abbreviation || line.name || "-"}
+                          </span>
+                        </td>
                         {/* 材料名称は長いものがあるので、はみ出す分は見切って全文はツールチップで読む。 */}
                         <td>
                           <span
@@ -288,6 +291,7 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                           {line.value || "-"}
                         </td>
                         <td className="rp-card__lab-unit">{line.unit || "-"}</td>
+                        <td className="rp-card__lab-unit">{line.referenceRange || "-"}</td>
                       </tr>
                     );
                   })}

@@ -27,49 +27,37 @@ module Master
           .where("valid_to IS NULL OR valid_to >= ?", Date.current)
       end
       if params[:name].present?
-        # 材料名の JOIN 先(master_lab_specimens)にも search_name があるので表名で修飾する。
+        # JLAC11 前方一致などと同じく、表名で修飾しておく。
         scope = flexible_name_match(
           scope, params[:name],
           %w[master_lab_result_items.search_name master_lab_result_items.search_short_name master_lab_result_items.search_kana]
         )
       end
 
-      # 材料名を添える(結果登録画面の「材料」列と Specimen の表示名に使う)。
+      # 材料名と基準値を添える(結果登録画面の「材料」列・H/L の自動判定・Specimen の表示名に使う)。
       # コード一括照会は 1 オーダーぶんを 1 回で引くので上限を広げる。
-      render json: paginate(with_specimen_name(scope).order(Arel.sql("display_order NULLS LAST")), max_per: 500)
+      result = paginate(scope.order(Arel.sql("display_order NULLS LAST")), max_per: 500)
+      render json: result.merge(items: Master::LabResultItem.as_json_with_details(result[:items].to_a))
     end
 
-    # 材料名と、この結果項目を返すオーダー項目を添えて返す。
+    # 材料名・基準値と、この結果項目を返すオーダー項目を添えて返す。
     def show
-      render json: @record.as_json.merge(
-        specimen_name: specimen_name_of(@record.specimen_code),
-        order_items: order_items_for(@record.result_item_code).as_json
+      render json: Master::LabResultItem.as_json_with_details([@record]).first.merge(
+        "order_items" => order_items_for(@record.result_item_code).as_json
       )
     end
 
-    # 外部キーを張っていないので、ぶら下がる対応表も併せて片付ける。
+    # 外部キーを張っていないので、ぶら下がる対応表と基準値も併せて片付ける。
     def destroy
       Master::LabResultItem.transaction do
         Master::LabOrderItemResult.where(result_item_code: @record.result_item_code).delete_all
+        Master::LabReferenceRange.where(result_item_code: @record.result_item_code).delete_all
         @record.destroy!
       end
       head :no_content
     end
 
     private
-
-    def with_specimen_name(scope)
-      scope
-        .joins("LEFT JOIN master_lab_specimens " \
-               "ON master_lab_specimens.specimen_code = master_lab_result_items.specimen_code")
-        .select("master_lab_result_items.*", "master_lab_specimens.name AS specimen_name")
-    end
-
-    def specimen_name_of(specimen_code)
-      return nil if specimen_code.blank?
-
-      Master::LabSpecimen.find_by(specimen_code: specimen_code)&.name
-    end
 
     def order_items_for(code)
       Master::LabOrderItemResult
