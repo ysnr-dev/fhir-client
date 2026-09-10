@@ -11,6 +11,7 @@
    ヘッダーだけ暗くなる)。z-index はページ内の重なり(最大 10)より上、
    モーダル(100)とテンプレート選択のパネル(200)より下に置く。 */
 .app__header {
+  --control-height: auto;
   position: sticky;
   top: 0;
   z-index: 50;
@@ -612,11 +613,22 @@
   align-items: center;
 }
 
+/* 入力部品の高さは --control-height で固定する(index.css)。チェックボックス等の
+   小さな部品と複数行のテキストエリアは対象外。ボタンは上下の余白を持たず、
+   inline-flex の縦中央揃えで文字を置く。 */
+select,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="image"]),
+.button,
+button {
+  box-sizing: border-box;
+  height: var(--control-height);
+}
+
 .button,
 button {
   font: inherit;
   font-size: 15px;
-  padding: 8px 16px;
+  padding: 0 16px;
   border-radius: 6px;
   border: 1px solid var(--accent-border);
   color: var(--accent);
@@ -738,6 +750,7 @@ button:disabled {
    font: inherit で受け継いでしまい、padding を削っただけでは縮まないため。 */
 .patient-list .patient-table__actions button,
 .patient-list .patient-table__actions .button {
+  --control-height: 26px;
   padding: 2px 10px;
   line-height: 20px;
 }
@@ -804,6 +817,7 @@ button:disabled {
 /* グローバルの button {} と .patient-table__actions button {} を上書きするため
    詳細度を 2 クラス以上に上げている。 */
 .row-menu__items .row-menu__item {
+  height: auto;
   display: block;
   width: 100%;
   box-sizing: border-box;
@@ -1050,6 +1064,7 @@ button:disabled {
 }
 
 .modal__close {
+  height: auto;
   border: none;
   background: transparent;
   color: var(--text);
@@ -1209,6 +1224,7 @@ button:disabled {
 }
 
 .lab-drilldown__head {
+  --control-height: 26px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1242,6 +1258,7 @@ button:disabled {
 
 /* 行はボタンだが、枠なしの一覧行として見せる(グローバルの button を上書き)。 */
 .lab-drilldown__list button {
+  height: auto;
   display: block;
   width: 100%;
   text-align: left;
@@ -1439,6 +1456,7 @@ button:disabled {
 /* コメント欄を出すトリガーは任意入力の補助操作なので、
    常用ボタン(用法選択・医薬品追加)と混ざらないよう控えめなテキストリンクにする。 */
 .comment-add-button {
+  height: auto;
   align-self: flex-start;
   padding: 0;
   border: none;
@@ -1704,6 +1722,7 @@ fieldset.rp-card {
 }
 
 .rp-card__medicines {
+  --control-height: 28px;
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
@@ -1774,14 +1793,14 @@ fieldset.rp-card {
 }
 
 /* 削除はゴミ箱アイコンのみのアイコンボタンにして、幅を取らないようにする。
-   医薬品行の削除と RP 削除の双方で使う。 */
+   医薬品行の削除と RP 削除の双方で使う。並んだ入力欄と同じ高さの正方形にする。 */
 .rp-card__icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 4px;
-  width: 26px;
-  height: 26px;
+  width: var(--control-height);
+  height: var(--control-height);
   color: var(--text);
 }
 
@@ -2482,6 +2501,7 @@ fieldset.rp-card {
 }
 
 .placeholder-list__copy {
+  height: auto;
   font-size: 11px;
   padding: 2px 8px;
 }
@@ -2931,6 +2951,7 @@ fieldset.rp-card {
 }
 
 .condition-form__modifier-chip button {
+  height: auto;
   border: none;
   background: none;
   padding: 0 2px;
@@ -3735,6 +3756,7 @@ fieldset.rp-card {
 /* テンプレートのプルダウンと「前回値を複写」を 1 行に並べる。プルダウンにはラベルが
    乗るので、下端(コントロールの高さ)で揃える。 */
 .qr-template-select {
+  --control-height: 32px;
   display: flex;
   align-items: flex-end;
   gap: 8px;
@@ -3843,6 +3865,7 @@ fieldset.rp-card {
 /* グローバルの button {} を上書きするため詳細度を 2 クラス以上に上げている。 */
 .template-select__panel .template-select__item,
 .template-select__panel .template-select__back {
+  height: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3918,6 +3941,7 @@ fieldset.rp-card {
 }
 
 .qc-modal__order button {
+  height: auto;
   padding: 4px 8px;
   line-height: 1;
 }
@@ -4199,6 +4223,7 @@ fieldset.rp-card {
 
 /* 装飾パネル。既定は非表示で、バーの「装飾」ボタンで開く。 */
 .rich-text-editor__toolbar {
+  --control-height: 24px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -4541,6 +4566,7 @@ body.karte-wide {
 
 /* 表示モード切替(タブ切替 / 上下分割 / 本日のカルテ)。 */
 .karte-tabs__mode {
+  height: auto;
   align-self: center;
   padding: 4px 6px;
   margin-bottom: 4px;
@@ -4691,6 +4717,7 @@ body.karte-wide {
 }
 
 .karte-tabs__tab {
+  height: auto;
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
@@ -4785,6 +4812,7 @@ body.karte-wide {
 
 /* 帯内のボタン共通指定を打ち消して、開閉は控えめな三角だけにする。 */
 .karte-problems .karte-problems__toggle {
+  height: auto;
   padding: 0 2px;
   border: none;
   background: transparent;
@@ -4813,6 +4841,7 @@ body.karte-wide {
 }
 
 .karte-problems .karte-problems__chip {
+  height: auto;
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
@@ -4860,6 +4889,7 @@ body.karte-wide {
 
 /* 解決済みの開閉。チップの列に並ぶが、プロブレムそのものではないので枠は付けない。 */
 .karte-problems .karte-problems__resolved-toggle {
+  height: auto;
   padding: 2px 4px;
   border: none;
   background: transparent;
@@ -4919,6 +4949,7 @@ body.karte-wide {
 }
 
 .karte-problem-summary .karte-problem-summary__clear {
+  height: auto;
   margin-left: auto;
   padding: 2px 8px;
   border: 1px solid var(--border);
@@ -5061,6 +5092,7 @@ body.karte-wide {
 
 /* 診療日パネルのボタンは通常ボタンの装飾を落としてツリー表示にする。 */
 .karte-daylist button {
+  height: auto;
   border: none;
   background: transparent;
   color: var(--text);
@@ -5227,6 +5259,7 @@ body.karte-wide {
 }
 
 .note-history .note-history__version {
+  height: auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -5386,6 +5419,7 @@ body.karte-wide {
 }
 
 .karte-card__actions {
+  --control-height: 22px;
   flex-shrink: 0;
   display: flex;
   gap: 6px;
@@ -5446,6 +5480,7 @@ body.karte-wide {
 }
 
 .karte-card__toggle {
+  height: auto;
   margin-top: 4px;
   padding: 2px 8px;
   font-size: 12px;
@@ -5802,6 +5837,7 @@ body.karte-wide {
    三点リーダーは既に行送り 1 で収まっているので、直下のボタンだけを対象にする。 */
 .karte-tabpanel .patient-table__actions > button,
 .karte-tabpanel .patient-table__actions > .button {
+  --control-height: 24px;
   padding: 2px 10px;
   line-height: 18px;
 }
@@ -5978,6 +6014,7 @@ body.karte-wide {
 
 /* 一覧はモーダルと違いページ全体を使うので、高さ固定のスクロール枠は使わない。 */
 .dose-conversion__table {
+  --control-height: 28px;
   margin-bottom: 4px;
 }
 
@@ -6061,6 +6098,7 @@ body.karte-wide {
 }
 
 .lab-order-item__fields {
+  --control-height: 28px;
   display: flex;
   flex-wrap: wrap;
   gap: 12px 16px;
@@ -6135,6 +6173,7 @@ fieldset.lab-order-item__section label {
 }
 
 .lab-order-item__section-head {
+  --control-height: 26px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -6169,6 +6208,7 @@ fieldset.lab-order-item__section label {
 }
 
 .lab-order-item__candidates button {
+  height: auto;
   width: 100%;
   text-align: left;
   border: none;
@@ -6188,6 +6228,7 @@ fieldset.lab-order-item__section label {
 
 /* レイアウト選択・名前・行数・列数の1行フォーム。 */
 .order-layout__bar {
+  --control-height: 28px;
   display: flex;
   flex-wrap: wrap;
   gap: 12px 16px;
@@ -6274,6 +6315,7 @@ fieldset.lab-order-item__section label {
 }
 
 .order-layout__editor-row {
+  --control-height: 28px;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -6348,6 +6390,7 @@ fieldset.lab-order-item__section label {
 }
 
 .order-select__tab {
+  height: auto;
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
@@ -6389,6 +6432,7 @@ fieldset.lab-order-item__section label {
 }
 
 .order-select__search input[type="text"] {
+  --control-height: 28px;
   font: inherit;
   font-size: 14px;
   padding: 4px 6px;
@@ -6463,6 +6507,7 @@ fieldset.lab-order-item__section label {
 }
 
 .order-select__remove {
+  height: auto;
   margin-left: 6px;
   border: none;
   background: transparent;
@@ -6761,6 +6806,7 @@ fieldset.lab-order-item__section label {
 }
 
 .schema-master__cat-toggle {
+  height: auto;
   flex: none;
   width: 22px;
   padding: 0;
@@ -6772,6 +6818,7 @@ fieldset.lab-order-item__section label {
 }
 
 .schema-master__cat-name {
+  height: auto;
   flex: 1 1 auto;
   min-width: 0;
   text-align: left;
@@ -6804,6 +6851,7 @@ fieldset.lab-order-item__section label {
 }
 
 .schema-master__cat-actions button {
+  height: auto;
   padding: 1px 5px;
   font-size: 11px;
   border: 1px solid var(--border);
@@ -6838,11 +6886,13 @@ fieldset.lab-order-item__section label {
 }
 
 .schema-master__item-order button {
+  height: auto;
   padding: 0 6px;
   font-size: 11px;
 }
 
 .schema-master__item-body {
+  height: auto;
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
@@ -6967,6 +7017,7 @@ fieldset.lab-order-item__section label {
 }
 
 .schema-picker__card {
+  height: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -7063,6 +7114,7 @@ fieldset.lab-order-item__section label {
 }
 
 .micro-order__suggest-item {
+  height: auto;
   width: 100%;
   text-align: left;
   /* 薬品名は長いので、一覧の幅で折り返す(横スクロールを出さない)。 */
@@ -7595,6 +7647,7 @@ body.page-wide .app__main {
 .rad-worklist__actions button,
 .lab-worklist__actions button,
 .lab-worklist__actions .button {
+  --control-height: 26px;
   padding: 2px 10px;
   font-size: 13px;
   line-height: 20px;
@@ -7747,6 +7800,7 @@ body.page-wide .app__main {
 /* 検体到着確認(スキャン画面) --------------------------------------------- */
 
 .lab-arrival__scan {
+  --control-height: 40px;
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
@@ -7884,6 +7938,7 @@ body.page-wide .app__main {
    受け継いでしまい、padding を削っただけでは縮まないため。 */
 .outpatient__actions button,
 .outpatient__actions .button {
+  --control-height: 26px;
   padding: 2px 10px;
   font-size: 13px;
   line-height: 20px;
@@ -8180,6 +8235,7 @@ body.page-wide .app__main {
    自動列幅のままだと使用量と数量の左位置がずれる。名称の幅を揃えれば残りの列は
    等分されるので、2 つの表で数量欄も行末の削除も縦に揃う。 */
 .rad-perform__lines {
+  --control-height: 28px;
   table-layout: fixed;
 }
 
@@ -8292,6 +8348,7 @@ body.page-wide .app__main {
 }
 
 .vital-form__row {
+  --control-height: 30px;
   display: grid;
   grid-template-columns: 5em 6em auto;
   align-items: center;
@@ -8382,6 +8439,7 @@ body.page-wide .app__main {
 }
 
 .vital-flowsheet .lab-timeline__controls {
+  --control-height: 24px;
   flex: none;
 }
 
@@ -8539,6 +8597,7 @@ body.page-wide .app__main {
 /* 測定の時刻。手入力のバイタルはここからバイタル編集を開けるので、押せると分かる
    見た目にする(見出しの文字と同じ大きさのまま、下線とカーソルだけ変える)。 */
 .vital-flowsheet__time-button {
+  height: auto;
   font: inherit;
   color: inherit;
   padding: 0;
@@ -8558,6 +8617,7 @@ body.page-wide .app__main {
 /* 日付の見出し。押すとその日の 24 時間表示に切り替わる(24 時間表示では最上段の
    日付を押して戻る)。見出しの文字はそのままに、押せることだけを示す。 */
 .vital-flowsheet__day-toggle {
+  height: auto;
   font: inherit;
   color: inherit;
   padding: 0;
@@ -8726,6 +8786,7 @@ body.page-wide .app__main {
 }
 
 .vital-flowsheet__meal-value {
+  height: auto;
   border: none;
   background: none;
   padding: 0;
@@ -9216,6 +9277,7 @@ body.page-wide .app__main {
 }
 
 .slot-calendar__week {
+  --control-height: 26px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -9309,6 +9371,7 @@ body.page-wide .app__main {
 /* 枠のないマス。押すとその日時の個別追加を開くので、普段は目立たせず
    hover でだけボタンらしく見せる。 */
 .slot-calendar__empty {
+  height: auto;
   display: block;
   width: 100%;
   padding: 3px 4px;
@@ -9333,6 +9396,7 @@ body.page-wide .app__main {
 
 /* 枠のセル。状態ごとに色を変え、選択中は枠線で示す。 */
 .slot-calendar__slot {
+  height: auto;
   display: block;
   width: 100%;
   padding: 3px 4px;
@@ -9407,6 +9471,7 @@ body.page-wide .app__main {
 
 /* 予約種別の下にメモ。メモは複数行書けるよう幅いっぱいに広げる。 */
 .appointment-panel__form {
+  --control-height: 32px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -9443,6 +9508,7 @@ body.page-wide .app__main {
 
 /* 枠の選択(枠表 → 月カレンダー → 時刻) */
 .appointment-picker {
+  --control-height: 32px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -9490,6 +9556,7 @@ body.page-wide .app__main {
 }
 
 .appointment-month__header {
+  --control-height: 26px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -9530,6 +9597,7 @@ body.page-wide .app__main {
 
 /* 1 日のマス。空きがある日だけ残数を出す。 */
 .appointment-month__day {
+  height: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -9610,6 +9678,7 @@ body.page-wide .app__main {
 }
 
 .appointment-times__slot {
+  height: auto;
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
@@ -9671,6 +9740,7 @@ body.page-wide .app__main {
 /* 1 枠 = 登録される 1 オーダー。オーダー単位の設定(至急区分・撮影日時・即実施)を
    上下の帯に置き、間に GP を並べて「どこまでが 1 オーダーか」を見せる。 */
 .rad-order-frame {
+  --control-height: 30px;
   border: 1px solid var(--border);
   border-radius: 8px;
   margin-bottom: 12px;
@@ -9751,8 +9821,6 @@ body.page-wide .app__main {
 .rad-order-frame__datetime input {
   font: inherit;
   font-size: 13px;
-  height: 30px;
-  box-sizing: border-box;
   padding: 4px 6px;
   border-radius: 4px;
   border: 1px solid var(--border);
@@ -9915,6 +9983,7 @@ body.page-wide .app__main {
    しまい、padding を削っただけでは縮まないため。 */
 .inpatient .patient-table__actions button,
 .inpatient .patient-table__actions .button {
+  --control-height: 26px;
   padding: 2px 10px;
   font-size: 13px;
   line-height: 20px;
@@ -9999,6 +10068,7 @@ body.page-wide .app__main {
 }
 
 .inpatient-tabs__tab {
+  height: auto;
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
@@ -10478,6 +10548,7 @@ body.page-wide .app__main {
 /* 列(時点)の削除。見出しの数字より前に出ないよう、枠も地も持たせず沈める
    (押す先は分かればよく、常時 4〜5 個が並ぶので目立つと表が読みにくい)。 */
 .anes-chart__table .anes-chart__cell-delete {
+  height: auto;
   margin-left: 4px;
   padding: 0 2px;
   border: none;
@@ -10603,6 +10674,7 @@ body.page-wide .app__main {
 
 /* 日送り・週送り。 */
 .surgery-calendar__date {
+  --control-height: 26px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -10993,6 +11065,7 @@ body.page-wide .app__main {
 }
 
 .surgery-pending__card-actions .row-menu__trigger {
+  height: auto;
   padding: 0 4px;
   font-size: 12px;
   line-height: 1.2;
@@ -11051,6 +11124,7 @@ body.page-wide .app__main {
 }
 
 .surgery-calendar__day-link {
+  height: auto;
   border: none;
   background: none;
   padding: 0;
@@ -11061,6 +11135,7 @@ body.page-wide .app__main {
 }
 
 .surgery-calendar__cell {
+  height: auto;
   display: flex;
   flex-direction: column;
   /* button の UA 既定は align-items: center。打ち消さないと中身が幅いっぱいに
@@ -11311,6 +11386,7 @@ td.surgery-calendar__cell--drop-target {
 /* 格子の中の操作なので、一覧の行ボタンより一段小さく。
    直接の子だけに当てる(メニューを開いた中の項目まで縮めないため)。 */
 .surgery-calendar__card-actions > button {
+  height: auto;
   padding: 1px 6px;
   font-size: 10px;
   line-height: 1.4;
@@ -11556,6 +11632,7 @@ td.surgery-calendar__cell--drop-target {
    入力欄の見た目は .lab-order-item__fields の中でしか当たらないので、
    その外に置くこの 2 節には同じ指定を書く。 */
 .meal-diet-nutrients {
+  --control-height: 28px;
   display: flex;
   flex-wrap: wrap;
   gap: 8px 16px;
@@ -11605,6 +11682,7 @@ td.surgery-calendar__cell--drop-target {
 /* ---- 食事タブの月カレンダー(docs/meal-order-design.md) ---- */
 
 .meal-calendar__toolbar {
+  --control-height: 26px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -11644,6 +11722,7 @@ td.surgery-calendar__cell--drop-target {
 }
 
 .meal-calendar__cell {
+  height: auto;
   background: var(--bg);
   min-height: 76px;
   padding: 4px;
@@ -11888,6 +11967,7 @@ button.meal-calendar__cell:hover {
 }
 
 .patho-order__frequent-button {
+  height: auto;
   font-size: 12px;
   padding: 2px 8px;
 }
@@ -12192,20 +12272,6 @@ button.meal-calendar__cell:hover {
   font-size: 13px;
 }
 
-/* 1 行に並ぶ欄の高さを揃える。
-   放っておくと select だけ 6〜8px 低くなる。原因はフォントサイズではなく行の高さで、
-   フォームの入力欄は `font: inherit` で根の line-height(18px/145% = 26.1px)を
-   そのまま受け取るのに対し、select は Chrome の既定で line-height: normal になり、
-   同じ padding でも中身の高さが違ってしまうため。
-   font-size を触らずに揃えるので、高さは em(その欄自身の文字サイズ基準)で指定する。
-   オーダー画面(15px)は 33px、実施入力モーダル(14px)は 30.8px と、
-   どちらもその場のフォントに比例した高さで横一列に並ぶ。 */
-.transfusion-order__product > label > select,
-.transfusion-order__product > label > input {
-  box-sizing: border-box;
-  height: 2.2em;
-}
-
 .transfusion-order__product-head {
   /* 製剤番号と削除ボタンは 1 行使い切って、番号を各カードの同じ位置に置く。 */
   flex: 1 1 100%;
@@ -12240,6 +12306,10 @@ button.meal-calendar__cell:hover {
 
 .transfusion-order__product-add {
   flex: 1 1 100%;
+}
+
+.transfusion-perform {
+  --control-height: 28px;
 }
 
 /* 実施入力モーダルの入力欄。
@@ -12736,6 +12806,7 @@ button.meal-calendar__cell:hover {
 
 /* 行の削除は病名の修飾語チップと同じ、枠の無い × にする(項目名より目立たせない)。 */
 .facility-settings__balance-list button {
+  height: auto;
   border: none;
   background: none;
   padding: 0 2px;
@@ -12815,6 +12886,7 @@ button.meal-calendar__cell:hover {
 /* 指示食種の「現在の食事オーダー」行に添える転記ボタン。文中に並ぶので
    .comment-add-button と同じくボタンらしい枠を持たせない。 */
 .nutrition-guidance-form__diet-copy {
+  height: auto;
   margin-left: 6px;
   padding: 0;
   border: none;
@@ -12856,6 +12928,7 @@ button.meal-calendar__cell:hover {
 }
 
 .order-set__tree-head {
+  --control-height: 26px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -12910,6 +12983,7 @@ button.meal-calendar__cell:hover {
 }
 
 .order-set-picker__tab {
+  height: auto;
   padding: 4px 10px;
   border: none;
   border-bottom: 2px solid transparent;
@@ -12956,6 +13030,7 @@ button.meal-calendar__cell:hover {
 }
 
 .order-set-tree__toggle {
+  height: auto;
   flex: none;
   width: 18px;
   padding: 0;
@@ -12978,6 +13053,7 @@ button.meal-calendar__cell:hover {
 }
 
 .order-set-tree__name {
+  height: auto;
   flex: 1 1 auto;
   min-width: 0;
   text-align: left;
@@ -13409,27 +13485,20 @@ button.meal-calendar__cell:hover {
   color: var(--text-muted);
 }
 
-/* select はブラウザ既定の内部余白が input と違い、同じ padding を与えても高さが
-   揃わない。レジメン画面の中だけ実寸で固定して、並んだ入力欄の高さを合わせる。 */
-.regimen-editor input[type="text"],
-.regimen-editor input[type="number"],
-.regimen-editor input[type="date"],
-.regimen-editor select {
-  height: 30px;
-  box-sizing: border-box;
+/* レジメン画面の入力欄は標準より一段低くする。表の中は 1 行が低いので、さらに詰める。 */
+.regimen-editor {
+  --control-height: 30px;
 }
 
-/* 表の中は 1 行が低いので、そちらに合わせた高さにする。 */
-.regimen-editor .regimen-editor__rows input[type="text"],
-.regimen-editor .regimen-editor__rows input[type="number"],
-.regimen-editor .regimen-editor__rows select {
-  height: 26px;
+.regimen-editor .regimen-editor__rows {
+  --control-height: 26px;
 }
 
 /* ---- 化学療法(レジメンオーダー)(docs/chemo-regimen-design.md §7) ---- */
 
 /* 右ペインのレジメン選択。 */
 .regimen-picker__search {
+  --control-height: 28px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -13457,6 +13526,7 @@ button.meal-calendar__cell:hover {
 }
 
 .regimen-picker__item {
+  height: auto;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -13489,6 +13559,7 @@ button.meal-calendar__cell:hover {
 
 /* 適用フォームの区画。マスタ編集モーダルの fieldset と同じ見た目。 */
 .regimen-apply__fields {
+  --control-height: 30px;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 12px 4px;
@@ -13502,14 +13573,6 @@ button.meal-calendar__cell:hover {
 
 .regimen-apply__fields .lab-order-item__fields {
   margin-bottom: 8px;
-}
-
-.regimen-apply__fields input[type="text"],
-.regimen-apply__fields input[type="number"],
-.regimen-apply__fields input[type="date"],
-.regimen-apply__fields select {
-  height: 30px;
-  box-sizing: border-box;
 }
 
 .regimen-apply__step {
@@ -13604,8 +13667,7 @@ button.meal-calendar__cell:hover {
   background: var(--bg);
   color: var(--text);
   width: 80px;
-  height: 26px;
-  box-sizing: border-box;
+  --control-height: 26px;
 }
 
 /* 適用の詳細。 */
@@ -13636,6 +13698,7 @@ button.meal-calendar__cell:hover {
 }
 
 .master-search__table button.regimen-detail__day {
+  height: auto;
   font-size: 12px;
   padding: 2px 8px;
 }
@@ -13733,6 +13796,7 @@ button.meal-calendar__cell:hover {
 }
 
 .regimen-day__move-row {
+  --control-height: 28px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -13908,6 +13972,7 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 .chemo-views__tab {
+  height: auto;
   font-size: 12px;
   padding: 2px 10px;
   border-radius: 999px;
@@ -14046,8 +14111,7 @@ button.chemo-calendar__cell[draggable="true"] {
   background: var(--bg);
   color: var(--text);
   width: 56px;
-  height: 26px;
-  box-sizing: border-box;
+  --control-height: 26px;
 }
 
 /* 前クールと同じ量にするかの選択(次クール登録のみ)。 */
@@ -14126,6 +14190,7 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 .master-search__table button.regimen-history__name {
+  height: auto;
   font: inherit;
   padding: 0;
   border: 0;
@@ -14337,6 +14402,7 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 .master-search__table button.ctcae-search__term {
+  height: auto;
   font: inherit;
   padding: 0;
   border: 0;
@@ -15035,6 +15101,7 @@ button.chemo-calendar__cell[draggable="true"] {
 
 /* パレットの項目。掴んでキャンバスへ運べる(押せば表示中央に置く)。 */
 .ward-map-edit__palette-item {
+  height: auto;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -15064,6 +15131,7 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 .ward-map-edit__props-row {
+  --control-height: 26px;
   display: flex;
   flex-wrap: wrap;
   gap: 8px 10px;
@@ -15230,6 +15298,7 @@ button.chemo-calendar__cell[draggable="true"] {
 
 .ward-map__workspace-card button,
 .ward-map__move-row button {
+  --control-height: 22px;
   margin-left: auto;
   padding: 0 6px;
   font-size: 12px;
@@ -15301,6 +15370,7 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 .ward-map__bed-menu .row-menu__trigger {
+  height: auto;
   padding: 0 4px;
   font-size: 12px;
   line-height: 1;

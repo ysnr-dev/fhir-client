@@ -25,6 +25,12 @@
   --lab-high: #d32f2f;
   --lab-low: #2a78d6;
 
+  /* 入力部品(テキスト入力・セレクト・ボタン)の高さ。並べたときに揃うよう、
+     行間や余白から決めずにこの値で固定する。標準の 15px 文字の セレクトに合わせた
+     34px を既定にし、小さめの文字を使う場所は各所の親要素で上書きする
+     (14px: 28px / 13px: 26px / 12px: 24px / 11px: 22px)。 */
+  --control-height: 34px;
+
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
