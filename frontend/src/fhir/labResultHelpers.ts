@@ -2,16 +2,21 @@ import { today } from "../lib/dates";
 import { categoryCoding, codingBySystem, findSettingDisplay, SETTING_OPTIONS } from "./shared";
 
 export { SETTING_OPTIONS };
-import type { LabItem } from "../api/masterClient";
+import type { LabResultItem } from "../api/masterClient";
 import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 
 // ローカル拡張・コードシステム。正式な CodeSystem が定義されていない(または
 // 不明な)項目を表現するための、この検査結果機能専用の URI。
 // 入外区分。細菌検査結果(microResultHelpers)も同じ意味で使うので共有する。
 export const SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/lab-result-setting";
+// 結果項目コード(検体検査の結果項目マスタ、施設採番)。Observation.code の先頭に置き、
+// 読み出し・時系列の突き合わせのキーにする。オーダー側の lab-order-item と同じ流儀。
+export const RESULT_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/lab-result-item";
 // JLAC11 コード。正式な CodeSystem URL が公開されていないためローカル URI を使用。
 // 検体検査オーダー(labOrderHelpers)も同じ体系のコードを持つので共有する。
 export const JLAC11_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11";
+// JLAC10 コード。JLAC11 と同じくローカル URI。
+export const JLAC10_SYSTEM = "http://fhir-client.local/CodeSystem/jlac10";
 // JLAC11 の材料(検体)コード。同じく正式な CodeSystem URL がないためローカル URI。
 export const JLAC11_SPECIMEN_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11-specimen";
 // 検査項目の略称。詳細表示・編集フォームへの復元に使う補助 coding。
@@ -48,19 +53,19 @@ const OBSERVATION_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_O
 const REPORT_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_DiagnosticReport_LabResult";
 const SPECIMEN_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Specimen_Common";
 
-// JLAC11 は17桁固定で、10〜12桁目が材料(検体)コード。
-// 桁構成: 測定物5桁 + 識別4桁 + 材料3桁 + 測定法3桁 + 結果単位2桁
-// https://www.idial.or.jp/jlac_eleven.html
-const JLAC11_LENGTH = 17;
-const SPECIMEN_CODE_START = 9;
-const SPECIMEN_CODE_END = 12;
+// 結果項目の材料(検体)コード。結果項目マスタが持つ JLAC11 材料コード 3 桁で、
+// 空なら Specimen を作らない。
+export function specimenCodeOf(item: LabResultItem | null | undefined): string {
+  return item?.specimen_code ?? "";
+}
 
-// 検査項目の JLAC11 コードから材料(検体)コードを取り出す。桁数が想定外のマスタは
-// 位置で切り出すと誤ったコードになるため、空文字を返して Specimen を作らない。
-export function specimenCodeOf(item: LabItem | null | undefined): string {
-  const code = item?.jlac11_code ?? "";
-  if (code.length !== JLAC11_LENGTH) return "";
-  return code.slice(SPECIMEN_CODE_START, SPECIMEN_CODE_END);
+// 結果項目の同一性キー。編集復元・オーダーからの展開・時系列の行まとめで、同じ結果項目を
+// 1 つとして扱うために使う。施設コードを持たない骨格(結果項目マスタ導入前の保存済み
+// 結果から復元したもの)は JLAC11、それも無ければ名称で代用する。
+export function lineKeyOf(item: LabResultItem): string {
+  if (item.result_item_code) return `item:${item.result_item_code}`;
+  if (item.jlac11_code) return `jlac11:${item.jlac11_code}`;
+  return `name:${item.name}`;
 }
 
 // 更新時に既存の Specimen を使い回すための、材料コード → リソース id の対応。
@@ -84,7 +89,7 @@ const INTERPRETATION_DISPLAYS: Record<string, string> = {
 
 export interface LabResultLineValues {
   id?: string;
-  item: LabItem | null;
+  item: LabResultItem | null;
   // 結果値。PQ/ST は入力文字列、CD/CO は code_value_list 中の値コード。
   value: string;
   // H/L 判定。空値は FHIR 上 "N"(Normal) として記録する。
@@ -155,8 +160,8 @@ function buildObservationValue(line: LabResultLineValues): Partial<fhir4.Observa
       valueQuantity: {
         value: Number(line.value),
         unit: item?.display_unit ?? undefined,
-        ...(item?.xml_unit
-          ? { system: UNITS_OF_MEASURE_SYSTEM, code: item.xml_unit }
+        ...(item?.ucum_unit
+          ? { system: UNITS_OF_MEASURE_SYSTEM, code: item.ucum_unit }
           : {}),
       },
     };
@@ -169,7 +174,7 @@ function buildObservationValue(line: LabResultLineValues): Partial<fhir4.Observa
         valueCodeableConcept: {
           coding: [
             {
-              system: item?.code_oid || undefined,
+              system: item?.value_code_system || undefined,
               code: option.code,
               display: option.display,
             },
@@ -219,7 +224,7 @@ function planSpecimens(
     if (label?.id) {
       plans.set(code, {
         code,
-        display: line.item?.jlac11_specimen ?? "",
+        display: line.item?.specimen_name ?? "",
         fullUrl: `Specimen/${label.id}`,
         id: label.id,
         referenceOnly: true,
@@ -230,7 +235,7 @@ function planSpecimens(
     const id = idByCode.get(code);
     plans.set(code, {
       code,
-      display: line.item?.jlac11_specimen ?? "",
+      display: line.item?.specimen_name ?? "",
       id,
       fullUrl: id ? `Specimen/${id}` : `urn:uuid:${crypto.randomUUID()}`,
     });
@@ -261,6 +266,30 @@ function buildSpecimen(plan: SpecimenPlan, patientId: string, collected: string)
   return resource;
 }
 
+// Observation.code の coding。施設の結果項目コードを先頭に、標準コード(JLAC11 / JLAC10)を
+// 持っていれば併記し、最後に略称の補助 coding を添える。施設コードを持たない骨格
+// (結果項目マスタ導入前の保存済み結果をそのまま保存し直したもの)は JLAC11 から始まる。
+function buildCodeCodings(item: LabResultItem): fhir4.Coding[] {
+  const codings: fhir4.Coding[] = [];
+  if (item.result_item_code) {
+    codings.push({ system: RESULT_ITEM_SYSTEM, code: item.result_item_code, display: item.name });
+  }
+  if (item.jlac11_code) {
+    codings.push({ system: JLAC11_SYSTEM, code: item.jlac11_code, display: item.name });
+  }
+  if (item.jlac10_code) {
+    codings.push({ system: JLAC10_SYSTEM, code: item.jlac10_code, display: item.name });
+  }
+  if (item.short_name) {
+    codings.push({
+      system: ABBREVIATION_SYSTEM,
+      code: item.result_item_code || item.jlac11_code || item.name,
+      display: item.short_name,
+    });
+  }
+  return codings;
+}
+
 function buildObservation(
   line: LabResultLineValues,
   patientId: string,
@@ -283,25 +312,8 @@ function buildObservation(
       },
     ],
     code: {
-      coding: item
-        ? [
-            {
-              system: JLAC11_SYSTEM,
-              code: item.jlac11_code,
-              display: item.fhir_item_name ?? undefined,
-            },
-            ...(item.abbreviation
-              ? [
-                  {
-                    system: ABBREVIATION_SYSTEM,
-                    code: item.jlac11_code,
-                    display: item.abbreviation,
-                  },
-                ]
-              : []),
-          ]
-        : undefined,
-      text: item?.fhir_item_name ?? undefined,
+      coding: item ? buildCodeCodings(item) : undefined,
+      text: item?.name ?? undefined,
     },
     subject: { reference: `Patient/${patientId}` },
     effectiveDateTime: effective,
@@ -374,7 +386,7 @@ function buildLabResultTransactionBundle(
     });
     resultReferences.push({
       reference: fullUrl,
-      display: line.item?.abbreviation ?? line.item?.fhir_item_name ?? undefined,
+      display: line.item?.short_name ?? line.item?.name ?? undefined,
     });
   }
 
@@ -639,18 +651,27 @@ function observationValueDisplay(obs: fhir4.Observation): { value: string; unit:
   return { value: obs.valueString ?? "", unit: "" };
 }
 
+// Observation の項目名。施設コードの coding → JLAC11 の coding → text の順に読む。
+function observationItemName(obs: fhir4.Observation): string {
+  return (
+    codingBySystem(obs.code.coding, RESULT_ITEM_SYSTEM)?.display ??
+    codingBySystem(obs.code.coding, JLAC11_SYSTEM)?.display ??
+    obs.code.text ??
+    ""
+  );
+}
+
 export function observationLineDisplay(
   obs: fhir4.Observation,
   specimenNames?: Map<string, string>,
 ): LabResultLineDisplay {
-  const jlacCoding = codingBySystem(obs.code.coding, JLAC11_SYSTEM);
   const abbrCoding = codingBySystem(obs.code.coding, ABBREVIATION_SYSTEM);
   const specimenId = obs.specimen?.reference?.split("/").pop();
   const { value, unit } = observationValueDisplay(obs);
 
   return {
     id: obs.id ?? "",
-    name: jlacCoding?.display ?? obs.code.text ?? "",
+    name: observationItemName(obs),
     abbreviation: abbrCoding?.display ?? "",
     specimen: (specimenId && specimenNames?.get(specimenId)) || "",
     value,
@@ -662,8 +683,7 @@ export function observationLineDisplay(
 // ---- 時系列表示のための parse ----
 
 export interface LabTimelineRow {
-  // JLAC11 コード。同じ項目コードの結果を1行にまとめるためのキー。
-  // コードがない Observation は項目名で代用する。
+  // 同じ結果項目の結果を1行にまとめるためのキー(labTimelineKeyOf)。
   key: string;
   name: string;
   abbreviation: string;
@@ -682,16 +702,71 @@ export interface LabTimeline {
   rows: LabTimelineRow[];
 }
 
-// Observation の JLAC11 コード。検査分野などマスタ側にしか無い情報を引き当てるのに使う。
+// Observation の結果項目コード(施設コード)。結果項目マスタ導入前の保存済み結果には無い。
+export function labResultItemCodeOf(obs: fhir4.Observation): string {
+  return codingBySystem(obs.code.coding, RESULT_ITEM_SYSTEM)?.code ?? "";
+}
+
+// Observation の JLAC11 コード。感染症・腎機能の判定(分析物コード)と、結果項目マスタ導入前の
+// 保存済み結果から結果項目を引き当てるのに使う。
 export function labJlac11CodeOf(obs: fhir4.Observation): string {
   return codingBySystem(obs.code.coding, JLAC11_SYSTEM)?.code ?? "";
 }
 
+// 施設コードを持たない Observation(結果項目マスタ導入前の保存済み結果)の JLAC11 コード。
+// これで結果項目マスタを引き、施設コードの行と同じ結果項目に合流させる(resultItemAliases)。
+export function legacyJlac11CodesOf(observations: fhir4.Observation[]): string[] {
+  const codes = observations.flatMap((obs) =>
+    labResultItemCodeOf(obs) ? [] : [labJlac11CodeOf(obs)].filter(Boolean),
+  );
+  return [...new Set(codes)];
+}
+
+// JLAC11 の読み替えキー。17 桁のうち測定物 5 + 識別 4 + 材料 3 の 12 桁で、残りの
+// 測定法 3 + 結果単位 2 は試薬・機器で変わるため同じ結果項目と見なす(docs/lab-order-master-design.md §3)。
+// 結果項目マスタ導入前の保存済み結果は試薬単位の 17 桁を持ち、マスタの代表コードとは
+// 下 5 桁が違うことが多いので、この単位で引き当てる。17 桁でないコードは読み替えない。
+const JLAC11_LENGTH = 17;
+const JLAC11_ALIAS_LENGTH = 12;
+
+export function jlac11AliasKey(code: string): string {
+  return code.length === JLAC11_LENGTH ? code.slice(0, JLAC11_ALIAS_LENGTH) : "";
+}
+
+// JLAC11 の読み替えキー → 結果項目コード。結果項目マスタ導入前の保存済み結果を、同じ
+// 測定物・識別・材料の結果項目に読み替えるための対応。複数の結果項目が同じキーを持つ
+// (定量と定性など)ことがあるので、マスタの並び(表示順)で先に来たものを採る。
+export function resultItemAliases(items: LabResultItem[]): Map<string, string> {
+  const aliases = new Map<string, string>();
+  for (const item of items) {
+    const key = item.jlac11_code ? jlac11AliasKey(item.jlac11_code) : "";
+    if (key && !aliases.has(key)) aliases.set(key, item.result_item_code);
+  }
+  return aliases;
+}
+
+// aliases(resultItemAliases)で JLAC11 を結果項目コードに読み替える。読み替えられなければ空。
+function aliasOf(jlac11: string, aliases: ReadonlyMap<string, string> | undefined): string {
+  const key = jlac11AliasKey(jlac11);
+  return (key && aliases?.get(key)) || "";
+}
+
 // 時系列表示で同じ検査項目を1行にまとめるキー(LabTimelineRow.key)。
 // 検査結果内容ページの「選択項目のみ時系列表示」で行の絞り込みにも使う。
-export function labTimelineKeyOf(obs: fhir4.Observation): string {
-  const jlacCoding = codingBySystem(obs.code.coding, JLAC11_SYSTEM);
-  return jlacCoding?.code ?? `name:${jlacCoding?.display ?? obs.code.text ?? ""}`;
+// 施設コードがあればそれ、無ければ JLAC11 を aliases(JLAC11 → 結果項目コード)で
+// 読み替えて同じキーにする。読み替えられなければ JLAC11、それも無ければ名称。
+export function labTimelineKeyOf(
+  obs: fhir4.Observation,
+  aliases?: ReadonlyMap<string, string>,
+): string {
+  const resultItemCode = labResultItemCodeOf(obs);
+  if (resultItemCode) return `item:${resultItemCode}`;
+  const jlac11 = labJlac11CodeOf(obs);
+  if (jlac11) {
+    const alias = aliasOf(jlac11, aliases);
+    return alias ? `item:${alias}` : `jlac11:${jlac11}`;
+  }
+  return `name:${observationItemName(obs)}`;
 }
 
 // DiagnosticReport(検体採取日の降順) と _include で取得した Observation から、
@@ -702,6 +777,7 @@ export function buildLabTimeline(
   reports: fhir4.DiagnosticReport[],
   observations: fhir4.Observation[],
   dateCount: number,
+  aliases?: ReadonlyMap<string, string>,
 ): LabTimeline {
   const obsById = new Map(observations.map((obs) => [obs.id ?? "", obs]));
 
@@ -722,14 +798,12 @@ export function buildLabTimeline(
       const obs = obsById.get(obsId);
       if (!obs) continue;
 
-      const jlacCoding = codingBySystem(obs.code.coding, JLAC11_SYSTEM);
-      const name = jlacCoding?.display ?? obs.code.text ?? "";
-      const key = labTimelineKeyOf(obs);
+      const key = labTimelineKeyOf(obs, aliases);
       let row = rows.get(key);
       if (!row) {
         row = {
           key,
-          name,
+          name: observationItemName(obs),
           abbreviation: codingBySystem(obs.code.coding, ABBREVIATION_SYSTEM)?.display ?? "",
           unit: "",
           values: new Map(),
@@ -760,32 +834,43 @@ export function buildLabTimeline(
 // まず保存済みの値のみを持つ簡易オブジェクトとして復元し、編集画面側で
 // hydrateLabResultForm によりマスタ情報を引き直して補完する。
 
-function labItemFromObservation(
+// 施設コードか JLAC11 のどちらも無い Observation は復元できない(null)。
+function resultItemFromObservation(
   obs: fhir4.Observation,
   specimenNames: Map<string, string>,
-): LabItem | null {
-  const jlacCoding = codingBySystem(obs.code.coding, JLAC11_SYSTEM);
-  if (!jlacCoding?.code) return null;
+): LabResultItem | null {
+  const resultItemCoding = codingBySystem(obs.code.coding, RESULT_ITEM_SYSTEM);
+  const jlac11Coding = codingBySystem(obs.code.coding, JLAC11_SYSTEM);
+  if (!resultItemCoding?.code && !jlac11Coding?.code) return null;
   const abbrCoding = codingBySystem(obs.code.coding, ABBREVIATION_SYSTEM);
   const specimenId = obs.specimen?.reference?.split("/").pop();
+  const specimen = specimenId ? specimenNames.get(specimenId) : undefined;
 
   const dataType = obs.valueQuantity ? "PQ" : obs.valueCodeableConcept ? "CD" : "ST";
 
   return {
     id: 0,
-    category_name: null,
-    major_item: null,
-    fhir_item_name: jlacCoding.display ?? obs.code.text ?? null,
-    abbreviation: abbrCoding?.display ?? null,
-    jlac11_specimen: (specimenId && specimenNames.get(specimenId)) || null,
-    jlac11_method: null,
-    jlac11_code: jlacCoding.code,
-    jlac10_code: null,
-    display_unit: obs.valueQuantity?.unit ?? null,
-    xml_unit: obs.valueQuantity?.code ?? null,
+    result_item_code: resultItemCoding?.code ?? "",
+    name: observationItemName(obs),
+    short_name: abbrCoding?.display ?? null,
+    name_kana: null,
+    category: null,
+    // 材料コードは Observation から読めない(Specimen 側にある)ので、材料名だけを表示用に持つ。
+    specimen_code: null,
+    specimen_name: specimen || null,
     data_type: dataType,
+    display_unit: obs.valueQuantity?.unit ?? null,
+    ucum_unit: obs.valueQuantity?.code ?? null,
     code_value_list: null,
-    code_oid: null,
+    value_code_system: null,
+    decimal_places: null,
+    jlac11_code: jlac11Coding?.code ?? null,
+    jlac10_code: codingBySystem(obs.code.coding, JLAC10_SYSTEM)?.code ?? null,
+    loinc_code: null,
+    valid_from: null,
+    valid_to: null,
+    display_order: null,
+    note: null,
   };
 }
 
@@ -807,7 +892,7 @@ export function parseLabResultForm(
   const specimenNames = specimenNamesById(specimens);
   const lines: LabResultLineValues[] = observations.map((obs) => ({
     id: obs.id,
-    item: labItemFromObservation(obs, specimenNames),
+    item: resultItemFromObservation(obs, specimenNames),
     value: lineValueFromObservation(obs),
     interpretation: formInterpretationOf(obs),
   }));
@@ -854,17 +939,24 @@ export function specimenRefsFrom(specimens: fhir4.Specimen[]): SpecimenRef[] {
   });
 }
 
-// 復元した簡易オブジェクトを、マスタから引き直した完全な LabItem で置き換える。
-// マスタに存在しなくなったコードは簡易オブジェクトのまま残す。
+// 復元した簡易オブジェクトを、マスタから引き直した完全な LabResultItem で置き換える。
+// 施設コードで引き、施設コードを持たない骨格(結果項目マスタ導入前の保存済み結果)は
+// JLAC11 で引く(結果項目間で一意とは限らないので先勝ち)。マスタに存在しなくなった
+// コードは簡易オブジェクトのまま残す。
 export function hydrateLabResultForm(
   values: LabResultFormValues,
-  masterItems: LabItem[],
+  masterItems: LabResultItem[],
 ): LabResultFormValues {
-  const byCode = new Map(masterItems.map((item) => [item.jlac11_code, item]));
+  const byCode = new Map(masterItems.map((item) => [item.result_item_code, item]));
+  const aliases = resultItemAliases(masterItems);
   return {
     ...values,
     lines: values.lines.map((line) => {
-      const master = line.item && byCode.get(line.item.jlac11_code);
+      if (!line.item) return line;
+      const code =
+        line.item.result_item_code ||
+        (line.item.jlac11_code ? aliasOf(line.item.jlac11_code, aliases) : "");
+      const master = code ? byCode.get(code) : undefined;
       return master ? { ...line, item: master } : line;
     }),
   };

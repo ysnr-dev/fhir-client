@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLabItemsByCodes } from "../api/masterQueries";
+import { useLabResultItemsByCodes, useLabResultItemsByJlac11Codes } from "../api/masterQueries";
 import { useLabResultDetail } from "../api/queries";
 import {
   hydrateLabResultForm,
@@ -33,20 +33,31 @@ export function useLabResultInitialValues(reportId: string | undefined, patientI
     [split],
   );
 
-  // 保存済みリソースにはコード型の選択肢などマスタ情報が含まれないため、
-  // JLAC11 コードでマスタを引き直してフォーム初期値を補完する。
-  const codes = useMemo(
-    () =>
-      parsed?.lines
-        .map((line) => line.item?.jlac11_code)
-        .filter((code): code is string => Boolean(code)) ?? [],
-    [parsed],
-  );
-  const masterItems = useLabItemsByCodes(codes);
+  // 保存済みリソースにはコード型の選択肢などマスタ情報が含まれないため、結果項目コードで
+  // マスタを引き直してフォーム初期値を補完する。結果項目マスタ導入前の保存済み結果
+  // (施設コードが無く JLAC11 だけ)は JLAC11 で引く。
+  const { codes, jlac11Codes } = useMemo(() => {
+    const codes: string[] = [];
+    const jlac11Codes: string[] = [];
+    for (const line of parsed?.lines ?? []) {
+      if (!line.item) continue;
+      if (line.item.result_item_code) codes.push(line.item.result_item_code);
+      else if (line.item.jlac11_code) jlac11Codes.push(line.item.jlac11_code);
+    }
+    return { codes, jlac11Codes };
+  }, [parsed]);
+  const masterItems = useLabResultItemsByCodes(codes);
+  const legacyItems = useLabResultItemsByJlac11Codes(jlac11Codes);
 
   const initialValues = useMemo(
-    () => (parsed ? hydrateLabResultForm(parsed, masterItems.data?.items ?? []) : undefined),
-    [parsed, masterItems.data],
+    () =>
+      parsed
+        ? hydrateLabResultForm(parsed, [
+            ...(masterItems.data?.items ?? []),
+            ...(legacyItems.data?.items ?? []),
+          ])
+        : undefined,
+    [parsed, masterItems.data, legacyItems.data],
   );
 
   const patientMismatch = isPatientMismatch(patientId, split.report?.subject);
@@ -55,7 +66,7 @@ export function useLabResultInitialValues(reportId: string | undefined, patientI
     ...split,
     initialValues: patientMismatch ? undefined : initialValues,
     // マスタ照会の完了(またはエラー)を待ってからフォームを初期化する。
-    ready: !detail.isLoading && !masterItems.isLoading,
+    ready: !detail.isLoading && !masterItems.isLoading && !legacyItems.isLoading,
     patientMismatch,
     error:
       detail.error ??

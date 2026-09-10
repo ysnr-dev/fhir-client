@@ -4,7 +4,7 @@ import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { PRIORITY_OPTIONS, categoryCoding, displayOf, itemNumber, orderComment, orderDay, parentRequestId, registrationAuthoredOn } from "./shared";
 
 export { PRIORITY_OPTIONS };
-import { ABBREVIATION_SYSTEM, JLAC11_SPECIMEN_SYSTEM, JLAC11_SYSTEM } from "./labResultHelpers";
+import { ABBREVIATION_SYSTEM, JLAC10_SYSTEM, JLAC11_SPECIMEN_SYSTEM, JLAC11_SYSTEM } from "./labResultHelpers";
 import {
   ORDER_TYPE_SYSTEM,
   SETTING_OPTIONS,
@@ -36,8 +36,6 @@ export const LAB_ORDER_TYPE = { code: "lab", display: "検体検査" };
 
 // 検査項目コード(検体検査オーダー項目マスタの独自コード)。
 const ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/lab-order-item";
-// JLAC10 コード。JLAC11(labResultHelpers)と同じくローカル URI。
-const JLAC10_SYSTEM = "http://fhir-client.local/CodeSystem/jlac10";
 // 採取管。施設ごとのマスタなのでローカル URI。
 const CONTAINER_SYSTEM = "http://fhir-client.local/CodeSystem/lab-container";
 

@@ -16,6 +16,7 @@ import { LabContainerPage } from "./pages/LabContainerPage";
 import { SchemaMasterPage } from "./pages/SchemaMasterPage";
 import { LabOrderItemLayoutPage } from "./pages/LabOrderItemLayoutPage";
 import { LabOrderItemPage } from "./pages/LabOrderItemPage";
+import { LabResultItemPage } from "./pages/LabResultItemPage";
 import { LabSpecimenPage } from "./pages/LabSpecimenPage";
 import { RadItemLayoutPage } from "./pages/RadItemLayoutPage";
 import { RadItemPage } from "./pages/RadItemPage";
@@ -293,6 +294,9 @@ function App() {
               <Link to="/lab-order-items" className="row-menu__item">
                 検査オーダー項目
               </Link>
+              <Link to="/lab-result-items" className="row-menu__item">
+                検査結果項目
+              </Link>
               <Link to="/lab-order-item-layouts" className="row-menu__item">
                 検査オーダーレイアウト
               </Link>
@@ -557,6 +561,7 @@ function App() {
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />
+          <Route path="/lab-result-items" element={<LabResultItemPage />} />
           <Route path="/lab-order-item-layouts" element={<LabOrderItemLayoutPage />} />
           <Route path="/lab-specimens" element={<LabSpecimenPage />} />
           <Route path="/lab-containers" element={<LabContainerPage />} />

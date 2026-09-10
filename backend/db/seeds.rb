@@ -172,6 +172,13 @@ else
   puts "master_lab_panel_items: #{lab_panel_items_csv} not found, skipped"
 end
 
+# 結果項目と、オーダー項目 → 結果項目の対応。同梱 CSV(多結果項目の分解)を入れてから、
+# 単項目オーダー項目 1 件につき同じコードの結果項目を作って 1:1 で対応づける。
+# 既存行は上書きしない(migration からも同じ処理を呼ぶ)。
+derivation = Master::LabResultItemDerivation.call
+puts "master_lab_result_items: csv #{derivation.csv_items} items / #{derivation.csv_mappings} mappings, " \
+     "derived #{derivation.created} items / #{derivation.mapped} mappings (kept #{derivation.kept})"
+
 # 伝票は layout_name ごとに作り、行数・列数はマスの最大位置から決める(部門オーダーと同じ)。
 lab_layout_cells_csv = Rails.root.join("db/seed_data/lab_order_item_layout_cells.csv")
 if File.exist?(lab_layout_cells_csv)

@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { MedicineDoseConversionMap } from "../fhir/doseConversionHelpers";
+import { jlac11AliasKey } from "../fhir/labResultHelpers";
 import {
   copyOrderSet,
   createOrderSet,
@@ -68,6 +69,17 @@ import {
   updateLabPanelItem,
   updateLabSpecimen,
   updateMedicineDoseConversion,
+  createLabOrderItemResult,
+  createLabResultItem,
+  deleteLabOrderItemResult,
+  deleteLabResultItem,
+  fetchLabResultItem,
+  searchLabOrderItemResults,
+  searchLabResultItems,
+  updateLabOrderItemResult,
+  updateLabResultItem,
+  type LabOrderItemResultPayload,
+  type LabResultItemPayload,
   type LabContainerPayload,
   type LabItemDrilldown,
   type LabPanelItem,
@@ -696,38 +708,12 @@ export function useMedicineDoseFactors(medicineCodes: string[]) {
   });
 }
 
-// 検査結果の編集画面用。保存済みの JLAC11 コードからマスタ情報
-// (コード型の選択肢など)を一括で引き直す。
-export function useLabItemsByCodes(codes: string[]) {
-  return useQuery({
-    queryKey: ["master", "lab_items", "by_codes", codes],
-    queryFn: () => searchLabItems({ jlac11_code: codes.join(","), per: 100 }),
-    staleTime: Infinity,
-    enabled: codes.length > 0,
-  });
-}
-
-// 検体検査オーダーから検査結果の項目を展開する用。オーダー項目マスタの JLAC コードは
-// JLAC11・JLAC10 のどちらの体系でも持てるため、体系ごとに引いて結果をまとめる。
-export function useLabItemsByJlacCodes(jlac11Codes: string[], jlac10Codes: string[]) {
-  return useQuery({
-    queryKey: ["master", "lab_items", "by_jlac_codes", jlac11Codes, jlac10Codes],
-    queryFn: async () => {
-      const results = await Promise.all([
-        jlac11Codes.length ? searchLabItems({ jlac11_code: jlac11Codes.join(","), per: 100 }) : null,
-        jlac10Codes.length ? searchLabItems({ jlac10_code: jlac10Codes.join(","), per: 100 }) : null,
-      ]);
-      return results.flatMap((result) => result?.items ?? []);
-    },
-    staleTime: Infinity,
-    enabled: jlac11Codes.length > 0 || jlac10Codes.length > 0,
-  });
-}
 
 // 検体検査オーダーのマスタ群 ------------------------------------------------
 
 // オーダー項目・パネル構成は同じ詳細画面で同時に変わるのでまとめて破棄する。
 const LAB_ORDER_ITEMS_KEY = ["master", "lab_order_items"];
+const LAB_RESULT_ITEMS_KEY = ["master", "lab_result_items"];
 const LAB_SPECIMENS_KEY = ["master", "lab_specimens"];
 const LAB_CONTAINERS_KEY = ["master", "lab_containers"];
 const LAB_LAYOUTS_KEY = ["master", "lab_order_item_layouts"];
@@ -808,6 +794,138 @@ export function useLabPanelItemMutations() {
     }),
     remove: useMutation({
       mutationFn: (id: number) => deleteLabPanelItem(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+// 検体検査の結果項目(施設マスタ) ----------------------------------------------
+
+export interface LabResultItemFilters {
+  name?: string;
+  category?: string;
+  data_type?: string;
+  active?: boolean;
+}
+
+export function useLabResultItemSearch(filters: LabResultItemFilters, page: number, enabled = true) {
+  return useQuery({
+    queryKey: [...LAB_RESULT_ITEMS_KEY, "list", filters, page],
+    queryFn: () =>
+      searchLabResultItems({
+        name: filters.name || undefined,
+        category: filters.category || undefined,
+        data_type: filters.data_type || undefined,
+        active: filters.active || undefined,
+        page,
+        per: 20,
+      }),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
+}
+
+// 材料名と、この項目を返すオーダー項目を添えた詳細(編集モーダル用)。
+export function useLabResultItem(idOrCode: string | number | null) {
+  return useQuery({
+    queryKey: [...LAB_RESULT_ITEMS_KEY, "detail", idOrCode],
+    queryFn: () => fetchLabResultItem(idOrCode as string | number),
+    enabled: idOrCode !== null,
+  });
+}
+
+export function useLabResultItemMutations() {
+  const queryClient = useQueryClient();
+  // 対応表はオーダー項目詳細にも入れ子で返るため、両方のキーを破棄する。
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: LAB_RESULT_ITEMS_KEY });
+    queryClient.invalidateQueries({ queryKey: LAB_ORDER_ITEMS_KEY });
+  };
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: LabResultItemPayload) => createLabResultItem(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: LabResultItemPayload }) =>
+        updateLabResultItem(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteLabResultItem(id),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+  };
+}
+
+// 検査結果の編集画面用。保存済みの結果項目コードからマスタ情報
+// (コード型の選択肢など)を一括で引き直す。1 レポートぶんを 1 回で引く。
+export function useLabResultItemsByCodes(codes: string[]) {
+  const sorted = Array.from(new Set(codes)).sort();
+
+  return useQuery({
+    queryKey: [...LAB_RESULT_ITEMS_KEY, "by_codes", sorted],
+    queryFn: () => searchLabResultItems({ result_item_code: sorted.join(","), per: 500 }),
+    staleTime: Infinity,
+    enabled: sorted.length > 0,
+  });
+}
+
+// 結果項目マスタを導入する前に登録した検査結果(Observation.code が JLAC11 だけ)から
+// 結果項目を引き当てる用。保存済みの 17 桁は試薬・機器単位で、マスタの代表コードとは
+// 測定法・結果単位が違うことが多いので、測定物・識別・材料の 12 桁の前方一致で引く。
+// 引き当て(どの結果項目に読み替えるか)は使う側の resultItemAliases が決める。
+export function useLabResultItemsByJlac11Codes(codes: string[]) {
+  const prefixes = Array.from(new Set(codes.map(jlac11AliasKey).filter(Boolean))).sort();
+
+  return useQuery({
+    queryKey: [...LAB_RESULT_ITEMS_KEY, "by_jlac11", prefixes],
+    queryFn: () => searchLabResultItems({ jlac11_prefix: prefixes.join(","), per: 500 }),
+    staleTime: Infinity,
+    enabled: prefixes.length > 0,
+  });
+}
+
+// オーダー項目 → 結果項目の対応(結果項目を入れ子で持つ)。検体検査オーダーから
+// 検査結果の項目を展開するときに、オーダーの項目コードをまとめて引く。
+export function useLabOrderItemResults(orderItemCodes: string[]) {
+  const sorted = Array.from(new Set(orderItemCodes)).sort();
+
+  return useQuery({
+    queryKey: [...LAB_RESULT_ITEMS_KEY, "order_item_results", sorted],
+    queryFn: () => searchLabOrderItemResults({ order_item_code: sorted.join(","), per: 500 }),
+    staleTime: Infinity,
+    enabled: sorted.length > 0,
+  });
+}
+
+export function useLabOrderItemResultMutations() {
+  const queryClient = useQueryClient();
+  // 対応表はオーダー項目詳細と結果項目詳細の両方に添えて返るため、両方のキーを破棄する。
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: LAB_ORDER_ITEMS_KEY });
+    queryClient.invalidateQueries({ queryKey: LAB_RESULT_ITEMS_KEY });
+  };
+
+  return {
+    create: useMutation({
+      mutationFn: (payload: LabOrderItemResultPayload) => createLabOrderItemResult(payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    update: useMutation({
+      mutationFn: ({ id, payload }: { id: number; payload: Partial<LabOrderItemResultPayload> }) =>
+        updateLabOrderItemResult(id, payload),
+      retry: false,
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: (id: number) => deleteLabOrderItemResult(id),
       retry: false,
       onSuccess: invalidate,
     }),

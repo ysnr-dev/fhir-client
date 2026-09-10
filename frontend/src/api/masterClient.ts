@@ -669,6 +669,8 @@ export interface LabOrderItemDetail extends LabOrderItem {
   // 項目の採取管指定が優先、無ければ検体の既定採取管。
   container: LabContainer | null;
   panel_items: LabPanelItem[];
+  // この項目が返す結果項目(オーダー項目 → 結果項目の対応、結果項目を入れ子で持つ)。
+  result_items: LabOrderItemResult[];
 }
 
 export interface LabOrderItemPayload {
@@ -694,6 +696,93 @@ export interface LabPanelItemPayload {
   panel_item_code: string;
   member_item_code: string;
   member_type?: string;
+  display_order?: number | null;
+  note?: string | null;
+}
+
+// 検体検査の結果項目(施設マスタ)。検査結果として返ってくる単位で、結果値を表現する
+// ための属性(データ型・単位・選択肢)を持つ。JLAC11 / JLAC10 / LOINC は任意の属性。
+export interface LabResultItem {
+  id: number;
+  result_item_code: string;
+  name: string;
+  short_name: string | null;
+  name_kana: string | null;
+  // 検査分野(生化学検査 / 血液学的検査 など)。オーダー項目と同じ語彙。
+  category: string | null;
+  // 材料(master_lab_specimens.specimen_code)。結果の Specimen はこの値で作る。
+  specimen_code: string | null;
+  // 材料名。一覧・詳細 API が検体マスタから添える。
+  specimen_name?: string | null;
+  // PQ:数値型、CD:大小順序のないコード型、CO:大小順序のあるコード型、ST:文字列型
+  data_type: string;
+  display_unit: string | null;
+  // UCUM 単位。Observation.valueQuantity.code に入れる。
+  ucum_unit: string | null;
+  // コード型の選択肢。「1：陽性、2：陰性」のような区切り文字列
+  code_value_list: string | null;
+  // コード型の値の CodeSystem URL
+  value_code_system: string | null;
+  decimal_places: number | null;
+  jlac11_code: string | null;
+  jlac10_code: string | null;
+  loinc_code: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  display_order: number | null;
+  note: string | null;
+}
+
+// この結果項目を返すオーダー項目。詳細 API がオーダー項目マスタから名称を添える。
+export interface LabResultItemOrderRef {
+  id: number;
+  order_item_code: string;
+  result_item_code: string;
+  order_item_name?: string | null;
+  order_item_kind?: string | null;
+}
+
+export interface LabResultItemDetail extends LabResultItem {
+  specimen_name: string | null;
+  order_items: LabResultItemOrderRef[];
+}
+
+export interface LabResultItemPayload {
+  result_item_code?: string;
+  name?: string;
+  short_name?: string | null;
+  name_kana?: string | null;
+  category?: string | null;
+  specimen_code?: string | null;
+  data_type?: string;
+  display_unit?: string | null;
+  ucum_unit?: string | null;
+  code_value_list?: string | null;
+  value_code_system?: string | null;
+  decimal_places?: number | null;
+  jlac11_code?: string | null;
+  jlac10_code?: string | null;
+  loinc_code?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  display_order?: number | null;
+  note?: string | null;
+}
+
+// オーダー項目 → 結果項目の対応(1:N)。result_item は一覧・詳細 API が入れ子で添える
+// (結果項目がマスタから消えていれば null)。
+export interface LabOrderItemResult {
+  id: number;
+  order_item_code: string;
+  result_item_code: string;
+  display_order: number | null;
+  note: string | null;
+  result_item: LabResultItem | null;
+}
+
+export interface LabOrderItemResultPayload {
+  order_item_code: string;
+  result_item_code: string;
   display_order?: number | null;
   note?: string | null;
 }
@@ -877,6 +966,126 @@ export async function updateLabPanelItem(
 
 export async function deleteLabPanelItem(id: number): Promise<void> {
   const res = await masterFetch(`/master/lab_panel_items/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+const LAB_RESULT_ITEMS_PATH = "/master/lab_result_items";
+const LAB_ORDER_ITEM_RESULTS_PATH = "/master/lab_order_item_results";
+
+export async function searchLabResultItems(params: {
+  name?: string;
+  /** 結果項目コード・JLAC コード。いずれもカンマ区切りで複数指定できる。 */
+  result_item_code?: string;
+  jlac11_code?: string;
+  /** JLAC11 の前方一致(測定物・識別・材料の 12 桁)。カンマ区切りで複数指定できる。 */
+  jlac11_prefix?: string;
+  jlac10_code?: string;
+  category?: string;
+  specimen_code?: string;
+  data_type?: string;
+  /** true なら今日使える項目(有効期間内)だけ。 */
+  active?: boolean;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<LabResultItem>> {
+  const search = new URLSearchParams();
+  if (params.name) search.set("name", params.name);
+  if (params.result_item_code) search.set("result_item_code", params.result_item_code);
+  if (params.jlac11_code) search.set("jlac11_code", params.jlac11_code);
+  if (params.jlac11_prefix) search.set("jlac11_prefix", params.jlac11_prefix);
+  if (params.jlac10_code) search.set("jlac10_code", params.jlac10_code);
+  if (params.category) search.set("category", params.category);
+  if (params.specimen_code) search.set("specimen_code", params.specimen_code);
+  if (params.data_type) search.set("data_type", params.data_type);
+  if (params.active) search.set("active", "true");
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${LAB_RESULT_ITEMS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<LabResultItem>;
+}
+
+// 材料名と、この項目を返すオーダー項目を添えた詳細。結果項目コードでも id でも引ける。
+export async function fetchLabResultItem(idOrCode: string | number): Promise<LabResultItemDetail> {
+  const res = await masterFetch(`${LAB_RESULT_ITEMS_PATH}/${encodeURIComponent(String(idOrCode))}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as LabResultItemDetail;
+}
+
+export async function createLabResultItem(payload: LabResultItemPayload): Promise<LabResultItem> {
+  const res = await masterFetch(LAB_RESULT_ITEMS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as LabResultItem;
+}
+
+export async function updateLabResultItem(
+  id: number,
+  payload: LabResultItemPayload,
+): Promise<LabResultItem> {
+  const res = await masterFetch(`${LAB_RESULT_ITEMS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as LabResultItem;
+}
+
+export async function deleteLabResultItem(id: number): Promise<void> {
+  const res = await masterFetch(`${LAB_RESULT_ITEMS_PATH}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+export async function searchLabOrderItemResults(params: {
+  /** オーダー項目コード・結果項目コード。いずれもカンマ区切りで複数指定できる。 */
+  order_item_code?: string;
+  result_item_code?: string;
+  page?: number;
+  per?: number;
+}): Promise<MasterSearchResult<LabOrderItemResult>> {
+  const search = new URLSearchParams();
+  if (params.order_item_code) search.set("order_item_code", params.order_item_code);
+  if (params.result_item_code) search.set("result_item_code", params.result_item_code);
+  if (params.page) search.set("page", String(params.page));
+  if (params.per) search.set("per", String(params.per));
+
+  const res = await masterFetch(`${LAB_ORDER_ITEM_RESULTS_PATH}?${search.toString()}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as MasterSearchResult<LabOrderItemResult>;
+}
+
+export async function createLabOrderItemResult(
+  payload: LabOrderItemResultPayload,
+): Promise<LabOrderItemResult> {
+  const res = await masterFetch(LAB_ORDER_ITEM_RESULTS_PATH, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as LabOrderItemResult;
+}
+
+export async function updateLabOrderItemResult(
+  id: number,
+  payload: Partial<LabOrderItemResultPayload>,
+): Promise<LabOrderItemResult> {
+  const res = await masterFetch(`${LAB_ORDER_ITEM_RESULTS_PATH}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as LabOrderItemResult;
+}
+
+export async function deleteLabOrderItemResult(id: number): Promise<void> {
+  const res = await masterFetch(`${LAB_ORDER_ITEM_RESULTS_PATH}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
 

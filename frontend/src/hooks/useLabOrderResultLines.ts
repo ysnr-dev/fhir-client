@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import type { LabItem } from "../api/masterClient";
-import { useLabItemsByJlacCodes } from "../api/masterQueries";
+import type { LabOrderItemResult } from "../api/masterClient";
+import { useLabOrderItemResults } from "../api/masterQueries";
 import { useLabOrderDetail } from "../api/queries";
 import {
   labOrderItemRequests,
@@ -8,25 +8,25 @@ import {
   serviceRequestsOf,
   type LabOrderItemLine,
 } from "../fhir/labOrderHelpers";
-import { emptyLabResultLine, type LabResultLineValues } from "../fhir/labResultHelpers";
+import { emptyLabResultLine, lineKeyOf, type LabResultLineValues } from "../fhir/labResultHelpers";
 
-/** オーダーから展開した行。検査項目マスタを引き当てられた行だけを作るので item は必ず入る。 */
+// 検体検査オーダーの検査項目を、検査結果フォームの行(結果項目)に展開する。
+// オーダー項目 → 結果項目の対応表(結果項目マスタ)で引く。1 つのオーダー項目が
+// 複数の結果を返す(血液ガス分析 → pH・PCO2…)ときは、その数だけ行になる。
+
 export interface ExpandedResultLine extends LabResultLineValues {
-  item: LabItem;
+  item: NonNullable<LabResultLineValues["item"]>;
 }
 
 /**
- * 検体検査オーダーの検査項目を、検査結果フォームの行に展開する。
- *
- * オーダー項目マスタの JLAC コードで検査項目マスタ(検査結果側)を引き当てるので、
- * オーダー項目に JLAC コードが入っていない項目は展開できない。展開できなかった
- * 項目は unmatchedNames で返し、呼び出し側で「手で足してほしい」旨を伝える。
+ * @returns lines: 展開した結果行(オーダーの項目順、同じオーダー項目内は対応表の並び順)。
+ *          unmatchedNames: 対応する結果項目が無いオーダー項目の名前(手入力を促すため)。
  */
 export function useLabOrderResultLines(orderId: string | undefined) {
   const detail = useLabOrderDetail(orderId);
 
   // 結果値を入力する単位になる項目(= 構成項目を持たない項目)だけを対象にする。
-  // パネル検査そのものは結果を持たず、その構成項目が結果の 1 行になる。
+  // パネル検査そのものは結果を持たず、その構成項目が結果の行になる。
   const items = useMemo(() => {
     const bundle = detail.data?.data;
     if (!bundle || !orderId) return [];
@@ -39,64 +39,55 @@ export function useLabOrderResultLines(orderId: string | undefined) {
     return all.filter((item) => !panelCodes.has(item.code));
   }, [detail.data, orderId]);
 
-  const jlac11Codes = useMemo(() => codesOf(items, "jlac11"), [items]);
-  const jlac10Codes = useMemo(() => codesOf(items, "jlac10"), [items]);
-  const masterItems = useLabItemsByJlacCodes(jlac11Codes, jlac10Codes);
+  const codes = useMemo(() => items.map((item) => item.code).filter(Boolean), [items]);
+  const mappings = useLabOrderItemResults(codes);
 
   const expansion = useMemo(
-    () => expand(items, masterItems.data ?? []),
-    [items, masterItems.data],
+    () => expand(items, mappings.data?.items ?? []),
+    [items, mappings.data],
   );
 
   return {
     ...expansion,
-    // マスタ照会の完了(またはエラー)を待ってから展開結果を使う。
-    ready: Boolean(orderId) && !detail.isLoading && !masterItems.isLoading,
-    error: detail.error ?? masterItems.error ?? undefined,
+    // 対応表の照会の完了(またはエラー)を待ってから展開結果を使う。
+    ready: Boolean(orderId) && !detail.isLoading && !mappings.isLoading,
+    error: detail.error ?? mappings.error ?? undefined,
   };
-}
-
-/** 指定のコード体系でオーダーされた項目の JLAC コード(重複なし)。 */
-function codesOf(items: LabOrderItemLine[], system: "jlac11" | "jlac10"): string[] {
-  const codes = items
-    .filter((item) => item.jlacCode && systemOf(item) === system)
-    .map((item) => item.jlacCode);
-  return [...new Set(codes)];
-}
-
-// コード体系が空のオーダー項目(JLAC コード自体も空)はここへ来ない。
-function systemOf(item: LabOrderItemLine): string {
-  return item.jlacCodeSystem === "jlac10" ? "jlac10" : "jlac11";
 }
 
 function expand(
   items: LabOrderItemLine[],
-  masterItems: LabItem[],
+  mappings: LabOrderItemResult[],
 ): { lines: ExpandedResultLine[]; unmatchedNames: string[] } {
-  const byJlac11 = new Map<string, LabItem>();
-  const byJlac10 = new Map<string, LabItem>();
-  for (const item of masterItems) {
-    // JLAC10 コードはマスタ上で一意ではないので、収載順で先に来たものを採る。
-    if (!byJlac11.has(item.jlac11_code)) byJlac11.set(item.jlac11_code, item);
-    if (item.jlac10_code && !byJlac10.has(item.jlac10_code)) byJlac10.set(item.jlac10_code, item);
+  const byOrderCode = new Map<string, LabOrderItemResult[]>();
+  for (const mapping of mappings) {
+    const list = byOrderCode.get(mapping.order_item_code);
+    if (list) list.push(mapping);
+    else byOrderCode.set(mapping.order_item_code, [mapping]);
   }
+  const byDisplayOrder = (a: LabOrderItemResult, b: LabOrderItemResult) =>
+    (a.display_order ?? Infinity) - (b.display_order ?? Infinity) || a.id - b.id;
 
   const lines: ExpandedResultLine[] = [];
   const unmatchedNames: string[] = [];
   const added = new Set<string>();
 
   for (const item of items) {
-    const master = item.jlacCode
-      ? (systemOf(item) === "jlac10" ? byJlac10 : byJlac11).get(item.jlacCode)
-      : undefined;
-    if (!master) {
+    // 対応表の行はあるが結果項目がマスタから消えている場合も「対応なし」に数える。
+    const resultItems = (byOrderCode.get(item.code) ?? [])
+      .sort(byDisplayOrder)
+      .flatMap((mapping) => (mapping.result_item ? [mapping.result_item] : []));
+    if (resultItems.length === 0) {
       unmatchedNames.push(item.name);
       continue;
     }
-    // 同じ検査項目が複数のパネルに入っていても結果は 1 行。
-    if (added.has(master.jlac11_code)) continue;
-    added.add(master.jlac11_code);
-    lines.push({ ...emptyLabResultLine, item: master });
+    for (const resultItem of resultItems) {
+      // 同じ結果項目が複数のオーダー項目から返っても結果は 1 行。
+      const key = lineKeyOf(resultItem);
+      if (added.has(key)) continue;
+      added.add(key);
+      lines.push({ ...emptyLabResultLine, item: resultItem });
+    }
   }
 
   return { lines, unmatchedNames };

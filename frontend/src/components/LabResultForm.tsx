@@ -1,7 +1,7 @@
 import { makeFieldUpdater } from "../lib/form";
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useSelfDepartments, type LabOrderCandidate } from "../api/queries";
-import type { LabItem } from "../api/masterClient";
+import type { LabResultItem } from "../api/masterClient";
 import {
   useLabOrderResultLines,
   type ExpandedResultLine,
@@ -10,6 +10,7 @@ import {
   emptyLabResultForm,
   emptyLabResultLine,
   INTERPRETATION_OPTIONS,
+  lineKeyOf,
   parseCodeValueList,
   SETTING_OPTIONS,
   type LabInterpretation,
@@ -18,7 +19,7 @@ import {
   type LabResultSetting,
 } from "../fhir/labResultHelpers";
 import { ErrorBanner } from "./ErrorBanner";
-import { LabItemSearchModal } from "./LabItemSearchModal";
+import { LabResultItemSearchModal } from "./LabResultItemSearchModal";
 
 interface LabResultFormProps {
   initialValues?: LabResultFormValues;
@@ -47,17 +48,17 @@ function mergeExpandedLines(
   current: LabResultLineValues[],
   expanded: ExpandedResultLine[],
 ): LabResultLineValues[] {
-  const currentByCode = new Map(
-    current.flatMap((line) => (line.item ? [[line.item.jlac11_code, line] as const] : [])),
+  const currentByKey = new Map(
+    current.flatMap((line) => (line.item ? [[lineKeyOf(line.item), line] as const] : [])),
   );
-  const expandedCodes = new Set(expanded.map((line) => line.item.jlac11_code));
+  const expandedKeys = new Set(expanded.map((line) => lineKeyOf(line.item)));
 
   const merged = expanded.map((line) => {
-    const existing = currentByCode.get(line.item.jlac11_code);
+    const existing = currentByKey.get(lineKeyOf(line.item));
     return existing ? { ...existing, item: line.item } : line;
   });
   const kept = current.filter(
-    (line) => line.item && line.value && !expandedCodes.has(line.item.jlac11_code),
+    (line) => line.item && line.value && !expandedKeys.has(lineKeyOf(line.item)),
   );
 
   return [...merged, ...kept];
@@ -120,7 +121,7 @@ function expandNoticeOf(lineCount: number, unmatchedNames: string[]): string | n
     unmatchedNames.length > NOTICE_NAME_COUNT
       ? ` 他${unmatchedNames.length - NOTICE_NAME_COUNT}件`
       : "";
-  return `${expanded}JLACコードから検査項目マスタを引けなかったため、次の項目は展開していません: ${shown}${rest}`;
+  return `${expanded}対応する結果項目が無いため、次の項目は展開していません: ${shown}${rest}`;
 }
 
 export function LabResultForm({
@@ -178,7 +179,7 @@ export function LabResultForm({
     setValues((v) => ({ ...v, lines: v.lines.filter((_, i) => i !== lineIndex) }));
   }
 
-  // オーダーを選び直したら、その JLAC コードから検査項目を展開し直す。
+  // オーダーを選び直したら、オーダー項目 → 結果項目の対応表で検査項目を展開し直す。
   // 診療科はオーダーの依頼科を採用する(オーダーと違う科の結果にならないよう、
   // 紐付けている間は選び直せない)。
   function handleOrderChange(orderId: string) {
@@ -203,7 +204,7 @@ export function LabResultForm({
     }));
   }
 
-  function handleItemSelect(item: LabItem) {
+  function handleItemSelect(item: LabResultItem) {
     if (!modal) return;
     // データタイプ・選択肢が変わるため、項目を変更したら結果値はクリアする。
     updateLine(modal.lineIndex, { item, value: "" });
@@ -373,14 +374,14 @@ export function LabResultForm({
                       {line.item ? "変更" : "選択"}
                     </button>
                     {line.item ? (
-                      <span className="rp-card__medicine-name">{line.item.fhir_item_name}</span>
+                      <span className="rp-card__medicine-name">{line.item.name}</span>
                     ) : (
                       <span className="rp-card__usage-value--empty">未選択</span>
                     )}
                   </div>
                 </td>
-                <td>{line.item?.abbreviation ?? "-"}</td>
-                <td>{line.item?.jlac11_specimen ?? "-"}</td>
+                <td>{line.item?.short_name ?? "-"}</td>
+                <td>{line.item?.specimen_name ?? "-"}</td>
                 <td>
                   <div className="lab-result-form__value-cell">
                     <ResultValueInput
@@ -434,7 +435,7 @@ export function LabResultForm({
       </div>
 
       {modal && (
-        <LabItemSearchModal onSelect={handleItemSelect} onClose={() => setModal(null)} />
+        <LabResultItemSearchModal onSelect={handleItemSelect} onClose={() => setModal(null)} />
       )}
     </form>
   );

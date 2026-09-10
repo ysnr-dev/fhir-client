@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLabItemsByCodes } from "../api/masterQueries";
+import { useLabResultItemsByCodes, useLabResultItemsByJlac11Codes } from "../api/masterQueries";
 import { useLabOrderDetail, useLabResultDetail } from "../api/queries";
 import {
   labOrderItemRequests,
@@ -9,9 +9,11 @@ import {
 } from "../fhir/labOrderHelpers";
 import {
   interpretationClass,
-  labJlac11CodeOf,
+  labResultItemCodeOf,
   labTimelineKeyOf,
+  legacyJlac11CodesOf,
   observationLineDisplay,
+  resultItemAliases,
   specimenNamesById,
   splitLabResultDetailBundle,
   summarizeDiagnosticReport,
@@ -43,7 +45,7 @@ function useLabOrderLabel(orderId: string | undefined): string {
   );
 }
 
-// 検査分野が引けなかった項目(JLAC11 コードなし・マスタに無いコード)のまとめ先。
+// 検査分野が引けなかった項目(結果項目コードなし・マスタに無いコード)のまとめ先。
 const UNKNOWN_CATEGORY = "その他";
 
 interface LabResultCategoryGroup {
@@ -52,15 +54,17 @@ interface LabResultCategoryGroup {
 }
 
 // 検査項目を検査分野(生化学検査・血液学的検査など)ごとにまとめる。分野は Observation
-// には持たないので、JLAC11 コードで引いた共有項目JLACコードマスタの区分名称を使う。
+// には持たないので、結果項目コードで引いた結果項目マスタの検査分野を使う(結果項目マスタ
+// 導入前の保存済み結果は JLAC11 で読み替える)。
 // 分野の並びはマスタ画面の選択肢と揃え、そこに無い分野は末尾に置く。
 function groupByCategory(
   observations: fhir4.Observation[],
-  categoryByCode: Map<string, string>,
+  categoryByKey: Map<string, string>,
+  aliases: Map<string, string>,
 ): LabResultCategoryGroup[] {
   const groups = new Map<string, fhir4.Observation[]>();
   for (const obs of observations) {
-    const category = categoryByCode.get(labJlac11CodeOf(obs)) || UNKNOWN_CATEGORY;
+    const category = categoryByKey.get(labTimelineKeyOf(obs, aliases)) || UNKNOWN_CATEGORY;
     const list = groups.get(category);
     if (list) list.push(obs);
     else groups.set(category, [obs]);
@@ -104,27 +108,34 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
   // 時系列表示は患者単位の検索なので、レポートの subject から患者 id を引く。
   const patientId = report?.subject?.reference?.split("/").pop() ?? "";
 
-  // 検査分野でグループ化するため、項目の JLAC11 コードでマスタを引き直す。
-  const jlac11Codes = useMemo(
-    () => [...new Set(observations.map(labJlac11CodeOf).filter(Boolean))],
+  // 検査分野でグループ化するため、項目の結果項目コードでマスタを引き直す。
+  // 結果項目マスタ導入前の保存済み結果(施設コード無し)は JLAC11 で引いて読み替える。
+  const resultItemCodes = useMemo(
+    () => [...new Set(observations.map(labResultItemCodeOf).filter(Boolean))],
     [observations],
   );
-  const masterItems = useLabItemsByCodes(jlac11Codes);
-  const categoryByCode = useMemo(() => {
+  const legacyCodes = useMemo(() => legacyJlac11CodesOf(observations), [observations]);
+  const masterItems = useLabResultItemsByCodes(resultItemCodes);
+  const legacyItems = useLabResultItemsByJlac11Codes(legacyCodes);
+  const aliases = useMemo(
+    () => resultItemAliases(legacyItems.data?.items ?? []),
+    [legacyItems.data],
+  );
+  const categoryByKey = useMemo(() => {
     const map = new Map<string, string>();
-    for (const item of masterItems.data?.items ?? []) {
-      if (item.category_name) map.set(item.jlac11_code, item.category_name);
+    for (const item of [...(masterItems.data?.items ?? []), ...(legacyItems.data?.items ?? [])]) {
+      if (item.category) map.set(`item:${item.result_item_code}`, item.category);
     }
     return map;
-  }, [masterItems.data]);
+  }, [masterItems.data, legacyItems.data]);
 
   // マスタ照会中は分野が決まらないので、見出しを出さずに登録順のまま並べる。
   const groups = useMemo(
     () =>
-      masterItems.isLoading
+      masterItems.isLoading || legacyItems.isLoading
         ? [{ category: "", observations }]
-        : groupByCategory(observations, categoryByCode),
-    [masterItems.isLoading, observations, categoryByCode],
+        : groupByCategory(observations, categoryByKey, aliases),
+    [masterItems.isLoading, legacyItems.isLoading, observations, categoryByKey, aliases],
   );
 
   // コピーは画面に見えている並び(分野ごと)に合わせる。
@@ -135,9 +146,10 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
         .filter((obs) => obs.id && checkedIds.has(obs.id)),
     [groups, checkedIds],
   );
+  // 時系列表示と同じ読み替え(JLAC11 → 結果項目コード)でキーを作る。
   const timelineKeys = useMemo(
-    () => new Set(checkedObservations.map(labTimelineKeyOf)),
-    [checkedObservations],
+    () => new Set(checkedObservations.map((obs) => labTimelineKeyOf(obs, aliases))),
+    [checkedObservations, aliases],
   );
 
   function toggleChecked(id: string) {
