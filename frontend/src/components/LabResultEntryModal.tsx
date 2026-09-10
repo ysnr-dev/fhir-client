@@ -4,6 +4,7 @@ import { useCreateLabResult, type LabWorklistRow } from "../api/queries";
 import { labOrderItems, labOrderLabel, summarizeLabOrder } from "../fhir/labOrderHelpers";
 import {
   emptyLabResultForm,
+  labResultSubjectOf,
   type LabResultFormValues,
   type LabResultSetting,
 } from "../fhir/labResultHelpers";
@@ -23,7 +24,7 @@ import { orderDay } from "../fhir/shared";
 //   オーダーを選び直した時に展開する。ここは選び直しが無いので初期値に入れる)
 // - 入外区分・診療科・検体採取日もオーダーから引き継ぐ
 //
-// 展開できなかった項目(オーダー項目に JLAC コードが無いなど)は、カルテと同じく
+// 展開できなかった項目(オーダー項目に対応する結果項目が無い)は、カルテと同じく
 // 名前を挙げて手入力を促す。
 
 // 展開できなかった項目を並べる上限(残りは「他N件」)。
@@ -33,7 +34,7 @@ function unmatchedNotice(names: string[]): string | null {
   if (names.length === 0) return null;
   const shown = names.slice(0, NOTICE_NAME_COUNT).join("、");
   const rest = names.length > NOTICE_NAME_COUNT ? ` 他${names.length - NOTICE_NAME_COUNT}件` : "";
-  return `JLACコードから検査項目マスタを引けなかったため、次の項目は展開していません: ${shown}${rest}`;
+  return `対応する結果項目が無いため、次の項目は展開していません: ${shown}${rest}`;
 }
 
 export function LabResultEntryModal({
@@ -67,10 +68,13 @@ export function LabResultEntryModal({
     };
   }, [order, orderId, expansion.lines]);
 
+  const subject = labResultSubjectOf(patient);
+
   function handleSubmit(values: LabResultFormValues) {
     if (!patient?.id) return;
     createLabResult.mutate(
-      { values, patientId: patient.id },
+      // パニック値の通知はこのオーダーの依頼医あてに出す。
+      { values, patientId: patient.id, subject, owner: order.requester },
       {
         onSuccess: () => {
           // 結果が付いた行の「結果登録」を閉じる(一覧は結果の有無も読んでいる)。
@@ -95,6 +99,7 @@ export function LabResultEntryModal({
           {notice && <p className="lab-result-form__notice">{notice}</p>}
           <LabResultForm
             initialValues={initialValues}
+            subject={subject}
             onSubmit={handleSubmit}
             submitting={createLabResult.isPending}
             submitError={createLabResult.error}

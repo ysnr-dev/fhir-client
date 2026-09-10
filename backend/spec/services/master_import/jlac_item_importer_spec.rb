@@ -1,17 +1,17 @@
 require "rails_helper"
 
-RSpec.describe MasterImport::LabItemImporter do
+RSpec.describe MasterImport::JlacItemImporter do
   def sample_file
-    File.open(Rails.root.join("spec/fixtures/files/lab_items_sample.csv"), "rb")
+    File.open(Rails.root.join("spec/fixtures/files/jlac_items_sample.csv"), "rb")
   end
 
   it "imports all data rows and maps columns correctly" do
     result = described_class.call(sample_file)
 
     expect(result.imported_count).to eq(3)
-    expect(Master::LabItem.count).to eq(3)
+    expect(Master::JlacItem.count).to eq(3)
 
-    record = Master::LabItem.find_by(jlac11_code: "C1002000025002755")
+    record = Master::JlacItem.find_by(jlac11_code: "C1002000025002755")
     expect(record.category_name).to eq("生化学検査")
     expect(record.major_item).to eq("総蛋白(TP)")
     expect(record.fhir_item_name).to eq("総蛋白(TP)")
@@ -32,27 +32,27 @@ RSpec.describe MasterImport::LabItemImporter do
   it "fills the normalized search columns" do
     described_class.call(sample_file)
 
-    record = Master::LabItem.find_by(jlac11_code: "C1002000025002755")
+    record = Master::JlacItem.find_by(jlac11_code: "C1002000025002755")
     expect(record.search_name).to eq(Master::SearchNormalizer.normalize("総蛋白(TP)"))
     expect(record.search_abbreviation).to eq(Master::SearchNormalizer.normalize("TP"))
   end
 
   it "replaces existing data wholesale (delete-all + reinsert)" do
-    Master::LabItem.create!(jlac11_code: "stale")
+    Master::JlacItem.create!(jlac11_code: "stale")
 
     described_class.call(sample_file)
 
-    expect(Master::LabItem.where(jlac11_code: "stale")).not_to exist
-    expect(Master::LabItem.count).to eq(3)
+    expect(Master::JlacItem.where(jlac11_code: "stale")).not_to exist
+    expect(Master::JlacItem.count).to eq(3)
   end
 
   it "rolls back entirely when a row has the wrong number of columns" do
-    Master::LabItem.create!(jlac11_code: "kept")
+    Master::JlacItem.create!(jlac11_code: "kept")
 
     bad_file = StringIO.new("\"h1\",\"h2\"\n\"only_two_columns\",\"x\"\n")
 
     expect { described_class.call(bad_file) }.to raise_error(MasterImport::ImportError)
-    expect(Master::LabItem.count).to eq(1)
-    expect(Master::LabItem.where(jlac11_code: "kept")).to exist
+    expect(Master::JlacItem.count).to eq(1)
+    expect(Master::JlacItem.where(jlac11_code: "kept")).to exist
   end
 end

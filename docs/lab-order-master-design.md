@@ -76,6 +76,10 @@
 
 ## 4. データモデル
 
+> 追記(2026-09-10): 実装ではオーダー項目(`master_lab_order_items`)と結果項目
+> (`master_lab_result_items`)を別テーブルにし、対応は `master_lab_order_item_results` で持つ。
+> 1 テーブル + orderability を採らなかった理由は `docs/lab-backlog.md` §1.5。
+
 ［提案］最大のポイントは「**オーダーされる概念と結果として返る概念を同じ `lab_concepts` テーブルで管理し、`orderability` で区別する**」こと（LOINCのORDER_OBS: Order/Observation/Both/Subsetと同型）。好中球のように「単独オーダー不可・結果としてのみ存在」する概念を自然に表現でき、Panel構造が閉じる。
 
 ```text

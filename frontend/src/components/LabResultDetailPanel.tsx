@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLabResultItemsByCodes, useLabResultItemsByJlac11Codes } from "../api/masterQueries";
 import { useLabOrderDetail, useLabResultDetail } from "../api/queries";
 import {
   labOrderItemRequests,
@@ -8,14 +9,18 @@ import {
 } from "../fhir/labOrderHelpers";
 import {
   interpretationClass,
+  labResultItemCodeOf,
   labTimelineKeyOf,
+  legacyJlac11CodesOf,
   observationLineDisplay,
+  resultItemAliases,
   specimenNamesById,
   splitLabResultDetailBundle,
   summarizeDiagnosticReport,
 } from "../fhir/labResultHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { FhirJsonView } from "./FhirJsonView";
+import { LAB_CATEGORIES } from "./labOrderItemOptions";
 import { LabResultTimelinePanel } from "./LabResultTimelinePanel";
 import { Modal } from "./Modal";
 import { RowMenu } from "./RowMenu";
@@ -38,6 +43,40 @@ function useLabOrderLabel(orderId: string | undefined): string {
     header,
     labOrderItems(header, labOrderItemRequests(serviceRequests, orderId)),
   );
+}
+
+// 検査分野が引けなかった項目(結果項目コードなし・マスタに無いコード)のまとめ先。
+const UNKNOWN_CATEGORY = "その他";
+
+interface LabResultCategoryGroup {
+  category: string;
+  observations: fhir4.Observation[];
+}
+
+// 検査項目を検査分野(生化学検査・血液学的検査など)ごとにまとめる。分野は Observation
+// には持たないので、結果項目コードで引いた結果項目マスタの検査分野を使う(結果項目マスタ
+// 導入前の保存済み結果は JLAC11 で読み替える)。
+// 分野の並びはマスタ画面の選択肢と揃え、そこに無い分野は末尾に置く。
+function groupByCategory(
+  observations: fhir4.Observation[],
+  categoryByKey: Map<string, string>,
+  aliases: Map<string, string>,
+): LabResultCategoryGroup[] {
+  const groups = new Map<string, fhir4.Observation[]>();
+  for (const obs of observations) {
+    const category = categoryByKey.get(labTimelineKeyOf(obs, aliases)) || UNKNOWN_CATEGORY;
+    const list = groups.get(category);
+    if (list) list.push(obs);
+    else groups.set(category, [obs]);
+  }
+
+  const rank = (category: string) => {
+    const index = LAB_CATEGORIES.indexOf(category);
+    return index < 0 ? LAB_CATEGORIES.length : index;
+  };
+  return [...groups.entries()]
+    .sort(([a], [b]) => rank(a) - rank(b))
+    .map(([category, list]) => ({ category, observations: list }));
 }
 
 export function LabResultDetailPanel({ reportId }: { reportId: string }) {
@@ -68,13 +107,49 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
 
   // 時系列表示は患者単位の検索なので、レポートの subject から患者 id を引く。
   const patientId = report?.subject?.reference?.split("/").pop() ?? "";
-  const checkedObservations = useMemo(
-    () => observations.filter((obs) => obs.id && checkedIds.has(obs.id)),
-    [observations, checkedIds],
+
+  // 検査分野でグループ化するため、項目の結果項目コードでマスタを引き直す。
+  // 結果項目マスタ導入前の保存済み結果(施設コード無し)は JLAC11 で引いて読み替える。
+  const resultItemCodes = useMemo(
+    () => [...new Set(observations.map(labResultItemCodeOf).filter(Boolean))],
+    [observations],
   );
+  const legacyCodes = useMemo(() => legacyJlac11CodesOf(observations), [observations]);
+  const masterItems = useLabResultItemsByCodes(resultItemCodes);
+  const legacyItems = useLabResultItemsByJlac11Codes(legacyCodes);
+  const aliases = useMemo(
+    () => resultItemAliases(legacyItems.data?.items ?? []),
+    [legacyItems.data],
+  );
+  const categoryByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of [...(masterItems.data?.items ?? []), ...(legacyItems.data?.items ?? [])]) {
+      if (item.category) map.set(`item:${item.result_item_code}`, item.category);
+    }
+    return map;
+  }, [masterItems.data, legacyItems.data]);
+
+  // マスタ照会中は分野が決まらないので、見出しを出さずに登録順のまま並べる。
+  const groups = useMemo(
+    () =>
+      masterItems.isLoading || legacyItems.isLoading
+        ? [{ category: "", observations }]
+        : groupByCategory(observations, categoryByKey, aliases),
+    [masterItems.isLoading, legacyItems.isLoading, observations, categoryByKey, aliases],
+  );
+
+  // コピーは画面に見えている並び(分野ごと)に合わせる。
+  const checkedObservations = useMemo(
+    () =>
+      groups
+        .flatMap((group) => group.observations)
+        .filter((obs) => obs.id && checkedIds.has(obs.id)),
+    [groups, checkedIds],
+  );
+  // 時系列表示と同じ読み替え(JLAC11 → 結果項目コード)でキーを作る。
   const timelineKeys = useMemo(
-    () => new Set(checkedObservations.map(labTimelineKeyOf)),
-    [checkedObservations],
+    () => new Set(checkedObservations.map((obs) => labTimelineKeyOf(obs, aliases))),
+    [checkedObservations, aliases],
   );
 
   function toggleChecked(id: string) {
@@ -170,44 +245,58 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                 <tr>
                   <th className="rp-card__lab-check" />
                   <th>検査項目</th>
-                  <th>略称</th>
                   <th>材料</th>
                   <th className="rp-card__lab-value">結果値</th>
                   <th className="rp-card__lab-unit">単位</th>
+                  <th className="rp-card__lab-unit">基準値</th>
                 </tr>
               </thead>
-              <tbody>
-                {observations.map((obs, index) => {
-                  const line = observationLineDisplay(obs, specimenNames);
-                  return (
-                    <tr key={line.id || index}>
-                      <td className="rp-card__lab-check">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(line.id) && checkedIds.has(line.id)}
-                          disabled={!line.id}
-                          onChange={() => line.id && toggleChecked(line.id)}
-                        />
-                      </td>
-                      <td>{line.name || "-"}</td>
-                      <td>{line.abbreviation || "-"}</td>
-                      {/* 材料名称は長いものがあるので、はみ出す分は見切って全文はツールチップで読む。 */}
-                      <td>
-                        <span
-                          className="lab-result-detail__specimen"
-                          title={line.specimen || undefined}
-                        >
-                          {line.specimen || "-"}
-                        </span>
-                      </td>
-                      <td className={interpretationClass(line.interpretation, "rp-card__lab-value")}>
-                        {line.value || "-"}
-                      </td>
-                      <td className="rp-card__lab-unit">{line.unit || "-"}</td>
+              {/* 分野ごとに tbody を分け、その先頭行を分野の見出しにする。 */}
+              {groups.map((group) => (
+                <tbody key={group.category}>
+                  {group.category && (
+                    <tr className="lab-result-detail__category">
+                      <th colSpan={6}>{group.category}</th>
                     </tr>
-                  );
-                })}
-              </tbody>
+                  )}
+                  {group.observations.map((obs, index) => {
+                    const line = observationLineDisplay(obs, specimenNames);
+                    return (
+                      <tr key={line.id || index}>
+                        <td className="rp-card__lab-check">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(line.id) && checkedIds.has(line.id)}
+                            disabled={!line.id}
+                            onChange={() => line.id && toggleChecked(line.id)}
+                          />
+                        </td>
+                        <td>
+                          <span title={line.name || undefined}>
+                            {line.abbreviation || line.name || "-"}
+                          </span>
+                        </td>
+                        {/* 材料名称は長いものがあるので、はみ出す分は見切って全文はツールチップで読む。 */}
+                        <td>
+                          <span
+                            className="lab-result-detail__specimen"
+                            title={line.specimen || undefined}
+                          >
+                            {line.specimen || "-"}
+                          </span>
+                        </td>
+                        <td
+                          className={interpretationClass(line.interpretation, "rp-card__lab-value")}
+                        >
+                          {line.value || "-"}
+                        </td>
+                        <td className="rp-card__lab-unit">{line.unit || "-"}</td>
+                        <td className="rp-card__lab-unit">{line.referenceRange || "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              ))}
             </table>
 
             {jsonOpen && (

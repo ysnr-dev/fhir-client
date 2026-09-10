@@ -273,6 +273,8 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
                 onChange={(e) => update("mobilePhone", e.target.value)}
               />
             </label>
+          </div>
+          <div className="patient-fields__row">
             <label className="patient-fields__field--email">
               EMail
               <input

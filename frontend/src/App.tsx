@@ -16,6 +16,7 @@ import { LabContainerPage } from "./pages/LabContainerPage";
 import { SchemaMasterPage } from "./pages/SchemaMasterPage";
 import { LabOrderItemLayoutPage } from "./pages/LabOrderItemLayoutPage";
 import { LabOrderItemPage } from "./pages/LabOrderItemPage";
+import { LabResultItemPage } from "./pages/LabResultItemPage";
 import { LabSpecimenPage } from "./pages/LabSpecimenPage";
 import { RadItemLayoutPage } from "./pages/RadItemLayoutPage";
 import { RadItemPage } from "./pages/RadItemPage";
@@ -64,6 +65,8 @@ import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
 import { OrderApprovalPage } from "./pages/OrderApprovalPage";
 import { OrderSetPage } from "./pages/OrderSetPage";
 import { OrderApprovalNavLink } from "./components/OrderApprovalNavLink";
+import { LabPanicNavLink } from "./components/LabPanicNavLink";
+import { LabPanicResultPage } from "./pages/LabPanicResultPage";
 import { NursingWorklistPage } from "./pages/NursingWorklistPage";
 import { PathoOrganPage } from "./pages/PathoOrganPage";
 import { PathoCollectionMethodPage } from "./pages/PathoCollectionMethodPage";
@@ -160,6 +163,9 @@ function App() {
             {/* 代行入力されたオーダーを指示医師が確認・承認する画面。承認するのは
                 部門ではなく指示した医師なので診療業務に置く(readme「代行入力の記録と承認」)。 */}
             <OrderApprovalNavLink />
+            {/* パニック値(緊急異常値)の通知。受け取るのは検査室ではなく依頼した医師なので
+                部門業務ではなくここに置く(readme「パニック値(緊急異常値)の通知」)。 */}
+            <LabPanicNavLink />
             {/* よく出すオーダーのひとまとめ(オーダーセット)の登録。出すのは診療科の
                 医師なので部門業務ではなくここに置く(docs/order-set-design.md §1)。 */}
             <Link to="/order-sets" className="row-menu__item">
@@ -292,6 +298,9 @@ function App() {
             <SubMenu label="検体検査">
               <Link to="/lab-order-items" className="row-menu__item">
                 検査オーダー項目
+              </Link>
+              <Link to="/lab-result-items" className="row-menu__item">
+                検査結果項目
               </Link>
               <Link to="/lab-order-item-layouts" className="row-menu__item">
                 検査オーダーレイアウト
@@ -542,6 +551,7 @@ function App() {
           />
           <Route path="/consult-worklist" element={<ConsultWorklistPage />} />
           <Route path="/order-approvals" element={<OrderApprovalPage />} />
+          <Route path="/lab-panic-results" element={<LabPanicResultPage />} />
           <Route path="/order-sets" element={<OrderSetPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
@@ -557,6 +567,7 @@ function App() {
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />
+          <Route path="/lab-result-items" element={<LabResultItemPage />} />
           <Route path="/lab-order-item-layouts" element={<LabOrderItemLayoutPage />} />
           <Route path="/lab-specimens" element={<LabSpecimenPage />} />
           <Route path="/lab-containers" element={<LabContainerPage />} />

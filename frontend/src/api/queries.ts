@@ -76,9 +76,17 @@ import {
   splitLabResultDetailBundle,
   summarizeDiagnosticReport,
   type LabResultFormValues,
+  type LabResultSubject,
   type LabResultSummary,
   type SpecimenRef,
 } from "../fhir/labResultHelpers";
+import {
+  buildAcknowledgedPanicTask,
+  isPanicTask,
+  LAB_PANIC_TASK_CODE,
+  panicTaskRows,
+} from "../fhir/labPanicHelpers";
+import { TASK_CODE_SYSTEM } from "../fhir/taskHelpers";
 import { orderDay, referenceId } from "../fhir/shared";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections, type InfectionRow } from "../fhir/infectionHelpers";
 import {
@@ -4004,6 +4012,8 @@ export interface LabOrderCandidate {
   /** オーダーの依頼科。紐付けた検査結果の診療科として採用する。 */
   departmentId: string;
   departmentName: string;
+  /** オーダーの依頼医。パニック値(緊急異常値)の通知の宛先にする。無ければ宛先なし。 */
+  requester?: fhir4.Reference;
 }
 
 // 患者のオーダー(ヘッダ)を新しい順に集める。処方・注射など他種のヘッダも同じ
@@ -4056,6 +4066,7 @@ async function fetchOrderCandidates(
         id: header.id,
         label: buildLabel(header, labOrderItemRequests(serviceRequests, header.id)),
         reportId: reportIdByOrderId.get(header.id) ?? "",
+        requester: header.requester,
         ...departmentOf(header),
       });
     }
@@ -4521,18 +4532,90 @@ export function useLabResultTimeline(patientId: string | undefined, dateCount: n
 
 // 検査結果を保存・削除するとオーダーの紐付け状況が変わるため、
 // 検体検査オーダーの候補(["ServiceRequest", "search"] 配下)も無効化する。
+// パニック値(緊急異常値)の通知 -------------------------------------------------
+
+const PANIC_TASK_KEY = ["Task", "lab-panic"];
+
+/** この検査結果に付いている通知。訂正で出し直す・取り下げるために引く。 */
+async function fetchPanicTask(reportId: string): Promise<fhir4.Task | undefined> {
+  const params = new URLSearchParams();
+  params.set("focus", `DiagnosticReport/${reportId}`);
+  params.set("code", `${TASK_CODE_SYSTEM}|${LAB_PANIC_TASK_CODE.code}`);
+  params.set("_count", "5");
+  const { data: bundle } = await searchResource<fhir4.Task>("Task", params);
+  return (bundle.entry ?? [])
+    .map((entry) => entry.resource as fhir4.Task | undefined)
+    .find((task): task is fhir4.Task => Boolean(task && isPanicTask(task)));
+}
+
+/**
+ * 未確認のパニック値の通知。宛先(依頼医)を指定すると自分あてだけに絞る。
+ * 患者は `_include=Task:subject` で同じ応答に添える(上流の `_include=Task:focus` は
+ * ServiceRequest しか返さないので、検査結果は id だけ持ってカルテへ渡す)。
+ */
+export function usePanicResults(ownerId?: string | null) {
+  const params = new URLSearchParams();
+  params.set("code", `${TASK_CODE_SYSTEM}|${LAB_PANIC_TASK_CODE.code}`);
+  params.set("status", "requested");
+  if (ownerId) params.set("owner", `Practitioner/${ownerId}`);
+  params.set("_include", "Task:subject");
+  params.set("_sort", "-authored-on");
+  params.set("_count", "100");
+
+  return useQuery({
+    queryKey: [...PANIC_TASK_KEY, ownerId ?? "all"],
+    queryFn: () => searchResource<fhir4.Resource>("Task", params),
+    select: (result) => panicTaskRows(result.data),
+    staleTime: 60_000,
+  });
+}
+
+/** 通知を確認済みにする。誰がいつ確認したかを Task の note に残す。 */
+export function useAcknowledgePanicTasks() {
+  const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
+  return useMutation({
+    mutationFn: (tasks: fhir4.Task[]) => {
+      if (!enterer) throw new Error("医療従事者に紐付いたアカウントでログインしてください");
+      return postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: tasks.map((task) => ({
+          resource: buildAcknowledgedPanicTask(task, enterer),
+          request: { method: "PUT" as const, url: `Task/${task.id}` },
+        })),
+      });
+    },
+    retry: false,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PANIC_TASK_KEY }),
+  });
+}
+
 export function useCreateLabResult() {
   const queryClient = useQueryClient();
   return useMutation({
     // オーダーに紐付く結果は、ラベル発行が作った管の Specimen を参照するので、
     // 組み立ての前にオーダーの管を引く(labResultHelpers の planSpecimens を参照)。
-    mutationFn: async ({ values, patientId }: { values: LabResultFormValues; patientId: string }) => {
+    // subject(性別・生年月日)は基準値の適用に使う。無ければ referenceRange を書かない。
+    // owner はパニック値の通知の宛先(オーダーの依頼医)。
+    mutationFn: async ({
+      values,
+      patientId,
+      subject,
+      owner,
+    }: {
+      values: LabResultFormValues;
+      patientId: string;
+      subject?: LabResultSubject;
+      owner?: fhir4.Reference;
+    }) => {
       const labelSpecimens = await fetchLabelSpecimens(values.orderId);
-      return postBundle(buildLabResultBundle(values, patientId, labelSpecimens));
+      return postBundle(buildLabResultBundle(values, patientId, labelSpecimens, subject, { owner }));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: PANIC_TASK_KEY });
     },
   });
 }
@@ -4546,14 +4629,23 @@ export function useUpdateLabResult() {
       reportId,
       originalObservationIds,
       originalSpecimens,
+      subject,
+      owner,
     }: {
       values: LabResultFormValues;
       patientId: string;
       reportId: string;
       originalObservationIds: string[];
       originalSpecimens: SpecimenRef[];
+      subject?: LabResultSubject;
+      owner?: fhir4.Reference;
     }) => {
-      const labelSpecimens = await fetchLabelSpecimens(values.orderId);
+      const [labelSpecimens, existingTask] = await Promise.all([
+        fetchLabelSpecimens(values.orderId),
+        // 訂正でパニック値が出た/直ったときに通知を出し直す・取り下げるため、
+        // この結果に付いている通知を先に引く。
+        fetchPanicTask(reportId),
+      ]);
       return postBundle(
         buildLabResultUpdateBundle(
           values,
@@ -4562,6 +4654,8 @@ export function useUpdateLabResult() {
           originalObservationIds,
           originalSpecimens,
           labelSpecimens,
+          subject,
+          { owner, existingTask },
         ),
       );
     },
@@ -4569,6 +4663,7 @@ export function useUpdateLabResult() {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "detail"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: PANIC_TASK_KEY });
     },
   });
 }

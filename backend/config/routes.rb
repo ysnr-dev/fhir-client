@@ -89,7 +89,7 @@ Rails.application.routes.draw do
         get :unmapped
       end
     end
-    resources :lab_items, only: %i[index show create update destroy] do
+    resources :jlac_items, only: %i[index show create update destroy] do
       collection do
         post :import
         get :filter_options
@@ -98,6 +98,10 @@ Rails.application.routes.draw do
     # 検体検査オーダーのマスタ群。
     resources :lab_order_items, only: %i[index show create update destroy]
     resources :lab_panel_items, only: %i[index create update destroy]
+    # 検体検査の結果項目(施設マスタ)と、オーダー項目 → 結果項目の対応。
+    resources :lab_result_items, only: %i[index show create update destroy]
+    resources :lab_order_item_results, only: %i[index create update destroy]
+    resources :lab_reference_ranges, only: %i[index create update destroy]
     resources :lab_specimens, only: %i[index show create update destroy] do
       collection do
         post :import

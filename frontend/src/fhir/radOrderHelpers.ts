@@ -9,12 +9,13 @@ import {
   displayOf,
   itemNumber,
   parentRequestId,
-  PRIORITY_OPTIONS,
+  EXAM_PRIORITY_OPTIONS,
+  RETRO_PRIORITY,
   orderDay,
   registrationAuthoredOn,
 } from "./shared";
 
-export { PRIORITY_OPTIONS };
+export { EXAM_PRIORITY_OPTIONS, RETRO_PRIORITY };
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import {
   ORDER_TYPE_SYSTEM,
@@ -94,7 +95,7 @@ const ITEM_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/rad-order-item-num
 const JJ1017_CODE_LENGTH = 32;
 const JJ1017_16M_LENGTH = 16;
 
-export type RadOrderPriority = "routine" | "urgent";
+export type RadOrderPriority = "routine" | "urgent" | typeof RETRO_PRIORITY;
 
 /** オーダーした撮影 1 件。マスタの写しなので、表示に必要な値をすべて持つ。 */
 export interface RadOrderItemLine {
@@ -190,7 +191,7 @@ export function emptyRadOrderForm(
 }
 
 export function priorityDisplay(priority: string | undefined): string {
-  return priority ? displayOf(PRIORITY_OPTIONS, priority) : "";
+  return priority ? displayOf(EXAM_PRIORITY_OPTIONS, priority) : "";
 }
 
 /** 撮影部位の表示(「右 膝関節」)。左右指定なしの部位は部位名だけ。 */
@@ -927,7 +928,9 @@ export function parseRadOrderForm(
 ): RadOrderFormValues {
   return {
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
-    priority: (sr.priority === "urgent" ? "urgent" : "routine") as RadOrderPriority,
+    priority: (sr.priority === "urgent" || sr.priority === RETRO_PRIORITY
+      ? sr.priority
+      : "routine") as RadOrderPriority,
     startDate: orderDay(sr) || today(),
     startTime: radOrderTime(sr),
     problem: radOrderProblem(sr),

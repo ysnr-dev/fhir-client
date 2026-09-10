@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { LabItem, LabOrderItemPayload } from "../api/masterClient";
+import type { JlacItem, LabOrderItemDetail, LabOrderItemPayload } from "../api/masterClient";
 import {
   useLabContainers,
   useLabOrderItem,
   useLabOrderItemMutations,
+  useLabOrderItemResultMutations,
   useLabOrderItemSearch,
   useLabPanelItemMutations,
+  useLabResultItemMutations,
+  useLabResultItemSearch,
   useLabSpecimenOptions,
   type LabOrderItemFilters,
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { LabItemSearchModal } from "../components/LabItemSearchModal";
-import { LAB_CATEGORIES, LAB_KIND_LABELS } from "../components/labOrderItemOptions";
+import { JlacItemSearchModal } from "../components/JlacItemSearchModal";
+import { LabResultItemSearchModal } from "../components/LabResultItemSearchModal";
+import { LAB_CATEGORIES, LAB_DATA_TYPE_LABELS, LAB_KIND_LABELS } from "../components/labOrderItemOptions";
 import { Modal } from "../components/Modal";
 
 const MEMBER_TYPE_LABELS: Record<string, string> = {
@@ -328,7 +332,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
   // 共有項目JLACコードマスタからの選択。コードと体系を埋め、名称が空なら補完する。
   // 検査分野・検体は JLAC マスタが正なので、選び直したら選択に合わせて入れ替える
   // (JLAC マスタ側が空、または対応する検体がマスタに無いときだけ元の選択を残す)。
-  function handleSelectLabItem(item: LabItem) {
+  function handleSelectJlacItem(item: JlacItem) {
     setSearchingJlac(false);
     const specimenCode = item.jlac11_specimen
       ? (specimenCodesByName.get(item.jlac11_specimen) ?? "")
@@ -570,8 +574,13 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
         />
       )}
 
+      {/* 結果を持つのは単項目。パネルは構成項目がそれぞれ結果項目に対応する。 */}
+      {itemId !== null && draft.kind === "single" && detail.data && (
+        <ResultItemsEditor orderItem={detail.data} />
+      )}
+
       {searchingJlac && (
-        <LabItemSearchModal onSelect={handleSelectLabItem} onClose={() => setSearchingJlac(false)} />
+        <JlacItemSearchModal onSelect={handleSelectJlacItem} onClose={() => setSearchingJlac(false)} />
       )}
     </Modal>
   );
@@ -673,6 +682,176 @@ function PanelItemsEditor({ panelItemCode, panelItems }: PanelItemsEditorProps) 
           </tbody>
         </table>
       </div>
+    </section>
+  );
+}
+
+interface ResultItemsEditorProps {
+  orderItem: LabOrderItemDetail;
+}
+
+// オーダー項目 → 結果項目の対応づけ。1 つのオーダー項目が複数の結果を返す
+// (血液ガス分析 → pH・PCO2…)ので 1:N で、並びは結果登録画面の行順になる。
+function ResultItemsEditor({ orderItem }: ResultItemsEditorProps) {
+  const mappings = orderItem.result_items;
+  const mutations = useLabOrderItemResultMutations();
+  const resultItemMutations = useLabResultItemMutations();
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const candidates = useLabResultItemSearch({ name: query, active: true }, 1, query.trim().length > 0);
+
+  const mappedCodes = new Set(mappings.map((m) => m.result_item_code));
+  const hasSameCode = mappedCodes.has(orderItem.order_item_code);
+
+  async function addMapping(resultItemCode: string) {
+    setQuery("");
+    setSearching(false);
+    await mutations.create.mutateAsync({
+      order_item_code: orderItem.order_item_code,
+      result_item_code: resultItemCode,
+    });
+  }
+
+  // 新しいオーダー項目の導線。同じコード・同じ名称の結果項目を作ってそのまま対応づける
+  // (初期投入の 1:1 派生と同じ写し方。データ型・単位は結果項目マスタで直す)。
+  async function createSameCodeResultItem() {
+    const created = await resultItemMutations.create.mutateAsync({
+      result_item_code: orderItem.order_item_code,
+      name: orderItem.name,
+      short_name: orderItem.short_name,
+      name_kana: orderItem.name_kana,
+      category: orderItem.category,
+      specimen_code: orderItem.specimen_code,
+      jlac11_code: orderItem.jlac_code_system === "jlac11" ? orderItem.jlac_code : null,
+      jlac10_code: orderItem.jlac_code_system === "jlac10" ? orderItem.jlac_code : null,
+      valid_from: orderItem.valid_from,
+      valid_to: orderItem.valid_to,
+      display_order: orderItem.display_order,
+    });
+    await addMapping(created.result_item_code);
+  }
+
+  // 並べ替え。入れ替えた後の並びで display_order を 1 から振り直す(隣接 2 件だけを
+  // 入れ替えると、seed の 10 刻みの値と混ざって順番が飛ぶため全件を揃える)。
+  async function move(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= mappings.length) return;
+    const reordered = [...mappings];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    await Promise.all(
+      reordered.flatMap((mapping, position) =>
+        mapping.display_order === position + 1
+          ? []
+          : [mutations.update.mutateAsync({ id: mapping.id, payload: { display_order: position + 1 } })],
+      ),
+    );
+  }
+
+  return (
+    <section className="lab-order-item__section">
+      <div className="lab-order-item__section-head">
+        <h3>返す結果項目</h3>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="対応づける結果項目を名称で検索"
+        />
+        <button type="button" onClick={() => setSearching(true)}>
+          一覧から選ぶ
+        </button>
+        {!hasSameCode && (
+          <button
+            type="button"
+            onClick={createSameCodeResultItem}
+            disabled={resultItemMutations.create.isPending || mutations.create.isPending}
+          >
+            同じコードで結果項目を作成
+          </button>
+        )}
+      </div>
+
+      {query.trim().length > 0 && (
+        <ul className="lab-order-item__candidates">
+          {candidates.data?.items
+            .filter((item) => !mappedCodes.has(item.result_item_code))
+            .map((item) => (
+              <li key={item.id}>
+                <button type="button" onClick={() => addMapping(item.result_item_code)}>
+                  {item.name}
+                  <span className="lab-order-item__code">{item.result_item_code}</span>
+                </button>
+              </li>
+            ))}
+        </ul>
+      )}
+
+      <ErrorBanner
+        error={
+          mutations.create.error ??
+          mutations.update.error ??
+          mutations.remove.error ??
+          resultItemMutations.create.error
+        }
+      />
+
+      <div className="lab-order-item__table-wrap">
+        <table className="master-search__table">
+          <thead>
+            <tr>
+              <th>結果項目</th>
+              <th>コード</th>
+              <th className="lab-order-item__compact">型</th>
+              <th>単位</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {mappings.map((mapping, index) => (
+              <tr key={mapping.id}>
+                <td>{mapping.result_item?.name ?? `${mapping.result_item_code} (マスタに無し)`}</td>
+                <td>{mapping.result_item_code}</td>
+                <td className="lab-order-item__compact">
+                  {mapping.result_item
+                    ? (LAB_DATA_TYPE_LABELS[mapping.result_item.data_type] ?? mapping.result_item.data_type)
+                    : ""}
+                </td>
+                <td>{mapping.result_item?.display_unit ?? ""}</td>
+                <td className="master-search__actions">
+                  <button type="button" onClick={() => move(index, -1)} disabled={index === 0}>
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(index, 1)}
+                    disabled={index === mappings.length - 1}
+                  >
+                    ↓
+                  </button>
+                  <button type="button" onClick={() => mutations.remove.mutate(mapping.id)}>
+                    外す
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {mappings.length === 0 && (
+              <tr>
+                <td colSpan={5} className="master-search__empty">
+                  結果項目が対応づけられていません。この項目は結果登録で展開されません。
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {searching && (
+        <LabResultItemSearchModal
+          title="対応づける結果項目を選択"
+          onSelect={(item) => addMapping(item.result_item_code)}
+          onClose={() => setSearching(false)}
+        />
+      )}
     </section>
   );
 }

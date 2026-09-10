@@ -25,7 +25,8 @@ import {
   type TemplateBinding,
 } from "../fhir/questionnaireResponseHelpers";
 import {
-  PRIORITY_OPTIONS,
+  EXAM_PRIORITY_OPTIONS,
+  RETRO_PRIORITY,
   emptyEndoscopyOrderForm,
   entryExamTypeName,
   orderEntries,
@@ -373,13 +374,28 @@ export function EndoscopyOrderForm({
     [catalogByCode],
   );
 
+  // 予約を取るのは通常のオーダーだけ。至急と事後は予約必須の項目でも予約せず、
+  // 日時を直接入れる(至急は当日、事後は実施済みの日)。
+  const booksSlot = useCallback(
+    (priority: EndoscopyOrderPriority, code: string) => priority === "routine" && requiresBooking(code),
+    [requiresBooking],
+  );
+
   // 予約必須の検査は予約した日時に撮るものなので、登録と同時に実施済にはできない。
-  // 至急(予約なしの当日実施)なら可。判定はオーダー単位。
+  // 至急・事後(予約なしのオーダー)なら可。判定はオーダー単位。
   const canPerformNow = useCallback(
     (split: EndoscopyOrderSplit) =>
-      split.values.priority === "urgent" ||
+      split.values.priority !== "routine" ||
       !topLevelItems(split.values.items).some((line) => requiresBooking(line.code)),
     [requiresBooking],
+  );
+
+  // 即実施にするオーダーか。事後は実施済みの検査を入れるオーダーなので固定で ON。
+  const performsNow = useCallback(
+    (split: EndoscopyOrderSplit) =>
+      split.values.priority === RETRO_PRIORITY ||
+      (Boolean(performNow[split.key]) && canPerformNow(split)),
+    [performNow, canPerformNow],
   );
 
   // 実施入力を開く項目が 1 つでもあるか(内視鏡一覧の「実施」と同じ判定)。
@@ -429,16 +445,15 @@ export function EndoscopyOrderForm({
     if (!editing) {
       const soloGroups = groups.filter((line) => !line.groupable);
       const withoutDate = soloGroups.find(
-        (line) => line.priority !== "urgent" && !requiresBooking(line.code) && !line.date,
+        (line) => line.priority !== "urgent" && !booksSlot(line.priority, line.code) && !line.date,
       );
       if (withoutDate) {
         setValidationError(`「${withoutDate.name}」の実施日を入力してください。`);
         return;
       }
-      // 予約必須の枠は予約が実施日時そのもの。選ばずには登録させない(至急を除く)。
+      // 予約必須の枠は予約が実施日時そのもの。選ばずには登録させない(至急・事後を除く)。
       const unbooked = soloGroups.find(
-        (line) =>
-          line.priority !== "urgent" && requiresBooking(line.code) && !bookings[line.code],
+        (line) => booksSlot(line.priority, line.code) && !bookings[line.code],
       );
       if (unbooked) {
         setValidationError(`「${unbooked.name}」の予約を取得してください。`);
@@ -446,11 +461,18 @@ export function EndoscopyOrderForm({
       }
     }
 
-    // 即実施にするオーダー。予約必須の非至急オーダーはチェックボックス自体を
-    // 無効化しているが、状態に残った値で実施記録を作らないよう判定にも噛ませる。
-    const performingSplits = splits.filter(
-      (split) => performNow[split.key] && canPerformNow(split),
+    // 事後は済んだ検査を入れるオーダーなので、当日を含む過去日だけを受ける。
+    const future = splits.find(
+      (split) => split.values.priority === RETRO_PRIORITY && split.values.startDate > today(),
     );
+    if (future) {
+      setValidationError("事後のオーダーの実施日には当日以前の日付を入力してください。");
+      return;
+    }
+
+    // 即実施にするオーダー。予約必須の通常オーダーはチェックボックス自体を
+    // 無効化しているが、状態に残った値で実施記録を作らないよう判定にも噛ませる。
+    const performingSplits = splits.filter(performsNow);
 
     // 即実施は実施記録まで作る操作なので、入れずに登録できてしまわないようにする
     // (実施入力をしない項目だけのオーダーは、実施記録を作らないので対象外)。
@@ -467,7 +489,7 @@ export function EndoscopyOrderForm({
     // (選ばなければ空なので、予約は今のままになる)。
     const selected = Object.fromEntries(
       Object.entries(bookings).filter(([code]) =>
-        groups.some((line) => line.code === code && line.priority !== "urgent"),
+        groups.some((line) => line.code === code && booksSlot(line.priority, line.code)),
       ),
     );
     const activeBookings = Object.keys(selected).length > 0 ? selected : null;
@@ -687,6 +709,7 @@ export function EndoscopyOrderForm({
                   date={values.startDate}
                   time={values.startTime}
                   urgent={values.priority === "urgent"}
+                  maxDate={values.priority === RETRO_PRIORITY ? today() : undefined}
                   onChangeDate={(date) => update("startDate", date)}
                   onChangeTime={(time) => update("startTime", time)}
                 />
@@ -709,9 +732,10 @@ export function EndoscopyOrderForm({
 
           {soloEntries.map((entry, index) => {
             const code = entry.item.code;
-            const reserved = requiresBooking(code);
+            const reserved = booksSlot(entry.item.priority, code);
             const booking = bookings[code];
             const urgent = entry.item.priority === "urgent";
+            const retro = entry.item.priority === RETRO_PRIORITY;
 
             return (
               <OrderFrame
@@ -739,7 +763,7 @@ export function EndoscopyOrderForm({
                       }
                 }
                 schedule={
-                  reserved && !urgent ? (
+                  reserved ? (
                     editing ? (
                       // 編集では、予約日時もここから変える(予約タブからは変えない。
                       // オーダーの実施日時と予約を必ず一緒に動かすため)。日時は予約と
@@ -776,6 +800,7 @@ export function EndoscopyOrderForm({
                       date={editing ? values.startDate : urgent ? today() : entry.item.date}
                       time={editing ? values.startTime : entry.item.time}
                       urgent={urgent}
+                      maxDate={retro ? today() : undefined}
                       onChangeDate={(date) =>
                         editing ? update("startDate", date) : updateItem(code, { date })
                       }
@@ -944,8 +969,11 @@ function OrderFrame({
   children: ReactNode;
 }) {
   const split = perform?.split ?? null;
-  // 予約必須の検査を含む非至急オーダーは、登録と同時に実施済にできない。
+  // 予約必須の検査を含む通常オーダーは、登録と同時に実施済にできない。
   const canPerform = split ? perform?.canPerform(split) : false;
+  // 事後は済んだ検査を入れるオーダーなので、即実施を固定で ON にする。
+  const forced = split?.values.priority === RETRO_PRIORITY;
+  const performChecked = forced || (perform?.checked === true && canPerform === true);
 
   return (
     <div className="rad-order-frame">
@@ -957,7 +985,7 @@ function OrderFrame({
             value={priority}
             onChange={(e) => onChangePriority(e.target.value as EndoscopyOrderPriority)}
           >
-            {PRIORITY_OPTIONS.map((o) => (
+            {EXAM_PRIORITY_OPTIONS.map((o) => (
               <option key={o.code} value={o.code}>
                 {o.display}
               </option>
@@ -984,17 +1012,16 @@ function OrderFrame({
           <label className="rad-order-frame__perform">
             <input
               type="checkbox"
-              checked={perform.checked && canPerform}
-              disabled={!canPerform}
+              checked={performChecked}
+              disabled={forced || !canPerform}
               onChange={(e) => perform.onToggle(e.target.checked)}
             />
-            即実施(登録と同時に実施済にする)
+            即実施
           </label>
           {!canPerform && (
             <span className="order-select__muted">予約する検査は即実施にできません</span>
           )}
-          {perform.checked &&
-            canPerform &&
+          {performChecked &&
             (perform.needsInput(split) ? (
               <>
                 <button type="button" onClick={perform.onOpen}>
@@ -1025,12 +1052,15 @@ function FrameDateTime({
   date,
   time,
   urgent,
+  maxDate,
   onChangeDate,
   onChangeTime,
 }: {
   date: string;
   time: string;
   urgent?: boolean;
+  /** 選べる最終日。事後のオーダーで当日までに絞るのに使う。 */
+  maxDate?: string;
   onChangeDate: (date: string) => void;
   onChangeTime: (time: string) => void;
 }) {
@@ -1041,6 +1071,7 @@ function FrameDateTime({
         <input
           type="date"
           value={date}
+          max={maxDate}
           disabled={urgent}
           onChange={(e) => onChangeDate(e.target.value)}
         />

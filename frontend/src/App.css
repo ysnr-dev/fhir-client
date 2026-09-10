@@ -1834,6 +1834,22 @@ fieldset.rp-card {
   width: 72px;
 }
 
+/* 単位は結果値に添える補助情報なので、一段小さく落ち着いた色にして結果値と見分けやすくする。 */
+.rp-card__medicines--detail td.rp-card__lab-unit {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* 検査分野(生化学検査・血液学的検査など)の見出し行。分野ごとに tbody を分けており、
+   その先頭行に置く。地色はアクセント色を薄く敷いて、列見出し(thead)とも表の外の
+   地とも取り違えないようにする。 */
+.rp-card__medicines--lab tbody tr.lab-result-detail__category th {
+  background: var(--accent-bg);
+  color: var(--text-h);
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
 /* 検査結果(詳細)は先頭にチェックボックス列があるため、--detail の nth-child
    幅指定を 1 列ずらして上書きする(同じ詳細度なので --detail より後に置く)。 */
 .rp-card__medicines--lab th.rp-card__lab-check,
@@ -1907,6 +1923,114 @@ fieldset.rp-card {
 .lab-timeline__table td.lab-timeline__value--low {
   color: var(--lab-low);
   font-weight: 700;
+}
+
+/* 見出しの絞り込み(自分あてのみ)。操作ボタンと役割が違うので、小さめにして間を空ける。 */
+.lab-panic__filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 16px;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.lab-panic__filter input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+/* 緊急異常値一覧。列は折り返さず(幅は page-wide で確保)、狭いときは表の中だけ横に送る。 */
+.lab-panic__table-wrap {
+  overflow-x: auto;
+}
+
+.lab-panic th,
+.lab-panic td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* 1 件の通知に複数の項目が入るので、項目ごとに 1 行にして列を揃える。 */
+.lab-panic__items {
+  min-width: 22em;
+}
+
+.lab-panic__item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.lab-panic__item-name {
+  min-width: 6em;
+}
+
+.lab-panic__item-value {
+  min-width: 5em;
+  text-align: right;
+  font-weight: 700;
+}
+
+.lab-panic__item-unit {
+  min-width: 6em;
+  color: var(--text);
+  font-size: 12px;
+}
+
+/* 判定(HH / LL)。結果値の反転表示と同じ色で、一覧でも重さが分かるようにする。 */
+.lab-panic__flag {
+  min-width: 2.5em;
+  padding: 0 6px;
+  border-radius: 3px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.lab-panic__flag--critical-high {
+  background: var(--lab-high);
+  color: #fff;
+}
+
+.lab-panic__flag--critical-low {
+  background: var(--lab-low);
+  color: #fff;
+}
+
+/* 「カルテ」(リンク)と「確認」(ボタン)の大きさを揃える。td の display は変えない
+   (table-cell でなくなると行の縦位置と罫線が崩れる)。 */
+.lab-panic__actions .button,
+.lab-panic__actions button {
+  box-sizing: border-box;
+  width: 5.5em;
+  margin-left: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+/* パニック値(緊急異常値)の HH / LL。H / L と一目で区別できるよう、色を反転して塗る。 */
+.rp-card__medicines--detail td.rp-card__lab-value--critical-high,
+.lab-timeline__table td.lab-timeline__value--critical-high,
+.rp-card__medicines--detail td.rp-card__lab-value--critical-low,
+.lab-timeline__table td.lab-timeline__value--critical-low {
+  font-weight: 700;
+  color: #fff;
+  border-radius: 3px;
+}
+
+.rp-card__medicines--detail td.rp-card__lab-value--critical-high,
+.lab-timeline__table td.lab-timeline__value--critical-high {
+  background: var(--lab-high);
+}
+
+.rp-card__medicines--detail td.rp-card__lab-value--critical-low,
+.lab-timeline__table td.lab-timeline__value--critical-low {
+  background: var(--lab-low);
 }
 
 /* 登録フォームの結果値セル: 結果値入力と H/L プルダウンを横に並べる。 */
@@ -5797,6 +5921,17 @@ body.karte-wide {
    1文字だけ折り返されて読みにくいので、この列だけ折り返さない。 */
 .lab-order-item__compact {
   white-space: nowrap;
+}
+
+/* 基準値の年齢帯(開始〜終了)。2 つの数値欄を 1 マスに並べる。 */
+.lab-order-item__range {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.lab-order-item__range input {
+  width: 4.5em;
 }
 
 /* モーダル内のパネル構成表。件数が振れるので max-height で抑える。 */

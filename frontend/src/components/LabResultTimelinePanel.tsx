@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLabResultItemsByJlac11Codes } from "../api/masterQueries";
 import { useLabResultTimeline } from "../api/queries";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabTimelineChart, type LabTimelineSeries } from "./LabTimelineChart";
@@ -6,6 +7,8 @@ import { Modal } from "./Modal";
 import {
   buildLabTimeline,
   interpretationClass,
+  legacyJlac11CodesOf,
+  resultItemAliases,
   type LabTimelineRow,
 } from "../fhir/labResultHelpers";
 import { flowsheetDayLabel } from "../fhir/vitalHelpers";
@@ -29,9 +32,17 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
   const tableWrapRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading, error } = useLabResultTimeline(patientId, dateCount);
+  // 結果項目マスタ導入前の保存済み結果(施設コード無し)を、同じ JLAC11 を持つ結果項目の
+  // 行に合流させる。読み替えが揃うまで待つ(先に描くと行が一度分かれてから合流する)。
+  const legacyCodes = useMemo(() => legacyJlac11CodesOf(data?.observations ?? []), [data]);
+  const legacyItems = useLabResultItemsByJlac11Codes(legacyCodes);
+  const aliases = useMemo(
+    () => resultItemAliases(legacyItems.data?.items ?? []),
+    [legacyItems.data],
+  );
   const timeline = useMemo(
-    () => buildLabTimeline(data?.reports ?? [], data?.observations ?? [], dateCount),
-    [data, dateCount],
+    () => buildLabTimeline(data?.reports ?? [], data?.observations ?? [], dateCount, aliases),
+    [data, dateCount, aliases],
   );
   const rows = useMemo(
     () => (filterKeys ? timeline.rows.filter((row) => filterKeys.has(row.key)) : timeline.rows),
@@ -78,9 +89,9 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
 
   return (
     <>
-      <ErrorBanner error={error} />
+      <ErrorBanner error={error ?? legacyItems.error} />
 
-      {isLoading ? (
+      {isLoading || legacyItems.isLoading ? (
         <p>読み込み中...</p>
       ) : (
         <>
@@ -118,6 +129,9 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
                     </th>
                     <th className="lab-timeline__unit-col" rowSpan={2}>
                       単位
+                    </th>
+                    <th className="lab-timeline__unit-col" rowSpan={2}>
+                      基準値
                     </th>
                     {groupDatesByYear(timeline.dates).map((group) => (
                       <th
@@ -207,6 +221,7 @@ function TimelineRow({ row, dates, checked, onToggle }: TimelineRowProps) {
         </label>
       </td>
       <td className="lab-timeline__unit-col">{row.unit}</td>
+      <td className="lab-timeline__unit-col">{row.referenceRange}</td>
       {dates.map((date) => (
         <td
           key={date}

@@ -66,6 +66,18 @@ export const PRIORITY_OPTIONS: { code: "routine" | "urgent"; display: string }[]
   { code: "urgent", display: "至急" },
 ];
 
+/**
+ * 事後(実施済みの検査を後から入力する)の至急区分。FHIR の priority に事後を表す
+ * 値は無いので asap を充てる(手術の予定区分が stat を「緊急」に充てるのと同じ)。
+ */
+export const RETRO_PRIORITY = "asap" as const;
+
+/** 事後を足した至急区分。実施をその場で入れられる部門(放射線・生理・内視鏡)で使う。 */
+export const EXAM_PRIORITY_OPTIONS: {
+  code: "routine" | "urgent" | typeof RETRO_PRIORITY;
+  display: string;
+}[] = [...PRIORITY_OPTIONS, { code: RETRO_PRIORITY, display: "事後" }];
+
 /** 入院/外来。system はオーダー系・結果系で別なので、選択肢と表示名だけを共有する。 */
 export const SETTING_OPTIONS: { code: "inpatient" | "outpatient"; display: string }[] = [
   { code: "inpatient", display: "入院" },

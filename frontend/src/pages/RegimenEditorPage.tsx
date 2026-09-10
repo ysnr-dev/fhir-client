@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import type { CtcaeTerm, Disease, LabItem, Medicine, MedicineUsage } from "../api/masterClient";
+import type { CtcaeTerm, Disease, JlacItem, Medicine, MedicineUsage } from "../api/masterClient";
 import { useRegimen, useRegimenMutations } from "../api/masterQueries";
 import { usePractitionerOptions, useSelfDepartments } from "../api/queries";
 import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { CtcaeTermSearchModal } from "../components/CtcaeTermSearchModal";
-import { LabItemSearchModal } from "../components/LabItemSearchModal";
+import { JlacItemSearchModal } from "../components/JlacItemSearchModal";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { UsageSearchModal } from "../components/UsageSearchModal";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
@@ -839,8 +839,8 @@ export function RegimenEditorPage() {
         />
       )}
       {picker?.kind === "lab" && (
-        <LabItemSearchModal
-          onSelect={(item: LabItem) => {
+        <JlacItemSearchModal
+          onSelect={(item: JlacItem) => {
             setPicker(null);
             updateLabCriterion(picker.criterionKey, {
               // 材料・測定法の違いをまとめるため分析物(先頭 5 桁)だけを持つ。

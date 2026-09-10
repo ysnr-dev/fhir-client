@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_09_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_10_000500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -309,21 +309,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_09_100000) do
     t.index ["search_name"], name: "index_master_jfagy_drugs_on_search_name"
   end
 
-  create_table "master_lab_containers", force: :cascade do |t|
-    t.string "container_code", null: false
-    t.string "name", null: false
-    t.string "short_name"
-    t.string "cap_color"
-    t.string "additive"
-    t.string "capacity"
-    t.integer "display_order"
-    t.text "note"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["container_code"], name: "index_master_lab_containers_on_container_code", unique: true
-  end
-
-  create_table "master_lab_items", force: :cascade do |t|
+  create_table "master_jlac_items", force: :cascade do |t|
     t.string "category_name"
     t.string "reserve_category_name"
     t.string "emergency_flag"
@@ -361,9 +347,23 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_09_100000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "search_major_item"
-    t.index ["fhir_item_name"], name: "index_master_lab_items_on_fhir_item_name"
-    t.index ["jlac10_code"], name: "index_master_lab_items_on_jlac10_code"
-    t.index ["jlac11_code"], name: "index_master_lab_items_on_jlac11_code", unique: true
+    t.index ["fhir_item_name"], name: "index_master_jlac_items_on_fhir_item_name"
+    t.index ["jlac10_code"], name: "index_master_jlac_items_on_jlac10_code"
+    t.index ["jlac11_code"], name: "index_master_jlac_items_on_jlac11_code", unique: true
+  end
+
+  create_table "master_lab_containers", force: :cascade do |t|
+    t.string "container_code", null: false
+    t.string "name", null: false
+    t.string "short_name"
+    t.string "cap_color"
+    t.string "additive"
+    t.string "capacity"
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["container_code"], name: "index_master_lab_containers_on_container_code", unique: true
   end
 
   create_table "master_lab_order_item_layout_cells", force: :cascade do |t|
@@ -389,6 +389,17 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_09_100000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["name"], name: "index_master_lab_order_item_layouts_on_name", unique: true
+  end
+
+  create_table "master_lab_order_item_results", force: :cascade do |t|
+    t.string "order_item_code", null: false
+    t.string "result_item_code", null: false
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["order_item_code", "result_item_code"], name: "index_lab_order_item_results_on_order_and_result", unique: true
+    t.index ["result_item_code"], name: "index_master_lab_order_item_results_on_result_item_code"
   end
 
   create_table "master_lab_order_items", force: :cascade do |t|
@@ -428,6 +439,52 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_09_100000) do
     t.datetime "updated_at", null: false
     t.index ["member_item_code"], name: "index_master_lab_panel_items_on_member_item_code"
     t.index ["panel_item_code", "member_item_code"], name: "index_lab_panel_items_on_panel_and_member", unique: true
+  end
+
+  create_table "master_lab_reference_ranges", force: :cascade do |t|
+    t.string "result_item_code", null: false
+    t.string "sex"
+    t.integer "age_from"
+    t.integer "age_to"
+    t.decimal "lower_limit", precision: 12, scale: 3
+    t.decimal "upper_limit", precision: 12, scale: 3
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.decimal "panic_lower", precision: 12, scale: 3
+    t.decimal "panic_upper", precision: 12, scale: 3
+    t.index ["result_item_code"], name: "index_master_lab_reference_ranges_on_result_item_code"
+  end
+
+  create_table "master_lab_result_items", force: :cascade do |t|
+    t.string "result_item_code", null: false
+    t.string "name", null: false
+    t.string "short_name"
+    t.string "name_kana"
+    t.string "category"
+    t.string "specimen_code"
+    t.string "data_type", default: "PQ", null: false
+    t.string "display_unit"
+    t.string "ucum_unit"
+    t.string "code_value_list"
+    t.string "value_code_system"
+    t.integer "decimal_places"
+    t.string "jlac11_code"
+    t.string "jlac10_code"
+    t.string "loinc_code"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_short_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["jlac10_code"], name: "index_master_lab_result_items_on_jlac10_code"
+    t.index ["jlac11_code"], name: "index_master_lab_result_items_on_jlac11_code"
+    t.index ["result_item_code"], name: "index_master_lab_result_items_on_result_item_code", unique: true
   end
 
   create_table "master_lab_specimens", force: :cascade do |t|

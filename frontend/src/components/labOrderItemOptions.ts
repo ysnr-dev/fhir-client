@@ -20,3 +20,18 @@ export const LAB_CATEGORIES = [
   "病理学的検査",
   "その他",
 ];
+
+// 結果項目のデータ型。配布の共有項目JLACコードマスタのデータタイプと同じ 4 値。
+export const LAB_DATA_TYPE_LABELS: Record<string, string> = {
+  PQ: "数値",
+  CD: "コード",
+  CO: "順序コード",
+  ST: "文字列",
+};
+
+// 基準値の性別区分。空は共通。
+export const LAB_REFERENCE_SEX_LABELS: Record<string, string> = {
+  "": "共通",
+  male: "男性",
+  female: "女性",
+};

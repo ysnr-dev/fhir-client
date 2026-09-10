@@ -30,8 +30,8 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".xlsx",
   },
   {
-    type: "lab_items",
-    label: "検査項目マスタ",
+    type: "jlac_items",
+    label: "共有項目JLACコードマスタ",
     formatHint: "共有項目JLACコードマスタ / CSV（UTF-8、ヘッダあり・32列）",
     accept: ".csv",
   },

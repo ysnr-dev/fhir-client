@@ -69,6 +69,19 @@ RSpec.describe "Master::LabOrderItems", type: :request do
       expect(body["panel_items"].map { |m| m["member_name"] }).to eq(["白血球数"])
     end
 
+    it "結果項目の対応を結果項目ごと添えて返す" do
+      create_item("L0005", name: "血液ガス分析")
+      Master::LabResultItem.create!(result_item_code: "R0001", name: "血液ガス pH")
+      Master::LabResultItem.create!(result_item_code: "R0002", name: "血液ガス PCO2", display_unit: "mmHg")
+      Master::LabOrderItemResult.create!(order_item_code: "L0005", result_item_code: "R0002", display_order: 2)
+      Master::LabOrderItemResult.create!(order_item_code: "L0005", result_item_code: "R0001", display_order: 1)
+
+      get "/master/lab_order_items/L0005"
+
+      expect(body["result_items"].map { |r| r["result_item"]["name"] }).to eq(["血液ガス pH", "血液ガス PCO2"])
+      expect(body["result_items"].last["result_item"]["display_unit"]).to eq("mmHg")
+    end
+
     it "項目の採取管指定が検体の既定より優先される" do
       Master::LabSpecimen.create!(specimen_code: "019", name: "血液", default_container_code: "T03")
       Master::LabContainer.create!(container_code: "T06", name: "フッ化Na管")
@@ -124,6 +137,18 @@ RSpec.describe "Master::LabOrderItems", type: :request do
 
       expect(response).to have_http_status(:no_content)
       expect(Master::LabPanelItem.count).to eq(0)
+    end
+
+    it "消すと結果項目の対応も消える(結果項目そのものは残る)" do
+      create_item("L0005", name: "血液ガス分析")
+      Master::LabResultItem.create!(result_item_code: "R0001", name: "血液ガス pH")
+      Master::LabOrderItemResult.create!(order_item_code: "L0005", result_item_code: "R0001")
+
+      delete "/master/lab_order_items/L0005"
+
+      expect(response).to have_http_status(:no_content)
+      expect(Master::LabOrderItemResult.count).to eq(0)
+      expect(Master::LabResultItem.count).to eq(1)
     end
   end
 end
