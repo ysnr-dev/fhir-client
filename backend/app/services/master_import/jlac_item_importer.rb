@@ -1,9 +1,9 @@
 module MasterImport
   # Parses the lab item master CSV (共有項目JLACコードマスタ, UTF-8,
-  # header row + 32 columns) and replaces master_lab_items wholesale
+  # header row + 32 columns) and replaces master_jlac_items wholesale
   # within one transaction.
-  class LabItemImporter < CsvImporter
-    self.model = Master::LabItem
+  class JlacItemImporter < CsvImporter
+    self.model = Master::JlacItem
     # 医薬品系マスタ(Shift_JIS)と異なり、このマスタは UTF-8 で配布される。
     self.encoding = :utf8
     self.headers = true

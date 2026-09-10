@@ -89,7 +89,7 @@ Rails.application.routes.draw do
         get :unmapped
       end
     end
-    resources :lab_items, only: %i[index show create update destroy] do
+    resources :jlac_items, only: %i[index show create update destroy] do
       collection do
         post :import
         get :filter_options

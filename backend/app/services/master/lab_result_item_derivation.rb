@@ -130,8 +130,8 @@ module Master
       return nil if order_item.jlac_code.blank?
 
       case order_item.jlac_code_system
-      when "jlac11" then Master::LabItem.find_by(jlac11_code: order_item.jlac_code)
-      when "jlac10" then Master::LabItem.where(jlac10_code: order_item.jlac_code).order(:id).first
+      when "jlac11" then Master::JlacItem.find_by(jlac11_code: order_item.jlac_code)
+      when "jlac10" then Master::JlacItem.where(jlac10_code: order_item.jlac_code).order(:id).first
       end
     end
 

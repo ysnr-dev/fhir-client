@@ -1,6 +1,6 @@
 module Master
   # 検体検査オーダー項目のメンテナンス。画面から手動で登録し、
-  # JLAC コードは共有項目JLACコードマスタ(master_lab_items)から検索して設定する。
+  # JLAC コードは共有項目JLACコードマスタ(master_jlac_items)から検索して設定する。
   class LabOrderItemsController < BaseController
     before_action :set_record, only: %i[show update destroy]
 

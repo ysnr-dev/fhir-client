@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { LabItem, LabReferenceRange, LabResultItemPayload } from "../api/masterClient";
+import type { JlacItem, LabReferenceRange, LabResultItemPayload } from "../api/masterClient";
 import {
   useLabReferenceRangeMutations,
   useLabResultItem,
@@ -9,7 +9,7 @@ import {
   type LabResultItemFilters,
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { LabItemSearchModal } from "../components/LabItemSearchModal";
+import { JlacItemSearchModal } from "../components/JlacItemSearchModal";
 import {
   LAB_CATEGORIES,
   LAB_DATA_TYPE_LABELS,
@@ -302,7 +302,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
   // 配布の共有項目JLACコードマスタからの引き当て。結果値を表現する属性(データ型・単位・
   // 選択肢)と標準コードは配布側が正なので上書きし、名称・略称は空のときだけ補完する。
   // 材料は JLAC11 の 10〜12 桁目から入れる(検体マスタも同じ JLAC11 材料コードで持つ)。
-  function handleSelectLabItem(item: LabItem) {
+  function handleSelectJlacItem(item: JlacItem) {
     setSearchingJlac(false);
     const specimenCode = specimenCodeFromJlac11(item.jlac11_code);
     setDraft((prev) => ({
@@ -604,7 +604,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       )}
 
       {searchingJlac && (
-        <LabItemSearchModal onSelect={handleSelectLabItem} onClose={() => setSearchingJlac(false)} />
+        <JlacItemSearchModal onSelect={handleSelectJlacItem} onClose={() => setSearchingJlac(false)} />
       )}
     </Modal>
   );

@@ -1,6 +1,6 @@
 module Master
   # 検体検査の結果項目(施設マスタ)のメンテナンス。
-  # 配布の共有項目JLACコードマスタ(master_lab_items)から属性を引き当てて登録する。
+  # 配布の共有項目JLACコードマスタ(master_jlac_items)から属性を引き当てて登録する。
   class LabResultItemsController < BaseController
     before_action :set_record, only: %i[show update destroy]
 

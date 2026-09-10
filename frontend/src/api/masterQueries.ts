@@ -38,7 +38,7 @@ import {
   deleteLabPanelItem,
   deleteLabSpecimen,
   deleteMedicineDoseConversion,
-  fetchLabItemFilterOptions,
+  fetchJlacItemFilterOptions,
   fetchLabOrderItem,
   fetchLabOrderItemLayout,
   fetchLabOrderItemLayouts,
@@ -51,7 +51,7 @@ import {
   searchJfagyAllergens,
   searchJfagyDrugs,
   searchLabContainers,
-  searchLabItems,
+  searchJlacItems,
   searchLabOrderItems,
   searchLabPanelItems,
   searchLabSpecimens,
@@ -85,7 +85,7 @@ import {
   type LabReferenceRangePayload,
   type LabResultItemPayload,
   type LabContainerPayload,
-  type LabItemDrilldown,
+  type JlacItemDrilldown,
   type LabPanelItem,
   type MasterSearchResult,
   type LabOrderItemLayoutCellPayload,
@@ -480,10 +480,10 @@ export function useMedicineUsageCategories(enabled: boolean) {
 
 // 検査項目選択モーダルの結果一覧。名称検索は大項目リストの絞り込み専用なので
 // ここには渡さない(一覧は区分名称・大項目・材料・測定法の選択だけで決まる)。
-export function useLabItemSearch(drilldown: LabItemDrilldown, page: number, enabled: boolean) {
+export function useJlacItemSearch(drilldown: JlacItemDrilldown, page: number, enabled: boolean) {
   return useQuery({
-    queryKey: ["master", "lab_items", "search", drilldown, page],
-    queryFn: () => searchLabItems({ ...drilldown, page, per: MASTER_SEARCH_PER }),
+    queryKey: ["master", "jlac_items", "search", drilldown, page],
+    queryFn: () => searchJlacItems({ ...drilldown, page, per: MASTER_SEARCH_PER }),
     placeholderData: keepPreviousData,
     enabled,
   });
@@ -491,13 +491,13 @@ export function useLabItemSearch(drilldown: LabItemDrilldown, page: number, enab
 
 // 段階的絞り込みの選択肢。選択が変わるたびに引き直すため、リストが一瞬空に
 // ならないよう前回値を保持する。
-export function useLabItemFilterOptions(
-  params: LabItemDrilldown & { name?: string },
+export function useJlacItemFilterOptions(
+  params: JlacItemDrilldown & { name?: string },
   enabled: boolean,
 ) {
   return useQuery({
-    queryKey: ["master", "lab_items", "filter_options", params],
-    queryFn: () => fetchLabItemFilterOptions(params),
+    queryKey: ["master", "jlac_items", "filter_options", params],
+    queryFn: () => fetchJlacItemFilterOptions(params),
     placeholderData: keepPreviousData,
     staleTime: Infinity,
     enabled,

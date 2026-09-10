@@ -611,7 +611,7 @@ JP Core の `JP_MedicationRequest_Injection` プロファイルを参考にし�
 
 検査結果の項目は、施設の**結果項目マスタ**(`master_lab_result_items`、「マスタメンテ > 検体検査 > 検査結果項目」)で
 持ちます。オーダー項目(頼む単位)とは別のテーブルで、データ型(数値 / コード / 順序コード / 文字列)・単位・
-選択肢・材料を持ち、JLAC11 / JLAC10 / LOINC は任意の属性です。配布の共有項目JLACコードマスタ(`master_lab_items`)は
+選択肢・材料を持ち、JLAC11 / JLAC10 / LOINC は任意の属性です。配布の共有項目JLACコードマスタ(`master_jlac_items`)は
 取込のたびに全件洗い替えになる参照テーブルなので結果項目の本体にはせず、「配布JLACマスタから引き当て」で
 属性を写す元として使います。設計の経緯は `docs/lab-backlog.md` §1。
 

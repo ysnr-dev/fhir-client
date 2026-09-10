@@ -1,10 +1,12 @@
 module Master
-  class LabItemsController < BaseController
+  # 配布の共有項目JLACコードマスタ。取込と、段階的絞り込みの検索だけを持つ
+  # (施設の項目マスタは LabOrderItemsController / LabResultItemsController)。
+  class JlacItemsController < BaseController
     include Importable
     before_action :set_record, only: %i[show update destroy]
 
     def index
-      scope = Master::LabItem.all
+      scope = Master::JlacItem.all
       # カンマ区切りで複数指定可(検査結果編集画面が保存済みコードからマスタ情報を一括復元したり、
       # 検体検査オーダーの JLAC コードから検査結果の項目を展開したりするため)。
       scope = scope.where(jlac11_code: params[:jlac11_code].split(",")) if params[:jlac11_code].present?
@@ -28,7 +30,7 @@ module Master
     # distinct な値をマスタ収載順で返す。1リクエストで4リストぶんを返すため、
     # 選択のたびにリスト単位のリクエストが増えない。
     def filter_options
-      scope = Master::LabItem.all
+      scope = Master::JlacItem.all
       category_names = distinct_ordered(scope, :category_name)
 
       scope = scope.where(category_name: params[:category_name]) if params[:category_name].present?

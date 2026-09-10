@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { LabItem, LabOrderItemDetail, LabOrderItemPayload } from "../api/masterClient";
+import type { JlacItem, LabOrderItemDetail, LabOrderItemPayload } from "../api/masterClient";
 import {
   useLabContainers,
   useLabOrderItem,
@@ -13,7 +13,7 @@ import {
   type LabOrderItemFilters,
 } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
-import { LabItemSearchModal } from "../components/LabItemSearchModal";
+import { JlacItemSearchModal } from "../components/JlacItemSearchModal";
 import { LabResultItemSearchModal } from "../components/LabResultItemSearchModal";
 import { LAB_CATEGORIES, LAB_DATA_TYPE_LABELS, LAB_KIND_LABELS } from "../components/labOrderItemOptions";
 import { Modal } from "../components/Modal";
@@ -332,7 +332,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
   // 共有項目JLACコードマスタからの選択。コードと体系を埋め、名称が空なら補完する。
   // 検査分野・検体は JLAC マスタが正なので、選び直したら選択に合わせて入れ替える
   // (JLAC マスタ側が空、または対応する検体がマスタに無いときだけ元の選択を残す)。
-  function handleSelectLabItem(item: LabItem) {
+  function handleSelectJlacItem(item: JlacItem) {
     setSearchingJlac(false);
     const specimenCode = item.jlac11_specimen
       ? (specimenCodesByName.get(item.jlac11_specimen) ?? "")
@@ -580,7 +580,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       )}
 
       {searchingJlac && (
-        <LabItemSearchModal onSelect={handleSelectLabItem} onClose={() => setSearchingJlac(false)} />
+        <JlacItemSearchModal onSelect={handleSelectJlacItem} onClose={() => setSearchingJlac(false)} />
       )}
     </Modal>
   );

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_10_000300) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_10_000400) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -309,21 +309,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_10_000300) do
     t.index ["search_name"], name: "index_master_jfagy_drugs_on_search_name"
   end
 
-  create_table "master_lab_containers", force: :cascade do |t|
-    t.string "container_code", null: false
-    t.string "name", null: false
-    t.string "short_name"
-    t.string "cap_color"
-    t.string "additive"
-    t.string "capacity"
-    t.integer "display_order"
-    t.text "note"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["container_code"], name: "index_master_lab_containers_on_container_code", unique: true
-  end
-
-  create_table "master_lab_items", force: :cascade do |t|
+  create_table "master_jlac_items", force: :cascade do |t|
     t.string "category_name"
     t.string "reserve_category_name"
     t.string "emergency_flag"
@@ -361,9 +347,23 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_10_000300) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "search_major_item"
-    t.index ["fhir_item_name"], name: "index_master_lab_items_on_fhir_item_name"
-    t.index ["jlac10_code"], name: "index_master_lab_items_on_jlac10_code"
-    t.index ["jlac11_code"], name: "index_master_lab_items_on_jlac11_code", unique: true
+    t.index ["fhir_item_name"], name: "index_master_jlac_items_on_fhir_item_name"
+    t.index ["jlac10_code"], name: "index_master_jlac_items_on_jlac10_code"
+    t.index ["jlac11_code"], name: "index_master_jlac_items_on_jlac11_code", unique: true
+  end
+
+  create_table "master_lab_containers", force: :cascade do |t|
+    t.string "container_code", null: false
+    t.string "name", null: false
+    t.string "short_name"
+    t.string "cap_color"
+    t.string "additive"
+    t.string "capacity"
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["container_code"], name: "index_master_lab_containers_on_container_code", unique: true
   end
 
   create_table "master_lab_order_item_layout_cells", force: :cascade do |t|

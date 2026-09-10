@@ -36,10 +36,10 @@ RSpec.describe Master::LabResultItemDerivation do
   end
 
   it "JLAC11 付きの項目は配布マスタからデータ型・単位・選択肢を写し、材料コードを 17 桁から切り出す" do
-    Master::LabItem.create!(jlac11_code: "V2010000025000002", jlac10_code: "5F016130023011101",
+    Master::JlacItem.create!(jlac11_code: "V2010000025000002", jlac10_code: "5F016130023011101",
                             fhir_item_name: "HBs抗原", abbreviation: "HBsAg", data_type: "CO",
                             code_value_list: "1：陰性、2：陽性", code_oid: "urn:oid:1.2.3")
-    Master::LabItem.create!(jlac11_code: "E3019000025001385", fhir_item_name: "CRP", data_type: "PQ",
+    Master::JlacItem.create!(jlac11_code: "E3019000025001385", fhir_item_name: "CRP", data_type: "PQ",
                             display_unit: "mg/dL", xml_unit: "mg/dL")
     create_order_item("O0001", name: "HBs抗原定性", jlac_code: "V2010000025000002", jlac_code_system: "jlac11")
     create_order_item("O0002", name: "CRP", specimen_code: "019", jlac_code: "E3019000025001385",
@@ -58,9 +58,9 @@ RSpec.describe Master::LabResultItemDerivation do
   end
 
   it "JLAC10 の引き当ては収載順で先に来た配布マスタを採る" do
-    Master::LabItem.create!(jlac11_code: "A0001000010000001", jlac10_code: "1A010000001000001", data_type: "PQ",
+    Master::JlacItem.create!(jlac11_code: "A0001000010000001", jlac10_code: "1A010000001000001", data_type: "PQ",
                             display_unit: "g/dL")
-    Master::LabItem.create!(jlac11_code: "A0001000010000002", jlac10_code: "1A010000001000001", data_type: "ST")
+    Master::JlacItem.create!(jlac11_code: "A0001000010000002", jlac10_code: "1A010000001000001", data_type: "ST")
     create_order_item("O0001", name: "尿蛋白", jlac_code: "1A010000001000001", jlac_code_system: "jlac10")
 
     described_class.call(**no_csv)

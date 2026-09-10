@@ -26,7 +26,7 @@ export function MicroOrganismSearchModal({
   return (
     <Modal title="分離菌を検索" onClose={onClose}>
       {/* 結果フォーム(form 要素)の中に出すモーダルなので、form の入れ子を作らない
-          (入れ子は外側フォームのネイティブ submit を誘発する)。LabItemSearchModal と同じ。 */}
+          (入れ子は外側フォームのネイティブ submit を誘発する)。JlacItemSearchModal と同じ。 */}
       <div className="patient-search-form">
         <label>
           菌名

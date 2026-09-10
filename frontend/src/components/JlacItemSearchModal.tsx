@@ -1,11 +1,11 @@
 import { useState, type ReactNode } from "react";
-import type { LabItem, LabItemDrilldown } from "../api/masterClient";
-import { useLabItemFilterOptions, useLabItemSearch } from "../api/masterQueries";
+import type { JlacItem, JlacItemDrilldown } from "../api/masterClient";
+import { useJlacItemFilterOptions, useJlacItemSearch } from "../api/masterQueries";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 
-interface LabItemSearchModalProps {
-  onSelect: (item: LabItem) => void;
+interface JlacItemSearchModalProps {
+  onSelect: (item: JlacItem) => void;
   onClose: () => void;
 }
 
@@ -52,7 +52,7 @@ function DrilldownList({ title, values, selected, onSelect, children }: Drilldow
   );
 }
 
-export function LabItemSearchModal({ onSelect, onClose }: LabItemSearchModalProps) {
+export function JlacItemSearchModal({ onSelect, onClose }: JlacItemSearchModalProps) {
   const [name, setName] = useState("");
   const [categoryName, setCategoryName] = useState("");
   const [majorItem, setMajorItem] = useState("");
@@ -60,7 +60,7 @@ export function LabItemSearchModal({ onSelect, onClose }: LabItemSearchModalProp
   const [method, setMethod] = useState("");
   const [page, setPage] = useState(1);
 
-  const drilldown: LabItemDrilldown = {
+  const drilldown: JlacItemDrilldown = {
     category_name: categoryName || undefined,
     major_item: majorItem || undefined,
     jlac11_specimen: specimen || undefined,
@@ -68,7 +68,7 @@ export function LabItemSearchModal({ onSelect, onClose }: LabItemSearchModalProp
   };
 
   // 測定法は結果一覧を絞るだけで、その下位のリストが無いので選択肢の取得には要らない。
-  const options = useLabItemFilterOptions(
+  const options = useJlacItemFilterOptions(
     {
       name: name || undefined,
       category_name: categoryName || undefined,
@@ -77,7 +77,7 @@ export function LabItemSearchModal({ onSelect, onClose }: LabItemSearchModalProp
     },
     true,
   );
-  const { data, error, isFetching } = useLabItemSearch(drilldown, page, true);
+  const { data, error, isFetching } = useJlacItemSearch(drilldown, page, true);
 
   // 上位の絞り込みが変わると下位の選択は選択肢から消えうるので必ず解除する。
   // 名称検索も同じ扱い(大項目リストの中身が入れ替わるため)。
@@ -118,7 +118,7 @@ export function LabItemSearchModal({ onSelect, onClose }: LabItemSearchModalProp
   const hasNext = data ? page * data.per < data.total : false;
 
   return (
-    <Modal title="検査項目を選択" onClose={onClose} className="modal--lab-item">
+    <Modal title="共有項目JLACコードマスタから選択" onClose={onClose} className="modal--lab-item">
       <div className="master-search__form">
         <label className="lab-drilldown__category">
           区分名称

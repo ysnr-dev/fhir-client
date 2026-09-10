@@ -50,12 +50,14 @@
 > - 蓄積済みの結果(施設コード無し)は読み出し側で JLAC11 から読み替える。試薬単位の 17 桁は
 >   マスタの代表コードと下 5 桁が違うので、**測定物・識別・材料の 12 桁**で引き当てる
 >   (`jlac11AliasKey`)。材料コードまで違う旧結果(211 と 212 など)は読み替えられず別行のまま。
-> - 残課題: A-1 以降(基準値・パニック値・デルタチェックは結果項目マスタの行にぶら下げる)、
->   `master_lab_items` の改名、CSV での結果項目マスタ取込(B の器で扱う)。
+> - 配布コードマスタは `master_jlac_items`(`Master::JlacItem`、`/master/jlac_items`)へ改名した
+>   (2026-09-10。§1.5)。施設の項目マスタと名前が紛らわしく、役割が伝わらないため。
+> - 残課題: A-2 以降(パニック値・デルタチェックは結果項目マスタの行にぶら下げる)、
+>   CSV での結果項目マスタ取込(B の器で扱う)。
 
 ### 1.1 現状
 
-**［事実］** 結果項目の実体は共有項目 JLAC コードマスタ(`master_lab_items`。電子カルテ情報共有
+**［事実］** 結果項目の実体は共有項目 JLAC コードマスタ(当時の `master_lab_items`。現 `master_jlac_items`。電子カルテ情報共有
 サービスの配布 CSV、32 列)で、`jlac11_code` が NOT NULL、`jlac10_code` は任意
 (`backend/db/schema.rb:326-363`)。結果入力の項目選択(`components/LabItemSearchModal.tsx`)は
 このマスタから選び、`Observation.code` には JLAC11 の coding と略称の補助 coding だけを書く
@@ -146,12 +148,13 @@ both)を足す 1 テーブル案を書いていたが、次の 2 点で採らな
 **［導出］** 分けると **orderability のフラグが要らなくなる**。好中球のように単独で頼めない項目は
 結果項目マスタにだけ存在する、という事実がテーブルの所属で表れる。フラグで区別するより素直。
 
-**［事実］** 基準値・パニック値を配布マスタ側(`master_lab_items`)に持たせることはできない。
-取込が**全件洗い替え**で(`backend/app/services/master_import/lab_item_importer.rb` 冒頭の
-「replaces master_lab_items wholesale」)、次の配布ファイルの取込で消える。
+**［事実］** 基準値・パニック値を配布マスタ側(`master_jlac_items`)に持たせることはできない。
+取込が**全件洗い替え**で(`backend/app/services/master_import/jlac_item_importer.rb` 冒頭の
+「replaces master_jlac_items wholesale」)、次の配布ファイルの取込で消える。
 
-**［提案］** `master_lab_items` は施設の項目マスタではなく**配布のコードマスタ**なので、名前を
-`master_jlac_items` のように改めると責務がはっきりする。機能は変わらないので優先度は低い。
+**［提案→対応済み(2026-09-10)］** 配布のコードマスタは施設の項目マスタと役割が違うので、
+`master_lab_items` を **`master_jlac_items`** に改めた(モデル `Master::JlacItem`、API
+`/master/jlac_items`、取込画面の種別名「共有項目JLACコードマスタ」)。機能は変えていない。
 
 **［提案］** 設計メモ §4 の `lab_concepts`(1 テーブル + orderability)と違えるのは、あれが
 何も無い状態からの設計だから。いまはオーダー側の表が実在し、オーダー固有の属性を持っている。
