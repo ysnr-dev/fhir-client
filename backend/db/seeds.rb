@@ -220,13 +220,23 @@ if File.exist?(lab_reference_ranges_csv)
       age_from: row["age_from"].to_s.strip.presence&.to_i,
       age_to: row["age_to"].to_s.strip.presence&.to_i,
     }
-    if Master::LabReferenceRange.exists?(key)
+    panic = {
+      panic_lower: row["panic_lower"].to_s.strip.presence,
+      panic_upper: row["panic_upper"].to_s.strip.presence,
+    }
+
+    existing = Master::LabReferenceRange.find_by(key)
+    if existing
+      # 既にある行は基準値を上書きしない。パニック値だけは、未設定なら初期値を補う
+      # (基準値を先に入れてからパニック値を足したため)。
+      fill = panic.reject { |column, value| value.blank? || existing[column].present? }
+      existing.update!(fill) if fill.any?
       skipped += 1
       next
     end
 
     Master::LabReferenceRange.create!(
-      key.merge(
+      key.merge(panic).merge(
         lower_limit: row["lower_limit"].to_s.strip.presence,
         upper_limit: row["upper_limit"].to_s.strip.presence,
         display_order: row["display_order"].to_s.strip.presence&.to_i,

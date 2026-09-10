@@ -73,7 +73,8 @@ export function LabResultEntryModal({
   function handleSubmit(values: LabResultFormValues) {
     if (!patient?.id) return;
     createLabResult.mutate(
-      { values, patientId: patient.id, subject },
+      // パニック値の通知はこのオーダーの依頼医あてに出す。
+      { values, patientId: patient.id, subject, owner: order.requester },
       {
         onSuccess: () => {
           // 結果が付いた行の「結果登録」を閉じる(一覧は結果の有無も読んでいる)。

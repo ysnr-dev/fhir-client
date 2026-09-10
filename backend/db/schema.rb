@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_10_000400) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_10_000500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -452,6 +452,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_10_000400) do
     t.text "note"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.decimal "panic_lower", precision: 12, scale: 3
+    t.decimal "panic_upper", precision: 12, scale: 3
     t.index ["result_item_code"], name: "index_master_lab_reference_ranges_on_result_item_code"
   end
 

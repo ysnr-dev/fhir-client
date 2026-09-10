@@ -643,7 +643,7 @@ function ReferenceRangesEditor({ resultItemCode, unit, ranges }: ReferenceRanges
   return (
     <section className="lab-order-item__section">
       <div className="lab-order-item__section-head">
-        <h3>基準値{unit ? `(${unit})` : ""}</h3>
+        <h3>基準値・パニック値{unit ? `(${unit})` : ""}</h3>
         <button type="button" onClick={add} disabled={mutations.create.isPending}>
           行を追加
         </button>
@@ -659,6 +659,8 @@ function ReferenceRangesEditor({ resultItemCode, unit, ranges }: ReferenceRanges
               <th className="lab-order-item__compact">年齢(歳)</th>
               <th className="lab-order-item__compact">下限</th>
               <th className="lab-order-item__compact">上限</th>
+              <th className="lab-order-item__compact">パニック値(下)</th>
+              <th className="lab-order-item__compact">パニック値(上)</th>
               <th>備考</th>
               <th></th>
             </tr>
@@ -676,8 +678,9 @@ function ReferenceRangesEditor({ resultItemCode, unit, ranges }: ReferenceRanges
             ))}
             {ranges.length === 0 && (
               <tr>
-                <td colSpan={6} className="master-search__empty">
+                <td colSpan={8} className="master-search__empty">
                   基準値がありません。「行を追加」で下限・上限を登録すると、結果登録時に H/L を自動判定します。
+                  パニック値を入れると、外れたときに HH/LL と緊急異常値の通知が出ます。
                 </td>
               </tr>
             )}
@@ -696,6 +699,8 @@ interface ReferenceRangeRowProps {
     age_to?: number | null;
     lower_limit?: number | null;
     upper_limit?: number | null;
+    panic_lower?: number | null;
+    panic_upper?: number | null;
     note?: string | null;
   }) => void;
   onMoveUp?: () => void;
@@ -704,26 +709,27 @@ interface ReferenceRangeRowProps {
 }
 
 function ReferenceRangeRow({ range, onChange, onMoveUp, onMoveDown, onRemove }: ReferenceRangeRowProps) {
-  // 入力中の値。欄を離れたときに保存済みの値と違えば更新する。
-  const [draft, setDraft] = useState({
-    age_from: range.age_from === null ? "" : String(range.age_from),
-    age_to: range.age_to === null ? "" : String(range.age_to),
-    lower_limit: range.lower_limit === null ? "" : String(Number(range.lower_limit)),
-    upper_limit: range.upper_limit === null ? "" : String(Number(range.upper_limit)),
-    note: range.note ?? "",
+  const draftOf = (row: LabReferenceRange) => ({
+    age_from: row.age_from === null ? "" : String(row.age_from),
+    age_to: row.age_to === null ? "" : String(row.age_to),
+    lower_limit: row.lower_limit === null ? "" : String(Number(row.lower_limit)),
+    upper_limit: row.upper_limit === null ? "" : String(Number(row.upper_limit)),
+    panic_lower: row.panic_lower === null ? "" : String(Number(row.panic_lower)),
+    panic_upper: row.panic_upper === null ? "" : String(Number(row.panic_upper)),
+    note: row.note ?? "",
   });
+  // 入力中の値。欄を離れたときに保存済みの値と違えば更新する。
+  const [draft, setDraft] = useState(() => draftOf(range));
 
   useEffect(() => {
-    setDraft({
-      age_from: range.age_from === null ? "" : String(range.age_from),
-      age_to: range.age_to === null ? "" : String(range.age_to),
-      lower_limit: range.lower_limit === null ? "" : String(Number(range.lower_limit)),
-      upper_limit: range.upper_limit === null ? "" : String(Number(range.upper_limit)),
-      note: range.note ?? "",
-    });
+    setDraft(draftOf(range));
+    // draftOf は描画のたびに作り直すので依存に入れない(range が変わったときだけ戻す)。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
-  function commitNumber(field: "age_from" | "age_to" | "lower_limit" | "upper_limit") {
+  function commitNumber(
+    field: "age_from" | "age_to" | "lower_limit" | "upper_limit" | "panic_lower" | "panic_upper",
+  ) {
     const raw = draft[field].trim();
     const next = raw === "" ? null : Number(raw);
     if (raw !== "" && Number.isNaN(next)) return;
@@ -790,6 +796,26 @@ function ReferenceRangeRow({ range, onChange, onMoveUp, onMoveDown, onRemove }: 
           onChange={(e) => setDraft({ ...draft, upper_limit: e.target.value })}
           onBlur={() => commitNumber("upper_limit")}
           aria-label="上限"
+        />
+      </td>
+      <td className="lab-order-item__compact">
+        <input
+          type="number"
+          step="any"
+          value={draft.panic_lower}
+          onChange={(e) => setDraft({ ...draft, panic_lower: e.target.value })}
+          onBlur={() => commitNumber("panic_lower")}
+          aria-label="パニック値(下)"
+        />
+      </td>
+      <td className="lab-order-item__compact">
+        <input
+          type="number"
+          step="any"
+          value={draft.panic_upper}
+          onChange={(e) => setDraft({ ...draft, panic_upper: e.target.value })}
+          onBlur={() => commitNumber("panic_upper")}
+          aria-label="パニック値(上)"
         />
       </td>
       <td>

@@ -48,6 +48,41 @@ RSpec.describe "Master::LabReferenceRanges", type: :request do
     expect(response).to have_http_status(:unprocessable_content)
   end
 
+  describe "パニック値(緊急異常値)" do
+    it "基準値と同じ行に持ち、一覧・詳細に添えて返る" do
+      Master::LabReferenceRange.create!(result_item_code: "R0001", lower_limit: 3.6, upper_limit: 4.8,
+                                        panic_lower: 2.5, panic_upper: 6.5)
+
+      get "/master/lab_result_items/R0001"
+
+      range = body["reference_ranges"].first
+      expect(range["panic_lower"]).to eq("2.5")
+      expect(range["panic_upper"]).to eq("6.5")
+    end
+
+    it "基準値を持たずパニック値だけの行も登録できる" do
+      post "/master/lab_reference_ranges", params: { result_item_code: "R0001", panic_upper: 6.5 }, as: :json
+      expect(response).to have_http_status(:created)
+    end
+
+    it "基準値の内側に入るパニック値・逆転したパニック値は登録できない" do
+      post "/master/lab_reference_ranges", params: {
+        result_item_code: "R0001", lower_limit: 3.6, upper_limit: 4.8, panic_lower: 4.0,
+      }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+
+      post "/master/lab_reference_ranges", params: {
+        result_item_code: "R0001", lower_limit: 3.6, upper_limit: 4.8, panic_upper: 4.5,
+      }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+
+      post "/master/lab_reference_ranges", params: {
+        result_item_code: "R0001", panic_lower: 7, panic_upper: 2,
+      }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   it "更新・削除でき、結果項目を消すと基準値も消える" do
     range = Master::LabReferenceRange.create!(result_item_code: "R0001", lower_limit: 0.6, upper_limit: 1.1)
 

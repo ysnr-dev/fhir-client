@@ -735,8 +735,8 @@ export interface LabResultItem {
   reference_ranges?: LabReferenceRange[];
 }
 
-// 結果項目の基準値。数値型(PQ)の結果項目に対する性別・年齢帯ごとの下限・上限。
-// 下限・上限は Rails の decimal がそのまま文字列で届く。
+// 結果項目の基準値とパニック値(緊急異常値)のしきい値。数値型(PQ)の結果項目に対する
+// 性別・年齢帯ごとの境界で、どちらも同じ行に持つ。数値は Rails の decimal が文字列で届く。
 export interface LabReferenceRange {
   id: number;
   result_item_code: string;
@@ -747,6 +747,9 @@ export interface LabReferenceRange {
   age_to: number | null;
   lower_limit: string | null;
   upper_limit: string | null;
+  // パニック値。これを下回る/上回ると緊急異常値(LL / HH)として扱う。
+  panic_lower: string | null;
+  panic_upper: string | null;
   display_order: number | null;
   note: string | null;
 }
@@ -758,6 +761,8 @@ export interface LabReferenceRangePayload {
   age_to?: number | null;
   lower_limit?: number | null;
   upper_limit?: number | null;
+  panic_lower?: number | null;
+  panic_upper?: number | null;
   display_order?: number | null;
   note?: string | null;
 }

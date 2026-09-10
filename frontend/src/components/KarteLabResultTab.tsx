@@ -189,7 +189,9 @@ function CreateForm({
   );
 
   function handleSubmit(values: LabResultFormValues) {
-    createLabResult.mutate({ values, patientId, subject }, { onSuccess: onSaved });
+    // パニック値の通知は、紐付けたオーダーの依頼医あてに出す。
+    const owner = orders.candidates.find((c) => c.id === values.orderId)?.requester;
+    createLabResult.mutate({ values, patientId, subject, owner }, { onSuccess: onSaved });
   }
 
   return (
@@ -235,10 +237,12 @@ function EditForm({
     // 別患者の検査結果を更新すると subject が書き換わり、検査結果が付け替わってしまう。
     if (!report || patientMismatch) return;
     const originalIds = observations.map((o) => o.id).filter((id): id is string => Boolean(id));
+    const owner = orders.candidates.find((c) => c.id === values.orderId)?.requester;
     updateLabResult.mutate(
       {
         values,
         patientId,
+        owner,
         reportId,
         originalObservationIds: originalIds,
         // 結果側が所有する Specimen だけ(ラベル由来はオーダー側の台帳)。

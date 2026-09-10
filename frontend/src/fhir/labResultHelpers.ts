@@ -3,6 +3,13 @@ import { categoryCoding, codingBySystem, findSettingDisplay, SETTING_OPTIONS } f
 
 export { SETTING_OPTIONS };
 import type { LabReferenceRange, LabResultItem } from "../api/masterClient";
+import {
+  buildCancelledPanicTask,
+  buildPanicTask,
+  hasPanicValue,
+  panicItemsOf,
+  panicSummaryOf,
+} from "./labPanicHelpers";
 import { calculateAge } from "./patientHelpers";
 import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 
@@ -40,7 +47,7 @@ export function isLabelSpecimen(specimen: fhir4.Specimen): boolean {
 
 // Observation.interpretation(H/L/N)。JP-CLINS の JP-Observation-LabResult-eCS が
 // 参照する v3 ObservationInterpretation コードシステム。
-const INTERPRETATION_SYSTEM =
+export const INTERPRETATION_SYSTEM =
   "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation";
 
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
@@ -49,7 +56,7 @@ const REFERENCE_RANGE_MEANING_SYSTEM = "http://terminology.hl7.org/CodeSystem/re
 const REPORT_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0074";
 const LOINC_SYSTEM = "http://loinc.org";
 const LOINC_LAB_REPORT_CODE = "11502-2"; // Laboratory report
-const UNITS_OF_MEASURE_SYSTEM = "http://unitsofmeasure.org";
+export const UNITS_OF_MEASURE_SYSTEM = "http://unitsofmeasure.org";
 
 // JP Core の検体検査結果プロファイル。
 const OBSERVATION_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Observation_LabResult";
@@ -79,16 +86,24 @@ export interface SpecimenRef {
 
 export type LabResultSetting = "inpatient" | "outpatient" | "";
 
-// 結果値の H/L 判定。フォームでは未選択(空)を許し、FHIR には空を "N" として記録する。
-export type LabInterpretation = "H" | "L" | "";
+// 結果値の判定。HH / LL はパニック値(緊急異常値)で、基準値を外れた H / L より重い。
+// フォームでは未選択(空)を許し、FHIR には空を "N" として記録する。
+export type LabInterpretation = "HH" | "H" | "L" | "LL" | "";
 
-export const INTERPRETATION_OPTIONS: Exclude<LabInterpretation, "">[] = ["H", "L"];
+export const INTERPRETATION_OPTIONS: Exclude<LabInterpretation, "">[] = ["HH", "H", "L", "LL"];
 
 const INTERPRETATION_DISPLAYS: Record<string, string> = {
+  HH: "Critical high",
   H: "High",
   L: "Low",
+  LL: "Critical low",
   N: "Normal",
 };
+
+/** パニック値(緊急異常値)の判定かどうか。 */
+export function isPanicInterpretation(interpretation: string): boolean {
+  return interpretation === "HH" || interpretation === "LL";
+}
 
 // 基準値の適用に要る患者の属性(性別と生年月日)。採取日の満年齢で年齢帯を選ぶ。
 export interface LabResultSubject {
@@ -125,11 +140,14 @@ export function matchReferenceRange(
   });
 }
 
-// 結果値と基準値の突き合わせ。下限未満なら L、上限超なら H、範囲内(または判定できない)なら空。
+// 結果値としきい値の突き合わせ。パニック値を外れていれば LL / HH、基準値を外れていれば
+// L / H、範囲内(または判定できない)なら空。パニック値を先に見るのは、こちらが重いため。
 export function judgeInterpretation(value: string, range: LabReferenceRange | undefined): LabInterpretation {
   if (!range || value.trim() === "") return "";
   const n = Number(value);
   if (Number.isNaN(n)) return "";
+  if (range.panic_lower != null && n < Number(range.panic_lower)) return "LL";
+  if (range.panic_upper != null && n > Number(range.panic_upper)) return "HH";
   if (range.lower_limit != null && n < Number(range.lower_limit)) return "L";
   if (range.upper_limit != null && n > Number(range.upper_limit)) return "H";
   return "";
@@ -426,11 +444,56 @@ function buildObservation(
   return resource;
 }
 
+/**
+ * パニック値(緊急異常値)の通知。値がパニック値のときは未確認の Task を作り(既にあれば
+ * 内容を更新して未確認に戻し)、値が直ったら取り下げる。宛先はオーダーの依頼医。
+ */
+function panicTaskEntries(
+  values: LabResultFormValues,
+  patientId: string,
+  reportReference: string,
+  owner?: fhir4.Reference,
+  existingPanicTask?: fhir4.Task,
+): fhir4.BundleEntry[] {
+  if (!hasPanicValue(values)) {
+    // パニック値でなくなった通知だけ取り下げる(元から無ければ何もしない)。
+    return existingPanicTask?.id && existingPanicTask.status !== "cancelled"
+      ? [
+          {
+            resource: buildCancelledPanicTask(existingPanicTask),
+            request: { method: "PUT", url: `Task/${existingPanicTask.id}` },
+          },
+        ]
+      : [];
+  }
+
+  const task = buildPanicTask(
+    {
+      reportReference,
+      patientId,
+      owner,
+      items: panicItemsOf(values),
+      summary: panicSummaryOf(values),
+      specimenDate: values.specimenDate,
+    },
+    existingPanicTask,
+  );
+  return [
+    {
+      resource: task,
+      request: existingPanicTask?.id
+        ? { method: "PUT", url: `Task/${existingPanicTask.id}` }
+        : { method: "POST", url: "Task" },
+    },
+  ];
+}
+
 function buildLabResultTransactionBundle(
   values: LabResultFormValues,
   patientId: string,
   labelSpecimens: fhir4.Specimen[],
   subject?: LabResultSubject,
+  panic?: LabPanicContext,
   reportId?: string,
   originalObservationIds?: string[],
   originalSpecimens?: SpecimenRef[],
@@ -544,8 +607,15 @@ function buildLabResultTransactionBundle(
       ...observationEntries,
       ...removedObservationEntries,
       ...removedSpecimenEntries,
+      ...panicTaskEntries(values, patientId, reportReference, panic?.owner, panic?.existingTask),
     ],
   };
+}
+
+/** パニック値の通知に要る文脈。宛先(依頼医)と、更新時の既存の通知。 */
+export interface LabPanicContext {
+  owner?: fhir4.Reference;
+  existingTask?: fhir4.Task;
 }
 
 export function buildLabResultBundle(
@@ -553,8 +623,9 @@ export function buildLabResultBundle(
   patientId: string,
   labelSpecimens: fhir4.Specimen[] = [],
   subject?: LabResultSubject,
+  panic?: LabPanicContext,
 ): fhir4.Bundle {
-  return buildLabResultTransactionBundle(values, patientId, labelSpecimens, subject);
+  return buildLabResultTransactionBundle(values, patientId, labelSpecimens, subject, panic);
 }
 
 export function buildLabResultUpdateBundle(
@@ -565,12 +636,14 @@ export function buildLabResultUpdateBundle(
   originalSpecimens: SpecimenRef[],
   labelSpecimens: fhir4.Specimen[] = [],
   subject?: LabResultSubject,
+  panic?: LabPanicContext,
 ): fhir4.Bundle {
   return buildLabResultTransactionBundle(
     values,
     patientId,
     labelSpecimens,
     subject,
+    panic,
     reportId,
     originalObservationIds,
     originalSpecimens,
@@ -644,17 +717,21 @@ function interpretationCodeOf(obs: fhir4.Observation): string {
   return "";
 }
 
-// H/L のみ表示・フォームの対象にする。"N"(および未記録)は通常表示として扱う。
+// HH/H/L/LL のみ表示・フォームの対象にする。"N"(および未記録)は通常表示として扱う。
 function formInterpretationOf(obs: fhir4.Observation): LabInterpretation {
   const code = interpretationCodeOf(obs);
-  return code === "H" || code === "L" ? code : "";
+  return INTERPRETATION_OPTIONS.includes(code as Exclude<LabInterpretation, "">)
+    ? (code as LabInterpretation)
+    : "";
 }
 
-// H/L 判定に応じた表示用クラス修飾子を返す。H: 赤字 / L: 青字。
+// 判定に応じた表示用クラス修飾子を返す。H: 赤字 / L: 青字 / HH・LL(パニック値): 反転して目立たせる。
 export function interpretationClass(
   interpretation: string,
   base: string,
 ): string {
+  if (interpretation === "HH") return `${base} ${base}--critical-high`;
+  if (interpretation === "LL") return `${base} ${base}--critical-low`;
   if (interpretation === "H") return `${base} ${base}--high`;
   if (interpretation === "L") return `${base} ${base}--low`;
   return base;
