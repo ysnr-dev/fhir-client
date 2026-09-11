@@ -29,6 +29,10 @@ import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeli
 import {
   buildActivityProvenanceEntry,
   buildOrderProvenanceEntry,
+  buildReviewProvenance,
+  latestReview,
+  provenancesOf,
+  reviewProvenanceEntry,
   type OrderActivity,
   type OrderEnterer,
 } from "../fhir/provenanceHelpers";
@@ -77,8 +81,20 @@ import {
   type LabResultSummary,
   type SpecimenRef,
 } from "../fhir/labResultHelpers";
-import { isPanicTask, LAB_PANIC_TASK_CODE } from "../fhir/labPanicHelpers";
-import { ALERT_PRIORITY_PARAM, splitNotificationBundle } from "../fhir/notificationHelpers";
+import { LAB_PANIC_TASK_CODE } from "../fhir/labPanicHelpers";
+import {
+  ALERT_PRIORITY_PARAM,
+  buildCompletedNotificationTask,
+  completeNotificationEntry,
+  hasTaskCode,
+  splitNotificationBundle,
+} from "../fhir/notificationHelpers";
+import {
+  RESULT_REVIEW_NOTE,
+  RESULT_REVIEW_TASK_CODE,
+  resultReviewTaskEntries,
+  type ReviewReportKind,
+} from "../fhir/resultReviewHelpers";
 import {
   completeNotificationEntries,
   notificationRows,
@@ -4633,16 +4649,146 @@ export function useLabObservationHistories(observationIds: string[]) {
 
 const NOTIFICATION_TASK_KEY = ["Task", "notification"];
 
-/** この検査結果に付いている通知。訂正で出し直す・取り下げるために引く。 */
-async function fetchPanicTask(reportId: string): Promise<fhir4.Task | undefined> {
+/** このレポートに付いている種別の通知。訂正で出し直す・取り下げるために引く。 */
+async function fetchReportTask(reportId: string, code: string): Promise<fhir4.Task | undefined> {
   const params = new URLSearchParams();
   params.set("focus", `DiagnosticReport/${reportId}`);
-  params.set("code", `${TASK_CODE_SYSTEM}|${LAB_PANIC_TASK_CODE.code}`);
+  params.set("code", `${TASK_CODE_SYSTEM}|${code}`);
   params.set("_count", "5");
   const { data: bundle } = await searchResource<fhir4.Task>("Task", params);
   return (bundle.entry ?? [])
     .map((entry) => entry.resource as fhir4.Task | undefined)
-    .find((task): task is fhir4.Task => Boolean(task && isPanicTask(task)));
+    .find((task): task is fhir4.Task => Boolean(task && hasTaskCode(task, code)));
+}
+
+/**
+ * この検査結果を誰がいつ確認したか。詳細を開いたときだけ引く(一覧には載せない)。
+ * 確認の正本は来歴なので、通知(Task)ではなくこちらを読む。
+ */
+export function useResultReviewProvenance(reportId: string | undefined) {
+  const params = new URLSearchParams();
+  if (reportId) params.set("target", `DiagnosticReport/${reportId}`);
+  params.set("_sort", "recorded");
+  params.set("_count", "20");
+
+  return useQuery({
+    queryKey: ["Provenance", "search", "report", reportId],
+    queryFn: () => searchResource<fhir4.Provenance>("Provenance", params),
+    select: (result) => latestReview(provenancesOf(result.data)),
+    enabled: Boolean(reportId),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * この患者の未確認のレポート id。カルテの採取日ペインの印に使う。
+ * 未確認は通知(Task)が未対応であることと同じなので、来歴ではなく通知を引く。
+ */
+export function useUnreviewedReportIds(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  params.set("code", `${TASK_CODE_SYSTEM}|${RESULT_REVIEW_TASK_CODE.code}`);
+  params.set("status", "requested");
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("_count", String(WORKLIST_PAGE));
+
+  return useQuery({
+    queryKey: [...NOTIFICATION_TASK_KEY, "unreviewed", patientId],
+    queryFn: () => searchResource<fhir4.Task>("Task", params),
+    select: (result) =>
+      new Set(
+        (result.data.entry ?? [])
+          .map((entry) => (entry.resource as fhir4.Task | undefined)?.focus?.reference)
+          .map((reference) => reference?.split("/").pop())
+          .filter((id): id is string => Boolean(id)),
+      ),
+    enabled: Boolean(patientId),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * 検査結果を確認する。来歴(正本)を作り、その結果あての通知が未対応なら同じ transaction で
+ * 対応済みにする。宛先でない医師が先に読むこともあるので、確認できる人は限らない。
+ */
+export function useMarkResultReviewed() {
+  const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
+  return useMutation({
+    mutationFn: async (reportId: string) => {
+      if (!enterer) throw new Error("医療従事者に紐付いたアカウントでログインしてください");
+      const task = await fetchReportTask(reportId, RESULT_REVIEW_TASK_CODE.code);
+      const entry: fhir4.BundleEntry[] = [
+        reviewProvenanceEntry(buildReviewProvenance(`DiagnosticReport/${reportId}`, enterer)),
+      ];
+      if (task && task.status === "requested") {
+        entry.push(
+          completeNotificationEntry(
+            buildCompletedNotificationTask(task, enterer, RESULT_REVIEW_NOTE),
+          ),
+        );
+      }
+      return postBundle({ resourceType: "Bundle", type: "transaction", entry });
+    },
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["Provenance"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+    },
+  });
+}
+
+/** オーダーの依頼医。通知の宛先に使う。 */
+async function fetchOrderRequester(orderId: string): Promise<fhir4.Reference | undefined> {
+  const { data } = await readResource<fhir4.ServiceRequest>("ServiceRequest", orderId);
+  return data.requester;
+}
+
+/**
+ * 結果保存の Bundle に、検査結果確認の通知を足す。
+ *
+ * 細菌検査・病理は Bundle を組み立ててから保存フックに渡す作りなので、宛先(依頼医)と
+ * 既にある通知はここで引く。中間報告のうちは通知しない(検体検査と同じ)。
+ */
+async function withResultReviewTask(
+  bundle: fhir4.Bundle,
+  kind: ReviewReportKind,
+  summaryOf: (report: fhir4.DiagnosticReport) => string,
+): Promise<fhir4.Bundle> {
+  const entry = bundle.entry ?? [];
+  const reportEntry = entry.find((e) => e.resource?.resourceType === "DiagnosticReport");
+  const report = reportEntry?.resource as fhir4.DiagnosticReport | undefined;
+  const reference = report?.id ? `DiagnosticReport/${report.id}` : reportEntry?.fullUrl;
+  if (!report || !reference || report.status === "preliminary") return bundle;
+
+  const patientId = report.subject?.reference?.split("/").pop() ?? "";
+  const orderReference = report.basedOn?.[0]?.reference;
+  const orderId = orderReference?.split("/").pop();
+  const [owner, existingTask] = await Promise.all([
+    orderId ? fetchOrderRequester(orderId) : Promise.resolve(undefined),
+    report.id
+      ? fetchReportTask(report.id, RESULT_REVIEW_TASK_CODE.code)
+      : Promise.resolve(undefined),
+  ]);
+
+  return {
+    ...bundle,
+    entry: [
+      ...entry,
+      ...resultReviewTaskEntries(
+        {
+          reportReference: reference,
+          patientId,
+          owner,
+          kind,
+          date: report.effectiveDateTime?.slice(0, 10) ?? "",
+          summary: summaryOf(report),
+          basedOn: orderReference ? [{ reference: orderReference }] : undefined,
+        },
+        true,
+        existingTask,
+      ),
+    ],
+  };
 }
 
 /** 一覧・件数に共通の検索条件。宛先を指定すると自分あてだけに絞る。 */
@@ -4794,11 +4940,12 @@ export function useUpdateLabResult() {
       subject?: LabResultSubject;
       owner?: fhir4.Reference;
     }) => {
-      const [labelSpecimens, existingTask] = await Promise.all([
+      const [labelSpecimens, existingPanicTask, existingReviewTask] = await Promise.all([
         fetchLabelSpecimens(values.orderId),
         // 訂正でパニック値が出た/直ったときに通知を出し直す・取り下げるため、
-        // この結果に付いている通知を先に引く。
-        fetchPanicTask(reportId),
+        // また訂正した結果を読み直してもらうため、この結果に付いている通知を先に引く。
+        fetchReportTask(reportId, LAB_PANIC_TASK_CODE.code),
+        fetchReportTask(reportId, RESULT_REVIEW_TASK_CODE.code),
       ]);
       return postBundle(
         buildLabResultUpdateBundle(
@@ -4809,7 +4956,7 @@ export function useUpdateLabResult() {
           originalSpecimens,
           labelSpecimens,
           subject,
-          { owner, existingTask },
+          { owner, existingPanicTask, existingReviewTask },
         ),
       );
     },
@@ -4863,10 +5010,12 @@ export function useMicroResultDetail(reportId: string | undefined) {
 export function useCreateMicroResult() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: async (bundle: fhir4.Bundle) =>
+      postBundle(await withResultReviewTask(bundle, "micro", microReviewSummary)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
 }
@@ -4874,13 +5023,28 @@ export function useCreateMicroResult() {
 export function useUpdateMicroResult() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: async (bundle: fhir4.Bundle) =>
+      postBundle(await withResultReviewTask(bundle, "micro", microReviewSummary)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "detail"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
+}
+
+/** 細菌検査の通知に出す要約。検体が何かで「どの検査の結果か」が分かる。 */
+function microReviewSummary(report: fhir4.DiagnosticReport): string {
+  return report.specimen?.[0]?.display ?? "";
+}
+
+/** 病理の通知に出す要約。検体(臓器・部位)を並べる。 */
+function pathoReviewSummary(report: fhir4.DiagnosticReport): string {
+  const names = (report.specimen ?? [])
+    .map((specimen) => specimen.display)
+    .filter((name): name is string => Boolean(name));
+  return names.length > 2 ? `${names.slice(0, 2).join("・")} ほか` : names.join("・");
 }
 
 export function useDeleteMicroResult() {
@@ -9989,11 +10153,13 @@ export function usePathoResultDetail(reportId: string | undefined) {
 export function useCreatePathoResult() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: async (bundle: fhir4.Bundle) =>
+      postBundle(await withResultReviewTask(bundle, "patho", pathoReviewSummary)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "patho-worklist"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
 }
@@ -10001,12 +10167,14 @@ export function useCreatePathoResult() {
 export function useUpdatePathoResult() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: async (bundle: fhir4.Bundle) =>
+      postBundle(await withResultReviewTask(bundle, "patho", pathoReviewSummary)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "detail"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "patho-worklist"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
 }
@@ -10032,6 +10200,7 @@ export function useDeletePathoResult() {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "patho-worklist"] });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
 }

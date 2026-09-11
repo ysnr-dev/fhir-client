@@ -18,11 +18,14 @@ export function SpecimenDateList({
   entries,
   selectedId,
   isLoading,
+  unreviewedIds,
   onSelect,
 }: {
   entries: readonly SpecimenDateEntry[];
   selectedId: string | undefined;
   isLoading: boolean;
+  /** まだ誰も確認していない結果の id。行の右肩に印を出す。 */
+  unreviewedIds?: ReadonlySet<string>;
   onSelect: (reportId: string) => void;
 }) {
   return (
@@ -46,23 +49,30 @@ export function SpecimenDateList({
                 <h5 className="karte-daylist__year-title">{group.year}年</h5>
               )}
               <ul className="karte-daylist__days">
-                {group.entries.map((entry) => (
-                  <li key={entry.id}>
-                    <button
-                      type="button"
-                      className={`karte-daylist__date${
-                        entry.id === selectedId ? " karte-daylist__date--selected" : ""
-                      }`}
-                      aria-current={entry.id === selectedId || undefined}
-                      // 行は月日だけなので、年を含む日付は読み上げ・ツールチップで補う。
-                      title={karteDayLabel(entry.date)}
-                      aria-label={karteDayLabel(entry.date)}
-                      onClick={() => onSelect(entry.id)}
-                    >
-                      {karteDayShortLabel(entry.date)}
-                    </button>
-                  </li>
-                ))}
+                {group.entries.map((entry) => {
+                  const unreviewed = unreviewedIds?.has(entry.id) ?? false;
+                  const label = `${karteDayLabel(entry.date)}${unreviewed ? "（未確認）" : ""}`;
+                  return (
+                    <li key={entry.id}>
+                      <button
+                        type="button"
+                        className={`karte-daylist__date${
+                          entry.id === selectedId ? " karte-daylist__date--selected" : ""
+                        }`}
+                        aria-current={entry.id === selectedId || undefined}
+                        // 行は月日だけなので、年を含む日付は読み上げ・ツールチップで補う。
+                        title={label}
+                        aria-label={label}
+                        onClick={() => onSelect(entry.id)}
+                      >
+                        {karteDayShortLabel(entry.date)}
+                        {unreviewed && (
+                          <span className="karte-daylist__unreviewed" aria-hidden="true" />
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ))}

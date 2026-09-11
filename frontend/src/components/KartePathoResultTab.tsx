@@ -4,6 +4,7 @@ import {
   useDeletePathoResult,
   usePathoOrderCandidates,
   usePathoResultEntries,
+  useUnreviewedReportIds,
   useUpdatePathoResult,
 } from "../api/queries";
 import {
@@ -18,6 +19,7 @@ import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { PathoResultDetailPanel } from "./PathoResultDetailPanel";
 import { PathoResultForm } from "./PathoResultForm";
+import { ResultReviewAction } from "./ResultReviewAction";
 import { SpecimenDateList } from "./SpecimenDateList";
 
 // カルテ画面の「病理検査」タブ(検査結果配下)。「細菌検査」タブと同じ構成で、左端の
@@ -43,6 +45,7 @@ export function KartePathoResultTab({ patientId, view, onViewChange }: KartePath
   useEffect(() => setForm(null), [view]);
 
   const { entries, isLoading, error } = usePathoResultEntries(patientId);
+  const unreviewed = useUnreviewedReportIds(patientId);
   const deletePathoResult = useDeletePathoResult();
 
   // view が指すレポートが見つからないとき(削除済み・古いリンク)は最新に落とす。
@@ -94,6 +97,7 @@ export function KartePathoResultTab({ patientId, view, onViewChange }: KartePath
         entries={entries}
         selectedId={selected?.id}
         isLoading={isLoading}
+        unreviewedIds={unreviewed.data}
         onSelect={(reportId) => onViewChange(reportId)}
       />
 
@@ -101,6 +105,8 @@ export function KartePathoResultTab({ patientId, view, onViewChange }: KartePath
         <div className="karte-tabpanel__header">
           <h3>病理診断レポート</h3>
           <div className="karte-tabpanel__actions">
+            {/* 確認は結果に記録を残す操作なので、登録・編集のボタンから離して左端に置く。 */}
+            {selected && <ResultReviewAction reportId={selected.id} />}
             <button type="button" onClick={() => setForm({ kind: "create" })}>
               新規登録
             </button>

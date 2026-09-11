@@ -11,6 +11,7 @@ import {
 } from "./labPanicHelpers";
 import { buildCancelledNotificationTask } from "./notificationHelpers";
 import { calculateAge } from "./patientHelpers";
+import { resultReviewTaskEntries } from "./resultReviewHelpers";
 import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 
 // ローカル拡張・コードシステム。正式な CodeSystem が定義されていない(または
@@ -607,12 +608,26 @@ function panicTaskEntries(
   ];
 }
 
+/** 結果確認の通知の内容。「何の結果が出たか」が一覧で分かる程度に短くまとめる。 */
+function labReviewSummary(values: LabResultFormValues): string {
+  const names = Array.from(
+    new Set(
+      values.lines
+        .map((line) => line.item?.specimen_name)
+        .filter((name): name is string => Boolean(name)),
+    ),
+  );
+  const specimens = names.length > 2 ? `${names.slice(0, 2).join("・")} ほか` : names.join("・");
+  const count = `${values.lines.length} 項目`;
+  return specimens ? `${specimens}（${count}）` : count;
+}
+
 function buildLabResultTransactionBundle(
   values: LabResultFormValues,
   patientId: string,
   labelSpecimens: fhir4.Specimen[],
   subject?: LabResultSubject,
-  panic?: LabPanicContext,
+  notifications?: LabResultNotificationContext,
   reportId?: string,
   originalObservationIds?: string[],
   originalSpecimens?: SpecimenRef[],
@@ -735,15 +750,36 @@ function buildLabResultTransactionBundle(
       ...observationEntries,
       ...removedObservationEntries,
       ...removedSpecimenEntries,
-      ...panicTaskEntries(values, patientId, reportReference, panic?.owner, panic?.existingTask),
+      ...panicTaskEntries(
+        values,
+        patientId,
+        reportReference,
+        notifications?.owner,
+        notifications?.existingPanicTask,
+      ),
+      ...resultReviewTaskEntries(
+        {
+          reportReference,
+          patientId,
+          owner: notifications?.owner,
+          kind: "lab",
+          date: values.specimenDate,
+          summary: labReviewSummary(values),
+          basedOn: values.orderId ? [{ reference: `ServiceRequest/${values.orderId}` }] : undefined,
+        },
+        // 中間報告のうちは読ませない(値が変わりうる)。最終報告と、その後の訂正で出す。
+        !isPreliminaryReport(status),
+        notifications?.existingReviewTask,
+      ),
     ],
   };
 }
 
-/** パニック値の通知に要る文脈。宛先(依頼医)と、更新時の既存の通知。 */
-export interface LabPanicContext {
+/** 結果に付く通知(パニック値・結果確認)の文脈。宛先(依頼医)と、更新時の既存の通知。 */
+export interface LabResultNotificationContext {
   owner?: fhir4.Reference;
-  existingTask?: fhir4.Task;
+  existingPanicTask?: fhir4.Task;
+  existingReviewTask?: fhir4.Task;
 }
 
 export function buildLabResultBundle(
@@ -751,9 +787,9 @@ export function buildLabResultBundle(
   patientId: string,
   labelSpecimens: fhir4.Specimen[] = [],
   subject?: LabResultSubject,
-  panic?: LabPanicContext,
+  notifications?: LabResultNotificationContext,
 ): fhir4.Bundle {
-  return buildLabResultTransactionBundle(values, patientId, labelSpecimens, subject, panic);
+  return buildLabResultTransactionBundle(values, patientId, labelSpecimens, subject, notifications);
 }
 
 export function buildLabResultUpdateBundle(
@@ -764,14 +800,14 @@ export function buildLabResultUpdateBundle(
   originalSpecimens: SpecimenRef[],
   labelSpecimens: fhir4.Specimen[] = [],
   subject?: LabResultSubject,
-  panic?: LabPanicContext,
+  notifications?: LabResultNotificationContext,
 ): fhir4.Bundle {
   return buildLabResultTransactionBundle(
     values,
     patientId,
     labelSpecimens,
     subject,
-    panic,
+    notifications,
     reportId,
     originalObservationIds,
     originalSpecimens,

@@ -207,6 +207,48 @@ function provenanceEntry(
 }
 
 /**
+ * 検査結果の確認(既読)の来歴。対象 1 件につき 1 操作 = 1 件を新しく作る。
+ *
+ * オーダーの承認と違い、直す対象の活動がありません(誰かの入力を承認するのではなく、
+ * 出来上がった結果を読んだという記録)。agent は verifier だけで activity は持たず、
+ * 署名だけが「誰がいつ読んだか」を表します。
+ */
+export function buildReviewProvenance(
+  targetReference: string,
+  reviewer: OrderEnterer,
+  when: string = nowFhirDateTime(),
+): fhir4.Provenance {
+  const who: fhir4.Reference = {
+    reference: `Practitioner/${reviewer.practitionerId}`,
+    display: reviewer.display || undefined,
+  };
+  return {
+    resourceType: "Provenance",
+    target: [{ reference: targetReference }],
+    recorded: when,
+    agent: [{ type: agentType(VERIFIER), who }],
+    signature: [{ type: [{ system: SIGNATURE_TYPE_SYSTEM, ...VERIFICATION_SIGNATURE }], when, who }],
+  };
+}
+
+/** 確認の来歴の transaction entry。 */
+export function reviewProvenanceEntry(provenance: fhir4.Provenance): fhir4.BundleEntry {
+  return { resource: provenance, request: { method: "POST", url: "Provenance" } };
+}
+
+/** 最後の確認。誰がいつ読んだか。一度も確認されていなければ null。 */
+export function latestReview(provenances: fhir4.Provenance[]): ProvenanceActor | null {
+  const reviews = provenances.filter(isVerifiedProvenance).sort(byRecorded);
+  const last = reviews[reviews.length - 1];
+  if (!last) return null;
+  const signature = last.signature?.[last.signature.length - 1];
+  return {
+    name: agentName(agentOfType(last, VERIFIER)),
+    at: signature?.when ?? last.recorded ?? "",
+  };
+}
+
+/**
  * 承認。verifier の agent と署名を足した Provenance を返す(元は変えない)。
  * 署名は「誰がいつ確認したか」の記録で、data(暗号署名)は持たない。
  */

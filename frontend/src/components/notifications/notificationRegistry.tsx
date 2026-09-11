@@ -12,11 +12,22 @@ import {
   orderApprovalRowOf,
   type OrderApprovalRow,
 } from "../../fhir/orderApprovalTaskHelpers";
-import type { OrderEnterer } from "../../fhir/provenanceHelpers";
+import {
+  buildReviewProvenance,
+  reviewProvenanceEntry,
+  type OrderEnterer,
+} from "../../fhir/provenanceHelpers";
+import {
+  RESULT_REVIEW_NOTE,
+  RESULT_REVIEW_TASK_CODE,
+  resultReviewRowOf,
+  type ResultReviewRow,
+} from "../../fhir/resultReviewHelpers";
 import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
 import { KARTE_DETAIL_PARAM, KARTE_TAB_PARAM, formatKarteDetail } from "../../karteUrl";
 import { LabPanicNotificationCells } from "./LabPanicNotificationCells";
 import { OrderApprovalNotificationCells } from "./OrderApprovalNotificationCells";
+import { ResultReviewNotificationCells } from "./ResultReviewNotificationCells";
 
 // 通知の種別ごとの振る舞いをまとめた対応表。通知そのものの形は notificationHelpers、
 // ここは「一覧でどう見せて、どう対応済みにするか」だけを持つ。
@@ -96,8 +107,35 @@ const orderApprovalKind = defineNotificationKind<OrderApprovalRow>({
     ),
 });
 
+const resultReviewKind = defineNotificationKind<ResultReviewRow>({
+  code: RESULT_REVIEW_TASK_CODE.code,
+  label: RESULT_REVIEW_TASK_CODE.display,
+  toRow: resultReviewRowOf,
+  Cells: ResultReviewNotificationCells,
+  // 種別の名前はカルテのタブのキーでもある。
+  karteLink: (row) => {
+    const params = new URLSearchParams();
+    params.set(KARTE_TAB_PARAM, row.kind);
+    if (row.reportId) params.set("view", row.reportId);
+    return `/patients/${row.patientId}/karte?${params.toString()}`;
+  },
+  action: { label: "確認", noteText: RESULT_REVIEW_NOTE },
+  // 確認の正本は来歴なので、通知を対応済みにするのと同じ transaction で書く。
+  actionEntries: async (rows, actor) =>
+    rows.flatMap((row) => [
+      reviewProvenanceEntry(buildReviewProvenance(`DiagnosticReport/${row.reportId}`, actor)),
+      completeNotificationEntry(
+        buildCompletedNotificationTask(row.task, actor, RESULT_REVIEW_NOTE),
+      ),
+    ]),
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [labPanicKind, orderApprovalKind];
+export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
+  labPanicKind,
+  resultReviewKind,
+  orderApprovalKind,
+];
 
 /** 一覧の検索に渡す `code` の値。種別を全部並べて 1 回で引く(カンマ区切りは OR)。 */
 export const NOTIFICATION_CODES = NOTIFICATION_KINDS.map(

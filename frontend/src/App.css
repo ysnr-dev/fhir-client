@@ -1926,6 +1926,41 @@ fieldset.rp-card {
 }
 
 /* 検査項目の表の上の操作(クリップボードにコピー・時系列表示)。右寄せ・小さめ。 */
+/* 未確認の結果の印。日付の行に小さな点を足すだけで、行の高さは変えない。 */
+.karte-daylist__unreviewed {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: middle;
+}
+
+/* 検査結果の確認(既読)。結果に記録を残す操作なので、登録・編集のボタンから離して
+   見出し行の左端に置く。 */
+.result-review {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 確認済みの印。確認者と確認日時はツールチップで読む(行を増やさない)。 */
+.result-review__done {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.result-review__error {
+  font-size: 12px;
+  color: var(--lab-high);
+}
+
 .lab-result-detail__actions {
   display: flex;
   justify-content: flex-end;
@@ -2073,6 +2108,11 @@ fieldset.rp-card {
 .notification__flag--critical-low {
   background: var(--lab-low);
   color: #fff;
+}
+
+/* 検査結果確認の内容。種別の後ろに要約を続けて読ませる。 */
+.notification__review-kind {
+  margin-right: 12px;
 }
 
 /* オーダー承認の内容。種別・活動・依頼元を 1 セルに横並びで置く。 */

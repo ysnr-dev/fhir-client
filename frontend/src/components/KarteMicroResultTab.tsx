@@ -4,6 +4,7 @@ import {
   useDeleteMicroResult,
   useMicroOrderCandidates,
   useMicroResultEntries,
+  useUnreviewedReportIds,
   useUpdateMicroResult,
 } from "../api/queries";
 import {
@@ -18,6 +19,7 @@ import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { MicroResultDetailPanel } from "./MicroResultDetailPanel";
 import { MicroResultForm } from "./MicroResultForm";
+import { ResultReviewAction } from "./ResultReviewAction";
 import { SpecimenDateList } from "./SpecimenDateList";
 
 // カルテ画面の「細菌検査」タブ(検査結果配下)。「検体検査」タブと同じ構成で、左端の
@@ -44,6 +46,7 @@ export function KarteMicroResultTab({ patientId, view, onViewChange }: KarteMicr
   useEffect(() => setForm(null), [view]);
 
   const { entries, isLoading, error } = useMicroResultEntries(patientId);
+  const unreviewed = useUnreviewedReportIds(patientId);
   const deleteMicroResult = useDeleteMicroResult();
 
   // view が指す結果が見つからないとき(削除済み・古いリンク)は最新に落とす。
@@ -91,6 +94,7 @@ export function KarteMicroResultTab({ patientId, view, onViewChange }: KarteMicr
         entries={entries}
         selectedId={selected?.id}
         isLoading={isLoading}
+        unreviewedIds={unreviewed.data}
         onSelect={(reportId) => onViewChange(reportId)}
       />
 
@@ -98,6 +102,8 @@ export function KarteMicroResultTab({ patientId, view, onViewChange }: KarteMicr
         <div className="karte-tabpanel__header">
           <h3>細菌検査結果内容</h3>
           <div className="karte-tabpanel__actions">
+            {/* 確認は結果に記録を残す操作なので、登録・編集のボタンから離して左端に置く。 */}
+            {selected && <ResultReviewAction reportId={selected.id} />}
             <button type="button" onClick={() => setForm({ kind: "create" })}>
               新規登録
             </button>

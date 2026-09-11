@@ -5,6 +5,7 @@ import {
   useLabOrderCandidates,
   useLabResultEntries,
   usePatient,
+  useUnreviewedReportIds,
   useUpdateLabResult,
 } from "../api/queries";
 import {
@@ -20,6 +21,7 @@ import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabResultDetailPanel } from "./LabResultDetailPanel";
 import { LabResultForm } from "./LabResultForm";
+import { ResultReviewAction } from "./ResultReviewAction";
 import { SpecimenDateList } from "./SpecimenDateList";
 
 // カルテ画面の「検体検査」タブ(検査結果配下)。カルテタブの診療日パネルと同様に、
@@ -50,6 +52,7 @@ export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabRes
   useEffect(() => setForm(null), [view]);
 
   const { entries, isLoading, error } = useLabResultEntries(patientId);
+  const unreviewed = useUnreviewedReportIds(patientId);
   const deleteLabResult = useDeleteLabResult();
 
   // view が指す検査結果が見つからないとき(削除済み・古いリンク)は最新に落とす。
@@ -101,6 +104,7 @@ export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabRes
         entries={entries}
         selectedId={selected?.id}
         isLoading={isLoading}
+        unreviewedIds={unreviewed.data}
         onSelect={(reportId) => onViewChange(reportId)}
       />
 
@@ -108,6 +112,8 @@ export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabRes
         <div className="karte-tabpanel__header">
           <h3>検査結果内容</h3>
           <div className="karte-tabpanel__actions">
+            {/* 確認は結果に記録を残す操作なので、登録・編集のボタンから離して左端に置く。 */}
+            {selected && <ResultReviewAction reportId={selected.id} />}
             <button type="button" onClick={() => setForm({ kind: "create" })}>
               新規登録
             </button>
