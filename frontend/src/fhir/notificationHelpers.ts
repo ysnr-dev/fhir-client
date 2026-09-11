@@ -34,6 +34,46 @@ export interface NotificationRowBase {
 /** 通知の状態。requested = 未対応 / completed = 対応済み / cancelled = 取り下げ。 */
 export type NotificationStatus = "requested" | "completed" | "cancelled";
 
+/**
+ * 通知の強度。`Task.priority` に写す。
+ *
+ *   alert   アラート   連絡が遅れると患者に害が出る(緊急異常値)
+ *   caution 注意       順番を上げて対応してほしい
+ *   info    お知らせ   手が空いたときでよい(オーダー承認)
+ *
+ * オーダー(`ServiceRequest`)の至急区分も `priority` を使うが、あちらは
+ * 通常・至急・事後・緊急の語彙(`fhir/shared.ts`)で、この対応表とは別物。
+ */
+export type NotificationSeverity = "alert" | "caution" | "info";
+
+/** 強い順。一覧の絞り込みもこの順に並べる。 */
+export const NOTIFICATION_SEVERITIES: NotificationSeverity[] = ["alert", "caution", "info"];
+
+export const NOTIFICATION_SEVERITY_LABEL: Record<NotificationSeverity, string> = {
+  alert: "アラート",
+  caution: "注意",
+  info: "お知らせ",
+};
+
+const SEVERITY_PRIORITY: Record<NotificationSeverity, "stat" | "urgent" | "routine"> = {
+  alert: "stat",
+  caution: "urgent",
+  info: "routine",
+};
+
+/** ベルのアラート件数を引く `priority` の値(カンマ区切りは OR)。 */
+export const ALERT_PRIORITY_PARAM = "stat,asap";
+
+/**
+ * 通知の強度。`asap` をアラートに寄せるのは、通知で使うとしたら「急ぎ」の意味に
+ * なるため。priority を持たない Task は最も弱い扱いにする。
+ */
+export function notificationSeverityOf(task: fhir4.Task): NotificationSeverity {
+  if (task.priority === "stat" || task.priority === "asap") return "alert";
+  if (task.priority === "urgent") return "caution";
+  return "info";
+}
+
 export interface NotificationTaskCode {
   code: string;
   display: string;
@@ -42,8 +82,8 @@ export interface NotificationTaskCode {
 /** 通知を作る・書き換えるときの入力。種別ごとの中身は input に構造化して渡す。 */
 export interface NotificationTaskInput {
   code: NotificationTaskCode;
-  /** 至急(stat)か通常(routine)か。連絡が遅れて患者に害が出るものは stat。 */
-  priority: "routine" | "urgent" | "asap" | "stat";
+  /** 通知の強度。連絡が遅れて患者に害が出るものは alert。 */
+  severity: NotificationSeverity;
   /** 通知の対象。同じ transaction で作るリソースなら urn:uuid(上流が解決する)。 */
   focusReference: string;
   patientId: string;
@@ -84,7 +124,7 @@ export function buildNotificationTask(
     resourceType: "Task",
     status: "requested",
     intent: "filler-order",
-    priority: input.priority,
+    priority: SEVERITY_PRIORITY[input.severity],
     code: {
       coding: [{ system: TASK_CODE_SYSTEM, ...input.code }],
       text: input.code.display,

@@ -129,7 +129,7 @@ export function buildOrderApprovalTaskEntry(
   const task = buildNotificationTask({
     code: ORDER_APPROVAL_TASK_CODE,
     // 承認は遅れても診療は止まらない(承認前でも部門にオーダーは流れる)。
-    priority: "routine",
+    severity: "info",
     focusReference,
     patientId,
     owner,

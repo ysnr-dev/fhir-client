@@ -1,13 +1,16 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
-import { useNotificationCount } from "../api/queries";
+import { useNotificationCounts } from "../api/queries";
 import { useNotificationPolling } from "../hooks/useNotificationPolling";
 
 /**
  * ヘッダーの通知ベル。ログイン中の医療従事者あての未対応件数を常に出す
  * (緊急異常値は連絡が遅れると患者に害が出るので、メニューを開かないと気付けない
  * 置き方にしない)。医療従事者に紐付かないアカウントでは宛先で絞れないので全件。
+ *
+ * 数字は未対応の合計で、**アラートが 1 件でもあるときだけ赤く**する。お知らせが
+ * 溜まっているだけの状態と、すぐ見てほしいものがある状態を色で分ける。
  *
  * 自動更新の入り切りは通知一覧に置く(ヘッダーは常に見えているぶん、置くものを
  * 件数だけに絞る)。切っている間も、ページを移るたびと、ウィンドウに戻ったときに
@@ -17,12 +20,12 @@ import { useNotificationPolling } from "../hooks/useNotificationPolling";
 export function NotificationBell() {
   const { practitionerId } = useCurrentPractitioner();
   const [polling] = useNotificationPolling();
-  const count = useNotificationCount(practitionerId, polling);
+  const counts = useNotificationCounts(practitionerId, polling);
   const location = useLocation();
 
   // ベルは常に画面に居るので、react-query のマウント時再取得が効かない。
   // 画面を移ったときを「区切り」とみなして、古くなっていれば読み直す。
-  const { refetch, isStale } = count;
+  const { refetch, isStale } = counts;
   useEffect(() => {
     if (isStale) refetch();
     // 画面を移ったときだけ見る(isStale の変化で引き直すと実質ポーリングになる)。
@@ -30,14 +33,20 @@ export function NotificationBell() {
   }, [location.pathname]);
 
   // 件数が取れないとき(上流が落ちている・権限が無い)は数字を出さない。ベルは残す。
-  const total = count.data ?? 0;
+  const { total, alertTotal } = counts;
+  const label =
+    total > 0
+      ? `未対応の通知 ${total} 件${alertTotal > 0 ? `（アラート ${alertTotal} 件）` : ""}`
+      : "通知";
 
   return (
     <Link
       to="/notifications"
-      className={`notification-bell${total > 0 ? " notification-bell--unread" : ""}`}
-      aria-label={total > 0 ? `通知 未対応 ${total} 件` : "通知"}
-      title={total > 0 ? `未対応の通知 ${total} 件` : "通知"}
+      className={`notification-bell${total > 0 ? " notification-bell--unread" : ""}${
+        alertTotal > 0 ? " notification-bell--alert" : ""
+      }`}
+      aria-label={label}
+      title={label}
     >
       <svg className="notification-bell__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path

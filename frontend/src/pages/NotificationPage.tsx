@@ -8,6 +8,12 @@ import {
   NOTIFICATION_KINDS,
   type NotificationRow,
 } from "../components/notifications/notificationRegistry";
+import {
+  NOTIFICATION_SEVERITIES,
+  NOTIFICATION_SEVERITY_LABEL,
+  notificationSeverityOf,
+  type NotificationSeverity,
+} from "../fhir/notificationHelpers";
 import { displayName, patientNumberOf } from "../fhir/patientHelpers";
 import { useNotificationPolling } from "../hooks/useNotificationPolling";
 import { dateTimeSecondsLabel } from "../lib/dates";
@@ -19,6 +25,10 @@ import { useReturnLinkState } from "../returnTo";
 // 見てほしい)とオーダー承認(代行入力を承認してほしい)で、読影の重要所見や文書作成の督促が
 // 今後ここに並ぶ。種別ごとの内容セルと操作は notificationRegistry が持つ。
 //
+// 種別と強度(アラート / 注意 / お知らせ)で絞れる。どちらの件数も絞り込む前の全件から
+// 数えるので、2 つのセレクトは互いに独立した軸として読める。並びは通知日時の新しい順で、
+// 強度では並べ替えない(いつ届いたかが分からなくなるため)。
+//
 // 既定は自分あてだけ。宛先の決まらない通知(オーダーに紐付かない検査結果など)は
 // 「すべて」に切り替えると出る(検査室が電話連絡する運用ならこちらを見る)。
 //
@@ -29,6 +39,7 @@ export function NotificationPage() {
   const { practitionerId } = useCurrentPractitioner();
   const [mine, setMine] = useState(true);
   const [kindCode, setKindCode] = useState("");
+  const [severity, setSeverity] = useState<NotificationSeverity | "">("");
   const notifications = useNotifications(mine ? practitionerId : undefined);
   const complete = useCompleteNotifications();
   const linkState = useReturnLinkState();
@@ -48,13 +59,26 @@ export function NotificationPage() {
 
   const allRows = useMemo(() => notifications.data ?? [], [notifications.data]);
   const rows = useMemo(
-    () => (kindCode ? allRows.filter((row) => row.kind.code === kindCode) : allRows),
-    [allRows, kindCode],
+    () =>
+      allRows.filter(
+        (row) =>
+          (!kindCode || row.kind.code === kindCode) &&
+          (!severity || notificationSeverityOf(row.row.task) === severity),
+      ),
+    [allRows, kindCode, severity],
   );
   // 種別ごとの件数。フィルタの選択肢に添えて、どこに溜まっているかを一目で分かるようにする。
   const countByKind = useMemo(() => {
     const counts = new Map<string, number>();
     for (const row of allRows) counts.set(row.kind.code, (counts.get(row.kind.code) ?? 0) + 1);
+    return counts;
+  }, [allRows]);
+  const countBySeverity = useMemo(() => {
+    const counts = new Map<NotificationSeverity, number>();
+    for (const row of allRows) {
+      const value = notificationSeverityOf(row.row.task);
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
     return counts;
   }, [allRows]);
 
@@ -89,6 +113,19 @@ export function NotificationPage() {
       <div className="page__header">
         <h1>通知</h1>
         <div className="page__header-actions notification__actions-bar">
+          <select
+            className="notification__severity-select"
+            value={severity}
+            onChange={(event) => setSeverity(event.target.value as NotificationSeverity | "")}
+            aria-label="強度"
+          >
+            <option value="">すべての強度（{allRows.length}）</option>
+            {NOTIFICATION_SEVERITIES.map((value) => (
+              <option key={value} value={value}>
+                {NOTIFICATION_SEVERITY_LABEL[value]}（{countBySeverity.get(value) ?? 0}）
+              </option>
+            ))}
+          </select>
           <select
             className="notification__kind-select"
             value={kindCode}
@@ -155,6 +192,7 @@ export function NotificationPage() {
                 />
               </th>
               <th className="notification__compact">通知日時</th>
+              <th className="notification__compact">強度</th>
               <th className="notification__compact">種別</th>
               <th className="notification__compact">患者番号</th>
               <th>氏名</th>
@@ -179,7 +217,7 @@ export function NotificationPage() {
             ))}
             {!notifications.isLoading && rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="master-search__empty">
+                <td colSpan={10} className="master-search__empty">
                   未対応の通知はありません
                 </td>
               </tr>
@@ -216,9 +254,10 @@ function NotificationTableRow({
 }: NotificationTableRowProps) {
   const { kind, row } = entry;
   const karteLink = kind.karteLink(row);
+  const severity = notificationSeverityOf(row.task);
 
   return (
-    <tr>
+    <tr className={severity === "alert" ? "notification__row--alert" : undefined}>
       <td className="notification__compact">
         <input
           type="checkbox"
@@ -229,6 +268,11 @@ function NotificationTableRow({
         />
       </td>
       <td className="notification__compact">{dateTimeSecondsLabel(row.authoredOn)}</td>
+      <td className="notification__compact">
+        <span className={`notification__severity notification__severity--${severity}`}>
+          {NOTIFICATION_SEVERITY_LABEL[severity]}
+        </span>
+      </td>
       <td className="notification__compact">{kind.label}</td>
       <td className="notification__compact">{row.patient ? patientNumberOf(row.patient) : ""}</td>
       <td>

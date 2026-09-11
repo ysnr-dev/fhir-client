@@ -106,8 +106,8 @@ export function buildPanicTask(input: PanicTaskInput, existing?: fhir4.Task): fh
   return buildNotificationTask(
     {
       code: LAB_PANIC_TASK_CODE,
-      // パニック値は連絡が遅れると患者に害が出るので、通知そのものを至急として扱う。
-      priority: "stat",
+      // パニック値は連絡が遅れると患者に害が出るので、通知そのものをアラートにする。
+      severity: "alert",
       focusReference: input.reportReference,
       patientId: input.patientId,
       owner: input.owner,

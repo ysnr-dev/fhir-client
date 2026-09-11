@@ -78,7 +78,7 @@ import {
   type SpecimenRef,
 } from "../fhir/labResultHelpers";
 import { isPanicTask, LAB_PANIC_TASK_CODE } from "../fhir/labPanicHelpers";
-import { splitNotificationBundle } from "../fhir/notificationHelpers";
+import { ALERT_PRIORITY_PARAM, splitNotificationBundle } from "../fhir/notificationHelpers";
 import {
   completeNotificationEntries,
   notificationRows,
@@ -4680,16 +4680,39 @@ export function useNotifications(ownerId?: string | null) {
  * ヘッダーのベルに出す未対応件数。`_summary=count` で件数だけを引く
  * (本文も `_include` も返らないので、自動更新を入れても軽い)。
  *
+ * 全体とアラート(`priority=stat,asap`)の **2 本**を引く。ベルはアラートが 1 件でも
+ * あるときだけ赤くするので、内訳が要る。
+ *
  * 自動更新は既定では止めてある。上流は FHIR リクエストごとに AuditEvent を 1 行書くので、
  * 無償のサーバーでは開きっぱなしの画面が監査ログとインスタンスの稼働時間を食う。
  * 止めている間も、ページ遷移・ウィンドウのフォーカス復帰・通知の書き込みでは読み直す。
  */
-export function useNotificationCount(ownerId: string | null | undefined, polling: boolean) {
+export function useNotificationCounts(ownerId: string | null | undefined, polling: boolean) {
+  const all = useNotificationCount(ownerId, polling);
+  const alert = useNotificationCount(ownerId, polling, ALERT_PRIORITY_PARAM);
+
+  return {
+    total: all.data ?? 0,
+    alertTotal: alert.data ?? 0,
+    isStale: all.isStale || alert.isStale,
+    refetch: () => {
+      all.refetch();
+      alert.refetch();
+    },
+  };
+}
+
+function useNotificationCount(
+  ownerId: string | null | undefined,
+  polling: boolean,
+  priority?: string,
+) {
   const params = notificationParams(ownerId);
+  if (priority) params.set("priority", priority);
   params.set("_summary", "count");
 
   return useQuery({
-    queryKey: [...NOTIFICATION_TASK_KEY, "count", ownerId ?? "all"],
+    queryKey: [...NOTIFICATION_TASK_KEY, "count", ownerId ?? "all", priority ?? "all"],
     queryFn: () => searchResource<fhir4.Resource>("Task", params),
     select: (result) => result.data.total ?? 0,
     staleTime: 60_000,

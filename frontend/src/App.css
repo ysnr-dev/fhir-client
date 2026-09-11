@@ -2028,6 +2028,33 @@ fieldset.rp-card {
   font-size: 12px;
 }
 
+/* 通知の強度。3 つとも枠線で揃えて 1 つの尺度として読ませる(塗りつぶしにすると
+   同じ行の判定バッジ HH / LL と赤が二重になる)。行の左の帯と合わせて読む。 */
+.notification__severity {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.notification__severity--alert {
+  border-color: var(--lab-high);
+  color: var(--lab-high);
+}
+
+.notification__severity--caution {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+/* アラートの行。検体検査一覧の至急行と同じく、左端の帯で拾わせる。 */
+.notification__row--alert > td:first-child {
+  box-shadow: inset 3px 0 0 var(--lab-high);
+}
+
 /* 判定(HH / LL)。結果値の反転表示と同じ色で、一覧でも重さが分かるようにする。 */
 .notification__flag {
   min-width: 2.5em;
@@ -2080,6 +2107,7 @@ fieldset.rp-card {
   align-items: center;
 }
 
+.notification__severity-select,
 .notification__kind-select {
   font: inherit;
   font-size: 15px;
@@ -2132,7 +2160,7 @@ fieldset.rp-card {
   flex: none;
 }
 
-/* 未対応の件数。緊急異常値が混ざるので、見落とさない色でベルの肩に載せる。 */
+/* 未対応の件数をベルの肩に載せる。地の色は面の濃淡で、アラートのときだけ赤にする。 */
 .notification-bell__count {
   position: absolute;
   top: -1px;
@@ -2143,12 +2171,23 @@ fieldset.rp-card {
   box-sizing: border-box;
   border-radius: 999px;
   border: 2px solid var(--bg);
-  background: var(--lab-high);
-  color: #fff;
+  background: var(--surface-sunken);
+  color: var(--text-h);
   font-size: 11px;
   font-weight: 700;
   line-height: 13px;
   text-align: center;
+}
+
+/* アラート(緊急異常値など)があるベル。連絡が遅れると患者に害が出るものなので、
+   お知らせが溜まっているだけの状態とは色で分ける。 */
+.notification-bell--alert {
+  color: var(--lab-high);
+}
+
+.notification-bell--alert .notification-bell__count {
+  background: var(--lab-high);
+  color: #fff;
 }
 
 
