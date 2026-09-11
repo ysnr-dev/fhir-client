@@ -498,6 +498,12 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   `hasDoseDays` に集約していて、フォーム・調剤登録・カードの表示が同じ関数を通ります。
 - **入院のオーダー**: 入院中に登録した処方は `ServiceRequest.encounter` にその入院を入れます
   (与薬の実施記録がここから Encounter を写します)。
+- **薬剤の安全性チェック**: 医薬品を選ぶと、その行にアレルギー(銘柄・成分)と重複投与
+  (フォーム内の別の行、投与中の他の処方)の警告、医薬品名の後ろに麻薬・毒薬・覚醒剤原料・
+  向精神薬・生物由来製品・造影剤の印を出します。**登録は止めません**(判断は医師のもの)。
+  処方・注射・医薬品検索モーダルが `fhir/medicationSafetyHelpers.ts` と
+  `components/MedicineWarnings.tsx` を共用します。同一成分は YJ コードの上 7 桁で見るため、
+  同じ成分でも薬効分類が違えば(アスピリンとバイアスピリン)重複になりません。
 - backend の `/fhir` プロキシは `ALLOWED_RESOURCE_TYPES` に `ServiceRequest` を追加し、
   `POST /fhir`(空パス)を transaction Bundle 中継用のルートとして扱います
   (`backend/app/controllers/fhir_proxy_controller.rb`)。

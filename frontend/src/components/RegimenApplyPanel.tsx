@@ -972,7 +972,7 @@ function RegimenApplyForm({
                           className={`regimen-apply__allergy${m.high ? " regimen-apply__allergy--high" : ""}`}
                           title={m.reaction}
                         >
-                          アレルギー {allergyMatchLabel(m)}
+                          アレルギー: {allergyMatchLabel(m)}
                         </span>
                       ))}
                     </td>

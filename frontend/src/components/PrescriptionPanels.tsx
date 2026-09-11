@@ -129,6 +129,7 @@ export function PrescriptionEditPanel({ patientId, srId, onSaved }: Prescription
             submitting={updatePrescription.isPending}
             submitError={updatePrescription.error}
             submitLabel="更新"
+            orderId={srId}
           />
         )
       )}

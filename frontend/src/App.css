@@ -14491,6 +14491,39 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 /* アレルギー照合の警告(投与内容の薬剤行)。登録は止めないので、赤は「読め」の印。 */
+/* 薬剤オーダーの安全性チェック(docs/order-common-backlog.md §3)。
+   医薬品名の後ろの印(麻薬・毒薬など)と、行の下に出すアレルギー・重複投与の警告。
+   登録は止めないので、入力を塞がずに読める大きさに留める。 */
+.medicine-caution {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.medicine-caution--strong {
+  border-color: var(--danger, #c0392b);
+  color: var(--danger, #c0392b);
+  font-weight: 600;
+}
+
+.medicine-warning {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--warning-text, #8a5a00);
+}
+
+.medicine-warning--high {
+  color: var(--danger, #c0392b);
+  font-weight: 600;
+}
+
 .regimen-apply__allergy {
   display: block;
   margin-top: 2px;

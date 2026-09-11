@@ -58,6 +58,12 @@ export interface Medicine {
   yakko_name: string | null;
   // 個別医薬品コード（YJコード）。検索APIが HOTコードマスタから付与する。
   yj_code: string | null;
+  // 規制区分(0:該当しない 1:麻薬 2:毒薬 3:覚醒剤原料 5:向精神薬)。薬剤の印に使う。
+  narcotic_category?: string | null;
+  // 生物由来製品(1:該当)。
+  biological_product_flag?: string | null;
+  // 造影剤区分(0:該当しない 1:造影剤 2:造影の補助剤)。
+  contrast_medium_category?: string | null;
   // 一般名処方(【般】〜)の候補。true のとき medicine_code はレセプト電算コードでは
   // なく一般名処方コード、name は一般名記載になる。銘柄検索の結果には付かない。
   generic?: boolean;

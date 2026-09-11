@@ -181,6 +181,7 @@ export function InjectionEditPanel({ patientId, srId, onSaved }: InjectionEditPa
               submitError={updateInjection.error}
               submitLabel="更新"
               mode="edit"
+              orderId={srId}
             />
           </>
         )

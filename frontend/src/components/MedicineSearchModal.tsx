@@ -9,6 +9,7 @@ import {
   type DatasetPickProps,
 } from "./DatasetPickList";
 import { ErrorBanner } from "./ErrorBanner";
+import { MedicineCautionMarks } from "./MedicineWarnings";
 import { Modal } from "./Modal";
 
 interface MedicineSearchModalProps {
@@ -182,7 +183,10 @@ export function MedicineSearchModal({
                 {data?.items.map((medicine) => (
                   <tr key={medicine.id}>
                     <td>{medicine.medicine_code}</td>
-                    <td>{medicine.name}</td>
+                    <td>
+                      {medicine.name}
+                      <MedicineCautionMarks medicine={medicine} />
+                    </td>
                     <td>{medicine.unit_name}</td>
                     <td>{dosageFormLabel(medicine.dosage_form)}</td>
                     <td className="master-search__yakko">

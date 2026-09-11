@@ -44,6 +44,7 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { MedicineCautionMarks, MedicineWarnings, useMedicationWarnings } from "./MedicineWarnings";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
 
@@ -72,6 +73,8 @@ interface InjectionFormProps {
   setMode?: boolean;
   /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
   hideSubmit?: boolean;
+  /** 編集中のオーダー(ServiceRequest.id)。重複投与の警告から自分自身を外すのに使う。 */
+  orderId?: string;
 }
 
 type ModalState = { kind: "medicine"; rpIndex: number; medIndex: number } | null;
@@ -134,6 +137,7 @@ export function InjectionForm({
   bulkStartDate,
   setMode = false,
   hideSubmit = false,
+  orderId,
 }: InjectionFormProps) {
   const [values, setValues] = useState<InjectionFormValues>(initialValues ?? emptyInjectionForm);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
@@ -149,6 +153,15 @@ export function InjectionForm({
   );
 
   const problemOptions = useProblemOptions(patientId);
+
+  // 薬剤の安全性チェック(アレルギー・重複投与)。オーダーセットの内容入力では患者が
+  // 決まらないので出さない。
+  const warnings = useMedicationWarnings({
+    patientId: setMode ? "" : patientId,
+    startDate: values.startDate,
+    rps: values.rps,
+    excludeOrderId: orderId,
+  });
 
   // 総投与量の計算に使う換算(製剤数・力価 → mL)。フォーム上の全医薬品分をまとめて引く。
   const { data: conversions } = useMedicineDoseFactors(
@@ -655,11 +668,15 @@ export function InjectionForm({
                         {med.medicine ? "変更" : "選択"}
                       </button>
                       {med.medicine ? (
-                        <span className="rp-card__medicine-name">{med.medicine.name}</span>
+                        <span className="rp-card__medicine-name">
+                          {med.medicine.name}
+                          <MedicineCautionMarks medicine={med.medicine} />
+                        </span>
                       ) : (
                         <span className="rp-card__usage-value--empty">未選択</span>
                       )}
                     </div>
+                    <MedicineWarnings warnings={warnings[rpIndex]?.[medIndex]} />
                   </td>
                   <td>
                     <input

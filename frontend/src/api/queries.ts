@@ -170,10 +170,14 @@ import {
   PRESCRIPTION_CATEGORY_SYSTEM,
   buildPrescriptionDeleteBundle,
   departmentOf,
+  groupByRp,
   isPrescriptionServiceRequest,
 } from "../fhir/prescriptionHelpers";
+import { rpEndDate } from "../fhir/medicationScheduleHelpers";
+import { ingredientKey, type ActiveMedication } from "../fhir/medicationSafetyHelpers";
 import {
   buildRxTaskUpdate,
+  rxTaskStatus,
   rxTasksByOrderId,
   type RxTaskStatus,
 } from "../fhir/rxTaskHelpers";
@@ -2042,6 +2046,74 @@ export function usePatientOralPrescriptions(
     },
     enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
   });
+}
+
+/**
+ * 重複投与チェック(`docs/order-common-backlog.md` §3)に使う、基準日に効いている処方の薬剤。
+ *
+ * 処方の絞り込みは経過表の内服欄と同じ手(`usePatientOralPrescriptions` のコメント)。
+ * 投与日数は上流で索引できないので基準日の 92 日前から引き、効いているかどうかは
+ * 投与終了日(`rpEndDate`)を出してクライアントで判定する。中止した処方は数えない。
+ */
+export function useActiveMedications(patientId: string | undefined, onDate: string) {
+  const rangeStart = onDate ? addDays(onDate, -ORAL_LOOKBACK_DAYS) : "";
+
+  const query = useQuery({
+    queryKey: ["ServiceRequest", "search", "active-medications", patientId, onDate],
+    queryFn: async (): Promise<ActiveMedication[]> => {
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|`);
+      params.append("occurrence", `ge${rangeStart}`);
+      params.append("occurrence", `le${onDate}`);
+      params.append("_revinclude", "MedicationRequest:based-on");
+      params.append("_revinclude", "Task:focus");
+      params.set("_count", "100");
+
+      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+      const resources = (bundle.entry ?? [])
+        .map((entry) => entry.resource)
+        .filter((r): r is fhir4.Resource => Boolean(r));
+      const orders = resources
+        .filter((r): r is fhir4.ServiceRequest => r.resourceType === "ServiceRequest")
+        .filter(isPrescriptionServiceRequest);
+      const medicationRequests = resources.filter(
+        (r): r is fhir4.MedicationRequest => r.resourceType === "MedicationRequest",
+      );
+      const tasksByOrder = rxTasksByOrderId(
+        resources.filter((r): r is fhir4.Task => r.resourceType === "Task"),
+      );
+
+      const active: ActiveMedication[] = [];
+      for (const order of orders) {
+        if (!order.id) continue;
+        if (rxTaskStatus(tasksByOrder.get(order.id)) === "cancelled") continue;
+        const startDate = (order.occurrenceDateTime ?? "").slice(0, 10);
+        if (!startDate) continue;
+        const mrs = medicationRequests.filter((mr) =>
+          mr.basedOn?.some((ref) => ref.reference === `ServiceRequest/${order.id}`),
+        );
+        for (const rp of groupByRp(mrs)) {
+          const endDate = rpEndDate(startDate, rp) ?? startDate;
+          if (endDate < onDate) continue;
+          for (const line of rp.medicines) {
+            const ingredient = ingredientKey({
+              yj_code: line.yjCode,
+              medicine_code: line.code,
+              generic: line.generic,
+            });
+            if (!ingredient) continue;
+            active.push({ orderId: order.id, name: line.name, ingredient, endDate });
+          }
+        }
+      }
+      return active;
+    },
+    enabled: Boolean(patientId) && Boolean(onDate),
+    staleTime: 30 * 1000,
+  });
+
+  return { ...query, medications: query.data ?? [] };
 }
 
 /** 与薬の記録(1 枠ぶん)。ハブと薬剤の記録を 1 transaction で作る。 */

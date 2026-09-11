@@ -20,6 +20,7 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
+import { MedicineCautionMarks, MedicineWarnings, useMedicationWarnings } from "./MedicineWarnings";
 import { PregnancyNotice } from "./PregnancyNotice";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
@@ -46,6 +47,8 @@ interface PrescriptionFormProps {
   setMode?: boolean;
   /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
   hideSubmit?: boolean;
+  /** 編集中のオーダー(ServiceRequest.id)。重複投与の警告から自分自身を外すのに使う。 */
+  orderId?: string;
 }
 
 type ModalState =
@@ -78,6 +81,7 @@ export function PrescriptionForm({
   bulkStartDate,
   setMode = false,
   hideSubmit = false,
+  orderId,
 }: PrescriptionFormProps) {
   const [values, setValues] = useState<PrescriptionFormValues>(initialValues ?? emptyPrescriptionForm);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
@@ -92,6 +96,15 @@ export function PrescriptionForm({
   // 対象プロブレムの候補。POMR では「#1 糖尿病に対する処方」のように、オーダー 1 件を
   // 1 つのプロブレムに紐付ける(RP ごとに分けたいときはオーダーを分けて登録する)。
   const problemOptions = useProblemOptions(patientId);
+
+  // 薬剤の安全性チェック(アレルギー・重複投与)。オーダーセットの内容入力では患者が
+  // 決まらないので出さない(妊娠の注意と同じ)。
+  const warnings = useMedicationWarnings({
+    patientId: setMode ? "" : patientId,
+    startDate: values.startDate,
+    rps: values.rps,
+    excludeOrderId: orderId,
+  });
 
   // 一般名処方は保険上、外来の院外処方でだけ算定できる。
   const allowGeneric = values.setting === "outpatient" && values.category === "external";
@@ -355,11 +368,15 @@ export function PrescriptionForm({
                         {med.medicine ? "変更" : "選択"}
                       </button>
                       {med.medicine ? (
-                        <span className="rp-card__medicine-name">{med.medicine.name}</span>
+                        <span className="rp-card__medicine-name">
+                          {med.medicine.name}
+                          <MedicineCautionMarks medicine={med.medicine} />
+                        </span>
                       ) : (
                         <span className="rp-card__usage-value--empty">未選択</span>
                       )}
                     </div>
+                    <MedicineWarnings warnings={warnings[rpIndex]?.[medIndex]} />
                   </td>
                   <td>
                     <input

@@ -84,6 +84,10 @@ module Master
           "NULL AS yakka_code",
           "NULL AS price",
           "master_medicines.generic_name_description",
+          # 規制区分・製品区分は代表行の値をそのまま返す(同じ一般名の銘柄間で変わらない)。
+          "master_medicines.narcotic_category",
+          "master_medicines.biological_product_flag",
+          "master_medicines.contrast_medium_category",
           "NULL AS abolished_on",
           "LEFT(master_medicines.generic_name_code, 4) AS yakko_code",
           "master_medicine_types.name AS yakko_name",
