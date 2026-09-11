@@ -2,7 +2,9 @@ import { today } from "../lib/dates";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
 import { emptyOrderContext, type OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
+import { isAsNeededUsage } from "./medicationScheduleHelpers";
 import {
+  categoryCoding,
   codingBySystem,
   findSettingDisplay,
   orderComment,
@@ -67,7 +69,19 @@ export const ORDER_IN_RP_SYSTEM =
 export const UNITS_OF_MEASURE_SYSTEM = "http://unitsofmeasure.org";
 
 const BASIC_USAGE_CATEGORY_ORAL = "内服";
-const BASIC_USAGE_CATEGORY_AS_NEEDED = "頓服";
+
+/**
+ * 投与日数で処方する用法か。頓用でない内服だけが日数を持つ。
+ *
+ * 頓用かどうかは用法コードの 3 桁目で判定する(`isAsNeededUsage`)。用法マスタの基本区分は
+ * 内服 / 外用 / 注射 / 注入 の 4 種で「頓服」が無いため、区分では頓用を見分けられない。
+ */
+export function hasDoseDays(
+  usageCode: string | null | undefined,
+  basicCategory: string | null | undefined,
+): boolean {
+  return basicCategory === BASIC_USAGE_CATEGORY_ORAL && !isAsNeededUsage(usageCode ?? undefined);
+}
 
 export type PrescriptionSetting = "inpatient" | "outpatient" | "";
 
@@ -211,19 +225,26 @@ export interface OrderAttribution extends OrderContext {
   /** オーダー時点の入院病棟(Location.id)。外来オーダーでは空。 */
   wardId?: string;
   wardName?: string;
+  /** オーダー時点の入院(Encounter.id)。外来オーダーでは空。 */
+  encounterId?: string;
 }
 
 /**
- * 入院のオーダーにだけ在院病棟を添える。入外区分を手で「外来」に変えたときは付けない
- * (一覧の区分列と病棟列が食い違わないように)。
+ * 入院のオーダーにだけ在院病棟と入院(Encounter)を添える。入外区分を手で「外来」に
+ * 変えたときは付けない(一覧の区分列と病棟列が食い違わないように)。
  */
 export function withOrderWard(
   requester: OrderContext,
   setting: PrescriptionSetting,
-  ward: { wardId: string; wardName: string },
+  ward: { wardId: string; wardName: string; encounterId?: string },
 ): OrderAttribution {
   if (setting !== "inpatient" || !ward.wardId) return requester;
-  return { ...requester, wardId: ward.wardId, wardName: ward.wardName };
+  return {
+    ...requester,
+    wardId: ward.wardId,
+    wardName: ward.wardName,
+    ...(ward.encounterId ? { encounterId: ward.encounterId } : {}),
+  };
 }
 
 // 依頼医師は標準の requester、依頼科と入院病棟はローカル拡張に入れる。
@@ -320,8 +341,7 @@ function buildMedicationRequest(
     dosageInstruction.additionalInstruction = [{ text: rp.usageComment }];
   }
 
-  const basicCategory = rp.usage?.basic_usage_category;
-  if (basicCategory === BASIC_USAGE_CATEGORY_AS_NEEDED) {
+  if (isAsNeededUsage(rp.usage?.usage_code)) {
     dosageInstruction.asNeededBoolean = true;
     if (rp.doseCount) {
       dosageInstruction.timing = {
@@ -352,7 +372,7 @@ function buildMedicationRequest(
 
   applyOrderContext(resource, requester);
 
-  if (basicCategory === BASIC_USAGE_CATEGORY_ORAL && rp.doseDays) {
+  if (hasDoseDays(rp.usage?.usage_code, rp.usage?.basic_usage_category) && rp.doseDays) {
     resource.dispenseRequest = {
       expectedSupplyDuration: {
         value: Number(rp.doseDays),
@@ -373,7 +393,7 @@ function buildMedicationRequest(
 function buildPrescriptionTransactionBundle(
   values: PrescriptionFormValues,
   patientId: string,
-  requester: OrderContext,
+  requester: OrderAttribution,
   // 登録日時。新規は registrationAuthoredOn()、更新は元の SR の値(編集で動かさない)。
   // SR と全 MedicationRequest に同じ値を入れる。
   authoredOn: string,
@@ -452,6 +472,12 @@ function buildPrescriptionTransactionBundle(
     orderDetail,
   };
 
+  // 入院のオーダーはその入院に紐付ける。与薬の実施記録(Procedure /
+  // MedicationAdministration)がここから Encounter を写す(oralPerformHelpers)。
+  if (requester.encounterId) {
+    serviceRequest.encounter = { reference: `Encounter/${requester.encounterId}` };
+  }
+
   if (serviceRequestId) serviceRequest.id = serviceRequestId;
   // 対象プロブレム(POMR)。オーダーの適応を表す標準要素 reasonReference をそのまま使う
   // (診療記録と違いローカル拡張は不要)。紐付けは処方オーダー 1 件に対して 1 つ持たせ、
@@ -495,7 +521,7 @@ function buildPrescriptionTransactionBundle(
 export function buildPrescriptionBundle(
   values: PrescriptionFormValues,
   patientId: string,
-  requester: OrderContext,
+  requester: OrderAttribution,
 ): fhir4.Bundle {
   return buildPrescriptionTransactionBundle(values, patientId, requester, registrationAuthoredOn());
 }
@@ -506,7 +532,7 @@ export function buildPrescriptionUpdateBundle(
   patientId: string,
   original: fhir4.ServiceRequest,
   originalMedicationRequestIds: string[],
-  requester: OrderContext,
+  requester: OrderAttribution,
 ): fhir4.Bundle {
   if (!original.id) throw new Error("更新する処方に id がありません");
   return buildPrescriptionTransactionBundle(
@@ -589,8 +615,8 @@ export function isPrescriptionServiceRequest(sr: fhir4.ServiceRequest): boolean 
 }
 
 export function summarizeServiceRequest(sr: fhir4.ServiceRequest): PrescriptionSummary {
-  const setting = codingBySystem(sr.category?.[0]?.coding, SETTING_SYSTEM);
-  const category = codingBySystem(sr.category?.[1]?.coding, PRESCRIPTION_CATEGORY_SYSTEM);
+  const setting = categoryCoding(sr, SETTING_SYSTEM);
+  const category = categoryCoding(sr, PRESCRIPTION_CATEGORY_SYSTEM);
 
   return {
     id: sr.id ?? "",
@@ -612,12 +638,16 @@ export const prescriptionProblem = orderProblem;
 export function prescriptionRequester(sr: fhir4.ServiceRequest): OrderAttribution {
   const department = departmentOf(sr);
   const ward = wardOf(sr);
-  if (!department.departmentId && !sr.requester && !ward.wardId) return emptyOrderContext;
+  const encounterId = sr.encounter?.reference?.split("/").pop() ?? "";
+  if (!department.departmentId && !sr.requester && !ward.wardId && !encounterId) {
+    return emptyOrderContext;
+  }
   return {
     ...department,
-    // 編集で保存し直しても登録時点の病棟が残るよう、読み戻してそのまま渡す
+    // 編集で保存し直しても登録時点の病棟・入院が残るよう、読み戻してそのまま渡す
     // (依頼科・依頼医師を引き継ぐのと同じ扱い)。
     ...(ward.wardId ? ward : {}),
+    ...(encounterId ? { encounterId } : {}),
     practitionerId: sr.requester?.reference?.split("/").pop() ?? "",
     practitionerName: sr.requester?.display ?? "",
   };
@@ -685,7 +715,7 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
     const orderInRp = Number(identifierValue(mr, ORDER_IN_RP_SYSTEM) ?? "0");
     const dosage = mr.dosageInstruction?.[0];
     const usageCoding = codingBySystem(dosage?.timing?.code?.coding, USAGE_CODE_SYSTEM);
-    const categoryCoding = codingBySystem(dosage?.timing?.code?.coding, USAGE_CATEGORY_SYSTEM);
+    const usageCategoryCoding = codingBySystem(dosage?.timing?.code?.coding, USAGE_CATEGORY_SYSTEM);
 
     let group = groups.get(rpNumber);
     if (!group) {
@@ -693,7 +723,7 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
         rpNumber,
         usageCode: usageCoding?.code,
         usageName: usageCoding?.display,
-        basicCategory: categoryCoding?.display,
+        basicCategory: usageCategoryCoding?.display,
         doseDays: mr.dispenseRequest?.expectedSupplyDuration?.value,
         doseCount: dosage?.timing?.repeat?.count,
         usageComment: dosage?.additionalInstruction?.[0]?.text,
@@ -732,7 +762,7 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
 
 /** 保存済みの処方の処方区分(院内・院外…)のコード。無ければ空。 */
 export function prescriptionCategoryOf(sr: fhir4.ServiceRequest): string {
-  return codingBySystem(sr.category?.[1]?.coding, PRESCRIPTION_CATEGORY_SYSTEM)?.code ?? "";
+  return categoryCoding(sr, PRESCRIPTION_CATEGORY_SYSTEM)?.code ?? "";
 }
 
 export function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null {
@@ -766,14 +796,14 @@ export function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null
 function usageFromCoding(mr: fhir4.MedicationRequest): MedicineUsage | null {
   const dosage = mr.dosageInstruction?.[0];
   const usageCoding = codingBySystem(dosage?.timing?.code?.coding, USAGE_CODE_SYSTEM);
-  const categoryCoding = codingBySystem(dosage?.timing?.code?.coding, USAGE_CATEGORY_SYSTEM);
+  const usageCategoryCoding = codingBySystem(dosage?.timing?.code?.coding, USAGE_CATEGORY_SYSTEM);
   if (!usageCoding) return null;
   return {
     id: 0,
     usage_code: usageCoding.code ?? "",
     usage_name: usageCoding.display ?? "",
-    basic_usage_category_code: categoryCoding?.code ?? null,
-    basic_usage_category: categoryCoding?.display ?? null,
+    basic_usage_category_code: usageCategoryCoding?.code ?? null,
+    basic_usage_category: usageCategoryCoding?.display ?? null,
     detailed_usage_category_code: null,
     detailed_usage_category: null,
     timing_category_code: null,
@@ -785,9 +815,8 @@ export function parsePrescriptionForm(
   sr: fhir4.ServiceRequest,
   mrs: fhir4.MedicationRequest[],
 ): PrescriptionFormValues {
-  const setting = (codingBySystem(sr.category?.[0]?.coding, SETTING_SYSTEM)?.code ??
-    "") as PrescriptionSetting;
-  const category = codingBySystem(sr.category?.[1]?.coding, PRESCRIPTION_CATEGORY_SYSTEM)?.code ?? "";
+  const setting = (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting;
+  const category = categoryCoding(sr, PRESCRIPTION_CATEGORY_SYSTEM)?.code ?? "";
 
   const rpGroups = new Map<number, RpValues & { medicinesByOrder: Map<number, MedicineLineValues> }>();
 

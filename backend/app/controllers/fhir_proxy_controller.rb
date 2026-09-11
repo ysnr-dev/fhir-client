@@ -21,10 +21,12 @@ class FhirProxyController < ApplicationController
   # オーダーと一緒の _revinclude=Provenance:target が主で、書き込みは登録の transaction に混ぜる。
   # Flag は患者の診療上の注意(転倒リスク・体内金属・DNAR など)。患者帯のピクトグラムと
   # カルテのプロファイルタブが患者ごとに引く。
+  # MedicationDispense は調剤・払出の結果。書き込みは登録の transaction に混ぜるが、
+  # 処方・注射のオーダーから調剤内容を読み戻すので単独の検索も通す。
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
-    PractitionerRole Composition Task Procedure MedicationAdministration
+    PractitionerRole Composition Task Procedure MedicationAdministration MedicationDispense
     Location Schedule Slot Appointment Encounter Provenance Flag
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze

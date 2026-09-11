@@ -7,12 +7,14 @@ import {
   emptyMedicineLine,
   emptyPrescriptionForm,
   emptyRp,
+  hasDoseDays,
   SETTING_OPTIONS,
   type MedicineLineValues,
   type PrescriptionFormValues,
   type PrescriptionSetting,
   type RpValues,
 } from "../fhir/prescriptionHelpers";
+import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import { presetUsageFilters } from "../fhir/usageMapping";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
@@ -188,10 +190,10 @@ export function PrescriptionForm({
       const rp = values.rps[i];
       const rpLabel = `RP${i + 1}`;
       if (!rp.usage) return `${rpLabel}: 用法を選択してください。`;
-      if (rp.usage.basic_usage_category === "内服") {
+      if (hasDoseDays(rp.usage.usage_code, rp.usage.basic_usage_category)) {
         if (!rp.doseDays || Number(rp.doseDays) < 1) return `${rpLabel}: 投与日数を入力してください。`;
       }
-      if (rp.usage.basic_usage_category === "頓服") {
+      if (isAsNeededUsage(rp.usage.usage_code)) {
         if (!rp.doseCount || Number(rp.doseCount) < 1) return `${rpLabel}: 投与回数を入力してください。`;
       }
       if (rp.medicines.length === 0) return `${rpLabel}: 医薬品を1件以上登録してください。`;
@@ -421,7 +423,7 @@ export function PrescriptionForm({
                 <span className="rp-card__usage-value rp-card__usage-value--empty">未選択</span>
               )}
 
-              {rp.usage?.basic_usage_category === "内服" && (
+              {hasDoseDays(rp.usage?.usage_code, rp.usage?.basic_usage_category) && (
                 <span className="rp-card__dose-count">
                   <span className="rp-card__dose-count-label">投与日数</span>
                   <input
@@ -434,7 +436,7 @@ export function PrescriptionForm({
                   <span className="rp-card__dose-count-suffix">日分</span>
                 </span>
               )}
-              {rp.usage?.basic_usage_category === "頓服" && (
+              {isAsNeededUsage(rp.usage?.usage_code) && (
                 <span className="rp-card__dose-count">
                   <span className="rp-card__dose-count-label">投与回数</span>
                   <input

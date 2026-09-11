@@ -491,8 +491,13 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   実IDへ書き換わります)。処方詳細画面はこの extension から MedicationRequest の id を取り出し、並列 read
   で内容を取得します(`_id` のカンマ区切り検索に fhir-server が対応していないため)。
 - **RP・医薬品**: 用法・医薬品はいずれもマスタデータAPI(後述)から検索して選択します。RP・医薬品行は
-  フォーム上で動的に追加/削除でき、RP番号は自動連番です。用法の `basic_usage_category`（内服/頓服）に
-  応じて「投与日数」または「投与回数」のいずれかを入力します。
+  フォーム上で動的に追加/削除でき、RP番号は自動連番です。**頓用は用法コードの 3 桁目(`5`)で判定**し
+  (用法マスタの `basic_usage_category` は 内服 / 外用 / 注射 / 注入 の 4 種で「頓服」が無いため)、
+  頓用なら「投与回数」、頓用でない内服なら「投与日数」を入力します。判定は
+  `fhir/medicationScheduleHelpers.ts` の `isAsNeededUsage` と `fhir/prescriptionHelpers.ts` の
+  `hasDoseDays` に集約していて、フォーム・調剤登録・カードの表示が同じ関数を通ります。
+- **入院のオーダー**: 入院中に登録した処方は `ServiceRequest.encounter` にその入院を入れます
+  (与薬の実施記録がここから Encounter を写します)。
 - backend の `/fhir` プロキシは `ALLOWED_RESOURCE_TYPES` に `ServiceRequest` を追加し、
   `POST /fhir`(空パス)を transaction Bundle 中継用のルートとして扱います
   (`backend/app/controllers/fhir_proxy_controller.rb`)。

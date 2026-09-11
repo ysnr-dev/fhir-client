@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { problemLabel } from "../fhir/conditionHelpers";
+import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import {
   groupByRp,
+  hasDoseDays,
   orderContextSummary,
   prescriptionComment,
   prescriptionProblem,
@@ -118,13 +120,13 @@ export function PrescriptionDetailPanel({
             <dt>用法</dt>
             <dd className="prescription-detail__usage-value">
               <span>{rp.usageName ?? "-"}</span>
-              {rp.basicCategory === "内服" && (
+              {hasDoseDays(rp.usageCode, rp.basicCategory) && (
                 <span className="prescription-detail__dose">
                   <span className="prescription-detail__dose-label">投与日数</span>
                   {rp.doseDays != null ? `${rp.doseDays}日分` : "-"}
                 </span>
               )}
-              {rp.basicCategory === "頓服" && (
+              {isAsNeededUsage(rp.usageCode) && (
                 <span className="prescription-detail__dose">
                   <span className="prescription-detail__dose-label">投与回数</span>
                   {rp.doseCount != null ? `${rp.doseCount}回分` : "-"}

@@ -301,3 +301,64 @@ Provenance
 経過表の水分出納と注射フォームの総投与量が力価のオーダーで桁違いになっていたので、
 `fhir/doseConversionHelpers.ts` の `toMilliliters` に寄せて単位を見るようにした(同 §8.13 N-3 / N-4)。
 **投与量を数量として扱う処理を新しく書くときは `doseQuantity.unit` を必ず見る**(払出は `toPackQuantity`、mL は `toMilliliters`)。
+
+---
+
+## 4. 処方オーダーの不足機能(2026-09-11 に洗い出し)
+
+処方オーダーの不足機能を調べた結果。**§4.1 は対応済み**、§4.2 以降は未対応。
+薬剤の安全性チェック(§3)と定期処方の日付(§1.2)は既出なのでここでは繰り返さない。
+
+### 4.1 頓用の分岐が発火していなかった(2026-09-11 に対応済み)
+
+> フォーム・調剤登録・カードの表示が `basic_usage_category === "頓服"` で分岐していたが、
+> 用法マスタの実値は **内服 / 外用 / 注射 / 注入 の 4 種だけで「頓服」が無い**(開発 DB で確認)。
+> 頓用の内服(用法コード 3 桁目 `5`。マスタに 585 件)を選ぶと、投与回数の欄が出ずに投与日数が
+> 必須になり、`asNeededBoolean` も `timing.repeat.count` も付かず、調剤数量も 1 日量 × 日数で
+> 計算されていた。判定を `medicationScheduleHelpers.isAsNeededUsage`(3 桁目)に統一し、
+> 「頓用でない内服だけが日数を持つ」を `prescriptionHelpers.hasDoseDays` に切り出して、
+> フォーム・調剤モーダル・カード・詳細パネルの 6 か所が同じ関数を通るようにした。
+> **外用の頓用も回数入力・1 回量 × 回数の調剤数量に変わる**(従来は全量)。
+>
+> 併せて直したもの: `MedicationDispense` を `/fhir` プロキシの `ALLOWED_RESOURCE_TYPES` に追加
+> (登録は transaction で通るが単独の検索が 404 だった)、入院の処方 `ServiceRequest` に
+> `encounter` を焼く(与薬の実施記録が `order.encounter` を写すのに常に undefined だった)、
+> 処方の `category` を添字ではなく system で読む(`shared.categoryCoding`)。
+
+### 4.2 処方箋に出せない項目(入力欄が無い)
+
+`docs/prescription-report-design.md` §2 の「枠はあるが常に空欄」がそのまま残っている。
+
+- 後発品の**変更不可・患者希望**(`MedicationRequest.substitution.allowedBoolean` + 理由)。
+  調剤側(`RxDispenseModal`)で変更不可なら銘柄変更を止めるところまで対になる。
+- **リフィル・分割調剤**(`dispenseRequest.numberOfRepeatsAllowed` / `validityPeriod`)。
+- **一包化・粉砕**などの調剤指示(RP 単位。JP Core の調剤指示拡張)。
+- **時刻指定用法(`Z`)の時刻入力**。入れると経過表の与薬予定が展開できるようになる
+  (`docs/prescription-order-design.md` §5 と対)。
+- **`priority`**(緊急・至急)。処方と注射だけ `shared.ts` の `PRIORITY_OPTIONS` を使っていない。
+- **外用の全量**。「用量 = 1 日量」の暗黙の運用なので、本数・g 数の総量を持つ場所が無い。
+
+### 4.3 調剤結果を読み戻す画面が無い
+
+`MedicationDispense` は登録するだけで、**表示・訂正・削除の画面が無い**(注射の払出も同じ。
+`docs/injection-order-design.md` §8 C)。プロキシは §4.1 で通したので、あとは処方詳細
+(`RxOrderViewModal` / `PrescriptionDetailPanel`)に調剤内容(代替調剤・数量・調剤者)を出す。
+
+### 4.4 RP 単位の頻用薬・約束処方マスタが無い
+
+検体検査のセット(`master_lab_panel_items`)、放射線の頻用コード、細菌・病理の `frequent` に
+相当する器が医薬品だけ無い。オーダーセット(`order_sets`)は**処方オーダー 1 件まるごと**の
+粒度なので、「RP 1 つぶんの定型(薬剤 + 用法 + 用量 + 日数)をフォームから呼ぶ」には使えない。
+
+### 4.5 持参薬(MedicationStatement)
+
+リポジトリに `MedicationStatement` は 1 件も無い。入院時の持参薬の登録・鑑別、退院処方との
+重複チェック(§1.2)の前提になる。プロキシの許可リストと上流のプロファイル対応の確認が要る。
+
+### 4.6 そのほか
+
+- **病棟の与薬ワークリスト**と**頓用・臨時の与薬入力**(`docs/prescription-order-design.md` §5)。
+- **薬袋ラベル・薬剤情報提供書**。注射ラベル(`injection_label.tlf`)と同じ器で作れる。
+- カルテのカードから**中止**と**処方箋 PDF**ができない(どちらも処方一覧だけ)。カードに
+  進捗バッジも出ない(`KarteTimeline.tsx` の status 表示に `prescription` が無い)。
+- 医薬品・用法マスタの**参照画面**が無い(取込だけ。`/master-import`)。

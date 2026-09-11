@@ -1,7 +1,9 @@
 import type { RxWorklistRow } from "../api/queries";
+import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import {
   groupByRp,
+  hasDoseDays,
   orderContextSummary,
   prescriptionComment,
   prescriptionRequester,
@@ -79,10 +81,10 @@ export function RxOrderViewModal({ row, onClose }: { row: RxWorklistRow; onClose
               <span className="karte-rp__detail-label">用法:</span>
               <span className="karte-rp__usage">
                 <span>{rp.usageName ?? "-"}</span>
-                {rp.basicCategory === "内服" && rp.doseDays != null && (
+                {hasDoseDays(rp.usageCode, rp.basicCategory) && rp.doseDays != null && (
                   <span className="karte-rp__dose">{`${rp.doseDays}日分`}</span>
                 )}
-                {rp.basicCategory === "頓服" && rp.doseCount != null && (
+                {isAsNeededUsage(rp.usageCode) && rp.doseCount != null && (
                   <span className="karte-rp__dose">{`${rp.doseCount}回分`}</span>
                 )}
                 {rp.usageComment && (

@@ -1,6 +1,8 @@
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import { toPackQuantity, type MedicineDoseConversionMap } from "./doseConversionHelpers";
+import { isAsNeededUsage } from "./medicationScheduleHelpers";
 import {
+  hasDoseDays,
   medicationCodeableConcept,
   medicineFromCoding,
   UNITS_OF_MEASURE_SYSTEM,
@@ -56,13 +58,16 @@ export function dispenseValuesFromOrder(
 }
 
 /**
- * 調剤数量。用量の意味が用法の基本区分で変わる(処方オーダー登録の入力と同じ):
- * 内服は 1 日量 × 投与日数、頓服は 1 回量 × 投与回数、それ以外(外用など)は全量。
+ * 調剤数量。用量の意味が用法で変わる(処方オーダー登録の入力と同じ):
+ * 頓用は 1 回量 × 投与回数、頓用でない内服は 1 日量 × 投与日数、それ以外(外用など)は全量。
  */
 function dispenseQuantity(rp: RpValues, dose: number): number {
-  const category = rp.usage?.basic_usage_category;
-  const times =
-    category === "内服" ? Number(rp.doseDays) : category === "頓服" ? Number(rp.doseCount) : 1;
+  const usageCode = rp.usage?.usage_code;
+  const times = isAsNeededUsage(usageCode)
+    ? Number(rp.doseCount)
+    : hasDoseDays(usageCode, rp.usage?.basic_usage_category)
+      ? Number(rp.doseDays)
+      : 1;
   const value = dose * (times >= 1 ? times : 1);
   // 0.1 × 3 = 0.30000000000000004 のような浮動小数の端数を落とす。
   return Math.round(value * 1e6) / 1e6;

@@ -151,8 +151,10 @@ import {
 } from "../fhir/endoscopyOrderHelpers";
 import type { EndoscopyPerformDisplay } from "../fhir/endoscopyResultHelpers";
 import { endoscopyTaskStatusDisplay } from "../fhir/endoscopyTaskHelpers";
+import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import {
   groupByRp,
+  hasDoseDays,
   orderContextSummary,
   prescriptionComment,
   prescriptionRequester,
@@ -1146,10 +1148,10 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
               <span className="karte-rp__detail-label">用法:</span>
               <span className="karte-rp__usage">
                 <span>{rp.usageName ?? "-"}</span>
-                {rp.basicCategory === "内服" && rp.doseDays != null && (
+                {hasDoseDays(rp.usageCode, rp.basicCategory) && rp.doseDays != null && (
                   <span className="karte-rp__dose">{`${rp.doseDays}日分`}</span>
                 )}
-                {rp.basicCategory === "頓服" && rp.doseCount != null && (
+                {isAsNeededUsage(rp.usageCode) && rp.doseCount != null && (
                   <span className="karte-rp__dose">{`${rp.doseCount}回分`}</span>
                 )}
                 {rp.usageComment && (

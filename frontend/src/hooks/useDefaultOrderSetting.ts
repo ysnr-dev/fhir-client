@@ -10,6 +10,8 @@ export interface DefaultOrderSetting {
   /** 入院病棟の Location.id。入院していない・辿れなかったときは空。 */
   wardId: string;
   wardName: string;
+  /** 入院(Encounter.id)。入院していないときは空。 */
+  encounterId: string;
   /** 入院かどうかが分かったか。フォームの初期値は初回描画時にしか効かないので、
    *  呼び出し側はこれが true になるまでフォームを描かない。 */
   ready: boolean;
@@ -22,6 +24,7 @@ export function useDefaultOrderSetting(patientId: string): DefaultOrderSetting {
     setting: admission.data ? "inpatient" : "outpatient",
     wardId: admission.data?.wardId ?? "",
     wardName: admission.data?.wardName ?? "",
+    encounterId: admission.data?.encounter.id ?? "",
     ready: !admission.isPending,
   };
 }
