@@ -164,16 +164,18 @@ export function buildOrderProvenanceEntry(
  * 進捗や状態だけを書き換える活動(中止・完了・休止・再開・中止取消)の来歴。
  *
  * こうした操作の Bundle は Task やヘッダの状態しか持たず、`buildOrderProvenanceEntry` が
- * 見る「登録・編集されたヘッダ」が無い。そこで**対象のオーダー(ServiceRequest)を呼ぶ側が渡す**。
+ * 見る「登録・編集されたヘッダ」が無い。そこで**対象のオーダー(ServiceRequest)を呼ぶ側が渡す**
+ * (通知の Task も患者・種別をそこから組むので、参照ではなくリソースを受け取る)。
  * target がオーダーであることは承認待ち一覧の前提でもある(行はオーダーから組む)。
  * 指示医師はオーダーに保存済みの requester をそのまま使う(登録・編集と同じ)。
  */
 export function buildActivityProvenanceEntry(
-  targets: string[],
-  requester: fhir4.Reference | undefined,
+  orders: fhir4.ServiceRequest[],
   activity: OrderActivity,
   enterer: OrderEnterer,
 ): fhir4.BundleEntry | null {
+  const targets = orders.map((order) => `ServiceRequest/${order.id}`);
+  const requester = orders[0]?.requester;
   if (targets.length === 0 || !requester?.reference) return null;
   return provenanceEntry(targets, requester, activity, enterer);
 }
@@ -302,51 +304,4 @@ export function provenancesOf(bundle: fhir4.Bundle | undefined): fhir4.Provenanc
   return (bundle?.entry ?? [])
     .map((entry) => entry.resource)
     .filter((resource): resource is fhir4.Provenance => resource?.resourceType === "Provenance");
-}
-
-// ---- 承認待ち一覧 ----
-
-export interface PendingApprovalRow {
-  provenance: fhir4.Provenance;
-  /** 対象オーダーのヘッダ。注射の連日オーダーは複数(target ごと)。 */
-  orders: fhir4.ServiceRequest[];
-  patient: fhir4.Patient | undefined;
-  entererName: string;
-  recorded: string;
-  activity: OrderActivity;
-}
-
-/**
- * 承認待ち一覧の行。検索結果(Provenance + _include の ServiceRequest / Patient)から組む。
- * 検索は署名無しで絞るだけなので、医師本人が入力した活動(承認不要)はここで除く。
- */
-export function pendingApprovalRows(bundle: fhir4.Bundle | undefined): PendingApprovalRow[] {
-  const ordersById = new Map<string, fhir4.ServiceRequest>();
-  const patientsById = new Map<string, fhir4.Patient>();
-  for (const entry of bundle?.entry ?? []) {
-    const resource = entry.resource;
-    if (!resource?.id) continue;
-    if (resource.resourceType === "ServiceRequest") ordersById.set(resource.id, resource as fhir4.ServiceRequest);
-    if (resource.resourceType === "Patient") patientsById.set(resource.id, resource as fhir4.Patient);
-  }
-
-  return provenancesOf(bundle)
-    .filter(needsApproval)
-    .map((provenance) => {
-      const orders = provenanceServiceRequestIds(provenance)
-        .map((id) => ordersById.get(id))
-        .filter((sr): sr is fhir4.ServiceRequest => Boolean(sr));
-      const patientId = orders[0]?.subject?.reference?.split("/").pop() ?? "";
-      return {
-        provenance,
-        orders,
-        patient: patientsById.get(patientId),
-        entererName: agentName(agentOfType(provenance, ENTERER)),
-        recorded: provenance.recorded ?? "",
-        activity: provenanceActivity(provenance),
-      };
-    })
-    // 削除されたオーダーの来歴(target が消えている)は承認するものが無いので出さない。
-    .filter((row) => row.orders.length > 0)
-    .sort((a, b) => b.recorded.localeCompare(a.recorded));
 }

@@ -27,11 +27,8 @@ import {
 } from "../fhir/locationHelpers";
 import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeline";
 import {
-  approvalBundleEntry,
   buildActivityProvenanceEntry,
-  buildApprovedProvenance,
   buildOrderProvenanceEntry,
-  pendingApprovalRows,
   type OrderActivity,
   type OrderEnterer,
 } from "../fhir/provenanceHelpers";
@@ -80,12 +77,19 @@ import {
   type LabResultSummary,
   type SpecimenRef,
 } from "../fhir/labResultHelpers";
+import { isPanicTask, LAB_PANIC_TASK_CODE } from "../fhir/labPanicHelpers";
+import { splitNotificationBundle } from "../fhir/notificationHelpers";
 import {
-  buildAcknowledgedPanicTask,
-  isPanicTask,
-  LAB_PANIC_TASK_CODE,
-  panicTaskRows,
-} from "../fhir/labPanicHelpers";
+  completeNotificationEntries,
+  notificationRows,
+  NOTIFICATION_CODES,
+  type NotificationRow,
+} from "../components/notifications/notificationRegistry";
+import { approvalTransactionEntries } from "./notificationActions";
+import {
+  approvalOrdersOfBundle,
+  buildOrderApprovalTaskEntry,
+} from "../fhir/orderApprovalTaskHelpers";
 import { TASK_CODE_SYSTEM } from "../fhir/taskHelpers";
 import { orderDay, referenceId } from "../fhir/shared";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections, type InfectionRow } from "../fhir/infectionHelpers";
@@ -4166,7 +4170,11 @@ function useWithOrderProvenance(): (bundle: fhir4.Bundle) => fhir4.Bundle {
   const enterer = useOrderEnterer();
   return (bundle) => {
     const entry = enterer ? buildOrderProvenanceEntry(bundle, enterer) : null;
-    return entry ? { ...bundle, entry: [...(bundle.entry ?? []), entry] } : bundle;
+    if (!entry || !enterer) return bundle;
+    // 代行入力なら指示医師あての承認待ちの通知も同じ transaction で作る
+    // (来歴は urn:uuid で参照する。上流が採番済みの id に解決する)。
+    const task = buildOrderApprovalTaskEntry(entry, approvalOrdersOfBundle(bundle), enterer);
+    return { ...bundle, entry: [...(bundle.entry ?? []), entry, ...(task ? [task] : [])] };
   };
 }
 
@@ -4175,20 +4183,30 @@ function useWithOrderProvenance(): (bundle: fhir4.Bundle) => fhir4.Bundle {
  * 指示医師は呼ぶ側が渡す(Bundle には Task やヘッダの状態しか入らないため)。
  */
 function useActivityProvenance(): (
-  targets: string[],
-  requester: fhir4.Reference | undefined,
+  orders: fhir4.ServiceRequest[],
   activity: OrderActivity,
 ) => fhir4.BundleEntry[] {
   const enterer = useOrderEnterer();
-  return (targets, requester, activity) => {
-    const entry = enterer ? buildActivityProvenanceEntry(targets, requester, activity, enterer) : null;
-    return entry ? [entry] : [];
+  return (orders, activity) => {
+    const entry = enterer ? buildActivityProvenanceEntry(orders, activity, enterer) : null;
+    if (!entry || !enterer) return [];
+    const task = buildOrderApprovalTaskEntry(
+      entry,
+      orders.map((order) => ({ order, reference: `ServiceRequest/${order.id}` })),
+      enterer,
+    );
+    return task ? [entry, task] : [entry];
   };
 }
 
-/** 来歴を書いた・承認したあとに、詳細の来歴と承認待ち一覧を読み直させる。 */
+/**
+ * 来歴を書いた・承認したあとに、詳細の来歴と通知(承認待ち)を読み直させる。
+ * 登録・編集で承認待ちの通知が増えるので、来歴を書く 16 種別ぶんの onSuccess を
+ * 触らずに済むようここで両方を無効化する。
+ */
 function invalidateProvenance(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["Provenance"] });
+  queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
 }
 
 /**
@@ -4227,48 +4245,23 @@ export function useOrderProvenance(serviceRequestId: string | undefined) {
 }
 
 /**
- * ログイン中の医師あての承認待ち。「その医師が author で、署名の無い」来歴を引き、
- * 対象オーダーと患者を _include で一緒に取る。医師本人が入力した活動(承認不要)は
- * 検索では除けないので pendingApprovalRows が落とす。
- *
- * 承認待ちは溜めずに捌く前提で 1 ページ(100 件)だけ引く。それ以上ある場合は
- * 承認して減らせば次が出てくる。
- */
-export function usePendingApprovals(practitionerId: string | null | undefined) {
-  const params = new URLSearchParams();
-  if (practitionerId) params.set("agent", `Practitioner/${practitionerId}`);
-  params.set("signature-type:missing", "true");
-  params.append("_include", "Provenance:target");
-  params.append("_include:iterate", "ServiceRequest:subject");
-  params.set("_sort", "-recorded");
-  params.set("_count", "100");
-
-  return useQuery({
-    queryKey: ["Provenance", "search", "pending-approval", practitionerId],
-    queryFn: () => searchResource<fhir4.Resource>("Provenance", params),
-    select: (result) => ({ rows: pendingApprovalRows(result.data), total: result.data.total }),
-    enabled: Boolean(practitionerId),
-    staleTime: 60_000,
-  });
-}
-
-/**
- * 承認。渡された来歴すべてに verifier と署名を足して 1 つの transaction で PUT する
- * (1 オーダーに登録と編集の承認待ちが並んでいれば、まとめて「いまの内容を確認した」ことになる)。
+ * 承認。渡された来歴に verifier と署名を足し、その来歴あての承認待ちの通知を対応済みにして、
+ * 1 つの transaction で PUT する(1 オーダーに登録と編集の承認待ちが並んでいれば、まとめて
+ * 「いまの内容を確認した」ことになる)。来歴は id で渡して中で最新を読み直す
+ * (一覧を開いたままにしていても、古い内容で上書きしない)。
  * 承認できるのは author(指示医師)本人だけで、判定は呼ぶ側(canApprove)が行う。
  */
 export function useApproveOrderProvenances() {
   const queryClient = useQueryClient();
   const enterer = useOrderEnterer();
   return useMutation({
-    mutationFn: (provenances: fhir4.Provenance[]) => {
+    mutationFn: async (provenanceIds: string[]) => {
       if (!enterer) throw new Error("医療従事者に紐付いたアカウントでログインしてください");
-      return postBundle({
-        resourceType: "Bundle",
-        type: "transaction",
-        entry: provenances.map((p) => approvalBundleEntry(buildApprovedProvenance(p, enterer))),
-      });
+      const entry = await approvalTransactionEntries(provenanceIds, enterer);
+      if (entry.length === 0) return null;
+      return postBundle({ resourceType: "Bundle", type: "transaction", entry });
     },
+    retry: false,
     onSuccess: () => invalidateProvenance(queryClient),
   });
 }
@@ -4561,9 +4554,12 @@ export function useLabObservationHistories(observationIds: string[]) {
 
 // 検査結果を保存・削除するとオーダーの紐付け状況が変わるため、
 // 検体検査オーダーの候補(["ServiceRequest", "search"] 配下)も無効化する。
-// パニック値(緊急異常値)の通知 -------------------------------------------------
+// 通知(Task) ------------------------------------------------------------------
+//
+// 緊急異常値・オーダー承認などの通知を 1 つのクエリで引く。種別ごとの見せ方と
+// 対応の仕方は components/notifications/notificationRegistry が持つ。
 
-const PANIC_TASK_KEY = ["Task", "lab-panic"];
+const NOTIFICATION_TASK_KEY = ["Task", "notification"];
 
 /** この検査結果に付いている通知。訂正で出し直す・取り下げるために引く。 */
 async function fetchPanicTask(reportId: string): Promise<fhir4.Task | undefined> {
@@ -4577,46 +4573,80 @@ async function fetchPanicTask(reportId: string): Promise<fhir4.Task | undefined>
     .find((task): task is fhir4.Task => Boolean(task && isPanicTask(task)));
 }
 
-/**
- * 未確認のパニック値の通知。宛先(依頼医)を指定すると自分あてだけに絞る。
- * 患者は `_include=Task:subject` で同じ応答に添える(上流の `_include=Task:focus` は
- * ServiceRequest しか返さないので、検査結果は id だけ持ってカルテへ渡す)。
- */
-export function usePanicResults(ownerId?: string | null) {
+/** 一覧・件数に共通の検索条件。宛先を指定すると自分あてだけに絞る。 */
+function notificationParams(ownerId?: string | null): URLSearchParams {
   const params = new URLSearchParams();
-  params.set("code", `${TASK_CODE_SYSTEM}|${LAB_PANIC_TASK_CODE.code}`);
+  params.set("code", NOTIFICATION_CODES);
   params.set("status", "requested");
   if (ownerId) params.set("owner", `Practitioner/${ownerId}`);
+  return params;
+}
+
+/**
+ * 未対応の通知。患者は `_include=Task:subject` で同じ応答に添える(上流の
+ * `_include=Task:focus` は ServiceRequest しか返さないので、対象は id だけ持って
+ * カルテへ渡す)。種別の絞り込みは取得済みの行に対して画面側で行う。
+ */
+export function useNotifications(ownerId?: string | null) {
+  const params = notificationParams(ownerId);
   params.set("_include", "Task:subject");
   params.set("_sort", "-authored-on");
   params.set("_count", "100");
 
   return useQuery({
-    queryKey: [...PANIC_TASK_KEY, ownerId ?? "all"],
+    queryKey: [...NOTIFICATION_TASK_KEY, "list", ownerId ?? "all"],
     queryFn: () => searchResource<fhir4.Resource>("Task", params),
-    select: (result) => panicTaskRows(result.data),
+    select: (result) => {
+      const { tasks, patients } = splitNotificationBundle(result.data);
+      return notificationRows(tasks, patients);
+    },
     staleTime: 60_000,
   });
 }
 
-/** 通知を確認済みにする。誰がいつ確認したかを Task の note に残す。 */
-export function useAcknowledgePanicTasks() {
+/**
+ * ヘッダーのベルに出す未対応件数。`_summary=count` で件数だけを引く
+ * (本文も `_include` も返らないので、自動更新を入れても軽い)。
+ *
+ * 自動更新は既定では止めてある。上流は FHIR リクエストごとに AuditEvent を 1 行書くので、
+ * 無償のサーバーでは開きっぱなしの画面が監査ログとインスタンスの稼働時間を食う。
+ * 止めている間も、ページ遷移・ウィンドウのフォーカス復帰・通知の書き込みでは読み直す。
+ */
+export function useNotificationCount(ownerId: string | null | undefined, polling: boolean) {
+  const params = notificationParams(ownerId);
+  params.set("_summary", "count");
+
+  return useQuery({
+    queryKey: [...NOTIFICATION_TASK_KEY, "count", ownerId ?? "all"],
+    queryFn: () => searchResource<fhir4.Resource>("Task", params),
+    select: (result) => result.data.total ?? 0,
+    staleTime: 60_000,
+    refetchInterval: polling ? 60_000 : false,
+    // 上流が落ちているときにヘッダーで再試行を繰り返さない(件数を出さないだけにする)。
+    retry: false,
+  });
+}
+
+/**
+ * 通知を対応済みにする。誰がいつ対応したかを Task の note に残す。
+ * オーダー承認のように別のリソース(来歴の署名)も要る種別は、レジストリが
+ * その entry を同じ transaction に足す。
+ */
+export function useCompleteNotifications() {
   const queryClient = useQueryClient();
   const enterer = useOrderEnterer();
   return useMutation({
-    mutationFn: (tasks: fhir4.Task[]) => {
+    mutationFn: async (rows: NotificationRow[]) => {
       if (!enterer) throw new Error("医療従事者に紐付いたアカウントでログインしてください");
-      return postBundle({
-        resourceType: "Bundle",
-        type: "transaction",
-        entry: tasks.map((task) => ({
-          resource: buildAcknowledgedPanicTask(task, enterer),
-          request: { method: "PUT" as const, url: `Task/${task.id}` },
-        })),
-      });
+      const entry = await completeNotificationEntries(rows, enterer);
+      if (entry.length === 0) return null;
+      return postBundle({ resourceType: "Bundle", type: "transaction", entry });
     },
     retry: false,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: PANIC_TASK_KEY }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+      queryClient.invalidateQueries({ queryKey: ["Provenance"] });
+    },
   });
 }
 
@@ -4644,7 +4674,7 @@ export function useCreateLabResult() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
-      queryClient.invalidateQueries({ queryKey: PANIC_TASK_KEY });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
 }
@@ -4692,7 +4722,7 @@ export function useUpdateLabResult() {
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
       queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "detail"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
-      queryClient.invalidateQueries({ queryKey: PANIC_TASK_KEY });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
   });
 }
@@ -10512,8 +10542,7 @@ export function useUpdateRegimenDayStatus() {
           ...(status === "cancelled" ? await chemoAppointmentCancelEntries(targets) : []),
           // 誰がどの投与日を止めたか(代行なら指示医師の承認待ちに並ぶ)。
           ...activityProvenance(
-            targets.map((order) => `ServiceRequest/${order.serviceRequest.id}`),
-            targets[0]?.serviceRequest.requester,
+            targets.map((order) => order.serviceRequest),
             status === "cancelled" ? "CANCEL" : "REACTIVATE",
           ),
         ],
@@ -10553,7 +10582,7 @@ export function useRevokeRegimen() {
           ),
           ...(await chemoAppointmentCancelEntries(pending)),
           // 中止はレジメン全体への判断なので、対象はヘッダだけにする(日オーダーはヘッダから辿れる)。
-          ...activityProvenance([`ServiceRequest/${header.id}`], header.requester, "CANCEL"),
+          ...activityProvenance([header], "CANCEL"),
         ],
       });
     },
@@ -10798,7 +10827,7 @@ export function useUpdateRegimenStatus() {
                 ...(await chemoAppointmentCancelEntries(pending)),
               ]
             : [holdRegimenEntry(header, status === "on-hold")]),
-          ...activityProvenance([`ServiceRequest/${header.id}`], header.requester, activity),
+          ...activityProvenance([header], activity),
         ],
       });
     },

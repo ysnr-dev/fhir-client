@@ -65,7 +65,7 @@ export function EnteredByRow({ serviceRequestId }: { serviceRequestId: string | 
                     type="button"
                     className="button rp-card__compact-button"
                     disabled={approve.isPending}
-                    onClick={() => approve.mutate(pending)}
+                    onClick={() => approve.mutate(pending.map((p) => p.id ?? ""))}
                   >
                     承認する
                   </button>

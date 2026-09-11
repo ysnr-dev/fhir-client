@@ -223,7 +223,7 @@ requisition 空いているときだけ同じ uuid
   `buildConditionBundle`)、`orderSetRegistry.tsx` の `condition` 定義と `duplicateNote` / `allocateProblemNumber`、
   `OrderSetApplyPanel.tsx`(患者の病名を待つ・重複エントリの除外)、`KarteProblemList.tsx`(`isActiveCondition` に統一)
 - `fhir/provenanceHelpers.ts` の `isHeaderEntry` を export(セット印の対象判定と共用)
-- `pages/OrderApprovalPage.tsx` の種別列
+- 通知一覧の「オーダー承認」の種別(`components/notifications/OrderApprovalNotificationCells.tsx`。当時は `pages/OrderApprovalPage.tsx`)
 
 ### 8.1 検証したこと(2026-09-05〜06、開発環境のテスト太郎、ysnr-dev = 児玉 義憲でログイン)
 

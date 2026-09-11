@@ -4,12 +4,12 @@ import { categoryCoding, codingBySystem, findSettingDisplay, SETTING_OPTIONS } f
 export { SETTING_OPTIONS };
 import type { LabReferenceRange, LabResultItem } from "../api/masterClient";
 import {
-  buildCancelledPanicTask,
   buildPanicTask,
   hasPanicValue,
   panicItemsOf,
   panicSummaryOf,
 } from "./labPanicHelpers";
+import { buildCancelledNotificationTask } from "./notificationHelpers";
 import { calculateAge } from "./patientHelpers";
 import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 
@@ -579,7 +579,7 @@ function panicTaskEntries(
     return existingPanicTask?.id && existingPanicTask.status !== "cancelled"
       ? [
           {
-            resource: buildCancelledPanicTask(existingPanicTask),
+            resource: buildCancelledNotificationTask(existingPanicTask),
             request: { method: "PUT", url: `Task/${existingPanicTask.id}` },
           },
         ]

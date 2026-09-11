@@ -423,18 +423,28 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   Verification Signature。`when` / `who` だけで暗号署名 `data` は持たない、操作の記録)を足して PUT します
   (`buildApprovedProvenance`)。承認済みのオーダーを代行者が編集すると、その編集ぶんだけがまた承認待ちに
   なります。承認できるのは `author` 本人のみ(`useCanApproveOrder`)。
-- **承認待ちの取り方**は `Provenance?agent=Practitioner/{医師}&signature-type:missing=true&_include=Provenance:target&_include:iterate=ServiceRequest:subject`
-  の 1 本(`usePendingApprovals`)。検索は署名の有無しか見られないので、医師本人の活動(承認不要)は
-  クライアント側で落とします(`pendingApprovalRows`)。
+- **承認待ちは通知(Task)で拾います**。`enterer ≠ author` の来歴を書くとき、同じ transaction に
+  指示医師あての `order-approval` の通知を積みます(`fhir/orderApprovalTaskHelpers.ts` の
+  `buildOrderApprovalTaskEntry`)。`focus` は来歴の `urn:uuid` で、上流の transaction が
+  `Provenance/{id}` に解決します。真正性の正本は引き続き Provenance で、通知は宛先と未対応・対応済みだけを
+  持ちます(後述の「通知(Task)」)。
+- **承認**すると、来歴への署名の PUT と通知を対応済みにする PUT を 1 つの transaction で送ります
+  (`api/notificationActions.ts` の `approvalTransactionEntries`)。来歴は id で渡して中で最新を読み直すので、
+  一覧を開いたままでも古い内容で上書きしません。通知を持たない承認待ち(通知の導入前のもの)でも
+  承認は通ります。
 - **画面**は 2 か所。詳細モーダルの来歴の行(`components/OrderDetailRows.tsx` の `EnteredByRow`。
   登録が代行なら「代行入力」、編集があれば「最終更新」、代行の活動があれば「承認」の行で、未承認かつ
-  指示医師本人には「承認する」ボタン)と、診療業務メニューの「オーダー承認」(`pages/OrderApprovalPage.tsx`。
-  自分あての承認待ちを活動単位で並べ、カルテの詳細モーダルで内容を確認してから承認するか、一覧から直接・
-  一括で承認する。メニューには件数を添える)。
+  指示医師本人には「承認する」ボタン)と、診療業務メニューの「通知」(`pages/NotificationPage.tsx` の
+  種別「オーダー承認」。自分あての承認待ちを活動単位で並べ、カルテの詳細モーダルで内容を確認してから
+  承認するか、一覧から直接・一括で承認する)。
 - **承認前でもオーダーは部門に流れます**(`ServiceRequest.status = draft` は部門一覧から消えるので使えず、
   緊急オーダーが止まると危ないため)。部門一覧・カルテのタイムラインに未承認の印は出していません
-  (`_revinclude` を足すと編集回数ぶん膨らむので、必要になった時点で Task を持つか `_revinclude` するかを
-  決める)。
+  (`_revinclude` を足すと編集回数ぶん膨らむため)。出すことにした場合は、通知の `basedOn` にヘッダを
+  入れてあるので `_revinclude=Task:based-on` で引けます(`_revinclude=Task:focus` は上流が
+  ServiceRequest しか返さないので使えません)。
+- 通知の導入前に溜まっていた承認待ちには、`bin/rails notifications:backfill_order_approval`
+  (`backend/lib/tasks/notifications.rake`)で後から通知を作りました。既に通知を持つ来歴は飛ばすので
+  何度流しても増えません。
 - **読むのは詳細を開いたときだけ**(`useOrderProvenance`)。カルテのタイムラインは 1 ページ 20 件・
   先読みは 100 件 × 2 本をカルテを開くたびに叩くので、そこに `_revinclude` は足していません。
 - 上流の `AuditEvent` は依然 OAuth クライアントしか記録せず、エンドユーザーは Provenance でしか追えません
@@ -636,16 +646,48 @@ JP Core の `JP_MedicationRequest_Injection` プロファイルを参考にし�
 - 感染症・腎機能・レジメンの検査値チェックは従来どおり JLAC11 の分析物コード(先頭 5 桁)で突き合わせます。
   結果項目に JLAC11 があれば coding に併記されるので動作は変わりません。
 
+### 通知(Task)
+
+「相手を決めて何かしてもらう」お知らせを 1 つの器(`Task`)にまとめ、ヘッダーのベルと
+**診療業務 > 通知**(`/notifications`)に集約します。いまの種別は次の 2 つで、読影レポートの重要所見や
+退院時サマリーなどの文書作成の督促を同じ仕組みに足していきます。
+
+| 種別(`Task.code`) | 焦点(`focus`) | 宛先(`owner`) | 操作 |
+|---|---|---|---|
+| `lab-panic` 緊急異常値 | 検査結果(`DiagnosticReport`) | オーダーの依頼医 | 確認 |
+| `order-approval` オーダー承認 | 来歴(`Provenance`) | 指示医師 | 承認 |
+
+- 器を `Task` にしたのは、宛先(`owner`)・未対応と対応済み(`status`)・対象(`focus`)・患者(`for`)・
+  期限(`restriction.period`)・優先度を標準のフィールドで持てるからです。`Communication` は上流が未対応で、
+  `received` が 1 つしかなく宛先ごとの既読を持てないため採りませんでした(純粋な連絡・お知らせの用途が
+  出た時点で改めて検討します)。**1 通知 = 1 宛先**で、複数人に届けるなら Task を複数作ります。
+- 共通の作法は `fhir/notificationHelpers.ts`。`status` は `requested`(未対応)/ `completed`(対応済み)/
+  `cancelled`(取り下げ。値が直ったなど、対応の要らない事象になったときにシステムが落とす)。対応済みに
+  すると `executionPeriod` と `note`(誰がいつ・種別ごとの文言)が付きます。一覧に出す情報は
+  `_include=Task:focus` が上流では ServiceRequest しか返さないので、**Task 自身**(`for` / `description` /
+  `input`)から読める形で持たせます。患者だけは `_include=Task:subject` で同じ応答に付きます。
+- 種別ごとの「どう見せて、どう対応済みにするか」は `components/notifications/notificationRegistry.tsx` の
+  対応表に集めています。新しい通知を足すときは、Task を作るヘルパーと内容セルを書いて対応表に 1 要素
+  足すだけで、一覧・件数・種別フィルタ・一括対応に乗ります。
+- **一覧**は未対応のものを新しい順に並べ、種別で絞れます。既定は自分あてだけで、「自分あてのみ」を外すと
+  宛先の決まらない通知(オーダーに紐付かない検査結果など)も出ます。取得は
+  `Task?code=<種別をカンマ区切りで OR>&status=requested&owner=…&_include=Task:subject` の 1 本です。
+- **ヘッダーのベル**に自分あての未対応件数を常に出します(緊急異常値は連絡が遅れると患者に害が出るので、
+  メニューを開かないと気付けない置き方にしません)。未対応があるベルは色を付け、件数を肩に載せます。
+  件数は `_summary=count` で件数だけを引きます。
+- **自動更新は既定で切ってあり**、通知一覧の「自動更新」で端末ごとに入れられます(1 分ごと。設定は
+  localStorage)。上流は FHIR リクエストごとに `AuditEvent` を 1 行書くので、無償のサーバーでは
+  開きっぱなしの画面が監査ログとインスタンスの稼働時間を食うためです。切っている間も、画面を移るたび・
+  ウィンドウに戻ったとき・通知が増減する書き込みのあとには読み直します。
+
 ### パニック値(緊急異常値)の通知
 
 パニック値を外れた結果を登録すると、**依頼医あての通知**(`Task`、`code = task-code|lab-panic`、
 `focus` = その検査結果、`priority = stat`)が未確認の状態で作られます。宛先は紐付けたオーダーの
 依頼医です。オーダーに紐付かない結果には宛先が付きません。
 
-- **診療業務 > 緊急異常値**(`/lab-panic-results`)で未確認のものを新しい順に並べます。既定は自分あてだけで、
-  「自分あてのみ」を外すと宛先なしのぶんも出ます(検査室が電話連絡する運用ではこちらを見ます)。
-  メニューには自分あての未確認件数を出します。
-- 一覧は 登録日時・採取日・患者・緊急異常値・宛先 の列で、緊急異常値は項目・値・単位・判定(HH / LL の色付き)に
+- **診療業務 > 通知**(`/notifications`)の種別「緊急異常値」で未確認のものを見ます(一覧の作りと
+  自分あての絞り込みは後述の「通知(Task)」)。内容の列には項目・値・単位・判定(HH / LL の色付き)を
   分けて出します。1 件の通知に複数の項目が入るので、その中身は `Task.input` に構造化して持たせています
   (`Task.description` は Task をそのまま読む相手への説明として同じ内容を文にしたものです)。
 - 行から**カルテ**(その検査結果を開く)と**確認**ができます。確認すると通知が完了になり、

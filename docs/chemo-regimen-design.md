@@ -413,7 +413,7 @@ ServiceRequest + MedicationRequest(日オーダー)  通常の注射・処方そ
   (クール登録のローダー・投与日・移動の確認)、`components/RegimenDetailView.tsx`(左ペインの詳細)、
   `components/KarteChemoTab.tsx`(暦とビュー切り替え)、`hooks/useRegimenApplication.ts`(適用と日オーダーの取得)、
   `KarteRightPane.tsx`(`regimen-apply` / `regimen-cycle` / `regimen-day` と「化学療法」ボタン)、`KartePage.tsx` / `karteUrl.ts`(タブ)、`fhir/karteTimeline.ts`(ヘッダを外す・`orderKindOf`)、
-  `KarteTimeline.tsx`(カードの印)、`OrderApprovalPage.tsx`(種別名)、`App.css`
+  `KarteTimeline.tsx`(カードの印)、`OrderApprovalPage.tsx`(種別名。現 `fhir/orderApprovalTaskHelpers.ts`)、`App.css`
 
 
 - backend: `db/migrate/20260906100000〜100500`(6 テーブル)、`app/models/master/regimen*.rb`(6 モデル)、
@@ -848,7 +848,7 @@ ServiceRequest + MedicationRequest(日オーダー)  通常の注射・処方そ
   来歴も付ける)・投与日の中止・レジメンの中止・完了が同じ transaction に同梱する。
   - ［決定］移動では予約を**取り消すだけ**で、自動では取り直さない(空き枠が無いと移動そのものが止まる。D-3 と同じ判断)。
     確認文とモーダルに「予約 n 件も取り消します。移動後に予約し直してください」を出す。中止取消でも予約は戻さない。
-- **N-6 承認行の種別**: `OrderApprovalPage` の `approvalKindOf` が日オーダーの `regimen-order` 拡張を見て「化学療法」に
+- **N-6 承認行の種別**: `approvalKindOf`(当時 `OrderApprovalPage`、現 `fhir/orderApprovalTaskHelpers.ts`)が日オーダーの `regimen-order` 拡張を見て「化学療法」に
   寄せる(次クール登録の transaction にはヘッダが無い)。`karteTimeline.orderKindOf` は変えない(そこで化学療法にすると
   日オーダーがカードから消える)。
 - **N-7 採番**: `next_regimen_code` が 900000 未満のコードだけを数える(`SAMPLE_CODE_FLOOR`)。spec 1 件追加。
@@ -901,7 +901,7 @@ ServiceRequest + MedicationRequest(日オーダー)  通常の注射・処方そ
   `useUpdateRegimenStatus`(完了・休止・再開)の 3 つ。移動は `useMoveRegimenDays` が
   登録・編集と同じ来歴を書く(§8.13 N-5)。
 - **承認一覧**の「活動」列は登録・編集の 2 値だったので `orderActivityLabel` に替えた
-  (`OrderApprovalPage`)。詳細モーダルの「最終更新」も、編集以外は活動名を見出しにする
+  (当時 `OrderApprovalPage`、現 `pages/NotificationPage.tsx` の種別「オーダー承認」)。詳細モーダルの「最終更新」も、編集以外は活動名を見出しにする
   (`OrderDetailRows`)。`summarizeOrderProvenance` の「最後の更新」は登録以外の活動から採る。
 - ［決定］**代行で中止したら医師の承認待ちに並ぶ**。看護師が代行で入力したオーダーを医師が
   確認するのと同じ理屈で、指示を止める判断も指示医師が確認すべきものだから。承認待ちの

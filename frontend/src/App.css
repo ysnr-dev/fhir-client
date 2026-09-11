@@ -1969,7 +1969,7 @@ fieldset.rp-card {
 }
 
 /* 見出しの絞り込み(自分あてのみ)。操作ボタンと役割が違うので、小さめにして間を空ける。 */
-.lab-panic__filter {
+.notification__filter {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1979,52 +1979,57 @@ fieldset.rp-card {
   white-space: nowrap;
 }
 
-.lab-panic__filter input {
+.notification__filter input {
   width: 14px;
   height: 14px;
   margin: 0;
 }
 
-/* 緊急異常値一覧。列は折り返さず(幅は page-wide で確保)、狭いときは表の中だけ横に送る。 */
-.lab-panic__table-wrap {
+/* 通知一覧。列は折り返さず(幅は page-wide で確保)、狭いときは表の中だけ横に送る。 */
+.notification__table-wrap {
   overflow-x: auto;
 }
 
-.lab-panic th,
-.lab-panic td {
+.notification th,
+.notification td {
   white-space: nowrap;
   vertical-align: middle;
 }
 
+/* 患者・日時・種別のように幅の決まった列。内容の列だけが伸びる。 */
+.notification__compact {
+  width: 1%;
+}
+
 /* 1 件の通知に複数の項目が入るので、項目ごとに 1 行にして列を揃える。 */
-.lab-panic__items {
+.notification__items {
   min-width: 22em;
 }
 
-.lab-panic__item {
+.notification__item {
   display: flex;
   align-items: baseline;
   gap: 8px;
 }
 
-.lab-panic__item-name {
+.notification__item-name {
   min-width: 6em;
 }
 
-.lab-panic__item-value {
+.notification__item-value {
   min-width: 5em;
   text-align: right;
   font-weight: 700;
 }
 
-.lab-panic__item-unit {
+.notification__item-unit {
   min-width: 6em;
   color: var(--text);
   font-size: 12px;
 }
 
 /* 判定(HH / LL)。結果値の反転表示と同じ色で、一覧でも重さが分かるようにする。 */
-.lab-panic__flag {
+.notification__flag {
   min-width: 2.5em;
   padding: 0 6px;
   border-radius: 3px;
@@ -2033,20 +2038,34 @@ fieldset.rp-card {
   font-size: 12px;
 }
 
-.lab-panic__flag--critical-high {
+.notification__flag--critical-high {
   background: var(--lab-high);
   color: #fff;
 }
 
-.lab-panic__flag--critical-low {
+.notification__flag--critical-low {
   background: var(--lab-low);
   color: #fff;
 }
 
-/* 「カルテ」(リンク)と「確認」(ボタン)の大きさを揃える。td の display は変えない
+/* オーダー承認の内容。種別・活動・依頼元を 1 セルに横並びで置く。 */
+.notification__approval-kind {
+  margin-right: 12px;
+}
+
+.notification__approval-activity {
+  margin-right: 12px;
+  font-weight: 700;
+}
+
+.notification__approval-context {
+  font-size: 12px;
+}
+
+/* 「カルテ」(リンク)と「確認 / 承認」(ボタン)の大きさを揃える。td の display は変えない
    (table-cell でなくなると行の縦位置と罫線が崩れる)。 */
-.lab-panic__actions .button,
-.lab-panic__actions button {
+.notification__actions .button,
+.notification__actions button {
   box-sizing: border-box;
   width: 5.5em;
   margin-left: 8px;
@@ -2055,6 +2074,83 @@ fieldset.rp-card {
   justify-content: center;
   vertical-align: middle;
 }
+
+/* 見出しの操作(種別の絞り込み・自分あて・自動更新)。 */
+.notification__actions-bar {
+  align-items: center;
+}
+
+.notification__kind-select {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+/* ヘッダーの通知ベル。未対応があるかどうかを常に目に入れるので、
+   ヘッダーの他の要素(地味なテキストボタン)より一段強く出す。 */
+.notification-bell {
+  margin-left: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--text);
+  background: transparent;
+  text-decoration: none;
+}
+
+/* 右端寄せは先に出る要素が担うので、後続は隣に並べる。 */
+.order-context ~ .notification-bell {
+  margin-left: 0;
+}
+
+.notification-bell ~ .app__user,
+.notification-bell ~ .wake-button {
+  margin-left: 0;
+}
+
+.notification-bell:hover {
+  color: var(--text-h);
+  background: var(--accent-bg);
+}
+
+/* 未対応があるベルは色を付けて、無いときの地のアイコンと一目で区別する。 */
+.notification-bell--unread {
+  color: var(--accent);
+}
+
+.notification-bell__icon {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
+/* 未対応の件数。緊急異常値が混ざるので、見落とさない色でベルの肩に載せる。 */
+.notification-bell__count {
+  position: absolute;
+  top: -1px;
+  right: -3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+  background: var(--lab-high);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 13px;
+  text-align: center;
+}
+
 
 /* パニック値(緊急異常値)の HH / LL。H / L と一目で区別できるよう、色を反転して塗る。 */
 .rp-card__medicines--detail td.rp-card__lab-value--critical-high,

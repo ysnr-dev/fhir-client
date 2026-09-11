@@ -62,11 +62,9 @@ import { ChemoRoomWorklistPage } from "./pages/ChemoRoomWorklistPage";
 import { RehabWorklistPage } from "./pages/RehabWorklistPage";
 import { NutritionGuidanceWorklistPage } from "./pages/NutritionGuidanceWorklistPage";
 import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
-import { OrderApprovalPage } from "./pages/OrderApprovalPage";
+import { NotificationPage } from "./pages/NotificationPage";
 import { OrderSetPage } from "./pages/OrderSetPage";
-import { OrderApprovalNavLink } from "./components/OrderApprovalNavLink";
-import { LabPanicNavLink } from "./components/LabPanicNavLink";
-import { LabPanicResultPage } from "./pages/LabPanicResultPage";
+import { NotificationBell } from "./components/NotificationBell";
 import { NursingWorklistPage } from "./pages/NursingWorklistPage";
 import { PathoOrganPage } from "./pages/PathoOrganPage";
 import { PathoCollectionMethodPage } from "./pages/PathoCollectionMethodPage";
@@ -160,12 +158,11 @@ function App() {
             <Link to="/consult-worklist" className="row-menu__item">
               他科依頼一覧
             </Link>
-            {/* 代行入力されたオーダーを指示医師が確認・承認する画面。承認するのは
-                部門ではなく指示した医師なので診療業務に置く(readme「代行入力の記録と承認」)。 */}
-            <OrderApprovalNavLink />
-            {/* パニック値(緊急異常値)の通知。受け取るのは検査室ではなく依頼した医師なので
-                部門業務ではなくここに置く(readme「パニック値(緊急異常値)の通知」)。 */}
-            <LabPanicNavLink />
+            {/* 宛先の決まった通知(緊急異常値・オーダー承認…)の一覧。受け取るのは部門ではなく
+                医師なので診療業務に置く(readme「通知」)。件数はヘッダーのベルに出る。 */}
+            <Link to="/notifications" className="row-menu__item">
+              通知
+            </Link>
             {/* よく出すオーダーのひとまとめ(オーダーセット)の登録。出すのは診療科の
                 医師なので部門業務ではなくここに置く(docs/order-set-design.md §1)。 */}
             <Link to="/order-sets" className="row-menu__item">
@@ -467,6 +464,7 @@ function App() {
         {/* オーダーはカルテ以外(手術カレンダーなど)からも登録するので、
             依頼科・依頼医師の選択はどの画面でも切り替えられるようにする。 */}
         <OrderContextPicker />
+        <NotificationBell />
         <CurrentUserBadge />
         <WakeButton />
       </header>
@@ -550,8 +548,7 @@ function App() {
             element={<NutritionGuidanceWorklistPage />}
           />
           <Route path="/consult-worklist" element={<ConsultWorklistPage />} />
-          <Route path="/order-approvals" element={<OrderApprovalPage />} />
-          <Route path="/lab-panic-results" element={<LabPanicResultPage />} />
+          <Route path="/notifications" element={<NotificationPage />} />
           <Route path="/order-sets" element={<OrderSetPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />

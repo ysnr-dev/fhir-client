@@ -1,4 +1,3 @@
-import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import {
   INTERPRETATION_SYSTEM,
   isPanicInterpretation,
@@ -7,35 +6,29 @@ import {
   type LabInterpretation,
   type LabResultFormValues,
 } from "./labResultHelpers";
-import { TASK_CODE_SYSTEM } from "./taskHelpers";
+import {
+  buildNotificationTask,
+  hasTaskCode,
+  taskInputOf,
+  taskOwnerName,
+  taskPatientId,
+  type NotificationRowBase,
+} from "./notificationHelpers";
 
 // 検体検査のパニック値(緊急異常値)の通知。
 //
 //   DiagnosticReport(検査結果) ← focus ── Task(通知)
 //
-// 部門進捗の Task(labTaskHelpers)とは形が違うので共通ファクトリ(createTaskHelpers)には
-// 乗せない。あちらは「オーダーを部門が処理する進捗」で焦点が ServiceRequest・宛先を持たない。
-// こちらは「この結果を医師に見てもらう」通知なので、焦点が結果(DiagnosticReport)で、
-// 宛先(owner = 依頼医)と未確認・確認済みを持つ。
+// 通知そのものの作法(状態・宛先・対応済みの記録)は notificationHelpers に共通化してある。
+// ここに残すのは「どの結果行がパニック値か」「一覧に何を出すか」という検体検査固有の部分。
 //
 // 患者帯の Flag にする案もあったが、パニック値はその結果 1 件に閉じた事象で、確認されたら
 // 終わるもの。宛先と未読を持てる Task の方が実態に合う(docs/lab-backlog.md A-2)。
-//
-// 上流の Task 検索は code / status / owner / focus に対応している。ただし
-// `_include=Task:focus` の対象は ServiceRequest だけなので、一覧に出す情報
-// (患者・項目と値)は Task 自身(for / description)から読めるようにしてある。
 
 export const LAB_PANIC_TASK_CODE = { code: "lab-panic", display: "緊急異常値" };
 
-/** 通知の状態。requested = 未確認 / completed = 確認済み / cancelled = 取り下げ(値が直った)。 */
-export type LabPanicTaskStatus = "requested" | "completed" | "cancelled";
-
 export function isPanicTask(task: fhir4.Task): boolean {
-  return Boolean(
-    task.code?.coding?.some(
-      (c) => c.system === TASK_CODE_SYSTEM && c.code === LAB_PANIC_TASK_CODE.code,
-    ),
-  );
+  return hasTaskCode(task, LAB_PANIC_TASK_CODE.code);
 }
 
 /** パニック値だった行。一覧はこれを項目・値・判定に分けて出す。 */
@@ -110,80 +103,28 @@ function panicTaskInputs(input: PanicTaskInput): fhir4.TaskInput[] {
  * (訂正で値が変わったときは、確認済みでも改めて見てもらう必要があるため)。
  */
 export function buildPanicTask(input: PanicTaskInput, existing?: fhir4.Task): fhir4.Task {
-  const now = toFhirDateTime(toDateTimeInput(new Date()));
-
-  const task: fhir4.Task = {
-    ...(existing ?? {}),
-    resourceType: "Task",
-    status: "requested",
-    intent: "filler-order",
-    // パニック値は連絡が遅れると患者に害が出るので、通知そのものを至急として扱う。
-    priority: "stat",
-    code: {
-      coding: [{ system: TASK_CODE_SYSTEM, ...LAB_PANIC_TASK_CODE }],
-      text: LAB_PANIC_TASK_CODE.display,
+  return buildNotificationTask(
+    {
+      code: LAB_PANIC_TASK_CODE,
+      // パニック値は連絡が遅れると患者に害が出るので、通知そのものを至急として扱う。
+      priority: "stat",
+      focusReference: input.reportReference,
+      patientId: input.patientId,
+      owner: input.owner,
+      description: `${input.specimenDate} ${input.summary}`,
+      input: panicTaskInputs(input),
     },
-    focus: { reference: input.reportReference },
-    for: { reference: `Patient/${input.patientId}` },
-    description: `${input.specimenDate} ${input.summary}`,
-    input: panicTaskInputs(input),
-    authoredOn: existing?.authoredOn ?? now,
-    lastModified: now,
-  };
-
-  if (input.owner?.reference) task.owner = input.owner;
-  else delete task.owner;
-  // 前の確認記録は残さない(この通知は新しい内容として出し直す)。
-  delete task.note;
-  delete task.executionPeriod;
-  return task;
+    existing,
+  );
 }
 
-/** 値が基準内に直ったときの取り下げ。通知そのものは履歴として残す。 */
-export function buildCancelledPanicTask(task: fhir4.Task): fhir4.Task {
-  return {
-    ...task,
-    status: "cancelled",
-    lastModified: toFhirDateTime(toDateTimeInput(new Date())),
-  };
-}
-
-/** 医師が確認した通知。誰がいつ確認したかを note に残す。 */
-export function buildAcknowledgedPanicTask(
-  task: fhir4.Task,
-  practitioner: { practitionerId: string; display: string },
-): fhir4.Task {
-  const now = toFhirDateTime(toDateTimeInput(new Date()));
-  return {
-    ...task,
-    status: "completed",
-    lastModified: now,
-    executionPeriod: { start: task.authoredOn ?? now, end: now },
-    note: [
-      {
-        authorReference: {
-          reference: `Practitioner/${practitioner.practitionerId}`,
-          display: practitioner.display,
-        },
-        time: now,
-        text: "緊急異常値を確認しました。",
-      },
-    ],
-  };
-}
-
-export interface PanicTaskRow {
-  task: fhir4.Task;
-  patient?: fhir4.Patient;
-  patientId: string;
+export interface PanicTaskRow extends NotificationRowBase {
   /** 検査結果(DiagnosticReport)の id。カルテの検査結果タブを開くのに使う。 */
   reportId: string;
   specimenDate: string;
   items: PanicItem[];
   /** 構造化した input を持たない古い通知のための本文。 */
   summary: string;
-  authoredOn: string;
-  ownerName: string;
 }
 
 function rowItemsOf(task: fhir4.Task): PanicItem[] {
@@ -198,33 +139,17 @@ function rowItemsOf(task: fhir4.Task): PanicItem[] {
     }));
 }
 
-/** Task 検索の応答(Task + _include の Patient)を一覧の行にする。 */
-export function panicTaskRows(bundle: fhir4.Bundle): PanicTaskRow[] {
-  const patients = new Map<string, fhir4.Patient>();
-  const tasks: fhir4.Task[] = [];
-  for (const entry of bundle.entry ?? []) {
-    const resource = entry.resource;
-    if (resource?.resourceType === "Patient" && resource.id) {
-      patients.set(resource.id, resource as fhir4.Patient);
-    } else if (resource?.resourceType === "Task" && isPanicTask(resource as fhir4.Task)) {
-      tasks.push(resource as fhir4.Task);
-    }
-  }
-
-  return tasks.map((task) => {
-    const patientId = task.for?.reference?.split("/").pop() ?? "";
-    return {
-      task,
-      patient: patients.get(patientId),
-      patientId,
-      reportId: task.focus?.reference?.match(/^DiagnosticReport\/(.+)$/)?.[1] ?? "",
-      specimenDate:
-        (task.input ?? []).find((input) => input.type?.text === SPECIMEN_DATE_INPUT)?.valueDate ?? "",
-      items: rowItemsOf(task),
-      summary: task.description ?? "",
-      authoredOn: task.authoredOn ?? "",
-      // 宛先はオーダーの依頼医の表示名を焼き付けている(この画面は Practitioner を引き直さない)。
-      ownerName: task.owner?.display ?? (task.owner?.reference ? "(氏名なし)" : ""),
-    };
-  });
+/** 通知 1 件を一覧の行にする。患者は `_include=Task:subject` で引いたもの。 */
+export function panicRowOf(task: fhir4.Task, patient: fhir4.Patient | undefined): PanicTaskRow {
+  return {
+    task,
+    patient,
+    patientId: taskPatientId(task),
+    reportId: task.focus?.reference?.match(/^DiagnosticReport\/(.+)$/)?.[1] ?? "",
+    specimenDate: taskInputOf(task, SPECIMEN_DATE_INPUT)?.valueDate ?? "",
+    items: rowItemsOf(task),
+    summary: task.description ?? "",
+    authoredOn: task.authoredOn ?? "",
+    ownerName: taskOwnerName(task),
+  };
 }

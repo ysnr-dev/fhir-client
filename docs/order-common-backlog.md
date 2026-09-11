@@ -108,8 +108,9 @@ ServiceRequest
 > Provenance に対応済みで、履歴も承認も同じ器に載るため二重管理を避けた。登録(2026-09-01)と
 > 編集(2026-09-02)のたびに Provenance を 1 件書き(`activity` = CREATE / UPDATE)、入力者 = 指示医師でも
 > 常に残す。承認(§2.5)は同じ Provenance に `verifier` と `signature` を足す PUT で、承認待ち一覧は
-> `signature-type:missing=true` で引く。実装は `fhir/provenanceHelpers.ts` / `components/OrderDetailRows.tsx` /
-> `pages/OrderApprovalPage.tsx`、ルールは readme「代行入力の記録と承認」。
+> `signature-type:missing=true` で引いていた(2026-09-11 に通知 Task へ移行、§2.5)。実装は
+> `fhir/provenanceHelpers.ts` / `fhir/orderApprovalTaskHelpers.ts` / `components/OrderDetailRows.tsx` /
+> `pages/NotificationPage.tsx`、ルールは readme「代行入力の記録と承認」。
 > **残り**: 部門一覧・タイムラインの未承認バッジ(必要になったら)、上流 AuditEvent のエンドユーザー記録(別課題)。
 
 ### 2.1 現状
@@ -240,6 +241,13 @@ Provenance
   `_revinclude=Task:focus` を引いているので一覧に「未承認」バッジを出すのが無料、という利点があったが、
   Provenance と二重管理になり編集後の再承認も別途組む必要が出るので採らなかった。バッジが必要になった
   時点で、一覧に `_revinclude=Provenance:target` を足すか Task を足すかを決める。
+- **2026-09-11 に Task を併用に変えた**(統合通知)。緊急異常値の通知が先に Task で実装され、読影の重要所見や
+  文書作成の督促も控えていたので、「宛先を決めて相手に何かしてもらう」お知らせを 1 つの器にまとめた
+  (readme「通知(Task)」)。真正性の正本は引き続き Provenance で、`order-approval` の Task は
+  **宛先(`owner`)と未対応・対応済み(`status`)だけ**を持つ。編集後の再承認は、編集のたびに新しい
+  Provenance と Task が 1 組できるので二重管理にならない。承認は署名の PUT と Task を completed に
+  する PUT を 1 transaction で送る(`api/notificationActions.ts`)。Task が無い承認待ち(導入前のぶん)でも
+  承認は通す。
 
 #### 決めたこと
 
@@ -248,14 +256,18 @@ Provenance
 - **承認前でもオーダーは部門へ流す**。`ServiceRequest.status = draft` は部門一覧から消えるので使えず、
   緊急オーダーが承認待ちで止まると危ない。部門側に未承認の印は出していない(上記バッジの判断と同じ)。
 - **画面**は詳細モーダルの「承認」行(未承認なら指示医師本人に「承認する」ボタン。登録・編集の承認待ちが
-  並んでいればまとめて承認)と、診療業務メニューの「オーダー承認」(自分あての承認待ちを活動単位で並べ、
-  「カルテで確認」で詳細モーダルを開いた状態のカルテへ。一覧からの直接承認・一括承認も可。メニューに件数)。
-  一括承認は真正性の趣旨からは避けたいが、運用上ほぼ確実に要望が出るので用意した。
+  並んでいればまとめて承認)と、診療業務メニューの「通知」の種別「オーダー承認」(自分あての承認待ちを
+  活動単位で並べ、「カルテ」で詳細モーダルを開いた状態のカルテへ。一覧からの直接承認・一括承認も可。
+  件数はヘッダーのベル)。一括承認は真正性の趣旨からは避けたいが、運用上ほぼ確実に要望が出るので用意した。
+  2026-09-11 まで専用画面(`/order-approvals`)だったが、統合通知に置き換えた。
 - 署名は「誰がいつ承認操作をしたか」の電子記録に留め、暗号署名ではないことを readme に明記。
 
 #### 残っている課題
 
-- 部門一覧・タイムラインの未承認バッジ(上記)。
+- 部門一覧・タイムラインの未承認バッジ(上記)。出すことにした場合は、`order-approval` の Task の
+  `basedOn` にヘッダを入れてあるので `_revinclude=Task:based-on` で引ける
+  (`_revinclude=Task:focus` は上流の許可リストが ServiceRequest だけなので、焦点が Provenance の
+  この Task は引けない)。
 - 中止・削除の活動は Provenance に書いていない(削除は target が消えて孤児になる。§2.4 障壁 4)。
   **中止・完了・休止・再開は器だけ作ってある**(`buildActivityProvenanceEntry`。活動は v3-DataOperation の
   CANCEL / REACTIVATE / COMPLETE / SUSPEND / RESUME、target は対象のオーダー)。いま呼んでいるのは化学療法だけなので
