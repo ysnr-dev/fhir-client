@@ -613,6 +613,28 @@
   align-items: center;
 }
 
+/* カルテ右ペインのオーダー種別、カルテ見出しの「戻る」「診察終了」、そして他の
+   ボタンと並ばない登録ボタン。横に並ぶ入力欄が無く高さを揃える必要がないので、
+   押しやすさを優先して一段高くする。
+   :only-child の判定で、取消などと 2 つ並ぶ操作列は既定の高さのまま残す。
+   カルテ見出しは直接の子だけを対象にして、患者情報の帯に並ぶ注意ピクトを外す。
+   ログインフォームは操作列を挟まないのでボタンを直接指定する(フォームに当てると
+   縦に積んだ入力欄まで高くなる)。 */
+.karte-right__actions,
+.karte-page__header > button,
+.karte-page__header > .button,
+.prescription-form__submit,
+.prescription-form__actions:has(> button:only-child),
+.patient-form__actions:has(> button:only-child),
+.patient-fields__actions:has(> button:only-child),
+.lab-order-item__actions:has(> button:only-child),
+.appointment-panel__actions:has(> button:only-child),
+.master-import-form__actions:has(> button:only-child),
+.connection-settings-form__actions:has(> button:only-child),
+.admin-login-form > button {
+  --control-height: var(--control-height-lg);
+}
+
 /* 入力部品の高さは --control-height で固定する(index.css)。チェックボックス等の
    小さな部品と複数行のテキストエリアは対象外。ボタンは上下の余白を持たず、
    inline-flex の縦中央揃えで文字を置く。 */
@@ -5919,11 +5941,12 @@ body.karte-wide {
 
 /* オーダー種別は増えていくので、ボタン列だけがペインの高さに収まらなくなる。
    はみ出したぶんは列の中でスクロールさせる(ペインごと伸ばすと、左ペインとの
-   高さが揃わなくなる)。 */
+   高さが揃わなくなる)。ボタン 1 つずつが高いぶん間隔は詰めて、一度に見える
+   種別の数を稼ぐ。 */
 .karte-right__actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   flex: none;
   overflow-y: auto;
 }

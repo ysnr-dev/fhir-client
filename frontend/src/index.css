@@ -31,6 +31,10 @@
      (14px: 28px / 13px: 26px / 12px: 24px / 11px: 22px)。 */
   --control-height: 34px;
 
+  /* 単独で置く主ボタン(カルテ右ペインのオーダー種別・フォームの登録)の高さ。
+     並んだ入力欄と揃える必要がないので、押しやすいよう一段高くする。 */
+  --control-height-lg: 38px;
+
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
