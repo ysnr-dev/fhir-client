@@ -1,0 +1,1059 @@
+{
+  "pathway_code": "900001",
+  "name": "腹腔鏡下胆嚢摘出術(4泊5日)",
+  "short_name": "LC 4泊5日",
+  "name_kana": "フククウキョウカタンノウテキシュツジュツ",
+  "version": "1.0",
+  "setting": "inpatient",
+  "scheduled_days": 5,
+  "adaptive_criteria": "胆石症・胆嚢ポリープに対する待機的腹腔鏡下胆嚢摘出術。急性胆嚢炎(発症72時間以内の緊急手術)、総胆管結石合併、開腹移行が予想される高度癒着例は除く。",
+  "note": "ePath の PCI(2泊3日)ひな型パスの構成に倣った開発・デモ用のサンプル。BOM コードは実装ガイドに載っている範囲だけ付けている。",
+  "indications": [
+    {
+      "management_number": "20079414",
+      "name": "胆のう結石症",
+      "icd10": "K802"
+    },
+    {
+      "management_number": "20079359",
+      "name": "胆のうポリープ",
+      "icd10": "K828"
+    }
+  ],
+  "events": [
+    {
+      "elapsed_days": 1,
+      "title": "入院日",
+      "oat_units": [
+        {
+          "unit_key": "fa383abf-25aa-4b5a-9031-deb99f38bf5a",
+          "name": "身体的準備ができている",
+          "category": "H",
+          "critical": true,
+          "code_system": "bom",
+          "code": "O00470",
+          "assessments": [
+            {
+              "assessment_key": "8cee6118-41ec-483a-866d-11be1e7f4f01",
+              "name": "感冒症状がない",
+              "category_code": "34",
+              "category_name": "呼吸",
+              "code_system": "bom",
+              "code": "3400063200",
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "7897eb56-e4f8-4f2e-8db2-f84258d68de4",
+              "name": "抗血小板剤・抗凝固剤が予定通り中止されている",
+              "category_code": "37",
+              "category_name": "出血",
+              "code_system": "bom",
+              "code": "3700070000",
+              "proper_value": "中止済"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "b5c9eb09-7bb7-4874-ace7-53de33d3e3bc",
+              "name": "感冒様症状の観察",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": "8cee6118-41ec-483a-866d-11be1e7f4f01",
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "32d1aeb6-d3ad-434e-989d-8e23e6cb9370",
+              "name": "休薬状況の確認",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": "7897eb56-e4f8-4f2e-8db2-f84258d68de4",
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "de3a9179-9284-4a02-bcc1-0b1c9da383d0",
+              "name": "術前検査(血算・生化学・凝固)",
+              "category_lv1": "EX",
+              "category_lv2": "EXSP",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "c84c2e52-0ce9-438e-961c-f9f9097e6581",
+              "name": "胸部X線・心電図",
+              "category_lv1": "EX",
+              "category_lv2": "EXIM",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        },
+        {
+          "unit_key": "3cd78f9e-60b7-40e5-995a-c89784423803",
+          "name": "バイタルサインが安定している",
+          "category": "H",
+          "critical": false,
+          "code_system": "bom",
+          "code": "O00670",
+          "assessments": [
+            {
+              "assessment_key": "7997b647-76f3-4ce3-9e18-9b6ea41e0203",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満"
+            },
+            {
+              "assessment_key": "3dfc0776-7fac-48da-b9d5-2ca03d6e0764",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分"
+            },
+            {
+              "assessment_key": "3180206e-8783-44bd-aa97-148521d9e6cd",
+              "name": "収縮期血圧",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900030700",
+              "proper_value": "90〜160mmHg"
+            },
+            {
+              "assessment_key": "3ae2298e-1d3d-4111-9196-7c8a4bb83300",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "db8ff5f0-99a4-4d83-a811-f51739dad4e7",
+              "name": "バイタルサイン測定",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        },
+        {
+          "unit_key": "a24232dc-0449-40ad-a035-ed0ef5a06bc2",
+          "name": "手術・麻酔について理解できる",
+          "category": "G",
+          "critical": false,
+          "code_system": null,
+          "code": null,
+          "assessments": [
+            {
+              "assessment_key": "55e0ab93-a2b9-4df0-b9c4-f852c70fca67",
+              "name": "説明内容を復唱できる",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "できる"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "0c369135-55a6-41da-ab04-639d2c3825a7",
+              "name": "手術説明・同意取得",
+              "category_lv1": "EG",
+              "category_lv2": "EGIC",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "98df3308-ffe8-4f7a-a310-eb9d970dab64",
+              "name": "麻酔科術前診察",
+              "category_lv1": "EG",
+              "category_lv2": "EGIC",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "449c6920-9ddb-4430-9341-fb98735ac3d4",
+              "name": "入院診療計画書の説明",
+              "category_lv1": "MD",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        },
+        {
+          "unit_key": "ea5159bd-4ac1-4a9d-8243-516625fbe1b0",
+          "name": "術前の準備が整う",
+          "category": "G",
+          "critical": false,
+          "code_system": null,
+          "code": null,
+          "assessments": [],
+          "tasks": [
+            {
+              "task_key": "425470dc-3d38-49d6-83eb-3646e45b3605",
+              "name": "臍処置・除毛",
+              "category_lv1": "NC",
+              "category_lv2": "NC01",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "75b7dad4-4d7d-4639-a4f8-50ba6c89432b",
+              "name": "21時以降絶食",
+              "category_lv1": "ML",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "3ec61411-807c-406a-8f00-ae89273d92d4",
+              "name": "常食",
+              "category_lv1": "ML",
+              "category_lv2": "MLSU",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "6ad0a466-d09d-4e7a-b822-fd9d076b63e8",
+              "name": "病棟内フリー",
+              "category_lv1": "AL",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 2,
+      "title": "手術当日",
+      "oat_units": [
+        {
+          "unit_key": "af10f1ee-4bb0-41ea-8ac8-14df37fa65c0",
+          "name": "術前の状態が手術に適している",
+          "category": "H",
+          "critical": true,
+          "code_system": null,
+          "code": null,
+          "assessments": [
+            {
+              "assessment_key": "fd865f35-5216-4310-8fa8-44b406c133ba",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満"
+            },
+            {
+              "assessment_key": "1fde7e82-26f3-407f-9780-3c585314b09a",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分"
+            },
+            {
+              "assessment_key": "cf39129d-c2b3-497a-8906-0b9004ae67f6",
+              "name": "収縮期血圧",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900030700",
+              "proper_value": "90〜160mmHg"
+            },
+            {
+              "assessment_key": "159950ec-0866-4088-8303-6eff9479e63e",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上"
+            },
+            {
+              "assessment_key": "8b9c4358-1373-423e-ac4e-a0b2c0385e67",
+              "name": "絶飲食が守られている",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "守られている"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "93417928-a148-4e9f-ae8f-a67c0fed456c",
+              "name": "バイタルサイン測定",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "36b97ae5-774f-4856-9dac-1082256d7a93",
+              "name": "絶飲食の確認",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": "8b9c4358-1373-423e-ac4e-a0b2c0385e67",
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "1fed5703-6d34-457c-bb77-c3d4a38237af",
+              "name": "弾性ストッキング着用",
+              "category_lv1": "NC",
+              "category_lv2": "NC15",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "d82ab384-9141-4201-bd91-ce1d9ef97cb2",
+              "name": "術前点滴(細胞外液)",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "74712da3-6699-4d43-994b-10b96bf23449",
+              "name": "予防的抗菌薬(執刀前30分)",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "45229f48-27c8-4a9f-b94b-561a3c4ec278",
+              "name": "腹腔鏡下胆嚢摘出術",
+              "category_lv1": "TP",
+              "category_lv2": "TPOP",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        },
+        {
+          "unit_key": "9ff7ca88-9f63-44f1-aa7d-8bdd745cc5b3",
+          "name": "術後の呼吸・循環が安定している",
+          "category": "H",
+          "critical": true,
+          "code_system": "bom",
+          "code": "O01260",
+          "assessments": [
+            {
+              "assessment_key": "15176e98-b8ce-409b-8c65-a7f8bdb78da0",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満"
+            },
+            {
+              "assessment_key": "3da282ed-ac27-48e0-a7e1-016e82479da3",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分"
+            },
+            {
+              "assessment_key": "511ba81a-cf9c-4e94-b978-f6d71becab97",
+              "name": "収縮期血圧",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900030700",
+              "proper_value": "90〜160mmHg"
+            },
+            {
+              "assessment_key": "dee6ab54-407a-4812-a78f-fbada9c04d1b",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上"
+            },
+            {
+              "assessment_key": "1933b083-cdb2-42ee-aa86-7bd299a4b1d9",
+              "name": "創部出血がない",
+              "category_code": "37",
+              "category_name": "出血",
+              "code_system": null,
+              "code": null,
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "8e2cebb7-96bc-4e64-8a9b-6e197947a382",
+              "name": "ドレーン排液の性状",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "淡血性以下"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "d72a1f28-89d2-42e3-aa93-6352e8c6ae3e",
+              "name": "帰室後バイタルサイン測定(1時間毎×3)",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "31fb09d6-1d1a-420b-96b3-5a1c05b3b51e",
+              "name": "創部・ドレーンの観察",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": "1933b083-cdb2-42ee-aa86-7bd299a4b1d9",
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "6599e324-15eb-4b18-affd-fbe60f046243",
+              "name": "酸素投与",
+              "category_lv1": "NC",
+              "category_lv2": "NC10",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "c53f8ed7-c26f-4864-902d-29f11ade1d29",
+              "name": "術後点滴",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "e63fc4af-6535-42de-8a3c-b3cdcbe0e978",
+              "name": "疼痛時鎮痛薬",
+              "category_lv1": "TP",
+              "category_lv2": "TPCI",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "19e81f7f-4ff4-4512-8d66-02dcc1697156",
+              "name": "ベッド上安静(翌朝まで)",
+              "category_lv1": "AL",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "27a7830d-278c-4984-b0c9-9f6c742f97a9",
+              "name": "絶飲食",
+              "category_lv1": "ML",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        },
+        {
+          "unit_key": "5a8a983f-68a1-431d-8369-464b60be2fc6",
+          "name": "疼痛が自制内である",
+          "category": "G",
+          "critical": false,
+          "code_system": null,
+          "code": null,
+          "assessments": [
+            {
+              "assessment_key": "36fc62d9-badd-4282-af95-6a3ba3f8492d",
+              "name": "疼痛(NRS)",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "3以下"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "1cd9d1ba-4cec-41f1-bc90-8d1d7683ba37",
+              "name": "疼痛の評価",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": "36fc62d9-badd-4282-af95-6a3ba3f8492d",
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 3,
+      "title": "術後1日目",
+      "oat_units": [
+        {
+          "unit_key": "e3b37d55-9038-4ee8-8894-4d2ee2ba9407",
+          "name": "呼吸・循環が安定している",
+          "category": "H",
+          "critical": false,
+          "code_system": "bom",
+          "code": "O01260",
+          "assessments": [
+            {
+              "assessment_key": "acad3df7-c306-45c9-9a1a-986692df4c03",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満"
+            },
+            {
+              "assessment_key": "04cb9896-08e2-4968-8f24-d720f26e9472",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分"
+            },
+            {
+              "assessment_key": "bc7f890a-8806-4ca5-b958-44dc390aa2e7",
+              "name": "収縮期血圧",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900030700",
+              "proper_value": "90〜160mmHg"
+            },
+            {
+              "assessment_key": "34a99e7c-a43f-40a0-b54a-97bdf5798e09",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上"
+            },
+            {
+              "assessment_key": "a51b495b-2a9d-4fbf-a5bf-7405db70fd95",
+              "name": "創部出血がない",
+              "category_code": "37",
+              "category_name": "出血",
+              "code_system": null,
+              "code": null,
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "02979115-4479-47a6-a719-194922f84488",
+              "name": "バイタルサイン測定",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "8ba19d44-75c3-421e-8201-00d3fc41a9fb",
+              "name": "創部・ドレーンの観察",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": "a51b495b-2a9d-4fbf-a5bf-7405db70fd95",
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "af420695-d0cf-49bf-956a-1faac4a2faa4",
+              "name": "術後採血(血算・生化学)",
+              "category_lv1": "EX",
+              "category_lv2": "EXSP",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "717d4aa5-90f3-48de-9cf4-6cc241e3ccc1",
+              "name": "点滴(食事摂取まで)",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "519b9404-2712-4988-b16c-5fbaa6a54161",
+              "name": "予防的抗菌薬",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        },
+        {
+          "unit_key": "8877d5d3-900a-489a-99e8-9153adbd1f25",
+          "name": "離床できる",
+          "category": "G",
+          "critical": false,
+          "code_system": null,
+          "code": null,
+          "assessments": [
+            {
+              "assessment_key": "0c6d4dd2-54dd-4fd5-907e-cc052a5e4402",
+              "name": "歩行時のふらつき",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "6a2a49c0-475f-41ba-9e33-70eece4b7f63",
+              "name": "疼痛(NRS)",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "3以下"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "622beca6-81bc-4647-b3ef-f8cbbda76e3e",
+              "name": "離床介助・歩行",
+              "category_lv1": "NC",
+              "category_lv2": "NC04",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "065a2289-5ac6-4af0-ba12-6090320a83bf",
+              "name": "病棟内歩行",
+              "category_lv1": "AL",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "868293e2-534c-4c89-b81a-80075ebb7728",
+              "name": "疼痛時鎮痛薬(内服)",
+              "category_lv1": "TP",
+              "category_lv2": "TPPR",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        },
+        {
+          "unit_key": "0775687c-7b7d-4dc8-8024-0a35d8e7c0a6",
+          "name": "経口摂取が再開できる",
+          "category": "G",
+          "critical": false,
+          "code_system": null,
+          "code": null,
+          "assessments": [
+            {
+              "assessment_key": "1524afc2-56d8-4938-b958-602e68213936",
+              "name": "悪心・嘔吐",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "56839f97-2cd7-42aa-9cae-9b50c50e82e2",
+              "name": "腹部膨満",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "e9e22a41-64e1-4121-983d-af612cb0858e",
+              "name": "飲水開始",
+              "category_lv1": "ML",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "f0dcd497-3461-4592-9fee-ed9f4212cd46",
+              "name": "五分粥(昼から)",
+              "category_lv1": "ML",
+              "category_lv2": "MLLU",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "84fd356e-9ca0-4c4e-9cd9-77640498e69d",
+              "name": "食事摂取量の観察",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 4,
+      "title": "術後2日目",
+      "oat_units": [
+        {
+          "unit_key": "9a48ca06-73cc-451b-9a3d-425331e40ff0",
+          "name": "術後合併症の徴候がない",
+          "category": "H",
+          "critical": true,
+          "code_system": null,
+          "code": null,
+          "assessments": [
+            {
+              "assessment_key": "25dc3b15-b8f6-4bd7-a44a-d2a8780a0ad9",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満"
+            },
+            {
+              "assessment_key": "e533e173-e7b4-4a61-8f93-6897c40362c1",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分"
+            },
+            {
+              "assessment_key": "2fa5719a-3974-4219-b44e-35586894e1a2",
+              "name": "収縮期血圧",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900030700",
+              "proper_value": "90〜160mmHg"
+            },
+            {
+              "assessment_key": "2393687a-053c-465a-9bf0-cef322632bf8",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上"
+            },
+            {
+              "assessment_key": "e137e699-86aa-4318-a32d-8729b57375c7",
+              "name": "創部感染徴候",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "713204d3-64c4-471b-83b9-b99b8a78ca44",
+              "name": "腹痛の増強",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "f06d8308-72e4-4da3-9c61-9056e9500364",
+              "name": "バイタルサイン測定",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "78242171-d1e4-401d-9f1d-446e4cbc0f74",
+              "name": "創部の観察",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": "e137e699-86aa-4318-a32d-8729b57375c7",
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "7871848a-763e-44de-a06a-984e4d905ba9",
+              "name": "ドレーン抜去",
+              "category_lv1": "TP",
+              "category_lv2": "TPTR",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "cda88369-5ae4-4d67-9dbb-b39e5dfffff5",
+              "name": "シャワー浴",
+              "category_lv1": "NC",
+              "category_lv2": "NC01",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        },
+        {
+          "unit_key": "8231039d-63e8-4d37-a6da-9b5bb89da782",
+          "name": "食事が摂れる",
+          "category": "G",
+          "critical": false,
+          "code_system": null,
+          "code": null,
+          "assessments": [
+            {
+              "assessment_key": "1855d11d-9e60-4764-8310-cf8524abc3b0",
+              "name": "食事摂取量",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "5割以上"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "a2dfa685-6fef-4deb-9509-1803a540565d",
+              "name": "全粥",
+              "category_lv1": "ML",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "e8dd209b-ba64-4769-8c8d-f8b230c682ae",
+              "name": "食事摂取量の観察",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": "1855d11d-9e60-4764-8310-cf8524abc3b0",
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        },
+        {
+          "unit_key": "e0b9b890-bd87-4b1d-8f48-7407909d43a3",
+          "name": "退院後の生活について理解できる",
+          "category": "G",
+          "critical": false,
+          "code_system": null,
+          "code": null,
+          "assessments": [
+            {
+              "assessment_key": "d4904352-9ca8-40cb-9a7e-4fbe4baba973",
+              "name": "退院指導の理解",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "理解できる"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "18feacb4-ae68-4601-8e9f-db2bca7f9f27",
+              "name": "退院指導(創部・食事・活動)",
+              "category_lv1": "EG",
+              "category_lv2": "EGCS",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "0afc39eb-19a2-4b1c-849a-4a2d47aef029",
+              "name": "栄養指導",
+              "category_lv1": "EG",
+              "category_lv2": "EGNC",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 5,
+      "title": "退院日",
+      "oat_units": [
+        {
+          "unit_key": "423b9232-1130-483d-aa8d-12d1dcd0fb53",
+          "name": "退院基準を満たしている",
+          "category": "H",
+          "critical": true,
+          "code_system": null,
+          "code": null,
+          "assessments": [
+            {
+              "assessment_key": "4e70ce81-b8c6-407d-9249-94b1fbb4d959",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満"
+            },
+            {
+              "assessment_key": "f5279304-ff82-4b9c-b9db-b3693b44958b",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分"
+            },
+            {
+              "assessment_key": "98c73f2c-ad62-4496-af55-2a69fbe81361",
+              "name": "収縮期血圧",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900030700",
+              "proper_value": "90〜160mmHg"
+            },
+            {
+              "assessment_key": "cc48b6e9-3a95-4a2c-b857-8b432869f267",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上"
+            },
+            {
+              "assessment_key": "4539f883-55f2-432e-be95-aa7c2ea9ce24",
+              "name": "創部に異常がない",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "4d4374af-770b-4435-b68f-5ced8c739510",
+              "name": "食事が摂れている",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "5割以上"
+            },
+            {
+              "assessment_key": "92f5dbc5-9931-4609-b957-9d5f38306e51",
+              "name": "排便がある",
+              "category_code": null,
+              "category_name": null,
+              "code_system": null,
+              "code": null,
+              "proper_value": "あり"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "620f5b50-52dc-4e9f-bed1-78d4059d60d4",
+              "name": "バイタルサイン測定",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "3ed1c3c1-adbf-4a3a-b665-4809ce66f384",
+              "name": "創部の観察",
+              "category_lv1": "NO",
+              "category_lv2": null,
+              "assessment_key": "4539f883-55f2-432e-be95-aa7c2ea9ce24",
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "ef399784-5636-4b99-826d-8f267b72d1ca",
+              "name": "退院処方(鎮痛薬)",
+              "category_lv1": "TP",
+              "category_lv2": "TPPR",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "174fab48-62b7-416a-89a6-352e94b56c1a",
+              "name": "退院時要約・診療情報提供書",
+              "category_lv1": "MD",
+              "category_lv2": null,
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            },
+            {
+              "task_key": "06c079f5-ae5f-445d-a4de-1d17e532ce44",
+              "name": "次回外来予約の案内",
+              "category_lv1": "EG",
+              "category_lv2": "EGCS",
+              "assessment_key": null,
+              "order_type": null,
+              "order_values": {}
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

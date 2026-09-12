@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_10_010000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_12_100500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1116,6 +1116,126 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_10_010000) do
     t.datetime "updated_at", null: false
     t.index ["code"], name: "index_master_patho_organs_on_code", unique: true
     t.index ["search_name"], name: "index_master_patho_organs_on_search_name"
+  end
+
+  create_table "master_pathway_assessments", force: :cascade do |t|
+    t.string "pathway_code", null: false
+    t.bigint "unit_id", null: false
+    t.integer "display_order"
+    t.string "assessment_key", null: false
+    t.string "name", null: false
+    t.string "category_code"
+    t.string "category_name"
+    t.string "code_system"
+    t.string "code"
+    t.string "proper_value"
+    t.string "nursing_observation_manage_no"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["pathway_code", "assessment_key"], name: "idx_on_pathway_code_assessment_key_c4770a6564", unique: true
+    t.index ["unit_id"], name: "index_master_pathway_assessments_on_unit_id"
+  end
+
+  create_table "master_pathway_events", force: :cascade do |t|
+    t.string "pathway_code", null: false
+    t.integer "display_order"
+    t.integer "elapsed_days", null: false
+    t.integer "path_step", default: 1, null: false
+    t.string "path_step_name"
+    t.string "title"
+    t.string "allowable_condition_type"
+    t.integer "allowable_days"
+    t.integer "allowable_range_low"
+    t.integer "allowable_range_high"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["pathway_code", "elapsed_days", "path_step"], name: "idx_master_pathway_events_day", unique: true
+  end
+
+  create_table "master_pathway_indications", force: :cascade do |t|
+    t.string "pathway_code", null: false
+    t.integer "display_order"
+    t.string "management_number", null: false
+    t.string "name", null: false
+    t.string "icd10"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["pathway_code"], name: "index_master_pathway_indications_on_pathway_code"
+  end
+
+  create_table "master_pathway_oat_units", force: :cascade do |t|
+    t.string "pathway_code", null: false
+    t.bigint "event_id", null: false
+    t.integer "display_order"
+    t.string "unit_key", null: false
+    t.string "name", null: false
+    t.string "category"
+    t.string "code_system"
+    t.string "code"
+    t.boolean "critical", default: false, null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["event_id"], name: "index_master_pathway_oat_units_on_event_id"
+    t.index ["pathway_code", "unit_key"], name: "index_master_pathway_oat_units_on_pathway_code_and_unit_key", unique: true
+  end
+
+  create_table "master_pathway_tasks", force: :cascade do |t|
+    t.string "pathway_code", null: false
+    t.bigint "unit_id", null: false
+    t.bigint "assessment_id"
+    t.integer "display_order"
+    t.string "task_key", null: false
+    t.string "name", null: false
+    t.string "category_lv1", null: false
+    t.string "category_lv2"
+    t.string "code"
+    t.string "order_type"
+    t.string "order_label"
+    t.jsonb "order_values", default: {}, null: false
+    t.integer "order_schema_version"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["assessment_id"], name: "index_master_pathway_tasks_on_assessment_id"
+    t.index ["pathway_code", "task_key"], name: "index_master_pathway_tasks_on_pathway_code_and_task_key", unique: true
+    t.index ["unit_id"], name: "index_master_pathway_tasks_on_unit_id"
+  end
+
+  create_table "master_pathways", force: :cascade do |t|
+    t.string "pathway_code", null: false
+    t.string "name", null: false
+    t.string "short_name"
+    t.string "name_kana"
+    t.string "version"
+    t.string "department_code"
+    t.string "department_name"
+    t.string "setting", default: "inpatient", null: false
+    t.integer "scheduled_days"
+    t.text "adaptive_criteria"
+    t.string "protocol_base"
+    t.string "status", default: "draft", null: false
+    t.date "approved_on"
+    t.string "approved_by"
+    t.date "valid_from"
+    t.date "valid_to"
+    t.integer "display_order"
+    t.text "note"
+    t.string "copied_from_code"
+    t.string "search_name"
+    t.string "search_kana"
+    t.string "search_short_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["copied_from_code"], name: "index_master_pathways_on_copied_from_code"
+    t.index ["department_code"], name: "index_master_pathways_on_department_code"
+    t.index ["pathway_code"], name: "index_master_pathways_on_pathway_code", unique: true
+    t.index ["search_kana"], name: "idx_master_pathways_search_kana_trgm", opclass: :gin_trgm_ops, using: :gin
+    t.index ["search_name"], name: "idx_master_pathways_search_name_trgm", opclass: :gin_trgm_ops, using: :gin
+    t.index ["search_short_name"], name: "idx_master_pathways_search_short_name_trgm", opclass: :gin_trgm_ops, using: :gin
+    t.index ["status"], name: "index_master_pathways_on_status"
   end
 
   create_table "master_patient_cautions", force: :cascade do |t|

@@ -13697,6 +13697,323 @@ button.meal-calendar__cell:hover {
   --control-height: 26px;
 }
 
+/* ---- クリニカルパス定義マスタ(docs/clinical-pathway-design.md) ---- */
+
+/* 病日カード。見出し行(病日・見出し・備考・ケバブ)+ OAT ユニットの縦積み。 */
+.pathway-event {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: var(--bg);
+}
+
+.pathway-event__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.pathway-event__head label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.pathway-event__head input {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  height: var(--control-height);
+  box-sizing: border-box;
+}
+
+.pathway-event__day input {
+  width: 72px;
+  font-weight: 600;
+}
+
+.pathway-event__title input {
+  width: 200px;
+}
+
+.pathway-event__note {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pathway-event__note input {
+  width: 100%;
+}
+
+.pathway-event__tools {
+  display: flex;
+  align-items: center;
+  height: var(--control-height);
+}
+
+/* OAT ユニット。見出し行(アウトカム)と、観察項目・タスクの 2 区画。 */
+.pathway-unit {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.pathway-unit--critical {
+  border-left-color: #e0687a;
+}
+
+.pathway-unit__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pathway-unit__head label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.pathway-unit__head input[type="text"],
+.pathway-unit__head select {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  height: var(--control-height);
+  box-sizing: border-box;
+}
+
+.pathway-unit__index {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding-bottom: 6px;
+}
+
+.pathway-unit__name {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.pathway-unit__name input {
+  width: 100%;
+}
+
+.pathway-unit__check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+  padding-bottom: 6px;
+}
+
+.pathway-unit__code {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pathway-unit__tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding-bottom: 2px;
+}
+
+.pathway-unit__body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.pathway-unit__block {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.pathway-unit__block h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.pathway-unit__block .lab-order-item__actions {
+  margin-top: 4px;
+}
+
+@media (max-width: 1100px) {
+  .pathway-unit__body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 観察項目・タスクの行テーブル。 */
+.pathway-rows th,
+.pathway-rows td {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.pathway-rows input.pathway-rows__name {
+  width: 100%;
+  min-width: 160px;
+}
+
+/* 名称の列だけ伸ばし、他の列は中身の幅で固定する(100% にすると名称に押されて潰れる)。 */
+.pathway-rows select {
+  width: auto;
+  min-width: 96px;
+  max-width: 180px;
+}
+
+.pathway-rows input[type="text"]:not(.pathway-rows__name) {
+  width: 100px;
+}
+
+.pathway-rows input.regimen-editor__code-input {
+  width: 96px;
+}
+
+.pathway-rows .pathway-unit__code input.pathway-rows__short {
+  width: 56px;
+}
+
+.pathway-rows td:has(> input.pathway-rows__name) {
+  width: 100%;
+}
+
+/* ↑↓(文字)とゴミ箱(SVG)を並べる操作列。既定のベースライン揃えだと、SVG を持つ
+   ボタンのベースラインが図形の下端になって 2px ほど上に浮くので、中央で揃える。 */
+.pathway-rows__tools {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.pathway-rows__tools button {
+  vertical-align: middle;
+}
+
+.pathway-rows .pathway-unit__code button {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+/* タスクのオーダー雛形。種別のラベル + 要約 + 編集・外す。 */
+.pathway-task__template {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 300px;
+}
+
+.pathway-task__template button {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.pathway-task__template-label {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.pathway-task__template-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-size: 13px;
+}
+
+/* 概要表。列 = 病日、行 = アウトカム / 大分類ごとのタスク。全行を出し、横に長ければ表の中だけ送る。 */
+.pathway-overview__wrap {
+  overflow-x: auto;
+}
+
+.pathway-overview.master-search__table {
+  width: auto;
+}
+
+.pathway-overview td.regimen-day-table__label {
+  width: 1%;
+  min-width: 200px;
+}
+
+.pathway-overview th.regimen-day-table__day,
+.pathway-overview td.regimen-day-table__day {
+  width: 72px;
+  min-width: 72px;
+}
+
+.pathway-overview th.pathway-overview__day {
+  vertical-align: bottom;
+}
+
+.pathway-overview th.pathway-overview__day small {
+  display: block;
+  font-weight: normal;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* 地(--bg)から一段はっきり離れる面を選ぶ。明るいテーマでは panel が地より暗く、
+   暗いテーマでは card が地より明るいので、テーマごとに使い分ける。 */
+.pathway-overview .pathway-overview__group td {
+  background: var(--surface-panel);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+}
+
+:root[data-theme="dark"] .pathway-overview .pathway-overview__group td {
+  background: var(--surface-card);
+}
+
+.pathway-overview__label--critical {
+  font-weight: 600;
+}
+
+/* オーダー雛形のモーダル。オーダー登録フォームがそのまま入るので広く取る。 */
+.pathway-template-modal {
+  width: min(1100px, 95vw);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.pathway-template-modal__type {
+  margin-bottom: 8px;
+}
+
+.pathway-template-modal__type label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.pathway-template-modal__form {
+  margin-bottom: 8px;
+}
+
 /* ---- 化学療法(レジメンオーダー)(docs/chemo-regimen-design.md §7) ---- */
 
 /* 右ペインのレジメン選択。 */

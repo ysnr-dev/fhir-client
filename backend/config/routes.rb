@@ -292,5 +292,10 @@ Rails.application.routes.draw do
     resources :regimens, only: %i[index show create update destroy] do
       member { post :copy }
     end
+    # クリニカルパス(施設パス)定義マスタ。本体と子(対象病名・病日・OAT ユニット・
+    # 観察項目・タスク)を 1 リクエストで読み書きする(docs/clinical-pathway-design.md)。
+    resources :pathways, only: %i[index show create update destroy] do
+      member { post :copy }
+    end
   end
 end

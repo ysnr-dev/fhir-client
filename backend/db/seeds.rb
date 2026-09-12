@@ -1434,3 +1434,92 @@ if File.exist?(regimens_csv)
 else
   puts "master_regimens: #{regimens_csv} not found, skipped"
 end
+
+# クリニカルパス(施設パス)のサンプル(db/seed_data/pathways/*.json、1 ファイル = 1 パス)。
+#
+# 4 階層(病日 → OAT ユニット → 観察項目・タスク)とオーダー雛形の jsonb を CSV で表すのは
+# 無理があるので、API の payload と同じ形の JSON で置く(docs/clinical-pathway-design.md)。
+# レジメンと同じく**開発とデモのためのサンプル**で、状態を「下書き(draft)」で入れる。
+# 既存のパス(同じ pathway_code)は上書きしない。uuid キーは JSON の値をそのまま使う。
+pathway_files = Dir[Rails.root.join("db/seed_data/pathways/*.json").to_s].sort
+if pathway_files.any?
+  loaded = 0
+  skipped = 0
+  pathway_files.each do |path|
+    data = JSON.parse(File.read(path))
+    code = data["pathway_code"].to_s.strip
+    next if code.blank? || data["name"].to_s.strip.blank?
+
+    if Master::Pathway.exists?(pathway_code: code)
+      skipped += 1
+      next
+    end
+
+    ActiveRecord::Base.transaction do
+      Master::Pathway.create!(
+        pathway_code: code,
+        name: data["name"].to_s.strip,
+        short_name: data["short_name"].presence,
+        name_kana: data["name_kana"].presence,
+        version: data["version"].presence,
+        department_code: data["department_code"].presence,
+        department_name: data["department_name"].presence,
+        setting: data["setting"].presence || "inpatient",
+        scheduled_days: data["scheduled_days"],
+        adaptive_criteria: data["adaptive_criteria"].presence,
+        protocol_base: data["protocol_base"].presence,
+        status: "draft",
+        note: data["note"].presence
+      )
+      Array(data["indications"]).each_with_index do |item, index|
+        Master::PathwayIndication.create!(
+          pathway_code: code, display_order: index + 1,
+          management_number: item["management_number"].to_s, name: item["name"].to_s, icd10: item["icd10"].presence
+        )
+      end
+      Array(data["events"]).each_with_index do |event_data, event_index|
+        event = Master::PathwayEvent.create!(
+          pathway_code: code, display_order: event_index + 1,
+          elapsed_days: event_data["elapsed_days"], path_step: event_data["path_step"] || 1,
+          path_step_name: event_data["path_step_name"].presence, title: event_data["title"].presence,
+          note: event_data["note"].presence
+        )
+        Array(event_data["oat_units"]).each_with_index do |unit_data, unit_index|
+          unit = Master::PathwayOatUnit.create!(
+            pathway_code: code, event_id: event.id, display_order: unit_index + 1,
+            unit_key: unit_data["unit_key"].presence || SecureRandom.uuid,
+            name: unit_data["name"].to_s, category: unit_data["category"].presence,
+            code_system: unit_data["code_system"].presence, code: unit_data["code"].presence,
+            critical: unit_data["critical"] == true, note: unit_data["note"].presence
+          )
+          assessment_ids = {}
+          Array(unit_data["assessments"]).each_with_index do |a, index|
+            assessment = Master::PathwayAssessment.create!(
+              pathway_code: code, unit_id: unit.id, display_order: index + 1,
+              assessment_key: a["assessment_key"].presence || SecureRandom.uuid,
+              name: a["name"].to_s, category_code: a["category_code"].presence, category_name: a["category_name"].presence,
+              code_system: a["code_system"].presence, code: a["code"].presence, proper_value: a["proper_value"].presence,
+              nursing_observation_manage_no: a["nursing_observation_manage_no"].presence, note: a["note"].presence
+            )
+            assessment_ids[assessment.assessment_key] = assessment.id
+          end
+          Array(unit_data["tasks"]).each_with_index do |t, index|
+            Master::PathwayTask.create!(
+              pathway_code: code, unit_id: unit.id, display_order: index + 1,
+              assessment_id: t["assessment_key"].presence && assessment_ids[t["assessment_key"]],
+              task_key: t["task_key"].presence || SecureRandom.uuid,
+              name: t["name"].to_s, category_lv1: t["category_lv1"].to_s, category_lv2: t["category_lv2"].presence,
+              code: t["code"].presence, order_type: t["order_type"].presence, order_label: t["order_label"].presence,
+              order_values: t["order_values"].is_a?(Hash) ? t["order_values"] : {},
+              order_schema_version: t["order_schema_version"], note: t["note"].presence
+            )
+          end
+        end
+      end
+    end
+    loaded += 1
+  end
+  puts "master_pathways: seeded #{loaded} rows (kept #{skipped})"
+else
+  puts "master_pathways: no db/seed_data/pathways/*.json, skipped"
+end
