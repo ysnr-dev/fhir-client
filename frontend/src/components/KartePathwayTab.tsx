@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { usePathwayApplicationTree, usePathwayApplications, usePathwayObservations } from "../api/queries";
+import {
+  useNursingPerformsOn,
+  usePathwayApplicationTree,
+  usePathwayApplications,
+  usePathwayObservations,
+} from "../api/queries";
+import { orderKindOf } from "../fhir/karteTimeline";
 import { buildEvaluationState } from "../fhir/pathwayEvaluationHelpers";
 import {
   buildPathwaySheet,
@@ -16,14 +22,23 @@ import { formatPathwaySheetView, parsePathwaySheetView } from "../karteUrl";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
+import { NursingPerformModal } from "./NursingPerformModal";
 import { PathwayEvaluatePanel } from "./PathwayEvaluatePanel";
+import { PathwayTaskPanel } from "./PathwayTaskPanel";
 
 // カルテ画面の「パス」タブ。適用したクリニカルパスを、紙のパスシートと同じ
 // 病日 × OAT ユニットのシートで見る。列は病日(今日の列を強調)、行は OAT ユニットを
 // 見出しに観察項目とタスクを並べる。適用が複数ある入院ではタブで切り替える(化学療法と同じ)。
 //
 // 全画面は経過表と同じ作法: 患者情報の下からビューポートの下端まで広げ、view の末尾の
-// 「!」で URL に残す。Escape で戻る。評価の入力は右ペインの担当(第 2 段階のタスク 7)。
+// 「!」で URL に残す。Escape で戻る。
+//
+// セルを押したときに開くものは行の種類で決まる。アウトカムのセルは評価(右ペイン)、
+// タスクのセルはそのタスクに結んだオーダー(看護指示なら実施入力、他はオーダーの画面)、
+// オーダーを持たないタスクは実施 / 未実施の記録。観察項目の実績値は評価の中で入れる。
+
+/** タスクに結んだオーダーの種別のうち、右ペインの「〜編集」で開けるもの。 */
+export type PathwayOrderKind = Exclude<ReturnType<typeof orderKindOf>, null | "nursing-order" | "chemo-regimen">;
 
 interface KartePathwayTabProps {
   patientId: string;
@@ -35,6 +50,10 @@ interface KartePathwayTabProps {
    * 全画面のときは右ペインが隠れるので、代わりにこのタブがモーダルで開く。
    */
   onOpenUnit: (applyId: string, unitId: string) => void;
+  /** オーダーを持たないタスクのセルを押したとき、そのタスクの実施入力を右ペインで開く。 */
+  onOpenTask: (applyId: string, procedureId: string) => void;
+  /** オーダーを持つタスクのセルを押したとき、そのオーダーの画面を右ペインで開く(看護指示は除く)。 */
+  onOpenOrder: (kind: PathwayOrderKind, srId: string) => void;
 }
 
 /** 左ペインの幅で読める病日の列数。これを超える分は表の中だけ横に送る。 */
@@ -53,7 +72,14 @@ function sheetUnitIdOf(
   return (unitRow?.cells.get(eventId) as SheetUnitCell | undefined)?.unitId ?? null;
 }
 
-export function KartePathwayTab({ patientId, view, onViewChange, onOpenUnit }: KartePathwayTabProps) {
+export function KartePathwayTab({
+  patientId,
+  view,
+  onViewChange,
+  onOpenUnit,
+  onOpenTask,
+  onOpenOrder,
+}: KartePathwayTabProps) {
   const current = parsePathwaySheetView(view);
   const applications = usePathwayApplications(patientId);
   const list = applications.data?.applications ?? [];
@@ -62,9 +88,16 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenUnit }: K
   const fullscreen = Boolean(current.fullscreen);
   // 全画面では右ペインが隠れるので、評価入力はモーダルで開く(開いている OAT ユニット)。
   const [modalUnitId, setModalUnitId] = useState<string | null>(null);
+  const [modalTaskId, setModalTaskId] = useState<string | null>(null);
   useEffect(() => {
-    if (!fullscreen) setModalUnitId(null);
+    if (!fullscreen) {
+      setModalUnitId(null);
+      setModalTaskId(null);
+    }
   }, [fullscreen]);
+  // 看護指示を結んだタスクの実施入力。全画面でもそうでなくてもモーダルで開く(指示簿と同じ画面)。
+  const [nursingPerform, setNursingPerform] = useState<{ orders: fhir4.ServiceRequest[]; date: string } | null>(null);
+  const nursingPerforms = useNursingPerformsOn(nursingPerform?.date ?? "", nursingPerform ? [patientId] : []);
 
   function updateView(next: { applyId?: string; fullscreen?: boolean }) {
     onViewChange(formatPathwaySheetView({ applyId: selected?.id, fullscreen, ...next }));
@@ -125,14 +158,16 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenUnit }: K
     if (!fullscreen) return;
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
-      if (modalUnitId) setModalUnitId(null);
+      if (nursingPerform) setNursingPerform(null);
+      else if (modalUnitId) setModalUnitId(null);
+      else if (modalTaskId) setModalTaskId(null);
       else updateView({ fullscreen: false });
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // updateView は毎描画で作り直されるが、押した時点の選択で戻せればよい。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen, modalUnitId]);
+  }, [fullscreen, modalUnitId, modalTaskId, nursingPerform]);
 
   return (
     <div
@@ -266,18 +301,40 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenUnit }: K
                         day.date < todayDate ? " pathway-sheet__day--past" : ""
                       }`;
                       if (!cell) return <td key={day.eventId} className={classes} />;
-                      // どの行のセルを押しても、その病日 × OAT ユニットの評価入力を開く。
+                      // アウトカムのセルは、その病日 × OAT ユニットの評価入力を開く。
                       const unitId = sheetUnitIdOf(row, cell, sheet, day.eventId);
-                      const open = () => {
+                      const openUnit = () => {
                         if (!application || !unitId) return;
                         if (fullscreen) setModalUnitId(unitId);
                         else onOpenUnit(application.id, unitId);
+                      };
+                      // タスクのセルは、結んだオーダーの画面(看護指示は実施入力)を開く。
+                      // オーダーを持たないタスクは、そのタスクの実施 / 未実施の記録を開く。
+                      const openTask = (task: SheetTaskCell) => {
+                        if (!application) return;
+                        const linked = task.orderIds
+                          .map((id) => orders?.get(id))
+                          .filter((sr): sr is fhir4.ServiceRequest => Boolean(sr));
+                        const nursing = linked.filter((sr) => orderKindOf(sr) === "nursing-order");
+                        if (nursing.length > 0) {
+                          setNursingPerform({ orders: nursing, date: day.date });
+                          return;
+                        }
+                        const kind = linked[0] ? orderKindOf(linked[0]) : null;
+                        if (linked[0]?.id && kind && kind !== "nursing-order" && kind !== "chemo-regimen") {
+                          // 右ペインは全画面の裏に隠れているので、全画面を抜けてから開く。
+                          if (fullscreen) updateView({ fullscreen: false });
+                          onOpenOrder(kind, linked[0].id);
+                          return;
+                        }
+                        if (fullscreen) setModalTaskId(task.procedureId);
+                        else onOpenTask(application.id, task.procedureId);
                       };
                       if (row.kind === "unit") {
                         const unit = cell as SheetUnitCell;
                         return (
                           <td key={day.eventId} className={`${classes} pathway-sheet__cell--unit`}>
-                            <button type="button" className="pathway-sheet__cell-button" onClick={open}>
+                            <button type="button" className="pathway-sheet__cell-button" onClick={openUnit}>
                               <span
                                 className={`pathway-sheet__outcome${
                                   unit.achievement ? ` pathway-sheet__outcome--${unit.achievement}` : " pathway-sheet__outcome--pending"
@@ -294,13 +351,13 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenUnit }: K
                         const assessment = cell as SheetAssessmentCell;
                         return (
                           <td key={day.eventId} className={classes} data-assessment-id={assessment.assessmentId}>
-                            <button type="button" className="pathway-sheet__cell-button" onClick={open}>
+                            <span className="pathway-sheet__cell-static">
                               {assessment.value ? (
                                 <span className="pathway-sheet__value">{assessment.value}</span>
                               ) : (
                                 <span className="pathway-sheet__planned">○</span>
                               )}
-                            </button>
+                            </span>
                           </td>
                         );
                       }
@@ -308,7 +365,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenUnit }: K
                       const order = task.orderIds.map((id) => orders?.get(id)).find(Boolean);
                       return (
                         <td key={day.eventId} className={classes} data-procedure-id={task.procedureId}>
-                          <button type="button" className="pathway-sheet__cell-button" onClick={open}>
+                          <button type="button" className="pathway-sheet__cell-button" onClick={() => openTask(task)}>
                             <span className={`pathway-sheet__task${task.done ? " pathway-sheet__task--done" : ""}`}>
                               {task.done ? "☑" : "☐"}
                             </span>
@@ -343,6 +400,35 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenUnit }: K
             onSaved={() => setModalUnitId(null)}
           />
         </Modal>
+      )}
+
+      {/* 全画面のときの、オーダーを持たないタスクの実施入力。 */}
+      {modalTaskId && application && (
+        <Modal
+          title="クリニカルパス(タスク)"
+          className="modal--wide pathway-evaluate-modal"
+          onClose={() => setModalTaskId(null)}
+        >
+          <PathwayTaskPanel
+            patientId={patientId}
+            applyId={application.id}
+            procedureId={modalTaskId}
+            onSaved={() => setModalTaskId(null)}
+          />
+        </Modal>
+      )}
+
+      {/* 看護指示を結んだタスクの実施入力(指示簿の「実施入力」と同じ画面)。過去の病日から
+          開いたときは、その日の時刻で記録を始める。 */}
+      {nursingPerform && (
+        <NursingPerformModal
+          orders={nursingPerform.orders}
+          defaultAt={
+            nursingPerform.date === todayDate ? undefined : `${nursingPerform.date}T${new Date().toTimeString().slice(0, 5)}`
+          }
+          performsByOrderId={nursingPerforms.data}
+          onClose={() => setNursingPerform(null)}
+        />
       )}
     </div>
   );

@@ -769,6 +769,8 @@ export function KartePage() {
         <KartePathwayTab
           {...props}
           onOpenUnit={(applyId, unitId) => setPane({ kind: "pathway-evaluate", applyId, unitId })}
+          onOpenTask={(applyId, procedureId) => setPane({ kind: "pathway-task", applyId, procedureId })}
+          onOpenOrder={(kind, srId) => setPane({ kind: `${kind}-edit`, srId } as KartePaneState)}
         />
       );
     }

@@ -14288,6 +14288,14 @@ button.meal-calendar__cell:hover {
   background: var(--accent-bg);
 }
 
+/* 観察項目の実績値は評価の中で入れるので、セルは押せない表示にする(ボタンと同じ寸法)。 */
+.pathway-sheet__cell-static {
+  display: block;
+  width: 100%;
+  padding: 0;
+  text-align: center;
+}
+
 .pathway-sheet__outcome--1 {
   color: var(--accent);
   font-weight: 600;
@@ -14326,6 +14334,14 @@ button.meal-calendar__cell:hover {
   font-weight: normal;
   white-space: nowrap;
   width: 40%;
+}
+
+/* 行見出しの th。.master-search__table は列見出し(thead の th)を前提に sticky と
+   box-shadow の下線を当てるので、行見出しでは td と同じ罫線に戻す(1px ずれる)。 */
+.pathway-evaluate__rows tbody th {
+  position: static;
+  border-bottom: 1px solid var(--border);
+  box-shadow: none;
 }
 
 .pathway-evaluate__rows td input[type="text"],

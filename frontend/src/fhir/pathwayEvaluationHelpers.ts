@@ -398,21 +398,49 @@ export function buildPathwayEvaluationBundle(
       if (done === task.done) continue;
       const procedure = ctx.procedures.get(task.id);
       if (!procedure) continue;
-      const next: fhir4.Procedure = done
-        ? {
-            ...procedure,
-            status: "completed",
-            performedDateTime: recordedAt,
-            ...(performer.length > 0 ? { performer: performer.map((actor) => ({ actor })) } : {}),
-          }
-        : { ...procedure, status: "preparation" };
-      if (!done) {
-        delete next.performedDateTime;
-        delete next.performer;
-      }
-      entry.push(put(next));
+      entry.push(put(taskProcedureUpdate(procedure, done, recordedAt, ctx.performer)));
     }
   }
 
   return { resourceType: "Bundle", type: "transaction", entry };
+}
+
+/** タスク Procedure を実施済(completed + 実施日時 + 実施者)か未実施(preparation)に書き換えたもの。 */
+function taskProcedureUpdate(
+  procedure: fhir4.Procedure,
+  done: boolean,
+  recordedAt: string,
+  performer: PathwayEvaluationContext["performer"],
+): fhir4.Procedure {
+  const actors = performerRef(performer);
+  const next: fhir4.Procedure = done
+    ? {
+        ...procedure,
+        status: "completed",
+        performedDateTime: recordedAt,
+        ...(actors.length > 0 ? { performer: actors.map((actor) => ({ actor })) } : {}),
+      }
+    : { ...procedure, status: "preparation" };
+  if (!done) {
+    delete next.performedDateTime;
+    delete next.performer;
+  }
+  return next;
+}
+
+/**
+ * タスク 1 件だけの実施 / 未実施の記録(パスシートのタスクのセルから開く右ペイン)。
+ * 評価(Goal・Observation)には触れない。
+ */
+export function buildPathwayTaskBundle(
+  procedure: fhir4.Procedure,
+  done: boolean,
+  recordedAt: string,
+  performer: PathwayEvaluationContext["performer"],
+): fhir4.Bundle {
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [put(taskProcedureUpdate(procedure, done, recordedAt || nowFhirDateTime(), performer))],
+  };
 }
