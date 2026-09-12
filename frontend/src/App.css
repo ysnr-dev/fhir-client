@@ -687,7 +687,7 @@ button:disabled {
   color: var(--text);
 }
 
-/* 入力欄の見た目。モーダルの中(.walk-in__fields = 当日受付・入院登録)も
+/* 入力欄の見た目。モーダルの中(.walk-in__fields = 当日受付・入院登録・入院予定)も
    画面の検索フォームと同じ枠・余白に揃える。 */
 .patient-search-form input,
 .patient-search-form select,
@@ -8319,7 +8319,8 @@ body.page-wide .app__main {
   margin-top: 16px;
 }
 
-/* 当日受付モーダル。患者を選んだ後の受付内容。 */
+/* 当日受付モーダル。患者を選んだ後の受付内容。入院予定の入力
+   (カルテ右ペインにも出る)も同じ形なのでこの一式に乗せる。 */
 .walk-in__patient {
   display: flex;
   align-items: center;
@@ -10255,6 +10256,8 @@ body.page-wide .app__main {
 
 .walk-in__fields .admission__note textarea {
   width: 100%;
+  /* 枠・余白ごと親の幅に収める(右ペインでは 1px でもはみ出すと横スクロールが出る)。 */
+  box-sizing: border-box;
   resize: vertical;
 }
 

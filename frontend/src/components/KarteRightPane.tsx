@@ -28,6 +28,7 @@ import {
   QuestionnaireResponseEditPanel,
 } from "./QuestionnaireResponsePanels";
 import { VitalCreatePanel, VitalEditPanel } from "./VitalPanels";
+import { PlannedAdmissionCreatePanel } from "./PlannedAdmissionPanel";
 import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
 import { RegimenApplyPanel } from "./RegimenApplyPanel";
 import { RegimenCycleLoader, RegimenDayPanel, RegimenHeaderPanel } from "./RegimenPanels";
@@ -83,6 +84,8 @@ export type KartePaneState =
   // 日時変更は予約タブの一覧から開く。
   | { kind: "appointment-create"; problem?: ProblemRef }
   | { kind: "appointment-reschedule"; appointmentId: string }
+  // 入院予定(status=planned の Encounter)。病棟だけ決めて日付は未定にもできる。
+  | { kind: "planned-admission-create" }
   // オーダーセットの適用。setId 未指定はセット選択の状態(ペイン内のツリーから選ぶ)。
   | { kind: "order-set"; setId?: number; problem?: ProblemRef }
   // 化学療法レジメンの適用。regimenId 未指定はレジメン選択の状態。
@@ -138,6 +141,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "qr-edit": "テンプレート編集",
   "appointment-create": "予約登録",
   "appointment-reschedule": "予約の日時変更",
+  "planned-admission-create": "入院予定登録",
   "order-set": "セット適用",
   "regimen-apply": "化学療法(レジメン適用)",
   "regimen-cycle": "化学療法(クール登録)",
@@ -287,6 +291,10 @@ export function KarteRightPane({
           onClick={() => onStateChange({ kind: "appointment-create", problem: selectedProblem })}
         >
           予約
+        </button>
+        {/* 入院予定も先の日を押さえる操作なので、予約の隣に置く。 */}
+        <button type="button" onClick={() => onStateChange({ kind: "planned-admission-create" })}>
+          入院予定
         </button>
         {/* よく出すオーダーをまとめて出す入口。個別の種別ボタンより前に置く
             (「セットにあればセット、無ければ個別」の順で探すため)。 */}
@@ -689,6 +697,8 @@ function PaneContent({
       return (
         <AppointmentReschedulePanel appointmentId={state.appointmentId} onSaved={onSaved} />
       );
+    case "planned-admission-create":
+      return <PlannedAdmissionCreatePanel patientId={patientId} onSaved={onSaved} />;
     case "empty":
       return null;
   }
