@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   useClinicalNote,
   useLabOrderDetail,
@@ -100,11 +101,14 @@ export function KarteDetailModal({
   patientId,
   target,
   problemsById,
+  actions,
   onClose,
 }: {
   patientId: string;
   target: KarteDetailTarget;
   problemsById: Map<string, fhir4.Condition>;
+  /** 詳細の下に並べる操作(編集・実施入力 など)。渡さなければ読むだけのモーダル。 */
+  actions?: ReactNode;
   onClose: () => void;
 }) {
   return (
@@ -154,6 +158,7 @@ export function KarteDetailModal({
       ) : (
         <QuestionnaireResponseDetail patientId={patientId} qrId={target.id} />
       )}
+      {actions && <div className="lab-order-item__actions karte-detail__actions">{actions}</div>}
     </Modal>
   );
 }

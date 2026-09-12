@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useNursingPerformsOn,
   usePathwayApplicationTree,
   usePathwayApplications,
   usePathwayObservations,
 } from "../api/queries";
+import { useKarteConditions } from "../api/queries";
 import { orderKindOf } from "../fhir/karteTimeline";
 import { buildEvaluationState } from "../fhir/pathwayEvaluationHelpers";
 import {
@@ -24,6 +25,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { NursingPerformModal } from "./NursingPerformModal";
 import { PathwayEvaluatePanel } from "./PathwayEvaluatePanel";
+import { PathwayOrderModal } from "./PathwayOrderModal";
 import { PathwayTaskPanel } from "./PathwayTaskPanel";
 
 // カルテ画面の「パス」タブ。適用したクリニカルパスを、紙のパスシートと同じ
@@ -33,9 +35,13 @@ import { PathwayTaskPanel } from "./PathwayTaskPanel";
 // 全画面は経過表と同じ作法: 患者情報の下からビューポートの下端まで広げ、view の末尾の
 // 「!」で URL に残す。Escape で戻る。
 //
-// セルを押したときに開くものは行の種類で決まる。アウトカムのセルは評価(右ペイン)、
-// タスクのセルはそのタスクに結んだオーダー(看護指示なら実施入力、他はオーダーの画面)、
-// オーダーを持たないタスクは実施 / 未実施の記録。観察項目の実績値は評価の中で入れる。
+// セルを押したときに開くものは行の種類で決まる。アウトカムのセルは評価、タスクのセルは
+// そのタスクに結んだオーダー(看護指示なら実施入力、他はオーダーの詳細)、オーダーを
+// 持たないタスクは実施 / 未実施の記録。観察項目の実績値は評価の中で入れる。
+//
+// ［決定］どれもモーダルで開く(右ペインは使わない)。このタブは全画面を持ち、全画面では
+// 右ペインが後ろに隠れるので、右ペインと使い分けると同じ操作で開く場所が変わってしまう。
+// オーダーの編集だけは右ペインのフォームしか無いので、詳細モーダルの「編集」から右ペインへ渡す。
 
 /** タスクに結んだオーダーの種別のうち、右ペインの「〜編集」で開けるもの。 */
 export type PathwayOrderKind = Exclude<ReturnType<typeof orderKindOf>, null | "nursing-order" | "chemo-regimen">;
@@ -49,10 +55,7 @@ interface KartePathwayTabProps {
    * セルを押したとき、その病日 × OAT ユニットの評価入力を右ペインで開く。
    * 全画面のときは右ペインが隠れるので、代わりにこのタブがモーダルで開く。
    */
-  onOpenUnit: (applyId: string, unitId: string) => void;
-  /** オーダーを持たないタスクのセルを押したとき、そのタスクの実施入力を右ペインで開く。 */
-  onOpenTask: (applyId: string, procedureId: string) => void;
-  /** オーダーを持つタスクのセルを押したとき、そのオーダーの画面を右ペインで開く(看護指示は除く)。 */
+  /** オーダー詳細の「編集」。そのオーダーの編集フォームを右ペインで開く。 */
   onOpenOrder: (kind: PathwayOrderKind, srId: string) => void;
 }
 
@@ -72,14 +75,7 @@ function sheetUnitIdOf(
   return (unitRow?.cells.get(eventId) as SheetUnitCell | undefined)?.unitId ?? null;
 }
 
-export function KartePathwayTab({
-  patientId,
-  view,
-  onViewChange,
-  onOpenUnit,
-  onOpenTask,
-  onOpenOrder,
-}: KartePathwayTabProps) {
+export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: KartePathwayTabProps) {
   const current = parsePathwaySheetView(view);
   const applications = usePathwayApplications(patientId);
   const list = applications.data?.applications ?? [];
@@ -89,15 +85,16 @@ export function KartePathwayTab({
   // 全画面では右ペインが隠れるので、評価入力はモーダルで開く(開いている OAT ユニット)。
   const [modalUnitId, setModalUnitId] = useState<string | null>(null);
   const [modalTaskId, setModalTaskId] = useState<string | null>(null);
-  useEffect(() => {
-    if (!fullscreen) {
-      setModalUnitId(null);
-      setModalTaskId(null);
-    }
-  }, [fullscreen]);
-  // 看護指示を結んだタスクの実施入力。全画面でもそうでなくてもモーダルで開く(指示簿と同じ画面)。
+  // オーダーを結んだタスクの詳細。看護指示だけは詳細ではなく実施入力を開く(指示簿と同じ画面)。
+  const [modalOrder, setModalOrder] = useState<{ order: fhir4.ServiceRequest; kind: PathwayOrderKind } | null>(null);
   const [nursingPerform, setNursingPerform] = useState<{ orders: fhir4.ServiceRequest[]; date: string } | null>(null);
   const nursingPerforms = useNursingPerformsOn(nursingPerform?.date ?? "", nursingPerform ? [patientId] : []);
+  // 詳細に出す対象プロブレムの名前。カルテのカードから開く詳細と同じものを渡す。
+  const { conditions } = useKarteConditions(patientId);
+  const problemsById = useMemo(
+    () => new Map(conditions.filter((c) => c.id).map((c) => [c.id as string, c])),
+    [conditions],
+  );
 
   function updateView(next: { applyId?: string; fullscreen?: boolean }) {
     onViewChange(formatPathwaySheetView({ applyId: selected?.id, fullscreen, ...next }));
@@ -152,22 +149,25 @@ export function KartePathwayTab({
     return () => window.removeEventListener("resize", measure);
   }, [fullscreen]);
 
-  // 全画面は Escape でも抜けられるようにする(モーダルと同じ作法)。評価のモーダルを
-  // 開いているときは、そちらを先に閉じる(重なりの外側から閉じる)。
+  // Escape は重なりの外側から閉じる(モーダル → 全画面)。Modal は自分では Escape を
+  // 見ないので、モーダルを開いている間は全画面でなくてもここで拾う。
   useEffect(() => {
-    if (!fullscreen) return;
+    if (!fullscreen && !nursingPerform && !modalOrder && !modalUnitId && !modalTaskId) return;
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      // オーダー詳細を開いている間は、その中の実施入力から順に閉じたいので
+      // PathwayOrderModal 側に任せる(こちらは何もしない)。
+      if (modalOrder) return;
       if (nursingPerform) setNursingPerform(null);
       else if (modalUnitId) setModalUnitId(null);
       else if (modalTaskId) setModalTaskId(null);
-      else updateView({ fullscreen: false });
+      else if (fullscreen) updateView({ fullscreen: false });
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // updateView は毎描画で作り直されるが、押した時点の選択で戻せればよい。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen, modalUnitId, modalTaskId, nursingPerform]);
+  }, [fullscreen, modalUnitId, modalTaskId, modalOrder, nursingPerform]);
 
   return (
     <div
@@ -305,8 +305,7 @@ export function KartePathwayTab({
                       const unitId = sheetUnitIdOf(row, cell, sheet, day.eventId);
                       const openUnit = () => {
                         if (!application || !unitId) return;
-                        if (fullscreen) setModalUnitId(unitId);
-                        else onOpenUnit(application.id, unitId);
+                        setModalUnitId(unitId);
                       };
                       // タスクのセルは、結んだオーダーの画面(看護指示は実施入力)を開く。
                       // オーダーを持たないタスクは、そのタスクの実施 / 未実施の記録を開く。
@@ -321,14 +320,11 @@ export function KartePathwayTab({
                           return;
                         }
                         const kind = linked[0] ? orderKindOf(linked[0]) : null;
-                        if (linked[0]?.id && kind && kind !== "nursing-order" && kind !== "chemo-regimen") {
-                          // 右ペインは全画面の裏に隠れているので、全画面を抜けてから開く。
-                          if (fullscreen) updateView({ fullscreen: false });
-                          onOpenOrder(kind, linked[0].id);
+                        if (linked[0] && kind && kind !== "nursing-order" && kind !== "chemo-regimen") {
+                          setModalOrder({ order: linked[0], kind });
                           return;
                         }
-                        if (fullscreen) setModalTaskId(task.procedureId);
-                        else onOpenTask(application.id, task.procedureId);
+                        setModalTaskId(task.procedureId);
                       };
                       if (row.kind === "unit") {
                         const unit = cell as SheetUnitCell;
@@ -386,7 +382,7 @@ export function KartePathwayTab({
         </>
       )}
 
-      {/* 全画面のときの評価入力。右ペインと同じ中身を、シートに重ねて開く。 */}
+      {/* 評価入力。シートに重ねて開く(全画面でも通常でも同じ)。 */}
       {modalUnitId && application && (
         <Modal
           title="クリニカルパス(評価)"
@@ -402,7 +398,7 @@ export function KartePathwayTab({
         </Modal>
       )}
 
-      {/* 全画面のときの、オーダーを持たないタスクの実施入力。 */}
+      {/* オーダーを持たないタスクの実施入力。 */}
       {modalTaskId && application && (
         <Modal
           title="クリニカルパス(タスク)"
@@ -416,6 +412,23 @@ export function KartePathwayTab({
             onSaved={() => setModalTaskId(null)}
           />
         </Modal>
+      )}
+
+      {/* オーダーを結んだタスクの詳細。「編集」は右ペインのフォームへ渡す(全画面なら抜ける)。 */}
+      {modalOrder && (
+        <PathwayOrderModal
+          patientId={patientId}
+          order={modalOrder.order}
+          kind={modalOrder.kind}
+          problemsById={problemsById}
+          onEdit={() => {
+            const { order, kind } = modalOrder;
+            setModalOrder(null);
+            if (fullscreen) updateView({ fullscreen: false });
+            if (order.id) onOpenOrder(kind, order.id);
+          }}
+          onClose={() => setModalOrder(null)}
+        />
       )}
 
       {/* 看護指示を結んだタスクの実施入力(指示簿の「実施入力」と同じ画面)。過去の病日から

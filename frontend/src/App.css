@@ -14317,8 +14317,7 @@ button.meal-calendar__cell:hover {
   font-weight: 600;
 }
 
-/* 全画面のシートに重ねる評価入力。中身は右ペインと同じなので、縦に長いときは
-   モーダルの中だけ送る。 */
+/* シートに重ねる評価入力・タスクの実施入力。縦に長いときはモーダルの中だけ送る。 */
 .pathway-evaluate-modal {
   box-sizing: border-box;
   width: min(720px, 92vw);
@@ -14365,6 +14364,12 @@ button.meal-calendar__cell:hover {
 
 .pathway-evaluate__rows td input[type="number"] {
   width: 90px;
+}
+
+/* 詳細モーダルの下に並べる操作(編集・実施入力)。本文と離して置く。 */
+.karte-detail__actions {
+  margin-top: 12px;
+  margin-bottom: 0;
 }
 
 .pathway-evaluate__achievement {
