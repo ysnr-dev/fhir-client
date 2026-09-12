@@ -168,6 +168,25 @@ RSpec.describe "FhirProxy", type: :request do
 
       expect(response).to have_http_status(:ok)
     end
+
+    # クリニカルパスの適用は CarePlan の木で、子孫は partOf に祖先すべてを並べる。
+    # 適用を指す 1 回の検索で木全体が引ける(part-of)。
+    it "allowlists CarePlan・Goal (クリニカルパスの適用)" do
+      stub_request(:get, "#{upstream_base}/CarePlan")
+        .with(query: { "part-of" => "CarePlan/123" })
+        .to_return(status: 200, body: '{"resourceType":"Bundle"}',
+                   headers: { "Content-Type" => "application/fhir+json" })
+      stub_request(:get, "#{upstream_base}/Goal")
+        .with(query: { "patient" => "Patient/123" })
+        .to_return(status: 200, body: '{"resourceType":"Bundle"}',
+                   headers: { "Content-Type" => "application/fhir+json" })
+
+      get "/fhir/CarePlan?part-of=CarePlan/123"
+      expect(response).to have_http_status(:ok)
+
+      get "/fhir/Goal?patient=Patient/123"
+      expect(response).to have_http_status(:ok)
+    end
   end
 
   describe "Binary (シェーマ画像)" do
