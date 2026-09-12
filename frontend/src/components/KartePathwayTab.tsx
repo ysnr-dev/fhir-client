@@ -80,6 +80,29 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenUnit }: K
       : null;
   const sheet = application ? buildPathwaySheet(application, evaluation) : null;
   const todayDate = today();
+
+  // アウトカム(OAT ユニット)ごとの開閉。評価の済んだアウトカムは既定で畳み、
+  // 手で開け閉めしたらそのまま残す(適用を切り替えたら既定に戻す)。
+  const [collapsedUnits, setCollapsedUnits] = useState<Set<string>>(new Set());
+  const defaultsFor = useRef<string | null>(null);
+  useEffect(() => {
+    // 評価が揃う前に決めると全部開いたままになるので、両方届いてから初期値を入れる。
+    if (!sheet || !selected || !evaluation) return;
+    if (defaultsFor.current === selected.id) return;
+    defaultsFor.current = selected.id;
+    setCollapsedUnits(new Set(sheet.rows.filter((row) => row.kind === "unit" && row.evaluated).map((row) => row.key)));
+  }, [sheet, selected, evaluation]);
+
+  function toggleUnit(unitKey: string) {
+    setCollapsedUnits((current) => {
+      const next = new Set(current);
+      if (next.has(unitKey)) next.delete(unitKey);
+      else next.add(unitKey);
+      return next;
+    });
+  }
+
+  const visibleRows = sheet?.rows.filter((row) => row.kind === "unit" || !collapsedUnits.has(row.unitKey)) ?? [];
   const todayEvent = application ? todayEventOf(application.events, todayDate) : null;
 
   // 全画面はビューポート全体ではなく「患者情報の下」から始める(経過表と同じ)。
@@ -208,9 +231,23 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenUnit }: K
                 </tr>
               </thead>
               <tbody>
-                {sheet.rows.map((row) => (
+                {visibleRows.map((row) => {
+                  const collapsed = collapsedUnits.has(row.key);
+                  return (
                   <tr key={row.key} className={`pathway-sheet__row pathway-sheet__row--${row.kind}`}>
                     <th scope="row" className="pathway-sheet__label-col">
+                      {row.kind === "unit" && (
+                        <button
+                          type="button"
+                          className="pathway-sheet__toggle"
+                          onClick={() => toggleUnit(row.key)}
+                          aria-expanded={!collapsed}
+                          disabled={row.childCount === 0}
+                          title={collapsed ? "観察項目とタスクを開く" : "観察項目とタスクを畳む"}
+                        >
+                          {row.childCount === 0 ? "" : collapsed ? "▸" : "▾"}
+                        </button>
+                      )}
                       {row.kind === "unit" && row.critical && (
                         <span className="pathway-sheet__critical" title="重要アウトカム">
                           ★
@@ -219,7 +256,9 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenUnit }: K
                       {row.kind === "task" && (
                         <span className="pathway-task__template-label">{row.categoryLabel}</span>
                       )}
-                      <span className="pathway-sheet__label">{row.label}</span>
+                      <span className="pathway-sheet__label" title={row.label}>
+                        {row.label}
+                      </span>
                     </th>
                     {sheet.days.map((day) => {
                       const cell = row.cells.get(day.eventId);
@@ -282,7 +321,8 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenUnit }: K
                     })}
                     <td className="pathway-sheet__filler" />
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

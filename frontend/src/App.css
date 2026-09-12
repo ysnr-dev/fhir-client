@@ -14202,6 +14202,26 @@ button.meal-calendar__cell:hover {
   background: var(--surface-panel);
 }
 
+/* アウトカムの開閉。評価の済んだアウトカムは畳んだ状態で開く。 */
+.pathway-sheet__toggle {
+  width: 18px;
+  padding: 0;
+  margin-right: 2px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.pathway-sheet__toggle:disabled {
+  cursor: default;
+  opacity: 0;
+}
+
+
 :root[data-theme="dark"] .pathway-sheet__row--unit th.pathway-sheet__label-col {
   background: var(--surface-card);
 }

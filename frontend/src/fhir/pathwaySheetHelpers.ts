@@ -23,11 +23,20 @@ export interface SheetTaskCell {
 export interface SheetRow {
   key: string;
   kind: "unit" | "assessment" | "task";
+  /** 属するアウトカム(unit 行の key)。開閉の単位になる。 */
+  unitKey: string;
   label: string;
   /** 重要アウトカム(unit 行だけ)。 */
   critical: boolean;
   /** タスク分類(大)の表示(task 行だけ)。 */
   categoryLabel: string;
+  /** ぶら下がる観察項目・タスクの行数(unit 行だけ)。 */
+  childCount: number;
+  /**
+   * 載っている病日すべてで評価が入っているか(unit 行だけ)。シートは評価済みの
+   * アウトカムを畳んで開く。
+   */
+  evaluated: boolean;
   /** 病日 → セル。その病日に載らない行は undefined。 */
   cells: Map<string, SheetUnitCell | SheetAssessmentCell | SheetTaskCell>;
 }
@@ -73,7 +82,17 @@ export function buildPathwaySheet(
       let group = unitRows.get(unitKey);
       if (!group) {
         group = {
-          row: { key: unitKey, kind: "unit", label: unit.name, critical: false, categoryLabel: "", cells: new Map() },
+          row: {
+            key: unitKey,
+            kind: "unit",
+            unitKey,
+            label: unit.name,
+            critical: false,
+            categoryLabel: "",
+            childCount: 0,
+            evaluated: false,
+            cells: new Map(),
+          },
           children: new Map(),
         };
         unitRows.set(unitKey, group);
@@ -93,7 +112,17 @@ export function buildPathwaySheet(
           const key = `${unitKey}/a:${assessment.name}`;
           let row = group.children.get(key);
           if (!row) {
-            row = { key, kind: "assessment", label: assessment.name, critical: false, categoryLabel: "", cells: new Map() };
+            row = {
+              key,
+              kind: "assessment",
+              unitKey,
+              label: assessment.name,
+              critical: false,
+              categoryLabel: "",
+              childCount: 0,
+              evaluated: false,
+              cells: new Map(),
+            };
             group.children.set(key, row);
           }
           row.cells.set(event.id, {
@@ -108,9 +137,12 @@ export function buildPathwaySheet(
             row = {
               key,
               kind: "task",
+              unitKey,
               label: task.name,
               critical: false,
               categoryLabel: displayOfOption(TASK_CATEGORY_LV1_OPTIONS, task.categoryLv1),
+              childCount: 0,
+              evaluated: false,
               cells: new Map(),
             };
             group.children.set(key, row);
@@ -123,6 +155,10 @@ export function buildPathwaySheet(
 
   const rows: SheetRow[] = [];
   for (const group of unitRows.values()) {
+    const cells = [...group.row.cells.values()] as SheetUnitCell[];
+    group.row.childCount = group.children.size;
+    // 載っている病日が全部評価済みのときだけ「評価済み」とする(1 日でも残っていれば開く)。
+    group.row.evaluated = cells.length > 0 && cells.every((cell) => Boolean(cell.achievement));
     rows.push(group.row);
     // 観察項目を先に、タスクを後に(紙のパスシートの並び)。
     const children = [...group.children.values()];
