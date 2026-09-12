@@ -109,15 +109,41 @@ export function taskCategoryLv2Options(lv1: PathwayTaskCategoryLv1): { code: str
   return TASK_CATEGORY_LV2_OPTIONS.filter((o) => o.lv1 === lv1);
 }
 
-/** タスク分類(中)から、オーダー雛形の既定の種別。対応する種別が無ければ処方。 */
+/** タスク分類(中)から、オーダー雛形の既定の種別。 */
 export const DEFAULT_ORDER_TYPE_BY_LV2: Record<string, string> = {
   TPPR: "prescription",
   TPIN: "injection",
   TPTR: "treatment-order",
+  TPOP: "surgery-order",
+  TPBT: "transfusion-order",
+  TPRH: "rehab-order",
   EXSP: "lab-order",
-  EXIM: "rad-order",
+  EXMB: "micro-order",
   EXPH: "physio-order",
+  EXEN: "endoscopy-order",
+  EXIM: "rad-order",
+  EXPA: "patho-order",
+  MLBR: "meal-order",
+  MLLU: "meal-order",
+  MLSU: "meal-order",
+  EGNC: "nutrition-guidance-order",
 };
+
+/** タスク分類(大)だけのタスクの既定の種別。ケア項目は看護指示、食事は食事オーダー。 */
+const DEFAULT_ORDER_TYPE_BY_LV1: Record<string, string> = {
+  NC: "nursing-order",
+  ML: "meal-order",
+};
+
+/** タスクの分類から、オーダー雛形の既定の種別。対応する種別が無ければ処方。 */
+export function defaultOrderTypeOfTask(lv1: string, lv2: string | null | undefined): string {
+  if (lv2 && lv2.startsWith("NC")) return "nursing-order";
+  return (
+    (lv2 ? DEFAULT_ORDER_TYPE_BY_LV2[lv2] : undefined) ??
+    DEFAULT_ORDER_TYPE_BY_LV1[lv1] ??
+    "prescription"
+  );
+}
 
 export function displayOfOption(options: readonly CodeOption[], code: string | null | undefined): string {
   if (!code) return "";

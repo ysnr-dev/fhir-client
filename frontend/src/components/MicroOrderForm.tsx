@@ -25,6 +25,7 @@ import {
 import { SETTING_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import { useAntimicrobialSuggestions } from "../hooks/useAntimicrobialSuggestions";
 import { useConditionOptions } from "../hooks/useConditionOptions";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
@@ -45,6 +46,12 @@ interface MicroOrderFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /** オーダーセットの適用日。外から開始日をまとめて入れるときに渡す。 */
+  bulkStartDate?: string;
+  /** セットの内容として入力する(患者と日付に依存する入力を出さず、その検証も外す)。 */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 export function MicroOrderForm({
@@ -54,6 +61,9 @@ export function MicroOrderForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: MicroOrderFormProps) {
   const [values, setValues] = useState<MicroOrderFormValues>(
     initialValues ?? emptyMicroOrderForm(),
@@ -63,6 +73,7 @@ export function MicroOrderForm({
 
   const problemOptions = useProblemOptions(patientId);
   const conditionOptions = useConditionOptions(patientId);
+  useBulkStartDate(bulkStartDate, (date) => setValues((v) => ({ ...v, startDate: date })));
   const specimenTypes = useMicroSpecimenTypeOptions();
   const sites = useMicroCollectionSites();
   const methods = useMicroCollectionMethods();
@@ -152,7 +163,8 @@ export function MicroOrderForm({
       setValidationError("検査項目を 1 つ以上選択してください。");
       return;
     }
-    if (!values.startDate) {
+    // セットの内容としての入力では検査日を持たない(適用時に入れる)。
+    if (!setMode && !values.startDate) {
       setValidationError("検査日を入力してください。");
       return;
     }
@@ -170,7 +182,12 @@ export function MicroOrderForm({
   const selectedItemCodes = new Set(values.items.map((item) => item.code));
 
   return (
-    <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
+    <form
+      className="prescription-form"
+      onSubmit={handleSubmit}
+      onKeyDown={handleKeyDown}
+      noValidate={hideSubmit}
+    >
       {validationError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -183,14 +200,16 @@ export function MicroOrderForm({
 
       <fieldset>
         <legend>検査共通</legend>
-        <label>
-          対象プロブレム
-          <ProblemSelect
-            value={values.problem}
-            options={problemOptions}
-            onChange={(problem) => update("problem", problem)}
-          />
-        </label>
+        {!setMode && (
+          <label>
+            対象プロブレム
+            <ProblemSelect
+              value={values.problem}
+              options={problemOptions}
+              onChange={(problem) => update("problem", problem)}
+            />
+          </label>
+        )}
         <label>
           入外区分
           <select
@@ -349,6 +368,7 @@ export function MicroOrderForm({
 
       <ClinicalInfoFieldset
         patientId={patientId}
+        setMode={setMode}
         specimen={values.specimen}
         priorAntimicrobial={values.priorAntimicrobial}
         examPurpose={values.examPurpose}
@@ -359,11 +379,13 @@ export function MicroOrderForm({
 
       <SelectionSummary values={values} />
 
-      <div className="prescription-form__submit">
-        <button type="submit" disabled={submitting}>
-          {submitting ? "送信中..." : submitLabel}
-        </button>
-      </div>
+      {!hideSubmit && (
+        <div className="prescription-form__submit">
+          <button type="submit" disabled={submitting}>
+            {submitting ? "送信中..." : submitLabel}
+          </button>
+        </div>
+      )}
     </form>
   );
 }
@@ -512,6 +534,7 @@ function OrganismFieldset({
 // 臨床情報。疑い病名は登録病名のプルダウンから選ぶか直接入力する。
 function ClinicalInfoFieldset({
   patientId,
+  setMode,
   specimen,
   priorAntimicrobial,
   examPurpose,
@@ -520,6 +543,8 @@ function ClinicalInfoFieldset({
   onChange,
 }: {
   patientId: string;
+  /** セットの内容としての入力(登録病名の候補と処方からの抗菌薬候補は出さない)。 */
+  setMode: boolean;
   specimen: MicroSpecimenValues;
   priorAntimicrobial: string;
   examPurpose: MicroExamPurpose;
@@ -552,6 +577,7 @@ function ClinicalInfoFieldset({
       <label>
         疑い病名
         <div className="rad-gp__reason">
+          {!setMode && (
           <select
             value={specimen.reasonConditionId}
             onChange={(e) => {
@@ -577,6 +603,7 @@ function ClinicalInfoFieldset({
               </option>
             )}
           </select>
+          )}
           <input
             type="text"
             value={specimen.reasonName}
@@ -601,13 +628,15 @@ function ClinicalInfoFieldset({
           placeholder="投与中・投与歴のある抗菌薬(薬品名・期間)"
           onChange={(e) => onChange("priorAntimicrobial", e.target.value)}
         />
-        <button
-          type="button"
-          className="micro-order__suggest-toggle"
-          onClick={() => setSuggestionsOpen((open) => !open)}
-        >
-          {suggestionsOpen ? "候補を閉じる" : "処方から取り込み"}
-        </button>
+        {!setMode && (
+          <button
+            type="button"
+            className="micro-order__suggest-toggle"
+            onClick={() => setSuggestionsOpen((open) => !open)}
+          >
+            {suggestionsOpen ? "候補を閉じる" : "処方から取り込み"}
+          </button>
+        )}
         {suggestionsOpen && (
           <div className="micro-order__suggest">
             <ErrorBanner error={suggestions.error} />

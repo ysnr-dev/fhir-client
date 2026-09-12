@@ -841,6 +841,8 @@ export function buildMealOrderBundle(
     closing.length > 0 ? { kind: "change", sourceId: closing[0].id } : { kind: "start" };
   return transactionBundle([
     {
+      // fullUrl は来歴(Provenance)とクリニカルパスのタスクがこのオーダーを指すのに使う。
+      fullUrl: `urn:uuid:${crypto.randomUUID()}`,
       resource: buildMealOrderServiceRequest(values, patientId, requester, { encounterId, link }),
       request: { method: "POST", url: "ServiceRequest" },
     },

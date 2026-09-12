@@ -128,11 +128,15 @@ export function emptyConsultOrderForm(setting: PrescriptionSetting): ConsultOrde
 }
 
 /** 入力の検証。空文字なら妥当(リハビリと同じくヘルパー側に置く)。 */
-export function validateConsultOrderForm(values: ConsultOrderFormValues): string {
+export function validateConsultOrderForm(
+  values: ConsultOrderFormValues,
+  /** requireDates を偽にすると希望日を求めない(セットの内容としての入力)。 */
+  { requireDates = true }: { requireDates?: boolean } = {},
+): string {
   if (!values.targetDepartmentId) return "依頼先の診療科を選んでください。";
   if (!values.requestType) return "依頼種別を選んでください。";
   if (!values.purpose.trim()) return "依頼目的を入れてください。";
-  if (!values.desiredDate) return "希望日を入れてください。";
+  if (requireDates && !values.desiredDate) return "希望日を入れてください。";
   return "";
 }
 
@@ -297,6 +301,8 @@ export function buildConsultOrderBundle(
   const entries: fhir4.BundleEntry[] = [];
   const template = pushPurposeTemplateEntry(entries, values.purposeTemplate);
   entries.push({
+    // fullUrl は来歴(Provenance)とクリニカルパスのタスクがこのオーダーを指すのに使う。
+    fullUrl: `urn:uuid:${crypto.randomUUID()}`,
     resource: buildConsultOrderServiceRequest(
       values,
       patientId,

@@ -20,6 +20,7 @@ import {
   type TransfusionTestType,
 } from "../fhir/transfusionOrderHelpers";
 import { makeFieldUpdater } from "../lib/form";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
@@ -52,6 +53,12 @@ interface TransfusionOrderFormProps {
    * (編集で空欄のまま保存しようとしているオーダーに、後から型を書き足さない)。
    */
   prefillBloodType?: boolean;
+  /** オーダーセットの適用日。外から投与予定日をまとめて入れるときに渡す(時刻は保つ)。 */
+  bulkStartDate?: string;
+  /** セットの内容として入力する(患者と日付に依存する入力を出さず、その検証も外す)。 */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 export function TransfusionOrderForm({
@@ -62,6 +69,9 @@ export function TransfusionOrderForm({
   submitError,
   submitLabel = "登録",
   prefillBloodType = false,
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: TransfusionOrderFormProps) {
   const [values, setValues] = useState<TransfusionOrderFormValues>(
     initialValues ?? emptyTransfusionOrderForm(""),
@@ -70,6 +80,12 @@ export function TransfusionOrderForm({
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
 
   const problemOptions = useProblemOptions(patientId);
+  useBulkStartDate(bulkStartDate, (date) =>
+    setValues((v) => ({
+      ...v,
+      scheduledDateTime: `${date}T${v.scheduledDateTime.slice(11, 16) || "09:00"}`,
+    })),
+  );
   const products = useTransfusionProductOptions();
   const pretransfusion = usePretransfusionResults(patientId);
   // 患者に登録された血液型(プロファイルタブ)。新規オーダーの初期値と、
@@ -86,7 +102,7 @@ export function TransfusionOrderForm({
   // DO で型が写っている場合は上書きしない。一度入れたら追わない
   // (医師が外した型を書き戻さない)。
   useEffect(() => {
-    if (!prefillBloodType || prefilled.current) return;
+    if (!prefillBloodType || setMode || prefilled.current) return;
     if (!patientTested || (!patientAbo && !patientRhd)) return;
 
     prefilled.current = true;
@@ -99,7 +115,7 @@ export function TransfusionOrderForm({
             rhdBloodType: (patientRhd as RhdBloodType) || "",
           },
     );
-  }, [prefillBloodType, patientTested, patientAbo, patientRhd]);
+  }, [prefillBloodType, setMode, patientTested, patientAbo, patientRhd]);
 
   // 患者の血液型と食い違う型を選んでいるか。取り違えは重大なので、
   // 選択を妨げずに気付かせる(意図して別の型を出すこともあるため)。
@@ -183,6 +199,8 @@ export function TransfusionOrderForm({
     if (filled.some((product) => !(Number(product.units) > 0))) {
       return "製剤の単位数を入れてください。";
     }
+    // セットの内容としての入力では日時と同意の確認を持たない(適用時に入れる)。
+    if (setMode) return null;
     if (!values.scheduledDateTime) return "投与予定日時を入れてください。";
     // 同意書は輸血の必須要件。未確認のまま出せてしまうと確認そのものが形骸化する。
     if (!values.consentConfirmed) return "輸血同意書の確認にチェックを入れてください。";
@@ -199,7 +217,7 @@ export function TransfusionOrderForm({
   }
 
   return (
-    <form className="prescription-form" onSubmit={handleSubmit}>
+    <form className="prescription-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
       {validationError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -270,7 +288,7 @@ export function TransfusionOrderForm({
 
         {/* 検体検査の結果。選んだ型と見比べられるよう、選択欄のすぐ下に置く。 */}
         <ul className="transfusion-order__pretest">
-          {(pretransfusion.data ?? []).map((result) => (
+          {(setMode ? [] : (pretransfusion.data ?? [])).map((result) => (
             <li key={result.label} className="transfusion-order__pretest-item">
               <span className="transfusion-order__pretest-label">{result.label}</span>
               {result.value ? (
@@ -301,14 +319,16 @@ export function TransfusionOrderForm({
             ))}
           </select>
         </label>
-        <label>
-          対象プロブレム
-          <ProblemSelect
-            value={values.problem}
-            options={problemOptions}
-            onChange={(problem) => update("problem", problem)}
-          />
-        </label>
+        {!setMode && (
+          <label>
+            対象プロブレム
+            <ProblemSelect
+              value={values.problem}
+              options={problemOptions}
+              onChange={(problem) => update("problem", problem)}
+            />
+          </label>
+        )}
         <label>
           入外区分
           <select
@@ -422,11 +442,13 @@ export function TransfusionOrderForm({
         </label>
       </fieldset>
 
-      <div className="prescription-form__actions">
-        <button type="submit" disabled={submitting}>
-          {submitting ? "保存中..." : submitLabel}
-        </button>
-      </div>
+      {!hideSubmit && (
+        <div className="prescription-form__actions">
+          <button type="submit" disabled={submitting}>
+            {submitting ? "保存中..." : submitLabel}
+          </button>
+        </div>
+      )}
     </form>
   );
 }

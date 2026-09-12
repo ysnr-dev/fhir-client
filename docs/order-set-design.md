@@ -192,12 +192,31 @@ requisition 空いているときだけ同じ uuid
 
 - **Phase 1(実装済)**: backend(テーブル・API・request spec 19 件)、セット登録画面、カルテの適用パネル、
   処方・注射・検体検査・放射線検査・生理検査・処置の set モード、承認画面の種別列、病名エントリ(§4.2)。
-- **Phase 2(未実装)**: 細菌・病理・内視鏡・手術・輸血・リハビリ・栄養指導・他科依頼・食事・看護指示。
-  各フォームに `setMode` / `hideSubmit` を足し、`orderSetRegistry.tsx` に定義を 1 つ足せば画面は変えなくてよい。
-  注意点: 輸血は血液型を `useEffect` で後から流し込む(`TransfusionOrderForm.tsx`)ので「事前入力が終わるまで
-  一括登録を disabled」の口が要る。食事・看護指示は入院 Encounter を submit 時に渡すので同様。看護指示は DO が無い。
-  未対応の種別のエントリは、登録画面では「この画面ではまだ編集できません」と出して保存時にそのまま残し、
-  適用では除外される。
+- **Phase 2(実装済、2026-09-12)**: 細菌・病理・内視鏡・手術・輸血・リハビリ・栄養指導・他科依頼・食事・看護指示。
+  各フォームに `setMode` / `hideSubmit` / `bulkStartDate` を足し、`orderSetRegistry.tsx` に定義を足しただけで、
+  セット登録画面・適用パネル・クリニカルパスの雛形モーダル/適用パネルは変えていない(`ORDER_SET_TYPE_ORDER` を見て動く)。
+  種別ごとの決め事:
+  - `setMode` で出さない入力: 対象プロブレム(全種別)、登録病名からの選択(手術の術前診断・栄養指導の対象疾患・
+    内視鏡の依頼病名・細菌の疑い病名)、テンプレート記入(手術の術前指示・栄養指導と他科依頼の目的・病理の臨床情報・
+    内視鏡の目的/特別指示)、病理のシェーマ、輸血の血液型の自動入力と検査結果の一覧、細菌の処方からの抗菌薬取込、
+    手術の手術室の予定表、内視鏡の日時・予約・即実施。日付の必須検証は `setMode` で外す(`validateXxxForm` の `requireDates`)。
+  - HTML の `required` を持つフォーム(看護指示・食事・リハビリ・栄養指導・他科依頼)は `hideSubmit` のとき `<form noValidate>`。
+    hidden のフォームで `required` が止めると文言が出ないため、必須はコード側の検証で文言を出す。
+  - `bulkStartDate` の入れ先: 看護指示は全行の開始日、食事は開始日、手術は予定手術日、輸血は投与予定日時の日付部(時刻は保つ)、
+    リハビリ・栄養指導は開始日、他科依頼は希望日、細菌は検査日(採取日時は触らない)、病理は採取日時の日付部、
+    内視鏡は実施日と予約不要の単独枠の日付(放射線と同じ)。
+  - **手術**: `hideSubmit` のときは手術室の重なり検査(`useSurgeryConflictCheck`)を通さず同期に登録する。積んだフォームでは
+    確認モーダルを挟めないため、重なりは登録後に手術カレンダーで確かめる運用(ユーザー決定)。
+  - **食事**: セット・パスからは「いま出ている食事の終了・再開」を扱わず、新しい指示だけ登録する(`closing` / `resuming` は空。
+    ユーザー決定)。前の食事を終えるときは食事タブから。
+  - **輸血**: 適用では `prefillBloodType` で検査確定の血液型が後から入る。同意書の確認は適用の行を開いてチェックする
+    (検証で止まるので未確認のままは登録できない)。DO では空にする投与予定日時と病理の採取日時は、積んだフォームの初期値として
+    当日 09:00 を入れる(`orderSetRegistry.tsx` の `DEFAULT_APPLY_TIME`。`bulkStartDate` が日付部を上書きする)。
+  - **看護指示・食事**: 入院にだけ出す種別でフォーム値に入外区分が無い。`settingOf` は「入院」を返し、外来の患者に適用すると
+    既存の入外の注意が出る。入院 Encounter は `BuildBundleArgs.encounterId`(セット適用は入院中の Encounter、パス適用は
+    適用先に選んだ入院(予定))で渡す。看護指示の DO(`buildDoNursingOrderForm`)を新設した。
+  - `sanitizeValuesForSet` は種別ごとに、日付・明細 id・登録病名への参照・テンプレート回答・シェーマ・血液型・同意の確認・
+    予約を落とす。`ORDER_SET_SCHEMA_VERSION` は上げていない(種別の追加であって既存エントリの形は変わらない)。
 - **Phase 3(提案)**:
   - 「この日のオーダーをセットとして保存」(カルテのカードから `useXxxInitialValues` → sanitize → 保存)。
     医師は実症例からセットを作るのが自然。
@@ -219,11 +238,32 @@ requisition 空いているときだけ同じ uuid
   `order-set` ペイン)、`App.tsx`(診療業務 > セット登録、`/order-sets`)、`App.css`
 - フォームの `setMode` / `hideSubmit`: `PrescriptionForm` / `InjectionForm` / `LabOrderForm` / `RadOrderForm` /
   `PhysioOrderForm` / `TreatmentOrderForm` / `ConditionForm`、`TemplateTextField`(`onOpenTemplate` 省略でテンプレート操作を出さない)
+- Phase 2(2026-09-12): `NursingOrderForm` / `MealOrderForm` / `SurgeryOrderForm` / `TransfusionOrderForm` / `RehabOrderForm` /
+  `NutritionGuidanceOrderForm` / `ConsultOrderForm` / `MicroOrderForm` / `PathoOrderForm` / `EndoscopyOrderForm` の
+  `setMode` / `hideSubmit` / `bulkStartDate`、`fhir/nursingOrderHelpers.ts`(`buildDoNursingOrderForm`、`validateNursingOrderForm` の
+  `requireDates`)、`rehabOrderHelpers.ts` / `nutritionGuidanceOrderHelpers.ts` / `consultOrderHelpers.ts`(`validateXxxForm` の `requireDates`)、
+  `orderSetRegistry.tsx`(10 定義と `BuildBundleArgs.encounterId`)、`orderSetHelpers.ts`(sanitize / summarize の 10 分岐)、
+  `OrderSetApplyPanel.tsx` / `PathwayApplyPanel.tsx`(`encounterId`)
 - 病名エントリ: `fhir/conditionHelpers.ts`(`isActiveCondition` / `buildDoConditionForm` / `findActiveSameCondition` /
   `buildConditionBundle`)、`orderSetRegistry.tsx` の `condition` 定義と `duplicateNote` / `allocateProblemNumber`、
   `OrderSetApplyPanel.tsx`(患者の病名を待つ・重複エントリの除外)、`KarteProblemList.tsx`(`isActiveCondition` に統一)
 - `fhir/provenanceHelpers.ts` の `isHeaderEntry` を export(セット印の対象判定と共用)
 - 通知一覧の「オーダー承認」の種別(`components/notifications/OrderApprovalNotificationCells.tsx`。当時は `pages/OrderApprovalPage.tsx`)
+
+### 8.2 検証したこと(Phase 2、2026-09-12、開発環境のテスト太郎、ysnr-dev = 児玉 義憲でログイン)
+
+- セット登録画面の「＋」に 17 種別すべてが並ぶ。自分のセット「術後1日目セット」に 看護指示 + 食事 + リハビリ を入れて保存。
+  set モードでは 3 種別とも対象プロブレムが出ない。食事は「いま出ている食事」の帯も出ない。
+- 空のまま保存 → 「1 行目: 指示内容を入れてください。」(コード側の検証)で止まる。hidden の form でも `noValidate` で
+  HTML の `required` に邪魔されず文言が出る。
+- 保存後の `order_set_entries.values`: 看護指示は行の `startDate` / `endDate` が空・`problem: null`、食事は `startDate` /
+  `endDate` が空、リハビリは日付 3 つが空で `setting: "inpatient"` だけ残る。要約(label)は「離床開始、歩行器歩行を介助」
+  「五分粥食1000kcal、朝から」「廃用症候群リハビリテーション、PT」。
+- カルテ(入院中のテスト太郎)で適用 → 3 件とも入外の注意は出ない。適用日を 09-15 に変えると看護指示の開始日が追随する。
+  一括登録 → 上流に 3 件(`nursing|inpatient` / `meal|inpatient` / `rehab|inpatient`)、看護指示と食事には入院 Encounter が付き、
+  3 件ともヘッダに `order-set-instance` の identifier。カルテのカードとして食事・リハビリが 09-15 に並び、食事の暦は
+  9/15 から五分粥食に変わる(前の一般食は終わらない = 決定どおり)。看護指示は開始日が未来なので指示簿の一覧には出ず、
+  履歴に「有効 …2026-09-15 〜」で載る。
 
 ### 8.1 検証したこと(2026-09-05〜06、開発環境のテスト太郎、ysnr-dev = 児玉 義憲でログイン)
 
@@ -246,6 +286,10 @@ requisition 空いているときだけ同じ uuid
 
 ## 9. 申し送り
 
+- 手術をセット・パスから出すと手術室の重なり検査を通らない(§7 Phase 2)。輸血の同意書の確認は適用の行を開いて入れる。
+- 食事をセット・パスから出しても前の食事は終わらない(2 本が並ぶ)。終えるときは食事タブから。
+- 手術・輸血・細菌・病理・内視鏡は雛形モーダルとセット登録画面でフォームが出るところまでの確認。適用して上流に登録するまでは
+  看護指示・食事・リハビリの 3 種別で確かめた(§8.2)。
 - 病名エントリで登録した Condition には、セット印(identifier / `order-set` 拡張)も来歴(Provenance)も付かない。
   必要になったら `buildOrderProvenanceEntry` の target に Condition を足す(§4.2)。
 - 病名の重複判定は表示名の完全一致。`code.text` を持たない古い Condition は管理番号 coding の display(修飾語なし)で
@@ -255,6 +299,9 @@ requisition 空いているときだけ同じ uuid
   画面では未確認(backend の 403 は spec で確認済み)。
 - rad/physio/treatment の `groupable`(単独オーダーか)は常に今のマスタで再導出するので、セット作成後にマスタを変えると
   適用時の分割数が変わる。仕様として受け入れる。
+- 食事・リハビリ・栄養指導・他科依頼の登録 Bundle はヘッダ entry に `fullUrl` を持っていなかったため、来歴(Provenance)が
+  付かず、クリニカルパスのタスクからも参照できなかった(2026-09-12 に 4 つの `buildXxxOrderBundle` へ `fullUrl` を追加)。
+  それ以前に登録されたこの 4 種別のオーダーには来歴が無い。
 - 大きなセット(entry 60〜80 件の Bundle)の上流 transaction 上限は未確認。落ちるならモデルにエントリ数上限を設ける。
 - 「セットから出たオーダー」を横断で引く検索(identifier / 拡張)は上流に無い。必要になったら
   `docs/server-improvement-backlog.md` に起票。

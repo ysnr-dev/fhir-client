@@ -184,10 +184,16 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
   (set モード・患者なし)を出し、`useStackedOrderForms` の 1 キーで外から submit して値を受け取る。「この内容にする」で確定、
   閉じたら破棄。ページが `<form>` でないので、非ポータルの Modal でも入れ子の form は起きない。フォーム内の検索モーダル
   (医薬品・用法)は fixed の overlay なので、モーダルの上にそのまま重なる。
-- 種別の既定はタスク分類(中)から決める(`DEFAULT_ORDER_TYPE_BY_LV2`: 処方 → prescription、注射 → injection、検体検査 → lab-order、
-  画像診断 → rad-order、生理検査 → physio-order、処置 → treatment-order)。
-- 雛形を持てる種別は `ORDER_SET_TYPES` の 6 種(処方・注射・検体検査・放射線検査・生理検査・処置)。食事・ケア・指導・安静度・
-  手術・輸血・レジメンは第 1 段階ではチェックリスト項目。未対応の種別・新しい版の雛形は要約だけ出し、保存時にそのまま戻す。
+- 種別の既定はタスク分類から決める(`defaultOrderTypeOfTask`: 中分類 `DEFAULT_ORDER_TYPE_BY_LV2` = 処方 → prescription、
+  注射 → injection、処置 → treatment-order、手術 → surgery-order、輸血 → transfusion-order、リハビリ → rehab-order、検体検査 → lab-order、
+  細菌検査 → micro-order、生理検査 → physio-order、内視鏡検査 → endoscopy-order、画像診断 → rad-order、病理診断 → patho-order、
+  朝/昼/夕 → meal-order、栄養指導 → nutrition-guidance-order、ケア項目(NC01〜)→ nursing-order。中分類が無ければ大分類で
+  ケア項目 → 看護指示、食事 → 食事オーダー、それ以外は処方)。
+- 雛形を持てる種別は `ORDER_SET_TYPES` の全 16 種(病名を除く。2026-09-12 に看護指示・食事・手術・輸血・リハビリ・栄養指導・
+  他科依頼・細菌・病理・内視鏡を追加。`docs/order-set-design.md` §7 Phase 2)。透析・放射線治療・レジメン・指導・IC・安静度・
+  医療文書はチェックリスト項目。このクライアントより新しい版の雛形は要約だけ出し、保存時にそのまま戻す。
+- 看護指示・食事の雛形は入院 Encounter をオーダーに焼く(適用先に選んだ入院(予定)の id を `BuildBundleArgs.encounterId` で渡す)。
+  食事は前の食事の終了・再開を扱わない、手術は手術室の重なり検査を通らない(同 §7 Phase 2 の決め事)。
 
 ### 5.1 適用時の展開(第 2 段階)
 
@@ -392,6 +398,17 @@ Procedure(タスク)            status completed(実施)/ preparation(未実施)
   `components/PathwayOverviewTable.tsx`、`components/PathwayTaskTemplateModal.tsx`、`App.tsx`(マスタメンテ > クリニカルパス > パス定義、`/pathways` 3 ルート)、
   `App.css`(`.pathway-*`)
 
+### 9.7 検証したこと(オーダー雛形の 10 種別、2026-09-12、テスト太郎)
+
+- 検証用のパス 900002(病日 1、OAT ユニット 1、タスク 2)を作り、雛形モーダルを開くと種別の既定が
+  タスク分類から決まる(ケア項目 NC01 → 看護指示、食事 MLBR → 食事)。看護指示に指示内容、食事に食種を入れて「この内容にする」。
+- 保存した `order_values` は `problem: null` で日付が空、`order_label` は「離床開始、初回歩行は2名で介助」「五分粥食1000kcal、朝から」。
+- 承認してカルテから適用 → オーダー区画に 2 件が病日の日付(入院日 2026-08-22)で並び、適用すると上流に
+  `nursing|inpatient` と `meal|inpatient` が 2026-08-22 で登録される。どちらもヘッダに `pathway-instance` の identifier と
+  `pathway-order` 拡張(パス名)、入院 Encounter、来歴 1 件。タスクの Procedure は `basedOn` に 観察項目の CarePlan と
+  ServiceRequest の両方を持つ。パスタブのシートでタスク行のセルが「依頼済」になる。
+- 検証で作ったパス 900002・セット・上流のリソースはすべて削除済み(900001 の適用は残す)。
+
 ### 9.1 検証したこと(2026-09-12、開発環境、児玉 義憲でログイン)
 
 - `RAILS_ENV=test ADMIN_TOKEN= bundle exec rspec spec/requests/master/pathways_spec.rb spec/requests/master/regimens_spec.rb`(コンテナ内)43 件成功、
@@ -472,6 +489,11 @@ Procedure(タスク)            status completed(実施)/ preparation(未実施)
 - 病日単位の入外区分・パスステップ・許容経過日数条件は列だけ持ち、UI には出していない(ePath 出力時は `setting` を各病日に写す)。
 - 観察項目の「コード」欄はコード体系を選ぶまで disabled だが、ブラウザ自動化(`form_input`)では値が入る。手入力では起きない。
 - 雛形モーダルの中で種別を切り替えると空のフォームになる(前の種別の入力は残らない)。
+- 10 種別の雛形のうち、適用して上流に登録するところまで確かめたのは看護指示と食事(§9.7)。手術・輸血・細菌・病理・内視鏡・
+  リハビリ・栄養指導・他科依頼は雛形モーダルでフォームが出て要約が入るところまで。
+- 食事の雛形は前の食事を終わらせない(病日ごとに食事タスクを置くと、前日の食事オーダーと並ぶ)。パスで食事を変えていく運用なら
+  各病日の雛形に終了日を持たせない代わりに、食事タブで前のオーダーを終える。
+- 手術の雛形は手術室の重なり検査を通らないので、適用後に手術カレンダーで確かめる。輸血の雛形は適用の行を開いて同意書の確認を入れる。
 - オーダー雛形の `order_values` はフォーム値そのものなので、医薬品マスタの行(価格・薬効分類など)が丸ごと入る(オーダーセットと同じ)。
   マスタ差し替え後はコードで引き直す(名前は自己修復するが廃止は分からない)。
 - 概要表のタスクは(大分類, 名称)でまとめるので、同じ名前で中分類が違うタスクは 1 行になる。

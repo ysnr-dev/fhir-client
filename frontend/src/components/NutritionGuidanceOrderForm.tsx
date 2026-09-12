@@ -17,6 +17,7 @@ import {
   type NutritionGuidanceOrderFormValues,
 } from "../fhir/nutritionGuidanceOrderHelpers";
 import { makeFieldUpdater } from "../lib/form";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ConditionPickerModal } from "./ConditionPickerModal";
@@ -48,6 +49,12 @@ interface NutritionGuidanceOrderFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /** オーダーセットの適用日。外から開始日をまとめて入れるときに渡す。 */
+  bulkStartDate?: string;
+  /** セットの内容として入力する(患者と日付に依存する入力を出さず、その検証も外す)。 */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 export function NutritionGuidanceOrderForm({
@@ -57,6 +64,9 @@ export function NutritionGuidanceOrderForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: NutritionGuidanceOrderFormProps) {
   const [values, setValues] = useState<NutritionGuidanceOrderFormValues>(
     initialValues ?? emptyNutritionGuidanceOrderForm(""),
@@ -68,6 +78,7 @@ export function NutritionGuidanceOrderForm({
   const [templateOpen, setTemplateOpen] = useState(false);
 
   const problemOptions = useProblemOptions(patientId);
+  useBulkStartDate(bulkStartDate, (date) => setValues((v) => ({ ...v, startDate: date })));
   const update = makeFieldUpdater(setValues);
 
   // 指示食種は食事オーダーと同じ食種マスタから選ぶ。件数が多く主成分量を比べて
@@ -78,7 +89,7 @@ export function NutritionGuidanceOrderForm({
 
   // 入院中なら今出ている食事オーダーの食種を参考に見せる。指示食種を選び直す手間を
   // 省くためのもので、押したときに同じ食種を写す(食事が出ていなければ帯ごと出ない)。
-  const activeMealOrders = useActiveMealOrders(patientId, values.startDate);
+  const activeMealOrders = useActiveMealOrders(setMode ? undefined : patientId, values.startDate);
   const currentDiet = activeMealOrders.data?.map(mealOrderDietRef).find(Boolean) ?? null;
 
   function handleDietSelect(diet: MealDiet) {
@@ -88,7 +99,7 @@ export function NutritionGuidanceOrderForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateNutritionGuidanceOrderForm(values);
+    const error = validateNutritionGuidanceOrderForm(values, { requireDates: !setMode });
     setValidationError(error);
     if (error) return;
 
@@ -97,7 +108,11 @@ export function NutritionGuidanceOrderForm({
 
   return (
     <>
-      <form className="prescription-form nutrition-guidance-form" onSubmit={handleSubmit}>
+      <form
+        className="prescription-form nutrition-guidance-form"
+        onSubmit={handleSubmit}
+        noValidate={hideSubmit}
+      >
         {validationError && (
           <div className="error-banner" role="alert" ref={validationErrorRef}>
             <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -129,7 +144,7 @@ export function NutritionGuidanceOrderForm({
               value={values.purpose}
               template={values.purposeTemplate}
               onChange={(purpose) => update("purpose", purpose)}
-              onOpenTemplate={() => setTemplateOpen(true)}
+              onOpenTemplate={setMode ? undefined : () => setTemplateOpen(true)}
               onClearTemplate={() => update("purposeTemplate", null)}
             />
           </div>
@@ -181,15 +196,17 @@ export function NutritionGuidanceOrderForm({
               />
               {/* 登録済みの病名から写す。候補が数十件になっても選べるよう、
                   絞り込みのできるモーダルで選ぶ(放射線の依頼病名と同じ)。 */}
-              <div className="rad-gp__reason-actions">
-                <button
-                  type="button"
-                  onClick={() => setPickingCondition(true)}
-                  title="登録されている病名から選ぶ"
-                >
-                  病名
-                </button>
-              </div>
+              {!setMode && (
+                <div className="rad-gp__reason-actions">
+                  <button
+                    type="button"
+                    onClick={() => setPickingCondition(true)}
+                    title="登録されている病名から選ぶ"
+                  >
+                    病名
+                  </button>
+                </div>
+              )}
             </div>
           </label>
 
@@ -229,14 +246,16 @@ export function NutritionGuidanceOrderForm({
             </div>
           </div>
 
-          <label>
-            対象プロブレム
-            <ProblemSelect
-              value={values.problem}
-              options={problemOptions}
-              onChange={(problem) => update("problem", problem)}
-            />
-          </label>
+          {!setMode && (
+            <label>
+              対象プロブレム
+              <ProblemSelect
+                value={values.problem}
+                options={problemOptions}
+                onChange={(problem) => update("problem", problem)}
+              />
+            </label>
+          )}
         </fieldset>
 
         <fieldset>
@@ -292,11 +311,13 @@ export function NutritionGuidanceOrderForm({
           )}
         </fieldset>
 
-        <div className="prescription-form__actions">
-          <button type="submit" disabled={submitting}>
-            {submitting ? "保存中..." : submitLabel}
-          </button>
-        </div>
+        {!hideSubmit && (
+          <div className="prescription-form__actions">
+            <button type="submit" disabled={submitting}>
+              {submitting ? "保存中..." : submitLabel}
+            </button>
+          </div>
+        )}
       </form>
 
       {/* モーダルはどれも独自の入力を持つので form の外に置く

@@ -107,14 +107,31 @@ export function emptyNursingOrderForm(): NursingOrderFormValues {
   return { lines: [emptyNursingOrderLine()], problem: null };
 }
 
-/** 入力チェック。問題なければ空文字。 */
-export function validateNursingOrderForm(values: NursingOrderFormValues): string {
+/**
+ * 保存値 → 画面に出すフォーム値(オーダーセット・パスの雛形)。各行の開始日を当日で
+ * 埋め、終了日は引き継がない(頻度・条件・文言は雛形の中身なので保つ)。
+ */
+export function buildDoNursingOrderForm(values: NursingOrderFormValues): NursingOrderFormValues {
+  return {
+    ...values,
+    lines: values.lines.map((line) => ({ ...line, startDate: today(), endDate: "" })),
+  };
+}
+
+/**
+ * 入力チェック。問題なければ空文字。requireDates を偽にすると開始日を求めない
+ * (オーダーセットの内容としての入力。日付は適用時に入る)。
+ */
+export function validateNursingOrderForm(
+  values: NursingOrderFormValues,
+  { requireDates = true }: { requireDates?: boolean } = {},
+): string {
   if (values.lines.length === 0) return "指示を 1 行以上入れてください。";
   for (const [index, line] of values.lines.entries()) {
     const n = index + 1;
     if (!line.text.trim()) return `${n} 行目: 指示内容を入れてください。`;
-    if (!line.startDate) return `${n} 行目: 開始日を入れてください。`;
-    if (line.endDate && line.endDate < line.startDate) {
+    if (requireDates && !line.startDate) return `${n} 行目: 開始日を入れてください。`;
+    if (line.startDate && line.endDate && line.endDate < line.startDate) {
       return `${n} 行目: 終了日は開始日以降にしてください。`;
     }
     const scheduleError = validateSchedule(line.schedule);

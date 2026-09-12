@@ -20,6 +20,7 @@ import {
   type MealStapleChoice,
   type MealTiming,
 } from "../fhir/mealOrderHelpers";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
@@ -53,6 +54,12 @@ interface MealOrderFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /** オーダーセットの適用日。外から開始日をまとめて入れるときに渡す。 */
+  bulkStartDate?: string;
+  /** セットの内容として入力する(患者と日付に依存する入力を出さず、その検証も外す)。 */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 /**
@@ -105,6 +112,9 @@ export function MealOrderForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: MealOrderFormProps) {
   const [values, setValues] = useState<MealOrderFormValues>(initialValues);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
@@ -115,6 +125,7 @@ export function MealOrderForm({
   const [resumeIds, setResumeIds] = useState<string[]>([]);
 
   const problemOptions = useProblemOptions(patientId);
+  useBulkStartDate(bulkStartDate, (date) => setValues((v) => ({ ...v, startDate: date })));
   const diets = useMealDietOptions();
   const staples = useMealItemOptions("staple");
   // 副食形態(きざみ・ミキサー など)。主食と違い朝昼夕の軸が無いのでセレクト 1 つ。
@@ -241,8 +252,8 @@ export function MealOrderForm({
     if (values.saltLimit.trim() && parseSaltLimit(values.saltLimit) === undefined) {
       return "塩分制限は 0 以上の数値で入れてください。";
     }
-    if (!startDate) return "開始日を入れてください。";
-    if (values.endDate) {
+    if (!setMode && !startDate) return "開始日を入れてください。";
+    if (startDate && values.endDate) {
       const beforeStart =
         values.endDate < startDate ||
         (values.endDate === startDate &&
@@ -292,7 +303,7 @@ export function MealOrderForm({
     : "";
 
   return (
-    <form className="prescription-form" onSubmit={handleSubmit}>
+    <form className="prescription-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
       {validationError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -409,14 +420,16 @@ export function MealOrderForm({
             </select>
           </label>
         )}
-        <label>
-          対象プロブレム
-          <ProblemSelect
-            value={values.problem}
-            options={problemOptions}
-            onChange={(problem) => update("problem", problem)}
-          />
-        </label>
+        {!setMode && (
+          <label>
+            対象プロブレム
+            <ProblemSelect
+              value={values.problem}
+              options={problemOptions}
+              onChange={(problem) => update("problem", problem)}
+            />
+          </label>
+        )}
       </fieldset>
 
       {/* 主食は朝・昼・夕で変わることがある(米飯 → 全粥、昼だけ検査で欠食 など)ので
@@ -574,11 +587,13 @@ export function MealOrderForm({
         </label>
       </fieldset>
 
-      <div className="prescription-form__actions">
-        <button type="submit" disabled={submitting}>
-          {submitting ? "保存中..." : submitLabel}
-        </button>
-      </div>
+      {!hideSubmit && (
+        <div className="prescription-form__actions">
+          <button type="submit" disabled={submitting}>
+            {submitting ? "保存中..." : submitLabel}
+          </button>
+        </div>
+      )}
 
       {pickingDiet && (
         <MealDietPickerModal

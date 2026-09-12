@@ -12,7 +12,7 @@ import { PathwayTaskTemplateModal } from "../components/PathwayTaskTemplateModal
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
 import {
   ASSESSMENT_CATEGORY_SUGGESTIONS,
-  DEFAULT_ORDER_TYPE_BY_LV2,
+  defaultOrderTypeOfTask,
   PATHWAY_SETTING_OPTIONS,
   PATHWAY_STATUS_OPTIONS,
   copyEventDraft,
@@ -520,7 +520,7 @@ export function PathwayEditorPage() {
         <PathwayTaskTemplateModal
           taskName={templateTask.name}
           template={templateTask.template}
-          defaultOrderType={DEFAULT_ORDER_TYPE_BY_LV2[templateTask.categoryLv2] ?? "prescription"}
+          defaultOrderType={defaultOrderTypeOfTask(templateTask.categoryLv1, templateTask.categoryLv2)}
           setting={draft.setting}
           onCommit={(template) => commitTemplate(picker, template)}
           onClose={() => setPicker(null)}

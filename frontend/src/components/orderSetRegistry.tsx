@@ -65,12 +65,87 @@ import {
   buildTreatmentOrderWithPerformBundle,
   type TreatmentImmediatePerforms,
 } from "../fhir/treatmentResultHelpers";
+import {
+  buildDoNursingOrderForm,
+  buildNursingOrderBundle,
+  emptyNursingOrderForm,
+  type NursingOrderFormValues,
+} from "../fhir/nursingOrderHelpers";
+import {
+  buildDoMealOrderForm,
+  buildMealOrderBundle,
+  emptyMealOrderForm,
+  type MealOrderFormValues,
+} from "../fhir/mealOrderHelpers";
+import {
+  buildDoSurgeryOrderForm,
+  buildSurgeryOrderBundle,
+  emptySurgeryOrderForm,
+  type SurgeryOrderFormValues,
+} from "../fhir/surgeryOrderHelpers";
+import {
+  buildDoTransfusionOrderForm,
+  buildTransfusionOrderBundle,
+  emptyTransfusionOrderForm,
+  type TransfusionOrderFormValues,
+} from "../fhir/transfusionOrderHelpers";
+import {
+  buildDoRehabOrderForm,
+  buildRehabOrderBundle,
+  emptyRehabOrderForm,
+  type RehabOrderFormValues,
+} from "../fhir/rehabOrderHelpers";
+import {
+  buildDoNutritionGuidanceOrderForm,
+  buildNutritionGuidanceOrderBundle,
+  emptyNutritionGuidanceOrderForm,
+  type NutritionGuidanceOrderFormValues,
+} from "../fhir/nutritionGuidanceOrderHelpers";
+import {
+  buildConsultOrderBundle,
+  buildDoConsultOrderForm,
+  emptyConsultOrderForm,
+  type ConsultOrderFormValues,
+} from "../fhir/consultOrderHelpers";
+import {
+  buildDoMicroOrderForm,
+  buildMicroOrderBundle,
+  emptyMicroOrderForm,
+  type MicroOrderFormValues,
+} from "../fhir/microOrderHelpers";
+import {
+  buildDoPathoOrderForm,
+  buildPathoOrderBundle,
+  emptyPathoOrderForm,
+  type PathoOrderFormValues,
+} from "../fhir/pathoOrderHelpers";
+import {
+  buildDoEndoscopyOrderForm,
+  buildEndoscopyOrderBundle,
+  emptyEndoscopyOrderForm,
+  type EndoscopyOrderFormValues,
+} from "../fhir/endoscopyOrderHelpers";
+import {
+  buildEndoscopyOrderWithPerformBundle,
+  type EndoscopyImmediatePerforms,
+} from "../fhir/endoscopyResultHelpers";
+import { today } from "../lib/dates";
 import { ConditionForm } from "./ConditionForm";
+import { ConsultOrderForm } from "./ConsultOrderForm";
+import { EndoscopyOrderForm } from "./EndoscopyOrderForm";
 import { InjectionForm } from "./InjectionForm";
 import { LabOrderForm } from "./LabOrderForm";
+import { MealOrderForm } from "./MealOrderForm";
+import { MicroOrderForm } from "./MicroOrderForm";
+import { NursingOrderForm } from "./NursingOrderForm";
+import { NutritionGuidanceOrderForm } from "./NutritionGuidanceOrderForm";
+import { PathoOrderForm } from "./PathoOrderForm";
 import { PhysioOrderForm } from "./PhysioOrderForm";
 import { PrescriptionForm } from "./PrescriptionForm";
 import { RadOrderForm } from "./RadOrderForm";
+import { RehabOrderForm } from "./RehabOrderForm";
+import { SurgeryOrderForm } from "./SurgeryOrderForm";
+import { TransfusionOrderForm } from "./TransfusionOrderForm";
 import { TreatmentOrderForm } from "./TreatmentOrderForm";
 
 // オーダーセットが扱う種別ごとの対応表。セット登録画面と適用パネルはこの表だけを
@@ -104,6 +179,11 @@ export interface BuildBundleArgs {
   defaultSetting: DefaultOrderSetting;
   /** 予約を同梱する種別が participant の表示名に使う。 */
   patient?: fhir4.Patient;
+  /**
+   * 入院(Encounter.id)。入院にだけ出す種別(看護指示・食事)がオーダーに焼く。
+   * セット適用は入院中の Encounter、パス適用は適用先に選んだ入院(予定)。
+   */
+  encounterId?: string;
   /**
    * プロブレム区分の病名に付ける番号を 1 つ採る。適用 1 回ぶんのクロージャなので、
    * 同じ適用に病名が複数あっても順に連番になる。
@@ -419,23 +499,332 @@ const treatmentOrder = defineOrderSetType<
   },
 });
 
-/** 対応済みの種別。未対応の種別はここに無く、登録画面の追加ボタンにも出ない。 */
+const endoscopyOrder = defineOrderSetType<
+  EndoscopyOrderFormValues,
+  [EndoscopyImmediatePerforms | null, Record<string, SlotSelection> | null]
+>("endoscopy-order", {
+  label: "内視鏡",
+  renderForm: (props) => (
+    <EndoscopyOrderForm
+      patientId={props.patientId}
+      initialValues={props.initialValues}
+      onSubmit={props.onSubmit}
+      submitting={props.submitting}
+      submitError={props.submitError}
+      bulkStartDate={props.bulkStartDate}
+      setMode={props.setMode}
+      hideSubmit
+    />
+  ),
+  emptyValues: (setting) => emptyEndoscopyOrderForm(null, setting),
+  buildDoValues: buildDoEndoscopyOrderForm,
+  settingOf: (values) => values.setting,
+  buildBundle: (values, [performs, bookings], { patientId, requester, defaultSetting, patient }) => {
+    const attribution = withOrderWard(requester, values.setting, defaultSetting);
+    const booking = bookingOf(bookings, patient);
+    return {
+      bundle: performs
+        ? buildEndoscopyOrderWithPerformBundle(values, patientId, attribution, performs)
+        : buildEndoscopyOrderBundle(values, patientId, attribution, booking),
+      invalidate: examInvalidate("endoscopy-worklist", performs, booking),
+    };
+  },
+});
+
+const microOrder = defineOrderSetType<MicroOrderFormValues, []>("micro-order", {
+  label: "細菌検査",
+  renderForm: (props) => (
+    <MicroOrderForm
+      patientId={props.patientId}
+      initialValues={props.initialValues}
+      onSubmit={props.onSubmit}
+      submitting={props.submitting}
+      submitError={props.submitError}
+      bulkStartDate={props.bulkStartDate}
+      setMode={props.setMode}
+      hideSubmit
+    />
+  ),
+  emptyValues: (setting) => emptyMicroOrderForm(null, setting),
+  buildDoValues: buildDoMicroOrderForm,
+  settingOf: (values) => values.setting,
+  buildBundle: (values, _extra, { patientId, requester, defaultSetting }) => ({
+    bundle: buildMicroOrderBundle(
+      values,
+      patientId,
+      withOrderWard(requester, values.setting, defaultSetting),
+    ),
+    invalidate: [],
+  }),
+});
+
+// 採取日時・投与予定日時は DO では空にするが、積んだフォームは外から一括 submit
+// されるので、適用日(bulkStartDate)が入るまでの初期値として当日の朝を入れておく。
+const DEFAULT_APPLY_TIME = "09:00";
+
+const pathoOrder = defineOrderSetType<PathoOrderFormValues, []>("patho-order", {
+  label: "病理検査",
+  renderForm: (props) => (
+    <PathoOrderForm
+      patientId={props.patientId}
+      initialValues={props.initialValues}
+      onSubmit={props.onSubmit}
+      submitting={props.submitting}
+      submitError={props.submitError}
+      bulkStartDate={props.bulkStartDate}
+      setMode={props.setMode}
+      hideSubmit
+    />
+  ),
+  emptyValues: (setting) => emptyPathoOrderForm(null, setting),
+  buildDoValues: (values, setting) => ({
+    ...buildDoPathoOrderForm(values, setting),
+    collectionDateTime: `${today()}T${DEFAULT_APPLY_TIME}`,
+  }),
+  settingOf: (values) => values.setting,
+  buildBundle: (values, _extra, { patientId, requester, defaultSetting }) => ({
+    bundle: buildPathoOrderBundle(
+      values,
+      patientId,
+      withOrderWard(requester, values.setting, defaultSetting),
+    ),
+    invalidate: [],
+  }),
+});
+
+const surgeryOrder = defineOrderSetType<SurgeryOrderFormValues, []>("surgery-order", {
+  label: "手術",
+  renderForm: (props) => (
+    <SurgeryOrderForm
+      patientId={props.patientId}
+      initialValues={props.initialValues}
+      onSubmit={props.onSubmit}
+      submitting={props.submitting}
+      submitError={props.submitError}
+      bulkStartDate={props.bulkStartDate}
+      setMode={props.setMode}
+      hideSubmit
+    />
+  ),
+  emptyValues: (setting) => emptySurgeryOrderForm(null, setting),
+  buildDoValues: buildDoSurgeryOrderForm,
+  settingOf: (values) => values.setting,
+  buildBundle: (values, _extra, { patientId, requester, defaultSetting }) => ({
+    bundle: buildSurgeryOrderBundle(
+      values,
+      patientId,
+      withOrderWard(requester, values.setting, defaultSetting),
+    ),
+    // 手術カレンダーと手術部の一覧は ServiceRequest の検索キーで読み直される。
+    invalidate: [],
+  }),
+});
+
+// 看護指示・食事は入院にだけ出す種別で、フォーム値に入外区分を持たない。
+// セットの入外区分は「入院」として扱い、外来の患者に適用すると注意が出る。
+const nursingOrder = defineOrderSetType<NursingOrderFormValues, []>("nursing-order", {
+  label: "看護指示",
+  renderForm: (props) => (
+    <NursingOrderForm
+      patientId={props.patientId}
+      initialValues={props.initialValues}
+      onSubmit={props.onSubmit}
+      submitting={props.submitting}
+      submitError={props.submitError}
+      bulkStartDate={props.bulkStartDate}
+      setMode={props.setMode}
+      hideSubmit
+    />
+  ),
+  emptyValues: () => emptyNursingOrderForm(),
+  buildDoValues: (values) => buildDoNursingOrderForm(values),
+  settingOf: () => "inpatient",
+  buildBundle: (values, _extra, { patientId, requester, defaultSetting, encounterId }) => ({
+    bundle: buildNursingOrderBundle(
+      values,
+      patientId,
+      withOrderWard(requester, "inpatient", defaultSetting),
+      encounterId,
+    ),
+    invalidate: [],
+  }),
+});
+
+// 食事は「いま出ている食事の終了・再開」をここでは扱わず、新しい指示だけ登録する
+// (終了・再開は食事タブから)。
+const mealOrder = defineOrderSetType<MealOrderFormValues, [string[], string[]]>("meal-order", {
+  label: "食事",
+  renderForm: (props) => (
+    <MealOrderForm
+      patientId={props.patientId}
+      initialValues={props.initialValues}
+      onSubmit={props.onSubmit}
+      submitting={props.submitting}
+      submitError={props.submitError}
+      bulkStartDate={props.bulkStartDate}
+      setMode={props.setMode}
+      hideSubmit
+    />
+  ),
+  emptyValues: () => emptyMealOrderForm(),
+  buildDoValues: (values) => buildDoMealOrderForm(values),
+  settingOf: () => "inpatient",
+  buildBundle: (values, _extra, { patientId, requester, defaultSetting, encounterId }) => ({
+    bundle: buildMealOrderBundle(
+      values,
+      patientId,
+      withOrderWard(requester, "inpatient", defaultSetting),
+      [],
+      [],
+      encounterId,
+    ),
+    invalidate: [],
+  }),
+});
+
+const transfusionOrder = defineOrderSetType<TransfusionOrderFormValues, []>("transfusion-order", {
+  label: "輸血",
+  renderForm: (props) => (
+    <TransfusionOrderForm
+      patientId={props.patientId}
+      initialValues={props.initialValues}
+      onSubmit={props.onSubmit}
+      submitting={props.submitting}
+      submitError={props.submitError}
+      // 患者に出すときは検査で確定した血液型を初期値に入れる(新規登録と同じ)。
+      prefillBloodType={!props.setMode}
+      bulkStartDate={props.bulkStartDate}
+      setMode={props.setMode}
+      hideSubmit
+    />
+  ),
+  emptyValues: (setting) => emptyTransfusionOrderForm(setting),
+  buildDoValues: (values, setting) => ({
+    ...buildDoTransfusionOrderForm(values, setting),
+    scheduledDateTime: `${today()}T${DEFAULT_APPLY_TIME}`,
+  }),
+  settingOf: (values) => values.setting,
+  buildBundle: (values, _extra, { patientId, requester, defaultSetting }) => ({
+    bundle: buildTransfusionOrderBundle(
+      values,
+      patientId,
+      withOrderWard(requester, values.setting, defaultSetting),
+    ),
+    invalidate: [],
+  }),
+});
+
+const rehabOrder = defineOrderSetType<RehabOrderFormValues, []>("rehab-order", {
+  label: "リハビリ",
+  renderForm: (props) => (
+    <RehabOrderForm
+      patientId={props.patientId}
+      initialValues={props.initialValues}
+      onSubmit={props.onSubmit}
+      submitting={props.submitting}
+      submitError={props.submitError}
+      bulkStartDate={props.bulkStartDate}
+      setMode={props.setMode}
+      hideSubmit
+    />
+  ),
+  emptyValues: (setting) => emptyRehabOrderForm(setting),
+  buildDoValues: buildDoRehabOrderForm,
+  settingOf: (values) => values.setting,
+  buildBundle: (values, _extra, { patientId, requester, defaultSetting }) => ({
+    bundle: buildRehabOrderBundle(
+      values,
+      patientId,
+      withOrderWard(requester, values.setting, defaultSetting),
+    ),
+    invalidate: [],
+  }),
+});
+
+const nutritionGuidanceOrder = defineOrderSetType<NutritionGuidanceOrderFormValues, []>(
+  "nutrition-guidance-order",
+  {
+    label: "栄養指導",
+    renderForm: (props) => (
+      <NutritionGuidanceOrderForm
+        patientId={props.patientId}
+        initialValues={props.initialValues}
+        onSubmit={props.onSubmit}
+        submitting={props.submitting}
+        submitError={props.submitError}
+        bulkStartDate={props.bulkStartDate}
+        setMode={props.setMode}
+        hideSubmit
+      />
+    ),
+    emptyValues: (setting) => emptyNutritionGuidanceOrderForm(setting),
+    buildDoValues: buildDoNutritionGuidanceOrderForm,
+    settingOf: (values) => values.setting,
+    buildBundle: (values, _extra, { patientId, requester, defaultSetting }) => ({
+      bundle: buildNutritionGuidanceOrderBundle(
+        values,
+        patientId,
+        withOrderWard(requester, values.setting, defaultSetting),
+      ),
+      invalidate: [],
+    }),
+  },
+);
+
+const consultOrder = defineOrderSetType<ConsultOrderFormValues, []>("consult-order", {
+  label: "他科依頼",
+  renderForm: (props) => (
+    <ConsultOrderForm
+      patientId={props.patientId}
+      initialValues={props.initialValues}
+      onSubmit={props.onSubmit}
+      submitting={props.submitting}
+      submitError={props.submitError}
+      bulkStartDate={props.bulkStartDate}
+      setMode={props.setMode}
+      hideSubmit
+    />
+  ),
+  emptyValues: (setting) => emptyConsultOrderForm(setting),
+  buildDoValues: buildDoConsultOrderForm,
+  settingOf: (values) => values.setting,
+  buildBundle: (values, _extra, { patientId, requester, defaultSetting }) => ({
+    bundle: buildConsultOrderBundle(
+      values,
+      patientId,
+      withOrderWard(requester, values.setting, defaultSetting),
+    ),
+    invalidate: [],
+  }),
+});
+
+/** 種別ごとの対応表。ORDER_SET_ORDER_TYPES の全種別を持つ。 */
 export const ORDER_SET_TYPES: Partial<Record<OrderSetOrderType, OrderSetTypeDef>> = {
   condition,
   prescription,
   injection,
   "lab-order": labOrder,
+  "micro-order": microOrder,
+  "patho-order": pathoOrder,
   "rad-order": radOrder,
   "physio-order": physioOrder,
+  "endoscopy-order": endoscopyOrder,
   "treatment-order": treatmentOrder,
+  "surgery-order": surgeryOrder,
+  "meal-order": mealOrder,
+  "transfusion-order": transfusionOrder,
+  "rehab-order": rehabOrder,
+  "nutrition-guidance-order": nutritionGuidanceOrder,
+  "consult-order": consultOrder,
+  "nursing-order": nursingOrder,
 };
 
-/** 登録画面の「追加」ボタンに出す順(対応済みの種別だけ)。 */
+/** 登録画面の「追加」ボタンに出す順。 */
 export const ORDER_SET_TYPE_ORDER: OrderSetOrderType[] = ORDER_SET_ORDER_TYPES.filter(
   (type) => ORDER_SET_TYPES[type] !== undefined,
 );
 
-/** 全種別の表示名(未対応の種別も一覧では名前を出す)。 */
+/** 全種別の表示名(このクライアントより新しい種別のエントリでも一覧では名前を出す)。 */
 export const ORDER_SET_TYPE_LABELS: Record<OrderSetOrderType, string> = {
   condition: "病名",
   prescription: "処方",

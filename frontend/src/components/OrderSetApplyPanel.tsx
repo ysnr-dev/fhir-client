@@ -323,6 +323,7 @@ function OrderSetApplyForms({
         requester,
         defaultSetting,
         patient,
+        encounterId: defaultSetting.encounterId || undefined,
         allocateProblemNumber,
       });
     });

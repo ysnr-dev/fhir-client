@@ -1,10 +1,23 @@
 import { conditionDisplayName, type ConditionFormValues } from "./conditionHelpers";
+import type { ConsultOrderFormValues } from "./consultOrderHelpers";
+import type { EndoscopyOrderFormValues } from "./endoscopyOrderHelpers";
 import type { InjectionFormValues } from "./injectionHelpers";
 import type { LabOrderFormValues } from "./labOrderHelpers";
+import { mealTimingDisplay, type MealOrderFormValues } from "./mealOrderHelpers";
+import type { MicroOrderFormValues } from "./microOrderHelpers";
+import type { NursingOrderFormValues } from "./nursingOrderHelpers";
+import {
+  guidanceFormatDisplay,
+  type NutritionGuidanceOrderFormValues,
+} from "./nutritionGuidanceOrderHelpers";
+import type { PathoOrderFormValues } from "./pathoOrderHelpers";
 import type { PhysioOrderFormValues } from "./physioOrderHelpers";
 import type { PrescriptionFormValues } from "./prescriptionHelpers";
 import { isHeaderEntry } from "./provenanceHelpers";
 import type { RadOrderFormValues } from "./radOrderHelpers";
+import { diseaseCategoryDisplay, therapyTypesLabel, type RehabOrderFormValues } from "./rehabOrderHelpers";
+import type { SurgeryOrderFormValues } from "./surgeryOrderHelpers";
+import type { TransfusionOrderFormValues } from "./transfusionOrderHelpers";
 import type { TreatmentOrderFormValues } from "./treatmentOrderHelpers";
 
 // オーダーセット(よく出すオーダーのひとまとめ)の共通ロジック。React には依存しない。
@@ -161,7 +174,8 @@ export function orderSetInstanceOf(sr: fhir4.ServiceRequest): string {
  *   画面に出て検証に落ちることはない。
  * ・入外区分・処方区分は残す(「外来の院外処方セット」は種類として意味がある)。
  * ・病名は開始日・終了日・転帰・親プロブレム・引き継ぎ先を落とす(経過と関連は患者のもの)。
- * ・未対応の種別は対象プロブレムだけ落とす(Phase 2 で種別ごとに足す)。
+ * ・登録病名への参照(依頼病名・術前診断・対象疾患)、テンプレートの回答、シェーマ、
+ *   血液型、同意の確認、予約も患者のものなので落とす(文言だけ残す)。
  */
 export function sanitizeValuesForSet(orderType: OrderSetOrderType, values: unknown): unknown {
   switch (orderType) {
@@ -212,8 +226,9 @@ export function sanitizeValuesForSet(orderType: OrderSetOrderType, values: unkno
       } satisfies LabOrderFormValues;
     }
     case "rad-order":
-    case "physio-order": {
-      const v = values as RadOrderFormValues | PhysioOrderFormValues;
+    case "physio-order":
+    case "endoscopy-order": {
+      const v = values as RadOrderFormValues | PhysioOrderFormValues | EndoscopyOrderFormValues;
       return {
         ...v,
         problem: null,
@@ -241,9 +256,92 @@ export function sanitizeValuesForSet(orderType: OrderSetOrderType, values: unkno
         items: v.items.map((item) => ({ ...item, id: "", date: "", time: "" })),
       } satisfies TreatmentOrderFormValues;
     }
-    default: {
-      const v = values as { problem?: unknown };
-      return { ...v, problem: null };
+    case "micro-order": {
+      const v = values as MicroOrderFormValues;
+      return {
+        ...v,
+        problem: null,
+        startDate: "",
+        specimen: { ...v.specimen, id: "", collectionDateTime: "", reasonConditionId: "" },
+        items: v.items.map((item) => ({ ...item, id: "" })),
+      } satisfies MicroOrderFormValues;
+    }
+    case "patho-order": {
+      const v = values as PathoOrderFormValues;
+      return {
+        ...v,
+        problem: null,
+        collectionDateTime: "",
+        reportDueDate: "",
+        clinicalInfoTemplate: null,
+        schemas: [],
+        specimens: v.specimens.map((specimen) => ({ ...specimen, id: "" })),
+      } satisfies PathoOrderFormValues;
+    }
+    case "surgery-order": {
+      const v = values as SurgeryOrderFormValues;
+      return {
+        ...v,
+        problem: null,
+        scheduledDate: "",
+        scheduledTime: "",
+        preopInstructionTemplate: null,
+        items: v.items.map((item) => ({ ...item, id: "", reasonConditionId: "", reasonName: "" })),
+      } satisfies SurgeryOrderFormValues;
+    }
+    case "meal-order": {
+      const v = values as MealOrderFormValues;
+      return { ...v, problem: null, startDate: "", endDate: "" } satisfies MealOrderFormValues;
+    }
+    case "transfusion-order": {
+      const v = values as TransfusionOrderFormValues;
+      return {
+        ...v,
+        problem: null,
+        scheduledDateTime: "",
+        aboBloodType: "",
+        rhdBloodType: "",
+        consentConfirmed: false,
+        products: v.products.map((product) => ({ ...product, id: "" })),
+      } satisfies TransfusionOrderFormValues;
+    }
+    case "rehab-order": {
+      const v = values as RehabOrderFormValues;
+      return {
+        ...v,
+        problem: null,
+        startDate: "",
+        endDate: "",
+        onsetDate: "",
+      } satisfies RehabOrderFormValues;
+    }
+    case "nutrition-guidance-order": {
+      const v = values as NutritionGuidanceOrderFormValues;
+      return {
+        ...v,
+        problem: null,
+        startDate: "",
+        endDate: "",
+        targetConditionId: "",
+        purposeTemplate: null,
+      } satisfies NutritionGuidanceOrderFormValues;
+    }
+    case "consult-order": {
+      const v = values as ConsultOrderFormValues;
+      return {
+        ...v,
+        problem: null,
+        desiredDate: "",
+        purposeTemplate: null,
+      } satisfies ConsultOrderFormValues;
+    }
+    case "nursing-order": {
+      const v = values as NursingOrderFormValues;
+      return {
+        ...v,
+        problem: null,
+        lines: v.lines.map((line) => ({ ...line, startDate: "", endDate: "" })),
+      } satisfies NursingOrderFormValues;
     }
   }
 }
@@ -284,12 +382,58 @@ export function summarizeOrderSetValues(orderType: OrderSetOrderType, values: un
     case "lab-order":
     case "rad-order":
     case "physio-order":
+    case "endoscopy-order":
     case "treatment-order": {
       const v = values as { items: { name: string; shortName: string; parentCode: string }[] };
       // セット(パネル)の構成項目は親の名前で代表させる。
       return joinNames(v.items.filter((i) => !i.parentCode).map((i) => i.shortName || i.name));
     }
-    default:
-      return "";
+    case "micro-order": {
+      const v = values as MicroOrderFormValues;
+      return joinNames([
+        v.specimen.typeName,
+        ...v.items.map((item) => item.shortName || item.name),
+      ]);
+    }
+    case "patho-order": {
+      const v = values as PathoOrderFormValues;
+      return joinNames(v.specimens.map((s) => s.organName || s.typeName));
+    }
+    case "surgery-order": {
+      const v = values as SurgeryOrderFormValues;
+      return joinNames(v.items.map((item) => item.shortName || item.name));
+    }
+    case "meal-order": {
+      const v = values as MealOrderFormValues;
+      return joinNames([
+        v.diet?.name ?? "",
+        v.sideDishForm?.name ?? "",
+        v.startTiming ? `${mealTimingDisplay(v.startTiming)}から` : "",
+      ]);
+    }
+    case "transfusion-order": {
+      const v = values as TransfusionOrderFormValues;
+      return joinNames(
+        v.products
+          .filter((p) => p.productCode)
+          .map((p) => `${p.abbreviation || p.productName}${p.units ? ` ${p.units}${p.unitLabel}` : ""}`),
+      );
+    }
+    case "rehab-order": {
+      const v = values as RehabOrderFormValues;
+      return joinNames([diseaseCategoryDisplay(v.diseaseCategory), therapyTypesLabel(v.therapyTypes)]);
+    }
+    case "nutrition-guidance-order": {
+      const v = values as NutritionGuidanceOrderFormValues;
+      return joinNames([guidanceFormatDisplay(v.format), v.targetDiet?.name ?? ""]);
+    }
+    case "consult-order": {
+      const v = values as ConsultOrderFormValues;
+      return joinNames([v.targetDepartmentName, v.targetPractitionerName]);
+    }
+    case "nursing-order": {
+      const v = values as NursingOrderFormValues;
+      return joinNames(v.lines.map((line) => line.text));
+    }
   }
 }

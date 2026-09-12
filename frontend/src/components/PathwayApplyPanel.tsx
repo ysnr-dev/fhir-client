@@ -328,6 +328,8 @@ function PathwayApplyForm({
         requester,
         defaultSetting,
         patient,
+        // 入院にだけ出す種別(看護指示・食事)は適用先の入院(予定)に紐づける。
+        encounterId: encounterId || defaultSetting.encounterId || undefined,
         // パスのタスクは病名を伴わない(プロブレム番号は使わない)。
         allocateProblemNumber: () => 0,
       });
