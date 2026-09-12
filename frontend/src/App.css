@@ -2443,18 +2443,20 @@ fieldset.rp-card {
   font-size: 14px;
 }
 
-/* 検査結果の検査共通。採取日・入外区分・診療科・報告区分と、報告日時・実施施設・実施者を
-   4 組ずつ 2 行に並べ、幅を食う検体検査オーダーだけを次の行で残り幅いっぱいに置く。 */
+/* 検査結果の検査共通。採取日・入外区分・診療科を 1 行目、報告区分・報告日時を 2 行目に置き、
+   幅を食う検体検査オーダーだけを次の行で残り幅いっぱいに置く。 */
 .prescription-detail__common--lab {
   grid-template-columns: repeat(7, max-content) minmax(0, 1fr);
   column-gap: 24px;
 }
 
-.prescription-detail__common--lab dt:nth-of-type(8) {
+/* 報告区分から 2 行目に送り、報告の状態(報告区分・報告日時)を 1 か所で読ませる。 */
+.prescription-detail__common--lab dt:nth-of-type(4),
+.prescription-detail__common--lab dt:nth-of-type(6) {
   grid-column: 1;
 }
 
-.prescription-detail__common--lab dd:nth-of-type(8) {
+.prescription-detail__common--lab dd:nth-of-type(6) {
   grid-column: 2 / -1;
 }
 

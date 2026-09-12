@@ -236,7 +236,8 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
           <div className="prescription-detail">
             <fieldset>
               <legend>検査共通</legend>
-              {/* 短い項目を 4 組ずつ 2 行に並べ、長い検体検査オーダーだけを次の行に置く。 */}
+              {/* 採取日・入外区分・診療科を 1 行目に、報告の状態を 2 行目にまとめ、
+                  長い検体検査オーダーを次の行に置く。 */}
               <dl className="prescription-detail__common prescription-detail__common--lab">
                 <dt>検体採取日</dt>
                 <dd>{summary.date}</dd>
@@ -255,10 +256,6 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
                 </dd>
                 <dt>報告日時</dt>
                 <dd>{info?.issued || "-"}</dd>
-                <dt>実施施設</dt>
-                <dd>{info?.performer.organizationName || "-"}</dd>
-                <dt>実施者</dt>
-                <dd>{info?.performer.practitionerName || "-"}</dd>
                 <dt>検体検査オーダー</dt>
                 <dd>{summary.orderId ? orderLabel : "紐付けなし"}</dd>
               </dl>
