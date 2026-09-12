@@ -7728,6 +7728,12 @@ body.page-wide .app__main {
   max-width: none;
 }
 
+/* 列の多い編集画面(クリニカルパス定義)は、本文を既定の 960px より少しだけ広げる。
+   一覧のような全画面にはせず、表が横スクロールにならない幅で止める。 */
+body.page-wide-md .app__main {
+  max-width: 1200px;
+}
+
 /* 列を折り返さないぶん、画面が狭いと表がページからはみ出す。ページ全体を横に
    スクロールさせず、表の中だけで送れるようにする(.sticky-table-wrap)。
    横スクロールで患者を見失わないよう左の数列を、縦スクロールで列見出しを
@@ -13833,9 +13839,11 @@ button.meal-calendar__cell:hover {
   padding-bottom: 2px;
 }
 
+/* 観察項目とタスクは縦に積む。横に並べると 1 つあたりの幅が半分になり、
+   どちらの表も横スクロールになって読みにくいため。 */
 .pathway-unit__body {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
   margin-top: 8px;
 }
@@ -13854,12 +13862,6 @@ button.meal-calendar__cell:hover {
 
 .pathway-unit__block .lab-order-item__actions {
   margin-top: 4px;
-}
-
-@media (max-width: 1100px) {
-  .pathway-unit__body {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* 観察項目・タスクの行テーブル。 */
@@ -13913,15 +13915,27 @@ button.meal-calendar__cell:hover {
   padding: 2px 8px;
 }
 
-/* タスクのオーダー雛形。種別のラベル + 要約 + 編集・外す。 */
+/* タスクのオーダー雛形。種別のラベル + 要約 + 編集・外す。本文の幅に収めるため
+   列を広く取れないので、要約は入りきらなければ次の行へ送る(横スクロールを出さない)。 */
 .pathway-task__template {
   display: flex;
   align-items: center;
-  gap: 6px;
-  max-width: 300px;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  /* 列の幅を決め打ちにして、種別と要約が 1 行に並ぶようにする(操作は次の行)。 */
+  width: 264px;
+}
+
+/* 種別と要約で 1 行、操作(編集・外す)で 1 行。間に幅いっぱいの区切りを挟んで折り返す。 */
+.pathway-task__template::after {
+  content: "";
+  flex-basis: 100%;
+  height: 0;
+  order: 1;
 }
 
 .pathway-task__template button {
+  order: 2;
   font-size: 12px;
   padding: 2px 8px;
 }
@@ -13936,6 +13950,7 @@ button.meal-calendar__cell:hover {
 }
 
 .pathway-task__template-summary {
+  flex: 1 1 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

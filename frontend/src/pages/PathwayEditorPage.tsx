@@ -65,9 +65,10 @@ export function PathwayEditorPage() {
   const [picker, setPicker] = useState<Picker>(null);
   const update = makeFieldUpdater(setDraft);
 
+  // 病日 × OAT ユニットの表は列が多いので、本文の幅を既定より少し広げる。
   useEffect(() => {
-    document.body.classList.add("page-wide");
-    return () => document.body.classList.remove("page-wide");
+    document.body.classList.add("page-wide-md");
+    return () => document.body.classList.remove("page-wide-md");
   }, []);
 
   useEffect(() => {

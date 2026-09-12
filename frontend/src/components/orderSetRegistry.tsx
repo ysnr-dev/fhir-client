@@ -667,7 +667,13 @@ const mealOrder = defineOrderSetType<MealOrderFormValues, [string[], string[]]>(
     />
   ),
   emptyValues: () => emptyMealOrderForm(),
-  buildDoValues: (values) => buildDoMealOrderForm(values),
+  // 開始・終了の食(朝昼夕)はセットの中身なので保つ。DO(カルテからの複写)は当日の朝に
+  // 戻すが、「昼から五分粥」のような雛形はその指定に意味がある。
+  buildDoValues: (values) => ({
+    ...buildDoMealOrderForm(values),
+    startTiming: values.startTiming,
+    endTiming: values.endTiming,
+  }),
   settingOf: () => "inpatient",
   buildBundle: (values, _extra, { patientId, requester, defaultSetting, encounterId }) => ({
     bundle: buildMealOrderBundle(
