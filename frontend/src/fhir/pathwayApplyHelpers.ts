@@ -6,6 +6,7 @@ import type {
   PathwayTask,
 } from "../api/masterClient";
 import { addDays } from "../lib/dates";
+import { isHeaderEntry } from "./provenanceHelpers";
 
 // クリニカルパスの患者への適用(適用後パスデータ)の FHIR 構造。ePath(ePath R4 実装ガイド)の
 // 適用後パスデータ(EP12)に倣い、1 回の適用を CarePlan の木で表す。
@@ -92,6 +93,62 @@ export const PATHWAY_LEVEL_SYSTEM = "http://fhir-client.local/CodeSystem/pathway
 
 export type PathwayLevel = "apply" | "event" | "oat-unit" | "assessment";
 
+// ---- オーダーの印(オーダー雛形から出したオーダー) ----
+
+/** 1 回の適用で登録したオーダー群を束ねる識別子(ヘッダ ServiceRequest.identifier、値 = 適用 uuid)。 */
+export const PATHWAY_INSTANCE_SYSTEM = "http://fhir-client.local/Identifier/pathway-instance";
+/** どのパスから出したか(ヘッダ ServiceRequest の拡張、valueCoding.code = パスコード)。 */
+export const PATHWAY_LOCAL_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/pathway";
+export const PATHWAY_ORDER_EXT_URL = "http://fhir-client.local/StructureDefinition/pathway-order";
+
+/**
+ * 登録するオーダーのヘッダ(basedOn を持たない ServiceRequest)に、どのパスの適用から
+ * 出したかの印を焼く(オーダーセットの stampOrderSetInstance と同型)。requisition は
+ * 空いているときだけ入れる(注射の連日展開が先に使う)。
+ */
+export function stampPathwayOrders(
+  bundle: fhir4.Bundle,
+  pathway: { code: string; name: string },
+  applyKey: string,
+): fhir4.Bundle {
+  const identifier: fhir4.Identifier = { system: PATHWAY_INSTANCE_SYSTEM, value: applyKey };
+  const extension: fhir4.Extension = {
+    url: PATHWAY_ORDER_EXT_URL,
+    valueCoding: { system: PATHWAY_LOCAL_CODE_SYSTEM, code: pathway.code, display: pathway.name },
+  };
+  return {
+    ...bundle,
+    entry: (bundle.entry ?? []).map((entry) => {
+      if (!isHeaderEntry(entry)) return entry;
+      const sr = entry.resource;
+      return {
+        ...entry,
+        resource: {
+          ...sr,
+          identifier: [...(sr.identifier ?? []), identifier],
+          extension: [...(sr.extension ?? []), extension],
+          requisition: sr.requisition ?? identifier,
+        },
+      };
+    }),
+  };
+}
+
+/** オーダーがパスの適用から出たものなら、そのパスのコードと名前。 */
+export function pathwayOf(sr: fhir4.ServiceRequest): { code: string; name: string } | null {
+  const coding = sr.extension?.find((e) => e.url === PATHWAY_ORDER_EXT_URL)?.valueCoding;
+  if (!coding?.code) return null;
+  return { code: coding.code, name: coding.display ?? "" };
+}
+
+/** オーダー雛形の transaction Bundle から、ヘッダ(basedOn を持たない ServiceRequest)の fullUrl。 */
+export function orderHeaderUrlsOf(bundle: fhir4.Bundle): string[] {
+  return (bundle.entry ?? [])
+    .filter(isHeaderEntry)
+    .map((entry) => entry.fullUrl)
+    .filter((url): url is string => Boolean(url));
+}
+
 /** パス定義(backend のマスタ)を指す URI。レジメンと同じ形。 */
 export function pathwayInstantiatesUri(pathwayCode: string): string {
   return `http://fhir-client.local/pathway/${pathwayCode}`;
@@ -156,6 +213,11 @@ export interface PathwayApplyInput {
   applyKey?: string;
   /** パスが対象とする病名(Condition)への参照。適用画面で選んだものを渡す。 */
   conditionIds?: string[];
+  /**
+   * オーダー雛形から同じ transaction で登録するオーダーのヘッダ(task_key → fullUrl)。
+   * タスクの Procedure が basedOn でそのオーダーも指し、シートから実施の進み具合を辿れる。
+   */
+  orderHeaderUrls?: Map<string, string[]>;
 }
 
 function markerCategory(level: PathwayLevel): fhir4.CodeableConcept {
@@ -333,6 +395,7 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
             resource: buildTaskProcedure(task, {
               taskId: taskIdValue(assessmentId, task.task_key),
               assessmentUrl,
+              orderUrls: input.orderHeaderUrls?.get(task.task_key) ?? [],
               patientId,
               encounterId,
               date,
@@ -432,6 +495,8 @@ function buildTaskProcedure(
   ctx: {
     taskId: string;
     assessmentUrl: string;
+    /** 雛形から出したオーダーのヘッダ(同じ transaction の fullUrl)。 */
+    orderUrls: string[];
     patientId: string;
     encounterId?: string;
     date: string;
@@ -449,7 +514,9 @@ function buildTaskProcedure(
     },
     subject: { reference: `Patient/${ctx.patientId}` },
     ...(ctx.encounterId ? { encounter: { reference: `Encounter/${ctx.encounterId}` } } : {}),
-    basedOn: [reference(ctx.assessmentUrl)],
+    // 観察項目(計画)に加えて、雛形から出したオーダーも指す。参照の向きはタスク → オーダーの
+    // 一方向で、オーダー側にはパスの印(stampPathwayOrders)だけを焼く。
+    basedOn: [reference(ctx.assessmentUrl), ...ctx.orderUrls.map(reference)],
     extension: [{ url: PATHWAY_EXT.taskPlannedDateTime, valueDate: ctx.date }],
   };
 }
@@ -493,6 +560,8 @@ function codeExtension(resource: { extension?: fhir4.Extension[] }, url: string)
 export interface PathwayTaskRecord {
   id: string;
   taskKey: string;
+  /** 雛形から出したオーダー(ServiceRequest)の id。 */
+  orderIds: string[];
   name: string;
   categoryLv1: string;
   categoryLv2: string;
@@ -570,8 +639,9 @@ export function parsePathwayApplication(
 
   const tasksByAssessment = new Map<string, PathwayTaskRecord[]>();
   for (const procedure of procedures) {
-    const assessmentId = (procedure.basedOn ?? [])
-      .map((ref) => ref.reference?.split("/").pop())
+    const basedOn = procedure.basedOn ?? [];
+    const assessmentId = basedOn
+      .map((ref) => ref.reference?.match(/^CarePlan\/(.+)$/)?.[1])
       .find((id): id is string => Boolean(id));
     if (!assessmentId) continue;
     const taskId = identifierValue(procedure, PATHWAY_TASK_ID_SYSTEM);
@@ -579,6 +649,9 @@ export function parsePathwayApplication(
     rows.push({
       id: procedure.id ?? "",
       taskKey: taskId.split(".").pop() ?? "",
+      orderIds: basedOn
+        .map((ref) => ref.reference?.match(/^ServiceRequest\/(.+)$/)?.[1])
+        .filter((id): id is string => Boolean(id)),
       name: procedure.code?.text ?? "",
       categoryLv1:
         procedure.category?.coding?.find((c) => c.system === PATHWAY_CODE_SYSTEM.taskCategoryLv1)?.code ?? "",

@@ -14042,6 +14042,13 @@ button.meal-calendar__cell:hover {
   padding: 3px 8px;
 }
 
+/* 雛形の行に出す病日と日付。種別の後ろ、タスク名の前。 */
+.pathway-apply__task-day {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 /* ---- 化学療法(レジメンオーダー)(docs/chemo-regimen-design.md §7) ---- */
 
 /* 右ペインのレジメン選択。 */

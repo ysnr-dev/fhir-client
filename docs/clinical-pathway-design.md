@@ -189,6 +189,24 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
 - 雛形を持てる種別は `ORDER_SET_TYPES` の 6 種(処方・注射・検体検査・放射線検査・生理検査・処置)。食事・ケア・指導・安静度・
   手術・輸血・レジメンは第 1 段階ではチェックリスト項目。未対応の種別・新しい版の雛形は要約だけ出し、保存時にそのまま戻す。
 
+### 5.1 適用時の展開(第 2 段階)
+
+- 適用パネルの「オーダー」区画に、雛形を持つタスクを病日順に積む(オーダーセットの適用と同じ器: 既存のオーダー登録
+  フォームを `mode: "order"` で出し、`useStackedOrderForms` で外から submit する)。行の見出しは 種別 / 病日と日付 / タスク名 /
+  雛形の要約。既定は閉じていて、除外はチェックを外す。
+- 開始日は **入院日 + (病日 − 1)** を `bulkStartDate` で入れる(`pathwayEventDate`)。入院日を変えると追随する。予約必須の
+  項目は動かない(オーダーセットと同じ)。入外区分の初期値はパスの `setting`(DO と同じ正規化 `buildDoValues`)。
+  ［導出］雛形が外来で作られていると処方区分が空になるので、その行を開いて選び直す(オーダーセット §4.1 と同じ挙動)。
+- 検証に落ちた行があれば**何も登録しない**(その行を開いてスクロール)。
+- 登録は**計画の木 + オーダー + 来歴 2 件を 1 つの transaction**にまとめる(`mergeTransactionBundles`)。オーダーの来歴
+  (代行なら承認待ちの通知も)は `useWithOrderProvenance`、パスの来歴は適用の CarePlan を対象に 1 件。
+- ［決定］**印はオーダーセットと同型**(`stampPathwayOrders`): ヘッダ ServiceRequest に identifier `pathway-instance`
+  (値 = 適用 uuid)と拡張 `pathway-order`(valueCoding = パスコード・名前)、`requisition` は空いていれば同じ uuid。
+- ［決定］**タスクの Procedure が `basedOn` でオーダーのヘッダも指す**(観察項目の CarePlan に加えて)。参照の向きは
+  タスク → オーダーの一方向で、オーダー側には印だけ。シートはタスクからオーダーの id を辿り(`PathwayTaskRecord.orderIds`)、
+  オーダー側の DO・削除には影響しない。
+- 病名(`condition`)の雛形はタスクに置けない(オーダーセット専用)。
+
 ## 6. 画面
 
 - **一覧**(`pages/PathwayListPage.tsx`、`/pathways`): 名称・カナ / 診療科 / 入外 / 状態 / 有効期間内のみ で絞り込み、行クリックで編集へ。
@@ -217,7 +235,7 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
   - ［決定］**同じ入院に同じパスが進行中なら止める**(二重適用)。別のパスが進行中なら注意だけ出して通す(術後に別のパスへ
     移るなど、重なる運用はある)。
   - 登録は `useApplyPathway`(`api/queries.ts`)。来歴は適用の CarePlan を対象に 1 件(author = 依頼医師、enterer = ログイン本人)。
-    オーダー雛形の展開(第 2 段階のタスク 5)はまだで、CarePlan の木と未実施の Procedure だけを登録する。
+    雛形を持つタスクは「オーダー」区画に積み、同じ transaction で通常のオーダーとして登録する(§5.1)。
 
 ## 7. 適用の FHIR 構造(第 2 段階)
 
@@ -284,7 +302,7 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
     (オーダーセットの適用パネルと同じ器)。パスの印はオーダーセットの `stampOrderSetInstance` と同型で焼く。
   - カルテに「パス」タブ(病日 × OAT ユニットのシート)を足し、病日ごとにアウトカムの達成 / 未達成(バリアンス)・観察項目の実績値・
     タスクの実施 / 未実施を記録する。看護観察に結んだ観察項目は `nursingObservationInputSpec` で入力欄を出す。
-  - **適用の FHIR 構造(§7)と右ペインの適用パネル(§6)は実装済み(2026-09-12)**。残るのはオーダー雛形の展開、パスタブ、評価の記録。
+  - **適用の FHIR 構造(§7)・右ペインの適用パネル(§6)・オーダー雛形の展開(§5.1)は実装済み(2026-09-12)**。残るのはパスタブと評価の記録。
   - **上流の CarePlan / Goal は実装済み(2026-09-12、別リポジトリ `fhir-server`)**。JP Core にプロファイルが
     無い型なので HL7 基本定義 + 手書きバリデータで、`Goal.achievementStatus` は preferred 束縛のまま値を縛らない
     (ePath の 1 達成 / 2 未達成(バリアンス) / 3 未評価 がそのまま通る)。計画の木は `partOf` に**祖先すべて**を
@@ -303,6 +321,7 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
 - 第 2 段階(適用): `frontend/src/fhir/pathwayApplyHelpers.ts`(§7)、`components/PathwayApplyPanel.tsx`、
   `components/KarteRightPane.tsx`(`pathway-apply` と「クリニカルパス」ボタン)、`api/queries.ts`(`usePathwayApplications` /
   `usePatientPlannedAdmissions` / `useApplyPathway`)、`api/masterQueries.ts`(`useApplicablePathways`)、
+  `fhir/pathwayApplyHelpers.ts`(`stampPathwayOrders` / `pathwayOf` / `orderHeaderUrlsOf`)、
   `fhir/provenanceHelpers.ts`(`buildPathwayApplyProvenanceEntry`)、`fhir/conditionHelpers.ts`(`conditionManagementNumber`)、`App.css`(`.pathway-apply__*`)、
   backend `app/controllers/fhir_proxy_controller.rb` の許可リストに CarePlan / Goal、
   上流(別リポジトリ `fhir-server`)に CarePlan / Goal リソース一式
@@ -348,6 +367,20 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
   「このパスは同じ入院に適用済みです（2026-08-22 開始）」で止まる。
 - この適用(テスト太郎、入院 2026-08-22、CarePlan 76 + Procedure 50)は次段階(パスタブ・評価)の検証データとして残してある。
 
+### 9.4 検証したこと(オーダー雛形の展開、2026-09-12、テスト太郎)
+
+- 雛形付きの検証用パス 000009(1 泊 2 日: 病日 1 に検体検査「血算、HbA1c」とチェックリスト、病日 2 に処方「ガスター散２％」。
+  雛形の値は感冒セットのエントリから写した)を作って承認し、同じ入院に適用した。
+- 別のパスが進行中の注意が出て、通る。「オーダー」区画に 2 件が病日順に積まれ、開くと検体検査の検査日が 08-22、処方の投与開始日が
+  08-23(入院日 + 1)で入っている。
+- 雛形が外来で作られていたため処方区分が空で、「適用」→「「退院処方」のオーダーの入力を確認してください」で止まり、その行が開く。
+  区分を「退院」にして「適用」→ ペインが閉じる。
+- 上流: ヘッダ ServiceRequest 2 件に `pathway-instance` / `pathway-order`(000009)/ `requisition` が入り、occurrence が 08-22・08-23。
+  タスクの Procedure 3 件のうち雛形付き 2 件は basedOn が [CarePlan, ServiceRequest]、チェックリストの 1 件は [CarePlan]。
+  Provenance は適用の CarePlan に 1 件、オーダーに 1 件。カルテの 08-23 に退院処方のカードが出る。
+- 検証データは上流で削除(木・オーダー・明細・来歴を参照で辿って `Fhir::Repository.delete`)し、000009 も消した。
+  コンテナ内 `tsc -b` 成功。
+
 ## 10. 申し送り
 
 - BOM(Basic Outcome Master®)は日本クリニカルパス学会の知財で同梱しない。IG に載っている分類(G/H、19/34/37)と例示コードだけを候補に出す。
@@ -359,3 +392,5 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
   マスタ差し替え後はコードで引き直す(名前は自己修復するが廃止は分からない)。
 - 概要表のタスクは(大分類, 名称)でまとめるので、同じ名前で中分類が違うタスクは 1 行になる。
 - 削除の確認は `window.confirm`(他画面と同じ)。
+- パスの適用そのものの来歴には承認待ちの通知を付けていない(雛形から出したオーダーには通常どおり付く)。
+- 雛形から出したオーダーのカルテのカードに、パスの印(`pathwayOf`)はまだ出していない(オーダーセットの「セット名」バッジと同じく未実装)。

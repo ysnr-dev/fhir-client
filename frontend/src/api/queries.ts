@@ -8,6 +8,7 @@ import {
   useQuery,
   useQueryClient,
   type QueryClient,
+  type QueryKey,
 } from "@tanstack/react-query";
 import {
   groupVitalEntries,
@@ -11198,6 +11199,9 @@ export function usePatientPlannedAdmissions(patientId: string | undefined) {
 export function useApplyPathway() {
   const queryClient = useQueryClient();
   const enterer = useOrderEnterer();
+  // 雛形から出したオーダーが同じ Bundle に入るので、オーダーの来歴(代行なら承認待ちの通知も)
+  // を先に付ける。パスの来歴はその後ろ。
+  const withOrderProvenance = useWithOrderProvenance();
   return useMutation({
     mutationFn: ({
       bundle,
@@ -11207,17 +11211,24 @@ export function useApplyPathway() {
       bundle: fhir4.Bundle;
       applyFullUrl: string;
       requesterId: string;
+      /** 雛形から出したオーダーの種別が読み直すキー。 */
+      invalidate?: QueryKey[];
     }) => {
+      const withOrders = withOrderProvenance(bundle);
       const provenance =
         enterer && requesterId
           ? buildPathwayApplyProvenanceEntry(applyFullUrl, { reference: `Practitioner/${requesterId}` }, enterer)
           : null;
-      const withProvenance = provenance ? { ...bundle, entry: [...(bundle.entry ?? []), provenance] } : bundle;
+      const withProvenance = provenance
+        ? { ...withOrders, entry: [...(withOrders.entry ?? []), provenance] }
+        : withOrders;
       return postBundle(withProvenance);
     },
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       invalidatePathway(queryClient);
       invalidateProvenance(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      for (const key of variables.invalidate ?? []) queryClient.invalidateQueries({ queryKey: key });
     },
   });
 }

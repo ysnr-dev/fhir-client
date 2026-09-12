@@ -1,22 +1,37 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Pathway, PathwayDetail } from "../api/masterClient";
+import type { Pathway, PathwayDetail, PathwayTask } from "../api/masterClient";
 import { useApplicablePathways, usePathway } from "../api/masterQueries";
 import {
   useApplyPathway,
   useKarteConditions,
   usePathwayApplications,
+  usePatient,
   usePatientAdmission,
   usePatientPlannedAdmissions,
 } from "../api/queries";
 import { conditionManagementNumber, isActiveCondition, summarizeCondition } from "../fhir/conditionHelpers";
 import { encounterAdmissionDate, plannedAdmissionDate } from "../fhir/encounterHelpers";
-import { buildPathwayApplyBundle, pathwayEventDate } from "../fhir/pathwayApplyHelpers";
+import {
+  isOrderSetOrderType,
+  mergeTransactionBundles,
+  migrateEntryValues,
+  type OrderSetOrderType,
+} from "../fhir/orderSetHelpers";
+import {
+  buildPathwayApplyBundle,
+  orderHeaderUrlsOf,
+  pathwayEventDate,
+  stampPathwayOrders,
+} from "../fhir/pathwayApplyHelpers";
 import { PATHWAY_SETTING_OPTIONS, displayOfOption, eventDayLabel } from "../fhir/pathwayHelpers";
+import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useSelfInstitutionNumber } from "../hooks/useSelfInstitutionNumber";
+import { useStackedOrderForms } from "../hooks/useStackedOrderForms";
 import { useValidationError } from "../hooks/useValidationError";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
+import { ORDER_SET_TYPE_LABELS, ORDER_SET_TYPES } from "./orderSetRegistry";
 
 // カルテ右ペインの「パス」。承認済のクリニカルパスを選び、入院(または入院予定)と入院日を
 // 決めて適用する。適用は CarePlan の木と未実施のタスクを 1 transaction で登録する
@@ -88,8 +103,11 @@ function PathwayApplyLoader({
   onSaved: () => void;
 }) {
   const detail = usePathway(pathwayId);
+  // オーダー雛形のフォームは初回描画で初期値が決まるので、在院状況と患者が揃ってから積む。
+  const defaultSetting = useDefaultOrderSetting(patientId);
+  const { data: patientResult, isPending: patientPending } = usePatient(patientId);
 
-  if (detail.isPending) return <p>読み込み中...</p>;
+  if (detail.isPending || !defaultSetting.ready || patientPending) return <p>読み込み中...</p>;
   if (!detail.data) return <ErrorBanner error={detail.error} />;
 
   return (
@@ -100,9 +118,28 @@ function PathwayApplyLoader({
           ← パス選択
         </button>
       </div>
-      <PathwayApplyForm patientId={patientId} pathway={detail.data} onSaved={onSaved} />
+      <PathwayApplyForm
+        patientId={patientId}
+        pathway={detail.data}
+        defaultSetting={defaultSetting}
+        patient={patientResult?.data}
+        onSaved={onSaved}
+      />
     </>
   );
+}
+
+/** オーダー雛形を持つタスク 1 件ぶん(積むフォーム 1 つ)。 */
+interface TemplateEntry {
+  key: number;
+  task: PathwayTask;
+  elapsedDays: number;
+  dayLabel: string;
+  orderType: OrderSetOrderType;
+  initialValues: unknown;
+  unsupported: boolean;
+  included: boolean;
+  collapsed: boolean;
 }
 
 /** 適用先の候補(入院中の Encounter と入院予定)。 */
@@ -116,10 +153,14 @@ interface EncounterOption {
 function PathwayApplyForm({
   patientId,
   pathway,
+  defaultSetting,
+  patient,
   onSaved,
 }: {
   patientId: string;
   pathway: PathwayDetail;
+  defaultSetting: ReturnType<typeof useDefaultOrderSetting>;
+  patient?: fhir4.Patient;
   onSaved: () => void;
 }) {
   const admission = usePatientAdmission(patientId);
@@ -156,6 +197,49 @@ function PathwayApplyForm({
   const [admissionDate, setAdmissionDate] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [conditionIds, setConditionIds] = useState<string[] | null>(null);
+  const stack = useStackedOrderForms<number>();
+
+  const events = useMemo(
+    () => [...pathway.events].sort((a, b) => a.elapsed_days - b.elapsed_days || a.path_step - b.path_step),
+    [pathway.events],
+  );
+
+  // オーダー雛形を持つタスクを病日順に積む。初期値は DO と同じ正規化(日付は当日、
+  // 入外区分はパスのもの)で、開始日は後から病日の日付で上書きする(bulkStartDate)。
+  const initialTemplates = useMemo<TemplateEntry[]>(() => {
+    let key = 0;
+    return events.flatMap((event) =>
+      event.oat_units.flatMap((unit) =>
+        unit.tasks
+          .filter((task) => task.order_type)
+          .map((task) => {
+            const orderType = task.order_type && isOrderSetOrderType(task.order_type) ? task.order_type : null;
+            const def = orderType ? ORDER_SET_TYPES[orderType] : undefined;
+            const migrated = orderType
+              ? migrateEntryValues(orderType, task.order_schema_version ?? 1, task.order_values)
+              : { values: task.order_values, unsupported: true };
+            const unsupported = !def || migrated.unsupported;
+            return {
+              key: key++,
+              task,
+              elapsedDays: event.elapsed_days,
+              dayLabel: eventDayLabel(event.elapsed_days, event.title ?? ""),
+              orderType: orderType ?? "prescription",
+              initialValues: def && !unsupported ? def.buildDoValues(migrated.values, pathway.setting) : null,
+              unsupported,
+              included: !unsupported,
+              collapsed: true,
+            };
+          }),
+      ),
+    );
+  }, [events, pathway.setting]);
+  const [templates, setTemplates] = useState(initialTemplates);
+
+  function patchTemplate(key: number, changes: Partial<TemplateEntry>) {
+    setTemplates((prev) => prev.map((t) => (t.key === key ? { ...t, ...changes } : t)));
+  }
+  const anyOpen = templates.some((t) => !t.collapsed);
 
   // 入院中があればそれ、無ければ最初の入院予定を既定にする。入院日はその Encounter から入れる。
   useEffect(() => {
@@ -199,7 +283,6 @@ function PathwayApplyForm({
   const duplicate = activeOnEncounter.find((a) => a.pathwayCode === pathway.pathway_code);
   const others = activeOnEncounter.filter((a) => a.pathwayCode !== pathway.pathway_code);
 
-  const events = [...pathway.events].sort((a, b) => a.elapsed_days - b.elapsed_days || a.path_step - b.path_step);
   const unitCount = events.reduce((n, e) => n + e.oat_units.length, 0);
   const taskCount = events.reduce((n, e) => n + e.oat_units.reduce((m, u) => m + u.tasks.length, 0), 0);
 
@@ -218,7 +301,42 @@ function PathwayApplyForm({
     setValidationError(message);
     if (message) return;
 
-    const built = buildPathwayApplyBundle({
+    // 雛形のフォームを外から submit して値を集める。検証に落ちたら何も登録しない。
+    const included = templates.filter((t) => t.included && !t.unsupported);
+    const result = stack.submitAll(included.map((t) => t.key));
+    if (!result.ok) {
+      const failed = templates.find((t) => t.key === result.failedKey);
+      setValidationError(`「${failed?.task.name ?? ""}」のオーダーの入力を確認してください`);
+      if (failed) {
+        patchTemplate(failed.key, { collapsed: false });
+        stack.scrollTo(failed.key);
+      }
+      return;
+    }
+
+    const applyKey = crypto.randomUUID();
+    const orderBundles: fhir4.Bundle[] = [];
+    const invalidate = [];
+    const orderHeaderUrls = new Map<string, string[]>();
+    for (const entry of included) {
+      const def = ORDER_SET_TYPES[entry.orderType]!;
+      const submitted = result.collected.get(entry.key)!;
+      const built = def.buildBundle({
+        values: submitted.values,
+        extra: submitted.extra,
+        patientId,
+        requester,
+        defaultSetting,
+        patient,
+        // パスのタスクは病名を伴わない(プロブレム番号は使わない)。
+        allocateProblemNumber: () => 0,
+      });
+      orderBundles.push(built.bundle);
+      invalidate.push(...built.invalidate);
+      orderHeaderUrls.set(entry.task.task_key, orderHeaderUrlsOf(built.bundle));
+    }
+
+    const tree = buildPathwayApplyBundle({
       pathway,
       patientId,
       encounterId: encounterId || undefined,
@@ -226,12 +344,27 @@ function PathwayApplyForm({
       institutionNumber,
       adaptiveCriteriaConfirmed: confirmed,
       conditionIds: selectedConditionIds,
+      applyKey,
+      orderHeaderUrls,
     });
+    // 計画の木とオーダーを 1 つの transaction にまとめ、オーダーのヘッダにパスの印を焼く。
+    const bundle = stampPathwayOrders(
+      mergeTransactionBundles([tree.bundle, ...orderBundles]),
+      { code: pathway.pathway_code, name: pathway.name },
+      applyKey,
+    );
     apply.mutate(
-      { bundle: built.bundle, applyFullUrl: built.bundle.entry?.[0]?.fullUrl ?? "", requesterId: requester.practitionerId },
+      {
+        bundle,
+        applyFullUrl: tree.bundle.entry?.[0]?.fullUrl ?? "",
+        requesterId: requester.practitionerId,
+        invalidate,
+      },
       { onSuccess: onSaved },
     );
   }
+
+  const includedTemplateCount = templates.filter((t) => t.included && !t.unsupported).length;
 
   return (
     <div className="pathway-apply">
@@ -345,9 +478,84 @@ function PathwayApplyForm({
         </table>
       </fieldset>
 
+      {templates.length > 0 && (
+        <fieldset className="regimen-apply__fields">
+          <legend>オーダー</legend>
+          <div className="order-set-apply__head">
+            <span className="regimen-apply__step-meta">{`${includedTemplateCount} / ${templates.length} 件`}</span>
+            <button
+              type="button"
+              className="order-set-apply__toggle"
+              onClick={() => setTemplates((prev) => prev.map((t) => ({ ...t, collapsed: anyOpen })))}
+            >
+              {anyOpen ? "すべて閉じる" : "すべて開く"}
+            </button>
+          </div>
+          <div className="order-set-stack">
+            {templates.map((entry) => {
+              const def = ORDER_SET_TYPES[entry.orderType];
+              const date = admissionDate ? pathwayEventDate(admissionDate, entry.elapsedDays) : "";
+              return (
+                <section
+                  className={`order-set-stack__item${entry.included ? "" : " order-set-stack__item--excluded"}`}
+                  key={entry.key}
+                >
+                  <div className="order-set-stack__head">
+                    <button
+                      type="button"
+                      className="schema-master__cat-toggle"
+                      aria-label={entry.collapsed ? "展開" : "折りたたむ"}
+                      onClick={() => patchTemplate(entry.key, { collapsed: !entry.collapsed })}
+                    >
+                      {entry.collapsed ? "▶" : "▼"}
+                    </button>
+                    <label className="dose-conversion__checkbox order-set-stack__include">
+                      <input
+                        type="checkbox"
+                        checked={entry.included}
+                        disabled={entry.unsupported}
+                        onChange={(e) => patchTemplate(entry.key, { included: e.target.checked })}
+                      />
+                      <span className="order-set-stack__type">{ORDER_SET_TYPE_LABELS[entry.orderType]}</span>
+                    </label>
+                    <span className="pathway-apply__task-day">{`${entry.dayLabel}${date ? ` ${date}` : ""}`}</span>
+                    <span className="order-set-stack__label">
+                      {entry.task.name}
+                      {entry.task.order_label && (
+                        <span className="lab-order-item__code">{entry.task.order_label}</span>
+                      )}
+                    </span>
+                  </div>
+                  {/* 除外・折りたたみはアンマウントせず隠すだけ(入力中の値を保つ)。 */}
+                  <div
+                    className="order-set-stack__body"
+                    ref={stack.registerContainer(entry.key)}
+                    hidden={entry.collapsed || !entry.included}
+                  >
+                    {entry.unsupported || !def ? (
+                      <p className="order-set-stack__unsupported">この種別はパスからの登録にまだ対応していません。</p>
+                    ) : (
+                      def.renderForm({
+                        patientId,
+                        initialValues: entry.initialValues,
+                        onSubmit: (values, ...extra) => stack.collect(entry.key, values, ...extra),
+                        submitting: apply.isPending,
+                        mode: "order",
+                        bulkStartDate: date || undefined,
+                        conditions,
+                      })
+                    )}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
+
       <div className="lab-order-item__actions">
         <button type="button" onClick={handleApply} disabled={apply.isPending}>
-          適用
+          {apply.isPending ? "送信中..." : includedTemplateCount > 0 ? `適用(オーダー ${includedTemplateCount} 件)` : "適用"}
         </button>
       </div>
     </div>
