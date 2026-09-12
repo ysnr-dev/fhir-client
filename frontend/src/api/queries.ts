@@ -29,6 +29,7 @@ import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeli
 import {
   buildActivityProvenanceEntry,
   buildOrderProvenanceEntry,
+  buildPathwayApplyProvenanceEntry,
   buildReviewProvenance,
   latestReview,
   provenancesOf,
@@ -37,6 +38,12 @@ import {
   type OrderEnterer,
 } from "../fhir/provenanceHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
+import {
+  PATHWAY_APPLY_ID_SYSTEM,
+  PATHWAY_MARKER_CODE,
+  PATHWAY_MARKER_SYSTEM,
+  pathwayInstantiatesUri,
+} from "../fhir/pathwayApplyHelpers";
 import { useCurrentPractitioner } from "./authQueries";
 import { nowFhirDateTime, today } from "../lib/dates";
 import {
@@ -11097,6 +11104,119 @@ export function useUpdateRegimenStatus() {
     },
     onSuccess: () => {
       invalidateRegimen(queryClient);
+      invalidateProvenance(queryClient);
+    },
+  });
+}
+
+// ---- クリニカルパスの適用(docs/clinical-pathway-design.md §7) ----
+
+function invalidatePathway(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["CarePlan"] });
+  queryClient.invalidateQueries({ queryKey: ["Procedure"] });
+}
+
+/** 患者のパス適用(木の根)の一覧に出す要約。 */
+export interface PathwayApplicationSummary {
+  id: string;
+  applyId: string;
+  title: string;
+  status: string;
+  pathwayCode: string;
+  encounterId: string;
+  periodStart: string;
+  periodEnd: string;
+}
+
+function summarizePathwayApplication(carePlan: fhir4.CarePlan): PathwayApplicationSummary {
+  const prefix = pathwayInstantiatesUri("");
+  const uri = carePlan.instantiatesUri?.find((u) => u.startsWith(prefix)) ?? "";
+  return {
+    id: carePlan.id ?? "",
+    applyId: carePlan.identifier?.find((i) => i.system === PATHWAY_APPLY_ID_SYSTEM)?.value ?? "",
+    title: carePlan.title ?? "",
+    status: carePlan.status,
+    pathwayCode: uri.slice(prefix.length),
+    encounterId: carePlan.encounter?.reference?.split("/").pop() ?? "",
+    periodStart: carePlan.period?.start ?? "",
+    periodEnd: carePlan.period?.end ?? "",
+  };
+}
+
+/**
+ * 患者に適用したクリニカルパス(木の根だけ)。子孫は partOf に根を持つので
+ * `part-of:missing=true` で根だけが引ける。開始日の新しい順。
+ */
+export function usePathwayApplications(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("category", `${PATHWAY_MARKER_SYSTEM}|${PATHWAY_MARKER_CODE}`);
+  params.set("part-of:missing", "true");
+  params.set("_sort", "-date");
+  params.set("_count", "50");
+
+  return useQuery({
+    queryKey: ["CarePlan", "search", "pathway-applications", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.CarePlan>("CarePlan", params);
+      const roots =
+        bundle.entry
+          ?.map((e) => e.resource)
+          .filter((r): r is fhir4.CarePlan => r?.resourceType === "CarePlan") ?? [];
+      return { roots, applications: roots.map(summarizePathwayApplication) };
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/** 患者の入院予定(status=planned)。パスの適用先の候補にする(日付未定のものも含む)。 */
+export function usePatientPlannedAdmissions(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("status", PLANNED_STATUS);
+  params.set("class", ADMISSION_CLASS_CODE);
+  params.set("_count", "10");
+
+  return useQuery({
+    queryKey: ["Encounter", "patient-planned-admissions", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
+      return sortPlannedAdmissions(
+        bundle.entry
+          ?.map((e) => e.resource)
+          .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter") ?? [],
+      );
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * パスを適用する(CarePlan の木と未実施のタスクを 1 transaction で登録)。来歴は適用の
+ * CarePlan(木の根)を対象に 1 件。指示医師はオーダーのヘッダが無いので呼ぶ側が渡す。
+ */
+export function useApplyPathway() {
+  const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
+  return useMutation({
+    mutationFn: ({
+      bundle,
+      applyFullUrl,
+      requesterId,
+    }: {
+      bundle: fhir4.Bundle;
+      applyFullUrl: string;
+      requesterId: string;
+    }) => {
+      const provenance =
+        enterer && requesterId
+          ? buildPathwayApplyProvenanceEntry(applyFullUrl, { reference: `Practitioner/${requesterId}` }, enterer)
+          : null;
+      const withProvenance = provenance ? { ...bundle, entry: [...(bundle.entry ?? []), provenance] } : bundle;
+      return postBundle(withProvenance);
+    },
+    onSuccess: () => {
+      invalidatePathway(queryClient);
       invalidateProvenance(queryClient);
     },
   });

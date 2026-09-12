@@ -6132,7 +6132,8 @@ body.karte-wide {
    1 つずつが薄くなって押しにくくなる。 */
 .karte-right__actions button {
   font-size: 13px;
-  padding: 6px 12px;
+  /* 列の幅はいちばん長いラベル(クリニカルパス)で決まるので、左右の余白は詰める。 */
+  padding: 6px 7px;
   justify-content: center;
   flex: none;
 }
@@ -14012,6 +14013,33 @@ button.meal-calendar__cell:hover {
 
 .pathway-template-modal__form {
   margin-bottom: 8px;
+}
+
+/* カルテ右ペインのパス適用(PathwayApplyPanel)。区画はレジメン適用と同じ見た目。 */
+.pathway-apply__criteria {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.pathway-apply__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.pathway-apply__conditions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pathway-apply__days th,
+.pathway-apply__days td {
+  font-size: 13px;
+  padding: 3px 8px;
 }
 
 /* ---- 化学療法(レジメンオーダー)(docs/chemo-regimen-design.md §7) ---- */

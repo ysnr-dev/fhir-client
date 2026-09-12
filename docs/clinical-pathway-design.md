@@ -206,6 +206,18 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
     どの日に何が載るかを ● で示す。
   - 運用(状態 / 承認日・承認者 / 有効期間 / 表示順)は凍結中も動かせる。承認済・廃止では内容の fieldset を disabled にする。
   - 複製は保存済みの内容をサーバー側で写す(新しいコード・下書き・`copied_from_code`、uuid はそのまま)。削除は下書きだけ。
+- **適用パネル**(`components/PathwayApplyPanel.tsx`、カルテ右ペインの「クリニカルパス」ボタン、`KartePaneState` の `pathway-apply`):
+  承認済で有効期間内のパスを名前で探して選ぶ(レジメン適用と同じ picker)。
+  - 適用先は入院中の Encounter か入院予定(`usePatientAdmission` / `usePatientPlannedAdmissions`)。既定は入院中、無ければ最初の
+    入院予定で、入院日(病日 1)はその Encounter から入れる(予定で日付未定なら当日)。「指定しない」で日付だけの適用もできる。
+  - 適応基準の文をそのまま出し、「適応基準を確認した」のチェックが無いと適用できない(ePath の適応基準確認区分 = 1 で記録)。
+  - 対象病名は患者の継続中の病名から選ぶ。パスの対象病名(管理番号)と一致するものは既定でチェックし「対象病名」の印を付ける。
+    `CarePlan.addresses` に入る。
+  - 予定の要約(病日・OAT ユニット・タスクの数)と、病日 → 日付の表を出す(入院日を変えると追随)。
+  - ［決定］**同じ入院に同じパスが進行中なら止める**(二重適用)。別のパスが進行中なら注意だけ出して通す(術後に別のパスへ
+    移るなど、重なる運用はある)。
+  - 登録は `useApplyPathway`(`api/queries.ts`)。来歴は適用の CarePlan を対象に 1 件(author = 依頼医師、enterer = ログイン本人)。
+    オーダー雛形の展開(第 2 段階のタスク 5)はまだで、CarePlan の木と未実施の Procedure だけを登録する。
 
 ## 7. 適用の FHIR 構造(第 2 段階)
 
@@ -272,7 +284,7 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
     (オーダーセットの適用パネルと同じ器)。パスの印はオーダーセットの `stampOrderSetInstance` と同型で焼く。
   - カルテに「パス」タブ(病日 × OAT ユニットのシート)を足し、病日ごとにアウトカムの達成 / 未達成(バリアンス)・観察項目の実績値・
     タスクの実施 / 未実施を記録する。看護観察に結んだ観察項目は `nursingObservationInputSpec` で入力欄を出す。
-  - **適用の FHIR 構造(§7)は実装済み(2026-09-12、`fhir/pathwayApplyHelpers.ts`)**。残るのは画面(適用パネル・パスタブ)と評価の記録。
+  - **適用の FHIR 構造(§7)と右ペインの適用パネル(§6)は実装済み(2026-09-12)**。残るのはオーダー雛形の展開、パスタブ、評価の記録。
   - **上流の CarePlan / Goal は実装済み(2026-09-12、別リポジトリ `fhir-server`)**。JP Core にプロファイルが
     無い型なので HL7 基本定義 + 手書きバリデータで、`Goal.achievementStatus` は preferred 束縛のまま値を縛らない
     (ePath の 1 達成 / 2 未達成(バリアンス) / 3 未評価 がそのまま通る)。計画の木は `partOf` に**祖先すべて**を
@@ -288,7 +300,10 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
   `app/controllers/master/pathways_controller.rb`(index / show / create / update / copy / destroy)、`config/routes.rb`、
   `db/seed_data/pathways/900001.json`(腹腔鏡下胆嚢摘出術 4 泊 5 日、病日 5・OAT ユニット 14・観察項目 43・タスク 50)と `db/seeds.rb` の節、
   `spec/requests/master/pathways_spec.rb`(19 件)
-- 第 2 段階(適用の FHIR 構造): `frontend/src/fhir/pathwayApplyHelpers.ts`(§7)、
+- 第 2 段階(適用): `frontend/src/fhir/pathwayApplyHelpers.ts`(§7)、`components/PathwayApplyPanel.tsx`、
+  `components/KarteRightPane.tsx`(`pathway-apply` と「クリニカルパス」ボタン)、`api/queries.ts`(`usePathwayApplications` /
+  `usePatientPlannedAdmissions` / `useApplyPathway`)、`api/masterQueries.ts`(`useApplicablePathways`)、
+  `fhir/provenanceHelpers.ts`(`buildPathwayApplyProvenanceEntry`)、`fhir/conditionHelpers.ts`(`conditionManagementNumber`)、`App.css`(`.pathway-apply__*`)、
   backend `app/controllers/fhir_proxy_controller.rb` の許可リストに CarePlan / Goal、
   上流(別リポジトリ `fhir-server`)に CarePlan / Goal リソース一式
 - frontend: `api/masterClient.ts` / `api/masterQueries.ts`(クリニカルパス節)、`fhir/pathwayHelpers.ts`(選択肢・draft ⇔ API・検証・概要表)、
@@ -322,6 +337,16 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
   `category=oat-unit` で 14 件、`category=assessment` + `_revinclude=Procedure:based-on` で 106 件(観察項目 56 + タスク 50)。
 - `parsePathwayApplication` に読み戻すと、病日 5 件が病日順に並び、各 OAT ユニットの重要フラグ・観察項目・タスクまで復元される。
 - 検証データは 126 件すべて削除した(上流に残るのは削除済みの行だけ)。コンテナ内 `tsc -b` 成功。
+
+### 9.3 検証したこと(適用パネル、2026-09-12、テスト太郎)
+
+- seed の 900001 を承認済にした(開発環境ではこのパスだけが適用の候補)。
+- カルテ右ペイン「クリニカルパス」→ 名前で検索して 900001 を選択 → 適用先に「入院中（2026-08-22 入院）」が既定で入り、入院日が
+  2026-08-22 になる。適応基準の文、継続中の病名 5 件(対象病名に一致するものは無い)、病日 5 日分の日付表が出る。
+- 未確認のまま「適用」→「適応基準を確認してください」。確認して「適用」→ ペインが閉じ、上流に適用 1 件 + 子孫 75 件、
+  Provenance(CREATE、author = 児玉 義憲、enterer = 児玉 義憲)。もう一度同じパスを同じ入院に適用 →
+  「このパスは同じ入院に適用済みです（2026-08-22 開始）」で止まる。
+- この適用(テスト太郎、入院 2026-08-22、CarePlan 76 + Procedure 50)は次段階(パスタブ・評価)の検証データとして残してある。
 
 ## 10. 申し送り
 

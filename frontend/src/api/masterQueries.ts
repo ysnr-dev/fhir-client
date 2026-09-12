@@ -4252,6 +4252,15 @@ export function usePathway(idOrCode: number | string | null) {
   });
 }
 
+/** 適用の候補にするパス(承認済かつ有効期間内)。 */
+export function useApplicablePathways(name: string) {
+  return useQuery({
+    queryKey: [...PATHWAYS_KEY, "applicable", name],
+    queryFn: () => searchPathways({ name, status: "approved", active: true, per: 100 }),
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function usePathwayMutations() {
   const queryClient = useQueryClient();
   const invalidate = () => {

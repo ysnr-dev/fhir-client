@@ -30,6 +30,7 @@ import {
 import { VitalCreatePanel, VitalEditPanel } from "./VitalPanels";
 import { PlannedAdmissionCreatePanel } from "./PlannedAdmissionPanel";
 import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
+import { PathwayApplyPanel } from "./PathwayApplyPanel";
 import { RegimenApplyPanel } from "./RegimenApplyPanel";
 import { RegimenCycleLoader, RegimenDayPanel, RegimenHeaderPanel } from "./RegimenPanels";
 import { RegimenAdverseEventPanel } from "./RegimenAdverseEventPanel";
@@ -90,6 +91,8 @@ export type KartePaneState =
   | { kind: "order-set"; setId?: number; problem?: ProblemRef }
   // 化学療法レジメンの適用。regimenId 未指定はレジメン選択の状態。
   | { kind: "regimen-apply"; regimenId?: number; problem?: ProblemRef }
+  // クリニカルパスの適用。pathwayId 未指定はパス選択の状態。
+  | { kind: "pathway-apply"; pathwayId?: number }
   // 適用済みレジメンへの次クールの登録。regimenSrId はヘッダ ServiceRequest。
   | { kind: "regimen-cycle"; regimenSrId: string }
   // 暦の 1 日(その日のオーダーの編集・移動・中止)。
@@ -144,6 +147,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "planned-admission-create": "入院予定登録",
   "order-set": "セット適用",
   "regimen-apply": "化学療法(レジメン適用)",
+  "pathway-apply": "クリニカルパス(適用)",
   "regimen-cycle": "化学療法(クール登録)",
   "regimen-day": "化学療法(投与日)",
   "regimen-adverse": "化学療法(有害事象)",
@@ -183,6 +187,8 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.setId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "regimen-apply":
       return `${state.kind}:${state.regimenId ?? ""}:${state.problem?.conditionId ?? ""}`;
+    case "pathway-apply":
+      return `${state.kind}:${state.pathwayId ?? ""}`;
     case "regimen-cycle":
       return `${state.kind}:${state.regimenSrId}`;
     case "regimen-day":
@@ -323,6 +329,10 @@ export function KarteRightPane({
         >
           化学療法
         </button>
+        {/* クリニカルパスの適用。入院の計画そのものなので、化学療法の隣に置く。 */}
+        <button type="button" onClick={() => onStateChange({ kind: "pathway-apply" })}>
+          クリニカルパス
+        </button>
         <button
           type="button"
           onClick={() => onStateChange({ kind: "lab-order-create", problem: selectedProblem })}
@@ -449,6 +459,16 @@ function PaneContent({
           defaultProblem={state.problem}
           onSelectRegimen={(regimenId) => onStateChange({ ...state, regimenId })}
           onBack={() => onStateChange({ ...state, regimenId: undefined })}
+          onSaved={onSaved}
+        />
+      );
+    case "pathway-apply":
+      return (
+        <PathwayApplyPanel
+          patientId={patientId}
+          pathwayId={state.pathwayId}
+          onSelectPathway={(pathwayId) => onStateChange({ ...state, pathwayId })}
+          onBack={() => onStateChange({ ...state, pathwayId: undefined })}
           onSaved={onSaved}
         />
       );
