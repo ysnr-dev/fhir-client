@@ -24,6 +24,7 @@ import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { NursingPerformModal } from "./NursingPerformModal";
+import { PathwayClosePanel } from "./PathwayClosePanel";
 import { PathwayEvaluatePanel } from "./PathwayEvaluatePanel";
 import { PathwayOrderModal } from "./PathwayOrderModal";
 import { PathwayTaskPanel } from "./PathwayTaskPanel";
@@ -87,6 +88,8 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
   const [modalTaskId, setModalTaskId] = useState<string | null>(null);
   // オーダーを結んだタスクの詳細。看護指示だけは詳細ではなく実施入力を開く(指示簿と同じ画面)。
   const [modalOrder, setModalOrder] = useState<{ order: fhir4.ServiceRequest; kind: PathwayOrderKind } | null>(null);
+  // パスの終了・中止。見出しの帯から開く。
+  const [closeOpen, setCloseOpen] = useState(false);
   const [nursingPerform, setNursingPerform] = useState<{ orders: fhir4.ServiceRequest[]; date: string } | null>(null);
   const nursingPerforms = useNursingPerformsOn(nursingPerform?.date ?? "", nursingPerform ? [patientId] : []);
   // 詳細に出す対象プロブレムの名前。カルテのカードから開く詳細と同じものを渡す。
@@ -152,9 +155,13 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
   // Escape は重なりの外側から閉じる(モーダル → 全画面)。Modal は自分では Escape を
   // 見ないので、モーダルを開いている間は全画面でなくてもここで拾う。
   useEffect(() => {
-    if (!fullscreen && !nursingPerform && !modalOrder && !modalUnitId && !modalTaskId) return;
+    if (!fullscreen && !nursingPerform && !modalOrder && !modalUnitId && !modalTaskId && !closeOpen) return;
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      if (closeOpen) {
+        setCloseOpen(false);
+        return;
+      }
       // オーダー詳細を開いている間は、その中の実施入力から順に閉じたいので
       // PathwayOrderModal 側に任せる(こちらは何もしない)。
       if (modalOrder) return;
@@ -167,7 +174,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
     return () => window.removeEventListener("keydown", handleKeyDown);
     // updateView は毎描画で作り直されるが、押した時点の選択で戻せればよい。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen, modalUnitId, modalTaskId, modalOrder, nursingPerform]);
+  }, [fullscreen, modalUnitId, modalTaskId, modalOrder, nursingPerform, closeOpen]);
 
   return (
     <div
@@ -231,7 +238,11 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
             </span>
             <span className={`regimen-status regimen-status--${application.status === "active" ? "approved" : "retired"}`}>
               {pathwayStatusLabel(application.status)}
+              {application.periodEnd && ` ${application.periodEnd}`}
             </span>
+            <button type="button" className="pathway-sheet__close-button" onClick={() => setCloseOpen(true)}>
+              {application.status === "active" ? "終了・中止" : "終了の記録"}
+            </button>
           </div>
 
           <div className="lab-timeline__table-wrap pathway-sheet__wrap">
@@ -411,6 +422,17 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
             procedureId={modalTaskId}
             onSaved={() => setModalTaskId(null)}
           />
+        </Modal>
+      )}
+
+      {/* パスの終了・中止。 */}
+      {closeOpen && application && (
+        <Modal
+          title="クリニカルパス(終了・中止)"
+          className="modal--wide pathway-evaluate-modal"
+          onClose={() => setCloseOpen(false)}
+        >
+          <PathwayClosePanel patientId={patientId} applyId={application.id} onSaved={() => setCloseOpen(false)} />
         </Modal>
       )}
 

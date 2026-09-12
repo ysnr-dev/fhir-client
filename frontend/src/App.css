@@ -14317,6 +14317,13 @@ button.meal-calendar__cell:hover {
   font-weight: 600;
 }
 
+/* 見出しの帯に置く「終了・中止」。帯の文字に合わせて小さくする。 */
+.pathway-sheet__close-button {
+  --control-height: 24px;
+  font-size: 12px;
+  padding: 0 10px;
+}
+
 /* シートに重ねる評価入力・タスクの実施入力。縦に長いときはモーダルの中だけ送る。 */
 .pathway-evaluate-modal {
   box-sizing: border-box;

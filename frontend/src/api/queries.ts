@@ -47,6 +47,7 @@ import {
   pathwayInstantiatesUri,
   type PathwayApplicationRecord,
 } from "../fhir/pathwayApplyHelpers";
+import { PATHWAY_APPLY_GOAL_ID_SYSTEM } from "../fhir/pathwayCloseHelpers";
 import { useCurrentPractitioner } from "./authQueries";
 import { nowFhirDateTime, today } from "../lib/dates";
 import {
@@ -11169,6 +11170,38 @@ export function usePathwayApplications(patientId: string | undefined) {
       return { roots, applications: roots.map(summarizePathwayApplication) };
     },
     enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * パス適用の Goal(終了・中止)。適用の識別子と同じ値を apply-goal-id で持つので、
+ * identifier の 1 回の検索で引ける(木の検索には根が入らないため別に引く)。
+ */
+export function usePathwayApplyGoal(applyId: string | undefined) {
+  const params = new URLSearchParams();
+  if (applyId) params.set("identifier", `${PATHWAY_APPLY_GOAL_ID_SYSTEM}|${applyId}`);
+
+  return useQuery({
+    queryKey: ["Goal", "search", "pathway-apply", applyId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Goal>("Goal", params);
+      return (
+        bundle.entry?.map((e) => e.resource).find((r): r is fhir4.Goal => r?.resourceType === "Goal") ?? null
+      );
+    },
+    enabled: Boolean(applyId),
+  });
+}
+
+/** パスの終了・中止(適用の CarePlan と Goal)。 */
+export function useClosePathway() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      invalidatePathway(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["Goal"] });
+    },
   });
 }
 
