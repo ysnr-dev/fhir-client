@@ -13317,6 +13317,13 @@ button.meal-calendar__cell:hover {
   gap: 10px;
 }
 
+/* 積んだオーダーフォームは通常のオーダー画面と同じ 15px の入力欄。クリニカルパスの
+   適用パネルは区画(.regimen-apply__fields)の詰まった高さ(30px)の中に積むので、
+   そのままだと選択欄の文字の下が切れる。フォームの中だけ標準の高さに戻す。 */
+.order-set-stack .prescription-form {
+  --control-height: 34px;
+}
+
 .order-set-stack__item {
   border: 1px solid var(--border);
   border-radius: 6px;
