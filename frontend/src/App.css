@@ -14049,6 +14049,192 @@ button.meal-calendar__cell:hover {
   white-space: nowrap;
 }
 
+/* ---- パスシート(カルテのパスタブ、KartePathwayTab) ---- */
+
+.pathway-sheet {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 全画面。経過表(.vital-flowsheet--fullscreen)と同じ枠。 */
+.pathway-sheet--fullscreen {
+  position: fixed;
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
+  z-index: 100;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  padding: 12px;
+  overflow: hidden;
+}
+
+.pathway-sheet .karte-tabpanel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pathway-sheet__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.pathway-sheet__name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.pathway-sheet__wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  margin-bottom: 0;
+}
+
+.pathway-sheet__table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* 行の見出し列は左に貼り付ける。幅は決め打ち(sticky の left は手前の列幅でしか決まらない)。 */
+.pathway-sheet__table .pathway-sheet__label-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  text-align: left;
+  background: var(--bg);
+  box-shadow: inset -1px 0 0 var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pathway-sheet--fullscreen .pathway-sheet__table .pathway-sheet__label-col {
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+}
+
+.pathway-sheet__table thead th {
+  z-index: 3;
+}
+
+.pathway-sheet__table th,
+.pathway-sheet__table td {
+  padding: 3px 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--border);
+  box-shadow: inset -1px 0 0 var(--border);
+  white-space: nowrap;
+}
+
+.pathway-sheet__table th.pathway-sheet__day,
+.pathway-sheet__table td.pathway-sheet__cell {
+  width: var(--pathway-sheet-col-w);
+  min-width: var(--pathway-sheet-col-w);
+  text-align: center;
+}
+
+.pathway-sheet__day-no {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.pathway-sheet__day-title {
+  display: block;
+  font-weight: normal;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pathway-sheet__day-date {
+  font-weight: normal;
+  font-size: 12px;
+}
+
+.pathway-sheet__day--today {
+  background: var(--accent-bg);
+}
+
+.pathway-sheet__day--past {
+  color: var(--text-muted);
+}
+
+/* 末尾の空列で幅の端数を吸収する(経過表と同じ)。 */
+.pathway-sheet__filler {
+  width: auto;
+  box-shadow: none;
+}
+
+/* OAT ユニットの行は見出し。観察項目・タスクはその下に字下げ。 */
+.pathway-sheet__row--unit th.pathway-sheet__label-col {
+  font-weight: 600;
+  background: var(--surface-panel);
+}
+
+:root[data-theme="dark"] .pathway-sheet__row--unit th.pathway-sheet__label-col {
+  background: var(--surface-card);
+}
+
+.pathway-sheet__row--unit td {
+  background: var(--surface-stripe);
+}
+
+.pathway-sheet__row--assessment .pathway-sheet__label,
+.pathway-sheet__row--task .pathway-sheet__label {
+  padding-left: 12px;
+  font-weight: normal;
+}
+
+.pathway-sheet__row--task .pathway-task__template-label {
+  margin-left: 12px;
+  margin-right: 4px;
+}
+
+.pathway-sheet__row--task .pathway-sheet__label {
+  padding-left: 0;
+}
+
+.pathway-sheet__critical {
+  color: #e0687a;
+  margin-right: 4px;
+}
+
+.pathway-sheet__outcome--pending,
+.pathway-sheet__planned {
+  color: var(--text-muted);
+}
+
+.pathway-sheet__task {
+  font-size: 15px;
+}
+
+.pathway-sheet__task--done {
+  color: var(--accent);
+}
+
+.pathway-sheet__order,
+.pathway-sheet__unplanned {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* ---- 化学療法(レジメンオーダー)(docs/chemo-regimen-design.md §7) ---- */
 
 /* 右ペインのレジメン選択。 */

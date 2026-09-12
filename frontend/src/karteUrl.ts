@@ -49,6 +49,8 @@ export const KARTE_TABS = [
   { key: "meal", label: "食事" },
   // 化学療法。レジメンの投与スケジュールは日付の器(暦)で見る(食事と同じ考え方)。
   { key: "chemo", label: "化学療法" },
+  // クリニカルパス。適用したパスを病日 × OAT ユニットのシートで見る(紙のパスシートの形)。
+  { key: "pathway", label: "パス" },
   // 看護指示(指示簿)。「今なにが有効か」を区分ごとに見る情報なので、時系列の
   // カードにはせずタブでのみ見る。
   { key: "nursing", label: "指示簿" },
@@ -166,6 +168,27 @@ export function formatFlowsheetView(view: FlowsheetView, today: string): string 
     view.day ? `/${view.day}` : "",
     view.fullscreen ? "!" : "",
   ].join("");
+}
+
+// ---- パスシートの表示状態 ----
+//
+// 形は「適用の id[!]」。適用が複数ある入院でどれを見ているかと、全画面かどうか
+// (経過表と同じ末尾の「!」)。既定(最初の適用・全画面でない)なら view を落とす。
+
+export interface PathwaySheetView {
+  applyId?: string;
+  fullscreen?: boolean;
+}
+
+export function parsePathwaySheetView(value: string | undefined): PathwaySheetView {
+  const match = /^([^!]*)(!)?$/.exec(value ?? "");
+  if (!match) return {};
+  return { applyId: match[1] || undefined, fullscreen: Boolean(match[2]) };
+}
+
+export function formatPathwaySheetView(view: PathwaySheetView): string | null {
+  if (!view.applyId && !view.fullscreen) return null;
+  return `${view.applyId ?? ""}${view.fullscreen ? "!" : ""}`;
 }
 
 // ---- 種別での絞り込み ----

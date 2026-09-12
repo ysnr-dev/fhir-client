@@ -90,6 +90,10 @@ export const EMPTY_ASSESSMENT_CODE = "ZZZZZZZZZZ";
 export const PATHWAY_MARKER_SYSTEM = "http://fhir-client.local/CodeSystem/care-plan-type";
 export const PATHWAY_MARKER_CODE = "clinical-pathway";
 export const PATHWAY_LEVEL_SYSTEM = "http://fhir-client.local/CodeSystem/pathway-level";
+// ［決定］定義の並び(display_order)をローカル拡張で持ち越す。CarePlan にも Procedure にも
+// 並びを表す要素が無く、上流の id は uuid なので、無いとシートの行が定義と違う順になる。
+// EP12 出力では落とす。
+export const PATHWAY_DISPLAY_ORDER_EXT_URL = "http://fhir-client.local/StructureDefinition/pathway-display-order";
 
 export type PathwayLevel = "apply" | "event" | "oat-unit" | "assessment";
 
@@ -352,12 +356,12 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
       request: { method: "POST", url: "CarePlan" },
     });
 
-    for (const unit of event.oat_units) {
+    for (const [unitIndex, unit] of event.oat_units.entries()) {
       const unitUrl = `urn:uuid:${crypto.randomUUID()}`;
       const unitId = oatUnitIdValue(eventId, unit.unit_key);
       entry.push({
         fullUrl: unitUrl,
-        resource: buildOatUnitCarePlan(unit, { unitId, applyUrl, eventUrl, patientId }),
+        resource: buildOatUnitCarePlan(unit, { unitId, applyUrl, eventUrl, patientId, order: unitIndex + 1 }),
         request: { method: "POST", url: "CarePlan" },
       });
 
@@ -374,7 +378,7 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
           : []),
       ];
 
-      for (const row of assessments) {
+      for (const [assessmentIndex, row] of assessments.entries()) {
         const assessmentUrl = `urn:uuid:${crypto.randomUUID()}`;
         const assessmentId = assessmentIdValue(unitId, row.key);
         entry.push({
@@ -385,11 +389,12 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
             eventUrl,
             unitUrl,
             patientId,
+            order: assessmentIndex + 1,
           }),
           request: { method: "POST", url: "CarePlan" },
         });
 
-        for (const task of row.tasks) {
+        for (const [taskIndex, task] of row.tasks.entries()) {
           entry.push({
             fullUrl: `urn:uuid:${crypto.randomUUID()}`,
             resource: buildTaskProcedure(task, {
@@ -399,6 +404,7 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
               patientId,
               encounterId,
               date,
+              order: taskIndex + 1,
             }),
             request: { method: "POST", url: "Procedure" },
           });
@@ -448,7 +454,7 @@ function buildEventCarePlan(
 
 function buildOatUnitCarePlan(
   unit: PathwayOatUnit,
-  ctx: { unitId: string; applyUrl: string; eventUrl: string; patientId: string },
+  ctx: { unitId: string; applyUrl: string; eventUrl: string; patientId: string; order: number },
 ): fhir4.CarePlan {
   return {
     resourceType: "CarePlan",
@@ -464,13 +470,14 @@ function buildOatUnitCarePlan(
       { url: PATHWAY_EXT.criticalIndicator, valueCode: unit.critical ? YES : NO },
       // 適用の時点で作るアウトカムは予定どおりのもの。予定外は評価のときに足す。
       { url: PATHWAY_EXT.unplannedKind, valueCode: NO },
+      { url: PATHWAY_DISPLAY_ORDER_EXT_URL, valueInteger: ctx.order },
     ],
   };
 }
 
 function buildAssessmentCarePlan(
   assessment: PathwayAssessment | null,
-  ctx: { assessmentId: string; applyUrl: string; eventUrl: string; unitUrl: string; patientId: string },
+  ctx: { assessmentId: string; applyUrl: string; eventUrl: string; unitUrl: string; patientId: string; order: number },
 ): fhir4.CarePlan {
   return {
     resourceType: "CarePlan",
@@ -486,7 +493,10 @@ function buildAssessmentCarePlan(
     ],
     subject: { reference: `Patient/${ctx.patientId}` },
     partOf: [reference(ctx.applyUrl), reference(ctx.eventUrl), reference(ctx.unitUrl)],
-    extension: [{ url: PATHWAY_EXT.statusTypeWhenOccured, valueCode: STATUS_TYPE_EP12 }],
+    extension: [
+      { url: PATHWAY_EXT.statusTypeWhenOccured, valueCode: STATUS_TYPE_EP12 },
+      { url: PATHWAY_DISPLAY_ORDER_EXT_URL, valueInteger: ctx.order },
+    ],
   };
 }
 
@@ -500,6 +510,7 @@ function buildTaskProcedure(
     patientId: string;
     encounterId?: string;
     date: string;
+    order: number;
   },
 ): fhir4.Procedure {
   return {
@@ -517,7 +528,10 @@ function buildTaskProcedure(
     // 観察項目(計画)に加えて、雛形から出したオーダーも指す。参照の向きはタスク → オーダーの
     // 一方向で、オーダー側にはパスの印(stampPathwayOrders)だけを焼く。
     basedOn: [reference(ctx.assessmentUrl), ...ctx.orderUrls.map(reference)],
-    extension: [{ url: PATHWAY_EXT.taskPlannedDateTime, valueDate: ctx.date }],
+    extension: [
+      { url: PATHWAY_EXT.taskPlannedDateTime, valueDate: ctx.date },
+      { url: PATHWAY_DISPLAY_ORDER_EXT_URL, valueInteger: ctx.order },
+    ],
   };
 }
 
@@ -555,6 +569,19 @@ function intExtension(resource: { extension?: fhir4.Extension[] }, url: string):
 
 function codeExtension(resource: { extension?: fhir4.Extension[] }, url: string): string {
   return extensionOf(resource, url)?.valueCode ?? "";
+}
+
+/** 定義の並び(拡張)で整列する。拡張を持たないもの(古い適用)は元の順のまま末尾。 */
+function sortByDisplayOrder<T extends { extension?: fhir4.Extension[] }>(items: T[]): T[] {
+  return items
+    .map((item, index) => ({ item, index, order: intExtension(item, PATHWAY_DISPLAY_ORDER_EXT_URL) }))
+    .sort((a, b) => {
+      if (a.order === null && b.order === null) return a.index - b.index;
+      if (a.order === null) return 1;
+      if (b.order === null) return -1;
+      return a.order - b.order || a.index - b.index;
+    })
+    .map((x) => x.item);
 }
 
 export interface PathwayTaskRecord {
@@ -638,7 +665,7 @@ export function parsePathwayApplication(
   if (!apply?.id) return null;
 
   const tasksByAssessment = new Map<string, PathwayTaskRecord[]>();
-  for (const procedure of procedures) {
+  for (const procedure of sortByDisplayOrder(procedures)) {
     const basedOn = procedure.basedOn ?? [];
     const assessmentId = basedOn
       .map((ref) => ref.reference?.match(/^CarePlan\/(.+)$/)?.[1])
@@ -665,7 +692,7 @@ export function parsePathwayApplication(
   }
 
   const assessmentsByUnit = new Map<string, PathwayAssessmentRecord[]>();
-  for (const carePlan of carePlans) {
+  for (const carePlan of sortByDisplayOrder(carePlans)) {
     if (pathwayLevelOf(carePlan) !== "assessment" || !carePlan.id) continue;
     // partOf は [適用, 病日, OAT ユニット]。直近の祖先が OAT ユニット。
     const unitId = partOfIds(carePlan).at(-1);
@@ -682,7 +709,7 @@ export function parsePathwayApplication(
   }
 
   const unitsByEvent = new Map<string, PathwayOatUnitRecord[]>();
-  for (const carePlan of carePlans) {
+  for (const carePlan of sortByDisplayOrder(carePlans)) {
     if (pathwayLevelOf(carePlan) !== "oat-unit" || !carePlan.id) continue;
     const eventId = partOfIds(carePlan).at(-1);
     if (!eventId) continue;

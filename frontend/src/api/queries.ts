@@ -43,7 +43,9 @@ import {
   PATHWAY_APPLY_ID_SYSTEM,
   PATHWAY_MARKER_CODE,
   PATHWAY_MARKER_SYSTEM,
+  parsePathwayApplication,
   pathwayInstantiatesUri,
+  type PathwayApplicationRecord,
 } from "../fhir/pathwayApplyHelpers";
 import { useCurrentPractitioner } from "./authQueries";
 import { nowFhirDateTime, today } from "../lib/dates";
@@ -11230,5 +11232,41 @@ export function useApplyPathway() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       for (const key of variables.invalidate ?? []) queryClient.invalidateQueries({ queryKey: key });
     },
+  });
+}
+
+/**
+ * 適用 1 件の木(病日・OAT ユニット・観察項目)と、そのタスク(Procedure)、タスクが指す
+ * オーダーのヘッダ(ServiceRequest)を 1 回の検索で読む。子孫は partOf に根を持つので
+ * `part-of=根` で全部引け、タスクは _revinclude、オーダーは :iterate でその先を辿る。
+ */
+export function usePathwayApplicationTree(applyId: string | undefined) {
+  const params = new URLSearchParams();
+  if (applyId) params.set("part-of", `CarePlan/${applyId}`);
+  params.append("_revinclude", "Procedure:based-on");
+  params.append("_include:iterate", "Procedure:based-on");
+  params.set("_count", "500");
+
+  return useQuery({
+    queryKey: ["CarePlan", "search", "pathway-tree", applyId],
+    queryFn: async (): Promise<{
+      application: PathwayApplicationRecord | null;
+      orders: Map<string, fhir4.ServiceRequest>;
+    }> => {
+      const [{ data: apply }, { data: bundle }] = await Promise.all([
+        readResource<fhir4.CarePlan>("CarePlan", applyId as string),
+        searchResource<fhir4.Resource>("CarePlan", params),
+      ]);
+      const resources = (bundle.entry ?? []).map((e) => e.resource).filter((r): r is fhir4.Resource => Boolean(r));
+      const orders = new Map<string, fhir4.ServiceRequest>();
+      for (const r of resources) {
+        if (r.resourceType === "ServiceRequest" && r.id) orders.set(r.id, r as fhir4.ServiceRequest);
+      }
+      const tree = resources.filter(
+        (r): r is fhir4.CarePlan | fhir4.Procedure => r.resourceType === "CarePlan" || r.resourceType === "Procedure",
+      );
+      return { application: parsePathwayApplication([apply, ...tree]), orders };
+    },
+    enabled: Boolean(applyId),
   });
 }

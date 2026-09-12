@@ -27,6 +27,7 @@ import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
 import { KarteMealTab } from "../components/KarteMealTab";
 import { KarteChemoTab } from "../components/KarteChemoTab";
 import { KarteNursingTab } from "../components/KarteNursingTab";
+import { KartePathwayTab } from "../components/KartePathwayTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteProfileTab } from "../components/KarteProfileTab";
 import { KarteSidePane } from "../components/KarteSidePane";
@@ -761,6 +762,9 @@ export function KartePage() {
         />
       );
     }
+    // クリニカルパス。適用したパスを病日 × OAT ユニットのシートで見る。適用は右ペインの
+    // 「クリニカルパス」から、評価の入力も右ペインの担当。
+    if (key === "pathway") return <KartePathwayTab {...props} />;
     // 指示簿。登録・編集は他のオーダーと同じ右ペインで開く。
     if (key === "nursing") {
       return (

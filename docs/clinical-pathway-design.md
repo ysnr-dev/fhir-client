@@ -236,6 +236,24 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
     移るなど、重なる運用はある)。
   - 登録は `useApplyPathway`(`api/queries.ts`)。来歴は適用の CarePlan を対象に 1 件(author = 依頼医師、enterer = ログイン本人)。
     雛形を持つタスクは「オーダー」区画に積み、同じ transaction で通常のオーダーとして登録する(§5.1)。
+- **パスタブ**(`components/KartePathwayTab.tsx`、カルテ左ペインの「パス」、`KARTE_TABS` の `pathway`): 適用したパスを
+  紙のパスシートと同じ**病日 × OAT ユニットのシート**で見る。
+  - 見出し帯: パス名 / 入院日 / 今日が何病日目か(パスの期間外なら病日数)/ 状態(進行中・終了・中止)。適用が複数ある
+    入院ではタブで切り替える(化学療法と同じ)。
+  - 列 = 病日(番号・定義の見出し・実日付の 3 段)。今日の列を強調し、過ぎた列は薄くする。行の見出し列と病日の見出し行は
+    貼り付け(sticky)、列が多ければ表の中だけ横に送る。
+  - 行 = OAT ユニットを見出し行(重要は ★)にして、その下に観察項目、次にタスク(分類のバッジ付き)。同じ名前のアウトカムが
+    複数の病日にあれば 1 行にまとめ、その病日にだけ載るものは該当列だけにセルが入る(`fhir/pathwaySheetHelpers.ts`)。
+    「観察項目なし」で包んだだけの観察項目は行にしない。
+  - セル: アウトカム行は 達成 / 未達成 / 未評価(評価の記録は第 2 段階のタスク 7 で、いまは未評価)、観察項目行は予定(○)、
+    タスク行は ☐ / ☑ と、雛形から出したオーダーの状態(依頼済・実施済・中止)。
+  - **全画面**: 経過表と同じ作法。見出し帯の「全画面」で患者情報の下からビューポートの下端まで広げ、Escape か
+    「全画面を終了」で戻る。view は「適用の id[!]」(`parsePathwaySheetView`)で、リロード・共有で同じ状態が開く。
+    全画面では行の見出し列を広く取る(220px → 320px)。
+  - 読みは `usePathwayApplicationTree`: `CarePlan?part-of=適用&_revinclude=Procedure:based-on&_include:iterate=Procedure:based-on`
+    の 1 回で木・タスク・オーダーのヘッダまで揃える。
+  - ［決定］定義の並び(display_order)を**ローカル拡張 `pathway-display-order`** で OAT ユニット・観察項目・タスクに持ち越す。
+    CarePlan にも Procedure にも並びの要素が無く id は uuid なので、無いとシートの行が定義と違う順になる。EP12 出力では落とす。
 
 ## 7. 適用の FHIR 構造(第 2 段階)
 
@@ -302,7 +320,7 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
     (オーダーセットの適用パネルと同じ器)。パスの印はオーダーセットの `stampOrderSetInstance` と同型で焼く。
   - カルテに「パス」タブ(病日 × OAT ユニットのシート)を足し、病日ごとにアウトカムの達成 / 未達成(バリアンス)・観察項目の実績値・
     タスクの実施 / 未実施を記録する。看護観察に結んだ観察項目は `nursingObservationInputSpec` で入力欄を出す。
-  - **適用の FHIR 構造(§7)・右ペインの適用パネル(§6)・オーダー雛形の展開(§5.1)は実装済み(2026-09-12)**。残るのはパスタブと評価の記録。
+  - **適用の FHIR 構造(§7)・右ペインの適用パネル(§6)・オーダー雛形の展開(§5.1)・パスタブ(§6)は実装済み(2026-09-12)**。残るのは評価の記録。
   - **上流の CarePlan / Goal は実装済み(2026-09-12、別リポジトリ `fhir-server`)**。JP Core にプロファイルが
     無い型なので HL7 基本定義 + 手書きバリデータで、`Goal.achievementStatus` は preferred 束縛のまま値を縛らない
     (ePath の 1 達成 / 2 未達成(バリアンス) / 3 未評価 がそのまま通る)。計画の木は `partOf` に**祖先すべて**を
@@ -322,6 +340,8 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
   `components/KarteRightPane.tsx`(`pathway-apply` と「クリニカルパス」ボタン)、`api/queries.ts`(`usePathwayApplications` /
   `usePatientPlannedAdmissions` / `useApplyPathway`)、`api/masterQueries.ts`(`useApplicablePathways`)、
   `fhir/pathwayApplyHelpers.ts`(`stampPathwayOrders` / `pathwayOf` / `orderHeaderUrlsOf`)、
+  パスタブ: `components/KartePathwayTab.tsx`、`fhir/pathwaySheetHelpers.ts`、`karteUrl.ts`(`pathway` タブ・`parsePathwaySheetView`)、
+  `pages/KartePage.tsx`、`api/queries.ts`(`usePathwayApplicationTree`)、`App.css`(`.pathway-sheet*`)、
   `fhir/provenanceHelpers.ts`(`buildPathwayApplyProvenanceEntry`)、`fhir/conditionHelpers.ts`(`conditionManagementNumber`)、`App.css`(`.pathway-apply__*`)、
   backend `app/controllers/fhir_proxy_controller.rb` の許可リストに CarePlan / Goal、
   上流(別リポジトリ `fhir-server`)に CarePlan / Goal リソース一式
@@ -381,6 +401,14 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
 - 検証データは上流で削除(木・オーダー・明細・来歴を参照で辿って `Fhir::Repository.delete`)し、000009 も消した。
   コンテナ内 `tsc -b` 成功。
 
+### 9.5 検証したこと(パスタブ、2026-09-12、テスト太郎)
+
+- 「パス」タブに 900001 の適用がシートで出る: 列は病日 1〜5(08/22〜08/26、今日は期間外なので強調なし)、行は OAT ユニット 14 と
+  その観察項目・タスク(107 行)。長い行見出しは省略記号で切れる。
+- 「全画面」で患者情報の下からビューポートの下端まで広がり、URL の view が「適用の id!」になる。Escape で戻り「!」が消える。
+- 並び順の拡張を持たない古い適用は行が定義と違う順になったので、上流で削除して UI から適用し直した。適用が終わると
+  シートが読み直され、定義どおりの順(身体的準備 → バイタル → 手術・麻酔 → 術前の準備)で並ぶ。
+
 ## 10. 申し送り
 
 - BOM(Basic Outcome Master®)は日本クリニカルパス学会の知財で同梱しない。IG に載っている分類(G/H、19/34/37)と例示コードだけを候補に出す。
@@ -394,3 +422,5 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
 - 削除の確認は `window.confirm`(他画面と同じ)。
 - パスの適用そのものの来歴には承認待ちの通知を付けていない(雛形から出したオーダーには通常どおり付く)。
 - 雛形から出したオーダーのカルテのカードに、パスの印(`pathwayOf`)はまだ出していない(オーダーセットの「セット名」バッジと同じく未実装)。
+- シートのセルを押しても何も開かない(評価の入力はタスク 7 で右ペインに開く)。
+- 適用が複数ある入院で view の id が古いと最初の適用に戻る(削除した適用の id が URL に残っていても壊れない)。
