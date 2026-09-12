@@ -6,6 +6,7 @@ import type {
   PathwayTask,
 } from "../api/masterClient";
 import { addDays } from "../lib/dates";
+import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
 import { isHeaderEntry } from "./provenanceHelpers";
 
 // クリニカルパスの患者への適用(適用後パスデータ)の FHIR 構造。ePath(ePath R4 実装ガイド)の
@@ -266,6 +267,8 @@ function assessmentCategories(assessment: PathwayAssessment): fhir4.CodeableConc
   const categories = [
     codingOf(categorySystem, assessment.category_code, assessment.category_name),
     codingOf(codeSystem, assessment.code, assessment.name),
+    // 看護観察(MEDIS)に結んだ観察項目は、評価入力でその表現タイプ(数値・列挙…)を借りる。
+    codingOf(NURSING_OBSERVATION_CODE_SYSTEM, assessment.nursing_observation_manage_no, assessment.name),
   ].filter((c): c is fhir4.CodeableConcept => c !== null);
   if (categories.length > 0) return categories;
 
@@ -602,12 +605,18 @@ export interface PathwayAssessmentRecord {
   id: string;
   assessmentKey: string;
   name: string;
+  /** 観察項目のコード(BOM / ローカル)。実績の Observation.code に写す。ローカルの階層コードは含まない。 */
+  codings: fhir4.Coding[];
+  /** 看護観察(MEDIS)の管理番号。結んでいなければ空。 */
+  nursingObservationManageNo: string;
   tasks: PathwayTaskRecord[];
 }
 
 export interface PathwayOatUnitRecord {
   id: string;
   unitKey: string;
+  /** ePath の OAT ユニット識別子(識別子の値そのもの)。Goal と評価の識別子の元。 */
+  unitId: string;
   name: string;
   critical: boolean;
   unplanned: boolean;
@@ -698,11 +707,16 @@ export function parsePathwayApplication(
     const unitId = partOfIds(carePlan).at(-1);
     if (!unitId) continue;
     const assessmentId = identifierValue(carePlan, PATHWAY_ASSESSMENT_ID_SYSTEM);
+    const codings = (carePlan.category ?? [])
+      .flatMap((c) => c.coding ?? [])
+      .filter((c) => c.system !== PATHWAY_MARKER_SYSTEM && c.system !== PATHWAY_LEVEL_SYSTEM);
     const rows = assessmentsByUnit.get(unitId) ?? [];
     rows.push({
       id: carePlan.id,
       assessmentKey: assessmentId.split(".").pop() ?? "",
       name: carePlan.title ?? "",
+      codings: codings.filter((c) => c.system !== NURSING_OBSERVATION_CODE_SYSTEM),
+      nursingObservationManageNo: codings.find((c) => c.system === NURSING_OBSERVATION_CODE_SYSTEM)?.code ?? "",
       tasks: tasksByAssessment.get(carePlan.id) ?? [],
     });
     assessmentsByUnit.set(unitId, rows);
@@ -718,6 +732,7 @@ export function parsePathwayApplication(
     rows.push({
       id: carePlan.id,
       unitKey: unitId.split(".").pop() ?? "",
+      unitId,
       name: carePlan.title ?? "",
       critical: codeExtension(carePlan, PATHWAY_EXT.criticalIndicator) === YES,
       unplanned: codeExtension(carePlan, PATHWAY_EXT.unplannedKind) === YES,

@@ -254,6 +254,14 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
     の 1 回で木・タスク・オーダーのヘッダまで揃える。
   - ［決定］定義の並び(display_order)を**ローカル拡張 `pathway-display-order`** で OAT ユニット・観察項目・タスクに持ち越す。
     CarePlan にも Procedure にも並びの要素が無く id は uuid なので、無いとシートの行が定義と違う順になる。EP12 出力では落とす。
+  - **セルを押すと右ペインに評価入力が開く**(どの行のセルでも、その病日 × OAT ユニット)。記録するとシートに達成 / 未達成
+    (バリアンスは赤)、実績値、☑ が出る(§7.4)。
+  - ［決定］**全画面のときは同じ内容をモーダルで開く**。全画面はシートをビューポートいっぱいに広げるので、右ペインが
+    後ろに隠れて見えない。中身は右ペインと同じ `PathwayEvaluatePanel` をそのまま置く(2 つ目の画面を作らない)。
+    Escape は重なりの外側から閉じる(モーダル → 全画面)。記録すればモーダルだけ閉じ、全画面のまま次のセルへ進める。
+- **評価パネル**(`components/PathwayEvaluatePanel.tsx`): 見出しにパス名・病日・日付・アウトカム名。区画は 観察項目(実績値)/
+  タスク(実施のチェックと雛形のオーダーの状態)/ アウトカム評価(達成 / 未達成(バリアンス)/ 未評価、S・O・A・P、コメント、記録日時)。
+  保存済みの値は開いたときに復元され、「記録」で 1 transaction。
 
 ## 7. 適用の FHIR 構造(第 2 段階)
 
@@ -308,6 +316,37 @@ CarePlan(適用)                 partOf 無し = 木の根
 (CarePlan 76 + Procedure 50)になる。観察項目に結ばないタスクを包む空の観察項目が 13 件増えるため、
 CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transaction に件数の上限は無い。
 
+### 7.4 日次評価(1 病日 × 1 OAT ユニット)
+
+実装は `fhir/pathwayEvaluationHelpers.ts`。シートのセルから右ペイン(`components/PathwayEvaluatePanel.tsx`、
+`KartePaneState` の `pathway-evaluate`)に開き、観察項目の実績値・タスクの実施・アウトカムの達成状態と S/O/A/P を 1 回で記録する。
+
+```text
+Goal(アウトカム)             identifier outcome-goal-id = OAT ユニットの識別子、lifecycleStatus completed(評価済)/ active、
+                            achievementStatus = EPathStateOfAchievementCS 1 達成 / 2 未達成(バリアンス) / 3 未評価、
+                            description.text = アウトカム名、statusDate、outcomeReference → 評価の Observation
+CarePlan(OAT ユニット).goal → Goal(初回の記録で PUT して足す)
+Observation(評価)            identifier observation-evaluation-id、code = EPathEvaluationItemCS|judgement、
+                            valueCodeableConcept = 達成状態、component = S / O / A / P(valueString)、note = コメント、
+                            basedOn → CarePlan(OAT ユニット)、effectiveDateTime、performer
+Observation(観察項目の実績)   identifier observation-result-id、code = 観察項目のコード + text、value[x] は表現タイプで決まる、
+                            basedOn → CarePlan(観察項目)
+Procedure(タスク)            status completed(実施)/ preparation(未実施)、performedDateTime、performer.actor
+```
+
+- ［決定］評価・実績の Observation は **Goal に contained せず独立のリソース**にする。検索で読めて、シートは
+  `Observation?patient=X&category=care-plan-type|clinical-pathway` の 1 回で全部引ける(category の先頭にパスの印を置く。
+  上流は category の先頭しか索引しない)。EP12 出力で contained に畳む(第 3 段階)。
+- ［決定］Goal は「評価したとき」に作る(適用時には作らない)。初回は Goal と評価 Observation を POST し、OAT ユニットの
+  CarePlan に goal を足す PUT を同じ transaction に入れる。2 回目以降は同じ id へ PUT(識別子が同じなので二重にならない)。
+- ［決定］観察項目の実績は**値が入っているものだけ**記録し、消したら DELETE。表現タイプは看護観察(MEDIS)に結んだ観察項目なら
+  マスタの表現タイプ(数値 / 列挙 / 文字 / 2 数値 / 血圧)、それ以外は文字。入力欄は看護の実施入力と同じ `ObservationInput`。
+  看護観察の管理番号は適用時に観察項目の CarePlan.category へ MEDIS の体系で写しておく。
+- ［決定］タスクは状態が変わったものだけ PUT。実施にすると performedDateTime と performer が入り、戻すと消える。
+- 記録者はログイン本人(`useCurrentPractitioner`)。ePath の Goal AssessmentExecution(観察項目ごとの達成)は作らない
+  (実績値から導ける。EP12 出力で必要なら組む)。
+- 予定外の OAT ユニットの追加と、パスの終了・中止(Goal EPathApply)は第 2 段階のタスク 8。
+
 ---
 
 ## 8. 実装フェーズ
@@ -320,7 +359,8 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
     (オーダーセットの適用パネルと同じ器)。パスの印はオーダーセットの `stampOrderSetInstance` と同型で焼く。
   - カルテに「パス」タブ(病日 × OAT ユニットのシート)を足し、病日ごとにアウトカムの達成 / 未達成(バリアンス)・観察項目の実績値・
     タスクの実施 / 未実施を記録する。看護観察に結んだ観察項目は `nursingObservationInputSpec` で入力欄を出す。
-  - **適用の FHIR 構造(§7)・右ペインの適用パネル(§6)・オーダー雛形の展開(§5.1)・パスタブ(§6)は実装済み(2026-09-12)**。残るのは評価の記録。
+  - **適用の FHIR 構造(§7)・右ペインの適用パネル(§6)・オーダー雛形の展開(§5.1)・パスタブ(§6)・日次評価(§7.4)は実装済み(2026-09-12)**。
+    残るのはパスの終了・中止と予定外 OAT ユニット。
   - **上流の CarePlan / Goal は実装済み(2026-09-12、別リポジトリ `fhir-server`)**。JP Core にプロファイルが
     無い型なので HL7 基本定義 + 手書きバリデータで、`Goal.achievementStatus` は preferred 束縛のまま値を縛らない
     (ePath の 1 達成 / 2 未達成(バリアンス) / 3 未評価 がそのまま通る)。計画の木は `partOf` に**祖先すべて**を
@@ -342,6 +382,8 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
   `fhir/pathwayApplyHelpers.ts`(`stampPathwayOrders` / `pathwayOf` / `orderHeaderUrlsOf`)、
   パスタブ: `components/KartePathwayTab.tsx`、`fhir/pathwaySheetHelpers.ts`、`karteUrl.ts`(`pathway` タブ・`parsePathwaySheetView`)、
   `pages/KartePage.tsx`、`api/queries.ts`(`usePathwayApplicationTree`)、`App.css`(`.pathway-sheet*`)、
+  日次評価: `fhir/pathwayEvaluationHelpers.ts`、`components/PathwayEvaluatePanel.tsx`、`components/KarteRightPane.tsx`(`pathway-evaluate`)、
+  `api/queries.ts`(`usePathwayObservations` / `useRecordPathwayEvaluation`)、`components/NursingPerformModal.tsx`(`ObservationInput` を公開)、
   `fhir/provenanceHelpers.ts`(`buildPathwayApplyProvenanceEntry`)、`fhir/conditionHelpers.ts`(`conditionManagementNumber`)、`App.css`(`.pathway-apply__*`)、
   backend `app/controllers/fhir_proxy_controller.rb` の許可リストに CarePlan / Goal、
   上流(別リポジトリ `fhir-server`)に CarePlan / Goal リソース一式
@@ -409,6 +451,20 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
 - 並び順の拡張を持たない古い適用は行が定義と違う順になったので、上流で削除して UI から適用し直した。適用が終わると
   シートが読み直され、定義どおりの順(身体的準備 → バイタル → 手術・麻酔 → 術前の準備)で並ぶ。
 
+### 9.6 検証したこと(日次評価、2026-09-12、テスト太郎)
+
+- 病日 1「身体的準備ができている」のセル → 右ペインに評価入力。観察項目 2 件(文字)、タスク 4 件(分類バッジ付き)、
+  達成状態 3 択、S/O/A/P とコメント、記録日時(現在時刻)。
+- 実績「なし」「中止済」、タスク 2 件を実施、未達成(バリアンス)、S/O/A/P とコメントを入れて「記録」→ ペインが閉じ、
+  シートのセルに「未達成（バリアンス）」(赤)・実績値・☑ が出る。
+- 上流: Goal 1 件(completed、achievementStatus 2、outcomeReference → 評価 Observation)、Observation 3 件(judgement に
+  S/O/A/P の component と note、実績 2 件は basedOn → 観察項目の CarePlan、performer = 児玉 義憲)、OAT ユニットの CarePlan に
+  goal、Procedure 2 件が completed(performedDateTime・performer)。
+- 同じセルを開き直すと全部復元される。達成に変えて「記録」→ Goal と評価 Observation が版 2 に上がり(件数は増えない)、
+  セルが「達成」になる。コンテナ内 `tsc -b` 成功。
+- 全画面でセルを押すと、右ペインではなくモーダルで同じ評価入力が開く(右ペインは空のまま)。Escape はモーダル →
+  全画面の順に閉じる。モーダルから「記録」するとモーダルだけ閉じ、全画面のシートのセルが「達成」に変わる。
+
 ## 10. 申し送り
 
 - BOM(Basic Outcome Master®)は日本クリニカルパス学会の知財で同梱しない。IG に載っている分類(G/H、19/34/37)と例示コードだけを候補に出す。
@@ -422,5 +478,6 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
 - 削除の確認は `window.confirm`(他画面と同じ)。
 - パスの適用そのものの来歴には承認待ちの通知を付けていない(雛形から出したオーダーには通常どおり付く)。
 - 雛形から出したオーダーのカルテのカードに、パスの印(`pathwayOf`)はまだ出していない(オーダーセットの「セット名」バッジと同じく未実装)。
-- シートのセルを押しても何も開かない(評価の入力はタスク 7 で右ペインに開く)。
+- 評価パネルは 1 セル(1 病日 × 1 OAT ユニット)ずつ。病日をまとめて記録する面(病日ビュー)は無い。
+- 実績の Observation は経過表に出ない(category がパスの印だけで vital-signs を持たない。看護観察と同じ判断)。
 - 適用が複数ある入院で view の id が古いと最初の適用に戻る(削除した適用の id が URL に残っていても壊れない)。

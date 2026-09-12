@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from "react";
-import { usePathwayApplicationTree, usePathwayApplications } from "../api/queries";
+import { usePathwayApplicationTree, usePathwayApplications, usePathwayObservations } from "../api/queries";
+import { buildEvaluationState } from "../fhir/pathwayEvaluationHelpers";
 import {
   buildPathwaySheet,
   orderStatusLabel,
   pathwayStatusLabel,
   todayEventOf,
+  type PathwaySheet,
   type SheetAssessmentCell,
+  type SheetRow,
   type SheetTaskCell,
   type SheetUnitCell,
 } from "../fhir/pathwaySheetHelpers";
 import { formatPathwaySheetView, parsePathwaySheetView } from "../karteUrl";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
+import { Modal } from "./Modal";
+import { PathwayEvaluatePanel } from "./PathwayEvaluatePanel";
 
 // カルテ画面の「パス」タブ。適用したクリニカルパスを、紙のパスシートと同じ
 // 病日 × OAT ユニットのシートで見る。列は病日(今日の列を強調)、行は OAT ユニットを
@@ -25,27 +30,55 @@ interface KartePathwayTabProps {
   /** URL の view。「適用の id[!]」。 */
   view: string;
   onViewChange: (view: string | null) => void;
+  /**
+   * セルを押したとき、その病日 × OAT ユニットの評価入力を右ペインで開く。
+   * 全画面のときは右ペインが隠れるので、代わりにこのタブがモーダルで開く。
+   */
+  onOpenUnit: (applyId: string, unitId: string) => void;
 }
 
 /** 左ペインの幅で読める病日の列数。これを超える分は表の中だけ横に送る。 */
 const SHEET_COLUMN_WIDTH = 96;
 
-export function KartePathwayTab({ patientId, view, onViewChange }: KartePathwayTabProps) {
+/** セルが属する OAT ユニット(CarePlan)の id。観察項目・タスクの行は、同じ組の見出し行(unit)から引く。 */
+function sheetUnitIdOf(
+  row: SheetRow,
+  cell: SheetUnitCell | SheetAssessmentCell | SheetTaskCell,
+  sheet: PathwaySheet,
+  eventId: string,
+): string | null {
+  if (row.kind === "unit") return (cell as SheetUnitCell).unitId;
+  const unitKey = row.key.split("/")[0];
+  const unitRow = sheet.rows.find((r) => r.kind === "unit" && r.key === unitKey);
+  return (unitRow?.cells.get(eventId) as SheetUnitCell | undefined)?.unitId ?? null;
+}
+
+export function KartePathwayTab({ patientId, view, onViewChange, onOpenUnit }: KartePathwayTabProps) {
   const current = parsePathwaySheetView(view);
   const applications = usePathwayApplications(patientId);
   const list = applications.data?.applications ?? [];
   // 既定は最初の適用(開始日の新しい順)。URL に無い id を指していれば最初のものに戻す。
   const selected = list.find((a) => a.id === current.applyId) ?? list[0] ?? null;
   const fullscreen = Boolean(current.fullscreen);
+  // 全画面では右ペインが隠れるので、評価入力はモーダルで開く(開いている OAT ユニット)。
+  const [modalUnitId, setModalUnitId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!fullscreen) setModalUnitId(null);
+  }, [fullscreen]);
 
   function updateView(next: { applyId?: string; fullscreen?: boolean }) {
     onViewChange(formatPathwaySheetView({ applyId: selected?.id, fullscreen, ...next }));
   }
 
   const tree = usePathwayApplicationTree(selected?.id);
+  const observations = usePathwayObservations(patientId);
   const application = tree.data?.application ?? null;
   const orders = tree.data?.orders;
-  const sheet = application ? buildPathwaySheet(application) : null;
+  const evaluation =
+    tree.data && observations.data
+      ? buildEvaluationState(observations.data, tree.data.goals, [...tree.data.carePlans.values()])
+      : null;
+  const sheet = application ? buildPathwaySheet(application, evaluation) : null;
   const todayDate = today();
   const todayEvent = application ? todayEventOf(application.events, todayDate) : null;
 
@@ -63,17 +96,20 @@ export function KartePathwayTab({ patientId, view, onViewChange }: KartePathwayT
     return () => window.removeEventListener("resize", measure);
   }, [fullscreen]);
 
-  // 全画面は Escape でも抜けられるようにする(モーダルと同じ作法)。
+  // 全画面は Escape でも抜けられるようにする(モーダルと同じ作法)。評価のモーダルを
+  // 開いているときは、そちらを先に閉じる(重なりの外側から閉じる)。
   useEffect(() => {
     if (!fullscreen) return;
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") updateView({ fullscreen: false });
+      if (event.key !== "Escape") return;
+      if (modalUnitId) setModalUnitId(null);
+      else updateView({ fullscreen: false });
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // updateView は毎描画で作り直されるが、押した時点の選択で戻せればよい。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen]);
+  }, [fullscreen, modalUnitId]);
 
   return (
     <div
@@ -95,7 +131,7 @@ export function KartePathwayTab({ patientId, view, onViewChange }: KartePathwayT
         )}
       </div>
 
-      <ErrorBanner error={applications.error ?? tree.error} />
+      <ErrorBanner error={applications.error ?? tree.error ?? observations.error} />
 
       {list.length > 1 && (
         <div className="chemo-calendar__regimens" role="tablist" aria-label="適用したパス">
@@ -191,12 +227,27 @@ export function KartePathwayTab({ patientId, view, onViewChange }: KartePathwayT
                         day.date < todayDate ? " pathway-sheet__day--past" : ""
                       }`;
                       if (!cell) return <td key={day.eventId} className={classes} />;
+                      // どの行のセルを押しても、その病日 × OAT ユニットの評価入力を開く。
+                      const unitId = sheetUnitIdOf(row, cell, sheet, day.eventId);
+                      const open = () => {
+                        if (!application || !unitId) return;
+                        if (fullscreen) setModalUnitId(unitId);
+                        else onOpenUnit(application.id, unitId);
+                      };
                       if (row.kind === "unit") {
                         const unit = cell as SheetUnitCell;
                         return (
                           <td key={day.eventId} className={`${classes} pathway-sheet__cell--unit`}>
-                            <span className="pathway-sheet__outcome pathway-sheet__outcome--pending">未評価</span>
-                            {unit.unplanned && <span className="pathway-sheet__unplanned">予定外</span>}
+                            <button type="button" className="pathway-sheet__cell-button" onClick={open}>
+                              <span
+                                className={`pathway-sheet__outcome${
+                                  unit.achievement ? ` pathway-sheet__outcome--${unit.achievement}` : " pathway-sheet__outcome--pending"
+                                }`}
+                              >
+                                {unit.achievementLabel || "未評価"}
+                              </span>
+                              {unit.unplanned && <span className="pathway-sheet__unplanned">予定外</span>}
+                            </button>
                           </td>
                         );
                       }
@@ -204,7 +255,13 @@ export function KartePathwayTab({ patientId, view, onViewChange }: KartePathwayT
                         const assessment = cell as SheetAssessmentCell;
                         return (
                           <td key={day.eventId} className={classes} data-assessment-id={assessment.assessmentId}>
-                            <span className="pathway-sheet__planned">○</span>
+                            <button type="button" className="pathway-sheet__cell-button" onClick={open}>
+                              {assessment.value ? (
+                                <span className="pathway-sheet__value">{assessment.value}</span>
+                              ) : (
+                                <span className="pathway-sheet__planned">○</span>
+                              )}
+                            </button>
                           </td>
                         );
                       }
@@ -212,12 +269,14 @@ export function KartePathwayTab({ patientId, view, onViewChange }: KartePathwayT
                       const order = task.orderIds.map((id) => orders?.get(id)).find(Boolean);
                       return (
                         <td key={day.eventId} className={classes} data-procedure-id={task.procedureId}>
-                          <span className={`pathway-sheet__task${task.done ? " pathway-sheet__task--done" : ""}`}>
-                            {task.done ? "☑" : "☐"}
-                          </span>
-                          {order && (
-                            <span className="pathway-sheet__order">{orderStatusLabel(order.status)}</span>
-                          )}
+                          <button type="button" className="pathway-sheet__cell-button" onClick={open}>
+                            <span className={`pathway-sheet__task${task.done ? " pathway-sheet__task--done" : ""}`}>
+                              {task.done ? "☑" : "☐"}
+                            </span>
+                            {order && (
+                              <span className="pathway-sheet__order">{orderStatusLabel(order.status)}</span>
+                            )}
+                          </button>
                         </td>
                       );
                     })}
@@ -228,6 +287,22 @@ export function KartePathwayTab({ patientId, view, onViewChange }: KartePathwayT
             </table>
           </div>
         </>
+      )}
+
+      {/* 全画面のときの評価入力。右ペインと同じ中身を、シートに重ねて開く。 */}
+      {modalUnitId && application && (
+        <Modal
+          title="クリニカルパス(評価)"
+          className="modal--wide pathway-evaluate-modal"
+          onClose={() => setModalUnitId(null)}
+        >
+          <PathwayEvaluatePanel
+            patientId={patientId}
+            applyId={application.id}
+            unitId={modalUnitId}
+            onSaved={() => setModalUnitId(null)}
+          />
+        </Modal>
       )}
     </div>
   );

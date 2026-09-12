@@ -31,6 +31,7 @@ import { VitalCreatePanel, VitalEditPanel } from "./VitalPanels";
 import { PlannedAdmissionCreatePanel } from "./PlannedAdmissionPanel";
 import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
 import { PathwayApplyPanel } from "./PathwayApplyPanel";
+import { PathwayEvaluatePanel } from "./PathwayEvaluatePanel";
 import { RegimenApplyPanel } from "./RegimenApplyPanel";
 import { RegimenCycleLoader, RegimenDayPanel, RegimenHeaderPanel } from "./RegimenPanels";
 import { RegimenAdverseEventPanel } from "./RegimenAdverseEventPanel";
@@ -93,6 +94,8 @@ export type KartePaneState =
   | { kind: "regimen-apply"; regimenId?: number; problem?: ProblemRef }
   // クリニカルパスの適用。pathwayId 未指定はパス選択の状態。
   | { kind: "pathway-apply"; pathwayId?: number }
+  // パスシートの 1 セル(病日 × OAT ユニット)の評価入力。unitId は OAT ユニットの CarePlan。
+  | { kind: "pathway-evaluate"; applyId: string; unitId: string }
   // 適用済みレジメンへの次クールの登録。regimenSrId はヘッダ ServiceRequest。
   | { kind: "regimen-cycle"; regimenSrId: string }
   // 暦の 1 日(その日のオーダーの編集・移動・中止)。
@@ -148,6 +151,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "order-set": "セット適用",
   "regimen-apply": "化学療法(レジメン適用)",
   "pathway-apply": "クリニカルパス(適用)",
+  "pathway-evaluate": "クリニカルパス(評価)",
   "regimen-cycle": "化学療法(クール登録)",
   "regimen-day": "化学療法(投与日)",
   "regimen-adverse": "化学療法(有害事象)",
@@ -189,6 +193,8 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.regimenId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "pathway-apply":
       return `${state.kind}:${state.pathwayId ?? ""}`;
+    case "pathway-evaluate":
+      return `${state.kind}:${state.unitId}`;
     case "regimen-cycle":
       return `${state.kind}:${state.regimenSrId}`;
     case "regimen-day":
@@ -471,6 +477,10 @@ function PaneContent({
           onBack={() => onStateChange({ ...state, pathwayId: undefined })}
           onSaved={onSaved}
         />
+      );
+    case "pathway-evaluate":
+      return (
+        <PathwayEvaluatePanel patientId={patientId} applyId={state.applyId} unitId={state.unitId} onSaved={onSaved} />
       );
     case "regimen-cycle":
       return <RegimenCycleLoader patientId={patientId} regimenSrId={state.regimenSrId} onSaved={onSaved} />;

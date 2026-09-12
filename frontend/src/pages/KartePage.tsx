@@ -764,7 +764,14 @@ export function KartePage() {
     }
     // クリニカルパス。適用したパスを病日 × OAT ユニットのシートで見る。適用は右ペインの
     // 「クリニカルパス」から、評価の入力も右ペインの担当。
-    if (key === "pathway") return <KartePathwayTab {...props} />;
+    if (key === "pathway") {
+      return (
+        <KartePathwayTab
+          {...props}
+          onOpenUnit={(applyId, unitId) => setPane({ kind: "pathway-evaluate", applyId, unitId })}
+        />
+      );
+    }
     // 指示簿。登録・編集は他のオーダーと同じ右ペインで開く。
     if (key === "nursing") {
       return (

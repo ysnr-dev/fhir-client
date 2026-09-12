@@ -1,4 +1,5 @@
 import type { PathwayApplicationRecord, PathwayEventRecord } from "./pathwayApplyHelpers";
+import { achievementLabel, resultValueLabel, type Achievement, type PathwayEvaluationState } from "./pathwayEvaluationHelpers";
 import { TASK_CATEGORY_LV1_OPTIONS, displayOfOption } from "./pathwayHelpers";
 
 // パスシート(病日 × OAT ユニット)の行と列。適用 1 件の木(parsePathwayApplication)を、
@@ -34,10 +35,15 @@ export interface SheetRow {
 export interface SheetUnitCell {
   unitId: string;
   unplanned: boolean;
+  /** 評価済みなら達成状態(1 達成 / 2 未達成 / 3 未評価)。 */
+  achievement: Achievement | "";
+  achievementLabel: string;
 }
 
 export interface SheetAssessmentCell {
   assessmentId: string;
+  /** 記録済みの実績値の表示。無ければ空。 */
+  value: string;
 }
 
 export interface PathwaySheet {
@@ -49,7 +55,10 @@ export interface PathwaySheet {
  * 同じ名前のアウトカムが複数の病日にあれば 1 行にまとめる(定義の概要表と同じまとめ方)。
  * 観察項目とタスクはアウトカムの下に、名前でまとめて並べる。行の並びは初出の病日順。
  */
-export function buildPathwaySheet(application: PathwayApplicationRecord): PathwaySheet {
+export function buildPathwaySheet(
+  application: PathwayApplicationRecord,
+  evaluation: PathwayEvaluationState | null = null,
+): PathwaySheet {
   const days: SheetDay[] = application.events.map((event) => ({
     eventId: event.id,
     elapsedDays: event.elapsedDays,
@@ -70,7 +79,13 @@ export function buildPathwaySheet(application: PathwayApplicationRecord): Pathwa
         unitRows.set(unitKey, group);
       }
       group.row.critical = group.row.critical || unit.critical;
-      group.row.cells.set(event.id, { unitId: unit.id, unplanned: unit.unplanned });
+      const achievement = evaluation?.units.get(unit.id)?.achievement ?? "";
+      group.row.cells.set(event.id, {
+        unitId: unit.id,
+        unplanned: unit.unplanned,
+        achievement,
+        achievementLabel: achievementLabel(achievement),
+      });
 
       for (const assessment of unit.assessments) {
         // 「観察項目なし」で包んだだけの観察項目は行にしない(タスクだけを出す)。
@@ -81,7 +96,10 @@ export function buildPathwaySheet(application: PathwayApplicationRecord): Pathwa
             row = { key, kind: "assessment", label: assessment.name, critical: false, categoryLabel: "", cells: new Map() };
             group.children.set(key, row);
           }
-          row.cells.set(event.id, { assessmentId: assessment.id });
+          row.cells.set(event.id, {
+            assessmentId: assessment.id,
+            value: resultValueLabel(evaluation?.results.get(assessment.id)),
+          });
         }
         for (const task of assessment.tasks) {
           const key = `${unitKey}/t:${task.categoryLv1}:${task.name}`;

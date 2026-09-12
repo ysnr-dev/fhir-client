@@ -11240,33 +11240,89 @@ export function useApplyPathway() {
  * オーダーのヘッダ(ServiceRequest)を 1 回の検索で読む。子孫は partOf に根を持つので
  * `part-of=根` で全部引け、タスクは _revinclude、オーダーは :iterate でその先を辿る。
  */
+export interface PathwayApplicationTree {
+  application: PathwayApplicationRecord | null;
+  /** タスクが指すオーダーのヘッダ(id → ServiceRequest)。 */
+  orders: Map<string, fhir4.ServiceRequest>;
+  /** OAT ユニットの Goal(id → Goal)。 */
+  goals: Map<string, fhir4.Goal>;
+  /** 木の CarePlan(id → CarePlan)。評価の保存で OAT ユニットに goal を足すときに使う。 */
+  carePlans: Map<string, fhir4.CarePlan>;
+  /** タスクの Procedure(id → Procedure)。実施の記録で status を書き換える。 */
+  procedures: Map<string, fhir4.Procedure>;
+}
+
 export function usePathwayApplicationTree(applyId: string | undefined) {
   const params = new URLSearchParams();
   if (applyId) params.set("part-of", `CarePlan/${applyId}`);
   params.append("_revinclude", "Procedure:based-on");
   params.append("_include:iterate", "Procedure:based-on");
+  // OAT ユニットの Goal(評価)も同じ応答で揃える。
+  params.append("_include", "CarePlan:goal");
   params.set("_count", "500");
 
   return useQuery({
     queryKey: ["CarePlan", "search", "pathway-tree", applyId],
-    queryFn: async (): Promise<{
-      application: PathwayApplicationRecord | null;
-      orders: Map<string, fhir4.ServiceRequest>;
-    }> => {
+    queryFn: async (): Promise<PathwayApplicationTree> => {
       const [{ data: apply }, { data: bundle }] = await Promise.all([
         readResource<fhir4.CarePlan>("CarePlan", applyId as string),
         searchResource<fhir4.Resource>("CarePlan", params),
       ]);
       const resources = (bundle.entry ?? []).map((e) => e.resource).filter((r): r is fhir4.Resource => Boolean(r));
       const orders = new Map<string, fhir4.ServiceRequest>();
+      const goals = new Map<string, fhir4.Goal>();
+      const carePlans = new Map<string, fhir4.CarePlan>();
+      const procedures = new Map<string, fhir4.Procedure>();
       for (const r of resources) {
-        if (r.resourceType === "ServiceRequest" && r.id) orders.set(r.id, r as fhir4.ServiceRequest);
+        if (!r.id) continue;
+        if (r.resourceType === "ServiceRequest") orders.set(r.id, r as fhir4.ServiceRequest);
+        if (r.resourceType === "Goal") goals.set(r.id, r as fhir4.Goal);
+        if (r.resourceType === "CarePlan") carePlans.set(r.id, r as fhir4.CarePlan);
+        if (r.resourceType === "Procedure") procedures.set(r.id, r as fhir4.Procedure);
       }
+      if (apply.id) carePlans.set(apply.id, apply);
       const tree = resources.filter(
         (r): r is fhir4.CarePlan | fhir4.Procedure => r.resourceType === "CarePlan" || r.resourceType === "Procedure",
       );
-      return { application: parsePathwayApplication([apply, ...tree]), orders };
+      return { application: parsePathwayApplication([apply, ...tree]), orders, goals, carePlans, procedures };
     },
     enabled: Boolean(applyId),
+  });
+}
+
+/**
+ * 患者のパスの評価と観察項目の実績(Observation)。category の先頭がパスの印なので
+ * 患者 + category の 1 回で全部引ける(上流は category の先頭しか索引しない)。
+ */
+export function usePathwayObservations(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("category", `${PATHWAY_MARKER_SYSTEM}|${PATHWAY_MARKER_CODE}`);
+  params.set("_count", "500");
+
+  return useQuery({
+    queryKey: ["Observation", "search", "pathway", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
+      return (
+        bundle.entry
+          ?.map((e) => e.resource)
+          .filter((r): r is fhir4.Observation => r?.resourceType === "Observation") ?? []
+      );
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/** 1 病日 × 1 OAT ユニットの評価(Goal・Observation・タスクの実施)を 1 transaction で書く。 */
+export function useRecordPathwayEvaluation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      invalidatePathway(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search", "pathway"] });
+      queryClient.invalidateQueries({ queryKey: ["Goal"] });
+    },
   });
 }

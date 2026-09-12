@@ -14235,6 +14235,87 @@ button.meal-calendar__cell:hover {
   color: var(--text-muted);
 }
 
+/* セルは丸ごと押せる(評価入力を右ペインに開く)。見た目は表のセルのまま。 */
+.pathway-sheet__cell-button {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.pathway-sheet__cell-button:hover {
+  background: var(--accent-bg);
+}
+
+.pathway-sheet__outcome--1 {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.pathway-sheet__outcome--2 {
+  color: #e0687a;
+  font-weight: 600;
+}
+
+.pathway-sheet__value {
+  font-weight: 600;
+}
+
+/* 全画面のシートに重ねる評価入力。中身は右ペインと同じなので、縦に長いときは
+   モーダルの中だけ送る。 */
+.pathway-evaluate-modal {
+  box-sizing: border-box;
+  width: min(720px, 92vw);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+/* 右ペインの評価入力(PathwayEvaluatePanel)。 */
+.pathway-evaluate__head {
+  margin-bottom: 4px;
+}
+
+.pathway-evaluate__unit {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.pathway-evaluate__rows th {
+  text-align: left;
+  font-weight: normal;
+  white-space: nowrap;
+  width: 40%;
+}
+
+.pathway-evaluate__rows td input[type="text"],
+.pathway-evaluate__rows td input[type="number"],
+.pathway-evaluate__rows td select {
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.pathway-evaluate__rows td input[type="number"] {
+  width: 90px;
+}
+
+.pathway-evaluate__achievement {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 4px;
+}
+
 /* ---- 化学療法(レジメンオーダー)(docs/chemo-regimen-design.md §7) ---- */
 
 /* 右ペインのレジメン選択。 */
