@@ -1,6 +1,6 @@
 # クリニカルパスの設計
 
-**状態: 第 1 段階(施設パス定義マスタの登録画面)実装済(2026-09-12)。患者への適用・日次評価(第 2 段階)、ePath 形式の出力(第 3 段階)は未実装(§7)。**
+**状態: 第 1 段階(施設パス定義マスタの登録画面)実装済(2026-09-12)。患者への適用・日次評価(第 2 段階)、ePath 形式の出力(第 3 段階)は未実装(§8)。**
 本文中の区別は他の設計書と同じ(［事実］/［導出］/［決定］/［提案］)。
 
 基本仕様は JAMI・JSCP 合同委員会の ePath(ePath R4 実装ガイド v1.0.1、https://e-path.jp/fhir/ePath/260219/)の概念に準ずる。
@@ -207,7 +207,62 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
   - 運用(状態 / 承認日・承認者 / 有効期間 / 表示順)は凍結中も動かせる。承認済・廃止では内容の fieldset を disabled にする。
   - 複製は保存済みの内容をサーバー側で写す(新しいコード・下書き・`copied_from_code`、uuid はそのまま)。削除は下書きだけ。
 
-## 7. 実装フェーズ
+## 7. 適用の FHIR 構造(第 2 段階)
+
+1 回の適用は **CarePlan の木**で表す。実装は `fhir/pathwayApplyHelpers.ts`。
+
+```text
+CarePlan(適用)                 partOf 無し = 木の根
+  └ CarePlan(病日)             partOf = [適用]
+      └ CarePlan(OAT ユニット)  partOf = [適用, 病日]
+          └ CarePlan(観察項目)   partOf = [適用, 病日, OAT ユニット]
+              └ Procedure(タスク) basedOn = [観察項目]
+```
+
+- ［決定］子孫は **partOf に祖先すべて**を並べる(ePath の identifier が祖先を連結するのと同じ考え方)。
+  適用を指す 1 回の検索 `part-of=CarePlan/{適用の id}` で木全体が引け、根は `part-of:missing=true` で引ける。
+- ［決定］参照は **Procedure → 観察項目の一方向だけ**書く。ePath は観察項目側にも `activity.outcomeReference` で
+  タスクを持たせるが、同じ transaction の中で相互参照になる。読みは `_revinclude=Procedure:based-on` で足りるので、
+  EP12 出力のときに `Procedure.basedOn` から組み立て直す(第 3 段階)。
+- ［決定］**タスクは適用の時点で「未実施」(`status = preparation`)の Procedure として置く**。パスシートは「その日に
+  何をする予定か」を出すものなので、予定が FHIR 側に無いと定義マスタを読み直さないとシートが描けない。
+  実施したら `completed` にして `performedDateTime` を入れる。予定日は拡張 `EPathProcedureTaskPlannedDateTime`。
+- ［決定］**Goal と評価 Observation は適用時には作らない**。アウトカムの達成・未達成は評価したときに生まれる記録で、
+  計画の一部ではない(§8 の第 2 段階で実装)。
+- ［決定］観察項目に結んでいないタスクは、ePath の規則どおり「観察項目なし」(コード `ZZZZZZZZZZ`)の観察項目 CarePlan で
+  包む。識別子の観察項目部分にも `ZZZZZZZZZZ` を使う。
+- ［決定］どの階層かを **category のローカルコード**で示す(`care-plan-type|clinical-pathway` と
+  `pathway-level|apply|event|oat-unit|assessment`)。partOf の本数でも導けるが、木を全部読まないと分からない。
+  階層コードがあれば「この患者のパス適用一覧」も「その日の OAT ユニット」も 1 回の検索で引ける。EP12 出力では落とす。
+
+### 7.1 識別子(ePath)
+
+`{保険医療機関番号}.{適用uuid}` を先頭に、階層ごとにピリオドで連ねる。
+
+| 階層 | identifier.system | value |
+|---|---|---|
+| 適用 | `…/IdSystem/apply-id` | `{施設コード}.{適用uuid}` |
+| 病日 | `…/IdSystem/event-id` | `….{病日[-パスステップ]}` |
+| OAT ユニット | `…/IdSystem/oat-unit-id` | `….{unit_key}[-{リピート番号}]` |
+| 観察項目 | `…/IdSystem/assessment-id` | `….{assessment_key}` |
+| タスク | `…/IdSystem/task-id` | `….{task_key}` |
+
+`unit_key` / `assessment_key` / `task_key` は定義マスタの uuid(§3)。定義を直しても同じアウトカムを追える。
+
+### 7.2 病日 → 実日付
+
+入院日を 1、入院前日を -1 とし 0 は使わないので、正の病日は `入院日 + (病日 − 1)`、負の病日は `入院日 + 病日`。
+病日の CarePlan は `period.start = period.end = その日` にする(`date` 検索の包含で「その日」が引ける)。
+
+### 7.3 規模
+
+サンプルのパス(5 病日・OAT ユニット 14・観察項目 43・タスク 50)で **1 回の適用が 126 リソース**
+(CarePlan 76 + Procedure 50)になる。観察項目に結ばないタスクを包む空の観察項目が 13 件増えるため、
+CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transaction に件数の上限は無い。
+
+---
+
+## 8. 実装フェーズ
 
 - **第 1 段階(実装済)**: 施設パス定義マスタ(backend・API・spec・seed・一覧・編集・雛形モーダル)。
 - **第 2 段階(未実装)**: 患者への適用と日次評価。
@@ -217,27 +272,31 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
     (オーダーセットの適用パネルと同じ器)。パスの印はオーダーセットの `stampOrderSetInstance` と同型で焼く。
   - カルテに「パス」タブ(病日 × OAT ユニットのシート)を足し、病日ごとにアウトカムの達成 / 未達成(バリアンス)・観察項目の実績値・
     タスクの実施 / 未実施を記録する。看護観察に結んだ観察項目は `nursingObservationInputSpec` で入力欄を出す。
+  - **適用の FHIR 構造(§7)は実装済み(2026-09-12、`fhir/pathwayApplyHelpers.ts`)**。残るのは画面(適用パネル・パスタブ)と評価の記録。
   - **上流の CarePlan / Goal は実装済み(2026-09-12、別リポジトリ `fhir-server`)**。JP Core にプロファイルが
     無い型なので HL7 基本定義 + 手書きバリデータで、`Goal.achievementStatus` は preferred 束縛のまま値を縛らない
     (ePath の 1 達成 / 2 未達成(バリアンス) / 3 未評価 がそのまま通る)。計画の木は `partOf` に**祖先すべて**を
     並べる約束にしてあり、`part-of:missing=true` で適用(根)だけ、`part-of=CarePlan/{適用の id}` で木全体が引ける。
     `_include=CarePlan:goal` で目標、`_revinclude=Procedure:based-on` で実施記録が同じ応答で揃う。
     backend の `FhirProxyController::ALLOWED_RESOURCE_TYPES` にも追加済み(2026-09-12)。
-- **第 3 段階(提案)**: ePath 形式の出力(EP02 Bundle = 定義、EP12 Bundle = 適用後データ)。§4 の対応表の逆変換。
+- **第 3 段階(提案)**: ePath 形式の出力(EP02 Bundle = 定義、EP12 Bundle = 適用後データ)。§4 の対応表の逆変換(§7 が書かない `activity.outcomeReference` もここで組み立てる)。
   ひな型パス(EP01)の取込(`protocol_base` に URL を残す)。パスステップ・許容経過日数条件・BOM 中分類の UI。
 
-## 8. 実装したもの(2026-09-12)
+## 9. 実装したもの
 
 - backend: `db/migrate/20260912100000〜100500`(6 テーブル)、`app/models/master/pathway*.rb`(6 モデル)、
   `app/controllers/master/pathways_controller.rb`(index / show / create / update / copy / destroy)、`config/routes.rb`、
   `db/seed_data/pathways/900001.json`(腹腔鏡下胆嚢摘出術 4 泊 5 日、病日 5・OAT ユニット 14・観察項目 43・タスク 50)と `db/seeds.rb` の節、
   `spec/requests/master/pathways_spec.rb`(19 件)
+- 第 2 段階(適用の FHIR 構造): `frontend/src/fhir/pathwayApplyHelpers.ts`(§7)、
+  backend `app/controllers/fhir_proxy_controller.rb` の許可リストに CarePlan / Goal、
+  上流(別リポジトリ `fhir-server`)に CarePlan / Goal リソース一式
 - frontend: `api/masterClient.ts` / `api/masterQueries.ts`(クリニカルパス節)、`fhir/pathwayHelpers.ts`(選択肢・draft ⇔ API・検証・概要表)、
   `pages/PathwayListPage.tsx`、`pages/PathwayEditorPage.tsx`、`components/PathwayEventCard.tsx`(病日 + OAT ユニット)、
   `components/PathwayOverviewTable.tsx`、`components/PathwayTaskTemplateModal.tsx`、`App.tsx`(マスタメンテ > クリニカルパス > パス定義、`/pathways` 3 ルート)、
   `App.css`(`.pathway-*`)
 
-### 8.1 検証したこと(2026-09-12、開発環境、児玉 義憲でログイン)
+### 9.1 検証したこと(2026-09-12、開発環境、児玉 義憲でログイン)
 
 - `RAILS_ENV=test ADMIN_TOKEN= bundle exec rspec spec/requests/master/pathways_spec.rb spec/requests/master/regimens_spec.rb`(コンテナ内)43 件成功、
   コンテナ内 `npx tsc -b` 成功。
@@ -251,7 +310,20 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
   凍結の注意が出る。「複製」→ `/pathways/3`(コード 000002、下書き、複製元 000001)。OAT ユニットの uuid が複製元と一致し、
   タスクの `assessment_id` は新しい観察項目を指す。検証データは片付けた(seed の 900001 だけ残る)。
 
-## 9. 申し送り
+### 9.2 検証したこと(適用の FHIR 構造、2026-09-12、テスト太郎)
+
+画面がまだ無い段階なので、開発サーバーの Vite が配るモジュールをブラウザから直に読み込んで
+`buildPathwayApplyBundle` を動かし、上流に流して確かめた。
+
+- サンプルのパス 900001 を 2026-09-20 入院で組むと **126 entry**(適用 1 + 病日 5 + OAT ユニット 14 +
+  観察項目 56 + タスク 50)。観察項目 56 は定義の 43 に、観察項目に結ばないタスクを包む空の観察項目 13 が足されたもの。
+- `POST /fhir` で全 126 件が 201 Created。`urn:uuid` の参照(partOf / basedOn)は上流が解決する。
+- 検索: `part-of:missing=true` + `category=clinical-pathway` で適用 1 件、`part-of=CarePlan/{適用}` で子孫 75 件、
+  `category=oat-unit` で 14 件、`category=assessment` + `_revinclude=Procedure:based-on` で 106 件(観察項目 56 + タスク 50)。
+- `parsePathwayApplication` に読み戻すと、病日 5 件が病日順に並び、各 OAT ユニットの重要フラグ・観察項目・タスクまで復元される。
+- 検証データは 126 件すべて削除した(上流に残るのは削除済みの行だけ)。コンテナ内 `tsc -b` 成功。
+
+## 10. 申し送り
 
 - BOM(Basic Outcome Master®)は日本クリニカルパス学会の知財で同梱しない。IG に載っている分類(G/H、19/34/37)と例示コードだけを候補に出す。
   施設が BOM の利用許諾を持つなら、コード体系 BOM でコードを手入力できる。
