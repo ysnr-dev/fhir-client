@@ -16,6 +16,7 @@ import {
   pathoOrderResponseIds,
 } from "./pathoOrderHelpers";
 import { pathoTaskStatus, pathoTasksByOrderId, type PathoTaskStatus } from "./pathoTaskHelpers";
+import { pathwayOf } from "./pathwayApplyHelpers";
 import { ORDER_TYPE_SYSTEM, prescriptionProblem } from "./prescriptionHelpers";
 import { categoryCoding } from "./shared";
 import {
@@ -1108,6 +1109,16 @@ export function mergeDayIndex(
         byDay.get(day) ??
         (day === KARTE_UNSCHEDULED_DAY || cutoff === undefined || day > cutoff ? [] : null),
     }));
+}
+
+// ---- クリニカルパスとの紐付け ----
+
+/**
+ * この情報がクリニカルパスのオーダー雛形から出たものなら、そのパスのコードと名前。
+ * 印はオーダーのヘッダ(ServiceRequest)に焼いてあるので、ヘッダを持つ種別だけが対象。
+ */
+export function itemPathway(item: KarteTimelineItem): { code: string; name: string } | null {
+  return "serviceRequest" in item ? pathwayOf(item.serviceRequest) : null;
 }
 
 // ---- プロブレム(POMR)との紐付け ----

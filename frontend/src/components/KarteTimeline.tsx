@@ -33,6 +33,7 @@ import {
   karteItemKindLabel,
   karteDayLabel,
   karteItemKey,
+  itemPathway,
   itemProblem,
   referencesProblem,
   type KarteDayGroup,
@@ -482,6 +483,7 @@ const KarteCard = memo(function KarteCard({
           </span>
           <span className="karte-card__title">{cardTitle(item)}</span>
           <ProblemBadge problem={itemProblem(item)} problemsById={problemsById} />
+          <PathwayBadge pathway={itemPathway(item)} />
           {/* 検体検査は中間報告と、確定後に直した訂正報告をカードで見分けられるようにする。 */}
           {item.kind === "lab-order" && item.reportStatus === "preliminary" && (
             <span className="micro-result__badge">結果:中間報告</span>
@@ -2494,6 +2496,20 @@ function ProblemBadge({
       title={current ? "対象プロブレム" : "このプロブレムは削除されています"}
     >
       {current ? problemLabel(current) : `${problem.display || "不明"} (削除済み)`}
+    </span>
+  );
+}
+
+// クリニカルパスのオーダー雛形から出たオーダーに付ける印。パス名は長いので
+// バッジは「パス」だけにして、名前はツールチップに回す(docs/clinical-pathway-design.md §5.1)。
+function PathwayBadge({ pathway }: { pathway: { code: string; name: string } | null }) {
+  if (!pathway) return null;
+  return (
+    <span
+      className="karte-card__problem karte-card__pathway"
+      title={`クリニカルパス: ${pathway.name || pathway.code}`}
+    >
+      パス
     </span>
   );
 }

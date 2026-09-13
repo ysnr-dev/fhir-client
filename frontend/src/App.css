@@ -5721,6 +5721,12 @@ body.karte-wide {
   border-style: dashed;
 }
 
+/* クリニカルパスから出たオーダーの印。プロブレムと同じ形で、地色だけ敷いて見分ける。 */
+.karte-card__pathway {
+  background: var(--surface-sunken);
+  white-space: nowrap;
+}
+
 /* プロブレム選択中、そのプロブレムに紐付かない情報は控えめに出す
    (隠すとスクロール位置と追加読み込みの判定が動くため減光にとどめる)。 */
 .karte-card--dimmed {
