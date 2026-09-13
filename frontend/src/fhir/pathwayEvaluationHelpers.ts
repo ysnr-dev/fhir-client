@@ -11,7 +11,8 @@ import {
   PATHWAY_MARKER_SYSTEM,
   type PathwayOatUnitRecord,
 } from "./pathwayApplyHelpers";
-import { NURSING_OBSERVATION_RESULT_SYSTEM } from "./nursingPerformHelpers";
+import { NURSING_OBSERVATION_RESULT_SYSTEM, nursingVitalCodeOf } from "./nursingPerformHelpers";
+import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
 import { buildBloodPressureComponents } from "./vitalHelpers";
 
 // クリニカルパスの日次評価(1 病日 × 1 OAT ユニット)の FHIR 構造。ePath の適用後パスデータに倣う。
@@ -227,6 +228,70 @@ export function resultInputOf(observation: fhir4.Observation | undefined): [stri
     return [String(components[0].valueQuantity?.value ?? ""), String(components[1].valueQuantity?.value ?? "")];
   }
   return ["", ""];
+}
+
+// ---- 実績値の候補(経過表) ----
+
+const LOINC_SYSTEM = "http://loinc.org";
+const BLOOD_PRESSURE_CODE = "85354-9";
+const SYSTOLIC_CODE = "8480-6";
+const DIASTOLIC_CODE = "8462-4";
+
+export interface AssessmentCandidate {
+  values: [string, string];
+  /** 「37.2℃(14:00)」。 */
+  label: string;
+}
+
+function hasCoding(concept: fhir4.CodeableConcept | undefined, system: string, code: string): boolean {
+  return Boolean(concept?.coding?.some((c) => c.system === system && c.code === code));
+}
+
+/**
+ * 看護観察に結んだ観察項目の、その日の経過表の値(最後に記録したもの)。［決定］バイタル(体温・脈拍・SpO2・
+ * 血圧など LOINC を持つもの)は手入力のバイタルと看護観察の記録のどちらからも読み、それ以外の看護観察は
+ * 同じ管理番号の記録から読む。パスの実績(自分自身)は候補にしない。候補が無ければ null。
+ */
+export function assessmentCandidate(
+  manageNo: string,
+  date: string,
+  observations: fhir4.Observation[],
+): AssessmentCandidate | null {
+  if (!manageNo || !date) return null;
+  const vital = nursingVitalCodeOf(manageNo);
+  const matches = observations
+    .filter((o) => !isPathwayObservation(o) && o.status !== "entered-in-error")
+    .filter((o) => (o.effectiveDateTime ?? "").slice(0, 10) === date)
+    .filter((o) => {
+      if (hasCoding(o.code, NURSING_OBSERVATION_CODE_SYSTEM, manageNo)) return true;
+      if (vital?.kind === "measure") return hasCoding(o.code, LOINC_SYSTEM, vital.code);
+      if (vital?.kind === "bp") return hasCoding(o.code, LOINC_SYSTEM, BLOOD_PRESSURE_CODE);
+      return false;
+    })
+    .sort((a, b) => (a.effectiveDateTime ?? "").localeCompare(b.effectiveDateTime ?? ""));
+  const latest = matches.at(-1);
+  if (!latest) return null;
+  const time = (latest.effectiveDateTime ?? "").slice(11, 16);
+  const suffix = time ? `(${time})` : "";
+
+  if (vital?.kind === "bp") {
+    const part = (code: string) =>
+      latest.component?.find((c) => hasCoding(c.code, LOINC_SYSTEM, code))?.valueQuantity?.value;
+    const systolic = part(SYSTOLIC_CODE);
+    const diastolic = part(DIASTOLIC_CODE);
+    if (vital.part === "systolic" && systolic !== undefined) return { values: [String(systolic), ""], label: `${systolic}mmHg${suffix}` };
+    if (vital.part === "diastolic" && diastolic !== undefined) return { values: [String(diastolic), ""], label: `${diastolic}mmHg${suffix}` };
+    if (vital.part === "both" && systolic !== undefined && diastolic !== undefined) {
+      return { values: [String(systolic), String(diastolic)], label: `${systolic}/${diastolic}mmHg${suffix}` };
+    }
+    return null;
+  }
+  if (latest.valueQuantity?.value !== undefined) {
+    const unit = latest.valueQuantity.unit ?? (vital?.kind === "measure" ? vital.unit : "");
+    return { values: [String(latest.valueQuantity.value), ""], label: `${latest.valueQuantity.value}${unit}${suffix}` };
+  }
+  const text = latest.valueString ?? latest.valueCodeableConcept?.text ?? latest.valueCodeableConcept?.coding?.[0]?.display;
+  return text ? { values: [text, ""], label: `${text}${suffix}` } : null;
 }
 
 export function evaluationValuesOf(

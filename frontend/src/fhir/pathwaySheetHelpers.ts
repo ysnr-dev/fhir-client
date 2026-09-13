@@ -233,8 +233,9 @@ export function isNursingLinkedTask(
 
 /**
  * その病日にタスクを実施したか。［決定］看護指示を結んだタスクは、その日の実施記録があれば実施とみなす
- * (続く病日にまたがる 1 件の指示を日ごとに記録するため)。それ以外はタスクの Procedure の状態。
- * パスシートのセルと評価パネルのチェックが同じ判定を使う。
+ * (続く病日にまたがる 1 件の指示を日ごとに記録するため)。その他のオーダーを結んだタスクは、オーダーが
+ * 実施済みになれば実施(部門が実施を記録する)。どれでもなければタスクの Procedure の状態。
+ * パスシートのセル・評価パネル・日めくりのチェック・進み具合の集計が同じ判定を使う。
  */
 export function pathwayTaskPerformedOn(
   task: { orderIds: string[]; done: boolean },
@@ -245,8 +246,85 @@ export function pathwayTaskPerformedOn(
   if (task.done) return true;
   return task.orderIds.some((id) => {
     const sr = orders?.get(id);
-    return Boolean(sr && isNursingServiceRequest(sr) && performDates.get(id)?.has(date));
+    if (!sr) return false;
+    if (isNursingServiceRequest(sr)) return Boolean(performDates.get(id)?.has(date));
+    return sr.status === "completed";
   });
+}
+
+/**
+ * タスクの実施がオーダーの側で決まるか(看護指示を結んでいる、またはオーダーが実施済み)。
+ * そのときは評価パネル・日めくりのチェックを押せなくする(実施は実施入力・部門で記録する)。
+ */
+export function isOrderDrivenTask(
+  task: { orderIds: string[] },
+  orders: Map<string, fhir4.ServiceRequest> | undefined,
+): boolean {
+  return task.orderIds.some((id) => {
+    const sr = orders?.get(id);
+    return Boolean(sr && (isNursingServiceRequest(sr) || sr.status === "completed"));
+  });
+}
+
+// ---- 進み具合 ----
+
+/** 見出し帯の集計の区分。未評価(今日まで)・バリアンス・未実施(今日まで)。 */
+export type SheetIssue = "pending" | "variance" | "undone";
+
+export interface SheetProgress {
+  counts: Record<SheetIssue, number>;
+  /** 区分ごとに、該当するセルを持つ行の key。 */
+  rowKeys: Record<SheetIssue, Set<string>>;
+}
+
+/**
+ * 進み具合の集計。［決定］未評価と未実施は今日までの病日だけを数える(先の病日はまだ評価・実施しないので)。
+ * 未評価は達成状態が無いか「未評価」を記録したアウトカムのセル、バリアンスは「未達成」のセル(期間を問わない)、
+ * 未実施はタスクのセルで pathwayTaskPerformedOn が偽のもの。数はセルの数。
+ */
+export function sheetProgress(
+  sheet: PathwaySheet,
+  today: string,
+  orders: Map<string, fhir4.ServiceRequest> | undefined,
+  performDates: Map<string, Set<string>>,
+): SheetProgress {
+  const counts: Record<SheetIssue, number> = { pending: 0, variance: 0, undone: 0 };
+  const rowKeys: Record<SheetIssue, Set<string>> = { pending: new Set(), variance: new Set(), undone: new Set() };
+  const dateOf = new Map(sheet.days.map((d) => [d.eventId, d.date]));
+  for (const row of sheet.rows) {
+    for (const [eventId, cell] of row.cells) {
+      const date = dateOf.get(eventId) ?? "";
+      if (row.kind === "unit") {
+        const achievement = (cell as SheetUnitCell).achievement;
+        if (achievement === "2") {
+          counts.variance++;
+          rowKeys.variance.add(row.key);
+        } else if ((!achievement || achievement === "3") && date <= today) {
+          counts.pending++;
+          rowKeys.pending.add(row.key);
+        }
+      } else if (row.kind === "task" && date <= today) {
+        if (!pathwayTaskPerformedOn(cell as SheetTaskCell, date, orders, performDates)) {
+          counts.undone++;
+          rowKeys.undone.add(row.key);
+        }
+      }
+    }
+  }
+  return { counts, rowKeys };
+}
+
+/**
+ * 集計の区分で行を絞る。未評価・バリアンスはそのアウトカムの行と配下の行、未実施はそのタスクの行と
+ * 属するアウトカムの行を出す(畳んだアウトカムも開いて出す)。
+ */
+export function filterSheetRows(rows: SheetRow[], issue: SheetIssue, progress: SheetProgress): SheetRow[] {
+  const keys = progress.rowKeys[issue];
+  if (issue === "undone") {
+    const units = new Set(rows.filter((r) => keys.has(r.key)).map((r) => r.unitKey));
+    return rows.filter((r) => (r.kind === "unit" ? units.has(r.key) : r.kind === "task" && keys.has(r.key)));
+  }
+  return rows.filter((r) => keys.has(r.unitKey));
 }
 
 /** 今日が何病日目か(パスの病日に無ければ null)。 */

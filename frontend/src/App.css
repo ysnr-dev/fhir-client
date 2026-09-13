@@ -14483,10 +14483,11 @@ button.meal-calendar__cell:hover {
   color: var(--text-muted);
 }
 
-/* 見出しの帯のメニュー(日程の変更・適用の取り消し)。帯の行を増やさないよう小さなケバブにする。 */
+/* 見出しの帯のメニュー(予定外を追加・日程の変更・終了・取り消し)。帯の行を増やさないよう右端の小さなケバブにする。 */
 .pathway-sheet__menu {
   display: inline-flex;
   align-self: center;
+  margin-left: auto;
 }
 
 .pathway-sheet__menu .row-menu__trigger {
@@ -14521,8 +14522,210 @@ button.meal-calendar__cell:hover {
   padding: 0 10px;
 }
 
+/* 見出しの右の表示の切り替え(日めくり / 全体)。2 つを 1 組の枠に並べ、選んでいる方に地色を敷く。 */
+.pathway-sheet__modes {
+  display: inline-flex;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+.pathway-sheet__modes .pathway-sheet__mode {
+  --control-height: 28px;
+  font-size: 13px;
+  padding: 0 12px;
+  border-radius: 0;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.pathway-sheet__modes .pathway-sheet__mode:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.pathway-sheet__modes .pathway-sheet__mode:last-child {
+  border-radius: 0 6px 6px 0;
+  margin-left: -1px;
+}
+
+.pathway-sheet__modes .pathway-sheet__mode--active {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* 見出し帯の進み具合(未評価・バリアンス・未実施)。押すと全体をその行に絞る。 */
+.pathway-sheet__issue {
+  --control-height: 22px;
+  gap: 4px;
+  font-size: 12px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.pathway-sheet__issue--variance:not(:disabled) {
+  border-color: #e0687a;
+  color: #e0687a;
+}
+
+/* 絞り込み中の件数は塗りつぶし、「×」を添えて押すと解除できることを示す。 */
+.pathway-sheet__issue.pathway-sheet__issue--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.pathway-sheet__issue--variance.pathway-sheet__issue--active {
+  background: #e0687a;
+  border-color: #e0687a;
+  color: var(--bg);
+}
+
+.pathway-sheet__issue-clear {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* 日めくり。病日の見出しと前後の送り、アウトカムごとのカード。全画面でも読みやすい幅で止めて中央に置く。 */
+.pathway-day {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  overflow-y: auto;
+}
+
+.pathway-day__nav {
+  --control-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pathway-day__nav button {
+  font-size: 13px;
+  padding: 0 10px;
+}
+
+.pathway-day__title {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.pathway-day__title strong {
+  font-size: 16px;
+  color: var(--text-h);
+}
+
+.pathway-day__date {
+  font-size: 13px;
+}
+
+.pathway-day__today {
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.pathway-day__unit {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.pathway-day__unit--critical {
+  border-left-color: #e0687a;
+}
+
+.pathway-day__unit-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 6px;
+}
+
+.pathway-day__unit-head h4 {
+  flex: 1 1 200px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.pathway-day__unit-head .pathway-sheet__unplanned {
+  display: inline;
+  margin-left: 6px;
+}
+
+.pathway-day__achievement {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.pathway-day__rows {
+  margin-bottom: 6px;
+}
+
+.pathway-day__tasks li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.pathway-day__task-link {
+  height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pathway-day__task-link:hover {
+  text-decoration: underline;
+}
+
+.pathway-day__actions {
+  justify-content: flex-end;
+}
+
+/* 観察項目の実績値の候補(その日の経過表の値)。押すと入力欄に入る。 */
+.pathway-evaluate__rows td.pathway-day__candidate-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.pathway-evaluate__candidate {
+  --control-height: 22px;
+  font-size: 12px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border-style: dashed;
+}
+
 .pathway-sheet__summary button:first-of-type {
   margin-left: auto;
+}
+
+/* 進み具合の件数は状態の横に置き、その後ろの操作(予定外を追加・終了)から右端へ寄せる。 */
+.pathway-sheet__summary .pathway-sheet__issue:first-of-type {
+  margin-left: 0;
 }
 
 /* 予定外の追加。タスクは分類 2 つ + 名称。 */

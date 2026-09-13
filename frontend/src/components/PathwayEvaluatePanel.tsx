@@ -5,11 +5,13 @@ import {
   usePathwayApplicationTree,
   usePathwayObservations,
   useRecordPathwayEvaluation,
+  useVitalFlowsheet,
 } from "../api/queries";
 import { useCurrentPractitioner } from "../api/authQueries";
 import {
   ACHIEVEMENT_OPTIONS,
   SOAP_ITEMS,
+  assessmentCandidate,
   assessmentInputSpec,
   buildEvaluationState,
   buildPathwayEvaluationBundle,
@@ -25,7 +27,7 @@ import {
 } from "../fhir/questionnaireResponseHelpers";
 import { eventDayStepLabel, taskCategoryLabel } from "../fhir/pathwayHelpers";
 import {
-  isNursingLinkedTask,
+  isOrderDrivenTask,
   nursingPerformDates,
   orderStatusLabel,
   pathwayTaskPerformedOn,
@@ -94,6 +96,8 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
     [found],
   );
   const masters = useNursingObservationsByManageNos(manageNos);
+  // 看護観察に結んだ観察項目の候補(その日の経過表の値)。
+  const vitals = useVitalFlowsheet(patientId, found?.event.date ?? "", found?.event.date ?? "");
   const specs = useMemo(() => {
     const map = new Map<string, ReturnType<typeof assessmentInputSpec>>();
     for (const assessment of found?.unit.assessments ?? []) {
@@ -222,6 +226,28 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
                         }}
                       />
                     </td>
+                    <td className="pathway-day__candidate-cell">
+                      {(() => {
+                        const candidate = assessmentCandidate(
+                          assessment.nursingObservationManageNo,
+                          event.date,
+                          vitals.data ?? [],
+                        );
+                        return candidate ? (
+                          <button
+                            type="button"
+                            className="pathway-evaluate__candidate"
+                            onClick={() => {
+                              const next = new Map(values.results);
+                              next.set(assessment.id, candidate.values);
+                              update("results", next);
+                            }}
+                          >
+                            {candidate.label}
+                          </button>
+                        ) : null;
+                      })()}
+                    </td>
                   </tr>
                 ))}
             </tbody>
@@ -235,9 +261,9 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
           <ul className="pathway-apply__conditions">
             {tasks.map((task) => {
               const order = task.orderIds.map((id) => tree.data?.orders.get(id)).find(Boolean);
-              // 看護指示を結んだタスクは、その日の実施記録で決まる(実施入力で記録する)ので、ここでは変えない。
-              const nursing = isNursingLinkedTask(task, tree.data?.orders);
-              const checked = nursing
+              // 看護指示を結んだ・オーダーが実施済みのタスクは、実施がオーダーの側で決まるのでここでは変えない。
+              const orderDriven = isOrderDrivenTask(task, tree.data?.orders);
+              const checked = orderDriven
                 ? pathwayTaskPerformedOn(task, event.date, tree.data?.orders, performDates)
                 : (values.tasksDone.get(task.id) ?? task.done);
               return (
@@ -246,7 +272,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
                     <input
                       type="checkbox"
                       checked={checked}
-                      disabled={nursing}
+                      disabled={orderDriven}
                       onChange={(e) => {
                         const next = new Map(values.tasksDone);
                         next.set(task.id, e.target.checked);

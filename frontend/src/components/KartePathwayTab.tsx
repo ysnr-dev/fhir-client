@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   useNursingPerformsOf,
   useNursingPerformsOn,
@@ -11,9 +11,12 @@ import { orderKindOf } from "../fhir/karteTimeline";
 import { buildEvaluationState } from "../fhir/pathwayEvaluationHelpers";
 import {
   buildPathwaySheet,
+  filterSheetRows,
   nursingPerformDates,
   orderStatusLabel,
   pathwayTaskPerformedOn,
+  sheetProgress,
+  type SheetIssue,
   pathwayStatusLabel,
   todayEventOf,
   type PathwaySheet,
@@ -24,13 +27,14 @@ import {
 } from "../fhir/pathwaySheetHelpers";
 import { pathStepLabel } from "../fhir/pathwayHelpers";
 import { orderStartDate } from "../fhir/pathwayScheduleHelpers";
-import { formatPathwaySheetView, parsePathwaySheetView } from "../karteUrl";
+import { formatPathwaySheetView, parsePathwaySheetView, type PathwaySheetView } from "../karteUrl";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { NursingPerformModal } from "./NursingPerformModal";
 import { PathwayCancelPanel } from "./PathwayCancelPanel";
 import { PathwayClosePanel } from "./PathwayClosePanel";
+import { PathwayDayView, defaultDayEventId } from "./PathwayDayView";
 import { PathwayEvaluatePanel } from "./PathwayEvaluatePanel";
 import { PathwayOrderModal } from "./PathwayOrderModal";
 import { PathwaySchedulePanel } from "./PathwaySchedulePanel";
@@ -69,8 +73,16 @@ interface KartePathwayTabProps {
   onOpenOrder: (kind: PathwayOrderKind, srId: string) => void;
 }
 
-/** 左ペインの幅で読める病日の列数。これを超える分は表の中だけ横に送る。 */
-const SHEET_COLUMN_WIDTH = 96;
+/** 病日の列幅の下限と上限。表の幅に収まるだけ広げ、収まらなければ下限のまま表の中だけ横に送る。 */
+const SHEET_COLUMN_MIN = 96;
+const SHEET_COLUMN_MAX = 180;
+/** 行の見出し列の幅(App.css の .pathway-sheet__label-col と揃える)。 */
+const SHEET_LABEL_WIDTH = 220;
+const SHEET_LABEL_WIDTH_FULLSCREEN = 320;
+/** 病日のセルの左右の余白の合計(App.css の .pathway-sheet__table td の padding)。 */
+const SHEET_CELL_PADDING = 16;
+
+const ISSUE_LABELS: Record<SheetIssue, string> = { pending: "未評価", variance: "バリアンス", undone: "未実施" };
 
 /** セルが属する OAT ユニット(CarePlan)の id。観察項目・タスクの行は、同じ組の見出し行(unit)から引く。 */
 function sheetUnitIdOf(
@@ -112,9 +124,15 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
     [conditions],
   );
 
-  function updateView(next: { applyId?: string; fullscreen?: boolean }) {
-    onViewChange(formatPathwaySheetView({ applyId: selected?.id, fullscreen, ...next }));
+  function updateView(next: PathwaySheetView) {
+    onViewChange(
+      formatPathwaySheetView({ applyId: selected?.id, mode: current.mode, eventId: current.eventId, fullscreen, ...next }),
+    );
   }
+  // 表示の既定は、進行中の適用なら日めくり、終わった適用ならオーバービュー。
+  const mode = current.mode ?? (selected?.status === "active" ? "day" : "sheet");
+  // 見出し帯の集計(未評価・バリアンス・未実施)でオーバービューの行を絞っているとき。
+  const [issue, setIssue] = useState<SheetIssue | null>(null);
 
   const tree = usePathwayApplicationTree(selected?.id);
   const observations = usePathwayObservations(patientId);
@@ -169,8 +187,76 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
     return `${date === todayDate ? " pathway-sheet__day--today" : ""}${date < todayDate ? " pathway-sheet__day--past" : ""}`;
   }
 
-  const visibleRows = sheet?.rows.filter((row) => row.kind === "unit" || !collapsedUnits.has(row.unitKey)) ?? [];
+  const progress = sheet ? sheetProgress(sheet, todayDate, orders, performDates) : null;
+  const visibleRows =
+    sheet && progress && issue
+      ? filterSheetRows(sheet.rows, issue, progress)
+      : (sheet?.rows.filter((row) => row.kind === "unit" || !collapsedUnits.has(row.unitKey)) ?? []);
   const todayEvent = application ? todayEventOf(application.events, todayDate) : null;
+  const dayEventId =
+    application && current.eventId && application.events.some((e) => e.id === current.eventId)
+      ? current.eventId
+      : application
+        ? defaultDayEventId(application.events, todayDate)
+        : "";
+
+  // タスクのセル・日めくりのタスクから、結んだオーダーの画面(看護指示は実施入力)を開く。
+  // オーダーを持たないタスクは、そのタスクの実施 / 未実施の記録を開く。
+  function openTask(orderIds: string[], procedureId: string, date: string) {
+    const linked = orderIds
+      .map((id) => orders?.get(id))
+      .filter((sr): sr is fhir4.ServiceRequest => Boolean(sr));
+    const nursing = linked.filter((sr) => orderKindOf(sr) === "nursing-order");
+    if (nursing.length > 0) {
+      setNursingPerform({ orders: nursing, date });
+      return;
+    }
+    const kind = linked[0] ? orderKindOf(linked[0]) : null;
+    if (linked[0] && kind && kind !== "nursing-order" && kind !== "chemo-regimen") {
+      setModalOrder({ order: linked[0], kind });
+      return;
+    }
+    setModalTaskId(procedureId);
+  }
+
+  // 病日の列幅。表の幅(見出し列を除く)を列の数で割り、下限と上限の間に収める。
+  // 自動化のタブでは ResizeObserver が発火しないことがあるので、描画のたびと画面の大きさが変わったときに同期で測る。
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [columnWidth, setColumnWidth] = useState(SHEET_COLUMN_MIN);
+  const columnCount = sheet?.days.length ?? 0;
+  useLayoutEffect(() => {
+    function measure() {
+      const wrap = wrapRef.current;
+      if (!wrap || columnCount === 0) return;
+      const label = fullscreen ? SHEET_LABEL_WIDTH_FULLSCREEN : SHEET_LABEL_WIDTH;
+      // 右端の詰め物の列にも余白があるので、その分も引く。
+      const available = wrap.clientWidth - label - SHEET_CELL_PADDING - 1;
+      // 列幅(--pathway-sheet-col-w)はセルの中身の幅で、左右の余白(8px ずつ)はその外に足される。
+      const width = Math.max(
+        SHEET_COLUMN_MIN,
+        Math.min(SHEET_COLUMN_MAX, Math.floor(available / columnCount) - SHEET_CELL_PADDING),
+      );
+      setColumnWidth((prev) => (prev === width ? prev : width));
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  });
+
+  // オーバービューを開いたとき(適用・表示を切り替えたとき)に、今日の列と、今日まだ評価していない最初のアウトカムへ寄せる。
+  const scrolledFor = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const key = `${selected?.id ?? ""}:${mode}:${issue ?? ""}`;
+    const wrap = wrapRef.current;
+    if (mode !== "sheet" || !wrap || !sheet || !evaluation || scrolledFor.current === key) return;
+    scrolledFor.current = key;
+    const label = fullscreen ? SHEET_LABEL_WIDTH_FULLSCREEN : SHEET_LABEL_WIDTH;
+    const todayHeader = wrap.querySelector<HTMLElement>("thead .pathway-sheet__day--today");
+    wrap.scrollLeft = todayHeader ? Math.max(0, todayHeader.offsetLeft - label) : 0;
+    const head = wrap.querySelector<HTMLElement>("thead");
+    const pendingRow = wrap.querySelector<HTMLElement>("tr.pathway-sheet__row--unit[data-pending-today]");
+    wrap.scrollTop = pendingRow ? Math.max(0, pendingRow.offsetTop - (head?.offsetHeight ?? 0)) : 0;
+  });
 
   // 全画面はビューポート全体ではなく「患者情報の下」から始める(経過表と同じ)。
   const panelRef = useRef<HTMLDivElement>(null);
@@ -243,13 +329,31 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
       className={`karte-tabpanel pathway-sheet${fullscreen ? " pathway-sheet--fullscreen" : ""}`}
       style={{
         ...(fullscreen ? { top: fullscreenTop } : {}),
-        ["--pathway-sheet-col-w" as string]: `${SHEET_COLUMN_WIDTH}px`,
+        ["--pathway-sheet-col-w" as string]: `${columnWidth}px`,
       }}
     >
       <div className="karte-tabpanel__header">
         <div className="karte-tabpanel__title">
           <h3>クリニカルパス</h3>
         </div>
+        {list.length > 0 && (
+          <div className="pathway-sheet__modes" role="group" aria-label="表示">
+            {(["day", "sheet"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={mode === m}
+                className={`pathway-sheet__mode${mode === m ? " pathway-sheet__mode--active" : ""}`}
+                onClick={() => {
+                  setIssue(null);
+                  updateView({ mode: m });
+                }}
+              >
+                {m === "day" ? "日めくり" : "オーバービュー"}
+              </button>
+            ))}
+          </div>
+        )}
         {list.length > 0 && (
           <button type="button" onClick={() => updateView({ fullscreen: !fullscreen })}>
             {fullscreen ? "全画面を終了" : "全画面"}
@@ -270,7 +374,10 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
               className={`chemo-calendar__regimen${a.id === selected?.id ? " chemo-calendar__regimen--active" : ""}${
                 a.status !== "active" ? " chemo-calendar__regimen--inactive" : ""
               }`}
-              onClick={() => updateView({ applyId: a.id })}
+              onClick={() => {
+                setIssue(null);
+                updateView({ applyId: a.id, mode: undefined, eventId: undefined });
+              }}
             >
               {a.title}
               {a.status !== "active" && (
@@ -301,24 +408,44 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
               {pathwayStatusLabel(application.status)}
               {application.periodEnd && ` ${application.periodEnd}`}
             </span>
-            {application.status === "active" && (
-              <button
-                type="button"
-                className="pathway-sheet__close-button"
-                onClick={() => setUnplannedOpen(true)}
-              >
-                予定外を追加
-              </button>
-            )}
-            <button type="button" className="pathway-sheet__close-button" onClick={() => setCloseOpen(true)}>
-              {application.status === "active" ? "終了・中止" : "終了の記録"}
-            </button>
-            {application.status === "active" && (
-              <span className="pathway-sheet__menu">
-                <RowMenu label="パスの操作" escapesClipping>
-                  <button type="button" className="row-menu__item" onClick={() => setScheduleOpen(true)}>
-                    日程の変更
-                  </button>
+            {/* 件数はオーバービューの行を絞るためのもので、日めくりでは出さない。 */}
+            {mode === "sheet" &&
+              progress &&
+              (["pending", "variance", "undone"] as const).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={issue === key}
+                  className={`pathway-sheet__issue pathway-sheet__issue--${key}${issue === key ? " pathway-sheet__issue--active" : ""}`}
+                  disabled={progress.counts[key] === 0 && issue !== key}
+                  title={issue === key ? "絞り込みを解除" : undefined}
+                  onClick={() => setIssue(issue === key ? null : key)}
+                >
+                  {`${ISSUE_LABELS[key]} ${progress.counts[key]}`}
+                  {issue === key && (
+                    <span className="pathway-sheet__issue-clear" aria-hidden="true">
+                      ×
+                    </span>
+                  )}
+                </button>
+              ))}
+            {/* 操作は帯の行を増やさないよう、右端の小さなケバブにまとめる。 */}
+            <span className="pathway-sheet__menu">
+              <RowMenu label="パスの操作" escapesClipping>
+                {application.status === "active" && (
+                  <>
+                    <button type="button" className="row-menu__item" onClick={() => setUnplannedOpen(true)}>
+                      予定外を追加
+                    </button>
+                    <button type="button" className="row-menu__item" onClick={() => setScheduleOpen(true)}>
+                      日程の変更
+                    </button>
+                  </>
+                )}
+                <button type="button" className="row-menu__item" onClick={() => setCloseOpen(true)}>
+                  {application.status === "active" ? "終了・中止" : "終了の記録"}
+                </button>
+                {application.status === "active" && (
                   <button
                     type="button"
                     className="row-menu__item row-menu__item--danger"
@@ -326,12 +453,29 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                   >
                     適用の取り消し
                   </button>
-                </RowMenu>
-              </span>
-            )}
+                )}
+              </RowMenu>
+            </span>
           </div>
 
-          <div className="lab-timeline__table-wrap pathway-sheet__wrap">
+          {mode === "day" && (
+            <PathwayDayView
+              patientId={patientId}
+              application={application}
+              carePlans={tree.data?.carePlans ?? new Map()}
+              procedures={tree.data?.procedures ?? new Map()}
+              orders={orders ?? new Map()}
+              evaluation={evaluation}
+              performDates={performDates}
+              eventId={dayEventId}
+              today={todayDate}
+              onEventChange={(eventId) => updateView({ mode: "day", eventId })}
+              onOpenEvaluation={(unitId) => setModalUnitId(unitId)}
+              onOpenTask={(task, date) => openTask(task.orderIds, task.id, date)}
+            />
+          )}
+          {mode === "sheet" && (
+          <div className="lab-timeline__table-wrap pathway-sheet__wrap" ref={wrapRef}>
             <table className="lab-timeline__table pathway-sheet__table">
               <thead>
                 <tr>
@@ -380,7 +524,19 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                 {visibleRows.map((row) => {
                   const collapsed = collapsedUnits.has(row.key);
                   return (
-                  <tr key={row.key} className={`pathway-sheet__row pathway-sheet__row--${row.kind}`}>
+                  <tr
+                    key={row.key}
+                    className={`pathway-sheet__row pathway-sheet__row--${row.kind}`}
+                    data-pending-today={
+                      row.kind === "unit" &&
+                      sheet.days.some((day) => {
+                        const cell = row.cells.get(day.eventId) as SheetUnitCell | undefined;
+                        return day.date === todayDate && cell && (!cell.achievement || cell.achievement === "3");
+                      })
+                        ? ""
+                        : undefined
+                    }
+                  >
                     <th scope="row" className="pathway-sheet__label-col">
                       {row.kind === "unit" && (
                         <button
@@ -423,25 +579,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                         if (!application || !unitId) return;
                         setModalUnitId(unitId);
                       };
-                      // タスクのセルは、結んだオーダーの画面(看護指示は実施入力)を開く。
-                      // オーダーを持たないタスクは、そのタスクの実施 / 未実施の記録を開く。
-                      const openTask = (task: SheetTaskCell) => {
-                        if (!application) return;
-                        const linked = task.orderIds
-                          .map((id) => orders?.get(id))
-                          .filter((sr): sr is fhir4.ServiceRequest => Boolean(sr));
-                        const nursing = linked.filter((sr) => orderKindOf(sr) === "nursing-order");
-                        if (nursing.length > 0) {
-                          setNursingPerform({ orders: nursing, date: day.date });
-                          return;
-                        }
-                        const kind = linked[0] ? orderKindOf(linked[0]) : null;
-                        if (linked[0] && kind && kind !== "nursing-order" && kind !== "chemo-regimen") {
-                          setModalOrder({ order: linked[0], kind });
-                          return;
-                        }
-                        setModalTaskId(task.procedureId);
-                      };
+                      const openCellTask = (task: SheetTaskCell) => openTask(task.orderIds, task.procedureId, day.date);
                       if (row.kind === "unit") {
                         const unit = cell as SheetUnitCell;
                         return (
@@ -487,7 +625,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                       const done = pathwayTaskPerformedOn(task, day.date, orders, performDates);
                       return (
                         <td key={day.eventId} className={classes} data-procedure-id={task.procedureId}>
-                          <button type="button" className="pathway-sheet__cell-button" onClick={() => openTask(task)}>
+                          <button type="button" className="pathway-sheet__cell-button" onClick={() => openCellTask(task)}>
                             <SeriesLink fromPrev={fromPrev} toNext={toNext}>
                               <span className={`pathway-sheet__task${done ? " pathway-sheet__task--done" : ""}`}>
                                 {done ? "☑" : "☐"}
@@ -519,6 +657,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
               </tbody>
             </table>
           </div>
+          )}
         </>
       )}
 

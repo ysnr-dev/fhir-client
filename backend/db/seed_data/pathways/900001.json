@@ -263,7 +263,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900032700",
-              "proper_value": "37.5℃未満"
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
             },
             {
               "assessment_key": "3dfc0776-7fac-48da-b9d5-2ca03d6e0764",
@@ -272,7 +273,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900034300",
-              "proper_value": "60〜100/分"
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
             },
             {
               "assessment_key": "3180206e-8783-44bd-aa97-148521d9e6cd",
@@ -281,7 +283,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900030700",
-              "proper_value": "90〜160mmHg"
+              "proper_value": "90〜160mmHg",
+              "nursing_observation_manage_no": "31001848"
             },
             {
               "assessment_key": "3ae2298e-1d3d-4111-9196-7c8a4bb83300",
@@ -290,7 +293,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900027300",
-              "proper_value": "95%以上"
+              "proper_value": "95%以上",
+              "nursing_observation_manage_no": "31000001"
             }
           ],
           "tasks": [
@@ -477,7 +481,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900032700",
-              "proper_value": "37.5℃未満"
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
             },
             {
               "assessment_key": "1fde7e82-26f3-407f-9780-3c585314b09a",
@@ -486,7 +491,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900034300",
-              "proper_value": "60〜100/分"
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
             },
             {
               "assessment_key": "cf39129d-c2b3-497a-8906-0b9004ae67f6",
@@ -495,7 +501,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900030700",
-              "proper_value": "90〜160mmHg"
+              "proper_value": "90〜160mmHg",
+              "nursing_observation_manage_no": "31001848"
             },
             {
               "assessment_key": "159950ec-0866-4088-8303-6eff9479e63e",
@@ -504,7 +511,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900027300",
-              "proper_value": "95%以上"
+              "proper_value": "95%以上",
+              "nursing_observation_manage_no": "31000001"
             },
             {
               "assessment_key": "8b9c4358-1373-423e-ac4e-a0b2c0385e67",
@@ -856,7 +864,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900032700",
-              "proper_value": "37.5℃未満"
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
             },
             {
               "assessment_key": "04cb9896-08e2-4968-8f24-d720f26e9472",
@@ -865,7 +874,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900034300",
-              "proper_value": "60〜100/分"
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
             },
             {
               "assessment_key": "bc7f890a-8806-4ca5-b958-44dc390aa2e7",
@@ -874,7 +884,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900030700",
-              "proper_value": "90〜160mmHg"
+              "proper_value": "90〜160mmHg",
+              "nursing_observation_manage_no": "31001848"
             },
             {
               "assessment_key": "34a99e7c-a43f-40a0-b54a-97bdf5798e09",
@@ -883,7 +894,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900027300",
-              "proper_value": "95%以上"
+              "proper_value": "95%以上",
+              "nursing_observation_manage_no": "31000001"
             }
           ],
           "tasks": [
@@ -1226,7 +1238,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900032700",
-              "proper_value": "37.5℃未満"
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
             },
             {
               "assessment_key": "04cb9896-08e2-4968-8f24-d720f26e9472",
@@ -1235,7 +1248,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900034300",
-              "proper_value": "60〜100/分"
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
             },
             {
               "assessment_key": "bc7f890a-8806-4ca5-b958-44dc390aa2e7",
@@ -1244,7 +1258,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900030700",
-              "proper_value": "90〜160mmHg"
+              "proper_value": "90〜160mmHg",
+              "nursing_observation_manage_no": "31001848"
             },
             {
               "assessment_key": "34a99e7c-a43f-40a0-b54a-97bdf5798e09",
@@ -1253,7 +1268,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900027300",
-              "proper_value": "95%以上"
+              "proper_value": "95%以上",
+              "nursing_observation_manage_no": "31000001"
             }
           ],
           "tasks": [
@@ -1825,7 +1841,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900032700",
-              "proper_value": "37.5℃未満"
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
             },
             {
               "assessment_key": "04cb9896-08e2-4968-8f24-d720f26e9472",
@@ -1834,7 +1851,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900034300",
-              "proper_value": "60〜100/分"
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
             },
             {
               "assessment_key": "bc7f890a-8806-4ca5-b958-44dc390aa2e7",
@@ -1843,7 +1861,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900030700",
-              "proper_value": "90〜160mmHg"
+              "proper_value": "90〜160mmHg",
+              "nursing_observation_manage_no": "31001848"
             },
             {
               "assessment_key": "34a99e7c-a43f-40a0-b54a-97bdf5798e09",
@@ -1852,7 +1871,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900027300",
-              "proper_value": "95%以上"
+              "proper_value": "95%以上",
+              "nursing_observation_manage_no": "31000001"
             }
           ],
           "tasks": [
@@ -2153,7 +2173,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900032700",
-              "proper_value": "37.5℃未満"
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
             },
             {
               "assessment_key": "f5279304-ff82-4b9c-b9db-b3693b44958b",
@@ -2162,7 +2183,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900034300",
-              "proper_value": "60〜100/分"
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
             },
             {
               "assessment_key": "98c73f2c-ad62-4496-af55-2a69fbe81361",
@@ -2171,7 +2193,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900030700",
-              "proper_value": "90〜160mmHg"
+              "proper_value": "90〜160mmHg",
+              "nursing_observation_manage_no": "31001848"
             },
             {
               "assessment_key": "cc48b6e9-3a95-4a2c-b857-8b432869f267",
@@ -2180,7 +2203,8 @@
               "category_name": "バイタルサイン",
               "code_system": "bom",
               "code": "1900027300",
-              "proper_value": "95%以上"
+              "proper_value": "95%以上",
+              "nursing_observation_manage_no": "31000001"
             },
             {
               "assessment_key": "92f5dbc5-9931-4609-b957-9d5f38306e51",

@@ -172,23 +172,39 @@ export function formatFlowsheetView(view: FlowsheetView, today: string): string 
 
 // ---- パスシートの表示状態 ----
 //
-// 形は「適用の id[!]」。適用が複数ある入院でどれを見ているかと、全画面かどうか
-// (経過表と同じ末尾の「!」)。既定(最初の適用・全画面でない)なら view を落とす。
+// 形は「適用の id[~表示][@病日][!]」。適用が複数ある入院でどれを見ているか、日めくり(day)か
+// オーバービュー(sheet)か、日めくりで開いている病日(病日の CarePlan の id)、全画面かどうか(経過表と同じ
+// 末尾の「!」)。表示を省くと進行中の適用は日めくり、終わった適用はオーバービューで開く。既定ばかりなら view を落とす。
+
+export type PathwaySheetMode = "day" | "sheet";
 
 export interface PathwaySheetView {
   applyId?: string;
+  mode?: PathwaySheetMode;
+  /** 日めくりで開いている病日(病日の CarePlan の id)。 */
+  eventId?: string;
   fullscreen?: boolean;
 }
 
 export function parsePathwaySheetView(value: string | undefined): PathwaySheetView {
-  const match = /^([^!]*)(!)?$/.exec(value ?? "");
+  const match = /^([^~@!]*)(?:~(day|sheet))?(?:@([^!]*))?(!)?$/.exec(value ?? "");
   if (!match) return {};
-  return { applyId: match[1] || undefined, fullscreen: Boolean(match[2]) };
+  return {
+    applyId: match[1] || undefined,
+    mode: (match[2] as PathwaySheetMode | undefined) || undefined,
+    eventId: match[3] || undefined,
+    fullscreen: Boolean(match[4]),
+  };
 }
 
 export function formatPathwaySheetView(view: PathwaySheetView): string | null {
-  if (!view.applyId && !view.fullscreen) return null;
-  return `${view.applyId ?? ""}${view.fullscreen ? "!" : ""}`;
+  if (!view.applyId && !view.mode && !view.eventId && !view.fullscreen) return null;
+  return [
+    view.applyId ?? "",
+    view.mode ? `~${view.mode}` : "",
+    view.eventId ? `@${view.eventId}` : "",
+    view.fullscreen ? "!" : "",
+  ].join("");
 }
 
 // ---- 種別での絞り込み ----
