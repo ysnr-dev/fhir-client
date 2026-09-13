@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_12_100500) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_13_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1133,7 +1133,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_12_100500) do
     t.text "note"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["pathway_code", "assessment_key"], name: "idx_on_pathway_code_assessment_key_c4770a6564", unique: true
+    t.index ["pathway_code", "assessment_key"], name: "idx_on_pathway_code_assessment_key_c4770a6564"
+    t.index ["unit_id", "assessment_key"], name: "index_master_pathway_assessments_on_unit_id_and_assessment_key", unique: true
     t.index ["unit_id"], name: "index_master_pathway_assessments_on_unit_id"
   end
 
@@ -1178,8 +1179,9 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_12_100500) do
     t.text "note"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["event_id", "unit_key"], name: "index_master_pathway_oat_units_on_event_id_and_unit_key", unique: true
     t.index ["event_id"], name: "index_master_pathway_oat_units_on_event_id"
-    t.index ["pathway_code", "unit_key"], name: "index_master_pathway_oat_units_on_pathway_code_and_unit_key", unique: true
+    t.index ["pathway_code", "unit_key"], name: "index_master_pathway_oat_units_on_pathway_code_and_unit_key"
   end
 
   create_table "master_pathway_tasks", force: :cascade do |t|
@@ -1200,7 +1202,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_12_100500) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["assessment_id"], name: "index_master_pathway_tasks_on_assessment_id"
-    t.index ["pathway_code", "task_key"], name: "index_master_pathway_tasks_on_pathway_code_and_task_key", unique: true
+    t.index ["pathway_code", "task_key"], name: "index_master_pathway_tasks_on_pathway_code_and_task_key"
+    t.index ["unit_id", "task_key"], name: "index_master_pathway_tasks_on_unit_id_and_task_key", unique: true
     t.index ["unit_id"], name: "index_master_pathway_tasks_on_unit_id"
   end
 

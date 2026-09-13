@@ -9,8 +9,19 @@ import { TASK_CATEGORY_LV1_OPTIONS, displayOfOption } from "./pathwayHelpers";
 export interface SheetDay {
   eventId: string;
   elapsedDays: number;
+  /** 同じ病日を分けたときのステップ。分けていなければ 1。 */
+  pathStep: number;
+  pathStepName: string;
   title: string;
   date: string;
+}
+
+/** シートの見出しで病日をまとめる単位(同じ病日のステップを 1 つにする)。 */
+export interface SheetDayGroup {
+  elapsedDays: number;
+  title: string;
+  date: string;
+  days: SheetDay[];
 }
 
 export interface SheetTaskCell {
@@ -64,12 +75,16 @@ export interface SheetAssessmentCell {
 
 export interface PathwaySheet {
   days: SheetDay[];
+  /** 病日ごとのまとまり。どれかの病日を分けていれば、見出しにステップの段を出す。 */
+  dayGroups: SheetDayGroup[];
+  split: boolean;
   rows: SheetRow[];
 }
 
 /**
- * 同じ名前のアウトカムが複数の病日にあれば 1 行にまとめる(定義の概要表と同じまとめ方)。
- * 観察項目とタスクはアウトカムの下に、名前でまとめて並べる。行の並びは初出の病日順。
+ * ［決定］行は識別子でまとめる(定義の概要表と同じまとめ方)。同じ unit_key のアウトカムが複数の
+ * 病日にあれば 1 行(= 日をまたぐアウトカム)、その下の観察項目・タスクも識別子で 1 行にする。
+ * 名前が同じでも識別子が違えば別の行。行の見出しは初出の病日の名前、並びは初出の病日順。
  */
 export function buildPathwaySheet(
   application: PathwayApplicationRecord,
@@ -78,14 +93,22 @@ export function buildPathwaySheet(
   const days: SheetDay[] = application.events.map((event) => ({
     eventId: event.id,
     elapsedDays: event.elapsedDays,
+    pathStep: event.pathStep,
+    pathStepName: event.pathStepName,
     title: event.title,
     date: event.date,
   }));
+  const dayGroups: SheetDayGroup[] = [];
+  for (const day of days) {
+    const last = dayGroups[dayGroups.length - 1];
+    if (last && last.elapsedDays === day.elapsedDays) last.days.push(day);
+    else dayGroups.push({ elapsedDays: day.elapsedDays, title: day.title, date: day.date, days: [day] });
+  }
 
   const unitRows = new Map<string, { row: SheetRow; children: Map<string, SheetRow> }>();
   for (const event of application.events) {
     for (const unit of event.units) {
-      const unitKey = `u:${unit.name}`;
+      const unitKey = `u:${unit.unitKey}`;
       let group = unitRows.get(unitKey);
       if (!group) {
         group = {
@@ -117,7 +140,7 @@ export function buildPathwaySheet(
       for (const assessment of unit.assessments) {
         // 「観察項目なし」で包んだだけの観察項目は行にしない(タスクだけを出す)。
         if (assessment.name) {
-          const key = `${unitKey}/a:${assessment.name}`;
+          const key = `${unitKey}/a:${assessment.assessmentKey}`;
           let row = group.children.get(key);
           if (!row) {
             row = {
@@ -141,7 +164,7 @@ export function buildPathwaySheet(
           });
         }
         for (const task of assessment.tasks) {
-          const key = `${unitKey}/t:${task.categoryLv1}:${task.name}`;
+          const key = `${unitKey}/t:${task.taskKey}`;
           let row = group.children.get(key);
           if (!row) {
             row = {
@@ -180,7 +203,7 @@ export function buildPathwaySheet(
     }
     rows.push(...children.filter((r) => r.kind === "assessment"), ...children.filter((r) => r.kind === "task"));
   }
-  return { days, rows };
+  return { days, dayGroups, split: dayGroups.some((g) => g.days.length > 1), rows };
 }
 
 /** 今日が何病日目か(パスの病日に無ければ null)。 */

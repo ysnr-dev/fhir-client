@@ -15,21 +15,33 @@ import {
   defaultOrderTypeOfTask,
   PATHWAY_SETTING_OPTIONS,
   PATHWAY_STATUS_OPTIONS,
+  addOutcomeOccurrence,
+  addTaskOccurrence,
+  canAddTaskOccurrence,
   copyEventDraft,
   draftFromPathway,
   emptyEventDraft,
   emptyPathwayDraft,
   eventDayOf,
+  isSplitDay,
   newDraftKey,
   nextDayNumber,
   operationalPayloadFromDraft,
+  outcomeSeriesLabels,
   overviewRows,
   payloadFromDraft,
   previousDayNumber,
+  propagateSeries,
+  removeOutcomeOccurrence,
+  removeTaskOccurrence,
   sortEventsByDay,
+  splitEventDraft,
   validatePathwayDraft,
   type PathwayDraft,
   type PathwayEventDraft,
+  type OverviewColumn,
+  type OverviewRow,
+  type OverviewTaskRow,
   type PathwayOatUnitDraft,
   type PathwayTaskTemplate,
 } from "../fhir/pathwayHelpers";
@@ -128,20 +140,27 @@ export function PathwayEditorPage() {
 
   // ---- 病日の更新 ----
 
+  // 病日カードの編集は、続き(同じ識別子を持つ他の病日のアウトカム・観察項目・タスク)にも写す。
   function updateEvent(eventKey: number, patch: Partial<PathwayEventDraft>) {
     setDraft((prev) => ({
       ...prev,
-      events: prev.events.map((e) => (e.key === eventKey ? { ...e, ...patch } : e)),
+      events: propagateSeries(
+        prev.events.map((e) => (e.key === eventKey ? { ...e, ...patch } : e)),
+        eventKey,
+      ),
     }));
   }
 
   function updateUnit(eventKey: number, unitKey: number, patch: Partial<PathwayOatUnitDraft>) {
     setDraft((prev) => ({
       ...prev,
-      events: prev.events.map((e) =>
-        e.key === eventKey
-          ? { ...e, oatUnits: e.oatUnits.map((u) => (u.key === unitKey ? { ...u, ...patch } : u)) }
-          : e,
+      events: propagateSeries(
+        prev.events.map((e) =>
+          e.key === eventKey
+            ? { ...e, oatUnits: e.oatUnits.map((u) => (u.key === unitKey ? { ...u, ...patch } : u)) }
+            : e,
+        ),
+        eventKey,
       ),
     }));
   }
@@ -155,6 +174,32 @@ export function PathwayEditorPage() {
       ...prev,
       events: sortEventsByDay([...prev.events, copyEventDraft(event, nextDayNumber(prev.events))]),
     }));
+  }
+
+  function splitEvent(event: PathwayEventDraft) {
+    setDraft((prev) => ({
+      ...prev,
+      events: sortEventsByDay([...prev.events, splitEventDraft(prev.events, event)]),
+    }));
+  }
+
+  // 概要表のセルで続きを足す・外す。最後の 1 日を外すとアウトカム(タスク)そのものが消えるので確かめる。
+  function toggleOutcome(row: OverviewRow, column: OverviewColumn) {
+    if (row.eventKeys.has(column.eventKey)) {
+      if (row.eventKeys.size === 1 && !window.confirm(`アウトカム「${row.label}」を削除しますか？`)) return;
+      update("events", removeOutcomeOccurrence(draft.events, row.seriesKey, column.eventKey));
+    } else {
+      update("events", addOutcomeOccurrence(draft.events, row.seriesKey, column.eventKey));
+    }
+  }
+
+  function toggleTask(row: OverviewTaskRow, column: OverviewColumn) {
+    if (row.eventKeys.has(column.eventKey)) {
+      if (row.eventKeys.size === 1 && !window.confirm(`タスク「${row.label}」を削除しますか？`)) return;
+      update("events", removeTaskOccurrence(draft.events, row.seriesKey, column.eventKey));
+    } else if (canAddTaskOccurrence(draft.events, row, column.eventKey)) {
+      update("events", addTaskOccurrence(draft.events, row, column.eventKey));
+    }
   }
 
   function removeEvent(event: PathwayEventDraft) {
@@ -184,6 +229,7 @@ export function PathwayEditorPage() {
 
   const templateTask = picker?.kind === "template" ? findTask(picker) : null;
   const overview = overviewRows(draft);
+  const seriesLabels = outcomeSeriesLabels(draft.events);
 
   if (!isNew && detail.isPending) {
     return (
@@ -395,9 +441,12 @@ export function PathwayEditorPage() {
             <PathwayEventCard
               key={event.key}
               event={event}
+              split={isSplitDay(draft.events, event)}
+              seriesLabels={seriesLabels}
               onChange={(patch) => updateEvent(event.key, patch)}
               onDayCommit={() => update("events", sortEventsByDay(draft.events))}
               onCopy={() => copyEvent(event)}
+              onSplit={() => splitEvent(event)}
               onRemove={() => removeEvent(event)}
               onPickNursingObservation={(unitKey, assessmentKey) =>
                 setPicker({ kind: "nursing", eventKey: event.key, unitKey, assessmentKey })
@@ -417,7 +466,12 @@ export function PathwayEditorPage() {
           </div>
         </section>
 
-        <PathwayOverviewTable rows={overview} />
+        <PathwayOverviewTable
+          rows={overview}
+          canAddTask={(row, column) => canAddTaskOccurrence(draft.events, row, column.eventKey)}
+          onToggleOutcome={toggleOutcome}
+          onToggleTask={toggleTask}
+        />
       </fieldset>
 
       {/* ---- 運用(凍結中も動かせる) ---- */}

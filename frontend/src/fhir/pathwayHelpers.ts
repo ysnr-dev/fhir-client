@@ -168,6 +168,29 @@ export function eventDayLabel(elapsedDays: number, title: string): string {
   return title.trim() || defaultDayLabel(elapsedDays);
 }
 
+/**
+ * 同じ病日をパスステップで分けたときの、ステップの見出し(術前 / 術後 など)。
+ * 名前が無ければ「ステップ n」。
+ */
+export function pathStepLabel(pathStep: number, pathStepName: string | null | undefined): string {
+  return pathStepName?.trim() || `ステップ${pathStep}`;
+}
+
+/**
+ * 病日の見出しにステップを添えた表示(「手術当日 術後」)。分けていない病日(ステップ 1 だけで
+ * 名前も無い)は病日の見出しだけ。
+ */
+export function eventDayStepLabel(
+  elapsedDays: number,
+  title: string | null | undefined,
+  pathStep: number,
+  pathStepName: string | null | undefined,
+): string {
+  const day = eventDayLabel(elapsedDays, title ?? "");
+  if (pathStep <= 1 && !pathStepName?.trim()) return day;
+  return `${day} ${pathStepLabel(pathStep, pathStepName)}`;
+}
+
 /** ePath の action.id(病日[-パスステップ])。 */
 export function eventIdOf(elapsedDays: number, pathStep: number): string {
   return pathStep <= 1 ? String(elapsedDays) : `${elapsedDays}-${pathStep}`;
@@ -226,7 +249,9 @@ export interface PathwayOatUnitDraft {
 export interface PathwayEventDraft {
   key: number;
   elapsedDays: string;
+  /** パスステップ(同じ病日を術前・術後などに分けたときの順番。分けなければ 1)。 */
   pathStep: number;
+  pathStepName: string;
   title: string;
   note: string;
   oatUnits: PathwayOatUnitDraft[];
@@ -301,7 +326,15 @@ export function emptyPathwayDraft(): PathwayDraft {
 }
 
 export function emptyEventDraft(elapsedDays: number): PathwayEventDraft {
-  return { key: newDraftKey(), elapsedDays: String(elapsedDays), pathStep: 1, title: "", note: "", oatUnits: [] };
+  return {
+    key: newDraftKey(),
+    elapsedDays: String(elapsedDays),
+    pathStep: 1,
+    pathStepName: "",
+    title: "",
+    note: "",
+    oatUnits: [],
+  };
 }
 
 export function emptyOatUnitDraft(): PathwayOatUnitDraft {
@@ -383,6 +416,7 @@ export function draftFromPathway(detail: PathwayDetail): PathwayDraft {
       key: newDraftKey(),
       elapsedDays: String(e.elapsed_days),
       pathStep: e.path_step,
+      pathStepName: str(e.path_step_name),
       title: str(e.title),
       note: str(e.note),
       oatUnits: e.oat_units.map((u) => ({
@@ -458,6 +492,7 @@ function eventPayload(event: PathwayEventDraft): PathwayEventPayload {
   return {
     elapsed_days: numOrNull(event.elapsedDays) ?? 0,
     path_step: event.pathStep,
+    path_step_name: textOrNull(event.pathStepName),
     title: textOrNull(event.title),
     note: textOrNull(event.note),
     oat_units: event.oatUnits.map((u) => ({
@@ -559,34 +594,123 @@ export function previousDayNumber(events: PathwayEventDraft[]): number {
   return min === 1 ? -1 : min - 1;
 }
 
-/** 病日を複製する。識別子は適用後まで持ち越すものなので、必ず採り直す。 */
+/** OAT ユニットの写し。識別子(unit_key と観察項目・タスクのキー)はそのまま持ち越す = 続き。 */
+function continueUnit(unit: PathwayOatUnitDraft): PathwayOatUnitDraft {
+  return {
+    ...unit,
+    key: newDraftKey(),
+    assessments: unit.assessments.map((a) => ({ ...a, key: newDraftKey() })),
+    tasks: unit.tasks.map((t) => ({ ...t, key: newDraftKey() })),
+  };
+}
+
+/**
+ * 病日を複製する。［決定］識別子は採り直さず写す。同じ識別子を別の病日に置いたものが
+ * 「続き」なので、複製した日のアウトカムは元の日と同じ行としてシートに並び、看護指示などの
+ * 継続するタスクは 1 件のオーダーにまとまる。別のアウトカムにしたいときは新しく足す。
+ */
 export function copyEventDraft(event: PathwayEventDraft, elapsedDays: number): PathwayEventDraft {
   return {
     ...event,
     key: newDraftKey(),
     elapsedDays: String(elapsedDays),
+    pathStep: 1,
+    pathStepName: "",
     title: "",
-    oatUnits: event.oatUnits.map((u) => {
-      const assessmentKeys = new Map<string, string>();
-      const assessments = u.assessments.map((a) => {
-        const assessmentKey = newPathwayUuid();
-        assessmentKeys.set(a.assessmentKey, assessmentKey);
-        return { ...a, key: newDraftKey(), assessmentKey };
-      });
-      return {
-        ...u,
-        key: newDraftKey(),
-        unitKey: newPathwayUuid(),
-        assessments,
-        tasks: u.tasks.map((t) => ({
-          ...t,
-          key: newDraftKey(),
-          taskKey: newPathwayUuid(),
-          assessmentKey: assessmentKeys.get(t.assessmentKey) ?? "",
-        })),
-      };
-    }),
+    oatUnits: event.oatUnits.map(continueUnit),
   };
+}
+
+/**
+ * 病日を分ける(手術当日の術前・術後など)。同じ病日の最後のステップの次に、空のステップを足す。
+ * 見出しは元の日と同じにし、ステップ名で見分ける。
+ */
+export function splitEventDraft(events: PathwayEventDraft[], event: PathwayEventDraft): PathwayEventDraft {
+  const day = eventDayOf(event);
+  const lastStep = Math.max(
+    ...events.filter((e) => eventDayOf(e) === day).map((e) => e.pathStep),
+    event.pathStep,
+  );
+  return { ...emptyEventDraft(day ?? 1), elapsedDays: event.elapsedDays, pathStep: lastStep + 1, title: event.title };
+}
+
+/** 同じ病日にステップが 2 つ以上あるか(ステップ名の欄を出すかどうか)。 */
+export function isSplitDay(events: PathwayEventDraft[], event: PathwayEventDraft): boolean {
+  const day = eventDayOf(event);
+  return day !== null && (event.pathStep > 1 || events.some((e) => e.key !== event.key && eventDayOf(e) === day));
+}
+
+/**
+ * 続き(同じ識別子)の同一性に関わる項目を、編集した病日から他の病日へ写す。
+ *
+ * ［決定］アウトカムの名前・区分・コード・重要、観察項目の名前・分類・コード・看護観察、
+ * タスクの名前・分類・コード・オーダー雛形は続き全体で同じにする(同じアウトカム・同じ指示だから)。
+ * 観察項目の適正値と備考は病日ごとに持てる(術後の日を追って基準を下げる、など)。
+ * 観察項目・タスクを置くかどうかも病日ごとに決められる。
+ */
+export function propagateSeries(events: PathwayEventDraft[], sourceEventKey: number): PathwayEventDraft[] {
+  const source = events.find((e) => e.key === sourceEventKey);
+  if (!source) return events;
+  const units = new Map(source.oatUnits.map((u) => [u.unitKey, u]));
+  const assessments = new Map(source.oatUnits.flatMap((u) => u.assessments.map((a) => [a.assessmentKey, a] as const)));
+  const tasks = new Map(source.oatUnits.flatMap((u) => u.tasks.map((t) => [t.taskKey, t] as const)));
+  return events.map((event) => {
+    if (event.key === sourceEventKey) return event;
+    let changed = false;
+    const oatUnits = event.oatUnits.map((unit) => {
+      const su = units.get(unit.unitKey);
+      const next: PathwayOatUnitDraft = {
+        ...unit,
+        ...(su
+          ? { name: su.name, category: su.category, codeSystem: su.codeSystem, code: su.code, critical: su.critical }
+          : {}),
+        assessments: unit.assessments.map((a) => {
+          const sa = assessments.get(a.assessmentKey);
+          return sa
+            ? {
+                ...a,
+                name: sa.name,
+                categoryCode: sa.categoryCode,
+                categoryName: sa.categoryName,
+                codeSystem: sa.codeSystem,
+                code: sa.code,
+                nursingObservationManageNo: sa.nursingObservationManageNo,
+              }
+            : a;
+        }),
+        tasks: unit.tasks.map((t) => {
+          const st = tasks.get(t.taskKey);
+          return st
+            ? {
+                ...t,
+                name: st.name,
+                categoryLv1: st.categoryLv1,
+                categoryLv2: st.categoryLv2,
+                code: st.code,
+                template: st.template,
+              }
+            : t;
+        }),
+      };
+      const same =
+        next.name === unit.name &&
+        next.category === unit.category &&
+        next.codeSystem === unit.codeSystem &&
+        next.code === unit.code &&
+        next.critical === unit.critical &&
+        next.assessments.every((a, i) => shallowEqual(a, unit.assessments[i])) &&
+        next.tasks.every((t, i) => shallowEqual(t, unit.tasks[i]));
+      if (same) return unit;
+      changed = true;
+      return next;
+    });
+    return changed ? { ...event, oatUnits } : event;
+  });
+}
+
+function shallowEqual<T extends object>(a: T, b: T): boolean {
+  const keys = Object.keys(a) as (keyof T)[];
+  return keys.every((k) => a[k] === b[k]);
 }
 
 /** オーダー雛形の要約(一覧・タスク行に出す)。 */
@@ -631,53 +755,204 @@ export function validatePathwayDraft(draft: PathwayDraft): string | null {
 
 // ---- 概要表 ----
 
-export interface OverviewRow {
+export interface OverviewColumn {
+  /** 画面の病日カードの key(続きを足す・外す先)。 */
+  eventKey: number;
+  day: number;
+  pathStep: number;
   label: string;
-  /** その行が載る病日(elapsed_days)。 */
-  days: Set<number>;
+  /** 同じ病日を分けたときのステップの見出し。分けていなければ空。 */
+  stepLabel: string;
+}
+
+export interface OverviewRow {
+  /** 続きの識別子(アウトカムは unit_key、タスクは task_key)。 */
+  seriesKey: string;
+  label: string;
+  /** その行が載る病日カードの key。 */
+  eventKeys: Set<number>;
   critical: boolean;
 }
 
-export interface OverviewRows {
-  days: { day: number; label: string }[];
-  outcomes: OverviewRow[];
-  taskGroups: { lv1: PathwayTaskCategoryLv1; label: string; rows: OverviewRow[] }[];
+export interface OverviewTaskRow extends OverviewRow {
+  /** タスクが属するアウトカムの unit_key(最初に現れた病日のもの)。その続きが無い日には置けない。 */
+  unitKey: string;
 }
 
-/** 概要表の行。アウトカムは名前、タスクは(大分類, 名前)でまとめる。 */
+export interface OverviewRows {
+  columns: OverviewColumn[];
+  outcomes: OverviewRow[];
+  taskGroups: { lv1: PathwayTaskCategoryLv1; label: string; rows: OverviewTaskRow[] }[];
+}
+
+/**
+ * 概要表の行。［決定］名前ではなく識別子でまとめる(同じ識別子 = 続き)。名前が同じでも
+ * 識別子が違えば別の行になり、パスシートの行と一致する。
+ */
 export function overviewRows(draft: PathwayDraft): OverviewRows {
   const events = sortEventsByDay(draft.events).filter((e) => eventDayOf(e) !== null);
-  const days = events.map((e) => {
+  const columns = events.map((e) => {
     const day = eventDayOf(e) as number;
-    return { day, label: eventDayLabel(day, e.title) };
+    return {
+      eventKey: e.key,
+      day,
+      pathStep: e.pathStep,
+      label: eventDayLabel(day, e.title),
+      stepLabel: isSplitDay(events, e) ? pathStepLabel(e.pathStep, e.pathStepName) : "",
+    };
   });
   const outcomes = new Map<string, OverviewRow>();
-  const tasks = new Map<PathwayTaskCategoryLv1, Map<string, OverviewRow>>();
+  const tasks = new Map<PathwayTaskCategoryLv1, Map<string, OverviewTaskRow>>();
   for (const event of events) {
-    const day = eventDayOf(event) as number;
     for (const unit of event.oatUnits) {
-      const name = unit.name.trim() || "(名称未入力)";
-      const row = outcomes.get(name) ?? { label: name, days: new Set<number>(), critical: false };
-      row.days.add(day);
+      const row = outcomes.get(unit.unitKey) ?? {
+        seriesKey: unit.unitKey,
+        label: unit.name.trim() || "(名称未入力)",
+        eventKeys: new Set<number>(),
+        critical: false,
+      };
+      row.eventKeys.add(event.key);
       row.critical = row.critical || unit.critical;
-      outcomes.set(name, row);
+      outcomes.set(unit.unitKey, row);
       for (const task of unit.tasks) {
-        const group = tasks.get(task.categoryLv1) ?? new Map<string, OverviewRow>();
-        const taskName = task.name.trim() || "(名称未入力)";
-        const taskRow = group.get(taskName) ?? { label: taskName, days: new Set<number>(), critical: false };
-        taskRow.days.add(day);
-        group.set(taskName, taskRow);
+        const group = tasks.get(task.categoryLv1) ?? new Map<string, OverviewTaskRow>();
+        const taskRow = group.get(task.taskKey) ?? {
+          seriesKey: task.taskKey,
+          label: task.name.trim() || "(名称未入力)",
+          eventKeys: new Set<number>(),
+          critical: false,
+          unitKey: unit.unitKey,
+        };
+        taskRow.eventKeys.add(event.key);
+        group.set(task.taskKey, taskRow);
         tasks.set(task.categoryLv1, group);
       }
     }
   }
   return {
-    days,
+    columns,
     outcomes: [...outcomes.values()],
     taskGroups: TASK_CATEGORY_LV1_OPTIONS.filter((o) => tasks.has(o.code)).map((o) => ({
       lv1: o.code,
       label: o.display,
-      rows: [...(tasks.get(o.code) as Map<string, OverviewRow>).values()],
+      rows: [...(tasks.get(o.code) as Map<string, OverviewTaskRow>).values()],
     })),
   };
+}
+
+/** 続きを写す元。足す先より前の病日で最も近いもの、無ければ後ろで最も近いもの。 */
+function nearestOccurrence<T>(
+  events: PathwayEventDraft[],
+  targetEventKey: number,
+  find: (event: PathwayEventDraft) => T | undefined,
+): T | undefined {
+  const sorted = sortEventsByDay(events);
+  const index = sorted.findIndex((e) => e.key === targetEventKey);
+  for (let i = index - 1; i >= 0; i--) {
+    const found = find(sorted[i]);
+    if (found) return found;
+  }
+  for (let i = index + 1; i < sorted.length; i++) {
+    const found = find(sorted[i]);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** アウトカムの続きをその病日に足す(近い日の内容を識別子ごと写す)。 */
+export function addOutcomeOccurrence(
+  events: PathwayEventDraft[],
+  unitKey: string,
+  targetEventKey: number,
+): PathwayEventDraft[] {
+  const source = nearestOccurrence(events, targetEventKey, (e) => e.oatUnits.find((u) => u.unitKey === unitKey));
+  if (!source) return events;
+  return events.map((e) =>
+    e.key === targetEventKey && !e.oatUnits.some((u) => u.unitKey === unitKey)
+      ? { ...e, oatUnits: [...e.oatUnits, continueUnit(source)] }
+      : e,
+  );
+}
+
+/** アウトカムをその病日から外す(他の病日の続きは残る)。 */
+export function removeOutcomeOccurrence(
+  events: PathwayEventDraft[],
+  unitKey: string,
+  targetEventKey: number,
+): PathwayEventDraft[] {
+  return events.map((e) =>
+    e.key === targetEventKey ? { ...e, oatUnits: e.oatUnits.filter((u) => u.unitKey !== unitKey) } : e,
+  );
+}
+
+/**
+ * タスクの続きをその病日に足す。タスクは OAT ユニットの中に置くので、そのアウトカムの続きが
+ * その日に無ければ足せない(false を返す)。結ぶ観察項目は、足す先の日に同じ観察項目があれば保つ。
+ */
+export function canAddTaskOccurrence(events: PathwayEventDraft[], row: OverviewTaskRow, targetEventKey: number): boolean {
+  const target = events.find((e) => e.key === targetEventKey);
+  return Boolean(target?.oatUnits.some((u) => u.unitKey === row.unitKey));
+}
+
+export function addTaskOccurrence(
+  events: PathwayEventDraft[],
+  row: OverviewTaskRow,
+  targetEventKey: number,
+): PathwayEventDraft[] {
+  const source = nearestOccurrence(events, targetEventKey, (e) =>
+    e.oatUnits.flatMap((u) => u.tasks).find((t) => t.taskKey === row.seriesKey),
+  );
+  if (!source) return events;
+  return events.map((e) =>
+    e.key === targetEventKey
+      ? {
+          ...e,
+          oatUnits: e.oatUnits.map((u) =>
+            u.unitKey === row.unitKey && !u.tasks.some((t) => t.taskKey === row.seriesKey)
+              ? {
+                  ...u,
+                  tasks: [
+                    ...u.tasks,
+                    {
+                      ...source,
+                      key: newDraftKey(),
+                      assessmentKey: u.assessments.some((a) => a.assessmentKey === source.assessmentKey)
+                        ? source.assessmentKey
+                        : "",
+                    },
+                  ],
+                }
+              : u,
+          ),
+        }
+      : e,
+  );
+}
+
+export function removeTaskOccurrence(
+  events: PathwayEventDraft[],
+  taskKey: string,
+  targetEventKey: number,
+): PathwayEventDraft[] {
+  return events.map((e) =>
+    e.key === targetEventKey
+      ? { ...e, oatUnits: e.oatUnits.map((u) => ({ ...u, tasks: u.tasks.filter((t) => t.taskKey !== taskKey) })) }
+      : e,
+  );
+}
+
+/** アウトカムの続きが載る病日の見出し(unit_key → 見出しの並び)。2 日以上のものだけ。 */
+export function outcomeSeriesLabels(events: PathwayEventDraft[]): Map<string, string[]> {
+  const labels = new Map<string, string[]>();
+  for (const event of sortEventsByDay(events)) {
+    const day = eventDayOf(event);
+    if (day === null) continue;
+    const label = isSplitDay(events, event)
+      ? `${day}(${pathStepLabel(event.pathStep, event.pathStepName)})`
+      : String(day);
+    for (const unit of event.oatUnits) {
+      labels.set(unit.unitKey, [...(labels.get(unit.unitKey) ?? []), label]);
+    }
+  }
+  return new Map([...labels].filter(([, v]) => v.length > 1));
 }

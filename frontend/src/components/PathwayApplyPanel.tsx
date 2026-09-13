@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Pathway, PathwayDetail, PathwayTask } from "../api/masterClient";
+import type { Pathway, PathwayDetail, PathwayEvent } from "../api/masterClient";
 import { useApplicablePathways, usePathway } from "../api/masterQueries";
 import {
   useApplyPathway,
@@ -17,13 +17,21 @@ import {
   migrateEntryValues,
   type OrderSetOrderType,
 } from "../fhir/orderSetHelpers";
+import type { MealOrderFormValues } from "../fhir/mealOrderHelpers";
 import {
   buildPathwayApplyBundle,
   orderHeaderUrlsOf,
   pathwayEventDate,
+  pathwayOrderEnd,
+  pathwayOrderPlan,
+  pathwayOrderStartOf,
+  pathwayTaskOrderKey,
   stampPathwayOrders,
+  withPathwayOrderEnd,
+  type PathwayOrderPlanEntry,
+  type PathwayOrderStart,
 } from "../fhir/pathwayApplyHelpers";
-import { PATHWAY_SETTING_OPTIONS, displayOfOption, eventDayLabel } from "../fhir/pathwayHelpers";
+import { PATHWAY_SETTING_OPTIONS, displayOfOption, eventDayStepLabel } from "../fhir/pathwayHelpers";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { useSelfInstitutionNumber } from "../hooks/useSelfInstitutionNumber";
@@ -129,17 +137,24 @@ function PathwayApplyLoader({
   );
 }
 
-/** オーダー雛形を持つタスク 1 件ぶん(積むフォーム 1 つ)。 */
+/**
+ * 出すオーダー 1 件ぶん(積むフォーム 1 つ)。病日ごとのタスク 1 件か、続く病日をまとめた
+ * 継続するタスク(看護指示・食事・安静度)1 件。plan の並びと key は同じ(key = plan の添字)。
+ */
 interface TemplateEntry {
   key: number;
-  task: PathwayTask;
-  elapsedDays: number;
+  plan: PathwayOrderPlanEntry;
   dayLabel: string;
   orderType: OrderSetOrderType;
   initialValues: unknown;
   unsupported: boolean;
   included: boolean;
   collapsed: boolean;
+}
+
+/** 病日の見出し(分けた日はステップ名を添える)。 */
+function eventLabel(event: PathwayEvent): string {
+  return eventDayStepLabel(event.elapsed_days, event.title, event.path_step, event.path_step_name);
 }
 
 /** 適用先の候補(入院中の Encounter と入院予定)。 */
@@ -195,6 +210,7 @@ function PathwayApplyForm({
 
   const [encounterId, setEncounterId] = useState("");
   const [admissionDate, setAdmissionDate] = useState("");
+  const eventDateOf = (event: PathwayEvent) => pathwayEventDate(admissionDate, event.elapsed_days);
   const [confirmed, setConfirmed] = useState(false);
   const [conditionIds, setConditionIds] = useState<string[] | null>(null);
   const stack = useStackedOrderForms<number>();
@@ -204,36 +220,36 @@ function PathwayApplyForm({
     [pathway.events],
   );
 
-  // オーダー雛形を持つタスクを病日順に積む。初期値は DO と同じ正規化(日付は当日、
-  // 入外区分はパスのもの)で、開始日は後から病日の日付で上書きする(bulkStartDate)。
-  const initialTemplates = useMemo<TemplateEntry[]>(() => {
-    let key = 0;
-    return events.flatMap((event) =>
-      event.oat_units.flatMap((unit) =>
-        unit.tasks
-          .filter((task) => task.order_type)
-          .map((task) => {
-            const orderType = task.order_type && isOrderSetOrderType(task.order_type) ? task.order_type : null;
-            const def = orderType ? ORDER_SET_TYPES[orderType] : undefined;
-            const migrated = orderType
-              ? migrateEntryValues(orderType, task.order_schema_version ?? 1, task.order_values)
-              : { values: task.order_values, unsupported: true };
-            const unsupported = !def || migrated.unsupported;
-            return {
-              key: key++,
-              task,
-              elapsedDays: event.elapsed_days,
-              dayLabel: eventDayLabel(event.elapsed_days, event.title ?? ""),
-              orderType: orderType ?? "prescription",
-              initialValues: def && !unsupported ? def.buildDoValues(migrated.values, pathway.setting) : null,
-              unsupported,
-              included: !unsupported,
-              collapsed: true,
-            };
-          }),
-      ),
-    );
-  }, [events, pathway.setting]);
+  // 出すオーダーを病日順に積む(続く病日にまたがる継続するタスクは 1 件)。初期値は DO と同じ
+  // 正規化(日付は当日、入外区分はパスのもの)で、開始日は後から病日の日付で上書きする(bulkStartDate)。
+  const initialTemplates = useMemo<TemplateEntry[]>(
+    () =>
+      pathwayOrderPlan(pathway).map((plan, key) => {
+        const { task } = plan;
+        const orderType = task.order_type && isOrderSetOrderType(task.order_type) ? task.order_type : null;
+        const def = orderType ? ORDER_SET_TYPES[orderType] : undefined;
+        const migrated = orderType
+          ? migrateEntryValues(orderType, task.order_schema_version ?? 1, task.order_values)
+          : { values: task.order_values, unsupported: true };
+        const unsupported = !def || migrated.unsupported;
+        const first = plan.events[0];
+        const last = plan.events[plan.events.length - 1];
+        return {
+          key,
+          plan,
+          dayLabel:
+            plan.events.length > 1
+              ? `${eventLabel(first)}〜${eventLabel(last)}`
+              : eventLabel(first),
+          orderType: orderType ?? "prescription",
+          initialValues: def && !unsupported ? def.buildDoValues(migrated.values, pathway.setting) : null,
+          unsupported,
+          included: !unsupported,
+          collapsed: true,
+        };
+      }),
+    [pathway],
+  );
   const [templates, setTemplates] = useState(initialTemplates);
 
   function patchTemplate(key: number, changes: Partial<TemplateEntry>) {
@@ -306,7 +322,7 @@ function PathwayApplyForm({
     const result = stack.submitAll(included.map((t) => t.key));
     if (!result.ok) {
       const failed = templates.find((t) => t.key === result.failedKey);
-      setValidationError(`「${failed?.task.name ?? ""}」のオーダーの入力を確認してください`);
+      setValidationError(`「${failed?.plan.task.name ?? ""}」のオーダーの入力を確認してください`);
       if (failed) {
         patchTemplate(failed.key, { collapsed: false });
         stack.scrollTo(failed.key);
@@ -318,11 +334,18 @@ function PathwayApplyForm({
     const orderBundles: fhir4.Bundle[] = [];
     const invalidate = [];
     const orderHeaderUrls = new Map<string, string[]>();
+    // 継続するオーダーの終了は、入力し終えた開始(食事は開始の区切りまで)から決める。
+    const plan = templates.map((t) => t.plan);
+    const starts = templates.map((t) => {
+      const submitted = t.included && !t.unsupported ? result.collected.get(t.key) : undefined;
+      return submitted ? pathwayOrderStartOf(t.orderType, submitted.values) : null;
+    });
     for (const entry of included) {
       const def = ORDER_SET_TYPES[entry.orderType]!;
       const submitted = result.collected.get(entry.key)!;
+      const end = pathwayOrderEnd(plan, entry.key, starts, eventDateOf);
       const built = def.buildBundle({
-        values: submitted.values,
+        values: withPathwayOrderEnd(entry.orderType, submitted.values, end),
         extra: submitted.extra,
         patientId,
         requester,
@@ -335,7 +358,10 @@ function PathwayApplyForm({
       });
       orderBundles.push(built.bundle);
       invalidate.push(...built.invalidate);
-      orderHeaderUrls.set(entry.task.task_key, orderHeaderUrlsOf(built.bundle));
+      const urls = orderHeaderUrlsOf(built.bundle);
+      for (const event of entry.plan.events) {
+        orderHeaderUrls.set(pathwayTaskOrderKey(event, entry.plan.task.task_key), urls);
+      }
     }
 
     const tree = buildPathwayApplyBundle({
@@ -367,6 +393,16 @@ function PathwayApplyForm({
   }
 
   const includedTemplateCount = templates.filter((t) => t.included && !t.unsupported).length;
+  // 見出しに出す終了の見込み(開始は病日の日付と雛形の食事の区切り。適用時は入力した開始で決め直す)。
+  const plannedStarts: (PathwayOrderStart | null)[] = templates.map((t) =>
+    t.included && !t.unsupported && admissionDate
+      ? {
+          date: eventDateOf(t.plan.events[0]),
+          mealTiming:
+            t.orderType === "meal-order" ? (t.initialValues as MealOrderFormValues | null)?.startTiming : undefined,
+        }
+      : null,
+  );
 
   return (
     <div className="pathway-apply">
@@ -445,7 +481,7 @@ function PathwayApplyForm({
         <div className="lab-order-item__fields">
           <div className="regimen-editor__derived">
             病日
-            <strong>{events.length} 日分</strong>
+            <strong>{new Set(events.map((e) => e.elapsed_days)).size} 日分</strong>
           </div>
           <div className="regimen-editor__derived">
             OAT ユニット
@@ -468,7 +504,7 @@ function PathwayApplyForm({
           <tbody>
             {events.map((event) => (
               <tr key={event.id}>
-                <td className="rad-item__compact">{eventDayLabel(event.elapsed_days, event.title ?? "")}</td>
+                <td className="rad-item__compact">{eventLabel(event)}</td>
                 <td>{admissionDate ? pathwayEventDate(admissionDate, event.elapsed_days) : "—"}</td>
                 <td className="rad-item__compact">{event.oat_units.length}</td>
                 <td className="rad-item__compact">
@@ -496,7 +532,13 @@ function PathwayApplyForm({
           <div className="order-set-stack">
             {templates.map((entry) => {
               const def = ORDER_SET_TYPES[entry.orderType];
-              const date = admissionDate ? pathwayEventDate(admissionDate, entry.elapsedDays) : "";
+              const date = admissionDate ? eventDateOf(entry.plan.events[0]) : "";
+              const end = pathwayOrderEnd(
+                templates.map((t) => t.plan),
+                entry.key,
+                plannedStarts,
+                eventDateOf,
+              );
               return (
                 <section
                   className={`order-set-stack__item${entry.included ? "" : " order-set-stack__item--excluded"}`}
@@ -520,11 +562,13 @@ function PathwayApplyForm({
                       />
                       <span className="order-set-stack__type">{ORDER_SET_TYPE_LABELS[entry.orderType]}</span>
                     </label>
-                    <span className="pathway-apply__task-day">{`${entry.dayLabel}${date ? ` ${date}` : ""}`}</span>
+                    <span className="pathway-apply__task-day">
+                      {`${entry.dayLabel}${date ? ` ${date}` : ""}${end ? `〜${end.date}` : ""}`}
+                    </span>
                     <span className="order-set-stack__label">
-                      {entry.task.name}
-                      {entry.task.order_label && (
-                        <span className="lab-order-item__code">{entry.task.order_label}</span>
+                      {entry.plan.task.name}
+                      {entry.plan.task.order_label && (
+                        <span className="lab-order-item__code">{entry.plan.task.order_label}</span>
                       )}
                     </span>
                   </div>

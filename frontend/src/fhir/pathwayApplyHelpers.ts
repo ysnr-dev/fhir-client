@@ -6,7 +6,8 @@ import type {
   PathwayTask,
 } from "../api/masterClient";
 import { addDays } from "../lib/dates";
-import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
+import { DEFAULT_MEAL_TIMING, previousMealPoint, type MealOrderFormValues, type MealTiming } from "./mealOrderHelpers";
+import { NURSING_OBSERVATION_CODE_SYSTEM, type NursingOrderFormValues } from "./nursingOrderHelpers";
 import { isHeaderEntry } from "./provenanceHelpers";
 
 // クリニカルパスの患者への適用(適用後パスデータ)の FHIR 構造。ePath(ePath R4 実装ガイド)の
@@ -221,8 +222,9 @@ export interface PathwayApplyInput {
   /** パスが対象とする病名(Condition)への参照。適用画面で選んだものを渡す。 */
   conditionIds?: string[];
   /**
-   * オーダー雛形から同じ transaction で登録するオーダーのヘッダ(task_key → fullUrl)。
+   * オーダー雛形から同じ transaction で登録するオーダーのヘッダ(pathwayTaskOrderKey → fullUrl)。
    * タスクの Procedure が basedOn でそのオーダーも指し、シートから実施の進み具合を辿れる。
+   * 続きをまとめたオーダーは、受け持つ病日すべてのキーに同じ fullUrl が入る。
    */
   orderHeaderUrls?: Map<string, string[]>;
 }
@@ -409,7 +411,7 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
             resource: buildTaskProcedure(task, {
               taskId: taskIdValue(assessmentId, task.task_key),
               assessmentUrl,
-              orderUrls: input.orderHeaderUrls?.get(task.task_key) ?? [],
+              orderUrls: input.orderHeaderUrls?.get(pathwayTaskOrderKey(event, task.task_key)) ?? [],
               patientId,
               encounterId,
               date,
@@ -686,6 +688,7 @@ export interface PathwayEventRecord {
   id: string;
   elapsedDays: number;
   pathStep: number;
+  pathStepName: string;
   title: string;
   date: string;
   units: PathwayOatUnitRecord[];
@@ -724,6 +727,134 @@ function partOfIds(carePlan: fhir4.CarePlan): string[] {
  * 画面が読む木に組み直す。検索は `part-of=CarePlan/{適用の id}` の 1 回で足りる
  * (子孫は祖先すべてを partOf に持つ)ので、渡すのはその結果 + 適用そのもの。
  */
+// ---- オーダー雛形の展開(続き) ----
+
+/**
+ * 雛形のオーダーを病日ごとに出すか、続く病日をまとめて 1 件にするか。
+ * - each-day: 病日ごとに 1 件(注射・検査・処方など、その日に行うもの)
+ * - run: 続く病日をまとめて 1 件にし、続きの最終日で終える(看護指示)
+ * - meal / activity: 続く病日をまとめて 1 件にし、次の食事・安静度が始まる前で終える
+ *   (同時に 2 つの食事・安静度が有効にならない)。次が無ければ終わりを決めない。
+ */
+export type PathwayOrderContinuity = "each-day" | "run" | "meal" | "activity";
+
+export function orderContinuityOf(task: Pick<PathwayTask, "order_type" | "category_lv1">): PathwayOrderContinuity {
+  if (task.order_type === "meal-order") return "meal";
+  if (task.order_type === "nursing-order") return task.category_lv1 === "AL" ? "activity" : "run";
+  return "each-day";
+}
+
+export interface PathwayOrderPlanEntry {
+  task: PathwayTask;
+  continuity: PathwayOrderContinuity;
+  /** このオーダーが受け持つ病日(先頭がオーダーを出す日)。その日のタスクはどれもこのオーダーを指す。 */
+  events: PathwayEvent[];
+}
+
+/** 雛形のオーダーとタスクの Procedure を結ぶキー(病日[-ステップ]/task_key)。 */
+export function pathwayTaskOrderKey(event: Pick<PathwayEvent, "elapsed_days" | "path_step">, taskKey: string): string {
+  return `${eventKeyOf(event.elapsed_days, event.path_step)}/${taskKey}`;
+}
+
+/**
+ * 適用で出すオーダーの一覧(病日順)。［決定］同じ task_key のタスクが続く病日(並べた病日で
+ * 隣り合うもの。ステップも 1 つの病日として数える)に置かれていれば、継続する種別は 1 件にまとめ、
+ * 先頭の病日の雛形で出す。続きの途中で雛形を変えることはできない(定義画面が続き全体で揃える)。
+ */
+export function pathwayOrderPlan(pathway: Pick<PathwayDetail, "events">): PathwayOrderPlanEntry[] {
+  const events = [...pathway.events].sort((a, b) => a.elapsed_days - b.elapsed_days || a.path_step - b.path_step);
+  const plan: PathwayOrderPlanEntry[] = [];
+  const open = new Map<string, { entry: PathwayOrderPlanEntry; lastIndex: number }>();
+  events.forEach((event, index) => {
+    for (const unit of event.oat_units) {
+      for (const task of unit.tasks) {
+        if (!task.order_type) continue;
+        const continuity = orderContinuityOf(task);
+        const current = continuity === "each-day" ? undefined : open.get(task.task_key);
+        if (current && current.lastIndex === index - 1) {
+          current.entry.events.push(event);
+          current.lastIndex = index;
+          continue;
+        }
+        const entry: PathwayOrderPlanEntry = { task, continuity, events: [event] };
+        plan.push(entry);
+        if (continuity !== "each-day") open.set(task.task_key, { entry, lastIndex: index });
+      }
+    }
+  });
+  return plan;
+}
+
+/** オーダーの開始(食事は食事の区切りまで)。除外したオーダーは null。 */
+export interface PathwayOrderStart {
+  date: string;
+  mealTiming?: MealTiming;
+}
+
+export interface PathwayOrderEnd {
+  date: string;
+  mealTiming?: MealTiming;
+}
+
+/**
+ * 続きをまとめたオーダーの終了。each-day は null。run は続きの最終日。meal / activity は、
+ * 後に並ぶ同じ種類のオーダー(除外したものは数えない)の直前。食事は 1 つ前の食事の区切り、
+ * 安静度は前日で、次が同じ日の途中のステップ(ステップ 2 以降)から始まるならその日まで。
+ * 次が無い、または自分の開始より前になってしまうときは null(終わりを決めない)。
+ */
+export function pathwayOrderEnd(
+  plan: PathwayOrderPlanEntry[],
+  index: number,
+  starts: (PathwayOrderStart | null)[],
+  eventDate: (event: PathwayEvent) => string,
+): PathwayOrderEnd | null {
+  const entry = plan[index];
+  const start = starts[index];
+  if (!entry || !start || entry.continuity === "each-day") return null;
+  if (entry.continuity === "run") return { date: eventDate(entry.events[entry.events.length - 1]) };
+
+  const nextIndex = plan.findIndex((e, i) => i > index && e.continuity === entry.continuity && starts[i]);
+  if (nextIndex < 0) return null;
+  const next = starts[nextIndex] as PathwayOrderStart;
+  if (entry.continuity === "meal") {
+    const point = previousMealPoint(next.date, next.mealTiming ?? DEFAULT_MEAL_TIMING);
+    return point.date < start.date ? null : { date: point.date, mealTiming: point.timing };
+  }
+  const nextEvent = plan[nextIndex].events[0];
+  const date = nextEvent.path_step > 1 ? next.date : addDays(next.date, -1);
+  return date < start.date ? null : { date };
+}
+
+/** フォーム値から開始を読む(終了の計算用)。 */
+export function pathwayOrderStartOf(orderType: string, values: unknown): PathwayOrderStart | null {
+  if (orderType === "meal-order") {
+    const v = values as MealOrderFormValues;
+    return v?.startDate ? { date: v.startDate, mealTiming: v.startTiming } : null;
+  }
+  if (orderType === "nursing-order") {
+    const date = (values as NursingOrderFormValues)?.lines?.[0]?.startDate;
+    return date ? { date } : null;
+  }
+  return null;
+}
+
+/**
+ * 計算した終了をフォーム値に入れる。［決定］入力で終了日を決めてあればそちらを優先し、
+ * 空のときだけ入れる(看護指示は行ごと)。
+ */
+export function withPathwayOrderEnd(orderType: string, values: unknown, end: PathwayOrderEnd | null): unknown {
+  if (!end) return values;
+  if (orderType === "nursing-order") {
+    const v = values as NursingOrderFormValues;
+    return { ...v, lines: v.lines.map((line) => (line.endDate ? line : { ...line, endDate: end.date })) };
+  }
+  if (orderType === "meal-order") {
+    const v = values as MealOrderFormValues;
+    return v.endDate ? v : { ...v, endDate: end.date, endTiming: end.mealTiming ?? v.endTiming };
+  }
+  return values;
+}
+
 // ---- 予定外 OAT ユニットの追加 ----
 
 /** 予定外に足すアウトカム 1 件(その場で入力するので定義マスタは介さない)。 */
@@ -925,6 +1056,7 @@ export function parsePathwayApplication(
       id: carePlan.id as string,
       elapsedDays: intExtension(carePlan, PATHWAY_EXT.eventElapsedDays) ?? 0,
       pathStep: intExtension(carePlan, PATHWAY_EXT.pathStep) ?? 1,
+      pathStepName: extensionOf(carePlan, PATHWAY_EXT.pathStepName)?.valueString ?? "",
       title: carePlan.title ?? "",
       date: carePlan.period?.start ?? "",
       units: unitsByEvent.get(carePlan.id as string) ?? [],

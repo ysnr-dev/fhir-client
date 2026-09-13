@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  useNursingPerformsOf,
   useNursingPerformsOn,
   usePathwayApplicationTree,
   usePathwayApplications,
@@ -19,6 +20,7 @@ import {
   type SheetTaskCell,
   type SheetUnitCell,
 } from "../fhir/pathwaySheetHelpers";
+import { pathStepLabel } from "../fhir/pathwayHelpers";
 import { formatPathwaySheetView, parsePathwaySheetView } from "../karteUrl";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
@@ -93,7 +95,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
   const [closeOpen, setCloseOpen] = useState(false);
   const [unplannedOpen, setUnplannedOpen] = useState(false);
   const [nursingPerform, setNursingPerform] = useState<{ orders: fhir4.ServiceRequest[]; date: string } | null>(null);
-  const nursingPerforms = useNursingPerformsOn(nursingPerform?.date ?? "", nursingPerform ? [patientId] : []);
+  const nursingPerformsOfDay = useNursingPerformsOn(nursingPerform?.date ?? "", nursingPerform ? [patientId] : []);
   // 詳細に出す対象プロブレムの名前。カルテのカードから開く詳細と同じものを渡す。
   const { conditions } = useKarteConditions(patientId);
   const problemsById = useMemo(
@@ -115,6 +117,16 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
       : null;
   const sheet = application ? buildPathwaySheet(application, evaluation) : null;
   const todayDate = today();
+  // 看護指示を結んだタスクは、その日の実施記録があれば実施済みとして出す(続く病日にまたがる
+  // 1 件の指示を、日ごとに記録するため。タスクの Procedure の状態だけでは日ごとに分からない)。
+  const nursingPerforms = useNursingPerformsOf(patientId);
+  const performDates = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const [orderId, rows] of nursingPerforms.data ?? []) {
+      map.set(orderId, new Set(rows.map((row) => row.at.slice(0, 10))));
+    }
+    return map;
+  }, [nursingPerforms.data]);
 
   // アウトカム(OAT ユニット)ごとの開閉。評価の済んだアウトカムは既定で畳み、
   // 手で開け閉めしたらそのまま残す(適用を切り替えたら既定に戻す)。
@@ -135,6 +147,10 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
       else next.add(unitKey);
       return next;
     });
+  }
+
+  function dayClasses(date: string): string {
+    return `${date === todayDate ? " pathway-sheet__day--today" : ""}${date < todayDate ? " pathway-sheet__day--past" : ""}`;
   }
 
   const visibleRows = sheet?.rows.filter((row) => row.kind === "unit" || !collapsedUnits.has(row.unitKey)) ?? [];
@@ -252,8 +268,8 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
             <span>入院 {application.periodStart}</span>
             <span>
               {todayEvent
-                ? `病日 ${todayEvent.elapsedDays} / ${application.scheduledDays ?? sheet.days.length}`
-                : `病日 ${sheet.days.length} 日分`}
+                ? `病日 ${todayEvent.elapsedDays} / ${application.scheduledDays ?? sheet.dayGroups.length}`
+                : `病日 ${sheet.dayGroups.length} 日分`}
             </span>
             <span className={`regimen-status regimen-status--${application.status === "active" ? "approved" : "retired"}`}>
               {pathwayStatusLabel(application.status)}
@@ -277,32 +293,46 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
             <table className="lab-timeline__table pathway-sheet__table">
               <thead>
                 <tr>
-                  <th className="pathway-sheet__label-col" rowSpan={2} />
-                  {sheet.days.map((day) => (
+                  <th className="pathway-sheet__label-col" rowSpan={sheet.split ? 3 : 2} />
+                  {sheet.dayGroups.map((group) => (
                     <th
-                      key={day.eventId}
-                      className={`pathway-sheet__day${day.date === todayDate ? " pathway-sheet__day--today" : ""}${
-                        day.date < todayDate ? " pathway-sheet__day--past" : ""
-                      }`}
+                      key={group.days[0].eventId}
+                      colSpan={group.days.length}
+                      className={`pathway-sheet__day${dayClasses(group.date)}`}
                     >
-                      <span className="pathway-sheet__day-no">{day.elapsedDays}</span>
-                      <span className="pathway-sheet__day-title">{day.title}</span>
+                      <span className="pathway-sheet__day-no">{group.elapsedDays}</span>
+                      <span className="pathway-sheet__day-title">{group.title}</span>
                     </th>
                   ))}
-                  <th className="pathway-sheet__filler" rowSpan={2} />
+                  <th className="pathway-sheet__filler" rowSpan={sheet.split ? 3 : 2} />
                 </tr>
                 <tr>
-                  {sheet.days.map((day) => (
+                  {sheet.dayGroups.map((group) => (
                     <th
-                      key={day.eventId}
-                      className={`pathway-sheet__day pathway-sheet__day-date${
-                        day.date === todayDate ? " pathway-sheet__day--today" : ""
-                      }${day.date < todayDate ? " pathway-sheet__day--past" : ""}`}
+                      key={group.days[0].eventId}
+                      colSpan={group.days.length}
+                      className={`pathway-sheet__day pathway-sheet__day-date${dayClasses(group.date)}`}
                     >
-                      {day.date.slice(5).replace("-", "/")}
+                      {group.date.slice(5).replace("-", "/")}
                     </th>
                   ))}
                 </tr>
+                {/* 同じ病日を術前・術後などに分けたパスだけ、ステップの段を出す。 */}
+                {sheet.split && (
+                  <tr>
+                    {sheet.days.map((day) => {
+                      const group = sheet.dayGroups.find((g) => g.days.includes(day));
+                      return (
+                        <th
+                          key={day.eventId}
+                          className={`pathway-sheet__day pathway-sheet__day-step${dayClasses(day.date)}`}
+                        >
+                          {group && group.days.length > 1 ? pathStepLabel(day.pathStep, day.pathStepName) : ""}
+                        </th>
+                      );
+                    })}
+                  </tr>
+                )}
               </thead>
               <tbody>
                 {visibleRows.map((row) => {
@@ -340,9 +370,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                     </th>
                     {sheet.days.map((day) => {
                       const cell = row.cells.get(day.eventId);
-                      const classes = `pathway-sheet__cell${day.date === todayDate ? " pathway-sheet__day--today" : ""}${
-                        day.date < todayDate ? " pathway-sheet__day--past" : ""
-                      }`;
+                      const classes = `pathway-sheet__cell${dayClasses(day.date)}`;
                       if (!cell) return <td key={day.eventId} className={classes} />;
                       // アウトカムのセルは、その病日 × OAT ユニットの評価入力を開く。
                       const unitId = sheetUnitIdOf(row, cell, sheet, day.eventId);
@@ -407,11 +435,17 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                       }
                       const task = cell as SheetTaskCell;
                       const order = task.orderIds.map((id) => orders?.get(id)).find(Boolean);
+                      const done =
+                        task.done ||
+                        task.orderIds.some((id) => {
+                          const sr = orders?.get(id);
+                          return Boolean(sr && orderKindOf(sr) === "nursing-order" && performDates.get(id)?.has(day.date));
+                        });
                       return (
                         <td key={day.eventId} className={classes} data-procedure-id={task.procedureId}>
                           <button type="button" className="pathway-sheet__cell-button" onClick={() => openTask(task)}>
-                            <span className={`pathway-sheet__task${task.done ? " pathway-sheet__task--done" : ""}`}>
-                              {task.done ? "☑" : "☐"}
+                            <span className={`pathway-sheet__task${done ? " pathway-sheet__task--done" : ""}`}>
+                              {done ? "☑" : "☐"}
                             </span>
                             {order && (
                               <span className="pathway-sheet__order">{orderStatusLabel(order.status)}</span>
@@ -514,7 +548,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
           defaultAt={
             nursingPerform.date === todayDate ? undefined : `${nursingPerform.date}T${new Date().toTimeString().slice(0, 5)}`
           }
-          performsByOrderId={nursingPerforms.data}
+          performsByOrderId={nursingPerformsOfDay.data}
           onClose={() => setNursingPerform(null)}
         />
       )}

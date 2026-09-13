@@ -18,7 +18,7 @@ import {
   questionnaireResponsePlainText,
   type TemplateDraft,
 } from "../fhir/questionnaireResponseHelpers";
-import { eventDayLabel, taskCategoryLabel } from "../fhir/pathwayHelpers";
+import { eventDayStepLabel, taskCategoryLabel } from "../fhir/pathwayHelpers";
 import { orderStatusLabel } from "../fhir/pathwaySheetHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useValidationError } from "../hooks/useValidationError";
@@ -174,7 +174,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
       <div className="chemo-calendar__summary pathway-evaluate__head">
         <span className="pathway-sheet__name">{tree.data.application.title}</span>
         <span>
-          病日 {event.elapsedDays} {eventDayLabel(event.elapsedDays, event.title)} {event.date}
+          病日 {event.elapsedDays} {eventDayStepLabel(event.elapsedDays, event.title, event.pathStep, event.pathStepName)} {event.date}
         </span>
       </div>
       <h4 className="pathway-evaluate__unit">

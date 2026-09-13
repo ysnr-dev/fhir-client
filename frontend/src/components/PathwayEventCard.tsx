@@ -49,10 +49,15 @@ export function moveItem<T>(items: T[], index: number, delta: number): T[] {
 
 interface EventCardProps {
   event: PathwayEventDraft;
+  /** 同じ病日を術前・術後などに分けているか(ステップ名の欄を出す)。 */
+  split: boolean;
+  /** 複数の病日に続くアウトカム(unit_key → 載っている病日の見出し)。 */
+  seriesLabels: Map<string, string[]>;
   onChange: (patch: Partial<PathwayEventDraft>) => void;
   /** 病日の入力を確定したとき(ページが病日順に並べ直す)。 */
   onDayCommit: () => void;
   onCopy: () => void;
+  onSplit: () => void;
   onRemove: () => void;
   onPickNursingObservation: (unitKey: number, assessmentKey: number) => void;
   onEditTemplate: (unitKey: number, taskKey: number) => void;
@@ -60,9 +65,12 @@ interface EventCardProps {
 
 export function PathwayEventCard({
   event,
+  split,
+  seriesLabels,
   onChange,
   onDayCommit,
   onCopy,
+  onSplit,
   onRemove,
   onPickNursingObservation,
   onEditTemplate,
@@ -86,6 +94,17 @@ export function PathwayEventCard({
             onBlur={onDayCommit}
           />
         </label>
+        {split && (
+          <label className="pathway-event__step">
+            ステップ名
+            <input
+              type="text"
+              value={event.pathStepName}
+              onChange={(e) => onChange({ pathStepName: e.target.value })}
+              placeholder={`ステップ${event.pathStep}`}
+            />
+          </label>
+        )}
         <label className="pathway-event__title">
           見出し
           <input
@@ -104,6 +123,9 @@ export function PathwayEventCard({
             <button type="button" className="row-menu__item" onClick={onCopy}>
               この日を複製
             </button>
+            <button type="button" className="row-menu__item" onClick={onSplit}>
+              この日を分割
+            </button>
             <button type="button" className="row-menu__item row-menu__item--danger" onClick={onRemove}>
               この日を削除
             </button>
@@ -115,6 +137,7 @@ export function PathwayEventCard({
         <PathwayOatUnitCard
           key={unit.key}
           unit={unit}
+          seriesLabels={seriesLabels.get(unit.unitKey) ?? null}
           index={index}
           count={event.oatUnits.length}
           onChange={(patch) => updateUnit(unit.key, patch)}
@@ -135,6 +158,8 @@ export function PathwayEventCard({
 
 interface UnitCardProps {
   unit: PathwayOatUnitDraft;
+  /** 複数の病日に続くときの、載っている病日の見出し。 */
+  seriesLabels: string[] | null;
   index: number;
   count: number;
   onChange: (patch: Partial<PathwayOatUnitDraft>) => void;
@@ -146,6 +171,7 @@ interface UnitCardProps {
 
 function PathwayOatUnitCard({
   unit,
+  seriesLabels,
   index,
   count,
   onChange,
@@ -176,6 +202,14 @@ function PathwayOatUnitCard({
     <div className={`pathway-unit${unit.critical ? " pathway-unit--critical" : ""}`}>
       <div className="pathway-unit__head">
         <span className="pathway-unit__index">{index + 1}</span>
+        {seriesLabels && (
+          <span
+            className="pathway-unit__series"
+            title={`病日 ${seriesLabels.join("・")} に続くアウトカム`}
+          >
+            {`病日 ${seriesLabels.join("・")}`}
+          </span>
+        )}
         <label className="pathway-unit__name">
           アウトカム
           <input type="text" value={unit.name} onChange={(e) => onChange({ name: e.target.value })} />

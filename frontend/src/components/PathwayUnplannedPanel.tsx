@@ -18,7 +18,7 @@ import {
 import {
   TASK_CATEGORY_LV1_OPTIONS,
   defaultOrderTypeOfTask,
-  eventDayLabel,
+  eventDayStepLabel,
   taskCategoryLv2Options,
 } from "../fhir/pathwayHelpers";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
@@ -263,7 +263,7 @@ function UnplannedForm({
             <select value={selected?.id ?? ""} onChange={(e) => setEventId(e.target.value)}>
               {events.map((event) => (
                 <option key={event.id} value={event.id}>
-                  {event.elapsedDays} {eventDayLabel(event.elapsedDays, event.title)} {event.date}
+                  {event.elapsedDays} {eventDayStepLabel(event.elapsedDays, event.title, event.pathStep, event.pathStepName)} {event.date}
                 </option>
               ))}
             </select>

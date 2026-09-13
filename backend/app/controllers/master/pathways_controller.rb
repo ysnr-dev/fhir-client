@@ -4,7 +4,9 @@ module Master
   # 本体と子(対象病名・病日・OAT ユニット・観察項目・タスク)を 1 リクエストで
   # 読み書きする。子は配列を丸ごと置換し、display_order は配列順で振り直す(レジメンと
   # 同じ)。OAT ユニット・観察項目・タスクの uuid キーは画面が採り、置換で行を作り直しても
-  # 変わらない(適用後データの識別子に使うため)。外部キーは張らないので削除は transaction で
+  # 変わらない(適用後データの識別子に使うため)。同じキーを複数の病日に置いたものが
+  # 「続き」(日をまたぐアウトカム・継続するタスク)で、一意なのは親(病日・OAT ユニット)の
+  # 中だけ。外部キーは張らないので削除は transaction で
   # 片付ける。承認済・廃止は内容を凍結し、直すときは複製する。
   class PathwaysController < BaseController
     before_action :set_record, only: %i[show update destroy copy]
@@ -21,7 +23,8 @@ module Master
       result = paginate(scope.order(Arel.sql("display_order NULLS LAST")).order(:pathway_code))
       codes = result[:items].map(&:pathway_code)
       events = Master::PathwayEvent.where(pathway_code: codes).group(:pathway_code)
-      counts = events.count
+      # 同じ病日をステップで分けても 1 日と数える。
+      counts = events.distinct.count(:elapsed_days)
       last_days = events.maximum(:elapsed_days)
       result[:items] = result[:items].map { |r| summary(r, counts[r.pathway_code].to_i, last_days[r.pathway_code]) }
       render json: result
@@ -264,17 +267,11 @@ module Master
       raise ContentInvalid, messages if messages.any?
     end
 
-    # 下書きでも通さないもの。
+    # 下書きでも通さないもの。識別子の重なり(同じ病日・OAT ユニットの中)はモデルの検証で弾く。
     def always_invalid_messages(record)
       events = record.events.reload.to_a
       duplicated = events.group_by(&:event_key).select { |_, v| v.size > 1 }.keys
-      messages = duplicated.map { |k| "病日 #{k} が重複しています" }
-      %w[oat_units assessments tasks].each do |kind|
-        key_column = { "oat_units" => :unit_key, "assessments" => :assessment_key, "tasks" => :task_key }[kind]
-        keys = record.public_send(kind).reload.map(&key_column)
-        messages << "#{kind_label(kind)}の識別子が重複しています" if keys.uniq.size != keys.size
-      end
-      messages
+      duplicated.map { |k| "病日 #{k} が重複しています" }
     end
 
     # 承認するときだけ求める完全性。ここを通ったパスは、患者に適用したときに
@@ -304,10 +301,6 @@ module Master
 
     def event_label(event)
       event.title.presence || "病日 #{event.event_key}"
-    end
-
-    def kind_label(kind)
-      { "oat_units" => "OAT ユニット", "assessments" => "観察項目", "tasks" => "タスク" }[kind]
     end
 
     def each_row(raw)
@@ -367,7 +360,7 @@ module Master
       units_by_event = Master::PathwayOatUnit.where(pathway_code: code).in_display_order.group_by(&:event_id)
       assessments_by_unit = Master::PathwayAssessment.where(pathway_code: code).in_display_order.group_by(&:unit_id)
       tasks_by_unit = Master::PathwayTask.where(pathway_code: code).in_display_order.group_by(&:unit_id)
-      summary(pathway, events.size, events.map(&:elapsed_days).max).merge(
+      summary(pathway, events.map(&:elapsed_days).uniq.size, events.map(&:elapsed_days).max).merge(
         "indications" => pathway.indications.as_json,
         "events" => events.map do |event|
           event.as_json.merge(

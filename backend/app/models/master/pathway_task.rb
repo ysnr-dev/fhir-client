@@ -16,7 +16,9 @@ module Master
     ).freeze
 
     validates :pathway_code, :unit_id, presence: true
-    validates :task_key, presence: true, format: { with: PathwayOatUnit::UUID_FORMAT }
+    # 同じ task_key を続く病日に置いたものが継続するタスク(看護指示などは 1 件のオーダーにまとまる)。
+    validates :task_key, presence: true, format: { with: PathwayOatUnit::UUID_FORMAT },
+                         uniqueness: { scope: :unit_id, message: "が同じ OAT ユニットの中で重複しています" }
     validates :name, presence: true
     validates :category_lv1, inclusion: { in: CATEGORIES_LV1 }
     validates :category_lv2, inclusion: { in: CATEGORIES_LV2 }, allow_blank: true

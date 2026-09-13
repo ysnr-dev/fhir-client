@@ -201,6 +201,57 @@ RSpec.describe "Master::Pathways", type: :request do
       expect(Master::Pathway.count).to eq(0)
     end
 
+    it "同じ識別子を別の病日に置ける(日をまたぐアウトカム・継続するタスク)" do
+      unit = ->(day) {
+        { elapsed_days: day, oat_units: [
+          { unit_key: UNIT_KEY, name: "疼痛が自制内である",
+            assessments: [{ assessment_key: ASSESSMENT_KEY, name: "疼痛(NRS)", proper_value: day == 3 ? "2以下" : "3以下" }],
+            tasks: [{ task_key: TASK_KEY, name: "弾性ストッキング着用", category_lv1: "NC", assessment_key: ASSESSMENT_KEY }] },
+        ] }
+      }
+      post "/master/pathways", params: { name: "続き", events: [unit.call(2), unit.call(3)] }, as: :json
+
+      expect(response).to have_http_status(:created)
+      units = body["events"].map { |e| e["oat_units"][0] }
+      expect(units.map { |u| u["unit_key"] }).to eq([UNIT_KEY, UNIT_KEY])
+      expect(units.map { |u| u["assessments"][0]["proper_value"] }).to eq(%w[3以下 2以下])
+      expect(units.map { |u| u["tasks"][0]["task_key"] }).to eq([TASK_KEY, TASK_KEY])
+      expect(units.map { |u| u["tasks"][0]["assessment_key"] }).to eq([ASSESSMENT_KEY, ASSESSMENT_KEY])
+    end
+
+    it "同じ病日の中で識別子が重なれば登録できない" do
+      post "/master/pathways", params: {
+        name: "ユニット重複",
+        events: [{ elapsed_days: 1, oat_units: [{ unit_key: UNIT_KEY, name: "a" }, { unit_key: UNIT_KEY, name: "b" }] }],
+      }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("同じ病日の中で重複")
+
+      post "/master/pathways", params: {
+        name: "タスク重複",
+        events: [{ elapsed_days: 1, oat_units: [{ name: "a", tasks: [
+          { task_key: TASK_KEY, name: "t1", category_lv1: "NO" }, { task_key: TASK_KEY, name: "t2", category_lv1: "NO" },
+        ] }] }],
+      }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("同じ OAT ユニットの中で重複")
+      expect(Master::Pathway.count).to eq(0)
+    end
+
+    it "同じ病日をパスステップで分けられる(手術当日の術前・術後)" do
+      post "/master/pathways", params: {
+        name: "分割",
+        events: [
+          { elapsed_days: 2, path_step: 1, path_step_name: "術前", title: "手術当日", oat_units: [{ unit_key: UNIT_KEY, name: "a" }] },
+          { elapsed_days: 2, path_step: 2, path_step_name: "術後", title: "手術当日", oat_units: [{ unit_key: UNIT_KEY, name: "a" }] },
+        ],
+      }, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(body["events"].map { |e| [e["event_key"], e["path_step_name"]] }).to eq([%w[2 術前], %w[2-2 術後]])
+      expect(body["event_count"]).to eq(1)
+    end
+
     it "有効終了日が有効開始日より前なら登録できない" do
       post "/master/pathways", params: { name: "期間おかしい", valid_from: "2026-08-01", valid_to: "2026-07-01" }
 
