@@ -59,7 +59,7 @@ export const NURSING_OBSERVATION_CODE_SYSTEM =
  * 終了日(いつまでの指示か)。食事・リハビリと同じく occurrencePeriod ではなく
  * ローカル拡張にする(上流が occurrenceDateTime しか索引しない)。無ければ継続中。
  */
-const NURSING_ORDER_END_EXT_URL = "http://fhir-client.local/StructureDefinition/nursing-order-end";
+export const NURSING_ORDER_END_EXT_URL = "http://fhir-client.local/StructureDefinition/nursing-order-end";
 
 /** 同時に出した指示群の束ね。値は登録ごとに振る uuid。 */
 export const NURSING_REQUISITION_SYSTEM =

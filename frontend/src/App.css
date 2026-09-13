@@ -14483,6 +14483,37 @@ button.meal-calendar__cell:hover {
   color: var(--text-muted);
 }
 
+/* 見出しの帯のメニュー(日程の変更・適用の取り消し)。帯の行を増やさないよう小さなケバブにする。 */
+.pathway-sheet__menu {
+  display: inline-flex;
+  align-self: center;
+}
+
+.pathway-sheet__menu .row-menu__trigger {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-color: transparent;
+  font-size: 14px;
+}
+
+/* オーダーの開始日が、そのタスクの病日の日付と食い違う(日程の変更の後に直していない)。 */
+.pathway-sheet__order--mismatch {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+/* 日程の変更・取り消しのオーダーの一覧。項目名は本文と同じ大きさにする。 */
+.pathway-schedule__list li {
+  font-size: 13px;
+}
+
+/* 適用の取り消しの実行ボタン(消すので危険の色)。 */
+.pathway-cancel__button:not(:disabled) {
+  border-color: #e0687a;
+  color: #e0687a;
+}
+
 /* 見出しの帯に置く「予定外を追加」「終了・中止」。帯の文字に合わせて小さくし、右端にまとめる。 */
 .pathway-sheet__close-button {
   --control-height: 24px;

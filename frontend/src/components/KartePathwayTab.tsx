@@ -23,16 +23,20 @@ import {
   type SheetUnitCell,
 } from "../fhir/pathwaySheetHelpers";
 import { pathStepLabel } from "../fhir/pathwayHelpers";
+import { orderStartDate } from "../fhir/pathwayScheduleHelpers";
 import { formatPathwaySheetView, parsePathwaySheetView } from "../karteUrl";
 import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { NursingPerformModal } from "./NursingPerformModal";
+import { PathwayCancelPanel } from "./PathwayCancelPanel";
 import { PathwayClosePanel } from "./PathwayClosePanel";
 import { PathwayEvaluatePanel } from "./PathwayEvaluatePanel";
 import { PathwayOrderModal } from "./PathwayOrderModal";
+import { PathwaySchedulePanel } from "./PathwaySchedulePanel";
 import { PathwayTaskPanel } from "./PathwayTaskPanel";
 import { PathwayUnplannedPanel } from "./PathwayUnplannedPanel";
+import { RowMenu } from "./RowMenu";
 
 // カルテ画面の「パス」タブ。適用したクリニカルパスを、紙のパスシートと同じ
 // 病日 × OAT ユニットのシートで見る。列は病日(今日の列を強調)、行は OAT ユニットを
@@ -96,6 +100,9 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
   // パスの終了・中止と、予定外アウトカムの追加。どちらも見出しの帯から開く。
   const [closeOpen, setCloseOpen] = useState(false);
   const [unplannedOpen, setUnplannedOpen] = useState(false);
+  // 日程の変更と、誤って適用したパスの取り消し。見出しの帯のメニューから開く。
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [nursingPerform, setNursingPerform] = useState<{ orders: fhir4.ServiceRequest[]; date: string } | null>(null);
   const nursingPerformsOfDay = useNursingPerformsOn(nursingPerform?.date ?? "", nursingPerform ? [patientId] : []);
   // 詳細に出す対象プロブレムの名前。カルテのカードから開く詳細と同じものを渡す。
@@ -144,6 +151,20 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
     });
   }
 
+  // 雛形から出したオーダーが最初に載る病日の日付(オーダーの開始日と食い違えば「日付違い」を出す)。
+  const firstDateByOrder = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!sheet) return map;
+    for (const day of sheet.days) {
+      for (const row of sheet.rows) {
+        if (row.kind !== "task") continue;
+        const cell = row.cells.get(day.eventId) as SheetTaskCell | undefined;
+        for (const id of cell?.orderIds ?? []) if (!map.has(id)) map.set(id, day.date);
+      }
+    }
+    return map;
+  }, [sheet]);
+
   function dayClasses(date: string): string {
     return `${date === todayDate ? " pathway-sheet__day--today" : ""}${date < todayDate ? " pathway-sheet__day--past" : ""}`;
   }
@@ -175,7 +196,9 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
       !modalUnitId &&
       !modalTaskId &&
       !closeOpen &&
-      !unplannedOpen
+      !unplannedOpen &&
+      !scheduleOpen &&
+      !cancelOpen
     ) {
       return;
     }
@@ -183,6 +206,14 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
       if (event.key !== "Escape") return;
       if (closeOpen) {
         setCloseOpen(false);
+        return;
+      }
+      if (scheduleOpen) {
+        setScheduleOpen(false);
+        return;
+      }
+      if (cancelOpen) {
+        setCancelOpen(false);
         return;
       }
       if (unplannedOpen) {
@@ -204,7 +235,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
     return () => window.removeEventListener("keydown", handleKeyDown);
     // updateView は毎描画で作り直されるが、押した時点の選択で戻せればよい。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen, modalUnitId, modalTaskId, modalOrder, nursingPerform, closeOpen, unplannedOpen]);
+  }, [fullscreen, modalUnitId, modalTaskId, modalOrder, nursingPerform, closeOpen, unplannedOpen, scheduleOpen, cancelOpen]);
 
   return (
     <div
@@ -282,6 +313,22 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
             <button type="button" className="pathway-sheet__close-button" onClick={() => setCloseOpen(true)}>
               {application.status === "active" ? "終了・中止" : "終了の記録"}
             </button>
+            {application.status === "active" && (
+              <span className="pathway-sheet__menu">
+                <RowMenu label="パスの操作" escapesClipping>
+                  <button type="button" className="row-menu__item" onClick={() => setScheduleOpen(true)}>
+                    日程の変更
+                  </button>
+                  <button
+                    type="button"
+                    className="row-menu__item row-menu__item--danger"
+                    onClick={() => setCancelOpen(true)}
+                  >
+                    適用の取り消し
+                  </button>
+                </RowMenu>
+              </span>
+            )}
           </div>
 
           <div className="lab-timeline__table-wrap pathway-sheet__wrap">
@@ -448,6 +495,18 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                               {order && (
                                 <span className="pathway-sheet__order">{orderStatusLabel(order.status)}</span>
                               )}
+                              {order &&
+                                order.id &&
+                                !["completed", "revoked", "entered-in-error"].includes(order.status) &&
+                                orderStartDate(order) &&
+                                orderStartDate(order) !== firstDateByOrder.get(order.id) && (
+                                  <span
+                                    className="pathway-sheet__order pathway-sheet__order--mismatch"
+                                    title={`オーダーの開始日 ${orderStartDate(order)}`}
+                                  >
+                                    日付違い
+                                  </span>
+                                )}
                             </SeriesLink>
                           </button>
                         </td>
@@ -503,6 +562,35 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
           onClose={() => setCloseOpen(false)}
         >
           <PathwayClosePanel patientId={patientId} applyId={application.id} onSaved={() => setCloseOpen(false)} />
+        </Modal>
+      )}
+
+      {/* 日程の変更。 */}
+      {scheduleOpen && application && (
+        <Modal
+          title="クリニカルパス(日程の変更)"
+          className="modal--wide pathway-evaluate-modal"
+          onClose={() => setScheduleOpen(false)}
+        >
+          <PathwaySchedulePanel patientId={patientId} applyId={application.id} onSaved={() => setScheduleOpen(false)} />
+        </Modal>
+      )}
+
+      {/* 誤って適用したパスの取り消し。消えた適用は選べないので、URL の view を外す。 */}
+      {cancelOpen && application && (
+        <Modal
+          title="クリニカルパス(適用の取り消し)"
+          className="modal--wide pathway-evaluate-modal"
+          onClose={() => setCancelOpen(false)}
+        >
+          <PathwayCancelPanel
+            patientId={patientId}
+            applyId={application.id}
+            onCancelled={() => {
+              setCancelOpen(false);
+              onViewChange(null);
+            }}
+          />
         </Modal>
       )}
 
