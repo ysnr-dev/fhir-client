@@ -14274,6 +14274,20 @@ button.meal-calendar__cell:hover {
   margin-right: 4px;
 }
 
+/* アウトカムの評価はセルを押して入れる。ホバーするまで押せると分からないので、
+   値はカルテのバッジと同じチップにして静止状態でも操作だと分かるようにする。
+   枠は文字と同じ色にし、達成 / 未達成 / 未評価の色分けをそのまま使う。
+   観察項目の実績値(押せない)は素の文字のままなので、見ただけで区別できる
+   (タスクは ☐ / ☑ 自体が押せる印になるのでチップにしない)。 */
+.pathway-sheet__outcome {
+  display: inline-block;
+  padding: 0 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .pathway-sheet__outcome--pending,
 .pathway-sheet__planned {
   color: var(--text-muted);
@@ -14308,8 +14322,16 @@ button.meal-calendar__cell:hover {
   cursor: pointer;
 }
 
-.pathway-sheet__cell-button:hover {
+.pathway-sheet__cell-button:hover,
+.pathway-sheet__cell-button:focus-visible {
   background: var(--accent-bg);
+}
+
+/* キーボードで辿ったときは、ホバーと同じ地色に加えてセルの中に枠を出す
+   (表の罫線とずれないよう内側に引く)。 */
+.pathway-sheet__cell-button:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: -2px;
 }
 
 /* 観察項目の実績値は評価の中で入れるので、セルは押せない表示にする(ボタンと同じ寸法)。 */
