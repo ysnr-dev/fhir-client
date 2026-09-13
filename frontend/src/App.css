@@ -14058,6 +14058,13 @@ button.meal-calendar__cell:hover {
   margin-bottom: 6px;
 }
 
+/* 入力欄の並び(ラベルを縦積みにする入れ物)に混ざるチェックボックスは、
+   チェックと文字を横に並べたままにする。 */
+.lab-order-item__fields .pathway-apply__check {
+  flex-direction: row;
+  align-items: center;
+}
+
 .pathway-apply__conditions {
   list-style: none;
   margin: 0;
@@ -14339,9 +14346,35 @@ button.meal-calendar__cell:hover {
 }
 
 /* 予定外の追加。タスクは分類 2 つ + 名称。 */
-.pathway-unplanned__tasks select {
+/* 予定外のタスクの見出し行。分類・名称・オーダー種別・外すを 1 行に収め、
+   狭いときは名称から縮める(オーダーの本体は下に開く)。入れ物が
+   .lab-order-item__fields でも .prescription-form でもないので、部品の見た目は
+   ここで当てる(値は同じモーダルの観察項目の欄に合わせてある)。 */
+.pathway-unplanned__task-head select,
+.pathway-unplanned__task-name {
+  font: inherit;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.pathway-unplanned__task-head select {
+  flex: none;
   max-width: 132px;
-  margin-right: 4px;
+}
+
+.pathway-unplanned__task-name {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+/* オーダーを付けないタスクは本体を持たないので、見出しの角を全部丸める。 */
+.pathway-unplanned__task .order-set-stack__head:only-child {
+  border-bottom: none;
+  border-radius: 6px;
 }
 
 .pathway-evaluate__rows input[type="text"] {

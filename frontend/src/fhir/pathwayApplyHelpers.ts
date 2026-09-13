@@ -681,8 +681,8 @@ export interface UnplannedUnitInput {
   critical: boolean;
   /** 観察項目の名称(任意)。コードは持たせない。 */
   assessments: string[];
-  /** タスク(任意)。オーダー雛形は持たせない(必要なら通常のオーダーとして出す)。 */
-  tasks: { name: string; categoryLv1: string; categoryLv2: string }[];
+  /** タスク(任意)。オーダーを一緒に出すときは、そのヘッダの fullUrl を orderUrls に入れる。 */
+  tasks: { name: string; categoryLv1: string; categoryLv2: string; orderUrls?: string[] }[];
   /** 同じ病日に既にあるアウトカムの数。並び順を末尾にするのに使う。 */
   existingUnitCount: number;
 }
@@ -692,6 +692,10 @@ export interface UnplannedUnitInput {
  *
  * ［決定］予定どおりのアウトカムと同じ形で作り、`EPathCarePlanUnplannedKind` だけを Y にする。
  * シートは同じ行として扱えて、評価も日次評価の仕組みがそのまま効く。
+ *
+ * タスクにオーダーを付けるときは、同じ transaction に積むオーダーのヘッダの fullUrl を
+ * `orderUrls` で渡す。Procedure が basedOn でそれも指すので、定義から展開したタスクと
+ * 同じようにシートからオーダーの状態を辿れる。
  */
 export function buildUnplannedUnitBundle(input: UnplannedUnitInput): fhir4.Bundle {
   const unitKey = crypto.randomUUID();
@@ -762,7 +766,7 @@ export function buildUnplannedUnitBundle(input: UnplannedUnitInput): fhir4.Bundl
         code: { text: task.name },
         subject: { reference: `Patient/${input.patientId}` },
         ...(input.encounterId ? { encounter: { reference: `Encounter/${input.encounterId}` } } : {}),
-        basedOn: [reference(wrapper.url)],
+        basedOn: [reference(wrapper.url), ...(task.orderUrls ?? []).map(reference)],
         extension: [
           { url: PATHWAY_EXT.taskPlannedDateTime, valueDate: input.date },
           { url: PATHWAY_DISPLAY_ORDER_EXT_URL, valueInteger: index + 1 },

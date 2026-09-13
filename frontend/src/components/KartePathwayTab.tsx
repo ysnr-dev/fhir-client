@@ -175,6 +175,9 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
         return;
       }
       if (unplannedOpen) {
+        // オーダーのフォームがテンプレート記入などのモーダルを重ねている間は、
+        // そちらを閉じる操作なので予定外の入力は閉じない(入力中の値を失わせない)。
+        if (document.querySelectorAll(".modal-overlay").length > 1) return;
         setUnplannedOpen(false);
         return;
       }

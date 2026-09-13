@@ -11205,12 +11205,22 @@ export function useClosePathway() {
   });
 }
 
-/** 予定外の OAT ユニットの追加(適用の木に足す)。 */
+/**
+ * 予定外の OAT ユニットの追加(適用の木に足す)。タスクにオーダーを付けたときは同じ
+ * Bundle に入るので、適用と同じくオーダーの来歴(代行なら承認待ちの通知も)を付ける。
+ */
 export function useAddUnplannedUnit() {
   const queryClient = useQueryClient();
+  const withOrderProvenance = useWithOrderProvenance();
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
-    onSuccess: () => invalidatePathway(queryClient),
+    mutationFn: ({ bundle }: { bundle: fhir4.Bundle; invalidate?: QueryKey[] }) =>
+      postBundle(withOrderProvenance(bundle)),
+    onSuccess: (_result, variables) => {
+      invalidatePathway(queryClient);
+      invalidateProvenance(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      for (const key of variables.invalidate ?? []) queryClient.invalidateQueries({ queryKey: key });
+    },
   });
 }
 
