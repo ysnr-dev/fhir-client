@@ -1,0 +1,1936 @@
+{
+  "pathway_code": "900004",
+  "name": "市中肺炎(抗菌薬点滴・7日間)",
+  "short_name": "市中肺炎 7日",
+  "name_kana": "シチュウハイエン",
+  "version": "1.0",
+  "setting": "inpatient",
+  "scheduled_days": 7,
+  "adaptive_criteria": "A-DROP 軽症〜中等症(0〜2 点)で入院加療を要する市中肺炎。人工呼吸管理を要する重症例、誤嚥性肺炎、免疫不全例、肺炎球菌・レジオネラ以外の非定型肺炎が強く疑われる例は除く。",
+  "note": "開発・デモ用のサンプル。手術の無い内科系のパスとして、呼吸状態・解熱・抗菌薬治療・食事のアウトカムを 7 日間続けている(適正値は入院 3 日目までと 4 日目からで変える)。抗菌薬の点滴は 5 日目まで、6 日目から内服へ切り替える。",
+  "indications": [
+    {
+      "management_number": "20073542",
+      "name": "肺炎",
+      "icd10": "J189"
+    },
+    {
+      "management_number": "20062299",
+      "name": "細菌性肺炎",
+      "icd10": "J159"
+    }
+  ],
+  "events": [
+    {
+      "elapsed_days": 1,
+      "path_step": 1,
+      "title": "入院日",
+      "oat_units": [
+        {
+          "unit_key": "9df5ad09-27cc-5591-94ef-caa766964835",
+          "name": "呼吸状態が安定している",
+          "category": "H",
+          "code_system": "bom",
+          "code": "O01260",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "a28a3a8b-a3f2-5f6c-bf8d-568b90239743",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "93%以上",
+              "nursing_observation_manage_no": "31000001"
+            },
+            {
+              "assessment_key": "0209c8fb-0eb2-5c36-882b-c94356529830",
+              "name": "呼吸困難",
+              "proper_value": "軽減している"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "bf2359d8-2129-592f-a376-2484b8bef76f",
+              "name": "バイタルサイン測定(呼吸数を含む)",
+              "category_lv1": "NO"
+            },
+            {
+              "task_key": "f9dfb020-213e-552b-8add-ea9d6065abb5",
+              "name": "酸素投与",
+              "category_lv1": "NC",
+              "category_lv2": "NC10",
+              "order_type": "nursing-order",
+              "order_label": "酸素 1〜3L/分 経鼻カニューラ(SpO2 93%以上を保つ。室内気で保てれば中止)",
+              "order_values": {
+                "lines": [
+                  {
+                    "item": null,
+                    "text": "酸素 1〜3L/分 経鼻カニューラ(SpO2 93%以上を保つ。室内気で保てれば中止)",
+                    "comment": "",
+                    "endDate": "",
+                    "schedule": null,
+                    "condition": "",
+                    "startDate": ""
+                  }
+                ],
+                "problem": null
+              },
+              "order_schema_version": 1
+            }
+          ]
+        },
+        {
+          "unit_key": "0760be83-4b4f-568f-8ddb-5a96506b3e92",
+          "name": "解熱している",
+          "category": "H",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "50524bf2-9356-5621-b517-514d60842aaa",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "38.0℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "88dc4749-2096-5aef-a469-e6f71ea723d6",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            }
+          ],
+          "tasks": []
+        },
+        {
+          "unit_key": "db27b3e7-ea44-51d7-9d9a-26f82f60cf0d",
+          "name": "抗菌薬治療が予定通り行われる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd",
+              "name": "発疹・下痢",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "344abd68-b450-5fe4-bc85-ecfac489070e",
+              "name": "セフトリアキソン点滴(1日1回)",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "order_type": "injection",
+              "order_label": "セフトリアキソンナトリウム点滴用１ｇバッグＮＰ　生食１００ｍＬ付",
+              "order_values": {
+                "rps": [
+                  {
+                    "rate": "",
+                    "times": [],
+                    "lineCode": "",
+                    "siteCode": "",
+                    "medicines": [
+                      {
+                        "dose": "1",
+                        "comment": "",
+                        "medicine": {
+                          "id": 22896,
+                          "change_category": "0",
+                          "master_type": "Y",
+                          "medicine_code": "620002955",
+                          "name_kanji_length": 32,
+                          "name": "セフトリアキソンナトリウム点滴用１ｇバッグＮＰ　生食１００ｍＬ付",
+                          "name_kana_length": 20,
+                          "name_kana": "ｾﾌﾄﾘｱｷｿﾝﾅﾄﾘｳﾑﾃﾝﾃｷﾖｳ1",
+                          "unit_code": "51",
+                          "unit_name_length": 3,
+                          "unit_name": "キット",
+                          "price_type": "1",
+                          "price": "967.0",
+                          "reserve1": "0",
+                          "narcotic_category": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "generic_flag": "0",
+                          "reserve2": "0",
+                          "dental_specific_flag": "0",
+                          "contrast_medium_category": "0",
+                          "injection_volume": "100",
+                          "listing_method_category": "0",
+                          "brand_name_related_code": "0",
+                          "old_price_type": "1",
+                          "old_price": "967.0",
+                          "name_change_flag": "0",
+                          "kana_change_flag": "0",
+                          "dosage_form": "4",
+                          "reserve3": "",
+                          "changed_on": "20250401",
+                          "abolished_on": "99999999",
+                          "yakka_code": "6132419G1033",
+                          "publication_order": "008425000",
+                          "transitional_measure_on": "0",
+                          "basic_name": "セフトリアキソンナトリウム点滴用１ｇバッグ「ＮＰ」",
+                          "listed_on": "0",
+                          "generic_name_code": "",
+                          "generic_name_description": "",
+                          "generic_name_addition_category": "0",
+                          "anti_hiv_flag": "0",
+                          "long_term_listed_related_code": "0",
+                          "selective_treatment_category": "0",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "search_name": "セフトリアキソンナトリウム点滴用1gバッグnp生食100ml付",
+                          "search_kana": "セフトリアキソンナトリウムテンテキヨウ1",
+                          "search_generic": ""
+                        }
+                      }
+                    ],
+                    "routeCode": "IV",
+                    "usageType": "drip",
+                    "methodCode": "",
+                    "usageComment": "点滴静注 30 分(1日1回、同じ時刻に)",
+                    "infusionHours": ""
+                  }
+                ],
+                "series": null,
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "temporary",
+                "schedule": {
+                  "kind": "daily"
+                },
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "c4661c86-258e-5bfc-a9eb-0a09f9c14f5c",
+              "name": "喀痰培養・グラム染色(抗菌薬開始前)",
+              "category_lv1": "EX",
+              "category_lv2": "EXMB",
+              "order_type": "micro-order",
+              "order_label": "喀出痰",
+              "order_values": {
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": "",
+                "comment": "",
+                "priorAntimicrobial": "",
+                "examPurpose": "diagnostic",
+                "problem": null,
+                "specimen": {
+                  "id": "",
+                  "typeCode": "101",
+                  "typeName": "喀出痰",
+                  "siteCode": "",
+                  "siteName": "",
+                  "lateralityCode": "",
+                  "methodCode": "04",
+                  "methodName": "自然喀出",
+                  "collectionDateTime": "",
+                  "organisms": [],
+                  "reasonConditionId": "",
+                  "reasonName": "肺炎"
+                },
+                "items": [
+                  {
+                    "id": "",
+                    "code": "1",
+                    "name": "塗抹・鏡検",
+                    "shortName": "塗抹"
+                  },
+                  {
+                    "id": "",
+                    "code": "2",
+                    "name": "培養・同定",
+                    "shortName": "培養"
+                  },
+                  {
+                    "id": "",
+                    "code": "3",
+                    "name": "薬剤感受性",
+                    "shortName": "感受性"
+                  }
+                ]
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "aa907c3b-dd9a-5a0d-be48-38e35ba3cf3e",
+              "name": "血液培養 2 セット(抗菌薬開始前)",
+              "category_lv1": "EX",
+              "category_lv2": "EXMB",
+              "order_type": "micro-order",
+              "order_label": "静脈血",
+              "order_values": {
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": "",
+                "comment": "",
+                "priorAntimicrobial": "",
+                "examPurpose": "diagnostic",
+                "problem": null,
+                "specimen": {
+                  "id": "",
+                  "typeCode": "401",
+                  "typeName": "静脈血",
+                  "siteCode": "",
+                  "siteName": "",
+                  "lateralityCode": "",
+                  "methodCode": "03",
+                  "methodName": "静脈穿刺",
+                  "collectionDateTime": "",
+                  "organisms": [],
+                  "reasonConditionId": "",
+                  "reasonName": "肺炎"
+                },
+                "items": [
+                  {
+                    "id": "",
+                    "code": "8",
+                    "name": "血液培養（好気ボトル）",
+                    "shortName": "血培好気"
+                  },
+                  {
+                    "id": "",
+                    "code": "9",
+                    "name": "血液培養（嫌気ボトル）",
+                    "shortName": "血培嫌気"
+                  }
+                ]
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "7e168aaf-0619-5cf9-b80c-c8cffa1b6ee0",
+              "name": "採血(血算・CRP・生化学)",
+              "category_lv1": "EX",
+              "category_lv2": "EXSP",
+              "order_type": "lab-order",
+              "order_label": "血算、CRP、生化セット",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "160008010",
+                    "name": "末梢血液一般検査",
+                    "jlacCode": "",
+                    "shortName": "血算",
+                    "parentCode": "",
+                    "specimenCode": "212",
+                    "specimenName": "全血(静脈血、EDTA入り)",
+                    "containerCode": "T03",
+                    "containerName": "EDTA-2K管",
+                    "jlacCodeSystem": ""
+                  },
+                  {
+                    "id": "",
+                    "code": "160054710",
+                    "name": "CRP",
+                    "jlacCode": "E3019000025000085",
+                    "shortName": "CRP",
+                    "parentCode": "",
+                    "specimenCode": "250",
+                    "specimenName": "血清",
+                    "containerCode": "",
+                    "containerName": "",
+                    "jlacCodeSystem": "jlac11"
+                  },
+                  {
+                    "id": "",
+                    "code": "SET-01",
+                    "name": "生化学セット(基本)",
+                    "jlacCode": "",
+                    "shortName": "生化セット",
+                    "parentCode": "",
+                    "specimenCode": "",
+                    "specimenName": "",
+                    "containerCode": "",
+                    "containerName": "",
+                    "jlacCodeSystem": ""
+                  }
+                ],
+                "comment": "",
+                "problem": null,
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "dc733b1a-9972-56f5-8273-b4b56ccde694",
+              "name": "胸部X線",
+              "category_lv1": "EX",
+              "category_lv2": "EXIM",
+              "order_type": "rad-order",
+              "order_label": "胸部立位P→A",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "000001",
+                    "date": "",
+                    "name": "Ｘ線単純撮影胸部立位正面(P→A)",
+                    "time": "",
+                    "purpose": "",
+                    "remarks": "",
+                    "priority": "routine",
+                    "groupable": true,
+                    "shortName": "胸部立位P→A",
+                    "jj1017Code": "10000002000103000000010000000000",
+                    "parentCode": "",
+                    "reasonName": "",
+                    "bodyPartCode": "200",
+                    "bodyPartName": "胸部",
+                    "modalityCode": "1",
+                    "modalityName": "Ｘ線単純撮影",
+                    "lateralityCode": "",
+                    "lateralityName": "",
+                    "purposeTemplate": null,
+                    "remarksTemplate": null,
+                    "reasonConditionId": ""
+                  }
+                ],
+                "problem": null,
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": "",
+                "startTime": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "b602581b-23c2-5933-8093-8b8a3f350c71",
+              "name": "副作用(発疹・下痢)の観察",
+              "category_lv1": "NO",
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd"
+            }
+          ]
+        },
+        {
+          "unit_key": "3683688e-12d5-576b-b919-ddb40b2a74bf",
+          "name": "食事・水分が摂れる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168",
+              "name": "食事摂取量",
+              "proper_value": "3割以上"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "9700993d-7651-556c-9228-5ff4081f01af",
+              "name": "常食(昼から)",
+              "category_lv1": "ML",
+              "category_lv2": "MLLU",
+              "order_type": "meal-order",
+              "order_label": "一般食2000kcal、昼から",
+              "order_values": {
+                "diet": {
+                  "code": "A00105",
+                  "name": "一般食2000kcal"
+                },
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "staples": {
+                  "lunch": null,
+                  "dinner": null,
+                  "breakfast": null
+                },
+                "endTiming": "dinner",
+                "saltLimit": "",
+                "startDate": "",
+                "startTiming": "lunch",
+                "sideDishForm": null,
+                "dietIsFasting": false,
+                "fastingReason": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "52554db4-c22f-5936-a6fb-14f8499d6994",
+              "name": "食事摂取量の観察",
+              "category_lv1": "NO",
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168"
+            }
+          ]
+        },
+        {
+          "unit_key": "6a00195b-ac55-5811-81cb-f7e1ad560474",
+          "name": "活動量が保てる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "c7bd16fb-4e79-59fb-a667-3c5c8632329c",
+              "name": "歩行時のふらつき",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "4d1eb997-d945-56a8-bce1-7001990a62df",
+              "name": "ベッド上安静(トイレ歩行可)",
+              "category_lv1": "AL",
+              "order_type": "nursing-order",
+              "order_label": "安静度: ベッド上安静(トイレ・洗面は歩行可)",
+              "order_values": {
+                "lines": [
+                  {
+                    "item": null,
+                    "text": "安静度: ベッド上安静(トイレ・洗面は歩行可)",
+                    "comment": "",
+                    "endDate": "",
+                    "schedule": null,
+                    "condition": "",
+                    "startDate": ""
+                  }
+                ],
+                "problem": null
+              },
+              "order_schema_version": 1
+            }
+          ]
+        },
+        {
+          "unit_key": "474edbd4-0a4f-50d7-8cfa-d1bc6a868ca8",
+          "name": "病状と治療について理解できる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "f8d26855-6368-5621-b82d-ba6af5c671df",
+              "name": "説明内容を復唱できる",
+              "proper_value": "できる"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "da63e3ff-0340-55d0-afc9-5836d17d53f2",
+              "name": "病状説明(入院の必要性・治療期間)",
+              "category_lv1": "EG",
+              "category_lv2": "EGIC"
+            },
+            {
+              "task_key": "2d0d57ee-f14b-5100-9974-95f1676579a0",
+              "name": "入院診療計画書の説明",
+              "category_lv1": "MD"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 2,
+      "path_step": 1,
+      "title": "入院2日目",
+      "oat_units": [
+        {
+          "unit_key": "9df5ad09-27cc-5591-94ef-caa766964835",
+          "name": "呼吸状態が安定している",
+          "category": "H",
+          "code_system": "bom",
+          "code": "O01260",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "a28a3a8b-a3f2-5f6c-bf8d-568b90239743",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "93%以上",
+              "nursing_observation_manage_no": "31000001"
+            },
+            {
+              "assessment_key": "0209c8fb-0eb2-5c36-882b-c94356529830",
+              "name": "呼吸困難",
+              "proper_value": "軽減している"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "bf2359d8-2129-592f-a376-2484b8bef76f",
+              "name": "バイタルサイン測定(呼吸数を含む)",
+              "category_lv1": "NO"
+            },
+            {
+              "task_key": "f9dfb020-213e-552b-8add-ea9d6065abb5",
+              "name": "酸素投与",
+              "category_lv1": "NC",
+              "category_lv2": "NC10",
+              "order_type": "nursing-order",
+              "order_label": "酸素 1〜3L/分 経鼻カニューラ(SpO2 93%以上を保つ。室内気で保てれば中止)",
+              "order_values": {
+                "lines": [
+                  {
+                    "item": null,
+                    "text": "酸素 1〜3L/分 経鼻カニューラ(SpO2 93%以上を保つ。室内気で保てれば中止)",
+                    "comment": "",
+                    "endDate": "",
+                    "schedule": null,
+                    "condition": "",
+                    "startDate": ""
+                  }
+                ],
+                "problem": null
+              },
+              "order_schema_version": 1
+            }
+          ]
+        },
+        {
+          "unit_key": "0760be83-4b4f-568f-8ddb-5a96506b3e92",
+          "name": "解熱している",
+          "category": "H",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "50524bf2-9356-5621-b517-514d60842aaa",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "38.0℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "88dc4749-2096-5aef-a469-e6f71ea723d6",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            }
+          ],
+          "tasks": []
+        },
+        {
+          "unit_key": "db27b3e7-ea44-51d7-9d9a-26f82f60cf0d",
+          "name": "抗菌薬治療が予定通り行われる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd",
+              "name": "発疹・下痢",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "344abd68-b450-5fe4-bc85-ecfac489070e",
+              "name": "セフトリアキソン点滴(1日1回)",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "order_type": "injection",
+              "order_label": "セフトリアキソンナトリウム点滴用１ｇバッグＮＰ　生食１００ｍＬ付",
+              "order_values": {
+                "rps": [
+                  {
+                    "rate": "",
+                    "times": [],
+                    "lineCode": "",
+                    "siteCode": "",
+                    "medicines": [
+                      {
+                        "dose": "1",
+                        "comment": "",
+                        "medicine": {
+                          "id": 22896,
+                          "change_category": "0",
+                          "master_type": "Y",
+                          "medicine_code": "620002955",
+                          "name_kanji_length": 32,
+                          "name": "セフトリアキソンナトリウム点滴用１ｇバッグＮＰ　生食１００ｍＬ付",
+                          "name_kana_length": 20,
+                          "name_kana": "ｾﾌﾄﾘｱｷｿﾝﾅﾄﾘｳﾑﾃﾝﾃｷﾖｳ1",
+                          "unit_code": "51",
+                          "unit_name_length": 3,
+                          "unit_name": "キット",
+                          "price_type": "1",
+                          "price": "967.0",
+                          "reserve1": "0",
+                          "narcotic_category": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "generic_flag": "0",
+                          "reserve2": "0",
+                          "dental_specific_flag": "0",
+                          "contrast_medium_category": "0",
+                          "injection_volume": "100",
+                          "listing_method_category": "0",
+                          "brand_name_related_code": "0",
+                          "old_price_type": "1",
+                          "old_price": "967.0",
+                          "name_change_flag": "0",
+                          "kana_change_flag": "0",
+                          "dosage_form": "4",
+                          "reserve3": "",
+                          "changed_on": "20250401",
+                          "abolished_on": "99999999",
+                          "yakka_code": "6132419G1033",
+                          "publication_order": "008425000",
+                          "transitional_measure_on": "0",
+                          "basic_name": "セフトリアキソンナトリウム点滴用１ｇバッグ「ＮＰ」",
+                          "listed_on": "0",
+                          "generic_name_code": "",
+                          "generic_name_description": "",
+                          "generic_name_addition_category": "0",
+                          "anti_hiv_flag": "0",
+                          "long_term_listed_related_code": "0",
+                          "selective_treatment_category": "0",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "search_name": "セフトリアキソンナトリウム点滴用1gバッグnp生食100ml付",
+                          "search_kana": "セフトリアキソンナトリウムテンテキヨウ1",
+                          "search_generic": ""
+                        }
+                      }
+                    ],
+                    "routeCode": "IV",
+                    "usageType": "drip",
+                    "methodCode": "",
+                    "usageComment": "点滴静注 30 分(1日1回、同じ時刻に)",
+                    "infusionHours": ""
+                  }
+                ],
+                "series": null,
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "temporary",
+                "schedule": {
+                  "kind": "daily"
+                },
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "b602581b-23c2-5933-8093-8b8a3f350c71",
+              "name": "副作用(発疹・下痢)の観察",
+              "category_lv1": "NO",
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd"
+            }
+          ]
+        },
+        {
+          "unit_key": "3683688e-12d5-576b-b919-ddb40b2a74bf",
+          "name": "食事・水分が摂れる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168",
+              "name": "食事摂取量",
+              "proper_value": "3割以上"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "52554db4-c22f-5936-a6fb-14f8499d6994",
+              "name": "食事摂取量の観察",
+              "category_lv1": "NO",
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 3,
+      "path_step": 1,
+      "title": "入院3日目",
+      "oat_units": [
+        {
+          "unit_key": "9df5ad09-27cc-5591-94ef-caa766964835",
+          "name": "呼吸状態が安定している",
+          "category": "H",
+          "code_system": "bom",
+          "code": "O01260",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "a28a3a8b-a3f2-5f6c-bf8d-568b90239743",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "93%以上",
+              "nursing_observation_manage_no": "31000001"
+            },
+            {
+              "assessment_key": "0209c8fb-0eb2-5c36-882b-c94356529830",
+              "name": "呼吸困難",
+              "proper_value": "軽減している"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "bf2359d8-2129-592f-a376-2484b8bef76f",
+              "name": "バイタルサイン測定(呼吸数を含む)",
+              "category_lv1": "NO"
+            },
+            {
+              "task_key": "f9dfb020-213e-552b-8add-ea9d6065abb5",
+              "name": "酸素投与",
+              "category_lv1": "NC",
+              "category_lv2": "NC10",
+              "order_type": "nursing-order",
+              "order_label": "酸素 1〜3L/分 経鼻カニューラ(SpO2 93%以上を保つ。室内気で保てれば中止)",
+              "order_values": {
+                "lines": [
+                  {
+                    "item": null,
+                    "text": "酸素 1〜3L/分 経鼻カニューラ(SpO2 93%以上を保つ。室内気で保てれば中止)",
+                    "comment": "",
+                    "endDate": "",
+                    "schedule": null,
+                    "condition": "",
+                    "startDate": ""
+                  }
+                ],
+                "problem": null
+              },
+              "order_schema_version": 1
+            }
+          ]
+        },
+        {
+          "unit_key": "0760be83-4b4f-568f-8ddb-5a96506b3e92",
+          "name": "解熱している",
+          "category": "H",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "50524bf2-9356-5621-b517-514d60842aaa",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "38.0℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "88dc4749-2096-5aef-a469-e6f71ea723d6",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            }
+          ],
+          "tasks": []
+        },
+        {
+          "unit_key": "db27b3e7-ea44-51d7-9d9a-26f82f60cf0d",
+          "name": "抗菌薬治療が予定通り行われる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd",
+              "name": "発疹・下痢",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "344abd68-b450-5fe4-bc85-ecfac489070e",
+              "name": "セフトリアキソン点滴(1日1回)",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "order_type": "injection",
+              "order_label": "セフトリアキソンナトリウム点滴用１ｇバッグＮＰ　生食１００ｍＬ付",
+              "order_values": {
+                "rps": [
+                  {
+                    "rate": "",
+                    "times": [],
+                    "lineCode": "",
+                    "siteCode": "",
+                    "medicines": [
+                      {
+                        "dose": "1",
+                        "comment": "",
+                        "medicine": {
+                          "id": 22896,
+                          "change_category": "0",
+                          "master_type": "Y",
+                          "medicine_code": "620002955",
+                          "name_kanji_length": 32,
+                          "name": "セフトリアキソンナトリウム点滴用１ｇバッグＮＰ　生食１００ｍＬ付",
+                          "name_kana_length": 20,
+                          "name_kana": "ｾﾌﾄﾘｱｷｿﾝﾅﾄﾘｳﾑﾃﾝﾃｷﾖｳ1",
+                          "unit_code": "51",
+                          "unit_name_length": 3,
+                          "unit_name": "キット",
+                          "price_type": "1",
+                          "price": "967.0",
+                          "reserve1": "0",
+                          "narcotic_category": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "generic_flag": "0",
+                          "reserve2": "0",
+                          "dental_specific_flag": "0",
+                          "contrast_medium_category": "0",
+                          "injection_volume": "100",
+                          "listing_method_category": "0",
+                          "brand_name_related_code": "0",
+                          "old_price_type": "1",
+                          "old_price": "967.0",
+                          "name_change_flag": "0",
+                          "kana_change_flag": "0",
+                          "dosage_form": "4",
+                          "reserve3": "",
+                          "changed_on": "20250401",
+                          "abolished_on": "99999999",
+                          "yakka_code": "6132419G1033",
+                          "publication_order": "008425000",
+                          "transitional_measure_on": "0",
+                          "basic_name": "セフトリアキソンナトリウム点滴用１ｇバッグ「ＮＰ」",
+                          "listed_on": "0",
+                          "generic_name_code": "",
+                          "generic_name_description": "",
+                          "generic_name_addition_category": "0",
+                          "anti_hiv_flag": "0",
+                          "long_term_listed_related_code": "0",
+                          "selective_treatment_category": "0",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "search_name": "セフトリアキソンナトリウム点滴用1gバッグnp生食100ml付",
+                          "search_kana": "セフトリアキソンナトリウムテンテキヨウ1",
+                          "search_generic": ""
+                        }
+                      }
+                    ],
+                    "routeCode": "IV",
+                    "usageType": "drip",
+                    "methodCode": "",
+                    "usageComment": "点滴静注 30 分(1日1回、同じ時刻に)",
+                    "infusionHours": ""
+                  }
+                ],
+                "series": null,
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "temporary",
+                "schedule": {
+                  "kind": "daily"
+                },
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "b602581b-23c2-5933-8093-8b8a3f350c71",
+              "name": "副作用(発疹・下痢)の観察",
+              "category_lv1": "NO",
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd"
+            }
+          ]
+        },
+        {
+          "unit_key": "3683688e-12d5-576b-b919-ddb40b2a74bf",
+          "name": "食事・水分が摂れる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168",
+              "name": "食事摂取量",
+              "proper_value": "5割以上"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "52554db4-c22f-5936-a6fb-14f8499d6994",
+              "name": "食事摂取量の観察",
+              "category_lv1": "NO",
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 4,
+      "path_step": 1,
+      "title": "入院4日目",
+      "oat_units": [
+        {
+          "unit_key": "9df5ad09-27cc-5591-94ef-caa766964835",
+          "name": "呼吸状態が安定している",
+          "category": "H",
+          "code_system": "bom",
+          "code": "O01260",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "a28a3a8b-a3f2-5f6c-bf8d-568b90239743",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上(室内気)",
+              "nursing_observation_manage_no": "31000001"
+            },
+            {
+              "assessment_key": "0209c8fb-0eb2-5c36-882b-c94356529830",
+              "name": "呼吸困難",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "bf2359d8-2129-592f-a376-2484b8bef76f",
+              "name": "バイタルサイン測定(呼吸数を含む)",
+              "category_lv1": "NO"
+            }
+          ]
+        },
+        {
+          "unit_key": "0760be83-4b4f-568f-8ddb-5a96506b3e92",
+          "name": "解熱している",
+          "category": "H",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "50524bf2-9356-5621-b517-514d60842aaa",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "88dc4749-2096-5aef-a469-e6f71ea723d6",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            }
+          ],
+          "tasks": []
+        },
+        {
+          "unit_key": "db27b3e7-ea44-51d7-9d9a-26f82f60cf0d",
+          "name": "抗菌薬治療が予定通り行われる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd",
+              "name": "発疹・下痢",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "344abd68-b450-5fe4-bc85-ecfac489070e",
+              "name": "セフトリアキソン点滴(1日1回)",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "order_type": "injection",
+              "order_label": "セフトリアキソンナトリウム点滴用１ｇバッグＮＰ　生食１００ｍＬ付",
+              "order_values": {
+                "rps": [
+                  {
+                    "rate": "",
+                    "times": [],
+                    "lineCode": "",
+                    "siteCode": "",
+                    "medicines": [
+                      {
+                        "dose": "1",
+                        "comment": "",
+                        "medicine": {
+                          "id": 22896,
+                          "change_category": "0",
+                          "master_type": "Y",
+                          "medicine_code": "620002955",
+                          "name_kanji_length": 32,
+                          "name": "セフトリアキソンナトリウム点滴用１ｇバッグＮＰ　生食１００ｍＬ付",
+                          "name_kana_length": 20,
+                          "name_kana": "ｾﾌﾄﾘｱｷｿﾝﾅﾄﾘｳﾑﾃﾝﾃｷﾖｳ1",
+                          "unit_code": "51",
+                          "unit_name_length": 3,
+                          "unit_name": "キット",
+                          "price_type": "1",
+                          "price": "967.0",
+                          "reserve1": "0",
+                          "narcotic_category": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "generic_flag": "0",
+                          "reserve2": "0",
+                          "dental_specific_flag": "0",
+                          "contrast_medium_category": "0",
+                          "injection_volume": "100",
+                          "listing_method_category": "0",
+                          "brand_name_related_code": "0",
+                          "old_price_type": "1",
+                          "old_price": "967.0",
+                          "name_change_flag": "0",
+                          "kana_change_flag": "0",
+                          "dosage_form": "4",
+                          "reserve3": "",
+                          "changed_on": "20250401",
+                          "abolished_on": "99999999",
+                          "yakka_code": "6132419G1033",
+                          "publication_order": "008425000",
+                          "transitional_measure_on": "0",
+                          "basic_name": "セフトリアキソンナトリウム点滴用１ｇバッグ「ＮＰ」",
+                          "listed_on": "0",
+                          "generic_name_code": "",
+                          "generic_name_description": "",
+                          "generic_name_addition_category": "0",
+                          "anti_hiv_flag": "0",
+                          "long_term_listed_related_code": "0",
+                          "selective_treatment_category": "0",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "search_name": "セフトリアキソンナトリウム点滴用1gバッグnp生食100ml付",
+                          "search_kana": "セフトリアキソンナトリウムテンテキヨウ1",
+                          "search_generic": ""
+                        }
+                      }
+                    ],
+                    "routeCode": "IV",
+                    "usageType": "drip",
+                    "methodCode": "",
+                    "usageComment": "点滴静注 30 分(1日1回、同じ時刻に)",
+                    "infusionHours": ""
+                  }
+                ],
+                "series": null,
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "temporary",
+                "schedule": {
+                  "kind": "daily"
+                },
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "3835f361-ab2a-5a91-9de9-725736b86d5d",
+              "name": "採血(血算・CRP・生化学)",
+              "category_lv1": "EX",
+              "category_lv2": "EXSP",
+              "order_type": "lab-order",
+              "order_label": "血算、CRP、生化セット",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "160008010",
+                    "name": "末梢血液一般検査",
+                    "jlacCode": "",
+                    "shortName": "血算",
+                    "parentCode": "",
+                    "specimenCode": "212",
+                    "specimenName": "全血(静脈血、EDTA入り)",
+                    "containerCode": "T03",
+                    "containerName": "EDTA-2K管",
+                    "jlacCodeSystem": ""
+                  },
+                  {
+                    "id": "",
+                    "code": "160054710",
+                    "name": "CRP",
+                    "jlacCode": "E3019000025000085",
+                    "shortName": "CRP",
+                    "parentCode": "",
+                    "specimenCode": "250",
+                    "specimenName": "血清",
+                    "containerCode": "",
+                    "containerName": "",
+                    "jlacCodeSystem": "jlac11"
+                  },
+                  {
+                    "id": "",
+                    "code": "SET-01",
+                    "name": "生化学セット(基本)",
+                    "jlacCode": "",
+                    "shortName": "生化セット",
+                    "parentCode": "",
+                    "specimenCode": "",
+                    "specimenName": "",
+                    "containerCode": "",
+                    "containerName": "",
+                    "jlacCodeSystem": ""
+                  }
+                ],
+                "comment": "",
+                "problem": null,
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "7d99b3cb-4f51-55c9-8aeb-c62d3e612634",
+              "name": "治療効果判定(内服への切り替えの判断)",
+              "category_lv1": "MD"
+            },
+            {
+              "task_key": "b602581b-23c2-5933-8093-8b8a3f350c71",
+              "name": "副作用(発疹・下痢)の観察",
+              "category_lv1": "NO",
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd"
+            }
+          ]
+        },
+        {
+          "unit_key": "3683688e-12d5-576b-b919-ddb40b2a74bf",
+          "name": "食事・水分が摂れる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168",
+              "name": "食事摂取量",
+              "proper_value": "5割以上"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "52554db4-c22f-5936-a6fb-14f8499d6994",
+              "name": "食事摂取量の観察",
+              "category_lv1": "NO",
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168"
+            }
+          ]
+        },
+        {
+          "unit_key": "6a00195b-ac55-5811-81cb-f7e1ad560474",
+          "name": "活動量が保てる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "c7bd16fb-4e79-59fb-a667-3c5c8632329c",
+              "name": "歩行時のふらつき",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "2ef19352-7dd1-5760-9dc8-20dffa1af151",
+              "name": "病棟内フリー",
+              "category_lv1": "AL",
+              "order_type": "nursing-order",
+              "order_label": "安静度: 病棟内フリー",
+              "order_values": {
+                "lines": [
+                  {
+                    "item": null,
+                    "text": "安静度: 病棟内フリー",
+                    "comment": "",
+                    "endDate": "",
+                    "schedule": null,
+                    "condition": "",
+                    "startDate": ""
+                  }
+                ],
+                "problem": null
+              },
+              "order_schema_version": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 5,
+      "path_step": 1,
+      "title": "入院5日目",
+      "oat_units": [
+        {
+          "unit_key": "9df5ad09-27cc-5591-94ef-caa766964835",
+          "name": "呼吸状態が安定している",
+          "category": "H",
+          "code_system": "bom",
+          "code": "O01260",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "a28a3a8b-a3f2-5f6c-bf8d-568b90239743",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上(室内気)",
+              "nursing_observation_manage_no": "31000001"
+            },
+            {
+              "assessment_key": "0209c8fb-0eb2-5c36-882b-c94356529830",
+              "name": "呼吸困難",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "bf2359d8-2129-592f-a376-2484b8bef76f",
+              "name": "バイタルサイン測定(呼吸数を含む)",
+              "category_lv1": "NO"
+            }
+          ]
+        },
+        {
+          "unit_key": "0760be83-4b4f-568f-8ddb-5a96506b3e92",
+          "name": "解熱している",
+          "category": "H",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "50524bf2-9356-5621-b517-514d60842aaa",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "88dc4749-2096-5aef-a469-e6f71ea723d6",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            }
+          ],
+          "tasks": []
+        },
+        {
+          "unit_key": "db27b3e7-ea44-51d7-9d9a-26f82f60cf0d",
+          "name": "抗菌薬治療が予定通り行われる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd",
+              "name": "発疹・下痢",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "344abd68-b450-5fe4-bc85-ecfac489070e",
+              "name": "セフトリアキソン点滴(1日1回)",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "order_type": "injection",
+              "order_label": "セフトリアキソンナトリウム点滴用１ｇバッグＮＰ　生食１００ｍＬ付",
+              "order_values": {
+                "rps": [
+                  {
+                    "rate": "",
+                    "times": [],
+                    "lineCode": "",
+                    "siteCode": "",
+                    "medicines": [
+                      {
+                        "dose": "1",
+                        "comment": "",
+                        "medicine": {
+                          "id": 22896,
+                          "change_category": "0",
+                          "master_type": "Y",
+                          "medicine_code": "620002955",
+                          "name_kanji_length": 32,
+                          "name": "セフトリアキソンナトリウム点滴用１ｇバッグＮＰ　生食１００ｍＬ付",
+                          "name_kana_length": 20,
+                          "name_kana": "ｾﾌﾄﾘｱｷｿﾝﾅﾄﾘｳﾑﾃﾝﾃｷﾖｳ1",
+                          "unit_code": "51",
+                          "unit_name_length": 3,
+                          "unit_name": "キット",
+                          "price_type": "1",
+                          "price": "967.0",
+                          "reserve1": "0",
+                          "narcotic_category": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "generic_flag": "0",
+                          "reserve2": "0",
+                          "dental_specific_flag": "0",
+                          "contrast_medium_category": "0",
+                          "injection_volume": "100",
+                          "listing_method_category": "0",
+                          "brand_name_related_code": "0",
+                          "old_price_type": "1",
+                          "old_price": "967.0",
+                          "name_change_flag": "0",
+                          "kana_change_flag": "0",
+                          "dosage_form": "4",
+                          "reserve3": "",
+                          "changed_on": "20250401",
+                          "abolished_on": "99999999",
+                          "yakka_code": "6132419G1033",
+                          "publication_order": "008425000",
+                          "transitional_measure_on": "0",
+                          "basic_name": "セフトリアキソンナトリウム点滴用１ｇバッグ「ＮＰ」",
+                          "listed_on": "0",
+                          "generic_name_code": "",
+                          "generic_name_description": "",
+                          "generic_name_addition_category": "0",
+                          "anti_hiv_flag": "0",
+                          "long_term_listed_related_code": "0",
+                          "selective_treatment_category": "0",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "search_name": "セフトリアキソンナトリウム点滴用1gバッグnp生食100ml付",
+                          "search_kana": "セフトリアキソンナトリウムテンテキヨウ1",
+                          "search_generic": ""
+                        }
+                      }
+                    ],
+                    "routeCode": "IV",
+                    "usageType": "drip",
+                    "methodCode": "",
+                    "usageComment": "点滴静注 30 分(1日1回、同じ時刻に)",
+                    "infusionHours": ""
+                  }
+                ],
+                "series": null,
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "temporary",
+                "schedule": {
+                  "kind": "daily"
+                },
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "b602581b-23c2-5933-8093-8b8a3f350c71",
+              "name": "副作用(発疹・下痢)の観察",
+              "category_lv1": "NO",
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd"
+            }
+          ]
+        },
+        {
+          "unit_key": "3683688e-12d5-576b-b919-ddb40b2a74bf",
+          "name": "食事・水分が摂れる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168",
+              "name": "食事摂取量",
+              "proper_value": "5割以上"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "52554db4-c22f-5936-a6fb-14f8499d6994",
+              "name": "食事摂取量の観察",
+              "category_lv1": "NO",
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 6,
+      "path_step": 1,
+      "title": "入院6日目",
+      "oat_units": [
+        {
+          "unit_key": "9df5ad09-27cc-5591-94ef-caa766964835",
+          "name": "呼吸状態が安定している",
+          "category": "H",
+          "code_system": "bom",
+          "code": "O01260",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "a28a3a8b-a3f2-5f6c-bf8d-568b90239743",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上(室内気)",
+              "nursing_observation_manage_no": "31000001"
+            },
+            {
+              "assessment_key": "0209c8fb-0eb2-5c36-882b-c94356529830",
+              "name": "呼吸困難",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "bf2359d8-2129-592f-a376-2484b8bef76f",
+              "name": "バイタルサイン測定(呼吸数を含む)",
+              "category_lv1": "NO"
+            }
+          ]
+        },
+        {
+          "unit_key": "0760be83-4b4f-568f-8ddb-5a96506b3e92",
+          "name": "解熱している",
+          "category": "H",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "50524bf2-9356-5621-b517-514d60842aaa",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "88dc4749-2096-5aef-a469-e6f71ea723d6",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            }
+          ],
+          "tasks": []
+        },
+        {
+          "unit_key": "db27b3e7-ea44-51d7-9d9a-26f82f60cf0d",
+          "name": "抗菌薬治療が予定通り行われる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd",
+              "name": "発疹・下痢",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "2ef3cf8f-ab69-54c5-a94e-61bcfd44ee95",
+              "name": "内服抗菌薬へ切り替え",
+              "category_lv1": "TP",
+              "category_lv2": "TPPR",
+              "order_type": "prescription",
+              "order_label": "オーグメンチン配合錠２５０ＲＳ　（３７５ｍｇ）",
+              "order_values": {
+                "rps": [
+                  {
+                    "usage": {
+                      "id": 3650,
+                      "usage_code": "1013044400000000",
+                      "basic_usage_category_code": "1",
+                      "basic_usage_category": "内服",
+                      "detailed_usage_category_code": "0",
+                      "detailed_usage_category": "経口",
+                      "timing_category_code": "1",
+                      "timing_category": "食事ベース型",
+                      "usage_name": "１日３回朝昼夕食後　服用",
+                      "standard_usage_number": "1130",
+                      "start_date": "20220725",
+                      "end_date": "99999999",
+                      "usage_code_category": "0",
+                      "created_at": "2026-07-19T22:40:26.575Z",
+                      "updated_at": "2026-07-19T22:40:26.575Z",
+                      "search_name": "1日3回朝昼夕食後服用"
+                    },
+                    "doseDays": "5",
+                    "doseCount": "",
+                    "medicines": [
+                      {
+                        "dose": "1",
+                        "comment": "",
+                        "medicine": {
+                          "id": 26911,
+                          "change_category": "0",
+                          "master_type": "Y",
+                          "medicine_code": "621116301",
+                          "name_kanji_length": 23,
+                          "name": "オーグメンチン配合錠２５０ＲＳ　（３７５ｍｇ）",
+                          "name_kana_length": 20,
+                          "name_kana": "ｵｰｸﾞﾒﾝﾁﾝﾊｲｺﾞｳｼﾞｮｳ250",
+                          "unit_code": "16",
+                          "unit_name_length": 1,
+                          "unit_name": "錠",
+                          "price_type": "1",
+                          "price": "45.7",
+                          "reserve1": "0",
+                          "narcotic_category": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "generic_flag": "0",
+                          "reserve2": "0",
+                          "dental_specific_flag": "0",
+                          "contrast_medium_category": "0",
+                          "injection_volume": "0",
+                          "listing_method_category": "0",
+                          "brand_name_related_code": "0",
+                          "old_price_type": "1",
+                          "old_price": "45.7",
+                          "name_change_flag": "0",
+                          "kana_change_flag": "0",
+                          "dosage_form": "1",
+                          "reserve3": "",
+                          "changed_on": "20250401",
+                          "abolished_on": "99999999",
+                          "yakka_code": "6139100F2044",
+                          "publication_order": "001218000",
+                          "transitional_measure_on": "0",
+                          "basic_name": "オーグメンチン配合錠２５０ＲＳ",
+                          "listed_on": "0",
+                          "generic_name_code": "",
+                          "generic_name_description": "",
+                          "generic_name_addition_category": "0",
+                          "anti_hiv_flag": "0",
+                          "long_term_listed_related_code": "0",
+                          "selective_treatment_category": "0",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "search_name": "オーグメンチン配合錠250rs(375mg)",
+                          "search_kana": "オーグメンチンハイゴウジョウ250",
+                          "search_generic": ""
+                        }
+                      }
+                    ],
+                    "usageComment": "点滴終了の翌日から"
+                  }
+                ],
+                "comment": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "temporary",
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "b602581b-23c2-5933-8093-8b8a3f350c71",
+              "name": "副作用(発疹・下痢)の観察",
+              "category_lv1": "NO",
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd"
+            }
+          ]
+        },
+        {
+          "unit_key": "3683688e-12d5-576b-b919-ddb40b2a74bf",
+          "name": "食事・水分が摂れる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168",
+              "name": "食事摂取量",
+              "proper_value": "5割以上"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "52554db4-c22f-5936-a6fb-14f8499d6994",
+              "name": "食事摂取量の観察",
+              "category_lv1": "NO",
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 7,
+      "path_step": 1,
+      "title": "退院日",
+      "oat_units": [
+        {
+          "unit_key": "9df5ad09-27cc-5591-94ef-caa766964835",
+          "name": "呼吸状態が安定している",
+          "category": "H",
+          "code_system": "bom",
+          "code": "O01260",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "a28a3a8b-a3f2-5f6c-bf8d-568b90239743",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上(室内気)",
+              "nursing_observation_manage_no": "31000001"
+            },
+            {
+              "assessment_key": "0209c8fb-0eb2-5c36-882b-c94356529830",
+              "name": "呼吸困難",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "bf2359d8-2129-592f-a376-2484b8bef76f",
+              "name": "バイタルサイン測定(呼吸数を含む)",
+              "category_lv1": "NO"
+            }
+          ]
+        },
+        {
+          "unit_key": "0760be83-4b4f-568f-8ddb-5a96506b3e92",
+          "name": "解熱している",
+          "category": "H",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "50524bf2-9356-5621-b517-514d60842aaa",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "88dc4749-2096-5aef-a469-e6f71ea723d6",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            }
+          ],
+          "tasks": []
+        },
+        {
+          "unit_key": "db27b3e7-ea44-51d7-9d9a-26f82f60cf0d",
+          "name": "抗菌薬治療が予定通り行われる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd",
+              "name": "発疹・下痢",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "b602581b-23c2-5933-8093-8b8a3f350c71",
+              "name": "副作用(発疹・下痢)の観察",
+              "category_lv1": "NO",
+              "assessment_key": "9177eb7d-1ebf-5028-bf1d-57448f6a0cbd"
+            }
+          ]
+        },
+        {
+          "unit_key": "3683688e-12d5-576b-b919-ddb40b2a74bf",
+          "name": "食事・水分が摂れる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168",
+              "name": "食事摂取量",
+              "proper_value": "5割以上"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "52554db4-c22f-5936-a6fb-14f8499d6994",
+              "name": "食事摂取量の観察",
+              "category_lv1": "NO",
+              "assessment_key": "49b9da27-b467-53c7-b68d-e40e338ac168"
+            }
+          ]
+        },
+        {
+          "unit_key": "853d52d9-4475-54d1-81ca-1a67dd8d99a4",
+          "name": "退院基準を満たしている",
+          "category": "H",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "46d744d0-90e2-57ec-bd1b-0177e78248e1",
+              "name": "解熱が 24 時間以上続いている",
+              "proper_value": "続いている"
+            },
+            {
+              "assessment_key": "c23fd958-7924-568b-84d8-c89a7e1f1bf4",
+              "name": "室内気で SpO2 95%以上",
+              "proper_value": "保てる"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "b3ea8cc7-3721-538b-8c38-9a9294845b17",
+              "name": "採血(血算・CRP・生化学)",
+              "category_lv1": "EX",
+              "category_lv2": "EXSP",
+              "order_type": "lab-order",
+              "order_label": "血算、CRP、生化セット",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "160008010",
+                    "name": "末梢血液一般検査",
+                    "jlacCode": "",
+                    "shortName": "血算",
+                    "parentCode": "",
+                    "specimenCode": "212",
+                    "specimenName": "全血(静脈血、EDTA入り)",
+                    "containerCode": "T03",
+                    "containerName": "EDTA-2K管",
+                    "jlacCodeSystem": ""
+                  },
+                  {
+                    "id": "",
+                    "code": "160054710",
+                    "name": "CRP",
+                    "jlacCode": "E3019000025000085",
+                    "shortName": "CRP",
+                    "parentCode": "",
+                    "specimenCode": "250",
+                    "specimenName": "血清",
+                    "containerCode": "",
+                    "containerName": "",
+                    "jlacCodeSystem": "jlac11"
+                  },
+                  {
+                    "id": "",
+                    "code": "SET-01",
+                    "name": "生化学セット(基本)",
+                    "jlacCode": "",
+                    "shortName": "生化セット",
+                    "parentCode": "",
+                    "specimenCode": "",
+                    "specimenName": "",
+                    "containerCode": "",
+                    "containerName": "",
+                    "jlacCodeSystem": ""
+                  }
+                ],
+                "comment": "",
+                "problem": null,
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "59f74c29-af1e-51bd-bf53-fea1adeb53d9",
+              "name": "胸部X線",
+              "category_lv1": "EX",
+              "category_lv2": "EXIM",
+              "order_type": "rad-order",
+              "order_label": "胸部立位P→A",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "000001",
+                    "date": "",
+                    "name": "Ｘ線単純撮影胸部立位正面(P→A)",
+                    "time": "",
+                    "purpose": "",
+                    "remarks": "",
+                    "priority": "routine",
+                    "groupable": true,
+                    "shortName": "胸部立位P→A",
+                    "jj1017Code": "10000002000103000000010000000000",
+                    "parentCode": "",
+                    "reasonName": "",
+                    "bodyPartCode": "200",
+                    "bodyPartName": "胸部",
+                    "modalityCode": "1",
+                    "modalityName": "Ｘ線単純撮影",
+                    "lateralityCode": "",
+                    "lateralityName": "",
+                    "purposeTemplate": null,
+                    "remarksTemplate": null,
+                    "reasonConditionId": ""
+                  }
+                ],
+                "problem": null,
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": "",
+                "startTime": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "53e13107-8c70-5c20-9c89-e0482d5a50d5",
+              "name": "退院指導(内服の継続・禁煙・肺炎球菌ワクチン)",
+              "category_lv1": "EG",
+              "category_lv2": "EGCS"
+            },
+            {
+              "task_key": "307f9f4f-8425-559e-8cbc-8be6239145a5",
+              "name": "退院時要約",
+              "category_lv1": "MD"
+            },
+            {
+              "task_key": "8adb400a-02c2-5612-b75b-f2ce1edc4bcc",
+              "name": "次回外来予約の案内",
+              "category_lv1": "EG",
+              "category_lv2": "EGCS"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

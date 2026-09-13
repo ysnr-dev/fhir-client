@@ -1,0 +1,1487 @@
+{
+  "pathway_code": "900003",
+  "name": "鼠径ヘルニア根治術(2泊3日)",
+  "short_name": "鼠径ヘルニア 2泊3日",
+  "name_kana": "ソケイヘルニアコンチジュツ",
+  "version": "1.0",
+  "setting": "inpatient",
+  "scheduled_days": 3,
+  "adaptive_criteria": "成人の片側鼠径ヘルニアに対する待機的な前方アプローチの根治術(脊椎麻酔)。嵌頓・絞扼例、再発例、両側例、抗血栓薬を休薬できない例は除く。",
+  "note": "開発・デモ用のサンプル。手術当日を術前・術後に分け、疼痛・創部の観察を退院日まで続けている。手術の雛形は左右を空けてあるので、適用時に入れる。",
+  "indications": [
+    {
+      "management_number": "20082159",
+      "name": "鼠径ヘルニア",
+      "icd10": "K409"
+    }
+  ],
+  "events": [
+    {
+      "elapsed_days": 1,
+      "path_step": 1,
+      "title": "入院日",
+      "oat_units": [
+        {
+          "unit_key": "3f5b8863-a0b6-59c7-828f-919d0774fead",
+          "name": "身体的準備ができている",
+          "category": "H",
+          "code_system": "bom",
+          "code": "O00470",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "7abe6213-0fb3-53fd-8bc8-8a5c09bd7457",
+              "name": "感冒症状がない",
+              "category_code": "34",
+              "category_name": "呼吸",
+              "code_system": "bom",
+              "code": "3400063200",
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "faeb0181-a678-56e0-b83d-99b4f61c9a49",
+              "name": "抗血小板剤・抗凝固剤が予定通り中止されている",
+              "category_code": "37",
+              "category_name": "出血",
+              "code_system": "bom",
+              "code": "3700070000",
+              "proper_value": "中止済"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "97843f07-94b9-513c-ab13-292b864ed27b",
+              "name": "感冒様症状の観察",
+              "category_lv1": "NO",
+              "assessment_key": "7abe6213-0fb3-53fd-8bc8-8a5c09bd7457"
+            },
+            {
+              "task_key": "9f7363f0-17fc-5101-8689-d1c149689c65",
+              "name": "休薬状況の確認",
+              "category_lv1": "NO",
+              "assessment_key": "faeb0181-a678-56e0-b83d-99b4f61c9a49"
+            },
+            {
+              "task_key": "57f06da3-d799-596b-8934-b0a18a6bd80d",
+              "name": "術前検査(血算・生化学・凝固)",
+              "category_lv1": "EX",
+              "category_lv2": "EXSP",
+              "order_type": "lab-order",
+              "order_label": "血算、生化セット、PT、APTT",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "160008010",
+                    "name": "末梢血液一般検査",
+                    "jlacCode": "",
+                    "shortName": "血算",
+                    "parentCode": "",
+                    "specimenCode": "212",
+                    "specimenName": "全血(静脈血、EDTA入り)",
+                    "containerCode": "T03",
+                    "containerName": "EDTA-2K管",
+                    "jlacCodeSystem": ""
+                  },
+                  {
+                    "id": "",
+                    "code": "SET-01",
+                    "name": "生化学セット(基本)",
+                    "jlacCode": "",
+                    "shortName": "生化セット",
+                    "parentCode": "",
+                    "specimenCode": "",
+                    "specimenName": "",
+                    "containerCode": "",
+                    "containerName": "",
+                    "jlacCodeSystem": ""
+                  },
+                  {
+                    "id": "",
+                    "code": "160012010",
+                    "name": "プロトロンビン時間(PT)",
+                    "jlacCode": "",
+                    "shortName": "PT",
+                    "parentCode": "",
+                    "specimenCode": "244",
+                    "specimenName": "血漿(クエン酸入り)",
+                    "containerCode": "T05",
+                    "containerName": "クエン酸Na管",
+                    "jlacCodeSystem": ""
+                  },
+                  {
+                    "id": "",
+                    "code": "160012310",
+                    "name": "活性化部分トロンボプラスチン時間(APTT)",
+                    "jlacCode": "B20030000244000F0",
+                    "shortName": "APTT",
+                    "parentCode": "",
+                    "specimenCode": "244",
+                    "specimenName": "血漿(クエン酸入り)",
+                    "containerCode": "T05",
+                    "containerName": "クエン酸Na管",
+                    "jlacCodeSystem": "jlac11"
+                  }
+                ],
+                "comment": "",
+                "problem": null,
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "b0089092-b7ce-5220-821f-0fac0291cddf",
+              "name": "胸部X線",
+              "category_lv1": "EX",
+              "category_lv2": "EXIM",
+              "order_type": "rad-order",
+              "order_label": "胸部立位P→A",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "000001",
+                    "date": "",
+                    "name": "Ｘ線単純撮影胸部立位正面(P→A)",
+                    "time": "",
+                    "purpose": "",
+                    "remarks": "",
+                    "priority": "routine",
+                    "groupable": true,
+                    "shortName": "胸部立位P→A",
+                    "jj1017Code": "10000002000103000000010000000000",
+                    "parentCode": "",
+                    "reasonName": "",
+                    "bodyPartCode": "200",
+                    "bodyPartName": "胸部",
+                    "modalityCode": "1",
+                    "modalityName": "Ｘ線単純撮影",
+                    "lateralityCode": "",
+                    "lateralityName": "",
+                    "purposeTemplate": null,
+                    "remarksTemplate": null,
+                    "reasonConditionId": ""
+                  }
+                ],
+                "problem": null,
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": "",
+                "startTime": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "1673fed6-951c-5afc-a62e-51ca50913949",
+              "name": "心電図",
+              "category_lv1": "EX",
+              "category_lv2": "EXPH",
+              "order_type": "physio-order",
+              "order_label": "ECG12",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "000001",
+                    "date": "",
+                    "name": "心電図12誘導",
+                    "time": "",
+                    "purpose": "",
+                    "remarks": "",
+                    "priority": "routine",
+                    "groupable": true,
+                    "shortName": "ECG12",
+                    "parentCode": "",
+                    "reasonName": "",
+                    "examTypeCode": "01",
+                    "examTypeName": "心電図",
+                    "purposeTemplate": null,
+                    "remarksTemplate": null,
+                    "reasonConditionId": ""
+                  }
+                ],
+                "problem": null,
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": "",
+                "startTime": ""
+              },
+              "order_schema_version": 1
+            }
+          ]
+        },
+        {
+          "unit_key": "ed1c1f9c-288b-51d4-ac4d-c2d123cc8412",
+          "name": "バイタルサインが安定している",
+          "category": "H",
+          "code_system": "bom",
+          "code": "O00670",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "e03a09c2-a903-58e4-a1ed-5dc968ab5da8",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "80426f0c-a1da-55f7-ba73-192adc93ce26",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            },
+            {
+              "assessment_key": "a68e0455-1672-5a6e-9454-41f04f64fa76",
+              "name": "収縮期血圧",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900030700",
+              "proper_value": "90〜160mmHg",
+              "nursing_observation_manage_no": "31001848"
+            },
+            {
+              "assessment_key": "a72014e9-e70e-58a9-b935-58ad8225ea1c",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上",
+              "nursing_observation_manage_no": "31000001"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "8d3ac8bd-f58e-5a24-8583-9210a7cf1f02",
+              "name": "バイタルサイン測定",
+              "category_lv1": "NO"
+            }
+          ]
+        },
+        {
+          "unit_key": "cf345af0-735f-5fde-90e1-af2cb45f4d68",
+          "name": "手術・麻酔について理解できる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "aa81c292-6925-5304-b256-c1cf960fd67f",
+              "name": "説明内容を復唱できる",
+              "proper_value": "できる"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "8ea6138f-1066-580d-8fb0-f2e022b1e078",
+              "name": "手術説明・同意取得",
+              "category_lv1": "EG",
+              "category_lv2": "EGIC"
+            },
+            {
+              "task_key": "7115d2d3-9340-5ede-9342-8275624d5719",
+              "name": "麻酔科術前診察",
+              "category_lv1": "EG",
+              "category_lv2": "EGIC",
+              "order_type": "consult-order",
+              "order_label": "麻酔科",
+              "order_values": {
+                "comment": "",
+                "problem": null,
+                "purpose": "鼠径ヘルニア根治術(脊椎麻酔)の術前診察をお願いします。",
+                "setting": "inpatient",
+                "priority": "routine",
+                "desiredDate": "",
+                "requestType": "consult",
+                "purposeTemplate": null,
+                "targetDepartmentId": "64c1c450-1a9c-45a0-b7b0-e91964524493",
+                "targetDepartmentName": "麻酔科",
+                "targetPractitionerId": "",
+                "targetPractitionerName": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "480eb58e-e22d-539d-b43b-6c282c0edb49",
+              "name": "入院診療計画書の説明",
+              "category_lv1": "MD"
+            }
+          ]
+        },
+        {
+          "unit_key": "5bac2ae4-cb41-5474-a422-d472b7df8c60",
+          "name": "術前の準備が整う",
+          "category": "G",
+          "critical": false,
+          "assessments": [],
+          "tasks": [
+            {
+              "task_key": "35f88536-d218-5ebe-b075-72f59023021a",
+              "name": "除毛(鼠径部)",
+              "category_lv1": "NC",
+              "category_lv2": "NC01",
+              "order_type": "nursing-order",
+              "order_label": "除毛(鼠径部、手術前日)",
+              "order_values": {
+                "lines": [
+                  {
+                    "item": null,
+                    "text": "除毛(鼠径部、手術前日)",
+                    "comment": "",
+                    "endDate": "",
+                    "schedule": null,
+                    "condition": "",
+                    "startDate": ""
+                  }
+                ],
+                "problem": null
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "b051a60c-0ca2-5c59-a3cc-6f439debcb96",
+              "name": "21時以降絶食",
+              "category_lv1": "ML",
+              "order_type": "nursing-order",
+              "order_label": "21時以降は絶食(飲水は手術当日朝 6 時まで可)",
+              "order_values": {
+                "lines": [
+                  {
+                    "item": null,
+                    "text": "21時以降は絶食(飲水は手術当日朝 6 時まで可)",
+                    "comment": "",
+                    "endDate": "",
+                    "schedule": null,
+                    "condition": "",
+                    "startDate": ""
+                  }
+                ],
+                "problem": null
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "8fa9717a-3c52-52c6-bac1-67582a4dac79",
+              "name": "常食",
+              "category_lv1": "ML",
+              "category_lv2": "MLSU",
+              "order_type": "meal-order",
+              "order_label": "一般食2000kcal、夕から",
+              "order_values": {
+                "diet": {
+                  "code": "A00105",
+                  "name": "一般食2000kcal"
+                },
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "staples": {
+                  "lunch": null,
+                  "dinner": null,
+                  "breakfast": null
+                },
+                "endTiming": "dinner",
+                "saltLimit": "",
+                "startDate": "",
+                "startTiming": "dinner",
+                "sideDishForm": null,
+                "dietIsFasting": false,
+                "fastingReason": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "7f47b392-dc9c-51f9-8fed-5c907f4df031",
+              "name": "病棟内フリー",
+              "category_lv1": "AL",
+              "order_type": "nursing-order",
+              "order_label": "安静度: 病棟内フリー",
+              "order_values": {
+                "lines": [
+                  {
+                    "item": null,
+                    "text": "安静度: 病棟内フリー",
+                    "comment": "",
+                    "endDate": "",
+                    "schedule": null,
+                    "condition": "",
+                    "startDate": ""
+                  }
+                ],
+                "problem": null
+              },
+              "order_schema_version": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 2,
+      "path_step": 1,
+      "title": "手術当日",
+      "path_step_name": "術前",
+      "oat_units": [
+        {
+          "unit_key": "a011da03-b7eb-5d72-bd1b-661a3ee26afd",
+          "name": "術前の状態が手術に適している",
+          "category": "H",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "47868c95-44ea-5dfd-bc2e-f90e0507ae67",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "54598287-bbc5-599a-97da-c51b88849d66",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            },
+            {
+              "assessment_key": "4ba6ffbb-ec72-5102-861f-fea551579966",
+              "name": "収縮期血圧",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900030700",
+              "proper_value": "90〜160mmHg",
+              "nursing_observation_manage_no": "31001848"
+            },
+            {
+              "assessment_key": "3c5f3e59-d513-550f-a352-bd4daec45b77",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上",
+              "nursing_observation_manage_no": "31000001"
+            },
+            {
+              "assessment_key": "799dbcd6-c174-5c32-b387-c475cb47a77b",
+              "name": "絶飲食が守られている",
+              "proper_value": "守られている"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "e1c9c379-ab6f-536f-88b3-6eb4dd92a29d",
+              "name": "バイタルサイン測定",
+              "category_lv1": "NO"
+            },
+            {
+              "task_key": "61c41fdf-7b15-5f80-b291-a3ff85cb795d",
+              "name": "絶飲食の確認",
+              "category_lv1": "NO",
+              "assessment_key": "799dbcd6-c174-5c32-b387-c475cb47a77b"
+            },
+            {
+              "task_key": "6d5b841b-ea42-58af-b870-1eeeb57e346f",
+              "name": "術前点滴(細胞外液)",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "order_type": "injection",
+              "order_label": "ラクテック注　５００ｍＬ",
+              "order_values": {
+                "rps": [
+                  {
+                    "rate": "",
+                    "times": [],
+                    "lineCode": "",
+                    "siteCode": "",
+                    "medicines": [
+                      {
+                        "dose": "1",
+                        "comment": "",
+                        "medicine": {
+                          "id": 36910,
+                          "name": "ラクテック注　５００ｍＬ",
+                          "price": "231.0",
+                          "yj_code": "3319534A4046",
+                          "reserve1": "0",
+                          "reserve2": "0",
+                          "reserve3": "",
+                          "listed_on": "0",
+                          "name_kana": "ﾗｸﾃｯｸﾁｭｳ",
+                          "old_price": "231.0",
+                          "unit_code": "20",
+                          "unit_name": "袋",
+                          "basic_name": "ラクテック注",
+                          "changed_on": "20250401",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "price_type": "1",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "yakka_code": "3319534A4046",
+                          "yakko_code": "3319",
+                          "yakko_name": "その他の血液代用剤",
+                          "dosage_form": "4",
+                          "master_type": "Y",
+                          "search_kana": "ラクテックチュウ",
+                          "search_name": "ラクテック注500ml",
+                          "abolished_on": "99999999",
+                          "generic_flag": "0",
+                          "anti_hiv_flag": "0",
+                          "medicine_code": "643310347",
+                          "old_price_type": "1",
+                          "search_generic": "",
+                          "change_category": "0",
+                          "injection_volume": "500",
+                          "kana_change_flag": "0",
+                          "name_change_flag": "0",
+                          "name_kana_length": 8,
+                          "unit_name_length": 1,
+                          "generic_name_code": "",
+                          "name_kanji_length": 12,
+                          "narcotic_category": "0",
+                          "publication_order": "010058000",
+                          "dental_specific_flag": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "brand_name_related_code": "0",
+                          "listing_method_category": "1",
+                          "transitional_measure_on": "0",
+                          "contrast_medium_category": "0",
+                          "generic_name_description": "",
+                          "selective_treatment_category": "0",
+                          "long_term_listed_related_code": "0",
+                          "generic_name_addition_category": "0"
+                        }
+                      }
+                    ],
+                    "routeCode": "IV",
+                    "usageType": "drip",
+                    "methodCode": "",
+                    "usageComment": "点滴静注(手術室入室前から)",
+                    "infusionHours": ""
+                  }
+                ],
+                "series": null,
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "temporary",
+                "schedule": {
+                  "kind": "daily"
+                },
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "db6d3527-975d-5c33-8463-67ce3cae12e7",
+              "name": "予防的抗菌薬(執刀前30分)",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "order_type": "injection",
+              "order_label": "セファゾリンＮａ点滴静注用１ｇバッグオーツカ　生食１００ｍＬ付",
+              "order_values": {
+                "rps": [
+                  {
+                    "rate": "",
+                    "times": [],
+                    "lineCode": "",
+                    "siteCode": "",
+                    "medicines": [
+                      {
+                        "dose": "1",
+                        "comment": "",
+                        "medicine": {
+                          "id": 24438,
+                          "name": "セファゾリンＮａ点滴静注用１ｇバッグオーツカ　生食１００ｍＬ付",
+                          "price": "1062.0",
+                          "yj_code": "6132401G3079",
+                          "reserve1": "0",
+                          "reserve2": "0",
+                          "reserve3": "",
+                          "listed_on": "0",
+                          "name_kana": "ｾﾌｧｿﾞﾘﾝNAﾃﾝﾃｷｼﾞｮｳﾁｭｳ",
+                          "old_price": "772.0",
+                          "unit_code": "51",
+                          "unit_name": "キット",
+                          "basic_name": "セファゾリンＮａ点滴静注用１ｇバッグ「オーツカ」",
+                          "changed_on": "20250401",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "price_type": "1",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "yakka_code": "6132401G3079",
+                          "yakko_code": "6132",
+                          "yakko_name": "セフェム系抗生物質製剤",
+                          "dosage_form": "4",
+                          "master_type": "Y",
+                          "search_kana": "セファゾリンnaテンテキジョウチュウ",
+                          "search_name": "セファゾリンna点滴静注用1gバッグオーツカ生食100ml付",
+                          "abolished_on": "99999999",
+                          "generic_flag": "0",
+                          "anti_hiv_flag": "0",
+                          "medicine_code": "620007318",
+                          "old_price_type": "1",
+                          "search_generic": "",
+                          "change_category": "0",
+                          "injection_volume": "100",
+                          "kana_change_flag": "0",
+                          "name_change_flag": "0",
+                          "name_kana_length": 20,
+                          "unit_name_length": 3,
+                          "generic_name_code": "",
+                          "name_kanji_length": 31,
+                          "narcotic_category": "0",
+                          "publication_order": "008381000",
+                          "dental_specific_flag": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "brand_name_related_code": "0",
+                          "listing_method_category": "1",
+                          "transitional_measure_on": "0",
+                          "contrast_medium_category": "0",
+                          "generic_name_description": "",
+                          "selective_treatment_category": "0",
+                          "long_term_listed_related_code": "0",
+                          "generic_name_addition_category": "0"
+                        }
+                      }
+                    ],
+                    "routeCode": "IV",
+                    "usageType": "drip",
+                    "methodCode": "",
+                    "usageComment": "点滴静注 30 分(執刀 30 分前に開始)",
+                    "infusionHours": ""
+                  }
+                ],
+                "series": null,
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "temporary",
+                "schedule": {
+                  "kind": "daily"
+                },
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "2ec80f53-1fbb-5b8a-9ca5-697a93311bda",
+              "name": "鼠径ヘルニア根治術",
+              "category_lv1": "TP",
+              "category_lv2": "TPOP",
+              "order_type": "surgery-order",
+              "order_label": "鼠径ヘルニア根治術",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "150159010",
+                    "name": "鼠径ヘルニア手術",
+                    "approach": "open",
+                    "shortName": "鼠径ヘルニア根治術",
+                    "laterality": "",
+                    "reasonName": "",
+                    "receiptCode": "150159010",
+                    "bodySiteText": "",
+                    "reasonConditionId": ""
+                  }
+                ],
+                "staff": [
+                  {
+                    "role": "surgeon",
+                    "practitionerId": "1faaa744-265d-41cd-b0f1-328bbf5bae98",
+                    "practitionerName": "医師 三郎"
+                  }
+                ],
+                "roomId": "",
+                "comment": "クリニカルパス(鼠径ヘルニア 2泊3日)の雛形。左右は適用時に入れる。",
+                "problem": null,
+                "setting": "inpatient",
+                "consents": [],
+                "position": "supine",
+                "priority": "routine",
+                "roomName": "",
+                "equipment": [],
+                "scheduledDate": "",
+                "scheduledTime": "",
+                "specimenPlans": [],
+                "equipmentOther": "",
+                "durationMinutes": "90",
+                "bloodPreparation": "",
+                "preopInstruction": "",
+                "anesthesiaMethods": [
+                  "spinal"
+                ],
+                "estimatedBloodLoss": "",
+                "anesthesiaManagement": "",
+                "surgicalDepartmentId": "",
+                "bloodPreparationUnits": "",
+                "surgicalDepartmentName": "",
+                "preopInstructionTemplate": null
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "48eb7346-a17d-5fed-8110-f025db7ae1f9",
+              "name": "絶飲食",
+              "category_lv1": "ML",
+              "order_type": "meal-order",
+              "order_label": "食止め、朝から",
+              "order_values": {
+                "diet": {
+                  "code": "NPO",
+                  "name": "食止め"
+                },
+                "comment": "手術のため絶飲食",
+                "endDate": "",
+                "problem": null,
+                "staples": {
+                  "lunch": null,
+                  "dinner": null,
+                  "breakfast": null
+                },
+                "endTiming": "dinner",
+                "saltLimit": "",
+                "startDate": "",
+                "startTiming": "breakfast",
+                "sideDishForm": null,
+                "dietIsFasting": true,
+                "fastingReason": "ope"
+              },
+              "order_schema_version": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 2,
+      "path_step": 2,
+      "title": "手術当日",
+      "path_step_name": "術後",
+      "oat_units": [
+        {
+          "unit_key": "b7b8f1c4-a20f-5d97-a188-bb6f8a371d15",
+          "name": "呼吸・循環が安定している",
+          "category": "H",
+          "code_system": "bom",
+          "code": "O01260",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "284d5c14-3174-5e26-96e4-2de60c523348",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "fdc8bb43-a68d-5683-9b37-f02d39e5e3b3",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            },
+            {
+              "assessment_key": "d2ca96b8-dfba-5bc9-9b97-2126aabe034a",
+              "name": "収縮期血圧",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900030700",
+              "proper_value": "90〜160mmHg",
+              "nursing_observation_manage_no": "31001848"
+            },
+            {
+              "assessment_key": "a72a4053-e656-582f-a4a9-66ab0dd4fb82",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上",
+              "nursing_observation_manage_no": "31000001"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "4f4cd108-dd2a-5f9c-9da5-94080d46eaf2",
+              "name": "帰室後バイタルサイン測定(1時間毎×3)",
+              "category_lv1": "NO"
+            },
+            {
+              "task_key": "0dac49a5-b070-5a32-85fb-34233028df4f",
+              "name": "術後点滴",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "order_type": "injection",
+              "order_label": "ラクテック注　５００ｍＬ",
+              "order_values": {
+                "rps": [
+                  {
+                    "rate": "",
+                    "times": [],
+                    "lineCode": "",
+                    "siteCode": "",
+                    "medicines": [
+                      {
+                        "dose": "1",
+                        "comment": "",
+                        "medicine": {
+                          "id": 36910,
+                          "name": "ラクテック注　５００ｍＬ",
+                          "price": "231.0",
+                          "yj_code": "3319534A4046",
+                          "reserve1": "0",
+                          "reserve2": "0",
+                          "reserve3": "",
+                          "listed_on": "0",
+                          "name_kana": "ﾗｸﾃｯｸﾁｭｳ",
+                          "old_price": "231.0",
+                          "unit_code": "20",
+                          "unit_name": "袋",
+                          "basic_name": "ラクテック注",
+                          "changed_on": "20250401",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "price_type": "1",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "yakka_code": "3319534A4046",
+                          "yakko_code": "3319",
+                          "yakko_name": "その他の血液代用剤",
+                          "dosage_form": "4",
+                          "master_type": "Y",
+                          "search_kana": "ラクテックチュウ",
+                          "search_name": "ラクテック注500ml",
+                          "abolished_on": "99999999",
+                          "generic_flag": "0",
+                          "anti_hiv_flag": "0",
+                          "medicine_code": "643310347",
+                          "old_price_type": "1",
+                          "search_generic": "",
+                          "change_category": "0",
+                          "injection_volume": "500",
+                          "kana_change_flag": "0",
+                          "name_change_flag": "0",
+                          "name_kana_length": 8,
+                          "unit_name_length": 1,
+                          "generic_name_code": "",
+                          "name_kanji_length": 12,
+                          "narcotic_category": "0",
+                          "publication_order": "010058000",
+                          "dental_specific_flag": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "brand_name_related_code": "0",
+                          "listing_method_category": "1",
+                          "transitional_measure_on": "0",
+                          "contrast_medium_category": "0",
+                          "generic_name_description": "",
+                          "selective_treatment_category": "0",
+                          "long_term_listed_related_code": "0",
+                          "generic_name_addition_category": "0"
+                        }
+                      }
+                    ],
+                    "routeCode": "IV",
+                    "usageType": "drip",
+                    "methodCode": "",
+                    "usageComment": "点滴静注(飲水開始まで)",
+                    "infusionHours": ""
+                  }
+                ],
+                "series": null,
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "temporary",
+                "schedule": {
+                  "kind": "daily"
+                },
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "8e59c734-3302-5448-99d9-ac8f5f8b09cd",
+              "name": "ベッド上安静(脊椎麻酔後 3 時間)",
+              "category_lv1": "AL",
+              "order_type": "nursing-order",
+              "order_label": "安静度: ベッド上安静(脊椎麻酔後 3 時間、以降は付き添いで歩行)",
+              "order_values": {
+                "lines": [
+                  {
+                    "item": null,
+                    "text": "安静度: ベッド上安静(脊椎麻酔後 3 時間、以降は付き添いで歩行)",
+                    "comment": "",
+                    "endDate": "",
+                    "schedule": null,
+                    "condition": "",
+                    "startDate": ""
+                  }
+                ],
+                "problem": null
+              },
+              "order_schema_version": 1
+            }
+          ]
+        },
+        {
+          "unit_key": "cc0f9725-b837-59b4-9227-61236883a52c",
+          "name": "疼痛が自制内である",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "7f678060-a994-5675-807c-fdffb91de9ab",
+              "name": "疼痛(NRS)",
+              "proper_value": "3以下"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "470dca3d-a124-5022-98e0-8fec9951732b",
+              "name": "疼痛の評価",
+              "category_lv1": "NO",
+              "assessment_key": "7f678060-a994-5675-807c-fdffb91de9ab"
+            },
+            {
+              "task_key": "170b375a-5647-53d6-b8e7-8cc2eeee6fcb",
+              "name": "疼痛時鎮痛薬",
+              "category_lv1": "TP",
+              "category_lv2": "TPCI",
+              "order_type": "prescription",
+              "order_label": "カロナール錠３００　３００ｍｇ",
+              "order_values": {
+                "rps": [
+                  {
+                    "usage": {
+                      "id": 3677,
+                      "end_date": "99999999",
+                      "created_at": "2026-07-19T22:40:26.575Z",
+                      "start_date": "20220725",
+                      "updated_at": "2026-07-19T22:40:26.575Z",
+                      "usage_code": "1050110000000000",
+                      "usage_name": "疼痛時　服用",
+                      "search_name": "疼痛時服用",
+                      "timing_category": "頓用指示型",
+                      "usage_code_category": "0",
+                      "basic_usage_category": "内服",
+                      "timing_category_code": "5",
+                      "standard_usage_number": "1601",
+                      "detailed_usage_category": "経口",
+                      "basic_usage_category_code": "1",
+                      "detailed_usage_category_code": "0"
+                    },
+                    "doseDays": "",
+                    "doseCount": "5",
+                    "medicines": [
+                      {
+                        "dose": "2",
+                        "comment": "",
+                        "medicine": {
+                          "id": 22208,
+                          "name": "カロナール錠３００　３００ｍｇ",
+                          "price": "7.0",
+                          "yj_code": "1141007F2027",
+                          "reserve1": "0",
+                          "reserve2": "0",
+                          "reserve3": "",
+                          "listed_on": "0",
+                          "name_kana": "ｶﾛﾅｰﾙｼﾞｮｳ300",
+                          "old_price": "7.0",
+                          "unit_code": "16",
+                          "unit_name": "錠",
+                          "basic_name": "カロナール錠３００",
+                          "changed_on": "20250401",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "price_type": "1",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "yakka_code": "1141007F2027",
+                          "yakko_code": "1141",
+                          "yakko_name": "アニリン系製剤；メフェナム酸、フルフェナム酸等",
+                          "dosage_form": "1",
+                          "master_type": "Y",
+                          "search_kana": "カロナールジョウ300",
+                          "search_name": "カロナール錠300300mg",
+                          "abolished_on": "99999999",
+                          "generic_flag": "1",
+                          "anti_hiv_flag": "0",
+                          "medicine_code": "620000033",
+                          "old_price_type": "1",
+                          "search_generic": "【般】アセトアミノフェン錠300mg",
+                          "change_category": "0",
+                          "injection_volume": "0",
+                          "kana_change_flag": "0",
+                          "name_change_flag": "0",
+                          "name_kana_length": 12,
+                          "unit_name_length": 1,
+                          "generic_name_code": "1141007F2ZZZ",
+                          "name_kanji_length": 15,
+                          "narcotic_category": "0",
+                          "publication_order": "001598000",
+                          "dental_specific_flag": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "brand_name_related_code": "0",
+                          "listing_method_category": "0",
+                          "transitional_measure_on": "0",
+                          "contrast_medium_category": "0",
+                          "generic_name_description": "【般】アセトアミノフェン錠３００ｍｇ",
+                          "selective_treatment_category": "0",
+                          "long_term_listed_related_code": "0",
+                          "generic_name_addition_category": "1"
+                        }
+                      }
+                    ],
+                    "usageComment": "疼痛時、1 日 3 回まで(間隔 4 時間以上)"
+                  }
+                ],
+                "comment": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "temporary",
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            }
+          ]
+        },
+        {
+          "unit_key": "3e760288-5eb2-5a2f-ae96-2e3ee09d24f7",
+          "name": "創部の出血・感染の徴候がない",
+          "category": "H",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "7116acfa-b677-5592-8027-156c2ee8bf7c",
+              "name": "創部出血がない",
+              "category_code": "37",
+              "category_name": "出血",
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "876b005f-dc8f-5ef7-9ff6-16c4919b759b",
+              "name": "陰嚢の腫脹",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "df84c6b1-1c7e-51b6-821b-51670c5bc3be",
+              "name": "創部の観察",
+              "category_lv1": "NO",
+              "assessment_key": "7116acfa-b677-5592-8027-156c2ee8bf7c"
+            }
+          ]
+        },
+        {
+          "unit_key": "a89c8524-0202-5fe0-95b2-a4a097adcfd0",
+          "name": "排尿がある",
+          "category": "H",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "3b414dcf-426b-5f31-b3d1-d5d2d945cf39",
+              "name": "自尿",
+              "proper_value": "あり"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "4fbb8f5a-7444-56f8-ba12-a7640fdbe22a",
+              "name": "排尿の確認(帰室後 6 時間以内)",
+              "category_lv1": "NO",
+              "assessment_key": "3b414dcf-426b-5f31-b3d1-d5d2d945cf39"
+            }
+          ]
+        },
+        {
+          "unit_key": "dabb45ef-48ab-5303-a1ae-8a54d49a3ec8",
+          "name": "経口摂取が再開できる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "b63bfbf8-e9b4-57b6-b4a4-f8208a5c50a0",
+              "name": "悪心・嘔吐",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "e331b378-d939-5f2a-8e03-2510a7a2946f",
+              "name": "飲水開始",
+              "category_lv1": "ML",
+              "order_type": "nursing-order",
+              "order_label": "飲水開始(帰室 3 時間後から、嘔気が無ければ増量)",
+              "order_values": {
+                "lines": [
+                  {
+                    "item": null,
+                    "text": "飲水開始(帰室 3 時間後から、嘔気が無ければ増量)",
+                    "comment": "",
+                    "endDate": "",
+                    "schedule": null,
+                    "condition": "",
+                    "startDate": ""
+                  }
+                ],
+                "problem": null
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "1159adfb-a755-5560-927c-d7e894413ee0",
+              "name": "常食(夕から)",
+              "category_lv1": "ML",
+              "category_lv2": "MLSU",
+              "order_type": "meal-order",
+              "order_label": "一般食2000kcal、夕から",
+              "order_values": {
+                "diet": {
+                  "code": "A00105",
+                  "name": "一般食2000kcal"
+                },
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "staples": {
+                  "lunch": null,
+                  "dinner": null,
+                  "breakfast": null
+                },
+                "endTiming": "dinner",
+                "saltLimit": "",
+                "startDate": "",
+                "startTiming": "dinner",
+                "sideDishForm": null,
+                "dietIsFasting": false,
+                "fastingReason": ""
+              },
+              "order_schema_version": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 3,
+      "path_step": 1,
+      "title": "退院日(術後1日目)",
+      "oat_units": [
+        {
+          "unit_key": "cc0f9725-b837-59b4-9227-61236883a52c",
+          "name": "疼痛が自制内である",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "7f678060-a994-5675-807c-fdffb91de9ab",
+              "name": "疼痛(NRS)",
+              "proper_value": "2以下"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "470dca3d-a124-5022-98e0-8fec9951732b",
+              "name": "疼痛の評価",
+              "category_lv1": "NO",
+              "assessment_key": "7f678060-a994-5675-807c-fdffb91de9ab"
+            }
+          ]
+        },
+        {
+          "unit_key": "3e760288-5eb2-5a2f-ae96-2e3ee09d24f7",
+          "name": "創部の出血・感染の徴候がない",
+          "category": "H",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "7116acfa-b677-5592-8027-156c2ee8bf7c",
+              "name": "創部出血がない",
+              "category_code": "37",
+              "category_name": "出血",
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "876b005f-dc8f-5ef7-9ff6-16c4919b759b",
+              "name": "陰嚢の腫脹",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "df84c6b1-1c7e-51b6-821b-51670c5bc3be",
+              "name": "創部の観察",
+              "category_lv1": "NO",
+              "assessment_key": "7116acfa-b677-5592-8027-156c2ee8bf7c"
+            },
+            {
+              "task_key": "4aff6795-7d2f-55bf-980d-f569aef8d29f",
+              "name": "創処置(ガーゼ交換)",
+              "category_lv1": "TP",
+              "category_lv2": "TPTR",
+              "order_type": "treatment-order",
+              "order_label": "創処置",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "000001",
+                    "date": "",
+                    "name": "創傷処置(100cm2未満)",
+                    "time": "",
+                    "groupable": true,
+                    "shortName": "創処置",
+                    "parentCode": ""
+                  }
+                ],
+                "problem": null,
+                "setting": "inpatient",
+                "startDate": "",
+                "startTime": ""
+              },
+              "order_schema_version": 1
+            }
+          ]
+        },
+        {
+          "unit_key": "c2287c98-ab8e-5f25-81c8-fa716823e501",
+          "name": "離床できる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "9e38ede7-deaa-5c29-8e10-42b075f9365c",
+              "name": "歩行時のふらつき",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "4285e16e-dd9e-57f3-a7ea-807876d2583a",
+              "name": "病棟内フリー",
+              "category_lv1": "AL",
+              "order_type": "nursing-order",
+              "order_label": "安静度: 病棟内フリー",
+              "order_values": {
+                "lines": [
+                  {
+                    "item": null,
+                    "text": "安静度: 病棟内フリー",
+                    "comment": "",
+                    "endDate": "",
+                    "schedule": null,
+                    "condition": "",
+                    "startDate": ""
+                  }
+                ],
+                "problem": null
+              },
+              "order_schema_version": 1
+            }
+          ]
+        },
+        {
+          "unit_key": "34d76d42-f545-510d-8b89-bf774943eb83",
+          "name": "退院基準を満たしている",
+          "category": "H",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "f56443dd-3e07-5b3d-88a0-72571f3bf7eb",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "8e0c2c7a-6437-5113-b22f-2fe32532067a",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            },
+            {
+              "assessment_key": "c0babb24-f6ea-5b74-a835-9ed5495bad2c",
+              "name": "収縮期血圧",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900030700",
+              "proper_value": "90〜160mmHg",
+              "nursing_observation_manage_no": "31001848"
+            },
+            {
+              "assessment_key": "95fd1eee-a2b9-57e5-926f-1cbd6442eb77",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上",
+              "nursing_observation_manage_no": "31000001"
+            },
+            {
+              "assessment_key": "5f9fdeca-5152-593b-be26-172d19ef9a7c",
+              "name": "食事摂取量",
+              "proper_value": "5割以上"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "e4ac4bf6-7b32-5928-90db-800aed45cbf9",
+              "name": "バイタルサイン測定",
+              "category_lv1": "NO"
+            },
+            {
+              "task_key": "6f006159-fcdb-588e-8b91-f3d84ba663a5",
+              "name": "退院処方(鎮痛薬)",
+              "category_lv1": "TP",
+              "category_lv2": "TPPR",
+              "order_type": "prescription",
+              "order_label": "ロキソニン錠６０ｍｇ",
+              "order_values": {
+                "rps": [
+                  {
+                    "usage": {
+                      "id": 3650,
+                      "usage_code": "1013044400000000",
+                      "basic_usage_category_code": "1",
+                      "basic_usage_category": "内服",
+                      "detailed_usage_category_code": "0",
+                      "detailed_usage_category": "経口",
+                      "timing_category_code": "1",
+                      "timing_category": "食事ベース型",
+                      "usage_name": "１日３回朝昼夕食後　服用",
+                      "standard_usage_number": "1130",
+                      "start_date": "20220725",
+                      "end_date": "99999999",
+                      "usage_code_category": "0",
+                      "created_at": "2026-07-19T22:40:26.575Z",
+                      "updated_at": "2026-07-19T22:40:26.575Z",
+                      "search_name": "1日3回朝昼夕食後服用"
+                    },
+                    "doseDays": "5",
+                    "doseCount": "",
+                    "medicines": [
+                      {
+                        "dose": "1",
+                        "comment": "",
+                        "medicine": {
+                          "id": 25396,
+                          "change_category": "0",
+                          "master_type": "Y",
+                          "medicine_code": "620098801",
+                          "name_kanji_length": 10,
+                          "name": "ロキソニン錠６０ｍｇ",
+                          "name_kana_length": 13,
+                          "name_kana": "ﾛｷｿﾆﾝｼﾞｮｳ60MG",
+                          "unit_code": "16",
+                          "unit_name_length": 1,
+                          "unit_name": "錠",
+                          "price_type": "1",
+                          "price": "10.4",
+                          "reserve1": "0",
+                          "narcotic_category": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "generic_flag": "0",
+                          "reserve2": "0",
+                          "dental_specific_flag": "0",
+                          "contrast_medium_category": "0",
+                          "injection_volume": "0",
+                          "listing_method_category": "1",
+                          "brand_name_related_code": "0",
+                          "old_price_type": "1",
+                          "old_price": "10.1",
+                          "name_change_flag": "0",
+                          "kana_change_flag": "0",
+                          "dosage_form": "1",
+                          "reserve3": "",
+                          "changed_on": "20250401",
+                          "abolished_on": "99999999",
+                          "yakka_code": "1149019F1560",
+                          "publication_order": "006715000",
+                          "transitional_measure_on": "0",
+                          "basic_name": "ロキソニン錠６０ｍｇ",
+                          "listed_on": "0",
+                          "generic_name_code": "1149019F1ZZZ",
+                          "generic_name_description": "【般】ロキソプロフェンＮａ錠６０ｍｇ",
+                          "generic_name_addition_category": "2",
+                          "anti_hiv_flag": "0",
+                          "long_term_listed_related_code": "0",
+                          "selective_treatment_category": "1",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "search_name": "ロキソニン錠60mg",
+                          "search_kana": "ロキソニンジョウ60mg",
+                          "search_generic": "【般】ロキソプロフェンna錠60mg"
+                        }
+                      }
+                    ],
+                    "usageComment": ""
+                  }
+                ],
+                "comment": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "discharge",
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "9357d1aa-5f70-5abd-9d11-0a7d962ff6a4",
+              "name": "退院指導(入浴・重い物を持たない・腹圧を避ける)",
+              "category_lv1": "EG",
+              "category_lv2": "EGCS"
+            },
+            {
+              "task_key": "f9aa43fc-2ed6-5737-983f-9f4872d8356d",
+              "name": "退院時要約・診療情報提供書",
+              "category_lv1": "MD"
+            },
+            {
+              "task_key": "1aeb7ce8-418b-5954-b6a6-eb3f42aaf21f",
+              "name": "次回外来予約の案内",
+              "category_lv1": "EG",
+              "category_lv2": "EGCS"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
