@@ -41,6 +41,7 @@ import {
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import {
   PATHWAY_APPLY_ID_SYSTEM,
+  PATHWAY_LEVEL_SYSTEM,
   PATHWAY_MARKER_CODE,
   PATHWAY_MARKER_SYSTEM,
   parsePathwayApplication,
@@ -48,6 +49,7 @@ import {
   type PathwayApplicationRecord,
 } from "../fhir/pathwayApplyHelpers";
 import { PATHWAY_APPLY_GOAL_ID_SYSTEM } from "../fhir/pathwayCloseHelpers";
+import { parsePathwayWardTasks, type PathwayWardTask } from "../fhir/pathwayWorklistHelpers";
 import { useCurrentPractitioner } from "./authQueries";
 import { nowFhirDateTime, today } from "../lib/dates";
 import {
@@ -11247,6 +11249,61 @@ export function useClosePathway() {
       invalidatePathway(queryClient);
       queryClient.invalidateQueries({ queryKey: ["Goal"] });
     },
+  });
+}
+
+/** 1 回の子孫の検索で引く病日の数(1 病日あたり子孫が数十件あるので、_count に収まるように分ける)。 */
+const PATHWAY_WARD_EVENT_CHUNK = 10;
+
+/**
+ * 病棟の指示簿の「パスのタスク」(docs/clinical-pathway-design.md §6)。基準日の病日に置かれた、
+ * オーダーを持たないタスクを患者ぶんまとめて引く。
+ *
+ * 1. `CarePlan?category=病日&date=基準日&subject=患者(カンマ OR)&_include=CarePlan:part-of` で
+ *    その日の病日と、partOf の先頭(適用の根)を 1 回で引く。
+ * 2. 病日の id を `part-of`(カンマ OR)に渡し、子孫(OAT ユニット・観察項目)とタスクの Procedure
+ *    (`_revinclude=Procedure:based-on`)を引く。子孫は partOf に祖先すべてを持つので病日から直接引ける。
+ */
+export function usePathwayWardTasks(date: string, patientIds: string[]) {
+  const ids = [...new Set(patientIds.filter(Boolean))].sort();
+  return useQuery({
+    // 実施の記録(invalidatePathway)で読み直されるよう CarePlan 配下のキーにする。
+    queryKey: ["CarePlan", "search", "pathway-ward-tasks", date, ids.join(",")],
+    queryFn: async (): Promise<PathwayWardTask[]> => {
+      const eventParams = new URLSearchParams();
+      eventParams.set("category", `${PATHWAY_LEVEL_SYSTEM}|event`);
+      eventParams.set("date", date);
+      eventParams.set("subject", ids.map((id) => `Patient/${id}`).join(","));
+      eventParams.set("_include", "CarePlan:part-of");
+      eventParams.set("_count", "500");
+      const { data: eventBundle } = await searchResource<fhir4.Resource>("CarePlan", eventParams);
+      const heads = (eventBundle.entry ?? [])
+        .map((e) => e.resource)
+        .filter((r): r is fhir4.CarePlan => r?.resourceType === "CarePlan");
+      const events = heads.filter((cp) =>
+        cp.category?.some((c) => c.coding?.some((x) => x.system === PATHWAY_LEVEL_SYSTEM && x.code === "event")),
+      );
+      if (events.length === 0) return [];
+
+      const resources: fhir4.Resource[] = [...heads];
+      for (let i = 0; i < events.length; i += PATHWAY_WARD_EVENT_CHUNK) {
+        const params = new URLSearchParams();
+        params.set(
+          "part-of",
+          events
+            .slice(i, i + PATHWAY_WARD_EVENT_CHUNK)
+            .map((event) => `CarePlan/${event.id}`)
+            .join(","),
+        );
+        params.append("_revinclude", "Procedure:based-on");
+        params.set("_count", "500");
+        const { data: bundle } = await searchResource<fhir4.Resource>("CarePlan", params);
+        for (const entry of bundle.entry ?? []) if (entry.resource) resources.push(entry.resource);
+      }
+      return parsePathwayWardTasks(resources);
+    },
+    enabled: Boolean(date) && ids.length > 0,
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -12765,6 +12765,27 @@ button.meal-calendar__cell:hover {
   color: var(--accent);
 }
 
+/* 指示簿の「パスのタスク」の区画。看護指示の表の下に、見出しを置いて続ける。 */
+.nursing-worklist__pathway {
+  margin-top: 24px;
+}
+
+.nursing-worklist__pathway .lab-order-item__section-head .nursing-worklist__pending {
+  margin-left: 0;
+  font-size: 13px;
+}
+
+/* 患者見出し行に添えるパス名。氏名より控えめにする。 */
+.nursing-worklist__pathway-name {
+  margin-left: 16px;
+  font-weight: normal;
+}
+
+/* 実施済みのタスクは薄くする(未実施が目に入るように)。 */
+.nursing-worklist__pathway-done td {
+  opacity: 0.6;
+}
+
 /* 食事摂取量の入力(MealIntakeModal)。0〜10 割を横に並べたボタンで選ぶ。 */
 .meal-intake {
   display: flex;

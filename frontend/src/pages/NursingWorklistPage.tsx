@@ -16,6 +16,7 @@ import {
 import { ErrorBanner } from "../components/ErrorBanner";
 import { NursingOrderDetailModal } from "../components/NursingOrderDetailModal";
 import { NursingPerformModal } from "../components/NursingPerformModal";
+import { PathwayWardTasks } from "../components/PathwayWardTasks";
 import { PatientKana } from "../components/PatientRowCells";
 import { RowMenu } from "../components/RowMenu";
 import { encounterBedLabel, encounterPatientId } from "../fhir/encounterHelpers";
@@ -477,6 +478,17 @@ export function NursingWorklistPage() {
           <p className="order-select__muted lab-worklist__count">
             {groups.length} 人 / {visibleRows.length} 件
           </p>
+
+          {/* クリニカルパスのタスクのうち、オーダーを持たないもの(観察・説明・文書など)。指示受けは要らないので
+              未指示受けのビューでは出さず、実施予定のビューでは未実施のものだけを出す。 */}
+          {view !== "pending" && (
+            <PathwayWardTasks
+              date={date}
+              wardId={wardId}
+              onlyUndone={view === "due"}
+              returnLinkState={returnLinkState}
+            />
+          )}
         </>
       )}
 
