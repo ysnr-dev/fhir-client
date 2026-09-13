@@ -10,8 +10,14 @@ import {
   buildPathwayEvaluationBundle,
   evaluationValuesOf,
   type Achievement,
+  type EvaluationField,
+  type EvaluationMode,
   type PathwayEvaluationValues,
 } from "../fhir/pathwayEvaluationHelpers";
+import {
+  questionnaireResponsePlainText,
+  type TemplateDraft,
+} from "../fhir/questionnaireResponseHelpers";
 import { eventDayLabel, taskCategoryLabel } from "../fhir/pathwayHelpers";
 import { orderStatusLabel } from "../fhir/pathwaySheetHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
@@ -19,9 +25,12 @@ import { useValidationError } from "../hooks/useValidationError";
 import { toDateTimeInputValue, toFhirDateTime } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { ObservationInput } from "./NursingPerformModal";
+import { TemplateEntryModal } from "./TemplateEntryModal";
+import { TemplateTextField } from "./TemplateTextField";
 
-// カルテ右ペインの「クリニカルパス(評価)」。パスシートのセルから開き、その病日 × OAT ユニットの
-// 観察項目の実績値・タスクの実施・アウトカムの達成状態(バリアンス)と S/O/A/P を 1 回で記録する。
+// 「クリニカルパス(評価)」。パスシートのアウトカムのセルからモーダルで開き、その病日 × OAT ユニットの
+// 観察項目の実績値・タスクの実施・アウトカムの達成状態(バリアンス)と記載を 1 回で記録する。
+// 記載は SOAP と自由記載を選べ、欄ごとにテンプレートを結べる。
 // 設計は docs/clinical-pathway-design.md §7.4。
 
 interface PathwayEvaluatePanelProps {
@@ -37,6 +46,21 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const record = useRecordPathwayEvaluation();
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
+  // テンプレート記入を開いている欄(S/O/A/P か自由記載)。
+  const [templateTarget, setTemplateTarget] = useState<EvaluationField | null>(null);
+
+  // Escape はテンプレートから先に閉じる。パスシート側もモーダルを閉じる listener を
+  // 持つので、こちらで拾ったときはそれ以上伝えない(重なりの外側から閉じる)。
+  useEffect(() => {
+    if (!templateTarget) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.stopImmediatePropagation();
+      setTemplateTarget(null);
+    }
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [templateTarget]);
 
   const found = useMemo(() => {
     const application = tree.data?.application;
@@ -85,6 +109,25 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
 
   function update<K extends keyof PathwayEvaluationValues>(key: K, value: PathwayEvaluationValues[K]) {
     setValues((prev) => (prev ? { ...prev, [key]: value } : prev));
+  }
+
+  /** テンプレートの紐付けを外す(書いた文言は残して直接入力に戻す)。 */
+  function clearTemplate(field: EvaluationField) {
+    setValues((prev) => (prev ? { ...prev, templates: { ...prev.templates, [field]: null } } : prev));
+  }
+
+  /** テンプレート記入の反映。平文を欄に入れ、以後その欄はテンプレートからのみ直す。 */
+  function applyTemplate(field: EvaluationField, draft: TemplateDraft) {
+    const text = questionnaireResponsePlainText(draft.questionnaire, draft.response);
+    setValues((prev) => {
+      if (!prev) return prev;
+      const binding = { responseId: prev.templates[field]?.responseId ?? null, draft };
+      const templates = { ...prev.templates, [field]: binding };
+      return field === "free"
+        ? { ...prev, freeText: text, templates }
+        : { ...prev, soap: { ...prev.soap, [field]: text }, templates };
+    });
+    setTemplateTarget(null);
   }
 
   function handleSave() {
@@ -217,17 +260,49 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
             </label>
           ))}
         </div>
+        <div className="pathway-evaluate__mode" role="radiogroup" aria-label="記載形式">
+          <label className="pathway-apply__check">
+            <input
+              type="radio"
+              name="pathway-evaluate-mode"
+              checked={values.mode === "soap"}
+              onChange={() => update("mode", "soap" as EvaluationMode)}
+            />
+            SOAP
+          </label>
+          <label className="pathway-apply__check">
+            <input
+              type="radio"
+              name="pathway-evaluate-mode"
+              checked={values.mode === "free"}
+              onChange={() => update("mode", "free" as EvaluationMode)}
+            />
+            自由記載
+          </label>
+        </div>
         <div className="regimen-editor__texts">
-          {SOAP_ITEMS.map((item) => (
-            <label key={item.code}>
-              {item.label}
-              <textarea
-                rows={2}
+          {values.mode === "soap" ? (
+            SOAP_ITEMS.map((item) => (
+              <TemplateTextField
+                key={item.code}
+                label={item.label}
                 value={values.soap[item.code]}
-                onChange={(e) => update("soap", { ...values.soap, [item.code]: e.target.value })}
+                template={values.templates[item.code]}
+                onChange={(text) => update("soap", { ...values.soap, [item.code]: text })}
+                onOpenTemplate={() => setTemplateTarget(item.code)}
+                onClearTemplate={() => clearTemplate(item.code)}
               />
-            </label>
-          ))}
+            ))
+          ) : (
+            <TemplateTextField
+              label="記載"
+              value={values.freeText}
+              template={values.templates.free}
+              onChange={(text) => update("freeText", text)}
+              onOpenTemplate={() => setTemplateTarget("free")}
+              onClearTemplate={() => clearTemplate("free")}
+            />
+          )}
           <label>
             コメント
             <textarea rows={2} value={values.comment} onChange={(e) => update("comment", e.target.value)} />
@@ -250,6 +325,17 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
           {record.isPending ? "送信中..." : "記録"}
         </button>
       </div>
+
+      {/* テンプレート記入。回答は評価と同じ transaction で保存する(評価を保存しなければ回答も残らない)。 */}
+      {templateTarget && (
+        <TemplateEntryModal
+          patientId={patientId}
+          draft={values.templates[templateTarget]?.draft ?? null}
+          responseId={values.templates[templateTarget]?.responseId ?? null}
+          onSubmit={(draft) => applyTemplate(templateTarget, draft)}
+          onClose={() => setTemplateTarget(null)}
+        />
+      )}
     </div>
   );
 }

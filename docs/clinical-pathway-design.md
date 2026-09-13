@@ -343,8 +343,9 @@ CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transacti
 
 ### 7.4 日次評価(1 病日 × 1 OAT ユニット)
 
-実装は `fhir/pathwayEvaluationHelpers.ts`。シートのセルから右ペイン(`components/PathwayEvaluatePanel.tsx`、
-`KartePaneState` の `pathway-evaluate`)に開き、観察項目の実績値・タスクの実施・アウトカムの達成状態と S/O/A/P を 1 回で記録する。
+実装は `fhir/pathwayEvaluationHelpers.ts`。シートのアウトカムのセルからモーダル(`components/PathwayEvaluatePanel.tsx`)を開き、
+観察項目の実績値・タスクの実施・アウトカムの達成状態と記載を 1 回で記録する。記載は **SOAP と自由記載を選べ**、どちらも
+テンプレートから書ける。
 
 ```text
 Goal(アウトカム)             identifier outcome-goal-id = OAT ユニットの識別子、lifecycleStatus completed(評価済)/ active、
@@ -352,8 +353,11 @@ Goal(アウトカム)             identifier outcome-goal-id = OAT ユニット�
                             description.text = アウトカム名、statusDate、outcomeReference → 評価の Observation
 CarePlan(OAT ユニット).goal → Goal(初回の記録で PUT して足す)
 Observation(評価)            identifier observation-evaluation-id、code = EPathEvaluationItemCS|judgement、
-                            valueCodeableConcept = 達成状態、component = S / O / A / P(valueString)、note = コメント、
+                            valueCodeableConcept = 達成状態、note = コメント、
+                            component = S / O / A / P(SOAP)または comp-assessment(自由記載)の valueString、
+                            component.extension pathway-evaluation-template → QuestionnaireResponse(テンプレートから書いたとき)、
                             basedOn → CarePlan(OAT ユニット)、effectiveDateTime、performer
+QuestionnaireResponse       テンプレートの回答。評価と同じ transaction で書き、外れたら消す
 Observation(観察項目の実績)   identifier observation-result-id、code = 観察項目のコード + text、value[x] は表現タイプで決まる、
                             basedOn → CarePlan(観察項目)
 Procedure(タスク)            status completed(実施)/ preparation(未実施)、performedDateTime、performer.actor
@@ -368,9 +372,16 @@ Procedure(タスク)            status completed(実施)/ preparation(未実施)
   マスタの表現タイプ(数値 / 列挙 / 文字 / 2 数値 / 血圧)、それ以外は文字。入力欄は看護の実施入力と同じ `ObservationInput`。
   看護観察の管理番号は適用時に観察項目の CarePlan.category へ MEDIS の体系で写しておく。
 - ［決定］タスクは状態が変わったものだけ PUT。実施にすると performedDateTime と performer が入り、戻すと消える。
+- ［決定］**記載の形式は SOAP と自由記載の 2 つ**。ePath の評価項目区分(`EPathEvaluationItemCS`)は S / O / A / P と
+  総合評価(`comp-assessment`)を持つので、自由記載は総合評価のコードに載せる。形式は保存した component から読み戻す
+  (`comp-assessment` があれば自由記載)。形式を変えて記録し直すと、前の形式の component は消える。
+- ［決定］**テンプレートは記載欄ごとに結ぶ**(SOAP なら S / O / A / P の 4 つを別々に、自由記載なら 1 つ)。差し込みは
+  他のオーダーと同じ `TemplateEntryModal` + `TemplateTextField` で、平文が欄に入り、回答の QuestionnaireResponse を
+  評価と同じ transaction に積む。参照は component の拡張 `pathway-evaluation-template` に置く。
+- ［決定］**テンプレートを結んだ欄は読み取り専用**。書き換えは「テンプレート編集」から。「解除」すると平文だけが残って
+  手で直せるようになり、外れた QuestionnaireResponse は記録時に DELETE する(記載を空にしたときも同じ)。
 - 記録者はログイン本人(`useCurrentPractitioner`)。ePath の Goal AssessmentExecution(観察項目ごとの達成)は作らない
   (実績値から導ける。EP12 出力で必要なら組む)。
-- 予定外の OAT ユニットの追加は第 2 段階の残り(§10)。
 
 ### 7.5 パスの終了・中止
 
@@ -545,6 +556,23 @@ Goal(適用)      identifier apply-goal-id = 適用の識別子(施設コード.
   セルが「達成」になる。コンテナ内 `tsc -b` 成功。
 - 全画面でセルを押すと、右ペインではなくモーダルで同じ評価入力が開く(右ペインは空のまま)。Escape はモーダル →
   全画面の順に閉じる。モーダルから「記録」するとモーダルだけ閉じ、全画面のシートのセルが「達成」に変わる。
+
+### 9.12 検証したこと(SOAP・自由記載とテンプレート、2026-09-13、テスト太郎)
+
+- 病日 1「手術・麻酔について理解できる」のセル → 評価のモーダル。記載の形式は SOAP が既定で、S/O/A/P の 4 欄それぞれに
+  「テンプレート」が付く。自由記載に切り替えると記載欄が 1 つになる。
+- 自由記載で「テンプレート」→ 「テンプレート記載」→ 「テスト１ (v1.0.0)」を選んで回答を入れ「記載を反映」→ 平文
+  「ほげですか？: ほげ」が欄に入り読み取り専用になり、ボタンが「テンプレート編集」「解除」に変わる。回答を入れずに
+  反映すると平文が空になる(テンプレートの回答が空なら平文も空、という当たり前の挙動)。
+- 「記録」→ 評価 Observation の component が `comp-assessment` 1 件になり、拡張 `pathway-evaluation-template` が
+  QuestionnaireResponse を指す。QR は status completed・subject = 患者で同じ transaction に入っている。
+- 開き直すと形式(自由記載)・平文・テンプレートの結び付き(読み取り専用 +「テンプレート編集」「解除」)が復元される。
+- 「解除」→ 欄が編集できるようになり平文は残る。手で書き換えて「記録」→ component から拡張が消え、外れた
+  QuestionnaireResponse は 404(DELETE 済み)。
+- SOAP に切り替えて S に手書き・O にテンプレートを入れて「記録」→ component は S(拡張なし)と O(拡張あり)の 2 件だけになり、
+  `comp-assessment` は消える。新しい QR が 1 件できる。
+- コンテナ内 `tsc -b` 成功。検証で作った評価(Observation・Goal・QR)は削除し、デモの適用は元の状態
+  (アウトカムの Goal 2 件・CarePlan 76)に戻した。
 
 ### 9.11 検証したこと(予定外の OAT ユニット、2026-09-13、テスト太郎)
 

@@ -14412,11 +14412,23 @@ button.meal-calendar__cell:hover {
   margin-bottom: 0;
 }
 
-.pathway-evaluate__achievement {
+.pathway-evaluate__achievement,
+.pathway-evaluate__mode {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
   margin-bottom: 4px;
+}
+
+/* 記載形式の切り替え。達成状態の並びと区別が付くよう上に線を引く。 */
+.pathway-evaluate__mode {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* テンプレート記入の欄(TemplateTextField)は評価の中でも他の欄と同じ幅にする。 */
+.pathway-evaluate .rad-gp__template-field textarea {
+  width: 100%;
 }
 
 /* ---- 化学療法(レジメンオーダー)(docs/chemo-regimen-design.md §7) ---- */

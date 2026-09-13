@@ -1,4 +1,5 @@
 import type { NursingObservation } from "../api/masterClient";
+import type { TemplateBinding } from "./questionnaireResponseHelpers";
 import { nowFhirDateTime } from "../lib/dates";
 import {
   nursingObservationInputSpec,
@@ -55,6 +56,32 @@ export const SOAP_ITEMS: { code: "S" | "O" | "A" | "P"; label: string }[] = [
   { code: "P", label: "P" },
 ];
 
+/** 自由記載(ePath の総合評価)の component コード。 */
+export const FREE_TEXT_CODE = "comp-assessment";
+
+/** 記載形式。SOAP(4 欄)か自由記載(1 欄)。 */
+export type EvaluationMode = "soap" | "free";
+
+/** 記載欄の識別子(S/O/A/P と自由記載)。テンプレートの紐付けをこの単位で持つ。 */
+export type EvaluationField = "S" | "O" | "A" | "P" | "free";
+
+/**
+ * 記載欄をテンプレートから書いたときの回答(QuestionnaireResponse)への参照。
+ * component に付けるので、どの欄がテンプレート由来かを欄ごとに持ち越せる。
+ */
+export const PATHWAY_EVALUATION_TEMPLATE_EXT_URL =
+  "http://fhir-client.local/StructureDefinition/pathway-evaluation-template";
+
+function templateRefOf(component: fhir4.ObservationComponent | undefined): string {
+  return (
+    component?.extension?.find((e) => e.url === PATHWAY_EVALUATION_TEMPLATE_EXT_URL)?.valueReference?.reference ?? ""
+  );
+}
+
+function emptyTemplates(): Record<EvaluationField, TemplateBinding | null> {
+  return { S: null, O: null, A: null, P: null, free: null };
+}
+
 /** Observation.category の先頭に置くパスの印(検索の鍵)。 */
 export function pathwayObservationCategory(): fhir4.CodeableConcept {
   return { coding: [{ system: PATHWAY_MARKER_SYSTEM, code: PATHWAY_MARKER_CODE }] };
@@ -78,7 +105,12 @@ export interface UnitEvaluation {
   goal: fhir4.Goal | null;
   observation: fhir4.Observation | null;
   achievement: Achievement | "";
+  /** 記載形式。自由記載(総合評価)の component があれば free。 */
+  mode: EvaluationMode;
   soap: Record<"S" | "O" | "A" | "P", string>;
+  freeText: string;
+  /** 記載欄ごとのテンプレート紐付け(保存済みの回答への参照)。 */
+  templates: Record<EvaluationField, TemplateBinding | null>;
   comment: string;
   recordedAt: string;
   performerName: string;
@@ -120,15 +152,30 @@ export function buildEvaluationState(
     const achievement = (goal?.achievementStatus?.coding?.find((c) => c.system === ACHIEVEMENT_SYSTEM)?.code ??
       "") as Achievement | "";
     const soap = { S: "", O: "", A: "", P: "" } as Record<"S" | "O" | "A" | "P", string>;
+    const templates = emptyTemplates();
+    let freeText = "";
+    let mode: EvaluationMode = "soap";
     for (const component of observation?.component ?? []) {
       const code = component.code?.coding?.find((c) => c.system === EVALUATION_ITEM_SYSTEM)?.code;
-      if (code === "S" || code === "O" || code === "A" || code === "P") soap[code] = component.valueString ?? "";
+      const responseId = templateRefOf(component).split("/").pop() ?? "";
+      if (code === "S" || code === "O" || code === "A" || code === "P") {
+        soap[code] = component.valueString ?? "";
+        if (responseId) templates[code] = { responseId, draft: null };
+      }
+      if (code === FREE_TEXT_CODE) {
+        freeText = component.valueString ?? "";
+        mode = "free";
+        if (responseId) templates.free = { responseId, draft: null };
+      }
     }
     units.set(unit.id, {
       goal,
       observation,
       achievement,
+      mode,
       soap,
+      freeText,
+      templates,
       comment: observation?.note?.[0]?.text ?? "",
       recordedAt: observation?.effectiveDateTime ?? "",
       performerName: observation?.performer?.[0]?.display ?? "",
@@ -145,7 +192,13 @@ export function resultValueLabel(observation: fhir4.Observation | undefined): st
 
 export interface PathwayEvaluationValues {
   achievement: Achievement | "";
+  /** 記載形式。切り替えても両方の入力は state に残し、保存するのは選んでいる方だけ。 */
+  mode: EvaluationMode;
   soap: Record<"S" | "O" | "A" | "P", string>;
+  /** 自由記載(総合評価)。 */
+  freeText: string;
+  /** 記載欄ごとのテンプレート紐付け。 */
+  templates: Record<EvaluationField, TemplateBinding | null>;
   comment: string;
   /** 観察項目 CarePlan の id → 入力値(数値・文字・列挙は [値, ""]、2 値と血圧は [1 つ目, 2 つ目])。 */
   results: Map<string, [string, string]>;
@@ -189,7 +242,10 @@ export function evaluationValuesOf(
   }
   return {
     achievement: evaluation?.achievement ?? "",
+    mode: evaluation?.mode ?? "soap",
     soap: { ...(evaluation?.soap ?? { S: "", O: "", A: "", P: "" }) },
+    freeText: evaluation?.freeText ?? "",
+    templates: { ...emptyTemplates(), ...(evaluation?.templates ?? {}) },
     comment: evaluation?.comment ?? "",
     results,
     tasksDone,
@@ -291,9 +347,55 @@ export function buildPathwayEvaluationBundle(
   const performer = performerRef(ctx.performer);
   const recordedAt = values.recordedAt || nowFhirDateTime();
 
-  // 評価(達成状態・S/O/A/P・コメント)。どれか 1 つでも入っていれば記録する。
-  const hasEvaluation =
-    Boolean(values.achievement) || SOAP_ITEMS.some((i) => values.soap[i.code].trim()) || Boolean(values.comment.trim());
+  // 記載欄(S/O/A/P か自由記載)。選んでいる形式のぶんだけ書く。
+  const written: { field: EvaluationField; code: string; text: string }[] =
+    values.mode === "free"
+      ? [{ field: "free" as EvaluationField, code: FREE_TEXT_CODE, text: values.freeText.trim() }].filter((x) => x.text)
+      : SOAP_ITEMS.map((i) => ({ field: i.code as EvaluationField, code: i.code, text: values.soap[i.code].trim() })).filter(
+          (x) => x.text,
+        );
+
+  // 評価(達成状態・記載・コメント)。どれか 1 つでも入っていれば記録する。
+  const hasEvaluation = Boolean(values.achievement) || written.length > 0 || Boolean(values.comment.trim());
+
+  // テンプレートから書いた欄の回答(QuestionnaireResponse)を同じ transaction に積む。
+  // 先に単独で保存すると「評価を保存しなかったときに回答だけが残る」ため(オーダーと同じ作り)。
+  const templateRefs = new Map<EvaluationField, string>();
+  const keptResponseIds = new Set<string>();
+  if (hasEvaluation) {
+    for (const item of written) {
+      const binding = values.templates[item.field];
+      if (!binding) continue;
+      const { responseId, draft } = binding;
+      if (!draft) {
+        // 再編集していない保存済みの回答 → 参照だけ引き継ぐ。
+        if (responseId) {
+          templateRefs.set(item.field, `QuestionnaireResponse/${responseId}`);
+          keptResponseIds.add(responseId);
+        }
+        continue;
+      }
+      const reference = responseId
+        ? `QuestionnaireResponse/${responseId}`
+        : `urn:uuid:${crypto.randomUUID()}`;
+      if (responseId) {
+        entry.push({ resource: { ...draft.response, id: responseId }, request: { method: "PUT", url: reference } });
+        keptResponseIds.add(responseId);
+      } else {
+        entry.push({ fullUrl: reference, resource: draft.response, request: { method: "POST", url: "QuestionnaireResponse" } });
+      }
+      entry.push(...draft.imageEntries);
+      templateRefs.set(item.field, reference);
+    }
+  }
+
+  // 参照が外れた回答(テンプレートを解除した・形式を切り替えた)は一緒に消す。
+  for (const component of existing?.observation?.component ?? []) {
+    const previous = templateRefOf(component).split("/").pop() ?? "";
+    if (previous && !keptResponseIds.has(previous)) {
+      entry.push({ request: { method: "DELETE", url: `QuestionnaireResponse/${previous}` } });
+    }
+  }
   let evaluationRef: string | null = existing?.observation?.id ? `Observation/${existing.observation.id}` : null;
   if (hasEvaluation) {
     const observation: fhir4.Observation = {
@@ -314,10 +416,20 @@ export function buildPathwayEvaluationBundle(
             },
           }
         : {}),
-      component: SOAP_ITEMS.filter((i) => values.soap[i.code].trim()).map((i) => ({
-        code: { coding: [{ system: EVALUATION_ITEM_SYSTEM, code: i.code }] },
-        valueString: values.soap[i.code].trim(),
-      })),
+      component: written.map((item) => {
+        const reference = templateRefs.get(item.field) ?? "";
+        return {
+          code: { coding: [{ system: EVALUATION_ITEM_SYSTEM, code: item.code }] },
+          valueString: item.text,
+          ...(reference
+            ? {
+                extension: [
+                  { url: PATHWAY_EVALUATION_TEMPLATE_EXT_URL, valueReference: { reference } },
+                ],
+              }
+            : {}),
+        };
+      }),
       note: values.comment.trim() ? [{ text: values.comment.trim(), time: recordedAt }] : undefined,
     };
     if (!values.achievement) delete observation.valueCodeableConcept;
