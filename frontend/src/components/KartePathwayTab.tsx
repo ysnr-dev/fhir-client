@@ -110,7 +110,11 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
   const [modalUnitId, setModalUnitId] = useState<string | null>(null);
   const [modalTaskId, setModalTaskId] = useState<string | null>(null);
   // オーダーを結んだタスクの詳細。看護指示だけは詳細ではなく実施入力を開く(指示簿と同じ画面)。
-  const [modalOrder, setModalOrder] = useState<{ order: fhir4.ServiceRequest; kind: PathwayOrderKind } | null>(null);
+  const [modalOrder, setModalOrder] = useState<{
+    order: fhir4.ServiceRequest;
+    kind: PathwayOrderKind;
+    date: string;
+  } | null>(null);
   // パスの終了・中止と、予定外アウトカムの追加。どちらも見出しの帯から開く。
   const [closeOpen, setCloseOpen] = useState(false);
   const [unplannedOpen, setUnplannedOpen] = useState(false);
@@ -227,7 +231,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
     }
     const kind = linked[0] ? orderKindOf(linked[0]) : null;
     if (linked[0] && kind && kind !== "nursing-order" && kind !== "chemo-regimen") {
-      setModalOrder({ order: linked[0], kind });
+      setModalOrder({ order: linked[0], kind, date });
       return;
     }
     setModalTaskId(procedureId);
@@ -770,6 +774,8 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
           patientId={patientId}
           order={modalOrder.order}
           kind={modalOrder.kind}
+          date={modalOrder.date}
+          progress={orderProgress?.get(modalOrder.order.id ?? "")}
           problemsById={problemsById}
           onEdit={() => {
             const { order, kind } = modalOrder;

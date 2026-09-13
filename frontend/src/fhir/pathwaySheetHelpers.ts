@@ -2,7 +2,7 @@ import type { PathwayApplicationRecord, PathwayEventRecord } from "./pathwayAppl
 import { achievementLabel, resultValueLabel, type Achievement, type PathwayEvaluationState } from "./pathwayEvaluationHelpers";
 import { TASK_CATEGORY_LV1_OPTIONS, displayOfOption } from "./pathwayHelpers";
 import { isNursingServiceRequest } from "./nursingOrderHelpers";
-import type { OrderProgress } from "./orderProgressHelpers";
+import { orderPerformedOn, type OrderProgress } from "./orderProgressHelpers";
 
 // パスシート(病日 × OAT ユニット)の行と列。適用 1 件の木(parsePathwayApplication)を、
 // 紙のパスシートと同じ「行 = アウトカム・観察項目・タスク、列 = 病日」に組み直す。
@@ -234,8 +234,9 @@ export function isNursingLinkedTask(
 
 /**
  * その病日にタスクを実施したか。［決定］看護指示を結んだタスクは、その日の実施記録があれば実施とみなす
- * (続く病日にまたがる 1 件の指示を日ごとに記録するため)。その他のオーダーを結んだタスクは、オーダーが
- * 実施済みになれば実施(部門・病棟が実施を記録すると進捗の Task が completed になる。orderProgress)。
+ * (続く病日にまたがる 1 件の指示を日ごとに記録するため)。リハビリ・栄養指導も同じくその日の実施記録で決める。
+ * その他のオーダーを結んだタスクは、オーダーが実施済みになれば実施(部門・病棟が実施を記録すると進捗の
+ * Task が completed になる。orderProgress)。
  * どれでもなければタスクの Procedure の状態。
  * パスシートのセル・評価パネル・日めくりのチェック・進み具合の集計が同じ判定を使う。
  */
@@ -251,12 +252,13 @@ export function pathwayTaskPerformedOn(
     const sr = orders?.get(id);
     if (!sr) return false;
     if (isNursingServiceRequest(sr)) return Boolean(performDates.get(id)?.has(date));
-    return orderProgress?.get(id)?.completed ?? sr.status === "completed";
+    const progress = orderProgress?.get(id);
+    return progress ? orderPerformedOn(progress, date) : sr.status === "completed";
   });
 }
 
 /**
- * タスクの実施がオーダーの側で決まるか(看護指示を結んでいる、またはオーダーが実施済み)。
+ * タスクの実施がオーダーの側で決まるか(看護指示・リハビリ・栄養指導を結んでいる、またはオーダーが実施済み)。
  * そのときは評価パネル・日めくりのチェックを押せなくする(実施は実施入力・部門で記録する)。
  */
 export function isOrderDrivenTask(
@@ -267,7 +269,12 @@ export function isOrderDrivenTask(
   return task.orderIds.some((id) => {
     const sr = orders?.get(id);
     if (!sr) return false;
-    return isNursingServiceRequest(sr) || (orderProgress?.get(id)?.completed ?? sr.status === "completed");
+    const progress = orderProgress?.get(id);
+    return (
+      isNursingServiceRequest(sr) ||
+      Boolean(progress?.performedDates) ||
+      (progress?.completed ?? sr.status === "completed")
+    );
   });
 }
 

@@ -13,6 +13,7 @@ import {
   validateRehabPerformForm,
   type RehabPerformFormValues,
 } from "../fhir/rehabResultHelpers";
+import { buildRehabTaskUpdate, rehabTaskStatus } from "../fhir/rehabTaskHelpers";
 import { makeFieldUpdater } from "../lib/form";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
@@ -38,6 +39,11 @@ interface Props {
   defaultDate?: string;
   /** 実施時刻の初期値(HH:mm)。予約から開いたときは枠の開始時刻を渡す。 */
   defaultTime?: string;
+  /**
+   * 受付を飛ばして実施するときの進捗 Task(クリニカルパスから開くとき)。渡すと、まだ依頼済なら
+   * 実施と一緒に受付済にする(完了にはしない)。部門の一覧は受付済の行からしか開かないので渡さない。
+   */
+  acceptTask?: { task: fhir4.Task | undefined };
   onClose: () => void;
 }
 
@@ -46,6 +52,7 @@ export function RehabPerformModal({
   patientName,
   defaultDate,
   defaultTime,
+  acceptTask,
   onClose,
 }: Props) {
   const register = useRegisterRehabPerform();
@@ -86,7 +93,15 @@ export function RehabPerformModal({
     setValidationError(error);
     if (error) return;
 
-    register.mutate(buildRehabPerformBundle(values, order), { onSuccess: onClose });
+    const bundle = buildRehabPerformBundle(values, order);
+    if (acceptTask && rehabTaskStatus(acceptTask.task) === "requested") {
+      const task = acceptTask.task;
+      bundle.entry?.push({
+        resource: buildRehabTaskUpdate(task, order, "accepted"),
+        request: task?.id ? { method: "PUT", url: `Task/${task.id}` } : { method: "POST", url: "Task" },
+      });
+    }
+    register.mutate(bundle, { onSuccess: onClose });
   }
 
   return (

@@ -4,6 +4,10 @@ import { usePractitionerOptions, useRegisterNutritionGuidancePerform } from "../
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { summarizeNutritionGuidanceOrder } from "../fhir/nutritionGuidanceOrderHelpers";
 import {
+  buildNutritionGuidanceTaskUpdate,
+  nutritionGuidanceTaskStatus,
+} from "../fhir/nutritionGuidanceTaskHelpers";
+import {
   buildNutritionGuidancePerformBundle,
   emptyNutritionGuidancePerformForm,
   sessionTypesForOrder,
@@ -44,6 +48,11 @@ interface Props {
   defaultDate?: string;
   /** 実施時刻の初期値(HH:mm)。予約から開いたときは枠の開始時刻を渡す。 */
   defaultTime?: string;
+  /**
+   * 受付を飛ばして実施するときの進捗 Task(クリニカルパスから開くとき)。渡すと、まだ依頼済なら
+   * 実施と一緒に受付済にする(完了にはしない)。部門の一覧は受付済の行からしか開かないので渡さない。
+   */
+  acceptTask?: { task: fhir4.Task | undefined };
   onClose: () => void;
 }
 
@@ -53,6 +62,7 @@ export function NutritionGuidancePerformModal({
   patientId,
   defaultDate,
   defaultTime,
+  acceptTask,
   onClose,
 }: Props) {
   const register = useRegisterNutritionGuidancePerform();
@@ -95,7 +105,15 @@ export function NutritionGuidancePerformModal({
     setValidationError(error);
     if (error) return;
 
-    register.mutate(buildNutritionGuidancePerformBundle(values, order), { onSuccess: onClose });
+    const bundle = buildNutritionGuidancePerformBundle(values, order);
+    if (acceptTask && nutritionGuidanceTaskStatus(acceptTask.task) === "requested") {
+      const task = acceptTask.task;
+      bundle.entry?.push({
+        resource: buildNutritionGuidanceTaskUpdate(task, order, "accepted"),
+        request: task?.id ? { method: "PUT", url: `Task/${task.id}` } : { method: "POST", url: "Task" },
+      });
+    }
+    register.mutate(bundle, { onSuccess: onClose });
   }
 
   return (

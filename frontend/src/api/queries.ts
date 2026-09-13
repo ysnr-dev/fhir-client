@@ -8482,6 +8482,8 @@ function invalidateRehab(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
   queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
+  // パスから受付前に実施すると Task も受付済になる。患者の Task の一覧(パスの実施入力が読む)も読み直させる。
+  queryClient.invalidateQueries({ queryKey: ["Task", "search"] });
 }
 
 /**
@@ -8836,6 +8838,8 @@ function invalidateNutritionGuidance(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
   queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
+  // パスから受付前に実施すると Task も受付済になる。患者の Task の一覧(パスの実施入力が読む)も読み直させる。
+  queryClient.invalidateQueries({ queryKey: ["Task", "search"] });
 }
 
 /**
@@ -11650,7 +11654,9 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
   // OAT ユニットの Goal(評価)と観察項目の Goal(適正値)も同じ応答で揃える。
   params.append("_include", "CarePlan:goal");
   // オーダーの進み具合は ServiceRequest ではなく focus で指す進捗の Task にあるので、それも辿る。
-  params.append("_revinclude:iterate", "Task:focus");
+  // リハビリ・栄養指導は日ごとの実施記録(オーダーを basedOn で指す Procedure)で実施を見るので、それも辿る。
+  // 上流は同じ名前の _revinclude:iterate を並べると最後の 1 つしか効かないので、カンマで 1 つにまとめる。
+  params.append("_revinclude:iterate", "Task:focus,Procedure:based-on");
   params.set("_count", "500");
 
   return useQuery({
@@ -11666,25 +11672,29 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
       const carePlans = new Map<string, fhir4.CarePlan>();
       const procedures = new Map<string, fhir4.Procedure>();
       const tasks: fhir4.Task[] = [];
+      // オーダーの実施記録。パスのタスク(CarePlan を basedOn で指す Procedure)とは分けて持つ。
+      const performs: fhir4.Procedure[] = [];
       for (const r of resources) {
         if (!r.id) continue;
         if (r.resourceType === "Task") tasks.push(r as fhir4.Task);
         if (r.resourceType === "ServiceRequest") orders.set(r.id, r as fhir4.ServiceRequest);
         if (r.resourceType === "Goal") goals.set(r.id, r as fhir4.Goal);
         if (r.resourceType === "CarePlan") carePlans.set(r.id, r as fhir4.CarePlan);
-        if (r.resourceType === "Procedure") procedures.set(r.id, r as fhir4.Procedure);
+        if (r.resourceType === "Procedure") {
+          const procedure = r as fhir4.Procedure;
+          if (procedure.basedOn?.some((ref) => ref.reference?.startsWith("CarePlan/"))) procedures.set(r.id, procedure);
+          else performs.push(procedure);
+        }
       }
       if (apply.id) carePlans.set(apply.id, apply);
-      const tree = resources.filter(
-        (r): r is fhir4.CarePlan | fhir4.Procedure => r.resourceType === "CarePlan" || r.resourceType === "Procedure",
-      );
+      const tree = [...carePlans.values(), ...procedures.values()].filter((r) => r.id !== apply.id);
       return {
         application: parsePathwayApplication([apply, ...tree], goals),
         orders,
         goals,
         carePlans,
         procedures,
-        orderProgress: orderProgressByOrderId(orders.values(), tasks),
+        orderProgress: orderProgressByOrderId(orders.values(), tasks, performs),
       };
     },
     enabled: Boolean(applyId),
