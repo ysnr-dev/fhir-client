@@ -46,6 +46,7 @@ export function PathwayCancelPanel({ patientId, applyId, onCancelled }: PathwayC
       procedures: tree.data.procedures,
       goals: tree.data.goals,
       orders: tree.data.orders,
+      orderProgress: tree.data.orderProgress,
       evaluation: buildEvaluationState(observations.data, tree.data.goals, [...tree.data.carePlans.values()]),
       performDates: nursingPerformDates(performs.data),
     };

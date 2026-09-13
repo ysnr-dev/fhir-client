@@ -29,7 +29,6 @@ import { eventDayStepLabel, taskCategoryLabel } from "../fhir/pathwayHelpers";
 import {
   isOrderDrivenTask,
   nursingPerformDates,
-  orderStatusLabel,
   pathwayTaskPerformedOn,
 } from "../fhir/pathwaySheetHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
@@ -262,9 +261,9 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
             {tasks.map((task) => {
               const order = task.orderIds.map((id) => tree.data?.orders.get(id)).find(Boolean);
               // 看護指示を結んだ・オーダーが実施済みのタスクは、実施がオーダーの側で決まるのでここでは変えない。
-              const orderDriven = isOrderDrivenTask(task, tree.data?.orders);
+              const orderDriven = isOrderDrivenTask(task, tree.data?.orders, tree.data?.orderProgress);
               const checked = orderDriven
-                ? pathwayTaskPerformedOn(task, event.date, tree.data?.orders, performDates)
+                ? pathwayTaskPerformedOn(task, event.date, tree.data?.orders, performDates, tree.data?.orderProgress)
                 : (values.tasksDone.get(task.id) ?? task.done);
               return (
                 <li key={task.id}>
@@ -281,7 +280,9 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
                     />
                     <span className="pathway-task__template-label">{taskCategoryLabel(task.categoryLv1, task.categoryLv2)}</span>
                     {task.name}
-                    {order && <span className="lab-order-item__code">{orderStatusLabel(order.status)}</span>}
+                    {order?.id && tree.data?.orderProgress.get(order.id) && (
+                      <span className="lab-order-item__code">{tree.data.orderProgress.get(order.id)?.label}</span>
+                    )}
                   </label>
                 </li>
               );

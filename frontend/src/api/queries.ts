@@ -51,6 +51,7 @@ import {
 import { PATHWAY_APPLY_GOAL_ID_SYSTEM } from "../fhir/pathwayCloseHelpers";
 import { parsePathwayWardTasks, type PathwayWardTask } from "../fhir/pathwayWorklistHelpers";
 import { buildPathwayEvaluationCards, type PathwayEvaluationCard } from "../fhir/pathwayKarteHelpers";
+import { orderProgressByOrderId, type OrderProgress } from "../fhir/orderProgressHelpers";
 import { EVALUATION_ITEM_SYSTEM } from "../fhir/pathwayEvaluationHelpers";
 import { useCurrentPractitioner } from "./authQueries";
 import { nowFhirDateTime, today } from "../lib/dates";
@@ -11604,7 +11605,12 @@ export interface PathwayApplicationTree {
   carePlans: Map<string, fhir4.CarePlan>;
   /** タスクの Procedure(id → Procedure)。実施の記録で status を書き換える。 */
   procedures: Map<string, fhir4.Procedure>;
+  /** オーダーのヘッダの id → 進み具合(進捗の Task から。カルテのカードと同じ判定)。 */
+  orderProgress: Map<string, OrderProgress>;
 }
+
+/** 適用の木の検索のキーの先頭。オーダーの実施入力などを閉じたときに読み直させるのに使う。 */
+export const PATHWAY_TREE_KEY_PREFIX: string[] = ["CarePlan", "search", "pathway-tree"];
 
 export function usePathwayApplicationTree(applyId: string | undefined) {
   const params = new URLSearchParams();
@@ -11613,10 +11619,12 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
   params.append("_include:iterate", "Procedure:based-on");
   // OAT ユニットの Goal(評価)と観察項目の Goal(適正値)も同じ応答で揃える。
   params.append("_include", "CarePlan:goal");
+  // オーダーの進み具合は ServiceRequest ではなく focus で指す進捗の Task にあるので、それも辿る。
+  params.append("_revinclude:iterate", "Task:focus");
   params.set("_count", "500");
 
   return useQuery({
-    queryKey: ["CarePlan", "search", "pathway-tree", applyId],
+    queryKey: PATHWAY_TREE_KEY_PREFIX.concat(applyId ?? ""),
     queryFn: async (): Promise<PathwayApplicationTree> => {
       const [{ data: apply }, { data: bundle }] = await Promise.all([
         readResource<fhir4.CarePlan>("CarePlan", applyId as string),
@@ -11627,8 +11635,10 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
       const goals = new Map<string, fhir4.Goal>();
       const carePlans = new Map<string, fhir4.CarePlan>();
       const procedures = new Map<string, fhir4.Procedure>();
+      const tasks: fhir4.Task[] = [];
       for (const r of resources) {
         if (!r.id) continue;
+        if (r.resourceType === "Task") tasks.push(r as fhir4.Task);
         if (r.resourceType === "ServiceRequest") orders.set(r.id, r as fhir4.ServiceRequest);
         if (r.resourceType === "Goal") goals.set(r.id, r as fhir4.Goal);
         if (r.resourceType === "CarePlan") carePlans.set(r.id, r as fhir4.CarePlan);
@@ -11638,7 +11648,14 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
       const tree = resources.filter(
         (r): r is fhir4.CarePlan | fhir4.Procedure => r.resourceType === "CarePlan" || r.resourceType === "Procedure",
       );
-      return { application: parsePathwayApplication([apply, ...tree], goals), orders, goals, carePlans, procedures };
+      return {
+        application: parsePathwayApplication([apply, ...tree], goals),
+        orders,
+        goals,
+        carePlans,
+        procedures,
+        orderProgress: orderProgressByOrderId(orders.values(), tasks),
+      };
     },
     enabled: Boolean(applyId),
   });

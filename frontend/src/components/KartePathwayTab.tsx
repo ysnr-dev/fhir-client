@@ -1,7 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   useNursingPerformsOf,
   useNursingPerformsOn,
+  PATHWAY_TREE_KEY_PREFIX,
   usePathwayApplicationTree,
   usePathwayApplications,
   usePathwayObservations,
@@ -13,7 +15,6 @@ import {
   buildPathwaySheet,
   filterSheetRows,
   nursingPerformDates,
-  orderStatusLabel,
   pathwayTaskPerformedOn,
   sheetProgress,
   type SheetIssue,
@@ -135,6 +136,18 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
   const [issue, setIssue] = useState<SheetIssue | null>(null);
 
   const tree = usePathwayApplicationTree(selected?.id);
+  const orderProgress = tree.data?.orderProgress;
+  // オーダーの詳細(注射・輸血の実施入力を含む)と看護指示の実施入力は、それぞれの種別の一覧だけを読み直し、
+  // 適用の木(オーダーの進み具合の Task を含む)は読み直さない。閉じたときにここで読み直させる。
+  const queryClient = useQueryClient();
+  const orderModalOpen = Boolean(modalOrder || nursingPerform);
+  const orderModalWasOpen = useRef(false);
+  useEffect(() => {
+    if (orderModalWasOpen.current && !orderModalOpen) {
+      queryClient.invalidateQueries({ queryKey: PATHWAY_TREE_KEY_PREFIX });
+    }
+    orderModalWasOpen.current = orderModalOpen;
+  }, [orderModalOpen, queryClient]);
   const observations = usePathwayObservations(patientId);
   const application = tree.data?.application ?? null;
   const orders = tree.data?.orders;
@@ -187,7 +200,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
     return `${date === todayDate ? " pathway-sheet__day--today" : ""}${date < todayDate ? " pathway-sheet__day--past" : ""}`;
   }
 
-  const progress = sheet ? sheetProgress(sheet, todayDate, orders, performDates) : null;
+  const progress = sheet ? sheetProgress(sheet, todayDate, orders, performDates, orderProgress) : null;
   const visibleRows =
     sheet && progress && issue
       ? filterSheetRows(sheet.rows, issue, progress)
@@ -465,6 +478,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
               carePlans={tree.data?.carePlans ?? new Map()}
               procedures={tree.data?.procedures ?? new Map()}
               orders={orders ?? new Map()}
+              orderProgress={orderProgress ?? new Map()}
               evaluation={evaluation}
               performDates={performDates}
               eventId={dayEventId}
@@ -622,7 +636,8 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                       }
                       const task = cell as SheetTaskCell;
                       const order = task.orderIds.map((id) => orders?.get(id)).find(Boolean);
-                      const done = pathwayTaskPerformedOn(task, day.date, orders, performDates);
+                      const done = pathwayTaskPerformedOn(task, day.date, orders, performDates, orderProgress);
+                      const orderState = order?.id ? orderProgress?.get(order.id) : undefined;
                       return (
                         <td key={day.eventId} className={classes} data-procedure-id={task.procedureId}>
                           <button type="button" className="pathway-sheet__cell-button" onClick={() => openCellTask(task)}>
@@ -630,11 +645,10 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                               <span className={`pathway-sheet__task${done ? " pathway-sheet__task--done" : ""}`}>
                                 {done ? "☑" : "☐"}
                               </span>
-                              {order && (
-                                <span className="pathway-sheet__order">{orderStatusLabel(order.status)}</span>
-                              )}
+                              {orderState && <span className="pathway-sheet__order">{orderState.label}</span>}
                               {order &&
                                 order.id &&
+                                !orderState?.completed &&
                                 !["completed", "revoked", "entered-in-error"].includes(order.status) &&
                                 orderStartDate(order) &&
                                 orderStartDate(order) !== firstDateByOrder.get(order.id) && (

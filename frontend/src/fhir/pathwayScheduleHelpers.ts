@@ -2,6 +2,7 @@ import { addDays, diffDays } from "../lib/dates";
 import { isMealServiceRequest, MEAL_ORDER_END_EXT_URL } from "./mealOrderHelpers";
 import { isNursingServiceRequest, NURSING_ORDER_END_EXT_URL } from "./nursingOrderHelpers";
 import { PATHWAY_EXT, type PathwayApplicationRecord, type PathwayEventRecord } from "./pathwayApplyHelpers";
+import type { OrderProgress } from "./orderProgressHelpers";
 import type { PathwayEvaluationState } from "./pathwayEvaluationHelpers";
 
 // 適用したパスの日程の変更と、誤って適用したパスの取り消し。React に依存しない。
@@ -17,6 +18,8 @@ export interface PathwayRecordContext {
   procedures: Map<string, fhir4.Procedure>;
   goals: Map<string, fhir4.Goal>;
   orders: Map<string, fhir4.ServiceRequest>;
+  /** オーダーのヘッダの id → 進み具合(進捗の Task から。実施済みかはここで判定する)。 */
+  orderProgress: Map<string, OrderProgress>;
   evaluation: PathwayEvaluationState | null;
   /** 看護指示の実施記録(指示の id → 記録のある日付)。 */
   performDates: Map<string, Set<string>>;
@@ -138,8 +141,9 @@ export function planPathwayShift(ctx: PathwayRecordContext, fromEventId: string,
   const threshold = days > 0 ? addDays(from.date, -1) : from.date;
   for (const id of allOrderIds) {
     const order = ctx.orders.get(id);
-    if (!order || SETTLED_ORDER_STATUSES.has(order.status)) {
-      if (order?.status === "completed" && inRange.has(id)) {
+    const completed = order ? (ctx.orderProgress.get(id)?.completed ?? order.status === "completed") : false;
+    if (!order || completed || SETTLED_ORDER_STATUSES.has(order.status)) {
+      if (completed && inRange.has(id)) {
         plan.blockers.push(`実施済みのオーダーがあります(${inRange.get(id)?.taskName})`);
       }
       continue;
@@ -264,7 +268,9 @@ export function planPathwayCancel(ctx: PathwayRecordContext, departmentTasks: fh
         seen.add(id);
         const order = ctx.orders.get(id);
         if (!order || order.status === "entered-in-error") continue;
-        if (order.status === "completed") blockers.push(`実施済みのオーダーがあります(${task.name})`);
+        if (ctx.orderProgress.get(id)?.completed ?? order.status === "completed") {
+          blockers.push(`実施済みのオーダーがあります(${task.name})`);
+        }
         if ((ctx.performDates.get(id)?.size ?? 0) > 0) blockers.push(`看護指示の実施記録があります(${task.name})`);
         const progressed = departmentTasks.some(
           (t) =>

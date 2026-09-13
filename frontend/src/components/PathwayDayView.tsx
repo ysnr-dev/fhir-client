@@ -13,7 +13,8 @@ import {
   type PathwayEvaluationState,
 } from "../fhir/pathwayEvaluationHelpers";
 import { eventDayStepLabel, taskCategoryLabel } from "../fhir/pathwayHelpers";
-import { isOrderDrivenTask, orderStatusLabel, pathwayTaskPerformedOn } from "../fhir/pathwaySheetHelpers";
+import type { OrderProgress } from "../fhir/orderProgressHelpers";
+import { isOrderDrivenTask, pathwayTaskPerformedOn } from "../fhir/pathwaySheetHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { nowFhirDateTime } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
@@ -37,6 +38,8 @@ interface PathwayDayViewProps {
   carePlans: Map<string, fhir4.CarePlan>;
   procedures: Map<string, fhir4.Procedure>;
   orders: Map<string, fhir4.ServiceRequest>;
+  /** オーダーのヘッダの id → 進み具合(進捗の Task から)。 */
+  orderProgress: Map<string, OrderProgress>;
   evaluation: PathwayEvaluationState | null;
   performDates: Map<string, Set<string>>;
   eventId: string;
@@ -74,6 +77,7 @@ export function PathwayDayView({
   carePlans,
   procedures,
   orders,
+  orderProgress,
   evaluation,
   performDates,
   eventId,
@@ -304,9 +308,9 @@ export function PathwayDayView({
               <ul className="pathway-apply__conditions pathway-day__tasks">
                 {tasks.map((task) => {
                   const order = task.orderIds.map((id) => orders.get(id)).find(Boolean);
-                  const orderDriven = isOrderDrivenTask(task, orders);
+                  const orderDriven = isOrderDrivenTask(task, orders, orderProgress);
                   const checked = orderDriven
-                    ? pathwayTaskPerformedOn(task, event.date, orders, performDates)
+                    ? pathwayTaskPerformedOn(task, event.date, orders, performDates, orderProgress)
                     : (draft.tasksDone.get(task.id) ?? task.done);
                   return (
                     <li key={task.id}>
@@ -333,7 +337,9 @@ export function PathwayDayView({
                       ) : (
                         <span>{task.name}</span>
                       )}
-                      {order && <span className="lab-order-item__code">{orderStatusLabel(order.status)}</span>}
+                      {order?.id && orderProgress.get(order.id) && (
+                        <span className="lab-order-item__code">{orderProgress.get(order.id)?.label}</span>
+                      )}
                     </li>
                   );
                 })}

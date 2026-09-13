@@ -2,6 +2,7 @@ import type { PathwayApplicationRecord, PathwayEventRecord } from "./pathwayAppl
 import { achievementLabel, resultValueLabel, type Achievement, type PathwayEvaluationState } from "./pathwayEvaluationHelpers";
 import { TASK_CATEGORY_LV1_OPTIONS, displayOfOption } from "./pathwayHelpers";
 import { isNursingServiceRequest } from "./nursingOrderHelpers";
+import type { OrderProgress } from "./orderProgressHelpers";
 
 // パスシート(病日 × OAT ユニット)の行と列。適用 1 件の木(parsePathwayApplication)を、
 // 紙のパスシートと同じ「行 = アウトカム・観察項目・タスク、列 = 病日」に組み直す。
@@ -234,7 +235,8 @@ export function isNursingLinkedTask(
 /**
  * その病日にタスクを実施したか。［決定］看護指示を結んだタスクは、その日の実施記録があれば実施とみなす
  * (続く病日にまたがる 1 件の指示を日ごとに記録するため)。その他のオーダーを結んだタスクは、オーダーが
- * 実施済みになれば実施(部門が実施を記録する)。どれでもなければタスクの Procedure の状態。
+ * 実施済みになれば実施(部門・病棟が実施を記録すると進捗の Task が completed になる。orderProgress)。
+ * どれでもなければタスクの Procedure の状態。
  * パスシートのセル・評価パネル・日めくりのチェック・進み具合の集計が同じ判定を使う。
  */
 export function pathwayTaskPerformedOn(
@@ -242,13 +244,14 @@ export function pathwayTaskPerformedOn(
   date: string,
   orders: Map<string, fhir4.ServiceRequest> | undefined,
   performDates: Map<string, Set<string>>,
+  orderProgress: Map<string, OrderProgress> | undefined,
 ): boolean {
   if (task.done) return true;
   return task.orderIds.some((id) => {
     const sr = orders?.get(id);
     if (!sr) return false;
     if (isNursingServiceRequest(sr)) return Boolean(performDates.get(id)?.has(date));
-    return sr.status === "completed";
+    return orderProgress?.get(id)?.completed ?? sr.status === "completed";
   });
 }
 
@@ -259,10 +262,12 @@ export function pathwayTaskPerformedOn(
 export function isOrderDrivenTask(
   task: { orderIds: string[] },
   orders: Map<string, fhir4.ServiceRequest> | undefined,
+  orderProgress: Map<string, OrderProgress> | undefined,
 ): boolean {
   return task.orderIds.some((id) => {
     const sr = orders?.get(id);
-    return Boolean(sr && (isNursingServiceRequest(sr) || sr.status === "completed"));
+    if (!sr) return false;
+    return isNursingServiceRequest(sr) || (orderProgress?.get(id)?.completed ?? sr.status === "completed");
   });
 }
 
@@ -287,6 +292,7 @@ export function sheetProgress(
   today: string,
   orders: Map<string, fhir4.ServiceRequest> | undefined,
   performDates: Map<string, Set<string>>,
+  orderProgress: Map<string, OrderProgress> | undefined,
 ): SheetProgress {
   const counts: Record<SheetIssue, number> = { pending: 0, variance: 0, undone: 0 };
   const rowKeys: Record<SheetIssue, Set<string>> = { pending: new Set(), variance: new Set(), undone: new Set() };
@@ -304,7 +310,7 @@ export function sheetProgress(
           rowKeys.pending.add(row.key);
         }
       } else if (row.kind === "task" && date <= today) {
-        if (!pathwayTaskPerformedOn(cell as SheetTaskCell, date, orders, performDates)) {
+        if (!pathwayTaskPerformedOn(cell as SheetTaskCell, date, orders, performDates, orderProgress)) {
           counts.undone++;
           rowKeys.undone.add(row.key);
         }
@@ -330,19 +336,6 @@ export function filterSheetRows(rows: SheetRow[], issue: SheetIssue, progress: S
 /** 今日が何病日目か(パスの病日に無ければ null)。 */
 export function todayEventOf(events: PathwayEventRecord[], today: string): PathwayEventRecord | null {
   return events.find((event) => event.date === today) ?? null;
-}
-
-const ORDER_STATUS_LABELS: Record<string, string> = {
-  draft: "下書き",
-  active: "依頼済",
-  "on-hold": "保留",
-  revoked: "中止",
-  completed: "実施済",
-  "entered-in-error": "誤登録",
-};
-
-export function orderStatusLabel(status: string | undefined): string {
-  return status ? (ORDER_STATUS_LABELS[status] ?? status) : "";
 }
 
 export function pathwayStatusLabel(status: string): string {
