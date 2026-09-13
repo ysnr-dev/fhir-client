@@ -7,6 +7,7 @@ import {
   useLabInfectionResults,
   useManualInfections,
   usePatient,
+  usePathwayApplications,
   usePatientAdmission,
   useRegimenApplications,
 } from "../api/queries";
@@ -28,6 +29,7 @@ import {
   HEADER_PICTOGRAM_SIZE,
   InfectionPictogramBadge,
 } from "./PatientPictograms";
+import { PathwayNameLinks } from "./PathwayNameLinks";
 import { PictogramPopover } from "./PictogramPopover";
 
 interface PatientHeaderProps {
@@ -95,6 +97,7 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
           <span className="patient-header__value">{admissionPlace}</span>
         </span>
       )}
+      <Pathways patientId={patientId} />
       <CautionPictograms patientId={patientId} />
       <AllergyPictograms patientId={patientId} />
       <InfectionPictogram patientId={patientId} />
@@ -117,6 +120,25 @@ function CautionPictograms({ patientId }: { patientId: string | undefined }) {
     (cautions.data?.items ?? []).map((c) => [c.code, c]),
   );
   return <CautionPictogramBadges flags={flags} cautionsByCode={cautionsByCode} patientId={patientId} />;
+}
+
+/**
+ * 進行中のクリニカルパスの名前。［決定］帯が横に長くなるので名前だけを出す(病日・評価はパスタブで読む)。
+ * 名前からカルテのパスタブをその適用の日めくりで開く。終了・中止した適用は出さない。
+ */
+function Pathways({ patientId }: { patientId: string | undefined }) {
+  const applications = usePathwayApplications(patientId);
+  const running = (applications.data?.applications ?? []).filter((a) => a.status === "active");
+  if (!patientId || running.length === 0) return null;
+
+  return (
+    <span className="patient-header__item">
+      <span className="patient-header__label">パス</span>
+      <span className="patient-header__value patient-header__pathways">
+        <PathwayNameLinks patientId={patientId} applications={running} />
+      </span>
+    </span>
+  );
 }
 
 /** 陽性の感染症のピクトグラム(手入力 + 検査由来)。 */

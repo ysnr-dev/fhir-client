@@ -11357,6 +11357,36 @@ export function usePathwayWardTasks(date: string, patientIds: string[]) {
 }
 
 /**
+ * 患者ごとの進行中のパス(病棟の一覧の「パス」列。docs/clinical-pathway-design.md §6)。
+ * `CarePlan?subject=患者(カンマ OR)&category=パスの印&part-of:missing=true&status=active` の 1 回で適用の根だけを引く。
+ */
+export function useActivePathwaysByPatient(patientIds: string[]) {
+  const ids = [...new Set(patientIds.filter(Boolean))].sort();
+  return useQuery({
+    // 終了・中止・取り消し(invalidatePathway)で読み直されるよう CarePlan 配下のキーにする。
+    queryKey: ["CarePlan", "search", "pathway-active-by-patient", ids.join(",")],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("subject", ids.map((id) => `Patient/${id}`).join(","));
+      params.set("category", `${PATHWAY_MARKER_SYSTEM}|${PATHWAY_MARKER_CODE}`);
+      params.set("part-of:missing", "true");
+      params.set("status", "active");
+      params.set("_sort", "date");
+      params.set("_count", "500");
+      const { data: bundle } = await searchResource<fhir4.CarePlan>("CarePlan", params);
+      const byPatientId = new Map<string, PathwayApplicationSummary[]>();
+      for (const root of resourcesOfType<fhir4.CarePlan>(bundle, "CarePlan")) {
+        const patientId = root.subject?.reference?.split("/").pop() ?? "";
+        byPatientId.set(patientId, [...(byPatientId.get(patientId) ?? []), summarizePathwayApplication(root)]);
+      }
+      return byPatientId;
+    },
+    enabled: ids.length > 0,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
  * 日程の変更(docs/clinical-pathway-design.md §7.8)。病日・タスクと、自動でずらす看護指示・食事を
  * 1 transaction で PUT する。オーダーを書き換えるので、オーダーの来歴(代行なら承認待ちの通知も)を付ける。
  */

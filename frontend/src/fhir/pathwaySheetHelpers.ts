@@ -338,6 +338,16 @@ export function todayEventOf(events: PathwayEventRecord[], today: string): Pathw
   return events.find((event) => event.date === today) ?? null;
 }
 
+/** 日めくりの既定の病日。今日の病日(分けた日は最初のステップ)、期間の前なら最初、後なら最後。 */
+export function defaultDayEventId(events: PathwayEventRecord[], today: string): string {
+  if (events.length === 0) return "";
+  const todays = events.find((e) => e.date === today);
+  if (todays) return todays.id;
+  if (today < events[0].date) return events[0].id;
+  const past = events.filter((e) => e.date <= today);
+  return (past.at(-1) ?? events[events.length - 1]).id;
+}
+
 export function pathwayStatusLabel(status: string): string {
   if (status === "active") return "進行中";
   if (status === "completed") return "終了";

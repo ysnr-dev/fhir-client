@@ -14769,6 +14769,20 @@ button.meal-calendar__cell:hover {
   margin-left: 0;
 }
 
+/* 入院患者一覧の「パス」列と患者ヘッダの、進行中のパスの名前。長い名前は省略し、複数あれば間を空けて並べる。 */
+.pathway-name-link {
+  display: inline-block;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.pathway-name-link + .pathway-name-link {
+  margin-left: 8px;
+}
+
 /* 予定外の追加。タスクは分類 2 つ + 名称。 */
 /* 予定外のタスクの見出し行。分類・名称・オーダー種別・外すを 1 行に収め、
    狭いときは名称から縮める(オーダーの本体は下に開く)。入れ物が

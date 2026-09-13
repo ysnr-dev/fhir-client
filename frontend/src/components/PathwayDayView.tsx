@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useCurrentPractitioner } from "../api/authQueries";
 import { useNursingObservationsByManageNos } from "../api/masterQueries";
 import { useRecordPathwayEvaluation, useVitalFlowsheet } from "../api/queries";
-import type { PathwayApplicationRecord, PathwayEventRecord, PathwayTaskRecord } from "../fhir/pathwayApplyHelpers";
+import type { PathwayApplicationRecord, PathwayTaskRecord } from "../fhir/pathwayApplyHelpers";
 import {
   ACHIEVEMENT_OPTIONS,
   assessmentCandidate,
@@ -59,16 +59,6 @@ function sameDraft(a: UnitDraft, b: UnitDraft): boolean {
   }
   for (const [id, done] of a.tasksDone) if (done !== (b.tasksDone.get(id) ?? false)) return false;
   return true;
-}
-
-/** 日めくりの既定の病日。今日の病日(分けた日は最初のステップ)、期間の前なら最初、後なら最後。 */
-export function defaultDayEventId(events: PathwayEventRecord[], today: string): string {
-  if (events.length === 0) return "";
-  const todays = events.find((e) => e.date === today);
-  if (todays) return todays.id;
-  if (today < events[0].date) return events[0].id;
-  const past = events.filter((e) => e.date <= today);
-  return (past.at(-1) ?? events[events.length - 1]).id;
 }
 
 export function PathwayDayView({

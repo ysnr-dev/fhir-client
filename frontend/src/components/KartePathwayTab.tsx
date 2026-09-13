@@ -15,6 +15,7 @@ import {
   buildPathwaySheet,
   filterSheetRows,
   nursingPerformDates,
+  defaultDayEventId,
   pathwayTaskPerformedOn,
   sheetProgress,
   type SheetIssue,
@@ -35,7 +36,7 @@ import { Modal } from "./Modal";
 import { NursingPerformModal } from "./NursingPerformModal";
 import { PathwayCancelPanel } from "./PathwayCancelPanel";
 import { PathwayClosePanel } from "./PathwayClosePanel";
-import { PathwayDayView, defaultDayEventId } from "./PathwayDayView";
+import { PathwayDayView } from "./PathwayDayView";
 import { PathwayEvaluatePanel } from "./PathwayEvaluatePanel";
 import { PathwayOrderModal } from "./PathwayOrderModal";
 import { PathwaySchedulePanel } from "./PathwaySchedulePanel";
@@ -130,8 +131,8 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
       formatPathwaySheetView({ applyId: selected?.id, mode: current.mode, eventId: current.eventId, fullscreen, ...next }),
     );
   }
-  // 表示の既定は、進行中の適用なら日めくり、終わった適用ならオーバービュー。
-  const mode = current.mode ?? (selected?.status === "active" ? "day" : "sheet");
+  // 表示の既定はオーバービュー(日めくりは切り替えるか、病日を指して開いたときだけ)。
+  const mode = current.mode ?? "sheet";
   // 見出し帯の集計(未評価・バリアンス・未実施)でオーバービューの行を絞っているとき。
   const [issue, setIssue] = useState<SheetIssue | null>(null);
 
