@@ -11205,6 +11205,15 @@ export function useClosePathway() {
   });
 }
 
+/** 予定外の OAT ユニットの追加(適用の木に足す)。 */
+export function useAddUnplannedUnit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidatePathway(queryClient),
+  });
+}
+
 /** 患者の入院予定(status=planned)。パスの適用先の候補にする(日付未定のものも含む)。 */
 export function usePatientPlannedAdmissions(patientId: string | undefined) {
   const params = new URLSearchParams();

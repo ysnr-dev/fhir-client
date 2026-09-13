@@ -14101,9 +14101,13 @@ button.meal-calendar__cell:hover {
   gap: 8px;
 }
 
-.pathway-sheet__summary {
+/* 見出しの帯。併せて付けている .chemo-calendar__summary が後ろにあり space-between と
+   gap を上書きするので、こちらは両方のクラスで詳細度を上げて指定する。
+   項目は左から詰め、操作(予定外を追加・終了・中止)だけ右端にまとめる。 */
+.chemo-calendar__summary.pathway-sheet__summary {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-start;
   gap: 4px 12px;
   align-items: center;
   font-size: 13px;
@@ -14317,11 +14321,25 @@ button.meal-calendar__cell:hover {
   font-weight: 600;
 }
 
-/* 見出しの帯に置く「終了・中止」。帯の文字に合わせて小さくする。 */
+/* 見出しの帯に置く「予定外を追加」「終了・中止」。帯の文字に合わせて小さくし、右端にまとめる。 */
 .pathway-sheet__close-button {
   --control-height: 24px;
   font-size: 12px;
   padding: 0 10px;
+}
+
+.pathway-sheet__summary button:first-of-type {
+  margin-left: auto;
+}
+
+/* 予定外の追加。タスクは分類 2 つ + 名称。 */
+.pathway-unplanned__tasks select {
+  max-width: 132px;
+  margin-right: 4px;
+}
+
+.pathway-evaluate__rows input[type="text"] {
+  width: 100%;
 }
 
 /* シートに重ねる評価入力・タスクの実施入力。縦に長いときはモーダルの中だけ送る。 */
@@ -14371,6 +14389,21 @@ button.meal-calendar__cell:hover {
 
 .pathway-evaluate__rows td input[type="number"] {
   width: 90px;
+}
+
+/* 評価・終了・予定外の各パネルの自由文欄。区画(fieldset)に直接置くので、
+   .lab-order-item__fields の入力欄の見た目をここで当てる(textarea は素のまま残るため)。 */
+.pathway-evaluate textarea,
+.pathway-unplanned__name {
+  box-sizing: border-box;
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
 }
 
 /* 詳細モーダルの下に並べる操作(編集・実施入力)。本文と離して置く。 */

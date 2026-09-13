@@ -665,6 +665,116 @@ function partOfIds(carePlan: fhir4.CarePlan): string[] {
  * 画面が読む木に組み直す。検索は `part-of=CarePlan/{適用の id}` の 1 回で足りる
  * (子孫は祖先すべてを partOf に持つ)ので、渡すのはその結果 + 適用そのもの。
  */
+// ---- 予定外 OAT ユニットの追加 ----
+
+/** 予定外に足すアウトカム 1 件(その場で入力するので定義マスタは介さない)。 */
+export interface UnplannedUnitInput {
+  patientId: string;
+  encounterId?: string;
+  /** 適用(木の根)の CarePlan の id。 */
+  applyCarePlanId: string;
+  /** 足す先の病日の CarePlan の id と、その識別子・日付。 */
+  eventCarePlanId: string;
+  eventId: string;
+  date: string;
+  name: string;
+  critical: boolean;
+  /** 観察項目の名称(任意)。コードは持たせない。 */
+  assessments: string[];
+  /** タスク(任意)。オーダー雛形は持たせない(必要なら通常のオーダーとして出す)。 */
+  tasks: { name: string; categoryLv1: string; categoryLv2: string }[];
+  /** 同じ病日に既にあるアウトカムの数。並び順を末尾にするのに使う。 */
+  existingUnitCount: number;
+}
+
+/**
+ * 予定外のアウトカムを既にある適用へ足す transaction。
+ *
+ * ［決定］予定どおりのアウトカムと同じ形で作り、`EPathCarePlanUnplannedKind` だけを Y にする。
+ * シートは同じ行として扱えて、評価も日次評価の仕組みがそのまま効く。
+ */
+export function buildUnplannedUnitBundle(input: UnplannedUnitInput): fhir4.Bundle {
+  const unitKey = crypto.randomUUID();
+  const unitId = oatUnitIdValue(input.eventId, unitKey);
+  const unitUrl = `urn:uuid:${crypto.randomUUID()}`;
+  const applyRef = `CarePlan/${input.applyCarePlanId}`;
+  const eventRef = `CarePlan/${input.eventCarePlanId}`;
+
+  const unit: fhir4.CarePlan = {
+    resourceType: "CarePlan",
+    identifier: [{ system: PATHWAY_OAT_UNIT_ID_SYSTEM, value: unitId }],
+    status: "active",
+    intent: "plan",
+    title: input.name,
+    category: [markerCategory("oat-unit")],
+    subject: { reference: `Patient/${input.patientId}` },
+    partOf: [reference(applyRef), reference(eventRef)],
+    extension: [
+      { url: PATHWAY_EXT.statusTypeWhenOccured, valueCode: STATUS_TYPE_EP12 },
+      { url: PATHWAY_EXT.criticalIndicator, valueCode: input.critical ? YES : NO },
+      { url: PATHWAY_EXT.unplannedKind, valueCode: YES },
+      { url: PATHWAY_DISPLAY_ORDER_EXT_URL, valueInteger: input.existingUnitCount + 1 },
+    ],
+  };
+
+  const entry: fhir4.BundleEntry[] = [
+    { fullUrl: unitUrl, resource: unit, request: { method: "POST", url: "CarePlan" } },
+  ];
+
+  const assessmentEntry = (key: string, name: string | null, order: number) => {
+    const assessmentId = assessmentIdValue(unitId, key);
+    const url = `urn:uuid:${crypto.randomUUID()}`;
+    const carePlan: fhir4.CarePlan = {
+      resourceType: "CarePlan",
+      identifier: [{ system: PATHWAY_ASSESSMENT_ID_SYSTEM, value: assessmentId }],
+      status: "active",
+      intent: "plan",
+      title: name ?? "",
+      category: [
+        markerCategory("assessment"),
+        { coding: [{ system: PATHWAY_CODE_SYSTEM.assessmentCodeEmpty, code: EMPTY_ASSESSMENT_CODE }] },
+      ],
+      subject: { reference: `Patient/${input.patientId}` },
+      partOf: [reference(applyRef), reference(eventRef), reference(unitUrl)],
+      extension: [
+        { url: PATHWAY_EXT.statusTypeWhenOccured, valueCode: STATUS_TYPE_EP12 },
+        { url: PATHWAY_DISPLAY_ORDER_EXT_URL, valueInteger: order },
+      ],
+    };
+    entry.push({ fullUrl: url, resource: carePlan, request: { method: "POST", url: "CarePlan" } });
+    return { assessmentId, url };
+  };
+
+  input.assessments.forEach((name, index) => assessmentEntry(crypto.randomUUID(), name, index + 1));
+
+  if (input.tasks.length > 0) {
+    // タスクは定義と同じく「観察項目なし」で包む(結び先を選ばせる画面は持たない)。
+    const wrapper = assessmentEntry(EMPTY_ASSESSMENT_CODE, null, input.assessments.length + 1);
+    input.tasks.forEach((task, index) => {
+      const procedure: fhir4.Procedure = {
+        resourceType: "Procedure",
+        identifier: [{ system: PATHWAY_TASK_ID_SYSTEM, value: taskIdValue(wrapper.assessmentId, crypto.randomUUID()) }],
+        status: "preparation",
+        category: taskCategory({
+          category_lv1: task.categoryLv1,
+          category_lv2: task.categoryLv2 || null,
+        } as PathwayTask),
+        code: { text: task.name },
+        subject: { reference: `Patient/${input.patientId}` },
+        ...(input.encounterId ? { encounter: { reference: `Encounter/${input.encounterId}` } } : {}),
+        basedOn: [reference(wrapper.url)],
+        extension: [
+          { url: PATHWAY_EXT.taskPlannedDateTime, valueDate: input.date },
+          { url: PATHWAY_DISPLAY_ORDER_EXT_URL, valueInteger: index + 1 },
+        ],
+      };
+      entry.push({ resource: procedure, request: { method: "POST", url: "Procedure" } });
+    });
+  }
+
+  return { resourceType: "Bundle", type: "transaction", entry };
+}
+
 export function parsePathwayApplication(
   resources: (fhir4.CarePlan | fhir4.Procedure)[],
 ): PathwayApplicationRecord | null {
