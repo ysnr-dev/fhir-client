@@ -709,7 +709,7 @@ export interface PathwayApplicationRecord {
   events: PathwayEventRecord[];
 }
 
-function pathwayCodeOf(carePlan: fhir4.CarePlan): string {
+export function pathwayCodeOf(carePlan: fhir4.CarePlan): string {
   const uri = carePlan.instantiatesUri?.find((u) => u.startsWith(pathwayInstantiatesUri("")));
   return uri ? uri.slice(pathwayInstantiatesUri("").length) : "";
 }

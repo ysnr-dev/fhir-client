@@ -181,6 +181,7 @@ import { PlainTextModal } from "./PlainTextModal";
 import { RichTextView } from "./RichTextView";
 import { ResponseSchemaImages, SchemaImageGallery } from "./SchemaImageGallery";
 import { RowMenu } from "./RowMenu";
+import type { PathwayEvaluationCard } from "../fhir/pathwayKarteHelpers";
 
 interface KarteTimelineProps {
   groups: KarteDayGroup[];
@@ -612,8 +613,8 @@ const KarteCard = memo(function KarteCard({
               </button>
             ))}
           <RowMenu label={`${cardTitle(item) || karteItemKindLabel(item)} の操作`}>
-            {/* バイタルはカードに測定値が全部出るので詳細モーダルを持たない。 */}
-            {item.kind !== "vital" && (
+            {/* バイタル・パス評価はカードに中身が全部出るので詳細モーダルを持たない。 */}
+            {item.kind !== "vital" && item.kind !== "pathway-evaluation" && (
               <button type="button" className="row-menu__item" onClick={() => onOpenDetail(item)}>
                 詳細表示
               </button>
@@ -773,17 +774,27 @@ const KarteCard = memo(function KarteCard({
             <button type="button" className="row-menu__item" onClick={() => setJsonOpen(true)}>
               FHIR JSON 表示
             </button>
-            <button type="button" className="row-menu__item" onClick={() => onEdit(item)}>
-              編集
-            </button>
-            <button
-              type="button"
-              className="row-menu__item row-menu__item--danger"
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              削除
-            </button>
+            {/* パス評価の記載はパスタブの評価で書き直す(カードからはその病日の日めくりを開く)。
+                評価はアウトカムの記録なので、カードからは消させない。 */}
+            {item.kind === "pathway-evaluation" ? (
+              <button type="button" className="row-menu__item" onClick={() => onEdit(item)}>
+                パスで開く
+              </button>
+            ) : (
+              <>
+                <button type="button" className="row-menu__item" onClick={() => onEdit(item)}>
+                  編集
+                </button>
+                <button
+                  type="button"
+                  className="row-menu__item row-menu__item--danger"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  削除
+                </button>
+              </>
+            )}
           </RowMenu>
         </span>
       </header>
@@ -884,6 +895,8 @@ function consultReplyId(sr: fhir4.ServiceRequest): string {
 
 function cardTitle(item: KarteTimelineItem): string {
   if (item.kind === "note") return item.note.title ?? "";
+  // パス評価はどのアウトカムの評価かが見出し(パス名・病日は本文の先頭に出す)。
+  if (item.kind === "pathway-evaluation") return item.evaluation.unitName;
   // バイタルは種別バッジだけで内容が分かるので、タイトルは持たない。
   if (item.kind === "vital") return "";
   if (item.kind === "prescription") {
@@ -996,6 +1009,10 @@ function cardMeta(item: KarteTimelineItem): string {
   }
   // バイタルは測定時刻だけ(誰が測ったかは Observation に持たせていない)。
   if (item.kind === "vital") return time;
+  // パス評価は記録時刻・達成状態・記録者。
+  if (item.kind === "pathway-evaluation") {
+    return [time, item.evaluation.achievementLabel, item.evaluation.performerName].filter(Boolean).join(" | ");
+  }
   const requesterSummary = orderContextSummary(prescriptionRequester(item.serviceRequest));
   // 放射線検査は撮影時刻を指定できるので、依頼科・依頼医師の前に添える。記入時刻を
   // 出す診療記録と紛れないよう「撮影」と付ける(未指定のオーダーでは出さない)。
@@ -1314,6 +1331,10 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
 
   if (item.kind === "consult-order") {
     return <ConsultOrderCardBody serviceRequest={item.serviceRequest} />;
+  }
+
+  if (item.kind === "pathway-evaluation") {
+    return <PathwayEvaluationCardBody evaluation={item.evaluation} />;
   }
 
   if (!item.questionnaire) {
@@ -2546,6 +2567,37 @@ function CollapsibleBody({ children }: { children: ReactNode }) {
         >
           {expanded ? "折りたたむ" : "続きを表示"}
         </button>
+      )}
+    </>
+  );
+}
+
+/**
+ * パス評価のカードの本文。どのパスのどの病日か、S/O/A/P(書いた欄だけ)または自由記載、コメント。
+ * 達成状態は見出しのメタに出し、未達成(バリアンス)は本文の先頭でも目立たせる。
+ */
+function PathwayEvaluationCardBody({ evaluation }: { evaluation: PathwayEvaluationCard }) {
+  return (
+    <>
+      <p className="karte-pathway-eval__context">
+        <span>{evaluation.pathwayTitle}</span>
+        <span>{`${evaluation.eventLabel}${evaluation.eventDate ? `(${evaluation.eventDate})` : ""}`}</span>
+        {evaluation.achievement === "2" && (
+          <span className="karte-pathway-eval__variance">{evaluation.achievementLabel}</span>
+        )}
+      </p>
+      {evaluation.soap.map((item) => (
+        <div className="karte-card__section" key={item.code}>
+          <span className="karte-card__section-title">{item.code}</span>
+          <p className="karte-pathway-eval__text">{item.text}</p>
+        </div>
+      ))}
+      {evaluation.freeText && <p className="karte-pathway-eval__text">{evaluation.freeText}</p>}
+      {evaluation.comment && (
+        <div className="karte-card__section">
+          <span className="karte-card__section-title">コメント</span>
+          <p className="karte-pathway-eval__text">{evaluation.comment}</p>
+        </div>
       )}
     </>
   );

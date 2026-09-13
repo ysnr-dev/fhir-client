@@ -5691,6 +5691,26 @@ body.karte-wide {
   margin-top: 10px;
 }
 
+/* パス評価のカード。先頭にどのパスのどの病日の評価かを添え、記載は改行を保って出す。 */
+.karte-pathway-eval__context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+.karte-pathway-eval__variance {
+  color: #e0687a;
+  font-weight: 600;
+}
+
+.karte-pathway-eval__text {
+  margin: 0;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
 /* S/O/A/P などの見出し。本文(13px 通常)に埋もれないよう、
    見出し色・太字にしたうえで頭にアクセントの縦線を添える。 */
 .karte-card__section-title {

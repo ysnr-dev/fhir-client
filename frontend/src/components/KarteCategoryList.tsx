@@ -35,6 +35,7 @@ const PLAIN_KINDS: KarteItemKind[] = [
   "rehab-order",
   "nutrition-guidance-order",
   "consult-order",
+  "pathway-evaluation",
 ];
 
 export function KarteCategoryList({ filter, onSelect }: KarteCategoryListProps) {

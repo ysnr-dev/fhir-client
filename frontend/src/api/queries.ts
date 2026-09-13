@@ -50,6 +50,8 @@ import {
 } from "../fhir/pathwayApplyHelpers";
 import { PATHWAY_APPLY_GOAL_ID_SYSTEM } from "../fhir/pathwayCloseHelpers";
 import { parsePathwayWardTasks, type PathwayWardTask } from "../fhir/pathwayWorklistHelpers";
+import { buildPathwayEvaluationCards, type PathwayEvaluationCard } from "../fhir/pathwayKarteHelpers";
+import { EVALUATION_ITEM_SYSTEM } from "../fhir/pathwayEvaluationHelpers";
 import { useCurrentPractitioner } from "./authQueries";
 import { nowFhirDateTime, today } from "../lib/dates";
 import {
@@ -6624,6 +6626,52 @@ export function useKarteVitalsInfinite(
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, _pages, lastOffset) => karteNextOffset(lastPage.data, lastOffset),
+    enabled: Boolean(patientId) && problemIds !== undefined,
+  });
+}
+
+/**
+ * カルテのタイムラインの「パス評価」(docs/clinical-pathway-design.md §6)。記載のあるアウトカムの評価を
+ * 患者ぶん全部読む(1 人の患者で数十件程度なのでページングしない。タイムラインの表示範囲の計算には加わらない)。
+ *
+ * 1. `Observation?patient&category=パスの印&code=判定` で評価の Observation。
+ * 2. basedOn の OAT ユニットを `CarePlan?_id=…&_include=CarePlan:part-of` で引き、祖先の病日・適用も揃える
+ *    (Observation の based-on は上流で検索・include できないので分ける)。
+ *
+ * 評価はプロブレムを指さないので、プロブレムで絞り込んでいるときは出さない。
+ * キーは評価の記録(useRecordPathwayEvaluation)の読み直しと同じ ["Observation", "search", "pathway"] 配下。
+ */
+export function useKartePathwayEvaluations(
+  patientId: string | undefined,
+  problemIds: KarteProblemFilter = null,
+) {
+  return useQuery({
+    queryKey: ["Observation", "search", "pathway", "karte-cards", patientId, problemQueryKey(problemIds)],
+    queryFn: async (): Promise<PathwayEvaluationCard[]> => {
+      if (problemIds?.length) return [];
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("category", `${PATHWAY_MARKER_SYSTEM}|${PATHWAY_MARKER_CODE}`);
+      params.set("code", `${EVALUATION_ITEM_SYSTEM}|judgement`);
+      params.set("_count", "500");
+      const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
+      const observations = (bundle.entry ?? [])
+        .map((entry) => entry.resource)
+        .filter((r): r is fhir4.Observation => r?.resourceType === "Observation");
+      const unitIds = [
+        ...new Set(observations.map((o) => o.basedOn?.[0]?.reference?.split("/").pop() ?? "").filter(Boolean)),
+      ];
+      if (unitIds.length === 0) return [];
+      const carePlanParams = new URLSearchParams();
+      carePlanParams.set("_id", unitIds.join(","));
+      carePlanParams.set("_include", "CarePlan:part-of");
+      carePlanParams.set("_count", "500");
+      const { data: carePlanBundle } = await searchResource<fhir4.CarePlan>("CarePlan", carePlanParams);
+      const carePlans = (carePlanBundle.entry ?? [])
+        .map((entry) => entry.resource)
+        .filter((r): r is fhir4.CarePlan => r?.resourceType === "CarePlan");
+      return buildPathwayEvaluationCards(observations, carePlans);
+    },
     enabled: Boolean(patientId) && problemIds !== undefined,
   });
 }

@@ -806,6 +806,7 @@ function jsonResource(item: KarteTimelineItem): fhir4.Resource {
     return bundle;
   }
   if (item.kind === "qr") return item.response;
+  if (item.kind === "pathway-evaluation") return item.evaluation.observation;
   return item.serviceRequest;
 }
 

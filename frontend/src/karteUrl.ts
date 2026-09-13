@@ -87,7 +87,7 @@ export function parseKarteTab(value: string | null): KarteTabKey {
  */
 // バイタルはカードに測定値が全部出るので詳細モーダルを持たない。
 export type KarteDetailKind =
-  | Exclude<KarteItemKind, "vital">
+  | Exclude<KarteItemKind, "vital" | "pathway-evaluation">
   | "lab-result"
   | "micro-result"
   | "patho-result";
@@ -228,6 +228,7 @@ const CARD_KINDS: KarteItemKind[] = [
   "rehab-order",
   "nutrition-guidance-order",
   "qr",
+  "pathway-evaluation",
 ];
 
 export function formatKarteCard(filter: KarteCardFilter): string {
