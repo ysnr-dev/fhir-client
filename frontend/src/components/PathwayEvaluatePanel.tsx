@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNursingObservationsByManageNos } from "../api/masterQueries";
-import { usePathwayApplicationTree, usePathwayObservations, useRecordPathwayEvaluation } from "../api/queries";
+import {
+  useNursingPerformsOf,
+  usePathwayApplicationTree,
+  usePathwayObservations,
+  useRecordPathwayEvaluation,
+} from "../api/queries";
 import { useCurrentPractitioner } from "../api/authQueries";
 import {
   ACHIEVEMENT_OPTIONS,
@@ -19,7 +24,12 @@ import {
   type TemplateDraft,
 } from "../fhir/questionnaireResponseHelpers";
 import { eventDayStepLabel, taskCategoryLabel } from "../fhir/pathwayHelpers";
-import { orderStatusLabel } from "../fhir/pathwaySheetHelpers";
+import {
+  isNursingLinkedTask,
+  nursingPerformDates,
+  orderStatusLabel,
+  pathwayTaskPerformedOn,
+} from "../fhir/pathwaySheetHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useValidationError } from "../hooks/useValidationError";
 import { toDateTimeInputValue, toFhirDateTime } from "../lib/dates";
@@ -43,6 +53,8 @@ interface PathwayEvaluatePanelProps {
 export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: PathwayEvaluatePanelProps) {
   const tree = usePathwayApplicationTree(applyId);
   const observations = usePathwayObservations(patientId);
+  const nursingPerforms = useNursingPerformsOf(patientId);
+  const performDates = useMemo(() => nursingPerformDates(nursingPerforms.data), [nursingPerforms.data]);
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const record = useRecordPathwayEvaluation();
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
@@ -223,12 +235,18 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
           <ul className="pathway-apply__conditions">
             {tasks.map((task) => {
               const order = task.orderIds.map((id) => tree.data?.orders.get(id)).find(Boolean);
+              // 看護指示を結んだタスクは、その日の実施記録で決まる(実施入力で記録する)ので、ここでは変えない。
+              const nursing = isNursingLinkedTask(task, tree.data?.orders);
+              const checked = nursing
+                ? pathwayTaskPerformedOn(task, event.date, tree.data?.orders, performDates)
+                : (values.tasksDone.get(task.id) ?? task.done);
               return (
                 <li key={task.id}>
                   <label className="pathway-apply__check">
                     <input
                       type="checkbox"
-                      checked={values.tasksDone.get(task.id) ?? task.done}
+                      checked={checked}
+                      disabled={nursing}
                       onChange={(e) => {
                         const next = new Map(values.tasksDone);
                         next.set(task.id, e.target.checked);

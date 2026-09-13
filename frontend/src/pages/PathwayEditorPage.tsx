@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Disease, PathwaySetting, PathwayStatus } from "../api/masterClient";
 import { usePathway, usePathwayMutations } from "../api/masterQueries";
@@ -24,6 +24,7 @@ import {
   emptyPathwayDraft,
   eventDayOf,
   isSplitDay,
+  linkSameNameSeries,
   newDraftKey,
   nextDayNumber,
   operationalPayloadFromDraft,
@@ -230,6 +231,8 @@ export function PathwayEditorPage() {
   const templateTask = picker?.kind === "template" ? findTask(picker) : null;
   const overview = overviewRows(draft);
   const seriesLabels = outcomeSeriesLabels(draft.events);
+  // 雛形の中身まで比べるので、病日が変わったときだけ計算する。
+  const linkable = useMemo(() => linkSameNameSeries(draft.events), [draft.events]);
 
   if (!isNew && detail.isPending) {
     return (
@@ -471,6 +474,7 @@ export function PathwayEditorPage() {
           canAddTask={(row, column) => canAddTaskOccurrence(draft.events, row, column.eventKey)}
           onToggleOutcome={toggleOutcome}
           onToggleTask={toggleTask}
+          onLinkSameNames={linkable.linked > 0 ? () => update("events", linkable.events) : null}
         />
       </fieldset>
 

@@ -1,6 +1,7 @@
 import type { PathwayApplicationRecord, PathwayEventRecord } from "./pathwayApplyHelpers";
 import { achievementLabel, resultValueLabel, type Achievement, type PathwayEvaluationState } from "./pathwayEvaluationHelpers";
 import { TASK_CATEGORY_LV1_OPTIONS, displayOfOption } from "./pathwayHelpers";
+import { isNursingServiceRequest } from "./nursingOrderHelpers";
 
 // パスシート(病日 × OAT ユニット)の行と列。適用 1 件の木(parsePathwayApplication)を、
 // 紙のパスシートと同じ「行 = アウトカム・観察項目・タスク、列 = 病日」に組み直す。
@@ -204,6 +205,48 @@ export function buildPathwaySheet(
     rows.push(...children.filter((r) => r.kind === "assessment"), ...children.filter((r) => r.kind === "task"));
   }
   return { days, dayGroups, split: dayGroups.some((g) => g.days.length > 1), rows };
+}
+
+// ---- タスクの実施 ----
+
+/** 看護指示の実施記録を、指示の id → 記録のある日付(YYYY-MM-DD)にまとめる。 */
+export function nursingPerformDates(
+  byOrderId: Map<string, { at: string }[]> | undefined,
+): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  for (const [orderId, rows] of byOrderId ?? []) {
+    map.set(orderId, new Set(rows.map((row) => row.at.slice(0, 10))));
+  }
+  return map;
+}
+
+/** タスクが看護指示を結んでいるか(実施はタスクの Procedure ではなく、指示の実施記録で表す)。 */
+export function isNursingLinkedTask(
+  task: { orderIds: string[] },
+  orders: Map<string, fhir4.ServiceRequest> | undefined,
+): boolean {
+  return task.orderIds.some((id) => {
+    const sr = orders?.get(id);
+    return Boolean(sr && isNursingServiceRequest(sr));
+  });
+}
+
+/**
+ * その病日にタスクを実施したか。［決定］看護指示を結んだタスクは、その日の実施記録があれば実施とみなす
+ * (続く病日にまたがる 1 件の指示を日ごとに記録するため)。それ以外はタスクの Procedure の状態。
+ * パスシートのセルと評価パネルのチェックが同じ判定を使う。
+ */
+export function pathwayTaskPerformedOn(
+  task: { orderIds: string[]; done: boolean },
+  date: string,
+  orders: Map<string, fhir4.ServiceRequest> | undefined,
+  performDates: Map<string, Set<string>>,
+): boolean {
+  if (task.done) return true;
+  return task.orderIds.some((id) => {
+    const sr = orders?.get(id);
+    return Boolean(sr && isNursingServiceRequest(sr) && performDates.get(id)?.has(date));
+  });
 }
 
 /** 今日が何病日目か(パスの病日に無ければ null)。 */

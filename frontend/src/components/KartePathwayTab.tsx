@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   useNursingPerformsOf,
   useNursingPerformsOn,
@@ -11,7 +11,9 @@ import { orderKindOf } from "../fhir/karteTimeline";
 import { buildEvaluationState } from "../fhir/pathwayEvaluationHelpers";
 import {
   buildPathwaySheet,
+  nursingPerformDates,
   orderStatusLabel,
+  pathwayTaskPerformedOn,
   pathwayStatusLabel,
   todayEventOf,
   type PathwaySheet,
@@ -117,16 +119,9 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
       : null;
   const sheet = application ? buildPathwaySheet(application, evaluation) : null;
   const todayDate = today();
-  // 看護指示を結んだタスクは、その日の実施記録があれば実施済みとして出す(続く病日にまたがる
-  // 1 件の指示を、日ごとに記録するため。タスクの Procedure の状態だけでは日ごとに分からない)。
+  // 看護指示を結んだタスクは、その日の実施記録で実施を出す(pathwayTaskPerformedOn)。
   const nursingPerforms = useNursingPerformsOf(patientId);
-  const performDates = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    for (const [orderId, rows] of nursingPerforms.data ?? []) {
-      map.set(orderId, new Set(rows.map((row) => row.at.slice(0, 10))));
-    }
-    return map;
-  }, [nursingPerforms.data]);
+  const performDates = useMemo(() => nursingPerformDates(nursingPerforms.data), [nursingPerforms.data]);
 
   // アウトカム(OAT ユニット)ごとの開閉。評価の済んだアウトカムは既定で畳み、
   // 手で開け閉めしたらそのまま残す(適用を切り替えたら既定に戻す)。
@@ -368,8 +363,11 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                       </span>
                       {row.properValue && <span className="pathway-sheet__proper">{row.properValue}</span>}
                     </th>
-                    {sheet.days.map((day) => {
+                    {sheet.days.map((day, dayIndex) => {
                       const cell = row.cells.get(day.eventId);
+                      // 隣の列(病日・ステップ)にも同じ行のセルがあれば、続いていることを線と矢印で示す。
+                      const fromPrev = dayIndex > 0 && row.cells.has(sheet.days[dayIndex - 1].eventId);
+                      const toNext = dayIndex < sheet.days.length - 1 && row.cells.has(sheet.days[dayIndex + 1].eventId);
                       const classes = `pathway-sheet__cell${dayClasses(day.date)}`;
                       if (!cell) return <td key={day.eventId} className={classes} />;
                       // アウトカムのセルは、その病日 × OAT ユニットの評価入力を開く。
@@ -402,14 +400,16 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                         return (
                           <td key={day.eventId} className={`${classes} pathway-sheet__cell--unit`}>
                             <button type="button" className="pathway-sheet__cell-button" onClick={openUnit}>
-                              <span
-                                className={`pathway-sheet__outcome${
-                                  unit.achievement ? ` pathway-sheet__outcome--${unit.achievement}` : " pathway-sheet__outcome--pending"
-                                }`}
-                              >
-                                {unit.achievementLabel || "未評価"}
-                              </span>
-                              {unit.unplanned && <span className="pathway-sheet__unplanned">予定外</span>}
+                              <SeriesLink fromPrev={fromPrev} toNext={toNext}>
+                                <span
+                                  className={`pathway-sheet__outcome${
+                                    unit.achievement ? ` pathway-sheet__outcome--${unit.achievement}` : " pathway-sheet__outcome--pending"
+                                  }`}
+                                >
+                                  {unit.achievementLabel || "未評価"}
+                                </span>
+                                {unit.unplanned && <span className="pathway-sheet__unplanned">予定外</span>}
+                              </SeriesLink>
                             </button>
                           </td>
                         );
@@ -424,32 +424,31 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                             title={assessment.properValue ? `適正値: ${assessment.properValue}` : undefined}
                           >
                             <span className="pathway-sheet__cell-static">
-                              {assessment.value ? (
-                                <span className="pathway-sheet__value">{assessment.value}</span>
-                              ) : (
-                                <span className="pathway-sheet__planned">○</span>
-                              )}
+                              <SeriesLink fromPrev={fromPrev} toNext={toNext}>
+                                {assessment.value ? (
+                                  <span className="pathway-sheet__value">{assessment.value}</span>
+                                ) : (
+                                  <span className="pathway-sheet__planned">○</span>
+                                )}
+                              </SeriesLink>
                             </span>
                           </td>
                         );
                       }
                       const task = cell as SheetTaskCell;
                       const order = task.orderIds.map((id) => orders?.get(id)).find(Boolean);
-                      const done =
-                        task.done ||
-                        task.orderIds.some((id) => {
-                          const sr = orders?.get(id);
-                          return Boolean(sr && orderKindOf(sr) === "nursing-order" && performDates.get(id)?.has(day.date));
-                        });
+                      const done = pathwayTaskPerformedOn(task, day.date, orders, performDates);
                       return (
                         <td key={day.eventId} className={classes} data-procedure-id={task.procedureId}>
                           <button type="button" className="pathway-sheet__cell-button" onClick={() => openTask(task)}>
-                            <span className={`pathway-sheet__task${done ? " pathway-sheet__task--done" : ""}`}>
-                              {done ? "☑" : "☐"}
-                            </span>
-                            {order && (
-                              <span className="pathway-sheet__order">{orderStatusLabel(order.status)}</span>
-                            )}
+                            <SeriesLink fromPrev={fromPrev} toNext={toNext}>
+                              <span className={`pathway-sheet__task${done ? " pathway-sheet__task--done" : ""}`}>
+                                {done ? "☑" : "☐"}
+                              </span>
+                              {order && (
+                                <span className="pathway-sheet__order">{orderStatusLabel(order.status)}</span>
+                              )}
+                            </SeriesLink>
                           </button>
                         </td>
                       );
@@ -553,5 +552,28 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
         />
       )}
     </div>
+  );
+}
+
+/**
+ * 複数の病日に続く行(日をまたぐアウトカム・続く観察項目やタスク)のセルの中身。前の列から続いていれば左に、
+ * 次の列へ続いていれば右に線を引き、続きの最後のセルは矢印で終える(紙のパスシートで日をまたいで引く矢印)。
+ * 線はセルの余白まで伸ばして隣のセルとつなげる。続いていないセルは中身だけ。
+ */
+function SeriesLink({ fromPrev, toNext, children }: { fromPrev: boolean; toNext: boolean; children: ReactNode }) {
+  if (!fromPrev && !toNext) return <>{children}</>;
+  return (
+    <span className="pathway-sheet__series">
+      <span
+        className={
+          fromPrev
+            ? `pathway-sheet__link pathway-sheet__link--in${toNext ? "" : " pathway-sheet__link--end"}`
+            : "pathway-sheet__link-spacer"
+        }
+        aria-hidden="true"
+      />
+      <span className="pathway-sheet__series-content">{children}</span>
+      <span className={toNext ? "pathway-sheet__link pathway-sheet__link--out" : "pathway-sheet__link-spacer"} aria-hidden="true" />
+    </span>
   );
 }

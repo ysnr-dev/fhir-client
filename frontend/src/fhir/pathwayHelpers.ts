@@ -956,3 +956,105 @@ export function outcomeSeriesLabels(events: PathwayEventDraft[]): Map<string, st
   }
   return new Map([...labels].filter(([, v]) => v.length > 1));
 }
+
+/**
+ * 名前が同じで識別子が別々のアウトカムを続きにまとめる(続きの仕組みより前に作った定義や、
+ * 病日ごとに手で同じアウトカムを入れた定義のため)。まとめた件数(識別子を付け替えた行の数)を返す。
+ *
+ * ［決定］アウトカムは名前が同じなら、最初に現れた病日の識別子に揃える。観察項目はその続きの中で名前が
+ * 同じもの、タスクは続きの中で大分類・名前・オーダー雛形が同じものを揃える(雛形が違うタスクを
+ * まとめると、出るオーダーが変わってしまう)。同じ病日(同じ OAT ユニット)の中に同じ名前が 2 つあるときは、
+ * 後のものをそのまま残す。揃えた後の名前・コードなどは、最初に現れた病日の値に合わせる(propagateSeries)。
+ * 適正値は病日ごとの値を保つ。
+ */
+export function linkSameNameSeries(events: PathwayEventDraft[]): { events: PathwayEventDraft[]; linked: number } {
+  const sorted = sortEventsByDay(events);
+  const unitKeyByName = new Map<string, string>();
+  const assessmentKeyByName = new Map<string, string>();
+  const taskKeyBySignature = new Map<string, string>();
+  let linked = 0;
+
+  const relinked = new Map<number, PathwayEventDraft>();
+  for (const event of sorted) {
+    const usedUnitKeys = new Set(event.oatUnits.map((u) => u.unitKey));
+    const oatUnits = event.oatUnits.map((unit) => {
+      const name = unit.name.trim();
+      let unitKey = unit.unitKey;
+      if (name) {
+        const canonical = unitKeyByName.get(name);
+        if (!canonical) unitKeyByName.set(name, unitKey);
+        else if (canonical !== unitKey && !usedUnitKeys.has(canonical)) {
+          usedUnitKeys.delete(unitKey);
+          usedUnitKeys.add(canonical);
+          unitKey = canonical;
+          linked++;
+        }
+      }
+
+      const usedAssessmentKeys = new Set(unit.assessments.map((a) => a.assessmentKey));
+      const renamedAssessments = new Map<string, string>();
+      const assessments = unit.assessments.map((a) => {
+        const aName = a.name.trim();
+        if (!aName) return a;
+        const id = `${unitKey}/${aName}`;
+        const canonical = assessmentKeyByName.get(id);
+        if (!canonical) {
+          assessmentKeyByName.set(id, a.assessmentKey);
+          return a;
+        }
+        if (canonical === a.assessmentKey || usedAssessmentKeys.has(canonical)) return a;
+        usedAssessmentKeys.delete(a.assessmentKey);
+        usedAssessmentKeys.add(canonical);
+        renamedAssessments.set(a.assessmentKey, canonical);
+        linked++;
+        return { ...a, assessmentKey: canonical };
+      });
+
+      const usedTaskKeys = new Set(unit.tasks.map((t) => t.taskKey));
+      const tasks = unit.tasks.map((t) => {
+        const assessmentKey = renamedAssessments.get(t.assessmentKey) ?? t.assessmentKey;
+        const tName = t.name.trim();
+        const next = assessmentKey === t.assessmentKey ? t : { ...t, assessmentKey };
+        if (!tName) return next;
+        const signature = `${unitKey}/${t.categoryLv1}/${tName}/${JSON.stringify(t.template ?? null)}`;
+        const canonical = taskKeyBySignature.get(signature);
+        if (!canonical) {
+          taskKeyBySignature.set(signature, t.taskKey);
+          return next;
+        }
+        if (canonical === t.taskKey || usedTaskKeys.has(canonical)) return next;
+        usedTaskKeys.delete(t.taskKey);
+        usedTaskKeys.add(canonical);
+        linked++;
+        return { ...next, taskKey: canonical };
+      });
+
+      return { ...unit, unitKey, assessments, tasks };
+    });
+    relinked.set(event.key, { ...event, oatUnits });
+  }
+  if (linked === 0) return { events, linked };
+
+  // 付け替えた続きの名前・コード・雛形などを、最初に現れた病日の値に揃える。最初に現れたものだけを
+  // 集めた仮の病日を写し元にして propagateSeries に渡し、終わったら外す。
+  const firstUnits = new Map<string, PathwayOatUnitDraft>();
+  const firstAssessments = new Map<string, PathwayAssessmentDraft>();
+  const firstTasks = new Map<string, PathwayTaskDraft>();
+  for (const event of sortEventsByDay([...relinked.values()])) {
+    for (const unit of event.oatUnits) {
+      if (!firstUnits.has(unit.unitKey)) firstUnits.set(unit.unitKey, { ...unit, assessments: [], tasks: [] });
+      for (const a of unit.assessments) if (!firstAssessments.has(a.assessmentKey)) firstAssessments.set(a.assessmentKey, a);
+      for (const t of unit.tasks) if (!firstTasks.has(t.taskKey)) firstTasks.set(t.taskKey, t);
+    }
+  }
+  const source: PathwayEventDraft = {
+    ...emptyEventDraft(1),
+    oatUnits: [
+      ...firstUnits.values(),
+      // 観察項目・タスクは OAT ユニットをまたいで識別子で引くので、1 つの入れ物にまとめて渡す。
+      { ...emptyOatUnitDraft(), assessments: [...firstAssessments.values()], tasks: [...firstTasks.values()] },
+    ],
+  };
+  const next = propagateSeries([source, ...events.map((e) => relinked.get(e.key) ?? e)], source.key).slice(1);
+  return { events: next, linked };
+}

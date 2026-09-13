@@ -14408,6 +14408,73 @@ button.meal-calendar__cell:hover {
   font-weight: 600;
 }
 
+/* 複数の病日に続く行の線と矢印(SeriesLink)。中身の左右に線を置き、セルの左右の余白(8px)まで伸ばして
+   隣のセルの線とつなげる。続きの最後のセルは、中身の手前で右向きの矢じりにする。 */
+.pathway-sheet__series {
+  --pathway-link-color: var(--text);
+  display: flex;
+  align-items: stretch;
+}
+
+.pathway-sheet__series-content {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.pathway-sheet__link,
+.pathway-sheet__link-spacer {
+  flex: 1 1 0;
+  min-width: 8px;
+  position: relative;
+}
+
+.pathway-sheet__link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--pathway-link-color);
+}
+
+.pathway-sheet__link--in {
+  margin-left: -8px;
+  margin-right: 4px;
+}
+
+.pathway-sheet__link--out {
+  margin-left: 4px;
+  margin-right: -8px;
+}
+
+.pathway-sheet__link-spacer:first-child {
+  margin-right: 4px;
+}
+
+.pathway-sheet__link-spacer:last-child {
+  margin-left: 4px;
+}
+
+.pathway-sheet__link--end::before {
+  right: 5px;
+}
+
+.pathway-sheet__link--end::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 6px;
+  height: 8px;
+  transform: translateY(-50%);
+  background: var(--pathway-link-color);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
 /* 観察項目の行見出しに添える適正値(評価基準)。名前より控えめにし、はみ出たら名前と一緒に省略する。 */
 .pathway-sheet__proper {
   margin-left: 6px;

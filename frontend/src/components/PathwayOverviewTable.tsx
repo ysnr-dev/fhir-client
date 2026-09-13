@@ -10,8 +10,11 @@ export function PathwayOverviewTable({
   canAddTask,
   onToggleOutcome,
   onToggleTask,
+  onLinkSameNames,
 }: {
   rows: OverviewRows;
+  /** 名前が同じで識別子が別々のアウトカムを続きにまとめる。まとめるものが無ければ null(ボタンを出さない)。 */
+  onLinkSameNames: (() => void) | null;
   canAddTask: (row: OverviewTaskRow, column: OverviewColumn) => boolean;
   onToggleOutcome: (row: OverviewRow, column: OverviewColumn) => void;
   onToggleTask: (row: OverviewTaskRow, column: OverviewColumn) => void;
@@ -61,6 +64,11 @@ export function PathwayOverviewTable({
     <section className="lab-order-item__section">
       <div className="lab-order-item__section-head">
         <h3>概要表</h3>
+        {onLinkSameNames && (
+          <button type="button" onClick={onLinkSameNames}>
+            同じ名前を続きにまとめる
+          </button>
+        )}
       </div>
       <div className="pathway-overview__wrap">
         <table className="master-search__table regimen-day-table pathway-overview">
