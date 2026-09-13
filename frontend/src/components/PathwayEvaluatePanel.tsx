@@ -160,6 +160,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
   }
 
   const tasks = unit.assessments.flatMap((a) => a.tasks);
+  const hasProperValue = unit.assessments.some((a) => a.name && a.properValue);
 
   return (
     <div className="pathway-evaluate">
@@ -195,6 +196,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
                 .map((assessment) => (
                   <tr key={assessment.id}>
                     <th scope="row">{assessment.name}</th>
+                    {hasProperValue && <td className="pathway-evaluate__proper">{assessment.properValue}</td>}
                     <td>
                       <ObservationInput
                         spec={specs.get(assessment.id) ?? { kind: "text" }}

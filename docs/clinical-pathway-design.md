@@ -1,6 +1,6 @@
 # クリニカルパスの設計
 
-**状態: 第 1 段階(施設パス定義マスタの登録画面)実装済(2026-09-12)。患者への適用・日次評価(第 2 段階)、ePath 形式の出力(第 3 段階)は未実装(§8)。**
+**状態: 第 1 段階(施設パス定義マスタ)・第 2 段階(患者への適用・パスシート・日次評価・終了中止・予定外)実装済(2026-09-13)。ePath 形式の入出力(第 3 段階)は未実装(§8)。不足機能の洗い出しは `docs/clinical-pathway-backlog.md`。**
 本文中の区別は他の設計書と同じ(［事実］/［導出］/［決定］/［提案］)。
 
 基本仕様は JAMI・JSCP 合同委員会の ePath(ePath R4 実装ガイド v1.0.1、https://e-path.jp/fhir/ePath/260219/)の概念に準ずる。
@@ -281,6 +281,8 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
       その日の時刻で記録を始める)。オーダーを持たないタスクは `PathwayTaskPanel` で実施 / 未実施を 1 件だけ記録する
       (Procedure の PUT のみ。評価には触れない)。
     - 観察項目の行 → 押せない(実績値はアウトカムの評価の中で入れる)。
+  - **適正値**: 観察項目の行見出しに、名前に続けて適正値を控えめな文字で添える(§7.7)。同じ観察項目でも病日によって
+    適正値が違えば行見出しには出さず、各セルのツールチップ(「適正値: …」)で見る。行見出しのツールチップにも入る。
   - **オーダー詳細からの導線**: 下に「編集」と「実施入力」を添える(`KarteDetailModal` の `actions`)。
     - 編集 → そのオーダーの編集フォームを右ペインで開く(フォームは右ペインにしか無いので、全画面なら抜けてから開く)。
     - 実施入力 → 注射と輸血だけ。病棟が記録する種別で、カルテのカードのケバブメニューと同じ範囲。撮影・検査・手術のように
@@ -291,7 +293,7 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
     畳んだ状態で開き、手で開け閉めした状態は適用を切り替えるまで残る。
   - モーダルに揃えたので、全画面でも通常でも同じ場所に開く。記録すればモーダルだけ閉じ、シートはそのままで次のセルへ進める。
     右ペインの `pathway-evaluate` / `pathway-task` は使わなくなったので消した(パスの適用は右ペインのボタンから始まるので残す)。
-- **評価パネル**(`components/PathwayEvaluatePanel.tsx`): 見出しにパス名・病日・日付・アウトカム名。区画は 観察項目(実績値)/
+- **評価パネル**(`components/PathwayEvaluatePanel.tsx`): 見出しにパス名・病日・日付・アウトカム名。区画は 観察項目(名称・適正値・実績値)/
   タスク(実施のチェックと雛形のオーダーの状態)/ アウトカム評価(達成 / 未達成(バリアンス)/ 未評価、S・O・A・P、コメント、記録日時)。
   保存済みの値は開いたときに復元され、「記録」で 1 transaction。
 
@@ -303,7 +305,7 @@ master_pathway_tasks            … タスク(unit_id で結ぶ。assessment_id 
 CarePlan(適用)                 partOf 無し = 木の根
   └ CarePlan(病日)             partOf = [適用]
       └ CarePlan(OAT ユニット)  partOf = [適用, 病日]
-          └ CarePlan(観察項目)   partOf = [適用, 病日, OAT ユニット]
+          └ CarePlan(観察項目)   partOf = [適用, 病日, OAT ユニット]、goal → Goal(適正値。§7.7)
               └ Procedure(タスク) basedOn = [観察項目]
 ```
 
@@ -315,7 +317,7 @@ CarePlan(適用)                 partOf 無し = 木の根
 - ［決定］**タスクは適用の時点で「未実施」(`status = preparation`)の Procedure として置く**。パスシートは「その日に
   何をする予定か」を出すものなので、予定が FHIR 側に無いと定義マスタを読み直さないとシートが描けない。
   実施したら `completed` にして `performedDateTime` を入れる。予定日は拡張 `EPathProcedureTaskPlannedDateTime`。
-- ［決定］**Goal と評価 Observation は適用時には作らない**。アウトカムの達成・未達成は評価したときに生まれる記録で、
+- ［決定］**アウトカムの Goal と評価 Observation は適用時には作らない**(観察項目の適正値の Goal だけは計画の一部なので作る。§7.7)。アウトカムの達成・未達成は評価したときに生まれる記録で、
   計画の一部ではない(§8 の第 2 段階で実装)。
 - ［決定］観察項目に結んでいないタスクは、ePath の規則どおり「観察項目なし」(コード `ZZZZZZZZZZ`)の観察項目 CarePlan で
   包む。識別子の観察項目部分にも `ZZZZZZZZZZ` を使う。
@@ -345,7 +347,8 @@ CarePlan(適用)                 partOf 無し = 木の根
 ### 7.3 規模
 
 サンプルのパス(5 病日・OAT ユニット 14・観察項目 43・タスク 50)で **1 回の適用が 126 リソース**
-(CarePlan 76 + Procedure 50)になる。観察項目に結ばないタスクを包む空の観察項目が 13 件増えるため、
+(CarePlan 76 + Procedure 50)になる。観察項目の適正値の Goal(§7.7)を足した 2026-09-13 以降は、43 件すべてに
+適正値があるので **169 リソース**(雛形のオーダーは別)。観察項目に結ばないタスクを包む空の観察項目が 13 件増えるため、
 CarePlan は定義の 1 + 5 + 14 + 43 = 63 ではなく 76。上流の transaction に件数の上限は無い。
 
 ### 7.4 日次評価(1 病日 × 1 OAT ユニット)
@@ -387,7 +390,7 @@ Procedure(タスク)            status completed(実施)/ preparation(未実施)
   評価と同じ transaction に積む。参照は component の拡張 `pathway-evaluation-template` に置く。
 - ［決定］**テンプレートを結んだ欄は読み取り専用**。書き換えは「テンプレート編集」から。「解除」すると平文だけが残って
   手で直せるようになり、外れた QuestionnaireResponse は記録時に DELETE する(記載を空にしたときも同じ)。
-- 記録者はログイン本人(`useCurrentPractitioner`)。ePath の Goal AssessmentExecution(観察項目ごとの達成)は作らない
+- 記録者はログイン本人(`useCurrentPractitioner`)。ePath の Goal AssessmentExecution の達成状態(観察項目ごとの達成)は書かない
   (実績値から導ける。EP12 出力で必要なら組む)。
 
 ### 7.5 パスの終了・中止
@@ -434,6 +437,28 @@ Goal(適用)      identifier apply-goal-id = 適用の識別子(施設コード.
 - 終了・中止したパスには足せない(「予定外を追加」は進行中のときだけ出す)。
 - ［決定］オーダーのフォームがテンプレート記入などのモーダルを重ねている間は、**Escape で予定外の入力を閉じない**
   (入力中の値を失わせない)。重ねたモーダルは自分で Escape を見ないので、そちらは × で閉じる。
+
+### 7.7 観察項目の適正値
+
+実装は `fhir/pathwayApplyHelpers.ts` の `buildAssessmentGoal`。定義の観察項目の適正値(`proper_value`)を適用後に持ち越し、
+評価する人が判断の基準をシートと評価パネルで見られるようにする。
+
+```text
+CarePlan(観察項目).goal → Goal  identifier assessment-goal-id = 観察項目の識別子、lifecycleStatus active、
+                               description.text = 観察項目名、subject → 患者、
+                               target.measure = 観察項目のコード(BOM / ローカル)+ text、target.detailString = 適正値
+```
+
+- ［事実］ePath の CarePlan(観察項目)には適正値の要素が無い。IG が適正値を持たせているのは、定義側の
+  `EPathPlanDefinitionAssessmentActionExtensions` の `ProperValue` と、適用後の `EPath Goal AssessmentExecution` の
+  `target.detail[x]`(「観察項目の評価基準となる適正値」)だけ。
+- ［決定］**適正値の Goal は適用の時点で作る**。アウトカムの Goal(§7.4)は評価で生まれる記録だが、適正値は計画の一部で、
+  実績値からは導けない。適正値の無い観察項目には作らない。「観察項目なし」で包んだだけの観察項目にも作らない。
+- ［決定］**この Goal には達成状態を書かない**。観察項目ごとの達成は実績値から導ける(EP12 出力で必要なら組む)。
+- 参照は CarePlan → Goal の一方向で、同じ transaction の中で Goal を先に積む。読みはシートの木の検索に既にある
+  `_include=CarePlan:goal` でアウトカムの Goal と一緒に届き、`parsePathwayApplication` が観察項目の `properValue` に入れる。
+- 予定外の追加(§7.6)の観察項目は名称だけなので、適正値を持たない。
+- 定義を直しても適用済みの Goal は変わらない(適用した時点の基準で評価する)。
 
 ---
 
@@ -573,6 +598,22 @@ Goal(適用)      identifier apply-goal-id = 適用の識別子(施設コード.
   セルが「達成」になる。コンテナ内 `tsc -b` 成功。
 - 全画面でセルを押すと、右ペインではなくモーダルで同じ評価入力が開く(右ペインは空のまま)。Escape はモーダル →
   全画面の順に閉じる。モーダルから「記録」するとモーダルだけ閉じ、全画面のシートのセルが「達成」に変わる。
+
+### 9.15 検証したこと(観察項目の適正値、2026-09-13、テスト太郎)
+
+- 開発サーバーのモジュールをブラウザから読み込み、900001 で `buildPathwayApplyBundle` を組むと 172 entry
+  (CarePlan 76・Goal 43・Procedure 53)。観察項目の CarePlan 43 件すべての `goal` が同じ Bundle の Goal の fullUrl を指し、
+  Goal が先に並ぶ。Goal は `assessment-goal-id`・`target.measure`(BOM コード)・`target.detailString`(例「なし」)を持つ。
+- デモの適用(テスト太郎、入院 2026-08-22)は適正値の Goal を持たない時期のものなので、`buildAssessmentGoal` で
+  同じ形の Goal 43 件を作り、観察項目の CarePlan に `goal` を足す PUT と組にして上流へ送った(11 件ずつ 4 transaction、
+  すべて 201 / 200)。
+- シートの木の検索(`_include=CarePlan:goal` 付き)で Goal 45 件(観察項目 43 + アウトカム 2)が届き、
+  `parsePathwayApplication` で 43 件すべての `properValue` が読める。
+- パスタブ: 観察項目の行見出しに「体温 37.5℃未満」「脈拍数 60〜100/分」のように適正値が控えめな文字で並び、
+  セルのツールチップが「適正値: …」。評価のモーダルの観察項目が 名称 / 適正値 / 入力欄 の 3 列になる。
+- 同じ観察項目で病日によって適正値が違う木(3 以下 / 3 以下 / 2 以下)を `buildPathwaySheet` に通すと、行の
+  `properValue` は空で、セルごとに値を持つ。揃っている行は行に値が入る。
+- コンテナ内 `tsc -b` 成功。
 
 ### 9.14 検証したこと(予定外のタスクのオーダー、2026-09-13、テスト太郎)
 

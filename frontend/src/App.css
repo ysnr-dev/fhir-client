@@ -14356,6 +14356,14 @@ button.meal-calendar__cell:hover {
   font-weight: 600;
 }
 
+/* 観察項目の行見出しに添える適正値(評価基準)。名前より控えめにし、はみ出たら名前と一緒に省略する。 */
+.pathway-sheet__proper {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--text-muted);
+}
+
 /* 見出しの帯に置く「予定外を追加」「終了・中止」。帯の文字に合わせて小さくし、右端にまとめる。 */
 .pathway-sheet__close-button {
   --control-height: 24px;
@@ -14426,6 +14434,12 @@ button.meal-calendar__cell:hover {
   font-weight: normal;
   white-space: nowrap;
   width: 40%;
+}
+
+.pathway-evaluate__rows td.pathway-evaluate__proper {
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 /* 行見出しの th。.master-search__table は列見出し(thead の th)を前提に sticky と

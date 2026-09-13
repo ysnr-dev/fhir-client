@@ -33,6 +33,11 @@ export interface SheetRow {
   /** ぶら下がる観察項目・タスクの行数(unit 行だけ)。 */
   childCount: number;
   /**
+   * 適正値(assessment 行だけ)。載っている病日すべてで同じときだけ入る。日によって違えば空で、
+   * 各セルの properValue を見る。
+   */
+  properValue: string;
+  /**
    * 載っている病日すべてで評価が入っているか(unit 行だけ)。シートは評価済みの
    * アウトカムを畳んで開く。
    */
@@ -51,6 +56,8 @@ export interface SheetUnitCell {
 
 export interface SheetAssessmentCell {
   assessmentId: string;
+  /** その病日の適正値。無ければ空。 */
+  properValue: string;
   /** 記録済みの実績値の表示。無ければ空。 */
   value: string;
 }
@@ -90,6 +97,7 @@ export function buildPathwaySheet(
             critical: false,
             categoryLabel: "",
             childCount: 0,
+            properValue: "",
             evaluated: false,
             cells: new Map(),
           },
@@ -120,6 +128,7 @@ export function buildPathwaySheet(
               critical: false,
               categoryLabel: "",
               childCount: 0,
+              properValue: "",
               evaluated: false,
               cells: new Map(),
             };
@@ -127,6 +136,7 @@ export function buildPathwaySheet(
           }
           row.cells.set(event.id, {
             assessmentId: assessment.id,
+            properValue: assessment.properValue,
             value: resultValueLabel(evaluation?.results.get(assessment.id)),
           });
         }
@@ -142,6 +152,7 @@ export function buildPathwaySheet(
               critical: false,
               categoryLabel: displayOfOption(TASK_CATEGORY_LV1_OPTIONS, task.categoryLv1),
               childCount: 0,
+              properValue: "",
               evaluated: false,
               cells: new Map(),
             };
@@ -162,6 +173,11 @@ export function buildPathwaySheet(
     rows.push(group.row);
     // 観察項目を先に、タスクを後に(紙のパスシートの並び)。
     const children = [...group.children.values()];
+    for (const row of children) {
+      if (row.kind !== "assessment") continue;
+      const values = new Set([...row.cells.values()].map((cell) => (cell as SheetAssessmentCell).properValue));
+      row.properValue = values.size === 1 ? [...values][0] : "";
+    }
     rows.push(...children.filter((r) => r.kind === "assessment"), ...children.filter((r) => r.kind === "task"));
   }
   return { days, rows };

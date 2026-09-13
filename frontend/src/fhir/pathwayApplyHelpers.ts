@@ -36,6 +36,8 @@ export const PATHWAY_EVENT_ID_SYSTEM = `${ID_SYSTEM_BASE}/event-id`;
 export const PATHWAY_OAT_UNIT_ID_SYSTEM = `${ID_SYSTEM_BASE}/oat-unit-id`;
 export const PATHWAY_ASSESSMENT_ID_SYSTEM = `${ID_SYSTEM_BASE}/assessment-id`;
 export const PATHWAY_TASK_ID_SYSTEM = `${ID_SYSTEM_BASE}/task-id`;
+/** 観察項目の Goal(ePath の Goal AssessmentExecution)。値は観察項目の識別子と同じ。 */
+export const PATHWAY_ASSESSMENT_GOAL_ID_SYSTEM = `${ID_SYSTEM_BASE}/assessment-goal-id`;
 
 // ---- 拡張(ePath) ----
 
@@ -384,6 +386,9 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
       for (const [assessmentIndex, row] of assessments.entries()) {
         const assessmentUrl = `urn:uuid:${crypto.randomUUID()}`;
         const assessmentId = assessmentIdValue(unitId, row.key);
+        const goal = row.assessment ? buildAssessmentGoal(row.assessment, { assessmentId, patientId }) : null;
+        const goalUrl = `urn:uuid:${crypto.randomUUID()}`;
+        if (goal) entry.push({ fullUrl: goalUrl, resource: goal, request: { method: "POST", url: "Goal" } });
         entry.push({
           fullUrl: assessmentUrl,
           resource: buildAssessmentCarePlan(row.assessment, {
@@ -393,6 +398,7 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
             unitUrl,
             patientId,
             order: assessmentIndex + 1,
+            goalUrl: goal ? goalUrl : null,
           }),
           request: { method: "POST", url: "CarePlan" },
         });
@@ -478,9 +484,59 @@ function buildOatUnitCarePlan(
   };
 }
 
+/**
+ * 観察項目の適正値(評価基準)を持つ Goal。適正値の無い観察項目には作らない。
+ *
+ * ［決定］適正値は ePath の Goal AssessmentExecution の target.detailString に置く。CarePlan
+ * (観察項目)には適正値の要素が無く、IG が適正値を持たせているのはこの Goal だけ。適正値は
+ * 評価で生まれる記録ではなく計画の一部なので、アウトカムの Goal と違って適用の時点で作る。
+ * 観察項目ごとの達成状態(achievementStatus)はここには書かない(実績値から導ける)。
+ */
+export function buildAssessmentGoal(
+  assessment: Pick<PathwayAssessment, "name" | "code_system" | "code" | "proper_value">,
+  ctx: { assessmentId: string; patientId: string },
+): fhir4.Goal | null {
+  const properValue = assessment.proper_value?.trim();
+  if (!properValue) return null;
+  const codeSystem =
+    assessment.code_system === "bom" ? PATHWAY_CODE_SYSTEM.bomAssessmentCode : PATHWAY_CODE_SYSTEM.localAssessmentCode;
+  return {
+    resourceType: "Goal",
+    identifier: [{ system: PATHWAY_ASSESSMENT_GOAL_ID_SYSTEM, value: ctx.assessmentId }],
+    lifecycleStatus: "active",
+    description: { text: assessment.name },
+    subject: { reference: `Patient/${ctx.patientId}` },
+    target: [
+      {
+        measure: {
+          ...(assessment.code_system && assessment.code
+            ? { coding: [{ system: codeSystem, code: assessment.code, display: assessment.name }] }
+            : {}),
+          text: assessment.name,
+        },
+        detailString: properValue,
+      },
+    ],
+  };
+}
+
+/** 観察項目の Goal から適正値を読む。 */
+export function assessmentGoalProperValue(goal: fhir4.Goal | undefined): string {
+  if (!goal?.identifier?.some((id) => id.system === PATHWAY_ASSESSMENT_GOAL_ID_SYSTEM)) return "";
+  return goal.target?.find((t) => t.detailString)?.detailString ?? "";
+}
+
 function buildAssessmentCarePlan(
   assessment: PathwayAssessment | null,
-  ctx: { assessmentId: string; applyUrl: string; eventUrl: string; unitUrl: string; patientId: string; order: number },
+  ctx: {
+    assessmentId: string;
+    applyUrl: string;
+    eventUrl: string;
+    unitUrl: string;
+    patientId: string;
+    order: number;
+    goalUrl: string | null;
+  },
 ): fhir4.CarePlan {
   return {
     resourceType: "CarePlan",
@@ -496,6 +552,7 @@ function buildAssessmentCarePlan(
     ],
     subject: { reference: `Patient/${ctx.patientId}` },
     partOf: [reference(ctx.applyUrl), reference(ctx.eventUrl), reference(ctx.unitUrl)],
+    ...(ctx.goalUrl ? { goal: [reference(ctx.goalUrl)] } : {}),
     extension: [
       { url: PATHWAY_EXT.statusTypeWhenOccured, valueCode: STATUS_TYPE_EP12 },
       { url: PATHWAY_DISPLAY_ORDER_EXT_URL, valueInteger: ctx.order },
@@ -609,6 +666,8 @@ export interface PathwayAssessmentRecord {
   codings: fhir4.Coding[];
   /** 看護観察(MEDIS)の管理番号。結んでいなければ空。 */
   nursingObservationManageNo: string;
+  /** 適正値(評価基準)。観察項目の Goal の target.detailString。無ければ空。 */
+  properValue: string;
   tasks: PathwayTaskRecord[];
 }
 
@@ -781,6 +840,7 @@ export function buildUnplannedUnitBundle(input: UnplannedUnitInput): fhir4.Bundl
 
 export function parsePathwayApplication(
   resources: (fhir4.CarePlan | fhir4.Procedure)[],
+  goals: Map<string, fhir4.Goal> = new Map(),
 ): PathwayApplicationRecord | null {
   const carePlans = resources.filter((r): r is fhir4.CarePlan => r.resourceType === "CarePlan");
   const procedures = resources.filter((r): r is fhir4.Procedure => r.resourceType === "Procedure");
@@ -831,6 +891,10 @@ export function parsePathwayApplication(
       name: carePlan.title ?? "",
       codings: codings.filter((c) => c.system !== NURSING_OBSERVATION_CODE_SYSTEM),
       nursingObservationManageNo: codings.find((c) => c.system === NURSING_OBSERVATION_CODE_SYSTEM)?.code ?? "",
+      properValue:
+        (carePlan.goal ?? [])
+          .map((ref) => assessmentGoalProperValue(goals.get(ref.reference?.split("/").pop() ?? "")))
+          .find(Boolean) ?? "",
       tasks: tasksByAssessment.get(carePlan.id) ?? [],
     });
     assessmentsByUnit.set(unitId, rows);

@@ -11309,7 +11309,7 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
   if (applyId) params.set("part-of", `CarePlan/${applyId}`);
   params.append("_revinclude", "Procedure:based-on");
   params.append("_include:iterate", "Procedure:based-on");
-  // OAT ユニットの Goal(評価)も同じ応答で揃える。
+  // OAT ユニットの Goal(評価)と観察項目の Goal(適正値)も同じ応答で揃える。
   params.append("_include", "CarePlan:goal");
   params.set("_count", "500");
 
@@ -11336,7 +11336,7 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
       const tree = resources.filter(
         (r): r is fhir4.CarePlan | fhir4.Procedure => r.resourceType === "CarePlan" || r.resourceType === "Procedure",
       );
-      return { application: parsePathwayApplication([apply, ...tree]), orders, goals, carePlans, procedures };
+      return { application: parsePathwayApplication([apply, ...tree], goals), orders, goals, carePlans, procedures };
     },
     enabled: Boolean(applyId),
   });

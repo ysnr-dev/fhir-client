@@ -330,9 +330,13 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                       {row.kind === "task" && (
                         <span className="pathway-task__template-label">{row.categoryLabel}</span>
                       )}
-                      <span className="pathway-sheet__label" title={row.label}>
+                      <span
+                        className="pathway-sheet__label"
+                        title={row.properValue ? `${row.label}（適正値: ${row.properValue}）` : row.label}
+                      >
                         {row.label}
                       </span>
+                      {row.properValue && <span className="pathway-sheet__proper">{row.properValue}</span>}
                     </th>
                     {sheet.days.map((day) => {
                       const cell = row.cells.get(day.eventId);
@@ -385,7 +389,12 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                       if (row.kind === "assessment") {
                         const assessment = cell as SheetAssessmentCell;
                         return (
-                          <td key={day.eventId} className={classes} data-assessment-id={assessment.assessmentId}>
+                          <td
+                            key={day.eventId}
+                            className={classes}
+                            data-assessment-id={assessment.assessmentId}
+                            title={assessment.properValue ? `適正値: ${assessment.properValue}` : undefined}
+                          >
                             <span className="pathway-sheet__cell-static">
                               {assessment.value ? (
                                 <span className="pathway-sheet__value">{assessment.value}</span>
