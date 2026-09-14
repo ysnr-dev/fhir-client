@@ -39,11 +39,19 @@ export function appointmentStatusLabel(status: string | undefined): string {
   return APPOINTMENT_STATUS_OPTIONS.find((o) => o.code === status)?.label ?? status;
 }
 
+/** 取り消せる予約(まだ来院・診療が済んでいないもの)の status。検索の `status=` にも使う。 */
+export const ACTIVE_APPOINTMENT_STATUSES: readonly string[] = [
+  "proposed",
+  "pending",
+  "booked",
+  "arrived",
+  "checked-in",
+  "waitlist",
+];
+
 /** 取り消せる予約(まだ来院・診療が済んでいないもの)。 */
 export function isActiveAppointment(appointment: fhir4.Appointment): boolean {
-  return ["proposed", "pending", "booked", "arrived", "checked-in", "waitlist"].includes(
-    appointment.status,
-  );
+  return ACTIVE_APPOINTMENT_STATUSES.includes(appointment.status);
 }
 
 /** 受付できる予約(まだ受付が済んでいないもの)。外来一覧の「受付」の出し分けに使う。 */

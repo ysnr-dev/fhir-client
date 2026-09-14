@@ -137,6 +137,7 @@ import {
 } from "../fhir/injectionPerformHelpers";
 import {
   INJECTION_ORDER_TYPE,
+  INJECTION_SERIES_SYSTEM,
   buildInjectionSeriesDeleteBundle,
   injectionSeriesOf,
   isInjectionServiceRequest,
@@ -165,8 +166,8 @@ import {
   type LabTaskStatus,
 } from "../fhir/labTaskHelpers";
 import {
+  MICRO_ORDER_TYPE,
   buildMicroOrderDeleteBundle,
-  isMicroServiceRequest,
   microOrderItemRequests,
   microOrderLabel,
 } from "../fhir/microOrderHelpers";
@@ -412,6 +413,7 @@ import {
   type SlotStatus,
 } from "../fhir/scheduleHelpers";
 import {
+  ACTIVE_APPOINTMENT_STATUSES,
   appointmentActorId,
   appointmentOrderId,
   appointmentSlotIds,
@@ -423,7 +425,6 @@ import {
   buildRehabAppointmentBundle,
   buildRescheduleBundle,
   buildRescheduleEntries,
-  isActiveAppointment,
   isExamAppointment,
   withCheckedInAt,
   type SlotSelection,
@@ -435,6 +436,7 @@ import {
   outpatientEncounterAppointmentId,
 } from "../fhir/outpatientEncounterHelpers";
 import {
+  DOCTOR_ROLE_CODES,
   baseRoleOf,
   isDoctorRoleCode,
   parsePractitionerRole,
@@ -1000,32 +1002,25 @@ async function fetchDepartmentMembers(departmentId: string): Promise<fhir4.Pract
   );
 }
 
-// 医療機関に所属する医療従事者の職種(Practitioner.id → 職種コード)。職種は所属
-// ロールだけが持ち、そのロールの organization は医療機関なので、施設で引けば
-// 「誰が医師か」が一度に分かる。診療科ロールは organization が診療科なのでヒットしない。
-async function fetchFacilityRoleCodes(facilityId: string): Promise<Record<string, string>> {
-  const PAGE = 100;
-  const codes: Record<string, string> = {};
-
-  for (let offset = 0; ; offset += PAGE) {
-    const params = new URLSearchParams();
-    params.set("organization", `Organization/${facilityId}`);
-    params.set("_count", String(PAGE));
-    params.set("_offset", String(offset));
-    const { data: bundle } = await searchResource<fhir4.PractitionerRole>(
-      "PractitionerRole",
-      params,
-    );
-    const page =
-      bundle.entry?.map((e) => e.resource).filter((r): r is fhir4.PractitionerRole => Boolean(r)) ??
-      [];
-    for (const role of page) {
-      const id = practitionerIdOfRole(role);
-      const code = parsePractitionerRole(role).roleCode;
-      if (id && code) codes[id] = code;
-    }
-    if (page.length < PAGE) return codes;
-  }
+// 医療機関に医師・歯科医師として所属する医療従事者の id。職種は所属ロールだけが持ち、
+// そのロールの organization は医療機関なので、施設と職種で引く。診療科ロールは
+// organization が診療科なのでヒットしない。診療科の所属者に限って引くので 1 ページで足りる。
+async function fetchFacilityDoctorIds(
+  facilityId: string,
+  practitionerIds: string[],
+): Promise<Set<string>> {
+  const params = new URLSearchParams();
+  params.set("organization", `Organization/${facilityId}`);
+  params.set("practitioner", practitionerIds.map((id) => `Practitioner/${id}`).join(","));
+  params.set("role", DOCTOR_ROLE_CODES.join(","));
+  params.set("_count", String(Math.min(practitionerIds.length * 2, 500)));
+  const { data: bundle } = await searchResource<fhir4.PractitionerRole>("PractitionerRole", params);
+  return new Set(
+    resourcesOfType<fhir4.PractitionerRole>(bundle, "PractitionerRole")
+      .filter((role) => isDoctorRoleCode(parsePractitionerRole(role).roleCode))
+      .map(practitionerIdOfRole)
+      .filter((id): id is string => Boolean(id)),
+  );
 }
 
 // 診療科に所属する医師・歯科医師。依頼科 → 依頼医師の階層選択に使う。
@@ -1040,22 +1035,27 @@ export function useDepartmentDoctors(
     enabled: Boolean(departmentId),
   });
 
-  const roleCodes = useQuery({
-    queryKey: ["PractitionerRole", "organization", "role-codes", facilityId],
-    queryFn: () => fetchFacilityRoleCodes(facilityId as string),
-    enabled: Boolean(departmentId && facilityId),
+  const practitioners = members.data ?? [];
+  const memberIds = practitioners
+    .map((p) => p.id)
+    .filter((id): id is string => Boolean(id))
+    .sort();
+  const doctorIds = useQuery({
+    queryKey: ["PractitionerRole", "organization", "doctors", facilityId, memberIds.join(",")],
+    queryFn: () => fetchFacilityDoctorIds(facilityId as string, memberIds),
+    enabled: Boolean(facilityId) && memberIds.length > 0,
     staleTime: 5 * 60_000,
   });
 
-  const practitioners = members.data ?? [];
   const doctors = facilityId
-    ? practitioners.filter((p) => p.id && isDoctorRoleCode(roleCodes.data?.[p.id]))
+    ? practitioners.filter((p) => p.id && doctorIds.data?.has(p.id))
     : practitioners;
 
   return {
     doctors,
-    isPending: members.isPending || (Boolean(facilityId) && roleCodes.isPending),
-    error: members.error ?? roleCodes.error,
+    isPending:
+      members.isPending || (Boolean(facilityId) && memberIds.length > 0 && doctorIds.isPending),
+    error: members.error ?? doctorIds.error,
   };
 }
 
@@ -1859,9 +1859,7 @@ async function fetchPatientAdmission(patientId: string): Promise<PatientAdmissio
   const bedId = encounterBedId(encounter);
   if (!bedId) return { encounter, wardId: "", wardName: "", roomName: "" };
 
-  // ベッドと、その上の病室・病棟をまとめて引く。階層は physicalType(wa/ro/bd)で
-  // 見分ける。_include:iterate に応えない上流でも病室までは返るので、
-  // 病棟が無ければそこから 1 件だけ読み足す。
+  // ベッドと、その上の病室・病棟をまとめて引く。階層は physicalType(wa/ro/bd)で見分ける。
   const locationParams = new URLSearchParams();
   locationParams.set("_id", bedId);
   locationParams.append("_include", "Location:partof");
@@ -1883,11 +1881,7 @@ async function fetchPatientAdmission(patientId: string): Promise<PatientAdmissio
     );
 
   const room = ofType(ROOM_PHYSICAL_TYPE.code);
-  let ward = ofType(WARD_PHYSICAL_TYPE.code);
-  if (!ward) {
-    const wardId = room ? partOfId(room) : undefined;
-    if (wardId) ward = (await readResource<fhir4.Location>("Location", wardId)).data;
-  }
+  const ward = ofType(WARD_PHYSICAL_TYPE.code);
 
   return {
     encounter,
@@ -1967,19 +1961,12 @@ export function usePatientSurgeryPerforms(patientId: string | undefined, from: s
       params.set("category", `${ORDER_TYPE_SYSTEM}|${SURGERY_ORDER_TYPE.code}`);
       params.append("date", `ge${from}`);
       params.append("date", `le${to}`);
+      // 2 件目以降の術式(partOf 付き)はハブと同じ日時なので、ハブだけをイベントにする。
+      params.set("part-of:missing", "true");
+      params.set("status:not", "entered-in-error,not-done");
       params.set("_count", "100");
       const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
-      return (bundle.entry ?? [])
-        .map((entry) => entry.resource)
-        .filter((r): r is fhir4.Procedure => r?.resourceType === "Procedure")
-        // 2 件目以降の術式(partOf 付き)はハブと同じ日時なので、ハブだけをイベントにする。
-        .filter(
-          (procedure) =>
-            isSurgeryProcedure(procedure) &&
-            !procedure.partOf?.length &&
-            procedure.status !== "entered-in-error" &&
-            procedure.status !== "not-done",
-        );
+      return resourcesOfType<fhir4.Procedure>(bundle, "Procedure").filter(isSurgeryProcedure);
     },
     enabled: Boolean(patientId) && Boolean(from) && Boolean(to),
   });
@@ -2298,6 +2285,7 @@ export function usePatientExamOrders(
       params.set("based-on:missing", "true");
       params.append("occurrence", `ge${rangeStart}`);
       params.append("occurrence", `le${rangeEnd}`);
+      params.set("status:not", "revoked,entered-in-error");
       params.set("_count", "100");
       params.append("_revinclude:iterate", "ServiceRequest:based-on");
       // 実施記録(ハブ Procedure)。予定と実施を印で塗り分けるのに使う。
@@ -2306,6 +2294,7 @@ export function usePatientExamOrders(
       const resources = (bundle.entry ?? [])
         .map((entry) => entry.resource)
         .filter((r): r is fhir4.Resource => Boolean(r));
+      // status の条件はヘッダにしか掛からないので、_revinclude で届く明細にも同じ条件を掛ける。
       const all = resources
         .filter((r): r is fhir4.ServiceRequest => r.resourceType === "ServiceRequest")
         .filter((sr) => sr.status !== "revoked" && sr.status !== "entered-in-error");
@@ -2322,10 +2311,7 @@ export function usePatientExamOrders(
   });
 }
 
-/**
- * ベッド id → 病棟名。ベッドと親の病室・病棟をまとめて引き、partOf を 2 段辿る。
- * _include:iterate に応えない上流だと病棟が欠けるので、その病室の親は 1 件ずつ読み足す。
- */
+/** ベッド id → 病棟名。ベッドと親の病室・病棟をまとめて引き、partOf を 2 段辿る。 */
 async function fetchWardNameByBed(bedIds: string[]): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   if (bedIds.length === 0) return result;
@@ -2346,14 +2332,8 @@ async function fetchWardNameByBed(bedIds: string[]): Promise<Map<string, string>
     const bed = byId.get(bedId);
     const roomId = bed ? partOfId(bed) : undefined;
     const room = roomId ? byId.get(roomId) : undefined;
-    const wardId = room ? partOfId(room) : undefined;
-    if (!wardId) continue;
-    let ward = byId.get(wardId);
-    if (!ward) {
-      ward = (await readResource<fhir4.Location>("Location", wardId)).data;
-      byId.set(wardId, ward);
-    }
-    if (ward.name) result.set(bedId, ward.name);
+    const ward = room ? byId.get(partOfId(room) ?? "") : undefined;
+    if (ward?.name) result.set(bedId, ward.name);
   }
   return result;
 }
@@ -2585,9 +2565,11 @@ export function useDeleteSlots() {
   });
 }
 
-// 予約を取る画面の枠表セレクト。診療科は上流の specialty 検索に頼らず、取得後に
-// コードで絞る(枠表は施設あたり数十件の想定で、全件読んでも軽い)。
-// 種別(診察予約/検査予約)も同様に取得後に絞る。
+// 予約を取る画面の枠表セレクト。
+// 診療科は取得後にコードで絞る。診療科を設定していない枠表をどの科からも選べるように
+// 残すためで、specialty 検索では「その科 または 未設定」を 1 回で引けない。
+// 種別は診察予約以外をサーバーで絞る。診察予約は種別を持たない枠表も含むので
+// (scheduleTypeOf)、取得後に判定する。
 export function useScheduleOptions(filter: {
   departmentCode?: string;
   practitionerId?: string;
@@ -2596,10 +2578,19 @@ export function useScheduleOptions(filter: {
   const params = new URLSearchParams();
   params.set("active", "true");
   if (filter.practitionerId) params.append("actor", `Practitioner/${filter.practitionerId}`);
+  if (filter.scheduleType && filter.scheduleType !== "consultation") {
+    params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|${filter.scheduleType}`);
+  }
   params.set("_count", "100");
 
   const query = useQuery({
-    queryKey: ["Schedule", "search", "options", filter.practitionerId ?? ""],
+    queryKey: [
+      "Schedule",
+      "search",
+      "options",
+      filter.practitionerId ?? "",
+      filter.scheduleType === "consultation" ? "" : (filter.scheduleType ?? ""),
+    ],
     queryFn: () => searchResource<fhir4.Schedule>("Schedule", params),
   });
 
@@ -2704,26 +2695,31 @@ export function useAppointment(id: string | undefined) {
   });
 }
 
+/** 取り消せる予約(`isActiveAppointment`)だけを返す status 条件を付ける。 */
+function setActiveAppointmentStatus(params: URLSearchParams) {
+  params.set("status", ACTIVE_APPOINTMENT_STATUSES.join(","));
+}
+
 /**
- * 放射線オーダーに紐づく有効な検査予約(1 オーダーに 1 件)。予約日時の変更は
- * オーダーの編集画面から行うので、編集を開くときに予約の現物を用意しておく。
+ * オーダーに紐づく有効な検査予約(放射線・生理検査・内視鏡・処置は 1 オーダーに 1 件)。
+ * 予約日時の変更はオーダーの編集画面から行うので、編集を開くときに予約の現物を用意しておく。
  */
-export function useRadOrderAppointment(srId: string | undefined) {
+export function useOrderAppointment(srId: string | undefined) {
   const params = new URLSearchParams();
   if (srId) params.set("based-on", `ServiceRequest/${srId}`);
+  setActiveAppointmentStatus(params);
 
   const query = useQuery({
-    queryKey: ["Appointment", "rad-order", srId],
+    queryKey: ["Appointment", "order", srId],
     queryFn: () => searchResource<fhir4.Appointment>("Appointment", params),
     enabled: Boolean(srId),
   });
 
   return {
     ...query,
-    appointment: (query.data?.data.entry ?? [])
-      .map((e) => e.resource)
-      .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
-      .find(isActiveAppointment),
+    appointment: query.data
+      ? resourcesOfType<fhir4.Appointment>(query.data.data, "Appointment")[0]
+      : undefined,
   };
 }
 
@@ -2737,11 +2733,44 @@ function invalidateAppointments(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["Slot"] });
 }
 
-async function fetchAppointmentSlots(appointment: fhir4.Appointment): Promise<fhir4.Slot[]> {
-  const results = await Promise.all(
-    appointmentSlotIds(appointment).map((id) => readResource<fhir4.Slot>("Slot", id)),
+/** 予約が押さえている枠の現物(Slot.id → Slot)。複数の予約の分を 1 回の検索で引く。 */
+async function fetchSlotsById(appointments: fhir4.Appointment[]): Promise<Map<string, fhir4.Slot>> {
+  const ids = [...new Set(appointments.flatMap(appointmentSlotIds))];
+  if (ids.length === 0) return new Map();
+  const params = new URLSearchParams();
+  params.set("_id", ids.join(","));
+  params.set("_count", String(ids.length));
+  const { data: bundle } = await searchResource<fhir4.Slot>("Slot", params);
+  return new Map(
+    resourcesOfType<fhir4.Slot>(bundle, "Slot").flatMap((slot) => (slot.id ? [[slot.id, slot]] : [])),
   );
-  return results.map((r) => r.data);
+}
+
+function slotsOf(appointment: fhir4.Appointment, slotsById: Map<string, fhir4.Slot>): fhir4.Slot[] {
+  return appointmentSlotIds(appointment)
+    .map((id) => slotsById.get(id))
+    .filter((slot): slot is fhir4.Slot => Boolean(slot));
+}
+
+async function fetchAppointmentSlots(appointment: fhir4.Appointment): Promise<fhir4.Slot[]> {
+  return slotsOf(appointment, await fetchSlotsById([appointment]));
+}
+
+/** 予約それぞれの取消エントリ(予約の取消と、押さえていた枠を空きに戻す PUT)。 */
+async function buildCancelEntriesOf(appointments: fhir4.Appointment[]): Promise<fhir4.BundleEntry[]> {
+  const slotsById = await fetchSlotsById(appointments);
+  return appointments.flatMap((appointment) =>
+    buildCancelEntries(appointment, slotsOf(appointment, slotsById)),
+  );
+}
+
+/** オーダーヘッダに紐づく有効な予約の取消エントリ。予約が無ければ空。 */
+async function fetchOrderAppointmentCancelEntries(srId: string): Promise<fhir4.BundleEntry[]> {
+  const params = new URLSearchParams();
+  params.set("based-on", `ServiceRequest/${srId}`);
+  setActiveAppointmentStatus(params);
+  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
+  return buildCancelEntriesOf(resourcesOfType<fhir4.Appointment>(bundle, "Appointment"));
 }
 
 export function useBookAppointment() {
@@ -3119,9 +3148,8 @@ export function usePrescriptionDetail(srId: string | undefined) {
 }
 
 // 連日オーダーの後続日。編集中・削除中の注射と同じ束ね(requisition)で、その日より
-// 後の注射日のオーダーを薬剤ごと返す。上流に requisition 検索が無いので、患者 + 注射 +
-// 注射日(occurrence)で引いてから requisition を突き合わせる。一括で展開できるのは
-// 14 日までなので _count は余裕を見た固定値で足りる。
+// 後の注射日のオーダーを注射日の順に薬剤ごと返す。一括で展開できるのは 14 日までなので
+// _count は余裕を見た固定値で足りる。
 // 注射日は occurrence(登録日時 authoredOn ではない。同時に展開した日はすべて同じ
 // 登録日時を持つので、authoredOn では後続日を区別できない)。
 export function useInjectionSeriesLater(sr: fhir4.ServiceRequest | undefined) {
@@ -3131,7 +3159,9 @@ export function useInjectionSeriesLater(sr: fhir4.ServiceRequest | undefined) {
   const params = new URLSearchParams();
   if (patientId) params.set("patient", patientId);
   params.set("category", `${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`);
+  if (series) params.set("requisition", `${INJECTION_SERIES_SYSTEM}|${series.requisition}`);
   if (date) params.set("occurrence", `gt${date}`);
+  params.set("_sort", "occurrence");
   params.append("_revinclude", "MedicationRequest:based-on");
   // 中止を「この日以降」まとめて書くとき、後続日に既にある Task が要る
   // (status だけだと Task を二重に作ってしまう)。
@@ -3156,13 +3186,7 @@ export function useInjectionSeriesLater(sr: fhir4.ServiceRequest | undefined) {
       );
       return resources
         .filter((r): r is fhir4.ServiceRequest => r?.resourceType === "ServiceRequest")
-        .filter(
-          (s) =>
-            s.id !== sr?.id &&
-            injectionSeriesOf(s)?.requisition === series?.requisition &&
-            orderDay(s) > date,
-        )
-        .sort((a, b) => orderDay(a).localeCompare(orderDay(b)))
+        .filter((s) => s.id !== sr?.id)
         .map((s) => ({
           serviceRequest: s,
           medicationRequests: mrsBySr.get(s.id ?? "") ?? [],
@@ -4105,7 +4129,7 @@ export function useUpdateLabArrival() {
   });
 }
 
-// ---- 検査結果に紐付けるオーダー(検体検査・細菌検査)の候補 ----
+// ---- 検査結果に紐付けるオーダー(検体検査・細菌検査・病理)の候補 ----
 
 // 上流 fhir-server の _count 上限 500 を 1 ページとして順に辿る。
 const LAB_ORDER_CANDIDATE_PAGE = 500;
@@ -4128,17 +4152,15 @@ export interface LabOrderCandidate {
   requester?: fhir4.Reference;
 }
 
-// 患者のオーダー(ヘッダ)を新しい順に集める。処方・注射など他種のヘッダも同じ
-// 検索で返るのでクライアント側で振り分ける(上流の ServiceRequest には category
-// 検索パラメータが無いため)。振り分けとラベルの組み立てだけがオーダー種別ごとに
-// 異なるので、そこを差し替えられるようにしている。
+// 患者のオーダー(ヘッダ)のうち、指定した種別のものを新しい順に集める。ラベルの
+// 組み立てだけがオーダー種別ごとに異なるので、そこを差し替えられるようにしている。
 //
 // 明細は選択肢のラベルに使うので `_revinclude:iterate=ServiceRequest:based-on` で、
 // 「結果が既に登録されているか」は `_revinclude=DiagnosticReport:based-on` で
 // 同じ応答に添えてもらう。
 async function fetchOrderCandidates(
   patientId: string,
-  isTargetHeader: (sr: fhir4.ServiceRequest) => boolean,
+  orderTypeCode: string,
   buildLabel: (header: fhir4.ServiceRequest, itemRequests: fhir4.ServiceRequest[]) => string,
 ): Promise<LabOrderCandidate[]> {
   const candidates: LabOrderCandidate[] = [];
@@ -4146,6 +4168,7 @@ async function fetchOrderCandidates(
   for (let page = 0; page < LAB_ORDER_CANDIDATE_MAX_PAGES; page += 1) {
     const params = new URLSearchParams();
     params.set("patient", `Patient/${patientId}`);
+    params.set("category", `${ORDER_TYPE_SYSTEM}|${orderTypeCode}`);
     // 明細(基づく先を持つ ServiceRequest)はオーダーそのものではないので除く。
     params.set("based-on:missing", "true");
     params.set("_count", String(LAB_ORDER_CANDIDATE_PAGE));
@@ -4173,7 +4196,7 @@ async function fetchOrderCandidates(
     // ヘッダ(= 検索にヒットした分)だけを数える。明細と検査結果も混ざって返るため。
     const headers = serviceRequests.filter((sr) => !isOrderItemRequest(sr));
     for (const header of headers) {
-      if (!header.id || !isTargetHeader(header)) continue;
+      if (!header.id) continue;
       candidates.push({
         id: header.id,
         label: buildLabel(header, labOrderItemRequests(serviceRequests, header.id)),
@@ -4191,13 +4214,13 @@ async function fetchOrderCandidates(
 }
 
 function fetchLabOrderCandidates(patientId: string): Promise<LabOrderCandidate[]> {
-  return fetchOrderCandidates(patientId, isLabServiceRequest, (header, itemRequests) =>
+  return fetchOrderCandidates(patientId, LAB_ORDER_TYPE.code, (header, itemRequests) =>
     labOrderLabel(header, labOrderItems(header, itemRequests)),
   );
 }
 
 function fetchMicroOrderCandidates(patientId: string): Promise<LabOrderCandidate[]> {
-  return fetchOrderCandidates(patientId, isMicroServiceRequest, microOrderLabel);
+  return fetchOrderCandidates(patientId, MICRO_ORDER_TYPE.code, microOrderLabel);
 }
 
 // 「すでに結果が登録されているオーダーは出さないが、編集中の結果自身が紐付けている
@@ -4669,16 +4692,30 @@ export function useLabObservationHistories(observationIds: string[]) {
 
 const NOTIFICATION_TASK_KEY = ["Task", "notification"];
 
-/** このレポートに付いている種別の通知。訂正で出し直す・取り下げるために引く。 */
-async function fetchReportTask(reportId: string, code: string): Promise<fhir4.Task | undefined> {
+/**
+ * このレポートに付いている種別ごとの通知(種別コード → Task)。訂正で出し直す・取り下げるために
+ * 引く。複数の種別を 1 回の検索で引く。
+ */
+async function fetchReportTasks(
+  reportId: string,
+  codes: string[],
+): Promise<Map<string, fhir4.Task>> {
   const params = new URLSearchParams();
   params.set("focus", `DiagnosticReport/${reportId}`);
-  params.set("code", `${TASK_CODE_SYSTEM}|${code}`);
-  params.set("_count", "5");
+  params.set("code", codes.map((code) => `${TASK_CODE_SYSTEM}|${code}`).join(","));
+  params.set("_count", String(codes.length * 5));
   const { data: bundle } = await searchResource<fhir4.Task>("Task", params);
-  return (bundle.entry ?? [])
-    .map((entry) => entry.resource as fhir4.Task | undefined)
-    .find((task): task is fhir4.Task => Boolean(task && hasTaskCode(task, code)));
+  const tasks = resourcesOfType<fhir4.Task>(bundle, "Task");
+  const result = new Map<string, fhir4.Task>();
+  for (const code of codes) {
+    const task = tasks.find((t) => hasTaskCode(t, code));
+    if (task) result.set(code, task);
+  }
+  return result;
+}
+
+async function fetchReportTask(reportId: string, code: string): Promise<fhir4.Task | undefined> {
+  return (await fetchReportTasks(reportId, [code])).get(code);
 }
 
 /**
@@ -4960,13 +4997,14 @@ export function useUpdateLabResult() {
       subject?: LabResultSubject;
       owner?: fhir4.Reference;
     }) => {
-      const [labelSpecimens, existingPanicTask, existingReviewTask] = await Promise.all([
+      const [labelSpecimens, reportTasks] = await Promise.all([
         fetchLabelSpecimens(values.orderId),
         // 訂正でパニック値が出た/直ったときに通知を出し直す・取り下げるため、
         // また訂正した結果を読み直してもらうため、この結果に付いている通知を先に引く。
-        fetchReportTask(reportId, LAB_PANIC_TASK_CODE.code),
-        fetchReportTask(reportId, RESULT_REVIEW_TASK_CODE.code),
+        fetchReportTasks(reportId, [LAB_PANIC_TASK_CODE.code, RESULT_REVIEW_TASK_CODE.code]),
       ]);
+      const existingPanicTask = reportTasks.get(LAB_PANIC_TASK_CODE.code);
+      const existingReviewTask = reportTasks.get(RESULT_REVIEW_TASK_CODE.code);
       return postBundle(
         buildLabResultUpdateBundle(
           values,
@@ -6202,32 +6240,6 @@ export function useQuestionnaireResponseWithQuestionnaire(id: string | undefined
   };
 }
 
-// 検索結果(新しい順)から最新の「処方」の ServiceRequest とその明細だけを残した Bundle
-// を作る。注射オーダーの ServiceRequest と、他のオーダーに属する MedicationRequest を
-// 取り除く(splitPrescriptionDetailBundle は basedOn を見ずに全 MR を集めるため)。
-function latestPrescriptionBundle(bundle: fhir4.Bundle): fhir4.Bundle {
-  const entries = bundle.entry ?? [];
-  const sr = entries
-    .map((e) => e.resource)
-    .find(
-      (r): r is fhir4.ServiceRequest =>
-        r?.resourceType === "ServiceRequest" && !isInjectionServiceRequest(r as fhir4.ServiceRequest),
-    );
-  if (!sr) return { ...bundle, entry: [] };
-
-  const kept = entries.filter((entry) => {
-    const resource = entry.resource;
-    if (resource?.resourceType === "ServiceRequest") return resource.id === sr.id;
-    if (resource?.resourceType === "MedicationRequest") {
-      return (resource as fhir4.MedicationRequest).basedOn?.some(
-        (basedOn) => basedOn.reference === `ServiceRequest/${sr.id}`,
-      );
-    }
-    return false;
-  });
-  return { ...bundle, entry: kept };
-}
-
 // テンプレート回答フォームの初期値式(%conditions / %labResults / %prescriptions)の
 // 元データ取得。傷病名はアクティブなもの全件(上流の _count 上限 500 まで)、
 // 検査結果・処方は最新 1 件を _sort + _count + _include/_revinclude の 1 リクエスト
@@ -6260,19 +6272,14 @@ export function usePopulateSources(patientId: string | undefined) {
 
   const rxParams = new URLSearchParams();
   if (patientId) rxParams.set("patient", `Patient/${patientId}`);
-  // 注射オーダーも同じ ServiceRequest として保存されるため、_count=1 だと最新が注射の
-  // 患者で %prescriptions が注射になってしまう。少し多めに取り、最新の処方だけを残す。
-  rxParams.set("_count", "5");
+  // 処方だけが持つ処方区分の system で絞る(注射も同じ ServiceRequest として保存されるため)。
+  rxParams.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|`);
+  rxParams.set("_count", "1");
   rxParams.set("_sort", "-authoredon");
-  // 検体検査の明細(ServiceRequest)は処方ではないので最初から除く。
-  rxParams.set("based-on:missing", "true");
   rxParams.set("_revinclude", "MedicationRequest:based-on");
   const rxDetail = useQuery({
     queryKey: ["ServiceRequest", "populate", patientId],
-    queryFn: async () => {
-      const result = await searchResource<fhir4.Resource>("ServiceRequest", rxParams);
-      return { ...result, data: latestPrescriptionBundle(result.data) };
-    },
+    queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", rxParams),
     enabled: Boolean(patientId),
   });
 
@@ -7019,7 +7026,7 @@ export const deleteRadOrderRequest = async (srId: string) => {
         .map((request) => request.id)
         .filter((id): id is string => Boolean(id));
 
-      const appointmentEntries = await fetchRadAppointmentCancelEntries(srId);
+      const appointmentEntries = await fetchOrderAppointmentCancelEntries(srId);
 
       // 明細が参照しているテンプレート回答も一緒に消す(孤児を残さない)。
       return postBundle(
@@ -7043,23 +7050,6 @@ export function useDeleteRadOrder() {
       queryClient.invalidateQueries({ queryKey: ["Slot"] });
     },
   });
-}
-
-/** オーダーヘッダに紐づく有効な検査予約の取消エントリ。予約が無ければ空。 */
-async function fetchRadAppointmentCancelEntries(srId: string): Promise<fhir4.BundleEntry[]> {
-  const params = new URLSearchParams();
-  params.set("based-on", `ServiceRequest/${srId}`);
-  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
-  const appointments = (bundle.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
-    .filter(isActiveAppointment);
-
-  const entries: fhir4.BundleEntry[] = [];
-  for (const appointment of appointments) {
-    entries.push(...buildCancelEntries(appointment, await fetchAppointmentSlots(appointment)));
-  }
-  return entries;
 }
 
 // ---- 生理検査オーダー ----
@@ -7086,7 +7076,7 @@ export function usePhysioPerformDetail(orderId: string | undefined) {
   return useQuery({
     queryKey: ["Procedure", "search", "physio-perform", orderId],
     queryFn: () =>
-      searchResource<fhir4.Resource>("Procedure", physioPerformSearchParams(orderId ?? "")),
+      searchResource<fhir4.Resource>("Procedure", procedurePerformSearchParams(orderId ?? "")),
     enabled: Boolean(orderId),
   });
 }
@@ -7170,13 +7160,13 @@ const PHYSIO_WORKLIST_KEY = (date: string) => ["ServiceRequest", "physio-worklis
 
 /**
  * 実施の取消で片付ける実施記録。オーダーにぶら下がる Procedure と、その子の
- * 薬剤(MedicationAdministration)を 1 リクエストで集める。
+ * 薬剤(MedicationAdministration)を 1 リクエストで集める。生理検査・内視鏡・処置で共用する。
  * 放射線と違い被曝線量(Observation)は作らないので引かない。
  *
  * 一覧が持っている行の情報からではなく、その場で引き直す。取消は稀な操作で、
  * 一覧を開いた後に別の端末で登録された実施記録も残さず消したいため。
  */
-function physioPerformSearchParams(orderId: string): URLSearchParams {
+function procedurePerformSearchParams(orderId: string): URLSearchParams {
   const params = new URLSearchParams();
   params.set("based-on", `ServiceRequest/${orderId}`);
   params.set("_count", "100");
@@ -7184,10 +7174,10 @@ function physioPerformSearchParams(orderId: string): URLSearchParams {
   return params;
 }
 
-async function fetchPhysioPerformResources(orderId: string) {
+async function fetchProcedurePerformResources(orderId: string) {
   const { data: bundle } = await searchResource<fhir4.Resource>(
     "Procedure",
-    physioPerformSearchParams(orderId),
+    procedurePerformSearchParams(orderId),
   );
 
   const procedures: fhir4.Procedure[] = [];
@@ -7224,7 +7214,7 @@ export function useUpdatePhysioTaskStatus() {
 
       const cancelsPerform = physioTaskStatus(task) === "completed" && status !== "completed";
       const performed = cancelsPerform
-        ? await fetchPhysioPerformResources(order.id ?? "")
+        ? await fetchProcedurePerformResources(order.id ?? "")
         : { procedures: [], administrations: [] };
       const performEntries = buildPhysioPerformDeleteEntries(
         performed.procedures,
@@ -7262,29 +7252,6 @@ export function useRegisterPhysioPerform() {
       queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
     },
   });
-}
-
-/**
- * 生理検査オーダーに紐づく有効な検査予約(1 オーダーに 1 件)。予約日時の変更は
- * オーダーの編集画面から行うので、編集を開くときに予約の現物を用意しておく。
- */
-export function usePhysioOrderAppointment(srId: string | undefined) {
-  const params = new URLSearchParams();
-  if (srId) params.set("based-on", `ServiceRequest/${srId}`);
-
-  const query = useQuery({
-    queryKey: ["Appointment", "physio-order", srId],
-    queryFn: () => searchResource<fhir4.Appointment>("Appointment", params),
-    enabled: Boolean(srId),
-  });
-
-  return {
-    ...query,
-    appointment: (query.data?.data.entry ?? [])
-      .map((e) => e.resource)
-      .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
-      .find(isActiveAppointment),
-  };
 }
 
 /**
@@ -7335,7 +7302,7 @@ export const deletePhysioOrderRequest = async (srId: string) => {
         .map((request) => request.id)
         .filter((id): id is string => Boolean(id));
 
-      const appointmentEntries = await fetchPhysioAppointmentCancelEntries(srId);
+      const appointmentEntries = await fetchOrderAppointmentCancelEntries(srId);
 
       // 明細が参照しているテンプレート回答も一緒に消す(孤児を残さない)。
       return postBundle(
@@ -7361,23 +7328,6 @@ export function useDeletePhysioOrder() {
   });
 }
 
-/** オーダーヘッダに紐づく有効な検査予約の取消エントリ。予約が無ければ空。 */
-async function fetchPhysioAppointmentCancelEntries(srId: string): Promise<fhir4.BundleEntry[]> {
-  const params = new URLSearchParams();
-  params.set("based-on", `ServiceRequest/${srId}`);
-  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
-  const appointments = (bundle.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
-    .filter(isActiveAppointment);
-
-  const entries: fhir4.BundleEntry[] = [];
-  for (const appointment of appointments) {
-    entries.push(...buildCancelEntries(appointment, await fetchAppointmentSlots(appointment)));
-  }
-  return entries;
-}
-
 // ---- 内視鏡オーダー ----
 //
 // 生理検査と同じ形。ヘッダと明細が別リソースなので 1 リクエストにまとめて取り、
@@ -7401,7 +7351,7 @@ export function useEndoscopyPerformDetail(orderId: string | undefined) {
   return useQuery({
     queryKey: ["Procedure", "search", "endoscopy-perform", orderId],
     queryFn: () =>
-      searchResource<fhir4.Resource>("Procedure", endoscopyPerformSearchParams(orderId ?? "")),
+      searchResource<fhir4.Resource>("Procedure", procedurePerformSearchParams(orderId ?? "")),
     enabled: Boolean(orderId),
   });
 }
@@ -7484,40 +7434,6 @@ export function useEndoscopyWorklist(date: string) {
 const ENDOSCOPY_WORKLIST_KEY = (date: string) => ["ServiceRequest", "endoscopy-worklist", date];
 
 /**
- * 実施の取消で片付ける実施記録。オーダーにぶら下がる Procedure と、その子の
- * 薬剤(MedicationAdministration)を 1 リクエストで集める。
- * 放射線と違い被曝線量(Observation)は作らないので引かない。
- *
- * 一覧が持っている行の情報からではなく、その場で引き直す。取消は稀な操作で、
- * 一覧を開いた後に別の端末で登録された実施記録も残さず消したいため。
- */
-function endoscopyPerformSearchParams(orderId: string): URLSearchParams {
-  const params = new URLSearchParams();
-  params.set("based-on", `ServiceRequest/${orderId}`);
-  params.set("_count", "100");
-  params.append("_revinclude", "MedicationAdministration:part-of");
-  return params;
-}
-
-async function fetchEndoscopyPerformResources(orderId: string) {
-  const { data: bundle } = await searchResource<fhir4.Resource>(
-    "Procedure",
-    endoscopyPerformSearchParams(orderId),
-  );
-
-  const procedures: fhir4.Procedure[] = [];
-  const administrations: fhir4.MedicationAdministration[] = [];
-  for (const entry of bundle.entry ?? []) {
-    const resource = entry.resource;
-    if (resource?.resourceType === "Procedure") procedures.push(resource as fhir4.Procedure);
-    else if (resource?.resourceType === "MedicationAdministration") {
-      administrations.push(resource as fhir4.MedicationAdministration);
-    }
-  }
-  return { procedures, administrations };
-}
-
-/**
  * 受付・実施などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
  * 実施済から戻す(取消)ときは、実施記録も同じ transaction で消す
  * (放射線検査と同じ理由。docs/rad-result-design.md §7-6)。
@@ -7539,7 +7455,7 @@ export function useUpdateEndoscopyTaskStatus() {
 
       const cancelsPerform = endoscopyTaskStatus(task) === "completed" && status !== "completed";
       const performed = cancelsPerform
-        ? await fetchEndoscopyPerformResources(order.id ?? "")
+        ? await fetchProcedurePerformResources(order.id ?? "")
         : { procedures: [], administrations: [] };
       const performEntries = buildEndoscopyPerformDeleteEntries(
         performed.procedures,
@@ -7577,29 +7493,6 @@ export function useRegisterEndoscopyPerform() {
       queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
     },
   });
-}
-
-/**
- * 内視鏡オーダーに紐づく有効な検査予約(1 オーダーに 1 件)。予約日時の変更は
- * オーダーの編集画面から行うので、編集を開くときに予約の現物を用意しておく。
- */
-export function useEndoscopyOrderAppointment(srId: string | undefined) {
-  const params = new URLSearchParams();
-  if (srId) params.set("based-on", `ServiceRequest/${srId}`);
-
-  const query = useQuery({
-    queryKey: ["Appointment", "endoscopy-order", srId],
-    queryFn: () => searchResource<fhir4.Appointment>("Appointment", params),
-    enabled: Boolean(srId),
-  });
-
-  return {
-    ...query,
-    appointment: (query.data?.data.entry ?? [])
-      .map((e) => e.resource)
-      .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
-      .find(isActiveAppointment),
-  };
 }
 
 /**
@@ -7650,7 +7543,7 @@ export const deleteEndoscopyOrderRequest = async (srId: string) => {
         .map((request) => request.id)
         .filter((id): id is string => Boolean(id));
 
-      const appointmentEntries = await fetchEndoscopyAppointmentCancelEntries(srId);
+      const appointmentEntries = await fetchOrderAppointmentCancelEntries(srId);
 
       // 明細が参照しているテンプレート回答も一緒に消す(孤児を残さない)。
       return postBundle(
@@ -7674,23 +7567,6 @@ export function useDeleteEndoscopyOrder() {
       queryClient.invalidateQueries({ queryKey: ["Slot"] });
     },
   });
-}
-
-/** オーダーヘッダに紐づく有効な検査予約の取消エントリ。予約が無ければ空。 */
-async function fetchEndoscopyAppointmentCancelEntries(srId: string): Promise<fhir4.BundleEntry[]> {
-  const params = new URLSearchParams();
-  params.set("based-on", `ServiceRequest/${srId}`);
-  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
-  const appointments = (bundle.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
-    .filter(isActiveAppointment);
-
-  const entries: fhir4.BundleEntry[] = [];
-  for (const appointment of appointments) {
-    entries.push(...buildCancelEntries(appointment, await fetchAppointmentSlots(appointment)));
-  }
-  return entries;
 }
 
 
@@ -7718,7 +7594,7 @@ export function useTreatmentPerformDetail(orderId: string | undefined) {
   return useQuery({
     queryKey: ["Procedure", "search", "treatment-perform", orderId],
     queryFn: () =>
-      searchResource<fhir4.Resource>("Procedure", treatmentPerformSearchParams(orderId ?? "")),
+      searchResource<fhir4.Resource>("Procedure", procedurePerformSearchParams(orderId ?? "")),
     enabled: Boolean(orderId),
   });
 }
@@ -7801,40 +7677,6 @@ export function useTreatmentWorklist(date: string) {
 const TREATMENT_WORKLIST_KEY = (date: string) => ["ServiceRequest", "treatment-worklist", date];
 
 /**
- * 実施の取消で片付ける実施記録。オーダーにぶら下がる Procedure と、その子の
- * 薬剤(MedicationAdministration)を 1 リクエストで集める。
- * 生理検査と同じく被曝線量(Observation)は作らないので引かない。
- *
- * 一覧が持っている行の情報からではなく、その場で引き直す。取消は稀な操作で、
- * 一覧を開いた後に別の端末で登録された実施記録も残さず消したいため。
- */
-function treatmentPerformSearchParams(orderId: string): URLSearchParams {
-  const params = new URLSearchParams();
-  params.set("based-on", `ServiceRequest/${orderId}`);
-  params.set("_count", "100");
-  params.append("_revinclude", "MedicationAdministration:part-of");
-  return params;
-}
-
-async function fetchTreatmentPerformResources(orderId: string) {
-  const { data: bundle } = await searchResource<fhir4.Resource>(
-    "Procedure",
-    treatmentPerformSearchParams(orderId),
-  );
-
-  const procedures: fhir4.Procedure[] = [];
-  const administrations: fhir4.MedicationAdministration[] = [];
-  for (const entry of bundle.entry ?? []) {
-    const resource = entry.resource;
-    if (resource?.resourceType === "Procedure") procedures.push(resource as fhir4.Procedure);
-    else if (resource?.resourceType === "MedicationAdministration") {
-      administrations.push(resource as fhir4.MedicationAdministration);
-    }
-  }
-  return { procedures, administrations };
-}
-
-/**
  * 受付・実施などの進捗を書き込む。Task がまだ無いオーダーでは新しく作る。
  * 実施済から戻す(取消)ときは、実施記録も同じ transaction で消す
  * (放射線検査と同じ理由。docs/rad-result-design.md §7-6)。
@@ -7856,7 +7698,7 @@ export function useUpdateTreatmentTaskStatus() {
 
       const cancelsPerform = treatmentTaskStatus(task) === "completed" && status !== "completed";
       const performed = cancelsPerform
-        ? await fetchTreatmentPerformResources(order.id ?? "")
+        ? await fetchProcedurePerformResources(order.id ?? "")
         : { procedures: [], administrations: [] };
       const performEntries = buildTreatmentPerformDeleteEntries(
         performed.procedures,
@@ -7894,29 +7736,6 @@ export function useRegisterTreatmentPerform() {
       queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
     },
   });
-}
-
-/**
- * 処置オーダーに紐づく有効な処置予約(1 オーダーに 1 件)。予約日時の変更は
- * オーダーの編集画面から行うので、編集を開くときに予約の現物を用意しておく。
- */
-export function useTreatmentOrderAppointment(srId: string | undefined) {
-  const params = new URLSearchParams();
-  if (srId) params.set("based-on", `ServiceRequest/${srId}`);
-
-  const query = useQuery({
-    queryKey: ["Appointment", "treatment-order", srId],
-    queryFn: () => searchResource<fhir4.Appointment>("Appointment", params),
-    enabled: Boolean(srId),
-  });
-
-  return {
-    ...query,
-    appointment: (query.data?.data.entry ?? [])
-      .map((e) => e.resource)
-      .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
-      .find(isActiveAppointment),
-  };
 }
 
 /**
@@ -7967,7 +7786,7 @@ export const deleteTreatmentOrderRequest = async (srId: string) => {
         .map((request) => request.id)
         .filter((id): id is string => Boolean(id));
 
-      const appointmentEntries = await fetchTreatmentAppointmentCancelEntries(srId);
+      const appointmentEntries = await fetchOrderAppointmentCancelEntries(srId);
 
       return postBundle(buildTreatmentOrderDeleteBundle(srId, itemIds, appointmentEntries));
     };
@@ -7983,23 +7802,6 @@ export function useDeleteTreatmentOrder() {
       queryClient.invalidateQueries({ queryKey: ["Slot"] });
     },
   });
-}
-
-/** オーダーヘッダに紐づく有効な処置予約の取消エントリ。予約が無ければ空。 */
-async function fetchTreatmentAppointmentCancelEntries(srId: string): Promise<fhir4.BundleEntry[]> {
-  const params = new URLSearchParams();
-  params.set("based-on", `ServiceRequest/${srId}`);
-  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
-  const appointments = (bundle.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
-    .filter(isActiveAppointment);
-
-  const entries: fhir4.BundleEntry[] = [];
-  for (const appointment of appointments) {
-    entries.push(...buildCancelEntries(appointment, await fetchAppointmentSlots(appointment)));
-  }
-  return entries;
 }
 
 
@@ -8337,7 +8139,8 @@ async function fetchRehabWorklist(date: string): Promise<RehabWorklistResult> {
     },
   );
 
-  // 実施記録と予約はオーダーの検索から辿れないので別に引く。1 日ぶんなので 1 往復ずつ。
+  // 実施記録はその日の分、予約は基準日以降の分だけが要るので別に引く。_revinclude だと
+  // 継続中のオーダーの全期間ぶんが付いてくる。
   const [performsByOrderId, appointmentsByOrderId] = await Promise.all([
     fetchRehabPerformsOn(date),
     fetchRehabAppointmentsFrom(date),
@@ -8386,14 +8189,12 @@ async function fetchRehabAppointmentsFrom(
   const params = new URLSearchParams();
   params.set("date", `ge${from}`);
   params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|rehab`);
+  setActiveAppointmentStatus(params);
   params.set("_count", "200");
   params.set("_sort", "date");
 
   const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
-  const appointments = (bundle.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
-    .filter(isActiveAppointment);
+  const appointments = resourcesOfType<fhir4.Appointment>(bundle, "Appointment");
 
   const byOrderId = new Map<string, fhir4.Appointment[]>();
   for (const appointment of appointments) {
@@ -8407,26 +8208,6 @@ async function fetchRehabAppointmentsFrom(
     list.sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""));
   }
   return byOrderId;
-}
-
-/**
- * オーダーヘッダに紐づく有効な予約の取消エントリ。予約が無ければ空。
- * basedOn だけで引くので、部門が都度予約を取る種別(リハビリ・栄養指導)で共用する。
- */
-async function fetchOrderAppointmentCancelEntries(srId: string): Promise<fhir4.BundleEntry[]> {
-  const params = new URLSearchParams();
-  params.set("based-on", `ServiceRequest/${srId}`);
-  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
-  const appointments = (bundle.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
-    .filter(isActiveAppointment);
-
-  const entries: fhir4.BundleEntry[] = [];
-  for (const appointment of appointments) {
-    entries.push(...buildCancelEntries(appointment, await fetchAppointmentSlots(appointment)));
-  }
-  return entries;
 }
 
 /** リハビリの予約を取る。オーダーを basedOn に持つ Appointment + 枠の busy 化。 */
@@ -8715,14 +8496,12 @@ async function fetchNutritionGuidanceAppointmentsFrom(
   const params = new URLSearchParams();
   params.set("date", `ge${from}`);
   params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|nutrition-guidance`);
+  setActiveAppointmentStatus(params);
   params.set("_count", "200");
   params.set("_sort", "date");
 
   const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
-  const appointments = (bundle.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Appointment => r?.resourceType === "Appointment")
-    .filter(isActiveAppointment);
+  const appointments = resourcesOfType<fhir4.Appointment>(bundle, "Appointment");
 
   const byOrderId = new Map<string, fhir4.Appointment[]>();
   for (const appointment of appointments) {
@@ -8754,7 +8533,8 @@ async function fetchNutritionGuidanceWorklist(
     },
   );
 
-  // 実施記録と予約はオーダーの検索から辿れないので別に引く。1 日ぶんなので 1 往復ずつ。
+  // 実施記録はその日の分、予約は基準日以降の分だけが要るので別に引く。_revinclude だと
+  // 継続中のオーダーの全期間ぶんが付いてくる。
   const [performsByOrderId, appointmentsByOrderId] = await Promise.all([
     fetchNutritionGuidancePerformsOn(date),
     fetchNutritionGuidanceAppointmentsFrom(date),
@@ -9477,20 +9257,41 @@ export function useNursingPerformsOf(patientId: string | undefined) {
   });
 }
 
+// 1 回の検索に載せる患者数。1 人 1 日の実施が 20 件を超えても _count(500)に収まる幅にする。
+const NURSING_PERFORM_PATIENT_CHUNK = 20;
+
 /**
  * 基準日 1 日ぶんの実施記録を、指示の id ごとにまとめる(病棟の指示簿の「本日」列)。
- * Observation は病棟で絞れないので日付で全患者ぶんを引き、画面の患者だけ残す。
+ * 画面の患者だけを、URL が長くなりすぎないよう分割して並列に引く。
  * 入院患者一覧のバッジ(useNursingPendingCounts)はこれを引かない(別クエリにしてある)。
  */
 export function useNursingPerformsOn(date: string, patientIds: string[]) {
-  const wanted = new Set(patientIds);
+  const ids = [...new Set(patientIds)].sort();
   return useQuery({
-    queryKey: ["Observation", "search", "nursing-perform-day", date, [...wanted].sort().join(",")],
+    queryKey: ["Observation", "search", "nursing-perform-day", date, ids.join(",")],
     queryFn: async () => {
-      const byOrderId = await fetchNursingPerforms((params) => params.set("date", date));
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += NURSING_PERFORM_PATIENT_CHUNK) {
+        chunks.push(ids.slice(i, i + NURSING_PERFORM_PATIENT_CHUNK));
+      }
+      const maps = await Promise.all(
+        chunks.map((chunk) =>
+          fetchNursingPerforms((params) => {
+            params.set("date", date);
+            params.set("patient", chunk.map((id) => `Patient/${id}`).join(","));
+            params.set("_count", "500");
+          }),
+        ),
+      );
+      const byOrderId = new Map<string, NursingPerformDisplay[]>();
+      for (const map of maps) {
+        for (const [orderId, performs] of map) {
+          byOrderId.set(orderId, [...(byOrderId.get(orderId) ?? []), ...performs]);
+        }
+      }
       return byOrderId;
     },
-    enabled: Boolean(date) && wanted.size > 0,
+    enabled: Boolean(date) && ids.length > 0,
     placeholderData: keepPreviousData,
   });
 }
@@ -10223,7 +10024,7 @@ export const useUpdatePathoTaskStatus = makeUpdateTaskStatusHook<PathoTaskStatus
 // ---- 病理診断レポート ----
 
 function fetchPathoOrderCandidates(patientId: string): Promise<LabOrderCandidate[]> {
-  return fetchOrderCandidates(patientId, isPathoServiceRequest, pathoOrderLabel);
+  return fetchOrderCandidates(patientId, PATHO_ORDER_TYPE.code, pathoOrderLabel);
 }
 
 /** 病理レポートに紐付ける病理検査オーダーの候補。 */
@@ -10698,11 +10499,10 @@ async function fetchOrderAppointments(ids: string[]): Promise<Map<string, fhir4.
   if (ids.length === 0) return result;
   const params = new URLSearchParams();
   params.set("based-on", ids.map((id) => `ServiceRequest/${id}`).join(","));
+  setActiveAppointmentStatus(params);
   params.set("_count", String(ids.length * 2));
   const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
-  for (const entry of bundle.entry ?? []) {
-    const appointment = entry.resource;
-    if (appointment?.resourceType !== "Appointment" || !isActiveAppointment(appointment)) continue;
+  for (const appointment of resourcesOfType<fhir4.Appointment>(bundle, "Appointment")) {
     const orderId = appointmentOrderId(appointment);
     if (orderId) result.set(orderId, appointment);
   }
@@ -10725,12 +10525,7 @@ export function useOrderAppointments(orderIds: string[]) {
  */
 async function orderAppointmentCancelEntries(orderIds: string[]): Promise<fhir4.BundleEntry[]> {
   const appointments = await fetchOrderAppointments(Array.from(new Set(orderIds.filter(Boolean))));
-  const entries = await Promise.all(
-    Array.from(appointments.values()).map(async (appointment) =>
-      buildCancelEntries(appointment, await fetchAppointmentSlots(appointment)),
-    ),
-  );
-  return entries.flat();
+  return buildCancelEntriesOf(Array.from(appointments.values()));
 }
 
 /**
@@ -10992,53 +10787,39 @@ export function useChemoRoomList(date: string) {
       const params = new URLSearchParams();
       params.set("date", date);
       params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|chemo`);
+      setActiveAppointmentStatus(params);
       params.set("_count", "200");
       params.set("_sort", "date");
       params.append("_include", "Appointment:patient");
+      // 予約が指す日オーダーと、そのオーダーの進捗 Task・薬剤も同じ応答で揃える。
+      params.append("_include", "Appointment:based-on");
+      params.append("_revinclude:iterate", "Task:focus,MedicationRequest:based-on");
       const { data: bundle } = await searchResource<fhir4.Resource>("Appointment", params);
 
       const appointments: fhir4.Appointment[] = [];
       const patientsById = new Map<string, fhir4.Patient>();
+      const ordersById = new Map<string, fhir4.ServiceRequest>();
+      const tasks: fhir4.Task[] = [];
+      const mrsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
       for (const entry of bundle.entry ?? []) {
         const resource = entry.resource;
         if (resource?.resourceType === "Appointment") {
-          const appointment = resource as fhir4.Appointment;
-          if (isActiveAppointment(appointment)) appointments.push(appointment);
+          appointments.push(resource as fhir4.Appointment);
         } else if (resource?.resourceType === "Patient" && resource.id) {
           patientsById.set(resource.id, resource as fhir4.Patient);
-        }
-      }
-
-      const orderIds = Array.from(
-        new Set(appointments.map((a) => appointmentOrderId(a)).filter(Boolean)),
-      );
-      const ordersById = new Map<string, fhir4.ServiceRequest>();
-      const tasksByOrderId = new Map<string, fhir4.Task>();
-      const mrsByOrderId = new Map<string, fhir4.MedicationRequest[]>();
-      if (orderIds.length > 0) {
-        const orderParams = new URLSearchParams();
-        orderParams.set("_id", orderIds.join(","));
-        orderParams.set("_count", String(orderIds.length));
-        orderParams.append("_revinclude", "Task:focus");
-        orderParams.append("_revinclude", "MedicationRequest:based-on");
-        const { data: orderBundle } = await searchResource<fhir4.Resource>("ServiceRequest", orderParams);
-        const tasks: fhir4.Task[] = [];
-        for (const entry of orderBundle.entry ?? []) {
-          const resource = entry.resource;
-          if (resource?.resourceType === "ServiceRequest" && resource.id) {
-            ordersById.set(resource.id, resource as fhir4.ServiceRequest);
-          } else if (resource?.resourceType === "Task") {
-            tasks.push(resource as fhir4.Task);
-          } else if (resource?.resourceType === "MedicationRequest") {
-            const mr = resource as fhir4.MedicationRequest;
-            for (const reference of mr.basedOn ?? []) {
-              const id = referenceId(reference.reference);
-              if (id) mrsByOrderId.set(id, [...(mrsByOrderId.get(id) ?? []), mr]);
-            }
+        } else if (resource?.resourceType === "ServiceRequest" && resource.id) {
+          ordersById.set(resource.id, resource as fhir4.ServiceRequest);
+        } else if (resource?.resourceType === "Task") {
+          tasks.push(resource as fhir4.Task);
+        } else if (resource?.resourceType === "MedicationRequest") {
+          const mr = resource as fhir4.MedicationRequest;
+          for (const reference of mr.basedOn ?? []) {
+            const id = referenceId(reference.reference);
+            if (id) mrsByOrderId.set(id, [...(mrsByOrderId.get(id) ?? []), mr]);
           }
         }
-        for (const [orderId, task] of injectionTasksByOrderId(tasks)) tasksByOrderId.set(orderId, task);
       }
+      const tasksByOrderId = injectionTasksByOrderId(tasks);
 
       return appointments
         .map((appointment) => {
@@ -11339,19 +11120,21 @@ export function usePathwayWardTasks(date: string, patientIds: string[]) {
       );
       if (events.length === 0) return [];
 
-      const resources: fhir4.Resource[] = [...heads];
+      const chunks: fhir4.CarePlan[][] = [];
       for (let i = 0; i < events.length; i += PATHWAY_WARD_EVENT_CHUNK) {
-        const params = new URLSearchParams();
-        params.set(
-          "part-of",
-          events
-            .slice(i, i + PATHWAY_WARD_EVENT_CHUNK)
-            .map((event) => `CarePlan/${event.id}`)
-            .join(","),
-        );
-        params.append("_revinclude", "Procedure:based-on");
-        params.set("_count", "500");
-        const { data: bundle } = await searchResource<fhir4.Resource>("CarePlan", params);
+        chunks.push(events.slice(i, i + PATHWAY_WARD_EVENT_CHUNK));
+      }
+      const bundles = await Promise.all(
+        chunks.map((chunk) => {
+          const params = new URLSearchParams();
+          params.set("part-of", chunk.map((event) => `CarePlan/${event.id}`).join(","));
+          params.append("_revinclude", "Procedure:based-on");
+          params.set("_count", "500");
+          return searchResource<fhir4.Resource>("CarePlan", params);
+        }),
+      );
+      const resources: fhir4.Resource[] = [...heads];
+      for (const { data: bundle } of bundles) {
         for (const entry of bundle.entry ?? []) if (entry.resource) resources.push(entry.resource);
       }
       return parsePathwayWardTasks(resources);
@@ -11409,18 +11192,40 @@ export function useShiftPathwaySchedule() {
   });
 }
 
-/** 患者の Task(部門の受付・指示受け)。パスの取り消しで、受け付け済みのオーダーを見分けるのに使う。 */
-export function usePatientTasks(patientId: string | undefined) {
-  const params = new URLSearchParams();
-  if (patientId) params.set("patient", `Patient/${patientId}`);
-  params.set("_count", "500");
+// 1 回の検索に載せるオーダー数(URL の長さの目安)。
+const ORDER_TASK_CHUNK = 50;
+
+/**
+ * オーダーを指す Task。部門の受付・指示受けは focus で、承認は basedOn でオーダーを指すので、
+ * 両方で引いて重複を除く。パスの取り消しで受け付け済みのオーダーを見分け、実施入力で
+ * 受付の Task を探すのに使う。
+ */
+export function useOrderTasks(orderIds: string[]) {
+  const ids = [...new Set(orderIds.filter(Boolean))].sort();
   return useQuery({
-    queryKey: ["Task", "search", "patient", patientId],
+    queryKey: ["Task", "search", "order", ids.join(",")],
     queryFn: async () => {
-      const { data: bundle } = await searchResource<fhir4.Task>("Task", params);
-      return resourcesOfType<fhir4.Task>(bundle, "Task");
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += ORDER_TASK_CHUNK) chunks.push(ids.slice(i, i + ORDER_TASK_CHUNK));
+      const bundles = await Promise.all(
+        chunks.flatMap((chunk) =>
+          ["focus", "based-on"].map((param) => {
+            const params = new URLSearchParams();
+            params.set(param, chunk.map((id) => `ServiceRequest/${id}`).join(","));
+            params.set("_count", "500");
+            return searchResource<fhir4.Task>("Task", params);
+          }),
+        ),
+      );
+      const tasksById = new Map<string, fhir4.Task>();
+      for (const { data: bundle } of bundles) {
+        for (const task of resourcesOfType<fhir4.Task>(bundle, "Task")) {
+          if (task.id) tasksById.set(task.id, task);
+        }
+      }
+      return [...tasksById.values()];
     },
-    enabled: Boolean(patientId),
+    enabled: ids.length > 0,
   });
 }
 

@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreatePrescription,
   usePatient,
-  useRadOrderAppointment,
+  useOrderAppointment,
   useUpdateRadOrder,
 } from "../api/queries";
 import type { SlotSelection } from "../fhir/appointmentHelpers";
@@ -133,7 +133,7 @@ export function RadOrderEditPanel({ patientId, srId, onSaved }: RadOrderEditPane
     useRadOrderInitialValues(srId, patientId);
   // 予約日時の変更もこの画面から行うので、オーダーに紐づく検査予約を読んでおく
   // (予約タブからは変えない。オーダーの撮影日時と必ず一緒に動かすため)。
-  const booking = useRadOrderAppointment(srId);
+  const booking = useOrderAppointment(srId);
 
   function handleSubmit(
     values: RadOrderFormValues,

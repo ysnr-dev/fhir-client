@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreatePrescription,
   usePatient,
-  useTreatmentOrderAppointment,
+  useOrderAppointment,
   useUpdateTreatmentOrder,
 } from "../api/queries";
 import type { SlotSelection } from "../fhir/appointmentHelpers";
@@ -133,7 +133,7 @@ export function TreatmentOrderEditPanel({ patientId, srId, onSaved }: TreatmentO
     useTreatmentOrderInitialValues(srId, patientId);
   // 予約日時の変更もこの画面から行うので、オーダーに紐づく処置予約を読んでおく
   // (予約タブからは変えない。オーダーの実施日時と必ず一緒に動かすため)。
-  const booking = useTreatmentOrderAppointment(srId);
+  const booking = useOrderAppointment(srId);
 
   function handleSubmit(
     values: TreatmentOrderFormValues,

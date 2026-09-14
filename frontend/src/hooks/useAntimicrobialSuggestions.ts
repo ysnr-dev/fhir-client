@@ -1,7 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { searchResource } from "../api/fhirClient";
 import { fetchMedicinesByCodes } from "../api/masterClient";
-import { MEDICINE_CODE_SYSTEM, codingBySystem } from "../fhir/prescriptionHelpers";
+import { INJECTION_ORDER_TYPE } from "../fhir/injectionHelpers";
+import {
+  MEDICINE_CODE_SYSTEM,
+  ORDER_TYPE_SYSTEM,
+  PRESCRIPTION_CATEGORY_SYSTEM,
+  codingBySystem,
+} from "../fhir/prescriptionHelpers";
 
 // 細菌検査オーダーの前投与抗菌薬「処方から取り込み」の候補。
 //
@@ -40,6 +46,11 @@ async function fetchSuggestions(patientId: string): Promise<AntimicrobialSuggest
   // 処方・注射のヘッダと薬剤を新しい順に取る(タイムラインと同じ検索の縮小版)。
   const params = new URLSearchParams();
   params.set("patient", `Patient/${patientId}`);
+  // 処方(処方区分の system を持つ)と注射(オーダー種別)のヘッダだけ。
+  params.set(
+    "category",
+    `${PRESCRIPTION_CATEGORY_SYSTEM}|,${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`,
+  );
   params.set("based-on:missing", "true");
   params.set("_sort", "-authoredon");
   params.set("_count", String(RECENT_ORDER_COUNT));

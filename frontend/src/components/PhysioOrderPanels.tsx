@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useCreatePrescription,
   usePatient,
-  usePhysioOrderAppointment,
+  useOrderAppointment,
   useUpdatePhysioOrder,
 } from "../api/queries";
 import type { SlotSelection } from "../fhir/appointmentHelpers";
@@ -133,7 +133,7 @@ export function PhysioOrderEditPanel({ patientId, srId, onSaved }: PhysioOrderEd
     usePhysioOrderInitialValues(srId, patientId);
   // 予約日時の変更もこの画面から行うので、オーダーに紐づく検査予約を読んでおく
   // (予約タブからは変えない。オーダーの実施日時と必ず一緒に動かすため)。
-  const booking = usePhysioOrderAppointment(srId);
+  const booking = useOrderAppointment(srId);
 
   function handleSubmit(
     values: PhysioOrderFormValues,

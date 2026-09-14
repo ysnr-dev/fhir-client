@@ -6,7 +6,8 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
 - 調査履歴: 2026-08-01（初回、6 項目）、2026-08-23（frontend/backend 全面再調査で拡充）、
   2026-08-30（他科依頼の実装で C-6 を追加）、2026-09-01（オーダー横断の課題整理で C-7 を追加し、同日実装）、
   2026-09-09（パフォーマンス観点の再調査で 6 項目を追加し、C-6・C-8 と合わせて同日サーバー側を実装。
-  クライアント側の追随 F-4〜F-9 も同日実装）。
+  クライアント側の追随 F-4〜F-9 も同日実装）、2026-09-15（リファクタリング観点の再調査。上流が対応済みなのに
+  クライアントが使っていない検索と C-9 を `refactoring-plan.md` にまとめた）。
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
@@ -15,10 +16,10 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   readme「オーダーの日付」〕）については両リポジトリのコミット履歴を参照。
 - **2026-08-23 に優先度 A（5 件）・B（operation 系）・C-1（日付／期間検索）・C-2
   （`_sort` と `AllergyIntolerance.onset`）をサーバー・クライアント両側とも実装済み**
-  （下記の「対応済み」節を参照）。**C-7（Provenance）も 2026-09-01 に実装済み**。残るは C-3〜C-6 と長期のみ。
+  （下記の「対応済み」節を参照）。**C-7（Provenance）も 2026-09-01 に実装済み**。残るは C-3・C-4・C-9 と長期のみ（C-5 は上流実装済み）。
 
 各項目は「現状のワークアラウンド → 望ましいサーバー機能 → 影響範囲」の形式。
-**残っているのは優先度 C の C-3〜C-5 と長期のみ**（優先度 A・B と C-1・C-2 は
+**残っているのは優先度 C の C-3・C-4・C-9 と長期のみ**（優先度 A・B と C-1・C-2 は
 2026-08-23 に、C-7 は 2026-09-01 に、C-6・C-8 と 2026-09-09 追加分は同日に対応済み）。
 
 ---
@@ -97,6 +98,8 @@ fhir-client のパフォーマンス監査で「上流を直した方が効率�
   最大値を写す必要がある。サーバーだけでは閉じないため、クライアントのデータ設計と合わせて別途判断する。
 - **検査結果コードの前方一致**（感染症判定の JLAC11 分析物コード 5 桁）: `code:below` の実装か
   派生 token の索引が要る。患者あたりの検査結果は直近 N 件で足りており優先度が低い。
+  ただし病棟マップの感染症パネルは患者 5 人ずつ `_count=500` で引いており、画面でいちばん重い検索になっている
+  （2026-09-15 の再調査。`refactoring-plan.md` 第 2 段）。
 
 ---
 
@@ -325,7 +328,7 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   `type:not=` と書けるようになったため、優先度はさらに低い。なお現状の
   「許可する種別を挙げる」書き方は、未知の種別が増えても混ざらない利点がある。
 
-### C-5. `Schedule.specialty` 検索の実装
+### C-5. `Schedule.specialty` 検索の実装 — **上流は実装済み（2026-09-15 確認）。クライアントは service-type だけ追随済み（`refactoring-plan.md` A10。specialty は全科共通の枠表を残すため手元で絞る）**
 
 - **現状**: 予約枠セレクトは全 Schedule を取得後にコードで絞っている
   （`useScheduleOptions` のコメント「上流の specialty 検索に頼らず」）。
@@ -357,6 +360,16 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   `requisition` でも使える)。あれば拡張を索引するカスタム検索パラメータ(`regimen=ServiceRequest/xxx`)。
 - **影響範囲**: 化学療法タブ・投与日パネル・次クール登録。他のオーダーが非常に多い患者では読み切れない
   可能性がある(化学療法は 1 患者で多くても数十件なので、`requisition` で引ければ 1 リクエストで済む)。
+
+### C-9. `Observation.based-on` 検索と `_include` / `_revinclude`
+
+- **現状**: 上流の Observation は `part-of` と `derived-from` を索引しているが、`based-on` は索引していない
+  （Procedure は索引済み）。クリニカルパスの判定（`useKartePathwayEvaluations`）は Observation を取ってから
+  CarePlan を `_id` で別に引く 2 往復になり、看護の実施記録（`fetchNursingPerforms`）は患者か日付で引いてから
+  basedOn で指示に振り分けている。
+- **望ましいサーバー機能**: `Observation?based-on=`（R4 標準、targets ServiceRequest / CarePlan）と、
+  `_include=Observation:based-on` / `_revinclude=Observation:based-on`。
+- **影響範囲**: カルテのパスタブ（2 往復 → 1）と看護の実施記録。詳細は `refactoring-plan.md` 第 2 段。
 
 
 ## 長期（アーキテクチャ）
@@ -399,7 +412,7 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   extension の書き込みを廃止する。readme の該当記述も更新する。既存データには extension が
   残るため、読み出しの互換は当面維持する。
 
-### F-2. `fetchOrderCandidates` の古いコメントと category 未使用
+### F-2. `fetchOrderCandidates` の古いコメントと category 未使用 — **対応済み（2026-09-15、`refactoring-plan.md` A1）**
 
 - **現状**: `queries.ts:2710` 付近のコメントは「上流の ServiceRequest には category
   検索パラメータが無い」と述べているが、これは**古い**（ワークリスト系の

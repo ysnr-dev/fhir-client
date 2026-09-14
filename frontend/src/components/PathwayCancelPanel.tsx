@@ -4,7 +4,7 @@ import {
   useNursingPerformsOf,
   usePathwayApplicationTree,
   usePathwayObservations,
-  usePatientTasks,
+  useOrderTasks,
 } from "../api/queries";
 import { orderKindOf } from "../fhir/karteTimeline";
 import type { OrderSetOrderType } from "../fhir/orderSetHelpers";
@@ -33,7 +33,7 @@ export function PathwayCancelPanel({ patientId, applyId, onCancelled }: PathwayC
   const tree = usePathwayApplicationTree(applyId);
   const observations = usePathwayObservations(patientId);
   const performs = useNursingPerformsOf(patientId);
-  const tasks = usePatientTasks(patientId);
+  const tasks = useOrderTasks(tree.data ? [...tree.data.orders.keys()] : []);
   const cancel = useCancelPathwayApplication();
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -51,9 +51,11 @@ export function PathwayCancelPanel({ patientId, applyId, onCancelled }: PathwayC
       performDates: nursingPerformDates(performs.data),
     };
   }, [tree.data, observations.data, performs.data]);
-  const plan = ctx && tasks.data ? planPathwayCancel(ctx, tasks.data) : null;
+  // オーダーが 1 件も無いパスでは Task の検索が走らないので、空として扱う。
+  const taskList = ctx && ctx.orders.size === 0 ? [] : tasks.data;
+  const plan = ctx && taskList ? planPathwayCancel(ctx, taskList) : null;
 
-  if (tree.isPending || observations.isPending || performs.isPending || tasks.isPending) return <p>読み込み中...</p>;
+  if (tree.isPending || observations.isPending || performs.isPending || (!taskList && !tasks.error)) return <p>読み込み中...</p>;
   if (!ctx || !plan) return <ErrorBanner error={tree.error ?? observations.error ?? performs.error ?? tasks.error} />;
   const application = ctx.application;
   const running = progress !== null;
@@ -67,7 +69,7 @@ export function PathwayCancelPanel({ patientId, applyId, onCancelled }: PathwayC
     cancel.mutate(
       {
         orders: plan.orders.map(({ order }) => ({ order, kind: orderKindOf(order) })),
-        tasks: tasks.data ?? [],
+        tasks: taskList ?? [],
         treeBundle: buildPathwayTreeDeleteBundle(plan),
         onProgress: (done) => setProgress({ done, total }),
       },

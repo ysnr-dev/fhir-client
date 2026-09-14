@@ -10,7 +10,7 @@ import {
   PATHWAY_TREE_KEY_PREFIX,
   useEndoscopyWorklist,
   usePatientInjectionOrders,
-  usePatientTasks,
+  useOrderTasks,
   usePhysioWorklist,
   useRadWorklist,
   useSurgeryWorklist,
@@ -420,7 +420,7 @@ function SurgeryPerformLoader({ order, onClose }: { order: fhir4.ServiceRequest;
 
 /**
  * リハビリ・栄養指導の実施入力。1 回ぶんの実施を積み上げる。受付前なら実施と一緒に受付済にするので、
- * 患者の Task から進捗を引いてから開く。実施日の初期値は開いたセルの日付(先の日なら今日)。
+ * オーダーの Task から進捗を引いてから開く。実施日の初期値は開いたセルの日付(先の日なら今日)。
  */
 function SessionPerformLoader({
   patientId,
@@ -435,7 +435,7 @@ function SessionPerformLoader({
   date: string;
   onClose: () => void;
 }) {
-  const tasks = usePatientTasks(patientId);
+  const tasks = useOrderTasks([order.id ?? ""]);
   if (!tasks.data) {
     return (
       <Modal title="実施入力" onClose={onClose}>
