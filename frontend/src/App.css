@@ -2344,9 +2344,16 @@ fieldset.rp-card {
   min-width: 0;
 }
 
+/* 表の行は入力部品の高さが低いので、select も表内の input と同じ字の大きさと
+   余白にして、選択中の文字の下が切れないようにする。 */
+.lab-result-form__value-cell select {
+  font-size: 14px;
+  padding: 4px 6px;
+}
+
 .lab-result-form__interpretation {
   flex: none;
-  width: 52px;
+  width: 60px;
 }
 
 /* 検体検査オーダーの選択肢は検査項目名を並べるので長くなりがち。選択肢の幅に
