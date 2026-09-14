@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   useEndoscopyItemsByCodes,
@@ -6,6 +7,7 @@ import {
   useTreatmentItemsByCodes,
 } from "../api/masterQueries";
 import {
+  PATHWAY_TREE_KEY_PREFIX,
   useEndoscopyWorklist,
   usePatientInjectionOrders,
   usePatientTasks,
@@ -113,7 +115,13 @@ export function PathwayOrderModal({
   }, [performing, onClose]);
 
   const canPerform = canPerformOrder(order, kind, progress);
-  const closePerform = () => setPerforming(false);
+  // 実施入力を閉じたら(登録したかに関わらず)パスの木を読み直す。進み具合が変わると「実施入力」を消し、
+  // 詳細を開いたまま同じオーダーに実施を二重に入れさせない。
+  const queryClient = useQueryClient();
+  const closePerform = () => {
+    setPerforming(false);
+    queryClient.invalidateQueries({ queryKey: PATHWAY_TREE_KEY_PREFIX });
+  };
 
   return (
     <>
@@ -389,9 +397,9 @@ function TreatmentPerformLoader({ order, onClose }: { order: fhir4.ServiceReques
   );
 }
 
-/** 手術の実施入力。手術一覧は予定手術日(occurrencePeriod)で引くので、日程未定の申込は開けない。 */
+/** 手術の実施入力。手術一覧は予定日時(occurrence)の日で引くので、日程未定の申込は開けない。 */
 function SurgeryPerformLoader({ order, onClose }: { order: fhir4.ServiceRequest; onClose: () => void }) {
-  const date = order.occurrencePeriod?.start?.slice(0, 10) ?? "";
+  const date = (order.occurrenceDateTime ?? order.occurrencePeriod?.start ?? "").slice(0, 10);
   const worklist = useSurgeryWorklist(date);
   const row = worklist.data?.rows.find((r) => r.order.id === order.id);
   return (
