@@ -839,7 +839,7 @@ export function parsePathoOrderForm(
     setting: (categoryCoding(sr, SETTING_SYSTEM)?.code ?? "") as PrescriptionSetting,
     priority: (sr.priority === "urgent" ? "urgent" : "routine") as PathoOrderPriority,
     examCategory,
-    // datetime-local の入力値に合わせて分までに丸める。時刻を持たない値(旧データ)は
+    // datetime-local の入力値に合わせて分までに丸める。時刻を持たない値は
     // datetime-local に入らないので空にし、入れ直してもらう。
     collectionDateTime:
       sr.occurrenceDateTime && sr.occurrenceDateTime.length > 10

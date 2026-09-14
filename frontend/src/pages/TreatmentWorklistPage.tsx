@@ -229,8 +229,8 @@ function matchesFilters(row: TreatmentWorklistRow, filters: Filters): boolean {
   const summary = summarizeTreatmentOrder(row.order);
   if (filters.setting && summary.settingCode !== filters.setting) return false;
 
-  // 病棟はオーダー登録時に焼き付けたもの。外来オーダーと、焼き付ける前に出した
-  // オーダーは病棟を持たないので、病棟で絞ると消える。
+  // 病棟はオーダー登録時に焼き付けたもの。病棟を持たないオーダー(外来など)は、
+  // 病棟で絞ると消える。
   if (filters.wardId && wardOf(row.order).wardId !== filters.wardId) return false;
 
   const requester = prescriptionRequester(row.order);
@@ -381,7 +381,7 @@ function WorklistRow({
         </ul>
       </td>
       <td className="rad-worklist__compact">{summary.settingDisplay || "-"}</td>
-      {/* オーダー登録時の入院病棟。外来オーダーと、焼き付ける前のオーダーは "-"。 */}
+      {/* オーダー登録時の入院病棟。病棟を持たないオーダー(外来など)は "-"。 */}
       <td className="rad-worklist__compact">{wardOf(order).wardName || "-"}</td>
       <td>{orderContextSummary(requester) || "-"}</td>
       <td className="rad-worklist__compact">

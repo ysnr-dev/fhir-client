@@ -48,7 +48,7 @@ export function readOrderContext(owner: string): StoredOrderContextValue | null 
       departmentName: stored.departmentName ?? "",
       practitionerId: stored.practitionerId ?? "",
       practitionerName: stored.practitionerName ?? "",
-      // auto を持たない旧形式は、既定診療科から自動で入れた値と区別が付かない。
+      // auto を持たない保存値は、既定診療科から自動で入れた値と区別が付かない。
       // 既定診療科に追従する側に倒す(ユーザーが選び直せば次からは残る)。
       auto: stored.auto !== false,
     };

@@ -142,7 +142,7 @@ export function MealOrderForm({
   const sideDishFormItems = sideDishForms.data?.items ?? [];
 
   // 選んだ食種の給与形態(種別マスタの nutrition_form)。未分類の食種・マスタが届く前は
-  // 既定の「普通食・治療食」として扱う(この分類を入れる前のデータもこれになる)。
+  // 既定の「普通食・治療食」として扱う。
   const nutritionForm = useMemo(() => {
     const diet = dietItems.find((item) => item.item_code === values.diet?.code);
     if (!diet?.category_code) return DEFAULT_MEAL_NUTRITION_FORM;

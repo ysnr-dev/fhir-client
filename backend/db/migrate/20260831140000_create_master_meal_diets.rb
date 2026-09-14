@@ -1,11 +1,9 @@
 class CreateMasterMealDiets < ActiveRecord::Migration[8.0]
   # 食種を master_meal_items から独立したテーブルに分ける(docs/meal-order-design.md §3)。
   #
-  # 当初は食種・主食・副食形態を「列構成が同じ」として 1 テーブルに入れていたが、
-  # 食止め(is_fasting)・種別(category_code)に続いて主成分量(§3.3)と適応を持たせると
-  # 食種専用の列が共通の列より多くなり、「主食には入れられない」検証を重ねる形に
-  # なるので分けた。主食・副食形態(・将来の嗜好品・補助食)は「コードと名称のリスト」の
-  # ままで、こちらは master_meal_items に残る。
+  # 食種は食止め(is_fasting)・種別(category_code)・主成分量(§3.3)・適応といった専用の列が
+  # 共通の列より多いので別テーブルにする。主食・副食形態(・将来の嗜好品・補助食)は
+  # 「コードと名称のリスト」のままで、master_meal_items に残る。
   #
   # FHIR 側は CodeSystem の URI(meal-type / meal-staple-food / meal-side-dish-form)で
   # 既に区別しているので無変更。

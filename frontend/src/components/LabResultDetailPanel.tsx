@@ -91,8 +91,8 @@ interface LabResultCategoryGroup {
 }
 
 // 検査項目を検査分野(生化学検査・血液学的検査など)ごとにまとめる。分野は Observation
-// には持たないので、結果項目コードで引いた結果項目マスタの検査分野を使う(結果項目マスタ
-// 導入前の保存済み結果は JLAC11 で読み替える)。
+// には持たないので、結果項目コードで引いた結果項目マスタの検査分野を使う(施設コードを
+// 持たない結果は JLAC11 で読み替える)。
 // 分野の並びはマスタ画面の選択肢と揃え、そこに無い分野は末尾に置く。
 function groupByCategory(
   observations: fhir4.Observation[],
@@ -149,7 +149,7 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
   const patientId = report?.subject?.reference?.split("/").pop() ?? "";
 
   // 検査分野でグループ化するため、項目の結果項目コードでマスタを引き直す。
-  // 結果項目マスタ導入前の保存済み結果(施設コード無し)は JLAC11 で引いて読み替える。
+  // 施設コードを持たない結果(JLAC11 のみ)は JLAC11 で引いて読み替える。
   const resultItemCodes = useMemo(
     () => [...new Set(observations.map(labResultItemCodeOf).filter(Boolean))],
     [observations],

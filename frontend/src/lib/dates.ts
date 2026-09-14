@@ -33,7 +33,7 @@ export function diffDays(from: string, to: string): number {
 
 /**
  * FHIR の date / dateTime を一覧向けの「YYYY-MM-DD HH:mm」にする。時刻を持たない値
- * (時刻を付ける前に登録した入退院・外出泊)は日付だけ返す。タイムゾーンは変換しない
+ * (日付だけの入退院・外出泊)は日付だけ返す。タイムゾーンは変換しない
  * (入退院の日時はローカル時刻 + オフセットで書いているので、文字列のまま切り出せる)。
  */
 export function dateTimeLabel(value: string | undefined): string {

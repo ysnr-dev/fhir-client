@@ -12,7 +12,7 @@
 //   participant     : 主治医(種別 ATND)と担当看護師(種別はローカル code の nurse。
 //                     看護師を表す標準コードが ParticipationType に無いため)。複数可。
 //                     どちらも未指定なら要素ごと付けない
-//   period.start    : 入院日時。時刻を付ける前に登録したものは日付だけ
+//   period.start    : 入院日時。日付だけのこともある
 //
 // 特記事項は R4 の Encounter に置き場所が無いのでローカル拡張にする。上流の
 // プロファイル検証は extension の中身を見ないが、R4 に無い要素(note など)は
@@ -116,8 +116,8 @@ export function buildAdmissionEncounter(
 }
 
 /**
- * 画面の日時(YYYY-MM-DDTHH:mm)を FHIR dateTime にする。日付だけの値(時刻を付ける前の
- * 形)はそのまま date として通す。
+ * 画面の日時(YYYY-MM-DDTHH:mm)を FHIR dateTime にする。日付だけの値はそのまま date として
+ * 通す。
  */
 export function encounterDateTime(value: string): string {
   return value.length > 10 ? toFhirDateTime(value) : value;
@@ -288,7 +288,7 @@ export function encounterDischargeDate(encounter: fhir4.Encounter): string {
   return end ? end.slice(0, 10) : "-";
 }
 
-/** 入院日時(FHIR dateTime そのまま。時刻を付ける前のものは日付だけ)。 */
+/** 入院日時(FHIR dateTime そのまま。日付だけのこともある)。 */
 export function encounterAdmissionAt(encounter: fhir4.Encounter): string {
   return encounter.period?.start ?? "";
 }
@@ -682,18 +682,18 @@ export function buildBedTransferEncounter(
 // 1 回ごとに拡張 1 件で、複数回の外出泊を並べられる。
 //
 // 開始・終了は日時(valueDateTime)。食事オーダーが「出発までに出た最後の食事で止め、
-// 帰院後に出る最初の食事から戻す」ために時刻が要る。時刻を付ける前の valueDate も読める。
+// 帰院後に出る最初の食事から戻す」ために時刻が要る。日付だけの valueDate も読める。
 // 各外出泊は id(子拡張 `id`)を持ち、食事オーダー側がこの id で結び付く(取消で戻す先を
-// 突き止めるため。配列の位置は削除で動くので使わない)。id の無い旧データは、次に
+// 突き止めるため。配列の位置は削除で動くので使わない)。id を持たない外出泊は、次に
 // その入院の外出泊を書き換えるときに採番される。
 
 export const ENCOUNTER_LEAVE_EXTENSION_URL =
   "http://fhir-client.local/StructureDefinition/encounter-leave";
 
 export interface LeaveValues {
-  /** 外出泊の id。登録時に採番。旧データでは空のことがある。 */
+  /** 外出泊の id。登録時に採番。id を持たない外出泊では空。 */
   id: string;
-  /** 外出泊開始日時(YYYY-MM-DDTHH:mm)。旧データは日付だけ。 */
+  /** 外出泊開始日時(YYYY-MM-DDTHH:mm)。日付だけのこともある。 */
   start: string;
   /** 外出泊終了(帰院)日時。未定なら空。 */
   end: string;
@@ -722,7 +722,7 @@ function buildLeaveExtension(values: LeaveValues): fhir4.Extension {
   return { url: ENCOUNTER_LEAVE_EXTENSION_URL, extension: children };
 }
 
-/** 外出泊の拡張を丸ごと組み直す(id の無い旧データにも id が付く)。 */
+/** 外出泊の拡張を丸ごと組み直す(id を持たない外出泊にも id が付く)。 */
 function withLeaves(encounter: fhir4.Encounter, leaves: LeaveValues[]): fhir4.Encounter {
   const rest = (encounter.extension ?? []).filter((e) => e.url !== ENCOUNTER_LEAVE_EXTENSION_URL);
   const extension = [...rest, ...leaves.map(buildLeaveExtension)];
@@ -919,7 +919,7 @@ export const DISCHARGE_PLAN_EXTENSION_URL =
   "http://fhir-client.local/StructureDefinition/encounter-discharge-plan";
 
 export interface DischargePlan {
-  /** 退院予定日時(YYYY-MM-DDTHH:mm)。必須。時刻を付ける前のデータは日付だけ。 */
+  /** 退院予定日時(YYYY-MM-DDTHH:mm)。必須。日付だけのこともある。 */
   at: string;
   reason: string;
 }

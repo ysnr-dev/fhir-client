@@ -2,7 +2,7 @@
 # 上流 FHIR サーバーから処方オーダー一式を 2 往復で取得し、RP ごとのグループに
 # 畳んで PDF を組む。
 #   1. GET /ServiceRequest/{id} -- 中身を見ないと患者参照・入外区分が分からない
-#   2. batch Bundle POST /      -- 明細(_revinclude)+ Patient read + 自院 Organization 検索
+#   2. batch Bundle POST /      -- 明細(based-on 検索)+ Patient read + 自院 Organization 検索
 #
 # 検体ラベル(LabLabelReport)と同じ作りだが、採番のような副作用は無い(何度呼んでも
 # 読むだけ)。進捗 Task にも触らない -- 発行 = 受付の遷移は frontend が行い、この

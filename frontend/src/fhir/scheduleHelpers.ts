@@ -210,7 +210,7 @@ export function scheduleTypeLabel(type: ScheduleType): string {
 }
 
 /**
- * 枠表の種別。種別を持たない頃のデータ(coding が "outpatient")や不明値は
+ * 枠表の種別。種別を持たない枠表(coding が "outpatient")や不明値は
  * 診察予約として読む。
  */
 export function scheduleTypeOf(schedule: fhir4.Schedule): ScheduleType {
@@ -418,7 +418,7 @@ export function slotPatternOf(schedule: fhir4.Schedule): SlotPattern | null {
       weekdays: parsed.weekdays,
       blocks: parsed.blocks,
       durationMinutes: parsed.durationMinutes || emptySlotPattern.durationMinutes,
-      // capacity を持たない頃に作った枠表は 1 人枠として読む。
+      // capacity を持たない枠表は 1 人枠として読む。
       capacity: parsed.capacity || 1,
     };
   } catch {

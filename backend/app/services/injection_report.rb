@@ -106,7 +106,7 @@ class InjectionReport
   end
 
   # 明細・Patient read・自院 Organization を 1 つの batch Bundle で取得する。
-  # 明細は _revinclude で取る(based-on 検索は上流に無い。処方箋と同じ注意)。
+  # 明細はオーダーの検索に _revinclude で添えてもらう。
   def fetch_related_resources(order)
     patient_id = patient_id_from(order)
     self_organization_id = FacilitySettings.self_organization_id

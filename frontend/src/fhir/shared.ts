@@ -24,7 +24,7 @@ export function registrationAuthoredOn(
 
 /**
  * オーダーの開始日(YYYY-MM-DD)。occurrence 優先、無ければ登録日時の日付
- * (occurrence を持たない旧データのフォールバック。手術の日付未定以外では起きない)。
+ * (occurrence を持たないオーダーのフォールバック。手術の日付未定以外では起きない)。
  */
 export function orderDay(
   sr: Pick<fhir4.ServiceRequest, "occurrenceDateTime" | "authoredOn">,
@@ -93,7 +93,7 @@ export function orderComment(sr: fhir4.ServiceRequest): string {
   return sr.note?.[0]?.text ?? "";
 }
 
-/** 明細の並び順。identifier に採番した番号を持たない明細(contained だった頃)は 0。 */
+/** 明細の並び順。identifier に採番した番号を持たない明細は 0。 */
 export function itemNumber(request: fhir4.ServiceRequest, system: string): number {
   const value = request.identifier?.find((i) => i.system === system)?.value;
   return value ? Number(value) : 0;

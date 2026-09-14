@@ -35,7 +35,7 @@ class LabLabelReport
   JLAC11_SPECIMEN_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11-specimen".freeze
   CONTAINER_SYSTEM = "http://fhir-client.local/CodeSystem/lab-container".freeze
   ITEM_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/lab-order-item-number".freeze
-  # 検体・採取管を拡張で持っていた頃のオーダーの読み出し用。
+  # 検体・採取管を拡張に持つ明細の読み出し用(書き込みは contained の Specimen)。
   SPECIMEN_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-order-specimen".freeze
   CONTAINER_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-order-container".freeze
 
@@ -247,7 +247,7 @@ class LabLabelReport
     abbreviation.presence || name.to_s
   end
 
-  # 明細の検体・採取管。contained Specimen から読み、無ければ拡張(旧形式)を読む。
+  # 明細の検体・採取管。contained Specimen から読み、無ければ拡張を読む。
   def specimen_of(item)
     specimen = contained_specimen_of(item)
     type = coding_by_system(specimen&.dig("type", "coding"), JLAC11_SPECIMEN_SYSTEM) ||

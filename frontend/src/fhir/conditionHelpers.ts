@@ -92,7 +92,7 @@ export function problemNumberOf(condition: fhir4.Condition): number | undefined 
   return typeof value === "number" ? value : undefined;
 }
 
-// 番号順の比較。番号の無いプロブレム(区分を付ける前の既存データ)は末尾へ回し、
+// 番号順の比較。番号の無いプロブレムは末尾へ回し、
 // 番号なし同士は元の順序(取得順)を保つ。
 function compareProblemNumber(a: fhir4.Condition, b: fhir4.Condition): number {
   const left = problemNumberOf(a);

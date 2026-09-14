@@ -54,8 +54,8 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
   // 死亡は「その患者に今からオーダーを出してよいか」に直結するので帯に出す。
   const deceasedDate = p.deceasedDateTime?.slice(0, 10) ?? "";
   const deceased = deceasedDate || p.deceasedBoolean === true;
-  // ［決定］使用言語・通訳の要否は帯に出さない(2026-09-08)。窓口で毎回見るものではなく、
-  // 帯の横幅は患者番号・氏名・生年月日・在院場所と、注意のピクトグラムに使う。
+  // 使用言語・通訳の要否は帯に出さない。窓口で毎回見るものではなく、帯の横幅は
+  // 患者番号・氏名・生年月日・在院場所と、注意のピクトグラムに使う。
   // プロファイルタブの「使用言語」で読む(通訳必要もそこに出る)。
 
   return (

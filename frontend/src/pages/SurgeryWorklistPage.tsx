@@ -513,7 +513,7 @@ function WorklistRow({
         )}
       </td>
       <td className="rad-worklist__compact">{summary.settingDisplay || "-"}</td>
-      {/* オーダー登録時の入院病棟。外来オーダーと、焼き付ける前のオーダーは "-"。 */}
+      {/* オーダー登録時の入院病棟。病棟を持たないオーダー(外来など)は "-"。 */}
       <td className="rad-worklist__compact">{wardOf(order).wardName || "-"}</td>
       <td>{orderContextSummary(requester) || "-"}</td>
       <td className="rad-worklist__compact">

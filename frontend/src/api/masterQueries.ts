@@ -888,7 +888,7 @@ export function useLabResultItemsByCodes(codes: string[]) {
   });
 }
 
-// 結果項目マスタを導入する前に登録した検査結果(Observation.code が JLAC11 だけ)から
+// 施設コードを持たない検査結果(Observation.code が JLAC11 だけ)から
 // 結果項目を引き当てる用。保存済みの 17 桁は試薬・機器単位で、マスタの代表コードとは
 // 測定法・結果単位が違うことが多いので、測定物・識別・材料の 12 桁の前方一致で引く。
 // 引き当て(どの結果項目に読み替えるか)は使う側の resultItemAliases が決める。
@@ -4056,7 +4056,7 @@ export interface NursingObservationFilters {
 /**
  * 管理番号でまとめて引く(実施入力が、その患者の観察指示ぶんの表現タイプ・単位・
  * 選択肢を 1 往復で揃えるため)。管理番号は一意でない(用語の統合で番号が再利用される)が、
- * サーバー既定の active 絞り込みで旧行は落ちるので、残ったものの先頭を採る。
+ * サーバー既定の active 絞り込みで無効になった行は落ちるので、残ったものの先頭を採る。
  * 引けなかった番号は実施入力側で文字入力に落とす。
  */
 export function useNursingObservationsByManageNos(manageNos: string[]) {

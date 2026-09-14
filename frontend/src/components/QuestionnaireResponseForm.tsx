@@ -393,7 +393,7 @@ function resolveAnswer(answers: Answers, prefix: string, linkId: string): Answer
 function isEnabled(item: fhir4.QuestionnaireItem, prefix: string, answers: Answers): boolean {
   if (!item.enableWhen?.length) return true;
   // JASPEHR では演算子 "="・Coding 比較・enableWhen は最大1件(enableBehavior 禁止)。
-  // 旧データや外部リソースの複数条件にも耐えるよう all 既定で評価する。
+  // 外部リソースの複数条件にも耐えるよう all 既定で評価する。
   const results = item.enableWhen.map((ew) => {
     const answer = resolveAnswer(answers, prefix, ew.question);
     const code = ew.answerCoding?.code;

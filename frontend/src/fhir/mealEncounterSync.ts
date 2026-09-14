@@ -55,7 +55,7 @@ export interface MealSyncContext {
   fastingDiet?: MealItemRef | null;
 }
 
-/** この入院のオーダーか(入院との結びつきを持たない旧データは患者のものとして含める)。 */
+/** この入院のオーダーか(入院との結びつきを持たないオーダーは患者のものとして含める)。 */
 function belongsTo(sr: fhir4.ServiceRequest, encounterId: string): boolean {
   const id = mealOrderEncounterId(sr);
   return !id || id === encounterId;

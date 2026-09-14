@@ -22,14 +22,11 @@ import {
 // カルテのタイムラインは患者の ServiceRequest を 1 本のページングで読むので、
 // 明細がカードとして紛れ込まないよう `based-on:missing=true` でヘッダだけを
 // 取り、明細は `_revinclude:iterate=ServiceRequest:based-on` で同じ応答に
-// 添えてもらう(上流サーバーは 2026-08-09 に based-on 検索へ対応済み)。
+// 添えてもらう。
 //
 // 明細の各 ServiceRequest は、オーダーした時点の検査項目マスタの内容(項目コード・
 // 名称・略称・JLAC コード・検体・採取管)を写して持つ。マスタを直した後に過去の
 // オーダーの中身が変わってしまわないよう、参照ではなく写しにしている。
-//
-// 明細を contained に入れていた頃・検査項目を orderDetail に直接持っていた頃の
-// オーダーも読めるようにしてある(labOrderItems の読み出し順を参照)。
 
 // 処方の ServiceRequest と区別するオーダー種別(注射と同じ CodeSystem)。
 export const LAB_ORDER_TYPE = { code: "lab", display: "検体検査" };
@@ -47,7 +44,7 @@ const SPECIMEN_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Spec
 // contained の中だけで一意ならよいので、明細ごとに固定の id を使う。
 const CONTAINED_SPECIMEN_ID = "specimen";
 
-// 検体・採取管を拡張で持っていた頃の明細。読み出しのためだけに残してある。
+// 検体・採取管を拡張に持つ明細の読み出し用(書き込みは contained の Specimen)。
 const SPECIMEN_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-order-specimen";
 const CONTAINER_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-order-container";
 
@@ -315,14 +312,14 @@ function containedSpecimenOf(request: fhir4.ServiceRequest): fhir4.Specimen | un
 
 function parseItemRequest(request: fhir4.ServiceRequest, parentCode: string): LabOrderItemLine {
   const coding = request.code?.coding;
-  // contained だった頃の明細は id がリソース内だけの文字列(item-1)なので拾わない。
+  // contained の明細は id がリソース内だけの文字列(item-1)なので拾わない。
   const id = request.id && !request.id.startsWith("item-") ? request.id : "";
   const itemCoding = codingBySystem(coding, ORDER_ITEM_SYSTEM);
   const jlac11 = codingBySystem(coding, JLAC11_SYSTEM);
   const jlac10 = codingBySystem(coding, JLAC10_SYSTEM);
   const abbreviation = codingBySystem(coding, ABBREVIATION_SYSTEM);
   const contained = containedSpecimenOf(request);
-  // 検体・採取管を拡張で持っていた頃の明細のために、contained が無ければ拡張を読む。
+  // contained の Specimen が無ければ、検体・採取管を拡張から読む。
   const specimen =
     codingBySystem(contained?.type?.coding, JLAC11_SPECIMEN_SYSTEM) ??
     request.extension?.find((e) => e.url === SPECIMEN_EXT_URL)?.valueCodeableConcept?.coding?.[0];

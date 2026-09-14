@@ -70,7 +70,7 @@ export const MEAL_ORDER_END_EXT_URL = "http://fhir-client.local/StructureDefinit
 /**
  * 主食がどの食事のものかを表す(SS-MIX2 の ODS-2 サービス時間帯)。orderDetail の
  * CodeableConcept に付ける。この拡張を持たない主食は「全食共通」で、SS-MIX2 で
- * ODS-2 をブランクにしたものと同じ意味になる(この拡張を入れる前のデータもこれ)。
+ * ODS-2 をブランクにしたものと同じ意味になる。
  */
 const MEAL_TIMING_EXT_URL = "http://fhir-client.local/StructureDefinition/meal-timing";
 

@@ -334,7 +334,7 @@ export function parsePatient(patient: fhir4.Patient): PatientFormValues {
     contacts: (patient.contact ?? []).map(parseContact),
     generalPractitionerRef: patient.generalPractitioner?.[0]?.reference ?? "",
     generalPractitionerName: patient.generalPractitioner?.[0]?.display ?? "",
-    // use の無い電話番号(他システム由来や、分ける前に登録した患者)は固定電話として扱う。
+    // use の無い電話番号(他システム由来など)は固定電話として扱う。
     homePhone:
       patient.telecom?.find((t) => t.system === "phone" && t.use !== "mobile")?.value ?? "",
     mobilePhone:

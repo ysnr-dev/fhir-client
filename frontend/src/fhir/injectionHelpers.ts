@@ -90,12 +90,12 @@ export interface InjectionSeries {
   start: string;
   /** 展開の終了日。単日の束ねでは開始日と同じ。 */
   end: string;
-  /** 実施パターン。古いデータ・単日のオーダーは毎日として扱う。 */
+  /** 実施パターン。パターンを持たないオーダー・単日のオーダーは毎日として扱う。 */
   schedule: InjectionSchedule;
 }
 
 // 束ねを FHIR の Timing にする。毎日は Timing で表現するものが無いので持たせない
-// (拡張が無い = 毎日。古いデータもそう読める)。
+// (拡張が無い = 毎日)。
 function scheduleTiming(series: InjectionSeries): fhir4.Timing | null {
   const { schedule, start, end } = series;
   const bounds: fhir4.Period = { start, end };
@@ -957,7 +957,7 @@ export function buildInjectionSingleDayEntries(
   return buildInjectionDayEntries(values, patientId, requester, authoredOn, series);
 }
 
-// 1 日分の更新。束ね情報は保存済みのものを引き継ぐ(古いデータで無ければ単日の束ねを作る)。
+// 1 日分の更新。束ね情報は保存済みのものを引き継ぐ(束ねを持たなければ単日の束ねを作る)。
 // 元の ServiceRequest を受け取るのは、id のほかに登録日時(authoredOn)を引き継ぐため。
 export function buildInjectionUpdateBundle(
   values: InjectionFormValues,

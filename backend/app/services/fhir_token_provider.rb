@@ -5,7 +5,7 @@ require "faraday"
 #
 # When FHIR_SERVER_CLIENT_ID / FHIR_SERVER_CLIENT_SECRET are not configured,
 # runs in no-auth mode and #access_token returns nil (no Authorization header
-# should be sent) — preserving the previous pass-through behaviour.
+# should be sent), so requests pass through unauthenticated.
 #
 # The token is cached process-wide (see .default) and refreshed proactively
 # once 90% of its lifetime has elapsed. Concurrent callers are serialized by a

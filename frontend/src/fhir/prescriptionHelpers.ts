@@ -594,7 +594,7 @@ export interface PrescriptionSummary {
   id: string;
   /** 処方日(交付日)= 登録日時の日付。処方箋の交付年月日と同じ。 */
   date: string;
-  /** 投与開始日(occurrenceDateTime)。旧データは処方日と同じ。 */
+  /** 投与開始日(occurrenceDateTime)。持たない処方では処方日と同じ。 */
   startDate: string;
   settingCode: string;
   settingDisplay: string;

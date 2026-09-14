@@ -8,8 +8,7 @@ import { createTaskHelpers } from "./taskHelpers";
 // 「明日からやめる」が実際の指示の形なので)。
 //
 // Task はオーダー登録時には作らない。最初のステータス変更(いまはカルテからの中止)で
-// 作り、それまでは「Task が無い = 依頼済」として扱う。この機能より前に登録された
-// 注射もそのまま並べられる。
+// 作り、それまでは「Task が無い = 依頼済」として扱う。
 
 export const INJECTION_TASK_CODE = { code: "injection", display: "注射" };
 

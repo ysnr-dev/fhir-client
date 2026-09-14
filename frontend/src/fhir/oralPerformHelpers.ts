@@ -284,7 +284,6 @@ export function buildOralPerformBundle(
 // ---- 一覧への表示 ----
 
 export interface OralPerformDisplay {
-  /** ハブの Procedure id。 */
   id: string;
   /** どの予定枠の記録か "YYYY-MM-DDTHH:mm"。予定の印との突き合わせに使う。 */
   slotAt: string;

@@ -7,7 +7,7 @@ import { ErrorBanner } from "./ErrorBanner";
  * オーダー詳細の「登録日時」行。全種別の詳細で同じラベル・同じ書式にする。
  * 書式は文字列のまま切り出す dateTimeSecondsLabel(YYYY-MM-DD HH:mm:ss)。秒まで出すのは、
  * 同じ分にオーダーを何件も登録するため(どちらが先かが分からないと監査の役に立たない)。
- * 時刻を持たない旧データは日付だけになる(formatDateTime だと日付のみの値を UTC 0 時 = 9:00 と
+ * 時刻を持たない値は日付だけになる(formatDateTime だと日付のみの値を UTC 0 時 = 9:00 と
  * 誤って出す)。
  */
 export function RegisteredAtRow({ authoredOn }: { authoredOn: string | undefined }) {

@@ -169,8 +169,8 @@ export function specimenCodeOf(item: LabResultItem | null | undefined): string {
 }
 
 // 結果項目の同一性キー。編集復元・オーダーからの展開・時系列の行まとめで、同じ結果項目を
-// 1 つとして扱うために使う。施設コードを持たない骨格(結果項目マスタ導入前の保存済み
-// 結果から復元したもの)は JLAC11、それも無ければ名称で代用する。
+// 1 つとして扱うために使う。施設コードを持たない骨格(JLAC11 だけの結果から復元したもの)は
+// JLAC11、それも無ければ名称で代用する。
 export function lineKeyOf(item: LabResultItem): string {
   if (item.result_item_code) return `item:${item.result_item_code}`;
   if (item.jlac11_code) return `jlac11:${item.jlac11_code}`;
@@ -466,7 +466,7 @@ function buildSpecimen(plan: SpecimenPlan, patientId: string, collected: string)
 
 // Observation.code の coding。施設の結果項目コードを先頭に、標準コード(JLAC11 / JLAC10)を
 // 持っていれば併記し、最後に略称の補助 coding を添える。施設コードを持たない骨格
-// (結果項目マスタ導入前の保存済み結果をそのまま保存し直したもの)は JLAC11 から始まる。
+// (JLAC11 だけの結果をそのまま保存し直したもの)は JLAC11 から始まる。
 function buildCodeCodings(item: LabResultItem): fhir4.Coding[] {
   const codings: fhir4.Coding[] = [];
   if (item.result_item_code) {
@@ -1085,18 +1085,18 @@ export interface LabTimeline {
   rows: LabTimelineRow[];
 }
 
-// Observation の結果項目コード(施設コード)。結果項目マスタ導入前の保存済み結果には無い。
+// Observation の結果項目コード(施設コード)。JLAC11 だけの結果には無い。
 export function labResultItemCodeOf(obs: fhir4.Observation): string {
   return codingBySystem(obs.code.coding, RESULT_ITEM_SYSTEM)?.code ?? "";
 }
 
-// Observation の JLAC11 コード。感染症・腎機能の判定(分析物コード)と、結果項目マスタ導入前の
-// 保存済み結果から結果項目を引き当てるのに使う。
+// Observation の JLAC11 コード。感染症・腎機能の判定(分析物コード)と、施設コードを持たない
+// 結果から結果項目を引き当てるのに使う。
 export function labJlac11CodeOf(obs: fhir4.Observation): string {
   return codingBySystem(obs.code.coding, JLAC11_SYSTEM)?.code ?? "";
 }
 
-// 施設コードを持たない Observation(結果項目マスタ導入前の保存済み結果)の JLAC11 コード。
+// 施設コードを持たない Observation(JLAC11 だけの結果)の JLAC11 コード。
 // これで結果項目マスタを引き、施設コードの行と同じ結果項目に合流させる(resultItemAliases)。
 export function legacyJlac11CodesOf(observations: fhir4.Observation[]): string[] {
   const codes = observations.flatMap((obs) =>
@@ -1107,7 +1107,7 @@ export function legacyJlac11CodesOf(observations: fhir4.Observation[]): string[]
 
 // JLAC11 の読み替えキー。17 桁のうち測定物 5 + 識別 4 + 材料 3 の 12 桁で、残りの
 // 測定法 3 + 結果単位 2 は試薬・機器で変わるため同じ結果項目と見なす(docs/lab-order-master-design.md §3)。
-// 結果項目マスタ導入前の保存済み結果は試薬単位の 17 桁を持ち、マスタの代表コードとは
+// 施設コードを持たない結果は試薬単位の 17 桁を持ち、マスタの代表コードとは
 // 下 5 桁が違うことが多いので、この単位で引き当てる。17 桁でないコードは読み替えない。
 const JLAC11_LENGTH = 17;
 const JLAC11_ALIAS_LENGTH = 12;
@@ -1116,7 +1116,7 @@ export function jlac11AliasKey(code: string): string {
   return code.length === JLAC11_LENGTH ? code.slice(0, JLAC11_ALIAS_LENGTH) : "";
 }
 
-// JLAC11 の読み替えキー → 結果項目コード。結果項目マスタ導入前の保存済み結果を、同じ
+// JLAC11 の読み替えキー → 結果項目コード。施設コードを持たない結果を、同じ
 // 測定物・識別・材料の結果項目に読み替えるための対応。複数の結果項目が同じキーを持つ
 // (定量と定性など)ことがあるので、マスタの並び(表示順)で先に来たものを採る。
 export function resultItemAliases(items: LabResultItem[]): Map<string, string> {
@@ -1346,7 +1346,7 @@ export function specimenRefsFrom(specimens: fhir4.Specimen[]): SpecimenRef[] {
 }
 
 // 復元した簡易オブジェクトを、マスタから引き直した完全な LabResultItem で置き換える。
-// 施設コードで引き、施設コードを持たない骨格(結果項目マスタ導入前の保存済み結果)は
+// 施設コードで引き、施設コードを持たない骨格(JLAC11 だけの結果)は
 // JLAC11 で引く(結果項目間で一意とは限らないので先勝ち)。マスタに存在しなくなった
 // コードは簡易オブジェクトのまま残す。
 export function hydrateLabResultForm(

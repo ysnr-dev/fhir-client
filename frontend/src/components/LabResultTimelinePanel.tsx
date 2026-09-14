@@ -34,7 +34,7 @@ export function LabResultTimelinePanel({ patientId, filterKeys }: LabResultTimel
   const tableWrapRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading, error } = useLabResultTimeline(patientId, dateCount);
-  // 結果項目マスタ導入前の保存済み結果(施設コード無し)を、同じ JLAC11 を持つ結果項目の
+  // 施設コードを持たない結果(JLAC11 のみ)を、同じ JLAC11 を持つ結果項目の
   // 行に合流させる。読み替えが揃うまで待つ(先に描くと行が一度分かれてから合流する)。
   const legacyCodes = useMemo(() => legacyJlac11CodesOf(data?.observations ?? []), [data]);
   const legacyItems = useLabResultItemsByJlac11Codes(legacyCodes);

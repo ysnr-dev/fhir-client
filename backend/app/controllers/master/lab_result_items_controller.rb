@@ -10,7 +10,7 @@ module Master
       %i[result_item_code jlac11_code jlac10_code].each do |column|
         scope = scope.where(column => params[column].split(",")) if params[column].present?
       end
-      # JLAC11 の前方一致(カンマ区切りで複数)。結果項目マスタ導入前の検査結果は試薬・機器
+      # JLAC11 の前方一致(カンマ区切りで複数)。施設コードを持たない検査結果は試薬・機器
       # 単位の 17 桁を持ち、マスタの代表コードと下 5 桁(測定法・結果単位)が違うことが多いので、
       # 測定物・識別・材料の 12 桁で引き当てるために使う。
       if params[:jlac11_prefix].present?

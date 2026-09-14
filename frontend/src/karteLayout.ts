@@ -28,7 +28,7 @@ const MIN_TOP_RATIO = 0.2;
 const MAX_TOP_RATIO = 0.85;
 export const DEFAULT_TOP_RATIO = 0.6;
 
-// 左右も同様に制限する。既定は右ペイン 44%(スプリッタ導入前の固定値)。
+// 左右も同様に制限する。既定は右ペイン 44%。
 const MIN_LEFT_WIDTH_RATIO = 0.3;
 const MAX_LEFT_WIDTH_RATIO = 0.75;
 export const DEFAULT_LEFT_WIDTH_RATIO = 0.56;

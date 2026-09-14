@@ -414,7 +414,7 @@ export function DischargedTable({
       ? `${label} の退院を取り消して入院中に戻します。${bedLabel} には別の患者が入院しています。退院で止めた食事オーダーは元に戻ります。よろしいですか?`
       : `${label} の退院を取り消して入院中に戻します。退院で止めた食事オーダーは元に戻ります。よろしいですか?`;
     if (!window.confirm(message)) return;
-    // 退院予定で止めたまま退院した分も「退院」に上書きしてあるが、旧データに備えて両方を戻す。
+    // 退院予定で止めたまま退院した分も「退院」に上書きしてあるが、どちらの理由で止めたものも拾えるよう両方を戻す。
     const ctx = await loadMealSync(row.encounter);
     cancelDischarge.mutate({
       encounter: buildDischargeCancelledEncounter(row.encounter),

@@ -5,8 +5,8 @@ module Master
   class SurgeryCategory < ApplicationRecord
     self.table_name = "master_surgery_categories"
 
-    # 親をたどる回数の上限。循環は検証で弾いているが、データ移行などで壊れた行が
-    # 入っても無限ループにしないための歯止め。
+    # 親をたどる回数の上限。循環は検証で弾いているが、検証を通らずに入った行(直接の
+    # SQL など)で親が循環していても無限ループにしないための歯止め。
     MAX_DEPTH = 10
 
     validates :category_code, presence: true, uniqueness: true

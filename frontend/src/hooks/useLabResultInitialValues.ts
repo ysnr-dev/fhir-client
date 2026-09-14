@@ -34,8 +34,8 @@ export function useLabResultInitialValues(reportId: string | undefined, patientI
   );
 
   // 保存済みリソースにはコード型の選択肢などマスタ情報が含まれないため、結果項目コードで
-  // マスタを引き直してフォーム初期値を補完する。結果項目マスタ導入前の保存済み結果
-  // (施設コードが無く JLAC11 だけ)は JLAC11 で引く。
+  // マスタを引き直してフォーム初期値を補完する。施設コードを持たない結果
+  // (JLAC11 だけ)は JLAC11 で引く。
   const { codes, jlac11Codes } = useMemo(() => {
     const codes: string[] = [];
     const jlac11Codes: string[] = [];

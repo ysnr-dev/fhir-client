@@ -823,7 +823,6 @@ function PrescriptionJson({ srId }: { srId: string }) {
   );
 }
 
-// 検体検査もオーダーのヘッダと明細をまとめた Bundle で見せる。
 function LabOrderJson({ srId }: { srId: string }) {
   const detail = useLabOrderDetail(srId);
 
@@ -835,7 +834,6 @@ function LabOrderJson({ srId }: { srId: string }) {
   );
 }
 
-// 細菌検査もオーダーのヘッダと明細をまとめた Bundle で見せる。
 function MicroOrderJson({ srId }: { srId: string }) {
   const detail = useMicroOrderDetail(srId);
 
@@ -976,7 +974,6 @@ function TransfusionOrderDetail({
   );
 }
 
-// 病理・輸血もオーダーのヘッダと明細をまとめた Bundle で見せる(検体検査と同じ)。
 function PathoOrderJson({ srId }: { srId: string }) {
   const detail = usePathoOrderDetail(srId);
 

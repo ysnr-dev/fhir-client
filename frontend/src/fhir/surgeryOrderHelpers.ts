@@ -915,7 +915,7 @@ export function buildSurgeryScheduleServiceRequest(
 ): fhir4.ServiceRequest {
   const next: fhir4.ServiceRequest = { ...order };
 
-  // occurrence[x] は排他。古いデータが持つ occurrencePeriod は必ず落とす
+  // occurrence[x] は排他。occurrencePeriod を持つ申込でも必ず落とす
   // (残すと 2 つの occurrence が並び、読み手によってどちらを見るかがぶれる)。
   delete next.occurrencePeriod;
   if (values.scheduledDate) {
@@ -1069,7 +1069,7 @@ export interface SurgeryOrderSummary {
 
 export function summarizeSurgeryOrder(sr: fhir4.ServiceRequest): SurgeryOrderSummary {
   const setting = categoryCoding(sr, SETTING_SYSTEM);
-  // 旧データ(occurrencePeriod で保存した申込)も読めるよう start へフォールバック。
+  // occurrencePeriod を持つ申込も読めるよう start へフォールバック。
   const start = sr.occurrenceDateTime ?? sr.occurrencePeriod?.start ?? "";
   const duration = sr.extension?.find((e) => e.url === DURATION_EXT_URL)?.valueQuantity?.value;
   const room = sr.extension?.find((e) => e.url === ROOM_EXT_URL)?.valueReference;
