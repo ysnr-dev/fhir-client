@@ -1,0 +1,805 @@
+{
+  "pathway_code": "900002",
+  "name": "内視鏡的大腸ポリープ切除術(1泊2日)",
+  "short_name": "大腸EMR 1泊2日",
+  "name_kana": "ナイシキョウテキダイチョウポリープセツジョジュツ",
+  "version": "1.0",
+  "setting": "inpatient",
+  "scheduled_days": 2,
+  "adaptive_criteria": "長径2cm未満の大腸ポリープに対する内視鏡的粘膜切除術(EMR)。抗血栓薬を休薬できない例、長径2cm以上・ESD の適応例、全身状態不良例は除く。",
+  "note": "開発・デモ用のサンプル。入院日を前処置と治療後の 2 ステップに分け、出血・穿孔の観察を翌日まで続けている。雛形は処方・注射・検体検査・内視鏡・病理・食事・看護指示の 7 種別。",
+  "indications": [
+    {
+      "management_number": "20069734",
+      "name": "大腸ポリープ",
+      "icd10": "K635"
+    },
+    {
+      "management_number": "20059987",
+      "name": "結腸ポリープ",
+      "icd10": "K635"
+    }
+  ],
+  "events": [
+    {
+      "elapsed_days": 1,
+      "path_step": 1,
+      "title": "入院日",
+      "path_step_name": "前処置",
+      "oat_units": [
+        {
+          "unit_key": "cb8fa840-b4e6-5141-b5ad-db887f73d555",
+          "name": "腸管前処置が完了している",
+          "category": "G",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "91c1e580-b7a1-505b-aa97-6d28724f9127",
+              "name": "排便の性状",
+              "proper_value": "透明な水様便"
+            },
+            {
+              "assessment_key": "51a77da7-57aa-5014-aec7-62cbbbdde832",
+              "name": "悪心・嘔吐",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "a33aff95-e619-5234-a1c4-0b49abcf00b4",
+              "name": "腸管洗浄剤の内服(2L を 2 時間かけて)",
+              "category_lv1": "TP",
+              "category_lv2": "TPPR",
+              "order_type": "prescription",
+              "order_label": "モビプレップ配合内用剤",
+              "order_values": {
+                "rps": [
+                  {
+                    "usage": {
+                      "id": 3714,
+                      "usage_code": "1050A12000000000",
+                      "basic_usage_category_code": "1",
+                      "basic_usage_category": "内服",
+                      "detailed_usage_category_code": "0",
+                      "detailed_usage_category": "経口",
+                      "timing_category_code": "5",
+                      "timing_category": "頓用指示型",
+                      "usage_name": "検査前　服用",
+                      "standard_usage_number": "1638",
+                      "start_date": "20230123",
+                      "end_date": "99999999",
+                      "usage_code_category": "0",
+                      "created_at": "2026-07-19T22:40:26.575Z",
+                      "updated_at": "2026-07-19T22:40:26.575Z",
+                      "search_name": "検査前服用"
+                    },
+                    "doseDays": "",
+                    "doseCount": "1",
+                    "medicines": [
+                      {
+                        "dose": "1",
+                        "comment": "",
+                        "medicine": {
+                          "id": 30144,
+                          "change_category": "0",
+                          "master_type": "Y",
+                          "medicine_code": "622224401",
+                          "name_kanji_length": 11,
+                          "name": "モビプレップ配合内用剤",
+                          "name_kana_length": 20,
+                          "name_kana": "ﾓﾋﾞﾌﾟﾚｯﾌﾟﾊｲｺﾞｳﾅｲﾖｳｻﾞ",
+                          "unit_code": "20",
+                          "unit_name_length": 1,
+                          "unit_name": "袋",
+                          "price_type": "1",
+                          "price": "1555.0",
+                          "reserve1": "0",
+                          "narcotic_category": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "generic_flag": "0",
+                          "reserve2": "0",
+                          "dental_specific_flag": "0",
+                          "contrast_medium_category": "0",
+                          "injection_volume": "0",
+                          "listing_method_category": "0",
+                          "brand_name_related_code": "0",
+                          "old_price_type": "1",
+                          "old_price": "1634.3",
+                          "name_change_flag": "0",
+                          "kana_change_flag": "0",
+                          "dosage_form": "1",
+                          "reserve3": "",
+                          "changed_on": "20250401",
+                          "abolished_on": "99999999",
+                          "yakka_code": "7990102A1024",
+                          "publication_order": "006022000",
+                          "transitional_measure_on": "0",
+                          "basic_name": "モビプレップ配合内用剤",
+                          "listed_on": "0",
+                          "generic_name_code": "",
+                          "generic_name_description": "",
+                          "generic_name_addition_category": "0",
+                          "anti_hiv_flag": "0",
+                          "long_term_listed_related_code": "0",
+                          "selective_treatment_category": "0",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "search_name": "モビプレップ配合内用剤",
+                          "search_kana": "モビプレップハイゴウナイヨウザ",
+                          "search_generic": ""
+                        }
+                      }
+                    ],
+                    "usageComment": "検査当日朝から 2L を 2 時間かけて服用"
+                  }
+                ],
+                "comment": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "temporary",
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "3a1d0121-d84d-5093-b641-3ffa8e1d5472",
+              "name": "排便状況の確認(透明な水様便まで)",
+              "category_lv1": "NO",
+              "assessment_key": "91c1e580-b7a1-505b-aa97-6d28724f9127"
+            },
+            {
+              "task_key": "56742bd0-bc8d-52a6-95b9-6945c6e4c646",
+              "name": "食止め(検査のため)",
+              "category_lv1": "ML",
+              "order_type": "meal-order",
+              "order_label": "食止め、朝から",
+              "order_values": {
+                "diet": {
+                  "code": "NPO",
+                  "name": "食止め"
+                },
+                "comment": "内視鏡治療のため絶食",
+                "endDate": "",
+                "problem": null,
+                "staples": {
+                  "lunch": null,
+                  "dinner": null,
+                  "breakfast": null
+                },
+                "endTiming": "dinner",
+                "saltLimit": "",
+                "startDate": "",
+                "startTiming": "breakfast",
+                "sideDishForm": null,
+                "dietIsFasting": true,
+                "fastingReason": "exam"
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "879fcfce-11aa-55a8-a38d-2d19abda629c",
+              "name": "前処置の説明",
+              "category_lv1": "EG",
+              "category_lv2": "EGCS"
+            }
+          ]
+        },
+        {
+          "unit_key": "233521f6-27a9-5569-b0fe-d60bc4409780",
+          "name": "身体的準備ができている",
+          "category": "H",
+          "code_system": "bom",
+          "code": "O00470",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "42d396c7-2526-54c2-a3fb-7dc73db07cf8",
+              "name": "抗血小板剤・抗凝固剤が予定通り中止されている",
+              "category_code": "37",
+              "category_name": "出血",
+              "code_system": "bom",
+              "code": "3700070000",
+              "proper_value": "中止済"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "f96a4fef-7498-51f9-b6db-58b87165b609",
+              "name": "休薬状況の確認",
+              "category_lv1": "NO",
+              "assessment_key": "42d396c7-2526-54c2-a3fb-7dc73db07cf8"
+            },
+            {
+              "task_key": "5df4bb79-6d97-5318-9368-5efbaef17c54",
+              "name": "採血(血算・凝固)",
+              "category_lv1": "EX",
+              "category_lv2": "EXSP",
+              "order_type": "lab-order",
+              "order_label": "血算、PT、APTT",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "160008010",
+                    "name": "末梢血液一般検査",
+                    "jlacCode": "",
+                    "shortName": "血算",
+                    "parentCode": "",
+                    "specimenCode": "212",
+                    "specimenName": "全血(静脈血、EDTA入り)",
+                    "containerCode": "T03",
+                    "containerName": "EDTA-2K管",
+                    "jlacCodeSystem": ""
+                  },
+                  {
+                    "id": "",
+                    "code": "160012010",
+                    "name": "プロトロンビン時間(PT)",
+                    "jlacCode": "",
+                    "shortName": "PT",
+                    "parentCode": "",
+                    "specimenCode": "244",
+                    "specimenName": "血漿(クエン酸入り)",
+                    "containerCode": "T05",
+                    "containerName": "クエン酸Na管",
+                    "jlacCodeSystem": ""
+                  },
+                  {
+                    "id": "",
+                    "code": "160012310",
+                    "name": "活性化部分トロンボプラスチン時間(APTT)",
+                    "jlacCode": "B20030000244000F0",
+                    "shortName": "APTT",
+                    "parentCode": "",
+                    "specimenCode": "244",
+                    "specimenName": "血漿(クエン酸入り)",
+                    "containerCode": "T05",
+                    "containerName": "クエン酸Na管",
+                    "jlacCodeSystem": "jlac11"
+                  }
+                ],
+                "comment": "",
+                "problem": null,
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "13f094d9-ce59-5c72-91a4-c2de3edbf194",
+              "name": "点滴(細胞外液)",
+              "category_lv1": "TP",
+              "category_lv2": "TPIN",
+              "order_type": "injection",
+              "order_label": "ラクテック注　５００ｍＬ",
+              "order_values": {
+                "rps": [
+                  {
+                    "rate": "",
+                    "times": [],
+                    "lineCode": "",
+                    "siteCode": "",
+                    "medicines": [
+                      {
+                        "dose": "1",
+                        "comment": "",
+                        "medicine": {
+                          "id": 36910,
+                          "name": "ラクテック注　５００ｍＬ",
+                          "price": "231.0",
+                          "yj_code": "3319534A4046",
+                          "reserve1": "0",
+                          "reserve2": "0",
+                          "reserve3": "",
+                          "listed_on": "0",
+                          "name_kana": "ﾗｸﾃｯｸﾁｭｳ",
+                          "old_price": "231.0",
+                          "unit_code": "20",
+                          "unit_name": "袋",
+                          "basic_name": "ラクテック注",
+                          "changed_on": "20250401",
+                          "created_at": "2026-07-19T22:40:10.662Z",
+                          "price_type": "1",
+                          "updated_at": "2026-07-19T22:40:10.662Z",
+                          "yakka_code": "3319534A4046",
+                          "yakko_code": "3319",
+                          "yakko_name": "その他の血液代用剤",
+                          "dosage_form": "4",
+                          "master_type": "Y",
+                          "search_kana": "ラクテックチュウ",
+                          "search_name": "ラクテック注500ml",
+                          "abolished_on": "99999999",
+                          "generic_flag": "0",
+                          "anti_hiv_flag": "0",
+                          "medicine_code": "643310347",
+                          "old_price_type": "1",
+                          "search_generic": "",
+                          "change_category": "0",
+                          "injection_volume": "500",
+                          "kana_change_flag": "0",
+                          "name_change_flag": "0",
+                          "name_kana_length": 8,
+                          "unit_name_length": 1,
+                          "generic_name_code": "",
+                          "name_kanji_length": 12,
+                          "narcotic_category": "0",
+                          "publication_order": "010058000",
+                          "dental_specific_flag": "0",
+                          "nerve_destruction_flag": "0",
+                          "biological_product_flag": "0",
+                          "brand_name_related_code": "0",
+                          "listing_method_category": "1",
+                          "transitional_measure_on": "0",
+                          "contrast_medium_category": "0",
+                          "generic_name_description": "",
+                          "selective_treatment_category": "0",
+                          "long_term_listed_related_code": "0",
+                          "generic_name_addition_category": "0"
+                        }
+                      }
+                    ],
+                    "routeCode": "IV",
+                    "usageType": "drip",
+                    "methodCode": "",
+                    "usageComment": "前処置中の脱水予防(治療後の飲水開始まで)",
+                    "infusionHours": ""
+                  }
+                ],
+                "series": null,
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "setting": "inpatient",
+                "category": "temporary",
+                "schedule": {
+                  "kind": "daily"
+                },
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            }
+          ]
+        },
+        {
+          "unit_key": "eeb0d0cd-a151-5383-a66a-5ffe1433b64a",
+          "name": "治療・鎮静について理解できる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "0dec9af7-ad0c-5ffb-8f37-db40c6f44295",
+              "name": "説明内容を復唱できる",
+              "proper_value": "できる"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "52b978c6-f348-549b-8135-343d72cc1c1b",
+              "name": "内視鏡治療の説明・同意取得",
+              "category_lv1": "EG",
+              "category_lv2": "EGIC"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 1,
+      "path_step": 2,
+      "title": "入院日",
+      "path_step_name": "治療後",
+      "oat_units": [
+        {
+          "unit_key": "f3f57857-01b2-50f0-a8b9-2429773a7e2a",
+          "name": "予定した治療が終わる",
+          "category": "G",
+          "critical": false,
+          "assessments": [],
+          "tasks": [
+            {
+              "task_key": "d4a58ab1-ea7a-5b42-8479-10210c60065e",
+              "name": "内視鏡的大腸ポリープ切除術",
+              "category_lv1": "EX",
+              "category_lv2": "EXEN",
+              "order_type": "endoscopy-order",
+              "order_label": "大腸EMR",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "000024",
+                    "name": "内視鏡的大腸ポリープ・粘膜切除術(長径2cm未満)",
+                    "shortName": "大腸EMR",
+                    "examTypeCode": "03",
+                    "examTypeName": "下部消化管内視鏡",
+                    "reasonConditionId": "",
+                    "reasonName": "大腸ポリープ",
+                    "purpose": "",
+                    "remarks": "",
+                    "purposeTemplate": null,
+                    "remarksTemplate": null,
+                    "parentCode": "",
+                    "groupable": false,
+                    "date": "",
+                    "time": "",
+                    "priority": "routine"
+                  }
+                ],
+                "problem": null,
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": "",
+                "startTime": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "da263782-ea55-5f38-ba20-5003f4e4216b",
+              "name": "切除ポリープの病理検査",
+              "category_lv1": "EX",
+              "category_lv2": "EXPA",
+              "order_type": "patho-order",
+              "order_label": "結腸その他",
+              "order_values": {
+                "comment": "",
+                "problem": null,
+                "schemas": [],
+                "setting": "inpatient",
+                "priority": "routine",
+                "specimens": [
+                  {
+                    "id": "",
+                    "note": "",
+                    "typeCode": "201",
+                    "typeName": "生検",
+                    "organCode": "01030900",
+                    "organName": "結腸その他",
+                    "methodCode": "201",
+                    "methodName": "生検",
+                    "lateralityCode": ""
+                  }
+                ],
+                "clinicalInfo": "内視鏡的大腸ポリープ切除術(EMR)の切除標本。部位・大きさは内視鏡所見を参照。",
+                "examCategory": "N000",
+                "operatingRoom": "",
+                "reportDueDate": "",
+                "collectionDateTime": "",
+                "clinicalInfoTemplate": null
+              },
+              "order_schema_version": 1
+            }
+          ]
+        },
+        {
+          "unit_key": "3fcaf15c-5de1-5d59-8ced-cbf9cf9f18da",
+          "name": "バイタルサインが安定している",
+          "category": "H",
+          "code_system": "bom",
+          "code": "O00670",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "860f9575-44c8-5168-837d-69c20379aeb4",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "6b75dcb9-3b8f-5669-86c2-6cb06551729d",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            },
+            {
+              "assessment_key": "fde6c2ab-fc8b-5ace-af1e-0ff5a0bc4c71",
+              "name": "収縮期血圧",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900030700",
+              "proper_value": "90〜160mmHg",
+              "nursing_observation_manage_no": "31001848"
+            },
+            {
+              "assessment_key": "5d64a89e-e1b0-5cad-84f1-3868ecbc6906",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上",
+              "nursing_observation_manage_no": "31000001"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "794cc71c-9ff6-54b7-b1e0-5bc95f3645f3",
+              "name": "帰室後バイタルサイン測定",
+              "category_lv1": "NO"
+            }
+          ]
+        },
+        {
+          "unit_key": "59b0f161-a65c-5008-9bf5-e0444b593699",
+          "name": "出血・穿孔の徴候がない",
+          "category": "H",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "ed132fd9-57ff-58ea-922e-00762acd8a13",
+              "name": "下血",
+              "category_code": "37",
+              "category_name": "出血",
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "ae44ce7b-f6fc-5f39-91a6-8c9ecee1d4a9",
+              "name": "腹痛の増強",
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "8ee13f7f-14a9-5d92-bbe1-4513cf6a694a",
+              "name": "腹部膨満",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "5ea57985-d5e9-55e8-8111-06fb322e4b77",
+              "name": "腹部症状・排便の観察",
+              "category_lv1": "NO",
+              "assessment_key": "ed132fd9-57ff-58ea-922e-00762acd8a13"
+            }
+          ]
+        },
+        {
+          "unit_key": "b70eac25-200a-5905-bfe7-65e6430a5f3e",
+          "name": "安静が守られる",
+          "category": "G",
+          "critical": false,
+          "assessments": [],
+          "tasks": [
+            {
+              "task_key": "27d42e1f-b47a-5037-bc70-f1fdc005056e",
+              "name": "ベッド上安静(帰室後 2 時間)",
+              "category_lv1": "AL",
+              "order_type": "nursing-order",
+              "order_label": "安静度: ベッド上安静(帰室後 2 時間、以降トイレ歩行可)",
+              "order_values": {
+                "lines": [
+                  {
+                    "item": null,
+                    "text": "安静度: ベッド上安静(帰室後 2 時間、以降トイレ歩行可)",
+                    "comment": "",
+                    "endDate": "",
+                    "schedule": null,
+                    "condition": "",
+                    "startDate": ""
+                  }
+                ],
+                "problem": null
+              },
+              "order_schema_version": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "elapsed_days": 2,
+      "path_step": 1,
+      "title": "退院日",
+      "oat_units": [
+        {
+          "unit_key": "59b0f161-a65c-5008-9bf5-e0444b593699",
+          "name": "出血・穿孔の徴候がない",
+          "category": "H",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "ed132fd9-57ff-58ea-922e-00762acd8a13",
+              "name": "下血",
+              "category_code": "37",
+              "category_name": "出血",
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "ae44ce7b-f6fc-5f39-91a6-8c9ecee1d4a9",
+              "name": "腹痛の増強",
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "8ee13f7f-14a9-5d92-bbe1-4513cf6a694a",
+              "name": "腹部膨満",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "5ea57985-d5e9-55e8-8111-06fb322e4b77",
+              "name": "腹部症状・排便の観察",
+              "category_lv1": "NO",
+              "assessment_key": "ed132fd9-57ff-58ea-922e-00762acd8a13"
+            }
+          ]
+        },
+        {
+          "unit_key": "5316032b-9a62-5d7c-9727-0eea29f0caf8",
+          "name": "経口摂取が再開できる",
+          "category": "G",
+          "critical": false,
+          "assessments": [
+            {
+              "assessment_key": "51a77da7-57aa-5014-aec7-62cbbbdde832",
+              "name": "悪心・嘔吐",
+              "proper_value": "なし"
+            },
+            {
+              "assessment_key": "6ab98086-2030-5003-ba33-835ad7ff45f1",
+              "name": "食事摂取量",
+              "proper_value": "5割以上"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "c45956f5-4009-5059-83b9-40c7cecf4b7e",
+              "name": "採血(血算)",
+              "category_lv1": "EX",
+              "category_lv2": "EXSP",
+              "order_type": "lab-order",
+              "order_label": "血算",
+              "order_values": {
+                "items": [
+                  {
+                    "id": "",
+                    "code": "160008010",
+                    "name": "末梢血液一般検査",
+                    "jlacCode": "",
+                    "shortName": "血算",
+                    "parentCode": "",
+                    "specimenCode": "212",
+                    "specimenName": "全血(静脈血、EDTA入り)",
+                    "containerCode": "T03",
+                    "containerName": "EDTA-2K管",
+                    "jlacCodeSystem": ""
+                  }
+                ],
+                "comment": "",
+                "problem": null,
+                "setting": "inpatient",
+                "priority": "routine",
+                "startDate": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "a72b15bb-32d6-5f8a-875a-6f3e24cdafd9",
+              "name": "低残渣食(昼から)",
+              "category_lv1": "ML",
+              "category_lv2": "MLLU",
+              "order_type": "meal-order",
+              "order_label": "低残渣食1400kcal、昼から",
+              "order_values": {
+                "diet": {
+                  "code": "A00243",
+                  "name": "低残渣食1400kcal"
+                },
+                "comment": "",
+                "endDate": "",
+                "problem": null,
+                "staples": {
+                  "lunch": null,
+                  "dinner": null,
+                  "breakfast": null
+                },
+                "endTiming": "dinner",
+                "saltLimit": "",
+                "startDate": "",
+                "startTiming": "lunch",
+                "sideDishForm": null,
+                "dietIsFasting": false,
+                "fastingReason": ""
+              },
+              "order_schema_version": 1
+            },
+            {
+              "task_key": "739d0d25-19d6-590c-b236-db3e3fc82be9",
+              "name": "食事摂取量の観察",
+              "category_lv1": "NO",
+              "assessment_key": "6ab98086-2030-5003-ba33-835ad7ff45f1"
+            }
+          ]
+        },
+        {
+          "unit_key": "c24b49f1-330b-5b1b-b292-71982049c54d",
+          "name": "退院基準を満たしている",
+          "category": "H",
+          "critical": true,
+          "assessments": [
+            {
+              "assessment_key": "ff5af7ff-c040-5c6f-bfa5-89ffe4c3ced9",
+              "name": "体温",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900032700",
+              "proper_value": "37.5℃未満",
+              "nursing_observation_manage_no": "31001368"
+            },
+            {
+              "assessment_key": "8e6dccef-d8ce-5ee7-b5c2-1a1333adb58c",
+              "name": "脈拍数",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900034300",
+              "proper_value": "60〜100/分",
+              "nursing_observation_manage_no": "31001390"
+            },
+            {
+              "assessment_key": "857776d8-5ce5-57ac-9c2e-b2f96f8bf755",
+              "name": "収縮期血圧",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900030700",
+              "proper_value": "90〜160mmHg",
+              "nursing_observation_manage_no": "31001848"
+            },
+            {
+              "assessment_key": "968c4bfd-0f81-56f6-ae7f-e76ef6d7b65e",
+              "name": "SpO2",
+              "category_code": "19",
+              "category_name": "バイタルサイン",
+              "code_system": "bom",
+              "code": "1900027300",
+              "proper_value": "95%以上",
+              "nursing_observation_manage_no": "31000001"
+            },
+            {
+              "assessment_key": "77c54737-e27f-5028-b11b-f3ba20321440",
+              "name": "治療後の下血がない",
+              "category_code": "37",
+              "category_name": "出血",
+              "proper_value": "なし"
+            }
+          ],
+          "tasks": [
+            {
+              "task_key": "95bef911-86d5-5b19-a435-6cf9fddc2b15",
+              "name": "バイタルサイン測定",
+              "category_lv1": "NO"
+            },
+            {
+              "task_key": "9f299b09-0c99-52cb-88c1-09e3bb301a50",
+              "name": "退院指導(1 週間の飲酒・運動・遠出を控える、出血時の連絡)",
+              "category_lv1": "EG",
+              "category_lv2": "EGCS"
+            },
+            {
+              "task_key": "f9a24223-535b-527f-8f1c-d72552cc59a7",
+              "name": "退院時要約",
+              "category_lv1": "MD"
+            },
+            {
+              "task_key": "bd6c2f09-8980-54a7-b7db-7219b8cfe5f9",
+              "name": "病理結果説明の外来予約",
+              "category_lv1": "EG",
+              "category_lv2": "EGCS"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

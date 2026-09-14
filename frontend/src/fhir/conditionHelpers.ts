@@ -181,6 +181,11 @@ export function invalidParentIds(problems: fhir4.Condition[], selfId: string): S
 }
 
 /** 継続中(clinicalStatus = active)か。それ以外は解決済み・中止として扱う。 */
+/** 病名マスタの管理番号(病名の同一性の判定に使う)。マスタ外の自由記載なら空。 */
+export function conditionManagementNumber(condition: fhir4.Condition): string {
+  return codingBySystem(condition.code?.coding, DISEASE_KEY_NUMBER_SYSTEM)?.code ?? "";
+}
+
 export function isActiveCondition(condition: fhir4.Condition): boolean {
   return condition.clinicalStatus?.coding?.[0]?.code === "active";
 }

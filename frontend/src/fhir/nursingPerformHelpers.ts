@@ -64,6 +64,23 @@ const NURSING_LOINC_MAP: Record<string, LoincMapEntry> = {
   "31002365": { kind: "bp" }, // 血圧(血圧型)
 };
 
+/** 看護観察の管理番号に対応する経過表のバイタル(LOINC)。血圧は内訳のどちらを読むかも返す。 */
+export type NursingVitalCode =
+  | { kind: "measure"; code: string; unit: string }
+  | { kind: "bp"; part: "both" | "systolic" | "diastolic" };
+
+/**
+ * 看護観察の管理番号 → 経過表のバイタルの読み方。対応表(NURSING_LOINC_MAP)に加えて、収縮期・拡張期の
+ * 単独項目は血圧の内訳から読む(記録の側では別行にしないが、読むだけなら内訳が使える)。
+ */
+export function nursingVitalCodeOf(manageNo: string): NursingVitalCode | null {
+  if (manageNo === "31001848") return { kind: "bp", part: "systolic" };
+  if (manageNo === "31001849") return { kind: "bp", part: "diastolic" };
+  const mapped = NURSING_LOINC_MAP[manageNo];
+  if (!mapped) return null;
+  return mapped.kind === "bp" ? { kind: "bp", part: "both" } : { kind: "measure", code: mapped.code, unit: mapped.unit };
+}
+
 // ---- マスタ → 入力欄の仕様 ----
 
 /** 列挙型の選択肢。結果 1〜18 の空でないものを並べる。 */

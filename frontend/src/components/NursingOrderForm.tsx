@@ -18,6 +18,7 @@ import {
   type NursingOrderFormValues,
   type NursingOrderLineValues,
 } from "../fhir/nursingOrderHelpers";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { ErrorBanner } from "./ErrorBanner";
 import { NursingItemSearchModal } from "./NursingItemSearchModal";
@@ -32,6 +33,12 @@ interface Props {
   submitting: boolean;
   submitError: unknown;
   submitLabel?: string;
+  /** オーダーセットの適用日。外から開始日をまとめて入れるときに渡す。 */
+  bulkStartDate?: string;
+  /** セットの内容として入力する(患者と日付に依存する入力を出さず、その検証も外す)。 */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 // 看護指示の入力。1 回の登録で複数行(安静度・清潔・観察…)をまとめて出せるよう、
@@ -44,6 +51,9 @@ export function NursingOrderForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: Props) {
   const [values, setValues] = useState<NursingOrderFormValues>(initialValues);
   const [validationError, setValidationError] = useState("");
@@ -53,6 +63,10 @@ export function NursingOrderForm({
   // 「1日N回」の既定時刻。読めていない間は既定値で組む(選び直せば設定値が入る)。
   const facility = useFacilitySettings();
   const scheduleSettings = facility.data?.nursing_schedule ?? DEFAULT_NURSING_SCHEDULE;
+
+  useBulkStartDate(bulkStartDate, (date) =>
+    setValues((v) => ({ ...v, lines: v.lines.map((line) => ({ ...line, startDate: date })) })),
+  );
 
   useEffect(() => {
     if (validationError) validationErrorRef.current?.scrollIntoView({ block: "nearest" });
@@ -87,7 +101,7 @@ export function NursingOrderForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateNursingOrderForm(values);
+    const error = validateNursingOrderForm(values, { requireDates: !setMode });
     setValidationError(error);
     if (error) return;
     onSubmit({ ...values, problem: refreshProblemDisplay(values.problem, problemOptions) });
@@ -98,7 +112,7 @@ export function NursingOrderForm({
     // モーダル内の検索フォームが入れ子の <form> になり、検索ボタンで外側の指示登録
     // フォームがネイティブ送信されてしまう(処置・生理のオーダー画面と同じ作り)。
     <>
-      <form className="prescription-form" onSubmit={handleSubmit}>
+      <form className="prescription-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
         {validationError && (
           <div className="error-banner" role="alert" ref={validationErrorRef}>
             <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -198,23 +212,27 @@ export function NursingOrderForm({
           )}
         </fieldset>
 
-        <fieldset>
-          <legend>対象</legend>
-          <label>
-            対象プロブレム
-            <ProblemSelect
-              value={values.problem}
-              options={problemOptions}
-              onChange={(problem) => setValues((prev) => ({ ...prev, problem }))}
-            />
-          </label>
-        </fieldset>
+        {!setMode && (
+          <fieldset>
+            <legend>対象</legend>
+            <label>
+              対象プロブレム
+              <ProblemSelect
+                value={values.problem}
+                options={problemOptions}
+                onChange={(problem) => setValues((prev) => ({ ...prev, problem }))}
+              />
+            </label>
+          </fieldset>
+        )}
 
-        <div className="prescription-form__actions">
-          <button type="submit" disabled={submitting}>
-            {submitting ? "送信中..." : submitLabel}
-          </button>
-        </div>
+        {!hideSubmit && (
+          <div className="prescription-form__actions">
+            <button type="submit" disabled={submitting}>
+              {submitting ? "送信中..." : submitLabel}
+            </button>
+          </div>
+        )}
       </form>
 
       {picking !== null && (

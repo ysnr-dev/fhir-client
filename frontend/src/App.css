@@ -5691,6 +5691,26 @@ body.karte-wide {
   margin-top: 10px;
 }
 
+/* パス評価のカード。先頭にどのパスのどの病日の評価かを添え、記載は改行を保って出す。 */
+.karte-pathway-eval__context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+
+.karte-pathway-eval__variance {
+  color: #e0687a;
+  font-weight: 600;
+}
+
+.karte-pathway-eval__text {
+  margin: 0;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
 /* S/O/A/P などの見出し。本文(13px 通常)に埋もれないよう、
    見出し色・太字にしたうえで頭にアクセントの縦線を添える。 */
 .karte-card__section-title {
@@ -5719,6 +5739,12 @@ body.karte-wide {
 /* 参照先が削除済みのプロブレム。色を足さず、破線で通常と区別する。 */
 .karte-card__problem--missing {
   border-style: dashed;
+}
+
+/* クリニカルパスから出たオーダーの印。プロブレムと同じ形で、地色だけ敷いて見分ける。 */
+.karte-card__pathway {
+  background: var(--surface-sunken);
+  white-space: nowrap;
 }
 
 /* プロブレム選択中、そのプロブレムに紐付かない情報は控えめに出す
@@ -6132,7 +6158,8 @@ body.karte-wide {
    1 つずつが薄くなって押しにくくなる。 */
 .karte-right__actions button {
   font-size: 13px;
-  padding: 6px 12px;
+  /* 列の幅はいちばん長いラベル(クリニカルパス)で決まるので、左右の余白は詰める。 */
+  padding: 6px 7px;
   justify-content: center;
   flex: none;
 }
@@ -7725,6 +7752,12 @@ button.rp-card__icon-button.micro-result-form__isolate-remove {
    地の色は他の一覧画面と同じままにする。 */
 body.page-wide .app__main {
   max-width: none;
+}
+
+/* 列の多い編集画面(クリニカルパス定義)は、本文を既定の 960px より少しだけ広げる。
+   一覧のような全画面にはせず、表が横スクロールにならない幅で止める。 */
+body.page-wide-md .app__main {
+  max-width: 1200px;
 }
 
 /* 列を折り返さないぶん、画面が狭いと表がページからはみ出す。ページ全体を横に
@@ -12752,6 +12785,27 @@ button.meal-calendar__cell:hover {
   color: var(--accent);
 }
 
+/* 指示簿の「パスのタスク」の区画。看護指示の表の下に、見出しを置いて続ける。 */
+.nursing-worklist__pathway {
+  margin-top: 24px;
+}
+
+.nursing-worklist__pathway .lab-order-item__section-head .nursing-worklist__pending {
+  margin-left: 0;
+  font-size: 13px;
+}
+
+/* 患者見出し行に添えるパス名。氏名より控えめにする。 */
+.nursing-worklist__pathway-name {
+  margin-left: 16px;
+  font-weight: normal;
+}
+
+/* 実施済みのタスクは薄くする(未実施が目に入るように)。 */
+.nursing-worklist__pathway-done td {
+  opacity: 0.6;
+}
+
 /* 食事摂取量の入力(MealIntakeModal)。0〜10 割を横に並べたボタンで選ぶ。 */
 .meal-intake {
   display: flex;
@@ -13310,6 +13364,13 @@ button.meal-calendar__cell:hover {
   gap: 10px;
 }
 
+/* 積んだオーダーフォームは通常のオーダー画面と同じ 15px の入力欄。クリニカルパスの
+   適用パネルは区画(.regimen-apply__fields)の詰まった高さ(30px)の中に積むので、
+   そのままだと選択欄の文字の下が切れる。フォームの中だけ標準の高さに戻す。 */
+.order-set-stack .prescription-form {
+  --control-height: 34px;
+}
+
 .order-set-stack__item {
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -13695,6 +13756,1162 @@ button.meal-calendar__cell:hover {
 
 .regimen-editor .regimen-editor__rows {
   --control-height: 26px;
+}
+
+/* ---- クリニカルパス定義マスタ(docs/clinical-pathway-design.md) ---- */
+
+/* 病日カード。見出し行(病日・見出し・備考・ケバブ)+ OAT ユニットの縦積み。 */
+.pathway-event {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: var(--bg);
+}
+
+.pathway-event__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.pathway-event__head label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.pathway-event__head input {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  height: var(--control-height);
+  box-sizing: border-box;
+}
+
+.pathway-event__day input {
+  width: 72px;
+  font-weight: 600;
+}
+
+.pathway-event__title input {
+  width: 200px;
+}
+
+.pathway-event__step input {
+  width: 120px;
+}
+
+.pathway-event__note {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pathway-event__note input {
+  width: 100%;
+}
+
+.pathway-event__tools {
+  display: flex;
+  align-items: center;
+  height: var(--control-height);
+}
+
+/* OAT ユニット。見出し行(アウトカム)と、観察項目・タスクの 2 区画。 */
+.pathway-unit {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.pathway-unit--critical {
+  border-left-color: #e0687a;
+}
+
+.pathway-unit__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pathway-unit__head label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.pathway-unit__head input[type="text"],
+.pathway-unit__head select {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  height: var(--control-height);
+  box-sizing: border-box;
+}
+
+.pathway-unit__index {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding-bottom: 6px;
+}
+
+/* 複数の病日に続くアウトカムの印(載っている病日)。 */
+.pathway-unit__series {
+  align-self: flex-end;
+  margin-bottom: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.pathway-unit__name {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.pathway-unit__name input {
+  width: 100%;
+}
+
+.pathway-unit__check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+  padding-bottom: 6px;
+}
+
+.pathway-unit__code {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pathway-unit__tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding-bottom: 2px;
+}
+
+/* 観察項目とタスクは縦に積む。横に並べると 1 つあたりの幅が半分になり、
+   どちらの表も横スクロールになって読みにくいため。 */
+.pathway-unit__body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.pathway-unit__block {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.pathway-unit__block h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.pathway-unit__block .lab-order-item__actions {
+  margin-top: 4px;
+}
+
+/* 観察項目・タスクの行テーブル。 */
+.pathway-rows th,
+.pathway-rows td {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.pathway-rows input.pathway-rows__name {
+  width: 100%;
+  min-width: 160px;
+}
+
+/* 名称の列だけ伸ばし、他の列は中身の幅で固定する(100% にすると名称に押されて潰れる)。 */
+.pathway-rows select {
+  width: auto;
+  min-width: 96px;
+  max-width: 180px;
+}
+
+.pathway-rows input[type="text"]:not(.pathway-rows__name) {
+  width: 100px;
+}
+
+.pathway-rows input.regimen-editor__code-input {
+  width: 96px;
+}
+
+.pathway-rows .pathway-unit__code input.pathway-rows__short {
+  width: 56px;
+}
+
+.pathway-rows td:has(> input.pathway-rows__name) {
+  width: 100%;
+}
+
+/* ↑↓(文字)とゴミ箱(SVG)を並べる操作列。既定のベースライン揃えだと、SVG を持つ
+   ボタンのベースラインが図形の下端になって 2px ほど上に浮くので、中央で揃える。 */
+.pathway-rows__tools {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.pathway-rows__tools button {
+  vertical-align: middle;
+}
+
+.pathway-rows .pathway-unit__code button {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+/* タスクのオーダー雛形。種別のラベル + 要約 + 編集・外す。本文の幅に収めるため
+   列を広く取れないので、要約は入りきらなければ次の行へ送る(横スクロールを出さない)。 */
+.pathway-task__template {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  /* 列の幅を決め打ちにして、種別と要約が 1 行に並ぶようにする(操作は次の行)。 */
+  width: 264px;
+}
+
+/* 種別と要約で 1 行、操作(編集・外す)で 1 行。間に幅いっぱいの区切りを挟んで折り返す。 */
+.pathway-task__template::after {
+  content: "";
+  flex-basis: 100%;
+  height: 0;
+  order: 1;
+}
+
+.pathway-task__template button {
+  order: 2;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.pathway-task__template-label {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.pathway-task__template-summary {
+  flex: 1 1 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-size: 13px;
+}
+
+/* 概要表。列 = 病日、行 = アウトカム / 大分類ごとのタスク。全行を出し、横に長ければ表の中だけ送る。 */
+.pathway-overview__wrap {
+  overflow-x: auto;
+}
+
+.pathway-overview.master-search__table {
+  width: auto;
+}
+
+.pathway-overview td.regimen-day-table__label {
+  width: 1%;
+  min-width: 200px;
+}
+
+.pathway-overview th.regimen-day-table__day,
+.pathway-overview td.regimen-day-table__day {
+  width: 72px;
+  min-width: 72px;
+}
+
+.pathway-overview th.pathway-overview__day {
+  vertical-align: bottom;
+}
+
+.pathway-overview th.pathway-overview__day small {
+  display: block;
+  font-weight: normal;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* 地(--bg)から一段はっきり離れる面を選ぶ。明るいテーマでは panel が地より暗く、
+   暗いテーマでは card が地より明るいので、テーマごとに使い分ける。 */
+.pathway-overview .pathway-overview__group td {
+  background: var(--surface-panel);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+}
+
+:root[data-theme="dark"] .pathway-overview .pathway-overview__group td {
+  background: var(--surface-card);
+}
+
+.pathway-overview__label--critical {
+  font-weight: 600;
+}
+
+/* 概要表のセルは押して続きを付け外しする。セル全体を押せる面にし、罫線の内側に収める。 */
+.pathway-overview td.pathway-overview__cell {
+  padding: 0;
+}
+
+.pathway-overview__toggle {
+  display: block;
+  width: 100%;
+  min-height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pathway-overview__toggle:hover:not(:disabled),
+.pathway-overview__toggle:focus-visible {
+  background: var(--accent-bg);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.pathway-overview__toggle:disabled {
+  cursor: default;
+}
+
+/* オーダー雛形のモーダル。オーダー登録フォームがそのまま入るので広く取る。 */
+.pathway-template-modal {
+  width: min(1100px, 95vw);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.pathway-template-modal__type {
+  margin-bottom: 8px;
+}
+
+.pathway-template-modal__type label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.pathway-template-modal__form {
+  margin-bottom: 8px;
+}
+
+/* カルテ右ペインのパス適用(PathwayApplyPanel)。区画はレジメン適用と同じ見た目。 */
+.pathway-apply__criteria {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.pathway-apply__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+/* 入力欄の並び(ラベルを縦積みにする入れ物)に混ざるチェックボックスは、
+   チェックと文字を横に並べたままにする。 */
+.lab-order-item__fields .pathway-apply__check {
+  flex-direction: row;
+  align-items: center;
+}
+
+.pathway-apply__conditions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pathway-apply__days th,
+.pathway-apply__days td {
+  font-size: 13px;
+  padding: 3px 8px;
+}
+
+/* 雛形の行に出す病日と日付。種別の後ろ、タスク名の前。 */
+.pathway-apply__task-day {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ---- パスシート(カルテのパスタブ、KartePathwayTab) ---- */
+
+.pathway-sheet {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 全画面。経過表(.vital-flowsheet--fullscreen)と同じ枠。 */
+.pathway-sheet--fullscreen {
+  position: fixed;
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
+  z-index: 100;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  padding: 12px;
+  overflow: hidden;
+}
+
+.pathway-sheet .karte-tabpanel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* 見出しの帯。併せて付けている .chemo-calendar__summary が後ろにあり space-between と
+   gap を上書きするので、こちらは両方のクラスで詳細度を上げて指定する。
+   項目は左から詰め、操作(予定外を追加・終了・中止)だけ右端にまとめる。 */
+.chemo-calendar__summary.pathway-sheet__summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 4px 12px;
+  align-items: center;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.pathway-sheet__name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.pathway-sheet__wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  margin-bottom: 0;
+}
+
+.pathway-sheet__table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* 行の見出し列は左に貼り付ける。幅は決め打ち(sticky の left は手前の列幅でしか決まらない)。 */
+.pathway-sheet__table .pathway-sheet__label-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  text-align: left;
+  background: var(--bg);
+  box-shadow: inset -1px 0 0 var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pathway-sheet--fullscreen .pathway-sheet__table .pathway-sheet__label-col {
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+}
+
+.pathway-sheet__table thead th {
+  z-index: 3;
+}
+
+.pathway-sheet__table th,
+.pathway-sheet__table td {
+  padding: 3px 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--border);
+  box-shadow: inset -1px 0 0 var(--border);
+  white-space: nowrap;
+}
+
+.pathway-sheet__table th.pathway-sheet__day,
+.pathway-sheet__table td.pathway-sheet__cell {
+  width: var(--pathway-sheet-col-w);
+  min-width: var(--pathway-sheet-col-w);
+  text-align: center;
+}
+
+.pathway-sheet__day-no {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.pathway-sheet__day-title {
+  display: block;
+  font-weight: normal;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pathway-sheet__day-date {
+  font-weight: normal;
+  font-size: 12px;
+}
+
+/* 同じ病日を分けたときのステップ(術前 / 術後)。日付の段の下に並ぶ。 */
+.pathway-sheet__day-step {
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.pathway-sheet__day--today {
+  background: var(--accent-bg);
+}
+
+.pathway-sheet__day--past {
+  color: var(--text-muted);
+}
+
+/* 末尾の空列で幅の端数を吸収する(経過表と同じ)。 */
+.pathway-sheet__filler {
+  width: auto;
+  box-shadow: none;
+}
+
+/* OAT ユニットの行は見出し。観察項目・タスクはその下に字下げ。 */
+.pathway-sheet__row--unit th.pathway-sheet__label-col {
+  font-weight: 600;
+  background: var(--surface-panel);
+}
+
+/* アウトカムの開閉。評価の済んだアウトカムは畳んだ状態で開く。 */
+.pathway-sheet__toggle {
+  width: 18px;
+  padding: 0;
+  margin-right: 2px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.pathway-sheet__toggle:disabled {
+  cursor: default;
+  opacity: 0;
+}
+
+
+:root[data-theme="dark"] .pathway-sheet__row--unit th.pathway-sheet__label-col {
+  background: var(--surface-card);
+}
+
+.pathway-sheet__row--unit td {
+  background: var(--surface-stripe);
+}
+
+.pathway-sheet__row--assessment .pathway-sheet__label,
+.pathway-sheet__row--task .pathway-sheet__label {
+  padding-left: 12px;
+  font-weight: normal;
+}
+
+.pathway-sheet__row--task .pathway-task__template-label {
+  margin-left: 12px;
+  margin-right: 4px;
+}
+
+.pathway-sheet__row--task .pathway-sheet__label {
+  padding-left: 0;
+}
+
+.pathway-sheet__critical {
+  color: #e0687a;
+  margin-right: 4px;
+}
+
+/* アウトカムの評価はセルを押して入れる。ホバーするまで押せると分からないので、
+   値はカルテのバッジと同じチップにして静止状態でも操作だと分かるようにする。
+   枠は文字と同じ色にし、達成 / 未達成 / 未評価の色分けをそのまま使う。
+   観察項目の実績値(押せない)は素の文字のままなので、見ただけで区別できる
+   (タスクは ☐ / ☑ 自体が押せる印になるのでチップにしない)。 */
+.pathway-sheet__outcome {
+  display: inline-block;
+  padding: 0 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.pathway-sheet__outcome--pending,
+.pathway-sheet__planned {
+  color: var(--text-muted);
+}
+
+.pathway-sheet__task {
+  font-size: 15px;
+}
+
+.pathway-sheet__task--done {
+  color: var(--accent);
+}
+
+.pathway-sheet__order,
+.pathway-sheet__unplanned {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* セルは丸ごと押せる(評価入力を右ペインに開く)。見た目は表のセルのまま。 */
+.pathway-sheet__cell-button {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.pathway-sheet__cell-button:hover,
+.pathway-sheet__cell-button:focus-visible {
+  background: var(--accent-bg);
+}
+
+/* キーボードで辿ったときは、ホバーと同じ地色に加えてセルの中に枠を出す
+   (表の罫線とずれないよう内側に引く)。 */
+.pathway-sheet__cell-button:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: -2px;
+}
+
+/* 観察項目の実績値は評価の中で入れるので、セルは押せない表示にする(ボタンと同じ寸法)。 */
+.pathway-sheet__cell-static {
+  display: block;
+  width: 100%;
+  padding: 0;
+  text-align: center;
+}
+
+.pathway-sheet__outcome--1 {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.pathway-sheet__outcome--2 {
+  color: #e0687a;
+  font-weight: 600;
+}
+
+.pathway-sheet__value {
+  font-weight: 600;
+}
+
+/* 複数の病日に続く行の線と矢印(SeriesLink)。中身の左右に線を置き、セルの左右の余白(8px)まで伸ばして
+   隣のセルの線とつなげる。続きの最後のセルは、中身の手前で右向きの矢じりにする。 */
+.pathway-sheet__series {
+  --pathway-link-color: var(--text);
+  display: flex;
+  align-items: stretch;
+}
+
+.pathway-sheet__series-content {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.pathway-sheet__link,
+.pathway-sheet__link-spacer {
+  flex: 1 1 0;
+  min-width: 8px;
+  position: relative;
+}
+
+.pathway-sheet__link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--pathway-link-color);
+}
+
+.pathway-sheet__link--in {
+  margin-left: -8px;
+  margin-right: 4px;
+}
+
+.pathway-sheet__link--out {
+  margin-left: 4px;
+  margin-right: -8px;
+}
+
+.pathway-sheet__link-spacer:first-child {
+  margin-right: 4px;
+}
+
+.pathway-sheet__link-spacer:last-child {
+  margin-left: 4px;
+}
+
+.pathway-sheet__link--end::before {
+  right: 5px;
+}
+
+.pathway-sheet__link--end::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 6px;
+  height: 8px;
+  transform: translateY(-50%);
+  background: var(--pathway-link-color);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+/* 観察項目の行見出しに添える適正値(評価基準)。名前より控えめにし、はみ出たら名前と一緒に省略する。 */
+.pathway-sheet__proper {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--text-muted);
+}
+
+/* 見出しの帯のメニュー(予定外を追加・日程の変更・終了・取り消し)。帯の行を増やさないよう右端の小さなケバブにする。 */
+.pathway-sheet__menu {
+  display: inline-flex;
+  align-self: center;
+  margin-left: auto;
+}
+
+.pathway-sheet__menu .row-menu__trigger {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-color: transparent;
+  font-size: 14px;
+}
+
+/* オーダーの開始日が、そのタスクの病日の日付と食い違う(日程の変更の後に直していない)。 */
+.pathway-sheet__order--mismatch {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+/* 日程の変更・取り消しのオーダーの一覧。項目名は本文と同じ大きさにする。 */
+.pathway-schedule__list li {
+  font-size: 13px;
+}
+
+/* 適用の取り消しの実行ボタン(消すので危険の色)。 */
+.pathway-cancel__button:not(:disabled) {
+  border-color: #e0687a;
+  color: #e0687a;
+}
+
+/* 見出しの帯に置く「予定外を追加」「終了・中止」。帯の文字に合わせて小さくし、右端にまとめる。 */
+.pathway-sheet__close-button {
+  --control-height: 24px;
+  font-size: 12px;
+  padding: 0 10px;
+}
+
+/* 見出しの右の表示の切り替え(日めくり / 全体)。2 つを 1 組の枠に並べ、選んでいる方に地色を敷く。 */
+.pathway-sheet__modes {
+  display: inline-flex;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+.pathway-sheet__modes .pathway-sheet__mode {
+  --control-height: 28px;
+  font-size: 13px;
+  padding: 0 12px;
+  border-radius: 0;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.pathway-sheet__modes .pathway-sheet__mode:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.pathway-sheet__modes .pathway-sheet__mode:last-child {
+  border-radius: 0 6px 6px 0;
+  margin-left: -1px;
+}
+
+.pathway-sheet__modes .pathway-sheet__mode--active {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* 見出し帯の進み具合(未評価・バリアンス・未実施)。押すと全体をその行に絞る。 */
+.pathway-sheet__issue {
+  --control-height: 22px;
+  gap: 4px;
+  font-size: 12px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.pathway-sheet__issue--variance:not(:disabled) {
+  border-color: #e0687a;
+  color: #e0687a;
+}
+
+/* 絞り込み中の件数は塗りつぶし、「×」を添えて押すと解除できることを示す。 */
+.pathway-sheet__issue.pathway-sheet__issue--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.pathway-sheet__issue--variance.pathway-sheet__issue--active {
+  background: #e0687a;
+  border-color: #e0687a;
+  color: var(--bg);
+}
+
+.pathway-sheet__issue-clear {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* 日めくり。病日の見出しと前後の送り、アウトカムごとのカード。全画面でも読みやすい幅で止めて中央に置く。 */
+.pathway-day {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  overflow-y: auto;
+}
+
+.pathway-day__nav {
+  --control-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pathway-day__nav button {
+  font-size: 13px;
+  padding: 0 10px;
+}
+
+.pathway-day__title {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.pathway-day__title strong {
+  font-size: 16px;
+  color: var(--text-h);
+}
+
+.pathway-day__date {
+  font-size: 13px;
+}
+
+.pathway-day__today {
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.pathway-day__unit {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.pathway-day__unit--critical {
+  border-left-color: #e0687a;
+}
+
+.pathway-day__unit-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 6px;
+}
+
+.pathway-day__unit-head h4 {
+  flex: 1 1 200px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.pathway-day__unit-head .pathway-sheet__unplanned {
+  display: inline;
+  margin-left: 6px;
+}
+
+.pathway-day__achievement {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.pathway-day__rows {
+  margin-bottom: 6px;
+}
+
+.pathway-day__tasks li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.pathway-day__task-link {
+  height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pathway-day__task-link:hover {
+  text-decoration: underline;
+}
+
+.pathway-day__actions {
+  justify-content: flex-end;
+}
+
+/* 観察項目の実績値の候補(その日の経過表の値)。押すと入力欄に入る。 */
+.pathway-evaluate__rows td.pathway-day__candidate-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.pathway-evaluate__candidate {
+  --control-height: 22px;
+  font-size: 12px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border-style: dashed;
+}
+
+.pathway-sheet__summary button:first-of-type {
+  margin-left: auto;
+}
+
+/* 進み具合の件数は状態の横に置き、その後ろの操作(予定外を追加・終了)から右端へ寄せる。 */
+.pathway-sheet__summary .pathway-sheet__issue:first-of-type {
+  margin-left: 0;
+}
+
+/* 入院患者一覧の「パス」列と患者ヘッダの、進行中のパスの名前。長い名前は省略し、複数あれば間を空けて並べる。 */
+.pathway-name-link {
+  display: inline-block;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.pathway-name-link + .pathway-name-link {
+  margin-left: 8px;
+}
+
+/* 予定外の追加。タスクは分類 2 つ + 名称。 */
+/* 予定外のタスクの見出し行。分類・名称・オーダー種別・外すを 1 行に収め、
+   狭いときは名称から縮める(オーダーの本体は下に開く)。入れ物が
+   .lab-order-item__fields でも .prescription-form でもないので、部品の見た目は
+   ここで当てる(値は同じモーダルの観察項目の欄に合わせてある)。 */
+.pathway-unplanned__task-head select,
+.pathway-unplanned__task-name {
+  font: inherit;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.pathway-unplanned__task-head select {
+  flex: none;
+  max-width: 132px;
+}
+
+.pathway-unplanned__task-name {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+/* オーダーを付けないタスクは本体を持たないので、見出しの角を全部丸める。 */
+.pathway-unplanned__task .order-set-stack__head:only-child {
+  border-bottom: none;
+  border-radius: 6px;
+}
+
+.pathway-evaluate__rows input[type="text"] {
+  width: 100%;
+}
+
+/* シートに重ねる評価入力・タスクの実施入力。縦に長いときはモーダルの中だけ送る。 */
+.pathway-evaluate-modal {
+  box-sizing: border-box;
+  width: min(720px, 92vw);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+/* 右ペインの評価入力(PathwayEvaluatePanel)。 */
+.pathway-evaluate__head {
+  margin-bottom: 4px;
+}
+
+.pathway-evaluate__unit {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.pathway-evaluate__rows th {
+  text-align: left;
+  font-weight: normal;
+  white-space: nowrap;
+  width: 40%;
+}
+
+.pathway-evaluate__rows td.pathway-evaluate__proper {
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* 行見出しの th。.master-search__table は列見出し(thead の th)を前提に sticky と
+   box-shadow の下線を当てるので、行見出しでは td と同じ罫線に戻す(1px ずれる)。 */
+.pathway-evaluate__rows tbody th {
+  position: static;
+  border-bottom: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.pathway-evaluate__rows td input[type="text"],
+.pathway-evaluate__rows td input[type="number"],
+.pathway-evaluate__rows td select {
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.pathway-evaluate__rows td input[type="number"] {
+  width: 90px;
+}
+
+/* 評価・終了・予定外の各パネルの自由文欄。区画(fieldset)に直接置くので、
+   .lab-order-item__fields の入力欄の見た目をここで当てる(textarea は素のまま残るため)。 */
+.pathway-evaluate textarea,
+.pathway-unplanned__name {
+  box-sizing: border-box;
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* 詳細モーダルの下に並べる操作(編集・実施入力)。本文と離して置く。 */
+.karte-detail__actions {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.pathway-evaluate__achievement,
+.pathway-evaluate__mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 4px;
+}
+
+/* 記載形式の切り替え。達成状態の並びと区別が付くよう上に線を引く。 */
+.pathway-evaluate__mode {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* テンプレート記入の欄(TemplateTextField)は評価の中でも他の欄と同じ幅にする。 */
+.pathway-evaluate .rad-gp__template-field textarea {
+  width: 100%;
 }
 
 /* ---- 化学療法(レジメンオーダー)(docs/chemo-regimen-design.md §7) ---- */

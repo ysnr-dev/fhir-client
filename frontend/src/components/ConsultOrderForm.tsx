@@ -18,6 +18,7 @@ import {
   type TemplateBinding,
 } from "../fhir/questionnaireResponseHelpers";
 import { makeFieldUpdater } from "../lib/form";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
@@ -45,6 +46,12 @@ interface ConsultOrderFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /** オーダーセットの適用日。外から開始日をまとめて入れるときに渡す。 */
+  bulkStartDate?: string;
+  /** セットの内容として入力する(患者と日付に依存する入力を出さず、その検証も外す)。 */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 export function ConsultOrderForm({
@@ -54,6 +61,9 @@ export function ConsultOrderForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: ConsultOrderFormProps) {
   const [values, setValues] = useState<ConsultOrderFormValues>(
     initialValues ?? emptyConsultOrderForm(""),
@@ -64,6 +74,7 @@ export function ConsultOrderForm({
   const fromTemplate = Boolean(values.purposeTemplate);
 
   const problemOptions = useProblemOptions(patientId);
+  useBulkStartDate(bulkStartDate, (date) => setValues((v) => ({ ...v, desiredDate: date })));
   const update = makeFieldUpdater(setValues);
 
   // 依頼先の候補は自院の診療科(部門ワークリストの絞り込みと同じ母集団)。
@@ -109,7 +120,7 @@ export function ConsultOrderForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateConsultOrderForm(values);
+    const error = validateConsultOrderForm(values, { requireDates: !setMode });
     setValidationError(error);
     if (error) return;
 
@@ -118,7 +129,11 @@ export function ConsultOrderForm({
 
   return (
     <>
-      <form className="prescription-form consult-form" onSubmit={handleSubmit}>
+      <form
+        className="prescription-form consult-form"
+        onSubmit={handleSubmit}
+        noValidate={hideSubmit}
+      >
       {validationError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -246,14 +261,16 @@ export function ConsultOrderForm({
             </div>
           </div>
         </div>
-        <label>
-          対象プロブレム
-          <ProblemSelect
-            value={values.problem}
-            options={problemOptions}
-            onChange={(problem) => update("problem", problem)}
-          />
-        </label>
+        {!setMode && (
+          <label>
+            対象プロブレム
+            <ProblemSelect
+              value={values.problem}
+              options={problemOptions}
+              onChange={(problem) => update("problem", problem)}
+            />
+          </label>
+        )}
       </fieldset>
 
       <fieldset>
@@ -308,11 +325,13 @@ export function ConsultOrderForm({
         )}
       </fieldset>
 
-      <div className="prescription-form__actions">
-        <button type="submit" disabled={submitting}>
-          {submitting ? "保存中..." : submitLabel}
-        </button>
-      </div>
+      {!hideSubmit && (
+        <div className="prescription-form__actions">
+          <button type="submit" disabled={submitting}>
+            {submitting ? "保存中..." : submitLabel}
+          </button>
+        </div>
+      )}
       </form>
 
       {/* モーダルは独自の入力(form)を持つため、外側フォームの子孫に置かない

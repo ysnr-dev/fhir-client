@@ -16,6 +16,8 @@ import {
   pathoOrderResponseIds,
 } from "./pathoOrderHelpers";
 import { pathoTaskStatus, pathoTasksByOrderId, type PathoTaskStatus } from "./pathoTaskHelpers";
+import { pathwayOf } from "./pathwayApplyHelpers";
+import type { PathwayEvaluationCard } from "./pathwayKarteHelpers";
 import { ORDER_TYPE_SYSTEM, prescriptionProblem } from "./prescriptionHelpers";
 import { categoryCoding } from "./shared";
 import {
@@ -162,7 +164,8 @@ export type KarteItemKind =
   | "rehab-order"
   | "nutrition-guidance-order"
   | "consult-order"
-  | "qr";
+  | "qr"
+  | "pathway-evaluation";
 
 export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   note: "診療記録",
@@ -183,6 +186,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   "nutrition-guidance-order": "栄養指導",
   "consult-order": "他科依頼",
   qr: "テンプレート",
+  "pathway-evaluation": "パス評価",
 };
 
 /**
@@ -192,7 +196,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
  */
 export function orderKindOf(
   sr: fhir4.ServiceRequest,
-): Exclude<KarteItemKind, "note" | "vital" | "qr"> | "nursing-order" | "chemo-regimen" | null {
+): Exclude<KarteItemKind, "note" | "vital" | "qr" | "pathway-evaluation"> | "nursing-order" | "chemo-regimen" | null {
   if (isOrderItemRequest(sr)) return null;
   if (isNursingServiceRequest(sr)) return "nursing-order";
   if (isRegimenServiceRequest(sr)) return "chemo-regimen";
@@ -404,6 +408,8 @@ export type KarteTimelineItem = KarteItemBase &
         status: ConsultTaskStatus;
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
+    // クリニカルパスのアウトカムの評価のうち、記載(S/O/A/P・自由記載・コメント)のあるもの。
+    | { kind: "pathway-evaluation"; evaluation: PathwayEvaluationCard }
   );
 
 export interface KarteDayGroup {
@@ -424,6 +430,11 @@ export interface KarteTimelineInput {
   pendingBundles: fhir4.Bundle[];
   responseBundles: fhir4.Bundle[];
   vitalBundles: fhir4.Bundle[];
+  /**
+   * パス評価のカード(記載のある評価)。患者ぶんを全部読んであるので、ページングの判定(カットオフ)には
+   * 加わらず、表示範囲に入った日から出る。
+   */
+  pathwayEvaluations: PathwayEvaluationCard[];
   noteHasNext: boolean;
   prescriptionHasNext: boolean;
   responseHasNext: boolean;
@@ -1000,7 +1011,17 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     (source) => source.hasNext && (source.oldest ?? CUTOFF_BLOCK_ALL) >= (cutoff ?? ""),
   );
 
-  const visible = [...noteItems, ...prescriptionItems, ...qrItems, ...vitalItems].filter(
+  // ［決定］パス評価は記録日時の日に置く(他の記載と同じく「いつ書いたか」の軸。どの病日の評価かは本文に出す)。
+  const pathwayEvaluationItems: KarteTimelineItem[] = input.pathwayEvaluations.map((evaluation) => ({
+    kind: "pathway-evaluation",
+    id: evaluation.observation.id ?? "",
+    day: dayOf(evaluation.recordedAt),
+    dateTime: evaluation.recordedAt,
+    label: KARTE_KIND_LABELS["pathway-evaluation"],
+    evaluation,
+  }));
+
+  const visible = [...noteItems, ...prescriptionItems, ...qrItems, ...vitalItems, ...pathwayEvaluationItems].filter(
     // 日付未定は先読みで全件持っているので、カットオフで隠さない。
     (item) =>
       item.day === KARTE_UNSCHEDULED_DAY || cutoff === undefined || item.day > cutoff,
@@ -1108,6 +1129,19 @@ export function mergeDayIndex(
         byDay.get(day) ??
         (day === KARTE_UNSCHEDULED_DAY || cutoff === undefined || day > cutoff ? [] : null),
     }));
+}
+
+// ---- クリニカルパスとの紐付け ----
+
+/**
+ * この情報がクリニカルパスのオーダー雛形から出たものなら、そのパスのコードと名前。
+ * 印はオーダーのヘッダ(ServiceRequest)に焼いてあるので、ヘッダを持つ種別だけが対象。
+ */
+export function itemPathway(item: KarteTimelineItem): { code: string; name: string } | null {
+  if (item.kind === "pathway-evaluation") {
+    return { code: item.evaluation.pathwayCode, name: item.evaluation.pathwayTitle };
+  }
+  return "serviceRequest" in item ? pathwayOf(item.serviceRequest) : null;
 }
 
 // ---- プロブレム(POMR)との紐付け ----

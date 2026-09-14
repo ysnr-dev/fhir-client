@@ -173,10 +173,12 @@ export function emptyNutritionGuidanceOrderForm(
  */
 export function validateNutritionGuidanceOrderForm(
   values: NutritionGuidanceOrderFormValues,
+  /** requireDates を偽にすると開始日を求めない(セットの内容としての入力)。 */
+  { requireDates = true }: { requireDates?: boolean } = {},
 ): string {
   if (!values.format) return "指導形態を選んでください。";
-  if (!values.startDate) return "開始日を入れてください。";
-  if (values.endDate && values.endDate < values.startDate) {
+  if (requireDates && !values.startDate) return "開始日を入れてください。";
+  if (values.startDate && values.endDate && values.endDate < values.startDate) {
     return "終了日は開始日と同じか、それより後にしてください。";
   }
   if (!values.targetDisease.trim()) return "対象疾患名を入れてください。";
@@ -348,6 +350,8 @@ export function buildNutritionGuidanceOrderBundle(
   const entries: fhir4.BundleEntry[] = [];
   const template = pushPurposeTemplateEntry(entries, values.purposeTemplate);
   entries.push({
+    // fullUrl は来歴(Provenance)とクリニカルパスのタスクがこのオーダーを指すのに使う。
+    fullUrl: `urn:uuid:${crypto.randomUUID()}`,
     resource: buildNutritionGuidanceServiceRequest(
       values,
       patientId,

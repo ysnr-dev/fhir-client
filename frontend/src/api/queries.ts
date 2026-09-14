@@ -8,6 +8,7 @@ import {
   useQuery,
   useQueryClient,
   type QueryClient,
+  type QueryKey,
 } from "@tanstack/react-query";
 import {
   groupVitalEntries,
@@ -29,6 +30,7 @@ import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeli
 import {
   buildActivityProvenanceEntry,
   buildOrderProvenanceEntry,
+  buildPathwayApplyProvenanceEntry,
   buildReviewProvenance,
   latestReview,
   provenancesOf,
@@ -37,6 +39,21 @@ import {
   type OrderEnterer,
 } from "../fhir/provenanceHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
+import {
+  PATHWAY_APPLY_ID_SYSTEM,
+  PATHWAY_LEVEL_SYSTEM,
+  PATHWAY_MARKER_CODE,
+  PATHWAY_MARKER_SYSTEM,
+  parsePathwayApplication,
+  pathwayInstantiatesUri,
+  type PathwayApplicationRecord,
+} from "../fhir/pathwayApplyHelpers";
+import { PATHWAY_APPLY_GOAL_ID_SYSTEM } from "../fhir/pathwayCloseHelpers";
+import { parsePathwayWardTasks, type PathwayWardTask } from "../fhir/pathwayWorklistHelpers";
+import { buildPathwayEvaluationCards, type PathwayEvaluationCard } from "../fhir/pathwayKarteHelpers";
+import { orderProgressByOrderId, type OrderProgress } from "../fhir/orderProgressHelpers";
+import { EVALUATION_ITEM_SYSTEM } from "../fhir/pathwayEvaluationHelpers";
+import { PATHWAY_VARIANCE_TASK_CODE } from "../fhir/pathwayVarianceHelpers";
 import { useCurrentPractitioner } from "./authQueries";
 import { nowFhirDateTime, today } from "../lib/dates";
 import {
@@ -3236,14 +3253,17 @@ export function useCancelInjectionPerforms() {
  * 連日オーダーを複数日まとめて削除する。予約(化学療法の日オーダーに取ってある外来化学療法室)も
  * 一緒に取り消す —— オーダーが消えたのに枠が埋まったままになるのを防ぐ(§8.15 N-13)。
  */
-export function useDeleteInjectionSeries() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srIds: string[]) => {
+/** useDeleteInjectionSeries の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deleteInjectionSeriesRequest = async (srIds: string[]) => {
       const bundle = buildInjectionSeriesDeleteBundle(srIds);
       const cancels = await orderAppointmentCancelEntries(srIds);
       return postBundle({ ...bundle, entry: [...(bundle.entry ?? []), ...cancels] });
-    },
+    };
+
+export function useDeleteInjectionSeries() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteInjectionSeriesRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -6612,6 +6632,52 @@ export function useKarteVitalsInfinite(
   });
 }
 
+/**
+ * カルテのタイムラインの「パス評価」(docs/clinical-pathway-design.md §6)。記載のあるアウトカムの評価を
+ * 患者ぶん全部読む(1 人の患者で数十件程度なのでページングしない。タイムラインの表示範囲の計算には加わらない)。
+ *
+ * 1. `Observation?patient&category=パスの印&code=判定` で評価の Observation。
+ * 2. basedOn の OAT ユニットを `CarePlan?_id=…&_include=CarePlan:part-of` で引き、祖先の病日・適用も揃える
+ *    (Observation の based-on は上流で検索・include できないので分ける)。
+ *
+ * 評価はプロブレムを指さないので、プロブレムで絞り込んでいるときは出さない。
+ * キーは評価の記録(useRecordPathwayEvaluation)の読み直しと同じ ["Observation", "search", "pathway"] 配下。
+ */
+export function useKartePathwayEvaluations(
+  patientId: string | undefined,
+  problemIds: KarteProblemFilter = null,
+) {
+  return useQuery({
+    queryKey: ["Observation", "search", "pathway", "karte-cards", patientId, problemQueryKey(problemIds)],
+    queryFn: async (): Promise<PathwayEvaluationCard[]> => {
+      if (problemIds?.length) return [];
+      const params = new URLSearchParams();
+      params.set("patient", `Patient/${patientId}`);
+      params.set("category", `${PATHWAY_MARKER_SYSTEM}|${PATHWAY_MARKER_CODE}`);
+      params.set("code", `${EVALUATION_ITEM_SYSTEM}|judgement`);
+      params.set("_count", "500");
+      const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
+      const observations = (bundle.entry ?? [])
+        .map((entry) => entry.resource)
+        .filter((r): r is fhir4.Observation => r?.resourceType === "Observation");
+      const unitIds = [
+        ...new Set(observations.map((o) => o.basedOn?.[0]?.reference?.split("/").pop() ?? "").filter(Boolean)),
+      ];
+      if (unitIds.length === 0) return [];
+      const carePlanParams = new URLSearchParams();
+      carePlanParams.set("_id", unitIds.join(","));
+      carePlanParams.set("_include", "CarePlan:part-of");
+      carePlanParams.set("_count", "500");
+      const { data: carePlanBundle } = await searchResource<fhir4.CarePlan>("CarePlan", carePlanParams);
+      const carePlans = (carePlanBundle.entry ?? [])
+        .map((entry) => entry.resource)
+        .filter((r): r is fhir4.CarePlan => r?.resourceType === "CarePlan");
+      return buildPathwayEvaluationCards(observations, carePlans);
+    },
+    enabled: Boolean(patientId) && problemIds !== undefined,
+  });
+}
+
 // ---- 診療日インデックス ----
 //
 // 診療日ペインには、タイムラインの読み込み状況に関係なく全診療日を最初から出す。
@@ -6831,10 +6897,13 @@ export function useDeleteVitalEntry() {
   });
 }
 
+/** useDeletePrescription の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deletePrescriptionRequest = (srId: string) => postBundle(buildPrescriptionDeleteBundle(srId));
+
 export function useDeletePrescription() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (srId: string) => postBundle(buildPrescriptionDeleteBundle(srId)),
+    mutationFn: deletePrescriptionRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
     },
@@ -6843,10 +6912,8 @@ export function useDeletePrescription() {
 
 // 検体検査は明細も ServiceRequest なので、ぶら下がっているものを引いてから
 // ヘッダごと消す(処方の MedicationRequest と同じ考え方)。
-export function useDeleteLabOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srId: string) => {
+/** useDeleteLabOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deleteLabOrderRequest = async (srId: string) => {
       const params = new URLSearchParams();
       params.set("_id", srId);
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
@@ -6855,7 +6922,12 @@ export function useDeleteLabOrder() {
         .map((request) => request.id)
         .filter((id): id is string => Boolean(id));
       return postBundle(buildLabOrderDeleteBundle(srId, itemIds));
-    },
+    };
+
+export function useDeleteLabOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteLabOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -6865,10 +6937,8 @@ export function useDeleteLabOrder() {
 
 // 細菌検査オーダーも明細(検体グループ・検査項目)が独立した ServiceRequest なので、
 // 消す直前に明細を引き直してからまとめて消す(検体検査と同じ)。
-export function useDeleteMicroOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srId: string) => {
+/** useDeleteMicroOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deleteMicroOrderRequest = async (srId: string) => {
       const params = new URLSearchParams();
       params.set("_id", srId);
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
@@ -6877,7 +6947,12 @@ export function useDeleteMicroOrder() {
         .map((request) => request.id)
         .filter((id): id is string => Boolean(id));
       return postBundle(buildMicroOrderDeleteBundle(srId, itemIds));
-    },
+    };
+
+export function useDeleteMicroOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteMicroOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -6933,10 +7008,8 @@ export function useUpdateRadOrder() {
 // 残ってしまう。消す直前に明細を引き直してからまとめて消す(検体検査と同じ)。
 // オーダーに紐づく検査予約があれば、取消(cancelled + 枠の free 化)も同じ
 // transaction に同梱する(予約だけ残ってオーダーが無い状態を作らない)。
-export function useDeleteRadOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srId: string) => {
+/** useDeleteRadOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deleteRadOrderRequest = async (srId: string) => {
       const params = new URLSearchParams();
       params.set("_id", srId);
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
@@ -6957,7 +7030,12 @@ export function useDeleteRadOrder() {
           appointmentEntries,
         ),
       );
-    },
+    };
+
+export function useDeleteRadOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteRadOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -7246,10 +7324,8 @@ export function useUpdatePhysioOrder() {
 
 // 生理検査オーダーも明細が独立した ServiceRequest なので、ヘッダだけ消すと明細が
 // 残ってしまう。消す直前に明細を引き直してからまとめて消す(放射線検査と同じ)。
-export function useDeletePhysioOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srId: string) => {
+/** useDeletePhysioOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deletePhysioOrderRequest = async (srId: string) => {
       const params = new URLSearchParams();
       params.set("_id", srId);
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
@@ -7270,7 +7346,12 @@ export function useDeletePhysioOrder() {
           appointmentEntries,
         ),
       );
-    },
+    };
+
+export function useDeletePhysioOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deletePhysioOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -7558,10 +7639,8 @@ export function useUpdateEndoscopyOrder() {
 
 // 内視鏡オーダーも明細が独立した ServiceRequest なので、ヘッダだけ消すと明細が
 // 残ってしまう。消す直前に明細を引き直してからまとめて消す(放射線検査と同じ)。
-export function useDeleteEndoscopyOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srId: string) => {
+/** useDeleteEndoscopyOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deleteEndoscopyOrderRequest = async (srId: string) => {
       const params = new URLSearchParams();
       params.set("_id", srId);
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
@@ -7582,7 +7661,12 @@ export function useDeleteEndoscopyOrder() {
           appointmentEntries,
         ),
       );
-    },
+    };
+
+export function useDeleteEndoscopyOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteEndoscopyOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -7872,10 +7956,8 @@ export function useUpdateTreatmentOrder() {
 
 // 処置オーダーも明細が独立した ServiceRequest なので、ヘッダだけ消すと明細が
 // 残ってしまう。消す直前に明細を引き直してからまとめて消す(生理検査と同じ)。
-export function useDeleteTreatmentOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srId: string) => {
+/** useDeleteTreatmentOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deleteTreatmentOrderRequest = async (srId: string) => {
       const params = new URLSearchParams();
       params.set("_id", srId);
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
@@ -7888,7 +7970,12 @@ export function useDeleteTreatmentOrder() {
       const appointmentEntries = await fetchTreatmentAppointmentCancelEntries(srId);
 
       return postBundle(buildTreatmentOrderDeleteBundle(srId, itemIds, appointmentEntries));
-    },
+    };
+
+export function useDeleteTreatmentOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteTreatmentOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -8053,10 +8140,13 @@ export function useUpdateMealOrder() {
 }
 
 /** 明細も予約も持たないので、ヘッダ 1 件を消すだけ。 */
+/** useDeleteMealOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deleteMealOrderRequest = (srId: string) => deleteResource("ServiceRequest", srId);
+
 export function useDeleteMealOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (srId: string) => deleteResource("ServiceRequest", srId),
+    mutationFn: deleteMealOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -8150,10 +8240,8 @@ export function useUpdateRehabOrder() {
  * オーダーを消す。明細は持たないが、リハ部門が取った予約は道連れで取り消す
  * (放射線オーダーの削除と同じ後始末。予約だけが残って枠を塞ぐのを防ぐ)。
  */
-export function useDeleteRehabOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srId: string) => {
+/** useDeleteRehabOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deleteRehabOrderRequest = async (srId: string) => {
       const appointmentEntries = await fetchOrderAppointmentCancelEntries(srId);
       return postBundle({
         resourceType: "Bundle",
@@ -8163,7 +8251,12 @@ export function useDeleteRehabOrder() {
           { request: { method: "DELETE", url: `ServiceRequest/${srId}` } },
         ],
       });
-    },
+    };
+
+export function useDeleteRehabOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteRehabOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -8390,6 +8483,8 @@ function invalidateRehab(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
   queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
+  // パスから受付前に実施すると Task も受付済になる。患者の Task の一覧(パスの実施入力が読む)も読み直させる。
+  queryClient.invalidateQueries({ queryKey: ["Task", "search"] });
 }
 
 /**
@@ -8518,10 +8613,8 @@ export function useUpdateNutritionGuidanceOrder() {
  * 指導目的をテンプレートから書いていれば記入内容も一緒に消す
  * (オーダーが消えると誰も参照しない孤児になるため)。
  */
-export function useDeleteNutritionGuidanceOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srId: string) => {
+/** useDeleteNutritionGuidanceOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deleteNutritionGuidanceOrderRequest = async (srId: string) => {
       const [{ data: order }, appointmentEntries] = await Promise.all([
         readResource<fhir4.ServiceRequest>("ServiceRequest", srId),
         fetchOrderAppointmentCancelEntries(srId),
@@ -8537,7 +8630,12 @@ export function useDeleteNutritionGuidanceOrder() {
           { request: { method: "DELETE", url: `ServiceRequest/${srId}` } },
         ],
       });
-    },
+    };
+
+export function useDeleteNutritionGuidanceOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteNutritionGuidanceOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -8741,6 +8839,8 @@ function invalidateNutritionGuidance(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
   queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
+  // パスから受付前に実施すると Task も受付済になる。患者の Task の一覧(パスの実施入力が読む)も読み直させる。
+  queryClient.invalidateQueries({ queryKey: ["Task", "search"] });
 }
 
 /**
@@ -8868,10 +8968,8 @@ export function useUpdateConsultOrder() {
  * でもない)。消すと出どころの分からない記録だけが残るので、先に部門一覧の
  * 「回答取消」で紐付きを外してもらう(docs/consult-order-design.md §7)。
  */
-export function useDeleteConsultOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srId: string) => {
+/** useDeleteConsultOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deleteConsultOrderRequest = async (srId: string) => {
       const { data: order } = await readResource<fhir4.ServiceRequest>("ServiceRequest", srId);
       if (consultReply(order).replyId) {
         throw new Error(
@@ -8879,7 +8977,12 @@ export function useDeleteConsultOrder() {
         );
       }
       return postBundle(buildConsultOrderDeleteBundle(order));
-    },
+    };
+
+export function useDeleteConsultOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteConsultOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -9855,10 +9958,8 @@ export function useUpdateSurgeryOrder() {
 // 手術オーダーも明細が独立した ServiceRequest なので、ヘッダだけ消すと明細が
 // 残ってしまう。消す直前に明細を引き直してからまとめて消す(処置と同じ)。
 // 術前指示をテンプレートから書いていれば、その回答も一緒に消す(孤児を残さない)。
-export function useDeleteSurgeryOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srId: string) => {
+/** useDeleteSurgeryOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deleteSurgeryOrderRequest = async (srId: string) => {
       const params = new URLSearchParams();
       params.set("_id", srId);
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
@@ -9870,7 +9971,12 @@ export function useDeleteSurgeryOrder() {
       const responseIds = surgeryOrderResponseIds(requests);
 
       return postBundle(buildSurgeryOrderDeleteBundle(srId, itemIds, responseIds));
-    },
+    };
+
+export function useDeleteSurgeryOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteSurgeryOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -9984,10 +10090,8 @@ export function usePathoOrderDetail(srId: string | undefined) {
 
 // 検体明細が独立した ServiceRequest なので、消す直前に明細を引き直してから
 // まとめて消す(検体検査・細菌検査と同じ)。
-export function useDeletePathoOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srId: string) => {
+/** useDeletePathoOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deletePathoOrderRequest = async (srId: string) => {
       const params = new URLSearchParams();
       params.set("_id", srId);
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
@@ -9999,7 +10103,12 @@ export function useDeletePathoOrder() {
       // テンプレートの記入内容も一緒に消す(オーダーが消えると誰も参照しなくなるため)。
       const responseIds = pathoOrderResponseIds(requests.filter((r) => r.id === srId));
       return postBundle(buildPathoOrderDeleteBundle(srId, itemIds, responseIds));
-    },
+    };
+
+export function useDeletePathoOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deletePathoOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -10223,10 +10332,8 @@ export function useTransfusionOrderDetail(srId: string | undefined) {
 
 // 製剤明細が独立した ServiceRequest なので、消す直前に明細を引き直してから
 // まとめて消す(病理・検体検査と同じ)。
-export function useDeleteTransfusionOrder() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (srId: string) => {
+/** useDeleteTransfusionOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。 */
+export const deleteTransfusionOrderRequest = async (srId: string) => {
       const params = new URLSearchParams();
       params.set("_id", srId);
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
@@ -10236,7 +10343,12 @@ export function useDeleteTransfusionOrder() {
         .map((request) => request.id)
         .filter((id): id is string => Boolean(id));
       return postBundle(buildTransfusionOrderDeleteBundle(srId, itemIds));
-    },
+    };
+
+export function useDeleteTransfusionOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteTransfusionOrderRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
@@ -11099,5 +11211,552 @@ export function useUpdateRegimenStatus() {
       invalidateRegimen(queryClient);
       invalidateProvenance(queryClient);
     },
+  });
+}
+
+// ---- クリニカルパスの適用(docs/clinical-pathway-design.md §7) ----
+
+function invalidatePathway(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["CarePlan"] });
+  queryClient.invalidateQueries({ queryKey: ["Procedure"] });
+}
+
+/** 患者のパス適用(木の根)の一覧に出す要約。 */
+export interface PathwayApplicationSummary {
+  id: string;
+  applyId: string;
+  title: string;
+  status: string;
+  pathwayCode: string;
+  encounterId: string;
+  periodStart: string;
+  periodEnd: string;
+}
+
+function summarizePathwayApplication(carePlan: fhir4.CarePlan): PathwayApplicationSummary {
+  const prefix = pathwayInstantiatesUri("");
+  const uri = carePlan.instantiatesUri?.find((u) => u.startsWith(prefix)) ?? "";
+  return {
+    id: carePlan.id ?? "",
+    applyId: carePlan.identifier?.find((i) => i.system === PATHWAY_APPLY_ID_SYSTEM)?.value ?? "",
+    title: carePlan.title ?? "",
+    status: carePlan.status,
+    pathwayCode: uri.slice(prefix.length),
+    encounterId: carePlan.encounter?.reference?.split("/").pop() ?? "",
+    periodStart: carePlan.period?.start ?? "",
+    periodEnd: carePlan.period?.end ?? "",
+  };
+}
+
+/**
+ * 患者に適用したクリニカルパス(木の根だけ)。子孫は partOf に根を持つので
+ * `part-of:missing=true` で根だけが引ける。開始日の新しい順。
+ */
+export function usePathwayApplications(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("category", `${PATHWAY_MARKER_SYSTEM}|${PATHWAY_MARKER_CODE}`);
+  params.set("part-of:missing", "true");
+  params.set("_sort", "-date");
+  params.set("_count", "50");
+
+  return useQuery({
+    queryKey: ["CarePlan", "search", "pathway-applications", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.CarePlan>("CarePlan", params);
+      const roots =
+        bundle.entry
+          ?.map((e) => e.resource)
+          .filter((r): r is fhir4.CarePlan => r?.resourceType === "CarePlan") ?? [];
+      return { roots, applications: roots.map(summarizePathwayApplication) };
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * パス適用の Goal(終了・中止)。適用の識別子と同じ値を apply-goal-id で持つので、
+ * identifier の 1 回の検索で引ける(木の検索には根が入らないため別に引く)。
+ */
+export function usePathwayApplyGoal(applyId: string | undefined) {
+  const params = new URLSearchParams();
+  if (applyId) params.set("identifier", `${PATHWAY_APPLY_GOAL_ID_SYSTEM}|${applyId}`);
+
+  return useQuery({
+    queryKey: ["Goal", "search", "pathway-apply", applyId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Goal>("Goal", params);
+      return (
+        bundle.entry?.map((e) => e.resource).find((r): r is fhir4.Goal => r?.resourceType === "Goal") ?? null
+      );
+    },
+    enabled: Boolean(applyId),
+  });
+}
+
+/** パスの終了・中止(適用の CarePlan と Goal)。 */
+export function useClosePathway() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      invalidatePathway(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["Goal"] });
+    },
+  });
+}
+
+/** 1 回の子孫の検索で引く病日の数(1 病日あたり子孫が数十件あるので、_count に収まるように分ける)。 */
+const PATHWAY_WARD_EVENT_CHUNK = 10;
+
+/**
+ * 病棟の指示簿の「パスのタスク」(docs/clinical-pathway-design.md §6)。基準日の病日に置かれた、
+ * オーダーを持たないタスクを患者ぶんまとめて引く。
+ *
+ * 1. `CarePlan?category=病日&date=基準日&subject=患者(カンマ OR)&_include=CarePlan:part-of` で
+ *    その日の病日と、partOf の先頭(適用の根)を 1 回で引く。
+ * 2. 病日の id を `part-of`(カンマ OR)に渡し、子孫(OAT ユニット・観察項目)とタスクの Procedure
+ *    (`_revinclude=Procedure:based-on`)を引く。子孫は partOf に祖先すべてを持つので病日から直接引ける。
+ */
+export function usePathwayWardTasks(date: string, patientIds: string[]) {
+  const ids = [...new Set(patientIds.filter(Boolean))].sort();
+  return useQuery({
+    // 実施の記録(invalidatePathway)で読み直されるよう CarePlan 配下のキーにする。
+    queryKey: ["CarePlan", "search", "pathway-ward-tasks", date, ids.join(",")],
+    queryFn: async (): Promise<PathwayWardTask[]> => {
+      const eventParams = new URLSearchParams();
+      eventParams.set("category", `${PATHWAY_LEVEL_SYSTEM}|event`);
+      eventParams.set("date", date);
+      eventParams.set("subject", ids.map((id) => `Patient/${id}`).join(","));
+      eventParams.set("_include", "CarePlan:part-of");
+      eventParams.set("_count", "500");
+      const { data: eventBundle } = await searchResource<fhir4.Resource>("CarePlan", eventParams);
+      const heads = (eventBundle.entry ?? [])
+        .map((e) => e.resource)
+        .filter((r): r is fhir4.CarePlan => r?.resourceType === "CarePlan");
+      const events = heads.filter((cp) =>
+        cp.category?.some((c) => c.coding?.some((x) => x.system === PATHWAY_LEVEL_SYSTEM && x.code === "event")),
+      );
+      if (events.length === 0) return [];
+
+      const resources: fhir4.Resource[] = [...heads];
+      for (let i = 0; i < events.length; i += PATHWAY_WARD_EVENT_CHUNK) {
+        const params = new URLSearchParams();
+        params.set(
+          "part-of",
+          events
+            .slice(i, i + PATHWAY_WARD_EVENT_CHUNK)
+            .map((event) => `CarePlan/${event.id}`)
+            .join(","),
+        );
+        params.append("_revinclude", "Procedure:based-on");
+        params.set("_count", "500");
+        const { data: bundle } = await searchResource<fhir4.Resource>("CarePlan", params);
+        for (const entry of bundle.entry ?? []) if (entry.resource) resources.push(entry.resource);
+      }
+      return parsePathwayWardTasks(resources);
+    },
+    enabled: Boolean(date) && ids.length > 0,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 患者ごとの進行中のパス(病棟の一覧の「パス」列。docs/clinical-pathway-design.md §6)。
+ * `CarePlan?subject=患者(カンマ OR)&category=パスの印&part-of:missing=true&status=active` の 1 回で適用の根だけを引く。
+ */
+export function useActivePathwaysByPatient(patientIds: string[]) {
+  const ids = [...new Set(patientIds.filter(Boolean))].sort();
+  return useQuery({
+    // 終了・中止・取り消し(invalidatePathway)で読み直されるよう CarePlan 配下のキーにする。
+    queryKey: ["CarePlan", "search", "pathway-active-by-patient", ids.join(",")],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("subject", ids.map((id) => `Patient/${id}`).join(","));
+      params.set("category", `${PATHWAY_MARKER_SYSTEM}|${PATHWAY_MARKER_CODE}`);
+      params.set("part-of:missing", "true");
+      params.set("status", "active");
+      params.set("_sort", "date");
+      params.set("_count", "500");
+      const { data: bundle } = await searchResource<fhir4.CarePlan>("CarePlan", params);
+      const byPatientId = new Map<string, PathwayApplicationSummary[]>();
+      for (const root of resourcesOfType<fhir4.CarePlan>(bundle, "CarePlan")) {
+        const patientId = root.subject?.reference?.split("/").pop() ?? "";
+        byPatientId.set(patientId, [...(byPatientId.get(patientId) ?? []), summarizePathwayApplication(root)]);
+      }
+      return byPatientId;
+    },
+    enabled: ids.length > 0,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 日程の変更(docs/clinical-pathway-design.md §7.8)。病日・タスクと、自動でずらす看護指示・食事を
+ * 1 transaction で PUT する。オーダーを書き換えるので、オーダーの来歴(代行なら承認待ちの通知も)を付ける。
+ */
+export function useShiftPathwaySchedule() {
+  const queryClient = useQueryClient();
+  const withOrderProvenance = useWithOrderProvenance();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(withOrderProvenance(bundle)),
+    onSuccess: () => {
+      invalidatePathway(queryClient);
+      invalidateProvenance(queryClient);
+      invalidateNursing(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+    },
+  });
+}
+
+/** 患者の Task(部門の受付・指示受け)。パスの取り消しで、受け付け済みのオーダーを見分けるのに使う。 */
+export function usePatientTasks(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("_count", "500");
+  return useQuery({
+    queryKey: ["Task", "search", "patient", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Task>("Task", params);
+      return resourcesOfType<fhir4.Task>(bundle, "Task");
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/** 看護指示と指示受けの Task を消す(パスの取り消し用。普段の看護指示は中止で残す)。 */
+function deleteNursingOrderRequest(order: fhir4.ServiceRequest, tasks: fhir4.Task[]) {
+  const reference = `ServiceRequest/${order.id}`;
+  const taskIds = tasks
+    .filter((t) => t.focus?.reference === reference || t.basedOn?.some((b) => b.reference === reference))
+    .map((t) => t.id)
+    .filter((id): id is string => Boolean(id));
+  return postBundle({
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [
+      ...taskIds.map((id) => ({ request: { method: "DELETE" as const, url: `Task/${id}` } })),
+      { request: { method: "DELETE", url: reference } },
+    ],
+  });
+}
+
+/** パスの取り消しで消すオーダー 1 件(種別はカルテのカードと同じ振り分け)。 */
+export interface PathwayCancelOrder {
+  order: fhir4.ServiceRequest;
+  kind: string | null;
+}
+
+/**
+ * 誤って適用したパスの取り消し(docs/clinical-pathway-design.md §7.9)。オーダーをカルテのカードの削除と
+ * 同じ種別ごとの処理で 1 件ずつ消し(明細・予約・部門の Task・テンプレートの記入の後始末は各種別に任せる)、
+ * 最後に計画の木を 1 transaction で消す。
+ *
+ * ［決定］種別ごとの削除の hook は 1 件ごとに一覧を読み直させるので、続けて呼ぶと開いている画面の読み直しが
+ * 積み重なり上流の回数制限(1 分あたり)に当たる。ここでは hook の本体だけを順に呼び、読み直しは最後に 1 回にする。
+ * 途中で失敗したら木は残す(もう一度開けば、残っているオーダーから続けられる)。
+ */
+export function useCancelPathwayApplication() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      orders,
+      tasks,
+      treeBundle,
+      onProgress,
+    }: {
+      orders: PathwayCancelOrder[];
+      tasks: fhir4.Task[];
+      treeBundle: fhir4.Bundle;
+      onProgress: (done: number) => void;
+    }) => {
+      for (const [index, { order, kind }] of orders.entries()) {
+        const id = order.id ?? "";
+        switch (kind) {
+          case "prescription":
+            await deletePrescriptionRequest(id);
+            break;
+          case "injection":
+            await deleteInjectionSeriesRequest([id]);
+            break;
+          case "lab-order":
+            await deleteLabOrderRequest(id);
+            break;
+          case "micro-order":
+            await deleteMicroOrderRequest(id);
+            break;
+          case "patho-order":
+            await deletePathoOrderRequest(id);
+            break;
+          case "rad-order":
+            await deleteRadOrderRequest(id);
+            break;
+          case "physio-order":
+            await deletePhysioOrderRequest(id);
+            break;
+          case "endoscopy-order":
+            await deleteEndoscopyOrderRequest(id);
+            break;
+          case "treatment-order":
+            await deleteTreatmentOrderRequest(id);
+            break;
+          case "surgery-order":
+            await deleteSurgeryOrderRequest(id);
+            break;
+          case "meal-order":
+            await deleteMealOrderRequest(id);
+            break;
+          case "transfusion-order":
+            await deleteTransfusionOrderRequest(id);
+            break;
+          case "rehab-order":
+            await deleteRehabOrderRequest(id);
+            break;
+          case "nutrition-guidance-order":
+            await deleteNutritionGuidanceOrderRequest(id);
+            break;
+          case "consult-order":
+            await deleteConsultOrderRequest(id);
+            break;
+          case "nursing-order":
+            await deleteNursingOrderRequest(order, tasks);
+            break;
+          default:
+            throw new Error(`この種別のオーダーは取り消せません(${kind ?? "不明"})`);
+        }
+        onProgress(index + 1);
+      }
+      return postBundle(treeBundle);
+    },
+    // 失敗しても途中まで消えているので、どちらでも読み直す。
+    onSettled: () => {
+      invalidatePathway(queryClient);
+      invalidateNursing(queryClient);
+      invalidateAppointments(queryClient);
+      invalidateConsult(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      queryClient.invalidateQueries({ queryKey: ["Goal"] });
+      queryClient.invalidateQueries({ queryKey: ["Task"] });
+      queryClient.invalidateQueries({ queryKey: ["Slot"] });
+      queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse", "search"] });
+    },
+  });
+}
+
+/**
+ * 予定外の OAT ユニットの追加(適用の木に足す)。タスクにオーダーを付けたときは同じ
+ * Bundle に入るので、適用と同じくオーダーの来歴(代行なら承認待ちの通知も)を付ける。
+ */
+export function useAddUnplannedUnit() {
+  const queryClient = useQueryClient();
+  const withOrderProvenance = useWithOrderProvenance();
+  return useMutation({
+    mutationFn: ({ bundle }: { bundle: fhir4.Bundle; invalidate?: QueryKey[] }) =>
+      postBundle(withOrderProvenance(bundle)),
+    onSuccess: (_result, variables) => {
+      invalidatePathway(queryClient);
+      invalidateProvenance(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      for (const key of variables.invalidate ?? []) queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
+}
+
+/** 患者の入院予定(status=planned)。パスの適用先の候補にする(日付未定のものも含む)。 */
+export function usePatientPlannedAdmissions(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("status", PLANNED_STATUS);
+  params.set("class", ADMISSION_CLASS_CODE);
+  params.set("_count", "10");
+
+  return useQuery({
+    queryKey: ["Encounter", "patient-planned-admissions", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
+      return sortPlannedAdmissions(
+        bundle.entry
+          ?.map((e) => e.resource)
+          .filter((r): r is fhir4.Encounter => r?.resourceType === "Encounter") ?? [],
+      );
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * パスを適用する(CarePlan の木と未実施のタスクを 1 transaction で登録)。来歴は適用の
+ * CarePlan(木の根)を対象に 1 件。指示医師はオーダーのヘッダが無いので呼ぶ側が渡す。
+ */
+export function useApplyPathway() {
+  const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
+  // 雛形から出したオーダーが同じ Bundle に入るので、オーダーの来歴(代行なら承認待ちの通知も)
+  // を先に付ける。パスの来歴はその後ろ。
+  const withOrderProvenance = useWithOrderProvenance();
+  return useMutation({
+    mutationFn: ({
+      bundle,
+      applyFullUrl,
+      requesterId,
+    }: {
+      bundle: fhir4.Bundle;
+      applyFullUrl: string;
+      requesterId: string;
+      /** 雛形から出したオーダーの種別が読み直すキー。 */
+      invalidate?: QueryKey[];
+    }) => {
+      const withOrders = withOrderProvenance(bundle);
+      const provenance =
+        enterer && requesterId
+          ? buildPathwayApplyProvenanceEntry(applyFullUrl, { reference: `Practitioner/${requesterId}` }, enterer)
+          : null;
+      const withProvenance = provenance
+        ? { ...withOrders, entry: [...(withOrders.entry ?? []), provenance] }
+        : withOrders;
+      return postBundle(withProvenance);
+    },
+    onSuccess: (_result, variables) => {
+      invalidatePathway(queryClient);
+      invalidateProvenance(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+      for (const key of variables.invalidate ?? []) queryClient.invalidateQueries({ queryKey: key });
+    },
+  });
+}
+
+/**
+ * 適用 1 件の木(病日・OAT ユニット・観察項目)と、そのタスク(Procedure)、タスクが指す
+ * オーダーのヘッダ(ServiceRequest)を 1 回の検索で読む。子孫は partOf に根を持つので
+ * `part-of=根` で全部引け、タスクは _revinclude、オーダーは :iterate でその先を辿る。
+ */
+export interface PathwayApplicationTree {
+  application: PathwayApplicationRecord | null;
+  /** タスクが指すオーダーのヘッダ(id → ServiceRequest)。 */
+  orders: Map<string, fhir4.ServiceRequest>;
+  /** OAT ユニットの Goal(id → Goal)。 */
+  goals: Map<string, fhir4.Goal>;
+  /** 木の CarePlan(id → CarePlan)。評価の保存で OAT ユニットに goal を足すときに使う。 */
+  carePlans: Map<string, fhir4.CarePlan>;
+  /** タスクの Procedure(id → Procedure)。実施の記録で status を書き換える。 */
+  procedures: Map<string, fhir4.Procedure>;
+  /** オーダーのヘッダの id → 進み具合(進捗の Task から。カルテのカードと同じ判定)。 */
+  orderProgress: Map<string, OrderProgress>;
+}
+
+/** 適用の木の検索のキーの先頭。オーダーの実施入力などを閉じたときに読み直させるのに使う。 */
+export const PATHWAY_TREE_KEY_PREFIX: string[] = ["CarePlan", "search", "pathway-tree"];
+
+export function usePathwayApplicationTree(applyId: string | undefined) {
+  const params = new URLSearchParams();
+  if (applyId) params.set("part-of", `CarePlan/${applyId}`);
+  params.append("_revinclude", "Procedure:based-on");
+  params.append("_include:iterate", "Procedure:based-on");
+  // OAT ユニットの Goal(評価)と観察項目の Goal(適正値)も同じ応答で揃える。
+  params.append("_include", "CarePlan:goal");
+  // オーダーの進み具合は ServiceRequest ではなく focus で指す進捗の Task にあるので、それも辿る。
+  // リハビリ・栄養指導は日ごとの実施記録(オーダーを basedOn で指す Procedure)で実施を見るので、それも辿る。
+  // 上流は同じ名前の _revinclude:iterate を並べると最後の 1 つしか効かないので、カンマで 1 つにまとめる。
+  params.append("_revinclude:iterate", "Task:focus,Procedure:based-on");
+  params.set("_count", "500");
+
+  return useQuery({
+    queryKey: PATHWAY_TREE_KEY_PREFIX.concat(applyId ?? ""),
+    queryFn: async (): Promise<PathwayApplicationTree> => {
+      const [{ data: apply }, { data: bundle }] = await Promise.all([
+        readResource<fhir4.CarePlan>("CarePlan", applyId as string),
+        searchResource<fhir4.Resource>("CarePlan", params),
+      ]);
+      const resources = (bundle.entry ?? []).map((e) => e.resource).filter((r): r is fhir4.Resource => Boolean(r));
+      const orders = new Map<string, fhir4.ServiceRequest>();
+      const goals = new Map<string, fhir4.Goal>();
+      const carePlans = new Map<string, fhir4.CarePlan>();
+      const procedures = new Map<string, fhir4.Procedure>();
+      const tasks: fhir4.Task[] = [];
+      // オーダーの実施記録。パスのタスク(CarePlan を basedOn で指す Procedure)とは分けて持つ。
+      const performs: fhir4.Procedure[] = [];
+      for (const r of resources) {
+        if (!r.id) continue;
+        if (r.resourceType === "Task") tasks.push(r as fhir4.Task);
+        if (r.resourceType === "ServiceRequest") orders.set(r.id, r as fhir4.ServiceRequest);
+        if (r.resourceType === "Goal") goals.set(r.id, r as fhir4.Goal);
+        if (r.resourceType === "CarePlan") carePlans.set(r.id, r as fhir4.CarePlan);
+        if (r.resourceType === "Procedure") {
+          const procedure = r as fhir4.Procedure;
+          if (procedure.basedOn?.some((ref) => ref.reference?.startsWith("CarePlan/"))) procedures.set(r.id, procedure);
+          else performs.push(procedure);
+        }
+      }
+      if (apply.id) carePlans.set(apply.id, apply);
+      const tree = [...carePlans.values(), ...procedures.values()].filter((r) => r.id !== apply.id);
+      return {
+        application: parsePathwayApplication([apply, ...tree], goals),
+        orders,
+        goals,
+        carePlans,
+        procedures,
+        orderProgress: orderProgressByOrderId(orders.values(), tasks, performs),
+      };
+    },
+    enabled: Boolean(applyId),
+  });
+}
+
+/**
+ * 患者のパスの評価と観察項目の実績(Observation)。category の先頭がパスの印なので
+ * 患者 + category の 1 回で全部引ける(上流は category の先頭しか索引しない)。
+ */
+export function usePathwayObservations(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("category", `${PATHWAY_MARKER_SYSTEM}|${PATHWAY_MARKER_CODE}`);
+  params.set("_count", "500");
+
+  return useQuery({
+    queryKey: ["Observation", "search", "pathway", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
+      return (
+        bundle.entry
+          ?.map((e) => e.resource)
+          .filter((r): r is fhir4.Observation => r?.resourceType === "Observation") ?? []
+      );
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/** 1 病日 × 1 OAT ユニットの評価(Goal・Observation・タスクの実施)を 1 transaction で書く。 */
+export function useRecordPathwayEvaluation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => {
+      invalidatePathway(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search", "pathway"] });
+      queryClient.invalidateQueries({ queryKey: ["Goal"] });
+      // バリアンスの通知を作る・取り下げることがあるので、通知の一覧・件数も読み直させる。
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+    },
+  });
+}
+
+/**
+ * 患者のパスのバリアンスの通知(対応済み・取り下げも含む)。評価を記録するときに、同じアウトカムの
+ * 通知を出し直すか・取り下げるかを決めるのに使う(docs/clinical-pathway-design.md §7.10)。
+ * OAT ユニットとの突き合わせは basedOn で画面側が行う。
+ */
+export function usePathwayVarianceTasks(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("code", `${TASK_CODE_SYSTEM}|${PATHWAY_VARIANCE_TASK_CODE.code}`);
+  params.set("_count", "500");
+  return useQuery({
+    queryKey: [...NOTIFICATION_TASK_KEY, "pathway-variance", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Task>("Task", params);
+      return resourcesOfType<fhir4.Task>(bundle, "Task");
+    },
+    enabled: Boolean(patientId),
   });
 }

@@ -7,7 +7,9 @@ import {
   useUpdateEncounter,
   useWardGrid,
   useNursingPendingCounts,
+  useActivePathwaysByPatient,
   useWardOptions,
+  type PathwayApplicationSummary,
 } from "../api/queries";
 import { AdmissionExecuteModal } from "../components/AdmissionExecuteModal";
 import { AdmissionModal } from "../components/AdmissionModal";
@@ -32,6 +34,7 @@ import {
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { PathwayNameLinks } from "../components/PathwayNameLinks";
 import { PlannedAdmissionModal } from "../components/PlannedAdmissionModal";
 import { RowMenu } from "../components/RowMenu";
 import { TransferPlanModal } from "../components/TransferPlanModal";
@@ -345,6 +348,19 @@ export function InpatientListPage() {
     return withRoomRowSpans(visible);
   }, [grid.rooms, grid.bedsByRoom, byBed, patientsById, filtering, filters]);
 
+  // パス列(入院患者タブだけ)。絞り込みで検索し直さないよう、病棟の床にいる患者全員で引く。
+  const wardPatientIds = useMemo(() => {
+    if (tab !== "current") return [];
+    return grid.rooms.flatMap((room) =>
+      (grid.bedsByRoom.get(room.id ?? "") ?? []).flatMap((bed) => {
+        const encounter = bed.id ? byBed?.get(bed.id) : undefined;
+        const patientId = encounter ? encounterPatientId(encounter) : undefined;
+        return patientId ? [patientId] : [];
+      }),
+    );
+  }, [tab, grid.rooms, grid.bedsByRoom, byBed]);
+  const activePathways = useActivePathwaysByPatient(wardPatientIds);
+
   // 入院予定は選んだ病棟のぶんだけ、予定日順(取得時に整列済み。日付未定が先頭)で
   // 出す。予定日で絞ると日付未定は外れる(その日に来る予定ではないので)。
   const plannedRows = useMemo<PlannedRow[]>(() => {
@@ -627,6 +643,7 @@ export function InpatientListPage() {
                   <th>主治医</th>
                   <th>担当看護師</th>
                   <th>入院日</th>
+                  <th>パス</th>
                   <th>特記事項</th>
                   <th className="sticky-table__fix-actions"></th>
                 </tr>
@@ -650,6 +667,7 @@ export function InpatientListPage() {
                     pendingNursingCount={
                       nursingPending.countByPatientId.get(row.patient?.id ?? "") ?? 0
                     }
+                    pathways={activePathways.data?.get(row.patient?.id ?? "") ?? []}
                   />
                 ))}
               </tbody>
@@ -800,6 +818,7 @@ export function InpatientListPage() {
       />
       <ErrorBanner error={cancelAdmission.error ?? updateEncounter.error} />
       <ErrorBanner error={nursingPending.error} />
+      <ErrorBanner error={activePathways.error} />
 
       {(tab === "planned" ? planned.data?.truncated : inpatients.data?.truncated) && (
         <p className="error-banner__line error-banner__line--error" role="status">
@@ -920,6 +939,7 @@ function InpatientTableRow({
   onRowAction,
   cancelling,
   pendingNursingCount,
+  pathways,
 }: {
   row: InpatientRow;
   date: string;
@@ -931,6 +951,8 @@ function InpatientTableRow({
   cancelling: boolean;
   /** まだ看護師が受けていない看護指示の件数。0 なら出さない。 */
   pendingNursingCount: number;
+  /** 進行中のパスの適用(無ければ空)。 */
+  pathways: PathwayApplicationSummary[];
 }) {
   const returnLinkState = useReturnLinkState();
   const { room, bed, roomRowSpan, encounter, patient } = row;
@@ -959,6 +981,13 @@ function InpatientTableRow({
           <td>{encounterAttendingName(encounter)}</td>
           <td>{encounterNurseNames(encounter).join("、") || "-"}</td>
           <td>{encounterAdmissionDate(encounter)}</td>
+          <td>
+            {pathways.length > 0 && patientId ? (
+              <PathwayNameLinks patientId={patientId} applications={pathways} returnLinkState={returnLinkState} />
+            ) : (
+              "-"
+            )}
+          </td>
           <td className="inpatient__note">
             {/* 未指示受けは「掲示」ではなく要対応なので、予定タグ(枠線)と見た目を
                 分けて先頭に置く。押すとその患者のカルテの指示簿タブが開く。 */}
@@ -1041,7 +1070,7 @@ function InpatientTableRow({
           <td className="sticky-table__fix-3">
             <span className="inpatient__empty-bed">空床</span>
           </td>
-          <td colSpan={7}></td>
+          <td colSpan={8}></td>
           <td className="patient-table__actions sticky-table__fix-actions">
             <RowMenu label={`${locationDisplayName(room)} ${bedLabel} の操作`} escapesClipping>
               <button type="button" className="row-menu__item" onClick={onAdmit}>

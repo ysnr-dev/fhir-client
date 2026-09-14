@@ -49,6 +49,8 @@ export const KARTE_TABS = [
   { key: "meal", label: "食事" },
   // 化学療法。レジメンの投与スケジュールは日付の器(暦)で見る(食事と同じ考え方)。
   { key: "chemo", label: "化学療法" },
+  // クリニカルパス。適用したパスを病日 × OAT ユニットのシートで見る(紙のパスシートの形)。
+  { key: "pathway", label: "パス" },
   // 看護指示(指示簿)。「今なにが有効か」を区分ごとに見る情報なので、時系列の
   // カードにはせずタブでのみ見る。
   { key: "nursing", label: "指示簿" },
@@ -85,7 +87,7 @@ export function parseKarteTab(value: string | null): KarteTabKey {
  */
 // バイタルはカードに測定値が全部出るので詳細モーダルを持たない。
 export type KarteDetailKind =
-  | Exclude<KarteItemKind, "vital">
+  | Exclude<KarteItemKind, "vital" | "pathway-evaluation">
   | "lab-result"
   | "micro-result"
   | "patho-result";
@@ -168,6 +170,43 @@ export function formatFlowsheetView(view: FlowsheetView, today: string): string 
   ].join("");
 }
 
+// ---- パスシートの表示状態 ----
+//
+// 形は「適用の id[~表示][@病日][!]」。適用が複数ある入院でどれを見ているか、日めくり(day)か
+// オーバービュー(sheet)か、日めくりで開いている病日(病日の CarePlan の id)、全画面かどうか(経過表と同じ
+// 末尾の「!」)。表示を省くと進行中の適用は日めくり、終わった適用はオーバービューで開く。既定ばかりなら view を落とす。
+
+export type PathwaySheetMode = "day" | "sheet";
+
+export interface PathwaySheetView {
+  applyId?: string;
+  mode?: PathwaySheetMode;
+  /** 日めくりで開いている病日(病日の CarePlan の id)。 */
+  eventId?: string;
+  fullscreen?: boolean;
+}
+
+export function parsePathwaySheetView(value: string | undefined): PathwaySheetView {
+  const match = /^([^~@!]*)(?:~(day|sheet))?(?:@([^!]*))?(!)?$/.exec(value ?? "");
+  if (!match) return {};
+  return {
+    applyId: match[1] || undefined,
+    mode: (match[2] as PathwaySheetMode | undefined) || undefined,
+    eventId: match[3] || undefined,
+    fullscreen: Boolean(match[4]),
+  };
+}
+
+export function formatPathwaySheetView(view: PathwaySheetView): string | null {
+  if (!view.applyId && !view.mode && !view.eventId && !view.fullscreen) return null;
+  return [
+    view.applyId ?? "",
+    view.mode ? `~${view.mode}` : "",
+    view.eventId ? `@${view.eventId}` : "",
+    view.fullscreen ? "!" : "",
+  ].join("");
+}
+
 // ---- 種別での絞り込み ----
 
 // タイムラインに出る種別(詳細モーダル専用の検査結果は含まない)。
@@ -189,6 +228,7 @@ const CARD_KINDS: KarteItemKind[] = [
   "rehab-order",
   "nutrition-guidance-order",
   "qr",
+  "pathway-evaluation",
 ];
 
 export function formatKarteCard(filter: KarteCardFilter): string {

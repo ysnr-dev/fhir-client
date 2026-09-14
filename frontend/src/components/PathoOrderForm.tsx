@@ -23,6 +23,7 @@ import {
   questionnaireResponsePlainText,
   type TemplateBinding,
 } from "../fhir/questionnaireResponseHelpers";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
@@ -60,6 +61,12 @@ interface PathoOrderFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /** オーダーセットの適用日。外から開始日をまとめて入れるときに渡す。 */
+  bulkStartDate?: string;
+  /** セットの内容として入力する(患者と日付に依存する入力を出さず、その検証も外す)。 */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 export function PathoOrderForm({
@@ -69,6 +76,9 @@ export function PathoOrderForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: PathoOrderFormProps) {
   const [values, setValues] = useState<PathoOrderFormValues>(
     initialValues ?? emptyPathoOrderForm(),
@@ -82,6 +92,12 @@ export function PathoOrderForm({
 
   const problemOptions = useProblemOptions(patientId);
   const methods = usePathoCollectionMethods();
+  useBulkStartDate(bulkStartDate, (date) =>
+    setValues((v) => ({
+      ...v,
+      collectionDateTime: `${date}T${v.collectionDateTime.slice(11, 16) || "09:00"}`,
+    })),
+  );
 
   const update = makeFieldUpdater(setValues);
   const isCytology = isCytologyCategory(values.examCategory);
@@ -134,7 +150,8 @@ export function PathoOrderForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!values.collectionDateTime) {
+    // セットの内容としての入力では採取日時を持たない(適用時に入れる)。
+    if (!setMode && !values.collectionDateTime) {
       setValidationError("採取(予定)日時を入力してください。");
       return;
     }
@@ -182,7 +199,12 @@ export function PathoOrderForm({
 
   return (
     <>
-      <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
+      <form
+        className="prescription-form"
+        onSubmit={handleSubmit}
+        onKeyDown={handleKeyDown}
+        noValidate={hideSubmit}
+      >
       {validationError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -206,14 +228,16 @@ export function PathoOrderForm({
             ))}
           </select>
         </label>
-        <label>
-          対象プロブレム
-          <ProblemSelect
-            value={values.problem}
-            options={problemOptions}
-            onChange={(problem) => update("problem", problem)}
-          />
-        </label>
+        {!setMode && (
+          <label>
+            対象プロブレム
+            <ProblemSelect
+              value={values.problem}
+              options={problemOptions}
+              onChange={(problem) => update("problem", problem)}
+            />
+          </label>
+        )}
         <label>
           入外区分
           <select
@@ -339,11 +363,12 @@ export function PathoOrderForm({
               : "現病歴・治療歴・内視鏡所見など、診断に関わる情報"
           }
           onChange={(clinicalInfo) => update("clinicalInfo", clinicalInfo)}
-          onOpenTemplate={() => setTemplateOpen(true)}
+          onOpenTemplate={setMode ? undefined : () => setTemplateOpen(true)}
           onClearTemplate={() => update("clinicalInfoTemplate", null)}
         />
       </fieldset>
 
+      {!setMode && (
       <fieldset>
         <legend>シェーマ</legend>
         <div className="patho-order__schemas">
@@ -367,12 +392,15 @@ export function PathoOrderForm({
           </div>
         </div>
       </fieldset>
+      )}
 
-      <div className="prescription-form__submit">
-        <button type="submit" disabled={submitting}>
-          {submitting ? "送信中..." : submitLabel}
-        </button>
-      </div>
+      {!hideSubmit && (
+        <div className="prescription-form__submit">
+          <button type="submit" disabled={submitting}>
+            {submitting ? "送信中..." : submitLabel}
+          </button>
+        </div>
+      )}
       </form>
 
       {/* 各モーダルは独自の入力を持つため、外側フォームの子孫に置かない
@@ -436,7 +464,8 @@ function TemplateTextField({
   template: TemplateBinding | null;
   placeholder?: string;
   onChange: (value: string) => void;
-  onOpenTemplate: () => void;
+  /** テンプレート記入を開く。渡さなければ操作を出さない(セットの内容としての入力)。 */
+  onOpenTemplate?: () => void;
   onClearTemplate: () => void;
 }) {
   const fromTemplate = Boolean(template);
@@ -459,15 +488,17 @@ function TemplateTextField({
           }
         />
         <div className="rad-gp__template-actions">
-          <button
-            type="button"
-            onClick={onOpenTemplate}
-            title={
-              fromTemplate ? `${label}をテンプレートから直す` : `${label}をテンプレートから記入`
-            }
-          >
-            {fromTemplate ? "テンプレート編集" : "テンプレート"}
-          </button>
+          {onOpenTemplate && (
+            <button
+              type="button"
+              onClick={onOpenTemplate}
+              title={
+                fromTemplate ? `${label}をテンプレートから直す` : `${label}をテンプレートから記入`
+              }
+            >
+              {fromTemplate ? "テンプレート編集" : "テンプレート"}
+            </button>
+          )}
           {fromTemplate && (
             <button
               type="button"

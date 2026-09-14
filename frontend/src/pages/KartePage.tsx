@@ -17,6 +17,7 @@ import {
   useKartePrescriptionsInfinite,
   useKarteQuestionnaireResponsesInfinite,
   useKarteVitalsInfinite,
+  useKartePathwayEvaluations,
   usePatientOutpatientExam,
   useUpdateOutpatientExam,
   type KarteProblemFilter,
@@ -27,6 +28,7 @@ import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
 import { KarteMealTab } from "../components/KarteMealTab";
 import { KarteChemoTab } from "../components/KarteChemoTab";
 import { KarteNursingTab } from "../components/KarteNursingTab";
+import { KartePathwayTab } from "../components/KartePathwayTab";
 import { KarteConditionTab } from "../components/KarteConditionTab";
 import { KarteProfileTab } from "../components/KarteProfileTab";
 import { KarteSidePane } from "../components/KarteSidePane";
@@ -275,6 +277,8 @@ export function KartePage() {
   // 日付未定・開始日が今日より後のオーダーは本流(開始日が今日以前)に乗らないので別に先読みする。
   const pendingOrders = useKartePendingOrders(patientId, timelineProblemIds);
   const vitals = useKarteVitalsInfinite(patientId, timelineProblemIds);
+  // 記載のあるパスの評価。患者ぶんを全部読むので、ページングの判定には加わらない。
+  const pathwayEvaluations = useKartePathwayEvaluations(patientId, timelineProblemIds);
   // 診療日ペイン用の全診療日。タイムラインのページングとは別に日付だけを読み切る
   // ので、スクロール(読み込み状況)に関係なく過去の日付まで最初から並ぶ。
   const dayIndex = useKarteDayIndex(patientId, timelineProblemIds);
@@ -367,6 +371,7 @@ export function KartePage() {
         pendingBundles: pendingOrders.bundles,
         responseBundles: responses.data?.pages.map((page) => page.data) ?? [],
         vitalBundles: vitals.data?.pages.map((page) => page.data) ?? [],
+        pathwayEvaluations: pathwayEvaluations.data ?? [],
         noteHasNext: Boolean(notes.hasNextPage),
         prescriptionHasNext: Boolean(prescriptions.hasNextPage),
         responseHasNext: Boolean(responses.hasNextPage),
@@ -378,6 +383,7 @@ export function KartePage() {
       pendingOrders.bundles,
       responses.data,
       vitals.data,
+      pathwayEvaluations.data,
       notes.hasNextPage,
       prescriptions.hasNextPage,
       responses.hasNextPage,
@@ -395,8 +401,17 @@ export function KartePage() {
 
   // 診療日ペインに出す全日付。読み込み済みの日はタイムラインの項目付き。
   const dayEntries = useMemo(
-    () => mergeDayIndex(filteredGroups, dayIndex.days, timeline.cutoff),
-    [filteredGroups, dayIndex.days, timeline.cutoff],
+    () =>
+      mergeDayIndex(
+        filteredGroups,
+        // パス評価は全部読んであるので、その日付も診療日ペインに最初から並べる(種別で絞り込み中は
+        // 絞り込み後の groups だけで決まるので、評価の日付を足すのは絞り込んでいないときだけ)。
+        cardFilter && cardFilter.kind !== "pathway-evaluation"
+          ? dayIndex.days
+          : [...dayIndex.days, ...(pathwayEvaluations.data ?? []).map((e) => e.recordedAt.slice(0, 10))],
+        timeline.cutoff,
+      ),
+    [filteredGroups, dayIndex.days, timeline.cutoff, cardFilter, pathwayEvaluations.data],
   );
 
   // 本日のカルテのペインに出す 1 日分。オーダーの本流は開始日が今日以前のものを新しい順に
@@ -495,6 +510,20 @@ export function KartePage() {
     setPendingDay((prev) => (prev?.key === key ? prev : { key, scroll: false }));
   }, []);
 
+  // パスタブの日めくりでその病日を開く。handleEdit の同一性を保つため ref で最新を呼ぶ。
+  const openPathwayDay = useCallback(
+    (applyId: string, eventId: string) => {
+      setLastOtherTab("pathway");
+      updateParams((params) => {
+        params.set(KARTE_TAB_PARAM, "pathway");
+        params.set(KARTE_VIEW_PARAM, `${applyId}~day@${eventId}`);
+      }, true);
+    },
+    [updateParams],
+  );
+  const openPathwayDayRef = useRef(openPathwayDay);
+  openPathwayDayRef.current = openPathwayDay;
+
   // 3 つのハンドラはカード(memo)に渡すので同一性を保つ。setPane は安定している。
   const handleEdit = useCallback((item: KarteTimelineItem) => {
     if (item.kind === "note") setPane({ kind: "note-edit", noteId: item.id });
@@ -519,6 +548,8 @@ export function KartePage() {
     else if (item.kind === "consult-order") setPane({ kind: "consult-order-edit", srId: item.id });
     // バイタルの id は 1 回の測定を束ねる identifier。
     else if (item.kind === "vital") setPane({ kind: "vital-edit", entryId: item.id });
+    // パス評価はパスタブの日めくりでその病日を開く(記載はそこから評価で書き直す)。
+    else if (item.kind === "pathway-evaluation") openPathwayDayRef.current(item.evaluation.applyId, item.evaluation.eventId);
     else setPane({ kind: "qr-edit", qrId: item.id });
   }, []);
 
@@ -675,6 +706,7 @@ export function KartePage() {
         <ErrorBanner error={prescriptions.error} />
         <ErrorBanner error={pendingOrders.error} />
         <ErrorBanner error={responses.error} />
+        <ErrorBanner error={pathwayEvaluations.error} />
         <ErrorBanner error={conditionsError} />
         <KarteTimeline
           groups={filteredGroups}
@@ -758,6 +790,16 @@ export function KartePage() {
           onOpenDay={(regimenSrId, date) => setPane({ kind: "regimen-day", regimenSrId, date })}
           onOpenAdverseEvents={(regimenSrId, cycle) => setPane({ kind: "regimen-adverse", regimenSrId, cycle })}
           onEditHeader={(regimenSrId) => setPane({ kind: "regimen-header", regimenSrId })}
+        />
+      );
+    }
+    // クリニカルパス。適用したパスを病日 × OAT ユニットのシートで見る。適用は右ペインの
+    // 「クリニカルパス」から、評価の入力も右ペインの担当。
+    if (key === "pathway") {
+      return (
+        <KartePathwayTab
+          {...props}
+          onOpenOrder={(kind, srId) => setPane({ kind: `${kind}-edit`, srId } as KartePaneState)}
         />
       );
     }

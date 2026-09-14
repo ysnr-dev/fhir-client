@@ -329,8 +329,8 @@ export function NursingPerformModal({
   );
 }
 
-/** 表現タイプごとの入力欄。 */
-function ObservationInput({
+/** 表現タイプごとの入力欄。パスの評価入力(PathwayEvaluatePanel)も同じ欄を使う。 */
+export function ObservationInput({
   spec,
   values,
   onChange,

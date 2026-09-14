@@ -25,6 +25,8 @@ import { RadMaterialPage } from "./pages/RadMaterialPage";
 import { RadDatasetPage } from "./pages/RadDatasetPage";
 import { RegimenListPage } from "./pages/RegimenListPage";
 import { RegimenEditorPage } from "./pages/RegimenEditorPage";
+import { PathwayListPage } from "./pages/PathwayListPage";
+import { PathwayEditorPage } from "./pages/PathwayEditorPage";
 import { PhysioWorklistPage } from "./pages/PhysioWorklistPage";
 import { PhysioExamTypePage } from "./pages/PhysioExamTypePage";
 import { PhysioItemPage } from "./pages/PhysioItemPage";
@@ -290,6 +292,12 @@ function App() {
             <SubMenu label="化学療法">
               <Link to="/regimens" className="row-menu__item">
                 レジメン
+              </Link>
+            </SubMenu>
+            {/* クリニカルパス(施設パス)の定義。承認制の施設共通マスタ(docs/clinical-pathway-design.md)。 */}
+            <SubMenu label="クリニカルパス">
+              <Link to="/pathways" className="row-menu__item">
+                パス定義
               </Link>
             </SubMenu>
             <SubMenu label="検体検査">
@@ -577,6 +585,9 @@ function App() {
           <Route path="/regimens" element={<RegimenListPage />} />
           <Route path="/regimens/new" element={<RegimenEditorPage />} />
           <Route path="/regimens/:regimenId" element={<RegimenEditorPage />} />
+          <Route path="/pathways" element={<PathwayListPage />} />
+          <Route path="/pathways/new" element={<PathwayEditorPage />} />
+          <Route path="/pathways/:pathwayId" element={<PathwayEditorPage />} />
           <Route path="/physio-items" element={<PhysioItemPage />} />
           <Route path="/physio-item-layouts" element={<PhysioItemLayoutPage />} />
           <Route path="/physio-exam-types" element={<PhysioExamTypePage />} />

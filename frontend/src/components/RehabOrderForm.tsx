@@ -12,6 +12,7 @@ import {
   type RehabTherapyType,
 } from "../fhir/rehabOrderHelpers";
 import { makeFieldUpdater } from "../lib/form";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
@@ -36,6 +37,12 @@ interface RehabOrderFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /** オーダーセットの適用日。外から開始日をまとめて入れるときに渡す。 */
+  bulkStartDate?: string;
+  /** セットの内容として入力する(患者と日付に依存する入力を出さず、その検証も外す)。 */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 export function RehabOrderForm({
@@ -45,6 +52,9 @@ export function RehabOrderForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: RehabOrderFormProps) {
   const [values, setValues] = useState<RehabOrderFormValues>(
     initialValues ?? emptyRehabOrderForm(""),
@@ -53,6 +63,7 @@ export function RehabOrderForm({
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
 
   const problemOptions = useProblemOptions(patientId);
+  useBulkStartDate(bulkStartDate, (date) => setValues((v) => ({ ...v, startDate: date })));
   const update = makeFieldUpdater(setValues);
 
   function toggleTherapyType(code: RehabTherapyType, checked: boolean) {
@@ -66,7 +77,7 @@ export function RehabOrderForm({
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const error = validateRehabOrderForm(values);
+    const error = validateRehabOrderForm(values, { requireDates: !setMode });
     setValidationError(error);
     if (error) return;
 
@@ -78,7 +89,7 @@ export function RehabOrderForm({
   const elapsedDays = rehabElapsedDays(values.onsetDate, values.startDate);
 
   return (
-    <form className="prescription-form" onSubmit={handleSubmit}>
+    <form className="prescription-form" onSubmit={handleSubmit} noValidate={hideSubmit}>
       {validationError && (
         <div className="error-banner" role="alert" ref={validationErrorRef}>
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -202,14 +213,16 @@ export function RehabOrderForm({
         {elapsedDays !== undefined && (
           <p className="order-select__muted">開始日は起算日から {elapsedDays} 日目です。</p>
         )}
-        <label>
-          対象プロブレム
-          <ProblemSelect
-            value={values.problem}
-            options={problemOptions}
-            onChange={(problem) => update("problem", problem)}
-          />
-        </label>
+        {!setMode && (
+          <label>
+            対象プロブレム
+            <ProblemSelect
+              value={values.problem}
+              options={problemOptions}
+              onChange={(problem) => update("problem", problem)}
+            />
+          </label>
+        )}
       </fieldset>
 
       <fieldset>
@@ -264,11 +277,13 @@ export function RehabOrderForm({
         )}
       </fieldset>
 
-      <div className="prescription-form__actions">
-        <button type="submit" disabled={submitting}>
-          {submitting ? "保存中..." : submitLabel}
-        </button>
-      </div>
+      {!hideSubmit && (
+        <div className="prescription-form__actions">
+          <button type="submit" disabled={submitting}>
+            {submitting ? "保存中..." : submitLabel}
+          </button>
+        </div>
+      )}
     </form>
   );
 }

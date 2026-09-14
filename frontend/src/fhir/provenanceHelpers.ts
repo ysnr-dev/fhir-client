@@ -180,6 +180,19 @@ export function buildActivityProvenanceEntry(
   return provenanceEntry(targets, requester, activity, enterer);
 }
 
+/**
+ * クリニカルパスの適用の来歴。対象は適用の CarePlan(木の根)だけで、病日以下の CarePlan と
+ * タスクの Procedure は根から辿れるので入れない(検体検査の明細を入れないのと同じ理由)。
+ * 指示医師はオーダーのヘッダを持たないので呼ぶ側が渡す(OrderContext の依頼医師)。
+ */
+export function buildPathwayApplyProvenanceEntry(
+  applyFullUrl: string,
+  requester: fhir4.Reference,
+  enterer: OrderEnterer,
+): fhir4.BundleEntry {
+  return provenanceEntry([applyFullUrl], requester, "CREATE", enterer);
+}
+
 function provenanceEntry(
   targets: string[],
   requester: fhir4.Reference,

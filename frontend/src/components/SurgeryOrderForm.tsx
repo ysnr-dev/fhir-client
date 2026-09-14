@@ -30,6 +30,7 @@ import {
   questionnaireResponsePlainText,
   type TemplateBinding,
 } from "../fhir/questionnaireResponseHelpers";
+import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useSurgeryConflictCheck } from "../hooks/useSurgeryConflictCheck";
 import { useValidationError } from "../hooks/useValidationError";
@@ -62,6 +63,12 @@ interface SurgeryOrderFormProps {
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
+  /** オーダーセットの適用日。外から開始日をまとめて入れるときに渡す。 */
+  bulkStartDate?: string;
+  /** セットの内容として入力する(患者と日付に依存する入力を出さず、その検証も外す)。 */
+  setMode?: boolean;
+  /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
+  hideSubmit?: boolean;
 }
 
 function ArrowUpIcon() {
@@ -102,6 +109,9 @@ export function SurgeryOrderForm({
   submitting,
   submitError,
   submitLabel = "登録",
+  bulkStartDate,
+  setMode = false,
+  hideSubmit = false,
 }: SurgeryOrderFormProps) {
   const [values, setValues] = useState<SurgeryOrderFormValues>(
     initialValues ?? emptySurgeryOrderForm(),
@@ -117,6 +127,7 @@ export function SurgeryOrderForm({
   const [preopTemplateOpen, setPreopTemplateOpen] = useState(false);
 
   const problemOptions = useProblemOptions(patientId);
+  useBulkStartDate(bulkStartDate, (date) => setValues((v) => ({ ...v, scheduledDate: date })));
   // 左右が必須かどうかは術式マスタが決める。保存済みのオーダーを開いたときは明細から
   // 復元できないので、選択中の術式コードから今のマスタを引き直す(処置の groupable と
   // 同じ扱い)。マスタから消えた術式は任意のままにする。
@@ -276,6 +287,13 @@ export function SurgeryOrderForm({
 
     setValidationError(null);
 
+    // 外から一括 submit される(セット・パスの適用)ときは同期に登録する。手術室の
+    // 重なりは確認モーダルを挟めないので、登録後に手術カレンダーで確かめる運用。
+    if (hideSubmit) {
+      save();
+      return;
+    }
+
     // 同じ手術室・同じ時間帯に他の手術が入っていないかを、登録の直前に一覧を
     // 引き直して確かめる。重なっていれば確認モーダルを挟み、承知で登録された
     // ときだけ通す(docs/surgery-calendar-design.md)。
@@ -309,7 +327,12 @@ export function SurgeryOrderForm({
 
   return (
     <>
-      <form className="prescription-form" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
+      <form
+        className="prescription-form"
+        onSubmit={handleSubmit}
+        onKeyDown={handleKeyDown}
+        noValidate={hideSubmit}
+      >
         {validationError && (
           <div className="error-banner" role="alert" ref={validationErrorRef}>
             <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -320,14 +343,16 @@ export function SurgeryOrderForm({
 
         <fieldset>
           <legend>手術共通</legend>
-          <label>
-            対象プロブレム
-            <ProblemSelect
-              value={values.problem}
-              options={problemOptions}
-              onChange={(problem) => update("problem", problem)}
-            />
-          </label>
+          {!setMode && (
+            <label>
+              対象プロブレム
+              <ProblemSelect
+                value={values.problem}
+                options={problemOptions}
+                onChange={(problem) => update("problem", problem)}
+              />
+            </label>
+          )}
           <label>
             入外区分
             <select
@@ -439,15 +464,17 @@ export function SurgeryOrderForm({
               ))}
             </select>
           </label>
-          <SurgeryRoomDaySchedule
-            date={values.scheduledDate}
-            roomId={values.roomId}
-            roomName={values.roomName}
-            time={values.scheduledTime}
-            durationMinutes={values.durationMinutes}
-            excludeOrderId={orderId}
-            departmentId={values.surgicalDepartmentId}
-          />
+          {!setMode && (
+            <SurgeryRoomDaySchedule
+              date={values.scheduledDate}
+              roomId={values.roomId}
+              roomName={values.roomName}
+              time={values.scheduledTime}
+              durationMinutes={values.durationMinutes}
+              excludeOrderId={orderId}
+              departmentId={values.surgicalDepartmentId}
+            />
+          )}
         </fieldset>
 
         {/* 術式。先頭が主術式で、DPC・手術記録の見出しになる。 */}
@@ -553,15 +580,17 @@ export function SurgeryOrderForm({
                       }
                       aria-label="術前診断"
                     />
-                    <div className="rad-gp__reason-actions">
-                      <button
-                        type="button"
-                        onClick={() => setConditionTarget(item.code)}
-                        title="登録されている病名から選ぶ"
-                      >
-                        病名
-                      </button>
-                    </div>
+                    {!setMode && (
+                      <div className="rad-gp__reason-actions">
+                        <button
+                          type="button"
+                          onClick={() => setConditionTarget(item.code)}
+                          title="登録されている病名から選ぶ"
+                        >
+                          病名
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </label>
               </div>
@@ -776,7 +805,7 @@ export function SurgeryOrderForm({
             value={values.preopInstruction}
             template={values.preopInstructionTemplate}
             onChange={(preopInstruction) => update("preopInstruction", preopInstruction)}
-            onOpenTemplate={() => setPreopTemplateOpen(true)}
+            onOpenTemplate={setMode ? undefined : () => setPreopTemplateOpen(true)}
             onClearTemplate={() => update("preopInstructionTemplate", null)}
           />
         </fieldset>
@@ -791,11 +820,13 @@ export function SurgeryOrderForm({
           />
         </fieldset>
 
-        <div className="prescription-form__submit">
-          <button type="submit" disabled={submitting || conflictCheck.checking}>
-            {submitting ? "送信中..." : conflictCheck.checking ? "確認中..." : submitLabel}
-          </button>
-        </div>
+        {!hideSubmit && (
+          <div className="prescription-form__submit">
+            <button type="submit" disabled={submitting || conflictCheck.checking}>
+              {submitting ? "送信中..." : conflictCheck.checking ? "確認中..." : submitLabel}
+            </button>
+          </div>
+        )}
       </form>
 
       {/* 各モーダルは独自の入力を持つため、外側フォームの子孫に置かない
@@ -892,7 +923,8 @@ function TemplateTextField({
   value: string;
   template: TemplateBinding | null;
   onChange: (value: string) => void;
-  onOpenTemplate: () => void;
+  /** テンプレート記入を開く。渡さなければ操作を出さない(セットの内容としての入力)。 */
+  onOpenTemplate?: () => void;
   onClearTemplate: () => void;
 }) {
   const fromTemplate = Boolean(template);
@@ -914,15 +946,17 @@ function TemplateTextField({
           }
         />
         <div className="rad-gp__template-actions">
-          <button
-            type="button"
-            onClick={onOpenTemplate}
-            title={
-              fromTemplate ? `${label}をテンプレートから直す` : `${label}をテンプレートから記入`
-            }
-          >
-            {fromTemplate ? "テンプレート編集" : "テンプレート"}
-          </button>
+          {onOpenTemplate && (
+            <button
+              type="button"
+              onClick={onOpenTemplate}
+              title={
+                fromTemplate ? `${label}をテンプレートから直す` : `${label}をテンプレートから記入`
+              }
+            >
+              {fromTemplate ? "テンプレート編集" : "テンプレート"}
+            </button>
+          )}
           {fromTemplate && (
             <button
               type="button"

@@ -205,7 +205,11 @@ export function emptyRehabOrderForm(setting: PrescriptionSetting): RehabOrderFor
  * 入力の検証。空文字なら妥当。フォームとパネルの双方から呼べるように
  * ヘルパー側に置く(他のオーダーはフォーム内の関数だが、リハビリは項目が多い)。
  */
-export function validateRehabOrderForm(values: RehabOrderFormValues): string {
+export function validateRehabOrderForm(
+  values: RehabOrderFormValues,
+  /** requireDates を偽にすると開始日を求めない(セットの内容としての入力)。 */
+  { requireDates = true }: { requireDates?: boolean } = {},
+): string {
   if (!values.diseaseCategory) return "疾患別リハ区分を選んでください。";
   if (values.therapyTypes.length === 0) return "療法種別を 1 つ以上選んでください。";
 
@@ -222,8 +226,8 @@ export function validateRehabOrderForm(values: RehabOrderFormValues): string {
     }
   }
 
-  if (!values.startDate) return "開始日を入れてください。";
-  if (values.endDate && values.endDate < values.startDate) {
+  if (requireDates && !values.startDate) return "開始日を入れてください。";
+  if (values.startDate && values.endDate && values.endDate < values.startDate) {
     return "終了日は開始日と同じか、それより後にしてください。";
   }
   if (values.onsetDate && values.onsetDate > values.startDate) {
@@ -352,6 +356,8 @@ export function buildRehabOrderBundle(
 ): fhir4.Bundle {
   return transactionBundle([
     {
+      // fullUrl は来歴(Provenance)とクリニカルパスのタスクがこのオーダーを指すのに使う。
+      fullUrl: `urn:uuid:${crypto.randomUUID()}`,
       resource: buildRehabOrderServiceRequest(values, patientId, requester, registrationAuthoredOn()),
       request: { method: "POST", url: "ServiceRequest" },
     },

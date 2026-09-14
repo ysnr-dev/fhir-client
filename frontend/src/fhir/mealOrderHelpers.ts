@@ -65,7 +65,7 @@ const SIDE_DISH_FORM_SYSTEM = "http://fhir-client.local/CodeSystem/meal-side-dis
  * occurrenceDateTime しか索引しないため(手術の surgery-duration と同じ判断)。
  * この拡張が無いオーダーは「継続中」。
  */
-const MEAL_ORDER_END_EXT_URL = "http://fhir-client.local/StructureDefinition/meal-order-end";
+export const MEAL_ORDER_END_EXT_URL = "http://fhir-client.local/StructureDefinition/meal-order-end";
 
 /**
  * 主食がどの食事のものかを表す(SS-MIX2 の ODS-2 サービス時間帯)。orderDetail の
@@ -841,6 +841,8 @@ export function buildMealOrderBundle(
     closing.length > 0 ? { kind: "change", sourceId: closing[0].id } : { kind: "start" };
   return transactionBundle([
     {
+      // fullUrl は来歴(Provenance)とクリニカルパスのタスクがこのオーダーを指すのに使う。
+      fullUrl: `urn:uuid:${crypto.randomUUID()}`,
       resource: buildMealOrderServiceRequest(values, patientId, requester, { encounterId, link }),
       request: { method: "POST", url: "ServiceRequest" },
     },
