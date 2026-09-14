@@ -134,8 +134,9 @@ ServiceRequest(行為の指示) ← basedOn ── Procedure(category order-type
   対応表に入れない(血圧行と別行になり、グラフの系列キーが衝突する)。それ以外の観察は
   MEDIS コードをキーにした行になる。`buildVitalFlowsheet` は valueCodeableConcept と
   component(2 値 → "12.5/8")も読むように広げた。
-- `Observation` には `based-on` の検索パラメータが無いので、実施履歴は患者(または日付)で
-  引いてから basedOn で指示に振り分ける(`useNursingPerformsOf` / `useNursingPerformsOn`)。
+- 実施記録は Observation・Procedure とも `based-on` で指示を指す。指示の詳細の実施履歴は指示で
+  (`useNursingPerformsOfOrder`)、指示簿の「本日」列は日付と患者で(`useNursingPerformsOn`)、
+  パスの画面は患者で(`useNursingPerformsOf`)引き、basedOn で指示に振り分ける。
 
 ## 3. マスタ(MEDIS 看護実践用語標準マスター)
 

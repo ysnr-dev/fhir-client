@@ -6643,9 +6643,8 @@ export function useKarteVitalsInfinite(
  * カルテのタイムラインの「パス評価」(docs/clinical-pathway-design.md §6)。記載のあるアウトカムの評価を
  * 患者ぶん全部読む(1 人の患者で数十件程度なのでページングしない。タイムラインの表示範囲の計算には加わらない)。
  *
- * 1. `Observation?patient&category=パスの印&code=判定` で評価の Observation。
- * 2. basedOn の OAT ユニットを `CarePlan?_id=…&_include=CarePlan:part-of` で引き、祖先の病日・適用も揃える
- *    (Observation の based-on は上流で検索・include できないので分ける)。
+ * `Observation?patient&category=パスの印&code=判定` で評価の Observation を引き、basedOn の OAT ユニットを
+ * `_include=Observation:based-on` で、その祖先の病日・適用を `_include:iterate=CarePlan:part-of` で同じ応答に揃える。
  *
  * 評価はプロブレムを指さないので、プロブレムで絞り込んでいるときは出さない。
  * キーは評価の記録(useRecordPathwayEvaluation)の読み直しと同じ ["Observation", "search", "pathway"] 配下。
@@ -6662,24 +6661,13 @@ export function useKartePathwayEvaluations(
       params.set("patient", `Patient/${patientId}`);
       params.set("category", `${PATHWAY_MARKER_SYSTEM}|${PATHWAY_MARKER_CODE}`);
       params.set("code", `${EVALUATION_ITEM_SYSTEM}|judgement`);
+      params.set("_include", "Observation:based-on");
+      params.set("_include:iterate", "CarePlan:part-of");
       params.set("_count", "500");
-      const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
-      const observations = (bundle.entry ?? [])
-        .map((entry) => entry.resource)
-        .filter((r): r is fhir4.Observation => r?.resourceType === "Observation");
-      const unitIds = [
-        ...new Set(observations.map((o) => o.basedOn?.[0]?.reference?.split("/").pop() ?? "").filter(Boolean)),
-      ];
-      if (unitIds.length === 0) return [];
-      const carePlanParams = new URLSearchParams();
-      carePlanParams.set("_id", unitIds.join(","));
-      carePlanParams.set("_include", "CarePlan:part-of");
-      carePlanParams.set("_count", "500");
-      const { data: carePlanBundle } = await searchResource<fhir4.CarePlan>("CarePlan", carePlanParams);
-      const carePlans = (carePlanBundle.entry ?? [])
-        .map((entry) => entry.resource)
-        .filter((r): r is fhir4.CarePlan => r?.resourceType === "CarePlan");
-      return buildPathwayEvaluationCards(observations, carePlans);
+      const { data: bundle } = await searchResource<fhir4.Resource>("Observation", params);
+      const observations = resourcesOfType<fhir4.Observation>(bundle, "Observation");
+      if (observations.length === 0) return [];
+      return buildPathwayEvaluationCards(observations, resourcesOfType<fhir4.CarePlan>(bundle, "CarePlan"));
     },
     enabled: Boolean(patientId) && problemIds !== undefined,
   });
@@ -9212,8 +9200,7 @@ export function useNursingPendingCounts(date: string, wardId: string | undefined
 //
 // 観察は Observation、行為は Procedure(fhir/nursingPerformHelpers.ts)。どちらも
 // category が order-type の nursing で、指示(ServiceRequest)を basedOn で指す。
-// Observation には based-on の検索パラメータが無いので、患者(または日付)で引いて
-// から basedOn で指示に振り分ける。指示受けの Task は実施では動かない。
+// 患者・日付・指示のいずれかで引き、basedOn で指示に振り分ける。指示受けの Task は実施では動かない。
 
 function nursingPerformParams(): URLSearchParams {
   const params = new URLSearchParams();
@@ -9246,7 +9233,7 @@ async function fetchNursingPerforms(
   );
 }
 
-/** その患者の実施記録(指示の id ごと、新しい順)。詳細モーダルの実施履歴に使う。 */
+/** その患者の実施記録(指示の id ごと、新しい順)。パスの画面が指示ごとの実施を見るのに使う。 */
 export function useNursingPerformsOf(patientId: string | undefined) {
   return useQuery({
     // Procedure も含むが、無効化は Observation / Procedure の両方に投げるので片方のキーで足りる。
@@ -9293,6 +9280,20 @@ export function useNursingPerformsOn(date: string, patientIds: string[]) {
     },
     enabled: Boolean(date) && ids.length > 0,
     placeholderData: keepPreviousData,
+  });
+}
+
+/** 1 つの指示の実施記録(新しい順)。指示の詳細の実施履歴に使う。 */
+export function useNursingPerformsOfOrder(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ["Observation", "search", "nursing-perform-order", orderId],
+    queryFn: async () => {
+      const byOrderId = await fetchNursingPerforms((params) =>
+        params.set("based-on", `ServiceRequest/${orderId}`),
+      );
+      return byOrderId.get(orderId ?? "") ?? [];
+    },
+    enabled: Boolean(orderId),
   });
 }
 

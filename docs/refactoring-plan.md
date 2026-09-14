@@ -182,6 +182,26 @@ A14 を除いて実装済み。`tsc -b` 通過。計画から変えた点は次�
 
 ## 第 2 段: 上流 fhir-server 側の実装
 
+### 第 2 段の実施結果（2026-09-15）
+
+実装済み。上流の rspec は全件通過（2119 件、0 failures）、クライアントは `tsc -b` 通過。
+
+- **上流**: `search_definitions/observation.rb` と `search_references.rb` の Observation に `based-on` を追加した。
+  参照は content の jsonb 包含で引くので、migration も再索引も要らない（既存データもそのまま引ける）。
+  `spec/requests/observations_spec.rb` に 3 件追加した（依頼・計画・型省略・カンマ OR での検索、
+  `_revinclude=Observation:based-on`、`_include=Observation:based-on` と `_include:iterate=CarePlan:part-of`）。
+- **クライアント**:
+  - `useKartePathwayEvaluations` を 1 往復にした。
+  - 看護指示の詳細の実施履歴を、患者ぶん（最大 200 件）を引いて手元で絞る形から、
+    新設の `useNursingPerformsOfOrder` で指示ごとに引く形に変えた。長い入院で 200 件を超えると履歴が欠ける問題も直る。
+  - 看護の実施記録と設計書（`nursing-order-design.md`）の「based-on の検索パラメータが無い」を直した。
+  - パスの画面（シート・評価・取消）は患者のすべての指示の実施を使うので、患者単位の取得のまま。
+- **検証**: 開発環境で、旧条件と新条件の結果を突き合わせた。パス評価は患者 4 人ぶん（評価 6 件と CarePlan）、
+  看護の実施記録は指示ごとに 9 件で一致した。画面では、カルテのパス評価カードが 1 リクエストで表示されること、
+  指示簿の詳細の実施履歴が `based-on` の検索で出ることを確認した。
+- **デプロイ**: 上流を先にデプロイする。上流が旧版だと、lenient 既定では `based-on` が無視され、
+  パス評価カードの計画名が出ず、指示の詳細に患者のすべての実施が混ざる。
+
 ### C-9. `Observation.based-on` 検索と `_include` / `_revinclude`
 
 - **現状**: 上流の Observation には `part-of` と `derived-from` はあるが、`based-on` が無い。

@@ -10,8 +10,7 @@ import {
   nursingTaskStatus,
   nursingTaskStatusDisplay,
 } from "../fhir/nursingTaskHelpers";
-import { useDeleteNursingPerform, useNursingPerformsOf } from "../api/queries";
-import { referenceId } from "../fhir/shared";
+import { useDeleteNursingPerform, useNursingPerformsOfOrder } from "../api/queries";
 import { Modal } from "./Modal";
 
 interface Props {
@@ -48,10 +47,8 @@ export function NursingOrderDetailModal({
   const department = departmentOf(order).departmentName;
   const ward = wardOf(order).wardName;
   const acceptedAt = task?.executionPeriod?.start ?? "";
-  // 実施履歴。Observation には based-on 検索が無いので患者ぶんを引いて指示で絞る。
-  const patientId = referenceId(order.subject?.reference);
-  const performsQuery = useNursingPerformsOf(patientId);
-  const performs = performsQuery.data?.get(order.id ?? "") ?? [];
+  const performsQuery = useNursingPerformsOfOrder(order.id);
+  const performs = performsQuery.data ?? [];
   const deletePerform = useDeleteNursingPerform();
 
   function handleDeletePerform(perform: (typeof performs)[number]) {
