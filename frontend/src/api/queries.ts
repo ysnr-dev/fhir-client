@@ -53,6 +53,7 @@ import { parsePathwayWardTasks, type PathwayWardTask } from "../fhir/pathwayWork
 import { buildPathwayEvaluationCards, type PathwayEvaluationCard } from "../fhir/pathwayKarteHelpers";
 import { orderProgressByOrderId, type OrderProgress } from "../fhir/orderProgressHelpers";
 import { EVALUATION_ITEM_SYSTEM } from "../fhir/pathwayEvaluationHelpers";
+import { PATHWAY_VARIANCE_TASK_CODE } from "../fhir/pathwayVarianceHelpers";
 import { useCurrentPractitioner } from "./authQueries";
 import { nowFhirDateTime, today } from "../lib/dates";
 import {
@@ -11734,6 +11735,28 @@ export function useRecordPathwayEvaluation() {
       invalidatePathway(queryClient);
       queryClient.invalidateQueries({ queryKey: ["Observation", "search", "pathway"] });
       queryClient.invalidateQueries({ queryKey: ["Goal"] });
+      // バリアンスの通知を作る・取り下げることがあるので、通知の一覧・件数も読み直させる。
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
     },
+  });
+}
+
+/**
+ * 患者のパスのバリアンスの通知(対応済み・取り下げも含む)。評価を記録するときに、同じアウトカムの
+ * 通知を出し直すか・取り下げるかを決めるのに使う(docs/clinical-pathway-design.md §7.10)。
+ * OAT ユニットとの突き合わせは basedOn で画面側が行う。
+ */
+export function usePathwayVarianceTasks(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("code", `${TASK_CODE_SYSTEM}|${PATHWAY_VARIANCE_TASK_CODE.code}`);
+  params.set("_count", "500");
+  return useQuery({
+    queryKey: [...NOTIFICATION_TASK_KEY, "pathway-variance", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.Task>("Task", params);
+      return resourcesOfType<fhir4.Task>(bundle, "Task");
+    },
+    enabled: Boolean(patientId),
   });
 }

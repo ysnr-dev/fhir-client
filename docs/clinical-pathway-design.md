@@ -665,6 +665,31 @@ CarePlan(観察項目).goal → Goal  identifier assessment-goal-id = 観察項�
 - 途中で失敗したら計画の木は残す。もう一度開けば、残っているオーダーから続けられる(消えたオーダーは一覧に出ない)。
 - 取り消した後は URL の view を外し、シートは残っている適用(無ければ「適用されていません」)を出す。
 
+### 7.10 バリアンスの通知
+
+実装は `fhir/pathwayVarianceHelpers.ts`(通知の組み立て)、`hooks/usePathwayVarianceNotice.ts`(宛先と既存の通知)、
+`buildPathwayEvaluationBundle`(評価の transaction に積む)、`components/notifications/notificationRegistry.tsx`(一覧の種別)。
+通知の器は他の通知と同じ Task(readme の「通知(Task)」)。
+
+```
+Task  code = task-code|pathway-variance、priority = urgent(注意)、status requested / completed / cancelled
+      focus → 評価の Observation、for → 患者、owner → 入院の主治医、requester → 記録した人
+      basedOn → OAT ユニットの CarePlan(アウトカムごとの通知を引き当てる)
+      input: パス名 / 適用(CarePlan の id)/ 病日(CarePlan の id)/ 病日の表示 / 対象日 / アウトカム
+```
+
+- ［決定］**通知するのは重要アウトカム(★)を「未達成」と記録したときだけ**。重要でないアウトカムの未達成まで届けると数が多く、
+  主治医が見るべきものが埋もれる(パスシートの「バリアンス」の件数では全部数える)。強度は注意(緊急異常値ほど急がない)。
+- 評価モーダルと日めくりの記録で、評価と同じ transaction に積む。指示簿のタスクの実施など、達成状態に触れない記録では作らない。
+- ［決定］**同じアウトカムを未達成のまま記録し直しても出し直さない**(記載を足すたびに届くと煩い)。達成・未評価から未達成に
+  変わったときは、前の通知(対応済み・取り下げ)があれば書き換えて未対応に戻す。
+- ［決定］**未達成でなくなったら未対応の通知を取り下げる**(cancelled)。対応済みの通知はそのまま残す。
+- 宛先は入院の Encounter の主治医(participant ATND)。パスを当てた入院と今の入院が違う、または入院していないときは宛先なし
+  (通知の一覧で「自分あてのみ」を外すと出る)。
+- 既存の通知は `Task?patient&code=task-code|pathway-variance` で患者ぶんを引き、basedOn で OAT ユニットに突き合わせる
+  (`usePathwayVarianceTasks`)。［決定］読めるまでは記録のボタンを押させない(読めていないと同じアウトカムに通知が重なる)。
+- 通知の「カルテ」は、パスタブをその病日の日めくりで開く。「確認」で対応済み(note に「バリアンスを確認しました。」)。
+
 ---
 
 ## 8. 実装フェーズ
@@ -809,6 +834,12 @@ CarePlan(観察項目).goal → Goal  identifier assessment-goal-id = 観察項�
   セルが「達成」になる。コンテナ内 `tsc -b` 成功。
 - 全画面でセルを押すと、右ペインではなくモーダルで同じ評価入力が開く(右ペインは空のまま)。Escape はモーダル →
   全画面の順に閉じる。モーダルから「記録」するとモーダルだけ閉じ、全画面のシートのセルが「達成」に変わる。
+
+### 9.26 検証したこと(バリアンスの通知、2026-09-14)
+
+- 上流の `Task/$validate` に、focus = Observation・basedOn = CarePlan・input に valueDate を持つ `pathway-variance` の Task を送り、
+  「valid」が返る(保存はしていない)。
+- 型チェックまで。画面で未達成を記録して通知が届くこと・取り下げは確かめていない。
 
 ### 9.25 検証したこと(パスシートからの部門の実施入力、2026-09-14)
 

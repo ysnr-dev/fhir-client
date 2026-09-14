@@ -18,6 +18,12 @@ import {
   type OrderEnterer,
 } from "../../fhir/provenanceHelpers";
 import {
+  PATHWAY_VARIANCE_NOTE,
+  PATHWAY_VARIANCE_TASK_CODE,
+  pathwayVarianceRowOf,
+  type PathwayVarianceRow,
+} from "../../fhir/pathwayVarianceHelpers";
+import {
   RESULT_REVIEW_NOTE,
   RESULT_REVIEW_TASK_CODE,
   resultReviewRowOf,
@@ -27,6 +33,7 @@ import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
 import { KARTE_DETAIL_PARAM, KARTE_TAB_PARAM, formatKarteDetail } from "../../karteUrl";
 import { LabPanicNotificationCells } from "./LabPanicNotificationCells";
 import { OrderApprovalNotificationCells } from "./OrderApprovalNotificationCells";
+import { PathwayVarianceNotificationCells } from "./PathwayVarianceNotificationCells";
 import { ResultReviewNotificationCells } from "./ResultReviewNotificationCells";
 
 // 通知の種別ごとの振る舞いをまとめた対応表。通知そのものの形は notificationHelpers、
@@ -130,10 +137,26 @@ const resultReviewKind = defineNotificationKind<ResultReviewRow>({
     ]),
 });
 
+const pathwayVarianceKind = defineNotificationKind<PathwayVarianceRow>({
+  code: PATHWAY_VARIANCE_TASK_CODE.code,
+  label: PATHWAY_VARIANCE_TASK_CODE.display,
+  toRow: pathwayVarianceRowOf,
+  Cells: PathwayVarianceNotificationCells,
+  // カルテのパスタブを、未達成を記録した病日の日めくりで開く。
+  karteLink: (row) => {
+    const params = new URLSearchParams();
+    params.set(KARTE_TAB_PARAM, "pathway");
+    if (row.applyId) params.set("view", `${row.applyId}~day${row.eventId ? `@${row.eventId}` : ""}`);
+    return `/patients/${row.patientId}/karte?${params.toString()}`;
+  },
+  action: { label: "確認", noteText: PATHWAY_VARIANCE_NOTE },
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
   resultReviewKind,
+  pathwayVarianceKind,
   orderApprovalKind,
 ];
 

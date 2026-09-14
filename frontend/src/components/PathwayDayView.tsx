@@ -17,6 +17,7 @@ import type { OrderProgress } from "../fhir/orderProgressHelpers";
 import { isOrderDrivenTask, pathwayTaskPerformedOn } from "../fhir/pathwaySheetHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { nowFhirDateTime } from "../lib/dates";
+import { usePathwayVarianceNotice } from "../hooks/usePathwayVarianceNotice";
 import { ErrorBanner } from "./ErrorBanner";
 import { ObservationInput } from "./NursingPerformModal";
 
@@ -83,6 +84,7 @@ export function PathwayDayView({
   );
   const event = events[index];
   const record = useRecordPathwayEvaluation();
+  const variance = usePathwayVarianceNotice(patientId, application);
   const { practitionerId, practitioner } = useCurrentPractitioner();
   // 入力中の値はアウトカムごとに持ち、病日をめくっても残す(記録で全部まとめて送る)。
   const [drafts, setDrafts] = useState<Map<string, UnitDraft>>(new Map());
@@ -131,10 +133,11 @@ export function PathwayDayView({
     const specs = new Map<string, ReturnType<typeof assessmentInputSpec>>();
     const entry: fhir4.BundleEntry[] = [];
     for (const unitId of dirtyUnitIds) {
-      const unit = events.flatMap((e) => e.units).find((u) => u.id === unitId);
+      const unitEvent = events.find((e) => e.units.some((u) => u.id === unitId));
+      const unit = unitEvent?.units.find((u) => u.id === unitId);
       const unitCarePlan = carePlans.get(unitId);
       const draft = drafts.get(unitId);
-      if (!unit || !unitCarePlan || !draft) continue;
+      if (!unitEvent || !unit || !unitCarePlan || !draft) continue;
       for (const a of unit.assessments) specs.set(a.id, assessmentInputSpec(a.nursingObservationManageNo, masters.data));
       const base = evaluationValuesOf(unit, evaluation);
       const bundle = buildPathwayEvaluationBundle(
@@ -149,6 +152,7 @@ export function PathwayDayView({
             practitionerId && practitioner
               ? { practitionerId, display: practitionerDisplayName(practitioner) }
               : null,
+          variance: variance.noticeFor(unitEvent),
         },
         {
           ...base,
@@ -169,7 +173,7 @@ export function PathwayDayView({
 
   return (
     <div className="pathway-day">
-      <ErrorBanner error={record.error ?? masters.error ?? vitals.error} />
+      <ErrorBanner error={record.error ?? masters.error ?? vitals.error ?? variance.error} />
 
       <div className="pathway-day__nav">
         <button type="button" onClick={() => onEventChange(events[index - 1].id)} disabled={index === 0}>
@@ -340,7 +344,7 @@ export function PathwayDayView({
       })}
 
       <div className="lab-order-item__actions pathway-day__actions">
-        <button type="button" onClick={handleRecord} disabled={record.isPending || dirtyUnitIds.length === 0}>
+        <button type="button" onClick={handleRecord} disabled={record.isPending || dirtyUnitIds.length === 0 || !variance.ready}>
           {record.isPending ? "送信中..." : dirtyUnitIds.length > 0 ? `記録(${dirtyUnitIds.length} 件)` : "記録"}
         </button>
       </div>

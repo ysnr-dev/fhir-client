@@ -34,6 +34,7 @@ import {
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useValidationError } from "../hooks/useValidationError";
 import { toDateTimeInputValue, toFhirDateTime } from "../lib/dates";
+import { usePathwayVarianceNotice } from "../hooks/usePathwayVarianceNotice";
 import { ErrorBanner } from "./ErrorBanner";
 import { ObservationInput } from "./NursingPerformModal";
 import { TemplateEntryModal } from "./TemplateEntryModal";
@@ -58,6 +59,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
   const performDates = useMemo(() => nursingPerformDates(nursingPerforms.data), [nursingPerforms.data]);
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const record = useRecordPathwayEvaluation();
+  const variance = usePathwayVarianceNotice(patientId, tree.data?.application);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
   // テンプレート記入を開いている欄(S/O/A/P か自由記載)。
   const [templateTarget, setTemplateTarget] = useState<EvaluationField | null>(null);
@@ -146,7 +148,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
   }
 
   function handleSave() {
-    if (!values || !unitCarePlan) return;
+    if (!values || !unitCarePlan || !variance.ready) return;
     if (!values.recordedAt) {
       setValidationError("記録日時を入力してください");
       return;
@@ -164,6 +166,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
           practitionerId && practitioner
             ? { practitionerId, display: practitionerDisplayName(practitioner) }
             : null,
+        variance: variance.noticeFor(event),
       },
       values,
     );
@@ -184,7 +187,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
           <p className="error-banner__line error-banner__line--error">{validationError}</p>
         </div>
       )}
-      <ErrorBanner error={record.error ?? masters.error} />
+      <ErrorBanner error={record.error ?? masters.error ?? variance.error} />
 
       <div className="chemo-calendar__summary pathway-evaluate__head">
         <span className="pathway-sheet__name">{tree.data.application.title}</span>
@@ -368,7 +371,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
       </fieldset>
 
       <div className="lab-order-item__actions">
-        <button type="button" onClick={handleSave} disabled={record.isPending}>
+        <button type="button" onClick={handleSave} disabled={record.isPending || !variance.ready}>
           {record.isPending ? "送信中..." : "記録"}
         </button>
       </div>

@@ -14,6 +14,7 @@ import {
 import { NURSING_OBSERVATION_RESULT_SYSTEM, nursingVitalCodeOf } from "./nursingPerformHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
 import { buildBloodPressureComponents } from "./vitalHelpers";
+import { pathwayVarianceTaskEntries, type PathwayVarianceNotice } from "./pathwayVarianceHelpers";
 
 // クリニカルパスの日次評価(1 病日 × 1 OAT ユニット)の FHIR 構造。ePath の適用後パスデータに倣う。
 // React に依存しない。設計は docs/clinical-pathway-design.md §7.4。
@@ -384,6 +385,8 @@ export interface PathwayEvaluationContext {
   procedures: Map<string, fhir4.Procedure>;
   existing: PathwayEvaluationState | null;
   performer: { practitionerId: string; display: string } | null;
+  /** バリアンスの通知に要る情報。渡さなければ通知を作らない(指示簿のタスクの記録など)。 */
+  variance?: PathwayVarianceNotice | null;
 }
 
 function put<T extends fhir4.Resource>(resource: T): fhir4.BundleEntry {
@@ -535,6 +538,19 @@ export function buildPathwayEvaluationBundle(
       // OAT ユニットの CarePlan から Goal を辿れるようにする(初回だけ)。
       entry.push(put({ ...unitCarePlan, goal: [...(unitCarePlan.goal ?? []), { reference: goalUrl }] }));
     }
+  }
+
+  // 重要アウトカムの未達成は主治医に通知する(未達成でなくなったら未対応の通知を取り下げる)。
+  if (ctx.variance) {
+    entry.push(
+      ...pathwayVarianceTaskEntries(
+        ctx.variance,
+        unit,
+        hasEvaluation ? values.achievement : "",
+        existing?.achievement ?? "",
+        evaluationRef,
+      ),
+    );
   }
 
   // 観察項目の実績。
