@@ -202,16 +202,18 @@ function PathwayOatUnitCard({
     <div className={`pathway-unit${unit.critical ? " pathway-unit--critical" : ""}`}>
       <div className="pathway-unit__head">
         <span className="pathway-unit__index">{index + 1}</span>
-        {seriesLabels && (
-          <span
-            className="pathway-unit__series"
-            title={`病日 ${seriesLabels.join("・")} に続くアウトカム`}
-          >
-            {`病日 ${seriesLabels.join("・")}`}
-          </span>
-        )}
         <label className="pathway-unit__name">
-          アウトカム
+          <span className="pathway-unit__name-label">
+            アウトカム
+            {seriesLabels && (
+              <span
+                className="pathway-unit__series"
+                title={`病日 ${seriesLabels.join("・")} に続くアウトカム`}
+              >
+                {`病日 ${seriesLabels.join("・")}`}
+              </span>
+            )}
+          </span>
           <input type="text" value={unit.name} onChange={(e) => onChange({ name: e.target.value })} />
         </label>
         <label>
