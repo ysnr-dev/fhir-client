@@ -11,8 +11,11 @@ module Master
              class_name: "Master::PathwayOatUnit", foreign_key: :event_id
 
     validates :pathway_code, presence: true
-    validates :elapsed_days, numericality: { only_integer: true, other_than: 0 },
-                             uniqueness: { scope: %i[pathway_code path_step], message: "が重複しています" }
+    validates :elapsed_days, numericality: { only_integer: true, other_than: 0 }
+    # 1 行ずつ作るときの重なりの検査。まとめて置換するときは送られてきた配列の中で見る
+    # (PathwaysController#replace_children)。DB の一意インデックスが最後の砦。
+    validates :elapsed_days, uniqueness: { scope: %i[pathway_code path_step], message: "が重複しています" },
+                             on: :create
     validates :path_step, numericality: { only_integer: true, greater_than_or_equal_to: 1 }
     validates :allowable_condition_type, inclusion: { in: ALLOWABLE_CONDITION_TYPES }, allow_blank: true
     validates :allowable_days, :allowable_range_low, :allowable_range_high,

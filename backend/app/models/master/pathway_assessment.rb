@@ -4,8 +4,10 @@ module Master
     self.table_name = "master_pathway_assessments"
 
     validates :pathway_code, :unit_id, presence: true
-    validates :assessment_key, presence: true, format: { with: PathwayOatUnit::UUID_FORMAT },
-                               uniqueness: { scope: :unit_id, message: "が同じ OAT ユニットの中で重複しています" }
+    validates :assessment_key, presence: true, format: { with: PathwayOatUnit::UUID_FORMAT }
+    # 置換のときの重なりはコントローラが配列の中で見る(PathwaysController#replace_children)。
+    validates :assessment_key, uniqueness: { scope: :unit_id, message: "が同じ OAT ユニットの中で重複しています" },
+                               on: :create
     validates :name, presence: true
     validates :code_system, inclusion: { in: PathwayOatUnit::CODE_SYSTEMS }, allow_blank: true
 

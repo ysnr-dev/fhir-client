@@ -212,55 +212,118 @@ module Master
       code = record.pathway_code
       if params.key?(:indications)
         Master::PathwayIndication.where(pathway_code: code).delete_all
+        rows = []
         each_row(params[:indications]) do |row, index|
-          Master::PathwayIndication.create!(row.slice(*INDICATION_ATTRS).merge(pathway_code: code, display_order: index + 1))
+          rows << row.slice(*INDICATION_ATTRS).merge("pathway_code" => code, "display_order" => index + 1)
         end
+        insert_rows(Master::PathwayIndication, rows)
       end
       return unless params.key?(:events)
 
       delete_event_tree(code)
-      each_row(params[:events]) do |row, index|
-        event = Master::PathwayEvent.create!(row.slice(*EVENT_ATTRS).merge(pathway_code: code, display_order: index + 1))
-        each_row(row["oat_units"]) do |unit_row, unit_index|
-          create_unit_tree(code, event, unit_row, unit_index)
+      insert_event_tree(code, params[:events])
+    end
+
+    # 病日 → OAT ユニット → 観察項目 → タスクを、階層ごとに 1 回の INSERT で入れる。
+    # タスク→観察項目は assessment_key(uuid)で受け、同じユニットの中で新しい id に引き直す
+    # (置換で id が変わるため)。
+    def insert_event_tree(code, raw_events)
+      event_rows = []
+      units = [] # [親の病日の添字, ユニットの行, ユニット内の並び]
+      each_row(raw_events) do |row, index|
+        event_rows << row.slice(*EVENT_ATTRS).merge("pathway_code" => code, "display_order" => index + 1)
+        each_row(row["oat_units"]) { |unit_row, unit_index| units << [index, unit_row, unit_index] }
+      end
+      event_ids = insert_rows(Master::PathwayEvent, event_rows,
+                              unique_by: %w[elapsed_days path_step], duplicate_on: :elapsed_days)
+
+      unit_rows = units.map do |event_index, row, index|
+        row.slice(*UNIT_ATTRS).merge(
+          "pathway_code" => code, "event_id" => event_ids[event_index], "display_order" => index + 1,
+          "unit_key" => row["unit_key"].presence || SecureRandom.uuid,
+        )
+      end
+      unit_ids = insert_rows(Master::PathwayOatUnit, unit_rows,
+                             unique_by: %w[event_id unit_key], duplicate_on: :unit_key)
+
+      assessment_ids = insert_assessments(code, units, unit_ids)
+      insert_tasks(code, units, unit_ids, assessment_ids)
+    end
+
+    # 観察項目を入れ、[ユニットの id, assessment_key] → 観察項目の id を返す。
+    def insert_assessments(code, units, unit_ids)
+      rows = []
+      units.each_with_index do |(_, unit_row, _), unit_index|
+        each_row(unit_row["assessments"]) do |row, index|
+          rows << row.slice(*ASSESSMENT_ATTRS).merge(
+            "pathway_code" => code, "unit_id" => unit_ids[unit_index], "display_order" => index + 1,
+            "assessment_key" => row["assessment_key"].presence || SecureRandom.uuid,
+          )
         end
+      end
+      ids = insert_rows(Master::PathwayAssessment, rows,
+                        unique_by: %w[unit_id assessment_key], duplicate_on: :assessment_key)
+      rows.zip(ids).to_h { |row, id| [[row["unit_id"], row["assessment_key"]], id] }
+    end
+
+    def insert_tasks(code, units, unit_ids, assessment_ids)
+      rows = []
+      units.each_with_index do |(_, unit_row, _), unit_index|
+        unit_id = unit_ids[unit_index]
+        each_row(unit_row["tasks"]) do |row, index|
+          key = row["assessment_key"].presence
+          if key && !assessment_ids.key?([unit_id, key])
+            raise ContentInvalid, ["タスク「#{row['name']}」が結ぶ観察項目が同じ OAT ユニットにありません"]
+          end
+
+          rows << row.slice(*TASK_ATTRS).merge(
+            "pathway_code" => code, "unit_id" => unit_id, "display_order" => index + 1,
+            "task_key" => row["task_key"].presence || SecureRandom.uuid,
+            "assessment_id" => key && assessment_ids[[unit_id, key]],
+            "order_values" => row["order_values"].is_a?(Hash) ? row["order_values"] : {},
+          )
+        end
+      end
+      insert_rows(Master::PathwayTask, rows, unique_by: %w[unit_id task_key], duplicate_on: :task_key)
+    end
+
+    # 行を検証してからまとめて INSERT し、入れた行の id を rows と同じ並びで返す。
+    # 置換はその パス の子を全部消して入れ直すので、識別子の重なりは送られてきた配列の中だけを
+    # 見ればよい(1 行ずつ DB の一意性検証に当てない)。id の対応は親の中で一意な列で引き直すので、
+    # RETURNING の並びには頼らない。
+    def insert_rows(model, rows, unique_by: nil, duplicate_on: nil)
+      return [] if rows.empty?
+
+      records = rows.map { |row| model.new(row) }
+      # 一意性はモデルでは :create のときだけ見るので、文脈を分けて DB への問い合わせを避ける。
+      records.each { |record| raise ActiveRecord::RecordInvalid, record unless record.valid?(:replace) }
+      detect_duplicates!(records, unique_by, duplicate_on) if unique_by
+      # 既定値のある列(パスステップなど)も埋めた全列で入れる(insert_all は列の揃った行を要る)。
+      values = records.map { |record| record.attributes.except("id", "created_at", "updated_at") }
+      result = model.insert_all!(values, returning: ["id", *unique_by])
+      return [] unless unique_by
+
+      ids = result.to_a.to_h { |r| [unique_by.map { |c| r[c].to_s }, r["id"]] }
+      records.map { |record| ids.fetch(unique_by.map { |c| record[c].to_s }) }
+    end
+
+    # 同じ親の中で重なった識別子。文言は 1 行ずつ作るときの一意性検証と同じものを使う。
+    def detect_duplicates!(records, unique_by, attribute)
+      seen = {}
+      records.each do |record|
+        key = unique_by.map { |column| record[column] }
+        if seen[key]
+          record.errors.add(attribute, uniqueness_message(record.class, attribute))
+          raise ActiveRecord::RecordInvalid, record
+        end
+        seen[key] = true
       end
     end
 
-    # OAT ユニットとその観察項目・タスクを作る。タスク→観察項目は assessment_key(uuid)で
-    # 受け、同じユニットの中で新しい id に引き直す(置換で id が変わるため)。
-    def create_unit_tree(code, event, unit_row, unit_index)
-      unit = Master::PathwayOatUnit.create!(
-        unit_row.slice(*UNIT_ATTRS).merge(
-          pathway_code: code, event_id: event.id, display_order: unit_index + 1,
-          unit_key: unit_row["unit_key"].presence || SecureRandom.uuid,
-        ),
-      )
-      assessment_ids = {}
-      each_row(unit_row["assessments"]) do |row, index|
-        assessment = Master::PathwayAssessment.create!(
-          row.slice(*ASSESSMENT_ATTRS).merge(
-            pathway_code: code, unit_id: unit.id, display_order: index + 1,
-            assessment_key: row["assessment_key"].presence || SecureRandom.uuid,
-          ),
-        )
-        assessment_ids[assessment.assessment_key] = assessment.id
-      end
-      each_row(unit_row["tasks"]) do |row, index|
-        key = row["assessment_key"].presence
-        if key && !assessment_ids.key?(key)
-          raise ContentInvalid, ["タスク「#{row['name']}」が結ぶ観察項目が同じ OAT ユニットにありません"]
-        end
-
-        Master::PathwayTask.create!(
-          row.slice(*TASK_ATTRS).merge(
-            pathway_code: code, unit_id: unit.id, display_order: index + 1,
-            task_key: row["task_key"].presence || SecureRandom.uuid,
-            assessment_id: key && assessment_ids[key],
-            order_values: row["order_values"].is_a?(Hash) ? row["order_values"] : {},
-          ),
-        )
-      end
+    def uniqueness_message(model, attribute)
+      model.validators_on(attribute)
+           .find { |validator| validator.is_a?(ActiveRecord::Validations::UniquenessValidator) }
+           .options[:message]
     end
 
     # 病日と、その下の OAT ユニット・観察項目・タスク。保存後の検証と応答の組み立てで

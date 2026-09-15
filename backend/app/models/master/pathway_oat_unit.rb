@@ -15,9 +15,11 @@ module Master
              class_name: "Master::PathwayTask", foreign_key: :unit_id
 
     validates :pathway_code, :event_id, presence: true
+    validates :unit_key, presence: true, format: { with: UUID_FORMAT }
     # 同じ unit_key を別の病日に置いたものが日をまたぐアウトカム(続き)。重なってはいけないのは同じ病日の中だけ。
-    validates :unit_key, presence: true, format: { with: UUID_FORMAT },
-                         uniqueness: { scope: :event_id, message: "が同じ病日の中で重複しています" }
+    # 置換のときの重なりはコントローラが配列の中で見る(PathwaysController#replace_children)。
+    validates :unit_key, uniqueness: { scope: :event_id, message: "が同じ病日の中で重複しています" },
+                         on: :create
     validates :name, presence: true
     validates :category, inclusion: { in: CATEGORIES }, allow_blank: true
     validates :code_system, inclusion: { in: CODE_SYSTEMS }, allow_blank: true

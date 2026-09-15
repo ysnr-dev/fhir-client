@@ -221,36 +221,66 @@ module Master
       code = record.regimen_code
       if params.key?(:indications)
         Master::RegimenIndication.where(regimen_code: code).delete_all
-        each_row(params[:indications]) do |row, index|
-          Master::RegimenIndication.create!(row.slice(*INDICATION_ATTRS).merge(regimen_code: code, display_order: index + 1))
-        end
+        insert_rows(Master::RegimenIndication, child_rows(params[:indications], INDICATION_ATTRS, code))
       end
       if params.key?(:steps)
         Master::RegimenDrug.where(regimen_code: code).delete_all
         Master::RegimenStep.where(regimen_code: code).delete_all
-        each_row(params[:steps]) do |row, index|
-          step = Master::RegimenStep.create!(
-            row.slice(*STEP_ATTRS).merge(regimen_code: code, display_order: index + 1, days: normalize_days(row["days"])),
-          )
-          each_row(row["drugs"]) do |drug, drug_index|
-            Master::RegimenDrug.create!(
-              drug.slice(*DRUG_ATTRS).merge(regimen_code: code, step_id: step.id, display_order: drug_index + 1),
-            )
-          end
-        end
+        insert_step_tree(code, params[:steps])
       end
       if params.key?(:lab_criteria)
         Master::RegimenLabCriterion.where(regimen_code: code).delete_all
-        each_row(params[:lab_criteria]) do |row, index|
-          Master::RegimenLabCriterion.create!(row.slice(*LAB_CRITERION_ATTRS).merge(regimen_code: code, display_order: index + 1))
-        end
+        insert_rows(Master::RegimenLabCriterion, child_rows(params[:lab_criteria], LAB_CRITERION_ATTRS, code))
       end
       return unless params.key?(:adverse_events)
 
       Master::RegimenAdverseEvent.where(regimen_code: code).delete_all
-      each_row(params[:adverse_events]) do |row, index|
-        Master::RegimenAdverseEvent.create!(row.slice(*ADVERSE_EVENT_ATTRS).merge(regimen_code: code, display_order: index + 1))
+      insert_rows(Master::RegimenAdverseEvent, child_rows(params[:adverse_events], ADVERSE_EVENT_ATTRS, code))
+    end
+
+    # 配列の並びを display_order に振り直した行。
+    def child_rows(raw, attrs, code)
+      rows = []
+      each_row(raw) do |row, index|
+        rows << row.slice(*attrs).merge("regimen_code" => code, "display_order" => index + 1)
       end
+      rows
+    end
+
+    # 投与ステップと薬剤を、階層ごとに 1 回の INSERT で入れる。薬剤の step_id は
+    # 入れたステップの id に付け替える。
+    def insert_step_tree(code, raw_steps)
+      step_rows = []
+      drugs = [] # [親のステップの添字, 薬剤の行, ステップ内の並び]
+      each_row(raw_steps) do |row, index|
+        step_rows << row.slice(*STEP_ATTRS).merge("regimen_code" => code, "display_order" => index + 1,
+                                                  "days" => normalize_days(row["days"]))
+        each_row(row["drugs"]) { |drug, drug_index| drugs << [index, drug, drug_index] }
+      end
+      # ステップは regimen_code の中で display_order が一意(配列の並びで振り直している)。
+      step_ids = insert_rows(Master::RegimenStep, step_rows, unique_by: %w[display_order])
+
+      drug_rows = drugs.map do |step_index, row, index|
+        row.slice(*DRUG_ATTRS).merge("regimen_code" => code, "step_id" => step_ids[step_index],
+                                     "display_order" => index + 1)
+      end
+      insert_rows(Master::RegimenDrug, drug_rows)
+    end
+
+    # 行を検証してからまとめて INSERT し、入れた行の id を rows と同じ並びで返す
+    # (unique_by を渡したときだけ。id の対応はその列で引き直し、RETURNING の並びには頼らない)。
+    def insert_rows(model, rows, unique_by: nil)
+      return [] if rows.empty?
+
+      records = rows.map { |row| model.new(row) }
+      records.each { |record| raise ActiveRecord::RecordInvalid, record unless record.valid? }
+      # 既定値のある列も埋めた全列で入れる(insert_all は列の揃った行を要る)。
+      values = records.map { |record| record.attributes.except("id", "created_at", "updated_at") }
+      result = model.insert_all!(values, returning: ["id", *unique_by])
+      return [] unless unique_by
+
+      ids = result.to_a.to_h { |r| [unique_by.map { |c| r[c].to_s }, r["id"]] }
+      records.map { |record| ids.fetch(unique_by.map { |c| record[c].to_s }) }
     end
 
     # 投与ステップと、ステップごとの薬剤(薬剤マスタの名称付き)。保存後の検証と応答の

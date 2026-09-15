@@ -235,6 +235,15 @@ RSpec.describe "Master::Pathways", type: :request do
       }, as: :json
       expect(response).to have_http_status(:unprocessable_content)
       expect(body["errors"].join).to include("同じ OAT ユニットの中で重複")
+
+      post "/master/pathways", params: {
+        name: "観察項目重複",
+        events: [{ elapsed_days: 1, oat_units: [{ name: "a", assessments: [
+          { assessment_key: ASSESSMENT_KEY, name: "a1" }, { assessment_key: ASSESSMENT_KEY, name: "a2" },
+        ] }] }],
+      }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("同じ OAT ユニットの中で重複")
       expect(Master::Pathway.count).to eq(0)
     end
 
