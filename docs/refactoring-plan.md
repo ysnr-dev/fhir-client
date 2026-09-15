@@ -342,6 +342,29 @@ grep -rnE "(前に登録|前のデータ|導入前|頃の|頃に|旧データ|�
 
 FHIR サーバーへの往復に関わるものを B、Rails 内で完結するものを R とする。
 
+### B-1・B-2 の実施結果（2026-09-15）
+
+実装済み。上流の変更は無し（`_include` / `_revinclude`・canonical の `_include`・batch の `ifNoneExist` は対応済みだった）。
+backend の rspec は全件通過（1304 件、0 failures）。
+
+| 帳票 | 上流との往復 |
+|---|---|
+| 検体ラベル | オーダー検索 1 回（患者を `_include`、明細・発行済み Specimen を `_revinclude`）＋ 未発行の管があるときだけ Specimen 作成の batch 1 回。再発行は 1 往復 |
+| 処方箋・注射箋・注射ラベル | batch 1 回（オーダー検索 ＋ 自院 Organization） |
+| 問診票など（QuestionnaireResponse） | QR 検索 1 回（患者と Questionnaire を `_include`）＋ シェーマ画像があるときだけ Binary の batch 1 回 |
+
+- 患者は `_include` で届いた Patient のうち、オーダー（QR）の subject と id が一致するものだけを使う。
+  届かなければ生成を中止する（取り違え防止の方針は従来どおり）。
+- 検体ラベルの Specimen 作成は transaction ではなく batch。途中で失敗しても作成できた分は残り、
+  再発行で発行済みとして引かれて足りない分だけが作られる。
+- 版の無い canonical では `_include` が全版を返すので、url の一致する版の中から id 順の先頭を使う（B-3 の並びの論点はこれで解消）。
+- **検証**: 開発環境で、旧実装と新実装がレンダラに渡す中身（オーダー・患者・自院・RP／ラベル・Questionnaire・画像）を
+  突き合わせた。検体ラベルの再発行 2 件、処方 8 件、注射 8 件、QR 6 件ですべて一致。
+  未発行のオーダー 2 件（検体コードありと検体未設定の 2 グループを含む）で、batch 1 回で番号が採番され、
+  2 回目は検索 1 回だけで同じ番号が刷られることを確認した。
+- 既存の spec の一部は `a_request(...) { }` のブロック形で、WebMock がブロックを無視するため URL の検証が効いていなかった。
+  `.with { }` の形に直した。
+
 | # | 箇所 | 現状 | 対応 | 効果 |
 |---|---|---|---|---|
 | B-1 | `app/services/lab_label_report.rb:137-179` | 管のグループごとに Specimen を 1 件ずつ直列に POST | 採番が要る分をまとめて 1 つの batch Bundle で登録（上流は entry ごとの `ifNoneExist` に対応） | 高 |

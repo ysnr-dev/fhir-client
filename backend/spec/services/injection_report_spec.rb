@@ -1,6 +1,6 @@
 require "rails_helper"
 
-# 上流アクセスが「オーダー read 1 本 + batch Bundle POST 1 本」であること、注射以外を
+# 上流アクセスが「batch Bundle POST 1 本」であること、注射以外を
 # 弾くこと、RP のグルーピング(用法・開始時刻)、失敗時の例外マッピングを検証する
 # (PDF 描画はレンダラが担うのでモックする)。
 RSpec.describe InjectionReport do
@@ -60,15 +60,12 @@ RSpec.describe InjectionReport do
     { "resourceType" => "Bundle", "type" => "searchset", "entry" => resources.map { |r| { "resource" => r } } }
   end
 
-  def stub_order(status: 200, body: order)
-    stub_request(:get, "#{base_url}/ServiceRequest/o1").to_return(status: status, body: body.to_json)
-  end
-
-  def stub_batch(medication_requests, entries: nil)
+  # オーダー検索には患者(_include)と明細(_revinclude)が混ざって返る。
+  def stub_batch(medication_requests, order_body: order, entries: nil)
     stub_request(:post, "#{base_url}/").to_return(status: 200, body: {
       "resourceType" => "Bundle", "type" => "batch-response",
-      "entry" => entries || [batch_entry(searchset([order] + medication_requests)),
-                             batch_entry(patient), batch_entry(searchset([institution]))]
+      "entry" => entries || [batch_entry(searchset([order_body, patient].compact + medication_requests)),
+                             batch_entry(searchset([institution]))]
     }.to_json)
   end
 
@@ -81,24 +78,25 @@ RSpec.describe InjectionReport do
     -> { captured }
   end
 
-  it "fetches details via _revinclude and renders the order sheet" do
-    stub_order
+  it "fetches the order, patient and details in one batch and renders the order sheet" do
     stub_batch([medication_request("m1", rp: 1, index: 1, name: "生理食塩液")])
     captured = capture(Reports::InjectionRenderer)
 
     expect(described_class.new("o1", gateway: gateway).generate_order).to eq("%PDF")
     expect(captured.call[:layout_path]).to eq(described_class::ORDER_LAYOUT[:path])
+    expect(captured.call[:patient]).to eq(patient)
     expect(
-      a_request(:post, "#{base_url}/") { |req|
+      a_request(:post, "#{base_url}/").with { |req|
         urls = JSON.parse(req.body)["entry"].map { |e| e.dig("request", "url") }
-        urls[0] == "ServiceRequest?_id=o1&_revinclude=MedicationRequest%3Abased-on&_count=100" &&
-          urls[1] == "Patient/p1"
+        urls == [
+          "ServiceRequest?_id=o1&_include=ServiceRequest%3Asubject&_revinclude=MedicationRequest%3Abased-on",
+          "Organization?identifier=#{CGI.escape(described_class::INSTITUTION_NO_SYSTEM)}%7C&_count=10"
+        ]
       }
     ).to have_been_made.once
   end
 
   it "groups medication requests by RP with usage and start times" do
-    stub_order
     stub_batch([
       medication_request("m3", rp: 2, index: 1, name: "セファゾリン", usage_type: "ワンショット", times: ["20:30"]),
       # 投与速度は frontend が RP 内の全薬剤に同じ値を写す。グループの用法は最初に
@@ -123,28 +121,25 @@ RSpec.describe InjectionReport do
   end
 
   it "raises NotInjectionOrder for prescriptions (no order type)" do
-    stub_order(body: order.except("category"))
+    stub_batch([], order_body: order.except("category"))
     expect { described_class.new("o1", gateway: gateway).generate_order }
       .to raise_error(described_class::NotInjectionOrder)
   end
 
   it "raises NotFound when the order does not exist" do
-    stub_order(status: 404, body: {})
+    stub_batch([], order_body: nil)
     expect { described_class.new("o1", gateway: gateway).generate_order }
       .to raise_error(described_class::NotFound)
   end
 
   it "raises NoMedication when the order has no medication requests" do
-    stub_order
     stub_batch([])
     expect { described_class.new("o1", gateway: gateway).generate_order }
       .to raise_error(described_class::NoMedication)
   end
 
   it "raises UpstreamError when a batch entry fails" do
-    stub_order
-    stub_batch([], entries: [{ "response" => { "status" => "500" } }, batch_entry(patient),
-                             batch_entry(searchset([institution]))])
+    stub_batch([], entries: [{ "response" => { "status" => "500" } }, batch_entry(searchset([institution]))])
     expect { described_class.new("o1", gateway: gateway).generate_order }
       .to raise_error(described_class::UpstreamError)
   end

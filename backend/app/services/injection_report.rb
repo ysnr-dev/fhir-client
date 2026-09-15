@@ -1,8 +1,7 @@
 # 注射の帳票(注射箋・注射ラベル)のオーケストレータ(docs/injection-order-design.md §5.4)。
-# 処方箋(PrescriptionReport)と同じ作りで、上流から注射オーダー 1 日ぶんを 2 往復で
+# 処方箋(PrescriptionReport)と同じ作りで、上流から注射オーダー 1 日ぶんを 1 往復で
 # 取得し、RP ごとに畳んでレンダラへ渡す。
-#   1. GET /ServiceRequest/{id}
-#   2. batch Bundle POST /  -- 明細(_revinclude)+ Patient read + 自院 Organization
+#   batch Bundle POST / -- オーダー検索(患者を _include、明細を _revinclude)+ 自院 Organization
 #
 # 副作用は無い(何度呼んでも読むだけ)。進捗 Task にも触らない -- 発行 = 受付の遷移は
 # frontend の注射一覧が行い、再発行にもそのまま使う(処方箋と同じ設計判断)。
@@ -75,25 +74,11 @@ class InjectionReport
   attr_reader :order_id, :gateway
 
   def load
-    order = fetch_order
-    medication_requests, patient, organization = fetch_related_resources(order)
+    order, patient, medication_requests, organization = fetch_order_resources
     rps = build_rps(medication_requests)
     raise NoMedication, "order #{order_id} has no medication requests" if rps.empty?
 
     [order, patient, organization, rps]
-  end
-
-  def fetch_order
-    upstream = gateway.forward(method: :get, path: "/ServiceRequest/#{order_id}")
-    raise NotFound, "ServiceRequest/#{order_id} not found" if upstream.status == 404
-    ensure_success!(upstream, "ServiceRequest/#{order_id}")
-
-    order = JSON.parse(upstream.body)
-    unless injection_order?(order)
-      raise NotInjectionOrder, "ServiceRequest/#{order_id} is not an injection order"
-    end
-
-    order
   end
 
   # frontend の isInjectionServiceRequest と同じ判定(order-type|injection)。
@@ -105,16 +90,15 @@ class InjectionReport
     end
   end
 
-  # 明細・Patient read・自院 Organization を 1 つの batch Bundle で取得する。
-  # 明細はオーダーの検索に _revinclude で添えてもらう。
-  def fetch_related_resources(order)
-    patient_id = patient_id_from(order)
+  # オーダー・患者・明細・自院 Organization を 1 つの batch Bundle で取得する。
+  # 患者はオーダーの subject を _include、明細は _revinclude で添えてもらう。
+  def fetch_order_resources
     self_organization_id = FacilitySettings.self_organization_id
     entries = [
       { "request" => { "method" => "GET",
-                       "url" => "ServiceRequest?_id=#{order_id}" \
-                                "&_revinclude=MedicationRequest%3Abased-on&_count=100" } },
-      { "request" => { "method" => "GET", "url" => "Patient/#{patient_id}" } },
+                       "url" => "ServiceRequest?_id=#{CGI.escape(order_id)}" \
+                                "&_include=ServiceRequest%3Asubject" \
+                                "&_revinclude=MedicationRequest%3Abased-on" } },
       { "request" => { "method" => "GET", "url" => institution_url(self_organization_id) } }
     ]
     bundle = { "resourceType" => "Bundle", "type" => "batch", "entry" => entries }
@@ -125,9 +109,19 @@ class InjectionReport
     ensure_success!(upstream, "batch bundle")
     results = Array(JSON.parse(upstream.body)["entry"])
 
-    medication_requests = searchset_resources(results[0], "MedicationRequest", "detail search")
-    patient = entry_resource!(results[1], "Patient/#{patient_id}")
-    [medication_requests, patient, find_institution(results[2], self_organization_id)]
+    resources = searchset_resources(results[0], nil, "ServiceRequest?_id=#{order_id}")
+    order = resources.find { |r| r["resourceType"] == "ServiceRequest" && r["id"] == order_id }
+    raise NotFound, "ServiceRequest/#{order_id} not found" unless order
+    unless injection_order?(order)
+      raise NotInjectionOrder, "ServiceRequest/#{order_id} is not an injection order"
+    end
+
+    medication_requests = resources.select do |r|
+      r["resourceType"] == "MedicationRequest" &&
+        Array(r["basedOn"]).any? { |ref| ref["reference"] == "ServiceRequest/#{order_id}" }
+    end
+    [order, included_patient(resources, order), medication_requests,
+     find_institution(results[1], self_organization_id)]
   end
 
   def institution_url(self_organization_id)
@@ -137,12 +131,15 @@ class InjectionReport
   end
 
   # 患者取り違えは重大なので、患者が引けない場合は生成を中止する(処方箋と同じ)。
-  def patient_id_from(order)
+  def included_patient(resources, order)
     reference = order.dig("subject", "reference").to_s
     patient_id = reference[%r{\APatient/(.+)\z}, 1]
     raise UpstreamError, "ServiceRequest/#{order_id} has no patient subject" if patient_id.blank?
 
-    patient_id
+    patient = resources.find { |r| r["resourceType"] == "Patient" && r["id"] == patient_id }
+    raise UpstreamError, "Patient/#{patient_id} was not included for ServiceRequest/#{order_id}" unless patient
+
+    patient
   end
 
   # 自院。取れなくても発行は止めない(医療機関名が空欄になるだけ)。
@@ -219,10 +216,11 @@ class InjectionReport
     Array(codings).find { |coding| coding["system"] == system }
   end
 
+  # resource_type が nil なら型を問わず返す(_include / _revinclude で型が混ざる検索)。
   def searchset_resources(entry, resource_type, context)
     Array(entry_resource!(entry, context)["entry"])
-      .map { |e| e["resource"] }
-      .select { |resource| resource&.dig("resourceType") == resource_type }
+      .filter_map { |e| e["resource"] }
+      .select { |resource| resource_type.nil? || resource["resourceType"] == resource_type }
   end
 
   def entry_resource!(entry, context)

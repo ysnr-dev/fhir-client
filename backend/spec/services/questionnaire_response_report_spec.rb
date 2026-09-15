@@ -1,8 +1,8 @@
 require "rails_helper"
 
-# 上流アクセスは「QR read 1本 + batch Bundle POST 1本」の 2 往復であること、
-# batch-response のエントリ順対応・Binary の base64 デコード・失敗時の例外
-# マッピングを検証する(PDF 描画自体は ThinreportsRenderer の spec が担う)。
+# 上流アクセスは「QR 検索 1 本(患者・Questionnaire を _include)+ 画像があれば Binary の
+# batch POST 1 本」であること、batch-response のエントリ順対応・Binary の base64 デコード・
+# 失敗時の例外マッピングを検証する(PDF 描画自体は ThinreportsRenderer の spec が担う)。
 RSpec.describe QuestionnaireResponseReport do
   let(:base_url) { "http://fhir.example" }
   let(:gateway) do
@@ -37,6 +37,11 @@ RSpec.describe QuestionnaireResponseReport do
     }
   end
 
+  let(:search_path) do
+    "#{base_url}/QuestionnaireResponse?_id=qr1" \
+      "&_include=QuestionnaireResponse%3Asubject&_include=QuestionnaireResponse%3Aquestionnaire"
+  end
+
   def batch_entry(resource, status: "200 OK")
     { "response" => { "status" => status }, "resource" => resource }
   end
@@ -45,14 +50,22 @@ RSpec.describe QuestionnaireResponseReport do
     { "resourceType" => "Bundle", "type" => "batch-response", "entry" => entries }
   end
 
-  def stub_questionnaire_response(status: 200, body: response_json)
-    stub_request(:get, "#{base_url}/QuestionnaireResponse/qr1")
-      .to_return(status: status, body: body.to_json)
+  def searchset(resources)
+    { "resourceType" => "Bundle", "type" => "searchset", "entry" => resources.map { |r| { "resource" => r } } }
+  end
+
+  def stub_search(resources = [response_json, patient, questionnaire], status: 200)
+    stub_request(:get, search_path).to_return(status: status, body: searchset(resources).to_json)
   end
 
   def stub_batch(entries)
     stub_request(:post, "#{base_url}/")
       .to_return(status: 200, body: batch_response(entries).to_json)
+  end
+
+  let(:image_entry) do
+    batch_entry({ "resourceType" => "Binary", "contentType" => "image/png",
+                  "data" => Base64.strict_encode64(image_bytes) })
   end
 
   def create_layout!
@@ -67,15 +80,9 @@ RSpec.describe QuestionnaireResponseReport do
 
   before { create_layout! }
 
-  it "fetches everything in two round trips (QR read + one batch POST) and renders" do
-    stub_questionnaire_response
-    batch = stub_batch([
-      batch_entry({ "resourceType" => "Bundle", "type" => "searchset",
-                    "entry" => [{ "resource" => questionnaire }] }),
-      batch_entry(patient),
-      batch_entry({ "resourceType" => "Binary", "contentType" => "image/png",
-                    "data" => Base64.strict_encode64(image_bytes) })
-    ])
+  it "fetches the response with includes and the images in one batch, then renders" do
+    search = stub_search
+    batch = stub_batch([image_entry])
 
     renderer = instance_double(Reports::ThinreportsRenderer, render: "%PDF")
     expect(Reports::ThinreportsRenderer).to receive(:new) do |args|
@@ -87,55 +94,71 @@ RSpec.describe QuestionnaireResponseReport do
 
     expect(described_class.new("qr1", gateway: gateway).generate).to eq("%PDF")
 
+    expect(search).to have_been_requested.once
     expect(batch).to have_been_requested.once
     expect(
       a_request(:post, "#{base_url}/").with do |req|
-        entries = JSON.parse(req.body)["entry"]
-        urls = entries.map { |e| e.dig("request", "url") }
-        urls == [
-          "Questionnaire?url=#{CGI.escape('http://example.org/Questionnaire/q1')}&version=1.0.0",
-          "Patient/p1",
-          "Binary/bin1"
-        ] && JSON.parse(req.body)["type"] == "batch"
+        body = JSON.parse(req.body)
+        body["type"] == "batch" && body["entry"].map { |e| e.dig("request", "url") } == ["Binary/bin1"]
       end
     ).to have_been_made.once
   end
 
+  it "skips the batch request when the response has no images" do
+    response_without_image = response_json.merge("item" => [{ "linkId" => "q1" }])
+    stub_search([response_without_image, patient, questionnaire])
+    allow(Reports::ThinreportsRenderer).to receive(:new)
+      .and_return(instance_double(Reports::ThinreportsRenderer, render: "%PDF"))
+
+    expect(described_class.new("qr1", gateway: gateway).generate).to eq("%PDF")
+    expect(a_request(:post, "#{base_url}/")).not_to have_been_made
+  end
+
+  it "picks the questionnaire version named by the canonical" do
+    other_version = questionnaire.merge("version" => "2.0.0")
+    stub_search([response_json, patient, other_version, questionnaire])
+    stub_batch([image_entry])
+
+    expect(Reports::ThinreportsRenderer).to receive(:new) do |args|
+      expect(args[:questionnaire]).to eq(questionnaire)
+      instance_double(Reports::ThinreportsRenderer, render: "%PDF")
+    end
+
+    described_class.new("qr1", gateway: gateway).generate
+  end
+
   it "raises NotFound when the QuestionnaireResponse does not exist" do
-    stub_questionnaire_response(status: 404, body: {})
+    stub_search([])
 
     expect { described_class.new("qr1", gateway: gateway).generate }
       .to raise_error(described_class::NotFound)
   end
 
   it "raises QuestionnaireNotFound when the canonical matches nothing" do
-    stub_questionnaire_response
-    stub_batch([
-      batch_entry({ "resourceType" => "Bundle", "type" => "searchset", "entry" => [] }),
-      batch_entry(patient),
-      batch_entry({ "resourceType" => "Binary", "data" => Base64.strict_encode64(image_bytes) })
-    ])
+    stub_search([response_json, patient])
 
     expect { described_class.new("qr1", gateway: gateway).generate }
       .to raise_error(described_class::QuestionnaireNotFound)
   end
 
-  it "raises UpstreamError when a batch entry fails (e.g. the patient read)" do
-    stub_questionnaire_response
-    stub_batch([
-      batch_entry({ "resourceType" => "Bundle", "type" => "searchset",
-                    "entry" => [{ "resource" => questionnaire }] }),
-      { "response" => { "status" => "404 Not Found" } },
-      batch_entry({ "resourceType" => "Binary", "data" => Base64.strict_encode64(image_bytes) })
-    ])
+  it "raises UpstreamError when the patient is not included" do
+    stub_search([response_json, questionnaire])
 
     expect { described_class.new("qr1", gateway: gateway).generate }
-      .to raise_error(described_class::UpstreamError, /Patient\/p1/)
+      .to raise_error(described_class::UpstreamError, %r{Patient/p1})
+  end
+
+  it "raises UpstreamError when a Binary read in the batch fails" do
+    stub_search
+    stub_batch([{ "response" => { "status" => "404 Not Found" } }])
+
+    expect { described_class.new("qr1", gateway: gateway).generate }
+      .to raise_error(described_class::UpstreamError, %r{Binary/bin1})
   end
 
   it "raises LayoutNotRegistered before any batch request when the layout is missing" do
     ReportLayout.delete_all
-    stub_questionnaire_response
+    stub_search
 
     expect { described_class.new("qr1", gateway: gateway).generate }
       .to raise_error(described_class::LayoutNotRegistered)

@@ -64,13 +64,21 @@ RSpec.describe "Reports::QuestionnaireResponsePdfs", type: :request do
     )
   end
 
-  # 関連リソース(Questionnaire 検索・Patient・Binary)は 1 つの batch Bundle で
-  # 取得される。entry はリクエストと同順で返る。
-  def batch_entry(resource, status: "200 OK")
-    { "response" => { "status" => status }, "resource" => resource }
+  # QR は患者・元 Questionnaire を _include した検索で、シェーマ画像は Binary の batch で取得される。
+  def search_url
+    "#{upstream_base}/QuestionnaireResponse?_id=qr-1" \
+      "&_include=QuestionnaireResponse%3Asubject&_include=QuestionnaireResponse%3Aquestionnaire"
   end
 
-  def stub_batch(entries)
+  def stub_search(resources: [questionnaire_response, patient, questionnaire], status: 200)
+    stub_request(:get, search_url)
+      .to_return(status: status,
+                 body: { "resourceType" => "Bundle", "type" => "searchset",
+                         "entry" => resources.map { |r| { "resource" => r } } }.to_json,
+                 headers: { "Content-Type" => "application/fhir+json" })
+  end
+
+  def stub_binary_batch(entries = [binary_entry])
     stub_request(:post, "#{upstream_base}/")
       .to_return(status: 200,
                  body: { "resourceType" => "Bundle", "type" => "batch-response",
@@ -78,21 +86,15 @@ RSpec.describe "Reports::QuestionnaireResponsePdfs", type: :request do
                  headers: { "Content-Type" => "application/fhir+json" })
   end
 
-  def successful_batch_entries
-    [
-      batch_entry({ "resourceType" => "Bundle",
-                    "entry" => [{ "resource" => questionnaire }] }),
-      batch_entry(patient),
-      batch_entry({ "resourceType" => "Binary", "contentType" => "image/png",
-                    "data" => Base64.strict_encode64(png_1px) })
-    ]
+  def binary_entry
+    { "response" => { "status" => "200 OK" },
+      "resource" => { "resourceType" => "Binary", "contentType" => "image/png",
+                      "data" => Base64.strict_encode64(png_1px) } }
   end
 
   def stub_upstream
-    stub_request(:get, "#{upstream_base}/QuestionnaireResponse/qr-1")
-      .to_return(status: 200, body: questionnaire_response.to_json,
-                 headers: { "Content-Type" => "application/fhir+json" })
-    stub_batch(successful_batch_entries)
+    stub_search
+    stub_binary_batch
   end
 
   describe "GET /reports/questionnaire_responses/:id/pdf" do
@@ -120,8 +122,7 @@ RSpec.describe "Reports::QuestionnaireResponsePdfs", type: :request do
 
     it "returns 404 when the QuestionnaireResponse does not exist upstream" do
       create_layout!
-      stub_request(:get, "#{upstream_base}/QuestionnaireResponse/qr-1")
-        .to_return(status: 404, body: '{"resourceType":"OperationOutcome"}')
+      stub_search(resources: [])
 
       get "/reports/questionnaire_responses/qr-1/pdf"
 
@@ -131,10 +132,7 @@ RSpec.describe "Reports::QuestionnaireResponsePdfs", type: :request do
 
     it "returns 422 when the questionnaire cannot be resolved by canonical" do
       create_layout!
-      stub_upstream
-      entries = successful_batch_entries
-      entries[0] = batch_entry({ "resourceType" => "Bundle", "entry" => [] })
-      stub_batch(entries)
+      stub_search(resources: [questionnaire_response, patient])
 
       get "/reports/questionnaire_responses/qr-1/pdf"
 
@@ -144,7 +142,7 @@ RSpec.describe "Reports::QuestionnaireResponsePdfs", type: :request do
 
     it "returns 502 when the upstream is unreachable" do
       create_layout!
-      stub_request(:get, "#{upstream_base}/QuestionnaireResponse/qr-1").to_timeout
+      stub_request(:get, search_url).to_timeout
 
       get "/reports/questionnaire_responses/qr-1/pdf"
 
@@ -154,10 +152,7 @@ RSpec.describe "Reports::QuestionnaireResponsePdfs", type: :request do
 
     it "returns 502 when the patient cannot be fetched" do
       create_layout!
-      stub_upstream
-      entries = successful_batch_entries
-      entries[1] = { "response" => { "status" => "404 Not Found" } }
-      stub_batch(entries)
+      stub_search(resources: [questionnaire_response, questionnaire])
 
       get "/reports/questionnaire_responses/qr-1/pdf"
 

@@ -1,9 +1,9 @@
 require "rails_helper"
 
-# 上流アクセスは「オーダー read 1 本 + batch Bundle POST 1 本(+ 新規の管ぶんの
-# Specimen 作成)」であること、検体・採取管ごとのグルーピング、台帳としての
-# Specimen の扱い(再発行は既存の番号、新規は conditional create)、失敗時の
-# 例外マッピングを検証する(PDF 描画は LabLabelRenderer が担うのでモックする)。
+# 上流アクセスは「オーダー検索 1 本(+ 新規の管があれば Specimen 作成の batch 1 本)」で
+# あること、検体・採取管ごとのグルーピング、台帳としての Specimen の扱い(再発行は
+# 既存の番号、新規は conditional create)、失敗時の例外マッピングを検証する
+# (PDF 描画は LabLabelRenderer が担うのでモックする)。
 RSpec.describe LabLabelReport do
   let(:base_url) { "http://fhir.example" }
   let(:gateway) do
@@ -73,8 +73,9 @@ RSpec.describe LabLabelReport do
     }
   end
 
-  def batch_entry(resource)
-    { "response" => { "status" => "200 OK" }, "resource" => resource }
+  let(:search_path) do
+    "#{base_url}/ServiceRequest?_id=o1&_include=ServiceRequest%3Asubject" \
+      "&_revinclude=ServiceRequest%3Abased-on&_revinclude=Specimen%3Arequest"
   end
 
   def searchset(resources)
@@ -82,36 +83,31 @@ RSpec.describe LabLabelReport do
       "entry" => resources.map { |r| { "resource" => r } } }
   end
 
-  def stub_order(status: 200, body: order)
-    stub_request(:get, "#{base_url}/ServiceRequest/o1")
-      .to_return(status: status, body: body.to_json)
+  # オーダー検索の応答。患者は _include、明細と発行済み Specimen は _revinclude で混ざって返る。
+  def stub_search(items = [], specimens: [], order_body: order, include_patient: true, status: 200)
+    resources = [order_body].compact + (include_patient ? [patient] : []) + items + specimens
+    stub_request(:get, search_path).to_return(status: status, body: searchset(resources).to_json)
   end
 
-  def stub_batch(items, specimens: [])
-    stub_request(:post, "#{base_url}/")
-      .to_return(status: 200, body: {
-        "resourceType" => "Bundle", "type" => "batch-response",
-        "entry" => [batch_entry(searchset(items)), batch_entry(patient),
-                    batch_entry(searchset(specimens))]
-      }.to_json)
-  end
-
-  # Specimen の conditional create。上流の採番(Fhir::AccessionAssigner)を模して、
-  # 値なしの accessionIdentifier に 11 桁の番号を埋めて返す。
-  def stub_specimen_create
+  # Specimen 作成の batch。上流の採番(Fhir::AccessionAssigner)を模して、値なしの
+  # accessionIdentifier に 11 桁の番号を埋めて返す。
+  def stub_specimen_batch
     counter = 0
-    stub_request(:post, "#{base_url}/Specimen")
+    stub_request(:post, "#{base_url}/")
       .to_return do |request|
-        body = JSON.parse(request.body)
-        counter += 1
-        body["accessionIdentifier"]["value"] ||= format("%011d", counter)
-        { status: 201, body: body.to_json }
+        entries = JSON.parse(request.body)["entry"].map do |entry|
+          resource = entry["resource"]
+          counter += 1
+          resource["accessionIdentifier"]["value"] ||= format("%011d", counter)
+          { "response" => { "status" => "201 Created" }, "resource" => resource }
+        end
+        { status: 200, body: { "resourceType" => "Bundle", "type" => "batch-response",
+                               "entry" => entries }.to_json }
       end
   end
 
   it "groups items by specimen and creates one label Specimen per new tube" do
-    stub_order
-    stub_batch([
+    search = stub_search([
       item("i1", number: 1, name: "末梢血液一般検査", abbreviation: "CBC",
            specimen: { code: "212", name: "全血", container: "T03", container_name: "EDTA管" }),
       item("i3", number: 3, name: "AST(GOT)", abbreviation: "AST",
@@ -119,7 +115,7 @@ RSpec.describe LabLabelReport do
       item("i2", number: 2, name: "総蛋白(TP)", abbreviation: "TP",
            specimen: { code: "250", name: "血清", container: "T01", container_name: "分離剤管" })
     ])
-    create = stub_specimen_create
+    create = stub_specimen_batch
 
     captured = nil
     renderer = instance_double(Reports::LabLabelRenderer, render: "%PDF")
@@ -138,31 +134,79 @@ RSpec.describe LabLabelReport do
     expect(labels.map { |l| l[:number] }).to all(match(/\A\d{11}\z/))
     expect(labels.map { |l| l[:number] }.uniq.length).to eq(2)
 
-    # 管 1 本 = Specimen 1 件。二重発行対策の conditional create で作られる。
-    expect(create).to have_been_requested.twice
+    expect(search).to have_been_requested.once
+    # 管 1 本 = Specimen 1 件。新規の管はまとめて 1 つの batch で、二重発行対策の
+    # conditional create として作られる。
+    expect(create).to have_been_requested.once
     expect(
-      a_request(:post, "#{base_url}/Specimen").with(
-        headers: { "If-None-Exist" => "request=ServiceRequest/o1&type=212" }
-      ) { |req|
-        body = JSON.parse(req.body)
-        # 番号は送らない(上流が作成時に採番する)。
-        body.dig("accessionIdentifier", "system") == described_class::LABEL_NUMBER_SYSTEM &&
-          body.dig("accessionIdentifier", "value").nil? &&
-          body["request"] == [{ "reference" => "ServiceRequest/o1" }] &&
-          body.dig("subject", "reference") == "Patient/p1" &&
-          body["status"].nil?
+      a_request(:post, "#{base_url}/").with { |req|
+        bundle = JSON.parse(req.body)
+        requests = bundle["entry"].map { |e| e["request"] }
+        bodies = bundle["entry"].map { |e| e["resource"] }
+        bundle["type"] == "batch" &&
+          requests == [
+            { "method" => "POST", "url" => "Specimen", "ifNoneExist" => "request=ServiceRequest/o1&type=212" },
+            { "method" => "POST", "url" => "Specimen", "ifNoneExist" => "request=ServiceRequest/o1&type=250" }
+          ] &&
+          bodies.all? do |body|
+            # 番号は送らない(上流が作成時に採番する)。
+            body.dig("accessionIdentifier", "system") == described_class::LABEL_NUMBER_SYSTEM &&
+              body.dig("accessionIdentifier", "value").nil? &&
+              body["request"] == [{ "reference" => "ServiceRequest/o1" }] &&
+              body.dig("subject", "reference") == "Patient/p1" &&
+              body["status"].nil?
+          end
       }
     ).to have_been_made.once
   end
 
+  it "creates only the missing tubes and keeps the label order" do
+    stub_search(
+      [item("i1", number: 1, name: "末梢血液一般検査",
+            specimen: { code: "212", name: "全血", container: "T03", container_name: "EDTA管" }),
+       item("i2", number: 2, name: "総蛋白(TP)",
+            specimen: { code: "250", name: "血清", container: "T01", container_name: "分離剤管" })],
+      specimens: [label_specimen("sp2", number: "00000000789", specimen_code: "250")]
+    )
+    stub_specimen_batch
+
+    captured = nil
+    allow(Reports::LabLabelRenderer).to receive(:new) do |args|
+      captured = args
+      instance_double(Reports::LabLabelRenderer, render: "%PDF")
+    end
+
+    described_class.new("o1", gateway: gateway).generate
+
+    expect(captured[:labels].map { |l| l[:group].specimen_code }).to eq(%w[212 250])
+    expect(captured[:labels].map { |l| l[:number] }).to eq(%w[00000000001 00000000789])
+    expect(
+      a_request(:post, "#{base_url}/").with { |req|
+        JSON.parse(req.body)["entry"].map { |e| e.dig("request", "ifNoneExist") } ==
+          ["request=ServiceRequest/o1&type=212"]
+      }
+    ).to have_been_made.once
+  end
+
+  it "raises UpstreamError when a Specimen create in the batch fails" do
+    stub_search([item("i1", number: 1, name: "末梢血液一般検査",
+                      specimen: { code: "212", name: "全血", container: "T03", container_name: "EDTA管" })])
+    stub_request(:post, "#{base_url}/").to_return(status: 200, body: {
+      "resourceType" => "Bundle", "type" => "batch-response",
+      "entry" => [{ "response" => { "status" => "422 Unprocessable Content" } }]
+    }.to_json)
+
+    expect { described_class.new("o1", gateway: gateway).generate }
+      .to raise_error(described_class::UpstreamError)
+  end
+
   it "reuses the numbers of already issued Specimens (reprint creates nothing)" do
-    stub_order
-    stub_batch(
+    stub_search(
       [item("i1", number: 1, name: "末梢血液一般検査",
             specimen: { code: "212", name: "全血", container: "T03", container_name: "EDTA管" })],
       specimens: [label_specimen("sp1", number: "00000000456", specimen_code: "212")]
     )
-    create = stub_specimen_create
+    create = stub_specimen_batch
 
     captured = nil
     allow(Reports::LabLabelRenderer).to receive(:new) do |args|
@@ -177,32 +221,44 @@ RSpec.describe LabLabelReport do
   end
 
   it "raises NotFound when the order does not exist" do
-    stub_order(status: 404, body: {})
+    stub_search(order_body: nil, include_patient: false)
 
     expect { described_class.new("o1", gateway: gateway).generate }
       .to raise_error(described_class::NotFound)
   end
 
+  it "raises UpstreamError when the patient is not included" do
+    stub_search([item("i1", number: 1, name: "末梢血液一般検査")], include_patient: false)
+
+    expect { described_class.new("o1", gateway: gateway).generate }
+      .to raise_error(described_class::UpstreamError, %r{Patient/p1})
+  end
+
+  it "raises UpstreamError when the order search fails" do
+    stub_search(status: 500)
+
+    expect { described_class.new("o1", gateway: gateway).generate }
+      .to raise_error(described_class::UpstreamError)
+  end
+
   it "raises NotLabOrder for a non-lab ServiceRequest" do
-    stub_order(body: order.merge("category" => []))
+    stub_search(order_body: order.merge("category" => []))
 
     expect { described_class.new("o1", gateway: gateway).generate }
       .to raise_error(described_class::NotLabOrder)
   end
 
   it "raises NoLabelTarget when the order has no items" do
-    stub_order
-    stub_batch([])
+    stub_search([])
 
     expect { described_class.new("o1", gateway: gateway).generate }
       .to raise_error(described_class::NoLabelTarget)
   end
 
   it "renders with the bundled layout file (no DB registration involved)" do
-    stub_order
-    stub_batch([item("i1", number: 1, name: "末梢血液一般検査", abbreviation: "CBC",
-                     specimen: { code: "212", name: "全血", container: "T03", container_name: "EDTA管" })])
-    stub_specimen_create
+    stub_search([item("i1", number: 1, name: "末梢血液一般検査", abbreviation: "CBC",
+                      specimen: { code: "212", name: "全血", container: "T03", container_name: "EDTA管" })])
+    stub_specimen_batch
 
     captured = nil
     renderer = instance_double(Reports::LabLabelRenderer, render: "%PDF")

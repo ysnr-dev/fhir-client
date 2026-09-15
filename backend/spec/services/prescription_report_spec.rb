@@ -1,6 +1,6 @@
 require "rails_helper"
 
-# 上流アクセスは「オーダー read 1 本 + batch Bundle POST 1 本」であること、
+# 上流アクセスは「batch Bundle POST 1 本」であること、
 # レイアウトの選択(院外だけ様式第2号)、RP のグルーピング、自院 Organization の
 # フォールバック、失敗時の例外マッピングを検証する(PDF 描画は
 # PrescriptionRenderer が担うのでモックする)。
@@ -74,19 +74,17 @@ RSpec.describe PrescriptionReport do
       "entry" => resources.map { |r| { "resource" => r } } }
   end
 
-  def stub_order(status: 200, body: order)
-    stub_request(:get, "#{base_url}/ServiceRequest/o1")
-      .to_return(status: status, body: body.to_json)
+  let(:order_search_url) do
+    "ServiceRequest?_id=o1&_include=ServiceRequest%3Asubject&_revinclude=MedicationRequest%3Abased-on"
   end
 
-  # batch の応答。明細検索は _revinclude なのでヘッダの ServiceRequest も混ざって返る。
-  def stub_batch(medication_requests, organizations: [institution], entries: nil)
+  # batch の応答。オーダー検索には患者(_include)と明細(_revinclude)が混ざって返る。
+  def stub_batch(medication_requests, order_body: order, organizations: [institution], entries: nil)
     stub_request(:post, "#{base_url}/")
       .to_return(status: 200, body: {
         "resourceType" => "Bundle", "type" => "batch-response",
         "entry" => entries || [
-          batch_entry(searchset([order] + medication_requests)),
-          batch_entry(patient),
+          batch_entry(searchset([order_body, patient].compact + medication_requests)),
           batch_entry(searchset(organizations))
         ]
       }.to_json)
@@ -101,25 +99,35 @@ RSpec.describe PrescriptionReport do
     -> { captured }
   end
 
-  it "fetches details via _revinclude (based-on search is not supported upstream)" do
-    stub_order
+  it "fetches the order, patient, details and institution in one batch" do
     batch = stub_batch([medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)])
-    capture_renderer.call
+    captured = capture_renderer
 
     expect(described_class.new("o1", gateway: gateway).generate).to eq("%PDF")
 
-    # MedicationRequest?based-on=... は上流に無い検索(未知パラメータは無視され
-    # 全件が返る)。必ず _revinclude で取っていることを URL で固定する。
+    expect(captured.call[:patient]).to eq(patient)
+    expect(captured.call[:order]).to eq(order)
+    expect(batch).to have_been_requested.once
     expect(
-      a_request(:post, "#{base_url}/") { |req|
-        entries = JSON.parse(req.body)["entry"]
-        urls = entries.map { |e| e.dig("request", "url") }
-        urls[0] == "ServiceRequest?_id=o1&_revinclude=MedicationRequest%3Abased-on&_count=100" &&
-          urls[1] == "Patient/p1" &&
-          urls[2] == "Organization?identifier=#{CGI.escape(described_class::INSTITUTION_NO_SYSTEM)}%7C&_count=10"
+      a_request(:post, "#{base_url}/").with { |req|
+        urls = JSON.parse(req.body)["entry"].map { |e| e.dig("request", "url") }
+        urls == [
+          order_search_url,
+          "Organization?identifier=#{CGI.escape(described_class::INSTITUTION_NO_SYSTEM)}%7C&_count=10"
+        ]
       }
     ).to have_been_made.once
-    expect(batch).to have_been_requested.once
+  end
+
+  it "ignores included resources that do not belong to the order" do
+    other = medication_request("m9", rp: 1, index: 9, name: "他のオーダーの薬", days: 7)
+    other["basedOn"] = [{ "reference" => "ServiceRequest/o2" }]
+    stub_batch([medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7), other])
+    captured = capture_renderer
+
+    described_class.new("o1", gateway: gateway).generate
+
+    expect(captured.call[:rps].flat_map(&:medicines).map(&:name)).to eq(["テスト錠"])
   end
 
   it "selects the external layout only for outpatient external prescriptions" do
@@ -128,8 +136,8 @@ RSpec.describe PrescriptionReport do
       %w[outpatient internal] => :internal,
       %w[inpatient regular] => :internal
     }.each do |(setting, category), expected|
-      stub_order(body: build_order(setting: setting, category: category))
-      stub_batch([medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)])
+      stub_batch([medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)],
+                 order_body: build_order(setting: setting, category: category))
       captured = capture_renderer
 
       described_class.new("o1", gateway: gateway).generate
@@ -141,8 +149,8 @@ RSpec.describe PrescriptionReport do
   end
 
   it "falls back to the internal layout when the category is missing" do
-    stub_order(body: order.except("category"))
-    stub_batch([medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)])
+    stub_batch([medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)],
+               order_body: order.except("category"))
     captured = capture_renderer
 
     described_class.new("o1", gateway: gateway).generate
@@ -151,7 +159,6 @@ RSpec.describe PrescriptionReport do
   end
 
   it "groups medication requests by RP number in order" do
-    stub_order
     stub_batch([
       medication_request("m3", rp: 2, index: 1, name: "頓服薬", count: 10, usage: "疼痛時"),
       medication_request("m2", rp: 1, index: 2, name: "ムコスタ錠", days: 7, comment: "胃保護"),
@@ -174,7 +181,6 @@ RSpec.describe PrescriptionReport do
   end
 
   it "continues with a nil organization when the institution search returns none" do
-    stub_order
     stub_batch([medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)],
                organizations: [])
     captured = capture_renderer
@@ -185,7 +191,6 @@ RSpec.describe PrescriptionReport do
   end
 
   it "ignores organizations without the institution identifier (defense against match-all)" do
-    stub_order
     # 未知の検索パラメータを無視する上流だと全 Organization が返り得る。
     # identifier を実際に持つものだけを自院として採用する。
     stub_batch([medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)],
@@ -206,8 +211,8 @@ RSpec.describe PrescriptionReport do
         .to_return(status: 200, body: {
           "resourceType" => "Bundle", "type" => "batch-response",
           "entry" => [
-            batch_entry(searchset([order, medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)])),
-            batch_entry(patient),
+            batch_entry(searchset([order, patient,
+                                   medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)])),
             organization_entry
           ]
         }.to_json)
@@ -216,23 +221,21 @@ RSpec.describe PrescriptionReport do
     before { FacilitySettings.current.update!(self_organization_fhir_id: "org1") }
 
     it "reads the configured Organization instead of searching by identifier" do
-      stub_order
-      stub_batch_with_read(batch_entry(institution))
+        stub_batch_with_read(batch_entry(institution))
       captured = capture_renderer
 
       described_class.new("o1", gateway: gateway).generate
 
       expect(captured.call[:organization]).to eq(institution)
       expect(
-        a_request(:post, "#{base_url}/") { |req|
-          JSON.parse(req.body)["entry"].map { |e| e.dig("request", "url") }[2] == "Organization/org1"
+        a_request(:post, "#{base_url}/").with { |req|
+          JSON.parse(req.body)["entry"].map { |e| e.dig("request", "url") }[1] == "Organization/org1"
         }
       ).to have_been_made.once
     end
 
     it "continues with a nil organization when the configured Organization is gone" do
-      stub_order
-      stub_batch_with_read({ "response" => { "status" => "404 Not Found" } })
+        stub_batch_with_read({ "response" => { "status" => "404 Not Found" } })
       captured = capture_renderer
 
       described_class.new("o1", gateway: gateway).generate
@@ -242,14 +245,14 @@ RSpec.describe PrescriptionReport do
   end
 
   it "raises NotFound when the order does not exist" do
-    stub_order(status: 404, body: {})
+    stub_batch([], order_body: nil)
 
     expect { described_class.new("o1", gateway: gateway).generate }
       .to raise_error(described_class::NotFound)
   end
 
   it "raises NotPrescriptionOrder for orders with an order type (lab etc.)" do
-    stub_order(body: order.merge(
+    stub_batch([], order_body: order.merge(
       "category" => [{ "coding" => [{ "system" => described_class::ORDER_TYPE_SYSTEM, "code" => "lab" }] }]
     ))
 
@@ -258,7 +261,6 @@ RSpec.describe PrescriptionReport do
   end
 
   it "raises NoMedication when the order has no medication requests" do
-    stub_order
     stub_batch([])
 
     expect { described_class.new("o1", gateway: gateway).generate }
@@ -266,10 +268,8 @@ RSpec.describe PrescriptionReport do
   end
 
   it "raises UpstreamError when a batch entry fails" do
-    stub_order
     stub_batch([], entries: [
       { "response" => { "status" => "500 Internal Server Error" } },
-      batch_entry(patient),
       batch_entry(searchset([institution]))
     ])
 
@@ -277,8 +277,18 @@ RSpec.describe PrescriptionReport do
       .to raise_error(described_class::UpstreamError)
   end
 
-  it "raises UpstreamError when the upstream returns an error for the order read" do
-    stub_order(status: 500, body: {})
+  it "raises UpstreamError when the patient is not included" do
+    stub_batch([], entries: [
+      batch_entry(searchset([order, medication_request("m1", rp: 1, index: 1, name: "テスト錠", days: 7)])),
+      batch_entry(searchset([institution]))
+    ])
+
+    expect { described_class.new("o1", gateway: gateway).generate }
+      .to raise_error(described_class::UpstreamError, %r{Patient/p1})
+  end
+
+  it "raises UpstreamError when the batch request itself fails" do
+    stub_request(:post, "#{base_url}/").to_return(status: 500, body: {}.to_json)
 
     expect { described_class.new("o1", gateway: gateway).generate }
       .to raise_error(described_class::UpstreamError)

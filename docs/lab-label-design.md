@@ -184,7 +184,8 @@ ServiceRequest(オーダー) ← focus ── Task(進捗)
 - **エンドポイント**: `GET /reports/lab_labels/:order_id/pdf`(`Reports::BaseController` 配下、
   ログイン必須・inline 返却は既存と同じ)。
 - **資源収集サービス**: `QuestionnaireResponseReport` と同じ役割の `LabLabelReport` を新設。
-  上流からヘッダ ServiceRequest(id 指定)+ 明細(`based-on` 検索)+ Patient を集め、
+  上流からヘッダ ServiceRequest を `_id` で検索し、Patient(`_include`)と明細・発行済み Specimen
+  (`_revinclude`)を同じ応答で集め、
   検体グループに畳む。グルーピングは frontend の `groupBySpecimen` と同じ規則を
   Ruby で持つことになる(明細の contained Specimen から検体・採取管コードを読む)。
   二重実装だが、規則は「トップレベル項目を specimen_code でまとめる」だけなので許容する。

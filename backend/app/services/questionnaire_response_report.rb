@@ -1,8 +1,8 @@
 # QuestionnaireResponse の PDF 帳票生成のオーケストレータ。
-# 上流 FHIR サーバーから必要なリソース一式を 2 往復で取得し、canonical に紐付く
-# ReportLayout で PDF を組む。
-#   1. GET /QuestionnaireResponse/{id} -- 中身を見ないと canonical・患者・画像が分からない
-#   2. batch Bundle POST / -- 元 Questionnaire 検索 + Patient read + シェーマ画像 Binary read ×N
+# 上流 FHIR サーバーから必要なリソース一式を取得し、canonical に紐付く
+# ReportLayout で PDF を組む。上流との往復は最大 2 回。
+#   1. GET /QuestionnaireResponse?_id={id} -- QR + 患者と元 Questionnaire(_include)
+#   2. batch Bundle POST /                 -- シェーマ画像 Binary read ×N(画像が無ければ走らない)
 class QuestionnaireResponseReport
   # QR が上流に存在しない
   class NotFound < StandardError; end
@@ -22,13 +22,15 @@ class QuestionnaireResponseReport
 
   # PDF のバイト列を返す。
   def generate
-    response = fetch_questionnaire_response
+    response, resources = fetch_questionnaire_response
     canonical = response["questionnaire"].to_s
 
     layout = ReportLayout.for_canonical(canonical)
     raise LayoutNotRegistered, "layout not registered for #{canonical}" unless layout
 
-    questionnaire, patient, images = fetch_related_resources(response, canonical)
+    questionnaire = included_questionnaire(resources, canonical)
+    patient = included_patient(resources, response)
+    images = fetch_images(collect_binary_ids(response["item"]).uniq)
 
     Reports::ThinreportsRenderer.new(
       layout: layout,
@@ -43,27 +45,56 @@ class QuestionnaireResponseReport
 
   attr_reader :response_id, :gateway
 
+  # QR と、_include で添えた患者・元 Questionnaire を返す。
   def fetch_questionnaire_response
-    upstream = gateway.forward(method: :get, path: "/QuestionnaireResponse/#{response_id}")
-    raise NotFound, "QuestionnaireResponse/#{response_id} not found" if upstream.status == 404
-    ensure_success!(upstream, "QuestionnaireResponse/#{response_id}")
+    query = "_id=#{CGI.escape(response_id)}" \
+            "&_include=QuestionnaireResponse%3Asubject" \
+            "&_include=QuestionnaireResponse%3Aquestionnaire"
+    upstream = gateway.forward(method: :get, path: "/QuestionnaireResponse", query: query)
+    ensure_success!(upstream, "QuestionnaireResponse?_id=#{response_id}")
+    resources = Array(JSON.parse(upstream.body)["entry"]).filter_map { |e| e["resource"] }
 
-    JSON.parse(upstream.body)
+    response = resources.find do |r|
+      r["resourceType"] == "QuestionnaireResponse" && r["id"] == response_id
+    end
+    raise NotFound, "QuestionnaireResponse/#{response_id} not found" unless response
+
+    [response, resources]
   end
 
-  # Questionnaire 検索・Patient read・Binary read ×N を 1 つの batch Bundle で取得する。
+  # canonical に版があればその版、無ければ url の一致する版の中から id 順の先頭を使う
+  # (_include は版の無い canonical に対して全版を返す)。
+  def included_questionnaire(resources, canonical)
+    url, version = canonical.split("|", 2)
+    raise QuestionnaireNotFound, "QuestionnaireResponse has no canonical reference" if url.blank?
+
+    questionnaire = resources
+      .select { |r| r["resourceType"] == "Questionnaire" && r["url"] == url }
+      .select { |r| version.blank? || r["version"] == version }
+      .min_by { |r| r["id"].to_s }
+    raise QuestionnaireNotFound, "Questionnaire not found for #{canonical}" unless questionnaire
+
+    questionnaire
+  end
+
+  # 帳票の患者取り違えは重大なので、患者が引けない場合は生成を中止する。
+  def included_patient(resources, response)
+    reference = response.dig("subject", "reference").to_s
+    patient_id = reference[%r{\APatient/(.+)\z}, 1]
+    raise UpstreamError, "QuestionnaireResponse has no patient subject" if patient_id.blank?
+
+    patient = resources.find { |r| r["resourceType"] == "Patient" && r["id"] == patient_id }
+    raise UpstreamError, "Patient/#{patient_id} was not included for QuestionnaireResponse" unless patient
+
+    patient
+  end
+
+  # シェーマ画像の Binary read ×N を 1 つの batch Bundle で取得する。
   # batch-response の entry はリクエストと同順で返る。
-  def fetch_related_resources(response, canonical)
-    questionnaire_query = build_questionnaire_query(canonical)
-    patient_id = patient_id_from(response)
-    binary_ids = collect_binary_ids(response["item"]).uniq
+  def fetch_images(binary_ids)
+    return {} if binary_ids.empty?
 
-    entries = [
-      { "request" => { "method" => "GET", "url" => "Questionnaire?#{questionnaire_query}" } },
-      { "request" => { "method" => "GET", "url" => "Patient/#{patient_id}" } }
-    ]
-    entries += binary_ids.map { |id| { "request" => { "method" => "GET", "url" => "Binary/#{id}" } } }
-
+    entries = binary_ids.map { |id| { "request" => { "method" => "GET", "url" => "Binary/#{id}" } } }
     bundle = { "resourceType" => "Bundle", "type" => "batch", "entry" => entries }
     upstream = gateway.forward(
       method: :post,
@@ -72,45 +103,7 @@ class QuestionnaireResponseReport
       headers: { "Content-Type" => "application/fhir+json" }
     )
     ensure_success!(upstream, "batch bundle")
-    results = Array(JSON.parse(upstream.body)["entry"])
-
-    [
-      questionnaire_from(results[0], canonical, questionnaire_query),
-      patient_from(results[1], patient_id),
-      images_from(results.drop(2), binary_ids)
-    ]
-  end
-
-  def build_questionnaire_query(canonical)
-    url, version = canonical.split("|", 2)
-    raise QuestionnaireNotFound, "QuestionnaireResponse has no canonical reference" if url.blank?
-
-    query = "url=#{CGI.escape(url)}"
-    query += "&version=#{CGI.escape(version)}" if version.present?
-    query
-  end
-
-  # 帳票の患者取り違えは重大なので、患者が引けない場合は生成を中止する。
-  def patient_id_from(response)
-    reference = response.dig("subject", "reference").to_s
-    patient_id = reference[%r{\APatient/(.+)\z}, 1]
-    raise UpstreamError, "QuestionnaireResponse has no patient subject" if patient_id.blank?
-
-    patient_id
-  end
-
-  def questionnaire_from(entry, canonical, query)
-    bundle = entry_resource!(entry, "Questionnaire?#{query}")
-    questionnaire = Array(bundle["entry"])
-      .map { |e| e["resource"] }
-      .find { |resource| resource&.dig("resourceType") == "Questionnaire" }
-    raise QuestionnaireNotFound, "Questionnaire not found for #{canonical}" unless questionnaire
-
-    questionnaire
-  end
-
-  def patient_from(entry, patient_id)
-    entry_resource!(entry, "Patient/#{patient_id}")
+    images_from(Array(JSON.parse(upstream.body)["entry"]), binary_ids)
   end
 
   # batch 経由の Binary は FHIR JSON(data: base64)で返るためデコードして生バイトに戻す。

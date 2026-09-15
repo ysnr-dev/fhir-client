@@ -1,8 +1,7 @@
 # 処方箋 PDF 生成のオーケストレータ(docs/prescription-report-design.md)。
-# 上流 FHIR サーバーから処方オーダー一式を 2 往復で取得し、RP ごとのグループに
+# 上流 FHIR サーバーから処方オーダー一式を 1 往復で取得し、RP ごとのグループに
 # 畳んで PDF を組む。
-#   1. GET /ServiceRequest/{id} -- 中身を見ないと患者参照・入外区分が分からない
-#   2. batch Bundle POST /      -- 明細(based-on 検索)+ Patient read + 自院 Organization 検索
+#   batch Bundle POST / -- オーダー検索(患者を _include、明細を _revinclude)+ 自院 Organization
 #
 # 検体ラベル(LabLabelReport)と同じ作りだが、採番のような副作用は無い(何度呼んでも
 # 読むだけ)。進捗 Task にも触らない -- 発行 = 受付の遷移は frontend が行い、この
@@ -64,8 +63,7 @@ class PrescriptionReport
 
   # PDF のバイト列を返す。
   def generate
-    order = fetch_order
-    medication_requests, patient, organization = fetch_related_resources(order)
+    order, patient, medication_requests, organization = fetch_order_resources
     rps = build_rps(medication_requests)
     raise NoMedication, "order #{order_id} has no medication requests" if rps.empty?
 
@@ -81,19 +79,6 @@ class PrescriptionReport
   private
 
   attr_reader :order_id, :gateway
-
-  def fetch_order
-    upstream = gateway.forward(method: :get, path: "/ServiceRequest/#{order_id}")
-    raise NotFound, "ServiceRequest/#{order_id} not found" if upstream.status == 404
-    ensure_success!(upstream, "ServiceRequest/#{order_id}")
-
-    order = JSON.parse(upstream.body)
-    unless prescription_order?(order)
-      raise NotPrescriptionOrder, "ServiceRequest/#{order_id} is not a prescription order"
-    end
-
-    order
-  end
 
   # 処方はオーダー種別(order-type)を持たない(注射より前から存在するための規約。
   # frontend の isPrescriptionServiceRequest と同じ判定)。
@@ -120,16 +105,16 @@ class PrescriptionReport
     nil
   end
 
-  # 明細・Patient read・自院 Organization 検索を 1 つの batch Bundle で取得する。
-  # 明細は MedicationRequest.basedOn が処方オーダーを指すので based-on で直接引く。
-  def fetch_related_resources(order)
-    patient_id = patient_id_from(order)
+  # オーダー・患者・明細・自院 Organization を 1 つの batch Bundle で取得する。
+  # 患者はオーダーの subject を _include、明細は basedOn がオーダーを指す
+  # MedicationRequest を _revinclude で添えてもらう。
+  def fetch_order_resources
     self_organization_id = FacilitySettings.self_organization_id
     entries = [
       { "request" => { "method" => "GET",
-                       "url" => "MedicationRequest?based-on=ServiceRequest/#{order_id}" \
-                                "&_count=100" } },
-      { "request" => { "method" => "GET", "url" => "Patient/#{patient_id}" } },
+                       "url" => "ServiceRequest?_id=#{CGI.escape(order_id)}" \
+                                "&_include=ServiceRequest%3Asubject" \
+                                "&_revinclude=MedicationRequest%3Abased-on" } },
       { "request" => { "method" => "GET", "url" => institution_url(self_organization_id) } }
     ]
 
@@ -143,9 +128,19 @@ class PrescriptionReport
     ensure_success!(upstream, "batch bundle")
     results = Array(JSON.parse(upstream.body)["entry"])
 
-    medication_requests = searchset_resources(results[0], "MedicationRequest", "detail search")
-    patient = entry_resource!(results[1], "Patient/#{patient_id}")
-    [medication_requests, patient, find_institution(results[2], self_organization_id)]
+    resources = searchset_resources(results[0], nil, "ServiceRequest?_id=#{order_id}")
+    order = resources.find { |r| r["resourceType"] == "ServiceRequest" && r["id"] == order_id }
+    raise NotFound, "ServiceRequest/#{order_id} not found" unless order
+    unless prescription_order?(order)
+      raise NotPrescriptionOrder, "ServiceRequest/#{order_id} is not a prescription order"
+    end
+
+    medication_requests = resources.select do |r|
+      r["resourceType"] == "MedicationRequest" &&
+        Array(r["basedOn"]).any? { |ref| ref["reference"] == "ServiceRequest/#{order_id}" }
+    end
+    [order, included_patient(resources, order), medication_requests,
+     find_institution(results[1], self_organization_id)]
   end
 
   # 自院 Organization の取得 URL。自院が設定済み(管理 > 施設設定)ならそれを
@@ -161,13 +156,17 @@ class PrescriptionReport
   end
 
   # 処方箋の患者取り違えは重大なので、患者が引けない場合は生成を中止する
-  # (検体ラベルと同じ判断)。
-  def patient_id_from(order)
+  # (検体ラベルと同じ判断)。_include で届いた Patient のうち、オーダーの subject と
+  # id が一致するものだけを使う。
+  def included_patient(resources, order)
     reference = order.dig("subject", "reference").to_s
     patient_id = reference[%r{\APatient/(.+)\z}, 1]
     raise UpstreamError, "ServiceRequest/#{order_id} has no patient subject" if patient_id.blank?
 
-    patient_id
+    patient = resources.find { |r| r["resourceType"] == "Patient" && r["id"] == patient_id }
+    raise UpstreamError, "Patient/#{patient_id} was not included for ServiceRequest/#{order_id}" unless patient
+
+    patient
   end
 
   # 自院の Organization。取得できなくても発行は止めない(医療機関欄が空欄になる
@@ -244,10 +243,11 @@ class PrescriptionReport
     Array(codings).find { |coding| coding["system"] == system }
   end
 
+  # resource_type が nil なら型を問わず返す(_include / _revinclude で型が混ざる検索)。
   def searchset_resources(entry, resource_type, context)
     Array(entry_resource!(entry, context)["entry"])
-      .map { |e| e["resource"] }
-      .select { |resource| resource&.dig("resourceType") == resource_type }
+      .filter_map { |e| e["resource"] }
+      .select { |resource| resource_type.nil? || resource["resourceType"] == resource_type }
   end
 
   def entry_resource!(entry, context)

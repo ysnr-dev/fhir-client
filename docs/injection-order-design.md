@@ -253,8 +253,7 @@ ServiceRequest(1 日分) ← focus ── Task(進捗)
 InjectionWorklistPage「注射箋発行」<a target="_blank">
   → GET /reports/injections/:order_id/pdf        → InjectionReport#generate_order
   → GET /reports/injection_labels/:order_id/pdf  → InjectionReport#generate_labels
-      ① GET /ServiceRequest/{id}
-      ② batch: ServiceRequest?_id&_revinclude=MedicationRequest:based-on / Patient / 自院 Organization
+      batch: ServiceRequest?_id&_include=ServiceRequest:subject&_revinclude=MedicationRequest:based-on / 自院 Organization
 ```
 
 - **注射箋と注射指示票は 1 様式**(`injection_order.tlf`、A5、1 オーダー = 1 日分 = 1 枚)。

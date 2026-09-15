@@ -10,11 +10,10 @@ RxWorklistPage「処方箋発行」<a target="_blank">
   → GET /reports/prescriptions/:order_id/pdf   (Cookie セッション認証)
     → Reports::PrescriptionPdfsController#show
       → PrescriptionReport#generate
-          ① GET /ServiceRequest/{id}
-          ② batch Bundle POST /
-             - ServiceRequest?_id={id}&_revinclude=MedicationRequest:based-on
-             - Patient/{id}
-             - Organization?identifier={保険医療機関コードの system}|
+          batch Bundle POST /
+             - ServiceRequest?_id={id}&_include=ServiceRequest:subject
+                 &_revinclude=MedicationRequest:based-on
+             - Organization/{自院 id}(未設定なら Organization?identifier={保険医療機関コードの system}|)
           → Reports::PrescriptionRenderer#render (Thinreports)
       → send_data inline
 ```
