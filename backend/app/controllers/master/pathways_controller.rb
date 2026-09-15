@@ -37,12 +37,14 @@ module Master
     def create
       record = Master::Pathway.new(record_params.merge(approval_attrs(nil, record_params[:status])))
       record.pathway_code = next_pathway_code if record.pathway_code.blank?
+      tree = nil
       Master::Pathway.transaction do
         record.save!
         replace_children(record)
-        validate_content!(record)
+        tree = load_tree(record)
+        validate_content!(record, tree)
       end
-      render json: detail(record), status: :created
+      render json: detail(record, tree), status: :created
     rescue ActiveRecord::RecordInvalid => e
       render_validation_errors(e.record)
     rescue ContentInvalid => e
@@ -53,12 +55,14 @@ module Master
       return render_frozen if frozen_change?
       return render_unapproval if unapproving?
 
+      tree = nil
       Master::Pathway.transaction do
         @record.update!(update_params)
         replace_children(@record)
-        validate_content!(@record)
+        tree = load_tree(@record)
+        validate_content!(@record, tree)
       end
-      render json: detail(@record)
+      render json: detail(@record, tree)
     rescue ActiveRecord::RecordInvalid => e
       render_validation_errors(e.record)
     rescue ContentInvalid => e
@@ -259,25 +263,38 @@ module Master
       end
     end
 
+    # 病日と、その下の OAT ユニット・観察項目・タスク。保存後の検証と応答の組み立てで
+    # 同じものを使い、子テーブルを読むのは 1 回で済ませる。
+    PathwayTree = Struct.new(:events, :units_by_event, :assessments_by_unit, :tasks_by_unit, keyword_init: true)
+
+    def load_tree(pathway)
+      code = pathway.pathway_code
+      PathwayTree.new(
+        events: Master::PathwayEvent.where(pathway_code: code).in_day_order.to_a,
+        units_by_event: Master::PathwayOatUnit.where(pathway_code: code).in_display_order.group_by(&:event_id),
+        assessments_by_unit: Master::PathwayAssessment.where(pathway_code: code).in_display_order.group_by(&:unit_id),
+        tasks_by_unit: Master::PathwayTask.where(pathway_code: code).in_display_order.group_by(&:unit_id),
+      )
+    end
+
     # 画面の validatePathwayDraft は入力中の案内で、API を直に叩けば素通りする。
     # どの入口から来ても効かせたい検証をここに置く。下書きは緩く、承認で厳しくする。
-    def validate_content!(record)
-      messages = always_invalid_messages(record)
-      messages += approval_invalid_messages(record) if record.status == "approved"
+    def validate_content!(record, tree)
+      messages = always_invalid_messages(tree)
+      messages += approval_invalid_messages(record, tree) if record.status == "approved"
       raise ContentInvalid, messages if messages.any?
     end
 
     # 下書きでも通さないもの。識別子の重なり(同じ病日・OAT ユニットの中)はモデルの検証で弾く。
-    def always_invalid_messages(record)
-      events = record.events.reload.to_a
-      duplicated = events.group_by(&:event_key).select { |_, v| v.size > 1 }.keys
+    def always_invalid_messages(tree)
+      duplicated = tree.events.group_by(&:event_key).select { |_, v| v.size > 1 }.keys
       duplicated.map { |k| "病日 #{k} が重複しています" }
     end
 
     # 承認するときだけ求める完全性。ここを通ったパスは、患者に適用したときに
     # 病日ごとのアウトカムとタスクを展開できる。
-    def approval_invalid_messages(record)
-      events = record.events.to_a
+    def approval_invalid_messages(record, tree)
+      events = tree.events
       messages = []
       messages << "適応基準がありません" if record.adaptive_criteria.blank?
       messages << "パス予定日数がありません" if record.scheduled_days.blank?
@@ -287,11 +304,10 @@ module Master
       if record.scheduled_days.present? && record.scheduled_days < last_day
         messages << "パス予定日数(#{record.scheduled_days} 日)より後の病日(#{last_day} 日目)があります"
       end
-      units_by_event = record.oat_units.group_by(&:event_id)
       events.each do |event|
-        messages << "#{event_label(event)} に OAT ユニットがありません" if units_by_event[event.id].blank?
+        messages << "#{event_label(event)} に OAT ユニットがありません" if tree.units_by_event[event.id].blank?
       end
-      record.tasks.each do |task|
+      tree.tasks_by_unit.values.flatten.each do |task|
         next unless task.order_template? && task.order_values.blank?
 
         messages << "タスク「#{task.name}」のオーダー雛形が空です"
@@ -310,26 +326,46 @@ module Master
       end
     end
 
+    # 子を階層ごとにまとめて写す(1 階層 1 回の INSERT)。親の id は写した先の id に付け替える。
+    # 行は元の並び(表示順・id 順)で入れるので、表示順が同じ行の前後も元と変わらない。
     def copy_children(source, target)
-      code = target.pathway_code
-      source.indications.each { |r| Master::PathwayIndication.create!(child_attrs(r).merge(pathway_code: code)) }
-      source.events.each do |event|
-        copied_event = Master::PathwayEvent.create!(child_attrs(event).merge(pathway_code: code))
-        event.oat_units.each do |unit|
-          copied_unit = Master::PathwayOatUnit.create!(child_attrs(unit).merge(pathway_code: code, event_id: copied_event.id))
-          assessment_ids = {}
-          unit.assessments.each do |assessment|
-            copied = Master::PathwayAssessment.create!(child_attrs(assessment).merge(pathway_code: code, unit_id: copied_unit.id))
-            assessment_ids[assessment.id] = copied.id
-          end
-          unit.tasks.each do |task|
-            Master::PathwayTask.create!(
-              child_attrs(task).merge(pathway_code: code, unit_id: copied_unit.id,
-                                      assessment_id: task.assessment_id && assessment_ids[task.assessment_id]),
-            )
-          end
-        end
+      to = target.pathway_code
+      insert_copies(Master::PathwayIndication, source.indications.to_a, [], to)
+      tree = load_tree(source)
+      event_ids = insert_copies(Master::PathwayEvent, tree.events, %w[elapsed_days path_step], to)
+
+      units = tree.units_by_event.values.flatten.select { |unit| event_ids.key?(unit.event_id) }
+      unit_ids = insert_copies(Master::PathwayOatUnit, units, %w[event_id unit_key], to) do |unit|
+        { "event_id" => event_ids[unit.event_id] }
       end
+
+      assessments = tree.assessments_by_unit.values.flatten.select { |a| unit_ids.key?(a.unit_id) }
+      assessment_ids = insert_copies(Master::PathwayAssessment, assessments, %w[unit_id assessment_key], to) do |a|
+        { "unit_id" => unit_ids[a.unit_id] }
+      end
+      assessment_units = assessments.to_h { |a| [a.id, a.unit_id] }
+
+      tasks = tree.tasks_by_unit.values.flatten.select { |task| unit_ids.key?(task.unit_id) }
+      insert_copies(Master::PathwayTask, tasks, [], to) do |task|
+        # タスクが結ぶ観察項目は同じ OAT ユニットのものだけ(置換時の検証と同じ)。
+        linked = task.assessment_id && assessment_units[task.assessment_id] == task.unit_id
+        { "unit_id" => unit_ids[task.unit_id], "assessment_id" => linked ? assessment_ids[task.assessment_id] : nil }
+      end
+    end
+
+    # rows を写して INSERT し、元の id → 写した行の id を返す。対応は親の中で一意なキー
+    # (key_columns)で引き直し、RETURNING の並びには頼らない。子を持たない行は key_columns を空にする。
+    def insert_copies(model, rows, key_columns, pathway_code)
+      return {} if rows.empty?
+
+      attrs = rows.map do |row|
+        child_attrs(row).merge("pathway_code" => pathway_code).merge(block_given? ? yield(row) : {})
+      end
+      result = model.insert_all!(attrs, returning: ["id", *key_columns])
+      return {} if key_columns.empty?
+
+      new_ids = result.to_a.to_h { |r| [key_columns.map { |c| r[c].to_s }, r["id"]] }
+      rows.zip(attrs).to_h { |row, attr| [row.id, new_ids.fetch(key_columns.map { |c| attr[c].to_s })] }
     end
 
     def child_attrs(record)
@@ -354,12 +390,11 @@ module Master
     end
 
     # 詳細は子を入れ子で同梱し、画面が 1 リクエストで開けるようにする。
-    def detail(pathway)
-      code = pathway.pathway_code
-      events = pathway.events.to_a
-      units_by_event = Master::PathwayOatUnit.where(pathway_code: code).in_display_order.group_by(&:event_id)
-      assessments_by_unit = Master::PathwayAssessment.where(pathway_code: code).in_display_order.group_by(&:unit_id)
-      tasks_by_unit = Master::PathwayTask.where(pathway_code: code).in_display_order.group_by(&:unit_id)
+    def detail(pathway, tree = load_tree(pathway))
+      events = tree.events
+      units_by_event = tree.units_by_event
+      assessments_by_unit = tree.assessments_by_unit
+      tasks_by_unit = tree.tasks_by_unit
       summary(pathway, events.map(&:elapsed_days).uniq.size, events.map(&:elapsed_days).max).merge(
         "indications" => pathway.indications.as_json,
         "events" => events.map do |event|

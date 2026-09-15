@@ -394,6 +394,44 @@ RSpec.describe "Master::Pathways", type: :request do
     end
   end
 
+  describe "POST /master/pathways/:id/copy (複数の病日・ユニット)" do
+    it "階層ごとに親を付け替えて写し、並びと観察項目の結び付きを保つ" do
+      pathway = create_pathway("000001", "PCI")
+      second_unit_key = "22222222-3333-4444-8555-666666666666"
+      events = event_params
+      events[1][:oat_units] << { unit_key: second_unit_key, name: "歩行できる", assessments: [],
+                                 tasks: [{ name: "歩行訓練", category_lv1: "AL" }, { name: "転倒予防", category_lv1: "NC" }] }
+      put "/master/pathways/#{pathway.id}", params: { indications: [{ management_number: "1", name: "x" },
+                                                                    { management_number: "2", name: "y" }],
+                                                      events: events }, as: :json
+      expect(response).to have_http_status(:ok)
+      original = body
+
+      post "/master/pathways/000001/copy", as: :json
+
+      expect(response).to have_http_status(:created)
+      strip = lambda do |node|
+        case node
+        when Hash
+          node.except("id", "pathway_code", "event_id", "unit_id", "assessment_id", "created_at", "updated_at",
+                      "name", "status", "copied_from_code").transform_values { |v| strip.call(v) }
+        when Array then node.map { |v| strip.call(v) }
+        else node
+        end
+      end
+      expect(strip.call(body["events"])).to eq(strip.call(original["events"]))
+      expect(body["indications"].map { |i| i["management_number"] }).to eq(%w[1 2])
+      expect(body["events"][1]["oat_units"].map { |u| u["name"] }).to eq(%w[疼痛がコントロールできる 歩行できる])
+
+      copied_events = Master::PathwayEvent.where(pathway_code: "000002")
+      copied_units = Master::PathwayOatUnit.where(pathway_code: "000002")
+      expect(copied_units.map(&:event_id).uniq).to match_array(copied_events.map(&:id))
+      copied_task = Master::PathwayTask.find_by(pathway_code: "000002", task_key: TASK_KEY)
+      expect(copied_task.assessment_id).to eq(Master::PathwayAssessment.find_by(pathway_code: "000002").id)
+      expect(Master::PathwayTask.where(pathway_code: "000002").count).to eq(4)
+    end
+  end
+
   describe "DELETE /master/pathways/:id" do
     it "子も併せて片付ける" do
       pathway = create_pathway("000001", "PCI")

@@ -71,6 +71,21 @@ RSpec.describe "Master::NursingActs", type: :request do
       expect(items[0]["default_manage_no"]).to eq("1")
     end
 
+    it "行為の最小ソートキー順(同じなら行為コード順)に並べ、ページを切って総数を返す" do
+      create_act("10", "A001", "B003", "C300", "D000", sort_key: 1)
+      create_act("11", "A001", "B003", "C200", "D000", sort_key: 1)
+      create_act("12", "A001", "B003", "C050", "D000", sort_key: nil)
+
+      get "/master/nursing_acts/actions"
+      # ソートキーが無い行為は 0 として扱う
+      expect(body["items"].map { |i| i["level3_code"] }).to eq(%w[C050 C001 C200 C300 C010])
+
+      get "/master/nursing_acts/actions", params: { per: 2, page: 2 }
+      expect(body["total"]).to eq(5)
+      expect(body["items"].map { |i| i["level3_code"] }).to eq(%w[C200 C300])
+      expect(body["items"][0]["default_manage_no"]).to eq("11")
+    end
+
     it "階層と名称で絞り込める" do
       get "/master/nursing_acts/actions", params: { level2_code: "B002" }
       expect(body["items"].map { |i| i["level3_code"] }).to eq(%w[C010])

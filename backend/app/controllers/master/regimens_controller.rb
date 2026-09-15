@@ -34,12 +34,14 @@ module Master
     def create
       record = Master::Regimen.new(record_params.merge(approval_attrs(nil, record_params[:status])))
       record.regimen_code = next_regimen_code if record.regimen_code.blank?
+      tree = nil
       Master::Regimen.transaction do
         record.save!
         replace_children(record)
-        validate_content!(record)
+        tree = load_tree(record)
+        validate_content!(record, tree)
       end
-      render json: detail(record), status: :created
+      render json: detail(record, tree), status: :created
     rescue ActiveRecord::RecordInvalid => e
       render_validation_errors(e.record)
     rescue ContentInvalid => e
@@ -50,12 +52,14 @@ module Master
       return render_frozen if frozen_change?
       return render_unapproval if unapproving?
 
+      tree = nil
       Master::Regimen.transaction do
         @record.update!(update_params)
         replace_children(@record)
-        validate_content!(@record)
+        tree = load_tree(@record)
+        validate_content!(@record, tree)
       end
-      render json: detail(@record)
+      render json: detail(@record, tree)
     rescue ActiveRecord::RecordInvalid => e
       render_validation_errors(e.record)
     rescue ContentInvalid => e
@@ -249,24 +253,34 @@ module Master
       end
     end
 
+    # 投与ステップと、ステップごとの薬剤(薬剤マスタの名称付き)。保存後の検証と応答の
+    # 組み立てで同じものを使い、子テーブルを読むのは 1 回で済ませる。
+    RegimenTree = Struct.new(:steps, :drugs_by_step, keyword_init: true)
+
+    def load_tree(regimen)
+      steps = Master::RegimenStep.where(regimen_code: regimen.regimen_code).in_display_order.to_a
+      drugs = Master::RegimenDrug.with_names.where(step_id: steps.map(&:id)).in_display_order
+      RegimenTree.new(steps: steps, drugs_by_step: drugs.group_by(&:step_id))
+    end
+
     # 画面でしか分からない検証ではなく、**どの入口から来ても効かせたい検証**をここに置く
     # (画面の validateRegimenDraft は入力中の案内で、API を直に叩けば素通りする)。
     #
     # ［決定］下書きは緩く、承認で厳しくする。書きかけを保存できるのは編集の前提で、
     # 承認は「これで運用する」という宣言だから(§8.17)。
-    def validate_content!(record)
-      messages = always_invalid_messages(record)
-      messages += approval_invalid_messages(record) if record.status == "approved"
+    def validate_content!(record, tree)
+      messages = always_invalid_messages(record, tree)
+      messages += approval_invalid_messages(tree) if record.status == "approved"
       raise ContentInvalid, messages if messages.any?
     end
 
     # 下書きでも通さないもの。1 クールに収まらない投与日は、暦にもクールの進捗にも
     # 載せられない(オーダーに展開できない)。
-    def always_invalid_messages(record)
+    def always_invalid_messages(record, tree)
       cycle = record.cycle_days
       return [] if cycle <= 0
 
-      record.steps.flat_map do |step|
+      tree.steps.flat_map do |step|
         label = step_label(step)
         days = Array(step.days).select { |d| d.is_a?(Integer) }
         over = days.select { |d| d > cycle }
@@ -280,14 +294,12 @@ module Master
 
     # 承認するときだけ求める完全性。ここを通ったレジメンは、患者に適用したときに
     # 投与量が出せる(手入力に落ちない)。
-    def approval_invalid_messages(record)
-      steps = record.steps.to_a
+    def approval_invalid_messages(tree)
+      steps = tree.steps
       return ["投与ステップがありません"] if steps.empty?
 
-      drugs = Master::RegimenDrug.with_names.where(step_id: steps.map(&:id)).to_a
-      by_step = drugs.group_by(&:step_id)
-      messages = steps.filter_map { |s| "#{step_label(s)} に薬剤がありません" if by_step[s.id].blank? }
-      messages + drugs.flat_map { |drug| drug_approval_messages(drug) }
+      messages = steps.filter_map { |s| "#{step_label(s)} に薬剤がありません" if tree.drugs_by_step[s.id].blank? }
+      messages + tree.drugs_by_step.values.flatten.flat_map { |drug| drug_approval_messages(drug) }
     end
 
     def drug_approval_messages(drug)
@@ -362,9 +374,9 @@ module Master
 
     # 詳細は子を名称付きで同梱し、画面が 1 リクエストで開けるようにする
     # (薬剤名は薬剤マスタ、内服の用法名は用法マスタから引く)。
-    def detail(regimen)
-      steps = regimen.steps.to_a
-      drugs_by_step = Master::RegimenDrug.with_names.where(step_id: steps.map(&:id)).in_display_order.group_by(&:step_id)
+    def detail(regimen, tree = load_tree(regimen))
+      steps = tree.steps
+      drugs_by_step = tree.drugs_by_step
       # 内服の用法は名称だけでなく区分も添える(レジメンオーダーが処方に写すとき、
       # 用法マスタを引き直さずに済むように)。
       usages = Master::MedicineUsage.where(usage_code: steps.filter_map(&:usage_code))

@@ -82,6 +82,11 @@ class FacilitySettings < ApplicationRecord
   validate :water_balance_shape
   validate :medication_schedule_shape
 
+  # 自院の Organization.id。未設定なら nil(呼び出し側は推測に倒す)。
+  def self_organization_id
+    self_organization_fhir_id.presence
+  end
+
   # 欠けたキーを既定値で埋めた看護指示の既定時刻。読み出しは常にこちらを使う。
   def nursing_schedule_with_defaults
     stored = nursing_schedule.is_a?(Hash) ? nursing_schedule : {}
@@ -133,9 +138,8 @@ class FacilitySettings < ApplicationRecord
       first_or_create!
     end
 
-    # 自院の Organization.id。未設定なら nil(呼び出し側は推測に倒す)。
     def self_organization_id
-      current.self_organization_fhir_id.presence
+      current.self_organization_id
     end
 
     def nursing_schedule

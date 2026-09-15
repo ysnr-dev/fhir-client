@@ -22,7 +22,6 @@ module Master
 
     # 第 3 階層(行為)の一覧。修飾語(第 4 階層)で分かれた行を行為ごとに畳んで返す。
     # 指示の用語選択は「行為を選んでから修飾語を選ぶ」二段なので、モーダルには行為だけを出す。
-    # 全体で 650 件程度なので Ruby 側でページングする。
     def actions
       scope = Master::NursingAct.active
       %i[level1_code level2_code].each do |column|
@@ -33,13 +32,15 @@ module Master
       end
       # flexible_name_match は search_name で並べ替える ORDER BY を足すが、
       # 行為単位に畳む GROUP BY には載らない列なので外す(並びは sort_key で決める)。
-      rows = scope.reorder(nil)
-                  .group(:level1_code, :level1_name, :level2_code, :level2_name, :level3_code, :level3_name)
-                  .pluck(:level1_code, :level1_name, :level2_code, :level2_name, :level3_code, :level3_name,
-                         Arel.sql("MIN(sort_key)"), Arel.sql("COUNT(*)"))
-                  .sort_by { |r| [r[6] || 0, r[4]] }
+      grouped = scope.reorder(nil)
+                     .group(:level1_code, :level1_name, :level2_code, :level2_name, :level3_code, :level3_name)
+      total = Master::NursingAct.from(grouped.select("1"), :acts).count
       page, per = pagination_params(max_per: 100)
-      window = rows.slice((page - 1) * per, per).to_a
+      # 行為の並びは修飾語の中で最小のソートキー、同じなら行為コード(バイト順)。
+      window = grouped.order(Arel.sql("COALESCE(MIN(sort_key), 0)"), Arel.sql('level3_code COLLATE "C"'))
+                      .offset((page - 1) * per).limit(per)
+                      .pluck(:level1_code, :level1_name, :level2_code, :level2_name, :level3_code, :level3_name,
+                             Arel.sql("COUNT(*)"))
       # 行為を選んだ時点で確定するコード(修飾語なしの D000、無ければ先頭)。
       # これが無いと画面が行為を選ぶたびに修飾語を引き直すことになる。
       defaults = default_rows(window.map { |r| r[4] })
@@ -47,12 +48,12 @@ module Master
         default = defaults[r[4]]
         {
           level1_code: r[0], level1_name: r[1], level2_code: r[2], level2_name: r[3],
-          level3_code: r[4], level3_name: r[5], modifier_count: r[7],
+          level3_code: r[4], level3_name: r[5], modifier_count: r[6],
           default_code_16: default&.code_16, default_manage_no: default&.manage_no,
           default_modifier_name: default&.level4_name
         }
       end
-      render json: { total: rows.size, page: page, per: per, items: items }
+      render json: { total: total, page: page, per: per, items: items }
     end
 
     # 行為ごとの既定行。修飾語なし(D000)を優先し、無ければソート順の先頭。

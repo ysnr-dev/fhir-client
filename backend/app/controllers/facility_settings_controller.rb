@@ -9,13 +9,14 @@ class FacilitySettingsController < ActionController::API
   before_action :authorize_user!
 
   def show
+    settings = FacilitySettings.current
     render json: {
-      self_organization_id: FacilitySettings.self_organization_id,
-      nursing_schedule: FacilitySettings.nursing_schedule,
-      meal_schedule: FacilitySettings.meal_schedule,
-      vital_thresholds: FacilitySettings.vital_thresholds,
-      water_balance: FacilitySettings.water_balance,
-      medication_schedule: FacilitySettings.medication_schedule
+      self_organization_id: settings.self_organization_id,
+      nursing_schedule: settings.nursing_schedule_with_defaults,
+      meal_schedule: settings.meal_schedule_with_defaults,
+      vital_thresholds: settings.vital_thresholds_with_defaults,
+      water_balance: settings.water_balance_with_defaults,
+      medication_schedule: settings.medication_schedule_with_defaults
     }
   end
 end
