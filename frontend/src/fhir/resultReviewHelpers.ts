@@ -27,17 +27,16 @@ export const RESULT_REVIEW_NOTE = "検査結果を確認しました。";
 
 /**
  * 確認の対象になるレポートの種別。一覧の表示とカルテでの開き方がこれで決まる。
- * カルテのタブのキーと同じ文字列にしてある。
- *
- * 放射線は読影レポート(DiagnosticReport)がまだ無く、実施記録(Procedure)だけなので
- * 対象にできない。読影レポートを入れるときにここへ足す。
+ * 検体検査・細菌・病理はカルテのタブのキーと同じ文字列にしてある。放射線(読影レポート)は
+ * カルテにタブを持たないので、詳細モーダルで開く(notificationRegistry の karteLink)。
  */
-export type ReviewReportKind = "lab" | "micro" | "patho";
+export type ReviewReportKind = "lab" | "micro" | "patho" | "rad";
 
 export const REVIEW_REPORT_KIND_LABEL: Record<ReviewReportKind, string> = {
   lab: "検体検査",
   micro: "細菌検査",
   patho: "病理検査",
+  rad: "放射線検査",
 };
 
 // 一覧に出す内容は Task.input に構造化して持つ(上流の `_include=Task:focus` は

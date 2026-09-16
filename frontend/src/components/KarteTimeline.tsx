@@ -175,6 +175,7 @@ import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
 import { cycleDayLabel, regimenOrderLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { InjectionCancelModal } from "./InjectionCancelModal";
 import { InjectionPerformModal } from "./InjectionPerformModal";
+import { RadReportEntryModal } from "./RadReportEntryModal";
 import { InjectionDeleteModal } from "./InjectionDeleteModal";
 import { KarteCardJsonModal } from "./KarteCardModals";
 import { PlainTextModal } from "./PlainTextModal";
@@ -440,6 +441,8 @@ const KarteCard = memo(function KarteCard({
   const [chartOpen, setChartOpen] = useState(false);
   // 輸血の実施入力。投与するのは病棟なので、部門一覧だけでなくここからも開ける。
   const [performOpen, setPerformOpen] = useState(false);
+  // 読影レポートの登録・編集。放射線検査一覧と同じモーダルを開く。
+  const [radReportOpen, setRadReportOpen] = useState(false);
 
 
   // テンプレートは帳票レイアウトが登録されているものだけ PDF 出力できる。
@@ -506,6 +509,13 @@ const KarteCard = memo(function KarteCard({
             <span className="micro-result__badge micro-result__badge--muted">
               結果:修正報告
             </span>
+          )}
+          {/* 読影レポートは暫定報告と、確定後に直した訂正報告をカードで見分けられるようにする。 */}
+          {item.kind === "rad-order" && item.reportStatus === "preliminary" && (
+            <span className="micro-result__badge">読影:暫定報告</span>
+          )}
+          {item.kind === "rad-order" && item.reportStatus === "amended" && (
+            <span className="micro-result__badge micro-result__badge--muted">読影:訂正報告</span>
           )}
           <span className="karte-card__meta">
             {/* 検体検査・放射線検査・生理検査は部門の進捗(依頼済・受付済・実施済・中止)が
@@ -653,6 +663,27 @@ const KarteCard = memo(function KarteCard({
                 レポート表示
               </button>
             )}
+            {item.kind === "rad-order" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={!item.reportId}
+                title={item.reportId ? undefined : "この放射線検査の読影レポートはまだ登録されていません"}
+                onClick={() => onOpenDetail({ kind: "rad-result", id: item.reportId })}
+              >
+                読影レポート表示
+              </button>
+            )}
+            {/* 読影は撮影した後にしか書けないので、実施済のときだけ出す。 */}
+            {item.kind === "rad-order" && item.status === "completed" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => setRadReportOpen(true)}
+              >
+                {item.reportId ? "読影レポート編集" : "読影レポート登録"}
+              </button>
+            )}
             {/* 他科依頼の回答は診療記録なので、専用の詳細ではなく診療記録として開く
                 (docs/consult-order-design.md §5)。まだ回答が無い依頼では無効化する。 */}
             {item.kind === "consult-order" && (
@@ -789,7 +820,13 @@ const KarteCard = memo(function KarteCard({
                   type="button"
                   className="row-menu__item row-menu__item--danger"
                   onClick={handleDelete}
-                  disabled={deleting}
+                  // 読影レポートが付いたオーダーを消すと、レポートが指す先が無くなる。
+                  disabled={deleting || (item.kind === "rad-order" && Boolean(item.reportId))}
+                  title={
+                    item.kind === "rad-order" && item.reportId
+                      ? "読影レポートがあるため削除できません"
+                      : undefined
+                  }
                 >
                   削除
                 </button>
@@ -847,6 +884,13 @@ const KarteCard = memo(function KarteCard({
       )}
       {chartOpen && item.kind === "surgery-order" && (
         <AnesthesiaChartModal orderId={item.id} onClose={() => setChartOpen(false)} />
+      )}
+      {radReportOpen && item.kind === "rad-order" && (
+        <RadReportEntryModal
+          orderId={item.serviceRequest.id ?? ""}
+          patientId={item.serviceRequest.subject?.reference?.split("/").pop() ?? ""}
+          onClose={() => setRadReportOpen(false)}
+        />
       )}
       {performOpen && item.kind === "transfusion-order" && (
         <TransfusionPerformModal

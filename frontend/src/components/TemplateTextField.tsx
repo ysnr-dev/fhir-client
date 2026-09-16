@@ -18,6 +18,8 @@ export function TemplateTextField({
   onChange,
   onOpenTemplate,
   onClearTemplate,
+  rows = 2,
+  className,
 }: {
   label: string;
   value: string;
@@ -26,15 +28,18 @@ export function TemplateTextField({
   /** 省略するとテンプレート記入を出さない(オーダーセットの内容としての入力)。 */
   onOpenTemplate?: () => void;
   onClearTemplate: () => void;
+  /** 入力欄の行数。読影所見のような長文の欄で増やす。 */
+  rows?: number;
+  className?: string;
 }) {
   const fromTemplate = Boolean(template);
 
   return (
-    <label>
+    <label className={className}>
       {label}
       <div className="rad-gp__template-field">
         <textarea
-          rows={2}
+          rows={rows}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           readOnly={fromTemplate}

@@ -413,6 +413,9 @@ CTを1件追加）→ DO → 削除、まで通した。編集では PUT / POST 
 
 ## 10. 次フェーズへの申し送り
 
+不足機能の全体像は `docs/rad-backlog.md`(2026-09-16 の棚卸し)にまとめ直した。以下はマスタと
+オーダーの設計から直接続く申し送り。
+
 1. **実施・結果**: 撮影実績（ImagingStudy）と読影レポート（DiagnosticReport Radiology Profile）は未実装。
    検体検査でいう「検査結果」に相当し、カードの「検査結果表示」導線も放射線には無い。
    JP Core は ImagingStudy に `bodySite` / `laterality` / `procedureCode` を定義しているので、

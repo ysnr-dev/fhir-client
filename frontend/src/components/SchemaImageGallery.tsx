@@ -9,13 +9,24 @@ import {
 // カード・放射線オーダー(記入内容が別リソースの QuestionnaireResponse にある)と、
 // 診療記録・放射線オーダーの入力画面で共用する。
 
-export function SchemaImageGallery({ refs }: { refs: SchemaImageRef[] }) {
+export function SchemaImageGallery({
+  refs,
+  onOpen,
+}: {
+  refs: SchemaImageRef[];
+  /** サムネイルを押したとき(拡大表示を開く)。省略するとサムネイルは押せない。 */
+  onOpen?: (index: number) => void;
+}) {
   if (refs.length === 0) return null;
 
   return (
     <div className="schema-gallery">
-      {refs.map((ref) => (
-        <SchemaImageThumb key={ref.key} imageRef={ref} />
+      {refs.map((ref, index) => (
+        <SchemaImageThumb
+          key={ref.key}
+          imageRef={ref}
+          onOpen={onOpen ? () => onOpen(index) : undefined}
+        />
       ))}
     </div>
   );
@@ -47,7 +58,13 @@ export function ResponseSchemaImages({ responseId }: { responseId: string }) {
 
 // 描き込み済みシェーマ画像のサムネイル。Binary は staleTime: Infinity で
 // キャッシュされるので、同じ画像を何枚出しても取得は 1 回で済む。
-function SchemaImageThumb({ imageRef }: { imageRef: SchemaImageRef }) {
+function SchemaImageThumb({
+  imageRef,
+  onOpen,
+}: {
+  imageRef: SchemaImageRef;
+  onOpen?: () => void;
+}) {
   // 未保存の dataURL を持っているときは Binary の取得を省く(SchemaImageField と同じ規約)。
   const { data, isLoading } = useBinaryImage(
     imageRef.dataUrl ? undefined : (imageRef.binaryId ?? undefined),
@@ -56,7 +73,17 @@ function SchemaImageThumb({ imageRef }: { imageRef: SchemaImageRef }) {
 
   return (
     <figure className="schema-gallery__item">
-      {src ? (
+      {src && onOpen ? (
+        <button
+          type="button"
+          className="schema-gallery__open"
+          title="拡大して表示"
+          aria-label={`${imageRef.label || "画像"}を拡大して表示`}
+          onClick={onOpen}
+        >
+          <img className="schema-gallery__image" src={src} alt={imageRef.label || "画像"} />
+        </button>
+      ) : src ? (
         <img className="schema-gallery__image" src={src} alt={imageRef.label || "シェーマ画像"} />
       ) : (
         <p className="schema-gallery__empty">

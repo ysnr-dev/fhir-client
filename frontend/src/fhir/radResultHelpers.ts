@@ -509,6 +509,27 @@ const PROCEDURE_STATUS_NOTES: Record<string, string> = {
   unknown: "状態不明",
 };
 
+/** 実施記録の検索(Procedure + 造影剤・被曝線量の _revinclude)の応答を種類ごとに分ける。 */
+export function splitRadPerformBundle(bundle: fhir4.Bundle | undefined): {
+  procedures: fhir4.Procedure[];
+  administrations: fhir4.MedicationAdministration[];
+  observations: fhir4.Observation[];
+} {
+  const procedures: fhir4.Procedure[] = [];
+  const administrations: fhir4.MedicationAdministration[] = [];
+  const observations: fhir4.Observation[] = [];
+  for (const entry of bundle?.entry ?? []) {
+    const resource = entry.resource;
+    if (resource?.resourceType === "Procedure") procedures.push(resource as fhir4.Procedure);
+    else if (resource?.resourceType === "MedicationAdministration") {
+      administrations.push(resource as fhir4.MedicationAdministration);
+    } else if (resource?.resourceType === "Observation") {
+      observations.push(resource as fhir4.Observation);
+    }
+  }
+  return { procedures, administrations, observations };
+}
+
 /** 放射線検査の実施記録か。処方・検体検査の Procedure と振り分ける。 */
 export function isRadProcedure(procedure: fhir4.Procedure): boolean {
   return Boolean(

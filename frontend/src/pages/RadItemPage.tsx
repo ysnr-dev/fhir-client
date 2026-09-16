@@ -64,6 +64,7 @@ interface Draft {
   // 検査目的・特別指示の既定テンプレート(Questionnaire の canonical)。
   purpose_template_canonical: string;
   remarks_template_canonical: string;
+  report_findings_template_canonical: string;
   // 実施入力をする項目か。false なら一覧の「実施」でそのまま実施済にする。
   requires_perform_input: boolean;
   // 実施入力の初期明細になるデータセット。1項目1つ。
@@ -91,6 +92,7 @@ const emptyDraft: Draft = {
   note: "",
   purpose_template_canonical: "",
   remarks_template_canonical: "",
+  report_findings_template_canonical: "",
   requires_perform_input: true,
   dataset_code: "",
   requires_appointment: false,
@@ -117,6 +119,7 @@ function toPayload(draft: Draft, elementCodes: ElementCodes, elementNames: strin
     note: draft.note || null,
     purpose_template_canonical: draft.purpose_template_canonical || null,
     remarks_template_canonical: draft.remarks_template_canonical || null,
+    report_findings_template_canonical: draft.report_findings_template_canonical || null,
     requires_perform_input: draft.requires_perform_input,
     // 実施入力をしない項目は初期明細も持たない。
     dataset_code: (draft.requires_perform_input && draft.dataset_code) || null,
@@ -408,6 +411,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       note: d.note ?? "",
       purpose_template_canonical: d.purpose_template_canonical ?? "",
       remarks_template_canonical: d.remarks_template_canonical ?? "",
+      report_findings_template_canonical: d.report_findings_template_canonical ?? "",
       requires_perform_input: d.requires_perform_input,
       dataset_code: d.dataset_code ?? "",
       requires_appointment: d.requires_appointment,
@@ -652,6 +656,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
         <TemplateDefaults
           purpose={draft.purpose_template_canonical}
           remarks={draft.remarks_template_canonical}
+          reportFindings={draft.report_findings_template_canonical}
           onChange={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
         />
 
@@ -726,16 +731,22 @@ function readElementCodes(item: RadItemDetail): ElementCodes {
   return codes;
 }
 
-// オーダー画面の「検査目的」「特別指示」を記入するときに最初から選ばれている
-// テンプレート。撮影項目ごとに決めておくもので、オーダー時に別のものへ変えられる。
+// オーダー画面の「検査目的」「特別指示」と、読影レポートの「所見」を記入するときに
+// 最初から選ばれているテンプレート。撮影項目ごとに決めておくもので、記入時に別のものへ変えられる。
 function TemplateDefaults({
   purpose,
   remarks,
+  reportFindings,
   onChange,
 }: {
   purpose: string;
   remarks: string;
-  onChange: (patch: { purpose_template_canonical?: string; remarks_template_canonical?: string }) => void;
+  reportFindings: string;
+  onChange: (patch: {
+    purpose_template_canonical?: string;
+    remarks_template_canonical?: string;
+    report_findings_template_canonical?: string;
+  }) => void;
 }) {
   const templates = useQuestionnaireOptions({ status: "active" });
 
@@ -765,6 +776,12 @@ function TemplateDefaults({
           questionnaires={templates.questionnaires}
           value={idOf(remarks)}
           onChange={(id) => onChange({ remarks_template_canonical: canonicalOf(id) })}
+        />
+        <TemplateSelect
+          label="読影所見"
+          questionnaires={templates.questionnaires}
+          value={idOf(reportFindings)}
+          onChange={(id) => onChange({ report_findings_template_canonical: canonicalOf(id) })}
         />
       </div>
     </section>

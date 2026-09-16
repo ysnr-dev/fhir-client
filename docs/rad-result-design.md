@@ -331,6 +331,9 @@ Task の `completed` 化が 1 つの transaction で走る。
 
 ## 7. 未決事項・申し送り
 
+放射線全体の不足機能(読影レポート・安全確認・帳票・線量管理)は `docs/rad-backlog.md` に
+まとめ直した。以下は実施入力の設計から直接続く申し送り。
+
 1. **ImagingStudy(撮影実績)は今回作らない**。［事実］JP_ImagingStudy_Radiology は
    `series` を持つなら `series.uid` と `series.modality` が 1..1 で、DICOM の
    Study/Series UID が要る。モダリティや PACS と繋がっていない段階で UID を
@@ -356,9 +359,9 @@ Task の `completed` 化が 1 つの transaction で走る。
 4. **線量の自動取得**。手入力を前提にしているが、実際の運用では RDSR から自動で
    入るべき値。手入力欄は残しつつ、取り込み時に上書きできる形にしておく。
 
-5. **読影レポート**。DiagnosticReport(`basedOn` = オーダー、`imagingStudy` =
-   ImagingStudy)で別途設計する。［事実］上流の DiagnosticReport は `based-on`
-   検索に対応済み(検体検査で使用中)なので、リソース側の追加は不要。
+5. **読影レポート**。`docs/rad-report-design.md` で設計した。DiagnosticReport の `basedOn` で
+   オーダーを指し、`imagingStudy` は PACS 連携まで空にする。［事実］上流の DiagnosticReport は
+   `based-on` 検索に対応済み(検体検査で使用中)なので、リソース側の追加は不要。
 
 6. **実施の取消で実施記録も片付ける(実装済み 2026-08-15)**。実施済の行の「取消」は、
    Task を受付済へ戻す更新と同じ transaction で、そのオーダーの実施記録

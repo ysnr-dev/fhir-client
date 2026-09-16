@@ -24,6 +24,12 @@ import {
   type PathwayVarianceRow,
 } from "../../fhir/pathwayVarianceHelpers";
 import {
+  RAD_CRITICAL_FINDING_NOTE,
+  RAD_CRITICAL_FINDING_TASK_CODE,
+  radCriticalFindingRowOf,
+  type RadCriticalFindingRow,
+} from "../../fhir/radCriticalFindingHelpers";
+import {
   RESULT_REVIEW_NOTE,
   RESULT_REVIEW_TASK_CODE,
   resultReviewRowOf,
@@ -34,6 +40,7 @@ import { KARTE_DETAIL_PARAM, KARTE_TAB_PARAM, formatKarteDetail } from "../../ka
 import { LabPanicNotificationCells } from "./LabPanicNotificationCells";
 import { OrderApprovalNotificationCells } from "./OrderApprovalNotificationCells";
 import { PathwayVarianceNotificationCells } from "./PathwayVarianceNotificationCells";
+import { RadCriticalFindingNotificationCells } from "./RadCriticalFindingNotificationCells";
 import { ResultReviewNotificationCells } from "./ResultReviewNotificationCells";
 
 // 通知の種別ごとの振る舞いをまとめた対応表。通知そのものの形は notificationHelpers、
@@ -119,12 +126,20 @@ const resultReviewKind = defineNotificationKind<ResultReviewRow>({
   label: RESULT_REVIEW_TASK_CODE.display,
   toRow: resultReviewRowOf,
   Cells: ResultReviewNotificationCells,
-  // 種別の名前はカルテのタブのキーでもある。
+  // 種別の名前はカルテのタブのキーでもある。放射線はタブを持たないので、
+  // 読影レポートの詳細モーダルを開いた状態で開く。
   karteLink: (row) => {
     const params = new URLSearchParams();
-    params.set(KARTE_TAB_PARAM, row.kind);
-    if (row.reportId) params.set("view", row.reportId);
-    return `/patients/${row.patientId}/karte?${params.toString()}`;
+    if (row.kind === "rad") {
+      if (row.reportId) {
+        params.set(KARTE_DETAIL_PARAM, formatKarteDetail({ kind: "rad-result", id: row.reportId }));
+      }
+    } else {
+      params.set(KARTE_TAB_PARAM, row.kind);
+      if (row.reportId) params.set("view", row.reportId);
+    }
+    const query = params.toString();
+    return `/patients/${row.patientId}/karte${query ? `?${query}` : ""}`;
   },
   action: { label: "確認", noteText: RESULT_REVIEW_NOTE },
   // 確認の正本は来歴なので、通知を対応済みにするのと同じ transaction で書く。
@@ -135,6 +150,22 @@ const resultReviewKind = defineNotificationKind<ResultReviewRow>({
         buildCompletedNotificationTask(row.task, actor, RESULT_REVIEW_NOTE),
       ),
     ]),
+});
+
+const radCriticalFindingKind = defineNotificationKind<RadCriticalFindingRow>({
+  code: RAD_CRITICAL_FINDING_TASK_CODE.code,
+  label: RAD_CRITICAL_FINDING_TASK_CODE.display,
+  toRow: radCriticalFindingRowOf,
+  Cells: RadCriticalFindingNotificationCells,
+  karteLink: (row) => {
+    const params = new URLSearchParams();
+    if (row.reportId) {
+      params.set(KARTE_DETAIL_PARAM, formatKarteDetail({ kind: "rad-result", id: row.reportId }));
+    }
+    const query = params.toString();
+    return `/patients/${row.patientId}/karte${query ? `?${query}` : ""}`;
+  },
+  action: { label: "確認", noteText: RAD_CRITICAL_FINDING_NOTE },
 });
 
 const pathwayVarianceKind = defineNotificationKind<PathwayVarianceRow>({
@@ -155,6 +186,7 @@ const pathwayVarianceKind = defineNotificationKind<PathwayVarianceRow>({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
+  radCriticalFindingKind,
   resultReviewKind,
   pathwayVarianceKind,
   orderApprovalKind,

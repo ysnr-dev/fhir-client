@@ -90,7 +90,8 @@ export type KarteDetailKind =
   | Exclude<KarteItemKind, "vital" | "pathway-evaluation">
   | "lab-result"
   | "micro-result"
-  | "patho-result";
+  | "patho-result"
+  | "rad-result";
 
 export interface KarteDetailTarget {
   kind: KarteDetailKind;
@@ -117,6 +118,7 @@ const DETAIL_KINDS: KarteDetailKind[] = [
   "lab-result",
   "micro-result",
   "patho-result",
+  "rad-result",
   "qr",
 ];
 

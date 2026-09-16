@@ -304,11 +304,14 @@ export type KarteTimelineItem = KarteItemBase &
       }
     // 放射線検査も明細(撮影項目・セットの構成項目)が ServiceRequest なので、
     // オーダーのヘッダにぶら下がるぶんを itemRequests に集めて渡す。
-    // 検査結果(ImagingStudy)との紐付けは未実装なので reportId は持たない。
     | {
         kind: "rad-order";
         serviceRequest: fhir4.ServiceRequest;
         itemRequests: fhir4.ServiceRequest[];
+        /** 読影レポートの id。空ならまだ読影していない。 */
+        reportId: string;
+        /** 読影レポートの報告区分。"preliminary" なら暫定、"amended" なら訂正のバッジを出す。 */
+        reportStatus: string;
         /** 部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
         status: RadTaskStatus;
         /** 実施記録。未実施なら空。取消 → 再実施で複数残ることがある。 */
@@ -663,7 +666,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     }
   }
 
-  // オーダー id → そのオーダーを元にした検査結果(検体検査・細菌検査)の id と status
+  // オーダー id → そのオーダーを元にした検査結果(検体検査・細菌検査・病理・読影)の id と status
   // (DiagnosticReport.basedOn。カードの「検査結果表示」を出せるかの判定と、
   // 中間報告・訂正報告のバッジに使う)。
   const reportByOrderId = new Map<string, { id: string; status: string }>();
@@ -811,11 +814,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     }
     if (isRadServiceRequest(serviceRequest)) {
       const status = radTaskStatus(radTaskByOrderId.get(serviceRequest.id ?? ""));
+      const report = reportByOrderId.get(serviceRequest.id ?? "");
       return {
         ...base,
         kind: "rad-order" as const,
         label: KARTE_KIND_LABELS["rad-order"],
         itemRequests: radOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+        reportId: report?.id ?? "",
+        reportStatus: report?.status ?? "",
         status,
         // 実施情報は実施済のときだけ出す。実施の取消は Task を受付済へ戻すだけで
         // 実施記録を消していない(docs/rad-result-design.md §7-6)ため、取り消した

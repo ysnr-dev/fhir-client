@@ -103,10 +103,21 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+/**
+ * 縮小後の保存形式。`keep` は PNG を PNG のまま残す(線画のシェーマ台紙を劣化させない)。
+ * `jpeg` はすべて JPEG にする。CT・MR のスクリーンショットのような濃淡画像は PNG だと
+ * 1 枚が数 MB になり、Bundle に base64 で積むと上流の本文上限に届くため。
+ */
+export type ImageOutputFormat = "keep" | "jpeg";
+
+/** 濃淡画像を JPEG にするときの品質。読影に差し支える劣化を出さない値。 */
+export const PHOTO_JPEG_QUALITY = 0.9;
+
 // 選択されたファイルを検証し、必要なら縮小して dataURL 化する。
-// 線画のシェーマ台紙を劣化させないよう PNG は PNG のまま、それ以外は JPEG に再エンコードする。
+// 既定(keep)は PNG を PNG のまま、それ以外を JPEG に再エンコードする。
 export async function normalizeImageFile(
   file: File,
+  { format = "keep" }: { format?: ImageOutputFormat } = {},
 ): Promise<{ dataUrl: string; contentType: string }> {
   if (!file.type.startsWith("image/")) {
     throw new Error("画像ファイルを選択してください。");
@@ -119,7 +130,9 @@ export async function normalizeImageFile(
   const img = await loadImage(original);
   const scale = MAX_UPLOAD_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight);
 
-  if (scale >= 1 && (file.type === "image/png" || file.type === "image/jpeg")) {
+  const keepsOriginal =
+    format === "jpeg" ? file.type === "image/jpeg" : file.type === "image/png" || file.type === "image/jpeg";
+  if (scale >= 1 && keepsOriginal) {
     return { dataUrl: original, contentType: file.type };
   }
 
@@ -128,8 +141,16 @@ export async function normalizeImageFile(
   canvas.height = Math.round(img.naturalHeight * Math.min(scale, 1));
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("画像の変換に失敗しました。");
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
+  if (format === "jpeg") {
+    // 透過のある PNG を JPEG にすると透過部分が黒になるので、白で塗ってから描く。
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return { dataUrl: canvas.toDataURL("image/jpeg", PHOTO_JPEG_QUALITY), contentType: "image/jpeg" };
+  }
+
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   const contentType = file.type === "image/png" ? "image/png" : "image/jpeg";
   const dataUrl =
     contentType === "image/png" ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.85);
@@ -152,6 +173,19 @@ export async function makeThumbnailDataUrl(dataUrl: string, maxDim = 160): Promi
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/jpeg", 0.8);
+}
+
+/**
+ * Bundle に新しく積む画像(Binary の作成エントリ)の base64 の合計長。上流は本文が
+ * 一定の大きさを超えると 413 で拒否するので、保存前に量を見積もるのに使う。
+ * 保存済みの画像は参照だけで再送しないので数えない。
+ */
+export function newBinaryDataLength(entries: fhir4.BundleEntry[]): number {
+  return entries.reduce((total, entry) => {
+    const resource = entry.resource;
+    if (resource?.resourceType !== "Binary" || entry.request?.method !== "POST") return total;
+    return total + ((resource as fhir4.Binary).data?.length ?? 0);
+  }, 0);
 }
 
 // dataURL を transaction Bundle の Binary 作成エントリにする。

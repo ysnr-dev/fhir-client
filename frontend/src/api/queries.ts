@@ -102,10 +102,23 @@ import { LAB_PANIC_TASK_CODE } from "../fhir/labPanicHelpers";
 import {
   ALERT_PRIORITY_PARAM,
   buildCompletedNotificationTask,
+  buildCancelledNotificationTask,
   completeNotificationEntry,
   hasTaskCode,
+  notificationTaskEntry,
   splitNotificationBundle,
 } from "../fhir/notificationHelpers";
+import {
+  RAD_CRITICAL_FINDING_TASK_CODE,
+  radCriticalFindingEntries,
+} from "../fhir/radCriticalFindingHelpers";
+import {
+  RAD_REPORT_TOO_LARGE_MESSAGE,
+  buildRadReportDeleteEntries,
+  isRadReport,
+  radCriticalFindingOf,
+  radReportBundleTooLarge,
+} from "../fhir/radReportHelpers";
 import {
   RESULT_REVIEW_NOTE,
   RESULT_REVIEW_TASK_CODE,
@@ -240,7 +253,7 @@ import {
   radOrderResponseIds,
   radOrderTime,
 } from "../fhir/radOrderHelpers";
-import { buildRadPerformDeleteEntries } from "../fhir/radResultHelpers";
+import { buildRadPerformDeleteEntries, splitRadPerformBundle } from "../fhir/radResultHelpers";
 import {
   buildRadTaskUpdate,
   radTaskStatus,
@@ -3505,6 +3518,9 @@ export interface RadWorklistRow {
   patient?: fhir4.Patient;
   /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
   task?: fhir4.Task;
+  /** 読影レポート。未登録なら空。 */
+  reportId: string;
+  reportStatus: string;
 }
 
 export interface RadWorklistResult {
@@ -3516,6 +3532,7 @@ export interface RadWorklistResult {
 async function fetchRadWorklist(date: string): Promise<RadWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const items: fhir4.ServiceRequest[] = [];
+  const reportByOrderId = new Map<string, { id: string; status: string }>();
 
   const { patientsById, tasks, truncated } = await fetchWorklistBundles(
     (page) => {
@@ -3525,12 +3542,22 @@ async function fetchRadWorklist(date: string): Promise<RadWorklistResult> {
         page,
         "occurrence",
       );
-      // 撮影項目も同じ応答に添えてもらう。
+      // 撮影項目・進捗・読影レポートも同じ応答に添えてもらう。
+      // _revinclude は複数指定するので append(set だと先に入れたものが消える)。
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
-      params.set("_revinclude", "Task:focus");
+      params.append("_revinclude", "Task:focus");
+      params.append("_revinclude", "DiagnosticReport:based-on");
       return params;
     },
     (resource) => {
+      if (resource.resourceType === "DiagnosticReport") {
+        const report = resource as fhir4.DiagnosticReport;
+        const orderId = report.basedOn?.[0]?.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
+        if (orderId && report.id && isRadReport(report)) {
+          reportByOrderId.set(orderId, { id: report.id, status: report.status });
+        }
+        return false;
+      }
       if (resource.resourceType !== "ServiceRequest") return false;
       const request = resource as fhir4.ServiceRequest;
       // 検索にヒットしたヘッダと、添えられた明細を分ける。
@@ -3550,6 +3577,8 @@ async function fetchRadWorklist(date: string): Promise<RadWorklistResult> {
     itemRequests: radOrderItemRequests(items, order.id ?? ""),
     patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
     task: taskByOrderId.get(order.id ?? ""),
+    reportId: reportByOrderId.get(order.id ?? "")?.id ?? "",
+    reportStatus: reportByOrderId.get(order.id ?? "")?.status ?? "",
   }));
 
   // 撮影時刻の早い順。時刻を指定していないオーダー(撮影日だけ)は後ろにまとめる。
@@ -3596,20 +3625,7 @@ async function fetchRadPerformResources(orderId: string) {
     "Procedure",
     radPerformSearchParams(orderId),
   );
-
-  const procedures: fhir4.Procedure[] = [];
-  const administrations: fhir4.MedicationAdministration[] = [];
-  const observations: fhir4.Observation[] = [];
-  for (const entry of bundle.entry ?? []) {
-    const resource = entry.resource;
-    if (resource?.resourceType === "Procedure") procedures.push(resource as fhir4.Procedure);
-    else if (resource?.resourceType === "MedicationAdministration") {
-      administrations.push(resource as fhir4.MedicationAdministration);
-    } else if (resource?.resourceType === "Observation") {
-      observations.push(resource as fhir4.Observation);
-    }
-  }
-  return { procedures, administrations, observations };
+  return splitRadPerformBundle(bundle);
 }
 
 /**
@@ -3638,6 +3654,11 @@ export function useUpdateRadTaskStatus() {
       const taskEntry = taskBundleEntry(buildRadTaskUpdate(task, order, status));
 
       const cancelsPerform = radTaskStatus(task) === "completed" && status !== "completed";
+      // 読影レポートが付いた検査は取り消させない。実施記録を消すとレポートの撮影日時の
+      // 根拠が消え、撮っていない検査に読影が残る(docs/rad-report-design.md §8)。
+      if (cancelsPerform && (await radOrderHasReport(order.id ?? ""))) {
+        throw new Error("読影レポートがあるため取り消せません。読影レポートを削除してから取り消してください。");
+      }
       const performed = cancelsPerform
         ? await fetchRadPerformResources(order.id ?? "")
         : { procedures: [], administrations: [], observations: [] };
@@ -3677,6 +3698,143 @@ export function useRegisterRadPerform() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
     },
+  });
+}
+
+// ---- 放射線検査の読影レポート ----
+//
+// 構造は fhir/radReportHelpers(docs/rad-report-design.md)。オーダー 1 件に読影レポート 1 件。
+
+/** オーダーに読影レポートが付いているか。実施の取消を止めるのに使う。 */
+async function radOrderHasReport(orderId: string): Promise<boolean> {
+  const params = new URLSearchParams();
+  params.set("based-on", `ServiceRequest/${orderId}`);
+  params.set("_count", "10");
+  const { data: bundle } = await searchResource<fhir4.DiagnosticReport>("DiagnosticReport", params);
+  return resourcesOfType<fhir4.DiagnosticReport>(bundle, "DiagnosticReport").some(isRadReport);
+}
+
+/** オーダーに付いた読影レポート(所見の Observation を添える)。入力モーダルが使う。 */
+export function useRadReportByOrder(orderId: string | undefined) {
+  const params = new URLSearchParams();
+  if (orderId) params.set("based-on", `ServiceRequest/${orderId}`);
+  params.append("_include", "DiagnosticReport:result");
+  params.set("_count", "10");
+
+  return useQuery({
+    queryKey: ["DiagnosticReport", "detail", "rad-order", orderId],
+    queryFn: () => searchResource<fhir4.Resource>("DiagnosticReport", params),
+    enabled: Boolean(orderId),
+  });
+}
+
+/** 読影レポートの内容(所見の Observation を添える)。取得の形は検体検査結果と同じ。 */
+export function useRadReportDetail(reportId: string | undefined) {
+  return useLabResultDetail(reportId);
+}
+
+const RAD_REPORT_TASK_CODES = [RESULT_REVIEW_TASK_CODE.code, RAD_CRITICAL_FINDING_TASK_CODE.code];
+
+/**
+ * 読影レポート保存の Bundle に通知を足す。宛先(依頼医)と既存の通知 2 種はここで引く。
+ *
+ * - 検査結果確認: 最終報告・訂正報告になったとき(暫定報告では出さない)
+ * - 重要所見: 要点があれば暫定報告でも出す。要点の変更で未確認に戻し、外したら取り下げる
+ */
+async function withRadReportTasks(bundle: fhir4.Bundle): Promise<fhir4.Bundle> {
+  const entry = bundle.entry ?? [];
+  const reportEntry = entry.find((e) => e.resource?.resourceType === "DiagnosticReport");
+  const report = reportEntry?.resource as fhir4.DiagnosticReport | undefined;
+  const reference = report?.id ? `DiagnosticReport/${report.id}` : reportEntry?.fullUrl;
+  if (!report || !reference) return bundle;
+
+  const patientId = report.subject?.reference?.split("/").pop() ?? "";
+  const orderReference = report.basedOn?.[0]?.reference;
+  const orderId = orderReference?.split("/").pop();
+  const [owner, tasks] = await Promise.all([
+    orderId ? fetchOrderRequester(orderId) : Promise.resolve(undefined),
+    report.id
+      ? fetchReportTasks(report.id, RAD_REPORT_TASK_CODES)
+      : Promise.resolve(new Map<string, fhir4.Task>()),
+  ]);
+
+  const date = report.effectiveDateTime?.slice(0, 10) ?? "";
+  const exam = report.code?.text ?? "";
+  const basedOn = orderReference ? [{ reference: orderReference }] : undefined;
+
+  return {
+    ...bundle,
+    entry: [
+      ...entry,
+      ...resultReviewTaskEntries(
+        { reportReference: reference, patientId, owner, kind: "rad", date, summary: exam, basedOn },
+        report.status !== "preliminary",
+        tasks.get(RESULT_REVIEW_TASK_CODE.code),
+      ),
+      ...radCriticalFindingEntries(
+        {
+          reportReference: reference,
+          patientId,
+          owner,
+          date,
+          exam,
+          point: radCriticalFindingOf(report),
+          basedOn,
+        },
+        tasks.get(RAD_CRITICAL_FINDING_TASK_CODE.code),
+      ),
+    ],
+  };
+}
+
+function invalidateRadReport(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
+  queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "detail"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rad-worklist"] });
+  queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse"] });
+  queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+}
+
+/**
+ * 読影レポートの登録・更新(Bundle は radReportHelpers の buildRadReportBundle)。
+ * 新しく送る画像が上流の本文上限に届く量なら、送る前に止める。
+ */
+export function useSaveRadReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (bundle: fhir4.Bundle) => {
+      if (radReportBundleTooLarge(bundle)) throw new Error(RAD_REPORT_TOO_LARGE_MESSAGE);
+      return postBundle(await withRadReportTasks(bundle));
+    },
+    retry: false,
+    onSuccess: () => invalidateRadReport(queryClient),
+  });
+}
+
+/**
+ * 読影レポートの削除。所見・テンプレート回答を消し、未確認の通知(検査結果確認・重要所見)を
+ * 取り下げる。削除したレポートを指す通知が未確認のまま残らないようにするため。
+ */
+export function useDeleteRadReport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (reportId: string) => {
+      const [{ data: report }, tasks] = await Promise.all([
+        readResource<fhir4.DiagnosticReport>("DiagnosticReport", reportId),
+        fetchReportTasks(reportId, RAD_REPORT_TASK_CODES),
+      ]);
+      const cancelEntries = Array.from(tasks.values())
+        .filter((task) => task.status === "requested")
+        .map((task) => notificationTaskEntry(buildCancelledNotificationTask(task), task.id));
+      return postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [...buildRadReportDeleteEntries(report), ...cancelEntries],
+      });
+    },
+    retry: false,
+    onSuccess: () => invalidateRadReport(queryClient),
   });
 }
 
@@ -7014,7 +7172,12 @@ export const deleteRadOrderRequest = async (srId: string) => {
   const params = new URLSearchParams();
   params.set("_id", srId);
   params.set("_revinclude:iterate", "ServiceRequest:based-on");
+  params.append("_revinclude", "DiagnosticReport:based-on");
   const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+  // 読影レポートが付いたオーダーは消させない(レポートの basedOn が指す先が無くなる)。
+  if (resourcesOfType<fhir4.DiagnosticReport>(bundle, "DiagnosticReport").some(isRadReport)) {
+    throw new Error("読影レポートがあるため削除できません。読影レポートを削除してから削除してください。");
+  }
   const itemRequests = radOrderItemRequests(serviceRequestsOf(bundle), srId);
   const itemIds = itemRequests
     .map((request) => request.id)

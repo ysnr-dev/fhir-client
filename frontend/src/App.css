@@ -12302,6 +12302,157 @@ button.meal-calendar__cell:hover {
   resize: vertical;
 }
 
+/* サムネイルを押して拡大表示を開くとき(読影レポートの画像)。ボタンの枠は出さず画像だけを見せる。 */
+.schema-gallery__open {
+  height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+  line-height: 0;
+}
+
+/* 読影レポートの入力(RadReportEntryModal)。依頼内容は既定で畳めるようにする。 */
+.rad-report-entry__order {
+  margin-bottom: 12px;
+}
+
+.rad-report-entry__order > summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.rad-report-entry__perform {
+  margin-top: 8px;
+}
+
+.rad-report-entry__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+/* 重要所見のチェックは横並び(フォームの label は縦積みが既定)。 */
+.prescription-form label.rad-report-form__critical {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.rad-report-form__critical-text {
+  flex: 1 1 320px;
+}
+
+/* 読影レポートの画像欄。ファイルを落とせる範囲なので、ドラッグ中は枠で示す。 */
+.rad-report-images {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+  border: 1px dashed transparent;
+  border-radius: 6px;
+}
+
+.rad-report-images:focus-visible,
+.rad-report-images--dragging {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  outline: none;
+}
+
+.rad-report-images__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rad-report-images__row .schema-gallery {
+  margin-top: 0;
+}
+
+.rad-report-images__row input[type="text"] {
+  flex: 1;
+}
+
+/* 読影レポートの内容表示。重要所見は読み落とさせないよう先頭に色付きの枠で出す。 */
+.rad-report-detail__critical {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 8px 12px;
+  border: 1px solid var(--lab-high);
+  border-left-width: 4px;
+  border-radius: 6px;
+  color: var(--text-h);
+  margin-bottom: 12px;
+}
+
+.rad-report-detail__critical-label {
+  color: var(--lab-high);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rad-report-detail__review {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* 画像の拡大表示。濃淡画像を読むので背景は黒にし、画面に収まる最大の大きさで出す。 */
+.modal--image-viewer {
+  width: min(1280px, 96vw);
+}
+
+.image-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.image-viewer__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  border-radius: 6px;
+  min-height: 240px;
+}
+
+.image-viewer__image {
+  max-width: 100%;
+  max-height: 72vh;
+  object-fit: contain;
+}
+
+.image-viewer__empty {
+  color: #fff;
+  margin: 0;
+}
+
+.image-viewer__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.image-viewer__caption {
+  flex: 1;
+  color: var(--text-h);
+}
+
+.image-viewer__toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.image-viewer__toggle--active {
+  outline: 2px solid var(--accent);
+}
+
 /* 病理の検体テーブル(オーダー内容・レポートの検体情報)。処方内容の --detail は
    1 列目が薬剤名の 360px という前提の列幅を持っており、1 列目が№の病理では
    番号だけが極端に広くなる。列の並びが違うので共用せず、専用の列幅を持つ。 */

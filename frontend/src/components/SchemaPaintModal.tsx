@@ -13,9 +13,11 @@ import {
   type FabricObject,
 } from "fabric";
 import { Modal } from "./Modal";
+import { PHOTO_JPEG_QUALITY } from "../fhir/schemaImage";
+import { PEN_COLORS, type PenColor } from "./penColors";
 
 // シェーマのペイントモーダル(fabric.js)。台紙(backgroundDataUrl)を背景に、
-// ペン・図形・矢印・テキストを描き込み、保存時に背景込みの合成 PNG(dataURL)を返す。
+// ペン・図形・矢印・テキストを描き込み、保存時に背景込みの合成画像(dataURL)を返す。
 // オブジェクト情報は保持しない(保存後の再編集は画像への追記になる)。
 // 診療記録のシェーマ挿入(ClinicalNoteForm)とテンプレート項目の描き込み
 // (SchemaImageField)で共用する。
@@ -27,15 +29,14 @@ interface SchemaPaintModalProps {
   onClose: () => void;
   // 確定ボタンの文言。保存先が呼び出し側で異なる(記録への挿入 / 回答への添付)。
   saveLabel?: string;
+  /** 描き込みの色。先頭が既定色。省略すると線画の台紙向けの PEN_COLORS。 */
+  colors?: readonly PenColor[];
+  /**
+   * 書き出し形式。既定の png は線画の台紙を劣化させない。濃淡画像(CT・MR など)に
+   * 描き込むときは jpeg にする(png だと 1 枚が数 MB になる)。
+   */
+  exportFormat?: "png" | "jpeg";
 }
-
-// RichTextEditor の文字色と同じパレット(アプリ内で装飾色を統一する)。
-const PEN_COLORS = [
-  { code: "#1f1f1f", label: "黒" },
-  { code: "#d32f2f", label: "赤" },
-  { code: "#1565c0", label: "青" },
-  { code: "#2e7d32", label: "緑" },
-] as const;
 
 const PEN_WIDTHS = [2, 4, 8] as const;
 
@@ -71,6 +72,8 @@ export function SchemaPaintModal({
   onSave,
   onClose,
   saveLabel = "保存",
+  colors = PEN_COLORS,
+  exportFormat = "png",
 }: SchemaPaintModalProps) {
   const canvasElRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<Canvas | null>(null);
@@ -78,7 +81,7 @@ export function SchemaPaintModal({
   const exportMultiplierRef = useRef(1);
 
   const [tool, setTool] = useState<Tool>("pen");
-  const [color, setColor] = useState<string>(PEN_COLORS[0].code);
+  const [color, setColor] = useState<string>(colors[0]?.code ?? PEN_COLORS[0].code);
   const [width, setWidth] = useState<number>(4);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -417,7 +420,14 @@ export function SchemaPaintModal({
     try {
       canvas.discardActiveObject();
       canvas.requestRenderAll();
-      const dataUrl = canvas.toDataURL({ format: "png", multiplier: exportMultiplierRef.current });
+      const dataUrl =
+        exportFormat === "jpeg"
+          ? canvas.toDataURL({
+              format: "jpeg",
+              quality: PHOTO_JPEG_QUALITY,
+              multiplier: exportMultiplierRef.current,
+            })
+          : canvas.toDataURL({ format: "png", multiplier: exportMultiplierRef.current });
       onSave(dataUrl);
     } catch {
       setError("画像の書き出しに失敗しました。");
@@ -444,7 +454,7 @@ export function SchemaPaintModal({
             ))}
           </span>
           <span className="schema-annotator__tool-group" role="group" aria-label="色">
-            {PEN_COLORS.map((entry) => (
+            {colors.map((entry) => (
               <button
                 key={entry.code}
                 type="button"

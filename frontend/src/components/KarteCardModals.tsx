@@ -5,9 +5,11 @@ import {
   useMicroOrderDetail,
   usePathoOrderDetail,
   usePathoResultDetail,
+  useRadReportDetail,
   useMicroResultDetail,
   useRadOrderDetail,
   useRadPerformDetail,
+  useRadReportByOrder,
   usePhysioOrderDetail,
   usePhysioPerformDetail,
   useEndoscopyOrderDetail,
@@ -40,6 +42,7 @@ import { surgeryOrderItemRequests } from "../fhir/surgeryOrderHelpers";
 import { splitLabResultDetailBundle } from "../fhir/labResultHelpers";
 import { splitMicroResultDetailBundle } from "../fhir/microResultHelpers";
 import { splitPathoResultDetailBundle } from "../fhir/pathoResultHelpers";
+import { splitRadReportBundle } from "../fhir/radReportHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { splitPrescriptionDetailBundle } from "../fhir/prescriptionHelpers";
 import type { KarteDetailKind, KarteDetailTarget } from "../karteUrl";
@@ -58,6 +61,8 @@ import { PathoResultDetailPanel } from "./PathoResultDetailPanel";
 import { PrescriptionDetailPanel } from "./PrescriptionDetailPanel";
 import { QuestionnaireResponseDetailPanel } from "./QuestionnaireResponseDetailPanel";
 import { RadOrderDetailPanel } from "./RadOrderDetailPanel";
+import { RadReportDetailPanel } from "./RadReportDetailPanel";
+import { ResultReviewAction } from "./ResultReviewAction";
 import { PhysioOrderDetailPanel } from "./PhysioOrderDetailPanel";
 import { EndoscopyOrderDetailPanel } from "./EndoscopyOrderDetailPanel";
 import { TreatmentOrderDetailPanel } from "./TreatmentOrderDetailPanel";
@@ -92,6 +97,7 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   "lab-result": "検査結果内容",
   "micro-result": "細菌検査結果内容",
   "patho-result": "病理診断レポート",
+  "rad-result": "読影レポート",
   qr: "テンプレート表示",
 };
 
@@ -155,6 +161,8 @@ export function KarteDetailModal({
         <MicroResultDetail patientId={patientId} reportId={target.id} />
       ) : target.kind === "patho-result" ? (
         <PathoResultDetail patientId={patientId} reportId={target.id} />
+      ) : target.kind === "rad-result" ? (
+        <RadResultDetail patientId={patientId} reportId={target.id} />
       ) : (
         <QuestionnaireResponseDetail patientId={patientId} qrId={target.id} />
       )}
@@ -701,6 +709,33 @@ function PathoResultDetail({ patientId, reportId }: { patientId: string; reportI
   );
 }
 
+// 読影レポート。放射線はカルテにタブが無いので、依頼医の確認(既読)はここで行う。
+function RadResultDetail({ patientId, reportId }: { patientId: string; reportId: string }) {
+  const detail = useRadReportDetail(reportId);
+  const { report } = splitRadReportBundle(detail.data?.data);
+  const mismatch = isPatientMismatch(patientId, report?.subject);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? (
+        <p>読み込み中...</p>
+      ) : mismatch ? (
+        <p className="patient-table__empty">指定された読影レポートは別の患者のものです。</p>
+      ) : report ? (
+        <>
+          <div className="karte-tabpanel__actions rad-report-detail__review">
+            <ResultReviewAction reportId={reportId} />
+          </div>
+          <RadReportDetailPanel reportId={reportId} />
+        </>
+      ) : (
+        !detail.error && <NotFound label="読影レポート" />
+      )}
+    </>
+  );
+}
+
 function MicroResultDetail({ patientId, reportId }: { patientId: string; reportId: string }) {
   const detail = useMicroResultDetail(reportId);
   const report = detail.data ? splitMicroResultDetailBundle(detail.data.data).report : undefined;
@@ -845,31 +880,42 @@ function MicroOrderJson({ srId }: { srId: string }) {
   );
 }
 
-// 放射線検査もオーダーのヘッダと明細をまとめた Bundle で見せる。実施入力があるときは、
-// 実施記録(Procedure 一式)がオーダーとは別リソースなので、別の見出しで続けて出す
-// (1 つの Bundle に混ぜると、依頼した内容と実際に行ったことの境目が読めなくなる)。
+// 放射線検査もオーダーのヘッダと明細をまとめた Bundle で見せる。実施記録(Procedure 一式)と
+// 読影レポートはオーダーとは別リソースなので、あるときは別の見出しで続けて出す
+// (1 つの Bundle に混ぜると、依頼した内容・実際に行ったこと・読んだ結果の境目が読めなくなる)。
 function RadOrderJson({ srId }: { srId: string }) {
   const detail = useRadOrderDetail(srId);
   const perform = useRadPerformDetail(srId);
+  const report = useRadReportByOrder(srId);
   const performBundle = perform.data?.data;
+  const reportBundle = report.data?.data;
   const hasPerform = (performBundle?.entry?.length ?? 0) > 0;
+  const hasReport = (reportBundle?.entry?.length ?? 0) > 0;
 
   return (
     <>
       <ErrorBanner error={detail.error} />
-      <ErrorBanner error={perform.error} />
+      <ErrorBanner error={perform.error ?? report.error} />
       {detail.isLoading ? (
         <p>読み込み中...</p>
-      ) : hasPerform ? (
+      ) : hasPerform || hasReport ? (
         <>
           <section className="karte-json__section">
             <h3 className="karte-json__section-title">オーダー</h3>
             <FhirJsonView resource={detail.data?.data} />
           </section>
-          <section className="karte-json__section">
-            <h3 className="karte-json__section-title">実施記録</h3>
-            <FhirJsonView resource={performBundle} />
-          </section>
+          {hasPerform && (
+            <section className="karte-json__section">
+              <h3 className="karte-json__section-title">実施記録</h3>
+              <FhirJsonView resource={performBundle} />
+            </section>
+          )}
+          {hasReport && (
+            <section className="karte-json__section">
+              <h3 className="karte-json__section-title">読影レポート</h3>
+              <FhirJsonView resource={reportBundle} />
+            </section>
+          )}
         </>
       ) : (
         <FhirJsonView resource={detail.data?.data} />
