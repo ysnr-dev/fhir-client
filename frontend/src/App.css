@@ -12376,9 +12376,18 @@ button.meal-calendar__cell:hover {
   flex: 1;
 }
 
+/* 読影レポートの所見・診断。改行を残し、他の表示項目(.prescription-detail__common dd)と同じ大きさで読ませる。 */
+.rad-report-detail__text {
+  white-space: pre-wrap;
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
 /* 読影レポートの内容表示。重要所見は読み落とさせないよう先頭に色付きの枠で出す。 */
 .rad-report-detail__critical {
   display: flex;
+  font-size: 14px;
   gap: 8px;
   align-items: baseline;
   padding: 8px 12px;

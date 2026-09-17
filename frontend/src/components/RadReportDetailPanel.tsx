@@ -85,13 +85,13 @@ function RadReportContent({
 
       <fieldset>
         <legend>所見</legend>
-        <p className="patho-result__text">{values.findings || "-"}</p>
+        <p className="rad-report-detail__text">{values.findings || "-"}</p>
         {findingsResponseId && <ResponseSchemaImages responseId={findingsResponseId} />}
       </fieldset>
 
       <fieldset>
         <legend>診断</legend>
-        <p className="patho-result__text">{values.conclusion || "-"}</p>
+        <p className="rad-report-detail__text">{values.conclusion || "-"}</p>
         {conclusionResponseId && <ResponseSchemaImages responseId={conclusionResponseId} />}
       </fieldset>
 
