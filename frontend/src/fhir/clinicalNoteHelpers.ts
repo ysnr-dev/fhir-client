@@ -45,7 +45,25 @@ export const CONSULT_NOTE_TYPE: fhir4.CodeableConcept = {
  * (docs/consult-order-design.md §5)。種別を増やしたらここに足す — 検索から漏れると
  * 記録は保存されているのにカルテに出ない、という気付きにくい欠落になる。
  */
-export const KARTE_NOTE_TYPE_SEARCH = `${LOINC_SYSTEM}|11506-3,${LOINC_SYSTEM}|11488-4`;
+export const KARTE_NOTE_TYPE_SEARCH = `${LOINC_SYSTEM}|11506-3,${LOINC_SYSTEM}|11488-4,${LOINC_SYSTEM}|18842-5`;
+
+/**
+ * 退院時サマリー(LOINC 18842-5 Discharge summary)。診療記録と同じ Composition の器で、
+ * セクションの構成と入院(encounter)への紐付けだけが違う(fhir/dischargeSummaryHelpers.ts)。
+ */
+export const DISCHARGE_SUMMARY_TYPE: fhir4.CodeableConcept = {
+  coding: [{ system: LOINC_SYSTEM, code: "18842-5", display: "Discharge summary" }],
+  text: "退院時サマリー",
+};
+
+export const DISCHARGE_SUMMARY_TYPE_SEARCH = `${LOINC_SYSTEM}|18842-5`;
+
+export function isDischargeSummary(composition: fhir4.Composition | undefined): boolean {
+  return (
+    composition?.type?.coding?.some((c) => c.system === LOINC_SYSTEM && c.code === "18842-5") ??
+    false
+  );
+}
 
 const CONSULT_NOTE_EVENT_SYSTEM = "http://fhir-client.local/CodeSystem/consult-note-event";
 
@@ -100,6 +118,13 @@ export const SECTION_OPTIONS = [
 ] as const;
 
 export type SectionCode = (typeof SECTION_OPTIONS)[number]["code"];
+
+/** セクションの選択肢(診療記録は SECTION_OPTIONS、退院時サマリーは専用の固定セット)。 */
+export interface SectionOption {
+  code: string;
+  display: string;
+  title: string;
+}
 
 // 自由記載モードで使う唯一のセクション。
 export const FREE_TEXT_SECTION_CODE = "77599-9" satisfies SectionCode;
@@ -162,7 +187,8 @@ export function noteBodySections(
 export interface ClinicalNoteSectionDraft {
   // React の key と並べ替えのための安定 ID。FHIR には保存しない。
   uid: string;
-  code: SectionCode;
+  // 診療記録では SectionCode、退院時サマリーでは専用セクションのコード。
+  code: string;
   // Tiptap が出力する HTML(編集中の内部形式)。保存時に XHTML へ変換する。
   // テンプレート由来のセクションでは回答の平文から生成し、直接編集は不可。
   html: string;
@@ -181,7 +207,7 @@ export interface ClinicalNoteFormValues {
   sections: ClinicalNoteSectionDraft[];
 }
 
-export function newSectionDraft(code: SectionCode): ClinicalNoteSectionDraft {
+export function newSectionDraft(code: string): ClinicalNoteSectionDraft {
   return { uid: crypto.randomUUID(), code, html: "" };
 }
 
@@ -237,13 +263,15 @@ export function htmlToXhtml(html: string): string {
   return new XMLSerializer().serializeToString(div);
 }
 
-// 平文 1 行を Narrative にする。エスケープは DOM 側に任せる。
-function plainTextXhtml(text: string): string {
+// 平文を Narrative にする(1 行 1 段落)。エスケープは DOM 側に任せる。
+export function plainTextXhtml(text: string): string {
   const doc = new DOMParser().parseFromString("", "text/html");
   const div = doc.createElementNS("http://www.w3.org/1999/xhtml", "div");
-  const p = doc.createElementNS("http://www.w3.org/1999/xhtml", "p");
-  p.textContent = text;
-  div.appendChild(p);
+  for (const line of text.split("\n")) {
+    const p = doc.createElementNS("http://www.w3.org/1999/xhtml", "p");
+    p.textContent = line;
+    div.appendChild(p);
+  }
   return new XMLSerializer().serializeToString(div);
 }
 
@@ -315,7 +343,7 @@ export function validateClinicalNote(
  * (administrator 等)が確定済みの記録を編集したときは、既存の署名をそのまま残す
  * (署名者を空にすると、誰も責任を負っていない確定記録になってしまうため)。
  */
-function buildAttester(
+export function buildAttester(
   status: fhir4.Composition["status"],
   practitioner: fhir4.Practitioner | null | undefined,
   existing: fhir4.Composition | undefined,
@@ -350,6 +378,102 @@ export interface ClinicalNoteSave {
   // 先行して単独 POST しない — 診療記録を保存しなかったときに QR だけが
   // 残る孤児を構造的に防ぐため(schemaImage.ts の設計と同じ)。
   entries: fhir4.BundleEntry[];
+}
+
+/**
+ * 本文セクション(手入力・テンプレート由来)を Composition.section に組み立てる。
+ * テンプレート由来のセクションは QR への参照拡張を付け、未保存の記入内容があれば
+ * QR(+シェーマ画像 Binary、回答から生成する Observation)を entries に積む。
+ * 保存後も参照され続ける QR の id は keptResponseIds に集める(呼び出し側が
+ * 既存 Composition との差分で「参照が外れた QR」を求めて削除する)。
+ * 診療記録と退院時サマリーで共用する。
+ */
+export function buildBodySections(
+  sections: ClinicalNoteSectionDraft[],
+  sectionOptions: readonly SectionOption[],
+  entries: fhir4.BundleEntry[],
+  keptResponseIds: Set<string>,
+): fhir4.CompositionSection[] {
+  return sections
+    .filter((s) => !isEmptyNoteHtml(s.html))
+    .map((s) => {
+      const option = sectionOptions.find((o) => o.code === s.code);
+
+      let extension: fhir4.Extension[] | undefined;
+      if (s.template) {
+        const { responseId, draft } = s.template;
+        let reference: string;
+        if (draft) {
+          if (responseId) {
+            // 保存済み QR の再編集 → 同じ id へ PUT(参照は実 ID のまま)。
+            reference = `QuestionnaireResponse/${responseId}`;
+            keptResponseIds.add(responseId);
+            entries.push({
+              resource: { ...draft.response, id: responseId },
+              request: { method: "PUT", url: reference },
+            });
+          } else {
+            // 新規記入 → urn:uuid プレースホルダで POST し、拡張から参照する
+            // (実 ID への書き換えは上流の transaction 処理が行う)。
+            reference = `urn:uuid:${crypto.randomUUID()}`;
+            entries.push({
+              fullUrl: reference,
+              resource: draft.response,
+              request: { method: "POST", url: "QuestionnaireResponse" },
+            });
+          }
+          entries.push(...draft.imageEntries);
+          // 「回答から Observation を生成する」テンプレートなら、単独登録と同じく
+          // 構造化データも残す(前回の生成物の削除は保存側で行う)。
+          entries.push(
+            ...draftObservationEntries({
+              questionnaire: draft.questionnaire,
+              response: draft.response,
+              responseReference: reference,
+            }),
+          );
+        } else if (responseId) {
+          // 再編集していない保存済みテンプレート → 参照だけ引き継ぐ。
+          reference = `QuestionnaireResponse/${responseId}`;
+          keptResponseIds.add(responseId);
+        } else {
+          reference = "";
+        }
+        if (reference) {
+          extension = [{ url: SECTION_QR_EXT_URL, valueReference: { reference } }];
+        }
+      }
+
+      return {
+        title: option?.title ?? s.code,
+        extension,
+        code: {
+          coding: [{ system: LOINC_SYSTEM, code: s.code, display: option?.display }],
+        },
+        text: {
+          // 手入力由来の narrative なので additional(構造化データの要約ではない)
+          status: "additional" as const,
+          div: htmlToXhtml(s.html),
+        },
+      };
+    });
+}
+
+/** セクションの LOINC コード。 */
+export function sectionCodeOf(section: fhir4.CompositionSection): string {
+  return section.code?.coding?.find((c) => c.system === LOINC_SYSTEM)?.code ?? "";
+}
+
+/** 保存済みセクションを編集フォームの下書きに戻す(コードの正規化は呼び出し側)。 */
+export function sectionDraftOf(section: fhir4.CompositionSection, code: string): ClinicalNoteSectionDraft {
+  const responseId = sectionResponseId(section);
+  return {
+    uid: crypto.randomUUID(),
+    code,
+    html: xhtmlToHtml(section.text?.div),
+    // draft は null = 「再編集されるまで QR は触らない」。
+    template: responseId ? { responseId, draft: null } : undefined,
+  };
 }
 
 export function buildClinicalNote(
@@ -417,71 +541,7 @@ export function buildClinicalNote(
       ]
     : [];
 
-  const bodySections = values.sections
-    .filter((s) => !isEmptyNoteHtml(s.html))
-    .map((s) => {
-      const option = SECTION_OPTIONS.find((o) => o.code === s.code);
-
-      // テンプレート由来セクション: QR への参照拡張を付け、未保存の記入内容が
-      // あれば QR(+シェーマ画像 Binary)を Bundle エントリに積む。
-      let extension: fhir4.Extension[] | undefined;
-      if (s.template) {
-        const { responseId, draft } = s.template;
-        let reference: string;
-        if (draft) {
-          if (responseId) {
-            // 保存済み QR の再編集 → 同じ id へ PUT(参照は実 ID のまま)。
-            reference = `QuestionnaireResponse/${responseId}`;
-            keptResponseIds.add(responseId);
-            entries.push({
-              resource: { ...draft.response, id: responseId },
-              request: { method: "PUT", url: reference },
-            });
-          } else {
-            // 新規記入 → urn:uuid プレースホルダで POST し、拡張から参照する
-            // (実 ID への書き換えは上流の transaction 処理が行う)。
-            reference = `urn:uuid:${crypto.randomUUID()}`;
-            entries.push({
-              fullUrl: reference,
-              resource: draft.response,
-              request: { method: "POST", url: "QuestionnaireResponse" },
-            });
-          }
-          entries.push(...draft.imageEntries);
-          // 「回答から Observation を生成する」テンプレートなら、単独登録と同じく
-          // 構造化データも残す(前回の生成物の削除は保存側で行う)。
-          entries.push(
-            ...draftObservationEntries({
-              questionnaire: draft.questionnaire,
-              response: draft.response,
-              responseReference: reference,
-            }),
-          );
-        } else if (responseId) {
-          // 再編集していない保存済みテンプレート → 参照だけ引き継ぐ。
-          reference = `QuestionnaireResponse/${responseId}`;
-          keptResponseIds.add(responseId);
-        } else {
-          reference = "";
-        }
-        if (reference) {
-          extension = [{ url: SECTION_QR_EXT_URL, valueReference: { reference } }];
-        }
-      }
-
-      return {
-        title: option?.title ?? s.code,
-        extension,
-        code: {
-          coding: [{ system: LOINC_SYSTEM, code: s.code, display: option?.display }],
-        },
-        text: {
-          // 手入力由来の narrative なので additional(構造化データの要約ではない)
-          status: "additional" as const,
-          div: htmlToXhtml(s.html),
-        },
-      };
-    });
+  const bodySections = buildBodySections(values.sections, SECTION_OPTIONS, entries, keptResponseIds);
 
   // 他科依頼の回答は種別と event が違う。編集(existing あり)では呼び出し側が
   // consultOrderId を渡さないので、保存済みの値をそのまま引き継ぐ
@@ -601,19 +661,9 @@ export function parseClinicalNoteForm(composition: fhir4.Composition): ClinicalN
   // プロブレムセクションは本文ではないので編集欄に出さない(未知コードは自由記載に
   // 丸められるため、除外しないと編集できてしまい記載形式の復元も狂う)。
   const sections = noteBodySections(composition).map((section) => {
-    const code = section.code?.coding?.find((c) => c.system === LOINC_SYSTEM)?.code;
-    // テンプレート参照拡張(QuestionnaireResponse/<id>)があれば復元する。
-    // draft は null = 「再編集されるまで QR は触らない」。
-    const qrRef = section.extension?.find((e) => e.url === SECTION_QR_EXT_URL)?.valueReference
-      ?.reference;
-    const responseId = qrRef?.match(/^QuestionnaireResponse\/(.+)$/)?.[1];
-    return {
-      uid: crypto.randomUUID(),
-      // 未知コードは「自由記載」として編集を継続できるようにする(保存で正規化される)
-      code: (knownCodes.has(code ?? "") ? code : FREE_TEXT_SECTION_CODE) as SectionCode,
-      html: xhtmlToHtml(section.text?.div),
-      template: responseId ? { responseId, draft: null } : undefined,
-    };
+    const code = sectionCodeOf(section);
+    // 未知コードは「自由記載」として編集を継続できるようにする(保存で正規化される)
+    return sectionDraftOf(section, knownCodes.has(code) ? code : FREE_TEXT_SECTION_CODE);
   });
 
   return {

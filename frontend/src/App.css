@@ -2115,6 +2115,12 @@ fieldset.rp-card {
   margin-right: 12px;
 }
 
+/* 文書作成の督促の期限超過。強度(行の色)は変えず、内容欄で目に付くようにする。 */
+.notification__overdue {
+  color: var(--color-danger, #c62828);
+  font-weight: 600;
+}
+
 /* オーダー承認の内容。種別・活動・依頼元を 1 セルに横並びで置く。 */
 .notification__approval-kind {
   margin-right: 12px;
@@ -4633,6 +4639,53 @@ fieldset.rp-card {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* 退院時サマリー。固定の 8 セクションを見出し付きで縦に並べる。参照セクションは
+   候補のチェックリスト、本文セクションは診療記録と同じエディタ。 */
+.discharge-summary__tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.discharge-summary__section + .discharge-summary__section {
+  margin-top: 12px;
+}
+
+.discharge-summary__title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.discharge-summary__checklist {
+  list-style: none;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* .patient-form label(縦積み)と .patient-form input(枠・余白)に負けないよう、
+   フォームを含めた詳細度で横並びに戻す。 */
+.patient-form .discharge-summary__checklist label {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  text-align: left;
+}
+
+.patient-form .discharge-summary__checklist input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  flex: none;
 }
 
 /* 確定済み記録の編集時に出す注意書き。 */

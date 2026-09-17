@@ -23,6 +23,7 @@
 // in-progress ではなくなるので入院患者一覧からは外れる。
 
 import { toFhirDateTime } from "./clinicalNoteHelpers";
+import { diffDays } from "../lib/dates";
 import { referenceId } from "./shared";
 import {
   BED_PHYSICAL_TYPE,
@@ -1104,4 +1105,63 @@ export function withEventWards(
     const changed = Boolean(ward) && Boolean(from) && ward !== from;
     return { ...event, label: changed ? "転棟" : EVENT_LABELS.transfer, detail: ward };
   });
+}
+
+// ---- 退院時の転帰(退院先) ----
+
+const DISCHARGE_DISPOSITION_SYSTEM =
+  "http://terminology.hl7.org/CodeSystem/discharge-disposition";
+
+/**
+ * 退院時の転帰。標準要素 Encounter.hospitalization.dischargeDisposition に持つ
+ * (値セットは HL7 discharge-disposition のうち国内の運用で使う分)。退院時サマリーの
+ * 転帰欄と退院モーダルから書き、どちらで入れても同じ場所に残る。
+ */
+export const DISCHARGE_DISPOSITION_OPTIONS = [
+  { code: "home", display: "自宅" },
+  { code: "other-hcf", display: "転院" },
+  { code: "snf", display: "施設入所" },
+  { code: "hosp", display: "院内転科" },
+  { code: "aadvice", display: "自己退院" },
+  { code: "exp", display: "死亡" },
+  { code: "oth", display: "その他" },
+] as const;
+
+export function dischargeDispositionDisplay(code: string | undefined): string {
+  return DISCHARGE_DISPOSITION_OPTIONS.find((o) => o.code === code)?.display ?? "";
+}
+
+export function encounterDischargeDisposition(encounter: fhir4.Encounter): string {
+  return (
+    encounter.hospitalization?.dischargeDisposition?.coding?.find(
+      (c) => c.system === DISCHARGE_DISPOSITION_SYSTEM,
+    )?.code ?? ""
+  );
+}
+
+/** 転帰を書き換えた Encounter。空なら外す(hospitalization が空になれば要素ごと落とす)。 */
+export function withDischargeDisposition(encounter: fhir4.Encounter, code: string): fhir4.Encounter {
+  const hospitalization = { ...(encounter.hospitalization ?? {}) };
+  if (code) {
+    const option = DISCHARGE_DISPOSITION_OPTIONS.find((o) => o.code === code);
+    hospitalization.dischargeDisposition = {
+      coding: [{ system: DISCHARGE_DISPOSITION_SYSTEM, code, display: option?.display }],
+      text: option?.display,
+    };
+  } else {
+    delete hospitalization.dischargeDisposition;
+  }
+  const next = { ...encounter };
+  if (Object.keys(hospitalization).length) next.hospitalization = hospitalization;
+  else delete next.hospitalization;
+  return next;
+}
+
+/** 在院日数(入院日を 1 日目、退院日を含む)。退院していなければ今日まで。 */
+export function encounterStayDays(encounter: fhir4.Encounter, today: string): number | undefined {
+  const start = encounter.period?.start?.slice(0, 10);
+  if (!start) return undefined;
+  const end = encounter.period?.end?.slice(0, 10) || today;
+  const days = diffDays(start, end) + 1;
+  return Number.isFinite(days) && days > 0 ? days : undefined;
 }

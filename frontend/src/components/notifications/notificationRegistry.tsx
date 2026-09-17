@@ -43,8 +43,22 @@ import {
   resultReviewRowOf,
   type ResultReviewRow,
 } from "../../fhir/resultReviewHelpers";
+import {
+  DISCHARGE_SUMMARY_DOCUMENT,
+  DOCUMENT_DUE_NOTE,
+  DOCUMENT_DUE_TASK_CODE,
+  documentDueRowOf,
+  type DocumentDueRow,
+} from "../../fhir/documentDueHelpers";
 import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
-import { KARTE_DETAIL_PARAM, KARTE_TAB_PARAM, formatKarteDetail } from "../../karteUrl";
+import {
+  KARTE_DETAIL_PARAM,
+  KARTE_OPEN_PARAM,
+  KARTE_TAB_PARAM,
+  formatKarteDetail,
+  formatKarteOpen,
+} from "../../karteUrl";
+import { DocumentDueNotificationCells } from "./DocumentDueNotificationCells";
 import { LabPanicNotificationCells } from "./LabPanicNotificationCells";
 import { OrderApprovalNotificationCells } from "./OrderApprovalNotificationCells";
 import { PathwayVarianceNotificationCells } from "./PathwayVarianceNotificationCells";
@@ -195,6 +209,25 @@ const pathwayVarianceKind = defineNotificationKind<PathwayVarianceRow>({
   action: { label: "確認", noteText: PATHWAY_VARIANCE_NOTE },
 });
 
+const documentDueKind = defineNotificationKind<DocumentDueRow>({
+  code: DOCUMENT_DUE_TASK_CODE.code,
+  label: DOCUMENT_DUE_TASK_CODE.display,
+  toRow: documentDueRowOf,
+  Cells: DocumentDueNotificationCells,
+  // カルテの右ペインをその入院の退院時サマリーで開く(一回限りの open パラメータ)。
+  karteLink: (row) => {
+    if (!row.patientId) return null;
+    const params = new URLSearchParams();
+    if (row.documentCode === DISCHARGE_SUMMARY_DOCUMENT && row.encounterId) {
+      params.set(KARTE_OPEN_PARAM, formatKarteOpen({ kind: "discharge-summary", encounterId: row.encounterId }));
+    }
+    const query = params.toString();
+    return `/patients/${row.patientId}/karte${query ? `?${query}` : ""}`;
+  },
+  // 文書を確定すれば自動で閉じる。ここからは「不要」として手で閉じる。
+  action: { label: "対応済", noteText: DOCUMENT_DUE_NOTE },
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
@@ -202,6 +235,7 @@ export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   resultReviewKind,
   pathwayVarianceKind,
   orderApprovalKind,
+  documentDueKind,
 ];
 
 /** 一覧の検索に渡す `code` の値。種別を全部並べて 1 回で引く(カンマ区切りは OR)。 */

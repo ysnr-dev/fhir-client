@@ -2,7 +2,12 @@ import { useState } from "react";
 import { useQuestionnaireCategories } from "../api/adminQueries";
 import { useQuestionnaireOptions } from "../api/queries";
 import { groupTemplatesByCategory } from "../fhir/questionnaireCategory";
-import { KARTE_KIND_LABELS, type KarteCardFilter, type KarteItemKind } from "../fhir/karteTimeline";
+import {
+  KARTE_KIND_LABELS,
+  KARTE_NOTE_TYPES,
+  type KarteCardFilter,
+  type KarteItemKind,
+} from "../fhir/karteTimeline";
 
 // カルテ左端のペインの「カテゴリ」表示。情報の種別を選ぶとタイムラインがその種別の
 // カードだけになる。テンプレートは種別が 1 つしか無く、社会歴のように「そのテンプレート
@@ -47,7 +52,9 @@ export function KarteCategoryList({ filter, onSelect }: KarteCategoryListProps) 
   // 同じ行をもう一度押したら絞り込みを解除する。
   function select(next: KarteCardFilter) {
     const same =
-      filter?.kind === next.kind && filter?.questionnaireUrl === next.questionnaireUrl;
+      filter?.kind === next.kind &&
+      filter?.questionnaireUrl === next.questionnaireUrl &&
+      filter?.noteType === next.noteType;
     onSelect(same ? null : next);
   }
 
@@ -91,6 +98,24 @@ export function KarteCategoryList({ filter, onSelect }: KarteCategoryListProps) 
         </button>
       </li>
       {PLAIN_KINDS.map((kind) => {
+        // 診療記録は中の種別(診療記録・退院時サマリー)で分けて選ぶ(同じ Composition の器)。
+        if (kind === "note") {
+          return KARTE_NOTE_TYPES.map((type) => {
+            const selected = filter?.kind === "note" && filter.noteType === type.code;
+            return (
+              <li key={`note:${type.code}`}>
+                <button
+                  type="button"
+                  className={itemClass(selected)}
+                  aria-pressed={selected}
+                  onClick={() => select({ kind: "note", noteType: type.code })}
+                >
+                  {type.label}
+                </button>
+              </li>
+            );
+          });
+        }
         const selected = filter?.kind === kind;
         return (
           <li key={kind}>

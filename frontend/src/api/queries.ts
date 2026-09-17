@@ -18,9 +18,16 @@ import {
   DEFAULT_VITAL_THRESHOLDS,
 } from "../fhir/vitalHelpers";
 import {
+  DISCHARGE_SUMMARY_TYPE_SEARCH,
   KARTE_NOTE_TYPE_SEARCH,
   buildClinicalNoteDeleteBundle,
 } from "../fhir/clinicalNoteHelpers";
+import type { DischargeSummarySources } from "../fhir/dischargeSummaryHelpers";
+import {
+  DOCUMENT_DUE_TASK_CODE,
+  buildCompletedDocumentDueEntries,
+  cancelDocumentDueEntries,
+} from "../fhir/documentDueHelpers";
 import {
   LOCATION_TYPE_CODES,
   locationDisplayName,
@@ -1709,10 +1716,13 @@ export function useDischargePatient() {
       rehabOrders = [],
       nutritionGuidanceOrders = [],
       nursingOrders = [],
+      extraEntries = [],
     }: {
       encounter: fhir4.Encounter;
       /** 退院日時(YYYY-MM-DDTHH:mm)。 */
       dischargeAt: string;
+      /** 退院と同じ transaction に載せるその他の entry(退院時サマリーの督促 Task など)。 */
+      extraEntries?: fhir4.BundleEntry[];
       /** 食事オーダーの連動エントリ(buildDischargeSyncEntries)。画面で外したときは空。 */
       mealEntries?: fhir4.BundleEntry[];
       /** 一緒に終了させるリハビリオーダー。退院日を終了日にする。 */
@@ -1733,6 +1743,7 @@ export function useDischargePatient() {
           // 栄養指導もリハビリと同じ期間継続型なので同じ扱い。
           ...buildNutritionGuidanceOrderStopEntries(nutritionGuidanceOrders, dischargeDate),
           ...buildNursingOrderStopEntries(nursingOrders, dischargeDate),
+          ...extraEntries,
         ]),
       );
     },
@@ -1740,6 +1751,8 @@ export function useDischargePatient() {
       queryClient.invalidateQueries({ queryKey: ["Encounter"] });
       // 食事・リハビリの終了もこの transaction で書いているので読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      // 退院時サマリーの督促(通知 Task)。
+      queryClient.invalidateQueries({ queryKey: ["Task"] });
     },
   });
 }
@@ -5505,6 +5518,202 @@ export function useUpdateClinicalNote() {
       queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
     },
   });
+}
+
+// ---- 退院時サマリー ----
+
+/**
+ * 患者の入院(入院中・退院済)。退院時サマリーの対象を選ぶのに使う。新しい順。
+ * 誤登録(entered-in-error)と入院予定は対象にしない。
+ */
+export function usePatientAdmissions(patientId: string | undefined) {
+  return useQuery({
+    queryKey: ["Encounter", "patient-admissions", patientId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("subject", `Patient/${patientId}`);
+      params.set("status", `${ADMISSION_STATUS},${DISCHARGED_STATUS}`);
+      params.set("class", ADMISSION_CLASS_CODE);
+      params.set("_sort", "-date");
+      params.set("_count", "50");
+      const { data: bundle } = await searchResource<fhir4.Encounter>("Encounter", params);
+      return resourcesOfType<fhir4.Encounter>(bundle, "Encounter");
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/** 入院 1 件の読み出し(退院時サマリーの編集で対象の入院を引くのに使う)。 */
+export function useEncounter(id: string | undefined) {
+  return useQuery({
+    queryKey: ["Encounter", "read", id],
+    queryFn: async () => (await readResource<fhir4.Encounter>("Encounter", id as string)).data,
+    enabled: Boolean(id),
+  });
+}
+
+/**
+ * その入院の退院時サマリー(1 入院 1 件)。あれば登録ではなく編集に切り替える。
+ * 上流の Composition は encounter 検索に対応済み。
+ */
+export function useDischargeSummaryFor(encounterId: string | undefined) {
+  return useQuery({
+    queryKey: ["Composition", "search", "discharge-summary", encounterId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("encounter", `Encounter/${encounterId}`);
+      params.set("type", DISCHARGE_SUMMARY_TYPE_SEARCH);
+      params.set("_count", "5");
+      params.set("_sort", "-date");
+      const { data: bundle } = await searchResource<fhir4.Composition>("Composition", params);
+      return resourcesOfType<fhir4.Composition>(bundle, "Composition")[0] ?? null;
+    },
+    enabled: Boolean(encounterId),
+  });
+}
+
+/** その入院の未対応の文書作成督促(通知 Task)。確定保存・退院取消で閉じるのに使う。 */
+export async function fetchDocumentDueTasks(encounterId: string): Promise<fhir4.Task[]> {
+  const params = new URLSearchParams();
+  params.set("code", `${TASK_CODE_SYSTEM}|${DOCUMENT_DUE_TASK_CODE.code}`);
+  params.set("encounter", `Encounter/${encounterId}`);
+  params.set("status", "requested");
+  params.set("_count", "10");
+  const { data: bundle } = await searchResource<fhir4.Task>("Task", params);
+  return resourcesOfType<fhir4.Task>(bundle, "Task");
+}
+
+export function useDocumentDueTasks(encounterId: string | undefined) {
+  return useQuery({
+    queryKey: [...NOTIFICATION_TASK_KEY, "document-due", encounterId],
+    queryFn: () => fetchDocumentDueTasks(encounterId as string),
+    enabled: Boolean(encounterId),
+  });
+}
+
+const SUMMARY_ORDER_KINDS = ["surgery", "treatment", "endoscopy", "rad", "physio", "pathology"];
+
+/**
+ * 退院時サマリーの下書きに使う、入院期間のデータ。オーダー・記録は Encounter を
+ * 参照していないので、患者 + 入院期間(period)の日付範囲で引く(経過表と同じ手段)。
+ * 入院中は今日までを範囲にする。
+ */
+export function useDischargeSummarySources(
+  patientId: string | undefined,
+  encounter: fhir4.Encounter | undefined,
+) {
+  const encounterId = encounter?.id;
+  return useQuery({
+    queryKey: ["discharge-summary", "sources", patientId, encounterId, encounter?.period?.end ?? ""],
+    queryFn: async (): Promise<DischargeSummarySources> => {
+      const enc = encounter as fhir4.Encounter;
+      const start = enc.period?.start?.slice(0, 10) ?? "";
+      const end = enc.period?.end?.slice(0, 10) ?? today();
+
+      const events = encounterEvents(enc);
+      const bedIds = Array.from(
+        new Set(events.flatMap((e) => [e.bedId, e.fromBedId]).filter((id): id is string => !!id)),
+      );
+
+      const conditionParams = new URLSearchParams();
+      conditionParams.set("patient", `Patient/${patientId}`);
+      conditionParams.set("_count", String(KARTE_CONDITION_COUNT));
+      conditionParams.set("_sort", "-onset-date");
+
+      const orderParams = new URLSearchParams();
+      orderParams.set("patient", `Patient/${patientId}`);
+      orderParams.set(
+        "category",
+        SUMMARY_ORDER_KINDS.map((kind) => `${ORDER_TYPE_SYSTEM}|${kind}`).join(","),
+      );
+      orderParams.set("based-on:missing", "true");
+      orderParams.append("occurrence", `ge${start}`);
+      orderParams.append("occurrence", `le${end}`);
+      orderParams.set("status:not", "revoked,entered-in-error");
+      orderParams.set("_count", "100");
+      orderParams.append("_revinclude:iterate", "ServiceRequest:based-on");
+      orderParams.append("_revinclude", "Procedure:based-on");
+
+      const rxParams = new URLSearchParams();
+      rxParams.set("patient", `Patient/${patientId}`);
+      rxParams.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|discharge`);
+      rxParams.append("occurrence", `ge${start}`);
+      rxParams.set("status:not", "revoked,entered-in-error");
+      rxParams.set("_count", "20");
+      rxParams.append("_revinclude", "MedicationRequest:based-on");
+
+      const allergyParams = new URLSearchParams();
+      allergyParams.set("patient", `Patient/${patientId}`);
+      allergyParams.set("_count", "100");
+
+      const [wardNameByBed, conditions, orders, rx, allergies] = await Promise.all([
+        fetchWardNameByBed(bedIds),
+        searchResource<fhir4.Condition>("Condition", conditionParams),
+        searchResource<fhir4.Resource>("ServiceRequest", orderParams),
+        searchResource<fhir4.Resource>("ServiceRequest", rxParams),
+        searchResource<fhir4.AllergyIntolerance>("AllergyIntolerance", allergyParams),
+      ]);
+
+      const orderRequests = resourcesOfType<fhir4.ServiceRequest>(orders.data, "ServiceRequest").filter(
+        (sr) => sr.status !== "revoked" && sr.status !== "entered-in-error",
+      );
+      return {
+        encounter: enc,
+        events: withEventWards(events, wardNameByBed),
+        conditions: resourcesOfType<fhir4.Condition>(conditions.data, "Condition"),
+        orders: {
+          headers: orderRequests.filter((sr) => !sr.basedOn?.length),
+          items: orderRequests.filter((sr) => sr.basedOn?.length),
+          procedures: resourcesOfType<fhir4.Procedure>(orders.data, "Procedure"),
+        },
+        dischargeMedications: resourcesOfType<fhir4.MedicationRequest>(rx.data, "MedicationRequest"),
+        allergies: resourcesOfType<fhir4.AllergyIntolerance>(allergies.data, "AllergyIntolerance"),
+      };
+    },
+    enabled: Boolean(patientId) && Boolean(encounterId),
+  });
+}
+
+/**
+ * 退院時サマリーの保存。診療記録と同じ transaction(テンプレート回答・Observation の作り直し)に、
+ * 転帰の Encounter PUT(entries に含めて渡す)と、確定したときは督促 Task の完了を載せる。
+ */
+export function useSaveDischargeSummary() {
+  const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
+  return useMutation({
+    mutationFn: async ({
+      composition,
+      entries,
+      etag,
+      dueTasks,
+    }: {
+      composition: fhir4.Composition;
+      entries: fhir4.BundleEntry[];
+      etag?: string;
+      /** その入院の未対応の督促。確定(final / amended)で保存するときに閉じる。 */
+      dueTasks: fhir4.Task[];
+    }) => {
+      const closing =
+        composition.status !== "preliminary" && enterer
+          ? buildCompletedDocumentDueEntries(dueTasks, enterer)
+          : [];
+      return saveClinicalNote(composition, [...entries, ...closing], etag);
+    },
+    onSuccess: (result: FhirResult<fhir4.Composition>) => {
+      queryClient.invalidateQueries({ queryKey: ["Composition", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["Composition", result.data.id] });
+      queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse"] });
+      queryClient.invalidateQueries({ queryKey: ["Observation", "search"] });
+      queryClient.invalidateQueries({ queryKey: ["Encounter"] });
+      queryClient.invalidateQueries({ queryKey: ["Task"] });
+    },
+  });
+}
+
+/** 退院取消で、その入院の督促を取り下げる entry。 */
+export async function documentDueCancelEntries(encounterId: string): Promise<fhir4.BundleEntry[]> {
+  return cancelDocumentDueEntries(await fetchDocumentDueTasks(encounterId));
 }
 
 // 削除はテンプレート回答(QuestionnaireResponse)も道連れにする。参照は一覧の検索

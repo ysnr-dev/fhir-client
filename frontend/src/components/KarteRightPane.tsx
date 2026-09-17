@@ -1,6 +1,7 @@
 import type { ProblemRef } from "../fhir/conditionHelpers";
 import { AppointmentCreatePanel, AppointmentReschedulePanel } from "./AppointmentPanels";
 import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePanels";
+import { DischargeSummaryCreatePanel, DischargeSummaryEditPanel } from "./DischargeSummaryPanels";
 import { InjectionCreatePanel, InjectionEditPanel } from "./InjectionPanels";
 import { LabOrderCreatePanel, LabOrderEditPanel } from "./LabOrderPanels";
 import { MicroOrderCreatePanel, MicroOrderEditPanel } from "./MicroOrderPanels";
@@ -42,6 +43,9 @@ export type KartePaneState =
   // problem: 登録ボタンを押した時点で選択されていたプロブレム(対象の初期値)。
   | { kind: "note-create"; problem?: ProblemRef }
   | { kind: "note-edit"; noteId: string }
+  // 退院時サマリー。encounterId は対象の入院の初期値(通知・入院患者一覧のリンクから)。
+  | { kind: "summary-create"; encounterId?: string }
+  | { kind: "summary-edit"; noteId: string }
   | { kind: "vital-create"; problem?: ProblemRef }
   // 1 回の測定は複数の Observation なので、束ねている identifier で対象を指す。
   | { kind: "vital-edit"; entryId: string }
@@ -107,6 +111,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   empty: "",
   "note-create": "診療記録登録",
   "note-edit": "診療記録編集",
+  "summary-create": "退院時サマリー登録",
+  "summary-edit": "退院時サマリー編集",
   "vital-create": "バイタル登録",
   "vital-edit": "バイタル編集",
   "prescription-create": "処方登録",
@@ -160,7 +166,10 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
 function paneKey(state: KartePaneState): string {
   switch (state.kind) {
     case "note-edit":
+    case "summary-edit":
       return `${state.kind}:${state.noteId}`;
+    case "summary-create":
+      return `${state.kind}:${state.encounterId ?? ""}`;
     case "prescription-edit":
     case "injection-edit":
     case "lab-order-edit":
@@ -424,6 +433,10 @@ export function KarteRightPane({
         >
           他科依頼
         </button>
+        {/* 退院時サマリーは入院の締めくくりに書く文書なので、一番下に置く。 */}
+        <button type="button" onClick={() => onStateChange({ kind: "summary-create" })}>
+          退院時サマリー
+        </button>
       </div>
     </section>
   );
@@ -500,6 +513,17 @@ function PaneContent({
           onSaved={onSaved}
         />
       );
+    case "summary-create":
+      return (
+        <DischargeSummaryCreatePanel
+          patientId={patientId}
+          defaultEncounterId={state.encounterId}
+          onSaved={onSaved}
+          onStateChange={onStateChange}
+        />
+      );
+    case "summary-edit":
+      return <DischargeSummaryEditPanel patientId={patientId} noteId={state.noteId} onSaved={onSaved} />;
     case "note-edit":
       return (
         <ClinicalNoteEditPanel patientId={patientId} noteId={state.noteId} onSaved={onSaved} />

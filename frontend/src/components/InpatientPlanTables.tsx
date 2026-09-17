@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useUpdateEncounter } from "../api/queries";
+import { Link } from "react-router-dom";
+import { documentDueCancelEntries, useUpdateEncounter } from "../api/queries";
 import {
   buildDischargeCancelledEncounter,
   buildDischargePlanEncounter,
@@ -18,6 +19,7 @@ import {
 } from "../fhir/mealEncounterSync";
 import { displayName } from "../fhir/patientHelpers";
 import { useMealSyncContextLoader } from "../hooks/useMealSyncContext";
+import { KARTE_OPEN_PARAM, formatKarteOpen } from "../karteUrl";
 import { dateTimeLabel } from "../lib/dates";
 import { DischargeModal } from "./DischargeModal";
 import { ErrorBanner } from "./ErrorBanner";
@@ -416,9 +418,14 @@ export function DischargedTable({
     if (!window.confirm(message)) return;
     // 退院予定で止めたまま退院した分も「退院」に上書きしてあるが、どちらの理由で止めたものも拾えるよう両方を戻す。
     const ctx = await loadMealSync(row.encounter);
+    // 退院で作った退院時サマリーの督促も取り下げる(退院していない入院に督促は要らない)。
+    const dueEntries = row.encounter.id ? await documentDueCancelEntries(row.encounter.id) : [];
     cancelDischarge.mutate({
       encounter: buildDischargeCancelledEncounter(row.encounter),
-      extraEntries: buildDischargeRestoreEntries(ctx, ["discharge", "discharge-plan"]),
+      extraEntries: [
+        ...buildDischargeRestoreEntries(ctx, ["discharge", "discharge-plan"]),
+        ...dueEntries,
+      ],
     });
   }
 
@@ -456,6 +463,17 @@ export function DischargedTable({
                     label={`${row.patient ? displayName(row.patient) : "この患者"} の操作`}
                     escapesClipping
                   >
+                    {/* カルテの右ペインをこの入院の退院時サマリーで開く。 */}
+                    {row.patient?.id && row.encounter.id && (
+                      <Link
+                        className="row-menu__item"
+                        to={`/patients/${row.patient.id}/karte?${KARTE_OPEN_PARAM}=${encodeURIComponent(
+                          formatKarteOpen({ kind: "discharge-summary", encounterId: row.encounter.id }),
+                        )}`}
+                      >
+                        退院時サマリー
+                      </Link>
+                    )}
                     <button
                       type="button"
                       className="row-menu__item row-menu__item--danger"

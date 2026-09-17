@@ -26,6 +26,10 @@ import {
   DEFAULT_MEDICATION_SCHEDULE,
   type MedicationScheduleSettings,
 } from "../fhir/medicationScheduleHelpers";
+import {
+  DEFAULT_DOCUMENT_REMINDER,
+  type DocumentReminderSettings,
+} from "../fhir/documentDueHelpers";
 import { useNursingObservationsByManageNos } from "../api/masterQueries";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
 
@@ -107,6 +111,13 @@ export function FacilitySettingsPage() {
     setMedicationDraft((prev) => ({ ...(prev ?? savedMedication), [key]: value }));
   }
 
+  // 文書作成の督促。退院時サマリーは退院日からこの日数を期限にして通知を作る。
+  const [reminderDraft, setReminderDraft] = useState<DocumentReminderSettings | undefined>(undefined);
+  const savedReminder = settings.data?.document_reminder ?? DEFAULT_DOCUMENT_REMINDER;
+  const reminder = reminderDraft ?? savedReminder;
+  const reminderValid =
+    Number.isInteger(reminder.discharge_summary_days) && reminder.discharge_summary_days >= 0;
+
   // 水分出納に数える看護観察。管理番号だけを保存し、名前はマスタから引く。
   const [balanceDraft, setBalanceDraft] = useState<WaterBalanceSettings | undefined>(undefined);
   const savedBalance = settings.data?.water_balance ?? EMPTY_WATER_BALANCE;
@@ -132,7 +143,7 @@ export function FacilitySettingsPage() {
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid) return;
+    if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
     update.mutate({
       self_organization_id: value,
       nursing_schedule: schedule,
@@ -140,6 +151,7 @@ export function FacilitySettingsPage() {
       vital_thresholds: thresholds,
       water_balance: balance,
       medication_schedule: medicationSchedule,
+      document_reminder: reminder,
     });
   }
 
@@ -313,6 +325,30 @@ export function FacilitySettingsPage() {
           </div>
         </details>
 
+        {/* 文書作成の督促。退院の時点で期限付きの通知 Task を作るので、変えても作成済みの
+            通知の期限は動かない。 */}
+        <details className="facility-settings__schedule">
+          <summary>文書作成の督促</summary>
+          <div className="facility-settings__schedule-body">
+            <label>
+              退院時サマリーの期限
+              <span className="facility-settings__times">
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={reminder.discharge_summary_days}
+                  onChange={(e) =>
+                    setReminderDraft({ ...reminder, discharge_summary_days: Number(e.target.value) })
+                  }
+                  aria-label="退院時サマリーの期限の日数"
+                />
+                <span className="facility-settings__unit">日以内(退院日から)</span>
+              </span>
+            </label>
+          </div>
+        </details>
+
         {/* 経過表の水分出納に数える看護観察。同じ名前で単位違いの項目(尿量 mL / g)が
             あるので管理番号で持つ。集計できるのは mL の項目だけなので候補も mL に絞る。 */}
         <details className="facility-settings__schedule">
@@ -357,7 +393,8 @@ export function FacilitySettingsPage() {
               !scheduleValid ||
               !mealValid ||
               !thresholdsValid ||
-              !medicationValid
+              !medicationValid ||
+              !reminderValid
             }
           >
             {update.isPending ? "保存中..." : "保存"}
@@ -383,6 +420,11 @@ export function FacilitySettingsPage() {
         {!medicationValid && (
           <p className="connection-settings-form__field-hint" role="status">
             「内服の与薬の時刻」は 0 以上の分と、HH:MM の時刻で入れてください。
+          </p>
+        )}
+        {!reminderValid && (
+          <p className="connection-settings-form__field-hint" role="status">
+            「文書作成の督促」は 0 以上の日数で入れてください。
           </p>
         )}
         {update.isSuccess && (

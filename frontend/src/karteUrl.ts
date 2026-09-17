@@ -1,4 +1,4 @@
-import type { KarteCardFilter, KarteItemKind } from "./fhir/karteTimeline";
+import { isKarteNoteType, type KarteCardFilter, type KarteItemKind } from "./fhir/karteTimeline";
 
 // カルテ画面の URL パラメータ。
 //
@@ -27,6 +27,31 @@ export const KARTE_PROBLEM_PARAM = "problem";
  * 「<種別>」、テンプレートを 1 つに絞るときは「qr:<テンプレートの url>」。
  */
 export const KARTE_CARD_PARAM = "card";
+/**
+ * 開いた直後に右ペインで始める登録("discharge-summary:<入院の Encounter id>")。
+ * 通知や入院患者一覧のリンクから登録を始めるための一回限りの引数で、KartePage が
+ * 読んだら URL から消す(フォームを URL に載せない方針と両立させるため)。
+ */
+export const KARTE_OPEN_PARAM = "open";
+
+export interface KarteOpenTarget {
+  kind: "discharge-summary";
+  encounterId: string;
+}
+
+export function formatKarteOpen(target: KarteOpenTarget): string {
+  return `${target.kind}:${target.encounterId}`;
+}
+
+export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
+  if (!value) return null;
+  const separator = value.indexOf(":");
+  if (separator < 0) return null;
+  const kind = value.slice(0, separator);
+  const encounterId = value.slice(separator + 1);
+  if (kind !== "discharge-summary" || !encounterId) return null;
+  return { kind, encounterId };
+}
 
 export const KARTE_TABS = [
   { key: "karte", label: "カルテ" },
@@ -234,9 +259,9 @@ const CARD_KINDS: KarteItemKind[] = [
 ];
 
 export function formatKarteCard(filter: KarteCardFilter): string {
-  return filter.kind === "qr" && filter.questionnaireUrl
-    ? `qr:${filter.questionnaireUrl}`
-    : filter.kind;
+  if (filter.kind === "qr" && filter.questionnaireUrl) return `qr:${filter.questionnaireUrl}`;
+  if (filter.kind === "note" && filter.noteType) return `note:${filter.noteType}`;
+  return filter.kind;
 }
 
 // 壊れた値(手打ちの URL や仕様変更後の古いリンク)は「絞り込みなし」として扱う。
@@ -248,9 +273,11 @@ export function parseKarteCard(value: string | null): KarteCardFilter | null {
   }
   // テンプレートの url は "http://..." のようにコロンを含むので、最初の 1 つで切る。
   const kind = value.slice(0, separator) as KarteItemKind;
-  const questionnaireUrl = value.slice(separator + 1);
-  if (kind !== "qr" || !questionnaireUrl) return null;
-  return { kind, questionnaireUrl };
+  const rest = value.slice(separator + 1);
+  if (!rest) return null;
+  if (kind === "qr") return { kind, questionnaireUrl: rest };
+  if (kind === "note" && isKarteNoteType(rest)) return { kind, noteType: rest };
+  return null;
 }
 
 // 壊れた値(手打ちの URL や仕様変更後の古いリンク)は「開いていない」として扱う。

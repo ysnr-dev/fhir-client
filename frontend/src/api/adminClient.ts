@@ -12,6 +12,7 @@ import type { NursingScheduleSettings } from "../fhir/nursingScheduleHelpers";
 import type { VitalThresholdSettings } from "../fhir/vitalHelpers";
 import type { WaterBalanceSettings } from "../fhir/flowsheetWaterBalanceHelpers";
 import type { MedicationScheduleSettings } from "../fhir/medicationScheduleHelpers";
+import type { DocumentReminderSettings } from "../fhir/documentDueHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 
 export interface ConnectionSettings {
@@ -46,6 +47,8 @@ export interface FacilitySettings {
   /** 経過表の水分出納に数える看護観察(MEDIS の管理番号)。 */
   water_balance: WaterBalanceSettings;
   medication_schedule: MedicationScheduleSettings;
+  /** 文書作成の督促(退院時サマリーの期限までの日数)。 */
+  document_reminder: DocumentReminderSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -55,6 +58,7 @@ export type FacilitySettingsPayload = Partial<{
   vital_thresholds: VitalThresholdSettings;
   water_balance: WaterBalanceSettings;
   medication_schedule: MedicationScheduleSettings;
+  document_reminder: DocumentReminderSettings;
 }>;
 
 export interface ConnectionTestResult {

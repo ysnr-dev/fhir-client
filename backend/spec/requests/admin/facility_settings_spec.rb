@@ -195,6 +195,27 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /admin/facility_settings (document_reminder)" do
+    it "stores the days and returns the merged defaults" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { document_reminder: { discharge_summary_days: "7" } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["document_reminder"]).to eq("discharge_summary_days" => 7)
+    end
+
+    it "rejects a negative number of days" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { document_reminder: { discharge_summary_days: -1 } }, as: :json
+      end
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "with ADMIN_TOKEN configured" do
     it "rejects a request without credentials" do
       ENV["ADMIN_TOKEN"] = "s3cret-admin-passphrase"

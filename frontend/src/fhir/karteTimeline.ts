@@ -1,4 +1,4 @@
-import { clinicalNoteProblem, referencedResponseIds } from "./clinicalNoteHelpers";
+import { clinicalNoteProblem, isDischargeSummary, referencedResponseIds } from "./clinicalNoteHelpers";
 import type { ProblemRef } from "./conditionHelpers";
 import { isInjectionServiceRequest } from "./injectionHelpers";
 import {
@@ -222,10 +222,14 @@ export function orderKindOf(
  * 「化学療法の一部」であることが先に読めた方がよいので「化学療法」と出す
  * (どちらのオーダーかは副題に添える)。
  */
-export function karteItemKindLabel(item: Pick<KarteTimelineItem, "kind"> & { serviceRequest?: fhir4.ServiceRequest }): string {
+export function karteItemKindLabel(
+  item: Pick<KarteTimelineItem, "kind"> & { serviceRequest?: fhir4.ServiceRequest; note?: fhir4.Composition },
+): string {
   if ((item.kind === "injection" || item.kind === "prescription") && item.serviceRequest) {
     if (regimenOrderOf(item.serviceRequest)) return "化学療法";
   }
+  // 退院時サマリーは診療記録と同じ器だが、バッジでは文書として見分けられるようにする。
+  if (item.kind === "note" && item.note && isDischargeSummary(item.note)) return "退院時サマリー";
   return KARTE_KIND_LABELS[item.kind];
 }
 
@@ -1067,8 +1071,29 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
  * タイムラインに出す情報の種別。テンプレートは種別が 1 つしか無いので、
  * どのテンプレートかまで指定できるようにする(社会歴だけを時系列で読む、など)。
  */
+/**
+ * 診療記録(Composition)の中の種別。「診療記録」は経過記録と他科依頼回答、
+ * 「退院時サマリー」は 1 入院 1 件の文書。同じ検索・同じカードの器だが、
+ * 左ペインの種別では分けて選べるようにする。
+ */
+export const KARTE_NOTE_TYPES = [
+  { code: "progress", label: "診療記録" },
+  { code: "discharge-summary", label: "退院時サマリー" },
+] as const;
+export type KarteNoteType = (typeof KARTE_NOTE_TYPES)[number]["code"];
+
+export function isKarteNoteType(value: string): value is KarteNoteType {
+  return KARTE_NOTE_TYPES.some((t) => t.code === value);
+}
+
+export function karteNoteTypeOf(note: fhir4.Composition): KarteNoteType {
+  return isDischargeSummary(note) ? "discharge-summary" : "progress";
+}
+
 export interface KarteCardFilter {
   kind: KarteItemKind;
+  /** kind が "note" のときの、診療記録の中の種別。無ければ診療記録すべて。 */
+  noteType?: KarteNoteType;
   /**
    * kind が "qr" のときの絞り込み先テンプレート(canonical ではなく url)。
    * テンプレートのバージョンを上げても過去の回答が外れないよう、版は見ない。
@@ -1085,6 +1110,7 @@ function responseQuestionnaireUrl(item: KarteTimelineItem): string {
 
 export function matchesCardFilter(item: KarteTimelineItem, filter: KarteCardFilter): boolean {
   if (item.kind !== filter.kind) return false;
+  if (item.kind === "note" && filter.noteType) return karteNoteTypeOf(item.note) === filter.noteType;
   if (!filter.questionnaireUrl) return true;
   return responseQuestionnaireUrl(item) === filter.questionnaireUrl;
 }

@@ -4,11 +4,19 @@ import {
   usePatientNutritionGuidanceOrders,
   usePatientNursingOrders,
   useDischargePatient,
+  useDischargeSummaryFor,
+  useDocumentDueTasks,
+  useFacilitySettings,
 } from "../api/queries";
+import { DEFAULT_DOCUMENT_REMINDER, dischargeSummaryDueEntry } from "../fhir/documentDueHelpers";
 import {
+  DISCHARGE_DISPOSITION_OPTIONS,
+  buildDischargedEncounter,
   encounterAdmissionDate,
+  encounterDischargeDisposition,
   encounterPatientId,
   validateDischargeDate,
+  withDischargeDisposition,
 } from "../fhir/encounterHelpers";
 import { buildDischargeSyncEntries, dischargeStopPoint } from "../fhir/mealEncounterSync";
 import { mealPointDisplay } from "../fhir/mealOrderHelpers";
@@ -44,6 +52,8 @@ interface DischargeModalProps {
 
 export function DischargeModal({ encounter, patient, bedLabel, onClose }: DischargeModalProps) {
   const [dischargeAt, setDischargeAt] = useState(nowDateTimeInput);
+  // 転帰(退院先)。任意。退院時サマリーの転帰欄と同じ場所(Encounter.hospitalization)に残る。
+  const [disposition, setDisposition] = useState(() => encounterDischargeDisposition(encounter));
   const [validationError, setValidationError] = useState<string | null>(null);
   const [stopMeals, setStopMeals] = useState(true);
   const [stopRehab, setStopRehab] = useState(true);
@@ -75,6 +85,13 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
     nursingOrderNeedsStop(sr, dischargeDate),
   );
 
+  // 退院時サマリーの督促。確定済みのサマリーが既にある入院と、未対応の督促がある入院には作らない。
+  const facility = useFacilitySettings();
+  const existingSummary = useDischargeSummaryFor(encounter.id);
+  const dueTasks = useDocumentDueTasks(encounter.id);
+  const summaryDone = Boolean(existingSummary.data && existingSummary.data.status !== "preliminary");
+  const dueExists = (dueTasks.data ?? []).length > 0;
+
   function handleSubmit() {
     const error = validateDischargeDate(encounter, dischargeAt);
     if (error) {
@@ -82,10 +99,20 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
       return;
     }
     setValidationError(null);
+    const target = withDischargeDisposition(encounter, disposition);
+    const dueEntry =
+      summaryDone || dueExists || !patientId
+        ? null
+        : dischargeSummaryDueEntry(
+            buildDischargedEncounter(target, dischargeAt),
+            patientId,
+            facility.data?.document_reminder ?? DEFAULT_DOCUMENT_REMINDER,
+          );
     discharge.mutate(
       {
-        encounter,
+        encounter: target,
         dischargeAt,
+        extraEntries: dueEntry ? [dueEntry] : [],
         mealEntries: stopMeals ? mealEntries : [],
         rehabOrders: stopRehab ? stoppingRehab : [],
         nutritionGuidanceOrders: stopNutritionGuidance ? stoppingNutritionGuidance : [],
@@ -126,6 +153,17 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
               value={dischargeAt}
               onChange={(e) => setDischargeAt(e.target.value)}
             />
+          </label>
+          <label>
+            転帰
+            <select value={disposition} onChange={(e) => setDisposition(e.target.value)}>
+              <option value="">（未設定）</option>
+              {DISCHARGE_DISPOSITION_OPTIONS.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.display}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 
@@ -212,7 +250,9 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={discharge.isPending || !meal.ready}
+            disabled={
+              discharge.isPending || !meal.ready || existingSummary.isLoading || dueTasks.isLoading
+            }
           >
             {discharge.isPending ? "退院処理中..." : "退院"}
           </button>

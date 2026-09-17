@@ -32,7 +32,8 @@ module Admin
         meal_schedule: %i[breakfast lunch dinner],
         vital_thresholds: {},
         water_balance: { in: [], out: [] },
-        medication_schedule: %i[before_meal_minutes after_meal_minutes bedtime wake_time]
+        medication_schedule: %i[before_meal_minutes after_meal_minutes bedtime wake_time],
+        document_reminder: %i[discharge_summary_days]
       )
       attrs = {}
       if params.key?(:self_organization_id)
@@ -53,6 +54,9 @@ module Admin
       if params.key?(:medication_schedule)
         attrs[:medication_schedule] = medication_schedule_attrs(permitted[:medication_schedule])
       end
+      if params.key?(:document_reminder)
+        attrs[:document_reminder] = document_reminder_attrs(permitted[:document_reminder])
+      end
       attrs
     end
 
@@ -67,6 +71,13 @@ module Admin
       end
     end
 
+    # 日数は数値で保存する(JSON で文字列で来ても数値に寄せる)。
+    def document_reminder_attrs(permitted)
+      permitted.to_h.to_h do |key, value|
+        [key, value.to_s.match?(/\A-?\d+\z/) ? value.to_i : value]
+      end
+    end
+
     def payload(settings)
       {
         self_organization_id: settings.self_organization_fhir_id.presence,
@@ -74,7 +85,8 @@ module Admin
         meal_schedule: settings.meal_schedule_with_defaults,
         vital_thresholds: settings.vital_thresholds_with_defaults,
         water_balance: settings.water_balance_with_defaults,
-        medication_schedule: settings.medication_schedule_with_defaults
+        medication_schedule: settings.medication_schedule_with_defaults,
+        document_reminder: settings.document_reminder_with_defaults
       }
     end
   end

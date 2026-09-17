@@ -1,12 +1,25 @@
 import type { ReactNode } from "react";
+import { useEncounter } from "../api/queries";
 import {
   clinicalNoteAttestation,
+  isDischargeSummary,
   noteBodySections,
   sectionResponseId,
   sectionTitle,
   stripSchemaImageNotes,
   summarizeClinicalNote,
 } from "../fhir/clinicalNoteHelpers";
+import { dischargeSummaryEncounterId } from "../fhir/dischargeSummaryHelpers";
+import {
+  dischargeDispositionDisplay,
+  encounterAdmissionDate,
+  encounterAttendingName,
+  encounterDepartmentName,
+  encounterDischargeDate,
+  encounterDischargeDisposition,
+  encounterStayDays,
+} from "../fhir/encounterHelpers";
+import { today } from "../lib/dates";
 import { RichTextView } from "./RichTextView";
 import { ResponseSchemaImages } from "./SchemaImageGallery";
 
@@ -50,6 +63,8 @@ export function ClinicalNoteDetailPanel({
         </dl>
       </fieldset>
 
+      {isDischargeSummary(note) && <AdmissionInfo encounterId={dischargeSummaryEncounterId(note)} />}
+
       {noteBodySections(note).map((section, index) => {
         // テンプレート由来のセクションは、記入内容のシェーマ画像を本文の下に並べる
         // (カルテのカードと同じ見せ方)。
@@ -69,5 +84,33 @@ export function ClinicalNoteDetailPanel({
 
       {children}
     </div>
+  );
+}
+
+/** 退院時サマリーの対象の入院(入院日・退院日・在院日数・診療科・主治医・転帰)。 */
+function AdmissionInfo({ encounterId }: { encounterId: string }) {
+  const encounter = useEncounter(encounterId || undefined);
+  const e = encounter.data;
+  if (!e) return null;
+  const discharge = encounterDischargeDate(e);
+  const stayDays = encounterStayDays(e, today());
+  return (
+    <fieldset>
+      <legend>入院情報</legend>
+      <dl className="prescription-detail__common">
+        <dt>入院日</dt>
+        <dd>{encounterAdmissionDate(e)}</dd>
+        <dt>退院日</dt>
+        <dd>{discharge === "-" ? "入院中" : discharge}</dd>
+        <dt>在院日数</dt>
+        <dd>{stayDays != null ? `${stayDays} 日` : "-"}</dd>
+        <dt>診療科</dt>
+        <dd>{encounterDepartmentName(e)}</dd>
+        <dt>主治医</dt>
+        <dd>{encounterAttendingName(e) || "-"}</dd>
+        <dt>転帰</dt>
+        <dd>{dischargeDispositionDisplay(encounterDischargeDisposition(e)) || "-"}</dd>
+      </dl>
+    </fieldset>
   );
 }

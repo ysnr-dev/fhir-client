@@ -70,6 +70,15 @@ class FacilitySettings < ApplicationRecord
   # (db/seed_data/water_balance_items.csv。選んである施設は上書きしない)。
   DEFAULT_WATER_BALANCE = { "in" => [], "out" => [] }.freeze
 
+  # 文書作成の督促。退院時サマリーは退院日からこの日数を期限にして、退院の時点で
+  # 主治医あての通知 Task を作る(期限は Task に焼き付くので、ここを変えても
+  # 作成済みの通知は動かない)。
+  DEFAULT_DOCUMENT_REMINDER = {
+    "discharge_summary_days" => 14
+  }.freeze
+
+  DOCUMENT_REMINDER_DAY_KEYS = %w[discharge_summary_days].freeze
+
   WATER_BALANCE_KEYS = %w[in out].freeze
   # MEDIS の管理番号は 8 桁の数字。
   MANAGE_NO_PATTERN = /\A\d{8}\z/
@@ -81,6 +90,7 @@ class FacilitySettings < ApplicationRecord
   validate :vital_thresholds_shape
   validate :water_balance_shape
   validate :medication_schedule_shape
+  validate :document_reminder_shape
 
   # 自院の Organization.id。未設定なら nil(呼び出し側は推測に倒す)。
   def self_organization_id
@@ -118,6 +128,15 @@ class FacilitySettings < ApplicationRecord
   def medication_schedule_with_defaults
     stored = medication_schedule.is_a?(Hash) ? medication_schedule : {}
     DEFAULT_MEDICATION_SCHEDULE.to_h do |key, default|
+      value = stored[key]
+      [key, value.nil? || value == "" ? default : value]
+    end
+  end
+
+  # 欠けたキーを既定値で埋めた文書作成の督促。
+  def document_reminder_with_defaults
+    stored = document_reminder.is_a?(Hash) ? document_reminder : {}
+    DEFAULT_DOCUMENT_REMINDER.to_h do |key, default|
       value = stored[key]
       [key, value.nil? || value == "" ? default : value]
     end
@@ -161,6 +180,10 @@ class FacilitySettings < ApplicationRecord
     def medication_schedule
       current.medication_schedule_with_defaults
     end
+
+    def document_reminder
+      current.document_reminder_with_defaults
+    end
   end
 
   private
@@ -182,6 +205,23 @@ class FacilitySettings < ApplicationRecord
         end
       else
         errors.add(:medication_schedule, "#{key} は対象外の項目です")
+      end
+    end
+  end
+
+  def document_reminder_shape
+    return if document_reminder.blank?
+    unless document_reminder.is_a?(Hash)
+      return errors.add(:document_reminder, "は連想配列で指定してください")
+    end
+
+    document_reminder.each do |key, value|
+      if DOCUMENT_REMINDER_DAY_KEYS.include?(key)
+        unless value.is_a?(Integer) && value >= 0
+          errors.add(:document_reminder, "#{key} は 0 以上の日数で指定してください")
+        end
+      else
+        errors.add(:document_reminder, "#{key} は対象外の項目です")
       end
     end
   end

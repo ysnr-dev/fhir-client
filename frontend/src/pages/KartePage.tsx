@@ -22,6 +22,7 @@ import {
   useUpdateOutpatientExam,
   type KarteProblemFilter,
 } from "../api/queries";
+import { isDischargeSummary } from "../fhir/clinicalNoteHelpers";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
 import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
@@ -62,8 +63,10 @@ import {
   KARTE_DETAIL_PARAM,
   KARTE_LAB_GROUP,
   KARTE_OTHER_TABS,
+  KARTE_OPEN_PARAM,
   KARTE_PROBLEM_PARAM,
   KARTE_TAB_PARAM,
+  parseKarteOpen,
   KARTE_TABS,
   KARTE_VIEW_PARAM,
   formatKarteCard,
@@ -210,6 +213,17 @@ export function KartePage() {
   }, [updateParams]);
 
   const [pane, setPane] = useState<KartePaneState>({ kind: "empty" });
+
+  // 通知・入院患者一覧のリンクから「この入院の退院時サマリー」を右ペインで始める。
+  // 一回限りの引数なので、読んだら URL から消す(フォームを URL に載せない方針)。
+  const openTarget = parseKarteOpen(searchParams.get(KARTE_OPEN_PARAM));
+  useEffect(() => {
+    if (!openTarget) return;
+    setPane({ kind: "summary-create", encounterId: openTarget.encounterId });
+    updateParams((params) => params.delete(KARTE_OPEN_PARAM));
+    // openTarget は URL から消した時点で null になる(同じ対象で再発火しない)。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openTarget?.encounterId]);
   const [mode, setMode] = useState<KarteLeftPaneMode>(readLeftPaneMode);
   const [topRatio, setTopRatio] = useState(readTopRatio);
   const [leftWidthRatio, setLeftWidthRatio] = useState(readLeftWidthRatio);
@@ -526,7 +540,13 @@ export function KartePage() {
 
   // 3 つのハンドラはカード(memo)に渡すので同一性を保つ。setPane は安定している。
   const handleEdit = useCallback((item: KarteTimelineItem) => {
-    if (item.kind === "note") setPane({ kind: "note-edit", noteId: item.id });
+    if (item.kind === "note") {
+      setPane(
+        isDischargeSummary(item.note)
+          ? { kind: "summary-edit", noteId: item.id }
+          : { kind: "note-edit", noteId: item.id },
+      );
+    }
     else if (item.kind === "prescription") setPane({ kind: "prescription-edit", srId: item.id });
     else if (item.kind === "injection") setPane({ kind: "injection-edit", srId: item.id });
     else if (item.kind === "lab-order") setPane({ kind: "lab-order-edit", srId: item.id });
@@ -590,7 +610,7 @@ export function KartePage() {
     (item: KarteTimelineItem) => {
       setPane((current) => {
         const openId =
-          current.kind === "note-edit"
+          current.kind === "note-edit" || current.kind === "summary-edit"
             ? current.noteId
             : current.kind === "prescription-edit" ||
                 current.kind === "injection-edit" ||
