@@ -11,7 +11,7 @@ import {
 } from "./labPanicHelpers";
 import { buildCancelledNotificationTask } from "./notificationHelpers";
 import { calculateAge } from "./patientHelpers";
-import { resultReviewTaskEntries } from "./resultReviewHelpers";
+import { urgentAwareReviewTaskEntries, urgentNotificationOpenAfter } from "./resultReviewHelpers";
 import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 
 // ローカル拡張・コードシステム。正式な CodeSystem が定義されていない(または
@@ -735,6 +735,14 @@ function buildLabResultTransactionBundle(
     })
     .map((s) => ({ request: { method: "DELETE", url: `Specimen/${s.id}` } }));
 
+  const panicEntries = panicTaskEntries(
+    values,
+    patientId,
+    reportReference,
+    notifications?.owner,
+    notifications?.existingPanicTask,
+  );
+
   return {
     resourceType: "Bundle",
     type: "transaction",
@@ -750,14 +758,8 @@ function buildLabResultTransactionBundle(
       ...observationEntries,
       ...removedObservationEntries,
       ...removedSpecimenEntries,
-      ...panicTaskEntries(
-        values,
-        patientId,
-        reportReference,
-        notifications?.owner,
-        notifications?.existingPanicTask,
-      ),
-      ...resultReviewTaskEntries(
+      ...panicEntries,
+      ...urgentAwareReviewTaskEntries(
         {
           reportReference,
           patientId,
@@ -770,6 +772,8 @@ function buildLabResultTransactionBundle(
         // 中間報告のうちは読ませない(値が変わりうる)。最終報告と、その後の訂正で出す。
         !isPreliminaryReport(status),
         notifications?.existingReviewTask,
+        // 緊急異常値の通知が未確認で残るなら、検査結果確認は出さない(確認で既読も残す)。
+        urgentNotificationOpenAfter(panicEntries, notifications?.existingPanicTask),
       ),
     ],
   };

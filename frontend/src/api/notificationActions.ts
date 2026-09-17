@@ -6,9 +6,16 @@ import { ORDER_APPROVAL_TASK_CODE } from "../fhir/orderApprovalTaskHelpers";
 import {
   approvalBundleEntry,
   buildApprovedProvenance,
+  buildReviewProvenance,
   isVerifiedProvenance,
+  reviewProvenanceEntry,
   type OrderEnterer,
 } from "../fhir/provenanceHelpers";
+import {
+  RESULT_REVIEW_NOTE,
+  RESULT_REVIEW_TASK_CODE,
+  isReviewableReportStatus,
+} from "../fhir/resultReviewHelpers";
 import { TASK_CODE_SYSTEM } from "../fhir/taskHelpers";
 import { searchResource } from "./fhirClient";
 
@@ -68,4 +75,68 @@ export async function approvalTransactionEntries(
   }
 
   return entries;
+}
+
+// ---- 緊急の通知(緊急異常値・重要所見)の確認 ----
+
+/**
+ * 緊急の通知を確認する transaction entry。
+ *
+ * 緊急の通知が未確認の間は検査結果確認の通知を作らない(resultReviewHelpers の
+ * urgentAwareReviewTaskEntries)ので、確認したときに結果そのものを読んだことも残す。
+ * レポートが最終報告(訂正を含む)なら既読の来歴を書き、未確認の検査結果確認があれば
+ * 対応済みにする。暫定報告のうちは既読を残さない(内容が変わりうるため)。
+ */
+export async function urgentConfirmationEntries(
+  rows: { task: fhir4.Task; reportId: string }[],
+  actor: OrderEnterer,
+  noteText: string,
+): Promise<fhir4.BundleEntry[]> {
+  const reportIds = Array.from(new Set(rows.map((row) => row.reportId).filter(Boolean)));
+  const [reports, reviewTasks] = await Promise.all([
+    fetchReports(reportIds),
+    fetchOpenReviewTasks(reportIds),
+  ]);
+
+  const entries: fhir4.BundleEntry[] = rows.map((row) =>
+    completeNotificationEntry(buildCompletedNotificationTask(row.task, actor, noteText)),
+  );
+
+  for (const report of reports) {
+    if (!report.id || !isReviewableReportStatus(report.status)) continue;
+    const reference = `DiagnosticReport/${report.id}`;
+    entries.push(reviewProvenanceEntry(buildReviewProvenance(reference, actor)));
+    for (const task of reviewTasks.filter((t) => t.focus?.reference === reference)) {
+      entries.push(
+        completeNotificationEntry(buildCompletedNotificationTask(task, actor, RESULT_REVIEW_NOTE)),
+      );
+    }
+  }
+  return entries;
+}
+
+async function fetchReports(reportIds: string[]): Promise<fhir4.DiagnosticReport[]> {
+  if (reportIds.length === 0) return [];
+  const params = new URLSearchParams();
+  params.set("_id", reportIds.join(","));
+  params.set("_count", "100");
+  const { data } = await searchResource<fhir4.DiagnosticReport>("DiagnosticReport", params);
+  return (data.entry ?? [])
+    .map((entry) => entry.resource)
+    .filter(
+      (resource): resource is fhir4.DiagnosticReport => resource?.resourceType === "DiagnosticReport",
+    );
+}
+
+async function fetchOpenReviewTasks(reportIds: string[]): Promise<fhir4.Task[]> {
+  if (reportIds.length === 0) return [];
+  const params = new URLSearchParams();
+  params.set("focus", reportIds.map((id) => `DiagnosticReport/${id}`).join(","));
+  params.set("code", `${TASK_CODE_SYSTEM}|${RESULT_REVIEW_TASK_CODE.code}`);
+  params.set("status", "requested");
+  params.set("_count", "100");
+  const { data } = await searchResource<fhir4.Task>("Task", params);
+  return (data.entry ?? [])
+    .map((entry) => entry.resource)
+    .filter((resource): resource is fhir4.Task => resource?.resourceType === "Task");
 }

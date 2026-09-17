@@ -98,7 +98,7 @@ import {
   type LabResultSummary,
   type SpecimenRef,
 } from "../fhir/labResultHelpers";
-import { LAB_PANIC_TASK_CODE } from "../fhir/labPanicHelpers";
+import { LAB_PANIC_NOTE, LAB_PANIC_TASK_CODE } from "../fhir/labPanicHelpers";
 import {
   ALERT_PRIORITY_PARAM,
   buildCompletedNotificationTask,
@@ -109,6 +109,7 @@ import {
   splitNotificationBundle,
 } from "../fhir/notificationHelpers";
 import {
+  RAD_CRITICAL_FINDING_NOTE,
   RAD_CRITICAL_FINDING_TASK_CODE,
   radCriticalFindingEntries,
 } from "../fhir/radCriticalFindingHelpers";
@@ -122,7 +123,10 @@ import {
 import {
   RESULT_REVIEW_NOTE,
   RESULT_REVIEW_TASK_CODE,
+  isReviewableReportStatus,
   resultReviewTaskEntries,
+  urgentAwareReviewTaskEntries,
+  urgentNotificationOpenAfter,
   type ReviewReportKind,
 } from "../fhir/resultReviewHelpers";
 import {
@@ -3738,8 +3742,9 @@ const RAD_REPORT_TASK_CODES = [RESULT_REVIEW_TASK_CODE.code, RAD_CRITICAL_FINDIN
 /**
  * 読影レポート保存の Bundle に通知を足す。宛先(依頼医)と既存の通知 2 種はここで引く。
  *
- * - 検査結果確認: 最終報告・訂正報告になったとき(暫定報告では出さない)
  * - 重要所見: 要点があれば暫定報告でも出す。要点の変更で未確認に戻し、外したら取り下げる
+ * - 検査結果確認: 最終報告・訂正報告になったとき(暫定報告では出さない)。ただし重要所見が
+ *   未確認で残る間は出さず、未確認のものは取り下げる(重要所見の確認で既読も残すため)
  */
 async function withRadReportTasks(bundle: fhir4.Bundle): Promise<fhir4.Bundle> {
   const entry = bundle.entry ?? [];
@@ -3762,26 +3767,22 @@ async function withRadReportTasks(bundle: fhir4.Bundle): Promise<fhir4.Bundle> {
   const exam = report.code?.text ?? "";
   const basedOn = orderReference ? [{ reference: orderReference }] : undefined;
 
+  const existingCritical = tasks.get(RAD_CRITICAL_FINDING_TASK_CODE.code);
+  const criticalEntries = radCriticalFindingEntries(
+    { reportReference: reference, patientId, owner, date, exam, point: radCriticalFindingOf(report), basedOn },
+    existingCritical,
+  );
+
   return {
     ...bundle,
     entry: [
       ...entry,
-      ...resultReviewTaskEntries(
+      ...criticalEntries,
+      ...urgentAwareReviewTaskEntries(
         { reportReference: reference, patientId, owner, kind: "rad", date, summary: exam, basedOn },
-        report.status !== "preliminary",
+        isReviewableReportStatus(report.status),
         tasks.get(RESULT_REVIEW_TASK_CODE.code),
-      ),
-      ...radCriticalFindingEntries(
-        {
-          reportReference: reference,
-          patientId,
-          owner,
-          date,
-          exam,
-          point: radCriticalFindingOf(report),
-          basedOn,
-        },
-        tasks.get(RAD_CRITICAL_FINDING_TASK_CODE.code),
+        urgentNotificationOpenAfter(criticalEntries, existingCritical),
       ),
     ],
   };
@@ -4921,6 +4922,9 @@ export function useUnreviewedReportIds(patientId: string | undefined) {
 /**
  * 検査結果を確認する。来歴(正本)を作り、その結果あての通知が未対応なら同じ transaction で
  * 対応済みにする。宛先でない医師が先に読むこともあるので、確認できる人は限らない。
+ *
+ * 結果を読めば緊急の通知(緊急異常値・重要所見)の内容も読んだことになるので、それらが
+ * 未確認なら一緒に確認する(緊急の通知が出ている間は検査結果確認の通知を作らないため)。
  */
 export function useMarkResultReviewed() {
   const queryClient = useQueryClient();
@@ -4928,16 +4932,18 @@ export function useMarkResultReviewed() {
   return useMutation({
     mutationFn: async (reportId: string) => {
       if (!enterer) throw new Error("医療従事者に紐付いたアカウントでログインしてください");
-      const task = await fetchReportTask(reportId, RESULT_REVIEW_TASK_CODE.code);
+      const notes: Record<string, string> = {
+        [RESULT_REVIEW_TASK_CODE.code]: RESULT_REVIEW_NOTE,
+        [LAB_PANIC_TASK_CODE.code]: LAB_PANIC_NOTE,
+        [RAD_CRITICAL_FINDING_TASK_CODE.code]: RAD_CRITICAL_FINDING_NOTE,
+      };
+      const tasks = await fetchReportTasks(reportId, Object.keys(notes));
       const entry: fhir4.BundleEntry[] = [
         reviewProvenanceEntry(buildReviewProvenance(`DiagnosticReport/${reportId}`, enterer)),
       ];
-      if (task && task.status === "requested") {
-        entry.push(
-          completeNotificationEntry(
-            buildCompletedNotificationTask(task, enterer, RESULT_REVIEW_NOTE),
-          ),
-        );
+      for (const [code, task] of tasks) {
+        if (task.status !== "requested") continue;
+        entry.push(completeNotificationEntry(buildCompletedNotificationTask(task, enterer, notes[code])));
       }
       return postBundle({ resourceType: "Bundle", type: "transaction", entry });
     },

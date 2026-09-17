@@ -1,6 +1,14 @@
 import type { ComponentType } from "react";
-import { approvalTransactionEntries } from "../../api/notificationActions";
-import { LAB_PANIC_TASK_CODE, panicRowOf, type PanicTaskRow } from "../../fhir/labPanicHelpers";
+import {
+  approvalTransactionEntries,
+  urgentConfirmationEntries,
+} from "../../api/notificationActions";
+import {
+  LAB_PANIC_NOTE,
+  LAB_PANIC_TASK_CODE,
+  panicRowOf,
+  type PanicTaskRow,
+} from "../../fhir/labPanicHelpers";
 import {
   buildCompletedNotificationTask,
   completeNotificationEntry,
@@ -88,7 +96,9 @@ const labPanicKind = defineNotificationKind<PanicTaskRow>({
     if (row.reportId) params.set("view", row.reportId);
     return `/patients/${row.patientId}/karte?${params.toString()}`;
   },
-  action: { label: "確認", noteText: "緊急異常値を確認しました。" },
+  action: { label: "確認", noteText: LAB_PANIC_NOTE },
+  // 緊急異常値が出ている間は検査結果確認を出さないので、最終報告なら既読もここで残す。
+  actionEntries: (rows, actor) => urgentConfirmationEntries(rows, actor, LAB_PANIC_NOTE),
 });
 
 const orderApprovalKind = defineNotificationKind<OrderApprovalRow>({
@@ -166,6 +176,8 @@ const radCriticalFindingKind = defineNotificationKind<RadCriticalFindingRow>({
     return `/patients/${row.patientId}/karte${query ? `?${query}` : ""}`;
   },
   action: { label: "確認", noteText: RAD_CRITICAL_FINDING_NOTE },
+  // 重要所見が出ている間は検査結果確認を出さないので、最終報告なら既読もここで残す。
+  actionEntries: (rows, actor) => urgentConfirmationEntries(rows, actor, RAD_CRITICAL_FINDING_NOTE),
 });
 
 const pathwayVarianceKind = defineNotificationKind<PathwayVarianceRow>({

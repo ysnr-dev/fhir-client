@@ -1,4 +1,5 @@
 import {
+  buildCancelledNotificationTask,
   buildNotificationTask,
   hasTaskCode,
   notificationTaskEntry,
@@ -19,6 +20,10 @@ import {
 //
 // 通知を作るのは**最終報告になったときだけ**。中間報告は値が変わりうるので読ませない。
 // 訂正報告で出し直すときは同じ通知を書き換えて未確認に戻す。
+//
+// 同じ結果に緊急の通知(検体検査の緊急異常値・読影の重要所見)が未確認で出ている間は、
+// この通知を作らない(urgentAwareReviewTaskEntries)。宛先が同じ依頼医で、2 回確認させる
+// ことになるため。緊急の通知を確認するときに、最終報告なら既読の来歴も一緒に残す。
 
 export const RESULT_REVIEW_TASK_CODE = { code: "result-review", display: "検査結果確認" };
 
@@ -100,6 +105,43 @@ export function resultReviewTaskEntries(
 ): fhir4.BundleEntry[] {
   if (!reviewable) return [];
   return [notificationTaskEntry(buildResultReviewTask(input, existingTask), existingTask?.id)];
+}
+
+/** 既読を記録できる報告区分か。中間報告(暫定報告)は値・所見が変わりうるので読ませない。 */
+export function isReviewableReportStatus(status: string | undefined): boolean {
+  return Boolean(status) && status !== "preliminary" && status !== "registered" && status !== "partial";
+}
+
+/**
+ * 保存後に、緊急の通知(緊急異常値・重要所見)が未確認で残るか。
+ * 同じ transaction で書く通知があればその状態、無ければ既存の通知の状態で決まる。
+ */
+export function urgentNotificationOpenAfter(
+  urgentEntries: fhir4.BundleEntry[],
+  existingUrgentTask: fhir4.Task | undefined,
+): boolean {
+  const written = urgentEntries
+    .map((entry) => entry.resource)
+    .find((resource): resource is fhir4.Task => resource?.resourceType === "Task");
+  return (written ?? existingUrgentTask)?.status === "requested";
+}
+
+/**
+ * 緊急の通知と並べるときの検査結果確認の entry。緊急の通知が未確認で残るなら作らず、
+ * 未確認の検査結果確認があれば取り下げる(1 つの結果に通知を 1 件にする)。
+ * 緊急の通知が無い・確認済みなら、通常どおり resultReviewTaskEntries に任せる。
+ */
+export function urgentAwareReviewTaskEntries(
+  input: ResultReviewTaskInput,
+  reviewable: boolean,
+  existingReviewTask: fhir4.Task | undefined,
+  urgentOpen: boolean,
+): fhir4.BundleEntry[] {
+  if (!urgentOpen) return resultReviewTaskEntries(input, reviewable, existingReviewTask);
+  if (existingReviewTask?.status !== "requested") return [];
+  return [
+    notificationTaskEntry(buildCancelledNotificationTask(existingReviewTask), existingReviewTask.id),
+  ];
 }
 
 export interface ResultReviewRow extends NotificationRowBase {
