@@ -820,6 +820,7 @@ export function KartePage() {
         <KartePathwayTab
           {...props}
           onOpenOrder={(kind, srId) => setPane({ kind: `${kind}-edit`, srId } as KartePaneState)}
+          onApplyPhase={(applyId, phaseKey) => setPane({ kind: "pathway-phase", applyId, phaseKey })}
         />
       );
     }

@@ -1437,7 +1437,7 @@ end
 
 # クリニカルパス(施設パス)のサンプル(db/seed_data/pathways/*.json、1 ファイル = 1 パス)。
 #
-# 4 階層(病日 → OAT ユニット → 観察項目・タスク)とオーダー雛形の jsonb を CSV で表すのは
+# フェーズと分岐、4 階層(病日 → OAT ユニット → 観察項目・タスク)とオーダー雛形の jsonb を CSV で表すのは
 # 無理があるので、API の payload と同じ形の JSON で置く(docs/clinical-pathway-design.md)。
 # レジメンと同じく**開発とデモのためのサンプル**で、状態を「下書き(draft)」で入れる。
 # 既存のパス(同じ pathway_code)は上書きしない。uuid キーは JSON の値をそのまま使う。
@@ -1477,9 +1477,26 @@ if pathway_files.any?
           management_number: item["management_number"].to_s, name: item["name"].to_s, icd10: item["icd10"].presence
         )
       end
+      # フェーズを書いていないパスは、全部の病日が入る既定のフェーズを 1 つ作る。
+      phases = Array(data["phases"]).presence || [{}]
+      phase_keys = phases.each_with_index.map do |phase_data, phase_index|
+        phase = Master::PathwayPhase.create!(
+          pathway_code: code, display_order: phase_index + 1,
+          phase_key: phase_data["phase_key"].presence || SecureRandom.uuid,
+          name: phase_data["name"].presence, note: phase_data["note"].presence
+        )
+        Array(phase_data["branches"]).each_with_index do |branch_data, branch_index|
+          Master::PathwayPhaseBranch.create!(
+            pathway_code: code, from_phase_key: phase.phase_key, display_order: branch_index + 1,
+            to_phase_key: branch_data["to_phase_key"].presence, criteria: branch_data["criteria"].presence
+          )
+        end
+        phase.phase_key
+      end
       Array(data["events"]).each_with_index do |event_data, event_index|
         event = Master::PathwayEvent.create!(
           pathway_code: code, display_order: event_index + 1,
+          phase_key: event_data["phase_key"].presence || phase_keys.first,
           elapsed_days: event_data["elapsed_days"], path_step: event_data["path_step"] || 1,
           path_step_name: event_data["path_step_name"].presence, title: event_data["title"].presence,
           note: event_data["note"].presence

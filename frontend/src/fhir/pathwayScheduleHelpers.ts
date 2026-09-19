@@ -1,6 +1,19 @@
 import { addDays, diffDays } from "../lib/dates";
-import { isMealServiceRequest, MEAL_ORDER_END_EXT_URL } from "./mealOrderHelpers";
-import { isNursingServiceRequest, NURSING_ORDER_END_EXT_URL } from "./nursingOrderHelpers";
+import {
+  buildMealOrderCloseEntry,
+  DEFAULT_MEAL_TIMING,
+  isMealServiceRequest,
+  MEAL_ORDER_END_EXT_URL,
+  mealOrderNeedsStop,
+  previousMealPoint,
+  type MealTiming,
+} from "./mealOrderHelpers";
+import {
+  buildNursingOrderCloseEntry,
+  isNursingServiceRequest,
+  NURSING_ORDER_END_EXT_URL,
+  nursingOrderNeedsStop,
+} from "./nursingOrderHelpers";
 import { PATHWAY_EXT, type PathwayApplicationRecord, type PathwayEventRecord } from "./pathwayApplyHelpers";
 import { orderHasPerformed, type OrderProgress } from "./orderProgressHelpers";
 import type { PathwayEvaluationState } from "./pathwayEvaluationHelpers";
@@ -230,6 +243,57 @@ export function buildPathwayShiftBundle(ctx: PathwayRecordContext, plan: Pathway
   return { resourceType: "Bundle", type: "transaction", entry };
 }
 
+// ---- フェーズの境界 ----
+
+/** 次のフェーズの適用で終える、前のフェーズから続いている食事・安静度。 */
+export interface PathwayPhaseClosing {
+  order: fhir4.ServiceRequest;
+  taskName: string;
+  /** 終える日(食事は endTiming の食事まで)。 */
+  endDate: string;
+  endTiming?: MealTiming;
+}
+
+/**
+ * 次のフェーズが食事・安静度を出すとき、前のフェーズから続いているもの(終わりを決めていないか、
+ * 新しい開始より後まで続くもの)を新しい開始の直前で終える。同時に 2 つの食事・安静度が有効に
+ * ならないようにする、フェーズの中の規則(pathwayOrderEnd)と同じ考え方。
+ * 終わった・取り下げたオーダーは触らない。
+ */
+export function planPhaseOrderClosings(
+  application: PathwayApplicationRecord,
+  orders: Map<string, fhir4.ServiceRequest>,
+  starts: { meal: { date: string; timing?: MealTiming } | null; activity: { date: string } | null },
+): PathwayPhaseClosing[] {
+  const closings = new Map<string, PathwayPhaseClosing>();
+  for (const event of application.events) {
+    for (const task of eventTasks(event)) {
+      for (const id of task.orderIds) {
+        const order = orders.get(id);
+        if (!order || closings.has(id) || SETTLED_ORDER_STATUSES.has(order.status)) continue;
+        if (isMealServiceRequest(order) && starts.meal) {
+          const point = previousMealPoint(starts.meal.date, starts.meal.timing ?? DEFAULT_MEAL_TIMING);
+          if (orderStartDate(order) > point.date || !mealOrderNeedsStop(order, point.date, point.timing)) continue;
+          closings.set(id, { order, taskName: task.name, endDate: point.date, endTiming: point.timing });
+        } else if (isNursingServiceRequest(order) && task.categoryLv1 === "AL" && starts.activity) {
+          const endDate = addDays(starts.activity.date, -1);
+          if (orderStartDate(order) > endDate || !nursingOrderNeedsStop(order, endDate)) continue;
+          closings.set(id, { order, taskName: task.name, endDate });
+        }
+      }
+    }
+  }
+  return [...closings.values()];
+}
+
+export function phaseClosingEntries(closings: PathwayPhaseClosing[]): fhir4.BundleEntry[] {
+  return closings.map((c) =>
+    c.endTiming
+      ? buildMealOrderCloseEntry(c.order, c.endDate, c.endTiming)
+      : buildNursingOrderCloseEntry(c.order, c.endDate),
+  );
+}
+
 // ---- 適用の取り消し ----
 
 export interface PathwayCancelPlan {
@@ -250,10 +314,22 @@ const PROGRESSED_TASK_STATUSES = new Set(["accepted", "in-progress", "on-hold", 
  * 誤って適用したパスの取り消し計画。［決定］取り消せるのは、まだ何も記録していない進行中の適用だけ
  * (評価・実績・実施済みのタスク・看護指示の実施記録・終わったオーダー・部門が受け付けたオーダーが無い)。
  * 記録が 1 つでもあれば、取り消しではなく中止にする(記録を消さない)。
+ *
+ * phaseKey を渡すとそのフェーズだけを取り消す(選び間違えた分岐を戻す)。対象は最後に適用したフェーズに
+ * 限り、記録の有無もそのフェーズの病日だけで見る。適用の CarePlan と前のフェーズは残す。前のフェーズの
+ * 食事・安静度に入れた終了は戻さない(次のフェーズを適用し直せば、また直前で終える)。
  */
-export function planPathwayCancel(ctx: PathwayRecordContext, departmentTasks: fhir4.Task[]): PathwayCancelPlan {
+export function planPathwayCancel(
+  ctx: PathwayRecordContext,
+  departmentTasks: fhir4.Task[],
+  phaseKey?: string,
+): PathwayCancelPlan {
   const blockers: string[] = [];
-  const events = sortedEvents(ctx.application);
+  const allEvents = sortedEvents(ctx.application);
+  const events = phaseKey === undefined ? allEvents : allEvents.filter((e) => e.phaseKey === phaseKey);
+  if (phaseKey !== undefined && (allEvents.at(-1)?.phaseKey !== phaseKey || events.length === allEvents.length)) {
+    blockers.push("取り消せるのは、最後に適用した 2 つ目以降のフェーズだけです");
+  }
   if (ctx.application.status !== "active") blockers.push("進行中のパスだけ取り消せます(終了・中止の記録を先に取り消してください)");
   for (const event of events) {
     if (eventHasEvaluation(event, ctx.evaluation)) blockers.push(`${eventLabel(event)} に評価の記録があります`);
@@ -285,14 +361,24 @@ export function planPathwayCancel(ctx: PathwayRecordContext, departmentTasks: fh
     }
   }
 
-  const carePlanIds = [...ctx.carePlans.keys()];
+  // フェーズだけのときは、その病日と、病日を partOf に持つ子孫(OAT ユニット・観察項目)。
+  const eventIds = new Set(events.map((e) => e.id));
+  const carePlans = new Map(
+    [...ctx.carePlans].filter(
+      ([id, cp]) =>
+        phaseKey === undefined ||
+        eventIds.has(id) ||
+        cp.partOf?.some((ref) => eventIds.has(ref.reference?.replace(/^CarePlan\//, "") ?? "")),
+    ),
+  );
+  const carePlanIds = [...carePlans.keys()];
   const procedureIds = [...ctx.procedures.values()]
-    .filter((p) => p.basedOn?.some((b) => ctx.carePlans.has(b.reference?.replace(/^CarePlan\//, "") ?? "")))
+    .filter((p) => p.basedOn?.some((b) => carePlans.has(b.reference?.replace(/^CarePlan\//, "") ?? "")))
     .map((p) => p.id)
     .filter((id): id is string => Boolean(id));
   const goalIds = [
     ...new Set(
-      [...ctx.carePlans.values()].flatMap((cp) => (cp.goal ?? []).map((g) => g.reference?.replace(/^Goal\//, "") ?? "")),
+      [...carePlans.values()].flatMap((cp) => (cp.goal ?? []).map((g) => g.reference?.replace(/^Goal\//, "") ?? "")),
     ),
   ].filter(Boolean);
   return { blockers: [...new Set(blockers)], orders, carePlanIds, procedureIds, goalIds };

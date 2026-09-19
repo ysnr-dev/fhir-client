@@ -31,7 +31,7 @@ import {
 import { VitalCreatePanel, VitalEditPanel } from "./VitalPanels";
 import { PlannedAdmissionCreatePanel } from "./PlannedAdmissionPanel";
 import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
-import { PathwayApplyPanel } from "./PathwayApplyPanel";
+import { PathwayApplyPanel, PathwayPhasePanel } from "./PathwayApplyPanel";
 import { RegimenApplyPanel } from "./RegimenApplyPanel";
 import { RegimenCycleLoader, RegimenDayPanel, RegimenHeaderPanel } from "./RegimenPanels";
 import { RegimenAdverseEventPanel } from "./RegimenAdverseEventPanel";
@@ -97,6 +97,7 @@ export type KartePaneState =
   | { kind: "regimen-apply"; regimenId?: number; problem?: ProblemRef }
   // クリニカルパスの適用。pathwayId 未指定はパス選択の状態。
   | { kind: "pathway-apply"; pathwayId?: number }
+  | { kind: "pathway-phase"; applyId: string; phaseKey: string }
   // パスシートの 1 セル(病日 × OAT ユニット)の評価入力。unitId は OAT ユニットの CarePlan。
   // 適用済みレジメンへの次クールの登録。regimenSrId はヘッダ ServiceRequest。
   | { kind: "regimen-cycle"; regimenSrId: string }
@@ -155,6 +156,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "order-set": "セット適用",
   "regimen-apply": "化学療法(レジメン適用)",
   "pathway-apply": "クリニカルパス(適用)",
+  "pathway-phase": "クリニカルパス(次のフェーズ)",
   "regimen-cycle": "化学療法(クール登録)",
   "regimen-day": "化学療法(投与日)",
   "regimen-adverse": "化学療法(有害事象)",
@@ -199,6 +201,8 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.regimenId ?? ""}:${state.problem?.conditionId ?? ""}`;
     case "pathway-apply":
       return `${state.kind}:${state.pathwayId ?? ""}`;
+    case "pathway-phase":
+      return `${state.kind}:${state.applyId}:${state.phaseKey}`;
     case "regimen-cycle":
       return `${state.kind}:${state.regimenSrId}`;
     case "regimen-day":
@@ -483,6 +487,15 @@ function PaneContent({
           pathwayId={state.pathwayId}
           onSelectPathway={(pathwayId) => onStateChange({ ...state, pathwayId })}
           onBack={() => onStateChange({ ...state, pathwayId: undefined })}
+          onSaved={onSaved}
+        />
+      );
+    case "pathway-phase":
+      return (
+        <PathwayPhasePanel
+          patientId={patientId}
+          applyId={state.applyId}
+          phaseKey={state.phaseKey}
           onSaved={onSaved}
         />
       );

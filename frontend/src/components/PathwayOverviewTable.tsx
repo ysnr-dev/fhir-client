@@ -21,6 +21,15 @@ export function PathwayOverviewTable({
 }) {
   if (rows.columns.length === 0) return null;
 
+  // 列は同じフェーズが隣り合って並ぶ。フェーズが 2 つ以上のときだけ見出しの上に 1 段足す。
+  const phaseGroups: { key: string; label: string; span: number }[] = [];
+  for (const column of rows.columns) {
+    const last = phaseGroups[phaseGroups.length - 1];
+    if (last && last.key === column.phaseKey) last.span += 1;
+    else phaseGroups.push({ key: column.phaseKey, label: column.phaseLabel, span: 1 });
+  }
+  const showPhases = phaseGroups.some((g) => g.label !== "");
+
   function renderRow<R extends OverviewRow>(
     key: string,
     row: R,
@@ -73,6 +82,16 @@ export function PathwayOverviewTable({
       <div className="pathway-overview__wrap">
         <table className="master-search__table regimen-day-table pathway-overview">
           <thead>
+            {showPhases && (
+              <tr>
+                <th></th>
+                {phaseGroups.map((group) => (
+                  <th key={group.key} colSpan={group.span} className="pathway-overview__phase">
+                    {group.label}
+                  </th>
+                ))}
+              </tr>
+            )}
             <tr>
               <th></th>
               {rows.columns.map((column) => (

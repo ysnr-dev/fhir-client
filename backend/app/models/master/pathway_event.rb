@@ -10,11 +10,12 @@ module Master
     has_many :oat_units, -> { in_display_order },
              class_name: "Master::PathwayOatUnit", foreign_key: :event_id
 
-    validates :pathway_code, presence: true
+    validates :pathway_code, :phase_key, presence: true
     validates :elapsed_days, numericality: { only_integer: true, other_than: 0 }
-    # 1 行ずつ作るときの重なりの検査。まとめて置換するときは送られてきた配列の中で見る
+    # 1 行ずつ作るときの重なりの検査。分岐先のフェーズどうしは同じ病日から始まるので、
+    # 重なってはいけないのはフェーズの中だけ。まとめて置換するときは送られてきた配列の中で見る
     # (PathwaysController#replace_children)。DB の一意インデックスが最後の砦。
-    validates :elapsed_days, uniqueness: { scope: %i[pathway_code path_step], message: "が重複しています" },
+    validates :elapsed_days, uniqueness: { scope: %i[pathway_code phase_key path_step], message: "が重複しています" },
                              on: :create
     validates :path_step, numericality: { only_integer: true, greater_than_or_equal_to: 1 }
     validates :allowable_condition_type, inclusion: { in: ALLOWABLE_CONDITION_TYPES }, allow_blank: true

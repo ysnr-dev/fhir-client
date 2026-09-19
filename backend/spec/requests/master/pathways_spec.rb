@@ -9,6 +9,13 @@ RSpec.describe "Master::Pathways", type: :request do
     Master::Pathway.create!({ pathway_code: code, name: name }.merge(attrs))
   end
 
+  # 病日を直に作る。フェーズが無ければ既定のフェーズを 1 つ作って結ぶ。
+  def create_event(code, **attrs)
+    phase = Master::PathwayPhase.find_by(pathway_code: code) ||
+            Master::PathwayPhase.create!(pathway_code: code, phase_key: SecureRandom.uuid, display_order: 1)
+    Master::PathwayEvent.create!({ pathway_code: code, phase_key: phase.phase_key }.merge(attrs))
+  end
+
   UNIT_KEY = "e89a8e7c-2f30-4a8e-88d7-41cdf3e7617a".freeze
   ASSESSMENT_KEY = "0b1c2d3e-4f50-4617-8899-aabbccddeeff".freeze
   TASK_KEY = "11111111-2222-4333-8444-555555555555".freeze
@@ -42,8 +49,8 @@ RSpec.describe "Master::Pathways", type: :request do
       create_pathway("000002", "胆嚢摘出", department_code: "02", status: "draft", setting: "outpatient", display_order: 2)
       create_pathway("000003", "旧パス", status: "retired", display_order: 3,
                                 valid_from: Date.current - 100, valid_to: Date.current - 1)
-      Master::PathwayEvent.create!(pathway_code: "000001", elapsed_days: 1)
-      Master::PathwayEvent.create!(pathway_code: "000001", elapsed_days: 3)
+      create_event("000001", elapsed_days: 1)
+      create_event("000001", elapsed_days: 3)
     end
 
     it "表示順で一覧を返し、病日数と最終病日を添える" do
@@ -83,8 +90,8 @@ RSpec.describe "Master::Pathways", type: :request do
     before do
       Master::PathwayIndication.create!(pathway_code: "000001", management_number: "20058911", name: "狭心症",
                                         icd10: "I209", display_order: 1)
-      day3 = Master::PathwayEvent.create!(pathway_code: "000001", elapsed_days: 3, title: "退院日", display_order: 1)
-      day1 = Master::PathwayEvent.create!(pathway_code: "000001", elapsed_days: 1, title: "入院日", display_order: 2)
+      day3 = create_event("000001", elapsed_days: 3, title: "退院日", display_order: 1)
+      day1 = create_event("000001", elapsed_days: 1, title: "入院日", display_order: 2)
       unit = Master::PathwayOatUnit.create!(pathway_code: "000001", event_id: day1.id, unit_key: UNIT_KEY,
                                             name: "身体的準備ができている", display_order: 1)
       assessment = Master::PathwayAssessment.create!(pathway_code: "000001", unit_id: unit.id,
@@ -94,7 +101,7 @@ RSpec.describe "Master::Pathways", type: :request do
       Master::PathwayOatUnit.create!(pathway_code: "000001", event_id: day3.id, unit_key: SecureRandom.uuid,
                                      name: "退院できる", display_order: 1)
       # 別パスの子は混ざらない。
-      Master::PathwayEvent.create!(pathway_code: "000002", elapsed_days: 1)
+      create_event("000002", elapsed_days: 1)
     end
 
     it "コードでも引け、病日順に入れ子で返す" do
@@ -328,7 +335,7 @@ RSpec.describe "Master::Pathways", type: :request do
   describe "承認の記録" do
     it "承認したときに承認日をサーバーが入れ、下書きには戻せない" do
       pathway = create_pathway("000001", "PCI", adaptive_criteria: "待機的", scheduled_days: 3)
-      Master::PathwayEvent.create!(pathway_code: "000001", elapsed_days: 1).then do |event|
+      create_event("000001", elapsed_days: 1).then do |event|
         Master::PathwayOatUnit.create!(pathway_code: "000001", event_id: event.id, unit_key: UNIT_KEY, name: "x")
       end
 
@@ -370,12 +377,141 @@ RSpec.describe "Master::Pathways", type: :request do
     end
   end
 
+  describe "フェーズと分岐" do
+    PHASE_A = "aaaaaaaa-0000-4000-8000-000000000001".freeze
+    PHASE_B = "aaaaaaaa-0000-4000-8000-000000000002".freeze
+    PHASE_C = "aaaaaaaa-0000-4000-8000-000000000003".freeze
+
+    def day(phase_key, elapsed_days)
+      { phase_key: phase_key, elapsed_days: elapsed_days, oat_units: [{ name: "x" }] }
+    end
+
+    def branching_params(**overrides)
+      {
+        name: "分岐あり", adaptive_criteria: "a", scheduled_days: 4,
+        phases: [
+          { phase_key: PHASE_A, name: "周術期",
+            branches: [{ to_phase_key: PHASE_B, criteria: "発熱なし" }, { to_phase_key: PHASE_C, criteria: "縫合不全の疑い" }] },
+          { phase_key: PHASE_B, name: "標準回復", branches: [{ to_phase_key: nil, criteria: "退院基準を満たす" }] },
+          { phase_key: PHASE_C, name: "合併症対応" },
+        ],
+        events: [day(PHASE_A, 1), day(PHASE_A, 2), day(PHASE_B, 3), day(PHASE_B, 4),
+                 day(PHASE_C, 3), day(PHASE_C, 4), day(PHASE_C, 5)],
+      }.merge(overrides)
+    end
+
+    it "フェーズと分岐を入れ子で保存して返し、分岐先どうしは同じ病日を置ける" do
+      post "/master/pathways", params: branching_params(status: "approved"), as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(body["phases"].map { |p| p["phase_key"] }).to eq([PHASE_A, PHASE_B, PHASE_C])
+      expect(body["phases"][0]["branches"].map { |b| [b["to_phase_key"], b["criteria"]] })
+        .to eq([[PHASE_B, "発熱なし"], [PHASE_C, "縫合不全の疑い"]])
+      expect(body["phases"][1]["branches"][0]["to_phase_key"]).to be_nil
+      expect(body["events"].map { |e| [e["phase_key"], e["elapsed_days"]] })
+        .to eq([[PHASE_A, 1], [PHASE_A, 2], [PHASE_B, 3], [PHASE_B, 4], [PHASE_C, 3], [PHASE_C, 4], [PHASE_C, 5]])
+    end
+
+    it "フェーズを送らなければ既定のフェーズを 1 つ作って病日を結ぶ" do
+      post "/master/pathways", params: { name: "PCI", events: event_params }, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(body["phases"].size).to eq(1)
+      expect(body["events"].map { |e| e["phase_key"] }.uniq).to eq([body["phases"][0]["phase_key"]])
+    end
+
+    it "病日だけ置換してもフェーズは残る" do
+      post "/master/pathways", params: branching_params, as: :json
+      put "/master/pathways/#{body['id']}", params: { events: [day(PHASE_A, 1)] }, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(body["phases"].size).to eq(3)
+      expect(body["events"].size).to eq(1)
+    end
+
+    it "同じフェーズの中で病日が重なれば登録しない" do
+      post "/master/pathways", params: branching_params(events: [day(PHASE_A, 1), day(PHASE_A, 1)]), as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(Master::Pathway.count).to eq(0)
+    end
+
+    it "分岐先や病日のフェーズが無い・分岐先が同じフェーズなら下書きでも保存しない" do
+      post "/master/pathways", params: {
+        name: "x",
+        phases: [{ phase_key: PHASE_A, name: "a", branches: [{ to_phase_key: PHASE_A }, { to_phase_key: PHASE_B }] }],
+        events: [day(PHASE_C, 1)],
+      }, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"]).to include("フェーズ「a」 の分岐先が同じフェーズです", "フェーズ「a」 の分岐先のフェーズがありません",
+                                        "病日が結ぶフェーズがありません")
+    end
+
+    it "承認では到達できないフェーズ・循環・病日の食い違い・名前なしを弾く" do
+      params = branching_params(
+        status: "approved",
+        phases: [
+          { phase_key: PHASE_A, name: "周術期", branches: [{ to_phase_key: PHASE_B }] },
+          { phase_key: PHASE_B, name: "", branches: [{ to_phase_key: PHASE_A }] },
+          { phase_key: PHASE_C, name: "合併症対応" },
+        ],
+        events: [day(PHASE_A, 1), day(PHASE_A, 3), day(PHASE_B, 5), day(PHASE_C, 4)],
+      )
+      post "/master/pathways", params: params, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"]).to include(
+        "フェーズ名がありません", "フェーズの分岐が循環しています", "フェーズ「合併症対応」 に進む分岐がありません",
+        "フェーズ「周術期」 の病日が連続していません",
+      )
+      expect(body["errors"].join).to include("病日 4 から始めてください")
+    end
+
+    it "予定日数は標準の経路(分岐の先頭)で見る" do
+      post "/master/pathways", params: branching_params(status: "approved", scheduled_days: 4), as: :json
+      expect(response).to have_http_status(:created)
+
+      post "/master/pathways", params: branching_params(status: "approved", scheduled_days: 3), as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["errors"].join).to include("パス予定日数(3 日)より後の病日(4 日目)")
+    end
+
+    it "フェーズが 1 つなら病日が飛んでいても承認できる" do
+      post "/master/pathways", params: {
+        name: "PCI", status: "approved", adaptive_criteria: "a", scheduled_days: 5,
+        events: [{ elapsed_days: 1, oat_units: [{ name: "x" }] }, { elapsed_days: 5, oat_units: [{ name: "x" }] }],
+      }, as: :json
+
+      expect(response).to have_http_status(:created)
+    end
+
+    it "複製でフェーズ・分岐・病日の結び付きを写し、承認済はフェーズを変えられず、削除で片付く" do
+      post "/master/pathways", params: branching_params(status: "approved"), as: :json
+      source_id = body["id"]
+
+      put "/master/pathways/#{source_id}", params: { phases: [] }, as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+
+      post "/master/pathways/#{source_id}/copy", as: :json
+      expect(response).to have_http_status(:created)
+      expect(body["phases"].map { |p| p["phase_key"] }).to eq([PHASE_A, PHASE_B, PHASE_C])
+      expect(body["phases"][0]["branches"].size).to eq(2)
+      expect(body["events"].count { |e| e["phase_key"] == PHASE_C }).to eq(3)
+
+      delete "/master/pathways/#{body['id']}"
+      expect(response).to have_http_status(:no_content)
+      expect(Master::PathwayPhase.count).to eq(3)
+      expect(Master::PathwayPhaseBranch.count).to eq(3)
+    end
+  end
+
   describe "POST /master/pathways/:id/copy" do
     it "新しいコードで全部写し、uuid を引き継ぎ、承認は引き継がず下書きになる" do
       create_pathway("000001", "PCI", status: "approved", approved_on: Date.current, approved_by: "p1",
                                      adaptive_criteria: "a", scheduled_days: 3, valid_from: "2026-01-01")
       Master::PathwayIndication.create!(pathway_code: "000001", management_number: "20058911", name: "狭心症")
-      event = Master::PathwayEvent.create!(pathway_code: "000001", elapsed_days: 1, title: "入院日")
+      event = create_event("000001", elapsed_days: 1, title: "入院日")
       unit = Master::PathwayOatUnit.create!(pathway_code: "000001", event_id: event.id, unit_key: UNIT_KEY, name: "x")
       assessment = Master::PathwayAssessment.create!(pathway_code: "000001", unit_id: unit.id,
                                                      assessment_key: ASSESSMENT_KEY, name: "a")

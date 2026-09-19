@@ -180,6 +180,7 @@ export function PathwayDayView({
           ‹ 前の日
         </button>
         <div className={`pathway-day__title${isToday ? " pathway-day__title--today" : ""}`}>
+          {event.phaseName && <span className="pathway-day__date">{event.phaseName}</span>}
           <strong>{`病日 ${event.elapsedDays}`}</strong>
           <span>{eventDayStepLabel(event.elapsedDays, event.title, event.pathStep, event.pathStepName)}</span>
           <span className="pathway-day__date">{event.date}</span>

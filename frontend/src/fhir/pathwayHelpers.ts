@@ -246,8 +246,26 @@ export interface PathwayOatUnitDraft {
   tasks: PathwayTaskDraft[];
 }
 
+export interface PathwayPhaseBranchDraft {
+  key: number;
+  /** 次のフェーズ。空は「ここでパスを終了」。 */
+  toPhaseKey: string;
+  criteria: string;
+}
+
+/** フェーズ(連続する病日のまとまり)。適用はフェーズ単位で進め、終わりで分岐から次を選ぶ。 */
+export interface PathwayPhaseDraft {
+  key: number;
+  phaseKey: string;
+  name: string;
+  note: string;
+  /** 次の候補。先頭が標準の経路。 */
+  branches: PathwayPhaseBranchDraft[];
+}
+
 export interface PathwayEventDraft {
   key: number;
+  phaseKey: string;
   elapsedDays: string;
   /** パスステップ(同じ病日を術前・術後などに分けたときの順番。分けなければ 1)。 */
   pathStep: number;
@@ -285,6 +303,8 @@ export interface PathwayDraft {
   displayOrder: string;
   note: string;
   indications: PathwayIndicationDraft[];
+  /** 先頭が開始フェーズ。必ず 1 つ以上ある。 */
+  phases: PathwayPhaseDraft[];
   events: PathwayEventDraft[];
 }
 
@@ -297,6 +317,10 @@ export function newDraftKey(): number {
 /** OAT ユニット・観察項目・タスクの識別子。適用後データまで持ち越すので画面で採る。 */
 export function newPathwayUuid(): string {
   return crypto.randomUUID();
+}
+
+export function emptyPhaseDraft(): PathwayPhaseDraft {
+  return { key: newDraftKey(), phaseKey: newPathwayUuid(), name: "", note: "", branches: [] };
 }
 
 export function emptyPathwayDraft(): PathwayDraft {
@@ -321,13 +345,15 @@ export function emptyPathwayDraft(): PathwayDraft {
     displayOrder: "",
     note: "",
     indications: [],
+    phases: [emptyPhaseDraft()],
     events: [],
   };
 }
 
-export function emptyEventDraft(elapsedDays: number): PathwayEventDraft {
+export function emptyEventDraft(elapsedDays: number, phaseKey = ""): PathwayEventDraft {
   return {
     key: newDraftKey(),
+    phaseKey,
     elapsedDays: String(elapsedDays),
     pathStep: 1,
     pathStepName: "",
@@ -386,6 +412,15 @@ function str(value: string | number | null | undefined): string {
 }
 
 export function draftFromPathway(detail: PathwayDetail): PathwayDraft {
+  const phases: PathwayPhaseDraft[] = detail.phases.map((p) => ({
+    key: newDraftKey(),
+    phaseKey: p.phase_key,
+    name: str(p.name),
+    note: str(p.note),
+    branches: p.branches.map((b) => ({ key: newDraftKey(), toPhaseKey: str(b.to_phase_key), criteria: str(b.criteria) })),
+  }));
+  if (phases.length === 0) phases.push(emptyPhaseDraft());
+  const phaseKeys = new Set(phases.map((p) => p.phaseKey));
   return {
     pathwayCode: detail.pathway_code,
     name: detail.name,
@@ -412,8 +447,10 @@ export function draftFromPathway(detail: PathwayDetail): PathwayDraft {
       name: i.name,
       icd10: str(i.icd10),
     })),
+    phases,
     events: detail.events.map((e) => ({
       key: newDraftKey(),
+      phaseKey: phaseKeys.has(e.phase_key) ? e.phase_key : phases[0].phaseKey,
       elapsedDays: String(e.elapsed_days),
       pathStep: e.path_step,
       pathStepName: str(e.path_step_name),
@@ -490,6 +527,7 @@ export function operationalPayloadFromDraft(draft: PathwayDraft): PathwayPayload
 
 function eventPayload(event: PathwayEventDraft): PathwayEventPayload {
   return {
+    phase_key: event.phaseKey,
     elapsed_days: numOrNull(event.elapsedDays) ?? 0,
     path_step: event.pathStep,
     path_step_name: textOrNull(event.pathStepName),
@@ -554,6 +592,12 @@ export function payloadFromDraft(draft: PathwayDraft): PathwayPayload {
       name: i.name,
       icd10: textOrNull(i.icd10),
     })),
+    phases: draft.phases.map((p) => ({
+      phase_key: p.phaseKey,
+      name: textOrNull(p.name.trim()),
+      note: textOrNull(p.note),
+      branches: p.branches.map((b) => ({ to_phase_key: b.toPhaseKey || null, criteria: textOrNull(b.criteria) })),
+    })),
     events: sortEventsByDay(draft.events).map(eventPayload),
   };
 }
@@ -565,17 +609,78 @@ export function eventDayOf(event: Pick<PathwayEventDraft, "elapsedDays">): numbe
   return n !== null && Number.isInteger(n) ? n : null;
 }
 
-/** 病日順に並べる(書式が不正な行は末尾)。 */
+/**
+ * フェーズごとに病日順で並べる(書式が不正な行はフェーズの末尾)。フェーズの順は配列に現れた順を保つ
+ * (フェーズを並べ替えるときは orderEventsByPhases で病日の並びも揃える)。
+ */
 export function sortEventsByDay(events: PathwayEventDraft[]): PathwayEventDraft[] {
+  const phaseOrder = new Map<string, number>();
+  for (const e of events) if (!phaseOrder.has(e.phaseKey)) phaseOrder.set(e.phaseKey, phaseOrder.size);
   return events
-    .map((e, index) => ({ e, index, day: eventDayOf(e) }))
+    .map((e, index) => ({ e, index, day: eventDayOf(e), phase: phaseOrder.get(e.phaseKey) ?? 0 }))
     .sort((a, b) => {
+      if (a.phase !== b.phase) return a.phase - b.phase;
       if (a.day === null && b.day === null) return a.index - b.index;
       if (a.day === null) return 1;
       if (b.day === null) return -1;
       return a.day - b.day || a.e.pathStep - b.e.pathStep || a.index - b.index;
     })
     .map((x) => x.e);
+}
+
+/** 病日をフェーズの並びに揃える(フェーズの追加・並べ替え・削除のあと)。 */
+export function orderEventsByPhases(events: PathwayEventDraft[], phases: PathwayPhaseDraft[]): PathwayEventDraft[] {
+  const order = new Map(phases.map((p, index) => [p.phaseKey, index]));
+  const kept = events.filter((e) => order.has(e.phaseKey));
+  return sortEventsByDay(
+    kept
+      .map((e, index) => ({ e, index }))
+      .sort((a, b) => (order.get(a.e.phaseKey) ?? 0) - (order.get(b.e.phaseKey) ?? 0) || a.index - b.index)
+      .map((x) => x.e),
+  );
+}
+
+export function eventsOfPhase(events: PathwayEventDraft[], phaseKey: string): PathwayEventDraft[] {
+  return events.filter((e) => e.phaseKey === phaseKey);
+}
+
+/**
+ * フェーズを足す。最初の病日は直前のフェーズの続き(最終病日の次)から始める。
+ * 分岐先どうしは同じ病日から始めるので、足したあとで病日を直せる。
+ */
+export function addPhaseDraft(draft: PathwayDraft): PathwayDraft {
+  const phase = emptyPhaseDraft();
+  const previous = draft.phases[draft.phases.length - 1];
+  const day = nextDayNumber(previous ? eventsOfPhase(draft.events, previous.phaseKey) : []);
+  return {
+    ...draft,
+    phases: [...draft.phases, phase],
+    events: [...draft.events, emptyEventDraft(day, phase.phaseKey)],
+  };
+}
+
+/** フェーズを外す。配下の病日と、そのフェーズへ進む分岐も外す。最後の 1 つは外せない。 */
+export function removePhaseDraft(draft: PathwayDraft, phaseKey: string): PathwayDraft {
+  if (draft.phases.length <= 1) return draft;
+  const phases = draft.phases
+    .filter((p) => p.phaseKey !== phaseKey)
+    .map((p) => ({ ...p, branches: p.branches.filter((b) => b.toPhaseKey !== phaseKey) }));
+  return { ...draft, phases, events: orderEventsByPhases(draft.events, phases) };
+}
+
+export function movePhaseDraft(draft: PathwayDraft, phaseKey: string, delta: -1 | 1): PathwayDraft {
+  const from = draft.phases.findIndex((p) => p.phaseKey === phaseKey);
+  const to = from + delta;
+  if (from < 0 || to < 0 || to >= draft.phases.length) return draft;
+  const phases = [...draft.phases];
+  [phases[from], phases[to]] = [phases[to], phases[from]];
+  return { ...draft, phases, events: orderEventsByPhases(draft.events, phases) };
+}
+
+/** フェーズの見出し(名前が無ければ順番)。 */
+export function phaseLabelOf(phases: PathwayPhaseDraft[], phaseKey: string): string {
+  const index = phases.findIndex((p) => p.phaseKey === phaseKey);
+  return phases[index]?.name.trim() || `フェーズ ${index + 1}`;
 }
 
 /** 「＋ 病日」で足す次の病日(最大病日 + 1。無ければ入院日)。 */
@@ -628,16 +733,20 @@ export function copyEventDraft(event: PathwayEventDraft, elapsedDays: number): P
 export function splitEventDraft(events: PathwayEventDraft[], event: PathwayEventDraft): PathwayEventDraft {
   const day = eventDayOf(event);
   const lastStep = Math.max(
-    ...events.filter((e) => eventDayOf(e) === day).map((e) => e.pathStep),
+    ...events.filter((e) => e.phaseKey === event.phaseKey && eventDayOf(e) === day).map((e) => e.pathStep),
     event.pathStep,
   );
-  return { ...emptyEventDraft(day ?? 1), elapsedDays: event.elapsedDays, pathStep: lastStep + 1, title: event.title };
+  return { ...emptyEventDraft(day ?? 1, event.phaseKey), elapsedDays: event.elapsedDays, pathStep: lastStep + 1, title: event.title };
 }
 
 /** 同じ病日にステップが 2 つ以上あるか(ステップ名の欄を出すかどうか)。 */
 export function isSplitDay(events: PathwayEventDraft[], event: PathwayEventDraft): boolean {
   const day = eventDayOf(event);
-  return day !== null && (event.pathStep > 1 || events.some((e) => e.key !== event.key && eventDayOf(e) === day));
+  return (
+    day !== null &&
+    (event.pathStep > 1 ||
+      events.some((e) => e.key !== event.key && e.phaseKey === event.phaseKey && eventDayOf(e) === day))
+  );
 }
 
 /**
@@ -733,8 +842,8 @@ export function validatePathwayDraft(draft: PathwayDraft): string | null {
     const day = eventDayOf(event);
     if (day === null || day === 0) return "病日は 0 以外の整数で入力してください(入院日 = 1、入院前日 = -1)";
     const id = eventIdOf(day, event.pathStep);
-    if (seen.has(id)) return `病日 ${id} が重複しています`;
-    seen.add(id);
+    if (seen.has(`${event.phaseKey}/${id}`)) return `病日 ${id} が重複しています`;
+    seen.add(`${event.phaseKey}/${id}`);
     const dayLabel = eventDayLabel(day, event.title);
     for (const [unitIndex, unit] of event.oatUnits.entries()) {
       const unitLabel = `${dayLabel} の OAT ユニット ${unitIndex + 1}`;
@@ -763,6 +872,9 @@ export interface OverviewColumn {
   label: string;
   /** 同じ病日を分けたときのステップの見出し。分けていなければ空。 */
   stepLabel: string;
+  phaseKey: string;
+  /** フェーズの見出し。フェーズが 1 つだけなら空。 */
+  phaseLabel: string;
 }
 
 export interface OverviewRow {
@@ -799,6 +911,8 @@ export function overviewRows(draft: PathwayDraft): OverviewRows {
       pathStep: e.pathStep,
       label: eventDayLabel(day, e.title),
       stepLabel: isSplitDay(events, e) ? pathStepLabel(e.pathStep, e.pathStepName) : "",
+      phaseKey: e.phaseKey,
+      phaseLabel: draft.phases.length > 1 ? phaseLabelOf(draft.phases, e.phaseKey) : "",
     };
   });
   const outcomes = new Map<string, OverviewRow>();

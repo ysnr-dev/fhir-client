@@ -2,6 +2,8 @@ import type {
   PathwayAssessment,
   PathwayDetail,
   PathwayEvent,
+  PathwayPhase,
+  PathwayPhaseBranch,
   PathwayOatUnit,
   PathwayTask,
 } from "../api/masterClient";
@@ -98,6 +100,15 @@ export const PATHWAY_LEVEL_SYSTEM = "http://fhir-client.local/CodeSystem/pathway
 // 並びを表す要素が無く、上流の id は uuid なので、無いとシートの行が定義と違う順になる。
 // EP12 出力では落とす。
 export const PATHWAY_DISPLAY_ORDER_EXT_URL = "http://fhir-client.local/StructureDefinition/pathway-display-order";
+
+/**
+ * 病日がどのフェーズのものか(valueCoding.code = phase_key、display = フェーズ名)。適用はフェーズ単位で
+ * 進めるので、どこまで適用したかはこの印から逆算する。印の無い病日は先頭のフェーズとして読む。
+ */
+export const PATHWAY_PHASE_EXT_URL = "http://fhir-client.local/StructureDefinition/pathway-phase";
+export const PATHWAY_PHASE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/pathway-phase";
+/** フェーズの最初の病日に残す、分岐を選んだときの記録(目安の写しとコメント)。 */
+export const PATHWAY_PHASE_NOTE_EXT_URL = "http://fhir-client.local/StructureDefinition/pathway-phase-note";
 
 export type PathwayLevel = "apply" | "event" | "oat-unit" | "assessment";
 
@@ -202,6 +213,28 @@ export function taskIdValue(assessmentId: string, taskKey: string): string {
  */
 export function pathwayEventDate(admissionDate: string, elapsedDays: number): string {
   return addDays(admissionDate, elapsedDays > 0 ? elapsedDays - 1 : elapsedDays);
+}
+
+/** フェーズの開始日から数えた病日の実日付(0 を使わない数え方のまま、フェーズの最初の病日を開始日に置く)。 */
+export function phaseEventDate(phaseStart: string, firstDay: number, elapsedDays: number): string {
+  const index = (day: number) => (day > 0 ? day - 1 : day);
+  return addDays(phaseStart, index(elapsedDays) - index(firstDay));
+}
+
+// ---- フェーズ ----
+
+/** 開始フェーズ(先頭)。 */
+export function firstPhaseOf(pathway: PathwayDetail): PathwayPhase | null {
+  return pathway.phases[0] ?? null;
+}
+
+/**
+ * パス定義をフェーズ 1 つ分に絞る。適用はフェーズ単位なので、病日の展開もオーダーの続きの
+ * まとめもこの中で閉じる。フェーズの無い定義(古い応答)はそのまま返す。
+ */
+export function pathwayOfPhase(pathway: PathwayDetail, phaseKey: string): PathwayDetail {
+  if (pathway.phases.length === 0) return pathway;
+  return { ...pathway, events: pathway.events.filter((event) => event.phase_key === phaseKey) };
 }
 
 // ---- 適用の入力値 ----
@@ -317,7 +350,6 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
   const applyId = applyIdValue(institutionNumber, applyKey);
   const applyUrl = `urn:uuid:${crypto.randomUUID()}`;
   const entry: fhir4.BundleEntry[] = [];
-  const eventDates = new Map<number, string>();
 
   const events = [...pathway.events].sort(
     (a, b) => a.elapsed_days - b.elapsed_days || a.path_step - b.path_step,
@@ -352,14 +384,157 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
   };
   entry.push({ fullUrl: applyUrl, resource: apply, request: { method: "POST", url: "CarePlan" } });
 
+  const eventDates = appendEventEntries(entry, events, {
+    applyId,
+    applyUrl,
+    patientId,
+    encounterId,
+    pathway,
+    dateOf: (event) => pathwayEventDate(admissionDate, event.elapsed_days),
+    orderHeaderUrls: input.orderHeaderUrls,
+  });
+
+  return { bundle: { resourceType: "Bundle", type: "transaction", entry }, applyKey, eventDates };
+}
+
+// ---- 次のフェーズ ----
+
+export interface PathwayPhaseApplyInput {
+  /** 適用するフェーズに絞ったパス定義(pathwayOfPhase)。 */
+  pathway: PathwayDetail;
+  application: Pick<PathwayApplicationRecord, "id" | "applyId" | "encounterId" | "events">;
+  patientId: string;
+  /** フェーズの最初の病日の実日付。 */
+  startDate: string;
+  /** 分岐を選んだときの記録(目安の写しとコメント)。 */
+  note?: string;
+  orderHeaderUrls?: Map<string, string[]>;
+}
+
+export interface PathwayPhaseBundle {
+  bundle: fhir4.Bundle;
+  eventDates: Map<number, string>;
+  /** フェーズの最初の病日の fullUrl(来歴の対象)。 */
+  firstEventUrl: string;
+}
+
+function sortedEvents(events: PathwayEvent[]): PathwayEvent[] {
+  return [...events].sort((a, b) => a.elapsed_days - b.elapsed_days || a.path_step - b.path_step);
+}
+
+/** フェーズの病日 → 実日付(開始日を最初の病日に置く)。 */
+export function phaseEventDates(pathway: Pick<PathwayDetail, "events">, startDate: string): Map<number, string> {
+  const events = sortedEvents(pathway.events);
+  const firstDay = events[0]?.elapsed_days ?? 1;
+  return new Map(events.map((e) => [e.elapsed_days, phaseEventDate(startDate, firstDay, e.elapsed_days)]));
+}
+
+/**
+ * 適用済みのパスに次のフェーズの木を足す transaction Bundle。適用の CarePlan は触らず、
+ * 病日以下を同じ適用の識別子の下に作る(レジメンの次クール登録と同じ考え方)。
+ */
+export function buildPathwayPhaseBundle(input: PathwayPhaseApplyInput): PathwayPhaseBundle {
+  const { pathway, application, patientId } = input;
+  const events = sortedEvents(pathway.events);
+  const applied = new Set(application.events.map((e) => eventKeyOf(e.elapsedDays, e.pathStep)));
+  const duplicated = events.find((e) => applied.has(eventKeyOf(e.elapsed_days, e.path_step)));
+  if (duplicated) throw new Error(`病日 ${eventKeyOf(duplicated.elapsed_days, duplicated.path_step)} は適用済みです`);
+
+  const dates = phaseEventDates(pathway, input.startDate);
+  const entry: fhir4.BundleEntry[] = [];
+  const eventDates = appendEventEntries(entry, events, {
+    applyId: application.applyId,
+    applyUrl: `CarePlan/${application.id}`,
+    patientId,
+    encounterId: application.encounterId || undefined,
+    pathway,
+    dateOf: (event) => dates.get(event.elapsed_days) ?? input.startDate,
+    orderHeaderUrls: input.orderHeaderUrls,
+    phaseNote: input.note?.trim() || undefined,
+  });
+  return {
+    bundle: { resourceType: "Bundle", type: "transaction", entry },
+    eventDates,
+    firstEventUrl: entry[0]?.fullUrl ?? "",
+  };
+}
+
+export interface PathwayNextPhases {
+  /** いま適用が進んでいるフェーズ(最後に適用したもの)。 */
+  current: PathwayPhase | null;
+  /** 次の候補。to_phase_key が null の行は「パスを終了」。 */
+  candidates: PathwayPhaseBranch[];
+  /** 次のフェーズの開始日の既定(いまのフェーズの最終日の翌日)。 */
+  defaultStartDate: string;
+}
+
+/** 最後に適用したフェーズの key(印の無い適用は空)。病日が最も進んだものを採る。 */
+export function currentPhaseKeyOf(application: Pick<PathwayApplicationRecord, "events">): string {
+  return application.events.at(-1)?.phaseKey ?? "";
+}
+
+/**
+ * 次に適用できるフェーズの候補。「どこまで適用したか」は保存せず、適用済みの病日の印から逆算する。
+ * 進行中でない適用と、分岐を持たない(最後の)フェーズでは候補は空。
+ */
+export function nextPhasesOf(
+  application: Pick<PathwayApplicationRecord, "status" | "events">,
+  pathway: PathwayDetail,
+): PathwayNextPhases {
+  const key = currentPhaseKeyOf(application);
+  const current = pathway.phases.find((p) => p.phase_key === key) ?? (key === "" ? firstPhaseOf(pathway) : null);
+  const lastDate = application.events
+    .filter((e) => e.phaseKey === key)
+    .reduce((max, e) => (e.date > max ? e.date : max), "");
+  return {
+    current,
+    candidates: application.status === "active" && current ? current.branches : [],
+    defaultStartDate: lastDate ? addDays(lastDate, 1) : "",
+  };
+}
+
+/** 分岐を選んだときの記録(目安の写し + コメント)。 */
+export function phaseNoteOf(criteria: string | null | undefined, comment: string): string {
+  return [criteria?.trim(), comment.trim()].filter(Boolean).join(" / ");
+}
+
+interface EventEntriesContext {
+  applyId: string;
+  /** 適用の CarePlan への参照(同じ transaction なら urn:uuid、登録済みなら CarePlan/{id})。 */
+  applyUrl: string;
+  patientId: string;
+  encounterId?: string;
+  pathway: PathwayDetail;
+  dateOf: (event: PathwayEvent) => string;
+  orderHeaderUrls?: Map<string, string[]>;
+  /** 分岐を選んだときの記録。最初の病日に残す。 */
+  phaseNote?: string;
+}
+
+/** 病日とその下の木(OAT ユニット・観察項目・タスク)を entry に足し、病日 → 実日付を返す。 */
+function appendEventEntries(
+  entry: fhir4.BundleEntry[],
+  events: PathwayEvent[],
+  ctx: EventEntriesContext,
+): Map<number, string> {
+  const { applyId, applyUrl, patientId, encounterId, pathway } = ctx;
+  const eventDates = new Map<number, string>();
   for (const event of events) {
-    const date = pathwayEventDate(admissionDate, event.elapsed_days);
+    const date = ctx.dateOf(event);
     eventDates.set(event.elapsed_days, date);
     const eventUrl = `urn:uuid:${crypto.randomUUID()}`;
     const eventId = eventIdValue(applyId, event.elapsed_days, event.path_step);
     entry.push({
       fullUrl: eventUrl,
-      resource: buildEventCarePlan(event, { eventId, applyUrl, patientId, encounterId, date, pathway }),
+      resource: buildEventCarePlan(event, {
+        eventId,
+        applyUrl,
+        patientId,
+        encounterId,
+        date,
+        pathway,
+        phaseNote: event === events[0] ? ctx.phaseNote : undefined,
+      }),
       request: { method: "POST", url: "CarePlan" },
     });
 
@@ -411,7 +586,7 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
             resource: buildTaskProcedure(task, {
               taskId: taskIdValue(assessmentId, task.task_key),
               assessmentUrl,
-              orderUrls: input.orderHeaderUrls?.get(pathwayTaskOrderKey(event, task.task_key)) ?? [],
+              orderUrls: ctx.orderHeaderUrls?.get(pathwayTaskOrderKey(event, task.task_key)) ?? [],
               patientId,
               encounterId,
               date,
@@ -424,7 +599,7 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
     }
   }
 
-  return { bundle: { resourceType: "Bundle", type: "transaction", entry }, applyKey, eventDates };
+  return eventDates;
 }
 
 function buildEventCarePlan(
@@ -436,6 +611,7 @@ function buildEventCarePlan(
     encounterId?: string;
     date: string;
     pathway: PathwayDetail;
+    phaseNote?: string;
   },
 ): fhir4.CarePlan {
   const extension: fhir4.Extension[] = [
@@ -447,6 +623,18 @@ function buildEventCarePlan(
   if (event.path_step_name) {
     extension.push({ url: PATHWAY_EXT.pathStepName, valueString: event.path_step_name });
   }
+  const phase = ctx.pathway.phases.find((p) => p.phase_key === event.phase_key);
+  if (phase) {
+    extension.push({
+      url: PATHWAY_PHASE_EXT_URL,
+      valueCoding: {
+        system: PATHWAY_PHASE_CODE_SYSTEM,
+        code: phase.phase_key,
+        ...(phase.name ? { display: phase.name } : {}),
+      },
+    });
+  }
+  if (ctx.phaseNote) extension.push({ url: PATHWAY_PHASE_NOTE_EXT_URL, valueString: ctx.phaseNote });
   return {
     resourceType: "CarePlan",
     identifier: [{ system: PATHWAY_EVENT_ID_SYSTEM, value: ctx.eventId }],
@@ -691,6 +879,11 @@ export interface PathwayEventRecord {
   pathStepName: string;
   title: string;
   date: string;
+  /** フェーズの印。印の無い(フェーズ導入前の)適用は空で、先頭のフェーズとして扱う。 */
+  phaseKey: string;
+  phaseName: string;
+  /** 分岐を選んだときの記録(フェーズの最初の病日だけ)。 */
+  phaseNote: string;
   units: PathwayOatUnitRecord[];
 }
 
@@ -1059,6 +1252,9 @@ export function parsePathwayApplication(
       pathStepName: extensionOf(carePlan, PATHWAY_EXT.pathStepName)?.valueString ?? "",
       title: carePlan.title ?? "",
       date: carePlan.period?.start ?? "",
+      phaseKey: extensionOf(carePlan, PATHWAY_PHASE_EXT_URL)?.valueCoding?.code ?? "",
+      phaseName: extensionOf(carePlan, PATHWAY_PHASE_EXT_URL)?.valueCoding?.display ?? "",
+      phaseNote: extensionOf(carePlan, PATHWAY_PHASE_NOTE_EXT_URL)?.valueString ?? "",
       units: unitsByEvent.get(carePlan.id as string) ?? [],
     }))
     .sort((a, b) => a.elapsedDays - b.elapsedDays || a.pathStep - b.pathStep);

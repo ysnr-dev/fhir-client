@@ -14042,6 +14042,110 @@ button.meal-calendar__cell:hover {
   height: var(--control-height);
 }
 
+.pathway-next-phase {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+
+.pathway-next-phase__option {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.pathway-next-phase__name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pathway-next-phase__criteria {
+  color: var(--text-muted, inherit);
+  font-size: 13px;
+}
+
+/* フェーズ(連続する病日のまとまり)。フェーズが 2 つ以上のときだけ帯を出す。 */
+.pathway-phase {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+  margin-bottom: 20px;
+}
+
+.pathway-phase__head {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.pathway-phase__head label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  width: 240px;
+}
+
+.pathway-phase__head input,
+.pathway-branch-modal__row input,
+.pathway-branch-modal__row select {
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  height: var(--control-height);
+  box-sizing: border-box;
+}
+
+.pathway-phase__branches {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pathway-branch-modal__rows {
+  border: 0;
+  padding: 0;
+  margin: 0 0 12px;
+  min-width: 0;
+}
+
+.pathway-branch-modal__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pathway-branch-modal__row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.pathway-branch-modal__criteria {
+  flex: 1;
+  min-width: 0;
+}
+
+.pathway-branch-modal__tools {
+  display: flex;
+  gap: 4px;
+}
+
+.pathway-overview th.pathway-overview__phase {
+  text-align: center;
+  font-size: 12px;
+  border-left: 1px solid var(--border);
+}
+
 /* OAT ユニット。見出し行(アウトカム)と、観察項目・タスクの 2 区画。 */
 .pathway-unit {
   border: 1px solid var(--border);
@@ -14517,6 +14621,22 @@ button.meal-calendar__cell:hover {
   font-weight: normal;
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.pathway-sheet__phase {
+  text-align: left;
+  font-size: 12px;
+  border-left: 2px solid var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
+}
+
+.pathway-sheet__phase-note {
+  margin-left: 8px;
+  font-weight: 400;
+  opacity: 0.75;
 }
 
 .pathway-sheet__day-date {

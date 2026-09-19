@@ -8,6 +8,8 @@ import { ErrorBanner } from "../components/ErrorBanner";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
 import { PathwayEventCard, TrashIcon } from "../components/PathwayEventCard";
 import { PathwayOverviewTable } from "../components/PathwayOverviewTable";
+import { PathwayPhaseBranchModal } from "../components/PathwayPhaseBranchModal";
+import { RowMenu } from "../components/RowMenu";
 import { PathwayTaskTemplateModal } from "../components/PathwayTaskTemplateModal";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
 import {
@@ -18,24 +20,29 @@ import {
   addOutcomeOccurrence,
   addTaskOccurrence,
   canAddTaskOccurrence,
+  addPhaseDraft,
   copyEventDraft,
   draftFromPathway,
   emptyEventDraft,
   emptyPathwayDraft,
   eventDayOf,
+  eventsOfPhase,
   isSplitDay,
+  movePhaseDraft,
   linkSameNameSeries,
   newDraftKey,
   nextDayNumber,
+  orderEventsByPhases,
+  phaseLabelOf,
   operationalPayloadFromDraft,
   outcomeSeriesLabels,
   overviewRows,
   payloadFromDraft,
   previousDayNumber,
+  removePhaseDraft,
   propagateSeries,
   removeOutcomeOccurrence,
   removeTaskOccurrence,
-  sortEventsByDay,
   splitEventDraft,
   validatePathwayDraft,
   type PathwayDraft,
@@ -44,6 +51,7 @@ import {
   type OverviewRow,
   type OverviewTaskRow,
   type PathwayOatUnitDraft,
+  type PathwayPhaseDraft,
   type PathwayTaskTemplate,
 } from "../fhir/pathwayHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
@@ -60,7 +68,14 @@ type Picker =
   | { kind: "disease" }
   | { kind: "nursing"; eventKey: number; unitKey: number; assessmentKey: number }
   | { kind: "template"; eventKey: number; unitKey: number; taskKey: number }
+  | { kind: "branch"; phaseKey: string }
   | null;
+
+/** フェーズの見出しに出す分岐の要約(次の候補の名前を並べる)。 */
+function branchSummary(phases: PathwayPhaseDraft[], phase: PathwayPhaseDraft): string {
+  if (phase.branches.length === 0) return "分岐なし";
+  return `→ ${phase.branches.map((b) => (b.toPhaseKey ? phaseLabelOf(phases, b.toPhaseKey) : "終了")).join(" / ")}`;
+}
 
 export function PathwayEditorPage() {
   const { pathwayId } = useParams<{ pathwayId: string }>();
@@ -166,22 +181,40 @@ export function PathwayEditorPage() {
     }));
   }
 
-  function addEvent(day: number) {
-    setDraft((prev) => ({ ...prev, events: sortEventsByDay([...prev.events, emptyEventDraft(day)]) }));
+  function addEvent(phaseKey: string, day: number) {
+    setDraft((prev) => ({
+      ...prev,
+      events: orderEventsByPhases([...prev.events, emptyEventDraft(day, phaseKey)], prev.phases),
+    }));
   }
 
   function copyEvent(event: PathwayEventDraft) {
-    setDraft((prev) => ({
-      ...prev,
-      events: sortEventsByDay([...prev.events, copyEventDraft(event, nextDayNumber(prev.events))]),
-    }));
+    setDraft((prev) => {
+      const day = nextDayNumber(eventsOfPhase(prev.events, event.phaseKey));
+      return { ...prev, events: orderEventsByPhases([...prev.events, copyEventDraft(event, day)], prev.phases) };
+    });
   }
 
   function splitEvent(event: PathwayEventDraft) {
     setDraft((prev) => ({
       ...prev,
-      events: sortEventsByDay([...prev.events, splitEventDraft(prev.events, event)]),
+      events: orderEventsByPhases([...prev.events, splitEventDraft(prev.events, event)], prev.phases),
     }));
+  }
+
+  function updatePhase(phaseKey: string, patch: Partial<PathwayPhaseDraft>) {
+    setDraft((prev) => ({
+      ...prev,
+      phases: prev.phases.map((p) => (p.phaseKey === phaseKey ? { ...p, ...patch } : p)),
+    }));
+  }
+
+  function removePhase(phase: PathwayPhaseDraft) {
+    const label = phaseLabelOf(draft.phases, phase.phaseKey);
+    if (eventsOfPhase(draft.events, phase.phaseKey).length > 0 && !window.confirm(`${label} を病日ごと削除しますか?`)) {
+      return;
+    }
+    setDraft((prev) => removePhaseDraft(prev, phase.phaseKey));
   }
 
   // 概要表のセルで続きを足す・外す。最後の 1 日を外すとアウトカム(タスク)そのものが消えるので確かめる。
@@ -231,6 +264,8 @@ export function PathwayEditorPage() {
   const templateTask = picker?.kind === "template" ? findTask(picker) : null;
   const overview = overviewRows(draft);
   const seriesLabels = outcomeSeriesLabels(draft.events);
+  const multiPhase = draft.phases.length > 1;
+  const branchPhase = picker?.kind === "branch" ? draft.phases.find((p) => p.phaseKey === picker.phaseKey) : undefined;
   // 雛形の中身まで比べるので、病日が変わったときだけ計算する。
   const linkable = useMemo(() => linkSameNameSeries(draft.events), [draft.events]);
 
@@ -440,33 +475,99 @@ export function PathwayEditorPage() {
           <div className="lab-order-item__section-head">
             <h3>病日</h3>
           </div>
-          {draft.events.map((event) => (
-            <PathwayEventCard
-              key={event.key}
-              event={event}
-              split={isSplitDay(draft.events, event)}
-              seriesLabels={seriesLabels}
-              onChange={(patch) => updateEvent(event.key, patch)}
-              onDayCommit={() => update("events", sortEventsByDay(draft.events))}
-              onCopy={() => copyEvent(event)}
-              onSplit={() => splitEvent(event)}
-              onRemove={() => removeEvent(event)}
-              onPickNursingObservation={(unitKey, assessmentKey) =>
-                setPicker({ kind: "nursing", eventKey: event.key, unitKey, assessmentKey })
-              }
-              onEditTemplate={(unitKey, taskKey) =>
-                setPicker({ kind: "template", eventKey: event.key, unitKey, taskKey })
-              }
-            />
-          ))}
-          <div className="lab-order-item__actions">
-            <button type="button" onClick={() => addEvent(nextDayNumber(draft.events))}>
-              ＋ 病日
-            </button>
-            <button type="button" onClick={() => addEvent(previousDayNumber(draft.events))}>
-              ＋ 入院前日
-            </button>
-          </div>
+          {draft.phases.map((phase, phaseIndex) => {
+            const phaseEvents = eventsOfPhase(draft.events, phase.phaseKey);
+            return (
+              <div key={phase.key} className={multiPhase ? "pathway-phase" : undefined}>
+                {multiPhase && (
+                  <div className="pathway-phase__head">
+                    <label>
+                      フェーズ名
+                      <input
+                        type="text"
+                        value={phase.name}
+                        onChange={(e) => updatePhase(phase.phaseKey, { name: e.target.value })}
+                        placeholder={`フェーズ ${phaseIndex + 1}`}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="pathway-phase__branches"
+                      onClick={() => setPicker({ kind: "branch", phaseKey: phase.phaseKey })}
+                    >
+                      {branchSummary(draft.phases, phase)}
+                    </button>
+                    <RowMenu label={`${phaseLabelOf(draft.phases, phase.phaseKey)} の操作`}>
+                      <button
+                        type="button"
+                        className="row-menu__item"
+                        onClick={() => setPicker({ kind: "branch", phaseKey: phase.phaseKey })}
+                      >
+                        分岐を編集
+                      </button>
+                      <button
+                        type="button"
+                        className="row-menu__item"
+                        disabled={phaseIndex === 0}
+                        onClick={() => setDraft((prev) => movePhaseDraft(prev, phase.phaseKey, -1))}
+                      >
+                        上へ
+                      </button>
+                      <button
+                        type="button"
+                        className="row-menu__item"
+                        disabled={phaseIndex === draft.phases.length - 1}
+                        onClick={() => setDraft((prev) => movePhaseDraft(prev, phase.phaseKey, 1))}
+                      >
+                        下へ
+                      </button>
+                      <button
+                        type="button"
+                        className="row-menu__item row-menu__item--danger"
+                        onClick={() => removePhase(phase)}
+                      >
+                        このフェーズを削除
+                      </button>
+                    </RowMenu>
+                  </div>
+                )}
+                {phaseEvents.map((event) => (
+                  <PathwayEventCard
+                    key={event.key}
+                    event={event}
+                    split={isSplitDay(draft.events, event)}
+                    seriesLabels={seriesLabels}
+                    onChange={(patch) => updateEvent(event.key, patch)}
+                    onDayCommit={() => update("events", orderEventsByPhases(draft.events, draft.phases))}
+                    onCopy={() => copyEvent(event)}
+                    onSplit={() => splitEvent(event)}
+                    onRemove={() => removeEvent(event)}
+                    onPickNursingObservation={(unitKey, assessmentKey) =>
+                      setPicker({ kind: "nursing", eventKey: event.key, unitKey, assessmentKey })
+                    }
+                    onEditTemplate={(unitKey, taskKey) =>
+                      setPicker({ kind: "template", eventKey: event.key, unitKey, taskKey })
+                    }
+                  />
+                ))}
+                <div className="lab-order-item__actions">
+                  <button type="button" onClick={() => addEvent(phase.phaseKey, nextDayNumber(phaseEvents))}>
+                    ＋ 病日
+                  </button>
+                  {phaseIndex === 0 && (
+                    <button type="button" onClick={() => addEvent(phase.phaseKey, previousDayNumber(phaseEvents))}>
+                      ＋ 入院前日
+                    </button>
+                  )}
+                  {phaseIndex === draft.phases.length - 1 && (
+                    <button type="button" onClick={() => setDraft((prev) => addPhaseDraft(prev))}>
+                      ＋ フェーズ
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </section>
 
         <PathwayOverviewTable
@@ -550,6 +651,18 @@ export function PathwayEditorPage() {
                 icd10: disease.icd10_2013 ?? "",
               },
             ]);
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {branchPhase && (
+        <PathwayPhaseBranchModal
+          phase={branchPhase}
+          phases={draft.phases}
+          readOnly={frozen}
+          onCommit={(branches) => {
+            updatePhase(branchPhase.phaseKey, { branches });
+            setPicker(null);
           }}
           onClose={() => setPicker(null)}
         />

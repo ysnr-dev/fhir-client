@@ -34,7 +34,10 @@ import { today } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { NursingPerformModal } from "./NursingPerformModal";
+import { usePathway } from "../api/masterQueries";
+import { currentPhaseKeyOf, nextPhasesOf } from "../fhir/pathwayApplyHelpers";
 import { PathwayCancelPanel } from "./PathwayCancelPanel";
+import { PathwayNextPhaseModal } from "./PathwayNextPhaseModal";
 import { PathwayClosePanel } from "./PathwayClosePanel";
 import { PathwayDayView } from "./PathwayDayView";
 import { PathwayEvaluatePanel } from "./PathwayEvaluatePanel";
@@ -73,6 +76,8 @@ interface KartePathwayTabProps {
    */
   /** オーダー詳細の「編集」。そのオーダーの編集フォームを右ペインで開く。 */
   onOpenOrder: (kind: PathwayOrderKind, srId: string) => void;
+  /** 次のフェーズの適用(右ペインで開く)。 */
+  onApplyPhase: (applyId: string, phaseKey: string) => void;
 }
 
 /** 病日の列幅の下限と上限。表の幅に収まるだけ広げ、収まらなければ下限のまま表の中だけ横に送る。 */
@@ -99,7 +104,7 @@ function sheetUnitIdOf(
   return (unitRow?.cells.get(eventId) as SheetUnitCell | undefined)?.unitId ?? null;
 }
 
-export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: KartePathwayTabProps) {
+export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, onApplyPhase }: KartePathwayTabProps) {
   const current = parsePathwaySheetView(view);
   const applications = usePathwayApplications(patientId);
   const list = applications.data?.applications ?? [];
@@ -121,6 +126,8 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
   // 日程の変更と、誤って適用したパスの取り消し。見出しの帯のメニューから開く。
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [nextPhaseOpen, setNextPhaseOpen] = useState(false);
+  const [phaseCancelOpen, setPhaseCancelOpen] = useState(false);
   const [nursingPerform, setNursingPerform] = useState<{ orders: fhir4.ServiceRequest[]; date: string } | null>(null);
   const nursingPerformsOfDay = useNursingPerformsOn(nursingPerform?.date ?? "", nursingPerform ? [patientId] : []);
   // 詳細に出す対象プロブレムの名前。カルテのカードから開く詳細と同じものを渡す。
@@ -155,6 +162,15 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
   }, [orderModalOpen, queryClient]);
   const observations = usePathwayObservations(patientId);
   const application = tree.data?.application ?? null;
+  // 次のフェーズの候補は、適用済みの病日の印とパス定義の分岐から逆算する。
+  const pathwayMaster = usePathway(application?.pathwayCode || null);
+  const nextPhases = application && pathwayMaster.data ? nextPhasesOf(application, pathwayMaster.data) : null;
+  const currentPhaseKey = application ? currentPhaseKeyOf(application) : "";
+  // 取り消せるのは最後に適用した 2 つ目以降のフェーズ(最初のフェーズは適用の取り消しで戻す)。
+  const phaseCancellable =
+    application?.status === "active" &&
+    currentPhaseKey !== "" &&
+    application.events.some((e) => e.phaseKey !== currentPhaseKey);
   const orders = tree.data?.orders;
   const evaluation =
     tree.data && observations.data
@@ -302,7 +318,9 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
       !closeOpen &&
       !unplannedOpen &&
       !scheduleOpen &&
-      !cancelOpen
+      !cancelOpen &&
+      !nextPhaseOpen &&
+      !phaseCancelOpen
     ) {
       return;
     }
@@ -318,6 +336,14 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
       }
       if (cancelOpen) {
         setCancelOpen(false);
+        return;
+      }
+      if (nextPhaseOpen) {
+        setNextPhaseOpen(false);
+        return;
+      }
+      if (phaseCancelOpen) {
+        setPhaseCancelOpen(false);
         return;
       }
       if (unplannedOpen) {
@@ -339,7 +365,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
     return () => window.removeEventListener("keydown", handleKeyDown);
     // updateView は毎描画で作り直されるが、押した時点の選択で戻せればよい。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen, modalUnitId, modalTaskId, modalOrder, nursingPerform, closeOpen, unplannedOpen, scheduleOpen, cancelOpen]);
+  }, [fullscreen, modalUnitId, modalTaskId, modalOrder, nursingPerform, closeOpen, unplannedOpen, scheduleOpen, cancelOpen, nextPhaseOpen, phaseCancelOpen]);
 
   return (
     <div
@@ -450,6 +476,11 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
             {/* 操作は帯の行を増やさないよう、右端の小さなケバブにまとめる。 */}
             <span className="pathway-sheet__menu">
               <RowMenu label="パスの操作" escapesClipping>
+                {nextPhases && nextPhases.candidates.length > 0 && (
+                  <button type="button" className="row-menu__item" onClick={() => setNextPhaseOpen(true)}>
+                    次のフェーズを適用
+                  </button>
+                )}
                 {application.status === "active" && (
                   <>
                     <button type="button" className="row-menu__item" onClick={() => setUnplannedOpen(true)}>
@@ -470,6 +501,15 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
                     onClick={() => setCancelOpen(true)}
                   >
                     適用の取り消し
+                  </button>
+                )}
+                {phaseCancellable && (
+                  <button
+                    type="button"
+                    className="row-menu__item row-menu__item--danger"
+                    onClick={() => setPhaseCancelOpen(true)}
+                  >
+                    フェーズの取り消し
                   </button>
                 )}
               </RowMenu>
@@ -497,6 +537,24 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
           <div className="lab-timeline__table-wrap pathway-sheet__wrap" ref={wrapRef}>
             <table className="lab-timeline__table pathway-sheet__table">
               <thead>
+                {/* フェーズを分けたパスだけ、フェーズの段を出す(分岐を選んだときの記録は title で読める)。 */}
+                {sheet.phased && (
+                  <tr>
+                    <th className="pathway-sheet__label-col" />
+                    {sheet.phaseGroups.map((group) => (
+                      <th
+                        key={group.phaseKey}
+                        colSpan={group.span}
+                        className="pathway-sheet__day pathway-sheet__phase"
+                        title={group.note || undefined}
+                      >
+                        {group.name}
+                        {group.note && <span className="pathway-sheet__phase-note">{group.note}</span>}
+                      </th>
+                    ))}
+                    <th className="pathway-sheet__filler" />
+                  </tr>
+                )}
                 <tr>
                   <th className="pathway-sheet__label-col" rowSpan={sheet.split ? 3 : 2} />
                   {sheet.dayGroups.map((group) => (
@@ -748,6 +806,41 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder }: 
               setCancelOpen(false);
               onViewChange(null);
             }}
+          />
+        </Modal>
+      )}
+
+      {/* フェーズの終わりで次を選ぶ。適用は右ペインなので、全画面は解いてから開く。 */}
+      {nextPhaseOpen && application && pathwayMaster.data && nextPhases && (
+        <PathwayNextPhaseModal
+          pathway={pathwayMaster.data}
+          currentName={nextPhases.current?.name ?? ""}
+          candidates={nextPhases.candidates}
+          onSelectPhase={(phaseKey) => {
+            setNextPhaseOpen(false);
+            if (fullscreen) updateView({ fullscreen: false });
+            onApplyPhase(application.id, phaseKey);
+          }}
+          onSelectClose={() => {
+            setNextPhaseOpen(false);
+            setCloseOpen(true);
+          }}
+          onClose={() => setNextPhaseOpen(false)}
+        />
+      )}
+
+      {/* 選び間違えた分岐を戻す(最後に適用したフェーズだけ)。 */}
+      {phaseCancelOpen && application && (
+        <Modal
+          title="クリニカルパス(フェーズの取り消し)"
+          className="modal--wide pathway-evaluate-modal"
+          onClose={() => setPhaseCancelOpen(false)}
+        >
+          <PathwayCancelPanel
+            patientId={patientId}
+            applyId={application.id}
+            phaseKey={currentPhaseKey}
+            onCancelled={() => setPhaseCancelOpen(false)}
           />
         </Modal>
       )}

@@ -14,6 +14,8 @@ module Master
 
     has_many :indications, -> { in_display_order },
              class_name: "Master::PathwayIndication", primary_key: :pathway_code, foreign_key: :pathway_code
+    has_many :phases, -> { in_display_order },
+             class_name: "Master::PathwayPhase", primary_key: :pathway_code, foreign_key: :pathway_code
     has_many :events, -> { in_day_order },
              class_name: "Master::PathwayEvent", primary_key: :pathway_code, foreign_key: :pathway_code
     has_many :oat_units, class_name: "Master::PathwayOatUnit", primary_key: :pathway_code, foreign_key: :pathway_code

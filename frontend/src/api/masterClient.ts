@@ -6216,9 +6216,30 @@ export interface PathwayOatUnit {
   tasks: PathwayTask[];
 }
 
+/** フェーズの終わりで選べる次の候補。先頭が標準の経路。 */
+export interface PathwayPhaseBranch {
+  id: number;
+  display_order: number | null;
+  /** 次のフェーズ。null は「ここでパスを終了」。 */
+  to_phase_key: string | null;
+  /** 選ぶときの目安。 */
+  criteria: string | null;
+}
+
+/** フェーズ(連続する病日のまとまり)。適用はフェーズ単位で進める。先頭が開始フェーズ。 */
+export interface PathwayPhase {
+  id: number;
+  phase_key: string;
+  display_order: number | null;
+  name: string | null;
+  note: string | null;
+  branches: PathwayPhaseBranch[];
+}
+
 export interface PathwayEvent {
   id: number;
   display_order: number | null;
+  phase_key: string;
   /** 病日(入院日 = 1、入院前日 = -1)。 */
   elapsed_days: number;
   path_step: number;
@@ -6236,6 +6257,7 @@ export interface PathwayEvent {
 
 export interface PathwayDetail extends Pathway {
   indications: PathwayIndication[];
+  phases: PathwayPhase[];
   events: PathwayEvent[];
 }
 
@@ -6283,7 +6305,20 @@ export interface PathwayOatUnitPayload {
   tasks: PathwayTaskPayload[];
 }
 
+export interface PathwayPhaseBranchPayload {
+  to_phase_key: string | null;
+  criteria?: string | null;
+}
+
+export interface PathwayPhasePayload {
+  phase_key: string;
+  name?: string | null;
+  note?: string | null;
+  branches: PathwayPhaseBranchPayload[];
+}
+
 export interface PathwayEventPayload {
+  phase_key: string;
   elapsed_days: number;
   path_step?: number;
   path_step_name?: string | null;
@@ -6311,6 +6346,7 @@ export interface PathwayPayload {
   display_order?: number | null;
   note?: string | null;
   indications?: PathwayIndicationPayload[];
+  phases?: PathwayPhasePayload[];
   events?: PathwayEventPayload[];
 }
 

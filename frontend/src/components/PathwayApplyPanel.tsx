@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Pathway, PathwayDetail, PathwayEvent } from "../api/masterClient";
+import type { Pathway, PathwayDetail, PathwayEvent, PathwayPhaseBranch } from "../api/masterClient";
 import { useApplicablePathways, usePathway } from "../api/masterQueries";
 import {
   useApplyPathway,
   useKarteConditions,
+  usePathwayApplicationTree,
   usePathwayApplications,
   usePatient,
   usePatientAdmission,
@@ -20,7 +21,13 @@ import {
 import type { MealOrderFormValues } from "../fhir/mealOrderHelpers";
 import {
   buildPathwayApplyBundle,
+  buildPathwayPhaseBundle,
+  firstPhaseOf,
+  nextPhasesOf,
   orderHeaderUrlsOf,
+  pathwayOfPhase,
+  phaseEventDate,
+  phaseNoteOf,
   pathwayEventDate,
   pathwayOrderEnd,
   pathwayOrderPlan,
@@ -28,9 +35,11 @@ import {
   pathwayTaskOrderKey,
   stampPathwayOrders,
   withPathwayOrderEnd,
+  type PathwayApplicationRecord,
   type PathwayOrderPlanEntry,
   type PathwayOrderStart,
 } from "../fhir/pathwayApplyHelpers";
+import { phaseClosingEntries, planPhaseOrderClosings } from "../fhir/pathwayScheduleHelpers";
 import { PATHWAY_SETTING_OPTIONS, displayOfOption, eventDayStepLabel } from "../fhir/pathwayHelpers";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useOrderContext } from "../hooks/useOrderContext";
@@ -44,6 +53,8 @@ import { ORDER_SET_TYPE_LABELS, ORDER_SET_TYPES } from "./orderSetRegistry";
 // カルテ右ペインの「パス」。承認済のクリニカルパスを選び、入院(または入院予定)と入院日を
 // 決めて適用する。適用は CarePlan の木と未実施のタスクを 1 transaction で登録する
 // (fhir/pathwayApplyHelpers.ts)。設計は docs/clinical-pathway-design.md §7。
+// 適用はフェーズ単位で進める。最初は開始フェーズだけを登録し、続きは同じフォームを
+// 「次のフェーズ」として開いて足す(PathwayPhasePanel)。
 
 interface PathwayApplyPanelProps {
   patientId: string;
@@ -128,13 +139,71 @@ function PathwayApplyLoader({
       </div>
       <PathwayApplyForm
         patientId={patientId}
-        pathway={detail.data}
+        pathway={pathwayOfPhase(detail.data, firstPhaseOf(detail.data)?.phase_key ?? "")}
         defaultSetting={defaultSetting}
         patient={patientResult?.data}
         onSaved={onSaved}
       />
     </>
   );
+}
+
+/**
+ * 適用済みのパスに次のフェーズを足す。どのフェーズへ進むかは呼ぶ側で選んである(分岐の候補から)。
+ * 候補でないフェーズ(適用が進んだあとに開いたままのパネルなど)は登録させない。
+ */
+export function PathwayPhasePanel({
+  patientId,
+  applyId,
+  phaseKey,
+  onSaved,
+}: {
+  patientId: string;
+  applyId: string;
+  phaseKey: string;
+  onSaved: () => void;
+}) {
+  const tree = usePathwayApplicationTree(applyId);
+  const application = tree.data?.application ?? null;
+  const detail = usePathway(application?.pathwayCode || null);
+  const defaultSetting = useDefaultOrderSetting(patientId);
+  const { data: patientResult, isPending: patientPending } = usePatient(patientId);
+
+  if (tree.isPending || (application && detail.isPending) || !defaultSetting.ready || patientPending) {
+    return <p>読み込み中...</p>;
+  }
+  if (!application || !tree.data) return <ErrorBanner error={tree.error} />;
+  if (!detail.data) return <ErrorBanner error={detail.error} />;
+
+  const next = nextPhasesOf(application, detail.data);
+  const branch = next.candidates.find((b) => b.to_phase_key === phaseKey);
+  const phase = detail.data.phases.find((p) => p.phase_key === phaseKey);
+  if (!branch || !phase) return <p className="regimen-picker__empty">このフェーズは適用できません</p>;
+
+  return (
+    <>
+      <div className="order-set-apply__head">
+        <span className="regimen-apply__title">{`${detail.data.name} ${phase.name ?? ""}`}</span>
+      </div>
+      <PathwayApplyForm
+        patientId={patientId}
+        pathway={pathwayOfPhase(detail.data, phaseKey)}
+        defaultSetting={defaultSetting}
+        patient={patientResult?.data}
+        phase={{ application, orders: tree.data.orders, branch, defaultStartDate: next.defaultStartDate }}
+        onSaved={onSaved}
+      />
+    </>
+  );
+}
+
+/** 次のフェーズとして開いたときの文脈。 */
+interface PhaseApplyContext {
+  application: PathwayApplicationRecord;
+  /** 適用済みのタスクが指すオーダー(前のフェーズから続く食事・安静度を終えるのに使う)。 */
+  orders: Map<string, fhir4.ServiceRequest>;
+  branch: PathwayPhaseBranch;
+  defaultStartDate: string;
 }
 
 /**
@@ -170,12 +239,16 @@ function PathwayApplyForm({
   pathway,
   defaultSetting,
   patient,
+  phase,
   onSaved,
 }: {
   patientId: string;
+  /** 適用するフェーズに絞ったパス定義。 */
   pathway: PathwayDetail;
   defaultSetting: ReturnType<typeof useDefaultOrderSetting>;
   patient?: fhir4.Patient;
+  /** 渡すと「次のフェーズ」の適用になる(入院・適応基準・対象病名は適用済みのものを使う)。 */
+  phase?: PhaseApplyContext;
   onSaved: () => void;
 }) {
   const admission = usePatientAdmission(patientId);
@@ -208,9 +281,10 @@ function PathwayApplyForm({
     return options;
   }, [admission.data, planned.data]);
 
-  const [encounterId, setEncounterId] = useState("");
-  const [admissionDate, setAdmissionDate] = useState("");
-  const eventDateOf = (event: PathwayEvent) => pathwayEventDate(admissionDate, event.elapsed_days);
+  const [encounterId, setEncounterId] = useState(phase?.application.encounterId ?? "");
+  // 次のフェーズでは、フェーズの最初の病日の日付(開始日)。
+  const [admissionDate, setAdmissionDate] = useState(phase?.defaultStartDate ?? "");
+  const [comment, setComment] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [conditionIds, setConditionIds] = useState<string[] | null>(null);
   const stack = useStackedOrderForms<number>();
@@ -219,6 +293,9 @@ function PathwayApplyForm({
     () => [...pathway.events].sort((a, b) => a.elapsed_days - b.elapsed_days || a.path_step - b.path_step),
     [pathway.events],
   );
+  const firstDay = events[0]?.elapsed_days ?? 1;
+  const eventDateOf = (event: PathwayEvent) =>
+    phase ? phaseEventDate(admissionDate, firstDay, event.elapsed_days) : pathwayEventDate(admissionDate, event.elapsed_days);
 
   // 出すオーダーを病日順に積む(続く病日にまたがる継続するタスクは 1 件)。初期値は DO と同じ
   // 正規化(日付は当日、入外区分はパスのもの)で、開始日は後から病日の日付で上書きする(bulkStartDate)。
@@ -259,11 +336,11 @@ function PathwayApplyForm({
 
   // 入院中があればそれ、無ければ最初の入院予定を既定にする。入院日はその Encounter から入れる。
   useEffect(() => {
-    if (encounterId || encounterOptions.length === 0) return;
+    if (phase || encounterId || encounterOptions.length === 0) return;
     const first = encounterOptions[0];
     setEncounterId(first.id);
     setAdmissionDate(first.date || today());
-  }, [encounterId, encounterOptions]);
+  }, [phase, encounterId, encounterOptions]);
 
   function changeEncounter(id: string) {
     setEncounterId(id);
@@ -302,8 +379,32 @@ function PathwayApplyForm({
   const unitCount = events.reduce((n, e) => n + e.oat_units.length, 0);
   const taskCount = events.reduce((n, e) => n + e.oat_units.reduce((m, u) => m + u.tasks.length, 0), 0);
 
+  /** 次のフェーズが出す食事・安静度の最初の開始。前のフェーズから続くものをその直前で終える。 */
+  function closingsOf(starts: (PathwayOrderStart | null)[]) {
+    if (!phase) return [];
+    const firstOf = (continuity: "meal" | "activity") =>
+      templates
+        .map((t, index) => (t.plan.continuity === continuity ? starts[index] : null))
+        .filter((start): start is PathwayOrderStart => start !== null)
+        .sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
+    const meal = firstOf("meal");
+    return planPhaseOrderClosings(phase.application, phase.orders, {
+      meal: meal ? { date: meal.date, timing: meal.mealTiming } : null,
+      activity: firstOf("activity"),
+    });
+  }
+
   function handleApply() {
-    const message = !admissionDate
+    const lastApplied = phase?.application.events.at(-1)?.date ?? "";
+    const message = phase
+      ? !admissionDate
+        ? "開始日を入力してください"
+        : admissionDate <= lastApplied
+          ? `開始日は適用済みの最後の病日（${lastApplied}）より後にしてください`
+          : !requester.practitionerId
+            ? "依頼医師を選択してください"
+            : null
+      : !admissionDate
       ? "入院日を入力してください"
       : !confirmed
         ? "適応基準を確認してください"
@@ -330,7 +431,8 @@ function PathwayApplyForm({
       return;
     }
 
-    const applyKey = crypto.randomUUID();
+    // 次のフェーズのオーダーも同じ適用の印で束ねる(識別子は「医療機関番号.適用 uuid」)。
+    const applyKey = phase ? phase.application.applyId.slice(phase.application.applyId.indexOf(".") + 1) : crypto.randomUUID();
     const orderBundles: fhir4.Bundle[] = [];
     const invalidate = [];
     const orderHeaderUrls = new Map<string, string[]>();
@@ -362,6 +464,36 @@ function PathwayApplyForm({
       for (const event of entry.plan.events) {
         orderHeaderUrls.set(pathwayTaskOrderKey(event, entry.plan.task.task_key), urls);
       }
+    }
+
+    if (phase) {
+      const phaseTree = buildPathwayPhaseBundle({
+        pathway,
+        application: phase.application,
+        patientId,
+        startDate: admissionDate,
+        note: phaseNoteOf(phase.branch.criteria, comment),
+        orderHeaderUrls,
+      });
+      const closing: fhir4.Bundle = {
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: phaseClosingEntries(closingsOf(starts)),
+      };
+      apply.mutate(
+        {
+          bundle: stampPathwayOrders(
+            mergeTransactionBundles([phaseTree.bundle, ...orderBundles, closing]),
+            { code: pathway.pathway_code, name: pathway.name },
+            applyKey,
+          ),
+          applyFullUrl: phaseTree.firstEventUrl,
+          requesterId: requester.practitionerId,
+          invalidate,
+        },
+        { onSuccess: onSaved },
+      );
+      return;
     }
 
     const tree = buildPathwayApplyBundle({
@@ -404,6 +536,8 @@ function PathwayApplyForm({
       : null,
   );
 
+  const closings = admissionDate ? closingsOf(plannedStarts) : [];
+
   return (
     <div className="pathway-apply">
       {validationError && (
@@ -418,63 +552,83 @@ function PathwayApplyForm({
         </p>
       )}
 
-      <fieldset className="regimen-apply__fields">
-        <legend>入院</legend>
-        <div className="lab-order-item__fields">
-          <label>
-            適用先
-            <select value={encounterId} onChange={(e) => changeEncounter(e.target.value)}>
-              {encounterOptions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-              <option value="">指定しない</option>
-            </select>
-          </label>
-          <label>
-            入院日（病日 1）
-            <input type="date" value={admissionDate} onChange={(e) => setAdmissionDate(e.target.value)} />
-          </label>
-        </div>
-      </fieldset>
+      {phase ? (
+        <fieldset className="regimen-apply__fields">
+          <legend>フェーズ</legend>
+          {phase.branch.criteria && <p className="pathway-apply__criteria">{phase.branch.criteria}</p>}
+          <div className="lab-order-item__fields">
+            <label>
+              {`開始日（病日 ${firstDay}）`}
+              <input type="date" value={admissionDate} onChange={(e) => setAdmissionDate(e.target.value)} />
+            </label>
+            <label>
+              コメント
+              <input type="text" value={comment} onChange={(e) => setComment(e.target.value)} />
+            </label>
+          </div>
+        </fieldset>
+      ) : (
+        <>
+          <fieldset className="regimen-apply__fields">
+            <legend>入院</legend>
+            <div className="lab-order-item__fields">
+              <label>
+                適用先
+                <select value={encounterId} onChange={(e) => changeEncounter(e.target.value)}>
+                  {encounterOptions.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                  <option value="">指定しない</option>
+                </select>
+              </label>
+              <label>
+                入院日（病日 1）
+                <input type="date" value={admissionDate} onChange={(e) => setAdmissionDate(e.target.value)} />
+              </label>
+            </div>
+          </fieldset>
 
-      <fieldset className="regimen-apply__fields">
-        <legend>適応基準</legend>
-        <p className="pathway-apply__criteria">{pathway.adaptive_criteria}</p>
-        <label className="pathway-apply__check">
-          <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
-          適応基準を確認した
-        </label>
-      </fieldset>
+          <fieldset className="regimen-apply__fields">
+            <legend>適応基準</legend>
+            <p className="pathway-apply__criteria">{pathway.adaptive_criteria}</p>
+            <label className="pathway-apply__check">
+              <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
+              適応基準を確認した
+            </label>
+          </fieldset>
 
-      <fieldset className="regimen-apply__fields">
-        <legend>対象病名</legend>
-        {activeConditions.length === 0 ? (
-          <p className="regimen-picker__empty">継続中の病名がありません</p>
-        ) : (
-          <ul className="pathway-apply__conditions">
-            {activeConditions.map((condition) => {
-              const summary = summarizeCondition(condition);
-              return (
-                <li key={summary.id}>
-                  <label className="pathway-apply__check">
-                    <input
-                      type="checkbox"
-                      checked={selectedConditionIds.includes(summary.id)}
-                      onChange={() => toggleCondition(summary.id)}
-                    />
-                    {summary.name}
-                    {indicationNumbers.has(conditionManagementNumber(condition)) && (
-                      <span className="pathway-task__template-label">対象病名</span>
-                    )}
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </fieldset>
+          <fieldset className="regimen-apply__fields">
+            <legend>対象病名</legend>
+            {activeConditions.length === 0 ? (
+              <p className="regimen-picker__empty">継続中の病名がありません</p>
+            ) : (
+              <ul className="pathway-apply__conditions">
+                {activeConditions.map((condition) => {
+                  const summary = summarizeCondition(condition);
+                  return (
+                    <li key={summary.id}>
+                      <label className="pathway-apply__check">
+                        <input
+                          type="checkbox"
+                          checked={selectedConditionIds.includes(summary.id)}
+                          onChange={() => toggleCondition(summary.id)}
+                        />
+                        {summary.name}
+                        {indicationNumbers.has(conditionManagementNumber(condition)) && (
+                          <span className="pathway-task__template-label">対象病名</span>
+                        )}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </fieldset>
+
+        </>
+      )}
 
       <fieldset className="regimen-apply__fields">
         <legend>予定</legend>
@@ -505,7 +659,7 @@ function PathwayApplyForm({
             {events.map((event) => (
               <tr key={event.id}>
                 <td className="rad-item__compact">{eventLabel(event)}</td>
-                <td>{admissionDate ? pathwayEventDate(admissionDate, event.elapsed_days) : "—"}</td>
+                <td>{admissionDate ? eventDateOf(event) : "—"}</td>
                 <td className="rad-item__compact">{event.oat_units.length}</td>
                 <td className="rad-item__compact">
                   {event.oat_units.reduce((m, u) => m + u.tasks.length, 0)}
@@ -596,6 +750,17 @@ function PathwayApplyForm({
               );
             })}
           </div>
+        </fieldset>
+      )}
+
+      {closings.length > 0 && (
+        <fieldset className="regimen-apply__fields">
+          <legend>終了する指示</legend>
+          <ul className="pathway-apply__conditions">
+            {closings.map((c) => (
+              <li key={c.order.id}>{`${c.taskName}（〜${c.endDate}）`}</li>
+            ))}
+          </ul>
         </fieldset>
       )}
 

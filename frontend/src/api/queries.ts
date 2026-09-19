@@ -11858,6 +11858,9 @@ export interface PathwayApplicationTree {
 /** 適用の木の検索のキーの先頭。オーダーの実施入力などを閉じたときに読み直させるのに使う。 */
 export const PATHWAY_TREE_KEY_PREFIX: string[] = ["CarePlan", "search", "pathway-tree"];
 
+/** 適用の木の検索の 1 ページ(上流の _count の上限)。 */
+const PATHWAY_TREE_PAGE = 500;
+
 export function usePathwayApplicationTree(applyId: string | undefined) {
   const params = new URLSearchParams();
   if (applyId) params.set("part-of", `CarePlan/${applyId}`);
@@ -11869,7 +11872,7 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
   // リハビリ・栄養指導は日ごとの実施記録(オーダーを basedOn で指す Procedure)で実施を見るので、それも辿る。
   // 上流は同じ名前の _revinclude:iterate を並べると最後の 1 つしか効かないので、カンマで 1 つにまとめる。
   params.append("_revinclude:iterate", "Task:focus,Procedure:based-on");
-  params.set("_count", "500");
+  params.set("_count", String(PATHWAY_TREE_PAGE));
 
   return useQuery({
     queryKey: PATHWAY_TREE_KEY_PREFIX.concat(applyId ?? ""),
@@ -11878,7 +11881,19 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
         readResource<fhir4.CarePlan>("CarePlan", applyId as string),
         searchResource<fhir4.Resource>("CarePlan", params),
       ]);
-      const resources = (bundle.entry ?? []).map((e) => e.resource).filter((r): r is fhir4.Resource => Boolean(r));
+      // フェーズを重ねた長いパスは木の CarePlan が 1 ページ(500 件)を超えるので、残りのページも読む。
+      const pageCount = Math.ceil((bundle.total ?? 0) / PATHWAY_TREE_PAGE);
+      const rest = await Promise.all(
+        Array.from({ length: Math.max(pageCount - 1, 0) }, (_, i) => {
+          const pageParams = new URLSearchParams(params);
+          pageParams.set("_offset", String((i + 1) * PATHWAY_TREE_PAGE));
+          return searchResource<fhir4.Resource>("CarePlan", pageParams).then((r) => r.data);
+        }),
+      );
+      const resources = [bundle, ...rest]
+        .flatMap((page) => page.entry ?? [])
+        .map((e) => e.resource)
+        .filter((r): r is fhir4.Resource => Boolean(r));
       const orders = new Map<string, fhir4.ServiceRequest>();
       const goals = new Map<string, fhir4.Goal>();
       const carePlans = new Map<string, fhir4.CarePlan>();

@@ -26,10 +26,12 @@ import { ORDER_SET_TYPE_LABELS } from "./orderSetRegistry";
 interface PathwayCancelPanelProps {
   patientId: string;
   applyId: string;
+  /** 渡すとそのフェーズだけを取り消す(最後に適用したフェーズ)。 */
+  phaseKey?: string;
   onCancelled: () => void;
 }
 
-export function PathwayCancelPanel({ patientId, applyId, onCancelled }: PathwayCancelPanelProps) {
+export function PathwayCancelPanel({ patientId, applyId, phaseKey, onCancelled }: PathwayCancelPanelProps) {
   const tree = usePathwayApplicationTree(applyId);
   const observations = usePathwayObservations(patientId);
   const performs = useNursingPerformsOf(patientId);
@@ -53,14 +55,15 @@ export function PathwayCancelPanel({ patientId, applyId, onCancelled }: PathwayC
   }, [tree.data, observations.data, performs.data]);
   // オーダーが 1 件も無いパスでは Task の検索が走らないので、空として扱う。
   const taskList = ctx && ctx.orders.size === 0 ? [] : tasks.data;
-  const plan = ctx && taskList ? planPathwayCancel(ctx, taskList) : null;
+  const plan = ctx && taskList ? planPathwayCancel(ctx, taskList, phaseKey) : null;
 
   if (tree.isPending || observations.isPending || performs.isPending || (!taskList && !tasks.error)) return <p>読み込み中...</p>;
   if (!ctx || !plan) return <ErrorBanner error={tree.error ?? observations.error ?? performs.error ?? tasks.error} />;
   const application = ctx.application;
   const running = progress !== null;
-  const days = new Set(application.events.map((e) => e.elapsedDays)).size;
-  const units = application.events.reduce((n, e) => n + e.units.length, 0);
+  const targetEvents = application.events.filter((e) => phaseKey === undefined || e.phaseKey === phaseKey);
+  const days = new Set(targetEvents.map((e) => e.elapsedDays)).size;
+  const units = targetEvents.reduce((n, e) => n + e.units.length, 0);
 
   function handleCancel() {
     if (!plan || plan.blockers.length > 0) return;
@@ -83,7 +86,11 @@ export function PathwayCancelPanel({ patientId, applyId, onCancelled }: PathwayC
 
       <div className="chemo-calendar__summary pathway-evaluate__head">
         <span className="pathway-sheet__name">{application.title}</span>
-        <span>入院 {application.periodStart}</span>
+        {phaseKey === undefined ? (
+          <span>入院 {application.periodStart}</span>
+        ) : (
+          <span>{`${targetEvents[0]?.phaseName ?? ""} ${targetEvents[0]?.date ?? ""}〜`}</span>
+        )}
       </div>
 
       <fieldset className="regimen-apply__fields">

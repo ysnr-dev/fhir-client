@@ -80,7 +80,19 @@ export interface PathwaySheet {
   /** 病日ごとのまとまり。どれかの病日を分けていれば、見出しにステップの段を出す。 */
   dayGroups: SheetDayGroup[];
   split: boolean;
+  /** フェーズごとのまとまり。名前の付いたフェーズがあるパスだけ、見出しの上にフェーズの段を出す。 */
+  phaseGroups: SheetPhaseGroup[];
+  phased: boolean;
   rows: SheetRow[];
+}
+
+export interface SheetPhaseGroup {
+  phaseKey: string;
+  name: string;
+  /** 分岐を選んだときの記録(フェーズの最初の病日から)。 */
+  note: string;
+  /** 列の数。 */
+  span: number;
 }
 
 /**
@@ -205,7 +217,25 @@ export function buildPathwaySheet(
     }
     rows.push(...children.filter((r) => r.kind === "assessment"), ...children.filter((r) => r.kind === "task"));
   }
-  return { days, dayGroups, split: dayGroups.some((g) => g.days.length > 1), rows };
+  const phaseGroups: SheetPhaseGroup[] = [];
+  for (const event of application.events) {
+    const last = phaseGroups[phaseGroups.length - 1];
+    if (last && last.phaseKey === event.phaseKey) {
+      last.span += 1;
+      last.note ||= event.phaseNote;
+    } else {
+      phaseGroups.push({ phaseKey: event.phaseKey, name: event.phaseName, note: event.phaseNote, span: 1 });
+    }
+  }
+
+  return {
+    days,
+    dayGroups,
+    split: dayGroups.some((g) => g.days.length > 1),
+    phaseGroups,
+    phased: phaseGroups.some((g) => g.name !== ""),
+    rows,
+  };
 }
 
 // ---- タスクの実施 ----

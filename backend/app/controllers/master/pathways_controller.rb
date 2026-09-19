@@ -1,7 +1,7 @@
 module Master
   # クリニカルパス(施設パス)定義マスタ(docs/clinical-pathway-design.md)。
   #
-  # 本体と子(対象病名・病日・OAT ユニット・観察項目・タスク)を 1 リクエストで
+  # 本体と子(対象病名・フェーズと分岐・病日・OAT ユニット・観察項目・タスク)を 1 リクエストで
   # 読み書きする。子は配列を丸ごと置換し、display_order は配列順で振り直す(レジメンと
   # 同じ)。OAT ユニット・観察項目・タスクの uuid キーは画面が採り、置換で行を作り直しても
   # 変わらない(適用後データの識別子に使うため)。同じキーを複数の病日に置いたものが
@@ -130,7 +130,9 @@ module Master
     # 承認済・廃止でも動かせる項目。内容は凍結し、「使うのをやめる」「並び順を変える」だけ残す。
     FROZEN_EDITABLE_ATTRS = %i[status valid_from valid_to display_order].freeze
     INDICATION_ATTRS = %w[management_number name icd10].freeze
-    EVENT_ATTRS = %w[elapsed_days path_step path_step_name title allowable_condition_type allowable_days
+    PHASE_ATTRS = %w[phase_key name note].freeze
+    BRANCH_ATTRS = %w[to_phase_key criteria].freeze
+    EVENT_ATTRS = %w[phase_key elapsed_days path_step path_step_name title allowable_condition_type allowable_days
                      allowable_range_low allowable_range_high note].freeze
     UNIT_ATTRS = %w[unit_key name category code_system code critical note].freeze
     ASSESSMENT_ATTRS = %w[assessment_key name category_code category_name code_system code proper_value
@@ -157,7 +159,7 @@ module Master
     def frozen_change?
       return false unless frozen_record?
 
-      children_sent = %i[indications events].any? { |k| params.key?(k) }
+      children_sent = %i[indications phases events].any? { |k| params.key?(k) }
       content_sent = record_params.except(:pathway_code, :approved_on, :approved_by, *FROZEN_EDITABLE_ATTRS)
                                   .to_h.any? { |k, v| @record[k].to_s != v.to_s }
       children_sent || content_sent
@@ -218,24 +220,56 @@ module Master
         end
         insert_rows(Master::PathwayIndication, rows)
       end
+      replace_phases(code, params[:phases]) if params.key?(:phases)
       return unless params.key?(:events)
 
       delete_event_tree(code)
-      insert_event_tree(code, params[:events])
+      insert_event_tree(code, params[:events], default_phase_key(code))
+    end
+
+    # フェーズと、その下の分岐(phases[].branches[])。分岐元は親のフェーズ。
+    def replace_phases(code, raw_phases)
+      delete_phases(code)
+      phase_rows = []
+      branch_rows = []
+      each_row(raw_phases) do |row, index|
+        key = row["phase_key"].presence || SecureRandom.uuid
+        phase_rows << row.slice(*PHASE_ATTRS).merge(
+          "pathway_code" => code, "display_order" => index + 1, "phase_key" => key,
+        )
+        each_row(row["branches"]) do |branch_row, branch_index|
+          branch_rows << branch_row.slice(*BRANCH_ATTRS).merge(
+            "pathway_code" => code, "from_phase_key" => key, "display_order" => branch_index + 1,
+            "to_phase_key" => branch_row["to_phase_key"].presence,
+          )
+        end
+      end
+      insert_rows(Master::PathwayPhase, phase_rows, unique_by: %w[phase_key], duplicate_on: :phase_key)
+      insert_rows(Master::PathwayPhaseBranch, branch_rows)
+    end
+
+    # フェーズを指さない病日が入る先(先頭のフェーズ)。フェーズが 1 つも無ければ作る。
+    def default_phase_key(code)
+      first = Master::PathwayPhase.where(pathway_code: code).in_display_order.first
+      first ||= Master::PathwayPhase.create!(pathway_code: code, phase_key: SecureRandom.uuid, display_order: 1)
+      first.phase_key
     end
 
     # 病日 → OAT ユニット → 観察項目 → タスクを、階層ごとに 1 回の INSERT で入れる。
     # タスク→観察項目は assessment_key(uuid)で受け、同じユニットの中で新しい id に引き直す
     # (置換で id が変わるため)。
-    def insert_event_tree(code, raw_events)
+    def insert_event_tree(code, raw_events, default_phase)
       event_rows = []
       units = [] # [親の病日の添字, ユニットの行, ユニット内の並び]
       each_row(raw_events) do |row, index|
-        event_rows << row.slice(*EVENT_ATTRS).merge("pathway_code" => code, "display_order" => index + 1)
+        event_rows << row.slice(*EVENT_ATTRS).merge(
+          "pathway_code" => code, "display_order" => index + 1,
+          "phase_key" => row["phase_key"].presence || default_phase,
+        )
         each_row(row["oat_units"]) { |unit_row, unit_index| units << [index, unit_row, unit_index] }
       end
       event_ids = insert_rows(Master::PathwayEvent, event_rows,
-                              unique_by: %w[elapsed_days path_step], duplicate_on: :elapsed_days)
+                              unique_by: %w[phase_key elapsed_days path_step], duplicate_on: :elapsed_days)
 
       unit_rows = units.map do |event_index, row, index|
         row.slice(*UNIT_ATTRS).merge(
@@ -326,14 +360,25 @@ module Master
            .options[:message]
     end
 
-    # 病日と、その下の OAT ユニット・観察項目・タスク。保存後の検証と応答の組み立てで
-    # 同じものを使い、子テーブルを読むのは 1 回で済ませる。
-    PathwayTree = Struct.new(:events, :units_by_event, :assessments_by_unit, :tasks_by_unit, keyword_init: true)
+    # フェーズと分岐、病日と、その下の OAT ユニット・観察項目・タスク。保存後の検証と応答の
+    # 組み立てで同じものを使い、子テーブルを読むのは 1 回で済ませる。病日はフェーズ順 → 病日順。
+    PathwayTree = Struct.new(:phases, :branches_by_phase, :events, :units_by_event, :assessments_by_unit,
+                             :tasks_by_unit, keyword_init: true) do
+      def events_by_phase
+        @events_by_phase ||= events.group_by(&:phase_key)
+      end
+    end
 
     def load_tree(pathway)
       code = pathway.pathway_code
+      phases = Master::PathwayPhase.where(pathway_code: code).in_display_order.to_a
+      phase_order = phases.each_with_index.to_h { |phase, index| [phase.phase_key, index] }
+      events = Master::PathwayEvent.where(pathway_code: code).in_day_order.to_a
       PathwayTree.new(
-        events: Master::PathwayEvent.where(pathway_code: code).in_day_order.to_a,
+        phases: phases,
+        branches_by_phase: Master::PathwayPhaseBranch.where(pathway_code: code).in_display_order
+                                                     .group_by(&:from_phase_key),
+        events: events.sort_by.with_index { |event, index| [phase_order[event.phase_key] || phases.size, index] },
         units_by_event: Master::PathwayOatUnit.where(pathway_code: code).in_display_order.group_by(&:event_id),
         assessments_by_unit: Master::PathwayAssessment.where(pathway_code: code).in_display_order.group_by(&:unit_id),
         tasks_by_unit: Master::PathwayTask.where(pathway_code: code).in_display_order.group_by(&:unit_id),
@@ -350,8 +395,22 @@ module Master
 
     # 下書きでも通さないもの。識別子の重なり(同じ病日・OAT ユニットの中)はモデルの検証で弾く。
     def always_invalid_messages(tree)
-      duplicated = tree.events.group_by(&:event_key).select { |_, v| v.size > 1 }.keys
-      duplicated.map { |k| "病日 #{k} が重複しています" }
+      duplicated = tree.events.group_by { |e| [e.phase_key, e.event_key] }.select { |_, v| v.size > 1 }.keys
+      messages = duplicated.map { |_, k| "病日 #{k} が重複しています" }
+      keys = tree.phases.map(&:phase_key)
+      messages << "病日が結ぶフェーズがありません" if tree.events.any? { |e| keys.exclude?(e.phase_key) }
+      tree.phases.each do |phase|
+        (tree.branches_by_phase[phase.phase_key] || []).each do |branch|
+          next if branch.to_phase_key.blank?
+
+          if branch.to_phase_key == phase.phase_key
+            messages << "#{phase_label(phase)} の分岐先が同じフェーズです"
+          elsif keys.exclude?(branch.to_phase_key)
+            messages << "#{phase_label(phase)} の分岐先のフェーズがありません"
+          end
+        end
+      end
+      messages
     end
 
     # 承認するときだけ求める完全性。ここを通ったパスは、患者に適用したときに
@@ -363,8 +422,9 @@ module Master
       messages << "パス予定日数がありません" if record.scheduled_days.blank?
       return messages + ["病日がありません"] if events.empty?
 
-      last_day = events.map(&:elapsed_days).max
-      if record.scheduled_days.present? && record.scheduled_days < last_day
+      messages += phase_invalid_messages(tree)
+      last_day = standard_last_day(tree)
+      if record.scheduled_days.present? && last_day && record.scheduled_days < last_day
         messages << "パス予定日数(#{record.scheduled_days} 日)より後の病日(#{last_day} 日目)があります"
       end
       events.each do |event|
@@ -376,6 +436,100 @@ module Master
         messages << "タスク「#{task.name}」のオーダー雛形が空です"
       end
       messages
+    end
+
+    # フェーズと分岐の完全性。フェーズが 1 つのパスは病日の歯抜けを許す(分岐が無ければ
+    # 通しの病日が食い違うことはない)。
+    def phase_invalid_messages(tree)
+      phases = tree.phases
+      messages = []
+      phases.each do |phase|
+        messages << "#{phase_label(phase)} に病日がありません" if tree.events_by_phase[phase.phase_key].blank?
+      end
+      return messages if phases.size < 2
+
+      messages << "フェーズ名がありません" if phases.any? { |phase| phase.name.blank? }
+      messages << "フェーズの分岐が循環しています" if phase_cycle?(tree)
+      reachable = reachable_phase_keys(tree)
+      phases.each do |phase|
+        messages << "#{phase_label(phase)} に進む分岐がありません" if reachable.exclude?(phase.phase_key)
+        days = phase_days(tree, phase.phase_key)
+        next if days.empty?
+
+        unless days.each_cons(2).all? { |a, b| b == next_day(a) }
+          messages << "#{phase_label(phase)} の病日が連続していません"
+        end
+        (tree.branches_by_phase[phase.phase_key] || []).each do |branch|
+          target_days = phase_days(tree, branch.to_phase_key)
+          next if target_days.empty? || target_days.first == next_day(days.last)
+
+          target = phases.find { |p| p.phase_key == branch.to_phase_key }
+          messages << "#{phase_label(target)} は病日 #{next_day(days.last)} から始めてください" \
+                      "(#{phase_label(phase)} の続き)"
+        end
+      end
+      messages.uniq
+    end
+
+    # 標準の経路(各フェーズの分岐の先頭を辿る)の最終病日。
+    def standard_last_day(tree)
+      phase = tree.phases.first
+      return tree.events.map(&:elapsed_days).max unless phase
+
+      seen = []
+      last = nil
+      while phase && seen.exclude?(phase.phase_key)
+        seen << phase.phase_key
+        last = phase_days(tree, phase.phase_key).last || last
+        to = (tree.branches_by_phase[phase.phase_key] || []).first&.to_phase_key
+        phase = to && tree.phases.find { |p| p.phase_key == to }
+      end
+      last
+    end
+
+    def phase_days(tree, phase_key)
+      (tree.events_by_phase[phase_key] || []).map(&:elapsed_days).uniq.sort
+    end
+
+    # 病日は 0 を使わない(-1 の次は 1)。
+    def next_day(day)
+      day == -1 ? 1 : day + 1
+    end
+
+    def next_phase_keys(tree, phase_key)
+      (tree.branches_by_phase[phase_key] || []).filter_map(&:to_phase_key)
+    end
+
+    def reachable_phase_keys(tree)
+      first = tree.phases.first&.phase_key
+      reached = []
+      queue = [first].compact
+      until queue.empty?
+        key = queue.shift
+        next if reached.include?(key)
+
+        reached << key
+        queue.concat(next_phase_keys(tree, key))
+      end
+      reached
+    end
+
+    def phase_cycle?(tree)
+      state = {}
+      visit = lambda do |key|
+        return true if state[key] == :visiting
+        return false if state[key] == :done
+
+        state[key] = :visiting
+        found = next_phase_keys(tree, key).any? { |to| visit.call(to) }
+        state[key] = :done
+        found
+      end
+      tree.phases.any? { |phase| visit.call(phase.phase_key) }
+    end
+
+    def phase_label(phase)
+      phase&.name.present? ? "フェーズ「#{phase.name}」" : "フェーズ"
     end
 
     def event_label(event)
@@ -395,7 +549,9 @@ module Master
       to = target.pathway_code
       insert_copies(Master::PathwayIndication, source.indications.to_a, [], to)
       tree = load_tree(source)
-      event_ids = insert_copies(Master::PathwayEvent, tree.events, %w[elapsed_days path_step], to)
+      insert_copies(Master::PathwayPhase, tree.phases, [], to)
+      insert_copies(Master::PathwayPhaseBranch, tree.branches_by_phase.values.flatten, [], to)
+      event_ids = insert_copies(Master::PathwayEvent, tree.events, %w[phase_key elapsed_days path_step], to)
 
       units = tree.units_by_event.values.flatten.select { |unit| event_ids.key?(unit.event_id) }
       unit_ids = insert_copies(Master::PathwayOatUnit, units, %w[event_id unit_key], to) do |unit|
@@ -442,8 +598,14 @@ module Master
       Master::PathwayEvent.where(pathway_code: code).delete_all
     end
 
+    def delete_phases(code)
+      Master::PathwayPhaseBranch.where(pathway_code: code).delete_all
+      Master::PathwayPhase.where(pathway_code: code).delete_all
+    end
+
     def delete_children(code)
       delete_event_tree(code)
+      delete_phases(code)
       Master::PathwayIndication.where(pathway_code: code).delete_all
     end
 
@@ -460,6 +622,9 @@ module Master
       tasks_by_unit = tree.tasks_by_unit
       summary(pathway, events.map(&:elapsed_days).uniq.size, events.map(&:elapsed_days).max).merge(
         "indications" => pathway.indications.as_json,
+        "phases" => tree.phases.map do |phase|
+          phase.as_json.merge("branches" => (tree.branches_by_phase[phase.phase_key] || []).as_json)
+        end,
         "events" => events.map do |event|
           event.as_json.merge(
             "event_key" => event.event_key,

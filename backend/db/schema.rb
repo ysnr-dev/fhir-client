@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_17_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_18_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1153,7 +1153,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_17_100000) do
     t.text "note"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["pathway_code", "elapsed_days", "path_step"], name: "idx_master_pathway_events_day", unique: true
+    t.string "phase_key", null: false
+    t.index ["pathway_code", "phase_key", "elapsed_days", "path_step"], name: "idx_master_pathway_events_day", unique: true
   end
 
   create_table "master_pathway_indications", force: :cascade do |t|
@@ -1183,6 +1184,28 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_17_100000) do
     t.index ["event_id", "unit_key"], name: "index_master_pathway_oat_units_on_event_id_and_unit_key", unique: true
     t.index ["event_id"], name: "index_master_pathway_oat_units_on_event_id"
     t.index ["pathway_code", "unit_key"], name: "index_master_pathway_oat_units_on_pathway_code_and_unit_key"
+  end
+
+  create_table "master_pathway_phase_branches", force: :cascade do |t|
+    t.string "pathway_code", null: false
+    t.string "from_phase_key", null: false
+    t.string "to_phase_key"
+    t.text "criteria"
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["pathway_code", "from_phase_key"], name: "idx_master_pathway_phase_branches_from"
+  end
+
+  create_table "master_pathway_phases", force: :cascade do |t|
+    t.string "pathway_code", null: false
+    t.string "phase_key", null: false
+    t.integer "display_order"
+    t.string "name"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["pathway_code", "phase_key"], name: "index_master_pathway_phases_on_pathway_code_and_phase_key", unique: true
   end
 
   create_table "master_pathway_tasks", force: :cascade do |t|
