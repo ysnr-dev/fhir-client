@@ -56,10 +56,17 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
 export const KARTE_TABS = [
   { key: "karte", label: "カルテ" },
   { key: "condition", label: "病名" },
-  { key: "allergy", label: "アレルギー" },
   // 患者の「現在の状態」を区画ごとに読むタブ(時系列ではない)。今は診療上の注意
   // だけで、身体・感染症・生活などの区画を後から足す。
   { key: "profile", label: "プロファイル" },
+  { key: "allergy", label: "アレルギー" },
+  // 化学療法。レジメンの投与スケジュールは日付の器(暦)で見る(食事と同じ考え方)。
+  { key: "chemo", label: "化学療法" },
+  // クリニカルパス。適用したパスを病日 × OAT ユニットのシートで見る(紙のパスシートの形)。
+  { key: "pathway", label: "クリニカルパス" },
+  // 食事は「開始したら次の指示まで続く」ので、カードを日付順に読むだけでは
+  // その日に何を食べているかが分かりにくい。暦の形で見るタブを別に持つ。
+  { key: "meal", label: "食事" },
   // 経過表(POMR のフローシート)。上下分割で「上にカルテ、下に経過表」と並べて
   // 読めるよう、カルテ以外のタブとして持つ。
   { key: "flowsheet", label: "経過表" },
@@ -69,13 +76,6 @@ export const KARTE_TABS = [
   { key: "lab-timeline", label: "検体検査時系列" },
   { key: "micro", label: "細菌検査" },
   { key: "patho", label: "病理検査" },
-  // 食事は「開始したら次の指示まで続く」ので、カードを日付順に読むだけでは
-  // その日に何を食べているかが分かりにくい。暦の形で見るタブを別に持つ。
-  { key: "meal", label: "食事" },
-  // 化学療法。レジメンの投与スケジュールは日付の器(暦)で見る(食事と同じ考え方)。
-  { key: "chemo", label: "化学療法" },
-  // クリニカルパス。適用したパスを病日 × OAT ユニットのシートで見る(紙のパスシートの形)。
-  { key: "pathway", label: "パス" },
   // 看護指示(指示簿)。「今なにが有効か」を区分ごとに見る情報なので、時系列の
   // カードにはせずタブでのみ見る。
   { key: "nursing", label: "指示簿" },
@@ -92,13 +92,21 @@ export const KARTE_TABS = [
 export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
 
 /**
- * タブ行で「検査結果」1 つのドロップダウンにまとめるタブ。タブ自体は独立のまま
+ * タブ行で 1 つのドロップダウンにまとめるタブ。タブ自体は独立のまま
  * (URL の tab= もタブごと)で、タブ行の見た目だけを階層化する。
+ * 並ぶ位置は配下の先頭のタブの位置で、メニューの順もこの keys の順。
  */
-export const KARTE_LAB_GROUP: { label: string; keys: readonly KarteTabKey[] } = {
-  label: "検査結果",
-  keys: ["lab", "lab-timeline", "micro", "patho"],
-};
+export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly KarteTabKey[] }> = [
+  { label: "患者情報", keys: ["profile", "allergy"] },
+  { label: "診療情報", keys: ["chemo", "pathway", "meal"] },
+  { label: "検査結果", keys: ["lab", "lab-timeline", "micro", "patho"] },
+];
+
+/** そのタブを畳んでいるグループ。畳んでいなければ undefined。 */
+export function findKarteTabGroup(key: string) {
+  return KARTE_TAB_GROUPS.find((group) => (group.keys as readonly string[]).includes(key));
+}
+
 /** 上下分割モードで下ペインに出せるタブ(カルテは常に上ペインなので除く)。 */
 export type KarteOtherTabKey = Exclude<KarteTabKey, "karte">;
 

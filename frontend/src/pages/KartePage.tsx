@@ -63,7 +63,6 @@ import {
 import {
   KARTE_CARD_PARAM,
   KARTE_DETAIL_PARAM,
-  KARTE_LAB_GROUP,
   KARTE_OTHER_TABS,
   KARTE_OPEN_PARAM,
   KARTE_PROBLEM_PARAM,
@@ -76,6 +75,7 @@ import {
   parseKarteCard,
   parseKarteDetail,
   parseKarteTab,
+  findKarteTabGroup,
   type KarteDetailTarget,
   type KarteOtherTabKey,
   type KarteTabKey,
@@ -991,8 +991,8 @@ export function KartePage() {
 }
 
 // タブ行。右端に左ペインの表示モード切替ボタンを置く。
-// 検査結果系のタブ(検体検査・検体検査時系列・細菌検査)はタブ行に並べず、
-// 「検査結果」1 つのドロップダウンにまとめる(タブ行の幅と行数を増やさない)。
+// 患者情報・診療情報・検査結果のタブはタブ行に並べず、それぞれ 1 つの
+// ドロップダウンにまとめる(タブ行の幅と行数を増やさない)。
 function KarteTabs<K extends string>({
   tabs,
   active,
@@ -1004,18 +1004,21 @@ function KarteTabs<K extends string>({
   onSelect: (key: K) => void;
   trailing: ReactNode;
 }) {
-  const groupKeys = KARTE_LAB_GROUP.keys as readonly string[];
-  const groupTabs = tabs.filter((item) => groupKeys.includes(item.key));
   return (
     <div className="karte-tabs">
       <div className="karte-tabs__list" role="tablist">
         {tabs.map((item) => {
-          if (groupKeys.includes(item.key)) {
+          const group = findKarteTabGroup(item.key);
+          if (group) {
             // グループはまとめて 1 つ。先頭のタブの位置にだけ描く。
+            const groupTabs = group.keys
+              .map((key) => tabs.find((tab) => tab.key === (key as string)))
+              .filter((tab): tab is { key: K; label: string } => tab != null);
             if (item.key !== groupTabs[0]?.key) return null;
             return (
               <KarteTabGroup
                 key={item.key}
+                label={group.label}
                 tabs={groupTabs}
                 active={active}
                 onSelect={onSelect}
@@ -1041,14 +1044,16 @@ function KarteTabs<K extends string>({
   );
 }
 
-// 「検査結果」ドロップダウンタブ。ヘッダーメニュー(HoverMenu)と同様にマウスオーバーで
-// 開き、メニューで配下(検体検査・検体検査時系列・細菌検査)を選ぶ。タブ名は
-// 「検査結果」固定で、キーボード操作向けにクリックでも開閉する。
+// まとめたタブのドロップダウン。ヘッダーメニュー(HoverMenu)と同様にマウスオーバーで
+// 開き、メニューで配下のタブを選ぶ。タブ名はグループ名固定で、キーボード操作向けに
+// クリックでも開閉する。
 function KarteTabGroup<K extends string>({
+  label,
   tabs,
   active,
   onSelect,
 }: {
+  label: string;
   tabs: ReadonlyArray<{ key: K; label: string }>;
   active: K;
   onSelect: (key: K) => void;
@@ -1112,7 +1117,7 @@ function KarteTabGroup<K extends string>({
         className={`karte-tabs__tab${activeTab ? " karte-tabs__tab--active" : ""}`}
         onClick={() => setOpen((value) => !value)}
       >
-        {KARTE_LAB_GROUP.label}
+        {label}
         <span className="karte-tabs__caret" aria-hidden="true">
           ▾
         </span>
