@@ -17,7 +17,7 @@ import type { PatientCaution } from "../api/masterClient";
 import { regimenStatusLabel } from "../fhir/regimenOrderHelpers";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../fhir/infectionHelpers";
 import {
-  calculateAge,
+  ageWithMonthsLabel,
   displayKana,
   displayName,
   genderLabel,
@@ -49,8 +49,8 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
     : "";
 
   const kana = displayKana(p);
-  const age = p.birthDate ? calculateAge(p.birthDate) : undefined;
-  const birth = p.birthDate ? `${p.birthDate}${age !== undefined ? `（${age}歳）` : ""}` : "-";
+  const age = p.birthDate ? ageWithMonthsLabel(p.birthDate) : undefined;
+  const birth = p.birthDate ? `${p.birthDate}${age ? `（${age}）` : ""}` : "-";
   // 死亡は「その患者に今からオーダーを出してよいか」に直結するので帯に出す。
   const deceasedDate = p.deceasedDateTime?.slice(0, 10) ?? "";
   const deceased = deceasedDate || p.deceasedBoolean === true;
