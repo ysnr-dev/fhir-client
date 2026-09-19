@@ -399,9 +399,76 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
           </div>
         )}
         {list.length > 0 && (
-          <button type="button" onClick={() => updateView({ fullscreen: !fullscreen })}>
+          <button type="button" className="pathway-sheet__fullscreen" onClick={() => updateView({ fullscreen: !fullscreen })}>
             {fullscreen ? "全画面を終了" : "全画面"}
           </button>
+        )}
+        {/* よく使う操作は見出しの行にアイコンで並べる(見出し帯の行は増やさない)。取り消しはケバブに畳む。 */}
+        {application && (
+          <span className="pathway-sheet__menu">
+            {nextPhases && nextPhases.candidates.length > 0 && (
+              <button
+                type="button"
+                className="pathway-sheet__action pathway-sheet__action--primary"
+                data-tooltip="次のフェーズを適用"
+                aria-label="次のフェーズを適用"
+                onClick={() => setNextPhaseOpen(true)}
+              >
+                <ActionIcon name="next" />
+              </button>
+            )}
+            {application.status === "active" && (
+              <>
+                <button
+                  type="button"
+                  className="pathway-sheet__action"
+                  data-tooltip="予定外を追加"
+                  aria-label="予定外を追加"
+                  onClick={() => setUnplannedOpen(true)}
+                >
+                  <ActionIcon name="add" />
+                </button>
+                <button
+                  type="button"
+                  className="pathway-sheet__action"
+                  data-tooltip="日程の変更"
+                  aria-label="日程の変更"
+                  onClick={() => setScheduleOpen(true)}
+                >
+                  <ActionIcon name="schedule" />
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              className="pathway-sheet__action"
+              data-tooltip={application.status === "active" ? "終了・中止" : "終了の記録"}
+              aria-label={application.status === "active" ? "終了・中止" : "終了の記録"}
+              onClick={() => setCloseOpen(true)}
+            >
+              <ActionIcon name="close" />
+            </button>
+            {application.status === "active" && (
+              <RowMenu label="パスの操作" escapesClipping>
+                <button
+                  type="button"
+                  className="row-menu__item row-menu__item--danger"
+                  onClick={() => setCancelOpen(true)}
+                >
+                  適用の取り消し
+                </button>
+                {phaseCancellable && (
+                  <button
+                    type="button"
+                    className="row-menu__item row-menu__item--danger"
+                    onClick={() => setPhaseCancelOpen(true)}
+                  >
+                    フェーズの取り消し
+                  </button>
+                )}
+              </RowMenu>
+            )}
+          </span>
         )}
       </div>
 
@@ -473,47 +540,6 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                   )}
                 </button>
               ))}
-            {/* 操作は帯の行を増やさないよう、右端の小さなケバブにまとめる。 */}
-            <span className="pathway-sheet__menu">
-              <RowMenu label="パスの操作" escapesClipping>
-                {nextPhases && nextPhases.candidates.length > 0 && (
-                  <button type="button" className="row-menu__item" onClick={() => setNextPhaseOpen(true)}>
-                    次のフェーズを適用
-                  </button>
-                )}
-                {application.status === "active" && (
-                  <>
-                    <button type="button" className="row-menu__item" onClick={() => setUnplannedOpen(true)}>
-                      予定外を追加
-                    </button>
-                    <button type="button" className="row-menu__item" onClick={() => setScheduleOpen(true)}>
-                      日程の変更
-                    </button>
-                  </>
-                )}
-                <button type="button" className="row-menu__item" onClick={() => setCloseOpen(true)}>
-                  {application.status === "active" ? "終了・中止" : "終了の記録"}
-                </button>
-                {application.status === "active" && (
-                  <button
-                    type="button"
-                    className="row-menu__item row-menu__item--danger"
-                    onClick={() => setCancelOpen(true)}
-                  >
-                    適用の取り消し
-                  </button>
-                )}
-                {phaseCancellable && (
-                  <button
-                    type="button"
-                    className="row-menu__item row-menu__item--danger"
-                    onClick={() => setPhaseCancelOpen(true)}
-                  >
-                    フェーズの取り消し
-                  </button>
-                )}
-              </RowMenu>
-            </span>
           </div>
 
           {mode === "day" && (
@@ -901,6 +927,31 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
  * 次の列へ続いていれば右に線を引き、続きの最後のセルは矢印で終える(紙のパスシートで日をまたいで引く矢印)。
  * 線はセルの余白まで伸ばして隣のセルとつなげる。続いていないセルは中身だけ。
  */
+const ACTION_ICON_PATHS = {
+  // 次のフェーズ(先へ進む矢印)
+  next: "M2.5 8h9M8 4l4 4-4 4M13.5 3v10",
+  add: "M8 3v10M3 8h10",
+  // 日程(カレンダー)
+  schedule: "M2.5 4.5h11v9h-11zM2.5 7.5h11M5.5 2.5v3M10.5 2.5v3",
+  // 終了・中止(旗)
+  close: "M4 14V2.5M4 3h8l-2 3 2 3H4",
+} as const;
+
+function ActionIcon({ name }: { name: keyof typeof ACTION_ICON_PATHS }) {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+      <path
+        d={ACTION_ICON_PATHS[name]}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function SeriesLink({ fromPrev, toNext, children }: { fromPrev: boolean; toNext: boolean; children: ReactNode }) {
   if (!fromPrev && !toNext) return <>{children}</>;
   return (
