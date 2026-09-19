@@ -310,3 +310,28 @@ export function fileIconKindOf(contentType: string): PatientFileIconKind {
   if (contentType.startsWith("video/")) return "video";
   return "other";
 }
+
+export interface PatientFileDayGroup {
+  /** 診療日 "YYYY-MM-DD"。日付を持たないファイルは空文字。 */
+  date: string;
+  files: PatientFile[];
+}
+
+/**
+ * 診療日ごとにまとめる。並びは上流が `_sort=-date` で返した順のままなので、
+ * 同じ日が続く区間を折るだけでよい(ページの途中で日が切れても、そのページの
+ * 中では正しくまとまる)。
+ *
+ * 日付を持たないファイルだけは末尾に回す。上流の降順は NULL が先に来るが、
+ * カルテでは「日付なし」を最下部に置く決まりのため。
+ */
+export function groupPatientFilesByDate(files: readonly PatientFile[]): PatientFileDayGroup[] {
+  const groups: PatientFileDayGroup[] = [];
+  for (const file of files) {
+    const last = groups[groups.length - 1];
+    if (last && last.date === file.date) last.files.push(file);
+    else groups.push({ date: file.date, files: [file] });
+  }
+  const undated = groups.filter((group) => group.date === "");
+  return undated.length === 0 ? groups : [...groups.filter((g) => g.date !== ""), ...undated];
+}

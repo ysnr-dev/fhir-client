@@ -1,5 +1,11 @@
 import { useDeletePatientFile, usePatientFileBlob } from "../api/queries";
-import { contentTypeLabel, formatFileSize, type PatientFile } from "../fhir/patientFileHelpers";
+import { karteDayLabel } from "../fhir/karteTimeline";
+import {
+  contentTypeLabel,
+  formatFileSize,
+  groupPatientFilesByDate,
+  type PatientFile,
+} from "../fhir/patientFileHelpers";
 import { useObjectUrl } from "../hooks/useObjectUrl";
 import { ErrorBanner } from "./ErrorBanner";
 import { FileTypeIcon } from "./FileTypeIcon";
@@ -32,46 +38,54 @@ export function PatientFileGrid({
   return (
     <>
       <ErrorBanner error={deleteFile.error} />
-      <ul className="karte-file-grid">
-        {files.map((file) => (
-          <li key={file.id} className="karte-file-card">
-            <button
-              type="button"
-              className="karte-file-card__open"
-              onClick={() => onView(file.id)}
-              title={file.title}
-            >
-              <span className="karte-file-card__thumb">
-                <FileThumbnail file={file} />
-              </span>
-              <span className="karte-file-card__title">{file.title}</span>
-              <span className="karte-file-card__meta">
-                {file.date || "日付なし"}
-                {file.categoryName && ` / ${file.categoryName}`}
-              </span>
-              <span className="karte-file-card__meta">
-                {contentTypeLabel(file.contentType)}
-                {file.size === null ? "" : ` / ${formatFileSize(file.size)}`}
-              </span>
-            </button>
-            <span className="karte-file-card__menu">
-              <RowMenu label={`${file.title} の操作`}>
-                <button type="button" className="row-menu__item" onClick={() => onEdit(file.id)}>
-                  編集
-                </button>
+      {groupPatientFilesByDate(files).map((group) => (
+        <section key={group.date || "undated"} className="karte-file-day">
+          <h4 className="karte-file-day__date">{karteDayLabel(group.date)}</h4>
+          <ul className="karte-file-grid">
+            {group.files.map((file) => (
+              <li key={file.id} className="karte-file-card">
                 <button
                   type="button"
-                  className="row-menu__item row-menu__item--danger"
-                  onClick={() => handleDelete(file)}
-                  disabled={deleteFile.isPending}
+                  className="karte-file-card__open"
+                  onClick={() => onView(file.id)}
+                  title={file.title}
                 >
-                  削除
+                  <span className="karte-file-card__thumb">
+                    <FileThumbnail file={file} />
+                  </span>
+                  <span className="karte-file-card__title">{file.title}</span>
+                  <span className="karte-file-card__meta">
+                    {file.categoryName || "カテゴリなし"}
+                  </span>
+                  <span className="karte-file-card__meta">
+                    {contentTypeLabel(file.contentType)}
+                    {file.size === null ? "" : ` / ${formatFileSize(file.size)}`}
+                  </span>
                 </button>
-              </RowMenu>
-            </span>
-          </li>
-        ))}
-      </ul>
+                <span className="karte-file-card__menu">
+                  <RowMenu label={`${file.title} の操作`}>
+                    <button
+                      type="button"
+                      className="row-menu__item"
+                      onClick={() => onEdit(file.id)}
+                    >
+                      編集
+                    </button>
+                    <button
+                      type="button"
+                      className="row-menu__item row-menu__item--danger"
+                      onClick={() => handleDelete(file)}
+                      disabled={deleteFile.isPending}
+                    >
+                      削除
+                    </button>
+                  </RowMenu>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </>
   );
 }

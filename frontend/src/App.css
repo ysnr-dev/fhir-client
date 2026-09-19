@@ -17378,6 +17378,33 @@ button.chemo-calendar__cell[draggable="true"] {
   color: var(--accent);
 }
 
+/* 診療日の見出し。表もサムネイルも、カルテのタイムラインと同じく日で区切って読む。
+   スクロールしても今どの日を見ているか分かるよう、グループの上端に貼り付ける。 */
+.karte-file-table__day th,
+.karte-file-day__date {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 4px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+  background: var(--surface-panel);
+}
+
+.karte-file-table__day th {
+  padding: 4px 10px;
+  text-align: left;
+}
+
+.karte-file-day__date {
+  margin: 0 0 6px;
+}
+
+.karte-file-day + .karte-file-day {
+  margin-top: 10px;
+}
+
 /* サムネイルの一覧。左ペインは幅が変わるので、入る枚数は幅に任せる。 */
 .karte-file-grid {
   display: grid;
