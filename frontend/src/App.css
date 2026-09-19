@@ -17379,21 +17379,24 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 /* 診療日の見出し。表もサムネイルも、カルテのタイムラインと同じく日で区切って読む。
-   スクロールしても今どの日を見ているか分かるよう、グループの上端に貼り付ける。 */
+   スクロールしても今どの日を見ているか分かるよう、グループの上端に貼り付ける。
+   中身の行と地続きに見えないよう、一段沈んだ面で塗って左端に印を立てる
+   (印は box-shadow で描く。表は border-collapse なので border だと表の外へはみ出す)。 */
 .karte-file-table__day th,
 .karte-file-day__date {
   position: sticky;
   top: 0;
   z-index: 1;
-  padding: 4px 0;
-  font-size: 13px;
+  padding: 4px 10px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.04em;
   color: var(--text-h);
-  background: var(--surface-panel);
+  background: var(--surface-sunken);
+  box-shadow: inset 3px 0 0 var(--accent-border);
 }
 
 .karte-file-table__day th {
-  padding: 4px 10px;
   text-align: left;
 }
 
