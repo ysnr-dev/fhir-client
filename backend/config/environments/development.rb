@@ -59,4 +59,7 @@ Rails.application.configure do
   # app via its Docker Compose service name ("backend") rather than
   # localhost. Default localhost/127.0.0.1/::1 allowances are unaffected.
   config.hosts << "backend"
+
+  # DICOM の実体の置き場(config/storage.yml)。
+  config.active_storage.service = :local
 end

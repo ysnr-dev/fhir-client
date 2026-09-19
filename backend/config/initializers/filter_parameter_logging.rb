@@ -4,5 +4,7 @@
 # sensitive information. See the ActiveSupport::ParameterFilter documentation for supported
 # notations and behaviors.
 Rails.application.config.filter_parameters += [
-  :passw, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn
+  :passw, :secret, :token, :_key, :crypt, :salt, :certificate, :otp, :ssn,
+  # DICOM 取込(/imaging/instances)。meta は取込元の患者名・ID を含む。
+  :meta, :file
 ]

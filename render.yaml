@@ -51,6 +51,17 @@ services:
       # ここは env フォールバック(未設定でも構わない)。
       - key: FHIR_ADMIN_TOKEN
         sync: false
+      # 取り込んだ DICOM の実体の置き場(Cloudflare R2。docs/imaging-design.md)。
+      # Render の無料枠には永続ディスクが無いので、本番は外部ストレージが要る。
+      # R2_ENDPOINT は https://<account id>.r2.cloudflarestorage.com。
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
 
   # --- React SPA(Vite ビルドの静的配信) ---
   # /fhir・/master は rewrite で backend にプロキシし同一オリジン化する
@@ -111,6 +122,13 @@ services:
       - type: rewrite
         source: /facility_settings
         destination: https://ysnr-fhir-client-api.onrender.com/facility_settings
+      # 取り込んだ DICOM の保存・配信。
+      - type: rewrite
+        source: /imaging
+        destination: https://ysnr-fhir-client-api.onrender.com/imaging
+      - type: rewrite
+        source: /imaging/*
+        destination: https://ysnr-fhir-client-api.onrender.com/imaging/*
       # SPA フォールバック(react-router の直リンク対応)
       - type: rewrite
         source: /*

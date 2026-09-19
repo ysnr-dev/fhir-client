@@ -84,6 +84,9 @@ export const KARTE_TABS = [
   // 取り込んだファイル(紹介状・同意書・持参の検査結果など)。診療の経過そのもの
   // ではなく「患者に付いている書類の束」なので、タイムラインには出さずタブで見る。
   { key: "file", label: "ファイル" },
+  // 取り込んだ DICOM(他院の CD など)。スタディ → シリーズ → 画像の階層を持ち、専用の
+  // ビューアで開くので、ファイルとは別のタブにする。
+  { key: "imaging", label: "DICOM" },
 ] as const;
 
 export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];

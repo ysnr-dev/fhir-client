@@ -94,6 +94,8 @@ DocumentReference
   独立した書類には要らない縛りで、1 回に入れられる総量が減るだけになる。
 - **Active Storage を入れて backend に持つ**。`storage.yml` の新設と Render のディスク / S3 が要る。
   FHIR リソースを backend に持たない方針とも合わない。
+  (DICOM の実体だけは Active Storage に置いている。上流に置ける大きさではなく、FHIR リソースでもない
+  ため。`docs/imaging-design.md` §2.1。書類をこちらへ寄せる理由にはならない。)
 
 ### 2.4 削除は `DocumentReference` だけ
 

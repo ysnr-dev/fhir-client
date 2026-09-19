@@ -1,0 +1,21 @@
+# DICOM の実体の置き場(docs/imaging-design.md)。
+local:
+  service: Disk
+  root: <%= ENV.fetch("ACTIVE_STORAGE_ROOT") { Rails.root.join("storage") } %>
+
+test:
+  service: Disk
+  root: <%= Rails.root.join("tmp/storage") %>
+
+# Cloudflare R2(S3 互換)。checksum の 2 行は、aws-sdk-s3 が既定で付ける CRC32 を
+# R2 が受け付けないため。
+r2:
+  service: S3
+  endpoint: <%= ENV["R2_ENDPOINT"] %>
+  access_key_id: <%= ENV["R2_ACCESS_KEY_ID"] %>
+  secret_access_key: <%= ENV["R2_SECRET_ACCESS_KEY"] %>
+  bucket: <%= ENV["R2_BUCKET"] %>
+  region: auto
+  force_path_style: true
+  request_checksum_calculation: when_required
+  response_checksum_validation: when_required

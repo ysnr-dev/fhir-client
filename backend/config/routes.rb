@@ -54,6 +54,19 @@ Rails.application.routes.draw do
   # 変更は管理者だけなので /admin/facility_settings 側。
   resource :facility_settings, only: :show
 
+  # 取り込んだ DICOM(docs/imaging-design.md)。実体はこの backend が持ち、上流には
+  # ImagingStudy だけを置く。UID はドットを含むので format を切り、制約で形を絞る。
+  scope "imaging", module: "imaging", format: false do
+    post "instances", to: "instances#create"
+    get "instances/:sop_uid", to: "instances#show", constraints: { sop_uid: /[0-9.]+/ }
+    get "studies", to: "studies#index"
+    scope "studies/:study_uid", constraints: { study_uid: /[0-9.]+/ } do
+      get "instances", to: "studies#instances"
+      post "commit", to: "studies#commit"
+      delete "", to: "studies#destroy"
+    end
+  end
+
   # 帳票出力(QuestionnaireResponse の PDF 化)。FHIR リソースではないため
   # /fhir とは別のプレーン JSON / PDF エンドポイント。
   namespace :reports do

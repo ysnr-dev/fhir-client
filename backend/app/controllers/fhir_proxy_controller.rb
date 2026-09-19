@@ -28,11 +28,15 @@ class FhirProxyController < ApplicationController
   # アウトカムの達成・未達成(バリアンス)を持つ。
   # DocumentReference はカルテに取り込んだファイル(docs/patient-file-design.md)。
   # 本体は Binary に置き、この参照が診療日・カテゴリ・表示名を持つ。
+  # ImagingStudy は取り込んだ DICOM のスタディ(docs/imaging-design.md)。実体は
+  # backend の Active Storage にあり、書き込みも /imaging が行う。ここを通るのは
+  # 「画像」タブの一覧・詳細の読み出し。
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
     PractitionerRole Composition Task Procedure MedicationAdministration MedicationDispense
     Location Schedule Slot Appointment Encounter Provenance Flag CarePlan Goal DocumentReference
+    ImagingStudy
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 

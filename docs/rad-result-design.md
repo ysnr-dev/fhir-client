@@ -341,6 +341,8 @@ Task の `completed` 化が 1 つの transaction で走る。
    PACS 連携(MPPS / RDSR 取り込み)を行う時点で導入し、`procedureReference` で
    ここで作る Procedure を指す。［事実］R4 で Procedure と ImagingStudy を直接
    つなぐ経路はこれだけ(`Procedure.report` は DiagnosticReport 用)。
+   持ち込みの DICOM を取り込んだときの `ImagingStudy`(`docs/imaging-design.md`)は別の話で、
+   UID は実ファイルのもの。院内の実施記録とはまだ繋いでいない。
 
 2. **会計連携**。［事実］上流に `ChargeItem` / `Claim` / `Invoice` は未実装。
    FHIR 上で会計を完結させず、オーダー明細(`receipt_code`)+ Procedure の

@@ -111,6 +111,19 @@ RSpec.describe "FhirProxy", type: :request do
     end
   end
 
+  describe "GET /fhir/ImagingStudy" do
+    it "is allowlisted and forwards the search" do
+      stub_request(:get, "#{upstream_base}/ImagingStudy")
+        .with(query: { "patient" => "123" })
+        .to_return(status: 200, body: '{"resourceType":"Bundle"}',
+                   headers: { "Content-Type" => "application/fhir+json" })
+
+      get "/fhir/ImagingStudy?patient=123"
+
+      expect(response).to have_http_status(:ok)
+    end
+  end
+
   describe "resource type allowlist" do
     it "returns 404 OperationOutcome for a resource type that is not allowlisted, without calling upstream" do
       get "/fhir/Coverage/1"

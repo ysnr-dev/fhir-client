@@ -17599,3 +17599,255 @@ button.chemo-calendar__cell[draggable="true"] {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ---- カルテの「画像」タブ(取り込んだ DICOM) ---- */
+
+.karte-imaging-import__pickers {
+  display: flex;
+  gap: 8px;
+}
+
+.karte-imaging-import__patient {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.karte-imaging-import__table td:first-child {
+  width: 1%;
+}
+
+.karte-imaging-import__progress {
+  margin-right: auto;
+  color: var(--text);
+}
+
+.karte-imaging-series {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.karte-imaging-series__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.karte-imaging-series__thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 176px;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.karte-imaging-series__thumb:disabled {
+  cursor: default;
+}
+
+.karte-imaging-series__thumb canvas {
+  width: 160px;
+  height: 160px;
+}
+
+.karte-imaging-series__unsupported {
+  color: #bbb;
+  font-size: 12px;
+}
+
+.karte-imaging-series__caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-h);
+}
+
+/* ビューアは画面全体を使う。画像を読む場なので、配色はテーマによらず暗くする。 */
+.dicom-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  background: #111;
+  color: #ddd;
+}
+
+.dicom-viewer__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #1c1c1e;
+  border-bottom: 1px solid #333;
+}
+
+.dicom-viewer__toolbar button,
+.dicom-viewer__toolbar select {
+  background: #2a2a2d;
+  border: 1px solid #444;
+  color: #ddd;
+}
+
+.dicom-viewer__toolbar button:disabled {
+  opacity: 0.5;
+}
+
+.dicom-viewer__tools {
+  display: flex;
+  gap: 4px;
+  margin-right: 8px;
+}
+
+.dicom-viewer__toolbar .dicom-viewer__tool--active {
+  background: #3d5a80;
+  border-color: #6c93c4;
+  color: #fff;
+}
+
+.dicom-viewer__close {
+  margin-left: auto;
+}
+
+.dicom-viewer__body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.dicom-viewer__series {
+  width: 200px;
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  list-style: none;
+  border-right: 1px solid #333;
+}
+
+.dicom-viewer__series li + li {
+  margin-top: 6px;
+}
+
+.dicom-viewer__series button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  height: auto;
+  padding: 6px 8px;
+  background: #1c1c1e;
+  border: 1px solid #333;
+  color: #ccc;
+  font-size: 12px;
+  text-align: left;
+}
+
+.dicom-viewer__series .dicom-viewer__series--active {
+  border-color: #6c93c4;
+  color: #fff;
+}
+
+.dicom-viewer__stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  background: #000;
+}
+
+.dicom-viewer__viewport {
+  position: absolute;
+  inset: 0;
+}
+
+.dicom-viewer__overlay {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #e6e6a0;
+  text-shadow: 0 0 2px #000;
+  pointer-events: none;
+}
+
+.dicom-viewer__overlay--top-left {
+  top: 0;
+  left: 0;
+}
+
+.dicom-viewer__overlay--top-right {
+  top: 0;
+  right: 0;
+  text-align: right;
+}
+
+.dicom-viewer__overlay--bottom-left {
+  bottom: 0;
+  left: 0;
+}
+
+.dicom-viewer__overlay--bottom-right {
+  right: 0;
+  bottom: 0;
+  text-align: right;
+}
+
+.dicom-viewer__error {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 80%;
+}
+
+.modal--dicom-tags {
+  width: min(960px, 94vw);
+  color: var(--text-h);
+}
+
+/* 検索フォームの外にある入力にはフォーム側のスタイルが当たらないので、
+   同じ見た目をここで与える(.patient-search-form input と揃える)。 */
+.dicom-tags__filter {
+  width: 100%;
+  margin-bottom: 8px;
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.dicom-tags__scroll {
+  max-height: 68vh;
+  overflow: auto;
+}
+
+.dicom-tags__table td {
+  font-size: 12px;
+}
+
+.dicom-tags__table td:not(:last-child) {
+  white-space: nowrap;
+}
+
+.dicom-tags__table td:first-child {
+  font-family: monospace;
+}
+
+.dicom-tags__table td:last-child {
+  word-break: break-all;
+}

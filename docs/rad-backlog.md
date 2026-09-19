@@ -353,11 +353,14 @@ COMPLETE / SUSPEND / RESUME)という器は既にあり、いま呼んでいる�
 ### F-1. ImagingStudy と PACS 連携
 
 ［事実］`JP_ImagingStudy_Radiology` は `series` を持つなら `series.uid` と `series.modality` が 1..1 で、
-DICOM の Study / Series UID が要る(`docs/rad-result-design.md` §7-1)。［事実］`ImagingStudy` は
-`FhirProxyController::ALLOWED_RESOURCE_TYPES` にも無い。
+DICOM の Study / Series UID が要る(`docs/rad-result-design.md` §7-1)。
 
-［提案］モダリティ・PACS と繋がるまで作らない。UID を捏造すると、後で実機の UID と突き合わせられない
-偽データが残る。読影レポート(A)は `imagingStudy` を空で作り、連携時に足す。
+［事実］持ち込みの DICOM(他院の CD など)をカルテに取り込んだときは `ImagingStudy` を作る
+(`docs/imaging-design.md`)。UID は実ファイルのもので、`ImagingStudy` は許可リストにも入った(読み出し用)。
+ここで先送りしているのは、院内の撮影についての `ImagingStudy` と、オーダー・レポートとの紐付け。
+
+［提案］院内の撮影ぶんは、モダリティ・PACS と繋がるまで作らない。UID を捏造すると、後で実機の UID と
+突き合わせられない偽データが残る。読影レポート(A)は `imagingStudy` を空で作り、連携時に足す。
 ［導出］画像ビューアへのリンクには Accession Number が要るので、その段階で
 `ServiceRequest.identifier` への採番(上流の `$next-identifier`)を併せて入れる。
 

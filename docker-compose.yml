@@ -41,12 +41,16 @@ services:
       # management screen. Normally entered in the 接続設定 screen (stored
       # encrypted in the DB); this env var is only the fallback.
       # FHIR_ADMIN_TOKEN: ""
+      # 取り込んだ DICOM の実体の置き場(Active Storage のローカルディスク)。
+      # バインドマウントの ./backend 配下ではなく、専用のボリュームに置く。
+      ACTIVE_STORAGE_ROOT: /storage
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "3001:3001"
     volumes:
       - ./backend:/app
+      - dicom_storage:/storage
     depends_on:
       db:
         condition: service_healthy
@@ -65,3 +69,4 @@ services:
 
 volumes:
   pg_data:
+  dicom_storage:

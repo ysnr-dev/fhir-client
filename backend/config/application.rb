@@ -5,7 +5,7 @@ require "rails"
 require "active_model/railtie"
 require "active_job/railtie"
 require "active_record/railtie"
-# require "active_storage/engine"
+require "active_storage/engine"
 require "action_controller/railtie"
 # require "action_mailer/railtie"
 # require "action_mailbox/engine"
@@ -35,6 +35,14 @@ module Backend
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+
+    # Active Storage は DICOM の実体(docs/imaging-design.md)だけに使う。配信は
+    # /imaging が認証つきで中継するので、既定の /rails/active_storage/* は生やさない。
+    # 画像変換・解析はしない(ジョブ基盤が無く、DICOM には意味も無い)。
+    config.active_storage.draw_routes = false
+    config.active_storage.variant_processor = :disabled
+    config.active_storage.analyzers = []
+    config.active_storage.previewers = []
 
     # ログインセッション用の Cookie。アプリ本体のログイン(/auth、/fhir・
     # /master・/reports の認可)と管理UI(/admin)が 1 つのセッションに同居する

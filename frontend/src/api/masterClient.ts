@@ -215,7 +215,7 @@ export interface MasterSearchResult<T> {
 
 // ログインセッションは same-origin fetch に自動で載る。非 GET への CSRF
 // トークン付与と 401(セッション失効)の通知だけを行う(fhirClient と同じ)。
-async function masterFetch(url: string, init: RequestInit = {}): Promise<Response> {
+export async function masterFetch(url: string, init: RequestInit = {}): Promise<Response> {
   const method = (init.method ?? "GET").toUpperCase();
   const res = await fetch(url, { ...init, headers: withCsrfHeaders(method, init.headers) });
   if (res.status === 401) notifyUnauthorized();

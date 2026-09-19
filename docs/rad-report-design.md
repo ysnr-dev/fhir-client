@@ -468,7 +468,8 @@ extension[rad-report-image]                                    0..*(並び順 = 
 
 ## 9. 未決事項・申し送り
 
-1. **ImagingStudy と PACS 連携**。［事実］上流は ImagingStudy に対応しているが、プロキシの許可リストに無い。
+1. **ImagingStudy と PACS 連携**。［事実］`ImagingStudy` は持ち込み DICOM の取込(`docs/imaging-design.md`)で
+   使っており、プロキシの許可リストにも入った。院内の撮影ぶんと、レポートとの紐付けはまだ無い。
    ［事実］JP_ImagingStudy_Radiology は `series.uid` と `series.modality` が 1..1 で DICOM の UID が要る。
    連携の段階で `DiagnosticReport.imagingStudy` を足し、ビューアを開くリンクを内容表示に出す。
    そのとき、ここで添付した画像は「キー画像の写し」として残す(PACS の画像を指し直すことはしない)。

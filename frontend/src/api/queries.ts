@@ -512,6 +512,8 @@ import {
   type FhirResult,
 } from "./fhirClient";
 import { fetchFacilitySettings } from "./facilityClient";
+import { deleteImagingStudy, fetchStoredStudies, fetchStudyInstances } from "./imagingClient";
+import { IMAGING_STUDY_SUMMARY_ELEMENTS } from "../fhir/imagingHelpers";
 
 // シェーマ画像を伴う保存は、画像 Binary と本体を 1 つの transaction Bundle で
 // atomic に書く(片方だけ保存されて孤児 Binary が残ることを防ぐ)。画像がない
@@ -12122,5 +12124,84 @@ export function useDeletePatientFile() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PATIENT_FILE_KEY });
     },
+  });
+}
+
+// --- 取り込んだ DICOM(docs/imaging-design.md) --------------------------------
+
+const IMAGING_STUDY_COUNT = 20;
+export const IMAGING_STUDY_KEY = ["ImagingStudy"];
+const IMAGING_STORED_KEY = ["imaging", "stored"];
+
+/**
+ * 患者のスタディ一覧。並びは検査日の降順。series(インスタンスの一覧)は数百件に
+ * なるので、一覧では _elements で落とす。
+ */
+export function useImagingStudySearch(patientId: string | undefined, offset: number) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("patient", `Patient/${patientId}`);
+  params.set("_count", String(IMAGING_STUDY_COUNT));
+  params.set("_offset", String(offset));
+  params.set("_sort", "-started");
+  params.set("_elements", IMAGING_STUDY_SUMMARY_ELEMENTS);
+
+  const query = useQuery({
+    queryKey: [...IMAGING_STUDY_KEY, "search", patientId, offset],
+    queryFn: () => searchResource<fhir4.ImagingStudy>("ImagingStudy", params),
+    placeholderData: keepPreviousData,
+    enabled: Boolean(patientId),
+  });
+
+  return {
+    ...query,
+    bundle: query.data?.data,
+    total: query.data?.data.total ?? 0,
+    count: IMAGING_STUDY_COUNT,
+    hasPrevious: hasRelation(query.data?.data, "previous"),
+    hasNext: hasRelation(query.data?.data, "next"),
+  };
+}
+
+export function useImagingStudy(id: string | undefined) {
+  return useQuery({
+    queryKey: [...IMAGING_STUDY_KEY, id],
+    queryFn: () => readResource<fhir4.ImagingStudy>("ImagingStudy", id as string),
+    enabled: Boolean(id),
+  });
+}
+
+/** backend が実体を持っているスタディと枚数。取込フォームが取込済みの判定に使う。 */
+export function useStoredImagingStudies(patientId: string | undefined) {
+  return useQuery({
+    queryKey: [...IMAGING_STORED_KEY, patientId],
+    queryFn: () => fetchStoredStudies(patientId as string),
+    enabled: Boolean(patientId),
+  });
+}
+
+/** スタディの保存済みインスタンス(フレーム数など、ImagingStudy に無い属性を持つ)。 */
+export function useImagingStudyInstances(patientId: string | undefined, studyUid: string | undefined) {
+  return useQuery({
+    queryKey: [...IMAGING_STORED_KEY, patientId, studyUid],
+    queryFn: () => fetchStudyInstances(patientId as string, studyUid as string),
+    enabled: Boolean(patientId && studyUid),
+  });
+}
+
+/** 取込・削除のあとに、スタディの一覧と保存済みの枚数を読み直す。 */
+export function useInvalidateImaging() {
+  const queryClient = useQueryClient();
+  return () => {
+    queryClient.invalidateQueries({ queryKey: IMAGING_STUDY_KEY });
+    queryClient.invalidateQueries({ queryKey: IMAGING_STORED_KEY });
+  };
+}
+
+/** スタディを実体ごと消す(上流の ImagingStudy も backend が消す)。 */
+export function useDeleteImagingStudy(patientId: string) {
+  const invalidate = useInvalidateImaging();
+  return useMutation({
+    mutationFn: (studyUid: string) => deleteImagingStudy(patientId, studyUid),
+    onSuccess: invalidate,
   });
 }
