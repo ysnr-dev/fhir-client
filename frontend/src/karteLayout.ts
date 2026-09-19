@@ -12,6 +12,11 @@ export type KarteProblemMode = "dim" | "filter";
 // days: 診療日のツリー(既定) / categories: 情報の種別で絞り込む一覧
 export type KarteSidePaneMode = "days" | "categories";
 
+// ファイルタブの一覧の見せ方。
+// list: 表(既定。診療日・カテゴリ・種類まで並べて読む)
+// thumbnail: サムネイル(画像を目で探す)
+export type KarteFileViewMode = "list" | "thumbnail";
+
 const MODE_STORAGE_KEY = "fhir-client.karte.leftPaneMode";
 const TOP_RATIO_STORAGE_KEY = "fhir-client.karte.leftPaneTopRatio";
 const LEFT_WIDTH_RATIO_STORAGE_KEY = "fhir-client.karte.leftPaneWidthRatio";
@@ -22,6 +27,7 @@ const PROBLEM_MODE_STORAGE_KEY = "fhir-client.karte.problemMode";
 const SIDE_PANE_MODE_STORAGE_KEY = "fhir-client.karte.sidePaneMode";
 const TODAY_PANE_STORAGE_KEY = "fhir-client.karte.todayPaneVisible";
 const TODAY_RATIO_STORAGE_KEY = "fhir-client.karte.todayPaneRatio";
+const FILE_VIEW_MODE_STORAGE_KEY = "fhir-client.karte.fileViewMode";
 
 // 上下どちらのペインも潰れないように、上ペインが占める比率を制限する。
 const MIN_TOP_RATIO = 0.2;
@@ -224,5 +230,22 @@ export function storeTodayMainRatio(ratio: number) {
     localStorage.setItem(TODAY_RATIO_STORAGE_KEY, String(clampTodayMainRatio(ratio)));
   } catch {
     // 保存できなくてもその場の表示は変える。
+  }
+}
+
+// ファイルタブの一覧の見せ方。既定は表。
+export function readFileViewMode(): KarteFileViewMode {
+  try {
+    return localStorage.getItem(FILE_VIEW_MODE_STORAGE_KEY) === "thumbnail" ? "thumbnail" : "list";
+  } catch {
+    return "list";
+  }
+}
+
+export function storeFileViewMode(mode: KarteFileViewMode) {
+  try {
+    localStorage.setItem(FILE_VIEW_MODE_STORAGE_KEY, mode);
+  } catch {
+    // 保存できなくてもその場の表示は切り替える。
   }
 }

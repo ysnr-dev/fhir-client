@@ -262,3 +262,51 @@ export function previewKindOf(contentType: string): PatientFilePreviewKind {
   if (contentType.startsWith("text/") || contentType === "application/json") return "text";
   return "none";
 }
+
+/**
+ * サムネイルに出すアイコンの種類。中身を読めないファイルを MIME で見分けるためのもので、
+ * 同じ見た目でよいもの(Word と OpenDocument など)は 1 つにまとめる。
+ */
+export type PatientFileIconKind =
+  | "image"
+  | "pdf"
+  | "document"
+  | "spreadsheet"
+  | "presentation"
+  | "text"
+  | "archive"
+  | "audio"
+  | "video"
+  | "other";
+
+const ICON_KIND_BY_TYPE: Record<string, PatientFileIconKind> = {
+  "application/pdf": "pdf",
+  "application/msword": "document",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "document",
+  "application/vnd.oasis.opendocument.text": "document",
+  "application/rtf": "document",
+  "application/vnd.ms-excel": "spreadsheet",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "spreadsheet",
+  "application/vnd.oasis.opendocument.spreadsheet": "spreadsheet",
+  "text/csv": "spreadsheet",
+  "text/tab-separated-values": "spreadsheet",
+  "application/vnd.ms-powerpoint": "presentation",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "presentation",
+  "application/vnd.oasis.opendocument.presentation": "presentation",
+  "application/zip": "archive",
+  "application/x-zip-compressed": "archive",
+  "application/gzip": "archive",
+  "application/x-tar": "archive",
+  "application/json": "text",
+  "application/xml": "text",
+};
+
+export function fileIconKindOf(contentType: string): PatientFileIconKind {
+  const known = ICON_KIND_BY_TYPE[contentType];
+  if (known) return known;
+  if (contentType.startsWith("image/")) return "image";
+  if (contentType.startsWith("text/")) return "text";
+  if (contentType.startsWith("audio/")) return "audio";
+  if (contentType.startsWith("video/")) return "video";
+  return "other";
+}

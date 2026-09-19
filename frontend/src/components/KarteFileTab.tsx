@@ -15,12 +15,14 @@ import {
   parsePatientFileValues,
   type PatientFileValues,
 } from "../fhir/patientFileHelpers";
+import { readFileViewMode, storeFileViewMode, type KarteFileViewMode } from "../karteLayout";
 import { dateTimeLabel } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { FileCategoryModal } from "./FileCategoryModal";
 import { KarteFilePreview } from "./KarteFilePreview";
 import { KarteFileUploadForm } from "./KarteFileUploadForm";
 import { Pagination } from "./Pagination";
+import { PatientFileGrid } from "./PatientFileGrid";
 import { PatientFileTable } from "./PatientFileTable";
 
 // カルテ画面の「ファイル」タブ(docs/patient-file-design.md)。
@@ -56,6 +58,7 @@ export function KarteFileTab({ patientId, view, onViewChange }: KarteFileTabProp
   const [offset, setOffset] = useState(0);
   const [categoryCode, setCategoryCode] = useState("");
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<KarteFileViewMode>(readFileViewMode);
 
   // 戻る・進むで表示対象が変わったら、開いていたフォームは畳む。
   useEffect(() => setForm(null), [view]);
@@ -127,6 +130,14 @@ export function KarteFileTab({ patientId, view, onViewChange }: KarteFileTabProp
               </option>
             ))}
           </select>
+          <FileViewModeButton
+            mode={viewMode}
+            onToggle={() => {
+              const next = viewMode === "list" ? "thumbnail" : "list";
+              setViewMode(next);
+              storeFileViewMode(next);
+            }}
+          />
           <button type="button" onClick={() => setCategoriesOpen(true)}>
             カテゴリ管理
           </button>
@@ -142,11 +153,19 @@ export function KarteFileTab({ patientId, view, onViewChange }: KarteFileTabProp
         <p>読み込み中...</p>
       ) : (
         <>
-          <PatientFileTable
-            files={files}
-            onView={(fileId) => onViewChange(fileId)}
-            onEdit={(fileId) => setForm({ kind: "edit", fileId })}
-          />
+          {viewMode === "thumbnail" ? (
+            <PatientFileGrid
+              files={files}
+              onView={(fileId) => onViewChange(fileId)}
+              onEdit={(fileId) => setForm({ kind: "edit", fileId })}
+            />
+          ) : (
+            <PatientFileTable
+              files={files}
+              onView={(fileId) => onViewChange(fileId)}
+              onEdit={(fileId) => setForm({ kind: "edit", fileId })}
+            />
+          )}
           <Pagination
             offset={offset}
             count={count}
@@ -161,6 +180,51 @@ export function KarteFileTab({ patientId, view, onViewChange }: KarteFileTabProp
 
       {categoriesOpen && <FileCategoryModal onClose={() => setCategoriesOpen(false)} />}
     </div>
+  );
+}
+
+// 表とサムネイルの切り替え。カルテのペイン分割の切り替えと同じく、押したら
+// どちらになるかをアイコンで描く。
+function FileViewModeButton({
+  mode,
+  onToggle,
+}: {
+  mode: KarteFileViewMode;
+  onToggle: () => void;
+}) {
+  const thumbnail = mode === "thumbnail";
+  const label = thumbnail ? "表で表示" : "サムネイルで表示";
+  return (
+    <button
+      type="button"
+      className="karte-file-view-mode icon-tooltip"
+      data-tooltip={label}
+      aria-label={label}
+      aria-pressed={thumbnail}
+      onClick={onToggle}
+    >
+      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+        {thumbnail ? (
+          // 表に戻す: 行が並んだアイコン
+          <path
+            d="M2 4h12M2 8h12M2 12h12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        ) : (
+          // サムネイルにする: 格子のアイコン
+          <path
+            d="M2.5 2.5h4v4h-4zM9.5 2.5h4v4h-4zM2.5 9.5h4v4h-4zM9.5 9.5h4v4h-4z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.3"
+            strokeLinejoin="round"
+          />
+        )}
+      </svg>
+    </button>
   );
 }
 

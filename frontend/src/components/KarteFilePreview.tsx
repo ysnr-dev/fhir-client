@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { usePatientFileBlob } from "../api/queries";
 import { previewKindOf, type PatientFile } from "../fhir/patientFileHelpers";
+import { useObjectUrl } from "../hooks/useObjectUrl";
 import { ErrorBanner } from "./ErrorBanner";
 
 // 取り込んだファイルのプレビューとダウンロード。中身は Binary から blob で取り、
@@ -12,11 +13,7 @@ export function KarteFilePreview({ file }: { file: PatientFile }) {
   const kind = previewKindOf(file.contentType);
   const [text, setText] = useState<string | null>(null);
 
-  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
-  useEffect(() => {
-    if (!url) return;
-    return () => URL.revokeObjectURL(url);
-  }, [url]);
+  const url = useObjectUrl(blob);
 
   useEffect(() => {
     if (kind !== "text" || !blob) {

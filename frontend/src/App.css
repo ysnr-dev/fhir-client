@@ -17361,6 +17361,120 @@ button.chemo-calendar__cell[draggable="true"] {
   color: var(--text-h);
 }
 
+/* 表とサムネイルの切り替え。隣の絞り込み・ボタンと同じ高さの正方形にする。 */
+.karte-file-view-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  padding: 0;
+  border-color: var(--border);
+  color: var(--text);
+  background: transparent;
+}
+
+.karte-file-view-mode:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* サムネイルの一覧。左ペインは幅が変わるので、入る枚数は幅に任せる。 */
+.karte-file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.karte-file-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.karte-file-card:hover {
+  border-color: var(--accent-border);
+}
+
+/* カード全体が詳細を開くボタン。押せる範囲を広く取りたいので中身ごと包む。 */
+.karte-file-card__open {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+  height: auto;
+  padding: 0 0 6px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-h);
+  text-align: left;
+}
+
+/* サムネイルの枠。中身の縦横比に関わらず並びが崩れないよう高さを固定する。 */
+.karte-file-card__thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 92px;
+  margin-bottom: 4px;
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.karte-file-card__image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* 画像でないファイルは MIME ごとのアイコンを出す。 */
+.karte-file-card__kind {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--text);
+}
+
+.karte-file-card__loading {
+  font-size: 11px;
+}
+
+.karte-file-card__title {
+  padding: 0 6px;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.karte-file-card__meta {
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+/* ケバブはサムネイルの右上に重ねる(カードの縦を食わない)。 */
+.karte-file-card__menu {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.karte-file-card__menu .row-menu__trigger {
+  padding: 0 6px;
+  height: 22px;
+  font-size: 15px;
+  line-height: 20px;
+  background: var(--bg);
+}
+
 /* ファイルを落とせる範囲。ドラッグ中は枠と背景で示す(読影レポートの画像欄と同じ)。 */
 .karte-file-drop {
   display: flex;
