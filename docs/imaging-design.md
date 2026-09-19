@@ -38,7 +38,7 @@ PNG / JPEG だけで、DICOM のまま取り込んで見る手段が無かった
 ［事実］FHIR の `ImagingStudy` はもともと画素を持たない。実体は PACS にあり、`ImagingStudy` はそこを指す。
 
 ［決定］**DICOM の実体は、この backend の Active Storage に置く**(開発はローカルディスク、本番は
-Cloudflare R2)。**上流にはメタ情報の `ImagingStudy` だけを置く**。backend が簡易の PACS の役をする形で、
+Backblaze B2)。**上流にはメタ情報の `ImagingStudy` だけを置く**。backend が簡易の PACS の役をする形で、
 将来ほんものの PACS に繋ぐときは、画像の取得先を差し替えればよい。
 
 ［決定］Active Storage は DICOM のためだけに使う。`docs/patient-file-design.md` §2.3 が Active Storage を
@@ -121,8 +121,8 @@ File Meta Information(group 0002)だけ。ここは転送構文によらず Expl
 | `POST /imaging/studies/:study_uid/commit` | 保存済みの行から `ImagingStudy` を置く |
 | `DELETE /imaging/studies/:study_uid?patient=` | §2.5 |
 
-［決定］配信は backend が中継する(R2 へのリダイレクトにしない)。ブラウザから見えるオリジンが 1 つの
-ままなので、ログインの Cookie がそのまま効き、R2 側の CORS 設定も要らない。Active Storage の
+［決定］配信は backend が中継する(ストレージへのリダイレクトにしない)。ブラウザから見えるオリジンが
+1 つのままなので、ログインの Cookie がそのまま効き、ストレージ側の CORS 設定も要らない。Active Storage の
 既定のルート(`/rails/active_storage/*`)は生やさない(`draw_routes = false`)。
 
 ［決定］Direct upload は使わない。サーバーで DICOM の検証ができなくなり、既定のルートも開けることになる。
@@ -190,8 +190,12 @@ File Meta Information(group 0002)だけ。ここは転送構文によらず Expl
 
 ## 5. 本番の準備
 
-1. Cloudflare R2 にバケットと API トークンを作り、Render の backend に `R2_ENDPOINT` /
-   `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` を設定する(`render.yaml`)。
+1. Backblaze B2 に非公開のバケットと、そのバケットに限定した Read and Write のアプリケーションキーを
+   作る。B2 の有効化にはカードの登録は要らないが、SMS による電話番号の確認が要る。Render の backend に
+   `B2_KEY_ID`(keyID) / `B2_APPLICATION_KEY`(applicationKey) / `B2_BUCKET` を設定する
+   (`B2_ENDPOINT` と `B2_REGION` は `render.yaml` に直接書いてある)。無料枠は 10GB と、
+   保存量の 3 倍までの下り転送。別の S3 互換ストレージに替えるときは `config/storage.yml` の
+   `b2` ブロックと env だけを差し替える。
 2. `render.yaml` の static site に `/imaging` と `/imaging/*` の rewrite がある(無いと SPA フォールバックに落ちる)。
 3. 上流の変更は無い(`ImagingStudy` は実装済み)。
 

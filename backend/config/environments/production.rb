@@ -81,5 +81,5 @@ Rails.application.configure do
   config.active_record.dump_schema_after_migration = false
 
   # DICOM の実体の置き場(config/storage.yml)。
-  config.active_storage.service = ENV.fetch("ACTIVE_STORAGE_SERVICE", "r2").to_sym
+  config.active_storage.service = ENV.fetch("ACTIVE_STORAGE_SERVICE", "b2").to_sym
 end

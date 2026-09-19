@@ -7,15 +7,17 @@ test:
   service: Disk
   root: <%= Rails.root.join("tmp/storage") %>
 
-# Cloudflare R2(S3 互換)。checksum の 2 行は、aws-sdk-s3 が既定で付ける CRC32 を
-# R2 が受け付けないため。
-r2:
+# Backblaze B2(S3 互換)。endpoint と region はバケットの詳細画面に出る値
+# (例: s3.us-east-005.backblazeb2.com / us-east-005)。access_key_id はアプリケーション
+# キーの keyID、secret_access_key は applicationKey。
+# checksum の 2 行は、aws-sdk-s3 が既定で付ける CRC32 を S3 以外が受け付けないため。
+b2:
   service: S3
-  endpoint: <%= ENV["R2_ENDPOINT"] %>
-  access_key_id: <%= ENV["R2_ACCESS_KEY_ID"] %>
-  secret_access_key: <%= ENV["R2_SECRET_ACCESS_KEY"] %>
-  bucket: <%= ENV["R2_BUCKET"] %>
-  region: auto
+  endpoint: <%= ENV["B2_ENDPOINT"] %>
+  access_key_id: <%= ENV["B2_KEY_ID"] %>
+  secret_access_key: <%= ENV["B2_APPLICATION_KEY"] %>
+  bucket: <%= ENV["B2_BUCKET"] %>
+  region: <%= ENV["B2_REGION"] %>
   force_path_style: true
   request_checksum_calculation: when_required
   response_checksum_validation: when_required

@@ -51,16 +51,19 @@ services:
       # ここは env フォールバック(未設定でも構わない)。
       - key: FHIR_ADMIN_TOKEN
         sync: false
-      # 取り込んだ DICOM の実体の置き場(Cloudflare R2。docs/imaging-design.md)。
+      # 取り込んだ DICOM の実体の置き場(Backblaze B2。docs/imaging-design.md)。
       # Render の無料枠には永続ディスクが無いので、本番は外部ストレージが要る。
-      # R2_ENDPOINT は https://<account id>.r2.cloudflarestorage.com。
-      - key: R2_ENDPOINT
+      # endpoint と region はバケットの詳細画面に出る値。
+      - key: B2_ENDPOINT
+        value: https://s3.us-east-005.backblazeb2.com
+      - key: B2_REGION
+        value: us-east-005
+      # キーはアプリケーションキーの keyID / applicationKey。
+      - key: B2_KEY_ID
         sync: false
-      - key: R2_ACCESS_KEY_ID
+      - key: B2_APPLICATION_KEY
         sync: false
-      - key: R2_SECRET_ACCESS_KEY
-        sync: false
-      - key: R2_BUCKET
+      - key: B2_BUCKET
         sync: false
 
   # --- React SPA(Vite ビルドの静的配信) ---
