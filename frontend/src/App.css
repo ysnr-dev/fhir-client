@@ -17391,7 +17391,7 @@ button.chemo-calendar__cell[draggable="true"] {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: var(--text-h);
+  color: var(--accent);
   background: var(--surface-sunken);
   box-shadow: inset 3px 0 0 var(--accent-border);
 }
