@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_18_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_19_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -40,6 +40,16 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_18_100000) do
     t.datetime "updated_at", null: false
     t.text "fhir_admin_token"
     t.index ["singleton_guard"], name: "index_fhir_connection_settings_on_singleton_guard", unique: true
+  end
+
+  create_table "file_categories", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.integer "display_order", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_file_categories_on_code", unique: true
+    t.index ["name"], name: "index_file_categories_on_name", unique: true
   end
 
   create_table "master_ctcae_terms", force: :cascade do |t|

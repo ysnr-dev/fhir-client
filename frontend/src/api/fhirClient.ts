@@ -122,12 +122,18 @@ export function deleteResource(resourceType: string, id: string): Promise<FhirRe
   return fhirFetch(`${BASE}/${resourceType}/${id}`, { method: "DELETE" }).then((r) => handle(r));
 }
 
-// Binary を raw バイトで取得して dataURL にする。非 FHIR Accept を送ると
-// 上流が data を decode した生バイトを contentType 付きで返す。
-export async function fetchBinaryImage(id: string): Promise<string> {
-  const res = await fhirFetch(`${BASE}/Binary/${id}`, { headers: { Accept: "image/*" } });
+// Binary を raw バイトで取得する。非 FHIR な Accept を送ると上流が data を
+// decode した生バイトを contentType 付きで返す(Accept が空・json・*/* だと
+// FHIR JSON 表現になるので、必ず具体的な型を送る)。
+export async function fetchBinaryBlob(id: string, accept = "application/octet-stream"): Promise<Blob> {
+  const res = await fhirFetch(`${BASE}/Binary/${id}`, { headers: { Accept: accept } });
   if (!res.ok) throw new FhirError(res.status);
-  const blob = await res.blob();
+  return res.blob();
+}
+
+// Binary を dataURL にする。
+export async function fetchBinaryImage(id: string): Promise<string> {
+  const blob = await fetchBinaryBlob(id, "image/*");
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);

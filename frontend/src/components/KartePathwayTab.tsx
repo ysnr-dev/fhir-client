@@ -409,7 +409,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
             {nextPhases && nextPhases.candidates.length > 0 && (
               <button
                 type="button"
-                className="pathway-sheet__action pathway-sheet__action--primary"
+                className="pathway-sheet__action pathway-sheet__action--primary icon-tooltip"
                 data-tooltip="次のフェーズを適用"
                 aria-label="次のフェーズを適用"
                 onClick={() => setNextPhaseOpen(true)}
@@ -421,7 +421,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
               <>
                 <button
                   type="button"
-                  className="pathway-sheet__action"
+                  className="pathway-sheet__action icon-tooltip"
                   data-tooltip="予定外を追加"
                   aria-label="予定外を追加"
                   onClick={() => setUnplannedOpen(true)}
@@ -430,7 +430,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
                 </button>
                 <button
                   type="button"
-                  className="pathway-sheet__action"
+                  className="pathway-sheet__action icon-tooltip"
                   data-tooltip="日程の変更"
                   aria-label="日程の変更"
                   onClick={() => setScheduleOpen(true)}
@@ -441,7 +441,7 @@ export function KartePathwayTab({ patientId, view, onViewChange, onOpenOrder, on
             )}
             <button
               type="button"
-              className="pathway-sheet__action"
+              className="pathway-sheet__action icon-tooltip"
               data-tooltip={application.status === "active" ? "終了・中止" : "終了の記録"}
               aria-label={application.status === "active" ? "終了・中止" : "終了の記録"}
               onClick={() => setCloseOpen(true)}

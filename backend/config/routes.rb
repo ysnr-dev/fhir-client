@@ -44,6 +44,10 @@ Rails.application.routes.draw do
 
     # テンプレートカテゴリ(独自マスタ)。Questionnaire 側は拡張に code を持つ。
     resources :questionnaire_categories, only: %i[index create update destroy]
+
+    # ファイルカテゴリ(独自マスタ)。取り込んだファイルの DocumentReference 側は
+    # category の coding に code を持つ。
+    resources :file_categories, only: %i[index create update destroy]
   end
 
   # 「自院」がどの Organization かの参照(ログイン済みユーザー全員が読む)。

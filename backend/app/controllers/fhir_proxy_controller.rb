@@ -26,11 +26,13 @@ class FhirProxyController < ApplicationController
   # CarePlan / Goal はクリニカルパスの適用後データ(docs/clinical-pathway-design.md)。
   # 適用 1 件は CarePlan の木(適用 → 病日 → OAT ユニット → 観察項目)で、Goal が
   # アウトカムの達成・未達成(バリアンス)を持つ。
+  # DocumentReference はカルテに取り込んだファイル(docs/patient-file-design.md)。
+  # 本体は Binary に置き、この参照が診療日・カテゴリ・表示名を持つ。
   ALLOWED_RESOURCE_TYPES = %w[
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
     PractitionerRole Composition Task Procedure MedicationAdministration MedicationDispense
-    Location Schedule Slot Appointment Encounter Provenance Flag CarePlan Goal
+    Location Schedule Slot Appointment Encounter Provenance Flag CarePlan Goal DocumentReference
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 

@@ -1,14 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createFileCategory,
   createOauthClient,
   createQuestionnaireCategory,
   createReportLayout,
+  deleteFileCategory,
   deleteOauthClient,
   deleteQuestionnaireCategory,
   deleteReportLayout,
   fetchAdminFacilitySettings,
   fetchAdminSession,
   fetchConnectionSettings,
+  fetchFileCategories,
   fetchOauthClients,
   fetchQuestionnaireCategories,
   fetchReportLayout,
@@ -20,9 +23,11 @@ import {
   updateAdminFacilitySettings,
   type FacilitySettingsPayload,
   updateConnectionSettings,
+  updateFileCategory,
   updateQuestionnaireCategory,
   updateReportLayout,
   type ConnectionSettingsUpdate,
+  type FileCategoryPayload,
   type NewOauthClient,
   type QuestionnaireCategoryPayload,
   type ReportLayoutPayload,
@@ -35,6 +40,7 @@ const OAUTH_CLIENTS_KEY = ["admin", "oauth_clients"];
 const SCOPE_OPTIONS_KEY = ["admin", "scope_options"];
 const REPORT_LAYOUTS_KEY = ["admin", "report_layouts"];
 const QUESTIONNAIRE_CATEGORIES_KEY = ["admin", "questionnaire_categories"];
+const FILE_CATEGORIES_KEY = ["admin", "file_categories"];
 
 // 管理系はすべて retry: false。自動リトライされた 401 は上流 fhir-server の
 // レート制限(admin/ip)を無駄に消費するだけで、状況を改善しない。
@@ -258,6 +264,51 @@ export function useDeleteQuestionnaireCategory() {
     retry: false,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUESTIONNAIRE_CATEGORIES_KEY });
+    },
+  });
+}
+
+// ファイルカテゴリもテンプレートカテゴリと同じく、件数が少なく変更も稀なので
+// staleTime を長めに取る。
+export function useFileCategories() {
+  return useQuery({
+    queryKey: FILE_CATEGORIES_KEY,
+    queryFn: fetchFileCategories,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useCreateFileCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: FileCategoryPayload) => createFileCategory(payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: FILE_CATEGORIES_KEY });
+    },
+  });
+}
+
+export function useUpdateFileCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: FileCategoryPayload }) =>
+      updateFileCategory(id, payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: FILE_CATEGORIES_KEY });
+    },
+  });
+}
+
+export function useDeleteFileCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteFileCategory(id),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: FILE_CATEGORIES_KEY });
     },
   });
 }

@@ -94,7 +94,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
+/** File を dataURL にする。画像に限らず Binary に積むファイル全般で使う。 */
+export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);

@@ -26,6 +26,7 @@ import { isDischargeSummary } from "../fhir/clinicalNoteHelpers";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
 import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
+import { KarteFileTab } from "../components/KarteFileTab";
 import { KarteMealTab } from "../components/KarteMealTab";
 import { KarteChemoTab } from "../components/KarteChemoTab";
 import { KarteNursingTab } from "../components/KarteNursingTab";
@@ -843,6 +844,8 @@ export function KartePage() {
         />
       );
     }
+    // 取り込んだファイル。登録・編集・削除はタブ内で完結する(右ペインは使わない)。
+    if (key === "file") return <KarteFileTab {...props} />;
     return <KarteLabResultTab {...props} />;
   }
 

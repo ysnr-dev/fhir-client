@@ -81,6 +81,9 @@ export const KARTE_TABS = [
   { key: "nursing", label: "指示簿" },
   // 予約はカルテのカードにしない(タイムラインには出ない)ので、タブでのみ見る。
   { key: "appointment", label: "予約" },
+  // 取り込んだファイル(紹介状・同意書・持参の検査結果など)。診療の経過そのもの
+  // ではなく「患者に付いている書類の束」なので、タイムラインには出さずタブで見る。
+  { key: "file", label: "ファイル" },
 ] as const;
 
 export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];

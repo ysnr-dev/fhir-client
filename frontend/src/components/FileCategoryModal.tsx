@@ -1,23 +1,23 @@
 import { useState } from "react";
-import type { QuestionnaireCategorySummary } from "../api/adminClient";
+import type { FileCategorySummary } from "../api/adminClient";
 import {
-  useCreateQuestionnaireCategory,
-  useDeleteQuestionnaireCategory,
-  useQuestionnaireCategories,
-  useUpdateQuestionnaireCategory,
+  useCreateFileCategory,
+  useDeleteFileCategory,
+  useFileCategories,
+  useUpdateFileCategory,
 } from "../api/adminQueries";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 
-// テンプレートカテゴリ(独自マスタ)の管理。テンプレート一覧から開く。
-// カテゴリ自体の追加・改名・並べ替え・削除だけを行い、どのテンプレートに
-// 付けるかはテンプレート編集画面で設定する。
+// ファイルカテゴリ(独自マスタ)の管理。カルテの「ファイル」タブから開く。
+// カテゴリ自体の追加・改名・並べ替え・削除だけを行い、どのファイルに付けるかは
+// ファイルの登録・編集で設定する。
 
-export function QuestionnaireCategoryModal({ onClose }: { onClose: () => void }) {
-  const { data: categories = [], isLoading, error } = useQuestionnaireCategories();
-  const create = useCreateQuestionnaireCategory();
-  const update = useUpdateQuestionnaireCategory();
-  const remove = useDeleteQuestionnaireCategory();
+export function FileCategoryModal({ onClose }: { onClose: () => void }) {
+  const { data: categories = [], isLoading, error } = useFileCategories();
+  const create = useCreateFileCategory();
+  const update = useUpdateFileCategory();
+  const remove = useDeleteFileCategory();
 
   const [newName, setNewName] = useState("");
   // 改名の編集中の値(未編集の行は元の名前を表示する)。
@@ -25,7 +25,7 @@ export function QuestionnaireCategoryModal({ onClose }: { onClose: () => void })
 
   const busy = create.isPending || update.isPending || remove.isPending;
 
-  function nameOf(category: QuestionnaireCategorySummary): string {
+  function nameOf(category: FileCategorySummary): string {
     return drafts[category.id] ?? category.name;
   }
 
@@ -35,7 +35,7 @@ export function QuestionnaireCategoryModal({ onClose }: { onClose: () => void })
     create.mutate({ name }, { onSuccess: () => setNewName("") });
   }
 
-  function handleRename(category: QuestionnaireCategorySummary) {
+  function handleRename(category: FileCategorySummary) {
     const name = nameOf(category).trim();
     if (!name || name === category.name) return;
     update.mutate(
@@ -67,12 +67,12 @@ export function QuestionnaireCategoryModal({ onClose }: { onClose: () => void })
     });
   }
 
-  function handleDelete(category: QuestionnaireCategorySummary) {
+  function handleDelete(category: FileCategorySummary) {
     if (
       !window.confirm(
         `カテゴリ「${category.name}」を削除します。\n` +
-          "このカテゴリを設定済みのテンプレートは、テンプレート編集画面でカテゴリを変更するまで" +
-          "同じ名前でまとめて表示されます。よろしいですか?",
+          "このカテゴリで取り込み済みのファイルは同じ名前のまま残りますが、" +
+          "絞り込みの選択肢からは消えます。よろしいですか?",
       )
     ) {
       return;
@@ -81,15 +81,11 @@ export function QuestionnaireCategoryModal({ onClose }: { onClose: () => void })
   }
 
   return (
-    <Modal title="テンプレートカテゴリ" onClose={onClose}>
+    <Modal title="ファイルカテゴリ" onClose={onClose}>
       <ErrorBanner error={error} />
       <ErrorBanner error={create.error} />
       <ErrorBanner error={update.error} />
       <ErrorBanner error={remove.error} />
-
-      <p className="category-modal__hint">
-        テンプレート選択のプルダウンで使う分類です。並び順はプルダウンの表示順になります。
-      </p>
 
       {isLoading ? (
         <p>読み込み中...</p>
@@ -121,9 +117,7 @@ export function QuestionnaireCategoryModal({ onClose }: { onClose: () => void })
                 type="text"
                 aria-label={`${category.name} の名前`}
                 value={nameOf(category)}
-                onChange={(e) =>
-                  setDrafts((prev) => ({ ...prev, [category.id]: e.target.value }))
-                }
+                onChange={(e) => setDrafts((prev) => ({ ...prev, [category.id]: e.target.value }))}
               />
               <button
                 type="button"
@@ -134,11 +128,13 @@ export function QuestionnaireCategoryModal({ onClose }: { onClose: () => void })
               </button>
               <button
                 type="button"
-                className="category-modal__delete"
+                className="category-modal__delete category-modal__delete--icon icon-tooltip"
+                data-tooltip="削除"
+                aria-label={`${category.name} を削除`}
                 disabled={busy}
                 onClick={() => handleDelete(category)}
               >
-                削除
+                <TrashIcon />
               </button>
             </li>
           ))}
@@ -164,5 +160,20 @@ export function QuestionnaireCategoryModal({ onClose }: { onClose: () => void })
         </button>
       </div>
     </Modal>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+      <path
+        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.5h6.6L12 4M6.5 6.5v5M9.5 6.5v5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

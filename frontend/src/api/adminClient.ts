@@ -368,3 +368,47 @@ export async function deleteQuestionnaireCategory(id: number): Promise<void> {
   const res = await adminFetch(`${QUESTIONNAIRE_CATEGORIES}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
+
+// --- ファイルカテゴリ --------------------------------------------------------
+
+export interface FileCategorySummary {
+  id: number;
+  /** DocumentReference.category の coding から参照される不変のコード(UUID)。 */
+  code: string;
+  name: string;
+  display_order: number;
+  updated_at: string;
+}
+
+export interface FileCategoryPayload {
+  name?: string;
+  display_order?: number;
+}
+
+const FILE_CATEGORIES = "/admin/file_categories";
+
+export async function fetchFileCategories(): Promise<FileCategorySummary[]> {
+  const body = await adminJson<{ total: number; items: FileCategorySummary[] }>(FILE_CATEGORIES);
+  return body.items;
+}
+
+export async function createFileCategory(
+  payload: FileCategoryPayload,
+): Promise<FileCategorySummary> {
+  return adminJson<FileCategorySummary>(FILE_CATEGORIES, { method: "POST", ...jsonBody(payload) });
+}
+
+export async function updateFileCategory(
+  id: number,
+  payload: FileCategoryPayload,
+): Promise<FileCategorySummary> {
+  return adminJson<FileCategorySummary>(`${FILE_CATEGORIES}/${id}`, {
+    method: "PATCH",
+    ...jsonBody(payload),
+  });
+}
+
+export async function deleteFileCategory(id: number): Promise<void> {
+  const res = await adminFetch(`${FILE_CATEGORIES}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}

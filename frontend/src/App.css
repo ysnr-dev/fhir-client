@@ -667,6 +667,39 @@ button:disabled {
   cursor: not-allowed;
 }
 
+/* アイコンだけのボタンの名前を、すぐ出るツールチップで示す(ネイティブの title は
+   出るまでが遅い)。右端に並ぶことが多いので右揃えで下に出す。 */
+.icon-tooltip[data-tooltip] {
+  position: relative;
+}
+
+.icon-tooltip[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.icon-tooltip[data-tooltip]:hover::after,
+.icon-tooltip[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+}
+
 .patient-search-form {
   display: flex;
   flex-wrap: wrap;
@@ -4124,58 +4157,84 @@ fieldset.rp-card {
   padding-top: 8px;
 }
 
-/* ---- テンプレートカテゴリ管理(テンプレート一覧のモーダル) ---- */
+/* ---- カテゴリ管理モーダル(テンプレートカテゴリ・ファイルカテゴリ) ---- */
 
-.qc-modal__hint {
+.category-modal__hint {
   margin: 0 0 12px;
   font-size: 13px;
   color: var(--text);
 }
 
-.qc-modal__list {
+.category-modal__list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   margin: 0 0 16px;
   padding: 0;
   list-style: none;
 }
 
-.qc-modal__row {
+/* 名前を並べて見比べる一覧なので、1 行は入力欄が読める最小限の高さに詰める。 */
+.category-modal__row {
+  --control-height: 28px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
-.qc-modal__order {
+.category-modal__row button {
+  font-size: 14px;
+  padding: 0 10px;
+}
+
+.category-modal__order {
   display: inline-flex;
   gap: 2px;
 }
 
-.qc-modal__order button {
-  height: auto;
-  padding: 4px 8px;
+.category-modal__order button {
+  padding: 0 6px;
   line-height: 1;
 }
 
-.qc-modal__row input,
-.qc-modal__add input {
+.category-modal__row input,
+.category-modal__add input {
   flex: 1;
   min-width: 0;
   font: inherit;
   font-size: 15px;
-  padding: 6px 8px;
+  padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg);
   color: var(--text-h);
 }
 
-.qc-modal__delete {
+.category-modal__row input {
+  font-size: 14px;
+}
+
+.category-modal__delete {
   color: #e0687a;
 }
 
-.qc-modal__add {
+/* アイコンだけの削除ボタン。行の高さは変えず、正方形にして余白を詰める
+   (行のボタンの左右余白より詳細度を上げないと、アイコンが潰れる)。 */
+.category-modal__row .category-modal__delete--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-height);
+  padding: 0;
+}
+
+.category-modal__delete--icon svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+
+.category-modal__add {
   display: flex;
   gap: 8px;
 }
@@ -14902,38 +14961,6 @@ button.meal-calendar__cell:hover {
   box-sizing: border-box;
 }
 
-/* アイコンの意味はすぐ出るツールチップで示す(右端に並ぶので右揃えで下に出す)。 */
-.pathway-sheet__action[data-tooltip] {
-  position: relative;
-}
-
-.pathway-sheet__action[data-tooltip]::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 30;
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.5;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-}
-
-.pathway-sheet__action[data-tooltip]:hover::after,
-.pathway-sheet__action[data-tooltip]:focus-visible::after {
-  opacity: 1;
-  visibility: visible;
-}
-
 .pathway-sheet__action--primary {
   color: var(--accent);
   border-color: var(--accent);
@@ -17258,4 +17285,176 @@ button.chemo-calendar__cell[draggable="true"] {
 /* ピクトグラムの行は吹き出しがはみ出せるように切らない(入院日数は短いので溢れない)。 */
 .ward-map__bed-meta--bottom {
   overflow: visible;
+}
+
+/* ---- カルテの「ファイル」タブ ---- */
+
+.karte-file-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.karte-file-form__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.karte-file-form__fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.karte-file-form__fields input,
+.karte-file-form__fields select {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.karte-file-form__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 左ペインは縦が限られるので、一覧は 1 行が文字 1 行に収まる高さまで詰める
+   (全患者一覧と同じやり方。line-height を明示するのは、既定では本文の行送りを
+   font: inherit で受け継ぎ padding を削っただけでは縮まないため)。 */
+.karte-file-table th,
+.karte-file-table td {
+  padding: 4px 10px;
+}
+
+.karte-file-table .patient-table__actions button {
+  --control-height: 24px;
+  padding: 2px 10px;
+  line-height: 18px;
+}
+
+.karte-file-table .patient-table__actions .row-menu__trigger {
+  padding: 2px 7px;
+  font-size: 15px;
+  line-height: 18px;
+}
+
+.karte-file-table .patient-table__actions > * + * {
+  margin-left: 8px;
+}
+
+/* タブ見出しに並ぶ絞り込み。隣のボタンと同じ高さに揃える。 */
+.karte-file-filter {
+  font: inherit;
+  font-size: 14px;
+  height: var(--control-height);
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+/* ファイルを落とせる範囲。ドラッグ中は枠と背景で示す(読影レポートの画像欄と同じ)。 */
+.karte-file-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.karte-file-drop--dragging {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.karte-file-drop p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.karte-file-drafts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 積んだファイルの一覧も 1 行を詰める(カテゴリ管理の行と同じ高さ)。 */
+.karte-file-drafts__row {
+  --control-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.karte-file-drafts__row button {
+  font-size: 14px;
+  padding: 0 10px;
+}
+
+.karte-file-drafts__row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 14px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.karte-file-drafts__size {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.karte-file-preview {
+  margin-top: 12px;
+}
+
+.karte-file-preview__actions {
+  margin: 0 0 8px;
+}
+
+.karte-file-preview__image {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+/* PDF は左ペインの高さに収まる範囲で大きく出す(それ以上は全画面で開いてもらう)。 */
+.karte-file-preview__pdf {
+  width: 100%;
+  height: 60vh;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.karte-file-preview__text {
+  max-height: 60vh;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
