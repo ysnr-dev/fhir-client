@@ -53,12 +53,9 @@ services:
         sync: false
       # 取り込んだ DICOM の実体の置き場(Backblaze B2。docs/imaging-design.md)。
       # Render の無料枠には永続ディスクが無いので、本番は外部ストレージが要る。
-      # endpoint と region はバケットの詳細画面に出る値。
-      - key: B2_ENDPOINT
-        value: https://s3.us-east-005.backblazeb2.com
-      - key: B2_REGION
-        value: us-east-005
-      # キーはアプリケーションキーの keyID / applicationKey。
+      # endpoint と region の既定は config/storage.yml にある(バケットを作り直さない限り
+      # 変わらないため)。ここで設定するのはアプリケーションキーとバケット名だけ。
+      # Blueprint を再適用しない場合はダッシュボードで手動設定する。
       - key: B2_KEY_ID
         sync: false
       - key: B2_APPLICATION_KEY

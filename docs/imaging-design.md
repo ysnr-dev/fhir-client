@@ -191,13 +191,22 @@ File Meta Information(group 0002)だけ。ここは転送構文によらず Expl
 ## 5. 本番の準備
 
 1. Backblaze B2 に非公開のバケットと、そのバケットに限定した Read and Write のアプリケーションキーを
-   作る。B2 の有効化にはカードの登録は要らないが、SMS による電話番号の確認が要る。Render の backend に
-   `B2_KEY_ID`(keyID) / `B2_APPLICATION_KEY`(applicationKey) / `B2_BUCKET` を設定する
-   (`B2_ENDPOINT` と `B2_REGION` は `render.yaml` に直接書いてある)。無料枠は 10GB と、
-   保存量の 3 倍までの下り転送。別の S3 互換ストレージに替えるときは `config/storage.yml` の
-   `b2` ブロックと env だけを差し替える。
-2. `render.yaml` の static site に `/imaging` と `/imaging/*` の rewrite がある(無いと SPA フォールバックに落ちる)。
-3. 上流の変更は無い(`ImagingStudy` は実装済み)。
+   作る。B2 の有効化にはカードの登録は要らないが、SMS による電話番号の確認が要る。無料枠は 10GB と、
+   保存量の 3 倍までの下り転送。
+2. Render の backend に `B2_KEY_ID`(keyID)と `B2_APPLICATION_KEY`(applicationKey)を設定する。
+   endpoint・region・バケット名は `config/storage.yml` に既定があるので、変える必要が無い限り
+   設定は要らない(env で上書きはできる)。`render.yaml` の env は Blueprint を再適用しないと
+   反映されないので、ダッシュボードで設定する。
+   ［事実］Active Storage の service は起動時(eager load)に作られるので、endpoint・region・
+   バケット名のどれかが欠けると aws-sdk が例外を投げ、**アプリ全体が起動しない**。既定を
+   `storage.yml` に持たせているのはこのため。アプリケーションキーだけは欠けても起動は通り、
+   取り込みのときに認証エラーになる。
+   ［事実］認証情報が見つからないと aws-sdk は EC2 のインスタンスプロファイル
+   (169.254.169.254)へ問い合わせて起動が数秒止まるので、`production.rb` で
+   `AWS_EC2_METADATA_DISABLED` を立てている。
+   別の S3 互換ストレージに替えるときは `config/storage.yml` の `b2` ブロックだけを差し替える。
+3. `render.yaml` の static site に `/imaging` と `/imaging/*` の rewrite がある(無いと SPA フォールバックに落ちる)。
+4. 上流の変更は無い(`ImagingStudy` は実装済み・本番に反映済み)。
 
 ---
 

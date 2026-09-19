@@ -7,17 +7,24 @@ test:
   service: Disk
   root: <%= Rails.root.join("tmp/storage") %>
 
-# Backblaze B2(S3 互換)。endpoint と region はバケットの詳細画面に出る値
-# (例: s3.us-east-005.backblazeb2.com / us-east-005)。access_key_id はアプリケーション
-# キーの keyID、secret_access_key は applicationKey。
+# Backblaze B2(S3 互換)。access_key_id はアプリケーションキーの keyID、
+# secret_access_key は applicationKey。
+#
+# endpoint・region・bucket は秘密ではなく、バケットを作り直さない限り変わらないので、
+# 既定をここに持つ。Active Storage の service は起動時(eager load)に作られ、この 3 つの
+# どれが欠けても aws-sdk が例外を投げるため、env を必須にするとストレージの設定漏れで
+# アプリ全体が起動しなくなる。env が空で渡ることもあるので presence で見る。
+# 本当に秘密なのはアプリケーションキーの 2 つだけで、これは無くても起動は通り、
+# 取り込みのときに認証エラーとして出る。
+#
 # checksum の 2 行は、aws-sdk-s3 が既定で付ける CRC32 を S3 以外が受け付けないため。
 b2:
   service: S3
-  endpoint: <%= ENV["B2_ENDPOINT"] %>
+  endpoint: <%= ENV["B2_ENDPOINT"].presence || "https://s3.us-east-005.backblazeb2.com" %>
   access_key_id: <%= ENV["B2_KEY_ID"] %>
   secret_access_key: <%= ENV["B2_APPLICATION_KEY"] %>
-  bucket: <%= ENV["B2_BUCKET"] %>
-  region: <%= ENV["B2_REGION"] %>
+  bucket: <%= ENV["B2_BUCKET"].presence || "fhir-client-dicom" %>
+  region: <%= ENV["B2_REGION"].presence || "us-east-005" %>
   force_path_style: true
   request_checksum_calculation: when_required
   response_checksum_validation: when_required

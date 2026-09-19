@@ -80,6 +80,10 @@ Rails.application.configure do
   # Do not dump schema after migrations.
   config.active_record.dump_schema_after_migration = false
 
+  # 認証情報が見つからないとき、aws-sdk は EC2 のインスタンスプロファイル
+  # (169.254.169.254)へ問い合わせに行って起動を数秒止める。この環境に EC2 は無い。
+  ENV["AWS_EC2_METADATA_DISABLED"] ||= "true"
+
   # DICOM の実体の置き場(config/storage.yml)。
   config.active_storage.service = ENV.fetch("ACTIVE_STORAGE_SERVICE", "b2").to_sym
 end
