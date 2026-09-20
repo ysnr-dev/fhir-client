@@ -54,7 +54,13 @@ export function BillingSendModal({
 
   const [coverageSet, setCoverageSet] = useState("");
   const sets = coverageSetsOf(coverages);
-  const selected = coverageSet || target.coverageSetKey || sets[0]?.key || "";
+  // 受付に記録された請求セットが選択肢に無いことがある(レセコン側で保険を選ばずに
+  // 受付すると「未選択」を表す番号が入る)。選択肢に無いキーをそのまま初期値にすると、
+  // 画面には先頭の保険が出たまま別の値を送ってしまうので、先頭に寄せる。
+  const fromReception = sets.some((s) => s.key === target.coverageSetKey)
+    ? target.coverageSetKey
+    : "";
+  const selected = coverageSet || fromReception || sets[0]?.key || "";
   const alreadySent = sentStatus.data?.sent ?? false;
 
   const items = preview.data?.items ?? [];

@@ -169,9 +169,12 @@ module Integrations
       end
 
       # 会計送信の初期値に使う。カルテは中身を解釈せず、そのままレセコンへ返す。
+      # ただし全ゼロは「保険組合せを選ばずに受付した」ことを表す番号で、実在する
+      # 組合せではない。記録すると会計送信がその番号を返してしまい、レセコン側で
+      # 病名も診療行為も保険に結びつかなくなるため落とす。
       def coverage_set_extension(appointment, event)
         rest = Array(appointment["extension"]).reject { |e| e["url"] == ReceiptComputer::RECEPTION_COVERAGE_SET_URL }
-        return rest if event.coverage_set_key.blank?
+        return rest if event.coverage_set_key.blank? || event.coverage_set_key.match?(/\A0+\z/)
 
         rest + [{ "url" => ReceiptComputer::RECEPTION_COVERAGE_SET_URL,
                   "valueString" => event.coverage_set_key }]
