@@ -1,5 +1,8 @@
 # レセコン連携
 
+会計送信(カルテ → レセコン)で日レセの API 仕様に対して足りていない部分は
+`docs/receipt-billing-backlog.md` にまとめてある。
+
 ## この設計が守っていること
 
 **カルテはレセコンの製品を知らない。** 特定のレセコンの語彙 — 日レセなら
@@ -137,6 +140,8 @@ send_diagnoses(patient_number:, date:, department_code:, coverage_set_key:, diag
 (`Api_Result=80`)、送り直しは置換(class=03)で Medical_Uid が要る。カルテ側に
 控えを持たず、そのつど `tmedicalgetv2` で引き直す。登録が 1 往復増えるが、
 医事課が日レセの画面で触ったときに食い違わない。
+ただし仕様上、置換が使えるのは入院だけで、外来は削除しかできない
+(`docs/receipt-billing-backlog.md` A-2)。
 
 **受付取込で作るのは Appointment だけ。** 受付と診察開始は別物で、ここで Encounter を
 作ると全員が受診済みに見える。Encounter は診察を始めたときにカルテ側で作る。
