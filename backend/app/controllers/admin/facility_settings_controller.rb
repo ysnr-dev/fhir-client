@@ -33,7 +33,8 @@ module Admin
         vital_thresholds: {},
         water_balance: { in: [], out: [] },
         medication_schedule: %i[before_meal_minutes after_meal_minutes bedtime wake_time],
-        document_reminder: %i[discharge_summary_days]
+        document_reminder: %i[discharge_summary_days],
+        prescription_category: %i[inpatient outpatient]
       )
       attrs = {}
       if params.key?(:self_organization_id)
@@ -56,6 +57,9 @@ module Admin
       end
       if params.key?(:document_reminder)
         attrs[:document_reminder] = document_reminder_attrs(permitted[:document_reminder])
+      end
+      if params.key?(:prescription_category)
+        attrs[:prescription_category] = permitted[:prescription_category].to_h
       end
       attrs
     end
@@ -86,7 +90,8 @@ module Admin
         vital_thresholds: settings.vital_thresholds_with_defaults,
         water_balance: settings.water_balance_with_defaults,
         medication_schedule: settings.medication_schedule_with_defaults,
-        document_reminder: settings.document_reminder_with_defaults
+        document_reminder: settings.document_reminder_with_defaults,
+        prescription_category: settings.prescription_category_with_defaults
       }
     end
   end

@@ -1,5 +1,9 @@
 import { useMemo } from "react";
-import { useCreatePrescription, useUpdatePrescription } from "../api/queries";
+import {
+  useCreatePrescription,
+  usePrescriptionCategoryDefaults,
+  useUpdatePrescription,
+} from "../api/queries";
 import { ErrorBanner } from "./ErrorBanner";
 import { PrescriptionForm } from "./PrescriptionForm";
 import type { ProblemRef } from "../fhir/conditionHelpers";
@@ -39,9 +43,11 @@ export function PrescriptionCreatePanel({
   const source = usePrescriptionInitialValues(sourceSrId, patientId);
   // 入外区分の初期値は入院中なら「入院」。DO でも DO 元ではなくいまの状態に合わせる。
   const defaultSetting = useDefaultOrderSetting(patientId);
-  // DO 元と入院かどうかの読み込み完了を待ってからフォームを描画する
+  // 処方区分の初期値(施設設定)はフォームが初回描画で入れるので、読み込みを待つ。
+  const categoryDefaults = usePrescriptionCategoryDefaults();
+  // DO 元と入院かどうか・施設設定の読み込み完了を待ってからフォームを描画する
   // (初期値は初回描画時のみ反映される)。
-  const waiting = (sourceSrId && !source.ready) || !defaultSetting.ready;
+  const waiting = (sourceSrId && !source.ready) || !defaultSetting.ready || !categoryDefaults.ready;
   // DO も新しいオーダーなので、依頼元は DO 元ではなくヘッダーで選択中のものを使う。
   const requester = useOrderContext();
 

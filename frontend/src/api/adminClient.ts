@@ -13,6 +13,7 @@ import type { VitalThresholdSettings } from "../fhir/vitalHelpers";
 import type { WaterBalanceSettings } from "../fhir/flowsheetWaterBalanceHelpers";
 import type { MedicationScheduleSettings } from "../fhir/medicationScheduleHelpers";
 import type { DocumentReminderSettings } from "../fhir/documentDueHelpers";
+import type { PrescriptionCategoryDefaults } from "../fhir/prescriptionHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 
 export interface ConnectionSettings {
@@ -49,6 +50,8 @@ export interface FacilitySettings {
   medication_schedule: MedicationScheduleSettings;
   /** 文書作成の督促(退院時サマリーの期限までの日数)。 */
   document_reminder: DocumentReminderSettings;
+  /** 処方区分の初期値(入外区分ごと。空なら未選択で開く)。 */
+  prescription_category: PrescriptionCategoryDefaults;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -59,6 +62,7 @@ export type FacilitySettingsPayload = Partial<{
   water_balance: WaterBalanceSettings;
   medication_schedule: MedicationScheduleSettings;
   document_reminder: DocumentReminderSettings;
+  prescription_category: PrescriptionCategoryDefaults;
 }>;
 
 export interface ConnectionTestResult {

@@ -30,6 +30,12 @@ import {
   DEFAULT_DOCUMENT_REMINDER,
   type DocumentReminderSettings,
 } from "../fhir/documentDueHelpers";
+import {
+  CATEGORY_OPTIONS,
+  DEFAULT_PRESCRIPTION_CATEGORY,
+  SETTING_OPTIONS,
+  type PrescriptionCategoryDefaults,
+} from "../fhir/prescriptionHelpers";
 import { useNursingObservationsByManageNos } from "../api/masterQueries";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
 
@@ -118,6 +124,13 @@ export function FacilitySettingsPage() {
   const reminderValid =
     Number.isInteger(reminder.discharge_summary_days) && reminder.discharge_summary_days >= 0;
 
+  // 処方区分の初期値。入外区分ごとに 1 つで、空なら処方フォームは未選択で開く。
+  const [categoryDraft, setCategoryDraft] = useState<PrescriptionCategoryDefaults | undefined>(
+    undefined,
+  );
+  const savedCategory = settings.data?.prescription_category ?? DEFAULT_PRESCRIPTION_CATEGORY;
+  const prescriptionCategory = categoryDraft ?? savedCategory;
+
   // 水分出納に数える看護観察。管理番号だけを保存し、名前はマスタから引く。
   const [balanceDraft, setBalanceDraft] = useState<WaterBalanceSettings | undefined>(undefined);
   const savedBalance = settings.data?.water_balance ?? EMPTY_WATER_BALANCE;
@@ -152,6 +165,7 @@ export function FacilitySettingsPage() {
       water_balance: balance,
       medication_schedule: medicationSchedule,
       document_reminder: reminder,
+      prescription_category: prescriptionCategory,
     });
   }
 
@@ -322,6 +336,36 @@ export function FacilitySettingsPage() {
                 onChange={(e) => updateMedication("wake_time", e.target.value)}
               />
             </label>
+          </div>
+        </details>
+
+        {/* 処方区分の初期値。処方フォームを開いたとき・入外区分を選び直したときに入る値で、
+            登録済みの処方には区分が焼き付いているのでここを変えても動かない。選択肢は入外区分で
+            違う(入院は定期・臨時…、外来は院外・院内)ので、区分ごとに 1 つずつ選ぶ。 */}
+        <details className="facility-settings__schedule">
+          <summary>処方区分の初期値</summary>
+          <div className="facility-settings__schedule-body">
+            {SETTING_OPTIONS.map((setting) => (
+              <label key={setting.code}>
+                {setting.display}
+                <select
+                  value={prescriptionCategory[setting.code] ?? ""}
+                  onChange={(e) =>
+                    setCategoryDraft({
+                      ...prescriptionCategory,
+                      [setting.code]: e.target.value,
+                    })
+                  }
+                >
+                  <option value="">（未選択）</option>
+                  {CATEGORY_OPTIONS[setting.code].map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.display}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
           </div>
         </details>
 

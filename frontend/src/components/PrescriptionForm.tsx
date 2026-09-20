@@ -4,6 +4,7 @@ import type { Medicine, MedicineUsage } from "../api/masterClient";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   CATEGORY_OPTIONS,
+  defaultPrescriptionCategory,
   emptyMedicineLine,
   emptyPrescriptionForm,
   emptyRp,
@@ -16,6 +17,7 @@ import {
 } from "../fhir/prescriptionHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import { presetUsageFilters } from "../fhir/usageMapping";
+import { usePrescriptionCategoryDefaults } from "../api/queries";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
@@ -83,7 +85,17 @@ export function PrescriptionForm({
   hideSubmit = false,
   orderId,
 }: PrescriptionFormProps) {
-  const [values, setValues] = useState<PrescriptionFormValues>(initialValues ?? emptyPrescriptionForm);
+  // 処方区分の初期値(施設設定。入外区分ごとに持つ)。区分が決まっていないフォーム
+  // (新規・DO で入外区分が変わったとき)にだけ入れ、入力済み・保存済みの区分は動かさない。
+  const categoryDefaults = usePrescriptionCategoryDefaults();
+  const [values, setValues] = useState<PrescriptionFormValues>(() => {
+    const base = initialValues ?? emptyPrescriptionForm();
+    if (base.category) return base;
+    return {
+      ...base,
+      category: defaultPrescriptionCategory(categoryDefaults.defaults, base.setting),
+    };
+  });
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
   const [modal, setModal] = useState<ModalState>(null);
   // コメント欄は常に入力する訳ではないため、既に値がある場合のみ初期表示し、
@@ -132,8 +144,14 @@ export function PrescriptionForm({
     }));
   }
 
+  // 入外区分を変えると処方区分の選択肢ごと変わるので、区分はその入外区分の初期値
+  // (施設設定)に入れ替える。初期値が無ければ未選択に戻す。
   function handleSettingChange(setting: PrescriptionSetting) {
-    setValues((v) => ({ ...v, setting, category: "" }));
+    setValues((v) => ({
+      ...v,
+      setting,
+      category: defaultPrescriptionCategory(categoryDefaults.defaults, setting),
+    }));
   }
 
   function addRp() {

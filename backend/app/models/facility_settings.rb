@@ -79,6 +79,21 @@ class FacilitySettings < ApplicationRecord
 
   DOCUMENT_REMINDER_DAY_KEYS = %w[discharge_summary_days].freeze
 
+  # 処方区分の初期値。処方フォームを開いたときと、入外区分を選び直したときの値に使う。
+  # 既定は空(「選択してください」のまま開く)。登録済みの処方には区分が焼き付いているので、
+  # ここを変えても過去の処方は動かない。
+  DEFAULT_PRESCRIPTION_CATEGORY = {
+    "inpatient" => "",
+    "outpatient" => ""
+  }.freeze
+
+  # 入外区分ごとに選べる処方区分のコード。表示名は画面側(frontend の CATEGORY_OPTIONS)が
+  # 持ち、こちらは初期値として妥当なコードかを見るためだけに並べる。
+  PRESCRIPTION_CATEGORY_CODES = {
+    "inpatient" => %w[regular continuous temporary discharge emergency],
+    "outpatient" => %w[external internal]
+  }.freeze
+
   WATER_BALANCE_KEYS = %w[in out].freeze
   # MEDIS の管理番号は 8 桁の数字。
   MANAGE_NO_PATTERN = /\A\d{8}\z/
@@ -91,6 +106,7 @@ class FacilitySettings < ApplicationRecord
   validate :water_balance_shape
   validate :medication_schedule_shape
   validate :document_reminder_shape
+  validate :prescription_category_shape
 
   # 自院の Organization.id。未設定なら nil(呼び出し側は推測に倒す)。
   def self_organization_id
@@ -142,6 +158,15 @@ class FacilitySettings < ApplicationRecord
     end
   end
 
+  # 欠けたキーを既定値で埋めた処方区分の初期値。
+  def prescription_category_with_defaults
+    stored = prescription_category.is_a?(Hash) ? prescription_category : {}
+    DEFAULT_PRESCRIPTION_CATEGORY.to_h do |key, default|
+      value = stored[key]
+      [key, value.is_a?(String) ? value : default]
+    end
+  end
+
   # 欠けたキーを既定値で埋めた水分出納の対象項目。
   def water_balance_with_defaults
     stored = water_balance.is_a?(Hash) ? water_balance : {}
@@ -184,6 +209,10 @@ class FacilitySettings < ApplicationRecord
     def document_reminder
       current.document_reminder_with_defaults
     end
+
+    def prescription_category
+      current.prescription_category_with_defaults
+    end
   end
 
   private
@@ -222,6 +251,27 @@ class FacilitySettings < ApplicationRecord
         end
       else
         errors.add(:document_reminder, "#{key} は対象外の項目です")
+      end
+    end
+  end
+
+  def prescription_category_shape
+    return if prescription_category.blank?
+    unless prescription_category.is_a?(Hash)
+      return errors.add(:prescription_category, "は連想配列で指定してください")
+    end
+
+    prescription_category.each do |setting, code|
+      codes = PRESCRIPTION_CATEGORY_CODES[setting]
+      if codes.nil?
+        errors.add(:prescription_category, "#{setting} は inpatient / outpatient のいずれかで指定してください")
+        next
+      end
+      # 空文字は「初期値を決めない」の意味。
+      next if code.blank?
+
+      unless code.is_a?(String) && codes.include?(code)
+        errors.add(:prescription_category, "#{setting} は #{codes.join(' / ')} のいずれかで指定してください")
       end
     end
   end

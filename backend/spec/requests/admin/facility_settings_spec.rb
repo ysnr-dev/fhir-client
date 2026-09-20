@@ -216,6 +216,39 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /admin/facility_settings (prescription_category)" do
+    it "stores the default category of each setting" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { prescription_category: { inpatient: "temporary", outpatient: "external" } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["prescription_category"])
+        .to eq("inpatient" => "temporary", "outpatient" => "external")
+    end
+
+    it "accepts an empty code (初期値を決めない)" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { prescription_category: { inpatient: "" } }, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["prescription_category"]).to eq("inpatient" => "", "outpatient" => "")
+    end
+
+    it "rejects a code that belongs to the other setting" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { prescription_category: { outpatient: "temporary" } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   describe "with ADMIN_TOKEN configured" do
     it "rejects a request without credentials" do
       ENV["ADMIN_TOKEN"] = "s3cret-admin-passphrase"

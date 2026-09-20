@@ -102,6 +102,28 @@ export const CATEGORY_OPTIONS: Record<
   ],
 };
 
+/**
+ * 施設設定「処方区分の初期値」。入外区分ごとに、処方フォームを開いたときの処方区分を
+ * 決める(空なら「選択してください」のまま開く)。入外区分を選び直したときも、その区分の
+ * 初期値に入れ替える。登録済みの処方には区分が焼き付いているので、設定を変えても動かない。
+ */
+export type PrescriptionCategoryDefaults = Record<Exclude<PrescriptionSetting, "">, string>;
+
+export const DEFAULT_PRESCRIPTION_CATEGORY: PrescriptionCategoryDefaults = {
+  inpatient: "",
+  outpatient: "",
+};
+
+/** その入外区分の処方区分の初期値。設定が無い・選択肢に無いコードなら空(未選択)。 */
+export function defaultPrescriptionCategory(
+  defaults: PrescriptionCategoryDefaults | undefined,
+  setting: PrescriptionSetting,
+): string {
+  if (!setting) return "";
+  const code = defaults?.[setting] ?? "";
+  return CATEGORY_OPTIONS[setting].some((o) => o.code === code) ? code : "";
+}
+
 export interface MedicineLineValues {
   id?: string;
   medicine: Medicine | null;
@@ -142,7 +164,8 @@ export const emptyRp: RpValues = {
 };
 
 // problem を渡すと対象プロブレムを選択済みで開く(プロブレムリストで選んでいる
-// プロブレムをそのまま新規処方の対象にするため)。
+// プロブレムをそのまま新規処方の対象にするため)。処方区分は空で、施設設定の初期値は
+// フォーム(PrescriptionForm)が入れる。
 export function emptyPrescriptionForm(
   problem: ProblemRef | null = null,
   setting: PrescriptionSetting = "outpatient",
@@ -550,7 +573,7 @@ export function buildPrescriptionUpdateBundle(
 // ・MedicationRequest の id を落とし、既存リソースの更新(PUT)ではなく新規登録(POST)にする
 // ・投与開始日は DO 元ではなく当日にする(登録日時は保存時に採るのでフォームには無い)
 // ・入外区分はいまの患者の状態(setting)に合わせる。DO 元と変わる場合は処方区分の
-//   選択肢ごと変わるので、処方区分は選び直させる。
+//   選択肢ごと変わるので、処方区分は空にしてフォームに初期値(施設設定)を入れさせる。
 export function buildDoPrescriptionForm(
   values: PrescriptionFormValues,
   setting: PrescriptionSetting,

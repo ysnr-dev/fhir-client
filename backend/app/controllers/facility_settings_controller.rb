@@ -17,7 +17,8 @@ class FacilitySettingsController < ActionController::API
       vital_thresholds: settings.vital_thresholds_with_defaults,
       water_balance: settings.water_balance_with_defaults,
       medication_schedule: settings.medication_schedule_with_defaults,
-      document_reminder: settings.document_reminder_with_defaults
+      document_reminder: settings.document_reminder_with_defaults,
+      prescription_category: settings.prescription_category_with_defaults
     }
   end
 end

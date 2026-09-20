@@ -225,6 +225,7 @@ import {
   type PathoTaskStatus,
 } from "../fhir/pathoTaskHelpers";
 import {
+  DEFAULT_PRESCRIPTION_CATEGORY,
   ORDER_TYPE_SYSTEM,
   PRESCRIPTION_CATEGORY_SYSTEM,
   buildPrescriptionDeleteBundle,
@@ -8306,6 +8307,20 @@ export function useMealSchedule() {
 export function useMedicationSchedule() {
   const settings = useFacilitySettings();
   return settings.data?.medication_schedule ?? DEFAULT_MEDICATION_SCHEDULE;
+}
+
+/**
+ * 処方区分の初期値(入外区分ごと)。処方フォームを開いたときと、入外区分を選び直した
+ * ときの値に使う。設定が読めるまでは未選択(既定値)。
+ */
+export function usePrescriptionCategoryDefaults() {
+  const settings = useFacilitySettings();
+  return {
+    defaults: settings.data?.prescription_category ?? DEFAULT_PRESCRIPTION_CATEGORY,
+    /** 設定を読み終えたか。フォームの初期値は初回描画時にしか効かないので、呼び出し側は
+     *  これが true になるまでフォームを描かない。 */
+    ready: !settings.isLoading,
+  };
 }
 
 /** 経過表でバイタルを異常値として強調するしきい値。設定が読めるまでは既定値で判定する。 */
