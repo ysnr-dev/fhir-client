@@ -59,6 +59,9 @@ Rails.application.configure do
   # app via its Docker Compose service name ("backend") rather than
   # localhost. Default localhost/127.0.0.1/::1 allowances are unaffected.
   config.hosts << "backend"
+  # 院内エージェント(fhir-client-agent)を別の compose プロジェクトで動かすと、ホスト経由で届く。
+  # 本番(config.hosts 無制限)では要らない開発だけの許可。
+  config.hosts << "host.docker.internal"
 
   # DICOM の実体の置き場(config/storage.yml)。
   config.active_storage.service = :local

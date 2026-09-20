@@ -36,7 +36,7 @@ class FhirProxyController < ApplicationController
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
     PractitionerRole Composition Task Procedure MedicationAdministration MedicationDispense
     Location Schedule Slot Appointment Encounter Provenance Flag CarePlan Goal DocumentReference
-    ImagingStudy
+    ImagingStudy Coverage
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 

@@ -9,6 +9,9 @@ import { SubMenu } from "./components/SubMenu";
 import { ThemeToggleItem } from "./components/ThemeToggleItem";
 import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
+import { ExternalCodeMappingPage } from "./pages/ExternalCodeMappingPage";
+import { ExternalSystemListPage } from "./pages/ExternalSystemListPage";
+import { ExternalSystemSettingsPage } from "./pages/ExternalSystemSettingsPage";
 import { FacilitySettingsPage } from "./pages/FacilitySettingsPage";
 import { OauthClientsPage } from "./pages/OauthClientsPage";
 import { MasterImportPage } from "./pages/MasterImportPage";
@@ -466,6 +469,11 @@ function App() {
             <Link to="/facility-settings" className="row-menu__item">
               施設設定
             </Link>
+            {/* 外部システム連携。一覧でシステムを選ぶと、そのシステムの設定ページへ入る
+                (レセコン連携は docs/receipt-computer-integration.md)。 */}
+            <Link to="/external-systems" className="row-menu__item">
+              外部システム連携
+            </Link>
             <ThemeToggleItem />
           </HoverMenu>
         </nav>
@@ -644,6 +652,31 @@ function App() {
             element={
               <AdminGate>
                 <OauthClientsPage />
+              </AdminGate>
+            }
+          />
+          {/* 外部システムの接続先と資格情報、受信トークンを持つので、接続設定と同じく管理者だけ。 */}
+          <Route
+            path="/external-systems"
+            element={
+              <AdminGate>
+                <ExternalSystemListPage />
+              </AdminGate>
+            }
+          />
+          <Route
+            path="/external-systems/:systemKey"
+            element={
+              <AdminGate>
+                <ExternalSystemSettingsPage />
+              </AdminGate>
+            }
+          />
+          <Route
+            path="/external-systems/:systemKey/code-mappings"
+            element={
+              <AdminGate>
+                <ExternalCodeMappingPage />
               </AdminGate>
             }
           />

@@ -5392,6 +5392,27 @@ const HISTORY_COUNT = 50;
 //  category での絞り込みをサーバーに任せられない)。
 // クエリキーを ["Condition", "search", ...] 配下に置くことで、病名の登録・更新・
 // 削除の invalidate がそのまま効き、プロブレムリストも自動で再取得される。
+// 患者の保険・公費。レセコンが正本で、カルテからは登録しないので読み取りだけ。
+// 使えなくなった保険も status=cancelled として残るため、期間や履歴を見せられる。
+export function useCoverages(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("beneficiary", `Patient/${patientId}`);
+  params.set("_count", "50");
+
+  const query = useQuery({
+    queryKey: ["coverages", patientId],
+    queryFn: () => searchResource<fhir4.Coverage>("Coverage", params),
+    enabled: Boolean(patientId),
+  });
+
+  const coverages =
+    query.data?.data.entry
+      ?.map((e) => e.resource)
+      .filter((r): r is fhir4.Coverage => r?.resourceType === "Coverage") ?? [];
+
+  return { ...query, coverages };
+}
+
 export function useKarteConditions(patientId: string | undefined) {
   const params = new URLSearchParams();
   if (patientId) params.set("patient", `Patient/${patientId}`);

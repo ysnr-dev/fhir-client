@@ -30,6 +30,17 @@ Rails.application.routes.draw do
       post :test, on: :collection
     end
 
+    # 外部システム連携。システム(レセコン等)ごとの設定と、コード対応表。
+    resources :external_systems, only: %i[index show update], param: :key do
+      member do
+        post :test
+        post :regenerate_inbound_token
+      end
+      resource :code_mappings, only: %i[show update], controller: "external_code_mappings" do
+        get :candidates, on: :collection
+      end
+    end
+
     # 「自院」の Organization 指定(書き込み)。読み取りは全ユーザー向けに
     # トップレベルの /facility_settings がある。
     resource :facility_settings, only: %i[show update]
@@ -48,6 +59,25 @@ Rails.application.routes.draw do
     # ファイルカテゴリ(独自マスタ)。取り込んだファイルの DocumentReference 側は
     # category の coding に code を持つ。
     resources :file_categories, only: %i[index create update destroy]
+  end
+
+  # レセコン連携(docs/receipt-computer-integration.md)。患者・保険・受付は
+  # レセコンが正本でカルテへ取り込み、カルテからは病名と診療行為(会計)だけを送る。
+  namespace :integrations do
+    scope "receipt", module: "receipt", as: "receipt" do
+      # 単数リソースだと statuses に複数化されるので、コントローラを明示する。
+      resource :status, only: :show, controller: "status"
+
+      post "patients/refresh", to: "patients#refresh"
+
+      get "billings/preview", to: "billings#preview"
+      get "billings/status", to: "billings#status"
+      post "billings", to: "billings#create"
+      delete "billings", to: "billings#destroy"
+
+      # 院内エージェント(fhir-client-agent)からの通知。ログインではなく発行済みトークンで認証する。
+      post "events", to: "events#create"
+    end
   end
 
   # 「自院」がどの Organization かの参照(ログイン済みユーザー全員が読む)。

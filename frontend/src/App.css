@@ -1041,6 +1041,17 @@ button:disabled {
   color: var(--text-h);
 }
 
+/* チェックボックスは他の項目と違い、ラベルを横に並べる。 */
+.connection-settings-form label.connection-settings-form__checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.connection-settings-form__checkbox input {
+  width: auto;
+}
+
 .connection-settings-form__status {
   margin: 0;
   padding: 10px 12px;
@@ -17853,4 +17864,117 @@ button.chemo-calendar__cell[draggable="true"] {
 
 .dicom-tags__table td:last-child {
   word-break: break-all;
+}
+
+/* ---- 外部システム連携 ---- */
+
+.external-systems__table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.external-systems__table th,
+.external-systems__table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.external-systems__description {
+  color: var(--text);
+  margin-left: 8px;
+  font-size: 0.85rem;
+}
+
+.external-systems__status--incomplete {
+  color: var(--text);
+}
+
+.receipt-mapping {
+  margin-bottom: 32px;
+}
+
+.receipt-mapping__title {
+  margin: 16px 0 8px;
+  font-size: 1rem;
+}
+
+.receipt-mapping__empty {
+  color: var(--text);
+  margin: 8px 0;
+}
+
+.receipt-mapping__table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.receipt-mapping__table th,
+.receipt-mapping__table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.receipt-mapping__table select {
+  min-width: 220px;
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+/* 失効した保険も履歴として残すので、使えるものと見分けが付くようにする。 */
+.receipt-coverage--expired {
+  color: var(--text);
+}
+
+/* 送信内容は件数が多くなるので、本文の大きさではなく一覧と同じ大きさで読ませる。 */
+.receipt-send {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 480px;
+  font-size: 14px;
+}
+
+.receipt-send .receipt-mapping__title {
+  font-size: 15px;
+}
+
+.receipt-send__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.receipt-send__field select {
+  min-width: 280px;
+  align-self: flex-start;
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.receipt-send__list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.receipt-send__list ul {
+  padding-left: 16px;
+}
+
+.receipt-send__list--ng,
+.receipt-send__ng {
+  color: var(--danger, var(--text));
 }

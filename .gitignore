@@ -1,3 +1,6 @@
+# compose の変数(RECEIPT_INBOUND_TOKEN など)
+/.env
+
 # Backend (Rails)
 /backend/.env
 /backend/log/*

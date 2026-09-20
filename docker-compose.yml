@@ -44,6 +44,16 @@ services:
       # 取り込んだ DICOM の実体の置き場(Active Storage のローカルディスク)。
       # バインドマウントの ./backend 配下ではなく、専用のボリュームに置く。
       ACTIVE_STORAGE_ROOT: /storage
+      # レセコン連携。レセコンはこの compose では起動しない(日レセの検証環境は
+      # 別リポジトリの weborca-dev で立てて :8000 で待ち受ける)。通常は
+      # 外部システム連携の画面から入れる(DB に暗号化して保存)ので、この env は
+      # フォールバックにすぎない。未設定なら連携は無効で、
+      # /integrations/receipt/* は 404 を返す。
+      # RECEIPT_COMPUTER_ENABLED: "true"
+      # RECEIPT_COMPUTER_TYPE: orca
+      # RECEIPT_COMPUTER_BASE_URL: http://host.docker.internal:8000
+      # RECEIPT_COMPUTER_USERNAME: ormaster
+      # RECEIPT_COMPUTER_PASSWORD: ""
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -67,6 +77,61 @@ services:
     depends_on:
       - backend
 
+  # 院内エージェント(別リポジトリ fhir-client-agent)。院内システムの通知を
+  # カルテへ中継する。本来は院内サーバーで動かすもので、通常の開発では要らないので
+  # profile で切ってある。隣に fhir-client-agent を clone してあること。
+  #   RECEIPT_INBOUND_TOKEN=<トークン> docker compose --profile agent up -d --build agent
+  # 日レセも一緒に上げるなら --profile orca を足す。
+  agent:
+    profiles: ["agent"]
+    build: ../fhir-client-agent
+    restart: unless-stopped
+    environment:
+      AGENT_ADAPTER: orca-push
+      ORCA_WS_URL: ws://host.docker.internal:8000/ws
+      KARTE_EVENTS_URL: http://backend:3001/integrations/receipt/events
+      # 管理画面「外部システム連携」で発行したトークンを入れる。
+      KARTE_INBOUND_TOKEN: ${RECEIPT_INBOUND_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - agent_spool:/spool
+    stop_grace_period: 30s
+    depends_on:
+      - backend
+
+  # 日レセ検証環境(別リポジトリ weborca-dev)。agent の接続先で、これも通常の開発では
+  # 要らないので profile で切ってある。隣に weborca-dev を clone してあること。
+  #   docker compose --profile orca up -d --build orca
+  # weborca-dev リポジトリ側の compose とは同じコンテナ名・同じボリュームを使うので、
+  # どちらか一方だけを動かすこと(両方上げようとすると名前の衝突で止まる)。
+  orca:
+    profiles: ["orca"]
+    build: ../weborca-dev
+    image: weborca-dev:local
+    platform: linux/amd64
+    container_name: weborca
+    ports:
+      - "8000:8000"
+    environment:
+      # 初回起動時に設定される ormaster のパスワード(8〜16文字)。
+      ORMASTER_PASSWORD: ${ORMASTER_PASSWORD:-weborcadev1}
+    volumes:
+      - orca_pg_data:/var/lib/postgresql
+    # 空ボリュームからの初回起動はスキーマ移行に数分かかる。
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 600s
+    stop_grace_period: 60s
+
 volumes:
   pg_data:
   dicom_storage:
+  agent_spool:
+  # weborca-dev リポジトリ側と同じ実体を指す(検証データを共有する)。
+  # 別プロジェクトが作ったボリュームなので compose が warning を出すが無視してよい。
+  orca_pg_data:
+    name: weborca-dev_pg_data

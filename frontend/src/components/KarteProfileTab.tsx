@@ -49,6 +49,7 @@ import {
 } from "../fhir/patientHelpers";
 import { PatientForm } from "./PatientForm";
 import { ErrorBanner } from "./ErrorBanner";
+import { KarteCoverageSection } from "./KarteCoverageSection";
 import { FlagDetailPanel } from "./FlagDetailPanel";
 import { FlagForm } from "./FlagForm";
 import { FlagTable } from "./FlagTable";
@@ -180,6 +181,8 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
         patientId={patientId}
         onEdit={() => setForm({ kind: "edit-patient" })}
       />
+      {/* 保険は医事会計が正本なので参照だけ。取り込み済みの Coverage を見せる。 */}
+      <KarteCoverageSection patientId={patientId} />
       <PatientBodySection
         patientId={patientId}
         onEditBloodType={() => setForm({ kind: "edit-blood-type" })}

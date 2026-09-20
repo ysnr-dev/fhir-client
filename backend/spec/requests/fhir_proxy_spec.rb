@@ -126,12 +126,12 @@ RSpec.describe "FhirProxy", type: :request do
 
   describe "resource type allowlist" do
     it "returns 404 OperationOutcome for a resource type that is not allowlisted, without calling upstream" do
-      get "/fhir/Coverage/1"
+      get "/fhir/Claim/1"
 
       expect(response).to have_http_status(:not_found)
       body = JSON.parse(response.body)
       expect(body["resourceType"]).to eq("OperationOutcome")
-      expect(body["issue"].first["diagnostics"]).to include("Coverage")
+      expect(body["issue"].first["diagnostics"]).to include("Claim")
     end
 
     it "allowlists DiagnosticReport, Observation, Specimen (検査結果機能)、Condition (病名機能)、Questionnaire・QuestionnaireResponse (テンプレート機能)、Encounter (入院患者一覧)" do

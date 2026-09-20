@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_19_110100) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_20_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -69,6 +69,32 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_19_110100) do
     t.index ["patient_id", "study_instance_uid"], name: "index_dicom_instances_on_patient_id_and_study_instance_uid"
     t.index ["sop_instance_uid"], name: "index_dicom_instances_on_sop_instance_uid", unique: true
     t.index ["study_instance_uid", "series_instance_uid", "instance_number"], name: "index_dicom_instances_on_study_series_number"
+  end
+
+  create_table "external_code_mappings", force: :cascade do |t|
+    t.string "system_type", null: false
+    t.string "kind", null: false
+    t.string "local_key", null: false
+    t.string "external_code", null: false
+    t.string "label"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["system_type", "kind", "external_code"], name: "idx_on_system_type_kind_external_code_93947f1bc0"
+    t.index ["system_type", "kind", "local_key"], name: "idx_on_system_type_kind_local_key_e8f5c57fde", unique: true
+  end
+
+  create_table "external_system_connections", force: :cascade do |t|
+    t.string "system_key", null: false
+    t.string "system_type"
+    t.boolean "enabled", default: false, null: false
+    t.string "base_url"
+    t.string "username"
+    t.text "password"
+    t.text "inbound_token"
+    t.jsonb "options", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["system_key"], name: "index_external_system_connections_on_system_key", unique: true
   end
 
   create_table "facility_settings", force: :cascade do |t|
