@@ -18,11 +18,15 @@ import {
   useKarteQuestionnaireResponsesInfinite,
   useKarteVitalsInfinite,
   useKartePathwayEvaluations,
+  usePatient,
   usePatientOutpatientExam,
   useUpdateOutpatientExam,
   type KarteProblemFilter,
+  type OutpatientExam,
 } from "../api/queries";
+import { useReceiptStatus } from "../api/receiptQueries";
 import { isDischargeSummary } from "../fhir/clinicalNoteHelpers";
+import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
 import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
@@ -80,7 +84,11 @@ import {
   type KarteOtherTabKey,
   type KarteTabKey,
 } from "../karteUrl";
+import { appointmentDepartmentCode } from "../fhir/appointmentHelpers";
+import { receptionCoverageSetKey } from "../fhir/coverageHelpers";
+import { encounterAttendingId } from "../fhir/encounterHelpers";
 import { buildFinishedOutpatientEncounter } from "../fhir/outpatientEncounterHelpers";
+import { displayName } from "../fhir/patientHelpers";
 import { nowFhirDateTime, today } from "../lib/dates";
 import { useKarteReturnTo } from "../returnTo";
 import {
@@ -130,6 +138,32 @@ export function KartePage() {
   // (入院患者や、外来受付を経ずに開いたカルテ)null が返り、ボタンは出ない。
   const outpatientExam = usePatientOutpatientExam(patientId);
   const finishExam = useUpdateOutpatientExam();
+  const patient = usePatient(patientId);
+  // 会計送信はレセコン連携が有効なときだけ。無効なら診察終了でそのまま一覧へ戻る。
+  const receiptStatus = useReceiptStatus();
+  const [billingTarget, setBillingTarget] = useState<BillingSendTarget | null>(null);
+
+  // 診察が終わったら次に見るのは外来患者一覧なので、どの入口から開いていても
+  // そこへ戻す(useKarteReturnTo の戻り先とは別)。
+  function leaveKarte() {
+    navigate("/outpatients");
+  }
+
+  // 会計はレセコン側で 診療日 + 患者 + 診療科 の単位で持つ。診療日は診察を始めた日。
+  function billingTargetOf(exam: OutpatientExam): BillingSendTarget {
+    return {
+      patientId: patientId as string,
+      patientName: patient.data?.data
+        ? displayName(patient.data.data)
+        : (exam.encounter.subject?.display ?? ""),
+      performDate: exam.encounter.period?.start?.slice(0, 10) ?? today(),
+      departmentCode: exam.appointment
+        ? appointmentDepartmentCode(exam.appointment) || undefined
+        : undefined,
+      practitionerId: encounterAttendingId(exam.encounter),
+      coverageSetKey: receptionCoverageSetKey(exam.appointment) || undefined,
+    };
+  }
 
   function handleFinishExam() {
     const exam = outpatientExam.data;
@@ -141,9 +175,17 @@ export function KartePage() {
         appointment: exam.appointment,
         appointmentStatus: exam.appointment ? "fulfilled" : undefined,
       },
-      // 診察が終わったら次に見るのは外来患者一覧なので、どの入口から開いていても
-      // そこへ戻す(useKarteReturnTo の戻り先とは別)。
-      { onSuccess: () => navigate("/outpatients") },
+      {
+        // 診察を終えたその場で会計を送れるようにする。送らずに閉じても外来患者
+        // 一覧に戻るだけで、一覧の行からいつでも送り直せる。
+        onSuccess: () => {
+          if (receiptStatus.data?.enabled) {
+            setBillingTarget(billingTargetOf(exam));
+            return;
+          }
+          leaveKarte();
+        },
+      },
     );
   }
 
@@ -984,6 +1026,16 @@ export function KartePage() {
           target={detailTarget}
           problemsById={problemsById}
           onClose={closeDetail}
+        />
+      )}
+      {/* 診察終了の直後だけ出す。閉じたら(送っても送らなくても)外来患者一覧へ。 */}
+      {billingTarget && (
+        <BillingSendModal
+          target={billingTarget}
+          onClose={() => {
+            setBillingTarget(null);
+            leaveKarte();
+          }}
         />
       )}
     </div>
