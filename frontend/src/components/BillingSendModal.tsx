@@ -72,7 +72,7 @@ export function BillingSendModal({
   };
 
   return (
-    <Modal title={`医事会計へ会計送信 — ${target.patientName}`} onClose={onClose}>
+    <Modal title={`医事送信 — ${target.patientName}`} onClose={onClose}>
       <div className="receipt-send">
         <ErrorBanner error={preview.error ?? send.error ?? cancel.error} />
 
@@ -191,7 +191,7 @@ export function BillingSendModal({
             disabled={send.isPending || items.length === 0}
             onClick={() => send.mutate(body)}
           >
-            {send.isPending ? "送信中..." : alreadySent ? "送り直す" : "送る"}
+            {send.isPending ? "送信中..." : alreadySent ? "送り直す" : "送信"}
           </button>
           {alreadySent && (
             <button

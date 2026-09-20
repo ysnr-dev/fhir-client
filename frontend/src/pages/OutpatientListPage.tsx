@@ -548,6 +548,12 @@ function OutpatientTableRow({
             診察終了
           </button>
         )}
+        {/* 診察が終わったら次にやることは会計送信なので、同じ位置に出す。 */}
+        {examFinished && onSendBilling && (
+          <button type="button" disabled={pending} onClick={onSendBilling}>
+            医事送信
+          </button>
+        )}
         {patientId && (
           <Link className="button" to={`/patients/${patientId}/karte`} state={returnLinkState}>
             カルテ
@@ -588,15 +594,16 @@ function OutpatientTableRow({
             </button>
           )}
           {/* 会計はレセコン側に置くので、カルテからは診療行為と病名を送るだけ。
-              受付済み以降ならいつでも送れる(診察終了を待たなくてよい)。 */}
-          {onSendBilling && (
+              受付済み以降ならいつでも送れる(診察終了を待たなくてよい)。診察終了後は
+              行に「医事送信」が出るので、メニューには重ねて出さない。 */}
+          {onSendBilling && !examFinished && (
             <button
               type="button"
               className="row-menu__item"
               disabled={pending}
               onClick={onSendBilling}
             >
-              医事会計へ会計送信
+              医事送信
             </button>
           )}
           {examFinished && (
