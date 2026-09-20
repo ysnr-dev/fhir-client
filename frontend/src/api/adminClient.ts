@@ -412,3 +412,164 @@ export async function deleteFileCategory(id: number): Promise<void> {
   const res = await adminFetch(`${FILE_CATEGORIES}/${id}`, { method: "DELETE" });
   if (!res.ok) throw await buildError(res);
 }
+
+// --- 外部システム連携 ---------------------------------------------------------
+// システム(レセコン等)ごとに 1 件の設定。項目を宣言するのは backend の定義。
+
+const EXTERNAL_SYSTEMS = "/admin/external_systems";
+
+/** 設定ページに出す区画。 */
+export type ExternalSystemSection = "connection" | "inbound_token" | "code_mappings";
+
+/** 定義が宣言する設定項目。値は options に入る。 */
+export interface ExternalSystemField {
+  key: string;
+  label: string;
+  /** 既定は "text"。 */
+  type?: "text" | "boolean" | "select";
+  /** type が "select" のときの選択肢。 */
+  choices?: { value: string; label: string }[];
+  default?: string;
+  required?: boolean;
+}
+
+/** アダプタが宣言する製品固有の設定項目。値は options に入る。 */
+export interface ExternalOptionField {
+  key: string;
+  label: string;
+  default?: string;
+}
+
+/** アダプタが宣言する対応表の種別。 */
+export interface ExternalCodeKind {
+  key: string;
+  label: string;
+  /** カルテ側が何のコードか。"ssmix2_department" / "practitioner"。 */
+  local: string;
+  /** 対応が無いときの扱い。"identity" ならそのまま使う。 */
+  fallback?: string | null;
+}
+
+export interface ExternalSystemSummary {
+  key: string;
+  label: string;
+  description: string | null;
+  sections: ExternalSystemSection[];
+  system_types: string[];
+  fields: ExternalSystemField[];
+  enabled: boolean;
+  /** どの製品と繋ぐか。"orca" など。API で繋がないシステムは空。 */
+  system_type: string | null;
+  usable: boolean;
+}
+
+export interface ExternalSystemDetail extends ExternalSystemSummary {
+  base_url: string | null;
+  username: string | null;
+  options: Record<string, string>;
+  /** パスワードは返らない。設定済みかどうかだけ。 */
+  password_set: boolean;
+  /** 受信エンドポイントのトークンが発行済みか。 */
+  inbound_token_set: boolean;
+  effective_base_url: string | null;
+  option_fields: ExternalOptionField[];
+  code_kinds: ExternalCodeKind[];
+}
+
+export interface ExternalSystemUpdate {
+  enabled?: boolean;
+  system_type?: string;
+  base_url?: string;
+  username?: string;
+  /** 空文字なら既存のパスワードを変更しない。 */
+  password?: string;
+  options?: Record<string, string>;
+}
+
+export interface ExternalConnectionTestResult {
+  ok: boolean;
+  error?: string;
+  facility_name?: string | null;
+  /** 保険医療機関番号 10 桁。自院 Organization の identifier と突き合わせる。 */
+  facility_number?: string | null;
+  message?: string;
+}
+
+export interface ExternalCodeMapping {
+  id?: number;
+  system_type?: string;
+  kind: string;
+  local_key: string;
+  external_code: string;
+  label?: string | null;
+}
+
+export interface ExternalCodeCandidate {
+  code: string;
+  label: string;
+}
+
+function systemPath(systemKey: string) {
+  return `${EXTERNAL_SYSTEMS}/${encodeURIComponent(systemKey)}`;
+}
+
+export async function fetchExternalSystems(): Promise<{ items: ExternalSystemSummary[] }> {
+  return adminJson<{ items: ExternalSystemSummary[] }>(EXTERNAL_SYSTEMS);
+}
+
+export async function fetchExternalSystem(systemKey: string): Promise<ExternalSystemDetail> {
+  return adminJson<ExternalSystemDetail>(systemPath(systemKey));
+}
+
+export async function updateExternalSystem(
+  systemKey: string,
+  payload: ExternalSystemUpdate,
+): Promise<ExternalSystemDetail> {
+  return adminJson<ExternalSystemDetail>(systemPath(systemKey), {
+    method: "PATCH",
+    ...jsonBody(payload),
+  });
+}
+
+export async function testExternalSystem(systemKey: string): Promise<ExternalConnectionTestResult> {
+  return adminJson<ExternalConnectionTestResult>(`${systemPath(systemKey)}/test`, {
+    method: "POST",
+  });
+}
+
+/** 受信エンドポイントのトークンを作り直す。院内エージェントに配るので平文で返る。 */
+export async function regenerateInboundToken(systemKey: string): Promise<{ inbound_token: string }> {
+  return adminJson<{ inbound_token: string }>(`${systemPath(systemKey)}/regenerate_inbound_token`, {
+    method: "POST",
+  });
+}
+
+export async function fetchExternalCodeMappings(systemKey: string): Promise<{
+  items: ExternalCodeMapping[];
+  kinds: ExternalCodeKind[];
+}> {
+  return adminJson<{ items: ExternalCodeMapping[]; kinds: ExternalCodeKind[] }>(
+    `${systemPath(systemKey)}/code_mappings`,
+  );
+}
+
+/** 種別ごとに丸ごと置き換える。部分更新にすると「消したのに残る」が起きやすい。 */
+export async function updateExternalCodeMappings(
+  systemKey: string,
+  kind: string,
+  items: { local_key: string; external_code: string; label?: string }[],
+): Promise<{ items: ExternalCodeMapping[] }> {
+  return adminJson<{ items: ExternalCodeMapping[] }>(`${systemPath(systemKey)}/code_mappings`, {
+    method: "PATCH",
+    ...jsonBody({ kind, items }),
+  });
+}
+
+export async function fetchExternalCodeCandidates(
+  systemKey: string,
+  kind: string,
+): Promise<{ items: ExternalCodeCandidate[] }> {
+  return adminJson<{ items: ExternalCodeCandidate[] }>(
+    `${systemPath(systemKey)}/code_mappings/candidates?kind=${encodeURIComponent(kind)}`,
+  );
+}

@@ -366,6 +366,9 @@ DICOM の Study / Series UID が要る(`docs/rad-result-design.md` §7-1)。
 
 ### F-2. 会計連携
 
+> レセコン連携として実装した。`docs/receipt-computer-integration.md` を参照。
+> 送るのは各オーダー項目マスタの `receipt_code` で、未設定の項目は送らず画面に出す。
+
 ［事実］上流に `ChargeItem` / `Claim` / `Invoice` が未実装。種別をまたぐ課題
 (`docs/order-common-backlog.md` / `docs/lab-backlog.md` C-7)。オーダー明細の `receipt_code` と
 実施記録の `usedCode` ・造影剤の使用量という「会計が必要とする材料」までは揃っている。

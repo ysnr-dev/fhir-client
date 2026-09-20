@@ -68,6 +68,11 @@ export default defineConfig({
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
         changeOrigin: true,
       },
+      // レセコン連携。SPA ルートとぶつからないよう /integrations/ 配下に限定する。
+      '^/integrations/': {
+        target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   },
 })

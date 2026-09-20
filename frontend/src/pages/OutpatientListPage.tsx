@@ -15,6 +15,9 @@ import {
   type OutpatientRow,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
+import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
+import { useReceiptStatus } from "../api/receiptQueries";
+import { receptionCoverageSetKey } from "../fhir/coverageHelpers";
 import {
   PatientKana,
   PatientProfileCells,
@@ -120,6 +123,9 @@ export function OutpatientListPage() {
   const cancel = useCancelAppointment();
   const startExam = useStartOutpatientExam();
   const updateExam = useUpdateOutpatientExam();
+  // 会計送信はレセコン連携が有効なときだけ。無効なら行メニューに項目ごと出さない。
+  const receiptStatus = useReceiptStatus();
+  const [billingTarget, setBillingTarget] = useState<BillingSendTarget | null>(null);
 
   // ログイン中の医師には自分の予約から見せる(受付や代行入力の職種はすべての予約)。
   const { practitionerId } = useCurrentPractitioner();
@@ -140,6 +146,23 @@ export function OutpatientListPage() {
     [list.data, filters],
   );
   const total = list.data?.rows.length ?? 0;
+
+  // 会計はレセコン側で 診療日 + 患者 + 診療科 の単位で持つので、Encounter ではなく
+  // 一覧の日付をそのまま診療日として渡す。
+  function openBillingSend(row: OutpatientRow) {
+    const patientId = row.patient?.id ?? appointmentActorId(row.appointment, "Patient");
+    if (!patientId) return;
+    setBillingTarget({
+      patientId,
+      patientName: row.patient
+        ? displayName(row.patient)
+        : appointmentActorDisplay(row.appointment, "Patient"),
+      performDate: date,
+      departmentCode: appointmentDepartmentCode(row.appointment) || undefined,
+      practitionerId: appointmentActorId(row.appointment, "Practitioner") || undefined,
+      coverageSetKey: receptionCoverageSetKey(row.appointment) || undefined,
+    });
+  }
 
   function handleDateChange(value: string) {
     // 日付を空にはさせない(空で検索すると全期間になってしまう)。
@@ -280,6 +303,9 @@ export function OutpatientListPage() {
                     onFinishExam={() => handleFinishExam(row)}
                     onCancelExamStart={() => handleCancelExamStart(row)}
                     onCancelExamFinish={() => handleCancelExamFinish(row)}
+                    onSendBilling={
+                      receiptStatus.data?.enabled ? () => openBillingSend(row) : undefined
+                    }
                     onCancel={() => handleCancel(row.appointment)}
                     onEditReception={() => setReceptionTarget(row)}
                   />
@@ -305,6 +331,9 @@ export function OutpatientListPage() {
           row={receptionTarget}
           onClose={() => setReceptionTarget(null)}
         />
+      )}
+      {billingTarget && (
+        <BillingSendModal target={billingTarget} onClose={() => setBillingTarget(null)} />
       )}
       {walkInOpen && <WalkInCheckInModal onClose={() => setWalkInOpen(false)} />}
       {newPatientOpen && <NewPatientCheckInModal onClose={() => setNewPatientOpen(false)} />}
@@ -447,6 +476,7 @@ function OutpatientTableRow({
   onFinishExam,
   onCancelExamStart,
   onCancelExamFinish,
+  onSendBilling,
   onCancel,
   onEditReception,
 }: {
@@ -457,6 +487,8 @@ function OutpatientTableRow({
   onFinishExam: () => void;
   onCancelExamStart: () => void;
   onCancelExamFinish: () => void;
+  /** レセコン連携が無効なら undefined。メニューに項目ごと出さない。 */
+  onSendBilling?: () => void;
   onCancel: () => void;
   onEditReception: () => void;
 }) {
@@ -553,6 +585,18 @@ function OutpatientTableRow({
               onClick={onCancelExamStart}
             >
               診察開始を取り消す
+            </button>
+          )}
+          {/* 会計はレセコン側に置くので、カルテからは診療行為と病名を送るだけ。
+              受付済み以降ならいつでも送れる(診察終了を待たなくてよい)。 */}
+          {onSendBilling && (
+            <button
+              type="button"
+              className="row-menu__item"
+              disabled={pending}
+              onClick={onSendBilling}
+            >
+              医事会計へ会計送信
             </button>
           )}
           {examFinished && (

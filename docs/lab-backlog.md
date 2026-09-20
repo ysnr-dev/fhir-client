@@ -396,6 +396,9 @@ JLAC の識別コードが「負荷後 60 分」を別項目として持つの�
 
 ### C-7. 会計連携
 
+> レセコン連携として実装した。`docs/receipt-computer-integration.md` を参照。
+> 送るのは各オーダー項目マスタの `receipt_code` で、未設定の項目は送らず画面に出す。
+
 **［事実］** レセ電算コード(`receipt_code`)はオーダー項目マスタに持てるが、FHIR にも書いておらず
 点数計算も無い。上流に `ChargeItem` / `Claim` / `Invoice` が未実装
 (`docs/rad-result-design.md` §7)。

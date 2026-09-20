@@ -11,6 +11,10 @@ import {
   fetchAdminFacilitySettings,
   fetchAdminSession,
   fetchConnectionSettings,
+  fetchExternalCodeCandidates,
+  fetchExternalCodeMappings,
+  fetchExternalSystem,
+  fetchExternalSystems,
   fetchFileCategories,
   fetchOauthClients,
   fetchQuestionnaireCategories,
@@ -20,6 +24,10 @@ import {
   login,
   logout,
   testConnection,
+  regenerateInboundToken,
+  testExternalSystem,
+  updateExternalCodeMappings,
+  updateExternalSystem,
   updateAdminFacilitySettings,
   type FacilitySettingsPayload,
   updateConnectionSettings,
@@ -27,6 +35,7 @@ import {
   updateQuestionnaireCategory,
   updateReportLayout,
   type ConnectionSettingsUpdate,
+  type ExternalSystemUpdate,
   type FileCategoryPayload,
   type NewOauthClient,
   type QuestionnaireCategoryPayload,
@@ -34,6 +43,9 @@ import {
 } from "./adminClient";
 
 const CONNECTION_SETTINGS_KEY = ["admin", "connection_settings"];
+const EXTERNAL_SYSTEMS_KEY = ["admin", "external_systems"];
+const EXTERNAL_CODE_MAPPINGS_KEY = ["admin", "external_code_mappings"];
+const EXTERNAL_CODE_CANDIDATES_KEY = ["admin", "external_code_candidates"];
 const FACILITY_SETTINGS_KEY = ["admin", "facility_settings"];
 export const ADMIN_SESSION_KEY = ["admin", "session"];
 const OAUTH_CLIENTS_KEY = ["admin", "oauth_clients"];
@@ -95,6 +107,94 @@ export function useUpdateConnectionSettings() {
     retry: false,
     onSuccess: (data) => {
       queryClient.setQueryData(CONNECTION_SETTINGS_KEY, data);
+    },
+  });
+}
+
+// --- 外部システム連携 ---------------------------------------------------------
+
+export function useExternalSystems() {
+  return useQuery({
+    queryKey: EXTERNAL_SYSTEMS_KEY,
+    queryFn: fetchExternalSystems,
+    retry: false,
+  });
+}
+
+export function useExternalSystem(systemKey: string) {
+  return useQuery({
+    queryKey: [...EXTERNAL_SYSTEMS_KEY, systemKey],
+    queryFn: () => fetchExternalSystem(systemKey),
+    enabled: Boolean(systemKey),
+    retry: false,
+  });
+}
+
+export function useUpdateExternalSystem(systemKey: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ExternalSystemUpdate) => updateExternalSystem(systemKey, payload),
+    retry: false,
+    onSuccess: (data) => {
+      queryClient.setQueryData([...EXTERNAL_SYSTEMS_KEY, systemKey], data);
+      // 一覧の有効/無効も同じ行を見ている。
+      queryClient.invalidateQueries({ queryKey: EXTERNAL_SYSTEMS_KEY, exact: true });
+      // 向き先や資格情報が変われば、外部システム側のコード候補も別物になる。
+      queryClient.removeQueries({ queryKey: [...EXTERNAL_CODE_CANDIDATES_KEY, systemKey] });
+    },
+  });
+}
+
+export function useTestExternalSystem(systemKey: string) {
+  return useMutation({
+    mutationFn: () => testExternalSystem(systemKey),
+    retry: false,
+  });
+}
+
+export function useRegenerateInboundToken(systemKey: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => regenerateInboundToken(systemKey),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...EXTERNAL_SYSTEMS_KEY, systemKey] });
+    },
+  });
+}
+
+export function useExternalCodeMappings(systemKey: string) {
+  return useQuery({
+    queryKey: [...EXTERNAL_CODE_MAPPINGS_KEY, systemKey],
+    queryFn: () => fetchExternalCodeMappings(systemKey),
+    enabled: Boolean(systemKey),
+    retry: false,
+  });
+}
+
+// 対応先の候補は外部システム側のマスタ。連携が無効・未設定なら落ちるので retry しない。
+export function useExternalCodeCandidates(systemKey: string, kind: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...EXTERNAL_CODE_CANDIDATES_KEY, systemKey, kind],
+    queryFn: () => fetchExternalCodeCandidates(systemKey, kind),
+    enabled,
+    retry: false,
+  });
+}
+
+export function useUpdateExternalCodeMappings(systemKey: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      kind,
+      items,
+    }: {
+      kind: string;
+      items: { local_key: string; external_code: string; label?: string }[];
+    }) => updateExternalCodeMappings(systemKey, kind, items),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...EXTERNAL_CODE_MAPPINGS_KEY, systemKey] });
     },
   });
 }

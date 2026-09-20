@@ -83,6 +83,10 @@ services:
       - type: rewrite
         source: /fhir/*
         destination: https://ysnr-fhir-client-api.onrender.com/fhir/*
+      # レセコン連携。SPA ルートとは別パスなので /integrations/ 配下だけ。
+      - type: rewrite
+        source: /integrations/*
+        destination: https://ysnr-fhir-client-api.onrender.com/integrations/*
       - type: rewrite
         source: /master
         destination: https://ysnr-fhir-client-api.onrender.com/master
