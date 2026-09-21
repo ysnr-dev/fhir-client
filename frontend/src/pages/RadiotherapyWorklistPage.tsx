@@ -416,26 +416,6 @@ function CoursePanel({
             onChange={(e) => update({ patient: e.target.value })}
           />
         </label>
-        {/* 部門の仕事は「まだ日程を組んでいないコース」を見つけることから始まる。 */}
-        {view === "open" && (
-          <label className="dose-conversion__checkbox radiotherapy-courses__filter-wide">
-            <input
-              type="checkbox"
-              checked={filters.needsPlan}
-              onChange={(e) => update({ needsPlan: e.target.checked })}
-            />
-            予定が足りないコースのみ
-          </label>
-        )}
-        {filtered && (
-          <button
-            type="button"
-            className="radiotherapy-courses__filter-clear"
-            onClick={() => setFilters(EMPTY_COURSE_FILTERS)}
-          >
-            絞り込みを外す
-          </button>
-        )}
       </div>
 
       {truncated && (
@@ -644,16 +624,9 @@ interface CourseFilters {
   status: string;
   /** 氏名・患者番号の部分一致。 */
   patient: string;
-  /** 予定が処方の回数に足りていないコースだけ。 */
-  needsPlan: boolean;
 }
 
-const EMPTY_COURSE_FILTERS: CourseFilters = {
-  deviceCode: "",
-  status: "",
-  patient: "",
-  needsPlan: false,
-};
+const EMPTY_COURSE_FILTERS: CourseFilters = { deviceCode: "", status: "", patient: "" };
 
 /** 「装置未定」を選んだときの値(空文字は「すべて」なので別の値を使う)。 */
 const NO_DEVICE_FILTER = "__none__";
@@ -687,10 +660,6 @@ function matchesCourseFilters(
   if (filters.deviceCode) {
     const wanted = filters.deviceCode === NO_DEVICE_FILTER ? "" : filters.deviceCode;
     if (!courseDeviceCodes(summary, fractions).has(wanted)) return false;
-  }
-
-  if (filters.needsPlan && !radiotherapyPlanEligibility(status, summary, fractions).canPlan) {
-    return false;
   }
 
   const keyword = filters.patient.trim();

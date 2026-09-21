@@ -18251,8 +18251,7 @@ button.chemo-calendar__cell[draggable="true"] {
   white-space: nowrap;
 }
 
-/* 治療コースの絞り込み。パネルが狭いので 2 列に詰め、患者名と「予定が足りないコースのみ」は
-   1 行使う。 */
+/* 治療コースの絞り込み。パネルが狭いので装置と進捗を 2 列に詰め、患者名は 1 行使う。 */
 .radiotherapy-courses__filters {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -18287,15 +18286,3 @@ button.chemo-calendar__cell[draggable="true"] {
   grid-column: 1 / -1;
 }
 
-.radiotherapy-courses__filters label.dose-conversion__checkbox {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-}
-
-.radiotherapy-courses__filter-clear {
-  grid-column: 1 / -1;
-  justify-self: start;
-  padding: 2px 8px;
-  font-size: 12px;
-}
