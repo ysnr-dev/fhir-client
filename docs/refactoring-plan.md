@@ -408,7 +408,7 @@ backend の rspec は全件通過（1304 件、0 failures）。
 | B-3 | `app/services/questionnaire_response_report.rb:84-110` | `Questionnaire?url=` を件数指定なしで取り、先頭を選ぶ | `_count=1` を付ける（版指定が無いときの並びも明示する） | 低 |
 | R-1 | `app/controllers/master/pathways_controller.rb:313-333` | パスの複製で、イベント → 単位 → 評価・タスクを入れ子のループで 1 件ずつ読んで create | 子テーブルを pathway_code で一括ロードし、階層ごとに `insert_all` | 中 |
 | R-2 | `pathways_controller.rb`（承認検証と detail）、`regimens_controller.rb:287, 367` | 同じ子レコードを保存の検証と応答の組み立てで二度ロード | 1 回のロードを渡す | 中 |
-| R-3 | `app/models/facility_settings.rb:132` と `app/controllers/facility_settings_controller.rb:11-19` | `current` がキャッシュなしの `first_or_create!` で、show の中で 6 回呼ばれる | show の中で 1 回にするか、`FhirConnectionSettings` と同じ短時間キャッシュ | 中 |
+| R-3 | `app/models/facility_settings.rb:132` と `app/controllers/facility_settings_controller.rb:11-19` | `current` がキャッシュなしの `first_or_create!` で、show の中で 6 回呼ばれる | show の中で 1 回にするか、`FhirConnectionSettings` と同じ短時間キャッシュ | 中（**2026-09-21 に解消**。施設設定を項目表 + `settings` jsonb にまとめた際、show は `current` 1 回で全項目を組み立てるようになった） |
 | R-4 | `app/controllers/master/nursing_acts_controller.rb:36-68` | 全件ロードして Ruby でソートし、ページを切る | ORDER BY と LIMIT/OFFSET を SQL に移す | 低〜中 |
 
 ---

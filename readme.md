@@ -1522,6 +1522,34 @@ transaction でまとめて送ります。コードの値集合は輸血オー�
 | 処方箋 PDF の医療機関欄 | 自院を read | 保険医療機関番号を持つ最初の Organization（取り違えうる） |
 | テンプレートの自動入力・保険医療機関番号の初期値 | 自院の登録値 | ログイン中の医療従事者の所属 / 仮の番号 |
 
+### 施設設定の項目（`facility_settings.settings`）
+
+自院の Organization 以外の施設設定（看護指示の既定時刻・食事の提供時刻・バイタルの異常値・
+内服の与薬の時刻・処方区分の初期値・文書作成の督促・水分出納の対象項目）は、**`settings`
+jsonb 1 列**にまとめて入れます。backend はこれらを検索にも集計にも使わず（読むのは frontend
+だけ）、列に分けても索引も WHERE も使わないためです。
+
+**項目を足すときに書くのは `FacilitySettings::SETTINGS`（項目表）だけです。** 検証・既定値の
+穴埋め・読み書きのメソッド（`meal_schedule` / `meal_schedule_with_defaults` /
+`FacilitySettings.meal_schedule`）・管理 API の受け取りと応答は、項目表から
+`FacilitySettings::Schema` が回します（migration も要りません）。
+
+```ruby
+"prescription_category" => {
+  default: DEFAULT_PRESCRIPTION_CATEGORY,                     # 保存されていないときに返す値
+  shape: { fields: { "inpatient" => { enum: [...], blank: true }, ... } },  # 構造
+  check: ->(value) { ... }                                    # 構造で書けない決まり（任意）
+}
+```
+
+- 構造の節は `fields`（決まったキー・知らないキーは弾く）/ `map`（キーが可変）/ `list` の 3 種、
+  葉は `:time` / `:number` / `{ integer: }` / `{ enum: }` / `{ pattern: }` です。
+- 既定値の重ね方は節で変わります。`fields` は**キーごと**（空欄は既定値に戻る）、`map` は
+  **キー単位で差し替え**（バイタルのしきい値で「上限だけ空にする」を保存できるように）。
+- `PATCH /admin/facility_settings` は**渡した項目だけ**を差し替えます（看護指示の既定時刻だけを
+  保存しても他の設定は消えません）。応答と `GET /facility_settings` は、常に既定値で埋めた
+  全項目を平らな JSON で返します（frontend から見える形は項目表の前後で変わりません）。
+
 連携先（他院）は「マスタメンテ > 連携先」配下の**連携先医療機関**（`/partner-organizations`）と
 **連携先医師**（`/partner-practitioners`）で登録します。FHIR 上の表現は自院と同じ
 Organization / Practitioner + PractitionerRole で、所属ロールの `organization` が他院になる点だけが

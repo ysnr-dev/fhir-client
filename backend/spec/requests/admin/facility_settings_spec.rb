@@ -249,6 +249,24 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  # 設定は settings(jsonb)1 列にまとめて入るので、1 項目の保存が他の項目を
+  # 消していないことを見る。
+  describe "PATCH /admin/facility_settings (渡した項目だけ差し替える)" do
+    it "keeps the settings that were not sent" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { meal_schedule: { lunch: "11:30" } }, as: :json
+        patch "/admin/facility_settings",
+              params: { document_reminder: { discharge_summary_days: 7 } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)
+      expect(body["meal_schedule"]["lunch"]).to eq("11:30")
+      expect(body["document_reminder"]).to eq("discharge_summary_days" => 7)
+    end
+  end
+
   describe "with ADMIN_TOKEN configured" do
     it "rejects a request without credentials" do
       ENV["ADMIN_TOKEN"] = "s3cret-admin-passphrase"

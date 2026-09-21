@@ -102,13 +102,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_21_100000) do
     t.integer "singleton_guard", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.jsonb "nursing_schedule", default: {}, null: false
-    t.jsonb "meal_schedule", default: {}, null: false
-    t.jsonb "vital_thresholds", default: {}, null: false
-    t.jsonb "water_balance", default: {}, null: false
-    t.jsonb "medication_schedule", default: {}, null: false
-    t.jsonb "document_reminder", default: {}, null: false
-    t.jsonb "prescription_category", default: {}, null: false
+    t.jsonb "settings", default: {}, null: false
     t.index ["singleton_guard"], name: "index_facility_settings_on_singleton_guard", unique: true
   end
 

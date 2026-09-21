@@ -15,6 +15,27 @@ RSpec.describe FacilitySettings do
     end
   end
 
+  # 項目は FacilitySettings::SETTINGS(項目表)にあるものだけ。綴り違いを黙って
+  # 貯め込まないよう、知らないキーは弾く。
+  describe "settings" do
+    it "rejects an unknown setting" do
+      settings = described_class.current
+      settings.settings = { "meal_schdule" => {} }
+
+      expect(settings).not_to be_valid
+      expect(settings.errors[:settings]).to be_present
+    end
+
+    it "keeps the other settings when one is written" do
+      settings = described_class.current
+      settings.update!(meal_schedule: { "lunch" => "11:30" })
+      settings.update!(document_reminder: { "discharge_summary_days" => 7 })
+
+      expect(settings.meal_schedule_with_defaults["lunch"]).to eq("11:30")
+      expect(settings.document_reminder_with_defaults).to eq("discharge_summary_days" => 7)
+    end
+  end
+
   describe ".nursing_schedule" do
     it "returns the defaults when nothing is stored" do
       expect(described_class.nursing_schedule).to eq(described_class::DEFAULT_NURSING_SCHEDULE)

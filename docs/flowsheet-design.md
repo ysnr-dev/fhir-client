@@ -480,7 +480,7 @@ ServiceRequest?patient=…&category={prescription-category}|
 | `components/OralPerformModal.tsx` | 与薬入力(押した 1 枠だけ) |
 | `components/MealIntakeModal.tsx` | 食事摂取量の入力(押した 1 食の主食・副食だけ) |
 | `api/queries.ts` | `useVitalFlowsheet` / `usePatientEncounterEvents` / `usePatientSurgeryPerforms` / `usePatientExamOrders` / `usePatientInjectionOrders` / `usePatientNursingFlowsheet` / `usePatientMealIntake` / `useSaveMealIntake` / `usePatientOralPrescriptions` / `useRegisterOralPerform` / `useCancelOralPerforms` / `useVitalThresholds` |
-| backend | `facility_settings.vital_thresholds` / `water_balance` / `medication_schedule`(migration `20260903000000` / `20260903120000` / `20260904000000`)とモデル・コントローラ |
+| backend | 施設設定の `vital_thresholds` / `water_balance` / `medication_schedule`(`facility_settings.settings` jsonb の中。2026-09-21 に項目ごとの列から集約した)とモデル・コントローラ |
 
 ## 12. 未実装・今後
 

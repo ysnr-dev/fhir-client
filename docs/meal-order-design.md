@@ -792,7 +792,7 @@ UI にはしていない(切り替えの状態を持たずに済み、行が固�
 | FHIR 変換 | `fhir/mealOrderHelpers.ts` 1 本のみ(Task・実施記録のヘルパーは無い) |
 | 画面 | `pages/MealDietPage.tsx` / `pages/MealItemPage.tsx` / `components/MealDietPickerModal.tsx` / `components/MealOrderForm.tsx` / `MealOrderPanels.tsx` / `MealOrderDetailPanel.tsx` / `KarteMealTab.tsx` / `mealItemOptions.ts` |
 | 連動 | `fhir/mealEncounterSync.ts` / `hooks/useMealSyncContext.ts` / `components/MealSyncSummary.tsx`、`DischargeModal` / `DischargePlanModal` / `LeaveModal` / `LeaveReturnModal` / `InpatientPlanTables` の各操作 |
-| 施設設定 | `facility_settings.meal_schedule`(migration `20260831100000`、`FacilitySettingsPage` の「食事の提供時刻」) |
+| 施設設定 | 施設設定の `meal_schedule`(`facility_settings.settings` jsonb の中、`FacilitySettingsPage` の「食事の提供時刻」) |
 | queries | `useMealOrderDetail` / `useActiveMealOrders` / `useMealOrderMonth` / `useUpdateMealOrder` / `useDeleteMealOrder`、`OCCURRENCE_ORDER_TYPES` に `meal` を追加 |
 | カルテ | `KARTE_TABS` に「食事」タブ、`karteTimeline` に `meal-order` 種別、`KarteRightPane` の起動ボタンとパネル、`KarteTimeline` のカード本体・タイトル・削除、`KarteCardModals` の詳細/JSON、`KarteCategoryList` / `karteUrl` / `KartePage` の分岐 |
 

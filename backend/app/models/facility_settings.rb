@@ -1,4 +1,4 @@
-# 「自院」がどの Organization かを指す単一行モデル。
+# 「自院」がどの Organization かと、施設ごとの業務設定を持つ単一行モデル。
 #
 # 本アプリはマルチテナントではなく、スタッフ・診療科・診察室は自院のものしか
 # 登録しない。一方で診療情報提供書の送付先候補として他院の医療機関・医師も
@@ -9,10 +9,29 @@
 # 接続設定(FhirConnectionSettings)とは分けている。あちらは「どのサーバーに
 # 繋ぐか」というインフラ設定で秘密情報を持ち管理者しか読めないが、こちらは
 # 業務設定でログイン済みユーザー全員が読む。
+#
+# ## 設定項目の持ち方
+#
+# 自院の Organization 以外の設定は、すべて settings(jsonb)1 列にまとめて入れる。
+# backend はこれらを検索にも集計にも使わず(読むのは frontend だけ)、列に分けても
+# 索引も WHERE も使わないため。**項目を足すときに書くのは下の SETTINGS だけ**で、
+# 検証・既定値の穴埋め・読み書きのメソッド・管理 API の受け取りと応答は
+# FacilitySettings::Schema が項目表から回す(migration も要らない)。
+#
+# どの設定も「登録時の初期値」か「表示時の判定」のどちらかで、**登録済みの
+# リソースは動かさない**(オーダーや Task には値が焼き付いている)。
 class FacilitySettings < ApplicationRecord
   # 単一行の強制: ガード列は常に 0。一意インデックス(migration)と合わせて 2 行目を弾く。
   attribute :singleton_guard, :integer, default: 0
   validates :singleton_guard, inclusion: { in: [0] }, uniqueness: true
+
+  TIME_PATTERN = /\A([01]\d|2[0-3]):[0-5]\d\z/
+  # MEDIS の管理番号は 8 桁の数字。
+  MANAGE_NO_PATTERN = /\A\d{8}\z/
+
+  MANAGE_NO = { pattern: MANAGE_NO_PATTERN, label: "管理番号" }.freeze
+  MINUTES = { integer: { min: 0, unit: "分" } }.freeze
+  DAYS = { integer: { min: 0, unit: "日数" } }.freeze
 
   # 看護指示の既定時刻。"daily" は「1日N回」の N ごとの時刻、"interval_start" は
   # 「N時間毎」の起点。指示を登録するときの初期値に使うだけで、登録済みの指示には
@@ -60,15 +79,13 @@ class FacilitySettings < ApplicationRecord
     "wake_time" => "06:00"
   }.freeze
 
-  MEDICATION_SCHEDULE_MINUTE_KEYS = %w[before_meal_minutes after_meal_minutes].freeze
-  MEDICATION_SCHEDULE_TIME_KEYS = %w[bedtime wake_time].freeze
-
   # 経過表の水分出納(In/Out)に数える看護観察の項目(MEDIS の管理番号)。
   # 何を数えるかは施設の運用で違うので既定は空にし、施設設定で選ばせる
   # (尿量だけで 29 件、ドレーン排液は 200 件超あり、汎用の既定値は作れない)。
   # 空のままだと経過表に欄が出ないので、代表的な項目は db:seed で入れる
   # (db/seed_data/water_balance_items.csv。選んである施設は上書きしない)。
   DEFAULT_WATER_BALANCE = { "in" => [], "out" => [] }.freeze
+  WATER_BALANCE_KEYS = DEFAULT_WATER_BALANCE.keys.freeze
 
   # 文書作成の督促。退院時サマリーは退院日からこの日数を期限にして、退院の時点で
   # 主治医あての通知 Task を作る(期限は Task に焼き付くので、ここを変えても
@@ -77,11 +94,8 @@ class FacilitySettings < ApplicationRecord
     "discharge_summary_days" => 14
   }.freeze
 
-  DOCUMENT_REMINDER_DAY_KEYS = %w[discharge_summary_days].freeze
-
   # 処方区分の初期値。処方フォームを開いたときと、入外区分を選び直したときの値に使う。
-  # 既定は空(「選択してください」のまま開く)。登録済みの処方には区分が焼き付いているので、
-  # ここを変えても過去の処方は動かない。
+  # 既定は空(「選択してください」のまま開く)。
   DEFAULT_PRESCRIPTION_CATEGORY = {
     "inpatient" => "",
     "outpatient" => ""
@@ -94,86 +108,96 @@ class FacilitySettings < ApplicationRecord
     "outpatient" => %w[external internal]
   }.freeze
 
-  WATER_BALANCE_KEYS = %w[in out].freeze
-  # MEDIS の管理番号は 8 桁の数字。
-  MANAGE_NO_PATTERN = /\A\d{8}\z/
+  # 設定項目の表。ここに 1 項目足せば、検証・既定値・読み書き・管理 API がすべて付く。
+  #
+  #   default: 保存されていないときに返す値
+  #   shape:   構造(節の書き方は FacilitySettings::Schema のコメント)
+  #   check:   構造では書けない決まりごと(任意。エラー文言の配列を返す)
+  SETTINGS = {
+    "nursing_schedule" => {
+      default: DEFAULT_NURSING_SCHEDULE,
+      # 「1日N回」の N は施設が増やせるようにキーを縛らない。
+      shape: { fields: { "daily" => { map: { list: :time }, keys: :any }, "interval_start" => :time } }
+    },
+    "meal_schedule" => {
+      default: DEFAULT_MEAL_SCHEDULE,
+      shape: { fields: DEFAULT_MEAL_SCHEDULE.keys.index_with(:time) }
+    },
+    "vital_thresholds" => {
+      default: DEFAULT_VITAL_THRESHOLDS,
+      shape: {
+        map: { fields: { "low" => :number, "high" => :number } },
+        keys: DEFAULT_VITAL_THRESHOLDS.keys
+      },
+      check: lambda { |value|
+        (value.is_a?(Hash) ? value : {}).filter_map do |code, bounds|
+          next unless bounds.is_a?(Hash)
 
-  TIME_PATTERN = /\A([01]\d|2[0-3]):[0-5]\d\z/
+          low = bounds["low"]
+          high = bounds["high"]
+          "#{code} は下限 < 上限にしてください" if low.is_a?(Numeric) && high.is_a?(Numeric) && low >= high
+        end
+      }
+    },
+    "water_balance" => {
+      default: DEFAULT_WATER_BALANCE,
+      shape: { fields: WATER_BALANCE_KEYS.index_with({ list: MANAGE_NO }) }
+    },
+    "medication_schedule" => {
+      default: DEFAULT_MEDICATION_SCHEDULE,
+      shape: {
+        fields: {
+          "before_meal_minutes" => MINUTES,
+          "after_meal_minutes" => MINUTES,
+          "bedtime" => :time,
+          "wake_time" => :time
+        }
+      }
+    },
+    "document_reminder" => {
+      default: DEFAULT_DOCUMENT_REMINDER,
+      shape: { fields: { "discharge_summary_days" => DAYS } }
+    },
+    "prescription_category" => {
+      default: DEFAULT_PRESCRIPTION_CATEGORY,
+      shape: {
+        fields: PRESCRIPTION_CATEGORY_CODES.transform_values { |codes| { enum: codes, blank: true } }
+      }
+    }
+  }.freeze
 
-  validate :nursing_schedule_shape
-  validate :meal_schedule_shape
-  validate :vital_thresholds_shape
-  validate :water_balance_shape
-  validate :medication_schedule_shape
-  validate :document_reminder_shape
-  validate :prescription_category_shape
+  validate :settings_shape
+
+  # 項目ごとの読み書き。保存値そのもの(nursing_schedule)、既定値で埋めた読み出し用
+  # (nursing_schedule_with_defaults)、単一行を引く近道(FacilitySettings.nursing_schedule)。
+  SETTINGS.each do |key, spec|
+    define_method(key) { stored_settings[key] }
+
+    define_method("#{key}=") { |value| self.settings = stored_settings.merge(key => value) }
+
+    define_method("#{key}_with_defaults") { Schema.fill(spec[:shape], spec[:default], stored_settings[key]) }
+
+    singleton_class.define_method(key) { current.public_send("#{key}_with_defaults") }
+  end
 
   # 自院の Organization.id。未設定なら nil(呼び出し側は推測に倒す)。
   def self_organization_id
     self_organization_fhir_id.presence
   end
 
-  # 欠けたキーを既定値で埋めた看護指示の既定時刻。読み出しは常にこちらを使う。
-  def nursing_schedule_with_defaults
-    stored = nursing_schedule.is_a?(Hash) ? nursing_schedule : {}
-    {
-      "daily" => DEFAULT_NURSING_SCHEDULE["daily"].merge(stored["daily"].is_a?(Hash) ? stored["daily"] : {}),
-      "interval_start" => stored["interval_start"].presence || DEFAULT_NURSING_SCHEDULE["interval_start"]
-    }
+  # 全項目を既定値で埋めたもの。API の応答はこれをそのまま返す。
+  def settings_with_defaults
+    SETTINGS.keys.index_with { |key| public_send("#{key}_with_defaults") }
   end
 
-  # 欠けたキーを既定値で埋めた食事の提供時刻。
-  def meal_schedule_with_defaults
-    stored = meal_schedule.is_a?(Hash) ? meal_schedule : {}
-    DEFAULT_MEAL_SCHEDULE.transform_values.with_index do |default, index|
-      key = DEFAULT_MEAL_SCHEDULE.keys[index]
-      stored[key].presence || default
+  # 管理 API から来た設定を重ねる。**渡された項目だけ**を差し替える(看護指示の既定時刻
+  # だけを保存できるように)。文字列で来た数値はここで数値に寄せ、妥当性は検証に任せる。
+  def apply_settings(incoming)
+    merged = (incoming || {}).to_h do |key, value|
+      spec = SETTINGS[key.to_s]
+      [key.to_s, spec ? Schema.coerce(spec[:shape], value) : value]
     end
-  end
-
-  # 欠けた項目を既定値で埋めたバイタルのしきい値。項目単位で置き換える(項目の中の
-  # low / high はマージしない。「上限を空にする」を保存できるようにするため)。
-  def vital_thresholds_with_defaults
-    stored = vital_thresholds.is_a?(Hash) ? vital_thresholds : {}
-    DEFAULT_VITAL_THRESHOLDS.merge(stored.slice(*DEFAULT_VITAL_THRESHOLDS.keys)).transform_values do |bounds|
-      bounds.is_a?(Hash) ? bounds.slice("low", "high").compact : {}
-    end
-  end
-
-  # 欠けたキーを既定値で埋めた与薬の時刻。
-  def medication_schedule_with_defaults
-    stored = medication_schedule.is_a?(Hash) ? medication_schedule : {}
-    DEFAULT_MEDICATION_SCHEDULE.to_h do |key, default|
-      value = stored[key]
-      [key, value.nil? || value == "" ? default : value]
-    end
-  end
-
-  # 欠けたキーを既定値で埋めた文書作成の督促。
-  def document_reminder_with_defaults
-    stored = document_reminder.is_a?(Hash) ? document_reminder : {}
-    DEFAULT_DOCUMENT_REMINDER.to_h do |key, default|
-      value = stored[key]
-      [key, value.nil? || value == "" ? default : value]
-    end
-  end
-
-  # 欠けたキーを既定値で埋めた処方区分の初期値。
-  def prescription_category_with_defaults
-    stored = prescription_category.is_a?(Hash) ? prescription_category : {}
-    DEFAULT_PRESCRIPTION_CATEGORY.to_h do |key, default|
-      value = stored[key]
-      [key, value.is_a?(String) ? value : default]
-    end
-  end
-
-  # 欠けたキーを既定値で埋めた水分出納の対象項目。
-  def water_balance_with_defaults
-    stored = water_balance.is_a?(Hash) ? water_balance : {}
-    WATER_BALANCE_KEYS.index_with do |key|
-      value = stored[key]
-      value.is_a?(Array) ? value.map(&:to_s) : []
-    end
+    self.settings = stored_settings.merge(merged)
   end
 
   class << self
@@ -185,171 +209,23 @@ class FacilitySettings < ApplicationRecord
     def self_organization_id
       current.self_organization_id
     end
-
-    def nursing_schedule
-      current.nursing_schedule_with_defaults
-    end
-
-    def meal_schedule
-      current.meal_schedule_with_defaults
-    end
-
-    def vital_thresholds
-      current.vital_thresholds_with_defaults
-    end
-
-    def water_balance
-      current.water_balance_with_defaults
-    end
-
-    def medication_schedule
-      current.medication_schedule_with_defaults
-    end
-
-    def document_reminder
-      current.document_reminder_with_defaults
-    end
-
-    def prescription_category
-      current.prescription_category_with_defaults
-    end
   end
 
   private
 
-  def medication_schedule_shape
-    return if medication_schedule.blank?
-    unless medication_schedule.is_a?(Hash)
-      return errors.add(:medication_schedule, "は連想配列で指定してください")
-    end
-
-    medication_schedule.each do |key, value|
-      if MEDICATION_SCHEDULE_MINUTE_KEYS.include?(key)
-        unless value.is_a?(Numeric) && value >= 0
-          errors.add(:medication_schedule, "#{key} は 0 以上の分で指定してください")
-        end
-      elsif MEDICATION_SCHEDULE_TIME_KEYS.include?(key)
-        unless value.is_a?(String) && value.match?(TIME_PATTERN)
-          errors.add(:medication_schedule, "#{key} は HH:MM で指定してください")
-        end
-      else
-        errors.add(:medication_schedule, "#{key} は対象外の項目です")
-      end
-    end
+  def stored_settings
+    settings.is_a?(Hash) ? settings : {}
   end
 
-  def document_reminder_shape
-    return if document_reminder.blank?
-    unless document_reminder.is_a?(Hash)
-      return errors.add(:document_reminder, "は連想配列で指定してください")
-    end
+  def settings_shape
+    return errors.add(:settings, "は連想配列で指定してください") unless settings.is_a?(Hash)
 
-    document_reminder.each do |key, value|
-      if DOCUMENT_REMINDER_DAY_KEYS.include?(key)
-        unless value.is_a?(Integer) && value >= 0
-          errors.add(:document_reminder, "#{key} は 0 以上の日数で指定してください")
-        end
-      else
-        errors.add(:document_reminder, "#{key} は対象外の項目です")
-      end
-    end
-  end
+    settings.each do |key, value|
+      spec = SETTINGS[key.to_s]
+      next errors.add(:settings, "#{key} は対象外の項目です") if spec.nil?
 
-  def prescription_category_shape
-    return if prescription_category.blank?
-    unless prescription_category.is_a?(Hash)
-      return errors.add(:prescription_category, "は連想配列で指定してください")
-    end
-
-    prescription_category.each do |setting, code|
-      codes = PRESCRIPTION_CATEGORY_CODES[setting]
-      if codes.nil?
-        errors.add(:prescription_category, "#{setting} は inpatient / outpatient のいずれかで指定してください")
-        next
-      end
-      # 空文字は「初期値を決めない」の意味。
-      next if code.blank?
-
-      unless code.is_a?(String) && codes.include?(code)
-        errors.add(:prescription_category, "#{setting} は #{codes.join(' / ')} のいずれかで指定してください")
-      end
-    end
-  end
-
-  def water_balance_shape
-    return if water_balance.blank?
-    return errors.add(:water_balance, "は連想配列で指定してください") unless water_balance.is_a?(Hash)
-
-    water_balance.each do |key, codes|
-      unless WATER_BALANCE_KEYS.include?(key)
-        errors.add(:water_balance, "#{key} は in / out のいずれかで指定してください")
-        next
-      end
-      unless codes.is_a?(Array)
-        errors.add(:water_balance, "#{key} は管理番号の配列で指定してください")
-        next
-      end
-      invalid = codes.reject { |code| code.to_s.match?(MANAGE_NO_PATTERN) }
-      errors.add(:water_balance, "#{key} に管理番号でない値があります") if invalid.any?
-    end
-  end
-
-  def vital_thresholds_shape
-    return if vital_thresholds.blank?
-    return errors.add(:vital_thresholds, "は連想配列で指定してください") unless vital_thresholds.is_a?(Hash)
-
-    vital_thresholds.each do |code, bounds|
-      unless DEFAULT_VITAL_THRESHOLDS.key?(code)
-        errors.add(:vital_thresholds, "#{code} は対象外の項目です")
-        next
-      end
-      unless bounds.is_a?(Hash) && (bounds.keys - %w[low high]).empty?
-        errors.add(:vital_thresholds, "#{code} は low / high で指定してください")
-        next
-      end
-      low = bounds["low"]
-      high = bounds["high"]
-      unless [low, high].all? { |v| v.nil? || v.is_a?(Numeric) }
-        errors.add(:vital_thresholds, "#{code} の下限・上限は数値で指定してください")
-        next
-      end
-      errors.add(:vital_thresholds, "#{code} は下限 < 上限にしてください") if low && high && low >= high
-    end
-  end
-
-  def meal_schedule_shape
-    return if meal_schedule.blank?
-    return errors.add(:meal_schedule, "は連想配列で指定してください") unless meal_schedule.is_a?(Hash)
-
-    meal_schedule.each do |timing, time|
-      unless DEFAULT_MEAL_SCHEDULE.key?(timing)
-        errors.add(:meal_schedule, "#{timing} は朝・昼・夕(breakfast/lunch/dinner)のいずれかで指定してください")
-        next
-      end
-      unless time.is_a?(String) && time.match?(TIME_PATTERN)
-        errors.add(:meal_schedule, "#{timing} は HH:MM で指定してください")
-      end
-    end
-  end
-
-  def nursing_schedule_shape
-    return if nursing_schedule.blank?
-    return errors.add(:nursing_schedule, "は連想配列で指定してください") unless nursing_schedule.is_a?(Hash)
-
-    daily = nursing_schedule["daily"]
-    if daily.present?
-      return errors.add(:nursing_schedule, "daily は連想配列で指定してください") unless daily.is_a?(Hash)
-
-      daily.each do |count, times|
-        unless times.is_a?(Array) && times.all? { |t| t.is_a?(String) && t.match?(TIME_PATTERN) }
-          errors.add(:nursing_schedule, "daily[#{count}] は HH:MM の配列で指定してください")
-        end
-      end
-    end
-
-    start = nursing_schedule["interval_start"]
-    if start.present? && !(start.is_a?(String) && start.match?(TIME_PATTERN))
-      errors.add(:nursing_schedule, "interval_start は HH:MM で指定してください")
+      messages = Schema.errors(spec[:shape], value) + Array(spec[:check]&.call(value))
+      messages.each { |message| errors.add(key.to_sym, message) }
     end
   end
 end
