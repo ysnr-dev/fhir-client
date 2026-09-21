@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { radiotherapyStopReasonHooks } from "../api/masterQueries";
+import { radiotherapyDeviceHooks, radiotherapyStopReasonHooks } from "../api/masterQueries";
 import {
   useCancelRadiotherapyFraction,
   useDeleteRadiotherapyPlanned,
@@ -36,7 +36,10 @@ import {
 } from "../components/RadiotherapySlotModal";
 import { RowMenu } from "../components/RowMenu";
 import { displayName } from "../fhir/patientHelpers";
-import { summarizeRadiotherapyOrder } from "../fhir/radiotherapyOrderHelpers";
+import {
+  summarizeRadiotherapyOrder,
+  type RadiotherapyOrderSummary,
+} from "../fhir/radiotherapyOrderHelpers";
 import {
   radiotherapyPlanEligibility,
   radiotherapyProgress,
@@ -44,6 +47,7 @@ import {
   type RadiotherapyPlanOptions,
 } from "../fhir/radiotherapyResultHelpers";
 import {
+  RADIOTHERAPY_TASK_STATUS_OPTIONS,
   radiotherapyTaskActions,
   radiotherapyTaskStatus,
   radiotherapyTaskStatusDisplay,
@@ -329,11 +333,29 @@ function CoursePanel({
   onAction: (row: RadiotherapyWorklistRow, action: RadiotherapyTaskAction) => void;
   onClearPlanned: (row: RadiotherapyWorklistRow) => void;
 }) {
+  const devices = radiotherapyDeviceHooks.useOptions();
+  const [filters, setFilters] = useState<CourseFilters>(EMPTY_COURSE_FILTERS);
+
+  // 絞り込みは読んだ行に対して画面側で行う(部門一覧の他の画面と同じ。件数は有限)。
+  const shown = useMemo(
+    () => rows.filter((row) => matchesCourseFilters(row, fractionsOf(row.order.id), filters)),
+    // fractionsOf は procedures のキャッシュを引くだけなので、依存は rows と絞り込みで足りる。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, filters],
+  );
+  const filtered = shown.length !== rows.length;
+
+  function update(patch: Partial<CourseFilters>) {
+    setFilters((current) => ({ ...current, ...patch }));
+  }
+
   return (
     <aside className="surgery-pending">
       <div className="surgery-pending__head">
         <span className="surgery-pending__title">治療コース</span>
-        <span className="surgery-pending__count">{rows.length} 件</span>
+        <span className="surgery-pending__count">
+          {filtered ? `${shown.length} / ${rows.length} 件` : `${rows.length} 件`}
+        </span>
       </div>
       <div className="order-select__tabs" role="tablist">
         {(
@@ -355,6 +377,67 @@ function CoursePanel({
         ))}
       </div>
 
+      {/* コースは数十件並ぶので絞り込みを置く。装置は「その装置で照射する予定のコース」で、
+          予定の装置(実績を含む)か、まだ予定が無ければ Phase の使用予定装置で見る。 */}
+      <div className="radiotherapy-courses__filters">
+        <label>
+          装置
+          <select value={filters.deviceCode} onChange={(e) => update({ deviceCode: e.target.value })}>
+            <option value="">すべて</option>
+            {devices.items.map((device) => (
+              <option key={device.code} value={device.code}>
+                {device.name}
+              </option>
+            ))}
+            <option value={NO_DEVICE_FILTER}>装置未定</option>
+          </select>
+        </label>
+        <label>
+          進捗
+          <select value={filters.status} onChange={(e) => update({ status: e.target.value })}>
+            <option value="">すべて</option>
+            {RADIOTHERAPY_TASK_STATUS_OPTIONS.filter((option) =>
+              view === "open"
+                ? option.code !== "completed" && option.code !== "cancelled"
+                : option.code === "completed" || option.code === "cancelled",
+            ).map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.display}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="radiotherapy-courses__filter-wide">
+          患者
+          <input
+            type="search"
+            value={filters.patient}
+            placeholder="氏名・患者番号"
+            onChange={(e) => update({ patient: e.target.value })}
+          />
+        </label>
+        {/* 部門の仕事は「まだ日程を組んでいないコース」を見つけることから始まる。 */}
+        {view === "open" && (
+          <label className="dose-conversion__checkbox radiotherapy-courses__filter-wide">
+            <input
+              type="checkbox"
+              checked={filters.needsPlan}
+              onChange={(e) => update({ needsPlan: e.target.checked })}
+            />
+            予定が足りないコースのみ
+          </label>
+        )}
+        {filtered && (
+          <button
+            type="button"
+            className="radiotherapy-courses__filter-clear"
+            onClick={() => setFilters(EMPTY_COURSE_FILTERS)}
+          >
+            絞り込みを外す
+          </button>
+        )}
+      </div>
+
       {truncated && (
         <p className="order-select__muted" role="status">
           コースが多いため、一部のみ表示しています。
@@ -362,13 +445,17 @@ function CoursePanel({
       )}
       {loading ? (
         <p className="order-select__muted">読み込み中...</p>
-      ) : rows.length === 0 ? (
+      ) : shown.length === 0 ? (
         <p className="surgery-pending__empty">
-          {view === "open" ? "進行中の放射線治療はありません。" : "終了・中止した放射線治療はありません。"}
+          {rows.length > 0
+            ? "絞り込みに該当する治療コースがありません。"
+            : view === "open"
+              ? "進行中の放射線治療はありません。"
+              : "終了・中止した放射線治療はありません。"}
         </p>
       ) : (
         <ul className="surgery-pending__list">
-          {rows.map((row) => (
+          {shown.map((row) => (
             <li key={row.order.id}>
               <CourseCard
                 row={row}
@@ -548,6 +635,78 @@ function CourseCard({
       </span>
     </div>
   );
+}
+
+/** 治療コースの絞り込み。読んだ行に対して画面側で効かせる(他の部門一覧と同じ)。 */
+interface CourseFilters {
+  /** 治療装置のコード。NO_DEVICE_FILTER は「装置未定」。 */
+  deviceCode: string;
+  status: string;
+  /** 氏名・患者番号の部分一致。 */
+  patient: string;
+  /** 予定が処方の回数に足りていないコースだけ。 */
+  needsPlan: boolean;
+}
+
+const EMPTY_COURSE_FILTERS: CourseFilters = {
+  deviceCode: "",
+  status: "",
+  patient: "",
+  needsPlan: false,
+};
+
+/** 「装置未定」を選んだときの値(空文字は「すべて」なので別の値を使う)。 */
+const NO_DEVICE_FILTER = "__none__";
+
+/**
+ * そのコースが使う治療装置。**予定・実績の装置**を見て、無ければ Phase の使用予定装置で補う
+ * (まだ日程を組んでいないコースも、装置で絞ったときに出るように)。
+ */
+function courseDeviceCodes(
+  summary: RadiotherapyOrderSummary,
+  fractions: RadiotherapyFractionDisplay[],
+): Set<string> {
+  const codes = new Set(fractions.map((fraction) => fraction.deviceCode));
+  if (codes.size === 0) {
+    for (const phase of summary.phases) {
+      if (phase.status === "active") codes.add(phase.deviceCode);
+    }
+  }
+  return codes;
+}
+
+function matchesCourseFilters(
+  row: RadiotherapyWorklistRow,
+  fractions: RadiotherapyFractionDisplay[],
+  filters: CourseFilters,
+): boolean {
+  const status = radiotherapyTaskStatus(row.task);
+  if (filters.status && status !== filters.status) return false;
+
+  const summary = summarizeRadiotherapyOrder(row.order);
+  if (filters.deviceCode) {
+    const wanted = filters.deviceCode === NO_DEVICE_FILTER ? "" : filters.deviceCode;
+    if (!courseDeviceCodes(summary, fractions).has(wanted)) return false;
+  }
+
+  if (filters.needsPlan && !radiotherapyPlanEligibility(status, summary, fractions).canPlan) {
+    return false;
+  }
+
+  const keyword = filters.patient.trim();
+  if (keyword) {
+    const patient = row.patient;
+    const haystack = [
+      patient?.identifier?.[0]?.value,
+      patient ? displayName(patient) : "",
+      patient?.name?.map((name) => [name.family, ...(name.given ?? [])].join("")).join(" "),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    if (!haystack.includes(keyword)) return false;
+  }
+
+  return true;
 }
 
 /** 進捗の色。手術カレンダーの状態の色分け(受付済・進行中・実施済)に寄せる。 */
