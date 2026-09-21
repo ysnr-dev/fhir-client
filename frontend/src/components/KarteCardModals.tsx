@@ -1117,7 +1117,7 @@ function RadiotherapyOrderDetail({
   srId: string;
   problemsById: Map<string, fhir4.Condition>;
 }) {
-  const { serviceRequest, taskStatus, fractions, ready, patientMismatch, error } =
+  const { serviceRequest, taskStatus, fractions, courseSummary, ready, patientMismatch, error } =
     useRadiotherapyOrderInitialValues(srId, patientId);
 
   return (
@@ -1132,6 +1132,7 @@ function RadiotherapyOrderDetail({
           serviceRequest={serviceRequest}
           taskStatus={taskStatus}
           fractions={fractions}
+          courseSummary={courseSummary}
           problemsById={problemsById}
         />
       ) : (

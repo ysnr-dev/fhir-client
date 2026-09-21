@@ -43,7 +43,7 @@ const PROCEDURE_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Pro
  * 治療終了サマリー(course-summary)がぶら下がるので、category の 2 つ目の coding で分ける
  * (1 つ目は他オーダーと同じ order-type で、上流の category 列にはこちらが入る)。
  */
-const PROCEDURE_KIND_SYSTEM = "http://fhir-client.local/CodeSystem/radiotherapy-procedure";
+export const PROCEDURE_KIND_SYSTEM = "http://fhir-client.local/CodeSystem/radiotherapy-procedure";
 export const FRACTION_KIND = { code: "fraction", display: "照射" };
 
 const FRACTION_EXT_URL = "http://fhir-client.local/StructureDefinition/radiotherapy-fraction";

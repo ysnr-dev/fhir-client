@@ -1,8 +1,8 @@
 # 放射線治療オーダーの設計
 
-**状態: 第1段階(依頼の補強・施設固有マスタ・治療処方・部門一覧)と第2段階(照射記録・累積線量・
-休止)を実装済(2026-09-21)。** 治療終了サマリー・週次レビュー・計画 CT・予約・会計は後続フェーズ
-(§6)で、この文書では構造だけを定める。
+**状態: 第1段階(依頼の補強・施設固有マスタ・治療処方・部門一覧)、第2段階(照射記録・累積線量・
+休止)、第3段階(治療終了サマリー)を実装済(2026-09-21)。** 週次レビュー・計画 CT・予約・会計は
+後続フェーズ(§6)で、この文書では構造だけを定める。
 
 他科依頼(`docs/consult-order-design.md`)とリハビリ(`docs/rehab-order-design.md`)を雛形にした。
 同じところはそちらを参照し、違うところだけをここに書く。
@@ -26,7 +26,7 @@ Management System / Treatment Planning / Treatment Delivery を別のアクタ�
 | 治療計画(輪郭・ビーム・MU・DVH) | 物理士・治療計画装置 | **持たない**(DICOM RT の領域。§1.3) | - |
 | 照射実績(1 回ごと) | 診療放射線技師 | Procedure(§6.1) | 第2 |
 | 経過・有害事象 | 放射線治療医 | Observation(CTCAE。§6.3) | 後続 |
-| 終了サマリー | 放射線治療医 | Procedure(Course Summary。§6.2) | 後続 |
+| 終了サマリー | 放射線治療医 | Procedure(Course Summary。§6.2) | 第3 |
 
 ［導出］依頼医に「60 Gy / 30 回、VMAT」を入れさせない。依頼医が決めるのは「何を相談したいか」
 までで、線量と技法は放射線治療医の処方で決まる。
@@ -365,12 +365,37 @@ Procedure   basedOn = 治療処方
 - 経過表への照射日・累積線量と、会計(M001 体外照射ほか。単位は照射 1 回、JJ1017 F3 → レセ電算コード)は
   後続フェーズ
 
-### 6.2 治療終了サマリー
+### 6.2 治療終了サマリー【第3段階・実装済】
 
-Procedure(`category = radiotherapy-course-summary`、`basedOn` = 治療処方、`performedPeriod` = 初回〜最終
-照射、標的ごとの実照射線量と回数、完遂 / 中止と理由)。照射記録から自動で下書きする
-(退院時サマリーの「下書きを集め直す」と同じ作り)。他院での照射歴を構造化して残すときも、`basedOn` の
-無い Course Summary として同じ器に入れられる。
+```text
+Procedure   basedOn = 治療処方(1 コースに 1 件)
+  status     completed(完遂)| stopped(途中で終わった)
+  category   order-type|radiotherapy ＋ radiotherapy-procedure|course-summary
+  performedPeriod  初回照射日 〜 最終照射日
+  performer        記載した医師
+  outcome          radiotherapy-course-outcome|completed / discontinued
+  extension[radiotherapy-course-summary]
+    fractionsDelivered / fractionsPrescribed
+    doseDeliveredToVolume ×M { volume, dose(Gy), fractions }
+    terminationReason / terminationNote
+    progressNote(治療経過) / adverseEvents(急性有害事象) / followUpPlan(今後の方針)
+```
+
+- 実装は `frontend/src/fhir/radiotherapySummaryHelpers.ts`、入力は
+  `RadiotherapyCourseSummaryModal`(部門一覧の「終了・中止」ビューの「サマリー」)
+- **照射記録から下書きを組み立てる。** 期間(初回〜最終照射日)、回数、標的ごとの実照射線量と
+  回数、完遂かどうか(処方の回数に達したか)は数えれば分かるので、開いた時点で入っている。
+  医師が書くのは治療経過・急性有害事象・今後の方針の 3 つだけ
+- 書き直しは同じ Procedure への PUT。**集計値だけを取り直し、書いた本文は残す**
+  (退院時サマリーの `draftDischargeSummaryForm` と同じ考え方。あとから照射記録を直しても
+  本文が消えない)
+- 中止の理由は治療処方(中止の操作)に入っているので、サマリー側が空なら引き継ぐ。中止の操作は
+  理由マスタから選ぶが、サマリーでは文字列だけの理由も受ける(古いコースの取り込み用)
+- 標的ごとの回数は「その標的に線量を入れた回」を数える(Boost は標的ごとに回数が違う)
+- 一覧は「終了・中止」ビューにサマリーの有無(未作成 / 作成済)を出す。カルテはカードに
+  「サマリーあり」の印、本文は詳細に出す
+- 他院での照射歴を構造化して残すときも、`basedOn` の無い Course Summary として同じ器に入れられる
+  (未実装。§8)
 
 ### 6.3 治療中の診察(週次レビュー)と有害事象
 
@@ -439,7 +464,10 @@ actor は治療装置の Location。30 回ぶんを一括で確保する操作�
 9. 部門一覧の「照射入力」で 1 回目を登録 → カードと詳細に照射記録が出て、累積線量と「1 / 28 回」が
    進む。未実施(理由つき)も登録できる。取消は消えずに一覧から外れる(`entered-in-error`)
 10. 「休止」→ 進行中のまま状態が休止になり、休止日と理由が詳細に出る →「再開」で治療中に戻る
-11. `tsc -b`、backend の rspec(`spec/requests/master/radiotherapy_masters_spec.rb`、
+11. 「終了」したコースの「サマリー」→ 期間・回数・標的ごとの実照射線量が入った状態で開く。経過と
+   有害事象を書いて登録 → 一覧が「作成済」、カルテのカードに「サマリーあり」、詳細に本文が出る。
+   もう一度開くと本文が残ったまま集計値が取り直される
+12. `tsc -b`、backend の rspec(`spec/requests/master/radiotherapy_masters_spec.rb`、
    施設設定の spec)
 
 上流の落とし穴: JASPEHR の Questionnaire は `name` が 15 文字以内(jsp-5)、`enableWhen` を持てるのは

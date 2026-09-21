@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { radiotherapyStopReasonHooks } from "../api/masterQueries";
 import {
   useCancelRadiotherapyFraction,
-  useRadiotherapyFractions,
+  useRadiotherapyProcedures,
   useRadiotherapyWorklist,
   useUpdateRadiotherapyTaskStatus,
   type RadiotherapyWorklistRow,
@@ -17,6 +17,7 @@ import {
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
 import { RadiotherapyOrderDetailPanel } from "../components/RadiotherapyOrderDetailPanel";
+import { RadiotherapyCourseSummaryModal } from "../components/RadiotherapyCourseSummaryModal";
 import { RadiotherapyPerformModal } from "../components/RadiotherapyPerformModal";
 import { RowMenu } from "../components/RowMenu";
 import { displayName } from "../fhir/patientHelpers";
@@ -80,18 +81,21 @@ export function RadiotherapyWorklistPage() {
   }, []);
 
   const worklist = useRadiotherapyWorklist(view);
-  // 照射記録は進行中のコースでしか使わない(終了・中止の一覧では回数を出さない)。
-  const fractions = useRadiotherapyFractions(view === "open");
+  // 照射記録と治療終了サマリー。進行中は回数と累積線量に、終了・中止はサマリーの有無に使う。
+  const procedures = useRadiotherapyProcedures();
   const updateStatus = useUpdateRadiotherapyTaskStatus();
   const cancelFraction = useCancelRadiotherapyFraction();
   const [performingId, setPerformingId] = useState<string | null>(null);
+  const [summarizingId, setSummarizingId] = useState<string | null>(null);
 
   const allRows = useMemo(() => worklist.data?.rows ?? [], [worklist.data]);
   const rows = useMemo(() => allRows.filter((row) => matchesFilters(row, filters)), [allRows, filters]);
   const viewing = allRows.find((row) => row.order.id === viewingId);
   const performing = allRows.find((row) => row.order.id === performingId);
+  const summarizing = allRows.find((row) => row.order.id === summarizingId);
   const fractionsOf = (orderId: string | undefined) =>
-    fractions.data?.get(orderId ?? "") ?? EMPTY_FRACTIONS;
+    procedures.data?.fractions.get(orderId ?? "") ?? EMPTY_FRACTIONS;
+  const summaryOf = (orderId: string | undefined) => procedures.data?.summaries.get(orderId ?? "");
 
   function handleAction(row: RadiotherapyWorklistRow, action: RadiotherapyTaskAction) {
     if (action.asksTermination) return setTerminating({ row, action });
@@ -185,7 +189,7 @@ export function RadiotherapyWorklistPage() {
       </form>
 
       <ErrorBanner error={worklist.error} />
-      <ErrorBanner error={fractions.error} />
+      <ErrorBanner error={procedures.error} />
       <ErrorBanner error={updateStatus.error} />
       <ErrorBanner error={cancelFraction.error} />
 
@@ -212,7 +216,7 @@ export function RadiotherapyWorklistPage() {
                   <th>処方</th>
                   <th className="lab-worklist__compact">技法</th>
                   <th className="lab-worklist__compact">開始予定日</th>
-                  {view === "open" && <th className="lab-worklist__compact">照射</th>}
+                  <th className="lab-worklist__compact">{view === "open" ? "照射" : "サマリー"}</th>
                   <th className="lab-worklist__compact">{view === "closed" ? "終了日" : "入外"}</th>
                   <th>担当医</th>
                   <th>依頼科 | 依頼医師</th>
@@ -227,9 +231,11 @@ export function RadiotherapyWorklistPage() {
                     row={row}
                     view={view}
                     fractions={fractionsOf(row.order.id)}
+                    courseSummary={summaryOf(row.order.id)}
                     pending={updateStatus.isPending}
                     onView={() => setViewingId(row.order.id ?? null)}
                     onPerform={() => setPerformingId(row.order.id ?? null)}
+                    onSummarize={() => setSummarizingId(row.order.id ?? null)}
                     onAction={(action) => handleAction(row, action)}
                   />
                 ))}
@@ -261,6 +267,7 @@ export function RadiotherapyWorklistPage() {
             serviceRequest={viewing.order}
             taskStatus={radiotherapyTaskStatus(viewing.task)}
             fractions={fractionsOf(viewing.order.id)}
+            courseSummary={summaryOf(viewing.order.id)}
             onCancelFraction={(fractionId) => cancelFraction.mutate(fractionId)}
             cancellingFractionId={cancelFraction.isPending ? cancelFraction.variables : undefined}
           />
@@ -273,6 +280,16 @@ export function RadiotherapyWorklistPage() {
           fractions={fractionsOf(performing.order.id)}
           patientName={performing.patient ? displayName(performing.patient) : undefined}
           onClose={() => setPerformingId(null)}
+        />
+      )}
+
+      {summarizing && (
+        <RadiotherapyCourseSummaryModal
+          order={summarizing.order}
+          fractions={fractionsOf(summarizing.order.id)}
+          existing={summaryOf(summarizing.order.id)}
+          patientName={summarizing.patient ? displayName(summarizing.patient) : undefined}
+          onClose={() => setSummarizingId(null)}
         />
       )}
 
@@ -305,17 +322,21 @@ function OrderRow({
   row,
   view,
   fractions,
+  courseSummary,
   pending,
   onView,
   onPerform,
+  onSummarize,
   onAction,
 }: {
   row: RadiotherapyWorklistRow;
   view: RadiotherapyWorklistView;
   fractions: RadiotherapyFractionDisplay[];
+  courseSummary?: fhir4.Procedure;
   pending: boolean;
   onView: () => void;
   onPerform: () => void;
+  onSummarize: () => void;
   onAction: (action: RadiotherapyTaskAction) => void;
 }) {
   const returnLinkState = useReturnLinkState();
@@ -348,11 +369,19 @@ function OrderRow({
       <td>{summary.doseLabel || "-"}</td>
       <td className="lab-worklist__compact">{summary.techniqueLabel || "-"}</td>
       <td className="lab-worklist__compact">{summary.startDate || "-"}</td>
-      {view === "open" && (
+      {view === "open" ? (
         <td className="lab-worklist__compact" title={progress.volumes.map((v) => `${v.label} ${v.doseLabel}`).join("\n")}>
           {progress.fractionLabel}
           {/* 処方の回数に達したコースは、終了の操作を促すために印を出す。 */}
           {progress.finished && <span className="micro-result__badge">完了</span>}
+        </td>
+      ) : (
+        <td className="lab-worklist__compact">
+          {courseSummary ? (
+            "作成済"
+          ) : (
+            <span className="micro-result__badge">未作成</span>
+          )}
         </td>
       )}
       <td className="lab-worklist__compact">
@@ -368,10 +397,15 @@ function OrderRow({
         </span>
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
-        {/* 照射入力は状態を選ぶ操作ではないので、進捗ボタンとは別に出す。 */}
+        {/* 照射入力・サマリーは状態を選ぶ操作ではないので、進捗ボタンとは別に出す。 */}
         {status === "in-progress" && (
           <button type="button" onClick={onPerform}>
             照射入力
+          </button>
+        )}
+        {(status === "completed" || status === "cancelled") && (
+          <button type="button" onClick={onSummarize}>
+            {courseSummary ? "サマリー編集" : "サマリー"}
           </button>
         )}
         {actions

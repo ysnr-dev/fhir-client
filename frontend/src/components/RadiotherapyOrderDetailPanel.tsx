@@ -10,6 +10,7 @@ import {
   radiotherapyProgress,
   type RadiotherapyFractionDisplay,
 } from "../fhir/radiotherapyResultHelpers";
+import { parseRadiotherapyCourseSummary } from "../fhir/radiotherapySummaryHelpers";
 import {
   radiotherapyTaskStatusDisplay,
   type RadiotherapyTaskStatus,
@@ -24,6 +25,8 @@ interface RadiotherapyOrderDetailPanelProps {
   problemsById?: Map<string, fhir4.Condition>;
   /** そのコースの照射記録(新しい順)。 */
   fractions?: RadiotherapyFractionDisplay[];
+  /** 治療終了サマリー(書いてあれば)。 */
+  courseSummary?: fhir4.Procedure;
   /** 照射の取消。部門一覧から開いたときだけ渡す(カルテの詳細では取り消させない)。 */
   onCancelFraction?: (fractionId: string) => void;
   cancellingFractionId?: string;
@@ -38,12 +41,16 @@ export function RadiotherapyOrderDetailPanel({
   taskStatus,
   problemsById,
   fractions = NO_FRACTIONS,
+  courseSummary,
   onCancelFraction,
   cancellingFractionId,
   onOpenConsult,
 }: RadiotherapyOrderDetailPanelProps) {
   const summary = summarizeRadiotherapyOrder(serviceRequest);
   const progress = radiotherapyProgress(summary, fractions);
+  const courseSummaryDisplay = courseSummary
+    ? parseRadiotherapyCourseSummary(courseSummary, summary)
+    : undefined;
 
   const problem = radiotherapyOrderProblem(serviceRequest);
   const currentProblem = problem ? problemsById?.get(problem.conditionId) : undefined;
@@ -189,6 +196,41 @@ export function RadiotherapyOrderDetailPanel({
           </table>
         </fieldset>
       ))}
+
+      {/* 治療終了サマリー。照射記録から数えた実績と、医師が書いた経過・有害事象・方針。 */}
+      {courseSummaryDisplay && (
+        <fieldset className="rp-card">
+          <legend>治療終了サマリー</legend>
+          <dl className="prescription-detail__common">
+            <dt>治療期間</dt>
+            <dd>{courseSummaryDisplay.periodLabel || "-"}</dd>
+            <dt>治療の結末</dt>
+            <dd>
+              {courseSummaryDisplay.outcomeDisplay || "-"}
+              {courseSummaryDisplay.terminationReason.name &&
+                `（${[courseSummaryDisplay.terminationReason.name, courseSummaryDisplay.terminationNote]
+                  .filter(Boolean)
+                  .join(" ")}）`}
+            </dd>
+            <dt>照射回数</dt>
+            <dd>{courseSummaryDisplay.fractionLabel}</dd>
+            <dt>実照射線量</dt>
+            <dd>
+              {courseSummaryDisplay.doses.length > 0
+                ? courseSummaryDisplay.doses.map((d) => `${d.label} ${d.doseLabel}`).join("、")
+                : "-"}
+            </dd>
+            <dt>治療経過</dt>
+            <dd className="radiotherapy-summary__value">{courseSummaryDisplay.progressNote || "-"}</dd>
+            <dt>急性有害事象</dt>
+            <dd className="radiotherapy-summary__value">{courseSummaryDisplay.adverseEvents || "-"}</dd>
+            <dt>今後の方針</dt>
+            <dd className="radiotherapy-summary__value">{courseSummaryDisplay.followUpPlan || "-"}</dd>
+            <dt>記載医師</dt>
+            <dd>{courseSummaryDisplay.practitionerName || "-"}</dd>
+          </dl>
+        </fieldset>
+      )}
 
       {/* 照射記録。1 コースで数十件になるので新しい順に全件を出す(カードは先頭数件)。 */}
       {fractions.length > 0 && (

@@ -375,6 +375,9 @@ import {
   type RadiotherapyTermination,
 } from "../fhir/radiotherapyOrderHelpers";
 import {
+  radiotherapyCourseSummariesByOrderId,
+} from "../fhir/radiotherapySummaryHelpers";
+import {
   buildRadiotherapyFractionCancelBundle,
   isRadiotherapyFraction,
   radiotherapyFractionsByOrderId,
@@ -12528,11 +12531,18 @@ export function useCancelRadiotherapyFraction() {
   });
 }
 
+export interface RadiotherapyProcedures {
+  /** オーダー id → 照射記録(新しい順)。 */
+  fractions: Map<string, RadiotherapyFractionDisplay[]>;
+  /** オーダー id → 治療終了サマリー(1 コースに 1 件)。 */
+  summaries: Map<string, fhir4.Procedure>;
+}
+
 /**
- * 部門一覧に出すオーダーの照射記録。一覧は 1 画面に数十コースなので、オーダーごとに
- * 引かず患者をまたいで category でまとめて引き、オーダー id で振り分ける。
+ * 部門一覧に出すオーダーの照射記録と治療終了サマリー。一覧は 1 画面に数十コースなので、
+ * オーダーごとに引かず患者をまたいで category でまとめて引き、オーダー id で振り分ける。
  */
-async function fetchRadiotherapyFractions(): Promise<Map<string, RadiotherapyFractionDisplay[]>> {
+async function fetchRadiotherapyProcedures(): Promise<RadiotherapyProcedures> {
   const params = new URLSearchParams();
   params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
   params.set("status:not", "entered-in-error");
@@ -12540,15 +12550,27 @@ async function fetchRadiotherapyFractions(): Promise<Map<string, RadiotherapyFra
   params.set("_count", "500");
 
   const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
-  return radiotherapyFractionsByOrderId(
-    resourcesOfType<fhir4.Procedure>(bundle, "Procedure").filter(isRadiotherapyFraction),
-  );
+  const procedures = resourcesOfType<fhir4.Procedure>(bundle, "Procedure");
+  return {
+    fractions: radiotherapyFractionsByOrderId(procedures.filter(isRadiotherapyFraction)),
+    summaries: radiotherapyCourseSummariesByOrderId(procedures),
+  };
 }
 
-export function useRadiotherapyFractions(enabled = true) {
+export function useRadiotherapyProcedures(enabled = true) {
   return useQuery({
-    queryKey: ["Procedure", "search", "radiotherapy-fractions"],
-    queryFn: fetchRadiotherapyFractions,
+    queryKey: ["Procedure", "search", "radiotherapy-procedures"],
+    queryFn: fetchRadiotherapyProcedures,
     enabled,
+  });
+}
+
+/** 治療終了サマリーの保存。初回は POST、書き直しは同じ Procedure への PUT。 */
+export function useSaveRadiotherapyCourseSummary() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidateRadiotherapy(queryClient),
   });
 }

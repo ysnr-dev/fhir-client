@@ -1428,6 +1428,7 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
       <RadiotherapyOrderCardBody
         serviceRequest={item.serviceRequest}
         fractions={item.fractions}
+        hasCourseSummary={item.hasCourseSummary}
       />
     );
   }
@@ -2256,9 +2257,11 @@ const RADIOTHERAPY_FRACTION_PREVIEW = 3;
 function RadiotherapyOrderCardBody({
   serviceRequest,
   fractions,
+  hasCourseSummary,
 }: {
   serviceRequest: fhir4.ServiceRequest;
   fractions: RadiotherapyFractionDisplay[];
+  hasCourseSummary: boolean;
 }) {
   const summary = summarizeRadiotherapyOrder(serviceRequest);
   const progress = radiotherapyProgress(summary, fractions);
@@ -2273,6 +2276,10 @@ function RadiotherapyOrderCardBody({
           <span className="micro-result__badge micro-result__badge--muted">
             {summary.techniqueLabel}
           </span>
+        )}
+        {/* サマリーの本文は詳細で読む(カードに載せると長すぎる)。 */}
+        {hasCourseSummary && (
+          <span className="micro-result__badge micro-result__badge--muted">サマリーあり</span>
         )}
         {summary.concurrentTherapyDisplay && (
           <span className="micro-result__badge micro-result__badge--muted">

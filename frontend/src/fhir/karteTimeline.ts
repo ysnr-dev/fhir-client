@@ -91,6 +91,7 @@ import {
   radiotherapyFractionsByOrderId,
   type RadiotherapyFractionDisplay,
 } from "./radiotherapyResultHelpers";
+import { radiotherapyCourseSummariesByOrderId } from "./radiotherapySummaryHelpers";
 import {
   radiotherapyTaskStatus,
   radiotherapyTasksByOrderId,
@@ -443,6 +444,8 @@ export type KarteTimelineItem = KarteItemBase &
         status: RadiotherapyTaskStatus;
         /** 照射記録(新しい順)。 */
         fractions: RadiotherapyFractionDisplay[];
+        /** 治療終了サマリーを書いてあるか(中身は詳細で見る)。 */
+        hasCourseSummary: boolean;
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
     // クリニカルパスのアウトカムの評価のうち、記載(S/O/A/P・自由記載・コメント)のあるもの。
@@ -768,6 +771,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   // 放射線治療もリハビリと同じ形(Task と Procedure がまとめて届く)。
   const radiotherapyTaskByOrderId = radiotherapyTasksByOrderId(tasks);
   const radiotherapyFractionByOrderId = radiotherapyFractionsByOrderId(procedures);
+  const radiotherapySummaryByOrderId = radiotherapyCourseSummariesByOrderId(procedures);
   const injectionTaskByOrderId = injectionTasksByOrderId(tasks);
   // 注射の実施記録も同じ検索結果の Procedure + MedicationAdministration に混ざって届く。
   const injectionPerformByOrderId = injectionPerformsByOrderId(procedures, administrations);
@@ -1017,6 +1021,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
           status === "requested"
             ? []
             : (radiotherapyFractionByOrderId.get(serviceRequest.id ?? "") ?? []),
+        hasCourseSummary: radiotherapySummaryByOrderId.has(serviceRequest.id ?? ""),
       };
     }
     const withMedications = {

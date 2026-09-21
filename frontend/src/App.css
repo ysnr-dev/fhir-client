@@ -18063,3 +18063,17 @@ button.chemo-calendar__cell[draggable="true"] {
   color: #e07000;
   font-weight: 600;
 }
+
+/* 治療終了サマリーの記載欄(治療経過・急性有害事象・今後の方針)。 */
+.radiotherapy-summary__text {
+  flex: 1 1 100%;
+}
+
+.radiotherapy-summary__text textarea {
+  width: 100%;
+}
+
+/* サマリーの本文は改行で書かれるので、そのまま出す。 */
+.radiotherapy-summary__value {
+  white-space: pre-wrap;
+}
