@@ -375,6 +375,12 @@ import {
   type RadiotherapyTermination,
 } from "../fhir/radiotherapyOrderHelpers";
 import {
+  buildRadiotherapyFractionCancelBundle,
+  isRadiotherapyFraction,
+  radiotherapyFractionsByOrderId,
+  type RadiotherapyFractionDisplay,
+} from "../fhir/radiotherapyResultHelpers";
+import {
   buildRadiotherapyTaskUpdate,
   radiotherapyOrderStatusFor,
   radiotherapyTaskStatus,
@@ -12346,6 +12352,8 @@ function invalidateRadiotherapy(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "radiotherapy-worklist"] });
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
   queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+  // 照射記録(部門一覧の回数と累積線量、カルテのカード)。
+  queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
 }
 
 export function useUpdateRadiotherapyOrder() {
@@ -12489,5 +12497,58 @@ export function useUpdateRadiotherapyTaskStatus() {
         ],
       }),
     onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+// ---- 照射記録(docs/radiotherapy-order-design.md §6.1) ----
+//
+// 1 回の照射 = Procedure 1 件。リハビリと同じく**照射しても進捗 Task は動かさない**ので、
+// 登録は Procedure を 1 件 POST するだけ。取消は消さずに entered-in-error にする
+// (照射録は保存の対象)。
+
+export function useRegisterRadiotherapyFraction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+export function useCancelRadiotherapyFraction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    // 取り消す前に読み直すのは、PUT が全置換なので手元の写しでは古い版を書き戻しうるため。
+    mutationFn: async (procedureId: string) => {
+      const { data: procedure } = await readResource<fhir4.Procedure>("Procedure", procedureId);
+      return postBundle(buildRadiotherapyFractionCancelBundle(procedure));
+    },
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+/**
+ * 部門一覧に出すオーダーの照射記録。一覧は 1 画面に数十コースなので、オーダーごとに
+ * 引かず患者をまたいで category でまとめて引き、オーダー id で振り分ける。
+ */
+async function fetchRadiotherapyFractions(): Promise<Map<string, RadiotherapyFractionDisplay[]>> {
+  const params = new URLSearchParams();
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
+  params.set("status:not", "entered-in-error");
+  params.set("_sort", "-date");
+  params.set("_count", "500");
+
+  const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
+  return radiotherapyFractionsByOrderId(
+    resourcesOfType<fhir4.Procedure>(bundle, "Procedure").filter(isRadiotherapyFraction),
+  );
+}
+
+export function useRadiotherapyFractions(enabled = true) {
+  return useQuery({
+    queryKey: ["Procedure", "search", "radiotherapy-fractions"],
+    queryFn: fetchRadiotherapyFractions,
+    enabled,
   });
 }

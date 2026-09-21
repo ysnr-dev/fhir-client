@@ -55,7 +55,7 @@ export interface OrderProgress {
 }
 
 /** 実施を積み上げる種別。オーダー 1 件に実施記録が日ごとに付く。 */
-const SESSION_KINDS = new Set(["rehab-order", "nutrition-guidance-order"]);
+const SESSION_KINDS = new Set(["rehab-order", "nutrition-guidance-order", "radiotherapy-order"]);
 
 /** その日に実施したか。積み上げる種別はその日の実施記録、その他はオーダーが実施済みか。 */
 export function orderPerformedOn(progress: OrderProgress, date: string): boolean {

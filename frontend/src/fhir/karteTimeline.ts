@@ -88,6 +88,10 @@ import {
   radiotherapyOrderProblem,
 } from "./radiotherapyOrderHelpers";
 import {
+  radiotherapyFractionsByOrderId,
+  type RadiotherapyFractionDisplay,
+} from "./radiotherapyResultHelpers";
+import {
   radiotherapyTaskStatus,
   radiotherapyTasksByOrderId,
   type RadiotherapyTaskStatus,
@@ -432,11 +436,13 @@ export type KarteTimelineItem = KarteItemBase &
          */
         radiotherapyOrderIds: string[];
       }
-    // 放射線治療の治療処方。明細を持たないヘッダ 1 本で、照射記録は後続フェーズ。
+    // 放射線治療の治療処方。明細を持たないヘッダ 1 本に、照射記録(1 回の照射)が積み上がる。
     | {
         kind: "radiotherapy-order";
         serviceRequest: fhir4.ServiceRequest;
         status: RadiotherapyTaskStatus;
+        /** 照射記録(新しい順)。 */
+        fractions: RadiotherapyFractionDisplay[];
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
     // クリニカルパスのアウトカムの評価のうち、記載(S/O/A/P・自由記載・コメント)のあるもの。
@@ -759,7 +765,9 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const nutritionGuidancePerformByOrderId = nutritionGuidancePerformsByOrderId(procedures);
   // 他科依頼は実施記録を持たない(返ってくるのは回答の診療記録)ので Task だけ。
   const consultTaskByOrderId = consultTasksByOrderId(tasks);
+  // 放射線治療もリハビリと同じ形(Task と Procedure がまとめて届く)。
   const radiotherapyTaskByOrderId = radiotherapyTasksByOrderId(tasks);
+  const radiotherapyFractionByOrderId = radiotherapyFractionsByOrderId(procedures);
   const injectionTaskByOrderId = injectionTasksByOrderId(tasks);
   // 注射の実施記録も同じ検索結果の Procedure + MedicationAdministration に混ざって届く。
   const injectionPerformByOrderId = injectionPerformsByOrderId(procedures, administrations);
@@ -997,11 +1005,18 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
       };
     }
     if (isRadiotherapyServiceRequest(serviceRequest)) {
+      const status = radiotherapyTaskStatus(radiotherapyTaskByOrderId.get(serviceRequest.id ?? ""));
       return {
         ...base,
         kind: "radiotherapy-order" as const,
         label: KARTE_KIND_LABELS["radiotherapy-order"],
-        status: radiotherapyTaskStatus(radiotherapyTaskByOrderId.get(serviceRequest.id ?? "")),
+        status,
+        // リハビリと同じ期間継続型なので、実施情報の表示条件も同じ(受付済以降は常に出す)。
+        // 理由は上のリハビリ分岐のコメントを参照。
+        fractions:
+          status === "requested"
+            ? []
+            : (radiotherapyFractionByOrderId.get(serviceRequest.id ?? "") ?? []),
       };
     }
     const withMedications = {

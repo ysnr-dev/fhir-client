@@ -461,6 +461,9 @@ function phaseExtension(
 
 /** 終了・中止の情報。編集フォームの管理外で、進捗の変更と一緒に書く(§4)。 */
 const TERMINATION_KEYS = ["endedOn", "terminationReason", "terminationNote"];
+/** 休止の情報。再開すると落ちる(§6.4)。 */
+const SUSPENSION_KEYS = ["suspendedOn", "suspensionReason", "suspensionNote"];
+const STATE_KEYS = [...TERMINATION_KEYS, ...SUSPENSION_KEYS];
 
 function courseExtension(
   values: RadiotherapyOrderFormValues,
@@ -497,7 +500,7 @@ function courseExtension(
   }
   const kept = original?.extension
     ?.find((e) => e.url === COURSE_EXT_URL)
-    ?.extension?.filter((e) => TERMINATION_KEYS.includes(e.url));
+    ?.extension?.filter((e) => STATE_KEYS.includes(e.url));
   return { url: COURSE_EXT_URL, extension: [...extension, ...(kept ?? [])] };
 }
 
@@ -629,7 +632,7 @@ export function buildRadiotherapyOrderDeleteBundle(serviceRequestId: string): fh
 }
 
 export interface RadiotherapyTermination {
-  /** 終了日・中止日。 */
+  /** 終了日・中止日・休止日。 */
   endedOn: string;
   reason?: RadiotherapyCoded;
   note?: string;
@@ -637,7 +640,7 @@ export interface RadiotherapyTermination {
 
 /**
  * 進捗の変更に合わせて ServiceRequest.status を動かす PUT エントリ(§4)。終了・中止では
- * 終了日と中止理由を書き、進行中へ戻すときはそれらを落とす。
+ * 終了日と理由を、休止では休止日と理由を書く。治療中へ戻すときはどちらも落とす。
  */
 export function buildRadiotherapyOrderStatusEntry(
   sr: fhir4.ServiceRequest,
@@ -645,12 +648,14 @@ export function buildRadiotherapyOrderStatusEntry(
   termination?: RadiotherapyTermination,
 ): fhir4.BundleEntry {
   const course = sr.extension?.find((e) => e.url === COURSE_EXT_URL);
-  const inner = (course?.extension ?? []).filter((e) => !TERMINATION_KEYS.includes(e.url));
+  const inner = (course?.extension ?? []).filter((e) => !STATE_KEYS.includes(e.url));
   if (status !== "active" && termination) {
-    inner.push({ url: "endedOn", valueDate: termination.endedOn });
+    const keys = status === "on-hold" ? SUSPENSION_KEYS : TERMINATION_KEYS;
+    const [dateKey, reasonKey, noteKey] = keys;
+    inner.push({ url: dateKey, valueDate: termination.endedOn });
     if (termination.reason?.code) {
       inner.push({
-        url: "terminationReason",
+        url: reasonKey,
         valueCoding: {
           system: STOP_REASON_SYSTEM,
           code: termination.reason.code,
@@ -659,7 +664,7 @@ export function buildRadiotherapyOrderStatusEntry(
       });
     }
     if (termination.note?.trim()) {
-      inner.push({ url: "terminationNote", valueString: termination.note.trim() });
+      inner.push({ url: noteKey, valueString: termination.note.trim() });
     }
   }
 
@@ -846,6 +851,8 @@ export interface RadiotherapyPhaseSummary {
   status: "active" | "revoked";
   /** 「X線 VMAT」。 */
   methodLabel: string;
+  /** 照射技法の coding。照射記録が「照射方法」として写す(§6.1)。 */
+  techniqueCoding?: fhir4.Coding;
   deviceName: string;
   fractions: number;
   fractionsPerWeek?: number;
@@ -873,6 +880,10 @@ export interface RadiotherapyOrderSummary {
   endedOn: string;
   terminationReason: string;
   terminationNote: string;
+  /** 休止した日と理由(休止中だけ入る)。 */
+  suspendedOn: string;
+  suspensionReason: string;
+  suspensionNote: string;
   comment: string;
 }
 
@@ -890,6 +901,15 @@ export function summarizeRadiotherapyOrder(sr: fhir4.ServiceRequest): Radiothera
       label: radiotherapyPhaseLabel(phase, index),
       status: phase.status,
       methodLabel: [phase.modality.name, phase.technique.name].filter(Boolean).join(" "),
+      ...(phase.technique.code
+        ? {
+            techniqueCoding: {
+              system: TECHNIQUE_SYSTEM,
+              code: phase.technique.code,
+              display: phase.technique.name,
+            },
+          }
+        : {}),
       deviceName: phase.device.name,
       fractions,
       ...(perWeek > 0 ? { fractionsPerWeek: perWeek } : {}),
@@ -936,6 +956,9 @@ export function summarizeRadiotherapyOrder(sr: fhir4.ServiceRequest): Radiothera
     endedOn: sub(course, "endedOn")?.valueDate ?? "",
     terminationReason: sub(course, "terminationReason")?.valueCoding?.display ?? "",
     terminationNote: sub(course, "terminationNote")?.valueString ?? "",
+    suspendedOn: sub(course, "suspendedOn")?.valueDate ?? "",
+    suspensionReason: sub(course, "suspensionReason")?.valueCoding?.display ?? "",
+    suspensionNote: sub(course, "suspensionNote")?.valueString ?? "",
     comment: orderComment(sr),
   };
 }

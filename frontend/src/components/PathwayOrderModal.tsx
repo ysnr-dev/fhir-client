@@ -41,6 +41,7 @@ import { Modal } from "./Modal";
 import { NutritionGuidancePerformModal } from "./NutritionGuidancePerformModal";
 import { PhysioPerformModal } from "./PhysioPerformModal";
 import { RadPerformModal } from "./RadPerformModal";
+import { RadiotherapyPerformModalByOrder } from "./RadiotherapyPerformModal";
 import { RehabPerformModal } from "./RehabPerformModal";
 import { SurgeryPerformModal } from "./SurgeryPerformModal";
 import { TransfusionPerformModal } from "./TransfusionPerformModal";
@@ -65,7 +66,11 @@ const DEPARTMENT_KINDS = new Set<PerformKind>([
   "surgery-order",
 ]);
 /** 実施を積み上げる種別(Task は受付済のまま、終了は部門が記録する)。 */
-const SESSION_KINDS = new Set<PerformKind>(["rehab-order", "nutrition-guidance-order"]);
+const SESSION_KINDS = new Set<PerformKind>([
+  "rehab-order",
+  "nutrition-guidance-order",
+  "radiotherapy-order",
+]);
 
 interface PathwayOrderModalProps {
   patientId: string;
@@ -445,6 +450,10 @@ function SessionPerformLoader({
     );
   }
   const defaultDate = date && date < today() ? date : today();
+  // 放射線治療は Task を動かさない(治療中かどうかは部門が決める。§4)ので受付もしない。
+  if (kind === "radiotherapy-order") {
+    return <RadiotherapyPerformModalByOrder order={order} onClose={onClose} />;
+  }
   if (kind === "rehab-order") {
     return (
       <RehabPerformModal

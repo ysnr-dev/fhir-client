@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { radiotherapyStopReasonHooks } from "../api/masterQueries";
 import {
+  useCancelRadiotherapyFraction,
+  useRadiotherapyFractions,
   useRadiotherapyWorklist,
   useUpdateRadiotherapyTaskStatus,
   type RadiotherapyWorklistRow,
@@ -15,6 +17,7 @@ import {
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
 import { RadiotherapyOrderDetailPanel } from "../components/RadiotherapyOrderDetailPanel";
+import { RadiotherapyPerformModal } from "../components/RadiotherapyPerformModal";
 import { RowMenu } from "../components/RowMenu";
 import { displayName } from "../fhir/patientHelpers";
 import {
@@ -26,6 +29,10 @@ import {
   RADIOTHERAPY_INTENT_OPTIONS,
   summarizeRadiotherapyOrder,
 } from "../fhir/radiotherapyOrderHelpers";
+import {
+  radiotherapyProgress,
+  type RadiotherapyFractionDisplay,
+} from "../fhir/radiotherapyResultHelpers";
 import {
   RADIOTHERAPY_TASK_STATUS_OPTIONS,
   radiotherapyTaskActions,
@@ -73,11 +80,18 @@ export function RadiotherapyWorklistPage() {
   }, []);
 
   const worklist = useRadiotherapyWorklist(view);
+  // 照射記録は進行中のコースでしか使わない(終了・中止の一覧では回数を出さない)。
+  const fractions = useRadiotherapyFractions(view === "open");
   const updateStatus = useUpdateRadiotherapyTaskStatus();
+  const cancelFraction = useCancelRadiotherapyFraction();
+  const [performingId, setPerformingId] = useState<string | null>(null);
 
   const allRows = useMemo(() => worklist.data?.rows ?? [], [worklist.data]);
   const rows = useMemo(() => allRows.filter((row) => matchesFilters(row, filters)), [allRows, filters]);
   const viewing = allRows.find((row) => row.order.id === viewingId);
+  const performing = allRows.find((row) => row.order.id === performingId);
+  const fractionsOf = (orderId: string | undefined) =>
+    fractions.data?.get(orderId ?? "") ?? EMPTY_FRACTIONS;
 
   function handleAction(row: RadiotherapyWorklistRow, action: RadiotherapyTaskAction) {
     if (action.asksTermination) return setTerminating({ row, action });
@@ -171,7 +185,9 @@ export function RadiotherapyWorklistPage() {
       </form>
 
       <ErrorBanner error={worklist.error} />
+      <ErrorBanner error={fractions.error} />
       <ErrorBanner error={updateStatus.error} />
+      <ErrorBanner error={cancelFraction.error} />
 
       {worklist.data?.truncated && (
         <p className="error-banner__line error-banner__line--error" role="status">
@@ -196,6 +212,7 @@ export function RadiotherapyWorklistPage() {
                   <th>処方</th>
                   <th className="lab-worklist__compact">技法</th>
                   <th className="lab-worklist__compact">開始予定日</th>
+                  {view === "open" && <th className="lab-worklist__compact">照射</th>}
                   <th className="lab-worklist__compact">{view === "closed" ? "終了日" : "入外"}</th>
                   <th>担当医</th>
                   <th>依頼科 | 依頼医師</th>
@@ -209,14 +226,16 @@ export function RadiotherapyWorklistPage() {
                     key={row.order.id}
                     row={row}
                     view={view}
+                    fractions={fractionsOf(row.order.id)}
                     pending={updateStatus.isPending}
                     onView={() => setViewingId(row.order.id ?? null)}
+                    onPerform={() => setPerformingId(row.order.id ?? null)}
                     onAction={(action) => handleAction(row, action)}
                   />
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={16} className="master-search__empty">
+                    <td colSpan={17} className="master-search__empty">
                       {allRows.length === 0
                         ? view === "open"
                           ? "進行中の放射線治療はありません"
@@ -241,8 +260,20 @@ export function RadiotherapyWorklistPage() {
           <RadiotherapyOrderDetailPanel
             serviceRequest={viewing.order}
             taskStatus={radiotherapyTaskStatus(viewing.task)}
+            fractions={fractionsOf(viewing.order.id)}
+            onCancelFraction={(fractionId) => cancelFraction.mutate(fractionId)}
+            cancellingFractionId={cancelFraction.isPending ? cancelFraction.variables : undefined}
           />
         </Modal>
+      )}
+
+      {performing && (
+        <RadiotherapyPerformModal
+          order={performing.order}
+          fractions={fractionsOf(performing.order.id)}
+          patientName={performing.patient ? displayName(performing.patient) : undefined}
+          onClose={() => setPerformingId(null)}
+        />
       )}
 
       {terminating && (
@@ -268,17 +299,23 @@ function matchesFilters(row: RadiotherapyWorklistRow, filters: Filters): boolean
   return true;
 }
 
+const EMPTY_FRACTIONS: RadiotherapyFractionDisplay[] = [];
+
 function OrderRow({
   row,
   view,
+  fractions,
   pending,
   onView,
+  onPerform,
   onAction,
 }: {
   row: RadiotherapyWorklistRow;
   view: RadiotherapyWorklistView;
+  fractions: RadiotherapyFractionDisplay[];
   pending: boolean;
   onView: () => void;
+  onPerform: () => void;
   onAction: (action: RadiotherapyTaskAction) => void;
 }) {
   const returnLinkState = useReturnLinkState();
@@ -287,6 +324,7 @@ function OrderRow({
   const status = radiotherapyTaskStatus(row.task);
   const actions = radiotherapyTaskActions(status);
   const secondaryActions = actions.filter((action) => action.secondary);
+  const progress = radiotherapyProgress(summary, fractions);
 
   return (
     <tr>
@@ -310,6 +348,13 @@ function OrderRow({
       <td>{summary.doseLabel || "-"}</td>
       <td className="lab-worklist__compact">{summary.techniqueLabel || "-"}</td>
       <td className="lab-worklist__compact">{summary.startDate || "-"}</td>
+      {view === "open" && (
+        <td className="lab-worklist__compact" title={progress.volumes.map((v) => `${v.label} ${v.doseLabel}`).join("\n")}>
+          {progress.fractionLabel}
+          {/* 処方の回数に達したコースは、終了の操作を促すために印を出す。 */}
+          {progress.finished && <span className="micro-result__badge">完了</span>}
+        </td>
+      )}
       <td className="lab-worklist__compact">
         {view === "closed"
           ? [summary.endedOn, summary.terminationReason].filter(Boolean).join(" ") || "-"
@@ -323,6 +368,12 @@ function OrderRow({
         </span>
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
+        {/* 照射入力は状態を選ぶ操作ではないので、進捗ボタンとは別に出す。 */}
+        {status === "in-progress" && (
+          <button type="button" onClick={onPerform}>
+            照射入力
+          </button>
+        )}
         {actions
           .filter((action) => !action.secondary)
           .map((action) => (
@@ -355,7 +406,13 @@ function OrderRow({
   );
 }
 
-// 終了・中止の入力。終了は日付だけ、中止は理由(マスタ)と補足も聞く。
+// 終了・中止・休止の入力。終了は日付だけ、中止と休止は理由(マスタ)と補足も聞く。
+const TERMINATION_LABELS = {
+  completed: { title: "放射線治療の終了", date: "終了日", submit: "終了する", reasonKind: "" },
+  cancelled: { title: "放射線治療の中止", date: "中止日", submit: "中止する", reasonKind: "terminate" },
+  "on-hold": { title: "放射線治療の休止", date: "休止日", submit: "休止する", reasonKind: "suspend" },
+} as const;
+
 function TerminationModal({
   terminating,
   onClose,
@@ -364,8 +421,9 @@ function TerminationModal({
   onClose: () => void;
 }) {
   const { row, action } = terminating;
-  const cancelling = action.asksTermination === "cancelled";
-  const reasons = radiotherapyStopReasonHooks.useOptions({ kind: "terminate" });
+  const labels = TERMINATION_LABELS[action.asksTermination ?? "completed"];
+  const asksReason = labels.reasonKind !== "";
+  const reasons = radiotherapyStopReasonHooks.useOptions({ kind: labels.reasonKind || undefined });
   const updateStatus = useUpdateRadiotherapyTaskStatus();
   const [endedOn, setEndedOn] = useState(today());
   const [reasonCode, setReasonCode] = useState("");
@@ -390,18 +448,18 @@ function TerminationModal({
   }
 
   return (
-    <Modal title={cancelling ? "放射線治療の中止" : "放射線治療の終了"} onClose={onClose}>
+    <Modal title={labels.title} onClose={onClose}>
       <form className="prescription-form" onSubmit={handleSubmit}>
         <ErrorBanner error={updateStatus.error} />
         <fieldset>
           <label>
-            {cancelling ? "中止日" : "終了日"} *
+            {labels.date} *
             <input type="date" value={endedOn} onChange={(e) => setEndedOn(e.target.value)} required />
           </label>
-          {cancelling && (
+          {asksReason && (
             <>
               <label>
-                中止理由 *
+                理由 *
                 <select value={reasonCode} onChange={(e) => setReasonCode(e.target.value)} required>
                   <option value="">選択してください</option>
                   {reasons.items.map((reason) => (
@@ -420,7 +478,7 @@ function TerminationModal({
         </fieldset>
         <div className="prescription-form__actions">
           <button type="submit" disabled={updateStatus.isPending}>
-            {updateStatus.isPending ? "保存中..." : cancelling ? "中止する" : "終了する"}
+            {updateStatus.isPending ? "保存中..." : labels.submit}
           </button>
         </div>
       </form>

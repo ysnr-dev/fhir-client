@@ -6,6 +6,11 @@ import {
   summarizeRadiotherapyOrder,
 } from "../fhir/radiotherapyOrderHelpers";
 import {
+  radiotherapyFractionPhaseLabel,
+  radiotherapyProgress,
+  type RadiotherapyFractionDisplay,
+} from "../fhir/radiotherapyResultHelpers";
+import {
   radiotherapyTaskStatusDisplay,
   type RadiotherapyTaskStatus,
 } from "../fhir/radiotherapyTaskHelpers";
@@ -17,17 +22,28 @@ interface RadiotherapyOrderDetailPanelProps {
   serviceRequest: fhir4.ServiceRequest;
   taskStatus?: RadiotherapyTaskStatus;
   problemsById?: Map<string, fhir4.Condition>;
+  /** そのコースの照射記録(新しい順)。 */
+  fractions?: RadiotherapyFractionDisplay[];
+  /** 照射の取消。部門一覧から開いたときだけ渡す(カルテの詳細では取り消させない)。 */
+  onCancelFraction?: (fractionId: string) => void;
+  cancellingFractionId?: string;
   /** 元になった他科依頼を開く。渡されたときだけリンクにする。 */
   onOpenConsult?: (consultSrId: string) => void;
 }
+
+const NO_FRACTIONS: RadiotherapyFractionDisplay[] = [];
 
 export function RadiotherapyOrderDetailPanel({
   serviceRequest,
   taskStatus,
   problemsById,
+  fractions = NO_FRACTIONS,
+  onCancelFraction,
+  cancellingFractionId,
   onOpenConsult,
 }: RadiotherapyOrderDetailPanelProps) {
   const summary = summarizeRadiotherapyOrder(serviceRequest);
+  const progress = radiotherapyProgress(summary, fractions);
 
   const problem = radiotherapyOrderProblem(serviceRequest);
   const currentProblem = problem ? problemsById?.get(problem.conditionId) : undefined;
@@ -53,6 +69,16 @@ export function RadiotherapyOrderDetailPanel({
           <dd>{summary.protocolName || "-"}</dd>
           <dt>開始予定日</dt>
           <dd>{summary.startDate || "-"}</dd>
+          {summary.suspendedOn && (
+            <>
+              <dt>休止日</dt>
+              <dd>
+                {summary.suspendedOn}
+                {[summary.suspensionReason, summary.suspensionNote].filter(Boolean).length > 0 &&
+                  `（${[summary.suspensionReason, summary.suspensionNote].filter(Boolean).join(" ")}）`}
+              </dd>
+            </>
+          )}
           {summary.endedOn && (
             <>
               <dt>{serviceRequest.status === "revoked" ? "中止日" : "終了日"}</dt>
@@ -102,6 +128,8 @@ export function RadiotherapyOrderDetailPanel({
               <th>名称</th>
               <th>部位</th>
               <th>コース合計</th>
+              {/* 照射が始まっていれば、処方に対してどこまで照射したかを並べる。 */}
+              {fractions.length > 0 && <th>実照射線量</th>}
             </tr>
           </thead>
           <tbody>
@@ -110,6 +138,11 @@ export function RadiotherapyOrderDetailPanel({
                 <td>{volume.label}</td>
                 <td>{volume.siteLabel || "-"}</td>
                 <td>{volume.doseLabel || "-"}</td>
+                {fractions.length > 0 && (
+                  <td>
+                    {progress.volumes.find((v) => v.volumeId === volume.volumeId)?.doseLabel ?? "-"}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -156,6 +189,65 @@ export function RadiotherapyOrderDetailPanel({
           </table>
         </fieldset>
       ))}
+
+      {/* 照射記録。1 コースで数十件になるので新しい順に全件を出す(カードは先頭数件)。 */}
+      {fractions.length > 0 && (
+        <fieldset className="rp-card">
+          <legend>照射記録 ({progress.fractionLabel})</legend>
+          <table className="rp-card__medicines">
+            <thead>
+              <tr>
+                <th>照射日</th>
+                <th>Phase</th>
+                <th>回</th>
+                <th>線量</th>
+                <th>装置</th>
+                <th>位置照合</th>
+                <th>実施者</th>
+                <th>備考</th>
+                {onCancelFraction && <th />}
+              </tr>
+            </thead>
+            <tbody>
+              {fractions.map((fraction) => (
+                <tr key={fraction.id}>
+                  <td>
+                    {fraction.performedDate}
+                    {fraction.timeLabel && ` ${fraction.timeLabel}`}
+                  </td>
+                  <td>{radiotherapyFractionPhaseLabel(summary, fraction.phaseId)}</td>
+                  <td>{fraction.fractionNumber || "-"}</td>
+                  <td>
+                    {fraction.notDone ? (
+                      <span className="micro-result__badge">未実施</span>
+                    ) : (
+                      summary.volumes
+                        .filter((volume) => fraction.doses[volume.volumeId] !== undefined)
+                        .map((volume) => `${volume.label} ${formatDose(fraction.doses[volume.volumeId])} Gy`)
+                        .join("、") || "-"
+                    )}
+                  </td>
+                  <td>{fraction.deviceName || "-"}</td>
+                  <td>{fraction.imageGuidance || "-"}</td>
+                  <td>{fraction.performerName || "-"}</td>
+                  <td>{[fraction.notDoneReason, fraction.note].filter(Boolean).join(" ") || "-"}</td>
+                  {onCancelFraction && (
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => onCancelFraction(fraction.id)}
+                        disabled={cancellingFractionId === fraction.id}
+                      >
+                        {cancellingFractionId === fraction.id ? "取消中..." : "取消"}
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </fieldset>
+      )}
     </div>
   );
 }

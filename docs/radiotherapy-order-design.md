@@ -1,8 +1,8 @@
 # 放射線治療オーダーの設計
 
-**状態: 第1段階(依頼の補強・施設固有マスタ・治療処方・部門一覧)を実装済(2026-09-21)。**
-照射記録・累積線量・休止・週次レビュー・終了サマリー・計画 CT・予約は後続フェーズ(§6)で、
-この文書では構造だけを定める。
+**状態: 第1段階(依頼の補強・施設固有マスタ・治療処方・部門一覧)と第2段階(照射記録・累積線量・
+休止)を実装済(2026-09-21)。** 治療終了サマリー・週次レビュー・計画 CT・予約・会計は後続フェーズ
+(§6)で、この文書では構造だけを定める。
 
 他科依頼(`docs/consult-order-design.md`)とリハビリ(`docs/rehab-order-design.md`)を雛形にした。
 同じところはそちらを参照し、違うところだけをここに書く。
@@ -24,7 +24,7 @@ Management System / Treatment Planning / Treatment Delivery を別のアクタ�
 | 依頼 | 臨床医 | 他科依頼(既存)＋放射線治療依頼テンプレート(§1.2) | 第1 |
 | 治療処方(Course / Phase / 標的別線量) | 放射線治療医 | **放射線治療オーダー**(ServiceRequest。§2) | 第1 |
 | 治療計画(輪郭・ビーム・MU・DVH) | 物理士・治療計画装置 | **持たない**(DICOM RT の領域。§1.3) | - |
-| 照射実績(1 回ごと) | 診療放射線技師 | Procedure(§6.1) | 後続 |
+| 照射実績(1 回ごと) | 診療放射線技師 | Procedure(§6.1) | 第2 |
 | 経過・有害事象 | 放射線治療医 | Observation(CTCAE。§6.3) | 後続 |
 | 終了サマリー | 放射線治療医 | Procedure(Course Summary。§6.2) | 後続 |
 
@@ -329,31 +329,41 @@ status と終了・中止の情報を元のリソースから引き継ぐ。
 
 ## 6. 後続フェーズ(構造のみ)
 
-### 6.1 照射記録(1 回の照射 = Procedure 1 件)
+### 6.1 照射記録(1 回の照射 = Procedure 1 件)【第2段階・実装済】
 
 ```text
-Procedure   basedOn = 治療処方   category = radiotherapy-fraction   status = completed | not-done
-  performedPeriod    照射の開始・終了時刻
-  code               JJ1017-32(頻用コード F3)＋ レセ電算コード
-  performer          診療放射線技師(実施者)・医師
-  usedCode / focalDevice  治療装置
-  extension radiotherapy-fraction
-    phaseId  fractionNumber
-    doseDeliveredToVolume ×M { volume(volumeId)  dose(Gy) }
-    imageGuidance(CBCT など)  interruption / 未実施の理由(休止・中止理由マスタ)
+Procedure   basedOn = 治療処方
+  status     completed(照射した)| not-done(照射しなかった回)| entered-in-error(取消)
+  statusReason       照射しなかった理由(休止・中止理由マスタ)
+  category   order-type|radiotherapy ＋ radiotherapy-procedure|fraction
+  code       照射方法(Phase のモダリティ + 照射技法の写し。照射録の法定項目)
+  performedPeriod    照射の開始・終了時刻(時刻を入れないときは performedDateTime に日付)
+  performer          実施者(診療放射線技師)
+  usedCode           使用した治療装置
+  extension[radiotherapy-fraction]
+    phaseId  fractionNumber  imageGuidance(位置照合)
+    doseDeliveredToVolume ×M { volume(volumeId), dose(Gy) }
 ```
 
-- 累積線量は `_revinclude=Procedure:based-on` で 1 回に取って足す(治療処方の詳細の検索は既に付けてある)
+- 実装は `frontend/src/fhir/radiotherapyResultHelpers.ts`、入力は `RadiotherapyPerformModal`
+  (部門一覧の「照射入力」)。何回目・どの Phase・標的ごとの線量は処方と実施済み件数から決まるので、
+  開いた時点で入っている
+- **照射しても進捗 Task は動かさない**(リハビリ・栄養指導と同じ期間継続型。§4)。終わりは部門一覧の
+  「終了」が決める。カードの実施情報も受付済以降は常に出す
+- **［決定］取消は物理削除にしない。** 照射録は保存の対象なので `status=entered-in-error` にする
+  (リハビリ・処置は会計の都合で DELETE だが、ここは揃えない)。累積線量と回数からは外れる
+- **［決定］照射しなかった回も記録に残す**(`status=not-done` ＋ 理由)。休止の判断と治療期間の評価に
+  要るため。線量は持たない
+- 累積線量は `_revinclude=Procedure:based-on` で取った照射記録を標的ごとに足す
+  (`radiotherapyProgress`)。0.1 刻みの線量を何十回も足すので、cGy の整数にしてから足す
 - 再計画は、旧 Phase を `status=revoked` にして新しい Phase を足す。「どの回をどの処方で照射したか」は
-  Procedure の `phaseId` で追える
+  照射記録の `phaseId` で追える(§8 のとおり、Phase の打ち切りは画面から作れない)
 - ［事実］照射録の法定項目(診療放射線技師法施行規則): 患者の氏名・性別・年齢、照射年月日、照射方法、
-  指示した医師、指示の内容。［提案］氏名・性別は `subject`、年齢は照射日から導出、照射方法は Phase の
-  モダリティ・技法の写し、指示医師と指示内容は `basedOn` の治療処方。**照射実績と医師の指示が必ず
-  結びつく**ので、照射記録は処方なしでは作れないようにする
-- 照射記録は物理削除せず `entered-in-error` にする(照射録の保存義務)
-- 経過表に照射日と累積線量の行を出す(`docs/flowsheet-design.md`)
-- 会計(M001 体外照射ほか)は照射 1 回が単位。JJ1017 F3 → レセ電算コードが鍵になる
-  (`docs/receipt-computer-integration.md`)。M000 放射線治療管理料は計画の時点
+  指示した医師、指示の内容。［実装］氏名・性別は `subject`、年齢は照射日から導出、照射方法は `code`
+  (Phase の写し)、指示医師と指示内容は `basedOn` の治療処方。**照射記録は処方なしでは作れない**ので、
+  指示と実績は必ず結びつく
+- 経過表への照射日・累積線量と、会計(M001 体外照射ほか。単位は照射 1 回、JJ1017 F3 → レセ電算コード)は
+  後続フェーズ
 
 ### 6.2 治療終了サマリー
 
@@ -367,11 +377,14 @@ Procedure(`category = radiotherapy-course-summary`、`basedOn` = 治療処方、
 ［事実］CTCAE の記録は実装済みだが、`adverseEventHelpers.ts` は `regimen-order` 拡張(どのレジメンの
 何クールか)が無いと読めない。［提案］「原因となった治療」への参照を一般化してから放射線治療に広げる。
 
-### 6.4 休止
+### 6.4 休止【第2段階・実装済】
 
-Task `on-hold` ↔ `SR.status on-hold`。［事実］`taskHelpers.ts` の `executionPeriod` は accepted /
-in-progress 以外で終了時刻を入れるので、`on-hold` を足すときは手当てが要る。検索は最初から
-`on-hold` を含めてある。
+Task `on-hold` ↔ `SR.status on-hold`。部門一覧の「休止」で休止日と理由(休止・中止理由マスタの
+`kind=suspend`)を入れ、「再開」で治療中に戻る。休止の情報はコース拡張の `suspendedOn` /
+`suspensionReason` / `suspensionNote` に持ち、再開すると落ちる(終了・中止の `endedOn` 側とは別の枠)。
+
+［実装］`taskHelpers.ts` の `executionPeriod` は「受付済・作業中・休止中」で終了時刻を入れない
+(部門の手が離れていないため)。ここは共通実装なので、他部門の Task の挙動は変わらない。
 
 ### 6.5 計画 CT・固定具
 
@@ -394,7 +407,9 @@ actor は治療装置の Location。30 回ぶんを一括で確保する操作�
   出せるが、通知ベルには出ない(他科依頼全体の課題)
 - **処方できる人を絞っていない。** 権限の仕組みが無いので、どの医師でも治療処方を登録できる
 - **治療中の Phase の打ち切り**(`status=revoked`)は画面から作れない。構造と表示(詳細の「中止」、
-  コース合計から除外、DO で引き継がない)だけ入っている。照射記録と一緒に実装する
+  コース合計から除外、DO で引き継がない)と、照射記録からの追跡(`phaseId`)だけ入っている
+- **クリニカルパスから照射入力を開いたときは進捗 Task を動かさない**(リハビリ・栄養指導は依頼済なら
+  受付済にする)。放射線治療の Task は部門が決めるものなので、処方済のまま照射記録だけが付きうる
 - **入院 → 外来の切り替え**を表す手段が無い。入外区分は登録時の値のまま
 - **同時化学放射線療法**は併用療法の区分を持つだけ。化学療法タブの暦に照射期間を重ねるのは後続
 - **小線源・RI 内用療法**はモダリティに小線源だけ入れてある。RI 内用療法の投与量(MBq)は扱わない
@@ -421,7 +436,10 @@ actor は治療装置の Location。30 回ぶんを一括で確保する操作�
    標的と Phase の削除ボタンが無効になる
 8. 編集で元の他科依頼を選んで更新 → 依頼目的が表示され、依頼カードのメニューに「治療処方表示」、
    治療処方カードのメニューに「依頼表示」が出る。進捗は治療中のまま
-9. `tsc -b`、backend の rspec(`spec/requests/master/radiotherapy_masters_spec.rb`、
+9. 部門一覧の「照射入力」で 1 回目を登録 → カードと詳細に照射記録が出て、累積線量と「1 / 28 回」が
+   進む。未実施(理由つき)も登録できる。取消は消えずに一覧から外れる(`entered-in-error`)
+10. 「休止」→ 進行中のまま状態が休止になり、休止日と理由が詳細に出る →「再開」で治療中に戻る
+11. `tsc -b`、backend の rspec(`spec/requests/master/radiotherapy_masters_spec.rb`、
    施設設定の spec)
 
 上流の落とし穴: JASPEHR の Questionnaire は `name` が 15 文字以内(jsp-5)、`enableWhen` を持てるのは
