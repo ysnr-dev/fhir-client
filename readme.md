@@ -1666,10 +1666,28 @@ FHIR では職種・所属は Practitioner ではなく `PractitionerRole` に�
 ログインは代行入力として指示医師も選び、入力した本人と指示医師の承認は `Provenance` に残します
 （「代行入力の記録と承認」）。
 
-- 職種は `PractitionerRole.code`。コードは HL7 の `http://terminology.hl7.org/CodeSystem/practitioner-role`
-  （医師 `doctor` / 歯科医師 `dentist` / 薬剤師 `pharmacist` / 看護師 `nurse` / 理学療法士 `physio` /
-  言語聴覚士 `speech` / 研究者 `researcher` / 教員 `teacher`）。JP_PractitionerRole の binding は
-  `JP_PractitionerRole_VS` への **preferred** なので、上流はコード値を検証しません。
+- 職種は `PractitionerRole.code`。コードは独自の CodeSystem
+  `http://fhir-client.local/CodeSystem/practitioner-role` で、**HPKI（厚労省認可、MEDIS 運営）が
+  電子署名の対象とする国家資格 27 種**に揃えています（医師 `doctor` / 歯科医師 `dentist` /
+  薬剤師 `pharmacist` / 看護師 `nurse` / 保健師 `public-health-nurse` / 助産師 `midwife` /
+  診療放射線技師 `radiological-technologist` / 臨床検査技師 `medical-technologist` /
+  衛生検査技師 `laboratory-technician` / 臨床工学技士 `clinical-engineer` / 理学療法士 `physio` /
+  作業療法士 `occupational` / 言語聴覚士 `speech` / 視能訓練士 `orthoptist` /
+  義肢装具士 `prosthetist` / 歯科衛生士 `dental-hygienist` / 歯科技工士 `dental-technician` /
+  管理栄養士 `dietitian` / 救急救命士 `emergency-technician` / 社会福祉士 `social-worker` /
+  精神保健福祉士 `psychiatric-social-worker` / 介護福祉士 `care-worker` / 公認心理師 `psychologist` /
+  柔道整復師 `judo-therapist` / あん摩マッサージ指圧師 `massage-practitioner` / はり師 `acupuncturist` /
+  きゅう師 `moxibustionist`）。これに国家資格ではない事務職員 `clerk` と
+  医師事務作業補助者 `medical-clerk` を加えています。
+  - 標準のコード表を使っていないのは、使えるものが無いためです。JP_PractitionerRole の binding は
+    `JP_PractitionerRole_VS` への **preferred**（上流はコード値を検証しません）ですが、この値セットが
+    include している `JP_PractitionerRole_CS` は JP Core の IG に同梱されておらず未公開です。
+    SS-MIX2 の `JSHR004 医療従事者の職種コード` は 7 コードしかなく、しかも
+    「依頼医師 `DR-01` / 実施医師 `DR-02` / 実施技師 `TC-01`」のようにオーダー内の役割寄りで、
+    診療放射線技師・臨床検査技師などを区別できません。JP Core がコード表を公開したら差し替えます。
+  - HL7 の `http://terminology.hl7.org/CodeSystem/practitioner-role` は使いません。実際に定義されている
+    コードは `doctor` / `nurse` / `pharmacist` / `researcher` / `teacher` / `ict` の 6 つだけで、
+    歯科医師や療法士を表せないためです。
 - 所属医療機関は `PractitionerRole.organization`。自院設定済みなら自院で固定され、連携先医師のときだけ
   検索モーダル（自院を除いた一覧）から選びます。`reference` に加えて `display` にも名称を入れます
   （一覧で Organization を引き直さずに表示するため）。

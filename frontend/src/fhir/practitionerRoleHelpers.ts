@@ -8,11 +8,16 @@
 // 所属ロールには付かない。診療科は医療機関と同じ Organization なので、
 // organization の参照先だけでは両者を判別できないため目印が要る。
 //
-// JP_PractitionerRole の code は JP_PractitionerRole_VS への preferred binding で、
-// 上流はコード値を検証しない。ここでは HL7 の practitioner-role CodeSystem を使う。
+// JP_PractitionerRole の code は JP_PractitionerRole_VS への preferred binding だが、
+// その値セットが指す JP_PractitionerRole_CS は JP Core の IG に同梱されておらず、
+// 使えるコード表が存在しない(SS-MIX2 の JSHR004 は 7 コードで、しかも
+// 「依頼医師・実施医師・実施技師」という役割寄りで職種を表せない)。
+// そこで職種は下の独自 CodeSystem で持ち、コードは HPKI(厚労省認可、MEDIS 運営)が
+// 電子署名の対象とする国家資格 27 種に揃える。JP Core がコード表を公開したら
+// ここを差し替える。
 import { SSMIX2_DEPARTMENT_CODE_SYSTEM } from "./departmentCodes";
 
-const PRACTITIONER_ROLE_SYSTEM = "http://terminology.hl7.org/CodeSystem/practitioner-role";
+const PRACTITIONER_ROLE_SYSTEM = "http://fhir-client.local/CodeSystem/practitioner-role";
 
 export const PRIMARY_DEPARTMENT_EXT_URL =
   "http://fhir-client.local/StructureDefinition/practitioner-role-primary-department";
@@ -22,14 +27,36 @@ export const PRACTITIONER_ROLE_OPTIONS = [
   { code: "dentist", label: "歯科医師" },
   { code: "pharmacist", label: "薬剤師" },
   { code: "nurse", label: "看護師" },
+  { code: "public-health-nurse", label: "保健師" },
+  { code: "midwife", label: "助産師" },
+  { code: "radiological-technologist", label: "診療放射線技師" },
+  { code: "medical-technologist", label: "臨床検査技師" },
+  { code: "laboratory-technician", label: "衛生検査技師" },
+  { code: "clinical-engineer", label: "臨床工学技士" },
   // physio(理学療法士)・occupational(作業療法士)・speech(言語聴覚士)はリハビリの
   // 療法種別 PT/OT/ST に対応する職種。実施記録の担当療法士(Procedure.performer)に
   // 立つ。**この physio は職種のコードで、生理検査のオーダー種別 physio とは別物。**
   { code: "physio", label: "理学療法士" },
   { code: "occupational", label: "作業療法士" },
   { code: "speech", label: "言語聴覚士" },
-  { code: "researcher", label: "研究者" },
-  { code: "teacher", label: "教員" },
+  { code: "orthoptist", label: "視能訓練士" },
+  { code: "prosthetist", label: "義肢装具士" },
+  { code: "dental-hygienist", label: "歯科衛生士" },
+  { code: "dental-technician", label: "歯科技工士" },
+  { code: "dietitian", label: "管理栄養士" },
+  { code: "emergency-technician", label: "救急救命士" },
+  { code: "social-worker", label: "社会福祉士" },
+  { code: "psychiatric-social-worker", label: "精神保健福祉士" },
+  { code: "care-worker", label: "介護福祉士" },
+  { code: "psychologist", label: "公認心理師" },
+  { code: "judo-therapist", label: "柔道整復師" },
+  { code: "massage-practitioner", label: "あん摩マッサージ指圧師" },
+  { code: "acupuncturist", label: "はり師" },
+  { code: "moxibustionist", label: "きゅう師" },
+  // ここまでが HPKI の 27 資格。以下は国家資格ではないが、医事課の職員や
+  // ドクターズクラークも医療従事者として登録するので職種として持つ。
+  { code: "clerk", label: "事務職員" },
+  { code: "medical-clerk", label: "医師事務作業補助者" },
 ] as const;
 
 export function practitionerRoleLabel(code: string | undefined): string {
