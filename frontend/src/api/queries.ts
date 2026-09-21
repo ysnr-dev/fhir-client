@@ -368,6 +368,20 @@ import {
   isConsultServiceRequest,
 } from "../fhir/consultOrderHelpers";
 import {
+  RADIOTHERAPY_ORDER_TYPE,
+  buildRadiotherapyOrderDeleteBundle,
+  buildRadiotherapyOrderStatusEntry,
+  isRadiotherapyServiceRequest,
+  type RadiotherapyTermination,
+} from "../fhir/radiotherapyOrderHelpers";
+import {
+  buildRadiotherapyTaskUpdate,
+  radiotherapyOrderStatusFor,
+  radiotherapyTaskStatus,
+  radiotherapyTasksByOrderId,
+  type RadiotherapyTaskStatus,
+} from "../fhir/radiotherapyTaskHelpers";
+import {
   buildConsultTaskUpdate,
   consultOrderStatusFor,
   consultTasksByOrderId,
@@ -5623,7 +5637,15 @@ export function useDocumentDueTasks(encounterId: string | undefined) {
   });
 }
 
-const SUMMARY_ORDER_KINDS = ["surgery", "treatment", "endoscopy", "rad", "physio", "pathology"];
+const SUMMARY_ORDER_KINDS = [
+  "surgery",
+  "treatment",
+  "endoscopy",
+  "rad",
+  "physio",
+  "pathology",
+  "radiotherapy",
+];
 
 /**
  * 退院時サマリーの下書きに使う、入院期間のデータ。オーダー・記録は Encounter を
@@ -8321,6 +8343,14 @@ export function usePrescriptionCategoryDefaults() {
      *  これが true になるまでフォームを描かない。 */
     ready: !settings.isLoading,
   };
+}
+
+const EMPTY_CONSULT_DEFAULT_TEMPLATES: Record<string, string> = {};
+
+/** 他科依頼の依頼目的テンプレートの既定(依頼先の診療科 Organization.id → canonical)。 */
+export function useConsultDefaultTemplates() {
+  const settings = useFacilitySettings();
+  return settings.data?.consult_default_templates ?? EMPTY_CONSULT_DEFAULT_TEMPLATES;
 }
 
 /** 経過表でバイタルを異常値として強調するしきい値。設定が読めるまでは既定値で判定する。 */
@@ -11769,6 +11799,9 @@ export function useCancelPathwayApplication() {
           case "rehab-order":
             await deleteRehabOrderRequest(id);
             break;
+          case "radiotherapy-order":
+            await deleteRadiotherapyOrderRequest(id);
+            break;
           case "nutrition-guidance-order":
             await deleteNutritionGuidanceOrderRequest(id);
             break;
@@ -12239,5 +12272,222 @@ export function useDeleteImagingStudy(patientId: string) {
   return useMutation({
     mutationFn: (studyUid: string) => deleteImagingStudy(patientId, studyUid),
     onSuccess: invalidate,
+  });
+}
+
+// ---- 放射線治療(治療処方) ----
+//
+// 明細を持たないヘッダ 1 本 + 進捗 Task で、作りは他科依頼と同じ。**進捗の変更で
+// ServiceRequest.status も一緒に動かす**(docs/radiotherapy-order-design.md §4)。
+// 書き込みの入口は useUpdateRadiotherapyTaskStatus だけ。
+
+export function useRadiotherapyOrderDetail(srId: string | undefined) {
+  const params = new URLSearchParams();
+  if (srId) {
+    params.set("_id", srId);
+    // 進捗と照射記録(後続フェーズ。§6)を同時に取る。
+    params.set("_revinclude", "Task:focus");
+    params.append("_revinclude", "Procedure:based-on");
+  }
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "detail", "radiotherapy-order", srId],
+    queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", params),
+    enabled: Boolean(srId),
+  });
+}
+
+/**
+ * その患者の放射線治療コース(進行中・終了・中止のすべて)。治療処方の安全確認
+ * (過去の照射歴)とコース番号の既定値に使う。
+ */
+export function usePatientRadiotherapyOrders(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
+  params.set("status", "active,on-hold,completed,revoked");
+  params.set("_sort", "-authoredon");
+  params.set("_count", "50");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "radiotherapy-patient", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      return serviceRequestsOf(bundle).filter(isRadiotherapyServiceRequest);
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * その患者の他科依頼(新しい順)。治療処方が「どの依頼を受けたものか」を選ぶ候補。
+ * 取消(revoked)は候補にしない。
+ */
+export function usePatientConsultOrders(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${CONSULT_ORDER_TYPE.code}`);
+  params.set("status", "active,completed");
+  params.set("based-on:missing", "true");
+  params.set("_sort", "-authoredon");
+  params.set("_count", "20");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "consult-patient", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      return serviceRequestsOf(bundle).filter(isConsultServiceRequest);
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+function invalidateRadiotherapy(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "radiotherapy-worklist"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+}
+
+export function useUpdateRadiotherapyOrder() {
+  const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      invalidateProvenance(queryClient);
+    },
+  });
+}
+
+/**
+ * 治療処方を消す。**部門が受け付けた後(計画中以降)は消させない** — 計画や照射が
+ * 進んでいる処方が消えると、何に基づいて照射したのかが辿れなくなる。受付後にやめる
+ * ときは部門一覧の「中止」を使う(§4)。
+ *
+ * useDeleteRadiotherapyOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて
+ * 消すときにも使う。
+ */
+export const deleteRadiotherapyOrderRequest = async (srId: string) => {
+  const params = new URLSearchParams();
+  params.set("_id", srId);
+  params.set("_revinclude", "Task:focus");
+  const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+  const tasks = (bundle.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r): r is fhir4.Task => r?.resourceType === "Task");
+  const status = radiotherapyTaskStatus(radiotherapyTasksByOrderId(tasks).get(srId));
+  if (status !== "requested") {
+    throw new Error(
+      "受付後の放射線治療は削除できません。放射線治療一覧で中止するか、受付を取り消してください。",
+    );
+  }
+  return postBundle(buildRadiotherapyOrderDeleteBundle(srId));
+};
+
+export function useDeleteRadiotherapyOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteRadiotherapyOrderRequest,
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+// ---- 放射線治療一覧(部門ワークリスト) ----
+//
+// 治療コースは数週間続くので、他科依頼と同じく日付ではなく status で切る(§4.1)。
+//
+//   進行中     … status=active(処方済・計画中・治療中)。いま抱えているコースなので有限。
+//   終了・中止 … status=completed,revoked の直近ぶん(-authoredon)。
+
+export type RadiotherapyWorklistView = "open" | "closed";
+
+export interface RadiotherapyWorklistRow {
+  order: fhir4.ServiceRequest;
+  patient?: fhir4.Patient;
+  task?: fhir4.Task;
+}
+
+export interface RadiotherapyWorklistResult {
+  rows: RadiotherapyWorklistRow[];
+  truncated: boolean;
+}
+
+function radiotherapyWorklistParams(view: RadiotherapyWorklistView, page: number): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
+  params.set("status", view === "open" ? "active,on-hold" : "completed,revoked");
+  params.set("based-on:missing", "true");
+  params.set("_count", String(WORKLIST_PAGE));
+  params.set("_offset", String(page * WORKLIST_PAGE));
+  params.set("_sort", "-authoredon");
+  params.set("_include", "ServiceRequest:subject");
+  params.set("_revinclude", "Task:focus");
+  return params;
+}
+
+async function fetchRadiotherapyWorklist(
+  view: RadiotherapyWorklistView,
+): Promise<RadiotherapyWorklistResult> {
+  const orders: fhir4.ServiceRequest[] = [];
+
+  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
+    (page) => radiotherapyWorklistParams(view, page),
+    (resource) => {
+      if (resource.resourceType !== "ServiceRequest") return false;
+      const request = resource as fhir4.ServiceRequest;
+      if (!isRadiotherapyServiceRequest(request)) return false;
+      orders.push(request);
+      return true;
+    },
+  );
+
+  const taskByOrderId = radiotherapyTasksByOrderId(tasks);
+  const rows = orders.map((order) => ({
+    order,
+    patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+    task: taskByOrderId.get(order.id ?? ""),
+  }));
+
+  return { rows, truncated };
+}
+
+export function useRadiotherapyWorklist(view: RadiotherapyWorklistView) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "radiotherapy-worklist", view],
+    queryFn: () => fetchRadiotherapyWorklist(view),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 進捗の変更。Task と ServiceRequest.status を 1 つの transaction で両方書く(§4)。
+ * **片方だけを書く入口を増やさないこと** — status だけが取り残されると、終了した
+ * コースが部門一覧の進行中に出続ける。終了・中止では終了日と理由も同じ PUT で書く。
+ */
+export function useUpdateRadiotherapyTaskStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      order,
+      task,
+      status,
+      termination,
+    }: {
+      order: fhir4.ServiceRequest;
+      task: fhir4.Task | undefined;
+      status: RadiotherapyTaskStatus;
+      termination?: RadiotherapyTermination;
+    }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          taskBundleEntry(buildRadiotherapyTaskUpdate(task, order, status)),
+          buildRadiotherapyOrderStatusEntry(order, radiotherapyOrderStatusFor(status), termination),
+        ],
+      }),
+    onSuccess: () => invalidateRadiotherapy(queryClient),
   });
 }

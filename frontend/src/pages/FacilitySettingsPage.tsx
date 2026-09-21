@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useUpdateFacilitySettings } from "../api/adminQueries";
-import { useFacilitySettings, useOrganizationOptions } from "../api/queries";
+import {
+  useFacilitySettings,
+  useOrganizationOptions,
+  useQuestionnaireOptions,
+  useSelfDepartments,
+} from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { organizationDisplayName } from "../fhir/organizationHelpers";
 import {
@@ -37,6 +42,8 @@ import {
   type PrescriptionCategoryDefaults,
 } from "../fhir/prescriptionHelpers";
 import { useNursingObservationsByManageNos } from "../api/masterQueries";
+import { departmentDisplayName, sortDepartmentsByCode } from "../fhir/departmentHelpers";
+import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
 
 // 「どの Organization が自院か」を指定する。本アプリはマルチテナントではなく、
@@ -131,6 +138,22 @@ export function FacilitySettingsPage() {
   const savedCategory = settings.data?.prescription_category ?? DEFAULT_PRESCRIPTION_CATEGORY;
   const prescriptionCategory = categoryDraft ?? savedCategory;
 
+  // 他科依頼の依頼目的テンプレートの既定。依頼先の診療科ごとに 1 つで、未選択の科は保存しない。
+  const [consultTemplateDraft, setConsultTemplateDraft] = useState<
+    Record<string, string> | undefined
+  >(undefined);
+  const savedConsultTemplates = settings.data?.consult_default_templates ?? {};
+  const consultTemplates = consultTemplateDraft ?? savedConsultTemplates;
+  const departments = useSelfDepartments();
+  const templateOptions = useQuestionnaireOptions({ status: "active" });
+
+  function updateConsultTemplate(departmentId: string, canonical: string) {
+    const next = { ...consultTemplates };
+    if (canonical) next[departmentId] = canonical;
+    else delete next[departmentId];
+    setConsultTemplateDraft(next);
+  }
+
   // 水分出納に数える看護観察。管理番号だけを保存し、名前はマスタから引く。
   const [balanceDraft, setBalanceDraft] = useState<WaterBalanceSettings | undefined>(undefined);
   const savedBalance = settings.data?.water_balance ?? EMPTY_WATER_BALANCE;
@@ -166,6 +189,7 @@ export function FacilitySettingsPage() {
       medication_schedule: medicationSchedule,
       document_reminder: reminder,
       prescription_category: prescriptionCategory,
+      consult_default_templates: consultTemplates,
     });
   }
 
@@ -366,6 +390,32 @@ export function FacilitySettingsPage() {
                 </select>
               </label>
             ))}
+          </div>
+        </details>
+
+        {/* 他科依頼の依頼目的テンプレートの既定。依頼先の科を選んだときにテンプレート選択の
+            初期値になる(選び直しは妨げない)。 */}
+        <details className="facility-settings__schedule">
+          <summary>他科依頼の既定テンプレート</summary>
+          <div className="facility-settings__schedule-body">
+            {sortDepartmentsByCode(departments.departments)
+              .filter((department) => Boolean(department.id))
+              .map((department) => (
+                <label key={department.id}>
+                  {departmentDisplayName(department)}
+                  <select
+                    value={consultTemplates[department.id as string] ?? ""}
+                    onChange={(e) => updateConsultTemplate(department.id as string, e.target.value)}
+                  >
+                    <option value="">（なし）</option>
+                    {templateOptions.questionnaires.map((q) => (
+                      <option key={q.id} value={questionnaireCanonical(q)}>
+                        {q.title ?? q.name ?? q.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
           </div>
         </details>
 

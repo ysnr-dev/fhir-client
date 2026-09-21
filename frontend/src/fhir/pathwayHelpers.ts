@@ -117,6 +117,7 @@ export const DEFAULT_ORDER_TYPE_BY_LV2: Record<string, string> = {
   TPOP: "surgery-order",
   TPBT: "transfusion-order",
   TPRH: "rehab-order",
+  TPRT: "radiotherapy-order",
   EXSP: "lab-order",
   EXMB: "micro-order",
   EXPH: "physio-order",

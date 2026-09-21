@@ -16,6 +16,11 @@ import {
 import { pathoTaskStatus, pathoTaskStatusDisplay, pathoTasksByOrderId } from "./pathoTaskHelpers";
 import { physioTaskStatus, physioTaskStatusDisplay, physioTasksByOrderId } from "./physioTaskHelpers";
 import { radTaskStatus, radTaskStatusDisplay, radTasksByOrderId } from "./radTaskHelpers";
+import {
+  radiotherapyTaskStatus,
+  radiotherapyTaskStatusDisplay,
+  radiotherapyTasksByOrderId,
+} from "./radiotherapyTaskHelpers";
 import { rehabTaskStatus, rehabTaskStatusDisplay, rehabTasksByOrderId } from "./rehabTaskHelpers";
 import { surgeryTaskStatus, surgeryTaskStatusDisplay, surgeryTasksByOrderId } from "./surgeryTaskHelpers";
 import {
@@ -88,6 +93,11 @@ const TASK_KINDS: Partial<Record<string, TaskKind>> = {
   "surgery-order": taskKind(surgeryTasksByOrderId, surgeryTaskStatus, surgeryTaskStatusDisplay),
   "transfusion-order": taskKind(transfusionTasksByOrderId, transfusionTaskStatus, transfusionTaskStatusDisplay),
   "rehab-order": taskKind(rehabTasksByOrderId, rehabTaskStatus, rehabTaskStatusDisplay),
+  "radiotherapy-order": taskKind(
+    radiotherapyTasksByOrderId,
+    radiotherapyTaskStatus,
+    radiotherapyTaskStatusDisplay,
+  ),
   "nutrition-guidance-order": taskKind(
     nutritionGuidanceTasksByOrderId,
     nutritionGuidanceTaskStatus,

@@ -38,6 +38,7 @@ const PLAIN_KINDS: KarteItemKind[] = [
   "meal-order",
   "transfusion-order",
   "rehab-order",
+  "radiotherapy-order",
   "nutrition-guidance-order",
   "consult-order",
   "pathway-evaluation",

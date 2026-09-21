@@ -375,6 +375,9 @@ DICOM の Study / Series UID が要る(`docs/rad-result-design.md` §7-1)。
 
 ### F-3. 放射線治療オーダー
 
+> 第1段階(治療処方・施設固有マスタ・部門一覧)を実装した。`docs/radiotherapy-order-design.md` を参照。
+> 照射記録(頻用コード F3 を使う)は後続フェーズ(同 §6.1)。
+
 ［事実］頻用コード表 F3(治療系 4,576 件)は取り込んでいるが、照射指示の属性(総線量・分割回数・
 照射野・治療計画)は JJ1017 の範囲外(`docs/rad-order-master-design.md` §10-4)。別設計になる。
 

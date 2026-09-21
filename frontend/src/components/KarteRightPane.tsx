@@ -18,6 +18,10 @@ import {
   TransfusionOrderCreatePanel,
   TransfusionOrderEditPanel,
 } from "./TransfusionOrderPanels";
+import {
+  RadiotherapyOrderCreatePanel,
+  RadiotherapyOrderEditPanel,
+} from "./RadiotherapyOrderPanels";
 import { RehabOrderCreatePanel, RehabOrderEditPanel } from "./RehabOrderPanels";
 import {
   NutritionGuidanceOrderCreatePanel,
@@ -77,6 +81,8 @@ export type KartePaneState =
   | { kind: "transfusion-order-edit"; srId: string }
   | { kind: "rehab-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "rehab-order-edit"; srId: string }
+  | { kind: "radiotherapy-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "radiotherapy-order-edit"; srId: string }
   | { kind: "nutrition-guidance-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "nutrition-guidance-order-edit"; srId: string }
   | { kind: "consult-order-create"; sourceSrId?: string; problem?: ProblemRef }
@@ -142,6 +148,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "transfusion-order-edit": "輸血編集",
   "rehab-order-create": "リハビリ登録",
   "rehab-order-edit": "リハビリ編集",
+  "radiotherapy-order-create": "放射線治療登録",
+  "radiotherapy-order-edit": "放射線治療編集",
   "nutrition-guidance-order-create": "栄養指導登録",
   "nutrition-guidance-order-edit": "栄養指導編集",
   "consult-order-create": "他科依頼登録",
@@ -185,6 +193,7 @@ function paneKey(state: KartePaneState): string {
     case "meal-order-edit":
     case "transfusion-order-edit":
     case "rehab-order-edit":
+    case "radiotherapy-order-edit":
     case "nutrition-guidance-order-edit":
     case "consult-order-edit":
       return `${state.kind}:${state.srId}`;
@@ -225,6 +234,7 @@ function paneKey(state: KartePaneState): string {
     case "surgery-order-create":
     case "transfusion-order-create":
     case "rehab-order-create":
+    case "radiotherapy-order-create":
     case "nutrition-guidance-order-create":
     case "consult-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
@@ -342,6 +352,16 @@ export function KarteRightPane({
           onClick={() => onStateChange({ kind: "regimen-apply", problem: selectedProblem })}
         >
           化学療法
+        </button>
+        {/* 放射線治療の治療処方(放射線治療医が書く)。化学療法と同じくがんの治療計画なので
+            隣に置く。臨床医からの依頼は下の「他科依頼」で出す。 */}
+        <button
+          type="button"
+          onClick={() =>
+            onStateChange({ kind: "radiotherapy-order-create", problem: selectedProblem })
+          }
+        >
+          放射線治療
         </button>
         {/* クリニカルパスの適用。入院の計画そのものなので、化学療法の隣に置く。 */}
         <button type="button" onClick={() => onStateChange({ kind: "pathway-apply" })}>
@@ -703,6 +723,19 @@ function PaneContent({
       );
     case "rehab-order-edit":
       return <RehabOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "radiotherapy-order-create":
+      return (
+        <RadiotherapyOrderCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "radiotherapy-order-edit":
+      return (
+        <RadiotherapyOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />
+      );
     case "nutrition-guidance-order-create":
       return (
         <NutritionGuidanceOrderCreatePanel

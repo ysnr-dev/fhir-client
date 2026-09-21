@@ -108,6 +108,12 @@ class FacilitySettings < ApplicationRecord
     "outpatient" => %w[external internal]
   }.freeze
 
+  # 他科依頼の依頼目的テンプレートの既定(依頼先の診療科ごと)。キーは診療科の
+  # Organization.id、値はテンプレート(Questionnaire)の canonical。依頼先を選んだときに
+  # テンプレート選択の初期値に使う。診療科は上流のリソースなので、キーは環境ごとに違う。
+  DEFAULT_CONSULT_DEFAULT_TEMPLATES = {}.freeze
+  CANONICAL = { pattern: %r{\Ahttps?://\S+\z}, label: "テンプレートの canonical" }.freeze
+
   # 設定項目の表。ここに 1 項目足せば、検証・既定値・読み書き・管理 API がすべて付く。
   #
   #   default: 保存されていないときに返す値
@@ -163,6 +169,10 @@ class FacilitySettings < ApplicationRecord
       shape: {
         fields: PRESCRIPTION_CATEGORY_CODES.transform_values { |codes| { enum: codes, blank: true } }
       }
+    },
+    "consult_default_templates" => {
+      default: DEFAULT_CONSULT_DEFAULT_TEMPLATES,
+      shape: { map: CANONICAL, keys: :any }
     }
   }.freeze
 

@@ -15,6 +15,10 @@ import type { PhysioOrderFormValues } from "./physioOrderHelpers";
 import type { PrescriptionFormValues } from "./prescriptionHelpers";
 import { isHeaderEntry } from "./provenanceHelpers";
 import type { RadOrderFormValues } from "./radOrderHelpers";
+import {
+  radiotherapyVolumeTotals,
+  type RadiotherapyOrderFormValues,
+} from "./radiotherapyOrderHelpers";
 import { diseaseCategoryDisplay, therapyTypesLabel, type RehabOrderFormValues } from "./rehabOrderHelpers";
 import type { SurgeryOrderFormValues } from "./surgeryOrderHelpers";
 import type { TransfusionOrderFormValues } from "./transfusionOrderHelpers";
@@ -48,6 +52,7 @@ export type OrderSetOrderType =
   | "meal-order"
   | "transfusion-order"
   | "rehab-order"
+  | "radiotherapy-order"
   | "nutrition-guidance-order"
   | "consult-order"
   | "nursing-order";
@@ -67,6 +72,7 @@ export const ORDER_SET_ORDER_TYPES: readonly OrderSetOrderType[] = [
   "meal-order",
   "transfusion-order",
   "rehab-order",
+  "radiotherapy-order",
   "nutrition-guidance-order",
   "consult-order",
   "nursing-order",
@@ -315,6 +321,19 @@ export function sanitizeValuesForSet(orderType: OrderSetOrderType, values: unkno
         onsetDate: "",
       } satisfies RehabOrderFormValues;
     }
+    case "radiotherapy-order": {
+      // 患者に依存するもの(開始予定日・担当医・元の他科依頼・プロブレム)は持ち込まない。
+      const v = values as RadiotherapyOrderFormValues;
+      return {
+        ...v,
+        problem: null,
+        startDate: "",
+        practitionerId: "",
+        practitionerName: "",
+        consultOrderId: "",
+        consultOrderDisplay: "",
+      } satisfies RadiotherapyOrderFormValues;
+    }
     case "nutrition-guidance-order": {
       const v = values as NutritionGuidanceOrderFormValues;
       return {
@@ -422,6 +441,10 @@ export function summarizeOrderSetValues(orderType: OrderSetOrderType, values: un
     case "rehab-order": {
       const v = values as RehabOrderFormValues;
       return joinNames([diseaseCategoryDisplay(v.diseaseCategory), therapyTypesLabel(v.therapyTypes)]);
+    }
+    case "radiotherapy-order": {
+      const v = values as RadiotherapyOrderFormValues;
+      return joinNames(radiotherapyVolumeTotals(v).map((t) => `${t.label} ${t.doseLabel}`));
     }
     case "nutrition-guidance-order": {
       const v = values as NutritionGuidanceOrderFormValues;

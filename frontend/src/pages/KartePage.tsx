@@ -607,6 +607,8 @@ export function KartePage() {
     else if (item.kind === "transfusion-order")
       setPane({ kind: "transfusion-order-edit", srId: item.id });
     else if (item.kind === "rehab-order") setPane({ kind: "rehab-order-edit", srId: item.id });
+    else if (item.kind === "radiotherapy-order")
+      setPane({ kind: "radiotherapy-order-edit", srId: item.id });
     else if (item.kind === "nutrition-guidance-order")
       setPane({ kind: "nutrition-guidance-order-edit", srId: item.id });
     else if (item.kind === "consult-order") setPane({ kind: "consult-order-edit", srId: item.id });
@@ -642,6 +644,8 @@ export function KartePage() {
       setPane({ kind: "transfusion-order-create", sourceSrId: item.id });
     } else if (item.kind === "rehab-order") {
       setPane({ kind: "rehab-order-create", sourceSrId: item.id });
+    } else if (item.kind === "radiotherapy-order") {
+      setPane({ kind: "radiotherapy-order-create", sourceSrId: item.id });
     } else if (item.kind === "nutrition-guidance-order") {
       setPane({ kind: "nutrition-guidance-order-create", sourceSrId: item.id });
     } else if (item.kind === "consult-order") {
@@ -669,6 +673,7 @@ export function KartePage() {
                 current.kind === "meal-order-edit" ||
                 current.kind === "transfusion-order-edit" ||
                 current.kind === "rehab-order-edit" ||
+                current.kind === "radiotherapy-order-edit" ||
                 current.kind === "nutrition-guidance-order-edit" ||
                 current.kind === "consult-order-edit" ||
                 current.kind === "nursing-order-edit"

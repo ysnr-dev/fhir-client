@@ -52,6 +52,8 @@ export interface FacilitySettings {
   document_reminder: DocumentReminderSettings;
   /** 処方区分の初期値(入外区分ごと。空なら未選択で開く)。 */
   prescription_category: PrescriptionCategoryDefaults;
+  /** 他科依頼の依頼目的テンプレートの既定(依頼先の診療科 Organization.id → canonical)。 */
+  consult_default_templates: Record<string, string>;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -63,6 +65,7 @@ export type FacilitySettingsPayload = Partial<{
   medication_schedule: MedicationScheduleSettings;
   document_reminder: DocumentReminderSettings;
   prescription_category: PrescriptionCategoryDefaults;
+  consult_default_templates: Record<string, string>;
 }>;
 
 export interface ConnectionTestResult {

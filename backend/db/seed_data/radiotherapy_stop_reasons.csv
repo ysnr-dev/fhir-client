@@ -1,0 +1,13 @@
+code,name,kind,display_order
+condition,患者の体調不良,both,10
+hematologic,血球減少,both,20
+adverse-event,有害事象,both,30
+machine,装置の故障・保守,suspend,40
+holiday,祝日・休診,suspend,50
+patient-request,患者の希望・都合,both,60
+admission,入院・転院,both,70
+physician,医師の判断,both,80
+plan-change,治療方針の変更,terminate,90
+progression,病状の進行,terminate,100
+death,死亡,terminate,110
+other,その他,both,900

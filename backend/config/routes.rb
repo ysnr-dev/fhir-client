@@ -226,6 +226,13 @@ Rails.application.routes.draw do
     # 輸血製剤マスタ。食事と同じ単純編集型で、配布マスタの取込は持たない
     # (日赤の製品に配布形式の標準マスタが無いため。docs/transfusion-order-design.md §3)。
     resources :transfusion_products, only: %i[index show create update destroy]
+
+    # 放射線治療の施設固有マスタ(docs/radiotherapy-order-design.md §3)。
+    resources :radiotherapy_modalities, only: %i[index show create update destroy]
+    resources :radiotherapy_techniques, only: %i[index show create update destroy]
+    resources :radiotherapy_devices, only: %i[index show create update destroy]
+    resources :radiotherapy_stop_reasons, only: %i[index show create update destroy]
+    resources :radiotherapy_protocols, only: %i[index show create update destroy]
     # 術式マスタ。手術オーダー(申込)の項目。処置と違いセット・レイアウト・
     # データセットのマスタは持たない(術式は検索で選び、実施入力は第2段階)。
     resources :surgery_items, only: %i[index show create update destroy]

@@ -64,6 +64,14 @@ import { MicroSpecimenTypePage } from "./pages/MicroSpecimenTypePage";
 import { PathoWorklistPage } from "./pages/PathoWorklistPage";
 import { TransfusionWorklistPage } from "./pages/TransfusionWorklistPage";
 import { ChemoRoomWorklistPage } from "./pages/ChemoRoomWorklistPage";
+import {
+  RadiotherapyDevicePage,
+  RadiotherapyModalityPage,
+  RadiotherapyStopReasonPage,
+  RadiotherapyTechniquePage,
+} from "./pages/RadiotherapyMasterPages";
+import { RadiotherapyProtocolPage } from "./pages/RadiotherapyProtocolPage";
+import { RadiotherapyWorklistPage } from "./pages/RadiotherapyWorklistPage";
 import { RehabWorklistPage } from "./pages/RehabWorklistPage";
 import { NutritionGuidanceWorklistPage } from "./pages/NutritionGuidanceWorklistPage";
 import { ConsultWorklistPage } from "./pages/ConsultWorklistPage";
@@ -210,6 +218,10 @@ function App() {
                 作りは他の部門一覧と同じなのでここに並べる。 */}
             <Link to="/transfusion-worklist" className="row-menu__item">
               輸血一覧
+            </Link>
+            {/* 放射線治療は治療コースが数週間続くので、日付ではなく進行中 / 終了・中止で並べる。 */}
+            <Link to="/radiotherapy-worklist" className="row-menu__item">
+              放射線治療一覧
             </Link>
             {/* リハビリは他の部門一覧と違い「その日に効いている期間オーダー」を並べる
                 (1 オーダーが数か月続き、実施が日々積み上がる)。 */}
@@ -447,6 +459,24 @@ function App() {
                 輸血製剤マスタ
               </Link>
             </SubMenu>
+            {/* 放射線治療。装置・技法・定型の線量分割は施設ごとに違うので、選択肢をマスタで持つ。 */}
+            <SubMenu label="放射線治療">
+              <Link to="/radiotherapy-protocols" className="row-menu__item">
+                治療プロトコルマスタ
+              </Link>
+              <Link to="/radiotherapy-modalities" className="row-menu__item">
+                照射モダリティマスタ
+              </Link>
+              <Link to="/radiotherapy-techniques" className="row-menu__item">
+                照射技法マスタ
+              </Link>
+              <Link to="/radiotherapy-devices" className="row-menu__item">
+                治療装置マスタ
+              </Link>
+              <Link to="/radiotherapy-stop-reasons" className="row-menu__item">
+                休止・中止理由マスタ
+              </Link>
+            </SubMenu>
             {/* 看護。MEDIS 看護実践用語標準マスターの閲覧(取込で洗い替える読み取り専用)。 */}
             <SubMenu label="看護">
               <Link to="/nursing-acts" className="row-menu__item">
@@ -559,6 +589,12 @@ function App() {
           <Route path="/patho-worklist" element={<PathoWorklistPage />} />
           <Route path="/transfusion-worklist" element={<TransfusionWorklistPage />} />
           <Route path="/rehab-worklist" element={<RehabWorklistPage />} />
+          <Route path="/radiotherapy-worklist" element={<RadiotherapyWorklistPage />} />
+          <Route path="/radiotherapy-protocols" element={<RadiotherapyProtocolPage />} />
+          <Route path="/radiotherapy-modalities" element={<RadiotherapyModalityPage />} />
+          <Route path="/radiotherapy-techniques" element={<RadiotherapyTechniquePage />} />
+          <Route path="/radiotherapy-devices" element={<RadiotherapyDevicePage />} />
+          <Route path="/radiotherapy-stop-reasons" element={<RadiotherapyStopReasonPage />} />
           <Route
             path="/nutrition-guidance-worklist"
             element={<NutritionGuidanceWorklistPage />}

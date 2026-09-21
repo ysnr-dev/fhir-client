@@ -249,6 +249,29 @@ RSpec.describe "Admin::FacilitySettings", type: :request do
     end
   end
 
+  describe "PATCH /admin/facility_settings (consult_default_templates)" do
+    let(:canonical) { "http://fhir-client.local/Questionnaire/consult-purpose-radiotherapy-01|1.0.0" }
+
+    it "stores the default template of each department" do
+      without_admin_token do
+        patch "/admin/facility_settings",
+              params: { consult_default_templates: { "org-rt" => canonical } },
+              as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["consult_default_templates"]).to eq("org-rt" => canonical)
+    end
+
+    it "rejects a value that is not a canonical URL" do
+      without_admin_token do
+        patch "/admin/facility_settings", params: { consult_default_templates: { "org-rt" => "x" } }, as: :json
+      end
+
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+  end
+
   # 設定は settings(jsonb)1 列にまとめて入るので、1 項目の保存が他の項目を
   # 消していないことを見る。
   describe "PATCH /admin/facility_settings (渡した項目だけ差し替える)" do

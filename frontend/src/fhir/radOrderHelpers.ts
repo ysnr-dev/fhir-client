@@ -73,9 +73,9 @@ const JJ1017_32_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-32";
 const JJ1017_16M_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-16m";
 const JJ1017_16S_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-16s";
 // JJ1017 の部位(小部位)。指針 5.5 が独立コードとしての符号化系指定子を JJ1017P と定める。
-const JJ1017P_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017p";
+export const JJ1017P_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017p";
 // 左右等・種別(モダリティ)。JJ1017 は独立コードとしての指定子を定めていないので独自に付ける。
-const JJ1017_LATERALITY_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-laterality";
+export const JJ1017_LATERALITY_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-laterality";
 const JJ1017_MODALITY_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-modality";
 // 略称。検体検査と同じ CodeSystem を使う(検査項目の略称という意味は同じ)。
 const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
