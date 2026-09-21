@@ -73,6 +73,10 @@ interface Props {
   onPerform: (entry: RadiotherapyCalendarEntry) => void;
   onReschedule: (entry: RadiotherapyCalendarEntry) => void;
   onDeletePlanned: (entry: RadiotherapyCalendarEntry) => void;
+  /** この回を中止する(照射しなかった回として残す)。 */
+  onCancelFraction: (entry: RadiotherapyCalendarEntry) => void;
+  /** 中止を取り消して予定に戻す。 */
+  onRestoreFraction: (entry: RadiotherapyCalendarEntry) => void;
   onView: (entry: RadiotherapyCalendarEntry) => void;
   /** 空き枠を掴んだ(どのコースの照射を入れるかを選ぶ)。 */
   onEmptySlot: (slot: RadiotherapySlot) => void;
@@ -101,6 +105,8 @@ export function RadiotherapyCalendar({
   onPerform,
   onReschedule,
   onDeletePlanned,
+  onCancelFraction,
+  onRestoreFraction,
   onView,
   onEmptySlot,
   onCourseDrop,
@@ -217,6 +223,8 @@ export function RadiotherapyCalendar({
               onPerform={onPerform}
               onReschedule={onReschedule}
               onDeletePlanned={onDeletePlanned}
+              onCancelFraction={onCancelFraction}
+              onRestoreFraction={onRestoreFraction}
               onView={onView}
             />
           ) : (
@@ -260,6 +268,10 @@ interface CardHandlers {
   onPerform: (entry: RadiotherapyCalendarEntry) => void;
   onReschedule: (entry: RadiotherapyCalendarEntry) => void;
   onDeletePlanned: (entry: RadiotherapyCalendarEntry) => void;
+  /** この回を中止する(照射しなかった回として残す)。 */
+  onCancelFraction: (entry: RadiotherapyCalendarEntry) => void;
+  /** 中止を取り消して予定に戻す。 */
+  onRestoreFraction: (entry: RadiotherapyCalendarEntry) => void;
   onView: (entry: RadiotherapyCalendarEntry) => void;
 }
 
@@ -698,6 +710,8 @@ function FractionCard({
   onPerform,
   onReschedule,
   onDeletePlanned,
+  onCancelFraction,
+  onRestoreFraction,
   onView,
 }: {
   entry: RadiotherapyCalendarEntry;
@@ -787,12 +801,31 @@ function FractionCard({
               <button type="button" className="row-menu__item" onClick={() => onReschedule(entry)}>
                 予定変更
               </button>
+              {/* 照射しなかった回として残す(体調不良・休診など)。実施の入力とは別の操作で、
+                  コースそのものの中止は右の一覧のカードから。 */}
+              <button type="button" className="row-menu__item" onClick={() => onCancelFraction(entry)}>
+                この回を中止
+              </button>
               <button
                 type="button"
                 className="row-menu__item row-menu__item--danger"
                 onClick={() => onDeletePlanned(entry)}
               >
                 予定を削除
+              </button>
+            </>
+          )}
+          {fraction.notDone && (
+            <>
+              <button type="button" className="row-menu__item" onClick={() => onRestoreFraction(entry)}>
+                中止を取消
+              </button>
+              <button
+                type="button"
+                className="row-menu__item row-menu__item--danger"
+                onClick={() => onDeletePlanned(entry)}
+              >
+                記録を削除
               </button>
             </>
           )}

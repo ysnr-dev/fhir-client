@@ -1,6 +1,10 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { radiotherapyDeviceHooks } from "../api/masterQueries";
-import { useRegisterRadiotherapyPlan, useRescheduleRadiotherapyFraction } from "../api/queries";
+import { radiotherapyDeviceHooks, radiotherapyStopReasonHooks } from "../api/masterQueries";
+import {
+  useMarkRadiotherapyFractionNotDone,
+  useRegisterRadiotherapyPlan,
+  useRescheduleRadiotherapyFraction,
+} from "../api/queries";
 import { summarizeRadiotherapyOrder } from "../fhir/radiotherapyOrderHelpers";
 import {
   buildRadiotherapyPlanBundle,
@@ -305,6 +309,66 @@ export function RadiotherapyRescheduleModal({
         <div className="prescription-form__actions">
           <button type="submit" disabled={reschedule.isPending}>
             {reschedule.isPending ? "保存中..." : "変更"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// 照射 1 回の中止(照射しなかった回として残す)。実施の入力とは別の操作で、理由だけを聞く。
+export function RadiotherapyFractionCancelModal({
+  fraction,
+  patientName,
+  onClose,
+}: {
+  fraction: RadiotherapyFractionDisplay;
+  patientName?: string;
+  onClose: () => void;
+}) {
+  const markNotDone = useMarkRadiotherapyFractionNotDone();
+  const reasons = radiotherapyStopReasonHooks.useOptions({ kind: "suspend" });
+  const [reasonCode, setReasonCode] = useState("");
+  const [note, setNote] = useState(fraction.note);
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const reason = reasons.items.find((r) => r.code === reasonCode);
+    if (!reason) return;
+    markNotDone.mutate(
+      { procedureId: fraction.id, reason: { code: reason.code, name: reason.name }, note },
+      { onSuccess: onClose },
+    );
+  }
+
+  return (
+    <Modal title={`この回を中止${patientName ? ` - ${patientName}` : ""}`} onClose={onClose}>
+      <form className="prescription-form" onSubmit={handleSubmit}>
+        <ErrorBanner error={markNotDone.error} />
+        <fieldset>
+          <legend>
+            {fraction.performedDate}
+            {fraction.timeLabel && ` ${fraction.timeLabel}`}　{fraction.fractionNumber} 回目
+          </legend>
+          <label>
+            理由 *
+            <select value={reasonCode} onChange={(e) => setReasonCode(e.target.value)} required>
+              <option value="">選択してください</option>
+              {reasons.items.map((r) => (
+                <option key={r.code} value={r.code}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            補足
+            <input type="text" value={note} onChange={(e) => setNote(e.target.value)} />
+          </label>
+        </fieldset>
+        <div className="prescription-form__actions">
+          <button type="submit" disabled={markNotDone.isPending}>
+            {markNotDone.isPending ? "保存中..." : "中止にする"}
           </button>
         </div>
       </form>

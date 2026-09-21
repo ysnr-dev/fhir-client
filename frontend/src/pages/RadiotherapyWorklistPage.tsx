@@ -5,6 +5,7 @@ import {
   useCancelRadiotherapyFraction,
   useDeleteRadiotherapyPlanned,
   useRescheduleRadiotherapyFraction,
+  useRestoreRadiotherapyFraction,
   useRadiotherapyProcedures,
   useRadiotherapyWorklist,
   useUpdateRadiotherapyTaskStatus,
@@ -25,6 +26,7 @@ import { RadiotherapyCourseSummaryModal } from "../components/RadiotherapyCourse
 import { RadiotherapyOrderDetailPanel } from "../components/RadiotherapyOrderDetailPanel";
 import { RadiotherapyPerformModal } from "../components/RadiotherapyPerformModal";
 import {
+  RadiotherapyFractionCancelModal,
   RadiotherapyPlanModal,
   RadiotherapyRescheduleModal,
 } from "../components/RadiotherapyPlanModal";
@@ -94,6 +96,8 @@ export function RadiotherapyWorklistPage() {
   // 実施入力。格子の予定から開いたときはその予定を、コースから開いたときは次の回を入れる。
   const [performing, setPerforming] = useState<(Target & { plannedId?: string }) | null>(null);
   const [rescheduling, setRescheduling] = useState<RadiotherapyCalendarEntry | null>(null);
+  // 1 回の中止(照射しなかった回として残す)。
+  const [cancellingFraction, setCancellingFraction] = useState<RadiotherapyCalendarEntry | null>(null);
 
   useEffect(() => {
     document.body.classList.add("page-wide");
@@ -106,6 +110,7 @@ export function RadiotherapyWorklistPage() {
   const cancelFraction = useCancelRadiotherapyFraction();
   const deletePlanned = useDeleteRadiotherapyPlanned();
   const reschedule = useRescheduleRadiotherapyFraction();
+  const restoreFraction = useRestoreRadiotherapyFraction();
   // 空き枠に入れられるコースは進行中のものだけなので、右のパネルのタブとは別に持つ。
   const openCourses = useRadiotherapyWorklist("open");
 
@@ -156,6 +161,7 @@ export function RadiotherapyWorklistPage() {
       <ErrorBanner error={cancelFraction.error} />
       <ErrorBanner error={deletePlanned.error} />
       <ErrorBanner error={reschedule.error} />
+      <ErrorBanner error={restoreFraction.error} />
 
       <RadiotherapyCalendar
         date={date}
@@ -169,6 +175,8 @@ export function RadiotherapyWorklistPage() {
         }}
         onReschedule={setRescheduling}
         onDeletePlanned={(entry) => handleDeletePlanned([entry.fraction.id])}
+        onCancelFraction={setCancellingFraction}
+        onRestoreFraction={(entry) => restoreFraction.mutate(entry.fraction.id)}
         onView={(entry) => {
           if (entry.order) setViewing({ order: entry.order, patient: entry.patient });
         }}
@@ -249,6 +257,16 @@ export function RadiotherapyWorklistPage() {
           plannedId={performing.plannedId}
           patientName={performing.patient ? displayName(performing.patient) : undefined}
           onClose={() => setPerforming(null)}
+        />
+      )}
+
+      {cancellingFraction && (
+        <RadiotherapyFractionCancelModal
+          fraction={cancellingFraction.fraction}
+          patientName={
+            cancellingFraction.patient ? displayName(cancellingFraction.patient) : undefined
+          }
+          onClose={() => setCancellingFraction(null)}
         />
       )}
 

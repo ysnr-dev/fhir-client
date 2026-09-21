@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useCurrentPractitioner } from "../api/authQueries";
-import { radiotherapyDeviceHooks, radiotherapyStopReasonHooks } from "../api/masterQueries";
+import { radiotherapyDeviceHooks } from "../api/masterQueries";
 import {
   usePractitionerOptions,
   useRadiotherapyOrderDetail,
@@ -30,8 +30,10 @@ import { Modal } from "./Modal";
 // 入っている。技師は日付と時刻、実施者、位置照合を確かめて登録する。
 //
 // **進捗 Task は動かさない。** 治療コースは治療中のまま照射が積み上がり、終わりは部門一覧の
-// 「終了」が決める(§4)。照射しなかった回は「未実施」として理由つきで残す — 休止の判断と
-// 治療期間の評価に要るので、記録そのものを作らない扱いにはしない。
+// 「終了」が決める(§4)。
+//
+// **ここは実施したときだけ使う。** 照射しなかった回(体調不良・休診など)は、カレンダーの予定の
+// カードの「この回を中止」で記録する — 実施の入力に「しなかった」の入口を混ぜない(§6.1)。
 
 interface Props {
   order: fhir4.ServiceRequest;
@@ -54,7 +56,6 @@ export function RadiotherapyPerformModal({
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const { practitioners, error: practitionersError } = usePractitionerOptions();
   const devices = radiotherapyDeviceHooks.useOptions();
-  const reasons = radiotherapyStopReasonHooks.useOptions({ kind: "suspend" });
 
   const summary = useMemo(() => summarizeRadiotherapyOrder(order), [order]);
   const progress = useMemo(() => radiotherapyProgress(summary, fractions), [summary, fractions]);
@@ -212,7 +213,7 @@ export function RadiotherapyPerformModal({
                   performerName: selected ? practitionerDisplayName(selected) : "",
                 }));
               }}
-              required={!values.notDone}
+              required
             >
               <option value="">選択してください</option>
               {practitioners.map((p) => (
@@ -224,76 +225,41 @@ export function RadiotherapyPerformModal({
           </label>
         </fieldset>
 
-        {/* 照射しなかった回。線量は記録せず、理由だけを残す。 */}
         <fieldset>
-          <legend>未実施</legend>
-          <label className="dose-conversion__checkbox">
-            <input
-              type="checkbox"
-              checked={values.notDone}
-              onChange={(e) => update("notDone", e.target.checked)}
-            />
-            この回は照射しなかった
-          </label>
-          {values.notDone && (
-            <label>
-              理由 *
-              <select
-                value={values.notDoneReason.code}
-                onChange={(e) => {
-                  const reason = reasons.items.find((r) => r.code === e.target.value);
-                  update("notDoneReason", { code: e.target.value, name: reason?.name ?? "" });
-                }}
-                required
-              >
-                <option value="">選択してください</option>
-                {reasons.items.map((r) => (
-                  <option key={r.code} value={r.code}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <legend>実照射線量 *</legend>
+          <table className="master-search__table radiotherapy-order__doses">
+            <thead>
+              <tr>
+                <th>標的</th>
+                <th>処方(1回)</th>
+                <th>実照射線量(Gy)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.volumes.map((volume) => {
+                const prescribed = phase?.doses.find((d) => d.volumeId === volume.volumeId);
+                return (
+                  <tr key={volume.volumeId}>
+                    <td>{volume.label}</td>
+                    <td>{prescribed ? `${formatDose(prescribed.fractionDose)} Gy` : "-"}</td>
+                    <td>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={values.doses[volume.volumeId] ?? ""}
+                        aria-label={`${volume.label} の実照射線量`}
+                        onChange={(e) =>
+                          update("doses", { ...values.doses, [volume.volumeId]: e.target.value })
+                        }
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </fieldset>
-
-        {!values.notDone && (
-          <fieldset>
-            <legend>実照射線量 *</legend>
-            <table className="master-search__table radiotherapy-order__doses">
-              <thead>
-                <tr>
-                  <th>標的</th>
-                  <th>処方(1回)</th>
-                  <th>実照射線量(Gy)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.volumes.map((volume) => {
-                  const prescribed = phase?.doses.find((d) => d.volumeId === volume.volumeId);
-                  return (
-                    <tr key={volume.volumeId}>
-                      <td>{volume.label}</td>
-                      <td>{prescribed ? `${formatDose(prescribed.fractionDose)} Gy` : "-"}</td>
-                      <td>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={values.doses[volume.volumeId] ?? ""}
-                          aria-label={`${volume.label} の実照射線量`}
-                          onChange={(e) =>
-                            update("doses", { ...values.doses, [volume.volumeId]: e.target.value })
-                          }
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </fieldset>
-        )}
 
         <fieldset>
           <legend>備考</legend>

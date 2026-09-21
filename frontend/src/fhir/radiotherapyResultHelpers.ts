@@ -88,9 +88,6 @@ export interface RadiotherapyFractionFormValues {
   performerId: string;
   performerName: string;
   note: string;
-  /** 照射しなかった回として記録する(中止・患者都合など)。 */
-  notDone: boolean;
-  notDoneReason: RadiotherapyCoded;
 }
 
 const EMPTY_CODED: RadiotherapyCoded = { code: "", name: "" };
@@ -129,8 +126,6 @@ export function nextRadiotherapyFractionForm(
     performerId: "",
     performerName: "",
     note: "",
-    notDone: false,
-    notDoneReason: EMPTY_CODED,
   };
 }
 
@@ -155,8 +150,6 @@ export function radiotherapyFractionFormFromPlanned(
     performerId: "",
     performerName: "",
     note: planned.note,
-    notDone: false,
-    notDoneReason: EMPTY_CODED,
   };
 }
 
@@ -191,11 +184,6 @@ export function validateRadiotherapyFractionForm(
     return "終了時刻は開始時刻と同じか、それより後にしてください。";
   }
 
-  if (values.notDone) {
-    if (!values.notDoneReason.code) return "照射しなかった理由を選んでください。";
-    return "";
-  }
-
   const doses = Object.values(values.doses).filter((text) => text.trim() !== "");
   if (doses.length === 0) return "実照射線量を入れてください。";
   if (doses.some((text) => !(Number(text) > 0))) {
@@ -226,7 +214,7 @@ function buildFractionProcedure(
   const procedure: fhir4.Procedure = {
     resourceType: "Procedure",
     meta: { profile: [PROCEDURE_PROFILE] },
-    status: values.notDone ? "not-done" : "completed",
+    status: "completed",
     category: {
       coding: [
         { system: ORDER_TYPE_SYSTEM, ...RADIOTHERAPY_ORDER_TYPE },
@@ -246,19 +234,6 @@ function buildFractionProcedure(
       ? { performedPeriod: { start, ...(end ? { end } : {}) } }
       : { performedDateTime: values.performedDate }),
   };
-
-  if (values.notDone && values.notDoneReason.code) {
-    procedure.statusReason = {
-      coding: [
-        {
-          system: STOP_REASON_SYSTEM,
-          code: values.notDoneReason.code,
-          display: values.notDoneReason.name,
-        },
-      ],
-      text: values.notDoneReason.name,
-    };
-  }
 
   if (values.performerId) {
     procedure.performer = [
@@ -296,19 +271,16 @@ function buildFractionProcedure(
       },
     });
   }
-  // 照射しなかった回は線量を持たない(累積線量に入れない)。
-  if (!values.notDone) {
-    for (const volume of summary.volumes) {
-      const dose = Number(values.doses[volume.volumeId] ?? "");
-      if (!(dose > 0)) continue;
-      extension.push({
-        url: "doseDeliveredToVolume",
-        extension: [
-          { url: "volume", valueString: volume.volumeId },
-          { url: "dose", valueQuantity: doseQuantity(dose) },
-        ],
-      });
-    }
+  for (const volume of summary.volumes) {
+    const dose = Number(values.doses[volume.volumeId] ?? "");
+    if (!(dose > 0)) continue;
+    extension.push({
+      url: "doseDeliveredToVolume",
+      extension: [
+        { url: "volume", valueString: volume.volumeId },
+        { url: "dose", valueQuantity: doseQuantity(dose) },
+      ],
+    });
   }
   procedure.extension = [{ url: FRACTION_EXT_URL, extension }];
 
@@ -336,6 +308,53 @@ export function buildRadiotherapyFractionBundle(
         ? { resource, request: { method: "PUT", url: `Procedure/${values.plannedId}` } }
         : { resource, request: { method: "POST", url: "Procedure" } },
     ],
+  };
+}
+
+/**
+ * 予定を「照射しなかった回」にする。線量も実施者も持たず、理由だけを残す(`statusReason`)。
+ * 回数にも累積線量にも数えないので、残りの回数は 1 増え、その番号は空く(§7.2 の採番)。
+ */
+export function buildRadiotherapyFractionNotDoneBundle(
+  procedure: fhir4.Procedure,
+  reason: RadiotherapyCoded,
+  note: string,
+): fhir4.Bundle {
+  const next: fhir4.Procedure = {
+    ...procedure,
+    status: "not-done",
+    statusReason: {
+      ...(reason.code
+        ? { coding: [{ system: STOP_REASON_SYSTEM, code: reason.code, display: reason.name }] }
+        : {}),
+      text: reason.name,
+    },
+  };
+  // 照射していないので実施者も線量も持たない(予定には元から入っていないが、念のため落とす)。
+  delete next.performer;
+  next.extension = (next.extension ?? []).map((ext) =>
+    ext.url === FRACTION_EXT_URL
+      ? { ...ext, extension: ext.extension?.filter((e) => e.url !== "doseDeliveredToVolume") }
+      : ext,
+  );
+  if (note.trim()) next.note = [{ text: note.trim() }];
+  else delete next.note;
+
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [{ resource: next, request: { method: "PUT", url: `Procedure/${procedure.id}` } }],
+  };
+}
+
+/** 中止を取り消して予定に戻す(押し間違いの訂正)。 */
+export function buildRadiotherapyFractionRestoreBundle(procedure: fhir4.Procedure): fhir4.Bundle {
+  const next: fhir4.Procedure = { ...procedure, status: "preparation" };
+  delete next.statusReason;
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: [{ resource: next, request: { method: "PUT", url: `Procedure/${procedure.id}` } }],
   };
 }
 
@@ -389,10 +408,14 @@ export function draftRadiotherapyPlan(
 ): RadiotherapyPlanRow[] {
   if (!options.startDate || options.weekdays.length === 0) return [];
 
-  const taken = new Map<string, number>();
+  // 使用済みの回数。**中止した回の番号は空ける** —— 5 回目を中止したら、次に組むのも 5 回目
+  // (別の日への振り替え)。件数 + 1 で採番すると、既にある予定と番号がぶつかる。
+  const used = new Map<string, Set<number>>();
   for (const fraction of fractions) {
     if (fraction.notDone) continue;
-    taken.set(fraction.phaseId, Math.max(taken.get(fraction.phaseId) ?? 0, 0) + 1);
+    const numbers = used.get(fraction.phaseId) ?? new Set<number>();
+    numbers.add(fraction.fractionNumber);
+    used.set(fraction.phaseId, numbers);
   }
 
   const rows: RadiotherapyPlanRow[] = [];
@@ -401,8 +424,9 @@ export function draftRadiotherapyPlan(
   let guard = 0;
   for (const phase of summary.phases) {
     if (phase.status !== "active") continue;
-    const from = taken.get(phase.phaseId) ?? 0;
-    for (let number = from + 1; number <= phase.fractions; number += 1) {
+    const taken = used.get(phase.phaseId) ?? new Set<number>();
+    for (let number = 1; number <= phase.fractions; number += 1) {
+      if (taken.has(number)) continue;
       while (!options.weekdays.includes(new Date(`${date}T00:00:00`).getDay()) && guard < 5000) {
         date = nextDate(date);
         guard += 1;
@@ -451,8 +475,6 @@ export function buildRadiotherapyPlanBundle(
           performerId: "",
           performerName: "",
           note: "",
-          notDone: false,
-          notDoneReason: EMPTY_CODED,
         },
         order,
         summary,

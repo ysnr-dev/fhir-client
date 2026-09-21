@@ -379,6 +379,8 @@ import {
 } from "../fhir/radiotherapySummaryHelpers";
 import {
   buildRadiotherapyFractionCancelBundle,
+  buildRadiotherapyFractionNotDoneBundle,
+  buildRadiotherapyFractionRestoreBundle,
   isRadiotherapyFraction,
   radiotherapyFractionsByOrderId,
   rescheduleRadiotherapyFraction,
@@ -12685,6 +12687,50 @@ export function useDeleteRadiotherapyPlanned() {
           request: { method: "DELETE" as const, url: `Procedure/${id}` },
         })),
       }),
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+/**
+ * 照射予定を「照射しなかった回」にする(体調不良・休診など)。実施の入力とは別の操作で、
+ * 線量も実施者も持たない(docs/radiotherapy-order-design.md §6.1)。
+ */
+export function useMarkRadiotherapyFractionNotDone() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      procedureId,
+      reason,
+      note,
+    }: {
+      procedureId: string;
+      reason: { code: string; name: string };
+      note: string;
+    }) => {
+      // PUT は全置換なので、手元の写しではなく読み直したものを土台にする。
+      const { data: procedure } = await readResource<fhir4.Procedure>("Procedure", procedureId);
+      if (procedure.status !== "preparation") {
+        throw new Error("照射予定だけを中止にできます(実施済みの記録は取消してください)。");
+      }
+      return postBundle(buildRadiotherapyFractionNotDoneBundle(procedure, reason, note));
+    },
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+/** 中止を取り消して予定に戻す。 */
+export function useRestoreRadiotherapyFraction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (procedureId: string) => {
+      const { data: procedure } = await readResource<fhir4.Procedure>("Procedure", procedureId);
+      if (procedure.status !== "not-done") {
+        throw new Error("中止した回だけを予定に戻せます。");
+      }
+      return postBundle(buildRadiotherapyFractionRestoreBundle(procedure));
+    },
     onSuccess: () => invalidateRadiotherapy(queryClient),
   });
 }
