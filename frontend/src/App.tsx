@@ -219,9 +219,9 @@ function App() {
             <Link to="/transfusion-worklist" className="row-menu__item">
               輸血一覧
             </Link>
-            {/* 放射線治療は治療コースが数週間続くので、日付ではなく進行中 / 終了・中止で並べる。 */}
+            {/* 放射線治療は装置 × 時刻のカレンダーで照射の予定と実績を見る(右に治療コースの一覧)。 */}
             <Link to="/radiotherapy-worklist" className="row-menu__item">
-              放射線治療一覧
+              放射線治療カレンダー
             </Link>
             {/* リハビリは他の部門一覧と違い「その日に効いている期間オーダー」を並べる
                 (1 オーダーが数か月続き、実施が日々積み上がる)。 */}

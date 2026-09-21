@@ -851,6 +851,7 @@ export interface RadiotherapyPhaseSummary {
   status: "active" | "revoked";
   /** 「X線 VMAT」。 */
   methodLabel: string;
+  deviceCode: string;
   /** 照射技法の coding。照射記録が「照射方法」として写す(§6.1)。 */
   techniqueCoding?: fhir4.Coding;
   deviceName: string;
@@ -910,6 +911,7 @@ export function summarizeRadiotherapyOrder(sr: fhir4.ServiceRequest): Radiothera
             },
           }
         : {}),
+      deviceCode: phase.device.code,
       deviceName: phase.device.name,
       fractions,
       ...(perWeek > 0 ? { fractionsPerWeek: perWeek } : {}),

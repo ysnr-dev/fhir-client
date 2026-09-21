@@ -18077,3 +18077,124 @@ button.chemo-calendar__cell[draggable="true"] {
 .radiotherapy-summary__value {
   white-space: pre-wrap;
 }
+
+/* ---- 放射線治療カレンダー ---- */
+/* 格子と右のパネルは手術カレンダーのクラスをそのまま使い、照射のカードだけ足す。 */
+
+/* 列見出しに件数(小さい文字)を添えるぶん、行の高さが時刻の軸の見出しと 1px 食い違い、
+   格子が縦にずれる。行の高さを決めて両方を揃える。 */
+.radiotherapy-calendar .surgery-calendar__col-head {
+  line-height: 1.5;
+}
+
+/* 照射は 1 回 15 分前後で背が低いので、時刻・状態・患者・回を 1 行に詰める。 */
+.radiotherapy-calendar__card {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.radiotherapy-calendar__card-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.radiotherapy-calendar__card-count {
+  flex: none;
+  color: var(--text);
+}
+
+.radiotherapy-calendar__card .surgery-calendar__card-actions {
+  position: static;
+  flex: none;
+}
+
+.radiotherapy-calendar__card .surgery-calendar__card-actions > button {
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+/* 時刻を持たない照射。格子に置けないので列の見出しの下に並べる。
+   **高さを固定する** —— 中身のある列だけ背が伸びると、その列の格子が下へずれて時刻の軸と
+   合わなくなる。件数が多い日はこの中でスクロールさせる。 */
+.radiotherapy-calendar__untimed {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 56px;
+  padding: 2px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 時刻の軸のぶん。何の置き場かが分かるように見出しだけ置く。 */
+.radiotherapy-calendar__untimed--axis {
+  align-items: flex-end;
+  justify-content: center;
+  padding-right: 6px;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.radiotherapy-calendar__card--inline {
+  display: flex;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.radiotherapy-calendar__count {
+  margin-left: 6px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.radiotherapy-calendar__week-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 2px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* 治療コースのカードの操作(受付・治療開始・予定登録・終了・サマリー)。 */
+.radiotherapy-calendar__course-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.radiotherapy-calendar__course-actions button {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+/* 一括登録: 曜日のチェックと、割り付けた照射予定の表(30 行前後)。 */
+.radiotherapy-plan__weekdays {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.radiotherapy-plan__table {
+  flex: 1 1 100%;
+  max-height: 320px;
+  overflow-y: auto;
+}

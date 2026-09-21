@@ -14,7 +14,7 @@ import {
 //
 //   ServiceRequest(治療処方)
 //    └ basedOn ← Procedure (1 回の照射)
-//         status     = completed(照射した) | not-done(中止した回)
+//         status     = preparation(照射予定) | completed(照射した) | not-done(中止した回)
 //         statusReason = 中止の理由(休止・中止理由マスタ)
 //         category   = order-type|radiotherapy ＋ radiotherapy-procedure|fraction
 //         code       = 照射方法(モダリティ + 照射技法の写し。照射録の法定項目)
@@ -24,6 +24,11 @@ import {
 //         extension[radiotherapy-fraction]
 //           phaseId / fractionNumber / imageGuidance
 //           doseDeliveredToVolume ×M { volume(volumeId), dose(Gy) }
+//
+// **照射予定も同じ Procedure で持つ**(status=preparation)。部門が処方の回数ぶんを一括で
+// 作り、当日は予定を開いて実績に書き換える(同じ Procedure への PUT。§7)。予約枠(Slot)を
+// 使わないのは手術と同じ判断で、照射の時間割は装置ごとに部門が組み、休止のたびにまとめて
+// ずれるため(docs/surgery-calendar-design.md §1)。
 //
 // リハビリ・栄養指導と同じ「期間継続型」なので、**照射しても進捗 Task は動かさない**。
 // Task は「部門の受け入れ状態」(計画中 → 治療中 → 終了)で、治療中の間に照射が積み上がる
@@ -66,6 +71,8 @@ export const IMAGE_GUIDANCE_OPTIONS = [
 // ---- 実施入力フォームの値 ----
 
 export interface RadiotherapyFractionFormValues {
+  /** 照射予定から開いたときの Procedure.id。登録はその予定を実績に書き換える(PUT)。 */
+  plannedId?: string;
   performedDate: string;
   /** 照射の開始・終了時刻(HH:mm)。開始だけでもよい。 */
   startTime: string;
@@ -96,6 +103,12 @@ export function nextRadiotherapyFractionForm(
   summary: RadiotherapyOrderSummary,
   fractions: RadiotherapyFractionDisplay[],
 ): RadiotherapyFractionFormValues {
+  // 照射予定があれば、いちばん早い予定を実績に書き換える(予定を残したまま別の記録を足さない)。
+  const planned = fractions
+    .filter((fraction) => fraction.planned)
+    .sort((a, b) => a.performedAt.localeCompare(b.performedAt))[0];
+  if (planned) return radiotherapyFractionFormFromPlanned(summary, planned);
+
   const done = deliveredCountByPhase(fractions);
   const phase =
     summary.phases.find((p) => p.status === "active" && (done.get(p.phaseId) ?? 0) < p.fractions) ??
@@ -111,11 +124,37 @@ export function nextRadiotherapyFractionForm(
     doses: Object.fromEntries(
       (phase?.doses ?? []).map((dose) => [dose.volumeId, String(dose.fractionDose)]),
     ),
-    device: phase?.deviceName ? { code: "", name: phase.deviceName } : EMPTY_CODED,
+    device: phase?.deviceName ? { code: phase.deviceCode, name: phase.deviceName } : EMPTY_CODED,
     imageGuidance: "",
     performerId: "",
     performerName: "",
     note: "",
+    notDone: false,
+    notDoneReason: EMPTY_CODED,
+  };
+}
+
+/** 照射予定から実施入力を開くときの初期値。日時・Phase・回・装置は予定のもの、線量は処方の値。 */
+export function radiotherapyFractionFormFromPlanned(
+  summary: RadiotherapyOrderSummary,
+  planned: RadiotherapyFractionDisplay,
+): RadiotherapyFractionFormValues {
+  const phase = summary.phases.find((p) => p.phaseId === planned.phaseId);
+  return {
+    plannedId: planned.id,
+    performedDate: planned.performedDate || today(),
+    startTime: planned.startTime,
+    endTime: planned.endTime,
+    phaseId: planned.phaseId,
+    fractionNumber: String(planned.fractionNumber || 1),
+    doses: Object.fromEntries(
+      (phase?.doses ?? []).map((dose) => [dose.volumeId, String(dose.fractionDose)]),
+    ),
+    device: { code: planned.deviceCode, name: planned.deviceName },
+    imageGuidance: "",
+    performerId: "",
+    performerName: "",
+    note: planned.note,
     notDone: false,
     notDoneReason: EMPTY_CODED,
   };
@@ -278,22 +317,180 @@ function buildFractionProcedure(
   return procedure;
 }
 
-/** 1 回ぶんの照射登録。Procedure を 1 件 POST するだけで、進捗 Task は動かさない。 */
+/**
+ * 1 回ぶんの照射登録。進捗 Task は動かさない。照射予定から開いたときはその予定を実績に
+ * 書き換え(PUT)、予定が無ければ新しく足す(POST)。
+ */
 export function buildRadiotherapyFractionBundle(
   values: RadiotherapyFractionFormValues,
   order: fhir4.ServiceRequest,
 ): fhir4.Bundle {
   const summary = summarizeRadiotherapyOrder(order);
+  const resource = buildFractionProcedure(values, order, summary, `ServiceRequest/${order.id ?? ""}`);
+  if (values.plannedId) resource.id = values.plannedId;
   return {
     resourceType: "Bundle",
     type: "transaction",
     entry: [
-      {
-        resource: buildFractionProcedure(values, order, summary, `ServiceRequest/${order.id ?? ""}`),
-        request: { method: "POST", url: "Procedure" },
-      },
+      values.plannedId
+        ? { resource, request: { method: "PUT", url: `Procedure/${values.plannedId}` } }
+        : { resource, request: { method: "POST", url: "Procedure" } },
     ],
   };
+}
+
+// ---- 照射予定の一括登録(§7) ----
+
+/** 照射予定 1 回ぶん。一括登録の確認表の 1 行。 */
+export interface RadiotherapyPlanRow {
+  key: string;
+  date: string;
+  phaseId: string;
+  phaseLabel: string;
+  fractionNumber: number;
+}
+
+export interface RadiotherapyPlanOptions {
+  startDate: string;
+  /** 照射する曜日(0=日 〜 6=土)。 */
+  weekdays: number[];
+  /** 開始時刻(HH:mm)と 1 回の所要時間(分)。装置の時間割に載せるのに使う。 */
+  startTime: string;
+  durationMinutes: string;
+  device: RadiotherapyCoded;
+}
+
+export function emptyRadiotherapyPlanOptions(startDate: string): RadiotherapyPlanOptions {
+  return {
+    startDate,
+    weekdays: [1, 2, 3, 4, 5],
+    startTime: "09:00",
+    durationMinutes: "15",
+    device: EMPTY_CODED,
+  };
+}
+
+function nextDate(date: string): string {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * 残りの回数ぶんの照射予定を日付に割り付ける。処方の回数から、照射済みの回と登録済みの予定を
+ * 引いた残りを、Phase の並び順に、指定の曜日へ 1 日 1 回ずつ置く。祝日は知らないので、
+ * 確認表で行の日付を直すか外してもらう。
+ */
+export function draftRadiotherapyPlan(
+  summary: RadiotherapyOrderSummary,
+  fractions: RadiotherapyFractionDisplay[],
+  options: RadiotherapyPlanOptions,
+): RadiotherapyPlanRow[] {
+  if (!options.startDate || options.weekdays.length === 0) return [];
+
+  const taken = new Map<string, number>();
+  for (const fraction of fractions) {
+    if (fraction.notDone) continue;
+    taken.set(fraction.phaseId, Math.max(taken.get(fraction.phaseId) ?? 0, 0) + 1);
+  }
+
+  const rows: RadiotherapyPlanRow[] = [];
+  let date = options.startDate;
+  // 曜日の指定が空でなければ必ず進むが、念のため上限を置く。
+  let guard = 0;
+  for (const phase of summary.phases) {
+    if (phase.status !== "active") continue;
+    const from = taken.get(phase.phaseId) ?? 0;
+    for (let number = from + 1; number <= phase.fractions; number += 1) {
+      while (!options.weekdays.includes(new Date(`${date}T00:00:00`).getDay()) && guard < 5000) {
+        date = nextDate(date);
+        guard += 1;
+      }
+      rows.push({
+        key: `${phase.phaseId}:${number}`,
+        date,
+        phaseId: phase.phaseId,
+        phaseLabel: phase.label,
+        fractionNumber: number,
+      });
+      date = nextDate(date);
+    }
+  }
+  return rows;
+}
+
+function addMinutes(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const total = Math.min(h * 60 + m + minutes, 23 * 60 + 59);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** 照射予定の一括登録。1 回 = Procedure(status=preparation)1 件を、1 つの transaction で作る。 */
+export function buildRadiotherapyPlanBundle(
+  rows: RadiotherapyPlanRow[],
+  options: RadiotherapyPlanOptions,
+  order: fhir4.ServiceRequest,
+): fhir4.Bundle {
+  const summary = summarizeRadiotherapyOrder(order);
+  const duration = Number(options.durationMinutes) || 15;
+  return {
+    resourceType: "Bundle",
+    type: "transaction",
+    entry: rows.map((row) => {
+      const resource = buildFractionProcedure(
+        {
+          performedDate: row.date,
+          startTime: options.startTime,
+          endTime: options.startTime ? addMinutes(options.startTime, duration) : "",
+          phaseId: row.phaseId,
+          fractionNumber: String(row.fractionNumber),
+          doses: {},
+          device: options.device,
+          imageGuidance: "",
+          performerId: "",
+          performerName: "",
+          note: "",
+          notDone: false,
+          notDoneReason: EMPTY_CODED,
+        },
+        order,
+        summary,
+        `ServiceRequest/${order.id ?? ""}`,
+      );
+      resource.status = "preparation";
+      return { resource, request: { method: "POST" as const, url: "Procedure" } };
+    }),
+  };
+}
+
+/** 照射予定の日時・装置を変える(予定のままの Procedure への PUT)。 */
+export function rescheduleRadiotherapyFraction(
+  procedure: fhir4.Procedure,
+  change: { date: string; startTime: string; endTime: string; device?: RadiotherapyCoded },
+): fhir4.Procedure {
+  const next: fhir4.Procedure = { ...procedure };
+  delete next.performedDateTime;
+  delete next.performedPeriod;
+  if (change.startTime) {
+    next.performedPeriod = {
+      start: toFhirDateTime(`${change.date}T${change.startTime}`),
+      ...(change.endTime ? { end: toFhirDateTime(`${change.date}T${change.endTime}`) } : {}),
+    };
+  } else {
+    next.performedDateTime = change.date;
+  }
+  if (change.device) {
+    next.usedCode = change.device.code
+      ? [
+          {
+            coding: [{ system: DEVICE_SYSTEM, code: change.device.code, display: change.device.name }],
+            text: change.device.name,
+          },
+        ]
+      : undefined;
+  }
+  return next;
 }
 
 /**
@@ -323,6 +520,12 @@ export interface RadiotherapyFractionDisplay {
   timeLabel: string;
   phaseId: string;
   fractionNumber: number;
+  /** 照射予定(まだ照射していない)。回数にも累積線量にも数えない。 */
+  planned: boolean;
+  /** 開始・終了時刻(HH:mm)。カレンダーの位置に使う。 */
+  startTime: string;
+  endTime: string;
+  deviceCode: string;
   /** 照射しなかった回。 */
   notDone: boolean;
   notDoneReason: string;
@@ -379,6 +582,7 @@ function toDisplay(procedure: fhir4.Procedure): RadiotherapyFractionDisplay {
   }
 
   const notDone = procedure.status === "not-done";
+  const planned = procedure.status === "preparation";
   const fractionNumber = sub("fractionNumber")?.valueInteger ?? 0;
   const total = Object.values(doses).reduce((max, value) => Math.max(max, value), 0);
 
@@ -389,6 +593,10 @@ function toDisplay(procedure: fhir4.Procedure): RadiotherapyFractionDisplay {
     timeLabel: startTime ? (endTime ? `${startTime}〜${endTime}` : startTime) : "",
     phaseId: sub("phaseId")?.valueString ?? "",
     fractionNumber,
+    planned,
+    startTime,
+    endTime,
+    deviceCode: procedure.usedCode?.[0]?.coding?.find((c) => c.system === DEVICE_SYSTEM)?.code ?? "",
     notDone,
     notDoneReason: procedure.statusReason?.text ?? procedure.statusReason?.coding?.[0]?.display ?? "",
     methodLabel: procedure.code?.text ?? "",
@@ -400,7 +608,7 @@ function toDisplay(procedure: fhir4.Procedure): RadiotherapyFractionDisplay {
     label: [
       shortDate(performedDate),
       fractionNumber ? `${fractionNumber}回目` : "",
-      notDone ? "未実施" : total ? `${formatDose(total)} Gy` : "",
+      planned ? "予定" : notDone ? "未実施" : total ? `${formatDose(total)} Gy` : "",
       procedure.performer?.[0]?.actor?.display ?? "",
     ]
       .filter(Boolean)
@@ -434,7 +642,7 @@ export function radiotherapyFractionsByOrderId(
 function deliveredCountByPhase(fractions: RadiotherapyFractionDisplay[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const fraction of fractions) {
-    if (fraction.notDone) continue;
+    if (fraction.notDone || fraction.planned) continue;
     counts.set(fraction.phaseId, (counts.get(fraction.phaseId) ?? 0) + 1);
   }
   return counts;
@@ -458,6 +666,9 @@ export interface RadiotherapyProgress {
   prescribed: number;
   /** 照射しなかった回(未実施として記録したもの)。 */
   notDone: number;
+  /** 照射予定(まだ照射していない)の件数と、その最初の日。 */
+  planned: number;
+  nextPlannedDate: string;
   /** 「12 / 30 回」。 */
   fractionLabel: string;
   volumes: RadiotherapyVolumeProgress[];
@@ -472,7 +683,8 @@ export function radiotherapyProgress(
   summary: RadiotherapyOrderSummary,
   fractions: RadiotherapyFractionDisplay[],
 ): RadiotherapyProgress {
-  const active = fractions.filter((f) => !f.notDone);
+  const active = fractions.filter((f) => !f.notDone && !f.planned);
+  const planned = fractions.filter((f) => f.planned);
   const prescribed = summary.phases
     .filter((phase) => phase.status === "active")
     .reduce((sum, phase) => sum + phase.fractions, 0);
@@ -496,7 +708,9 @@ export function radiotherapyProgress(
   return {
     delivered: active.length,
     prescribed,
-    notDone: fractions.length - active.length,
+    notDone: fractions.length - active.length - planned.length,
+    planned: planned.length,
+    nextPlannedDate: planned.map((f) => f.performedDate).sort()[0] ?? "",
     fractionLabel: `${active.length} / ${prescribed} 回`,
     volumes,
     lastDate: active[0]?.performedDate ?? "",

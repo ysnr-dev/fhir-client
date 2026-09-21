@@ -260,7 +260,9 @@ export function RadiotherapyOrderDetailPanel({
                   <td>{radiotherapyFractionPhaseLabel(summary, fraction.phaseId)}</td>
                   <td>{fraction.fractionNumber || "-"}</td>
                   <td>
-                    {fraction.notDone ? (
+                    {fraction.planned ? (
+                      <span className="micro-result__badge micro-result__badge--muted">予定</span>
+                    ) : fraction.notDone ? (
                       <span className="micro-result__badge">未実施</span>
                     ) : (
                       summary.volumes
@@ -275,6 +277,8 @@ export function RadiotherapyOrderDetailPanel({
                   <td>{[fraction.notDoneReason, fraction.note].filter(Boolean).join(" ") || "-"}</td>
                   {onCancelFraction && (
                     <td>
+                      {/* 予定の変更・削除はカレンダーから行う(ここは照射録の取消)。 */}
+                      {!fraction.planned && (
                       <button
                         type="button"
                         onClick={() => onCancelFraction(fraction.id)}
@@ -282,6 +286,7 @@ export function RadiotherapyOrderDetailPanel({
                       >
                         {cancellingFractionId === fraction.id ? "取消中..." : "取消"}
                       </button>
+                      )}
                     </td>
                   )}
                 </tr>

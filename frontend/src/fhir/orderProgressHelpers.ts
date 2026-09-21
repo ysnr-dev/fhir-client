@@ -128,7 +128,8 @@ function serviceRequestProgress(order: fhir4.ServiceRequest): OrderProgress {
 function performedDatesByOrderId(performs: fhir4.Procedure[]): Map<string, Set<string>> {
   const map = new Map<string, Set<string>>();
   for (const procedure of performs) {
-    if (procedure.status === "entered-in-error") continue;
+    // 取消と、まだ行っていない予定(放射線治療の照射予定)は実施に数えない。
+    if (procedure.status === "entered-in-error" || procedure.status === "preparation") continue;
     const date = (procedure.performedDateTime ?? procedure.performedPeriod?.start ?? "").slice(0, 10);
     if (!date) continue;
     for (const ref of procedure.basedOn ?? []) {

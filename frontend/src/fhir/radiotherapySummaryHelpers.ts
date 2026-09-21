@@ -83,7 +83,7 @@ export function draftRadiotherapyCourseSummary(
 ): RadiotherapyCourseSummaryFormValues {
   const summary = summarizeRadiotherapyOrder(order);
   const progress = radiotherapyProgress(summary, fractions);
-  const delivered = fractions.filter((fraction) => !fraction.notDone);
+  const delivered = fractions.filter((fraction) => !fraction.notDone && !fraction.planned);
   const dates = delivered.map((fraction) => fraction.performedDate).filter(Boolean).sort();
   const saved = existing ? parseRadiotherapyCourseSummary(existing, summary) : undefined;
 

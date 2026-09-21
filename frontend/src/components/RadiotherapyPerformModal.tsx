@@ -12,6 +12,7 @@ import {
   IMAGE_GUIDANCE_OPTIONS,
   buildRadiotherapyFractionBundle,
   nextRadiotherapyFractionForm,
+  radiotherapyFractionFormFromPlanned,
   radiotherapyFractionsByOrderId,
   radiotherapyProgress,
   switchRadiotherapyFractionPhase,
@@ -36,11 +37,19 @@ interface Props {
   order: fhir4.ServiceRequest;
   /** そのオーダーの照射記録(新しい順)。回数と累積線量の既定値に使う。 */
   fractions: RadiotherapyFractionDisplay[];
+  /** カレンダーの予定から開いたときの、その予定の Procedure.id。無ければいちばん早い予定か次の回。 */
+  plannedId?: string;
   patientName?: string;
   onClose: () => void;
 }
 
-export function RadiotherapyPerformModal({ order, fractions, patientName, onClose }: Props) {
+export function RadiotherapyPerformModal({
+  order,
+  fractions,
+  plannedId,
+  patientName,
+  onClose,
+}: Props) {
   const register = useRegisterRadiotherapyFraction();
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const { practitioners, error: practitionersError } = usePractitionerOptions();
@@ -50,11 +59,16 @@ export function RadiotherapyPerformModal({ order, fractions, patientName, onClos
   const summary = useMemo(() => summarizeRadiotherapyOrder(order), [order]);
   const progress = useMemo(() => radiotherapyProgress(summary, fractions), [summary, fractions]);
 
-  const [values, setValues] = useState<RadiotherapyFractionFormValues>(() => ({
-    ...nextRadiotherapyFractionForm(summary, fractions),
-    performerId: practitionerId ?? "",
-    performerName: practitioner ? practitionerDisplayName(practitioner) : "",
-  }));
+  const [values, setValues] = useState<RadiotherapyFractionFormValues>(() => {
+    const planned = fractions.find((fraction) => fraction.planned && fraction.id === plannedId);
+    return {
+      ...(planned
+        ? radiotherapyFractionFormFromPlanned(summary, planned)
+        : nextRadiotherapyFractionForm(summary, fractions)),
+      performerId: practitionerId ?? "",
+      performerName: practitioner ? practitionerDisplayName(practitioner) : "",
+    };
+  });
   const [validationError, setValidationError] = useState("");
 
   const update = makeFieldUpdater(setValues);

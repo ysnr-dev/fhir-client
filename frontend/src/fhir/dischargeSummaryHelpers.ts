@@ -200,7 +200,13 @@ function orderDisplayName(
 function performedDateByOrder(procedures: fhir4.Procedure[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const procedure of procedures) {
-    if (procedure.status === "entered-in-error" || procedure.status === "not-done") continue;
+    if (
+      procedure.status === "entered-in-error" ||
+      procedure.status === "not-done" ||
+      procedure.status === "preparation"
+    ) {
+      continue;
+    }
     if (procedure.partOf?.length) continue;
     const orderId = procedure.basedOn?.[0]?.reference?.split("/")[1] ?? "";
     const at = (procedure.performedDateTime ?? procedure.performedPeriod?.start ?? "").slice(0, 10);

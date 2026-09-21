@@ -3,39 +3,36 @@ import { Link } from "react-router-dom";
 import { radiotherapyStopReasonHooks } from "../api/masterQueries";
 import {
   useCancelRadiotherapyFraction,
+  useDeleteRadiotherapyPlanned,
   useRadiotherapyProcedures,
   useRadiotherapyWorklist,
   useUpdateRadiotherapyTaskStatus,
+  type RadiotherapyCalendarEntry,
   type RadiotherapyWorklistRow,
   type RadiotherapyWorklistView,
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { PatientKana } from "../components/PatientRowCells";
 import {
-  PatientKana,
-  PatientProfileCells,
-  PatientProfileHeadCells,
-} from "../components/PatientRowCells";
-import { RadiotherapyOrderDetailPanel } from "../components/RadiotherapyOrderDetailPanel";
+  RadiotherapyCalendar,
+  type RadiotherapyCalendarMode,
+} from "../components/RadiotherapyCalendar";
 import { RadiotherapyCourseSummaryModal } from "../components/RadiotherapyCourseSummaryModal";
+import { RadiotherapyOrderDetailPanel } from "../components/RadiotherapyOrderDetailPanel";
 import { RadiotherapyPerformModal } from "../components/RadiotherapyPerformModal";
+import {
+  RadiotherapyPlanModal,
+  RadiotherapyRescheduleModal,
+} from "../components/RadiotherapyPlanModal";
 import { RowMenu } from "../components/RowMenu";
 import { displayName } from "../fhir/patientHelpers";
-import {
-  SETTING_OPTIONS,
-  orderContextSummary,
-  prescriptionRequester,
-} from "../fhir/prescriptionHelpers";
-import {
-  RADIOTHERAPY_INTENT_OPTIONS,
-  summarizeRadiotherapyOrder,
-} from "../fhir/radiotherapyOrderHelpers";
+import { summarizeRadiotherapyOrder } from "../fhir/radiotherapyOrderHelpers";
 import {
   radiotherapyProgress,
   type RadiotherapyFractionDisplay,
 } from "../fhir/radiotherapyResultHelpers";
 import {
-  RADIOTHERAPY_TASK_STATUS_OPTIONS,
   radiotherapyTaskActions,
   radiotherapyTaskStatus,
   radiotherapyTaskStatusDisplay,
@@ -45,35 +42,43 @@ import {
 import { today } from "../lib/dates";
 import { useReturnLinkState } from "../returnTo";
 
-// 放射線治療一覧(部門ワークリスト)。
+// 放射線治療カレンダー(部門の画面。docs/radiotherapy-order-design.md §7)。
 //
-// 治療コースは数週間続くので、他科依頼一覧と同じく日付ではなく ServiceRequest.status で
-// 切る(docs/radiotherapy-order-design.md §4.1)。
+// 左が**治療装置 × 時刻**の格子(日)/ 治療装置 × 日(週)で、照射の予定と実績が並ぶ。
+// 右が治療コースの一覧で、受付・治療開始・**照射予定の一括登録**・休止・終了・サマリーは
+// ここから行う。手術カレンダーと同じ「格子 + 右のパネル」の構成。
 //
-// - 進行中     … status=active(処方済・計画中・治療中)。いま抱えているコース。
-// - 終了・中止 … status=completed / revoked の直近ぶん(登録日の降順)。
+// 日々の流れ: コースを受け付けて治療を始める → 「予定登録」で処方の回数ぶんの照射予定を
+// 作る → 当日は格子の予定の「実施」を押し、入っている値を確かめて登録する。
 //
-// 進捗の変更は Task と ServiceRequest.status を同じ transaction で書く。終了と中止は
-// 日付(と中止理由)を聞いてから進める。
+// 進捗の変更は Task と ServiceRequest.status を同じ transaction で書く(§4)。
 
-interface Filters {
-  status: string;
-  intent: string;
-  setting: string;
+interface Target {
+  order: fhir4.ServiceRequest;
+  patient?: fhir4.Patient;
 }
-
-const EMPTY_FILTERS: Filters = { status: "", intent: "", setting: "" };
 
 interface Terminating {
   row: RadiotherapyWorklistRow;
   action: RadiotherapyTaskAction;
 }
 
+const EMPTY_FRACTIONS: RadiotherapyFractionDisplay[] = [];
+
 export function RadiotherapyWorklistPage() {
+  const [date, setDate] = useState(today);
+  const [mode, setMode] = useState<RadiotherapyCalendarMode>("day");
   const [view, setView] = useState<RadiotherapyWorklistView>("open");
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
-  const [viewingId, setViewingId] = useState<string | null>(null);
+
+  // 開いている対象は行そのものではなく id で覚えておき、読み直しのたびに引き直す。
+  // カレンダーの照射は、右の一覧が別のタブ(終了・中止)でも開けるよう、オーダーごと持つ。
+  const [viewing, setViewing] = useState<Target | null>(null);
+  const [planningId, setPlanningId] = useState<string | null>(null);
+  const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [terminating, setTerminating] = useState<Terminating | null>(null);
+  // 実施入力。格子の予定から開いたときはその予定を、コースから開いたときは次の回を入れる。
+  const [performing, setPerforming] = useState<(Target & { plannedId?: string }) | null>(null);
+  const [rescheduling, setRescheduling] = useState<RadiotherapyCalendarEntry | null>(null);
 
   useEffect(() => {
     document.body.classList.add("page-wide");
@@ -81,191 +86,95 @@ export function RadiotherapyWorklistPage() {
   }, []);
 
   const worklist = useRadiotherapyWorklist(view);
-  // 照射記録と治療終了サマリー。進行中は回数と累積線量に、終了・中止はサマリーの有無に使う。
   const procedures = useRadiotherapyProcedures();
   const updateStatus = useUpdateRadiotherapyTaskStatus();
   const cancelFraction = useCancelRadiotherapyFraction();
-  const [performingId, setPerformingId] = useState<string | null>(null);
-  const [summarizingId, setSummarizingId] = useState<string | null>(null);
+  const deletePlanned = useDeleteRadiotherapyPlanned();
 
-  const allRows = useMemo(() => worklist.data?.rows ?? [], [worklist.data]);
-  const rows = useMemo(() => allRows.filter((row) => matchesFilters(row, filters)), [allRows, filters]);
-  const viewing = allRows.find((row) => row.order.id === viewingId);
-  const performing = allRows.find((row) => row.order.id === performingId);
-  const summarizing = allRows.find((row) => row.order.id === summarizingId);
+  const rows = useMemo(() => worklist.data?.rows ?? [], [worklist.data]);
+  const rowOf = (orderId: string | null | undefined) => rows.find((row) => row.order.id === orderId);
   const fractionsOf = (orderId: string | undefined) =>
     procedures.data?.fractions.get(orderId ?? "") ?? EMPTY_FRACTIONS;
   const summaryOf = (orderId: string | undefined) => procedures.data?.summaries.get(orderId ?? "");
+
+  const planning = rowOf(planningId);
+  const summarizing = rowOf(summarizingId);
 
   function handleAction(row: RadiotherapyWorklistRow, action: RadiotherapyTaskAction) {
     if (action.asksTermination) return setTerminating({ row, action });
     updateStatus.mutate({ order: row.order, task: row.task, status: action.next });
   }
 
-  // 進行中のビューでは終了・中止を選べない(行が無い)ので、選択肢をビューに合わせる。
-  const statusOptions = RADIOTHERAPY_TASK_STATUS_OPTIONS.filter((o) =>
-    view === "open"
-      ? o.code !== "completed" && o.code !== "cancelled"
-      : o.code === "completed" || o.code === "cancelled",
-  );
+  function handleDeletePlanned(ids: string[]) {
+    if (ids.length > 0) deletePlanned.mutate(ids);
+  }
 
   return (
     <div className="page">
       <div className="page__header">
-        <h1>放射線治療一覧</h1>
+        <h1>放射線治療カレンダー</h1>
       </div>
-
-      <div className="order-select__tabs" role="tablist">
-        {(
-          [
-            ["open", "進行中"],
-            ["closed", "終了・中止"],
-          ] as const
-        ).map(([code, label]) => (
-          <button
-            key={code}
-            type="button"
-            role="tab"
-            aria-selected={view === code}
-            className={view === code ? "order-select__tab is-active" : "order-select__tab"}
-            onClick={() => {
-              setView(code);
-              setFilters((f) => ({ ...f, status: "" }));
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <form className="patient-search-form" onSubmit={(e) => e.preventDefault()}>
-        <label>
-          ステータス
-          <select
-            value={filters.status}
-            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-          >
-            <option value="">すべて</option>
-            {statusOptions.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.display}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          治療目的
-          <select
-            value={filters.intent}
-            onChange={(e) => setFilters({ ...filters, intent: e.target.value })}
-          >
-            <option value="">すべて</option>
-            {RADIOTHERAPY_INTENT_OPTIONS.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.display}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          入外区分
-          <select
-            value={filters.setting}
-            onChange={(e) => setFilters({ ...filters, setting: e.target.value })}
-          >
-            <option value="">すべて</option>
-            {SETTING_OPTIONS.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.display}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="patient-search-form__actions">
-          <button type="button" onClick={() => setFilters(EMPTY_FILTERS)}>
-            クリア
-          </button>
-        </div>
-      </form>
 
       <ErrorBanner error={worklist.error} />
       <ErrorBanner error={procedures.error} />
       <ErrorBanner error={updateStatus.error} />
       <ErrorBanner error={cancelFraction.error} />
+      <ErrorBanner error={deletePlanned.error} />
 
-      {worklist.data?.truncated && (
-        <p className="error-banner__line error-banner__line--error" role="status">
-          放射線治療が多いため、一部のみ表示しています。
-        </p>
-      )}
-
-      {worklist.isLoading ? (
-        <p>読み込み中...</p>
-      ) : (
-        <>
-          <div className="lab-worklist-wrap sticky-table-wrap">
-            <table className="lab-worklist sticky-table">
-              <thead>
-                <tr>
-                  <th className="sticky-table__fix-1">患者番号</th>
-                  <th className="sticky-table__fix-2">患者氏名</th>
-                  <PatientProfileHeadCells />
-                  <th className="lab-worklist__compact">コース</th>
-                  <th className="lab-worklist__compact">目的</th>
-                  <th>部位</th>
-                  <th>処方</th>
-                  <th className="lab-worklist__compact">技法</th>
-                  <th className="lab-worklist__compact">開始予定日</th>
-                  <th className="lab-worklist__compact">{view === "open" ? "照射" : "サマリー"}</th>
-                  <th className="lab-worklist__compact">{view === "closed" ? "終了日" : "入外"}</th>
-                  <th>担当医</th>
-                  <th>依頼科 | 依頼医師</th>
-                  <th className="lab-worklist__compact">ステータス</th>
-                  <th className="lab-worklist__actions sticky-table__fix-actions"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <OrderRow
-                    key={row.order.id}
-                    row={row}
-                    view={view}
-                    fractions={fractionsOf(row.order.id)}
-                    courseSummary={summaryOf(row.order.id)}
-                    pending={updateStatus.isPending}
-                    onView={() => setViewingId(row.order.id ?? null)}
-                    onPerform={() => setPerformingId(row.order.id ?? null)}
-                    onSummarize={() => setSummarizingId(row.order.id ?? null)}
-                    onAction={(action) => handleAction(row, action)}
-                  />
-                ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={17} className="master-search__empty">
-                      {allRows.length === 0
-                        ? view === "open"
-                          ? "進行中の放射線治療はありません"
-                          : "終了・中止した放射線治療はありません"
-                        : "絞り込みに該当する放射線治療がありません"}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <p className="order-select__muted lab-worklist__count">{rows.length} 件</p>
-        </>
-      )}
+      <RadiotherapyCalendar
+        date={date}
+        onDateChange={setDate}
+        mode={mode}
+        onModeChange={setMode}
+        onPerform={(entry) => {
+          if (entry.order) {
+            setPerforming({ order: entry.order, patient: entry.patient, plannedId: entry.fraction.id });
+          }
+        }}
+        onReschedule={setRescheduling}
+        onDeletePlanned={(entry) => handleDeletePlanned([entry.fraction.id])}
+        onView={(entry) => {
+          if (entry.order) setViewing({ order: entry.order, patient: entry.patient });
+        }}
+        panel={
+          <CoursePanel
+            view={view}
+            onViewChange={setView}
+            rows={rows}
+            loading={worklist.isLoading}
+            truncated={Boolean(worklist.data?.truncated)}
+            fractionsOf={fractionsOf}
+            hasSummary={(orderId) => Boolean(summaryOf(orderId))}
+            pending={updateStatus.isPending || deletePlanned.isPending}
+            onView={(row) => setViewing({ order: row.order, patient: row.patient })}
+            onPlan={(row) => setPlanningId(row.order.id ?? null)}
+            onPerform={(row) => setPerforming({ order: row.order, patient: row.patient })}
+            onSummarize={(row) => setSummarizingId(row.order.id ?? null)}
+            onAction={handleAction}
+            onClearPlanned={(row) =>
+              handleDeletePlanned(
+                fractionsOf(row.order.id)
+                  .filter((fraction) => fraction.planned)
+                  .map((fraction) => fraction.id),
+              )
+            }
+          />
+        }
+      />
 
       {viewing && (
         <Modal
           title={`放射線治療内容 - ${viewing.patient ? displayName(viewing.patient) : ""}`}
-          onClose={() => setViewingId(null)}
+          onClose={() => setViewing(null)}
           className="modal--wide"
         >
           <RadiotherapyOrderDetailPanel
-            serviceRequest={viewing.order}
-            taskStatus={radiotherapyTaskStatus(viewing.task)}
+            serviceRequest={rowOf(viewing.order.id)?.order ?? viewing.order}
+            taskStatus={
+              rowOf(viewing.order.id)
+                ? radiotherapyTaskStatus(rowOf(viewing.order.id)?.task)
+                : undefined
+            }
             fractions={fractionsOf(viewing.order.id)}
             courseSummary={summaryOf(viewing.order.id)}
             onCancelFraction={(fractionId) => cancelFraction.mutate(fractionId)}
@@ -274,12 +183,30 @@ export function RadiotherapyWorklistPage() {
         </Modal>
       )}
 
+      {planning && (
+        <RadiotherapyPlanModal
+          order={planning.order}
+          fractions={fractionsOf(planning.order.id)}
+          patientName={planning.patient ? displayName(planning.patient) : undefined}
+          onClose={() => setPlanningId(null)}
+        />
+      )}
+
       {performing && (
         <RadiotherapyPerformModal
           order={performing.order}
           fractions={fractionsOf(performing.order.id)}
+          plannedId={performing.plannedId}
           patientName={performing.patient ? displayName(performing.patient) : undefined}
-          onClose={() => setPerformingId(null)}
+          onClose={() => setPerforming(null)}
+        />
+      )}
+
+      {rescheduling && (
+        <RadiotherapyRescheduleModal
+          fraction={rescheduling.fraction}
+          patientName={rescheduling.patient ? displayName(rescheduling.patient) : undefined}
+          onClose={() => setRescheduling(null)}
         />
       )}
 
@@ -294,120 +221,226 @@ export function RadiotherapyWorklistPage() {
       )}
 
       {terminating && (
-        <TerminationModal
-          terminating={terminating}
-          onClose={() => setTerminating(null)}
-        />
+        <TerminationModal terminating={terminating} onClose={() => setTerminating(null)} />
       )}
     </div>
   );
 }
 
-function matchesFilters(row: RadiotherapyWorklistRow, filters: Filters): boolean {
-  const summary = summarizeRadiotherapyOrder(row.order);
-  if (filters.status && radiotherapyTaskStatus(row.task) !== filters.status) return false;
-  if (filters.intent && summary.intent !== filters.intent) return false;
-  if (
-    filters.setting &&
-    SETTING_OPTIONS.find((o) => o.code === filters.setting)?.display !== summary.settingDisplay
-  ) {
-    return false;
-  }
-  return true;
-}
-
-const EMPTY_FRACTIONS: RadiotherapyFractionDisplay[] = [];
-
-function OrderRow({
-  row,
+// 右のパネル。治療コースの一覧(進行中 / 終了・中止)。
+function CoursePanel({
   view,
-  fractions,
-  courseSummary,
+  onViewChange,
+  rows,
+  loading,
+  truncated,
+  fractionsOf,
+  hasSummary,
   pending,
   onView,
+  onPlan,
   onPerform,
   onSummarize,
   onAction,
+  onClearPlanned,
+}: {
+  view: RadiotherapyWorklistView;
+  onViewChange: (view: RadiotherapyWorklistView) => void;
+  rows: RadiotherapyWorklistRow[];
+  loading: boolean;
+  truncated: boolean;
+  fractionsOf: (orderId: string | undefined) => RadiotherapyFractionDisplay[];
+  hasSummary: (orderId: string | undefined) => boolean;
+  pending: boolean;
+  onView: (row: RadiotherapyWorklistRow) => void;
+  onPlan: (row: RadiotherapyWorklistRow) => void;
+  onPerform: (row: RadiotherapyWorklistRow) => void;
+  onSummarize: (row: RadiotherapyWorklistRow) => void;
+  onAction: (row: RadiotherapyWorklistRow, action: RadiotherapyTaskAction) => void;
+  onClearPlanned: (row: RadiotherapyWorklistRow) => void;
+}) {
+  return (
+    <aside className="surgery-pending">
+      <div className="surgery-pending__head">
+        <span className="surgery-pending__title">治療コース</span>
+        <span className="surgery-pending__count">{rows.length} 件</span>
+      </div>
+      <div className="order-select__tabs" role="tablist">
+        {(
+          [
+            ["open", "進行中"],
+            ["closed", "終了・中止"],
+          ] as const
+        ).map(([code, label]) => (
+          <button
+            key={code}
+            type="button"
+            role="tab"
+            aria-selected={view === code}
+            className={view === code ? "order-select__tab is-active" : "order-select__tab"}
+            onClick={() => onViewChange(code)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {truncated && (
+        <p className="order-select__muted" role="status">
+          コースが多いため、一部のみ表示しています。
+        </p>
+      )}
+      {loading ? (
+        <p className="order-select__muted">読み込み中...</p>
+      ) : rows.length === 0 ? (
+        <p className="surgery-pending__empty">
+          {view === "open" ? "進行中の放射線治療はありません。" : "終了・中止した放射線治療はありません。"}
+        </p>
+      ) : (
+        <ul className="surgery-pending__list">
+          {rows.map((row) => (
+            <li key={row.order.id}>
+              <CourseCard
+                row={row}
+                fractions={fractionsOf(row.order.id)}
+                hasSummary={hasSummary(row.order.id)}
+                pending={pending}
+                onView={() => onView(row)}
+                onPlan={() => onPlan(row)}
+                onPerform={() => onPerform(row)}
+                onSummarize={() => onSummarize(row)}
+                onAction={(action) => onAction(row, action)}
+                onClearPlanned={() => onClearPlanned(row)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </aside>
+  );
+}
+
+function CourseCard({
+  row,
+  fractions,
+  hasSummary,
+  pending,
+  onView,
+  onPlan,
+  onPerform,
+  onSummarize,
+  onAction,
+  onClearPlanned,
 }: {
   row: RadiotherapyWorklistRow;
-  view: RadiotherapyWorklistView;
   fractions: RadiotherapyFractionDisplay[];
-  courseSummary?: fhir4.Procedure;
+  hasSummary: boolean;
   pending: boolean;
   onView: () => void;
+  onPlan: () => void;
   onPerform: () => void;
   onSummarize: () => void;
   onAction: (action: RadiotherapyTaskAction) => void;
+  onClearPlanned: () => void;
 }) {
   const returnLinkState = useReturnLinkState();
   const { order, patient } = row;
   const summary = summarizeRadiotherapyOrder(order);
   const status = radiotherapyTaskStatus(row.task);
   const actions = radiotherapyTaskActions(status);
-  const secondaryActions = actions.filter((action) => action.secondary);
   const progress = radiotherapyProgress(summary, fractions);
+  const closed = status === "completed" || status === "cancelled";
+  // 予定を作れるのは受付後(計画中・治療中・休止)。残りが無ければ出さない。
+  const canPlan =
+    (status === "accepted" || status === "in-progress" || status === "on-hold") &&
+    progress.delivered + progress.planned < progress.prescribed;
 
   return (
-    <tr>
-      <td className="sticky-table__fix-1">{patient?.identifier?.[0]?.value ?? "-"}</td>
-      <td className="sticky-table__fix-2">
+    <div className="surgery-pending__card">
+      <span className="surgery-pending__card-head">
+        <span className={`surgery-calendar__status is-${statusClass(status)}`}>
+          {radiotherapyTaskStatusDisplay(status)}
+        </span>
+        <span className="surgery-pending__card-when">
+          第{summary.courseNumber}コース {summary.intentDisplay}
+        </span>
+        <span className="surgery-pending__card-actions">
+          <RowMenu label="この放射線治療の操作" escapesClipping>
+            <button type="button" className="row-menu__item" onClick={onView}>
+              表示
+            </button>
+            {status === "in-progress" && (
+              <button type="button" className="row-menu__item" onClick={onPerform}>
+                照射入力
+              </button>
+            )}
+            {progress.planned > 0 && (
+              <button
+                type="button"
+                className="row-menu__item row-menu__item--danger"
+                disabled={pending}
+                onClick={onClearPlanned}
+              >
+                予定をすべて削除
+              </button>
+            )}
+            {actions
+              .filter((action) => action.secondary)
+              .map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  className={`row-menu__item${
+                    action.next === "cancelled" ? " row-menu__item--danger" : ""
+                  }`}
+                  disabled={pending}
+                  onClick={() => onAction(action)}
+                >
+                  {action.label}
+                </button>
+              ))}
+            {patient && (
+              <Link to={`/patients/${patient.id}/karte`} state={returnLinkState} className="row-menu__item">
+                カルテ表示
+              </Link>
+            )}
+          </RowMenu>
+        </span>
+      </span>
+
+      <span className="surgery-pending__card-patient">
         {patient ? (
           <>
-            <Link to={`/patients/${patient.id}/karte`} state={returnLinkState}>
-              {displayName(patient)}
-            </Link>
+            <span className="surgery-pending__card-mrn">{patient.identifier?.[0]?.value ?? "-"}</span>
+            <span className="surgery-pending__card-patient-name">{displayName(patient)}</span>
             <PatientKana patient={patient} />
           </>
         ) : (
           "-"
         )}
-      </td>
-      <PatientProfileCells patient={patient} />
-      <td className="lab-worklist__compact">第{summary.courseNumber}</td>
-      <td className="lab-worklist__compact">{summary.intentDisplay || "-"}</td>
-      <td>{summary.siteLabel || "-"}</td>
-      <td>{summary.doseLabel || "-"}</td>
-      <td className="lab-worklist__compact">{summary.techniqueLabel || "-"}</td>
-      <td className="lab-worklist__compact">{summary.startDate || "-"}</td>
-      {view === "open" ? (
-        <td className="lab-worklist__compact" title={progress.volumes.map((v) => `${v.label} ${v.doseLabel}`).join("\n")}>
-          {progress.fractionLabel}
-          {/* 処方の回数に達したコースは、終了の操作を促すために印を出す。 */}
-          {progress.finished && <span className="micro-result__badge">完了</span>}
-        </td>
-      ) : (
-        <td className="lab-worklist__compact">
-          {courseSummary ? (
-            "作成済"
-          ) : (
-            <span className="micro-result__badge">未作成</span>
-          )}
-        </td>
-      )}
-      <td className="lab-worklist__compact">
-        {view === "closed"
-          ? [summary.endedOn, summary.terminationReason].filter(Boolean).join(" ") || "-"
-          : summary.settingDisplay || "-"}
-      </td>
-      <td>{summary.practitionerName || order.requester?.display || "-"}</td>
-      <td>{orderContextSummary(prescriptionRequester(order)) || "-"}</td>
-      <td className="lab-worklist__compact">
-        <span className={`lab-worklist__status lab-worklist__status--${status}`}>
-          {radiotherapyTaskStatusDisplay(status)}
+      </span>
+      <span className="surgery-pending__card-name">
+        {summary.siteLabel} {summary.techniqueLabel}
+      </span>
+      <span className="surgery-pending__card-meta">{summary.doseLabel}</span>
+      <span className="surgery-pending__card-meta">
+        {closed
+          ? [summary.endedOn && `終了 ${summary.endedOn}`, summary.terminationReason]
+              .filter(Boolean)
+              .join(" ") || `照射 ${progress.fractionLabel}`
+          : `照射 ${progress.fractionLabel}${progress.planned ? `　予定 ${progress.planned} 回` : ""}${
+              progress.nextPlannedDate ? `（次回 ${progress.nextPlannedDate}）` : ""
+            }`}
+        {progress.finished && !closed && <span className="micro-result__badge">完了</span>}
+        {closed && !hasSummary && <span className="micro-result__badge">サマリー未作成</span>}
+      </span>
+      {summary.suspendedOn && (
+        <span className="surgery-pending__card-meta">
+          休止 {summary.suspendedOn} {summary.suspensionReason}
         </span>
-      </td>
-      <td className="lab-worklist__actions sticky-table__fix-actions">
-        {/* 照射入力・サマリーは状態を選ぶ操作ではないので、進捗ボタンとは別に出す。 */}
-        {status === "in-progress" && (
-          <button type="button" onClick={onPerform}>
-            照射入力
-          </button>
-        )}
-        {(status === "completed" || status === "cancelled") && (
-          <button type="button" onClick={onSummarize}>
-            {courseSummary ? "サマリー編集" : "サマリー"}
-          </button>
-        )}
+      )}
+
+      <span className="radiotherapy-calendar__course-actions">
         {actions
           .filter((action) => !action.secondary)
           .map((action) => (
@@ -415,29 +448,27 @@ function OrderRow({
               {action.label}
             </button>
           ))}
-        <button type="button" onClick={onView}>
-          表示
-        </button>
-        {secondaryActions.length > 0 && (
-          <RowMenu label="この放射線治療の操作" escapesClipping>
-            {secondaryActions.map((action) => (
-              <button
-                key={action.label}
-                type="button"
-                className={`row-menu__item${
-                  action.next === "cancelled" ? " row-menu__item--danger" : ""
-                }`}
-                disabled={pending}
-                onClick={() => onAction(action)}
-              >
-                {action.label}
-              </button>
-            ))}
-          </RowMenu>
+        {canPlan && (
+          <button type="button" onClick={onPlan}>
+            予定登録
+          </button>
         )}
-      </td>
-    </tr>
+        {closed && (
+          <button type="button" onClick={onSummarize}>
+            {hasSummary ? "サマリー編集" : "サマリー"}
+          </button>
+        )}
+      </span>
+    </div>
   );
+}
+
+/** 進捗の色。手術カレンダーの状態の色分け(受付済・進行中・実施済)に寄せる。 */
+function statusClass(status: RadiotherapyTaskStatus): string {
+  if (status === "in-progress") return "in-progress";
+  if (status === "completed" || status === "cancelled") return "completed";
+  if (status === "requested") return "requested";
+  return "accepted";
 }
 
 // 終了・中止・休止の入力。終了は日付だけ、中止と休止は理由(マスタ)と補足も聞く。

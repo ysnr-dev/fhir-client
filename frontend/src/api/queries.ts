@@ -381,6 +381,7 @@ import {
   buildRadiotherapyFractionCancelBundle,
   isRadiotherapyFraction,
   radiotherapyFractionsByOrderId,
+  rescheduleRadiotherapyFraction,
   type RadiotherapyFractionDisplay,
 } from "../fhir/radiotherapyResultHelpers";
 import {
@@ -12531,6 +12532,9 @@ export function useCancelRadiotherapyFraction() {
   });
 }
 
+/** 30 回のコースが 300 本ぶん。それ以上は読まない(一覧の回数が欠ける)。 */
+const RADIOTHERAPY_PROCEDURE_MAX_PAGES = 20;
+
 export interface RadiotherapyProcedures {
   /** オーダー id → 照射記録(新しい順)。 */
   fractions: Map<string, RadiotherapyFractionDisplay[]>;
@@ -12543,14 +12547,20 @@ export interface RadiotherapyProcedures {
  * オーダーごとに引かず患者をまたいで category でまとめて引き、オーダー id で振り分ける。
  */
 async function fetchRadiotherapyProcedures(): Promise<RadiotherapyProcedures> {
-  const params = new URLSearchParams();
-  params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
-  params.set("status:not", "entered-in-error");
-  params.set("_sort", "-date");
-  params.set("_count", "500");
-
-  const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
-  const procedures = resourcesOfType<fhir4.Procedure>(bundle, "Procedure");
+  // 照射予定を一括登録すると 1 コースで数十件になるので、ページを送って読み切る。
+  const procedures: fhir4.Procedure[] = [];
+  for (let page = 0; page < RADIOTHERAPY_PROCEDURE_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
+    params.set("status:not", "entered-in-error");
+    params.set("_sort", "-date");
+    params.set("_count", String(WORKLIST_PAGE));
+    params.set("_offset", String(page * WORKLIST_PAGE));
+    const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
+    const found = resourcesOfType<fhir4.Procedure>(bundle, "Procedure");
+    procedures.push(...found);
+    if (found.length < WORKLIST_PAGE) break;
+  }
   return {
     fractions: radiotherapyFractionsByOrderId(procedures.filter(isRadiotherapyFraction)),
     summaries: radiotherapyCourseSummariesByOrderId(procedures),
@@ -12571,6 +12581,110 @@ export function useSaveRadiotherapyCourseSummary() {
 
   return useMutation({
     mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+// ---- 放射線治療カレンダー(docs/radiotherapy-order-design.md §7) ----
+//
+// 格子に載せるのは照射の Procedure(予定・実績・未実施)。期間を date で切り、患者と治療処方を
+// _include で一緒に取る。コースの一覧(右のパネル)は部門一覧と同じ useRadiotherapyWorklist。
+
+export interface RadiotherapyCalendarEntry {
+  fraction: RadiotherapyFractionDisplay;
+  order?: fhir4.ServiceRequest;
+  patient?: fhir4.Patient;
+}
+
+async function fetchRadiotherapyCalendar(from: string, to: string): Promise<RadiotherapyCalendarEntry[]> {
+  const params = new URLSearchParams();
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
+  params.set("status:not", "entered-in-error");
+  params.append("date", `ge${from}`);
+  params.append("date", `le${to}`);
+  params.set("_count", String(WORKLIST_PAGE));
+  params.append("_include", "Procedure:subject");
+  params.append("_include", "Procedure:based-on");
+
+  const { data: bundle } = await searchResource<fhir4.Resource>("Procedure", params);
+  const procedures = resourcesOfType<fhir4.Procedure>(bundle, "Procedure").filter(isRadiotherapyFraction);
+  const patients = new Map(
+    resourcesOfType<fhir4.Patient>(bundle, "Patient").map((patient) => [patient.id ?? "", patient]),
+  );
+  const orders = new Map(
+    resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest").map((sr) => [sr.id ?? "", sr]),
+  );
+
+  const entries: RadiotherapyCalendarEntry[] = [];
+  for (const [orderId, fractions] of radiotherapyFractionsByOrderId(procedures)) {
+    const order = orders.get(orderId);
+    const patient = patients.get(order?.subject?.reference?.split("/").pop() ?? "");
+    for (const fraction of fractions) entries.push({ fraction, order, patient });
+  }
+  return entries;
+}
+
+export function useRadiotherapyCalendar(from: string, to: string) {
+  return useQuery({
+    queryKey: ["Procedure", "search", "radiotherapy-calendar", from, to],
+    queryFn: () => fetchRadiotherapyCalendar(from, to),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** 照射予定の一括登録(処方の回数ぶんの Procedure を 1 つの transaction で作る)。 */
+export function useRegisterRadiotherapyPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+/** 照射予定の日時・装置の変更。読み直してから PUT する(全置換なので古い版を書き戻さない)。 */
+export function useRescheduleRadiotherapyFraction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      procedureId,
+      ...change
+    }: {
+      procedureId: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      device?: { code: string; name: string };
+    }) => {
+      const { data: procedure } = await readResource<fhir4.Procedure>("Procedure", procedureId);
+      if (procedure.status !== "preparation") {
+        throw new Error("照射済みの記録の日時は変更できません。");
+      }
+      const next = rescheduleRadiotherapyFraction(procedure, change);
+      return postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [{ resource: next, request: { method: "PUT", url: `Procedure/${procedureId}` } }],
+      });
+    },
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+/**
+ * 照射予定の削除。**予定(preparation)は照射録ではない**ので物理削除でよい
+ * (照射した記録の取消は entered-in-error。useCancelRadiotherapyFraction)。
+ */
+export function useDeleteRadiotherapyPlanned() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (procedureIds: string[]) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: procedureIds.map((id) => ({
+          request: { method: "DELETE" as const, url: `Procedure/${id}` },
+        })),
+      }),
     onSuccess: () => invalidateRadiotherapy(queryClient),
   });
 }

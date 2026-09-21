@@ -2265,7 +2265,9 @@ function RadiotherapyOrderCardBody({
 }) {
   const summary = summarizeRadiotherapyOrder(serviceRequest);
   const progress = radiotherapyProgress(summary, fractions);
-  const recent = fractions.slice(0, RADIOTHERAPY_FRACTION_PREVIEW);
+  // カードに並べるのは実績(照射した回・照射しなかった回)だけ。予定は件数と次回の日付で出す。
+  const records = fractions.filter((fraction) => !fraction.planned);
+  const recent = records.slice(0, RADIOTHERAPY_FRACTION_PREVIEW);
 
   return (
     <>
@@ -2319,6 +2321,7 @@ function RadiotherapyOrderCardBody({
               ` 累積 ${progress.volumes
                 .map((volume) => `${volume.label} ${formatDose(volume.deliveredDose)} Gy`)
                 .join("、")}`}
+            {progress.planned > 0 && ` 予定 ${progress.planned} 回（次回 ${progress.nextPlannedDate}）`}
           </span>
         </div>
         {recent.map((fraction) => (
@@ -2330,9 +2333,9 @@ function RadiotherapyOrderCardBody({
             </span>
           </div>
         ))}
-        {fractions.length > recent.length && (
+        {records.length > recent.length && (
           <p className="karte-perform__note">
-            ほか {fractions.length - recent.length} 件(詳細で全件を表示)
+            ほか {records.length - recent.length} 件(詳細で全件を表示)
           </p>
         )}
       </section>
