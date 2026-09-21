@@ -24,6 +24,7 @@ import {
 } from "../components/RadiotherapyCalendar";
 import { RadiotherapyCourseSummaryModal } from "../components/RadiotherapyCourseSummaryModal";
 import { RadiotherapyOrderDetailPanel } from "../components/RadiotherapyOrderDetailPanel";
+import { RadiotherapyOrderCreateModal } from "../components/RadiotherapyOrderModals";
 import { RadiotherapyPerformModal } from "../components/RadiotherapyPerformModal";
 import {
   RadiotherapyFractionCancelModal,
@@ -65,7 +66,8 @@ import { useReturnLinkState } from "../returnTo";
 //
 // 日々の流れ: コースを受け付ける → 照射予定を組む(コースのカードを格子へ落とす / 空き枠を
 // 掴んでコースを選ぶ / カードの「予定登録」) → 当日は格子の予定の「実施」を押し、入っている
-// 値を確かめて登録する。治療処方そのものはカルテで放射線治療医が書く(ここでは作らない)。
+// 値を確かめて登録する。治療処方そのものはカルテで放射線治療医が書くのが本筋だが、部門で
+// 受けて代わりに起こせるよう「新規登録」からも作れる(中身はカルテ右ペインと同じフォーム)。
 //
 // 進捗の変更は Task と ServiceRequest.status を同じ transaction で書く(§4)。
 
@@ -102,6 +104,8 @@ export function RadiotherapyWorklistPage() {
   const [rescheduling, setRescheduling] = useState<RadiotherapyCalendarEntry | null>(null);
   // 1 回の中止(照射しなかった回として残す)。
   const [cancellingFraction, setCancellingFraction] = useState<RadiotherapyCalendarEntry | null>(null);
+  // 治療処方の新規登録(患者を選んでから中身を書く)。
+  const [creatingOrder, setCreatingOrder] = useState(false);
 
   useEffect(() => {
     document.body.classList.add("page-wide");
@@ -157,6 +161,11 @@ export function RadiotherapyWorklistPage() {
     <div className="page">
       <div className="page__header">
         <h1>放射線治療カレンダー</h1>
+        {/* 治療処方はカルテで放射線治療医が書くのが本筋だが、部門で受けて代わりに
+            起こす場面があるので、ここからも登録できるようにする。 */}
+        <button type="button" onClick={() => setCreatingOrder(true)}>
+          新規登録
+        </button>
       </div>
 
       <ErrorBanner error={worklist.error} />
@@ -295,6 +304,8 @@ export function RadiotherapyWorklistPage() {
       {terminating && (
         <TerminationModal terminating={terminating} onClose={() => setTerminating(null)} />
       )}
+
+      {creatingOrder && <RadiotherapyOrderCreateModal onClose={() => setCreatingOrder(false)} />}
     </div>
   );
 }

@@ -33,7 +33,7 @@ import {
   locationDisplayName,
   sortLocations,
 } from "../fhir/locationHelpers";
-import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeline";
+import { compareKarteDaysDesc, orderCardDay } from "../fhir/karteTimeline";
 import {
   buildActivityProvenanceEntry,
   buildOrderProvenanceEntry,
@@ -7155,8 +7155,12 @@ export function useKarteDayIndex(
   });
 
   // オーダーはすべて開始日(occurrence)にカードを出すので、診療日もその 1 本で数える
-  // (タイムラインと同じくヘッダだけ、看護指示は除く)。日付未定(undated)はタイムラインと
-  // 同じ仮想日に写す。
+  // (タイムラインと同じくヘッダだけ、看護指示は除く)。
+  //
+  // occurrence を持たないオーダーの置き場は種別で変わる(未定を許す種別は「日付未定」、
+  // それ以外は登録日)。サーバー集計は「occurrence が無い」までしか分からないので、
+  // 該当があるときだけ種別と登録日を引き直し、タイムラインと同じ orderCardDay で写す
+  // —— 写さずに一律「日付未定」に足すと、カードが登録日に出るぶん空の「日付未定」が並ぶ。
   const orders = useQuery({
     queryKey: ["ServiceRequest", "search", "karte-days-occurrence", patientId, problemKey],
     queryFn: async () => {
@@ -7165,13 +7169,21 @@ export function useKarteDayIndex(
       if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
       params.set("based-on:missing", "true");
       params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
+      // fetchDistinctDates は渡した params に集計用の値を足すので、引き直し用に写しを渡す。
       const { dates, hasUndated } = await fetchDistinctDates(
         "ServiceRequest",
-        params,
+        new URLSearchParams(params),
         "occurrence",
         { limit: 1000 },
       );
-      return hasUndated ? [...dates, KARTE_UNSCHEDULED_DAY] : dates;
+      if (!hasUndated) return dates;
+
+      params.set("occurrence:missing", "true");
+      params.set("_elements", "category,authoredOn");
+      params.set("_count", String(KARTE_PENDING_COUNT));
+      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+      const undated = resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest");
+      return [...dates, ...undated.map(orderCardDay)];
     },
     enabled,
   });

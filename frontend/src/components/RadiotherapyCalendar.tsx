@@ -32,8 +32,10 @@ import { RowMenu } from "./RowMenu";
 // 掴んで格子に落とす**と、その装置・時刻でコースの照射予定を組む(新しいオーダーは作らない。
 // 装置と時刻が決まるのは処方のときではなく、部門が日程を組むとき。§7.4)。
 // **照射予定のカードは掴んで動かせ**(別の装置の列へも)、上下の縁で
-// 開始・終了時刻を伸縮できる。実績(実施済・未実施)は照射の記録なので動かせない。日をまたぐ
-// 変更と、この患者の残り全部の組み直しは、メニューの「予定変更」と一括登録のやり直しで行う。
+// 開始・終了時刻を伸縮できる。時刻を決めていない予定も、列の頭の「時刻なし」の置き場から
+// 掴んで格子へ落とせる(落とした先の装置・時刻が入る)。実績(実施済・未実施)は照射の記録
+// なので動かせない。日をまたぐ変更と、この患者の残り全部の組み直しは、メニューの
+// 「予定変更」と一括登録のやり直しで行う。
 
 export type RadiotherapyCalendarMode = "day" | "week";
 
@@ -434,13 +436,15 @@ function DayGrid({
   const [hover, setHover] = useState<{ code: string; start: number } | null>(null);
 
   // ---- カードの移動(照射予定だけ。実績は記録なので動かさない) ----
+  // 時刻を決めていない予定(「時刻なし」の置き場にあるカード)も掴める。格子に落とすと、
+  // そこで初めて装置と時刻が決まる。
   function dropTarget(state: DragState<RadiotherapyCalendarEntry>) {
     const column = columnAt(state.x, state.y);
+    if (!column) return null;
     const range = entryRange(state.item);
-    if (!column || !range) return null;
-    // 掴んだ場所とカードの頭のずれを保ったまま落とす。
-    const grabbed = minuteAt(state.item.fraction.deviceCode, state.startY) - range.start;
-    const duration = range.end - range.start;
+    const duration = range ? range.end - range.start : FALLBACK_MINUTES;
+    // 掴んだ場所とカードの頭のずれを保ったまま落とす(格子に載っていないカードにずれは無い)。
+    const grabbed = range ? minuteAt(state.item.fraction.deviceCode, state.startY) - range.start : 0;
     const start = Math.min(Math.max(snap(minuteAt(column.code, state.y) - grabbed), axis.start), axis.end - duration);
     return { column, start, end: start + duration };
   }
@@ -448,10 +452,11 @@ function DayGrid({
   const dragging = useCardDrag<RadiotherapyCalendarEntry>({
     onDrop: (state) => {
       const target = dropTarget(state);
+      if (!target) return;
       const range = entryRange(state.item);
-      if (!target || !range) return;
-      // 位置が変わっていなければ何もしない(掴んで置き直しただけ)。
-      if (target.column.code === state.item.fraction.deviceCode && target.start === range.start) return;
+      // 位置が変わっていなければ何もしない(掴んで置き直しただけ)。時刻なしのカードは
+      // 落とせば必ず時刻が付くので、この判定に掛からない。
+      if (range && target.column.code === state.item.fraction.deviceCode && target.start === range.start) return;
       onMove(state.item, {
         date,
         startTime: minutesToTime(target.start),
@@ -533,11 +538,18 @@ function DayGrid({
                 {column.name}
                 <span className="radiotherapy-calendar__count">{own.length} 件</span>
               </div>
-              {/* 時刻を決めていない照射。格子には置けないので軸の上に並べる(全列で同じ高さ)。 */}
+              {/* 時刻を決めていない照射。格子には置けないので軸の上に並べる(全列で同じ高さ)。
+                  予定はここから掴んで格子へ落とせる(落とした先で装置と時刻が決まる)。 */}
               {hasUntimed && (
                 <div className="radiotherapy-calendar__untimed">
                   {untimed.map((entry) => (
-                    <FractionCard key={entry.fraction.id} entry={entry} {...handlers} />
+                    <FractionCard
+                      key={entry.fraction.id}
+                      entry={entry}
+                      {...handlers}
+                      dragging={dragging.drag?.item.fraction.id === entry.fraction.id}
+                      onMoveStart={(event) => dragging.start(entry, event)}
+                    />
                   ))}
                 </div>
               )}
@@ -695,7 +707,7 @@ function DayGrid({
   );
 }
 
-// 照射 1 回ぶんのカード。1 回 15 分前後で背が低いので、1 行に「時刻・状態・患者・回」を詰める。
+// 照射 1 回ぶんのカード。1 回 15 分前後で背が低いので、1 行に「状態・時刻・患者・回」を詰める。
 //
 // **動かせるのは照射予定だけ。** 実績(実施済・未実施)は照射の記録なので、掴めず伸縮もできない。
 function FractionCard({
@@ -729,7 +741,10 @@ function FractionCard({
   const summary = order ? summarizeRadiotherapyOrder(order) : undefined;
   const phase = summary?.phases.find((p) => p.phaseId === fraction.phaseId);
   const count = phase ? `${fraction.fractionNumber}/${phase.fractions}` : `${fraction.fractionNumber}回目`;
-  const movable = Boolean(style && fraction.planned && onMoveStart);
+  const movable = Boolean(fraction.planned && onMoveStart);
+  // 伸縮できるのは格子に載っているカードだけ(「時刻なし」の置き場には掴む縁が無い)。
+  const resizable = movable && Boolean(style);
+  const timeText = timeLabel ?? fraction.timeLabel;
 
   const resizeHandle = (edge: "top" | "bottom") => (
     <span
@@ -775,11 +790,11 @@ function FractionCard({
         .filter(Boolean)
         .join("\n")}
     >
-      {movable && resizeHandle("top")}
-      {movable && resizeHandle("bottom")}
+      {resizable && resizeHandle("top")}
+      {resizable && resizeHandle("bottom")}
       <span className="radiotherapy-calendar__card-line">
-        <span className="surgery-calendar__card-time">{timeLabel ?? fraction.startTime}</span>
         <span className={`surgery-calendar__status is-${status.code}`}>{status.label}</span>
+        {timeText && <span className="radiotherapy-calendar__card-time">{timeText}</span>}
         <span className="surgery-calendar__card-patient-name">
           {patient ? displayName(patient) : "-"}
         </span>

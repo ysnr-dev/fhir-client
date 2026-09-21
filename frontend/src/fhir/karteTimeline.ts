@@ -619,8 +619,12 @@ export function groupByKarteDayYear<T>(
  * 無ければ、未定を許す種別なら「日付未定」、それ以外は登録日(authoredOn の日付)。後者は
  * occurrence を持たないオーダーのためのフォールバック。本流の検索もこの軸(occurrence)で読む(api/queries.ts の
  * useKartePrescriptionsInfinite)ので、カットオフ判定と配置が食い違わない。
+ *
+ * **診療日ペイン(useKarteDayIndex)も occurrence の無いオーダーをこの関数で写す。**
+ * サーバー集計($distinct-dates)は「occurrence が無い」までしか分からないので、
+ * ここを通さないと「日付未定」がカード無しで並ぶ。
  */
-function orderCardDay(sr: fhir4.ServiceRequest): string {
+export function orderCardDay(sr: fhir4.ServiceRequest): string {
   if (sr.occurrenceDateTime) return dayOf(sr.occurrenceDateTime);
   const orderType = categoryCoding(sr, ORDER_TYPE_SYSTEM)?.code ?? "";
   if (UNSCHEDULABLE_ORDER_TYPES.has(orderType)) return KARTE_UNSCHEDULED_DAY;

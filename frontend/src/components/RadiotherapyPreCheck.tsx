@@ -59,11 +59,11 @@ export function RadiotherapyPreCheck({ patientId, volumes, excludeSrId }: Radiot
           <table className="master-search__table radiotherapy-order__history">
             <thead>
               <tr>
-                <th>コース</th>
-                <th>開始</th>
+                <th className="radiotherapy-order__history-fit">コース</th>
+                <th className="radiotherapy-order__history-fit">開始</th>
                 <th>部位</th>
                 <th>線量</th>
-                <th>状態</th>
+                <th className="radiotherapy-order__history-fit">状態</th>
               </tr>
             </thead>
             <tbody>
@@ -76,11 +76,13 @@ export function RadiotherapyPreCheck({ patientId, volumes, excludeSrId }: Radiot
                       : undefined
                   }
                 >
-                  <td>第{summary.courseNumber}</td>
-                  <td>{summary.startDate}</td>
+                  <td className="radiotherapy-order__history-fit">第{summary.courseNumber}</td>
+                  <td className="radiotherapy-order__history-fit">{summary.startDate}</td>
                   <td>{summary.siteLabel}</td>
                   <td>{summary.doseLabel}</td>
-                  <td>{COURSE_STATUS_LABELS[sr.status] ?? sr.status}</td>
+                  <td className="radiotherapy-order__history-fit">
+                    {COURSE_STATUS_LABELS[sr.status] ?? sr.status}
+                  </td>
                 </tr>
               ))}
             </tbody>

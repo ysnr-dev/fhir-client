@@ -18055,7 +18055,14 @@ button.chemo-calendar__cell[draggable="true"] {
 /* 安全確認の過去コース。表は fieldset(flex)の中なので幅いっぱいに置く。 */
 .radiotherapy-order__history {
   flex: 1 1 100%;
-  font-size: 12px;
+  font-size: 11px;
+}
+
+/* コース・開始・状態は値の幅が決まっているので折り返さない。余る幅は
+   部位・線量(長さがまちまち)に渡す。 */
+.radiotherapy-order__history-fit {
+  width: 1%;
+  white-space: nowrap;
 }
 
 /* 今回の標的と同じ部位に照射した過去コース(再照射の気づき)。 */
@@ -18087,7 +18094,7 @@ button.chemo-calendar__cell[draggable="true"] {
   line-height: 1.5;
 }
 
-/* 照射は 1 回 15 分前後で背が低いので、時刻・状態・患者・回を 1 行に詰める。 */
+/* 照射は 1 回 15 分前後で背が低いので、状態・時刻・患者・回を 1 行に詰める。 */
 .radiotherapy-calendar__card {
   flex-direction: row;
   align-items: center;
@@ -18111,9 +18118,26 @@ button.chemo-calendar__cell[draggable="true"] {
   color: var(--text);
 }
 
+/* 開始〜終了。手術カレンダーの 1 行目とは違い行頭ではないので、あちらの
+   .surgery-calendar__card-time(下マージン付き)ではなく自前で持つ。 */
+.radiotherapy-calendar__card-time {
+  flex: none;
+  color: var(--text-h);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .radiotherapy-calendar__card .surgery-calendar__card-actions {
   position: static;
   flex: none;
+}
+
+/* 「実施」ボタンとケバブの背丈をそろえる。ケバブは既定で --control-height を持つので、
+   明示しないとボタンの倍の高さになり、背の低いカードからはみ出す。 */
+.radiotherapy-calendar__card .surgery-calendar__card-actions > button,
+.radiotherapy-calendar__card .surgery-calendar__card-actions .row-menu,
+.radiotherapy-calendar__card .surgery-calendar__card-actions .row-menu__trigger {
+  height: 18px;
 }
 
 .radiotherapy-calendar__card .surgery-calendar__card-actions > button {
@@ -18121,7 +18145,14 @@ button.chemo-calendar__cell[draggable="true"] {
   font-size: 11px;
 }
 
-/* 時刻を持たない照射。格子に置けないので列の見出しの下に並べる。
+.radiotherapy-calendar__card .surgery-calendar__card-actions .row-menu__trigger {
+  padding: 0 4px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+/* 時刻を持たない照射。格子に置けないので列の見出しの下に並べる。予定はここから掴んで
+   格子へ落とせる(落とした先で装置と時刻が決まる)。
    **高さを固定する** —— 中身のある列だけ背が伸びると、その列の格子が下へずれて時刻の軸と
    合わなくなる。件数が多い日はこの中でスクロールさせる。 */
 .radiotherapy-calendar__untimed {
