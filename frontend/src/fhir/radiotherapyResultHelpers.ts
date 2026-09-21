@@ -725,3 +725,23 @@ export function radiotherapyFractionPhaseLabel(
 ): string {
   return summary.phases.find((p) => p.phaseId === phaseId)?.label ?? "(不明)";
 }
+
+/**
+ * そのコースに照射予定を足せるか(docs/radiotherapy-order-design.md §7.4)。足せないときは理由を返す。
+ * 足せるのは**受付後(計画中・治療中・休止)**で、予定と実績が処方の回数に届いていないコース。
+ * 処方済は部門がまだ引き受けていないので、先に受付してもらう。
+ */
+export function radiotherapyPlanEligibility(
+  taskStatus: string,
+  summary: RadiotherapyOrderSummary,
+  fractions: RadiotherapyFractionDisplay[],
+): { canPlan: boolean; reason: string } {
+  if (taskStatus === "requested") return { canPlan: false, reason: "受付がまだ" };
+  if (taskStatus === "completed") return { canPlan: false, reason: "終了" };
+  if (taskStatus === "cancelled") return { canPlan: false, reason: "中止" };
+  const progress = radiotherapyProgress(summary, fractions);
+  if (progress.delivered + progress.planned >= progress.prescribed) {
+    return { canPlan: false, reason: "予定は足りている" };
+  }
+  return { canPlan: true, reason: "" };
+}

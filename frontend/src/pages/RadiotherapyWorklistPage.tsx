@@ -4,6 +4,7 @@ import { radiotherapyStopReasonHooks } from "../api/masterQueries";
 import {
   useCancelRadiotherapyFraction,
   useDeleteRadiotherapyPlanned,
+  useRescheduleRadiotherapyFraction,
   useRadiotherapyProcedures,
   useRadiotherapyWorklist,
   useUpdateRadiotherapyTaskStatus,
@@ -16,7 +17,9 @@ import { Modal } from "../components/Modal";
 import { PatientKana } from "../components/PatientRowCells";
 import {
   RadiotherapyCalendar,
+  type CoursePanelDrag,
   type RadiotherapyCalendarMode,
+  type RadiotherapySlot,
 } from "../components/RadiotherapyCalendar";
 import { RadiotherapyCourseSummaryModal } from "../components/RadiotherapyCourseSummaryModal";
 import { RadiotherapyOrderDetailPanel } from "../components/RadiotherapyOrderDetailPanel";
@@ -25,12 +28,18 @@ import {
   RadiotherapyPlanModal,
   RadiotherapyRescheduleModal,
 } from "../components/RadiotherapyPlanModal";
+import {
+  RadiotherapySlotModal,
+  planOptionsFromSlot,
+} from "../components/RadiotherapySlotModal";
 import { RowMenu } from "../components/RowMenu";
 import { displayName } from "../fhir/patientHelpers";
 import { summarizeRadiotherapyOrder } from "../fhir/radiotherapyOrderHelpers";
 import {
+  radiotherapyPlanEligibility,
   radiotherapyProgress,
   type RadiotherapyFractionDisplay,
+  type RadiotherapyPlanOptions,
 } from "../fhir/radiotherapyResultHelpers";
 import {
   radiotherapyTaskActions,
@@ -48,8 +57,9 @@ import { useReturnLinkState } from "../returnTo";
 // 右が治療コースの一覧で、受付・治療開始・**照射予定の一括登録**・休止・終了・サマリーは
 // ここから行う。手術カレンダーと同じ「格子 + 右のパネル」の構成。
 //
-// 日々の流れ: コースを受け付けて治療を始める → 「予定登録」で処方の回数ぶんの照射予定を
-// 作る → 当日は格子の予定の「実施」を押し、入っている値を確かめて登録する。
+// 日々の流れ: コースを受け付ける → 照射予定を組む(コースのカードを格子へ落とす / 空き枠を
+// 掴んでコースを選ぶ / カードの「予定登録」) → 当日は格子の予定の「実施」を押し、入っている
+// 値を確かめて登録する。治療処方そのものはカルテで放射線治療医が書く(ここでは作らない)。
 //
 // 進捗の変更は Task と ServiceRequest.status を同じ transaction で書く(§4)。
 
@@ -73,7 +83,12 @@ export function RadiotherapyWorklistPage() {
   // 開いている対象は行そのものではなく id で覚えておき、読み直しのたびに引き直す。
   // カレンダーの照射は、右の一覧が別のタブ(終了・中止)でも開けるよう、オーダーごと持つ。
   const [viewing, setViewing] = useState<Target | null>(null);
-  const [planningId, setPlanningId] = useState<string | null>(null);
+  // 照射予定の一括登録。格子の枠から来たとき(空き枠・コースのドロップ)は、その枠を初期値にする。
+  const [planning, setPlanning] = useState<
+    (Target & { initialOptions?: Partial<RadiotherapyPlanOptions> }) | null
+  >(null);
+  // 掴んだ空き枠。どのコースの照射を入れるかを選ぶ。
+  const [slot, setSlot] = useState<RadiotherapySlot | null>(null);
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [terminating, setTerminating] = useState<Terminating | null>(null);
   // 実施入力。格子の予定から開いたときはその予定を、コースから開いたときは次の回を入れる。
@@ -90,6 +105,9 @@ export function RadiotherapyWorklistPage() {
   const updateStatus = useUpdateRadiotherapyTaskStatus();
   const cancelFraction = useCancelRadiotherapyFraction();
   const deletePlanned = useDeleteRadiotherapyPlanned();
+  const reschedule = useRescheduleRadiotherapyFraction();
+  // 空き枠に入れられるコースは進行中のものだけなので、右のパネルのタブとは別に持つ。
+  const openCourses = useRadiotherapyWorklist("open");
 
   const rows = useMemo(() => worklist.data?.rows ?? [], [worklist.data]);
   const rowOf = (orderId: string | null | undefined) => rows.find((row) => row.order.id === orderId);
@@ -97,12 +115,29 @@ export function RadiotherapyWorklistPage() {
     procedures.data?.fractions.get(orderId ?? "") ?? EMPTY_FRACTIONS;
   const summaryOf = (orderId: string | undefined) => procedures.data?.summaries.get(orderId ?? "");
 
-  const planning = rowOf(planningId);
   const summarizing = rowOf(summarizingId);
 
   function handleAction(row: RadiotherapyWorklistRow, action: RadiotherapyTaskAction) {
     if (action.asksTermination) return setTerminating({ row, action });
     updateStatus.mutate({ order: row.order, task: row.task, status: action.next });
+  }
+
+  /** 進行中のコース。空き枠のモーダルが、予定を足せるもの・足せないもの(理由つき)に分けて出す。 */
+  const slotCourses = useMemo(
+    () =>
+      (openCourses.data?.rows ?? []).map((row) => ({ row, fractions: fractionsOf(row.order.id) })),
+    // fractionsOf は procedures.data から引くだけなので、依存はそちらで足りる。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [openCourses.data, procedures.data],
+  );
+
+  function openPlan(row: RadiotherapyWorklistRow, from?: RadiotherapySlot) {
+    setSlot(null);
+    setPlanning({
+      order: row.order,
+      patient: row.patient,
+      ...(from ? { initialOptions: planOptionsFromSlot(from) } : {}),
+    });
   }
 
   function handleDeletePlanned(ids: string[]) {
@@ -120,6 +155,7 @@ export function RadiotherapyWorklistPage() {
       <ErrorBanner error={updateStatus.error} />
       <ErrorBanner error={cancelFraction.error} />
       <ErrorBanner error={deletePlanned.error} />
+      <ErrorBanner error={reschedule.error} />
 
       <RadiotherapyCalendar
         date={date}
@@ -136,8 +172,12 @@ export function RadiotherapyWorklistPage() {
         onView={(entry) => {
           if (entry.order) setViewing({ order: entry.order, patient: entry.patient });
         }}
-        panel={
+        onEmptySlot={setSlot}
+        onCourseDrop={(row, target) => openPlan(row, target)}
+        onMove={(entry, change) => reschedule.mutate({ procedureId: entry.fraction.id, ...change })}
+        panel={(drag) => (
           <CoursePanel
+            drag={drag}
             view={view}
             onViewChange={setView}
             rows={rows}
@@ -147,7 +187,7 @@ export function RadiotherapyWorklistPage() {
             hasSummary={(orderId) => Boolean(summaryOf(orderId))}
             pending={updateStatus.isPending || deletePlanned.isPending}
             onView={(row) => setViewing({ order: row.order, patient: row.patient })}
-            onPlan={(row) => setPlanningId(row.order.id ?? null)}
+            onPlan={(row) => openPlan(row)}
             onPerform={(row) => setPerforming({ order: row.order, patient: row.patient })}
             onSummarize={(row) => setSummarizingId(row.order.id ?? null)}
             onAction={handleAction}
@@ -159,7 +199,7 @@ export function RadiotherapyWorklistPage() {
               )
             }
           />
-        }
+        )}
       />
 
       {viewing && (
@@ -183,12 +223,22 @@ export function RadiotherapyWorklistPage() {
         </Modal>
       )}
 
+      {slot && (
+        <RadiotherapySlotModal
+          slot={slot}
+          courses={slotCourses}
+          onPlan={(row) => openPlan(row, slot)}
+          onClose={() => setSlot(null)}
+        />
+      )}
+
       {planning && (
         <RadiotherapyPlanModal
           order={planning.order}
           fractions={fractionsOf(planning.order.id)}
           patientName={planning.patient ? displayName(planning.patient) : undefined}
-          onClose={() => setPlanningId(null)}
+          initialOptions={planning.initialOptions}
+          onClose={() => setPlanning(null)}
         />
       )}
 
@@ -229,6 +279,7 @@ export function RadiotherapyWorklistPage() {
 
 // 右のパネル。治療コースの一覧(進行中 / 終了・中止)。
 function CoursePanel({
+  drag,
   view,
   onViewChange,
   rows,
@@ -244,6 +295,7 @@ function CoursePanel({
   onAction,
   onClearPlanned,
 }: {
+  drag: CoursePanelDrag;
   view: RadiotherapyWorklistView;
   onViewChange: (view: RadiotherapyWorklistView) => void;
   rows: RadiotherapyWorklistRow[];
@@ -302,6 +354,8 @@ function CoursePanel({
             <li key={row.order.id}>
               <CourseCard
                 row={row}
+                dragging={drag.draggingOrderId === row.order.id}
+                onPointerDown={(event) => drag.onCardPointerDown(row, event)}
                 fractions={fractionsOf(row.order.id)}
                 hasSummary={hasSummary(row.order.id)}
                 pending={pending}
@@ -322,6 +376,8 @@ function CoursePanel({
 
 function CourseCard({
   row,
+  dragging,
+  onPointerDown,
   fractions,
   hasSummary,
   pending,
@@ -333,6 +389,8 @@ function CourseCard({
   onClearPlanned,
 }: {
   row: RadiotherapyWorklistRow;
+  dragging: boolean;
+  onPointerDown: (event: React.PointerEvent) => void;
   fractions: RadiotherapyFractionDisplay[];
   hasSummary: boolean;
   pending: boolean;
@@ -350,13 +408,21 @@ function CourseCard({
   const actions = radiotherapyTaskActions(status);
   const progress = radiotherapyProgress(summary, fractions);
   const closed = status === "completed" || status === "cancelled";
-  // 予定を作れるのは受付後(計画中・治療中・休止)。残りが無ければ出さない。
-  const canPlan =
-    (status === "accepted" || status === "in-progress" || status === "on-hold") &&
-    progress.delivered + progress.planned < progress.prescribed;
+  const canPlan = radiotherapyPlanEligibility(status, summary, fractions).canPlan;
 
   return (
-    <div className="surgery-pending__card">
+    <div
+      className={[
+        "surgery-pending__card",
+        canPlan ? "surgery-pending__card--movable" : "",
+        dragging ? "surgery-pending__card--dragging" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      // 予定を足せるコースは、掴んでカレンダーの枠へ落とせる(手術の未確定リストと同じ)。
+      onPointerDown={canPlan ? onPointerDown : undefined}
+      title={canPlan ? "ドラッグしてカレンダーへ(その枠で照射予定を組む)" : undefined}
+    >
       <span className="surgery-pending__card-head">
         <span className={`surgery-calendar__status is-${statusClass(status)}`}>
           {radiotherapyTaskStatusDisplay(status)}
@@ -364,7 +430,7 @@ function CourseCard({
         <span className="surgery-pending__card-when">
           第{summary.courseNumber}コース {summary.intentDisplay}
         </span>
-        <span className="surgery-pending__card-actions">
+        <span className="surgery-pending__card-actions" onPointerDown={(e) => e.stopPropagation()}>
           <RowMenu label="この放射線治療の操作" escapesClipping>
             <button type="button" className="row-menu__item" onClick={onView}>
               表示
@@ -440,7 +506,10 @@ function CourseCard({
         </span>
       )}
 
-      <span className="radiotherapy-calendar__course-actions">
+      <span
+        className="radiotherapy-calendar__course-actions"
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         {actions
           .filter((action) => !action.secondary)
           .map((action) => (

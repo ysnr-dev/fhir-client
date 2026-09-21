@@ -28,10 +28,18 @@ interface PlanProps {
   order: fhir4.ServiceRequest;
   fractions: RadiotherapyFractionDisplay[];
   patientName?: string;
+  /** カレンダーで掴んだ空き枠から来る初期値(開始日・開始時刻・所要時間・装置)。 */
+  initialOptions?: Partial<RadiotherapyPlanOptions>;
   onClose: () => void;
 }
 
-export function RadiotherapyPlanModal({ order, fractions, patientName, onClose }: PlanProps) {
+export function RadiotherapyPlanModal({
+  order,
+  fractions,
+  patientName,
+  initialOptions,
+  onClose,
+}: PlanProps) {
   const register = useRegisterRadiotherapyPlan();
   const devices = radiotherapyDeviceHooks.useOptions();
   const summary = useMemo(() => summarizeRadiotherapyOrder(order), [order]);
@@ -43,7 +51,11 @@ export function RadiotherapyPlanModal({ order, fractions, patientName, onClose }
     const start = summary.startDate > today() ? summary.startDate : today();
     const base = emptyRadiotherapyPlanOptions(last && last >= start ? nextDay(last) : start);
     const device = summary.phases.find((p) => p.deviceName);
-    return device ? { ...base, device: { code: device.deviceCode, name: device.deviceName } } : base;
+    return {
+      ...base,
+      ...(device ? { device: { code: device.deviceCode, name: device.deviceName } } : {}),
+      ...initialOptions,
+    };
   });
   // 表で直した日付と、外した行。条件を変えて割り付け直したら捨てる。
   const [edits, setEdits] = useState<Record<string, string>>({});

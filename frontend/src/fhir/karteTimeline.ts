@@ -1015,12 +1015,10 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         kind: "radiotherapy-order" as const,
         label: KARTE_KIND_LABELS["radiotherapy-order"],
         status,
-        // リハビリと同じ期間継続型なので、実施情報の表示条件も同じ(受付済以降は常に出す)。
-        // 理由は上のリハビリ分岐のコメントを参照。
-        fractions:
-          status === "requested"
-            ? []
-            : (radiotherapyFractionByOrderId.get(serviceRequest.id ?? "") ?? []),
+        // リハビリと同じ期間継続型だが、**進捗に関わらず常に出す**。部門がカレンダーの空き枠から
+        // 自分で登録したコースは、処方済のまま照射予定が付く(docs/radiotherapy-order-design.md §7.4)。
+        // 取消した記録(entered-in-error)は radiotherapyFractionsByOrderId が落としている。
+        fractions: radiotherapyFractionByOrderId.get(serviceRequest.id ?? "") ?? [],
         hasCourseSummary: radiotherapySummaryByOrderId.has(serviceRequest.id ?? ""),
       };
     }
