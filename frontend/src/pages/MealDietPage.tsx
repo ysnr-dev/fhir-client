@@ -422,7 +422,7 @@ function DietEditModal({ dietId, onClose }: DietEditModalProps) {
 
         {/* 食止めは主食を伴わないので、オーダー画面ではこの印の付いた食種を
             選んだときに主食欄を無効にする。 */}
-        <label className="dose-conversion__checkbox meal-diet-fasting">
+        <label className="lab-order-item__check meal-diet-fasting">
           <input
             type="checkbox"
             checked={draft.is_fasting}

@@ -27,6 +27,8 @@ interface Field<T> {
   options?: { code: string; display: string }[];
   /** 一覧に列として出すか。 */
   column?: boolean;
+  /** 一覧の列を折り返さないか(略称・標準コードのような短い値)。 */
+  compact?: boolean;
 }
 
 interface MasterHooks<T extends Row> {
@@ -86,10 +88,12 @@ function SimpleMasterPage<T extends Row>({ title, itemLabel, hooks, fields, defa
       <table className="master-search__table">
         <thead>
           <tr>
-            <th>コード</th>
-            <th>名称</th>
+            <th className="rad-item__compact">コード</th>
+            <th className="radiotherapy-master__name">名称</th>
             {columns.map((field) => (
-              <th key={field.key}>{field.label}</th>
+              <th key={field.key} className={field.compact ? "rad-item__compact" : undefined}>
+                {field.label}
+              </th>
             ))}
             <th className="rad-item__compact">表示順</th>
             <th className="rad-item__compact">状態</th>
@@ -98,10 +102,12 @@ function SimpleMasterPage<T extends Row>({ title, itemLabel, hooks, fields, defa
         <tbody>
           {list.data?.items.map((item) => (
             <tr key={item.id} onClick={() => setEditing(item)} className="master-search__row">
-              <td>{item.code}</td>
-              <td>{item.name}</td>
+              <td className="rad-item__compact">{item.code}</td>
+              <td className="radiotherapy-master__name">{item.name}</td>
               {columns.map((field) => (
-                <td key={field.key}>{cell(item, field)}</td>
+                <td key={field.key} className={field.compact ? "rad-item__compact" : undefined}>
+                  {cell(item, field)}
+                </td>
               ))}
               <td className="rad-item__compact">{item.display_order}</td>
               <td className="rad-item__compact">
@@ -255,7 +261,7 @@ function EditModal<T extends Row>({
           .map((field) => {
             const selected = (draft[field.key] as string[] | undefined) ?? [];
             return (
-              <fieldset key={field.key}>
+              <fieldset key={field.key} className="lab-order-item__section">
                 <legend>{field.label}</legend>
                 {modalityOptions.map((m) => (
                   <label key={m.code} className="dose-conversion__checkbox">
@@ -278,7 +284,7 @@ function EditModal<T extends Row>({
             );
           })}
 
-        <label className="dose-conversion__checkbox">
+        <label className="lab-order-item__check">
           <input
             type="checkbox"
             checked={Boolean(draft.enabled)}
@@ -329,9 +335,9 @@ export function RadiotherapyModalityPage() {
       hooks={radiotherapyModalityHooks}
       defaults={{ dose_unit: "Gy" }}
       fields={[
-        { key: "dose_unit", label: "線量の単位", type: "text", column: true },
+        { key: "dose_unit", label: "線量の単位", type: "text", column: true, compact: true },
         { key: "reference_system", label: "標準コードの体系", type: "text" },
-        { key: "reference_code", label: "標準コード", type: "text", column: true },
+        { key: "reference_code", label: "標準コード", type: "text", column: true, compact: true },
         { key: "note", label: "備考", type: "text" },
       ]}
     />
@@ -346,10 +352,10 @@ export function RadiotherapyTechniquePage() {
       hooks={radiotherapyTechniqueHooks}
       defaults={{ modality_codes: [] }}
       fields={[
-        { key: "abbreviation", label: "略称", type: "text", column: true },
+        { key: "abbreviation", label: "略称", type: "text", column: true, compact: true },
         { key: "modality_codes", label: "選べるモダリティ", type: "modalities", column: true },
         { key: "reference_system", label: "標準コードの体系", type: "text" },
-        { key: "reference_code", label: "標準コード", type: "text", column: true },
+        { key: "reference_code", label: "標準コード", type: "text", column: true, compact: true },
         { key: "note", label: "備考", type: "text" },
       ]}
     />
@@ -364,7 +370,14 @@ export function RadiotherapyDevicePage() {
       hooks={radiotherapyDeviceHooks}
       defaults={{ device_type: "linac", modality_codes: [] }}
       fields={[
-        { key: "device_type", label: "装置種別", type: "select", options: DEVICE_TYPE_OPTIONS, column: true },
+        {
+          key: "device_type",
+          label: "装置種別",
+          type: "select",
+          options: DEVICE_TYPE_OPTIONS,
+          column: true,
+          compact: true,
+        },
         { key: "modality_codes", label: "対応モダリティ", type: "modalities", column: true },
         { key: "note", label: "備考", type: "text" },
       ]}
@@ -380,7 +393,14 @@ export function RadiotherapyStopReasonPage() {
       hooks={radiotherapyStopReasonHooks}
       defaults={{ kind: "both" }}
       fields={[
-        { key: "kind", label: "区分", type: "select", options: STOP_REASON_KIND_OPTIONS, column: true },
+        {
+          key: "kind",
+          label: "区分",
+          type: "select",
+          options: STOP_REASON_KIND_OPTIONS,
+          column: true,
+          compact: true,
+        },
       ]}
     />
   );

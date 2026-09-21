@@ -180,7 +180,7 @@ export function RadiotherapyProtocolPage() {
       <table className="master-search__table">
         <thead>
           <tr>
-            <th>コード</th>
+            <th className="rad-item__compact">コード</th>
             <th>名称</th>
             <th className="rad-item__compact">目的</th>
             <th>線量分割</th>
@@ -190,7 +190,7 @@ export function RadiotherapyProtocolPage() {
         <tbody>
           {list.data?.items.map((item) => (
             <tr key={item.id} onClick={() => setEditing(item)} className="master-search__row">
-              <td>{item.code}</td>
+              <td className="rad-item__compact">{item.code}</td>
               <td>{item.name}</td>
               <td className="rad-item__compact">
                 {item.intent ? displayOf(RADIOTHERAPY_INTENT_OPTIONS, item.intent) : ""}
@@ -341,7 +341,7 @@ function ProtocolEditModal({
               標的を追加
             </button>
           </div>
-          <table className="master-search__table">
+          <table className="master-search__table radiotherapy-protocol__rows radiotherapy-protocol__volumes">
             <thead>
               <tr>
                 <th>名称</th>
@@ -527,7 +527,7 @@ function ProtocolEditModal({
                   />
                 </label>
               </div>
-              <table className="master-search__table">
+              <table className="master-search__table radiotherapy-protocol__rows radiotherapy-protocol__doses">
                 <thead>
                   <tr>
                     <th>標的</th>
@@ -575,7 +575,7 @@ function ProtocolEditModal({
           </button>
         </div>
 
-        <label className="dose-conversion__checkbox">
+        <label className="lab-order-item__check">
           <input
             type="checkbox"
             checked={draft.enabled}

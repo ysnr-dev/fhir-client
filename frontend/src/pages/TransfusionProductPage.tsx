@@ -378,7 +378,7 @@ function ProductEditModal({ productId, onClose }: ProductEditModalProps) {
 
         {/* 交差適合試験の要否。オーダー画面で製剤を選んだときの検査区分の初期選択に
             使う(血漿・血小板は交差適合試験を行わないのが一般的)。 */}
-        <label className="dose-conversion__checkbox">
+        <label className="lab-order-item__check">
           <input
             type="checkbox"
             checked={draft.requires_crossmatch}

@@ -6529,6 +6529,36 @@ fieldset.lab-order-item__section label {
   font-size: 13px;
 }
 
+/* 枠の中のチェックボックス群。label は素のままだと display: inline で、
+   チェックと文字がくっついたうえに文字の途中で折り返す(枠の flex が効くのは
+   label 単位までなので、label 自身にも flex を持たせる)。 */
+fieldset.lab-order-item__section label.dose-conversion__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 編集モーダルの単独のチェック(「有効」など)。<form> 直下に置く label には
+   何も当たらず、ブラウザ既定の inline でチェックと文字がくっつく。
+   inline-flex にするのは、行の余白まで押せる当たり判定にしないため。 */
+.lab-order-item__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+/* 項目の並びに混ぜるチェック(「頻用」「左右あり」など)。.lab-order-item__fields
+   label の縦積み(ラベルが上、入力が下)を行に戻し、隣の入力欄と下端を揃える。 */
+.lab-order-item__fields label.dose-conversion__checkbox {
+  flex-direction: row;
+  align-items: center;
+  align-self: flex-end;
+  gap: 6px;
+  height: var(--control-height);
+}
+
 .lab-order-item__section-head {
   --control-height: 26px;
   display: flex;
@@ -12038,10 +12068,8 @@ td.surgery-calendar__cell--drop-target {
 }
 
 /* 食止めの印は主成分量・適応とは別の性質の項目なので、上下に余白を空けて
-   ボタン行とも離す。既定の inline のままでは縦マージンが効かないので
-   inline-block にする(幅は中身のままにして、行全体が押せるようにはしない)。 */
+   ボタン行とも離す(行の作りは .lab-order-item__check)。 */
 .meal-diet-fasting {
-  display: inline-block;
   margin: 16px 0;
 }
 
@@ -18083,6 +18111,48 @@ button.chemo-calendar__cell[draggable="true"] {
 /* サマリーの本文は改行で書かれるので、そのまま出す。 */
 .radiotherapy-summary__value {
   white-space: pre-wrap;
+}
+
+/* ---- 放射線治療の施設固有マスタ ---- */
+
+/* 一覧の名称の列。「選べるモダリティ」のように中身の長い列があると、自動の列幅では
+   名称が 1 行に収まらないところまで狭められる。下限だけ決めて折り返しを抑える。 */
+.radiotherapy-master__name {
+  min-width: 9em;
+}
+
+/* ---- 放射線治療プロトコルマスタ ---- */
+
+/* 編集モーダルの中の表(標的・Phase ごとの線量)。スクロールするのはモーダル自身
+   なので、.master-search__table の sticky な列見出しがモーダルの上端に貼り付いて
+   下の行に重なる。入れ子の表では静止させる。 */
+.radiotherapy-protocol__rows th {
+  position: static;
+}
+
+/* 表の中の入力欄は列幅いっぱいに広げる。既定のままでは「左右」のように未選択の
+   select が中身の幅まで潰れて、列見出しと縦に揃わない。 */
+.radiotherapy-protocol__rows input,
+.radiotherapy-protocol__rows select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 標的の削除ボタンの列。幅を決めて、余りは部位の列に吸わせる。 */
+.radiotherapy-protocol__volumes td:last-child {
+  width: 56px;
+}
+
+/* 線量の表は 3 列しかないので、自動幅だと 1 回線量の列だけが伸びて総線量が
+   入力欄から離れる。入力と総線量の幅を決め、余りは標的名の列に吸わせる。 */
+.radiotherapy-protocol__doses th:nth-child(2),
+.radiotherapy-protocol__doses td:nth-child(2) {
+  width: 110px;
+}
+
+.radiotherapy-protocol__doses th:last-child,
+.radiotherapy-protocol__doses td:last-child {
+  width: 90px;
 }
 
 /* ---- 放射線治療カレンダー ---- */
