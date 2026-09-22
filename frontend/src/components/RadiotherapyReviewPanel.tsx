@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import {
+  useCloseRadiotherapyReviewDue,
   useFacilitySettings,
   useRadiotherapyCourseReviews,
   useRadiotherapyOrderDetail,
@@ -34,6 +35,8 @@ export function RadiotherapyReviewPanel({ patientId, srId, onSaved }: Radiothera
   const detail = useRadiotherapyOrderDetail(srId);
   const reviews = useRadiotherapyCourseReviews(srId);
   const facility = useFacilitySettings();
+  // 書けたら、そのコースの督促(通知)を閉じる。
+  const closeDue = useCloseRadiotherapyReviewDue();
 
   const order = useMemo(
     () =>
@@ -48,15 +51,12 @@ export function RadiotherapyReviewPanel({ patientId, srId, onSaved }: Radiothera
 
   const summary = summarizeRadiotherapyOrder(order);
   const list = reviews.data ?? [];
-  const state = radiotherapyReviewState(
-    list,
-    today(),
-    facility.data?.radiotherapy_review ?? DEFAULT_RADIOTHERAPY_REVIEW,
-  );
+  const settings = facility.data?.radiotherapy_review ?? DEFAULT_RADIOTHERAPY_REVIEW;
+  const state = radiotherapyReviewState(list, today(), settings);
 
   return (
     <div className="regimen-adverse">
-      <ErrorBanner error={detail.error ?? reviews.error} />
+      <ErrorBanner error={detail.error ?? reviews.error ?? closeDue.error} />
       <p className="regimen-day__title">
         {`第${summary.courseNumber}コース ${summary.siteLabel}`.trim()}
         <span className={`micro-result__badge${state.overdue ? "" : " micro-result__badge--muted"}`}>
@@ -74,11 +74,15 @@ export function RadiotherapyReviewPanel({ patientId, srId, onSaved }: Radiothera
         {list.length === 0 && <li className="regimen-day__empty">このコースの診察記録はありません</li>}
       </ul>
 
+      {/* 前回と同じ様式で書き始める。初回は施設の既定テンプレート(設定していれば)。 */}
       <QuestionnaireResponseCreatePanel
         patientId={patientId}
         basedOn={[{ reference: `ServiceRequest/${srId}` }]}
-        defaultQuestionnaireCanonical={state.last?.questionnaire}
-        onSaved={onSaved}
+        defaultQuestionnaireCanonical={state.last?.questionnaire || settings.template}
+        onSaved={() => {
+          closeDue.mutate(srId);
+          onSaved();
+        }}
       />
     </div>
   );

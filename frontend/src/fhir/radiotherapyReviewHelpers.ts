@@ -1,5 +1,16 @@
+import {
+  buildCompletedNotificationTask,
+  buildNotificationTask,
+  completeNotificationEntry,
+  hasTaskCode,
+  notificationTaskEntry,
+  taskInputOf,
+  taskOwnerName,
+  taskPatientId,
+  type NotificationRowBase,
+} from "./notificationHelpers";
 import { parseQuestionnaireResponseMeta } from "./questionnaireResponseHelpers";
-import { diffDays } from "../lib/dates";
+import { diffDays, today } from "../lib/dates";
 
 /**
  * 治療中の診察(週次レビュー)の記録(docs/radiotherapy-order-design.md §6.3)。
@@ -23,6 +34,8 @@ import { diffDays } from "../lib/dates";
  */
 export interface RadiotherapyReviewSettings {
   interval_days: number;
+  /** 記入欄を選択済みで開くテンプレートの canonical。空なら選ばせる。 */
+  template: string;
 }
 
 /**
@@ -33,6 +46,7 @@ export interface RadiotherapyReviewSettings {
  */
 export const DEFAULT_RADIOTHERAPY_REVIEW: RadiotherapyReviewSettings = {
   interval_days: 7,
+  template: "",
 };
 
 export interface RadiotherapyReview {
@@ -97,6 +111,106 @@ export function radiotherapyReviewState(
   if (!last?.date) return { last, elapsed: null, overdue: true };
   const elapsed = diffDays(last.date, today);
   return { last, elapsed, overdue: elapsed > settings.interval_days };
+}
+
+// ---- 診察が空いたコースの督促(通知 Task) ----
+//
+// 契機は**照射入力**。照射は治療中ほぼ毎日あるので、「間隔を超えた」ことに最初に気づける
+// 場所であり、部門の手が動くところでもある(外来放射線照射診療料が第 2 日目以降の観察を
+// 医師に報告させているのと同じ流れ)。宛先は治療処方の依頼医。
+//
+// 閉じるのは週次レビューを書いたとき。通知一覧から手で閉じることもできる(他の種別と同じ)。
+
+export const RADIOTHERAPY_REVIEW_DUE_TASK_CODE = {
+  code: "radiotherapy-review-due",
+  display: "放射線治療の診察",
+};
+
+/** 対応済みにしたときに通知へ残す文。 */
+export const RADIOTHERAPY_REVIEW_DUE_NOTE = "診察を記録しました。";
+
+const COURSE_INPUT = "治療コース";
+const LAST_REVIEW_INPUT = "前回の診察";
+
+export function isRadiotherapyReviewDueTask(task: fhir4.Task): boolean {
+  return hasTaskCode(task, RADIOTHERAPY_REVIEW_DUE_TASK_CODE.code);
+}
+
+/**
+ * 督促 Task の entry。間隔を超えていなければ null(呼び出し側で既存の未対応 Task の
+ * 有無も見る —— 同じコースの督促を毎回の照射で作り直さないため)。
+ */
+export function radiotherapyReviewDueEntry(args: {
+  order: fhir4.ServiceRequest;
+  patientId: string;
+  courseLabel: string;
+  state: RadiotherapyReviewState;
+  settings: RadiotherapyReviewSettings;
+}): fhir4.BundleEntry | null {
+  const { order, patientId, courseLabel, state, settings } = args;
+  if (!order.id || !state.overdue) return null;
+
+  const requester = order.requester;
+  const task = buildNotificationTask({
+    code: RADIOTHERAPY_REVIEW_DUE_TASK_CODE,
+    severity: "info",
+    focusReference: `ServiceRequest/${order.id}`,
+    patientId,
+    owner: requester?.reference?.startsWith("Practitioner/") ? requester : undefined,
+    description: state.last?.date
+      ? `${courseLabel} 前回の診察 ${state.last.date}（${state.elapsed} 日、間隔 ${settings.interval_days} 日）`
+      : `${courseLabel} 診察の記録がありません`,
+    input: [
+      { type: { text: COURSE_INPUT }, valueString: courseLabel },
+      ...(state.last?.date
+        ? [{ type: { text: LAST_REVIEW_INPUT }, valueDate: state.last.date }]
+        : []),
+    ],
+  });
+  return notificationTaskEntry(task);
+}
+
+/** 診察を書いたときに督促を閉じる entry。 */
+export function buildCompletedRadiotherapyReviewDueEntries(
+  tasks: fhir4.Task[],
+  actor: { practitionerId: string; display: string },
+): fhir4.BundleEntry[] {
+  return tasks
+    .filter((task) => task.id && task.status === "requested")
+    .map((task) =>
+      completeNotificationEntry(
+        buildCompletedNotificationTask(task, actor, RADIOTHERAPY_REVIEW_DUE_NOTE),
+      ),
+    );
+}
+
+/** 通知一覧の行。Task に焼いた値で描く(コースは引き直さない)。 */
+export interface RadiotherapyReviewDueRow extends NotificationRowBase {
+  /** 対象の治療処方。カルテの週次レビューを開くのに使う。 */
+  orderSrId: string;
+  courseLabel: string;
+  /** 前回の診察日。一度も診ていなければ空。 */
+  lastReview: string;
+  /** 前回の診察からの日数(表示のたびに数え直す)。診察が無ければ null。 */
+  elapsed: number | null;
+}
+
+export function radiotherapyReviewDueRowOf(
+  task: fhir4.Task,
+  patient: fhir4.Patient | undefined,
+): RadiotherapyReviewDueRow {
+  const lastReview = taskInputOf(task, LAST_REVIEW_INPUT)?.valueDate ?? "";
+  return {
+    task,
+    patient,
+    patientId: taskPatientId(task),
+    authoredOn: task.authoredOn ?? "",
+    ownerName: taskOwnerName(task),
+    orderSrId: task.focus?.reference?.split("/").pop() ?? "",
+    courseLabel: taskInputOf(task, COURSE_INPUT)?.valueString ?? "",
+    lastReview,
+    elapsed: lastReview ? diffDays(lastReview, today()) : null,
+  };
 }
 
 /** 「診察 09-15（7 日）」。1 件も無ければ「診察なし」。 */

@@ -459,9 +459,9 @@ export function FacilitySettingsPage() {
 
         {/* 放射線治療の治療中の診察。既定の 7 日は外来放射線照射診療料(B001-2-8。7 日間に
             1 回、算定日に放射線治療医の診察)に合わせた値で、入院の患者や施設の運用に合わせて
-            変えられるようにしてある。 */}
+            変えられるようにしてある。テンプレートは記入欄の初期値(選び直しは妨げない)。 */}
         <details className="facility-settings__schedule">
-          <summary>放射線治療の診察間隔</summary>
+          <summary>放射線治療の週次レビュー</summary>
           <div className="facility-settings__schedule-body">
             <label>
               治療中の診察の間隔
@@ -478,6 +478,20 @@ export function FacilitySettingsPage() {
                 />
                 <span className="facility-settings__unit">日以内(最後の診察から)</span>
               </span>
+            </label>
+            <label>
+              週次レビューの既定テンプレート
+              <select
+                value={radiotherapyReview.template}
+                onChange={(e) => setReviewDraft({ ...radiotherapyReview, template: e.target.value })}
+              >
+                <option value="">（なし）</option>
+                {templateOptions.questionnaires.map((q) => (
+                  <option key={q.id} value={questionnaireCanonical(q)}>
+                    {q.title ?? q.name ?? q.id}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
         </details>

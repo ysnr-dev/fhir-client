@@ -1,9 +1,15 @@
 import { useMemo } from "react";
 import { ADVERSE_EVENT_CATEGORY, parseAdverseEvent, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import {
+  DEFAULT_RADIOTHERAPY_REVIEW,
+  RADIOTHERAPY_REVIEW_DUE_TASK_CODE,
+  buildCompletedRadiotherapyReviewDueEntries,
   parseRadiotherapyReview,
+  radiotherapyReviewDueEntry,
+  radiotherapyReviewState,
   radiotherapyReviewsByOrderId,
   type RadiotherapyReview,
+  type RadiotherapyReviewSettings,
 } from "../fhir/radiotherapyReviewHelpers";
 import {
   keepPreviousData,
@@ -377,6 +383,7 @@ import {
   buildRadiotherapyOrderDeleteBundle,
   buildRadiotherapyOrderStatusEntry,
   isRadiotherapyServiceRequest,
+  summarizeRadiotherapyOrder,
   type RadiotherapyTermination,
 } from "../fhir/radiotherapyOrderHelpers";
 import {
@@ -12559,12 +12566,75 @@ export function useUpdateRadiotherapyTaskStatus() {
 // 登録は Procedure を 1 件 POST するだけ。取消は消さずに entered-in-error にする
 // (照射録は保存の対象)。
 
+/** そのコースの未対応の診察督促(通知 Task)。作り直しの抑止と、書いたときに閉じるのに使う。 */
+async function fetchRadiotherapyReviewDueTasks(orderSrId: string): Promise<fhir4.Task[]> {
+  const params = new URLSearchParams();
+  params.set("code", `${TASK_CODE_SYSTEM}|${RADIOTHERAPY_REVIEW_DUE_TASK_CODE.code}`);
+  params.set("focus", `ServiceRequest/${orderSrId}`);
+  params.set("status", "requested");
+  params.set("_count", "10");
+  const { data: bundle } = await searchResource<fhir4.Task>("Task", params);
+  return resourcesOfType<fhir4.Task>(bundle, "Task");
+}
+
+/**
+ * 照射記録の登録。**診察が空いていれば同じ transaction で督促の通知を作る**(§6.3)。
+ * 照射は治療中ほぼ毎日あるので、間隔を超えたことに最初に気づける場所がここになる。
+ * 既に未対応の督促があるコースでは作らない(毎回の照射で作り直さない)。
+ */
 export function useRegisterRadiotherapyFraction() {
   const queryClient = useQueryClient();
+  const facility = useFacilitySettings();
+  const settings = facility.data?.radiotherapy_review ?? DEFAULT_RADIOTHERAPY_REVIEW;
 
   return useMutation({
-    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    mutationFn: async ({ bundle, order }: { bundle: fhir4.Bundle; order: fhir4.ServiceRequest }) => {
+      const due = await radiotherapyReviewDueEntryFor(order, settings);
+      return postBundle(due ? { ...bundle, entry: [...(bundle.entry ?? []), due] } : bundle);
+    },
     onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+async function radiotherapyReviewDueEntryFor(
+  order: fhir4.ServiceRequest,
+  settings: RadiotherapyReviewSettings,
+): Promise<fhir4.BundleEntry | null> {
+  const patientId = order.subject?.reference?.split("/").pop() ?? "";
+  if (!order.id || !patientId) return null;
+
+  const [reviews, tasks] = await Promise.all([
+    fetchRadiotherapyReviewChunk([order.id]),
+    fetchRadiotherapyReviewDueTasks(order.id),
+  ]);
+  if (tasks.length > 0) return null;
+
+  const summary = summarizeRadiotherapyOrder(order);
+  return radiotherapyReviewDueEntry({
+    order,
+    patientId,
+    courseLabel: `第${summary.courseNumber}コース ${summary.siteLabel}`.trim(),
+    state: radiotherapyReviewState(reviews, today(), settings),
+    settings,
+  });
+}
+
+/** 診察を書いたときに、そのコースの督促を閉じる。 */
+export function useCloseRadiotherapyReviewDue() {
+  const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
+
+  return useMutation({
+    mutationFn: async (orderSrId: string) => {
+      if (!enterer) return null;
+      const tasks = await fetchRadiotherapyReviewDueTasks(orderSrId);
+      const entries = buildCompletedRadiotherapyReviewDueEntries(tasks, enterer);
+      if (entries.length === 0) return null;
+      return postBundle({ resourceType: "Bundle", type: "transaction", entry: entries });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+    },
   });
 }
 

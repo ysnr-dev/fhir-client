@@ -68,6 +68,7 @@ import {
   type RadiotherapyTaskStatus,
 } from "../fhir/radiotherapyTaskHelpers";
 import { today } from "../lib/dates";
+import { KARTE_OPEN_PARAM, formatKarteOpen } from "../karteUrl";
 import { useReturnLinkState } from "../returnTo";
 
 // 放射線治療カレンダー(部門の画面。docs/radiotherapy-order-design.md §7)。
@@ -662,6 +663,18 @@ function CourseCard({
                   {action.label}
                 </button>
               ))}
+            {/* 気づく場所(ここ)から書く場所(カルテの右ペイン)へ直に飛ばす。§6.3 */}
+            {patient && order.id && (
+              <Link
+                to={`/patients/${patient.id}/karte?${KARTE_OPEN_PARAM}=${encodeURIComponent(
+                  formatKarteOpen({ kind: "radiotherapy-review", srId: order.id }),
+                )}`}
+                state={returnLinkState}
+                className="row-menu__item"
+              >
+                週次レビュー
+              </Link>
+            )}
             {patient && (
               <Link to={`/patients/${patient.id}/karte`} state={returnLinkState} className="row-menu__item">
                 カルテ表示

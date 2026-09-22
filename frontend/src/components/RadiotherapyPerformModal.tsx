@@ -81,7 +81,11 @@ export function RadiotherapyPerformModal({
     setValidationError(error);
     if (error) return;
 
-    register.mutate(buildRadiotherapyFractionBundle(values, order), { onSuccess: onClose });
+    // 登録のついでに、診察が空いていれば督促の通知が同じ transaction で作られる(§6.3)。
+    register.mutate(
+      { bundle: buildRadiotherapyFractionBundle(values, order), order },
+      { onSuccess: onClose },
+    );
   }
 
   return (

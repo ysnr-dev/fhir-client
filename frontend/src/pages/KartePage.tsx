@@ -258,16 +258,21 @@ export function KartePage() {
 
   const [pane, setPane] = useState<KartePaneState>({ kind: "empty" });
 
-  // 通知・入院患者一覧のリンクから「この入院の退院時サマリー」を右ペインで始める。
+  // 一覧・通知のリンクから右ペインのフォームを開く(退院時サマリー、放射線治療の週次レビュー)。
   // 一回限りの引数なので、読んだら URL から消す(フォームを URL に載せない方針)。
-  const openTarget = parseKarteOpen(searchParams.get(KARTE_OPEN_PARAM));
+  const openValue = searchParams.get(KARTE_OPEN_PARAM);
+  const openTarget = parseKarteOpen(openValue);
   useEffect(() => {
     if (!openTarget) return;
-    setPane({ kind: "summary-create", encounterId: openTarget.encounterId });
+    setPane(
+      openTarget.kind === "discharge-summary"
+        ? { kind: "summary-create", encounterId: openTarget.encounterId }
+        : { kind: "radiotherapy-review", srId: openTarget.srId },
+    );
     updateParams((params) => params.delete(KARTE_OPEN_PARAM));
-    // openTarget は URL から消した時点で null になる(同じ対象で再発火しない)。
+    // URL から消した時点で openValue は null になる(同じ対象で再発火しない)。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openTarget?.encounterId]);
+  }, [openValue]);
   const [mode, setMode] = useState<KarteLeftPaneMode>(readLeftPaneMode);
   const [topRatio, setTopRatio] = useState(readTopRatio);
   const [leftWidthRatio, setLeftWidthRatio] = useState(readLeftWidthRatio);

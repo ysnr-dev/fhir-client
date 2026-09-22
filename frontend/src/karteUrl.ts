@@ -34,13 +34,17 @@ export const KARTE_CARD_PARAM = "card";
  */
 export const KARTE_OPEN_PARAM = "open";
 
-export interface KarteOpenTarget {
-  kind: "discharge-summary";
-  encounterId: string;
-}
+/**
+ * 一覧から「カルテのこのフォームを開く」ために渡す一回限りの引数。読んだら URL から消す
+ * (フォームそのものは URL に載せない)。
+ */
+export type KarteOpenTarget =
+  | { kind: "discharge-summary"; encounterId: string }
+  | { kind: "radiotherapy-review"; srId: string };
 
 export function formatKarteOpen(target: KarteOpenTarget): string {
-  return `${target.kind}:${target.encounterId}`;
+  const id = target.kind === "discharge-summary" ? target.encounterId : target.srId;
+  return `${target.kind}:${id}`;
 }
 
 export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
@@ -48,9 +52,11 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   const separator = value.indexOf(":");
   if (separator < 0) return null;
   const kind = value.slice(0, separator);
-  const encounterId = value.slice(separator + 1);
-  if (kind !== "discharge-summary" || !encounterId) return null;
-  return { kind, encounterId };
+  const id = value.slice(separator + 1);
+  if (!id) return null;
+  if (kind === "discharge-summary") return { kind, encounterId: id };
+  if (kind === "radiotherapy-review") return { kind, srId: id };
+  return null;
 }
 
 export const KARTE_TABS = [
