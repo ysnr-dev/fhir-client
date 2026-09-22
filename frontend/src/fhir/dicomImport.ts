@@ -1,12 +1,17 @@
 import dicomParser from "dicom-parser";
 import { Unzip, UnzipInflate } from "fflate";
+import { parseDicomdir } from "./dicomdir";
 import { decodeDicomText, dicomPersonName } from "./dicomText";
 
 // DICOM の取込(docs/imaging-design.md)。選ばれたファイル・フォルダ・ZIP から DICOM を
 // 拾い、タグを読んでスタディ・シリーズに振り分ける。
 //
-// DICOMDIR(CD の目次)は読まない。目次が無い・壊れている・一部だけコピーされた、の
-// どれでも同じに扱えるよう、ファイル 1 つずつのタグだけを根拠にする。拡張子も見ない
+// PDI のディスク(DICOMDIR のあるフォルダ)は目次を先に読み、そこに載っているファイルだけ
+// を相手にする。ビューアのプログラムや Web 表示用の JPEG を読まずに済み、一覧もファイルを
+// 開く前に出る。
+//
+// 目次が無い・壊れている・中のファイルが 1 つも見つからないときは、選ばれたファイルを
+// 1 つずつ見て、タグ(Study / Series / SOP Instance UID)だけで振り分ける。拡張子は見ない
 // (CD の中身は IMG0001 のように拡張子が無い)。
 
 /** backend の /imaging/instances に meta として送る属性(列名と同じ)。 */
@@ -35,6 +40,14 @@ export interface ParsedInstance {
   name: string;
   blob: Blob;
   meta: DicomInstanceMeta;
+  /** meta が目次(DICOMDIR)から来たもの。送る前にファイル本体のタグで取り直す。 */
+  indexed?: boolean;
+}
+
+/** 選ばれたファイル 1 つ。path は選んだフォルダから見た位置(目次との突き合わせに使う)。 */
+export interface SelectedFile {
+  file: File;
+  path: string;
 }
 
 export interface ParsedSeries {
@@ -218,9 +231,117 @@ async function collectFromZip(file: File, onInstance: OnInstance): Promise<void>
   }
 }
 
-/** 選ばれたファイルから DICOM を拾う。ZIP は中身を展開して拾う。 */
+/** 目次のファイル名。PDI ではディスクのルートに、この名前で置かれる。 */
+const DICOMDIR_NAME = "DICOMDIR";
+/** 目次から拾ったスタディの頭 1 枚を読むときの並行数。 */
+const HEAD_READ_CONCURRENCY = 4;
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\/+/, "").toUpperCase();
+}
+
+function baseNameOf(path: string): string {
+  return path.slice(path.lastIndexOf("/") + 1);
+}
+
+function dirNameOf(path: string): string {
+  const at = path.lastIndexOf("/");
+  return at < 0 ? "" : path.slice(0, at);
+}
+
+/**
+ * 目次(DICOMDIR)に載っているファイルを拾う。目次が無い・読めない・指しているファイルが
+ * 1 つも選ばれていないときは false(呼び側はファイルを 1 つずつ見る方に回る)。
+ */
+async function collectFromDicomdir(
+  files: readonly SelectedFile[],
+  onInstance: OnInstance,
+  errors: string[],
+): Promise<boolean> {
+  const catalogs = files.filter((f) => baseNameOf(normalizePath(f.path)) === DICOMDIR_NAME);
+  if (catalogs.length === 0) return false;
+
+  // 目次を使えたときだけ伝える。使えずに 1 ファイルずつ見る方へ回るなら、そちらの
+  // 結果がすべてなので黙る。
+  const notes: string[] = [];
+
+  const byPath = new Map(files.map((f) => [normalizePath(f.path), f]));
+  // フォルダではなくファイルを直に選ぶと位置が分からないので、ディスクの中で名前が
+  // 1 つしかないファイルに限って、名前でも突き合わせる。
+  const byName = new Map<string, SelectedFile | null>();
+  for (const file of files) {
+    const name = baseNameOf(normalizePath(file.path));
+    byName.set(name, byName.has(name) ? null : file);
+  }
+
+  let matched = 0;
+  let missing = 0;
+  for (const catalog of catalogs) {
+    let entries;
+    try {
+      entries = parseDicomdir(new Uint8Array(await catalog.file.arrayBuffer()));
+    } catch {
+      notes.push(`${catalog.file.name}: 目次(DICOMDIR)を読めませんでした。`);
+      continue;
+    }
+    const base = dirNameOf(normalizePath(catalog.path));
+    for (const entry of entries) {
+      const file =
+        byPath.get(base ? `${base}/${entry.path}` : entry.path) ?? byName.get(baseNameOf(entry.path));
+      if (!file) {
+        missing += 1;
+        continue;
+      }
+      matched += 1;
+      onInstance({
+        key: entry.meta.sop_instance_uid,
+        name: file.file.name,
+        blob: file.file,
+        meta: entry.meta,
+        indexed: true,
+      });
+    }
+  }
+
+  if (matched === 0) return false;
+  if (missing > 0) {
+    notes.push(`目次にある ${missing} 件のファイルが、選んだ中にありませんでした。`);
+  }
+  errors.push(...notes);
+  return true;
+}
+
+/**
+ * 目次には施設名・部位が無いので、スタディごとに 1 枚だけファイルのタグを読んで補う。
+ * 一覧は空でない値を拾うので、1 枚の meta を本物に差し替えれば足りる。
+ */
+async function fillHeadOfEachStudy(instances: readonly ParsedInstance[]): Promise<void> {
+  const heads = new Map<string, ParsedInstance>();
+  for (const instance of instances) {
+    if (!instance.indexed) continue;
+    const studyUid = instance.meta.study_instance_uid;
+    if (!heads.has(studyUid)) heads.set(studyUid, instance);
+  }
+  await runPool([...heads.values()], HEAD_READ_CONCURRENCY, async (instance) => {
+    const parsed = await parseInstance(instance.name, instance.blob);
+    if (!parsed) return;
+    instance.meta = parsed.meta;
+    instance.indexed = false;
+  });
+}
+
+/**
+ * 送る 1 件。目次から作ったものは、ここでファイル本体のタグを読んで meta を作り直す
+ * (目次に無い属性があり、目次の値がファイルと食い違っていることもある)。
+ */
+export async function instanceToSend(instance: ParsedInstance): Promise<ParsedInstance> {
+  if (!instance.indexed) return instance;
+  return (await parseInstance(instance.name, instance.blob)) ?? instance;
+}
+
+/** 選ばれたファイルから DICOM を拾う。目次があればそれに従い、ZIP は中身を展開して拾う。 */
 export async function collectDicomInstances(
-  files: readonly File[],
+  files: readonly SelectedFile[],
   onProgress?: (progress: CollectProgress) => void,
 ): Promise<{ instances: ParsedInstance[]; errors: string[] }> {
   const found = new Map<string, ParsedInstance>();
@@ -231,7 +352,13 @@ export async function collectDicomInstances(
     onProgress?.({ found: found.size });
   };
 
-  for (const file of files) {
+  if (await collectFromDicomdir(files, add, errors)) {
+    const instances = [...found.values()];
+    await fillHeadOfEachStudy(instances);
+    return { instances, errors };
+  }
+
+  for (const { file } of files) {
     try {
       const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
       if (isZip(head)) {
@@ -263,12 +390,12 @@ function readAllEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEn
   });
 }
 
-async function filesOfEntry(entry: FileSystemEntry): Promise<File[]> {
+async function filesOfEntry(entry: FileSystemEntry): Promise<SelectedFile[]> {
   if (entry.isFile) {
     const file = await new Promise<File>((resolve, reject) =>
       (entry as FileSystemFileEntry).file(resolve, reject),
     );
-    return [file];
+    return [{ file, path: entry.fullPath.replace(/^\/+/, "") || file.name }];
   }
   if (!entry.isDirectory) return [];
   const children = await readAllEntries((entry as FileSystemDirectoryEntry).createReader());
@@ -276,14 +403,23 @@ async function filesOfEntry(entry: FileSystemEntry): Promise<File[]> {
   return nested.flat();
 }
 
+/** input[type=file] が返したものを、位置つきのファイルにする。 */
+export function selectedFilesOf(files: FileList | null): SelectedFile[] {
+  return Array.from(files ?? []).map((file) => ({
+    file,
+    path: file.webkitRelativePath || file.name,
+  }));
+}
+
 /** ドロップされたもの(ファイル・フォルダの混在)を、中のファイルに開く。 */
-export async function filesFromDataTransfer(dataTransfer: DataTransfer): Promise<File[]> {
+export async function filesFromDataTransfer(dataTransfer: DataTransfer): Promise<SelectedFile[]> {
   // エントリはイベントの処理中にしか取り出せないので、await の前に集めきる。
   const entries = Array.from(dataTransfer.items)
     .filter((item) => item.kind === "file")
     .map((item) => item.webkitGetAsEntry?.() ?? null);
-  const fallback = Array.from(dataTransfer.files);
-  if (entries.length === 0 || entries.some((entry) => entry === null)) return fallback;
+  if (entries.length === 0 || entries.some((entry) => entry === null)) {
+    return selectedFilesOf(dataTransfer.files);
+  }
   const nested = await Promise.all((entries as FileSystemEntry[]).map(filesOfEntry));
   return nested.flat();
 }

@@ -5,15 +5,18 @@ import {
   collectDicomInstances,
   filesFromDataTransfer,
   groupStudies,
+  instanceToSend,
   runPool,
+  selectedFilesOf,
   type ParsedInstance,
   type ParsedStudy,
+  type SelectedFile,
 } from "../fhir/dicomImport";
 import { displayName, patientNumberOf } from "../fhir/patientHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 
-// DICOM の取込フォーム(docs/imaging-design.md)。ファイル・フォルダ・ZIP(CD の中身)を
-// 受け取り、ブラウザでタグを読んでスタディごとに並べ、選ばれたスタディだけを送る。
+// DICOM の取込フォーム(docs/imaging-design.md)。ファイル・フォルダ(PDI のディスクごと)・
+// ZIP を受け取り、ブラウザで中身を読んでスタディごとに並べ、選ばれたスタディだけを送る。
 //
 // 送るのはインスタンス 1 件ずつ。同じ UID の送り直しは backend が成功として扱うので、
 // 失敗したぶんの再送も、取込済みスタディへの追加も、同じ操作でよい。
@@ -73,7 +76,7 @@ export default function KarteImagingImportForm({
     setOverrides((prev) => new Map(prev).set(study.studyUid, next));
   }
 
-  async function addFiles(files: File[]) {
+  async function addFiles(files: SelectedFile[]) {
     if (files.length === 0) return;
     setPhase({ kind: "reading", found: 0 });
     const result = await collectDicomInstances(files, ({ found }) =>
@@ -92,7 +95,7 @@ export default function KarteImagingImportForm({
   }
 
   function handleFileInput(e: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
+    const files = selectedFilesOf(e.target.files);
     // 同じファイルを続けて選び直せるよう、読み込み前に入力を空にしておく。
     e.target.value = "";
     void addFiles(files);
@@ -127,7 +130,7 @@ export default function KarteImagingImportForm({
     let done = 0;
     await runPool(targets, UPLOAD_CONCURRENCY, async (instance) => {
       try {
-        await uploadDicomInstance(patientId, instance);
+        await uploadDicomInstance(patientId, await instanceToSend(instance));
         succeeded.add(instance.key);
       } catch (err) {
         failures.add(instance.key);
