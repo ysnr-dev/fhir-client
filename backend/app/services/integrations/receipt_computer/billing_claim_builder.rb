@@ -5,6 +5,12 @@ module Integrations
     # 集める単位は「患者 + 診療日」。オーダーは Encounter を参照していない
     # (カルテでは日付で束ねている)ので、日付で揃えるのが素直。
     #
+    # 何を軸にするかは種別で違う(OrderCatalog)。
+    # - 実施入力を持つ種別は実施記録(Procedure)。実施した手技・薬剤・材料をそのまま送り、
+    #   当日のオーダーに実施記録が無ければ「未実施」として送らない。
+    # - 実施入力を持たない種別と処方はオーダー。日付はオーダーの実施(予定)日 occurrence で、
+    #   登録日 authoredOn ではない(予約検査を登録した日の会計に載せないため)。
+    #
     # レセプト電算コードが引けない項目は落とすが、黙って消さずに skipped に積んで
     # プレビューとログに出す。
     class BillingClaimBuilder
@@ -30,31 +36,74 @@ module Integrations
       def call(patient_fhir_id:, perform_date:)
         date = perform_date.to_s
         skipped = []
-        items = prescription_items(patient_fhir_id, date, skipped) +
-                order_items(patient_fhir_id, date, skipped)
 
-        Built.new(items: items, skipped: skipped)
+        performed = collector.call(patient_fhir_id: patient_fhir_id, perform_date: date)
+        report_orphans(performed.orphans, skipped)
+        performed_items = PerformedItemBuilder.new(skipped).call(performed.records)
+        performed_order_ids = performed.records.map(&:order_id).compact.to_set
+
+        requests = order_requests(patient_fhir_id, date)
+        items = prescription_items(requests, date, skipped) +
+                order_items(requests, date, skipped, performed_order_ids) +
+                performed_items
+
+        Built.new(items: merge_repeats(items), skipped: skipped)
       end
 
       private
 
       attr_reader :store
 
+      def collector = @collector ||= PerformedRecordCollector.new(store: store)
+
       def alive?(resource) = DEAD_STATUSES.exclude?(resource["status"])
 
-      def on_date?(resource, date) = resource["authoredOn"].to_s[0, 10] == date
+      def on_date?(resource, date) = LocalDate.of(resource["occurrenceDateTime"]) == date
+
+      # 当日実施(予定)のオーダーのヘッダと、その明細・処方薬を 1 往復で引く。
+      def order_requests(patient_fhir_id, date)
+        store.search("ServiceRequest", {
+                       "subject" => "Patient/#{patient_fhir_id}",
+                       "occurrence" => date,
+                       "_revinclude" => "ServiceRequest:based-on",
+                       "_revinclude:iterate" => "MedicationRequest:based-on",
+                       "_count" => "500"
+                     }).uniq { |r| [r["resourceType"], r["id"]] }
+      end
+
+      # 当日のオーダーのヘッダ。処方は他の種別より前からあり order-type を持たないので、
+      # 種別が無いことで処方と判定する(frontend の isPrescriptionServiceRequest と同じ規約)。
+      # 明細(basedOn を持つ)はヘッダではない。
+      def headers_of(requests, date, prescription: false)
+        requests.select { |r| r["resourceType"] == "ServiceRequest" && Array(r["basedOn"]).empty? }
+                .select { |r| order_type_of(r).present? != prescription }
+                .select { |r| alive?(r) && on_date?(r, date) }
+      end
+
+      def order_type_of(header) = Coding.code_in_list(header["category"], Coding::ORDER_TYPE)
+
+      # basedOn でヘッダを指す明細(ServiceRequest / MedicationRequest)をヘッダ id ごとに。
+      def group_by_parent(requests, resource_type)
+        requests.select { |r| r["resourceType"] == resource_type && alive?(r) }
+                .each_with_object(Hash.new { |h, k| h[k] = [] }) do |request, acc|
+          Array(request["basedOn"]).each do |reference|
+            id = Coding.reference_id(reference["reference"])
+            acc[id] << request if id.present?
+          end
+        end
+      end
 
       # ---- 処方 ----
 
-      def prescription_items(patient_fhir_id, date, skipped)
-        requests = store
-                   .search("MedicationRequest",
-                           { "subject" => "Patient/#{patient_fhir_id}", "authoredon" => date, "_count" => "500" })
-                   .select { |r| alive?(r) && on_date?(r, date) }
+      def prescription_items(requests, date, skipped)
+        by_header = group_by_parent(requests, "MedicationRequest")
 
-        # RP 番号でまとめる。1 つの RP が 1 つの剤になる。
-        requests.group_by { |r| rp_number(r) }.sort_by { |rp, _| rp.to_i }.filter_map do |rp, lines|
-          build_prescription(rp, lines, skipped)
+        headers_of(requests, date, prescription: true).flat_map do |header|
+          lines = by_header[header["id"]]
+          # RP 番号でまとめる。1 つの RP が 1 つの剤になる。
+          lines.group_by { |r| rp_number(r) }.sort_by { |rp, _| rp.to_i }.filter_map do |rp, group|
+            build_prescription(rp, group, skipped)
+          end
         end
       end
 
@@ -86,7 +135,8 @@ module Integrations
           lines: built,
           days: prescription_count(lines.first, dosage),
           usage_code: usage&.dig("code"),
-          usage_name: usage&.dig("display")
+          usage_name: usage&.dig("display"),
+          source_ref: "MedicationRequest/#{lines.first['id']}"
         )
       end
 
@@ -97,17 +147,17 @@ module Integrations
         return ORAL if category == OrderCatalog::USAGE_CATEGORY_ORAL
         return TOPICAL if category == OrderCatalog::USAGE_CATEGORY_TOPICAL
 
-        # 注射・注入は剤の組み方も算定も別で、外来の会計では扱えない(第2段階)。
+        # 注射・注入の処方は注射オーダー(実施記録)の側で送る。
         nil
       end
 
       # 内服は投与日数、頓用は投与回数。
       def prescription_count(request, dosage)
         days = request.dig("dispenseRequest", "expectedSupplyDuration", "value")
-        return format_number(days) if days.present?
+        return Numbers.format(days) if days.present?
 
         count = dosage.dig("timing", "repeat", "count")
-        return format_number(count) if count.present?
+        return Numbers.format(count) if count.present?
 
         "1"
       end
@@ -127,64 +177,67 @@ module Integrations
           return nil
         end
 
-        BillingLine.new(code: code, name: medication_name(request), quantity: dose_of(request))
+        dose = request.dig("dosageInstruction", 0, "doseAndRate", 0, "doseQuantity")
+        BillingLine.new(code: code, name: medication_name(request), kind: :medicine,
+                        quantity: dose && dose["value"] ? Numbers.format(dose["value"]) : nil,
+                        unit: dose&.dig("unit"))
       end
 
       def medication_name(request)
         request.dig("medicationCodeableConcept", "text").presence || ""
       end
 
-      def dose_of(request)
-        value = request.dig("dosageInstruction", 0, "doseAndRate", 0, "doseQuantity", "value")
-        value.nil? ? nil : format_number(value)
-      end
+      # ---- 検査・処置などのオーダー ----
 
-      # 1.0 を "1" に、0.5 を "0.5" にする。
-      def format_number(value)
-        float = value.to_f
-        float == float.to_i ? float.to_i.to_s : float.to_s
-      end
+      def order_items(requests, date, skipped, performed_order_ids)
+        details_by_parent = group_by_parent(requests, "ServiceRequest")
 
-      # ---- 検査・処置・手術などのオーダー ----
+        headers_of(requests, date).filter_map do |header|
+          order_type = order_type_of(header)
+          next if OrderCatalog.ignored?(order_type)
 
-      def order_items(patient_fhir_id, date, skipped)
-        requests = store
-                   .search("ServiceRequest",
-                           { "subject" => "Patient/#{patient_fhir_id}", "authoredon" => date, "_count" => "500" })
-                   .select { |r| alive?(r) }
-
-        headers = requests.select { |r| Coding.code_in_list(r["category"], Coding::ORDER_TYPE).present? }
-                          .select { |r| on_date?(r, date) }
-        details_by_parent = group_details(requests)
-
-        headers.filter_map do |header|
-          order_type = Coding.code_in_list(header["category"], Coding::ORDER_TYPE)
           definition = OrderCatalog.find(order_type)
-          details = details_by_parent[header["id"]] || []
-          next if details.empty?
+          details = details_by_parent[header["id"]]
 
           if definition.nil?
-            unless ignorable?(order_type)
-              skipped << Skipped.new(kind: order_type, name: header.dig("code", "text").presence || order_type,
-                                     reason: "この種別はまだ医事会計へ送りません")
-            end
+            skipped << Skipped.new(kind: OrderCatalog.pending_label(order_type) || order_type,
+                                   name: header.dig("code", "text").presence || order_type,
+                                   reason: "この種別はまだ医事会計へ送りません")
             next
+          end
+          next if details.empty?
+
+          if definition.performed?
+            next if performed_order_ids.include?(header["id"])
+            next unless completed_without_record?(definition, header, details, skipped)
           end
 
           build_order_item(definition, details, skipped)
         end
       end
 
-      # 処方は別経路で送るので「送れなかった」扱いにしない。
-      def ignorable?(order_type) = order_type == "prescription"
+      # 実施記録の無い当日のオーダー。実施入力をしない項目だけのオーダーは部門が
+      # Task を実施済にするだけで記録を作らないので、そのときに限りオーダーから組む。
+      def completed_without_record?(definition, header, details, skipped)
+        item_codes = details.filter_map { |d| Coding.code_of(d["code"], definition.coding_system) }
+        name = header.dig("code", "text").presence || definition.label
 
-      def group_details(requests)
-        requests.each_with_object(Hash.new { |h, k| h[k] = [] }) do |request, acc|
-          Array(request["basedOn"]).each do |reference|
-            id = reference["reference"].to_s.split("/").last
-            acc[id] << request if id.present?
-          end
+        if definition.perform_input_required?(item_codes)
+          skipped << Skipped.new(kind: definition.label, name: name,
+                                 reason: "実施記録がありません(未実施のため送りません)")
+          return false
         end
+
+        return true if task_completed?(header["id"])
+
+        skipped << Skipped.new(kind: definition.label, name: name,
+                               reason: "部門で実施済になっていません")
+        false
+      end
+
+      def task_completed?(order_id)
+        store.search("Task", { "focus" => "ServiceRequest/#{order_id}", "_count" => "10" }, limit: 10)
+             .any? { |t| t["status"] == "completed" }
       end
 
       def build_order_item(definition, details, skipped)
@@ -202,11 +255,43 @@ module Integrations
             next
           end
 
-          BillingLine.new(code: receipt_code, name: name, quantity: "1")
+          quantity = detail.dig("quantityQuantity", "value")
+          BillingLine.new(code: receipt_code, name: name, kind: :procedure,
+                          quantity: quantity ? Numbers.format(quantity) : "1")
         end
         return nil if lines.empty?
 
+        sections = ProcedureSections.lookup(lines.map(&:code))
+        lines.each { |line| line.section = sections[line.code] }
+
         BillingItem.new(category: definition.order_type.to_sym, name: definition.label, lines: lines)
+      end
+
+      # 帰属先の無い実施記録の子・薬剤。取消の途中で残ったものなどで、送る先が決まらない。
+      def report_orphans(orphans, skipped)
+        orphans.each do |resource|
+          concept = resource["code"] || resource["medicationCodeableConcept"]
+          skipped << Skipped.new(kind: "実施記録", name: concept&.dig("text").presence || resource["id"].to_s,
+                                 reason: "実施記録の親が当日に見つかりません")
+        end
+      end
+
+      # 同じ内容の剤(同じ処置を 2 回など)は 1 剤にまとめて回数にする。
+      # 処方は日数を持つので対象にしない(RP は 1 つが 1 剤)。
+      def merge_repeats(items)
+        items.each_with_object([]) do |item, acc|
+          twin = item.days.nil? && acc.find { |other| other.days.nil? && same_content?(other, item) }
+          if twin
+            twin.count = ((twin.count || 1).to_i + 1).to_s
+          else
+            acc << item
+          end
+        end
+      end
+
+      def same_content?(a, b)
+        a.category == b.category &&
+          a.lines.map { |l| [l.kind, l.code, l.quantity] } == b.lines.map { |l| [l.kind, l.code, l.quantity] }
       end
     end
   end

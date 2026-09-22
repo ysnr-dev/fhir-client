@@ -6,6 +6,7 @@ import {
   useCancelBilling,
   useSendBilling,
 } from "../api/receiptQueries";
+import type { BillingItem, BillingLine } from "../api/receiptClient";
 import { coverageSetsOf } from "../fhir/coverageHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
@@ -31,7 +32,36 @@ const CATEGORY_LABELS: Record<string, string> = {
   rad: "放射線検査",
   treatment: "処置",
   surgery: "手術",
+  injection: "注射",
+  transfusion: "輸血",
+  pathology: "病理検査",
+  rehab: "リハビリ",
+  radiotherapy: "放射線治療",
+  "nutrition-guidance": "栄養指導",
 };
+
+const LINE_KIND_LABELS: Record<BillingLine["kind"], string> = {
+  procedure: "手技",
+  medicine: "薬剤",
+  material: "材料",
+  comment: "コメント",
+};
+
+/** 剤の見出し。区分名があればそれを先頭に、回数・日数は 1 のとき出さない。 */
+function itemHeading(item: BillingItem): string {
+  const label = item.class_name ?? CATEGORY_LABELS[item.category] ?? item.category;
+  const name = item.name === label ? "" : ` ${item.name}`;
+  const times = item.count && item.count !== "1" ? ` ×${item.count}回` : "";
+  const days = !item.count && item.days && item.days !== "1" ? ` ${item.days}日分` : "";
+  return `${label}${name}${times}${days}`;
+}
+
+function performedTime(value: string | undefined): string {
+  if (!value || value.length <= 10) return "";
+  const time = new Date(value);
+  if (Number.isNaN(time.getTime())) return "";
+  return `${String(time.getHours()).padStart(2, "0")}:${String(time.getMinutes()).padStart(2, "0")}`;
+}
 
 /**
  * 診察終了時の会計送信。何が送られて何が送られないかを見せてから送る。
@@ -124,16 +154,21 @@ export function BillingSendModal({
               <ul className="receipt-send__list">
                 {items.map((item, index) => (
                   <li key={index}>
-                    <strong>
-                      {CATEGORY_LABELS[item.category] ?? item.category} {item.name}
-                      {item.days && item.days !== "1" ? ` ${item.days}日分` : ""}
-                    </strong>
+                    <strong>{itemHeading(item)}</strong>
+                    {performedTime(item.performed_at) && (
+                      <span className="receipt-send__time">{performedTime(item.performed_at)} 実施</span>
+                    )}
                     {item.usage_name && <div>{item.usage_name}</div>}
                     <ul>
                       {item.lines.map((line, i) => (
                         <li key={i}>
+                          <span className={`receipt-send__kind receipt-send__kind--${line.kind}`}>
+                            {LINE_KIND_LABELS[line.kind] ?? line.kind}
+                          </span>
                           {line.name || line.code}
-                          {line.quantity && line.quantity !== "1" ? ` ${line.quantity}` : ""}
+                          {line.quantity && (line.quantity !== "1" || line.unit)
+                            ? ` ${line.quantity}${line.unit ?? ""}`
+                            : ""}
                         </li>
                       ))}
                     </ul>

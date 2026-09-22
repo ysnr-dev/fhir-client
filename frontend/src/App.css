@@ -18007,6 +18007,31 @@ button.chemo-calendar__cell[draggable="true"] {
   color: var(--danger, var(--text));
 }
 
+/* 剤の見出しに添える実施時刻。 */
+.receipt-send__time {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--text-muted, var(--text));
+}
+
+/* 行の種類(手技・薬剤・材料・コメント)。名称の前に小さく置く。 */
+.receipt-send__kind {
+  display: inline-block;
+  min-width: 3em;
+  margin-right: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--text-muted, var(--text));
+}
+
+.receipt-send__kind--comment {
+  border-style: dashed;
+}
+
 /* ---- 放射線治療(治療処方) ---- */
 
 /* 標的・Phase の 1 件。入れ物の fieldset が flex なので、行の幅いっぱいに置く

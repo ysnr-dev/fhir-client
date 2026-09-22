@@ -32,21 +32,38 @@ module Integrations
         keyword_init: true
       )
 
-      # カルテ → レセコンへ送る 1 受診ぶんの会計。
+      # カルテ → レセコンへ送る 1 受診ぶんの会計。time は診療の開始時刻(HH:MM)。
       BillingClaim = Struct.new(
-        :patient_number, :date, :department_code, :physician_code,
+        :patient_number, :date, :time, :department_code, :physician_code,
         :coverage_set_key, :items, :auto_basic_fee,
         keyword_init: true
       )
 
-      # 会計の 1 明細。category は :prescription / :injection / :lab / :imaging / :procedure など。
+      # 会計の 1 剤。category は :oral / :as_needed / :topical / :lab / :rad / :treatment など。
+      #
+      # - days は内服の投与日数、count は処置などの回数。どちらも無ければ 1 回。
+      # - route / method / usage_type は注射の投与経路・手技・用法種別で、
+      #   注射の剤区分を連携先が決めるときに使う。
+      # - performed_at は実施日時、source_ref は元になった記録("Procedure/xx" など)。
       BillingItem = Struct.new(
-        :category, :name, :lines, :days, :usage_code, :usage_name,
+        :category, :name, :lines, :days, :count, :usage_code, :usage_name,
+        :route, :method, :usage_type, :performed_at, :source_ref,
         keyword_init: true
       )
 
-      # 明細に並ぶ 1 行(薬剤・手技・材料)。
-      BillingLine = Struct.new(:code, :name, :quantity, :unit, keyword_init: true)
+      # 剤に並ぶ 1 行。kind は :procedure(手技・加算)/ :medicine(薬剤)/ :material(材料)/
+      # :comment(コメント)。section は手技の点数表の区分番号(章記号 + 3 桁、例 "K920")で、
+      # 連携先が剤の区分を決める手がかりになる。generic は一般名処方の薬剤。
+      BillingLine = Struct.new(:code, :name, :quantity, :unit, :kind, :section, :generic, keyword_init: true) do
+        def kind = self[:kind] || :procedure
+      end
+
+      # 画面に見せる剤。連携先の区分(class_code / class_name)を添えた BillingItem で、
+      # 実際に送る電文の剤の並びに合わせて分割・命名されている。
+      PreviewItem = Struct.new(
+        :category, :name, :class_code, :class_name, :count, :days, :usage_name, :performed_at, :lines,
+        keyword_init: true
+      )
 
       # 保険病名。
       Diagnosis = Struct.new(

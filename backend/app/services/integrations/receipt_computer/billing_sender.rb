@@ -13,15 +13,17 @@ module Integrations
         @log = log
       end
 
-      # 画面に出す送信内容。送る明細・病名・送れない項目を一度に返す。
+      # 画面に出す送信内容。送る剤・病名・送れない項目を一度に返す。
+      # 剤はレセコンが実際に送る並び(区分ごと)に分けて見せる。
       def preview(patient_fhir_id:, perform_date:)
         built = builder.call(patient_fhir_id: patient_fhir_id, perform_date: perform_date)
         diagnoses = collector.call(patient_fhir_id: patient_fhir_id, perform_date: perform_date)
+        described, dropped = describe(built.items)
 
         {
-          items: built.items.map { |i| item_json(i) },
+          items: described.map { |i| item_json(i) },
           diagnoses: diagnoses.map { |d| diagnosis_json(d) },
-          skipped: built.skipped.map(&:to_h)
+          skipped: built.skipped.map(&:to_h) + dropped
         }
       end
 
@@ -76,6 +78,15 @@ module Integrations
       attr_reader :store, :log
 
       def adapter = @adapter ||= ReceiptComputer.adapter!
+
+      # 接続設定が無くてもプレビューは出せるようにする(区分名が付かないだけ)。
+      def describe(items)
+        adapter.describe_billing(items)
+      rescue NotConfigured
+        [items.map { |i| PreviewItem.new(category: i.category, name: i.name, count: i.count, days: i.days,
+                                         usage_name: i.usage_name, performed_at: i.performed_at,
+                                         lines: i.lines) }, []]
+      end
 
       def builder = @builder ||= BillingClaimBuilder.new(store: store)
 
@@ -133,9 +144,16 @@ module Integrations
         {
           category: item.category.to_s,
           name: item.name,
+          class_code: item.class_code,
+          class_name: item.class_name,
+          count: item.count,
           days: item.days,
           usage_name: item.usage_name,
-          lines: item.lines.map { |l| { code: l.code, name: l.name, quantity: l.quantity } }
+          performed_at: item.performed_at,
+          lines: item.lines.map do |l|
+            { code: l.code, name: l.name, quantity: l.quantity, unit: l.unit, kind: l.kind.to_s,
+              section: l.section }.compact
+          end
         }.compact
       end
 

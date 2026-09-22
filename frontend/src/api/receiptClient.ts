@@ -39,18 +39,36 @@ export interface ReceiptResult {
   skipped: ReceiptSkipped[];
 }
 
+/** 剤に並ぶ 1 行。kind は手技(加算を含む)・薬剤・材料・コメント。 */
+export type BillingLineKind = "procedure" | "medicine" | "material" | "comment";
+
 export interface BillingLine {
   code: string;
   name: string;
-  quantity: string | null;
+  quantity?: string;
+  unit?: string;
+  kind: BillingLineKind;
+  /** 点数表の区分番号(章記号 + 3 桁)。診療行為マスタに無いコードでは付かない。 */
+  section?: string;
 }
 
+/**
+ * 画面に見せる剤。レセコンが実際に受ける並び(区分ごと)に分けてある。
+ * class_code / class_name はレセコン側の区分で、接続設定が無いプレビューでは付かない。
+ */
 export interface BillingItem {
   /** 内服・頓用・外用・検査・処置など。 */
   category: string;
   name: string;
+  class_code?: string;
+  class_name?: string;
+  /** 回数(処置など)。 */
+  count?: string;
+  /** 投与日数(内服)。 */
   days?: string;
   usage_name?: string;
+  /** 実施日時。実施記録から組んだ剤に付く。 */
+  performed_at?: string;
   lines: BillingLine[];
 }
 

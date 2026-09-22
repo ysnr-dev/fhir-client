@@ -67,6 +67,20 @@ module Integrations
         BillingStatus.new(sent: uid.present?, detail: uid)
       end
 
+      # 画面に見せる剤。日レセの剤(診療種別区分ごと)に分けた並びを、区分名つきで返す。
+      def describe_billing(items)
+        groups, dropped = MedicalMessage.split(items)
+        described = groups.map do |group|
+          PreviewItem.new(
+            category: group.item.category, name: group.item.name,
+            class_code: group.medical_class, class_name: MedicalMessage.class_name(group.medical_class),
+            count: group.item.count, days: group.item.days, usage_name: group.item.usage_name,
+            performed_at: group.item.performed_at, lines: group.lines
+          )
+        end
+        [described, dropped]
+      end
+
       def send_billing(claim)
         classes, dropped = MedicalMessage.build(claim.items)
         if classes.empty?
