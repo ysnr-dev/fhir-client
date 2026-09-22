@@ -7,7 +7,10 @@ import {
   useRescheduleRadiotherapyFraction,
   useRestoreRadiotherapyFraction,
   useRadiotherapyCourseFractions,
+  useFacilitySettings,
+  useRadiotherapyCourseReviews,
   useRadiotherapyProcedures,
+  useRadiotherapyReviews,
   useRadiotherapyWorklist,
   useTreatmentAdverseEvents,
   useUpdateRadiotherapyTaskStatus,
@@ -43,6 +46,13 @@ import {
   summarizeRadiotherapyOrder,
   type RadiotherapyOrderSummary,
 } from "../fhir/radiotherapyOrderHelpers";
+import {
+  DEFAULT_RADIOTHERAPY_REVIEW,
+  radiotherapyReviewLabel,
+  radiotherapyReviewState,
+  type RadiotherapyReview,
+  type RadiotherapyReviewState,
+} from "../fhir/radiotherapyReviewHelpers";
 import {
   radiotherapyPlanEligibility,
   radiotherapyProgress,
@@ -84,6 +94,7 @@ interface Terminating {
 }
 
 const EMPTY_FRACTIONS: RadiotherapyFractionDisplay[] = [];
+const EMPTY_REVIEWS: RadiotherapyReview[] = [];
 
 export function RadiotherapyWorklistPage() {
   const [date, setDate] = useState(today);
@@ -140,6 +151,11 @@ export function RadiotherapyWorklistPage() {
     [sourcesSettled, worklist.data, openCourses.data],
   );
   const procedures = useRadiotherapyProcedures(courseIds);
+  // 治療中のコースの診察(週次レビュー)。最後の診察からの日数をカードに出す(§6.3)。
+  // 間隔は施設設定(既定 7 日。外来放射線照射診療料に合わせた値)。
+  const reviews = useRadiotherapyReviews(courseIds);
+  const facility = useFacilitySettings();
+  const reviewSettings = facility.data?.radiotherapy_review ?? DEFAULT_RADIOTHERAPY_REVIEW;
   // 回数・累積線量・装置の絞り込みは照射記録が要る。届くまでは伏せる(0 回と見せない)。
   const fractionsReady = procedures.data !== undefined;
 
@@ -148,6 +164,10 @@ export function RadiotherapyWorklistPage() {
   const fractionsOf = (orderId: string | undefined) =>
     procedures.data?.fractions.get(orderId ?? "") ?? EMPTY_FRACTIONS;
   const summaryOf = (orderId: string | undefined) => procedures.data?.summaries.get(orderId ?? "");
+  const reviewStateOf = (orderId: string | undefined) =>
+    reviews.data
+      ? radiotherapyReviewState(reviews.data.get(orderId ?? "") ?? EMPTY_REVIEWS, today(), reviewSettings)
+      : undefined;
 
   const summarizing = rowOf(summarizingId);
 
@@ -161,8 +181,9 @@ export function RadiotherapyWorklistPage() {
     orderId && orderId === activeOrderId && courseFractions.data
       ? courseFractions.data
       : fractionsOf(orderId);
-  // 詳細に出す有害事象(§6.3)。記録はカルテの右ペインで行うので、ここは表示だけ。
+  // 詳細に出す有害事象と診察(§6.3)。記録はカルテの右ペインで行うので、ここは表示だけ。
   const adverseEvents = useTreatmentAdverseEvents(viewing?.order.id);
+  const courseReviews = useRadiotherapyCourseReviews(viewing?.order.id);
   const waitingCourse = Boolean(formOrderId) && courseFractions.isPending;
   // 待っているあいだの枠。開こうとしているモーダルと同じ見出しにする(カルテから照射入力を
   // 開くときと同じ形)。
@@ -255,6 +276,7 @@ export function RadiotherapyWorklistPage() {
             truncated={Boolean(worklist.data?.truncated)}
             fractionsOf={fractionsOf}
             fractionsReady={fractionsReady}
+            reviewStateOf={reviewStateOf}
             hasSummary={(orderId) => Boolean(summaryOf(orderId))}
             pending={updateStatus.isPending || deletePlanned.isPending}
             onView={(row) => setViewing({ order: row.order, patient: row.patient })}
@@ -289,6 +311,7 @@ export function RadiotherapyWorklistPage() {
             fractions={courseFractionsOf(viewing.order.id)}
             courseSummary={summaryOf(viewing.order.id)}
             adverseEvents={adverseEvents.data}
+            reviews={courseReviews.data}
             onCancelFraction={(fractionId) => cancelFraction.mutate(fractionId)}
             cancellingFractionId={cancelFraction.isPending ? cancelFraction.variables : undefined}
           />
@@ -377,6 +400,7 @@ function CoursePanel({
   truncated,
   fractionsOf,
   fractionsReady,
+  reviewStateOf,
   hasSummary,
   pending,
   onView,
@@ -395,6 +419,8 @@ function CoursePanel({
   fractionsOf: (orderId: string | undefined) => RadiotherapyFractionDisplay[];
   /** 照射記録が届いているか。届くまで回数は伏せ、装置の絞り込みは効かせない。 */
   fractionsReady: boolean;
+  /** そのコースの診察の状態(§6.3)。届くまでは undefined。 */
+  reviewStateOf: (orderId: string | undefined) => RadiotherapyReviewState | undefined;
   hasSummary: (orderId: string | undefined) => boolean;
   pending: boolean;
   onView: (row: RadiotherapyWorklistRow) => void;
@@ -517,6 +543,7 @@ function CoursePanel({
                 onPointerDown={(event) => drag.onCardPointerDown(row, event)}
                 fractions={fractionsOf(row.order.id)}
                 fractionsReady={fractionsReady}
+                reviewState={reviewStateOf(row.order.id)}
                 hasSummary={hasSummary(row.order.id)}
                 pending={pending}
                 onView={() => onView(row)}
@@ -540,6 +567,7 @@ function CourseCard({
   onPointerDown,
   fractions,
   fractionsReady,
+  reviewState,
   hasSummary,
   pending,
   onView,
@@ -554,6 +582,7 @@ function CourseCard({
   onPointerDown: (event: React.PointerEvent) => void;
   fractions: RadiotherapyFractionDisplay[];
   fractionsReady: boolean;
+  reviewState: RadiotherapyReviewState | undefined;
   hasSummary: boolean;
   pending: boolean;
   onView: () => void;
@@ -665,6 +694,14 @@ function CourseCard({
           : fractionLabel}
         {fractionsReady && progress.finished && !closed && (
           <span className="micro-result__badge">完了</span>
+        )}
+        {/* 週次レビュー。照射が続いているあいだだけ見張る(§6.3)。 */}
+        {status === "in-progress" && reviewState && (
+          <span
+            className={`micro-result__badge${reviewState.overdue ? "" : " micro-result__badge--muted"}`}
+          >
+            {radiotherapyReviewLabel(reviewState)}
+          </span>
         )}
         {closed && !hasSummary && <span className="micro-result__badge">サマリー未作成</span>}
       </span>

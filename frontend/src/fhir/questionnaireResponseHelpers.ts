@@ -110,6 +110,11 @@ export interface BuildQuestionnaireResponseArgs {
    * (どのプロブレムの記載かは記録側の紐付けで表すため)。
    */
   problem?: ProblemRef | null;
+  /**
+   * この回答が記述している対象(`basedOn`)。放射線治療の週次レビューは治療処方を指し、
+   * コース単位で診察を集めるのに使う(`radiotherapyReviewHelpers.ts`)。
+   */
+  basedOn?: fhir4.Reference[];
   // 更新時は id と identifier(報告単位ID)を引き継ぐ。
   existing?: fhir4.QuestionnaireResponse;
 }
@@ -126,7 +131,7 @@ function buildIdentifierValue(
 export function buildQuestionnaireResponse(
   args: BuildQuestionnaireResponseArgs,
 ): fhir4.QuestionnaireResponse {
-  const { questionnaire, patient, items, meta, problem, existing } = args;
+  const { questionnaire, patient, items, meta, problem, basedOn, existing } = args;
 
   // contained の型は基底 Resource のため、いったん Practitioner として組み立てる。
   const author: fhir4.Practitioner = {
@@ -150,6 +155,9 @@ export function buildQuestionnaireResponse(
   };
 
   if (existing?.id) response.id = existing.id;
+  // 更新では元の対象を引き継ぐ(編集の入口が対象を知らないことがある)。
+  const target = basedOn ?? existing?.basedOn;
+  if (target?.length) response.basedOn = target;
   if (items.length) response.item = items;
   if (problem) {
     response.extension = [

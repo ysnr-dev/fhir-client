@@ -788,7 +788,13 @@ export function KartePage() {
           onEdit={handleEdit}
           onDo={handleDo}
           onOpenDetail={openDetail}
-          onOpenAdverseEvents={(srId) => setPane({ kind: "radiotherapy-adverse", srId })}
+          onOpenRadiotherapyPane={(kind, srId) =>
+            setPane(
+              kind === "review"
+                ? { kind: "radiotherapy-review", srId }
+                : { kind: "radiotherapy-adverse", srId },
+            )
+          }
           onDeleted={handleDeleted}
           containerRef={timelineRef}
           problemsById={problemsById}
@@ -949,7 +955,13 @@ export function KartePage() {
       onEdit={handleEdit}
       onDo={handleDo}
       onOpenDetail={openDetail}
-      onOpenAdverseEvents={(srId) => setPane({ kind: "radiotherapy-adverse", srId })}
+      onOpenRadiotherapyPane={(kind, srId) =>
+        setPane(
+          kind === "review"
+            ? { kind: "radiotherapy-review", srId }
+            : { kind: "radiotherapy-adverse", srId },
+        )
+      }
       onDeleted={handleDeleted}
       problemsById={problemsById}
       selectedProblemIds={activeProblemIds}

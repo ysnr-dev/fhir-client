@@ -39,6 +39,7 @@ import { PathwayApplyPanel, PathwayPhasePanel } from "./PathwayApplyPanel";
 import { RegimenApplyPanel } from "./RegimenApplyPanel";
 import { RegimenCycleLoader, RegimenDayPanel, RegimenHeaderPanel } from "./RegimenPanels";
 import { RadiotherapyAdverseEventPanel } from "./RadiotherapyAdverseEventPanel";
+import { RadiotherapyReviewPanel } from "./RadiotherapyReviewPanel";
 import { RegimenAdverseEventPanel } from "./RegimenAdverseEventPanel";
 
 // カルテ画面の右ペイン。登録・編集 UI は既存ページと共通のパネルを使う。
@@ -115,7 +116,9 @@ export type KartePaneState =
   // 適用のヘッダ(予定クール数・入外区分・プロブレム・コメント)の編集。
   | { kind: "regimen-header"; regimenSrId: string }
   // 放射線治療コースの有害事象(CTCAE Grade)の記録。srId は治療処方。
-  | { kind: "radiotherapy-adverse"; srId: string };
+  | { kind: "radiotherapy-adverse"; srId: string }
+  // 放射線治療コースの週次レビュー(治療中の診察)。テンプレート回答として残す。
+  | { kind: "radiotherapy-review"; srId: string };
 
 const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   empty: "",
@@ -172,6 +175,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "regimen-day": "化学療法(投与日)",
   "regimen-adverse": "化学療法(有害事象)",
   "radiotherapy-adverse": "放射線治療(有害事象)",
+  "radiotherapy-review": "放射線治療(週次レビュー)",
   "regimen-header": "化学療法(適用の編集)",
 };
 
@@ -223,6 +227,7 @@ function paneKey(state: KartePaneState): string {
     case "regimen-adverse":
       return `${state.kind}:${state.regimenSrId}:${state.cycle}`;
     case "radiotherapy-adverse":
+    case "radiotherapy-review":
       return `${state.kind}:${state.srId}`;
     case "regimen-header":
       return `${state.kind}:${state.regimenSrId}`;
@@ -544,6 +549,8 @@ function PaneContent({
       );
     case "radiotherapy-adverse":
       return <RadiotherapyAdverseEventPanel patientId={patientId} srId={state.srId} />;
+    case "radiotherapy-review":
+      return <RadiotherapyReviewPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "regimen-header":
       return <RegimenHeaderPanel patientId={patientId} regimenSrId={state.regimenSrId} onSaved={onSaved} />;
     case "note-create":

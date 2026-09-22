@@ -43,12 +43,21 @@ interface QuestionnaireResponseCreatePanelProps {
   patientId: string;
   /** 開いた時点で対象にしておくプロブレム(カルテ画面でプロブレムを選んでいる場合)。 */
   defaultProblem?: ProblemRef;
+  /**
+   * この回答が記述している対象(`basedOn`)。放射線治療の週次レビューは治療処方を指す
+   * (`fhir/radiotherapyReviewHelpers.ts`)。
+   */
+  basedOn?: fhir4.Reference[];
+  /** 選択済みにしておくテンプレートの canonical。前回と同じ様式で書き始めるときに渡す。 */
+  defaultQuestionnaireCanonical?: string;
   onSaved: () => void;
 }
 
 export function QuestionnaireResponseCreatePanel({
   patientId,
   defaultProblem,
+  basedOn,
+  defaultQuestionnaireCanonical,
   onSaved,
 }: QuestionnaireResponseCreatePanelProps) {
   const { data: patientResult } = usePatient(patientId);
@@ -62,6 +71,16 @@ export function QuestionnaireResponseCreatePanel({
   } = useQuestionnaireOptions({ status: "active" });
   const [questionnaireId, setQuestionnaireId] = useState("");
   const questionnaire = activeQuestionnaires.find((q) => q.id === questionnaireId);
+
+  // 前回と同じ様式で書き始める(週次レビューのように毎回同じテンプレートを使う入口用)。
+  // テンプレートの一覧は非同期なので、届いてから、まだ選んでいないときだけ入れる。
+  useEffect(() => {
+    if (!defaultQuestionnaireCanonical || questionnaireId) return;
+    const match = activeQuestionnaires.find(
+      (q) => questionnaireCanonical(q) === defaultQuestionnaireCanonical,
+    );
+    if (match?.id) setQuestionnaireId(match.id);
+  }, [defaultQuestionnaireCanonical, activeQuestionnaires, questionnaireId]);
 
   const [meta, setMeta] = useState(emptyQuestionnaireResponseMeta);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -138,7 +157,7 @@ export function QuestionnaireResponseCreatePanel({
     createResponse.mutate(
       {
         questionnaire,
-        response: buildQuestionnaireResponse({ questionnaire, patient, items, meta, problem }),
+        response: buildQuestionnaireResponse({ questionnaire, patient, items, meta, problem, basedOn }),
         imageEntries,
       },
       { onSuccess: onSaved },

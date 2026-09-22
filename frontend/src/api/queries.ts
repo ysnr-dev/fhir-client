@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { ADVERSE_EVENT_CATEGORY, parseAdverseEvent, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import {
+  parseRadiotherapyReview,
+  radiotherapyReviewsByOrderId,
+  type RadiotherapyReview,
+} from "../fhir/radiotherapyReviewHelpers";
+import {
   keepPreviousData,
   useInfiniteQuery,
   useMutation,
@@ -12653,6 +12658,55 @@ export function useRadiotherapyCourseFractions(orderId: string | undefined) {
       return byOrderId.get(orderId ?? "") ?? [];
     },
     enabled: Boolean(orderId),
+  });
+}
+
+// ---- 治療中の診察(週次レビュー。docs/radiotherapy-order-design.md §6.3) ----
+//
+// 診察 1 回 = テンプレート回答 1 件で、治療処方を basedOn に持つ。上流は
+// `QuestionnaireResponse?based-on=` に対応済み。保存は通常のテンプレート回答と同じ経路
+// (`useCreateQuestionnaireResponse`)なので、ここにあるのは読みだけ。
+
+/** 照射記録と同じ理由でコースをまとめて引く(§7.3)。 */
+const RADIOTHERAPY_REVIEW_CHUNK = 20;
+
+async function fetchRadiotherapyReviewChunk(orderIds: string[]): Promise<RadiotherapyReview[]> {
+  const params = new URLSearchParams();
+  params.set("based-on", orderIds.map((id) => `ServiceRequest/${id}`).join(","));
+  params.set("_count", "200");
+  params.set("_sort", "-authored");
+  const { data: bundle } = await searchResource<fhir4.QuestionnaireResponse>(
+    "QuestionnaireResponse",
+    params,
+  );
+  return resourcesOfType<fhir4.QuestionnaireResponse>(bundle, "QuestionnaireResponse")
+    .map(parseRadiotherapyReview)
+    .filter((review): review is RadiotherapyReview => review !== null);
+}
+
+/** あるコースの診察(新しい順)。カルテの右ペインと詳細で使う。 */
+export function useRadiotherapyCourseReviews(orderSrId: string | undefined) {
+  return useQuery({
+    queryKey: ["QuestionnaireResponse", "search", "radiotherapy-review", orderSrId],
+    queryFn: () => fetchRadiotherapyReviewChunk([orderSrId ?? ""]),
+    enabled: Boolean(orderSrId),
+  });
+}
+
+/** 部門一覧に出すコースの診察。オーダー id → 診察(新しい順)。 */
+export function useRadiotherapyReviews(orderIds: string[]) {
+  const ids = [...new Set(orderIds.filter(Boolean))].sort();
+  return useQuery({
+    queryKey: ["QuestionnaireResponse", "search", "radiotherapy-reviews", ids.join(",")],
+    queryFn: async () => {
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += RADIOTHERAPY_REVIEW_CHUNK) {
+        chunks.push(ids.slice(i, i + RADIOTHERAPY_REVIEW_CHUNK));
+      }
+      const reviews = (await Promise.all(chunks.map(fetchRadiotherapyReviewChunk))).flat();
+      return radiotherapyReviewsByOrderId(reviews);
+    },
+    enabled: ids.length > 0,
   });
 }
 

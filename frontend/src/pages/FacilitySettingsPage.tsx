@@ -41,6 +41,10 @@ import {
   SETTING_OPTIONS,
   type PrescriptionCategoryDefaults,
 } from "../fhir/prescriptionHelpers";
+import {
+  DEFAULT_RADIOTHERAPY_REVIEW,
+  type RadiotherapyReviewSettings,
+} from "../fhir/radiotherapyReviewHelpers";
 import { useNursingObservationsByManageNos } from "../api/masterQueries";
 import { departmentDisplayName, sortDepartmentsByCode } from "../fhir/departmentHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
@@ -131,6 +135,14 @@ export function FacilitySettingsPage() {
   const reminderValid =
     Number.isInteger(reminder.discharge_summary_days) && reminder.discharge_summary_days >= 0;
 
+  // 放射線治療の治療中の診察(週次レビュー)の間隔。最後の診察からこの日数を超えたコースを
+  // 部門一覧で強調する。
+  const [reviewDraft, setReviewDraft] = useState<RadiotherapyReviewSettings | undefined>(undefined);
+  const savedReview = settings.data?.radiotherapy_review ?? DEFAULT_RADIOTHERAPY_REVIEW;
+  const radiotherapyReview = reviewDraft ?? savedReview;
+  const reviewValid =
+    Number.isInteger(radiotherapyReview.interval_days) && radiotherapyReview.interval_days >= 1;
+
   // 処方区分の初期値。入外区分ごとに 1 つで、空なら処方フォームは未選択で開く。
   const [categoryDraft, setCategoryDraft] = useState<PrescriptionCategoryDefaults | undefined>(
     undefined,
@@ -180,6 +192,7 @@ export function FacilitySettingsPage() {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
+    if (!reviewValid) return;
     update.mutate({
       self_organization_id: value,
       nursing_schedule: schedule,
@@ -190,6 +203,7 @@ export function FacilitySettingsPage() {
       document_reminder: reminder,
       prescription_category: prescriptionCategory,
       consult_default_templates: consultTemplates,
+      radiotherapy_review: radiotherapyReview,
     });
   }
 
@@ -443,6 +457,31 @@ export function FacilitySettingsPage() {
           </div>
         </details>
 
+        {/* 放射線治療の治療中の診察。既定の 7 日は外来放射線照射診療料(B001-2-8。7 日間に
+            1 回、算定日に放射線治療医の診察)に合わせた値で、入院の患者や施設の運用に合わせて
+            変えられるようにしてある。 */}
+        <details className="facility-settings__schedule">
+          <summary>放射線治療の診察間隔</summary>
+          <div className="facility-settings__schedule-body">
+            <label>
+              治療中の診察の間隔
+              <span className="facility-settings__times">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={radiotherapyReview.interval_days}
+                  onChange={(e) =>
+                    setReviewDraft({ ...radiotherapyReview, interval_days: Number(e.target.value) })
+                  }
+                  aria-label="放射線治療の診察間隔の日数"
+                />
+                <span className="facility-settings__unit">日以内(最後の診察から)</span>
+              </span>
+            </label>
+          </div>
+        </details>
+
         {/* 経過表の水分出納に数える看護観察。同じ名前で単位違いの項目(尿量 mL / g)が
             あるので管理番号で持つ。集計できるのは mL の項目だけなので候補も mL に絞る。 */}
         <details className="facility-settings__schedule">
@@ -514,6 +553,11 @@ export function FacilitySettingsPage() {
         {!medicationValid && (
           <p className="connection-settings-form__field-hint" role="status">
             「内服の与薬の時刻」は 0 以上の分と、HH:MM の時刻で入れてください。
+          </p>
+        )}
+        {!reviewValid && (
+          <p className="connection-settings-form__field-hint" role="status">
+            「放射線治療の診察間隔」は 1 以上の日数で入れてください。
           </p>
         )}
         {!reminderValid && (

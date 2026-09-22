@@ -204,8 +204,8 @@ interface KarteTimelineProps {
   onDo: (item: KarteTimelineItem) => void;
   /** 詳細表示。対象は URL に載せるので、モーダルは親(カルテ画面)が描く。 */
   onOpenDetail: (target: KarteDetailTarget) => void;
-  /** 放射線治療コースの有害事象を右ペインで開く(docs/radiotherapy-order-design.md §6.3)。 */
-  onOpenAdverseEvents: (srId: string) => void;
+  /** 放射線治療コースの記録を右ペインで開く(docs/radiotherapy-order-design.md §6.3)。 */
+  onOpenRadiotherapyPane: (kind: "adverse" | "review", srId: string) => void;
   /** 削除された項目。右ペインで開いていたら閉じるために親へ通知する。 */
   onDeleted: (item: KarteTimelineItem) => void;
   /** スクロールコンテナ。診療日パネルからのスクロール指示に使う。 */
@@ -233,7 +233,7 @@ export function KarteTimeline({
   onEdit,
   onDo,
   onOpenDetail,
-  onOpenAdverseEvents,
+  onOpenRadiotherapyPane,
   onDeleted,
   containerRef,
   problemsById,
@@ -295,7 +295,7 @@ export function KarteTimeline({
                     onEdit={onEdit}
                     onDo={onDo}
                     onOpenDetail={onOpenDetail}
-                    onOpenAdverseEvents={onOpenAdverseEvents}
+                    onOpenRadiotherapyPane={onOpenRadiotherapyPane}
                     onDelete={remove}
                     onDeleted={onDeleted}
                     deleting={deletingKey === key}
@@ -416,7 +416,7 @@ const KarteCard = memo(function KarteCard({
   onEdit,
   onDo,
   onOpenDetail,
-  onOpenAdverseEvents,
+  onOpenRadiotherapyPane,
   onDelete,
   onDeleted,
   deleting,
@@ -429,7 +429,7 @@ const KarteCard = memo(function KarteCard({
   onEdit: (item: KarteTimelineItem) => void;
   onDo: (item: KarteTimelineItem) => void;
   onOpenDetail: (target: KarteDetailTarget) => void;
-  onOpenAdverseEvents: (srId: string) => void;
+  onOpenRadiotherapyPane: (kind: "adverse" | "review", srId: string) => void;
   /** 確認の後に呼ぶ削除。実行状態は deleting / deleteError で戻ってくる。 */
   onDelete: (item: KarteTimelineItem) => void;
   onDeleted: (item: KarteTimelineItem) => void;
@@ -749,12 +749,21 @@ const KarteCard = memo(function KarteCard({
                 依頼表示
               </button>
             )}
-            {/* 照射による有害事象(CTCAE)。治療中の診察で記録する(§6.3)。 */}
+            {/* 照射期間中の診察と、そこで見つかった有害事象(CTCAE)の記録(§6.3)。 */}
             {item.kind === "radiotherapy-order" && item.serviceRequest.id && (
               <button
                 type="button"
                 className="row-menu__item"
-                onClick={() => onOpenAdverseEvents(item.serviceRequest.id ?? "")}
+                onClick={() => onOpenRadiotherapyPane("review", item.serviceRequest.id ?? "")}
+              >
+                週次レビュー
+              </button>
+            )}
+            {item.kind === "radiotherapy-order" && item.serviceRequest.id && (
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => onOpenRadiotherapyPane("adverse", item.serviceRequest.id ?? "")}
               >
                 有害事象
               </button>

@@ -11,6 +11,7 @@ import {
   radiotherapyProgress,
   type RadiotherapyFractionDisplay,
 } from "../fhir/radiotherapyResultHelpers";
+import { type RadiotherapyReview } from "../fhir/radiotherapyReviewHelpers";
 import { parseRadiotherapyCourseSummary } from "../fhir/radiotherapySummaryHelpers";
 import {
   radiotherapyTaskStatusDisplay,
@@ -30,6 +31,8 @@ interface RadiotherapyOrderDetailPanelProps {
   courseSummary?: fhir4.Procedure;
   /** そのコースの有害事象(発現日の新しい順。§6.3)。記録はカルテの右ペインで行う。 */
   adverseEvents?: AdverseEventRecord[];
+  /** そのコースの診察(週次レビュー。新しい順)。本文はテンプレート回答として読む。 */
+  reviews?: RadiotherapyReview[];
   /** 照射の取消。部門一覧から開いたときだけ渡す(カルテの詳細では取り消させない)。 */
   onCancelFraction?: (fractionId: string) => void;
   cancellingFractionId?: string;
@@ -39,6 +42,7 @@ interface RadiotherapyOrderDetailPanelProps {
 
 const NO_FRACTIONS: RadiotherapyFractionDisplay[] = [];
 const NO_ADVERSE_EVENTS: AdverseEventRecord[] = [];
+const NO_REVIEWS: RadiotherapyReview[] = [];
 
 export function RadiotherapyOrderDetailPanel({
   serviceRequest,
@@ -47,6 +51,7 @@ export function RadiotherapyOrderDetailPanel({
   fractions = NO_FRACTIONS,
   courseSummary,
   adverseEvents = NO_ADVERSE_EVENTS,
+  reviews = NO_REVIEWS,
   onCancelFraction,
   cancellingFractionId,
   onOpenConsult,
@@ -201,6 +206,30 @@ export function RadiotherapyOrderDetailPanel({
           </table>
         </fieldset>
       ))}
+
+      {/* 照射期間中の診察(週次レビュー)。本文はテンプレート回答なので、日付と記載者だけを
+          並べてカルテのタイムラインで読ませる(§6.3)。 */}
+      {reviews.length > 0 && (
+        <fieldset className="rp-card">
+          <legend>診察記録 ({reviews.length} 件)</legend>
+          <table className="rp-card__medicines">
+            <thead>
+              <tr>
+                <th>診察日</th>
+                <th>記載者</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reviews.map((review) => (
+                <tr key={review.id}>
+                  <td>{review.date || "-"}</td>
+                  <td>{review.authorName || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </fieldset>
+      )}
 
       {/* 治療中に記録した有害事象(CTCAE)。終了サマリーの「急性有害事象」は医師が書く
           まとめで、こちらは 1 件ずつの記録(§6.3)。 */}

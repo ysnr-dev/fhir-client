@@ -14,6 +14,7 @@ import type { WaterBalanceSettings } from "../fhir/flowsheetWaterBalanceHelpers"
 import type { MedicationScheduleSettings } from "../fhir/medicationScheduleHelpers";
 import type { DocumentReminderSettings } from "../fhir/documentDueHelpers";
 import type { PrescriptionCategoryDefaults } from "../fhir/prescriptionHelpers";
+import type { RadiotherapyReviewSettings } from "../fhir/radiotherapyReviewHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 
 export interface ConnectionSettings {
@@ -54,6 +55,8 @@ export interface FacilitySettings {
   prescription_category: PrescriptionCategoryDefaults;
   /** 他科依頼の依頼目的テンプレートの既定(依頼先の診療科 Organization.id → canonical)。 */
   consult_default_templates: Record<string, string>;
+  /** 放射線治療の治療中の診察(週次レビュー)の間隔。 */
+  radiotherapy_review: RadiotherapyReviewSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -66,6 +69,7 @@ export type FacilitySettingsPayload = Partial<{
   document_reminder: DocumentReminderSettings;
   prescription_category: PrescriptionCategoryDefaults;
   consult_default_templates: Record<string, string>;
+  radiotherapy_review: RadiotherapyReviewSettings;
 }>;
 
 export interface ConnectionTestResult {
