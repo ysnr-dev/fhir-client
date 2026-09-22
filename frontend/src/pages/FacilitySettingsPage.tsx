@@ -46,6 +46,19 @@ import {
   type RadiotherapyReviewSettings,
 } from "../fhir/radiotherapyReviewHelpers";
 import { useNursingObservationsByManageNos } from "../api/masterQueries";
+import {
+  DEFAULT_RECEIPT_CODES,
+  INJECTION_LABELS,
+  NUTRITION_LABELS,
+  PATHOLOGY_LABELS,
+  REHAB_CATEGORY_KEYS,
+  REHAB_CATEGORY_LABELS,
+  REHAB_THERAPY_KEYS,
+  REHAB_THERAPY_LABELS,
+  receiptCodeValid,
+  receiptCodesValid,
+  type ReceiptCodeSettings,
+} from "../fhir/receiptCodeSettingsHelpers";
 import { departmentDisplayName, sortDepartmentsByCode } from "../fhir/departmentHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
@@ -143,6 +156,39 @@ export function FacilitySettingsPage() {
   const reviewValid =
     Number.isInteger(radiotherapyReview.interval_days) && radiotherapyReview.interval_days >= 1;
 
+  // 医事会計へ送るレセプト電算コードのうち施設基準で決まるもの。空欄は「送らない」。
+  const [receiptCodesDraft, setReceiptCodesDraft] = useState<ReceiptCodeSettings | undefined>(
+    undefined,
+  );
+  const savedReceiptCodes = settings.data?.receipt_codes ?? DEFAULT_RECEIPT_CODES;
+  const receiptCodes = receiptCodesDraft ?? savedReceiptCodes;
+  const receiptCodesOk = receiptCodesValid(receiptCodes);
+
+  function updateReceiptCode<S extends keyof ReceiptCodeSettings>(
+    section: S,
+    key: keyof ReceiptCodeSettings[S],
+    value: string,
+  ) {
+    setReceiptCodesDraft((prev) => {
+      const base = prev ?? savedReceiptCodes;
+      return { ...base, [section]: { ...base[section], [key]: value } };
+    });
+  }
+
+  function updateRehabCode(
+    category: (typeof REHAB_CATEGORY_KEYS)[number],
+    therapy: (typeof REHAB_THERAPY_KEYS)[number],
+    value: string,
+  ) {
+    setReceiptCodesDraft((prev) => {
+      const base = prev ?? savedReceiptCodes;
+      return {
+        ...base,
+        rehab: { ...base.rehab, [category]: { ...base.rehab[category], [therapy]: value } },
+      };
+    });
+  }
+
   // 処方区分の初期値。入外区分ごとに 1 つで、空なら処方フォームは未選択で開く。
   const [categoryDraft, setCategoryDraft] = useState<PrescriptionCategoryDefaults | undefined>(
     undefined,
@@ -192,7 +238,7 @@ export function FacilitySettingsPage() {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
-    if (!reviewValid) return;
+    if (!reviewValid || !receiptCodesOk) return;
     update.mutate({
       self_organization_id: value,
       nursing_schedule: schedule,
@@ -204,7 +250,23 @@ export function FacilitySettingsPage() {
       prescription_category: prescriptionCategory,
       consult_default_templates: consultTemplates,
       radiotherapy_review: radiotherapyReview,
+      receipt_codes: receiptCodes,
     });
+  }
+
+  function receiptCodeInput(value: string, onChange: (next: string) => void, label: string) {
+    return (
+      <input
+        type="text"
+        inputMode="numeric"
+        maxLength={9}
+        value={value}
+        onChange={(e) => onChange(e.target.value.trim())}
+        aria-label={label}
+        aria-invalid={!receiptCodeValid(value)}
+        className="facility-settings__code"
+      />
+    );
   }
 
   return (
@@ -493,6 +555,97 @@ export function FacilitySettingsPage() {
                 ))}
               </select>
             </label>
+          </div>
+        </details>
+
+        {/* 医事会計へ送るレセプト電算コード。施設基準や届出で決まる 1 施設 1 値のものだけを
+            ここに持ち、製品・技法ごとのコードは各マスタの列に持つ。空欄は送らない
+            (送信前のプレビューに「送れない項目」として出る)。 */}
+        <details className="facility-settings__schedule">
+          <summary>医事会計のレセプト電算コード</summary>
+          <div className="facility-settings__schedule-body">
+            <h3 className="facility-settings__subheading">病理検査(検査区分ごと)</h3>
+            {(Object.keys(PATHOLOGY_LABELS) as (keyof ReceiptCodeSettings["pathology"])[]).map(
+              (key) => (
+                <label key={key}>
+                  {PATHOLOGY_LABELS[key]}
+                  {receiptCodeInput(
+                    receiptCodes.pathology[key],
+                    (next) => updateReceiptCode("pathology", key, next),
+                    `病理 ${PATHOLOGY_LABELS[key]} のレセプト電算コード`,
+                  )}
+                </label>
+              ),
+            )}
+
+            <h3 className="facility-settings__subheading">疾患別リハビリテーション料(区分 × 療法士)</h3>
+            <table className="facility-settings__code-table">
+              <thead>
+                <tr>
+                  <th />
+                  {REHAB_THERAPY_KEYS.map((therapy) => (
+                    <th key={therapy}>{REHAB_THERAPY_LABELS[therapy]}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {REHAB_CATEGORY_KEYS.map((category) => (
+                  <tr key={category}>
+                    <th scope="row">{REHAB_CATEGORY_LABELS[category]}</th>
+                    {REHAB_THERAPY_KEYS.map((therapy) => (
+                      <td key={therapy}>
+                        {receiptCodeInput(
+                          receiptCodes.rehab[category][therapy],
+                          (next) => updateRehabCode(category, therapy, next),
+                          `${REHAB_CATEGORY_LABELS[category]} ${REHAB_THERAPY_LABELS[therapy]} のレセプト電算コード`,
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h3 className="facility-settings__subheading">栄養食事指導料</h3>
+            {(
+              Object.keys(NUTRITION_LABELS) as (keyof ReceiptCodeSettings["nutrition_guidance"])[]
+            ).map((key) => (
+              <label key={key}>
+                {NUTRITION_LABELS[key]}
+                {receiptCodeInput(
+                  receiptCodes.nutrition_guidance[key],
+                  (next) => updateReceiptCode("nutrition_guidance", key, next),
+                  `栄養食事指導料 ${NUTRITION_LABELS[key]} のレセプト電算コード`,
+                )}
+              </label>
+            ))}
+
+            <h3 className="facility-settings__subheading">送信時に足す加算</h3>
+            <label>
+              血液採取(検体検査に血液の検体があるとき)
+              {receiptCodeInput(
+                receiptCodes.lab.blood_draw,
+                (next) => updateReceiptCode("lab", "blood_draw", next),
+                "血液採取のレセプト電算コード",
+              )}
+            </label>
+            {(Object.keys(INJECTION_LABELS) as (keyof ReceiptCodeSettings["injection"])[]).map(
+              (key) => (
+                <label key={key}>
+                  {INJECTION_LABELS[key]}(レジメンの注射があるとき)
+                  {receiptCodeInput(
+                    receiptCodes.injection[key],
+                    (next) => updateReceiptCode("injection", key, next),
+                    `${INJECTION_LABELS[key]} のレセプト電算コード`,
+                  )}
+                </label>
+              ),
+            )}
+            {!receiptCodesOk && (
+              <p className="facility-settings__error" role="alert">
+                レセプト電算コードは 9 桁の数字で入力してください
+              </p>
+            )}
           </div>
         </details>
 

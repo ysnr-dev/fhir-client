@@ -44,10 +44,11 @@ module Integrations
       # - days は内服の投与日数、count は処置などの回数。どちらも無ければ 1 回。
       # - route / method / usage_type は注射の投与経路・手技・用法種別で、
       #   注射の剤区分を連携先が決めるときに使う。
-      # - performed_at は実施日時、source_ref は元になった記録("Procedure/xx" など)。
+      # - performed_at は実施日時、source_ref は元になった記録("Procedure/xx" など)、
+      #   order_ref はそのオーダー("ServiceRequest/xx")。
       BillingItem = Struct.new(
         :category, :name, :lines, :days, :count, :usage_code, :usage_name,
-        :route, :method, :usage_type, :performed_at, :source_ref,
+        :route, :method, :usage_type, :performed_at, :source_ref, :order_ref,
         keyword_init: true
       )
 

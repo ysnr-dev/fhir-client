@@ -16,11 +16,17 @@ module Integrations
 
       # coded_hub: 実施記録のハブと子が手技コード(Procedure.code)を持つか。注射のハブは
       # 「注射」という text だけで手技は持たない(手技料は剤区分から連携先が算定する)。
-      Definition = Struct.new(:order_type, :label, :model_name, :code_column, :source, :coded_hub,
-                              keyword_init: true) do
+      # resolver: 項目マスタで手技コードを引けない種別の変換(Resolvers)。実施記録の種別は
+      # `call(record, order)`、オーダーの種別は `call(header, details)`。
+      # continuous: 1 つのオーダーが期間続き、実施が日々積み上がる種別。occurrence は開始日
+      # なので「その日に実施記録が無い = 未実施」とは言えず、無くても報告しない。
+      Definition = Struct.new(:order_type, :label, :model_name, :code_column, :source, :coded_hub, :resolver,
+                              :continuous, keyword_init: true) do
         def model = model_name&.constantize
 
-        def coded_hub? = coded_hub != false
+        def coded_hub? = coded_hub != false && resolver.nil?
+
+        def resolver_for(skipped:, store:) = resolver&.new(skipped: skipped, store: store)
 
         def coding_system = "#{LOCAL}/CodeSystem/#{order_type}-order-item"
 
@@ -70,18 +76,22 @@ module Integrations
         Definition.new(order_type: "surgery", label: "手術", model_name: "Master::SurgeryItem",
                        code_column: :item_code, source: :procedure),
         # 注射は項目マスタを持たず、薬剤(MedicationAdministration)だけを送る。
-        Definition.new(order_type: "injection", label: "注射", source: :procedure, coded_hub: false)
+        Definition.new(order_type: "injection", label: "注射", source: :procedure, coded_hub: false),
+        # 施設設定・照射技法マスタのコードで送る種別(docs/receipt-billing-design.md §5)。
+        Definition.new(order_type: "pathology", label: "病理検査", source: :order, resolver: Resolvers::Pathology),
+        Definition.new(order_type: "rehab", label: "リハビリ", source: :procedure, resolver: Resolvers::Rehab,
+                       continuous: true),
+        Definition.new(order_type: "nutrition-guidance", label: "栄養指導", source: :procedure,
+                       resolver: Resolvers::NutritionGuidance, continuous: true),
+        Definition.new(order_type: "radiotherapy", label: "放射線治療", source: :procedure,
+                       resolver: Resolvers::Radiotherapy, continuous: true)
       ].freeze
 
       BY_TYPE = ALL.index_by(&:order_type).freeze
 
       # 送り方が未実装の種別(docs/receipt-billing-design.md の Phase 2〜3)。
       PENDING = {
-        "transfusion" => "輸血",
-        "pathology" => "病理検査",
-        "rehab" => "リハビリ",
-        "radiotherapy" => "放射線治療",
-        "nutrition-guidance" => "栄養指導"
+        "transfusion" => "輸血"
       }.freeze
 
       # 出来高で請求する項目が無い種別と、別経路で送る処方。報告もしない。

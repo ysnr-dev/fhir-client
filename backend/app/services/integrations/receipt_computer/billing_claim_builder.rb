@@ -33,21 +33,27 @@ module Integrations
         @store = store
       end
 
-      def call(patient_fhir_id:, perform_date:)
+      # patient は年齢で変わる加算(外来化学療法加算の 15 歳未満)の判定に使う。無ければ成人扱い。
+      def call(patient_fhir_id:, perform_date:, patient: nil)
         date = perform_date.to_s
         skipped = []
 
         requests = order_requests(patient_fhir_id, date)
+        headers_by_id = requests.select { |r| r["resourceType"] == "ServiceRequest" }.index_by { |r| r["id"] }
         performed = collector.call(patient_fhir_id: patient_fhir_id, perform_date: date)
         report_orphans(performed.orphans, skipped)
         report_unfinished(performed.unfinished, skipped)
         performed_items = PerformedItemBuilder.new(skipped, medication_requests: medication_requests_by_id(requests),
-                                                            store: store).call(performed.records)
+                                                            service_requests: headers_by_id, store: store)
+                                              .call(performed.records)
         # 中止・実施せずのオーダーも「実施記録が無い」とは別に報告済みなので、ここに含める。
         performed_order_ids = (performed.records + performed.unfinished).map(&:order_id).compact.to_set
+
         items = prescription_items(requests, date, skipped) +
                 order_items(requests, date, skipped, performed_order_ids) +
                 performed_items
+        add_blood_draw(items)
+        add_chemo_additions(items, headers_by_id, patient, date, skipped)
 
         Built.new(items: merge_repeats(items), skipped: skipped)
       end
@@ -212,12 +218,16 @@ module Integrations
             next
           end
           if definition.performed?
-            next if performed_order_ids.include?(header["id"])
+            next if performed_order_ids.include?(header["id"]) || definition.continuous
             next unless completed_without_record?(definition, header, details, skipped)
           end
           next if details.empty?
 
-          build_order_item(definition, details, skipped)
+          if definition.resolver
+            definition.resolver_for(skipped: skipped, store: store).call(header, details)
+          else
+            build_order_item(definition, details, skipped)
+          end
         end
       end
 
@@ -296,13 +306,76 @@ module Integrations
         end
       end
 
-      # 同じ内容の剤(同じ処置を 2 回など)は 1 剤にまとめて回数にする。
+      # ---- 送信時にルールで足す加算 ----
+
+      # 血液採取(B-V)。検体検査に血液の検体(検体マスタの区分「血液」)があれば、その日の
+      # 最初の検体検査の剤に 1 回だけ足す。設定が無ければ足さず、報告もしない(採血料を
+      # 医事側で入れる運用もある)。
+      BLOOD_CATEGORY = "血液".freeze
+
+      def add_blood_draw(items)
+        code = receipt_codes.blood_draw
+        return if code.nil?
+
+        lab_items = items.select { |i| i.category == :lab }
+        return if lab_items.empty?
+
+        codes = lab_items.flat_map { |i| i.lines.map(&:code) }
+        specimen_codes = Master::LabOrderItem.where(receipt_code: codes).pluck(:specimen_code).compact.uniq
+        return if specimen_codes.empty?
+        return unless Master::LabSpecimen.where(specimen_code: specimen_codes, category: BLOOD_CATEGORY).exists?
+
+        lab_items.first.lines << BillingLine.new(code: code, name: "血液採取", quantity: "1", kind: :procedure)
+      end
+
+      # 外来化学療法加算と無菌製剤処理料。レジメン由来の注射(ヘッダの requisition が
+      # レジメン適用の uuid)があれば、その日の最初の注射の剤に 1 回だけ足す。
+      REGIMEN_INSTANCE = "#{Coding::LOCAL}/Identifier/regimen-instance".freeze
+      CHILD_AGE = 15
+
+      def add_chemo_additions(items, headers_by_id, patient, date, skipped)
+        target = items.find do |i|
+          i.category == :injection && regimen_order?(headers_by_id[Coding.reference_id(i.order_ref)])
+        end
+        return if target.nil?
+
+        child = age_on(patient, date)&.<(CHILD_AGE) || false
+        chemo = receipt_codes.outpatient_chemo_addition(child: child)
+        if chemo
+          target.lines << BillingLine.new(code: chemo, name: "外来化学療法加算", quantity: "1", kind: :procedure)
+        else
+          skipped << Skipped.new(kind: "注射", name: "外来化学療法加算",
+                                 reason: "施設設定に外来化学療法加算#{child ? '(15 歳未満)' : ''}のレセプト電算コードがありません")
+        end
+
+        aseptic = receipt_codes.aseptic_preparation
+        target.lines << BillingLine.new(code: aseptic, name: "無菌製剤処理料", quantity: "1", kind: :procedure) if aseptic
+      end
+
+      def regimen_order?(header)
+        header&.dig("requisition", "system") == REGIMEN_INSTANCE
+      end
+
+      def age_on(patient, date)
+        birth = patient&.dig("birthDate")
+        return nil if birth.blank?
+
+        born = Date.parse(birth)
+        day = Date.parse(date)
+        day.year - born.year - (day.month > born.month || (day.month == born.month && day.day >= born.day) ? 0 : 1)
+      rescue ArgumentError
+        nil
+      end
+
+      def receipt_codes = @receipt_codes ||= ReceiptCodes.new
+
+      # 同じ内容の剤(同じ処置を 2 回など)は 1 剤にまとめて回数を足す。
       # 処方は日数を持つので対象にしない(RP は 1 つが 1 剤)。
       def merge_repeats(items)
         items.each_with_object([]) do |item, acc|
           twin = item.days.nil? && acc.find { |other| other.days.nil? && same_content?(other, item) }
           if twin
-            twin.count = ((twin.count || 1).to_i + 1).to_s
+            twin.count = ((twin.count || 1).to_i + (item.count || 1).to_i).to_s
           else
             acc << item
           end

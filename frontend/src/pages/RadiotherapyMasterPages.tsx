@@ -356,6 +356,9 @@ export function RadiotherapyTechniquePage() {
         { key: "modality_codes", label: "選べるモダリティ", type: "modalities", column: true },
         { key: "reference_system", label: "標準コードの体系", type: "text" },
         { key: "reference_code", label: "標準コード", type: "text", column: true, compact: true },
+        { key: "receipt_code", label: "レセプト電算コード(体外照射 1 回目)", type: "text", column: true, compact: true },
+        { key: "receipt_code_second", label: "レセプト電算コード(同日 2 回目)", type: "text" },
+        { key: "management_receipt_code", label: "レセプト電算コード(放射線治療管理料)", type: "text" },
         { key: "note", label: "備考", type: "text" },
       ]}
     />

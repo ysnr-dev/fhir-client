@@ -16,8 +16,8 @@ module Integrations
       MEDICAL_CLASS = {
         oral: "210", as_needed: "220", topical: "230",
         treatment: "400", surgery: "500",
-        lab: "600", micro: "600", physio: "600", endoscopy: "600",
-        rad: "700"
+        lab: "600", micro: "600", physio: "600", endoscopy: "600", pathology: "640",
+        rad: "700", rehab: "800", "nutrition-guidance": "130", radiotherapy: "840"
       }.freeze
 
       # 点数表の章 → 診療種別区分(実機の点数マスタ srysyukbn で確認)。

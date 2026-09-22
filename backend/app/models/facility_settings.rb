@@ -13,8 +13,8 @@
 # ## 設定項目の持ち方
 #
 # 自院の Organization 以外の設定は、すべて settings(jsonb)1 列にまとめて入れる。
-# backend はこれらを検索にも集計にも使わず(読むのは frontend だけ)、列に分けても
-# 索引も WHERE も使わないため。**項目を足すときに書くのは下の SETTINGS だけ**で、
+# backend はこれらを検索にも集計にも使わず(読むのは frontend と、会計送信のコード引き当て
+# だけ)、列に分けても索引も WHERE も使わないため。**項目を足すときに書くのは下の SETTINGS だけ**で、
 # 検証・既定値の穴埋め・読み書きのメソッド・管理 API の受け取りと応答は
 # FacilitySettings::Schema が項目表から回す(migration も要らない)。
 #
@@ -131,6 +131,36 @@ class FacilitySettings < ApplicationRecord
     "template" => ""
   }.freeze
 
+  # 医事会計へ送るレセプト電算コードのうち、施設基準や届出で決まる「1 施設 1 値」のもの
+  # (docs/receipt-billing-design.md §5)。マスタを持たない種別(病理・リハビリ・栄養指導)の
+  # 診療行為コードと、送信時にルールで足す加算。空なら送らず、送れない項目として報告する。
+  # 製品・技法ごとに違うコード(輸血製剤・放射線治療の照射技法)はマスタの列に持つ。
+  RECEIPT_CODE = { pattern: /\A(\d{9})?\z/, label: "レセプト電算コード(9 桁、空可)" }.freeze
+  # 疾患別リハビリテーション料の区分(H000〜H003 の並び)と療法の担い手。コードは区分 × 担い手
+  # (2024 年改定で「理学療法士による場合」などに分かれた)× 施設基準で決まる。
+  REHAB_CATEGORIES = %w[cardiovascular cerebrovascular disuse musculoskeletal respiratory].freeze
+  REHAB_THERAPIES = %w[pt ot st].freeze
+  DEFAULT_RECEIPT_CODES = {
+    "pathology" => { "N000" => "", "N004" => "", "N003" => "" },
+    "rehab" => REHAB_CATEGORIES.index_with { REHAB_THERAPIES.index_with("") },
+    "nutrition_guidance" => { "initial" => "", "follow-up" => "", "group" => "" },
+    "lab" => { "blood_draw" => "" },
+    "injection" => {
+      "outpatient_chemo_addition" => "",
+      "outpatient_chemo_addition_child" => "",
+      "aseptic_preparation" => ""
+    }
+  }.freeze
+  RECEIPT_CODES_SHAPE = {
+    fields: {
+      "pathology" => { fields: DEFAULT_RECEIPT_CODES["pathology"].keys.index_with(RECEIPT_CODE) },
+      "rehab" => { fields: REHAB_CATEGORIES.index_with({ fields: REHAB_THERAPIES.index_with(RECEIPT_CODE) }) },
+      "nutrition_guidance" => { fields: DEFAULT_RECEIPT_CODES["nutrition_guidance"].keys.index_with(RECEIPT_CODE) },
+      "lab" => { fields: DEFAULT_RECEIPT_CODES["lab"].keys.index_with(RECEIPT_CODE) },
+      "injection" => { fields: DEFAULT_RECEIPT_CODES["injection"].keys.index_with(RECEIPT_CODE) }
+    }
+  }.freeze
+
   # 設定項目の表。ここに 1 項目足せば、検証・既定値・読み書き・管理 API がすべて付く。
   #
   #   default: 保存されていないときに返す値
@@ -190,6 +220,10 @@ class FacilitySettings < ApplicationRecord
     "consult_default_templates" => {
       default: DEFAULT_CONSULT_DEFAULT_TEMPLATES,
       shape: { map: CANONICAL, keys: :any }
+    },
+    "receipt_codes" => {
+      default: DEFAULT_RECEIPT_CODES,
+      shape: RECEIPT_CODES_SHAPE
     },
     "radiotherapy_review" => {
       default: DEFAULT_RADIOTHERAPY_REVIEW,

@@ -15,6 +15,7 @@ import type { MedicationScheduleSettings } from "../fhir/medicationScheduleHelpe
 import type { DocumentReminderSettings } from "../fhir/documentDueHelpers";
 import type { PrescriptionCategoryDefaults } from "../fhir/prescriptionHelpers";
 import type { RadiotherapyReviewSettings } from "../fhir/radiotherapyReviewHelpers";
+import type { ReceiptCodeSettings } from "../fhir/receiptCodeSettingsHelpers";
 import { notifyUnauthorized, setCsrfToken, withCsrfHeaders } from "./session";
 
 export interface ConnectionSettings {
@@ -57,6 +58,8 @@ export interface FacilitySettings {
   consult_default_templates: Record<string, string>;
   /** 放射線治療の治療中の診察(週次レビュー)の間隔。 */
   radiotherapy_review: RadiotherapyReviewSettings;
+  /** 医事会計へ送るレセプト電算コードのうち、施設基準で決まるもの。 */
+  receipt_codes: ReceiptCodeSettings;
 }
 
 export type FacilitySettingsPayload = Partial<{
@@ -70,6 +73,7 @@ export type FacilitySettingsPayload = Partial<{
   prescription_category: PrescriptionCategoryDefaults;
   consult_default_templates: Record<string, string>;
   radiotherapy_review: RadiotherapyReviewSettings;
+  receipt_codes: ReceiptCodeSettings;
 }>;
 
 export interface ConnectionTestResult {

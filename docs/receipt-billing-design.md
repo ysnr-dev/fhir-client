@@ -127,11 +127,11 @@ PreviewItem   画面用。区分(class_code/class_name)を添えて剤を分け�
 |---|---|---|---|
 | 注射 `injection` | 310 皮下筋注 / 320 静注 / 330 点滴 / 340 その他 / 350 中心静脈 | — | **対応済み(2026-09-23)**。実施記録(ハブ + MedicationAdministration)から薬剤行だけを送り、手技料は区分から日レセが算定する。区分は 手技 31 → 350、点滴(オーダーの usage-type)→ 330、手技 30 → 320、32/33/34 → 310、他の手技 → 340、手技が無ければ経路(IV 320 / IM・SC・ID 310 / 他 340)。1 施用(ハブ)が 1 剤で、同じ内容の施用は回数にまとめる。途中で中止・実施せずの記録は請求せず理由を出す |
 | 輸血 `transfusion` | 510 | `master_transfusion_products` にコード列が無い | 製剤は医薬品コードなので `medicine_code` 列を足す。手技(K920 系)は実施入力の手技行。数量 = 単位数 |
-| 病理 `pathology` | 640 | 項目マスタが無い(区分 N000/N004/N003 は直書き) | 施設設定 `receipt_codes.pathology`(区分 → 診療行為コード。施設で 1 値)。数量 = 検体数。`:order` 経路 |
-| リハビリ `rehab` | 800 | マスタ無し。疾患別区分 5 種、単位数は拡張 `rehab-performed-units` | 施設設定 `receipt_codes.rehab`(疾患別区分 → コード。施設基準 I/II/III で決まる)。回数 = 実施単位数 |
-| 放射線治療 `radiotherapy` | 840 | technique マスタに receipt_code 無し | `master_radiotherapy_techniques` に `receipt_code`(体外照射 1 回目)・`receipt_code_second`(同日 2 回目)・`management_receipt_code`(放射線治療管理料。コース初回だけ)を足す |
-| 栄養指導 `nutrition-guidance` | 130 | マスタ無し。実施の code = initial / follow-up / group | 施設設定 `receipt_codes.nutrition_guidance`(外来栄養食事指導料 1/2 は施設基準) |
-| 化学療法 `chemo-regimen` | 注射 + 加算 | ヘッダのみ | 配下の注射 SR(`requisition` regimen-instance + 拡張で判別)を注射経路で送り、外来化学療法加算・無菌製剤処理料を施設設定のコードで剤末尾に足す |
+| 病理 `pathology` | 640 | — | **対応済み(2026-09-23)**。施設設定 `receipt_codes.pathology`(検査区分 N000/N004/N003 → コード)。`:order` 経路で、数量 = 検体(明細)の数。判断料・診断料は日レセの自動算定 |
+| リハビリ `rehab` | 800 | — | **対応済み(2026-09-23)**。施設設定 `receipt_codes.rehab`(疾患別区分 × 療法士 PT/OT/ST → コード。2024 年改定で担い手ごとにコードが分かれた)。回数 = 実施単位数(同じ日の同じコードは合算) |
+| 放射線治療 `radiotherapy` | 840 | — | **対応済み(2026-09-23)**。`master_radiotherapy_techniques` の `receipt_code`(体外照射 1 回目)・`receipt_code_second`(同日 2 回目)・`management_receipt_code`(放射線治療管理料。コースの初回の照射だけ)。治療終了サマリーは送らない |
+| 栄養指導 `nutrition-guidance` | 130 | — | **対応済み(2026-09-23)**。施設設定 `receipt_codes.nutrition_guidance`(初回 / 2 回目以降 / 集団 → コード) |
+| 化学療法 `chemo-regimen` | 注射 + 加算 | — | **対応済み(2026-09-23)**。レジメン由来の注射(ヘッダの `requisition` が regimen-instance)の剤に、施設設定の外来化学療法加算(15 歳未満は別コード。患者の生年月日で判定)と無菌製剤処理料を 1 日 1 回足す |
 | 麻酔(手術配下) | 540 | — | §2 の剤分割で自動。麻酔時間の加算は実施入力で足す |
 | 食事・看護・他科依頼 | — | 出来高の項目が無い | 対象外(`OrderCatalog::IGNORED`。`skipped` にも出さない) |
 
@@ -142,10 +142,13 @@ PreviewItem   画面用。区分(class_code/class_name)を添えて剤を分け�
 段階:
 
 - **Phase 2** 注射(2026-09-23 済み)、輸血(列追加 + 管理画面 + CSV)、麻酔(spec のみ)、化学療法の加算。
-- **Phase 3** `receipt_codes` と病理・リハ・栄養指導の resolver(`receipt_computer/resolvers/*.rb`、
-  `call(record) -> [lines, count]`)、放射線治療(technique マスタに 3 列)。
-- **Phase 4** 採血料ルール(血液検体の項目があれば `receipt_codes.lab.blood_draw` = B-V 160095710 を 600 の
-  剤末尾に)、外用の日数(総量 × 1)、一般名処方(代表銘柄 + `Medication_Generic_Flg=yes`)、
+- **Phase 3**(2026-09-23 済み)施設設定 `receipt_codes`(`FacilitySettings`。backend は
+  `ReceiptComputer::ReceiptCodes` で読む)と病理・リハ・栄養指導・放射線治療の resolver
+  (`receipt_computer/resolvers.rb`。実施記録の種別は `call(record, order) -> [lines, count]`、
+  オーダーの種別は `call(header, details) -> BillingItem`)、照射技法マスタの 3 列。
+  採血料(血液の検体があれば `receipt_codes.lab.blood_draw` を最初の検体検査の剤末尾に 1 回)と
+  化学療法の加算もここで入れた。
+- **Phase 4** 外用の日数(総量 × 1)、一般名処方(代表銘柄 + `Medication_Generic_Flg=yes`)、
   `Perform_Time`(外来 Encounter の `period.start`)、数値コメント 842 の実施入力。
   外来迅速検体検査加算は「当日結果説明」を backend で判定できないので初期は送らない。
 - **Phase 5** 放射線のフィルム(枚数-分画。実施入力に分画数を足す。特定器材のフィルムは

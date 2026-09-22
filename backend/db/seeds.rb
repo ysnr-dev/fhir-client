@@ -1548,7 +1548,8 @@ end
 # 治療装置は施設ごとに違うので初期値を持たない(画面から登録する)。既存行は上書きしない。
 radiotherapy_csv_masters = [
   [Master::RadiotherapyModality, "radiotherapy_modalities.csv", %w[name dose_unit reference_system reference_code]],
-  [Master::RadiotherapyTechnique, "radiotherapy_techniques.csv", %w[name abbreviation reference_system reference_code]],
+  [Master::RadiotherapyTechnique, "radiotherapy_techniques.csv",
+   %w[name abbreviation reference_system reference_code receipt_code receipt_code_second management_receipt_code]],
   [Master::RadiotherapyStopReason, "radiotherapy_stop_reasons.csv", %w[name kind]]
 ]
 radiotherapy_csv_masters.each do |model, file, columns|

@@ -16,7 +16,8 @@ module Integrations
       # 画面に出す送信内容。送る剤・病名・送れない項目を一度に返す。
       # 剤はレセコンが実際に送る並び(区分ごと)に分けて見せる。
       def preview(patient_fhir_id:, perform_date:)
-        built = builder.call(patient_fhir_id: patient_fhir_id, perform_date: perform_date)
+        built = builder.call(patient_fhir_id: patient_fhir_id, perform_date: perform_date,
+                             patient: store.read_or_nil("Patient", patient_fhir_id))
         diagnoses = collector.call(patient_fhir_id: patient_fhir_id, perform_date: perform_date)
         described, dropped = describe(built.items)
 
@@ -28,7 +29,7 @@ module Integrations
       end
 
       def status(patient_fhir_id:, perform_date:, department_code:)
-        number = patient_number!(patient_fhir_id)
+        number = patient_number!(store.read("Patient", patient_fhir_id))
         adapter.billing_status(patient_number: number, date: perform_date,
                                department_code: mapped_department(department_code))
       end
@@ -36,7 +37,8 @@ module Integrations
       # 病名 → 診療行為の順で送る。病名が先でないとレセコン側で査定に使えない。
       def call(patient_fhir_id:, perform_date:, department_code:, practitioner_id: nil,
                coverage_set_key: nil, requested_by: nil)
-        number = patient_number!(patient_fhir_id)
+        patient = store.read("Patient", patient_fhir_id)
+        number = patient_number!(patient)
         department = mapped_department(department_code)
         physician = mapper.to_external("physician", practitioner_id)
 
@@ -44,7 +46,7 @@ module Integrations
           number, perform_date, department, coverage_set_key, patient_fhir_id, requested_by
         )
 
-        built = builder.call(patient_fhir_id: patient_fhir_id, perform_date: perform_date)
+        built = builder.call(patient_fhir_id: patient_fhir_id, perform_date: perform_date, patient: patient)
         claim = BillingClaim.new(
           patient_number: number, date: perform_date,
           time: exam_start_time(patient_fhir_id, perform_date),
@@ -64,7 +66,7 @@ module Integrations
       end
 
       def cancel(patient_fhir_id:, perform_date:, department_code:, requested_by: nil)
-        number = patient_number!(patient_fhir_id)
+        number = patient_number!(store.read("Patient", patient_fhir_id))
         department = mapped_department(department_code)
         result = adapter.cancel_billing(patient_number: number, date: perform_date,
                                         department_code: department)
@@ -139,8 +141,7 @@ module Integrations
         LocalDate.time_of(starts.min)
       end
 
-      def patient_number!(patient_fhir_id)
-        patient = store.read("Patient", patient_fhir_id)
+      def patient_number!(patient)
         number = PatientResource.number_of(patient)
         raise NotFound, "患者番号が登録されていません" if number.blank?
 

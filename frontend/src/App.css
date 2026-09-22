@@ -18007,6 +18007,44 @@ button.chemo-calendar__cell[draggable="true"] {
   color: var(--danger, var(--text));
 }
 
+/* 施設設定のレセプト電算コード。9 桁固定なので入力欄は短く、表は区分 × 療法士。 */
+.facility-settings__subheading {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.facility-settings__code {
+  width: 11em;
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.facility-settings__code[aria-invalid="true"] {
+  border-color: var(--danger, var(--border));
+}
+
+.facility-settings__code-table {
+  border-collapse: collapse;
+}
+
+.facility-settings__code-table th,
+.facility-settings__code-table td {
+  padding: 2px 8px 2px 0;
+  text-align: left;
+  font-weight: normal;
+  font-size: 13px;
+}
+
+.facility-settings__error {
+  margin: 0;
+  color: var(--danger, var(--text));
+}
+
 /* 医事側で触れなくなった理由。送信ボタンを止める根拠なので目立たせる。 */
 .receipt-send__locked {
   margin: 0;

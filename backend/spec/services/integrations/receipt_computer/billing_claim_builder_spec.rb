@@ -200,9 +200,9 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
     end
 
     it "reports order types whose 送り方 is not implemented yet, even without 明細" do
-      store.add(order_header(order_type: "rehab", name: "運動器リハ"))
+      store.add(order_header(order_type: "transfusion", name: "輸血"))
 
-      expect(build.skipped.first.kind).to eq("リハビリ")
+      expect(build.skipped.first.kind).to eq("輸血")
       expect(build.skipped.first.reason).to include("まだ医事会計へ送りません")
     end
 
@@ -483,6 +483,236 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
 
       expect(result.items).to be_empty
       expect(result.skipped.first.reason).to include("未実施")
+    end
+  end
+end
+
+RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder, "施設設定のコードで送る種別" do
+  let(:patient_id) { "pat-1" }
+  let(:date) { "2026-09-20" }
+  let(:store) { BillingFhirFixtures::FakeStore.new }
+
+  subject(:builder) { described_class.new(store: store) }
+
+  def build(patient: nil) = builder.call(patient_fhir_id: patient_id, perform_date: date, patient: patient)
+  def orca_classes = Integrations::Orca::MedicalMessage.build(build.items).first
+
+  def coded(system, code, display = nil)
+    { "coding" => [{ "system" => system, "code" => code, "display" => display }.compact] }
+  end
+
+  describe "病理" do
+    let(:exam) { "http://fhir-client.local/CodeSystem/jahis-patho-exam-category" }
+
+    def patho_order(category: "N000", specimens: 2)
+      header = order_header(order_type: "pathology", name: "病理")
+      header["code"] = coded(exam, category, "組織診")
+      store.add(header)
+      specimens.times { |i| store.add(order_detail(item_code: "sp#{i}", system: "x", id: "sp-#{i}")) }
+    end
+
+    it "sends the 検査区分's code from the 施設設定 with the number of 検体 as 数量" do
+      receipt_codes!("pathology" => { "N000" => "160060810" })
+      patho_order
+
+      item = build.items.first
+      expect(item.category).to eq(:pathology)
+      expect(item.lines.map { |l| [l.code, l.quantity] }).to eq([["160060810", "2"]])
+      expect(orca_classes.first["Medical_Class"]).to eq("640")
+    end
+
+    it "reports when the 施設設定 has no code for the 区分" do
+      patho_order(category: "N004")
+
+      expect(build.items).to be_empty
+      expect(build.skipped.first.reason).to include("施設設定に病理(N004)")
+    end
+  end
+
+  describe "リハビリ" do
+    let(:disease) { "http://fhir-client.local/CodeSystem/rehab-disease-category" }
+    let(:therapy) { "http://fhir-client.local/CodeSystem/rehab-therapy-type" }
+
+    def rehab_hub(id:, therapy_type:, units:, time: "10:00")
+      hub = procedure_hub(order_type: "rehab", code: nil, id: id, time: time)
+      hub["code"] = coded(therapy, therapy_type)
+      hub["extension"] = [{ "url" => "http://fhir-client.local/StructureDefinition/rehab-performed-units",
+                            "valueInteger" => units }]
+      hub
+    end
+
+    before do
+      header = order_header(order_type: "rehab", name: "運動器リハ")
+      header["code"] = coded(disease, "musculoskeletal", "運動器リハビリテーション")
+      store.add(header)
+    end
+
+    it "sends the code for 疾患別区分 × 療法士 with 単位数 as 回数" do
+      receipt_codes!("rehab" => { "musculoskeletal" => { "pt" => "180755710" } })
+      store.add(rehab_hub(id: "r1", therapy_type: "pt", units: 3))
+
+      item = build.items.first
+      expect(item.lines.first.code).to eq("180755710")
+      expect(item.count).to eq("3")
+      expect(orca_classes.first["Medical_Class"]).to eq("800")
+      expect(orca_classes.first["Medical_Class_Number"]).to eq("3")
+    end
+
+    it "adds up 単位数 across sessions of the same day with the same code" do
+      receipt_codes!("rehab" => { "musculoskeletal" => { "pt" => "180755710" } })
+      store.add(rehab_hub(id: "r1", therapy_type: "pt", units: 2), rehab_hub(id: "r2", therapy_type: "pt", units: 1, time: "15:00"))
+
+      expect(build.items.length).to eq(1)
+      expect(build.items.first.count).to eq("3")
+    end
+
+    it "reports when the 施設設定 has no code for the 区分 × 療法士" do
+      store.add(rehab_hub(id: "r1", therapy_type: "ot", units: 1))
+
+      expect(build.items).to be_empty
+      expect(build.skipped.first.reason).to include("musculoskeletal / ot")
+    end
+  end
+
+  describe "栄養指導" do
+    let(:session) { "http://fhir-client.local/CodeSystem/nutrition-guidance-session-type" }
+
+    it "sends the code for the 指導の種別 as 医学管理" do
+      receipt_codes!("nutrition_guidance" => { "initial" => "113017410" })
+      medical_procedure!("113017410", name: "外来栄養食事指導料１（初回）", chapter: "B", section: "001")
+      store.add(order_header(order_type: "nutrition-guidance"))
+      hub = procedure_hub(order_type: "nutrition-guidance", code: nil)
+      hub["code"] = coded(session, "initial", "初回指導")
+      store.add(hub)
+
+      expect(build.items.first.lines.first.code).to eq("113017410")
+      expect(orca_classes.first["Medical_Class"]).to eq("130")
+    end
+  end
+
+  describe "放射線治療" do
+    let(:kind) { "http://fhir-client.local/CodeSystem/radiotherapy-procedure" }
+    let(:technique) { "http://fhir-client.local/CodeSystem/radiotherapy-technique" }
+
+    def fraction(id:, time: "10:00", order: "hdr-1", date: "2026-09-20", kind_code: "fraction")
+      hub = procedure_hub(order_type: "radiotherapy", code: nil, id: id, time: time, order: order, date: date)
+      hub["category"] = { "coding" => [{ "system" => BillingFhirFixtures::ORDER_TYPE, "code" => "radiotherapy" },
+                                       { "system" => kind, "code" => kind_code }] }
+      hub["code"] = coded(technique, "3d-crt", "3次元原体照射")
+      hub
+    end
+
+    before do
+      Master::RadiotherapyTechnique.create!(code: "3d-crt", name: "3次元原体照射", receipt_code: "180762810",
+                                            receipt_code_second: "180762910", management_receipt_code: "180018510")
+      store.add(order_header(order_type: "radiotherapy"))
+    end
+
+    it "sends 体外照射 with 放射線治療管理料 on the first fraction of the course" do
+      store.add(fraction(id: "f1"))
+
+      lines = build.items.first.lines
+      expect(lines.map(&:code)).to eq(%w[180018510 180762810])
+      expect(orca_classes.first["Medical_Class"]).to eq("840")
+    end
+
+    it "does not repeat 管理料 once the course has earlier fractions" do
+      store.add(fraction(id: "f0", date: "2026-09-19"), fraction(id: "f1"))
+
+      expect(build.items.first.lines.map(&:code)).to eq(%w[180762810])
+    end
+
+    it "uses the 2 回目 code for the second fraction of the same day" do
+      store.add(fraction(id: "f0", date: "2026-09-19"), fraction(id: "f1"), fraction(id: "f2", time: "16:00"))
+
+      expect(build.items.map { |i| i.lines.map(&:code) }).to eq([%w[180762810], %w[180762910]])
+    end
+
+    it "does not call a 期間型 order 未実施 on its start day, and ignores the 治療装置 in usedCode" do
+      hub = fraction(id: "f1")
+      hub["usedCode"] = [{ "coding" => [{ "system" => "http://fhir-client.local/CodeSystem/radiotherapy-device",
+                                          "code" => "linac-1" }], "text" => "リニアック1号機" }]
+      store.add(order_header(order_type: "radiotherapy", id: "course-2", name: "別コース"), hub)
+
+      result = build
+
+      expect(result.items.length).to eq(1)
+      expect(result.skipped).to be_empty
+    end
+
+    it "ignores the 治療終了サマリー hub" do
+      store.add(fraction(id: "s1", kind_code: "course-summary"))
+
+      expect(build.items).to be_empty
+      expect(build.skipped).to be_empty
+    end
+  end
+
+  describe "送信時に足す加算" do
+    let(:lab_system) { "http://fhir-client.local/CodeSystem/lab-order-item" }
+
+    it "adds 血液採取 once when a 検体検査 of the day uses a 血液 specimen" do
+      receipt_codes!("lab" => { "blood_draw" => "160095710" })
+      Master::LabSpecimen.create!(specimen_code: "250", name: "血清", category: "血液")
+      Master::LabOrderItem.create!(order_item_code: "L1", name: "AST", receipt_code: "160020010", specimen_code: "250")
+      Master::LabOrderItem.create!(order_item_code: "L2", name: "ALT", receipt_code: "160020110", specimen_code: "250")
+      store.add(order_header(order_type: "lab", id: "h1"), order_detail(item_code: "L1", system: lab_system, parent: "h1"),
+                order_header(order_type: "lab", id: "h2"), order_detail(item_code: "L2", system: lab_system, parent: "h2"))
+
+      items = build.items
+
+      expect(items.flat_map(&:lines).count { |l| l.code == "160095710" }).to eq(1)
+      expect(items.first.lines.last.name).to eq("血液採取")
+    end
+
+    it "does not add 血液採取 for 尿 specimens" do
+      receipt_codes!("lab" => { "blood_draw" => "160095710" })
+      Master::LabSpecimen.create!(specimen_code: "100", name: "尿", category: "尿・便")
+      Master::LabOrderItem.create!(order_item_code: "U1", name: "尿一般", receipt_code: "160000110", specimen_code: "100")
+      store.add(order_header(order_type: "lab"), order_detail(item_code: "U1", system: lab_system))
+
+      expect(build.items.first.lines.map(&:code)).to eq(%w[160000110])
+    end
+
+    def regimen_injection
+      header = order_header(order_type: "injection")
+      header["requisition"] = { "system" => "http://fhir-client.local/Identifier/regimen-instance", "value" => "uuid" }
+      store.add(header, procedure_hub(order_type: "injection", code: nil),
+                injection_request(id: "mr-1", usage_type: "drip"),
+                administration(code: "620007342", dose: 1, route: "IV", request: "mr-1"))
+    end
+
+    it "adds 外来化学療法加算 and 無菌製剤処理料 to a レジメン injection, inside the 点滴 剤" do
+      receipt_codes!("injection" => { "outpatient_chemo_addition" => "130013990", "aseptic_preparation" => "130011070" })
+      regimen_injection
+
+      item = build(patient: { "birthDate" => "1990-01-01" }).items.first
+      expect(item.lines.map(&:code)).to eq(%w[620007342 130013990 130011070])
+      expect(orca_classes.first["Medical_Class"]).to eq("330")
+    end
+
+    it "uses the 15 歳未満 code for a child" do
+      receipt_codes!("injection" => { "outpatient_chemo_addition" => "130013990",
+                                      "outpatient_chemo_addition_child" => "130013890" })
+      regimen_injection
+
+      expect(build(patient: { "birthDate" => "2015-01-01" }).items.first.lines.map(&:code)).to include("130013890")
+    end
+
+    it "reports a missing 加算 code instead of sending the injection without it silently" do
+      regimen_injection
+
+      result = build
+      expect(result.items.first.lines.map(&:code)).to eq(%w[620007342])
+      expect(result.skipped.first.reason).to include("外来化学療法加算")
+    end
+
+    it "leaves an ordinary injection alone" do
+      receipt_codes!("injection" => { "outpatient_chemo_addition" => "130013990" })
+      store.add(order_header(order_type: "injection"), procedure_hub(order_type: "injection", code: nil),
+                administration(code: "620007342", dose: 1, route: "IV"))
+
+      expect(build.items.first.lines.map(&:code)).to eq(%w[620007342])
     end
   end
 end

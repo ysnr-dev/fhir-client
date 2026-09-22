@@ -19,9 +19,11 @@ module Integrations
       @gateway = gateway
     end
 
+    # 消されたリソース(410)も「無い」として扱う。実施記録が指すオーダーが後から消されている
+    # ことがあり、読めないだけで会計の組み立て全体を止めたくない。
     def read(resource_type, id)
       response = gateway.forward(method: :get, path: "/#{resource_type}/#{id}")
-      raise NotFound, "#{resource_type}/#{id} が見つかりません" if response.status == 404
+      raise NotFound, "#{resource_type}/#{id} が見つかりません" if [404, 410].include?(response.status)
 
       parse!(response)
     end

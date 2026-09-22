@@ -6448,6 +6448,10 @@ export interface RadiotherapyTechnique extends RadiotherapyMasterBase {
   modality_codes: string[];
   reference_system: string | null;
   reference_code: string | null;
+  /** 医事会計へ送る体外照射のレセプト電算コード(同じ日の 1 回目 / 2 回目)と放射線治療管理料。 */
+  receipt_code: string | null;
+  receipt_code_second: string | null;
+  management_receipt_code: string | null;
   note: string | null;
 }
 

@@ -15,10 +15,14 @@ module Integrations
       # 用法種別(点滴 / ワンショット)は実施記録に写されずオーダー側にしか無いので、
       # MedicationAdministration.request から引く。連日の注射は実施日と別の日のオーダーを
       # 指すことがあり、当日の集合に無ければ上流から読む。
-      def initialize(skipped, medication_requests: {}, store: nil)
+      # service_requests は当日のオーダーのヘッダ(id → リソース)。リハビリの疾患別区分の
+      # ようにオーダー側にしか無い情報を resolver が引く。当日の集合に無ければ上流から読む。
+      def initialize(skipped, medication_requests: {}, service_requests: {}, store: nil)
         @skipped = skipped
         @medication_requests = medication_requests
+        @service_requests = service_requests
         @store = store
+        @resolvers = {}
       end
 
       # records は同じ診療日のもの。放射線の器材と手技の区分番号は種別をまたいで
@@ -32,22 +36,52 @@ module Integrations
 
       private
 
-      attr_reader :skipped, :medication_requests, :store
+      attr_reader :skipped, :medication_requests, :service_requests, :store
 
       def build(record, rad_materials)
         definition = OrderCatalog.find(record.order_type)
         return nil if definition.nil?
 
-        lines = (definition.coded_hub? ? procedure_lines(record, definition) : []) +
+        head, count = head_lines(record, definition)
+        return nil if head.nil?
+
+        lines = head +
                 medicine_lines(record, definition) +
                 material_lines(record, definition, rad_materials) +
                 comment_lines(record)
         return nil if lines.empty?
 
         item = BillingItem.new(category: definition.order_type.to_sym, name: definition.label, lines: lines,
-                               performed_at: record.performed_at, source_ref: "Procedure/#{record.id}")
-        fill_injection(item, record) unless definition.coded_hub?
+                               count: count, performed_at: record.performed_at,
+                               source_ref: "Procedure/#{record.id}",
+                               order_ref: record.order_id && "ServiceRequest/#{record.order_id}")
+        fill_injection(item, record) if definition.order_type == "injection"
         item
+      end
+
+      # 手技の行と回数。項目マスタで引ける種別はハブと子の code、resolver を持つ種別は
+      # その変換、注射は手技を持たない。resolver が nil を返したら(送れない・対象外)剤ごと作らない。
+      def head_lines(record, definition)
+        if definition.resolver
+          resolved = resolver(definition).call(record, order_for(record))
+          resolved.nil? ? [nil, nil] : resolved
+        elsif definition.coded_hub?
+          [procedure_lines(record, definition), nil]
+        else
+          [[], nil]
+        end
+      end
+
+      def resolver(definition)
+        @resolvers[definition.order_type] ||= definition.resolver_for(skipped: skipped, store: store)
+      end
+
+      def order_for(record)
+        id = record.order_id
+        return nil if id.blank?
+        return service_requests[id] if service_requests.key?(id)
+
+        service_requests[id] = store&.read_or_nil("ServiceRequest", id)
       end
 
       # 注射の剤区分(皮下筋注 / 静注 / 点滴 / 中心静脈 …)は連携先が決める。その材料になる
@@ -110,8 +144,12 @@ module Integrations
         end
       end
 
+      # usedCode のうち材料の体系(特定器材・放射線の器材マスタ)のものだけを送る。
+      # 放射線治療の治療装置のように、算定しない道具が usedCode に載る種別もある。
       def material_lines(record, definition, rad_materials)
         Array(record.hub["usedCode"]).filter_map do |concept|
+          next nil unless Coding.find(concept, Coding::MEDICAL_MATERIAL) || Coding.find(concept, Coding::RAD_MATERIAL)
+
           code, name = material_code(concept, rad_materials)
           if code.blank?
             skipped << BillingClaimBuilder::Skipped.new(kind: definition.label, name: name,

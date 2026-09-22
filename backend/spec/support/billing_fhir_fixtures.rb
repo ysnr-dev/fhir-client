@@ -32,6 +32,8 @@ module BillingFhirFixtures
     def read(type, id)
       @resources[type].find { |r| r["id"] == id } or raise Integrations::FhirStore::NotFound, "#{type}/#{id}"
     end
+
+    def read_or_nil(type, id) = @resources[type].find { |r| r["id"] == id }
   end
 
   # 処方のヘッダは order-type を持たない(それで処方と判定する規約)。
@@ -133,6 +135,13 @@ module BillingFhirFixtures
       }]
     end
     concept
+  end
+
+  # 施設設定のレセプト電算コード。渡した項目だけを上書きする。
+  def receipt_codes!(values)
+    settings = FacilitySettings.current
+    settings.apply_settings("receipt_codes" => values)
+    settings.save!
   end
 
   def task(order:, status:, code: "rad-exam", id: nil)
