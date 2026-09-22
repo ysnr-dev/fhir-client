@@ -1540,3 +1540,44 @@ if pathway_files.any?
 else
   puts "master_pathways: no db/seed_data/pathways/*.json, skipped"
 end
+
+# 放射線治療の施設固有マスタ(docs/radiotherapy-order-design.md §3)。モダリティ・照射技法・
+# 休止/中止理由は CSV、治療プロトコル(定型処方)は標的と Phase が入れ子なので JSON。
+# 標準コードとの対応(reference_*)は mCODE の値セット(SNOMED CT)を参考に付けたもので、
+# オーダーには焼かない。定位照射・全身照射は mCODE の値セットに無いので空。
+# 治療装置は施設ごとに違うので初期値を持たない(画面から登録する)。既存行は上書きしない。
+radiotherapy_csv_masters = [
+  [Master::RadiotherapyModality, "radiotherapy_modalities.csv", %w[name dose_unit reference_system reference_code]],
+  [Master::RadiotherapyTechnique, "radiotherapy_techniques.csv", %w[name abbreviation reference_system reference_code]],
+  [Master::RadiotherapyStopReason, "radiotherapy_stop_reasons.csv", %w[name kind]]
+]
+radiotherapy_csv_masters.each do |model, file, columns|
+  path = Rails.root.join("db/seed_data", file)
+  next puts "#{model.table_name}: #{path} not found, skipped" unless File.exist?(path)
+
+  loaded = 0
+  CSV.foreach(path, headers: true) do |row|
+    code = row["code"].to_s.strip
+    next if code.blank? || model.exists?(code: code)
+
+    attrs = columns.index_with { |column| row[column].to_s.strip.presence }.compact
+    attrs[:modality_codes] = row["modality_codes"].to_s.split("|") if row.headers.include?("modality_codes")
+    model.create!(code: code, display_order: row["display_order"].to_s.strip.presence&.to_i, **attrs.symbolize_keys)
+    loaded += 1
+  end
+  puts "#{model.table_name}: seeded #{loaded} rows"
+end
+
+radiotherapy_protocols_json = Rails.root.join("db/seed_data/radiotherapy_protocols.json")
+if File.exist?(radiotherapy_protocols_json)
+  loaded = 0
+  JSON.parse(File.read(radiotherapy_protocols_json)).each do |attrs|
+    next if Master::RadiotherapyProtocol.exists?(code: attrs["code"])
+
+    Master::RadiotherapyProtocol.create!(attrs)
+    loaded += 1
+  end
+  puts "master_radiotherapy_protocols: seeded #{loaded} rows"
+else
+  puts "master_radiotherapy_protocols: #{radiotherapy_protocols_json} not found, skipped"
+end

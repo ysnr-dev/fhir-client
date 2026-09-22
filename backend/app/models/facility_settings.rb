@@ -108,6 +108,29 @@ class FacilitySettings < ApplicationRecord
     "outpatient" => %w[external internal]
   }.freeze
 
+  # 他科依頼の依頼目的テンプレートの既定(依頼先の診療科ごと)。キーは診療科の
+  # Organization.id、値はテンプレート(Questionnaire)の canonical。依頼先を選んだときに
+  # テンプレート選択の初期値に使う。診療科は上流のリソースなので、キーは環境ごとに違う。
+  DEFAULT_CONSULT_DEFAULT_TEMPLATES = {}.freeze
+  CANONICAL = { pattern: %r{\Ahttps?://\S+\z}, label: "テンプレートの canonical" }.freeze
+
+  # 放射線治療の治療中の診察(週次レビュー)。最後の診察から interval_days を超えたコースを
+  # 部門一覧で強調し、template を決めておくと記入欄が選択済みで開く。
+  #
+  # 既定の 7 日は診療報酬の外来放射線照射診療料(B001-2-8)に合わせてある —— 同点数は
+  # 「7 日間に 1 回に限り算定」し、算定日に放射線治療医が診察することを要件にしている。
+  # ただしこれは**外来の患者**の算定要件で、入院患者や施設ごとの運用まで縛るものでは
+  # ないので設定で変えられるようにしている。
+  # 空も受ける canonical(既定テンプレート未設定)。
+  CANONICAL_OR_BLANK = {
+    pattern: %r{\A(https?://\S+)?\z}, label: "テンプレートの canonical(空可)"
+  }.freeze
+
+  DEFAULT_RADIOTHERAPY_REVIEW = {
+    "interval_days" => 7,
+    "template" => ""
+  }.freeze
+
   # 設定項目の表。ここに 1 項目足せば、検証・既定値・読み書き・管理 API がすべて付く。
   #
   #   default: 保存されていないときに返す値
@@ -162,6 +185,18 @@ class FacilitySettings < ApplicationRecord
       default: DEFAULT_PRESCRIPTION_CATEGORY,
       shape: {
         fields: PRESCRIPTION_CATEGORY_CODES.transform_values { |codes| { enum: codes, blank: true } }
+      }
+    },
+    "consult_default_templates" => {
+      default: DEFAULT_CONSULT_DEFAULT_TEMPLATES,
+      shape: { map: CANONICAL, keys: :any }
+    },
+    "radiotherapy_review" => {
+      default: DEFAULT_RADIOTHERAPY_REVIEW,
+      shape: { fields: { "interval_days" => DAYS, "template" => CANONICAL_OR_BLANK } },
+      check: lambda { |value|
+        days = value.is_a?(Hash) ? value["interval_days"] : nil
+        ["診察の間隔は 1 日以上にしてください"] if days.is_a?(Integer) && days < 1
       }
     }
   }.freeze

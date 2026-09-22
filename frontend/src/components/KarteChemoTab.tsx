@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
-import { usePatientEncounterEvents, useRegimenAdverseEvents, useRegimenApplications, useRegimenDayOrders } from "../api/queries";
+import { usePatientEncounterEvents, usePatientAdverseEvents, useRegimenApplications, useRegimenDayOrders } from "../api/queries";
 import type { EncounterEvent } from "../fhir/encounterHelpers";
 import {
   cycleDayLabel,
@@ -96,7 +96,7 @@ export function KarteChemoTab({
   onEditHeader,
 }: KarteChemoTabProps) {
   const applications = useRegimenApplications(patientId);
-  const adverseEvents = useRegimenAdverseEvents(patientId);
+  const adverseEvents = usePatientAdverseEvents(patientId);
   const list = applications.data?.applications ?? [];
   // 適用中を先に、同じ状態なら新しい開始日を先に。
   const sorted = useMemo(

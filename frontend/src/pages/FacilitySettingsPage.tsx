@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useUpdateFacilitySettings } from "../api/adminQueries";
-import { useFacilitySettings, useOrganizationOptions } from "../api/queries";
+import {
+  useFacilitySettings,
+  useOrganizationOptions,
+  useQuestionnaireOptions,
+  useSelfDepartments,
+} from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { organizationDisplayName } from "../fhir/organizationHelpers";
 import {
@@ -36,7 +41,13 @@ import {
   SETTING_OPTIONS,
   type PrescriptionCategoryDefaults,
 } from "../fhir/prescriptionHelpers";
+import {
+  DEFAULT_RADIOTHERAPY_REVIEW,
+  type RadiotherapyReviewSettings,
+} from "../fhir/radiotherapyReviewHelpers";
 import { useNursingObservationsByManageNos } from "../api/masterQueries";
+import { departmentDisplayName, sortDepartmentsByCode } from "../fhir/departmentHelpers";
+import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
 
 // 「どの Organization が自院か」を指定する。本アプリはマルチテナントではなく、
@@ -124,12 +135,36 @@ export function FacilitySettingsPage() {
   const reminderValid =
     Number.isInteger(reminder.discharge_summary_days) && reminder.discharge_summary_days >= 0;
 
+  // 放射線治療の治療中の診察(週次レビュー)の間隔。最後の診察からこの日数を超えたコースを
+  // 部門一覧で強調する。
+  const [reviewDraft, setReviewDraft] = useState<RadiotherapyReviewSettings | undefined>(undefined);
+  const savedReview = settings.data?.radiotherapy_review ?? DEFAULT_RADIOTHERAPY_REVIEW;
+  const radiotherapyReview = reviewDraft ?? savedReview;
+  const reviewValid =
+    Number.isInteger(radiotherapyReview.interval_days) && radiotherapyReview.interval_days >= 1;
+
   // 処方区分の初期値。入外区分ごとに 1 つで、空なら処方フォームは未選択で開く。
   const [categoryDraft, setCategoryDraft] = useState<PrescriptionCategoryDefaults | undefined>(
     undefined,
   );
   const savedCategory = settings.data?.prescription_category ?? DEFAULT_PRESCRIPTION_CATEGORY;
   const prescriptionCategory = categoryDraft ?? savedCategory;
+
+  // 他科依頼の依頼目的テンプレートの既定。依頼先の診療科ごとに 1 つで、未選択の科は保存しない。
+  const [consultTemplateDraft, setConsultTemplateDraft] = useState<
+    Record<string, string> | undefined
+  >(undefined);
+  const savedConsultTemplates = settings.data?.consult_default_templates ?? {};
+  const consultTemplates = consultTemplateDraft ?? savedConsultTemplates;
+  const departments = useSelfDepartments();
+  const templateOptions = useQuestionnaireOptions({ status: "active" });
+
+  function updateConsultTemplate(departmentId: string, canonical: string) {
+    const next = { ...consultTemplates };
+    if (canonical) next[departmentId] = canonical;
+    else delete next[departmentId];
+    setConsultTemplateDraft(next);
+  }
 
   // 水分出納に数える看護観察。管理番号だけを保存し、名前はマスタから引く。
   const [balanceDraft, setBalanceDraft] = useState<WaterBalanceSettings | undefined>(undefined);
@@ -157,6 +192,7 @@ export function FacilitySettingsPage() {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!scheduleValid || !mealValid || !thresholdsValid || !medicationValid || !reminderValid) return;
+    if (!reviewValid) return;
     update.mutate({
       self_organization_id: value,
       nursing_schedule: schedule,
@@ -166,6 +202,8 @@ export function FacilitySettingsPage() {
       medication_schedule: medicationSchedule,
       document_reminder: reminder,
       prescription_category: prescriptionCategory,
+      consult_default_templates: consultTemplates,
+      radiotherapy_review: radiotherapyReview,
     });
   }
 
@@ -369,6 +407,32 @@ export function FacilitySettingsPage() {
           </div>
         </details>
 
+        {/* 他科依頼の依頼目的テンプレートの既定。依頼先の科を選んだときにテンプレート選択の
+            初期値になる(選び直しは妨げない)。 */}
+        <details className="facility-settings__schedule">
+          <summary>他科依頼の既定テンプレート</summary>
+          <div className="facility-settings__schedule-body">
+            {sortDepartmentsByCode(departments.departments)
+              .filter((department) => Boolean(department.id))
+              .map((department) => (
+                <label key={department.id}>
+                  {departmentDisplayName(department)}
+                  <select
+                    value={consultTemplates[department.id as string] ?? ""}
+                    onChange={(e) => updateConsultTemplate(department.id as string, e.target.value)}
+                  >
+                    <option value="">（なし）</option>
+                    {templateOptions.questionnaires.map((q) => (
+                      <option key={q.id} value={questionnaireCanonical(q)}>
+                        {q.title ?? q.name ?? q.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+          </div>
+        </details>
+
         {/* 文書作成の督促。退院の時点で期限付きの通知 Task を作るので、変えても作成済みの
             通知の期限は動かない。 */}
         <details className="facility-settings__schedule">
@@ -389,6 +453,45 @@ export function FacilitySettingsPage() {
                 />
                 <span className="facility-settings__unit">日以内(退院日から)</span>
               </span>
+            </label>
+          </div>
+        </details>
+
+        {/* 放射線治療の治療中の診察。既定の 7 日は外来放射線照射診療料(B001-2-8。7 日間に
+            1 回、算定日に放射線治療医の診察)に合わせた値で、入院の患者や施設の運用に合わせて
+            変えられるようにしてある。テンプレートは記入欄の初期値(選び直しは妨げない)。 */}
+        <details className="facility-settings__schedule">
+          <summary>放射線治療の週次レビュー</summary>
+          <div className="facility-settings__schedule-body">
+            <label>
+              治療中の診察の間隔
+              <span className="facility-settings__times">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={radiotherapyReview.interval_days}
+                  onChange={(e) =>
+                    setReviewDraft({ ...radiotherapyReview, interval_days: Number(e.target.value) })
+                  }
+                  aria-label="放射線治療の診察間隔の日数"
+                />
+                <span className="facility-settings__unit">日以内(最後の診察から)</span>
+              </span>
+            </label>
+            <label>
+              週次レビューの既定テンプレート
+              <select
+                value={radiotherapyReview.template}
+                onChange={(e) => setReviewDraft({ ...radiotherapyReview, template: e.target.value })}
+              >
+                <option value="">（なし）</option>
+                {templateOptions.questionnaires.map((q) => (
+                  <option key={q.id} value={questionnaireCanonical(q)}>
+                    {q.title ?? q.name ?? q.id}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
         </details>
@@ -464,6 +567,11 @@ export function FacilitySettingsPage() {
         {!medicationValid && (
           <p className="connection-settings-form__field-hint" role="status">
             「内服の与薬の時刻」は 0 以上の分と、HH:MM の時刻で入れてください。
+          </p>
+        )}
+        {!reviewValid && (
+          <p className="connection-settings-form__field-hint" role="status">
+            「放射線治療の診察間隔」は 1 以上の日数で入れてください。
           </p>
         )}
         {!reminderValid && (

@@ -1,0 +1,512 @@
+[
+  {
+    "code": "RT-BREAST-50-B10",
+    "name": "乳房温存術後 50Gy/25回 + Boost 10Gy/5回",
+    "name_kana": "ﾆｭｳﾎﾞｳｵﾝｿﾞﾝｼﾞｭﾂｺﾞ",
+    "intent": "adjuvant",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 全乳房",
+        "volume_type": "PTV",
+        "body_part_code": "781",
+        "body_part_name": "乳房"
+      },
+      {
+        "key": "v2",
+        "label": "PTV 腫瘍床",
+        "volume_type": "PTV",
+        "body_part_code": "781",
+        "body_part_name": "乳房"
+      }
+    ],
+    "phases": [
+      {
+        "label": "全乳房",
+        "modality_code": "photon",
+        "technique_code": "3d-crt",
+        "fractions": 25,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 2.0
+          }
+        ]
+      },
+      {
+        "label": "Boost",
+        "modality_code": "electron",
+        "technique_code": "electron-field",
+        "fractions": 5,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v2",
+            "fraction_dose": 2.0
+          }
+        ]
+      }
+    ],
+    "display_order": 10
+  },
+  {
+    "code": "RT-BREAST-4256",
+    "name": "乳房温存術後 寡分割 42.56Gy/16回",
+    "name_kana": "ﾆｭｳﾎﾞｳｵﾝｿﾞﾝｼﾞｭﾂｺﾞｶﾌﾞﾝｶﾂ",
+    "intent": "adjuvant",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 全乳房",
+        "volume_type": "PTV",
+        "body_part_code": "781",
+        "body_part_name": "乳房"
+      }
+    ],
+    "phases": [
+      {
+        "label": "全乳房",
+        "modality_code": "photon",
+        "technique_code": "3d-crt",
+        "fractions": 16,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 2.66
+          }
+        ]
+      }
+    ],
+    "display_order": 20
+  },
+  {
+    "code": "RT-PROSTATE-70",
+    "name": "前立腺 VMAT 70Gy/28回",
+    "name_kana": "ｾﾞﾝﾘﾂｾﾝ",
+    "intent": "curative",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 前立腺",
+        "volume_type": "PTV",
+        "body_part_code": "335",
+        "body_part_name": "前立腺"
+      }
+    ],
+    "phases": [
+      {
+        "label": "Phase 1",
+        "modality_code": "photon",
+        "technique_code": "vmat",
+        "fractions": 28,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 2.5
+          }
+        ]
+      }
+    ],
+    "display_order": 30
+  },
+  {
+    "code": "RT-PROSTATE-78",
+    "name": "前立腺 IMRT 78Gy/39回",
+    "name_kana": "ｾﾞﾝﾘﾂｾﾝ",
+    "intent": "curative",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 前立腺",
+        "volume_type": "PTV",
+        "body_part_code": "335",
+        "body_part_name": "前立腺"
+      }
+    ],
+    "phases": [
+      {
+        "label": "Phase 1",
+        "modality_code": "photon",
+        "technique_code": "imrt",
+        "fractions": 39,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 2.0
+          }
+        ]
+      }
+    ],
+    "display_order": 40
+  },
+  {
+    "code": "RT-BONE-30",
+    "name": "骨転移 30Gy/10回",
+    "name_kana": "ｺﾂﾃﾝｲ",
+    "intent": "palliative",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 骨転移",
+        "volume_type": "PTV"
+      }
+    ],
+    "phases": [
+      {
+        "label": "Phase 1",
+        "modality_code": "photon",
+        "technique_code": "3d-crt",
+        "fractions": 10,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 3.0
+          }
+        ]
+      }
+    ],
+    "display_order": 50
+  },
+  {
+    "code": "RT-BONE-20",
+    "name": "骨転移 20Gy/5回",
+    "name_kana": "ｺﾂﾃﾝｲ",
+    "intent": "palliative",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 骨転移",
+        "volume_type": "PTV"
+      }
+    ],
+    "phases": [
+      {
+        "label": "Phase 1",
+        "modality_code": "photon",
+        "technique_code": "3d-crt",
+        "fractions": 5,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 4.0
+          }
+        ]
+      }
+    ],
+    "display_order": 60
+  },
+  {
+    "code": "RT-BONE-8",
+    "name": "骨転移 8Gy/1回",
+    "name_kana": "ｺﾂﾃﾝｲ",
+    "intent": "palliative",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 骨転移",
+        "volume_type": "PTV"
+      }
+    ],
+    "phases": [
+      {
+        "label": "Phase 1",
+        "modality_code": "photon",
+        "technique_code": "3d-crt",
+        "fractions": 1,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 8.0
+          }
+        ]
+      }
+    ],
+    "display_order": 70
+  },
+  {
+    "code": "RT-WBRT-30",
+    "name": "全脳照射 30Gy/10回",
+    "name_kana": "ｾﾞﾝﾉｳｼｮｳｼｬ",
+    "intent": "palliative",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "全脳",
+        "volume_type": "CTV",
+        "body_part_code": "601",
+        "body_part_name": "脳"
+      }
+    ],
+    "phases": [
+      {
+        "label": "Phase 1",
+        "modality_code": "photon",
+        "technique_code": "3d-crt",
+        "fractions": 10,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 3.0
+          }
+        ]
+      }
+    ],
+    "display_order": 80
+  },
+  {
+    "code": "RT-BRAIN-SRS",
+    "name": "脳転移 定位手術的照射 20Gy/1回",
+    "name_kana": "ﾉｳﾃﾝｲ",
+    "intent": "palliative",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "GTV 脳転移",
+        "volume_type": "GTV",
+        "body_part_code": "601",
+        "body_part_name": "脳"
+      }
+    ],
+    "phases": [
+      {
+        "label": "Phase 1",
+        "modality_code": "photon",
+        "technique_code": "srs",
+        "fractions": 1,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 20.0
+          }
+        ]
+      }
+    ],
+    "display_order": 90
+  },
+  {
+    "code": "RT-LUNG-SBRT-48",
+    "name": "肺 SBRT 48Gy/4回",
+    "name_kana": "ﾊｲ",
+    "intent": "curative",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 肺",
+        "volume_type": "PTV",
+        "body_part_code": "201",
+        "body_part_name": "肺"
+      }
+    ],
+    "phases": [
+      {
+        "label": "Phase 1",
+        "modality_code": "photon",
+        "technique_code": "sbrt",
+        "fractions": 4,
+        "fractions_per_week": 4,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 12.0
+          }
+        ]
+      }
+    ],
+    "display_order": 100
+  },
+  {
+    "code": "RT-LUNG-CRT-60",
+    "name": "肺癌 化学放射線療法 60Gy/30回",
+    "name_kana": "ﾊｲｶﾞﾝ",
+    "intent": "curative",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 肺・縦隔",
+        "volume_type": "PTV",
+        "body_part_code": "200",
+        "body_part_name": "胸部"
+      }
+    ],
+    "phases": [
+      {
+        "label": "Phase 1",
+        "modality_code": "photon",
+        "technique_code": "3d-crt",
+        "fractions": 30,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 2.0
+          }
+        ]
+      }
+    ],
+    "display_order": 110
+  },
+  {
+    "code": "RT-HN-SIB-70",
+    "name": "頭頸部 IMRT SIB 70/56Gy 35回",
+    "name_kana": "ﾄｳｹｲﾌﾞ",
+    "intent": "curative",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 高リスク",
+        "volume_type": "PTV",
+        "body_part_code": "175",
+        "body_part_name": "咽頭"
+      },
+      {
+        "key": "v2",
+        "label": "PTV 予防域",
+        "volume_type": "PTV",
+        "body_part_code": "175",
+        "body_part_name": "咽頭"
+      }
+    ],
+    "phases": [
+      {
+        "label": "Phase 1",
+        "modality_code": "photon",
+        "technique_code": "imrt",
+        "fractions": 35,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 2.0
+          },
+          {
+            "volume_key": "v2",
+            "fraction_dose": 1.6
+          }
+        ]
+      }
+    ],
+    "display_order": 120
+  },
+  {
+    "code": "RT-ESO-CRT-504",
+    "name": "食道癌 化学放射線療法 50.4Gy/28回",
+    "name_kana": "ｼｮｸﾄﾞｳｶﾞﾝ",
+    "intent": "curative",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 食道",
+        "volume_type": "PTV",
+        "body_part_code": "261",
+        "body_part_name": "食道"
+      }
+    ],
+    "phases": [
+      {
+        "label": "Phase 1",
+        "modality_code": "photon",
+        "technique_code": "3d-crt",
+        "fractions": 28,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 1.8
+          }
+        ]
+      }
+    ],
+    "display_order": 130
+  },
+  {
+    "code": "RT-RECTUM-PRE-45",
+    "name": "直腸癌 術前 45Gy/25回",
+    "name_kana": "ﾁｮｸﾁｮｳｶﾞﾝ",
+    "intent": "neoadjuvant",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 骨盤",
+        "volume_type": "PTV",
+        "body_part_code": "320",
+        "body_part_name": "骨盤"
+      }
+    ],
+    "phases": [
+      {
+        "label": "Phase 1",
+        "modality_code": "photon",
+        "technique_code": "3d-crt",
+        "fractions": 25,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 1.8
+          }
+        ]
+      }
+    ],
+    "display_order": 140
+  },
+  {
+    "code": "RT-CERVIX-EBRT-ICBT",
+    "name": "子宮頸癌 全骨盤 50Gy/25回 + 腔内照射 24Gy/4回",
+    "name_kana": "ｼｷｭｳｹｲｶﾞﾝ",
+    "intent": "curative",
+    "volumes": [
+      {
+        "key": "v1",
+        "label": "PTV 全骨盤",
+        "volume_type": "PTV",
+        "body_part_code": "320",
+        "body_part_name": "骨盤"
+      },
+      {
+        "key": "v2",
+        "label": "HR-CTV",
+        "volume_type": "CTV",
+        "body_part_code": "331",
+        "body_part_name": "子宮"
+      }
+    ],
+    "phases": [
+      {
+        "label": "全骨盤",
+        "modality_code": "photon",
+        "technique_code": "3d-crt",
+        "fractions": 25,
+        "fractions_per_week": 5,
+        "doses": [
+          {
+            "volume_key": "v1",
+            "fraction_dose": 2.0
+          }
+        ]
+      },
+      {
+        "label": "腔内照射",
+        "modality_code": "brachy-hdr",
+        "technique_code": "intracavitary",
+        "fractions": 4,
+        "fractions_per_week": 1,
+        "doses": [
+          {
+            "volume_key": "v2",
+            "fraction_dose": 6.0
+          }
+        ]
+      }
+    ],
+    "display_order": 150
+  }
+]

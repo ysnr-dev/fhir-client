@@ -1,0 +1,16 @@
+code,name,abbreviation,modality_codes,reference_system,reference_code,display_order
+2d,2次元照射,2D,photon|electron|gamma,http://snomed.info/sct,1156526006,10
+3d-crt,3次元原体照射,3D-CRT,photon,http://snomed.info/sct,1162782007,20
+imrt,強度変調放射線治療,IMRT,photon,http://snomed.info/sct,441799006,30
+vmat,強度変調回転照射,VMAT,photon,http://snomed.info/sct,1156530009,40
+srs,定位手術的照射,SRS,photon|gamma,,,50
+srt,定位放射線治療(頭部),SRT,photon|gamma,,,60
+sbrt,体幹部定位放射線治療,SBRT,photon,,,70
+electron-field,電子線照射,,electron,,,80
+tbi,全身照射,TBI,photon,,,90
+tset,全身皮膚電子線照射,TSET,electron,,,100
+iort,術中照射,IORT,photon|electron,http://snomed.info/sct,168524008,110
+particle-scanning,粒子線スキャニング照射,,proton|carbon,http://snomed.info/sct,1204242009,120
+particle-passive,粒子線ブロードビーム照射,,proton|carbon,http://snomed.info/sct,1156529004,130
+intracavitary,腔内照射,,brachy-hdr|brachy-ldr,http://snomed.info/sct,384692006,140
+interstitial,組織内照射,,brachy-hdr|brachy-ldr|brachy-permanent,http://snomed.info/sct,113120007,150

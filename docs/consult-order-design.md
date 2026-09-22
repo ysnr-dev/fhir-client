@@ -297,8 +297,7 @@ backend の変更は無し。上流 FHIR サーバーの変更も無し。
 
 ## 8. 申し送り
 
-- **`performer` 検索が上流に無い**ので依頼先科の絞り込みがクライアント側。
-  件数が増えたら `status=active` で絞った先をさらにページングする必要が出る。
+- 依頼先科の絞り込みは上流の `performer` 検索で行う(`consultWorklistParams`)。
 - **回答の削除**(診療記録として消す)では依頼の状態は戻らない。ServiceRequest には
   `consult-reply` 拡張と `status=completed` が残る。戻す入口は部門一覧の「回答取消」
   (Task を対応中へ、status を active へ、拡張を外す)。回答の記録そのものは消さない。
@@ -308,11 +307,13 @@ backend の変更は無し。上流 FHIR サーバーの変更も無し。
   依頼から辿れるのは新しい方だけ。
 - 依頼先の医師を指名しても、その医師にだけ一覧が出る仕組みは無い(一覧の軸は科)。
   医師単位の受信箱が要るようになったら `performer` 検索と合わせて考える。
-- **依頼先の科ごとに既定テンプレートを出す仕組みは無い。** 放射線・内視鏡は項目マスタに
-  「既定のテンプレート」を持たせているが、他科依頼の宛先は Organization(診療科)で、
-  診療科マスタは上流の Organization そのものなのでフロント側の設定を持つ場所が無い。
-  科ごとの定型が増えたら、backend に「診療科 → 既定テンプレート」の対応表を持つのが
-  素直(そこまでは依頼医がカテゴリから選ぶ)。
+- **依頼先の科ごとの既定テンプレート**は施設設定に持つ
+  (`facility_settings.settings.consult_default_templates`。キーは診療科の Organization.id、
+  値はテンプレートの canonical)。依頼先を選んで「テンプレート」を押すと、その科の既定が
+  選択済みで開く(選び直しは妨げない)。診療科マスタは上流の Organization そのもので
+  フロント側の設定を持つ場所が無いため、backend の施設設定に置いた。キーが上流の id なので
+  環境ごとに設定し直す。最初の利用例は放射線治療科あての依頼
+  (`docs/report-mappings/consult-purpose-radiotherapy-01.md`)。
 - テンプレートカテゴリ「他科依頼」の code は環境ごとに違う。別環境へ
   `consult-purpose-01.questionnaire.json` を入れるときは、その環境で作った code に
   差し替える(`docs/report-mappings/consult-purpose-01.md`)。

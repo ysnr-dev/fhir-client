@@ -1,6 +1,17 @@
 import { useMemo } from "react";
 import { ADVERSE_EVENT_CATEGORY, parseAdverseEvent, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import {
+  DEFAULT_RADIOTHERAPY_REVIEW,
+  RADIOTHERAPY_REVIEW_DUE_TASK_CODE,
+  buildCompletedRadiotherapyReviewDueEntries,
+  parseRadiotherapyReview,
+  radiotherapyReviewDueEntry,
+  radiotherapyReviewState,
+  radiotherapyReviewsByOrderId,
+  type RadiotherapyReview,
+  type RadiotherapyReviewSettings,
+} from "../fhir/radiotherapyReviewHelpers";
+import {
   keepPreviousData,
   useInfiniteQuery,
   useMutation,
@@ -33,7 +44,7 @@ import {
   locationDisplayName,
   sortLocations,
 } from "../fhir/locationHelpers";
-import { KARTE_UNSCHEDULED_DAY, compareKarteDaysDesc } from "../fhir/karteTimeline";
+import { compareKarteDaysDesc, orderCardDay } from "../fhir/karteTimeline";
 import {
   buildActivityProvenanceEntry,
   buildOrderProvenanceEntry,
@@ -367,6 +378,33 @@ import {
   consultReply,
   isConsultServiceRequest,
 } from "../fhir/consultOrderHelpers";
+import {
+  RADIOTHERAPY_ORDER_TYPE,
+  buildRadiotherapyOrderDeleteBundle,
+  buildRadiotherapyOrderStatusEntry,
+  isRadiotherapyServiceRequest,
+  summarizeRadiotherapyOrder,
+  type RadiotherapyTermination,
+} from "../fhir/radiotherapyOrderHelpers";
+import {
+  radiotherapyCourseSummariesByOrderId,
+} from "../fhir/radiotherapySummaryHelpers";
+import {
+  buildRadiotherapyFractionCancelBundle,
+  buildRadiotherapyFractionNotDoneBundle,
+  buildRadiotherapyFractionRestoreBundle,
+  isRadiotherapyFraction,
+  radiotherapyFractionsByOrderId,
+  rescheduleRadiotherapyFraction,
+  type RadiotherapyFractionDisplay,
+} from "../fhir/radiotherapyResultHelpers";
+import {
+  buildRadiotherapyTaskUpdate,
+  radiotherapyOrderStatusFor,
+  radiotherapyTaskStatus,
+  radiotherapyTasksByOrderId,
+  type RadiotherapyTaskStatus,
+} from "../fhir/radiotherapyTaskHelpers";
 import {
   buildConsultTaskUpdate,
   consultOrderStatusFor,
@@ -5623,7 +5661,15 @@ export function useDocumentDueTasks(encounterId: string | undefined) {
   });
 }
 
-const SUMMARY_ORDER_KINDS = ["surgery", "treatment", "endoscopy", "rad", "physio", "pathology"];
+const SUMMARY_ORDER_KINDS = [
+  "surgery",
+  "treatment",
+  "endoscopy",
+  "rad",
+  "physio",
+  "pathology",
+  "radiotherapy",
+];
 
 /**
  * 退院時サマリーの下書きに使う、入院期間のデータ。オーダー・記録は Encounter を
@@ -7121,8 +7167,12 @@ export function useKarteDayIndex(
   });
 
   // オーダーはすべて開始日(occurrence)にカードを出すので、診療日もその 1 本で数える
-  // (タイムラインと同じくヘッダだけ、看護指示は除く)。日付未定(undated)はタイムラインと
-  // 同じ仮想日に写す。
+  // (タイムラインと同じくヘッダだけ、看護指示は除く)。
+  //
+  // occurrence を持たないオーダーの置き場は種別で変わる(未定を許す種別は「日付未定」、
+  // それ以外は登録日)。サーバー集計は「occurrence が無い」までしか分からないので、
+  // 該当があるときだけ種別と登録日を引き直し、タイムラインと同じ orderCardDay で写す
+  // —— 写さずに一律「日付未定」に足すと、カードが登録日に出るぶん空の「日付未定」が並ぶ。
   const orders = useQuery({
     queryKey: ["ServiceRequest", "search", "karte-days-occurrence", patientId, problemKey],
     queryFn: async () => {
@@ -7131,13 +7181,21 @@ export function useKarteDayIndex(
       if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
       params.set("based-on:missing", "true");
       params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
+      // fetchDistinctDates は渡した params に集計用の値を足すので、引き直し用に写しを渡す。
       const { dates, hasUndated } = await fetchDistinctDates(
         "ServiceRequest",
-        params,
+        new URLSearchParams(params),
         "occurrence",
         { limit: 1000 },
       );
-      return hasUndated ? [...dates, KARTE_UNSCHEDULED_DAY] : dates;
+      if (!hasUndated) return dates;
+
+      params.set("occurrence:missing", "true");
+      params.set("_elements", "category,authoredOn");
+      params.set("_count", String(KARTE_PENDING_COUNT));
+      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+      const undated = resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest");
+      return [...dates, ...undated.map(orderCardDay)];
     },
     enabled,
   });
@@ -8321,6 +8379,14 @@ export function usePrescriptionCategoryDefaults() {
      *  これが true になるまでフォームを描かない。 */
     ready: !settings.isLoading,
   };
+}
+
+const EMPTY_CONSULT_DEFAULT_TEMPLATES: Record<string, string> = {};
+
+/** 他科依頼の依頼目的テンプレートの既定(依頼先の診療科 Organization.id → canonical)。 */
+export function useConsultDefaultTemplates() {
+  const settings = useFacilitySettings();
+  return settings.data?.consult_default_templates ?? EMPTY_CONSULT_DEFAULT_TEMPLATES;
 }
 
 /** 経過表でバイタルを異常値として強調するしきい値。設定が読めるまでは既定値で判定する。 */
@@ -11294,7 +11360,20 @@ export function useChemoRoomList(date: string) {
 // ---- 有害事象(CTCAE Grade。§7.6 C-3) ----
 
 /** 患者の有害事象の記録。適用・クールでの絞り込みは画面側(1 患者で多くても数十件)。 */
-export function useRegimenAdverseEvents(patientId: string | undefined) {
+function parseAdverseEvents(bundle: fhir4.Bundle<fhir4.Observation>): AdverseEventRecord[] {
+  return (bundle.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r): r is fhir4.Observation => r?.resourceType === "Observation")
+    .map(parseAdverseEvent)
+    .filter((r): r is AdverseEventRecord => r !== null);
+}
+
+/**
+ * 患者の有害事象をすべて読む。**化学療法はこちらを使う** —— 治療への参照を拡張の中に
+ * 持っていた旧形式の記録(`basedOn` が無い)が残っているあいだは、治療の id で引くと
+ * 古い記録が落ちるため(`fhir/adverseEventHelpers.ts` の［改訂］)。
+ */
+export function usePatientAdverseEvents(patientId: string | undefined) {
   const params = new URLSearchParams();
   if (patientId) params.set("patient", `Patient/${patientId}`);
   params.set("category", ADVERSE_EVENT_CATEGORY.code);
@@ -11305,13 +11384,30 @@ export function useRegimenAdverseEvents(patientId: string | undefined) {
     queryKey: ["Observation", "search", patientId, "adverse-event"],
     queryFn: async (): Promise<AdverseEventRecord[]> => {
       const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
-      return (bundle.entry ?? [])
-        .map((e) => e.resource)
-        .filter((r): r is fhir4.Observation => r?.resourceType === "Observation")
-        .map(parseAdverseEvent)
-        .filter((r): r is AdverseEventRecord => r !== null);
+      return parseAdverseEvents(bundle);
     },
     enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * ある治療の有害事象だけを引く(`Observation?based-on=`。上流は対応済み)。旧形式の記録が
+ * 無い放射線治療はこちらで足りる。化学療法も backfill が済めば移せる。
+ */
+export function useTreatmentAdverseEvents(treatmentSrId: string | undefined) {
+  const params = new URLSearchParams();
+  if (treatmentSrId) params.set("based-on", `ServiceRequest/${treatmentSrId}`);
+  params.set("category", ADVERSE_EVENT_CATEGORY.code);
+  params.set("_count", "200");
+  params.set("_sort", "-date");
+
+  return useQuery({
+    queryKey: ["Observation", "search", "adverse-event", "treatment", treatmentSrId],
+    queryFn: async (): Promise<AdverseEventRecord[]> => {
+      const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
+      return parseAdverseEvents(bundle);
+    },
+    enabled: Boolean(treatmentSrId),
   });
 }
 
@@ -11768,6 +11864,9 @@ export function useCancelPathwayApplication() {
             break;
           case "rehab-order":
             await deleteRehabOrderRequest(id);
+            break;
+          case "radiotherapy-order":
+            await deleteRadiotherapyOrderRequest(id);
             break;
           case "nutrition-guidance-order":
             await deleteNutritionGuidanceOrderRequest(id);
@@ -12239,5 +12338,602 @@ export function useDeleteImagingStudy(patientId: string) {
   return useMutation({
     mutationFn: (studyUid: string) => deleteImagingStudy(patientId, studyUid),
     onSuccess: invalidate,
+  });
+}
+
+// ---- 放射線治療(治療処方) ----
+//
+// 明細を持たないヘッダ 1 本 + 進捗 Task で、作りは他科依頼と同じ。**進捗の変更で
+// ServiceRequest.status も一緒に動かす**(docs/radiotherapy-order-design.md §4)。
+// 書き込みの入口は useUpdateRadiotherapyTaskStatus だけ。
+
+export function useRadiotherapyOrderDetail(srId: string | undefined) {
+  const params = new URLSearchParams();
+  if (srId) {
+    params.set("_id", srId);
+    // 進捗と照射記録(後続フェーズ。§6)を同時に取る。
+    params.set("_revinclude", "Task:focus");
+    params.append("_revinclude", "Procedure:based-on");
+  }
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "detail", "radiotherapy-order", srId],
+    queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", params),
+    enabled: Boolean(srId),
+  });
+}
+
+/**
+ * その患者の放射線治療コース(進行中・終了・中止のすべて)。治療処方の安全確認
+ * (過去の照射歴)とコース番号の既定値に使う。
+ */
+export function usePatientRadiotherapyOrders(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
+  params.set("status", "active,on-hold,completed,revoked");
+  params.set("_sort", "-authoredon");
+  params.set("_count", "50");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "radiotherapy-patient", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      return serviceRequestsOf(bundle).filter(isRadiotherapyServiceRequest);
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * その患者の他科依頼(新しい順)。治療処方が「どの依頼を受けたものか」を選ぶ候補。
+ * 取消(revoked)は候補にしない。
+ */
+export function usePatientConsultOrders(patientId: string | undefined) {
+  const params = new URLSearchParams();
+  if (patientId) params.set("subject", `Patient/${patientId}`);
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${CONSULT_ORDER_TYPE.code}`);
+  params.set("status", "active,completed");
+  params.set("based-on:missing", "true");
+  params.set("_sort", "-authoredon");
+  params.set("_count", "20");
+
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "consult-patient", patientId],
+    queryFn: async () => {
+      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+      return serviceRequestsOf(bundle).filter(isConsultServiceRequest);
+    },
+    enabled: Boolean(patientId),
+  });
+}
+
+function invalidateRadiotherapy(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "radiotherapy-worklist"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
+  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "detail"] });
+  // 照射記録(部門一覧の回数と累積線量、カルテのカード)。
+  queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
+}
+
+export function useUpdateRadiotherapyOrder() {
+  const queryClient = useQueryClient();
+  const withProvenance = useWithOrderProvenance();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(withProvenance(bundle)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
+      invalidateProvenance(queryClient);
+    },
+  });
+}
+
+/**
+ * 治療処方を消す。**部門が受け付けた後(計画中以降)は消させない** — 計画や照射が
+ * 進んでいる処方が消えると、何に基づいて照射したのかが辿れなくなる。受付後にやめる
+ * ときは部門一覧の「中止」を使う(§4)。
+ *
+ * useDeleteRadiotherapyOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて
+ * 消すときにも使う。
+ */
+export const deleteRadiotherapyOrderRequest = async (srId: string) => {
+  const params = new URLSearchParams();
+  params.set("_id", srId);
+  params.set("_revinclude", "Task:focus");
+  const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
+  const tasks = (bundle.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r): r is fhir4.Task => r?.resourceType === "Task");
+  const status = radiotherapyTaskStatus(radiotherapyTasksByOrderId(tasks).get(srId));
+  if (status !== "requested") {
+    throw new Error(
+      "受付後の放射線治療は削除できません。放射線治療一覧で中止するか、受付を取り消してください。",
+    );
+  }
+  return postBundle(buildRadiotherapyOrderDeleteBundle(srId));
+};
+
+export function useDeleteRadiotherapyOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteRadiotherapyOrderRequest,
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+// ---- 放射線治療一覧(部門ワークリスト) ----
+//
+// 治療コースは数週間続くので、他科依頼と同じく日付ではなく status で切る(§4.1)。
+//
+//   進行中     … status=active(処方済・計画中・治療中)。いま抱えているコースなので有限。
+//   終了・中止 … status=completed,revoked の直近ぶん(-authoredon)。
+
+export type RadiotherapyWorklistView = "open" | "closed";
+
+export interface RadiotherapyWorklistRow {
+  order: fhir4.ServiceRequest;
+  patient?: fhir4.Patient;
+  task?: fhir4.Task;
+}
+
+export interface RadiotherapyWorklistResult {
+  rows: RadiotherapyWorklistRow[];
+  truncated: boolean;
+}
+
+function radiotherapyWorklistParams(view: RadiotherapyWorklistView, page: number): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
+  params.set("status", view === "open" ? "active,on-hold" : "completed,revoked");
+  params.set("based-on:missing", "true");
+  params.set("_count", String(WORKLIST_PAGE));
+  params.set("_offset", String(page * WORKLIST_PAGE));
+  params.set("_sort", "-authoredon");
+  params.set("_include", "ServiceRequest:subject");
+  params.set("_revinclude", "Task:focus");
+  return params;
+}
+
+async function fetchRadiotherapyWorklist(
+  view: RadiotherapyWorklistView,
+): Promise<RadiotherapyWorklistResult> {
+  const orders: fhir4.ServiceRequest[] = [];
+
+  const { patientsById, tasks, truncated } = await fetchWorklistBundles(
+    (page) => radiotherapyWorklistParams(view, page),
+    (resource) => {
+      if (resource.resourceType !== "ServiceRequest") return false;
+      const request = resource as fhir4.ServiceRequest;
+      if (!isRadiotherapyServiceRequest(request)) return false;
+      orders.push(request);
+      return true;
+    },
+  );
+
+  const taskByOrderId = radiotherapyTasksByOrderId(tasks);
+  const rows = orders.map((order) => ({
+    order,
+    patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
+    task: taskByOrderId.get(order.id ?? ""),
+  }));
+
+  return { rows, truncated };
+}
+
+export function useRadiotherapyWorklist(view: RadiotherapyWorklistView) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "radiotherapy-worklist", view],
+    queryFn: () => fetchRadiotherapyWorklist(view),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * 進捗の変更。Task と ServiceRequest.status を 1 つの transaction で両方書く(§4)。
+ * **片方だけを書く入口を増やさないこと** — status だけが取り残されると、終了した
+ * コースが部門一覧の進行中に出続ける。終了・中止では終了日と理由も同じ PUT で書く。
+ */
+export function useUpdateRadiotherapyTaskStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      order,
+      task,
+      status,
+      termination,
+    }: {
+      order: fhir4.ServiceRequest;
+      task: fhir4.Task | undefined;
+      status: RadiotherapyTaskStatus;
+      termination?: RadiotherapyTermination;
+    }) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+          taskBundleEntry(buildRadiotherapyTaskUpdate(task, order, status)),
+          buildRadiotherapyOrderStatusEntry(order, radiotherapyOrderStatusFor(status), termination),
+        ],
+      }),
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+// ---- 照射記録(docs/radiotherapy-order-design.md §6.1) ----
+//
+// 1 回の照射 = Procedure 1 件。リハビリと同じく**照射しても進捗 Task は動かさない**ので、
+// 登録は Procedure を 1 件 POST するだけ。取消は消さずに entered-in-error にする
+// (照射録は保存の対象)。
+
+/** そのコースの未対応の診察督促(通知 Task)。作り直しの抑止と、書いたときに閉じるのに使う。 */
+async function fetchRadiotherapyReviewDueTasks(orderSrId: string): Promise<fhir4.Task[]> {
+  const params = new URLSearchParams();
+  params.set("code", `${TASK_CODE_SYSTEM}|${RADIOTHERAPY_REVIEW_DUE_TASK_CODE.code}`);
+  params.set("focus", `ServiceRequest/${orderSrId}`);
+  params.set("status", "requested");
+  params.set("_count", "10");
+  const { data: bundle } = await searchResource<fhir4.Task>("Task", params);
+  return resourcesOfType<fhir4.Task>(bundle, "Task");
+}
+
+/**
+ * 照射記録の登録。**診察が空いていれば同じ transaction で督促の通知を作る**(§6.3)。
+ * 照射は治療中ほぼ毎日あるので、間隔を超えたことに最初に気づける場所がここになる。
+ * 既に未対応の督促があるコースでは作らない(毎回の照射で作り直さない)。
+ */
+export function useRegisterRadiotherapyFraction() {
+  const queryClient = useQueryClient();
+  const facility = useFacilitySettings();
+  const settings = facility.data?.radiotherapy_review ?? DEFAULT_RADIOTHERAPY_REVIEW;
+
+  return useMutation({
+    mutationFn: async ({ bundle, order }: { bundle: fhir4.Bundle; order: fhir4.ServiceRequest }) => {
+      const due = await radiotherapyReviewDueEntryFor(order, settings);
+      return postBundle(due ? { ...bundle, entry: [...(bundle.entry ?? []), due] } : bundle);
+    },
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+async function radiotherapyReviewDueEntryFor(
+  order: fhir4.ServiceRequest,
+  settings: RadiotherapyReviewSettings,
+): Promise<fhir4.BundleEntry | null> {
+  const patientId = order.subject?.reference?.split("/").pop() ?? "";
+  if (!order.id || !patientId) return null;
+
+  const [reviews, tasks] = await Promise.all([
+    fetchRadiotherapyReviewChunk([order.id]),
+    fetchRadiotherapyReviewDueTasks(order.id),
+  ]);
+  if (tasks.length > 0) return null;
+
+  const summary = summarizeRadiotherapyOrder(order);
+  return radiotherapyReviewDueEntry({
+    order,
+    patientId,
+    courseLabel: `第${summary.courseNumber}コース ${summary.siteLabel}`.trim(),
+    state: radiotherapyReviewState(reviews, today(), settings),
+    settings,
+  });
+}
+
+/** 診察を書いたときに、そのコースの督促を閉じる。 */
+export function useCloseRadiotherapyReviewDue() {
+  const queryClient = useQueryClient();
+  const enterer = useOrderEnterer();
+
+  return useMutation({
+    mutationFn: async (orderSrId: string) => {
+      if (!enterer) return null;
+      const tasks = await fetchRadiotherapyReviewDueTasks(orderSrId);
+      const entries = buildCompletedRadiotherapyReviewDueEntries(tasks, enterer);
+      if (entries.length === 0) return null;
+      return postBundle({ resourceType: "Bundle", type: "transaction", entry: entries });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
+    },
+  });
+}
+
+export function useCancelRadiotherapyFraction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    // 取り消す前に読み直すのは、PUT が全置換なので手元の写しでは古い版を書き戻しうるため。
+    mutationFn: async (procedureId: string) => {
+      const { data: procedure } = await readResource<fhir4.Procedure>("Procedure", procedureId);
+      return postBundle(buildRadiotherapyFractionCancelBundle(procedure));
+    },
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+/** 1 リクエストでまとめて引くコースの数(based-on のカンマ OR。URL 長と上流の索引の都合)。 */
+const RADIOTHERAPY_COURSE_CHUNK = 20;
+
+/** 1 コース = 予定と実績で数十件。20 コースぶんはこのページ数に収まる。 */
+const RADIOTHERAPY_PROCEDURE_MAX_PAGES = 5;
+
+export interface RadiotherapyProcedures {
+  /** オーダー id → 照射記録(新しい順)。 */
+  fractions: Map<string, RadiotherapyFractionDisplay[]>;
+  /** オーダー id → 治療終了サマリー(1 コースに 1 件)。 */
+  summaries: Map<string, fhir4.Procedure>;
+}
+
+/** 治療処方 id をまとめて指定して、その配下の照射記録・サマリーを引く。 */
+async function fetchRadiotherapyProcedureChunk(orderIds: string[]): Promise<fhir4.Procedure[]> {
+  const procedures: fhir4.Procedure[] = [];
+  for (let page = 0; page < RADIOTHERAPY_PROCEDURE_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("based-on", orderIds.map((id) => `ServiceRequest/${id}`).join(","));
+    params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
+    params.set("status:not", "entered-in-error");
+    params.set("_sort", "-date");
+    params.set("_count", String(WORKLIST_PAGE));
+    params.set("_offset", String(page * WORKLIST_PAGE));
+    const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
+    const found = resourcesOfType<fhir4.Procedure>(bundle, "Procedure");
+    procedures.push(...found);
+    if (found.length < WORKLIST_PAGE) break;
+  }
+  return procedures;
+}
+
+/**
+ * 画面に出ているコースの照射記録と治療終了サマリー。**治療処方の id で絞って引く**
+ * (§8)。category だけで引くと終了したコースのぶんまで読むので、コースが増えるほど
+ * 重くなり、上限に当たると回数と累積線量が静かに欠ける。
+ */
+async function fetchRadiotherapyProcedures(orderIds: string[]): Promise<RadiotherapyProcedures> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < orderIds.length; i += RADIOTHERAPY_COURSE_CHUNK) {
+    chunks.push(orderIds.slice(i, i + RADIOTHERAPY_COURSE_CHUNK));
+  }
+  const procedures = (await Promise.all(chunks.map(fetchRadiotherapyProcedureChunk))).flat();
+  return {
+    fractions: radiotherapyFractionsByOrderId(procedures.filter(isRadiotherapyFraction)),
+    summaries: radiotherapyCourseSummariesByOrderId(procedures),
+  };
+}
+
+/**
+ * 引くのは呼び出し側が渡したコースだけ。右のパネルの行・空き枠に出すコース・格子に
+ * 出ている照射のコースを合わせて渡す(格子の予定から実施入力を開けるので、行に無い
+ * コースも要る)。
+ */
+export function useRadiotherapyProcedures(orderIds: string[]) {
+  const ids = [...new Set(orderIds.filter(Boolean))].sort();
+  return useQuery({
+    queryKey: ["Procedure", "search", "radiotherapy-procedures", ids.join(",")],
+    queryFn: () => fetchRadiotherapyProcedures(ids),
+    enabled: ids.length > 0,
+  });
+}
+
+/**
+ * 1 コースぶんの照射記録。何回目・どの Phase かを数えるモーダル(実施入力・一括登録・
+ * サマリー)は、一覧のキャッシュではなく開いた時点で引き直す —— 一括登録の直後に続けて
+ * 実施入力を開くような場面で、採番が古い写しに引きずられないように。
+ */
+export function useRadiotherapyCourseFractions(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ["Procedure", "search", "radiotherapy-course", orderId],
+    queryFn: async () => {
+      const procedures = await fetchRadiotherapyProcedureChunk([orderId ?? ""]);
+      const byOrderId = radiotherapyFractionsByOrderId(procedures.filter(isRadiotherapyFraction));
+      return byOrderId.get(orderId ?? "") ?? [];
+    },
+    enabled: Boolean(orderId),
+  });
+}
+
+// ---- 治療中の診察(週次レビュー。docs/radiotherapy-order-design.md §6.3) ----
+//
+// 診察 1 回 = テンプレート回答 1 件で、治療処方を basedOn に持つ。上流は
+// `QuestionnaireResponse?based-on=` に対応済み。保存は通常のテンプレート回答と同じ経路
+// (`useCreateQuestionnaireResponse`)なので、ここにあるのは読みだけ。
+
+/** 照射記録と同じ理由でコースをまとめて引く(§7.3)。 */
+const RADIOTHERAPY_REVIEW_CHUNK = 20;
+
+async function fetchRadiotherapyReviewChunk(orderIds: string[]): Promise<RadiotherapyReview[]> {
+  const params = new URLSearchParams();
+  params.set("based-on", orderIds.map((id) => `ServiceRequest/${id}`).join(","));
+  params.set("_count", "200");
+  params.set("_sort", "-authored");
+  const { data: bundle } = await searchResource<fhir4.QuestionnaireResponse>(
+    "QuestionnaireResponse",
+    params,
+  );
+  return resourcesOfType<fhir4.QuestionnaireResponse>(bundle, "QuestionnaireResponse")
+    .map(parseRadiotherapyReview)
+    .filter((review): review is RadiotherapyReview => review !== null);
+}
+
+/** あるコースの診察(新しい順)。カルテの右ペインと詳細で使う。 */
+export function useRadiotherapyCourseReviews(orderSrId: string | undefined) {
+  return useQuery({
+    queryKey: ["QuestionnaireResponse", "search", "radiotherapy-review", orderSrId],
+    queryFn: () => fetchRadiotherapyReviewChunk([orderSrId ?? ""]),
+    enabled: Boolean(orderSrId),
+  });
+}
+
+/** 部門一覧に出すコースの診察。オーダー id → 診察(新しい順)。 */
+export function useRadiotherapyReviews(orderIds: string[]) {
+  const ids = [...new Set(orderIds.filter(Boolean))].sort();
+  return useQuery({
+    queryKey: ["QuestionnaireResponse", "search", "radiotherapy-reviews", ids.join(",")],
+    queryFn: async () => {
+      const chunks: string[][] = [];
+      for (let i = 0; i < ids.length; i += RADIOTHERAPY_REVIEW_CHUNK) {
+        chunks.push(ids.slice(i, i + RADIOTHERAPY_REVIEW_CHUNK));
+      }
+      const reviews = (await Promise.all(chunks.map(fetchRadiotherapyReviewChunk))).flat();
+      return radiotherapyReviewsByOrderId(reviews);
+    },
+    enabled: ids.length > 0,
+  });
+}
+
+/** 治療終了サマリーの保存。初回は POST、書き直しは同じ Procedure への PUT。 */
+export function useSaveRadiotherapyCourseSummary() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+// ---- 放射線治療カレンダー(docs/radiotherapy-order-design.md §7) ----
+//
+// 格子に載せるのは照射の Procedure(予定・実績・未実施)。期間を date で切り、患者と治療処方を
+// _include で一緒に取る。コースの一覧(右のパネル)は部門一覧と同じ useRadiotherapyWorklist。
+
+export interface RadiotherapyCalendarEntry {
+  fraction: RadiotherapyFractionDisplay;
+  order?: fhir4.ServiceRequest;
+  patient?: fhir4.Patient;
+}
+
+async function fetchRadiotherapyCalendar(from: string, to: string): Promise<RadiotherapyCalendarEntry[]> {
+  const params = new URLSearchParams();
+  params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
+  params.set("status:not", "entered-in-error");
+  params.append("date", `ge${from}`);
+  params.append("date", `le${to}`);
+  params.set("_count", String(WORKLIST_PAGE));
+  params.append("_include", "Procedure:subject");
+  params.append("_include", "Procedure:based-on");
+
+  const { data: bundle } = await searchResource<fhir4.Resource>("Procedure", params);
+  const procedures = resourcesOfType<fhir4.Procedure>(bundle, "Procedure").filter(isRadiotherapyFraction);
+  const patients = new Map(
+    resourcesOfType<fhir4.Patient>(bundle, "Patient").map((patient) => [patient.id ?? "", patient]),
+  );
+  const orders = new Map(
+    resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest").map((sr) => [sr.id ?? "", sr]),
+  );
+
+  const entries: RadiotherapyCalendarEntry[] = [];
+  for (const [orderId, fractions] of radiotherapyFractionsByOrderId(procedures)) {
+    const order = orders.get(orderId);
+    const patient = patients.get(order?.subject?.reference?.split("/").pop() ?? "");
+    for (const fraction of fractions) entries.push({ fraction, order, patient });
+  }
+  return entries;
+}
+
+export function useRadiotherapyCalendar(from: string, to: string) {
+  return useQuery({
+    queryKey: ["Procedure", "search", "radiotherapy-calendar", from, to],
+    queryFn: () => fetchRadiotherapyCalendar(from, to),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** 照射予定の一括登録(処方の回数ぶんの Procedure を 1 つの transaction で作る)。 */
+export function useRegisterRadiotherapyPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bundle: fhir4.Bundle) => postBundle(bundle),
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+/** 照射予定の日時・装置の変更。読み直してから PUT する(全置換なので古い版を書き戻さない)。 */
+export function useRescheduleRadiotherapyFraction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      procedureId,
+      ...change
+    }: {
+      procedureId: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      device?: { code: string; name: string };
+    }) => {
+      const { data: procedure } = await readResource<fhir4.Procedure>("Procedure", procedureId);
+      if (procedure.status !== "preparation") {
+        throw new Error("照射済みの記録の日時は変更できません。");
+      }
+      const next = rescheduleRadiotherapyFraction(procedure, change);
+      return postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [{ resource: next, request: { method: "PUT", url: `Procedure/${procedureId}` } }],
+      });
+    },
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+/**
+ * 照射予定の削除。**予定(preparation)は照射録ではない**ので物理削除でよい
+ * (照射した記録の取消は entered-in-error。useCancelRadiotherapyFraction)。
+ */
+export function useDeleteRadiotherapyPlanned() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (procedureIds: string[]) =>
+      postBundle({
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: procedureIds.map((id) => ({
+          request: { method: "DELETE" as const, url: `Procedure/${id}` },
+        })),
+      }),
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+/**
+ * 照射予定を「照射しなかった回」にする(体調不良・休診など)。実施の入力とは別の操作で、
+ * 線量も実施者も持たない(docs/radiotherapy-order-design.md §6.1)。
+ */
+export function useMarkRadiotherapyFractionNotDone() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      procedureId,
+      reason,
+      note,
+    }: {
+      procedureId: string;
+      reason: { code: string; name: string };
+      note: string;
+    }) => {
+      // PUT は全置換なので、手元の写しではなく読み直したものを土台にする。
+      const { data: procedure } = await readResource<fhir4.Procedure>("Procedure", procedureId);
+      if (procedure.status !== "preparation") {
+        throw new Error("照射予定だけを中止にできます(実施済みの記録は取消してください)。");
+      }
+      return postBundle(buildRadiotherapyFractionNotDoneBundle(procedure, reason, note));
+    },
+    onSuccess: () => invalidateRadiotherapy(queryClient),
+  });
+}
+
+/** 中止を取り消して予定に戻す。 */
+export function useRestoreRadiotherapyFraction() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (procedureId: string) => {
+      const { data: procedure } = await readResource<fhir4.Procedure>("Procedure", procedureId);
+      if (procedure.status !== "not-done") {
+        throw new Error("中止した回だけを予定に戻せます。");
+      }
+      return postBundle(buildRadiotherapyFractionRestoreBundle(procedure));
+    },
+    onSuccess: () => invalidateRadiotherapy(queryClient),
   });
 }

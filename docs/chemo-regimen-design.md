@@ -600,8 +600,8 @@ ServiceRequest + MedicationRequest(日オーダー)  通常の注射・処方そ
 
 - **保存の形**(`fhir/adverseEventHelpers.ts`): 1 件 = 1 Observation。category は独自の `adverse-event`(検体検査・
   バイタルの一覧に混ざらない。上流の category 検索で引ける)、`code.text` = CTCAE 用語(自由記述)、`valueInteger` = Grade、
-  `effectivePeriod` = 発現日〜回復日(継続中は end 無し)、`note` = 対処・経過。適用とクールは `regimen-order` 拡張
-  (regimen / cycle / code / name。日は持たない)で結ぶ。
+  `effectivePeriod` = 発現日〜回復日(継続中は end 無し)、`note` = 対処・経過。適用は **`basedOn`**、種別と名前の
+  写しとクールは `treatment-context` 拡張(type / name / cycle。日は持たない)で結ぶ。
   - ［決定］上流に AdverseEvent が無く、JP Core のプロファイルも無いので Observation にした。Flag と同じ手順で
     上流に AdverseEvent を足すこともできるが、患者コンパートメント・category 検索・拡張がそのまま使える方を採った。
     上流の受け入れは curl で確認した(独自 category + effectivePeriod + 拡張で 201、category 検索で 1 件)。
@@ -616,6 +616,14 @@ ServiceRequest + MedicationRequest(日オーダー)  通常の注射・処方そ
   (`RegimenPreviousAdverseEvents`)。減量(B-1)と「前クールと同じ量 / 出し直す」(B-2)を決める材料。
 - ［決定］登録してもパネルは閉じない(他のパネルと違う)。1 クールに複数の有害事象を続けて入れるのが普通で、
   追加のたびに閉じると「記録」を押し直すことになる。一覧は query の無効化で追随する。
+- ［改訂 2026-09-22］**放射線治療でも同じ器を使えるように一般化した**(`docs/radiotherapy-order-design.md` §6.3)。
+  当初は適用ヘッダへの参照を `regimen-order` 拡張の中に持っていたが、拡張の中の参照は検索できず、1 クールぶんを
+  見るのに患者の有害事象を全部読む必要があった。**標準の `basedOn` に移し**、フォームは化学療法・放射線治療で
+  共通の `AdverseEventEditor` にした。
+  - 読みは旧形式も受ける(`basedOn` の無い記録。編集して保存すると新形式になる)。上流の backfill
+    (`20260922000001_backfill_adverse_event_based_on`)で既存の記録にも `basedOn` を足した
+  - **化学療法の一覧はまだ患者単位で読む**(`usePatientAdverseEvents`)。すべての環境で backfill が済めば
+    `useTreatmentAdverseEvents`(`based-on` 検索)に移せる。そのとき `regimen-order` 拡張の読みも消せる
 
 #### 検証したこと(2026-09-06、テスト太郎、10/01 開始の mFOLFOX6)
 

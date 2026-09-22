@@ -58,7 +58,14 @@ import {
   formatKarteDetail,
   formatKarteOpen,
 } from "../../karteUrl";
+import {
+  RADIOTHERAPY_REVIEW_DUE_NOTE,
+  RADIOTHERAPY_REVIEW_DUE_TASK_CODE,
+  radiotherapyReviewDueRowOf,
+  type RadiotherapyReviewDueRow,
+} from "../../fhir/radiotherapyReviewHelpers";
 import { DocumentDueNotificationCells } from "./DocumentDueNotificationCells";
+import { RadiotherapyReviewDueNotificationCells } from "./RadiotherapyReviewDueNotificationCells";
 import { LabPanicNotificationCells } from "./LabPanicNotificationCells";
 import { OrderApprovalNotificationCells } from "./OrderApprovalNotificationCells";
 import { PathwayVarianceNotificationCells } from "./PathwayVarianceNotificationCells";
@@ -228,6 +235,25 @@ const documentDueKind = defineNotificationKind<DocumentDueRow>({
   action: { label: "対応済", noteText: DOCUMENT_DUE_NOTE },
 });
 
+const radiotherapyReviewDueKind = defineNotificationKind<RadiotherapyReviewDueRow>({
+  code: RADIOTHERAPY_REVIEW_DUE_TASK_CODE.code,
+  label: RADIOTHERAPY_REVIEW_DUE_TASK_CODE.display,
+  toRow: radiotherapyReviewDueRowOf,
+  Cells: RadiotherapyReviewDueNotificationCells,
+  // カルテの右ペインをそのコースの週次レビューで開く(一回限りの open パラメータ)。
+  karteLink: (row) => {
+    if (!row.patientId || !row.orderSrId) return null;
+    const params = new URLSearchParams();
+    params.set(
+      KARTE_OPEN_PARAM,
+      formatKarteOpen({ kind: "radiotherapy-review", srId: row.orderSrId }),
+    );
+    return `/patients/${row.patientId}/karte?${params.toString()}`;
+  },
+  // 診察を書けば自動で閉じる。ここからは「不要」として手で閉じる。
+  action: { label: "対応済", noteText: RADIOTHERAPY_REVIEW_DUE_NOTE },
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
@@ -236,6 +262,7 @@ export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   pathwayVarianceKind,
   orderApprovalKind,
   documentDueKind,
+  radiotherapyReviewDueKind,
 ];
 
 /** 一覧の検索に渡す `code` の値。種別を全部並べて 1 回で引く(カンマ区切りは OR)。 */

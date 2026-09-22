@@ -82,6 +82,21 @@ import {
   transfusionPerformsByOrderId,
   type TransfusionPerformDisplay,
 } from "./transfusionResultHelpers";
+import {
+  isRadiotherapyServiceRequest,
+  radiotherapyConsultRequest,
+  radiotherapyOrderProblem,
+} from "./radiotherapyOrderHelpers";
+import {
+  radiotherapyFractionsByOrderId,
+  type RadiotherapyFractionDisplay,
+} from "./radiotherapyResultHelpers";
+import { radiotherapyCourseSummariesByOrderId } from "./radiotherapySummaryHelpers";
+import {
+  radiotherapyTaskStatus,
+  radiotherapyTasksByOrderId,
+  type RadiotherapyTaskStatus,
+} from "./radiotherapyTaskHelpers";
 import { isRehabServiceRequest, rehabOrderProblem } from "./rehabOrderHelpers";
 import { rehabTaskStatus, rehabTasksByOrderId, type RehabTaskStatus } from "./rehabTaskHelpers";
 import { rehabPerformsByOrderId, type RehabPerformDisplay } from "./rehabResultHelpers";
@@ -162,6 +177,7 @@ export type KarteItemKind =
   | "meal-order"
   | "transfusion-order"
   | "rehab-order"
+  | "radiotherapy-order"
   | "nutrition-guidance-order"
   | "consult-order"
   | "qr"
@@ -183,6 +199,7 @@ export const KARTE_KIND_LABELS: Record<KarteItemKind, string> = {
   "meal-order": "食事",
   "transfusion-order": "輸血",
   "rehab-order": "リハビリ",
+  "radiotherapy-order": "放射線治療",
   "nutrition-guidance-order": "栄養指導",
   "consult-order": "他科依頼",
   qr: "テンプレート",
@@ -211,6 +228,7 @@ export function orderKindOf(
   if (isMealServiceRequest(sr)) return "meal-order";
   if (isTransfusionServiceRequest(sr)) return "transfusion-order";
   if (isRehabServiceRequest(sr)) return "rehab-order";
+  if (isRadiotherapyServiceRequest(sr)) return "radiotherapy-order";
   if (isNutritionGuidanceServiceRequest(sr)) return "nutrition-guidance-order";
   if (isConsultServiceRequest(sr)) return "consult-order";
   if (isInjectionServiceRequest(sr)) return "injection";
@@ -413,6 +431,21 @@ export type KarteTimelineItem = KarteItemBase &
         serviceRequest: fhir4.ServiceRequest;
         /** 依頼先科の対応状況。Task がまだ無いオーダーは依頼済。 */
         status: ConsultTaskStatus;
+        /**
+         * この依頼を受けて書かれた放射線治療の治療処方(ServiceRequest.id)。参照は治療処方の
+         * 側だけが持つので、ここで逆引きする(docs/radiotherapy-order-design.md §2.5)。
+         */
+        radiotherapyOrderIds: string[];
+      }
+    // 放射線治療の治療処方。明細を持たないヘッダ 1 本に、照射記録(1 回の照射)が積み上がる。
+    | {
+        kind: "radiotherapy-order";
+        serviceRequest: fhir4.ServiceRequest;
+        status: RadiotherapyTaskStatus;
+        /** 照射記録(新しい順)。 */
+        fractions: RadiotherapyFractionDisplay[];
+        /** 治療終了サマリーを書いてあるか(中身は詳細で見る)。 */
+        hasCourseSummary: boolean;
       }
     | { kind: "qr"; response: fhir4.QuestionnaireResponse; questionnaire?: fhir4.Questionnaire }
     // クリニカルパスのアウトカムの評価のうち、記載(S/O/A/P・自由記載・コメント)のあるもの。
@@ -586,8 +619,12 @@ export function groupByKarteDayYear<T>(
  * 無ければ、未定を許す種別なら「日付未定」、それ以外は登録日(authoredOn の日付)。後者は
  * occurrence を持たないオーダーのためのフォールバック。本流の検索もこの軸(occurrence)で読む(api/queries.ts の
  * useKartePrescriptionsInfinite)ので、カットオフ判定と配置が食い違わない。
+ *
+ * **診療日ペイン(useKarteDayIndex)も occurrence の無いオーダーをこの関数で写す。**
+ * サーバー集計($distinct-dates)は「occurrence が無い」までしか分からないので、
+ * ここを通さないと「日付未定」がカード無しで並ぶ。
  */
-function orderCardDay(sr: fhir4.ServiceRequest): string {
+export function orderCardDay(sr: fhir4.ServiceRequest): string {
   if (sr.occurrenceDateTime) return dayOf(sr.occurrenceDateTime);
   const orderType = categoryCoding(sr, ORDER_TYPE_SYSTEM)?.code ?? "";
   if (UNSCHEDULABLE_ORDER_TYPES.has(orderType)) return KARTE_UNSCHEDULED_DAY;
@@ -735,6 +772,10 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const nutritionGuidancePerformByOrderId = nutritionGuidancePerformsByOrderId(procedures);
   // 他科依頼は実施記録を持たない(返ってくるのは回答の診療記録)ので Task だけ。
   const consultTaskByOrderId = consultTasksByOrderId(tasks);
+  // 放射線治療もリハビリと同じ形(Task と Procedure がまとめて届く)。
+  const radiotherapyTaskByOrderId = radiotherapyTasksByOrderId(tasks);
+  const radiotherapyFractionByOrderId = radiotherapyFractionsByOrderId(procedures);
+  const radiotherapySummaryByOrderId = radiotherapyCourseSummariesByOrderId(procedures);
   const injectionTaskByOrderId = injectionTasksByOrderId(tasks);
   // 注射の実施記録も同じ検索結果の Procedure + MedicationAdministration に混ざって届く。
   const injectionPerformByOrderId = injectionPerformsByOrderId(procedures, administrations);
@@ -773,6 +814,18 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   // 処方・注射・検体検査・放射線検査は同じ検索結果に混ざって届くので、category の
   // オーダー種別で振り分ける(注射より前から存在する処方の ServiceRequest は
   // オーダー種別を持たない)。
+  // 他科依頼 → それを受けた放射線治療の治療処方。
+  const radiotherapyByConsultId = new Map<string, string[]>();
+  for (const request of orderRequests) {
+    if (!isRadiotherapyServiceRequest(request) || !request.id) continue;
+    const consult = radiotherapyConsultRequest(request);
+    if (!consult) continue;
+    radiotherapyByConsultId.set(consult.id, [
+      ...(radiotherapyByConsultId.get(consult.id) ?? []),
+      request.id,
+    ]);
+  }
+
   const prescriptionItems: KarteTimelineItem[] = orderRequests.map((serviceRequest) => {
     const base = {
       id: serviceRequest.id ?? "",
@@ -956,6 +1009,21 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
         kind: "consult-order" as const,
         label: KARTE_KIND_LABELS["consult-order"],
         status: consultTaskStatus(consultTaskByOrderId.get(serviceRequest.id ?? "")),
+        radiotherapyOrderIds: radiotherapyByConsultId.get(serviceRequest.id ?? "") ?? [],
+      };
+    }
+    if (isRadiotherapyServiceRequest(serviceRequest)) {
+      const status = radiotherapyTaskStatus(radiotherapyTaskByOrderId.get(serviceRequest.id ?? ""));
+      return {
+        ...base,
+        kind: "radiotherapy-order" as const,
+        label: KARTE_KIND_LABELS["radiotherapy-order"],
+        status,
+        // リハビリと同じ期間継続型だが、**進捗に関わらず常に出す**。部門がカレンダーの空き枠から
+        // 自分で登録したコースは、処方済のまま照射予定が付く(docs/radiotherapy-order-design.md §7.4)。
+        // 取消した記録(entered-in-error)は radiotherapyFractionsByOrderId が落としている。
+        fractions: radiotherapyFractionByOrderId.get(serviceRequest.id ?? "") ?? [],
+        hasCourseSummary: radiotherapySummaryByOrderId.has(serviceRequest.id ?? ""),
       };
     }
     const withMedications = {
@@ -1195,6 +1263,7 @@ export function itemProblem(item: KarteTimelineItem): ProblemRef | null {
   if (item.kind === "meal-order") return mealOrderProblem(item.serviceRequest);
   if (item.kind === "transfusion-order") return transfusionOrderProblem(item.serviceRequest);
   if (item.kind === "rehab-order") return rehabOrderProblem(item.serviceRequest);
+  if (item.kind === "radiotherapy-order") return radiotherapyOrderProblem(item.serviceRequest);
   if (item.kind === "nutrition-guidance-order") {
     return nutritionGuidanceOrderProblem(item.serviceRequest);
   }

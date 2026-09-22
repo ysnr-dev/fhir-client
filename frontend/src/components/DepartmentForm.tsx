@@ -1,7 +1,11 @@
 import { makeFieldUpdater } from "../lib/form";
 import { useState, type FormEvent } from "react";
 import { useOrganizationOptions, useSelfOrganization } from "../api/queries";
-import { SSMIX2_DEPARTMENT_CODES, departmentCodeDisplay } from "../fhir/departmentCodes";
+import {
+  SSMIX2_DEPARTMENT_CODES,
+  departmentCodeDisplay,
+  subCodesOf,
+} from "../fhir/departmentCodes";
 import {
   emptyDepartmentForm,
   validateDepartmentForm,
@@ -93,15 +97,32 @@ export function DepartmentForm({
         診療科コード
         <select value={values.code} onChange={(e) => selectCode(e.target.value)}>
           <option value="">未指定</option>
-          {SSMIX2_DEPARTMENT_CODES.map((department) => (
-            <option key={department.code} value={department.code}>
-              {department.code} {department.display}
-            </option>
-          ))}
+          {SSMIX2_DEPARTMENT_CODES.map((department) => {
+            const subCodes = subCodesOf(department.code);
+            const option = (
+              <option key={department.code} value={department.code}>
+                {department.code} {department.display}
+              </option>
+            );
+            // 3 ケタ科は親の 2 ケタ科の直後に置く。「放射線科」と「放射線治療科」のように
+            // 名前だけでは親子が分からないものがあるため、見出しで束ねる。
+            if (subCodes.length === 0) return option;
+            return (
+              <optgroup key={department.code} label={`${department.code} ${department.display}`}>
+                {option}
+                {subCodes.map((sub) => (
+                  <option key={sub.code} value={sub.code}>
+                    {sub.code} {sub.display}
+                  </option>
+                ))}
+              </optgroup>
+            );
+          })}
         </select>
       </label>
       <p className="organization-form__hint">
-        SS-MIX2 統一診療科コード表 V1.0(使用者定義表-#0069 診療部門)の 2 ケタ科。
+        SS-MIX2 統一診療科コード表 V1.0(使用者定義表-#0069 診療部門)。2 ケタ科と、その細分の
+        3 ケタ科から選べます。
       </p>
 
       <label>

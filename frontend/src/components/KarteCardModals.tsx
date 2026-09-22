@@ -16,6 +16,9 @@ import {
   useEndoscopyPerformDetail,
   useMealOrderDetail,
   useConsultOrderDetail,
+  useRadiotherapyOrderDetail,
+  useRadiotherapyCourseReviews,
+  useTreatmentAdverseEvents,
   useRehabOrderDetail,
   useNutritionGuidanceOrderDetail,
   useTransfusionOrderDetail,
@@ -71,6 +74,8 @@ import { TransfusionOrderDetailPanel } from "./TransfusionOrderDetailPanel";
 import { RehabOrderDetailPanel } from "./RehabOrderDetailPanel";
 import { NutritionGuidanceOrderDetailPanel } from "./NutritionGuidanceOrderDetailPanel";
 import { ConsultOrderDetailPanel } from "./ConsultOrderDetailPanel";
+import { RadiotherapyOrderDetailPanel } from "./RadiotherapyOrderDetailPanel";
+import { useRadiotherapyOrderInitialValues } from "../hooks/useRadiotherapyOrderInitialValues";
 import { rehabPerformsByOrderId } from "../fhir/rehabResultHelpers";
 import { nutritionGuidancePerformsByOrderId } from "../fhir/nutritionGuidanceResultHelpers";
 
@@ -94,6 +99,7 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   "rehab-order": "リハビリ内容",
   "nutrition-guidance-order": "栄養指導内容",
   "consult-order": "他科依頼内容",
+  "radiotherapy-order": "放射線治療内容",
   "lab-result": "検査結果内容",
   "micro-result": "細菌検査結果内容",
   "patho-result": "病理診断レポート",
@@ -155,6 +161,12 @@ export function KarteDetailModal({
         />
       ) : target.kind === "consult-order" ? (
         <ConsultOrderDetail patientId={patientId} srId={target.id} problemsById={problemsById} />
+      ) : target.kind === "radiotherapy-order" ? (
+        <RadiotherapyOrderDetail
+          patientId={patientId}
+          srId={target.id}
+          problemsById={problemsById}
+        />
       ) : target.kind === "lab-result" ? (
         <LabResultDetail patientId={patientId} reportId={target.id} />
       ) : target.kind === "micro-result" ? (
@@ -821,6 +833,8 @@ export function KarteCardJsonModal({
         <NutritionGuidanceOrderJson srId={item.id} />
       ) : item.kind === "consult-order" ? (
         <ConsultOrderJson srId={item.id} />
+      ) : item.kind === "radiotherapy-order" ? (
+        <RadiotherapyOrderJson srId={item.id} />
       ) : (
         <FhirJsonView resource={jsonResource(item)} />
       )}
@@ -1091,6 +1105,57 @@ function ConsultOrderDetail({
       ) : (
         !detail.error && <NotFound label="他科依頼" />
       )}
+    </>
+  );
+}
+
+// 放射線治療も明細を持たないヘッダ 1 件。進捗は同じ検索に _revinclude で届く。
+function RadiotherapyOrderDetail({
+  patientId,
+  srId,
+  problemsById,
+}: {
+  patientId: string;
+  srId: string;
+  problemsById: Map<string, fhir4.Condition>;
+}) {
+  const { serviceRequest, taskStatus, fractions, courseSummary, ready, patientMismatch, error } =
+    useRadiotherapyOrderInitialValues(srId, patientId);
+  // 有害事象と診察(週次レビュー)はコースに紐づくので治療処方の id で引く(§6.3)。
+  const adverseEvents = useTreatmentAdverseEvents(srId);
+  const reviews = useRadiotherapyCourseReviews(srId);
+
+  return (
+    <>
+      {!patientMismatch && <ErrorBanner error={error} />}
+      {!ready ? (
+        <p>読み込み中...</p>
+      ) : patientMismatch ? (
+        <p className="patient-table__empty">指定された放射線治療は別の患者のものです。</p>
+      ) : serviceRequest ? (
+        <RadiotherapyOrderDetailPanel
+          serviceRequest={serviceRequest}
+          taskStatus={taskStatus}
+          fractions={fractions}
+          courseSummary={courseSummary}
+          adverseEvents={adverseEvents.data}
+          reviews={reviews.data}
+          problemsById={problemsById}
+        />
+      ) : (
+        !error && <NotFound label="放射線治療" />
+      )}
+    </>
+  );
+}
+
+function RadiotherapyOrderJson({ srId }: { srId: string }) {
+  const detail = useRadiotherapyOrderDetail(srId);
+
+  return (
+    <>
+      <ErrorBanner error={detail.error} />
+      {detail.isLoading ? <p>読み込み中...</p> : <FhirJsonView resource={detail.data?.data} />}
     </>
   );
 }

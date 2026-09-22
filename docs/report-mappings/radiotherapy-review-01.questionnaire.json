@@ -1,0 +1,327 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/radiotherapy-review-01",
+  "version": "1.0.0",
+  "name": "RT_REVIEW_01",
+  "title": "放射線治療 週次レビュー",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "照射期間中の診察(週次レビュー)の様式。治療を続けられるかを判断した材料と結論を残す。有害事象そのものは Grade と発現日で追うため、この様式ではなく「有害事象」に記録する(docs/radiotherapy-order-design.md §6.3)。記入しなかった項目は表示されない。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "c8f5a301-6d24-4b9e-8f07-1a3e5c7b9d20",
+        "display": "放射線治療"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp-general",
+      "type": "group",
+      "text": "全身状態",
+      "item": [
+        {
+          "linkId": "ps",
+          "type": "choice",
+          "text": "Performance Status",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "PS 0"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "PS 1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "PS 2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "3",
+                "display": "PS 3"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "4",
+                "display": "PS 4"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "weight",
+          "type": "decimal",
+          "text": "体重",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "kg",
+                "display": "kg"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "頭頸部・食道の照射では体重の減りが治療の続けやすさを左右する。"
+            }
+          ]
+        },
+        {
+          "linkId": "intake",
+          "type": "choice",
+          "text": "食事摂取",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "good",
+                "display": "良好"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "reduced",
+                "display": "やや低下"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "poor",
+                "display": "不良"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "経口摂取なし"
+              }
+            }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-findings",
+      "type": "group",
+      "text": "照射野・症状の確認",
+      "item": [
+        {
+          "linkId": "skin",
+          "type": "choice",
+          "text": "照射野の皮膚",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "変化なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "erythema",
+                "display": "紅斑"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "dry",
+                "display": "乾性落屑"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "moist",
+                "display": "湿性落屑"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ulcer",
+                "display": "潰瘍・壊死"
+              }
+            }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "mucositis",
+          "type": "choice",
+          "text": "粘膜炎",
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "mild",
+                "display": "軽度(経口摂取に支障なし)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "moderate",
+                "display": "中等度(食事に支障)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "severe",
+                "display": "高度(経口摂取困難)"
+              }
+            }
+          ],
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "symptoms",
+          "type": "text",
+          "text": "自覚症状",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "倦怠感・疼痛・消化器症状など。Grade を付けて追うものは「有害事象」に記録する。"
+            }
+          ]
+        },
+        {
+          "linkId": "findings",
+          "type": "text",
+          "text": "診察所見・検査結果"
+        }
+      ]
+    },
+    {
+      "linkId": "grp-plan",
+      "type": "group",
+      "text": "判断",
+      "item": [
+        {
+          "linkId": "continuation",
+          "type": "choice",
+          "text": "治療継続の判断",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "continue",
+                "display": "予定どおり継続"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "watch",
+                "display": "継続(要観察)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "suspend",
+                "display": "休止を検討"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "stop",
+                "display": "中止を検討"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "action",
+          "type": "text",
+          "text": "対応・指示"
+        },
+        {
+          "linkId": "next-review",
+          "type": "date",
+          "text": "次回診察の予定"
+        }
+      ]
+    }
+  ]
+}

@@ -258,16 +258,21 @@ export function KartePage() {
 
   const [pane, setPane] = useState<KartePaneState>({ kind: "empty" });
 
-  // 通知・入院患者一覧のリンクから「この入院の退院時サマリー」を右ペインで始める。
+  // 一覧・通知のリンクから右ペインのフォームを開く(退院時サマリー、放射線治療の週次レビュー)。
   // 一回限りの引数なので、読んだら URL から消す(フォームを URL に載せない方針)。
-  const openTarget = parseKarteOpen(searchParams.get(KARTE_OPEN_PARAM));
+  const openValue = searchParams.get(KARTE_OPEN_PARAM);
+  const openTarget = parseKarteOpen(openValue);
   useEffect(() => {
     if (!openTarget) return;
-    setPane({ kind: "summary-create", encounterId: openTarget.encounterId });
+    setPane(
+      openTarget.kind === "discharge-summary"
+        ? { kind: "summary-create", encounterId: openTarget.encounterId }
+        : { kind: "radiotherapy-review", srId: openTarget.srId },
+    );
     updateParams((params) => params.delete(KARTE_OPEN_PARAM));
-    // openTarget は URL から消した時点で null になる(同じ対象で再発火しない)。
+    // URL から消した時点で openValue は null になる(同じ対象で再発火しない)。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openTarget?.encounterId]);
+  }, [openValue]);
   const [mode, setMode] = useState<KarteLeftPaneMode>(readLeftPaneMode);
   const [topRatio, setTopRatio] = useState(readTopRatio);
   const [leftWidthRatio, setLeftWidthRatio] = useState(readLeftWidthRatio);
@@ -607,6 +612,8 @@ export function KartePage() {
     else if (item.kind === "transfusion-order")
       setPane({ kind: "transfusion-order-edit", srId: item.id });
     else if (item.kind === "rehab-order") setPane({ kind: "rehab-order-edit", srId: item.id });
+    else if (item.kind === "radiotherapy-order")
+      setPane({ kind: "radiotherapy-order-edit", srId: item.id });
     else if (item.kind === "nutrition-guidance-order")
       setPane({ kind: "nutrition-guidance-order-edit", srId: item.id });
     else if (item.kind === "consult-order") setPane({ kind: "consult-order-edit", srId: item.id });
@@ -642,6 +649,8 @@ export function KartePage() {
       setPane({ kind: "transfusion-order-create", sourceSrId: item.id });
     } else if (item.kind === "rehab-order") {
       setPane({ kind: "rehab-order-create", sourceSrId: item.id });
+    } else if (item.kind === "radiotherapy-order") {
+      setPane({ kind: "radiotherapy-order-create", sourceSrId: item.id });
     } else if (item.kind === "nutrition-guidance-order") {
       setPane({ kind: "nutrition-guidance-order-create", sourceSrId: item.id });
     } else if (item.kind === "consult-order") {
@@ -669,6 +678,7 @@ export function KartePage() {
                 current.kind === "meal-order-edit" ||
                 current.kind === "transfusion-order-edit" ||
                 current.kind === "rehab-order-edit" ||
+                current.kind === "radiotherapy-order-edit" ||
                 current.kind === "nutrition-guidance-order-edit" ||
                 current.kind === "consult-order-edit" ||
                 current.kind === "nursing-order-edit"
@@ -783,6 +793,13 @@ export function KartePage() {
           onEdit={handleEdit}
           onDo={handleDo}
           onOpenDetail={openDetail}
+          onOpenRadiotherapyPane={(kind, srId) =>
+            setPane(
+              kind === "review"
+                ? { kind: "radiotherapy-review", srId }
+                : { kind: "radiotherapy-adverse", srId },
+            )
+          }
           onDeleted={handleDeleted}
           containerRef={timelineRef}
           problemsById={problemsById}
@@ -943,6 +960,13 @@ export function KartePage() {
       onEdit={handleEdit}
       onDo={handleDo}
       onOpenDetail={openDetail}
+      onOpenRadiotherapyPane={(kind, srId) =>
+        setPane(
+          kind === "review"
+            ? { kind: "radiotherapy-review", srId }
+            : { kind: "radiotherapy-adverse", srId },
+        )
+      }
       onDeleted={handleDeleted}
       problemsById={problemsById}
       selectedProblemIds={activeProblemIds}

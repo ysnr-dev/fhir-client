@@ -1,5 +1,10 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { useDepartmentDoctors, useSelfDepartments, useSelfOrganization } from "../api/queries";
+import {
+  useConsultDefaultTemplates,
+  useDepartmentDoctors,
+  useSelfDepartments,
+  useSelfOrganization,
+} from "../api/queries";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
   CONSULT_PRIORITY_OPTIONS,
@@ -79,6 +84,7 @@ export function ConsultOrderForm({
 
   // 依頼先の候補は自院の診療科(部門ワークリストの絞り込みと同じ母集団)。
   const departments = useSelfDepartments();
+  const defaultTemplates = useConsultDefaultTemplates();
   const departmentOptions = useMemo(
     () =>
       sortDepartmentsByCode(departments.departments)
@@ -341,6 +347,7 @@ export function ConsultOrderForm({
           patientId={patientId}
           draft={values.purposeTemplate?.draft ?? null}
           responseId={values.purposeTemplate?.responseId ?? null}
+          defaultCanonical={defaultTemplates[values.targetDepartmentId]}
           onSubmit={(draft) => {
             // 保存済みの回答を再編集した場合は同じ id へ書き戻す(id は保存時に使う)。
             const binding: TemplateBinding = {

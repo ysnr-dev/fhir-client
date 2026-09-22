@@ -9,6 +9,7 @@ import {
   useDeleteTreatmentOrder,
   useDeleteMealOrder,
   useDeleteConsultOrder,
+  useDeleteRadiotherapyOrder,
   useDeleteRehabOrder,
   useDeleteNutritionGuidanceOrder,
   useDeleteTransfusionOrder,
@@ -109,6 +110,12 @@ import type { TreatmentPerformDisplay } from "../fhir/treatmentResultHelpers";
 import { summarizeMealOrder } from "../fhir/mealOrderHelpers";
 import { consultReply, summarizeConsultOrder } from "../fhir/consultOrderHelpers";
 import { consultTaskStatusDisplay } from "../fhir/consultTaskHelpers";
+import { formatDose, summarizeRadiotherapyOrder } from "../fhir/radiotherapyOrderHelpers";
+import {
+  radiotherapyProgress,
+  type RadiotherapyFractionDisplay,
+} from "../fhir/radiotherapyResultHelpers";
+import { radiotherapyTaskStatusDisplay } from "../fhir/radiotherapyTaskHelpers";
 import {
   canCancelInjection,
   canRestoreInjection,
@@ -197,6 +204,8 @@ interface KarteTimelineProps {
   onDo: (item: KarteTimelineItem) => void;
   /** 詳細表示。対象は URL に載せるので、モーダルは親(カルテ画面)が描く。 */
   onOpenDetail: (target: KarteDetailTarget) => void;
+  /** 放射線治療コースの記録を右ペインで開く(docs/radiotherapy-order-design.md §6.3)。 */
+  onOpenRadiotherapyPane: (kind: "adverse" | "review", srId: string) => void;
   /** 削除された項目。右ペインで開いていたら閉じるために親へ通知する。 */
   onDeleted: (item: KarteTimelineItem) => void;
   /** スクロールコンテナ。診療日パネルからのスクロール指示に使う。 */
@@ -224,6 +233,7 @@ export function KarteTimeline({
   onEdit,
   onDo,
   onOpenDetail,
+  onOpenRadiotherapyPane,
   onDeleted,
   containerRef,
   problemsById,
@@ -285,6 +295,7 @@ export function KarteTimeline({
                     onEdit={onEdit}
                     onDo={onDo}
                     onOpenDetail={onOpenDetail}
+                    onOpenRadiotherapyPane={onOpenRadiotherapyPane}
                     onDelete={remove}
                     onDeleted={onDeleted}
                     deleting={deletingKey === key}
@@ -336,6 +347,8 @@ function useKarteItemDelete(onDeleted: (item: KarteTimelineItem) => void) {
     // 他科依頼も明細を持たないが、回答済のものは消させない(回答という別の医師の
     // 記録がぶら下がっているため。mutation 側で拒否してエラー帯に出す)。
     "consult-order": useDeleteConsultOrder(),
+    // 放射線治療は部門が受け付けた後は消させない(mutation 側で拒否してエラー帯に出す)。
+    "radiotherapy-order": useDeleteRadiotherapyOrder(),
     qr: useDeleteQuestionnaireResponse(),
     vital: useDeleteVitalEntry(),
   };
@@ -375,6 +388,7 @@ function useKarteItemDelete(onDeleted: (item: KarteTimelineItem) => void) {
       case "rehab-order":
       case "nutrition-guidance-order":
       case "consult-order":
+      case "radiotherapy-order":
         m[item.kind].mutate(item.id, options);
         break;
       // テンプレート回答は、生成した Observation も一緒に消すのでリソースごと渡す。
@@ -402,6 +416,7 @@ const KarteCard = memo(function KarteCard({
   onEdit,
   onDo,
   onOpenDetail,
+  onOpenRadiotherapyPane,
   onDelete,
   onDeleted,
   deleting,
@@ -414,6 +429,7 @@ const KarteCard = memo(function KarteCard({
   onEdit: (item: KarteTimelineItem) => void;
   onDo: (item: KarteTimelineItem) => void;
   onOpenDetail: (target: KarteDetailTarget) => void;
+  onOpenRadiotherapyPane: (kind: "adverse" | "review", srId: string) => void;
   /** 確認の後に呼ぶ削除。実行状態は deleting / deleteError で戻ってくる。 */
   onDelete: (item: KarteTimelineItem) => void;
   onDeleted: (item: KarteTimelineItem) => void;
@@ -532,6 +548,7 @@ const KarteCard = memo(function KarteCard({
               item.kind === "rehab-order" ||
               item.kind === "nutrition-guidance-order" ||
               item.kind === "consult-order" ||
+              item.kind === "radiotherapy-order" ||
               item.kind === "lab-order") && (
               <>
                 <span className={`karte-card__status karte-card__status--${item.status}`}>
@@ -557,7 +574,9 @@ const KarteCard = memo(function KarteCard({
                                     ? nutritionGuidanceTaskStatusDisplay(item.status)
                                     : item.kind === "consult-order"
                                       ? consultTaskStatusDisplay(item.status)
-                                      : labTaskStatusDisplay(item.status)}
+                                      : item.kind === "radiotherapy-order"
+                                        ? radiotherapyTaskStatusDisplay(item.status)
+                                        : labTaskStatusDisplay(item.status)}
                 </span>
                 {cardMeta(item) && <span aria-hidden="true">|</span>}
               </>
@@ -585,7 +604,8 @@ const KarteCard = memo(function KarteCard({
             item.kind === "transfusion-order" ||
             item.kind === "rehab-order" ||
             item.kind === "nutrition-guidance-order" ||
-            item.kind === "consult-order") && (
+            item.kind === "consult-order" ||
+            item.kind === "radiotherapy-order") && (
             <button
               type="button"
               className="karte-card__icon-button karte-card__icon-button--labeled"
@@ -701,6 +721,51 @@ const KarteCard = memo(function KarteCard({
                 }
               >
                 回答表示
+              </button>
+            )}
+            {/* 依頼と治療処方の行き来(docs/radiotherapy-order-design.md §2.5)。参照は治療処方の
+                側だけが持つので、依頼側はタイムラインで逆引きしたものを開く。 */}
+            {item.kind === "consult-order" &&
+              item.radiotherapyOrderIds.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="row-menu__item"
+                  onClick={() => onOpenDetail({ kind: "radiotherapy-order", id })}
+                >
+                  治療処方表示
+                </button>
+              ))}
+            {item.kind === "radiotherapy-order" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                disabled={!summarizeRadiotherapyOrder(item.serviceRequest).consultRequest}
+                onClick={() => {
+                  const consult = summarizeRadiotherapyOrder(item.serviceRequest).consultRequest;
+                  if (consult) onOpenDetail({ kind: "consult-order", id: consult.id });
+                }}
+              >
+                依頼表示
+              </button>
+            )}
+            {/* 照射期間中の診察と、そこで見つかった有害事象(CTCAE)の記録(§6.3)。 */}
+            {item.kind === "radiotherapy-order" && item.serviceRequest.id && (
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => onOpenRadiotherapyPane("review", item.serviceRequest.id ?? "")}
+              >
+                週次レビュー
+              </button>
+            )}
+            {item.kind === "radiotherapy-order" && item.serviceRequest.id && (
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => onOpenRadiotherapyPane("adverse", item.serviceRequest.id ?? "")}
+              >
+                有害事象
               </button>
             )}
             {/* 平文は元テンプレートの項目名と突き合わせて組み立てるので、
@@ -971,6 +1036,13 @@ function cardTitle(item: KarteTimelineItem): string {
   if (item.kind === "nutrition-guidance-order") {
     const summary = summarizeNutritionGuidanceOrder(item.serviceRequest);
     return [summary.settingDisplay, summary.periodLabel].filter(Boolean).join(" | ");
+  }
+  // 放射線治療は「第何コースで何が目的か」が見出し。
+  if (item.kind === "radiotherapy-order") {
+    const summary = summarizeRadiotherapyOrder(item.serviceRequest);
+    return [summary.settingDisplay, `第${summary.courseNumber}コース`, summary.intentDisplay]
+      .filter(Boolean)
+      .join(" | ");
   }
   // 他科依頼は「どこへ出したか」が見出しそのもの。至急のときだけ緊急度も並べる
   // (手術と同じ流儀で、通常はわざわざ出さない)。
@@ -1375,6 +1447,15 @@ function KarteCardBody({ item }: { item: KarteTimelineItem }) {
 
   if (item.kind === "consult-order") {
     return <ConsultOrderCardBody serviceRequest={item.serviceRequest} />;
+  }
+  if (item.kind === "radiotherapy-order") {
+    return (
+      <RadiotherapyOrderCardBody
+        serviceRequest={item.serviceRequest}
+        fractions={item.fractions}
+        hasCourseSummary={item.hasCourseSummary}
+      />
+    );
   }
 
   if (item.kind === "pathway-evaluation") {
@@ -2191,6 +2272,100 @@ function ConsultOrderCardBody({ serviceRequest }: { serviceRequest: fhir4.Servic
       <p className="karte-perform__note consult-card__purpose">{summary.purpose || "(目的の記載なし)"}</p>
       {summary.comment && <p className="karte-perform__note">{summary.comment}</p>}
     </div>
+  );
+}
+
+// 放射線治療の治療処方。部位と「標的ごとのコース合計」が処方の要点で、Phase の内訳は
+// 詳細で見る(docs/radiotherapy-order-design.md §5)。
+const RADIOTHERAPY_FRACTION_PREVIEW = 3;
+
+function RadiotherapyOrderCardBody({
+  serviceRequest,
+  fractions,
+  hasCourseSummary,
+}: {
+  serviceRequest: fhir4.ServiceRequest;
+  fractions: RadiotherapyFractionDisplay[];
+  hasCourseSummary: boolean;
+}) {
+  const summary = summarizeRadiotherapyOrder(serviceRequest);
+  const progress = radiotherapyProgress(summary, fractions);
+  // カードに並べるのは実績(照射した回・照射しなかった回)だけ。予定は件数と次回の日付で出す。
+  const records = fractions.filter((fraction) => !fraction.planned);
+  const recent = records.slice(0, RADIOTHERAPY_FRACTION_PREVIEW);
+
+  return (
+    <>
+    <div className="karte-rp">
+      <div className="karte-rp__head">
+        <span className="karte-order__group-name">{summary.siteLabel || "(部位の記載なし)"}</span>
+        {summary.techniqueLabel && (
+          <span className="micro-result__badge micro-result__badge--muted">
+            {summary.techniqueLabel}
+          </span>
+        )}
+        {/* サマリーの本文は詳細で読む(カードに載せると長すぎる)。 */}
+        {hasCourseSummary && (
+          <span className="micro-result__badge micro-result__badge--muted">サマリーあり</span>
+        )}
+        {summary.concurrentTherapyDisplay && (
+          <span className="micro-result__badge micro-result__badge--muted">
+            {summary.concurrentTherapyDisplay}
+          </span>
+        )}
+      </div>
+      {summary.volumes
+        .filter((volume) => volume.doseLabel)
+        .map((volume) => (
+          <p key={volume.volumeId} className="karte-perform__note">
+            {volume.label} {volume.doseLabel}
+          </p>
+        ))}
+      {summary.suspendedOn && (
+        <p className="karte-perform__note">
+          休止 {summary.suspendedOn}
+          {summary.suspensionReason && ` ${summary.suspensionReason}`}
+        </p>
+      )}
+      {summary.endedOn && (
+        <p className="karte-perform__note">
+          {serviceRequest.status === "revoked" ? "中止" : "終了"} {summary.endedOn}
+          {summary.terminationReason && ` ${summary.terminationReason}`}
+        </p>
+      )}
+      {summary.comment && <p className="karte-perform__note">{summary.comment}</p>}
+    </div>
+    {/* 照射の進み具合。1 コースで数十回になるので、直近ぶんと累積線量だけを出す。 */}
+    {fractions.length > 0 && (
+      <section className="karte-perform">
+        <div className="karte-perform__head">
+          <span className="karte-perform__title">照射</span>
+          <span className="karte-perform__meta">
+            {progress.fractionLabel}
+            {progress.volumes.length > 0 &&
+              ` 累積 ${progress.volumes
+                .map((volume) => `${volume.label} ${formatDose(volume.deliveredDose)} Gy`)
+                .join("、")}`}
+            {progress.planned > 0 && ` 予定 ${progress.planned} 回（次回 ${progress.nextPlannedDate}）`}
+          </span>
+        </div>
+        {recent.map((fraction) => (
+          <div className="karte-perform__row" key={fraction.id}>
+            <span className="karte-perform__values">
+              <span>{fraction.label}</span>
+              {fraction.notDoneReason && <span>{fraction.notDoneReason}</span>}
+              {fraction.note && <span>{fraction.note}</span>}
+            </span>
+          </div>
+        ))}
+        {records.length > recent.length && (
+          <p className="karte-perform__note">
+            ほか {records.length - recent.length} 件(詳細で全件を表示)
+          </p>
+        )}
+      </section>
+    )}
+    </>
   );
 }
 

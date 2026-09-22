@@ -1,4 +1,5 @@
 import { today } from "../lib/dates";
+import { isRadiotherapyServiceRequest, summarizeRadiotherapyOrder } from "./radiotherapyOrderHelpers";
 import {
   buildAttester,
   buildBodySections,
@@ -172,7 +173,7 @@ function orderKindCode(sr: fhir4.ServiceRequest): string {
   );
 }
 
-const PROCEDURE_KINDS = new Set(["surgery", "treatment", "endoscopy"]);
+const PROCEDURE_KINDS = new Set(["surgery", "treatment", "endoscopy", "radiotherapy"]);
 const EXAM_KIND_LABELS: Record<string, string> = {
   rad: "放射線検査",
   physio: "生理検査",
@@ -184,6 +185,11 @@ function orderDisplayName(
   header: fhir4.ServiceRequest,
   itemsByHeader: Map<string, fhir4.ServiceRequest[]>,
 ): string {
+  // 放射線治療は code が固定(治療処方)なので、部位と線量分割で名前を作る。
+  if (isRadiotherapyServiceRequest(header)) {
+    const summary = summarizeRadiotherapyOrder(header);
+    return ["放射線治療", summary.siteLabel, summary.doseLabel].filter(Boolean).join(" ");
+  }
   const own = header.code?.text ?? header.code?.coding?.[0]?.display ?? "";
   const names = (itemsByHeader.get(header.id ?? "") ?? [])
     .map((item) => item.code?.text ?? item.code?.coding?.[0]?.display ?? "")
@@ -194,7 +200,13 @@ function orderDisplayName(
 function performedDateByOrder(procedures: fhir4.Procedure[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const procedure of procedures) {
-    if (procedure.status === "entered-in-error" || procedure.status === "not-done") continue;
+    if (
+      procedure.status === "entered-in-error" ||
+      procedure.status === "not-done" ||
+      procedure.status === "preparation"
+    ) {
+      continue;
+    }
     if (procedure.partOf?.length) continue;
     const orderId = procedure.basedOn?.[0]?.reference?.split("/")[1] ?? "";
     const at = (procedure.performedDateTime ?? procedure.performedPeriod?.start ?? "").slice(0, 10);

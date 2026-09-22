@@ -16,6 +16,11 @@ import {
 import { pathoTaskStatus, pathoTaskStatusDisplay, pathoTasksByOrderId } from "./pathoTaskHelpers";
 import { physioTaskStatus, physioTaskStatusDisplay, physioTasksByOrderId } from "./physioTaskHelpers";
 import { radTaskStatus, radTaskStatusDisplay, radTasksByOrderId } from "./radTaskHelpers";
+import {
+  radiotherapyTaskStatus,
+  radiotherapyTaskStatusDisplay,
+  radiotherapyTasksByOrderId,
+} from "./radiotherapyTaskHelpers";
 import { rehabTaskStatus, rehabTaskStatusDisplay, rehabTasksByOrderId } from "./rehabTaskHelpers";
 import { surgeryTaskStatus, surgeryTaskStatusDisplay, surgeryTasksByOrderId } from "./surgeryTaskHelpers";
 import {
@@ -50,7 +55,7 @@ export interface OrderProgress {
 }
 
 /** 実施を積み上げる種別。オーダー 1 件に実施記録が日ごとに付く。 */
-const SESSION_KINDS = new Set(["rehab-order", "nutrition-guidance-order"]);
+const SESSION_KINDS = new Set(["rehab-order", "nutrition-guidance-order", "radiotherapy-order"]);
 
 /** その日に実施したか。積み上げる種別はその日の実施記録、その他はオーダーが実施済みか。 */
 export function orderPerformedOn(progress: OrderProgress, date: string): boolean {
@@ -88,6 +93,11 @@ const TASK_KINDS: Partial<Record<string, TaskKind>> = {
   "surgery-order": taskKind(surgeryTasksByOrderId, surgeryTaskStatus, surgeryTaskStatusDisplay),
   "transfusion-order": taskKind(transfusionTasksByOrderId, transfusionTaskStatus, transfusionTaskStatusDisplay),
   "rehab-order": taskKind(rehabTasksByOrderId, rehabTaskStatus, rehabTaskStatusDisplay),
+  "radiotherapy-order": taskKind(
+    radiotherapyTasksByOrderId,
+    radiotherapyTaskStatus,
+    radiotherapyTaskStatusDisplay,
+  ),
   "nutrition-guidance-order": taskKind(
     nutritionGuidanceTasksByOrderId,
     nutritionGuidanceTaskStatus,
@@ -118,7 +128,8 @@ function serviceRequestProgress(order: fhir4.ServiceRequest): OrderProgress {
 function performedDatesByOrderId(performs: fhir4.Procedure[]): Map<string, Set<string>> {
   const map = new Map<string, Set<string>>();
   for (const procedure of performs) {
-    if (procedure.status === "entered-in-error") continue;
+    // 取消と、まだ行っていない予定(放射線治療の照射予定)は実施に数えない。
+    if (procedure.status === "entered-in-error" || procedure.status === "preparation") continue;
     const date = (procedure.performedDateTime ?? procedure.performedPeriod?.start ?? "").slice(0, 10);
     if (!date) continue;
     for (const ref of procedure.basedOn ?? []) {

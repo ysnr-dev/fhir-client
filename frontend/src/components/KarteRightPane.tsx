@@ -18,6 +18,10 @@ import {
   TransfusionOrderCreatePanel,
   TransfusionOrderEditPanel,
 } from "./TransfusionOrderPanels";
+import {
+  RadiotherapyOrderCreatePanel,
+  RadiotherapyOrderEditPanel,
+} from "./RadiotherapyOrderPanels";
 import { RehabOrderCreatePanel, RehabOrderEditPanel } from "./RehabOrderPanels";
 import {
   NutritionGuidanceOrderCreatePanel,
@@ -34,6 +38,8 @@ import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
 import { PathwayApplyPanel, PathwayPhasePanel } from "./PathwayApplyPanel";
 import { RegimenApplyPanel } from "./RegimenApplyPanel";
 import { RegimenCycleLoader, RegimenDayPanel, RegimenHeaderPanel } from "./RegimenPanels";
+import { RadiotherapyAdverseEventPanel } from "./RadiotherapyAdverseEventPanel";
+import { RadiotherapyReviewPanel } from "./RadiotherapyReviewPanel";
 import { RegimenAdverseEventPanel } from "./RegimenAdverseEventPanel";
 
 // カルテ画面の右ペイン。登録・編集 UI は既存ページと共通のパネルを使う。
@@ -77,6 +83,8 @@ export type KartePaneState =
   | { kind: "transfusion-order-edit"; srId: string }
   | { kind: "rehab-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "rehab-order-edit"; srId: string }
+  | { kind: "radiotherapy-order-create"; sourceSrId?: string; problem?: ProblemRef }
+  | { kind: "radiotherapy-order-edit"; srId: string }
   | { kind: "nutrition-guidance-order-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "nutrition-guidance-order-edit"; srId: string }
   | { kind: "consult-order-create"; sourceSrId?: string; problem?: ProblemRef }
@@ -106,7 +114,11 @@ export type KartePaneState =
   // クールの有害事象(CTCAE Grade)の記録。
   | { kind: "regimen-adverse"; regimenSrId: string; cycle: number }
   // 適用のヘッダ(予定クール数・入外区分・プロブレム・コメント)の編集。
-  | { kind: "regimen-header"; regimenSrId: string };
+  | { kind: "regimen-header"; regimenSrId: string }
+  // 放射線治療コースの有害事象(CTCAE Grade)の記録。srId は治療処方。
+  | { kind: "radiotherapy-adverse"; srId: string }
+  // 放射線治療コースの週次レビュー(治療中の診察)。テンプレート回答として残す。
+  | { kind: "radiotherapy-review"; srId: string };
 
 const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   empty: "",
@@ -142,6 +154,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "transfusion-order-edit": "輸血編集",
   "rehab-order-create": "リハビリ登録",
   "rehab-order-edit": "リハビリ編集",
+  "radiotherapy-order-create": "放射線治療登録",
+  "radiotherapy-order-edit": "放射線治療編集",
   "nutrition-guidance-order-create": "栄養指導登録",
   "nutrition-guidance-order-edit": "栄養指導編集",
   "consult-order-create": "他科依頼登録",
@@ -160,6 +174,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "regimen-cycle": "化学療法(クール登録)",
   "regimen-day": "化学療法(投与日)",
   "regimen-adverse": "化学療法(有害事象)",
+  "radiotherapy-adverse": "放射線治療(有害事象)",
+  "radiotherapy-review": "放射線治療(週次レビュー)",
   "regimen-header": "化学療法(適用の編集)",
 };
 
@@ -185,6 +201,7 @@ function paneKey(state: KartePaneState): string {
     case "meal-order-edit":
     case "transfusion-order-edit":
     case "rehab-order-edit":
+    case "radiotherapy-order-edit":
     case "nutrition-guidance-order-edit":
     case "consult-order-edit":
       return `${state.kind}:${state.srId}`;
@@ -209,6 +226,9 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.regimenSrId}:${state.date}`;
     case "regimen-adverse":
       return `${state.kind}:${state.regimenSrId}:${state.cycle}`;
+    case "radiotherapy-adverse":
+    case "radiotherapy-review":
+      return `${state.kind}:${state.srId}`;
     case "regimen-header":
       return `${state.kind}:${state.regimenSrId}`;
     // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
@@ -225,6 +245,7 @@ function paneKey(state: KartePaneState): string {
     case "surgery-order-create":
     case "transfusion-order-create":
     case "rehab-order-create":
+    case "radiotherapy-order-create":
     case "nutrition-guidance-order-create":
     case "consult-order-create":
       return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}`;
@@ -342,6 +363,16 @@ export function KarteRightPane({
           onClick={() => onStateChange({ kind: "regimen-apply", problem: selectedProblem })}
         >
           化学療法
+        </button>
+        {/* 放射線治療の治療処方(放射線治療医が書く)。化学療法と同じくがんの治療計画なので
+            隣に置く。臨床医からの依頼は下の「他科依頼」で出す。 */}
+        <button
+          type="button"
+          onClick={() =>
+            onStateChange({ kind: "radiotherapy-order-create", problem: selectedProblem })
+          }
+        >
+          放射線治療
         </button>
         {/* クリニカルパスの適用。入院の計画そのものなので、化学療法の隣に置く。 */}
         <button type="button" onClick={() => onStateChange({ kind: "pathway-apply" })}>
@@ -516,6 +547,10 @@ function PaneContent({
       return (
         <RegimenAdverseEventPanel patientId={patientId} regimenSrId={state.regimenSrId} cycle={state.cycle} />
       );
+    case "radiotherapy-adverse":
+      return <RadiotherapyAdverseEventPanel patientId={patientId} srId={state.srId} />;
+    case "radiotherapy-review":
+      return <RadiotherapyReviewPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
     case "regimen-header":
       return <RegimenHeaderPanel patientId={patientId} regimenSrId={state.regimenSrId} onSaved={onSaved} />;
     case "note-create":
@@ -703,6 +738,19 @@ function PaneContent({
       );
     case "rehab-order-edit":
       return <RehabOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />;
+    case "radiotherapy-order-create":
+      return (
+        <RadiotherapyOrderCreatePanel
+          patientId={patientId}
+          sourceSrId={state.sourceSrId}
+          defaultProblem={state.problem}
+          onSaved={onSaved}
+        />
+      );
+    case "radiotherapy-order-edit":
+      return (
+        <RadiotherapyOrderEditPanel patientId={patientId} srId={state.srId} onSaved={onSaved} />
+      );
     case "nutrition-guidance-order-create":
       return (
         <NutritionGuidanceOrderCreatePanel

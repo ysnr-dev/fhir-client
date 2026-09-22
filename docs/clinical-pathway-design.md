@@ -244,7 +244,8 @@ master_pathway_events          + phase_key(NOT NULL)。一意性は (pathway_cod
   朝/昼/夕 → meal-order、栄養指導 → nutrition-guidance-order、ケア項目(NC01〜)→ nursing-order。中分類が無ければ大分類で
   ケア項目 → 看護指示、食事 → 食事オーダー、それ以外は処方)。
 - 雛形を持てる種別は `ORDER_SET_TYPES` の全 16 種(病名を除く。2026-09-12 に看護指示・食事・手術・輸血・リハビリ・栄養指導・
-  他科依頼・細菌・病理・内視鏡を追加。`docs/order-set-design.md` §7 Phase 2)。透析・放射線治療・レジメン・指導・IC・安静度・
+  他科依頼・細菌・病理・内視鏡を追加。`docs/order-set-design.md` §7 Phase 2)と放射線治療(`TPRT`。
+  `docs/radiotherapy-order-design.md` §5.4)。透析・レジメン・指導・IC・安静度・
   医療文書はチェックリスト項目。このクライアントより新しい版の雛形は要約だけ出し、保存時にそのまま戻す。
 - 看護指示・食事の雛形は入院 Encounter をオーダーに焼く(適用先に選んだ入院(予定)の id を `BuildBundleArgs.encounterId` で渡す)。
   食事は前の食事の終了・再開を扱わない、手術は手術室の重なり検査を通らない(同 §7 Phase 2 の決め事)。

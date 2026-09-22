@@ -1,0 +1,10 @@
+code,name,dose_unit,reference_system,reference_code,display_order
+photon,X線,Gy,http://snomed.info/sct,1156506007,10
+electron,電子線,Gy,http://snomed.info/sct,45643008,20
+proton,陽子線,Gy,http://snomed.info/sct,10611004,30
+carbon,炭素イオン線,Gy,http://snomed.info/sct,1156505006,40
+neutron,中性子線(BNCT),Gy,http://snomed.info/sct,80347004,50
+gamma,γ線,Gy,,,60
+brachy-hdr,密封小線源(高線量率),Gy,http://snomed.info/sct,394902000,70
+brachy-ldr,密封小線源(低線量率),Gy,http://snomed.info/sct,1156708005,80
+brachy-permanent,密封小線源(永久挿入),Gy,http://snomed.info/sct,169359004,90

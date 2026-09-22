@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_21_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_21_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1656,6 +1656,76 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_21_100000) do
     t.datetime "updated_at", null: false
     t.index ["member_item_code"], name: "index_master_rad_set_items_on_member_item_code"
     t.index ["set_item_code", "member_item_code"], name: "index_rad_set_items_on_set_and_member", unique: true
+  end
+
+  create_table "master_radiotherapy_devices", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "device_type", default: "linac", null: false
+    t.jsonb "modality_codes", default: [], null: false
+    t.boolean "enabled", default: true, null: false
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_radiotherapy_devices_on_code", unique: true
+  end
+
+  create_table "master_radiotherapy_modalities", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "dose_unit", default: "Gy", null: false
+    t.string "reference_system"
+    t.string "reference_code"
+    t.boolean "enabled", default: true, null: false
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_radiotherapy_modalities_on_code", unique: true
+  end
+
+  create_table "master_radiotherapy_protocols", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "name_kana"
+    t.string "intent"
+    t.jsonb "volumes", default: [], null: false
+    t.jsonb "phases", default: [], null: false
+    t.boolean "enabled", default: true, null: false
+    t.integer "display_order"
+    t.text "note"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_radiotherapy_protocols_on_code", unique: true
+  end
+
+  create_table "master_radiotherapy_stop_reasons", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "kind", default: "both", null: false
+    t.boolean "enabled", default: true, null: false
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_radiotherapy_stop_reasons_on_code", unique: true
+  end
+
+  create_table "master_radiotherapy_techniques", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "abbreviation"
+    t.jsonb "modality_codes", default: [], null: false
+    t.string "reference_system"
+    t.string "reference_code"
+    t.boolean "enabled", default: true, null: false
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_radiotherapy_techniques_on_code", unique: true
   end
 
   create_table "master_regimen_adverse_events", force: :cascade do |t|

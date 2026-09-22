@@ -1,0 +1,635 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/consult-purpose-radiotherapy-01",
+  "version": "1.0.0",
+  "name": "CONSULT_RT_01",
+  "title": "他科依頼 放射線治療依頼",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "放射線治療科あての他科依頼の「依頼目的」に貼るテンプレート。依頼医は線量や照射技法を決めない(それは放射線治療医の治療処方で決める)。ここでは適応の判断に要る情報、とくに過去の放射線治療歴を漏らさず伝える。記入しなかった項目は依頼目的の文面に出ない。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "b63bbd98-bc3d-4787-90ba-990a7b9c5f4e",
+        "display": "他科依頼"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp-target",
+      "type": "group",
+      "text": "治療の対象",
+      "item": [
+        {
+          "linkId": "primary-site",
+          "type": "string",
+          "text": "原発部位"
+        },
+        {
+          "linkId": "target-site",
+          "type": "string",
+          "text": "治療対象部位",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "原発と違うことがある(骨転移・脳転移など)。"
+            }
+          ]
+        },
+        {
+          "linkId": "laterality",
+          "type": "choice",
+          "text": "左右",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "right",
+                "display": "右"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "left",
+                "display": "左"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "both",
+                "display": "両側"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "na",
+                "display": "該当なし"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "intent",
+          "type": "choice",
+          "text": "治療目的",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "依頼医の見立て。確定は放射線治療医の治療処方で行う。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "curative",
+                "display": "根治"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "neoadjuvant",
+                "display": "術前"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "adjuvant",
+                "display": "術後"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "palliative",
+                "display": "緩和"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "prophylactic",
+                "display": "予防"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "consult",
+                "display": "適応の相談"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "request-kind",
+          "type": "choice",
+          "text": "依頼の内容",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "new",
+                "display": "新規治療"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "reirradiation",
+                "display": "再照射の相談"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "emergency",
+                "display": "緊急照射"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "followup",
+                "display": "治療後の経過相談"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-clinical",
+      "type": "group",
+      "text": "臨床情報",
+      "item": [
+        {
+          "linkId": "stage",
+          "type": "string",
+          "text": "病期",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "TNM・Stage。"
+            }
+          ]
+        },
+        {
+          "linkId": "pathology",
+          "type": "text",
+          "text": "病理診断"
+        },
+        {
+          "linkId": "imaging",
+          "type": "text",
+          "text": "画像所見"
+        },
+        {
+          "linkId": "clinical-course",
+          "type": "text",
+          "text": "経過の要点"
+        },
+        {
+          "linkId": "symptoms",
+          "type": "text",
+          "text": "症状",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "疼痛・神経症状・出血など、照射で和らげたい症状。"
+            }
+          ]
+        },
+        {
+          "linkId": "ps",
+          "type": "choice",
+          "text": "Performance Status",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "0",
+                "display": "PS 0"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1",
+                "display": "PS 1"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2",
+                "display": "PS 2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "3",
+                "display": "PS 3"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "4",
+                "display": "PS 4"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-combined",
+      "type": "group",
+      "text": "併用治療",
+      "item": [
+        {
+          "linkId": "combined",
+          "type": "choice",
+          "text": "併用治療",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "chemo",
+                "display": "化学療法"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "immuno",
+                "display": "免疫療法"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "hormone",
+                "display": "内分泌療法"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "targeted",
+                "display": "分子標的薬"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "surgery",
+                "display": "手術"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "combined-detail",
+          "type": "text",
+          "text": "併用治療の内容と時期",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "レジメン名、投与中か予定か、手術日。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-history",
+      "type": "group",
+      "text": "過去の放射線治療",
+      "item": [
+        {
+          "linkId": "prior-rt",
+          "type": "choice",
+          "text": "過去の放射線治療",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "同じ部位への再照射は線量の上限を左右する。不明なら不明と書く。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "あり"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "unknown",
+                "display": "不明"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "grp-prior-detail",
+              "type": "group",
+              "text": "治療歴",
+              "enableWhen": [
+                {
+                  "question": "prior-rt",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "yes"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "prior-site",
+                  "type": "string",
+                  "text": "照射部位"
+                },
+                {
+                  "linkId": "prior-period",
+                  "type": "string",
+                  "text": "治療時期"
+                },
+                {
+                  "linkId": "prior-facility",
+                  "type": "string",
+                  "text": "治療施設"
+                },
+                {
+                  "linkId": "prior-dose",
+                  "type": "string",
+                  "text": "総線量・回数",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "分かる範囲で。例: 50 Gy / 25 回。"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-safety",
+      "type": "group",
+      "text": "注意事項",
+      "item": [
+        {
+          "linkId": "cautions",
+          "type": "choice",
+          "text": "該当するもの",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "cied",
+                "display": "ペースメーカー・ICD"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "implant",
+                "display": "照射野の金属・人工物"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "pregnancy",
+                "display": "妊娠の可能性"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "contrast-allergy",
+                "display": "造影剤アレルギー"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "renal",
+                "display": "腎機能低下"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "anticoagulant",
+                "display": "抗血栓薬"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "infection",
+                "display": "感染症"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "cautions-detail",
+          "type": "text",
+          "text": "注意事項の内容"
+        }
+      ]
+    },
+    {
+      "linkId": "grp-request",
+      "type": "group",
+      "text": "希望・患者への説明",
+      "item": [
+        {
+          "linkId": "desired-start",
+          "type": "choice",
+          "text": "希望開始時期",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "emergency",
+                "display": "至急(当日〜翌日)"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1w",
+                "display": "1週間以内"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "2w",
+                "display": "2週間以内"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "1m",
+                "display": "1か月以内"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "any",
+                "display": "指定なし"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "patient-informed",
+          "type": "choice",
+          "text": "患者への説明",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "explained",
+                "display": "放射線治療について説明済み"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "diagnosis-only",
+                "display": "病名のみ説明済み"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "not-yet",
+                "display": "未説明"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "remarks",
+          "type": "text",
+          "text": "特記事項"
+        }
+      ]
+    }
+  ]
+}

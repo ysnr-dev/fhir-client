@@ -6529,6 +6529,36 @@ fieldset.lab-order-item__section label {
   font-size: 13px;
 }
 
+/* 枠の中のチェックボックス群。label は素のままだと display: inline で、
+   チェックと文字がくっついたうえに文字の途中で折り返す(枠の flex が効くのは
+   label 単位までなので、label 自身にも flex を持たせる)。 */
+fieldset.lab-order-item__section label.dose-conversion__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 編集モーダルの単独のチェック(「有効」など)。<form> 直下に置く label には
+   何も当たらず、ブラウザ既定の inline でチェックと文字がくっつく。
+   inline-flex にするのは、行の余白まで押せる当たり判定にしないため。 */
+.lab-order-item__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+/* 項目の並びに混ぜるチェック(「頻用」「左右あり」など)。.lab-order-item__fields
+   label の縦積み(ラベルが上、入力が下)を行に戻し、隣の入力欄と下端を揃える。 */
+.lab-order-item__fields label.dose-conversion__checkbox {
+  flex-direction: row;
+  align-items: center;
+  align-self: flex-end;
+  gap: 6px;
+  height: var(--control-height);
+}
+
 .lab-order-item__section-head {
   --control-height: 26px;
   display: flex;
@@ -12038,10 +12068,8 @@ td.surgery-calendar__cell--drop-target {
 }
 
 /* 食止めの印は主成分量・適応とは別の性質の項目なので、上下に余白を空けて
-   ボタン行とも離す。既定の inline のままでは縦マージンが効かないので
-   inline-block にする(幅は中身のままにして、行全体が押せるようにはしない)。 */
+   ボタン行とも離す(行の作りは .lab-order-item__check)。 */
 .meal-diet-fasting {
-  display: inline-block;
   margin: 16px 0;
 }
 
@@ -17978,3 +18006,384 @@ button.chemo-calendar__cell[draggable="true"] {
 .receipt-send__ng {
   color: var(--danger, var(--text));
 }
+
+/* ---- 放射線治療(治療処方) ---- */
+
+/* 標的・Phase の 1 件。入れ物の fieldset が flex なので、行の幅いっぱいに置く
+   (標的別の線量表を畳むと読めなくなる)。中の項目は横に並べて折り返す。 */
+.radiotherapy-order__card {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.radiotherapy-order__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.radiotherapy-order__row > label {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.radiotherapy-order__row select,
+.radiotherapy-order__row input {
+  width: 100%;
+}
+
+.radiotherapy-order__doses {
+  margin-top: 6px;
+}
+
+/* 1 回線量。数値の桁数ぶんあればよく、横に伸ばすと総線量の列が読みにくくなる。 */
+
+.radiotherapy-order__doses input {
+  width: 6em;
+}
+
+/* 標的ごとのコース合計(全 Phase の和)。 */
+.radiotherapy-order__totals {
+  flex: 1 1 100%;
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.radiotherapy-order__totals > div {
+  display: flex;
+  gap: 8px;
+}
+
+.radiotherapy-order__totals dt {
+  font-weight: 600;
+}
+
+.radiotherapy-order__totals dd {
+  margin: 0;
+}
+
+/* 紐付けた他科依頼の依頼目的(読み取り専用)。テンプレートの平文は改行で書かれる。 */
+.radiotherapy-order__consult-purpose {
+  flex: 1 1 100%;
+  max-height: 12em;
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+/* 安全確認の過去コース。表は fieldset(flex)の中なので幅いっぱいに置く。 */
+.radiotherapy-order__history {
+  flex: 1 1 100%;
+  font-size: 11px;
+}
+
+/* コース・開始・状態は値の幅が決まっているので折り返さない。余る幅は
+   部位・線量(長さがまちまち)に渡す。 */
+.radiotherapy-order__history-fit {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* 今回の標的と同じ部位に照射した過去コース(再照射の気づき)。 */
+.radiotherapy-order__history-row--overlap td {
+  color: #e07000;
+  font-weight: 600;
+}
+
+/* 治療終了サマリーの記載欄(治療経過・急性有害事象・今後の方針)。 */
+.radiotherapy-summary__text {
+  flex: 1 1 100%;
+}
+
+.radiotherapy-summary__text textarea {
+  width: 100%;
+}
+
+/* サマリーの本文は改行で書かれるので、そのまま出す。 */
+.radiotherapy-summary__value {
+  white-space: pre-wrap;
+}
+
+/* ---- 放射線治療の施設固有マスタ ---- */
+
+/* 一覧の名称の列。「選べるモダリティ」のように中身の長い列があると、自動の列幅では
+   名称が 1 行に収まらないところまで狭められる。下限だけ決めて折り返しを抑える。 */
+.radiotherapy-master__name {
+  min-width: 9em;
+}
+
+/* ---- 放射線治療プロトコルマスタ ---- */
+
+/* 編集モーダルの中の表(標的・Phase ごとの線量)。スクロールするのはモーダル自身
+   なので、.master-search__table の sticky な列見出しがモーダルの上端に貼り付いて
+   下の行に重なる。入れ子の表では静止させる。 */
+.radiotherapy-protocol__rows th {
+  position: static;
+}
+
+/* 表の中の入力欄は列幅いっぱいに広げる。既定のままでは「左右」のように未選択の
+   select が中身の幅まで潰れて、列見出しと縦に揃わない。 */
+.radiotherapy-protocol__rows input,
+.radiotherapy-protocol__rows select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 標的の削除ボタンの列。幅を決めて、余りは部位の列に吸わせる。 */
+.radiotherapy-protocol__volumes td:last-child {
+  width: 56px;
+}
+
+/* 線量の表は 3 列しかないので、自動幅だと 1 回線量の列だけが伸びて総線量が
+   入力欄から離れる。入力と総線量の幅を決め、余りは標的名の列に吸わせる。 */
+.radiotherapy-protocol__doses th:nth-child(2),
+.radiotherapy-protocol__doses td:nth-child(2) {
+  width: 110px;
+}
+
+.radiotherapy-protocol__doses th:last-child,
+.radiotherapy-protocol__doses td:last-child {
+  width: 90px;
+}
+
+/* ---- 放射線治療カレンダー ---- */
+/* 格子と右のパネルは手術カレンダーのクラスをそのまま使い、照射のカードだけ足す。 */
+
+/* 列見出しに件数(小さい文字)を添えるぶん、行の高さが時刻の軸の見出しと 1px 食い違い、
+   格子が縦にずれる。行の高さを決めて両方を揃える。 */
+.radiotherapy-calendar .surgery-calendar__col-head {
+  line-height: 1.5;
+}
+
+/* 照射は 1 回 15 分前後で背が低いので、状態・時刻・患者・回を 1 行に詰める。 */
+.radiotherapy-calendar__card {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.radiotherapy-calendar__card-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.radiotherapy-calendar__card-count {
+  flex: none;
+  color: var(--text);
+}
+
+/* 開始〜終了。手術カレンダーの 1 行目とは違い行頭ではないので、あちらの
+   .surgery-calendar__card-time(下マージン付き)ではなく自前で持つ。 */
+.radiotherapy-calendar__card-time {
+  flex: none;
+  color: var(--text-h);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.radiotherapy-calendar__card .surgery-calendar__card-actions {
+  position: static;
+  flex: none;
+}
+
+/* 「実施」ボタンとケバブの背丈をそろえる。ケバブは既定で --control-height を持つので、
+   明示しないとボタンの倍の高さになり、背の低いカードからはみ出す。 */
+.radiotherapy-calendar__card .surgery-calendar__card-actions > button,
+.radiotherapy-calendar__card .surgery-calendar__card-actions .row-menu,
+.radiotherapy-calendar__card .surgery-calendar__card-actions .row-menu__trigger {
+  height: 18px;
+}
+
+.radiotherapy-calendar__card .surgery-calendar__card-actions > button {
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.radiotherapy-calendar__card .surgery-calendar__card-actions .row-menu__trigger {
+  padding: 0 4px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+/* 時刻を持たない照射。格子に置けないので列の見出しの下に並べる。予定はここから掴んで
+   格子へ落とせる(落とした先で装置と時刻が決まる)。
+   **高さを固定する** —— 中身のある列だけ背が伸びると、その列の格子が下へずれて時刻の軸と
+   合わなくなる。件数が多い日はこの中でスクロールさせる。 */
+.radiotherapy-calendar__untimed {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 56px;
+  padding: 2px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 時刻の軸のぶん。何の置き場かが分かるように見出しだけ置く。 */
+.radiotherapy-calendar__untimed--axis {
+  align-items: flex-end;
+  justify-content: center;
+  padding-right: 6px;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.radiotherapy-calendar__card--inline {
+  display: flex;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.radiotherapy-calendar__count {
+  margin-left: 6px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.radiotherapy-calendar__week-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 2px;
+}
+
+.radiotherapy-calendar .surgery-calendar__week td {
+  cursor: pointer;
+  vertical-align: top;
+}
+
+/* 掴める札(照射予定)。実績は記録なので掴めない。 */
+.radiotherapy-calendar__chip--movable {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+/* 落とし先のセル。 */
+.radiotherapy-calendar__week-td--target {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+/* 治療コースのカードの操作(受付・治療開始・予定登録・終了・サマリー)。 */
+.radiotherapy-calendar__course-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.radiotherapy-calendar__course-actions button {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+/* 一括登録: 曜日のチェックと、割り付けた照射予定の表(30 行前後)。 */
+.radiotherapy-plan__weekdays {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.radiotherapy-plan__table {
+  flex: 1 1 100%;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* 空き枠のモーダル。入れられるコースが無いときの表示。押せないコースは並べず、
+   件数と次の一手(受付)だけを出す。 */
+.radiotherapy-slot__empty {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0 4px;
+}
+
+.radiotherapy-slot__empty-title {
+  margin: 0;
+  color: var(--text-h);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.radiotherapy-slot__empty-note {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* 入れられるコースが多い施設でも、モーダルが伸びきらないようスクロールに収める。 */
+.radiotherapy-slot__table {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.radiotherapy-slot__footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* 空き枠に入れるコースを選ぶ表の操作(予定を組む / 1回だけ追加)。 */
+.radiotherapy-slot__actions {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* 治療コースの絞り込み。パネルが狭いので装置と進捗を 2 列に詰め、患者名は 1 行使う。 */
+.radiotherapy-courses__filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.radiotherapy-courses__filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.radiotherapy-courses__filters select,
+.radiotherapy-courses__filters input[type="search"] {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.radiotherapy-courses__filter-wide {
+  grid-column: 1 / -1;
+}
+

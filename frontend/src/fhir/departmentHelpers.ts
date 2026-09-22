@@ -15,7 +15,7 @@ const ORGANIZATION_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/organiza
 const DEPARTMENT_TYPE_CODE = "dept";
 
 export interface DepartmentFormValues {
-  /** SS-MIX2 統一診療科コードの 2 ケタ科。任意(院内独自の科は空でも登録できる)。 */
+  /** SS-MIX2 統一診療科コード(2 ケタ科か 3 ケタ科)。任意(院内独自の科は空でも登録できる)。 */
   code: string;
   name: string;
   /** 所属医療機関の Organization.id。必須。 */
@@ -79,7 +79,7 @@ export function departmentPartOfId(department: fhir4.Organization): string | und
   return department.partOf?.reference?.split("/").pop() || undefined;
 }
 
-// 診療科コードの昇順。コードは "01"〜"9Z" の 2 文字なので単純な文字列比較でよい。
+// 診療科コードの昇順。3 ケタ科は先頭 2 文字が親の 2 ケタ科なので、文字列比較で親の直後に並ぶ。
 // コード未設定(院内独自の科)は末尾にまとめ、その中では名称順にする。
 export function sortDepartmentsByCode(departments: fhir4.Organization[]): fhir4.Organization[] {
   return [...departments].sort((a, b) => {
