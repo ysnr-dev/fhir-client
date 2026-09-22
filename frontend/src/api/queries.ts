@@ -12546,8 +12546,11 @@ export function useCancelRadiotherapyFraction() {
   });
 }
 
-/** 30 回のコースが 300 本ぶん。それ以上は読まない(一覧の回数が欠ける)。 */
-const RADIOTHERAPY_PROCEDURE_MAX_PAGES = 20;
+/** 1 リクエストでまとめて引くコースの数(based-on のカンマ OR。URL 長と上流の索引の都合)。 */
+const RADIOTHERAPY_COURSE_CHUNK = 20;
+
+/** 1 コース = 予定と実績で数十件。20 コースぶんはこのページ数に収まる。 */
+const RADIOTHERAPY_PROCEDURE_MAX_PAGES = 5;
 
 export interface RadiotherapyProcedures {
   /** オーダー id → 照射記録(新しい順)。 */
@@ -12556,15 +12559,12 @@ export interface RadiotherapyProcedures {
   summaries: Map<string, fhir4.Procedure>;
 }
 
-/**
- * 部門一覧に出すオーダーの照射記録と治療終了サマリー。一覧は 1 画面に数十コースなので、
- * オーダーごとに引かず患者をまたいで category でまとめて引き、オーダー id で振り分ける。
- */
-async function fetchRadiotherapyProcedures(): Promise<RadiotherapyProcedures> {
-  // 照射予定を一括登録すると 1 コースで数十件になるので、ページを送って読み切る。
+/** 治療処方 id をまとめて指定して、その配下の照射記録・サマリーを引く。 */
+async function fetchRadiotherapyProcedureChunk(orderIds: string[]): Promise<fhir4.Procedure[]> {
   const procedures: fhir4.Procedure[] = [];
   for (let page = 0; page < RADIOTHERAPY_PROCEDURE_MAX_PAGES; page += 1) {
     const params = new URLSearchParams();
+    params.set("based-on", orderIds.map((id) => `ServiceRequest/${id}`).join(","));
     params.set("category", `${ORDER_TYPE_SYSTEM}|${RADIOTHERAPY_ORDER_TYPE.code}`);
     params.set("status:not", "entered-in-error");
     params.set("_sort", "-date");
@@ -12575,17 +12575,54 @@ async function fetchRadiotherapyProcedures(): Promise<RadiotherapyProcedures> {
     procedures.push(...found);
     if (found.length < WORKLIST_PAGE) break;
   }
+  return procedures;
+}
+
+/**
+ * 画面に出ているコースの照射記録と治療終了サマリー。**治療処方の id で絞って引く**
+ * (§8)。category だけで引くと終了したコースのぶんまで読むので、コースが増えるほど
+ * 重くなり、上限に当たると回数と累積線量が静かに欠ける。
+ */
+async function fetchRadiotherapyProcedures(orderIds: string[]): Promise<RadiotherapyProcedures> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < orderIds.length; i += RADIOTHERAPY_COURSE_CHUNK) {
+    chunks.push(orderIds.slice(i, i + RADIOTHERAPY_COURSE_CHUNK));
+  }
+  const procedures = (await Promise.all(chunks.map(fetchRadiotherapyProcedureChunk))).flat();
   return {
     fractions: radiotherapyFractionsByOrderId(procedures.filter(isRadiotherapyFraction)),
     summaries: radiotherapyCourseSummariesByOrderId(procedures),
   };
 }
 
-export function useRadiotherapyProcedures(enabled = true) {
+/**
+ * 引くのは呼び出し側が渡したコースだけ。右のパネルの行・空き枠に出すコース・格子に
+ * 出ている照射のコースを合わせて渡す(格子の予定から実施入力を開けるので、行に無い
+ * コースも要る)。
+ */
+export function useRadiotherapyProcedures(orderIds: string[]) {
+  const ids = [...new Set(orderIds.filter(Boolean))].sort();
   return useQuery({
-    queryKey: ["Procedure", "search", "radiotherapy-procedures"],
-    queryFn: fetchRadiotherapyProcedures,
-    enabled,
+    queryKey: ["Procedure", "search", "radiotherapy-procedures", ids.join(",")],
+    queryFn: () => fetchRadiotherapyProcedures(ids),
+    enabled: ids.length > 0,
+  });
+}
+
+/**
+ * 1 コースぶんの照射記録。何回目・どの Phase かを数えるモーダル(実施入力・一括登録・
+ * サマリー)は、一覧のキャッシュではなく開いた時点で引き直す —— 一括登録の直後に続けて
+ * 実施入力を開くような場面で、採番が古い写しに引きずられないように。
+ */
+export function useRadiotherapyCourseFractions(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ["Procedure", "search", "radiotherapy-course", orderId],
+    queryFn: async () => {
+      const procedures = await fetchRadiotherapyProcedureChunk([orderId ?? ""]);
+      const byOrderId = radiotherapyFractionsByOrderId(procedures.filter(isRadiotherapyFraction));
+      return byOrderId.get(orderId ?? "") ?? [];
+    },
+    enabled: Boolean(orderId),
   });
 }
 
