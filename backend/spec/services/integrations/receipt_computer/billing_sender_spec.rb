@@ -100,6 +100,30 @@ RSpec.describe Integrations::ReceiptComputer::BillingSender do
       expect(log).to have_received(:write).with(hash_including(action: "billing.send", outcome: :succeeded))
     end
 
+    it "passes the 診察開始時刻 of the day's 外来 Encounter as the 診療時刻" do
+      allow(Integrations::CodeMapper).to receive(:new)
+        .and_return(instance_double(Integrations::CodeMapper, to_external: "01"))
+      store.add({ "resourceType" => "Encounter", "id" => "enc-1", "status" => "finished",
+                  "class" => { "code" => "AMB" }, "subject" => { "reference" => "Patient/pat-1" },
+                  "period" => { "start" => "2026-09-20T19:45:00+09:00", "end" => "2026-09-20T20:10:00+09:00" } },
+                { "resourceType" => "Encounter", "id" => "enc-old", "status" => "finished",
+                  "class" => { "code" => "AMB" }, "subject" => { "reference" => "Patient/pat-1" },
+                  "period" => { "start" => "2026-09-19T09:00:00+09:00" } })
+
+      sender.call(patient_fhir_id: "pat-1", perform_date: date, department_code: "01")
+
+      expect(adapter.claims.first.time).to eq("19:45")
+    end
+
+    it "leaves the 診療時刻 empty when the day has no 外来 Encounter" do
+      allow(Integrations::CodeMapper).to receive(:new)
+        .and_return(instance_double(Integrations::CodeMapper, to_external: "01"))
+
+      sender.call(patient_fhir_id: "pat-1", perform_date: date, department_code: "01")
+
+      expect(adapter.claims.first.time).to be_nil
+    end
+
     it "downgrades success to a warning when something could not be sent" do
       allow(Integrations::CodeMapper).to receive(:new)
         .and_return(instance_double(Integrations::CodeMapper, to_external: "01"))

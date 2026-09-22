@@ -59,12 +59,26 @@ module Integrations
         translate { patient_api.fetch(patient_number) }
       end
 
+      # 会計済み → 日レセ側で展開・編集済み → カルテから送ってある → 未送信 の順に見る。
+      # 会計が済んだ後や医事課が画面で触った後に送り直すと、失敗するか確定した会計と
+      # 食い違う中途データを作るので、その状態を画面に伝えて送信を止める。
       def billing_status(patient_number:, date:, department_code:)
-        uid = translate do
-          medical_api.find_uid(patient_id: patient_number, perform_date: date,
-                               department_code: department_code)
+        translate do
+          if accept_api.settled?(patient_id: patient_number, date: date, department_code: department_code)
+            return BillingStatus.new(state: :settled, message: "医事会計で会計済みです。変更は医事会計側で行ってください")
+          end
+
+          entry = medical_api.find_entry(patient_id: patient_number, perform_date: date,
+                                         department_code: department_code)
+          if entry.nil?
+            BillingStatus.new(state: :none)
+          elsif entry.controllable?
+            BillingStatus.new(state: :sent, detail: entry.uid)
+          else
+            BillingStatus.new(state: :opened, detail: entry.uid,
+                              message: "医事会計側で展開・編集された診療データがあり、カルテからは送り直し・取消ができません")
+          end
         end
-        BillingStatus.new(sent: uid.present?, detail: uid)
       end
 
       # 画面に見せる剤。日レセの剤(診療種別区分ごと)に分けた並びを、区分名つきで返す。
@@ -93,6 +107,7 @@ module Integrations
           medical_api.register(classes,
                                patient_id: claim.patient_number,
                                perform_date: claim.date,
+                               perform_time: claim.time,
                                department_code: claim.department_code,
                                physician_code: claim.physician_code,
                                coverage_set_key: claim.coverage_set_key,
@@ -138,6 +153,7 @@ module Integrations
       def patient_api = @patient_api ||= PatientApi.new(gateway)
       def medical_api = @medical_api ||= MedicalApi.new(gateway)
       def disease_api = @disease_api ||= DiseaseApi.new(gateway)
+      def accept_api = @accept_api ||= AcceptApi.new(gateway)
 
       # 日レセ側の例外を、連携先に依らない意味の例外へ読み替える。
       def translate
@@ -152,21 +168,46 @@ module Integrations
 
       # Api_Result は成功でも部分的に落ちていることがあるので、
       # 送れなかった項目があれば警告に落として「そのまま成功」とは言わない。
+      # 日レセが黙って落とした明細(M01 など)は、カルテ側で送れなかった項目と同じ器に入れる。
       def to_result(result, skipped: [], outcome: nil)
+        api_result = result.api_result
+        dropped = api_result.dropped_line_warnings.map do |w|
+          { kind: "医事会計", name: w["target_name"] || w["target_code"] || "明細 #{w['position']}",
+            reason: "#{w['message']}(日レセに取り込まれませんでした)" }
+        end
+        warnings = api_result.warnings - api_result.dropped_line_warnings
+        all_skipped = skipped + dropped
+
         decided = outcome || begin
-          if !result.ok? then :failed
-          elsif skipped.any? || result.api_result.warnings.any? then :warning
+          if !api_result.ok? then :failed
+          elsif all_skipped.any? || warnings.any? then :warning
           else :succeeded
           end
         end
 
         Result.new(
           outcome: decided,
-          code: result.api_result.code,
-          message: result.api_result.message,
-          warnings: result.api_result.warnings,
-          skipped: skipped
+          code: api_result.code,
+          message: failure_message(api_result),
+          warnings: warnings,
+          skipped: all_skipped
         )
+      end
+
+      # 実質エラーの警告は Api_Result のメッセージ(処理終了)より警告の文言を前に出す。
+      # 失敗のときは層ごとの結果(E31「同名の病名が存在します」など)を添える。Api_Result の
+      # メッセージだけでは「登録出来ない病名が存在します」で、どの病名が何故かが分からない。
+      def failure_message(api_result)
+        fatal = api_result.fatal_warnings.first
+        return "#{fatal['message']}(#{fatal['code']})。#{api_result.message}" if fatal
+
+        return api_result.message if api_result.ok?
+
+        detail = api_result.warnings.find { |w| w["message"].present? }
+        return api_result.message if detail.nil?
+
+        target = detail["target_name"] || detail["target_code"]
+        "#{api_result.message} #{target ? "#{target}: " : ''}#{detail['message']}"
       end
     end
   end

@@ -69,7 +69,7 @@ RSpec.describe Integrations::ReceiptComputer::DiagnosisCollector do
     ]
 
     expect(collect.map(&:outcome)).to eq([:resolved, :inactive, nil])
-    expect(orca_children.map { |c| c["Disease_OutCome"] }).to eq(%w[C D] + [nil])
+    expect(orca_children.map { |c| c["Disease_OutCome"] }).to eq(%w[F N] + [nil])
   end
 
   it "keeps 保険病名 and drops プロブレム and 既往歴" do

@@ -14,6 +14,12 @@ module Integrations
       BUSY = "90".freeze
       # 部分失敗を別々に返してくる層(medicalmodv2)。
       LAYERS = %w[Medical Disease].freeze
+      # Api_Result はゼロでも実質は失敗の警告。W02 は保険組合せが不正でゼロ(未確定)で登録された、
+      # W04 / W05 はその入外区分では展開できない(入院期間中 / 入院中ではない)。
+      FATAL_WARNINGS = %w[W02 W04 W05].freeze
+      # 明細が取り込まれなかった警告(点数マスタ未登録・セット未登録・全角変換・入力対象外・
+      # 診療種別区分なし)。登録自体は通るので、落ちた明細を「送れなかった項目」として扱う。
+      DROPPED_LINE_WARNINGS = %w[M01 M02 M03 M04 M05].freeze
 
       attr_reader :code, :message, :warnings
 
@@ -56,10 +62,21 @@ module Integrations
 
       # 層ごとの結果と警告。medicalmodv2 では Medical_Result / Disease_Result は
       # *_Message_Information の中に入っている(reference/record/xml_medicalv2res.db)が、
-      # 直下に返す API もあるので、入れ子が無ければ最上位を見る。
+      # 直下に返す API もあるので、入れ子が無ければ最上位を見る。diseasev2 は
+      # *_Message_Information を病名ごとの配列で返し、*_Warning_Info も配列ではなく 1 件の
+      # record で返ってくるので、どちらの形でも読む。
       def self.layer_messages(body, layer)
         container = body["#{layer}_Message_Information"]
-        source = container.is_a?(Hash) ? container : body
+        sources = case container
+                  when Array then container.select { |c| c.is_a?(Hash) }
+                  when Hash then [container]
+                  else [body]
+                  end
+
+        sources.flat_map { |source| layer_source_messages(source, layer) }
+      end
+
+      def self.layer_source_messages(source, layer)
         messages = []
 
         result = source["#{layer}_Result"].to_s
@@ -71,7 +88,7 @@ module Integrations
           }
         end
 
-        Array(source["#{layer}_Warning_Info"]).each do |entry|
+        Array.wrap(source["#{layer}_Warning_Info"]).each do |entry|
           next unless entry.is_a?(Hash)
 
           messages << {
@@ -87,8 +104,18 @@ module Integrations
           }.compact
         end
 
-        messages
+        # 病名の E31 のように、結果コードの説明が Result_Message に、対象が Warning_Info に
+        # 分かれて返る。対象名が分かるなら結果の行に添える。
+        if messages.length > 1 && messages.first["code"] == result && messages.first["message"].present?
+          target = messages.drop(1).find { |m| m["target_name"] || m["target_code"] }
+          messages.first["target_name"] ||= target["target_name"] if target
+          messages.first["target_code"] ||= target["target_code"] if target
+        end
+
+        messages.reject { |m| m["code"].empty? && m["message"].empty? }
       end
+      private_class_method :layer_source_messages
+
       private_class_method :layer_messages
 
       def self.zero?(code)
@@ -97,7 +124,16 @@ module Integrations
       end
 
       def ok?
-        self.class.zero?(code) || accepted_codes.include?(code)
+        (self.class.zero?(code) || accepted_codes.include?(code)) && fatal_warnings.empty?
+      end
+
+      def fatal_warnings
+        warnings.select { |w| FATAL_WARNINGS.include?(w["code"]) }
+      end
+
+      # 送ったが日レセに取り込まれなかった明細の警告。
+      def dropped_line_warnings
+        warnings.select { |w| DROPPED_LINE_WARNINGS.include?(w["code"]) }
       end
 
       # 登録自体は通ったが一部が落ちた状態。画面には成功と区別して出す。

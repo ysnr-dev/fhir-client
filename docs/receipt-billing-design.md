@@ -98,6 +98,18 @@ PreviewItem   画面用。区分(class_code/class_name)を添えて剤を分け�
 
 `days`(内服の日数)と `count`(回数)は分け、アダプタは `count || days || "1"` を `Medical_Class_Number` に。
 
+## 3-1. 送り直し・状態・警告の扱い(2026-09-23、バックログ A 系)
+
+- 外来の送り直しは **class=02(削除)→ class=01(再登録)**。置換 class=03 は入院用に残す。再登録で
+  落ちたときは「医事会計側のデータは消えています。もう一度送ってください」と伝える。
+- `billing_status` は **none / sent / opened / settled**。会計済み(`acceptlstv2` class=02)と
+  日レセ画面で展開・再保存された中途データ(`tmedicalgetv2` の `Medical_Mode` / `Medical_Mode2`、
+  または `Medical_Uid` が消えたもの)は画面で送信・取消を止める。
+- `W02`(保険組合せゼロ登録)/ `W04` / `W05` は `Api_Result` がゼロでも失敗。応答の
+  `Insurance_Combination_Number` が送った番号と違えば失敗。`M01`〜`M05` は「送れなかった項目」に並べる。
+- `Perform_Time` は当日の外来 Encounter の `period.start`。時間外・休日・深夜の判定は日レセに任せる。
+- 病名の転帰は `resolved` → `F`(治ゆ)、`inactive` → `N`(不変)。
+
 ## 4. 画面
 
 プレビューは「実際に送る剤の並び」を見せる。アダプタの `describe_billing` が区分ごとに分けた剤を

@@ -92,6 +92,8 @@ export function BillingSendModal({
     : "";
   const selected = coverageSet || fromReception || sets[0]?.key || "";
   const alreadySent = sentStatus.data?.sent ?? false;
+  // 会計済み・医事側で編集済みのときは送り直しも取消もできない(理由は backend が返す)。
+  const locked = sentStatus.data?.state === "opened" || sentStatus.data?.state === "settled";
 
   const items = preview.data?.items ?? [];
   const diagnoses = preview.data?.diagnoses ?? [];
@@ -116,6 +118,12 @@ export function BillingSendModal({
           <dt>診療日</dt>
           <dd>{target.performDate}</dd>
         </dl>
+
+        {locked && sentStatus.data?.message && (
+          <p className="receipt-send__locked" role="status">
+            {sentStatus.data.message}
+          </p>
+        )}
 
         <label className="receipt-send__field">
           保険
@@ -229,7 +237,7 @@ export function BillingSendModal({
         <div className="connection-settings-form__actions">
           <button
             type="button"
-            disabled={send.isPending || items.length === 0}
+            disabled={send.isPending || items.length === 0 || locked}
             onClick={() => send.mutate(body)}
           >
             {send.isPending ? "送信中..." : alreadySent ? "送り直す" : "送信"}
@@ -237,7 +245,7 @@ export function BillingSendModal({
           {alreadySent && (
             <button
               type="button"
-              disabled={cancel.isPending}
+              disabled={cancel.isPending || locked}
               onClick={() =>
                 cancel.mutate({
                   patient_id: target.patientId,

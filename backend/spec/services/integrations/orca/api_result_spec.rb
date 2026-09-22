@@ -119,4 +119,49 @@ RSpec.describe Integrations::Orca::ApiResult do
       expect(result.warnings.map { |w| w["message"] }).to eq(["診療内容情報を自動設定しました"])
     end
   end
+
+  describe "実質エラーの警告" do
+    it "fails on W02 even though Api_Result is zero" do
+      result = described_class.from({
+        "Api_Result" => "00", "Api_Result_Message" => "登録処理終了",
+        "Medical_Message_Information" => {
+          "Medical_Warning_Info" => [{ "Medical_Warning" => "W02", "Medical_Warning_Message" => "保険組合せをゼロで登録しました" }]
+        }
+      })
+
+      expect(result).not_to be_ok
+      expect(result.fatal_warnings.first["code"]).to eq("W02")
+    end
+
+    it "keeps M01 as ok but lists it as a dropped line" do
+      result = described_class.from({
+        "Api_Result" => "00",
+        "Medical_Message_Information" => {
+          "Medical_Warning_Info" => [{ "Medical_Warning" => "M01", "Medical_Warning_Message" => "点数マスタに登録がありません。",
+                                       "Medical_Warning_Item_Position" => "02", "Medical_Warning_Code" => "160008010" }]
+        }
+      })
+
+      expect(result).to be_ok
+      expect(result.dropped_line_warnings.first["target_code"]).to eq("160008010")
+    end
+  end
+
+  describe "diseasev2 の層別メッセージ" do
+    it "reads the per-病名 array and the single-record Warning_Info" do
+      result = described_class.from({
+        "Api_Result" => "E42", "Api_Result_Message" => "登録出来ない病名が存在します。",
+        "Disease_Message_Information" => [
+          { "Disease_Result" => "E31",
+            "Disease_Result_Message" => "同名の病名が令和　８年　９月２０日に存在します（転帰日等を確認して下さい）。",
+            "Disease_Warning_Info" => { "Disease_Warning_Item_Position" => "01", "Disease_Warning_Name" => "感冒",
+                                        "Disease_Warning_Code" => "4609008" } }
+        ]
+      })
+
+      expect(result).not_to be_ok
+      expect(result.warnings.first).to include("layer" => "Disease", "code" => "E31", "target_name" => "感冒")
+      expect(result.warnings.first["message"]).to include("同名の病名")
+    end
+  end
 end

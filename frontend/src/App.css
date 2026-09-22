@@ -18007,6 +18007,15 @@ button.chemo-calendar__cell[draggable="true"] {
   color: var(--danger, var(--text));
 }
 
+/* 医事側で触れなくなった理由。送信ボタンを止める根拠なので目立たせる。 */
+.receipt-send__locked {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--danger, var(--border));
+  border-radius: 4px;
+  color: var(--danger, var(--text));
+}
+
 /* 剤の見出しに添える実施時刻。 */
 .receipt-send__time {
   margin-left: 8px;

@@ -71,9 +71,13 @@ module Integrations
         keyword_init: true
       )
 
-      # 既にレセコンへ送ってあるか。
-      BillingStatus = Struct.new(:sent, :detail, keyword_init: true) do
-        def sent? = !!sent
+      # レセコン側での 1 受診の状態。
+      # state は :none(未送信)/ :sent(カルテから送ってあり、送り直し・取消ができる)/
+      # :opened(レセコン側で展開・編集されていて、カルテからは触れない)/ :settled(会計済み)。
+      # message は :opened / :settled のときに画面へ出す理由。
+      BillingStatus = Struct.new(:state, :detail, :message, keyword_init: true) do
+        def sent? = state == :sent
+        def locked? = %i[opened settled].include?(state)
       end
 
       # 連携 1 回の結果。outcome は :succeeded / :warning / :failed。

@@ -5,8 +5,10 @@ module Integrations
       # 修飾語のレセ電算コードは日レセでは ZZZ を冠した 7 桁になる。
       MODIFIER_PREFIX = "ZZZ".freeze
 
-      # 中立の転帰 → 日レセの転帰区分。継続は空欄。
-      OUTCOME = { resolved: "C", inactive: "D" }.freeze
+      # 中立の転帰 → 日レセの転帰区分(diseasev2 の Disease_OutCome)。継続は空欄。
+      # 値は F 治ゆ / D 死亡 / N 不変・R 軽快・S 後遺症残・U 不明・W 悪化(いずれも中止)/ O 削除。
+      # カルテの inactive は「もう活動していない病名」で死亡ではないので、中止群の N(不変)に寄せる。
+      OUTCOME = { resolved: "F", inactive: "N" }.freeze
 
       module_function
 

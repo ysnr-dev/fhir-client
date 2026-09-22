@@ -27,7 +27,7 @@
 | 診療種別区分の一覧 | 外来版マニュアル `https://orcamanual.orca.med.or.jp/gairai/` 2.6 |
 
 着手の推奨順は **A → B-1〜B-4 → B-5 以降 → C**。A は請求内容そのものが狂うもので、
-中でも **A-1(病名の転帰区分)は誤った情報を日レセに書き込む**ため最優先。
+2026-09-23 に A-1〜A-6 を直した(A-7 は根拠を残して現行のまま)。
 
 ---
 
@@ -54,7 +54,7 @@
 
 ## A. 仕様に反しているもの(請求内容が狂う)
 
-### A-1. 病名の転帰区分が仕様に無い値・別の意味の値になっている — **最優先**
+### A-1. 病名の転帰区分が仕様に無い値・別の意味の値になっている — 対応済み(2026-09-23: resolved → F、inactive → N)
 
 ［事実］`orca/disease_message.rb:9` は中立の転帰を次のように変換している。
 
@@ -85,7 +85,7 @@ OUTCOME = { resolved: "C", inactive: "D" }.freeze
 > なお `medicalmodv2` の `Disease_Information` にも同名の項目があり、値の定義は diseasev2 と同じ。
 > 現在は病名を diseasev2 に別送しているのでそちらだけ直せばよい。
 
-### A-2. 外来の送り直しに class=03(置換)を使っている
+### A-2. 外来の送り直しに class=03(置換)を使っている — 対応済み(2026-09-23: 02 → 01。再登録で落ちたら「医事側のデータは消えています」と出す)
 
 ［事実］`orca/medical_api.rb:58-69` は `Api_Result=80` を受けると class=03 に倒す。
 
@@ -124,7 +124,7 @@ OUTCOME = { resolved: "C", inactive: "D" }.freeze
 内視鏡・生理)は Procedure を、それ以外は `occurrence` を軸にする。種別ごとに実施の表し方が
 違うので、`OrderCatalog` の定義に「何をもって実施済みとするか」を足すのが素直。
 
-### A-4. 「登録はされたが一部が落ちた」警告を成功として扱っている
+### A-4. 「登録はされたが一部が落ちた」警告を成功として扱っている — 対応済み(2026-09-23: W02/W04/W05 は失敗、M 系は「送れなかった項目」、保険組合せ番号を応答と照合)
 
 ［事実］`orca/api_result.rb:99-107` は `Api_Result` がゼロなら `ok?`、警告があれば `warning?`
 という扱いで、警告の中身では成否を変えない。
@@ -149,7 +149,7 @@ OUTCOME = { resolved: "C", inactive: "D" }.freeze
 (何番目の明細か)、`Medical_Warning_Code`(対象コード)が返るので、既存の `skipped` と同じ器に
 入れて「送ったが日レセに取り込まれなかった項目」として画面に並べる。器は既にあるので足すのは変換だけ。
 
-### A-5. 日レセ側で展開済み・会計済みかどうかを見ていない
+### A-5. 日レセ側で展開済み・会計済みかどうかを見ていない — 対応済み(2026-09-23: `billing_status` が none / sent / opened / settled を返し、opened・settled は画面で送信・取消を止める)
 
 ［事実］`orca/medical_api.rb:30-50` の `find_uid` は `Medical_Uid` の有無しか見ていない。
 
@@ -166,7 +166,7 @@ OUTCOME = { resolved: "C", inactive: "D" }.freeze
 ［提案］`billing_status` に「医事側で処理中 / 処理済み」の状態を足し、
 送信ボタンを止めて理由を出す。`Medical_Mode` と `acceptlstv2` の会計済み判定を使う。
 
-### A-6. `Perform_Time` を送っておらず、時間外を表す手段が無い — 設計書 Phase 4
+### A-6. `Perform_Time` を送っておらず、時間外を表す手段が無い — 対応済み(2026-09-23: 当日の外来 Encounter の period.start を送る。時間外加算そのものは送らず日レセの判定に任せる)
 
 ［事実］`orca/medical_api.rb:97-112` は `Perform_Time` を送っていない。
 
@@ -180,7 +180,7 @@ OUTCOME = { resolved: "C", inactive: "D" }.freeze
 ［提案］`Perform_Time` を送る(診察の時刻はカルテが持っている)。加算そのものを送るかは
 B-10(診察料の扱い)と一緒に決める。
 
-### A-7. `Medication_Usage_Code` は公開仕様書に無い項目
+### A-7. `Medication_Usage_Code` は公開仕様書に無い項目 — 現行のまま(2026-09-23: 根拠を `medical_message.rb` のコメントに記載。明細 1 行方式は日レセ側の用法マスタが要るため)
 
 ［事実］`orca/medical_message.rb:53-60` は剤の各行に `Medication_Usage_Code` を付けている。
 

@@ -47,6 +47,7 @@ module Integrations
         built = builder.call(patient_fhir_id: patient_fhir_id, perform_date: perform_date)
         claim = BillingClaim.new(
           patient_number: number, date: perform_date,
+          time: exam_start_time(patient_fhir_id, perform_date),
           department_code: department, physician_code: physician,
           coverage_set_key: coverage_set_key,
           items: built.items,
@@ -123,6 +124,17 @@ module Integrations
           code: result.code, message: result.message,
           warnings: result.warnings, skipped: result.skipped + extra
         )
+      end
+
+      # 診療の開始時刻。その日の外来の Encounter(診察開始で作られる)の period.start。
+      # 時間外・休日・深夜の加算はレセコンがこの時刻で判定する。
+      def exam_start_time(patient_fhir_id, perform_date)
+        encounters = store.search("Encounter", { "subject" => "Patient/#{patient_fhir_id}",
+                                                 "class" => "AMB", "date" => perform_date.to_s,
+                                                 "_count" => "50" }, limit: 50)
+        starts = encounters.filter_map { |e| e.dig("period", "start") }
+                           .select { |start| LocalDate.of(start) == perform_date.to_s }
+        LocalDate.time_of(starts.min)
       end
 
       def patient_number!(patient_fhir_id)

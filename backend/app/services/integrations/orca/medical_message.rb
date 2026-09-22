@@ -130,6 +130,10 @@ module Integrations
         comment_medications(line)
       end
 
+      # Medication_Usage_Code は medicalmodv2 の公開仕様書のリクエスト項目に無い。実機の
+      # レコード定義(reference/record/xml_medicalv2req.db)には在り、電子処方箋の 16 桁用法
+      # コードがそのまま通ることを確認して使っている。仕様どおりに用法コードを明細 1 行として
+      # 送るには日レセ側の用法マスタに同じコードが要り、無ければ M01 で行ごと落ちる。
       def medication(line, item)
         {
           "Medication_Code" => line.code,

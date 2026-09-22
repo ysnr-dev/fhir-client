@@ -11,7 +11,7 @@ module Integrations
         result = sender.status(patient_fhir_id: params.require(:patient_id),
                                perform_date: params.require(:date),
                                department_code: params[:department_code])
-        render json: { sent: result.sent? }
+        render json: { sent: result.sent?, state: result.state, message: result.message }.compact
       end
 
       def create

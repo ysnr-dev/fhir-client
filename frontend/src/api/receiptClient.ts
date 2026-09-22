@@ -140,16 +140,27 @@ export function fetchBillingPreview(params: {
   return receiptJson<BillingPreview>(`${BASE}/billings/preview?${query}`);
 }
 
-/** 既にレセコンへ送ってあるか。控えを持たずレセコンに訊く。 */
+/**
+ * レセコン側での 1 受診の状態。none = 未送信、sent = カルテから送ってあり送り直し・取消ができる、
+ * opened = レセコン側で展開・編集されていてカルテからは触れない、settled = 会計済み。
+ * message は opened / settled の理由。
+ */
+export interface BillingStatus {
+  sent: boolean;
+  state: "none" | "sent" | "opened" | "settled";
+  message?: string;
+}
+
+/** レセコン側の状態。控えを持たずレセコンに訊く。 */
 export function fetchBillingStatus(params: {
   patient_id: string;
   date: string;
   department_code?: string;
-}): Promise<{ sent: boolean }> {
+}): Promise<BillingStatus> {
   const query = new URLSearchParams(
     Object.entries(params).filter(([, v]) => v) as [string, string][],
   ).toString();
-  return receiptJson<{ sent: boolean }>(`${BASE}/billings/status?${query}`);
+  return receiptJson<BillingStatus>(`${BASE}/billings/status?${query}`);
 }
 
 export function sendBilling(body: {
