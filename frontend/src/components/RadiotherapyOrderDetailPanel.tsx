@@ -1,3 +1,4 @@
+import { type AdverseEventRecord } from "../fhir/adverseEventHelpers";
 import { problemLabel } from "../fhir/conditionHelpers";
 import { orderContextSummary, prescriptionRequester } from "../fhir/prescriptionHelpers";
 import {
@@ -27,6 +28,8 @@ interface RadiotherapyOrderDetailPanelProps {
   fractions?: RadiotherapyFractionDisplay[];
   /** 治療終了サマリー(書いてあれば)。 */
   courseSummary?: fhir4.Procedure;
+  /** そのコースの有害事象(発現日の新しい順。§6.3)。記録はカルテの右ペインで行う。 */
+  adverseEvents?: AdverseEventRecord[];
   /** 照射の取消。部門一覧から開いたときだけ渡す(カルテの詳細では取り消させない)。 */
   onCancelFraction?: (fractionId: string) => void;
   cancellingFractionId?: string;
@@ -35,6 +38,7 @@ interface RadiotherapyOrderDetailPanelProps {
 }
 
 const NO_FRACTIONS: RadiotherapyFractionDisplay[] = [];
+const NO_ADVERSE_EVENTS: AdverseEventRecord[] = [];
 
 export function RadiotherapyOrderDetailPanel({
   serviceRequest,
@@ -42,6 +46,7 @@ export function RadiotherapyOrderDetailPanel({
   problemsById,
   fractions = NO_FRACTIONS,
   courseSummary,
+  adverseEvents = NO_ADVERSE_EVENTS,
   onCancelFraction,
   cancellingFractionId,
   onOpenConsult,
@@ -196,6 +201,37 @@ export function RadiotherapyOrderDetailPanel({
           </table>
         </fieldset>
       ))}
+
+      {/* 治療中に記録した有害事象(CTCAE)。終了サマリーの「急性有害事象」は医師が書く
+          まとめで、こちらは 1 件ずつの記録(§6.3)。 */}
+      {adverseEvents.length > 0 && (
+        <fieldset className="rp-card">
+          <legend>有害事象</legend>
+          <table className="rp-card__medicines">
+            <thead>
+              <tr>
+                <th>用語</th>
+                <th>Grade</th>
+                <th>発現 〜 回復</th>
+                <th>対処・経過</th>
+              </tr>
+            </thead>
+            <tbody>
+              {adverseEvents.map((record) => (
+                <tr key={record.id}>
+                  <td>{record.term}</td>
+                  <td>G{record.grade}</td>
+                  <td>
+                    {record.onset}
+                    {record.resolved ? ` 〜 ${record.resolved}` : " 〜（継続中）"}
+                  </td>
+                  <td>{record.note || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </fieldset>
+      )}
 
       {/* 治療終了サマリー。照射記録から数えた実績と、医師が書いた経過・有害事象・方針。 */}
       {courseSummaryDisplay && (

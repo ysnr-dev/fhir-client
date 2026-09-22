@@ -204,6 +204,8 @@ interface KarteTimelineProps {
   onDo: (item: KarteTimelineItem) => void;
   /** 詳細表示。対象は URL に載せるので、モーダルは親(カルテ画面)が描く。 */
   onOpenDetail: (target: KarteDetailTarget) => void;
+  /** 放射線治療コースの有害事象を右ペインで開く(docs/radiotherapy-order-design.md §6.3)。 */
+  onOpenAdverseEvents: (srId: string) => void;
   /** 削除された項目。右ペインで開いていたら閉じるために親へ通知する。 */
   onDeleted: (item: KarteTimelineItem) => void;
   /** スクロールコンテナ。診療日パネルからのスクロール指示に使う。 */
@@ -231,6 +233,7 @@ export function KarteTimeline({
   onEdit,
   onDo,
   onOpenDetail,
+  onOpenAdverseEvents,
   onDeleted,
   containerRef,
   problemsById,
@@ -292,6 +295,7 @@ export function KarteTimeline({
                     onEdit={onEdit}
                     onDo={onDo}
                     onOpenDetail={onOpenDetail}
+                    onOpenAdverseEvents={onOpenAdverseEvents}
                     onDelete={remove}
                     onDeleted={onDeleted}
                     deleting={deletingKey === key}
@@ -412,6 +416,7 @@ const KarteCard = memo(function KarteCard({
   onEdit,
   onDo,
   onOpenDetail,
+  onOpenAdverseEvents,
   onDelete,
   onDeleted,
   deleting,
@@ -424,6 +429,7 @@ const KarteCard = memo(function KarteCard({
   onEdit: (item: KarteTimelineItem) => void;
   onDo: (item: KarteTimelineItem) => void;
   onOpenDetail: (target: KarteDetailTarget) => void;
+  onOpenAdverseEvents: (srId: string) => void;
   /** 確認の後に呼ぶ削除。実行状態は deleting / deleteError で戻ってくる。 */
   onDelete: (item: KarteTimelineItem) => void;
   onDeleted: (item: KarteTimelineItem) => void;
@@ -741,6 +747,16 @@ const KarteCard = memo(function KarteCard({
                 }}
               >
                 依頼表示
+              </button>
+            )}
+            {/* 照射による有害事象(CTCAE)。治療中の診察で記録する(§6.3)。 */}
+            {item.kind === "radiotherapy-order" && item.serviceRequest.id && (
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => onOpenAdverseEvents(item.serviceRequest.id ?? "")}
+              >
+                有害事象
               </button>
             )}
             {/* 平文は元テンプレートの項目名と突き合わせて組み立てるので、

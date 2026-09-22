@@ -17,6 +17,7 @@ import {
   useMealOrderDetail,
   useConsultOrderDetail,
   useRadiotherapyOrderDetail,
+  useTreatmentAdverseEvents,
   useRehabOrderDetail,
   useNutritionGuidanceOrderDetail,
   useTransfusionOrderDetail,
@@ -1119,6 +1120,8 @@ function RadiotherapyOrderDetail({
 }) {
   const { serviceRequest, taskStatus, fractions, courseSummary, ready, patientMismatch, error } =
     useRadiotherapyOrderInitialValues(srId, patientId);
+  // 有害事象はコースに紐づくので治療処方の id で引く(§6.3)。
+  const adverseEvents = useTreatmentAdverseEvents(srId);
 
   return (
     <>
@@ -1133,6 +1136,7 @@ function RadiotherapyOrderDetail({
           taskStatus={taskStatus}
           fractions={fractions}
           courseSummary={courseSummary}
+          adverseEvents={adverseEvents.data}
           problemsById={problemsById}
         />
       ) : (

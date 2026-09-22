@@ -788,6 +788,7 @@ export function KartePage() {
           onEdit={handleEdit}
           onDo={handleDo}
           onOpenDetail={openDetail}
+          onOpenAdverseEvents={(srId) => setPane({ kind: "radiotherapy-adverse", srId })}
           onDeleted={handleDeleted}
           containerRef={timelineRef}
           problemsById={problemsById}
@@ -948,6 +949,7 @@ export function KartePage() {
       onEdit={handleEdit}
       onDo={handleDo}
       onOpenDetail={openDetail}
+      onOpenAdverseEvents={(srId) => setPane({ kind: "radiotherapy-adverse", srId })}
       onDeleted={handleDeleted}
       problemsById={problemsById}
       selectedProblemIds={activeProblemIds}

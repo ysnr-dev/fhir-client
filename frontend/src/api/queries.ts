@@ -11348,7 +11348,20 @@ export function useChemoRoomList(date: string) {
 // ---- 有害事象(CTCAE Grade。§7.6 C-3) ----
 
 /** 患者の有害事象の記録。適用・クールでの絞り込みは画面側(1 患者で多くても数十件)。 */
-export function useRegimenAdverseEvents(patientId: string | undefined) {
+function parseAdverseEvents(bundle: fhir4.Bundle<fhir4.Observation>): AdverseEventRecord[] {
+  return (bundle.entry ?? [])
+    .map((e) => e.resource)
+    .filter((r): r is fhir4.Observation => r?.resourceType === "Observation")
+    .map(parseAdverseEvent)
+    .filter((r): r is AdverseEventRecord => r !== null);
+}
+
+/**
+ * 患者の有害事象をすべて読む。**化学療法はこちらを使う** —— 治療への参照を拡張の中に
+ * 持っていた旧形式の記録(`basedOn` が無い)が残っているあいだは、治療の id で引くと
+ * 古い記録が落ちるため(`fhir/adverseEventHelpers.ts` の［改訂］)。
+ */
+export function usePatientAdverseEvents(patientId: string | undefined) {
   const params = new URLSearchParams();
   if (patientId) params.set("patient", `Patient/${patientId}`);
   params.set("category", ADVERSE_EVENT_CATEGORY.code);
@@ -11359,13 +11372,30 @@ export function useRegimenAdverseEvents(patientId: string | undefined) {
     queryKey: ["Observation", "search", patientId, "adverse-event"],
     queryFn: async (): Promise<AdverseEventRecord[]> => {
       const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
-      return (bundle.entry ?? [])
-        .map((e) => e.resource)
-        .filter((r): r is fhir4.Observation => r?.resourceType === "Observation")
-        .map(parseAdverseEvent)
-        .filter((r): r is AdverseEventRecord => r !== null);
+      return parseAdverseEvents(bundle);
     },
     enabled: Boolean(patientId),
+  });
+}
+
+/**
+ * ある治療の有害事象だけを引く(`Observation?based-on=`。上流は対応済み)。旧形式の記録が
+ * 無い放射線治療はこちらで足りる。化学療法も backfill が済めば移せる。
+ */
+export function useTreatmentAdverseEvents(treatmentSrId: string | undefined) {
+  const params = new URLSearchParams();
+  if (treatmentSrId) params.set("based-on", `ServiceRequest/${treatmentSrId}`);
+  params.set("category", ADVERSE_EVENT_CATEGORY.code);
+  params.set("_count", "200");
+  params.set("_sort", "-date");
+
+  return useQuery({
+    queryKey: ["Observation", "search", "adverse-event", "treatment", treatmentSrId],
+    queryFn: async (): Promise<AdverseEventRecord[]> => {
+      const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
+      return parseAdverseEvents(bundle);
+    },
+    enabled: Boolean(treatmentSrId),
   });
 }
 

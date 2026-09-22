@@ -38,6 +38,7 @@ import { OrderSetApplyPanel } from "./OrderSetApplyPanel";
 import { PathwayApplyPanel, PathwayPhasePanel } from "./PathwayApplyPanel";
 import { RegimenApplyPanel } from "./RegimenApplyPanel";
 import { RegimenCycleLoader, RegimenDayPanel, RegimenHeaderPanel } from "./RegimenPanels";
+import { RadiotherapyAdverseEventPanel } from "./RadiotherapyAdverseEventPanel";
 import { RegimenAdverseEventPanel } from "./RegimenAdverseEventPanel";
 
 // カルテ画面の右ペイン。登録・編集 UI は既存ページと共通のパネルを使う。
@@ -112,7 +113,9 @@ export type KartePaneState =
   // クールの有害事象(CTCAE Grade)の記録。
   | { kind: "regimen-adverse"; regimenSrId: string; cycle: number }
   // 適用のヘッダ(予定クール数・入外区分・プロブレム・コメント)の編集。
-  | { kind: "regimen-header"; regimenSrId: string };
+  | { kind: "regimen-header"; regimenSrId: string }
+  // 放射線治療コースの有害事象(CTCAE Grade)の記録。srId は治療処方。
+  | { kind: "radiotherapy-adverse"; srId: string };
 
 const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   empty: "",
@@ -168,6 +171,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "regimen-cycle": "化学療法(クール登録)",
   "regimen-day": "化学療法(投与日)",
   "regimen-adverse": "化学療法(有害事象)",
+  "radiotherapy-adverse": "放射線治療(有害事象)",
   "regimen-header": "化学療法(適用の編集)",
 };
 
@@ -218,6 +222,8 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.regimenSrId}:${state.date}`;
     case "regimen-adverse":
       return `${state.kind}:${state.regimenSrId}:${state.cycle}`;
+    case "radiotherapy-adverse":
+      return `${state.kind}:${state.srId}`;
     case "regimen-header":
       return `${state.kind}:${state.regimenSrId}`;
     // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
@@ -536,6 +542,8 @@ function PaneContent({
       return (
         <RegimenAdverseEventPanel patientId={patientId} regimenSrId={state.regimenSrId} cycle={state.cycle} />
       );
+    case "radiotherapy-adverse":
+      return <RadiotherapyAdverseEventPanel patientId={patientId} srId={state.srId} />;
     case "regimen-header":
       return <RegimenHeaderPanel patientId={patientId} regimenSrId={state.regimenSrId} onSaved={onSaved} />;
     case "note-create":

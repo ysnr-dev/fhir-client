@@ -9,6 +9,7 @@ import {
   useRadiotherapyCourseFractions,
   useRadiotherapyProcedures,
   useRadiotherapyWorklist,
+  useTreatmentAdverseEvents,
   useUpdateRadiotherapyTaskStatus,
   type RadiotherapyCalendarEntry,
   type RadiotherapyWorklistRow,
@@ -160,6 +161,8 @@ export function RadiotherapyWorklistPage() {
     orderId && orderId === activeOrderId && courseFractions.data
       ? courseFractions.data
       : fractionsOf(orderId);
+  // 詳細に出す有害事象(§6.3)。記録はカルテの右ペインで行うので、ここは表示だけ。
+  const adverseEvents = useTreatmentAdverseEvents(viewing?.order.id);
   const waitingCourse = Boolean(formOrderId) && courseFractions.isPending;
   // 待っているあいだの枠。開こうとしているモーダルと同じ見出しにする(カルテから照射入力を
   // 開くときと同じ形)。
@@ -285,6 +288,7 @@ export function RadiotherapyWorklistPage() {
             }
             fractions={courseFractionsOf(viewing.order.id)}
             courseSummary={summaryOf(viewing.order.id)}
+            adverseEvents={adverseEvents.data}
             onCancelFraction={(fractionId) => cancelFraction.mutate(fractionId)}
             cancellingFractionId={cancelFraction.isPending ? cancelFraction.variables : undefined}
           />

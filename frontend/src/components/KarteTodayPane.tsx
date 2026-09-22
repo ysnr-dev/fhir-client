@@ -17,6 +17,7 @@ interface KarteTodayPaneProps {
   onEdit: (item: KarteTimelineItem) => void;
   onDo: (item: KarteTimelineItem) => void;
   onOpenDetail: (target: KarteDetailTarget) => void;
+  onOpenAdverseEvents: (srId: string) => void;
   onDeleted: (item: KarteTimelineItem) => void;
   problemsById: Map<string, fhir4.Condition>;
   selectedProblemIds: ReadonlySet<string> | null;
@@ -29,6 +30,7 @@ export function KarteTodayPane({
   onEdit,
   onDo,
   onOpenDetail,
+  onOpenAdverseEvents,
   onDeleted,
   problemsById,
   selectedProblemIds,
@@ -52,6 +54,7 @@ export function KarteTodayPane({
         onEdit={onEdit}
         onDo={onDo}
         onOpenDetail={onOpenDetail}
+        onOpenAdverseEvents={onOpenAdverseEvents}
         onDeleted={onDeleted}
         containerRef={containerRef}
         problemsById={problemsById}
