@@ -30,6 +30,19 @@ module Integrations
       # 手術の章のうち輸血(K920〜K924)は 510。
       TRANSFUSION_SECTIONS = ("K920".."K924").to_a.freeze
 
+      # 注射の区分。手技(JAMI 詳細用法コードの注射手技)で決め、点滴は 330、
+      # 中心静脈は 350。手技が無ければ投与経路(JP Core route-codes)から、それも無ければ
+      # その他注射 340。手技料(静脈内注射など)は区分から日レセが算定するので送らない。
+      INJECTION_METHOD_CLASS = {
+        "30" => "320", # 静脈注射
+        "31" => "350", # 中心静脈注射
+        "32" => "310", # 皮下注射
+        "33" => "310", # 筋肉内注射
+        "34" => "310"  # 皮内注射
+      }.freeze
+      INJECTION_ROUTE_CLASS = { "IV" => "320", "IM" => "310", "SC" => "310", "ID" => "310" }.freeze
+      INJECTION_DRIP = "drip".freeze
+
       CLASS_NAMES = {
         "110" => "初診", "120" => "再診", "130" => "医学管理", "140" => "在宅",
         "210" => "内服", "220" => "頓服", "230" => "外用",
@@ -81,7 +94,7 @@ module Integrations
         dropped = []
 
         items.each do |item|
-          default_class = MEDICAL_CLASS[item.category]
+          default_class = item.category == :injection ? injection_class(item) : MEDICAL_CLASS[item.category]
           current = nil
 
           item.lines.each do |line|
@@ -104,6 +117,14 @@ module Integrations
       end
 
       def class_name(medical_class) = CLASS_NAMES[medical_class] || medical_class
+
+      def injection_class(item)
+        return "350" if item.method == "31"
+        return "330" if item.usage_type == INJECTION_DRIP
+        return INJECTION_METHOD_CLASS[item.method] || "340" if item.method.present?
+
+        INJECTION_ROUTE_CLASS[item.route] || "340"
+      end
 
       # 手技は区分番号の章で決め、それ以外は直前の手技(無ければ既定)に付ける。
       def class_of(line, previous_class, default_class)

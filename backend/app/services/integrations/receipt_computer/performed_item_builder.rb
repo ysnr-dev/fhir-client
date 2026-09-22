@@ -11,8 +11,14 @@ module Integrations
       # フリーコメントのレセ電算コード。実施コメントはこれで送る。
       FREE_COMMENT_CODE = "810000001".freeze
 
-      def initialize(skipped)
+      # medication_requests は当日のオーダーの MedicationRequest(id → リソース)。注射の
+      # 用法種別(点滴 / ワンショット)は実施記録に写されずオーダー側にしか無いので、
+      # MedicationAdministration.request から引く。連日の注射は実施日と別の日のオーダーを
+      # 指すことがあり、当日の集合に無ければ上流から読む。
+      def initialize(skipped, medication_requests: {}, store: nil)
         @skipped = skipped
+        @medication_requests = medication_requests
+        @store = store
       end
 
       # records は同じ診療日のもの。放射線の器材と手技の区分番号は種別をまたいで
@@ -26,20 +32,47 @@ module Integrations
 
       private
 
-      attr_reader :skipped
+      attr_reader :skipped, :medication_requests, :store
 
       def build(record, rad_materials)
         definition = OrderCatalog.find(record.order_type)
         return nil if definition.nil?
 
-        lines = procedure_lines(record, definition) +
+        lines = (definition.coded_hub? ? procedure_lines(record, definition) : []) +
                 medicine_lines(record, definition) +
                 material_lines(record, definition, rad_materials) +
                 comment_lines(record)
         return nil if lines.empty?
 
-        BillingItem.new(category: definition.order_type.to_sym, name: definition.label, lines: lines,
-                        performed_at: record.performed_at, source_ref: "Procedure/#{record.id}")
+        item = BillingItem.new(category: definition.order_type.to_sym, name: definition.label, lines: lines,
+                               performed_at: record.performed_at, source_ref: "Procedure/#{record.id}")
+        fill_injection(item, record) unless definition.coded_hub?
+        item
+      end
+
+      # 注射の剤区分(皮下筋注 / 静注 / 点滴 / 中心静脈 …)は連携先が決める。その材料になる
+      # 投与経路・手技・用法種別を 1 施用(ハブ)の最初の薬剤から写す。1 施用は同じ経路で行う。
+      def fill_injection(item, record)
+        administration = record.administrations.first
+        return if administration.nil?
+
+        dosage = administration["dosage"] || {}
+        item.route = Coding.code_of(dosage["route"], Coding::ROUTE)
+        item.method = Coding.code_of(dosage["method"], Coding::METHOD)
+
+        request = medication_request(Coding.reference_id(administration.dig("request", "reference")))
+        instruction = request&.dig("dosageInstruction", 0) || {}
+        usage = Array(instruction["extension"]).find { |e| e["url"] == Coding::INJECTION_USAGE_TYPE_EXT }
+        item.usage_type = Coding.code_of(usage&.dig("valueCodeableConcept"), Coding::INJECTION_USAGE_TYPE)
+        item.route ||= Coding.code_of(instruction["route"], Coding::ROUTE)
+        item.method ||= Coding.code_of(instruction["method"], Coding::METHOD)
+      end
+
+      def medication_request(id)
+        return nil if id.blank?
+        return medication_requests[id] if medication_requests.key?(id)
+
+        medication_requests[id] = store&.read_or_nil("MedicationRequest", id)
       end
 
       def procedure_lines(record, definition)

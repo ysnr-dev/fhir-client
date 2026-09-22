@@ -129,8 +129,10 @@ module Integrations
       # 診療の開始時刻。その日の外来の Encounter(診察開始で作られる)の period.start。
       # 時間外・休日・深夜の加算はレセコンがこの時刻で判定する。
       def exam_start_time(patient_fhir_id, perform_date)
+        # 診察中(終了の無い period)も引けるよう、等価ではなく「その日に始まった」で検索する。
         encounters = store.search("Encounter", { "subject" => "Patient/#{patient_fhir_id}",
-                                                 "class" => "AMB", "date" => perform_date.to_s,
+                                                 "class" => "AMB",
+                                                 "date" => LocalDate.starts_on(perform_date),
                                                  "_count" => "50" }, limit: 50)
         starts = encounters.filter_map { |e| e.dig("period", "start") }
                            .select { |start| LocalDate.of(start) == perform_date.to_s }

@@ -23,7 +23,7 @@
 
 | source | 種別 | 集め方 |
 |---|---|---|
-| `:procedure` | rad / physio / endoscopy / treatment / surgery(Phase 2〜: injection / transfusion / rehab / radiotherapy / nutrition-guidance) | `Procedure?subject&date=当日&status=completed&_revinclude=Procedure:part-of&_revinclude:iterate=MedicationAdministration:part-of` → ハブ(`partOf` 無し、category = order-type)ごとに 1 剤 |
+| `:procedure` | rad / physio / endoscopy / treatment / surgery / injection(Phase 2〜: transfusion / rehab / radiotherapy / nutrition-guidance) | `Procedure?subject&date=当日&status=completed&_revinclude=Procedure:part-of&_revinclude:iterate=MedicationAdministration:part-of` → ハブ(`partOf` 無し、category = order-type)ごとに 1 剤 |
 | `:order` | lab / micro(Phase 3: pathology) | ヘッダ SR を `occurrence=当日` で集め、明細 SR を `_revinclude=ServiceRequest:based-on` |
 | 処方 | prescription | 同じ検索の `_revinclude:iterate=MedicationRequest:based-on`。処方のヘッダは order-type を持たない(それで処方と判定する frontend の規約と同じ)。RP 番号ごとに 1 剤 |
 
@@ -44,6 +44,10 @@
 - 日付は日本の暦日で判定する(`local_date.rb`)。上流の `date=` はタイムゾーン無しの値を Asia/Tokyo で
   解釈するので検索はそのままでよいが、返ってきた `performedDateTime` を UTC の日付で比べると深夜の
   実施が前日に寄る。
+- Procedure と Encounter の日付検索は `date=<日付>`(等価)ではなく **`date=sa<前日>&date=le<日付>`**
+  (その日に始まった)。等価は期間の終了が無いリソース(注射の実施は開始だけ、診察中の Encounter)に
+  当たらない。会計の日付判定も開始の日なので意味が揃う。`status=completed,stopped,not-done` で
+  日時を持たない計画中の Procedure を除く。
 - 同じ内容の剤(同じ処置を 2 回)は 1 剤にまとめて回数にする。処方(日数を持つ)は対象外。
 
 ## 2. 剤の中身と区分
@@ -121,7 +125,7 @@ PreviewItem   画面用。区分(class_code/class_name)を添えて剤を分け�
 
 | 種別 | 区分 | 足りないもの | 送り方 |
 |---|---|---|---|
-| 注射 `injection` | 310 皮下筋注 / 320 静注 / 330 点滴 / 340 その他 / 350 中心静脈 | 区分の決め方 | 実施記録(ハブ + MedicationAdministration)から薬剤行。区分は MedicationRequest の `dosage.method`(JAMI 30 静注→320、31 中心静脈→350、32/33/34→310、他→340)と拡張 usage-type(drip→330)。混注は 1 剤。途中中止は `skipped` |
+| 注射 `injection` | 310 皮下筋注 / 320 静注 / 330 点滴 / 340 その他 / 350 中心静脈 | — | **対応済み(2026-09-23)**。実施記録(ハブ + MedicationAdministration)から薬剤行だけを送り、手技料は区分から日レセが算定する。区分は 手技 31 → 350、点滴(オーダーの usage-type)→ 330、手技 30 → 320、32/33/34 → 310、他の手技 → 340、手技が無ければ経路(IV 320 / IM・SC・ID 310 / 他 340)。1 施用(ハブ)が 1 剤で、同じ内容の施用は回数にまとめる。途中で中止・実施せずの記録は請求せず理由を出す |
 | 輸血 `transfusion` | 510 | `master_transfusion_products` にコード列が無い | 製剤は医薬品コードなので `medicine_code` 列を足す。手技(K920 系)は実施入力の手技行。数量 = 単位数 |
 | 病理 `pathology` | 640 | 項目マスタが無い(区分 N000/N004/N003 は直書き) | 施設設定 `receipt_codes.pathology`(区分 → 診療行為コード。施設で 1 値)。数量 = 検体数。`:order` 経路 |
 | リハビリ `rehab` | 800 | マスタ無し。疾患別区分 5 種、単位数は拡張 `rehab-performed-units` | 施設設定 `receipt_codes.rehab`(疾患別区分 → コード。施設基準 I/II/III で決まる)。回数 = 実施単位数 |
@@ -137,7 +141,7 @@ PreviewItem   画面用。区分(class_code/class_name)を添えて剤を分け�
 
 段階:
 
-- **Phase 2** 注射、輸血(列追加 + 管理画面 + CSV)、麻酔(spec のみ)、化学療法の加算。
+- **Phase 2** 注射(2026-09-23 済み)、輸血(列追加 + 管理画面 + CSV)、麻酔(spec のみ)、化学療法の加算。
 - **Phase 3** `receipt_codes` と病理・リハ・栄養指導の resolver(`receipt_computer/resolvers/*.rb`、
   `call(record) -> [lines, count]`)、放射線治療(technique マスタに 3 列)。
 - **Phase 4** 採血料ルール(血液検体の項目があれば `receipt_codes.lab.blood_draw` = B-V 160095710 を 600 の

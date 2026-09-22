@@ -87,7 +87,11 @@ module BillingFhirFixtures
       .merge("partOf" => [{ "reference" => "Procedure/#{hub}" }])
   end
 
-  def administration(code:, dose:, hub: "proc-1", id: nil, name: "薬剤", unit: "mL", system: MEDICINE_CODE)
+  def administration(code:, dose:, hub: "proc-1", id: nil, name: "薬剤", unit: "mL", system: MEDICINE_CODE,
+                     route: nil, method: nil, request: nil)
+    dosage = { "dose" => { "value" => dose, "unit" => unit } }
+    dosage["route"] = { "coding" => [{ "system" => "http://jpfhir.jp/fhir/core/CodeSystem/route-codes", "code" => route }] } if route
+    dosage["method"] = { "coding" => [{ "system" => "urn:oid:1.2.392.200250.2.2.20.40", "code" => method }] } if method
     {
       "resourceType" => "MedicationAdministration", "id" => id || "ma-#{code}", "status" => "completed",
       "medicationCodeableConcept" => { "coding" => [{ "system" => system, "code" => code, "display" => name }],
@@ -95,7 +99,28 @@ module BillingFhirFixtures
       "subject" => { "reference" => "Patient/pat-1" },
       "effectiveDateTime" => "2026-09-20T10:30:00+09:00",
       "partOf" => [{ "reference" => "Procedure/#{hub}" }],
-      "dosage" => { "dose" => { "value" => dose, "unit" => unit } }
+      "request" => request ? { "reference" => "MedicationRequest/#{request}" } : nil,
+      "dosage" => dosage
+    }.compact
+  end
+
+  # 注射オーダーの薬剤。用法種別(点滴 / ワンショット)はここにしか無い。
+  def injection_request(id:, code: "620007342", usage_type: nil, route: "IV", method: nil, parent: "hdr-1")
+    instruction = {}
+    instruction["route"] = { "coding" => [{ "system" => "http://jpfhir.jp/fhir/core/CodeSystem/route-codes", "code" => route }] } if route
+    instruction["method"] = { "coding" => [{ "system" => "urn:oid:1.2.392.200250.2.2.20.40", "code" => method }] } if method
+    if usage_type
+      instruction["extension"] = [{
+        "url" => "http://fhir-client.local/StructureDefinition/injection-usage-type",
+        "valueCodeableConcept" => { "coding" => [{ "system" => "http://fhir-client.local/CodeSystem/injection-usage-type",
+                                                   "code" => usage_type }] }
+      }]
+    end
+    {
+      "resourceType" => "MedicationRequest", "id" => id, "status" => "active",
+      "medicationCodeableConcept" => { "coding" => [{ "system" => MEDICINE_CODE, "code" => code }], "text" => "注射薬" },
+      "basedOn" => [{ "reference" => "ServiceRequest/#{parent}" }],
+      "dosageInstruction" => [instruction]
     }
   end
 

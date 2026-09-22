@@ -365,6 +365,24 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
       expect(build.skipped.map(&:kind)).to eq(["輸血"])
     end
 
+    it "reports a 実施記録 that was stopped, and does not also call the order 未実施" do
+      store.add(order_header(order_type: "injection"),
+                procedure_hub(order_type: "injection", code: nil, status: "stopped"),
+                administration(code: "620007342", dose: 1))
+
+      result = build
+
+      expect(result.items).to be_empty
+      expect(result.skipped.length).to eq(1)
+      expect(result.skipped.first.reason).to include("中止")
+    end
+
+    it "reports a 実施記録 marked 実施せず" do
+      store.add(order_header(order_type: "injection"), procedure_hub(order_type: "injection", code: nil, status: "not-done"))
+
+      expect(build.skipped.first.reason).to include("実施せず")
+    end
+
     it "reports a 手技 recorded without a 診療行為コード" do
       hub = procedure_hub(order_type: "treatment", code: nil)
       hub["code"] = { "text" => "手入力の処置" }
@@ -372,6 +390,99 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
 
       expect(build.items).to be_empty
       expect(build.skipped.first.reason).to include("診療行為コード")
+    end
+  end
+
+  describe "注射" do
+    def injection(usage_type: nil, route: "IV", method: nil, ma_method: nil, drugs: [%w[620007342 2 袋]])
+      store.add(order_header(order_type: "injection"), procedure_hub(order_type: "injection", code: nil))
+      drugs.each_with_index do |(code, dose, unit), i|
+        store.add(injection_request(id: "mr-#{code}", code: code, usage_type: usage_type, route: route, method: method),
+                  administration(code: code, dose: dose.to_i, unit: unit, name: "薬#{i}", route: route,
+                                 method: ma_method || method, request: "mr-#{code}"))
+      end
+      build
+    end
+
+    it "builds one 剤 of 薬剤 per 施用 and carries 経路・手技・用法種別 for the 連携先" do
+      result = injection(usage_type: "drip", drugs: [%w[620007342 2 袋], %w[620001234 1 A]])
+
+      item = result.items.first
+      expect(result.items.length).to eq(1)
+      expect(item.category).to eq(:injection)
+      expect(item.lines.map { |l| [l.kind, l.code, l.quantity, l.unit] })
+        .to eq([[:medicine, "620007342", "2", "袋"], [:medicine, "620001234", "1", "A"]])
+      expect(item.route).to eq("IV")
+      expect(item.usage_type).to eq("drip")
+      expect(result.skipped).to be_empty
+      expect(orca_classes.first["Medical_Class"]).to eq("330")
+      expect(orca_classes.first["Medication_info"].map { |m| m["Medication_Code"] }).to eq(%w[620007342 620001234])
+    end
+
+    it "sends a ワンショット 静注 as 320" do
+      injection(usage_type: "one-shot", method: "30")
+
+      expect(orca_classes.first["Medical_Class"]).to eq("320")
+    end
+
+    it "sends 中心静脈 as 350 even when dripped" do
+      injection(usage_type: "drip", method: "31")
+
+      expect(orca_classes.first["Medical_Class"]).to eq("350")
+    end
+
+    it "sends 皮下・筋肉内 as 310" do
+      injection(route: "IM", method: "33")
+
+      expect(orca_classes.first["Medical_Class"]).to eq("310")
+    end
+
+    it "sends other 手技 (関節腔内 など) as 340" do
+      injection(route: "OTHER", method: "3D")
+
+      expect(orca_classes.first["Medical_Class"]).to eq("340")
+    end
+
+    it "falls back to the 投与経路 when the 手技 is not recorded" do
+      injection(route: "SC")
+
+      expect(orca_classes.first["Medical_Class"]).to eq("310")
+    end
+
+    it "reads the 手技 from the 実施記録 when the オーダー has none" do
+      injection(route: "IV", ma_method: "31")
+
+      expect(orca_classes.first["Medical_Class"]).to eq("350")
+    end
+
+    it "reads the 用法種別 from an order of another day (連日の注射) through the store" do
+      store.add(procedure_hub(order_type: "injection", code: nil, order: "hdr-yesterday"),
+                injection_request(id: "mr-old", usage_type: "drip", parent: "hdr-yesterday"),
+                administration(code: "620007342", dose: 1, route: "IV", request: "mr-old"))
+
+      expect(orca_classes.first["Medical_Class"]).to eq("330")
+    end
+
+    it "merges two identical 施用 into 回数 2" do
+      store.add(order_header(order_type: "injection"),
+                procedure_hub(order_type: "injection", code: nil, id: "p1", time: "09:00"),
+                procedure_hub(order_type: "injection", code: nil, id: "p2", time: "21:00"),
+                administration(code: "620007342", dose: 1, hub: "p1", id: "ma1", route: "IV", method: "30"),
+                administration(code: "620007342", dose: 1, hub: "p2", id: "ma2", route: "IV", method: "30"))
+
+      expect(build.items.length).to eq(1)
+      expect(orca_classes.first["Medical_Class_Number"]).to eq("2")
+      expect(orca_classes.first["Medical_Class"]).to eq("320")
+    end
+
+    it "does not bill an 注射 order of the day that has no 実施記録" do
+      store.add(order_header(order_type: "injection", name: "点滴"),
+                injection_request(id: "mr-1", usage_type: "drip"))
+
+      result = build
+
+      expect(result.items).to be_empty
+      expect(result.skipped.first.reason).to include("未実施")
     end
   end
 end

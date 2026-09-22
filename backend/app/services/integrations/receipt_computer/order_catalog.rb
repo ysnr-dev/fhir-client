@@ -14,8 +14,13 @@ module Integrations
     module OrderCatalog
       LOCAL = "http://fhir-client.local".freeze
 
-      Definition = Struct.new(:order_type, :label, :model_name, :code_column, :source, keyword_init: true) do
-        def model = model_name.constantize
+      # coded_hub: 実施記録のハブと子が手技コード(Procedure.code)を持つか。注射のハブは
+      # 「注射」という text だけで手技は持たない(手技料は剤区分から連携先が算定する)。
+      Definition = Struct.new(:order_type, :label, :model_name, :code_column, :source, :coded_hub,
+                              keyword_init: true) do
+        def model = model_name&.constantize
+
+        def coded_hub? = coded_hub != false
 
         def coding_system = "#{LOCAL}/CodeSystem/#{order_type}-order-item"
 
@@ -28,7 +33,7 @@ module Integrations
 
         # 項目コード → レセ電算の診療行為コード。未設定は結果に現れない。
         def receipt_codes(item_codes)
-          return {} if item_codes.empty?
+          return {} if item_codes.empty? || model.nil?
 
           model.where(code_column => item_codes)
                .where.not(receipt_code: [nil, ""])
@@ -39,7 +44,7 @@ module Integrations
         # 部門の一覧が「実施入力をしない項目だけなら記録を作らず Task を実施済にする」
         # 判定に使う規則と同じ(セットは撮影そのものではないので数えない)。
         def perform_input_required?(item_codes)
-          return true if item_codes.empty?
+          return true if item_codes.empty? || model.nil?
           return true unless model.column_names.include?("requires_perform_input")
 
           scope = model.where(code_column => item_codes)
@@ -63,14 +68,15 @@ module Integrations
         Definition.new(order_type: "treatment", label: "処置", model_name: "Master::TreatmentItem",
                        code_column: :item_code, source: :procedure),
         Definition.new(order_type: "surgery", label: "手術", model_name: "Master::SurgeryItem",
-                       code_column: :item_code, source: :procedure)
+                       code_column: :item_code, source: :procedure),
+        # 注射は項目マスタを持たず、薬剤(MedicationAdministration)だけを送る。
+        Definition.new(order_type: "injection", label: "注射", source: :procedure, coded_hub: false)
       ].freeze
 
       BY_TYPE = ALL.index_by(&:order_type).freeze
 
       # 送り方が未実装の種別(docs/receipt-billing-design.md の Phase 2〜3)。
       PENDING = {
-        "injection" => "注射",
         "transfusion" => "輸血",
         "pathology" => "病理検査",
         "rehab" => "リハビリ",

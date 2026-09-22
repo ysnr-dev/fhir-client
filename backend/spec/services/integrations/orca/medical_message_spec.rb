@@ -52,6 +52,27 @@ RSpec.describe Integrations::Orca::MedicalMessage do
     end
   end
 
+  describe "注射の区分" do
+    def injection(**attrs)
+      classes([item(:injection, [line("620007342", kind: :medicine, quantity: "1")], **attrs)]).first["Medical_Class"]
+    end
+
+    it "decides by 手技, 点滴 and 中心静脈" do
+      expect(injection(method: "30")).to eq("320")
+      expect(injection(method: "33")).to eq("310")
+      expect(injection(method: "30", usage_type: "drip")).to eq("330")
+      expect(injection(method: "31", usage_type: "drip")).to eq("350")
+      expect(injection(method: "3A")).to eq("340")
+    end
+
+    it "falls back to the 投与経路, then to その他注射" do
+      expect(injection(route: "IV")).to eq("320")
+      expect(injection(route: "IV", usage_type: "drip")).to eq("330")
+      expect(injection(route: "SC")).to eq("310")
+      expect(injection).to eq("340")
+    end
+  end
+
   describe "回数・数量・用法" do
     it "uses 回数 for the 剤 and 数量 for the lines" do
       built = classes([item(:treatment, [line("140000110", quantity: "3")], count: "2")]).first

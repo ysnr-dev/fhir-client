@@ -37,12 +37,14 @@ module Integrations
         date = perform_date.to_s
         skipped = []
 
+        requests = order_requests(patient_fhir_id, date)
         performed = collector.call(patient_fhir_id: patient_fhir_id, perform_date: date)
         report_orphans(performed.orphans, skipped)
-        performed_items = PerformedItemBuilder.new(skipped).call(performed.records)
-        performed_order_ids = performed.records.map(&:order_id).compact.to_set
-
-        requests = order_requests(patient_fhir_id, date)
+        report_unfinished(performed.unfinished, skipped)
+        performed_items = PerformedItemBuilder.new(skipped, medication_requests: medication_requests_by_id(requests),
+                                                            store: store).call(performed.records)
+        # 中止・実施せずのオーダーも「実施記録が無い」とは別に報告済みなので、ここに含める。
+        performed_order_ids = (performed.records + performed.unfinished).map(&:order_id).compact.to_set
         items = prescription_items(requests, date, skipped) +
                 order_items(requests, date, skipped, performed_order_ids) +
                 performed_items
@@ -81,6 +83,10 @@ module Integrations
       end
 
       def order_type_of(header) = Coding.code_in_list(header["category"], Coding::ORDER_TYPE)
+
+      def medication_requests_by_id(requests)
+        requests.select { |r| r["resourceType"] == "MedicationRequest" }.index_by { |r| r["id"] }
+      end
 
       # basedOn でヘッダを指す明細(ServiceRequest / MedicationRequest)をヘッダ id ごとに。
       def group_by_parent(requests, resource_type)
@@ -147,7 +153,7 @@ module Integrations
         return ORAL if category == OrderCatalog::USAGE_CATEGORY_ORAL
         return TOPICAL if category == OrderCatalog::USAGE_CATEGORY_TOPICAL
 
-        # 注射・注入の処方は注射オーダー(実施記録)の側で送る。
+        # 注射・注入の用法を持つ処方は送らない。注射は注射オーダーの実施記録から送る。
         nil
       end
 
@@ -205,12 +211,11 @@ module Integrations
                                    reason: "この種別はまだ医事会計へ送りません")
             next
           end
-          next if details.empty?
-
           if definition.performed?
             next if performed_order_ids.include?(header["id"])
             next unless completed_without_record?(definition, header, details, skipped)
           end
+          next if details.empty?
 
           build_order_item(definition, details, skipped)
         end
@@ -265,6 +270,21 @@ module Integrations
         lines.each { |line| line.section = sections[line.code] }
 
         BillingItem.new(category: definition.order_type.to_sym, name: definition.label, lines: lines)
+      end
+
+      # 完了していない実施記録。途中で中止した分の算定(使った薬剤だけ請求するなど)は
+      # 運用判断が要るので、ここでは請求せず理由だけ出す。
+      UNFINISHED_REASONS = {
+        "stopped" => "途中で中止された実施記録です(中止までの分は医事会計で入力してください)",
+        "not-done" => "実施せずと記録されています"
+      }.freeze
+
+      def report_unfinished(records, skipped)
+        records.each do |record|
+          definition = OrderCatalog.find(record.order_type)
+          skipped << Skipped.new(kind: definition.label, name: definition.label,
+                                 reason: UNFINISHED_REASONS[record.status] || "実施が完了していません(#{record.status})")
+        end
       end
 
       # 帰属先の無い実施記録の子・薬剤。取消の途中で残ったものなどで、送る先が決まらない。

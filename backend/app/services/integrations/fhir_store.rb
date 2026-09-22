@@ -94,8 +94,9 @@ module Integrations
       JSON.parse(body)
     end
 
+    # 値が配列なら同じキーを繰り返す(FHIR では AND。date=ge…&date=le… のような範囲指定)。
     def encode(params)
-      params.compact.map { |k, v| "#{k}=#{CGI.escape(v.to_s)}" }.join("&")
+      params.compact.flat_map { |k, v| Array(v).map { |value| "#{k}=#{CGI.escape(value.to_s)}" } }.join("&")
     end
   end
 end

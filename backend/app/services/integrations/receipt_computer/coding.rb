@@ -32,6 +32,7 @@ module Integrations
       ROUTE = "http://jpfhir.jp/fhir/core/CodeSystem/route-codes".freeze
       METHOD = "urn:oid:1.2.392.200250.2.2.20.40".freeze
       INJECTION_USAGE_TYPE_EXT = "#{LOCAL}/StructureDefinition/injection-usage-type".freeze
+      INJECTION_USAGE_TYPE = "#{LOCAL}/CodeSystem/injection-usage-type".freeze
 
       RP_GROUP_NUMBER = "http://jpfhir.jp/fhir/core/mhlw/IdSystem/Medication-RPGroupNumber".freeze
 
