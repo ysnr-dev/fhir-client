@@ -80,10 +80,19 @@ export interface BillingDiagnosis {
   end_date: string | null;
 }
 
+/** 担当医がレセコンの医師コードに対応付いているか。無いまま送るとレセコンで弾かれる。 */
+export interface BillingPhysician {
+  mapped: boolean;
+  name: string;
+  message?: string;
+}
+
 export interface BillingPreview {
   items: BillingItem[];
   diagnoses: BillingDiagnosis[];
   skipped: ReceiptSkipped[];
+  /** 担当医を渡したときだけ付く。 */
+  physician?: BillingPhysician;
 }
 
 export interface BillingSendResult {
@@ -107,6 +116,9 @@ async function receiptJson<T>(path: string, init?: RequestInit): Promise<T> {
       const body = await response.json();
       if (typeof body?.error === "string") message = body.error;
       else if (Array.isArray(body?.errors)) message = body.errors.join(" / ");
+      // 送信・取消の失敗は結果(outcome / message)の形で返る。理由をそのまま出す。
+      else if (typeof body?.billing?.message === "string") message = body.billing.message;
+      else if (typeof body?.message === "string") message = body.message;
     } catch {
       // ボディが JSON でないときはステータスのまま出す。
     }
@@ -123,6 +135,27 @@ function send<T>(path: string, method: string, body?: unknown): Promise<T> {
   });
 }
 
+/**
+ * 送信・取消。レセコンが受け付けなかったときも backend は結果(outcome: failed と理由)を
+ * 502 で返すので、それは例外にせず結果として返し、画面に理由・警告・送れなかった項目を出す。
+ */
+async function sendResult<T>(path: string, method: string, body: unknown): Promise<T> {
+  const response = await masterFetch(path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (response.ok || response.status === 502) {
+    try {
+      const parsed = (await response.json()) as T & { billing?: unknown; outcome?: unknown };
+      if (parsed && (parsed.billing !== undefined || parsed.outcome !== undefined)) return parsed;
+    } catch {
+      // 結果の形でなければ下で例外にする。
+    }
+  }
+  throw new MasterApiError(`${response.status} ${response.statusText}`, response.status);
+}
+
 export function fetchReceiptStatus(): Promise<ReceiptStatus> {
   return receiptJson<ReceiptStatus>(`${BASE}/status`);
 }
@@ -135,8 +168,11 @@ export function refreshReceiptPatient(patientId: string): Promise<PatientRefresh
 export function fetchBillingPreview(params: {
   patient_id: string;
   date: string;
+  practitioner_id?: string;
 }): Promise<BillingPreview> {
-  const query = new URLSearchParams(params).toString();
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v) as [string, string][],
+  ).toString();
   return receiptJson<BillingPreview>(`${BASE}/billings/preview?${query}`);
 }
 
@@ -202,7 +238,7 @@ export function sendBilling(body: {
   practitioner_id?: string;
   coverage_set_key?: string;
 }): Promise<BillingSendResult> {
-  return send<BillingSendResult>(`${BASE}/billings`, "POST", body);
+  return sendResult<BillingSendResult>(`${BASE}/billings`, "POST", body);
 }
 
 export function cancelBilling(body: {
@@ -210,5 +246,5 @@ export function cancelBilling(body: {
   date: string;
   department_code?: string;
 }): Promise<ReceiptResult> {
-  return send<ReceiptResult>(`${BASE}/billings`, "DELETE", body);
+  return sendResult<ReceiptResult>(`${BASE}/billings`, "DELETE", body);
 }

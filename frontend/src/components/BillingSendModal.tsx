@@ -77,7 +77,9 @@ export function BillingSendModal({
   onClose: () => void;
 }) {
   const { coverages } = useCoverages(target.patientId);
-  const preview = useBillingPreview(target.patientId, target.performDate);
+  const preview = useBillingPreview(target.patientId, target.performDate, {
+    practitionerId: target.practitionerId,
+  });
   const sentStatus = useBillingStatus(target.patientId, target.performDate, target.departmentCode);
   const send = useSendBilling();
   const cancel = useCancelBilling();
@@ -94,6 +96,9 @@ export function BillingSendModal({
   const alreadySent = sentStatus.data?.sent ?? false;
   // 会計済み・医事側で編集済みのときは送り直しも取消もできない(理由は backend が返す)。
   const locked = sentStatus.data?.state === "opened" || sentStatus.data?.state === "settled";
+  // 担当医がレセコンの医師コードに対応付いていなければ、送っても弾かれるので先に止める。
+  const physicianProblem =
+    preview.data?.physician && !preview.data.physician.mapped ? preview.data.physician.message : undefined;
 
   const items = preview.data?.items ?? [];
   const diagnoses = preview.data?.diagnoses ?? [];
@@ -122,6 +127,11 @@ export function BillingSendModal({
         {locked && sentStatus.data?.message && (
           <p className="receipt-send__locked" role="status">
             {sentStatus.data.message}
+          </p>
+        )}
+        {physicianProblem && (
+          <p className="receipt-send__locked" role="alert">
+            {physicianProblem}
           </p>
         )}
         {/* 会計が済んでいれば、その結果(請求額・入金額・未収額)を伝票ごとに見せる。 */}
@@ -264,7 +274,7 @@ export function BillingSendModal({
         <div className="connection-settings-form__actions">
           <button
             type="button"
-            disabled={send.isPending || items.length === 0 || locked}
+            disabled={send.isPending || items.length === 0 || locked || !!physicianProblem}
             onClick={() => send.mutate(body)}
           >
             {send.isPending ? "送信中..." : alreadySent ? "送り直す" : "送信"}

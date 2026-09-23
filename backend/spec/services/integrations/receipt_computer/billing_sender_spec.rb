@@ -89,6 +89,32 @@ RSpec.describe Integrations::ReceiptComputer::BillingSender do
     end
   end
 
+  describe "担当医の対応付け" do
+    it "refuses to send, with a reason, when the 担当医 has no 医師コード, without calling the レセコン" do
+      allow(Integrations::CodeMapper).to receive(:new)
+        .and_return(instance_double(Integrations::CodeMapper, to_external: nil))
+      store.add({ "resourceType" => "Practitioner", "id" => "dr-1", "name" => [{ "text" => "児玉 義憲" }] })
+
+      result = sender.call(patient_fhir_id: "pat-1", perform_date: date, department_code: "01", practitioner_id: "dr-1")
+
+      expect(result[:billing].outcome).to eq(:failed)
+      expect(result[:billing].message).to include("児玉 義憲")
+      expect(result[:billing].message).to include("対応付け")
+      expect(adapter.claims).to be_empty
+    end
+
+    it "tells the preview whether the 担当医 is mapped" do
+      allow(Integrations::CodeMapper).to receive(:new)
+        .and_return(instance_double(Integrations::CodeMapper, to_external: nil))
+      store.add({ "resourceType" => "Practitioner", "id" => "dr-1", "name" => [{ "family" => "児玉", "given" => ["義憲"] }] })
+
+      preview = sender.preview(patient_fhir_id: "pat-1", perform_date: date, practitioner_id: "dr-1")
+
+      expect(preview[:physician]).to include(mapped: false, name: "児玉 義憲")
+      expect(preview[:physician][:message]).to include("対応付け")
+    end
+  end
+
   describe "#settled_receptions" do
     it "strips the zero padding of numeric 患者番号 and maps the 診療科 to the chart's code" do
       allow(Integrations::CodeMapper).to receive(:new)

@@ -4,7 +4,8 @@ module Integrations
     class BillingsController < BaseController
       def preview
         render json: sender.preview(patient_fhir_id: params.require(:patient_id),
-                                    perform_date: params.require(:date))
+                                    perform_date: params.require(:date),
+                                    practitioner_id: params[:practitioner_id])
       end
 
       def status

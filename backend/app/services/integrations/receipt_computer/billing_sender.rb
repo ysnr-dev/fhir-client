@@ -14,8 +14,9 @@ module Integrations
       end
 
       # 画面に出す送信内容。送る剤・病名・送れない項目を一度に返す。
-      # 剤はレセコンが実際に送る並び(区分ごと)に分けて見せる。
-      def preview(patient_fhir_id:, perform_date:)
+      # 剤はレセコンが実際に送る並び(区分ごと)に分けて見せる。担当医を渡せば、レセコンの
+      # 医師コードに対応付いているかも返す(無いまま送るとレセコンで弾かれるので、送る前に出す)。
+      def preview(patient_fhir_id:, perform_date:, practitioner_id: nil)
         built = builder.call(patient_fhir_id: patient_fhir_id, perform_date: perform_date,
                              patient: store.read_or_nil("Patient", patient_fhir_id))
         diagnoses = collector.call(patient_fhir_id: patient_fhir_id, perform_date: perform_date)
@@ -24,7 +25,8 @@ module Integrations
         {
           items: described.map { |i| item_json(i) },
           diagnoses: diagnoses.map { |d| diagnosis_json(d) },
-          skipped: built.skipped.map(&:to_h) + dropped
+          skipped: built.skipped.map(&:to_h) + dropped,
+          physician: physician_json(practitioner_id)
         }
       end
 
@@ -53,6 +55,13 @@ module Integrations
         number = patient_number!(patient)
         department = mapped_department(department_code)
         physician = mapper.to_external("physician", practitioner_id)
+        # 医師コードが無いとレセコンは受け付けない(日レセなら「ドクターが未設定です」)。
+        # 短い文言だけでは対応付けの問題だと分からないので、送る前にこちらで理由を出す。
+        if physician.blank?
+          return { billing: Result.new(outcome: :failed, code: "physician_unmapped",
+                                       message: physician_problem(practitioner_id)),
+                   diagnoses: nil }
+        end
 
         diagnosis_result = send_diagnoses(
           number, perform_date, department, coverage_set_key, patient_fhir_id, requested_by
@@ -151,6 +160,28 @@ module Integrations
         starts = encounters.filter_map { |e| e.dig("period", "start") }
                            .select { |start| LocalDate.of(start) == perform_date.to_s }
         LocalDate.time_of(starts.min)
+      end
+
+      def physician_json(practitioner_id)
+        return nil if practitioner_id.blank?
+
+        mapped = mapper.to_external("physician", practitioner_id).present?
+        { mapped: mapped, name: practitioner_name(practitioner_id),
+          message: mapped ? nil : physician_problem(practitioner_id) }.compact
+      end
+
+      def physician_problem(practitioner_id)
+        return "担当医が決まっていないため送れません。受付か診察で担当医を選んでください" if practitioner_id.blank?
+
+        "担当医「#{practitioner_name(practitioner_id)}」が医事会計の医師コードに対応付けられていません。" \
+          "管理 > 外部システム連携 > 医事会計 > コード変換設定で対応付けてください"
+      end
+
+      def practitioner_name(practitioner_id)
+        practitioner = store.read_or_nil("Practitioner", practitioner_id)
+        name = practitioner&.dig("name", 0)
+        name&.dig("text").presence || [name&.dig("family"), *Array(name&.dig("given"))].compact.join(" ").presence ||
+          practitioner_id
       end
 
       # 日レセは患者番号をゼロ埋めして返す("00002")。数字だけの番号はゼロ埋めを外して

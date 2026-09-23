@@ -44,11 +44,12 @@ export function useRefreshReceiptPatient() {
 export function useBillingPreview(
   patientId: string,
   date: string,
-  options: { enabled?: boolean } = {},
+  options: { enabled?: boolean; practitionerId?: string } = {},
 ) {
   return useQuery({
-    queryKey: billingKey(patientId, date, "preview"),
-    queryFn: () => fetchBillingPreview({ patient_id: patientId, date }),
+    queryKey: [...billingKey(patientId, date, "preview"), options.practitionerId ?? ""],
+    queryFn: () =>
+      fetchBillingPreview({ patient_id: patientId, date, practitioner_id: options.practitionerId }),
     enabled: options.enabled !== false && !!patientId && !!date,
     retry: false,
   });
