@@ -65,7 +65,8 @@ module Integrations
       def billing_status(patient_number:, date:, department_code:)
         translate do
           if accept_api.settled?(patient_id: patient_number, date: date, department_code: department_code)
-            return BillingStatus.new(state: :settled, message: "医事会計で会計済みです。変更は医事会計側で行ってください")
+            return BillingStatus.new(state: :settled, message: "医事会計で会計済みです。変更は医事会計側で行ってください",
+                                     settlements: income_api.settlements(patient_id: patient_number, date: date))
           end
 
           entry = medical_api.find_entry(patient_id: patient_number, perform_date: date,
@@ -93,6 +94,15 @@ module Integrations
           )
         end
         [described, dropped]
+      end
+
+      # その日に会計が済んだ受診。患者番号は日レセの形(ゼロ埋め)のまま返し、読み替えは呼び側。
+      def settled_receptions(date:)
+        translate do
+          accept_api.settled_receptions(date: date).map do |row|
+            SettledReception.new(patient_number: row["Patient_ID"].to_s, department_code: row["Department_Code"].presence)
+          end
+        end
       end
 
       def send_billing(claim)
@@ -154,6 +164,7 @@ module Integrations
       def medical_api = @medical_api ||= MedicalApi.new(gateway)
       def disease_api = @disease_api ||= DiseaseApi.new(gateway)
       def accept_api = @accept_api ||= AcceptApi.new(gateway)
+      def income_api = @income_api ||= IncomeApi.new(gateway)
 
       # 日レセ側の例外を、連携先に依らない意味の例外へ読み替える。
       def translate

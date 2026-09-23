@@ -30,8 +30,20 @@ module Integrations
 
       def status(patient_fhir_id:, perform_date:, department_code:)
         number = patient_number!(store.read("Patient", patient_fhir_id))
-        adapter.billing_status(patient_number: number, date: perform_date,
-                               department_code: mapped_department(department_code))
+        status = adapter.billing_status(patient_number: number, date: perform_date,
+                                        department_code: mapped_department(department_code))
+        # 会計の診療科はレセコンのコードで返るので、カルテのコードに読み替える。
+        Array(status.settlements).each { |s| s.department_code = mapper.to_local("department", s.department_code) }
+        status
+      end
+
+      # その日に会計が済んだ受診。外来一覧に「会計済み」を出すためのもので、患者番号は
+      # カルテの形(数字だけならゼロ埋めを外す)に揃え、診療科はカルテのコードに読み替える。
+      def settled_receptions(perform_date:)
+        adapter.settled_receptions(date: perform_date).map do |row|
+          SettledReception.new(patient_number: normalize_number(row.patient_number),
+                               department_code: mapper.to_local("department", row.department_code))
+        end
       end
 
       # 病名 → 診療行為の順で送る。病名が先でないとレセコン側で査定に使えない。
@@ -139,6 +151,13 @@ module Integrations
         starts = encounters.filter_map { |e| e.dig("period", "start") }
                            .select { |start| LocalDate.of(start) == perform_date.to_s }
         LocalDate.time_of(starts.min)
+      end
+
+      # 日レセは患者番号をゼロ埋めして返す("00002")。数字だけの番号はゼロ埋めを外して
+      # カルテの番号("2")に揃える。数字以外を含む番号はそのまま。
+      def normalize_number(number)
+        text = number.to_s
+        text.match?(/\A\d+\z/) ? text.sub(/\A0+(?=\d)/, "") : text
       end
 
       def patient_number!(patient)

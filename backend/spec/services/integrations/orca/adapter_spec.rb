@@ -160,12 +160,29 @@ RSpec.describe Integrations::Orca::Adapter do
       expect(status.state).to eq(:opened)
     end
 
-    it "is :settled once the 会計 is done, without asking for 中途終了データ" do
+    it "is :settled once the 会計 is done, with the 会計結果, without asking for 中途終了データ" do
       stub_path("/api01rv2/acceptlstv2", acceptlst_xml("00001"))
+      stub_path("/api01rv2/incomeinfv2", %(<xmlio2><res type="record"><Api_Result type="string">0000</Api_Result>
+        <Income_Information type="array"><Income_Information_child type="record">
+          <Perform_Date type="string">2026-09-20</Perform_Date><InOut type="string">2</InOut>
+          <Invoice_Number type="string">0000053</Invoice_Number><Department_Code type="string">01</Department_Code>
+          <Cd_Information type="record"><Ac_Money type="string">1230</Ac_Money><Ic_Money type="string">1230</Ic_Money></Cd_Information>
+          <Ac_Point_Information type="record"><Ac_Ttl_Point type="string">410</Ac_Ttl_Point></Ac_Point_Information>
+        </Income_Information_child></Income_Information></res></xmlio2>))
 
       expect(status.state).to eq(:settled)
       expect(status.message).to include("会計済み")
+      expect(status.settlements.first).to have_attributes(charge: 1230, paid: 1230, unpaid: 0, points: 410)
       expect(WebMock).not_to have_requested(:post, %r{tmedicalgetv2})
+    end
+
+    it "lists the 会計済み receptions of a day" do
+      stub_path("/api01rv2/acceptlstv2", acceptlst_xml("00001", "00002"))
+
+      rows = adapter.settled_receptions(date: "2026-09-20")
+
+      expect(rows.map(&:patient_number)).to eq(%w[00001 00002])
+      expect(rows.first.department_code).to eq("01")
     end
 
     it "ignores other patients in the 会計済み list" do

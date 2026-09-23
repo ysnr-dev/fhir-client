@@ -124,6 +124,33 @@ export function BillingSendModal({
             {sentStatus.data.message}
           </p>
         )}
+        {/* 会計が済んでいれば、その結果(請求額・入金額・未収額)を伝票ごとに見せる。 */}
+        {(sentStatus.data?.settlements?.length ?? 0) > 0 && (
+          <table className="receipt-send__settlements">
+            <thead>
+              <tr>
+                <th>点数</th>
+                <th>請求額</th>
+                <th>入金額</th>
+                <th>未収額</th>
+                <th>負担割合</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sentStatus.data?.settlements?.map((s, index) => (
+                <tr key={s.invoice_number ?? index}>
+                  <td>{s.points.toLocaleString()} 点</td>
+                  <td>{s.charge.toLocaleString()} 円</td>
+                  <td>{s.paid.toLocaleString()} 円</td>
+                  <td className={s.unpaid > 0 ? "receipt-send__ng" : undefined}>
+                    {s.unpaid.toLocaleString()} 円
+                  </td>
+                  <td>{s.copay_rate != null ? `${s.copay_rate}%` : "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
 
         <label className="receipt-send__field">
           保険

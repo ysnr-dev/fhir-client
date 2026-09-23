@@ -18068,6 +18068,32 @@ button.chemo-calendar__cell[draggable="true"] {
   color: var(--danger, var(--text));
 }
 
+/* 会計結果(伝票ごと)。数字は右寄せで揃える。 */
+.receipt-send__settlements {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.receipt-send__settlements th,
+.receipt-send__settlements td {
+  padding: 2px 10px 2px 0;
+  text-align: right;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+/* 外来一覧の「会計済み」。状態の横に小さく添える。 */
+.outpatient__settled {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--lab-low);
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--lab-low);
+  white-space: nowrap;
+}
+
 /* 剤の見出しに添える実施時刻。 */
 .receipt-send__time {
   margin-left: 8px;

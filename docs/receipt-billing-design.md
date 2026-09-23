@@ -142,6 +142,20 @@ PreviewItem   画面用。区分(class_code/class_name)を添えて剤を分け�
 - `Perform_Time` は当日の外来 Encounter の `period.start`。時間外・休日・深夜の判定は日レセに任せる。
 - 病名の転帰は `resolved` → `F`(治ゆ)、`inactive` → `N`(不変)。
 
+## 3-2. 会計結果の取り込み(2026-09-23、C-2)
+
+［決定］レセコン側の会計結果は**引き直す**(控えを持たない。`docs/receipt-computer-integration.md` の方針)。
+中立の語彙は `Settlement`(date / department_code / invoice_number / issued_on / charge 請求額 / paid 入金額 /
+unpaid 未収額 / self_pay 自費 / copay_rate 負担割合 / points 点数)と `SettledReception`(患者番号・診療科)。
+
+- 状態照会(`billings/status`)が :settled のとき `settlements` を同梱する。日レセでは
+  `incomeinfv2`(患者 + 診療日。外来の伝票だけ、未収は伝票番号で突き合わせ)。
+- その日の会計済み一覧(`billings/settled?date=`)は日レセの `acceptlstv2` class=02 を 1 回引き、
+  患者番号をカルテの形(数字だけならゼロ埋めを外す)、診療科をカルテのコードに読み替えて返す。
+  外来一覧は行の患者番号で突き合わせて「会計済」を添える(レセコン連携が有効なときだけ問い合わせ、
+  30 秒で再取得)。
+- 画面は「会計済 / 請求額 / 入金額 / 未収額 / 点数 / 負担割合」だけを出し、レセコンの語(伝票区分など)は出さない。
+
 ## 4. 画面
 
 プレビューは「実際に送る剤の並び」を見せる。アダプタの `describe_billing` が区分ごとに分けた剤を

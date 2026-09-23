@@ -72,6 +72,7 @@ Rails.application.routes.draw do
 
       get "billings/preview", to: "billings#preview"
       get "billings/status", to: "billings#status"
+      get "billings/settled", to: "billings#settled"
       post "billings", to: "billings#create"
       delete "billings", to: "billings#destroy"
 

@@ -16,7 +16,8 @@ import {
 } from "../api/queries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
-import { useReceiptStatus } from "../api/receiptQueries";
+import { useReceiptStatus, useSettledReceptions } from "../api/receiptQueries";
+import { patientNumberOf } from "../fhir/patientHelpers";
 import { receptionCoverageSetKey } from "../fhir/coverageHelpers";
 import {
   PatientKana,
@@ -125,6 +126,12 @@ export function OutpatientListPage() {
   const updateExam = useUpdateOutpatientExam();
   // 会計送信はレセコン連携が有効なときだけ。無効なら行メニューに項目ごと出さない。
   const receiptStatus = useReceiptStatus();
+  // その日に会計が済んだ受診。レセコン連携が有効なときだけ問い合わせ、行に印を付ける。
+  const settledReceptions = useSettledReceptions(date, { enabled: receiptStatus.data?.enabled === true });
+  const settledNumbers = useMemo(
+    () => new Set((settledReceptions.data?.settled ?? []).map((s) => s.patient_number)),
+    [settledReceptions.data],
+  );
   const [billingTarget, setBillingTarget] = useState<BillingSendTarget | null>(null);
 
   // ログイン中の医師には自分の予約から見せる(受付や代行入力の職種はすべての予約)。
@@ -290,6 +297,9 @@ export function OutpatientListPage() {
                   <OutpatientTableRow
                     key={row.appointment.id}
                     row={row}
+                    settled={
+                      !!row.patient && settledNumbers.has(normalizePatientNumber(patientNumberOf(row.patient)))
+                    }
                     pending={
                       updateStatus.isPending ||
                       cancel.isPending ||
@@ -468,8 +478,15 @@ function FilterForm({
   );
 }
 
+/** レセコンの患者番号との突き合わせ用。数字だけの番号はゼロ埋めを外す。 */
+function normalizePatientNumber(number: string | undefined): string {
+  const text = number ?? "";
+  return /^\d+$/.test(text) ? text.replace(/^0+(?=\d)/, "") : text;
+}
+
 function OutpatientTableRow({
   row,
+  settled,
   pending,
   onChangeStatus,
   onStartExam,
@@ -481,6 +498,8 @@ function OutpatientTableRow({
   onEditReception,
 }: {
   row: OutpatientRow;
+  /** レセコンで会計が済んでいる。 */
+  settled: boolean;
   pending: boolean;
   onChangeStatus: (status: fhir4.Appointment["status"]) => void;
   onStartExam: () => void;
@@ -530,6 +549,7 @@ function OutpatientTableRow({
         >
           {outpatientStatusLabel(appointment, encounter)}
         </span>
+        {settled && <span className="outpatient__settled">会計済</span>}
       </td>
       <td className="outpatient__actions sticky-table__fix-actions">
         {/* 受付 → 診察開始 → 診察終了 と、同じ位置でボタンが入れ替わる。 */}

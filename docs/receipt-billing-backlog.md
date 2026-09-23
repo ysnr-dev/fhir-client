@@ -391,7 +391,7 @@ B-10(診察料の扱い)と一緒に決める。
 ［提案］`ExternalSystemConnection` の `options` に証明書のパスとパスワードを足す。
 現在 `options` にあるのは `api_prefix` だけ。
 
-### C-2. 会計結果をカルテに戻していない
+### C-2. 会計結果をカルテに戻していない — 対応済み(2026-09-23: 状態照会が会計済みのとき収納情報(請求額・入金額・未収額・点数)を返し、外来一覧にその日の会計済みを印で出す。PUSH の patient_account は使わず、一覧は 30 秒で再取得)
 
 ［事実］`medicalgetv2` / `incomeinfv2` / PUSH の `patient_account` を使っていない。
 

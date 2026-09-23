@@ -73,11 +73,23 @@ module Integrations
         keyword_init: true
       )
 
+      # レセコンで済んだ 1 件の会計(伝票)。金額は円の整数、points は点数。
+      # charge = 請求額、paid = 入金額、unpaid = 未収額、self_pay = 自費分、copay_rate = 負担割合(%)。
+      Settlement = Struct.new(
+        :date, :department_code, :invoice_number, :issued_on,
+        :charge, :paid, :unpaid, :self_pay, :copay_rate, :points,
+        keyword_init: true
+      )
+
+      # その日に会計が済んだ受診(外来一覧に印を付けるためのもの)。
+      SettledReception = Struct.new(:patient_number, :department_code, keyword_init: true)
+
       # レセコン側での 1 受診の状態。
       # state は :none(未送信)/ :sent(カルテから送ってあり、送り直し・取消ができる)/
       # :opened(レセコン側で展開・編集されていて、カルテからは触れない)/ :settled(会計済み)。
-      # message は :opened / :settled のときに画面へ出す理由。
-      BillingStatus = Struct.new(:state, :detail, :message, keyword_init: true) do
+      # message は :opened / :settled のときに画面へ出す理由。settlements は :settled のときの
+      # 会計(伝票ごと)。
+      BillingStatus = Struct.new(:state, :detail, :message, :settlements, keyword_init: true) do
         def sent? = state == :sent
         def locked? = %i[opened settled].include?(state)
       end

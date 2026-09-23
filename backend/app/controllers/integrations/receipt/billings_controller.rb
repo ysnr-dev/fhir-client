@@ -11,7 +11,16 @@ module Integrations
         result = sender.status(patient_fhir_id: params.require(:patient_id),
                                perform_date: params.require(:date),
                                department_code: params[:department_code])
-        render json: { sent: result.sent?, state: result.state, message: result.message }.compact
+        render json: {
+          sent: result.sent?, state: result.state, message: result.message,
+          settlements: result.settlements&.map(&:to_h)
+        }.compact
+      end
+
+      # その日に会計が済んだ受診(外来一覧の印)。
+      def settled
+        rows = sender.settled_receptions(perform_date: params.require(:date))
+        render json: { settled: rows.map(&:to_h) }
       end
 
       def create

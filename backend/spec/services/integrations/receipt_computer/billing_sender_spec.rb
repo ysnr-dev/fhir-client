@@ -32,6 +32,11 @@ RSpec.describe Integrations::ReceiptComputer::BillingSender do
       end
 
       def send_diagnoses(**) = nil
+
+      def settled_receptions(date:)
+        [Integrations::ReceiptComputer::Records::SettledReception.new(patient_number: "00002", department_code: "01"),
+         Integrations::ReceiptComputer::Records::SettledReception.new(patient_number: "A0021", department_code: nil)]
+      end
     end.new(records::Result.new(outcome: :succeeded, code: "00", message: "処理終了"))
   end
 
@@ -81,6 +86,18 @@ RSpec.describe Integrations::ReceiptComputer::BillingSender do
 
       expect(preview[:items].first[:class_code]).to be_nil
       expect(preview[:items].first[:lines].length).to eq(2)
+    end
+  end
+
+  describe "#settled_receptions" do
+    it "strips the zero padding of numeric 患者番号 and maps the 診療科 to the chart's code" do
+      allow(Integrations::CodeMapper).to receive(:new)
+        .and_return(instance_double(Integrations::CodeMapper, to_local: "01"))
+
+      rows = sender.settled_receptions(perform_date: date)
+
+      expect(rows.map(&:patient_number)).to eq(%w[2 A0021])
+      expect(rows.first.department_code).to eq("01")
     end
   end
 

@@ -145,10 +145,42 @@ export function fetchBillingPreview(params: {
  * opened = レセコン側で展開・編集されていてカルテからは触れない、settled = 会計済み。
  * message は opened / settled の理由。
  */
+/** レセコンで済んだ 1 件の会計(伝票)。金額は円、points は点数。 */
+export interface Settlement {
+  date: string;
+  department_code: string | null;
+  invoice_number: string | null;
+  issued_on: string | null;
+  /** 請求額 */
+  charge: number;
+  /** 入金額 */
+  paid: number;
+  /** 未収額 */
+  unpaid: number;
+  /** 自費分 */
+  self_pay: number;
+  /** 負担割合(%) */
+  copay_rate: number | null;
+  points: number;
+}
+
 export interface BillingStatus {
   sent: boolean;
   state: "none" | "sent" | "opened" | "settled";
   message?: string;
+  /** 会計済みのときの会計(伝票ごと)。 */
+  settlements?: Settlement[];
+}
+
+/** その日に会計が済んだ受診。患者番号はカルテの形(ゼロ埋めなし)、診療科はカルテのコード。 */
+export interface SettledReception {
+  patient_number: string;
+  department_code: string | null;
+}
+
+export function fetchSettledReceptions(date: string): Promise<{ settled: SettledReception[] }> {
+  const query = new URLSearchParams({ date }).toString();
+  return receiptJson<{ settled: SettledReception[] }>(`${BASE}/billings/settled?${query}`);
 }
 
 /** レセコン側の状態。控えを持たずレセコンに訊く。 */
