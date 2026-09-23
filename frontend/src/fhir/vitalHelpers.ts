@@ -21,13 +21,14 @@ export const VITAL_PROBLEM_EXT_URL =
   "http://fhir-client.local/StructureDefinition/observation-problem";
 
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
-const LOINC = "http://loinc.org";
+export const LOINC_SYSTEM = "http://loinc.org";
+const LOINC = LOINC_SYSTEM;
 const UCUM = "http://unitsofmeasure.org";
 
 /** 血圧(パネル)。値は component に入るので value[x] は持たない。 */
-const BLOOD_PRESSURE = { code: "85354-9", display: "Blood pressure panel" } as const;
-const SYSTOLIC = { code: "8480-6", display: "Systolic blood pressure" } as const;
-const DIASTOLIC = { code: "8462-4", display: "Diastolic blood pressure" } as const;
+export const BLOOD_PRESSURE = { code: "85354-9", display: "Blood pressure panel" } as const;
+export const SYSTOLIC = { code: "8480-6", display: "Systolic blood pressure" } as const;
+export const DIASTOLIC = { code: "8462-4", display: "Diastolic blood pressure" } as const;
 const BP_UNIT = { unit: "mmHg", ucum: "mm[Hg]" } as const;
 
 /** 血圧(パネル)の code。看護観察の血圧型も同じ構造で作り、経過表の血圧行に合流させる。 */
@@ -101,7 +102,7 @@ export const VITAL_MEASURES: VitalMeasure[] = [
 ];
 
 /** 身長と体重から求める BMI。入力欄は持たず、両方が入っているときだけ作る。 */
-const BMI = {
+export const BMI = {
   code: "39156-5",
   display: "Body mass index (BMI) [Ratio]",
   unit: "kg/m2",

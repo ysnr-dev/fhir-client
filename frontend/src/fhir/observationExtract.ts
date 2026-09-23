@@ -73,6 +73,43 @@ interface ItemDefinition {
   unit: string;
 }
 
+/**
+ * テンプレートの数値項目(integer / decimal)。チャートの項目ピッカーが、
+ * 「このテンプレートから何をグラフにできるか」を並べるのに使う。
+ * 抽出が無効なテンプレートと、項目コードを持たない項目は Observation にならないので出さない。
+ */
+export interface QuestionnaireNumericItem {
+  linkId: string;
+  text: string;
+  type: "integer" | "decimal";
+  code: fhir4.Coding[];
+  /** questionnaire-unit の表示文字列。 */
+  unit: string;
+}
+
+export function questionnaireNumericItems(
+  questionnaire: fhir4.Questionnaire,
+): QuestionnaireNumericItem[] {
+  if (!observationExtractEnabled(questionnaire)) return [];
+  const found: QuestionnaireNumericItem[] = [];
+  const walk = (items: fhir4.QuestionnaireItem[] | undefined): void => {
+    for (const item of items ?? []) {
+      if ((item.type === "integer" || item.type === "decimal") && item.code?.length) {
+        found.push({
+          linkId: item.linkId,
+          text: item.text ?? item.linkId,
+          type: item.type,
+          code: item.code,
+          unit: item.extension?.find((e) => e.url === UNIT_EXT_URL)?.valueCoding?.display ?? "",
+        });
+      }
+      walk(item.item);
+    }
+  };
+  walk(questionnaire.item);
+  return found;
+}
+
 /** linkId は全体一意(jsp-4)なので、階層を平らにして引ける。 */
 function indexQuestionnaireItems(
   items: fhir4.QuestionnaireItem[] | undefined,

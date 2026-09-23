@@ -7330,6 +7330,122 @@ export function useVitalFlowsheet(
   });
 }
 
+// ---- チャート(数値の推移と治療イベントを重ねて読む画面) ----
+
+const CHART_OBSERVATION_PAGE = 500;
+const CHART_OBSERVATION_MAX_PAGES = 4;
+
+/** グラフに出せない状態。上流が Observation の status:not に応えるか未確認なので画面側で落とす。 */
+const CHART_EXCLUDED_STATUSES = new Set(["entered-in-error", "cancelled"]);
+
+async function fetchChartObservations(
+  patientId: string,
+  codeParam: string,
+  rangeStart: string,
+  rangeEnd: string,
+): Promise<fhir4.Observation[]> {
+  const observations: fhir4.Observation[] = [];
+  for (let page = 0; page < CHART_OBSERVATION_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("patient", `Patient/${patientId}`);
+    // 項目のコードをまとめて OR で引く(検体検査・バイタル・テンプレート抽出が混ざる)。
+    params.set("code", codeParam);
+    // 日付だけの値は上流が施設のタイムゾーンで日の範囲に広げて解釈する。
+    params.append("date", `ge${rangeStart}`);
+    params.append("date", `le${rangeEnd}`);
+    params.set("_count", String(CHART_OBSERVATION_PAGE));
+    params.set("_offset", String(page * CHART_OBSERVATION_PAGE));
+    params.set("_sort", "date");
+
+    const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
+    const pageObservations = resourcesOfType<fhir4.Observation>(bundle, "Observation");
+    observations.push(...pageObservations);
+
+    if (pageObservations.length < CHART_OBSERVATION_PAGE) break;
+  }
+
+  return observations.filter((observation) => !CHART_EXCLUDED_STATUSES.has(observation.status));
+}
+
+/**
+ * チャートに出す Observation。項目の coding をまとめて 1 回の検索で引く。
+ *
+ * 検体検査の時系列表(useLabResultTimeline)は DiagnosticReport 起点だが、こちらは
+ * バイタルやテンプレート抽出(報告書を持たない)も同じ表に載せるので Observation を直接引く。
+ */
+export function usePatientChartObservations(
+  patientId: string | undefined,
+  codings: fhir4.Coding[],
+  rangeStart: string,
+  rangeEnd: string,
+) {
+  const codeParam = codings.map((coding) => `${coding.system}|${coding.code}`).join(",");
+  return useQuery({
+    // 登録・更新・削除の invalidateQueries(["Observation", "search"]) でまとめて
+    // 無効化されるよう search 配下のキーにしている。
+    queryKey: ["Observation", "search", "patient-chart", patientId, codeParam, rangeStart, rangeEnd],
+    queryFn: () => fetchChartObservations(patientId ?? "", codeParam, rangeStart, rangeEnd),
+    enabled: Boolean(patientId) && Boolean(codeParam) && Boolean(rangeStart) && Boolean(rangeEnd),
+    placeholderData: keepPreviousData,
+  });
+}
+
+const CHART_PROCEDURE_PAGE = 500;
+const CHART_PROCEDURE_MAX_PAGES = 4;
+
+async function fetchChartProcedures(
+  patientId: string,
+  categoryParam: string,
+  rangeStart: string,
+  rangeEnd: string,
+): Promise<fhir4.Procedure[]> {
+  const procedures: fhir4.Procedure[] = [];
+  for (let page = 0; page < CHART_PROCEDURE_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams();
+    params.set("patient", `Patient/${patientId}`);
+    params.set("category", categoryParam);
+    params.append("date", `ge${rangeStart}`);
+    params.append("date", `le${rangeEnd}`);
+    // 2 件目以降の手技(partOf 付き)はハブと同じ日時なので、ハブだけをイベントにする。
+    params.set("part-of:missing", "true");
+    params.set("status:not", "entered-in-error,not-done");
+    params.set("_count", String(CHART_PROCEDURE_PAGE));
+    params.set("_offset", String(page * CHART_PROCEDURE_PAGE));
+    params.set("_sort", "date");
+
+    const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
+    const pageProcedures = resourcesOfType<fhir4.Procedure>(bundle, "Procedure");
+    procedures.push(...pageProcedures);
+
+    if (pageProcedures.length < CHART_PROCEDURE_PAGE) break;
+  }
+
+  return procedures;
+}
+
+/**
+ * チャートのイベント帯に出す検査・注射の実施記録(ハブ Procedure)を種別ごとに引く。
+ *
+ * 経過表の usePatientExamOrders はオーダーから `_revinclude` で実施記録まで辿るが、
+ * チャートは年単位の範囲を見るので件数が多く、実施記録そのものを検索してページングする。
+ * ハブの code は 1 件目の手技(検査名)なので、名前はこれだけで出せる。
+ */
+export function usePatientPerformedProcedures(
+  patientId: string | undefined,
+  orderTypeCodes: string[],
+  rangeStart: string,
+  rangeEnd: string,
+) {
+  const categoryParam = orderTypeCodes.map((code) => `${ORDER_TYPE_SYSTEM}|${code}`).join(",");
+  return useQuery({
+    queryKey: ["Procedure", "search", "patient-chart", patientId, categoryParam, rangeStart, rangeEnd],
+    queryFn: () => fetchChartProcedures(patientId ?? "", categoryParam, rangeStart, rangeEnd),
+    enabled:
+      Boolean(patientId) && Boolean(categoryParam) && Boolean(rangeStart) && Boolean(rangeEnd),
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useSaveVitalEntry() {
   const queryClient = useQueryClient();
   return useMutation({
