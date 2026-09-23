@@ -415,6 +415,27 @@ function OverlayChart({
 }: OverlayChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const series = useMemo(() => buildOverlaySeries(lanes), [lanes]);
+
+  // 凡例で一時的に隠している系列。色と印は**隠しても付け替えない**(残った系列の色が
+  // 変わると、隠す前後で同じ線が別物に見える)。別のチャートに切り替えたら戻す。
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const seriesKeys = series.map((spec) => spec.key).join("|");
+  const lastKeys = useRef(seriesKeys);
+  if (lastKeys.current !== seriesKeys) {
+    lastKeys.current = seriesKeys;
+    if (hidden.size > 0) setHidden(new Set());
+  }
+  const toggleHidden = (key: string) => {
+    // 直前の状態から作る(続けて押したときに取りこぼさない)。
+    setHidden((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const shown = series.filter((spec) => !hidden.has(spec.key));
+
   const plotH = height - MARGIN.top - MARGIN.bottom;
   const toY = (value: number, spec: OverlaySeries) =>
     MARGIN.top + plotH - ((value - spec.min) / Math.max(1e-9, spec.max - spec.min)) * plotH;
@@ -441,7 +462,7 @@ function OverlayChart({
   };
 
   const hoverX = hoverT === null ? null : toX(hoverT);
-  const hoverRows = hoverT === null ? [] : series.map((spec) => ({ spec, point: nearestOf(spec) }));
+  const hoverRows = hoverT === null ? [] : shown.map((spec) => ({ spec, point: nearestOf(spec) }));
   const hoverAt = hoverRows.find((row) => row.point)?.point?.at ?? "";
   const hasPoints = series.some((spec) => spec.points.length > 0);
 
@@ -516,7 +537,7 @@ function OverlayChart({
               y2={MARGIN.top + plotH}
             />
           )}
-          {series.map((spec) => (
+          {shown.map((spec) => (
             <g key={spec.key} className={`patient-chart__s${spec.slot + 1}`}>
               <path
                 className="lab-chart__line"
@@ -581,25 +602,36 @@ function OverlayChart({
       </div>
       {/* 縦軸に数値を出さないぶん、各系列の単位と表示範囲は凡例で示す。 */}
       <ul className="patient-chart__legend" ref={legendRef}>
-        {series.map((spec) => (
-          <li key={spec.key}>
-            <svg
-              className={`patient-chart__swatch patient-chart__s${spec.slot + 1}`}
-              viewBox="0 0 12 12"
-              width="12"
-              height="12"
-              aria-hidden="true"
-            >
-              <path className="lab-chart__line" d="M0,6 H12" />
-              <path className="lab-chart__marker" d={seriesMarkPath(spec.shape, 6, 6, 4)} />
-            </svg>
-            <span className="patient-chart__legend-name">{spec.name}</span>
-            <span className="patient-chart__legend-range">
-              {formatValue(spec.min)}〜{formatValue(spec.max)}
-              {spec.unit && ` ${spec.unit}`}
-            </span>
-          </li>
-        ))}
+        {series.map((spec) => {
+          const isHidden = hidden.has(spec.key);
+          return (
+            <li key={spec.key}>
+              <button
+                type="button"
+                className={`patient-chart__legend-item${isHidden ? " is-hidden" : ""}`}
+                aria-pressed={!isHidden}
+                title={isHidden ? `${spec.name} を表示` : `${spec.name} を隠す`}
+                onClick={() => toggleHidden(spec.key)}
+              >
+                <svg
+                  className={`patient-chart__swatch patient-chart__s${spec.slot + 1}`}
+                  viewBox="0 0 12 12"
+                  width="12"
+                  height="12"
+                  aria-hidden="true"
+                >
+                  <path className="lab-chart__line" d="M0,6 H12" />
+                  <path className="lab-chart__marker" d={seriesMarkPath(spec.shape, 6, 6, 4)} />
+                </svg>
+                <span className="patient-chart__legend-name">{spec.name}</span>
+                <span className="patient-chart__legend-range">
+                  {formatValue(spec.min)}〜{formatValue(spec.max)}
+                  {spec.unit && ` ${spec.unit}`}
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

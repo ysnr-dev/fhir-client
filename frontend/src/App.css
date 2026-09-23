@@ -3713,8 +3713,29 @@ fieldset.rp-card {
 .patient-chart__legend li {
   display: flex;
   align-items: center;
-  gap: 4px;
   white-space: nowrap;
+}
+
+/* 押すとその系列を一時的に隠す。ボタンだが凡例なので、枠や地色は持たせない。 */
+.patient-chart__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.patient-chart__legend-item.is-hidden {
+  opacity: 0.4;
+}
+
+.patient-chart__legend-item.is-hidden .patient-chart__legend-name {
+  text-decoration: line-through;
 }
 
 .patient-chart__legend-name {
