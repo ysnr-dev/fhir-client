@@ -148,13 +148,15 @@ PreviewItem   画面用。区分(class_code/class_name)を添えて剤を分け�
   オーダーの種別は `call(header, details) -> BillingItem`)、照射技法マスタの 3 列。
   採血料(血液の検体があれば `receipt_codes.lab.blood_draw` を最初の検体検査の剤末尾に 1 回)と
   化学療法の加算もここで入れた。
-- **Phase 4** 外用の日数(総量 × 1)、一般名処方(代表銘柄 + `Medication_Generic_Flg=yes`)、
-  `Perform_Time`(外来 Encounter の `period.start`)、数値コメント 842 の実施入力。
-  外来迅速検体検査加算は「当日結果説明」を backend で判定できないので初期は送らない。
+- **Phase 4**(2026-09-23 済み)外用の日数(総量 × 1)、一般名処方(一般名コード → 薬価最安の
+  銘柄 + `Medication_Generic_Flg=yes`)、院内 / 院外の区分(211/212 系)、40 剤超の class=04 追記、
+  `Perform_Time`(外来 Encounter の `period.start`)。残り: 数値コメント 842・選択式 830 の実施入力
+  (コメントマスタの取込が先)。外来迅速検体検査加算は「当日結果説明」を backend で判定できないので
+  送らない。
 - **Phase 5** 放射線のフィルム(枚数-分画。実施入力に分画数を足す。特定器材のフィルムは
   `material_category` では区別できないので名称/コード帯で見分ける)、造影剤注入手技、
   部位コメント(2024-06 以降は日レセ側の設定で不要なので初期は送らない)。
-- **Phase 6** 画面の仕上げ(skipped の種別畳み)、バックログの A-2(02→01)/ B-12(class=04)。
+- **Phase 6** 画面の仕上げ(skipped の種別畳み)と C 系(A-2 と B-12 は済み)。
 
 ## 6. 入院(方針だけ)
 

@@ -185,6 +185,34 @@ RSpec.describe Integrations::Orca::MedicalApi do
     expect(uid).to eq("padded-uid")
   end
 
+  describe "40 剤を超える送信" do
+    let(:many) { Array.new(45) { |i| { "Medical_Class" => "600", "Medical_Class_Name" => "剤#{i}" } } }
+
+    def register_many
+      api.register(many, patient_id: "00001", perform_date: date, department_code: "01",
+                         physician_code: "10001", coverage_set_key: "0001")
+    end
+
+    it "registers the first 40 with class=01 and appends the rest with class=04" do
+      register_many
+
+      expect(gateway.calls.map { |c| c[:params]["class"] }).to eq(%w[01 04])
+      expect(gateway.calls[0][:attributes]["Diagnosis_Information"]["Medical_Information"].length).to eq(40)
+      expect(gateway.calls[1][:attributes]["Diagnosis_Information"]["Medical_Information"].length).to eq(5)
+      expect(gateway.calls[1][:attributes]["Request_Number"]).to eq("04")
+    end
+
+    it "says how far the registration got when an append fails" do
+      gateway.responses = [{ "Api_Result" => "00" }, { "Api_Result" => "41", "Api_Result_Message" => "ドクターコードが違います" }]
+
+      result = register_many
+
+      expect(result).not_to be_ok
+      expect(result.api_result.message).to include("41 剤目以降")
+      expect(result.api_result.message).to include("40 剤までは登録済み")
+    end
+  end
+
   describe "#find_entry" do
     def entry(row)
       gateway.responses = [{ "Api_Result" => "00", "Tmedical_List_Information" => [row.merge(

@@ -17,6 +17,8 @@ module Integrations
       GENERAL_ORDER_CODE = "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/MedicationGeneralOrderCode".freeze
       USAGE_CODE = "#{LOCAL}/CodeSystem/medicine-usage".freeze
       USAGE_CATEGORY = "#{LOCAL}/CodeSystem/medicine-usage-basic-category".freeze
+      # 処方区分。外来は external(院外)/ internal(院内)。
+      PRESCRIPTION_CATEGORY = "#{LOCAL}/CodeSystem/prescription-category".freeze
 
       ORDER_TYPE = "#{LOCAL}/CodeSystem/order-type".freeze
       SSMIX2_DEPARTMENT = "#{LOCAL}/CodeSystem/ssmix2-department-code".freeze

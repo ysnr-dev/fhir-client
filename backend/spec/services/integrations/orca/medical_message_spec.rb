@@ -130,10 +130,27 @@ RSpec.describe Integrations::Orca::MedicalMessage do
     end
   end
 
-  it "reports 剤 beyond the 40 limit instead of dropping them silently" do
+  it "keeps every 剤 (the API sends 40 at a time) and reports 明細 beyond 40 in a 剤" do
     items = Array.new(41) { |i| item(:lab, [line("16000#{i.to_s.rjust(4, '0')}")]) }
+    expect(classes(items).length).to eq(41)
 
-    expect(classes(items).length).to eq(40)
-    expect(dropped(items).first[:reason]).to include("40")
+    wide = [item(:lab, Array.new(41) { |i| line("16000#{i.to_s.rjust(4, '0')}") })]
+    expect(classes(wide).first["Medication_info"].length).to eq(40)
+    expect(dropped(wide).first[:reason]).to include("40")
+  end
+
+  describe "処方" do
+    it "marks 一般名処方 with Medication_Generic_Flg" do
+      built = classes([item(:oral, [records::BillingLine.new(code: "610463165", name: "【般】ファモチジン散２％",
+                                                             quantity: "3", kind: :medicine, generic: true)], days: "7")])
+
+      expect(built.first["Medication_info"].first["Medication_Generic_Flg"]).to eq("yes")
+    end
+
+    it "uses the 院外 / 院内 区分 when the 処方 carries it" do
+      expect(classes([item(:oral, [line("1", kind: :medicine)], dispensing: :external)]).first["Medical_Class"]).to eq("212")
+      expect(classes([item(:topical, [line("1", kind: :medicine)], dispensing: :internal)]).first["Medical_Class"]).to eq("231")
+      expect(classes([item(:as_needed, [line("1", kind: :medicine)])]).first["Medical_Class"]).to eq("220")
+    end
   end
 end

@@ -112,9 +112,10 @@ module Integrations
 
         headers_of(requests, date, prescription: true).flat_map do |header|
           lines = by_header[header["id"]]
+          dispensing = dispensing_of(header)
           # RP 番号でまとめる。1 つの RP が 1 つの剤になる。
           lines.group_by { |r| rp_number(r) }.sort_by { |rp, _| rp.to_i }.filter_map do |rp, group|
-            build_prescription(rp, group, skipped)
+            build_prescription(rp, group, skipped, dispensing)
           end
         end
       end
@@ -124,7 +125,15 @@ module Integrations
           .find { |i| i["system"] == Coding::RP_GROUP_NUMBER }&.dig("value") || "1"
       end
 
-      def build_prescription(rp_number, lines, skipped)
+      # 院内 / 院外。同じ日に両方があると連携先で区別が要る(日レセなら 211 / 212)。
+      def dispensing_of(header)
+        case Coding.code_in_list(header["category"], Coding::PRESCRIPTION_CATEGORY)
+        when "external" then :external
+        when "internal" then :internal
+        end
+      end
+
+      def build_prescription(rp_number, lines, skipped, dispensing = nil)
         dosage = lines.first.dig("dosageInstruction", 0) || {}
         usage = Coding.find(dosage.dig("timing", "code"), Coding::USAGE_CODE)
         category = Coding.code_of(dosage.dig("timing", "code"), Coding::USAGE_CATEGORY)
@@ -145,9 +154,12 @@ module Integrations
           category: kind,
           name: "RP#{rp_number}",
           lines: built,
-          days: prescription_count(lines.first, dosage),
+          # 外用は「総量 × 1」で入力し、日数は送らない(日数が要るのは特定疾患処方管理加算の
+          # 28 日以上だけで、その判断は医事側)。
+          days: kind == TOPICAL ? nil : prescription_count(lines.first, dosage),
           usage_code: usage&.dig("code"),
           usage_name: usage&.dig("display"),
+          dispensing: dispensing,
           source_ref: "MedicationRequest/#{lines.first['id']}"
         )
       end
@@ -177,22 +189,37 @@ module Integrations
       def prescription_line(request, skipped)
         concept = request["medicationCodeableConcept"]
         code = Coding.code_of(concept, Coding::MEDICINE_CODE)
+        generic = false
 
         if code.blank?
-          # 一般名処方は銘柄を指さないので、そのままではレセ電算コードにならない。
-          reason = if Coding.code_of(concept, Coding::GENERAL_ORDER_CODE)
-                     "一般名処方はレセプト電算コードに解決できません"
-                   else
-                     "レセプト電算コードがありません"
-                   end
-          skipped << Skipped.new(kind: "処方", name: medication_name(request), reason: reason)
-          return nil
+          # 一般名処方は銘柄を指さない。レセコンには銘柄のコードに一般名の印を付けて送るので、
+          # 一般名コードから代表の銘柄(最も薬価の低いもの)を引く。
+          general = Coding.code_of(concept, Coding::GENERAL_ORDER_CODE)
+          code = representative_brand(general) if general
+          generic = code.present?
+          if code.blank?
+            reason = general ? "一般名処方の銘柄を医薬品マスタから引けません(#{general})" : "レセプト電算コードがありません"
+            skipped << Skipped.new(kind: "処方", name: medication_name(request), reason: reason)
+            return nil
+          end
         end
 
         dose = request.dig("dosageInstruction", 0, "doseAndRate", 0, "doseQuantity")
-        BillingLine.new(code: code, name: medication_name(request), kind: :medicine,
+        BillingLine.new(code: code, name: medication_name(request), kind: :medicine, generic: generic,
                         quantity: dose && dose["value"] ? Numbers.format(dose["value"]) : nil,
                         unit: dose&.dig("unit"))
+      end
+
+      # 一般名コードに対応する銘柄のうち、薬価が最も低いもの(同額ならコード順)。
+      # 院外処方では薬剤料を請求しないので、どの銘柄を指すかは一般名の印さえあれば結果に響かない。
+      def representative_brand(general_code)
+        @brands ||= {}
+        @brands.fetch(general_code) do
+          # 廃止年月日は「99999999」= 廃止されていない(レセ電算の慣行)。
+          @brands[general_code] = Master::Medicine.where(generic_name_code: general_code)
+                                                  .where(abolished_on: [nil, "", "99999999"])
+                                                  .order(:price, :medicine_code).pick(:medicine_code)
+        end
       end
 
       def medication_name(request)

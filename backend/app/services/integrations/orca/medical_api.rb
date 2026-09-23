@@ -16,6 +16,10 @@ module Integrations
       CANCEL = "02".freeze
       # 置換。仕様上は入院のみ(外来で通る版もあるが、それに頼らない)。入院の訂正で使う。
       REPLACE = "03".freeze
+      # 外来追加。1 回に送れる剤は 40 までなので、超える分はこれで続けて送る。
+      # 一致条件は患者・診療日・診療科・保険組合せで、ドクターコードが違うと 41 で弾かれる。
+      APPEND = "04".freeze
+      MAX_CLASSES = 40
 
       # 既に同日の診療データが登録されている。削除 → 再登録に倒す合図。
       ALREADY_REGISTERED = "80".freeze
@@ -73,19 +77,34 @@ module Integrations
           department_code: department_code, physician_code: physician_code,
           coverage_set_key: coverage_set_key, medical_fee_auto: medical_fee_auto
         }
-        result = post(REGISTER, classes, **request)
-        return verify_insurance(result, coverage_set_key) unless result.api_result.code == ALREADY_REGISTERED
+        first, *rest = classes.each_slice(MAX_CLASSES).to_a
+        result = post(REGISTER, first, **request)
+        if result.api_result.code == ALREADY_REGISTERED
+          # 日レセに同日のデータが既にある。Medical_Uid を引いて 削除 → 再登録 に倒す。
+          # UID が無いのに削除を送っても「ＵＩＤが未設定です」で止まるだけなので、80 をそのまま返す。
+          uid = find_uid(patient_id: patient_id, perform_date: perform_date, department_code: department_code)
+          return result if uid.blank?
 
-        # 日レセに同日のデータが既にある。Medical_Uid を引いて 削除 → 再登録 に倒す。
-        # UID が無いのに削除を送っても「ＵＩＤが未設定です」で止まるだけなので、80 をそのまま返す。
-        uid = find_uid(patient_id: patient_id, perform_date: perform_date, department_code: department_code)
-        return result if uid.blank?
+          deleted = delete(uid, patient_id: patient_id, perform_date: perform_date, department_code: department_code)
+          return deleted unless deleted.ok?
 
-        deleted = delete(uid, patient_id: patient_id, perform_date: perform_date, department_code: department_code)
-        return deleted unless deleted.ok?
+          result = post(REGISTER, first, **request)
+          return failed_after_delete(result) unless result.ok?
+        end
+        return result unless result.ok?
 
-        again = post(REGISTER, classes, **request)
-        again.ok? ? verify_insurance(again, coverage_set_key) : failed_after_delete(again)
+        # 40 剤を超える分を外来追加で続ける。途中で落ちたら、どこまで登録されたかを伝える。
+        rest.each_with_index do |chunk, index|
+          appended = post(APPEND, chunk, **request)
+          next if appended.ok?
+
+          sent = MAX_CLASSES * (index + 1)
+          return with_result(appended, code: appended.api_result.code,
+                                       message: "#{sent + 1} 剤目以降の追記に失敗しました(#{sent} 剤までは登録済み)。" \
+                                                "#{appended.api_result.message}")
+        end
+
+        verify_insurance(result, coverage_set_key)
       end
 
       def cancel(patient_id:, perform_date:, department_code:)

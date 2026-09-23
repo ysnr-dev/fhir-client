@@ -8,8 +8,8 @@ module Integrations
     # 変わったら剤を切る(手術の実施記録に並ぶ麻酔 L 章は 540 の別の剤になる)。
     # 手技の行が無い剤は、種別の既定の区分に落ちる。
     module MedicalMessage
-      # 日レセの上限(reference/record/xml_medicalv2req.db)。
-      MAX_CLASSES = 40
+      # 日レセの上限(reference/record/xml_medicalv2req.db)。剤が 40 を超える分は MedicalApi が
+      # class=04(外来追加)で続けて送るので、ここでは剤を切らない。明細は 1 剤 40 まで。
       MAX_LINES = 40
 
       # 種別の既定の区分。手技の区分番号が引けないときの落としどころ。
@@ -30,6 +30,11 @@ module Integrations
       # 手術の章のうち輸血(K920〜K924)は 510。
       TRANSFUSION_SECTIONS = ("K920".."K924").to_a.freeze
 
+      # 処方の院内 / 院外。通常は 210 系(院内・院外は日レセの医療機関情報で決まる)でよく、
+      # 同じ日に混在させるときだけ院内専用(211 系)・院外専用(212 系)を明示する。
+      # カルテは処方ごとに区分を持っているので、持っていれば常に明示する。
+      DISPENSING_OFFSET = { internal: 1, external: 2 }.freeze
+
       # 注射の区分。手技(JAMI 詳細用法コードの注射手技)で決め、点滴は 330、
       # 中心静脈は 350。手技が無ければ投与経路(JP Core route-codes)から、それも無ければ
       # その他注射 340。手技料(静脈内注射など)は区分から日レセが算定するので送らない。
@@ -46,6 +51,8 @@ module Integrations
       CLASS_NAMES = {
         "110" => "初診", "120" => "再診", "130" => "医学管理", "140" => "在宅",
         "210" => "内服", "220" => "頓服", "230" => "外用",
+        "211" => "内服(院内)", "221" => "頓服(院内)", "231" => "外用(院内)",
+        "212" => "内服(院外)", "222" => "頓服(院外)", "232" => "外用(院外)",
         "310" => "皮下筋肉内注射", "320" => "静脈内注射", "330" => "点滴注射",
         "340" => "その他注射", "350" => "中心静脈注射",
         "400" => "処置", "500" => "手術", "510" => "輸血", "540" => "麻酔",
@@ -69,20 +76,20 @@ module Integrations
       def build(items)
         groups, dropped = split(items)
         classes = groups.map do |group|
+          lines = group.lines
+          if lines.length > MAX_LINES
+            lines[MAX_LINES..].each do |line|
+              dropped << { kind: group.item.category.to_s, name: line.name.presence || line.code,
+                           reason: "1 剤に送れる明細は #{MAX_LINES} までです" }
+            end
+            lines = lines.first(MAX_LINES)
+          end
           {
             "Medical_Class" => group.medical_class,
             "Medical_Class_Name" => group.item.name,
             "Medical_Class_Number" => group.item.count.presence || group.item.days.presence || "1",
-            "Medication_info" => group.lines.first(MAX_LINES).flat_map { |line| medications(line, group.item) }
+            "Medication_info" => lines.flat_map { |line| medications(line, group.item) }
           }
-        end
-
-        if classes.length > MAX_CLASSES
-          classes[MAX_CLASSES..].each do |entry|
-            dropped << { kind: "剤", name: entry["Medical_Class_Name"],
-                         reason: "1 回に送れる剤は #{MAX_CLASSES} までです" }
-          end
-          classes = classes.first(MAX_CLASSES)
         end
 
         [classes, dropped]
@@ -95,6 +102,7 @@ module Integrations
 
         items.each do |item|
           default_class = item.category == :injection ? injection_class(item) : MEDICAL_CLASS[item.category]
+          default_class = with_dispensing(default_class, item.dispensing)
           current = nil
 
           item.lines.each do |line|
@@ -117,6 +125,14 @@ module Integrations
       end
 
       def class_name(medical_class) = CLASS_NAMES[medical_class] || medical_class
+
+      # 210 / 220 / 230 に院内(+1)・院外(+2)を足す。
+      def with_dispensing(medical_class, dispensing)
+        offset = DISPENSING_OFFSET[dispensing]
+        return medical_class if offset.nil? || medical_class.nil? || !medical_class.match?(/\A2[123]0\z/)
+
+        (medical_class.to_i + offset).to_s
+      end
 
       def injection_class(item)
         return "350" if item.method == "31"
@@ -160,7 +176,9 @@ module Integrations
           "Medication_Code" => line.code,
           "Medication_Name" => line.name,
           "Medication_Usage_Code" => item.usage_code,
-          "Medication_Number" => line.quantity
+          "Medication_Number" => line.quantity,
+          # 一般名処方。銘柄のコードに一般名の印を付ける(yes)。有効なのは内服・外用・頓服。
+          "Medication_Generic_Flg" => line.generic ? "yes" : nil
         }.compact_blank
       end
 

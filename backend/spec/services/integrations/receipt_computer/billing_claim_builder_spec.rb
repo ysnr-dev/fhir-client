@@ -104,14 +104,50 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
       expect(result.skipped.map(&:name)).to eq(["注射薬"])
     end
 
-    it "reports 一般名処方 as not sendable with the reason" do
-      request = medication_request(code: "1", dose: 1, name: "【般】ファモチジン")
+    def generic_request(general: "2325003B2ZZZ")
+      request = medication_request(code: "1", dose: 3, days: 7, name: "【般】ファモチジン散２％")
       request["medicationCodeableConcept"]["coding"] = [
-        { "system" => "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/MedicationGeneralOrderCode", "code" => "x" }
+        { "system" => "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/MedicationGeneralOrderCode", "code" => general }
       ]
-      store.add(request)
+      request
+    end
 
-      expect(build.skipped.first.reason).to include("一般名処方")
+    it "sends 一般名処方 as the cheapest brand of that 一般名, marked generic" do
+      Master::Medicine.create!(medicine_code: "610406079", name: "ガスター散２％", generic_name_code: "2325003B2ZZZ", price: 15.1)
+      Master::Medicine.create!(medicine_code: "610463165", name: "ファモチジン細粒２％", generic_name_code: "2325003B2ZZZ", price: 10.2)
+      Master::Medicine.create!(medicine_code: "600000001", name: "廃止品", generic_name_code: "2325003B2ZZZ", price: 1.0,
+                               abolished_on: "20240331")
+      store.add(generic_request)
+
+      line = build.items.first.lines.first
+      expect(line.code).to eq("610463165")
+      expect(line.generic).to be(true)
+      expect(line.name).to eq("【般】ファモチジン散２％")
+      expect(orca_classes.first["Medication_info"].first["Medication_Generic_Flg"]).to eq("yes")
+    end
+
+    it "reports 一般名処方 whose 一般名 no brand in the 医薬品マスタ carries" do
+      store.add(generic_request(general: "x"))
+
+      expect(build.items).to be_empty
+      expect(build.skipped.first.reason).to include("一般名処方の銘柄")
+    end
+
+    it "sends 外用 without 日数 (総量 × 1)" do
+      store.add(medication_request(code: "1", dose: 1, category: "2", days: 14))
+
+      expect(build.items.first.days).to be_nil
+      expect(orca_classes.first["Medical_Class_Number"]).to eq("1")
+    end
+
+    it "carries the 院外 区分 of the 処方 header to the 連携先" do
+      header = prescription_header(id: "rx-ext")
+      header["category"] << { "coding" => [{ "system" => "http://fhir-client.local/CodeSystem/prescription-category",
+                                             "code" => "external" }] }
+      store.add(header, medication_request(code: "1", dose: 1, parent: "rx-ext"))
+
+      expect(build.items.first.dispensing).to eq(:external)
+      expect(orca_classes.first["Medical_Class"]).to eq("212")
     end
 
     it "ignores prescriptions that were cancelled" do
