@@ -17,6 +17,7 @@ export type MasterType =
   | "medical_materials"
   | "medical_procedures"
   | "comments"
+  | "comment_relations"
   | "micro_specimen_types"
   | "micro_organisms"
   | "micro_antimicrobials"
@@ -1769,6 +1770,32 @@ export interface MedicalProcedure {
   /** 廃止年月日。"99999999" は廃止されていないことを表す(レセ電算の慣行)。 */
   abolished_on: string | null;
   basic_name: string | null;
+}
+
+/**
+ * コメント関連テーブルの 1 行。診療行為コードに関係するコメントコードと条件。
+ * condition_category: 00 = 記載要領の文言で決まる条件 / 01 = 算定したら要る /
+ * 02 = 入院・入院外のどちらかで算定したら / 03 = 複数回算定したら。
+ */
+export interface CommentRelation {
+  id: number;
+  procedure_code: string;
+  procedure_name: string | null;
+  comment_code: string;
+  comment_text: string | null;
+  condition_category: string | null;
+  inpatient_outpatient: string | null;
+  billing_count: string | null;
+}
+
+/** 診療行為コード(複数可)に関係するコメントコードの候補。設定画面でコメントを選ぶときに使う。 */
+export async function fetchCommentRelations(
+  procedureCodes: string[],
+): Promise<MasterSearchResult<CommentRelation>> {
+  const search = new URLSearchParams({ procedure_code: procedureCodes.join(","), per: "100" });
+  const res = await masterFetch(`/master/comment_relations?${search.toString()}`);
+  if (!res.ok) throw new MasterApiError(`${res.status} ${res.statusText}`, res.status);
+  return (await res.json()) as MasterSearchResult<CommentRelation>;
 }
 
 export async function searchMedicalProcedures(params: {

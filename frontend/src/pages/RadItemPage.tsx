@@ -1,3 +1,4 @@
+import { CommentCandidates } from "../components/CommentCandidates";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type {
   RadElementNames,
@@ -625,8 +626,11 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
               value={draft.site_comment_code}
               onChange={(e) => setDraft({ ...draft, site_comment_code: e.target.value.trim() })}
               placeholder="820181000"
+              list="rad-item-site-comments"
             />
           </label>
+          {/* レセ電算コード(撮影料)に関係するコメントを候補にする */}
+          <CommentCandidates id="rad-item-site-comments" procedureCodes={[draft.receipt_code]} />
           <label>
             表示順
             <input

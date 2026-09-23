@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_23_130000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_23_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -127,6 +127,43 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_23_130000) do
     t.datetime "updated_at", null: false
     t.index ["code"], name: "index_file_categories_on_code", unique: true
     t.index ["name"], name: "index_file_categories_on_name", unique: true
+  end
+
+  create_table "master_comment_relations", force: :cascade do |t|
+    t.string "change_category"
+    t.string "placement_category"
+    t.string "item_number"
+    t.string "section"
+    t.string "branch"
+    t.string "procedure_code", null: false
+    t.string "addition_code"
+    t.string "procedure_name"
+    t.string "comment_code"
+    t.string "patient_state_code"
+    t.string "comment_text"
+    t.string "changed_on"
+    t.string "abolished_on"
+    t.string "condition_category"
+    t.string "non_billing_reason"
+    t.string "inpatient_outpatient"
+    t.string "billing_count"
+    t.string "publication_order"
+    t.string "reserve1"
+    t.string "reserve2"
+    t.string "reserve3"
+    t.string "reserve4"
+    t.string "reserve5"
+    t.string "reserve6"
+    t.string "reserve7"
+    t.string "reserve8"
+    t.string "reserve9"
+    t.string "reserve10"
+    t.string "reserve11"
+    t.string "reserve12"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["comment_code"], name: "index_master_comment_relations_on_comment_code"
+    t.index ["procedure_code"], name: "index_master_comment_relations_on_procedure_code"
   end
 
   create_table "master_comments", force: :cascade do |t|

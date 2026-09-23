@@ -124,6 +124,8 @@ import {
   fetchRadMaterial,
   searchMedicalMaterials,
   searchMedicalProcedures,
+  fetchCommentRelations,
+  type CommentRelation,
   searchRadFrequentCodes,
   searchRadMaterials,
   updateRadMaterial,
@@ -1290,6 +1292,23 @@ export function useRadMaterialMutations() {
 const MEDICAL_PROCEDURES_KEY = ["master", "medical_procedures"];
 
 /** 医科診療行為(手技料)の検索。実施入力で手技を確定するために引く。 */
+const EMPTY_COMMENT_RELATIONS: CommentRelation[] = [];
+
+/**
+ * 診療行為コードに関係するコメントコードの候補(コメント関連テーブル)。
+ * 9 桁のコードが 1 つも無ければ問い合わせない。
+ */
+export function useCommentRelations(procedureCodes: string[]) {
+  const codes = Array.from(new Set(procedureCodes.filter((c) => /^\d{9}$/.test(c)))).sort();
+  const query = useQuery({
+    queryKey: ["master", "comment_relations", codes],
+    queryFn: () => fetchCommentRelations(codes),
+    enabled: codes.length > 0,
+    staleTime: Infinity,
+  });
+  return { ...query, items: query.data?.items ?? EMPTY_COMMENT_RELATIONS };
+}
+
 export function useMedicalProcedureSearch(
   filters: { name?: string; codeTableNumberAlpha?: string },
   page: number,

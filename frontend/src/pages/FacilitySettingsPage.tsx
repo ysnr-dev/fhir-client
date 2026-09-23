@@ -55,6 +55,8 @@ import {
   REHAB_CATEGORY_LABELS,
   REHAB_COLUMN_KEYS,
   REHAB_COLUMN_LABELS,
+  REHAB_COMMENT_KEYS,
+  REHAB_THERAPY_KEYS,
   TRANSFUSION_LABELS,
   receiptCodeValid,
   receiptCodesValid,
@@ -63,6 +65,8 @@ import {
 import { departmentDisplayName, sortDepartmentsByCode } from "../fhir/departmentHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
 import { NursingItemSearchModal } from "../components/NursingItemSearchModal";
+import { CommentCandidates } from "../components/CommentCandidates";
+import { radiotherapyTechniqueHooks } from "../api/masterQueries";
 
 // 「どの Organization が自院か」を指定する。本アプリはマルチテナントではなく、
 // 診療科・診察室・スタッフは自院のものしか登録しない。他院は診療情報提供書の
@@ -255,7 +259,14 @@ export function FacilitySettingsPage() {
     });
   }
 
-  function receiptCodeInput(value: string, onChange: (next: string) => void, label: string) {
+  // コメントコードの欄には、関係する診療行為コードから引いた候補(コメント関連テーブル)を
+  // datalist で添える。listId を渡した欄だけ。
+  function receiptCodeInput(
+    value: string,
+    onChange: (next: string) => void,
+    label: string,
+    listId?: string,
+  ) {
     return (
       <input
         type="text"
@@ -266,9 +277,16 @@ export function FacilitySettingsPage() {
         aria-label={label}
         aria-invalid={!receiptCodeValid(value)}
         className="facility-settings__code"
+        list={listId}
       />
     );
   }
+
+  // 照射部位コメントの候補は、照射技法マスタに設定した放射線治療管理料のコードから引く。
+  const techniques = radiotherapyTechniqueHooks.useList();
+  const managementCodes = (techniques.data?.items ?? [])
+    .map((t) => t.management_receipt_code ?? "")
+    .filter(Boolean);
 
   return (
     <div className="page">
@@ -601,9 +619,17 @@ export function FacilitySettingsPage() {
                           receiptCodes.rehab[category][column],
                           (next) => updateRehabCode(category, column, next),
                           `${REHAB_CATEGORY_LABELS[category]} ${REHAB_COLUMN_LABELS[column]} のレセプト電算コード`,
+                          (REHAB_COMMENT_KEYS as readonly string[]).includes(column)
+                            ? `rehab-comments-${category}`
+                            : undefined,
                         )}
                       </td>
                     ))}
+                    {/* この行の療法士のコードに関係するコメントを候補にする */}
+                    <CommentCandidates
+                      id={`rehab-comments-${category}`}
+                      procedureCodes={REHAB_THERAPY_KEYS.map((t) => receiptCodes.rehab[category][t])}
+                    />
                   </tr>
                 ))}
               </tbody>
@@ -630,8 +656,10 @@ export function FacilitySettingsPage() {
                 receiptCodes.radiotherapy.site_comment,
                 (next) => updateReceiptCode("radiotherapy", "site_comment", next),
                 "照射部位コメントのレセプト電算コード",
+                "radiotherapy-site-comments",
               )}
             </label>
+            <CommentCandidates id="radiotherapy-site-comments" procedureCodes={managementCodes} />
 
             <h3 className="facility-settings__subheading">輸血の手技</h3>
             {(Object.keys(TRANSFUSION_LABELS) as (keyof ReceiptCodeSettings["transfusion"])[]).map(

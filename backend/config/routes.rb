@@ -257,6 +257,10 @@ Rails.application.routes.draw do
     resources :comments, only: %i[index] do
       collection { post :import }
     end
+    # コメント関連テーブル。診療行為コードに関係するコメントコードの候補(全置換取込)。
+    resources :comment_relations, only: %i[index] do
+      collection { post :import }
+    end
     # 細菌検査オーダーのマスタ群。JANIS 由来の2つは標準コードを取込で洗い替え、
     # 画面からは施設追加分(と病原体の頻用フラグ)だけを書ける。
     resources :micro_specimen_types, only: %i[index create update destroy] do
