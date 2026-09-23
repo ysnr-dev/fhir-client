@@ -14,6 +14,13 @@ module Integrations
       # 疾患別リハビリテーション料。区分(疾患別)× 療法の担い手(pt / ot / st)。
       def rehab(category, therapy) = fetch("rehab", category, therapy)
 
+      # 疾患別リハに添えるコメント。疾患名(830 系)と発症年月日(850 系)。
+      def rehab_disease_name_comment(category) = fetch("rehab", category, "disease_name_comment")
+      def rehab_onset_date_comment(category) = fetch("rehab", category, "onset_date_comment")
+
+      # 放射線治療管理料に添える照射部位のコメント(830 系)。
+      def radiotherapy_site_comment = fetch("radiotherapy", "site_comment")
+
       # 栄養食事指導料。initial / follow-up / group。
       def nutrition_guidance(session) = fetch("nutrition_guidance", session)
 

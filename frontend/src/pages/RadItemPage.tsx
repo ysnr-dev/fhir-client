@@ -59,6 +59,7 @@ interface Draft {
   valid_from: string;
   valid_to: string;
   receipt_code: string;
+  site_comment_code: string;
   display_order: string;
   note: string;
   // 検査目的・特別指示の既定テンプレート(Questionnaire の canonical)。
@@ -88,6 +89,7 @@ const emptyDraft: Draft = {
   valid_from: "",
   valid_to: "",
   receipt_code: "",
+  site_comment_code: "",
   display_order: "",
   note: "",
   purpose_template_canonical: "",
@@ -115,6 +117,7 @@ function toPayload(draft: Draft, elementCodes: ElementCodes, elementNames: strin
     valid_from: draft.valid_from || null,
     valid_to: draft.valid_to || null,
     receipt_code: draft.receipt_code || null,
+    site_comment_code: draft.site_comment_code || null,
     display_order: draft.display_order ? Number(draft.display_order) : null,
     note: draft.note || null,
     purpose_template_canonical: draft.purpose_template_canonical || null,
@@ -407,6 +410,7 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
       valid_from: d.valid_from ?? "",
       valid_to: d.valid_to ?? "",
       receipt_code: d.receipt_code ?? "",
+      site_comment_code: d.site_comment_code ?? "",
       display_order: d.display_order === null ? "" : String(d.display_order),
       note: d.note ?? "",
       purpose_template_canonical: d.purpose_template_canonical ?? "",
@@ -613,6 +617,17 @@ function ItemEditModal({ itemId, onClose }: ItemEditModalProps) {
             />
           </label>
           <label>
+            撮影部位コメント(820)
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={9}
+              value={draft.site_comment_code}
+              onChange={(e) => setDraft({ ...draft, site_comment_code: e.target.value.trim() })}
+              placeholder="820181000"
+            />
+          </label>
+          <label>
             表示順
             <input
               type="number"
@@ -724,7 +739,7 @@ function readElementCodes(item: RadItemDetail): ElementCodes {
   const codes: ElementCodes = {};
   for (const [key, value] of Object.entries(source)) {
     if (!key.endsWith("_code") || key === "jj1017_code" || key === "item_code") continue;
-    if (key === "receipt_code" || key === "generic_extension_code") continue;
+    if (key === "receipt_code" || key === "site_comment_code" || key === "generic_extension_code") continue;
     if (key === "dataset_code") continue;
     if (value) codes[key.slice(0, -"_code".length)] = value;
   }

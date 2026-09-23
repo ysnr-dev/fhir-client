@@ -16,6 +16,7 @@ export type MasterType =
   | "rad_frequent_codes"
   | "medical_materials"
   | "medical_procedures"
+  | "comments"
   | "micro_specimen_types"
   | "micro_organisms"
   | "micro_antimicrobials"
@@ -1446,6 +1447,8 @@ export interface RadItem {
   valid_from: string | null;
   valid_to: string | null;
   receipt_code: string | null;
+  /** 撮影部位の選択式コメント(820 系)。医事会計へ送るときに撮影に添える。 */
+  site_comment_code: string | null;
   display_order: number | null;
   note: string | null;
   // オーダー画面の「検査目的」「特別指示」を記入するテンプレート(Questionnaire)の
@@ -1531,6 +1534,7 @@ export interface RadItemPayload {
   valid_from?: string | null;
   valid_to?: string | null;
   receipt_code?: string | null;
+  site_comment_code?: string | null;
   display_order?: number | null;
   note?: string | null;
   purpose_template_canonical?: string | null;

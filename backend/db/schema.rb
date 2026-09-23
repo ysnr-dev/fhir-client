@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_23_110000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_23_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -127,6 +127,46 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_23_110000) do
     t.datetime "updated_at", null: false
     t.index ["code"], name: "index_file_categories_on_code", unique: true
     t.index ["name"], name: "index_file_categories_on_name", unique: true
+  end
+
+  create_table "master_comments", force: :cascade do |t|
+    t.string "change_category"
+    t.string "master_type"
+    t.string "category"
+    t.string "pattern"
+    t.string "serial_number"
+    t.integer "name_kanji_length"
+    t.string "name"
+    t.integer "name_kana_length"
+    t.string "name_kana"
+    t.string "column_position_1"
+    t.string "digits_1"
+    t.string "column_position_2"
+    t.string "digits_2"
+    t.string "column_position_3"
+    t.string "digits_3"
+    t.string "column_position_4"
+    t.string "digits_4"
+    t.string "reserve1"
+    t.string "reserve2"
+    t.string "selective_flag"
+    t.string "changed_on"
+    t.string "abolished_on"
+    t.string "comment_code", null: false
+    t.string "publication_order"
+    t.string "reserve3"
+    t.string "reserve4"
+    t.string "reserve5"
+    t.string "reserve6"
+    t.string "reserve7"
+    t.string "reserve8"
+    t.string "search_name"
+    t.string "search_kana"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["abolished_on"], name: "index_master_comments_on_abolished_on"
+    t.index ["comment_code"], name: "index_master_comments_on_comment_code", unique: true
+    t.index ["pattern"], name: "index_master_comments_on_pattern"
   end
 
   create_table "master_ctcae_terms", force: :cascade do |t|
@@ -1584,6 +1624,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_23_110000) do
     t.integer "duration_minutes"
     t.string "appointment_schedule_id"
     t.string "report_findings_template_canonical"
+    t.string "site_comment_code"
     t.index ["dataset_code"], name: "index_master_rad_items_on_dataset_code"
     t.index ["groupable"], name: "index_master_rad_items_on_groupable"
     t.index ["item_code"], name: "index_master_rad_items_on_item_code", unique: true

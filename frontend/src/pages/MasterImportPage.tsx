@@ -99,6 +99,12 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".csv",
   },
   {
+    type: "comments",
+    label: "コメントマスタ",
+    formatHint: "レセプト電算 コメントマスター c_ALL*.csv（Shift_JIS、ヘッダなし・30列）",
+    accept: ".csv",
+  },
+  {
     type: "lab_specimens",
     label: "検体マスタ",
     formatHint:

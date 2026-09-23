@@ -140,9 +140,13 @@ class FacilitySettings < ApplicationRecord
   # (2024 年改定で「理学療法士による場合」などに分かれた)× 施設基準で決まる。
   REHAB_CATEGORIES = %w[cardiovascular cerebrovascular disuse musculoskeletal respiratory].freeze
   REHAB_THERAPIES = %w[pt ot st].freeze
+  # 疾患別リハに添えるコメント(区分ごとにコードが違う): 疾患名(830 系)と発症年月日(850 系)。
+  REHAB_COMMENTS = %w[disease_name_comment onset_date_comment].freeze
   DEFAULT_RECEIPT_CODES = {
     "pathology" => { "N000" => "", "N004" => "", "N003" => "" },
-    "rehab" => REHAB_CATEGORIES.index_with { REHAB_THERAPIES.index_with("") },
+    "rehab" => REHAB_CATEGORIES.index_with { (REHAB_THERAPIES + REHAB_COMMENTS).index_with("") },
+    # 放射線治療管理料に添える照射部位のコメント(830 系)。
+    "radiotherapy" => { "site_comment" => "" },
     "nutrition_guidance" => { "initial" => "", "follow-up" => "", "group" => "" },
     "lab" => { "blood_draw" => "" },
     # 保存血液輸血の手技(K920)。1 回目は最初の 200mL、2 回目以降は 200mL ごと。
@@ -156,7 +160,8 @@ class FacilitySettings < ApplicationRecord
   RECEIPT_CODES_SHAPE = {
     fields: {
       "pathology" => { fields: DEFAULT_RECEIPT_CODES["pathology"].keys.index_with(RECEIPT_CODE) },
-      "rehab" => { fields: REHAB_CATEGORIES.index_with({ fields: REHAB_THERAPIES.index_with(RECEIPT_CODE) }) },
+      "rehab" => { fields: REHAB_CATEGORIES.index_with({ fields: (REHAB_THERAPIES + REHAB_COMMENTS).index_with(RECEIPT_CODE) }) },
+      "radiotherapy" => { fields: DEFAULT_RECEIPT_CODES["radiotherapy"].keys.index_with(RECEIPT_CODE) },
       "nutrition_guidance" => { fields: DEFAULT_RECEIPT_CODES["nutrition_guidance"].keys.index_with(RECEIPT_CODE) },
       "lab" => { fields: DEFAULT_RECEIPT_CODES["lab"].keys.index_with(RECEIPT_CODE) },
       "transfusion" => { fields: DEFAULT_RECEIPT_CODES["transfusion"].keys.index_with(RECEIPT_CODE) },

@@ -284,6 +284,22 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
       expect(orca_classes.first["Medical_Class"]).to eq("700")
     end
 
+    it "adds the 撮影部位 選択式コメント (820) of the ordered items once each" do
+      Master::RadItem.create!(item_code: "R1", name: "胸部正面", receipt_code: "170001210", site_comment_code: "820181010")
+      Master::RadItem.create!(item_code: "R2", name: "胸部側面", receipt_code: "170001210", site_comment_code: "820181010")
+      Master::Comment.create!(comment_code: "820181010", name: "撮影部位（単純撮影）：胸部", pattern: "20")
+      store.add(order_header(order_type: "rad"),
+                order_detail(item_code: "R1", system: rad_system, id: "d1"),
+                order_detail(item_code: "R2", system: rad_system, id: "d2"),
+                procedure_hub(order_type: "rad", code: "170001210"))
+
+      lines = build.items.first.lines
+      expect(lines.map { |l| [l.kind, l.code, l.name] }).to eq([[:procedure, "170001210", "手技"],
+                                                               [:comment, "820181010", "撮影部位（単純撮影）：胸部"]])
+      expect(orca_classes.first["Medication_info"].last).to eq("Medication_Code" => "820181010",
+                                                              "Medication_Name" => "撮影部位（単純撮影）：胸部")
+    end
+
     it "translates 放射線の器材マスタ into the 特定器材コード" do
       Master::RadMaterial.create!(material_code: "RM1", name: "造影用シリンジ", receipt_material_code: "700090000")
       store.add(order_header(order_type: "rad"),
@@ -602,6 +618,38 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder, "施設設定
       expect(build.items.first.count).to eq("3")
     end
 
+    it "adds 疾患名 (830) and 発症年月日 (850) comments from the order when the 施設設定 names their codes" do
+      receipt_codes!("rehab" => { "musculoskeletal" => { "pt" => "180755710", "disease_name_comment" => "830100217",
+                                                        "onset_date_comment" => "850100224" } })
+      Master::Comment.create!(comment_code: "830100217", name: "疾患名（運動器リハビリテーション料）；", pattern: "30")
+      Master::Comment.create!(comment_code: "850100224", name: "発症年月日（運動器リハビリテーション料）", pattern: "50")
+      header = store.resources["ServiceRequest"].first
+      header["extension"] = [
+        { "url" => "http://fhir-client.local/StructureDefinition/rehab-target-disease", "valueString" => "変形性膝関節症" },
+        { "url" => "http://fhir-client.local/StructureDefinition/rehab-onset-date", "valueDate" => "2026-08-01" }
+      ]
+      store.add(rehab_hub(id: "r1", therapy_type: "pt", units: 2))
+
+      lines = build.items.first.lines
+      expect(lines.map { |l| [l.kind, l.code, l.name, l.quantity] }).to eq([
+        [:procedure, "180755710", "運動器リハビリテーション PT", "1"],
+        [:comment, "830100217", "変形性膝関節症", nil],
+        [:comment, "850100224", "発症年月日（運動器リハビリテーション料） 2026-08-01", "2026-08-01"]
+      ])
+      info = orca_classes.first["Medication_info"]
+      expect(info[1]).to eq("Medication_Code" => "830100217", "Medication_Name" => "変形性膝関節症")
+      expect(info[2]).to eq("Medication_Code" => "850100224", "Medication_Number" => "2026-08-01")
+    end
+
+    it "reports a comment it cannot fill instead of sending the 剤 without saying so" do
+      receipt_codes!("rehab" => { "musculoskeletal" => { "pt" => "180755710", "onset_date_comment" => "850100224" } })
+      store.add(rehab_hub(id: "r1", therapy_type: "pt", units: 1))
+
+      result = build
+      expect(result.items.first.lines.map(&:kind)).to eq([:procedure])
+      expect(result.skipped.first.reason).to include("起算日")
+    end
+
     it "reports when the 施設設定 has no code for the 区分 × 療法士" do
       store.add(rehab_hub(id: "r1", therapy_type: "ot", units: 1))
 
@@ -650,6 +698,21 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder, "施設設定
       lines = build.items.first.lines
       expect(lines.map(&:code)).to eq(%w[180018510 180762810])
       expect(orca_classes.first["Medical_Class"]).to eq("840")
+    end
+
+    it "adds the 照射部位 comment to the 管理料 from the 治療処方's 標的" do
+      receipt_codes!("radiotherapy" => { "site_comment" => "830100324" })
+      header = store.resources["ServiceRequest"].first
+      header["extension"] = [{
+        "url" => "http://fhir-client.local/StructureDefinition/radiotherapy-volume",
+        "extension" => [{ "url" => "label", "valueString" => "PTV1" },
+                        { "url" => "bodySite", "valueCodeableConcept" => { "text" => "左乳房" } }]
+      }]
+      store.add(fraction(id: "f1"))
+
+      lines = build.items.first.lines
+      expect(lines.map { |l| [l.kind, l.code] }).to eq([[:procedure, "180018510"], [:comment, "830100324"], [:procedure, "180762810"]])
+      expect(lines[1].name).to eq("PTV1：左乳房")
     end
 
     it "does not repeat 管理料 once the course has earlier fractions" do

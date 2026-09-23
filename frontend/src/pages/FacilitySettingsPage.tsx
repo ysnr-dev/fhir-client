@@ -53,8 +53,8 @@ import {
   PATHOLOGY_LABELS,
   REHAB_CATEGORY_KEYS,
   REHAB_CATEGORY_LABELS,
-  REHAB_THERAPY_KEYS,
-  REHAB_THERAPY_LABELS,
+  REHAB_COLUMN_KEYS,
+  REHAB_COLUMN_LABELS,
   TRANSFUSION_LABELS,
   receiptCodeValid,
   receiptCodesValid,
@@ -178,7 +178,7 @@ export function FacilitySettingsPage() {
 
   function updateRehabCode(
     category: (typeof REHAB_CATEGORY_KEYS)[number],
-    therapy: (typeof REHAB_THERAPY_KEYS)[number],
+    therapy: (typeof REHAB_COLUMN_KEYS)[number],
     value: string,
   ) {
     setReceiptCodesDraft((prev) => {
@@ -579,13 +579,15 @@ export function FacilitySettingsPage() {
               ),
             )}
 
-            <h3 className="facility-settings__subheading">疾患別リハビリテーション料(区分 × 療法士)</h3>
+            <h3 className="facility-settings__subheading">
+              疾患別リハビリテーション料(区分 × 療法士)と添えるコメント
+            </h3>
             <table className="facility-settings__code-table">
               <thead>
                 <tr>
                   <th />
-                  {REHAB_THERAPY_KEYS.map((therapy) => (
-                    <th key={therapy}>{REHAB_THERAPY_LABELS[therapy]}</th>
+                  {REHAB_COLUMN_KEYS.map((column) => (
+                    <th key={column}>{REHAB_COLUMN_LABELS[column]}</th>
                   ))}
                 </tr>
               </thead>
@@ -593,12 +595,12 @@ export function FacilitySettingsPage() {
                 {REHAB_CATEGORY_KEYS.map((category) => (
                   <tr key={category}>
                     <th scope="row">{REHAB_CATEGORY_LABELS[category]}</th>
-                    {REHAB_THERAPY_KEYS.map((therapy) => (
-                      <td key={therapy}>
+                    {REHAB_COLUMN_KEYS.map((column) => (
+                      <td key={column}>
                         {receiptCodeInput(
-                          receiptCodes.rehab[category][therapy],
-                          (next) => updateRehabCode(category, therapy, next),
-                          `${REHAB_CATEGORY_LABELS[category]} ${REHAB_THERAPY_LABELS[therapy]} のレセプト電算コード`,
+                          receiptCodes.rehab[category][column],
+                          (next) => updateRehabCode(category, column, next),
+                          `${REHAB_CATEGORY_LABELS[category]} ${REHAB_COLUMN_LABELS[column]} のレセプト電算コード`,
                         )}
                       </td>
                     ))}
@@ -620,6 +622,16 @@ export function FacilitySettingsPage() {
                 )}
               </label>
             ))}
+
+            <h3 className="facility-settings__subheading">放射線治療</h3>
+            <label>
+              照射部位コメント(830。放射線治療管理料に添える)
+              {receiptCodeInput(
+                receiptCodes.radiotherapy.site_comment,
+                (next) => updateReceiptCode("radiotherapy", "site_comment", next),
+                "照射部位コメントのレセプト電算コード",
+              )}
+            </label>
 
             <h3 className="facility-settings__subheading">輸血の手技</h3>
             {(Object.keys(TRANSFUSION_LABELS) as (keyof ReceiptCodeSettings["transfusion"])[]).map(

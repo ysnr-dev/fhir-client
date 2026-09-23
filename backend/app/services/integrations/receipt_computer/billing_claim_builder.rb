@@ -44,7 +44,9 @@ module Integrations
         report_orphans(performed.orphans, skipped)
         report_unfinished(performed.unfinished, skipped)
         performed_items = PerformedItemBuilder.new(skipped, medication_requests: medication_requests_by_id(requests),
-                                                            service_requests: headers_by_id, store: store)
+                                                            service_requests: headers_by_id,
+                                                            details_by_parent: group_by_parent(requests, "ServiceRequest"),
+                                                            store: store)
                                               .call(performed.records)
         # 中止・実施せずのオーダーも「実施記録が無い」とは別に報告済みなので、ここに含める。
         performed_order_ids = (performed.records + performed.unfinished).map(&:order_id).compact.to_set

@@ -109,8 +109,8 @@ RSpec.describe Integrations::Orca::MedicalMessage do
     it "sends 842 comments as a number" do
       built = classes([item(:lab, [line("160008010"), line("842100001", kind: :comment, quantity: "12.5", name: "値")])])
 
-      expect(built.first["Medication_info"].last).to eq("Medication_Code" => "842100001", "Medication_Name" => "値",
-                                                        "Medication_Number" => "12.5")
+      # 名称は展開時に破棄されるので送らない。
+      expect(built.first["Medication_info"].last).to eq("Medication_Code" => "842100001", "Medication_Number" => "12.5")
     end
 
     it "splits 830 comments into 50-character lines" do
@@ -120,6 +120,19 @@ RSpec.describe Integrations::Orca::MedicalMessage do
 
       expect(comments.map { |c| c["Medication_Name"].length }).to eq([50, 20])
       expect(comments.map { |c| c["Medication_Code"] }.uniq).to eq(["830100111"])
+    end
+
+    it "sends 年月日・時刻・時間 comments in Medication_Number and 選択式 as the code alone" do
+      built = classes([item(:rehab, [
+        line("180755710"),
+        line("850100224", kind: :comment, quantity: "2025-09-01", name: "発症年月日 2025-09-01"),
+        line("852100007", kind: :comment, quantity: "120", name: "診療時間 120"),
+        line("820181000", kind: :comment, name: "撮影部位（単純撮影）：頭部")
+      ])]).first["Medication_info"].drop(1)
+
+      expect(built[0]).to eq("Medication_Code" => "850100224", "Medication_Number" => "2025-09-01")
+      expect(built[1]).to eq("Medication_Code" => "852100007", "Medication_Number" => "120")
+      expect(built[2]).to eq("Medication_Code" => "820181000", "Medication_Name" => "撮影部位（単純撮影）：頭部")
     end
 
     it "cuts free comments at 80 bytes counting 全角 as 2" do

@@ -253,6 +253,10 @@ Rails.application.routes.draw do
     resources :medical_procedures, only: %i[index] do
       collection { post :import }
     end
+    # レセプト電算のコメントマスタ。医事会計へ送るコメントコードの参照用(全置換取込)。
+    resources :comments, only: %i[index] do
+      collection { post :import }
+    end
     # 細菌検査オーダーのマスタ群。JANIS 由来の2つは標準コードを取込で洗い替え、
     # 画面からは施設追加分(と病原体の頻用フラグ)だけを書ける。
     resources :micro_specimen_types, only: %i[index create update destroy] do

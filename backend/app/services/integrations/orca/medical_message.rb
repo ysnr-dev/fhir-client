@@ -60,9 +60,17 @@ module Integrations
         "800" => "リハビリ", "830" => "精神科専門療法", "840" => "放射線治療"
       }.freeze
 
-      # コメントコードの送り方はコードの先頭 3 桁で決まる(仕様書 comment842-830-bui-api)。
-      NUMBER_COMMENT_PREFIX = "842".freeze
+      # コメントコードの送り方はコードの先頭 3 桁で決まる(仕様書 comment842-830-bui-api、
+      # comment85-831-api)。
+      # - 830: 文を Medication_Name に(全角 50 文字ごとに行を分ける)
+      # - 820: 選択式。コードだけで意味が決まる(名称は参考)
+      # - 840・842: 数値を Medication_Number に
+      # - 850: 年月日を Medication_Number に "YYYY-MM-DD"(西暦 4 桁可。展開時に和暦になる)
+      # - 851: 時刻 "HH-MM"、852: 時間(分)、853: 年月日+時刻、831: 診療行為コード(9 桁)
+      # - 810000001: フリーコメント。80 バイトまで
+      NUMBER_COMMENT_PREFIXES = %w[840 842 850 851 852 853 831].freeze
       TEXT_COMMENT_PREFIX = "830".freeze
+      SELECTIVE_COMMENT_PREFIX = "820".freeze
       FREE_COMMENT_CODE = "810000001".freeze
       TEXT_COMMENT_CHARS = 50
       FREE_COMMENT_BYTES = 80
@@ -182,12 +190,14 @@ module Integrations
         }.compact_blank
       end
 
-      # 842 は数値を Medication_Number に、830 は文だけを Medication_Name に(全角 50 文字
-      # ごとに明細を分けて連続設定)、フリーコメントは 80 バイトまで(超過分は切る)。
+      # 数値・年月日・時刻は Medication_Number に、830 は文だけを Medication_Name に(全角 50 文字
+      # ごとに明細を分けて連続設定)、820 はコードだけ、フリーコメントは 80 バイトまで(超過分は切る)。
       def comment_medications(line)
         code = line.code.to_s
-        if code.start_with?(NUMBER_COMMENT_PREFIX)
-          [{ "Medication_Code" => code, "Medication_Name" => line.name, "Medication_Number" => line.quantity }.compact_blank]
+        if NUMBER_COMMENT_PREFIXES.any? { |prefix| code.start_with?(prefix) }
+          [{ "Medication_Code" => code, "Medication_Number" => line.quantity }.compact_blank]
+        elsif code.start_with?(SELECTIVE_COMMENT_PREFIX)
+          [{ "Medication_Code" => code, "Medication_Name" => line.name }.compact_blank]
         elsif code.start_with?(TEXT_COMMENT_PREFIX)
           line.name.to_s.scan(/.{1,#{TEXT_COMMENT_CHARS}}/m).map do |chunk|
             { "Medication_Code" => code, "Medication_Name" => chunk }

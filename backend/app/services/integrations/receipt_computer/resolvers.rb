@@ -30,6 +30,17 @@ module Integrations
         def line(code, name, quantity: "1")
           BillingLine.new(code: code, name: name, quantity: quantity, kind: :procedure)
         end
+
+        # コメントの行。文(830)は name に、数値・年月日(84x / 85x)は quantity に載せる。
+        # コードの名称はコメントマスタから引く(取り込んでいなければコードのまま)。
+        def comment(code, text: nil, value: nil)
+          title = Master::Comment.find_by(comment_code: code)&.name.to_s.sub(/；\z/, "")
+          BillingLine.new(code: code, kind: :comment,
+                          name: text.presence || [title.presence, value].compact.join(" "),
+                          quantity: value)
+        end
+
+        def date_value(value) = LocalDate.of(value)
       end
 
       # リハビリ。疾患別区分はオーダーの code、療法の担い手は実施記録の code、
@@ -51,7 +62,31 @@ module Integrations
           return skip(LABEL, name, "施設設定にリハビリ(#{category} / #{therapy})のレセプト電算コードがありません") if code.nil?
 
           units = Array(record.hub["extension"]).find { |e| e["url"] == PERFORMED_UNITS_EXT }&.dig("valueInteger")
-          [[line(code, name)], units.to_i.positive? ? units.to_i.to_s : "1"]
+          [[line(code, name)] + comments(category, order), units.to_i.positive? ? units.to_i.to_s : "1"]
+        end
+
+        private
+
+        TARGET_DISEASE_EXT = "#{Coding::LOCAL}/StructureDefinition/rehab-target-disease".freeze
+        ONSET_DATE_EXT = "#{Coding::LOCAL}/StructureDefinition/rehab-onset-date".freeze
+
+        # 疾患名と発症年月日。施設設定にコメントコードがあるものだけ、オーダーの値から作る。
+        # 値が無ければ送らず、理由を出す(コメントが要るのにオーダーに無い)。
+        def comments(category, order)
+          lines = []
+          if (code = codes.rehab_disease_name_comment(category))
+            disease = extension_value(order, TARGET_DISEASE_EXT, "valueString")
+            disease.present? ? lines << comment(code, text: disease) : skip(LABEL, "疾患名のコメント", "オーダーに対象疾患名がありません")
+          end
+          if (code = codes.rehab_onset_date_comment(category))
+            onset = extension_value(order, ONSET_DATE_EXT, "valueDate") || extension_value(order, ONSET_DATE_EXT, "valueDateTime")
+            onset.present? ? lines << comment(code, value: date_value(onset)) : skip(LABEL, "発症年月日のコメント", "オーダーに起算日がありません")
+          end
+          lines
+        end
+
+        def extension_value(order, url, key)
+          Array(order&.dig("extension")).find { |e| e["url"] == url }&.dig(key).presence
         end
       end
 
@@ -86,7 +121,7 @@ module Integrations
           @fractions_today = Hash.new(0)
         end
 
-        def call(record, _order)
+        def call(record, order)
           return nil unless Coding.code_in_list(record.hub["category"], PROCEDURE_KIND) == FRACTION
 
           technique_code = Coding.code_of(record.hub["code"], TECHNIQUE)
@@ -105,11 +140,34 @@ module Integrations
           lines = [line(code, name)]
           if nth == 1 && technique.management_receipt_code.present? && first_of_course?(record)
             lines.unshift(line(technique.management_receipt_code, "放射線治療管理料"))
+            lines.insert(1, *site_comments(order))
           end
           [lines, "1"]
         end
 
         private
+
+        VOLUME_EXT = "#{Coding::LOCAL}/StructureDefinition/radiotherapy-volume".freeze
+
+        # 照射部位のコメント(放射線治療管理料に添える)。治療処方の標的の名称と部位を並べる。
+        def site_comments(order)
+          code = codes.radiotherapy_site_comment
+          return [] if code.nil?
+
+          sites = Array(order&.dig("extension")).select { |e| e["url"] == VOLUME_EXT }.filter_map do |volume|
+            parts = volume["extension"] || []
+            label = parts.find { |p| p["url"] == "label" }&.dig("valueString")
+            site = parts.find { |p| p["url"] == "bodySite" }&.dig("valueCodeableConcept")
+            site_name = site&.dig("text").presence || Array(site&.dig("coding")).first&.dig("display")
+            [label, site_name].compact_blank.join("：").presence
+          end
+          if sites.empty?
+            skip(LABEL, "照射部位のコメント", "治療処方に標的がありません")
+            return []
+          end
+
+          [comment(code, text: sites.join("、"))]
+        end
 
         # コースの初回か。その日より前に完了した照射が同じオーダーに無ければ初回。
         def first_of_course?(record)

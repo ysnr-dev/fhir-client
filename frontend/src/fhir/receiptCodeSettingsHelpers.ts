@@ -15,11 +15,19 @@ export type RehabCategoryKey = (typeof REHAB_CATEGORY_KEYS)[number];
 export const REHAB_THERAPY_KEYS = ["pt", "ot", "st"] as const;
 export type RehabTherapyKey = (typeof REHAB_THERAPY_KEYS)[number];
 
+/** 疾患別リハに添えるコメント(区分ごとにコードが違う)。疾患名(830 系)と発症年月日(850 系)。 */
+export const REHAB_COMMENT_KEYS = ["disease_name_comment", "onset_date_comment"] as const;
+export type RehabCommentKey = (typeof REHAB_COMMENT_KEYS)[number];
+export type RehabColumnKey = RehabTherapyKey | RehabCommentKey;
+export const REHAB_COLUMN_KEYS: readonly RehabColumnKey[] = [...REHAB_THERAPY_KEYS, ...REHAB_COMMENT_KEYS];
+
 export interface ReceiptCodeSettings {
   /** 病理の検査区分(JAHIS LPATHO001)ごとの診療行為コード。 */
   pathology: { N000: string; N004: string; N003: string };
-  /** 疾患別リハビリテーション料。区分 × 療法の担い手(PT/OT/ST)。 */
-  rehab: Record<RehabCategoryKey, Record<RehabTherapyKey, string>>;
+  /** 疾患別リハビリテーション料。区分 × 療法の担い手(PT/OT/ST)と、区分ごとのコメント。 */
+  rehab: Record<RehabCategoryKey, Record<RehabColumnKey, string>>;
+  /** 放射線治療管理料に添える照射部位のコメント(830 系)。 */
+  radiotherapy: { site_comment: string };
   /** 栄養食事指導料。初回 / 2 回目以降 / 集団。 */
   nutrition_guidance: { initial: string; "follow-up": string; group: string };
   /** 血液採取(B-V)。検体検査に血液の検体があるとき 1 日 1 回足す。 */
@@ -38,7 +46,7 @@ function emptyRehab(): ReceiptCodeSettings["rehab"] {
   return Object.fromEntries(
     REHAB_CATEGORY_KEYS.map((category) => [
       category,
-      Object.fromEntries(REHAB_THERAPY_KEYS.map((therapy) => [therapy, ""])),
+      Object.fromEntries(REHAB_COLUMN_KEYS.map((column) => [column, ""])),
     ]),
   ) as ReceiptCodeSettings["rehab"];
 }
@@ -46,6 +54,7 @@ function emptyRehab(): ReceiptCodeSettings["rehab"] {
 export const DEFAULT_RECEIPT_CODES: ReceiptCodeSettings = {
   pathology: { N000: "", N004: "", N003: "" },
   rehab: emptyRehab(),
+  radiotherapy: { site_comment: "" },
   nutrition_guidance: { initial: "", "follow-up": "", group: "" },
   lab: { blood_draw: "" },
   transfusion: { first: "", subsequent: "" },
@@ -74,6 +83,12 @@ export const REHAB_THERAPY_LABELS: Record<RehabTherapyKey, string> = {
   pt: "理学療法士",
   ot: "作業療法士",
   st: "言語聴覚士",
+};
+
+export const REHAB_COLUMN_LABELS: Record<RehabColumnKey, string> = {
+  ...REHAB_THERAPY_LABELS,
+  disease_name_comment: "疾患名コメント(830)",
+  onset_date_comment: "発症日コメント(850)",
 };
 
 export const NUTRITION_LABELS: Record<keyof ReceiptCodeSettings["nutrition_guidance"], string> = {
@@ -105,6 +120,7 @@ export function receiptCodesValid(settings: ReceiptCodeSettings): boolean {
     ...Object.values(settings.rehab).flatMap((row) => Object.values(row)),
     ...Object.values(settings.nutrition_guidance),
     ...Object.values(settings.lab),
+    ...Object.values(settings.radiotherapy),
     ...Object.values(settings.transfusion),
     ...Object.values(settings.injection),
   ];

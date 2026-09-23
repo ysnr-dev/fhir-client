@@ -17,10 +17,13 @@ module Integrations
       # 指すことがあり、当日の集合に無ければ上流から読む。
       # service_requests は当日のオーダーのヘッダ(id → リソース)。リハビリの疾患別区分の
       # ようにオーダー側にしか無い情報を resolver が引く。当日の集合に無ければ上流から読む。
-      def initialize(skipped, medication_requests: {}, service_requests: {}, store: nil)
+      # details_by_parent はオーダーのヘッダ id → 明細(ServiceRequest)の配列。放射線の撮影部位の
+      # コメント(項目マスタの列)は、実施記録ではなくオーダーの項目から引く。
+      def initialize(skipped, medication_requests: {}, service_requests: {}, details_by_parent: {}, store: nil)
         @skipped = skipped
         @medication_requests = medication_requests
         @service_requests = service_requests
+        @details_by_parent = details_by_parent
         @store = store
         @resolvers = {}
       end
@@ -36,7 +39,7 @@ module Integrations
 
       private
 
-      attr_reader :skipped, :medication_requests, :service_requests, :store
+      attr_reader :skipped, :medication_requests, :service_requests, :details_by_parent, :store
 
       def build(record, rad_materials)
         definition = OrderCatalog.find(record.order_type)
@@ -46,6 +49,7 @@ module Integrations
         return nil if head.nil?
 
         lines = head +
+                site_comment_lines(record, definition) +
                 medicine_lines(record, definition) +
                 material_lines(record, definition, rad_materials) +
                 comment_lines(record)
@@ -175,6 +179,21 @@ module Integrations
 
         local = Coding.code_of(concept, Coding::RAD_MATERIAL)
         [rad_materials[local], Coding.label_of(concept, Coding::RAD_MATERIAL)]
+      end
+
+      # 撮影部位の選択式コメント(820 系)。放射線項目マスタの列で、オーダーの項目ごとに 1 つ。
+      # 同じ部位が複数の項目に付いていても 1 回にする。
+      def site_comment_lines(record, definition)
+        return [] unless definition.order_type == "rad"
+
+        details = details_by_parent[record.order_id] || []
+        item_codes = details.filter_map { |d| Coding.code_of(d["code"], definition.coding_system) }
+        return [] if item_codes.empty?
+
+        codes = Master::RadItem.where(item_code: item_codes).where.not(site_comment_code: [nil, ""])
+                               .pluck(:site_comment_code).uniq
+        names = Master::Comment.where(comment_code: codes).pluck(:comment_code, :name).to_h
+        codes.map { |code| BillingLine.new(code: code, name: names[code] || code, kind: :comment) }
       end
 
       def comment_lines(record)
