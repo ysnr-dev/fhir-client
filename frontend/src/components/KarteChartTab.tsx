@@ -4,6 +4,7 @@ import { useChartDefinitionMutations, useChartDefinitions } from "../api/masterQ
 import {
   usePatientChartObservations,
   usePatientEncounterEvents,
+  usePatientChartPrescriptions,
   usePatientPerformedProcedures,
   usePatientRadiotherapyOrders,
   usePatientSurgeryPerforms,
@@ -26,6 +27,7 @@ import {
   buildChartLanes,
   buildChemoChartEvents,
   buildEncounterChartEvents,
+  buildPrescriptionChartEvents,
   buildProcedureChartEvents,
   buildRadiotherapyChartEvents,
   buildSurgeryChartEvents,
@@ -517,6 +519,7 @@ function useChartEvents(
     rangeStart,
     rangeEnd,
   );
+  const prescriptions = usePatientChartPrescriptions(wants("prescription"), rangeStart, rangeEnd);
 
   return useMemo(() => {
     const events: ChartEvent[] = [];
@@ -535,6 +538,14 @@ function useChartEvents(
       );
     }
     if (procedures.data) events.push(...buildProcedureChartEvents(procedures.data));
+    if (prescriptions.data) {
+      events.push(
+        ...buildPrescriptionChartEvents(
+          prescriptions.data.orders,
+          prescriptions.data.medicationRequests,
+        ),
+      );
+    }
     return events;
   }, [
     encounters.data,
@@ -544,6 +555,7 @@ function useChartEvents(
     radiotherapyOrders.data,
     radiotherapy.data,
     procedures.data,
+    prescriptions.data,
     rangeEnd,
   ]);
 }

@@ -3808,10 +3808,13 @@ fieldset.rp-card {
   font-size: 11px;
 }
 
-/* イベントは色で種別を出す。バーは面、点の印は塗り。 */
+/* イベントは色で種別を出す。バーは面、点の印は塗り。
+   重なるバー(同時に飲んでいる処方など)を 1 本に見せないよう、地の色で縁を取る。 */
 .patient-chart__bar {
   fill: currentColor;
   opacity: 0.28;
+  stroke: var(--surface-panel, var(--bg));
+  stroke-width: 1;
 }
 
 .patient-chart__bar-label,
@@ -3858,6 +3861,10 @@ fieldset.rp-card {
   color: #1d4ed8;
 }
 
+.patient-chart__event--prescription {
+  color: #9a3412;
+}
+
 :root[data-theme="dark"] .patient-chart__event--encounter {
   color: #93a4b5;
 }
@@ -3880,6 +3887,10 @@ fieldset.rp-card {
 
 :root[data-theme="dark"] .patient-chart__event--injection {
   color: #60a5fa;
+}
+
+:root[data-theme="dark"] .patient-chart__event--prescription {
+  color: #f0a58a;
 }
 
 /* ---- チャート定義のエディタ ---- */

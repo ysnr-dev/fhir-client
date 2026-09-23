@@ -227,7 +227,12 @@ function EventBand({
         )}
         {kinds.map((kind, row) => {
           const y = BAND_TOP + row * BAND_ROW_HEIGHT;
-          const rowEvents = events.filter((event) => event.kind === kind);
+          // 同じ行に並ぶバーは、隣までの余地を見てラベルを出す(処方のように重なる行で
+          // 名前が重なって読めなくなるのを避ける)。
+          const rowEvents = events
+            .filter((event) => event.kind === kind)
+            .sort((a, b) => epochOf(a.at) - epochOf(b.at));
+          const rowX = rowEvents.map((event) => toX(epochOf(event.at)));
           return (
             <g key={kind} className={`patient-chart__event--${kind}`}>
               <text className="patient-chart__band-label" x={MARGIN.left - 8} y={y + 12} textAnchor="end">
@@ -247,6 +252,7 @@ function EventBand({
                   y={y}
                   range={range}
                   toX={toX}
+                  room={(rowX[i + 1] ?? vbWidth - MARGIN.right) - rowX[i]}
                   onOpenDetail={onOpenDetail}
                 />
               ))}
@@ -258,17 +264,36 @@ function EventBand({
   );
 }
 
+/** 頭だけ残っても読めないので、これより短くなるならラベルを出さない(ホバーで読む)。 */
+const MIN_BAR_LABEL_CHARS = 4;
+
+/** 10px の字で `width` に収まるところまで切り詰める(全角は約 10px、半角は約 5.5px)。 */
+function clipLabel(text: string, width: number): string {
+  const widthOf = (value: string) =>
+    [...value].reduce((sum, char) => sum + (/[\u0020-\u00ff]/.test(char) ? 5.5 : 10), 0);
+  if (widthOf(text) <= width) return text;
+  let clipped = "";
+  for (const char of text) {
+    if (widthOf(clipped + char) + 6 > width) break;
+    clipped += char;
+  }
+  return [...clipped].length >= MIN_BAR_LABEL_CHARS ? `${clipped}…` : "";
+}
+
 function EventMark({
   event,
   y,
   range,
   toX,
+  room,
   onOpenDetail,
 }: {
   event: ChartEvent;
   y: number;
   range: ChartRange;
   toX: (t: number) => number;
+  /** 次のバーまでの幅。ラベルを出せるかの判断に使う。 */
+  room: number;
   onOpenDetail?: (target: KarteDetailTarget) => void;
 }) {
   const target = event.target;
@@ -283,13 +308,14 @@ function EventMark({
     const start = Math.max(toX(epochOf(event.at)), toX(range.tMin));
     const end = Math.min(toX(epochOf(event.end) + DAY_MS), toX(range.tMax));
     const width = Math.max(2, end - start);
+    const label = clipLabel(event.label, Math.min(width, room) - 8);
     return (
       <g className={className} onClick={clickable ? handleClick : undefined}>
         {title}
         <rect className="patient-chart__bar" x={start} y={y + 3} width={width} height={10} rx={2} />
-        {width >= 40 && (
+        {label && (
           <text className="patient-chart__bar-label" x={start + 4} y={y + 11.5}>
-            {event.label}
+            {label}
           </text>
         )}
       </g>

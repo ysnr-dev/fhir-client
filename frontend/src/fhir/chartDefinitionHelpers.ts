@@ -17,7 +17,8 @@ import type { EncounterEvent } from "./encounterHelpers";
 import type { RegimenApplication, RegimenDayOrder } from "./regimenOrderHelpers";
 import type { RadiotherapyFractionDisplay } from "./radiotherapyResultHelpers";
 import { summarizeRadiotherapyOrder } from "./radiotherapyOrderHelpers";
-import { ORDER_TYPE_SYSTEM } from "./prescriptionHelpers";
+import { ORDER_TYPE_SYSTEM, groupByRp } from "./prescriptionHelpers";
+import { orderDay } from "./shared";
 import { INJECTION_ORDER_TYPE } from "./injectionHelpers";
 import { RAD_ORDER_TYPE } from "./radOrderHelpers";
 import { ENDOSCOPY_ORDER_TYPE } from "./endoscopyOrderHelpers";
@@ -67,7 +68,8 @@ export type ChartEventKind =
   | "chemo"
   | "radiotherapy"
   | "exam"
-  | "injection";
+  | "injection"
+  | "prescription";
 
 export interface ChartDefinitionBody {
   schema_version: 1;
@@ -85,6 +87,7 @@ export const CHART_EVENT_KINDS: ReadonlyArray<{ kind: ChartEventKind; label: str
   { kind: "radiotherapy", label: "放射線治療" },
   { kind: "exam", label: "検査実施" },
   { kind: "injection", label: "注射実施" },
+  { kind: "prescription", label: "処方" },
 ];
 
 export const DEFAULT_CHART_AXIS: ChartAxis = { unit: "month", columns: 12 };
@@ -669,6 +672,51 @@ export function buildProcedureChartEvents(procedures: fhir4.Procedure[]): ChartE
       // 検査名が種別と同じ(注射など)なら、同じ語を 2 度出さない。
       detail: name === type.label ? "" : name,
       target: orderId ? { kind: type.detailKind, id: orderId } : undefined,
+    });
+  }
+
+  return events;
+}
+
+/**
+ * 処方。**飲んでいた期間**をバーにする(検査値や血圧との前後関係を読むのが目的なので、
+ * オーダーを出した日の印だけでは足りない)。
+ *
+ * 期間は Rp ごとの投与日数(`dispenseRequest.expectedSupplyDuration`)の最大で、
+ * 開始日はオーダーの occurrence。日数を持たない処方(頓用・外用)は印にする。
+ */
+export function buildPrescriptionChartEvents(
+  orders: fhir4.ServiceRequest[],
+  medicationRequests: fhir4.MedicationRequest[],
+): ChartEvent[] {
+  const byOrderId = new Map<string, fhir4.MedicationRequest[]>();
+  for (const request of medicationRequests) {
+    const orderId = request.basedOn?.[0]?.reference?.split("/")[1];
+    if (!orderId) continue;
+    const list = byOrderId.get(orderId);
+    if (list) list.push(request);
+    else byOrderId.set(orderId, [request]);
+  }
+
+  const events: ChartEvent[] = [];
+  for (const order of orders) {
+    const id = order.id ?? "";
+    const start = orderDay(order);
+    if (!start) continue;
+
+    const groups = groupByRp(byOrderId.get(id) ?? []);
+    const days = Math.max(0, ...groups.map((group) => group.doseDays ?? 0));
+    const names = groups.flatMap((group) => group.medicines.map((medicine) => medicine.name));
+    const label = names[0] ?? "処方";
+
+    events.push({
+      at: start,
+      // 1 日ぶんは点で足りる。2 日以上のときだけバーにする(最終日は start + days - 1)。
+      end: days > 1 ? addDays(start, days - 1) : undefined,
+      kind: "prescription",
+      label: names.length > 1 ? `${label} ほか` : label,
+      detail: [names.join("、"), days > 0 ? `${days} 日分` : ""].filter(Boolean).join(" / "),
+      target: id ? { kind: "prescription", id } : undefined,
     });
   }
 

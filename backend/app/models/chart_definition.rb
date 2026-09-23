@@ -34,7 +34,7 @@ class ChartDefinition < ApplicationRecord
   ITEM_SOURCES = %w[lab vital template].freeze
   CODING_KEYS = %w[system code display].freeze
   COMPONENT_KEYS = %w[code name].freeze
-  EVENT_KINDS = %w[encounter surgery chemo radiotherapy exam injection].freeze
+  EVENT_KINDS = %w[encounter surgery chemo radiotherapy exam injection prescription].freeze
   MAX_ITEMS = 30
 
   DEFAULT_DEFINITION = {
