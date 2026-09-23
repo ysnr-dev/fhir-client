@@ -84,15 +84,15 @@ module Integrations
         Definition.new(order_type: "nutrition-guidance", label: "栄養指導", source: :procedure,
                        resolver: Resolvers::NutritionGuidance, continuous: true),
         Definition.new(order_type: "radiotherapy", label: "放射線治療", source: :procedure,
-                       resolver: Resolvers::Radiotherapy, continuous: true)
+                       resolver: Resolvers::Radiotherapy, continuous: true),
+        Definition.new(order_type: "transfusion", label: "輸血", source: :procedure,
+                       resolver: Resolvers::Transfusion)
       ].freeze
 
       BY_TYPE = ALL.index_by(&:order_type).freeze
 
-      # 送り方が未実装の種別(docs/receipt-billing-design.md の Phase 2〜3)。
-      PENDING = {
-        "transfusion" => "輸血"
-      }.freeze
+      # 送り方が未実装の種別。今は無い(足すときは order_type => 表示名)。
+      PENDING = {}.freeze
 
       # 出来高で請求する項目が無い種別と、別経路で送る処方。報告もしない。
       IGNORED = %w[prescription meal nursing consult chemo-regimen].freeze

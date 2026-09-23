@@ -40,6 +40,21 @@ RSpec.describe Integrations::Orca::MedicalMessage do
       expect(built[1]["Medication_info"].map { |m| m["Medication_Code"] }).to eq(%w[150233410 620098801])
     end
 
+    # 手術の実施記録に麻酔(L 章)の手技・加算・薬剤が並ぶと、麻酔だけ 540 の剤になる。
+    it "puts 麻酔 with its 加算 and 麻酔薬 into a 540 剤 separate from the 手術" do
+      built = classes([item(:surgery, [
+        line("150000010", section: "K001"),
+        line("150233410", section: "L008"),
+        line("150231790", section: "L008", name: "時間外加算(麻酔)"),
+        line("620001111", kind: :medicine, quantity: "10"),
+        line("700010000", kind: :material, quantity: "1")
+      ])])
+
+      expect(built.map { |c| c["Medical_Class"] }).to eq(%w[500 540])
+      expect(built[1]["Medication_info"].map { |m| m["Medication_Code"] })
+        .to eq(%w[150233410 150231790 620001111 700010000])
+    end
+
     it "drops 初診・再診 lines with the reason that the 日レセ computes them" do
       items = [item(:treatment, [line("111000110", section: "A000"), line("140000110", section: "J000")])]
 

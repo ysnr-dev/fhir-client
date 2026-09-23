@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_23_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_23_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1943,6 +1943,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_23_100000) do
     t.string "search_kana"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "medicine_code"
     t.index ["category"], name: "index_master_transfusion_products_on_category"
     t.index ["item_code"], name: "index_master_transfusion_products_on_item_code", unique: true
   end

@@ -26,6 +26,8 @@ module Integrations
       # 放射線だけ施設内の器材マスタ(受け側で特定器材コードに読み替える)を指す。
       MEDICAL_MATERIAL = "#{LOCAL}/CodeSystem/medical-material".freeze
       RAD_MATERIAL = "#{LOCAL}/CodeSystem/rad-material".freeze
+      # 輸血製剤(施設の製剤マスタ。受け側で医薬品コードに読み替える)。
+      TRANSFUSION_PRODUCT = "#{LOCAL}/CodeSystem/transfusion-product".freeze
 
       # 注射の投与経路(JP Core route-codes)と手技(JAMI 詳細用法コードの注射手技 30〜3Z)、
       # 用法種別(点滴 / ワンショット。ローカル拡張)。

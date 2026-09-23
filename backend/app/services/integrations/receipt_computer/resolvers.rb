@@ -127,6 +127,64 @@ module Integrations
         end
       end
 
+      # 輸血。1 回の輸血(ハブ)が 1 剤。手技は保存血液輸血(施設設定のコード)で、最初の
+      # 200mL が 1 回目、残りは 2 回目以降を 200mL ごと(1 単位 = 200mL 由来で数える)。
+      # 製剤はバッグ(MedicationAdministration)ごとに製剤マスタの医薬品コードを 1 袋。
+      # 自己血のように医薬品コードの無い製剤は送れない項目として報告する。
+      class Transfusion < Base
+        LABEL = "輸血".freeze
+        AUTOLOGOUS = "auto".freeze
+
+        def call(record, _order)
+          bags = record.administrations
+          return skip(LABEL, LABEL, "実施記録に製剤がありません") if bags.empty?
+
+          codes = bags.filter_map { |b| Coding.code_of(b["medicationCodeableConcept"], Coding::TRANSFUSION_PRODUCT) }.uniq
+          products = Master::TransfusionProduct.where(item_code: codes).index_by(&:item_code)
+
+          product_lines = bags.filter_map { |bag| product_line(bag, products) }
+          technique_lines = technique_lines(bags, products)
+          lines = technique_lines + product_lines
+          lines.empty? ? nil : [lines, "1"]
+        end
+
+        private
+
+        def product_line(bag, products)
+          concept = bag["medicationCodeableConcept"]
+          code = Coding.code_of(concept, Coding::TRANSFUSION_PRODUCT)
+          name = Coding.label_of(concept, Coding::TRANSFUSION_PRODUCT)
+          product = products[code]
+          return skip(LABEL, name, "製剤マスタに #{code} がありません") if product.nil?
+          return skip(LABEL, name, "製剤マスタに医薬品コードがありません(自己血などは医事会計で入力してください)") if product.medicine_code.blank?
+
+          BillingLine.new(code: product.medicine_code, name: name, quantity: "1", unit: "袋", kind: :medicine)
+        end
+
+        # 手技。自己血だけの輸血は保存血液輸血ではないので手技を付けない(製剤側で報告済み)。
+        def technique_lines(bags, products)
+          stored = bags.reject do |bag|
+            products[Coding.code_of(bag["medicationCodeableConcept"], Coding::TRANSFUSION_PRODUCT)]&.category == AUTOLOGOUS
+          end
+          return [] if stored.empty?
+
+          first = codes.transfusion_first
+          return [skip(LABEL, "保存血液輸血", "施設設定に保存血液輸血(1 回目)のレセプト電算コードがありません")].compact if first.nil?
+
+          units = stored.sum { |bag| bag.dig("dosage", "dose", "value").to_f }.round
+          lines = [line(first, "保存血液輸血(1回目)")]
+          return lines if units <= 1
+
+          subsequent = codes.transfusion_subsequent
+          if subsequent.nil?
+            skip(LABEL, "保存血液輸血(2回目以降)", "施設設定に保存血液輸血(2 回目以降)のレセプト電算コードがありません")
+          else
+            lines << line(subsequent, "保存血液輸血(2回目以降)", quantity: (units - 1).to_s)
+          end
+          lines
+        end
+      end
+
       # 病理。実施入力を持たないのでオーダーから組む。検査区分(組織診 / 細胞診 / 術中迅速)は
       # ヘッダの code、数量は検体(明細)の数。判断料・診断料は日レセが自動算定する。
       class Pathology < Base

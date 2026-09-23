@@ -20,6 +20,10 @@ module Integrations
       # 血液採取(B-V)。検体検査に血液の検体があるとき 1 日 1 回。
       def blood_draw = fetch("lab", "blood_draw")
 
+      # 保存血液輸血の手技。first は最初の 200mL(1 回目)、subsequent は 200mL ごと(2 回目以降)。
+      def transfusion_first = fetch("transfusion", "first")
+      def transfusion_subsequent = fetch("transfusion", "subsequent")
+
       # 外来化学療法加算(15 歳未満は別コード)と無菌製剤処理料。レジメン由来の注射に 1 日 1 回。
       def outpatient_chemo_addition(child: false)
         fetch("injection", child ? "outpatient_chemo_addition_child" : "outpatient_chemo_addition")

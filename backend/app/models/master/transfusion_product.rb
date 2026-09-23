@@ -14,6 +14,10 @@ module Master
     validates :default_units,
               numericality: { only_integer: true, greater_than: 0 },
               allow_nil: true
+    # 医事会計へ送るレセプト電算の医薬品コード。血液製剤は医薬品として算定する。
+    # 自己血のように薬価収載が無いものは空(製剤は送らず、送れない項目として報告する)。
+    validates :medicine_code, format: { with: /\A\d{9}\z/, message: "は 9 桁の数字で指定してください" },
+                              allow_blank: true
     validate :valid_period_is_ordered
 
     before_save :set_search_columns

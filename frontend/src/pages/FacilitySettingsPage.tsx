@@ -55,6 +55,7 @@ import {
   REHAB_CATEGORY_LABELS,
   REHAB_THERAPY_KEYS,
   REHAB_THERAPY_LABELS,
+  TRANSFUSION_LABELS,
   receiptCodeValid,
   receiptCodesValid,
   type ReceiptCodeSettings,
@@ -619,6 +620,20 @@ export function FacilitySettingsPage() {
                 )}
               </label>
             ))}
+
+            <h3 className="facility-settings__subheading">輸血の手技</h3>
+            {(Object.keys(TRANSFUSION_LABELS) as (keyof ReceiptCodeSettings["transfusion"])[]).map(
+              (key) => (
+                <label key={key}>
+                  {TRANSFUSION_LABELS[key]}
+                  {receiptCodeInput(
+                    receiptCodes.transfusion[key],
+                    (next) => updateReceiptCode("transfusion", key, next),
+                    `${TRANSFUSION_LABELS[key]} のレセプト電算コード`,
+                  )}
+                </label>
+              ),
+            )}
 
             <h3 className="facility-settings__subheading">送信時に足す加算</h3>
             <label>

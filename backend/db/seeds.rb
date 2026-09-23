@@ -1130,6 +1130,8 @@ if File.exist?(transfusion_products_csv)
       unit_label: row["unit_label"].to_s.strip.presence || "単位",
       default_units: row["default_units"].to_s.strip.presence&.to_i,
       requires_crossmatch: row["requires_crossmatch"].to_s.strip == "1",
+      # 医薬品コードは列が無ければ item_code(seed は医薬品コードと同じ 9 桁)。
+      medicine_code: row["medicine_code"].to_s.strip.presence || (code.match?(/\A\d{9}\z/) ? code : nil),
       display_order: row["display_order"].to_s.strip.presence&.to_i
     )
     loaded += 1

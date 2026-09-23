@@ -145,6 +145,8 @@ class FacilitySettings < ApplicationRecord
     "rehab" => REHAB_CATEGORIES.index_with { REHAB_THERAPIES.index_with("") },
     "nutrition_guidance" => { "initial" => "", "follow-up" => "", "group" => "" },
     "lab" => { "blood_draw" => "" },
+    # 保存血液輸血の手技(K920)。1 回目は最初の 200mL、2 回目以降は 200mL ごと。
+    "transfusion" => { "first" => "", "subsequent" => "" },
     "injection" => {
       "outpatient_chemo_addition" => "",
       "outpatient_chemo_addition_child" => "",
@@ -157,6 +159,7 @@ class FacilitySettings < ApplicationRecord
       "rehab" => { fields: REHAB_CATEGORIES.index_with({ fields: REHAB_THERAPIES.index_with(RECEIPT_CODE) }) },
       "nutrition_guidance" => { fields: DEFAULT_RECEIPT_CODES["nutrition_guidance"].keys.index_with(RECEIPT_CODE) },
       "lab" => { fields: DEFAULT_RECEIPT_CODES["lab"].keys.index_with(RECEIPT_CODE) },
+      "transfusion" => { fields: DEFAULT_RECEIPT_CODES["transfusion"].keys.index_with(RECEIPT_CODE) },
       "injection" => { fields: DEFAULT_RECEIPT_CODES["injection"].keys.index_with(RECEIPT_CODE) }
     }
   }.freeze

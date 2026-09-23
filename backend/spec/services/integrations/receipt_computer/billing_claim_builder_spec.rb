@@ -199,10 +199,10 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
       expect(build.skipped).to be_empty
     end
 
-    it "reports order types whose 送り方 is not implemented yet, even without 明細" do
-      store.add(order_header(order_type: "transfusion", name: "輸血"))
+    it "reports order types it does not know, even without 明細" do
+      store.add(order_header(order_type: "future-type", name: "新しい種別"))
 
-      expect(build.skipped.first.kind).to eq("輸血")
+      expect(build.skipped.first.kind).to eq("future-type")
       expect(build.skipped.first.reason).to include("まだ医事会計へ送りません")
     end
 
@@ -714,5 +714,67 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder, "施設設定
 
       expect(build.items.first.lines.map(&:code)).to eq(%w[620007342])
     end
+  end
+end
+
+RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder, "輸血" do
+  let(:patient_id) { "pat-1" }
+  let(:date) { "2026-09-20" }
+  let(:store) { BillingFhirFixtures::FakeStore.new }
+  let(:product) { "http://fhir-client.local/CodeSystem/transfusion-product" }
+
+  subject(:builder) { described_class.new(store: store) }
+
+  def build = builder.call(patient_fhir_id: patient_id, perform_date: date)
+  def orca_classes = Integrations::Orca::MedicalMessage.build(build.items).first
+
+  def bag(code:, units:, id:, name: "製剤")
+    administration(code: code, dose: units, unit: "単位", id: id, name: name, system: product)
+  end
+
+  before do
+    Master::TransfusionProduct.create!(item_code: "RBC2", name: "赤血球液-LR 2単位", category: "rbc", unit_label: "単位",
+                                       medicine_code: "621772901")
+    Master::TransfusionProduct.create!(item_code: "AUTO", name: "貯血式自己血", category: "auto", unit_label: "mL")
+    store.add(order_header(order_type: "transfusion"), procedure_hub(order_type: "transfusion", code: nil))
+  end
+
+  it "sends the 手技 (1 回目 + 2 回目以降 per 200mL) and one 袋 per bag as 医薬品, in 510" do
+    receipt_codes!("transfusion" => { "first" => "150224910", "subsequent" => "150286310" })
+    store.add(bag(code: "RBC2", units: 2, id: "b1"), bag(code: "RBC2", units: 2, id: "b2"))
+
+    item = build.items.first
+    expect(item.lines.map { |l| [l.kind, l.code, l.quantity] }).to eq([
+      [:procedure, "150224910", "1"],
+      [:procedure, "150286310", "3"],
+      [:medicine, "621772901", "1"],
+      [:medicine, "621772901", "1"]
+    ])
+    expect(orca_classes.first["Medical_Class"]).to eq("510")
+    expect(build.skipped).to be_empty
+  end
+
+  it "sends only the 1 回目 手技 for a single 単位" do
+    receipt_codes!("transfusion" => { "first" => "150224910" })
+    store.add(bag(code: "RBC2", units: 1, id: "b1"))
+
+    expect(build.items.first.lines.map(&:code)).to eq(%w[150224910 621772901])
+  end
+
+  it "reports 自己血 (no 医薬品コード) and sends no 手技 for it" do
+    receipt_codes!("transfusion" => { "first" => "150224910" })
+    store.add(bag(code: "AUTO", units: 400, id: "b1", name: "自己血"))
+
+    result = build
+    expect(result.items).to be_empty
+    expect(result.skipped.first.reason).to include("医薬品コード")
+  end
+
+  it "reports a missing 手技 code but still sends the 製剤" do
+    store.add(bag(code: "RBC2", units: 2, id: "b1"))
+
+    result = build
+    expect(result.items.first.lines.map(&:code)).to eq(%w[621772901])
+    expect(result.skipped.first.reason).to include("保存血液輸血(1 回目)")
   end
 end

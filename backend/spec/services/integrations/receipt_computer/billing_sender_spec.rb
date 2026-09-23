@@ -127,7 +127,7 @@ RSpec.describe Integrations::ReceiptComputer::BillingSender do
     it "downgrades success to a warning when something could not be sent" do
       allow(Integrations::CodeMapper).to receive(:new)
         .and_return(instance_double(Integrations::CodeMapper, to_external: "01"))
-      store.add(order_header(order_type: "transfusion", id: "r-1", name: "輸血"))
+      store.add(order_header(order_type: "future-type", id: "r-1", name: "新しい種別"))
 
       result = sender.call(patient_fhir_id: "pat-1", perform_date: date, department_code: "01")
 

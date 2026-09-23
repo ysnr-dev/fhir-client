@@ -26,6 +26,7 @@ interface Draft {
   unit_label: string;
   default_units: string;
   requires_crossmatch: boolean;
+  medicine_code: string;
   valid_from: string;
   valid_to: string;
   display_order: string;
@@ -41,6 +42,7 @@ const emptyDraft: Draft = {
   unit_label: "単位",
   default_units: "",
   requires_crossmatch: true,
+  medicine_code: "",
   valid_from: "",
   valid_to: "",
   display_order: "",
@@ -57,6 +59,7 @@ function toPayload(draft: Draft): TransfusionProductPayload {
     unit_label: draft.unit_label,
     default_units: draft.default_units ? Number(draft.default_units) : null,
     requires_crossmatch: draft.requires_crossmatch,
+    medicine_code: draft.medicine_code || null,
     valid_from: draft.valid_from || null,
     valid_to: draft.valid_to || null,
     display_order: draft.display_order ? Number(draft.display_order) : null,
@@ -237,6 +240,7 @@ function ProductEditModal({ productId, onClose }: ProductEditModalProps) {
       unit_label: d.unit_label,
       default_units: d.default_units === null ? "" : String(d.default_units),
       requires_crossmatch: d.requires_crossmatch,
+      medicine_code: d.medicine_code ?? "",
       valid_from: d.valid_from ?? "",
       valid_to: d.valid_to ?? "",
       display_order: d.display_order === null ? "" : String(d.display_order),
@@ -340,6 +344,17 @@ function ProductEditModal({ productId, onClose }: ProductEditModalProps) {
               min={1}
               value={draft.default_units}
               onChange={(e) => setDraft({ ...draft, default_units: e.target.value })}
+            />
+          </label>
+          <label>
+            レセプト電算コード(医薬品)
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={9}
+              value={draft.medicine_code}
+              onChange={(e) => setDraft({ ...draft, medicine_code: e.target.value.trim() })}
+              placeholder="621772801"
             />
           </label>
           <label>

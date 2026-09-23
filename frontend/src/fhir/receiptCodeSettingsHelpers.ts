@@ -24,6 +24,8 @@ export interface ReceiptCodeSettings {
   nutrition_guidance: { initial: string; "follow-up": string; group: string };
   /** 血液採取(B-V)。検体検査に血液の検体があるとき 1 日 1 回足す。 */
   lab: { blood_draw: string };
+  /** 保存血液輸血の手技。1 回目(最初の 200mL)と 2 回目以降(200mL ごと)。 */
+  transfusion: { first: string; subsequent: string };
   /** 外来化学療法加算(15 歳未満は別コード)と無菌製剤処理料。レジメン由来の注射に 1 日 1 回足す。 */
   injection: {
     outpatient_chemo_addition: string;
@@ -46,6 +48,7 @@ export const DEFAULT_RECEIPT_CODES: ReceiptCodeSettings = {
   rehab: emptyRehab(),
   nutrition_guidance: { initial: "", "follow-up": "", group: "" },
   lab: { blood_draw: "" },
+  transfusion: { first: "", subsequent: "" },
   injection: {
     outpatient_chemo_addition: "",
     outpatient_chemo_addition_child: "",
@@ -79,6 +82,11 @@ export const NUTRITION_LABELS: Record<keyof ReceiptCodeSettings["nutrition_guida
   group: "集団",
 };
 
+export const TRANSFUSION_LABELS: Record<keyof ReceiptCodeSettings["transfusion"], string> = {
+  first: "保存血液輸血(1 回目)",
+  subsequent: "保存血液輸血(2 回目以降)",
+};
+
 export const INJECTION_LABELS: Record<keyof ReceiptCodeSettings["injection"], string> = {
   outpatient_chemo_addition: "外来化学療法加算",
   outpatient_chemo_addition_child: "外来化学療法加算(15 歳未満)",
@@ -97,6 +105,7 @@ export function receiptCodesValid(settings: ReceiptCodeSettings): boolean {
     ...Object.values(settings.rehab).flatMap((row) => Object.values(row)),
     ...Object.values(settings.nutrition_guidance),
     ...Object.values(settings.lab),
+    ...Object.values(settings.transfusion),
     ...Object.values(settings.injection),
   ];
   return flat.every(receiptCodeValid);

@@ -126,9 +126,13 @@ module Integrations
         end
       end
 
+      # 薬剤。輸血製剤(製剤マスタの体系)は Resolvers::Transfusion が医薬品コードに読み替えて
+      # 送るので、ここでは扱わない。
       def medicine_lines(record, definition)
         record.administrations.filter_map do |administration|
           concept = administration["medicationCodeableConcept"]
+          next nil if Coding.find(concept, Coding::TRANSFUSION_PRODUCT)
+
           code = Coding.code_of(concept, Coding::MEDICINE_CODE)
           name = Coding.label_of(concept, Coding::MEDICINE_CODE)
           if code.blank?
