@@ -53,6 +53,12 @@ import { KarteTodayPane } from "../components/KarteTodayPane";
 import { KARTE_TARGET_ATTR, KarteTimeline } from "../components/KarteTimeline";
 import { PatientHeader } from "../components/PatientHeader";
 import {
+  openKartePane,
+  requestKarteForm,
+  setKartePanePatient,
+  subscribeKarteFormRequest,
+} from "../kartePaneChannel";
+import {
   problemLabel,
   problemWithDescendantIds,
   splitConditions,
@@ -127,8 +133,19 @@ import {
 const HIGHLIGHT_DURATION_MS = 2000;
 
 
-export function KartePage() {
-  const { patientId } = useParams<{ patientId: string }>();
+interface KartePageProps {
+  /**
+   * カルテの左ペインだけを別タブに切り離して表示している(サブモニター常駐)。
+   * 右ペイン(入力フォーム)と画面を離れるための操作を持たない。
+   */
+  detached?: boolean;
+  /** 切り離した表示で追従している患者。URL より先にこちらが切り替わる。 */
+  patientId?: string;
+}
+
+export function KartePage({ detached = false, patientId: followedPatientId }: KartePageProps = {}) {
+  const params = useParams<{ patientId: string }>();
+  const patientId = followedPatientId ?? params.patientId;
   const [searchParams, setSearchParams] = useSearchParams();
   // 「戻る」はカルテを開いた元の一覧へ。遷移元が分からなければ全患者へ戻す。
   const returnTo = useKarteReturnTo();
@@ -258,13 +275,42 @@ export function KartePage() {
 
   const [pane, setPane] = useState<KartePaneState>({ kind: "empty" });
 
+  // 右ペインでフォームを開く。別タブには右ペインが無いので、メインタブに頼んで
+  // そちらで開いてもらう(同じ患者を 2 画面で同時に編集させない)。
+  const openForm = useCallback(
+    (next: KartePaneState) => {
+      if (!detached) {
+        setPane(next);
+        return;
+      }
+      if (patientId) requestKarteForm(patientId, next);
+    },
+    [detached, patientId],
+  );
+
+  // 別タブに、いまカルテで開いている患者を知らせる。カルテを離れたら患者未指定に戻す。
+  useEffect(() => {
+    if (detached || !patientId) return;
+    setKartePanePatient(patientId);
+    return () => setKartePanePatient(null);
+  }, [detached, patientId]);
+
+  // 別タブで押された「編集」「DO」をこちらの右ペインで開く。
+  useEffect(() => {
+    if (detached || !patientId) return;
+    return subscribeKarteFormRequest(patientId, (state) => {
+      setPane(state);
+      window.focus();
+    });
+  }, [detached, patientId]);
+
   // 一覧・通知のリンクから右ペインのフォームを開く(退院時サマリー、放射線治療の週次レビュー)。
   // 一回限りの引数なので、読んだら URL から消す(フォームを URL に載せない方針)。
   const openValue = searchParams.get(KARTE_OPEN_PARAM);
   const openTarget = parseKarteOpen(openValue);
   useEffect(() => {
     if (!openTarget) return;
-    setPane(
+    openForm(
       openTarget.kind === "discharge-summary"
         ? { kind: "summary-create", encounterId: openTarget.encounterId }
         : { kind: "radiotherapy-review", srId: openTarget.srId },
@@ -587,76 +633,76 @@ export function KartePage() {
   const openPathwayDayRef = useRef(openPathwayDay);
   openPathwayDayRef.current = openPathwayDay;
 
-  // 3 つのハンドラはカード(memo)に渡すので同一性を保つ。setPane は安定している。
+  // 3 つのハンドラはカード(memo)に渡すので同一性を保つ。openForm は患者が変わるまで同一。
   const handleEdit = useCallback((item: KarteTimelineItem) => {
     if (item.kind === "note") {
-      setPane(
+      openForm(
         isDischargeSummary(item.note)
           ? { kind: "summary-edit", noteId: item.id }
           : { kind: "note-edit", noteId: item.id },
       );
     }
-    else if (item.kind === "prescription") setPane({ kind: "prescription-edit", srId: item.id });
-    else if (item.kind === "injection") setPane({ kind: "injection-edit", srId: item.id });
-    else if (item.kind === "lab-order") setPane({ kind: "lab-order-edit", srId: item.id });
-    else if (item.kind === "micro-order") setPane({ kind: "micro-order-edit", srId: item.id });
-    else if (item.kind === "patho-order") setPane({ kind: "patho-order-edit", srId: item.id });
-    else if (item.kind === "rad-order") setPane({ kind: "rad-order-edit", srId: item.id });
-    else if (item.kind === "physio-order") setPane({ kind: "physio-order-edit", srId: item.id });
+    else if (item.kind === "prescription") openForm({ kind: "prescription-edit", srId: item.id });
+    else if (item.kind === "injection") openForm({ kind: "injection-edit", srId: item.id });
+    else if (item.kind === "lab-order") openForm({ kind: "lab-order-edit", srId: item.id });
+    else if (item.kind === "micro-order") openForm({ kind: "micro-order-edit", srId: item.id });
+    else if (item.kind === "patho-order") openForm({ kind: "patho-order-edit", srId: item.id });
+    else if (item.kind === "rad-order") openForm({ kind: "rad-order-edit", srId: item.id });
+    else if (item.kind === "physio-order") openForm({ kind: "physio-order-edit", srId: item.id });
     else if (item.kind === "endoscopy-order")
-      setPane({ kind: "endoscopy-order-edit", srId: item.id });
+      openForm({ kind: "endoscopy-order-edit", srId: item.id });
     else if (item.kind === "treatment-order")
-      setPane({ kind: "treatment-order-edit", srId: item.id });
-    else if (item.kind === "surgery-order") setPane({ kind: "surgery-order-edit", srId: item.id });
-    else if (item.kind === "meal-order") setPane({ kind: "meal-order-edit", srId: item.id });
+      openForm({ kind: "treatment-order-edit", srId: item.id });
+    else if (item.kind === "surgery-order") openForm({ kind: "surgery-order-edit", srId: item.id });
+    else if (item.kind === "meal-order") openForm({ kind: "meal-order-edit", srId: item.id });
     else if (item.kind === "transfusion-order")
-      setPane({ kind: "transfusion-order-edit", srId: item.id });
-    else if (item.kind === "rehab-order") setPane({ kind: "rehab-order-edit", srId: item.id });
+      openForm({ kind: "transfusion-order-edit", srId: item.id });
+    else if (item.kind === "rehab-order") openForm({ kind: "rehab-order-edit", srId: item.id });
     else if (item.kind === "radiotherapy-order")
-      setPane({ kind: "radiotherapy-order-edit", srId: item.id });
+      openForm({ kind: "radiotherapy-order-edit", srId: item.id });
     else if (item.kind === "nutrition-guidance-order")
-      setPane({ kind: "nutrition-guidance-order-edit", srId: item.id });
-    else if (item.kind === "consult-order") setPane({ kind: "consult-order-edit", srId: item.id });
+      openForm({ kind: "nutrition-guidance-order-edit", srId: item.id });
+    else if (item.kind === "consult-order") openForm({ kind: "consult-order-edit", srId: item.id });
     // バイタルの id は 1 回の測定を束ねる identifier。
-    else if (item.kind === "vital") setPane({ kind: "vital-edit", entryId: item.id });
+    else if (item.kind === "vital") openForm({ kind: "vital-edit", entryId: item.id });
     // パス評価はパスタブの日めくりでその病日を開く(記載はそこから評価で書き直す)。
     else if (item.kind === "pathway-evaluation") openPathwayDayRef.current(item.evaluation.applyId, item.evaluation.eventId);
-    else setPane({ kind: "qr-edit", qrId: item.id });
-  }, []);
+    else openForm({ kind: "qr-edit", qrId: item.id });
+  }, [openForm]);
 
   // DO(複写して新規登録)。処方・注射・検体検査で開くフォームが違う。
   const handleDo = useCallback((item: KarteTimelineItem) => {
-    if (item.kind === "prescription") setPane({ kind: "prescription-create", sourceSrId: item.id });
-    else if (item.kind === "injection") setPane({ kind: "injection-create", sourceSrId: item.id });
-    else if (item.kind === "lab-order") setPane({ kind: "lab-order-create", sourceSrId: item.id });
+    if (item.kind === "prescription") openForm({ kind: "prescription-create", sourceSrId: item.id });
+    else if (item.kind === "injection") openForm({ kind: "injection-create", sourceSrId: item.id });
+    else if (item.kind === "lab-order") openForm({ kind: "lab-order-create", sourceSrId: item.id });
     else if (item.kind === "micro-order") {
-      setPane({ kind: "micro-order-create", sourceSrId: item.id });
+      openForm({ kind: "micro-order-create", sourceSrId: item.id });
     } else if (item.kind === "patho-order") {
-      setPane({ kind: "patho-order-create", sourceSrId: item.id });
+      openForm({ kind: "patho-order-create", sourceSrId: item.id });
     } else if (item.kind === "rad-order") {
-      setPane({ kind: "rad-order-create", sourceSrId: item.id });
+      openForm({ kind: "rad-order-create", sourceSrId: item.id });
     } else if (item.kind === "physio-order") {
-      setPane({ kind: "physio-order-create", sourceSrId: item.id });
+      openForm({ kind: "physio-order-create", sourceSrId: item.id });
     } else if (item.kind === "endoscopy-order") {
-      setPane({ kind: "endoscopy-order-create", sourceSrId: item.id });
+      openForm({ kind: "endoscopy-order-create", sourceSrId: item.id });
     } else if (item.kind === "treatment-order") {
-      setPane({ kind: "treatment-order-create", sourceSrId: item.id });
+      openForm({ kind: "treatment-order-create", sourceSrId: item.id });
     } else if (item.kind === "surgery-order") {
-      setPane({ kind: "surgery-order-create", sourceSrId: item.id });
+      openForm({ kind: "surgery-order-create", sourceSrId: item.id });
     } else if (item.kind === "meal-order") {
-      setPane({ kind: "meal-order-create", sourceSrId: item.id });
+      openForm({ kind: "meal-order-create", sourceSrId: item.id });
     } else if (item.kind === "transfusion-order") {
-      setPane({ kind: "transfusion-order-create", sourceSrId: item.id });
+      openForm({ kind: "transfusion-order-create", sourceSrId: item.id });
     } else if (item.kind === "rehab-order") {
-      setPane({ kind: "rehab-order-create", sourceSrId: item.id });
+      openForm({ kind: "rehab-order-create", sourceSrId: item.id });
     } else if (item.kind === "radiotherapy-order") {
-      setPane({ kind: "radiotherapy-order-create", sourceSrId: item.id });
+      openForm({ kind: "radiotherapy-order-create", sourceSrId: item.id });
     } else if (item.kind === "nutrition-guidance-order") {
-      setPane({ kind: "nutrition-guidance-order-create", sourceSrId: item.id });
+      openForm({ kind: "nutrition-guidance-order-create", sourceSrId: item.id });
     } else if (item.kind === "consult-order") {
-      setPane({ kind: "consult-order-create", sourceSrId: item.id });
+      openForm({ kind: "consult-order-create", sourceSrId: item.id });
     }
-  }, []);
+  }, [openForm]);
 
   // 開いている情報が消えたら、それを見ている UI も閉じる。
   const handleDeleted = useCallback(
@@ -794,7 +840,7 @@ export function KartePage() {
           onDo={handleDo}
           onOpenDetail={openDetail}
           onOpenRadiotherapyPane={(kind, srId) =>
-            setPane(
+            openForm(
               kind === "review"
                 ? { kind: "radiotherapy-review", srId }
                 : { kind: "radiotherapy-adverse", srId },
@@ -833,7 +879,7 @@ export function KartePage() {
         <VitalFlowsheetPanel
           {...props}
           onOpenDetail={openDetail}
-          onOpenVital={(entryId) => setPane({ kind: "vital-edit", entryId })}
+          onOpenVital={(entryId) => openForm({ kind: "vital-edit", entryId })}
         />
       );
     }
@@ -853,10 +899,10 @@ export function KartePage() {
         <KarteMealTab
           patientId={patientId}
           // オーダーが始まった日のマスは、そのオーダーの編集。
-          onEdit={(srId) => setPane({ kind: "meal-order-edit", srId })}
+          onEdit={(srId) => openForm({ kind: "meal-order-edit", srId })}
           // それ以外の日は、その日に出ている食事を引き継いだ新規登録(= その日からの食事変更)。
           onCreate={(date, sourceSrId) =>
-            setPane({ kind: "meal-order-create", sourceSrId, startDate: date })
+            openForm({ kind: "meal-order-create", sourceSrId, startDate: date })
           }
         />
       );
@@ -867,10 +913,10 @@ export function KartePage() {
       return (
         <KarteChemoTab
           {...props}
-          onAddCycle={(regimenSrId) => setPane({ kind: "regimen-cycle", regimenSrId })}
-          onOpenDay={(regimenSrId, date) => setPane({ kind: "regimen-day", regimenSrId, date })}
-          onOpenAdverseEvents={(regimenSrId, cycle) => setPane({ kind: "regimen-adverse", regimenSrId, cycle })}
-          onEditHeader={(regimenSrId) => setPane({ kind: "regimen-header", regimenSrId })}
+          onAddCycle={(regimenSrId) => openForm({ kind: "regimen-cycle", regimenSrId })}
+          onOpenDay={(regimenSrId, date) => openForm({ kind: "regimen-day", regimenSrId, date })}
+          onOpenAdverseEvents={(regimenSrId, cycle) => openForm({ kind: "regimen-adverse", regimenSrId, cycle })}
+          onEditHeader={(regimenSrId) => openForm({ kind: "regimen-header", regimenSrId })}
         />
       );
     }
@@ -880,8 +926,8 @@ export function KartePage() {
       return (
         <KartePathwayTab
           {...props}
-          onOpenOrder={(kind, srId) => setPane({ kind: `${kind}-edit`, srId } as KartePaneState)}
-          onApplyPhase={(applyId, phaseKey) => setPane({ kind: "pathway-phase", applyId, phaseKey })}
+          onOpenOrder={(kind, srId) => openForm({ kind: `${kind}-edit`, srId } as KartePaneState)}
+          onApplyPhase={(applyId, phaseKey) => openForm({ kind: "pathway-phase", applyId, phaseKey })}
         />
       );
     }
@@ -890,8 +936,8 @@ export function KartePage() {
       return (
         <KarteNursingTab
           {...props}
-          onCreate={() => setPane({ kind: "nursing-order-create", problem: selectedProblem })}
-          onEdit={(srId) => setPane({ kind: "nursing-order-edit", srId })}
+          onCreate={() => openForm({ kind: "nursing-order-create", problem: selectedProblem })}
+          onEdit={(srId) => openForm({ kind: "nursing-order-edit", srId })}
         />
       );
     }
@@ -900,7 +946,7 @@ export function KartePage() {
       return (
         <KarteAppointmentTab
           patientId={patientId}
-          onReschedule={(appointmentId) => setPane({ kind: "appointment-reschedule", appointmentId })}
+          onReschedule={(appointmentId) => openForm({ kind: "appointment-reschedule", appointmentId })}
         />
       );
     }
@@ -913,6 +959,7 @@ export function KartePage() {
   // タブ行の右端に置く分割の切り替え。左右の分割(本日のカルテ)と上下の分割。
   const tabActions = (
     <div className="karte-tabs__actions">
+      {!detached && patientId && <KarteOpenPaneButton patientId={patientId} />}
       <KarteTodayToggleButton visible={todayVisible} onToggle={toggleTodayPane} />
       <KarteModeToggleButton mode={mode} onToggle={toggleMode} />
     </div>
@@ -961,7 +1008,7 @@ export function KartePage() {
       onDo={handleDo}
       onOpenDetail={openDetail}
       onOpenRadiotherapyPane={(kind, srId) =>
-        setPane(
+        openForm(
           kind === "review"
             ? { kind: "radiotherapy-review", srId }
             : { kind: "radiotherapy-adverse", srId },
@@ -978,21 +1025,23 @@ export function KartePage() {
       {/* 見出しは置かず、患者情報と戻るボタンを 1 行にまとめて縦幅を左右のペインに回す。 */}
       <div className="karte-page__header">
         <PatientHeader patientId={patientId} />
-        {outpatientExam.data && (
+        {!detached && outpatientExam.data && (
           <button type="button" disabled={finishExam.isPending} onClick={handleFinishExam}>
             診察終了
           </button>
         )}
-        <Link to={returnTo} className="button">
-          ← 戻る
-        </Link>
+        {!detached && (
+          <Link to={returnTo} className="button">
+            ← 戻る
+          </Link>
+        )}
       </div>
       <ErrorBanner error={finishExam.error} />
 
       {/* 左右の幅はカスタムプロパティで渡す。狭い画面では CSS 側で縦積みに切り替える
           ため、grid-template-columns 自体はインラインで上書きしない。 */}
       <div
-        className="karte-layout"
+        className={`karte-layout${detached ? " karte-layout--pane" : ""}`}
         ref={layoutRef}
         style={{ "--karte-left-ratio": leftWidthRatio } as CSSProperties}
       >
@@ -1025,21 +1074,25 @@ export function KartePage() {
           )}
         </section>
 
-        <KarteSplitter
-          containerRef={layoutRef}
-          orientation="vertical"
-          ratio={leftWidthRatio}
-          label="左ペインと右ペインの幅"
-          onChange={(ratio) => setLeftWidthRatio(clampLeftWidthRatio(ratio))}
-          onChangeEnd={storeLeftWidthRatio}
-        />
+        {!detached && (
+          <>
+            <KarteSplitter
+              containerRef={layoutRef}
+              orientation="vertical"
+              ratio={leftWidthRatio}
+              label="左ペインと右ペインの幅"
+              onChange={(ratio) => setLeftWidthRatio(clampLeftWidthRatio(ratio))}
+              onChangeEnd={storeLeftWidthRatio}
+            />
 
-        <KarteRightPane
-          patientId={patientId}
-          state={pane}
-          selectedProblem={selectedProblem}
-          onStateChange={setPane}
-        />
+            <KarteRightPane
+              patientId={patientId}
+              state={pane}
+              selectedProblem={selectedProblem}
+              onStateChange={setPane}
+            />
+          </>
+        )}
       </div>
 
       {/* 詳細モーダルはタイムラインの読み込み位置に依存しないよう、対象を ID で
@@ -1220,6 +1273,41 @@ function KarteTabGroup<K extends string>({
         </div>
       )}
     </div>
+  );
+}
+
+// 左ペインを別タブで開く。サブモニターに出しっぱなしにして参照するための表示で、
+// 開いたあとはメインタブのカルテに追従する。
+function KarteOpenPaneButton({ patientId }: { patientId: string }) {
+  const label = "左ペインを別タブで開く";
+  return (
+    <button
+      type="button"
+      className="karte-tabs__mode"
+      title={label}
+      aria-label={label}
+      onClick={() => openKartePane(patientId)}
+    >
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+        {/* 枠の外へ出ていく矢印で「別のタブに出す」を表す。 */}
+        <path
+          d="M8.5 2.5h-6v11h11v-6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M10.5 2.5h3v3M13.5 2.5 8 8"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
   );
 }
 

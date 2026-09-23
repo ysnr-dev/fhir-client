@@ -4800,6 +4800,23 @@ body.karte-wide {
   --karte-pane-height: calc(100vh - 174px);
 }
 
+/* カルテの左ペインだけを出した別タブ(サブモニター常駐)。アプリのヘッダーが無く、
+   本文の余白も詰めた分だけペインを高く取れる。 */
+.app--pane .app__main {
+  padding: 12px;
+}
+
+/* 内訳は患者情報行(ペイン上端 69px)+ .app__main の下 padding 12px。 */
+.app--pane .karte-page {
+  --karte-pane-height: calc(100vh - 81px);
+}
+
+/* メインタブがカルテを閉じている間の別タブ。 */
+.karte-pane-empty {
+  padding: 24px;
+  color: var(--text-muted, var(--text));
+}
+
 /* 患者情報と「患者一覧に戻る」を 1 行に並べる(見出し行を持たない分、
    左右のペインを高くできる)。 */
 .karte-page__header {
@@ -4829,6 +4846,11 @@ body.karte-wide {
     minmax(0, 1fr);
   column-gap: 4px;
   row-gap: 16px;
+}
+
+/* 別タブ(左ペインだけ)は右ペインもスプリッタも持たないので 1 列。 */
+.karte-layout--pane {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* 左右のペインは同じ高さに固定し、中身が縦の残りを埋める。

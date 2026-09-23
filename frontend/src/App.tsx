@@ -1,4 +1,4 @@
-import { Link, Navigate, NavLink, Route, Routes, useParams } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useParams } from "react-router-dom";
 import "./App.css";
 import { AdminGate } from "./components/AdminGate";
 import { AuthGate } from "./components/AuthGate";
@@ -90,6 +90,8 @@ import { PatientCreatePage } from "./pages/PatientCreatePage";
 import { PatientEditPage } from "./pages/PatientEditPage";
 import { PatientListPage } from "./pages/PatientListPage";
 import { KartePage } from "./pages/KartePage";
+import { KartePanePage } from "./pages/KartePanePage";
+import { KARTE_PANE_PATH, useKartePaneHost } from "./kartePaneChannel";
 import { DepartmentCreatePage } from "./pages/DepartmentCreatePage";
 import { DepartmentEditPage } from "./pages/DepartmentEditPage";
 import { DepartmentListPage } from "./pages/DepartmentListPage";
@@ -135,11 +137,18 @@ function KarteRedirect() {
 }
 
 function App() {
+  // カルテの左ペインを出す別タブ。サブモニターに置いて参照するだけの画面なので、
+  // アプリのヘッダー(ナビ)を出さず縦幅をカルテに回す。
+  const detachedPane = useLocation().pathname.startsWith(KARTE_PANE_PATH);
+  // メインタブは、別タブから見た「生きているか」「いま誰のカルテか」の応答口になる。
+  useKartePaneHost(!detachedPane);
+
   return (
     // アプリ全体をログインゲートで包む(ADMIN_TOKEN 未設定なら素通し)。
     // ログイン中の医療従事者(Practitioner)は useCurrentPractitioner で参照できる。
     <AuthGate>
-      <div className="app">
+      <div className={`app${detachedPane ? " app--pane" : ""}`}>
+      {!detachedPane && (
       <header className="app__header">
         <Link to="/patients" className="app__title">
           FHIR Client
@@ -514,6 +523,7 @@ function App() {
         <CurrentUserBadge />
         <WakeButton />
       </header>
+      )}
       <main className="app__main">
         <Routes>
           <Route path="/" element={<Navigate to="/patients" replace />} />
@@ -523,6 +533,10 @@ function App() {
           {/* 診療記録・処方・病名・アレルギー・検査結果・テンプレート回答は
               患者ごとの一覧ページを持たず、カルテ画面(タブと右ペイン)で扱う。 */}
           <Route path="/patients/:patientId/karte" element={<KartePage />} />
+          {/* カルテの左ペインだけを出す別タブ。患者はメインタブから受け取るので、
+              患者を持たない形でも開ける(メインでカルテを閉じている間)。 */}
+          <Route path="/karte-pane" element={<KartePanePage />} />
+          <Route path="/karte-pane/:patientId" element={<KartePanePage />} />
           {/* 患者配下のその他の URL(/patients/:id/prescriptions など)は空白画面にせず、
               その患者のカルテへ寄せる。 */}
           <Route path="/patients/:patientId/*" element={<KarteRedirect />} />
