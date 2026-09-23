@@ -166,6 +166,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
 
   // 全画面はビューポート全体ではなく「患者情報の下」から始める(経過表・パスシートと同じ)。
   const overlay = parsed.overlay ?? body.overlay;
+  const values = Boolean(parsed.values);
   const fullscreen = Boolean(parsed.fullscreen);
   const panelRef = useRef<HTMLDivElement>(null);
   const [fullscreenTop, setFullscreenTop] = useState(0);
@@ -366,6 +367,11 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           onToggle={() => updateView({ ...parsed, overlay: !overlay })}
         />
 
+        <ValuesToggle
+          values={values}
+          onToggle={() => updateView({ ...parsed, values: !values })}
+        />
+
         <button type="button" onClick={() => updateView({ ...parsed, fullscreen: !fullscreen })}>
           {fullscreen ? "全画面を終了" : "全画面"}
         </button>
@@ -412,6 +418,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           events={shownEvents}
           eventKinds={body.events}
           overlay={overlay}
+          values={values}
           fullscreen={fullscreen}
           onOpenDetail={onOpenDetail}
         />
@@ -466,6 +473,28 @@ function OverlayToggle({ overlay, onToggle }: { overlay: boolean; onToggle: () =
             <path d="M3.5 12 6.5 10 9.5 12 12.5 9.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
           </>
         )}
+      </svg>
+    </button>
+  );
+}
+
+/** グラフ上に数値を出すかどうかの切り替え。アイコンは枠の中に数字。 */
+function ValuesToggle({ values, onToggle }: { values: boolean; onToggle: () => void }) {
+  const label = values ? "数値を隠す" : "グラフ上に数値を出す";
+  return (
+    <button
+      type="button"
+      className={`patient-chart__mode${values ? " is-active" : ""}`}
+      aria-pressed={values}
+      title={label}
+      aria-label={label}
+      onClick={onToggle}
+    >
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+        <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+        <text x="8" y="11.5" textAnchor="middle" fontSize="8" fill="currentColor">
+          12
+        </text>
       </svg>
     </button>
   );

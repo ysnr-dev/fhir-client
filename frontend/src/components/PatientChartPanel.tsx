@@ -49,6 +49,8 @@ interface PatientChartPanelProps {
   eventKinds: ChartEventKind[];
   /** 全項目を 1 つのグラフに重ねる。 */
   overlay?: boolean;
+  /** 点の上に数値を出す。 */
+  values?: boolean;
   /** 全画面かどうか。幅が変わるので測り直す合図に使う。 */
   fullscreen?: boolean;
   onOpenDetail?: (target: KarteDetailTarget) => void;
@@ -60,6 +62,7 @@ export function PatientChartPanel({
   events,
   eventKinds,
   overlay,
+  values,
   fullscreen,
   onOpenDetail,
 }: PatientChartPanelProps) {
@@ -160,6 +163,7 @@ export function PatientChartPanel({
           range={range}
           vbWidth={vbWidth}
           height={laneHeight}
+          values={values}
           legendRef={legendRef}
           toX={toX}
           boundaries={boundaries}
@@ -177,6 +181,7 @@ export function PatientChartPanel({
             range={range}
             vbWidth={vbWidth}
             height={laneHeight}
+            values={values}
             toX={toX}
             boundaries={boundaries}
             todayX={todayX}
@@ -262,6 +267,49 @@ function EventBand({
       </svg>
     </div>
   );
+}
+
+/** 点の上に出す数値の字の大きさ。 */
+const VALUE_FONT = 10;
+
+interface ValueLabel {
+  key: string;
+  x: number;
+  y: number;
+  text: string;
+}
+
+/**
+ * 点の数値ラベルを、重ならないものだけ残す(左から順に置けるものだけ置く)。
+ * 測定が詰まっている期間は全部には出せないので、間引いて読める密度にする。
+ */
+function placeValueLabels(candidates: ValueLabel[]): ValueLabel[] {
+  const widthOf = (text: string) =>
+    [...text].reduce((sum, char) => sum + (/[\u0020-\u00ff]/.test(char) ? VALUE_FONT * 0.55 : VALUE_FONT), 0);
+  const placed: { left: number; right: number; top: number; bottom: number }[] = [];
+  const result: ValueLabel[] = [];
+
+  for (const candidate of [...candidates].sort((a, b) => a.x - b.x)) {
+    const half = widthOf(candidate.text) / 2 + 2;
+    const box = {
+      left: candidate.x - half,
+      right: candidate.x + half,
+      top: candidate.y - VALUE_FONT - 2,
+      bottom: candidate.y + 2,
+    };
+    const hit = placed.some(
+      (other) =>
+        box.left < other.right &&
+        box.right > other.left &&
+        box.top < other.bottom &&
+        box.bottom > other.top,
+    );
+    if (hit) continue;
+    placed.push(box);
+    result.push(candidate);
+  }
+
+  return result;
 }
 
 /** 頭だけ残っても読めないので、これより短くなるならラベルを出さない(ホバーで読む)。 */
@@ -389,6 +437,7 @@ interface OverlayChartProps {
   range: ChartRange;
   vbWidth: number;
   height: number;
+  values?: boolean;
   legendRef: React.Ref<HTMLUListElement>;
   toX: (t: number) => number;
   boundaries: number[];
@@ -404,6 +453,7 @@ function OverlayChart({
   range,
   vbWidth,
   height,
+  values,
   legendRef,
   toX,
   boundaries,
@@ -561,6 +611,27 @@ function OverlayChart({
               ))}
             </g>
           ))}
+          {values &&
+            placeValueLabels(
+              shown.flatMap((spec) =>
+                spec.points.map((point) => ({
+                  key: `${spec.key}/${point.at}`,
+                  x: toX(point.t),
+                  y: toY(point.value, spec) - 6,
+                  text: formatValue(point.value),
+                })),
+              ),
+            ).map((label) => (
+              <text
+                key={label.key}
+                className="patient-chart__value"
+                x={label.x}
+                y={label.y}
+                textAnchor="middle"
+              >
+                {label.text}
+              </text>
+            ))}
           {!hasPoints && (
             <text
               className="patient-chart__no-data"
@@ -644,6 +715,7 @@ interface ChartLaneProps {
   range: ChartRange;
   vbWidth: number;
   height: number;
+  values?: boolean;
   toX: (t: number) => number;
   boundaries: number[];
   todayX: number | null;
@@ -658,6 +730,7 @@ function ChartLane({
   range,
   vbWidth,
   height,
+  values,
   toX,
   boundaries,
   todayX,
@@ -670,8 +743,8 @@ function ChartLane({
   const points = lane.series.flatMap((series) => series.points);
   const hasPoints = points.length > 0;
 
-  const values = points.map((point) => point.value);
-  const ticks = hasPoints ? niceTicks(Math.min(...values), Math.max(...values)) : [0, 1];
+  const numbers = points.map((point) => point.value);
+  const ticks = hasPoints ? niceTicks(Math.min(...numbers), Math.max(...numbers)) : [0, 1];
   const yMin = ticks[0];
   const yMax = ticks[ticks.length - 1];
   const plotH = height - MARGIN.top - MARGIN.bottom;
@@ -812,6 +885,27 @@ function ChartLane({
             ))}
           </g>
         ))}
+          {values &&
+            placeValueLabels(
+              lane.series.flatMap((series) =>
+                series.points.map((point) => ({
+                  key: `${series.key}/${point.at}`,
+                  x: toX(point.t),
+                  y: toY(point.value) - 6,
+                  text: formatValue(point.value),
+                })),
+              ),
+            ).map((label) => (
+              <text
+                key={label.key}
+                className="patient-chart__value"
+                x={label.x}
+                y={label.y}
+                textAnchor="middle"
+              >
+                {label.text}
+              </text>
+            ))}
           {!hasPoints && (
             <text className="patient-chart__no-data" x={vbWidth / 2} y={height / 2} textAnchor="middle">
               この期間に値がありません

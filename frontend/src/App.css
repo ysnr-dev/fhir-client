@@ -3807,6 +3807,14 @@ fieldset.rp-card {
   font-size: 12px;
 }
 
+/* 点の上に出す数値。系列色ではなく本文の字の色にする(小さい字を系列色で塗ると
+   ライトテーマで地との対比が足りない。どの系列かは点との近さで読む)。 */
+.patient-chart__value {
+  fill: var(--text-h);
+  font-size: 10px;
+  pointer-events: none;
+}
+
 .patient-chart__column-grid {
   stroke: var(--border);
   stroke-width: 1;

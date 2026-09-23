@@ -224,7 +224,8 @@ export function formatFlowsheetView(view: FlowsheetView, today: string): string 
 // ---- チャートの表示状態 ----
 //
 // 経過表と同じく「どこを見ているか」が読む位置そのものなので view に載せる。
-// 形は「[基準日][~単位列数][/定義 id][o|s][!]」。例 "2026-09-23~m12/5o"。単位は d/m/y の 1 文字。
+// 形は「[基準日][~単位列数][/定義 id][o|s][n][!]」。例 "2026-09-23~m12/5on"。単位は d/m/y の 1 文字。
+// 「n」はグラフ上に数値を出している状態。
 // グラフは o=まとめる / s=項目ごと で、**書いていなければ定義の設定に従う**
 // (真偽値 1 文字だと「指定なし」と「まとめない」が区別できない)。
 // 基準日が今日で、単位・列数が定義のままなら省く(既定値を URL に残さない)。
@@ -246,11 +247,15 @@ export interface ChartView {
   chartId?: number;
   /** 全項目を 1 つのグラフに重ねて見ている。 */
   overlay?: boolean;
+  /** グラフ上に数値を出している。 */
+  values?: boolean;
   fullscreen?: boolean;
 }
 
 export function parseChartView(value: string | undefined): ChartView {
-  const match = /^(\d{4}-\d{2}-\d{2})?(?:~([dmy])(\d+))?(?:\/(\d+))?([os])?(!)?$/.exec(value ?? "");
+  const match = /^(\d{4}-\d{2}-\d{2})?(?:~([dmy])(\d+))?(?:\/(\d+))?([os])?(n)?(!)?$/.exec(
+    value ?? "",
+  );
   if (!match) return {};
   const unit = match[2] ? CHART_UNIT_BY_LETTER[match[2]] : undefined;
   return {
@@ -259,7 +264,8 @@ export function parseChartView(value: string | undefined): ChartView {
     columns: match[3] ? Number(match[3]) : undefined,
     chartId: match[4] ? Number(match[4]) : undefined,
     overlay: match[5] === "o" ? true : match[5] === "s" ? false : undefined,
-    fullscreen: Boolean(match[6]),
+    values: Boolean(match[6]),
+    fullscreen: Boolean(match[7]),
   };
 }
 
@@ -269,8 +275,9 @@ export function formatChartView(view: ChartView, today: string): string | null {
   const axis = view.unit && view.columns ? `~${CHART_UNIT_LETTERS[view.unit]}${view.columns}` : "";
   const chart = view.chartId ? `/${view.chartId}` : "";
   const overlay = view.overlay === undefined ? "" : view.overlay ? "o" : "s";
+  const values = view.values ? "n" : "";
   const full = view.fullscreen ? "!" : "";
-  const formatted = `${baseDate}${axis}${chart}${overlay}${full}`;
+  const formatted = `${baseDate}${axis}${chart}${overlay}${values}${full}`;
   return formatted || null;
 }
 
