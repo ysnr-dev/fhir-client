@@ -3532,6 +3532,14 @@ fieldset.rp-card {
   flex-wrap: wrap;
 }
 
+/* 画面の名前。他のタブの見出し(.karte-tabpanel__header h3)と同じ字にする。 */
+.patient-chart__title {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-h);
+  white-space: nowrap;
+}
+
 .patient-chart__nav,
 .patient-chart__unit {
   display: flex;

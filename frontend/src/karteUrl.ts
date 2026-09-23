@@ -75,7 +75,7 @@ export const KARTE_TABS = [
   { key: "meal", label: "食事" },
   // チャート。検査値・バイタル・テンプレートの数値の推移に、手術・入退院・化学療法などの
   // 実施歴を重ねて読む。項目の組み合わせは名前を付けて保存する(chart_definitions)。
-  { key: "chart", label: "チャート" },
+  { key: "chart", label: "マルチチャート" },
   // 経過表(POMR のフローシート)。上下分割で「上にカルテ、下に経過表」と並べて
   // 読めるよう、カルテ以外のタブとして持つ。
   { key: "flowsheet", label: "経過表" },

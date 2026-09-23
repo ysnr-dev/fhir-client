@@ -278,6 +278,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
       style={fullscreen ? { top: fullscreenTop } : undefined}
     >
       <div className="patient-chart__toolbar">
+        <h3 className="patient-chart__title">マルチチャート</h3>
         <select
           value={selected?.id ?? ""}
           onChange={(e) => updateView({ ...parsed, chartId: Number(e.target.value) || undefined })}
