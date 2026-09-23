@@ -73,6 +73,9 @@ export const KARTE_TABS = [
   // 食事は「開始したら次の指示まで続く」ので、カードを日付順に読むだけでは
   // その日に何を食べているかが分かりにくい。暦の形で見るタブを別に持つ。
   { key: "meal", label: "食事" },
+  // チャート。検査値・バイタル・テンプレートの数値の推移に、手術・入退院・化学療法などの
+  // 実施歴を重ねて読む。項目の組み合わせは名前を付けて保存する(chart_definitions)。
+  { key: "chart", label: "マルチチャート" },
   // 経過表(POMR のフローシート)。上下分割で「上にカルテ、下に経過表」と並べて
   // 読めるよう、カルテ以外のタブとして持つ。
   { key: "flowsheet", label: "経過表" },
@@ -104,7 +107,7 @@ export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
  */
 export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly KarteTabKey[] }> = [
   { label: "患者情報", keys: ["profile", "allergy"] },
-  { label: "診療情報", keys: ["chemo", "pathway", "meal"] },
+  { label: "診療情報", keys: ["chemo", "pathway", "meal", "chart"] },
   { label: "検査結果", keys: ["lab", "lab-timeline", "micro", "patho"] },
 ];
 
@@ -216,6 +219,66 @@ export function formatFlowsheetView(view: FlowsheetView, today: string): string 
     view.day ? `/${view.day}` : "",
     view.fullscreen ? "!" : "",
   ].join("");
+}
+
+// ---- チャートの表示状態 ----
+//
+// 経過表と同じく「どこを見ているか」が読む位置そのものなので view に載せる。
+// 形は「[基準日][~単位列数][/定義 id][o|s][n][!]」。例 "2026-09-23~m12/5on"。単位は d/m/y の 1 文字。
+// 「n」はグラフ上に数値を出している状態。
+// グラフは o=まとめる / s=項目ごと で、**書いていなければ定義の設定に従う**
+// (真偽値 1 文字だと「指定なし」と「まとめない」が区別できない)。
+// 基準日が今日で、単位・列数が定義のままなら省く(既定値を URL に残さない)。
+// 区切りに「+」を使わないのは、クエリ文字列の「+」が空白に解釈されるため。
+
+/** チャートの横軸の単位。fhir/chartDefinitionHelpers.ts の ChartAxisUnit と対。 */
+export type ChartViewUnit = "day" | "month" | "year";
+
+const CHART_UNIT_LETTERS: Record<ChartViewUnit, string> = { day: "d", month: "m", year: "y" };
+const CHART_UNIT_BY_LETTER: Record<string, ChartViewUnit> = { d: "day", m: "month", y: "year" };
+
+export interface ChartView {
+  /** 期間の右端。省略は今日。 */
+  baseDate?: string;
+  /** 定義の既定と違う単位を見ているときだけ入る。 */
+  unit?: ChartViewUnit;
+  columns?: number;
+  /** 見ているチャート定義の id。 */
+  chartId?: number;
+  /** 全項目を 1 つのグラフに重ねて見ている。 */
+  overlay?: boolean;
+  /** グラフ上に数値を出している。 */
+  values?: boolean;
+  fullscreen?: boolean;
+}
+
+export function parseChartView(value: string | undefined): ChartView {
+  const match = /^(\d{4}-\d{2}-\d{2})?(?:~([dmy])(\d+))?(?:\/(\d+))?([os])?(n)?(!)?$/.exec(
+    value ?? "",
+  );
+  if (!match) return {};
+  const unit = match[2] ? CHART_UNIT_BY_LETTER[match[2]] : undefined;
+  return {
+    baseDate: match[1],
+    unit,
+    columns: match[3] ? Number(match[3]) : undefined,
+    chartId: match[4] ? Number(match[4]) : undefined,
+    overlay: match[5] === "o" ? true : match[5] === "s" ? false : undefined,
+    values: Boolean(match[6]),
+    fullscreen: Boolean(match[7]),
+  };
+}
+
+/** 何も指定が無ければ null を返して view を落とす(他タブの「何も開いていない」と揃える)。 */
+export function formatChartView(view: ChartView, today: string): string | null {
+  const baseDate = view.baseDate && view.baseDate !== today ? view.baseDate : "";
+  const axis = view.unit && view.columns ? `~${CHART_UNIT_LETTERS[view.unit]}${view.columns}` : "";
+  const chart = view.chartId ? `/${view.chartId}` : "";
+  const overlay = view.overlay === undefined ? "" : view.overlay ? "o" : "s";
+  const values = view.values ? "n" : "";
+  const full = view.fullscreen ? "!" : "";
+  const formatted = `${baseDate}${axis}${chart}${overlay}${values}${full}`;
+  return formatted || null;
 }
 
 // ---- パスシートの表示状態 ----

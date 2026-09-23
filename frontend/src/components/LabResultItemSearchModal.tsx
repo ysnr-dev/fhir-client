@@ -8,6 +8,8 @@ import { Modal } from "./Modal";
 interface Props {
   /** 見出し。何に足すのかは呼び出し元で変わる。 */
   title?: string;
+  /** データ型を固定する(チャートは数値型 PQ だけを足せる)。検索欄には出さない。 */
+  dataType?: string;
   onSelect: (item: LabResultItem) => void;
   onClose: () => void;
 }
@@ -16,11 +18,13 @@ interface Props {
 // 検査結果フォームの項目選択と、オーダー項目の対応づけから使う。
 export function LabResultItemSearchModal({
   title = "検査結果項目を選択",
+  dataType,
   onSelect,
   onClose,
 }: Props) {
-  const [inputs, setInputs] = useState<LabResultItemFilters>({ active: true });
-  const [filters, setFilters] = useState<LabResultItemFilters>({ active: true });
+  const initial: LabResultItemFilters = { active: true, ...(dataType ? { data_type: dataType } : {}) };
+  const [inputs, setInputs] = useState<LabResultItemFilters>(initial);
+  const [filters, setFilters] = useState<LabResultItemFilters>(initial);
   const [page, setPage] = useState(1);
 
   const list = useLabResultItemSearch(filters, page);
@@ -81,8 +85,8 @@ export function LabResultItemSearchModal({
           <button
             type="button"
             onClick={() => {
-              setInputs({ active: true });
-              setFilters({ active: true });
+              setInputs(initial);
+              setFilters(initial);
               setPage(1);
             }}
           >

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { formatPointDate, formatValue, niceTicks } from "./chartScale";
 
 export interface LabTimelinePoint {
   /**
@@ -42,43 +43,11 @@ const PLOT_H = VB_HEIGHT - MARGIN.top - MARGIN.bottom;
 // X 軸ラベルを重ねずに置ける最小間隔(viewBox 座標)。
 const MIN_LABEL_GAP = 56;
 
-function formatValue(value: number): string {
-  return value.toLocaleString("ja-JP", { maximumFractionDigits: 4 });
-}
-
 function formatDate(date: string, withYear: boolean): string {
   // 日時("...T09:00")で渡されることもあるので日付部分だけを見る。
   const [y, m, d] = date.slice(0, 10).split("-");
   const md = `${Number(m)}/${Number(d)}`;
   return withYear ? `${y}/${md}` : md;
-}
-
-/** ツールチップの見出し。日時で渡されたときだけ時刻も出す。 */
-function formatPointDate(date: string): string {
-  const time = date.slice(11, 16);
-  return time ? `${date.slice(0, 10)} ${time}` : date;
-}
-
-// 値域を覆う「きりのよい」目盛り(4分割程度)を返す。
-function niceTicks(min: number, max: number): number[] {
-  if (min === max) {
-    // 全点が同じ値のときは値を中央に置ける適当な幅をとる。
-    const pad = Math.abs(min) || 1;
-    min -= pad / 2;
-    max += pad / 2;
-  }
-  const rawStep = (max - min) / 4;
-  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
-  const step = [1, 2, 5, 10].map((m) => m * magnitude).find((s) => s >= rawStep) ?? rawStep;
-  const start = Math.floor(min / step) * step;
-  const ticks: number[] = [];
-  for (let v = start; ; v += step) {
-    // 0.30000000000000004 のような誤差を丸める。
-    const tick = Number(v.toPrecision(12));
-    ticks.push(tick);
-    if (tick >= max) break;
-  }
-  return ticks;
 }
 
 function ChartPanel({ series }: { series: LabTimelineSeries }) {

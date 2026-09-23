@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_23_140000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_23_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -41,6 +41,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_23_140000) do
     t.bigint "blob_id", null: false
     t.string "variation_digest", null: false
     t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
+  end
+
+  create_table "chart_definitions", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "scope", null: false
+    t.string "owner_id"
+    t.string "owner_name"
+    t.string "name", null: false
+    t.jsonb "definition", default: {}, null: false
+    t.integer "display_order"
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_chart_definitions_on_code", unique: true
+    t.index ["scope", "owner_id"], name: "index_chart_definitions_on_scope_and_owner_id"
   end
 
   create_table "dicom_instances", force: :cascade do |t|

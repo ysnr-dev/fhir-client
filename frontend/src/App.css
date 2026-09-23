@@ -3510,6 +3510,502 @@ fieldset.rp-card {
   color: var(--text);
 }
 
+/* ---- 患者チャート(数値の推移 + 治療イベント) ---- */
+
+/* レーンは横軸を共有するので、すべて同じ左右の余白(viewBox 座標)で描く。 */
+/* 操作の大きさは経過表(.vital-flowsheet)に揃える。送るのは本文だけで、
+   ツールバーは残す(karte-tabpanel の overflow-y を上書きするので 2 クラスで書く)。 */
+.karte-tabpanel.patient-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  overflow: hidden;
+}
+
+.patient-chart__toolbar {
+  --control-height: 24px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 画面の名前。他のタブの見出し(.karte-tabpanel__header h3)と同じ字にする。 */
+.patient-chart__title {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-h);
+  white-space: nowrap;
+}
+
+.patient-chart__nav,
+.patient-chart__unit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 素の select / input には枠も背景も付かない(共通の見た目は画面ごとのセレクタで
+   当てる作りなので)。同じ行に並ぶボタンと高さがそろうよう、経過表と同じ枠にする。 */
+.patient-chart__toolbar select,
+.patient-chart__toolbar input {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.patient-chart__toolbar button {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+/* 記号・1 文字のボタンは左右を詰める(経過表の週送りと同じ)。
+   上の .patient-chart__toolbar button より詳細度を上げておく。 */
+.patient-chart__toolbar .patient-chart__step,
+.patient-chart__toolbar .patient-chart__unit button {
+  padding-left: 7px;
+  padding-right: 7px;
+}
+
+/* 定義の編集はモーダルのフォームなので、画面の検索フォームと同じ大きさにする。 */
+.chart-editor select,
+.chart-editor input:not([type="checkbox"]) {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+/* 全画面。経過表(.vital-flowsheet--fullscreen)と同じ枠で、上端はパネル側が実測する。 */
+.patient-chart--fullscreen {
+  position: fixed;
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
+  z-index: 100;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-sunken);
+  padding: 12px;
+}
+
+.patient-chart__unit button.is-active {
+  background: var(--accent-bg);
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+/* 送るのは本文だけ(ツールバーは上に残す)。経過表の表のラップと同じ考え。 */
+.patient-chart__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.patient-chart__empty {
+  margin: 12px 0;
+  color: var(--text);
+}
+
+.patient-chart__lane {
+  position: relative;
+  --chart-series: #2a78d6;
+}
+
+:root[data-theme="dark"] .patient-chart__lane {
+  --chart-series: #3987e5;
+}
+
+/* 系列の色。dataviz の検証済みカテゴリ配色を並び順どおりに使う(色を作り足さない)。
+   .lab-chart の --chart-series と同じ役割で、スロット 1 は既存の系列色と同じ値。
+   重ね表示では色だけに頼らず、印の形(丸・三角・四角・菱形)も変えて見分ける。 */
+.patient-chart__series-2,
+.patient-chart__s2 {
+  --chart-series: #eb6834;
+}
+
+.patient-chart__s1 {
+  --chart-series: #2a78d6;
+}
+
+.patient-chart__s3 {
+  --chart-series: #1baf7a;
+}
+
+.patient-chart__s4 {
+  --chart-series: #eda100;
+}
+
+.patient-chart__s5 {
+  --chart-series: #e87ba4;
+}
+
+.patient-chart__s6 {
+  --chart-series: #008300;
+}
+
+.patient-chart__s7 {
+  --chart-series: #4a3aa7;
+}
+
+.patient-chart__s8 {
+  --chart-series: #e34948;
+}
+
+:root[data-theme="dark"] .patient-chart__series-2,
+:root[data-theme="dark"] .patient-chart__s2 {
+  --chart-series: #d95926;
+}
+
+:root[data-theme="dark"] .patient-chart__s1 {
+  --chart-series: #3987e5;
+}
+
+:root[data-theme="dark"] .patient-chart__s3 {
+  --chart-series: #199e70;
+}
+
+:root[data-theme="dark"] .patient-chart__s4 {
+  --chart-series: #c98500;
+}
+
+:root[data-theme="dark"] .patient-chart__s5 {
+  --chart-series: #d55181;
+}
+
+:root[data-theme="dark"] .patient-chart__s6 {
+  --chart-series: #008300;
+}
+
+:root[data-theme="dark"] .patient-chart__s7 {
+  --chart-series: #9085e9;
+}
+
+:root[data-theme="dark"] .patient-chart__s8 {
+  --chart-series: #e66767;
+}
+
+/* 凡例。縦軸に数値を出さないので、単位と表示範囲はここで読む。
+   名前と範囲は本文の文字色のまま(系列色を文字に使わない)。 */
+.patient-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.patient-chart__legend li {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* 押すとその系列を一時的に隠す。ボタンだが凡例なので、枠や地色は持たせない。 */
+.patient-chart__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.patient-chart__legend-item.is-hidden {
+  opacity: 0.4;
+}
+
+.patient-chart__legend-item.is-hidden .patient-chart__legend-name {
+  text-decoration: line-through;
+}
+
+.patient-chart__legend-name {
+  color: var(--text-h);
+}
+
+.patient-chart__legend-range {
+  color: var(--text);
+}
+
+.patient-chart__swatch {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  overflow: visible;
+}
+
+.patient-chart__tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 表示の切り替え(項目ごと / 重ねる)。カルテのタブ行のアイコンボタンと同じ見た目。 */
+.patient-chart__mode {
+  padding: 0 6px;
+}
+
+.patient-chart__mode.is-active {
+  background: var(--accent-bg);
+  color: var(--text-h);
+}
+
+/* グラフ本体だけを幅いっぱいにする(凡例・ツールチップの小さな記号は素の大きさのまま)。 */
+.patient-chart__lane-plot > svg,
+.patient-chart__band > svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.patient-chart__lane-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 2px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.patient-chart__lane-unit {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.patient-chart__lane-plot {
+  position: relative;
+}
+
+/* レーンの中に収める(検体検査時系列のようにカーソルの真上へは出さない)。 */
+.patient-chart__tooltip {
+  top: 0;
+  transform: none;
+  margin: 4px;
+}
+
+.patient-chart__no-data {
+  fill: var(--text);
+  font-size: 12px;
+}
+
+/* 点の上に出す数値。系列色ではなく本文の字の色にする(小さい字を系列色で塗ると
+   ライトテーマで地との対比が足りない。どの系列かは点との近さで読む)。 */
+.patient-chart__value {
+  fill: var(--text-h);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.patient-chart__column-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.patient-chart__today {
+  stroke: var(--text);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  opacity: 0.5;
+}
+
+.patient-chart__band-rule {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.patient-chart__band-label {
+  fill: var(--text);
+  font-size: 11px;
+}
+
+/* イベントは色で種別を出す。バーは面、点の印は塗り。
+   重なるバー(同時に飲んでいる処方など)を 1 本に見せないよう、地の色で縁を取る。 */
+.patient-chart__bar {
+  fill: currentColor;
+  opacity: 0.28;
+  stroke: var(--surface-panel, var(--bg));
+  stroke-width: 1;
+}
+
+.patient-chart__bar-label,
+.patient-chart__marker {
+  fill: currentColor;
+}
+
+.patient-chart__bar-label {
+  font-size: 10px;
+}
+
+.patient-chart__event--clickable {
+  cursor: pointer;
+}
+
+/* 点のイベントはレーンにも縦線で落とし、値との前後関係を追えるようにする。 */
+.patient-chart__event-line {
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.35;
+}
+
+.patient-chart__event--encounter {
+  color: #5b6b7c;
+}
+
+.patient-chart__event--surgery {
+  color: #c2410c;
+}
+
+.patient-chart__event--chemo {
+  color: #7c3aed;
+}
+
+.patient-chart__event--radiotherapy {
+  color: #b45309;
+}
+
+.patient-chart__event--exam {
+  color: #0f766e;
+}
+
+.patient-chart__event--injection {
+  color: #1d4ed8;
+}
+
+.patient-chart__event--prescription {
+  color: #9a3412;
+}
+
+:root[data-theme="dark"] .patient-chart__event--encounter {
+  color: #93a4b5;
+}
+
+:root[data-theme="dark"] .patient-chart__event--surgery {
+  color: #fb7a3c;
+}
+
+:root[data-theme="dark"] .patient-chart__event--chemo {
+  color: #a78bfa;
+}
+
+:root[data-theme="dark"] .patient-chart__event--radiotherapy {
+  color: #f0a93a;
+}
+
+:root[data-theme="dark"] .patient-chart__event--exam {
+  color: #2dd4bf;
+}
+
+:root[data-theme="dark"] .patient-chart__event--injection {
+  color: #60a5fa;
+}
+
+:root[data-theme="dark"] .patient-chart__event--prescription {
+  color: #f0a58a;
+}
+
+/* ---- チャート定義のエディタ ---- */
+
+.modal--chart-editor {
+  width: min(760px, 94vw);
+}
+
+.chart-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px 16px;
+}
+
+.chart-editor__head,
+.chart-editor__add {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 項目名は入力欄の上に置く(画面の検索フォームと同じ並び)。 */
+.chart-editor__head label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 表・チェックボックスの字は、他の画面の一覧(.master-search__table)と同じ大きさにする。 */
+.chart-editor__items {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.chart-editor__items th,
+.chart-editor__items td {
+  padding: 2px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-size: 14px;
+}
+
+.chart-editor__source {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+/* 行の高さは操作ボタンで決まるので、既定より詰めた高さにする。 */
+.chart-editor__row-actions {
+  --control-height: 26px;
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+/* 並べ替えは記号 1 文字なので、行の中で場所を取らないよう左右を詰める。 */
+.chart-editor__items .chart-editor__step {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.chart-editor__events {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.chart-editor__events label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chart-editor__actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* ---- Questionnaire テンプレートエディタ ---- */
 
 .qe-meta {
