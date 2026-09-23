@@ -18028,8 +18028,8 @@ button.chemo-calendar__cell[draggable="true"] {
   border-color: var(--danger, var(--border));
 }
 
-/* 区分 × 療法士の表。節の幅(約 400px)に 3 列の入力が収まるよう、表の中の入力は
-   9 桁がちょうど入る幅に詰め、行見出しは折り返さない(狭いと 1 文字ずつ縦に割れる)。 */
+/* 区分 × 療法士の表(コメントの表も同じ)。節の幅(約 500px)に 3 列の入力が収まるよう、
+   表の中の入力は 9 桁が入る幅に詰め、行見出しは折り返さない(狭いと 1 文字ずつ縦に割れる)。 */
 .facility-settings__code-table {
   border-collapse: collapse;
   width: 100%;
@@ -18050,7 +18050,7 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 .facility-settings__code-table .facility-settings__code {
-  width: 7.5em;
+  width: 8em;
   min-width: 0;
 }
 

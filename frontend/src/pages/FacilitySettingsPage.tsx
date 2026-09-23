@@ -53,7 +53,6 @@ import {
   PATHOLOGY_LABELS,
   REHAB_CATEGORY_KEYS,
   REHAB_CATEGORY_LABELS,
-  REHAB_COLUMN_KEYS,
   REHAB_COLUMN_LABELS,
   REHAB_COMMENT_KEYS,
   REHAB_THERAPY_KEYS,
@@ -61,6 +60,7 @@ import {
   receiptCodeValid,
   receiptCodesValid,
   type ReceiptCodeSettings,
+  type RehabColumnKey,
 } from "../fhir/receiptCodeSettingsHelpers";
 import { departmentDisplayName, sortDepartmentsByCode } from "../fhir/departmentHelpers";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
@@ -182,7 +182,7 @@ export function FacilitySettingsPage() {
 
   function updateRehabCode(
     category: (typeof REHAB_CATEGORY_KEYS)[number],
-    therapy: (typeof REHAB_COLUMN_KEYS)[number],
+    therapy: RehabColumnKey,
     value: string,
   ) {
     setReceiptCodesDraft((prev) => {
@@ -279,6 +279,42 @@ export function FacilitySettingsPage() {
         className="facility-settings__code"
         list={listId}
       />
+    );
+  }
+
+  // 疾患別リハの表(行 = 区分、列 = 療法士またはコメント)。コメントの列には、その行の
+  // 療法士のコードに関係するコメントの候補(datalist)を添える。
+  function rehabCodeTable(columns: readonly RehabColumnKey[]) {
+    return (
+      <table className="facility-settings__code-table">
+        <thead>
+          <tr>
+            <th />
+            {columns.map((column) => (
+              <th key={column}>{REHAB_COLUMN_LABELS[column]}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {REHAB_CATEGORY_KEYS.map((category) => (
+            <tr key={category}>
+              <th scope="row">{REHAB_CATEGORY_LABELS[category]}</th>
+              {columns.map((column) => (
+                <td key={column}>
+                  {receiptCodeInput(
+                    receiptCodes.rehab[category][column],
+                    (next) => updateRehabCode(category, column, next),
+                    `${REHAB_CATEGORY_LABELS[category]} ${REHAB_COLUMN_LABELS[column]} のレセプト電算コード`,
+                    (REHAB_COMMENT_KEYS as readonly string[]).includes(column)
+                      ? `rehab-comments-${category}`
+                      : undefined,
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     );
   }
 
@@ -597,43 +633,23 @@ export function FacilitySettingsPage() {
               ),
             )}
 
+            {/* 区分 × 療法士と、区分ごとのコメントは別の表にする。5 列を 1 つの表に並べると
+                節の幅(520px)に収まらない。コメントの候補(datalist)は表の外に置く。 */}
             <h3 className="facility-settings__subheading">
-              疾患別リハビリテーション料(区分 × 療法士)と添えるコメント
+              疾患別リハビリテーション料(区分 × 療法士)
             </h3>
-            <table className="facility-settings__code-table">
-              <thead>
-                <tr>
-                  <th />
-                  {REHAB_COLUMN_KEYS.map((column) => (
-                    <th key={column}>{REHAB_COLUMN_LABELS[column]}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {REHAB_CATEGORY_KEYS.map((category) => (
-                  <tr key={category}>
-                    <th scope="row">{REHAB_CATEGORY_LABELS[category]}</th>
-                    {REHAB_COLUMN_KEYS.map((column) => (
-                      <td key={column}>
-                        {receiptCodeInput(
-                          receiptCodes.rehab[category][column],
-                          (next) => updateRehabCode(category, column, next),
-                          `${REHAB_CATEGORY_LABELS[category]} ${REHAB_COLUMN_LABELS[column]} のレセプト電算コード`,
-                          (REHAB_COMMENT_KEYS as readonly string[]).includes(column)
-                            ? `rehab-comments-${category}`
-                            : undefined,
-                        )}
-                      </td>
-                    ))}
-                    {/* この行の療法士のコードに関係するコメントを候補にする */}
-                    <CommentCandidates
-                      id={`rehab-comments-${category}`}
-                      procedureCodes={REHAB_THERAPY_KEYS.map((t) => receiptCodes.rehab[category][t])}
-                    />
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {rehabCodeTable(REHAB_THERAPY_KEYS)}
+            <h3 className="facility-settings__subheading">
+              疾患別リハビリテーション料に添えるコメント(区分ごと)
+            </h3>
+            {rehabCodeTable(REHAB_COMMENT_KEYS)}
+            {REHAB_CATEGORY_KEYS.map((category) => (
+              <CommentCandidates
+                key={category}
+                id={`rehab-comments-${category}`}
+                procedureCodes={REHAB_THERAPY_KEYS.map((t) => receiptCodes.rehab[category][t])}
+              />
+            ))}
 
             <h3 className="facility-settings__subheading">栄養食事指導料</h3>
             {(
