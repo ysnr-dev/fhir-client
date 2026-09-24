@@ -58,6 +58,7 @@ import {
   type ChartOwnerOption,
 } from "./ChartDefinitionEditorModal";
 import { ErrorBanner } from "./ErrorBanner";
+import { PatientChartGuide } from "./PatientChartGuide";
 import { PatientChartPanel } from "./PatientChartPanel";
 import { RowMenu } from "./RowMenu";
 
@@ -191,6 +192,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
   const shownEvents = useMemo(() => filterChartEvents(events, range), [events, range]);
 
   const [editing, setEditing] = useState<Editing>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   // 全画面はビューポート全体ではなく「患者情報の下」から始める(経過表・パスシートと同じ)。
@@ -213,14 +215,14 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
   // 全画面は Escape でも抜けられるようにする。編集モーダルを開いている間は、
   // そちらを閉じる操作なのでここでは拾わない。
   useEffect(() => {
-    if (!fullscreen || editing) return;
+    if (!fullscreen || editing || guideOpen) return;
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") updateView({ ...viewRef.current, fullscreen: false });
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen, editing]);
+  }, [fullscreen, editing, guideOpen]);
 
   // 定義を消した後など、URL が指している id が無くなったら指定を落とす。
   // **引き直している間は触らない** —— 作った直後は一覧がまだ古く、作ったチャートを
@@ -477,6 +479,9 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           >
             削除
           </button>
+          <button type="button" className="row-menu__item" onClick={() => setGuideOpen(true)}>
+            説明
+          </button>
         </RowMenu>
       </div>
 
@@ -512,6 +517,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
         />
       )}
 
+      {guideOpen && <PatientChartGuide onClose={() => setGuideOpen(false)} />}
       {editing && (
         <ChartDefinitionEditorModal
           mode={editing.mode}
