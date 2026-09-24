@@ -1,10 +1,11 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KarteDetailTarget } from "../karteUrl";
 import type {
   ChartDrugSegment,
   ChartDrugTrack,
   ChartEvent,
   ChartEventKind,
+  ChartItemSource,
   ChartLaneData,
   ChartPoint,
   ChartRange,
@@ -13,6 +14,7 @@ import {
   CHART_DRUG_CHANGE_LABELS,
   CHART_EVENT_KINDS,
   chartEventKindLabel,
+  relativeDayLabel,
   chartSegmentBreaks,
 } from "../fhir/chartDefinitionHelpers";
 import type { ChartSegmentBreak } from "../fhir/chartDefinitionHelpers";
@@ -64,7 +66,29 @@ interface PatientChartPanelProps {
   values?: boolean;
   /** 全画面かどうか。幅が変わるので測り直す合図に使う。 */
   fullscreen?: boolean;
+  /** 前後を見る基準にしている日。各グラフに線を引き、ツールチップに日数を出す。 */
+  anchor?: string;
+  /** クリックした点・イベントの日を基準にして前後を見る。 */
+  onAnchor?: (date: string) => void;
   onOpenDetail?: (target: KarteDetailTarget) => void;
+  /** 点の元の記録を開く(検査結果・テンプレートのみ)。 */
+  onOpenPoint?: (source: ChartItemSource, point: ChartPoint) => void;
+}
+
+/** クリックで出すメニューの中身。 */
+interface PickRequest {
+  title: string;
+  /** 基準にする日(日時でもよい。日付だけを使う)。 */
+  at: string;
+  target?: KarteDetailTarget;
+  open?: () => void;
+}
+
+type OnPick = (event: React.MouseEvent, pick: PickRequest) => void;
+
+interface ChartPick extends PickRequest {
+  x: number;
+  y: number;
 }
 
 export function PatientChartPanel({
@@ -76,10 +100,31 @@ export function PatientChartPanel({
   overlay,
   values,
   fullscreen,
+  anchor,
+  onAnchor,
   onOpenDetail,
+  onOpenPoint,
 }: PatientChartPanelProps) {
   // ホバーは時刻(epoch)で 1 つだけ持ち、全レーンが同じ位置を指す。
   const [hoverT, setHoverT] = useState<number | null>(null);
+
+  // 点・イベントをクリックしたら、その場に「開く」「基準日に設定」のメニューを出す。
+  const [pick, setPick] = useState<ChartPick | null>(null);
+  const onPick: OnPick = (event, request) => {
+    const target = request.target;
+    const open = request.open ?? (target && onOpenDetail ? () => onOpenDetail(target) : undefined);
+    if (!open && !onAnchor) return;
+    setPick({ ...request, open, x: event.clientX, y: event.clientY });
+  };
+  const pointPicker = (source: ChartItemSource, name: string) =>
+    ((event, point) => {
+      const openable = source === "lab" || (source === "template" && point.responseId);
+      onPick(event, {
+        title: `${name} ${formatPointDate(point.at)} ${formatValue(point.value)}${point.unit ? ` ${point.unit}` : ""}`,
+        at: point.at,
+        open: openable && onOpenPoint ? () => onOpenPoint(source, point) : undefined,
+      });
+    }) satisfies PointPick;
 
   // 大きさはパネルから測る。ResizeObserver が動かない環境もあるので、まず同期で測ってから追う。
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -136,7 +181,10 @@ export function PatientChartPanel({
   // 節目のイベント(手術・入退院)だけ各レーンにも縦線を落とす。検査・注射は件数が多く、
   // すべて線にすると値の動きが読めなくなるので帯の印だけにする。
   // 薬剤は開始・用量の変わり目・途切れた所に線を落とす(治療の前後で値を比べる目印)。
+  const anchorT = anchor ? epochOf(anchor) : null;
+  const anchorX = anchorT !== null && anchorT >= range.tMin && anchorT < range.tMax ? toX(anchorT) : null;
   const markerLines: MarkerLine[] = [
+    ...(anchorX !== null ? [{ x: anchorX, kind: "anchor" }] : []),
     ...events
       .filter((event) => !event.end && (event.kind === "surgery" || event.kind === "encounter"))
       .map((event) => ({ x: toX(epochOf(event.at)), kind: event.kind })),
@@ -179,7 +227,9 @@ export function PatientChartPanel({
           toX={toX}
           boundaries={boundaries}
           todayX={todayX}
-          onOpenDetail={onOpenDetail}
+          anchorX={anchorX}
+          anchor={anchor}
+          onPick={onPick}
         />
       )}
       {lanes.length === 0 ? (
@@ -199,6 +249,8 @@ export function PatientChartPanel({
           hoverT={hoverT}
           onHover={setHoverT}
           columnLabels={columnLabels}
+          anchor={anchor}
+          onPickPoint={(event, point, series) => pointPicker(series.source, series.name)(event, point)}
         />
       ) : (
         lanes.map((lane) => (
@@ -216,8 +268,77 @@ export function PatientChartPanel({
             hoverT={hoverT}
             onHover={setHoverT}
             columnLabels={columnLabels}
+            anchor={anchor}
+            onPickPoint={pointPicker(lane.source, lane.name)}
           />
         ))
+      )}
+      {pick && (
+        <ChartPickMenu
+          pick={pick}
+          onAnchor={onAnchor ? () => onAnchor(pick.at.slice(0, 10)) : undefined}
+          onClose={() => setPick(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+type PointPick = (event: React.MouseEvent, point: ChartPoint) => void;
+
+/** 点・イベントのクリックで出すメニュー。クリックした位置に出し、外を押す・Esc・スクロールで閉じる。 */
+function ChartPickMenu({
+  pick,
+  onAnchor,
+  onClose,
+}: {
+  pick: ChartPick;
+  onAnchor?: () => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!ref.current?.contains(event.target as Node)) onClose();
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", onClose, true);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", onClose, true);
+    };
+  }, [onClose]);
+
+  // 画面の右端・下端に近ければ、カーソルの左・上に出す。
+  const style: React.CSSProperties = {
+    position: "fixed",
+    ...(pick.x > window.innerWidth - 240 ? { right: window.innerWidth - pick.x, left: "auto" } : { left: pick.x, right: "auto" }),
+    ...(pick.y > window.innerHeight - 140
+      ? { bottom: window.innerHeight - pick.y + 6, top: "auto" }
+      : { top: pick.y + 6, bottom: "auto" }),
+  };
+  const run = (action: () => void) => () => {
+    onClose();
+    action();
+  };
+
+  return (
+    <div className="row-menu__items patient-chart__pick" role="menu" ref={ref} style={style}>
+      <p className="patient-chart__pick-title">{pick.title}</p>
+      {pick.open && (
+        <button type="button" className="row-menu__item" role="menuitem" onClick={run(pick.open)}>
+          開く
+        </button>
+      )}
+      {onAnchor && (
+        <button type="button" className="row-menu__item" role="menuitem" onClick={run(onAnchor)}>
+          基準日に設定
+        </button>
       )}
     </div>
   );
@@ -234,7 +355,9 @@ interface EventBandProps {
   toX: (t: number) => number;
   boundaries: number[];
   todayX: number | null;
-  onOpenDetail?: (target: KarteDetailTarget) => void;
+  anchorX: number | null;
+  anchor?: string;
+  onPick: OnPick;
 }
 
 function EventBand({
@@ -246,7 +369,9 @@ function EventBand({
   toX,
   boundaries,
   todayX,
-  onOpenDetail,
+  anchorX,
+  anchor,
+  onPick,
 }: EventBandProps) {
   const height = BAND_TOP + (kinds.length + drugTracks.length) * BAND_ROW_HEIGHT + 6;
 
@@ -258,6 +383,15 @@ function EventBand({
         ))}
         {todayX !== null && (
           <line className="patient-chart__today" x1={todayX} x2={todayX} y1={0} y2={height} />
+        )}
+        {anchorX !== null && (
+          <line
+            className="patient-chart__event-line patient-chart__event--anchor"
+            x1={anchorX}
+            x2={anchorX}
+            y1={0}
+            y2={height}
+          />
         )}
         {kinds.map((kind, row) => {
           const y = BAND_TOP + row * BAND_ROW_HEIGHT;
@@ -287,7 +421,8 @@ function EventBand({
                   range={range}
                   toX={toX}
                   room={(rowX[i + 1] ?? vbWidth - MARGIN.right) - rowX[i]}
-                  onOpenDetail={onOpenDetail}
+                  anchor={anchor}
+                  onPick={onPick}
                 />
               ))}
             </g>
@@ -301,12 +436,19 @@ function EventBand({
             vbWidth={vbWidth}
             range={range}
             toX={toX}
-            onOpenDetail={onOpenDetail}
+            anchor={anchor}
+            onPick={onPick}
           />
         ))}
       </svg>
     </div>
   );
+}
+
+/** ホバーの文に基準日からの日数を添える(基準が無ければそのまま)。 */
+function withRelative(text: string, at: string, anchor: string | undefined): string {
+  const relative = relativeDayLabel(at, anchor);
+  return relative ? `${text}(${relative})` : text;
 }
 
 /** 行ラベルの幅(左の余白から間をとったぶん)。 */
@@ -319,17 +461,17 @@ function DrugRow({
   vbWidth,
   range,
   toX,
-  onOpenDetail,
+  anchor,
+  onPick,
 }: {
   track: ChartDrugTrack;
   y: number;
   vbWidth: number;
   range: ChartRange;
   toX: (t: number) => number;
-  onOpenDetail?: (target: KarteDetailTarget) => void;
+  anchor?: string;
+  onPick: OnPick;
 }) {
-  const open = (target: KarteDetailTarget | undefined) =>
-    target && onOpenDetail ? () => onOpenDetail(target) : undefined;
   const starts = track.segments.map((segment) => Math.max(toX(epochOf(segment.start)), toX(range.tMin)));
 
   return (
@@ -354,19 +496,31 @@ function DrugRow({
           clipped={epochOf(segment.start) < range.tMin}
           end={Math.min(toX(epochOf(segment.end) + DAY_MS), toX(range.tMax))}
           room={(starts[i + 1] ?? vbWidth - MARGIN.right) - starts[i]}
-          onClick={open(segment.target)}
+          title={withRelative(segment.detail, segment.start, anchor)}
+          onClick={(event) =>
+            onPick(event, {
+              title: `${track.name} ${segment.label} ${segment.start}〜${segment.end}`,
+              at: segment.start,
+              target: segment.target,
+            })
+          }
         />
       ))}
       {track.marks.map((mark, i) => {
         const x = toX(epochOf(mark.at));
-        const onClick = open(mark.target);
         return (
           <g
             key={`${mark.at}/${i}`}
-            className={onClick ? "patient-chart__event--clickable" : undefined}
-            onClick={onClick}
+            className="patient-chart__event--clickable"
+            onClick={(event) =>
+              onPick(event, {
+                title: `${track.name} ${mark.label} ${formatPointDate(mark.at)}`,
+                at: mark.at,
+                target: mark.target,
+              })
+            }
           >
-            <title>{`${mark.at} ${mark.detail}`}</title>
+            <title>{withRelative(`${mark.at} ${mark.detail}`, mark.at, anchor)}</title>
             <path className="patient-chart__marker" d={`M${x - 4},${y + 2} L${x + 4},${y + 2} L${x},${y + 10} Z`} />
           </g>
         );
@@ -382,6 +536,7 @@ function DrugSegmentBar({
   end,
   clipped,
   room,
+  title,
   onClick,
 }: {
   segment: ChartDrugSegment;
@@ -391,15 +546,16 @@ function DrugSegmentBar({
   /** 範囲より前から続いている(変わり目は範囲の外なので ▲ / ▼ を出さない)。 */
   clipped: boolean;
   room: number;
-  onClick?: () => void;
+  title: string;
+  onClick: (event: React.MouseEvent) => void;
 }) {
   const width = Math.max(2, end - start);
   const arrow = !clipped && (segment.change === "increase" || segment.change === "decrease");
   const labelX = start + (arrow ? 12 : 4);
   const label = clipLabel(segment.label, Math.min(width, room) - (labelX - start) - 4);
   return (
-    <g className={onClick ? "patient-chart__event--clickable" : undefined} onClick={onClick}>
-      <title>{segment.detail}</title>
+    <g className="patient-chart__event--clickable" onClick={onClick}>
+      <title>{title}</title>
       <rect className="patient-chart__bar" x={start} y={y + 3} width={width} height={10} rx={2} />
       {arrow && (
         <path
@@ -494,7 +650,8 @@ function EventMark({
   range,
   toX,
   room,
-  onOpenDetail,
+  anchor,
+  onPick,
 }: {
   event: ChartEvent;
   y: number;
@@ -502,15 +659,21 @@ function EventMark({
   toX: (t: number) => number;
   /** 次のバーまでの幅。ラベルを出せるかの判断に使う。 */
   room: number;
-  onOpenDetail?: (target: KarteDetailTarget) => void;
+  anchor?: string;
+  onPick: OnPick;
 }) {
-  const target = event.target;
-  const clickable = Boolean(target && onOpenDetail);
-  const handleClick = () => {
-    if (target && onOpenDetail) onOpenDetail(target);
-  };
-  const title = <title>{`${event.label}${event.detail ? ` / ${event.detail}` : ""}`}</title>;
-  const className = clickable ? "patient-chart__event--clickable" : undefined;
+  const handleClick = (e: React.MouseEvent) =>
+    onPick(e, {
+      title: `${event.label} ${formatPointDate(event.at)}`,
+      at: event.at,
+      target: event.target,
+    });
+  const title = (
+    <title>
+      {withRelative(`${event.label}${event.detail ? ` / ${event.detail}` : ""}`, event.at, anchor)}
+    </title>
+  );
+  const className = "patient-chart__event--clickable";
 
   if (event.end) {
     const start = Math.max(toX(epochOf(event.at)), toX(range.tMin));
@@ -518,7 +681,7 @@ function EventMark({
     const width = Math.max(2, end - start);
     const label = clipLabel(event.label, Math.min(width, room) - 8);
     return (
-      <g className={className} onClick={clickable ? handleClick : undefined}>
+      <g className={className} onClick={handleClick}>
         {title}
         <rect className="patient-chart__bar" x={start} y={y + 3} width={width} height={10} rx={2} />
         {label && (
@@ -532,7 +695,7 @@ function EventMark({
 
   const x = toX(epochOf(event.at));
   return (
-    <g className={className} onClick={clickable ? handleClick : undefined}>
+    <g className={className} onClick={handleClick}>
       {title}
       <path className="patient-chart__marker" d={`M${x - 4},${y + 2} L${x + 4},${y + 2} L${x},${y + 10} Z`} />
     </g>
@@ -645,6 +808,7 @@ function hasSeveralMethods(points: ChartPoint[]): boolean {
 
 interface OverlaySeries {
   key: string;
+  source: ChartItemSource;
   name: string;
   unit: string;
   /** 色(0〜7)と印の形(0〜4)の組で見分ける。 */
@@ -666,6 +830,7 @@ function buildOverlaySeries(lanes: ChartLaneData[]): OverlaySeries[] {
       const ticks = values.length > 0 ? niceTicks(Math.min(...values), Math.max(...values)) : [0, 1];
       result.push({
         key: series.key,
+        source: lane.source,
         // 血圧のように 1 項目が 2 系列になるものは、どちらかが分かる名前にする。
         name: lane.series.length > 1 ? `${lane.name} ${series.name}` : lane.name,
         unit: lane.unit,
@@ -707,6 +872,8 @@ interface OverlayChartProps {
   hoverT: number | null;
   onHover: (t: number | null) => void;
   columnLabels: { x: number; text: string }[];
+  anchor?: string;
+  onPickPoint: (event: React.MouseEvent, point: ChartPoint, series: OverlaySeries) => void;
 }
 
 function OverlayChart({
@@ -723,6 +890,8 @@ function OverlayChart({
   hoverT,
   onHover,
   columnLabels,
+  anchor,
+  onPickPoint,
 }: OverlayChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const series = useMemo(() => buildOverlaySeries(lanes), [lanes]);
@@ -859,8 +1028,9 @@ function OverlayChart({
                 <g key={point.at}>
                   <FlagRing point={point} x={toX(point.t)} y={toY(point.value, spec)} />
                   <path
-                    className="lab-chart__marker"
+                    className="lab-chart__marker patient-chart__point"
                     d={seriesMarkPath(spec.shape, toX(point.t), toY(point.value, spec), 4)}
+                    onClick={(event) => onPickPoint(event, point, spec)}
                     tabIndex={0}
                     aria-label={`${spec.name} ${formatPointDate(point.at)} ${pointSummary(point, spec.showMethod)}`}
                     onFocus={() => onHover(point.t)}
@@ -926,7 +1096,9 @@ function OverlayChart({
                 </span>
               ) : null,
             )}
-            <span className="lab-chart__tooltip-date">{formatPointDate(hoverAt)}</span>
+            <span className="lab-chart__tooltip-date">
+              {withRelative(formatPointDate(hoverAt), hoverAt, anchor)}
+            </span>
           </div>
         )}
       </div>
@@ -982,6 +1154,8 @@ interface ChartLaneProps {
   hoverT: number | null;
   onHover: (t: number | null) => void;
   columnLabels: { x: number; text: string }[];
+  anchor?: string;
+  onPickPoint: PointPick;
 }
 
 function ChartLane({
@@ -997,6 +1171,8 @@ function ChartLane({
   hoverT,
   onHover,
   columnLabels,
+  anchor,
+  onPickPoint,
 }: ChartLaneProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const points = lane.series.flatMap((series) => series.points);
@@ -1044,7 +1220,7 @@ function ChartLane({
   }
 
   const hoverX = hoverT === null ? null : toX(hoverT);
-  const tooltip = hoverT === null ? null : buildTooltip(lane, nearestOf);
+  const tooltip = hoverT === null ? null : buildTooltip(lane, nearestOf, anchor);
   const plotRight = vbWidth - MARGIN.right;
 
   return (
@@ -1156,10 +1332,11 @@ function ChartLane({
               <g key={point.at}>
                 <FlagRing point={point} x={toX(point.t)} y={toY(point.value)} />
                 <circle
-                  className="lab-chart__marker"
+                  className="lab-chart__marker patient-chart__point"
                   cx={toX(point.t)}
                   cy={toY(point.value)}
                   r={4}
+                  onClick={(event) => onPickPoint(event, point)}
                   tabIndex={0}
                   aria-label={`${formatPointDate(point.at)} ${pointSummary(point, false)}`}
                   onFocus={() => onHover(point.t)}
@@ -1216,7 +1393,11 @@ function ChartLane({
   );
 }
 
-function buildTooltip(lane: ChartLaneData, nearestOf: (index: number) => ChartPoint | null) {
+function buildTooltip(
+  lane: ChartLaneData,
+  nearestOf: (index: number) => ChartPoint | null,
+  anchor: string | undefined,
+) {
   const rows: { key: string; text: string }[] = [];
   let at = "";
   lane.series.forEach((series, index) => {
@@ -1229,5 +1410,5 @@ function buildTooltip(lane: ChartLaneData, nearestOf: (index: number) => ChartPo
       text: `${label}${pointSummary(point, hasSeveralMethods(series.points))}`,
     });
   });
-  return rows.length ? { rows, at: formatPointDate(at) } : null;
+  return rows.length ? { rows, at: withRelative(formatPointDate(at), at, anchor) } : null;
 }

@@ -14,7 +14,7 @@ import {
   useRegimenDayOrders,
 } from "../api/queries";
 import { useCurrentPractitioner } from "../api/authQueries";
-import { usePractitionerRoles, useVitalThresholds } from "../api/queries";
+import { findLabReportIdOf, usePractitionerRoles, useVitalThresholds } from "../api/queries";
 import {
   baseRoleOf,
   isDoctorRoleCode,
@@ -26,6 +26,7 @@ import {
   CHART_AXIS_UNIT_LABELS,
   CHART_COLUMN_CHOICES,
   buildChartLanes,
+  centeredBaseDate,
   buildDrugTracks,
   buildChemoChartEvents,
   buildEncounterChartEvents,
@@ -43,6 +44,8 @@ import {
   type ChartAxisUnit,
   type ChartEvent,
   type ChartEventKind,
+  type ChartItemSource,
+  type ChartPoint,
 } from "../fhir/chartDefinitionHelpers";
 import { formatChartView, parseChartView, type KarteDetailTarget } from "../karteUrl";
 import { addDays, today } from "../lib/dates";
@@ -83,7 +86,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
 
 
 
-  const { practitionerId, practitioner } = useCurrentPractitioner();
+  const { practitionerId, practitioner, sessionLoading } = useCurrentPractitioner();
   const practitionerRoles = usePractitionerRoles(practitionerId ?? undefined);
   const baseRole = baseRoleOf(practitionerRoles.roles);
   const isDoctor = isDoctorRoleCode(
@@ -125,7 +128,15 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
     ];
   }, [isDoctor, department, practitionerId, practitioner]);
 
-  const list = useChartDefinitions(department?.organizationId, practitionerId ?? undefined);
+  // 持ち主(自分・診療科)が決まる前に引くと、院内共通だけの一覧を一度返して
+  // 「チャートがありません」がちらつくので、決まってから引く。
+  const ownersReady = !sessionLoading && (!practitionerId || !practitionerRoles.isPending);
+  const list = useChartDefinitions(
+    department?.organizationId,
+    practitionerId ?? undefined,
+    ownersReady,
+  );
+  const listLoading = !ownersReady || list.isPending;
   const mutations = useChartDefinitionMutations();
   const definitions = useMemo(() => list.data?.items ?? [], [list.data]);
 
@@ -213,6 +224,30 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
     updateView({ ...parsed, chartId: undefined });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [definitions, parsed.chartId, list.isFetching]);
+
+  // 基準の日を見ているあいだは、横軸を変えても基準が真ん中に来るように右端を置き直す。
+  function changeAxis(nextUnit: ChartAxisUnit, nextColumns: number) {
+    const anchorBase = parsed.anchor
+      ? centeredBaseDate(parsed.anchor, { unit: nextUnit, columns: nextColumns })
+      : parsed.baseDate;
+    updateView({ ...parsed, unit: nextUnit, columns: nextColumns, baseDate: anchorBase });
+  }
+
+  // 点の元の記録。検査は結果の載った報告書を引いてから開く(点は Observation しか持たない)。
+  async function openPoint(source: ChartItemSource, point: ChartPoint) {
+    if (!onOpenDetail) return;
+    if (source === "template") {
+      if (point.responseId) onOpenDetail({ kind: "qr", id: point.responseId });
+      return;
+    }
+    try {
+      const reportId = await findLabReportIdOf(point.observationId);
+      if (reportId) onOpenDetail({ kind: "lab-result", id: reportId });
+      else setError(new Error("この結果の検査報告が見つかりません。"));
+    } catch (err) {
+      setError(err);
+    }
+  }
 
   function openEditor(mode: "create" | "edit" | "copy") {
     const owner = owners.find((entry) => entry.canEdit) ?? owners[0];
@@ -305,7 +340,9 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           onChange={(e) => updateView({ ...parsed, chartId: Number(e.target.value) || undefined })}
           disabled={definitions.length === 0}
         >
-          {definitions.length === 0 && <option value="">チャートがありません</option>}
+          {definitions.length === 0 && (
+            <option value="">{listLoading ? "読み込み中..." : "チャートがありません"}</option>
+          )}
           {(["practitioner", "department", "facility"] as const).map((scope) => {
             const group = definitions.filter((entry) => entry.scope === scope);
             if (group.length === 0) return null;
@@ -352,13 +389,24 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           </button>
         </div>
 
+        {parsed.anchor && (
+          <button
+            type="button"
+            className="patient-chart__anchor-chip"
+            onClick={() => updateView({ ...parsed, anchor: undefined })}
+            title="基準を外す"
+          >
+            基準 {parsed.anchor.replaceAll("-", "/")} ✕
+          </button>
+        )}
+
         <div className="patient-chart__unit">
           <select
             value={unit}
             aria-label="横軸の単位"
             onChange={(e) => {
               const next = e.target.value as ChartAxisUnit;
-              updateView({ ...parsed, unit: next, columns: chartColumnsFor(next, columns) });
+              changeAxis(next, chartColumnsFor(next, columns));
             }}
           >
             {(Object.keys(CHART_AXIS_UNIT_LABELS) as ChartAxisUnit[]).map((key) => (
@@ -370,7 +418,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           <select
             value={columns}
             aria-label="表示する列数"
-            onChange={(e) => updateView({ ...parsed, unit, columns: Number(e.target.value) })}
+            onChange={(e) => changeAxis(unit, Number(e.target.value))}
           >
             {CHART_COLUMN_CHOICES[unit].map((choice) => (
               <option key={choice} value={choice}>
@@ -431,7 +479,9 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
         }
       />
 
-      {definitions.length === 0 ? (
+      {listLoading ? (
+        <p className="patient-chart__empty">読み込み中...</p>
+      ) : definitions.length === 0 ? (
         <p className="patient-chart__empty">チャートがありません。</p>
       ) : (
         <PatientChartPanel
@@ -443,7 +493,12 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           overlay={overlay}
           values={values}
           fullscreen={fullscreen}
+          anchor={parsed.anchor}
+          onAnchor={(date) =>
+            updateView({ ...parsed, anchor: date, baseDate: centeredBaseDate(date, { unit, columns }) })
+          }
           onOpenDetail={onOpenDetail}
+          onOpenPoint={onOpenDetail ? openPoint : undefined}
         />
       )}
 

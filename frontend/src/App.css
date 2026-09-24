@@ -869,6 +869,11 @@ button:disabled {
   bottom: calc(100% + 4px);
 }
 
+.row-menu__items--start {
+  left: 0;
+  right: auto;
+}
+
 /* グローバルの button {} と .patient-table__actions button {} を上書きするため
    詳細度を 2 クラス以上に上げている。 */
 .row-menu__items .row-menu__item {
@@ -3998,6 +4003,39 @@ fieldset.rp-card {
 
 :root[data-theme="dark"] .patient-chart__event--prescription {
   color: #f0a58a;
+}
+
+/* 前後を見る基準の日。節目の線より濃く、実線で引く。 */
+.patient-chart__event--anchor {
+  color: var(--text-h);
+}
+
+.patient-chart__event-line.patient-chart__event--anchor {
+  stroke-width: 1.5;
+  opacity: 0.7;
+}
+
+.patient-chart__anchor-chip {
+  font-size: 12px;
+}
+
+/* 点も押せる(開く・基準日に設定)。 */
+.patient-chart__point {
+  cursor: pointer;
+}
+
+/* 点・イベントを押したときのメニュー。位置はクリックした場所から JS で決める。 */
+.row-menu__items.patient-chart__pick {
+  z-index: 1000;
+  min-width: 180px;
+  max-width: 320px;
+}
+
+.patient-chart__pick-title {
+  margin: 2px 6px 4px;
+  font-size: 12px;
+  color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 /* 追う薬剤の行と、レーンに落とす開始・変わり目・途切れの線。 */

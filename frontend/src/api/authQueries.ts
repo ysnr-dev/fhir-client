@@ -62,6 +62,8 @@ export function useCurrentPractitioner() {
     user: session.data?.user ?? null,
     practitionerId: practitionerId ?? null,
     practitioner: practitioner.data?.data ?? null,
+    /** セッションをまだ読み込んでいる(practitionerId が決まっていない)。 */
+    sessionLoading: session.isPending,
   };
 }
 

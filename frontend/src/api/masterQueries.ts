@@ -4270,6 +4270,7 @@ const CHART_DEFINITIONS_KEY = ["master", "chart_definitions"];
 export function useChartDefinitions(
   departmentId: string | undefined,
   practitionerId: string | undefined,
+  enabled = true,
 ) {
   return useQuery({
     queryKey: [
@@ -4279,6 +4280,7 @@ export function useChartDefinitions(
     ],
     queryFn: () =>
       fetchChartDefinitions({ department_id: departmentId, practitioner_id: practitionerId }),
+    enabled,
   });
 }
 

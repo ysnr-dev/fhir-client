@@ -11,6 +11,17 @@ import {
 // (カルテのタイムラインのようにスクロール領域の中に置かれることがある)。
 type Placement = "down" | "up";
 
+// 直近のはみ出しを切る領域の左端。見つからなければビューポートの左端。
+function clipLeft(element: HTMLElement): number {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const overflowX = getComputedStyle(node).overflowX;
+    if (overflowX === "auto" || overflowX === "scroll" || overflowX === "hidden") {
+      return node.getBoundingClientRect().left;
+    }
+  }
+  return 0;
+}
+
 // 直近のスクロール領域の上下端。見つからなければビューポートを使う。
 function clipBounds(element: HTMLElement): { top: number; bottom: number } {
   for (let node = element.parentElement; node; node = node.parentElement) {
@@ -39,6 +50,8 @@ export function RowMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<Placement>("down");
+  // 既定はトリガーの右端に揃えて左へ開く。左が足りない(トリガーが領域の左端にある)ときだけ右へ開く。
+  const [alignStart, setAlignStart] = useState(false);
   // escapesClipping のときだけ使う、ビューポート基準の位置。
   const [fixedStyle, setFixedStyle] = useState<CSSProperties | undefined>(undefined);
   const ref = useRef<HTMLDivElement>(null);
@@ -58,12 +71,18 @@ export function RowMenu({
     const fitsAbove = triggerRect.top - height >= bounds.top;
     const next: Placement = !fitsBelow && fitsAbove ? "up" : "down";
     setPlacement(next);
+    const left = escapesClipping ? 0 : clipLeft(trigger);
+    const start = triggerRect.right - items.offsetWidth < left;
+    setAlignStart(start);
 
     if (!escapesClipping) return;
+    const horizontal: CSSProperties = start
+      ? { left: triggerRect.left, right: "auto" }
+      : { right: window.innerWidth - triggerRect.right };
     setFixedStyle(
       next === "down"
-        ? { position: "fixed", top: triggerRect.bottom + 4, bottom: "auto", right: window.innerWidth - triggerRect.right }
-        : { position: "fixed", top: "auto", bottom: window.innerHeight - triggerRect.top + 4, right: window.innerWidth - triggerRect.right },
+        ? { position: "fixed", top: triggerRect.bottom + 4, bottom: "auto", ...horizontal }
+        : { position: "fixed", top: "auto", bottom: window.innerHeight - triggerRect.top + 4, ...horizontal },
     );
   }, [open, escapesClipping]);
 
@@ -110,7 +129,9 @@ export function RowMenu({
       {open && (
         // 項目を押したら閉じる。Link は遷移で消えるが、削除は同じ行に留まるため必要。
         <div
-          className={`row-menu__items${placement === "up" ? " row-menu__items--up" : ""}`}
+          className={`row-menu__items${placement === "up" ? " row-menu__items--up" : ""}${
+            alignStart ? " row-menu__items--start" : ""
+          }`}
           role="menu"
           ref={itemsRef}
           style={fixedStyle}

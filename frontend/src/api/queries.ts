@@ -7549,6 +7549,23 @@ export function usePatientChartPrescriptions(
 }
 
 /**
+ * 検査結果(Observation)が載っている報告書(DiagnosticReport)の id。チャートの点から
+ * 検査結果内容を開くのに使う。検索が効かずに別の報告書が返っても開かないよう、
+ * result に本当に含まれているかを確かめる。見つからなければ空。
+ */
+export async function findLabReportIdOf(observationId: string): Promise<string> {
+  const params = new URLSearchParams();
+  params.set("result", `Observation/${observationId}`);
+  params.set("_elements", "id,result");
+  params.set("_count", "1");
+  const { data: bundle } = await searchResource<fhir4.DiagnosticReport>("DiagnosticReport", params);
+  const report = resourcesOfType<fhir4.DiagnosticReport>(bundle, "DiagnosticReport").find((entry) =>
+    entry.result?.some((reference) => reference.reference === `Observation/${observationId}`),
+  );
+  return report?.id ?? "";
+}
+
+/**
  * チャートの薬剤の行に出す注射オーダー(1 日 1 オーダー)。化学療法の日オーダーも
  * 注射オーダーなので含まれる。
  */

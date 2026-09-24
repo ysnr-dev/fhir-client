@@ -224,7 +224,8 @@ export function formatFlowsheetView(view: FlowsheetView, today: string): string 
 // ---- チャートの表示状態 ----
 //
 // 経過表と同じく「どこを見ているか」が読む位置そのものなので view に載せる。
-// 形は「[基準日][~単位列数][/定義 id][o|s][n][!]」。例 "2026-09-23~m12/5on"。単位は d/m/y の 1 文字。
+// 形は「[基準日][@中心の日][~単位列数][/定義 id][o|s][n][!]」。例 "2026-09-23~m12/5on"。単位は d/m/y の 1 文字。
+// 「@中心の日」はイベントを基準に前後を見ているときの、その日(各グラフに線を引き、ツールチップに日数を出す)。
 // 「n」はグラフ上に数値を出している状態。
 // グラフは o=まとめる / s=項目ごと で、**書いていなければ定義の設定に従う**
 // (真偽値 1 文字だと「指定なし」と「まとめない」が区別できない)。
@@ -240,6 +241,8 @@ const CHART_UNIT_BY_LETTER: Record<string, ChartViewUnit> = { d: "day", m: "mont
 export interface ChartView {
   /** 期間の右端。省略は今日。 */
   baseDate?: string;
+  /** 前後を見る基準にしている日。 */
+  anchor?: string;
   /** 定義の既定と違う単位を見ているときだけ入る。 */
   unit?: ChartViewUnit;
   columns?: number;
@@ -253,31 +256,34 @@ export interface ChartView {
 }
 
 export function parseChartView(value: string | undefined): ChartView {
-  const match = /^(\d{4}-\d{2}-\d{2})?(?:~([dmy])(\d+))?(?:\/(\d+))?([os])?(n)?(!)?$/.exec(
-    value ?? "",
-  );
+  const match =
+    /^(\d{4}-\d{2}-\d{2})?(?:@(\d{4}-\d{2}-\d{2}))?(?:~([dmy])(\d+))?(?:\/(\d+))?([os])?(n)?(!)?$/.exec(
+      value ?? "",
+    );
   if (!match) return {};
-  const unit = match[2] ? CHART_UNIT_BY_LETTER[match[2]] : undefined;
+  const unit = match[3] ? CHART_UNIT_BY_LETTER[match[3]] : undefined;
   return {
     baseDate: match[1],
+    anchor: match[2],
     unit,
-    columns: match[3] ? Number(match[3]) : undefined,
-    chartId: match[4] ? Number(match[4]) : undefined,
-    overlay: match[5] === "o" ? true : match[5] === "s" ? false : undefined,
-    values: Boolean(match[6]),
-    fullscreen: Boolean(match[7]),
+    columns: match[4] ? Number(match[4]) : undefined,
+    chartId: match[5] ? Number(match[5]) : undefined,
+    overlay: match[6] === "o" ? true : match[6] === "s" ? false : undefined,
+    values: Boolean(match[7]),
+    fullscreen: Boolean(match[8]),
   };
 }
 
 /** 何も指定が無ければ null を返して view を落とす(他タブの「何も開いていない」と揃える)。 */
 export function formatChartView(view: ChartView, today: string): string | null {
   const baseDate = view.baseDate && view.baseDate !== today ? view.baseDate : "";
+  const anchor = view.anchor ? `@${view.anchor}` : "";
   const axis = view.unit && view.columns ? `~${CHART_UNIT_LETTERS[view.unit]}${view.columns}` : "";
   const chart = view.chartId ? `/${view.chartId}` : "";
   const overlay = view.overlay === undefined ? "" : view.overlay ? "o" : "s";
   const values = view.values ? "n" : "";
   const full = view.fullscreen ? "!" : "";
-  const formatted = `${baseDate}${axis}${chart}${overlay}${values}${full}`;
+  const formatted = `${baseDate}${anchor}${axis}${chart}${overlay}${values}${full}`;
   return formatted || null;
 }
 

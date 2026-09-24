@@ -336,6 +336,31 @@ export function chartColumnLabel(start: string, unit: ChartAxisUnit, withYear: b
   return withYear ? `${year}/${month}/${day}` : `${month}/${day}`;
 }
 
+/**
+ * `anchor` の日が期間の真ん中あたりに来る基準日(右端)。イベントを基準に前後を見るのに使う。
+ * 月・年は暦の区切りで割るので、右端はその月末・年末にする。
+ */
+export function centeredBaseDate(anchor: string, axis: ChartAxis): string {
+  const after = Math.floor(axis.columns / 2);
+  const { year, month } = partsOf(anchor);
+  if (axis.unit === "day") return addDays(anchor, after);
+  if (axis.unit === "month") {
+    const target = new Date(year, month - 1 + after, 1);
+    const y = target.getFullYear();
+    const m = target.getMonth() + 1;
+    return dateString(y, m, lastDayOfMonth(y, m));
+  }
+  return dateString(year + after, 12, 31);
+}
+
+/** 基準日からの日数(「基準+14日」)。基準が無ければ空。 */
+export function relativeDayLabel(at: string, anchor: string | undefined): string {
+  if (!anchor) return "";
+  const days = Math.round((epochOf(at.slice(0, 10)) - epochOf(anchor)) / DAY_MS);
+  if (days === 0) return "基準日";
+  return days > 0 ? `基準+${days}日` : `基準−${-days}日`;
+}
+
 /** 単位を切り替えたときの列数(前の列数が新しい単位でも選べるならそのまま)。 */
 export function chartColumnsFor(unit: ChartAxisUnit, previous: number): number {
   return CHART_COLUMN_CHOICES[unit].includes(previous) ? previous : DEFAULT_CHART_COLUMNS[unit];
@@ -439,6 +464,10 @@ export interface ChartPoint {
   method: string;
   /** 結果の JLAC11 コード。 */
   jlac11: string;
+  /** 元の Observation。点から記録を開くのに使う。 */
+  observationId: string;
+  /** テンプレート抽出なら元の QuestionnaireResponse の id。 */
+  responseId?: string;
 }
 
 /** 前の点と比べて単位・測定法・JLAC11 のどれかが変わった点。そこで線を切る。 */
@@ -477,6 +506,7 @@ export interface ChartSeries {
 /** 1 項目ぶんのグラフ(血圧のように系列が 2 本になることがある)。 */
 export interface ChartLaneData {
   key: string;
+  source: ChartItemSource;
   name: string;
   unit: string;
   series: ChartSeries[];
@@ -538,6 +568,16 @@ function matchesItem(observation: fhir4.Observation, item: ChartItem): boolean {
   );
 }
 
+function pointSource(observation: fhir4.Observation): Pick<ChartPoint, "observationId" | "responseId"> {
+  const response = observation.derivedFrom
+    ?.map((reference) => reference.reference ?? "")
+    .find((reference) => reference.startsWith("QuestionnaireResponse/"));
+  return {
+    observationId: observation.id ?? "",
+    ...(response ? { responseId: response.split("/")[1] } : {}),
+  };
+}
+
 /**
  * 点の判定・基準範囲・単位など。単位・測定法・JLAC11 の変わり目を見るのは検査だけで、
  * バイタルとテンプレートは項目の単位で揃える(書き方の揺れで線が切れないように)。
@@ -548,7 +588,7 @@ function pointDetails(
   observation: fhir4.Observation,
   value: number,
   vitalThresholds: VitalThresholdSettings,
-): Omit<ChartPoint, "at" | "t" | "value"> {
+): Omit<ChartPoint, "at" | "t" | "value" | "observationId" | "responseId"> {
   if (item.source === "lab") {
     const range = observation.referenceRange?.[0];
     return {
@@ -601,6 +641,7 @@ export function buildChartLanes(
           t: epochOf(at),
           value,
           ...pointDetails(item, spec.key, observation, value, vitalThresholds),
+          ...pointSource(observation),
         });
       }
       return {
@@ -610,7 +651,7 @@ export function buildChartLanes(
       };
     });
 
-    return { key: item.key, name: item.name, unit: item.unit, series };
+    return { key: item.key, source: item.source, name: item.name, unit: item.unit, series };
   });
 }
 
@@ -721,7 +762,18 @@ export function buildChemoChartEvents(
   dayOrders: RegimenDayOrder[],
 ): ChartEvent[] {
   const nameOf = new Map(applications.map((application) => [application.instanceId, application.name]));
-  const spans = new Map<string, { cycle: number; name: string; start: string; end: string; reduction: string }>();
+  const spans = new Map<
+    string,
+    {
+      cycle: number;
+      name: string;
+      start: string;
+      end: string;
+      reduction: string;
+      /** クールの最初の日オーダー。クリックで開く先。 */
+      first: RegimenDayOrder;
+    }
+  >();
 
   for (const order of dayOrders) {
     if (!order.date || order.status === "cancelled") continue;
@@ -735,10 +787,14 @@ export function buildChemoChartEvents(
         start: order.date,
         end: order.date,
         reduction: order.ref.reduction,
+        first: order,
       });
       continue;
     }
-    if (order.date < span.start) span.start = order.date;
+    if (order.date < span.start) {
+      span.start = order.date;
+      span.first = order;
+    }
     if (order.date > span.end) span.end = order.date;
     if (!span.reduction && order.ref.reduction) span.reduction = order.ref.reduction;
   }
@@ -755,6 +811,9 @@ export function buildChemoChartEvents(
     ]
       .filter(Boolean)
       .join(" / "),
+    target: span.first.serviceRequest.id
+      ? { kind: span.first.kind, id: span.first.serviceRequest.id }
+      : undefined,
   }));
 }
 
