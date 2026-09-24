@@ -4125,6 +4125,21 @@ fieldset.rp-card {
 }
 
 /* 項目名は入力欄の上に置く(画面の検索フォームと同じ並び)。 */
+/* 追加の操作は 1 行に収める。セレクトは中の一番長い選択肢(「放射線物質の取り扱い歴(選択肢)」など)の
+   幅まで広がって行を折り返させるので、残りの幅を等分して縮められるようにする。 */
+.chart-editor__add {
+  flex-wrap: nowrap;
+}
+
+.chart-editor__add select {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.chart-editor__add button {
+  flex: none;
+}
+
 .chart-editor__head label {
   display: flex;
   flex-direction: column;
