@@ -15,16 +15,18 @@
 #         "codings": [{ "system": "http://loinc.org", "code": "85354-9" }],
 #         "components": [{ "code": "8480-6", "name": "収縮期" }, { "code": "8462-4", "name": "拡張期" }] } ],
 #     "events": ["encounter", "surgery"],
+#     "drugs": [{ "key": "yj7:3332001", "name": "ワルファリン", "yj7": "3332001", "codes": ["613330003"] }],
 #     "overlay": false }
 #
 # codings の中身(どのコード体系のどのコードか)は解釈しない。画面が Observation.code
 # と突き合わせるためにそのまま持つだけ(OrderSetEntry#values と同じ考え)。
+# drugs の yj7(YJ コードの先頭 7 桁)・codes(レセ電コード)も同じで、形だけを見る。
 # 設計は docs/patient-chart-design.md。
 class ChartDefinition < ApplicationRecord
   SCOPES = %w[facility department practitioner].freeze
 
   SCHEMA_VERSION = 1
-  DEFINITION_KEYS = %w[schema_version axis items events overlay].freeze
+  DEFINITION_KEYS = %w[schema_version axis items events drugs overlay].freeze
   AXIS_KEYS = %w[unit columns].freeze
   AXIS_UNITS = %w[day month year].freeze
   # 画面が使う範囲(日 7〜92 / 月 3〜36 / 年 1〜10)より広く取る。単位ごとの妥当な
@@ -36,12 +38,15 @@ class ChartDefinition < ApplicationRecord
   COMPONENT_KEYS = %w[code name].freeze
   EVENT_KINDS = %w[encounter surgery chemo radiotherapy exam injection prescription].freeze
   MAX_ITEMS = 30
+  DRUG_KEYS = %w[key name yj7 codes].freeze
+  MAX_DRUGS = 20
 
   DEFAULT_DEFINITION = {
     "schema_version" => SCHEMA_VERSION,
     "axis" => { "unit" => "month", "columns" => 12 },
     "items" => [],
     "events" => [],
+    "drugs" => [],
     # true なら全項目を 1 つのグラフに重ねる。既定は項目ごとに分けて並べる。
     "overlay" => false
   }.freeze
@@ -100,6 +105,7 @@ class ChartDefinition < ApplicationRecord
     validate_axis(definition["axis"])
     validate_items(definition["items"])
     validate_events(definition["events"])
+    validate_drugs(definition["drugs"])
 
     overlay = definition["overlay"]
     return if overlay.nil? || [true, false].include?(overlay)
@@ -210,5 +216,42 @@ class ChartDefinition < ApplicationRecord
     unknown = events - EVENT_KINDS
     errors.add(:definition, "の events に対象外の種別があります(#{unknown.join(', ')})") if unknown.any?
     errors.add(:definition, "の events が重複しています") if events.size != events.uniq.size
+  end
+
+  def validate_drugs(drugs)
+    return if drugs.nil?
+    return errors.add(:definition, "の drugs は配列で指定してください") unless drugs.is_a?(Array)
+    return errors.add(:definition, "の drugs は #{MAX_DRUGS} 件までです") if drugs.size > MAX_DRUGS
+
+    keys = Set.new
+    drugs.each_with_index { |drug, index| validate_drug(drug, index, keys) }
+  end
+
+  def validate_drug(drug, index, keys)
+    label = "の drugs[#{index}]"
+    return errors.add(:definition, "#{label} は連想配列で指定してください") unless drug.is_a?(Hash)
+
+    unknown = drug.keys - DRUG_KEYS
+    errors.add(:definition, "#{label} に対象外の項目があります(#{unknown.join(', ')})") if unknown.any?
+
+    key = drug["key"]
+    if key.is_a?(String) && key.present?
+      errors.add(:definition, "#{label} の key が重複しています") unless keys.add?(key)
+    else
+      errors.add(:definition, "#{label} の key は必須です")
+    end
+    errors.add(:definition, "#{label} の name は必須です") unless drug["name"].is_a?(String) && drug["name"].present?
+
+    yj7 = drug["yj7"]
+    unless yj7.nil? || (yj7.is_a?(String) && yj7.match?(/\A\d{7}\z/))
+      errors.add(:definition, "#{label} の yj7 は 7 桁の数字で指定してください")
+    end
+    codes = drug["codes"]
+    unless codes.nil? || (codes.is_a?(Array) && codes.all? { |code| code.is_a?(String) && code.present? })
+      errors.add(:definition, "#{label} の codes は文字列の配列で指定してください")
+    end
+    return if yj7.present? || codes.is_a?(Array) && codes.any?
+
+    errors.add(:definition, "#{label} は yj7 か codes のどちらかが要ります")
   end
 end

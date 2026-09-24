@@ -108,6 +108,27 @@ RSpec.describe ChartDefinition do
       expect(build(definition: definition("events" => %w[encounter encounter]))).not_to be_valid
     end
 
+    it "drugs は key・name と、yj7 か codes のどちらかが要る" do
+      drug = { "key" => "yj7:3332001", "name" => "ワルファリン", "yj7" => "3332001", "codes" => ["613330003"] }
+      expect(build(definition: definition("drugs" => [drug]))).to be_valid
+      expect(build(definition: definition("drugs" => [drug.except("yj7")]))).to be_valid
+      expect(build(definition: definition("drugs" => [drug.except("yj7", "codes")]))).not_to be_valid
+      expect(build(definition: definition("drugs" => [drug.except("name")]))).not_to be_valid
+      expect(build(definition: definition("drugs" => [drug, drug]))).not_to be_valid
+    end
+
+    it "drugs の yj7 は 7 桁の数字、codes は文字列の配列" do
+      drug = { "key" => "a", "name" => "ワルファリン" }
+      expect(build(definition: definition("drugs" => [drug.merge("yj7" => "3332001F")]))).not_to be_valid
+      expect(build(definition: definition("drugs" => [drug.merge("codes" => [613330003])]))).not_to be_valid
+      expect(build(definition: definition("drugs" => [drug.merge("codes" => ["c"], "bogus" => 1)]))).not_to be_valid
+    end
+
+    it "drugs は上限 20 件" do
+      drugs = Array.new(21) { |i| { "key" => "code:#{i}", "name" => "薬#{i}", "codes" => ["c#{i}"] } }
+      expect(build(definition: definition("drugs" => drugs))).not_to be_valid
+    end
+
     it "overlay は真偽値のみ" do
       expect(build(definition: definition("overlay" => true))).to be_valid
       expect(build(definition: definition("overlay" => "yes"))).not_to be_valid
@@ -122,6 +143,7 @@ RSpec.describe ChartDefinition do
         "axis" => { "unit" => "month", "columns" => 12 },
         "items" => [],
         "events" => [],
+        "drugs" => [],
         "overlay" => false,
       )
     end

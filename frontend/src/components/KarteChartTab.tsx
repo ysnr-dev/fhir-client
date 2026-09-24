@@ -4,6 +4,7 @@ import { useChartDefinitionMutations, useChartDefinitions } from "../api/masterQ
 import {
   usePatientChartObservations,
   usePatientEncounterEvents,
+  usePatientChartInjections,
   usePatientChartPrescriptions,
   usePatientPerformedProcedures,
   usePatientRadiotherapyOrders,
@@ -25,6 +26,7 @@ import {
   CHART_AXIS_UNIT_LABELS,
   CHART_COLUMN_CHOICES,
   buildChartLanes,
+  buildDrugTracks,
   buildChemoChartEvents,
   buildEncounterChartEvents,
   buildPrescriptionChartEvents,
@@ -160,6 +162,14 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
   );
 
   const events = useChartEvents(patientId, body.events, range.rangeStart, range.rangeEnd);
+  // 薬剤の行。処方は帯の「処方」と同じ検索なので、両方 ON でもキャッシュを分け合う。
+  const drugPatientId = body.drugs.length > 0 ? patientId : undefined;
+  const drugPrescriptions = usePatientChartPrescriptions(drugPatientId, range.rangeStart, range.rangeEnd);
+  const drugInjections = usePatientChartInjections(drugPatientId, range.rangeStart, range.rangeEnd);
+  const drugTracks = useMemo(
+    () => buildDrugTracks(body.drugs, drugPrescriptions.data, drugInjections.data, range),
+    [body.drugs, drugPrescriptions.data, drugInjections.data, range],
+  );
   const shownEvents = useMemo(() => filterChartEvents(events, range), [events, range]);
 
   const [editing, setEditing] = useState<Editing>(null);
@@ -215,7 +225,14 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           ownerId: owner.ownerId,
           ownerName: owner.ownerName,
           // 新規は、いま見ている横軸と表示のしかたを初期値にする。
-          definition: { schema_version: 1, axis: { unit, columns }, items: [], events: [], overlay },
+          definition: {
+            schema_version: 1,
+            axis: { unit, columns },
+            items: [],
+            events: [],
+            drugs: [],
+            overlay,
+          },
         },
       });
       return;
@@ -408,7 +425,11 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
         </RowMenu>
       </div>
 
-      <ErrorBanner error={error ?? list.error ?? observations.error} />
+      <ErrorBanner
+        error={
+          error ?? list.error ?? observations.error ?? drugPrescriptions.error ?? drugInjections.error
+        }
+      />
 
       {definitions.length === 0 ? (
         <p className="patient-chart__empty">チャートがありません。</p>
@@ -417,6 +438,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           range={range}
           lanes={lanes}
           events={shownEvents}
+          drugTracks={drugTracks}
           eventKinds={body.events}
           overlay={overlay}
           values={values}
@@ -573,6 +595,7 @@ function useChartEvents(
         ...buildPrescriptionChartEvents(
           prescriptions.data.orders,
           prescriptions.data.medicationRequests,
+          prescriptions.data.tasks,
         ),
       );
     }

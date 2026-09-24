@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { LabResultItem } from "../api/masterClient";
+import type { LabResultItem, Medicine } from "../api/masterClient";
 import type { OrderSetScope } from "../api/masterClient";
 import { useQuestionnaireOptions } from "../api/queries";
 import {
@@ -9,18 +9,21 @@ import {
   CHART_ITEM_SOURCE_LABELS,
   CHART_LAYOUT_OPTIONS,
   chartColumnsFor,
+  chartDrugOf,
   ownerKeyOf,
   labChartItem,
   templateChartItems,
   vitalChartItems,
   type ChartAxisUnit,
   type ChartDefinitionBody,
+  type ChartDrug,
   type ChartEventKind,
   type ChartItem,
 } from "../fhir/chartDefinitionHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { TrashIcon } from "./PathwayEventCard";
 import { LabResultItemSearchModal } from "./LabResultItemSearchModal";
+import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
 
 /** 持ち主の選択肢。呼び出し元が権限を見て canEdit を決める。 */
@@ -72,7 +75,9 @@ export function ChartDefinitionEditorModal({
   const [columns, setColumns] = useState(initial.definition.axis.columns);
   const [events, setEvents] = useState<ChartEventKind[]>(initial.definition.events);
   const [overlay, setOverlay] = useState(initial.definition.overlay);
+  const [drugs, setDrugs] = useState<ChartDrug[]>(initial.definition.drugs);
   const [labSearch, setLabSearch] = useState(false);
+  const [drugSearch, setDrugSearch] = useState(false);
   const [templateId, setTemplateId] = useState("");
   const [localError, setLocalError] = useState("");
 
@@ -112,11 +117,17 @@ export function ChartDefinitionEditorModal({
   }
 
   function moveItem(index: number, delta: number) {
-    const next = [...items];
-    const target = index + delta;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    setItems(next);
+    setItems(moved(items, index, delta));
+  }
+
+  function addDrug(medicine: Medicine) {
+    const drug = chartDrugOf(medicine);
+    if (!drugs.some((entry) => entry.key === drug.key)) setDrugs([...drugs, drug]);
+    setDrugSearch(false);
+  }
+
+  function renameDrug(key: string, name: string) {
+    setDrugs(drugs.map((drug) => (drug.key === key ? { ...drug, name } : drug)));
   }
 
   function toggleEvent(kind: ChartEventKind) {
@@ -130,7 +141,10 @@ export function ChartDefinitionEditorModal({
 
   function handleSave() {
     if (!name.trim()) return setLocalError("チャート名を入力してください。");
-    if (items.length === 0) return setLocalError("項目を 1 つ以上選んでください。");
+    if (items.length === 0 && drugs.length === 0) {
+      return setLocalError("項目か薬剤を 1 つ以上選んでください。");
+    }
+    if (drugs.some((drug) => !drug.name.trim())) return setLocalError("薬剤の表示名を入力してください。");
     const owner = selectedOwner;
     if (!owner) return setLocalError("保存先を選んでください。");
 
@@ -140,7 +154,14 @@ export function ChartDefinitionEditorModal({
       scope: owner.scope,
       ownerId: owner.ownerId,
       ownerName: owner.ownerName,
-      definition: { schema_version: 1, axis: { unit, columns }, items, events, overlay },
+      definition: {
+        schema_version: 1,
+        axis: { unit, columns },
+        items,
+        events,
+        drugs: drugs.map((drug) => ({ ...drug, name: drug.name.trim() })),
+        overlay,
+      },
     });
   }
 
@@ -308,6 +329,72 @@ export function ChartDefinitionEditorModal({
           ))}
         </div>
 
+        <div className="chart-editor__add">
+          <button type="button" onClick={() => setDrugSearch(true)}>
+            薬剤を追加
+          </button>
+        </div>
+
+        {drugs.length > 0 && (
+          <table className="chart-editor__items">
+            <thead>
+              <tr>
+                <th>薬剤(表示名)</th>
+                <th>まとめ方</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {drugs.map((drug, index) => (
+                <tr key={drug.key}>
+                  <td>
+                    <input
+                      type="text"
+                      value={drug.name}
+                      aria-label="薬剤の表示名"
+                      onChange={(e) => renameDrug(drug.key, e.target.value)}
+                    />
+                  </td>
+                  <td>
+                    <span className="chart-editor__source">{drug.yj7 ? "同じ成分" : "この薬剤"}</span>
+                  </td>
+                  <td className="chart-editor__row-actions">
+                    <button
+                      type="button"
+                      className="chart-editor__step"
+                      onClick={() => setDrugs(moved(drugs, index, -1))}
+                      disabled={index === 0}
+                      title="上へ"
+                      aria-label="上へ"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="chart-editor__step"
+                      onClick={() => setDrugs(moved(drugs, index, 1))}
+                      disabled={index === drugs.length - 1}
+                      title="下へ"
+                      aria-label="下へ"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      className="rp-card__icon-button"
+                      onClick={() => setDrugs(drugs.filter((e) => e.key !== drug.key))}
+                      title={`${drug.name} を削除`}
+                      aria-label={`${drug.name} を削除`}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
         {localError && (
           <div className="error-banner" role="alert">
             <p className="error-banner__line error-banner__line--error">{localError}</p>
@@ -333,6 +420,23 @@ export function ChartDefinitionEditorModal({
           onClose={() => setLabSearch(false)}
         />
       )}
+      {drugSearch && (
+        <MedicineSearchModal
+          title="チャートに足す薬剤を選択"
+          allowGeneric
+          onSelect={addDrug}
+          onClose={() => setDrugSearch(false)}
+        />
+      )}
     </Modal>
   );
+}
+
+/** 並びの中で 1 つ上・下へ動かす(端なら動かさない)。 */
+function moved<T>(list: T[], index: number, delta: number): T[] {
+  const target = index + delta;
+  if (target < 0 || target >= list.length) return list;
+  const next = [...list];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
 }

@@ -4000,6 +4000,28 @@ fieldset.rp-card {
   color: #f0a58a;
 }
 
+/* 追う薬剤の行と、レーンに落とす開始・変わり目・途切れの線。 */
+.patient-chart__drug,
+.patient-chart__event--drug {
+  color: #be185d;
+}
+
+:root[data-theme="dark"] .patient-chart__drug,
+:root[data-theme="dark"] .patient-chart__event--drug {
+  color: #f472b6;
+}
+
+.patient-chart__event-line.patient-chart__event--drug {
+  stroke-dasharray: 3 3;
+}
+
+/* 増量 ▲ / 減量 ▼。バーの頭に置くので、バーの色に埋もれないよう本文色で塗る。 */
+.patient-chart__dose-change {
+  fill: var(--text-h);
+  stroke: var(--bg);
+  stroke-width: 1;
+}
+
 /* ---- チャート定義のエディタ ---- */
 
 .modal--chart-editor {
@@ -4055,9 +4077,18 @@ fieldset.rp-card {
 /* 行の高さは操作ボタンで決まるので、既定より詰めた高さにする。 */
 .chart-editor__row-actions {
   --control-height: 26px;
-  display: flex;
-  gap: 4px;
-  justify-content: flex-end;
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.chart-editor__row-actions > * {
+  vertical-align: middle;
+}
+
+.chart-editor__row-actions > * + * {
+  margin-left: 4px;
 }
 
 /* 並べ替えは記号 1 文字なので、行の中で場所を取らないよう左右を詰める。 */

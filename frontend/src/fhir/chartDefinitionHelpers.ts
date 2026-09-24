@@ -1,6 +1,6 @@
 import type { KarteDetailTarget } from "../karteUrl";
 import { addDays, toDateInput } from "../lib/dates";
-import type { LabResultItem } from "../api/masterClient";
+import type { LabResultItem, Medicine } from "../api/masterClient";
 import { JLAC11_SYSTEM, RESULT_ITEM_SYSTEM, interpretationCodeOf } from "./labResultHelpers";
 import {
   BLOOD_PRESSURE,
@@ -19,7 +19,15 @@ import type { EncounterEvent } from "./encounterHelpers";
 import type { RegimenApplication, RegimenDayOrder } from "./regimenOrderHelpers";
 import type { RadiotherapyFractionDisplay } from "./radiotherapyResultHelpers";
 import { summarizeRadiotherapyOrder } from "./radiotherapyOrderHelpers";
-import { ORDER_TYPE_SYSTEM, groupByRp } from "./prescriptionHelpers";
+import {
+  GENERAL_ORDER_CODE_SYSTEM,
+  MEDICINE_CODE_SYSTEM,
+  ORDER_TYPE_SYSTEM,
+  YJ_CODE_SYSTEM,
+  groupByRp,
+  hasDoseDays,
+} from "./prescriptionHelpers";
+import type { MedicineLineDisplay } from "./prescriptionHelpers";
 import { orderDay } from "./shared";
 import { INJECTION_ORDER_TYPE } from "./injectionHelpers";
 import { RAD_ORDER_TYPE } from "./radOrderHelpers";
@@ -73,11 +81,28 @@ export type ChartEventKind =
   | "injection"
   | "prescription";
 
+/**
+ * 追う薬剤。処方・注射の薬剤ごとに 1 行を帯に出す。
+ *
+ * YJ コード(一般名処方コードも同じ体系)の先頭 7 桁 = 薬効分類 4 桁 + 成分・投与経路 3 桁で
+ * まとめるので、規格(1mg / 0.5mg)・銘柄・一般名処方の違いは同じ行に入る。
+ * Do 処方は毎回別オーダーになるため、オーダーではなく薬剤で突き合わせる。
+ */
+export interface ChartDrug {
+  /** 定義の中で一意。`yj7:<先頭 7 桁>` / `code:<レセ電コード>`。 */
+  key: string;
+  name: string;
+  yj7?: string;
+  /** レセ電コード。YJ コードを持たない薬剤の突き合わせに使う。 */
+  codes: string[];
+}
+
 export interface ChartDefinitionBody {
   schema_version: 1;
   axis: ChartAxis;
   items: ChartItem[];
   events: ChartEventKind[];
+  drugs: ChartDrug[];
   /** true なら全項目を 1 つのグラフに重ねる。既定は項目ごとに分けて並べる。 */
   overlay: boolean;
 }
@@ -132,7 +157,14 @@ export function ownerKeyOf(scope: string, ownerId: string | null): string {
 }
 
 export function emptyChartDefinitionBody(): ChartDefinitionBody {
-  return { schema_version: 1, axis: { ...DEFAULT_CHART_AXIS }, items: [], events: [], overlay: false };
+  return {
+    schema_version: 1,
+    axis: { ...DEFAULT_CHART_AXIS },
+    items: [],
+    events: [],
+    drugs: [],
+    overlay: false,
+  };
 }
 
 function isAxisUnit(value: unknown): value is ChartAxisUnit {
@@ -184,6 +216,25 @@ export function normalizeChartDefinitionBody(raw: unknown): ChartDefinitionBody 
   if (Array.isArray(source.events)) {
     for (const kind of source.events) {
       if (isEventKind(kind) && !body.events.includes(kind)) body.events.push(kind);
+    }
+  }
+
+  if (Array.isArray(source.drugs)) {
+    for (const entry of source.drugs) {
+      if (!entry || typeof entry !== "object") continue;
+      const drug = entry as Record<string, unknown>;
+      if (typeof drug.key !== "string" || !drug.key) continue;
+      const yj7 = typeof drug.yj7 === "string" && drug.yj7 ? drug.yj7 : undefined;
+      const codes = Array.isArray(drug.codes)
+        ? drug.codes.filter((code): code is string => typeof code === "string" && code !== "")
+        : [];
+      if (!yj7 && codes.length === 0) continue;
+      body.drugs.push({
+        key: drug.key,
+        name: typeof drug.name === "string" ? drug.name : drug.key,
+        ...(yj7 ? { yj7 } : {}),
+        codes,
+      });
     }
   }
 
@@ -785,18 +836,12 @@ export function buildProcedureChartEvents(procedures: fhir4.Procedure[]): ChartE
 export function buildPrescriptionChartEvents(
   orders: fhir4.ServiceRequest[],
   medicationRequests: fhir4.MedicationRequest[],
+  tasks: fhir4.Task[] = [],
 ): ChartEvent[] {
-  const byOrderId = new Map<string, fhir4.MedicationRequest[]>();
-  for (const request of medicationRequests) {
-    const orderId = request.basedOn?.[0]?.reference?.split("/")[1];
-    if (!orderId) continue;
-    const list = byOrderId.get(orderId);
-    if (list) list.push(request);
-    else byOrderId.set(orderId, [request]);
-  }
+  const byOrderId = medicationRequestsByOrderId(medicationRequests);
 
   const events: ChartEvent[] = [];
-  for (const order of orders) {
+  for (const order of activeOrders(orders, tasks)) {
     const id = order.id ?? "";
     const start = orderDay(order);
     if (!start) continue;
@@ -818,6 +863,351 @@ export function buildPrescriptionChartEvents(
   }
 
   return events;
+}
+
+function medicationRequestsByOrderId(
+  medicationRequests: fhir4.MedicationRequest[],
+): Map<string, fhir4.MedicationRequest[]> {
+  const byOrderId = new Map<string, fhir4.MedicationRequest[]>();
+  for (const request of medicationRequests) {
+    const orderId = request.basedOn?.[0]?.reference?.split("/")[1];
+    if (!orderId) continue;
+    const list = byOrderId.get(orderId);
+    if (list) list.push(request);
+    else byOrderId.set(orderId, [request]);
+  }
+  return byOrderId;
+}
+
+/**
+ * 中止していないオーダー。中止は進捗の Task(cancelled)で持つ(オーダー自体の status は
+ * active のまま)ので、Task の focus で突き合わせて外す。
+ */
+function activeOrders(orders: fhir4.ServiceRequest[], tasks: fhir4.Task[]): fhir4.ServiceRequest[] {
+  const cancelled = new Set(
+    tasks
+      .filter((task) => task.status === "cancelled")
+      .map((task) => task.focus?.reference?.split("/")[1])
+      .filter((id): id is string => Boolean(id)),
+  );
+  return orders.filter((order) => !cancelled.has(order.id ?? ""));
+}
+
+// ---- 薬剤の行 ----
+
+/** 処方と処方の間がこの日数までなら、飲み続けていたとみなしてつなぐ(外来の受診間隔のずれ)。 */
+export const CHART_DRUG_GAP_DAYS = 7;
+
+/** YJ コード・一般名処方コードの先頭 7 桁(薬効分類 + 成分・投与経路)。形が違えば空。 */
+function yj7Of(code: string | null | undefined): string {
+  return code && /^\d{7}/.test(code) ? code.slice(0, 7) : "";
+}
+
+/**
+ * 行の表示名。成分でまとめる行に「1mg」のような規格や「「F」」のような屋号が残ると
+ * その銘柄だけの行に見えるので落とす。
+ */
+function drugDisplayName(name: string): string {
+  const normalized = name.normalize("NFKC").trim();
+  const stripped = normalized
+    .replace(/「[^」]*」$/, "")
+    .replace(/\s*\d+(?:\.\d+)?[千万]?\s*(?:mg|μg|µg|g|mL|%|単位)(?:\/\d*(?:\.\d+)?\s*mL)?$/, "")
+    .trim();
+  return stripped || normalized;
+}
+
+/** マスタの薬剤 → 追う薬剤。YJ コードが無ければ薬価基準コード、それも無ければレセ電コードだけで引く。 */
+export function chartDrugOf(medicine: Medicine): ChartDrug {
+  // 一般名処方は medicine_code に一般名処方コード(YJ と同じ体系)が入る。
+  const yj7 =
+    yj7Of(medicine.yj_code) ||
+    yj7Of(medicine.yakka_code) ||
+    (medicine.generic ? yj7Of(medicine.medicine_code) : "");
+  const name = drugDisplayName(medicine.generic_name_description || medicine.name);
+  const codes = medicine.generic ? [] : [medicine.medicine_code];
+  if (yj7) return { key: `yj7:${yj7}`, name, yj7, codes };
+  return { key: `code:${medicine.medicine_code}`, name, codes };
+}
+
+function codingsMatchDrug(codings: fhir4.Coding[] | undefined, drug: ChartDrug): boolean {
+  return (codings ?? []).some((coding) => {
+    const yjLike = coding.system === YJ_CODE_SYSTEM || coding.system === GENERAL_ORDER_CODE_SYSTEM;
+    if (drug.yj7 && yjLike && yj7Of(coding.code) === drug.yj7) return true;
+    return coding.system === MEDICINE_CODE_SYSTEM && drug.codes.includes(coding.code ?? "");
+  });
+}
+
+function lineMatchesDrug(line: MedicineLineDisplay, drug: ChartDrug): boolean {
+  if (drug.yj7) {
+    if (yj7Of(line.yjCode) === drug.yj7) return true;
+    if (line.generic && yj7Of(line.code) === drug.yj7) return true;
+  }
+  return !line.generic && drug.codes.includes(line.code);
+}
+
+/** 薬剤名から 1 錠あたりの含量(「ワーファリン錠1mg」→ 1 mg)。錠・カプセルだけ。 */
+function strengthOf(name: string, unit: string | undefined): { value: number; unit: string } | null {
+  if (unit !== "錠" && unit !== "カプセル") return null;
+  const match = name.normalize("NFKC").match(/(\d+(?:\.\d+)?)\s*(mg|μg|µg|g|単位)/);
+  return match ? { value: Number(match[1]), unit: match[2].replace("µ", "μ") } : null;
+}
+
+function formatAmount(value: number): string {
+  return String(Math.round(value * 1000) / 1000);
+}
+
+/** 1 日ぶんの内容(同じ成分の規格違いを同時に出すこともある)。 */
+interface DailyDose {
+  /** 同じ内容かどうかの比較に使う。 */
+  key: string;
+  text: string;
+  /** 含量で足し上げた 1 日量(求められるときだけ)。増量・減量の判定に使う。 */
+  total?: { value: number; unit: string };
+  orderId: string;
+}
+
+function dailyDoseOf(lines: MedicineLineDisplay[], orderId: string): DailyDose {
+  const parts = lines.map((line) => ({
+    name: line.name.normalize("NFKC"),
+    dose: line.dose ?? 0,
+    unit: (line.unit ?? "").normalize("NFKC"),
+    strength: strengthOf(line.name, line.unit),
+  }));
+  const strengthUnits = new Set(parts.map((part) => part.strength?.unit ?? ""));
+  const total =
+    parts.every((part) => part.strength) && strengthUnits.size === 1
+      ? {
+          value: parts.reduce((sum, part) => sum + part.dose * (part.strength?.value ?? 0), 0),
+          unit: [...strengthUnits][0],
+        }
+      : parts.length === 1
+        ? { value: parts[0].dose, unit: parts[0].unit }
+        : undefined;
+  const text = parts.map((part) => `${part.name} ${formatAmount(part.dose)}${part.unit}`).join(" + ");
+  return {
+    key: parts
+      .map((part) => `${part.name}|${part.dose}|${part.unit}`)
+      .sort()
+      .join("/"),
+    text:
+      total && parts.some((part) => part.strength)
+        ? `${text}(1日 ${formatAmount(total.value)}${total.unit})`
+        : text,
+    total,
+    orderId,
+  };
+}
+
+export type ChartDrugChange = "start" | "increase" | "decrease" | "change";
+
+export const CHART_DRUG_CHANGE_LABELS: Record<ChartDrugChange, string> = {
+  start: "開始",
+  increase: "増量",
+  decrease: "減量",
+  change: "変更",
+};
+
+/** 同じ用量で飲み続けた期間。 */
+export interface ChartDrugSegment {
+  start: string;
+  /** 最終日(この日を含む)。 */
+  end: string;
+  /** 帯に出す短い用量(「3錠」「1日 2.5mg」)。 */
+  label: string;
+  detail: string;
+  /** 前の区間からの変わり方。前が無い(または間が空いた)ときは開始。 */
+  change: ChartDrugChange;
+  /** この区間の後に途切れる(中止・終了)かどうか。 */
+  stops: boolean;
+  target?: KarteDetailTarget;
+}
+
+/** 期間を持たない投与(頓用・外用・注射)。 */
+export interface ChartDrugMark {
+  at: string;
+  label: string;
+  detail: string;
+  target?: KarteDetailTarget;
+}
+
+export interface ChartDrugTrack {
+  key: string;
+  name: string;
+  segments: ChartDrugSegment[];
+  marks: ChartDrugMark[];
+}
+
+export interface ChartMedicationOrders {
+  orders: fhir4.ServiceRequest[];
+  medicationRequests: fhir4.MedicationRequest[];
+  tasks: fhir4.Task[];
+}
+
+function changeBetween(before: DailyDose, after: DailyDose): ChartDrugChange {
+  if (before.total && after.total && before.total.unit === after.total.unit) {
+    if (after.total.value > before.total.value) return "increase";
+    if (after.total.value < before.total.value) return "decrease";
+  }
+  return "change";
+}
+
+function doseLabel(dose: DailyDose): string {
+  return dose.total ? `${formatAmount(dose.total.value)}${dose.total.unit}/日` : dose.text;
+}
+
+/**
+ * 処方から、薬剤ごとの「飲んでいた期間」を用量の変わり目で区切って作る。
+ *
+ * 日ごとに「その日の用量」を置き、同じ日に重なる処方は後から始まったものが勝つ
+ * (前の処方の残りを新しい処方で置き換えた、とみなす)。続く日が同じ用量なら 1 区間にし、
+ * 間が CHART_DRUG_GAP_DAYS 日以内なら続けて飲んでいたとみなしてつなぐ。
+ */
+function buildDrugSegments(
+  drug: ChartDrug,
+  orders: fhir4.ServiceRequest[],
+  byOrderId: Map<string, fhir4.MedicationRequest[]>,
+  marks: ChartDrugMark[],
+  baseDate: string,
+): ChartDrugSegment[] {
+  const byDay = new Map<string, DailyDose>();
+  const sorted = [...orders].sort((a, b) => orderDay(a).localeCompare(orderDay(b)));
+
+  for (const order of sorted) {
+    const id = order.id ?? "";
+    const start = orderDay(order);
+    if (!start) continue;
+    const continuous: MedicineLineDisplay[] = [];
+    let days = 0;
+    for (const group of groupByRp(byOrderId.get(id) ?? [])) {
+      const lines = group.medicines.filter((line) => lineMatchesDrug(line, drug));
+      if (lines.length === 0) continue;
+      if (hasDoseDays(group.usageCode, group.basicCategory) && (group.doseDays ?? 0) > 0) {
+        continuous.push(...lines);
+        days = Math.max(days, group.doseDays ?? 0);
+        continue;
+      }
+      // 頓用・外用は期間を持たないので印にする。
+      for (const line of lines) {
+        const amount = `${formatAmount(line.dose ?? 0)}${(line.unit ?? "").normalize("NFKC")}`;
+        marks.push({
+          at: start,
+          label: amount,
+          detail: [line.name, amount, group.usageName, group.doseCount ? `${group.doseCount} 回分` : ""]
+            .filter(Boolean)
+            .join(" "),
+          target: id ? { kind: "prescription", id } : undefined,
+        });
+      }
+    }
+    if (continuous.length === 0) continue;
+    const dose = dailyDoseOf(continuous, id);
+    for (let i = 0; i < days; i += 1) byDay.set(addDays(start, i), dose);
+  }
+
+  const days = [...byDay.keys()].sort();
+  const segments: ChartDrugSegment[] = [];
+  let current: { start: string; end: string; dose: DailyDose; change: ChartDrugChange } | null = null;
+  const close = (stops: boolean) => {
+    if (!current) return;
+    const { start, end, dose, change } = current;
+    segments.push({
+      start,
+      end,
+      label: doseLabel(dose),
+      detail: `${CHART_DRUG_CHANGE_LABELS[change]} ${start}〜${end} ${dose.text}${stops ? "(ここで途切れる)" : ""}`,
+      change,
+      stops,
+      target: dose.orderId ? { kind: "prescription", id: dose.orderId } : undefined,
+    });
+  };
+
+  for (const day of days) {
+    const dose = byDay.get(day);
+    if (!dose) continue;
+    if (!current) {
+      current = { start: day, end: day, dose, change: "start" };
+      continue;
+    }
+    const gap = (epochOf(day) - epochOf(current.end)) / DAY_MS - 1;
+    if (gap > CHART_DRUG_GAP_DAYS) {
+      close(true);
+      current = { start: day, end: day, dose, change: "start" };
+    } else if (dose.key === current.dose.key) {
+      current.end = day;
+    } else {
+      // 間が空いていても用量が変わった所は変わり目とする(前の区間は前日まで伸ばす)。
+      current.end = addDays(day, -1);
+      close(false);
+      current = { start: day, end: day, dose, change: changeBetween(current.dose, dose) };
+    }
+  }
+  // 基準日を越えて続く最後の区間は、まだ飲んでいる途中なので途切れにしない。
+  close(Boolean(current && current.end < baseDate));
+  return segments;
+}
+
+/** 注射は 1 日 1 オーダーなので、施行日ごとの印にする。 */
+function buildInjectionDrugMarks(
+  drug: ChartDrug,
+  orders: fhir4.ServiceRequest[],
+  byOrderId: Map<string, fhir4.MedicationRequest[]>,
+): ChartDrugMark[] {
+  const marks: ChartDrugMark[] = [];
+  for (const order of orders) {
+    const id = order.id ?? "";
+    const at = orderDay(order);
+    if (!at) continue;
+    const matched = (byOrderId.get(id) ?? []).filter((request) =>
+      codingsMatchDrug(request.medicationCodeableConcept?.coding, drug),
+    );
+    if (matched.length === 0) continue;
+    const parts = matched.map((request) => {
+      const quantity = request.dosageInstruction?.[0]?.doseAndRate?.[0]?.doseQuantity;
+      const name = (
+        request.medicationCodeableConcept?.coding?.find((coding) => coding.display)?.display ??
+        request.medicationCodeableConcept?.text ??
+        ""
+      ).normalize("NFKC");
+      const unit = (quantity?.unit ?? "").normalize("NFKC");
+      return { name, amount: `${formatAmount(quantity?.value ?? 0)}${unit}` };
+    });
+    marks.push({
+      at,
+      label: parts.map((part) => part.amount).join("+"),
+      detail: `注射 ${parts.map((part) => `${part.name} ${part.amount}`).join(" + ")}`,
+      target: id ? { kind: "injection", id } : undefined,
+    });
+  }
+  return marks;
+}
+
+/** 追う薬剤ごとの行。範囲に掛からない区間・印は落とす。 */
+export function buildDrugTracks(
+  drugs: ChartDrug[],
+  prescriptions: ChartMedicationOrders | undefined,
+  injections: ChartMedicationOrders | undefined,
+  range: ChartRange,
+): ChartDrugTrack[] {
+  const rxOrders = prescriptions ? activeOrders(prescriptions.orders, prescriptions.tasks) : [];
+  const rxByOrder = medicationRequestsByOrderId(prescriptions?.medicationRequests ?? []);
+  const injOrders = injections ? activeOrders(injections.orders, injections.tasks) : [];
+  const injByOrder = medicationRequestsByOrderId(injections?.medicationRequests ?? []);
+  const inRange = (start: string, end: string) =>
+    epochOf(end) + DAY_MS > range.tMin && epochOf(start) < range.tMax;
+
+  return drugs.map((drug) => {
+    const marks: ChartDrugMark[] = [];
+    const segments = buildDrugSegments(drug, rxOrders, rxByOrder, marks, range.rangeEnd);
+    marks.push(...buildInjectionDrugMarks(drug, injOrders, injByOrder));
+    return {
+      key: drug.key,
+      name: drug.name,
+      segments: segments.filter((segment) => inRange(segment.start, segment.end)),
+      marks: marks
+        .filter((mark) => inRange(mark.at, mark.at))
+        .sort((a, b) => a.at.localeCompare(b.at)),
+    };
+  });
 }
 
 /** 範囲に掛かるイベントだけ(期間バーは端が外でも中に入っていれば残す)。 */

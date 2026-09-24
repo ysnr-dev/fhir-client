@@ -7480,42 +7480,46 @@ const CHART_PRESCRIPTION_MAX_PAGES = 4;
 export interface ChartPrescriptions {
   orders: fhir4.ServiceRequest[];
   medicationRequests: fhir4.MedicationRequest[];
+  /** 進捗の Task(中止したオーダーを見分けるのに使う)。 */
+  tasks: fhir4.Task[];
 }
 
-async function fetchChartPrescriptions(
+async function fetchChartMedicationOrders(
   patientId: string,
+  category: string,
+  lookbackDays: number,
   rangeStart: string,
   rangeEnd: string,
 ): Promise<ChartPrescriptions> {
   const orders: fhir4.ServiceRequest[] = [];
   const medicationRequests: fhir4.MedicationRequest[] = [];
+  const tasks: fhir4.Task[] = [];
 
   for (let page = 0; page < CHART_PRESCRIPTION_MAX_PAGES; page += 1) {
     const params = new URLSearchParams();
     params.set("patient", `Patient/${patientId}`);
-    // 処方はオーダー種別(order-type)を持たず、処方区分の system で見分ける。
-    params.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|`);
-    // 飲み始めが範囲より前でも、範囲に掛かっていれば出したいので少し遡って引く。
-    params.append("occurrence", `ge${addDays(rangeStart, -ORAL_LOOKBACK_DAYS)}`);
+    params.set("category", category);
+    params.append("occurrence", `ge${addDays(rangeStart, -lookbackDays)}`);
     params.append("occurrence", `le${rangeEnd}`);
     params.set("status:not", "revoked,entered-in-error");
     params.append("_revinclude", "MedicationRequest:based-on");
+    params.append("_revinclude", "Task:focus");
     params.set("_count", String(CHART_PRESCRIPTION_PAGE));
     params.set("_offset", String(page * CHART_PRESCRIPTION_PAGE));
     params.set("_sort", "occurrence");
 
     const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-    const pageOrders = resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest");
-    orders.push(...pageOrders);
+    orders.push(...resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest"));
     medicationRequests.push(
       ...resourcesOfType<fhir4.MedicationRequest>(bundle, "MedicationRequest"),
     );
+    tasks.push(...resourcesOfType<fhir4.Task>(bundle, "Task"));
 
     // _revinclude のぶんも件数に数えられるので、ヘッダの数では終わりを判定できない。
     if ((bundle.entry?.length ?? 0) < CHART_PRESCRIPTION_PAGE) break;
   }
 
-  return { orders, medicationRequests };
+  return { orders, medicationRequests, tasks };
 }
 
 /**
@@ -7529,7 +7533,40 @@ export function usePatientChartPrescriptions(
 ) {
   return useQuery({
     queryKey: ["ServiceRequest", "search", "patient-chart-rx", patientId, rangeStart, rangeEnd],
-    queryFn: () => fetchChartPrescriptions(patientId ?? "", rangeStart, rangeEnd),
+    queryFn: () =>
+      fetchChartMedicationOrders(
+        patientId ?? "",
+        // 処方はオーダー種別(order-type)を持たず、処方区分の system で見分ける。
+        `${PRESCRIPTION_CATEGORY_SYSTEM}|`,
+        // 飲み始めが範囲より前でも、範囲に掛かっていれば出したいので少し遡って引く。
+        ORAL_LOOKBACK_DAYS,
+        rangeStart,
+        rangeEnd,
+      ),
+    enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * チャートの薬剤の行に出す注射オーダー(1 日 1 オーダー)。化学療法の日オーダーも
+ * 注射オーダーなので含まれる。
+ */
+export function usePatientChartInjections(
+  patientId: string | undefined,
+  rangeStart: string,
+  rangeEnd: string,
+) {
+  return useQuery({
+    queryKey: ["ServiceRequest", "search", "patient-chart-injection", patientId, rangeStart, rangeEnd],
+    queryFn: () =>
+      fetchChartMedicationOrders(
+        patientId ?? "",
+        `${ORDER_TYPE_SYSTEM}|${INJECTION_ORDER_TYPE.code}`,
+        0,
+        rangeStart,
+        rangeEnd,
+      ),
     enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
     placeholderData: keepPreviousData,
   });

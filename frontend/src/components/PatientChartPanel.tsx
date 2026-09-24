@@ -1,6 +1,8 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KarteDetailTarget } from "../karteUrl";
 import type {
+  ChartDrugSegment,
+  ChartDrugTrack,
   ChartEvent,
   ChartEventKind,
   ChartLaneData,
@@ -8,6 +10,7 @@ import type {
   ChartRange,
 } from "../fhir/chartDefinitionHelpers";
 import {
+  CHART_DRUG_CHANGE_LABELS,
   CHART_EVENT_KINDS,
   chartEventKindLabel,
   chartSegmentBreaks,
@@ -51,6 +54,8 @@ interface PatientChartPanelProps {
   range: ChartRange;
   lanes: ChartLaneData[];
   events: ChartEvent[];
+  /** 追う薬剤ごとの行(帯の種別の下に並べる)。 */
+  drugTracks?: ChartDrugTrack[];
   /** 帯に出す種別(定義で ON にしたもの)。 */
   eventKinds: ChartEventKind[];
   /** 全項目を 1 つのグラフに重ねる。 */
@@ -66,6 +71,7 @@ export function PatientChartPanel({
   range,
   lanes,
   events,
+  drugTracks = [],
   eventKinds,
   overlay,
   values,
@@ -129,9 +135,22 @@ export function PatientChartPanel({
 
   // 節目のイベント(手術・入退院)だけ各レーンにも縦線を落とす。検査・注射は件数が多く、
   // すべて線にすると値の動きが読めなくなるので帯の印だけにする。
-  const markerLines = events
-    .filter((event) => !event.end && (event.kind === "surgery" || event.kind === "encounter"))
-    .map((event) => ({ x: toX(epochOf(event.at)), kind: event.kind }));
+  // 薬剤は開始・用量の変わり目・途切れた所に線を落とす(治療の前後で値を比べる目印)。
+  const markerLines: MarkerLine[] = [
+    ...events
+      .filter((event) => !event.end && (event.kind === "surgery" || event.kind === "encounter"))
+      .map((event) => ({ x: toX(epochOf(event.at)), kind: event.kind })),
+    ...drugTracks.flatMap((track) =>
+      track.segments
+        .flatMap((segment) => [
+          epochOf(segment.start),
+          ...(segment.stops ? [epochOf(segment.end) + DAY_MS] : []),
+        ])
+        // 範囲の外で起きた変わり目は端に寄せて描かない。
+        .filter((t) => t > range.tMin && t < range.tMax)
+        .map((t) => ({ x: toX(t), kind: "drug" })),
+    ),
+  ];
 
   const shownKinds = CHART_EVENT_KINDS.filter((entry) => eventKinds.includes(entry.kind)).map(
     (entry) => entry.kind,
@@ -139,7 +158,8 @@ export function PatientChartPanel({
 
   // グラフの高さはパネルの残りを使い切る。入りきらない(項目が多い・ペインが低い)ときは
   // 最小の高さで止めて本文を送る。
-  const bandHeight = shownKinds.length > 0 ? BAND_TOP + shownKinds.length * BAND_ROW_HEIGHT + 6 : 0;
+  const bandRows = shownKinds.length + drugTracks.length;
+  const bandHeight = bandRows > 0 ? BAND_TOP + bandRows * BAND_ROW_HEIGHT + 6 : 0;
   const laneCount = overlay ? 1 : Math.max(1, lanes.length);
   const blocks = laneCount + (bandHeight > 0 ? 1 : 0);
   const free = size.height - bandHeight - Math.max(0, blocks - 1) * BODY_GAP;
@@ -149,10 +169,11 @@ export function PatientChartPanel({
 
   return (
     <div className="patient-chart__body" ref={bodyRef}>
-      {shownKinds.length > 0 && (
+      {bandRows > 0 && (
         <EventBand
           kinds={shownKinds}
           events={events}
+          drugTracks={drugTracks}
           range={range}
           vbWidth={vbWidth}
           toX={toX}
@@ -207,6 +228,7 @@ export function PatientChartPanel({
 interface EventBandProps {
   kinds: ChartEventKind[];
   events: ChartEvent[];
+  drugTracks: ChartDrugTrack[];
   range: ChartRange;
   vbWidth: number;
   toX: (t: number) => number;
@@ -218,6 +240,7 @@ interface EventBandProps {
 function EventBand({
   kinds,
   events,
+  drugTracks,
   range,
   vbWidth,
   toX,
@@ -225,7 +248,7 @@ function EventBand({
   todayX,
   onOpenDetail,
 }: EventBandProps) {
-  const height = BAND_TOP + kinds.length * BAND_ROW_HEIGHT + 6;
+  const height = BAND_TOP + (kinds.length + drugTracks.length) * BAND_ROW_HEIGHT + 6;
 
   return (
     <div className="patient-chart__band">
@@ -270,9 +293,138 @@ function EventBand({
             </g>
           );
         })}
+        {drugTracks.map((track, index) => (
+          <DrugRow
+            key={track.key}
+            track={track}
+            y={BAND_TOP + (kinds.length + index) * BAND_ROW_HEIGHT}
+            vbWidth={vbWidth}
+            range={range}
+            toX={toX}
+            onOpenDetail={onOpenDetail}
+          />
+        ))}
       </svg>
     </div>
   );
+}
+
+/** 行ラベルの幅(左の余白から間をとったぶん)。 */
+const ROW_LABEL_WIDTH = MARGIN.left - 12;
+
+/** 薬剤 1 つぶんの行。用量が同じ期間をバーにし、増量・減量は区間の頭に ▲ / ▼ を置く。 */
+function DrugRow({
+  track,
+  y,
+  vbWidth,
+  range,
+  toX,
+  onOpenDetail,
+}: {
+  track: ChartDrugTrack;
+  y: number;
+  vbWidth: number;
+  range: ChartRange;
+  toX: (t: number) => number;
+  onOpenDetail?: (target: KarteDetailTarget) => void;
+}) {
+  const open = (target: KarteDetailTarget | undefined) =>
+    target && onOpenDetail ? () => onOpenDetail(target) : undefined;
+  const starts = track.segments.map((segment) => Math.max(toX(epochOf(segment.start)), toX(range.tMin)));
+
+  return (
+    <g className="patient-chart__drug">
+      <text className="patient-chart__band-label" x={MARGIN.left - 8} y={y + 12} textAnchor="end">
+        <title>{track.name}</title>
+        {clipLabel(track.name, ROW_LABEL_WIDTH) || [...track.name].slice(0, 5).join("")}
+      </text>
+      <line
+        className="patient-chart__band-rule"
+        x1={MARGIN.left}
+        x2={vbWidth - MARGIN.right}
+        y1={y + 8}
+        y2={y + 8}
+      />
+      {track.segments.map((segment, i) => (
+        <DrugSegmentBar
+          key={segment.start}
+          segment={segment}
+          y={y}
+          start={starts[i]}
+          clipped={epochOf(segment.start) < range.tMin}
+          end={Math.min(toX(epochOf(segment.end) + DAY_MS), toX(range.tMax))}
+          room={(starts[i + 1] ?? vbWidth - MARGIN.right) - starts[i]}
+          onClick={open(segment.target)}
+        />
+      ))}
+      {track.marks.map((mark, i) => {
+        const x = toX(epochOf(mark.at));
+        const onClick = open(mark.target);
+        return (
+          <g
+            key={`${mark.at}/${i}`}
+            className={onClick ? "patient-chart__event--clickable" : undefined}
+            onClick={onClick}
+          >
+            <title>{`${mark.at} ${mark.detail}`}</title>
+            <path className="patient-chart__marker" d={`M${x - 4},${y + 2} L${x + 4},${y + 2} L${x},${y + 10} Z`} />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+function DrugSegmentBar({
+  segment,
+  y,
+  start,
+  end,
+  clipped,
+  room,
+  onClick,
+}: {
+  segment: ChartDrugSegment;
+  y: number;
+  start: number;
+  end: number;
+  /** 範囲より前から続いている(変わり目は範囲の外なので ▲ / ▼ を出さない)。 */
+  clipped: boolean;
+  room: number;
+  onClick?: () => void;
+}) {
+  const width = Math.max(2, end - start);
+  const arrow = !clipped && (segment.change === "increase" || segment.change === "decrease");
+  const labelX = start + (arrow ? 12 : 4);
+  const label = clipLabel(segment.label, Math.min(width, room) - (labelX - start) - 4);
+  return (
+    <g className={onClick ? "patient-chart__event--clickable" : undefined} onClick={onClick}>
+      <title>{segment.detail}</title>
+      <rect className="patient-chart__bar" x={start} y={y + 3} width={width} height={10} rx={2} />
+      {arrow && (
+        <path
+          className={`patient-chart__dose-change patient-chart__dose-change--${segment.change}`}
+          aria-label={CHART_DRUG_CHANGE_LABELS[segment.change]}
+          d={
+            segment.change === "increase"
+              ? `M${start + 2},${y + 12} L${start + 10},${y + 12} L${start + 6},${y + 4} Z`
+              : `M${start + 2},${y + 4} L${start + 10},${y + 4} L${start + 6},${y + 12} Z`
+          }
+        />
+      )}
+      {label && (
+        <text className="patient-chart__bar-label" x={labelX} y={y + 11.5}>
+          {label}
+        </text>
+      )}
+    </g>
+  );
+}
+
+/** レーンに落とす縦線。kind は CSS の修飾子(イベント種別か "drug")。 */
+interface MarkerLine {
+  x: number;
+  kind: string;
 }
 
 /** 点の上に出す数値の字の大きさ。 */
@@ -551,7 +703,7 @@ interface OverlayChartProps {
   toX: (t: number) => number;
   boundaries: number[];
   todayX: number | null;
-  markerLines: { x: number; kind: ChartEventKind }[];
+  markerLines: MarkerLine[];
   hoverT: number | null;
   onHover: (t: number | null) => void;
   columnLabels: { x: number; text: string }[];
@@ -826,7 +978,7 @@ interface ChartLaneProps {
   toX: (t: number) => number;
   boundaries: number[];
   todayX: number | null;
-  markerLines: { x: number; kind: ChartEventKind }[];
+  markerLines: MarkerLine[];
   hoverT: number | null;
   onHover: (t: number | null) => void;
   columnLabels: { x: number; text: string }[];

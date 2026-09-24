@@ -34,6 +34,7 @@ RSpec.describe "Master::ChartDefinitions", type: :request do
           "components" => [{ "code" => "8480-6", "name" => "収縮期" }, { "code" => "8462-4", "name" => "拡張期" }] }
       ],
       "events" => %w[encounter surgery],
+      "drugs" => [{ "key" => "yj7:3332001", "name" => "ワルファリン", "yj7" => "3332001", "codes" => ["613330003"] }],
       "overlay" => true
     }
   end
