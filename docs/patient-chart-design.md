@@ -74,8 +74,9 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
 - 薬剤の `codes` には、その成分・投与経路の薬剤のレセ電コードを薬価基準コードから集めて入れる
   (YJ コードを持たない処方も拾うため)。
 - 同じ名前の院内共通の定義があれば上書きしない(施設で直した内容を戻さない)。
-- 本番は起動時に `db:prepare` を流すだけで、既存の DB では seed が走らない。本番に入れるなら
-  migration から `ChartDefinitionPresets.load!` を呼ぶ。
+- 本番は起動時に `db:prepare` を流すだけで、既存の DB では seed が走らないので、同じ処理を
+  migration(`20260924120000_seed_chart_definition_presets`)からも呼んで入れる。プリセットを
+  足したときは、新しい migration から `ChartDefinitionPresets.load!` を呼び直す(既存は上書きしない)。
 
 ## 2. 持ち主は 3 段階
 
