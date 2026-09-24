@@ -32,8 +32,11 @@ import { TemplateSelect } from "./TemplateSelect";
 // モーダル内で行い、登録時に組み立て済みの QuestionnaireResponse を親へ返す。
 // ここでは FHIR サーバーへ保存しない — 保存は診療記録本体と同じ
 // transaction Bundle で行う(親フォーム側の責務)。
+//
+// 中身(TemplateEntryForm)はモーダルに入れずに埋め込むこともできる
+// (診療記録の記載形式「テンプレート」は右ペインに直接記入フォームを出す)。
 
-interface TemplateEntryModalProps {
+interface TemplateEntryFormProps {
   patientId: string;
   // 再編集の元。未保存の記入内容(draft)か、保存済み QR の id のどちらか。
   // 両方 null なら新規記入(テンプレート選択から始める)。
@@ -51,19 +54,39 @@ interface TemplateEntryModalProps {
    * 特別指示は未対応なので、黙って作られないと気づけない旨をここで断る。
    */
   extractsObservations?: boolean;
+  /**
+   * 新規記入で使うテンプレートの Questionnaire.id を呼び出し側が選ぶとき渡す
+   * (空文字 = 未選択)。渡した場合はテンプレート選択を出さない。
+   */
+  questionnaireId?: string;
+  submitLabel?: string;
+  submitting?: boolean;
   onSubmit: (draft: TemplateDraft) => void;
+}
+
+interface TemplateEntryModalProps extends TemplateEntryFormProps {
   onClose: () => void;
 }
 
-export function TemplateEntryModal({
+export function TemplateEntryModal({ onClose, ...props }: TemplateEntryModalProps) {
+  return (
+    <Modal title="テンプレート記載" onClose={onClose} className="modal--wide">
+      <TemplateEntryForm {...props} />
+    </Modal>
+  );
+}
+
+export function TemplateEntryForm({
   patientId,
   draft,
   responseId,
   defaultCanonical,
   extractsObservations = false,
+  questionnaireId: selectedQuestionnaireId,
+  submitLabel = "記載を反映",
+  submitting = false,
   onSubmit,
-  onClose,
-}: TemplateEntryModalProps) {
+}: TemplateEntryFormProps) {
   const { data: patientResult, error: patientError } = usePatient(patientId);
   const patient = patientResult?.data;
 
@@ -77,18 +100,20 @@ export function TemplateEntryModal({
 
   // 新規記入: 有効なテンプレートから選択。
   const options = useQuestionnaireOptions({ status: "active" });
-  const [questionnaireId, setQuestionnaireId] = useState("");
+  const [ownQuestionnaireId, setQuestionnaireId] = useState("");
+  const selectsOwn = selectedQuestionnaireId === undefined;
+  const questionnaireId = selectedQuestionnaireId ?? ownQuestionnaireId;
 
   // 既定テンプレートは候補が届いてから当てる(選択済みなら触らない)。
   // 版まで一致しなければ URL だけで拾い、版が上がっても指し先を見失わないようにする。
   useEffect(() => {
-    if (!defaultCanonical || questionnaireId || options.questionnaires.length === 0) return;
+    if (!selectsOwn || !defaultCanonical || questionnaireId || options.questionnaires.length === 0) return;
     const url = defaultCanonical.split("|")[0];
     const found =
       options.questionnaires.find((q) => questionnaireCanonical(q) === defaultCanonical) ??
       options.questionnaires.find((q) => q.url === url);
     if (found?.id) setQuestionnaireId(found.id);
-  }, [defaultCanonical, options.questionnaires, questionnaireId]);
+  }, [selectsOwn, defaultCanonical, options.questionnaires, questionnaireId]);
 
   const questionnaire =
     draft?.questionnaire ??
@@ -97,16 +122,22 @@ export function TemplateEntryModal({
       : options.questionnaires.find((q) => q.id === questionnaireId));
   const initialResponse = draft?.response ?? (needsFetch ? savedResponse.data?.data : undefined);
 
-  const [meta, setMeta] = useState(() =>
-    initialResponse ? parseQuestionnaireResponseMeta(initialResponse) : emptyQuestionnaireResponseMeta(),
-  );
-  const [validationError, setValidationError] = useState<string | null>(null);
-
   // 記入者名はログイン中の医療従事者で補完(QuestionnaireResponseCreatePage と同じ規約)。
   const loginAutofill = useLoginAutofillSource();
   const loginPractitionerName = loginAutofill.source
     ? displayJapaneseName(loginAutofill.source.practitioner.name)
     : "";
+  const selfInstitutionNumber = useSelfInstitutionNumber();
+
+  // 取得済みの記入者名・自院の番号は初期値に入れておく(登録情報の欄が揃った状態で
+  // 描画され、折り畳まれて出る)。まだ取得中なら下の effect が後から流し込む。
+  const [meta, setMeta] = useState(() =>
+    initialResponse
+      ? parseQuestionnaireResponseMeta(initialResponse)
+      : { ...emptyQuestionnaireResponseMeta(selfInstitutionNumber), authorName: loginPractitionerName },
+  );
+  const [validationError, setValidationError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!loginPractitionerName) return;
     setMeta((prev) => (prev.authorName ? prev : { ...prev, authorName: loginPractitionerName }));
@@ -114,7 +145,6 @@ export function TemplateEntryModal({
 
   // 保険医療機関番号は自院(管理 > 施設設定)の登録値で埋める。記入者名と同じく
   // 取得が非同期なので、仮の初期値のままのときだけ後から流し込む。
-  const selfInstitutionNumber = useSelfInstitutionNumber();
   useEffect(() => {
     if (!selfInstitutionNumber) return;
     setMeta((prev) =>
@@ -175,7 +205,7 @@ export function TemplateEntryModal({
     (!initialResponse && (options.isLoading || populate.isLoading || !loginAutofill.ready));
 
   return (
-    <Modal title="テンプレート記載" onClose={onClose} className="modal--wide">
+    <>
       <ErrorBanner error={patientError} />
       <ErrorBanner error={options.error} />
       <ErrorBanner error={savedResponse.error} />
@@ -193,6 +223,7 @@ export function TemplateEntryModal({
         <>
           {/* 新規記入時のみテンプレートを選ばせる。再編集では元テンプレート固定。 */}
           {!initialResponse &&
+            selectsOwn &&
             (options.questionnaires.length === 0 ? (
               <p className="patient-table__empty">
                 有効なテンプレートがありません。先にテンプレートを作成し、ステータスを「有効」にしてください。
@@ -223,7 +254,8 @@ export function TemplateEntryModal({
               questionnaire={questionnaire}
               initialResponse={initialResponse}
               onSubmit={handleSubmit}
-              submitLabel="記載を反映"
+              submitLabel={submitLabel}
+              submitting={submitting}
               expressionContext={initialResponse ? undefined : expressionContext}
               loginAutofill={initialResponse ? undefined : loginAutofill.source}
             >
@@ -232,6 +264,6 @@ export function TemplateEntryModal({
           )}
         </>
       )}
-    </Modal>
+    </>
   );
 }

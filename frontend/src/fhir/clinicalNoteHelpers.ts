@@ -132,7 +132,8 @@ export const FREE_TEXT_SECTION_CODE = "77599-9" satisfies SectionCode;
 const SOAP_SECTION_CODES = ["61150-9", "61149-1", "51848-0", "18776-5"] as const;
 
 // 記載形式。SOAP は複数セクション、自由記載は 1 セクション(自由記載)のみ。
-export type ClinicalNoteMode = "soap" | "free";
+// テンプレートは自由記載と同じ 1 セクションで、本文はテンプレート回答の平文。
+export type ClinicalNoteMode = "soap" | "free" | "template";
 
 export function sectionTitle(code: string | undefined): string {
   return SECTION_OPTIONS.find((o) => o.code === code)?.title ?? "";
@@ -194,6 +195,8 @@ export interface ClinicalNoteSectionDraft {
   html: string;
   // テンプレート由来のセクションであることの印。undefined なら通常の手入力。
   template?: TemplateBinding;
+  // 保存するセクションの見出し。未指定なら種別の既定(sectionOptions の title)。
+  title?: string;
 }
 
 export interface ClinicalNoteFormValues {
@@ -214,7 +217,7 @@ export function newSectionDraft(code: string): ClinicalNoteSectionDraft {
 // 記載形式ごとのセクション初期形。モード切替時はこれで作り直す
 // (入力済みの本文は引き継がない)。
 export function defaultSectionsForMode(mode: ClinicalNoteMode): ClinicalNoteSectionDraft[] {
-  return mode === "free"
+  return mode !== "soap"
     ? [newSectionDraft(FREE_TEXT_SECTION_CODE)]
     : SOAP_SECTION_CODES.map(newSectionDraft);
 }
@@ -445,7 +448,7 @@ export function buildBodySections(
       }
 
       return {
-        title: option?.title ?? s.code,
+        title: s.title || (option?.title ?? s.code),
         extension,
         code: {
           coding: [{ system: LOINC_SYSTEM, code: s.code, display: option?.display }],
@@ -668,8 +671,14 @@ export function parseClinicalNoteForm(composition: fhir4.Composition): ClinicalN
 
   return {
     // 記載形式は保存されないので構成から復元する。自由記載セクション 1 つだけなら
-    // 自由記載モード、それ以外(複数セクション・SOAP 系コード)は SOAP モード。
-    mode: sections.length === 1 && sections[0].code === FREE_TEXT_SECTION_CODE ? "free" : "soap",
+    // 自由記載モード(テンプレート由来ならテンプレートモード)、それ以外
+    // (複数セクション・SOAP 系コード)は SOAP モード。
+    mode:
+      sections.length === 1 && sections[0].code === FREE_TEXT_SECTION_CODE
+        ? sections[0].template
+          ? "template"
+          : "free"
+        : "soap",
     title: composition.title ?? "",
     status: composition.status === "preliminary" ? "preliminary" : "final",
     date: toDateTimeInput(composition.date),

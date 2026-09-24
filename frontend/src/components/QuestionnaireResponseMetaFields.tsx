@@ -47,6 +47,9 @@ export function QuestionnaireResponseMetaFields({
       className="qp-group qp-meta"
       open={open}
       onToggle={(e) => {
+        // open 属性を描画で変えたときにも toggle は(非同期に)届く。状態と一致する
+        // ものはその通知なので、ユーザーの開閉として扱わない(扱うと自動で閉じなくなる)。
+        if (e.currentTarget.open === open) return;
         pinned.current = true;
         setOpen(e.currentTarget.open);
       }}

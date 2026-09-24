@@ -5188,6 +5188,97 @@ fieldset.rp-card {
   min-height: 360px;
 }
 
+/* 記録情報。本文の入力欄を広く取れるよう、見出しを入力欄の左に置いて
+   固定の行(記載形式 / テンプレート / タイトル・対象プロブレム / 記録日時・ステータス)
+   に並べ、枠の高さを詰める。 */
+.patient-form fieldset.clinical-note-form__info {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 6px 12px 12px;
+  --control-height: 28px;
+}
+
+.clinical-note-form__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+/* 2 行(タイトル・記録日時)の 2 列目の頭を揃える。 */
+.patient-form .clinical-note-form__row > label:first-child {
+  min-width: 230px;
+}
+
+.patient-form .clinical-note-form__info label,
+.clinical-note-form__info .clinical-note-form__mode {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.clinical-note-form__info .clinical-note-form__mode-legend {
+  font-size: 12px;
+}
+
+.clinical-note-form__info .clinical-note-form__mode-options {
+  gap: 10px;
+  padding: 0;
+}
+
+.patient-form .clinical-note-form__info .clinical-note-form__mode-option {
+  font-size: 14px;
+}
+
+.patient-form .clinical-note-form__info input:not([type="radio"]),
+.patient-form .clinical-note-form__info select {
+  font-size: 14px;
+  padding: 0 6px;
+}
+
+.patient-form .clinical-note-form__info input[type="text"] {
+  width: 160px;
+}
+
+.patient-form .clinical-note-form__info label select {
+  max-width: 220px;
+}
+
+/* テンプレートの選択。記載形式の「テンプレート」の右に置き、見出しは出さない。
+   残りの幅いっぱいまで伸ばして候補名を読めるようにする。 */
+.clinical-note-form__template {
+  flex: 1;
+  min-width: 200px;
+  font-size: 14px;
+}
+
+.clinical-note-form__template .template-select {
+  width: 100%;
+  max-width: 420px;
+}
+
+.clinical-note-form__template .template-select .qp-field__label {
+  display: none;
+}
+
+.clinical-note-form__template .template-select__trigger {
+  padding: 0 6px;
+  font-size: 14px;
+}
+
+.clinical-note-form__template-name {
+  color: var(--text-h);
+}
+
+/* テンプレートの記入フォームは記録のフォームの外(兄弟)に置くので、同じ幅に揃える。 */
+.clinical-note-form__template-entry {
+  max-width: 880px;
+  margin-top: 16px;
+}
+
 /* セクション一覧。.patient-form fieldset の横並びを打ち消して縦に積む
    (.practitioner-form__role と同じパターン)。 */
 .clinical-note-form__sections {
