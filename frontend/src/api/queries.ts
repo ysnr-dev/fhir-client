@@ -4272,6 +4272,29 @@ export async function fetchLabArrivalContext(orderId: string): Promise<LabArriva
   };
 }
 
+/**
+ * 患者番号(取込ファイルの PID-3)から患者を引く。同じ値の別体系の識別子が当たることが
+ * あるので、院内の患者番号(DEFAULT_IDENTIFIER_SYSTEM)の一致を優先する。
+ */
+export async function fetchPatientByNumber(number: string): Promise<fhir4.Patient | null> {
+  if (!number) return null;
+  const params = new URLSearchParams();
+  params.set("identifier", number);
+  params.set("_count", "10");
+
+  const { data: bundle } = await searchResource<fhir4.Patient>("Patient", params);
+  const patients = (bundle.entry ?? [])
+    .map((entry) => entry.resource)
+    .filter((resource): resource is fhir4.Patient => resource?.resourceType === "Patient");
+  const exact = patients.find((patient) =>
+    patient.identifier?.some(
+      (identifier) =>
+        identifier.system === DEFAULT_IDENTIFIER_SYSTEM && identifier.value === number,
+    ),
+  );
+  return exact ?? patients[0] ?? null;
+}
+
 /** ラベル番号から管(Specimen)を引く。到着確認のスキャン逆引き。 */
 export async function fetchLabelSpecimenByNumber(number: string): Promise<fhir4.Specimen | null> {
   const params = new URLSearchParams();
@@ -4431,7 +4454,7 @@ async function fetchOrderCandidates(
   return candidates;
 }
 
-function fetchLabOrderCandidates(patientId: string): Promise<LabOrderCandidate[]> {
+export function fetchLabOrderCandidates(patientId: string): Promise<LabOrderCandidate[]> {
   return fetchOrderCandidates(patientId, LAB_ORDER_TYPE.code, (header, itemRequests) =>
     labOrderLabel(header, labOrderItems(header, itemRequests)),
   );
@@ -4634,15 +4657,20 @@ export function useUpdatePrescription() {
   });
 }
 
-export function useLabResultDetail(reportId: string | undefined) {
+/** 保存済みの検査結果(レポート + 結果 + 検体)を 1 リクエストで読む。 */
+export function fetchLabResultDetail(reportId: string) {
   const params = new URLSearchParams();
-  if (reportId) params.set("_id", reportId);
+  params.set("_id", reportId);
   params.append("_include", "DiagnosticReport:result");
   params.append("_include", "DiagnosticReport:specimen");
 
+  return searchResource<fhir4.Resource>("DiagnosticReport", params);
+}
+
+export function useLabResultDetail(reportId: string | undefined) {
   return useQuery({
     queryKey: ["DiagnosticReport", "detail", reportId],
-    queryFn: () => searchResource<fhir4.Resource>("DiagnosticReport", params),
+    queryFn: () => fetchLabResultDetail(reportId as string),
     enabled: Boolean(reportId),
   });
 }

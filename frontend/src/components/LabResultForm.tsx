@@ -1,7 +1,6 @@
 import { makeFieldUpdater } from "../lib/form";
 import { Fragment, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
-import { useCurrentPractitioner } from "../api/authQueries";
-import { useSelfDepartments, useSelfOrganization, type LabOrderCandidate } from "../api/queries";
+import { useSelfDepartments, type LabOrderCandidate } from "../api/queries";
 import type { LabResultItem } from "../api/masterClient";
 import {
   useLabOrderResultLines,
@@ -26,8 +25,7 @@ import {
   type LabResultSetting,
   type LabResultSubject,
 } from "../fhir/labResultHelpers";
-import { organizationDisplayName } from "../fhir/organizationHelpers";
-import { practitionerDisplayName } from "../fhir/practitionerHelpers";
+import { useLabResultPerformerDefaults } from "../hooks/useLabResultPerformerDefaults";
 import { ErrorBanner } from "./ErrorBanner";
 import { LabResultItemSearchModal } from "./LabResultItemSearchModal";
 
@@ -186,35 +184,21 @@ export function LabResultForm({
   const [conclusionOpen, setConclusionOpen] = useState(Boolean(initialValues?.conclusion));
   const { departments } = useSelfDepartments();
 
-  // 実施施設・実施者。画面には出さず、自院とログインユーザーを保存時に焼き付ける
-  // (空欄のときだけ入れるので、編集しても最初に登録した人が残る)。
-  const selfOrganization = useSelfOrganization();
-  const { practitionerId, practitioner } = useCurrentPractitioner();
+  // 実施施設・実施者。画面には出さず、自院とログインユーザーを保存時に焼き付ける。
+  const { fill: fillPerformer } = useLabResultPerformerDefaults();
 
   useEffect(() => {
-    const organization = selfOrganization.organization;
     setValues((v) => {
-      const performer = v.performer;
-      const organizationId = performer.organizationId || (organization?.id ?? "");
-      const practitionerRef = performer.practitionerId || (practitionerId ?? "");
-      if (organizationId === performer.organizationId && practitionerRef === performer.practitionerId) {
+      const performer = fillPerformer(v.performer);
+      if (
+        performer.organizationId === v.performer.organizationId &&
+        performer.practitionerId === v.performer.practitionerId
+      ) {
         return v;
       }
-      return {
-        ...v,
-        performer: {
-          organizationId,
-          organizationName:
-            performer.organizationName ||
-            (organization ? organizationDisplayName(organization) : ""),
-          practitionerId: practitionerRef,
-          practitionerName:
-            performer.practitionerName ||
-            (practitioner ? practitionerDisplayName(practitioner) : ""),
-        },
-      };
+      return { ...v, performer };
     });
-  }, [selfOrganization.organization, practitionerId, practitioner]);
+  }, [fillPerformer]);
 
   // 画面上でオーダーを選び直したときだけ検査項目を展開する(初期表示時の
   // 紐付け済みオーダーで、保存済みの検査項目を上書きしてしまわないようにする)。

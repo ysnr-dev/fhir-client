@@ -983,6 +983,28 @@ button:disabled {
   color: var(--text-h);
 }
 
+/* ファイル選択のボタンはブラウザ既定のままだと地の色に埋もれるので、
+   他のボタンと同じ見た目に揃える(ボタン本体は疑似要素なので個別に当てる)。
+   取込画面はどれも同じ作りなので .master-import-form にまとめて当てる。 */
+.master-import-form input[type="file"] {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.master-import-form input[type="file"]::file-selector-button {
+  font: inherit;
+  font-size: 14px;
+  height: var(--control-height);
+  padding: 0 12px;
+  margin-right: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-bg);
+  cursor: pointer;
+}
+
 .master-import-form__hint {
   margin: 0;
   font-size: 13px;
@@ -19017,3 +19039,173 @@ button.chemo-calendar__cell[draggable="true"] {
   grid-column: 1 / -1;
 }
 
+
+/* 検査結果取込(部門業務 > 臨床検査部門 > 検査結果取込)。
+   候補(ORC/OBR 群)1 件 = カード 1 枚で、その中に結果の行を並べる。 */
+.lab-import-summary {
+  color: var(--text);
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.lab-import-card {
+  background: var(--surface-card);
+  box-shadow: var(--surface-card-shadow);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.lab-import-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lab-import-card__header > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.lab-import-card__header span {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.lab-import-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lab-import-card__link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.lab-import-card__link label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lab-import-card__warning {
+  color: var(--color-danger, #c62828);
+}
+
+/* 列が多いので見出しは折り返さず、狭いときは横スクロールにする
+   (1 文字ずつ縦に流れてしまうのを防ぐ)。 */
+.lab-import-card__table {
+  overflow-x: auto;
+}
+
+.lab-import-card__table th {
+  white-space: nowrap;
+}
+
+.lab-import-card__table td small {
+  display: block;
+  color: var(--text);
+  font-size: 11px;
+}
+
+/* 1 行に 1 結果なので行数が多い。上下の余白と行内ボタンを詰めて 1 画面に入る数を増やす
+   (患者一覧の操作列と同じやり方。line-height を明示しないと padding を削っても
+   font: inherit の行送りが残って縮まない)。 */
+.lab-import-card__table td {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.lab-import-card__table td button,
+.lab-import-card__table td .button,
+.lab-import-card__table td select,
+.lab-import-card__table td input {
+  --control-height: 26px;
+  padding: 2px 10px;
+  line-height: 20px;
+}
+
+/* 保留の行。人が結果項目か値を決めるまで登録できない。 */
+.lab-import-row--pending > td {
+  background: var(--surface-stripe);
+}
+
+.lab-import-row__reason {
+  display: block;
+  color: var(--color-danger, #c62828);
+  font-size: 12px;
+}
+
+.lab-import-resolve {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  min-width: 420px;
+}
+
+.lab-import-resolve__source {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.lab-import-resolve__source dt {
+  color: var(--text);
+}
+
+.lab-import-resolve__source dd {
+  margin: 0;
+}
+
+.lab-import-resolve__candidates,
+.lab-import-resolve__selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.lab-import-resolve__candidates p {
+  width: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.lab-import-resolve__options {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.lab-import-resolve__conflict {
+  margin: 0;
+  color: var(--color-danger, #c62828);
+  font-size: 13px;
+}
+
+.lab-import-resolve__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.lab-import-resolve label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}

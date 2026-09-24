@@ -124,6 +124,8 @@ import { QuestionnaireListPage } from "./pages/QuestionnaireListPage";
 import { QuestionnairePreviewPage } from "./pages/QuestionnairePreviewPage";
 import { OutpatientListPage } from "./pages/OutpatientListPage";
 import { LabArrivalPage } from "./pages/LabArrivalPage";
+import { LabResultImportPage } from "./pages/LabResultImportPage";
+import { LabResultImportDetailPage } from "./pages/LabResultImportDetailPage";
 import { LabWorklistPage } from "./pages/LabWorklistPage";
 import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { RxWorklistPage } from "./pages/RxWorklistPage";
@@ -192,67 +194,95 @@ function App() {
             </Link>
           </HoverMenu>
           {/* 部門業務は「依頼を受けた側」の画面。診療科がオーダーを出す患者一覧・カルテと、
-              マスタメンテの間に置く。放射線以外の部門が増えたらここに並べる。 */}
+              マスタメンテの間に置く。項目が増えたのでマスタメンテと同じく部門ごとに
+              入れ子にする(1 項目だけの部門も並びを揃えるためサブメニューにする)。 */}
           <HoverMenu label="部門業務">
-            <Link to="/lab-worklist" className="row-menu__item">
-              検体検査一覧
-            </Link>
-            <Link to="/lab-arrivals" className="row-menu__item">
-              検体到着確認
-            </Link>
-            <Link to="/patho-worklist" className="row-menu__item">
-              病理検査一覧
-            </Link>
-            <Link to="/rad-worklist" className="row-menu__item">
-              放射線検査一覧
-            </Link>
-            <Link to="/physio-worklist" className="row-menu__item">
-              生理検査一覧
-            </Link>
-            <Link to="/endoscopy-worklist" className="row-menu__item">
-              内視鏡一覧
-            </Link>
-            <Link to="/treatment-worklist" className="row-menu__item">
-              処置一覧
-            </Link>
-            <Link to="/surgery-worklist" className="row-menu__item">
-              手術一覧
-            </Link>
-            {/* 手術一覧が「その日の手術を 1 件ずつ処理する」画面なのに対し、
-                カレンダーは「空いているところを探して日程を組む」画面。 */}
-            <Link to="/surgery-calendar" className="row-menu__item">
-              手術カレンダー
-            </Link>
-            {/* 輸血は依頼を受けてから製剤を払い出すまでが部門の仕事で、投与は病棟。
-                作りは他の部門一覧と同じなのでここに並べる。 */}
-            <Link to="/transfusion-worklist" className="row-menu__item">
-              輸血一覧
-            </Link>
-            {/* 放射線治療は装置 × 時刻のカレンダーで照射の予定と実績を見る(右に治療コースの一覧)。 */}
-            <Link to="/radiotherapy-worklist" className="row-menu__item">
-              放射線治療カレンダー
-            </Link>
+            <SubMenu label="臨床検査部門">
+              <Link to="/lab-worklist" className="row-menu__item">
+                検体検査一覧
+              </Link>
+              <Link to="/lab-arrivals" className="row-menu__item">
+                検体到着確認
+              </Link>
+              {/* 検査室・分析装置・外注ラボから受け取った結果ファイルを読み込む
+                  (docs/lab-result-import-design.md)。 */}
+              <Link to="/lab-result-imports" className="row-menu__item">
+                検査結果取込
+              </Link>
+            </SubMenu>
+            <SubMenu label="病理部門">
+              <Link to="/patho-worklist" className="row-menu__item">
+                病理検査一覧
+              </Link>
+            </SubMenu>
+            <SubMenu label="放射線部門">
+              <Link to="/rad-worklist" className="row-menu__item">
+                放射線検査一覧
+              </Link>
+              {/* 放射線治療は装置 × 時刻のカレンダーで照射の予定と実績を見る(右に治療コースの一覧)。 */}
+              <Link to="/radiotherapy-worklist" className="row-menu__item">
+                放射線治療カレンダー
+              </Link>
+            </SubMenu>
+            <SubMenu label="生理検査部門">
+              <Link to="/physio-worklist" className="row-menu__item">
+                生理検査一覧
+              </Link>
+            </SubMenu>
+            <SubMenu label="内視鏡部門">
+              <Link to="/endoscopy-worklist" className="row-menu__item">
+                内視鏡一覧
+              </Link>
+            </SubMenu>
+            <SubMenu label="手術部門">
+              <Link to="/surgery-worklist" className="row-menu__item">
+                手術一覧
+              </Link>
+              {/* 手術一覧が「その日の手術を 1 件ずつ処理する」画面なのに対し、
+                  カレンダーは「空いているところを探して日程を組む」画面。 */}
+              <Link to="/surgery-calendar" className="row-menu__item">
+                手術カレンダー
+              </Link>
+            </SubMenu>
+            {/* 輸血は依頼を受けてから製剤を払い出すまでが部門の仕事で、投与は病棟。 */}
+            <SubMenu label="輸血部門">
+              <Link to="/transfusion-worklist" className="row-menu__item">
+                輸血一覧
+              </Link>
+            </SubMenu>
             {/* リハビリは他の部門一覧と違い「その日に効いている期間オーダー」を並べる
                 (1 オーダーが数か月続き、実施が日々積み上がる)。 */}
-            <Link to="/rehab-worklist" className="row-menu__item">
-              リハビリ一覧
-            </Link>
-            {/* 栄養指導もリハビリと同じ期間継続型(1 オーダーに初回・継続の指導が
-                積み上がる)なので、リハビリの隣に置く。 */}
-            <Link to="/nutrition-guidance-worklist" className="row-menu__item">
-              栄養指導一覧
-            </Link>
-            <Link to="/rx-worklist" className="row-menu__item">
-              処方一覧
-            </Link>
-            <Link to="/injection-worklist" className="row-menu__item">
-              注射一覧
-            </Link>
+            <SubMenu label="リハビリ部門">
+              <Link to="/rehab-worklist" className="row-menu__item">
+                リハビリ一覧
+              </Link>
+            </SubMenu>
+            {/* 栄養指導もリハビリと同じ期間継続型(1 オーダーに初回・継続の指導が積み上がる)。 */}
+            <SubMenu label="栄養部門">
+              <Link to="/nutrition-guidance-worklist" className="row-menu__item">
+                栄養指導一覧
+              </Link>
+            </SubMenu>
+            <SubMenu label="薬剤部門">
+              <Link to="/rx-worklist" className="row-menu__item">
+                処方一覧
+              </Link>
+              <Link to="/injection-worklist" className="row-menu__item">
+                注射一覧
+              </Link>
+            </SubMenu>
+            <SubMenu label="処置">
+              <Link to="/treatment-worklist" className="row-menu__item">
+                処置一覧
+              </Link>
+            </SubMenu>
             {/* 化学療法室は注射一覧(オーダー軸)と違い、その日の予約(時間割)で回る部門なので
                 別の面にする(docs/chemo-regimen-design.md §7.6 E-7)。 */}
-            <Link to="/chemo-room-worklist" className="row-menu__item">
-              外来化学療法室
-            </Link>
+            <SubMenu label="外来化学療法室">
+              <Link to="/chemo-room-worklist" className="row-menu__item">
+                外来化学療法室
+              </Link>
+            </SubMenu>
           </HoverMenu>
           {/* 予約枠は診療科がオーダーを出す前段(いつ診るかを決める)なので、
               部門業務とマスタメンテの間に独立して置く。 */}
@@ -600,6 +630,8 @@ function App() {
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}
           <Route path="/lab-worklist" element={<LabWorklistPage />} />
           <Route path="/lab-arrivals" element={<LabArrivalPage />} />
+          <Route path="/lab-result-imports" element={<LabResultImportPage />} />
+          <Route path="/lab-result-imports/:id" element={<LabResultImportDetailPage />} />
           <Route path="/patho-worklist" element={<PathoWorklistPage />} />
           <Route path="/transfusion-worklist" element={<TransfusionWorklistPage />} />
           <Route path="/rehab-worklist" element={<RehabWorklistPage />} />

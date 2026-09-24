@@ -350,6 +350,15 @@ Rails.application.routes.draw do
         post :copy
       end
     end
+
+    # 検体検査結果の取込(JAHIS 臨床検査データ交換規約 / HL7 v2.5)。オーダーセットと
+    # 同じく現場の作業データだが、認証・CSRF・エラー整形を基底と共有するためここに置く。
+    resources :lab_result_imports, only: %i[index show create destroy] do
+      member { post :resolve }
+    end
+    resources :lab_result_import_rows, only: %i[update] do
+      collection { patch :bulk_update }
+    end
     # チャート定義(どの項目を並べ、どのイベントを重ねるか)。患者を持たない雛形なので
     # オーダーセットと同じくここに置く(docs/patient-chart-design.md)。
     resources :chart_definitions, only: %i[index show create update destroy]

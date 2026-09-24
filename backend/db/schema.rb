@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_23_150000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_24_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -142,6 +142,80 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_23_150000) do
     t.datetime "updated_at", null: false
     t.index ["code"], name: "index_file_categories_on_code", unique: true
     t.index ["name"], name: "index_file_categories_on_name", unique: true
+  end
+
+  create_table "lab_result_import_rows", force: :cascade do |t|
+    t.bigint "lab_result_import_id", null: false
+    t.integer "group_no", null: false
+    t.integer "sequence", null: false
+    t.string "patient_number"
+    t.string "patient_name"
+    t.date "patient_birth_date"
+    t.string "patient_sex"
+    t.string "setting"
+    t.string "placer_order_number"
+    t.string "filler_order_number"
+    t.jsonb "specimen_ids", default: [], null: false
+    t.string "label_number"
+    t.string "specimen_material_code"
+    t.string "specimen_material_name"
+    t.datetime "collected_at"
+    t.datetime "reported_at"
+    t.string "report_status"
+    t.text "report_comment"
+    t.string "external_code"
+    t.string "external_name"
+    t.string "external_code_system"
+    t.string "jlac10_code"
+    t.string "jlac11_code"
+    t.string "value_type"
+    t.string "value"
+    t.string "value_text"
+    t.string "value_code_system"
+    t.string "unit"
+    t.string "reference_range"
+    t.string "abnormal_flag"
+    t.string "observation_status"
+    t.datetime "observed_at"
+    t.text "note"
+    t.string "result_item_code"
+    t.string "resolution"
+    t.string "status", default: "pending", null: false
+    t.string "pending_reason"
+    t.jsonb "candidate_item_codes", default: [], null: false
+    t.string "patient_fhir_id"
+    t.string "order_fhir_id"
+    t.string "report_fhir_id"
+    t.datetime "registered_at"
+    t.string "registered_by_practitioner_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["lab_result_import_id", "external_code"], name: "index_lab_result_import_rows_on_import_and_code"
+    t.index ["lab_result_import_id", "group_no", "sequence"], name: "index_lab_result_import_rows_on_position"
+    t.index ["lab_result_import_id", "status"], name: "index_lab_result_import_rows_on_import_and_status"
+    t.index ["label_number"], name: "index_lab_result_import_rows_on_label_number"
+    t.index ["report_fhir_id"], name: "index_lab_result_import_rows_on_report_fhir_id"
+  end
+
+  create_table "lab_result_imports", force: :cascade do |t|
+    t.string "source"
+    t.string "format", default: "hl7_v25", null: false
+    t.string "message_type"
+    t.string "encoding"
+    t.string "encoding_reason"
+    t.string "file_name"
+    t.string "message_control_id"
+    t.datetime "message_datetime"
+    t.string "imported_by_login_id"
+    t.string "imported_by_practitioner_id"
+    t.integer "row_count", default: 0, null: false
+    t.integer "skipped_count", default: 0, null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_lab_result_imports_on_created_at"
+    t.index ["message_control_id"], name: "index_lab_result_imports_on_message_control_id"
+    t.index ["source"], name: "index_lab_result_imports_on_source"
   end
 
   create_table "master_comment_relations", force: :cascade do |t|
