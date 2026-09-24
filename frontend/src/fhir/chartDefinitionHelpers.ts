@@ -29,6 +29,12 @@ import {
 } from "./prescriptionHelpers";
 import type { MedicineLineDisplay } from "./prescriptionHelpers";
 import { orderDay } from "./shared";
+import {
+  conditionCategoryOf,
+  outcomeDisplay,
+  problemLabel,
+  problemSucceededByIds,
+} from "./conditionHelpers";
 import { INJECTION_ORDER_TYPE } from "./injectionHelpers";
 import { RAD_ORDER_TYPE } from "./radOrderHelpers";
 import { ENDOSCOPY_ORDER_TYPE } from "./endoscopyOrderHelpers";
@@ -73,6 +79,7 @@ export interface ChartAxis {
 }
 
 export type ChartEventKind =
+  | "condition"
   | "encounter"
   | "surgery"
   | "chemo"
@@ -108,6 +115,7 @@ export interface ChartDefinitionBody {
 }
 
 export const CHART_EVENT_KINDS: ReadonlyArray<{ kind: ChartEventKind; label: string }> = [
+  { kind: "condition", label: "病名" },
   { kind: "encounter", label: "入退院" },
   { kind: "surgery", label: "手術" },
   { kind: "chemo", label: "化学療法" },
@@ -669,6 +677,8 @@ export interface ChartEvent {
   detail: string;
   /** カルテのオーダー詳細モーダルを開く先。持たないイベント(入退院)もある。 */
   target?: KarteDetailTarget;
+  /** 点の印の横に出す短い名前(病名の「確定」など)。無ければ印だけ。 */
+  mark?: string;
 }
 
 export function chartEventKindLabel(kind: ChartEventKind): string {
@@ -1267,6 +1277,42 @@ export function buildDrugTracks(
         .sort((a, b) => a.at.localeCompare(b.at)),
     };
   });
+}
+
+/**
+ * 病名(プロブレムのみ)。開始日と転帰日を点にする。保険病名は数が多く節目を埋もれさせる
+ * ので出さない。
+ *
+ * - 開始日: 「の疑い」なら「疑い」、疑いのプロブレムから引き継がれた(problem-succeeded-by)
+ *   ものなら「確定」、それ以外は「開始」。
+ * - 転帰日: 転帰(治癒・軽快・中止)。疑いが確定に引き継がれて閉じたものは、確定の印と
+ *   同じことを 2 度描かないので出さない。
+ */
+export function buildConditionChartEvents(conditions: fhir4.Condition[]): ChartEvent[] {
+  const problems = conditions.filter((condition) => conditionCategoryOf(condition) === "problem");
+  const isSuspected = (condition: fhir4.Condition) =>
+    condition.verificationStatus?.coding?.some((coding) => coding.code === "provisional") ?? false;
+  const confirmedFromSuspected = new Set(
+    problems.filter(isSuspected).flatMap((condition) => problemSucceededByIds(condition)),
+  );
+
+  const events: ChartEvent[] = [];
+  for (const condition of problems) {
+    const name = problemLabel(condition);
+    const suspected = isSuspected(condition);
+    const onset = condition.onsetDateTime?.slice(0, 10);
+    if (onset) {
+      const mark = suspected ? "疑い" : confirmedFromSuspected.has(condition.id ?? "") ? "確定" : "開始";
+      events.push({ at: onset, kind: "condition", label: `${mark} ${name}`, detail: onset, mark });
+    }
+    const end = condition.abatementDateTime?.slice(0, 10);
+    const handedOver = suspected && problemSucceededByIds(condition).length > 0;
+    if (end && !handedOver) {
+      const mark = outcomeDisplay(condition.clinicalStatus?.coding?.[0]?.code) || "終了";
+      events.push({ at: end, kind: "condition", label: `${mark} ${name}`, detail: end, mark });
+    }
+  }
+  return events;
 }
 
 /** 範囲に掛かるイベントだけ(期間バーは端が外でも中に入っていれば残す)。 */

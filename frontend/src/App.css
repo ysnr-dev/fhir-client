@@ -3949,6 +3949,14 @@ fieldset.rp-card {
   opacity: 0.35;
 }
 
+.patient-chart__event--condition {
+  color: #15803d;
+}
+
+:root[data-theme="dark"] .patient-chart__event--condition {
+  color: #4ade80;
+}
+
 .patient-chart__event--encounter {
   color: #5b6b7c;
 }

@@ -4,6 +4,7 @@ import { useChartDefinitionMutations, useChartDefinitions } from "../api/masterQ
 import {
   usePatientChartObservations,
   usePatientEncounterEvents,
+  useKarteConditions,
   usePatientChartInjections,
   usePatientChartPrescriptions,
   usePatientPerformedProcedures,
@@ -29,6 +30,7 @@ import {
   centeredBaseDate,
   buildDrugTracks,
   buildChemoChartEvents,
+  buildConditionChartEvents,
   buildEncounterChartEvents,
   buildPrescriptionChartEvents,
   buildProcedureChartEvents,
@@ -602,6 +604,15 @@ function useChartEvents(
 ): ChartEvent[] {
   const wants = (kind: ChartEventKind) => (kinds.includes(kind) ? patientId : undefined);
 
+  // 病名はカルテのプロブレム一覧と同じ検索(キャッシュを分け合う)。
+  const conditionQuery = useKarteConditions(wants("condition"));
+  // conditions は描画のたびに作り直される配列なので、元の data で束ねる。
+  const conditionData = conditionQuery.data;
+  const conditions = useMemo(
+    () => (conditionData ? conditionQuery.conditions : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conditionData],
+  );
   const encounters = usePatientEncounterEvents(wants("encounter"), rangeStart, rangeEnd);
   const surgeries = usePatientSurgeryPerforms(wants("surgery"), rangeStart, rangeEnd);
   const applications = useRegimenApplications(wants("chemo"));
@@ -630,6 +641,7 @@ function useChartEvents(
 
   return useMemo(() => {
     const events: ChartEvent[] = [];
+    if (conditions) events.push(...buildConditionChartEvents(conditions));
     if (encounters.data) {
       events.push(
         ...buildEncounterChartEvents(encounters.data.events, encounters.data.stays, rangeEnd),
@@ -656,6 +668,7 @@ function useChartEvents(
     }
     return events;
   }, [
+    conditions,
     encounters.data,
     surgeries.data,
     applications.data,

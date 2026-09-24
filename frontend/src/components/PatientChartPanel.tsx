@@ -178,7 +178,7 @@ export function PatientChartPanel({
   const todayT = epochOf(new Date().toISOString().slice(0, 10));
   const todayX = todayT >= range.tMin && todayT <= range.tMax ? toX(todayT) : null;
 
-  // 節目のイベント(手術・入退院)だけ各レーンにも縦線を落とす。検査・注射は件数が多く、
+  // 節目のイベント(病名・手術・入退院)だけ各レーンにも縦線を落とす。検査・注射は件数が多く、
   // すべて線にすると値の動きが読めなくなるので帯の印だけにする。
   // 薬剤は開始・用量の変わり目・途切れた所に線を落とす(治療の前後で値を比べる目印)。
   const anchorT = anchor ? epochOf(anchor) : null;
@@ -186,7 +186,11 @@ export function PatientChartPanel({
   const markerLines: MarkerLine[] = [
     ...(anchorX !== null ? [{ x: anchorX, kind: "anchor" }] : []),
     ...events
-      .filter((event) => !event.end && (event.kind === "surgery" || event.kind === "encounter"))
+      .filter(
+        (event) =>
+          !event.end &&
+          (event.kind === "condition" || event.kind === "surgery" || event.kind === "encounter"),
+      )
       .map((event) => ({ x: toX(epochOf(event.at)), kind: event.kind })),
     ...drugTracks.flatMap((track) =>
       track.segments
@@ -694,10 +698,24 @@ function EventMark({
   }
 
   const x = toX(epochOf(event.at));
+  // 名前は隣の印までの余地に丸ごと入るときだけ出し、入らなければ短い名前(「確定」)に落とす
+  // (「疑い #…」のように途中で切ると何の印か読めない)。
+  const text = !event.mark
+    ? ""
+    : clipLabel(event.label, room - 12) === event.label
+      ? event.label
+      : room >= 12 + event.mark.length * 10
+        ? event.mark
+        : "";
   return (
     <g className={className} onClick={handleClick}>
       {title}
       <path className="patient-chart__marker" d={`M${x - 4},${y + 2} L${x + 4},${y + 2} L${x},${y + 10} Z`} />
+      {text && (
+        <text className="patient-chart__bar-label" x={x + 6} y={y + 11.5}>
+          {text}
+        </text>
+      )}
     </g>
   );
 }
