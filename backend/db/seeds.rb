@@ -1584,3 +1584,15 @@ if File.exist?(radiotherapy_protocols_json)
 else
   puts "master_radiotherapy_protocols: #{radiotherapy_protocols_json} not found, skipped"
 end
+
+# 疾患別のチャート定義(院内共通)の初期値。db/seed_data/chart_definition_presets.json の項目を
+# 検査結果項目・薬剤マスタから引いて作る(ChartDefinitionPresets)。マスタに無い検査項目は落とす。
+# 同じ名前の院内共通の定義があれば上書きしない。
+chart_presets_json = Rails.root.join("db/seed_data/chart_definition_presets.json")
+if File.exist?(chart_presets_json)
+  result = ChartDefinitionPresets.load!(chart_presets_json)
+  puts "chart_definitions presets: created #{result.created} (kept #{result.kept})"
+  puts "  skipped items: #{result.skipped_items.join(', ')}" if result.skipped_items.any?
+else
+  puts "chart_definitions presets: #{chart_presets_json} not found, skipped"
+end

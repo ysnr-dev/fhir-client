@@ -66,6 +66,8 @@ interface PatientChartPanelProps {
   values?: boolean;
   /** 全画面かどうか。幅が変わるので測り直す合図に使う。 */
   fullscreen?: boolean;
+  /** 値を読み込み中。「値がありません」と出さない。 */
+  loading?: boolean;
   /** 前後を見る基準にしている日。各グラフに線を引き、ツールチップに日数を出す。 */
   anchor?: string;
   /** クリックした点・イベントの日を基準にして前後を見る。 */
@@ -100,6 +102,7 @@ export function PatientChartPanel({
   overlay,
   values,
   fullscreen,
+  loading,
   anchor,
   onAnchor,
   onOpenDetail,
@@ -254,6 +257,7 @@ export function PatientChartPanel({
           onHover={setHoverT}
           columnLabels={columnLabels}
           anchor={anchor}
+          loading={loading}
           onPickPoint={(event, point, series) => pointPicker(series.source, series.name)(event, point)}
         />
       ) : (
@@ -273,6 +277,7 @@ export function PatientChartPanel({
             onHover={setHoverT}
             columnLabels={columnLabels}
             anchor={anchor}
+            loading={loading}
             onPickPoint={pointPicker(lane.source, lane.name)}
           />
         ))
@@ -891,6 +896,7 @@ interface OverlayChartProps {
   onHover: (t: number | null) => void;
   columnLabels: { x: number; text: string }[];
   anchor?: string;
+  loading?: boolean;
   onPickPoint: (event: React.MouseEvent, point: ChartPoint, series: OverlaySeries) => void;
 }
 
@@ -909,6 +915,7 @@ function OverlayChart({
   onHover,
   columnLabels,
   anchor,
+  loading,
   onPickPoint,
 }: OverlayChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -1087,7 +1094,7 @@ function OverlayChart({
               y={height / 2}
               textAnchor="middle"
             >
-              この期間に値がありません
+              {loading ? "読み込み中..." : "この期間に値がありません"}
             </text>
           )}
         </svg>
@@ -1173,6 +1180,7 @@ interface ChartLaneProps {
   onHover: (t: number | null) => void;
   columnLabels: { x: number; text: string }[];
   anchor?: string;
+  loading?: boolean;
   onPickPoint: PointPick;
 }
 
@@ -1190,6 +1198,7 @@ function ChartLane({
   onHover,
   columnLabels,
   anchor,
+  loading,
   onPickPoint,
 }: ChartLaneProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -1388,7 +1397,7 @@ function ChartLane({
             ))}
           {!hasPoints && (
             <text className="patient-chart__no-data" x={vbWidth / 2} y={height / 2} textAnchor="middle">
-              この期間に値がありません
+              {loading ? "読み込み中..." : "この期間に値がありません"}
             </text>
           )}
         </svg>

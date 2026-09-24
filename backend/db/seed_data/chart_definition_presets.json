@@ -1,0 +1,114 @@
+[
+  {
+    "name": "糖尿病",
+    "axis": { "unit": "month", "columns": 24 },
+    "items": [
+      { "lab": "160010010" },
+      { "lab": "160019410" },
+      { "lab": "160019210" },
+      { "vital": "29463-7" }
+    ],
+    "drugs": [
+      { "name": "メトホルミン", "yj7": "3962002" },
+      { "name": "プレドニゾロン", "yj7": "2456001" }
+    ],
+    "events": ["condition", "encounter"],
+    "overlay": false
+  },
+  {
+    "name": "慢性腎臓病",
+    "axis": { "unit": "month", "columns": 36 },
+    "items": [
+      { "lab": "160019210" },
+      { "lab": "160019010" },
+      { "lab": "160021410" },
+      { "lab": "160004810-01" },
+      { "lab": "160008010-03" },
+      { "vital": "85354-9" }
+    ],
+    "drugs": [],
+    "events": ["condition", "encounter", "exam"],
+    "overlay": false
+  },
+  {
+    "name": "心不全",
+    "axis": { "unit": "month", "columns": 12 },
+    "items": [
+      { "vital": "29463-7" },
+      { "vital": "85354-9" },
+      { "lab": "160162350" },
+      { "lab": "160181250" },
+      { "lab": "160019210" },
+      { "lab": "160021410" },
+      { "lab": "160021110-01" }
+    ],
+    "drugs": [
+      { "name": "フロセミド", "yj7": "2139005" },
+      { "name": "スピロノラクトン", "yj7": "2133001" },
+      { "name": "トルバプタン", "yj7": "2139011" }
+    ],
+    "events": ["condition", "encounter"],
+    "overlay": false
+  },
+  {
+    "name": "関節リウマチ",
+    "axis": { "unit": "month", "columns": 24 },
+    "items": [
+      { "lab": "160054710" },
+      { "lab": "160007610" },
+      { "lab": "160173150" },
+      { "lab": "160008010-01" },
+      { "lab": "160008010-03" }
+    ],
+    "drugs": [
+      { "name": "メトトレキサート", "yj7": "3999016" },
+      { "name": "プレドニゾロン", "yj7": "2456001" }
+    ],
+    "events": ["condition", "encounter", "injection"],
+    "overlay": false
+  },
+  {
+    "name": "甲状腺",
+    "axis": { "unit": "month", "columns": 24 },
+    "items": [
+      { "lab": "160031710" },
+      { "lab": "160033310" }
+    ],
+    "drugs": [
+      { "name": "レボチロキシン", "yj7": "2431004" },
+      { "name": "チアマゾール", "yj7": "2432001" }
+    ],
+    "events": ["condition", "surgery"],
+    "overlay": false
+  },
+  {
+    "name": "ワルファリン",
+    "axis": { "unit": "month", "columns": 6 },
+    "items": [
+      { "lab": "160012010-03" },
+      { "lab": "160008010-03" }
+    ],
+    "drugs": [
+      { "name": "ワルファリン", "yj7": "3332001" }
+    ],
+    "events": ["condition", "encounter", "surgery"],
+    "overlay": false
+  },
+  {
+    "name": "がん化学療法",
+    "axis": { "unit": "month", "columns": 12 },
+    "items": [
+      { "lab": "160008010-01" },
+      { "lab": "160008010-03" },
+      { "lab": "160008010-05" },
+      { "lab": "160022510" },
+      { "lab": "160022610" },
+      { "lab": "160019210" },
+      { "lab": "160036510" },
+      { "lab": "160037210" }
+    ],
+    "drugs": [],
+    "events": ["condition", "surgery", "chemo", "radiotherapy", "exam"],
+    "overlay": false
+  }
+]

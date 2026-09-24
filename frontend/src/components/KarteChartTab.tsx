@@ -495,6 +495,8 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           overlay={overlay}
           values={values}
           fullscreen={fullscreen}
+          // 別のチャートに切り替えた直後は前の値が仮に入っている(項目が違うので点にならない)。
+          loading={observations.isLoading || observations.isPlaceholderData}
           anchor={parsed.anchor}
           onAnchor={(date) =>
             updateView({ ...parsed, anchor: date, baseDate: centeredBaseDate(date, { unit, columns }) })
