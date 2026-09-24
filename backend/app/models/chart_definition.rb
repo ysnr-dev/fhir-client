@@ -13,7 +13,9 @@
 #         "codings": [{ "system": "...", "code": "0001", "display": "WBC" }] },
 #       { "key": "vital:85354-9", "source": "vital", "name": "血圧", "unit": "mmHg",
 #         "codings": [{ "system": "http://loinc.org", "code": "85354-9" }],
-#         "components": [{ "code": "8480-6", "name": "収縮期" }, { "code": "8462-4", "name": "拡張期" }] } ],
+#         "components": [{ "code": "8480-6", "name": "収縮期" }, { "code": "8462-4", "name": "拡張期" }] },
+#       { "key": "template:<id>:edema", "source": "template", "name": "浮腫", "unit": "",
+#         "codings": [...], "options": [{ "code": "none", "display": "なし" }, { "code": "mild", "display": "軽度" }] } ],
 #     "events": ["encounter", "surgery"],
 #     "drugs": [{ "key": "yj7:3332001", "name": "ワルファリン", "yj7": "3332001", "codes": ["613330003"] }],
 #     "overlay": false }
@@ -32,10 +34,11 @@ class ChartDefinition < ApplicationRecord
   # 画面が使う範囲(日 7〜92 / 月 3〜36 / 年 1〜10)より広く取る。単位ごとの妥当な
   # 範囲は画面の都合なので、ここでは桁が壊れていないことだけを見る。
   COLUMNS_RANGE = (1..120)
-  ITEM_KEYS = %w[key source name unit codings components].freeze
+  ITEM_KEYS = %w[key source name unit codings components options].freeze
   ITEM_SOURCES = %w[lab vital template].freeze
   CODING_KEYS = %w[system code display].freeze
   COMPONENT_KEYS = %w[code name].freeze
+  OPTION_KEYS = %w[system code display].freeze
   EVENT_KINDS = %w[condition encounter surgery chemo radiotherapy exam injection prescription].freeze
   MAX_ITEMS = 30
   DRUG_KEYS = %w[key name yj7 codes].freeze
@@ -162,6 +165,32 @@ class ChartDefinition < ApplicationRecord
 
     validate_codings(item["codings"], label)
     validate_components(item["components"], label)
+    validate_options(item["options"], label)
+  end
+
+  # テンプレートの選択肢項目の選択肢。並び順を程度の順として画面が使う。
+  def validate_options(options, label)
+    return if options.nil?
+    return errors.add(:definition, "#{label} の options は配列で指定してください") unless options.is_a?(Array)
+
+    options.each_with_index do |option, index|
+      unless option.is_a?(Hash)
+        next errors.add(:definition, "#{label} の options[#{index}] は連想配列で指定してください")
+      end
+
+      unknown = option.keys - OPTION_KEYS
+      if unknown.any?
+        errors.add(:definition, "#{label} の options[#{index}] に対象外の項目があります(#{unknown.join(', ')})")
+      end
+      %w[code display].each do |key|
+        next if option[key].is_a?(String) && option[key].present?
+
+        errors.add(:definition, "#{label} の options[#{index}].#{key} は必須です")
+      end
+      if option.key?("system") && !option["system"].is_a?(String)
+        errors.add(:definition, "#{label} の options[#{index}].system は文字列で指定してください")
+      end
+    end
   end
 
   def validate_codings(codings, label)

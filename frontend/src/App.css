@@ -4046,6 +4046,41 @@ fieldset.rp-card {
   overflow-wrap: anywhere;
 }
 
+/* 選択肢の項目(症状の程度など)の行。程度が重いほど濃く塗る。最も軽い(「なし」)は縁だけ。 */
+.patient-chart__choice {
+  color: #0369a1;
+}
+
+:root[data-theme="dark"] .patient-chart__choice {
+  color: #38bdf8;
+}
+
+.patient-chart__level {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1;
+}
+
+.patient-chart__level--0 {
+  fill-opacity: 0;
+}
+
+.patient-chart__level--1 {
+  fill-opacity: 0.3;
+}
+
+.patient-chart__level--2 {
+  fill-opacity: 0.55;
+}
+
+.patient-chart__level--3 {
+  fill-opacity: 0.8;
+}
+
+.patient-chart__level--4 {
+  fill-opacity: 1;
+}
+
 /* 追う薬剤の行と、レーンに落とす開始・変わり目・途切れの線。 */
 .patient-chart__drug,
 .patient-chart__event--drug {

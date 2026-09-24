@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KarteDetailTarget } from "../karteUrl";
 import type {
+  ChartChoiceTrack,
   ChartDrugSegment,
   ChartDrugTrack,
   ChartEvent,
@@ -58,6 +59,8 @@ interface PatientChartPanelProps {
   events: ChartEvent[];
   /** 追う薬剤ごとの行(帯の種別の下に並べる)。 */
   drugTracks?: ChartDrugTrack[];
+  /** 選択肢の項目ごとの行(薬剤の下に並べる)。 */
+  choiceTracks?: ChartChoiceTrack[];
   /** 帯に出す種別(定義で ON にしたもの)。 */
   eventKinds: ChartEventKind[];
   /** 全項目を 1 つのグラフに重ねる。 */
@@ -98,6 +101,7 @@ export function PatientChartPanel({
   lanes,
   events,
   drugTracks = [],
+  choiceTracks = [],
   eventKinds,
   overlay,
   values,
@@ -213,7 +217,7 @@ export function PatientChartPanel({
 
   // グラフの高さはパネルの残りを使い切る。入りきらない(項目が多い・ペインが低い)ときは
   // 最小の高さで止めて本文を送る。
-  const bandRows = shownKinds.length + drugTracks.length;
+  const bandRows = shownKinds.length + drugTracks.length + choiceTracks.length;
   const bandHeight = bandRows > 0 ? BAND_TOP + bandRows * BAND_ROW_HEIGHT + 6 : 0;
   const laneCount = overlay ? 1 : Math.max(1, lanes.length);
   const blocks = laneCount + (bandHeight > 0 ? 1 : 0);
@@ -229,6 +233,10 @@ export function PatientChartPanel({
           kinds={shownKinds}
           events={events}
           drugTracks={drugTracks}
+          choiceTracks={choiceTracks}
+          onOpenResponse={
+            onOpenDetail ? (responseId) => onOpenDetail({ kind: "qr", id: responseId }) : undefined
+          }
           range={range}
           vbWidth={vbWidth}
           toX={toX}
@@ -240,7 +248,8 @@ export function PatientChartPanel({
         />
       )}
       {lanes.length === 0 ? (
-        <p className="patient-chart__empty">項目が登録されていません。</p>
+        // 薬剤・選択肢の行だけのチャートは帯だけで足りる。
+        bandRows === 0 && <p className="patient-chart__empty">項目が登録されていません。</p>
       ) : overlay ? (
         <OverlayChart
           lanes={lanes}
@@ -359,6 +368,8 @@ interface EventBandProps {
   kinds: ChartEventKind[];
   events: ChartEvent[];
   drugTracks: ChartDrugTrack[];
+  choiceTracks: ChartChoiceTrack[];
+  onOpenResponse?: (responseId: string) => void;
   range: ChartRange;
   vbWidth: number;
   toX: (t: number) => number;
@@ -373,6 +384,8 @@ function EventBand({
   kinds,
   events,
   drugTracks,
+  choiceTracks,
+  onOpenResponse,
   range,
   vbWidth,
   toX,
@@ -382,7 +395,8 @@ function EventBand({
   anchor,
   onPick,
 }: EventBandProps) {
-  const height = BAND_TOP + (kinds.length + drugTracks.length) * BAND_ROW_HEIGHT + 6;
+  const rows = kinds.length + drugTracks.length + choiceTracks.length;
+  const height = BAND_TOP + rows * BAND_ROW_HEIGHT + 6;
 
   return (
     <div className="patient-chart__band">
@@ -449,6 +463,18 @@ function EventBand({
             onPick={onPick}
           />
         ))}
+        {choiceTracks.map((track, index) => (
+          <ChoiceRow
+            key={track.key}
+            track={track}
+            y={BAND_TOP + (kinds.length + drugTracks.length + index) * BAND_ROW_HEIGHT}
+            vbWidth={vbWidth}
+            toX={toX}
+            anchor={anchor}
+            onPick={onPick}
+            onOpenResponse={onOpenResponse}
+          />
+        ))}
       </svg>
     </div>
   );
@@ -460,8 +486,84 @@ function withRelative(text: string, at: string, anchor: string | undefined): str
   return relative ? `${text}(${relative})` : text;
 }
 
-/** 行ラベルの幅(左の余白から間をとったぶん)。 */
-const ROW_LABEL_WIDTH = MARGIN.left - 12;
+/**
+ * 選択肢の項目 1 つぶんの行。記録ごとに四角を置き、選択肢の程度で色の濃さを変える
+ * (「なし」は縁だけ)。隣の記録までに収まれば選んだ名前も出す。
+ */
+function ChoiceRow({
+  track,
+  y,
+  vbWidth,
+  toX,
+  anchor,
+  onPick,
+  onOpenResponse,
+}: {
+  track: ChartChoiceTrack;
+  y: number;
+  vbWidth: number;
+  toX: (t: number) => number;
+  anchor?: string;
+  onPick: OnPick;
+  onOpenResponse?: (responseId: string) => void;
+}) {
+  const xs = track.marks.map((mark) => toX(epochOf(mark.at)));
+  return (
+    <g className="patient-chart__choice">
+      <text className="patient-chart__band-label" x={MARGIN.left - 8} y={y + 12} textAnchor="end">
+        <title>{track.name}</title>
+        {clipLabel(track.name, ROW_LABEL_WIDTH) || [...track.name].slice(0, 5).join("")}
+      </text>
+      <line
+        className="patient-chart__band-rule"
+        x1={MARGIN.left}
+        x2={vbWidth - MARGIN.right}
+        y1={y + 8}
+        y2={y + 8}
+      />
+      {track.marks.map((mark, i) => {
+        const x = xs[i];
+        const room = (xs[i + 1] ?? vbWidth - MARGIN.right) - x;
+        const label = clipLabel(mark.label, room - 12) === mark.label ? mark.label : "";
+        const responseId = mark.responseId;
+        return (
+          <g
+            key={mark.at}
+            className="patient-chart__event--clickable"
+            onClick={(event) =>
+              onPick(event, {
+                title: `${track.name} ${mark.label} ${formatPointDate(mark.at)}`,
+                at: mark.at,
+                open: responseId && onOpenResponse ? () => onOpenResponse(responseId) : undefined,
+              })
+            }
+          >
+            <title>{withRelative(`${formatPointDate(mark.at)} ${track.name} ${mark.label}`, mark.at, anchor)}</title>
+            <rect
+              className={`patient-chart__level patient-chart__level--${mark.level}`}
+              x={x - 4}
+              y={y + 3}
+              width={8}
+              height={10}
+              rx={1.5}
+            />
+            {label && (
+              <text className="patient-chart__bar-label" x={x + 7} y={y + 11.5}>
+                {label}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/**
+ * 行ラベルの幅(左の余白から間をとったぶん)。clipLabel は 10px の字で測るので、
+ * 11px の行ラベル(.patient-chart__band-label)に合わせて 10/11 に縮めて渡す。
+ */
+const ROW_LABEL_WIDTH = Math.floor(((MARGIN.left - 12) * 10) / 11);
 
 /** 薬剤 1 つぶんの行。用量が同じ期間をバーにし、増量・減量は区間の頭に ▲ / ▼ を置く。 */
 function DrugRow({

@@ -27,6 +27,7 @@ import {
   CHART_AXIS_UNIT_LABELS,
   CHART_COLUMN_CHOICES,
   buildChartLanes,
+  buildChoiceTracks,
   centeredBaseDate,
   buildDrugTracks,
   buildChemoChartEvents,
@@ -172,6 +173,10 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
   const lanes = useMemo(
     () => buildChartLanes(body.items, observations.data ?? [], vitalThresholds),
     [body.items, observations.data, vitalThresholds],
+  );
+  const choiceTracks = useMemo(
+    () => buildChoiceTracks(body.items, observations.data ?? []),
+    [body.items, observations.data],
   );
 
   const events = useChartEvents(patientId, body.events, range.rangeStart, range.rangeEnd);
@@ -491,6 +496,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           lanes={lanes}
           events={shownEvents}
           drugTracks={drugTracks}
+          choiceTracks={choiceTracks}
           eventKinds={body.events}
           overlay={overlay}
           values={values}

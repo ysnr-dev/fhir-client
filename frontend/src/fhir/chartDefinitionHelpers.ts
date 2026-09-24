@@ -12,7 +12,7 @@ import {
   vitalInterpretationOf,
 } from "./vitalHelpers";
 import type { VitalThresholdSettings } from "./vitalHelpers";
-import { questionnaireNumericItems } from "./observationExtract";
+import { questionnaireChoiceItems, questionnaireNumericItems } from "./observationExtract";
 import { buildFlowsheetEvents, epochOf, localDateOf } from "./flowsheetEventHelpers";
 import type { EncounterStay } from "./flowsheetEventHelpers";
 import type { EncounterEvent } from "./encounterHelpers";
@@ -68,6 +68,22 @@ export interface ChartItem {
   /** Observation.code との突き合わせと、検索の code= に使う。どれか 1 つ当たればよい。 */
   codings: fhir4.Coding[];
   components?: ChartItemComponent[];
+  /**
+   * 選択肢(テンプレートの choice 項目)。あればグラフではなく帯の 1 行に並べる定性的な項目で、
+   * 並び順を程度の順(「なし」→「高度」)とみなして色の濃さを決める。
+   */
+  options?: ChartItemOption[];
+}
+
+export interface ChartItemOption {
+  system?: string;
+  code: string;
+  display: string;
+}
+
+/** 選択肢を持つ(帯の行に並べる)項目かどうか。 */
+export function isChoiceItem(item: ChartItem): boolean {
+  return Boolean(item.options?.length);
 }
 
 export type ChartAxisUnit = "day" | "month" | "year";
@@ -216,6 +232,9 @@ export function normalizeChartDefinitionBody(raw: unknown): ChartDefinitionBody 
         codings: item.codings as fhir4.Coding[],
         ...(Array.isArray(item.components) && item.components.length
           ? { components: item.components as ChartItemComponent[] }
+          : {}),
+        ...(Array.isArray(item.options) && item.options.length
+          ? { options: item.options as ChartItemOption[] }
           : {}),
       });
     }
@@ -424,16 +443,25 @@ export function vitalChartItems(): ChartItem[] {
   return items;
 }
 
-/** テンプレートの数値項目 → チャートの項目(抽出が有効なテンプレートだけ)。 */
+/** テンプレートの数値項目・選択肢項目 → チャートの項目(抽出が有効なテンプレートだけ)。 */
 export function templateChartItems(questionnaire: fhir4.Questionnaire): ChartItem[] {
   const id = questionnaire.id ?? "";
-  return questionnaireNumericItems(questionnaire).map((item) => ({
+  const numeric = questionnaireNumericItems(questionnaire).map((item) => ({
     key: `template:${id}:${item.linkId}`,
     source: "template" as const,
     name: item.text,
     unit: item.unit,
     codings: item.code,
   }));
+  const choice = questionnaireChoiceItems(questionnaire).map((item) => ({
+    key: `template:${id}:${item.linkId}`,
+    source: "template" as const,
+    name: item.text,
+    unit: "",
+    codings: item.code,
+    options: item.options,
+  }));
+  return [...numeric, ...choice];
 }
 
 /** 項目すべての coding を重複なく集める(検索の code= に渡す)。 */
@@ -629,7 +657,7 @@ export function buildChartLanes(
   observations: fhir4.Observation[],
   vitalThresholds: VitalThresholdSettings = {},
 ): ChartLaneData[] {
-  return items.map((item) => {
+  return items.filter((item) => !isChoiceItem(item)).map((item) => {
     const matched = observations.filter((observation) => matchesItem(observation, item));
     const specs = item.components?.length
       ? item.components.map((component) => ({ key: component.code, name: component.name }))
@@ -660,6 +688,73 @@ export function buildChartLanes(
     });
 
     return { key: item.key, source: item.source, name: item.name, unit: item.unit, series };
+  });
+}
+
+// ---- 選択肢の項目(定性的な記録) ----
+
+/** 選択肢の項目の 1 回の記録。 */
+export interface ChartChoiceMark {
+  at: string;
+  /** 選んだ選択肢の名前(複数選択は「、」でつなぐ)。 */
+  label: string;
+  /** 程度(0〜4)。選択肢の並び順から決める。複数選択なら重い方。 */
+  level: number;
+  /** 元の QuestionnaireResponse の id。 */
+  responseId?: string;
+}
+
+export interface ChartChoiceTrack {
+  key: string;
+  name: string;
+  marks: ChartChoiceMark[];
+}
+
+/** 色の濃さの段数。CSS の .patient-chart__level--0〜4 と対。 */
+const CHOICE_LEVELS = 5;
+
+/**
+ * 選択肢の項目ごとの行。Observation の valueCodeableConcept を選択肢と突き合わせ、
+ * 同じ日時の記録(複数選択は回答 1 つにつき 1 件の Observation になる)は 1 つにまとめる。
+ * 選択肢に無いコード(テンプレートを後から直した等)は名前だけ出して一番薄くする。
+ */
+export function buildChoiceTracks(
+  items: ChartItem[],
+  observations: fhir4.Observation[],
+): ChartChoiceTrack[] {
+  return items.filter(isChoiceItem).map((item) => {
+    const options = item.options ?? [];
+    const byTime = new Map<string, { labels: string[]; index: number; responseId?: string }>();
+    for (const observation of observations) {
+      if (!matchesItem(observation, item)) continue;
+      const at = localDateTimeOf(observationAt(observation));
+      if (!at) continue;
+      const coding = observation.valueCodeableConcept?.coding?.[0];
+      if (!coding?.code) continue;
+      const index = options.findIndex(
+        (option) =>
+          option.code === coding.code &&
+          (!option.system || !coding.system || option.system === coding.system),
+      );
+      const label =
+        index >= 0
+          ? options[index].display
+          : (coding.display ?? observation.valueCodeableConcept?.text ?? coding.code);
+      const entry = byTime.get(at) ?? { labels: [], index: -1, ...pointSource(observation) };
+      if (!entry.labels.includes(label)) entry.labels.push(label);
+      entry.index = Math.max(entry.index, index);
+      byTime.set(at, entry);
+    }
+    const steps = Math.max(1, options.length - 1);
+    const marks = [...byTime.entries()]
+      .map(([at, entry]) => ({
+        at,
+        label: entry.labels.join("、"),
+        level: entry.index < 0 ? 0 : Math.round((entry.index / steps) * (CHOICE_LEVELS - 1)),
+        ...(entry.responseId ? { responseId: entry.responseId } : {}),
+      }))
+      .sort((a, b) => a.at.localeCompare(b.at));
+    return { key: item.key, name: item.name, marks };
   });
 }
 

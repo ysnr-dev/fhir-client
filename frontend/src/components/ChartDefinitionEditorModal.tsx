@@ -257,7 +257,7 @@ export function ChartDefinitionEditorModal({
             <option value="">テンプレート項目を追加</option>
             {templateItems.map((item) => (
               <option key={item.key} value={item.key}>
-                {item.name}
+                {item.options?.length ? `${item.name}(選択肢)` : item.name}
               </option>
             ))}
           </select>
@@ -276,7 +276,7 @@ export function ChartDefinitionEditorModal({
             {items.map((item, index) => (
               <tr key={item.key}>
                 <td>{item.name}</td>
-                <td>{item.unit}</td>
+                <td>{item.options?.length ? "選択肢" : item.unit}</td>
                 <td>
                   <span className="chart-editor__source">{CHART_ITEM_SOURCE_LABELS[item.source]}</span>
                 </td>

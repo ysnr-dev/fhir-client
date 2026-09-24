@@ -55,6 +55,7 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
 | `lab` | 検査結果項目マスタ(数値型 `PQ` のみ) | 施設の結果項目コード + JLAC11 |
 | `vital` | 固定の一覧(`VITAL_MEASURES` + 血圧 + BMI) | LOINC |
 | `template` | テンプレート(`observationExtract` 有効)の integer / decimal 項目 | `Questionnaire.item.code` |
+| `template`(選択肢) | 同じテンプレートの choice 項目(項目コードと選択肢を持つもの) | `Questionnaire.item.code` + `options` |
 
 マスタ・定義から選ぶので、**その患者に値が無くても項目に足せる**(足してから値が付く
 使い方ができる。値の無い期間は「この期間に値がありません」と出す)。
@@ -168,6 +169,20 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
 - 病名には詳細モーダルが無いので、押したときのメニューは「基準日に設定」だけ。
 - 印の名前は隣の印までに丸ごと入るときだけ「確定 #2 Ｓ状結腸癌」と出し、入らなければ「確定」だけにする
   (途中で切った「確定 #…」は何の印か読めない)。
+
+## 5.1 選択肢の項目(症状などの定性的な記録)
+
+テンプレートの choice 項目(浮腫の程度・NYHA 分類など)は、グラフではなく**帯の 1 行**に並べる
+(薬剤の行の下)。項目に `options`(選択肢の code / display、並び順どおり)を持たせ、あれば
+選択肢の項目として扱う(`isChoiceItem`)。値は数値項目と同じ Observation の検索で一緒に引く
+(テンプレートの抽出は choice の回答を `valueCodeableConcept` の Observation にしている)。
+
+- 選択肢の**並び順を程度の順**とみなし(「なし」→「高度」)、記録ごとの四角の濃さを 5 段で変える。
+  最も軽いものは縁だけ。程度でない選択肢(「無 / 有」など)も並び順どおりに濃くなる。
+- 複数選択は回答 1 つにつき Observation が 1 件になるので、同じ日時のものを 1 つにまとめ、
+  名前は「、」でつなぎ、濃さは重い方にする。選択肢に無いコード(テンプレートを後から直した)は
+  名前だけ出して一番薄くする。
+- 隣の記録までに丸ごと入るときだけ選んだ名前を出す。押すと元のテンプレート記入を開ける。
 
 ## 5.2 追う薬剤の行
 

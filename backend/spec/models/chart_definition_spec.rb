@@ -103,6 +103,16 @@ RSpec.describe ChartDefinition do
       expect(build(definition: definition("items" => [item.merge("components" => [{ "code" => "8480-6" }])]))).not_to be_valid
     end
 
+    it "options は code と display が要る(テンプレートの選択肢項目)" do
+      item = { "key" => "template:q1:edema", "source" => "template", "name" => "浮腫",
+               "codings" => [{ "system" => "http://example.org/q", "code" => "edema" }] }
+      options = [{ "system" => "http://example.org/a", "code" => "none", "display" => "なし" },
+                 { "code" => "mild", "display" => "軽度" }]
+      expect(build(definition: definition("items" => [item.merge("options" => options)]))).to be_valid
+      expect(build(definition: definition("items" => [item.merge("options" => [{ "code" => "none" }])]))).not_to be_valid
+      expect(build(definition: definition("items" => [item.merge("options" => "none")]))).not_to be_valid
+    end
+
     it "events は既知の種別のみで重複できない" do
       expect(build(definition: definition("events" => %w[encounter bogus]))).not_to be_valid
       expect(build(definition: definition("events" => %w[encounter encounter]))).not_to be_valid

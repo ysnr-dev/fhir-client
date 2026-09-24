@@ -110,6 +110,42 @@ export function questionnaireNumericItems(
   return found;
 }
 
+/**
+ * テンプレートの選択肢項目(choice)。チャートの項目ピッカーが、症状の程度のような
+ * 定性的な記録を 1 行に並べる項目として出すのに使う。選択肢は並び順が程度の順
+ * (「なし」→「高度」)とみなす。抽出が無効なテンプレートと、項目コード・選択肢を
+ * 持たない項目は出さない。
+ */
+export interface QuestionnaireChoiceItem {
+  linkId: string;
+  text: string;
+  code: fhir4.Coding[];
+  options: { system?: string; code: string; display: string }[];
+}
+
+export function questionnaireChoiceItems(questionnaire: fhir4.Questionnaire): QuestionnaireChoiceItem[] {
+  if (!observationExtractEnabled(questionnaire)) return [];
+  const found: QuestionnaireChoiceItem[] = [];
+  const walk = (items: fhir4.QuestionnaireItem[] | undefined): void => {
+    for (const item of items ?? []) {
+      const options = (item.answerOption ?? [])
+        .map((option) => option.valueCoding)
+        .filter((coding): coding is fhir4.Coding => Boolean(coding?.code))
+        .map((coding) => ({
+          ...(coding.system ? { system: coding.system } : {}),
+          code: coding.code ?? "",
+          display: coding.display ?? coding.code ?? "",
+        }));
+      if (item.type === "choice" && item.code?.length && options.length) {
+        found.push({ linkId: item.linkId, text: item.text ?? item.linkId, code: item.code, options });
+      }
+      walk(item.item);
+    }
+  };
+  walk(questionnaire.item);
+  return found;
+}
+
 /** linkId は全体一意(jsp-4)なので、階層を平らにして引ける。 */
 function indexQuestionnaireItems(
   items: fhir4.QuestionnaireItem[] | undefined,
