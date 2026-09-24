@@ -877,7 +877,7 @@ export function labOrderIdFromReport(
 }
 
 // Observation.interpretation から H/L/N コードを取り出す。未記録なら空文字。
-function interpretationCodeOf(obs: fhir4.Observation): string {
+export function interpretationCodeOf(obs: fhir4.Observation): string {
   for (const concept of obs.interpretation ?? []) {
     const coding = codingBySystem(concept.coding, INTERPRETATION_SYSTEM);
     if (coding?.code) return coding.code;

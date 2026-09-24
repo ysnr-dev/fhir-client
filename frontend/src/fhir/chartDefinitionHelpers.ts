@@ -1,7 +1,7 @@
 import type { KarteDetailTarget } from "../karteUrl";
 import { addDays, toDateInput } from "../lib/dates";
 import type { LabResultItem } from "../api/masterClient";
-import { JLAC11_SYSTEM, RESULT_ITEM_SYSTEM } from "./labResultHelpers";
+import { JLAC11_SYSTEM, RESULT_ITEM_SYSTEM, interpretationCodeOf } from "./labResultHelpers";
 import {
   BLOOD_PRESSURE,
   BMI,
@@ -9,7 +9,9 @@ import {
   LOINC_SYSTEM,
   SYSTOLIC,
   VITAL_MEASURES,
+  vitalInterpretationOf,
 } from "./vitalHelpers";
+import type { VitalThresholdSettings } from "./vitalHelpers";
 import { questionnaireNumericItems } from "./observationExtract";
 import { buildFlowsheetEvents, epochOf, localDateOf } from "./flowsheetEventHelpers";
 import type { EncounterStay } from "./flowsheetEventHelpers";
@@ -368,11 +370,51 @@ export function chartItemCodings(items: ChartItem[]): fhir4.Coding[] {
 
 // ---- Observation → 系列 ----
 
+/** 点の判定。検査は Observation.interpretation、バイタルは施設のしきい値による。 */
+export type ChartPointFlag = "HH" | "H" | "L" | "LL" | "";
+
 export interface ChartPoint {
   /** 測定日時(タイムゾーンを持たないローカルの文字列)。 */
   at: string;
   t: number;
   value: number;
+  flag: ChartPointFlag;
+  /** 基準範囲(検査の referenceRange の先頭)。片側だけのこともある。 */
+  low?: number;
+  high?: number;
+  /** 結果に書かれた単位(項目の表示単位と違うことがある)。 */
+  unit: string;
+  /** 測定法(Observation.method.text)。 */
+  method: string;
+  /** 結果の JLAC11 コード。 */
+  jlac11: string;
+}
+
+/** 前の点と比べて単位・測定法・JLAC11 のどれかが変わった点。そこで線を切る。 */
+export interface ChartSegmentBreak {
+  t: number;
+  at: string;
+  /** 何が変わったか(「単位 mg/dL → g/L」など)。 */
+  changes: string[];
+}
+
+/** 系列の中の変わり目。同じ値で比べてよい区間の区切り。 */
+export function chartSegmentBreaks(points: ChartPoint[]): ChartSegmentBreak[] {
+  const breaks: ChartSegmentBreak[] = [];
+  for (let i = 1; i < points.length; i += 1) {
+    const before = points[i - 1];
+    const after = points[i];
+    const changes: string[] = [];
+    if (before.unit !== after.unit) changes.push(`単位 ${before.unit || "なし"} → ${after.unit || "なし"}`);
+    if (before.method !== after.method) {
+      changes.push(`測定法 ${before.method || "なし"} → ${after.method || "なし"}`);
+    }
+    if (before.jlac11 !== after.jlac11) {
+      changes.push(`JLAC11 ${before.jlac11 || "なし"} → ${after.jlac11 || "なし"}`);
+    }
+    if (changes.length) breaks.push({ t: after.t, at: after.at, changes });
+  }
+  return breaks;
 }
 
 export interface ChartSeries {
@@ -416,12 +458,27 @@ function observationNumber(observation: fhir4.Observation): number | undefined {
   return undefined;
 }
 
+function componentOf(
+  observation: fhir4.Observation,
+  code: string,
+): fhir4.ObservationComponent | undefined {
+  return (observation.component ?? []).find((component) =>
+    component.code?.coding?.some((coding) => coding.code === code),
+  );
+}
+
 function componentNumber(observation: fhir4.Observation, code: string): number | undefined {
-  for (const component of observation.component ?? []) {
-    const hit = component.code?.coding?.some((coding) => coding.code === code);
-    if (hit && typeof component.valueQuantity?.value === "number") return component.valueQuantity.value;
-  }
-  return undefined;
+  const value = componentOf(observation, code)?.valueQuantity?.value;
+  return typeof value === "number" ? value : undefined;
+}
+
+function quantityUnit(quantity: fhir4.Quantity | undefined): string {
+  return quantity?.unit ?? quantity?.code ?? "";
+}
+
+function labFlag(observation: fhir4.Observation): ChartPointFlag {
+  const code = interpretationCodeOf(observation);
+  return code === "HH" || code === "H" || code === "L" || code === "LL" ? code : "";
 }
 
 function matchesItem(observation: fhir4.Observation, item: ChartItem): boolean {
@@ -431,12 +488,47 @@ function matchesItem(observation: fhir4.Observation, item: ChartItem): boolean {
 }
 
 /**
+ * 点の判定・基準範囲・単位など。単位・測定法・JLAC11 の変わり目を見るのは検査だけで、
+ * バイタルとテンプレートは項目の単位で揃える(書き方の揺れで線が切れないように)。
+ */
+function pointDetails(
+  item: ChartItem,
+  componentCode: string,
+  observation: fhir4.Observation,
+  value: number,
+  vitalThresholds: VitalThresholdSettings,
+): Omit<ChartPoint, "at" | "t" | "value"> {
+  if (item.source === "lab") {
+    const range = observation.referenceRange?.[0];
+    return {
+      flag: labFlag(observation),
+      ...(typeof range?.low?.value === "number" ? { low: range.low.value } : {}),
+      ...(typeof range?.high?.value === "number" ? { high: range.high.value } : {}),
+      unit: quantityUnit(observation.valueQuantity) || item.unit,
+      method: observation.method?.text ?? observation.method?.coding?.[0]?.display ?? "",
+      jlac11: observation.code?.coding?.find((coding) => coding.system === JLAC11_SYSTEM)?.code ?? "",
+    };
+  }
+  const flag =
+    item.source === "vital"
+      ? vitalInterpretationOf(
+          item.components?.length ? componentCode : (item.codings[0]?.code ?? ""),
+          value,
+          vitalThresholds,
+        )
+      : "";
+  return { flag, unit: item.unit, method: "", jlac11: "" };
+}
+
+/**
  * 項目ごとのグラフを組み立てる。同じ日時に 2 件あれば後から来たもの(訂正)を採る。
  * 値の無い結果(コード型・文字列型)は点にならないので落ちる。
+ * 判定は検査なら結果に書かれたもの、バイタルなら施設のしきい値で付ける。
  */
 export function buildChartLanes(
   items: ChartItem[],
   observations: fhir4.Observation[],
+  vitalThresholds: VitalThresholdSettings = {},
 ): ChartLaneData[] {
   return items.map((item) => {
     const matched = observations.filter((observation) => matchesItem(observation, item));
@@ -453,7 +545,12 @@ export function buildChartLanes(
           ? componentNumber(observation, spec.key)
           : observationNumber(observation);
         if (typeof value !== "number" || Number.isNaN(value)) continue;
-        byTime.set(at, { at, t: epochOf(at), value });
+        byTime.set(at, {
+          at,
+          t: epochOf(at),
+          value,
+          ...pointDetails(item, spec.key, observation, value, vitalThresholds),
+        });
       }
       return {
         key: `${item.key}/${spec.key}`,

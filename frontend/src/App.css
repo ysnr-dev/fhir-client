@@ -3837,6 +3837,62 @@ fieldset.rp-card {
   pointer-events: none;
 }
 
+/* 判定のある数値は検査結果の表と同じ色にする(H: 赤 / L: 青、HH・LL は太字)。 */
+.patient-chart__value--high,
+.patient-chart__value--critical-high {
+  fill: var(--lab-high);
+  font-weight: 700;
+}
+
+.patient-chart__value--low,
+.patient-chart__value--critical-low {
+  fill: var(--lab-low);
+  font-weight: 700;
+}
+
+/* 基準範囲の帯。系列の色と競わないよう、本文色をごく薄く敷く。 */
+.patient-chart__ref-band {
+  fill: var(--text);
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+/* 判定のある点を囲む輪。HH・LL(パニック値)は太くする。 */
+.patient-chart__flag {
+  fill: none;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.patient-chart__flag--high,
+.patient-chart__flag--critical-high {
+  stroke: var(--lab-high);
+}
+
+.patient-chart__flag--low,
+.patient-chart__flag--critical-low {
+  stroke: var(--lab-low);
+}
+
+.patient-chart__flag--critical-high,
+.patient-chart__flag--critical-low {
+  stroke-width: 3;
+}
+
+/* 単位・測定法・JLAC11 の変わり目。縦線は目印だけで、◆ にホバーすると内容が出る。 */
+.patient-chart__segment-break line {
+  stroke: var(--chart-series);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  pointer-events: none;
+}
+
+.patient-chart__segment-break path {
+  fill: var(--chart-series);
+  stroke: var(--bg);
+  stroke-width: 1;
+}
+
 .patient-chart__column-grid {
   stroke: var(--border);
   stroke-width: 1;

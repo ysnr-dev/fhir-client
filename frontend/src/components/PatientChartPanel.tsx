@@ -7,8 +7,14 @@ import type {
   ChartPoint,
   ChartRange,
 } from "../fhir/chartDefinitionHelpers";
-import { CHART_EVENT_KINDS, chartEventKindLabel } from "../fhir/chartDefinitionHelpers";
+import {
+  CHART_EVENT_KINDS,
+  chartEventKindLabel,
+  chartSegmentBreaks,
+} from "../fhir/chartDefinitionHelpers";
+import type { ChartSegmentBreak } from "../fhir/chartDefinitionHelpers";
 import { epochOf } from "../fhir/flowsheetEventHelpers";
+import { interpretationClass, referenceRangeLabel } from "../fhir/labResultHelpers";
 import { formatPointDate, formatValue, niceTicks } from "./chartScale";
 
 // チャートの描画。項目ごとのグラフ(レーン)を縦に積み、**横軸を全レーンで共有する**
@@ -277,6 +283,8 @@ interface ValueLabel {
   x: number;
   y: number;
   text: string;
+  /** 判定(H/L など)。数値の字の色を変える。 */
+  flag: string;
 }
 
 /**
@@ -379,6 +387,103 @@ function EventMark({
   );
 }
 
+// ---- 点の判定・変わり目・基準範囲 ----
+
+/**
+ * 系列の線。単位・測定法・JLAC11 が変わった所で線を切る(そのまま比べられない値どうしを
+ * つながない)。
+ */
+function seriesPath(
+  points: ChartPoint[],
+  breaks: ChartSegmentBreak[],
+  toX: (t: number) => number,
+  toY: (value: number) => number,
+): string {
+  const breakAt = new Set(breaks.map((entry) => entry.at));
+  return points
+    .map(
+      (point, i) =>
+        `${i === 0 || breakAt.has(point.at) ? "M" : "L"}${toX(point.t).toFixed(1)},${toY(point.value).toFixed(1)}`,
+    )
+    .join(" ");
+}
+
+/** 判定のある点を囲む輪。色だけに頼らず、輪の有無で基準外が分かるようにする。 */
+function FlagRing({ point, x, y }: { point: ChartPoint; x: number; y: number }) {
+  if (!point.flag) return null;
+  return <circle className={interpretationClass(point.flag, "patient-chart__flag")} cx={x} cy={y} r={7} />;
+}
+
+/** 変わり目の縦線と、上端の ◆(ホバーで何が変わったかを出す)。 */
+function SegmentBreakMarks({
+  breaks,
+  name,
+  toX,
+  plotH,
+}: {
+  breaks: ChartSegmentBreak[];
+  name?: string;
+  toX: (t: number) => number;
+  plotH: number;
+}) {
+  return breaks.map((entry) => {
+    const x = toX(entry.t);
+    const y = MARGIN.top - 7;
+    return (
+      <g key={entry.at} className="patient-chart__segment-break">
+        <title>{`${formatPointDate(entry.at)} ${name ? `${name} ` : ""}${entry.changes.join(" / ")}`}</title>
+        <line x1={x} x2={x} y1={MARGIN.top} y2={MARGIN.top + plotH} />
+        <path d={`M${x},${y - 4} L${x + 4},${y} L${x},${y + 4} L${x - 4},${y} Z`} />
+      </g>
+    );
+  });
+}
+
+/** 基準範囲の帯の 1 区間。from / to が null なら描画域の端まで。 */
+interface ReferenceStep {
+  from: number | null;
+  to: number | null;
+  low?: number;
+  high?: number;
+}
+
+/**
+ * 基準範囲を、各点からその次の点までの階段にする(年齢帯などで範囲が変われば段になる)。
+ * 同じ範囲が続く区間は 1 つにまとめる。最初の区間は左端から、最後の区間は右端まで伸ばす。
+ */
+function referenceSteps(points: ChartPoint[]): ReferenceStep[] {
+  const steps: ReferenceStep[] = [];
+  points.forEach((point, i) => {
+    if (point.low === undefined && point.high === undefined) return;
+    const next = points[i + 1]?.t ?? null;
+    const last = steps[steps.length - 1];
+    if (last && last.to === point.t && last.low === point.low && last.high === point.high) {
+      last.to = next;
+      return;
+    }
+    steps.push({ from: i === 0 ? null : point.t, to: next, low: point.low, high: point.high });
+  });
+  return steps;
+}
+
+/** ツールチップの 1 行ぶん(値・単位・判定・基準範囲)。 */
+function pointSummary(point: ChartPoint, withMethod: boolean): string {
+  const range = referenceRangeLabel(point.low, point.high);
+  return [
+    `${formatValue(point.value)}${point.unit ? ` ${point.unit}` : ""}`,
+    point.flag,
+    range && `(基準 ${range})`,
+    withMethod && point.method,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** 系列の中で測定法が複数あるときだけ、ツールチップに測定法を出す。 */
+function hasSeveralMethods(points: ChartPoint[]): boolean {
+  return new Set(points.map((point) => point.method)).size > 1;
+}
+
 // ---- 全項目を重ねたグラフ ----
 //
 // 項目ごとに単位も桁も違う(体温 35〜38・血圧 50〜200・WBC 2〜6)ので、1 本の目盛りに
@@ -394,6 +499,8 @@ interface OverlaySeries {
   slot: number;
   shape: number;
   points: ChartPoint[];
+  breaks: ChartSegmentBreak[];
+  showMethod: boolean;
   min: number;
   max: number;
 }
@@ -413,6 +520,8 @@ function buildOverlaySeries(lanes: ChartLaneData[]): OverlaySeries[] {
         slot: index % SERIES_SLOTS,
         shape: index % SERIES_SHAPES,
         points: series.points,
+        breaks: chartSegmentBreaks(series.points),
+        showMethod: hasSeveralMethods(series.points),
         min: ticks[0],
         max: ticks[ticks.length - 1],
       });
@@ -589,25 +698,23 @@ function OverlayChart({
           )}
           {shown.map((spec) => (
             <g key={spec.key} className={`patient-chart__s${spec.slot + 1}`}>
+              <SegmentBreakMarks breaks={spec.breaks} name={spec.name} toX={toX} plotH={plotH} />
               <path
                 className="lab-chart__line"
-                d={spec.points
-                  .map(
-                    (point, i) =>
-                      `${i === 0 ? "M" : "L"}${toX(point.t).toFixed(1)},${toY(point.value, spec).toFixed(1)}`,
-                  )
-                  .join(" ")}
+                d={seriesPath(spec.points, spec.breaks, toX, (value) => toY(value, spec))}
               />
               {spec.points.map((point) => (
-                <path
-                  key={point.at}
-                  className="lab-chart__marker"
-                  d={seriesMarkPath(spec.shape, toX(point.t), toY(point.value, spec), 4)}
-                  tabIndex={0}
-                  aria-label={`${spec.name} ${formatPointDate(point.at)} ${formatValue(point.value)}${spec.unit}`}
-                  onFocus={() => onHover(point.t)}
-                  onBlur={() => onHover(null)}
-                />
+                <g key={point.at}>
+                  <FlagRing point={point} x={toX(point.t)} y={toY(point.value, spec)} />
+                  <path
+                    className="lab-chart__marker"
+                    d={seriesMarkPath(spec.shape, toX(point.t), toY(point.value, spec), 4)}
+                    tabIndex={0}
+                    aria-label={`${spec.name} ${formatPointDate(point.at)} ${pointSummary(point, spec.showMethod)}`}
+                    onFocus={() => onHover(point.t)}
+                    onBlur={() => onHover(null)}
+                  />
+                </g>
               ))}
             </g>
           ))}
@@ -617,14 +724,15 @@ function OverlayChart({
                 spec.points.map((point) => ({
                   key: `${spec.key}/${point.at}`,
                   x: toX(point.t),
-                  y: toY(point.value, spec) - 6,
+                  y: toY(point.value, spec) - (point.flag ? 9 : 6),
                   text: formatValue(point.value),
+                  flag: point.flag,
                 })),
               ),
             ).map((label) => (
               <text
                 key={label.key}
-                className="patient-chart__value"
+                className={interpretationClass(label.flag, "patient-chart__value")}
                 x={label.x}
                 y={label.y}
                 textAnchor="middle"
@@ -661,8 +769,7 @@ function OverlayChart({
                     <path className="lab-chart__marker" d={seriesMarkPath(spec.shape, 6, 6, 4)} />
                   </svg>
                   <span className="lab-chart__tooltip-value">
-                    {spec.name} {formatValue(point.value)}
-                    {spec.unit && ` ${spec.unit}`}
+                    {spec.name} {pointSummary(point, spec.showMethod)}
                   </span>
                 </span>
               ) : null,
@@ -742,8 +849,15 @@ function ChartLane({
   const svgRef = useRef<SVGSVGElement>(null);
   const points = lane.series.flatMap((series) => series.points);
   const hasPoints = points.length > 0;
+  // 基準範囲の帯は系列が 1 本のときだけ(血圧の 2 本に 1 つの帯は当てられない)。
+  const steps = lane.series.length === 1 ? referenceSteps(lane.series[0].points) : [];
+  const breaks = lane.series.map((series) => chartSegmentBreaks(series.points));
 
-  const numbers = points.map((point) => point.value);
+  // 縦軸は帯も収まる範囲にする(値がすべて基準内でも、帯の上下が見えるように)。
+  const numbers = [
+    ...points.map((point) => point.value),
+    ...steps.flatMap((step) => [step.low, step.high].filter((value) => value !== undefined)),
+  ];
   const ticks = hasPoints ? niceTicks(Math.min(...numbers), Math.max(...numbers)) : [0, 1];
   const yMin = ticks[0];
   const yMax = ticks[ticks.length - 1];
@@ -779,6 +893,7 @@ function ChartLane({
 
   const hoverX = hoverT === null ? null : toX(hoverT);
   const tooltip = hoverT === null ? null : buildTooltip(lane, nearestOf);
+  const plotRight = vbWidth - MARGIN.right;
 
   return (
     <div className="patient-chart__lane">
@@ -795,6 +910,23 @@ function ChartLane({
           onPointerMove={handlePointerMove}
           onPointerLeave={() => onHover(null)}
         >
+        {hasPoints &&
+          steps.map((step, i) => {
+            const x1 = step.from === null ? MARGIN.left : toX(step.from);
+            const x2 = step.to === null ? plotRight : toX(step.to);
+            const y1 = step.high === undefined ? MARGIN.top : toY(step.high);
+            const y2 = step.low === undefined ? MARGIN.top + plotH : toY(step.low);
+            return (
+              <rect
+                key={i}
+                className="patient-chart__ref-band"
+                x={x1}
+                y={y1}
+                width={Math.max(0, x2 - x1)}
+                height={Math.max(0, y2 - y1)}
+              />
+            );
+          })}
         {boundaries.map((x, i) => (
           <line
             key={i}
@@ -861,27 +993,27 @@ function ChartLane({
         )}
         {lane.series.map((series, index) => (
           <g key={series.key} className={index > 0 ? "patient-chart__series-2" : undefined}>
-            <path
-              className="lab-chart__line"
-              d={series.points
-                .map(
-                  (point, i) =>
-                    `${i === 0 ? "M" : "L"}${toX(point.t).toFixed(1)},${toY(point.value).toFixed(1)}`,
-                )
-                .join(" ")}
+            <SegmentBreakMarks
+              breaks={breaks[index]}
+              name={lane.series.length > 1 ? series.name : undefined}
+              toX={toX}
+              plotH={plotH}
             />
+            <path className="lab-chart__line" d={seriesPath(series.points, breaks[index], toX, toY)} />
             {series.points.map((point) => (
-              <circle
-                key={point.at}
-                className="lab-chart__marker"
-                cx={toX(point.t)}
-                cy={toY(point.value)}
-                r={4}
-                tabIndex={0}
-                aria-label={`${formatPointDate(point.at)} ${formatValue(point.value)}${lane.unit}`}
-                onFocus={() => onHover(point.t)}
-                onBlur={() => onHover(null)}
-              />
+              <g key={point.at}>
+                <FlagRing point={point} x={toX(point.t)} y={toY(point.value)} />
+                <circle
+                  className="lab-chart__marker"
+                  cx={toX(point.t)}
+                  cy={toY(point.value)}
+                  r={4}
+                  tabIndex={0}
+                  aria-label={`${formatPointDate(point.at)} ${pointSummary(point, false)}`}
+                  onFocus={() => onHover(point.t)}
+                  onBlur={() => onHover(null)}
+                />
+              </g>
             ))}
           </g>
         ))}
@@ -891,14 +1023,15 @@ function ChartLane({
                 series.points.map((point) => ({
                   key: `${series.key}/${point.at}`,
                   x: toX(point.t),
-                  y: toY(point.value) - 6,
+                  y: toY(point.value) - (point.flag ? 9 : 6),
                   text: formatValue(point.value),
+                  flag: point.flag,
                 })),
               ),
             ).map((label) => (
               <text
                 key={label.key}
-                className="patient-chart__value"
+                className={interpretationClass(label.flag, "patient-chart__value")}
                 x={label.x}
                 y={label.y}
                 textAnchor="middle"
@@ -931,10 +1064,7 @@ function ChartLane({
   );
 }
 
-function buildTooltip(
-  lane: ChartLaneData,
-  nearestOf: (index: number) => { at: string; value: number } | null,
-) {
+function buildTooltip(lane: ChartLaneData, nearestOf: (index: number) => ChartPoint | null) {
   const rows: { key: string; text: string }[] = [];
   let at = "";
   lane.series.forEach((series, index) => {
@@ -944,7 +1074,7 @@ function buildTooltip(
     const label = lane.series.length > 1 ? `${series.name} ` : "";
     rows.push({
       key: series.key,
-      text: `${label}${formatValue(point.value)}${lane.unit ? ` ${lane.unit}` : ""}`,
+      text: `${label}${pointSummary(point, hasSeveralMethods(series.points))}`,
     });
   });
   return rows.length ? { rows, at: formatPointDate(at) } : null;

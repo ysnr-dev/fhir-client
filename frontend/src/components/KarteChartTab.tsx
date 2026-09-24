@@ -13,7 +13,7 @@ import {
   useRegimenDayOrders,
 } from "../api/queries";
 import { useCurrentPractitioner } from "../api/authQueries";
-import { usePractitionerRoles } from "../api/queries";
+import { usePractitionerRoles, useVitalThresholds } from "../api/queries";
 import {
   baseRoleOf,
   isDoctorRoleCode,
@@ -153,9 +153,10 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
     range.rangeStart,
     range.rangeEnd,
   );
+  const vitalThresholds = useVitalThresholds();
   const lanes = useMemo(
-    () => buildChartLanes(body.items, observations.data ?? []),
-    [body.items, observations.data],
+    () => buildChartLanes(body.items, observations.data ?? [], vitalThresholds),
+    [body.items, observations.data, vitalThresholds],
   );
 
   const events = useChartEvents(patientId, body.events, range.rangeStart, range.rangeEnd);
