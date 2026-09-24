@@ -289,6 +289,7 @@ Rails.application.routes.draw do
     # 患者の診療上の注意(転倒リスク・DNAR など)の区分。実体の注意は上流の
     # FHIR Flag が持ち、このマスタは選択肢と患者帯のピクトグラムを決める。
     resources :patient_cautions, only: %i[index create update destroy]
+    resources :clinical_note_titles, only: %i[index create update destroy]
     resources :diseases, only: %i[index show create update destroy] do
       collection { post :import }
     end

@@ -1,5 +1,6 @@
 import { makeFieldUpdater } from "../lib/form";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useClinicalNoteTitles } from "../api/masterQueries";
 import {
   useQuestionnaireByCanonical,
   useQuestionnaireOptions,
@@ -15,7 +16,7 @@ import {
   type ClinicalNoteMode,
 } from "../fhir/clinicalNoteHelpers";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
-import type { TemplateDraft } from "../fhir/questionnaireResponseHelpers";
+import { questionnaireCanonical, type TemplateDraft } from "../fhir/questionnaireResponseHelpers";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { ErrorBanner } from "./ErrorBanner";
 import { useNoteSectionsEditor } from "./NoteSectionsEditor";
@@ -40,6 +41,11 @@ interface ClinicalNoteFormProps {
   submitError?: unknown;
   validationError?: string | null;
   submitLabel?: string;
+  /**
+   * 記載形式がテンプレートで開くときに最初から選んでおくテンプレートの canonical
+   * (タイトルのマスタの既定テンプレート)。
+   */
+  defaultTemplateCanonical?: string;
 }
 
 export function ClinicalNoteForm({
@@ -51,6 +57,7 @@ export function ClinicalNoteForm({
   submitError,
   validationError,
   submitLabel = "登録",
+  defaultTemplateCanonical,
 }: ClinicalNoteFormProps) {
   const [values, setValues] = useState<ClinicalNoteFormValues>(initialValues);
 
@@ -70,6 +77,23 @@ export function ClinicalNoteForm({
   const templateOptions = useQuestionnaireOptions({ status: "active" });
   const savedResponse = useQuestionnaireResponse(savedResponseId ?? undefined);
   const savedQuestionnaire = useQuestionnaireByCanonical(savedResponse.data?.data.questionnaire);
+
+  // タイトルのマスタ。選んだタイトルの記載形式・既定テンプレートをフォームへ当てる。
+  const titles = useClinicalNoteTitles();
+  const titleItems = titles.data?.items ?? [];
+
+  // 当てる予定のテンプレート(canonical)。候補が届いてから Questionnaire.id に解決する。
+  // 版まで一致しなければ URL だけで拾う(版が上がっても指し先を見失わないように)。
+  const [pendingCanonical, setPendingCanonical] = useState(defaultTemplateCanonical ?? "");
+  useEffect(() => {
+    if (!pendingCanonical || templateOptions.questionnaires.length === 0) return;
+    const url = pendingCanonical.split("|")[0];
+    const found =
+      templateOptions.questionnaires.find((q) => questionnaireCanonical(q) === pendingCanonical) ??
+      templateOptions.questionnaires.find((q) => q.url === url);
+    if (found?.id) setQuestionnaireId(found.id);
+    setPendingCanonical("");
+  }, [pendingCanonical, templateOptions.questionnaires]);
   const editor = useNoteSectionsEditor({
     patientId,
     sections: values.sections,
@@ -81,16 +105,40 @@ export function ClinicalNoteForm({
   // 記載形式の切替。セクション構成が変わるため本文は引き継がず作り直す。
   // 入力済みのときだけ確認する(誤クリックで長文を失わないため)。
   // テンプレートの記入途中は本文(sections)に現れないので、選択の有無で判定する。
-  function changeMode(mode: ClinicalNoteMode) {
-    if (mode === values.mode) return;
+  // 切り替えたら(または同じ形式なら) true、確認で取りやめたら false。
+  function changeMode(mode: ClinicalNoteMode): boolean {
+    if (mode === values.mode) return true;
     const hasContent = isTemplate
       ? Boolean(questionnaireId || savedResponseId)
       : values.sections.some((s) => !isEmptyNoteHtml(s.html));
     if (hasContent && !window.confirm("記載形式を切り替えると入力済みの本文は破棄されます。よろしいですか?")) {
-      return;
+      return false;
     }
     setQuestionnaireId("");
     setValues((v) => ({ ...v, mode, sections: defaultSectionsForMode(mode) }));
+    return true;
+  }
+
+  // タイトルの選択。マスタのタイトルなら記載形式を当て、テンプレートならまだ選んで
+  // いないときだけ既定テンプレートを選ぶ(記入途中の別テンプレートを捨てないため)。
+  // 記載形式の切替を確認で取りやめたら、タイトルも変えない。
+  function changeTitle(title: string) {
+    const item = titleItems.find((t) => t.title === title);
+    if (!item) {
+      update("title", title);
+      return;
+    }
+    const switching = item.mode !== values.mode;
+    if (!changeMode(item.mode)) return;
+    update("title", title);
+    if (
+      item.mode === "template" &&
+      item.template_canonical &&
+      !savedResponseId &&
+      (switching || !questionnaireId)
+    ) {
+      setPendingCanonical(item.template_canonical);
+    }
   }
 
   function submitValues(next: ClinicalNoteFormValues) {
@@ -205,12 +253,27 @@ export function ClinicalNoteForm({
         <div className="clinical-note-form__row">
           <label>
             タイトル
-            <input
-              type="text"
-              value={values.title}
-              onChange={(e) => update("title", e.target.value)}
-              placeholder="例: 定期外来"
-            />
+            {titleItems.length > 0 ? (
+              // マスタから選ぶ。保存済みの記録や他科依頼の回答のようにマスタに無い
+              // タイトルも、選択肢に残して表示・保存できるようにする。
+              <select value={values.title} onChange={(e) => changeTitle(e.target.value)}>
+                {!titleItems.some((t) => t.title === values.title) && (
+                  <option value={values.title}>{values.title}</option>
+                )}
+                {titleItems.map((t) => (
+                  <option key={t.id} value={t.title}>
+                    {t.title}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={values.title}
+                onChange={(e) => update("title", e.target.value)}
+                placeholder="例: 定期外来"
+              />
+            )}
           </label>
           {/* 対象プロブレム。POMR ではプロブレムごとに SOAP を書くので、記録 1 件に
               1 つだけ紐付ける(複数を扱うときは記録を分けて登録する)。 */}

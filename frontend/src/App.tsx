@@ -82,6 +82,7 @@ import { NursingWorklistPage } from "./pages/NursingWorklistPage";
 import { PathoOrganPage } from "./pages/PathoOrganPage";
 import { PathoCollectionMethodPage } from "./pages/PathoCollectionMethodPage";
 import { PatientCautionPage } from "./pages/PatientCautionPage";
+import { ClinicalNoteTitlePage } from "./pages/ClinicalNoteTitlePage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
 import { PractitionerEditPage } from "./pages/PractitionerEditPage";
@@ -314,6 +315,9 @@ function App() {
               </Link>
               <Link to="/patient-cautions" className="row-menu__item">
                 注意区分
+              </Link>
+              <Link to="/clinical-note-titles" className="row-menu__item">
+                診療記録タイトル
               </Link>
             </SubMenu>
             {/* 他院。診療情報提供書の送付先候補として登録する。 */}
@@ -706,6 +710,7 @@ function App() {
           <Route path="/patho-organs" element={<PathoOrganPage />} />
           <Route path="/patho-collection-methods" element={<PathoCollectionMethodPage />} />
           <Route path="/patient-cautions" element={<PatientCautionPage />} />
+          <Route path="/clinical-note-titles" element={<ClinicalNoteTitlePage />} />
           <Route path="/questionnaires" element={<QuestionnaireListPage />} />
           <Route path="/questionnaires/new" element={<QuestionnaireCreatePage />} />
           <Route path="/questionnaires/:questionnaireId/edit" element={<QuestionnaireEditPage />} />

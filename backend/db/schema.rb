@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_24_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_24_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -216,6 +216,16 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_24_100000) do
     t.index ["created_at"], name: "index_lab_result_imports_on_created_at"
     t.index ["message_control_id"], name: "index_lab_result_imports_on_message_control_id"
     t.index ["source"], name: "index_lab_result_imports_on_source"
+  end
+
+  create_table "master_clinical_note_titles", force: :cascade do |t|
+    t.string "title", null: false
+    t.string "mode", default: "soap", null: false
+    t.string "template_canonical"
+    t.string "role_code"
+    t.integer "display_order"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "master_comment_relations", force: :cascade do |t|

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { FhirError } from "../api/fhirClient";
 import { useCurrentPractitioner } from "../api/authQueries";
+import { useClinicalNoteTitles } from "../api/masterQueries";
 import { useClinicalNote, useCreateClinicalNote, useUpdateClinicalNote } from "../api/queries";
 import { ClinicalNoteForm } from "./ClinicalNoteForm";
 import { ErrorBanner } from "./ErrorBanner";
 import {
   buildClinicalNote,
+  defaultSectionsForMode,
   emptyClinicalNoteForm,
   parseClinicalNoteForm,
   validateClinicalNote,
@@ -13,6 +15,8 @@ import {
   type ClinicalNoteProblem,
 } from "../fhir/clinicalNoteHelpers";
 import { isPatientMismatch } from "../fhir/patientHelpers";
+import { parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
+import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
 
 // 診療記録の登録・編集 UI。ページ(/patients/:id/clinical-notes/new など)と
 // カルテ画面の右ペインの双方から使うため、保存後の遷移は onSaved に委ねる。
@@ -35,6 +39,16 @@ export function ClinicalNoteCreatePanel({
   const { practitionerId, practitioner } = useCurrentPractitioner();
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  // 初期値のタイトルは、職種がログイン中の医療従事者と一致するマスタの先頭(表示順)。
+  // 一致が無ければ既定(emptyClinicalNoteForm)のまま。フォームは初期値をマウント時に
+  // 一度だけ使うので、マスタと職種が揃うまで描画しない。
+  const titles = useClinicalNoteTitles();
+  const login = useLoginAutofillSource();
+  const roleCode = login.source?.role ? parsePractitionerRole(login.source.role).roleCode : "";
+  const defaultTitle = roleCode
+    ? titles.data?.items.find((t) => t.role_code === roleCode)
+    : undefined;
+
   function handleSubmit(values: ClinicalNoteFormValues) {
     const error = validateClinicalNote(values, practitionerId);
     if (error) {
@@ -47,10 +61,20 @@ export function ClinicalNoteCreatePanel({
     });
   }
 
+  if (titles.isLoading || !login.ready) return <p>読み込み中...</p>;
+
+  const initialValues = emptyClinicalNoteForm(defaultProblem ?? null);
+  if (defaultTitle) {
+    initialValues.title = defaultTitle.title;
+    initialValues.mode = defaultTitle.mode;
+    initialValues.sections = defaultSectionsForMode(defaultTitle.mode);
+  }
+
   return (
     <ClinicalNoteForm
       patientId={patientId}
-      initialValues={emptyClinicalNoteForm(defaultProblem ?? null)}
+      initialValues={initialValues}
+      defaultTemplateCanonical={defaultTitle?.template_canonical ?? undefined}
       onSubmit={handleSubmit}
       submitting={createNote.isPending}
       submitError={createNote.error}

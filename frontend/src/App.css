@@ -19300,3 +19300,12 @@ button.chemo-calendar__cell[draggable="true"] {
   gap: 6px;
   font-size: 13px;
 }
+
+/* 診療記録タイトルのマスタ。テンプレート名が読める幅を取る。 */
+.clinical-note-title__template {
+  min-width: 260px;
+}
+
+.clinical-note-title__template .template-select__trigger {
+  width: 100%;
+}

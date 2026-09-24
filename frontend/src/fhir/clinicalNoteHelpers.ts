@@ -135,6 +135,16 @@ const SOAP_SECTION_CODES = ["61150-9", "61149-1", "51848-0", "18776-5"] as const
 // テンプレートは自由記載と同じ 1 セクションで、本文はテンプレート回答の平文。
 export type ClinicalNoteMode = "soap" | "free" | "template";
 
+export const CLINICAL_NOTE_MODE_OPTIONS: readonly { code: ClinicalNoteMode; label: string }[] = [
+  { code: "soap", label: "SOAP" },
+  { code: "free", label: "自由記載" },
+  { code: "template", label: "テンプレート" },
+];
+
+export function clinicalNoteModeLabel(mode: string): string {
+  return CLINICAL_NOTE_MODE_OPTIONS.find((o) => o.code === mode)?.label ?? mode;
+}
+
 export function sectionTitle(code: string | undefined): string {
   return SECTION_OPTIONS.find((o) => o.code === code)?.title ?? "";
 }
