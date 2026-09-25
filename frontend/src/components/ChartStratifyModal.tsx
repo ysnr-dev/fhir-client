@@ -6,6 +6,7 @@ import {
   stratifySeries,
   type ChartStateTrack,
 } from "../fhir/chartStateHelpers";
+import { ChartStratifyGuide } from "./ChartStratifyGuide";
 import { formatValue } from "./chartScale";
 import { Modal } from "./Modal";
 
@@ -33,6 +34,7 @@ export function ChartStratifyModal({ lanes, stateTracks, range, initialRef, anch
   const initialIndex = stateTracks.indexOf(findStateTrack(stateTracks, initialRef) ?? stateTracks[0]);
   const [selectedKey, setSelectedKey] = useState(initialIndex >= 0 ? String(initialIndex) : choices[0]?.key ?? "");
   const selected = choices.find((choice) => choice.key === selectedKey) ?? choices[0];
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // 行 = 定量の系列(血圧は収縮期・拡張期の 2 行)。
   const rows = lanes.flatMap((lane) =>
@@ -51,7 +53,16 @@ export function ChartStratifyModal({ lanes, stateTracks, range, initialRef, anch
     : [];
 
   return (
-    <Modal title="層別の要約" onClose={onClose} className="modal--wide">
+    <Modal
+      title="層別の要約"
+      onClose={onClose}
+      className="modal--wide"
+      titleAction={
+        <button type="button" className="modal__help" onClick={() => setGuideOpen(true)} aria-label="層別の要約の使い方" title="層別の要約の使い方">
+          ?
+        </button>
+      }
+    >
       <div className="patient-chart__analysis">
         <div className="patient-chart__analysis-controls">
           <label>
@@ -117,6 +128,7 @@ export function ChartStratifyModal({ lanes, stateTracks, range, initialRef, anch
         )}
 
       </div>
+      {guideOpen && <ChartStratifyGuide onClose={() => setGuideOpen(false)} />}
     </Modal>
   );
 }
