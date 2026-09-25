@@ -36,7 +36,11 @@ import { formatPointDate, formatValue, niceTicks } from "./chartScale";
 const DEFAULT_VB_WIDTH = 800;
 const MIN_VB_WIDTH = 480;
 // left は帯の行ラベル(最長「放射線治療」= 5 文字)が収まる幅にする。
-const MARGIN = { top: 16, right: 20, bottom: 24, left: 72 };
+// 下は列の見出し 2 段(月・日と、その下の年)。
+const MARGIN = { top: 16, right: 20, bottom: 36, left: 72 };
+/** 列の見出しの y(グラフの下端から)。上の段が月・日、下の段が年。 */
+const COLUMN_LABEL_OFFSET = 20;
+const COLUMN_YEAR_OFFSET = 6;
 /** レーン 1 枚の最小の高さ。パネルに余裕があればここから伸ばす。 */
 const MIN_LANE_HEIGHT = 120;
 /** 重ね表示の最小の高さ。線が何本も重なるのでレーンより高く取る。 */
@@ -194,12 +198,17 @@ export function PatientChartPanel({
   };
 
   // 列の見出しは、幅が足りるものだけ残す(日 92 列のように密なときに重ならない)。
-  const columnLabels: { x: number; text: string }[] = [];
+  // 年を持つ見出し(年の変わり目)は、ぶつかる手前の年なしの見出しを外してでも残す。
+  const columnLabels: ColumnLabel[] = [];
   for (const column of range.columns) {
     const x = toX(epochOf(column.start) + (epochOf(column.end) + DAY_MS - epochOf(column.start)) / 2);
-    const previous = columnLabels[columnLabels.length - 1];
+    let previous = columnLabels[columnLabels.length - 1];
+    while (column.year && previous && !previous.year && x - previous.x < MIN_LABEL_GAP) {
+      columnLabels.pop();
+      previous = columnLabels[columnLabels.length - 1];
+    }
     if (previous && x - previous.x < MIN_LABEL_GAP) continue;
-    columnLabels.push({ x, text: column.label });
+    columnLabels.push({ x, text: column.label, year: column.year });
   }
 
   const boundaries = range.columns.map((column) => toX(epochOf(column.start)));
@@ -1106,6 +1115,38 @@ function seriesMarkPath(shape: number, x: number, y: number, r: number): string 
   return `M${x - r},${y} a${r},${r} 0 1,0 ${r * 2},0 a${r},${r} 0 1,0 ${-r * 2},0`;
 }
 
+interface ColumnLabel {
+  x: number;
+  text: string;
+  /** 下の段に出す年。空なら出さない。 */
+  year: string;
+}
+
+/** 列の見出し。上の段に月・日、年の変わり目だけ下の段に年を出す。 */
+function ColumnLabels({ labels, height }: { labels: ColumnLabel[]; height: number }) {
+  return (
+    <>
+      {labels.map((label, i) => (
+        <g key={i}>
+          <text className="lab-chart__tick" x={label.x} y={height - COLUMN_LABEL_OFFSET} textAnchor="middle">
+            {label.text}
+          </text>
+          {label.year && (
+            <text
+              className="lab-chart__tick patient-chart__tick-year"
+              x={label.x}
+              y={height - COLUMN_YEAR_OFFSET}
+              textAnchor="middle"
+            >
+              {label.year}
+            </text>
+          )}
+        </g>
+      ))}
+    </>
+  );
+}
+
 interface OverlayChartProps {
   lanes: ChartLaneData[];
   range: ChartRange;
@@ -1124,7 +1165,7 @@ interface OverlayChartProps {
   onHover: (t: number | null) => void;
   /** ホバー時刻に有効な状態(このレーンにカーソルがあるときだけ)。 */
   states: string[];
-  columnLabels: { x: number; text: string }[];
+  columnLabels: ColumnLabel[];
   anchor?: string;
   loading?: boolean;
   onPickPoint: (event: React.MouseEvent, point: ChartPoint, series: OverlaySeries) => void;
@@ -1256,17 +1297,7 @@ function OverlayChart({
               y2={MARGIN.top + plotH}
             />
           )}
-          {columnLabels.map((label, i) => (
-            <text
-              key={i}
-              className="lab-chart__tick"
-              x={label.x}
-              y={height - 8}
-              textAnchor="middle"
-            >
-              {label.text}
-            </text>
-          ))}
+          <ColumnLabels labels={columnLabels} height={height} />
           {hoverX !== null && (
             <line
               className="lab-chart__crosshair"
@@ -1419,7 +1450,7 @@ interface ChartLaneProps {
   onHover: (t: number | null) => void;
   /** ホバー時刻に有効な状態(このレーンにカーソルがあるときだけ)。 */
   states: string[];
-  columnLabels: { x: number; text: string }[];
+  columnLabels: ColumnLabel[];
   anchor?: string;
   loading?: boolean;
   onPickPoint: PointPick;
@@ -1572,17 +1603,7 @@ function ChartLane({
               </text>
             </g>
           ))}
-        {columnLabels.map((label, i) => (
-          <text
-            key={i}
-            className="lab-chart__tick"
-            x={label.x}
-            y={height - 8}
-            textAnchor="middle"
-          >
-            {label.text}
-          </text>
-        ))}
+        <ColumnLabels labels={columnLabels} height={height} />
         {hoverX !== null && (
           <line
             className="lab-chart__crosshair"

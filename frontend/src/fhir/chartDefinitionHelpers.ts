@@ -350,7 +350,13 @@ export interface ChartColumn {
   start: string;
   /** 列の終わり(YYYY-MM-DD、この日を含む)。 */
   end: string;
+  /** 見出し(「1月」「1/1」、年の軸なら「2025」)。 */
   label: string;
+  /**
+   * 見出しの下の段に出す年(「2025年」)。先頭の列と年が変わった最初の列だけが持ち、ほかは空。
+   * 見出しを間引くときに優先して残す。
+   */
+  year: string;
 }
 
 export interface ChartRange {
@@ -397,7 +403,8 @@ export function chartRangeOf(baseDate: string, axis: ChartAxis): ChartRange {
     const start = addDays(baseDate, -(axis.columns - 1));
     for (let i = 0; i < axis.columns; i += 1) {
       const day = addDays(start, i);
-      columns.push({ start: day, end: day, label: chartColumnLabel(day, "day", i === 0) });
+      const yearLabel = i === 0 || day.endsWith("-01-01") ? chartColumnYear(day) : "";
+      columns.push({ start: day, end: day, label: chartColumnLabel(day, "day"), year: yearLabel });
     }
   } else if (axis.unit === "month") {
     for (let i = axis.columns - 1; i >= 0; i -= 1) {
@@ -406,14 +413,15 @@ export function chartRangeOf(baseDate: string, axis: ChartAxis): ChartRange {
       const m = target.getMonth() + 1;
       const start = dateString(y, m, 1);
       const end = i === 0 ? baseDate : dateString(y, m, lastDayOfMonth(y, m));
-      columns.push({ start, end, label: chartColumnLabel(start, "month", i === axis.columns - 1) });
+      const yearLabel = i === axis.columns - 1 || m === 1 ? chartColumnYear(start) : "";
+      columns.push({ start, end, label: chartColumnLabel(start, "month"), year: yearLabel });
     }
   } else {
     for (let i = axis.columns - 1; i >= 0; i -= 1) {
       const y = year - i;
       const start = dateString(y, 1, 1);
       const end = i === 0 ? baseDate : dateString(y, 12, 31);
-      columns.push({ start, end, label: chartColumnLabel(start, "year", true) });
+      columns.push({ start, end, label: chartColumnLabel(start, "year"), year: "" });
     }
   }
 
@@ -428,12 +436,17 @@ export function chartRangeOf(baseDate: string, axis: ChartAxis): ChartRange {
   };
 }
 
-/** 列の見出し。年をまたぐ先頭の列だけ年を添える。 */
-export function chartColumnLabel(start: string, unit: ChartAxisUnit, withYear: boolean): string {
+/** 列の見出し。年は下の段に分けて出すので持たない(年の軸は年そのもの)。 */
+export function chartColumnLabel(start: string, unit: ChartAxisUnit): string {
   const { year, month, day } = partsOf(start);
   if (unit === "year") return String(year);
-  if (unit === "month") return withYear ? `${year}/${month}` : `${month}月`;
-  return withYear ? `${year}/${month}/${day}` : `${month}/${day}`;
+  if (unit === "month") return `${month}月`;
+  return `${month}/${day}`;
+}
+
+/** 見出しの下の段の年。 */
+function chartColumnYear(start: string): string {
+  return `${partsOf(start).year}年`;
 }
 
 /**
