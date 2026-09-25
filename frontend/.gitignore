@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# デモ用サンプル患者の投入スクリプトのビルド出力(scripts/demo-seed.vite.config.ts)
+scripts/dist
