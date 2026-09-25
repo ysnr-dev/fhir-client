@@ -363,6 +363,8 @@ Rails.application.routes.draw do
     # チャート定義(どの項目を並べ、どのイベントを重ねるか)。患者を持たない雛形なので
     # オーダーセットと同じくここに置く(docs/patient-chart-design.md)。
     resources :chart_definitions, only: %i[index show create update destroy]
+    # 患者ごとに最初に開くチャート(ピン留め)。患者につき 1 つ、利用者の間で共有する。
+    resources :patient_chart_pins, only: %i[show update destroy], param: :patient_id
     # 化学療法レジメンマスタ。本体と子(適応疾患・投与ステップ・薬剤・検査基準・
     # 副作用)を 1 リクエストで読み書きする(docs/chemo-regimen-design.md)。
     resources :regimens, only: %i[index show create update destroy] do

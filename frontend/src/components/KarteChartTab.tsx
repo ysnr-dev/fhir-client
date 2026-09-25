@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChartDefinition } from "../api/masterClient";
-import { useChartDefinitionMutations, useChartDefinitions } from "../api/masterQueries";
+import {
+  useChartDefinitionMutations,
+  useChartDefinitions,
+  usePatientChartPin,
+  usePatientChartPinMutation,
+} from "../api/masterQueries";
 import {
   usePatientChartObservations,
   usePatientEncounterEvents,
@@ -105,13 +110,13 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
   const department =
     myDepartments.find((d) => d.organizationId === orderContext.departmentId) ?? myDepartments[0];
 
+  const practitionerName = practitioner
+    ? practitioner.name?.[0]?.text ||
+      [practitioner.name?.[0]?.family, ...(practitioner.name?.[0]?.given ?? [])]
+        .filter(Boolean)
+        .join(" ")
+    : "";
   const owners: ChartOwnerOption[] = useMemo(() => {
-    const practitionerName = practitioner
-      ? practitioner.name?.[0]?.text ||
-        [practitioner.name?.[0]?.family, ...(practitioner.name?.[0]?.given ?? [])]
-          .filter(Boolean)
-          .join(" ")
-      : "";
     return [
       { scope: "facility", ownerId: null, ownerName: null, label: "院内共通", canEdit: isDoctor },
       {
@@ -130,7 +135,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
         canEdit: Boolean(practitionerId),
       },
     ];
-  }, [isDoctor, department, practitionerId, practitioner]);
+  }, [isDoctor, department, practitionerId, practitionerName]);
 
   // 持ち主(自分・診療科)が決まる前に引くと、院内共通だけの一覧を一度返して
   // 「チャートがありません」がちらつくので、決まってから引く。
@@ -140,18 +145,26 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
     practitionerId ?? undefined,
     ownersReady,
   );
-  const listLoading = !ownersReady || list.isPending;
+  // この患者で最初に開くチャート(ピン留め)。患者につき 1 つで、利用者の間で共有する。
+  const pin = usePatientChartPin(patientId);
+  const pinMutation = usePatientChartPinMutation(patientId);
+  const pinnedId = pin.data?.chart_definition_id ?? null;
+  // ピンを引き終わるまで開かない(先に別のチャートを開いてから切り替わらないように)。
+  const listLoading = !ownersReady || list.isPending || pin.isPending;
   const mutations = useChartDefinitionMutations();
   const definitions = useMemo(() => list.data?.items ?? [], [list.data]);
 
-  // 指定が無ければ自分 → 診療科 → 院内共通の順で先頭を開く。
+  // 指定が無ければ、この患者にピン留めしたチャート、それも無ければ(個人用のチャートで
+  // 本人以外には見えないときも)自分 → 診療科 → 院内共通の順で先頭を開く。
   const selected = useMemo(() => {
     const byId = definitions.find((entry) => entry.id === parsed.chartId);
     if (byId) return byId;
+    const pinned = definitions.find((entry) => entry.id === pinnedId);
+    if (pinned) return pinned;
     const rank = (entry: ChartDefinition) =>
       entry.scope === "practitioner" ? 0 : entry.scope === "department" ? 1 : 2;
     return [...definitions].sort((a, b) => rank(a) - rank(b))[0] ?? null;
-  }, [definitions, parsed.chartId]);
+  }, [definitions, parsed.chartId, pinnedId]);
 
   const body = useMemo(
     () => normalizeChartDefinitionBody(selected?.definition),
@@ -361,13 +374,81 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
               <optgroup key={scope} label={label}>
                 {group.map((entry) => (
                   <option key={entry.id} value={entry.id}>
-                    {entry.name}
+                    {entry.id === pinnedId ? `${entry.name}(固定)` : entry.name}
                   </option>
                 ))}
               </optgroup>
             );
           })}
         </select>
+
+        {selected && (
+          <PinToggle
+            pinned={selected.id === pinnedId}
+            pinnedByName={pin.data?.pinned_by_name ?? null}
+            disabled={pinMutation.isPending}
+            onToggle={() => {
+              setError(null);
+              pinMutation.mutate(
+                {
+                  chartDefinitionId: selected.id === pinnedId ? null : selected.id,
+                  pinnedByName: practitionerName || null,
+                },
+                { onError: setError },
+              );
+            }}
+          />
+        )}
+
+        <OverlayToggle
+          overlay={overlay}
+          onToggle={() => updateView({ ...parsed, overlay: !overlay })}
+        />
+
+        <ValuesToggle
+          values={values}
+          onToggle={() => updateView({ ...parsed, values: !values })}
+        />
+
+        <button type="button" onClick={() => updateView({ ...parsed, fullscreen: !fullscreen })}>
+          {fullscreen ? "全画面を終了" : "全画面"}
+        </button>
+
+        <RowMenu label="チャートの操作">
+          <button type="button" className="row-menu__item" onClick={() => openEditor("create")}>
+            新規
+          </button>
+          <button
+            type="button"
+            className="row-menu__item"
+            onClick={() => openEditor("edit")}
+            disabled={!canEditSelected}
+          >
+            編集
+          </button>
+          <button
+            type="button"
+            className="row-menu__item"
+            onClick={() => openEditor("copy")}
+            disabled={!selected}
+          >
+            名前を付けて保存
+          </button>
+          <button
+            type="button"
+            className="row-menu__item"
+            onClick={handleDelete}
+            disabled={!canEditSelected}
+          >
+            削除
+          </button>
+          <button type="button" className="row-menu__item" onClick={() => setGuideOpen(true)}>
+            説明
+          </button>
+        </RowMenu>
+
+        {/* 1 行目はチャートの選択と表示の切り替え・メニューまで。日付と横軸の操作は 2 行目に送る。 */}
+        <div className="patient-chart__toolbar-break" aria-hidden="true" />
 
         <div className="patient-chart__nav">
           <button
@@ -436,53 +517,6 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
             ))}
           </select>
         </div>
-
-        <OverlayToggle
-          overlay={overlay}
-          onToggle={() => updateView({ ...parsed, overlay: !overlay })}
-        />
-
-        <ValuesToggle
-          values={values}
-          onToggle={() => updateView({ ...parsed, values: !values })}
-        />
-
-        <button type="button" onClick={() => updateView({ ...parsed, fullscreen: !fullscreen })}>
-          {fullscreen ? "全画面を終了" : "全画面"}
-        </button>
-
-        <RowMenu label="チャートの操作">
-          <button type="button" className="row-menu__item" onClick={() => openEditor("create")}>
-            新規
-          </button>
-          <button
-            type="button"
-            className="row-menu__item"
-            onClick={() => openEditor("edit")}
-            disabled={!canEditSelected}
-          >
-            編集
-          </button>
-          <button
-            type="button"
-            className="row-menu__item"
-            onClick={() => openEditor("copy")}
-            disabled={!selected}
-          >
-            名前を付けて保存
-          </button>
-          <button
-            type="button"
-            className="row-menu__item"
-            onClick={handleDelete}
-            disabled={!canEditSelected}
-          >
-            削除
-          </button>
-          <button type="button" className="row-menu__item" onClick={() => setGuideOpen(true)}>
-            説明
-          </button>
-        </RowMenu>
       </div>
 
       <ErrorBanner
@@ -540,6 +574,47 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
  * 項目ごとに分けて並べるか、1 つのグラフに重ねるかの切り替え。
  * アイコンは「横罫で区切った 2 段」と「重なった 2 本の線」。
  */
+/**
+ * この患者で最初に開くチャートにする(ピン留め)。患者につき 1 つなので、別のチャートで押すと
+ * 前のピンは外れる。固定中のチャートで押すと外す。
+ */
+function PinToggle({
+  pinned,
+  pinnedByName,
+  disabled,
+  onToggle,
+}: {
+  pinned: boolean;
+  pinnedByName: string | null;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  const label = pinned
+    ? `この患者で最初に開くチャートから外す${pinnedByName ? `(${pinnedByName}が固定)` : ""}`
+    : "この患者で最初に開くチャートにする";
+  return (
+    <button
+      type="button"
+      className={`patient-chart__mode${pinned ? " is-active" : ""}`}
+      aria-pressed={pinned}
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onToggle}
+    >
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+        <path
+          d="M6 1.5h4l-.6 4.2 2.6 2.3v1.2H8.6V14L8 15l-.6-1V9.2H4V8l2.6-2.3z"
+          fill={pinned ? "currentColor" : "none"}
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
+  );
+}
+
 function OverlayToggle({ overlay, onToggle }: { overlay: boolean; onToggle: () => void }) {
   const label = overlay ? "項目ごとに分けて表示" : "すべてを 1 つのグラフに重ねて表示";
   return (

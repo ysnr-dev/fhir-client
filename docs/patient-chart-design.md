@@ -79,6 +79,20 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
   migration(`20260924120000_seed_chart_definition_presets`)からも呼んで入れる。プリセットを
   足したときは、新しい migration から `ChartDefinitionPresets.load!` を呼び直す(既存は上書きしない)。
 
+## 1.6 患者ごとに最初に開くチャート(ピン留め)
+
+ツールバーのピンで、その患者を開いたときに最初に出すチャートを決める。**患者につき 1 つ**で、
+**利用者の間で共有**する(糖尿病の患者は誰が開いても「糖尿病」から始まる)。別のチャートで
+ピンを押すと置き換わり、固定中のチャートで押すと外れる。選択欄では固定中のチャートに「(固定)」を付ける。
+
+- backend の `patient_chart_pins`(patient_id 一意、chart_definition_id、固定した人)。
+  `GET/PUT/DELETE /master/patient_chart_pins/:patient_id`。ピンが無いときも 200 で
+  `chart_definition_id: null` を返す(無いのが普通の状態なので 404 にしない)。
+- 初期表示の順は、URL の `view` で指定したチャート → ピン → 自分・診療科・院内共通の先頭。
+  個人用のチャートをピン留めした場合、本人以外には見えないので、その人には従来の順で開く。
+- ピンを引き終わるまでチャートを開かない(別のチャートを開いてから切り替わらないように)。
+- チャート定義を消すと、それを指すピンも外れる(`ChartDefinition has_many :patient_chart_pins, dependent: :delete_all`)。
+
 ## 2. 持ち主は 3 段階
 
 オーダーセットと同じ `scope` / `owner_id`(院内共通 / 診療科 / 医師)。

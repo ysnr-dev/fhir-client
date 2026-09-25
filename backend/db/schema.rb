@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_24_120000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_25_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -2255,6 +2255,17 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_24_120000) do
     t.index ["code"], name: "index_order_sets_on_code", unique: true
     t.index ["parent_id"], name: "index_order_sets_on_parent_id"
     t.index ["scope", "owner_id", "parent_id"], name: "index_order_sets_on_scope_and_owner_id_and_parent_id"
+  end
+
+  create_table "patient_chart_pins", force: :cascade do |t|
+    t.string "patient_id", null: false
+    t.bigint "chart_definition_id", null: false
+    t.string "pinned_by_id"
+    t.string "pinned_by_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chart_definition_id"], name: "index_patient_chart_pins_on_chart_definition_id"
+    t.index ["patient_id"], name: "index_patient_chart_pins_on_patient_id", unique: true
   end
 
   create_table "questionnaire_categories", force: :cascade do |t|

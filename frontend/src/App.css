@@ -3557,6 +3557,14 @@ fieldset.rp-card {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  /* 2 行になったツールバーが下のイベントの帯に詰まって見えないよう、パネルの gap に足して離す。 */
+  margin-bottom: 8px;
+}
+
+/* ツールバーの改行。操作が多く途中で折り返すと読みにくいので、日付と横軸の操作を必ず 2 行目にする。 */
+.patient-chart__toolbar-break {
+  flex-basis: 100%;
+  height: 0;
 }
 
 /* 画面の名前。他のタブの見出し(.karte-tabpanel__header h3)と同じ字にする。 */

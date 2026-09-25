@@ -28,6 +28,9 @@ import {
 import {
   createChartDefinition,
   deleteChartDefinition,
+  fetchPatientChartPin,
+  pinPatientChart,
+  unpinPatientChart,
   fetchChartDefinitions,
   updateChartDefinition,
   type ChartDefinitionPayload,
@@ -4308,6 +4311,37 @@ export function useChartDefinitionMutations() {
       onSuccess: invalidate,
     }),
   };
+}
+
+// 患者ごとに最初に開くチャート(ピン留め)。チャート定義を消すとピンも外れるので、
+// 定義と同じキーの下に置いて一緒に引き直す。
+export function usePatientChartPin(patientId: string | undefined) {
+  return useQuery({
+    queryKey: [...CHART_DEFINITIONS_KEY, "pin", patientId ?? ""],
+    queryFn: () => fetchPatientChartPin(patientId ?? ""),
+    enabled: Boolean(patientId),
+  });
+}
+
+export function usePatientChartPinMutation(patientId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    /** chartDefinitionId が null なら外す。 */
+    mutationFn: async ({
+      chartDefinitionId,
+      pinnedByName,
+    }: {
+      chartDefinitionId: number | null;
+      pinnedByName: string | null;
+    }): Promise<void> => {
+      if (chartDefinitionId === null) await unpinPatientChart(patientId);
+      else await pinPatientChart(patientId, chartDefinitionId, pinnedByName);
+    },
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...CHART_DEFINITIONS_KEY, "pin", patientId] });
+    },
+  });
 }
 
 // ---- 化学療法レジメンマスタ ----

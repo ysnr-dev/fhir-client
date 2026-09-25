@@ -6016,6 +6016,46 @@ export async function deleteChartDefinition(id: number): Promise<void> {
   if (!res.ok) throw await buildError(res);
 }
 
+// ---- 患者ごとに最初に開くチャート(ピン留め) ----
+// 患者につき 1 つで、利用者の間で共有する。ピンが無ければ chart_definition_id は null。
+
+export interface PatientChartPin {
+  patient_id: string;
+  chart_definition_id: number | null;
+  pinned_by_id: string | null;
+  pinned_by_name: string | null;
+  updated_at: string | null;
+}
+
+const PATIENT_CHART_PINS_PATH = "/master/patient_chart_pins";
+
+export async function fetchPatientChartPin(patientId: string): Promise<PatientChartPin> {
+  const res = await masterFetch(`${PATIENT_CHART_PINS_PATH}/${encodeURIComponent(patientId)}`);
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as PatientChartPin;
+}
+
+export async function pinPatientChart(
+  patientId: string,
+  chartDefinitionId: number,
+  pinnedByName: string | null,
+): Promise<PatientChartPin> {
+  const res = await masterFetch(`${PATIENT_CHART_PINS_PATH}/${encodeURIComponent(patientId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chart_definition_id: chartDefinitionId, pinned_by_name: pinnedByName }),
+  });
+  if (!res.ok) throw await buildError(res);
+  return (await res.json()) as PatientChartPin;
+}
+
+export async function unpinPatientChart(patientId: string): Promise<void> {
+  const res = await masterFetch(`${PATIENT_CHART_PINS_PATH}/${encodeURIComponent(patientId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw await buildError(res);
+}
+
 // ---- 化学療法レジメンマスタ ----
 
 // 審査委員会で承認する施設共通の参照表。本体と子(適応疾患・投与ステップ・薬剤・

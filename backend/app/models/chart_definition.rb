@@ -54,6 +54,9 @@ class ChartDefinition < ApplicationRecord
     "overlay" => false
   }.freeze
 
+  # 定義を消したら、それを最初に開くチャートにしていた患者のピンも外す。
+  has_many :patient_chart_pins, dependent: :delete_all
+
   before_validation :assign_code
 
   validates :code, presence: true, uniqueness: true
