@@ -135,7 +135,7 @@ export interface ChartDrug {
 }
 
 /**
- * 帯の行 1 つを指す参照。定義の `background`(全レーンの背景に敷く状態)と、
+ * 帯の行 1 つを指す参照。定義の `background`(全レーンに網掛けする状態)と、
  * 層別の要約の「層」で共用する。指す先は必ずチャートに出ている行なので、取得が増えない。
  */
 export type ChartTrackRef =
@@ -160,7 +160,7 @@ export interface ChartDefinitionBody {
   drugs: ChartDrug[];
   /** true なら全項目を 1 つのグラフに重ねる。既定は項目ごとに分けて並べる。 */
   overlay: boolean;
-  /** 全レーンの背景に状態を敷く行。無ければ null。 */
+  /** 全レーンに状態を網掛けする行。無ければ null。 */
   background: ChartTrackRef | null;
 }
 
@@ -304,8 +304,8 @@ export function normalizeChartDefinitionBody(raw: unknown): ChartDefinitionBody 
 
   if (typeof source.overlay === "boolean") body.overlay = source.overlay;
 
-  // 背景は、項目・薬剤・種別を読んだ後に「今もチャートに出ている行」を指すものだけ残す
-  // (元の行を定義から外したら背景も外れる)。
+  // 網掛けは、項目・薬剤・種別を読んだ後に「今もチャートに出ている行」を指すものだけ残す
+  // (元の行を定義から外したら網掛けも外れる)。
   body.background = resolveTrackRef(source.background, body);
 
   return body;

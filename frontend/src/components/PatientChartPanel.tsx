@@ -68,7 +68,7 @@ interface PatientChartPanelProps {
   eventKinds: ChartEventKind[];
   /** 帯の行を時刻で引けるようにしたもの。ツールチップに「その時点の状態」を添える。 */
   stateTracks?: ChartStateTrack[];
-  /** 全レーンの背景に敷く状態(定義の background)。 */
+  /** 全レーンに網掛けする状態(定義の background)。 */
   background?: ChartStateTrack;
   /** 全項目を 1 つのグラフに重ねる。 */
   overlay?: boolean;
@@ -244,7 +244,7 @@ export function PatientChartPanel({
           .filter(inRange)
           .map((t) => ({ x: toX(t), kind: "worse" })),
       ),
-    // 背景の状態は、前の区間と状態が変わった所だけ線にする(同じ状態の記録が続く所は引かない)。
+    // 網掛けの状態は、前の区間と状態が変わった所だけ線にする(同じ状態の記録が続く所は引かない)。
     ...(background?.spans ?? [])
       .filter((span, i, spans) => i === 0 || spans[i - 1].label !== span.label || spans[i - 1].end < span.start)
       .map((span) => span.start)
@@ -252,7 +252,7 @@ export function PatientChartPanel({
       .map((t) => ({ x: toX(t), kind: "state" })),
   ];
 
-  // 背景に敷く状態の区間(範囲に掛かるぶんだけ、端は範囲で切る)。
+  // 網掛けする状態の区間(範囲に掛かるぶんだけ、端は範囲で切る)。
   const stateBands: StateBand[] = (background?.spans ?? [])
     .filter((span) => span.end > range.tMin && span.start < range.tMax)
     .map((span) => ({
@@ -537,7 +537,7 @@ function EventBand({
 function StateLegend({ track }: { track: ChartStateTrack }) {
   return (
     <span className="patient-chart__state-legend">
-      <span className="patient-chart__state-legend-name">背景: {track.name}</span>
+      <span className="patient-chart__state-legend-name">網掛け: {track.name}</span>
       {track.strata.map((stratum) => (
         <span key={stratum.index} className="patient-chart__state-legend-item">
           <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
@@ -780,7 +780,7 @@ interface MarkerLine {
   kind: string;
 }
 
-/** レーンの背景に敷く状態の区間(viewBox 座標)。 */
+/** レーンに網掛けする状態の区間(viewBox 座標)。 */
 interface StateBand {
   x1: number;
   x2: number;
@@ -788,7 +788,7 @@ interface StateBand {
   title: string;
 }
 
-/** 背景の区間。線と点の下に、基準範囲の帯より先に敷く。 */
+/** 網掛けの区間。線と点の下に、基準範囲の帯より先に敷く。 */
 function StateBands({ bands, plotH }: { bands: StateBand[]; plotH: number }) {
   return bands.map((band, i) => (
     <rect

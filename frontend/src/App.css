@@ -4190,7 +4190,7 @@ fieldset.rp-card {
   stroke-dasharray: 3 3;
 }
 
-/* 背景に敷いた状態の変わり目。本文色の点線。 */
+/* 網掛けした状態の変わり目。本文色の点線。 */
 .patient-chart__event--state {
   color: var(--text);
 }
@@ -4200,7 +4200,7 @@ fieldset.rp-card {
   opacity: 0.6;
 }
 
-/* 全レーンの背景に敷く状態の区間。線と点が読めるよう、基準範囲の帯よりさらに薄い 5 段。 */
+/* 全レーンに網掛けする状態の区間。線と点が読めるよう、基準範囲の帯よりさらに薄い 5 段。 */
 .patient-chart__state-band,
 .patient-chart__state-swatch {
   fill: var(--text);

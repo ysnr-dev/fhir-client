@@ -19,7 +19,7 @@ interface Props {
   lanes: ChartLaneData[];
   stateTracks: ChartStateTrack[];
   range: ChartRange;
-  /** 最初に選ぶ層(定義の背景)。 */
+  /** 最初に選ぶ層(定義の網掛け)。 */
   initialRef: ChartTrackRef | null;
   anchor?: string;
   onClose: () => void;

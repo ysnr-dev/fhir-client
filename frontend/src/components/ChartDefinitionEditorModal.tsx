@@ -114,7 +114,7 @@ export function ChartDefinitionEditorModal({
     [templateOptions, templateId, keys],
   );
 
-  // 背景に敷ける行(選択肢の項目・追う薬剤・期間を持つ種別)。編集中の内容から作る。
+  // 網掛けにできる行(選択肢の項目・追う薬剤・期間を持つ種別)。編集中の内容から作る。
   const backgroundChoices: { value: string; label: string }[] = [
     ...items.filter(isChoiceItem).map((item) => ({ value: `item:${item.key}`, label: item.name })),
     ...drugs.map((drug) => ({ value: `drug:${drug.key}`, label: drug.name })),
@@ -183,7 +183,7 @@ export function ChartDefinitionEditorModal({
         events,
         drugs: drugs.map((drug) => ({ ...drug, name: drug.name.trim() })),
         overlay,
-        // 元の行を外していたら背景も外す(選択肢に無い値を保存しない)。
+        // 元の行を外していたら網掛けも外す(選択肢に無い値を保存しない)。
         background: backgroundValue ? background : null,
       },
     });
@@ -243,7 +243,7 @@ export function ChartDefinitionEditorModal({
             </select>
           </label>
           <label>
-            背景
+            網掛け
             <select
               value={backgroundValue}
               onChange={(e) => setBackground(parseTrackRefKey(e.target.value))}

@@ -260,7 +260,7 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
 - 発現日から回復日までのバー。回復していなければ基準日まで(入院と同じ)。
 - バーは Grade を濃さにして塗る(選択肢の行と同じ `.patient-chart__level--N`)。G1 が最も薄い塗り(1)、
   G4・G5 が最も濃い(4)で、枠だけ(0)は使わない(起きている有害事象が「無い」ように見えるため。
-  `adverseGradeLevel`)。背景に敷いたときも同じ段を使う。
+  `adverseGradeLevel`)。網掛けにしたときも同じ段を使う。
   名前は「G3」。
 - **Grade 3 以上の発現日は各レーンに縦線**を落とす(手術・入退院と同じ節目の扱い)。
 - 開く先は無い(記録の編集は化学療法・放射線治療の右ペインにあり、`KarteDetailTarget` ではない)。
@@ -343,11 +343,11 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
 - グラフのライブラリは入れず、`LabTimelineChart` の目盛り(`niceTicks`)・数値の書式・
   ツールチップの見た目(`.lab-chart__*`)を借りて自前の SVG で描く。
 
-### 6.1 状態(帯の行を時刻で引く)と、全レーンの背景
+### 6.1 状態(帯の行を時刻で引く)と、全レーンの網掛け
 
 帯の行のうち期間を持つもの —— 選択肢の項目(記録から次の記録まで)、追う薬剤(用量の区間)、
 入院、化学療法のクール、有害事象(発現〜回復)—— を **時刻で引ける区間の並び**にしたのが
-「状態」(`fhir/chartStateHelpers.ts` の `ChartStateTrack`)。ツールチップ(§6)、背景、
+「状態」(`fhir/chartStateHelpers.ts` の `ChartStateTrack`)。ツールチップ(§6)、網掛け、
 層別の要約(§8.1)が同じものを読む。タブが既に持つ行から作るので取得は増えない。
 `chartStateHelpers` は `chartDefinitionHelpers` を import する側で、逆は無い
 (`ChartTrackRef` は `chartDefinitionHelpers` に置く)。
@@ -356,15 +356,15 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
 化学療法は区間の名前をクールごとに持つが、層は「クール中 / クール外」の 2 つに畳む
 (クールごとに列を分けると n が小さくなりすぎる)。
 
-**背景**: 定義の `background`(`{ kind: "item" | "drug", key }` か `{ kind: "event", event }`、
-種別は `encounter` / `chemo` / `adverse` のみ)で行を 1 つ選ぶと、その状態を **全レーンの背景に
+**網掛け**: 定義の `background`(`{ kind: "item" | "drug", key }` か `{ kind: "event", event }`、
+種別は `encounter` / `chemo` / `adverse` のみ)で行を 1 つ選ぶと、その状態を **全レーンに
 薄い帯で敷く**(`.patient-chart__state--N`。基準範囲の帯よりさらに薄い 5 段)。凡例は
 最初のグラフの見出しの行の右端に出す(重ね表示では系列の凡例の先頭。帯の直下に置くと帯の行の
 説明に見えるため)(凡例の色見本は帯より濃くする。12px 角では帯と同じ薄さだと見えない)。
 凡例の段は選択肢の並び順で決め、その患者に記録の無い選択肢も同じ濃さで並べる(記録の有無で
 見本が「塗りなし」になると、程度の順が読めない)。
 状態が変わった所には各レーンに本文色の点線を落とす(同じ状態の記録が続く所には引かない)。
-定義に持つのは、単位・列数と同じく「誰が開いても同じ見え方」にするため。エディタの「背景」は
+定義に持つのは、単位・列数と同じく「誰が開いても同じ見え方」にするため。エディタの「網掛け」は
 編集中の選択肢の項目・薬剤・ON の対象種別から選ばせ、元の行を外していれば保存時に落とす。
 
 ## 7. 申し送り

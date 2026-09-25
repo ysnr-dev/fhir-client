@@ -98,7 +98,7 @@ export function PatientChartGuide({ onClose }: { onClose: () => void }) {
                 </Sample>
               }
             >
-              背景に敷いた状態の変わり目
+              網掛けした状態の変わり目
             </Row>
             <Row
               sample={
@@ -145,7 +145,7 @@ export function PatientChartGuide({ onClose }: { onClose: () => void }) {
                 </Sample>
               }
             >
-              背景の状態(チャートの「背景」で選んだ行の状態。濃いほど程度・用量・Grade が高い。凡例は最初のグラフの見出しの右)
+              網掛け(チャートの「網掛け」で選んだ行の状態。濃いほど程度・用量・Grade が高い。凡例は最初のグラフの見出しの右)
             </Row>
             <Row
               sample={

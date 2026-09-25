@@ -259,7 +259,7 @@ export async function seedHeartFailure(env: SeedEnv): Promise<void> {
       [MED.carv, "カルベジロール"],
     ]),
     overlay: false,
-    // 症状の最初の項目(NYHA 分類)を全レーンの背景に敷く。
+    // 症状の最初の項目(NYHA 分類)を全レーンに網掛けする。
     background: symptomItems[0] ? { kind: "item", key: symptomItems[0].key } : null,
   });
   env.log(`心不全: 記録 ${VISITS.length} 回・入院 2 回を登録`);

@@ -26,7 +26,7 @@
 # codings の中身(どのコード体系のどのコードか)は解釈しない。画面が Observation.code
 # と突き合わせるためにそのまま持つだけ(OrderSetEntry#values と同じ考え)。
 # drugs の yj7(YJ コードの先頭 7 桁)・codes(レセ電コード)も同じで、形だけを見る。
-# background(全レーンの背景に敷く行)は items / drugs / events の中を指す参照だが、
+# background(全レーンに網掛けする行)は items / drugs / events の中を指す参照だが、
 # 突き合わせは画面が行う(指す先が無くなっていれば画面が落とす)。
 # 設計は docs/patient-chart-design.md。
 class ChartDefinition < ApplicationRecord
@@ -52,7 +52,7 @@ class ChartDefinition < ApplicationRecord
   MAX_DRUGS = 20
   BACKGROUND_KEYS = %w[kind key event].freeze
   BACKGROUND_KINDS = %w[item drug event].freeze
-  # 背景に敷けるのは期間を持つ種別だけ。
+  # 網掛けにできるのは期間を持つ種別だけ。
   BACKGROUND_EVENT_KINDS = %w[encounter chemo adverse].freeze
 
   DEFAULT_DEFINITION = {

@@ -210,7 +210,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
     [body.drugs, drugPrescriptions.data, drugInjections.data, range],
   );
   const shownEvents = useMemo(() => filterChartEvents(events, range), [events, range]);
-  // 帯の行を時刻で引けるようにしたもの。ツールチップの「その時点の状態」・背景・層別の要約で共用。
+  // 帯の行を時刻で引けるようにしたもの。ツールチップの「その時点の状態」・網掛け・層別の要約で共用。
   const stateTracks = useMemo(
     () => buildStateTracks({ items: body.items, choiceTracks, drugTracks, events: shownEvents, range }),
     [body.items, choiceTracks, drugTracks, shownEvents, range],
