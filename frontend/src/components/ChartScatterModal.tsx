@@ -7,6 +7,7 @@ import {
 import { pairByTime, type ChartPair, type ChartPairSource } from "../fhir/chartStateHelpers";
 import { spearman } from "../lib/stats";
 import { formatPointDate, formatValue, niceTicks } from "./chartScale";
+import { ChartScatterGuide } from "./ChartScatterGuide";
 import { Modal } from "./Modal";
 
 // 2 項目の対比(散布図)。X と Y を選び、同じ日(または ±N 日)の記録をペアにして描く。
@@ -62,6 +63,7 @@ export function ChartScatterModal({ lanes, choiceTracks, anchor, onClose }: Prop
   const [yKey, setYKey] = useState(yAxes.find((axis) => axis.key !== xAxes[0]?.key)?.key ?? yAxes[0]?.key ?? "");
   const [windowDays, setWindowDays] = useState<number>(0);
   const [hovered, setHovered] = useState<ChartPair | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const x = xAxes.find((axis) => axis.key === xKey) ?? xAxes[0];
   const y = yAxes.find((axis) => axis.key === yKey) ?? yAxes[0];
@@ -75,7 +77,16 @@ export function ChartScatterModal({ lanes, choiceTracks, anchor, onClose }: Prop
   );
 
   return (
-    <Modal title="対比" onClose={onClose} className="modal--wide">
+    <Modal
+      title="対比"
+      onClose={onClose}
+      className="modal--wide"
+      titleAction={
+        <button type="button" className="modal__help" onClick={() => setGuideOpen(true)} aria-label="対比の使い方" title="対比の使い方">
+          ?
+        </button>
+      }
+    >
       <div className="patient-chart__analysis">
         <div className="patient-chart__analysis-controls">
           <label>
@@ -134,6 +145,7 @@ export function ChartScatterModal({ lanes, choiceTracks, anchor, onClose }: Prop
           </>
         )}
       </div>
+      {guideOpen && <ChartScatterGuide onClose={() => setGuideOpen(false)} />}
     </Modal>
   );
 }

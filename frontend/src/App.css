@@ -1156,6 +1156,34 @@ button:disabled {
   color: var(--text-h);
 }
 
+.modal__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 見出しの横の「?」。押すと使い方のモーダルを開く。 */
+.modal__help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.modal__help:hover {
+  color: var(--text-h);
+}
+
 .modal__close {
   height: auto;
   border: none;
