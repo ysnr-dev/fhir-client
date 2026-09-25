@@ -8,7 +8,7 @@ import { Modal } from "./Modal";
 interface Props {
   /** 見出し。何に足すのかは呼び出し元で変わる。 */
   title?: string;
-  /** データ型を固定する(チャートは数値型 PQ だけを足せる)。検索欄には出さない。 */
+  /** データ型を固定する(カンマ区切りで複数可。チャートは数値型と選択肢を持つコード型)。検索欄には出さない。 */
   dataType?: string;
   onSelect: (item: LabResultItem) => void;
   onClose: () => void;

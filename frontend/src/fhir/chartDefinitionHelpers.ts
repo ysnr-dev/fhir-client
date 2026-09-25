@@ -1,7 +1,13 @@
 import type { KarteDetailTarget } from "../karteUrl";
 import { addDays, toDateInput } from "../lib/dates";
 import type { LabResultItem, Medicine } from "../api/masterClient";
-import { JLAC11_SYSTEM, RESULT_ITEM_SYSTEM, interpretationCodeOf } from "./labResultHelpers";
+import {
+  JLAC11_SYSTEM,
+  RESULT_ITEM_SYSTEM,
+  interpretationCodeOf,
+  parseCodeValueList,
+} from "./labResultHelpers";
+import { adverseEventLabel, type AdverseEventRecord } from "./adverseEventHelpers";
 import {
   BLOOD_PRESSURE,
   BMI,
@@ -73,7 +79,14 @@ export interface ChartItem {
    * 並び順を程度の順(「なし」→「高度」)とみなして色の濃さを決める。
    */
   options?: ChartItemOption[];
+  /**
+   * 選択肢の尺度。省略は順序尺度(並び順が程度の順)。`nominal` は順序を持たない
+   * (陽性/陰性・血液型のような CD 型の検査)ので、濃さを付けず名前で読ませる。
+   */
+  scale?: ChartItemScale;
 }
+
+export type ChartItemScale = "ordinal" | "nominal";
 
 export interface ChartItemOption {
   system?: string;
@@ -100,6 +113,7 @@ export type ChartEventKind =
   | "surgery"
   | "chemo"
   | "radiotherapy"
+  | "adverse"
   | "exam"
   | "injection"
   | "prescription";
@@ -120,6 +134,24 @@ export interface ChartDrug {
   codes: string[];
 }
 
+/**
+ * 帯の行 1 つを指す参照。定義の `background`(全レーンの背景に敷く状態)と、
+ * 層別の要約の「層」で共用する。指す先は必ずチャートに出ている行なので、取得が増えない。
+ */
+export type ChartTrackRef =
+  | { kind: "item"; key: string }
+  | { kind: "drug"; key: string }
+  | { kind: "event"; event: ChartStateEventKind };
+
+/** 状態として使えるイベントの種別(期間を持つもの)。 */
+export type ChartStateEventKind = "encounter" | "chemo" | "adverse";
+
+export const CHART_STATE_EVENT_KINDS: readonly ChartStateEventKind[] = ["encounter", "chemo", "adverse"];
+
+export function isChartStateEventKind(value: unknown): value is ChartStateEventKind {
+  return CHART_STATE_EVENT_KINDS.some((kind) => kind === value);
+}
+
 export interface ChartDefinitionBody {
   schema_version: 1;
   axis: ChartAxis;
@@ -128,6 +160,8 @@ export interface ChartDefinitionBody {
   drugs: ChartDrug[];
   /** true なら全項目を 1 つのグラフに重ねる。既定は項目ごとに分けて並べる。 */
   overlay: boolean;
+  /** 全レーンの背景に状態を敷く行。無ければ null。 */
+  background: ChartTrackRef | null;
 }
 
 export const CHART_EVENT_KINDS: ReadonlyArray<{ kind: ChartEventKind; label: string }> = [
@@ -136,6 +170,7 @@ export const CHART_EVENT_KINDS: ReadonlyArray<{ kind: ChartEventKind; label: str
   { kind: "surgery", label: "手術" },
   { kind: "chemo", label: "化学療法" },
   { kind: "radiotherapy", label: "放射線治療" },
+  { kind: "adverse", label: "有害事象" },
   { kind: "exam", label: "検査実施" },
   { kind: "injection", label: "注射実施" },
   { kind: "prescription", label: "処方" },
@@ -188,6 +223,7 @@ export function emptyChartDefinitionBody(): ChartDefinitionBody {
     events: [],
     drugs: [],
     overlay: false,
+    background: null,
   };
 }
 
@@ -236,6 +272,7 @@ export function normalizeChartDefinitionBody(raw: unknown): ChartDefinitionBody 
         ...(Array.isArray(item.options) && item.options.length
           ? { options: item.options as ChartItemOption[] }
           : {}),
+        ...(item.scale === "nominal" ? { scale: "nominal" as const } : {}),
       });
     }
   }
@@ -267,7 +304,43 @@ export function normalizeChartDefinitionBody(raw: unknown): ChartDefinitionBody 
 
   if (typeof source.overlay === "boolean") body.overlay = source.overlay;
 
+  // 背景は、項目・薬剤・種別を読んだ後に「今もチャートに出ている行」を指すものだけ残す
+  // (元の行を定義から外したら背景も外れる)。
+  body.background = resolveTrackRef(source.background, body);
+
   return body;
+}
+
+function resolveTrackRef(raw: unknown, body: ChartDefinitionBody): ChartTrackRef | null {
+  if (!raw || typeof raw !== "object") return null;
+  const ref = raw as Record<string, unknown>;
+  if (ref.kind === "item" && typeof ref.key === "string") {
+    const item = body.items.find((entry) => entry.key === ref.key);
+    return item && isChoiceItem(item) ? { kind: "item", key: ref.key } : null;
+  }
+  if (ref.kind === "drug" && typeof ref.key === "string") {
+    return body.drugs.some((drug) => drug.key === ref.key) ? { kind: "drug", key: ref.key } : null;
+  }
+  if (ref.kind === "event" && isChartStateEventKind(ref.event)) {
+    return body.events.includes(ref.event) ? { kind: "event", event: ref.event } : null;
+  }
+  return null;
+}
+
+/** 参照を select の値にする(`item:<key>` / `drug:<key>` / `event:<kind>`)。 */
+export function trackRefKey(ref: ChartTrackRef | null): string {
+  if (!ref) return "";
+  return ref.kind === "event" ? `event:${ref.event}` : `${ref.kind}:${ref.key}`;
+}
+
+export function parseTrackRefKey(value: string): ChartTrackRef | null {
+  const at = value.indexOf(":");
+  if (at < 0) return null;
+  const kind = value.slice(0, at);
+  const rest = value.slice(at + 1);
+  if (kind === "item" || kind === "drug") return rest ? { kind, key: rest } : null;
+  if (kind === "event" && isChartStateEventKind(rest)) return { kind: "event", event: rest };
+  return null;
 }
 
 // ---- 横軸 ----
@@ -404,13 +477,37 @@ export function labChartItem(item: LabResultItem): ChartItem {
     { system: RESULT_ITEM_SYSTEM, code: item.result_item_code, display: item.name },
   ];
   if (item.jlac11_code) codings.push({ system: JLAC11_SYSTEM, code: item.jlac11_code });
-  return {
+  const base = {
     key: `lab:${item.result_item_code}`,
-    source: "lab",
+    source: "lab" as const,
     name: item.short_name || item.name,
-    unit: item.display_unit ?? "",
     codings,
   };
+  // コード型(CD: 順序なし / CO: 順序あり)は選択肢の行にする。選択肢は結果の
+  // valueCodeableConcept と同じ code_value_list から作るので、そのまま突き合わせられる。
+  const options = isCodedLabItem(item)
+    ? parseCodeValueList(item.code_value_list).map((option) => ({
+        ...(item.value_code_system ? { system: item.value_code_system } : {}),
+        code: option.code,
+        display: option.display,
+      }))
+    : [];
+  if (options.length > 0) {
+    return {
+      ...base,
+      unit: "",
+      options,
+      ...(item.data_type === "CD" ? { scale: "nominal" as const } : {}),
+    };
+  }
+  return { ...base, unit: item.display_unit ?? "" };
+}
+
+/** チャートに足せる検査項目のデータ型。数値型と、選択肢を持つコード型。 */
+export const CHART_LAB_DATA_TYPES = "PQ,CD,CO";
+
+function isCodedLabItem(item: LabResultItem): boolean {
+  return (item.data_type === "CD" || item.data_type === "CO") && Boolean(item.code_value_list);
 }
 
 /** バイタルの項目(固定)。血圧だけは 1 つの Observation に 2 つの値が入る。 */
@@ -696,22 +793,50 @@ export function buildChartLanes(
 /** 選択肢の項目の 1 回の記録。 */
 export interface ChartChoiceMark {
   at: string;
+  t: number;
   /** 選んだ選択肢の名前(複数選択は「、」でつなぐ)。 */
   label: string;
-  /** 程度(0〜4)。選択肢の並び順から決める。複数選択なら重い方。 */
+  /** 程度(0〜4)。選択肢の並び順から決める。複数選択なら重い方。順序の無い項目は 1 で固定。 */
   level: number;
+  /** 選択肢の添字(複数選択なら大きい方)。選択肢に無ければ -1。 */
+  index: number;
+  /** 元の Observation。検査結果の印から報告書を開くのに使う。 */
+  observationId: string;
   /** 元の QuestionnaireResponse の id。 */
   responseId?: string;
 }
 
 export interface ChartChoiceTrack {
   key: string;
+  source: ChartItemSource;
   name: string;
+  options: ChartItemOption[];
+  /** 順序を持たない選択肢(濃さも悪化の判定も付けない)。 */
+  nominal: boolean;
   marks: ChartChoiceMark[];
 }
 
 /** 色の濃さの段数。CSS の .patient-chart__level--0〜4 と対。 */
-const CHOICE_LEVELS = 5;
+export const CHOICE_LEVELS = 5;
+
+/** 順序の無い選択肢に使う濃さ(枠だけの 0 と見分けがつく最も薄い塗り)。 */
+const NOMINAL_LEVEL = 1;
+
+/**
+ * 有害事象の Grade を 0〜4 の濃さにする。G1 が最も薄い塗り(1)、G4・G5 が最も濃い(4)。
+ * 0(枠だけ)は使わない —— 起きている有害事象が「無い」ように見えるため。
+ */
+export function adverseGradeLevel(grade: number | undefined): number {
+  return Math.max(1, Math.min(CHOICE_LEVELS - 1, grade ?? 1));
+}
+
+/** 選択肢の添字を 0〜4 の濃さにする。 */
+export function choiceLevelOf(index: number, optionCount: number, nominal: boolean): number {
+  if (index < 0) return 0;
+  if (nominal) return NOMINAL_LEVEL;
+  const steps = Math.max(1, optionCount - 1);
+  return Math.round((index / steps) * (CHOICE_LEVELS - 1));
+}
 
 /**
  * 選択肢の項目ごとの行。Observation の valueCodeableConcept を選択肢と突き合わせ、
@@ -724,7 +849,11 @@ export function buildChoiceTracks(
 ): ChartChoiceTrack[] {
   return items.filter(isChoiceItem).map((item) => {
     const options = item.options ?? [];
-    const byTime = new Map<string, { labels: string[]; index: number; responseId?: string }>();
+    const nominal = item.scale === "nominal";
+    const byTime = new Map<
+      string,
+      { labels: string[]; index: number; observationId: string; responseId?: string }
+    >();
     for (const observation of observations) {
       if (!matchesItem(observation, item)) continue;
       const at = localDateTimeOf(observationAt(observation));
@@ -745,16 +874,18 @@ export function buildChoiceTracks(
       entry.index = Math.max(entry.index, index);
       byTime.set(at, entry);
     }
-    const steps = Math.max(1, options.length - 1);
     const marks = [...byTime.entries()]
       .map(([at, entry]) => ({
         at,
+        t: epochOf(at),
         label: entry.labels.join("、"),
-        level: entry.index < 0 ? 0 : Math.round((entry.index / steps) * (CHOICE_LEVELS - 1)),
+        level: choiceLevelOf(entry.index, options.length, nominal),
+        index: entry.index,
+        observationId: entry.observationId,
         ...(entry.responseId ? { responseId: entry.responseId } : {}),
       }))
       .sort((a, b) => a.at.localeCompare(b.at));
-    return { key: item.key, name: item.name, marks };
+    return { key: item.key, source: item.source, name: item.name, options, nominal, marks };
   });
 }
 
@@ -774,10 +905,76 @@ export interface ChartEvent {
   target?: KarteDetailTarget;
   /** 点の印の横に出す短い名前(病名の「確定」など)。無ければ印だけ。 */
   mark?: string;
+  /** 有害事象の用語。帯では用語ごとに行を分ける。 */
+  term?: string;
+  /** 有害事象の Grade(1〜5)。バーの濃さと縦線の要否に使う。 */
+  grade?: number;
 }
 
 export function chartEventKindLabel(kind: ChartEventKind): string {
   return CHART_EVENT_KINDS.find((entry) => entry.kind === kind)?.label ?? kind;
+}
+
+/** 帯の 1 行。種別ごとに 1 行だが、有害事象だけは用語ごとに行を分ける。 */
+export interface ChartBandRow {
+  kind: ChartEventKind;
+  label: string;
+  events: ChartEvent[];
+}
+
+/**
+ * 帯に出す行。定義で ON の種別の順に 1 行ずつ。有害事象は用語ごと(初回発現の順)に
+ * 分け、記録が無ければ種別名の空行を 1 つ置く(ON にしたのに行が無いと消えたように見える)。
+ */
+export function chartBandRows(kinds: readonly ChartEventKind[], events: ChartEvent[]): ChartBandRow[] {
+  const rows: ChartBandRow[] = [];
+  for (const entry of CHART_EVENT_KINDS) {
+    if (!kinds.includes(entry.kind)) continue;
+    const rowEvents = events
+      .filter((event) => event.kind === entry.kind)
+      .sort((a, b) => epochOf(a.at) - epochOf(b.at));
+    if (entry.kind !== "adverse") {
+      rows.push({ kind: entry.kind, label: entry.label, events: rowEvents });
+      continue;
+    }
+    const byTerm = new Map<string, ChartEvent[]>();
+    for (const event of rowEvents) {
+      const term = event.term ?? event.label;
+      byTerm.set(term, [...(byTerm.get(term) ?? []), event]);
+    }
+    if (byTerm.size === 0) rows.push({ kind: "adverse", label: entry.label, events: [] });
+    for (const [term, termEvents] of byTerm) rows.push({ kind: "adverse", label: term, events: termEvents });
+  }
+  return rows;
+}
+
+/**
+ * 有害事象(CTCAE Grade)。発現日から回復日までのバーで、回復していなければ基準日まで。
+ * 開く先は持たない(記録の編集は化学療法・放射線治療の右ペインにある)。
+ */
+export function buildAdverseChartEvents(
+  records: AdverseEventRecord[],
+  rangeEnd: string,
+  now: Date = new Date(),
+): ChartEvent[] {
+  const limit = now.getTime();
+  return records
+    .filter((record) => record.onset && epochOf(record.onset) <= limit)
+    .map((record) => ({
+      at: record.onset,
+      end: record.resolved || rangeEnd,
+      kind: "adverse" as const,
+      label: adverseEventLabel(record),
+      term: record.term,
+      grade: record.grade,
+      detail: [
+        `${record.term} Grade ${record.grade}`,
+        `${record.onset} 〜 ${record.resolved || "継続中"}`,
+        `${record.treatmentName}${record.cycle ? ` 第 ${record.cycle} クール` : ""}`,
+      ]
+        .filter(Boolean)
+        .join(" / "),
+    }));
 }
 
 /**
@@ -1183,6 +1380,8 @@ export interface ChartDrugSegment {
   change: ChartDrugChange;
   /** この区間の後に途切れる(中止・終了)かどうか。 */
   stops: boolean;
+  /** 含量で足し上げた 1 日量(求められるときだけ)。用量の層を並べるのに使う。 */
+  total?: { value: number; unit: string };
   target?: KarteDetailTarget;
 }
 
@@ -1281,6 +1480,7 @@ function buildDrugSegments(
       detail: `${CHART_DRUG_CHANGE_LABELS[change]} ${start}〜${end} ${dose.text}${stops ? "(ここで途切れる)" : ""}`,
       change,
       stops,
+      ...(dose.total ? { total: dose.total } : {}),
       target: dose.orderId ? { kind: "prescription", id: dose.orderId } : undefined,
     });
   };

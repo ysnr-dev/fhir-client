@@ -148,6 +148,7 @@ export async function seedDiabetes(env: SeedEnv): Promise<void> {
       [MED.glim, "グリメピリド"],
     ]),
     overlay: false,
+    background: null,
   });
   env.log(`糖尿病: 外来 ${visits.length} 回を登録`);
 }

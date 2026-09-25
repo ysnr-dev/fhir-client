@@ -76,6 +76,33 @@ export function PatientChartGuide({ onClose }: { onClose: () => void }) {
             <Row
               sample={
                 <Sample>
+                  <VLine className="patient-chart__event-line patient-chart__event--adverse" />
+                </Sample>
+              }
+            >
+              有害事象の Grade 3 以上の発現日
+            </Row>
+            <Row
+              sample={
+                <Sample>
+                  <VLine className="patient-chart__event-line patient-chart__event--worse" />
+                </Sample>
+              }
+            >
+              選択肢の項目が悪化した(前の記録より程度が上がった)日
+            </Row>
+            <Row
+              sample={
+                <Sample>
+                  <VLine className="patient-chart__event-line patient-chart__event--state" />
+                </Sample>
+              }
+            >
+              背景に敷いた状態の変わり目
+            </Row>
+            <Row
+              sample={
+                <Sample>
                   <VLine className="patient-chart__event-line patient-chart__event--anchor" />
                 </Sample>
               }
@@ -108,6 +135,17 @@ export function PatientChartGuide({ onClose }: { onClose: () => void }) {
               }
             >
               基準範囲(検査結果に書かれた範囲。項目ごとの表示で、線が 1 本のグラフだけ)
+            </Row>
+            <Row
+              sample={
+                <Sample>
+                  <rect className="patient-chart__state-band patient-chart__state--1" x={0} y={1} width={12} height={H - 2} />
+                  <rect className="patient-chart__state-band patient-chart__state--3" x={12} y={1} width={12} height={H - 2} />
+                  <rect className="patient-chart__state-band patient-chart__state--4" x={24} y={1} width={12} height={H - 2} />
+                </Sample>
+              }
+            >
+              背景の状態(チャートの「背景」で選んだ行の状態。濃いほど程度・用量・Grade が高い。凡例は最初のグラフの見出しの右)
             </Row>
             <Row
               sample={
@@ -175,7 +213,20 @@ export function PatientChartGuide({ onClose }: { onClose: () => void }) {
                 </Sample>
               }
             >
-              選択肢の項目(症状の程度など)。選択肢の並び順が後ろほど濃く塗ります。枠だけのものは最初の選択肢(「なし」など)です
+              選択肢の項目(症状の程度や、尿沈渣・抗原抗体などの定性検査)。選択肢の並び順が後ろほど濃く塗ります。枠だけのものは最初の選択肢(「なし」など)です。順序の無い検査(陽性/陰性・血液型)は濃さを付けず、名前で読みます
+            </Row>
+            <Row
+              sample={
+                <Sample>
+                  <g className="patient-chart__event--adverse">
+                    <rect className="patient-chart__level patient-chart__level--1" x={2} y={4} width={10} height={10} rx={2} />
+                    <rect className="patient-chart__level patient-chart__level--2" x={13} y={4} width={10} height={10} rx={2} />
+                    <rect className="patient-chart__level patient-chart__level--4" x={24} y={4} width={10} height={10} rx={2} />
+                  </g>
+                </Sample>
+              }
+            >
+              有害事象。用語ごとに 1 行で、発現から回復までの期間を Grade が高いほど濃く塗ります(回復していなければ基準日まで)
             </Row>
           </ul>
         </section>
@@ -184,10 +235,26 @@ export function PatientChartGuide({ onClose }: { onClose: () => void }) {
           <h3>操作</h3>
           <ul className="patient-chart__guide-text">
             <li>グラフの上でカーソルを動かすと、すべてのグラフで同じ時期の値が出ます。</li>
+            <li>
+              カーソルのあるグラフには、その時点で有効な状態(入院中、クール、追う薬剤の 1 日量、選択肢の項目の直近の値と日数、有害事象の Grade)も出ます。
+            </li>
             <li>点・印・帯を押すと、元の記録を「開く」か、その日を「基準日に設定」できます。</li>
             <li>
               基準日に設定すると、その日が真ん中に来るように表示期間が変わり、ツールチップに「基準+14日」のような日数が出ます。ツールバーの「基準 ✕」で外せます。
             </li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>分析</h3>
+          <ul className="patient-chart__guide-text">
+            <li>
+              「層別の要約」は、帯の行(選択肢の項目・追う薬剤の用量・入退院・化学療法のクール・有害事象)か基準日の前後を層にして、各項目の値を層ごとに n・中央値・範囲・基準外の割合で並べます。
+            </li>
+            <li>
+              「対比」は 2 つの項目の記録を同じ日(または ±N 日)で組にして散布図に描きます。横軸には選択肢の項目も置けます。古い記録ほど薄く、Spearman の ρ と n を添えます。
+            </li>
+            <li>n は必ず出します。少ない n で読んだ差や ρ は目安になりません。</li>
           </ul>
         </section>
 

@@ -113,9 +113,34 @@ RSpec.describe ChartDefinition do
       expect(build(definition: definition("items" => [item.merge("options" => "none")]))).not_to be_valid
     end
 
+    it "検査項目も options を持てて、scale は ordinal / nominal のみ" do
+      item = { "key" => "lab:160046810", "source" => "lab", "name" => "HBs抗原", "unit" => "",
+               "codings" => [{ "system" => "http://example.org/lab", "code" => "160046810" }],
+               "options" => [{ "code" => "1", "display" => "陽性" }, { "code" => "2", "display" => "陰性" }] }
+      expect(build(definition: definition("items" => [item]))).to be_valid
+      expect(build(definition: definition("items" => [item.merge("scale" => "nominal")]))).to be_valid
+      expect(build(definition: definition("items" => [item.merge("scale" => "ordinal")]))).to be_valid
+      expect(build(definition: definition("items" => [item.merge("scale" => "ranked")]))).not_to be_valid
+    end
+
     it "events は既知の種別のみで重複できない" do
+      expect(build(definition: definition("events" => %w[encounter adverse]))).to be_valid
       expect(build(definition: definition("events" => %w[encounter bogus]))).not_to be_valid
       expect(build(definition: definition("events" => %w[encounter encounter]))).not_to be_valid
+    end
+
+    it "background は行の参照(item / drug / event)" do
+      expect(build(definition: definition("background" => nil))).to be_valid
+      expect(build(definition: definition("background" => { "kind" => "item", "key" => "template:q1:edema" }))).to be_valid
+      expect(build(definition: definition("background" => { "kind" => "drug", "key" => "yj7:3332001" }))).to be_valid
+      expect(build(definition: definition("background" => { "kind" => "event", "event" => "encounter" }))).to be_valid
+      expect(build(definition: definition("background" => { "kind" => "event", "event" => "surgery" }))).not_to be_valid
+      expect(build(definition: definition("background" => { "kind" => "item" }))).not_to be_valid
+      expect(build(definition: definition("background" => { "kind" => "item", "key" => "a", "event" => "encounter" }))).not_to be_valid
+      expect(build(definition: definition("background" => { "kind" => "event", "event" => "chemo", "key" => "a" }))).not_to be_valid
+      expect(build(definition: definition("background" => { "kind" => "lane", "key" => "a" }))).not_to be_valid
+      expect(build(definition: definition("background" => { "kind" => "item", "key" => "a", "bogus" => 1 }))).not_to be_valid
+      expect(build(definition: definition("background" => "item"))).not_to be_valid
     end
 
     it "drugs は key・name と、yj7 か codes のどちらかが要る" do
@@ -155,6 +180,7 @@ RSpec.describe ChartDefinition do
         "events" => [],
         "drugs" => [],
         "overlay" => false,
+        "background" => nil,
       )
     end
   end

@@ -1,6 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { KarteDetailTarget } from "../karteUrl";
 import type {
+  ChartBandRow,
+  ChartChoiceMark,
   ChartChoiceTrack,
   ChartDrugSegment,
   ChartDrugTrack,
@@ -13,12 +15,13 @@ import type {
 } from "../fhir/chartDefinitionHelpers";
 import {
   CHART_DRUG_CHANGE_LABELS,
-  CHART_EVENT_KINDS,
-  chartEventKindLabel,
+  adverseGradeLevel,
+  chartBandRows,
   relativeDayLabel,
   chartSegmentBreaks,
 } from "../fhir/chartDefinitionHelpers";
 import type { ChartSegmentBreak } from "../fhir/chartDefinitionHelpers";
+import { describeStatesAt, type ChartStateTrack } from "../fhir/chartStateHelpers";
 import { epochOf } from "../fhir/flowsheetEventHelpers";
 import { interpretationClass, referenceRangeLabel } from "../fhir/labResultHelpers";
 import { formatPointDate, formatValue, niceTicks } from "./chartScale";
@@ -63,6 +66,10 @@ interface PatientChartPanelProps {
   choiceTracks?: ChartChoiceTrack[];
   /** 帯に出す種別(定義で ON にしたもの)。 */
   eventKinds: ChartEventKind[];
+  /** 帯の行を時刻で引けるようにしたもの。ツールチップに「その時点の状態」を添える。 */
+  stateTracks?: ChartStateTrack[];
+  /** 全レーンの背景に敷く状態(定義の background)。 */
+  background?: ChartStateTrack;
   /** 全項目を 1 つのグラフに重ねる。 */
   overlay?: boolean;
   /** 点の上に数値を出す。 */
@@ -78,6 +85,8 @@ interface PatientChartPanelProps {
   onOpenDetail?: (target: KarteDetailTarget) => void;
   /** 点の元の記録を開く(検査結果・テンプレートのみ)。 */
   onOpenPoint?: (source: ChartItemSource, point: ChartPoint) => void;
+  /** 選択肢の記録を開く(テンプレートの記入か検査結果)。 */
+  onOpenChoice?: (track: ChartChoiceTrack, mark: ChartChoiceMark) => void;
 }
 
 /** クリックで出すメニューの中身。 */
@@ -103,6 +112,8 @@ export function PatientChartPanel({
   drugTracks = [],
   choiceTracks = [],
   eventKinds,
+  stateTracks = [],
+  background,
   overlay,
   values,
   fullscreen,
@@ -111,9 +122,19 @@ export function PatientChartPanel({
   onAnchor,
   onOpenDetail,
   onOpenPoint,
+  onOpenChoice,
 }: PatientChartPanelProps) {
-  // ホバーは時刻(epoch)で 1 つだけ持ち、全レーンが同じ位置を指す。
-  const [hoverT, setHoverT] = useState<number | null>(null);
+  // ホバーは時刻(epoch)で 1 つだけ持ち、全レーンが同じ位置を指す。カーソルのあるレーン
+  // (owner)も持ち、「その時点の状態」の行はそのレーンのツールチップにだけ添える
+  // (全レーンに同じ行を繰り返すと値が埋もれる)。
+  const [hover, setHover] = useState<{ t: number; owner: string } | null>(null);
+  const hoverT = hover?.t ?? null;
+  const setHoverT = (t: number | null, owner = "") => setHover(t === null ? null : { t, owner });
+  const stateLines = useMemo(
+    () => (hoverT === null ? [] : describeStatesAt(stateTracks, hoverT)),
+    [stateTracks, hoverT],
+  );
+  const statesFor = (owner: string) => (hover?.owner === owner ? stateLines : []);
 
   // 点・イベントをクリックしたら、その場に「開く」「基準日に設定」のメニューを出す。
   const [pick, setPick] = useState<ChartPick | null>(null);
@@ -188,8 +209,11 @@ export function PatientChartPanel({
   // 節目のイベント(病名・手術・入退院)だけ各レーンにも縦線を落とす。検査・注射は件数が多く、
   // すべて線にすると値の動きが読めなくなるので帯の印だけにする。
   // 薬剤は開始・用量の変わり目・途切れた所に線を落とす(治療の前後で値を比べる目印)。
+  // 有害事象は Grade 3 以上の発現日、選択肢の項目は程度が上がった(悪化した)記録の日。
   const anchorT = anchor ? epochOf(anchor) : null;
   const anchorX = anchorT !== null && anchorT >= range.tMin && anchorT < range.tMax ? toX(anchorT) : null;
+  // 範囲の外で起きた変わり目は端に寄せて描かない。
+  const inRange = (t: number) => t > range.tMin && t < range.tMax;
   const markerLines: MarkerLine[] = [
     ...(anchorX !== null ? [{ x: anchorX, kind: "anchor" }] : []),
     ...events
@@ -199,25 +223,50 @@ export function PatientChartPanel({
           (event.kind === "condition" || event.kind === "surgery" || event.kind === "encounter"),
       )
       .map((event) => ({ x: toX(epochOf(event.at)), kind: event.kind })),
+    ...events
+      .filter((event) => event.kind === "adverse" && (event.grade ?? 0) >= 3 && inRange(epochOf(event.at)))
+      .map((event) => ({ x: toX(epochOf(event.at)), kind: "adverse" })),
     ...drugTracks.flatMap((track) =>
       track.segments
         .flatMap((segment) => [
           epochOf(segment.start),
           ...(segment.stops ? [epochOf(segment.end) + DAY_MS] : []),
         ])
-        // 範囲の外で起きた変わり目は端に寄せて描かない。
-        .filter((t) => t > range.tMin && t < range.tMax)
+        .filter(inRange)
         .map((t) => ({ x: toX(t), kind: "drug" })),
     ),
+    ...choiceTracks
+      .filter((track) => !track.nominal)
+      .flatMap((track) =>
+        track.marks
+          .filter((mark, i) => i > 0 && mark.index >= 0 && mark.index > track.marks[i - 1].index)
+          .map((mark) => mark.t)
+          .filter(inRange)
+          .map((t) => ({ x: toX(t), kind: "worse" })),
+      ),
+    // 背景の状態は、前の区間と状態が変わった所だけ線にする(同じ状態の記録が続く所は引かない)。
+    ...(background?.spans ?? [])
+      .filter((span, i, spans) => i === 0 || spans[i - 1].label !== span.label || spans[i - 1].end < span.start)
+      .map((span) => span.start)
+      .filter(inRange)
+      .map((t) => ({ x: toX(t), kind: "state" })),
   ];
 
-  const shownKinds = CHART_EVENT_KINDS.filter((entry) => eventKinds.includes(entry.kind)).map(
-    (entry) => entry.kind,
-  );
+  // 背景に敷く状態の区間(範囲に掛かるぶんだけ、端は範囲で切る)。
+  const stateBands: StateBand[] = (background?.spans ?? [])
+    .filter((span) => span.end > range.tMin && span.start < range.tMax)
+    .map((span) => ({
+      x1: toX(Math.max(span.start, range.tMin)),
+      x2: toX(Math.min(span.end, range.tMax)),
+      level: span.level,
+      title: span.label,
+    }));
+
+  const bandRowList = chartBandRows(eventKinds, events);
 
   // グラフの高さはパネルの残りを使い切る。入りきらない(項目が多い・ペインが低い)ときは
   // 最小の高さで止めて本文を送る。
-  const bandRows = shownKinds.length + drugTracks.length + choiceTracks.length;
+  const bandRows = bandRowList.length + drugTracks.length + choiceTracks.length;
   const bandHeight = bandRows > 0 ? BAND_TOP + bandRows * BAND_ROW_HEIGHT + 6 : 0;
   const laneCount = overlay ? 1 : Math.max(1, lanes.length);
   const blocks = laneCount + (bandHeight > 0 ? 1 : 0);
@@ -230,13 +279,10 @@ export function PatientChartPanel({
     <div className="patient-chart__body" ref={bodyRef}>
       {bandRows > 0 && (
         <EventBand
-          kinds={shownKinds}
-          events={events}
+          rows={bandRowList}
           drugTracks={drugTracks}
           choiceTracks={choiceTracks}
-          onOpenResponse={
-            onOpenDetail ? (responseId) => onOpenDetail({ kind: "qr", id: responseId }) : undefined
-          }
+          onOpenChoice={onOpenChoice}
           range={range}
           vbWidth={vbWidth}
           toX={toX}
@@ -262,15 +308,18 @@ export function PatientChartPanel({
           boundaries={boundaries}
           todayX={todayX}
           markerLines={markerLines}
+          stateBands={stateBands}
+          stateLegend={background && <StateLegend track={background} />}
           hoverT={hoverT}
-          onHover={setHoverT}
+          onHover={(t) => setHoverT(t, "overlay")}
+          states={statesFor("overlay")}
           columnLabels={columnLabels}
           anchor={anchor}
           loading={loading}
           onPickPoint={(event, point, series) => pointPicker(series.source, series.name)(event, point)}
         />
       ) : (
-        lanes.map((lane) => (
+        lanes.map((lane, index) => (
           <ChartLane
             key={lane.key}
             lane={lane}
@@ -282,8 +331,12 @@ export function PatientChartPanel({
             boundaries={boundaries}
             todayX={todayX}
             markerLines={markerLines}
+            stateBands={stateBands}
+            // 網掛けの凡例は最初のグラフの見出しの行に置く(帯の説明と取り違えないように)。
+            stateLegend={index === 0 && background ? <StateLegend track={background} /> : undefined}
             hoverT={hoverT}
-            onHover={setHoverT}
+            onHover={(t) => setHoverT(t, lane.key)}
+            states={statesFor(lane.key)}
             columnLabels={columnLabels}
             anchor={anchor}
             loading={loading}
@@ -365,11 +418,10 @@ function ChartPickMenu({
 // ---- イベントの帯 ----
 
 interface EventBandProps {
-  kinds: ChartEventKind[];
-  events: ChartEvent[];
+  rows: ChartBandRow[];
   drugTracks: ChartDrugTrack[];
   choiceTracks: ChartChoiceTrack[];
-  onOpenResponse?: (responseId: string) => void;
+  onOpenChoice?: (track: ChartChoiceTrack, mark: ChartChoiceMark) => void;
   range: ChartRange;
   vbWidth: number;
   toX: (t: number) => number;
@@ -381,11 +433,10 @@ interface EventBandProps {
 }
 
 function EventBand({
-  kinds,
-  events,
+  rows,
   drugTracks,
   choiceTracks,
-  onOpenResponse,
+  onOpenChoice,
   range,
   vbWidth,
   toX,
@@ -395,8 +446,8 @@ function EventBand({
   anchor,
   onPick,
 }: EventBandProps) {
-  const rows = kinds.length + drugTracks.length + choiceTracks.length;
-  const height = BAND_TOP + rows * BAND_ROW_HEIGHT + 6;
+  const rowCount = rows.length + drugTracks.length + choiceTracks.length;
+  const height = BAND_TOP + rowCount * BAND_ROW_HEIGHT + 6;
 
   return (
     <div className="patient-chart__band">
@@ -416,18 +467,17 @@ function EventBand({
             y2={height}
           />
         )}
-        {kinds.map((kind, row) => {
+        {rows.map((bandRow, row) => {
           const y = BAND_TOP + row * BAND_ROW_HEIGHT;
           // 同じ行に並ぶバーは、隣までの余地を見てラベルを出す(処方のように重なる行で
           // 名前が重なって読めなくなるのを避ける)。
-          const rowEvents = events
-            .filter((event) => event.kind === kind)
-            .sort((a, b) => epochOf(a.at) - epochOf(b.at));
+          const rowEvents = bandRow.events;
           const rowX = rowEvents.map((event) => toX(epochOf(event.at)));
           return (
-            <g key={kind} className={`patient-chart__event--${kind}`}>
+            <g key={`${bandRow.kind}/${bandRow.label}`} className={`patient-chart__event--${bandRow.kind}`}>
               <text className="patient-chart__band-label" x={MARGIN.left - 8} y={y + 12} textAnchor="end">
-                {chartEventKindLabel(kind)}
+                <title>{bandRow.label}</title>
+                {clipLabel(bandRow.label, ROW_LABEL_WIDTH) || [...bandRow.label].slice(0, 5).join("")}
               </text>
               <line
                 className="patient-chart__band-rule"
@@ -455,7 +505,7 @@ function EventBand({
           <DrugRow
             key={track.key}
             track={track}
-            y={BAND_TOP + (kinds.length + index) * BAND_ROW_HEIGHT}
+            y={BAND_TOP + (rows.length + index) * BAND_ROW_HEIGHT}
             vbWidth={vbWidth}
             range={range}
             toX={toX}
@@ -467,16 +517,53 @@ function EventBand({
           <ChoiceRow
             key={track.key}
             track={track}
-            y={BAND_TOP + (kinds.length + drugTracks.length + index) * BAND_ROW_HEIGHT}
+            y={BAND_TOP + (rows.length + drugTracks.length + index) * BAND_ROW_HEIGHT}
             vbWidth={vbWidth}
             toX={toX}
             anchor={anchor}
             onPick={onPick}
-            onOpenResponse={onOpenResponse}
+            onOpenChoice={onOpenChoice}
           />
         ))}
       </svg>
     </div>
+  );
+}
+
+/**
+ * グラフの背面に敷いている状態の凡例(どの行の、どの状態がどの濃さか)。帯の直下に置くと
+ * 帯の行の説明に見えるので、グラフの側(最初のレーンの見出し・重ね表示の凡例)に置く。
+ */
+function StateLegend({ track }: { track: ChartStateTrack }) {
+  return (
+    <span className="patient-chart__state-legend">
+      <span className="patient-chart__state-legend-name">背景: {track.name}</span>
+      {track.strata.map((stratum) => (
+        <span key={stratum.index} className="patient-chart__state-legend-item">
+          <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+            <rect className={`patient-chart__state-swatch patient-chart__state--${stratum.level}`} width="12" height="12" />
+          </svg>
+          {stratum.label}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * ツールチップに添える、その時点で有効な状態。1 行にまとめて折り返す(状態ごとに行を
+ * 取るとレーンの高さを超えて下のレーンに掛かる)。
+ */
+function TooltipStates({ states }: { states: string[] }) {
+  if (states.length === 0) return null;
+  return (
+    <span className="patient-chart__tooltip-state">
+      {states.map((state) => (
+        <span key={state} className="patient-chart__tooltip-state-item">
+          {state}
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -497,7 +584,7 @@ function ChoiceRow({
   toX,
   anchor,
   onPick,
-  onOpenResponse,
+  onOpenChoice,
 }: {
   track: ChartChoiceTrack;
   y: number;
@@ -505,9 +592,9 @@ function ChoiceRow({
   toX: (t: number) => number;
   anchor?: string;
   onPick: OnPick;
-  onOpenResponse?: (responseId: string) => void;
+  onOpenChoice?: (track: ChartChoiceTrack, mark: ChartChoiceMark) => void;
 }) {
-  const xs = track.marks.map((mark) => toX(epochOf(mark.at)));
+  const xs = track.marks.map((mark) => toX(mark.t));
   return (
     <g className="patient-chart__choice">
       <text className="patient-chart__band-label" x={MARGIN.left - 8} y={y + 12} textAnchor="end">
@@ -525,7 +612,6 @@ function ChoiceRow({
         const x = xs[i];
         const room = (xs[i + 1] ?? vbWidth - MARGIN.right) - x;
         const label = clipLabel(mark.label, room - 12) === mark.label ? mark.label : "";
-        const responseId = mark.responseId;
         return (
           <g
             key={mark.at}
@@ -534,7 +620,7 @@ function ChoiceRow({
               onPick(event, {
                 title: `${track.name} ${mark.label} ${formatPointDate(mark.at)}`,
                 at: mark.at,
-                open: responseId && onOpenResponse ? () => onOpenResponse(responseId) : undefined,
+                open: onOpenChoice ? () => onOpenChoice(track, mark) : undefined,
               })
             }
           >
@@ -688,10 +774,34 @@ function DrugSegmentBar({
   );
 }
 
-/** レーンに落とす縦線。kind は CSS の修飾子(イベント種別か "drug")。 */
+/** レーンに落とす縦線。kind は CSS の修飾子(イベント種別か "drug" / "worse" / "state" / "anchor")。 */
 interface MarkerLine {
   x: number;
   kind: string;
+}
+
+/** レーンの背景に敷く状態の区間(viewBox 座標)。 */
+interface StateBand {
+  x1: number;
+  x2: number;
+  level: number;
+  title: string;
+}
+
+/** 背景の区間。線と点の下に、基準範囲の帯より先に敷く。 */
+function StateBands({ bands, plotH }: { bands: StateBand[]; plotH: number }) {
+  return bands.map((band, i) => (
+    <rect
+      key={i}
+      className={`patient-chart__state-band patient-chart__state--${band.level}`}
+      x={band.x1}
+      y={MARGIN.top}
+      width={Math.max(0, band.x2 - band.x1)}
+      height={plotH}
+    >
+      <title>{band.title}</title>
+    </rect>
+  ));
 }
 
 /** 点の上に出す数値の字の大きさ。 */
@@ -790,11 +900,24 @@ function EventMark({
     const start = Math.max(toX(epochOf(event.at)), toX(range.tMin));
     const end = Math.min(toX(epochOf(event.end) + DAY_MS), toX(range.tMax));
     const width = Math.max(2, end - start);
-    const label = clipLabel(event.label, Math.min(width, room) - 8);
+    // 有害事象は Grade の濃さで塗る(選択肢の行と同じ 5 段)。名前は短く「G3」。
+    const grade = event.grade;
+    const label = clipLabel(grade ? `G${grade}` : event.label, Math.min(width, room) - 8);
     return (
       <g className={className} onClick={handleClick}>
         {title}
-        <rect className="patient-chart__bar" x={start} y={y + 3} width={width} height={10} rx={2} />
+        <rect
+          className={
+            grade
+              ? `patient-chart__level patient-chart__level--${adverseGradeLevel(grade)}`
+              : "patient-chart__bar"
+          }
+          x={start}
+          y={y + 3}
+          width={width}
+          height={10}
+          rx={2}
+        />
         {label && (
           <text className="patient-chart__bar-label" x={start + 4} y={y + 11.5}>
             {label}
@@ -994,8 +1117,13 @@ interface OverlayChartProps {
   boundaries: number[];
   todayX: number | null;
   markerLines: MarkerLine[];
+  stateBands: StateBand[];
+  /** 網掛けの凡例(置くグラフにだけ渡す)。 */
+  stateLegend?: ReactNode;
   hoverT: number | null;
   onHover: (t: number | null) => void;
+  /** ホバー時刻に有効な状態(このレーンにカーソルがあるときだけ)。 */
+  states: string[];
   columnLabels: { x: number; text: string }[];
   anchor?: string;
   loading?: boolean;
@@ -1013,8 +1141,11 @@ function OverlayChart({
   boundaries,
   todayX,
   markerLines,
+  stateBands,
+  stateLegend,
   hoverT,
   onHover,
+  states,
   columnLabels,
   anchor,
   loading,
@@ -1084,6 +1215,7 @@ function OverlayChart({
           onPointerMove={handlePointerMove}
           onPointerLeave={() => onHover(null)}
         >
+          <StateBands bands={stateBands} plotH={plotH} />
           {boundaries.map((x, i) => (
             <line
               key={i}
@@ -1223,6 +1355,7 @@ function OverlayChart({
                 </span>
               ) : null,
             )}
+            <TooltipStates states={states} />
             <span className="lab-chart__tooltip-date">
               {withRelative(formatPointDate(hoverAt), hoverAt, anchor)}
             </span>
@@ -1231,6 +1364,7 @@ function OverlayChart({
       </div>
       {/* 縦軸に数値を出さないぶん、各系列の単位と表示範囲は凡例で示す。 */}
       <ul className="patient-chart__legend" ref={legendRef}>
+        {stateLegend && <li className="patient-chart__legend-state">{stateLegend}</li>}
         {series.map((spec) => {
           const isHidden = hidden.has(spec.key);
           return (
@@ -1278,8 +1412,13 @@ interface ChartLaneProps {
   boundaries: number[];
   todayX: number | null;
   markerLines: MarkerLine[];
+  stateBands: StateBand[];
+  /** 網掛けの凡例(置くグラフにだけ渡す)。 */
+  stateLegend?: ReactNode;
   hoverT: number | null;
   onHover: (t: number | null) => void;
+  /** ホバー時刻に有効な状態(このレーンにカーソルがあるときだけ)。 */
+  states: string[];
   columnLabels: { x: number; text: string }[];
   anchor?: string;
   loading?: boolean;
@@ -1296,8 +1435,11 @@ function ChartLane({
   boundaries,
   todayX,
   markerLines,
+  stateBands,
+  stateLegend,
   hoverT,
   onHover,
+  states,
   columnLabels,
   anchor,
   loading,
@@ -1357,6 +1499,7 @@ function ChartLane({
       <p className="patient-chart__lane-title">
         {lane.name}
         {lane.unit && <span className="patient-chart__lane-unit">({lane.unit})</span>}
+        {stateLegend}
       </p>
       <div className="patient-chart__lane-plot">
         <svg
@@ -1367,6 +1510,7 @@ function ChartLane({
           onPointerMove={handlePointerMove}
           onPointerLeave={() => onHover(null)}
         >
+        <StateBands bands={stateBands} plotH={plotH} />
         {hasPoints &&
           steps.map((step, i) => {
             const x1 = step.from === null ? MARGIN.left : toX(step.from);
@@ -1514,6 +1658,7 @@ function ChartLane({
                 {row.text}
               </span>
             ))}
+            <TooltipStates states={states} />
             <span className="lab-chart__tooltip-date">{tooltip.at}</span>
           </div>
         )}

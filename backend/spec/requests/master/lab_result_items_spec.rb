@@ -54,6 +54,9 @@ RSpec.describe "Master::LabResultItems", type: :request do
 
       get "/master/lab_result_items", params: { data_type: "ST" }
       expect(body["items"].map { |i| i["result_item_code"] }).to eq(%w[R0003])
+
+      get "/master/lab_result_items", params: { data_type: "PQ,ST" }
+      expect(body["items"].map { |i| i["result_item_code"] }).to match_array(%w[R0001 R0002 R0003])
     end
 
     it "active=true は有効期間内の項目だけ返す" do

@@ -19,7 +19,8 @@ module Master
       end
       scope = scope.where(category: params[:category]) if params[:category].present?
       scope = scope.where(specimen_code: params[:specimen_code]) if params[:specimen_code].present?
-      scope = scope.where(data_type: params[:data_type]) if params[:data_type].present?
+      # データ型もカンマ区切りで複数可(チャートは数値型とコード型を一度に探す)。
+      scope = scope.where(data_type: params[:data_type].split(",")) if params[:data_type].present?
       # active=true は今日使える項目(有効期間内)だけに絞る。
       if params[:active] == "true"
         scope = scope

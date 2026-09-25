@@ -7,18 +7,25 @@ import {
   CHART_COLUMN_CHOICES,
   CHART_EVENT_KINDS,
   CHART_ITEM_SOURCE_LABELS,
+  CHART_LAB_DATA_TYPES,
   CHART_LAYOUT_OPTIONS,
+  CHART_STATE_EVENT_KINDS,
   chartColumnsFor,
   chartDrugOf,
+  chartEventKindLabel,
+  isChoiceItem,
   ownerKeyOf,
   labChartItem,
+  parseTrackRefKey,
   templateChartItems,
+  trackRefKey,
   vitalChartItems,
   type ChartAxisUnit,
   type ChartDefinitionBody,
   type ChartDrug,
   type ChartEventKind,
   type ChartItem,
+  type ChartTrackRef,
 } from "../fhir/chartDefinitionHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { TrashIcon } from "./PathwayEventCard";
@@ -76,6 +83,7 @@ export function ChartDefinitionEditorModal({
   const [events, setEvents] = useState<ChartEventKind[]>(initial.definition.events);
   const [overlay, setOverlay] = useState(initial.definition.overlay);
   const [drugs, setDrugs] = useState<ChartDrug[]>(initial.definition.drugs);
+  const [background, setBackground] = useState<ChartTrackRef | null>(initial.definition.background);
   const [labSearch, setLabSearch] = useState(false);
   const [drugSearch, setDrugSearch] = useState(false);
   const [templateId, setTemplateId] = useState("");
@@ -105,6 +113,20 @@ export function ChartDefinitionEditorModal({
         ?.items.filter((item) => !keys.has(item.key)) ?? [],
     [templateOptions, templateId, keys],
   );
+
+  // 背景に敷ける行(選択肢の項目・追う薬剤・期間を持つ種別)。編集中の内容から作る。
+  const backgroundChoices: { value: string; label: string }[] = [
+    ...items.filter(isChoiceItem).map((item) => ({ value: `item:${item.key}`, label: item.name })),
+    ...drugs.map((drug) => ({ value: `drug:${drug.key}`, label: drug.name })),
+    ...CHART_STATE_EVENT_KINDS.filter((kind) => events.includes(kind)).map((kind) => ({
+      value: `event:${kind}`,
+      label: chartEventKindLabel(kind),
+    })),
+  ];
+  const backgroundKey = trackRefKey(background);
+  const backgroundValue = backgroundChoices.some((choice) => choice.value === backgroundKey)
+    ? backgroundKey
+    : "";
 
   function addItem(item: ChartItem) {
     if (keys.has(item.key)) return;
@@ -161,6 +183,8 @@ export function ChartDefinitionEditorModal({
         events,
         drugs: drugs.map((drug) => ({ ...drug, name: drug.name.trim() })),
         overlay,
+        // 元の行を外していたら背景も外す(選択肢に無い値を保存しない)。
+        background: backgroundValue ? background : null,
       },
     });
   }
@@ -214,6 +238,21 @@ export function ChartDefinitionEditorModal({
               {CHART_LAYOUT_OPTIONS.map((option) => (
                 <option key={String(option.overlay)} value={String(option.overlay)}>
                   {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            背景
+            <select
+              value={backgroundValue}
+              onChange={(e) => setBackground(parseTrackRefKey(e.target.value))}
+              disabled={backgroundChoices.length === 0}
+            >
+              <option value="">なし</option>
+              {backgroundChoices.map((choice) => (
+                <option key={choice.value} value={choice.value}>
+                  {choice.label}
                 </option>
               ))}
             </select>
@@ -415,7 +454,7 @@ export function ChartDefinitionEditorModal({
       {labSearch && (
         <LabResultItemSearchModal
           title="チャートに足す検査項目を選択"
-          dataType="PQ"
+          dataType={CHART_LAB_DATA_TYPES}
           onSelect={addLabItem}
           onClose={() => setLabSearch(false)}
         />

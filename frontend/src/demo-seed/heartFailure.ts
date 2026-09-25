@@ -242,13 +242,14 @@ export async function seedHeartFailure(env: SeedEnv): Promise<void> {
   await createStay(env, patient, department, dateOf(0), dateOf(12), 1);
   await createStay(env, patient, department, dateOf(262), dateOf(269), 2);
 
+  const symptomItems = templateChartItems(questionnaire).filter((item) => item.options?.length);
   await ensureFacilityChart(env, "心不全(症状つき)", {
     axis: { unit: "month", columns: 12 },
     items: [
       vitalItem("29463-7"),
       vitalItem("85354-9"),
       ...labItemsOf(labs, [LAB.bnp, LAB.cre, LAB.k]),
-      ...templateChartItems(questionnaire).filter((item) => item.options?.length),
+      ...symptomItems,
     ],
     events: ["condition", "encounter"],
     drugs: drugsOf(drugs, [
@@ -258,6 +259,8 @@ export async function seedHeartFailure(env: SeedEnv): Promise<void> {
       [MED.carv, "カルベジロール"],
     ]),
     overlay: false,
+    // 症状の最初の項目(NYHA 分類)を全レーンの背景に敷く。
+    background: symptomItems[0] ? { kind: "item", key: symptomItems[0].key } : null,
   });
   env.log(`心不全: 記録 ${VISITS.length} 回・入院 2 回を登録`);
 }

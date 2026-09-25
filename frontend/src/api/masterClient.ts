@@ -1032,6 +1032,7 @@ export async function searchLabResultItems(params: {
   jlac10_code?: string;
   category?: string;
   specimen_code?: string;
+  /** データ型。カンマ区切りで複数指定できる。 */
   data_type?: string;
   /** true なら今日使える項目(有効期間内)だけ。 */
   active?: boolean;

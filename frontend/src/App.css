@@ -3814,6 +3814,7 @@ fieldset.rp-card {
 
 .patient-chart__lane-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
   margin: 0 0 2px;
@@ -4165,6 +4166,281 @@ fieldset.rp-card {
 
 .patient-chart__event-line.patient-chart__event--drug {
   stroke-dasharray: 3 3;
+}
+
+/* 有害事象の行(Grade の濃さは選択肢の行と同じ .patient-chart__level)と、Grade 3 以上の縦線。 */
+.patient-chart__event--adverse {
+  color: #9f1239;
+}
+
+:root[data-theme="dark"] .patient-chart__event--adverse {
+  color: #fb7185;
+}
+
+/* 選択肢の項目が悪化した(程度が上がった)記録の日。行と同じ色の破線。 */
+.patient-chart__event--worse {
+  color: #0369a1;
+}
+
+:root[data-theme="dark"] .patient-chart__event--worse {
+  color: #38bdf8;
+}
+
+.patient-chart__event-line.patient-chart__event--worse {
+  stroke-dasharray: 3 3;
+}
+
+/* 背景に敷いた状態の変わり目。本文色の点線。 */
+.patient-chart__event--state {
+  color: var(--text);
+}
+
+.patient-chart__event-line.patient-chart__event--state {
+  stroke-dasharray: 2 2;
+  opacity: 0.6;
+}
+
+/* 全レーンの背景に敷く状態の区間。線と点が読めるよう、基準範囲の帯よりさらに薄い 5 段。 */
+.patient-chart__state-band,
+.patient-chart__state-swatch {
+  fill: var(--text);
+  pointer-events: none;
+}
+
+/* 凡例の色見本は帯より濃くする(12px 角では帯と同じ薄さだと見えない)。段の順は同じ。 */
+.patient-chart__state-swatch {
+  stroke: var(--text);
+  stroke-width: 1;
+  stroke-opacity: 0.4;
+}
+
+.patient-chart__state-swatch.patient-chart__state--0 {
+  fill-opacity: 0.08;
+}
+
+.patient-chart__state-swatch.patient-chart__state--1 {
+  fill-opacity: 0.2;
+}
+
+.patient-chart__state-swatch.patient-chart__state--2 {
+  fill-opacity: 0.35;
+}
+
+.patient-chart__state-swatch.patient-chart__state--3 {
+  fill-opacity: 0.5;
+}
+
+.patient-chart__state-swatch.patient-chart__state--4 {
+  fill-opacity: 0.7;
+}
+
+.patient-chart__state--0 {
+  fill-opacity: 0.03;
+}
+
+.patient-chart__state--1 {
+  fill-opacity: 0.07;
+}
+
+.patient-chart__state--2 {
+  fill-opacity: 0.11;
+}
+
+.patient-chart__state--3 {
+  fill-opacity: 0.16;
+}
+
+.patient-chart__state--4 {
+  fill-opacity: 0.22;
+}
+
+/* 網掛けの凡例。最初のグラフの見出しの行の右端(重ね表示では系列の凡例の先頭)に置く。 */
+.patient-chart__state-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.patient-chart__legend-state {
+  flex-basis: 100%;
+}
+
+.patient-chart__legend-state .patient-chart__state-legend {
+  margin-left: 0;
+}
+
+.patient-chart__state-legend-name {
+  font-weight: 600;
+}
+
+.patient-chart__state-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* ツールチップに添える、その時点で有効な状態(入院中・クール・薬の 1 日量・選択肢の直近の値)。 */
+.patient-chart__tooltip-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  max-width: 280px;
+  line-height: 1.3;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.patient-chart__tooltip-state-item {
+  white-space: nowrap;
+}
+
+/* 相関を読む道具(層別の要約・対比)。 */
+.patient-chart__analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.patient-chart__analysis-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: flex-end;
+}
+
+.patient-chart__analysis-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 素の select には枠も背景も付かないので、定義の編集と同じ見た目を当てる。 */
+.patient-chart__analysis-controls select {
+  font: inherit;
+  font-size: 14px;
+  min-width: 140px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.patient-chart__strata {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+}
+
+.patient-chart__strata th,
+.patient-chart__strata td {
+  border-bottom: 1px solid var(--border);
+  padding: 4px 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.patient-chart__strata th {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.patient-chart__strata th[scope="row"],
+.patient-chart__strata td:first-child {
+  text-align: left;
+}
+
+.patient-chart__strata-group {
+  text-align: center !important;
+  border-left: 1px solid var(--border);
+}
+
+.patient-chart__strata-first {
+  border-left: 1px solid var(--border);
+}
+
+.patient-chart__strata-empty {
+  color: var(--text-muted, var(--text));
+  opacity: 0.6;
+}
+
+/* 対比の散布図。枠で囲み、幅は読める大きさで止める(広いモーダルで文字まで拡大しない)。 */
+.patient-chart__scatter-plot {
+  position: relative;
+  padding: 8px 12px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.patient-chart__scatter {
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  margin: 0 auto;
+}
+
+.patient-chart__scatter-point {
+  fill: #2a78d6;
+  stroke: var(--bg);
+  stroke-width: 1;
+  cursor: pointer;
+}
+
+.patient-chart__scatter-point:hover,
+.patient-chart__scatter-point:focus-visible,
+.patient-chart__scatter-point.is-active {
+  stroke: var(--text-h);
+  stroke-width: 1.5;
+  outline: none;
+}
+
+:root[data-theme="dark"] .patient-chart__scatter-point {
+  fill: #62a2f0;
+}
+
+.patient-chart__scatter-label {
+  fill: var(--text-h);
+  font-size: 12px;
+}
+
+/* 散布図のツールチップ。枠の中の角に置き、X と Y の 2 行を左揃えで読ませる。 */
+.patient-chart__scatter-tooltip {
+  top: 8px;
+  transform: none;
+  margin: 0 12px;
+  align-items: flex-start;
+  font-size: 12px;
+}
+
+.patient-chart__stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.patient-chart__stats strong {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.patient-chart__stats-note {
+  font-size: 12px;
+  opacity: 0.8;
 }
 
 /* 増量 ▲ / 減量 ▼。バーの頭に置くので、バーの色に埋もれないよう本文色で塗る。 */

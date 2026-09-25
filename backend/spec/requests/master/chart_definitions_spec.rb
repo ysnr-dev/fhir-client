@@ -35,7 +35,8 @@ RSpec.describe "Master::ChartDefinitions", type: :request do
       ],
       "events" => %w[encounter surgery],
       "drugs" => [{ "key" => "yj7:3332001", "name" => "ワルファリン", "yj7" => "3332001", "codes" => ["613330003"] }],
-      "overlay" => true
+      "overlay" => true,
+      "background" => { "kind" => "drug", "key" => "yj7:3332001" }
     }
   end
 

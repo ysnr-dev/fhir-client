@@ -7,6 +7,7 @@ import {
   usePatientChartPinMutation,
 } from "../api/masterQueries";
 import {
+  usePatientAdverseEvents,
   usePatientChartObservations,
   usePatientEncounterEvents,
   useKarteConditions,
@@ -31,6 +32,7 @@ import { useOrderContext } from "../hooks/useOrderContext";
 import {
   CHART_AXIS_UNIT_LABELS,
   CHART_COLUMN_CHOICES,
+  buildAdverseChartEvents,
   buildChartLanes,
   buildChoiceTracks,
   centeredBaseDate,
@@ -50,11 +52,14 @@ import {
   normalizeChartDefinitionBody,
   ownerKeyOf,
   type ChartAxisUnit,
+  type ChartChoiceMark,
+  type ChartChoiceTrack,
   type ChartEvent,
   type ChartEventKind,
   type ChartItemSource,
   type ChartPoint,
 } from "../fhir/chartDefinitionHelpers";
+import { buildStateTracks, findStateTrack } from "../fhir/chartStateHelpers";
 import { formatChartView, parseChartView, type KarteDetailTarget } from "../karteUrl";
 import { addDays, today } from "../lib/dates";
 import {
@@ -62,6 +67,8 @@ import {
   type ChartDefinitionDraft,
   type ChartOwnerOption,
 } from "./ChartDefinitionEditorModal";
+import { ChartScatterModal } from "./ChartScatterModal";
+import { ChartStratifyModal } from "./ChartStratifyModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { PatientChartGuide } from "./PatientChartGuide";
 import { PatientChartPanel } from "./PatientChartPanel";
@@ -203,9 +210,20 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
     [body.drugs, drugPrescriptions.data, drugInjections.data, range],
   );
   const shownEvents = useMemo(() => filterChartEvents(events, range), [events, range]);
+  // 帯の行を時刻で引けるようにしたもの。ツールチップの「その時点の状態」・背景・層別の要約で共用。
+  const stateTracks = useMemo(
+    () => buildStateTracks({ items: body.items, choiceTracks, drugTracks, events: shownEvents, range }),
+    [body.items, choiceTracks, drugTracks, shownEvents, range],
+  );
+  const background = useMemo(
+    () => findStateTrack(stateTracks, body.background),
+    [stateTracks, body.background],
+  );
 
   const [editing, setEditing] = useState<Editing>(null);
   const [guideOpen, setGuideOpen] = useState(false);
+  // 相関を読む道具(層別の要約・対比)。読み捨ての分析なので URL には載せない。
+  const [analysis, setAnalysis] = useState<"stratify" | "scatter" | null>(null);
   const [error, setError] = useState<unknown>(null);
 
   // 全画面はビューポート全体ではなく「患者情報の下」から始める(経過表・パスシートと同じ)。
@@ -228,14 +246,14 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
   // 全画面は Escape でも抜けられるようにする。編集モーダルを開いている間は、
   // そちらを閉じる操作なのでここでは拾わない。
   useEffect(() => {
-    if (!fullscreen || editing || guideOpen) return;
+    if (!fullscreen || editing || guideOpen || analysis) return;
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") updateView({ ...viewRef.current, fullscreen: false });
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fullscreen, editing, guideOpen]);
+  }, [fullscreen, editing, guideOpen, analysis]);
 
   // 定義を消した後など、URL が指している id が無くなったら指定を落とす。
   // **引き直している間は触らない** —— 作った直後は一覧がまだ古く、作ったチャートを
@@ -255,21 +273,27 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
     updateView({ ...parsed, unit: nextUnit, columns: nextColumns, baseDate: anchorBase });
   }
 
-  // 点の元の記録。検査は結果の載った報告書を引いてから開く(点は Observation しか持たない)。
-  async function openPoint(source: ChartItemSource, point: ChartPoint) {
+  // 記録の元。テンプレートは記入(QuestionnaireResponse)を、検査は結果の載った報告書を
+  // 引いてから開く(点も選択肢の印も Observation しか持たない)。バイタルは開く先が無い。
+  async function openObservation(source: ChartItemSource, observationId: string, responseId?: string) {
     if (!onOpenDetail) return;
     if (source === "template") {
-      if (point.responseId) onOpenDetail({ kind: "qr", id: point.responseId });
+      if (responseId) onOpenDetail({ kind: "qr", id: responseId });
       return;
     }
+    if (source !== "lab") return;
     try {
-      const reportId = await findLabReportIdOf(point.observationId);
+      const reportId = await findLabReportIdOf(observationId);
       if (reportId) onOpenDetail({ kind: "lab-result", id: reportId });
       else setError(new Error("この結果の検査報告が見つかりません。"));
     } catch (err) {
       setError(err);
     }
   }
+  const openPoint = (source: ChartItemSource, point: ChartPoint) =>
+    openObservation(source, point.observationId, point.responseId);
+  const openChoice = (track: ChartChoiceTrack, mark: ChartChoiceMark) =>
+    openObservation(track.source, mark.observationId, mark.responseId);
 
   function openEditor(mode: "create" | "edit" | "copy") {
     const owner = owners.find((entry) => entry.canEdit) ?? owners[0];
@@ -289,6 +313,7 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
             events: [],
             drugs: [],
             overlay,
+            background: null,
           },
         },
       });
@@ -442,6 +467,22 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           >
             削除
           </button>
+          <button
+            type="button"
+            className="row-menu__item"
+            onClick={() => setAnalysis("stratify")}
+            disabled={lanes.length === 0}
+          >
+            層別の要約
+          </button>
+          <button
+            type="button"
+            className="row-menu__item"
+            onClick={() => setAnalysis("scatter")}
+            disabled={lanes.length === 0}
+          >
+            対比
+          </button>
           <button type="button" className="row-menu__item" onClick={() => setGuideOpen(true)}>
             説明
           </button>
@@ -537,6 +578,8 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           drugTracks={drugTracks}
           choiceTracks={choiceTracks}
           eventKinds={body.events}
+          stateTracks={stateTracks}
+          background={background}
           overlay={overlay}
           values={values}
           fullscreen={fullscreen}
@@ -548,10 +591,29 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
           }
           onOpenDetail={onOpenDetail}
           onOpenPoint={onOpenDetail ? openPoint : undefined}
+          onOpenChoice={onOpenDetail ? openChoice : undefined}
         />
       )}
 
       {guideOpen && <PatientChartGuide onClose={() => setGuideOpen(false)} />}
+      {analysis === "stratify" && (
+        <ChartStratifyModal
+          lanes={lanes}
+          stateTracks={stateTracks}
+          range={range}
+          initialRef={body.background}
+          anchor={parsed.anchor}
+          onClose={() => setAnalysis(null)}
+        />
+      )}
+      {analysis === "scatter" && (
+        <ChartScatterModal
+          lanes={lanes}
+          choiceTracks={choiceTracks}
+          anchor={parsed.anchor}
+          onClose={() => setAnalysis(null)}
+        />
+      )}
       {editing && (
         <ChartDefinitionEditorModal
           mode={editing.mode}
@@ -727,6 +789,8 @@ function useChartEvents(
     rangeEnd,
   );
   const prescriptions = usePatientChartPrescriptions(wants("prescription"), rangeStart, rangeEnd);
+  // 有害事象は category で引く(code は用語の text だけなので、項目の code 検索には乗らない)。
+  const adverse = usePatientAdverseEvents(wants("adverse"));
 
   return useMemo(() => {
     const events: ChartEvent[] = [];
@@ -746,6 +810,7 @@ function useChartEvents(
       );
     }
     if (procedures.data) events.push(...buildProcedureChartEvents(procedures.data));
+    if (adverse.data) events.push(...buildAdverseChartEvents(adverse.data, rangeEnd));
     if (prescriptions.data) {
       events.push(
         ...buildPrescriptionChartEvents(
@@ -765,6 +830,7 @@ function useChartEvents(
     radiotherapyOrders.data,
     radiotherapy.data,
     procedures.data,
+    adverse.data,
     prescriptions.data,
     rangeEnd,
   ]);

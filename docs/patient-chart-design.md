@@ -14,6 +14,9 @@
 `components/PatientChartPanel.tsx`(描画)、
 `components/ChartDefinitionEditorModal.tsx`(定義の編集)、
 `fhir/chartDefinitionHelpers.ts`(定義の型・横軸・系列とイベントへの変換)、
+`fhir/chartStateHelpers.ts`(帯の行を時刻で引く「状態」。§6.1 / §8)、
+`components/ChartStratifyModal.tsx` / `components/ChartScatterModal.tsx`(相関を読む道具。§8)、
+`lib/stats.ts`(中央値・Spearman)、
 backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_definitions_controller.rb`。
 
 ## 1. 保存するのは「定義」だけ。患者は持たない
@@ -38,24 +41,35 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
           "components": [{ "code": "8480-6", "name": "収縮期" },
                          { "code": "8462-4", "name": "拡張期" }] },
         { "key": "template:<Questionnaire.id>:<linkId>", "source": "template", "name": "通算喫煙年数",
-          "unit": "年", "codings": [{ "system": ".../JP_ObservationSocialHistoryCode_CS", "code": "MD0012910" }] } ],
-      "events": ["encounter", "surgery", "chemo", "radiotherapy", "exam", "injection"],
+          "unit": "年", "codings": [{ "system": ".../JP_ObservationSocialHistoryCode_CS", "code": "MD0012910" }] },
+        { "key": "lab:160046810", "source": "lab", "name": "HBs抗原", "unit": "", "scale": "nominal",
+          "codings": [...], "options": [{ "system": ".../JP_PosNegHold_CS", "code": "1", "display": "陽性" },
+                                        { "system": ".../JP_PosNegHold_CS", "code": "2", "display": "陰性" }] } ],
+      "events": ["encounter", "surgery", "chemo", "radiotherapy", "adverse", "exam", "injection"],
       "drugs": [
         { "key": "yj7:3332001", "name": "ワーファリン錠", "yj7": "3332001", "codes": ["613330003"] } ],
-      "overlay": false }
+      "overlay": false,
+      "background": { "kind": "item", "key": "template:<Questionnaire.id>:<linkId>" } }
 
 `codings` の中身(どのコード体系のどのコードか)は **backend が解釈しない**。
 画面が `Observation.code` と突き合わせるためにそのまま持つだけ
 (`OrderSetEntry.values` と同じ流儀)。形の検証は `ChartDefinition#definition_shape` が担う。
+`background`(§6.1)も同じで、backend は形だけを見る。指す先(項目・薬剤・種別)が定義から
+消えていれば画面側(`normalizeChartDefinitionBody`)が落とす。
 
 ### 項目の選び方は 3 つ
 
 | source | 選択元 | codings |
 |---|---|---|
-| `lab` | 検査結果項目マスタ(数値型 `PQ` のみ) | 施設の結果項目コード + JLAC11 |
+| `lab` | 検査結果項目マスタ(数値型 `PQ`) | 施設の結果項目コード + JLAC11 |
+| `lab`(選択肢) | 同じマスタのコード型 `CD` / `CO`(`code_value_list` を持つもの) | 同上 + `options`(`code_value_list` の並び、system は `value_code_system`) |
 | `vital` | 固定の一覧(`VITAL_MEASURES` + 血圧 + BMI) | LOINC |
 | `template` | テンプレート(`observationExtract` 有効)の integer / decimal 項目 | `Questionnaire.item.code` |
 | `template`(選択肢) | 同じテンプレートの choice 項目(項目コードと選択肢を持つもの) | `Questionnaire.item.code` + `options` |
+
+選択肢の項目は `scale` で尺度を持てる。省略は順序尺度(並び順 = 程度)。`CO`(大小順序のある
+コード型)はそのまま、`CD`(順序のないコード型: 陽性/陰性・血液型)は `nominal` にして
+濃さを付けない(§5.1)。
 
 マスタ・定義から選ぶので、**その患者に値が無くても項目に足せる**(足してから値が付く
 使い方ができる。値の無い期間は「この期間に値がありません」と出す)。
@@ -156,6 +170,7 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
 | 手術 | `usePatientSurgeryPerforms` | 実施記録のハブ Procedure、入室時刻に印 |
 | 化学療法 | `useRegimenApplications` + `useRegimenDayOrders` | 適用 × クールで 1 本(その日オーダーの最初〜最後) |
 | 放射線治療 | `usePatientRadiotherapyOrders` + `useRadiotherapyProcedures` | コースごとに実施済み照射の最初〜最後で 1 本 |
+| 有害事象 | `usePatientAdverseEvents`(category で引く。code は用語の text だけなので項目の code 検索には乗らない) | 用語ごとに 1 行、発現〜回復のバーを Grade の濃さで(§5.3) |
 | 検査実施 / 注射実施 | `usePatientPerformedProcedures` | ハブ Procedure 1 件が印 1 つ |
 | 処方 | `usePatientChartPrescriptions` | オーダー 1 件が**飲んでいた期間**のバー |
 
@@ -196,7 +211,16 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
 - 複数選択は回答 1 つにつき Observation が 1 件になるので、同じ日時のものを 1 つにまとめ、
   名前は「、」でつなぎ、濃さは重い方にする。選択肢に無いコード(テンプレートを後から直した)は
   名前だけ出して一番薄くする。
-- 隣の記録までに丸ごと入るときだけ選んだ名前を出す。押すと元のテンプレート記入を開ける。
+- 隣の記録までに丸ごと入るときだけ選んだ名前を出す。押すと元の記録(テンプレートの記入、
+  検査なら結果の載った報告書)を開ける。
+- **定性検査も同じ行になる**。結果項目マスタのコード型(`CD` / `CO`)は `code_value_list` を
+  `options` にして持ち、結果の `valueCodeableConcept` と突き合わせる(結果は同じ一覧から
+  作られるので code が一致する。system が無い項目もあるので、無い側は system を見ない)。
+  順序のない `CD`(陽性/陰性・血液型)は `scale: "nominal"` で、並び順で濃くすると
+  「陰性が濃い」誤読になるため、全部を最も薄い塗り(枠だけの 0 と区別する 1)にして名前で読ませる。
+  エディタの検索は `PQ,CD,CO` をカンマ区切りで渡す(`Master::LabResultItemsController` が複数可)。
+- 程度が上がった(添字が前の記録より大きくなった)記録の日には、各レーンに行の色の破線を
+  落とす(悪化の目印。`nominal` は対象外)。
 
 ## 5.2 追う薬剤の行
 
@@ -225,6 +249,21 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
   オーダーで見る(実施記録ではない)ので、化学療法の日オーダーの薬剤も入る。
 - 開始・変わり目・途切れた日には、各レーンにも薬剤色の破線を落とす(治療の前後で値を比べる
   目印)。基準日を越えて続く最後の区間は、まだ飲んでいる途中なので途切れにしない。
+
+## 5.3 有害事象の行
+
+種別 `adverse` を ON にすると、有害事象(`Observation` category `adverse-event`、
+`fhir/adverseEventHelpers.ts`)を **用語ごとに 1 行** で出す(`chartBandRows`。他の種別は
+種別 1 つに 1 行)。記録が無ければ「有害事象」の空行を 1 つ置く(ON にしたのに行が無いと
+消えたように見える)。行ラベルは薬剤の行と同じく幅に収まるぶんだけ出し、`<title>` に全体を持つ。
+
+- 発現日から回復日までのバー。回復していなければ基準日まで(入院と同じ)。
+- バーは Grade を濃さにして塗る(選択肢の行と同じ `.patient-chart__level--N`)。G1 が最も薄い塗り(1)、
+  G4・G5 が最も濃い(4)で、枠だけ(0)は使わない(起きている有害事象が「無い」ように見えるため。
+  `adverseGradeLevel`)。背景に敷いたときも同じ段を使う。
+  名前は「G3」。
+- **Grade 3 以上の発現日は各レーンに縦線**を落とす(手術・入退院と同じ節目の扱い)。
+- 開く先は無い(記録の編集は化学療法・放射線治療の右ペインにあり、`KarteDetailTarget` ではない)。
 
 ## 5.5 項目ごとに分ける / 1 つに重ねる
 
@@ -284,6 +323,11 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
 - ホバーは時刻を 1 つだけ持ち、各レーンが自分の最近傍点をツールチップに出す。
   行には値と結果の単位・判定・基準範囲を出し、系列の中で測定法が複数あるときは測定法も添える。
   ツールチップはカーソルと反対側の角に置く(線と点を隠さず、上のレーンにも重ならない)。
+- **カーソルのあるレーンのツールチップには、その時点で有効な状態も添える**(§6.1 の
+  `describeStatesAt`): 「入院中(12 日目)」「mFOLFOX6 第 3 クール」「ワーファリン 2.5mg/日」
+  「浮腫 軽度(12 日前)」「悪心 G2」。取得は増やさず、帯の区間・印を時刻で引くだけ。
+  全レーンに同じ行を繰り返すと値が埋もれるので、カーソルのあるレーン(`hover.owner`)にだけ出す。
+  状態は 1 行にまとめて折り返す(状態ごとに行を取るとレーンの高さを超えて下のレーンに掛かる)。
 - 入院は期間バーだけで出し、入院日・退院日の印は重ねない(同じことを 2 回描かない)。
 - 左の余白は帯の行ラベル(最長「放射線治療」)が収まる幅で決めてある。行を増やすときは
   ラベルの長さに注意する(はみ出すと viewBox の外で切れる)。
@@ -299,6 +343,30 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
 - グラフのライブラリは入れず、`LabTimelineChart` の目盛り(`niceTicks`)・数値の書式・
   ツールチップの見た目(`.lab-chart__*`)を借りて自前の SVG で描く。
 
+### 6.1 状態(帯の行を時刻で引く)と、全レーンの背景
+
+帯の行のうち期間を持つもの —— 選択肢の項目(記録から次の記録まで)、追う薬剤(用量の区間)、
+入院、化学療法のクール、有害事象(発現〜回復)—— を **時刻で引ける区間の並び**にしたのが
+「状態」(`fhir/chartStateHelpers.ts` の `ChartStateTrack`)。ツールチップ(§6)、背景、
+層別の要約(§8.1)が同じものを読む。タブが既に持つ行から作るので取得は増えない。
+`chartStateHelpers` は `chartDefinitionHelpers` を import する側で、逆は無い
+(`ChartTrackRef` は `chartDefinitionHelpers` に置く)。
+
+区間の `index` は層の並び(選択肢の添字・用量の昇順・Grade)、`level` は 0〜4 の濃さ。
+化学療法は区間の名前をクールごとに持つが、層は「クール中 / クール外」の 2 つに畳む
+(クールごとに列を分けると n が小さくなりすぎる)。
+
+**背景**: 定義の `background`(`{ kind: "item" | "drug", key }` か `{ kind: "event", event }`、
+種別は `encounter` / `chemo` / `adverse` のみ)で行を 1 つ選ぶと、その状態を **全レーンの背景に
+薄い帯で敷く**(`.patient-chart__state--N`。基準範囲の帯よりさらに薄い 5 段)。凡例は
+最初のグラフの見出しの行の右端に出す(重ね表示では系列の凡例の先頭。帯の直下に置くと帯の行の
+説明に見えるため)(凡例の色見本は帯より濃くする。12px 角では帯と同じ薄さだと見えない)。
+凡例の段は選択肢の並び順で決め、その患者に記録の無い選択肢も同じ濃さで並べる(記録の有無で
+見本が「塗りなし」になると、程度の順が読めない)。
+状態が変わった所には各レーンに本文色の点線を落とす(同じ状態の記録が続く所には引かない)。
+定義に持つのは、単位・列数と同じく「誰が開いても同じ見え方」にするため。エディタの「背景」は
+編集中の選択肢の項目・薬剤・ON の対象種別から選ばせ、元の行を外していれば保存時に落とす。
+
 ## 7. 申し送り
 
 - **JLAC11 の前方一致で合流しない**。検体検査の時系列表は 17 桁のうち先頭 12 桁が同じ結果を
@@ -306,3 +374,27 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
   引くので、施設の結果項目コードを持たない古い結果は拾えない。合流が要るなら、
   マスタから読み替えた JLAC11 を `codings` に足す形になる。
 - 上流が Observation の `status:not` に応えるなら、取消の除外を検索側に寄せられる。
+
+## 8. 相関を読む道具
+
+ケバブメニューの「層別の要約」「対比」。どちらも読み捨ての分析で、**URL の `view` にも定義にも
+載せない**(`KarteChartTab` のローカル state)。統計は n・中央値・範囲・Spearman の ρ までに留め、
+p 値は出さない。因果の注意文は説明モーダルにだけ置き、分析のモーダルには出さない
+(結果の読み取りに要らない文を画面に増やさない)。
+
+### 8.1 層別の要約(`ChartStratifyModal`)
+
+§6.1 の状態を 1 つ「層」に選び(定義の `background` が初期値)、各定量の系列(血圧は収縮期・
+拡張期で 2 行)の点を層に振り分けて、層ごとに **n・中央値・範囲・基準外の割合** を表にする
+(`stratifySeries`)。列は層の並び + どの区間にも入らない時間(「服用なし」「入院外」「クール外」
+「なし」)。選択肢の項目は記録前の時間を持たないので、記録前の点は数えない。基準日を置いて
+いれば「基準日の前後」も層に選べる(`anchorStateTrack`)。全行 n = 0 の列は省く。
+基準外は `flag`(検査の interpretation・バイタルの施設しきい値)を持つ項目だけで、テンプレートは「—」。
+
+### 8.2 対比(`ChartScatterModal`)
+
+X と Y を選んで散布図にする。X には定量の系列に加えて **選択肢の項目**(添字を値にし、目盛りは
+選択肢の名前)も置ける。Y は定量のみ。記録の対応は「同じ日」か ±3 / 7 / 14 日で、X の各記録に
+窓の中で最も近い未使用の Y の記録を時刻順に貪欲に当てる(`pairByTime`)。点は古いほど薄く、
+ホバーで両方の値と日付(基準日があれば日数も)。`n` は常に出し、`n < 3` か値が変わらないときは
+ρ を出さず、`n < 10` は目安にならない旨を添える。自前 SVG で、目盛りは `niceTicks`。

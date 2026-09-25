@@ -15,34 +15,45 @@
 #         "codings": [{ "system": "http://loinc.org", "code": "85354-9" }],
 #         "components": [{ "code": "8480-6", "name": "収縮期" }, { "code": "8462-4", "name": "拡張期" }] },
 #       { "key": "template:<id>:edema", "source": "template", "name": "浮腫", "unit": "",
-#         "codings": [...], "options": [{ "code": "none", "display": "なし" }, { "code": "mild", "display": "軽度" }] } ],
-#     "events": ["encounter", "surgery"],
+#         "codings": [...], "options": [{ "code": "none", "display": "なし" }, { "code": "mild", "display": "軽度" }] },
+#       { "key": "lab:160046810", "source": "lab", "name": "HBs抗原", "unit": "", "scale": "nominal",
+#         "codings": [...], "options": [{ "code": "1", "display": "陽性" }, { "code": "2", "display": "陰性" }] } ],
+#     "events": ["encounter", "surgery", "adverse"],
 #     "drugs": [{ "key": "yj7:3332001", "name": "ワルファリン", "yj7": "3332001", "codes": ["613330003"] }],
-#     "overlay": false }
+#     "overlay": false,
+#     "background": { "kind": "item", "key": "template:<id>:edema" } }
 #
 # codings の中身(どのコード体系のどのコードか)は解釈しない。画面が Observation.code
 # と突き合わせるためにそのまま持つだけ(OrderSetEntry#values と同じ考え)。
 # drugs の yj7(YJ コードの先頭 7 桁)・codes(レセ電コード)も同じで、形だけを見る。
+# background(全レーンの背景に敷く行)は items / drugs / events の中を指す参照だが、
+# 突き合わせは画面が行う(指す先が無くなっていれば画面が落とす)。
 # 設計は docs/patient-chart-design.md。
 class ChartDefinition < ApplicationRecord
   SCOPES = %w[facility department practitioner].freeze
 
   SCHEMA_VERSION = 1
-  DEFINITION_KEYS = %w[schema_version axis items events drugs overlay].freeze
+  DEFINITION_KEYS = %w[schema_version axis items events drugs overlay background].freeze
   AXIS_KEYS = %w[unit columns].freeze
   AXIS_UNITS = %w[day month year].freeze
   # 画面が使う範囲(日 7〜92 / 月 3〜36 / 年 1〜10)より広く取る。単位ごとの妥当な
   # 範囲は画面の都合なので、ここでは桁が壊れていないことだけを見る。
   COLUMNS_RANGE = (1..120)
-  ITEM_KEYS = %w[key source name unit codings components options].freeze
+  ITEM_KEYS = %w[key source name unit codings components options scale].freeze
   ITEM_SOURCES = %w[lab vital template].freeze
+  # 選択肢の尺度。省略は順序あり(並び順 = 程度)。nominal は順序なし(陽性/陰性など)。
+  ITEM_SCALES = %w[ordinal nominal].freeze
   CODING_KEYS = %w[system code display].freeze
   COMPONENT_KEYS = %w[code name].freeze
   OPTION_KEYS = %w[system code display].freeze
-  EVENT_KINDS = %w[condition encounter surgery chemo radiotherapy exam injection prescription].freeze
+  EVENT_KINDS = %w[condition encounter surgery chemo radiotherapy adverse exam injection prescription].freeze
   MAX_ITEMS = 30
   DRUG_KEYS = %w[key name yj7 codes].freeze
   MAX_DRUGS = 20
+  BACKGROUND_KEYS = %w[kind key event].freeze
+  BACKGROUND_KINDS = %w[item drug event].freeze
+  # 背景に敷けるのは期間を持つ種別だけ。
+  BACKGROUND_EVENT_KINDS = %w[encounter chemo adverse].freeze
 
   DEFAULT_DEFINITION = {
     "schema_version" => SCHEMA_VERSION,
@@ -51,7 +62,8 @@ class ChartDefinition < ApplicationRecord
     "events" => [],
     "drugs" => [],
     # true なら全項目を 1 つのグラフに重ねる。既定は項目ごとに分けて並べる。
-    "overlay" => false
+    "overlay" => false,
+    "background" => nil
   }.freeze
 
   # 定義を消したら、それを最初に開くチャートにしていた患者のピンも外す。
@@ -112,11 +124,37 @@ class ChartDefinition < ApplicationRecord
     validate_items(definition["items"])
     validate_events(definition["events"])
     validate_drugs(definition["drugs"])
+    validate_background(definition["background"])
 
     overlay = definition["overlay"]
     return if overlay.nil? || [true, false].include?(overlay)
 
     errors.add(:definition, "の overlay は true / false で指定してください")
+  end
+
+  def validate_background(background)
+    return if background.nil?
+    return errors.add(:definition, "の background は連想配列で指定してください") unless background.is_a?(Hash)
+
+    unknown = background.keys - BACKGROUND_KEYS
+    errors.add(:definition, "の background に対象外の項目があります(#{unknown.join(', ')})") if unknown.any?
+
+    kind = background["kind"]
+    unless BACKGROUND_KINDS.include?(kind)
+      return errors.add(:definition, "の background.kind は #{BACKGROUND_KINDS.join(' / ')} のいずれかで指定してください")
+    end
+
+    if kind == "event"
+      errors.add(:definition, "の background に key は指定できません") if background.key?("key")
+      return if BACKGROUND_EVENT_KINDS.include?(background["event"])
+
+      errors.add(:definition, "の background.event は #{BACKGROUND_EVENT_KINDS.join(' / ')} のいずれかで指定してください")
+    else
+      errors.add(:definition, "の background に event は指定できません") if background.key?("event")
+      return if background["key"].is_a?(String) && background["key"].present?
+
+      errors.add(:definition, "の background.key は必須です")
+    end
   end
 
   def validate_axis(axis)
@@ -164,6 +202,9 @@ class ChartDefinition < ApplicationRecord
     errors.add(:definition, "#{label} の name は必須です") unless item["name"].is_a?(String) && item["name"].present?
     if item.key?("unit") && !item["unit"].is_a?(String)
       errors.add(:definition, "#{label} の unit は文字列で指定してください")
+    end
+    if item.key?("scale") && !ITEM_SCALES.include?(item["scale"])
+      errors.add(:definition, "#{label} の scale は #{ITEM_SCALES.join(' / ')} のいずれかで指定してください")
     end
 
     validate_codings(item["codings"], label)
