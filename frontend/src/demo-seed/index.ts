@@ -3,6 +3,7 @@
 
 import { fetchRegimen, radiotherapyProtocolClient } from "../api/masterClient";
 import { DrugMaster, findDisease, LabMaster, loadEnv } from "./base";
+import { REQUIREMENTS as ckdRequirements, seedCkd } from "./ckd";
 import { REQUIREMENTS as diabetesRequirements, seedDiabetes } from "./diabetes";
 import { REQUIREMENTS as heartFailureRequirements, seedHeartFailure } from "./heartFailure";
 import { REQUIREMENTS as rectalRequirements, seedRectalCancer } from "./rectalCancer";
@@ -11,6 +12,7 @@ export const SCENARIOS = {
   diabetes: seedDiabetes,
   rectal: seedRectalCancer,
   heartFailure: seedHeartFailure,
+  ckd: seedCkd,
 } as const;
 
 export type ScenarioName = keyof typeof SCENARIOS;
@@ -40,11 +42,17 @@ export async function run(
  */
 export async function preflight(): Promise<string[]> {
   const missing: string[] = [];
-  const all = [diabetesRequirements, rectalRequirements, heartFailureRequirements];
+  const all = [diabetesRequirements, rectalRequirements, heartFailureRequirements, ckdRequirements];
   const labs = new LabMaster();
   const labCodes = [...new Set(all.flatMap((r) => r.labs))];
   await labs.load(labCodes);
   for (const code of labCodes) if (!labs.get(code)) missing.push(`検査結果項目 ${code}`);
+  for (const code of ckdRequirements.codedLabs) {
+    const item = labs.get(code);
+    if (item && item.data_type !== "CO" && item.data_type !== "CD") {
+      missing.push(`検査結果項目 ${code}(${item.name})がコード型ではありません(チャートの網掛けは付きません)`);
+    }
+  }
   const drugs = new DrugMaster();
   const medicineCodes = [...new Set(all.flatMap((r) => r.medicines))];
   const usages = [...new Set(all.flatMap((r) => r.usages))];

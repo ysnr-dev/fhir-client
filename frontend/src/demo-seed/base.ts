@@ -170,6 +170,14 @@ export function withoutTasks(bundle: fhir4.Bundle): fhir4.Bundle {
   return { ...bundle, entry: (bundle.entry ?? []).filter((entry) => entry.resource?.resourceType !== "Task") };
 }
 
+/** post の結果のうち、指定した型のリソースを読み直す。 */
+export async function createdOf(ids: { type: string; id: string }[], type: string): Promise<fhir4.Resource[]> {
+  const wanted = ids.filter((entry) => entry.type === type).map((entry) => entry.id);
+  if (wanted.length === 0) return [];
+  const { data } = await searchResource<fhir4.Resource>(type, new URLSearchParams({ _id: wanted.join(",") }));
+  return (data.entry ?? []).map((e) => e.resource).filter((r): r is fhir4.Resource => Boolean(r));
+}
+
 // ---- 患者 ----
 
 export interface PatientSpec {
@@ -292,7 +300,8 @@ export function labResultBundle(
   patient: fhir4.Patient,
   department: Named,
   date: string,
-  values: [code: string, value: number][],
+  /** 数値、またはコード型(CD / CO)の項目なら選択肢のコード。 */
+  values: [code: string, value: number | string][],
   setting: "outpatient" | "inpatient" = "outpatient",
 ): fhir4.Bundle | null {
   const subject = labResultSubjectOf(patient);

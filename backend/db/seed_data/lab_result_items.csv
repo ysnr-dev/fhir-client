@@ -29,3 +29,6 @@ result_item_code,name,short_name,name_kana,category,specimen_code,data_type,disp
 160061110-02,髄液 細胞数,髄液細胞数,ズイエキサイボウスウ,尿・糞便等検査,410,PQ,/μL,/uL,,,0,,,,20
 160061110-03,髄液 蛋白,髄液蛋白,ズイエキタンパク,尿・糞便等検査,410,PQ,mg/dL,mg/dL,,,0,,,,30
 160061110-04,髄液 糖,髄液糖,ズイエキトウ,尿・糞便等検査,410,PQ,mg/dL,mg/dL,,,0,,,,40
+160000310-03,尿蛋白(定性),U-TP,ニョウタンパク,尿・糞便等検査,100,CO,,,1：－、2：±、3：＋、4：2＋、5：3＋、6：4＋,http://jpfhir.jp/fhir/LaboResult/CodeSystem/JP_Urine_Code_CS,,,,,40
+160000310-04,尿糖(定性),U-Glu,ニョウトウ,尿・糞便等検査,100,CO,,,1：－、2：±、3：＋、4：2＋、5：3＋、6：4＋、7：5＋,http://jpfhir.jp/fhir/LaboResult/CodeSystem/JP_Urine_Code_CS,,,,,50
+160000310-05,尿潜血,U-OB,ニョウセンケツ,尿・糞便等検査,100,CO,,,1：－、2：±、3：＋、4：2＋、5：3＋、6：4＋,http://jpfhir.jp/fhir/LaboResult/CodeSystem/JP_Urine_Code_CS,,,,,60

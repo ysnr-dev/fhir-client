@@ -2,17 +2,23 @@
 // (45Gy/25 回 + カペシタビン)→ 低位前方切除術 → 術後補助化学療法(CapeOX 8 コース)→
 // 経過観察中に CEA が上がって肝転移再発 → 二次治療(FOLFIRI)で CEA が下がり始めている。
 // 血算・肝機能は化学療法に合わせて下がる。
+// 化学療法には有害事象(CTCAE Grade)を記録する。CapeOX で末梢性感覚ニューロパチーが積み上がり、
+// FOLFIRI で好中球数減少 G3 が出る(その時期の最低値の採血つき)。チャートは有害事象を網掛けにする。
 
 import {
   at,
+  createdOf,
   createPatient,
   createProblem,
   createStay,
   daysAgo,
   departmentOf,
   DrugMaster,
+  drugsOf,
+  ensureFacilityChart,
   findDisease,
   LabMaster,
+  labItemsOf,
   labResultBundle,
   post,
   prescriptionBundle,
@@ -24,7 +30,6 @@ import {
   type SeedEnv,
 } from "./base";
 import { addDays } from "../lib/dates";
-import { searchResource } from "../api/fhirClient";
 import {
   fetchRegimen,
   radiotherapyDeviceClient,
@@ -39,6 +44,7 @@ import {
 } from "../api/masterClient";
 import type { OrderContext } from "../orderContext";
 import type { ProblemRef } from "../fhir/conditionHelpers";
+import { buildAdverseEvent } from "../fhir/adverseEventHelpers";
 import { CATEGORY_OPTIONS as PRESCRIPTION_CATEGORY_OPTIONS } from "../fhir/prescriptionHelpers";
 import { CATEGORY_OPTIONS as INJECTION_CATEGORY_OPTIONS } from "../fhir/injectionHelpers";
 import { buildEndoscopyOrderBundle, emptyEndoscopyOrderForm } from "../fhir/endoscopyOrderHelpers";
@@ -62,6 +68,7 @@ import {
   planSteps,
   validateRegimenApply,
   type DoseFactorMap,
+  type RegimenApplication,
   type RegimenApplyValues,
 } from "../fhir/regimenOrderHelpers";
 
@@ -97,6 +104,8 @@ const LAB_DAYS: [day: number, labs: Labs][] = [
   [238, { wbc: 3.6, hb: 10.9, plt: 142, ast: 36, alt: 35, cre: 0.74, cea: 2.2, ca199: 16 }],
   [259, { wbc: 3.8, hb: 11.1, plt: 150, ast: 33, alt: 31, cre: 0.73, cea: 2.4, ca199: 17 }],
   [280, { wbc: 3.4, hb: 10.8, plt: 138, ast: 38, alt: 36, cre: 0.74, cea: 2.3, ca199: 16 }],
+  // CapeOX 第 7 コースの最低値(好中球数減少 G2・血小板数減少 G1 の時期)
+  [290, { wbc: 2.6, hb: 10.6, plt: 92 }],
   [301, { wbc: 3.5, hb: 10.9, plt: 146, ast: 35, alt: 33, cre: 0.73, cea: 2.2, ca199: 15 }],
   // 経過観察 → CEA 上昇
   [360, { wbc: 5.4, hb: 12.0, plt: 212, ast: 22, alt: 18, cre: 0.7, cea: 2.8, ca199: 18 }],
@@ -106,22 +115,49 @@ const LAB_DAYS: [day: number, labs: Labs][] = [
   [466, { wbc: 5.6, hb: 11.6, plt: 230, ast: 36, alt: 32, cre: 0.71, cea: 9.4, ca199: 64 }],
   [480, { wbc: 4.2, hb: 11.2, plt: 205, ast: 34, alt: 30, cre: 0.72, cea: 8.1, ca199: 55 }],
   [494, { wbc: 3.6, hb: 10.8, plt: 190, ast: 31, alt: 28, cre: 0.72, cea: 7.0, ca199: 47 }],
+  // FOLFIRI 第 3 コースの最低値(好中球数減少 G3 の時期)
+  [504, { wbc: 1.6, hb: 10.4, plt: 168 }],
   [508, { wbc: 3.9, hb: 10.9, plt: 198, ast: 29, alt: 25, cre: 0.71, cea: 6.2, ca199: 41 }],
   [522, { wbc: 3.3, hb: 10.6, plt: 182, ast: 27, alt: 24, cre: 0.72, cea: 5.4, ca199: 36 }],
   [536, { wbc: 3.7, hb: 10.8, plt: 188, ast: 26, alt: 22, cre: 0.71, cea: 4.9, ca199: 32 }],
+];
+
+/**
+ * 有害事象。onset / resolved は初診からの日数(resolved が無ければ継続中)。
+ * 用語は CTCAE v5.0 日本語訳 JCOG 版の名称。同じ用語で Grade が変われば別の記録にする。
+ */
+interface AdverseSpec {
+  term: string;
+  grade: number;
+  cycle: number;
+  onset: number;
+  resolved?: number;
+}
+
+const CAPEOX_ADVERSE: AdverseSpec[] = [
+  { term: "末梢性感覚ニューロパチー", grade: 1, cycle: 2, onset: 177, resolved: 238 },
+  { term: "末梢性感覚ニューロパチー", grade: 2, cycle: 5, onset: 239, resolved: 330 },
+  { term: "末梢性感覚ニューロパチー", grade: 1, cycle: 8, onset: 331, resolved: 430 },
+  { term: "手掌・足底発赤知覚不全症候群", grade: 1, cycle: 3, onset: 203, resolved: 250 },
+  { term: "手掌・足底発赤知覚不全症候群", grade: 2, cycle: 6, onset: 265, resolved: 292 },
+  { term: "血小板数減少", grade: 1, cycle: 5, onset: 245, resolved: 256 },
+  { term: "血小板数減少", grade: 1, cycle: 7, onset: 287, resolved: 297 },
+  { term: "好中球数減少", grade: 2, cycle: 7, onset: 288, resolved: 296 },
+];
+
+const FOLFIRI_ADVERSE: AdverseSpec[] = [
+  { term: "悪心", grade: 1, cycle: 1, onset: 466, resolved: 470 },
+  { term: "下痢", grade: 2, cycle: 1, onset: 468, resolved: 474 },
+  { term: "食欲不振", grade: 1, cycle: 2, onset: 481, resolved: 490 },
+  { term: "好中球数減少", grade: 3, cycle: 3, onset: 502, resolved: 509 },
+  { term: "下痢", grade: 1, cycle: 3, onset: 496, resolved: 500 },
+  { term: "好中球数減少", grade: 2, cycle: 5, onset: 530, resolved: 536 },
 ];
 
 const WEIGHT: [day: number, weight: number][] = [
   [0, 58.4], [42, 57.6], [56, 57.1], [105, 57.4], [119, 55.8], [154, 56.2], [196, 55.9], [238, 55.4], [280, 55.1],
   [301, 55.2], [360, 56.0], [420, 56.3], [445, 55.8], [466, 55.6], [494, 55.0], [522, 54.6], [536, 54.5],
 ];
-
-async function createdOf(ids: { type: string; id: string }[], type: string): Promise<fhir4.Resource[]> {
-  const wanted = ids.filter((entry) => entry.type === type).map((entry) => entry.id);
-  if (wanted.length === 0) return [];
-  const { data } = await searchResource<fhir4.Resource>(type, new URLSearchParams({ _id: wanted.join(",") }));
-  return (data.entry ?? []).map((e) => e.resource).filter((r): r is fhir4.Resource => Boolean(r));
-}
 
 /** オーダーのヘッダ(明細から basedOn で指される側)。 */
 async function headerOf(ids: { type: string; id: string }[]): Promise<fhir4.ServiceRequest> {
@@ -359,9 +395,19 @@ async function doseFactors(regimen: RegimenDetail): Promise<DoseFactorMap> {
   return factors;
 }
 
-async function chemotherapy(env: SeedEnv, patientId: string, requester: OrderContext, problem: ProblemRef, course: RegimenCourse) {
+/** 化学療法の適用。レジメンが無い環境では null(飛ばす)。 */
+async function chemotherapy(
+  env: SeedEnv,
+  patientId: string,
+  requester: OrderContext,
+  problem: ProblemRef,
+  course: RegimenCourse,
+): Promise<RegimenApplication | null> {
   const regimen = await fetchRegimen(course.code).catch(() => null);
-  if (!regimen) return env.log(`レジメン ${course.code} が無いので飛ばします`);
+  if (!regimen) {
+    env.log(`レジメン ${course.code} が無いので飛ばします`);
+    return null;
+  }
   const factors = await doseFactors(regimen);
   const height = String(HEIGHT);
   const weight = String(course.weight);
@@ -402,6 +448,35 @@ async function chemotherapy(env: SeedEnv, patientId: string, requester: OrderCon
     }
   }
   env.log(`${regimen.name}: ${course.cycleStarts.length} コースを登録`);
+  return application;
+}
+
+/** 有害事象をまとめて登録する。今日より後に発現するものは作らない(回復日が未来なら継続中)。 */
+async function adverseEvents(
+  env: SeedEnv,
+  patientId: string,
+  application: RegimenApplication | null,
+  specs: AdverseSpec[],
+  day: (n: number) => string,
+) {
+  if (!application) return;
+  const now = daysAgo(0);
+  const entries: fhir4.BundleEntry[] = specs
+    .filter((spec) => day(spec.onset) <= now)
+    .map((spec) => {
+      const resolved = spec.resolved != null && day(spec.resolved) <= now ? day(spec.resolved) : "";
+      const observation = buildAdverseEvent(
+        { term: spec.term, grade: String(spec.grade), onset: day(spec.onset), resolved, note: "" },
+        patientId,
+        { treatmentSrId: application.id, treatmentType: "chemo-regimen", name: application.name, cycle: spec.cycle },
+        undefined,
+        { reference: `Practitioner/${env.practitioner.id}`, display: env.practitioner.name },
+      );
+      return { fullUrl: `urn:uuid:${crypto.randomUUID()}`, resource: observation, request: { method: "POST", url: "Observation" } };
+    });
+  if (entries.length === 0) return;
+  await post({ resourceType: "Bundle", type: "transaction", entry: entries });
+  env.log(`${application.name}: 有害事象 ${entries.length} 件を登録`);
 }
 
 export const REQUIREMENTS = {
@@ -485,12 +560,13 @@ export async function seedRectalCancer(env: SeedEnv): Promise<void> {
   await surgery(env, patientId, requesterOf(env, surgical), surgical, confirmed, day(112));
 
   // 術後補助化学療法 CapeOX 8 コース(3 週ごと)
-  await chemotherapy(env, patientId, requesterOf(env, oncology), confirmed, {
+  const capeox = await chemotherapy(env, patientId, requesterOf(env, oncology), confirmed, {
     code: "900003",
     start: day(154),
     cycleStarts: Array.from({ length: 8 }, (_, i) => day(154 + 21 * i)),
     weight: 56.2,
   });
+  await adverseEvents(env, patientId, capeox, CAPEOX_ADVERSE, day);
 
   // 再発: CEA 上昇 → 造影 CT → 肝転移
   await contrastCt(env, patientId, requesterOf(env, gastro), confirmed, day(448), "CEA 上昇。再発の検索");
@@ -501,12 +577,23 @@ export async function seedRectalCancer(env: SeedEnv): Promise<void> {
   });
 
   // 二次治療 FOLFIRI(2 週ごと、今日より前のコースだけ)
-  const folfiri = Array.from({ length: 6 }, (_, i) => day(466 + 14 * i)).filter((d) => d <= daysAgo(0));
-  await chemotherapy(env, patientId, requesterOf(env, oncology), confirmed, {
+  const folfiriStarts = Array.from({ length: 6 }, (_, i) => day(466 + 14 * i)).filter((d) => d <= daysAgo(0));
+  const folfiri = await chemotherapy(env, patientId, requesterOf(env, oncology), confirmed, {
     code: "900002",
     start: day(466),
-    cycleStarts: folfiri,
+    cycleStarts: folfiriStarts,
     weight: 55.6,
+  });
+  await adverseEvents(env, patientId, folfiri, FOLFIRI_ADVERSE, day);
+
+  await ensureFacilityChart(env, "がん化学療法(有害事象つき)", {
+    axis: { unit: "month", columns: 24 },
+    items: labItemsOf(labs, [LAB.wbc, LAB.plt, LAB.hb, LAB.ast, LAB.cea, LAB.ca199]),
+    events: ["condition", "surgery", "chemo", "radiotherapy", "adverse", "exam"],
+    drugs: drugsOf(drugs, [[CAPECITABINE, "カペシタビン"]]),
+    overlay: false,
+    // 有害事象を全レーンに網掛けする(G3 の好中球数減少の時期に白血球数が落ちているのを読む)。
+    background: { kind: "event", event: "adverse" },
   });
   env.log("直腸癌: 登録完了");
 }
