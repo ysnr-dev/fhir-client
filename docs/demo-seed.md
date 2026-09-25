@@ -1,0 +1,44 @@
+# デモ用サンプル患者の投入
+
+マルチチャートなどを見せるための、経過の長いサンプル患者を作る。画面と同じ組み立て関数
+(`frontend/src/fhir/*Helpers.ts`)でリソースを作り、backend の `/fhir`・`/master` に書き込むので、
+画面で登録したものと同じ形になる。コードは `frontend/src/demo-seed/`(アプリからは import しない
+ので本番ビルドには入らない)、ターミナルから動かす入口は `frontend/scripts/demo-seed.ts`。
+
+## シナリオ
+
+| 名前 | 患者 | 内容 |
+|---|---|---|
+| `diabetes` | 田中 健一(1964-05-12 男) | 糖尿病(悪化傾向)。3 年・外来 39 回。メトホルミン → DPP-4 → SGLT2 → 教育入院 → SU 薬と強めても HbA1c が上がり、腎症・網膜症が加わる |
+| `rectal` | 佐々木 恵子(1962-11-03 女) | 直腸癌。1 年半。内視鏡・造影 CT → 術前化学放射線療法(45Gy/25 回 + カペシタビン)→ 低位前方切除術 → CapeOX 8 コース → CEA 上昇で肝転移 → FOLFIRI |
+| `heartFailure` | 森 正男(1947-02-20 男) | 心不全。約 1 年。急性増悪の入院 → 外来で悪化してフロセミド増量 → 2 度目の入院 → K 上昇でスピロノラクトン減量。浮腫・NYHA をテンプレート「心不全 症状観察」に記入 |
+
+- 日付は**実行日からの相対**(いつ流しても「直近の経過」になる)。
+- 同じ氏名・生年月日の患者がいるシナリオは飛ばす(何度流しても二重にならない)。
+- 依頼医師・記入者はログインしたユーザーの医療従事者。診療科・ベッド・手術室は、その環境にあるものから
+  名前で選ぶ(無ければ先頭、ベッドが無ければ入院は作らない)。
+- 院内共通のチャート「糖尿病(治療強化・腎症)」「心不全(症状つき)」も作る(同名があれば作らない)。
+  直腸癌は既存の「がん化学療法」で見る。
+- 検査結果の未確認通知(Task)は作らない。
+
+## 実行
+
+ビルド(コードを直したとき):
+
+    docker compose exec frontend npx vite build --config scripts/demo-seed.vite.config.ts
+
+`frontend/scripts/dist/demo-seed.mjs` ができる(git 管理外)。実行はホストの Node(22 以上)で:
+
+    cd frontend
+    node scripts/dist/demo-seed.mjs --target prod --check     # ログインとマスタの確認だけ(書き込まない)
+    node scripts/dist/demo-seed.mjs --target prod             # 3 シナリオを投入
+    node scripts/dist/demo-seed.mjs --target prod --only rectal
+
+- `--target dev` は `http://localhost:3001`、`prod` は Render の backend。`--base-url` で任意の URL も指定できる。
+- ログイン ID とパスワードは実行時に聞く(パスワードは表示しない)。`DEMO_SEED_LOGIN` /
+  `DEMO_SEED_PASSWORD` の環境変数があればそちらを使う。
+- `--check` は、各シナリオが使うマスタ(検査結果項目・薬剤・用法・病名・レジメン・放射線治療の
+  プロトコル)が揃っているかを見る。足りないと途中で止まり、半端な患者が残る。
+- `--name-suffix テスト` で名に語を足す(試し流しで、本番の名前とぶつけないため)。
+- Render の無料枠はしばらく使わないと眠っている。先に画面を開いて起こしてから流すと、最初の要求で
+  待たされずに済む。1 トークン 300 件/分の制限には、1 回の受診を 1 つの transaction にまとめて収めている。
