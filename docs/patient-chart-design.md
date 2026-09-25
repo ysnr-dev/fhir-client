@@ -78,12 +78,17 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
 
 `db/seed_data/chart_definition_presets.json` に疾患別の定義を持ち、`db:seed` で院内共通として入れる
 (`ChartDefinitionPresets`)。糖尿病・慢性腎臓病・心不全・関節リウマチ・甲状腺・ワルファリン・
-がん化学療法の 7 件。
+がん化学療法の 7 件と、歯科の歯周病×糖尿病・口腔機能の 2 件。
 
 - JSON は項目を**コードだけ**で持つ(検査は結果項目コード、バイタルは LOINC、薬剤は YJ 先頭 7 桁)。
   名称・単位・coding は投入時にマスタから引き、画面が作るのと同じ形にそろえる
   (`labChartItem` / `vitalChartItems` / `chartDrugOf`)。結果項目コードは同梱の検体検査マスタが
   レセ電算コードで採番しているので、施設が変わっても同じコードで引ける。
+- テンプレートの項目(歯科の 2 件)は上流の Questionnaire にあって backend から引けないので、
+  JSON に項目コード・名称・単位・選択肢まで書く(`docs/report-mappings` の
+  `perio-summary-01` / `oral-function-01` と同じ値)。key は環境で変わる Questionnaire の id では
+  なく `template:<canonical URL>:<linkId>` にし、エディタは同じ項目コードのテンプレート項目を
+  重複とみなす(`hasChartItem`)。テンプレートが未取込でも定義は作る(取り込んで記入すれば値が出る)。
 - マスタに無い・数値でない検査項目は落とし、落とした項目は seed の出力に出す。項目も薬剤も
   残らない定義は作らない。eGFR(計算値)、HIV のウイルス量・CD4 はマスタに無いので入れていない。
 - 薬剤の `codes` には、その成分・投与経路の薬剤のレセ電コードを薬価基準コードから集めて入れる
@@ -91,7 +96,8 @@ backend は `app/models/chart_definition.rb` と `app/controllers/master/chart_d
 - 同じ名前の院内共通の定義があれば上書きしない(施設で直した内容を戻さない)。
 - 本番は起動時に `db:prepare` を流すだけで、既存の DB では seed が走らないので、同じ処理を
   migration(`20260924120000_seed_chart_definition_presets`)からも呼んで入れる。プリセットを
-  足したときは、新しい migration から `ChartDefinitionPresets.load!` を呼び直す(既存は上書きしない)。
+  足したときは、新しい migration から `ChartDefinitionPresets.load!` を呼び直す(既存は上書きしない。
+  歯科の 2 件は `20260926110000_seed_dental_chart_definition_presets`)。
 
 ## 1.6 患者ごとに最初に開くチャート(ピン留め)
 

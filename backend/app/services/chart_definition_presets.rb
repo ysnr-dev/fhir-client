@@ -5,11 +5,16 @@
 # (frontend/src/fhir/chartDefinitionHelpers.ts の labChartItem / vitalChartItems / chartDrugOf)。
 # マスタに無い検査項目は落とし、項目も薬剤も残らない定義は作らない。
 #
+# テンプレートの項目は上流の Questionnaire にあって backend からは引けないので、JSON に
+# 項目コード・名称・単位・選択肢まで書く(docs/report-mappings の Questionnaire と同じ値)。
+# key は環境ごとに変わる Questionnaire の id ではなく canonical URL で作る。
+#
 # 同じ名前の院内共通の定義があれば触らない(施設で直した内容を戻さない。他のマスタの初期値と同じ)。
 class ChartDefinitionPresets
   RESULT_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/lab-result-item".freeze
   JLAC11_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11".freeze
   LOINC_SYSTEM = "http://loinc.org".freeze
+  TEMPLATE_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/observation-item".freeze
 
   # frontend の VITAL_MEASURES + 血圧 + BMI と同じ並び・名称・単位。
   VITALS = {
@@ -74,6 +79,7 @@ class ChartDefinitionPresets
   def build_item(spec, preset_name, result)
     return lab_item(spec["lab"], preset_name, result) if spec["lab"]
     return vital_item(spec["vital"]) if spec["vital"]
+    return template_item(spec["template"]) if spec["template"]
 
     nil
   end
@@ -106,6 +112,18 @@ class ChartDefinitionPresets
       "unit" => vital[:unit],
       "codings" => [{ "system" => LOINC_SYSTEM, "code" => code, "display" => vital[:display] }],
       "components" => vital[:components]
+    }.compact
+  end
+
+  # 画面の templateChartItems と同じ形。選択肢があれば帯の行になる。
+  def template_item(spec)
+    {
+      "key" => "template:#{spec.fetch('url')}:#{spec.fetch('link_id')}",
+      "source" => "template",
+      "name" => spec.fetch("name"),
+      "unit" => spec["unit"].to_s,
+      "codings" => [{ "system" => TEMPLATE_ITEM_SYSTEM, "code" => spec.fetch("code"), "display" => spec.fetch("display") }],
+      "options" => spec["options"]
     }.compact
   end
 

@@ -13,6 +13,7 @@ import {
   chartColumnsFor,
   chartDrugOf,
   chartEventKindLabel,
+  hasChartItem,
   isChoiceItem,
   ownerKeyOf,
   labChartItem,
@@ -110,8 +111,8 @@ export function ChartDefinitionEditorModal({
     () =>
       templateOptions
         .find((entry) => entry.questionnaire.id === templateId)
-        ?.items.filter((item) => !keys.has(item.key)) ?? [],
-    [templateOptions, templateId, keys],
+        ?.items.filter((item) => !hasChartItem(items, item)) ?? [],
+    [templateOptions, templateId, items],
   );
 
   // 網掛けにできる行(選択肢の項目・追う薬剤・期間を持つ種別)。編集中の内容から作る。
@@ -129,7 +130,7 @@ export function ChartDefinitionEditorModal({
     : "";
 
   function addItem(item: ChartItem) {
-    if (keys.has(item.key)) return;
+    if (hasChartItem(items, item)) return;
     setItems([...items, item]);
   }
 

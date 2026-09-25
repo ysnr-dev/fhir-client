@@ -66,7 +66,10 @@ export interface ChartItemComponent {
 }
 
 export interface ChartItem {
-  /** 定義の中で一意。`lab:<結果項目コード>` / `vital:<LOINC>` / `template:<id>:<linkId>`。 */
+  /**
+   * 定義の中で一意。`lab:<結果項目コード>` / `vital:<LOINC>` / `template:<id>:<linkId>`
+   * (院内共通の初期値のテンプレート項目は `template:<canonical URL>:<linkId>`)。
+   */
   key: string;
   source: ChartItemSource;
   name: string;
@@ -572,6 +575,23 @@ export function templateChartItems(questionnaire: fhir4.Questionnaire): ChartIte
     options: item.options,
   }));
   return [...numeric, ...choice];
+}
+
+/**
+ * 定義に同じ項目がもうあるか。テンプレートの項目は、画面で足すと key が Questionnaire の id、
+ * 院内共通の初期値(backend の ChartDefinitionPresets)だと canonical URL になり key が一致しない
+ * ので、同じ項目コードを持つかどうかでも見る(同じコードなら同じ Observation を引く)。
+ */
+export function hasChartItem(items: ChartItem[], item: ChartItem): boolean {
+  return items.some(
+    (existing) =>
+      existing.key === item.key ||
+      (existing.source === "template" &&
+        item.source === "template" &&
+        existing.codings.some((a) =>
+          item.codings.some((b) => a.system === b.system && a.code === b.code),
+        )),
+  );
 }
 
 /** 項目すべての coding を重複なく集める(検索の code= に渡す)。 */

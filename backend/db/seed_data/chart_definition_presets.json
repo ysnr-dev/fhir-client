@@ -110,5 +110,39 @@
     "drugs": [],
     "events": ["condition", "surgery", "chemo", "radiotherapy", "exam"],
     "overlay": false
+  },
+  {
+    "name": "歯周病×糖尿病",
+    "axis": { "unit": "month", "columns": 24 },
+    "items": [
+      { "lab": "160010010" },
+      { "lab": "160019410" },
+      { "template": { "url": "http://fhir-client.local/Questionnaire/perio-summary-01", "link_id": "bop_rate", "code": "DENT-BOP-RATE", "display": "プロービング時の出血(BOP)率", "name": "BOP率", "unit": "%" } },
+      { "template": { "url": "http://fhir-client.local/Questionnaire/perio-summary-01", "link_id": "pd4_sites", "code": "DENT-PD4-SITES", "display": "歯周ポケット4mm以上の部位数", "name": "PD 4mm以上の部位数", "unit": "部位" } },
+      { "template": { "url": "http://fhir-client.local/Questionnaire/perio-summary-01", "link_id": "pisa", "code": "DENT-PISA", "display": "歯周炎症表面積(PISA)", "name": "PISA", "unit": "mm²" } },
+      { "template": { "url": "http://fhir-client.local/Questionnaire/perio-summary-01", "link_id": "pcr", "code": "DENT-PCR", "display": "プラークコントロールレコード(O'Leary)", "name": "PCR", "unit": "%" } },
+      { "template": { "url": "http://fhir-client.local/Questionnaire/perio-summary-01", "link_id": "stage", "code": "DENT-PERIO-STAGE", "display": "歯周炎のステージ", "name": "歯周炎のステージ", "options": [{ "code": "01", "display": "I" }, { "code": "02", "display": "II" }, { "code": "03", "display": "III" }, { "code": "04", "display": "IV" }] } }
+    ],
+    "drugs": [],
+    "events": ["condition"],
+    "overlay": false
+  },
+  {
+    "name": "口腔機能",
+    "axis": { "unit": "month", "columns": 24 },
+    "items": [
+      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "hypo_count", "code": "DENT-ORAL-HYPO-COUNT", "display": "口腔機能低下症の該当項目数", "name": "該当項目数", "unit": "項目" } },
+      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "tongue_pressure", "code": "DENT-TONGUE-PRESSURE", "display": "最大舌圧", "name": "最大舌圧", "unit": "kPa" } },
+      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "odk_ta", "code": "DENT-ODK-TA", "display": "オーラルディアドコキネシス /ta/", "name": "ODK /ta/", "unit": "回/秒" } },
+      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "eat10", "code": "DENT-EAT10", "display": "嚥下スクリーニング質問紙(EAT-10)", "name": "EAT-10", "unit": "点" } },
+      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "mucosal_moisture", "code": "DENT-MUCOSAL-MOISTURE", "display": "口腔粘膜湿潤度(口腔水分計)", "name": "口腔粘膜湿潤度" } },
+      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "mouth_opening", "code": "DENT-MOUTH-OPENING", "display": "最大開口量(切歯間距離)", "name": "最大開口量", "unit": "mm" } },
+      { "template": { "url": "http://fhir-client.local/Questionnaire/oral-function-01", "link_id": "stimulated_saliva", "code": "DENT-GUM-TEST", "display": "刺激時唾液量(ガムテスト)", "name": "刺激時唾液量(ガムテスト)", "unit": "mL/10分" } },
+      { "vital": "29463-7" },
+      { "lab": "160018910" }
+    ],
+    "drugs": [],
+    "events": ["condition", "radiotherapy", "adverse"],
+    "overlay": false
   }
 ]

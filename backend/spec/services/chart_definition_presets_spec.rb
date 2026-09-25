@@ -39,6 +39,31 @@ RSpec.describe ChartDefinitionPresets do
     expect(definition["events"]).to eq(%w[condition encounter])
   end
 
+  it "テンプレートの項目は JSON に書いた項目コード・名称・単位・選択肢から、URL を key にして作る" do
+    url = "http://fhir-client.local/Questionnaire/perio-summary-01"
+    result = load([{
+      "name" => "歯周病",
+      "items" => [
+        { "template" => { "url" => url, "link_id" => "bop_rate", "code" => "DENT-BOP-RATE",
+                          "display" => "BOP率", "name" => "BOP率", "unit" => "%" } },
+        { "template" => { "url" => url, "link_id" => "stage", "code" => "DENT-PERIO-STAGE",
+                          "display" => "歯周炎のステージ", "name" => "ステージ",
+                          "options" => [{ "code" => "01", "display" => "I" }, { "code" => "02", "display" => "II" }] } }
+      ]
+    }])
+
+    expect(result.created).to eq(1)
+    record = ChartDefinition.find_by!(name: "歯周病")
+    expect(record).to be_valid
+    numeric, choice = record.definition["items"]
+    expect(numeric).to eq(
+      "key" => "template:#{url}:bop_rate", "source" => "template", "name" => "BOP率", "unit" => "%",
+      "codings" => [{ "system" => described_class::TEMPLATE_ITEM_SYSTEM, "code" => "DENT-BOP-RATE", "display" => "BOP率" }]
+    )
+    expect(choice).to include("key" => "template:#{url}:stage", "unit" => "")
+    expect(choice["options"].map { |o| o["display"] }).to eq(%w[I II])
+  end
+
   it "マスタに無い・数値でない検査項目は落とし、何も残らない定義は作らない" do
     result = load([
       { "name" => "糖尿病", "items" => [{ "lab" => "160010010" }, { "lab" => "999999999" }], "drugs" => [] },
