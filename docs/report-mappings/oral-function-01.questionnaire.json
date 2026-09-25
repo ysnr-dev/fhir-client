@@ -1,0 +1,501 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/oral-function-01",
+  "version": "1.0.0",
+  "name": "ORAL_FUNC_01",
+  "title": "口腔機能の検査",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "口腔機能低下症の7つの下位症状の検査値と、頭頸部放射線治療後などに追う開口量・刺激時唾液量を記録するテンプレート。該当項目数は診断基準のしきい値で自動計算する。「回答から Observation を生成する」を有効にしてあり、各値をマルチチャートに出せる。",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract",
+      "valueBoolean": true
+    },
+    {
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-observationExtract-category",
+      "valueCodeableConcept": {
+        "coding": [
+          {
+            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+            "code": "exam"
+          }
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp_hygiene",
+      "type": "group",
+      "text": "口腔衛生状態",
+      "item": [
+        {
+          "linkId": "tci",
+          "type": "decimal",
+          "text": "舌苔の付着程度(TCI)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueDecimal": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueDecimal": 100
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "%",
+                "display": "%"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "DENT-TCI",
+              "display": "舌苔の付着程度(TCI)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_dryness",
+      "type": "group",
+      "text": "口腔乾燥",
+      "item": [
+        {
+          "linkId": "mucosal_moisture",
+          "type": "decimal",
+          "text": "口腔粘膜湿潤度",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueDecimal": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueDecimal": 99.9
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "DENT-MUCOSAL-MOISTURE",
+              "display": "口腔粘膜湿潤度(口腔水分計)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_bite",
+      "type": "group",
+      "text": "咬合力",
+      "item": [
+        {
+          "linkId": "bite_force",
+          "type": "integer",
+          "text": "咬合力",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueInteger": 3000
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "N",
+                "display": "N"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "DENT-BITE-FORCE",
+              "display": "咬合力"
+            }
+          ]
+        },
+        {
+          "linkId": "remaining_teeth",
+          "type": "integer",
+          "text": "残存歯数",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueInteger": 32
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "本",
+                "display": "本"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "DENT-REMAINING-TEETH",
+              "display": "残存歯数(残根・動揺度3を除く)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_odk",
+      "type": "group",
+      "text": "舌口唇運動機能(オーラルディアドコキネシス)",
+      "item": [
+        {
+          "linkId": "odk_pa",
+          "type": "decimal",
+          "text": "ODK /pa/",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueDecimal": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueDecimal": 15
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "回/秒",
+                "display": "回/秒"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "DENT-ODK-PA",
+              "display": "オーラルディアドコキネシス /pa/"
+            }
+          ]
+        },
+        {
+          "linkId": "odk_ta",
+          "type": "decimal",
+          "text": "ODK /ta/",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueDecimal": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueDecimal": 15
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "回/秒",
+                "display": "回/秒"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "DENT-ODK-TA",
+              "display": "オーラルディアドコキネシス /ta/"
+            }
+          ]
+        },
+        {
+          "linkId": "odk_ka",
+          "type": "decimal",
+          "text": "ODK /ka/",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueDecimal": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueDecimal": 15
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "回/秒",
+                "display": "回/秒"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "DENT-ODK-KA",
+              "display": "オーラルディアドコキネシス /ka/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_tongue",
+      "type": "group",
+      "text": "舌圧",
+      "item": [
+        {
+          "linkId": "tongue_pressure",
+          "type": "decimal",
+          "text": "最大舌圧",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueDecimal": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueDecimal": 80
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "kPa",
+                "display": "kPa"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "DENT-TONGUE-PRESSURE",
+              "display": "最大舌圧"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_mastication",
+      "type": "group",
+      "text": "咀嚼機能",
+      "item": [
+        {
+          "linkId": "glucose_elution",
+          "type": "integer",
+          "text": "グルコース溶出量",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueInteger": 500
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "mg/dL",
+                "display": "mg/dL"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "DENT-GLUCOSE-ELUTION",
+              "display": "咀嚼能力(グルコース溶出量)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp_swallow",
+      "type": "group",
+      "text": "嚥下機能",
+      "item": [
+        {
+          "linkId": "eat10",
+          "type": "integer",
+          "text": "EAT-10",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueInteger": 40
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "点",
+                "display": "点"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "DENT-EAT10",
+              "display": "嚥下スクリーニング質問紙(EAT-10)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "hypo_count",
+      "type": "integer",
+      "text": "該当項目数",
+      "extension": [
+        {
+          "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+          "valueCoding": {
+            "system": "http://unitsofmeasure.org",
+            "code": "項目",
+            "display": "項目"
+          }
+        },
+        {
+          "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+          "valueExpression": {
+            "language": "text/fhirpath",
+            "expression": "iif(descendants().where(linkId='tci').answer.value.first() >= 50, 1, 0) + iif(descendants().where(linkId='mucosal_moisture').answer.value.first() < 27, 1, 0) + iif((descendants().where(linkId='bite_force').answer.value.first() < 500) or (descendants().where(linkId='remaining_teeth').answer.value.first() < 20), 1, 0) + iif((descendants().where(linkId='odk_pa').answer.value.first() < 6) or (descendants().where(linkId='odk_ta').answer.value.first() < 6) or (descendants().where(linkId='odk_ka').answer.value.first() < 6), 1, 0) + iif(descendants().where(linkId='tongue_pressure').answer.value.first() < 30, 1, 0) + iif(descendants().where(linkId='glucose_elution').answer.value.first() < 100, 1, 0) + iif(descendants().where(linkId='eat10').answer.value.first() >= 3, 1, 0)"
+          }
+        }
+      ],
+      "code": [
+        {
+          "system": "http://fhir-client.local/CodeSystem/observation-item",
+          "code": "DENT-ORAL-HYPO-COUNT",
+          "display": "口腔機能低下症の該当項目数"
+        }
+      ]
+    },
+    {
+      "linkId": "grp_rt",
+      "type": "group",
+      "text": "開口・唾液",
+      "item": [
+        {
+          "linkId": "mouth_opening",
+          "type": "integer",
+          "text": "最大開口量",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueInteger": 80
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "mm",
+                "display": "mm"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "DENT-MOUTH-OPENING",
+              "display": "最大開口量(切歯間距離)"
+            }
+          ]
+        },
+        {
+          "linkId": "stimulated_saliva",
+          "type": "decimal",
+          "text": "刺激時唾液量(ガムテスト)",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueDecimal": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxValue",
+              "valueDecimal": 50
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces",
+              "valueInteger": 1
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "mL/10分",
+                "display": "mL/10分"
+              }
+            }
+          ],
+          "code": [
+            {
+              "system": "http://fhir-client.local/CodeSystem/observation-item",
+              "code": "DENT-GUM-TEST",
+              "display": "刺激時唾液量(ガムテスト)"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
