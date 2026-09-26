@@ -1568,11 +1568,6 @@ button:disabled {
   box-sizing: border-box;
 }
 
-/* 入力欄と高さを揃えるため、削除アイコンは 1 行目のラベル分だけ下げる。 */
-.prescription-form__comment-field > .rp-card__icon-button {
-  margin-bottom: 6px;
-}
-
 /* RP 内のコメント欄(用法コメント・薬剤コメント)は医薬品表の入力欄と同じ高さにそろえ、
    削除アイコンも同じ高さの正方形にして下端で揃える。 */
 .rp-card__comment-field {
