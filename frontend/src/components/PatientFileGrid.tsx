@@ -63,7 +63,7 @@ export function PatientFileGrid({
                   </span>
                 </button>
                 <span className="karte-file-card__menu">
-                  <RowMenu label={`${file.title} の操作`}>
+                  <RowMenu label={`${file.title} の操作`} escapesClipping>
                     <button
                       type="button"
                       className="row-menu__item"
