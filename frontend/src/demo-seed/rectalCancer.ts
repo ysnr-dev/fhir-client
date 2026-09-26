@@ -17,11 +17,13 @@ import {
   drugsOf,
   ensureFacilityChart,
   findDisease,
+  headerOf,
   LabMaster,
   labItemsOf,
   labResultBundle,
   post,
   prescriptionBundle,
+  radiotherapyCourse,
   requesterOf,
   stampAuthoredOn,
   vitalEntries,
@@ -30,12 +32,10 @@ import {
   type SeedEnv,
 } from "./base";
 import { addDays } from "../lib/dates";
+
+const RT_PROTOCOL = "RT-RECTUM-PRE-45";
 import {
   fetchRegimen,
-  radiotherapyDeviceClient,
-  radiotherapyModalityClient,
-  radiotherapyProtocolClient,
-  radiotherapyTechniqueClient,
   searchEndoscopyItems,
   searchMedicineDoseConversions,
   searchRadItems,
@@ -53,13 +53,6 @@ import { buildRadOrderBundle, emptyRadOrderForm } from "../fhir/radOrderHelpers"
 import { buildRadPerformBundle } from "../fhir/radResultHelpers";
 import { buildSurgeryOrderBundle, emptySurgeryOrderForm, type SurgeryOrderItemLine } from "../fhir/surgeryOrderHelpers";
 import { buildSurgeryPerformBundle, emptySurgeryPerformForm } from "../fhir/surgeryResultHelpers";
-import {
-  applyRadiotherapyProtocol,
-  buildRadiotherapyOrderBundle,
-  emptyRadiotherapyOrderForm,
-  summarizeRadiotherapyOrder,
-} from "../fhir/radiotherapyOrderHelpers";
-import { buildRadiotherapyFractionBundle } from "../fhir/radiotherapyResultHelpers";
 import {
   bsaOf,
   buildRegimenApplicationBundle,
@@ -160,13 +153,6 @@ const WEIGHT: [day: number, weight: number][] = [
 ];
 
 /** オーダーのヘッダ(明細から basedOn で指される側)。 */
-async function headerOf(ids: { type: string; id: string }[]): Promise<fhir4.ServiceRequest> {
-  const requests = (await createdOf(ids, "ServiceRequest")) as fhir4.ServiceRequest[];
-  const header = requests.find((sr) => !sr.basedOn?.length) ?? requests[0];
-  if (!header) throw new Error("オーダーのヘッダが見つかりません");
-  return header;
-}
-
 async function endoscopy(env: SeedEnv, patientId: string, requester: OrderContext, problem: ProblemRef, date: string) {
   const item = (await searchEndoscyItemsSafe("大腸内視鏡検査(全大腸)"))[0];
   if (!item) return env.log("内視鏡マスタに大腸内視鏡が無いので飛ばします");
@@ -269,56 +255,6 @@ async function contrastCt(env: SeedEnv, patientId: string, requester: OrderConte
       undefined,
     ),
   );
-}
-
-async function radiotherapy(env: SeedEnv, patientId: string, requester: OrderContext, problem: ProblemRef, start: string) {
-  const protocols = await radiotherapyProtocolClient.search({ code: "RT-RECTUM-PRE-45", per: 5 }).catch(() => ({ items: [] }));
-  const protocol = protocols.items.find((p) => p.code === "RT-RECTUM-PRE-45");
-  if (!protocol) return env.log("放射線治療のプロトコル(直腸癌 術前)が無いので飛ばします");
-  const [modalities, techniques, devices] = await Promise.all([
-    radiotherapyModalityClient.search({ per: 100 }),
-    radiotherapyTechniqueClient.search({ per: 100 }),
-    radiotherapyDeviceClient.search({ per: 100 }),
-  ]);
-  const values = applyRadiotherapyProtocol(
-    {
-      ...emptyRadiotherapyOrderForm("outpatient"),
-      startDate: start,
-      problem,
-      practitionerId: env.practitioner.id,
-      practitionerName: env.practitioner.name,
-      concurrentTherapy: "カペシタビン併用",
-    },
-    protocol,
-    { modalities: modalities.items, techniques: techniques.items, devices: devices.items },
-  );
-  const device = devices.items[0];
-  if (device) values.phases = values.phases.map((phase) => (phase.device.code ? phase : { ...phase, device: { code: device.code, name: device.name } }));
-  const order = await headerOf(await post(stampAuthoredOn(buildRadiotherapyOrderBundle(values, patientId, requester), at(start))));
-  const phase = summarizeRadiotherapyOrder(order).phases[0];
-  const entries: fhir4.BundleEntry[] = [];
-  let date = weekday(start);
-  for (let n = 1; n <= 25; n += 1) {
-    const bundle = buildRadiotherapyFractionBundle(
-      {
-        performedDate: date,
-        startTime: "10:00",
-        endTime: "10:12",
-        phaseId: phase.phaseId,
-        fractionNumber: String(n),
-        doses: Object.fromEntries(phase.doses.map((dose) => [dose.volumeId, String(dose.fractionDose)])),
-        device: { code: phase.deviceCode, name: phase.deviceName },
-        imageGuidance: "",
-        performerId: env.practitioner.id,
-        performerName: env.practitioner.name,
-        note: "",
-      },
-      order,
-    );
-    entries.push(...(bundle.entry ?? []));
-    date = weekday(addDays(date, 1));
-  }
-  await post({ resourceType: "Bundle", type: "transaction", entry: entries });
 }
 
 async function surgery(
@@ -485,7 +421,7 @@ export const REQUIREMENTS = {
   usages: [BID],
   diseases: ["直腸癌", "転移性肝癌"],
   regimens: ["900003", "900002"],
-  radiotherapyProtocol: "RT-RECTUM-PRE-45",
+  radiotherapyProtocol: RT_PROTOCOL,
 };
 
 export async function seedRectalCancer(env: SeedEnv): Promise<void> {
@@ -550,7 +486,7 @@ export async function seedRectalCancer(env: SeedEnv): Promise<void> {
   await contrastCt(env, patientId, requesterOf(env, gastro), suspected, day(9), "直腸癌の病期診断");
 
   // 術前化学放射線療法(45Gy/25 回 + カペシタビン)
-  await radiotherapy(env, patientId, requesterOf(env, radiation), confirmed, day(28));
+  await radiotherapyCourse(env, patientId, requesterOf(env, radiation), confirmed, day(28), RT_PROTOCOL, "カペシタビン併用");
   await post(
     prescriptionBundle(drugs, patientId, requesterOf(env, oncology), day(28), [{ usage: BID, days: 35, medicines: [[CAPECITABINE, 8]] }], confirmed),
   );

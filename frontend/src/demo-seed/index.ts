@@ -2,10 +2,12 @@
 // 同じ氏名・生年月日の患者がいるシナリオは飛ばすので、何度流しても二重にはならない。
 
 import { fetchRegimen, radiotherapyProtocolClient } from "../api/masterClient";
-import { DrugMaster, findDisease, LabMaster, loadEnv } from "./base";
+import { DrugMaster, findDisease, findTemplate, LabMaster, loadEnv } from "./base";
 import { REQUIREMENTS as ckdRequirements, seedCkd } from "./ckd";
 import { REQUIREMENTS as diabetesRequirements, seedDiabetes } from "./diabetes";
+import { REQUIREMENTS as headNeckRequirements, seedHeadNeckRadiotherapy } from "./headNeckRadiotherapy";
 import { REQUIREMENTS as heartFailureRequirements, seedHeartFailure } from "./heartFailure";
+import { REQUIREMENTS as periodontalRequirements, seedPeriodontal } from "./periodontal";
 import { REQUIREMENTS as rectalRequirements, seedRectalCancer } from "./rectalCancer";
 
 export const SCENARIOS = {
@@ -13,6 +15,8 @@ export const SCENARIOS = {
   rectal: seedRectalCancer,
   heartFailure: seedHeartFailure,
   ckd: seedCkd,
+  periodontal: seedPeriodontal,
+  headNeckRt: seedHeadNeckRadiotherapy,
 } as const;
 
 export type ScenarioName = keyof typeof SCENARIOS;
@@ -37,12 +41,19 @@ export async function run(
 
 /**
  * 書き込む前の確認。各シナリオが使うマスタ(検査項目・薬剤・用法・病名・レジメン・放射線治療の
- * プロトコル)が揃っているかを見て、足りないものを返す。途中で止まって半端な患者が残らないように、
+ * プロトコル)とテンプレートが揃っているかを見て、足りないものを返す。途中で止まって半端な患者が残らないように、
  * 本番へ流す前に `--check` で見る。
  */
 export async function preflight(): Promise<string[]> {
   const missing: string[] = [];
-  const all = [diabetesRequirements, rectalRequirements, heartFailureRequirements, ckdRequirements];
+  const all = [
+    diabetesRequirements,
+    rectalRequirements,
+    heartFailureRequirements,
+    ckdRequirements,
+    periodontalRequirements,
+    headNeckRequirements,
+  ];
   const labs = new LabMaster();
   const labCodes = [...new Set(all.flatMap((r) => r.labs))];
   await labs.load(labCodes);
@@ -77,9 +88,14 @@ export async function preflight(): Promise<string[]> {
   for (const code of rectalRequirements.regimens) {
     await fetchRegimen(code).catch(() => missing.push(`レジメン ${code}(直腸癌の化学療法は飛ばされます)`));
   }
-  const protocols = await radiotherapyProtocolClient.search({ code: rectalRequirements.radiotherapyProtocol, per: 5 });
-  if (!protocols.items.some((p) => p.code === rectalRequirements.radiotherapyProtocol)) {
-    missing.push(`放射線治療プロトコル ${rectalRequirements.radiotherapyProtocol}(放射線治療は飛ばされます)`);
+  for (const code of [rectalRequirements.radiotherapyProtocol, headNeckRequirements.radiotherapyProtocol]) {
+    const protocols = await radiotherapyProtocolClient.search({ code, per: 5 });
+    if (!protocols.items.some((p) => p.code === code)) {
+      missing.push(`放射線治療プロトコル ${code}(放射線治療は飛ばされます)`);
+    }
+  }
+  for (const url of [...periodontalRequirements.templates, ...headNeckRequirements.templates]) {
+    if (!(await findTemplate(url))) missing.push(`テンプレート ${url}(取り込むまでそのシナリオは飛ばされます)`);
   }
   return missing;
 }

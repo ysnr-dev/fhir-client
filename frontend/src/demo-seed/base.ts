@@ -14,12 +14,18 @@ import {
   fetchChartDefinitions,
   fetchLabResultItem,
   fetchMedicinesByCodes,
+  radiotherapyDeviceClient,
+  radiotherapyModalityClient,
+  radiotherapyProtocolClient,
+  radiotherapyTechniqueClient,
   searchDiseases,
   searchMedicineUsages,
   type LabResultItem,
   type Medicine,
   type MedicineUsage,
 } from "../api/masterClient";
+import fhirpath from "fhirpath";
+import fhirpathR4Model from "fhirpath/fhir-context/r4";
 import { addDays, today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { buildCondition, emptyConditionForm, type OutcomeCode, type ProblemRef } from "../fhir/conditionHelpers";
@@ -34,6 +40,16 @@ import {
 } from "../fhir/labResultHelpers";
 import { buildPrescriptionBundle, CATEGORY_OPTIONS, type PrescriptionSetting } from "../fhir/prescriptionHelpers";
 import { buildAdmissionEncounter, buildDischargedEncounter } from "../fhir/encounterHelpers";
+import {
+  applyRadiotherapyProtocol,
+  buildRadiotherapyOrderBundle,
+  emptyRadiotherapyOrderForm,
+  summarizeRadiotherapyOrder,
+} from "../fhir/radiotherapyOrderHelpers";
+import { buildRadiotherapyFractionBundle } from "../fhir/radiotherapyResultHelpers";
+import { buildAdverseEvent } from "../fhir/adverseEventHelpers";
+import { responseSaveBundle } from "../fhir/observationExtract";
+import { buildQuestionnaireResponse, DEFAULT_INSTITUTION_NUMBER } from "../fhir/questionnaireResponseHelpers";
 import { BED_PHYSICAL_TYPE } from "../fhir/wardHelpers";
 import type { Disease } from "../api/masterClient";
 import {
@@ -176,6 +192,14 @@ export async function createdOf(ids: { type: string; id: string }[], type: strin
   if (wanted.length === 0) return [];
   const { data } = await searchResource<fhir4.Resource>(type, new URLSearchParams({ _id: wanted.join(",") }));
   return (data.entry ?? []).map((e) => e.resource).filter((r): r is fhir4.Resource => Boolean(r));
+}
+
+/** オーダーを post した結果から、ヘッダ(basedOn を持たない ServiceRequest)を読み直す。 */
+export async function headerOf(ids: { type: string; id: string }[]): Promise<fhir4.ServiceRequest> {
+  const requests = (await createdOf(ids, "ServiceRequest")) as fhir4.ServiceRequest[];
+  const header = requests.find((sr) => !sr.basedOn?.length) ?? requests[0];
+  if (!header) throw new Error("オーダーのヘッダが見つかりません");
+  return header;
 }
 
 // ---- 患者 ----
@@ -462,6 +486,177 @@ export async function createStay(
   );
   const { data } = await createResource(buildDischargedEncounter(encounter, `${discharged}T10:00`));
   return data.id ?? null;
+}
+
+// ---- 放射線治療 ----
+
+export interface RadiotherapyCourse {
+  order: fhir4.ServiceRequest;
+  /** 有害事象の treatment-context に写す名前(画面と同じ「第1コース 咽頭」)。 */
+  name: string;
+}
+
+/**
+ * 治療プロトコルどおりの治療処方と、start から平日に 1 回ずつの照射記録(全回実施)。
+ * プロトコルがマスタに無ければ作らずに null を返す。
+ */
+export async function radiotherapyCourse(
+  env: SeedEnv,
+  patientId: string,
+  requester: OrderContext,
+  problem: ProblemRef,
+  start: string,
+  protocolCode: string,
+  concurrentTherapy = "",
+): Promise<RadiotherapyCourse | null> {
+  const protocols = await radiotherapyProtocolClient.search({ code: protocolCode, per: 5 }).catch(() => ({ items: [] }));
+  const protocol = protocols.items.find((p) => p.code === protocolCode);
+  if (!protocol) {
+    env.log(`放射線治療のプロトコル ${protocolCode} が無いので飛ばします`);
+    return null;
+  }
+  const [modalities, techniques, devices] = await Promise.all([
+    radiotherapyModalityClient.search({ per: 100 }),
+    radiotherapyTechniqueClient.search({ per: 100 }),
+    radiotherapyDeviceClient.search({ per: 100 }),
+  ]);
+  const values = applyRadiotherapyProtocol(
+    {
+      ...emptyRadiotherapyOrderForm("outpatient"),
+      startDate: start,
+      problem,
+      practitionerId: env.practitioner.id,
+      practitionerName: env.practitioner.name,
+      concurrentTherapy,
+    },
+    protocol,
+    { modalities: modalities.items, techniques: techniques.items, devices: devices.items },
+  );
+  const device = devices.items[0];
+  if (device) values.phases = values.phases.map((phase) => (phase.device.code ? phase : { ...phase, device: { code: device.code, name: device.name } }));
+  const order = await headerOf(await post(stampAuthoredOn(buildRadiotherapyOrderBundle(values, patientId, requester), at(start))));
+  const summary = summarizeRadiotherapyOrder(order);
+  const entries: fhir4.BundleEntry[] = [];
+  let date = weekday(start);
+  for (const phase of summary.phases) {
+    for (let n = 1; n <= phase.fractions; n += 1) {
+      const bundle = buildRadiotherapyFractionBundle(
+        {
+          performedDate: date,
+          startTime: "10:00",
+          endTime: "10:12",
+          phaseId: phase.phaseId,
+          fractionNumber: String(n),
+          doses: Object.fromEntries(phase.doses.map((dose) => [dose.volumeId, String(dose.fractionDose)])),
+          device: { code: phase.deviceCode, name: phase.deviceName },
+          imageGuidance: "",
+          performerId: env.practitioner.id,
+          performerName: env.practitioner.name,
+          note: "",
+        },
+        order,
+      );
+      entries.push(...(bundle.entry ?? []));
+      date = weekday(addDays(date, 1));
+    }
+  }
+  await post({ resourceType: "Bundle", type: "transaction", entry: entries });
+  return { order, name: `第${summary.courseNumber}コース ${summary.siteLabel}`.trim() };
+}
+
+/** 有害事象(CTCAE)1 件。onset / resolved は日付。resolved が空なら継続中。 */
+export interface AdverseEventSpec {
+  term: string;
+  grade: number;
+  onset: string;
+  resolved?: string;
+}
+
+/** 放射線治療のコースに紐付く有害事象。今日より後に発現するものは作らず、回復日が未来なら継続中にする。 */
+export async function radiotherapyAdverseEvents(
+  env: SeedEnv,
+  patientId: string,
+  course: RadiotherapyCourse,
+  specs: AdverseEventSpec[],
+): Promise<void> {
+  const now = daysAgo(0);
+  const entries: fhir4.BundleEntry[] = specs
+    .filter((spec) => spec.onset <= now)
+    .map((spec) => {
+      const resolved = spec.resolved && spec.resolved <= now ? spec.resolved : "";
+      const observation = buildAdverseEvent(
+        { term: spec.term, grade: String(spec.grade), onset: spec.onset, resolved, note: "" },
+        patientId,
+        { treatmentSrId: course.order.id ?? "", treatmentType: "radiotherapy", name: course.name },
+        undefined,
+        { reference: `Practitioner/${env.practitioner.id}`, display: env.practitioner.name },
+      );
+      return { fullUrl: `urn:uuid:${crypto.randomUUID()}`, resource: observation, request: { method: "POST", url: "Observation" } };
+    });
+  if (entries.length === 0) return;
+  await post({ resourceType: "Bundle", type: "transaction", entry: entries });
+  env.log(`${course.name}: 有害事象 ${entries.length} 件を登録`);
+}
+
+// ---- テンプレート ----
+
+/** 取り込み済みのテンプレートを canonical URL で引く。無ければ null(デモ投入では作らない)。 */
+export async function findTemplate(url: string): Promise<fhir4.Questionnaire | null> {
+  const { data } = await searchResource<fhir4.Questionnaire>("Questionnaire", new URLSearchParams({ url }));
+  return data.entry?.map((e) => e.resource).find((q): q is fhir4.Questionnaire => q?.url === url) ?? null;
+}
+
+const CALCULATED_EXPRESSION_EXT_URL = "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression";
+
+/**
+ * テンプレートへの記入 1 回ぶん(回答 + 抽出した Observation)。answers は linkId → 値で、
+ * 数値項目は値そのもの、選択肢項目は選択肢の添字(0 始まり)。計算式を持つ項目は、ほかの回答から
+ * 画面と同じ FHIRPath で求める。
+ */
+export function templateEntries(
+  env: SeedEnv,
+  questionnaire: fhir4.Questionnaire,
+  patient: fhir4.Patient,
+  dateTime: string,
+  answers: Record<string, number>,
+): fhir4.BundleEntry[] {
+  const values: Record<string, number> = { ...answers };
+  const itemsOf = (items: fhir4.QuestionnaireItem[] | undefined): fhir4.QuestionnaireResponseItem[] =>
+    (items ?? []).flatMap((item): fhir4.QuestionnaireResponseItem[] => {
+      if (item.type === "group") {
+        const children = itemsOf(item.item);
+        return children.length ? [{ linkId: item.linkId, text: item.text, item: children }] : [];
+      }
+      const value = values[item.linkId];
+      if (value == null) return [];
+      const answer: fhir4.QuestionnaireResponseItemAnswer =
+        item.type === "choice"
+          ? { valueCoding: item.answerOption?.[value]?.valueCoding }
+          : item.type === "integer"
+            ? { valueInteger: value }
+            : { valueDecimal: value };
+      return [{ linkId: item.linkId, text: item.text, answer: [answer] }];
+    });
+  const calculate = (items: fhir4.QuestionnaireItem[] | undefined): void => {
+    for (const item of items ?? []) {
+      const expression = item.extension?.find((e) => e.url === CALCULATED_EXPRESSION_EXT_URL)?.valueExpression?.expression;
+      if (expression && values[item.linkId] == null) {
+        const response = { resourceType: "QuestionnaireResponse", status: "in-progress", item: itemsOf(questionnaire.item) };
+        const [value] = fhirpath.evaluate(response, expression, {}, fhirpathR4Model) as unknown[];
+        if (typeof value === "number") values[item.linkId] = value;
+      }
+      calculate(item.item);
+    }
+  };
+  calculate(questionnaire.item);
+  const response = buildQuestionnaireResponse({
+    questionnaire,
+    patient,
+    items: itemsOf(questionnaire.item),
+    meta: { status: "completed", authorName: env.practitioner.name, institutionNumber: DEFAULT_INSTITUTION_NUMBER },
+  });
+  response.authored = dateTime;
+  return responseSaveBundle({ questionnaire, response }).entry ?? [];
 }
 
 // ---- マスタ引き ----
