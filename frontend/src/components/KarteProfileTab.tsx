@@ -171,12 +171,6 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
 
   return (
     <div className="karte-tabpanel karte-profile">
-      <CautionSection
-        patientId={patientId}
-        onView={(flagId) => onViewChange(`${CAUTION_VIEW_PREFIX}${flagId}`)}
-        onCreate={() => setForm({ kind: "create" })}
-        onEdit={(flagId) => setForm({ kind: "edit", flagId })}
-      />
       <PatientBasicSection
         patientId={patientId}
         onEdit={() => setForm({ kind: "edit-patient" })}
@@ -192,6 +186,12 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
         patientId={patientId}
         onAdd={() => setForm({ kind: "create-infection" })}
         onEdit={(observationId) => setForm({ kind: "edit-infection", observationId })}
+      />
+      <CautionSection
+        patientId={patientId}
+        onView={(flagId) => onViewChange(`${CAUTION_VIEW_PREFIX}${flagId}`)}
+        onCreate={() => setForm({ kind: "create" })}
+        onEdit={(flagId) => setForm({ kind: "edit", flagId })}
       />
     </div>
   );
