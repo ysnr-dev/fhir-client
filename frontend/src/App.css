@@ -19048,6 +19048,48 @@ button.chemo-calendar__cell[draggable="true"] {
   max-width: 80%;
 }
 
+.dicom-viewer__tools + .dicom-viewer__tools {
+  padding-left: 8px;
+  border-left: 1px solid #444;
+}
+
+.dicom-viewer__notice {
+  font-size: 13px;
+  color: #9fd49f;
+}
+
+.modal--dicom-text,
+.modal--dicom-save {
+  color: var(--text-h);
+}
+
+.modal--dicom-text {
+  width: min(420px, 90vw);
+}
+
+.modal--dicom-save {
+  width: min(720px, 94vw);
+}
+
+.dicom-save__preview {
+  display: block;
+  max-width: 100%;
+  max-height: 50vh;
+  margin: 0 auto 12px;
+  background: #000;
+}
+
+.dicom-save__fields label:first-child {
+  flex: 1 1 280px;
+}
+
+.dicom-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .modal--dicom-tags {
   width: min(960px, 94vw);
   color: var(--text-h);

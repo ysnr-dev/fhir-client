@@ -8,27 +8,76 @@ import {
   type ImagingSeries,
   type ImagingStudySummary,
 } from "../fhir/imagingHelpers";
+import type { CapturedImage, CornerTexts } from "../imaging/captureViewport";
 import { wadouriImageId } from "../imaging/cornerstoneSetup";
 import { CT_WINDOW_PRESETS } from "../imaging/windowPresets";
+import { today } from "../lib/dates";
+import { DicomAnnotationTextModal } from "./DicomAnnotationTextModal";
+import { DicomSaveImageModal } from "./DicomSaveImageModal";
 import { DicomTagListModal } from "./DicomTagListModal";
 import {
   DicomViewport,
   type DicomViewportHandle,
+  type RequestAnnotationText,
   type ViewerTool,
   type ViewportState,
 } from "./DicomViewport";
 import { ErrorBanner } from "./ErrorBanner";
 
 // DICOM のビューア(全画面)。左にシリーズ、中央に画像、上に道具を並べる。
-// 計測(距離・角度)は開いている間だけのもので、保存しない。
+// 計測・注釈は開いている間だけのもので保存しない。残したいときは描いたままの
+// 画像を JPEG にしてカルテのファイルに登録する。
 
-const TOOLS: { key: ViewerTool; label: string }[] = [
-  { key: "window", label: "ウィンドウ" },
-  { key: "pan", label: "移動" },
-  { key: "zoom", label: "拡大" },
-  { key: "length", label: "距離" },
-  { key: "angle", label: "角度" },
+const TOOL_GROUPS: { label: string; tools: { key: ViewerTool; label: string }[] }[] = [
+  {
+    label: "操作",
+    tools: [
+      { key: "window", label: "ウィンドウ" },
+      { key: "pan", label: "移動" },
+      { key: "zoom", label: "拡大" },
+    ],
+  },
+  {
+    label: "計測",
+    tools: [
+      { key: "length", label: "距離" },
+      { key: "angle", label: "角度" },
+      { key: "cobbAngle", label: "Cobb角" },
+      { key: "bidirectional", label: "長径・短径" },
+      { key: "probe", label: "点" },
+    ],
+  },
+  {
+    label: "範囲",
+    tools: [
+      { key: "rectangle", label: "矩形" },
+      { key: "ellipse", label: "楕円" },
+      { key: "circle", label: "円" },
+      { key: "freehand", label: "フリーハンド" },
+    ],
+  },
+  {
+    label: "注釈",
+    tools: [
+      { key: "arrow", label: "矢印" },
+      { key: "label", label: "文字" },
+    ],
+  },
 ];
+
+interface TextRequest {
+  current: string;
+  done: (text: string | null) => void;
+}
+
+const SAVED_NOTICE_MS = 3000;
+
+const CORNER_KEYS = {
+  "top-left": "topLeft",
+  "top-right": "topRight",
+  "bottom-left": "bottomLeft",
+  "bottom-right": "bottomRight",
+} as const;
 
 const DEFAULT_WINDOW = "default";
 
@@ -51,6 +100,12 @@ export default function DicomViewerModal({
   const [state, setState] = useState<ViewportState | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [textRequest, setTextRequest] = useState<TextRequest | null>(null);
+  const [captured, setCaptured] = useState<CapturedImage | null>(null);
+  const [capturing, setCapturing] = useState(false);
+  const [savedNotice, setSavedNotice] = useState(false);
+
+  const requestText: RequestAnnotationText = (current, done) => setTextRequest({ current, done });
 
   const { data: stored, error: storedError } = useImagingStudyInstances(patientId, study.studyUid);
 
@@ -80,10 +135,23 @@ export default function DicomViewerModal({
   useEffect(() => () => cache.purgeCache(), []);
 
   useEffect(() => {
+    if (!savedNotice) return;
+    const timer = window.setTimeout(() => setSavedNotice(false), SAVED_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [savedNotice]);
+
+  const dialogOpen = tagsOpen || textRequest !== null || captured !== null;
+
+  useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (tagsOpen) return;
+      if (dialogOpen) return;
       const position = displayable.findIndex((s) => s.uid === current?.uid);
       if (e.key === "Escape") onClose();
+      else if (e.key === "Delete" || e.key === "Backspace") {
+        viewportRef.current?.deleteSelectedAnnotations();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        viewportRef.current?.undo();
+      }
       else if (e.key === "ArrowUp") viewportRef.current?.scroll(-1);
       else if (e.key === "ArrowDown") viewportRef.current?.scroll(1);
       else if (e.key === "ArrowLeft" && position > 0) setSeriesUid(displayable[position - 1].uid);
@@ -94,27 +162,75 @@ export default function DicomViewerModal({
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [displayable, current, tagsOpen, onClose]);
+  }, [displayable, current, dialogOpen, onClose]);
 
   const currentImage = state ? images[state.index] : undefined;
   const isCt = current?.modality === "CT";
 
+  // 画面の四隅と同じ内容。JPEG に書き込むときにも使う。
+  const corners: CornerTexts = {
+    topLeft: [study.sourcePatientName, study.sourcePatientId, study.institutionName],
+    topRight: [
+      [study.date, study.time].filter(Boolean).join(" "),
+      study.description,
+      current?.description ?? "",
+    ],
+    bottomLeft: state
+      ? [
+          `Im ${state.index + 1} / ${state.total}`,
+          state.zoom != null ? `拡大 ${Math.round(state.zoom * 100)}%` : "",
+        ]
+      : [],
+    bottomRight:
+      state?.windowWidth != null && state.windowCenter != null
+        ? [`WW ${Math.round(state.windowWidth)} / WL ${Math.round(state.windowCenter)}`]
+        : [],
+  };
+
+  async function handleCapture() {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    setCapturing(true);
+    try {
+      setCaptured(await viewport.captureJpeg(corners));
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      setCapturing(false);
+    }
+  }
+
+  const defaultTitle = [
+    study.date,
+    current?.description || current?.modality,
+    state && `Im ${state.index + 1}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div className="dicom-viewer" role="dialog" aria-modal="true" aria-label="画像ビューア">
       <div className="dicom-viewer__toolbar">
-        <div className="dicom-viewer__tools" role="group" aria-label="左ドラッグの操作">
-          {TOOLS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={item.key === tool ? "dicom-viewer__tool--active" : undefined}
-              aria-pressed={item.key === tool}
-              onClick={() => setTool(item.key)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+        {TOOL_GROUPS.map((group) => (
+          <div
+            key={group.label}
+            className="dicom-viewer__tools"
+            role="group"
+            aria-label={`左ドラッグの操作(${group.label})`}
+          >
+            {group.tools.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={item.key === tool ? "dicom-viewer__tool--active" : undefined}
+                aria-pressed={item.key === tool}
+                onClick={() => setTool(item.key)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        ))}
         {isCt && (
           <select
             aria-label="ウィンドウのプリセット"
@@ -142,8 +258,11 @@ export default function DicomViewerModal({
         <button type="button" onClick={() => viewportRef.current?.toggleInvert()}>
           反転
         </button>
-        <button type="button" onClick={() => viewportRef.current?.clearMeasurements()}>
-          計測を消去
+        <button type="button" onClick={() => viewportRef.current?.undo()}>
+          元に戻す
+        </button>
+        <button type="button" onClick={() => viewportRef.current?.clearAnnotations()}>
+          注釈を消去
         </button>
         <button type="button" onClick={() => viewportRef.current?.reset()}>
           リセット
@@ -151,6 +270,14 @@ export default function DicomViewerModal({
         <button type="button" disabled={!currentImage} onClick={() => setTagsOpen(true)}>
           タグ
         </button>
+        <button type="button" disabled={!currentImage || capturing} onClick={handleCapture}>
+          画像を保存
+        </button>
+        {savedNotice && (
+          <span className="dicom-viewer__notice" role="status">
+            ファイルに保存しました
+          </span>
+        )}
         <button type="button" className="dicom-viewer__close" onClick={onClose}>
           閉じる
         </button>
@@ -183,34 +310,13 @@ export default function DicomViewerModal({
             tool={tool}
             onStateChange={setState}
             onError={setError}
+            onRequestText={requestText}
           />
-          <div className="dicom-viewer__overlay dicom-viewer__overlay--top-left">
-            <span>{study.sourcePatientName}</span>
-            <span>{study.sourcePatientId}</span>
-            <span>{study.institutionName}</span>
-          </div>
-          <div className="dicom-viewer__overlay dicom-viewer__overlay--top-right">
-            <span>{[study.date, study.time].filter(Boolean).join(" ")}</span>
-            <span>{study.description}</span>
-            <span>{current?.description}</span>
-          </div>
-          {state && (
-            <>
-              <div className="dicom-viewer__overlay dicom-viewer__overlay--bottom-left">
-                <span>
-                  Im {state.index + 1} / {state.total}
-                </span>
-                {state.zoom != null && <span>拡大 {Math.round(state.zoom * 100)}%</span>}
-              </div>
-              <div className="dicom-viewer__overlay dicom-viewer__overlay--bottom-right">
-                {state.windowWidth != null && state.windowCenter != null && (
-                  <span>
-                    WW {Math.round(state.windowWidth)} / WL {Math.round(state.windowCenter)}
-                  </span>
-                )}
-              </div>
-            </>
-          )}
+          {(["top-left", "top-right", "bottom-left", "bottom-right"] as const).map((corner) => (
+            <div key={corner} className={`dicom-viewer__overlay dicom-viewer__overlay--${corner}`}>
+              {corners[CORNER_KEYS[corner]].map((text, i) => (text ? <span key={i}>{text}</span> : null))}
+            </div>
+          ))}
           {(error || storedError) && (
             <div className="dicom-viewer__error">
               <ErrorBanner error={error ?? storedError} />
@@ -224,6 +330,28 @@ export default function DicomViewerModal({
           patientId={patientId}
           sopInstanceUid={currentImage.sopInstanceUid}
           onClose={() => setTagsOpen(false)}
+        />
+      )}
+      {textRequest && (
+        <DicomAnnotationTextModal
+          initialText={textRequest.current}
+          onDone={(text) => {
+            setTextRequest(null);
+            textRequest.done(text);
+          }}
+        />
+      )}
+      {captured && (
+        <DicomSaveImageModal
+          patientId={patientId}
+          image={captured}
+          defaultTitle={defaultTitle}
+          defaultDate={study.date || today()}
+          onSaved={() => {
+            setCaptured(null);
+            setSavedNotice(true);
+          }}
+          onClose={() => setCaptured(null)}
         />
       )}
     </div>

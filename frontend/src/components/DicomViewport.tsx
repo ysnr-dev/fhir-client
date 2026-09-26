@@ -2,21 +2,48 @@ import { Enums, RenderingEngine, utilities, type Types } from "@cornerstonejs/co
 import {
   AngleTool,
   annotation,
+  ArrowAnnotateTool,
+  BidirectionalTool,
+  CircleROITool,
+  CobbAngleTool,
+  EllipticalROITool,
   Enums as ToolEnums,
+  LabelTool,
   LengthTool,
   PanTool,
+  PlanarFreehandROITool,
+  ProbeTool,
+  RectangleROITool,
   StackScrollTool,
   ToolGroupManager,
   WindowLevelTool,
   ZoomTool,
 } from "@cornerstonejs/tools";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { captureViewportJpeg, type CapturedImage, type CornerTexts } from "../imaging/captureViewport";
 import { initCornerstone } from "../imaging/cornerstoneSetup";
 
-// DICOM を描く領域 1 つ。左ドラッグの道具(ウィンドウ・移動・拡大・計測)は選んで
+// DICOM を描く領域 1 つ。左ドラッグの道具(ウィンドウ・移動・拡大・計測・注釈)は選んで
 // 切り替え、中ドラッグ = 移動、右ドラッグ = 拡大、ホイール = コマ送りは常に効く。
 
-export type ViewerTool = "window" | "pan" | "zoom" | "length" | "angle";
+export type ViewerTool =
+  | "window"
+  | "pan"
+  | "zoom"
+  | "length"
+  | "angle"
+  | "cobbAngle"
+  | "bidirectional"
+  | "probe"
+  | "rectangle"
+  | "ellipse"
+  | "circle"
+  | "freehand"
+  | "arrow"
+  | "label";
+
+/** 矢印・文字の注釈に書く文字を尋ねる。取りやめは null で返す。 */
+export type RequestAnnotationText = (current: string, done: (text: string | null) => void) => void;
 
 export interface ViewportState {
   index: number;
@@ -31,8 +58,12 @@ export interface DicomViewportHandle {
   toggleInvert: () => void;
   /** null は画像に書かれた既定のウィンドウに戻す。 */
   setWindow: (window: { width: number; center: number } | null) => void;
-  clearMeasurements: () => void;
+  clearAnnotations: () => void;
+  undo: () => void;
+  deleteSelectedAnnotations: () => void;
   scroll: (delta: number) => void;
+  /** 見えているまま(注釈と四隅の文字を含む)を JPEG にする。 */
+  captureJpeg: (corners: CornerTexts) => Promise<CapturedImage>;
 }
 
 const TOOL_NAMES: Record<ViewerTool, string> = {
@@ -41,7 +72,26 @@ const TOOL_NAMES: Record<ViewerTool, string> = {
   zoom: ZoomTool.toolName,
   length: LengthTool.toolName,
   angle: AngleTool.toolName,
+  cobbAngle: CobbAngleTool.toolName,
+  bidirectional: BidirectionalTool.toolName,
+  probe: ProbeTool.toolName,
+  rectangle: RectangleROITool.toolName,
+  ellipse: EllipticalROITool.toolName,
+  circle: CircleROITool.toolName,
+  freehand: PlanarFreehandROITool.toolName,
+  arrow: ArrowAnnotateTool.toolName,
+  label: LabelTool.toolName,
 };
+const TEXT_TOOLS = new Set<string>([ArrowAnnotateTool.toolName, LabelTool.toolName]);
+
+const { DefaultHistoryMemo } = utilities.HistoryMemo;
+
+/** 注釈をまとめて消したあとに、消えた注釈の「元に戻す」が残らないようにする。 */
+function clearAllAnnotations() {
+  annotation.state.removeAllAnnotations();
+  // size を入れ直すと履歴が空になる(HistoryMemo に clear が無いため)。
+  DefaultHistoryMemo.size = DefaultHistoryMemo.size;
+}
 // 左ドラッグに選ばれていなくても効かせておく操作。
 const FIXED_BINDINGS: Partial<Record<ViewerTool, ToolEnums.MouseBindings>> = {
   pan: ToolEnums.MouseBindings.Auxiliary,
@@ -64,7 +114,7 @@ function applyTool(toolGroupId: string, active: ViewerTool) {
     if (tool === active) bindings.push({ mouseButton: ToolEnums.MouseBindings.Primary });
     const fixed = FIXED_BINDINGS[tool];
     if (fixed) bindings.push({ mouseButton: fixed });
-    // 計測は、選ばれていない間も描いた線を残して動かせるよう passive にする。
+    // 注釈は、選ばれていない間も描いたものを残して動かせるよう passive にする。
     if (bindings.length > 0) group.setToolActive(TOOL_NAMES[tool], { bindings });
     else group.setToolPassive(TOOL_NAMES[tool]);
   });
@@ -77,8 +127,9 @@ export const DicomViewport = forwardRef<
     tool: ViewerTool;
     onStateChange: (state: ViewportState) => void;
     onError: (error: Error | null) => void;
+    onRequestText: RequestAnnotationText;
   }
->(function DicomViewport({ imageIds, tool, onStateChange, onError }, ref) {
+>(function DicomViewport({ imageIds, tool, onStateChange, onError, onRequestText }, ref) {
   const elementRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<Session | null>(null);
   const [ready, setReady] = useState(false);
@@ -89,6 +140,8 @@ export const DicomViewport = forwardRef<
   onStateChangeRef.current = onStateChange;
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+  const onRequestTextRef = useRef(onRequestText);
+  onRequestTextRef.current = onRequestText;
 
   function publishState() {
     const session = sessionRef.current;
@@ -133,7 +186,22 @@ export const DicomViewport = forwardRef<
 
         const group = ToolGroupManager.createToolGroup(toolGroupId);
         if (group) {
-          Object.values(TOOL_NAMES).forEach((name) => group.addTool(name));
+          // 文字の入力は既定だと window.prompt になるので、ビューアの入力欄で尋ねる。
+          const textConfig = {
+            getTextCallback: (done: (text: string | null) => void) =>
+              onRequestTextRef.current("", done),
+            changeTextCallback: (
+              target: { data: { label?: string } },
+              _detail: unknown,
+              done: (text: string) => void,
+            ) => {
+              const current = target.data.label ?? "";
+              onRequestTextRef.current(current, (text) => done(text ?? current));
+            },
+          };
+          Object.values(TOOL_NAMES).forEach((name) =>
+            group.addTool(name, TEXT_TOOLS.has(name) ? textConfig : {}),
+          );
           group.addTool(StackScrollTool.toolName);
           group.addViewport(viewportId, engineId);
           group.setToolActive(StackScrollTool.toolName, {
@@ -160,8 +228,8 @@ export const DicomViewport = forwardRef<
       window.removeEventListener("resize", handleResize);
       observer?.disconnect();
       if (sessionRef.current) {
-        // 計測はこのビューアを開いている間だけのもの。閉じたら残さない。
-        annotation.state.removeAllAnnotations();
+        // 注釈はこのビューアを開いている間だけのもの。閉じたら残さない。
+        clearAllAnnotations();
         ToolGroupManager.destroyToolGroup(toolGroupId);
         sessionRef.current.engine.destroy();
         sessionRef.current = null;
@@ -177,7 +245,7 @@ export const DicomViewport = forwardRef<
     if (!ready || !session || imageIds.length === 0) return;
     let cancelled = false;
     onErrorRef.current(null);
-    annotation.state.removeAllAnnotations();
+    clearAllAnnotations();
     session.viewport
       .setStack(imageIds, Math.floor(imageIds.length / 2))
       .then(() => {
@@ -226,13 +294,28 @@ export const DicomViewport = forwardRef<
       viewport.render();
       publishState();
     },
-    clearMeasurements() {
-      annotation.state.removeAllAnnotations();
+    clearAnnotations() {
+      clearAllAnnotations();
+      sessionRef.current?.viewport.render();
+    },
+    undo() {
+      DefaultHistoryMemo.undo();
+      sessionRef.current?.viewport.render();
+    },
+    deleteSelectedAnnotations() {
+      const selected = annotation.selection.getAnnotationsSelected();
+      if (selected.length === 0) return;
+      selected.forEach((uid) => annotation.state.removeAnnotation(uid));
       sessionRef.current?.viewport.render();
     },
     scroll(delta) {
       const viewport = sessionRef.current?.viewport;
       if (viewport) utilities.scroll(viewport, { delta });
+    },
+    captureJpeg(corners) {
+      const element = elementRef.current;
+      if (!element || !sessionRef.current) return Promise.reject(new Error("画像が表示されていません。"));
+      return captureViewportJpeg(element, corners);
     },
   }));
 
