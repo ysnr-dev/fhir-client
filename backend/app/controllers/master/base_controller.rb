@@ -6,6 +6,7 @@ module Master
   class BaseController < ActionController::API
     # アプリ本体のログイン認証(ADMIN_TOKEN 未設定なら認証なし)。
     include UserAuthentication
+    include LikeEscaping
 
     before_action :authorize_user!
     before_action :verify_user_csrf!
@@ -90,10 +91,6 @@ module Master
       items = scope.order(:id).limit(per).offset((page - 1) * per)
 
       { total: total, page: page, per: per, items: items }
-    end
-
-    def sanitize_like(str)
-      str.gsub(/[%_\\]/) { |c| "\\#{c}" }
     end
 
     # 病名・修飾語マスタ用の名称検索。flexible_name_match と同じ表記ゆれ検索に

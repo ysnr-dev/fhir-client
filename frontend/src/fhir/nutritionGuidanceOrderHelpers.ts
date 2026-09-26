@@ -9,6 +9,7 @@ import {
   orderComment,
   orderDay,
   registrationAuthoredOn,
+  transactionBundle,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -296,10 +297,6 @@ function buildNutritionGuidanceServiceRequest(
   return resource;
 }
 
-function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
-  return { resourceType: "Bundle", type: "transaction", entry };
-}
-
 /**
  * 指導目的のテンプレート記入内容を Bundle に積み、オーダーから指す参照を返す。
  *
@@ -579,17 +576,6 @@ export function nutritionGuidanceOrderNeedsStop(
 
 export const nutritionGuidanceOrderComment = orderComment;
 export const nutritionGuidanceOrderProblem = orderProblem;
-
-/**
- * 「2026-09-01 個別 糖尿病」のような 1 行要約。実施入力の対象表示など、オーダーを
- * 1 行で指すところで使う。
- */
-export function nutritionGuidanceOrderLabel(sr: fhir4.ServiceRequest): string {
-  const summary = summarizeNutritionGuidanceOrder(sr);
-  return [summary.startDate, summary.formatShort, summary.targetDisease]
-    .filter(Boolean)
-    .join(" ");
-}
 
 // ---- 編集フォームへの復元 ----
 

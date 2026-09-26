@@ -4,6 +4,8 @@
 #   1. GET /QuestionnaireResponse?_id={id} -- QR + 患者と元 Questionnaire(_include)
 #   2. batch Bundle POST /                 -- シェーマ画像 Binary read ×N(画像が無ければ走らない)
 class QuestionnaireResponseReport
+  include Reports::UpstreamBundle
+
   # QR が上流に存在しない
   class NotFound < StandardError; end
   # canonical に対応するレイアウトが未登録
@@ -77,18 +79,6 @@ class QuestionnaireResponseReport
     questionnaire
   end
 
-  # 帳票の患者取り違えは重大なので、患者が引けない場合は生成を中止する。
-  def included_patient(resources, response)
-    reference = response.dig("subject", "reference").to_s
-    patient_id = reference[%r{\APatient/(.+)\z}, 1]
-    raise UpstreamError, "QuestionnaireResponse has no patient subject" if patient_id.blank?
-
-    patient = resources.find { |r| r["resourceType"] == "Patient" && r["id"] == patient_id }
-    raise UpstreamError, "Patient/#{patient_id} was not included for QuestionnaireResponse" unless patient
-
-    patient
-  end
-
   # シェーマ画像の Binary read ×N を 1 つの batch Bundle で取得する。
   # batch-response の entry はリクエストと同順で返る。
   def fetch_images(binary_ids)
@@ -123,20 +113,5 @@ class QuestionnaireResponseReport
       collect_binary_ids(item["item"], acc)
     end
     acc
-  end
-
-  # batch-response の各 entry を検証してリソース本体を返す。
-  def entry_resource!(entry, context)
-    status = entry&.dig("response", "status").to_i
-    resource = entry&.dig("resource")
-    raise UpstreamError, "upstream returned #{status} for #{context} (in batch)" unless (200..299).cover?(status) && resource
-
-    resource
-  end
-
-  def ensure_success!(upstream, context)
-    return if (200..299).cover?(upstream.status)
-
-    raise UpstreamError, "upstream returned #{upstream.status} for #{context}"
   end
 end

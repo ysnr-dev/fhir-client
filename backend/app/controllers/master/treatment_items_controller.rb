@@ -18,8 +18,8 @@ module Master
           .where("valid_from IS NULL OR valid_from <= ?", Date.current)
           .where("valid_to IS NULL OR valid_to >= ?", Date.current)
       end
-      # 名称検索。keyword は「その場で項目を足す検索欄」用で、生理検査では検査種別も
-      # 当てていたが処置には分類軸が無いので当てる先は名称・略称・カナだけ。
+      # 名称検索。keyword は「その場で項目を足す検索欄」用。生理検査と違い処置には
+      # 分類軸が無いので、当てる先は名称・略称・カナだけ。
       query = params[:name].presence || params[:keyword].presence
       scope = flexible_name_match(scope, query, ITEM_SEARCH_COLUMNS) if query
 

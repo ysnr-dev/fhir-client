@@ -565,11 +565,3 @@ export function nursingPerformsByOrderId(
   return byOrderId;
 }
 
-/** 実施記録を消すエントリ。子リソースを持たないので 1 件ずつ。 */
-export function buildNursingPerformDeleteEntries(
-  items: { resourceType: "Observation" | "Procedure"; id: string }[],
-): fhir4.BundleEntry[] {
-  return items.map((item) => ({
-    request: { method: "DELETE" as const, url: `${item.resourceType}/${item.id}` },
-  }));
-}

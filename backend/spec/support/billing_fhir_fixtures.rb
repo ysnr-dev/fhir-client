@@ -1,8 +1,9 @@
 # 会計送信の spec で使う FHIR リソースの雛形と、上流の読み取りを差し替えるフェイク。
 #
-# 上流の検索は _revinclude で他のリソース種別が混ざって返るので、フェイクも
-# 「主の種別 + _revinclude で指した種別」をまとめて返す。条件による絞り込みは
-# しない(組み立ての正しさだけを見るため)。
+# 上流の検索は _include / _revinclude で他のリソース種別が混ざって返るので、フェイクも
+# 「主の種別 + 付いてくる種別」をまとめて返す。条件による絞り込みは、存在確認が上流に
+# 頼る条件(based-on・category・date の上限)だけ主の種別に当て、他はしない
+# (組み立ての正しさだけを見るため)。
 module BillingFhirFixtures
   ORDER_TYPE = "http://fhir-client.local/CodeSystem/order-type".freeze
   MEDICINE_CODE = "http://fhir-client.local/CodeSystem/medicine-code".freeze
@@ -10,6 +11,12 @@ module BillingFhirFixtures
   RAD_MATERIAL = "http://fhir-client.local/CodeSystem/rad-material".freeze
 
   class FakeStore
+    # _include の参照先の種別。
+    INCLUDE_TARGETS = {
+      "Procedure:based-on" => "ServiceRequest",
+      "MedicationAdministration:request" => "MedicationRequest"
+    }.freeze
+
     attr_reader :resources, :searches
 
     def initialize
@@ -24,9 +31,32 @@ module BillingFhirFixtures
 
     def search(type, params, **)
       @searches << [type, params]
-      included = params.to_a.select { |k, _| k.to_s.start_with?("_revinclude") }
-                       .map { |_, v| v.to_s.split(":").first }
-      ([type] + included).uniq.flat_map { |t| @resources[t] }
+      revincluded = params.to_a.select { |k, _| k.to_s.start_with?("_revinclude") }
+                          .flat_map { |_, v| Array(v).map { |value| value.split(":").first } }
+      included = params.to_a.select { |k, _| k.to_s.start_with?("_include") }
+                       .flat_map { |_, v| Array(v).filter_map { |value| INCLUDE_TARGETS[value] } }
+      primary = @resources[type].select { |r| matches?(r, params) }
+      primary + (revincluded + included).uniq.reject { |t| t == type }.flat_map { |t| @resources[t] }
+    end
+
+    def matches?(resource, params)
+      params.all? do |key, value|
+        case key
+        when "based-on" then Array(resource["basedOn"]).any? { |ref| ref["reference"] == value }
+        when "category"
+          system, code = value.split("|", 2)
+          Array.wrap(resource["category"]).flat_map { |c| Array(c["coding"]) }
+               .any? { |c| c["system"] == system && c["code"] == code }
+        when "date"
+          Array(value).all? do |v|
+            next true unless v.start_with?("le")
+
+            performed = resource["performedDateTime"] || resource.dig("performedPeriod", "start")
+            Integrations::ReceiptComputer::LocalDate.of(performed).to_s <= v.delete_prefix("le")
+          end
+        else true
+        end
+      end
     end
 
     def read(type, id)

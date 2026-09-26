@@ -10,10 +10,17 @@ module Integrations
         @store = store
       end
 
+      # プロブレム・既往歴と、誤登録・否定された病名は上流で除く(:not は値の無い行を残すので、
+      # category を持たない Condition も保険病名として扱う。カルテ側の conditionCategoryOf と同じ判定)。
+      # 有効期間は onset / abatement の日付で見るので、ここで絞る。
       def call(patient_fhir_id:, perform_date:)
         date = perform_date.to_s
-        store.search("Condition", { "subject" => "Patient/#{patient_fhir_id}", "_count" => "500" })
-             .select { |c| billing?(c) }
+        store.search("Condition", {
+                       "subject" => "Patient/#{patient_fhir_id}",
+                       "category:not" => "problem-list-item,past-history",
+                       "verification-status:not" => "entered-in-error,refuted",
+                       "_count" => "500"
+                     })
              .select { |c| active_on?(c, date) }
              .map { |c| build(c) }
       end
@@ -21,14 +28,6 @@ module Integrations
       private
 
       attr_reader :store
-
-      # category が無い古いデータも保険病名として扱う(カルテ側の conditionCategoryOf と同じ判定)。
-      def billing?(condition)
-        codings = Array(condition["category"]).flat_map { |c| Array(c["coding"]) }
-        return false if codings.any? { |c| c["code"] == "past-history" }
-
-        codings.none? { |c| c["code"] == "problem-list-item" }
-      end
 
       def active_on?(condition, date)
         onset = condition["onsetDateTime"].to_s[0, 10]

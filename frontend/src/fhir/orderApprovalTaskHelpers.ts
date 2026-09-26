@@ -1,7 +1,6 @@
 import { KARTE_KIND_LABELS, orderKindOf } from "./karteTimeline";
 import {
   buildNotificationTask,
-  hasTaskCode,
   taskInputOf,
   taskInputsOf,
   taskOwnerName,
@@ -35,10 +34,6 @@ import { orderDay } from "./shared";
 // 一覧から Provenance やオーダーを引き直さずに済ませるため。
 
 export const ORDER_APPROVAL_TASK_CODE = { code: "order-approval", display: "オーダー承認" };
-
-export function isOrderApprovalTask(task: fhir4.Task): boolean {
-  return hasTaskCode(task, ORDER_APPROVAL_TASK_CODE.code);
-}
 
 // Task.input のキー名。
 const ACTIVITY_INPUT = "活動";

@@ -20,7 +20,7 @@ export interface DefaultOrderSetting {
 export function useDefaultOrderSetting(patientId: string): DefaultOrderSetting {
   const admission = usePatientAdmission(patientId);
   return {
-    // 読めなかった場合(エラーなど)は今までどおり外来にしておく。
+    // 読めなかった場合(エラーなど)は外来にする。
     setting: admission.data ? "inpatient" : "outpatient",
     wardId: admission.data?.wardId ?? "",
     wardName: admission.data?.wardName ?? "",

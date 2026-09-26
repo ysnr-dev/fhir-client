@@ -9,6 +9,7 @@ import {
   orderDay,
   referenceId,
   registrationAuthoredOn,
+  transactionBundle,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -241,10 +242,6 @@ function buildConsultOrderServiceRequest(
   applyOrderContext(resource, requester);
 
   return resource;
-}
-
-function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
-  return { resourceType: "Bundle", type: "transaction", entry };
 }
 
 /**
@@ -562,17 +559,6 @@ export function summarizeConsultOrder(sr: fhir4.ServiceRequest): ConsultOrderSum
     replyId: reply.replyId,
     replierName: reply.replierName,
   };
-}
-
-/**
- * 「2026-08-30 循環器内科 診察依頼」のような 1 行要約。回答モーダルなど、
- * 依頼を 1 行で指すところで使う。
- */
-export function consultOrderLabel(sr: fhir4.ServiceRequest): string {
-  const summary = summarizeConsultOrder(sr);
-  return [sr.authoredOn?.slice(0, 10) ?? "", summary.targetLabel, summary.requestTypeDisplay]
-    .filter(Boolean)
-    .join(" ");
 }
 
 export const consultOrderComment = orderComment;

@@ -1,3 +1,4 @@
+import { labOrderItemRequests } from "./labOrderHelpers";
 import { today, toFhirDateTime } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { buildExamAppointmentEntries, type SlotSelection } from "./appointmentHelpers";
@@ -8,11 +9,13 @@ import {
   categoryCoding,
   displayOf,
   itemNumber,
-  parentRequestId,
   EXAM_PRIORITY_OPTIONS,
   RETRO_PRIORITY,
   orderDay,
   registrationAuthoredOn,
+  transactionBundle,
+  priorityDisplay,
+  ABBREVIATION_SYSTEM,
 } from "./shared";
 
 export { EXAM_PRIORITY_OPTIONS, RETRO_PRIORITY };
@@ -68,7 +71,6 @@ const ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/endoscopy-order-i
 // 検査種別(上部消化管内視鏡・下部消化管内視鏡 など)。施設が定義するローカルコード。
 const EXAM_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/endoscopy-exam-type";
 // 略称。検体検査・放射線検査と同じ CodeSystem を使う(オーダー項目の略称という意味は同じ)。
-const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
 // 検査目的。標準要素に当てはまるものが無いのでローカル拡張で持つ。
 const EXAM_PURPOSE_EXT_URL = "http://fhir-client.local/StructureDefinition/endoscopy-exam-purpose";
 // テンプレートから記載したときの記入内容(QuestionnaireResponse)への参照。
@@ -171,9 +173,6 @@ export function emptyEndoscopyOrderForm(
   };
 }
 
-export function priorityDisplay(priority: string | undefined): string {
-  return priority ? displayOf(EXAM_PRIORITY_OPTIONS, priority) : "";
-}
 
 // ---- オーダーの単位(GP) ----
 //
@@ -593,10 +592,6 @@ export function buildEndoscopyOrderEntries(
   };
 }
 
-function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
-  return { resourceType: "Bundle", type: "transaction", entry };
-}
-
 /** 登録する 1 オーダーぶんの入力。 */
 export interface EndoscopyOrderSplit {
   /**
@@ -823,18 +818,7 @@ export function endoscopyOrderItemRequests(
   serviceRequests: fhir4.ServiceRequest[],
   headerId: string,
 ): fhir4.ServiceRequest[] {
-  const descendants = new Set([headerId]);
-  // ヘッダ → 明細 → 構成項目の 2 段。親が先に入っていないと孫を拾えないので、
-  // 増えなくなるまで繰り返す(件数は数十なので素朴に回してよい)。
-  for (let depth = 0; depth < 2; depth += 1) {
-    for (const request of serviceRequests) {
-      const parentId = parentRequestId(request);
-      if (parentId && descendants.has(parentId) && request.id) descendants.add(request.id);
-    }
-  }
-  return serviceRequests.filter(
-    (request) => request.id !== headerId && descendants.has(request.id ?? ""),
-  );
+  return labOrderItemRequests(serviceRequests, headerId);
 }
 
 /**

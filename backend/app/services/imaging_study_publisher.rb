@@ -2,6 +2,8 @@
 # スタディは DICOM の Study Instance UID(identifier)で特定するので、上流の id を
 # こちらで覚えておく必要は無い。
 class ImagingStudyPublisher
+  include Reports::UpstreamBundle
+
   class UpstreamError < StandardError; end
 
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
@@ -43,11 +45,5 @@ class ImagingStudyPublisher
   def identifier_query
     token = "#{ImagingStudyBuilder::DICOM_UID_SYSTEM}|#{ImagingStudyBuilder.study_identifier_value(study_uid)}"
     "identifier=#{CGI.escape(token)}"
-  end
-
-  def ensure_success!(upstream, context)
-    return if (200..299).cover?(upstream.status)
-
-    raise UpstreamError, "upstream returned #{upstream.status} for #{context}"
   end
 end

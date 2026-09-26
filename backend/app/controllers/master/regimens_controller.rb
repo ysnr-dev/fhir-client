@@ -5,7 +5,7 @@ module Master
   # 読み書きする。子は配列を丸ごと置換し、display_order は配列順で振り直す
   # (order_sets の entries と同じ)。外部キーは張らないので削除は transaction で片付ける。
   class RegimensController < BaseController
-    before_action :set_record, only: %i[show update destroy copy]
+    include VersionedMaster
 
     def index
       scope = Master::Regimen.all
@@ -27,99 +27,7 @@ module Master
       render json: result
     end
 
-    def show
-      render json: detail(@record)
-    end
-
-    def create
-      record = Master::Regimen.new(record_params.merge(approval_attrs(nil, record_params[:status])))
-      record.regimen_code = next_regimen_code if record.regimen_code.blank?
-      tree = nil
-      Master::Regimen.transaction do
-        record.save!
-        replace_children(record)
-        tree = load_tree(record)
-        validate_content!(record, tree)
-      end
-      render json: detail(record, tree), status: :created
-    rescue ActiveRecord::RecordInvalid => e
-      render_validation_errors(e.record)
-    rescue ContentInvalid => e
-      render json: { errors: e.messages }, status: :unprocessable_content
-    end
-
-    def update
-      return render_frozen if frozen_change?
-      return render_unapproval if unapproving?
-
-      tree = nil
-      Master::Regimen.transaction do
-        @record.update!(update_params)
-        replace_children(@record)
-        tree = load_tree(@record)
-        validate_content!(@record, tree)
-      end
-      render json: detail(@record, tree)
-    rescue ActiveRecord::RecordInvalid => e
-      render_validation_errors(e.record)
-    rescue ContentInvalid => e
-      render json: { errors: e.messages }, status: :unprocessable_content
-    end
-
-    # 複製。派生レジメン(減量版・隔週版)の作り方。コードは新しく採番し、
-    # 承認は引き継がず下書きに戻す。
-    def copy
-      target = Master::Regimen.new(
-        @record.attributes.except("id", "regimen_code", "created_at", "updated_at",
-                                  "status", "approved_on", "approved_by",
-                                  "search_name", "search_kana", "search_short_name"),
-      )
-      target.regimen_code = next_regimen_code
-      target.name = params[:name].presence || "#{@record.name}のコピー"
-      target.status = "draft"
-      # 改訂の系列を辿れるようにする(承認済は凍結し、直すときは複製するため)。
-      target.copied_from_code = @record.regimen_code
-      # 有効期間・表示順は複製元の都合なので引き継がない(新しい版として決め直す)。
-      target.valid_from = nil
-      target.valid_to = nil
-      target.display_order = nil
-      Master::Regimen.transaction do
-        target.save!
-        copy_children(@record, target)
-      end
-      render json: detail(target), status: :created
-    rescue ActiveRecord::RecordInvalid => e
-      render_validation_errors(e.record)
-    end
-
-    # 削除できるのは下書きだけ。承認済・廃止は施設の記録で、患者への適用が
-    # `instantiatesUri` で指しているため残す(§8.17)。
-    def destroy
-      if @record.status != "draft"
-        return render json: { errors: ["承認済・廃止のレジメンは削除できません。廃止にして使わないようにしてください"] },
-                      status: :unprocessable_content
-      end
-
-      Master::Regimen.transaction do
-        delete_children(@record.regimen_code)
-        @record.destroy!
-      end
-      head :no_content
-    end
-
     private
-
-    # 内容の検証に落ちたとき(モデル単体では判定できないもの)。
-    class ContentInvalid < StandardError
-      attr_reader :messages
-
-      def initialize(messages)
-        @messages = messages
-        super(messages.join(" / "))
-      end
-    end
-
-    SEARCH_COLUMNS = %w[search_name search_kana search_short_name].freeze
 
     REGIMEN_ATTRS = %i[
       regimen_code name short_name name_kana department_code department_name purpose setting
@@ -128,9 +36,6 @@ module Master
       valid_from valid_to display_order note copied_from_code
     ].freeze
 
-    # 承認済・廃止でも動かせる項目。内容(オーダーに影響するもの)は凍結し、
-    # 「使うのをやめる」「並び順を変える」操作だけ残す(§8.17)。
-    FROZEN_EDITABLE_ATTRS = %i[status valid_from valid_to display_order].freeze
     INDICATION_ATTRS = %w[management_number name icd10].freeze
     STEP_ATTRS = %w[name days usage_type route_code method_code line_code infusion_minutes rate
                     device_note usage_code dose_days note].freeze
@@ -146,74 +51,16 @@ module Master
       params.permit(*REGIMEN_ATTRS)
     end
 
-    # 更新で受ける値。承認日・承認者はサーバーが決める(画面からは送らせない)。
-    def update_params
-      permitted = record_params.except(:regimen_code, :approved_on, :approved_by)
-      permitted = permitted.slice(*FROZEN_EDITABLE_ATTRS) if frozen_record?
-      permitted.merge(approval_attrs(@record.status, permitted[:status]))
+    def child_param_keys
+      %i[indications steps lab_criteria adverse_events]
     end
 
-    # 承認済・廃止のレジメンか(= 内容を凍結する)。
-    def frozen_record?
-      %w[approved retired].include?(@record.status)
+    def master_label
+      "レジメン"
     end
 
-    # 凍結中に内容を変えようとしているか。子が 1 種類でも送られていれば内容の変更。
-    def frozen_change?
-      return false unless frozen_record?
-
-      children_sent = %i[indications steps lab_criteria adverse_events].any? { |k| params.key?(k) }
-      content_sent = record_params.except(:regimen_code, :approved_on, :approved_by, *FROZEN_EDITABLE_ATTRS)
-                                  .to_h.any? { |k, v| @record[k].to_s != v.to_s }
-      children_sent || content_sent
-    end
-
-    # 承認済・廃止から下書きへは戻せない。戻せると「下書きにしてから直す」で凍結を
-    # すり抜けられるため(§8.17)。使うのをやめるときは廃止にする。
-    def unapproving?
-      frozen_record? && record_params[:status] == "draft"
-    end
-
-    def render_unapproval
-      render json: {
-        errors: ["承認を取り消せません。使わないようにするには廃止にしてください"],
-      }, status: :unprocessable_content
-    end
-
-    def render_frozen
-      render json: {
-        errors: ["承認済・廃止のレジメンは内容を変更できません。複製して新しいレジメンとして直してください"],
-      }, status: :unprocessable_content
-    end
-
-    # 承認の記録はサーバーが入れる(画面の手入力にしない)。下書き・廃止へ戻したら消す。
-    def approval_attrs(previous_status, next_status)
-      return {} if next_status.blank? || previous_status == next_status
-
-      next_status == "approved" ? { approved_on: Date.current, approved_by: approver_id } : {}
-    end
-
-    # 承認者。認証なしモード(開発)ではパラメータを通す(order_sets の持ち主と同じ扱い)。
-    def approver_id
-      return params[:approved_by].presence if @user_auth == :none
-
-      current_user&.practitioner_fhir_id
-    end
-
-    # サンプル(db/seed_data/regimens.csv)が使う帯。施設の採番はこの手前で行う。
-    SAMPLE_CODE_FLOOR = 900_000
-
-    # 数字だけのレジメンコードの最大値の次(他マスタと同じ採番)。サンプルの 9000xx は
-    # 数えない(数えると seed 投入後の 1 件目が 900011 になり、帯を分けた意味が無くなる)。
-    def next_regimen_code
-      max = Master::Regimen.where("regimen_code ~ '^[0-9]+$'")
-                           .where("regimen_code::bigint < ?", SAMPLE_CODE_FLOOR)
-                           .maximum(Arel.sql("regimen_code::bigint"))
-      ((max || 0) + 1).to_s.rjust(6, "0")
-    end
-
-    def set_record
-      @record = Master::Regimen.find_by(regimen_code: params[:id]) || Master::Regimen.find(params[:id])
+    def parent_id_columns
+      %w[step_id]
     end
 
     # 子の配列が来た種別だけ置換する(来ていない種別は触らない)。
@@ -265,22 +112,6 @@ module Master
                                      "display_order" => index + 1)
       end
       insert_rows(Master::RegimenDrug, drug_rows)
-    end
-
-    # 行を検証してからまとめて INSERT し、入れた行の id を rows と同じ並びで返す
-    # (unique_by を渡したときだけ。id の対応はその列で引き直し、RETURNING の並びには頼らない)。
-    def insert_rows(model, rows, unique_by: nil)
-      return [] if rows.empty?
-
-      records = rows.map { |row| model.new(row) }
-      records.each { |record| raise ActiveRecord::RecordInvalid, record unless record.valid? }
-      # 既定値のある列も埋めた全列で入れる(insert_all は列の揃った行を要る)。
-      values = records.map { |record| record.attributes.except("id", "created_at", "updated_at") }
-      result = model.insert_all!(values, returning: ["id", *unique_by])
-      return [] unless unique_by
-
-      ids = result.to_a.to_h { |r| [unique_by.map { |c| r[c].to_s }, r["id"]] }
-      records.map { |record| ids.fetch(unique_by.map { |c| record[c].to_s }) }
     end
 
     # 投与ステップと、ステップごとの薬剤(薬剤マスタの名称付き)。保存後の検証と応答の
@@ -359,13 +190,6 @@ module Master
       step.name.present? ? "ステップ #{order}(#{step.name})" : "ステップ #{order}"
     end
 
-    def each_row(raw)
-      Array(raw).each_with_index do |row, index|
-        row = row.to_unsafe_h if row.respond_to?(:to_unsafe_h)
-        yield row.to_h.stringify_keys, index
-      end
-    end
-
     # 投与日は "1,8,15" の文字列でも配列でも受ける。整数に直せないものは
     # そのまま残してモデルの検証に落とす。
     def normalize_days(raw)
@@ -373,21 +197,21 @@ module Master
       values.reject(&:blank?).map { |v| Integer(v.to_s, exception: false) || v }
     end
 
+    # 子を階層ごとにまとめて写す(1 階層 1 回の INSERT)。薬剤の step_id は写したステップの id に
+    # 付け替える。ステップには親の中で一意な自然キーが無いので、並びどおりに振り直した
+    # display_order(置換と同じ規則)を付け替えのキーにする。
     def copy_children(source, target)
-      code = target.regimen_code
-      source.indications.each { |r| Master::RegimenIndication.create!(child_attrs(r).merge(regimen_code: code)) }
-      source.steps.each do |step|
-        copied = Master::RegimenStep.create!(child_attrs(step).merge(regimen_code: code))
-        step.drugs.each do |drug|
-          Master::RegimenDrug.create!(child_attrs(drug).merge(regimen_code: code, step_id: copied.id))
-        end
+      to = target.regimen_code
+      insert_copies(Master::RegimenIndication, source.indications.to_a, [], to)
+      steps = source.steps.to_a
+      orders = steps.each_with_index.to_h { |step, index| [step.id, index + 1] }
+      step_ids = insert_copies(Master::RegimenStep, steps, %w[display_order], to) do |step|
+        { "display_order" => orders[step.id] }
       end
-      source.lab_criteria.each { |r| Master::RegimenLabCriterion.create!(child_attrs(r).merge(regimen_code: code)) }
-      source.adverse_events.each { |r| Master::RegimenAdverseEvent.create!(child_attrs(r).merge(regimen_code: code)) }
-    end
-
-    def child_attrs(record)
-      record.attributes.except("id", "regimen_code", "step_id", "created_at", "updated_at")
+      drugs = Master::RegimenDrug.where(step_id: steps.map(&:id)).in_display_order.to_a
+      insert_copies(Master::RegimenDrug, drugs, [], to) { |drug| { "step_id" => step_ids[drug.step_id] } }
+      insert_copies(Master::RegimenLabCriterion, source.lab_criteria.to_a, [], to)
+      insert_copies(Master::RegimenAdverseEvent, source.adverse_events.to_a, [], to)
     end
 
     def delete_children(code)

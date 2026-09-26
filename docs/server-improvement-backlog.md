@@ -7,7 +7,8 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   2026-08-30（他科依頼の実装で C-6 を追加）、2026-09-01（オーダー横断の課題整理で C-7 を追加し、同日実装）、
   2026-09-09（パフォーマンス観点の再調査で 6 項目を追加し、C-6・C-8 と合わせて同日サーバー側を実装。
   クライアント側の追随 F-4〜F-9 も同日実装）、2026-09-15（リファクタリング観点の再調査。上流が対応済みなのに
-  クライアントが使っていない検索と C-9 を `refactoring-plan.md` にまとめた）。
+  クライアントが使っていない検索と C-9 を `refactoring-plan.md` にまとめた）、2026-09-27（第 2 回の再調査。
+  `Encounter.appointment` を同日実装し、C-10〜C-16 を追加）。
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
@@ -308,7 +309,60 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 
 ---
 
+## 2026-09-27 に対応済み
+
+### `Encounter.appointment` 検索と `_include` / `_revinclude`
+
+- **背景**: レセコンからの受付取消で「診察が始まっているか」を確かめるのに、患者の Encounter を
+  100 件読んで `appointment` の参照を Ruby で突き合わせていた（100 件を超えると「未開始」に誤判定）。
+- **対応**: `search_definitions/encounter.rb` と `search_references.rb` に `appointment`（reference、0..*、
+  jsonb 包含、target Appointment）を追加。`_include=Encounter:appointment` / `_revinclude=Encounter:appointment`
+  も効く。migration・再索引は不要。`spec/requests/encounters_spec.rb` に 3 件追加。
+- **クライアント**: `reception_importer.rb` の `encounter_started?` が `Encounter?appointment=Appointment/{id}&_count=1`
+  の存在確認になった。**上流を先にデプロイする**（旧版だと lenient で条件が黙殺され、全件が返って
+  「診察開始済み」に倒れ、予約を取り消せなくなる）。
+
 ## 優先度 C: 個別の検索パラメータ・仕様適合（残り）
+
+### C-10. token の前方一致（`code:below`）か、成分 YJ 7 桁の派生 token
+
+- **現状**: マルチチャートの「追う薬剤」の行は、期間内の処方・注射を全部読んでから YJ コードの先頭 7 桁
+  （成分）で手元照合している（`chartDefinitionHelpers.ts` の `codingsMatchDrug`）。感染症パネルの
+  JLAC11 分析物コード 5 桁の前方一致（上の「見送り」）も同じ機能で解ける。
+- **望ましいサーバー機能**: token の `:below`（前方一致）か、MedicationRequest / ServiceRequest の
+  `medication` に成分 7 桁の派生 token を索引する。
+- **影響範囲**: チャートの薬剤の行（処方帯を出していないときの転送量）、感染症パネル。優先度は中。
+
+### C-11. `Condition.abatement-date`（R4 標準）
+
+- **現状**: 上流は `onset-date` と `recorded-date` だけ。医事送信の「その日に有効な保険病名」は
+  onset / abatement を Ruby で判定している（`diagnosis_collector.rb`）。
+- **望ましいサーバー機能**: `abatement-date` の索引。abatement 無し（継続中）との OR は 1 検索で書けないので、効果は部分的。
+
+### C-12. 氏名検索のかな正規化をサーバー側で
+
+- **現状**: 患者検索はクライアントがひらがなをカタカナに変換し、`name=入力,カタカナ` のカンマ OR で送る
+  （`patientNameSearchValue`）。医療従事者検索には変換が無い。
+- **望ましいサーバー機能**: `name_text` の索引時にひらがな→カタカナ・半角→全角に正規化し、検索値も同じ正規化を通す。
+  空白の有無（「ヤマダタロウ」）も吸収できる。
+
+### C-13. `Task.focus` の `_include` 対象を ServiceRequest 以外へ
+
+- **現状**: `_include=Task:focus` は ServiceRequest しか返さないので、通知一覧は対象（DiagnosticReport /
+  Provenance / Encounter）を id だけ持ってカルテへ渡す。
+
+### C-14. MedicationStatement の `dateAsserted` の索引と `_sort`
+
+- **現状**: 持参薬の一覧は手元で `dateAsserted` 順に並べる（`sortByAsserted`）。件数が少ないので実害は無い。
+
+### C-15. `Observation/$lastn` か間引き・統計 operation
+
+- **現状**: マルチチャートは 5〜10 年の範囲を `_count=500` × 最大 4 ページで読む。遅くなってから検討する。
+
+### C-16. 検索 Bundle の truncated の明示
+
+- **現状**: `_count` 上限に当たったかはクライアントが件数で推定している（`searchAllPages` の `truncated`）。
+  `link[next]` は返るので、それを使う形に寄せるのが先。
 
 ### C-3. `_elements` の choice 型対応（仕様適合）
 

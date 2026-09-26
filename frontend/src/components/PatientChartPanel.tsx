@@ -23,6 +23,7 @@ import {
 import type { ChartSegmentBreak } from "../fhir/chartDefinitionHelpers";
 import { describeStatesAt, type ChartStateTrack } from "../fhir/chartStateHelpers";
 import { epochOf } from "../fhir/flowsheetEventHelpers";
+import { today } from "../lib/dates";
 import { interpretationClass, referenceRangeLabel } from "../fhir/labResultHelpers";
 import { formatPointDate, formatValue, niceTicks } from "./chartScale";
 
@@ -212,7 +213,7 @@ export function PatientChartPanel({
   }
 
   const boundaries = range.columns.map((column) => toX(epochOf(column.start)));
-  const todayT = epochOf(new Date().toISOString().slice(0, 10));
+  const todayT = epochOf(today());
   const todayX = todayT >= range.tMin && todayT <= range.tMax ? toX(todayT) : null;
 
   // 節目のイベント(病名・手術・入退院)だけ各レーンにも縦線を落とす。検査・注射は件数が多く、

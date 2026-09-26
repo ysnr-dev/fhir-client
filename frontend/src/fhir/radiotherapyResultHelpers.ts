@@ -574,7 +574,7 @@ export function isRadiotherapyProcedure(procedure: fhir4.Procedure): boolean {
 export function isRadiotherapyFraction(procedure: fhir4.Procedure): boolean {
   if (!isRadiotherapyProcedure(procedure)) return false;
   const kind = procedure.category?.coding?.find((c) => c.system === PROCEDURE_KIND_SYSTEM)?.code;
-  // 種別の coding を持たない古い記録は照射記録として読む(ぶら下がるのが照射だけの間に作ったもの)。
+  // 種別の coding を持たない記録は照射記録として読む。
   return kind === undefined || kind === FRACTION_KIND.code;
 }
 

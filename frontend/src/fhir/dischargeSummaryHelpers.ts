@@ -79,10 +79,6 @@ const ENTRY_SECTION_CODES = SUMMARY_SECTIONS.filter((s) => s.kind === "entry").m
   (s) => s.code as EntrySectionCode,
 );
 
-export function summarySectionTitle(code: string): string {
-  return SUMMARY_SECTIONS.find((s) => s.code === code)?.title ?? code;
-}
-
 /** 参照セクションの候補 1 件。selected のものだけ保存する。 */
 export interface SummaryEntryCandidate {
   reference: string;

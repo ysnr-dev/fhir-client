@@ -6,10 +6,104 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
 1. クライアントが手元でしている絞り込み・並べ替え・結合のうち、FHIR サーバーに任せた方がよいもの
 2. コメントに残った修正経緯と、過剰な説明
 
-- 調査日: 2026-09-15
+- 調査日: 2026-09-15（第 1 回）、2026-09-27（第 2 回。下の節）
 - 調査範囲: `frontend/src`、`backend/app`、上流 fhir-server の
   `app/lib/fhir/search_definitions/*.rb` と `app/lib/fhir/search_references.rb`
-- 行番号はすべて 2026-09-15 時点。着手時は関数名で探し直すこと。
+- 行番号は調査時点のもの。着手時は関数名で探し直すこと。
+
+## 第 2 回（2026-09-27）
+
+第 1 回以降に約 80k 行が加わった（医事会計連携・放射線治療・マルチチャート・持参薬・検査結果取込・
+DICOM・施設設定の jsonb 化ほか）。その新規コードを中心に再調査し、同日に実施した。
+
+### 結論
+
+- 中心は新規コードにあった**黙って取りこぼす**正しさの問題と、上流が対応済みなのに手元で絞っている箇所。
+- 上流に足したのは `Encounter.appointment` の 1 件。ほかの提案は `server-improvement-backlog.md` の C-10〜C-16。
+- 構造は「機械的な重複統合」まで。生理・内視鏡・処置の全層統一（約 8,000 行 × 3、97% 同一）は設計が
+  要るので今回はやらず、下の「次の候補」に残した。
+
+### 実施結果
+
+**正しさ**
+
+| # | 箇所 | 問題 | 対応 |
+|---|---|---|---|
+| S1 | `useKarteDayIndex` | Composition に `problem=` を送っていたが、上流は R4 標準の `entry` に置き換え済み（一覧は追随済み）。lenient で黙殺され、プロブレム絞り込み時に日付ペインが全日を出していた | `entry` に |
+| S2 | `useBroughtMedWorklist` | `_count=1000`（上流は 500 で切る）を 20 入院ずつ直列に引いていた | Task 検索に `_include=Task:encounter` と `_revinclude:iterate=MedicationStatement:context` を付けて 1 往復 |
+| S3 | マルチチャートの入院帯・処方 | `_count=20`・`_sort` 無し／200×4 ページ。打ち切り判定が entry 総数で、`_revinclude` 行を数えて余計に 1 ページ読んでいた（上流は include 行を `_count` に数えない） | `_count=500`、`_sort`、共通の `searchAllPages` で検索対象の型の件数だけを数える |
+| S4 | `MicroOrderForm`・`PatientChartPanel` | `toISOString().slice(0,10)` で JST 9 時前に前日になる | `lib/dates` の `today()` |
+| S5 | 輸血の `priorityDisplay` | asap/stat が「通常」になっていた | `shared.ts` の 1 本に統合 |
+| S6 | 輸血の実施記録検索 | `_count` 無し | 共通の `performSearchParams` で 100 |
+| S7 | デモ投入のバイタル | 束ねの identifier が無く、編集できるエントリにまとまらなかった | `buildVitalObservations` を使う |
+
+**上流に寄せた（クライアントだけの変更）**
+
+| # | 箇所 | 対応 |
+|---|---|---|
+| A1 | 検査結果取込のカードごとの文脈 | `fetchLabArrivalContext` に `_revinclude=DiagnosticReport:based-on` を足して既存レポートを同じ応答から取る。ラベル無しは `occurrence={採取日}` で候補を絞る。カードごとの候補 2×500 件の読みが消えた |
+| A2 | チャートの Observation | `status:not=entered-in-error,cancelled` を上流へ |
+| A3 | チャートの放射線治療帯 | `usePatientRadiotherapyChart`（治療処方に `_revinclude=Procedure:based-on`）の 1 往復に |
+| A4 | 放射線治療カレンダー | `category:not=…\|course-summary` と `searchAllPages` |
+| A5 | 医事送信の実施記録 | `_include=Procedure:based-on` と `_include:iterate=MedicationAdministration:request` で記録ごとの read を無くした |
+| A6 | 医事送信の Task | `_revinclude=Task:focus` でヘッダごとの `Task?focus=` を無くした |
+| A7 | 放射線治療の初回判定 | `category=…\|fraction&_count=1` の存在確認に |
+| A8 | 保険の取込 | `identifier={system}\|` と `status:not` で引き、書き込みは transaction 1 回（N+1+M 往復 → 2） |
+| A9 | 保険病名 | `category:not` と `verification-status:not=entered-in-error,refuted` を上流へ（誤登録・否定された病名を送らなくなった） |
+| A10 | 受付取消の「診察開始済み」判定 | 上流の `Encounter.appointment` で 1 件の存在確認に（患者の Encounter 100 件を読まない） |
+| A11 | 患者の照合 | 候補番号のカンマ OR 1 回 |
+| A12 | レジメンの有害事象パネル | 上流の backfill migration `20260922000001` で全記録が `basedOn` を持つので、`useTreatmentAdverseEvents`（`based-on=`）に |
+| A13 | 読影レポート有無 | `category`＋`_summary=count` |
+| A14 | 生理・内視鏡・処置の削除 | `_revinclude=Appointment:based-on` で予約を同じ応答から取る |
+| A15 | 通知一覧 | `_count` を 500 に。種別の絞り込みは種別ごとの件数を選択肢に出すため手元のまま |
+
+**上流**: `Encounter.appointment`（reference、0..*、`_include` / `_revinclude` 対応）。上流の rspec 2131 件通過。
+上流を先にデプロイする（旧版だと lenient で条件が黙殺され、受付取消が「診察開始済み」に倒れる）。
+
+**コメント整理**: 約 45 件。有害事象の basedOn 移行の変更ログ、「処方は注射より前から存在する」8 件、
+「古い記録」「導入前」の言い換え、「これまで／今までどおり」、「上流は対応済み」6 件、ずれた JSDoc 13 件、
+事実でなくなったもの 5 件。新しく入った `［改訂］` は履歴の印なので消した。
+
+**機械的な重複統合**
+
+- `queries.ts`（13,537 → 約 13,000 行）: 実施記録の検索・取得（5 本 → `performSearchParams` / `performCancelEntries`）、
+  Task 更新 hook（取消付き 6 本 → `makeUpdateTaskStatusHook` の `cancelPerform` オプション）、オーダー詳細 hook
+  （12 本 → `makeOrderDetailHook`）、実施詳細 hook（6 本 → `makePerformDetailHook`）、削除（9 本 → `deleteOrderWithItems`）、
+  ページ読みループ（7 本 → `searchAllPages`）。参照 0 の `useActiveRehabOrders` / `useRehabPerformDetail` /
+  `useNutritionGuidancePerformDetail` を削除。
+- `fhir/*Helpers.ts`: `transactionBundle` 12 本・`priorityDisplay` 7 本・`ABBREVIATION_SYSTEM` 6 か所・
+  `MEDICAL_MATERIAL_SYSTEM` 5 か所を `shared.ts` に。`*OrderItemRequests` 4 本は `labOrderItemRequests` へ委譲。
+  `scheduleHelpers` の `addDays` / `addMonths` は `lib/dates` に。
+- backend: 帳票 4 種の共通 private メソッドを `Reports::UpstreamBundle` に（約 1,000 行減）。
+  生理・内視鏡・処置・放射線（＋検体）の item_layout / cell / dataset / detail / set_item / exam_type の
+  コントローラとモデルを `app/controllers/concerns/master/*` と `app/models/concerns/master/*` に。
+  pathways / regimens の承認・版管理を `Master::VersionedMaster` に（646 → 437 行、427 → 251 行）。
+  レジメン複製の 1 行ずつ `create!` を階層ごとの一括 INSERT に。`sanitize_like` を `Master::LikeEscaping` に。
+
+### 次の候補（今回やらない構造の課題）
+
+1. **生理・内視鏡・処置の全層統一**。内視鏡は生理と 97% 同一（helpers / forms / pages / queries / masterClient /
+   masterQueries）、処置は要フラグ、放射線は JJ1017 と線量で別。`ExamDeptConfig` と `createExamOrderHelpers(cfg)` 等の設定方式。
+2. **`queries.ts` / `masterClient.ts` / `masterQueries.ts` のドメイン分割**。セクション見出し（約 70）どおりに分け、
+   barrel（`api/queries/index.ts`）で import 元 300 ファイルは無変更。先に `authQueries.ts` との循環 import と、
+   `api` 層が `components/notifications/notificationRegistry` に依存している点を解く。
+3. **ワークリスト 12 画面の共通部品**（`wardOptions`、`matchesFilters` の末尾、`FilterForm` の 4 select、患者セル）約 1,500 行。
+4. **マスタ画面の factory 化**（`radiotherapyMasterClient()` / `radiotherapyMasterHooks()` が既にある形。
+   `ItemLayoutPage` 5 本・`DatasetPage` 4 本）。`masterClient.ts` の `if (!res.ok) throw await buildError(res);` 312 回も同じ。
+5. **オーダー種別の fan-out**（`karteTimeline.ts` / `KarteTimeline.tsx` / `KarteCardModals.tsx` / `KarteRightPane.tsx` の
+   並列 switch）→ `notificationRegistry.tsx` と同じ `orderKindRegistry`。
+6. **`chart_definition.rb` の手書き JSON 検証 250 行**を `FacilitySettings::Schema` と同じ宣言方式に。
+7. `prescriptionHelpers.ts` に置かれたオーダー共通の `departmentOf` / `wardOf` / `prescriptionRequester`（57 ファイル参照）を `fhir/orderHeader.ts` へ。
+
+### 残すと判断したもの
+
+- 患者検索のかな変換（`patientNameSearchValue`）: 手元でカタカナに変換して `name=入力,カナ` のカンマ OR で送り、照合はサーバー。
+- `usePatientBroughtMedications` の手元の並べ替え: 上流が `dateAsserted` を索引していない（C-14）。
+- パス取消・ファイル取込・デモ投入の直列書き込み: レート制限と部分成功のため意図的。
+
+---
+
+## 第 1 回（2026-09-15）
 
 ## 結論
 

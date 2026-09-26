@@ -760,7 +760,6 @@ export function useMedicineDoseFactors(medicineCodes: string[]) {
   });
 }
 
-
 // 検体検査オーダーのマスタ群 ------------------------------------------------
 
 // オーダー項目・パネル構成は同じ詳細画面で同時に変わるのでまとめて破棄する。
@@ -1222,7 +1221,6 @@ export function useLabPanelMembers(panelCodes: string[]) {
     enabled: sorted.length > 0,
   });
 }
-
 
 // 放射線検査オーダーのマスタ群 ----------------------------------------------
 
@@ -2600,7 +2598,6 @@ export function endoscopyExamTypeName(
   return result?.exam_types?.[code] ?? "";
 }
 
-
 // ---- シェーマ(台紙画像)マスタ ----
 
 const SCHEMA_CATEGORIES_KEY = ["master", "schema_categories"];
@@ -3007,7 +3004,6 @@ export function useMicroSusceptibilityMethodOptions() {
   });
 }
 
-
 // ---- 処置オーダーのマスタ ----
 //
 // 生理検査と同じ構成から検査種別(分類軸)を落としたもの。
@@ -3336,7 +3332,6 @@ export function useTreatmentSetMembers(setCodes: string[]) {
   });
 }
 
-
 // ---- 食事オーダーのマスタ ----
 //
 // 食種(MealDiet)と、主食(staple)・副食形態(side_dish_form)の項目(MealItem)は別テーブル。
@@ -3624,19 +3619,6 @@ export function useTransfusionProductOptions() {
     queryKey: [...TRANSFUSION_PRODUCTS_KEY, "options"],
     staleTime: Infinity,
     queryFn: () => searchTransfusionProducts({ active: true, per: 200 }),
-  });
-}
-
-/**
- * 保存済みオーダーの製剤コードから製剤を引き直す。オーダーには名称を写してあるので、
- * これは編集画面がセレクトの選択肢に無い(有効期間切れの)製剤を補うためだけに使う。
- */
-export function useTransfusionProductsByCodes(codes: string[]) {
-  const key = [...codes].sort().join(",");
-  return useQuery({
-    queryKey: [...TRANSFUSION_PRODUCTS_KEY, "by-codes", key],
-    queryFn: () => searchTransfusionProducts({ item_code: key, per: 100 }),
-    enabled: key.length > 0,
   });
 }
 

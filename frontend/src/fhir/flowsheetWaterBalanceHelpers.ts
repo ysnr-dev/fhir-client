@@ -1,4 +1,3 @@
-import type { NursingObservation } from "../api/masterClient";
 import { toMilliliters, type MedicineDoseConversionMap } from "./doseConversionHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
 import { codingBySystem } from "./shared";
@@ -113,15 +112,3 @@ export function waterBalanceLabel(value: number | undefined): string {
   return `${rounded}`;
 }
 
-/** 設定に選んだ項目のうち、mL 以外の単位のもの(集計できないので設定画面で注意を出す)。 */
-export function unsupportedWaterBalanceItems(
-  settings: WaterBalanceSettings,
-  byManageNo: Map<string, NursingObservation> | undefined,
-): string[] {
-  if (!byManageNo) return [];
-  return [...settings.in, ...settings.out]
-    .map((manageNo) => byManageNo.get(manageNo))
-    .filter((item): item is NursingObservation => Boolean(item))
-    .filter((item) => !isWaterBalanceUnit(item.unit))
-    .map((item) => `${item.name}（${item.unit ?? "単位なし"}）`);
-}

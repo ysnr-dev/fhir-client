@@ -30,8 +30,8 @@ export { codingBySystem, SETTING_OPTIONS };
 // 入外区分。注射オーダーでも同じ区分(入院/外来)を使うので injectionHelpers.ts と共用する
 // (URI の "prescription-" は登録済みデータと揃えるためそのまま)。
 // オーダー種別。処方・注射・検体検査はどれも ServiceRequest で保存するので、
-// どの種類のオーダーかを category に持たせて振り分ける(処方は注射より前から
-// 存在するため、種別を持たない ServiceRequest は処方として扱う)。
+// どの種類のオーダーかを category に持たせて振り分ける(処方は種別を持たず、
+// 種別を持たない ServiceRequest は処方として扱う)。
 export const ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type";
 
 /**
@@ -714,8 +714,8 @@ export interface PrescriptionSummary {
 }
 
 /**
- * ServiceRequest が処方オーダーかどうか。処方は注射・検体検査などより前から存在し
- * オーダー種別(order-type)を持たないので、種別が無いことで判定する
+ * ServiceRequest が処方オーダーかどうか。処方はオーダー種別(order-type)を持たないので、
+ * 種別が無いことで判定する
  * (karteTimeline の振り分けと同じ規約)。
  */
 export function isPrescriptionServiceRequest(sr: fhir4.ServiceRequest): boolean {

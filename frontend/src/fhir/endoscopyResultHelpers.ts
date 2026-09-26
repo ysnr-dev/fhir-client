@@ -1,3 +1,4 @@
+import { MEDICAL_MATERIAL_SYSTEM } from "./shared";
 import type { OrderContext } from "../orderContext";
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import { ROUTE_SYSTEM, type CodeOption } from "./injectionHelpers";
@@ -39,7 +40,6 @@ const PROCEDURE_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Pro
 /** Procedure.code。オーダー項目マスタの receipt_code と同じレセ電算の診療行為コード。 */
 const ENDOSCOPY_PROCEDURE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/endoscopy-procedure-code";
 /** usedCode。算定に使うレセプト電算の特定器材コード。 */
-const MEDICAL_MATERIAL_SYSTEM = "http://fhir-client.local/CodeSystem/medical-material";
 
 // usedCode は CodeableConcept なので数量を持てない。器材は数量で算定するため、
 // 拡張で数量を添える(行を数量ぶん繰り返す形にはしない)。

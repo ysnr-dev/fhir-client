@@ -7,6 +7,8 @@
 # 読むだけ)。進捗 Task にも触らない -- 発行 = 受付の遷移は frontend が行い、この
 # エンドポイントは再発行にもそのまま使う(検体ラベルと同じ設計判断)。
 class PrescriptionReport
+  include Reports::UpstreamBundle
+
   # オーダーが上流に存在しない
   class NotFound < StandardError; end
   # 指定されたオーダーが処方ではない(URL 直叩きなど)
@@ -38,7 +40,6 @@ class PrescriptionReport
   }.freeze
 
   # frontend の fhir/prescriptionHelpers.ts と同じ system 定義。
-  ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type".freeze
   SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting".freeze
   PRESCRIPTION_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-category".freeze
   BROUGHT_CATEGORY = "brought".freeze
@@ -51,9 +52,6 @@ class PrescriptionReport
   # JAMI 補足用法コード(8 桁)。I/W/D/C は RP 単位の投与スケジュール、V は薬剤ごとの不均等投与。
   SUPPLEMENTARY_USAGE_SYSTEM = "urn:oid:1.2.392.200250.2.2.20.22".freeze
   ORDER_DEPARTMENT_EXT_URL = "http://fhir-client.local/StructureDefinition/order-department".freeze
-  # 保険医療機関コード(自院 Organization の identifier)。
-  INSTITUTION_NO_SYSTEM =
-    "http://jpfhir.jp/fhir/core/IdSystem/insurance-medical-institution-no".freeze
 
   # RP 1 つぶん。同じ RP 番号の明細(MedicationRequest)をまとめたもの。
   RpGroup = Struct.new(
@@ -90,7 +88,7 @@ class PrescriptionReport
 
   attr_reader :order_id, :gateway
 
-  # 処方はオーダー種別(order-type)を持たない(注射より前から存在するための規約。
+  # 処方オーダーは order-type を持たない(種別が無いものを処方とする。
   # frontend の isPrescriptionServiceRequest と同じ判定)。
   def prescription_order?(order)
     Array(order["category"]).none? do |category|
@@ -153,56 +151,6 @@ class PrescriptionReport
      find_institution(results[1], self_organization_id)]
   end
 
-  # 自院 Organization の取得 URL。自院が設定済み(管理 > 施設設定)ならそれを
-  # read する。未設定の環境では保険医療機関番号の system だけで検索
-  # する(Organization 検索に type は無く、未知のパラメータでは全件が返るため
-  # identifier で引くしかない)。この検索は「番号を持つ最初の 1 件」を自院と
-  # みなすので、連携先医療機関に番号を登録していると取り違えうる。自院設定を
-  # 入れればその曖昧さは消える。
-  def institution_url(self_organization_id)
-    return "Organization/#{self_organization_id}" if self_organization_id
-
-    "Organization?identifier=#{CGI.escape(INSTITUTION_NO_SYSTEM)}%7C&_count=10"
-  end
-
-  # 処方箋の患者取り違えは重大なので、患者が引けない場合は生成を中止する
-  # (検体ラベルと同じ判断)。_include で届いた Patient のうち、オーダーの subject と
-  # id が一致するものだけを使う。
-  def included_patient(resources, order)
-    reference = order.dig("subject", "reference").to_s
-    patient_id = reference[%r{\APatient/(.+)\z}, 1]
-    raise UpstreamError, "ServiceRequest/#{order_id} has no patient subject" if patient_id.blank?
-
-    patient = resources.find { |r| r["resourceType"] == "Patient" && r["id"] == patient_id }
-    raise UpstreamError, "Patient/#{patient_id} was not included for ServiceRequest/#{order_id}" unless patient
-
-    patient
-  end
-
-  # 自院の Organization。取得できなくても発行は止めない(医療機関欄が空欄になる
-  # だけで、処方内容は読める)。自院設定済みなら read の応答をそのまま使い、
-  # 未設定なら検索結果から identifier を実際に持つ 1 件を選ぶ(上流が未知の
-  # パラメータを無視して全件を返す場合への防御)。
-  def find_institution(entry, self_organization_id)
-    if self_organization_id
-      organization = begin
-        entry_resource!(entry, "Organization/#{self_organization_id}")
-      rescue UpstreamError
-        return nil
-      end
-      return organization["resourceType"] == "Organization" ? organization : nil
-    end
-
-    resources = begin
-      searchset_resources(entry, "Organization", "institution search")
-    rescue UpstreamError
-      return nil
-    end
-    resources.find do |organization|
-      Array(organization["identifier"]).any? { |i| i["system"] == INSTITUTION_NO_SYSTEM }
-    end
-  end
-
   # ---- 明細のグルーピング ----
 
   # 明細を RP 番号でまとめる。frontend の groupByRp(prescriptionHelpers.ts)と同じ
@@ -225,7 +173,8 @@ class PrescriptionReport
       )
       group.medicines << MedicineLine.new(
         order_in_rp: identifier_value(mr, ORDER_IN_RP_SYSTEM).to_i,
-        name: medicine_name(mr),
+        # 一般名処方(【般】〜)は一般名処方コードだけを持つので優先して引き、銘柄はレセ電コードの display。
+        name: medicine_name(mr, [GENERAL_ORDER_CODE_SYSTEM, MEDICINE_CODE_SYSTEM]),
         dose: dosage.dig("doseAndRate", 0, "doseQuantity", "value"),
         unit: dosage.dig("doseAndRate", 0, "doseQuantity", "unit").to_s,
         comment: mr.dig("note", 0, "text").to_s,
@@ -264,45 +213,5 @@ class PrescriptionReport
       end
     end
     labels.join("、")
-  end
-
-  def identifier_value(mr, system)
-    Array(mr["identifier"]).find { |i| i["system"] == system }&.dig("value").to_s
-  end
-
-  # 薬品名。一般名処方(【般】〜)は一般名処方コードだけを持つので優先して引き、
-  # 銘柄はレセ電コードの display、どちらも無ければ text に落ちる。
-  def medicine_name(mr)
-    codings = mr.dig("medicationCodeableConcept", "coding")
-    coding = coding_by_system(codings, GENERAL_ORDER_CODE_SYSTEM) ||
-             coding_by_system(codings, MEDICINE_CODE_SYSTEM)
-    coding&.dig("display").presence || mr.dig("medicationCodeableConcept", "text").to_s
-  end
-
-  def coding_by_system(codings, system)
-    Array(codings).find { |coding| coding["system"] == system }
-  end
-
-  # resource_type が nil なら型を問わず返す(_include / _revinclude で型が混ざる検索)。
-  def searchset_resources(entry, resource_type, context)
-    Array(entry_resource!(entry, context)["entry"])
-      .filter_map { |e| e["resource"] }
-      .select { |resource| resource_type.nil? || resource["resourceType"] == resource_type }
-  end
-
-  def entry_resource!(entry, context)
-    status = entry&.dig("response", "status").to_i
-    resource = entry&.dig("resource")
-    unless (200..299).cover?(status) && resource
-      raise UpstreamError, "upstream returned #{status} for #{context} (in batch)"
-    end
-
-    resource
-  end
-
-  def ensure_success!(upstream, context)
-    return if (200..299).cover?(upstream.status)
-
-    raise UpstreamError, "upstream returned #{upstream.status} for #{context}"
   end
 end

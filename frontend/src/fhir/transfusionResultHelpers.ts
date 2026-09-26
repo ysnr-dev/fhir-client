@@ -34,7 +34,7 @@ import { buildTransfusionTaskUpdate } from "./transfusionTaskHelpers";
 //   要るので、Observation が無い = 未観察、値が none = 観察して無かった、を区別する。
 //
 // Procedure.code は輸血手技のコード表を持っていないので text だけ("輸血")。
-// 輸血管理料・輸血手技料の算定は未実装(申し送り)。
+// 輸血手技のレセコン向けコードは backend の receipt_codes が持つ。
 
 /** JP Core の Procedure プロファイル。上流の登録先。 */
 const PROCEDURE_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Procedure";

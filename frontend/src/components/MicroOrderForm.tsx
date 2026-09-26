@@ -1,3 +1,4 @@
+import { today } from "../lib/dates";
 import { makeFieldUpdater } from "../lib/form";
 import { useId, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import {
@@ -81,11 +82,11 @@ export function MicroOrderForm({
 
   // 今日オーダーできる検査項目(有効期間内)だけを並べる。
   const activeItems = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const date = today();
     return (orderItems.data?.items ?? []).filter(
       (item) =>
-        (!item.valid_from || item.valid_from <= today) &&
-        (!item.valid_to || item.valid_to >= today),
+        (!item.valid_from || item.valid_from <= date) &&
+        (!item.valid_to || item.valid_to >= date),
     );
   }, [orderItems.data]);
 

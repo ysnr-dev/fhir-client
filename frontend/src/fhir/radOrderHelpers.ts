@@ -1,3 +1,4 @@
+import { labOrderItemRequests } from "./labOrderHelpers";
 import { today, toFhirDateTime } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { buildExamAppointmentEntries, type SlotSelection } from "./appointmentHelpers";
@@ -8,11 +9,13 @@ import {
   categoryCoding,
   displayOf,
   itemNumber,
-  parentRequestId,
   EXAM_PRIORITY_OPTIONS,
   RETRO_PRIORITY,
   orderDay,
   registrationAuthoredOn,
+  transactionBundle,
+  priorityDisplay,
+  ABBREVIATION_SYSTEM,
 } from "./shared";
 
 export { EXAM_PRIORITY_OPTIONS, RETRO_PRIORITY };
@@ -78,7 +81,6 @@ export const JJ1017P_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017p";
 export const JJ1017_LATERALITY_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-laterality";
 const JJ1017_MODALITY_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-modality";
 // 略称。検体検査と同じ CodeSystem を使う(検査項目の略称という意味は同じ)。
-const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
 // 検査目的。標準要素に当てはまるものが無いのでローカル拡張で持つ。
 const EXAM_PURPOSE_EXT_URL = "http://fhir-client.local/StructureDefinition/rad-exam-purpose";
 // テンプレートから記載したときの記入内容(QuestionnaireResponse)への参照。
@@ -190,9 +192,6 @@ export function emptyRadOrderForm(
   };
 }
 
-export function priorityDisplay(priority: string | undefined): string {
-  return priority ? displayOf(EXAM_PRIORITY_OPTIONS, priority) : "";
-}
 
 /** 撮影部位の表示(「右 膝関節」)。左右指定なしの部位は部位名だけ。 */
 export function bodySiteLabel(item: RadOrderItemLine): string {
@@ -665,10 +664,6 @@ export function buildRadOrderEntries(
   };
 }
 
-function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
-  return { resourceType: "Bundle", type: "transaction", entry };
-}
-
 /** 登録する 1 オーダーぶんの入力。 */
 export interface RadOrderSplit {
   /**
@@ -895,18 +890,7 @@ export function radOrderItemRequests(
   serviceRequests: fhir4.ServiceRequest[],
   headerId: string,
 ): fhir4.ServiceRequest[] {
-  const descendants = new Set([headerId]);
-  // ヘッダ → 明細 → 構成項目の 2 段。親が先に入っていないと孫を拾えないので、
-  // 増えなくなるまで繰り返す(件数は数十なので素朴に回してよい)。
-  for (let depth = 0; depth < 2; depth += 1) {
-    for (const request of serviceRequests) {
-      const parentId = parentRequestId(request);
-      if (parentId && descendants.has(parentId) && request.id) descendants.add(request.id);
-    }
-  }
-  return serviceRequests.filter(
-    (request) => request.id !== headerId && descendants.has(request.id ?? ""),
-  );
+  return labOrderItemRequests(serviceRequests, headerId);
 }
 
 /**

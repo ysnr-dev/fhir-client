@@ -15,6 +15,7 @@ import {
   orderDay,
   referenceId,
   registrationAuthoredOn,
+  transactionBundle,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -584,10 +585,6 @@ function buildRadiotherapyServiceRequest(
   return resource;
 }
 
-function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
-  return { resourceType: "Bundle", type: "transaction", entry };
-}
-
 /** 新規登録。明細が無いのでヘッダ 1 件の POST だけ。 */
 export function buildRadiotherapyOrderBundle(
   values: RadiotherapyOrderFormValues,
@@ -963,14 +960,6 @@ export function summarizeRadiotherapyOrder(sr: fhir4.ServiceRequest): Radiothera
     suspensionNote: sub(course, "suspensionNote")?.valueString ?? "",
     comment: orderComment(sr),
   };
-}
-
-/** 「2026-09-21 第1コース 乳房 50 Gy / 25 回」のような 1 行要約。 */
-export function radiotherapyOrderLabel(sr: fhir4.ServiceRequest): string {
-  const summary = summarizeRadiotherapyOrder(sr);
-  return [summary.startDate, `第${summary.courseNumber}コース`, summary.siteLabel, summary.doseLabel]
-    .filter(Boolean)
-    .join(" ");
 }
 
 /**

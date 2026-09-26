@@ -19,10 +19,8 @@ import { REGIMEN_ORDER_EXT_URL } from "./regimenOrderHelpers";
  * ［決定］記録者は Provenance ではなく `performer` に置く。オーダーではなく**臨床上の観察**で、
  * 「誰が診て記録したか」は観察そのものの属性だから(承認の対象にもしない。§8.14 N-10)。
  *
- * ［改訂］当初は化学療法専用で、適用ヘッダへの参照を `regimen-order` 拡張の中に持っていた。
- * **標準の `basedOn` に移した** —— 拡張の中の参照は検索できず、1 コースぶんを見るのに患者の
- * 有害事象を全部読む必要があったため。上流は `Observation?based-on=` に対応済みで改修は要らない。
- * 読みは旧形式も受ける(`basedOn` の無い古い記録。編集して保存すると新形式になる)。
+ * 治療への参照は `basedOn` に置く(拡張の中の参照は検索できない)。`basedOn` を持たず
+ * `regimen-order` 拡張に適用ヘッダへの参照を持つ化学療法の記録も読める。
  */
 
 const OBSERVATION_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/observation-category";
@@ -83,7 +81,7 @@ function subInt(ext: fhir4.Extension | undefined, url: string): number | undefin
 export function parseAdverseEvent(observation: fhir4.Observation): AdverseEventRecord | null {
   if (!observation.id || !isAdverseEventObservation(observation)) return null;
   const context = observation.extension?.find((e) => e.url === TREATMENT_CONTEXT_EXT_URL);
-  // 旧形式(basedOn が無く、適用ヘッダへの参照を拡張の中に持つ化学療法の記録)。
+  // basedOn を持たず、適用ヘッダへの参照を拡張の中に持つ化学療法の記録。
   const legacy = observation.extension?.find((e) => e.url === REGIMEN_ORDER_EXT_URL);
   const reference =
     observation.basedOn?.[0]?.reference ??
@@ -197,7 +195,3 @@ export function adverseEventLabel(record: Pick<AdverseEventRecord, "term" | "gra
   return `${record.term} G${record.grade}`;
 }
 
-/** 渡した記録の最大 Grade。無ければ null。 */
-export function maxGrade(records: AdverseEventRecord[]): number | null {
-  return records.length === 0 ? null : Math.max(...records.map((r) => r.grade));
-}

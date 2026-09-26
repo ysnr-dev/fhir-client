@@ -7,6 +7,9 @@ module Integrations
     #    └ partOf ← MedicationAdministration (薬剤)
     #
     # 上流には 1 往復。ハブと子は同じ日付で検索に当たり、薬剤は _revinclude で付いてくる。
+    # ハブが指すオーダー(ServiceRequest)と薬剤が指す MedicationRequest も _include で
+    # 同じ往復に載せ、"種別/id" で引ける形で included に返す(連日の注射のように当日の
+    # オーダーの集合に無いものを、1 件ずつ読みに行かずに済ませる)。
     # 帰属先のハブが無い子・薬剤は捨てず orphans に返す(取消の途中で残ったものなど)。
     # 完了していないハブ(途中で中止・実施せず)は unfinished に返す。算定はしないが、
     # 「未実施」と混同しないよう理由つきで報告するため。
@@ -19,7 +22,8 @@ module Integrations
         def performed_at = hub["performedDateTime"] || hub.dig("performedPeriod", "start")
       end
 
-      Collected = Struct.new(:records, :unfinished, :orphans, keyword_init: true)
+      Collected = Struct.new(:records, :unfinished, :orphans, :included, keyword_init: true)
+      INCLUDED_TYPES = %w[ServiceRequest MedicationRequest].freeze
 
       def initialize(store:)
         @store = store
@@ -37,12 +41,16 @@ module Integrations
                                    "status" => "completed,stopped,not-done",
                                    "_revinclude" => "Procedure:part-of",
                                    "_revinclude:iterate" => "MedicationAdministration:part-of",
+                                   "_include" => "Procedure:based-on",
+                                   "_include:iterate" => "MedicationAdministration:request",
                                    "_count" => "500"
                                  })
 
         procedures = resources.select { |r| r["resourceType"] == "Procedure" }.uniq { |r| r["id"] }
         administrations = resources.select { |r| r["resourceType"] == "MedicationAdministration" }
                                    .uniq { |r| r["id"] }
+        included = resources.select { |r| INCLUDED_TYPES.include?(r["resourceType"]) }
+                            .to_h { |r| ["#{r['resourceType']}/#{r['id']}", r] }
 
         hubs = procedures.select { |p| hub?(p) && LocalDate.of(performed_at(p)) == date }
         records = hubs.to_h do |hub|
@@ -64,7 +72,7 @@ module Integrations
         end
 
         completed, unfinished = records.values.partition(&:completed?)
-        Collected.new(records: completed, unfinished: unfinished, orphans: orphans)
+        Collected.new(records: completed, unfinished: unfinished, orphans: orphans, included: included)
       end
 
       private

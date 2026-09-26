@@ -1,7 +1,16 @@
 import { today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
-import { PRIORITY_OPTIONS, categoryCoding, displayOf, itemNumber, orderComment, orderDay, registrationAuthoredOn } from "./shared";
+import {
+  PRIORITY_OPTIONS,
+  categoryCoding,
+  displayOf,
+  itemNumber,
+  orderComment,
+  orderDay,
+  registrationAuthoredOn,
+  priorityDisplay,
+} from "./shared";
 import { toFhirDateTime } from "../lib/dates";
 
 export { PRIORITY_OPTIONS };
@@ -179,9 +188,6 @@ export function emptyMicroOrderForm(
   };
 }
 
-export function priorityDisplay(priority: string | undefined): string {
-  return priority ? displayOf(PRIORITY_OPTIONS, priority) : "";
-}
 
 export function lateralityDisplay(code: string): string {
   return code ? displayOf(LATERALITY_OPTIONS, code) : "";
@@ -652,16 +658,16 @@ export function microOrderContents(itemRequests: fhir4.ServiceRequest[]): {
   };
 }
 
-/**
- * 「2026-08-11 喀出痰 塗抹・鏡検/培養・同定」のような 1 行要約。結果登録の
- * オーダー選択肢と、結果内容表示の紐付けオーダー表示に使う。
- * 検査項目名自体が「・」を含むため、項目の区切りは「/」にする。
- */
 /** 時刻付きの dateTime だけを datetime-local の値(YYYY-MM-DDTHH:mm)にする。日付のみは空。 */
 function collectionDateTimeInput(value: string | undefined): string {
   return value && value.length > 10 ? value.slice(0, 16) : "";
 }
 
+/**
+ * 「2026-08-11 喀出痰 塗抹・鏡検/培養・同定」のような 1 行要約。結果登録の
+ * オーダー選択肢と、結果内容表示の紐付けオーダー表示に使う。
+ * 検査項目名自体が「・」を含むため、項目の区切りは「/」にする。
+ */
 export function microOrderLabel(
   header: fhir4.ServiceRequest,
   itemRequests: fhir4.ServiceRequest[],

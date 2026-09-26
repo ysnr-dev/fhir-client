@@ -87,12 +87,6 @@ function sameRef(a: ChartTrackRef, b: ChartTrackRef): boolean {
   return a.kind === b.kind && a.key === b.key;
 }
 
-export function chartTrackRefLabel(ref: ChartTrackRef, tracks: ChartStateTrack[]): string {
-  const track = findStateTrack(tracks, ref);
-  if (track) return track.name;
-  return ref.kind === "event" ? chartEventKindLabel(ref.event) : ref.key;
-}
-
 /** 時刻 t に掛かる区間。 */
 export function stateSpansAt(track: ChartStateTrack, t: number): ChartStateSpan[] {
   return track.spans.filter((span) => span.start <= t && t < span.end);

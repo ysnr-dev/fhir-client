@@ -7,7 +7,7 @@ import {
   useCreatePrescription,
   usePatient,
   useRecentLabResults,
-  usePatientAdverseEvents,
+  useTreatmentAdverseEvents,
   useRegimenApplications,
 } from "../api/queries";
 import { adverseEventsOf, type AdverseEventRecord } from "../fhir/adverseEventHelpers";
@@ -252,7 +252,7 @@ export function RegimenCyclePanel({
   onSaved,
 }: RegimenCyclePanelProps) {
   const detail = useRegimen(application.code || null);
-  const adverseEvents = usePatientAdverseEvents(patientId);
+  const adverseEvents = useTreatmentAdverseEvents(application.id);
   const previousAdverse = previousCycle
     ? adverseEventsOf(adverseEvents.data ?? [], application.id, previousCycle.cycle)
     : [];

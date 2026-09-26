@@ -6,6 +6,8 @@
 # 副作用は無い(何度呼んでも読むだけ)。進捗 Task にも触らない -- 発行 = 受付の遷移は
 # frontend の注射一覧が行い、再発行にもそのまま使う(処方箋と同じ設計判断)。
 class InjectionReport
+  include Reports::UpstreamBundle
+
   class NotFound < StandardError; end
   class NotInjectionOrder < StandardError; end
   class NoMedication < StandardError; end
@@ -21,7 +23,6 @@ class InjectionReport
   LABEL_LAYOUT_PATH = Rails.root.join("lib/report_layouts/injection_label.tlf").freeze
 
   # frontend の fhir/injectionHelpers.ts / prescriptionHelpers.ts と同じ system 定義。
-  ORDER_TYPE_SYSTEM = PrescriptionReport::ORDER_TYPE_SYSTEM
   SETTING_SYSTEM = PrescriptionReport::SETTING_SYSTEM
   INJECTION_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/injection-category".freeze
   RP_NUMBER_SYSTEM = PrescriptionReport::RP_NUMBER_SYSTEM
@@ -35,7 +36,6 @@ class InjectionReport
   SERIES_SCHEDULE_EXT_URL = "http://fhir-client.local/StructureDefinition/injection-series-schedule".freeze
   # 化学療法レジメンの日オーダーに焼いてある印(docs/chemo-regimen-design.md §7.1)。
   REGIMEN_ORDER_EXT_URL = "http://fhir-client.local/StructureDefinition/regimen-order".freeze
-  INSTITUTION_NO_SYSTEM = PrescriptionReport::INSTITUTION_NO_SYSTEM
   INJECTION_CODE = "injection".freeze
 
   # RP 1 つぶん(混注のまとまり)。用法は RP 内で共通なので最初の明細から取る。
@@ -124,44 +124,6 @@ class InjectionReport
      find_institution(results[1], self_organization_id)]
   end
 
-  def institution_url(self_organization_id)
-    return "Organization/#{self_organization_id}" if self_organization_id
-
-    "Organization?identifier=#{CGI.escape(INSTITUTION_NO_SYSTEM)}%7C&_count=10"
-  end
-
-  # 患者取り違えは重大なので、患者が引けない場合は生成を中止する(処方箋と同じ)。
-  def included_patient(resources, order)
-    reference = order.dig("subject", "reference").to_s
-    patient_id = reference[%r{\APatient/(.+)\z}, 1]
-    raise UpstreamError, "ServiceRequest/#{order_id} has no patient subject" if patient_id.blank?
-
-    patient = resources.find { |r| r["resourceType"] == "Patient" && r["id"] == patient_id }
-    raise UpstreamError, "Patient/#{patient_id} was not included for ServiceRequest/#{order_id}" unless patient
-
-    patient
-  end
-
-  # 自院。取れなくても発行は止めない(医療機関名が空欄になるだけ)。
-  def find_institution(entry, self_organization_id)
-    if self_organization_id
-      organization = begin
-        entry_resource!(entry, "Organization/#{self_organization_id}")
-      rescue UpstreamError
-        return nil
-      end
-      return organization["resourceType"] == "Organization" ? organization : nil
-    end
-    resources = begin
-      searchset_resources(entry, "Organization", "institution search")
-    rescue UpstreamError
-      return nil
-    end
-    resources.find do |organization|
-      Array(organization["identifier"]).any? { |i| i["system"] == INSTITUTION_NO_SYSTEM }
-    end
-  end
-
   # ---- 明細のグルーピング(frontend の groupInjectionByRp と同じ規則) ----
 
   def build_rps(medication_requests)
@@ -183,22 +145,13 @@ class InjectionReport
       )
       group.medicines << MedicineLine.new(
         order_in_rp: identifier_value(mr, ORDER_IN_RP_SYSTEM).to_i,
-        name: medicine_name(mr),
+        name: medicine_name(mr, [MEDICINE_CODE_SYSTEM]),
         dose: dosage.dig("doseAndRate", 0, "doseQuantity", "value"),
         unit: dosage.dig("doseAndRate", 0, "doseQuantity", "unit").to_s,
         comment: mr.dig("note", 0, "text").to_s
       )
     end
     groups.values.sort_by(&:rp_number).each { |group| group.medicines.sort_by!(&:order_in_rp) }
-  end
-
-  def identifier_value(mr, system)
-    Array(mr["identifier"]).find { |i| i["system"] == system }&.dig("value").to_s
-  end
-
-  def medicine_name(mr)
-    coding = coding_by_system(mr.dig("medicationCodeableConcept", "coding"), MEDICINE_CODE_SYSTEM)
-    coding&.dig("display").presence || mr.dig("medicationCodeableConcept", "text").to_s
   end
 
   def concept_display(concept)
@@ -210,32 +163,5 @@ class InjectionReport
   def extension_display(extensions, url)
     ext = Array(extensions).find { |e| e["url"] == url }
     concept_display(ext&.dig("valueCodeableConcept"))
-  end
-
-  def coding_by_system(codings, system)
-    Array(codings).find { |coding| coding["system"] == system }
-  end
-
-  # resource_type が nil なら型を問わず返す(_include / _revinclude で型が混ざる検索)。
-  def searchset_resources(entry, resource_type, context)
-    Array(entry_resource!(entry, context)["entry"])
-      .filter_map { |e| e["resource"] }
-      .select { |resource| resource_type.nil? || resource["resourceType"] == resource_type }
-  end
-
-  def entry_resource!(entry, context)
-    status = entry&.dig("response", "status").to_i
-    resource = entry&.dig("resource")
-    unless (200..299).cover?(status) && resource
-      raise UpstreamError, "upstream returned #{status} for #{context} (in batch)"
-    end
-
-    resource
-  end
-
-  def ensure_success!(upstream, context)
-    return if (200..299).cover?(upstream.status)
-
-    raise UpstreamError, "upstream returned #{upstream.status} for #{context}"
   end
 end

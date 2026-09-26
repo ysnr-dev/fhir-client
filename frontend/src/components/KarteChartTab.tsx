@@ -14,9 +14,8 @@ import {
   usePatientChartInjections,
   usePatientChartPrescriptions,
   usePatientPerformedProcedures,
-  usePatientRadiotherapyOrders,
+  usePatientRadiotherapyChart,
   usePatientSurgeryPerforms,
-  useRadiotherapyProcedures,
   useRegimenApplications,
   useRegimenDayOrders,
 } from "../api/queries";
@@ -633,10 +632,6 @@ export function KarteChartTab({ patientId, view, onViewChange, onOpenDetail }: P
 }
 
 /**
- * 項目ごとに分けて並べるか、1 つのグラフに重ねるかの切り替え。
- * アイコンは「横罫で区切った 2 段」と「重なった 2 本の線」。
- */
-/**
  * この患者で最初に開くチャートにする(ピン留め)。患者につき 1 つなので、別のチャートで押すと
  * 前のピンは外れる。固定中のチャートで押すと外す。
  */
@@ -677,6 +672,10 @@ function PinToggle({
   );
 }
 
+/**
+ * 項目ごとに分けて並べるか、1 つのグラフに重ねるかの切り替え。
+ * アイコンは「横罫で区切った 2 段」と「重なった 2 本の線」。
+ */
 function OverlayToggle({ overlay, onToggle }: { overlay: boolean; onToggle: () => void }) {
   const label = overlay ? "項目ごとに分けて表示" : "すべてを 1 つのグラフに重ねて表示";
   return (
@@ -772,12 +771,7 @@ function useChartEvents(
     [applications.data],
   );
   const dayOrders = useRegimenDayOrders(wants("chemo"), instanceIds);
-  const radiotherapyOrders = usePatientRadiotherapyOrders(wants("radiotherapy"));
-  const radiotherapyIds = useMemo(
-    () => (radiotherapyOrders.data ?? []).map((order) => order.id ?? ""),
-    [radiotherapyOrders.data],
-  );
-  const radiotherapy = useRadiotherapyProcedures(radiotherapyIds);
+  const radiotherapy = usePatientRadiotherapyChart(wants("radiotherapy"));
   const procedureCodes = useMemo(
     () => chartProcedureTypeCodes([...kinds]),
     [kinds],
@@ -804,9 +798,9 @@ function useChartEvents(
     if (applications.data && dayOrders.data) {
       events.push(...buildChemoChartEvents(applications.data.applications, dayOrders.data));
     }
-    if (radiotherapyOrders.data && radiotherapy.data) {
+    if (radiotherapy.data) {
       events.push(
-        ...buildRadiotherapyChartEvents(radiotherapyOrders.data, radiotherapy.data.fractions),
+        ...buildRadiotherapyChartEvents(radiotherapy.data.orders, radiotherapy.data.fractions),
       );
     }
     if (procedures.data) events.push(...buildProcedureChartEvents(procedures.data));
@@ -827,7 +821,6 @@ function useChartEvents(
     surgeries.data,
     applications.data,
     dayOrders.data,
-    radiotherapyOrders.data,
     radiotherapy.data,
     procedures.data,
     adverse.data,

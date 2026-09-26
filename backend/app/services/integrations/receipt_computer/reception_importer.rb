@@ -64,17 +64,9 @@ module Integrations
         store.put("Appointment", existing["id"], existing.merge("status" => "cancelled"))
       end
 
-      # 上流の Encounter は appointment での検索を持たないので、患者で引いてから
-      # 参照を突き合わせる。
       def encounter_started?(appointment)
-        patient = Array(appointment["participant"])
-                  .filter_map { |p| p.dig("actor", "reference") }
-                  .find { |r| r.start_with?("Patient/") }
-        return false if patient.nil?
-
-        reference = "Appointment/#{appointment['id']}"
-        store.search("Encounter", { "subject" => patient, "_count" => "100" }, limit: 100)
-             .any? { |e| Array(e["appointment"]).any? { |a| a["reference"] == reference } }
+        store.search("Encounter", { "appointment" => "Appointment/#{appointment['id']}", "_count" => "1" }, limit: 1)
+             .any?
       end
 
       def base_appointment(event, patient_fhir_id)

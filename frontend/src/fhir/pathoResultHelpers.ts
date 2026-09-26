@@ -666,15 +666,6 @@ export function pathoOrderIdFromReport(report: fhir4.DiagnosticReport | undefine
   return reference?.split("/")[1] ?? "";
 }
 
-/** DiagnosticReport が病理診断レポートかどうか(細菌検査などとの振り分け)。 */
-export function isPathoReport(report: fhir4.DiagnosticReport): boolean {
-  return Boolean(
-    report.code?.coding?.some(
-      (c) => c.system === LOINC_SYSTEM && c.code === LOINC_PATHO_REPORT_CODE,
-    ),
-  );
-}
-
 export interface PathoResultDetailBundle {
   report?: fhir4.DiagnosticReport;
   observations: fhir4.Observation[];
@@ -805,12 +796,3 @@ export function parsePathoResultForm(
   return values;
 }
 
-/** レポートの 1 行要約(一覧・カルテカード用)。診断があれば診断、無ければ所見の頭。 */
-export function pathoResultSummary(values: PathoResultFormValues): string {
-  if (isCytologyCategory(values.examCategory)) {
-    return [cytoJudgementDisplay(values.cytoJudgement), values.estimatedLesion]
-      .filter(Boolean)
-      .join(" / ");
-  }
-  return values.diagnosis || values.microscopic || values.gross;
-}

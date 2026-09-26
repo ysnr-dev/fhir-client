@@ -1,7 +1,14 @@
 import { addDays, diffDays, toFhirDateTime, today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
-import { categoryCoding, displayOf, orderComment, orderDay, registrationAuthoredOn } from "./shared";
+import {
+  categoryCoding,
+  displayOf,
+  orderComment,
+  orderDay,
+  registrationAuthoredOn,
+  transactionBundle,
+} from "./shared";
 import {
   MEDICINE_CODE_SYSTEM,
   ORDER_IN_RP_SYSTEM,
@@ -548,8 +555,8 @@ export function injectionTimesLabel(times: InjectionTimeValues[]): string {
 
 // ---- FHIR リソースの組み立て ----
 
-// ServiceRequest が注射オーダーかどうか。処方(注射より前から存在し order-type を
-// 持たない)との振り分けに使うため、category のローカルコードだけを見る。
+// ServiceRequest が注射オーダーかどうか。処方(order-type を持たない。種別が無いものを
+// 処方とする)との振り分けに使うため、category のローカルコードだけを見る。
 export function isInjectionServiceRequest(sr: fhir4.ServiceRequest): boolean {
   return (sr.category ?? []).some((category) =>
     category.coding?.some(
@@ -876,10 +883,6 @@ function buildInjectionDayEntries(
     ...medicationEntries,
     ...removedMedicationRequestEntries,
   ];
-}
-
-function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
-  return { resourceType: "Bundle", type: "transaction", entry };
 }
 
 /** YYYY-MM-DD の曜日コード(Timing.repeat.dayOfWeek と同じ)。 */

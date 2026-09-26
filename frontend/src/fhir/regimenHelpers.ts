@@ -622,9 +622,3 @@ export function validateRegimenDraft(draft: RegimenDraft): string | null {
   return null;
 }
 
-/** 投与時間(分)から総投与量(mL)に対する速度(mL/h)。どちらか無ければ空。 */
-export function rateFromMinutes(totalMl: number, minutes: string): string {
-  const m = Number(minutes);
-  if (!totalMl || !m || !Number.isFinite(m) || m <= 0) return "";
-  return String(Math.round((totalMl / (m / 60)) * 10) / 10);
-}

@@ -55,7 +55,6 @@ export function useBillingPreview(
   });
 }
 
-/** 送信済みかはレセコンに訊く。カルテ側に控えを持たない。 */
 /** その日に会計が済んだ受診。外来一覧が「会計済み」の印に使う。レセコン連携が無効なら問い合わせない。 */
 export function useSettledReceptions(date: string, options: { enabled?: boolean } = {}) {
   return useQuery({
@@ -68,6 +67,7 @@ export function useSettledReceptions(date: string, options: { enabled?: boolean 
   });
 }
 
+/** 送信済みかはレセコンに訊く。カルテ側に控えを持たない。 */
 export function useBillingStatus(
   patientId: string,
   date: string,

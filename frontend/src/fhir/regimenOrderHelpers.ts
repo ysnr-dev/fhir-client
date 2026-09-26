@@ -1113,10 +1113,6 @@ export interface RegimenDayOrder {
   status: InjectionTaskStatus | RxTaskStatus;
 }
 
-export function isRegimenDayOrder(sr: fhir4.ServiceRequest): boolean {
-  return regimenOrderOf(sr) !== null;
-}
-
 /** クール番号 → そのクールの Day 1 の実日付(登録された日オーダーから逆算)。 */
 export function cycleStartDates(orders: RegimenDayOrder[]): Map<number, string> {
   const result = new Map<number, string>();
@@ -1435,7 +1431,6 @@ export function canDeleteCycle(orders: RegimenDayOrder[]): boolean {
   return orders.length > 0 && orders.every((o) => o.status === "requested" || o.status === "cancelled");
 }
 
-/** ヘッダを中止(revoked)にする entry。 */
 /** ヘッダの `regimen` 拡張に、状態遷移の記録(中止理由・完了日)を足して返す。 */
 function withRegimenExtension(header: fhir4.ServiceRequest, parts: fhir4.Extension[]): fhir4.Extension[] {
   const others = (header.extension ?? []).filter((e) => e.url !== REGIMEN_EXT_URL);

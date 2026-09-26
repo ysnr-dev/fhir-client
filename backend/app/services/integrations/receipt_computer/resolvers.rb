@@ -170,18 +170,16 @@ module Integrations
         end
 
         # コースの初回か。その日より前に完了した照射が同じオーダーに無ければ初回。
+        # 有無だけ分かればよいので 1 件で切る。
         def first_of_course?(record)
           date = LocalDate.of(record.performed_at)
-          earlier = store.search("Procedure", {
-                                   "based-on" => "ServiceRequest/#{record.order_id}",
-                                   "status" => "completed",
-                                   "date" => "le#{Date.parse(date) - 1}",
-                                   "_count" => "20"
-                                 }, limit: 20)
-          earlier.none? do |p|
-            Coding.code_in_list(p["category"], PROCEDURE_KIND) == FRACTION &&
-              LocalDate.of(p["performedDateTime"] || p.dig("performedPeriod", "start")).to_s < date
-          end
+          store.search("Procedure", {
+                         "based-on" => "ServiceRequest/#{record.order_id}",
+                         "category" => "#{PROCEDURE_KIND}|#{FRACTION}",
+                         "status" => "completed",
+                         "date" => "le#{Date.parse(date) - 1}",
+                         "_count" => "1"
+                       }, limit: 1).none?
         end
       end
 

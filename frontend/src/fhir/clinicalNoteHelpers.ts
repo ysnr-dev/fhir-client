@@ -13,7 +13,7 @@ import {
 // 設計方針:
 // - C-CDA on FHIR の Progress Note を参考に、type = LOINC 11506-3 (Progress note) の
 //   base Composition として保存する(上流 fhir-server は base プロファイルで
-//   Composition に対応済み)。US Core は臨床ノートを DocumentReference /
+//   Composition に対応している)。US Core は臨床ノートを DocumentReference /
 //   DiagnosticReport で扱い Composition プロファイルを持たないので参照していない。
 // - 本文はセクション単位の Narrative (section.text.div) に XHTML で保存する。
 //   文字装飾は inline style、画像は data: URI の <img> として本文に埋め込む
@@ -88,21 +88,6 @@ function consultNoteEvent(serviceRequestId: string): fhir4.CompositionEvent[] {
       detail: [{ reference: `ServiceRequest/${serviceRequestId}` }],
     },
   ];
-}
-
-/** 回答が答えている他科依頼の ServiceRequest id。回答でなければ空。 */
-export function clinicalNoteConsultOrderId(composition: fhir4.Composition | undefined): string {
-  for (const event of composition?.event ?? []) {
-    const isReply = event.code?.some((c) =>
-      c.coding?.some((coding) => coding.system === CONSULT_NOTE_EVENT_SYSTEM),
-    );
-    if (!isReply) continue;
-    for (const detail of event.detail ?? []) {
-      const id = detail.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
-      if (id) return id;
-    }
-  }
-  return "";
 }
 
 // セクションの選択肢。コードは C-CDA on FHIR Progress Note のセクション定義に合わせた

@@ -1,3 +1,4 @@
+import { MEDICAL_MATERIAL_SYSTEM } from "./shared";
 import type { OrderContext } from "../orderContext";
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import { ROUTE_SYSTEM, type CodeOption } from "./injectionHelpers";
@@ -33,7 +34,6 @@ const RAD_PROCEDURE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/rad-proce
 /** usedCode。施設内の器材コード(放射線器材マスタ)。 */
 const RAD_MATERIAL_SYSTEM = "http://fhir-client.local/CodeSystem/rad-material";
 /** usedCode。算定に使うレセプト電算の特定器材コード。 */
-const MEDICAL_MATERIAL_SYSTEM = "http://fhir-client.local/CodeSystem/medical-material";
 /** 被曝線量の測定項目。DICOM RDSR を取り込む段階で標準コードを追加する。 */
 const RAD_DOSE_SYSTEM = "http://fhir-client.local/CodeSystem/rad-dose";
 
@@ -510,7 +510,7 @@ const PROCEDURE_STATUS_NOTES: Record<string, string> = {
 };
 
 /** 実施記録の検索(Procedure + 造影剤・被曝線量の _revinclude)の応答を種類ごとに分ける。 */
-export function splitRadPerformBundle(bundle: fhir4.Bundle | undefined): {
+export function splitPerformBundle(bundle: fhir4.Bundle | undefined): {
   procedures: fhir4.Procedure[];
   administrations: fhir4.MedicationAdministration[];
   observations: fhir4.Observation[];

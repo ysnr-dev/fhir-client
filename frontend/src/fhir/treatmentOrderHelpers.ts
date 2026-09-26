@@ -1,3 +1,4 @@
+import { labOrderItemRequests } from "./labOrderHelpers";
 import { today, toFhirDateTime } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { buildExamAppointmentEntries, type SlotSelection } from "./appointmentHelpers";
@@ -8,9 +9,10 @@ import {
   categoryCoding,
   displayOf,
   itemNumber,
-  parentRequestId,
   orderDay,
   registrationAuthoredOn,
+  transactionBundle,
+  ABBREVIATION_SYSTEM,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -46,7 +48,6 @@ export const TREATMENT_ORDER_TYPE = { code: "treatment", display: "処置" };
 // 処置オーダー項目マスタの独自コード。
 const ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/treatment-order-item";
 // 略称。検体検査・放射線検査と同じ CodeSystem を使う(オーダー項目の略称という意味は同じ)。
-const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
 
 // 明細の並び順。独立したリソースは検索の戻り順が保証されないため、伝票で選んだ
 // 順番を明細自身に持たせる(検体検査・処方の RP 番号と同じ考え方)。
@@ -411,10 +412,6 @@ export function buildTreatmentOrderEntries(
   };
 }
 
-function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
-  return { resourceType: "Bundle", type: "transaction", entry };
-}
-
 /** 登録する 1 オーダーぶんの入力。 */
 export interface TreatmentOrderSplit {
   /**
@@ -618,18 +615,7 @@ export function treatmentOrderItemRequests(
   serviceRequests: fhir4.ServiceRequest[],
   headerId: string,
 ): fhir4.ServiceRequest[] {
-  const descendants = new Set([headerId]);
-  // ヘッダ → 明細 → 構成項目の 2 段。親が先に入っていないと孫を拾えないので、
-  // 増えなくなるまで繰り返す(件数は数十なので素朴に回してよい)。
-  for (let depth = 0; depth < 2; depth += 1) {
-    for (const request of serviceRequests) {
-      const parentId = parentRequestId(request);
-      if (parentId && descendants.has(parentId) && request.id) descendants.add(request.id);
-    }
-  }
-  return serviceRequests.filter(
-    (request) => request.id !== headerId && descendants.has(request.id ?? ""),
-  );
+  return labOrderItemRequests(serviceRequests, headerId);
 }
 
 /**

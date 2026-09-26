@@ -14,15 +14,19 @@ module Integrations
       # medication_requests は当日のオーダーの MedicationRequest(id → リソース)。注射の
       # 用法種別(点滴 / ワンショット)は実施記録に写されずオーダー側にしか無いので、
       # MedicationAdministration.request から引く。連日の注射は実施日と別の日のオーダーを
-      # 指すことがあり、当日の集合に無ければ上流から読む。
+      # 指すことがあり、当日の集合に無ければ included、それにも無ければ上流から読む。
       # service_requests は当日のオーダーのヘッダ(id → リソース)。リハビリの疾患別区分の
-      # ようにオーダー側にしか無い情報を resolver が引く。当日の集合に無ければ上流から読む。
+      # ようにオーダー側にしか無い情報を resolver が引く。当日の集合に無ければ included、
+      # それにも無ければ上流から読む。
+      # included は実施記録の検索に _include で付いてきたリソース("種別/id" → リソース)。
       # details_by_parent はオーダーのヘッダ id → 明細(ServiceRequest)の配列。放射線の撮影部位の
       # コメント(項目マスタの列)は、実施記録ではなくオーダーの項目から引く。
-      def initialize(skipped, medication_requests: {}, service_requests: {}, details_by_parent: {}, store: nil)
+      def initialize(skipped, medication_requests: {}, service_requests: {}, included: {}, details_by_parent: {},
+                     store: nil)
         @skipped = skipped
         @medication_requests = medication_requests
         @service_requests = service_requests
+        @included = included
         @details_by_parent = details_by_parent
         @store = store
         @resolvers = {}
@@ -39,7 +43,7 @@ module Integrations
 
       private
 
-      attr_reader :skipped, :medication_requests, :service_requests, :details_by_parent, :store
+      attr_reader :skipped, :medication_requests, :service_requests, :included, :details_by_parent, :store
 
       def build(record, rad_materials)
         definition = OrderCatalog.find(record.order_type)
@@ -85,7 +89,7 @@ module Integrations
         return nil if id.blank?
         return service_requests[id] if service_requests.key?(id)
 
-        service_requests[id] = store&.read_or_nil("ServiceRequest", id)
+        service_requests[id] = included["ServiceRequest/#{id}"] || store&.read_or_nil("ServiceRequest", id)
       end
 
       # 注射の剤区分(皮下筋注 / 静注 / 点滴 / 中心静脈 …)は連携先が決める。その材料になる
@@ -110,7 +114,7 @@ module Integrations
         return nil if id.blank?
         return medication_requests[id] if medication_requests.key?(id)
 
-        medication_requests[id] = store&.read_or_nil("MedicationRequest", id)
+        medication_requests[id] = included["MedicationRequest/#{id}"] || store&.read_or_nil("MedicationRequest", id)
       end
 
       def procedure_lines(record, definition)

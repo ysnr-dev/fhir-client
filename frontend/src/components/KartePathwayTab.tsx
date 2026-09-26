@@ -70,10 +70,6 @@ interface KartePathwayTabProps {
   /** URL の view。「適用の id[!]」。 */
   view: string;
   onViewChange: (view: string | null) => void;
-  /**
-   * セルを押したとき、その病日 × OAT ユニットの評価入力を右ペインで開く。
-   * 全画面のときは右ペインが隠れるので、代わりにこのタブがモーダルで開く。
-   */
   /** オーダー詳細の「編集」。そのオーダーの編集フォームを右ペインで開く。 */
   onOpenOrder: (kind: PathwayOrderKind, srId: string) => void;
   /** 次のフェーズの適用(右ペインで開く)。 */

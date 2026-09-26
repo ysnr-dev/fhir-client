@@ -12,6 +12,7 @@ import {
   PRIORITY_OPTIONS,
   orderDay,
   registrationAuthoredOn,
+  priorityDisplay,
 } from "./shared";
 
 export { PRIORITY_OPTIONS };
@@ -234,9 +235,6 @@ export function emptyPathoOrderForm(
   };
 }
 
-export function priorityDisplay(priority: string | undefined): string {
-  return priority ? displayOf(PRIORITY_OPTIONS, priority) : "";
-}
 
 export function lateralityDisplay(code: string): string {
   return code ? displayOf(LATERALITY_OPTIONS, code) : "";

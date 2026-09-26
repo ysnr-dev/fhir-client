@@ -9,6 +9,8 @@ module LabImport
   # 違うことが多いので、完全一致の次に先頭 12 桁(測定物 5 + 識別 4 + 材料 3)で引く。
   # どの段階でも複数当たったら候補を残して保留にする(先勝ちさせない)。
   class ItemResolver
+    include Master::LikeEscaping
+
     PREFIX_LENGTH = 12
     JLAC_LENGTH = 17
     NUMERIC = /\A[-+]?\d+(\.\d+)?\z/
@@ -133,10 +135,6 @@ module LabImport
         .where("valid_from IS NULL OR valid_from <= ?", @as_of)
         .where("valid_to IS NULL OR valid_to >= ?", @as_of)
         .order(Arel.sql("display_order NULLS LAST"), :id)
-    end
-
-    def sanitize_like(value)
-      value.gsub(/[%_\\]/) { |char| "\\#{char}" }
     end
 
     # CD / CO のコード値。OBX-5 のコード → 表示名の順で選択肢に照合する。

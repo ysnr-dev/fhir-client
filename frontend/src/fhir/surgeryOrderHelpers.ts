@@ -9,6 +9,8 @@ import {
   displayOf,
   itemNumber,
   registrationAuthoredOn,
+  transactionBundle,
+  ABBREVIATION_SYSTEM,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -47,7 +49,6 @@ const ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/surgery-order-ite
 // 明細にオーダー時点のコードを写す。
 const RECEIPT_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/surgery-procedure-code";
 // 略称。他のオーダー項目と同じ CodeSystem を使う(オーダー項目の略称という意味は同じ)。
-const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
 // 明細の並び順。1 が主術式で、2 以降が副術式(検体検査・処方の RP 番号と同じ考え方)。
 const ITEM_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/surgery-order-item-number";
 // 左右。放射線の bodySite と同じコード表(R/L/B)を使う。
@@ -761,10 +762,6 @@ function buildSurgeryOrderServiceRequest(
   applyOrderContext(resource, requester);
 
   return resource;
-}
-
-function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
-  return { resourceType: "Bundle", type: "transaction", entry };
 }
 
 /**

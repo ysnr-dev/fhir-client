@@ -1,7 +1,17 @@
 import { today } from "../lib/dates";
 import type { OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
-import { PRIORITY_OPTIONS, categoryCoding, displayOf, itemNumber, orderComment, orderDay, parentRequestId, registrationAuthoredOn } from "./shared";
+import {
+  PRIORITY_OPTIONS,
+  categoryCoding,
+  displayOf,
+  itemNumber,
+  orderComment,
+  orderDay,
+  parentRequestId,
+  registrationAuthoredOn,
+  priorityDisplay,
+} from "./shared";
 
 export { PRIORITY_OPTIONS };
 import { ABBREVIATION_SYSTEM, JLAC10_SYSTEM, JLAC11_SPECIMEN_SYSTEM, JLAC11_SYSTEM } from "./labResultHelpers";
@@ -104,9 +114,6 @@ export function emptyLabOrderForm(
   };
 }
 
-export function priorityDisplay(priority: string | undefined): string {
-  return priority ? displayOf(PRIORITY_OPTIONS, priority) : "";
-}
 
 // ---- 親子・検体ごとのまとめ ----
 //

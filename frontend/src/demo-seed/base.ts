@@ -60,10 +60,9 @@ import {
   type ChartDrug,
   type ChartItem,
 } from "../fhir/chartDefinitionHelpers";
+import { buildVitalObservations, emptyVitalFormValues } from "../fhir/vitalHelpers";
 
 const PHYSICAL_TYPE_SYSTEM = "http://terminology.hl7.org/CodeSystem/location-physical-type";
-const UCUM = "http://unitsofmeasure.org";
-const LOINC = "http://loinc.org";
 
 // ---- 実行環境 ----
 
@@ -354,42 +353,33 @@ export function labResultBundle(
 
 // ---- バイタル ----
 
+/** 画面のバイタル入力と同じ形(1 回の測定を束ねる identifier 付き)で Observation を作る。 */
 export function vitalEntries(
   patientId: string,
   dateTime: string,
   values: { weight?: number; systolic?: number; diastolic?: number; pulse?: number; temperature?: number; spo2?: number },
 ): fhir4.BundleEntry[] {
-  const base = (code: string, display: string, value: Partial<fhir4.Observation>): fhir4.BundleEntry => ({
-    fullUrl: `urn:uuid:${crypto.randomUUID()}`,
-    request: { method: "POST", url: "Observation" },
-    resource: {
-      resourceType: "Observation",
-      meta: { profile: ["http://jpfhir.jp/fhir/core/StructureDefinition/JP_Observation_Common"] },
-      status: "final",
-      category: [{ coding: [{ system: "http://terminology.hl7.org/CodeSystem/observation-category", code: "vital-signs" }] }],
-      code: { coding: [{ system: LOINC, code, display }] },
-      subject: { reference: `Patient/${patientId}` },
-      effectiveDateTime: dateTime,
-      ...value,
+  const text = (value: number | undefined) => (value == null ? "" : String(value));
+  const observations = buildVitalObservations({
+    patientId,
+    entryId: crypto.randomUUID(),
+    problem: null,
+    values: {
+      ...emptyVitalFormValues(),
+      measuredAt: dateTime,
+      weight: text(values.weight),
+      systolic: text(values.systolic),
+      diastolic: text(values.diastolic),
+      pulse: text(values.pulse),
+      temperature: text(values.temperature),
+      spo2: text(values.spo2),
     },
   });
-  const q = (value: number, unit: string, code: string) => ({ value, unit, system: UCUM, code });
-  const entries: fhir4.BundleEntry[] = [];
-  if (values.weight != null) entries.push(base("29463-7", "Body weight", { valueQuantity: q(values.weight, "kg", "kg") }));
-  if (values.systolic != null && values.diastolic != null) {
-    entries.push(
-      base("85354-9", "Blood pressure panel", {
-        component: [
-          { code: { coding: [{ system: LOINC, code: "8480-6", display: "Systolic blood pressure" }] }, valueQuantity: q(values.systolic, "mmHg", "mm[Hg]") },
-          { code: { coding: [{ system: LOINC, code: "8462-4", display: "Diastolic blood pressure" }] }, valueQuantity: q(values.diastolic, "mmHg", "mm[Hg]") },
-        ],
-      }),
-    );
-  }
-  if (values.pulse != null) entries.push(base("8867-4", "Heart rate", { valueQuantity: q(values.pulse, "/分", "/min") }));
-  if (values.temperature != null) entries.push(base("8310-5", "Body temperature", { valueQuantity: q(values.temperature, "℃", "Cel") }));
-  if (values.spo2 != null) entries.push(base("2708-6", "Oxygen saturation in Arterial blood", { valueQuantity: q(values.spo2, "%", "%") }));
-  return entries;
+  return observations.map((resource) => ({
+    fullUrl: `urn:uuid:${crypto.randomUUID()}`,
+    request: { method: "POST", url: "Observation" },
+    resource,
+  }));
 }
 
 // ---- 処方 ----

@@ -4,6 +4,7 @@ import {
   fetchLabOrderCandidates,
   fetchLabelSpecimenByNumber,
   fetchPatientByNumber,
+  type LabArrivalContext,
   type LabOrderCandidate,
 } from "../api/queries";
 import type { LabImportGroup, LabImportOrderContext } from "../fhir/labImportHelpers";
@@ -56,12 +57,13 @@ function settingOf(order: fhir4.ServiceRequest | undefined): LabResultSetting {
 }
 
 function contextFromOrder(
-  order: fhir4.ServiceRequest,
+  arrival: LabArrivalContext,
   patient: fhir4.Patient | undefined,
   candidates: LabOrderCandidate[],
   resolvedBy: LabImportResolvedBy,
   warnings: string[],
 ): LabImportGroupContext {
+  const { order } = arrival;
   const department = departmentOf(order);
   return {
     patient,
@@ -73,7 +75,7 @@ function contextFromOrder(
       setting: settingOf(order),
     },
     requester: order.requester,
-    existingReportId: candidates.find((candidate) => candidate.id === order.id)?.reportId ?? "",
+    existingReportId: arrival.reportId,
     orderCandidates: candidates,
     resolvedBy,
     warnings,
@@ -89,12 +91,7 @@ export async function fetchLabImportGroupContext(
   // 1. 人が選んだ(または過去に決めた)オーダー。
   if (selectedOrderId) {
     const arrival = await fetchLabArrivalContext(selectedOrderId);
-    if (arrival) {
-      const candidates = arrival.patient?.id
-        ? await fetchLabOrderCandidates(arrival.patient.id)
-        : [];
-      return contextFromOrder(arrival.order, arrival.patient, candidates, "row", warnings);
-    }
+    if (arrival) return contextFromOrder(arrival, arrival.patient, [], "row", warnings);
     warnings.push("選んだオーダーが見つかりませんでした。");
   }
 
@@ -104,8 +101,7 @@ export async function fetchLabImportGroupContext(
     const orderId = specimen ? specimenOrderIdOf(specimen) : "";
     const arrival = orderId ? await fetchLabArrivalContext(orderId) : null;
     if (arrival && patientMatches(arrival.patient, group.patientNumber)) {
-      const candidates = arrival.patient?.id ? await fetchLabOrderCandidates(arrival.patient.id) : [];
-      return contextFromOrder(arrival.order, arrival.patient, candidates, "label", warnings);
+      return contextFromOrder(arrival, arrival.patient, [], "label", warnings);
     }
     warnings.push(
       arrival
@@ -120,16 +116,13 @@ export async function fetchLabImportGroupContext(
     return { ...EMPTY_CONTEXT, warnings: [...warnings, patientNotFoundMessage(group)] };
   }
 
-  const candidates = await fetchLabOrderCandidates(patient.id);
-  const sameDay = group.collectedDate
-    ? candidates.filter((candidate) => candidate.label.startsWith(group.collectedDate))
-    : candidates;
+  const sameDay = await fetchLabOrderCandidates(patient.id, {
+    occurrence: group.collectedDate || undefined,
+  });
 
   if (sameDay.length === 1) {
     const arrival = await fetchLabArrivalContext(sameDay[0].id);
-    if (arrival) {
-      return contextFromOrder(arrival.order, patient, candidates, "patient-single", warnings);
-    }
+    if (arrival) return contextFromOrder(arrival, patient, sameDay, "patient-single", warnings);
   }
 
   return {
@@ -156,10 +149,7 @@ function patientNotFoundMessage(group: LabImportGroup): string {
     : "ファイルに患者番号がありません。";
 }
 
-/**
- * 候補カード 1 枚ぶんの文脈。カードごとに上流を 2〜3 回引くので、
- * 画面は見えているカードだけ enabled にして同時アクセスを抑える。
- */
+/** 候補カード 1 枚ぶんの文脈。カードごとに上流を 1〜3 回引く。 */
 export function useLabImportGroupContext(
   group: LabImportGroup,
   selectedOrderId: string,

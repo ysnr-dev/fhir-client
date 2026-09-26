@@ -29,12 +29,16 @@ module Integrations
       end
 
       # 桁揃え違いも同じ患者として拾う(レセコンは "00002"、カルテは "2" のことがある)。
+      # 候補をまとめて 1 回で引き、レセコンの番号そのままの患者を優先する。
       def find(patient_number)
-        PatientResource.candidate_numbers(patient_number).each do |candidate|
-          found = store.search("Patient",
-                               { "identifier" => PatientResource.identifier_query(candidate), "_count" => "2" },
-                               limit: 2).first
-          return found if found
+        candidates = PatientResource.candidate_numbers(patient_number)
+        found = store.search("Patient", {
+                               "identifier" => candidates.map { |c| PatientResource.identifier_query(c) }.join(","),
+                               "_count" => "10"
+                             }, limit: 10)
+        candidates.each do |candidate|
+          match = found.find { |patient| numbered?(patient, candidate) }
+          return match if match
         end
         nil
       end
@@ -42,6 +46,12 @@ module Integrations
       private
 
       attr_reader :store
+
+      def numbered?(patient, number)
+        Array(patient["identifier"]).any? do |i|
+          i["system"] == PatientResource::IDENTIFIER_SYSTEM && i["value"] == number
+        end
+      end
     end
   end
 end

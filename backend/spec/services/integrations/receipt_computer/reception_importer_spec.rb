@@ -1,13 +1,25 @@
 require "rails_helper"
 
 RSpec.describe Integrations::ReceiptComputer::ReceptionImporter do
+  # 種別ごとに検索結果を差し替える。search は [種別, 条件] を記録する。
   let(:store) do
     Class.new do
-      attr_reader :written
+      attr_reader :written, :searches
+      attr_accessor :results
 
-      def search(_type, _params, **) = []
+      def initialize
+        @results = {}
+        @searches = []
+      end
+
+      def search(type, params, **)
+        @searches << [type, params]
+        results.fetch(type, [])
+      end
+
       def read_or_nil(_type, _id) = nil
       def conditional_put(_type, resource, _query) = @written = resource
+      def put(_type, _id, resource) = @written = resource
     end.new
   end
 
@@ -19,9 +31,9 @@ RSpec.describe Integrations::ReceiptComputer::ReceptionImporter do
 
   subject(:importer) { described_class.new(store: store, mapper: mapper) }
 
-  def event(coverage_set_key:)
+  def event(coverage_set_key: nil, action: :created)
     Integrations::ReceiptComputer::Records::ReceptionEvent.new(
-      event_id: "e1", action: :created, reception_key: "r1", patient_number: "00021",
+      event_id: "e1", action: action, reception_key: "r1", patient_number: "00021",
       date: "2026-09-20", time: "19:30:00", coverage_set_key: coverage_set_key
     )
   end
@@ -44,5 +56,27 @@ RSpec.describe Integrations::ReceiptComputer::ReceptionImporter do
     importer.call(event(coverage_set_key: "0000"), patient_fhir_id: "p1")
 
     expect(coverage_set_of(store.written)).to be_nil
+  end
+
+  describe "取消" do
+    let(:appointment) { { "resourceType" => "Appointment", "id" => "ap-1", "status" => "checked-in" } }
+
+    before { store.results["Appointment"] = [appointment] }
+
+    it "診察が始まっていなければ受付を取り消す" do
+      importer.call(event(action: :canceled), patient_fhir_id: "p1")
+
+      expect(store.written["status"]).to eq "cancelled"
+    end
+
+    # 診察の有無は Encounter を予約(appointment)で引いて決める。1 件あれば足りる。
+    it "予約を指す Encounter があれば取り消さない" do
+      store.results["Encounter"] = [{ "resourceType" => "Encounter", "id" => "enc-1" }]
+
+      importer.call(event(action: :canceled), patient_fhir_id: "p1")
+
+      expect(store.written).to be_nil
+      expect(store.searches).to include(["Encounter", { "appointment" => "Appointment/ap-1", "_count" => "1" }])
+    end
   end
 end

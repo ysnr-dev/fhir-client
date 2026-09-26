@@ -81,6 +81,21 @@ module Integrations
       ))
     end
 
+    # 複数の書き込みを 1 つの transaction Bundle で送る。entries は Bundle.entry の配列
+    # (request.url に "Coverage/1" か "Coverage?identifier=…" の条件付き更新)。
+    # 1 件でも失敗すると上流が全体を戻して失敗を返す。条件に複数当たった entry は 412。
+    def transaction(entries)
+      response = gateway.forward(
+        method: :post,
+        path: "/",
+        body: { "resourceType" => "Bundle", "type" => "transaction", "entry" => entries }.to_json,
+        headers: { "Content-Type" => JSON_TYPE }
+      )
+      raise AmbiguousMatch, "更新先が一意に決まりません: #{response.body.to_s.first(300)}" if response.status == 412
+
+      parse!(response)
+    end
+
     private
 
     attr_reader :gateway

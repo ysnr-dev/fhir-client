@@ -7,6 +7,7 @@ import {
   orderComment,
   orderDay,
   registrationAuthoredOn,
+  transactionBundle,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -101,8 +102,8 @@ export type RehabDiseaseCategory =
 
 /**
  * 疾患別リハビリテーション料の区分。並びは診療報酬の区分番号(H000〜H003)順。
- * 算定コードそのもの(点数表)は持たない。算定は全部門で未実装なので、
- * 対応付けが要るようになったら Master::MedicalProcedure から引く。
+ * 算定コードそのもの(点数表)は持たない。レセコン向けの対応付けは backend の
+ * receipt_codes(区分 × 療法)が持つ。
  */
 export const DISEASE_CATEGORY_OPTIONS: { code: RehabDiseaseCategory; display: string }[] = [
   { code: "cardiovascular", display: "心大血管疾患リハビリテーション" },
@@ -344,10 +345,6 @@ function buildRehabOrderServiceRequest(
   return resource;
 }
 
-function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
-  return { resourceType: "Bundle", type: "transaction", entry };
-}
-
 /** 新規登録。明細が無いのでヘッダ 1 件の POST だけ。 */
 export function buildRehabOrderBundle(
   values: RehabOrderFormValues,
@@ -420,13 +417,6 @@ export function buildRehabOrderStopEntries(
   return orders
     .filter((sr) => rehabOrderNeedsStop(sr, endDate))
     .map((sr) => buildRehabOrderCloseEntry(sr, endDate));
-}
-
-/** オーダーを消す Bundle。明細が無いのでヘッダ 1 件だけ(予約はフェーズ 3 で足す)。 */
-export function buildRehabOrderDeleteBundle(serviceRequestId: string): fhir4.Bundle {
-  return transactionBundle([
-    { request: { method: "DELETE", url: `ServiceRequest/${serviceRequestId}` } },
-  ]);
 }
 
 /**
@@ -576,17 +566,6 @@ export function rehabOrderNeedsStop(sr: fhir4.ServiceRequest, endDate: string): 
 
 export const rehabOrderComment = orderComment;
 export const rehabOrderProblem = orderProblem;
-
-/**
- * 「2026-08-29 脳血管 PT・OT」のような 1 行要約。実施入力の対象表示など、
- * オーダーを 1 行で指すところで使う。
- */
-export function rehabOrderLabel(sr: fhir4.ServiceRequest): string {
-  const summary = summarizeRehabOrder(sr);
-  return [summary.startDate, summary.diseaseCategoryShort, summary.therapyTypesLabel]
-    .filter(Boolean)
-    .join(" ");
-}
 
 // ---- 編集フォームへの復元 ----
 

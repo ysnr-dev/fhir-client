@@ -164,11 +164,6 @@ export function orderSetOf(sr: fhir4.ServiceRequest): { code: string; name: stri
   return { code: coding.code, name: coding.display ?? "" };
 }
 
-/** 同じ適用で登録したオーダー群を束ねる uuid。セットから出ていなければ空。 */
-export function orderSetInstanceOf(sr: fhir4.ServiceRequest): string {
-  return sr.identifier?.find((i) => i.system === ORDER_SET_INSTANCE_SYSTEM)?.value ?? "";
-}
-
 // ---- 保存前の正規化 -------------------------------------------------------------
 
 /**

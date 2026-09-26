@@ -6,6 +6,7 @@ import {
   displayOf,
   orderComment,
   registrationAuthoredOn,
+  transactionBundle,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -173,12 +174,6 @@ export type MealTiming = (typeof MEAL_TIMING_OPTIONS)[number]["code"];
 export const DEFAULT_MEAL_TIMING: MealTiming = "breakfast";
 /** 終了の既定。「その日の夕まで」が業務上いちばん多い。 */
 export const DEFAULT_MEAL_END_TIMING: MealTiming = "dinner";
-
-/**
- * 退院に合わせて食事を止めるときの既定。退院は午前が多く、退院日は朝食までを
- * 出して昼から止めるのがふつうなので「朝まで」にしてある(画面で変えられる)。
- */
-export const DEFAULT_MEAL_STOP_TIMING: MealTiming = "breakfast";
 
 function timingHour(timing: MealTiming): string {
   return MEAL_TIMING_OPTIONS.find((t) => t.code === timing)?.hour ?? "08";
@@ -575,10 +570,6 @@ function buildMealOrderServiceRequest(
   return resource;
 }
 
-function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
-  return { resourceType: "Bundle", type: "transaction", entry };
-}
-
 function linkExtension(link: MealOrderLink): fhir4.Extension {
   const children: fhir4.Extension[] = [{ url: "kind", valueCode: link.kind }];
   if (link.sourceId) {
@@ -704,20 +695,6 @@ export function buildMealOrderRestoreEntry(sr: fhir4.ServiceRequest): fhir4.Bund
     extension: extension.length > 0 ? extension : undefined,
   };
   return { resource: next, request: { method: "PUT", url: `ServiceRequest/${sr.id}` } };
-}
-
-/**
- * 退院などで食事を止める PUT エントリ。指定の食事までで終わっていないオーダーだけを
- * 対象にするので、退院の transaction にそのまま足せる(止める対象が無ければ空配列)。
- */
-export function buildMealOrderStopEntries(
-  orders: fhir4.ServiceRequest[],
-  endDate: string,
-  endTiming: MealTiming,
-): fhir4.BundleEntry[] {
-  return orders
-    .filter((sr) => mealOrderNeedsStop(sr, endDate, endTiming))
-    .map((sr) => buildMealOrderCloseEntry(sr, endDate, endTiming));
 }
 
 /**
@@ -1115,14 +1092,6 @@ export function mealOrderAt(
     }
   }
   return found;
-}
-
-/** その日に始まる(= その日に食事が変わった)オーダー。 */
-export function mealOrdersStartingOn(
-  orders: fhir4.ServiceRequest[],
-  date: string,
-): fhir4.ServiceRequest[] {
-  return orders.filter((order) => (order.occurrenceDateTime ?? "").slice(0, 10) === date);
 }
 
 /** カレンダーの 1 マスに出す、1 オーダーぶんの担当範囲。 */

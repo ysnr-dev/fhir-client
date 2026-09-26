@@ -6,6 +6,7 @@ import {
   displayOf,
   orderComment,
   registrationAuthoredOn,
+  transactionBundle,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -254,10 +255,6 @@ function buildNursingOrderServiceRequest(
   applyOrderContext(resource, requester);
 
   return resource;
-}
-
-function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
-  return { resourceType: "Bundle", type: "transaction", entry };
 }
 
 /**

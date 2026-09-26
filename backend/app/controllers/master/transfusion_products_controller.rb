@@ -1,7 +1,6 @@
 module Master
   # 輸血製剤マスタのメンテナンス。画面から手動で登録する。
-  # 食事の MealItemsController と同じ形(食種/主食の kind を製剤区分の category に
-  # 置き換えただけ)。
+  # 食事の MealItemsController と同じ形(区分が製剤区分の category)。
   class TransfusionProductsController < BaseController
     before_action :set_record, only: %i[show update destroy]
 

@@ -45,6 +45,7 @@ module Integrations
         report_unfinished(performed.unfinished, skipped)
         performed_items = PerformedItemBuilder.new(skipped, medication_requests: medication_requests_by_id(requests),
                                                             service_requests: headers_by_id,
+                                                            included: performed.included,
                                                             details_by_parent: group_by_parent(requests, "ServiceRequest"),
                                                             store: store)
                                               .call(performed.records)
@@ -52,7 +53,7 @@ module Integrations
         performed_order_ids = (performed.records + performed.unfinished).map(&:order_id).compact.to_set
 
         items = prescription_items(requests, date, skipped) +
-                order_items(requests, date, skipped, performed_order_ids) +
+                order_items(requests, date, skipped, performed_order_ids, completed_tasks(requests)) +
                 performed_items
         add_blood_draw(items)
         add_chemo_additions(items, headers_by_id, patient, date, skipped)
@@ -70,19 +71,19 @@ module Integrations
 
       def on_date?(resource, date) = LocalDate.of(resource["occurrenceDateTime"]) == date
 
-      # 当日実施(予定)のオーダーのヘッダと、その明細・処方薬を 1 往復で引く。
+      # 当日実施(予定)のオーダーのヘッダと、その明細・処方薬・部門の Task を 1 往復で引く。
       def order_requests(patient_fhir_id, date)
         store.search("ServiceRequest", {
                        "subject" => "Patient/#{patient_fhir_id}",
                        "occurrence" => date,
-                       "_revinclude" => "ServiceRequest:based-on",
+                       "_revinclude" => ["ServiceRequest:based-on", "Task:focus"],
                        "_revinclude:iterate" => "MedicationRequest:based-on",
                        "_count" => "500"
                      }).uniq { |r| [r["resourceType"], r["id"]] }
       end
 
-      # 当日のオーダーのヘッダ。処方は他の種別より前からあり order-type を持たないので、
-      # 種別が無いことで処方と判定する(frontend の isPrescriptionServiceRequest と同じ規約)。
+      # 当日のオーダーのヘッダ。処方オーダーは order-type を持たないので、種別が無いことで
+      # 処方と判定する(frontend の isPrescriptionServiceRequest と同じ規約)。
       # 明細(basedOn を持つ)はヘッダではない。
       def headers_of(requests, date, prescription: false)
         requests.select { |r| r["resourceType"] == "ServiceRequest" && Array(r["basedOn"]).empty? }
@@ -238,7 +239,13 @@ module Integrations
 
       # ---- 検査・処置などのオーダー ----
 
-      def order_items(requests, date, skipped, performed_order_ids)
+      # 部門が実施済にした Task が指すオーダーのヘッダ id。
+      def completed_tasks(requests)
+        requests.select { |r| r["resourceType"] == "Task" && r["status"] == "completed" }
+                .filter_map { |t| Coding.reference_id(t.dig("focus", "reference")) }.to_set
+      end
+
+      def order_items(requests, date, skipped, performed_order_ids, completed_tasks)
         details_by_parent = group_by_parent(requests, "ServiceRequest")
 
         headers_of(requests, date).filter_map do |header|
@@ -256,7 +263,7 @@ module Integrations
           end
           if definition.performed?
             next if performed_order_ids.include?(header["id"]) || definition.continuous
-            next unless completed_without_record?(definition, header, details, skipped)
+            next unless completed_without_record?(definition, header, details, skipped, completed_tasks)
           end
           next if details.empty?
 
@@ -270,7 +277,7 @@ module Integrations
 
       # 実施記録の無い当日のオーダー。実施入力をしない項目だけのオーダーは部門が
       # Task を実施済にするだけで記録を作らないので、そのときに限りオーダーから組む。
-      def completed_without_record?(definition, header, details, skipped)
+      def completed_without_record?(definition, header, details, skipped, completed_tasks)
         item_codes = details.filter_map { |d| Coding.code_of(d["code"], definition.coding_system) }
         name = header.dig("code", "text").presence || definition.label
 
@@ -280,16 +287,11 @@ module Integrations
           return false
         end
 
-        return true if task_completed?(header["id"])
+        return true if completed_tasks.include?(header["id"])
 
         skipped << Skipped.new(kind: definition.label, name: name,
                                reason: "部門で実施済になっていません")
         false
-      end
-
-      def task_completed?(order_id)
-        store.search("Task", { "focus" => "ServiceRequest/#{order_id}", "_count" => "10" }, limit: 10)
-             .any? { |t| t["status"] == "completed" }
       end
 
       def build_order_item(definition, details, skipped)

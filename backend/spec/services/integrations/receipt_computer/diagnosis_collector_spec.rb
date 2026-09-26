@@ -2,19 +2,31 @@ require "rails_helper"
 
 RSpec.describe Integrations::ReceiptComputer::DiagnosisCollector do
   let(:date) { "2026-09-20" }
+  # 上流の :not(値の無い行は残す)だけを模す。
   let(:store) do
     Class.new do
       attr_accessor :conditions
 
       def initialize = @conditions = []
-      def search(_type, _params, **) = conditions
+
+      def not_params = { "category:not" => "category", "verification-status:not" => "verificationStatus" }
+
+      def search(_type, params, **)
+        conditions.reject do |condition|
+          not_params.any? do |param, element|
+            codes = Array.wrap(condition[element]).flat_map { |c| Array(c["coding"]) }.map { |c| c["code"] }
+            codes.intersect?(params.fetch(param).split(","))
+          end
+        end
+      end
     end.new
   end
 
   subject(:collector) { described_class.new(store: store) }
 
   def condition(code: "4609008", text: "感冒", category: "encounter-diagnosis",
-                onset: "2026-09-01", abatement: nil, prefixes: [], postfixes: [], status: "active")
+                onset: "2026-09-01", abatement: nil, prefixes: [], postfixes: [], status: "active",
+                verification: nil)
     extensions =
       prefixes.map { |c| modifier_extension(Integrations::ReceiptComputer::Coding::PREFIX_MODIFIER_EXT, c) } +
       postfixes.map { |c| modifier_extension(Integrations::ReceiptComputer::Coding::POSTFIX_MODIFIER_EXT, c) }
@@ -30,6 +42,7 @@ RSpec.describe Integrations::ReceiptComputer::DiagnosisCollector do
         "extension" => extensions.presence
       }.compact
     }
+    resource["verificationStatus"] = { "coding" => [{ "code" => verification }] } if verification
     resource["onsetDateTime"] = onset if onset
     resource["abatementDateTime"] = abatement if abatement
     resource
@@ -82,11 +95,21 @@ RSpec.describe Integrations::ReceiptComputer::DiagnosisCollector do
     expect(collect.map(&:name)).to eq(["保険病名"])
   end
 
-  # category を持たない古いデータはカルテ側でも保険病名として扱う。
+  # category を持たない Condition はカルテ側でも保険病名として扱う。
   it "treats a condition without a category as 保険病名" do
     store.conditions = [condition.except("category")]
 
     expect(collect.length).to eq(1)
+  end
+
+  it "drops diseases entered in error or refuted" do
+    store.conditions = [
+      condition(code: "1", text: "誤登録", verification: "entered-in-error"),
+      condition(code: "2", text: "否定", verification: "refuted"),
+      condition(code: "3", text: "確定", verification: "confirmed")
+    ]
+
+    expect(collect.map(&:name)).to eq(%w[確定])
   end
 
   it "drops diseases that had not started or were already closed on the day" do

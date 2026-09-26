@@ -21,7 +21,7 @@ import { diffDays, today } from "../lib/dates";
  *
  * - ［決定］診療記録(Composition)には寄せない。上流の Composition 検索に `event.detail` が
  *   無く、「そのコースの診察」を集められないため —— 集められないと診察の抜けを見つけられない。
- *   QuestionnaireResponse は `based-on` 検索に対応済みで、上流の改修が要らない
+ *   QuestionnaireResponse は `based-on` 検索に対応している
  * - ［決定］**専用のリソースは足さない。** テンプレート回答はカルテのタイムラインにも出て、
  *   平文表示や帳票の仕組みもそのまま使える
  * - 有害事象(CTCAE)は診察の中で見つかるが、記録は別(`adverseEventHelpers.ts`)。Grade と

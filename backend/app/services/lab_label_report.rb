@@ -11,6 +11,8 @@
 # accessionIdentifier を値なしで POST すると、作成時に連番 10 桁 + M10W3 の
 # チェックデジット 1 桁が払い出される)。backend は番号を持たない。
 class LabLabelReport
+  include Reports::UpstreamBundle
+
   # オーダーが上流に存在しない
   class NotFound < StandardError; end
   # 指定されたオーダーが検体検査ではない(URL 直叩きなど)
@@ -28,7 +30,6 @@ class LabLabelReport
   # frontend の fhir/labOrderHelpers.ts・labResultHelpers.ts と同じ system 定義。
   # LABEL_NUMBER_SYSTEM は上流の SPECIMEN_ACCESSION_SYSTEM(採番のトリガ)と同じ値。
   LABEL_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/lab-label-number".freeze
-  ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type".freeze
   LAB_ORDER_CODE = "lab".freeze
   ORDER_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/lab-order-item".freeze
   ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation".freeze
@@ -102,24 +103,6 @@ class LabLabelReport
 
   def references?(references, reference)
     Array(references).any? { |r| r["reference"] == reference }
-  end
-
-  # 患者は _include で届く。オーダーの subject と id が一致するものだけを使う。
-  def included_patient(resources, order)
-    patient_id = patient_id_from(order)
-    patient = resources.find { |r| r["resourceType"] == "Patient" && r["id"] == patient_id }
-    raise UpstreamError, "Patient/#{patient_id} was not included for ServiceRequest/#{order_id}" unless patient
-
-    patient
-  end
-
-  # ラベルの患者取り違えは重大なので、患者が引けない場合は生成を中止する。
-  def patient_id_from(order)
-    reference = order.dig("subject", "reference").to_s
-    patient_id = reference[%r{\APatient/(.+)\z}, 1]
-    raise UpstreamError, "ServiceRequest/#{order_id} has no patient subject" if patient_id.blank?
-
-    patient_id
   end
 
   # ---- 番号の確保(台帳 = 上流の Specimen) ----
@@ -236,12 +219,7 @@ class LabLabelReport
   end
 
   def item_number(item)
-    value = Array(item["identifier"]).find { |i| i["system"] == ITEM_NUMBER_SYSTEM }&.dig("value")
-    value.to_i
-  end
-
-  def coding_by_system(codings, system)
-    Array(codings).find { |coding| coding["system"] == system }
+    identifier_value(item, ITEM_NUMBER_SYSTEM).to_i
   end
 
   # ラベルに刷る項目名。狭いので略称(WBC など)を優先する。
@@ -278,21 +256,5 @@ class LabLabelReport
 
   def extension_coding(item, url)
     Array(item["extension"]).find { |ext| ext["url"] == url }&.dig("valueCodeableConcept", "coding", 0)
-  end
-
-  def entry_resource!(entry, context)
-    status = entry&.dig("response", "status").to_i
-    resource = entry&.dig("resource")
-    unless (200..299).cover?(status) && resource
-      raise UpstreamError, "upstream returned #{status} for #{context} (in batch)"
-    end
-
-    resource
-  end
-
-  def ensure_success!(upstream, context)
-    return if (200..299).cover?(upstream.status)
-
-    raise UpstreamError, "upstream returned #{upstream.status} for #{context}"
   end
 end

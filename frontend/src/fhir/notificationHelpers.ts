@@ -6,8 +6,8 @@ import { TASK_CODE_SYSTEM } from "./taskHelpers";
 //   通知の対象 ← focus ── Task(通知) ── owner → 宛先の医療従事者
 //
 // 「緊急異常値を見てほしい」「代行入力を承認してほしい」のように、**宛先を決めて相手に
-// 何かしてもらう**ものを 1 つの器にまとめる。種別は Task.code で分ける(lab-panic /
-// order-approval。今後は読影の重要所見・文書作成の督促が乗る)。1 通知 = 1 宛先で、
+// 何かしてもらう**ものを 1 つの器にまとめる。種別は Task.code で分け、
+// components/notifications/notificationRegistry.tsx に登録する。1 通知 = 1 宛先で、
 // 複数人に届けるなら Task を複数作る。
 //
 // 部門進捗の Task(taskHelpers の createTaskHelpers)とは別物。あちらは「オーダーを部門が

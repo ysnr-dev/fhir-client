@@ -176,11 +176,6 @@ export function fetchBillingPreview(params: {
   return receiptJson<BillingPreview>(`${BASE}/billings/preview?${query}`);
 }
 
-/**
- * レセコン側での 1 受診の状態。none = 未送信、sent = カルテから送ってあり送り直し・取消ができる、
- * opened = レセコン側で展開・編集されていてカルテからは触れない、settled = 会計済み。
- * message は opened / settled の理由。
- */
 /** レセコンで済んだ 1 件の会計(伝票)。金額は円、points は点数。 */
 export interface Settlement {
   date: string;
@@ -200,6 +195,11 @@ export interface Settlement {
   points: number;
 }
 
+/**
+ * レセコン側での 1 受診の状態。none = 未送信、sent = カルテから送ってあり送り直し・取消ができる、
+ * opened = レセコン側で展開・編集されていてカルテからは触れない、settled = 会計済み。
+ * message は opened / settled の理由。
+ */
 export interface BillingStatus {
   sent: boolean;
   state: "none" | "sent" | "opened" | "settled";

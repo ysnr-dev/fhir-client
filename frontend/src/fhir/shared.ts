@@ -109,3 +109,19 @@ export function parentRequestId(sr: fhir4.ServiceRequest): string | undefined {
 export function referenceId(reference: string | undefined): string | undefined {
   return reference?.split("/").pop() || undefined;
 }
+
+/** 書き込みの単位。エントリを 1 つの transaction Bundle にまとめる。 */
+export function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
+  return { resourceType: "Bundle", type: "transaction", entry };
+}
+
+/** オーダーの緊急度の表示(通常・至急・事後)。未設定なら空。 */
+export function priorityDisplay(priority: string | undefined): string {
+  return priority ? displayOf(EXAM_PRIORITY_OPTIONS, priority) : "";
+}
+
+/** 項目マスタの略称を coding に添えるときの system。 */
+export const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
+
+/** 実施記録に使った器材(医療材料)の coding の system。 */
+export const MEDICAL_MATERIAL_SYSTEM = "http://fhir-client.local/CodeSystem/medical-material";

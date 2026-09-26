@@ -24,6 +24,12 @@ export function addDays(date: string, days: number): string {
   return toDateInput(new Date(y, m - 1, d + days));
 }
 
+/** YYYY-MM-DD に月数を足す(負も可)。 */
+export function addMonths(date: string, months: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return toDateInput(new Date(y, m - 1 + months, d));
+}
+
 /** 2 つの YYYY-MM-DD の差(to - from)を日数で返す。 */
 export function diffDays(from: string, to: string): number {
   const [fy, fm, fd] = from.split("-").map(Number);

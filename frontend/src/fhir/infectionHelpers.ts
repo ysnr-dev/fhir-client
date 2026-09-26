@@ -332,7 +332,3 @@ export function parseInfectionForm(observation: fhir4.Observation): InfectionFor
   };
 }
 
-/** 陽性の感染症があるか。患者帯・オーダー画面の注意に使う。 */
-export function hasPositiveInfection(rows: InfectionRow[]): boolean {
-  return rows.some((row) => row.result === "positive");
-}

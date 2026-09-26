@@ -25,7 +25,7 @@ import {
 } from "../fhir/radReportHelpers";
 import {
   radPerformsByOrderId,
-  splitRadPerformBundle,
+  splitPerformBundle,
   type RadPerformDisplay,
 } from "../fhir/radResultHelpers";
 import { ErrorBanner } from "./ErrorBanner";
@@ -67,7 +67,7 @@ export function RadReportEntryModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [order.data, orderId],
   );
-  const performed = useMemo(() => splitRadPerformBundle(perform.data?.data), [perform.data]);
+  const performed = useMemo(() => splitPerformBundle(perform.data?.data), [perform.data]);
   const performs: RadPerformDisplay[] =
     radPerformsByOrderId(performed.procedures, performed.administrations, performed.observations).get(
       orderId,

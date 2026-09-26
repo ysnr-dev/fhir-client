@@ -15,9 +15,9 @@ import {
   displayOf,
   itemNumber,
   orderComment,
-  orderDay,
   PRIORITY_OPTIONS,
   registrationAuthoredOn,
+  priorityDisplay,
 } from "./shared";
 
 export { PRIORITY_OPTIONS };
@@ -117,10 +117,6 @@ export function rhdDisplay(code: string): string {
 export function bloodTypeLabel(abo: string, rhd: string): string {
   if (!abo && !rhd) return "";
   return [abo && `${abo}型`, rhd && `RhD${rhdDisplay(rhd)}`].filter(Boolean).join(" ");
-}
-
-export function priorityDisplay(priority: string | undefined): string {
-  return priority === "urgent" ? "至急" : "通常";
 }
 
 // ---- フォームの値 ----
@@ -569,21 +565,6 @@ export function transfusionOrderItemRequests(
 
 export const transfusionOrderComment = orderComment;
 export const transfusionOrderProblem = orderProblem;
-
-/**
- * 「2026-08-29 交差適合試験 RBC-LR 2単位」のような 1 行要約。
- * 実施入力の対象表示など、オーダーを 1 行で指すところで使う。
- */
-export function transfusionOrderLabel(
-  header: fhir4.ServiceRequest,
-  itemRequests: fhir4.ServiceRequest[],
-): string {
-  const date = orderDay(header);
-  const products = productSummary(transfusionOrderProducts(itemRequests));
-  return [date, testTypeDisplay(transfusionOrderTestType(header)), products]
-    .filter(Boolean)
-    .join(" ");
-}
 
 // ---- 編集フォームへの復元 ----
 

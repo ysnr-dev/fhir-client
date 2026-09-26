@@ -230,7 +230,7 @@ export function firstPhaseOf(pathway: PathwayDetail): PathwayPhase | null {
 
 /**
  * パス定義をフェーズ 1 つ分に絞る。適用はフェーズ単位なので、病日の展開もオーダーの続きの
- * まとめもこの中で閉じる。フェーズの無い定義(古い応答)はそのまま返す。
+ * まとめもこの中で閉じる。フェーズの無い定義はそのまま返す。
  */
 export function pathwayOfPhase(pathway: PathwayDetail, phaseKey: string): PathwayDetail {
   if (pathway.phases.length === 0) return pathway;
@@ -787,14 +787,6 @@ function buildTaskProcedure(
 
 // ---- 読み出し ----
 
-export function isPathwayCarePlan(carePlan: fhir4.CarePlan): boolean {
-  return Boolean(
-    carePlan.category?.some((category) =>
-      category.coding?.some((c) => c.system === PATHWAY_MARKER_SYSTEM && c.code === PATHWAY_MARKER_CODE),
-    ),
-  );
-}
-
 export function pathwayLevelOf(carePlan: fhir4.CarePlan): PathwayLevel | null {
   for (const category of carePlan.category ?? []) {
     for (const coding of category.coding ?? []) {
@@ -821,7 +813,7 @@ function codeExtension(resource: { extension?: fhir4.Extension[] }, url: string)
   return extensionOf(resource, url)?.valueCode ?? "";
 }
 
-/** 定義の並び(拡張)で整列する。拡張を持たないもの(古い適用)は元の順のまま末尾。 */
+/** 定義の並び(拡張)で整列する。拡張を持たないものは元の順のまま末尾。 */
 function sortByDisplayOrder<T extends { extension?: fhir4.Extension[] }>(items: T[]): T[] {
   return items
     .map((item, index) => ({ item, index, order: intExtension(item, PATHWAY_DISPLAY_ORDER_EXT_URL) }))
@@ -879,7 +871,7 @@ export interface PathwayEventRecord {
   pathStepName: string;
   title: string;
   date: string;
-  /** フェーズの印。印の無い(フェーズ導入前の)適用は空で、先頭のフェーズとして扱う。 */
+  /** フェーズの印。印の無い適用は空で、先頭のフェーズとして扱う。 */
   phaseKey: string;
   phaseName: string;
   /** 分岐を選んだときの記録(フェーズの最初の病日だけ)。 */

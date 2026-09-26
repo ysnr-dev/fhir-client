@@ -232,10 +232,6 @@ export async function testConnection(): Promise<ConnectionTestResult> {
 // (api/facilityClient.ts)。
 const FACILITY_SETTINGS = "/admin/facility_settings";
 
-export async function fetchAdminFacilitySettings(): Promise<FacilitySettings> {
-  return adminJson<FacilitySettings>(FACILITY_SETTINGS);
-}
-
 // 渡した項目だけを書き換える(backend は無い項目を触らない)。
 export async function updateAdminFacilitySettings(
   payload: FacilitySettingsPayload,

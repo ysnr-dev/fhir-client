@@ -117,7 +117,7 @@ export function InjectionDetailPanel({
             </>
           )}
           <dt>実施パターン</dt>
-          {/* 束ねを持たない古いオーダーは単日なので「-」。期間はその束ねの登録時のもの。 */}
+          {/* 束ねを持たないオーダーは単日なので「-」。期間はその束ねの登録時のもの。 */}
           <dd>
             {series
               ? `${scheduleLabel(series.schedule)}${

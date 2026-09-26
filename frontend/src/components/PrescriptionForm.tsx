@@ -47,15 +47,15 @@ interface PrescriptionFormProps {
   submitError?: unknown;
   submitLabel?: string;
   /**
-   * オーダーセットの内容として入力する(既定は患者に出すオーダー)。患者と日付に
-   * 依存する入力を出さず、その検証も外す。値そのものは既定値のまま残り、保存時に
-   * サニタイザが落とす(fhir/orderSetHelpers.ts)。
-   */
-  /**
    * オーダーセットの適用日。外から開始日をまとめて入れるときに渡す(値が変わった
    * ときだけ反映し、他の入力は保つ)。
    */
   bulkStartDate?: string;
+  /**
+   * オーダーセットの内容として入力する(既定は患者に出すオーダー)。患者と日付に
+   * 依存する入力を出さず、その検証も外す。値そのものは既定値のまま残り、保存時に
+   * サニタイザが落とす(fhir/orderSetHelpers.ts)。
+   */
   setMode?: boolean;
   /** 送信ボタンを出さない(積んだフォームを外から一括 submit する画面で使う)。 */
   hideSubmit?: boolean;

@@ -227,7 +227,7 @@ export async function seedCkd(env: SeedEnv): Promise<void> {
       [MED.esa30, "ダルベポエチン"],
     ]),
     overlay: false,
-    // 尿蛋白(定性)を全レーンに網掛けする。マスタが数値型のままなら選択肢の行にならないので付けない。
+    // 尿蛋白(定性)を全レーンに網掛けする。マスタが数値型なら選択肢の行にならないので付けない。
     background: protein && isChoiceItem(protein) ? { kind: "item", key: protein.key } : null,
   });
   env.log(`慢性腎臓病: 外来 ${visits.length} 回を登録`);

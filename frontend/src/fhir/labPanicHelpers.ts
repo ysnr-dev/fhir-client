@@ -126,7 +126,7 @@ export interface PanicTaskRow extends NotificationRowBase {
   reportId: string;
   specimenDate: string;
   items: PanicItem[];
-  /** 構造化した input を持たない古い通知のための本文。 */
+  /** 構造化した input を持たない通知のための本文。 */
   summary: string;
 }
 

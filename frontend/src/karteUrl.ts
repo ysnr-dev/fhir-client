@@ -357,7 +357,7 @@ export function formatKarteCard(filter: KarteCardFilter): string {
   return filter.kind;
 }
 
-// 壊れた値(手打ちの URL や仕様変更後の古いリンク)は「絞り込みなし」として扱う。
+// 壊れた値(手打ちの URL や形の合わないリンク)は「絞り込みなし」として扱う。
 export function parseKarteCard(value: string | null): KarteCardFilter | null {
   if (!value) return null;
   const separator = value.indexOf(":");
@@ -373,7 +373,7 @@ export function parseKarteCard(value: string | null): KarteCardFilter | null {
   return null;
 }
 
-// 壊れた値(手打ちの URL や仕様変更後の古いリンク)は「開いていない」として扱う。
+// 壊れた値(手打ちの URL や形の合わないリンク)は「開いていない」として扱う。
 export function parseKarteDetail(value: string | null): KarteDetailTarget | null {
   if (!value) return null;
   const separator = value.indexOf(":");

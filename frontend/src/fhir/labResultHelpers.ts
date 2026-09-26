@@ -1,5 +1,11 @@
 import { today } from "../lib/dates";
-import { categoryCoding, codingBySystem, findSettingDisplay, SETTING_OPTIONS } from "./shared";
+import {
+  categoryCoding,
+  codingBySystem,
+  findSettingDisplay,
+  SETTING_OPTIONS,
+  ABBREVIATION_SYSTEM,
+} from "./shared";
 
 export { SETTING_OPTIONS };
 import type { LabReferenceRange, LabResultItem } from "../api/masterClient";
@@ -30,7 +36,7 @@ export const JLAC10_SYSTEM = "http://fhir-client.local/CodeSystem/jlac10";
 export const JLAC11_SPECIMEN_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11-specimen";
 // 検査項目の略称。詳細表示・編集フォームへの復元に使う補助 coding。
 // 検体検査オーダー(labOrderHelpers)も同じ用途で使うので共有する。
-export const ABBREVIATION_SYSTEM = "http://fhir-client.local/CodeSystem/lab-item-abbreviation";
+export { ABBREVIATION_SYSTEM };
 // 検体ラベル番号(Specimen.accessionIdentifier)。ラベル発行(backend の LabLabelNumber)が
 // 採番し、到着確認(labSpecimenHelpers)がスキャンで引く。
 export const LAB_LABEL_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/lab-label-number";

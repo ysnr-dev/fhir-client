@@ -1,3 +1,4 @@
+import { MEDICAL_MATERIAL_SYSTEM } from "./shared";
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 import { ROUTE_SYSTEM, type CodeOption } from "./injectionHelpers";
 import { MEDICINE_CODE_SYSTEM, ORDER_TYPE_SYSTEM, YJ_CODE_SYSTEM } from "./prescriptionHelpers";
@@ -50,7 +51,6 @@ const PROCEDURE_PROFILE = "http://jpfhir.jp/fhir/core/StructureDefinition/JP_Pro
 const SURGERY_PROCEDURE_CODE_SYSTEM =
   "http://fhir-client.local/CodeSystem/surgery-procedure-code";
 /** usedCode。算定に使うレセプト電算の特定器材コード。 */
-const MEDICAL_MATERIAL_SYSTEM = "http://fhir-client.local/CodeSystem/medical-material";
 /** usedCode は CodeableConcept なので数量を持てない。拡張で添える(処置と同型)。 */
 const MATERIAL_QUANTITY_EXT_URL =
   "http://fhir-client.local/StructureDefinition/surgery-material-quantity";

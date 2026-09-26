@@ -10,10 +10,10 @@
 // 枠の生成に使った曜日パターン(月水金 9:00-12:00、15分刻み …)は R4 の標準要素に
 // 置き場が無いので extension に JSON で持たせる。翌月ぶんを同じ条件で作り直せる
 // ようにするためで、Slot の内容そのものは常に Slot リソース側が正。
-import { toDateInput, today } from "../lib/dates";
+import { addDays, addMonths, toDateInput, today } from "../lib/dates";
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 
-export { toDateInput, today };
+export { addDays, addMonths, toDateInput, today };
 import { SSMIX2_DEPARTMENT_CODE_SYSTEM } from "./departmentCodes";
 
 const SLOT_PATTERN_EXT_URL = "http://fhir-client.local/StructureDefinition/schedule-slot-pattern";
@@ -134,18 +134,6 @@ function timeOf(minutes: number): string {
 }
 
 // ---- 日付ユーティリティ(すべてローカル時刻の "YYYY-MM-DD" で扱う) ----
-
-export function addDays(dateISO: string, days: number): string {
-  const date = new Date(`${dateISO}T00:00:00`);
-  date.setDate(date.getDate() + days);
-  return toDateInput(date);
-}
-
-export function addMonths(dateISO: string, months: number): string {
-  const date = new Date(`${dateISO}T00:00:00`);
-  date.setMonth(date.getMonth() + months);
-  return toDateInput(date);
-}
 
 /** その日を含む週の月曜日。カレンダーは月曜始まりで表示する。 */
 export function weekStart(dateISO: string): string {

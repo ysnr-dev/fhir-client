@@ -267,9 +267,3 @@ export function rehabPerformsByOrderId(
   return byOrderId;
 }
 
-/** 実施記録を消すエントリ。子リソースを持たないので Procedure 1 件だけ。 */
-export function buildRehabPerformDeleteEntries(procedureIds: string[]): fhir4.BundleEntry[] {
-  return procedureIds.map((id) => ({
-    request: { method: "DELETE" as const, url: `Procedure/${id}` },
-  }));
-}

@@ -812,8 +812,8 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const itemRequests = serviceRequests.filter(isOrderItemRequest);
 
   // 処方・注射・検体検査・放射線検査は同じ検索結果に混ざって届くので、category の
-  // オーダー種別で振り分ける(注射より前から存在する処方の ServiceRequest は
-  // オーダー種別を持たない)。
+  // オーダー種別で振り分ける(処方の ServiceRequest はオーダー種別を持たない。
+  // 種別が無いものを処方とする)。
   // 他科依頼 → それを受けた放射線治療の治療処方。
   const radiotherapyByConsultId = new Map<string, string[]>();
   for (const request of orderRequests) {
@@ -1136,10 +1136,6 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
 // ---- カード種での絞り込み ----
 
 /**
- * タイムラインに出す情報の種別。テンプレートは種別が 1 つしか無いので、
- * どのテンプレートかまで指定できるようにする(社会歴だけを時系列で読む、など)。
- */
-/**
  * 診療記録(Composition)の中の種別。「診療記録」は経過記録と他科依頼回答、
  * 「退院時サマリー」は 1 入院 1 件の文書。同じ検索・同じカードの器だが、
  * 左ペインの種別では分けて選べるようにする。
@@ -1158,6 +1154,10 @@ export function karteNoteTypeOf(note: fhir4.Composition): KarteNoteType {
   return isDischargeSummary(note) ? "discharge-summary" : "progress";
 }
 
+/**
+ * タイムラインに出す情報の種別。テンプレートは種別が 1 つしか無いので、
+ * どのテンプレートかまで指定できるようにする(社会歴だけを時系列で読む、など)。
+ */
 export interface KarteCardFilter {
   kind: KarteItemKind;
   /** kind が "note" のときの、診療記録の中の種別。無ければ診療記録すべて。 */

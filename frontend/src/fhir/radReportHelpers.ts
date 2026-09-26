@@ -32,6 +32,8 @@ import { categoryCoding, codingBySystem, findSettingDisplay } from "./shared";
 
 const LOINC_SYSTEM = "http://loinc.org";
 const RADIOLOGY_CATEGORY_CODE = "LP29684-5";
+/** 読影レポートを `DiagnosticReport?category=` で引くときの token。 */
+export const RAD_REPORT_CATEGORY_SEARCH = `${LOINC_SYSTEM}|${RADIOLOGY_CATEGORY_CODE}`;
 const DOCUMENT_CODES_SYSTEM = "http://jpfhir.jp/fhir/core/CodeSystem/JP_DocumentCodes_CS";
 const RADIOLOGY_REPORT_CODE = "18748-4";
 const REPORT_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0074";

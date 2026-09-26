@@ -100,13 +100,6 @@ export function provenanceAuthorReference(provenance: fhir4.Provenance): string 
   return agentOfType(provenance, AUTHOR)?.who?.reference;
 }
 
-/** target のうち ServiceRequest の id。ヘッダと(注射の連日なら)各日のヘッダ。 */
-export function provenanceServiceRequestIds(provenance: fhir4.Provenance): string[] {
-  return (provenance.target ?? [])
-    .map((t) => t.reference?.match(/^ServiceRequest\/(.+)$/)?.[1])
-    .filter((id): id is string => Boolean(id));
-}
-
 /** Bundle の entry が指す参照。新規は fullUrl(urn:uuid:)、更新は PUT 先。 */
 function entryReference(entry: fhir4.BundleEntry): string | undefined {
   if (entry.request?.method === "DELETE") return undefined;

@@ -294,11 +294,6 @@ export function encounterAdmissionAt(encounter: fhir4.Encounter): string {
   return encounter.period?.start ?? "";
 }
 
-/** 退院日時(FHIR dateTime そのまま)。退院していなければ空。 */
-export function encounterDischargeAt(encounter: fhir4.Encounter): string {
-  return encounter.period?.end ?? "";
-}
-
 export function encounterNote(encounter: fhir4.Encounter): string {
   const extension = encounter.extension?.find((e) => e.url === ENCOUNTER_NOTE_EXTENSION_URL);
   return extension?.valueString ?? "";
