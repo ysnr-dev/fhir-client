@@ -37,8 +37,9 @@ import {
 //   (extraction_definitions/service_request.rb。Period は索引されない)ので、
 //   入室予定は occurrencePeriod ではなく occurrenceDateTime に入れ、予定所要時間は
 //   ローカル拡張で持つ。退室予定時刻は start + 所要時間で導出できる。
-// - 実施記録(Procedure)・予約(Appointment/Slot)は第 1 段階では作らない。手術室の
-//   確保は日時 + 手術室の指定のみで、重複は手術一覧で目視する。
+// - 予約(Appointment/Slot)は持たない。手術室の確保は日時 + 手術室の指定のみで、
+//   重なりは手術一覧・手術カレンダーで確かめる。実施記録(Procedure)は退室後に
+//   別に入れる(surgeryResultHelpers)。
 
 // 処方・注射・検体検査・放射線・生理・内視鏡・処置の ServiceRequest と区別するオーダー種別。
 export const SURGERY_ORDER_TYPE = { code: "surgery", display: "手術" };

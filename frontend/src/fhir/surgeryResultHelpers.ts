@@ -184,7 +184,7 @@ export interface SurgeryPerformFormValues {
   observations: Partial<Record<SurgeryObservationKey, string>>;
   woundClass: string;
   countCheck: string;
-  /** 合併症。自由記載(コード化は第3段階の手術記録で扱う)。 */
+  /** 合併症(自由記載)。 */
   complication: string;
   outcome: string;
   comment: string;
