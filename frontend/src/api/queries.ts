@@ -75,6 +75,7 @@ import { EVALUATION_ITEM_SYSTEM } from "../fhir/pathwayEvaluationHelpers";
 import { PATHWAY_VARIANCE_TASK_CODE } from "../fhir/pathwayVarianceHelpers";
 import { useCurrentPractitioner } from "./authQueries";
 import { nowFhirDateTime, today } from "../lib/dates";
+import { toKatakana } from "../lib/kana";
 import {
   MAX_BED_COUNT,
   PHYSICAL_TYPE_SYSTEM,
@@ -590,9 +591,16 @@ export interface PatientSearchParams {
 
 const PATIENT_COUNT = 20;
 
+// カナ氏名はカタカナで持つので、ひらがなで入力されたらカタカナに直した値でも探す。
+// 漢字氏名にひらがなが含まれることもあるため、入力どおりの値はそのまま残して OR にする。
+function patientNameSearchValue(name: string): string {
+  const katakana = toKatakana(name);
+  return katakana === name ? name : `${name},${katakana}`;
+}
+
 function buildSearchParams(search: PatientSearchParams, offset: number): URLSearchParams {
   const params = new URLSearchParams();
-  if (search.name) params.set("name", search.name);
+  if (search.name) params.set("name", patientNameSearchValue(search.name));
   if (search.gender) params.set("gender", search.gender);
   if (search.identifier) params.set("identifier", search.identifier);
   if (search.birthDateFrom) params.append("birthdate", `ge${search.birthDateFrom}`);

@@ -158,10 +158,10 @@ function App() {
           FHIR Client
         </Link>
         <nav className="app__nav">
-          {/* 患者を探す入口。全患者から探すか、その日の外来予約から探すかで分ける。 */}
+          {/* 患者を探す入口。患者検索で探すか、その日の外来予約から探すかで分ける。 */}
           <HoverMenu label="患者一覧">
             <Link to="/patients" className="row-menu__item">
-              全患者
+              患者検索
             </Link>
             {/* 外来患者一覧はその日の予約患者を受付する画面。 */}
             <Link to="/outpatients" className="row-menu__item">

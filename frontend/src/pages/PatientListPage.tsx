@@ -27,7 +27,7 @@ export function PatientListPage() {
   return (
     <div className="page">
       <div className="page__header">
-        <h1>全患者</h1>
+        <h1>患者検索</h1>
         <Link to="/patients/new" className="button">
           新規登録
         </Link>

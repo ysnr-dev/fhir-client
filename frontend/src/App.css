@@ -799,7 +799,7 @@ button:disabled {
   font-size: 13px;
 }
 
-/* 全患者一覧(.patient-list)の操作は、上の既定サイズのままだと文字だけの行より
+/* 患者検索(.patient-list)の操作は、上の既定サイズのままだと文字だけの行より
    高くなり、外来患者一覧・入院患者一覧と 1 行の高さがそろわない。同じく文字
    1 行に収まる高さまで詰める。line-height を明示するのは、既定では本文の行送りを
    font: inherit で受け継いでしまい、padding を削っただけでは縮まないため。 */
@@ -18682,7 +18682,7 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 /* 左ペインは縦が限られるので、一覧は 1 行が文字 1 行に収まる高さまで詰める
-   (全患者一覧と同じやり方。line-height を明示するのは、既定では本文の行送りを
+   (患者検索と同じやり方。line-height を明示するのは、既定では本文の行送りを
    font: inherit で受け継ぎ padding を削っただけでは縮まないため)。 */
 .karte-file-table th,
 .karte-file-table td {

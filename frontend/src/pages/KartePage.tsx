@@ -149,7 +149,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   const params = useParams<{ patientId: string }>();
   const patientId = followedPatientId ?? params.patientId;
   const [searchParams, setSearchParams] = useSearchParams();
-  // 「戻る」はカルテを開いた元の一覧へ。遷移元が分からなければ全患者へ戻す。
+  // 「戻る」はカルテを開いた元の一覧へ。遷移元が分からなければ患者検索へ戻す。
   const returnTo = useKarteReturnTo();
   const navigate = useNavigate();
 
