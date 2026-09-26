@@ -68,8 +68,8 @@ export const YJ_CODE_SYSTEM = "http://capstandard.jp/iyaku.info/CodeSystem/YJ-co
 // (特定の銘柄を指さないので、レセ電コード・YJコードは付けない)。
 export const GENERAL_ORDER_CODE_SYSTEM =
   "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/MedicationGeneralOrderCode";
-const USAGE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-usage";
-const USAGE_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-usage-basic-category";
+export const USAGE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-usage";
+export const USAGE_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-usage-basic-category";
 
 // JP Core: MedicationRequest.identifier の必須スライス。値を入れないと警告になる。
 export const RP_NUMBER_SYSTEM = "http://jpfhir.jp/fhir/core/mhlw/IdSystem/Medication-RPGroupNumber";
@@ -113,6 +113,18 @@ export const CATEGORY_OPTIONS: Record<
 };
 
 /**
+ * 処方区分「持参」。継続した持参薬を院内処方に起こしたもので、薬剤部は調剤せず、請求にも
+ * 載せない(docs/brought-medication-design.md)。持参薬タブの「継続」からだけ作るので、
+ * 医師が選ぶ選択肢(CATEGORY_OPTIONS)・施設設定の初期値には入れない。
+ */
+export const BROUGHT_CATEGORY = { code: "brought", display: "持参" };
+
+/** 処方区分が「持参」の処方か。 */
+export function isBroughtPrescription(sr: fhir4.ServiceRequest): boolean {
+  return categoryCoding(sr, PRESCRIPTION_CATEGORY_SYSTEM)?.code === BROUGHT_CATEGORY.code;
+}
+
+/**
  * 施設設定「処方区分の初期値」。入外区分ごとに、処方フォームを開いたときの処方区分を
  * 決める(空なら「選択してください」のまま開く)。入外区分を選び直したときも、その区分の
  * 初期値に入れ替える。登録済みの処方には区分が焼き付いているので、設定を変えても動かない。
@@ -143,6 +155,8 @@ export interface MedicineLineValues {
   showComment?: boolean;
   /** 不均等投与の量(服用タイミング順)。null・未設定なら不均等でない。 */
   unevenDoses?: string[] | null;
+  /** 持参薬から起こした行の元の持参薬(MedicationStatement.id)。 */
+  broughtMedicationId?: string;
 }
 
 export interface RpValues {
@@ -199,6 +213,7 @@ export function emptyPrescriptionForm(
 }
 
 function findCategoryDisplay(setting: PrescriptionSetting, code: string): string {
+  if (code === BROUGHT_CATEGORY.code) return BROUGHT_CATEGORY.display;
   if (!setting) return code;
   return CATEGORY_OPTIONS[setting].find((c) => c.code === code)?.display ?? code;
 }
@@ -342,17 +357,16 @@ export function medicationCodeableConcept(medicine: Medicine): fhir4.CodeableCon
   };
 }
 
-function buildMedicationRequest(
-  rp: RpValues,
-  medLine: MedicineLineValues,
+/**
+ * RP の用法と薬剤 1 行から Dosage を組み立てる。処方の MedicationRequest.dosageInstruction と
+ * 持参薬の MedicationStatement.dosage が同じ形(JP_MedicationDosage)を使う。
+ * 投与日数は Dosage ではなく MedicationRequest.dispenseRequest に置く。
+ */
+export function buildDosage(
+  rp: Pick<RpValues, "usage" | "doseCount" | "usageComment" | "supplement">,
+  medLine: Pick<MedicineLineValues, "medicine" | "dose" | "unevenDoses">,
   startDate: string,
-  rpNumber: number,
-  orderInRp: number,
-  patientId: string,
-  authoredOn: string,
-  serviceRequestReference: string,
-  requester: OrderContext,
-): fhir4.MedicationRequest {
+): fhir4.Dosage {
   const timingCoding: fhir4.Coding[] = [];
   if (rp.usage) {
     timingCoding.push({
@@ -367,7 +381,7 @@ function buildMedicationRequest(
     });
   }
 
-  const dosageInstruction: fhir4.Dosage = {
+  const dosage: fhir4.Dosage = {
     timing: {
       code: {
         coding: timingCoding.length ? timingCoding : undefined,
@@ -388,17 +402,33 @@ function buildMedicationRequest(
     ),
     ...(rp.usageComment ? [{ text: rp.usageComment }] : []),
   ];
-  if (additionalInstruction.length) dosageInstruction.additionalInstruction = additionalInstruction;
+  if (additionalInstruction.length) dosage.additionalInstruction = additionalInstruction;
 
   if (isAsNeededUsage(rp.usage?.usage_code)) {
-    dosageInstruction.asNeededBoolean = true;
+    dosage.asNeededBoolean = true;
     if (rp.doseCount) {
-      dosageInstruction.timing = {
-        ...dosageInstruction.timing,
+      dosage.timing = {
+        ...dosage.timing,
         repeat: { count: Number(rp.doseCount) },
       };
     }
   }
+
+  return dosage;
+}
+
+function buildMedicationRequest(
+  rp: RpValues,
+  medLine: MedicineLineValues,
+  startDate: string,
+  rpNumber: number,
+  orderInRp: number,
+  patientId: string,
+  authoredOn: string,
+  serviceRequestReference: string,
+  requester: OrderContext,
+): fhir4.MedicationRequest {
+  const dosageInstruction = buildDosage(rp, medLine, startDate);
 
   const resource: fhir4.MedicationRequest = {
     resourceType: "MedicationRequest",
@@ -436,7 +466,31 @@ function buildMedicationRequest(
     resource.note = [{ text: medLine.comment }];
   }
 
+  // 持参薬から起こした行は元の持参薬を指す。R4 の basedOn は MedicationStatement を
+  // 指せないので、任意の参照を置ける supportingInformation を使う。
+  if (medLine.broughtMedicationId) {
+    resource.supportingInformation = [
+      { reference: broughtMedicationReference(medLine.broughtMedicationId) },
+    ];
+  }
+
   return resource;
+}
+
+/**
+ * 持参薬の参照。同じ transaction で作る持参薬(urn:uuid)はそのまま、登録済みは
+ * MedicationStatement/{id} にする。
+ */
+function broughtMedicationReference(id: string): string {
+  return id.startsWith("urn:uuid:") ? id : `MedicationStatement/${id}`;
+}
+
+/** 処方の行(MedicationRequest)が起こされた元の持参薬の id。無ければ undefined。 */
+export function broughtMedicationIdOf(mr: fhir4.MedicationRequest): string | undefined {
+  const reference = mr.supportingInformation?.find((r) =>
+    r.reference?.startsWith("MedicationStatement/"),
+  )?.reference;
+  return reference?.split("/").pop();
 }
 
 function buildPrescriptionTransactionBundle(
@@ -608,11 +662,17 @@ export function buildDoPrescriptionForm(
   return {
     ...values,
     setting,
-    category: setting === values.setting ? values.category : "",
+    // 「持参」は持参薬の継続からだけ作る区分なので、DO では持ち越さない。
+    category:
+      setting === values.setting && values.category !== BROUGHT_CATEGORY.code
+        ? values.category
+        : "",
     startDate: today(),
     rps: values.rps.map((rp) => ({
       ...rp,
-      medicines: rp.medicines.map(({ id: _id, ...rest }) => rest),
+      medicines: rp.medicines.map(
+        ({ id: _id, broughtMedicationId: _brought, ...rest }) => rest,
+      ),
     })),
   };
 }
@@ -827,20 +887,34 @@ export function prescriptionCategoryOf(sr: fhir4.ServiceRequest): string {
 }
 
 export function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null {
-  const codings = mr.medicationCodeableConcept?.coding;
+  return medicineFromConcept(
+    mr.medicationCodeableConcept,
+    mr.dosageInstruction?.[0]?.doseAndRate?.[0]?.doseQuantity?.unit,
+  );
+}
+
+/**
+ * 医薬品の CodeableConcept から Medicine を復元する。マスタのコードを持たない(名前だけの)
+ * ものは null。単位は医薬品の CodeableConcept に無いので、Dosage の単位を渡す。
+ */
+export function medicineFromConcept(
+  concept: fhir4.CodeableConcept | undefined,
+  unitName: string | undefined,
+): Medicine | null {
+  const codings = concept?.coding;
   // 一般名処方は一般名処方コードだけを持ち、レセ電コードは無い。
   const genericCoding = codingBySystem(codings, GENERAL_ORDER_CODE_SYSTEM);
   const coding = genericCoding ?? codingBySystem(codings, MEDICINE_CODE_SYSTEM);
   if (!coding) return null;
   const yjCoding = codingBySystem(codings, YJ_CODE_SYSTEM);
-  const name = coding.display ?? mr.medicationCodeableConcept?.text ?? "";
+  const name = coding.display ?? concept?.text ?? "";
   return {
     id: 0,
     medicine_code: coding.code ?? "",
     name,
     name_kana: null,
     unit_code: null,
-    unit_name: mr.dosageInstruction?.[0]?.doseAndRate?.[0]?.doseQuantity?.unit ?? null,
+    unit_name: unitName ?? null,
     dosage_form: null,
     injection_volume: null,
     yakka_code: null,
@@ -854,8 +928,8 @@ export function medicineFromCoding(mr: fhir4.MedicationRequest): Medicine | null
   };
 }
 
-function usageFromCoding(mr: fhir4.MedicationRequest): MedicineUsage | null {
-  const dosage = mr.dosageInstruction?.[0];
+/** Dosage の用法コードから MedicineUsage を復元する。用法コードが無ければ null。 */
+export function usageFromDosage(dosage: fhir4.Dosage | undefined): MedicineUsage | null {
   const usageCoding = codingBySystem(dosage?.timing?.code?.coding, USAGE_CODE_SYSTEM);
   const usageCategoryCoding = codingBySystem(dosage?.timing?.code?.coding, USAGE_CATEGORY_SYSTEM);
   if (!usageCoding) return null;
@@ -889,7 +963,7 @@ export function parsePrescriptionForm(
     let group = rpGroups.get(rpNumber);
     if (!group) {
       group = {
-        usage: usageFromCoding(mr),
+        usage: usageFromDosage(dosage),
         doseDays: mr.dispenseRequest?.expectedSupplyDuration?.value != null
           ? String(mr.dispenseRequest.expectedSupplyDuration.value)
           : "",
@@ -910,6 +984,7 @@ export function parsePrescriptionForm(
       comment: mr.note?.[0]?.text ?? "",
       showComment: Boolean(mr.note?.[0]?.text),
       unevenDoses: unevenDosesOf(dosage),
+      ...(broughtMedicationIdOf(mr) ? { broughtMedicationId: broughtMedicationIdOf(mr) } : {}),
     });
   }
 

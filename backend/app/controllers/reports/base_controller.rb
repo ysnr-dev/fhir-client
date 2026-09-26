@@ -37,6 +37,10 @@ module Reports
       render json: { error: "no_prescription_content" }, status: :unprocessable_content
     end
 
+    rescue_from PrescriptionReport::BroughtMedication do
+      render json: { error: "brought_medication_order" }, status: :unprocessable_content
+    end
+
     rescue_from InjectionReport::NotFound do
       render json: { error: "order_not_found" }, status: :not_found
     end

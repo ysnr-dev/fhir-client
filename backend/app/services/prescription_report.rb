@@ -13,6 +13,9 @@ class PrescriptionReport
   class NotPrescriptionOrder < StandardError; end
   # 明細が 1 件もなく、刷る処方内容がない
   class NoMedication < StandardError; end
+  # 処方区分「持参」。継続した持参薬を院内処方に起こしたもので、調剤しないので処方箋も刷らない
+  # (docs/brought-medication-design.md §4)
+  class BroughtMedication < StandardError; end
   # 上流が想定外の応答を返した
   class UpstreamError < StandardError; end
 
@@ -38,6 +41,7 @@ class PrescriptionReport
   ORDER_TYPE_SYSTEM = "http://fhir-client.local/CodeSystem/order-type".freeze
   SETTING_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-setting".freeze
   PRESCRIPTION_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/prescription-category".freeze
+  BROUGHT_CATEGORY = "brought".freeze
   RP_NUMBER_SYSTEM = "http://jpfhir.jp/fhir/core/mhlw/IdSystem/Medication-RPGroupNumber".freeze
   ORDER_IN_RP_SYSTEM = "http://jpfhir.jp/fhir/core/mhlw/IdSystem/MedicationAdministrationIndex".freeze
   MEDICINE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-code".freeze
@@ -66,6 +70,10 @@ class PrescriptionReport
   # PDF のバイト列を返す。
   def generate
     order, patient, medication_requests, organization = fetch_order_resources
+    if category_code(order, PRESCRIPTION_CATEGORY_SYSTEM) == BROUGHT_CATEGORY
+      raise BroughtMedication, "order #{order_id} is a brought medication order"
+    end
+
     rps = build_rps(medication_requests)
     raise NoMedication, "order #{order_id} has no medication requests" if rps.empty?
 

@@ -29,6 +29,7 @@ import { isDischargeSummary } from "../fhir/clinicalNoteHelpers";
 import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { KarteAllergyTab } from "../components/KarteAllergyTab";
+import { KarteBroughtMedicationTab } from "../components/KarteBroughtMedicationTab";
 import { KarteAppointmentTab } from "../components/KarteAppointmentTab";
 import { KarteFileTab } from "../components/KarteFileTab";
 import { KarteImagingTab } from "../components/KarteImagingTab";
@@ -871,6 +872,16 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     const props = { patientId, view: tab === key ? view : "", onViewChange: selectView };
     if (key === "condition") return <KarteConditionTab {...props} />;
     if (key === "allergy") return <KarteAllergyTab {...props} />;
+    // 継続は右ペインの処方登録を、選んだ持参薬から作った初期値で開く。
+    if (key === "brought-medication") {
+      return (
+        <KarteBroughtMedicationTab
+          {...props}
+          onContinue={(broughtIds) => openForm({ kind: "prescription-create", broughtIds })}
+          onOpenPrescription={(srId) => openDetail({ kind: "prescription", id: srId })}
+        />
+      );
+    }
     if (key === "profile") return <KarteProfileTab {...props} />;
     // 経過表は view に「基準日(と全画面)」を載せる(どの週を見ているかが読む位置
     // そのものなので、リロード・共有で戻れるようにする)。イベント一覧からはカルテの

@@ -23,6 +23,8 @@ class FhirProxyController < ApplicationController
   # カルテのプロファイルタブが患者ごとに引く。
   # MedicationDispense は調剤・払出の結果。書き込みは登録の transaction に混ぜるが、
   # 処方・注射のオーダーから調剤内容を読み戻すので単独の検索も通す。
+  # MedicationStatement は入院時の持参薬(docs/brought-medication-design.md)。1 剤 1 件で、
+  # カルテの持参薬タブと薬剤部の鑑別一覧が入院(context)ごとに引く。
   # CarePlan / Goal はクリニカルパスの適用後データ(docs/clinical-pathway-design.md)。
   # 適用 1 件は CarePlan の木(適用 → 病日 → OAT ユニット → 観察項目)で、Goal が
   # アウトカムの達成・未達成(バリアンス)を持つ。
@@ -35,8 +37,8 @@ class FhirProxyController < ApplicationController
     Patient MedicationRequest ServiceRequest DiagnosticReport Observation Specimen Condition
     AllergyIntolerance Questionnaire QuestionnaireResponse Binary Organization Practitioner
     PractitionerRole Composition Task Procedure MedicationAdministration MedicationDispense
-    Location Schedule Slot Appointment Encounter Provenance Flag CarePlan Goal DocumentReference
-    ImagingStudy Coverage
+    MedicationStatement Location Schedule Slot Appointment Encounter Provenance Flag CarePlan Goal
+    DocumentReference ImagingStudy Coverage
   ].freeze
   FHIR_CONTENT_TYPE = "application/fhir+json".freeze
 

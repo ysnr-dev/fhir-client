@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import {
+  useBroughtMedTasks,
+  usePatientBroughtMedications,
   usePatientRehabOrders,
   usePatientNutritionGuidanceOrders,
   usePatientNursingOrders,
@@ -9,6 +11,15 @@ import {
   useFacilitySettings,
 } from "../api/queries";
 import { DEFAULT_DOCUMENT_REMINDER, dischargeSummaryDueEntry } from "../fhir/documentDueHelpers";
+import {
+  buildBroughtMedicationCloseEntries,
+  summarizeBroughtMedication,
+} from "../fhir/broughtMedicationHelpers";
+import {
+  broughtMedReviewEntry,
+  buildBroughtMedReviewUpdate,
+  isOpenBroughtMedReview,
+} from "../fhir/broughtMedTaskHelpers";
 import {
   DISCHARGE_DISPOSITION_OPTIONS,
   buildDischargedEncounter,
@@ -85,6 +96,17 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
     nursingOrderNeedsStop(sr, dischargeDate),
   );
 
+  // 持参薬。継続中・休止中のものを退院で終了にし、閉じていない鑑別依頼は取り下げる。
+  const [closeBrought, setCloseBrought] = useState(true);
+  const broughtMedications = usePatientBroughtMedications(
+    encounter.id ? patientId : undefined,
+    encounter.id,
+  );
+  const { tasks: broughtTasks } = useBroughtMedTasks(encounter.id);
+  const closingBrought = broughtMedications.statements.filter(
+    (s) => s.status === "active" || s.status === "on-hold",
+  );
+
   // 退院時サマリーの督促。確定済みのサマリーが既にある入院と、未対応の督促がある入院には作らない。
   const facility = useFacilitySettings();
   const existingSummary = useDischargeSummaryFor(encounter.id);
@@ -112,7 +134,17 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
       {
         encounter: target,
         dischargeAt,
-        extraEntries: dueEntry ? [dueEntry] : [],
+        extraEntries: [
+          ...(dueEntry ? [dueEntry] : []),
+          ...(closeBrought
+            ? [
+                ...buildBroughtMedicationCloseEntries(closingBrought),
+                ...broughtTasks
+                  .filter(isOpenBroughtMedReview)
+                  .map((task) => broughtMedReviewEntry(buildBroughtMedReviewUpdate(task, "cancelled"))),
+              ]
+            : []),
+        ],
         mealEntries: stopMeals ? mealEntries : [],
         rehabOrders: stopRehab ? stoppingRehab : [],
         nutritionGuidanceOrders: stopNutritionGuidance ? stoppingNutritionGuidance : [],
@@ -246,12 +278,34 @@ export function DischargeModal({ encounter, patient, bedLabel, onClose }: Discha
           </div>
         )}
 
+        {closingBrought.length > 0 && (
+          <div className="discharge__meal">
+            <label className="discharge__meal-toggle">
+              <input
+                type="checkbox"
+                checked={closeBrought}
+                onChange={(e) => setCloseBrought(e.target.checked)}
+              />
+              持参薬を退院で終了する
+            </label>
+            <ul className="discharge__meal-list">
+              {closingBrought.map((statement) => (
+                <li key={statement.id}>{summarizeBroughtMedication(statement).name}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="walk-in__actions">
           <button
             type="button"
             onClick={handleSubmit}
             disabled={
-              discharge.isPending || !meal.ready || existingSummary.isLoading || dueTasks.isLoading
+              discharge.isPending ||
+              !meal.ready ||
+              existingSummary.isLoading ||
+              dueTasks.isLoading ||
+              broughtMedications.isLoading
             }
           >
             {discharge.isPending ? "退院処理中..." : "退院"}

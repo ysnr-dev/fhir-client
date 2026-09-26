@@ -20,7 +20,9 @@ import { RxDispenseModal } from "../components/RxDispenseModal";
 import { RxOrderViewModal } from "../components/RxOrderViewModal";
 import { displayName } from "../fhir/patientHelpers";
 import {
+  BROUGHT_CATEGORY,
   CATEGORY_OPTIONS,
+  isBroughtPrescription,
   SETTING_OPTIONS,
   groupByRp,
   orderContextSummary,
@@ -69,7 +71,12 @@ const emptyFilters: Filters = {
 
 // 入外区分を選んでいないときの処方区分の候補。入院・外来で区分のコードは重ならない
 // ので、そのまま繋げて全部出す。
-const ALL_CATEGORY_OPTIONS = [...CATEGORY_OPTIONS.inpatient, ...CATEGORY_OPTIONS.outpatient];
+// 「持参」は医師が選ぶ区分ではないが、薬剤部が一覧で見分けられるよう絞り込みには出す。
+const ALL_CATEGORY_OPTIONS = [
+  ...CATEGORY_OPTIONS.inpatient,
+  BROUGHT_CATEGORY,
+  ...CATEGORY_OPTIONS.outpatient,
+];
 
 export function RxWorklistPage() {
   // 処方日は必須。未選択にはできないので当日から始める。
@@ -354,9 +361,14 @@ function WorklistRow({
   const summary = summarizeServiceRequest(order);
   const requester = prescriptionRequester(order);
   const status = rxTaskStatus(row.task);
-  const actions = rxTaskActions(status);
+  // 持参の処方は薬剤部が調剤しない(持参薬を使う)。処方箋も刷らず、操作は中止と中止の取消だけ。
+  const brought = isBroughtPrescription(order);
+  const actions = brought
+    ? rxTaskActions(status).filter((a) => a.next === "cancelled" || a.next === "requested")
+    : rxTaskActions(status);
   // 発行済み(受付済以降)は処方箋を刷り直せる。中止した処方は刷らせない。
-  const canReissue = status === "accepted" || status === "in-progress" || status === "completed";
+  const canReissue =
+    !brought && (status === "accepted" || status === "in-progress" || status === "completed");
 
   // 処方内容の列。薬袋を作る側が何を揃えるかが分かればよいので、医薬品の名前だけを
   // 横に並べる。用法・用量まで要るときは「表示」か「調剤登録」で開く。
@@ -413,7 +425,7 @@ function WorklistRow({
       <td>{orderContextSummary(requester) || "-"}</td>
       <td className="lab-worklist__compact">
         <span className={`lab-worklist__status lab-worklist__status--${status}`}>
-          {rxTaskStatusDisplay(status)}
+          {brought && status === "requested" ? "持参(調剤なし)" : rxTaskStatusDisplay(status)}
         </span>
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
@@ -422,7 +434,7 @@ function WorklistRow({
             進める。院外・院内どちらの様式で刷るかは backend がオーダーの区分で決める。
             発行済みの再発行はケバブメニューへ畳む(同じ内容が刷られるだけの操作なので、
             主ボタンの列には出さない)。 */}
-        {status === "requested" && (
+        {status === "requested" && !brought && (
           <a
             className="button"
             href={prescriptionPdfUrl(order.id ?? "")}
@@ -436,7 +448,7 @@ function WorklistRow({
         )}
         {/* 受付が済んだら調剤の結果を登録できる。紐付け先はこの行のオーダーで決まって
             いるので、モーダルの中でオーダーを選ばせない(RxDispenseModal)。 */}
-        {status === "accepted" && (
+        {status === "accepted" && !brought && (
           <button type="button" disabled={!patient?.id} onClick={onDispense}>
             調剤登録
           </button>

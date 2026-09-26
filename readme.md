@@ -564,9 +564,31 @@ curl -G "http://localhost:3001/master/medicine_usages" --data-urlencode "usage_n
   処方・注射・医薬品検索モーダルが `fhir/medicationSafetyHelpers.ts` と
   `components/MedicineWarnings.tsx` を共用します。同一成分は YJ コードの上 7 桁で見るため、
   同じ成分でも薬効分類が違えば(アスピリンとバイアスピリン)重複になりません。
+  継続・中止の判断が済んでいない持参薬も重複の相手に数えます(「同一成分を服用中(持参薬)」)。
+- **処方区分「持参」**: 継続した持参薬を院内処方に起こしたもので、持参薬タブの「継続」からだけ作ります
+  (医師が選ぶ選択肢・施設設定の初期値には出ません)。薬剤部は調剤せず、処方箋 PDF を出さず、
+  請求にも載せません。処方一覧には並び、中止はそこからもできます。詳細は下の「持参薬」。
 - backend の `/fhir` プロキシは `ALLOWED_RESOURCE_TYPES` に `ServiceRequest` を追加し、
   `POST /fhir`(空パス)を transaction Bundle 中継用のルートとして扱います
   (`backend/app/controllers/fhir_proxy_controller.rb`)。
+
+## 持参薬
+
+入院時に患者が持ってきた薬を、カルテの「持参薬」タブ(患者情報のグループ)で登録し、薬剤部が
+「部門業務 > 薬剤部門 > 持参薬鑑別一覧」で鑑別し、医師がタブで継続・休止・中止を決めます。
+設計は `docs/brought-medication-design.md`。
+
+- **リソースの持ち方**: 持参薬 1 剤 = `MedicationStatement` 1 件(`context` = 入院)。聞き取り・鑑別・
+  医師の判断はローカル拡張 3 つに持ち、状態は `status` + `statusReason` で表します(未鑑別・未判断は
+  active、継続は active + continue、休止は on-hold、中止は stopped、服用していないは not-taken)。
+- **鑑別依頼**: 登録と同じ transaction で入院を焦点にした `Task`(`brought-med-review`)を作ります
+  (1 入院に閉じていないもの 1 件)。鑑別一覧で鑑別開始 → 鑑別 → 鑑別完了と進め、鑑別完了で主治医に
+  通知「持参薬鑑別済」を出します。判断が出揃うと通知は自動で閉じます。
+- **継続**: タブで選んだ持参薬から処方登録(区分「持参」、日数は残日数、代替薬があれば代替薬)を開き、
+  処方と持参薬の更新を 1 つの transaction で送ります。処方の明細は `supportingInformation` で元の
+  持参薬を、持参薬は拡張で起こした処方を指します。
+- **退院**: 退院モーダルで、継続中・休止中の持参薬を終了(completed)にします。
+- プロファイルタブには入院中だけ「持参薬」の要約(件数・未鑑別・未判断)が出ます。
 
 ## 注射オーダー機能
 

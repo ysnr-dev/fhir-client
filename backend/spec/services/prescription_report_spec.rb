@@ -286,6 +286,14 @@ RSpec.describe PrescriptionReport do
       .to raise_error(described_class::NotPrescriptionOrder)
   end
 
+  it "raises BroughtMedication for 持参 orders (no dispensing, so no prescription form)" do
+    stub_batch([medication_request("m1", rp: 1, index: 1, name: "ノルバスク錠５ｍｇ", days: 14)],
+               order_body: build_order(setting: "inpatient", category: "brought"))
+
+    expect { described_class.new("o1", gateway: gateway).generate }
+      .to raise_error(described_class::BroughtMedication)
+  end
+
   it "raises NoMedication when the order has no medication requests" do
     stub_batch([])
 

@@ -1,9 +1,21 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import type { OrderContext } from "../orderContext";
+import { useCurrentPractitioner } from "../api/authQueries";
 import {
+  useBroughtMedicationsByIds,
+  useBroughtMedTasks,
   useCreatePrescription,
+  usePatientBroughtMedications,
   usePrescriptionCategoryDefaults,
   useUpdatePrescription,
 } from "../api/queries";
+import {
+  buildConversionEntries,
+  buildPrescriptionFormFromBrought,
+  isAwaitingDecision,
+} from "../fhir/broughtMedicationHelpers";
+import { completeBroughtMedIdentifiedEntries } from "../fhir/broughtMedTaskHelpers";
+import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { PrescriptionForm } from "./PrescriptionForm";
 import type { ProblemRef } from "../fhir/conditionHelpers";
@@ -30,6 +42,8 @@ interface PrescriptionCreatePanelProps {
   // 開いた時点で対象にしておくプロブレム(カルテ画面でプロブレムを選んでいる場合)。
   // DO では元の処方の対象プロブレムをそのまま引き継ぐので使わない。
   defaultProblem?: ProblemRef;
+  /** 継続する持参薬(MedicationStatement.id)。その持参薬から初期値を作る。 */
+  broughtIds?: string[];
   onSaved: () => void;
 }
 
@@ -37,39 +51,52 @@ export function PrescriptionCreatePanel({
   patientId,
   sourceSrId,
   defaultProblem,
+  broughtIds,
   onSaved,
 }: PrescriptionCreatePanelProps) {
   const createPrescription = useCreatePrescription();
   const source = usePrescriptionInitialValues(sourceSrId, patientId);
+  const brought = useBroughtConversion(patientId, broughtIds);
   // 入外区分の初期値は入院中なら「入院」。DO でも DO 元ではなくいまの状態に合わせる。
   const defaultSetting = useDefaultOrderSetting(patientId);
   // 処方区分の初期値(施設設定)はフォームが初回描画で入れるので、読み込みを待つ。
   const categoryDefaults = usePrescriptionCategoryDefaults();
   // DO 元と入院かどうか・施設設定の読み込み完了を待ってからフォームを描画する
   // (初期値は初回描画時のみ反映される)。
-  const waiting = (sourceSrId && !source.ready) || !defaultSetting.ready || !categoryDefaults.ready;
+  const waiting =
+    (sourceSrId && !source.ready) ||
+    (broughtIds?.length && !brought.ready) ||
+    !defaultSetting.ready ||
+    !categoryDefaults.ready;
   // DO も新しいオーダーなので、依頼元は DO 元ではなくヘッダーで選択中のものを使う。
   const requester = useOrderContext();
 
   const initialValues = useMemo(
     () =>
-      source.initialValues
-        ? buildDoPrescriptionForm(source.initialValues, defaultSetting.setting)
-        : emptyPrescriptionForm(defaultProblem ?? null, defaultSetting.setting),
-    [source.initialValues, defaultProblem, defaultSetting.setting],
+      brought.statements.length
+        ? buildPrescriptionFormFromBrought(brought.statements)
+        : source.initialValues
+          ? buildDoPrescriptionForm(source.initialValues, defaultSetting.setting)
+          : emptyPrescriptionForm(defaultProblem ?? null, defaultSetting.setting),
+    [brought.statements, source.initialValues, defaultProblem, defaultSetting.setting],
   );
 
   function handleSubmit(values: PrescriptionFormValues) {
     // 新規オーダーには登録時点の入院病棟も焼き付ける(部門の一覧が入院を引き直さずに済む)。
     const attribution = withOrderWard(requester, values.setting, defaultSetting);
-    createPrescription.mutate(buildPrescriptionBundle(values, patientId, attribution), {
-      onSuccess: onSaved,
-    });
+    const bundle = buildPrescriptionBundle(values, patientId, attribution);
+    // 持参薬の継続は、持参薬を「継続」にする更新を処方と同じ transaction で送る。
+    const extraEntries = brought.entriesFor(bundle, values, attribution);
+    if (extraEntries === null) return;
+    createPrescription.mutate(
+      { ...bundle, entry: [...(bundle.entry ?? []), ...extraEntries] },
+      { onSuccess: onSaved },
+    );
   }
 
   return (
     <>
-      <ErrorBanner error={source.error} />
+      <ErrorBanner error={source.error ?? brought.error} />
 
       {waiting ? (
         <p>読み込み中...</p>
@@ -79,11 +106,66 @@ export function PrescriptionCreatePanel({
           initialValues={initialValues}
           onSubmit={handleSubmit}
           submitting={createPrescription.isPending}
-          submitError={createPrescription.error}
+          submitError={createPrescription.error ?? brought.submitError}
         />
       )}
     </>
   );
+}
+
+/**
+ * 持参薬の継続。選んだ持参薬を読み、処方の登録に足す entry(持参薬を「継続」にする更新と、
+ * 判断が出揃ったら鑑別済の通知を閉じる更新)を作る。
+ */
+function useBroughtConversion(patientId: string, broughtIds: string[] | undefined) {
+  const { statements, isLoading, error } = useBroughtMedicationsByIds(broughtIds);
+  const encounterId = statements[0]?.context?.reference?.split("/").pop();
+  const encounterStatements = usePatientBroughtMedications(
+    encounterId ? patientId : undefined,
+    encounterId,
+  );
+  const { tasks } = useBroughtMedTasks(encounterId);
+  const { practitionerId, practitioner } = useCurrentPractitioner();
+  const [noActorError, setNoActorError] = useState<Error | undefined>(undefined);
+
+  // 継続を判断したのは処方の指示医師(代行入力なら選んだ医師)。選ばれていなければログイン中の本人。
+  function entriesFor(
+    bundle: fhir4.Bundle,
+    values: PrescriptionFormValues,
+    requester: OrderContext,
+  ): fhir4.BundleEntry[] | null {
+    if (!broughtIds?.length) return [];
+    const actor = requester.practitionerId
+      ? { practitionerId: requester.practitionerId, display: requester.practitionerName }
+      : practitionerId && practitioner
+        ? { practitionerId, display: practitionerDisplayName(practitioner) }
+        : null;
+    if (!actor) {
+      setNoActorError(new Error("持参薬の継続には指示医師を選んでください。"));
+      return null;
+    }
+    setNoActorError(undefined);
+    // フォームで行を消した持参薬は継続にしない(未判断のまま残る)。
+    const kept = new Set(
+      values.rps.flatMap((rp) => rp.medicines.map((m) => m.broughtMedicationId).filter(Boolean)),
+    );
+    const converting = statements.filter((s) => s.id && kept.has(s.id));
+    const entries = buildConversionEntries(bundle, converting, actor);
+    const convertingIds = new Set(converting.map((s) => s.id));
+    const stillAwaiting = encounterStatements.statements.some(
+      (s) => isAwaitingDecision(s) && !convertingIds.has(s.id),
+    );
+    if (!stillAwaiting) entries.push(...completeBroughtMedIdentifiedEntries(tasks, actor));
+    return entries;
+  }
+
+  return {
+    statements,
+    ready: !isLoading && !encounterStatements.isLoading,
+    error,
+    submitError: noActorError,
+    entriesFor,
+  };
 }
 
 interface PrescriptionEditPanelProps {

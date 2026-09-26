@@ -1,8 +1,9 @@
 import { makeFieldUpdater } from "../lib/form";
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
+  BROUGHT_CATEGORY,
   CATEGORY_OPTIONS,
   defaultPrescriptionCategory,
   emptyMedicineLine,
@@ -131,11 +132,21 @@ export function PrescriptionForm({
 
   // 薬剤の安全性チェック(アレルギー・重複投与)。オーダーセットの内容入力では患者が
   // 決まらないので出さない(妊娠の注意と同じ)。
+  // 持参薬から起こした処方は区分・入外区分を変えさせない(持参薬の継続からだけ作る区分)。
+  const brought = values.category === BROUGHT_CATEGORY.code;
+  const broughtIds = useMemo(
+    () =>
+      values.rps.flatMap((rp) =>
+        rp.medicines.flatMap((m) => (m.broughtMedicationId ? [m.broughtMedicationId] : [])),
+      ),
+    [values.rps],
+  );
   const warnings = useMedicationWarnings({
     patientId: setMode ? "" : patientId,
     startDate: values.startDate,
     rps: values.rps,
     excludeOrderId: orderId,
+    excludeBroughtIds: broughtIds,
   });
 
   // 一般名処方は保険上、外来の院外処方でだけ算定できる。
@@ -328,6 +339,7 @@ export function PrescriptionForm({
           入外区分
           <select
             value={values.setting}
+            disabled={brought}
             onChange={(e) => handleSettingChange(e.target.value as PrescriptionSetting)}
           >
             <option value="">選択してください</option>
@@ -340,8 +352,13 @@ export function PrescriptionForm({
         </label>
         <label>
           処方区分
-          <select value={values.category} onChange={(e) => update("category", e.target.value)}>
+          <select
+            value={values.category}
+            disabled={brought}
+            onChange={(e) => update("category", e.target.value)}
+          >
             <option value="">選択してください</option>
+            {brought && <option value={BROUGHT_CATEGORY.code}>{BROUGHT_CATEGORY.display}</option>}
             {values.setting &&
               CATEGORY_OPTIONS[values.setting].map((o) => (
                 <option key={o.code} value={o.code}>

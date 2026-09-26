@@ -56,7 +56,13 @@ export type KartePaneState =
   // 1 回の測定は複数の Observation なので、束ねている identifier で対象を指す。
   | { kind: "vital-edit"; entryId: string }
   // DO(sourceSrId あり)では対象プロブレムも DO 元から引き継ぐので problem は使わない。
-  | { kind: "prescription-create"; sourceSrId?: string; problem?: ProblemRef }
+  // broughtIds: 持参薬タブの「継続」で選んだ持参薬。その持参薬から初期値を作る。
+  | {
+      kind: "prescription-create";
+      sourceSrId?: string;
+      problem?: ProblemRef;
+      broughtIds?: string[];
+    }
   | { kind: "prescription-edit"; srId: string }
   | { kind: "injection-create"; sourceSrId?: string; problem?: ProblemRef }
   | { kind: "injection-edit"; srId: string }
@@ -231,9 +237,10 @@ function paneKey(state: KartePaneState): string {
       return `${state.kind}:${state.srId}`;
     case "regimen-header":
       return `${state.kind}:${state.regimenSrId}`;
+    case "prescription-create":
+      return `${state.kind}:${state.sourceSrId ?? ""}:${state.problem?.conditionId ?? ""}:${(state.broughtIds ?? []).join(",")}`;
     // 別のプロブレムを選んで登録し直したときに初期値を反映させる(選択を変えただけでは
     // state が変わらないので、入力中のフォームが勝手に作り直されることはない)。
-    case "prescription-create":
     case "injection-create":
     case "lab-order-create":
     case "micro-order-create":
@@ -588,6 +595,7 @@ function PaneContent({
           patientId={patientId}
           sourceSrId={state.sourceSrId}
           defaultProblem={state.problem}
+          broughtIds={state.broughtIds}
           onSaved={onSaved}
         />
       );

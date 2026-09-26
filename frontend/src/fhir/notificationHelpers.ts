@@ -197,7 +197,7 @@ export function buildCancelledNotificationTask(task: fhir4.Task): fhir4.Task {
  * 作成時刻が未来の通知(端末の時計のずれ、来歴の記録時刻を写した後追いの通知)でも書き換えられる
  * ようにする。時差の表記が違うことがあるので文字列ではなく時刻として比べる。
  */
-function latestOf(now: string, authoredOn: string | undefined): string {
+export function latestOf(now: string, authoredOn: string | undefined): string {
   if (!authoredOn) return now;
   const created = Date.parse(authoredOn);
   return Number.isNaN(created) || created <= Date.parse(now) ? now : authoredOn;

@@ -66,6 +66,8 @@ export const KARTE_TABS = [
   // だけで、身体・感染症・生活などの区画を後から足す。
   { key: "profile", label: "プロファイル" },
   { key: "allergy", label: "アレルギー" },
+  // 入院時の持参薬。登録・鑑別・継続/中止の判断をタブの中で行う(docs/brought-medication-design.md)。
+  { key: "brought-medication", label: "持参薬" },
   // 化学療法。レジメンの投与スケジュールは日付の器(暦)で見る(食事と同じ考え方)。
   { key: "chemo", label: "化学療法" },
   // クリニカルパス。適用したパスを病日 × OAT ユニットのシートで見る(紙のパスシートの形)。
@@ -106,7 +108,7 @@ export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
  * 並ぶ位置は配下の先頭のタブの位置で、メニューの順もこの keys の順。
  */
 export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly KarteTabKey[] }> = [
-  { label: "患者情報", keys: ["profile", "allergy"] },
+  { label: "患者情報", keys: ["profile", "allergy", "brought-medication"] },
   { label: "診療情報", keys: ["chemo", "pathway", "meal", "chart"] },
   { label: "検査結果", keys: ["lab", "lab-timeline", "micro", "patho"] },
 ];

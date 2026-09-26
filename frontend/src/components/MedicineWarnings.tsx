@@ -1,5 +1,10 @@
 import { useMemo } from "react";
-import { useActiveAllergies, useActiveMedications } from "../api/queries";
+import {
+  useActiveAllergies,
+  useActiveBroughtMedications,
+  useActiveMedications,
+} from "../api/queries";
+import { broughtActiveMedications } from "../fhir/broughtMedicationHelpers";
 import {
   buildMedicationWarnings,
   medicineCautions,
@@ -22,14 +27,22 @@ export function useMedicationWarnings(args: {
   rps: MedicationRp[];
   /** 編集中のオーダー(自分自身との重複は出さない)。 */
   excludeOrderId?: string;
+  /** 継続して処方に起こしている最中の持参薬。 */
+  excludeBroughtIds?: string[];
 }): MedicationWarning[][][] {
-  const { patientId, startDate, rps, excludeOrderId } = args;
+  const { patientId, startDate, rps, excludeOrderId, excludeBroughtIds } = args;
   const { allergies } = useActiveAllergies(patientId);
   const { medications } = useActiveMedications(patientId, startDate);
+  const { statements: broughtStatements } = useActiveBroughtMedications(patientId);
+
+  const active = useMemo(
+    () => [...medications, ...broughtActiveMedications(broughtStatements)],
+    [medications, broughtStatements],
+  );
 
   return useMemo(
-    () => buildMedicationWarnings({ rps, allergies, active: medications, excludeOrderId }),
-    [rps, allergies, medications, excludeOrderId],
+    () => buildMedicationWarnings({ rps, allergies, active, excludeOrderId, excludeBroughtIds }),
+    [rps, allergies, active, excludeOrderId, excludeBroughtIds],
   );
 }
 

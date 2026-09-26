@@ -52,6 +52,12 @@ import {
 } from "../../fhir/documentDueHelpers";
 import { TASK_CODE_SYSTEM } from "../../fhir/taskHelpers";
 import {
+  BROUGHT_MED_IDENTIFIED_NOTE,
+  BROUGHT_MED_IDENTIFIED_TASK_CODE,
+  broughtMedIdentifiedRowOf,
+  type BroughtMedIdentifiedRow,
+} from "../../fhir/broughtMedTaskHelpers";
+import {
   KARTE_DETAIL_PARAM,
   KARTE_OPEN_PARAM,
   KARTE_TAB_PARAM,
@@ -64,6 +70,7 @@ import {
   radiotherapyReviewDueRowOf,
   type RadiotherapyReviewDueRow,
 } from "../../fhir/radiotherapyReviewHelpers";
+import { BroughtMedIdentifiedNotificationCells } from "./BroughtMedIdentifiedNotificationCells";
 import { DocumentDueNotificationCells } from "./DocumentDueNotificationCells";
 import { RadiotherapyReviewDueNotificationCells } from "./RadiotherapyReviewDueNotificationCells";
 import { LabPanicNotificationCells } from "./LabPanicNotificationCells";
@@ -254,6 +261,22 @@ const radiotherapyReviewDueKind = defineNotificationKind<RadiotherapyReviewDueRo
   action: { label: "対応済", noteText: RADIOTHERAPY_REVIEW_DUE_NOTE },
 });
 
+const broughtMedIdentifiedKind = defineNotificationKind<BroughtMedIdentifiedRow>({
+  code: BROUGHT_MED_IDENTIFIED_TASK_CODE.code,
+  label: BROUGHT_MED_IDENTIFIED_TASK_CODE.display,
+  toRow: broughtMedIdentifiedRowOf,
+  Cells: BroughtMedIdentifiedNotificationCells,
+  // カルテの持参薬タブで継続・休止・中止を判断する。
+  karteLink: (row) => {
+    if (!row.patientId) return null;
+    const params = new URLSearchParams();
+    params.set(KARTE_TAB_PARAM, "brought-medication");
+    return `/patients/${row.patientId}/karte?${params.toString()}`;
+  },
+  // 全部の持参薬を判断すれば自動で閉じる。ここからは手で閉じる。
+  action: { label: "対応済", noteText: BROUGHT_MED_IDENTIFIED_NOTE },
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
@@ -263,6 +286,7 @@ export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   orderApprovalKind,
   documentDueKind,
   radiotherapyReviewDueKind,
+  broughtMedIdentifiedKind,
 ];
 
 /** 一覧の検索に渡す `code` の値。種別を全部並べて 1 回で引く(カンマ区切りは OR)。 */

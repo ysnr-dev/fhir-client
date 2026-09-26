@@ -200,6 +200,17 @@ RSpec.describe "FhirProxy", type: :request do
       get "/fhir/Goal?patient=Patient/123"
       expect(response).to have_http_status(:ok)
     end
+
+    it "allowlists MedicationStatement (持参薬)" do
+      stub_request(:get, "#{upstream_base}/MedicationStatement")
+        .with(query: { "context" => "Encounter/123" })
+        .to_return(status: 200, body: '{"resourceType":"Bundle"}',
+                   headers: { "Content-Type" => "application/fhir+json" })
+
+      get "/fhir/MedicationStatement?context=Encounter/123"
+
+      expect(response).to have_http_status(:ok)
+    end
   end
 
   describe "Binary (シェーマ画像)" do

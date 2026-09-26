@@ -150,6 +150,16 @@ RSpec.describe Integrations::ReceiptComputer::BillingClaimBuilder do
       expect(orca_classes.first["Medical_Class"]).to eq("212")
     end
 
+    it "does not bill 持参 prescriptions (the patient's own medicine)" do
+      header = prescription_header(id: "rx-brought")
+      header["category"] << { "coding" => [{ "system" => "http://fhir-client.local/CodeSystem/prescription-category",
+                                             "code" => "brought" }] }
+      store.add(header, medication_request(code: "1", dose: 1, parent: "rx-brought"))
+
+      expect(build.items).to be_empty
+      expect(build.skipped).to be_empty
+    end
+
     it "ignores prescriptions that were cancelled" do
       store.add(medication_request(code: "1", dose: 1).merge("status" => "revoked"))
 

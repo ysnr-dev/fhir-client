@@ -97,14 +97,16 @@ export function medicineCautions(medicine: Medicine | null | undefined): Medicin
   return cautions;
 }
 
-/** 重複投与の相手。投与中の他のオーダーの薬剤 1 件。 */
+/** 重複投与の相手。投与中の他のオーダーの薬剤 1 件、または継続・中止が決まっていない持参薬 1 剤。 */
 export interface ActiveMedication {
-  /** 元のオーダー(ServiceRequest)の id。編集中のオーダー自身を外すのに使う。 */
+  /** 元のオーダー(ServiceRequest)の id。持参薬は MedicationStatement の id。 */
   orderId: string;
   name: string;
   ingredient: string;
-  /** 投与終了日。日数を持たない RP(頓用・外用)では開始日。 */
+  /** 投与終了日。日数を持たない RP(頓用・外用)では開始日。持参薬は持たない(空)。 */
   endDate: string;
+  /** 持参薬(MedicationStatement)。 */
+  brought?: boolean;
 }
 
 export type MedicationWarningKind = "allergy" | "duplicate";
@@ -139,8 +141,10 @@ export function buildMedicationWarnings(args: {
   active: ActiveMedication[];
   /** 編集中のオーダー(自分自身との重複は出さない)。 */
   excludeOrderId?: string;
+  /** 継続して処方に起こしている最中の持参薬(その処方の行と重複させない)。 */
+  excludeBroughtIds?: string[];
 }): MedicationWarning[][][] {
-  const { rps, allergies, active, excludeOrderId } = args;
+  const { rps, allergies, active, excludeOrderId, excludeBroughtIds = [] } = args;
 
   // フォーム内の同一成分。1 つの成分がどの RP の何行目に出るかを先に集める。
   const positions = new Map<string, { rpIndex: number; medIndex: number }[]>();
@@ -182,11 +186,17 @@ export function buildMedicationWarnings(args: {
         warnings.push({ kind: "duplicate", text, high: false });
       }
 
-      const ongoing = active.filter((a) => a.ingredient === key && a.orderId !== excludeOrderId);
+      const ongoing = active.filter(
+        (a) =>
+          a.ingredient === key &&
+          (a.brought ? !excludeBroughtIds.includes(a.orderId) : a.orderId !== excludeOrderId),
+      );
       for (const a of ongoing) {
         warnings.push({
           kind: "duplicate",
-          text: `同一成分を投与中: ${a.name}（${a.endDate} まで）`,
+          text: a.brought
+            ? `同一成分を服用中(持参薬): ${a.name}`
+            : `同一成分を投与中: ${a.name}（${a.endDate} まで）`,
           high: false,
         });
       }

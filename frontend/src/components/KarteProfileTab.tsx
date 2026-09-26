@@ -39,6 +39,7 @@ import {
 } from "../fhir/bloodTypeHelpers";
 import { BloodTypeForm } from "./BloodTypeForm";
 import { PatientBodySection } from "./PatientBodySection";
+import { PatientBroughtMedicationSection } from "./PatientBroughtMedicationSection";
 import type { PatientCaution } from "../api/masterClient";
 import { buildFlag, parseFlagForm, type FlagFormValues } from "../fhir/flagHelpers";
 import {
@@ -187,6 +188,7 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
         onAdd={() => setForm({ kind: "create-infection" })}
         onEdit={(observationId) => setForm({ kind: "edit-infection", observationId })}
       />
+      <PatientBroughtMedicationSection patientId={patientId} />
       <CautionSection
         patientId={patientId}
         onView={(flagId) => onViewChange(`${CAUTION_VIEW_PREFIX}${flagId}`)}

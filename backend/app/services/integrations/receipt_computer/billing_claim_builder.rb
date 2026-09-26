@@ -113,6 +113,10 @@ module Integrations
         by_header = group_by_parent(requests, "MedicationRequest")
 
         headers_of(requests, date, prescription: true).flat_map do |header|
+          # 持参(継続した持参薬を院内処方に起こしたもの)は患者の薬を使うので請求しない。
+          # 送れなかったものではないので skipped にも積まない(中止した処方と同じ扱い)。
+          next [] if brought?(header)
+
           lines = by_header[header["id"]]
           dispensing = dispensing_of(header)
           # RP 番号でまとめる。1 つの RP が 1 つの剤になる。
@@ -125,6 +129,10 @@ module Integrations
       def rp_number(request)
         Array(request["identifier"])
           .find { |i| i["system"] == Coding::RP_GROUP_NUMBER }&.dig("value") || "1"
+      end
+
+      def brought?(header)
+        Coding.code_in_list(header["category"], Coding::PRESCRIPTION_CATEGORY) == "brought"
       end
 
       # 院内 / 院外。同じ日に両方があると連携先で区別が要る(日レセなら 211 / 212)。

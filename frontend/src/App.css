@@ -20037,3 +20037,118 @@ button.chemo-calendar__cell[draggable="true"] {
 .clinical-note-title__template .template-select__trigger {
   width: 100%;
 }
+
+/* 持参薬(カルテの持参薬タブ・鑑別モーダル・薬剤部の鑑別一覧)。 */
+.brought-med__summary {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.brought-med__pending {
+  margin-left: 8px;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--warning);
+  color: var(--warning);
+  white-space: nowrap;
+}
+
+.brought-med__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.brought-med__bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.brought-med__check,
+.prescription-form label.brought-med__check {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.prescription-form label.brought-med__check input {
+  padding: 0;
+}
+
+.brought-med__state {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* 判断を待っている持参薬だけ色で拾わせる(済んだ判断は他のメタデータと同じ濃さ)。 */
+.brought-med__state--unidentified,
+.brought-med__state--undecided {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.brought-med__state--continued {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.brought-med__substitute {
+  display: block;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.brought-med__meta {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.brought-med__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.brought-med__decision-list {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+.brought-med__reason {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.brought-med__preview {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.brought-med__preview li + li {
+  margin-top: 2px;
+}
+
+.brought-med__preview .brought-med__state {
+  margin-left: 8px;
+}

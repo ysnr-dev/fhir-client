@@ -130,6 +130,7 @@ import { LabResultImportDetailPage } from "./pages/LabResultImportDetailPage";
 import { LabWorklistPage } from "./pages/LabWorklistPage";
 import { RadWorklistPage } from "./pages/RadWorklistPage";
 import { RxWorklistPage } from "./pages/RxWorklistPage";
+import { BroughtMedicationWorklistPage } from "./pages/BroughtMedicationWorklistPage";
 import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 
@@ -267,6 +268,9 @@ function App() {
             <SubMenu label="薬剤部門">
               <Link to="/rx-worklist" className="row-menu__item">
                 処方一覧
+              </Link>
+              <Link to="/brought-med-worklist" className="row-menu__item">
+                持参薬鑑別一覧
               </Link>
               <Link to="/injection-worklist" className="row-menu__item">
                 注射一覧
@@ -655,6 +659,7 @@ function App() {
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />
           <Route path="/rx-worklist" element={<RxWorklistPage />} />
+          <Route path="/brought-med-worklist" element={<BroughtMedicationWorklistPage />} />
           <Route path="/injection-worklist" element={<InjectionWorklistPage />} />
           <Route path="/chemo-room-worklist" element={<ChemoRoomWorklistPage />} />
           <Route path="/physio-worklist" element={<PhysioWorklistPage />} />
