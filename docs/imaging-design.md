@@ -184,7 +184,7 @@ File Meta Information(group 0002)だけ。ここは転送構文によらず Expl
 - マルチフレームはフレームごとに 1 コマとして並べる。フレーム数は `ImagingStudy` に無いので
   `/imaging/studies/:uid/instances` から取る。
 - **計測・注釈は保存しない**。ビューアを開いている間だけのもの。残したいものは「画像を保存」で、
-  画像・注釈(SVG 層)・四隅の文字を 1 枚の canvas に描き直した JPEG を `DocumentReference` + `Binary`
+  画像・注釈(SVG 層)・四隅の文字を 1 枚の canvas に描き直し、画像の写っている範囲に切り詰めた JPEG を `DocumentReference` + `Binary`
   (`docs/patient-file-design.md` と同じ形)で登録する。表示名・診療日(既定は検査日)・カテゴリは保存時に選ぶ。
 - 矢印・文字の注釈の入力は、cornerstone 既定の `window.prompt` を使わずビューア内の入力欄で受ける
   (`getTextCallback` / `changeTextCallback` の差し替え)。

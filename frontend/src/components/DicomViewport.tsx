@@ -20,7 +20,12 @@ import {
   ZoomTool,
 } from "@cornerstonejs/tools";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { captureViewportJpeg, type CapturedImage, type CornerTexts } from "../imaging/captureViewport";
+import {
+  captureViewportJpeg,
+  type CapturedImage,
+  type CaptureRect,
+  type CornerTexts,
+} from "../imaging/captureViewport";
 import { initCornerstone } from "../imaging/cornerstoneSetup";
 
 // DICOM を描く領域 1 つ。左ドラッグの道具(ウィンドウ・移動・拡大・計測・注釈)は選んで
@@ -118,6 +123,30 @@ function applyTool(toolGroupId: string, active: ViewerTool) {
     if (bindings.length > 0) group.setToolActive(TOOL_NAMES[tool], { bindings });
     else group.setToolPassive(TOOL_NAMES[tool]);
   });
+}
+
+/**
+ * 描画領域のうち画像が写っている範囲(CSS ピクセル)。描画領域からはみ出した部分は
+ * 書き出す側で切り落とす。core の getViewportImageCornersInWorld は画像が描画領域より
+ * 小さいときも描画領域の四隅を返すため使わない。
+ */
+function visibleImageRect(viewport: Types.IStackViewport): CaptureRect | undefined {
+  const data = viewport.getImageData();
+  const indexToWorld = data?.imageData.indexToWorld?.bind(data.imageData);
+  if (!data || !indexToWorld) return undefined;
+  const [columns, rows] = data.dimensions;
+  // 画素の中心が整数の座標なので、端は 0.5 画素外側になる。
+  const points = [
+    [-0.5, -0.5],
+    [columns - 0.5, -0.5],
+    [-0.5, rows - 0.5],
+    [columns - 0.5, rows - 0.5],
+  ].map(([i, j]) => viewport.worldToCanvas(indexToWorld([i, j, 0]) as Types.Point3));
+  const xs = points.map(([x]) => x);
+  const ys = points.map(([, y]) => y);
+  const x = Math.floor(Math.min(...xs));
+  const y = Math.floor(Math.min(...ys));
+  return { x, y, width: Math.ceil(Math.max(...xs)) - x, height: Math.ceil(Math.max(...ys)) - y };
 }
 
 export const DicomViewport = forwardRef<
@@ -314,8 +343,9 @@ export const DicomViewport = forwardRef<
     },
     captureJpeg(corners) {
       const element = elementRef.current;
-      if (!element || !sessionRef.current) return Promise.reject(new Error("画像が表示されていません。"));
-      return captureViewportJpeg(element, corners);
+      const viewport = sessionRef.current?.viewport;
+      if (!element || !viewport) return Promise.reject(new Error("画像が表示されていません。"));
+      return captureViewportJpeg(element, corners, visibleImageRect(viewport));
     },
   }));
 
