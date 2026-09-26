@@ -587,6 +587,9 @@ export interface PatientSearchParams {
   birthDateFrom?: string;
   birthDateTo?: string;
   identifier?: string;
+  address?: string;
+  /** 固定電話・携帯電話のどちらにも当てる。 */
+  phone?: string;
 }
 
 const PATIENT_COUNT = 20;
@@ -603,6 +606,10 @@ function buildSearchParams(search: PatientSearchParams, offset: number): URLSear
   if (search.name) params.set("name", patientNameSearchValue(search.name));
   if (search.gender) params.set("gender", search.gender);
   if (search.identifier) params.set("identifier", search.identifier);
+  // 住所は区切りなしで続けて書かれ、電話番号は末尾だけで探すこともあるので部分一致にする。
+  // 電話番号のハイフンの有無は上流が数字だけに揃えて比べる。
+  if (search.address) params.set("address:contains", search.address);
+  if (search.phone) params.set("phone:contains", search.phone);
   if (search.birthDateFrom) params.append("birthdate", `ge${search.birthDateFrom}`);
   if (search.birthDateTo) params.append("birthdate", `le${search.birthDateTo}`);
   params.set("_count", String(PATIENT_COUNT));

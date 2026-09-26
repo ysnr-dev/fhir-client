@@ -334,11 +334,8 @@ export function parsePatient(patient: fhir4.Patient): PatientFormValues {
     contacts: (patient.contact ?? []).map(parseContact),
     generalPractitionerRef: patient.generalPractitioner?.[0]?.reference ?? "",
     generalPractitionerName: patient.generalPractitioner?.[0]?.display ?? "",
-    // use の無い電話番号(他システム由来など)は固定電話として扱う。
-    homePhone:
-      patient.telecom?.find((t) => t.system === "phone" && t.use !== "mobile")?.value ?? "",
-    mobilePhone:
-      patient.telecom?.find((t) => t.system === "phone" && t.use === "mobile")?.value ?? "",
+    homePhone: homePhoneOf(patient),
+    mobilePhone: mobilePhoneOf(patient),
     email: patient.telecom?.find((t) => t.system === "email")?.value ?? "",
     ...parseAddress(patient.address?.[0]),
   };
@@ -407,6 +404,22 @@ export function displayName(patient: fhir4.Patient): string {
 
 export function displayKana(patient: fhir4.Patient): string {
   return displayJapaneseKana(patient.name);
+}
+
+/** 固定電話。use の無い電話番号(他システム由来など)も固定電話として扱う。 */
+export function homePhoneOf(patient: fhir4.Patient): string {
+  return patient.telecom?.find((t) => t.system === "phone" && t.use !== "mobile")?.value ?? "";
+}
+
+export function mobilePhoneOf(patient: fhir4.Patient): string {
+  return patient.telecom?.find((t) => t.system === "phone" && t.use === "mobile")?.value ?? "";
+}
+
+/** 一覧に出す住所。text が無ければ都道府県・市区町村・番地を続けて書く。 */
+export function addressLabelOf(patient: fhir4.Patient): string {
+  const address = patient.address?.[0];
+  if (!address) return "";
+  return address.text || [address.state, address.city, ...(address.line ?? [])].filter(Boolean).join("");
 }
 
 export function calculateAge(birthDate: string, asOf: Date = new Date()): number | undefined {

@@ -11,6 +11,8 @@ const emptySearch: PatientSearchParams = {
   birthDateFrom: "",
   birthDateTo: "",
   identifier: "",
+  address: "",
+  phone: "",
 };
 
 export function PatientSearchForm({ onSearch }: PatientSearchFormProps) {
@@ -68,6 +70,22 @@ export function PatientSearchForm({ onSearch }: PatientSearchFormProps) {
           type="text"
           value={values.identifier}
           onChange={(e) => setValues({ ...values, identifier: e.target.value })}
+        />
+      </label>
+      <label>
+        住所
+        <input
+          type="text"
+          value={values.address}
+          onChange={(e) => setValues({ ...values, address: e.target.value })}
+        />
+      </label>
+      <label>
+        電話番号
+        <input
+          type="tel"
+          value={values.phone}
+          onChange={(e) => setValues({ ...values, phone: e.target.value })}
         />
       </label>
       <div className="patient-search-form__actions">
