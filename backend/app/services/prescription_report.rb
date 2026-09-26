@@ -44,6 +44,8 @@ class PrescriptionReport
   GENERAL_ORDER_CODE_SYSTEM =
     "http://jpfhir.jp/fhir/core/mhlw/CodeSystem/MedicationGeneralOrderCode".freeze
   USAGE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/medicine-usage".freeze
+  # JAMI 補足用法コード(8 桁)。I/W/D/C は RP 単位の投与スケジュール、V は薬剤ごとの不均等投与。
+  SUPPLEMENTARY_USAGE_SYSTEM = "urn:oid:1.2.392.200250.2.2.20.22".freeze
   ORDER_DEPARTMENT_EXT_URL = "http://fhir-client.local/StructureDefinition/order-department".freeze
   # 保険医療機関コード(自院 Organization の identifier)。
   INSTITUTION_NO_SYSTEM =
@@ -51,10 +53,10 @@ class PrescriptionReport
 
   # RP 1 つぶん。同じ RP 番号の明細(MedicationRequest)をまとめたもの。
   RpGroup = Struct.new(
-    :rp_number, :usage_name, :dose_days, :dose_count, :usage_comment, :medicines,
+    :rp_number, :usage_name, :supplement, :dose_days, :dose_count, :usage_comment, :medicines,
     keyword_init: true
   )
-  MedicineLine = Struct.new(:order_in_rp, :name, :dose, :unit, :comment, keyword_init: true)
+  MedicineLine = Struct.new(:order_in_rp, :name, :dose, :unit, :comment, :uneven, keyword_init: true)
 
   def initialize(order_id, gateway: FhirGateway.new)
     @order_id = order_id
@@ -208,8 +210,9 @@ class PrescriptionReport
         usage_name: coding_by_system(dosage.dig("timing", "code", "coding"),
                                      USAGE_CODE_SYSTEM)&.dig("display").to_s,
         dose_days: mr.dig("dispenseRequest", "expectedSupplyDuration", "value"),
+        supplement: supplement_label(dosage),
         dose_count: dosage.dig("timing", "repeat", "count"),
-        usage_comment: dosage.dig("additionalInstruction", 0, "text").to_s,
+        usage_comment: usage_comment(dosage),
         medicines: []
       )
       group.medicines << MedicineLine.new(
@@ -217,13 +220,42 @@ class PrescriptionReport
         name: medicine_name(mr),
         dose: dosage.dig("doseAndRate", 0, "doseQuantity", "value"),
         unit: dosage.dig("doseAndRate", 0, "doseQuantity", "unit").to_s,
-        comment: mr.dig("note", 0, "text").to_s
+        comment: mr.dig("note", 0, "text").to_s,
+        uneven: supplementary_displays(dosage).select { |code, _| code.start_with?("V") }
+                                              .sort_by(&:first).map(&:last).join("・")
       )
     end
 
     groups.values.sort_by(&:rp_number).each do |group|
       group.medicines.sort_by!(&:order_in_rp)
     end
+  end
+
+  # 用法コメントは coding を持たない additionalInstruction(補足用法は coding を持つ)。
+  def usage_comment(dosage)
+    Array(dosage["additionalInstruction"]).find { |ai| Array(ai["coding"]).empty? }&.dig("text").to_s
+  end
+
+  # 補足用法コードと表示の組。表示は登録時に frontend(supplementaryUsage.ts)が入れたもの。
+  def supplementary_displays(dosage)
+    Array(dosage["additionalInstruction"]).flat_map { |ai| Array(ai["coding"]) }
+                                          .select { |c| c["system"] == SUPPLEMENTARY_USAGE_SYSTEM && c["code"].present? }
+                                          .map { |c| [c["code"], c["display"].to_s] }
+  end
+
+  # RP の補足用法(I/W/D/C)の表示。日付指定は 1 コード 6 日までなので、同じ月の続きは
+  # 1 つにまとめる(「毎月1日・…・18日」「毎月22日・25日」→「毎月1日・…・25日」)。
+  def supplement_label(dosage)
+    labels = []
+    supplementary_displays(dosage).reject { |code, _| code.start_with?("V") }.each do |code, display|
+      month = display[/\A(毎月|\d+月)/] if code.start_with?("D")
+      if month && labels.last.to_s[/\A(毎月|\d+月)/] == month
+        labels[-1] = "#{labels.last}・#{display.delete_prefix(month)}"
+      else
+        labels << display
+      end
+    end
+    labels.join("、")
   end
 
   def identifier_value(mr, system)

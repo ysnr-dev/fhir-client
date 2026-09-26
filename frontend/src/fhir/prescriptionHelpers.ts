@@ -4,6 +4,16 @@ import { emptyOrderContext, type OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { isAsNeededUsage } from "./medicationScheduleHelpers";
 import {
+  supplementInstructions,
+  supplementLabel,
+  supplementOf,
+  unevenDosesOf,
+  unevenInstructions,
+  unevenLabel,
+  usageCommentOf,
+  type SupplementaryUsage,
+} from "./supplementaryUsage";
+import {
   categoryCoding,
   codingBySystem,
   findSettingDisplay,
@@ -129,6 +139,10 @@ export interface MedicineLineValues {
   medicine: Medicine | null;
   dose: string;
   comment: string;
+  /** 薬剤コメントの入力欄を出しているか(フォーム内だけの値)。 */
+  showComment?: boolean;
+  /** 不均等投与の量(服用タイミング順)。null・未設定なら不均等でない。 */
+  unevenDoses?: string[] | null;
 }
 
 export interface RpValues {
@@ -136,6 +150,10 @@ export interface RpValues {
   doseDays: string;
   doseCount: string;
   usageComment: string;
+  /** 用法コメントの入力欄を出しているか(フォーム内だけの値)。 */
+  showUsageComment?: boolean;
+  /** 補足用法(日数間隔・曜日・日付・期間内回数)。 */
+  supplement?: SupplementaryUsage | null;
   medicines: MedicineLineValues[];
 }
 
@@ -327,6 +345,7 @@ export function medicationCodeableConcept(medicine: Medicine): fhir4.CodeableCon
 function buildMedicationRequest(
   rp: RpValues,
   medLine: MedicineLineValues,
+  startDate: string,
   rpNumber: number,
   orderInRp: number,
   patientId: string,
@@ -360,9 +379,16 @@ function buildMedicationRequest(
       : undefined,
   };
 
-  if (rp.usageComment) {
-    dosageInstruction.additionalInstruction = [{ text: rp.usageComment }];
-  }
+  const additionalInstruction: fhir4.CodeableConcept[] = [
+    ...supplementInstructions(rp.supplement, Number(startDate.slice(5, 7)) || 1),
+    ...unevenInstructions(
+      medLine.unevenDoses,
+      rp.usage?.usage_code,
+      medLine.medicine?.unit_name,
+    ),
+    ...(rp.usageComment ? [{ text: rp.usageComment }] : []),
+  ];
+  if (additionalInstruction.length) dosageInstruction.additionalInstruction = additionalInstruction;
 
   if (isAsNeededUsage(rp.usage?.usage_code)) {
     dosageInstruction.asNeededBoolean = true;
@@ -438,6 +464,7 @@ function buildPrescriptionTransactionBundle(
       const resource = buildMedicationRequest(
         rp,
         medLine,
+        values.startDate,
         rpNumber,
         orderInRp,
         patientId,
@@ -713,6 +740,8 @@ export interface MedicineLineDisplay {
   dose?: number;
   unit?: string;
   comment?: string;
+  /** 不均等投与の表示(「朝 3.5錠・夕 1錠」)。 */
+  unevenLabel?: string;
 }
 
 export interface RpDisplay {
@@ -723,6 +752,8 @@ export interface RpDisplay {
   doseDays?: number;
   doseCount?: number;
   usageComment?: string;
+  /** 補足用法の表示(「毎週月・木曜日」)。 */
+  supplementLabel?: string;
   medicines: MedicineLineDisplay[];
 }
 
@@ -749,7 +780,8 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
         basicCategory: usageCategoryCoding?.display,
         doseDays: mr.dispenseRequest?.expectedSupplyDuration?.value,
         doseCount: dosage?.timing?.repeat?.count,
-        usageComment: dosage?.additionalInstruction?.[0]?.text,
+        usageComment: usageCommentOf(dosage),
+        supplementLabel: supplementLabel(supplementOf(dosage)) || undefined,
         medicines: [],
       };
       groups.set(rpNumber, group);
@@ -769,6 +801,12 @@ export function groupByRp(mrs: fhir4.MedicationRequest[]): RpDisplay[] {
       dose: dosage?.doseAndRate?.[0]?.doseQuantity?.value,
       unit: dosage?.doseAndRate?.[0]?.doseQuantity?.unit,
       comment: mr.note?.[0]?.text,
+      unevenLabel:
+        unevenLabel(
+          unevenDosesOf(dosage),
+          usageCoding?.code,
+          dosage?.doseAndRate?.[0]?.doseQuantity?.unit,
+        ) || undefined,
     });
   }
 
@@ -856,7 +894,8 @@ export function parsePrescriptionForm(
           ? String(mr.dispenseRequest.expectedSupplyDuration.value)
           : "",
         doseCount: dosage?.timing?.repeat?.count != null ? String(dosage.timing.repeat.count) : "",
-        usageComment: dosage?.additionalInstruction?.[0]?.text ?? "",
+        usageComment: usageCommentOf(dosage) ?? "",
+        supplement: supplementOf(dosage),
         medicines: [],
         medicinesByOrder: new Map(),
       };
@@ -869,6 +908,8 @@ export function parsePrescriptionForm(
       medicine: medicineFromCoding(mr),
       dose: doseValue != null ? String(doseValue) : "",
       comment: mr.note?.[0]?.text ?? "",
+      showComment: Boolean(mr.note?.[0]?.text),
+      unevenDoses: unevenDosesOf(dosage),
     });
   }
 
@@ -879,6 +920,8 @@ export function parsePrescriptionForm(
       doseDays: group.doseDays,
       doseCount: group.doseCount,
       usageComment: group.usageComment,
+      showUsageComment: Boolean(group.usageComment),
+      supplement: group.supplement,
       medicines: Array.from(group.medicinesByOrder.entries())
         .sort(([a], [b]) => a - b)
         .map(([, medLine]) => medLine),

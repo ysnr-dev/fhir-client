@@ -96,7 +96,12 @@ export function PrescriptionDetailPanel({
             <tbody>
               {rp.medicines.map((med) => (
                 <tr key={med.orderInRp}>
-                  <td>{med.name}</td>
+                  <td>
+                    {med.name}
+                    {med.unevenLabel && (
+                      <div className="prescription-detail__uneven">{`不均等: ${med.unevenLabel}`}</div>
+                    )}
+                  </td>
                   <td>{med.dose ?? "-"}</td>
                   <td>{med.unit ?? "-"}</td>
                   <td>{med.comment || "-"}</td>
@@ -133,6 +138,12 @@ export function PrescriptionDetailPanel({
                 </span>
               )}
             </dd>
+            {rp.supplementLabel && (
+              <>
+                <dt>補足用法</dt>
+                <dd>{rp.supplementLabel}</dd>
+              </>
+            )}
             <dt>用法コメント</dt>
             <dd>{rp.usageComment || "-"}</dd>
           </dl>

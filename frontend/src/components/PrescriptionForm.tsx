@@ -16,6 +16,13 @@ import {
   type RpValues,
 } from "../fhir/prescriptionHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
+import {
+  emptySupplement,
+  isValidUnevenDose,
+  supplementError,
+  unevenDailyDose,
+  unevenTimingLabels,
+} from "../fhir/supplementaryUsage";
 import { presetUsageFilters } from "../fhir/usageMapping";
 import { usePrescriptionCategoryDefaults } from "../api/queries";
 import { useBulkStartDate } from "../hooks/useBulkStartDate";
@@ -26,6 +33,8 @@ import { MedicineCautionMarks, MedicineWarnings, useMedicationWarnings } from ".
 import { PregnancyNotice } from "./PregnancyNotice";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
+import { RowMenu } from "./RowMenu";
+import { SupplementaryUsageEditor, UnevenDoseEditor } from "./SupplementaryUsageEditor";
 import { UsageSearchModal } from "./UsageSearchModal";
 
 interface PrescriptionFormProps {
@@ -57,6 +66,20 @@ type ModalState =
   | { kind: "usage"; rpIndex: number }
   | { kind: "medicine"; rpIndex: number; medIndex: number }
   | null;
+
+function removeButton(onClick: () => void, label: string) {
+  return (
+    <button
+      type="button"
+      className="rp-card__icon-button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+    >
+      <TrashIcon />
+    </button>
+  );
+}
 
 function TrashIcon() {
   return (
@@ -101,9 +124,6 @@ export function PrescriptionForm({
   // コメント欄は常に入力する訳ではないため、既に値がある場合のみ初期表示し、
   // それ以外はボタン操作で表示する。
   const [commentOpen, setCommentOpen] = useState(Boolean(initialValues?.comment));
-  const [usageCommentOpen, setUsageCommentOpen] = useState<boolean[]>(() =>
-    (initialValues ?? emptyPrescriptionForm()).rps.map((rp) => Boolean(rp.usageComment)),
-  );
 
   // 対象プロブレムの候補。POMR では「#1 糖尿病に対する処方」のように、オーダー 1 件を
   // 1 つのプロブレムに紐付ける(RP ごとに分けたいときはオーダーを分けて登録する)。
@@ -159,17 +179,14 @@ export function PrescriptionForm({
       ...v,
       rps: [...v.rps, { ...emptyRp, medicines: [{ ...emptyMedicineLine }] }],
     }));
-    setUsageCommentOpen((open) => [...open, false]);
   }
 
   function removeRp(rpIndex: number) {
     setValues((v) => ({ ...v, rps: v.rps.filter((_, i) => i !== rpIndex) }));
-    setUsageCommentOpen((open) => open.filter((_, i) => i !== rpIndex));
   }
 
-  function toggleUsageComment(rpIndex: number, open: boolean) {
-    setUsageCommentOpen((prev) => prev.map((v, i) => (i === rpIndex ? open : v)));
-    if (!open) updateRp(rpIndex, { usageComment: "" });
+  function updateUnevenDoses(rpIndex: number, medIndex: number, unevenDoses: string[]) {
+    updateMedicine(rpIndex, medIndex, { unevenDoses, dose: unevenDailyDose(unevenDoses) });
   }
 
   function addMedicine(rpIndex: number) {
@@ -200,7 +217,22 @@ export function PrescriptionForm({
 
   function handleUsageSelect(usage: MedicineUsage) {
     if (modal?.kind !== "usage") return;
-    updateRp(modal.rpIndex, { usage, doseDays: "", doseCount: "" });
+    // 不均等は服用回数が用法で決まるので、回数に合わせて詰め直す。不均等にできない
+    // 用法に変えたら外す(1 日量はそのまま残す)。
+    const labels = unevenTimingLabels(usage.usage_code);
+    const rp = values.rps[modal.rpIndex];
+    updateRp(modal.rpIndex, {
+      usage,
+      doseDays: "",
+      doseCount: "",
+      supplement: isAsNeededUsage(usage.usage_code) ? null : rp.supplement,
+      medicines: rp.medicines.map((med) => {
+        if (!med.unevenDoses) return med;
+        if (!labels) return { ...med, unevenDoses: null };
+        const unevenDoses = labels.map((_, i) => med.unevenDoses?.[i] ?? "");
+        return { ...med, unevenDoses, dose: unevenDailyDose(unevenDoses) };
+      }),
+    });
     setModal(null);
   }
 
@@ -227,6 +259,10 @@ export function PrescriptionForm({
       if (isAsNeededUsage(rp.usage.usage_code)) {
         if (!rp.doseCount || Number(rp.doseCount) < 1) return `${rpLabel}: 投与回数を入力してください。`;
       }
+      if (rp.supplement) {
+        const error = supplementError(rp.supplement);
+        if (error) return `${rpLabel}: ${error}`;
+      }
       if (rp.medicines.length === 0) return `${rpLabel}: 医薬品を1件以上登録してください。`;
       for (let j = 0; j < rp.medicines.length; j++) {
         const med = rp.medicines[j];
@@ -234,6 +270,9 @@ export function PrescriptionForm({
         // 入外区分・処方区分は医薬品を選んだ後でも変えられるので、送信前にもう一度見る。
         if (med.medicine.generic && !allowGeneric) {
           return `${rpLabel}: 一般名(${med.medicine.name})は外来の院外処方でのみ使えます。`;
+        }
+        if (med.unevenDoses && !med.unevenDoses.every(isValidUnevenDose)) {
+          return `${rpLabel}: 不均等投与の量は数字と小数点で6桁以内で入力してください。`;
         }
         if (!med.dose || Number(med.dose) <= 0) return `${rpLabel}: 用量を入力してください。`;
       }
@@ -362,73 +401,118 @@ export function PrescriptionForm({
               <col />
               <col style={{ width: "88px" }} />
               <col style={{ width: "60px" }} />
-              <col style={{ width: "18%" }} />
-              <col style={{ width: "32px" }} />
+              <col style={{ width: "72px" }} />
             </colgroup>
             <thead>
               <tr>
                 <th>医薬品</th>
                 <th>用量</th>
                 <th>単位</th>
-                <th>薬剤コメント</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {rp.medicines.map((med, medIndex) => (
-                <tr key={medIndex}>
-                  <td>
-                    <div className="rp-card__medicine-cell">
-                      <button
-                        type="button"
-                        onClick={() => setModal({ kind: "medicine", rpIndex, medIndex })}
-                      >
-                        {med.medicine ? "変更" : "選択"}
-                      </button>
-                      {med.medicine ? (
-                        <span className="rp-card__medicine-name">
-                          {med.medicine.name}
-                          <MedicineCautionMarks medicine={med.medicine} />
-                        </span>
-                      ) : (
-                        <span className="rp-card__usage-value--empty">未選択</span>
+              {rp.medicines.map((med, medIndex) => {
+                const unevenLabels = unevenTimingLabels(rp.usage?.usage_code);
+                // コメントは値があれば出す(オーダーセット・レジメンから来た値はフラグを持たない)。
+                const showComment = Boolean(med.showComment || med.comment);
+                const canComment = !showComment;
+                const canUneven = !med.unevenDoses && unevenLabels !== null;
+                return (
+                  <tr key={medIndex}>
+                    <td>
+                      <div className="rp-card__medicine-cell">
+                        <button
+                          type="button"
+                          onClick={() => setModal({ kind: "medicine", rpIndex, medIndex })}
+                        >
+                          {med.medicine ? "変更" : "選択"}
+                        </button>
+                        {med.medicine ? (
+                          <span className="rp-card__medicine-name">
+                            {med.medicine.name}
+                            <MedicineCautionMarks medicine={med.medicine} />
+                          </span>
+                        ) : (
+                          <span className="rp-card__usage-value--empty">未選択</span>
+                        )}
+                      </div>
+                      <MedicineWarnings warnings={warnings[rpIndex]?.[medIndex]} />
+                      {med.unevenDoses && unevenLabels && (
+                        <UnevenDoseEditor
+                          labels={unevenLabels}
+                          doses={med.unevenDoses}
+                          onChange={(doses) => updateUnevenDoses(rpIndex, medIndex, doses)}
+                          onRemove={() => updateMedicine(rpIndex, medIndex, { unevenDoses: null })}
+                          removeButton={removeButton}
+                        />
                       )}
-                    </div>
-                    <MedicineWarnings warnings={warnings[rpIndex]?.[medIndex]} />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      className="rp-card__dose-input"
-                      value={med.dose}
-                      onChange={(e) => updateMedicine(rpIndex, medIndex, { dose: e.target.value })}
-                    />
-                  </td>
-                  <td className="rp-card__medicine-unit">{med.medicine?.unit_name ?? "-"}</td>
-                  <td>
-                    <input
-                      type="text"
-                      value={med.comment}
-                      onChange={(e) => updateMedicine(rpIndex, medIndex, { comment: e.target.value })}
-                    />
-                  </td>
-                  <td>
-                    {rp.medicines.length > 1 && (
-                      <button
-                        type="button"
-                        className="rp-card__icon-button"
-                        title="この医薬品を削除"
-                        aria-label="この医薬品を削除"
-                        onClick={() => removeMedicine(rpIndex, medIndex)}
-                      >
-                        <TrashIcon />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                      {showComment && (
+                        <div className="rp-card__comment-field rp-card__comment-field--inline">
+                          <label>
+                            薬剤コメント
+                            <input
+                              type="text"
+                              value={med.comment}
+                              onChange={(e) =>
+                                updateMedicine(rpIndex, medIndex, { comment: e.target.value })
+                              }
+                            />
+                          </label>
+                          {removeButton(
+                            () => updateMedicine(rpIndex, medIndex, { comment: "", showComment: false }),
+                            "薬剤コメントを削除",
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        className="rp-card__dose-input"
+                        value={med.dose}
+                        readOnly={Boolean(med.unevenDoses)}
+                        onChange={(e) => updateMedicine(rpIndex, medIndex, { dose: e.target.value })}
+                      />
+                    </td>
+                    <td className="rp-card__medicine-unit">{med.medicine?.unit_name ?? "-"}</td>
+                    <td>
+                      <div className="rp-card__row-actions">
+                        {(canComment || canUneven) && (
+                          <RowMenu label="この医薬品の操作" escapesClipping>
+                            {canComment && (
+                              <button
+                                type="button"
+                                className="row-menu__item"
+                                onClick={() => updateMedicine(rpIndex, medIndex, { showComment: true })}
+                              >
+                                薬剤コメント
+                              </button>
+                            )}
+                            {canUneven && (
+                              <button
+                                type="button"
+                                className="row-menu__item"
+                                onClick={() =>
+                                  updateMedicine(rpIndex, medIndex, {
+                                    unevenDoses: unevenLabels?.map(() => "") ?? null,
+                                  })
+                                }
+                              >
+                                不均等投与
+                              </button>
+                            )}
+                          </RowMenu>
+                        )}
+                        {rp.medicines.length > 1 &&
+                          removeButton(() => removeMedicine(rpIndex, medIndex), "この医薬品を削除")}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 
@@ -457,7 +541,6 @@ export function PrescriptionForm({
               ) : (
                 <span className="rp-card__usage-value rp-card__usage-value--empty">未選択</span>
               )}
-
               {hasDoseDays(rp.usage?.usage_code, rp.usage?.basic_usage_category) && (
                 <span className="rp-card__dose-count">
                   <span className="rp-card__dose-count-label">投与日数</span>
@@ -484,10 +567,44 @@ export function PrescriptionForm({
                   <span className="rp-card__dose-count-suffix">回分</span>
                 </span>
               )}
+              {rp.usage &&
+                ((!rp.supplement && !isAsNeededUsage(rp.usage.usage_code)) ||
+                  !(rp.showUsageComment || rp.usageComment)) && (
+                <RowMenu label="用法の操作" escapesClipping>
+                  {!rp.supplement && !isAsNeededUsage(rp.usage.usage_code) && (
+                    <button
+                      type="button"
+                      className="row-menu__item"
+                      onClick={() => updateRp(rpIndex, { supplement: emptySupplement("interval") })}
+                    >
+                      補足用法
+                    </button>
+                  )}
+                  {!(rp.showUsageComment || rp.usageComment) && (
+                    <button
+                      type="button"
+                      className="row-menu__item"
+                      onClick={() => updateRp(rpIndex, { showUsageComment: true })}
+                    >
+                      用法コメント
+                    </button>
+                  )}
+                </RowMenu>
+              )}
             </div>
           </div>
 
-          {usageCommentOpen[rpIndex] ? (
+          {rp.supplement && (
+            <SupplementaryUsageEditor
+              name={`rp-${rpIndex}-supplement`}
+              value={rp.supplement}
+              onChange={(supplement) => updateRp(rpIndex, { supplement })}
+              onRemove={() => updateRp(rpIndex, { supplement: null })}
+              removeButton={removeButton}
+            />
+          )}
+
+          {(rp.showUsageComment || rp.usageComment) && (
             <div className="rp-card__comment-field">
               <label>
                 用法コメント
@@ -497,25 +614,10 @@ export function PrescriptionForm({
                   onChange={(e) => updateRp(rpIndex, { usageComment: e.target.value })}
                 />
               </label>
-              <button
-                type="button"
-                className="rp-card__icon-button"
-                title="用法コメントを削除"
-                aria-label="用法コメントを削除"
-                onClick={() => toggleUsageComment(rpIndex, false)}
-              >
-                <TrashIcon />
-              </button>
-            </div>
-          ) : (
-            <div className="rp-card__actions">
-              <button
-                type="button"
-                className="comment-add-button"
-                onClick={() => toggleUsageComment(rpIndex, true)}
-              >
-                ＋用法コメント
-              </button>
+              {removeButton(
+                () => updateRp(rpIndex, { usageComment: "", showUsageComment: false }),
+                "用法コメントを削除",
+              )}
             </div>
           )}
 

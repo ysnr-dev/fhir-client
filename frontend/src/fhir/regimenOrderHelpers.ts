@@ -36,6 +36,7 @@ import {
 import { isHeaderEntry } from "./provenanceHelpers";
 import { doseUnitSuffix } from "./regimenHelpers";
 import type { RxTaskStatus } from "./rxTaskHelpers";
+import { usageCommentOf } from "./supplementaryUsage";
 import {
   categoryCoding,
   codingBySystem,
@@ -1232,7 +1233,7 @@ export function dayOrderStepNames(order: RegimenDayOrder): string[] {
   for (const mr of order.medicationRequests) {
     const rp = identifierValue(mr, RP_NUMBER_SYSTEM) ?? "";
     if (byRp.has(rp) && byRp.get(rp)) continue;
-    const comment = mr.dosageInstruction?.[0]?.additionalInstruction?.[0]?.text ?? "";
+    const comment = usageCommentOf(mr.dosageInstruction?.[0]) ?? "";
     const head = comment.split(" / ")[0].trim();
     // stepComment は [見出し, 器材, 注意] を並べたものなので、見出しが無いと
     // 器材が先頭に来る。それはステップ名ではないので薬剤名に落とす。

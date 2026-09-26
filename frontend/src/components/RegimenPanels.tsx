@@ -351,6 +351,9 @@ function RegimenOrderBody({ order }: { order: RegimenDayOrder }) {
                 {medicine.dose != null && (
                   <span className="karte-rp__medicine-dose">{`${medicine.dose}${medicine.unit ?? ""}`}</span>
                 )}
+                {medicine.unevenLabel && (
+                  <span className="karte-rp__comment">{`（${medicine.unevenLabel}）`}</span>
+                )}
                 {medicine.comment && <span className="karte-rp__comment">{`（${medicine.comment}）`}</span>}
               </li>
             ))}
@@ -359,6 +362,7 @@ function RegimenOrderBody({ order }: { order: RegimenDayOrder }) {
             <span className="karte-rp__detail-label">用法:</span>
             <span className="karte-rp__usage">
               <span>{rp.usageName ?? "-"}</span>
+              {rp.supplementLabel && <span>{rp.supplementLabel}</span>}
               {rp.doseDays != null && <span className="karte-rp__dose">{`${rp.doseDays}日分`}</span>}
               {rp.usageComment && <span className="karte-rp__comment">{`（${rp.usageComment}）`}</span>}
             </span>

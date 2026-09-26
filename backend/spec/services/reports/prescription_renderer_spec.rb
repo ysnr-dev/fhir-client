@@ -44,13 +44,14 @@ RSpec.describe Reports::PrescriptionRenderer do
     }
   end
 
-  def rp(number, medicines:, usage: "１日３回朝昼夕食後　服用", days: 7, count: nil, comment: nil)
+  def rp(number, medicines:, usage: "１日３回朝昼夕食後　服用", days: 7, count: nil, comment: nil,
+         supplement: nil)
     PrescriptionReport::RpGroup.new(
-      rp_number: number, usage_name: usage, dose_days: days, dose_count: count,
+      rp_number: number, usage_name: usage, supplement: supplement, dose_days: days, dose_count: count,
       usage_comment: comment,
-      medicines: medicines.each_with_index.map do |(name, dose, unit), index|
+      medicines: medicines.each_with_index.map do |(name, dose, unit, uneven), index|
         PrescriptionReport::MedicineLine.new(
-          order_in_rp: index + 1, name: name, dose: dose, unit: unit, comment: nil
+          order_in_rp: index + 1, name: name, dose: dose, unit: unit, comment: nil, uneven: uneven
         )
       end
     )
@@ -132,6 +133,15 @@ RSpec.describe Reports::PrescriptionRenderer do
 
     text = page_texts(pdf).flatten.join
     expect(text.delete("　")).to include(long_name)
+  end
+
+  it "prints the supplementary usage after the usage and the uneven doses on the medicine line" do
+    pdf = render(:external, [rp(1, medicines: [["プレドニン錠", 6, "錠", "朝4錠・夕2錠"]],
+                                   usage: "１日２回朝夕食後", supplement: "毎週月・木曜日")])
+
+    text = page_texts(pdf).flatten.join.gsub(/[[:space:]]/, "")
+    expect(text).to include("１日２回朝夕食後毎週月・木曜日7日分")
+    expect(text).to include("（朝4錠・夕2錠）")
   end
 
   it "renders with blank institution fields when the organization is unknown" do

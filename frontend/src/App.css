@@ -1569,9 +1569,137 @@ button:disabled {
 }
 
 /* 入力欄と高さを揃えるため、削除アイコンは 1 行目のラベル分だけ下げる。 */
-.prescription-form__comment-field > .rp-card__icon-button,
-.rp-card__comment-field > .rp-card__icon-button {
+.prescription-form__comment-field > .rp-card__icon-button {
   margin-bottom: 6px;
+}
+
+/* RP 内のコメント欄(用法コメント・薬剤コメント)は医薬品表の入力欄と同じ高さにそろえ、
+   削除アイコンも同じ高さの正方形にして下端で揃える。 */
+.rp-card__comment-field {
+  --control-height: 28px;
+}
+
+.prescription-form .rp-card__comment-field input {
+  font-size: 14px;
+}
+
+/* 薬剤名の下に出す薬剤コメント・不均等。医薬品セルの中なので上に少し間を空ける。 */
+.rp-card__comment-field--inline,
+.rp-card__uneven {
+  margin-top: 6px;
+}
+
+/* 薬剤名の下に入力欄が増えても、用量・単位・操作は 1 行目に揃えておく。 */
+.rp-card__medicines--form td {
+  vertical-align: top;
+}
+
+.rp-card__row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.rp-card__medicines .row-menu__trigger {
+  padding: 4px 8px;
+}
+
+/* 補足用法(RP 単位)。見出し行に種類のラジオと削除、その下に種類ごとの入力。 */
+.rp-card__supplement {
+  /* 入力欄・選択欄は医薬品表の用量と同じ高さにそろえる。 */
+  --control-height: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rp-card__supplement-head,
+.rp-card__supplement-body,
+.rp-card__uneven {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.rp-card__supplement-body > span {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.prescription-form .rp-card__supplement input,
+.prescription-form .rp-card__supplement select {
+  padding: 4px 6px;
+  font-size: 14px;
+}
+
+.rp-card__supplement-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.prescription-form label.rp-card__supplement-kind,
+.prescription-form label.rp-card__uneven-item {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.rp-card__supplement-dates {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.rp-card__supplement-date-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.rp-card__supplement-days {
+  display: grid;
+  grid-template-columns: repeat(7, 28px);
+  gap: 2px;
+}
+
+.supplement-toggle {
+  justify-content: center;
+  min-width: 28px;
+  height: 26px;
+  padding: 0 4px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--text);
+}
+
+.supplement-toggle--on {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.prescription-form .rp-card__uneven-input {
+  width: 56px;
+  padding: 4px 6px;
+  font-size: 14px;
+}
+
+.rp-card__supplement-kind input[type="radio"] {
+  width: auto;
+  margin: 0;
+}
+
+.prescription-detail__uneven {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text);
 }
 
 /* コメント欄を出すトリガーは任意入力の補助操作なので、

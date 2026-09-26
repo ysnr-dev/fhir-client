@@ -57,8 +57,9 @@ module Reports
         lines = ["Rp#{rp.rp_number}"]
         rp.medicines.each do |medicine|
           dose = medicine.dose.present? ? " #{medicine.dose}#{medicine.unit}" : ""
+          uneven = medicine.uneven.present? ? "（#{medicine.uneven}）" : ""
           comment = medicine.comment.present? ? "（#{medicine.comment}）" : ""
-          lines << "　#{medicine.name}#{dose}#{comment}"
+          lines << "　#{medicine.name}#{dose}#{uneven}#{comment}"
         end
         amount =
           if rp.dose_days.present?
@@ -68,7 +69,7 @@ module Reports
           else
             ""
           end
-        usage = [rp.usage_name, amount].compact_blank.join(" ")
+        usage = [rp.usage_name, rp.supplement, amount].compact_blank.join(" ")
         usage_comment = rp.usage_comment.present? ? "（#{rp.usage_comment}）" : ""
         lines << "　用法: #{usage}#{usage_comment}" if usage.present? || usage_comment.present?
         lines

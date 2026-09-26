@@ -18,6 +18,7 @@ import {
   type RpValues,
 } from "../fhir/prescriptionHelpers";
 import { buildRxDispenseBundle, dispenseValuesFromOrder } from "../fhir/rxDispenseHelpers";
+import { supplementLabel, unevenLabel } from "../fhir/supplementaryUsage";
 import { presetUsageFilters } from "../fhir/usageMapping";
 import { cycleDayLabel, regimenOrderOf } from "../fhir/regimenOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
@@ -265,6 +266,11 @@ function RxDispenseForm({
                           <span className="rp-card__usage-value--empty">未選択</span>
                         )}
                       </div>
+                      {med.unevenDoses && (
+                        <div className="prescription-detail__uneven">
+                          {`不均等: ${unevenLabel(med.unevenDoses, rp.usage?.usage_code, med.medicine?.unit_name)}`}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <input
@@ -336,6 +342,9 @@ function RxDispenseForm({
               </div>
             </div>
 
+            {rp.supplement && (
+              <p className="karte-card__note">{`補足用法: ${supplementLabel(rp.supplement)}`}</p>
+            )}
             {rp.usageComment && <p className="karte-card__note">{rp.usageComment}</p>}
           </fieldset>
         ))}

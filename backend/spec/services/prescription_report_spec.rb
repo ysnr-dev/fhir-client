@@ -39,7 +39,8 @@ RSpec.describe PrescriptionReport do
   end
 
   def medication_request(id, rp:, index:, name:, code: "610000001", generic: false, dose: 3, unit: "錠",
-                         days: nil, count: nil, usage: "１日３回朝昼夕食後　服用", comment: nil)
+                         days: nil, count: nil, usage: "１日３回朝昼夕食後　服用", comment: nil,
+                         supplements: [])
     system = generic ? described_class::GENERAL_ORDER_CODE_SYSTEM : described_class::MEDICINE_CODE_SYSTEM
     dosage = {
       "timing" => {
@@ -49,7 +50,12 @@ RSpec.describe PrescriptionReport do
       "doseAndRate" => [{ "doseQuantity" => { "value" => dose, "unit" => unit } }]
     }
     dosage["timing"]["repeat"] = { "count" => count } if count
-    dosage["additionalInstruction"] = [{ "text" => comment }] if comment
+    instructions = supplements.map do |code, display|
+      { "coding" => [{ "system" => described_class::SUPPLEMENTARY_USAGE_SYSTEM, "code" => code,
+                       "display" => display }], "text" => display }
+    end
+    instructions << { "text" => comment } if comment
+    dosage["additionalInstruction"] = instructions if instructions.any?
     resource = {
       "resourceType" => "MedicationRequest",
       "id" => id,
@@ -178,6 +184,26 @@ RSpec.describe PrescriptionReport do
     expect(rps[0].dose_days).to eq(7)
     expect(rps[1].dose_count).to eq(10)
     expect(rps[1].usage_name).to eq("疼痛時")
+  end
+
+  it "reads supplementary usage codes apart from the usage comment" do
+    stub_batch([
+      medication_request("m1", rp: 1, index: 1, name: "ワーファリン錠", days: 14, comment: "食後すぐ",
+                               supplements: [["D0148BFI", "毎月1日・4日・8日・11日・15日・18日"],
+                                             ["D0MPT000", "毎月22日・25日・29日"],
+                                             ["V22.5NNN", "夕 2.5錠"], ["V13.5NNN", "朝 3.5錠"]]),
+      medication_request("m2", rp: 1, index: 2, name: "ムコスタ錠", days: 14, comment: "食後すぐ",
+                               supplements: [["D0148BFI", "毎月1日・4日・8日・11日・15日・18日"],
+                                             ["D0MPT000", "毎月22日・25日・29日"]])
+    ])
+    captured = capture_renderer
+
+    described_class.new("o1", gateway: gateway).generate
+
+    rp = captured.call[:rps].first
+    expect(rp.usage_comment).to eq("食後すぐ")
+    expect(rp.supplement).to eq("毎月1日・4日・8日・11日・15日・18日・22日・25日・29日")
+    expect(rp.medicines.map(&:uneven)).to eq(["朝 3.5錠・夕 2.5錠", ""])
   end
 
   it "continues with a nil organization when the institution search returns none" do

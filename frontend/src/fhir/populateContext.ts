@@ -68,8 +68,9 @@ export function formatPrescriptions(prescriptionDetail: fhir4.Bundle | undefined
     for (const medicine of rp.medicines) {
       const dose =
         medicine.dose !== undefined ? ` ${medicine.dose}${medicine.unit ?? ""}` : "";
+      const uneven = medicine.unevenLabel ? `（${medicine.unevenLabel}）` : "";
       const comment = medicine.comment ? `（${medicine.comment}）` : "";
-      lines.push(`　${medicine.name}${dose}${comment}`);
+      lines.push(`　${medicine.name}${dose}${uneven}${comment}`);
     }
     const amount =
       rp.doseDays !== undefined
@@ -77,7 +78,7 @@ export function formatPrescriptions(prescriptionDetail: fhir4.Bundle | undefined
         : rp.doseCount !== undefined
           ? `${rp.doseCount}回分`
           : "";
-    const usage = [rp.usageName, amount].filter(Boolean).join(" ");
+    const usage = [rp.usageName, rp.supplementLabel, amount].filter(Boolean).join(" ");
     const usageComment = rp.usageComment ? `（${rp.usageComment}）` : "";
     if (usage || usageComment) lines.push(`　用法: ${usage}${usageComment}`);
   }
