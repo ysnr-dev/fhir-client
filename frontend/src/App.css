@@ -9821,6 +9821,173 @@ body.page-wide-md .app__main {
   background: var(--surface-sunken);
 }
 
+/* 救急患者一覧。表の作りは外来患者一覧(.outpatient)に乗せ、固定列の幅だけ替える。 */
+.emergency {
+  /* JTAS / 来院 / 患者番号 / 患者氏名。 */
+  --sticky-fix-1-w: 68px;
+  --sticky-fix-2-w: 184px;
+}
+
+.outpatient td.emergency__complaint-cell,
+.outpatient th.emergency__complaint-cell {
+  width: 100%;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emergency__row--finished td {
+  color: var(--text);
+  background: var(--surface-stripe);
+}
+
+/* JTAS のレベル。色は index.css の --jtas-*。白(5)は地に溶けないよう枠を付ける。 */
+.jtas-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.jtas-badge--none {
+  border-color: var(--border);
+  font-weight: 400;
+}
+
+.jtas--1 { background: var(--jtas-1); color: var(--jtas-1-text); }
+.jtas--2 { background: var(--jtas-2); color: var(--jtas-2-text); }
+.jtas--3 { background: var(--jtas-3); color: var(--jtas-3-text); }
+.jtas--4 { background: var(--jtas-4); color: var(--jtas-4-text); }
+.jtas--5 { background: var(--jtas-5); color: var(--jtas-5-text); border-color: var(--border); }
+
+.jtas-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.jtas-picker__option {
+  --control-height: 30px;
+  padding: 2px 10px;
+  font-size: 13px;
+  opacity: 0.55;
+}
+
+.jtas-picker__option--selected {
+  opacity: 1;
+  outline: 2px solid var(--text-h);
+  outline-offset: 1px;
+}
+
+.emergency__modes {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.emergency__modes label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 患者検索のページ送りと、その下の来院情報の欄を離す。 */
+.emergency__patient-search {
+  margin-bottom: 20px;
+}
+
+.emergency__triage-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.walk-in__fields .emergency__complaint {
+  flex-basis: 100%;
+}
+
+.walk-in__fields .emergency__complaint input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.emergency__modal-actions {
+  margin-top: 16px;
+}
+
+.emergency__triage-history {
+  margin-top: 16px;
+}
+
+/* 来院方法。救急車・ヘリなど搬送されてきたものは頭に印を付けて目立たせる。 */
+.emergency__arrival {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.emergency__arrival-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--bg);
+  background: var(--lab-high);
+}
+
+.emergency__arrival--referral .emergency__arrival-mark,
+.emergency__arrival--transfer .emergency__arrival-mark {
+  background: var(--warning);
+}
+
+/* 身元不明で仮登録した患者。 */
+.emergency__provisional {
+  flex-shrink: 0;
+  padding: 0 4px;
+  border: 1px solid var(--warning);
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--warning);
+}
+
+.emergency__status--arrived {
+  color: var(--bg);
+  border-color: var(--warning);
+  background: var(--warning);
+}
+
+.emergency__status--triaged {
+  color: var(--bg);
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.emergency__status--in-progress {
+  color: var(--bg);
+  border-color: var(--lab-low);
+  background: var(--lab-low);
+}
+
+.emergency__status--finished {
+  color: var(--lab-low);
+  border-color: var(--lab-low);
+}
+
 /* 患者の入力欄の並び。新患登録モーダルと患者登録・編集フォームで共有する
    (同じ患者属性を同じ並びで書けるようにするため)。情報のまとまりごとに
    枠(.patient-fields__group-box)で区切る。 */

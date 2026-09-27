@@ -26,6 +26,18 @@
   --lab-low: #2a78d6;
   /* 「急ぎではないが放置してよくない」ことを表す色。赤(--lab-high)より一段弱い。 */
   --warning: #b7791f;
+  /* JTAS の色分け(1 蘇生=青 / 2 緊急=赤 / 3 準緊急=黄 / 4 低緊急=緑 / 5 非緊急=白)。
+     地の色と、その上に載せる文字の色の組で持つ。 */
+  --jtas-1: #1f5fbf;
+  --jtas-1-text: #ffffff;
+  --jtas-2: #d32f2f;
+  --jtas-2-text: #ffffff;
+  --jtas-3: #f2c230;
+  --jtas-3-text: #3a2e00;
+  --jtas-4: #2e8b57;
+  --jtas-4-text: #ffffff;
+  --jtas-5: #ffffff;
+  --jtas-5-text: #3a3a44;
 
   /* 入力部品(テキスト入力・セレクト・ボタン)の高さ。並べたときに揃うよう、
      行間や余白から決めずにこの値で固定する。標準の 15px 文字の セレクトに合わせた
@@ -88,6 +100,16 @@
   --lab-high: #ef5350;
   --lab-low: #3987e5;
   --warning: #e0a33a;
+  --jtas-1: #3b7de0;
+  --jtas-1-text: #ffffff;
+  --jtas-2: #e5484d;
+  --jtas-2-text: #ffffff;
+  --jtas-3: #e9b82a;
+  --jtas-3-text: #2a2100;
+  --jtas-4: #3fa76c;
+  --jtas-4-text: #0b1a11;
+  --jtas-5: #e8e8ee;
+  --jtas-5-text: #1c1d25;
 }
 
 :root[data-theme="dark"] #social .button-icon {

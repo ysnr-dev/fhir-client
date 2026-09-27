@@ -124,6 +124,7 @@ import { QuestionnaireEditPage } from "./pages/QuestionnaireEditPage";
 import { QuestionnaireListPage } from "./pages/QuestionnaireListPage";
 import { QuestionnairePreviewPage } from "./pages/QuestionnairePreviewPage";
 import { OutpatientListPage } from "./pages/OutpatientListPage";
+import { EmergencyListPage } from "./pages/EmergencyListPage";
 import { LabArrivalPage } from "./pages/LabArrivalPage";
 import { LabResultImportPage } from "./pages/LabResultImportPage";
 import { LabResultImportDetailPage } from "./pages/LabResultImportDetailPage";
@@ -166,6 +167,10 @@ function App() {
             {/* 外来患者一覧はその日の予約患者を受付する画面。 */}
             <Link to="/outpatients" className="row-menu__item">
               外来患者一覧
+            </Link>
+            {/* 救急患者一覧は救急外来に来院した患者を来院から転帰まで追う画面。 */}
+            <Link to="/emergency" className="row-menu__item">
+              救急患者一覧
             </Link>
             {/* 入院患者一覧は病棟のベッドの埋まり具合と在院患者を見る画面。 */}
             <Link to="/inpatients" className="row-menu__item">
@@ -633,6 +638,8 @@ function App() {
           <Route path="/schedules/:id/slots" element={<ScheduleSlotCalendarPage />} />
           {/* 外来の受付。その日の予約患者と当日受付の患者を捌くための一覧。 */}
           <Route path="/outpatients" element={<OutpatientListPage />} />
+          {/* 救急の受付。来院で救急の受診(Encounter)を建て、トリアージから転帰まで追う。 */}
+          <Route path="/emergency" element={<EmergencyListPage />} />
           {/* 入院患者一覧。病棟のベッド(Location)に入院(Encounter)を突き合わせて出す。 */}
           <Route path="/inpatients" element={<InpatientListPage />} />
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}

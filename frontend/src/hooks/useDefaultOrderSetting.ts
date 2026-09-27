@@ -1,4 +1,4 @@
-import { usePatientAdmission } from "../api/queries";
+import { usePatientAdmission, usePatientEmergency } from "../api/queries";
 import type { PrescriptionSetting } from "../fhir/prescriptionHelpers";
 
 // 新規オーダー・検査結果を出す時点の在院状況。入外区分の初期値(入院中なら「入院」、
@@ -10,7 +10,7 @@ export interface DefaultOrderSetting {
   /** 入院病棟の Location.id。入院していない・辿れなかったときは空。 */
   wardId: string;
   wardName: string;
-  /** 入院(Encounter.id)。入院していないときは空。 */
+  /** 入院(Encounter.id)。入院していなければ救急の滞在中の受診、どちらも無ければ空。 */
   encounterId: string;
   /** 入院かどうかが分かったか。フォームの初期値は初回描画時にしか効かないので、
    *  呼び出し側はこれが true になるまでフォームを描かない。 */
@@ -19,12 +19,14 @@ export interface DefaultOrderSetting {
 
 export function useDefaultOrderSetting(patientId: string): DefaultOrderSetting {
   const admission = usePatientAdmission(patientId);
+  // 救急の滞在中は入外区分を外来のまま、オーダーを救急の受診に結び付ける。
+  const emergency = usePatientEmergency(patientId);
   return {
     // 読めなかった場合(エラーなど)は外来にする。
     setting: admission.data ? "inpatient" : "outpatient",
     wardId: admission.data?.wardId ?? "",
     wardName: admission.data?.wardName ?? "",
-    encounterId: admission.data?.encounter.id ?? "",
-    ready: !admission.isPending,
+    encounterId: admission.data?.encounter.id ?? emergency.data?.id ?? "",
+    ready: !admission.isPending && !emergency.isPending,
   };
 }

@@ -30,6 +30,7 @@ export function PlannedAdmissionForm({
   patient,
   defaultWardId,
   header,
+  prepare,
   onSaved,
   onCancel,
 }: {
@@ -38,6 +39,8 @@ export function PlannedAdmissionForm({
   defaultWardId?: string;
   /** 入力欄の上に出す行(モーダルでは選んだ患者)。送信中は操作させない。 */
   header?: (submitting: boolean) => ReactNode;
+  /** 登録前に入院予定の Encounter に手を加える(救急からの入院で経路を添えるなど)。 */
+  prepare?: (encounter: fhir4.Encounter) => fhir4.Encounter;
   onSaved: () => void;
   /** キャンセル。右ペインは見出しに「閉じる」があるので渡さない。 */
   onCancel?: () => void;
@@ -108,7 +111,7 @@ export function PlannedAdmissionForm({
       },
       merged,
     );
-    register.mutate(encounter, { onSuccess: onSaved });
+    register.mutate(prepare ? prepare(encounter) : encounter, { onSuccess: onSaved });
   }
 
   return (

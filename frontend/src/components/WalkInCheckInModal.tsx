@@ -98,7 +98,7 @@ export function WalkInCheckInModal({ onClose }: WalkInCheckInModalProps) {
   );
 }
 
-function WalkInPatientSearch({ onSelect }: { onSelect: (patient: fhir4.Patient) => void }) {
+export function WalkInPatientSearch({ onSelect }: { onSelect: (patient: fhir4.Patient) => void }) {
   const [inputs, setInputs] = useState<PatientSearchParams>({ name: "", identifier: "" });
   const [search, setSearch] = useState<PatientSearchParams>({});
   const [offset, setOffset] = useState(0);

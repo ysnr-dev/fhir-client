@@ -21,10 +21,7 @@ import {
   useUpdateOutpatientExam,
   type OutpatientRow,
 } from "../api/queries";
-import {
-  OUTPATIENT_ORDER_STAGE_LABELS,
-  type OutpatientOrderSummary,
-} from "../fhir/outpatientOrderProgressHelpers";
+import { type OutpatientOrderSummary } from "../fhir/outpatientOrderProgressHelpers";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
@@ -37,11 +34,7 @@ import {
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
 import { NewPatientCheckInModal } from "../components/NewPatientCheckInModal";
-import {
-  AllergyPictogramBadges,
-  CautionPictogramBadges,
-  InfectionPictogramBadge,
-} from "../components/PatientPictograms";
+import { ORDER_LEGEND, OrderSummaryChips, RowPictograms } from "../components/PatientListRowParts";
 import { OutpatientReceptionModal } from "../components/OutpatientReceptionModal";
 import { RowMenu } from "../components/RowMenu";
 import { WalkInCheckInModal } from "../components/WalkInCheckInModal";
@@ -640,73 +633,6 @@ function waitingMinutes(row: OutpatientRow, now: Date): number | undefined {
   if (Number.isNaN(checkedInAt)) return undefined;
   return Math.max(0, Math.floor((now.getTime() - checkedInAt) / 60_000));
 }
-
-type RowPictogramsProps = {
-  patientId: string;
-  flags: Map<string, fhir4.Flag[]>;
-  allergies: Map<string, fhir4.AllergyIntolerance[]>;
-  infections: ReturnType<typeof useInfectionsForPatients>["byPatient"];
-  cautionsByCode: Map<string, PatientCaution>;
-};
-
-/**
- * 氏名の後ろに並べる注意のピクトグラム(カルテの患者帯・病棟マップと同じもの)。
- * 表は横スクロールの入れ物に入っていて吹き出しが縁で切れるので、内容はホバーで読む。
- */
-function RowPictograms({ patientId, flags, allergies, infections, cautionsByCode }: RowPictogramsProps) {
-  if (!patientId) return null;
-  return (
-    <span className="outpatient__pictograms">
-      <CautionPictogramBadges
-        flags={flags.get(patientId) ?? []}
-        cautionsByCode={cautionsByCode}
-        patientId={patientId}
-        size={16}
-        popover={false}
-      />
-      <AllergyPictogramBadges
-        allergies={allergies.get(patientId) ?? []}
-        patientId={patientId}
-        size={16}
-        popover={false}
-      />
-      <InfectionPictogramBadge
-        rows={infections.get(patientId) ?? []}
-        patientId={patientId}
-        size={16}
-        popover={false}
-      />
-    </span>
-  );
-}
-
-/**
- * 当日オーダーの印。種別ごとに 1 文字の四角を 1 つ並べ、いちばん進んでいない段階を
- * 色と塗りで出す。種別の正式名と一件ずつの内訳はホバーで読む。
- */
-function OrderSummaryChips({ orders }: { orders: OutpatientOrderSummary[] }) {
-  if (orders.length === 0) return <>-</>;
-  return (
-    <span className="outpatient__orders">
-      {orders.map((order) => {
-        const heading = `${order.kindLabel}（${OUTPATIENT_ORDER_STAGE_LABELS[order.stage]}）`;
-        return (
-          <span
-            key={order.kind}
-            className={`outpatient__order outpatient__order--${order.stage}`}
-            title={[heading, ...order.details].join("\n")}
-            aria-label={heading}
-          >
-            {order.mark}
-          </span>
-        );
-      })}
-    </span>
-  );
-}
-
-/** 当日オーダーの列見出しのホバーに出す、印の見方。 */
-const ORDER_LEGEND = "青の塗り=結果あり / 青の枠=中間報告 / 灰の塗り=実施済 / 紫の枠=受付済 / 枠のみ=依頼";
 
 /** レセコンの患者番号との突き合わせ用。数字だけの番号はゼロ埋めを外す。 */
 function normalizePatientNumber(number: string | undefined): string {

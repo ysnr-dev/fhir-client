@@ -9,10 +9,18 @@ import {
   usePatient,
   usePathwayApplications,
   usePatientAdmission,
+  usePatientEmergency,
   useRegimenApplications,
 } from "../api/queries";
 import { summarizeBloodType } from "../fhir/bloodTypeHelpers";
 import { bloodTypeLabel } from "../fhir/transfusionOrderHelpers";
+import {
+  emergencyBedName,
+  emergencyStatusLabel,
+  emergencyTriageLevel,
+  isProvisionalPatient,
+  jtasLabel,
+} from "../fhir/emergencyEncounterHelpers";
 import type { PatientCaution } from "../api/masterClient";
 import { regimenStatusLabel } from "../fhir/regimenOrderHelpers";
 import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../fhir/infectionHelpers";
@@ -40,6 +48,8 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
   const patient = usePatient(patientId);
   // 入院中なら居場所を添える(外来のときは項目ごと出さない)。
   const admission = usePatientAdmission(patientId);
+  // 救急に滞在中なら JTAS・状態・ベッドを添える。
+  const emergency = usePatientEmergency(patientId);
   const p = patient.data?.data;
   if (!p) return null;
 
@@ -66,7 +76,10 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
       </span>
       <span className="patient-header__item">
         <span className="patient-header__label">氏名</span>
-        <span className="patient-header__value patient-header__value--name">{displayName(p)}</span>
+        <span className="patient-header__value patient-header__value--name">
+          {isProvisionalPatient(p) && <span className="emergency__provisional">仮</span>}{" "}
+          {displayName(p)}
+        </span>
       </span>
       {kana && (
         <span className="patient-header__item">
@@ -97,6 +110,7 @@ export function PatientHeader({ patientId }: PatientHeaderProps) {
           <span className="patient-header__value">{admissionPlace}</span>
         </span>
       )}
+      {emergency.data && <EmergencyStay encounter={emergency.data} />}
       <Pathways patientId={patientId} />
       <CautionPictograms patientId={patientId} />
       <AllergyPictograms patientId={patientId} />
@@ -234,6 +248,24 @@ function BloodType({ patientId }: { patientId: string | undefined }) {
       <span className="patient-header__value patient-header__value--blood-type">
         {label}
         {!summary?.tested && <span className="blood-type__unconfirmed">検査未確定</span>}
+      </span>
+    </span>
+  );
+}
+
+function EmergencyStay({ encounter }: { encounter: fhir4.Encounter }) {
+  const level = emergencyTriageLevel(encounter);
+  const bed = emergencyBedName(encounter);
+  return (
+    <span className="patient-header__item">
+      <span className="patient-header__label">救急</span>
+      <span className="patient-header__value">
+        {level && (
+          <span className={`jtas-badge jtas--${level}`} title={`JTAS ${level} ${jtasLabel(level)}`}>
+            {level}
+          </span>
+        )}{" "}
+        {[emergencyStatusLabel(encounter.status), bed].filter(Boolean).join(" ")}
       </span>
     </span>
   );

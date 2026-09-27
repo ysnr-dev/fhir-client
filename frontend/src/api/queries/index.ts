@@ -8,6 +8,7 @@ export * from "./encounter";
 export * from "./schedule";
 export * from "./appointment";
 export * from "./outpatient";
+export * from "./emergency";
 export * from "./worklist";
 export * from "./rad";
 export * from "./lab";
