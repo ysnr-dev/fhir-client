@@ -704,7 +704,12 @@ const KarteCard = memo(function KarteCard({
                 title={
                   examReport.reportId
                     ? undefined
-                    : `この${examReport.config.labels.order}の${examReport.config.labels.report}はまだ登録されていません`
+                    : // 「内視鏡所見レポート」のように種別名で始まる名前には「この内視鏡の」を重ねない。
+                      `${
+                        examReport.config.labels.report.startsWith(examReport.config.labels.order)
+                          ? "この"
+                          : `この${examReport.config.labels.order}の`
+                      }${examReport.config.labels.report}はまだ登録されていません`
                 }
                 onClick={() =>
                   onOpenDetail({ kind: examReport.config.detailKind, id: examReport.reportId })

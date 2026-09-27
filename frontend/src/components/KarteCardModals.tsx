@@ -108,8 +108,8 @@ const DETAIL_TITLES: Record<KarteDetailKind, string> = {
   "micro-result": "細菌検査結果内容",
   "patho-result": "病理診断レポート",
   "rad-result": EXAM_REPORT_CONFIGS.rad.labels.report,
-  "physio-result": `生理検査${EXAM_REPORT_CONFIGS.physio.labels.report}`,
-  "endoscopy-result": `内視鏡${EXAM_REPORT_CONFIGS.endoscopy.labels.report}`,
+  "physio-result": EXAM_REPORT_CONFIGS.physio.labels.report,
+  "endoscopy-result": EXAM_REPORT_CONFIGS.endoscopy.labels.report,
   qr: "テンプレート表示",
 };
 

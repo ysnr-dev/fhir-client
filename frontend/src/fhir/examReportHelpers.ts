@@ -135,7 +135,7 @@ const PHYSIO_CONFIG: ExamReportConfig = {
   observationCategory: { system: OBSERVATION_CATEGORY_SYSTEM, code: "procedure", display: "Procedure" },
   prefix: "physio",
   labels: {
-    report: "所見レポート",
+    report: "生理検査所見レポート",
     action: "所見",
     exam: "検査",
     interpreter: "記載医",
@@ -163,7 +163,7 @@ const ENDOSCOPY_CONFIG: ExamReportConfig = {
   observationCategory: { system: OBSERVATION_CATEGORY_SYSTEM, code: "procedure", display: "Procedure" },
   prefix: "endoscopy",
   labels: {
-    report: "所見レポート",
+    report: "内視鏡所見レポート",
     action: "所見",
     exam: "検査",
     interpreter: "記載医",
