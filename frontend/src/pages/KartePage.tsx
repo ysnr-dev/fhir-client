@@ -44,6 +44,7 @@ import { VitalFlowsheetPanel } from "../components/VitalFlowsheetPanel";
 import { KarteLabResultTab } from "../components/KarteLabResultTab";
 import { LabResultTimelinePanel } from "../components/LabResultTimelinePanel";
 import { KarteChartTab } from "../components/KarteChartTab";
+import { KarteMedicationHistoryTab } from "../components/KarteMedicationHistoryTab";
 import { KarteMicroResultTab } from "../components/KarteMicroResultTab";
 import { KartePathoResultTab } from "../components/KartePathoResultTab";
 import { KarteProblemList } from "../components/KarteProblemList";
@@ -906,6 +907,10 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     // チャートは view に「基準日・横軸・見ているチャート」を載せる(経過表と同じ考え)。
     // 帯のイベントからはカルテのカードと同じオーダー詳細モーダルを開く。
     if (key === "chart") return <KarteChartTab {...props} onOpenDetail={openDetail} />;
+    // 投薬歴も view に「基準日・列・絞り込み」を載せ、セルからオーダー詳細モーダルを開く。
+    if (key === "medication-history") {
+      return <KarteMedicationHistoryTab {...props} onOpenDetail={openDetail} />;
+    }
     if (key === "micro") return <KarteMicroResultTab {...props} />;
     if (key === "patho") return <KartePathoResultTab {...props} />;
     // 食事オーダーの編集も、登録と同じ右ペインで開く(暦は表示に徹する)。

@@ -1259,7 +1259,7 @@ export function buildPrescriptionChartEvents(
   return events;
 }
 
-function medicationRequestsByOrderId(
+export function medicationRequestsByOrderId(
   medicationRequests: fhir4.MedicationRequest[],
 ): Map<string, fhir4.MedicationRequest[]> {
   const byOrderId = new Map<string, fhir4.MedicationRequest[]>();
@@ -1277,7 +1277,7 @@ function medicationRequestsByOrderId(
  * 中止していないオーダー。中止は進捗の Task(cancelled)で持つ(オーダー自体の status は
  * active のまま)ので、Task の focus で突き合わせて外す。
  */
-function activeOrders(orders: fhir4.ServiceRequest[], tasks: fhir4.Task[]): fhir4.ServiceRequest[] {
+export function activeOrders(orders: fhir4.ServiceRequest[], tasks: fhir4.Task[]): fhir4.ServiceRequest[] {
   const cancelled = new Set(
     tasks
       .filter((task) => task.status === "cancelled")

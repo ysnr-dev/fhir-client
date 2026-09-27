@@ -111,6 +111,8 @@ export interface ChartPrescriptions {
   medicationRequests: fhir4.MedicationRequest[];
   /** 進捗の Task(中止したオーダーを見分けるのに使う)。 */
   tasks: fhir4.Task[];
+  /** 取得の上限に達し、期間の後ろのオーダーを取りこぼしている。 */
+  truncated: boolean;
 }
 
 async function fetchChartMedicationOrders(
@@ -129,7 +131,7 @@ async function fetchChartMedicationOrders(
   params.append("_revinclude", "MedicationRequest:based-on");
   params.append("_revinclude", "Task:focus");
   params.set("_sort", "occurrence");
-  const { matches, bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
+  const { matches, bundles, truncated } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
     page: CHART_PRESCRIPTION_PAGE,
     maxPages: CHART_PRESCRIPTION_MAX_PAGES,
   });
@@ -139,6 +141,7 @@ async function fetchChartMedicationOrders(
       resourcesOfType<fhir4.MedicationRequest>(bundle, "MedicationRequest"),
     ),
     tasks: bundles.flatMap((bundle) => resourcesOfType<fhir4.Task>(bundle, "Task")),
+    truncated,
   };
 }
 

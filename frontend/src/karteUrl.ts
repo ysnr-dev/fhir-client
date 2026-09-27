@@ -68,6 +68,8 @@ export const KARTE_TABS = [
   { key: "allergy", label: "アレルギー" },
   // 入院時の持参薬。登録・鑑別・継続/中止の判断をタブの中で行う(docs/brought-medication-design.md)。
   { key: "brought-medication", label: "持参薬" },
+  // 投薬歴。処方・注射・持参薬を「薬剤 × 日付」の表にして、いつ何をどれだけ使っていたかを読む。
+  { key: "medication-history", label: "投薬歴" },
   // 化学療法。レジメンの投与スケジュールは日付の器(暦)で見る(食事と同じ考え方)。
   { key: "chemo", label: "化学療法" },
   // クリニカルパス。適用したパスを病日 × OAT ユニットのシートで見る(紙のパスシートの形)。
@@ -109,7 +111,7 @@ export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
  */
 export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly KarteTabKey[] }> = [
   { label: "患者情報", keys: ["profile", "allergy", "brought-medication"] },
-  { label: "診療情報", keys: ["chemo", "pathway", "meal", "chart"] },
+  { label: "診療情報", keys: ["medication-history", "chemo", "pathway", "meal", "chart"] },
   { label: "検査結果", keys: ["lab", "lab-timeline", "micro", "patho"] },
 ];
 
@@ -287,6 +289,63 @@ export function formatChartView(view: ChartView, today: string): string | null {
   const full = view.fullscreen ? "!" : "";
   const formatted = `${baseDate}${anchor}${axis}${chart}${overlay}${values}${full}`;
   return formatted || null;
+}
+
+// ---- 投薬歴の表示状態 ----
+//
+// 形は「[基準日][~単位列数][.入外][-隠す区分][!]」。例 "2026-09-01~m12.out-cj"。単位は d/m の 1 文字、
+// 入外は in/out、隠す区分は区分ごとの 1 文字(MEDICATION_HISTORY_KIND_LETTERS)を並べる。
+// 末尾の「!」は全画面(経過表と同じ)。
+// 基準日が今日で、ほかが既定なら view を落とす。
+
+export type MedicationHistoryKind = "oral" | "external" | "prn" | "injection" | "brought";
+export type MedicationHistoryUnit = "day" | "month";
+export type MedicationHistorySetting = "inpatient" | "outpatient";
+
+const MEDICATION_HISTORY_KIND_LETTERS: Record<MedicationHistoryKind, string> = {
+  oral: "n",
+  external: "g",
+  prn: "t",
+  injection: "c",
+  brought: "j",
+};
+
+export interface MedicationHistoryView {
+  /** 期間の右端。省略は今日。 */
+  baseDate?: string;
+  unit?: MedicationHistoryUnit;
+  columns?: number;
+  setting?: MedicationHistorySetting;
+  hidden?: MedicationHistoryKind[];
+  fullscreen?: boolean;
+}
+
+export function parseMedicationHistoryView(value: string | undefined): MedicationHistoryView {
+  const match = /^(\d{4}-\d{2}-\d{2})?(?:~([dm])(\d+))?(?:\.(in|out))?(?:-([a-z]+))?(!)?$/.exec(value ?? "");
+  if (!match) return {};
+  const letters = match[5] ?? "";
+  const hidden = (Object.keys(MEDICATION_HISTORY_KIND_LETTERS) as MedicationHistoryKind[]).filter(
+    (kind) => letters.includes(MEDICATION_HISTORY_KIND_LETTERS[kind]),
+  );
+  return {
+    baseDate: match[1],
+    unit: match[2] === "m" ? "month" : match[2] === "d" ? "day" : undefined,
+    columns: match[3] ? Number(match[3]) : undefined,
+    setting: match[4] === "in" ? "inpatient" : match[4] === "out" ? "outpatient" : undefined,
+    hidden: hidden.length > 0 ? hidden : undefined,
+    fullscreen: Boolean(match[6]),
+  };
+}
+
+export function formatMedicationHistoryView(view: MedicationHistoryView, today: string): string | null {
+  const baseDate = view.baseDate && view.baseDate !== today ? view.baseDate : "";
+  const axis = view.unit && view.columns ? `~${view.unit === "month" ? "m" : "d"}${view.columns}` : "";
+  const setting = view.setting ? `.${view.setting === "inpatient" ? "in" : "out"}` : "";
+  const hidden = view.hidden?.length
+    ? `-${view.hidden.map((kind) => MEDICATION_HISTORY_KIND_LETTERS[kind]).join("")}`
+    : "";
+  const full = view.fullscreen ? "!" : "";
+  return `${baseDate}${axis}${setting}${hidden}${full}` || null;
 }
 
 // ---- パスシートの表示状態 ----

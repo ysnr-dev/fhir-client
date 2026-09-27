@@ -3778,7 +3778,8 @@ fieldset.rp-card {
 }
 
 /* 全画面。経過表(.vital-flowsheet--fullscreen)と同じ枠で、上端はパネル側が実測する。 */
-.patient-chart--fullscreen {
+.patient-chart--fullscreen,
+.medication-history--fullscreen {
   position: fixed;
   left: 24px;
   right: 24px;
@@ -20442,4 +20443,244 @@ button.chemo-calendar__cell[draggable="true"] {
 
 .brought-med__preview .brought-med__state {
   margin-left: 8px;
+}
+
+/* ---- 投薬歴(薬剤 × 日付の表) ---- */
+
+/* ツールバーは残して表だけを送る(マルチチャートと同じ)。 */
+.karte-tabpanel.medication-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  overflow: hidden;
+}
+
+.medication-history .patient-chart__toolbar {
+  margin-bottom: 0;
+}
+
+.medication-history__kinds {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.medication-history__kind {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--text-h);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.patient-chart__toolbar .medication-history__kind input {
+  margin: 0;
+  padding: 0;
+}
+
+.medication-history__notice {
+  font-size: 12px;
+  color: var(--warning);
+}
+
+.medication-history__empty {
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 縦横どちらに送っても、薬剤名の列と日付の見出しを残す。 */
+.medication-history__wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+/* 固定した列・見出しの罫線を置き去りにしないよう collapse は使わない(検査の時系列表と同じ)。 */
+.medication-history__table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+.medication-history__table th,
+.medication-history__table td {
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--surface-stripe);
+  white-space: nowrap;
+  background: var(--bg);
+}
+
+.medication-history__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.medication-history__table .medication-history__name-col {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  text-align: left;
+  font-weight: normal;
+  color: var(--text-h);
+  box-shadow: inset -1px 0 0 var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 単位は行ごとに 1 つなので、セルには数値だけを出してここにまとめる。 */
+.medication-history__table .medication-history__unit-col {
+  position: sticky;
+  left: 220px;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 52px;
+  min-width: 52px;
+  max-width: 52px;
+  text-align: center;
+  font-weight: normal;
+  color: var(--text);
+  box-shadow: inset -1px 0 0 var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.medication-history__table thead .medication-history__unit-col {
+  z-index: 3;
+  vertical-align: bottom;
+}
+
+.medication-history__table thead .medication-history__name-col {
+  z-index: 3;
+  vertical-align: bottom;
+  color: var(--text);
+}
+
+.medication-history__name-col .medication-history__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.medication-history__badge {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 10px;
+  color: var(--text);
+}
+
+.medication-history__badge--unidentified,
+.medication-history__badge--undecided {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.medication-history__badge--continued {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* 区分の見出し行。 */
+.medication-history__section th,
+.medication-history__section td {
+  background: var(--surface-sunken);
+}
+
+.medication-history__table .medication-history__section th.medication-history__name-col {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.medication-history__table th.medication-history__date-col {
+  text-align: center;
+  font-weight: normal;
+  color: var(--text-h);
+  line-height: 1.2;
+}
+
+.medication-history__table--day th.medication-history__date-col {
+  min-width: 28px;
+}
+
+.medication-history__table--month th.medication-history__date-col {
+  min-width: 40px;
+}
+
+.medication-history__date-upper {
+  display: block;
+  min-height: 1.2em;
+  font-size: 10px;
+  color: var(--text);
+}
+
+.medication-history__date-lower small {
+  display: block;
+  font-size: 10px;
+}
+
+.medication-history__table th.is-sunday .medication-history__date-lower {
+  color: var(--lab-high);
+}
+
+.medication-history__table th.is-saturday .medication-history__date-lower {
+  color: var(--lab-low);
+}
+
+/* 入院中の列は見出しの下端に帯を引く。 */
+.medication-history__table th.is-inpatient {
+  box-shadow: inset 0 -3px 0 var(--accent-border);
+}
+
+.medication-history__table .is-today {
+  background-image: linear-gradient(var(--accent-bg), var(--accent-bg));
+}
+
+.medication-history__cell {
+  text-align: center;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+.medication-history__cell.is-clickable {
+  cursor: pointer;
+}
+
+.medication-history__cell.is-clickable:hover {
+  outline: 1px solid var(--accent-border);
+  outline-offset: -1px;
+}
+
+.medication-history__cell--partial {
+  color: var(--text);
+}
+
+.medication-history__cell--increase,
+.medication-history__cell--decrease,
+.medication-history__cell--change {
+  font-weight: 600;
+}
+
+.medication-history__change {
+  margin-left: 1px;
+  font-size: 10px;
+}
+
+.medication-history__cell--increase .medication-history__change {
+  color: var(--lab-high);
+}
+
+.medication-history__cell--decrease .medication-history__change {
+  color: var(--lab-low);
 }
