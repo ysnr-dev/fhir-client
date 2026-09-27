@@ -91,6 +91,8 @@ export interface ExamReportConfig {
   darkImages: boolean;
   /** カルテの詳細モーダルの種別(karteUrl の KarteDetailKind)。 */
   detailKind: "rad-result" | "physio-result" | "endoscopy-result";
+  /** カルテの「検査結果」配下のタブ(karteUrl の KarteTabKey)。 */
+  tabKey: "rad-report" | "physio-report" | "endoscopy-report";
   settingOf(order: fhir4.ServiceRequest): string;
   examText(order: fhir4.ServiceRequest, itemRequests: fhir4.ServiceRequest[]): string;
   isProcedure(procedure: fhir4.Procedure): boolean;
@@ -118,6 +120,7 @@ const RAD_CONFIG: ExamReportConfig = {
   },
   darkImages: true,
   detailKind: "rad-result",
+  tabKey: "rad-report",
   settingOf: (order) => summarizeRadOrder(order).settingCode,
   examText: (order, itemRequests) =>
     radOrderEntries(radOrderItems(order, itemRequests)).map(radEntryLabel).join("・"),
@@ -145,6 +148,7 @@ const PHYSIO_CONFIG: ExamReportConfig = {
   },
   darkImages: false,
   detailKind: "physio-result",
+  tabKey: "physio-report",
   settingOf: (order) => summarizePhysioOrder(order).settingCode,
   examText: (order, itemRequests) =>
     physioOrderEntries(physioOrderItems(order, itemRequests)).map(physioEntryLabel).join("・"),
@@ -173,6 +177,7 @@ const ENDOSCOPY_CONFIG: ExamReportConfig = {
   // 内視鏡の画像は暗い背景に粘膜が写るので、放射線と同じ明るい色が見やすい。
   darkImages: true,
   detailKind: "endoscopy-result",
+  tabKey: "endoscopy-report",
   settingOf: (order) => summarizeEndoscopyOrder(order).settingCode,
   examText: (order, itemRequests) =>
     endoscopyOrderEntries(endoscopyOrderItems(order, itemRequests))

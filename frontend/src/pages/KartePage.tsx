@@ -47,6 +47,8 @@ import { KarteChartTab } from "../components/KarteChartTab";
 import { KarteMedicationHistoryTab } from "../components/KarteMedicationHistoryTab";
 import { KarteMicroResultTab } from "../components/KarteMicroResultTab";
 import { KartePathoResultTab } from "../components/KartePathoResultTab";
+import { KarteExamReportTab } from "../components/KarteExamReportTab";
+import { EXAM_REPORT_KINDS } from "../fhir/examReportHelpers";
 import { KarteProblemList } from "../components/KarteProblemList";
 import { KarteProblemSummary } from "../components/KarteProblemSummary";
 import { KarteDetailModal } from "../components/KarteCardModals";
@@ -913,6 +915,10 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     }
     if (key === "micro") return <KarteMicroResultTab {...props} />;
     if (key === "patho") return <KartePathoResultTab {...props} />;
+    if (key === "rad-report" || key === "physio-report" || key === "endoscopy-report") {
+      const config = EXAM_REPORT_KINDS.find((kind) => kind.tabKey === key);
+      return config ? <KarteExamReportTab key={key} config={config} {...props} /> : null;
+    }
     // 食事オーダーの編集も、登録と同じ右ペインで開く(暦は表示に徹する)。
     if (key === "meal") {
       return (

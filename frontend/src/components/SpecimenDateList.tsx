@@ -20,6 +20,7 @@ export function SpecimenDateList({
   isLoading,
   unreviewedIds,
   onSelect,
+  title = "検体採取日",
 }: {
   entries: readonly SpecimenDateEntry[];
   selectedId: string | undefined;
@@ -27,11 +28,13 @@ export function SpecimenDateList({
   /** まだ誰も確認していない結果の id。行の右肩に印を出す。 */
   unreviewedIds?: ReadonlySet<string>;
   onSelect: (reportId: string) => void;
+  /** ペインの見出し。検体の無い検査レポートは「検査日」にする。 */
+  title?: string;
 }) {
   return (
-    <nav className="karte-daylist" aria-label="検体採取日">
+    <nav className="karte-daylist" aria-label={title}>
       <div className="karte-daylist__header">
-        <h4 className="karte-daylist__title">検体採取日</h4>
+        <h4 className="karte-daylist__title">{title}</h4>
       </div>
       {isLoading ? (
         <p className="karte-daylist__empty">読み込み中...</p>

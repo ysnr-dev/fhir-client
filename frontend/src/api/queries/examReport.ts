@@ -18,7 +18,7 @@ import {
 } from "../../fhir/resultReviewHelpers";
 import { postBundle, readResource, searchResource } from "../fhirClient";
 import { NOTIFICATION_TASK_KEY, resourcesOfType } from "./core";
-import { useLabResultDetail } from "./labResult";
+import { useLabResultDetail, useResultSummariesQuery } from "./labResult";
 import { fetchOrderRequester, fetchReportTasks } from "./notification";
 
 // ---- 検査レポート(読影・生理検査・内視鏡の所見) ----
@@ -72,6 +72,16 @@ export function useExamReportByOrder(config: ExamReportConfig, orderId: string |
     queryFn: () => searchResource<fhir4.Resource>("DiagnosticReport", params),
     enabled: Boolean(orderId),
   });
+}
+
+/** カルテの検査結果タブの日付ペイン用。その種別のレポートの要約を新しい順で返す。 */
+export function useExamReportEntries(config: ExamReportConfig, patientId: string | undefined) {
+  const query = useResultSummariesQuery(examReportCategorySearch(config), patientId);
+  return {
+    entries: query.data ?? [],
+    isLoading: query.isLoading,
+    error: query.error,
+  };
 }
 
 /** レポートの内容(所見の Observation を添える)。取得の形は検体検査結果と同じ。 */

@@ -168,22 +168,12 @@ const resultReviewKind = defineNotificationKind<ResultReviewRow>({
   label: RESULT_REVIEW_TASK_CODE.display,
   toRow: resultReviewRowOf,
   Cells: ResultReviewNotificationCells,
-  // 種別の名前はカルテのタブのキーでもある。検査レポート(放射線・生理検査・内視鏡)は
-  // タブを持たないので、レポートの詳細モーダルを開いた状態で開く。
+  // 検体検査・細菌・病理は種別の名前がカルテのタブのキーでもある。検査レポート
+  // (放射線・生理検査・内視鏡)はタブのキーが別名なので設定から引く。
   karteLink: (row) => {
     const params = new URLSearchParams();
-    const examConfig = examReportConfigByKind(row.kind);
-    if (examConfig) {
-      if (row.reportId) {
-        params.set(
-          KARTE_DETAIL_PARAM,
-          formatKarteDetail({ kind: examConfig.detailKind, id: row.reportId }),
-        );
-      }
-    } else {
-      params.set(KARTE_TAB_PARAM, row.kind);
-      if (row.reportId) params.set("view", row.reportId);
-    }
+    params.set(KARTE_TAB_PARAM, examReportConfigByKind(row.kind)?.tabKey ?? row.kind);
+    if (row.reportId) params.set("view", row.reportId);
     const query = params.toString();
     return `/patients/${row.patientId}/karte${query ? `?${query}` : ""}`;
   },
@@ -205,13 +195,12 @@ function examCriticalFindingKind(config: ExamReportConfig) {
     label: config.critical.label,
     toRow: (task, patient) => examCriticalFindingRowOf(config, task, patient),
     Cells: ExamCriticalFindingNotificationCells,
+    // カルテの検査結果配下のタブを、そのレポートを選んだ状態で開く。
     karteLink: (row) => {
       const params = new URLSearchParams();
-      if (row.reportId) {
-        params.set(KARTE_DETAIL_PARAM, formatKarteDetail({ kind: config.detailKind, id: row.reportId }));
-      }
-      const query = params.toString();
-      return `/patients/${row.patientId}/karte${query ? `?${query}` : ""}`;
+      params.set(KARTE_TAB_PARAM, config.tabKey);
+      if (row.reportId) params.set("view", row.reportId);
+      return `/patients/${row.patientId}/karte?${params.toString()}`;
     },
     action: { label: "確認", noteText: EXAM_CRITICAL_FINDING_NOTE },
     // 重要所見が出ている間は検査結果確認を出さないので、最終報告なら既読もここで残す。

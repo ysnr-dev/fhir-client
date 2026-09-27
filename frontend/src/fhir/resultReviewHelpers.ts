@@ -34,8 +34,7 @@ export const RESULT_REVIEW_NOTE = "検査結果を確認しました。";
 /**
  * 確認の対象になるレポートの種別。一覧の表示とカルテでの開き方がこれで決まる。
  * 検体検査・細菌・病理はカルテのタブのキーと同じ文字列にしてある。検査レポート
- * (放射線・生理検査・内視鏡)はカルテにタブを持たないので、詳細モーダルで開く
- * (notificationRegistry の karteLink)。
+ * (放射線・生理検査・内視鏡)のタブは ExamReportConfig.tabKey(notificationRegistry の karteLink)。
  */
 export type ReviewReportKind = "lab" | "micro" | "patho" | ExamReportKind;
 

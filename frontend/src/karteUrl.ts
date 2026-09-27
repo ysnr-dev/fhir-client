@@ -89,6 +89,10 @@ export const KARTE_TABS = [
   { key: "lab-timeline", label: "検体検査時系列" },
   { key: "micro", label: "細菌検査" },
   { key: "patho", label: "病理検査" },
+  // 読影・所見レポート。オーダーから書くのでタブは読むための場所(病理と同じ日付ペインの形)。
+  { key: "rad-report", label: "放射線検査" },
+  { key: "physio-report", label: "生理検査" },
+  { key: "endoscopy-report", label: "内視鏡" },
   // 看護指示(指示簿)。「今なにが有効か」を区分ごとに見る情報なので、時系列の
   // カードにはせずタブでのみ見る。
   { key: "nursing", label: "指示簿" },
@@ -112,7 +116,10 @@ export type KarteTabKey = (typeof KARTE_TABS)[number]["key"];
 export const KARTE_TAB_GROUPS: ReadonlyArray<{ label: string; keys: readonly KarteTabKey[] }> = [
   { label: "患者情報", keys: ["profile", "allergy", "brought-medication"] },
   { label: "診療情報", keys: ["medication-history", "chemo", "pathway", "meal", "chart"] },
-  { label: "検査結果", keys: ["lab", "lab-timeline", "micro", "patho"] },
+  {
+    label: "検査結果",
+    keys: ["lab", "lab-timeline", "micro", "patho", "rad-report", "physio-report", "endoscopy-report"],
+  },
 ];
 
 /** そのタブを畳んでいるグループ。畳んでいなければ undefined。 */
