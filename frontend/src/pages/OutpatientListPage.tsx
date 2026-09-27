@@ -105,6 +105,9 @@ const emptyFilters: Filters = {
   status: "",
 };
 
+// 状態ごとの件数で、0 件でも出す状態(外来の流れの本筋)。それ以外は 1 件以上のときだけ出す。
+const ALWAYS_COUNTED_STATUSES: readonly string[] = ["booked", "checked-in", IN_EXAM_STATUS, "fulfilled"];
+
 // 診察日と絞り込みは URL に持つ。カルテの「戻る」は遷移元の検索文字列ごと戻すので、
 // こうしておくと開く前の日付・絞り込みのまま一覧に戻れる。
 const DATE_PARAM = "date";
@@ -235,6 +238,20 @@ export function OutpatientListPage() {
     [list.data, filters],
   );
   const total = list.data?.rows.length ?? 0;
+
+  // 状態ごとの件数。状態以外の絞り込み(診療科・担当医・診察室)だけを掛けて数える
+  // (状態で絞っても、他の状態が何件あるかは見えるようにする)。
+  const statusCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of list.data?.rows ?? []) {
+      if (!matchesFilters(row, { ...filters, status: "" })) continue;
+      const code = outpatientStatusCode(row.appointment, row.encounter);
+      counts.set(code, (counts.get(code) ?? 0) + 1);
+    }
+    return STATUS_OPTIONS.filter(
+      (option) => ALWAYS_COUNTED_STATUSES.includes(option.code) || counts.has(option.code),
+    ).map((option) => ({ ...option, count: counts.get(option.code) ?? 0 }));
+  }, [list.data, filters]);
 
   // 行の患者ぶんの注意(ピクトグラム)と当日オーダー。絞り込みで隠れた行のぶんも
   // 引いておく(絞り込みを切り替えるたびに引き直さないように)。
@@ -385,6 +402,13 @@ export function OutpatientListPage() {
         <p>読み込み中...</p>
       ) : (
         <>
+          <p className="outpatient__summary">
+            {statusCounts.map((status) => (
+              <span key={status.code} className="outpatient__summary-item">
+                {status.label} <strong>{status.count}</strong>
+              </span>
+            ))}
+          </p>
           <div className="outpatient-wrap sticky-table-wrap">
             <table className="outpatient sticky-table">
               <thead>
