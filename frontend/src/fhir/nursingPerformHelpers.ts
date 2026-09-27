@@ -25,7 +25,7 @@ import {
 // Observation の category は order-type の nursing **だけ**。上流は category の先頭の
 // concept しか索引しないので vital-signs を足しても検索には効かず、カルテのバイタル
 // 検索に混ざる害しかない。経過表は category を `vital-signs,nursing` で引く
-// (api/queries.ts の VITAL_FLOWSHEET_CATEGORY)。
+// (api/queries/karte.ts の VITAL_FLOWSHEET_CATEGORY)。
 //
 // 真のバイタル(SpO2・体温など)は LOINC を第 2 coding に併記する。経過表の行キーは
 // LOINC 優先なので、看護観察として記録した SpO2 が手入力のバイタルと同じ行に並ぶ。

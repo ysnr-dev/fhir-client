@@ -80,13 +80,25 @@ DICOM・施設設定の jsonb 化ほか）。その新規コードを中心に�
   pathways / regimens の承認・版管理を `Master::VersionedMaster` に（646 → 437 行、427 → 251 行）。
   レジメン複製の 1 行ずつ `create!` を階層ごとの一括 INSERT に。`sanitize_like` を `Master::LikeEscaping` に。
 
+### `queries.ts` / `masterClient.ts` / `masterQueries.ts` のドメイン分割（2026-09-27、同日実施）
+
+- `api/queries.ts`（13,058 行）→ `api/queries/*.ts` 40 ファイル、`api/masterClient.ts`（6,978 行）→ 28 ファイル、
+  `api/masterQueries.ts`（4,614 行）→ 28 ファイル。どれも `index.ts` が `export *` で束ねるので、
+  import 元（300 / 159 / 144 ファイル）の `from "../api/queries"` はそのまま解決する。
+- 分け方はセクション見出し（`// ---- X ----`）どおり。見出しの無い先頭部分は患者・医療機関・医療従事者、
+  マスタは薬剤・JLAC・病名・J-FAGY・CTCAE・検体検査・放射線・医療材料に分けた。
+- 共通のもの（`resourcesOfType` / `searchAllPages` / `fetchDistinctDates` / `saveWithImages` / `makeOrderDetailHook` /
+  `setOrderPeriod` / ページ定数）は `core.ts`。承認・代行入力の `useWithOrderProvenance` 系は `authQueries` に依存するので
+  `provenance.ts` に分け、`authQueries` は `queries/practitioner` を直接 import して循環を切った。
+  部門ワークリストの骨格と Task 更新・削除のファクトリは `worklist.ts`。
+- ファイル間の import は宣言側に `export` を付けて解決した。相対 import の循環は 0（`frontend/scripts/import-cycles.cjs` で確認）。
+- 検証: `tsc -b` と oxlint 通過。マルチチャート・放射線ワークリスト・マスタ画面をブラウザで開き、コンソールエラー無し。
+
 ### 次の候補（今回やらない構造の課題）
 
 1. **生理・内視鏡・処置の全層統一**。内視鏡は生理と 97% 同一（helpers / forms / pages / queries / masterClient /
    masterQueries）、処置は要フラグ、放射線は JJ1017 と線量で別。`ExamDeptConfig` と `createExamOrderHelpers(cfg)` 等の設定方式。
-2. **`queries.ts` / `masterClient.ts` / `masterQueries.ts` のドメイン分割**。セクション見出し（約 70）どおりに分け、
-   barrel（`api/queries/index.ts`）で import 元 300 ファイルは無変更。先に `authQueries.ts` との循環 import と、
-   `api` 層が `components/notifications/notificationRegistry` に依存している点を解く。
+2. `api` 層が `components/notifications/notificationRegistry` に依存している点（純粋な関数を `fhir/` へ移す）。
 3. **ワークリスト 12 画面の共通部品**（`wardOptions`、`matchesFilters` の末尾、`FilterForm` の 4 select、患者セル）約 1,500 行。
 4. **マスタ画面の factory 化**（`radiotherapyMasterClient()` / `radiotherapyMasterHooks()` が既にある形。
    `ItemLayoutPage` 5 本・`DatasetPage` 4 本）。`masterClient.ts` の `if (!res.ok) throw await buildError(res);` 312 回も同じ。

@@ -55,7 +55,7 @@ import { useReturnLinkState } from "../returnTo";
 // 実施予定のオーダー」を部門ごとに並べるが、看護指示を受けるのは病棟なので、
 // 絞り込みの主軸が病棟になる。しかも病棟だけは **上流の ward 検索でサーバー側で絞る**
 // (看護指示は退院まで status=active のまま残るので、全病院ぶんを引いてから捨てると
-// 際限なく重くなる。api/queries.ts の fetchNursingWorklist を参照)。
+// 際限なく重くなる。api/queries/nursing.ts の fetchNursingWorklist を参照)。
 //
 // 軸はリハビリ一覧と同じで、基準日に効いている(始まっていて、まだ終わっていない)
 // 指示を並べる。1 つの指示が入院中ずっと続き、看護師はそれを受けて実施していく。

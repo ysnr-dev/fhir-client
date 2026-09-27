@@ -7,7 +7,7 @@ import {
   logout,
   upsertLoginAccount,
 } from "./authClient";
-import { usePractitioner } from "./queries";
+import { usePractitioner } from "./queries/practitioner";
 
 export const AUTH_SESSION_KEY = ["auth", "session"];
 const LOGIN_ACCOUNT_KEY = ["auth", "account"];

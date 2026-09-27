@@ -617,7 +617,7 @@ export function groupByKarteDayYear<T>(
  * オーダーのカードを置く診療日 = オーダー開始日(occurrence)。
  *
  * 無ければ、未定を許す種別なら「日付未定」、それ以外は登録日(authoredOn の日付)。後者は
- * occurrence を持たないオーダーのためのフォールバック。本流の検索もこの軸(occurrence)で読む(api/queries.ts の
+ * occurrence を持たないオーダーのためのフォールバック。本流の検索もこの軸(occurrence)で読む(api/queries/karte.ts の
  * useKartePrescriptionsInfinite)ので、カットオフ判定と配置が食い違わない。
  *
  * **診療日ペイン(useKarteDayIndex)も occurrence の無いオーダーをこの関数で写す。**

@@ -199,7 +199,7 @@ export function useUpdateExternalCodeMappings(systemKey: string) {
 }
 
 // --- 施設設定 ----------------------------------------------------------------
-// 読み取りは全ユーザー向けの useFacilitySettings(api/queries.ts)が別にある。
+// 読み取りは全ユーザー向けの useFacilitySettings(api/queries/organization.ts)が別にある。
 // 保存したらそちらのキャッシュも捨てて、各画面の所属既定値を追従させる。
 
 export function useUpdateFacilitySettings() {

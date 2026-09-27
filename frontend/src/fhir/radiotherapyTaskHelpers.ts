@@ -17,7 +17,7 @@ import { createTaskHelpers } from "./taskHelpers";
 // 放射線治療は日付軸の検索が使えない(上流の order-period は拡張 URL が固定)ので、
 // 部門一覧が「進行中だけ」をサーバー側で絞る手段は status しか無い。
 // **表示の正本は Task**、status は検索のための索引。片方だけを動かす実装を書かないこと —
-// 書き込みの入口は api/queries.ts の useUpdateRadiotherapyTaskStatus だけにする。
+// 書き込みの入口は api/queries/radiotherapy.ts の useUpdateRadiotherapyTaskStatus だけにする。
 
 export const RADIOTHERAPY_TASK_CODE = { code: "radiotherapy", display: "放射線治療" };
 

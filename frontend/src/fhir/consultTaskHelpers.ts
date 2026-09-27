@@ -15,7 +15,7 @@ import { createTaskHelpers } from "./taskHelpers";
 //
 // **表示の正本は Task**(依頼済と対応中を status では区別できないため)。status は
 // 検索のための索引。片方だけを動かす実装を書かないこと — 書き込みの入口は
-// api/queries.ts の useUpdateConsultTaskStatus と useSaveConsultReply だけにする。
+// api/queries/consult.ts の useUpdateConsultTaskStatus と useSaveConsultReply だけにする。
 
 export const CONSULT_TASK_CODE = { code: "consult", display: "他科依頼" };
 
