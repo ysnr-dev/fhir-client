@@ -37,14 +37,14 @@ export function CautionPictogramBadges({
   cautionsByCode,
   patientId,
   size = HEADER_PICTOGRAM_SIZE,
-  popover = true,
+  portal = false,
 }: {
   flags: fhir4.Flag[];
   cautionsByCode: Map<string, PatientCaution>;
   patientId: string;
   size?: number;
-  /** false なら吹き出しを持たず、内容はホバーで読ませる(PictogramPopover を参照)。 */
-  popover?: boolean;
+  /** true なら吹き出しを body 直下に出す(PictogramPopover を参照)。 */
+  portal?: boolean;
 }) {
   if (flags.length === 0) return null;
 
@@ -83,7 +83,7 @@ export function CautionPictogramBadges({
           className={`patient-header__caution--${badge.category}`}
           icon={<CautionPictogram pictogram={badge.pictogram} size={size} />}
           count={badge.lines.length}
-          popover={popover}
+          portal={portal}
         >
           <ul className="patient-header__popover-list">
             {badge.lines.map((line, index) => (
@@ -121,14 +121,14 @@ export function InfectionPictogramBadge({
   rows,
   patientId,
   size = HEADER_PICTOGRAM_SIZE,
-  popover = true,
+  portal = false,
 }: {
   /** 感染症の一覧(陽性以外が混じっていてもよい)。 */
   rows: InfectionRow[];
   patientId: string;
   size?: number;
-  /** false なら吹き出しを持たず、内容はホバーで読ませる(PictogramPopover を参照)。 */
-  popover?: boolean;
+  /** true なら吹き出しを body 直下に出す(PictogramPopover を参照)。 */
+  portal?: boolean;
 }) {
   const positives = rows.filter((row) => row.result === "positive");
   if (positives.length === 0) return null;
@@ -142,7 +142,7 @@ export function InfectionPictogramBadge({
         className="patient-header__caution--infection"
         icon={<CautionPictogram pictogram="infection" size={size} />}
         count={positives.length}
-        popover={popover}
+        portal={portal}
       >
         <ul className="patient-header__popover-list">
           {positives.map((row) => (
@@ -173,13 +173,13 @@ export function AllergyPictogramBadges({
   allergies,
   patientId,
   size = HEADER_PICTOGRAM_SIZE,
-  popover = true,
+  portal = false,
 }: {
   allergies: fhir4.AllergyIntolerance[];
   patientId: string;
   size?: number;
-  /** false なら吹き出しを持たず、内容はホバーで読ませる(PictogramPopover を参照)。 */
-  popover?: boolean;
+  /** true なら吹き出しを body 直下に出す(PictogramPopover を参照)。 */
+  portal?: boolean;
 }) {
   if (allergies.length === 0) return null;
 
@@ -203,7 +203,7 @@ export function AllergyPictogramBadges({
           className="patient-header__caution--allergy"
           icon={<CautionPictogram pictogram={group.key} size={size} />}
           count={group.rows.length}
-          popover={popover}
+          portal={portal}
         >
           <ul className="patient-header__popover-list">
             {group.rows.map((row) => (

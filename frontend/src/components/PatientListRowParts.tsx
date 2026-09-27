@@ -22,7 +22,7 @@ type RowPictogramsProps = {
 
 /**
  * 氏名の後ろに並べる注意のピクトグラム(カルテの患者帯・病棟マップと同じもの)。
- * 表は横スクロールの入れ物に入っていて吹き出しが縁で切れるので、内容はホバーで読む。
+ * 表は横スクロールの入れ物に入っていて行の中では吹き出しが縁で切れるので、body 直下に出す。
  */
 export function RowPictograms({
   patientId,
@@ -39,19 +39,19 @@ export function RowPictograms({
         cautionsByCode={cautionsByCode}
         patientId={patientId}
         size={16}
-        popover={false}
+        portal
       />
       <AllergyPictogramBadges
         allergies={allergies.get(patientId) ?? []}
         patientId={patientId}
         size={16}
-        popover={false}
+        portal
       />
       <InfectionPictogramBadge
         rows={infections.get(patientId) ?? []}
         patientId={patientId}
         size={16}
-        popover={false}
+        portal
       />
     </span>
   );
