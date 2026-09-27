@@ -9684,6 +9684,95 @@ body.page-wide-md .app__main {
   text-align: right;
 }
 
+/* 受付からの待ち時間。受付時刻の後ろに小さく添える。 */
+.outpatient__wait {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--text-muted, var(--text));
+}
+
+/* 氏名の列は固定幅。あふれたら氏名・カナの側を省略し、ピクトグラムは縮めない。 */
+.outpatient__name-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.outpatient__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outpatient__pictograms {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.outpatient__pictograms .patient-header__cautions {
+  gap: 2px;
+}
+
+.outpatient__pictograms .patient-header__caution {
+  height: 16px;
+  cursor: default;
+}
+
+/* 当日オーダーの印。種別がいくつあっても 1 列に収めるため、この列だけ折り返す
+   (1 行に 6 個まで)。 */
+.outpatient td.outpatient__orders-cell {
+  white-space: normal;
+  min-width: 140px;
+  max-width: 170px;
+}
+
+/* 隣のセル(状態の印など)と中心が揃うよう少し下げる。 */
+.outpatient__orders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 3px;
+}
+
+/* 検査結果が返ったもの(もう一度呼び込む合図)をいちばん強く塗り(青)、中間報告は
+   同じ色の枠で予告する。実施済は地に沈め、受付済は紫の枠、依頼のままは素の枠にする
+   (列見出しの凡例 ORDER_LEGEND と揃える)。 */
+.outpatient__order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 13px;
+  line-height: 1;
+  cursor: default;
+}
+
+.outpatient__order--accepted {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.outpatient__order--done {
+  background: var(--surface-sunken);
+}
+
+.outpatient__order--partial {
+  border-color: var(--lab-low);
+  color: var(--lab-low);
+}
+
+.outpatient__order--result {
+  color: var(--bg);
+  border-color: var(--lab-low);
+  background: var(--lab-low);
+}
+
 .outpatient__status {
   display: inline-block;
   padding: 0 6px;

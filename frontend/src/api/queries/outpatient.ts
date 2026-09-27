@@ -19,6 +19,10 @@ import {
   OUTPATIENT_CLASS_CODE,
   outpatientEncounterAppointmentId,
 } from "../../fhir/outpatientEncounterHelpers";
+import {
+  outpatientOrderSummaries,
+  type OutpatientOrderSummary,
+} from "../../fhir/outpatientOrderProgressHelpers";
 import { createResource, postBundle, readResource, searchResource } from "../fhirClient";
 import { invalidateAppointments, orderAppointmentCancelEntries } from "./appointment";
 import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES } from "./core";
@@ -153,6 +157,73 @@ export function useOutpatientList(date: string, options: { polling?: boolean } =
     placeholderData: keepPreviousData,
     refetchInterval: options.polling ? OUTPATIENT_POLLING_INTERVAL : false,
   });
+}
+
+// ---- 当日オーダーの進み具合 ----
+//
+// 一覧に載っている患者ぶんだけ、その日のオーダー(ヘッダ)を進捗の Task・検査結果・
+// 実施記録と一緒に引く。患者を塊に分けて並列に引く(URL が長くなりすぎないように)。
+
+const ORDER_PATIENT_CHUNK = 40;
+
+async function fetchOutpatientOrders(
+  date: string,
+  patientIds: string[],
+): Promise<Map<string, OutpatientOrderSummary[]>> {
+  const orders: fhir4.ServiceRequest[] = [];
+  const tasks: fhir4.Task[] = [];
+  const reports: fhir4.DiagnosticReport[] = [];
+  const performs: fhir4.Procedure[] = [];
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < patientIds.length; i += ORDER_PATIENT_CHUNK) {
+    chunks.push(patientIds.slice(i, i + ORDER_PATIENT_CHUNK));
+  }
+  const bundles = await Promise.all(
+    chunks.map((ids) => {
+      const params = new URLSearchParams();
+      params.set("subject", ids.map((id) => `Patient/${id}`).join(","));
+      params.set("occurrence", date);
+      // 明細はオーダーそのものではないので、ヘッダだけにする。
+      params.set("based-on:missing", "true");
+      params.set("_count", "500");
+      params.append("_revinclude", "Task:focus");
+      params.append("_revinclude", "DiagnosticReport:based-on");
+      params.append("_revinclude", "Procedure:based-on");
+      return searchResource<fhir4.Resource>("ServiceRequest", params);
+    }),
+  );
+  for (const { data: bundle } of bundles) {
+    for (const entry of bundle.entry ?? []) {
+      const resource = entry.resource;
+      if (resource?.resourceType === "ServiceRequest") orders.push(resource as fhir4.ServiceRequest);
+      else if (resource?.resourceType === "Task") tasks.push(resource as fhir4.Task);
+      else if (resource?.resourceType === "DiagnosticReport") reports.push(resource as fhir4.DiagnosticReport);
+      else if (resource?.resourceType === "Procedure") performs.push(resource as fhir4.Procedure);
+    }
+  }
+
+  return outpatientOrderSummaries(orders, tasks, reports, performs, date);
+}
+
+/**
+ * 一覧の患者ぶんの当日オーダー。患者 id → 種別ごとの印。
+ * 一覧と同じく polling を入れると 1 分ごとに読み直す。
+ */
+export function useOutpatientOrders(
+  date: string,
+  patientIds: string[],
+  options: { polling?: boolean } = {},
+) {
+  const key = [...new Set(patientIds)].sort().join(",");
+  const query = useQuery({
+    queryKey: ["ServiceRequest", "outpatient-orders", date, key],
+    queryFn: () => fetchOutpatientOrders(date, key.split(",")),
+    enabled: Boolean(date) && key.length > 0,
+    placeholderData: keepPreviousData,
+    refetchInterval: options.polling ? OUTPATIENT_POLLING_INTERVAL : false,
+  });
+  return { ...query, byPatient: query.data ?? new Map<string, OutpatientOrderSummary[]>() };
 }
 
 /**

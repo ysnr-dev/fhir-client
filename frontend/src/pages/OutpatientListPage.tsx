@@ -1,13 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
+import type { PatientCaution } from "../api/masterClient";
+import { usePatientCautions } from "../api/masterQueries";
 import { useCurrentPractitioner } from "../api/authQueries";
 import {
   useCancelAppointment,
   useSelfDepartments,
   useLocationOptions,
   OUTPATIENT_POLLING_INTERVAL,
+  useAllergiesForPatients,
+  useFlagsForPatients,
+  useInfectionsForPatients,
   useOutpatientList,
+  useOutpatientOrders,
   usePractitionerOptions,
   usePractitionerRoles,
   useStartOutpatientExam,
@@ -15,6 +21,10 @@ import {
   useUpdateOutpatientExam,
   type OutpatientRow,
 } from "../api/queries";
+import {
+  OUTPATIENT_ORDER_STAGE_LABELS,
+  type OutpatientOrderSummary,
+} from "../fhir/outpatientOrderProgressHelpers";
 import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
@@ -27,9 +37,15 @@ import {
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
 import { NewPatientCheckInModal } from "../components/NewPatientCheckInModal";
+import {
+  AllergyPictogramBadges,
+  CautionPictogramBadges,
+  InfectionPictogramBadge,
+} from "../components/PatientPictograms";
 import { OutpatientReceptionModal } from "../components/OutpatientReceptionModal";
 import { RowMenu } from "../components/RowMenu";
 import { WalkInCheckInModal } from "../components/WalkInCheckInModal";
+import { useNow } from "../hooks/useNow";
 import { useStoredToggle } from "../hooks/useStoredToggle";
 import {
   APPOINTMENT_STATUS_OPTIONS,
@@ -39,10 +55,13 @@ import {
   appointmentDepartmentCode,
   appointmentDepartmentLabel,
   appointmentBookedTimeLabel,
+  appointmentCheckedInAt,
   appointmentCheckedInTimeLabel,
+  appointmentVisitKind,
   appointmentScheduleLabel,
   canCheckInAppointment,
   isActiveAppointment,
+  visitKindLabel,
 } from "../fhir/appointmentHelpers";
 import {
   IN_EXAM_LABEL,
@@ -217,6 +236,29 @@ export function OutpatientListPage() {
   );
   const total = list.data?.rows.length ?? 0;
 
+  // 行の患者ぶんの注意(ピクトグラム)と当日オーダー。絞り込みで隠れた行のぶんも
+  // 引いておく(絞り込みを切り替えるたびに引き直さないように)。
+  const patientIds = useMemo(
+    () =>
+      (list.data?.rows ?? [])
+        .map((row) => row.patient?.id ?? appointmentActorId(row.appointment, "Patient"))
+        .filter((id): id is string => Boolean(id)),
+    [list.data],
+  );
+  const cautions = usePatientCautions();
+  const cautionsByCode = useMemo(
+    () => new Map<string, PatientCaution>((cautions.data?.items ?? []).map((c) => [c.code, c])),
+    [cautions.data],
+  );
+  const flags = useFlagsForPatients(patientIds);
+  const allergies = useAllergiesForPatients(patientIds);
+  const infections = useInfectionsForPatients(patientIds);
+  const orders = useOutpatientOrders(date, patientIds, { polling });
+
+  // 待ち時間は当日の一覧だけで数える(過去の日は受付のまま残っていても待っていない)。
+  const isToday = date === today();
+  const now = useNow(isToday);
+
   // 会計はレセコン側で 診療日 + 患者 + 診療科 の単位で持つので、Encounter ではなく
   // 一覧の日付をそのまま診療日として渡す。
   function openBillingSend(row: OutpatientRow) {
@@ -355,11 +397,13 @@ export function OutpatientListPage() {
                   <th className="sticky-table__fix-3">患者番号</th>
                   <th className="sticky-table__fix-4">患者氏名</th>
                   <PatientProfileHeadCells />
+                  <th>初再診</th>
                   <th className="outpatient__schedule">予約枠</th>
                   <th>診療科</th>
                   <th>担当医</th>
                   <th>診察室</th>
                   <th>状態</th>
+                  <th title={ORDER_LEGEND}>当日オーダー</th>
                   <th className="outpatient__actions sticky-table__fix-actions"></th>
                 </tr>
               </thead>
@@ -370,6 +414,21 @@ export function OutpatientListPage() {
                     row={row}
                     settled={
                       !!row.patient && settledNumbers.has(normalizePatientNumber(patientNumberOf(row.patient)))
+                    }
+                    waitingMinutes={isToday ? waitingMinutes(row, now) : undefined}
+                    pictograms={
+                      <RowPictograms
+                        patientId={row.patient?.id ?? appointmentActorId(row.appointment, "Patient")}
+                        flags={flags.byPatient}
+                        allergies={allergies.byPatient}
+                        infections={infections.byPatient}
+                        cautionsByCode={cautionsByCode}
+                      />
+                    }
+                    orders={
+                      orders.byPatient.get(
+                        row.patient?.id ?? appointmentActorId(row.appointment, "Patient"),
+                      ) ?? []
                     }
                     pending={
                       updateStatus.isPending ||
@@ -394,7 +453,7 @@ export function OutpatientListPage() {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="master-search__empty">
+                    <td colSpan={14} className="master-search__empty">
                       {total === 0
                         ? "この診察日の予約はありません"
                         : "絞り込みに該当する予約がありません"}
@@ -550,6 +609,81 @@ function FilterForm({
   );
 }
 
+/** 受付から診察開始までの待ち時間(分)。受付済で診察が始まっていない行だけ。 */
+function waitingMinutes(row: OutpatientRow, now: Date): number | undefined {
+  if (row.appointment.status !== "checked-in" || row.encounter) return undefined;
+  const checkedInAt = new Date(appointmentCheckedInAt(row.appointment)).getTime();
+  if (Number.isNaN(checkedInAt)) return undefined;
+  return Math.max(0, Math.floor((now.getTime() - checkedInAt) / 60_000));
+}
+
+type RowPictogramsProps = {
+  patientId: string;
+  flags: Map<string, fhir4.Flag[]>;
+  allergies: Map<string, fhir4.AllergyIntolerance[]>;
+  infections: ReturnType<typeof useInfectionsForPatients>["byPatient"];
+  cautionsByCode: Map<string, PatientCaution>;
+};
+
+/**
+ * 氏名の後ろに並べる注意のピクトグラム(カルテの患者帯・病棟マップと同じもの)。
+ * 表は横スクロールの入れ物に入っていて吹き出しが縁で切れるので、内容はホバーで読む。
+ */
+function RowPictograms({ patientId, flags, allergies, infections, cautionsByCode }: RowPictogramsProps) {
+  if (!patientId) return null;
+  return (
+    <span className="outpatient__pictograms">
+      <CautionPictogramBadges
+        flags={flags.get(patientId) ?? []}
+        cautionsByCode={cautionsByCode}
+        patientId={patientId}
+        size={16}
+        popover={false}
+      />
+      <AllergyPictogramBadges
+        allergies={allergies.get(patientId) ?? []}
+        patientId={patientId}
+        size={16}
+        popover={false}
+      />
+      <InfectionPictogramBadge
+        rows={infections.get(patientId) ?? []}
+        patientId={patientId}
+        size={16}
+        popover={false}
+      />
+    </span>
+  );
+}
+
+/**
+ * 当日オーダーの印。種別ごとに 1 文字の四角を 1 つ並べ、いちばん進んでいない段階を
+ * 色と塗りで出す。種別の正式名と一件ずつの内訳はホバーで読む。
+ */
+function OrderSummaryChips({ orders }: { orders: OutpatientOrderSummary[] }) {
+  if (orders.length === 0) return <>-</>;
+  return (
+    <span className="outpatient__orders">
+      {orders.map((order) => {
+        const heading = `${order.kindLabel}（${OUTPATIENT_ORDER_STAGE_LABELS[order.stage]}）`;
+        return (
+          <span
+            key={order.kind}
+            className={`outpatient__order outpatient__order--${order.stage}`}
+            title={[heading, ...order.details].join("\n")}
+            aria-label={heading}
+          >
+            {order.mark}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/** 当日オーダーの列見出しのホバーに出す、印の見方。 */
+const ORDER_LEGEND = "青の塗り=結果あり / 青の枠=中間報告 / 灰の塗り=実施済 / 紫の枠=受付済 / 枠のみ=依頼";
+
 /** レセコンの患者番号との突き合わせ用。数字だけの番号はゼロ埋めを外す。 */
 function normalizePatientNumber(number: string | undefined): string {
   const text = number ?? "";
@@ -559,6 +693,9 @@ function normalizePatientNumber(number: string | undefined): string {
 function OutpatientTableRow({
   row,
   settled,
+  waitingMinutes,
+  pictograms,
+  orders,
   pending,
   canMarkNoShow,
   onChangeStatus,
@@ -573,6 +710,10 @@ function OutpatientTableRow({
   row: OutpatientRow;
   /** レセコンで会計が済んでいる。 */
   settled: boolean;
+  /** 受付からの待ち時間(分)。待っていない行・当日でない一覧は undefined。 */
+  waitingMinutes?: number;
+  pictograms: ReactNode;
+  orders: OutpatientOrderSummary[];
   pending: boolean;
   /** 未来院にできる日か(診察日が今日以前)。先の日付の予約はまだ来ないだけなので付けない。 */
   canMarkNoShow: boolean;
@@ -606,14 +747,26 @@ function OutpatientTableRow({
       </td>
       <td className="outpatient__time sticky-table__fix-2">
         {appointmentCheckedInTimeLabel(appointment)}
+        {waitingMinutes !== undefined && (
+          <span className="outpatient__wait" title={`受付から ${waitingMinutes} 分`}>
+            {waitingMinutes}分
+          </span>
+        )}
       </td>
       <td className="sticky-table__fix-3">{patient?.identifier?.[0]?.value ?? "-"}</td>
       <td className="sticky-table__fix-4">
-        {/* カナは列を分けず、氏名の後ろに小さめの括弧書きで添える(入院患者一覧と同じ)。 */}
-        {patientName || "-"}
-        <PatientKana patient={patient} />
+        {/* カナは列を分けず、氏名の後ろに小さめの括弧書きで添える(入院患者一覧と同じ)。
+            列は固定幅なので、あふれたら氏名・カナの側を省略してピクトグラムは必ず残す。 */}
+        <span className="outpatient__name-cell">
+          <span className="outpatient__name">
+            {patientName || "-"}
+            <PatientKana patient={patient} />
+          </span>
+          {pictograms}
+        </span>
       </td>
       <PatientProfileCells patient={patient} />
+      <td>{visitKindLabel(appointmentVisitKind(appointment)) || "-"}</td>
       <td className="outpatient__schedule">{appointmentScheduleLabel(appointment)}</td>
       <td>{appointmentDepartmentLabel(appointment) || "-"}</td>
       <td>{appointmentActorDisplay(appointment, "Practitioner") || "-"}</td>
@@ -625,6 +778,9 @@ function OutpatientTableRow({
           {outpatientStatusLabel(appointment, encounter)}
         </span>
         {settled && <span className="outpatient__settled">会計済</span>}
+      </td>
+      <td className="outpatient__orders-cell">
+        <OrderSummaryChips orders={orders} />
       </td>
       <td className="outpatient__actions sticky-table__fix-actions">
         {/* 受付 → 診察開始 → 診察終了 と、同じ位置でボタンが入れ替わる。 */}

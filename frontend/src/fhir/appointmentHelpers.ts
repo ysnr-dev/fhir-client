@@ -98,6 +98,42 @@ export function appointmentCheckedInTimeLabel(appointment: fhir4.Appointment): s
   return appointmentCheckedInAt(appointment).slice(11, 16) || "-";
 }
 
+// ---- 初再診 ----
+//
+// 受付で「初診」「再診」を指定できる。未選択は判定をレセコンに任せる意味で、
+// 拡張ごと持たない。R4 の Appointment に置き場が無いのでローカル拡張にする。
+
+export const APPOINTMENT_VISIT_KIND_EXTENSION_URL =
+  "http://fhir-client.local/StructureDefinition/appointment-visit-kind";
+
+export type VisitKind = "" | "first" | "revisit";
+
+export const VISIT_KIND_OPTIONS: { code: Exclude<VisitKind, "">; label: string }[] = [
+  { code: "first", label: "初診" },
+  { code: "revisit", label: "再診" },
+];
+
+/** 初再診。未選択(レセコンに任せる)なら空。 */
+export function appointmentVisitKind(appointment: fhir4.Appointment): VisitKind {
+  const code = appointment.extension?.find((e) => e.url === APPOINTMENT_VISIT_KIND_EXTENSION_URL)
+    ?.valueCode;
+  return code === "first" || code === "revisit" ? code : "";
+}
+
+export function visitKindLabel(kind: VisitKind): string {
+  return VISIT_KIND_OPTIONS.find((option) => option.code === kind)?.label ?? "";
+}
+
+function withVisitKind(appointment: fhir4.Appointment, kind: VisitKind): fhir4.Appointment {
+  const rest = (appointment.extension ?? []).filter(
+    (e) => e.url !== APPOINTMENT_VISIT_KIND_EXTENSION_URL,
+  );
+  const extension = kind
+    ? [...rest, { url: APPOINTMENT_VISIT_KIND_EXTENSION_URL, valueCode: kind }]
+    : rest;
+  return { ...appointment, extension: extension.length > 0 ? extension : undefined };
+}
+
 /** 当日受付(枠を持たない予約)か。予約時間を持たないので一覧では "-" を出す。 */
 export function isWalkInAppointment(appointment: fhir4.Appointment): boolean {
   return appointment.appointmentType?.coding?.some((c) => c.code === "WALKIN") ?? false;
@@ -206,6 +242,7 @@ export interface ReceptionAssignment {
   practitionerName: string;
   locationId: string;
   locationName: string;
+  visitKind: VisitKind;
 }
 
 /** 担当医・診察室の participant。指定のないものは行ごと作らない。 */
@@ -262,7 +299,7 @@ function receptionSpecialty(
 }
 
 /**
- * 受付内容を差し替えた予約。外来一覧から診療科・担当医・診察室を変えるのに使う。
+ * 受付内容を差し替えた予約。外来一覧から診療科・担当医・診察室・初再診を変えるのに使う。
  *
  * participant の先頭は患者でなければならない(buildAppointment と同じ理由)ので、
  * 担当医・診察室だけを入れ替えて、患者とそれ以外の参加者は元の並びのまま残す。
@@ -277,11 +314,14 @@ export function withReceptionAssignment(
     return !reference.startsWith("Practitioner/") && !reference.startsWith("Location/");
   });
 
-  return {
-    ...appointment,
-    participant: [...others, ...receptionParticipants(values)],
-    specialty: receptionSpecialty(values),
-  };
+  return withVisitKind(
+    {
+      ...appointment,
+      participant: [...others, ...receptionParticipants(values)],
+      specialty: receptionSpecialty(values),
+    },
+    values.visitKind,
+  );
 }
 
 /**
@@ -339,7 +379,7 @@ export function buildWalkInAppointment(
 
   appointment.specialty = receptionSpecialty(values);
 
-  return appointment;
+  return withVisitKind(appointment, values.visitKind);
 }
 
 function minutesBetween(start: string, end: string): number | undefined {

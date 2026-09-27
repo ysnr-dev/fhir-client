@@ -43,7 +43,11 @@ interface NewPatientCheckInModalProps {
 
 export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps) {
   const [values, setValues] = useState<PatientFormValues>(emptyPatientForm);
-  const [selects, setSelects] = useState<ReceptionSelects>(emptyReceptionSelects);
+  // 新患は初診なので、初再診は初診から始める。
+  const [selects, setSelects] = useState<ReceptionSelects>({
+    ...emptyReceptionSelects,
+    visitKind: "first",
+  });
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const departments = useSelfDepartments();
@@ -93,6 +97,7 @@ export function NewPatientCheckInModal({ onClose }: NewPatientCheckInModalProps)
             practitionerName: practitioner ? practitionerDisplayName(practitioner) : "",
             locationId: selects.locationId,
             locationName: location?.name ?? "",
+            visitKind: selects.visitKind,
           },
           new Date(),
         );

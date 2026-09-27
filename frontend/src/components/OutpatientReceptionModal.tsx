@@ -9,6 +9,7 @@ import {
 import {
   appointmentActorId,
   appointmentDepartmentCode,
+  appointmentVisitKind,
   withReceptionAssignment,
   type ReceptionAssignment,
 } from "../fhir/appointmentHelpers";
@@ -23,7 +24,7 @@ import {
   type ReceptionSelects,
 } from "./ReceptionFields";
 
-// 受付内容(診療科・担当医・診察室)の変更。外来一覧の行のケバブメニューから開く。
+// 受付内容(診療科・担当医・診察室・初再診)の変更。外来一覧の行のケバブメニューから開く。
 //
 // 予約は枠から診療科・担当医・診察室を引き継ぐが、当日になって担当医が替わる・
 // 別の診察室に回すといったことが起きる。入力欄は当日受付と同じものを使う。
@@ -49,6 +50,7 @@ export function OutpatientReceptionModal({
         (code ? departments.departments.find((d) => departmentCode(d) === code)?.id : "") ?? "",
       practitionerId: appointmentActorId(row.appointment, "Practitioner"),
       locationId: appointmentActorId(row.appointment, "Location"),
+      visitKind: appointmentVisitKind(row.appointment),
     };
   }, [departments.departments, row.appointment]);
 
@@ -68,6 +70,7 @@ export function OutpatientReceptionModal({
       practitionerName: practitioner ? practitionerDisplayName(practitioner) : "",
       locationId: values.locationId,
       locationName: location?.name ?? "",
+      visitKind: values.visitKind,
     };
 
     save.mutate(
@@ -81,7 +84,7 @@ export function OutpatientReceptionModal({
   }
 
   return (
-    <Modal title="診療科・担当医・診察室の変更" onClose={onClose} className="modal--wide">
+    <Modal title="受付内容の変更" onClose={onClose} className="modal--wide">
       <ErrorBanner error={departments.error ?? practitioners.error ?? locations.error} />
       <ErrorBanner error={save.error} />
 

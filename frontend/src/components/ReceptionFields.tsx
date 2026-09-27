@@ -5,11 +5,13 @@ import {
   useSelfDepartments,
   useSelfOrganization,
 } from "../api/queries";
+import { VISIT_KIND_OPTIONS, type VisitKind } from "../fhir/appointmentHelpers";
 import { departmentDisplayName } from "../fhir/departmentHelpers";
 import { OUTPATIENT_ROOM_TYPE_CODE, locationTypeCode } from "../fhir/locationHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 
-// 受付内容(診療科・担当医・診察室)の入力欄。当日受付と新患登録で同じものを使う。
+// 受付内容(診療科・担当医・診察室・初再診)の入力欄。当日受付・新患登録・受付内容の
+// 変更で同じものを使う。
 //
 // 担当医は診療科を選ぶとその科に所属する医師だけになる(依頼科 → 依頼医師の
 // 階層選択と同じ作り)。科を選んでいない間は全員を候補にする。
@@ -19,16 +21,18 @@ export interface ReceptionSelects {
   departmentId: string;
   practitionerId: string;
   locationId: string;
+  visitKind: VisitKind;
 }
 
 export const emptyReceptionSelects: ReceptionSelects = {
   departmentId: "",
   practitionerId: "",
   locationId: "",
+  visitKind: "",
 };
 
 interface ReceptionFieldsProps {
-  /** 3 つの欄を並べる入れ物のクラス(モーダルごとに並びが違うため)。 */
+  /** 欄を並べる入れ物のクラス(モーダルごとに並びが違うため)。 */
   className: string;
   values: ReceptionSelects;
   onChange: (values: ReceptionSelects) => void;
@@ -92,6 +96,20 @@ export function ReceptionFields({ className, values, onChange }: ReceptionFields
           {rooms.map((room) => (
             <option key={room.id} value={room.id}>
               {room.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        初再診
+        <select
+          value={values.visitKind}
+          onChange={(e) => onChange({ ...values, visitKind: e.target.value as VisitKind })}
+        >
+          <option value="">未選択</option>
+          {VISIT_KIND_OPTIONS.map((option) => (
+            <option key={option.code} value={option.code}>
+              {option.label}
             </option>
           ))}
         </select>

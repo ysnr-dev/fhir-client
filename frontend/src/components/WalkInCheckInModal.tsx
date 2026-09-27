@@ -54,6 +54,7 @@ export function WalkInCheckInModal({ onClose }: WalkInCheckInModalProps) {
         practitionerName: practitioner ? practitionerDisplayName(practitioner) : "",
         locationId: selects.locationId,
         locationName: location?.name ?? "",
+        visitKind: selects.visitKind,
       },
       new Date(),
     );
