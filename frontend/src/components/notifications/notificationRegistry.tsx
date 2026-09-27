@@ -32,11 +32,15 @@ import {
   type PathwayVarianceRow,
 } from "../../fhir/pathwayVarianceHelpers";
 import {
-  RAD_CRITICAL_FINDING_NOTE,
-  RAD_CRITICAL_FINDING_TASK_CODE,
-  radCriticalFindingRowOf,
-  type RadCriticalFindingRow,
-} from "../../fhir/radCriticalFindingHelpers";
+  EXAM_CRITICAL_FINDING_NOTE,
+  examCriticalFindingRowOf,
+  type ExamCriticalFindingRow,
+} from "../../fhir/examCriticalFindingHelpers";
+import {
+  EXAM_REPORT_KINDS,
+  examReportConfigByKind,
+  type ExamReportConfig,
+} from "../../fhir/examReportHelpers";
 import {
   RESULT_REVIEW_NOTE,
   RESULT_REVIEW_TASK_CODE,
@@ -76,7 +80,7 @@ import { RadiotherapyReviewDueNotificationCells } from "./RadiotherapyReviewDueN
 import { LabPanicNotificationCells } from "./LabPanicNotificationCells";
 import { OrderApprovalNotificationCells } from "./OrderApprovalNotificationCells";
 import { PathwayVarianceNotificationCells } from "./PathwayVarianceNotificationCells";
-import { RadCriticalFindingNotificationCells } from "./RadCriticalFindingNotificationCells";
+import { ExamCriticalFindingNotificationCells } from "./ExamCriticalFindingNotificationCells";
 import { ResultReviewNotificationCells } from "./ResultReviewNotificationCells";
 
 // 通知の種別ごとの振る舞いをまとめた対応表。通知そのものの形は notificationHelpers、
@@ -164,13 +168,17 @@ const resultReviewKind = defineNotificationKind<ResultReviewRow>({
   label: RESULT_REVIEW_TASK_CODE.display,
   toRow: resultReviewRowOf,
   Cells: ResultReviewNotificationCells,
-  // 種別の名前はカルテのタブのキーでもある。放射線はタブを持たないので、
-  // 読影レポートの詳細モーダルを開いた状態で開く。
+  // 種別の名前はカルテのタブのキーでもある。検査レポート(放射線・生理検査・内視鏡)は
+  // タブを持たないので、レポートの詳細モーダルを開いた状態で開く。
   karteLink: (row) => {
     const params = new URLSearchParams();
-    if (row.kind === "rad") {
+    const examConfig = examReportConfigByKind(row.kind);
+    if (examConfig) {
       if (row.reportId) {
-        params.set(KARTE_DETAIL_PARAM, formatKarteDetail({ kind: "rad-result", id: row.reportId }));
+        params.set(
+          KARTE_DETAIL_PARAM,
+          formatKarteDetail({ kind: examConfig.detailKind, id: row.reportId }),
+        );
       }
     } else {
       params.set(KARTE_TAB_PARAM, row.kind);
@@ -190,23 +198,26 @@ const resultReviewKind = defineNotificationKind<ResultReviewRow>({
     ]),
 });
 
-const radCriticalFindingKind = defineNotificationKind<RadCriticalFindingRow>({
-  code: RAD_CRITICAL_FINDING_TASK_CODE.code,
-  label: RAD_CRITICAL_FINDING_TASK_CODE.display,
-  toRow: radCriticalFindingRowOf,
-  Cells: RadCriticalFindingNotificationCells,
-  karteLink: (row) => {
-    const params = new URLSearchParams();
-    if (row.reportId) {
-      params.set(KARTE_DETAIL_PARAM, formatKarteDetail({ kind: "rad-result", id: row.reportId }));
-    }
-    const query = params.toString();
-    return `/patients/${row.patientId}/karte${query ? `?${query}` : ""}`;
-  },
-  action: { label: "確認", noteText: RAD_CRITICAL_FINDING_NOTE },
-  // 重要所見が出ている間は検査結果確認を出さないので、最終報告なら既読もここで残す。
-  actionEntries: (rows, actor) => urgentConfirmationEntries(rows, actor, RAD_CRITICAL_FINDING_NOTE),
-});
+/** 検査レポートの重要所見。種別(放射線・生理検査・内視鏡)ごとに Task.code が分かれる。 */
+function examCriticalFindingKind(config: ExamReportConfig) {
+  return defineNotificationKind<ExamCriticalFindingRow>({
+    code: config.critical.taskCode.code,
+    label: config.critical.label,
+    toRow: (task, patient) => examCriticalFindingRowOf(config, task, patient),
+    Cells: ExamCriticalFindingNotificationCells,
+    karteLink: (row) => {
+      const params = new URLSearchParams();
+      if (row.reportId) {
+        params.set(KARTE_DETAIL_PARAM, formatKarteDetail({ kind: config.detailKind, id: row.reportId }));
+      }
+      const query = params.toString();
+      return `/patients/${row.patientId}/karte${query ? `?${query}` : ""}`;
+    },
+    action: { label: "確認", noteText: EXAM_CRITICAL_FINDING_NOTE },
+    // 重要所見が出ている間は検査結果確認を出さないので、最終報告なら既読もここで残す。
+    actionEntries: (rows, actor) => urgentConfirmationEntries(rows, actor, EXAM_CRITICAL_FINDING_NOTE),
+  });
+}
 
 const pathwayVarianceKind = defineNotificationKind<PathwayVarianceRow>({
   code: PATHWAY_VARIANCE_TASK_CODE.code,
@@ -280,7 +291,7 @@ const broughtMedIdentifiedKind = defineNotificationKind<BroughtMedIdentifiedRow>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const NOTIFICATION_KINDS: NotificationKindDef<any>[] = [
   labPanicKind,
-  radCriticalFindingKind,
+  ...EXAM_REPORT_KINDS.map(examCriticalFindingKind),
   resultReviewKind,
   pathwayVarianceKind,
   orderApprovalKind,

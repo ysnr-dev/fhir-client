@@ -206,9 +206,9 @@ seed は `db/seed_data/physio_exam_types.csv`(心電図 / 超音波検査 / 呼�
 
 ## 7. 申し送り
 
-1. **結果**: 検査結果(波形・計測値・所見レポート)は未実装。カードの「検査結果表示」
-   導線も生理検査には無い。心電図所見や心エコーの計測値をどう持つか(Observation の
-   パネル / DiagnosticReport)は別途設計する。
+1. **結果**: 所見レポート(所見・判定・画像)は `docs/exam-report-design.md` で実装済み
+   (2026-09-27)。波形・計測値(心電図の各間隔・心エコーの EF など)の構造化は未実装で、
+   同書 §6-1 に申し送った。
 2. **会計連携**: 放射線と同じく、オーダー明細の `receipt_code` と Procedure の
    `usedCode` / MedicationAdministration の使用量から会計システムへ渡す前提。
    `ChargeItem` / `Claim` は上流に未実装。

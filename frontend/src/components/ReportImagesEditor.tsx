@@ -10,11 +10,11 @@ import {
 } from "react";
 import { fetchBinaryImage } from "../api/fhirClient";
 import {
-  radReportImageRefs,
-  radReportViewerImages,
-  type RadReportImageData,
-  type RadReportImageValues,
-} from "../fhir/radReportHelpers";
+  examReportImageRefs,
+  examReportViewerImages,
+  type ExamReportImageData,
+  type ExamReportImageValues,
+} from "../fhir/examReportHelpers";
 import { normalizeImageFile } from "../fhir/schemaImage";
 import { DARK_IMAGE_PEN_COLORS } from "./penColors";
 import { ReportImageViewerModal } from "./ReportImageViewerModal";
@@ -24,11 +24,11 @@ import { SchemaImageGallery } from "./SchemaImageGallery";
 // 描き込みモーダル(fabric.js)は重いので、開くまで読み込まない。
 const SchemaPaintModal = lazy(() => import("./SchemaPaintModal"));
 
-// 読影レポートの画像欄(docs/rad-report-design.md §4.2)。
+// 検査レポート(読影・生理検査・内視鏡)の画像欄(docs/rad-report-design.md §4.2)。
 //
-// 追加はファイル選択(複数可)・ドラッグ&ドロップ・貼り付けの 3 経路。読影端末では
+// 追加はファイル選択(複数可)・ドラッグ&ドロップ・貼り付けの 3 経路。読影端末・検査端末では
 // ビューアのスクリーンショットをファイルに保存せず貼る運用が最も手数が少ない。
-// 画像は CT・MR の濃淡画像なので JPEG にする(PNG のままだと Bundle が上流の上限に届く)。
+// 画像は CT・MR・内視鏡の写真的な画像なので JPEG にする(PNG のままだと Bundle が上流の上限に届く)。
 //
 // 描き込みは元画像を書き換えず、合成画像を別に持つ。描き直すときは元画像から始められる。
 
@@ -40,14 +40,17 @@ interface PaintTarget {
   background: string;
 }
 
-export function RadReportImagesEditor({
+export function ReportImagesEditor({
   images,
   onChange,
   onError,
+  darkImages,
 }: {
-  images: RadReportImageValues[];
-  onChange: (images: RadReportImageValues[]) => void;
+  images: ExamReportImageValues[];
+  onChange: (images: ExamReportImageValues[]) => void;
   onError: (message: string | null) => void;
+  /** 暗い画像(CT・MR・内視鏡)向けの描き込み色にする。心電図のような白地の画像では既定の色。 */
+  darkImages: boolean;
 }) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -67,7 +70,7 @@ export function RadReportImagesEditor({
       return;
     }
     setAdding(true);
-    const added: RadReportImageValues[] = [];
+    const added: ExamReportImageValues[] = [];
     const errors: string[] = [];
     for (const file of imageFiles) {
       try {
@@ -113,7 +116,7 @@ export function RadReportImagesEditor({
     void addFiles(files);
   }
 
-  function update(index: number, patch: Partial<RadReportImageValues>) {
+  function update(index: number, patch: Partial<ExamReportImageValues>) {
     onChange(images.map((image, i) => (i === index ? { ...image, ...patch } : image)));
   }
 
@@ -129,7 +132,7 @@ export function RadReportImagesEditor({
     onChange(images.filter((_, i) => i !== index));
   }
 
-  async function dataUrlOf(data: RadReportImageData): Promise<string> {
+  async function dataUrlOf(data: ExamReportImageData): Promise<string> {
     if (data.dataUrl) return data.dataUrl;
     return queryClient.fetchQuery({
       queryKey: ["Binary", data.binaryId, "image"],
@@ -156,11 +159,11 @@ export function RadReportImagesEditor({
     setPaint(null);
   }
 
-  const refs = radReportImageRefs(images);
+  const refs = examReportImageRefs(images);
 
   return (
     <div
-      className={`rad-report-images${dragging ? " rad-report-images--dragging" : ""}`}
+      className={`exam-report-images${dragging ? " exam-report-images--dragging" : ""}`}
       tabIndex={0}
       aria-label="画像"
       onPaste={handlePaste}
@@ -169,7 +172,7 @@ export function RadReportImagesEditor({
       onDrop={handleDrop}
     >
       {images.map((image, index) => (
-        <div className="rad-report-images__row" key={index}>
+        <div className="exam-report-images__row" key={index}>
           <span className="patho-result__image-number">{index + 1}</span>
           <SchemaImageGallery
             refs={[{ ...refs[index], label: "" }]}
@@ -262,7 +265,7 @@ export function RadReportImagesEditor({
             title={`画像${paint.index + 1}への描き込み`}
             backgroundDataUrl={paint.background}
             saveLabel="描き込みを確定"
-            colors={DARK_IMAGE_PEN_COLORS}
+            colors={darkImages ? DARK_IMAGE_PEN_COLORS : undefined}
             exportFormat="jpeg"
             onSave={savePaint}
             onClose={() => setPaint(null)}
@@ -271,7 +274,7 @@ export function RadReportImagesEditor({
       )}
       {viewerIndex !== null && (
         <ReportImageViewerModal
-          images={radReportViewerImages(images)}
+          images={examReportViewerImages(images)}
           initialIndex={viewerIndex}
           onClose={() => setViewerIndex(null)}
         />

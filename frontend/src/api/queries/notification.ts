@@ -8,7 +8,8 @@ import {
   hasTaskCode,
   splitNotificationBundle,
 } from "../../fhir/notificationHelpers";
-import { RAD_CRITICAL_FINDING_NOTE, RAD_CRITICAL_FINDING_TASK_CODE } from "../../fhir/radCriticalFindingHelpers";
+import { EXAM_CRITICAL_FINDING_NOTE } from "../../fhir/examCriticalFindingHelpers";
+import { EXAM_REPORT_KINDS } from "../../fhir/examReportHelpers";
 import {
   RESULT_REVIEW_NOTE,
   RESULT_REVIEW_TASK_CODE,
@@ -118,7 +119,9 @@ export function useMarkResultReviewed() {
       const notes: Record<string, string> = {
         [RESULT_REVIEW_TASK_CODE.code]: RESULT_REVIEW_NOTE,
         [LAB_PANIC_TASK_CODE.code]: LAB_PANIC_NOTE,
-        [RAD_CRITICAL_FINDING_TASK_CODE.code]: RAD_CRITICAL_FINDING_NOTE,
+        ...Object.fromEntries(
+          EXAM_REPORT_KINDS.map((config) => [config.critical.taskCode.code, EXAM_CRITICAL_FINDING_NOTE]),
+        ),
       };
       const tasks = await fetchReportTasks(reportId, Object.keys(notes));
       const entry: fhir4.BundleEntry[] = [

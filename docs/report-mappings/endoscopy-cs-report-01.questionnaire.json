@@ -1,0 +1,678 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/endoscopy-cs-report-01",
+  "version": "1.0.0",
+  "name": "END_CS_RPT_01",
+  "title": "大腸内視鏡 所見",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "内視鏡の所見レポート(大腸)の「所見」に貼るテンプレート。到達部位・腸管前処置・偶発症などの検査時情報は JED 用語集[基本情報]の統一表記を選択肢に転記し、所見は部位ごとの自由文で書く。記入しなかった項目は所見の文面に出ない。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "25675b10-0ef3-4425-83c4-c1f8c3015cca",
+        "display": "検査"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp-exam",
+      "type": "group",
+      "text": "検査時情報",
+      "item": [
+        {
+          "linkId": "exam-reach",
+          "type": "choice",
+          "text": "到達部位",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "選択肢は JED 用語集[基本情報](Ver.5.0.3)の統一表記。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "ileum",
+                "display": "回腸"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "cecum",
+                "display": "盲腸"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "ascending",
+                "display": "上行結腸"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "transverse",
+                "display": "横行結腸"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "descending",
+                "display": "下行結腸"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "sigmoid",
+                "display": "S状結腸"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "rectum",
+                "display": "直腸"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "exam-insertion-min",
+          "type": "integer",
+          "text": "挿入時間",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "分",
+                "display": "分"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "exam-prep",
+          "type": "choice",
+          "text": "腸管前処置",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "excellent",
+                "display": "Excellent"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "good",
+                "display": "Good"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "fair",
+                "display": "Fair"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "poor",
+                "display": "Poor"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "exam-antispasmodic",
+          "type": "choice",
+          "text": "鎮痙剤使用",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "l-menthol",
+                "display": "ｌ－メントール"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "anticholinergic",
+                "display": "抗コリン薬"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "glucagon",
+                "display": "グルカゴン"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "exam-sedation",
+          "type": "choice",
+          "text": "鎮静・鎮痛・麻酔",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "bzd",
+                "display": "BZD"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "analgesic",
+                "display": "鎮痛薬"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "propofol",
+                "display": "プロポフォール"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "dex",
+                "display": "DEX"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "general",
+                "display": "全身麻酔"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "exam-insufflation",
+          "type": "choice",
+          "text": "送気",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "co2",
+                "display": "CO2"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "air",
+                "display": "空気"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "exam-ie",
+          "type": "choice",
+          "text": "画像強調観察",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "indigo",
+                "display": "色素：インジゴカルミン"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "crystal-violet",
+                "display": "色素：クリスタルバイオレット"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "dye-other",
+                "display": "色素：その他"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "digital",
+                "display": "（光）デジタル法"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "magnifying",
+                "display": "拡大"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "eus",
+                "display": "EUS"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "other",
+                "display": "その他"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-findings",
+      "type": "group",
+      "text": "部位別所見",
+      "item": [
+        {
+          "linkId": "find-ileum",
+          "type": "text",
+          "text": "回腸・盲腸"
+        },
+        {
+          "linkId": "find-colon",
+          "type": "text",
+          "text": "結腸",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "病変は部位・大きさ・肉眼型(Is・IIa など)の順に書く。"
+            }
+          ]
+        },
+        {
+          "linkId": "find-rectum",
+          "type": "text",
+          "text": "直腸・肛門"
+        }
+      ]
+    },
+    {
+      "linkId": "grp-procedure",
+      "type": "group",
+      "text": "処置",
+      "item": [
+        {
+          "linkId": "biopsy",
+          "type": "choice",
+          "text": "生検",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "done",
+                "display": "あり"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "grp-biopsy",
+              "type": "group",
+              "text": "生検",
+              "enableWhen": [
+                {
+                  "question": "biopsy",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "done"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "biopsy-count",
+                  "type": "integer",
+                  "text": "個数",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+                      "valueInteger": 0
+                    },
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+                      "valueCoding": {
+                        "system": "http://unitsofmeasure.org",
+                        "code": "個",
+                        "display": "個"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "linkId": "biopsy-site",
+                  "type": "string",
+                  "text": "部位",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+                      "valueMarkdown": "例: 胃前庭部小彎。病理オーダーの臓器・部位と合わせる。"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-adverse",
+      "type": "group",
+      "text": "偶発症",
+      "item": [
+        {
+          "linkId": "adverse-intra",
+          "type": "choice",
+          "text": "手技中偶発症",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "選択肢は JED 用語集[基本情報](Ver.5.0.3)の統一表記。"
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "none",
+                "display": "なし"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "present",
+                "display": "あり"
+              }
+            }
+          ],
+          "item": [
+            {
+              "linkId": "grp-adverse-intra",
+              "type": "group",
+              "text": "手技中偶発症",
+              "enableWhen": [
+                {
+                  "question": "adverse-intra",
+                  "operator": "=",
+                  "answerCoding": {
+                    "code": "present"
+                  }
+                }
+              ],
+              "item": [
+                {
+                  "linkId": "adverse-intra-kind",
+                  "type": "choice",
+                  "text": "種類",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "radio-button"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "bleeding",
+                        "display": "出血"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "perforation",
+                        "display": "穿孔"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "cardiopulmonary",
+                        "display": "心肺"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "anaphylaxis",
+                        "display": "アナフィラキシー"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "other",
+                        "display": "その他"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "linkId": "adverse-intra-response",
+                  "type": "choice",
+                  "text": "対応",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "check-box"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "transfusion",
+                        "display": "輸血"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "endoscopic",
+                        "display": "内視鏡的治療"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "ivr",
+                        "display": "IVR"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "surgery",
+                        "display": "外科手術"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "other",
+                        "display": "その他"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "linkId": "adverse-intra-outcome",
+                  "type": "choice",
+                  "text": "転帰",
+                  "extension": [
+                    {
+                      "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                      "valueCodeableConcept": {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                            "code": "radio-button"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "answerOption": [
+                    {
+                      "valueCoding": {
+                        "code": "improved",
+                        "display": "軽快"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "unchanged",
+                        "display": "不変"
+                      }
+                    },
+                    {
+                      "valueCoding": {
+                        "code": "death",
+                        "display": "死亡"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "linkId": "adverse-intra-detail",
+                  "type": "string",
+                  "text": "詳細"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

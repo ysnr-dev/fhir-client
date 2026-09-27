@@ -1,4 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { EXAM_REPORT_CONFIGS, isExamReport } from "../../fhir/examReportHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
 import {
   buildPhysioOrderDeleteBundle,
@@ -14,6 +15,7 @@ import { buildRescheduleEntries } from "../../fhir/appointmentHelpers";
 import { postBundle } from "../fhirClient";
 import { fetchAppointmentSlots, invalidateAppointments } from "./appointment";
 import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES } from "./core";
+import { assertNoExamReportForCancel, examReportDeleteGuard } from "./examReport";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import type { RadBookingChange } from "./rad";
 import {
@@ -44,6 +46,9 @@ export interface PhysioWorklistRow {
   patient?: fhir4.Patient;
   /** 進捗。部門がまだ触っていないオーダーには無い(= 依頼済)。 */
   task?: fhir4.Task;
+  /** 所見レポート。未登録なら空。 */
+  reportId: string;
+  reportStatus: string;
 }
 
 export interface PhysioWorklistResult {
@@ -55,6 +60,7 @@ export interface PhysioWorklistResult {
 async function fetchPhysioWorklist(date: string): Promise<PhysioWorklistResult> {
   const orders: fhir4.ServiceRequest[] = [];
   const items: fhir4.ServiceRequest[] = [];
+  const reportByOrderId = new Map<string, { id: string; status: string }>();
 
   const { patientsById, tasks, truncated } = await fetchWorklistBundles(
     (page) => {
@@ -64,12 +70,22 @@ async function fetchPhysioWorklist(date: string): Promise<PhysioWorklistResult> 
         page,
         "occurrence",
       );
-      // 検査項目も同じ応答に添えてもらう。
+      // 検査項目・進捗・所見レポートも同じ応答に添えてもらう。
+      // _revinclude は複数指定するので append(set だと先に入れたものが消える)。
       params.set("_revinclude:iterate", "ServiceRequest:based-on");
-      params.set("_revinclude", "Task:focus");
+      params.append("_revinclude", "Task:focus");
+      params.append("_revinclude", "DiagnosticReport:based-on");
       return params;
     },
     (resource) => {
+      if (resource.resourceType === "DiagnosticReport") {
+        const report = resource as fhir4.DiagnosticReport;
+        const orderId = report.basedOn?.[0]?.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
+        if (orderId && report.id && isExamReport(EXAM_REPORT_CONFIGS.physio, report)) {
+          reportByOrderId.set(orderId, { id: report.id, status: report.status });
+        }
+        return false;
+      }
       if (resource.resourceType !== "ServiceRequest") return false;
       const request = resource as fhir4.ServiceRequest;
       // 検索にヒットしたヘッダと、添えられた明細を分ける。
@@ -89,6 +105,8 @@ async function fetchPhysioWorklist(date: string): Promise<PhysioWorklistResult> 
     itemRequests: physioOrderItemRequests(items, order.id ?? ""),
     patient: patientsById.get(order.subject?.reference?.split("/").pop() ?? ""),
     task: taskByOrderId.get(order.id ?? ""),
+    reportId: reportByOrderId.get(order.id ?? "")?.id ?? "",
+    reportStatus: reportByOrderId.get(order.id ?? "")?.status ?? "",
   }));
 
   // 実施時刻の早い順。時刻を指定していないオーダー(実施日だけ)は後ろにまとめる。
@@ -113,15 +131,20 @@ export function usePhysioWorklist(date: string) {
 
 const PHYSIO_WORKLIST_KEY = (date: string) => ["ServiceRequest", "physio-worklist", date];
 
-/** 受付・実施などの進捗を書き込む。実施済から戻す(取消)ときは、実施記録も同じ transaction で消す。 */
+/**
+ * 受付・実施などの進捗を書き込む。実施済から戻す(取消)ときは、実施記録も同じ transaction で消す。
+ * 所見レポートが付いた検査は取り消させない(docs/exam-report-design.md)。
+ */
 export const useUpdatePhysioTaskStatus = makeUpdateTaskStatusHook<PhysioTaskStatus>(
   buildPhysioTaskUpdate,
   "physio-worklist",
   {
     cancelPerform: {
       cancels: cancelsPerform(physioTaskStatus),
-      entries: (order) =>
-        performCancelEntries(order.id ?? "", { observations: false }, buildPhysioPerformDeleteEntries),
+      entries: async (order) => {
+        await assertNoExamReportForCancel(EXAM_REPORT_CONFIGS.physio, order.id ?? "");
+        return performCancelEntries(order.id ?? "", { observations: false }, buildPhysioPerformDeleteEntries);
+      },
     },
   },
 );
@@ -180,12 +203,15 @@ export function useUpdatePhysioOrder() {
 
 /**
  * 明細が参照しているテンプレート回答と、紐づく検査予約の取消も同じ transaction に同梱する。
+ * 所見レポートが付いたオーダーは消させない(レポートの basedOn が指す先が無くなる)。
  * useDeletePhysioOrder の本体(読み直しの指示を伴わない)。パスの取り消しがまとめて消すときにも使う。
  */
 export const deletePhysioOrderRequest = (srId: string) =>
   deleteOrderWithItems(srId, {
     itemsOf: physioOrderItemRequests,
     withAppointment: true,
+    revincludes: ["DiagnosticReport:based-on"],
+    guard: examReportDeleteGuard(EXAM_REPORT_CONFIGS.physio),
     build: ({ srId, itemIds, itemRequests, appointmentEntries }) =>
       buildPhysioOrderDeleteBundle(srId, itemIds, physioOrderResponseIds(itemRequests), appointmentEntries),
   });

@@ -12,7 +12,7 @@ import type { RadItem } from "../api/masterClient";
 import { useRadItemsByCodes, useRadJj1017Catalog } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { RadPerformModal } from "../components/RadPerformModal";
-import { RadReportEntryModal } from "../components/RadReportEntryModal";
+import { ExamReportEntryModal } from "../components/ExamReportEntryModal";
 import { RowMenu } from "../components/RowMenu";
 import {
   PatientKana,
@@ -33,7 +33,7 @@ import {
   radOrderTime,
   summarizeRadOrder,
 } from "../fhir/radOrderHelpers";
-import { radReportStatusDisplay } from "../fhir/radReportHelpers";
+import { EXAM_REPORT_CONFIGS, examReportStatusDisplay } from "../fhir/examReportHelpers";
 import {
   RAD_TASK_STATUS_OPTIONS,
   radTaskActions,
@@ -241,7 +241,8 @@ export function RadWorklistPage() {
         <RadPerformModal row={performing} onClose={() => setPerforming(null)} />
       )}
       {reporting && (
-        <RadReportEntryModal
+        <ExamReportEntryModal
+          config={EXAM_REPORT_CONFIGS.rad}
           orderId={reporting.orderId}
           patientId={reporting.patientId}
           title={reporting.title}
@@ -448,7 +449,7 @@ function WorklistRow({
       </td>
       <td className="rad-worklist__compact">
         {row.reportId ? (
-          radReportStatusDisplay(row.reportStatus) || "登録済"
+          examReportStatusDisplay(row.reportStatus) || "登録済"
         ) : (
           <span className="order-select__muted">未</span>
         )}

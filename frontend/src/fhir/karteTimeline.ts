@@ -346,6 +346,10 @@ export type KarteTimelineItem = KarteItemBase &
         kind: "physio-order";
         serviceRequest: fhir4.ServiceRequest;
         itemRequests: fhir4.ServiceRequest[];
+        /** 所見レポートの id。空ならまだ書いていない。 */
+        reportId: string;
+        /** 所見レポートの報告区分。"preliminary" なら暫定、"amended" なら訂正のバッジを出す。 */
+        reportStatus: string;
         /** 部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
         status: PhysioTaskStatus;
         /** 実施記録。未実施なら空。取消 → 再実施で複数残ることがある。 */
@@ -356,6 +360,10 @@ export type KarteTimelineItem = KarteItemBase &
         kind: "endoscopy-order";
         serviceRequest: fhir4.ServiceRequest;
         itemRequests: fhir4.ServiceRequest[];
+        /** 所見レポートの id。空ならまだ書いていない。 */
+        reportId: string;
+        /** 所見レポートの報告区分。"preliminary" なら暫定、"amended" なら訂正のバッジを出す。 */
+        reportStatus: string;
         /** 部門の進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
         status: EndoscopyTaskStatus;
         /** 実施記録。未実施なら空。取消 → 再実施で複数残ることがある。 */
@@ -707,7 +715,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     }
   }
 
-  // オーダー id → そのオーダーを元にした検査結果(検体検査・細菌検査・病理・読影)の id と status
+  // オーダー id → そのオーダーを元にした検査結果(検体検査・細菌検査・病理・読影・生理検査・内視鏡の所見)の id と status
   // (DiagnosticReport.basedOn。カードの「検査結果表示」を出せるかの判定と、
   // 中間報告・訂正報告のバッジに使う)。
   const reportByOrderId = new Map<string, { id: string; status: string }>();
@@ -889,11 +897,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     }
     if (isPhysioServiceRequest(serviceRequest)) {
       const status = physioTaskStatus(physioTaskByOrderId.get(serviceRequest.id ?? ""));
+      const report = reportByOrderId.get(serviceRequest.id ?? "");
       return {
         ...base,
         kind: "physio-order" as const,
         label: KARTE_KIND_LABELS["physio-order"],
         itemRequests: physioOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+        reportId: report?.id ?? "",
+        reportStatus: report?.status ?? "",
         status,
         // 放射線検査と同じく、実施情報は進捗が実施済のときだけ出す。
         performs:
@@ -902,11 +913,14 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     }
     if (isEndoscopyServiceRequest(serviceRequest)) {
       const status = endoscopyTaskStatus(endoscopyTaskByOrderId.get(serviceRequest.id ?? ""));
+      const report = reportByOrderId.get(serviceRequest.id ?? "");
       return {
         ...base,
         kind: "endoscopy-order" as const,
         label: KARTE_KIND_LABELS["endoscopy-order"],
         itemRequests: endoscopyOrderItemRequests(itemRequests, serviceRequest.id ?? ""),
+        reportId: report?.id ?? "",
+        reportStatus: report?.status ?? "",
         status,
         performs:
           status === "completed"

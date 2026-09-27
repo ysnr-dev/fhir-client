@@ -14062,7 +14062,7 @@ button.meal-calendar__cell:hover {
   resize: vertical;
 }
 
-/* サムネイルを押して拡大表示を開くとき(読影レポートの画像)。ボタンの枠は出さず画像だけを見せる。 */
+/* サムネイルを押して拡大表示を開くとき(検査レポートの画像)。ボタンの枠は出さず画像だけを見せる。 */
 .schema-gallery__open {
   height: auto;
   padding: 0;
@@ -14072,40 +14072,55 @@ button.meal-calendar__cell:hover {
   line-height: 0;
 }
 
-/* 読影レポートの入力(RadReportEntryModal)。依頼内容は既定で畳めるようにする。 */
-.rad-report-entry__order {
+/* 検査レポート(読影・所見)の入力(ExamReportEntryModal)。依頼内容は既定で畳めるようにする。 */
+.exam-report-entry__order {
   margin-bottom: 12px;
 }
 
-.rad-report-entry__order > summary {
+.exam-report-entry__order > summary {
   cursor: pointer;
   font-weight: 600;
   margin-bottom: 8px;
 }
 
-.rad-report-entry__perform {
-  margin-top: 8px;
+/* 依頼内容パネル(.prescription-detail)の外に置くので、枠と見出しをそちらの fieldset に揃える。 */
+.exam-report-entry__perform {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
-.rad-report-entry__actions {
+.exam-report-entry__perform legend {
+  font-size: 13px;
+  color: var(--text);
+  padding: 0 4px;
+}
+
+.exam-report-entry__perform .prescription-detail__common + .prescription-detail__common {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.exam-report-entry__actions {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 8px;
 }
 
 /* 重要所見のチェックは横並び(フォームの label は縦積みが既定)。 */
-.prescription-form label.rad-report-form__critical {
+.prescription-form label.exam-report-form__critical {
   flex-direction: row;
   align-items: center;
   gap: 6px;
 }
 
-.rad-report-form__critical-text {
+.exam-report-form__critical-text {
   flex: 1 1 320px;
 }
 
-/* 読影レポートの画像欄。ファイルを落とせる範囲なので、ドラッグ中は枠で示す。 */
-.rad-report-images {
+/* 検査レポートの画像欄。ファイルを落とせる範囲なので、ドラッグ中は枠で示す。 */
+.exam-report-images {
   flex: 1 1 100%;
   display: flex;
   flex-direction: column;
@@ -14115,37 +14130,37 @@ button.meal-calendar__cell:hover {
   border-radius: 6px;
 }
 
-.rad-report-images:focus-visible,
-.rad-report-images--dragging {
+.exam-report-images:focus-visible,
+.exam-report-images--dragging {
   border-color: var(--accent-border);
   background: var(--accent-bg);
   outline: none;
 }
 
-.rad-report-images__row {
+.exam-report-images__row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.rad-report-images__row .schema-gallery {
+.exam-report-images__row .schema-gallery {
   margin-top: 0;
 }
 
-.rad-report-images__row input[type="text"] {
+.exam-report-images__row input[type="text"] {
   flex: 1;
 }
 
-/* 読影レポートの所見・診断。改行を残し、他の表示項目(.prescription-detail__common dd)と同じ大きさで読ませる。 */
-.rad-report-detail__text {
+/* 検査レポートの所見・診断。改行を残し、他の表示項目(.prescription-detail__common dd)と同じ大きさで読ませる。 */
+.exam-report-detail__text {
   white-space: pre-wrap;
   margin: 0;
   font-size: 14px;
   color: var(--text-h);
 }
 
-/* 読影レポートの内容表示。重要所見は読み落とさせないよう先頭に色付きの枠で出す。 */
-.rad-report-detail__critical {
+/* 検査レポートの内容表示。重要所見は読み落とさせないよう先頭に色付きの枠で出す。 */
+.exam-report-detail__critical {
   display: flex;
   font-size: 14px;
   gap: 8px;
@@ -14158,13 +14173,13 @@ button.meal-calendar__cell:hover {
   margin-bottom: 12px;
 }
 
-.rad-report-detail__critical-label {
+.exam-report-detail__critical-label {
   color: var(--lab-high);
   font-weight: 700;
   white-space: nowrap;
 }
 
-.rad-report-detail__review {
+.exam-report-detail__review {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -19153,7 +19168,7 @@ button.chemo-calendar__cell[draggable="true"] {
   background: var(--bg);
 }
 
-/* ファイルを落とせる範囲。ドラッグ中は枠と背景で示す(読影レポートの画像欄と同じ)。 */
+/* ファイルを落とせる範囲。ドラッグ中は枠と背景で示す(検査レポートの画像欄と同じ)。 */
 .karte-file-drop {
   display: flex;
   flex-direction: column;

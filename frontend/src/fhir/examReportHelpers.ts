@@ -1,10 +1,29 @@
 import { nowFhirDateTime } from "../lib/dates";
+import {
+  endoscopyOrderItems,
+  entryLabel as endoscopyEntryLabel,
+  orderEntries as endoscopyOrderEntries,
+  summarizeEndoscopyOrder,
+} from "./endoscopyOrderHelpers";
+import { isEndoscopyProcedure } from "./endoscopyResultHelpers";
 import { SETTING_SYSTEM, type LabResultSetting } from "./labResultHelpers";
-import { departmentExtension, departmentOf, prescriptionRequester } from "./prescriptionHelpers";
+import {
+  entryLabel as physioEntryLabel,
+  orderEntries as physioOrderEntries,
+  physioOrderItems,
+  summarizePhysioOrder,
+} from "./physioOrderHelpers";
+import { isPhysioProcedure } from "./physioResultHelpers";
+import {
+  departmentExtension,
+  departmentOf,
+  ORDER_TYPE_SYSTEM,
+  prescriptionRequester,
+} from "./prescriptionHelpers";
 import type { SchemaImageRef, TemplateBinding } from "./questionnaireResponseHelpers";
 import {
-  entryLabel,
-  orderEntries,
+  entryLabel as radEntryLabel,
+  orderEntries as radOrderEntries,
   radOrderItems,
   summarizeRadOrder,
 } from "./radOrderHelpers";
@@ -12,100 +31,250 @@ import { isRadProcedure } from "./radResultHelpers";
 import { binaryIdFromAttachment, imageBinaryEntry, newBinaryDataLength } from "./schemaImage";
 import { categoryCoding, codingBySystem, findSettingDisplay } from "./shared";
 
-// 放射線検査の読影レポート(docs/rad-report-design.md)。
+// 検査レポート(docs/exam-report-design.md)。放射線の読影レポート・生理検査の所見レポート・
+// 内視鏡の所見レポートで共通の形。
 //
-//   DiagnosticReport ─ basedOn → 放射線オーダー(ヘッダ ServiceRequest)
+//   DiagnosticReport ─ basedOn → オーダー(ヘッダ ServiceRequest)
 //     ├ result → Observation(所見)
-//     └ extension[rad-report-image] → Binary(元画像・描き込み画像)
+//     └ extension[<接頭辞>-report-image] → Binary(元画像・描き込み画像)
 //
-// を 1 本の transaction Bundle で保存する。
+// を 1 本の transaction Bundle で保存する。種別ごとに違うのは category・code・拡張の接頭辞・
+// 画面の文言だけで、それを ExamReportConfig に持つ。
 //
-// 要素の入れ方は JP Core の JP_DiagnosticReport_Radiology に合わせる。category は LOINC の
-// LP29684-5、code は JP_DocumentCodes_CS の 18748-4(画像検査報告書)、読影医は
-// resultsInterpreter、診断は conclusion。上流の登録先は JP_DiagnosticReport_Common なので
-// meta.profile は付けない。
-//
+// 記載医は resultsInterpreter、診断は conclusion、発行施設は performer。
 // 報告区分は 暫定(preliminary)→ 最終(final)→ 確定後の編集で訂正(amended)。
-// 読影の訂正は解釈を改めることなので、検体検査の corrected ではなく病理と同じ amended。
+// 所見の訂正は解釈を改めることなので、検体検査の corrected ではなく病理と同じ amended。
 
-// ---- コードシステム・拡張 ----
+// ---- コードシステム ----
 
 const LOINC_SYSTEM = "http://loinc.org";
-const RADIOLOGY_CATEGORY_CODE = "LP29684-5";
-/** 読影レポートを `DiagnosticReport?category=` で引くときの token。 */
-export const RAD_REPORT_CATEGORY_SEARCH = `${LOINC_SYSTEM}|${RADIOLOGY_CATEGORY_CODE}`;
 const DOCUMENT_CODES_SYSTEM = "http://jpfhir.jp/fhir/core/CodeSystem/JP_DocumentCodes_CS";
-const RADIOLOGY_REPORT_CODE = "18748-4";
-const REPORT_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0074";
+const V2_0074_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0074";
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
-
-// 所見 Observation の code。JP Core は放射線の result を定めていないのでローカルコードにする。
-const REPORT_ITEM_SYSTEM = "http://fhir-client.local/CodeSystem/rad-report-item";
+/** 生理検査の報告書の code。種別の幅が広く(心電図・超音波・呼吸機能…)1 つの LOINC に収まらない。 */
+const EXAM_REPORT_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/exam-report";
+const EXTENSION_BASE = "http://fhir-client.local/StructureDefinition/";
 const FINDINGS_CODE = "findings";
+
+// ---- 種別ごとの設定 ----
+
+export type ExamReportKind = "rad" | "physio" | "endoscopy";
+
+export interface ExamReportConfig {
+  kind: ExamReportKind;
+  /** 種別を判定する category の coding。`DiagnosticReport?category=` の検索にも使う。 */
+  kindCoding: fhir4.Coding;
+  /** v2-0074 の診断区分。検体検査・細菌・病理の結果一覧(LAB / MB / SP,CP)と混ざらない値にする。 */
+  sectionCoding: fhir4.Coding;
+  code: fhir4.Coding;
+  observationCategory: fhir4.Coding;
+  /** 拡張の URL と所見 Observation の code system の接頭辞。 */
+  prefix: string;
+  labels: {
+    /** 「読影レポート」「所見レポート」 */
+    report: string;
+    /** 入力欄の見出しと一覧のボタン(「読影」「所見」)。 */
+    action: string;
+    /** 検査の呼び方(「撮影」「検査」)。「撮影内容」「撮影日時」のように使う。 */
+    exam: string;
+    interpreter: string;
+    conclusion: string;
+    /** 検査そのものの名前(「放射線検査」「生理検査」「内視鏡」)。 */
+    order: string;
+  };
+  critical: {
+    taskCode: { code: string; display: string };
+    /** 通知一覧の種別の表示。放射線は Task.code の display が「重要所見」のままなので分けて持つ。 */
+    label: string;
+  };
+  /** 描き込みの色を暗い画像向け(黄・赤・水色・白)にするか。 */
+  darkImages: boolean;
+  /** カルテの詳細モーダルの種別(karteUrl の KarteDetailKind)。 */
+  detailKind: "rad-result" | "physio-result" | "endoscopy-result";
+  settingOf(order: fhir4.ServiceRequest): string;
+  examText(order: fhir4.ServiceRequest, itemRequests: fhir4.ServiceRequest[]): string;
+  isProcedure(procedure: fhir4.Procedure): boolean;
+}
+
+const RAD_CONFIG: ExamReportConfig = {
+  kind: "rad",
+  // JP Core の JP_DiagnosticReport_Radiology が固定スライスで求める値。
+  kindCoding: { system: LOINC_SYSTEM, code: "LP29684-5", display: "Radiology" },
+  sectionCoding: { system: V2_0074_SYSTEM, code: "RAD", display: "Radiology" },
+  code: { system: DOCUMENT_CODES_SYSTEM, code: "18748-4", display: "画像検査報告書" },
+  observationCategory: { system: OBSERVATION_CATEGORY_SYSTEM, code: "imaging", display: "Imaging" },
+  prefix: "rad",
+  labels: {
+    report: "読影レポート",
+    action: "読影",
+    exam: "撮影",
+    interpreter: "読影医",
+    conclusion: "診断",
+    order: "放射線検査",
+  },
+  critical: {
+    taskCode: { code: "rad-critical-finding", display: "重要所見" },
+    label: "重要所見(放射線)",
+  },
+  darkImages: true,
+  detailKind: "rad-result",
+  settingOf: (order) => summarizeRadOrder(order).settingCode,
+  examText: (order, itemRequests) =>
+    radOrderEntries(radOrderItems(order, itemRequests)).map(radEntryLabel).join("・"),
+  isProcedure: isRadProcedure,
+};
+
+const PHYSIO_CONFIG: ExamReportConfig = {
+  kind: "physio",
+  kindCoding: { system: ORDER_TYPE_SYSTEM, code: "physio", display: "生理検査" },
+  sectionCoding: { system: V2_0074_SYSTEM, code: "OTH", display: "Other" },
+  code: { system: EXAM_REPORT_CODE_SYSTEM, code: "physio", display: "生理検査報告書" },
+  observationCategory: { system: OBSERVATION_CATEGORY_SYSTEM, code: "procedure", display: "Procedure" },
+  prefix: "physio",
+  labels: {
+    report: "所見レポート",
+    action: "所見",
+    exam: "検査",
+    interpreter: "記載医",
+    conclusion: "判定",
+    order: "生理検査",
+  },
+  critical: {
+    taskCode: { code: "physio-critical-finding", display: "重要所見(生理検査)" },
+    label: "重要所見(生理検査)",
+  },
+  darkImages: false,
+  detailKind: "physio-result",
+  settingOf: (order) => summarizePhysioOrder(order).settingCode,
+  examText: (order, itemRequests) =>
+    physioOrderEntries(physioOrderItems(order, itemRequests)).map(physioEntryLabel).join("・"),
+  isProcedure: isPhysioProcedure,
+};
+
+const ENDOSCOPY_CONFIG: ExamReportConfig = {
+  kind: "endoscopy",
+  kindCoding: { system: ORDER_TYPE_SYSTEM, code: "endoscopy", display: "内視鏡" },
+  sectionCoding: { system: V2_0074_SYSTEM, code: "OTH", display: "Other" },
+  code: { system: LOINC_SYSTEM, code: "18751-8", display: "Endoscopy study" },
+  observationCategory: { system: OBSERVATION_CATEGORY_SYSTEM, code: "procedure", display: "Procedure" },
+  prefix: "endoscopy",
+  labels: {
+    report: "所見レポート",
+    action: "所見",
+    exam: "検査",
+    interpreter: "記載医",
+    conclusion: "診断",
+    order: "内視鏡",
+  },
+  critical: {
+    taskCode: { code: "endoscopy-critical-finding", display: "重要所見(内視鏡)" },
+    label: "重要所見(内視鏡)",
+  },
+  // 内視鏡の画像は暗い背景に粘膜が写るので、放射線と同じ明るい色が見やすい。
+  darkImages: true,
+  detailKind: "endoscopy-result",
+  settingOf: (order) => summarizeEndoscopyOrder(order).settingCode,
+  examText: (order, itemRequests) =>
+    endoscopyOrderEntries(endoscopyOrderItems(order, itemRequests))
+      .map(endoscopyEntryLabel)
+      .join("・"),
+  isProcedure: isEndoscopyProcedure,
+};
+
+export const EXAM_REPORT_CONFIGS: Record<ExamReportKind, ExamReportConfig> = {
+  rad: RAD_CONFIG,
+  physio: PHYSIO_CONFIG,
+  endoscopy: ENDOSCOPY_CONFIG,
+};
+
+export const EXAM_REPORT_KINDS = Object.values(EXAM_REPORT_CONFIGS);
+
+/** カルテのオーダーの種別 → レポートの種別。 */
+export const EXAM_REPORT_KIND_OF_ORDER = {
+  "rad-order": "rad",
+  "physio-order": "physio",
+  "endoscopy-order": "endoscopy",
+} as const satisfies Record<string, ExamReportKind>;
+
+/** 種別の文字列(検査結果確認の通知の種別など)から設定を引く。検査レポート以外は undefined。 */
+export function examReportConfigByKind(kind: string): ExamReportConfig | undefined {
+  return EXAM_REPORT_KINDS.find((config) => config.kind === kind);
+}
+
+/** `DiagnosticReport?category=` で種別を引くときの token。 */
+export function examReportCategorySearch(config: ExamReportConfig): string {
+  return `${config.kindCoding.system}|${config.kindCoding.code}`;
+}
+
+function extensionUrl(config: ExamReportConfig, name: string): string {
+  return `${EXTENSION_BASE}${config.prefix}-${name}`;
+}
 
 /**
  * 画像 1 枚。元画像(source)と描き込みの合成画像(annotated)を別の Binary で持つ。
  * 描き込みモーダルは合成画像しか返さないので、元画像を残さないと描き直せなくなる。
  * DiagnosticReport.media は Reference(Media) を要求するが、上流に Media が無いので拡張にする。
  */
-const REPORT_IMAGE_EXT_URL = "http://fhir-client.local/StructureDefinition/rad-report-image";
-/** 重要所見の要点。あれば依頼医あてにアラートの通知を出す(radCriticalFindingHelpers)。 */
-const CRITICAL_FINDING_EXT_URL = "http://fhir-client.local/StructureDefinition/rad-critical-finding";
+const imageExtUrl = (config: ExamReportConfig) => extensionUrl(config, "report-image");
+/** 重要所見の要点。あれば依頼医あてにアラートの通知を出す(examCriticalFindingHelpers)。 */
+const criticalFindingExtUrl = (config: ExamReportConfig) => extensionUrl(config, "critical-finding");
 /** 所見・診断をテンプレートから記載したときの記入内容(QuestionnaireResponse)への参照。 */
-const FINDINGS_QR_EXT_URL =
-  "http://fhir-client.local/StructureDefinition/rad-report-findings-response";
-const CONCLUSION_QR_EXT_URL =
-  "http://fhir-client.local/StructureDefinition/rad-report-conclusion-response";
+const findingsQrExtUrl = (config: ExamReportConfig) => extensionUrl(config, "report-findings-response");
+const conclusionQrExtUrl = (config: ExamReportConfig) =>
+  extensionUrl(config, "report-conclusion-response");
+/** 所見 Observation の code。JP Core に決まりが無いのでローカルコードにする。 */
+const reportItemSystem = (config: ExamReportConfig) =>
+  `http://fhir-client.local/CodeSystem/${config.prefix}-report-item`;
 
 /**
  * 1 回の保存で新しく送る画像(base64)の合計の上限。上流は本文が 10MB を超えると 413 で
  * 拒否するので、本文・テンプレート回答の余白を残した値にする。保存済みの画像は参照だけで
  * 再送しないので、分けて保存すれば枚数の制限にはならない。
  */
-export const RAD_REPORT_MAX_NEW_IMAGE_LENGTH = 7 * 1024 * 1024;
+export const EXAM_REPORT_MAX_NEW_IMAGE_LENGTH = 7 * 1024 * 1024;
 
-export const RAD_REPORT_TOO_LARGE_MESSAGE =
+export const EXAM_REPORT_TOO_LARGE_MESSAGE =
   "一度に添付できる画像の量を超えています。いったん保存してから追加してください。";
 
 // ---- 報告区分 ----
 
-export type RadReportStatus = "preliminary" | "final" | "amended";
+export type ExamReportStatus = "preliminary" | "final" | "amended";
 
 /** 画面で選べるのは暫定と最終。訂正は確定後の編集保存で自動的に付く。 */
-export const RAD_REPORT_STATUS_OPTIONS: { code: "preliminary" | "final"; display: string }[] = [
+export const EXAM_REPORT_STATUS_OPTIONS: { code: "preliminary" | "final"; display: string }[] = [
   { code: "preliminary", display: "暫定報告" },
   { code: "final", display: "最終報告" },
 ];
 
-export function radReportStatusDisplay(status: string | undefined): string {
+export function examReportStatusDisplay(status: string | undefined): string {
   if (status === "amended") return "訂正報告";
-  return RAD_REPORT_STATUS_OPTIONS.find((o) => o.code === status)?.display ?? "";
+  return EXAM_REPORT_STATUS_OPTIONS.find((o) => o.code === status)?.display ?? "";
 }
 
 // ---- フォーム値 ----
 
 /** 画像の実体。保存済みは binaryId、足したばかりは dataUrl を持つ。 */
-export interface RadReportImageData {
+export interface ExamReportImageData {
   binaryId: string;
   dataUrl: string;
   contentType: string;
 }
 
-export interface RadReportImageValues {
-  source: RadReportImageData;
+export interface ExamReportImageValues {
+  source: ExamReportImageData;
   /** 描き込みの合成画像。描き込みが無ければ null。 */
-  annotated: RadReportImageData | null;
+  annotated: ExamReportImageData | null;
   caption: string;
 }
 
-export interface RadReportFormValues {
+export interface ExamReportFormValues {
   orderId: string;
   setting: LabResultSetting;
   departmentId: string;
   departmentName: string;
-  /** 撮影日時。実施記録の performedDateTime、無ければオーダーの occurrenceDateTime。 */
+  /** 検査日時。実施記録の performedDateTime、無ければオーダーの occurrenceDateTime。 */
   effectiveDateTime: string;
-  /** 撮影内容(code.text)。オーダーの GP の見出しを並べたもの。 */
+  /** 検査内容(code.text)。オーダーの GP の見出しを並べたもの。 */
   examText: string;
   reportStatus: "preliminary" | "final";
   findings: string;
@@ -114,31 +283,29 @@ export interface RadReportFormValues {
   conclusionTemplate: TemplateBinding | null;
   criticalFinding: boolean;
   criticalFindingText: string;
-  images: RadReportImageValues[];
-  /** 読影医。保存時にログイン中の医療従事者を入れ、編集では最初の読影医を残す。 */
+  images: ExamReportImageValues[];
+  /** 記載医。保存時にログイン中の医療従事者を入れ、編集では最初の記載医を残す。 */
   interpreterId: string;
   interpreterName: string;
   organizationId: string;
   organizationName: string;
   /** 以下は編集時の復元用。 */
   findingsId?: string;
-  originalStatus?: RadReportStatus;
-}
-
-/** オーダーの内容から撮影内容の文言を作る(「Ｘ線CT | 胸部単純CT・…」)。 */
-export function radExamText(order: fhir4.ServiceRequest, itemRequests: fhir4.ServiceRequest[]): string {
-  return orderEntries(radOrderItems(order, itemRequests)).map(entryLabel).join("・");
+  originalStatus?: ExamReportStatus;
 }
 
 /**
- * 実施記録から撮影日時を取る。取消 → 再実施でハブが複数残ることがあるので最も新しいもの。
- * 実施入力をしない撮影項目では実施記録が無いので空を返す(呼び出し側がオーダーの日時で補う)。
+ * 実施記録から検査日時を取る。取消 → 再実施でハブが複数残ることがあるので最も新しいもの。
+ * 実施入力をしない項目では実施記録が無いので空を返す(呼び出し側がオーダーの日時で補う)。
  */
-export function radPerformedDateTime(procedures: fhir4.Procedure[]): string {
+export function examPerformedDateTime(
+  config: ExamReportConfig,
+  procedures: fhir4.Procedure[],
+): string {
   return procedures
     .filter(
       (p) =>
-        isRadProcedure(p) &&
+        config.isProcedure(p) &&
         !p.partOf?.length &&
         p.status !== "entered-in-error" &&
         Boolean(p.performedDateTime),
@@ -148,19 +315,20 @@ export function radPerformedDateTime(procedures: fhir4.Procedure[]): string {
     .pop() ?? "";
 }
 
-export function emptyRadReportForm(
+export function emptyExamReportForm(
+  config: ExamReportConfig,
   order: fhir4.ServiceRequest,
   itemRequests: fhir4.ServiceRequest[],
   procedures: fhir4.Procedure[],
-): RadReportFormValues {
+): ExamReportFormValues {
   const requester = prescriptionRequester(order);
   return {
     orderId: order.id ?? "",
-    setting: (summarizeRadOrder(order).settingCode || "outpatient") as LabResultSetting,
+    setting: (config.settingOf(order) || "outpatient") as LabResultSetting,
     departmentId: requester.departmentId,
     departmentName: requester.departmentName,
-    effectiveDateTime: radPerformedDateTime(procedures) || order.occurrenceDateTime || "",
-    examText: radExamText(order, itemRequests),
+    effectiveDateTime: examPerformedDateTime(config, procedures) || order.occurrenceDateTime || "",
+    examText: config.examText(order, itemRequests),
     reportStatus: "final",
     findings: "",
     findingsTemplate: null,
@@ -177,26 +345,26 @@ export function emptyRadReportForm(
 }
 
 /** 保存後の status。確定(final・amended)のレポートを編集保存したら amended にする。 */
-export function nextRadReportStatus(values: RadReportFormValues): RadReportStatus {
+export function nextExamReportStatus(values: ExamReportFormValues): ExamReportStatus {
   const original = values.originalStatus;
   return original && original !== "preliminary" ? "amended" : values.reportStatus;
 }
 
-export function willBecomeAmended(values: RadReportFormValues): boolean {
-  return nextRadReportStatus(values) === "amended";
+export function willBecomeAmended(values: ExamReportFormValues): boolean {
+  return nextExamReportStatus(values) === "amended";
 }
 
 /** 表示する画像(描き込みがあればそれ)。 */
-export function displayedImage(image: RadReportImageValues): RadReportImageData {
+export function displayedImage(image: ExamReportImageValues): ExamReportImageData {
   return image.annotated ?? image.source;
 }
 
 /** SchemaImageGallery に渡す形。表示は描き込みがあれば描き込み画像。 */
-export function radReportImageRefs(images: RadReportImageValues[]): SchemaImageRef[] {
+export function examReportImageRefs(images: ExamReportImageValues[]): SchemaImageRef[] {
   return images.map((image, index) => {
     const shown = displayedImage(image);
     return {
-      key: `rad-report-image#${index}`,
+      key: `exam-report-image#${index}`,
       label: image.caption,
       binaryId: shown.binaryId || null,
       dataUrl: shown.dataUrl || null,
@@ -205,13 +373,13 @@ export function radReportImageRefs(images: RadReportImageValues[]): SchemaImageR
 }
 
 /** 拡大表示(ReportImageViewerModal)に渡す形。描き込みがあれば元画像と切り替えられる。 */
-export function radReportViewerImages(images: RadReportImageValues[]) {
-  const dataOf = (data: RadReportImageData) => ({
+export function examReportViewerImages(images: ExamReportImageValues[]) {
+  const dataOf = (data: ExamReportImageData) => ({
     binaryId: data.binaryId || null,
     dataUrl: data.dataUrl || null,
   });
   return images.map((image, index) => ({
-    key: `rad-report-image#${index}`,
+    key: `exam-report-image#${index}`,
     caption: image.caption,
     image: dataOf(displayedImage(image)),
     original: image.annotated ? dataOf(image.source) : null,
@@ -221,7 +389,7 @@ export function radReportViewerImages(images: RadReportImageValues[]) {
 // ---- FHIR リソースの組み立て ----
 
 /** 画像の実体を Bundle に積み、拡張に書く参照を返す。 */
-function imageReference(entries: fhir4.BundleEntry[], image: RadReportImageData): string | null {
+function imageReference(entries: fhir4.BundleEntry[], image: ExamReportImageData): string | null {
   if (image.binaryId) return `Binary/${image.binaryId}`;
   if (!image.dataUrl) return null;
   const { placeholder, entry } = imageBinaryEntry(image.dataUrl, image.contentType || "image/jpeg");
@@ -230,8 +398,9 @@ function imageReference(entries: fhir4.BundleEntry[], image: RadReportImageData)
 }
 
 function pushImageEntries(
+  config: ExamReportConfig,
   entries: fhir4.BundleEntry[],
-  images: RadReportImageValues[],
+  images: ExamReportImageValues[],
 ): fhir4.Extension[] {
   return images.flatMap((image) => {
     const sourceUrl = imageReference(entries, image.source);
@@ -256,13 +425,13 @@ function pushImageEntries(
         },
       });
     }
-    return [{ url: REPORT_IMAGE_EXT_URL, extension }];
+    return [{ url: imageExtUrl(config), extension }];
   });
 }
 
 /**
  * テンプレートの記入内容を Bundle に積み、レポートから指す参照を返す。
- * 保存済みの回答を再編集していなければ参照だけ引き継ぐ(放射線オーダーの検査目的と同じ形)。
+ * 保存済みの回答を再編集していなければ参照だけ引き継ぐ(オーダーの検査目的と同じ形)。
  */
 function templateReference(
   entries: fhir4.BundleEntry[],
@@ -296,24 +465,25 @@ function templateReference(
   return reference;
 }
 
-export interface RadReportSaveTarget {
+export interface ExamReportSaveTarget {
   reportId?: string;
   /** 編集前のレポートが参照していた所見 Observation とテンプレート回答。外れたものを消す。 */
   originalObservationIds?: string[];
   originalResponseIds?: string[];
 }
 
-export function buildRadReportBundle(
-  values: RadReportFormValues,
+export function buildExamReportBundle(
+  config: ExamReportConfig,
+  values: ExamReportFormValues,
   patientId: string,
-  { reportId, originalObservationIds = [], originalResponseIds = [] }: RadReportSaveTarget = {},
+  { reportId, originalObservationIds = [], originalResponseIds = [] }: ExamReportSaveTarget = {},
 ): fhir4.Bundle {
-  const status = nextRadReportStatus(values);
+  const status = nextExamReportStatus(values);
   const reportReference = reportId ? `DiagnosticReport/${reportId}` : `urn:uuid:${crypto.randomUUID()}`;
 
   // 画像とテンプレート回答はレポートが参照するので、レポートより先に積む。
   const leadingEntries: fhir4.BundleEntry[] = [];
-  const imageExtensions = pushImageEntries(leadingEntries, values.images);
+  const imageExtensions = pushImageEntries(config, leadingEntries, values.images);
   const keptResponseIds = new Set<string>();
   const findingsResponse = templateReference(leadingEntries, keptResponseIds, values.findingsTemplate);
   const conclusionResponse = templateReference(
@@ -329,11 +499,9 @@ export function buildRadReportBundle(
     const observation: fhir4.Observation = {
       resourceType: "Observation",
       status,
-      category: [
-        { coding: [{ system: OBSERVATION_CATEGORY_SYSTEM, code: "imaging", display: "Imaging" }] },
-      ],
+      category: [{ coding: [config.observationCategory] }],
       code: {
-        coding: [{ system: REPORT_ITEM_SYSTEM, code: FINDINGS_CODE, display: "所見" }],
+        coding: [{ system: reportItemSystem(config), code: FINDINGS_CODE, display: "所見" }],
         text: "所見",
       },
       subject: { reference: `Patient/${patientId}` },
@@ -361,13 +529,13 @@ export function buildRadReportBundle(
     ...(values.departmentId ? [departmentExtension(values.departmentId, values.departmentName)] : []),
     ...imageExtensions,
     ...(values.criticalFinding && values.criticalFindingText.trim()
-      ? [{ url: CRITICAL_FINDING_EXT_URL, valueString: values.criticalFindingText.trim() }]
+      ? [{ url: criticalFindingExtUrl(config), valueString: values.criticalFindingText.trim() }]
       : []),
     ...(findingsResponse
-      ? [{ url: FINDINGS_QR_EXT_URL, valueReference: { reference: findingsResponse } }]
+      ? [{ url: findingsQrExtUrl(config), valueReference: { reference: findingsResponse } }]
       : []),
     ...(conclusionResponse
-      ? [{ url: CONCLUSION_QR_EXT_URL, valueReference: { reference: conclusionResponse } }]
+      ? [{ url: conclusionQrExtUrl(config), valueReference: { reference: conclusionResponse } }]
       : []),
   ];
 
@@ -377,8 +545,8 @@ export function buildRadReportBundle(
     basedOn: [{ reference: `ServiceRequest/${values.orderId}` }],
     status,
     category: [
-      { coding: [{ system: LOINC_SYSTEM, code: RADIOLOGY_CATEGORY_CODE, display: "Radiology" }] },
-      { coding: [{ system: REPORT_CATEGORY_SYSTEM, code: "RAD", display: "Radiology" }] },
+      { coding: [config.kindCoding] },
+      { coding: [config.sectionCoding] },
       {
         coding: [
           { system: SETTING_SYSTEM, code: values.setting, display: findSettingDisplay(values.setting) },
@@ -386,10 +554,8 @@ export function buildRadReportBundle(
       },
     ],
     code: {
-      coding: [
-        { system: DOCUMENT_CODES_SYSTEM, code: RADIOLOGY_REPORT_CODE, display: "画像検査報告書" },
-      ],
-      text: values.examText || "画像検査報告書",
+      coding: [config.code],
+      text: values.examText || config.code.display,
     },
     subject: { reference: `Patient/${patientId}` },
     ...(values.effectiveDateTime ? { effectiveDateTime: values.effectiveDateTime } : {}),
@@ -448,21 +614,24 @@ export function buildRadReportBundle(
 }
 
 /** 新しく送る画像の量が上限を超えていないか。超えていれば保存させない。 */
-export function radReportBundleTooLarge(bundle: fhir4.Bundle): boolean {
-  return newBinaryDataLength(bundle.entry ?? []) > RAD_REPORT_MAX_NEW_IMAGE_LENGTH;
+export function examReportBundleTooLarge(bundle: fhir4.Bundle): boolean {
+  return newBinaryDataLength(bundle.entry ?? []) > EXAM_REPORT_MAX_NEW_IMAGE_LENGTH;
 }
 
 /**
  * レポートの削除。所見とテンプレート回答も消す。画像の Binary は消さない
  * (上流の旧版が参照しているため。readme「シェーマ画像」)。
  */
-export function buildRadReportDeleteEntries(report: fhir4.DiagnosticReport): fhir4.BundleEntry[] {
+export function buildExamReportDeleteEntries(
+  config: ExamReportConfig,
+  report: fhir4.DiagnosticReport,
+): fhir4.BundleEntry[] {
   return [
     { request: { method: "DELETE", url: `DiagnosticReport/${report.id}` } },
-    ...radReportObservationIds(report).map((id) => ({
+    ...examReportObservationIds(report).map((id) => ({
       request: { method: "DELETE" as const, url: `Observation/${id}` },
     })),
-    ...radReportResponseIds(report).map((id) => ({
+    ...examReportResponseIds(config, report).map((id) => ({
       request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` },
     })),
   ];
@@ -470,18 +639,22 @@ export function buildRadReportDeleteEntries(report: fhir4.DiagnosticReport): fhi
 
 // ---- 読み戻し ----
 
-/** 読影レポートか(同じオーダーに別の種類の DiagnosticReport が付くことは無いが、念のため判定する)。 */
-export function isRadReport(report: fhir4.DiagnosticReport): boolean {
+/** その種別のレポートか。 */
+export function isExamReport(config: ExamReportConfig, report: fhir4.DiagnosticReport): boolean {
+  const { system, code } = config.kindCoding;
   return Boolean(
     report.category?.some((category) =>
-      category.coding?.some(
-        (c) => c.system === LOINC_SYSTEM && c.code === RADIOLOGY_CATEGORY_CODE,
-      ),
+      category.coding?.some((c) => c.system === system && c.code === code),
     ),
   );
 }
 
-export function radReportObservationIds(report: fhir4.DiagnosticReport): string[] {
+/** 3 種のどれのレポートか。どれでもなければ undefined。 */
+export function examReportConfigOf(report: fhir4.DiagnosticReport): ExamReportConfig | undefined {
+  return EXAM_REPORT_KINDS.find((config) => isExamReport(config, report));
+}
+
+export function examReportObservationIds(report: fhir4.DiagnosticReport): string[] {
   return (report.result ?? [])
     .map((reference) => reference.reference?.match(/^Observation\/(.+)$/)?.[1])
     .filter((id): id is string => Boolean(id));
@@ -492,27 +665,37 @@ function responseIdOf(report: fhir4.DiagnosticReport, url: string): string | nul
   return reference?.match(/^QuestionnaireResponse\/(.+)$/)?.[1] ?? null;
 }
 
-export function radReportResponseIds(report: fhir4.DiagnosticReport): string[] {
-  return [responseIdOf(report, FINDINGS_QR_EXT_URL), responseIdOf(report, CONCLUSION_QR_EXT_URL)].filter(
-    (id): id is string => Boolean(id),
-  );
+export function examReportResponseIds(
+  config: ExamReportConfig,
+  report: fhir4.DiagnosticReport,
+): string[] {
+  return [
+    responseIdOf(report, findingsQrExtUrl(config)),
+    responseIdOf(report, conclusionQrExtUrl(config)),
+  ].filter((id): id is string => Boolean(id));
 }
 
 /** 重要所見の要点。無ければ空。 */
-export function radCriticalFindingOf(report: fhir4.DiagnosticReport): string {
-  return report.extension?.find((e) => e.url === CRITICAL_FINDING_EXT_URL)?.valueString ?? "";
+export function examCriticalFindingOf(
+  config: ExamReportConfig,
+  report: fhir4.DiagnosticReport,
+): string {
+  return report.extension?.find((e) => e.url === criticalFindingExtUrl(config))?.valueString ?? "";
 }
 
-function imageDataOf(attachment: fhir4.Attachment | undefined): RadReportImageData | null {
+function imageDataOf(attachment: fhir4.Attachment | undefined): ExamReportImageData | null {
   const binaryId = binaryIdFromAttachment(attachment);
   if (!binaryId) return null;
   return { binaryId, dataUrl: "", contentType: attachment?.contentType ?? "image/jpeg" };
 }
 
 /** 添付画像。拡張の並び順が表示順。 */
-export function radReportImages(report: fhir4.DiagnosticReport): RadReportImageValues[] {
+export function examReportImages(
+  config: ExamReportConfig,
+  report: fhir4.DiagnosticReport,
+): ExamReportImageValues[] {
   return (report.extension ?? [])
-    .filter((e) => e.url === REPORT_IMAGE_EXT_URL)
+    .filter((e) => e.url === imageExtUrl(config))
     .flatMap((e) => {
       const sourceAttachment = e.extension?.find((sub) => sub.url === "source")?.valueAttachment;
       const source = imageDataOf(sourceAttachment);
@@ -524,19 +707,22 @@ export function radReportImages(report: fhir4.DiagnosticReport): RadReportImageV
     });
 }
 
-export interface RadReportDetail {
+export interface ExamReportDetail {
   report?: fhir4.DiagnosticReport;
   observations: fhir4.Observation[];
 }
 
 /** `_include=DiagnosticReport:result` の応答を分ける。 */
-export function splitRadReportBundle(bundle: fhir4.Bundle | undefined): RadReportDetail {
-  const result: RadReportDetail = { observations: [] };
+export function splitExamReportBundle(
+  config: ExamReportConfig,
+  bundle: fhir4.Bundle | undefined,
+): ExamReportDetail {
+  const result: ExamReportDetail = { observations: [] };
   for (const entry of bundle?.entry ?? []) {
     const resource = entry.resource;
     if (resource?.resourceType === "DiagnosticReport") {
       const report = resource as fhir4.DiagnosticReport;
-      if (!result.report && isRadReport(report)) result.report = report;
+      if (!result.report && isExamReport(config, report)) result.report = report;
     } else if (resource?.resourceType === "Observation") {
       result.observations.push(resource as fhir4.Observation);
     }
@@ -544,28 +730,25 @@ export function splitRadReportBundle(bundle: fhir4.Bundle | undefined): RadRepor
   return result;
 }
 
-function findingsObservation(observations: fhir4.Observation[]): fhir4.Observation | undefined {
-  return observations.find(
-    (o) => codingBySystem(o.code.coding, REPORT_ITEM_SYSTEM)?.code === FINDINGS_CODE,
-  );
-}
-
 function referenceOf(references: fhir4.Reference[] | undefined, type: string) {
   const reference = references?.find((r) => r.reference?.startsWith(`${type}/`));
   return { id: reference?.reference?.split("/")[1] ?? "", display: reference?.display ?? "" };
 }
 
-export function parseRadReportForm(
+export function parseExamReportForm(
+  config: ExamReportConfig,
   report: fhir4.DiagnosticReport,
   observations: fhir4.Observation[],
-): RadReportFormValues {
-  const findings = findingsObservation(observations);
+): ExamReportFormValues {
+  const findings = observations.find(
+    (o) => codingBySystem(o.code.coding, reportItemSystem(config))?.code === FINDINGS_CODE,
+  );
   const department = departmentOf(report);
   const interpreter = referenceOf(report.resultsInterpreter, "Practitioner");
   const organization = referenceOf(report.performer, "Organization");
-  const criticalFindingText = radCriticalFindingOf(report);
-  const findingsResponseId = responseIdOf(report, FINDINGS_QR_EXT_URL);
-  const conclusionResponseId = responseIdOf(report, CONCLUSION_QR_EXT_URL);
+  const criticalFindingText = examCriticalFindingOf(config, report);
+  const findingsResponseId = responseIdOf(report, findingsQrExtUrl(config));
+  const conclusionResponseId = responseIdOf(report, conclusionQrExtUrl(config));
 
   return {
     orderId: referenceOf(report.basedOn, "ServiceRequest").id,
@@ -576,7 +759,7 @@ export function parseRadReportForm(
     examText: report.code?.text ?? "",
     // 訂正報告は最終報告として編集を続ける(次の保存でまた amended になる)。
     reportStatus: report.status === "preliminary" ? "preliminary" : "final",
-    originalStatus: report.status as RadReportStatus,
+    originalStatus: report.status as ExamReportStatus,
     findings: findings?.valueString ?? "",
     findingsId: findings?.id,
     findingsTemplate: findingsResponseId ? { responseId: findingsResponseId, draft: null } : null,
@@ -586,7 +769,7 @@ export function parseRadReportForm(
       : null,
     criticalFinding: Boolean(criticalFindingText),
     criticalFindingText,
-    images: radReportImages(report),
+    images: examReportImages(config, report),
     interpreterId: interpreter.id,
     interpreterName: interpreter.display,
     organizationId: organization.id,
@@ -594,8 +777,8 @@ export function parseRadReportForm(
   };
 }
 
-/** 撮影日時・報告日時の表示("YYYY-MM-DD HH:mm"。日付だけのものは日付)。 */
-export function radReportDateTimeLabel(value: string | undefined): string {
+/** 検査日時・報告日時の表示("YYYY-MM-DD HH:mm"。日付だけのものは日付)。 */
+export function examReportDateTimeLabel(value: string | undefined): string {
   if (!value) return "";
   if (value.length <= 10) return value;
   const date = new Date(value);

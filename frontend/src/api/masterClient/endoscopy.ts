@@ -65,6 +65,8 @@ export interface EndoscopyItem {
   // canonical。検査項目ごとの既定で、オーダー時に別のテンプレートも選べる。
   purpose_template_canonical: string | null;
   remarks_template_canonical: string | null;
+  /** 所見レポートの所見を記入するテンプレートの既定(canonical)。 */
+  report_findings_template_canonical: string | null;
   /**
    * 実施入力をする項目か。false の項目は内視鏡一覧の「実施」で実施入力を
    * 開かずそのまま実施済にし、実施記録を作らない(カルテにも実施情報は出ない)。
@@ -135,6 +137,7 @@ export interface EndoscopyItemPayload {
   note?: string | null;
   purpose_template_canonical?: string | null;
   remarks_template_canonical?: string | null;
+  report_findings_template_canonical?: string | null;
   requires_perform_input?: boolean;
   dataset_code?: string | null;
   requires_appointment?: boolean;

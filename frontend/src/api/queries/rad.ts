@@ -1,20 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { buildCancelledNotificationTask, notificationTaskEntry } from "../../fhir/notificationHelpers";
-import { RAD_CRITICAL_FINDING_TASK_CODE, radCriticalFindingEntries } from "../../fhir/radCriticalFindingHelpers";
-import {
-  buildRadReportDeleteEntries,
-  isRadReport,
-  RAD_REPORT_CATEGORY_SEARCH,
-  RAD_REPORT_TOO_LARGE_MESSAGE,
-  radCriticalFindingOf,
-  radReportBundleTooLarge,
-} from "../../fhir/radReportHelpers";
-import {
-  isReviewableReportStatus,
-  RESULT_REVIEW_TASK_CODE,
-  urgentAwareReviewTaskEntries,
-  urgentNotificationOpenAfter,
-} from "../../fhir/resultReviewHelpers";
+import { EXAM_REPORT_CONFIGS, isExamReport } from "../../fhir/examReportHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
 import {
   buildRadOrderDeleteBundle,
@@ -27,11 +12,9 @@ import {
 import { buildRadPerformDeleteEntries } from "../../fhir/radResultHelpers";
 import { buildRadTaskUpdate, radTasksByOrderId, radTaskStatus, type RadTaskStatus } from "../../fhir/radTaskHelpers";
 import { buildRescheduleEntries } from "../../fhir/appointmentHelpers";
-import { postBundle, readResource, searchResource } from "../fhirClient";
+import { postBundle } from "../fhirClient";
 import { fetchAppointmentSlots, invalidateAppointments } from "./appointment";
-import { NOTIFICATION_TASK_KEY, resourcesOfType } from "./core";
-import { useLabResultDetail } from "./labResult";
-import { fetchOrderRequester, fetchReportTasks } from "./notification";
+import { assertNoExamReportForCancel, examReportDeleteGuard } from "./examReport";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import {
   cancelsPerform,
@@ -96,7 +79,7 @@ async function fetchRadWorklist(date: string): Promise<RadWorklistResult> {
       if (resource.resourceType === "DiagnosticReport") {
         const report = resource as fhir4.DiagnosticReport;
         const orderId = report.basedOn?.[0]?.reference?.match(/^ServiceRequest\/(.+)$/)?.[1];
-        if (orderId && report.id && isRadReport(report)) {
+        if (orderId && report.id && isExamReport(EXAM_REPORT_CONFIGS.rad, report)) {
           reportByOrderId.set(orderId, { id: report.id, status: report.status });
         }
         return false;
@@ -159,9 +142,7 @@ export const useUpdateRadTaskStatus = makeUpdateTaskStatusHook<RadTaskStatus>(
     cancelPerform: {
       cancels: cancelsPerform(radTaskStatus),
       entries: async (order) => {
-        if (await radOrderHasReport(order.id ?? "")) {
-          throw new Error("読影レポートがあるため取り消せません。読影レポートを削除してから取り消してください。");
-        }
+        await assertNoExamReportForCancel(EXAM_REPORT_CONFIGS.rad, order.id ?? "");
         return performCancelEntries(order.id ?? "", { observations: true }, buildRadPerformDeleteEntries);
       },
     },
@@ -182,141 +163,6 @@ export function useRegisterRadPerform() {
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
       queryClient.invalidateQueries({ queryKey: ["Procedure", "search"] });
     },
-  });
-}
-
-// ---- 放射線検査の読影レポート ----
-//
-// 構造は fhir/radReportHelpers(docs/rad-report-design.md)。オーダー 1 件に読影レポート 1 件。
-
-/** オーダーに読影レポートが付いているか。実施の取消を止めるのに使う。 */
-async function radOrderHasReport(orderId: string): Promise<boolean> {
-  const params = new URLSearchParams();
-  params.set("based-on", `ServiceRequest/${orderId}`);
-  params.set("category", RAD_REPORT_CATEGORY_SEARCH);
-  params.set("_summary", "count");
-  const { data: bundle } = await searchResource<fhir4.DiagnosticReport>("DiagnosticReport", params);
-  return (bundle.total ?? 0) > 0;
-}
-
-/** オーダーに付いた読影レポート(所見の Observation を添える)。入力モーダルが使う。 */
-export function useRadReportByOrder(orderId: string | undefined) {
-  const params = new URLSearchParams();
-  if (orderId) params.set("based-on", `ServiceRequest/${orderId}`);
-  params.append("_include", "DiagnosticReport:result");
-  params.set("_count", "10");
-
-  return useQuery({
-    queryKey: ["DiagnosticReport", "detail", "rad-order", orderId],
-    queryFn: () => searchResource<fhir4.Resource>("DiagnosticReport", params),
-    enabled: Boolean(orderId),
-  });
-}
-
-/** 読影レポートの内容(所見の Observation を添える)。取得の形は検体検査結果と同じ。 */
-export function useRadReportDetail(reportId: string | undefined) {
-  return useLabResultDetail(reportId);
-}
-
-const RAD_REPORT_TASK_CODES = [RESULT_REVIEW_TASK_CODE.code, RAD_CRITICAL_FINDING_TASK_CODE.code];
-
-/**
- * 読影レポート保存の Bundle に通知を足す。宛先(依頼医)と既存の通知 2 種はここで引く。
- *
- * - 重要所見: 要点があれば暫定報告でも出す。要点の変更で未確認に戻し、外したら取り下げる
- * - 検査結果確認: 最終報告・訂正報告になったとき(暫定報告では出さない)。ただし重要所見が
- *   未確認で残る間は出さず、未確認のものは取り下げる(重要所見の確認で既読も残すため)
- */
-async function withRadReportTasks(bundle: fhir4.Bundle): Promise<fhir4.Bundle> {
-  const entry = bundle.entry ?? [];
-  const reportEntry = entry.find((e) => e.resource?.resourceType === "DiagnosticReport");
-  const report = reportEntry?.resource as fhir4.DiagnosticReport | undefined;
-  const reference = report?.id ? `DiagnosticReport/${report.id}` : reportEntry?.fullUrl;
-  if (!report || !reference) return bundle;
-
-  const patientId = report.subject?.reference?.split("/").pop() ?? "";
-  const orderReference = report.basedOn?.[0]?.reference;
-  const orderId = orderReference?.split("/").pop();
-  const [owner, tasks] = await Promise.all([
-    orderId ? fetchOrderRequester(orderId) : Promise.resolve(undefined),
-    report.id
-      ? fetchReportTasks(report.id, RAD_REPORT_TASK_CODES)
-      : Promise.resolve(new Map<string, fhir4.Task>()),
-  ]);
-
-  const date = report.effectiveDateTime?.slice(0, 10) ?? "";
-  const exam = report.code?.text ?? "";
-  const basedOn = orderReference ? [{ reference: orderReference }] : undefined;
-
-  const existingCritical = tasks.get(RAD_CRITICAL_FINDING_TASK_CODE.code);
-  const criticalEntries = radCriticalFindingEntries(
-    { reportReference: reference, patientId, owner, date, exam, point: radCriticalFindingOf(report), basedOn },
-    existingCritical,
-  );
-
-  return {
-    ...bundle,
-    entry: [
-      ...entry,
-      ...criticalEntries,
-      ...urgentAwareReviewTaskEntries(
-        { reportReference: reference, patientId, owner, kind: "rad", date, summary: exam, basedOn },
-        isReviewableReportStatus(report.status),
-        tasks.get(RESULT_REVIEW_TASK_CODE.code),
-        urgentNotificationOpenAfter(criticalEntries, existingCritical),
-      ),
-    ],
-  };
-}
-
-function invalidateRadReport(queryClient: ReturnType<typeof useQueryClient>) {
-  queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "search"] });
-  queryClient.invalidateQueries({ queryKey: ["DiagnosticReport", "detail"] });
-  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "search"] });
-  queryClient.invalidateQueries({ queryKey: ["ServiceRequest", "rad-worklist"] });
-  queryClient.invalidateQueries({ queryKey: ["QuestionnaireResponse"] });
-  queryClient.invalidateQueries({ queryKey: NOTIFICATION_TASK_KEY });
-}
-
-/**
- * 読影レポートの登録・更新(Bundle は radReportHelpers の buildRadReportBundle)。
- * 新しく送る画像が上流の本文上限に届く量なら、送る前に止める。
- */
-export function useSaveRadReport() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (bundle: fhir4.Bundle) => {
-      if (radReportBundleTooLarge(bundle)) throw new Error(RAD_REPORT_TOO_LARGE_MESSAGE);
-      return postBundle(await withRadReportTasks(bundle));
-    },
-    retry: false,
-    onSuccess: () => invalidateRadReport(queryClient),
-  });
-}
-
-/**
- * 読影レポートの削除。所見・テンプレート回答を消し、未確認の通知(検査結果確認・重要所見)を
- * 取り下げる。削除したレポートを指す通知が未確認のまま残らないようにするため。
- */
-export function useDeleteRadReport() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (reportId: string) => {
-      const [{ data: report }, tasks] = await Promise.all([
-        readResource<fhir4.DiagnosticReport>("DiagnosticReport", reportId),
-        fetchReportTasks(reportId, RAD_REPORT_TASK_CODES),
-      ]);
-      const cancelEntries = Array.from(tasks.values())
-        .filter((task) => task.status === "requested")
-        .map((task) => notificationTaskEntry(buildCancelledNotificationTask(task), task.id));
-      return postBundle({
-        resourceType: "Bundle",
-        type: "transaction",
-        entry: [...buildRadReportDeleteEntries(report), ...cancelEntries],
-      });
-    },
-    retry: false,
-    onSuccess: () => invalidateRadReport(queryClient),
   });
 }
 
@@ -374,11 +220,7 @@ export const deleteRadOrderRequest = (srId: string) =>
     itemsOf: radOrderItemRequests,
     withAppointment: true,
     revincludes: ["DiagnosticReport:based-on"],
-    guard: (bundle) => {
-      if (resourcesOfType<fhir4.DiagnosticReport>(bundle, "DiagnosticReport").some(isRadReport)) {
-        throw new Error("読影レポートがあるため削除できません。読影レポートを削除してから削除してください。");
-      }
-    },
+    guard: examReportDeleteGuard(EXAM_REPORT_CONFIGS.rad),
     build: ({ srId, itemIds, itemRequests, appointmentEntries }) =>
       buildRadOrderDeleteBundle(srId, itemIds, radOrderResponseIds(itemRequests), appointmentEntries),
   });

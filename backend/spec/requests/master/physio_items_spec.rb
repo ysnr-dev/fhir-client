@@ -127,17 +127,19 @@ RSpec.describe "Master::PhysioItems", type: :request do
       expect(body["item_code"]).to eq("000013")
     end
 
-    it "検査目的・特別指示の既定テンプレートを保存する" do
+    it "検査目的・特別指示・所見の既定テンプレートを保存する" do
       post "/master/physio_items", params: {
         item_code: "P0001", name: "心電図12誘導",
         purpose_template_canonical: "http://example.com/Questionnaire/physio-purpose|1.0",
-        remarks_template_canonical: "http://example.com/Questionnaire/physio-remarks"
+        remarks_template_canonical: "http://example.com/Questionnaire/physio-remarks",
+        report_findings_template_canonical: "http://example.com/Questionnaire/physio-findings|1.0"
       }
 
       expect(response).to have_http_status(:created)
       record = Master::PhysioItem.find_by(item_code: "P0001")
       expect(record.purpose_template_canonical).to eq("http://example.com/Questionnaire/physio-purpose|1.0")
       expect(record.remarks_template_canonical).to eq("http://example.com/Questionnaire/physio-remarks")
+      expect(record.report_findings_template_canonical).to eq("http://example.com/Questionnaire/physio-findings|1.0")
     end
 
     it "既定はグループ化で、単独オーダーの項目も登録できる" do

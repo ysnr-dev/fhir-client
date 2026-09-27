@@ -4,27 +4,29 @@ import {
   type TemplateBinding,
 } from "../fhir/questionnaireResponseHelpers";
 import {
-  RAD_REPORT_STATUS_OPTIONS,
+  EXAM_REPORT_STATUS_OPTIONS,
   willBecomeAmended,
-  type RadReportFormValues,
-} from "../fhir/radReportHelpers";
+  type ExamReportConfig,
+  type ExamReportFormValues,
+} from "../fhir/examReportHelpers";
 import { ErrorBanner } from "./ErrorBanner";
-import { RadReportImagesEditor } from "./RadReportImagesEditor";
+import { ReportImagesEditor } from "./ReportImagesEditor";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { TemplateTextField } from "./TemplateTextField";
 
-// 読影レポートの入力(docs/rad-report-design.md §4.1)。放射線検査一覧とカルテの双方から
-// RadReportEntryModal 経由で使う。
+// 検査レポート(読影・生理検査・内視鏡の所見)の入力(docs/rad-report-design.md §4.1)。
+// 部門一覧とカルテの双方から ExamReportEntryModal 経由で使う。
 //
 // 画像欄はファイルのドロップ・貼り付けを受けるので <form> の外に置き、登録ボタンは
 // form 属性で本文のフォームに結び付ける(描き込み・テンプレート記入のモーダルも
 // フォームの子孫にしない。Modal は非ポータルで、form の入れ子は送信が外へ漏れる)。
 
-const FORM_ID = "rad-report-form";
+const FORM_ID = "exam-report-form";
 
 type TemplateField = "findings" | "conclusion";
 
-export function RadReportForm({
+export function ExamReportForm({
+  config,
   patientId,
   initialValues,
   defaultFindingsCanonical,
@@ -33,32 +35,34 @@ export function RadReportForm({
   submitError,
   submitLabel = "登録",
 }: {
+  config: ExamReportConfig;
   patientId: string;
-  initialValues: RadReportFormValues;
-  /** 所見の既定テンプレート(撮影項目マスタ)。 */
+  initialValues: ExamReportFormValues;
+  /** 所見の既定テンプレート(検査項目マスタ)。 */
   defaultFindingsCanonical?: string;
-  onSubmit: (values: RadReportFormValues) => void;
+  onSubmit: (values: ExamReportFormValues) => void;
   submitting: boolean;
   submitError?: unknown;
   submitLabel?: string;
 }) {
-  const [values, setValues] = useState<RadReportFormValues>(initialValues);
+  const [values, setValues] = useState<ExamReportFormValues>(initialValues);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const [templateField, setTemplateField] = useState<TemplateField | null>(null);
+  const conclusionLabel = config.labels.conclusion;
 
-  function patch(next: Partial<RadReportFormValues>) {
+  function patch(next: Partial<ExamReportFormValues>) {
     setValues((current) => ({ ...current, ...next }));
   }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!values.findings.trim() && !values.conclusion.trim() && values.images.length === 0) {
-      setValidationError("所見・診断・画像のいずれかを入力してください。");
+      setValidationError(`所見・${conclusionLabel}・画像のいずれかを入力してください。`);
       return;
     }
     if (values.reportStatus === "final" && !values.conclusion.trim()) {
-      setValidationError("最終報告には診断が必要です。");
+      setValidationError(`最終報告には${conclusionLabel}が必要です。`);
       return;
     }
     if (values.criticalFinding && !values.criticalFindingText.trim()) {
@@ -84,7 +88,7 @@ export function RadReportForm({
 
   return (
     <>
-      <div className="prescription-form rad-report-form">
+      <div className="prescription-form exam-report-form">
         {validationError && (
           <div className="error-banner" role="alert">
             <p className="error-banner__line error-banner__line--error">{validationError}</p>
@@ -104,16 +108,16 @@ export function RadReportForm({
           onKeyDown={handleKeyDown}
         >
           <fieldset>
-            <legend>読影</legend>
+            <legend>{config.labels.action}</legend>
             <label>
               報告区分
               <select
                 value={values.reportStatus}
                 onChange={(e) =>
-                  patch({ reportStatus: e.target.value as RadReportFormValues["reportStatus"] })
+                  patch({ reportStatus: e.target.value as ExamReportFormValues["reportStatus"] })
                 }
               >
-                {RAD_REPORT_STATUS_OPTIONS.map((option) => (
+                {EXAM_REPORT_STATUS_OPTIONS.map((option) => (
                   <option key={option.code} value={option.code}>
                     {option.display}
                   </option>
@@ -131,7 +135,7 @@ export function RadReportForm({
               onClearTemplate={() => patch({ findingsTemplate: null })}
             />
             <TemplateTextField
-              label="診断"
+              label={conclusionLabel}
               className="patho-long-text"
               rows={4}
               value={values.conclusion}
@@ -144,7 +148,7 @@ export function RadReportForm({
 
           <fieldset>
             <legend>重要所見</legend>
-            <label className="rad-report-form__critical">
+            <label className="exam-report-form__critical">
               <input
                 type="checkbox"
                 checked={values.criticalFinding}
@@ -153,7 +157,7 @@ export function RadReportForm({
               重要所見あり
             </label>
             {values.criticalFinding && (
-              <label className="rad-report-form__critical-text">
+              <label className="exam-report-form__critical-text">
                 要点
                 <input
                   type="text"
@@ -167,10 +171,11 @@ export function RadReportForm({
 
         <fieldset>
           <legend>画像</legend>
-          <RadReportImagesEditor
+          <ReportImagesEditor
             images={values.images}
             onChange={(images) => patch({ images })}
             onError={setImageError}
+            darkImages={config.darkImages}
           />
         </fieldset>
 

@@ -127,17 +127,19 @@ RSpec.describe "Master::EndoscopyItems", type: :request do
       expect(body["item_code"]).to eq("000013")
     end
 
-    it "検査目的・特別指示の既定テンプレートを保存する" do
+    it "検査目的・特別指示・所見の既定テンプレートを保存する" do
       post "/master/endoscopy_items", params: {
         item_code: "P0001", name: "上部消化管内視鏡(経口)",
         purpose_template_canonical: "http://example.com/Questionnaire/endoscopy-purpose|1.0",
-        remarks_template_canonical: "http://example.com/Questionnaire/endoscopy-remarks"
+        remarks_template_canonical: "http://example.com/Questionnaire/endoscopy-remarks",
+        report_findings_template_canonical: "http://example.com/Questionnaire/endoscopy-findings|1.0"
       }
 
       expect(response).to have_http_status(:created)
       record = Master::EndoscopyItem.find_by(item_code: "P0001")
       expect(record.purpose_template_canonical).to eq("http://example.com/Questionnaire/endoscopy-purpose|1.0")
       expect(record.remarks_template_canonical).to eq("http://example.com/Questionnaire/endoscopy-remarks")
+      expect(record.report_findings_template_canonical).to eq("http://example.com/Questionnaire/endoscopy-findings|1.0")
     end
 
     it "既定はグループ化で、単独オーダーの項目も登録できる" do

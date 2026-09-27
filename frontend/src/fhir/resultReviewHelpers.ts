@@ -1,3 +1,4 @@
+import type { ExamReportKind } from "./examReportHelpers";
 import {
   buildCancelledNotificationTask,
   buildNotificationTask,
@@ -21,7 +22,7 @@ import {
 // 通知を作るのは**最終報告になったときだけ**。中間報告は値が変わりうるので読ませない。
 // 訂正報告で出し直すときは同じ通知を書き換えて未確認に戻す。
 //
-// 同じ結果に緊急の通知(検体検査の緊急異常値・読影の重要所見)が未確認で出ている間は、
+// 同じ結果に緊急の通知(検体検査の緊急異常値・検査レポートの重要所見)が未確認で出ている間は、
 // この通知を作らない(urgentAwareReviewTaskEntries)。宛先が同じ依頼医で、2 回確認させる
 // ことになるため。緊急の通知を確認するときに、最終報告なら既読の来歴も一緒に残す。
 
@@ -32,16 +33,19 @@ export const RESULT_REVIEW_NOTE = "検査結果を確認しました。";
 
 /**
  * 確認の対象になるレポートの種別。一覧の表示とカルテでの開き方がこれで決まる。
- * 検体検査・細菌・病理はカルテのタブのキーと同じ文字列にしてある。放射線(読影レポート)は
- * カルテにタブを持たないので、詳細モーダルで開く(notificationRegistry の karteLink)。
+ * 検体検査・細菌・病理はカルテのタブのキーと同じ文字列にしてある。検査レポート
+ * (放射線・生理検査・内視鏡)はカルテにタブを持たないので、詳細モーダルで開く
+ * (notificationRegistry の karteLink)。
  */
-export type ReviewReportKind = "lab" | "micro" | "patho" | "rad";
+export type ReviewReportKind = "lab" | "micro" | "patho" | ExamReportKind;
 
 export const REVIEW_REPORT_KIND_LABEL: Record<ReviewReportKind, string> = {
   lab: "検体検査",
   micro: "細菌検査",
   patho: "病理検査",
   rad: "放射線検査",
+  physio: "生理検査",
+  endoscopy: "内視鏡",
 };
 
 // 一覧に出す内容は Task.input に構造化して持つ(上流の `_include=Task:focus` は

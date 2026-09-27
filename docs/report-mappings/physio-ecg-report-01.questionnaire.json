@@ -1,0 +1,448 @@
+{
+  "resourceType": "Questionnaire",
+  "meta": {
+    "profile": [
+      "http://www.hosp.ncgm.go.jp/JASPEHR/fhir/StructureDefinition/jaspehr-questionnaire"
+    ]
+  },
+  "url": "http://fhir-client.local/Questionnaire/physio-ecg-report-01",
+  "version": "1.0.0",
+  "name": "PHY_ECG_RPT_01",
+  "title": "心電図 所見",
+  "status": "active",
+  "subjectType": [
+    "Patient"
+  ],
+  "description": "生理検査の所見レポート(心電図12誘導)の「所見」に貼るテンプレート。調律・心拍数・電気軸・各間隔を上から順に確かめ、異常所見は当てはまるものを選ぶ。記入しなかった項目は所見の文面に出ない。判定(正常・境界・異常など)はレポートの「判定」欄に書く。",
+  "extension": [
+    {
+      "url": "http://fhir-client.local/StructureDefinition/questionnaire-template-category",
+      "valueCoding": {
+        "system": "http://fhir-client.local/CodeSystem/questionnaire-template-category",
+        "code": "25675b10-0ef3-4425-83c4-c1f8c3015cca",
+        "display": "検査"
+      }
+    }
+  ],
+  "item": [
+    {
+      "linkId": "grp-basic",
+      "type": "group",
+      "text": "調律・心拍数",
+      "item": [
+        {
+          "linkId": "rhythm",
+          "type": "choice",
+          "text": "調律",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "sinus",
+                "display": "洞調律"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "sinus-tachy",
+                "display": "洞性頻脈"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "sinus-brady",
+                "display": "洞性徐脈"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "af",
+                "display": "心房細動"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "afl",
+                "display": "心房粗動"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "junctional",
+                "display": "接合部調律"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "paced",
+                "display": "ペースメーカー調律"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "other",
+                "display": "その他"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "hr",
+          "type": "integer",
+          "text": "心拍数",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "回/分",
+                "display": "回/分"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "axis",
+          "type": "choice",
+          "text": "電気軸",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "radio-button"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "normal",
+                "display": "正常軸"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "left",
+                "display": "左軸偏位"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "right",
+                "display": "右軸偏位"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "indeterminate",
+                "display": "不定軸"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-interval",
+      "type": "group",
+      "text": "間隔",
+      "item": [
+        {
+          "linkId": "pr",
+          "type": "integer",
+          "text": "PR",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "ms",
+                "display": "ms"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "qrs",
+          "type": "integer",
+          "text": "QRS",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "ms",
+                "display": "ms"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "qt",
+          "type": "integer",
+          "text": "QT",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "ms",
+                "display": "ms"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "qtc",
+          "type": "integer",
+          "text": "QTc",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/minValue",
+              "valueInteger": 0
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+              "valueCoding": {
+                "system": "http://unitsofmeasure.org",
+                "code": "ms",
+                "display": "ms"
+              }
+            },
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "補正式は心電計の出力に従う(Bazett が多い)。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "linkId": "grp-abnormal",
+      "type": "group",
+      "text": "異常所見",
+      "item": [
+        {
+          "linkId": "conduction",
+          "type": "choice",
+          "text": "伝導障害",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "avb1",
+                "display": "1度房室ブロック"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "avb2",
+                "display": "2度房室ブロック"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "avb3",
+                "display": "3度房室ブロック"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "rbbb",
+                "display": "右脚ブロック"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "lbbb",
+                "display": "左脚ブロック"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "lafb",
+                "display": "左脚前枝ブロック"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "wpw",
+                "display": "WPW型"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "premature",
+          "type": "choice",
+          "text": "期外収縮",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "pac",
+                "display": "上室性期外収縮"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "pvc",
+                "display": "心室性期外収縮"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "st-t",
+          "type": "choice",
+          "text": "ST-T・Q波",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "st-elevation",
+                "display": "ST上昇"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "st-depression",
+                "display": "ST低下"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "t-inversion",
+                "display": "陰性T波"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "abnormal-q",
+                "display": "異常Q波"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "voltage",
+          "type": "choice",
+          "text": "電位・肥大",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+              "valueCodeableConcept": {
+                "coding": [
+                  {
+                    "system": "http://hl7.org/fhir/CodeSystem/questionnaire-item-control",
+                    "code": "check-box"
+                  }
+                ]
+              }
+            }
+          ],
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "lvh",
+                "display": "左室高電位"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "rvh",
+                "display": "右室肥大"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "low-voltage",
+                "display": "低電位"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "abnormal-detail",
+          "type": "text",
+          "text": "補足",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/designNote",
+              "valueMarkdown": "誘導(II・III・aVF など)や前回との比較を書く。"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

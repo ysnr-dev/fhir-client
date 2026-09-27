@@ -11,6 +11,7 @@ export * from "./outpatient";
 export * from "./emergency";
 export * from "./worklist";
 export * from "./rad";
+export * from "./examReport";
 export * from "./lab";
 export * from "./prescription";
 export * from "./injection";

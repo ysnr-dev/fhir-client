@@ -143,7 +143,9 @@ export type KarteDetailKind =
   | "lab-result"
   | "micro-result"
   | "patho-result"
-  | "rad-result";
+  | "rad-result"
+  | "physio-result"
+  | "endoscopy-result";
 
 export interface KarteDetailTarget {
   kind: KarteDetailKind;
@@ -172,6 +174,8 @@ const DETAIL_KINDS: KarteDetailKind[] = [
   "micro-result",
   "patho-result",
   "rad-result",
+  "physio-result",
+  "endoscopy-result",
   "qr",
 ];
 

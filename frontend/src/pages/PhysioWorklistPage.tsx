@@ -13,12 +13,14 @@ import { usePhysioExamTypeOptions, usePhysioItemsByCodes } from "../api/masterQu
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PhysioPerformModal } from "../components/PhysioPerformModal";
 import { renderExamTypeOptions } from "../components/physioItemOptions";
+import { ExamReportEntryModal } from "../components/ExamReportEntryModal";
 import { RowMenu } from "../components/RowMenu";
 import {
   PatientKana,
   PatientProfileCells,
   PatientProfileHeadCells,
 } from "../components/PatientRowCells";
+import { EXAM_REPORT_CONFIGS, examReportStatusDisplay } from "../fhir/examReportHelpers";
 import { displayName } from "../fhir/patientHelpers";
 import {
   SETTING_OPTIONS,
@@ -66,12 +68,18 @@ const emptyFilters: Filters = {
   status: "",
 };
 
+const REPORT_CONFIG = EXAM_REPORT_CONFIGS.physio;
+
 export function PhysioWorklistPage() {
   // 実施日は必須。未選択にはできないので当日から始める。
   const [date, setDate] = useState(today);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   // 実施入力を開いている行。「実施」だけはステータス変更ではなくモーダルを開く。
   const [performing, setPerforming] = useState<PhysioWorklistRow | null>(null);
+  // 所見レポートを開いているオーダー。保存後に一覧を読み直すので、行ではなく id で覚える。
+  const [reporting, setReporting] = useState<{ orderId: string; patientId: string; title: string } | null>(
+    null,
+  );
 
   // 列が多く、既定の幅では患者名や依頼科まで折り返すので、この画面だけ幅を広げる
   // (カルテと同じやり方)。
@@ -192,6 +200,7 @@ export function PhysioWorklistPage() {
                   <th className="rad-worklist__compact">病棟</th>
                   <th>依頼科 | 依頼医師</th>
                   <th className="rad-worklist__compact">ステータス</th>
+                  <th className="rad-worklist__compact">所見</th>
                   <th className="rad-worklist__actions sticky-table__fix-actions"></th>
                 </tr>
               </thead>
@@ -206,11 +215,18 @@ export function PhysioWorklistPage() {
                       updateStatus.mutate({ order: row.order, task: row.task, status })
                     }
                     onPerform={() => handlePerform(row)}
+                    onReport={() =>
+                      setReporting({
+                        orderId: row.order.id ?? "",
+                        patientId: row.patient?.id ?? "",
+                        title: row.patient ? displayName(row.patient) : "",
+                      })
+                    }
                   />
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="master-search__empty">
+                    <td colSpan={12} className="master-search__empty">
                       {total === 0
                         ? "この実施日の生理検査オーダーはありません"
                         : "絞り込みに該当する検査がありません"}
@@ -226,6 +242,15 @@ export function PhysioWorklistPage() {
 
       {performing && (
         <PhysioPerformModal row={performing} onClose={() => setPerforming(null)} />
+      )}
+      {reporting && (
+        <ExamReportEntryModal
+          config={REPORT_CONFIG}
+          orderId={reporting.orderId}
+          patientId={reporting.patientId}
+          title={reporting.title}
+          onClose={() => setReporting(null)}
+        />
       )}
     </div>
   );
@@ -366,11 +391,13 @@ function WorklistRow({
   pending,
   onChangeStatus,
   onPerform,
+  onReport,
 }: {
   row: PhysioWorklistRow;
   pending: boolean;
   onChangeStatus: (status: PhysioTaskStatus) => void;
   onPerform: () => void;
+  onReport: () => void;
 }) {
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
@@ -419,6 +446,13 @@ function WorklistRow({
           {physioTaskStatusDisplay(status)}
         </span>
       </td>
+      <td className="rad-worklist__compact">
+        {row.reportId ? (
+          examReportStatusDisplay(row.reportStatus) || "登録済"
+        ) : (
+          <span className="order-select__muted">未</span>
+        )}
+      </td>
       <td className="rad-worklist__actions sticky-table__fix-actions">
         {actions
           .filter((action) => !action.secondary)
@@ -432,6 +466,13 @@ function WorklistRow({
               {action.label}
             </button>
           ))}
+        {/* 所見は検査した後に書く。既に書いてあれば同じボタンから直す
+            (確定済みのレポートを直すと訂正報告になる)。 */}
+        {status === "completed" && (
+          <button type="button" disabled={!patient?.id} onClick={onReport}>
+            {row.reportId ? "所見編集" : "所見"}
+          </button>
+        )}
         {/* 訂正・取りやめは押し間違えると進捗が巻き戻るので、一段畳んで置く。
             一覧は横スクロールできるよう overflow を持つため、メニューは
             escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
@@ -446,7 +487,13 @@ function WorklistRow({
                 className={`row-menu__item${
                   action.next === "cancelled" ? " row-menu__item--danger" : ""
                 }`}
-                disabled={pending}
+                // 所見レポートがある検査の実施を取り消すと、実施していない検査に所見が残る。
+                disabled={pending || (status === "completed" && Boolean(row.reportId))}
+                title={
+                  status === "completed" && row.reportId
+                    ? "所見レポートがあるため取り消せません"
+                    : undefined
+                }
                 onClick={() => onChangeStatus(action.next)}
               >
                 {action.label}
