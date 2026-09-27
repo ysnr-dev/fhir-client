@@ -56,13 +56,17 @@ export function useBillingPreview(
 }
 
 /** その日に会計が済んだ受診。外来一覧が「会計済み」の印に使う。レセコン連携が無効なら問い合わせない。 */
-export function useSettledReceptions(date: string, options: { enabled?: boolean } = {}) {
+export function useSettledReceptions(
+  date: string,
+  options: { enabled?: boolean; refetchInterval?: number | false } = {},
+) {
   return useQuery({
     queryKey: ["receipt", "settled", date],
     queryFn: () => fetchSettledReceptions(date),
     enabled: options.enabled !== false && !!date,
-    // 医事課が会計を打つと変わる。開き直しや切り替えで拾えればよい。
+    // 医事課が会計を打つと変わる。開き直しや切り替え(外来一覧は自動更新)で拾う。
     staleTime: 30_000,
+    refetchInterval: options.refetchInterval ?? false,
     retry: false,
   });
 }

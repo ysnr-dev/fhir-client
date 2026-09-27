@@ -136,13 +136,22 @@ async function fetchOutpatientList(date: string): Promise<OutpatientListResult> 
   return { rows, truncated };
 }
 
-/** 診察日 1 日ぶんの予約。日付が未選択の間は読みに行かない。 */
-export function useOutpatientList(date: string) {
+/** 外来一覧の自動更新の間隔。 */
+export const OUTPATIENT_POLLING_INTERVAL = 60_000;
+
+/**
+ * 診察日 1 日ぶんの予約。日付が未選択の間は読みに行かない。
+ *
+ * polling を入れると 1 分ごとに読み直す(受付・診察室・会計が別の端末で同じ一覧を
+ * 見るため)。
+ */
+export function useOutpatientList(date: string, options: { polling?: boolean } = {}) {
   return useQuery({
     queryKey: ["Appointment", "outpatient", date],
     queryFn: () => fetchOutpatientList(date),
     enabled: Boolean(date),
     placeholderData: keepPreviousData,
+    refetchInterval: options.polling ? OUTPATIENT_POLLING_INTERVAL : false,
   });
 }
 

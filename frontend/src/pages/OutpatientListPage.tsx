@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import { useCurrentPractitioner } from "../api/authQueries";
 import {
   useCancelAppointment,
   useSelfDepartments,
   useLocationOptions,
+  OUTPATIENT_POLLING_INTERVAL,
   useOutpatientList,
   usePractitionerOptions,
   usePractitionerRoles,
@@ -14,6 +15,7 @@ import {
   useUpdateOutpatientExam,
   type OutpatientRow,
 } from "../api/queries";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
 import { useReceiptStatus, useSettledReceptions } from "../api/receiptQueries";
@@ -28,6 +30,7 @@ import { NewPatientCheckInModal } from "../components/NewPatientCheckInModal";
 import { OutpatientReceptionModal } from "../components/OutpatientReceptionModal";
 import { RowMenu } from "../components/RowMenu";
 import { WalkInCheckInModal } from "../components/WalkInCheckInModal";
+import { useStoredToggle } from "../hooks/useStoredToggle";
 import {
   APPOINTMENT_STATUS_OPTIONS,
   appointmentActorDisplay,
@@ -83,6 +86,20 @@ const emptyFilters: Filters = {
   status: "",
 };
 
+// 診察日と絞り込みは URL に持つ。カルテの「戻る」は遷移元の検索文字列ごと戻すので、
+// こうしておくと開く前の日付・絞り込みのまま一覧に戻れる。
+const DATE_PARAM = "date";
+const FILTER_PARAMS: Record<keyof Filters, string> = {
+  departmentCode: "department",
+  practitionerId: "practitioner",
+  locationId: "location",
+  status: "status",
+};
+
+// 自動更新の入り切り。端末ごとの設定で、既定は切ってある(上流は検索のたびに
+// 監査ログを 1 行書くので、常に見張りたい端末でだけ入れる。通知のベルと同じ考え方)。
+const POLLING_STORAGE_KEY = "fhir-client.outpatients.polling";
+
 // 取消・誤登録は一覧に出さないので、絞り込みの選択肢にも出さない。「診察中」は
 // Appointment.status に無い状態なので、受付済と診療済の間に差し込む。
 const STATUS_OPTIONS: { code: string; label: string }[] = APPOINTMENT_STATUS_OPTIONS.filter(
@@ -101,9 +118,19 @@ export function OutpatientListPage() {
   // 診察を始めたら続けてカルテを開く。カルテの「戻る」でこの一覧に戻れるよう、
   // 行の「カルテ」リンクと同じ遷移元を渡す。
   const returnLinkState = useReturnLinkState();
+  const [searchParams, setSearchParams] = useSearchParams();
   // 診察日は必須。未選択にはできないので当日から始める。
-  const [date, setDate] = useState(today);
-  const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const date = searchParams.get(DATE_PARAM) || today();
+  const filters = useMemo<Filters>(
+    () => ({
+      departmentCode: searchParams.get(FILTER_PARAMS.departmentCode) ?? "",
+      practitionerId: searchParams.get(FILTER_PARAMS.practitionerId) ?? "",
+      locationId: searchParams.get(FILTER_PARAMS.locationId) ?? "",
+      status: searchParams.get(FILTER_PARAMS.status) ?? "",
+    }),
+    [searchParams],
+  );
+  const [polling, setPolling] = useStoredToggle(POLLING_STORAGE_KEY);
   const [walkInOpen, setWalkInOpen] = useState(false);
   const [newPatientOpen, setNewPatientOpen] = useState(false);
   // 受付内容(診療科・担当医・診察室)を変える行。
@@ -116,7 +143,7 @@ export function OutpatientListPage() {
     return () => document.body.classList.remove("page-wide");
   }, []);
 
-  const list = useOutpatientList(date);
+  const list = useOutpatientList(date, { polling });
   const departments = useSelfDepartments();
   const practitioners = usePractitionerOptions();
   const locations = useLocationOptions();
@@ -127,26 +154,62 @@ export function OutpatientListPage() {
   // 会計送信はレセコン連携が有効なときだけ。無効なら行メニューに項目ごと出さない。
   const receiptStatus = useReceiptStatus();
   // その日に会計が済んだ受診。レセコン連携が有効なときだけ問い合わせ、行に印を付ける。
-  const settledReceptions = useSettledReceptions(date, { enabled: receiptStatus.data?.enabled === true });
+  const settledReceptions = useSettledReceptions(date, {
+    enabled: receiptStatus.data?.enabled === true,
+    refetchInterval: polling ? OUTPATIENT_POLLING_INTERVAL : false,
+  });
   const settledNumbers = useMemo(
     () => new Set((settledReceptions.data?.settled ?? []).map((s) => s.patient_number)),
     [settledReceptions.data],
   );
   const [billingTarget, setBillingTarget] = useState<BillingSendTarget | null>(null);
 
+  // 日付・絞り込みの一部だけ変えるときも他を残す。
+  function setParams(next: Record<string, string>, replace = false) {
+    const params = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(next)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
+    // 日付は常に URL に残す。検索文字列が空のとき(メニューから開き直したとき)
+    // だけ、下の医師の初期絞り込みを掛けるため。
+    if (!params.get(DATE_PARAM)) params.set(DATE_PARAM, date);
+    setSearchParams(params, { replace });
+  }
+
+  function setFilters(next: Filters) {
+    setParams(
+      Object.fromEntries(
+        (Object.keys(FILTER_PARAMS) as (keyof Filters)[]).map((key) => [
+          FILTER_PARAMS[key],
+          next[key],
+        ]),
+      ),
+    );
+  }
+
   // ログイン中の医師には自分の予約から見せる(受付や代行入力の職種はすべての予約)。
+  // 掛けるのは検索文字列の無い状態で開いたときだけ。カルテから戻ったときなど、
+  // 検索文字列があるときはそちらの絞り込み(「すべて」に戻したことも含む)を守る。
   const { practitionerId } = useCurrentPractitioner();
   const roles = usePractitionerRoles(practitionerId ?? undefined);
-  const initializedFor = useRef("");
+  const initialized = useRef(false);
   useEffect(() => {
-    if (!practitionerId || roles.isPending) return;
-    if (initializedFor.current === practitionerId) return;
-    initializedFor.current = practitionerId;
-    const roleCode = roles.role ? parsePractitionerRole(roles.role).roleCode : undefined;
-    if (isDoctorRoleCode(roleCode)) {
-      setFilters((current) => ({ ...current, practitionerId }));
+    if (initialized.current) return;
+    if (searchParams.toString()) {
+      initialized.current = true;
+      return;
     }
-  }, [practitionerId, roles.isPending, roles.role]);
+    if (!practitionerId || roles.isPending) return;
+    initialized.current = true;
+    const roleCode = roles.role ? parsePractitionerRole(roles.role).roleCode : undefined;
+    setParams(
+      isDoctorRoleCode(roleCode) ? { [FILTER_PARAMS.practitionerId]: practitionerId } : {},
+      true,
+    );
+    // setParams は searchParams に依存するが、初回に一度だけ動けばよい。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [practitionerId, roles.isPending, roles.role, searchParams]);
 
   const rows = useMemo(
     () => (list.data?.rows ?? []).filter((row) => matchesFilters(row, filters)),
@@ -173,7 +236,7 @@ export function OutpatientListPage() {
 
   function handleDateChange(value: string) {
     // 日付を空にはさせない(空で検索すると全期間になってしまう)。
-    if (value) setDate(value);
+    if (value) setParams({ [DATE_PARAM]: value });
   }
 
   // 診察開始・診察終了は受付ボタンと同じく 1 クリック(現在時刻をそのまま記録する)。
@@ -236,6 +299,14 @@ export function OutpatientListPage() {
       <div className="page__header">
         <h1>外来患者一覧</h1>
         <div>
+          <label className="outpatient__polling" title="一覧を 1 分ごとに読み直します">
+            <input
+              type="checkbox"
+              checked={polling}
+              onChange={(event) => setPolling(event.target.checked)}
+            />
+            自動更新
+          </label>
           <button type="button" onClick={() => setWalkInOpen(true)}>
             当日受付
           </button>
@@ -306,6 +377,7 @@ export function OutpatientListPage() {
                       startExam.isPending ||
                       updateExam.isPending
                     }
+                    canMarkNoShow={date <= today()}
                     onChangeStatus={(status) =>
                       updateStatus.mutate({ appointment: row.appointment, status })
                     }
@@ -411,7 +483,7 @@ function FilterForm({
     <form className="patient-search-form" onSubmit={handleSubmit}>
       <label>
         診察日
-        <input type="date" value={date} required onChange={(e) => onDateChange(e.target.value)} />
+        <DateStepper value={date} onChange={onDateChange} />
       </label>
       <label>
         診療科
@@ -488,6 +560,7 @@ function OutpatientTableRow({
   row,
   settled,
   pending,
+  canMarkNoShow,
   onChangeStatus,
   onStartExam,
   onFinishExam,
@@ -501,6 +574,8 @@ function OutpatientTableRow({
   /** レセコンで会計が済んでいる。 */
   settled: boolean;
   pending: boolean;
+  /** 未来院にできる日か(診察日が今日以前)。先の日付の予約はまだ来ないだけなので付けない。 */
+  canMarkNoShow: boolean;
   onChangeStatus: (status: fhir4.Appointment["status"]) => void;
   onStartExam: () => void;
   onFinishExam: () => void;
@@ -603,6 +678,28 @@ function OutpatientTableRow({
               受付を取り消す
             </button>
           )}
+          {/* 来なかった予約。取消と違って予約の記録は残し、枠も触らない。遅れて来たときは
+              取り消して予約済に戻してから受付する。 */}
+          {canMarkNoShow && canCheckInAppointment(appointment) && (
+            <button
+              type="button"
+              className="row-menu__item"
+              disabled={pending}
+              onClick={() => onChangeStatus("noshow")}
+            >
+              未来院にする
+            </button>
+          )}
+          {appointment.status === "noshow" && (
+            <button
+              type="button"
+              className="row-menu__item"
+              disabled={pending}
+              onClick={() => onChangeStatus("booked")}
+            >
+              未来院を取り消す
+            </button>
+          )}
           {inExam && (
             <button
               type="button"
@@ -616,7 +713,7 @@ function OutpatientTableRow({
           {/* 会計はレセコン側に置くので、カルテからは診療行為と病名を送るだけ。
               受付済み以降ならいつでも送れる(診察終了を待たなくてよい)。診察終了後は
               行に「医事送信」が出るので、メニューには重ねて出さない。 */}
-          {onSendBilling && !examFinished && (
+          {onSendBilling && !examFinished && appointment.status !== "noshow" && (
             <button
               type="button"
               className="row-menu__item"
