@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { CtcaeTerm, Disease, JlacItem, Medicine, MedicineUsage } from "../api/masterClient";
-import { useRegimen, useRegimenMutations } from "../api/masterQueries";
+import { useFormularyRankLookup, useRegimen, useRegimenMutations } from "../api/masterQueries";
 import { usePractitionerOptions, useSelfDepartments } from "../api/queries";
 import { DiseaseSearchModal } from "../components/DiseaseSearchModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { CtcaeTermSearchModal } from "../components/CtcaeTermSearchModal";
 import { JlacItemSearchModal } from "../components/JlacItemSearchModal";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
+import { FormularyMark } from "../components/MedicineWarnings";
 import { UsageSearchModal } from "../components/UsageSearchModal";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
@@ -812,6 +813,7 @@ export function RegimenEditorPage() {
         <MedicineSearchModal
           title={pickerStep?.usageType === "oral" ? "内服薬を選択" : "注射薬を選択"}
           dosageForm={pickerStep?.usageType === "oral" ? "1" : "4"}
+          formularyPick={{ dosageForm: pickerStep?.usageType === "oral" ? "1" : "4" }}
           onSelect={(medicine: Medicine) => {
             setPicker(null);
             addMedicine(picker.stepKey, medicine);
@@ -885,6 +887,8 @@ function StepCard({
 }: StepCardProps) {
   const oral = step.usageType === "oral";
   const drip = step.usageType === "drip";
+  // 薬剤はコードと名称しか持たないので、フォーミュラリの順位は群の一覧から引く。
+  const formularyRank = useFormularyRankLookup();
 
   function handleUsageTypeChange(usageType: RegimenStepDraft["usageType"]) {
     const patch: Partial<RegimenStepDraft> = { usageType };
@@ -990,6 +994,11 @@ function StepCard({
                 {drug.medicine?.name}
                 {drug.medicine?.unitName && (
                   <span className="lab-order-item__code">（{drug.medicine.unitName}）</span>
+                )}
+                {drug.medicine && (
+                  <FormularyMark
+                    medicine={{ formulary_rank: formularyRank(drug.medicine.code) }}
+                  />
                 )}
                 {/* 削除・経過措置の薬剤は承認できない(§8.17)。選んだ時点で気付けるように印を出す。 */}
                 {drug.medicineRetirement && (

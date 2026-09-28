@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_27_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_09_29_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -501,6 +501,31 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_27_100000) do
     t.datetime "updated_at", null: false
     t.index ["member_item_code"], name: "index_master_endoscopy_set_items_on_member_item_code"
     t.index ["set_item_code", "member_item_code"], name: "index_endoscopy_set_items_on_set_and_member", unique: true
+  end
+
+  create_table "master_formulary_entries", force: :cascade do |t|
+    t.bigint "formulary_group_id", null: false
+    t.string "medicine_code", null: false
+    t.integer "rank", null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["formulary_group_id", "medicine_code"], name: "idx_on_formulary_group_id_medicine_code_79c03141a3", unique: true
+    t.index ["formulary_group_id"], name: "index_master_formulary_entries_on_formulary_group_id"
+    t.index ["medicine_code"], name: "index_master_formulary_entries_on_medicine_code"
+  end
+
+  create_table "master_formulary_groups", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "yakko_codes", default: [], null: false, array: true
+    t.string "dosage_form"
+    t.integer "display_order"
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_formulary_groups_on_code", unique: true
+    t.index ["yakko_codes"], name: "index_master_formulary_groups_on_yakko_codes", using: :gin
   end
 
   create_table "master_hot_codes", force: :cascade do |t|
@@ -2303,4 +2328,5 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_27_100000) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "master_formulary_entries", "master_formulary_groups", column: "formulary_group_id", on_delete: :cascade
 end

@@ -65,6 +65,12 @@ export function MedicineCautionMarks({ medicine }: { medicine: Medicine | null }
   );
 }
 
+/** 院内フォーミュラリの推奨順位の印(docs/formulary-design.md)。載っていない薬には何も出さない。 */
+export function FormularyMark({ medicine }: { medicine: Pick<Medicine, "formulary_rank"> | null }) {
+  if (!medicine?.formulary_rank) return null;
+  return <span className="medicine-caution formulary-mark">第{medicine.formulary_rank}選択</span>;
+}
+
 /** 1 つの薬剤行に出すアレルギー・重複投与の警告。 */
 export function MedicineWarnings({ warnings }: { warnings: MedicationWarning[] | undefined }) {
   if (!warnings || warnings.length === 0) return null;

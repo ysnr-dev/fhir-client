@@ -30,7 +30,12 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
-import { MedicineCautionMarks, MedicineWarnings, useMedicationWarnings } from "./MedicineWarnings";
+import {
+  FormularyMark,
+  MedicineCautionMarks,
+  MedicineWarnings,
+  useMedicationWarnings,
+} from "./MedicineWarnings";
 import { PregnancyNotice } from "./PregnancyNotice";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
@@ -449,6 +454,7 @@ export function PrescriptionForm({
                           <span className="rp-card__medicine-name">
                             {med.medicine.name}
                             <MedicineCautionMarks medicine={med.medicine} />
+                            <FormularyMark medicine={med.medicine} />
                           </span>
                         ) : (
                           <span className="rp-card__usage-value--empty">未選択</span>
@@ -682,6 +688,7 @@ export function PrescriptionForm({
           onSelect={handleMedicineSelect}
           onClose={() => setModal(null)}
           allowGeneric={allowGeneric}
+          formularyPick={{}}
         />
       )}
     </form>

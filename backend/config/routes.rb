@@ -129,6 +129,11 @@ Rails.application.routes.draw do
     resources :medicine_types, only: %i[index show create update destroy] do
       collection { get :options }
     end
+    # 院内フォーミュラリ(薬効群と推奨順位)。docs/formulary-design.md
+    resources :formulary_groups, only: %i[index show create update destroy]
+    resources :formulary_entries, only: %i[show create update destroy] do
+      collection { post :reorder }
+    end
     # 投与量の単位換算。配布ファイルではなく規格単位から生成 + 手動メンテするため
     # 取込ではなく generate を持つ。
     resources :medicine_dose_conversions, only: %i[index show create update destroy] do

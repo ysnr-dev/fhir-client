@@ -44,7 +44,12 @@ import { useBulkStartDate } from "../hooks/useBulkStartDate";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
-import { MedicineCautionMarks, MedicineWarnings, useMedicationWarnings } from "./MedicineWarnings";
+import {
+  FormularyMark,
+  MedicineCautionMarks,
+  MedicineWarnings,
+  useMedicationWarnings,
+} from "./MedicineWarnings";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
 
@@ -671,6 +676,7 @@ export function InjectionForm({
                         <span className="rp-card__medicine-name">
                           {med.medicine.name}
                           <MedicineCautionMarks medicine={med.medicine} />
+                          <FormularyMark medicine={med.medicine} />
                         </span>
                       ) : (
                         <span className="rp-card__usage-value--empty">未選択</span>
@@ -976,6 +982,7 @@ export function InjectionForm({
           dosageForm="4"
           onSelect={handleMedicineSelect}
           onClose={() => setModal(null)}
+          formularyPick={{ dosageForm: "4" }}
         />
       )}
     </form>

@@ -16,7 +16,7 @@ import {
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useValidationError } from "../hooks/useValidationError";
 import { ErrorBanner } from "./ErrorBanner";
-import { MedicineCautionMarks } from "./MedicineWarnings";
+import { FormularyMark, MedicineCautionMarks } from "./MedicineWarnings";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
 
@@ -187,7 +187,10 @@ export function BroughtMedicationIdentifyModal({
                           {row.substitute ? "変更" : "選択"}
                         </button>
                         {row.substitute ? (
-                          <span className="rp-card__medicine-name">{row.substitute.name}</span>
+                          <span className="rp-card__medicine-name">
+                            {row.substitute.name}
+                            <FormularyMark medicine={row.substitute} />
+                          </span>
                         ) : (
                           <span className="rp-card__usage-value rp-card__usage-value--empty">
                             未選択
@@ -225,6 +228,8 @@ export function BroughtMedicationIdentifyModal({
           title={pick.target === "medicine" ? "持参薬を特定" : "代替薬を選択"}
           onSelect={handlePick}
           onClose={() => setPick(null)}
+          // 代替薬は院内で出す薬なのでフォーミュラリから選ぶ。持参薬の特定は他院の薬なので出さない。
+          formularyPick={pick.target === "substitute" ? {} : undefined}
         />
       )}
     </Modal>

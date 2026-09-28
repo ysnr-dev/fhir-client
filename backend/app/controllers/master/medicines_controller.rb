@@ -38,6 +38,25 @@ module Master
 
     private
 
+    # 院内フォーミュラリの印(docs/formulary-design.md)。検索結果の各行に、
+    # 推奨順位(複数の群に載っていれば最小)とその群の名前を添える。
+    # 相関サブクエリなので JOIN と違い件数(paginate の COUNT)を増やさない。
+    FORMULARY_RANK_SQL = "(SELECT MIN(fe.rank) FROM master_formulary_entries fe " \
+                         "WHERE fe.medicine_code = master_medicines.medicine_code)".freeze
+    FORMULARY_GROUP_NAME_SQL = "(SELECT g.name FROM master_formulary_entries fe " \
+                               "JOIN master_formulary_groups g ON g.id = fe.formulary_group_id " \
+                               "WHERE fe.medicine_code = master_medicines.medicine_code " \
+                               "ORDER BY fe.rank, fe.id LIMIT 1)".freeze
+    # 一般名の行は、同じ一般名処方コードの銘柄が 1 つでも載っていれば推奨とみなす。
+    GENERIC_FORMULARY_RANK_SQL = "(SELECT MIN(fe.rank) FROM master_formulary_entries fe " \
+                                 "JOIN master_medicines m ON m.medicine_code = fe.medicine_code " \
+                                 "WHERE m.generic_name_code = master_medicines.generic_name_code)".freeze
+    GENERIC_FORMULARY_GROUP_NAME_SQL = "(SELECT g.name FROM master_formulary_entries fe " \
+                                       "JOIN master_medicines m ON m.medicine_code = fe.medicine_code " \
+                                       "JOIN master_formulary_groups g ON g.id = fe.formulary_group_id " \
+                                       "WHERE m.generic_name_code = master_medicines.generic_name_code " \
+                                       "ORDER BY fe.rank, fe.id LIMIT 1)".freeze
+
     # 薬効分類名称(yakko_name)と薬効分類番号(yakko_code=YJ上4桁)を各医薬品に付与する。
     # master_medicine_types.code は一意なので LEFT JOIN で件数は増えない。
     # yj_code(個別医薬品コード)は医薬品マスタに無いため、HOTコードマスタを
@@ -54,6 +73,8 @@ module Master
           "(SELECT hc.individual_medicine_code FROM master_hot_codes hc " \
           "WHERE hc.receipt_code_1 = master_medicines.medicine_code " \
           "AND hc.individual_medicine_code <> '' LIMIT 1) AS yj_code",
+          "#{FORMULARY_RANK_SQL} AS formulary_rank",
+          "#{FORMULARY_GROUP_NAME_SQL} AS formulary_group_name",
         )
     end
 
@@ -92,6 +113,8 @@ module Master
           "LEFT(master_medicines.generic_name_code, 4) AS yakko_code",
           "master_medicine_types.name AS yakko_name",
           "NULL AS yj_code",
+          "#{GENERIC_FORMULARY_RANK_SQL} AS formulary_rank",
+          "#{GENERIC_FORMULARY_GROUP_NAME_SQL} AS formulary_group_name",
           "TRUE AS generic",
         )
     end

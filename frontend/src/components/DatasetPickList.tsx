@@ -14,7 +14,8 @@ import { useId, useState } from "react";
 // 放射線・生理検査・内視鏡・処置の実施入力で共通。データセットの明細は部門ごとに
 // 別の型だが、候補にするのに要る列は同じなので DatasetDetailLike で構造だけ受ける。
 
-export type DatasetPickMode = "dataset" | "all";
+// formulary は医薬品の検索モーダルだけが持つ(院内フォーミュラリの群から選ぶ)。
+export type DatasetPickMode = "dataset" | "formulary" | "all";
 
 /** データセットに登録されている候補 1 行。 */
 export interface DatasetPickOption {
@@ -128,37 +129,38 @@ export function DatasetPickModeTabs({
   mode,
   onChange,
   count,
+  tabs,
 }: {
   mode: DatasetPickMode;
   onChange: (mode: DatasetPickMode) => void;
-  count: number;
+  /** データセットの候補数。tabs を渡さないときの既定タブの表示に使う。 */
+  count?: number;
+  /** 出すタブ。省略すると「データセット (count)」と「全件検索」。 */
+  tabs?: { mode: DatasetPickMode; label: string }[];
 }) {
   // 同じ画面に検索モーダルが複数開くことはないが、ラジオの name は
   // 使い回すと別のモーダルと排他になるので id から作る。
   const name = useId();
+  const items = tabs ?? [
+    { mode: "dataset" as const, label: `データセット (${count ?? 0})` },
+    { mode: "all" as const, label: "全件検索" },
+  ];
 
   return (
     <div className="master-search__mode">
       <span className="master-search__mode-legend">候補</span>
       <div className="master-search__mode-options">
-        <label className="master-search__mode-option">
-          <input
-            type="radio"
-            name={name}
-            checked={mode === "dataset"}
-            onChange={() => onChange("dataset")}
-          />
-          データセット ({count})
-        </label>
-        <label className="master-search__mode-option">
-          <input
-            type="radio"
-            name={name}
-            checked={mode === "all"}
-            onChange={() => onChange("all")}
-          />
-          全件検索
-        </label>
+        {items.map((tab) => (
+          <label key={tab.mode} className="master-search__mode-option">
+            <input
+              type="radio"
+              name={name}
+              checked={mode === tab.mode}
+              onChange={() => onChange(tab.mode)}
+            />
+            {tab.label}
+          </label>
+        ))}
       </div>
     </div>
   );

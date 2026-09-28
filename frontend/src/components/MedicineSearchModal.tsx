@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from "react";
-import type { Medicine } from "../api/masterClient";
+import { searchMedicines, type FormularyEntry, type Medicine } from "../api/masterClient";
 import { useMedicineSearch, useMedicineTypeOptions } from "../api/masterQueries";
 import { dosageFormLabel } from "../fhir/medicineHelpers";
 import {
@@ -9,7 +9,8 @@ import {
   type DatasetPickProps,
 } from "./DatasetPickList";
 import { ErrorBanner } from "./ErrorBanner";
-import { MedicineCautionMarks } from "./MedicineWarnings";
+import { FormularyPickTable, type FormularyPickProps } from "./FormularyPickList";
+import { FormularyMark, MedicineCautionMarks } from "./MedicineWarnings";
 import { Modal } from "./Modal";
 
 interface MedicineSearchModalProps {
@@ -34,6 +35,11 @@ interface MedicineSearchModalProps {
    * 候補があるときはそちらから始まる。渡さなければ全件検索だけ。
    */
   datasetPick?: DatasetPickProps;
+  /**
+   * 院内フォーミュラリの薬効群から選ぶモード。渡すとモード切替に「フォーミュラリ」が出る
+   * (処方・注射・レジメン・持参薬の代替薬)。始まりは全件検索。渡さなければ印だけ出す。
+   */
+  formularyPick?: FormularyPickProps;
 }
 
 export function MedicineSearchModal({
@@ -44,6 +50,7 @@ export function MedicineSearchModal({
   title = "医薬品を選択",
   allowGeneric = false,
   datasetPick,
+  formularyPick,
 }: MedicineSearchModalProps) {
   const [mode, setMode] = useDatasetPickMode(datasetPick);
   const [name, setName] = useState("");
@@ -53,6 +60,9 @@ export function MedicineSearchModal({
   const [page, setPage] = useState(1);
   // 銘柄 / 一般名の切り替え。一般名は院外処方だけなので既定は銘柄。
   const [generic, setGeneric] = useState(false);
+  // フォーミュラリの行から選んだあと、医薬品マスタの行を引き直している間。
+  const [selecting, setSelecting] = useState(false);
+  const [selectError, setSelectError] = useState<Error | null>(null);
   const { data, error, isFetching } = useMedicineSearch(
     name,
     yakkoCode,
@@ -102,17 +112,43 @@ export function MedicineSearchModal({
 
   const hasNext = data ? page * data.per < data.total : false;
 
+  // フォーミュラリの行はコードと名称しか持たないので、選んだら医薬品マスタの行
+  // (剤形・規制区分・印など、呼び出し側が使う列ぞろい)を引いてから返す。
+  async function handleFormularySelect(entry: FormularyEntry) {
+    setSelecting(true);
+    setSelectError(null);
+    try {
+      const result = await searchMedicines({ medicine_code: entry.medicine_code, per: 1 });
+      const medicine = result.items[0];
+      if (!medicine) throw new Error(`医薬品マスタに ${entry.medicine_code} がありません`);
+      onSelect(medicine);
+    } catch (e) {
+      setSelectError(e instanceof Error ? e : new Error(String(e)));
+    } finally {
+      setSelecting(false);
+    }
+  }
+
+  const tabs = [
+    ...(datasetPick ? [{ mode: "dataset" as const, label: `データセット (${datasetPick.options.length})` }] : []),
+    { mode: "all" as const, label: "全件検索" },
+    ...(formularyPick ? [{ mode: "formulary" as const, label: "フォーミュラリ" }] : []),
+  ];
+
   return (
     <Modal title={title} onClose={onClose} className="modal--wide">
-      {datasetPick && (
-        <DatasetPickModeTabs
-          mode={mode}
-          onChange={setMode}
-          count={datasetPick.options.length}
-        />
-      )}
+      {tabs.length > 1 && <DatasetPickModeTabs mode={mode} onChange={setMode} tabs={tabs} />}
       {datasetPick && mode === "dataset" ? (
         <DatasetPickTable {...datasetPick} />
+      ) : formularyPick && mode === "formulary" ? (
+        <>
+          <ErrorBanner error={selectError} />
+          <FormularyPickTable
+            dosageForm={formularyPick.dosageForm}
+            onSelect={handleFormularySelect}
+            selecting={selecting}
+          />
+        </>
       ) : (
         <>
           {allowGeneric && (
@@ -186,6 +222,7 @@ export function MedicineSearchModal({
                     <td>
                       {medicine.name}
                       <MedicineCautionMarks medicine={medicine} />
+                      <FormularyMark medicine={medicine} />
                     </td>
                     <td>{medicine.unit_name}</td>
                     <td>{dosageFormLabel(medicine.dosage_form)}</td>

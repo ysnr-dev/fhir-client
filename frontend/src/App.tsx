@@ -84,6 +84,7 @@ import { PathoCollectionMethodPage } from "./pages/PathoCollectionMethodPage";
 import { PatientCautionPage } from "./pages/PatientCautionPage";
 import { ClinicalNoteTitlePage } from "./pages/ClinicalNoteTitlePage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
+import { FormularyPage } from "./pages/FormularyPage";
 import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
 import { PractitionerEditPage } from "./pages/PractitionerEditPage";
 import { PractitionerListPage } from "./pages/PractitionerListPage";
@@ -352,6 +353,9 @@ function App() {
             <SubMenu label="医薬品">
               <Link to="/medicine-dose-conversions" className="row-menu__item">
                 投与量換算
+              </Link>
+              <Link to="/formularies" className="row-menu__item">
+                フォーミュラリ
               </Link>
             </SubMenu>
             {/* 化学療法のマスタ。レジメンは審査委員会で承認する施設共通の参照表なので
@@ -677,6 +681,7 @@ function App() {
           <Route path="/surgeries/:orderId/anesthesia-chart" element={<AnesthesiaChartPage />} />
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
+          <Route path="/formularies" element={<FormularyPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />
           <Route path="/lab-result-items" element={<LabResultItemPage />} />
           <Route path="/lab-order-item-layouts" element={<LabOrderItemLayoutPage />} />

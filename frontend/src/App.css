@@ -1212,6 +1212,25 @@ button:disabled {
   color: var(--text);
 }
 
+/* フォーミュラリから選ぶモード。群の見出し行の下に順位順の薬剤行。 */
+.formulary-pick__group th {
+  text-align: left;
+  background: var(--surface-2, var(--accent-bg));
+  color: var(--text-h);
+}
+
+.formulary-pick__group-note {
+  margin-left: 12px;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--text);
+}
+
+.formulary-pick__note {
+  font-size: 12px;
+  color: var(--text);
+}
+
 /* 条件を横 1 行に並べる版(患者検索モーダル)。縦に積むと表が下へ押し出され、
    モーダルの中で候補が数行しか見えなくなる。狭い画面では折り返す。 */
 .master-search__form--row {
@@ -7691,6 +7710,96 @@ body.karte-wide {
   align-items: center;
   gap: 6px;
   align-self: center;
+}
+
+/* フォーミュラリマスタ: 左に薬効群、右に選んだ群の薬剤(順位順)。 */
+.formulary-page {
+  display: grid;
+  grid-template-columns: minmax(360px, 2fr) 3fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.formulary-page__groups td,
+.formulary-page__entries th {
+  white-space: nowrap;
+}
+
+.formulary-page__entries td:nth-child(5) {
+  min-width: 220px;
+}
+
+.formulary-page__groups .master-search__row--selected > td {
+  background-image: linear-gradient(var(--accent-bg), var(--accent-bg));
+}
+
+.formulary-page__entries .page__header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.formulary-page__yakko {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.formulary-page__yakko-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--accent-border);
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+/* チップ内の × は枠も地も消して文字だけにする(チップの枠と二重に見えないように)。 */
+.formulary-page__yakko-chip button {
+  padding: 0 2px;
+  min-height: 0;
+  line-height: 1;
+  border: none;
+  background: none;
+  box-shadow: none;
+  color: var(--text);
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.formulary-page__yakko-chip button:hover {
+  opacity: 1;
+  color: var(--text-h);
+}
+
+.formulary-page__order {
+  white-space: nowrap;
+}
+
+.formulary-page__rank {
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.formulary-page__order button {
+  padding: 0 6px;
+  min-height: 0;
+}
+
+.formulary-page__order button + button {
+  margin-left: 4px;
+}
+
+.formulary-page__note-input {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .formulary-page {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* 一覧はモーダルと違いページ全体を使うので、高さ固定のスクロール枠は使わない。 */
@@ -17915,6 +18024,12 @@ button.chemo-calendar__cell[draggable="true"] {
   border-color: var(--danger, #c0392b);
   color: var(--danger, #c0392b);
   font-weight: 600;
+}
+
+/* 院内フォーミュラリの推奨順位の印(docs/formulary-design.md)。 */
+.medicine-caution.formulary-mark {
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .medicine-warning {

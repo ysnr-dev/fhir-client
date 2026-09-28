@@ -29,6 +29,9 @@ export interface Medicine {
   // 一般名処方(【般】〜)の候補。true のとき medicine_code はレセプト電算コードでは
   // なく一般名処方コード、name は一般名記載になる。銘柄検索の結果には付かない。
   generic?: boolean;
+  // 院内フォーミュラリの推奨順位(1=第一選択)と群名。検索APIが付与する。載っていなければ null。
+  formulary_rank?: number | null;
+  formulary_group_name?: string | null;
 }
 
 export interface MedicineType {
@@ -103,6 +106,8 @@ export interface MedicineUsage {
 
 export async function searchMedicines(params: {
   name?: string;
+  /** レセプト電算コードの完全一致(フォーミュラリの行から医薬品マスタの行を引くとき)。 */
+  medicine_code?: string;
   yakko_code?: string;
   yakko_name?: string;
   dosage_form?: string;
@@ -115,6 +120,7 @@ export async function searchMedicines(params: {
 }): Promise<MasterSearchResult<Medicine>> {
   const search = new URLSearchParams();
   if (params.name) search.set("name", params.name);
+  if (params.medicine_code) search.set("medicine_code", params.medicine_code);
   if (params.yakko_code) search.set("yakko_code", params.yakko_code);
   if (params.yakko_name) search.set("yakko_name", params.yakko_name);
   if (params.dosage_form) search.set("dosage_form", params.dosage_form);
