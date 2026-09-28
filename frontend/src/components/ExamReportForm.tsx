@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useId, useState, type FormEvent, type KeyboardEvent } from "react";
 import {
   questionnaireResponsePlainText,
   type TemplateBinding,
@@ -15,13 +15,11 @@ import { TemplateEntryModal } from "./TemplateEntryModal";
 import { TemplateTextField } from "./TemplateTextField";
 
 // 検査レポート(読影・生理検査・内視鏡の所見)の入力(docs/rad-report-design.md §4.1)。
-// 部門一覧とカルテの双方から ExamReportEntryModal 経由で使う。
+// 部門一覧・カルテのカードのモーダルと、カルテの検査結果タブの双方から ExamReportEntry 経由で使う。
 //
 // 画像欄はファイルのドロップ・貼り付けを受けるので <form> の外に置き、登録ボタンは
 // form 属性で本文のフォームに結び付ける(描き込み・テンプレート記入のモーダルも
 // フォームの子孫にしない。Modal は非ポータルで、form の入れ子は送信が外へ漏れる)。
-
-const FORM_ID = "exam-report-form";
 
 type TemplateField = "findings" | "conclusion";
 
@@ -45,6 +43,8 @@ export function ExamReportForm({
   submitError?: unknown;
   submitLabel?: string;
 }) {
+  // タブとモーダルで同時に開いても送信先が混ざらないよう、form の id は開くたびに分ける。
+  const formId = useId();
   const [values, setValues] = useState<ExamReportFormValues>(initialValues);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
@@ -102,7 +102,7 @@ export function ExamReportForm({
         <ErrorBanner error={submitError} />
 
         <form
-          id={FORM_ID}
+          id={formId}
           className="prescription-form"
           onSubmit={handleSubmit}
           onKeyDown={handleKeyDown}
@@ -180,7 +180,7 @@ export function ExamReportForm({
         </fieldset>
 
         <div className="prescription-form__submit">
-          <button type="submit" form={FORM_ID} disabled={submitting}>
+          <button type="submit" form={formId} disabled={submitting}>
             {submitting ? "送信中..." : amended ? "訂正報告として更新" : submitLabel}
           </button>
         </div>

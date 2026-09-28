@@ -14102,6 +14102,11 @@ button.meal-calendar__cell:hover {
   border-top: 1px solid var(--border);
 }
 
+/* 検査結果タブの新規登録。オーダーの選択と、その下の依頼内容の間をあける。 */
+.exam-report-create > .prescription-form {
+  margin-bottom: 12px;
+}
+
 .exam-report-entry__actions {
   display: flex;
   justify-content: flex-end;

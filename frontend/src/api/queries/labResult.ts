@@ -71,7 +71,7 @@ export async function fetchOrderCandidates(
   patientId: string,
   orderTypeCode: string,
   buildLabel: (header: fhir4.ServiceRequest, itemRequests: fhir4.ServiceRequest[]) => string,
-  options: { occurrence?: string } = {},
+  options: { occurrence?: string; completedOnly?: boolean } = {},
 ): Promise<LabOrderCandidate[]> {
   const candidates: LabOrderCandidate[] = [];
 
@@ -83,6 +83,8 @@ export async function fetchOrderCandidates(
     params.set("based-on:missing", "true");
     // 日付だけの値は上流が施設のタイムゾーンで日の範囲に広げて解釈する。
     if (options.occurrence) params.set("occurrence", options.occurrence);
+    // 部門の進捗(Task)が実施済のものだけ。読影・所見は実施した後にしか書けない。
+    if (options.completedOnly) params.set("_has:Task:focus:status", "completed");
     params.set("_count", String(LAB_ORDER_CANDIDATE_PAGE));
     params.set("_offset", String(page * LAB_ORDER_CANDIDATE_PAGE));
     params.set("_sort", "-authoredon");

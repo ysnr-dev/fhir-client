@@ -64,6 +64,8 @@ export interface ExamReportConfig {
   kind: ExamReportKind;
   /** 種別を判定する category の coding。`DiagnosticReport?category=` の検索にも使う。 */
   kindCoding: fhir4.Coding;
+  /** オーダー(ヘッダ ServiceRequest)の category に入る order-type のコード。 */
+  orderType: string;
   /** v2-0074 の診断区分。検体検査・細菌・病理の結果一覧(LAB / MB / SP,CP)と混ざらない値にする。 */
   sectionCoding: fhir4.Coding;
   code: fhir4.Coding;
@@ -100,6 +102,7 @@ export interface ExamReportConfig {
 
 const RAD_CONFIG: ExamReportConfig = {
   kind: "rad",
+  orderType: "rad",
   // JP Core の JP_DiagnosticReport_Radiology が固定スライスで求める値。
   kindCoding: { system: LOINC_SYSTEM, code: "LP29684-5", display: "Radiology" },
   sectionCoding: { system: V2_0074_SYSTEM, code: "RAD", display: "Radiology" },
@@ -129,6 +132,7 @@ const RAD_CONFIG: ExamReportConfig = {
 
 const PHYSIO_CONFIG: ExamReportConfig = {
   kind: "physio",
+  orderType: "physio",
   kindCoding: { system: ORDER_TYPE_SYSTEM, code: "physio", display: "生理検査" },
   sectionCoding: { system: V2_0074_SYSTEM, code: "OTH", display: "Other" },
   code: { system: EXAM_REPORT_CODE_SYSTEM, code: "physio", display: "生理検査報告書" },
@@ -157,6 +161,7 @@ const PHYSIO_CONFIG: ExamReportConfig = {
 
 const ENDOSCOPY_CONFIG: ExamReportConfig = {
   kind: "endoscopy",
+  orderType: "endoscopy",
   kindCoding: { system: ORDER_TYPE_SYSTEM, code: "endoscopy", display: "内視鏡" },
   sectionCoding: { system: V2_0074_SYSTEM, code: "OTH", display: "Other" },
   code: { system: LOINC_SYSTEM, code: "18751-8", display: "Endoscopy study" },

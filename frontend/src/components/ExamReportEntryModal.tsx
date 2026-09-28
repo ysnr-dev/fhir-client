@@ -46,7 +46,8 @@ import { PhysioOrderDetailPanel } from "./PhysioOrderDetailPanel";
 import { RadOrderDetailPanel } from "./RadOrderDetailPanel";
 
 // 検査レポート(読影・生理検査・内視鏡の所見)の登録・編集(docs/rad-report-design.md §4.1)。
-// 部門一覧のボタンとカルテのカードの双方から開く。オーダー 1 件にレポート 1 件なので、オーダー id を
+// 部門一覧のボタンとカルテのカードはモーダルで、カルテの検査結果タブはタブの中で開く。
+// オーダー 1 件にレポート 1 件なので、オーダー id を
 // 受けて、レポートがあれば編集、無ければ登録として開く。
 //
 // 記載医が臨床情報と実施内容(造影の有無・前処置の薬剤など)を見て書けるよう、依頼内容と
@@ -161,7 +162,36 @@ export function ExamReportEntryModal({
   title?: string;
   onClose: () => void;
 }) {
-  // 種別はモーダルを開いている間変わらないので、フックの呼び出し順も変わらない。
+  // 見出しの登録 / 編集の判定。本体(ExamReportEntry)と同じ検索なのでキャッシュを共有する。
+  const existing = useExamReportByOrder(config, orderId);
+  const hasReport = Boolean(splitExamReportBundle(config, existing.data?.data).report);
+  return (
+    <Modal
+      title={`${config.labels.report}${hasReport ? "編集" : "登録"}${title ? ` - ${title}` : ""}`}
+      onClose={onClose}
+      className="modal--wide"
+    >
+      <ExamReportEntry config={config} orderId={orderId} patientId={patientId} onDone={onClose} />
+    </Modal>
+  );
+}
+
+/**
+ * レポートの登録・編集の本体(依頼内容・実施情報とフォーム)。モーダルとカルテの検査結果タブの双方に置く。
+ * onDone は保存・削除が済んだとき。
+ */
+export function ExamReportEntry({
+  config,
+  orderId,
+  patientId,
+  onDone,
+}: {
+  config: ExamReportConfig;
+  orderId: string;
+  patientId: string;
+  onDone: () => void;
+}) {
+  // 種別は開いている間変わらないので、フックの呼び出し順も変わらない。
   const adapter = ADAPTERS[config.kind];
   const { labels } = config;
   const order = adapter.useOrderDetail(orderId);
@@ -223,23 +253,19 @@ export function ExamReportEntryModal({
       originalObservationIds: report ? examReportObservationIds(report) : [],
       originalResponseIds: report ? examReportResponseIds(config, report) : [],
     });
-    save.mutate(bundle, { onSuccess: onClose });
+    save.mutate(bundle, { onSuccess: onDone });
   }
 
   function handleDelete() {
     if (!report?.id) return;
     if (!window.confirm(`この${labels.report}を削除します。よろしいですか?`)) return;
-    remove.mutate(report.id, { onSuccess: onClose });
+    remove.mutate(report.id, { onSuccess: onDone });
   }
 
   const OrderDetailPanel = adapter.OrderDetailPanel;
 
   return (
-    <Modal
-      title={`${labels.report}${report ? "編集" : "登録"}${title ? ` - ${title}` : ""}`}
-      onClose={onClose}
-      className="modal--wide"
-    >
+    <>
       <ErrorBanner error={order.error ?? perform.error ?? existing.error} />
       <ErrorBanner error={remove.error} />
       {loading ? (
@@ -277,7 +303,7 @@ export function ExamReportEntryModal({
           />
         </>
       )}
-    </Modal>
+    </>
   );
 }
 

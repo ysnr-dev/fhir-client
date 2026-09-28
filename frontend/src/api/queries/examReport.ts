@@ -18,7 +18,12 @@ import {
 } from "../../fhir/resultReviewHelpers";
 import { postBundle, readResource, searchResource } from "../fhirClient";
 import { NOTIFICATION_TASK_KEY, resourcesOfType } from "./core";
-import { useLabResultDetail, useResultSummariesQuery } from "./labResult";
+import {
+  fetchOrderCandidates,
+  useLabResultDetail,
+  useOrderCandidatesQuery,
+  useResultSummariesQuery,
+} from "./labResult";
 import { fetchOrderRequester, fetchReportTasks } from "./notification";
 
 // ---- 検査レポート(読影・生理検査・内視鏡の所見) ----
@@ -72,6 +77,27 @@ export function useExamReportByOrder(config: ExamReportConfig, orderId: string |
     queryFn: () => searchResource<fhir4.Resource>("DiagnosticReport", params),
     enabled: Boolean(orderId),
   });
+}
+
+/**
+ * カルテから新規登録するときに選ばせるオーダーの候補。実施済で、まだレポートが付いていないもの。
+ * 選択肢は「実施予定日 検査内容」。
+ */
+export function useExamReportOrderCandidates(config: ExamReportConfig, patientId: string | undefined) {
+  return useOrderCandidatesQuery(
+    ["ServiceRequest", "search", `${config.kind}-report-order-candidates`, patientId],
+    (id) =>
+      fetchOrderCandidates(
+        id,
+        config.orderType,
+        (header, itemRequests) =>
+          [header.occurrenceDateTime?.slice(0, 10), config.examText(header, itemRequests)]
+            .filter(Boolean)
+            .join(" "),
+        { completedOnly: true },
+      ),
+    patientId,
+  );
 }
 
 /** カルテの検査結果タブの日付ペイン用。その種別のレポートの要約を新しい順で返す。 */
