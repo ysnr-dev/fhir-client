@@ -135,6 +135,7 @@ import { RxWorklistPage } from "./pages/RxWorklistPage";
 import { BroughtMedicationWorklistPage } from "./pages/BroughtMedicationWorklistPage";
 import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
+import { HomePage } from "./pages/HomePage";
 
 // 患者配下の未定義パスをその患者のカルテへ寄せる。
 function KarteRedirect() {
@@ -156,7 +157,7 @@ function App() {
       <div className={`app${detachedPane ? " app--pane" : ""}`}>
       {!detachedPane && (
       <header className="app__header">
-        <Link to="/patients" className="app__title">
+        <Link to="/" className="app__title">
           FHIR Client
         </Link>
         <nav className="app__nav">
@@ -573,7 +574,8 @@ function App() {
       )}
       <main className="app__main">
         <Routes>
-          <Route path="/" element={<Navigate to="/patients" replace />} />
+          {/* ホーム。ログインした人の「今日の仕事」(通知・外来・入院・部門の件数)を職種ごとに出す。 */}
+          <Route path="/" element={<HomePage />} />
           <Route path="/patients" element={<PatientListPage />} />
           <Route path="/patients/new" element={<PatientCreatePage />} />
           <Route path="/patients/:id/edit" element={<PatientEditPage />} />

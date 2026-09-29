@@ -22,6 +22,7 @@
 // 一覧の検索も class(AMB / IMP)で分かれている。
 
 import {
+  APPOINTMENT_STATUS_OPTIONS,
   appointmentActorDisplay,
   appointmentActorId,
   appointmentStatusLabel,
@@ -280,4 +281,42 @@ export function canStartExam(
   encounter: fhir4.Encounter | undefined,
 ): boolean {
   return appointment.status === "checked-in" && !encounter;
+}
+
+/**
+ * 外来一覧の状態の選択肢。取消・誤登録は一覧に出さないので選択肢にも出さない。
+ * 「診察中」は Appointment.status に無い状態なので、受付済と診療済の間に差し込む。
+ */
+export const OUTPATIENT_STATUS_OPTIONS: { code: string; label: string }[] =
+  APPOINTMENT_STATUS_OPTIONS.filter(
+    (option) => !["cancelled", "entered-in-error"].includes(option.code),
+  ).flatMap((option) =>
+    option.code === "checked-in"
+      ? [
+          { code: option.code, label: option.label },
+          { code: IN_EXAM_STATUS, label: IN_EXAM_LABEL },
+        ]
+      : [{ code: option.code, label: option.label }],
+  );
+
+/** 状態ごとの件数で、0 件でも出す状態(外来の流れの本筋)。それ以外は 1 件以上のときだけ出す。 */
+export const ALWAYS_COUNTED_STATUSES: readonly string[] = [
+  "booked",
+  "checked-in",
+  IN_EXAM_STATUS,
+  "fulfilled",
+];
+
+/** 外来の行を状態ごとに数える。選択肢の順で、本筋の状態は 0 件でも並べる。 */
+export function outpatientStatusCounts(
+  rows: { appointment: fhir4.Appointment; encounter?: fhir4.Encounter }[],
+): { code: string; label: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const code = outpatientStatusCode(row.appointment, row.encounter);
+    counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  return OUTPATIENT_STATUS_OPTIONS.filter(
+    (option) => ALWAYS_COUNTED_STATUSES.includes(option.code) || counts.has(option.code),
+  ).map((option) => ({ ...option, count: counts.get(option.code) ?? 0 }));
 }

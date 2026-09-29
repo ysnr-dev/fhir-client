@@ -20819,3 +20819,168 @@ button.chemo-calendar__cell[draggable="true"] {
 .medication-history__cell--decrease .medication-history__change {
   color: var(--lab-low);
 }
+
+/* --- ホーム(トップページ) ------------------------------------------------- */
+
+/* 職種ごとのカードをグリッドに並べる。色は全部テーマ変数なのでダークでも追記不要。 */
+.home__profile {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.home__profile-dept {
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.home__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.home__card {
+  min-width: 0;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-card);
+  box-shadow: var(--surface-card-shadow);
+}
+
+.home__card--wide {
+  grid-column: 1 / -1;
+}
+
+.home__card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.home__card-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.home__card-header a {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* 件数の帯。外来一覧の状態別件数(outpatient__summary)と同じ並び。 */
+.home__counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.home__count strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.home__count--big strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.home__count--alert strong {
+  color: var(--lab-high);
+}
+
+/* 列は折り返さず、カードより広いときは表の中だけ横に送る(通知一覧と同じ)。 */
+.home__table-wrap {
+  overflow-x: auto;
+}
+
+.home__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.home__table th,
+.home__table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.home__table th {
+  font-weight: 600;
+}
+
+.home__table tbody tr:nth-child(even) {
+  background: var(--surface-stripe);
+}
+
+.home__cell-compact {
+  white-space: nowrap;
+}
+
+.home__row-link {
+  color: var(--text-h);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.home__row-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.home__ward {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 10px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.home__ward-count {
+  font-weight: normal;
+  color: var(--text-muted, var(--text));
+}
+
+.home__empty {
+  margin: 4px 0;
+  font-size: 13px;
+  color: var(--text-muted, var(--text));
+}
+
+.home__more {
+  margin: 6px 0 0;
+  font-size: 13px;
+  text-align: right;
+}
+
+.home__launcher-group + .home__launcher-group {
+  margin-top: 8px;
+}
+
+.home__launcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 1200px) {
+  .home__grid {
+    grid-template-columns: 1fr;
+  }
+}

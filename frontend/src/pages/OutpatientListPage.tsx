@@ -41,7 +41,6 @@ import { WalkInCheckInModal } from "../components/WalkInCheckInModal";
 import { useNow } from "../hooks/useNow";
 import { useStoredToggle } from "../hooks/useStoredToggle";
 import {
-  APPOINTMENT_STATUS_OPTIONS,
   appointmentActorDisplay,
   appointmentActorId,
   appointmentDateTimeLabel,
@@ -57,8 +56,7 @@ import {
   visitKindLabel,
 } from "../fhir/appointmentHelpers";
 import {
-  IN_EXAM_LABEL,
-  IN_EXAM_STATUS,
+  OUTPATIENT_STATUS_OPTIONS,
   buildExamFinishCancelledEncounter,
   buildExamStartCancelledEncounter,
   buildFinishedOutpatientEncounter,
@@ -67,6 +65,7 @@ import {
   isExamFinished,
   isExamInProgress,
   outpatientStatusCode,
+  outpatientStatusCounts,
   outpatientStatusLabel,
 } from "../fhir/outpatientEncounterHelpers";
 import { nowFhirDateTime } from "../lib/dates";
@@ -98,9 +97,6 @@ const emptyFilters: Filters = {
   status: "",
 };
 
-// 状態ごとの件数で、0 件でも出す状態(外来の流れの本筋)。それ以外は 1 件以上のときだけ出す。
-const ALWAYS_COUNTED_STATUSES: readonly string[] = ["booked", "checked-in", IN_EXAM_STATUS, "fulfilled"];
-
 // 診察日と絞り込みは URL に持つ。カルテの「戻る」は遷移元の検索文字列ごと戻すので、
 // こうしておくと開く前の日付・絞り込みのまま一覧に戻れる。
 const DATE_PARAM = "date";
@@ -114,19 +110,6 @@ const FILTER_PARAMS: Record<keyof Filters, string> = {
 // 自動更新の入り切り。端末ごとの設定で、既定は切ってある(上流は検索のたびに
 // 監査ログを 1 行書くので、常に見張りたい端末でだけ入れる。通知のベルと同じ考え方)。
 const POLLING_STORAGE_KEY = "fhir-client.outpatients.polling";
-
-// 取消・誤登録は一覧に出さないので、絞り込みの選択肢にも出さない。「診察中」は
-// Appointment.status に無い状態なので、受付済と診療済の間に差し込む。
-const STATUS_OPTIONS: { code: string; label: string }[] = APPOINTMENT_STATUS_OPTIONS.filter(
-  (option) => !["cancelled", "entered-in-error"].includes(option.code),
-).flatMap((option) =>
-  option.code === "checked-in"
-    ? [
-        { code: option.code, label: option.label },
-        { code: IN_EXAM_STATUS, label: IN_EXAM_LABEL },
-      ]
-    : [{ code: option.code, label: option.label }],
-);
 
 export function OutpatientListPage() {
   const navigate = useNavigate();
@@ -234,17 +217,13 @@ export function OutpatientListPage() {
 
   // 状態ごとの件数。状態以外の絞り込み(診療科・担当医・診察室)だけを掛けて数える
   // (状態で絞っても、他の状態が何件あるかは見えるようにする)。
-  const statusCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const row of list.data?.rows ?? []) {
-      if (!matchesFilters(row, { ...filters, status: "" })) continue;
-      const code = outpatientStatusCode(row.appointment, row.encounter);
-      counts.set(code, (counts.get(code) ?? 0) + 1);
-    }
-    return STATUS_OPTIONS.filter(
-      (option) => ALWAYS_COUNTED_STATUSES.includes(option.code) || counts.has(option.code),
-    ).map((option) => ({ ...option, count: counts.get(option.code) ?? 0 }));
-  }, [list.data, filters]);
+  const statusCounts = useMemo(
+    () =>
+      outpatientStatusCounts(
+        (list.data?.rows ?? []).filter((row) => matchesFilters(row, { ...filters, status: "" })),
+      ),
+    [list.data, filters],
+  );
 
   // 行の患者ぶんの注意(ピクトグラム)と当日オーダー。絞り込みで隠れた行のぶんも
   // 引いておく(絞り込みを切り替えるたびに引き直さないように)。
@@ -610,7 +589,7 @@ function FilterForm({
           onChange={(e) => onChange({ ...filters, status: e.target.value })}
         >
           <option value="">すべて</option>
-          {STATUS_OPTIONS.map((option) => (
+          {OUTPATIENT_STATUS_OPTIONS.map((option) => (
             <option key={option.code} value={option.code}>
               {option.label}
             </option>
