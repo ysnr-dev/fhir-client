@@ -35,7 +35,6 @@ import {
   encounterNurseNames,
 } from "../fhir/encounterHelpers";
 import {
-  HOME_WORKLISTS,
   homeInpatientGroups,
   homeOutpatientRows,
   homeProfileOf,
@@ -135,7 +134,6 @@ export function HomePage() {
       ) : profile.kind === "administrator" ? (
         <div className="home__grid">
           <BulletinCard />
-          <LauncherCard profile={profile} wide />
         </div>
       ) : (
         <HomeDashboard profile={profile} practitionerId={practitionerId} polling={polling} />
@@ -243,7 +241,6 @@ function HomeDashboard({ profile, practitionerId, polling }: DashboardProps) {
       {profile.worklists.map((kind) => (
         <HomeWorklistCard key={kind} kind={kind} date={date} />
       ))}
-      <LauncherCard profile={profile} wide={profile.worklists.length === 0} />
     </div>
   );
 }
@@ -643,71 +640,6 @@ function InpatientCard({ date, by, groups, isPending, error, truncated, pictogra
           ))}
         </>
       )}
-    </section>
-  );
-}
-
-// ---- ランチャー ----
-
-const COMMON_LINKS: { to: string; label: string }[] = [
-  { to: "/bulletin", label: "掲示板" },
-  { to: "/patients", label: "患者検索" },
-  { to: "/outpatients", label: "外来患者一覧" },
-  { to: "/emergency", label: "救急患者一覧" },
-  { to: "/inpatients", label: "入院患者一覧" },
-  { to: "/ward-map", label: "病棟マップ" },
-  { to: "/notifications", label: "通知" },
-  { to: "/consult-worklist", label: "他科依頼一覧" },
-];
-
-const OTHER_WORKLIST_LINKS: { to: string; label: string }[] = [
-  { to: "/surgery-worklist", label: "手術一覧" },
-  { to: "/endoscopy-worklist", label: "内視鏡一覧" },
-  { to: "/treatment-worklist", label: "処置一覧" },
-  { to: "/chemo-room-worklist", label: "外来化学療法室" },
-  { to: "/nursing-worklist", label: "看護指示簿" },
-];
-
-const ADMIN_LINKS: { to: string; label: string }[] = [
-  { to: "/practitioners", label: "医療従事者" },
-  { to: "/facility-settings", label: "施設設定" },
-  { to: "/settings", label: "接続設定" },
-  { to: "/oauth-clients", label: "OAuth クライアント" },
-  { to: "/external-systems", label: "外部システム連携" },
-];
-
-function LauncherCard({ profile, wide }: { profile: HomeProfile; wide: boolean }) {
-  const worklistLinks = Object.entries(HOME_WORKLISTS)
-    .filter(([key]) => !profile.worklists.includes(key as keyof typeof HOME_WORKLISTS))
-    .map(([, def]) => ({ to: def.path, label: def.label }));
-  const groups: { title: string; links: { to: string; label: string }[] }[] = [
-    { title: "患者・診療", links: COMMON_LINKS },
-    { title: "部門業務", links: [...OTHER_WORKLIST_LINKS, ...worklistLinks] },
-  ];
-  if (profile.kind === "administrator") groups.push({ title: "管理", links: ADMIN_LINKS });
-
-  return (
-    <section className={`home__card${wide ? " home__card--wide" : ""}`}>
-      <div className="home__card-header">
-        <h2>画面へ移る</h2>
-      </div>
-      {profile.kind === "administrator" && (
-        <p className="home__empty">
-          医療従事者に紐付いたアカウントでログインすると、担当患者や通知がここに出ます。
-        </p>
-      )}
-      {groups.map((group) => (
-        <div key={group.title} className="home__launcher-group">
-          <p className="home__ward">{group.title}</p>
-          <div className="home__launcher">
-            {group.links.map((link) => (
-              <Link key={link.to} to={link.to} className="button">
-                {link.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-      ))}
     </section>
   );
 }

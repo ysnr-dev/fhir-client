@@ -20970,16 +20970,6 @@ button.chemo-calendar__cell[draggable="true"] {
   text-align: right;
 }
 
-.home__launcher-group + .home__launcher-group {
-  margin-top: 8px;
-}
-
-.home__launcher {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 @media (max-width: 1200px) {
   .home__grid {
     grid-template-columns: 1fr;
@@ -20988,7 +20978,7 @@ button.chemo-calendar__cell[draggable="true"] {
 
 /* --- 掲示板(院内のお知らせ) ------------------------------------------------ */
 
-/* ホームのカードと掲示板の画面で同じ見た目。投稿ごとに 1 本の区切り線で分ける。 */
+/* ホームのカードと掲示板の画面で同じ見た目。 */
 .home__card-actions {
   display: flex;
   align-items: center;
