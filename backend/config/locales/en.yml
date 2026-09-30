@@ -40,8 +40,22 @@ en:
         login_id: ログインID
         password: パスワード
         practitioner_fhir_id: 医療従事者ID
+      bulletin_post:
+        title: 件名
+        body: 本文
+        published_from: 掲載開始日
+        published_until: 掲載終了日
     errors:
       models:
+        bulletin_post:
+          attributes:
+            title:
+              blank: を入力してください
+              too_long: は%{count}文字以内で入力してください
+            body:
+              too_long: は%{count}文字以内で入力してください
+            published_from:
+              blank: を入力してください
         user:
           attributes:
             login_id:

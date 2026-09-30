@@ -136,6 +136,7 @@ import { BroughtMedicationWorklistPage } from "./pages/BroughtMedicationWorklist
 import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 import { HomePage } from "./pages/HomePage";
+import { BulletinPage } from "./pages/BulletinPage";
 
 // 患者配下の未定義パスをその患者のカルテへ寄せる。
 function KarteRedirect() {
@@ -299,6 +300,8 @@ function App() {
           {/* 予約枠は診療科がオーダーを出す前段(いつ診るかを決める)なので、
               部門業務とマスタメンテの間に独立して置く。 */}
           <NavLink to="/schedules">予約枠</NavLink>
+          {/* 掲示板は院内のお知らせ。職種を問わず全員が読むので独立して置く(ホームにも出る)。 */}
+          <NavLink to="/bulletin">掲示板</NavLink>
           {/* マスタメンテは項目が増えるため、診療領域ごとに入れ子にする。
               どの領域にも属さないものは「共通」にまとめる。
               マスタ取込は領域をまたぐので直下に置く。 */}
@@ -668,6 +671,8 @@ function App() {
           />
           <Route path="/consult-worklist" element={<ConsultWorklistPage />} />
           <Route path="/notifications" element={<NotificationPage />} />
+          {/* 掲示板(院内のお知らせ)。ホームのカードは今日掲載中だけ、ここは全件。 */}
+          <Route path="/bulletin" element={<BulletinPage />} />
           <Route path="/order-sets" element={<OrderSetPage />} />
           <Route path="/nursing-worklist" element={<NursingWorklistPage />} />
           <Route path="/rad-worklist" element={<RadWorklistPage />} />

@@ -1,8 +1,8 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCurrentPractitioner } from "../api/authQueries";
-import type { PatientCaution } from "../api/masterClient";
-import { usePatientCautions } from "../api/masterQueries";
+import type { BulletinPost, PatientCaution } from "../api/masterClient";
+import { useBulletinPosts, usePatientCautions } from "../api/masterQueries";
 import {
   useAllergiesForPatients,
   useBedWardIndex,
@@ -15,6 +15,8 @@ import {
   usePractitionerRoles,
   type OutpatientRow,
 } from "../api/queries";
+import { BulletinPostItem } from "../components/BulletinPostItem";
+import { BulletinPostModal } from "../components/BulletinPostModal";
 import { ErrorBanner } from "../components/ErrorBanner";
 import type { NotificationRow } from "../components/notifications/notificationRegistry";
 import { HomeWorklistCard } from "../components/HomeWorklistCard";
@@ -65,6 +67,7 @@ import { useReturnLinkState } from "../returnTo";
 // 自動更新の入り切り。既定は切ってある(外来一覧・通知のベルと同じ考え方)。
 const POLLING_STORAGE_KEY = "fhir-client.home.polling";
 
+const BULLETIN_ROWS = 5;
 const NOTIFICATION_ROWS = 5;
 const OUTPATIENT_ROWS = 8;
 
@@ -131,6 +134,7 @@ export function HomePage() {
         <p>読み込み中...</p>
       ) : profile.kind === "administrator" ? (
         <div className="home__grid">
+          <BulletinCard />
           <LauncherCard profile={profile} wide />
         </div>
       ) : (
@@ -210,6 +214,7 @@ function HomeDashboard({ profile, practitionerId, polling }: DashboardProps) {
 
   return (
     <div className="home__grid">
+      <BulletinCard />
       {profile.sections.includes("notifications") && (
         <NotificationCard practitionerId={practitionerId} />
       )}
@@ -244,6 +249,53 @@ function HomeDashboard({ profile, practitionerId, polling }: DashboardProps) {
 }
 
 type Pictograms = Omit<Parameters<typeof RowPictograms>[0], "patientId">;
+
+// ---- 掲示板 ----
+
+/**
+ * 職種によらず全員に出す。今日掲載中の投稿だけを、固定を先頭に新しい順で数件。
+ * 幅は他のカードと同じ 1 列ぶん(掲示板 | 通知、外来 | 入院 の並びになる)。
+ */
+function BulletinCard() {
+  const posts = useBulletinPosts({ current: true, per: BULLETIN_ROWS });
+  const [editing, setEditing] = useState<BulletinPost | "new" | null>(null);
+  const items = posts.data?.items ?? [];
+  const rest = (posts.data?.total ?? 0) - items.length;
+
+  return (
+    <section className="home__card">
+      <div className="home__card-header">
+        <h2>掲示板</h2>
+        <span className="home__card-actions">
+          <button type="button" onClick={() => setEditing("new")}>
+            投稿
+          </button>
+          <Link to="/bulletin">すべて見る</Link>
+        </span>
+      </div>
+      <ErrorBanner error={posts.error} />
+      {posts.isPending ? (
+        <p className="home__empty">読み込み中...</p>
+      ) : items.length === 0 ? (
+        <p className="home__empty">掲載中のお知らせはありません。</p>
+      ) : (
+        <div className="bulletin__list bulletin__list--compact">
+          {items.map((post) => (
+            <BulletinPostItem key={post.id} post={post} compact onEdit={setEditing} />
+          ))}
+        </div>
+      )}
+      {rest > 0 && (
+        <p className="home__more">
+          <Link to="/bulletin">他 {rest} 件</Link>
+        </p>
+      )}
+      {editing !== null && (
+        <BulletinPostModal post={editing === "new" ? null : editing} onClose={() => setEditing(null)} />
+      )}
+    </section>
+  );
+}
 
 // ---- 未対応の通知 ----
 
@@ -589,6 +641,7 @@ function InpatientCard({ date, by, groups, isPending, error, truncated, pictogra
 // ---- ランチャー ----
 
 const COMMON_LINKS: { to: string; label: string }[] = [
+  { to: "/bulletin", label: "掲示板" },
   { to: "/patients", label: "患者検索" },
   { to: "/outpatients", label: "外来患者一覧" },
   { to: "/emergency", label: "救急患者一覧" },

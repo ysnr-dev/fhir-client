@@ -20839,11 +20839,12 @@ button.chemo-calendar__cell[draggable="true"] {
   font-size: 12px;
 }
 
+/* 2 列固定(掲示板 | 通知、外来 | 入院)。広い画面でも 3 列にはしない。同じ段のカードは高さを揃える。 */
 .home__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .home__card {
@@ -20983,4 +20984,155 @@ button.chemo-calendar__cell[draggable="true"] {
   .home__grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* --- 掲示板(院内のお知らせ) ------------------------------------------------ */
+
+/* ホームのカードと掲示板の画面で同じ見た目。投稿ごとに 1 本の区切り線で分ける。 */
+.home__card-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.home__card-actions button {
+  padding: 2px 10px;
+  font-size: 13px;
+}
+
+/* 投稿は 1 件ずつ枠で囲み、間を空けて並べる。左端の色帯で記事の頭を示す(固定はアクセント色)。 */
+.bulletin__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bulletin__list--compact {
+  gap: 8px;
+}
+
+.bulletin__post {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-stripe);
+}
+
+.bulletin__list--compact .bulletin__post {
+  padding: 8px 10px;
+}
+
+.bulletin__post--pinned {
+  border-left-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.bulletin__post--inactive {
+  color: var(--text-muted, var(--text));
+  background: none;
+  border-style: dashed;
+  border-left-style: solid;
+}
+
+.bulletin__post-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.bulletin__post-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.bulletin__post--inactive .bulletin__post-title {
+  font-weight: normal;
+}
+
+.bulletin__post-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted, var(--text));
+  white-space: nowrap;
+}
+
+.bulletin__badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.bulletin__badge--pinned {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.bulletin__post-edit {
+  margin-left: auto;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+/* 本文は改行をそのまま出す。ホームでは数行に畳み、「続きを読む」で開く。 */
+.bulletin__post-body {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bulletin__post-body--folded {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.bulletin__post-toggle {
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bulletin__post-toggle:hover {
+  text-decoration: underline;
+}
+
+/* 投稿フォーム。件名と本文は横いっぱい、日付と固定は横に並べる。 */
+.bulletin-form .lab-order-item__fields label.bulletin-form__title,
+.bulletin-form .lab-order-item__fields label.bulletin-form__body {
+  flex-basis: 100%;
+}
+
+.bulletin-form textarea {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  resize: vertical;
+}
+
+.bulletin-form .lab-order-item__fields label.bulletin-form__check {
+  flex-direction: row;
+  align-items: center;
+  align-self: flex-end;
+  gap: 6px;
+  min-height: var(--control-height);
 }
