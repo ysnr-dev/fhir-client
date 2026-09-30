@@ -340,6 +340,15 @@ function NotificationCard({ practitionerId }: { practitionerId: string | null })
           ) : (
             <div className="home__table-wrap">
               <table className="home__table">
+                <thead>
+                  <tr>
+                    <th>強度</th>
+                    <th>種別</th>
+                    <th>患者番号</th>
+                    <th>患者氏名</th>
+                    <th>通知日時</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {rows.slice(0, NOTIFICATION_ROWS).map((entry) => (
                     <NotificationLine key={entry.row.task.id} entry={entry} linkState={linkState} />
