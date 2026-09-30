@@ -88,13 +88,14 @@ export function HomePage() {
   const [polling, setPolling] = useStoredToggle(POLLING_STORAGE_KEY);
 
   // カードの中の表を折り返さずに出すため、一覧ページと同じく本文の幅制限を外す。
+  // page-home はカードを画面の高さに合わせるため、アプリ全体の高さを画面に固定する。
   useEffect(() => {
-    document.body.classList.add("page-wide");
-    return () => document.body.classList.remove("page-wide");
+    document.body.classList.add("page-wide", "page-home");
+    return () => document.body.classList.remove("page-wide", "page-home");
   }, []);
 
   return (
-    <div className="page">
+    <div className="page home">
       <div className="page__header">
         <h1>ホーム</h1>
         <div className="page__header-title">

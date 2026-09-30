@@ -20839,21 +20839,48 @@ button.chemo-calendar__cell[draggable="true"] {
   font-size: 12px;
 }
 
-/* 2 列固定(掲示板 | 通知、外来 | 入院)。広い画面でも 3 列にはしない。同じ段のカードは高さを揃える。 */
-.home__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  align-items: stretch;
+/* ホームはページをスクロールさせず、カードの並びを画面の残りの高さいっぱいに広げる。
+   アプリ全体を画面の高さに固定し、ヘッダーの下の残りを本文 → ページ → グリッドへ順に渡す。 */
+body.page-home .app {
+  height: 100svh;
 }
 
+body.page-home .app__main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.home {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 2 列固定(掲示板 | 通知、外来 | 入院)。段は画面の残りを均等に分ける。カードが 5 枚以上の
+   職種は段が増えるが、1 段が低くなりすぎないよう下限を置き、超えたらグリッドの中で送る。 */
+.home__grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(240px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  overflow-y: auto;
+}
+
+/* 中身がカードの高さを超えたらカードの中で送る。見出しは上に残す(.home__card-header)。 */
 .home__card {
   min-width: 0;
-  padding: 12px 14px 14px;
+  min-height: 0;
+  padding: 0 14px 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-card);
   box-shadow: var(--surface-card-shadow);
+  overflow-y: auto;
 }
 
 .home__card--wide {
@@ -20861,11 +20888,16 @@ button.chemo-calendar__cell[draggable="true"] {
 }
 
 .home__card-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
+  margin: 0 -14px 8px;
+  padding: 12px 14px 4px;
+  background: var(--surface-card);
 }
 
 .home__card-header h2 {
@@ -20970,9 +21002,20 @@ button.chemo-calendar__cell[draggable="true"] {
   text-align: right;
 }
 
+/* 狭い画面は 1 列に落とし、高さの固定もやめてページごと縦に送る(4 段を画面に詰めると低すぎる)。 */
 @media (max-width: 1200px) {
+  body.page-home .app {
+    height: auto;
+  }
+
   .home__grid {
     grid-template-columns: 1fr;
+    grid-auto-rows: auto;
+    overflow-y: visible;
+  }
+
+  .home__card {
+    max-height: 70svh;
   }
 }
 
