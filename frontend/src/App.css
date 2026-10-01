@@ -4824,6 +4824,7 @@ fieldset.rp-card {
 }
 
 .qe-item__header-actions {
+  --control-height: 28px;
   display: flex;
   gap: 4px;
 }
@@ -4923,6 +4924,10 @@ fieldset.rp-card {
 
 .qe-options__actions {
   white-space: nowrap;
+}
+
+.qe-options__actions button + button {
+  margin-left: 4px;
 }
 
 .qe-enable-when {

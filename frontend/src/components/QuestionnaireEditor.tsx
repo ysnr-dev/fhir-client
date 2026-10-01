@@ -19,7 +19,7 @@ import {
 } from "../fhir/questionnaireHelpers";
 import { OBSERVATION_CATEGORY_OPTIONS } from "../fhir/observationExtract";
 import { ErrorBanner } from "./ErrorBanner";
-import { QuestionnaireItemEditor } from "./QuestionnaireItemEditor";
+import { QuestionnaireItemEditor, TrashIcon } from "./QuestionnaireItemEditor";
 
 interface QuestionnaireEditorProps {
   initialValues?: QuestionnaireFormValues;
@@ -245,6 +245,9 @@ export function QuestionnaireEditor({
             />
             <button
               type="button"
+              className="rp-card__icon-button"
+              title="変数を削除"
+              aria-label="変数を削除"
               onClick={() =>
                 update(
                   "variables",
@@ -252,7 +255,7 @@ export function QuestionnaireEditor({
                 )
               }
             >
-              ×
+              <TrashIcon />
             </button>
           </div>
         ))}

@@ -37,6 +37,36 @@ const INITIAL_INPUT_TYPES: Partial<Record<EditorItemType, string>> = {
   time: "time",
 };
 
+function ArrowIcon({ direction }: { direction: "up" | "down" }) {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d={direction === "up" ? "M8 13V3.5M8 3.5L4 7.5M8 3.5l4 4" : "M8 3v9.5M8 12.5L4 8.5M8 12.5l4-4"}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function QuestionnaireItemEditor({
   item,
   index,
@@ -129,22 +159,32 @@ export function QuestionnaireItemEditor({
         <span className="qe-item__header-actions">
           <button
             type="button"
+            className="rp-card__icon-button"
+            title="上へ移動"
             aria-label="上へ移動"
             disabled={index === 0}
             onClick={() => onMove(item.id, "up")}
           >
-            ↑
+            <ArrowIcon direction="up" />
           </button>
           <button
             type="button"
+            className="rp-card__icon-button"
+            title="下へ移動"
             aria-label="下へ移動"
             disabled={index === siblingCount - 1}
             onClick={() => onMove(item.id, "down")}
           >
-            ↓
+            <ArrowIcon direction="down" />
           </button>
-          <button type="button" className="qe-item__remove" onClick={handleRemove}>
-            削除
+          <button
+            type="button"
+            className="rp-card__icon-button qe-item__remove"
+            title="項目を削除"
+            aria-label="項目を削除"
+            onClick={handleRemove}
+          >
+            <TrashIcon />
           </button>
         </span>
       </div>
@@ -261,27 +301,34 @@ export function QuestionnaireItemEditor({
                   <td className="qe-options__actions">
                     <button
                       type="button"
+                      className="rp-card__icon-button"
+                      title="選択肢を上へ"
                       aria-label="選択肢を上へ"
                       disabled={optionIndex === 0}
                       onClick={() => moveOption(option.id, "up")}
                     >
-                      ↑
+                      <ArrowIcon direction="up" />
                     </button>
                     <button
                       type="button"
+                      className="rp-card__icon-button"
+                      title="選択肢を下へ"
                       aria-label="選択肢を下へ"
                       disabled={optionIndex === item.answerOptions.length - 1}
                       onClick={() => moveOption(option.id, "down")}
                     >
-                      ↓
+                      <ArrowIcon direction="down" />
                     </button>
                     <button
                       type="button"
+                      className="rp-card__icon-button"
+                      title="選択肢を削除"
+                      aria-label="選択肢を削除"
                       onClick={() =>
                         patch({ answerOptions: item.answerOptions.filter((o) => o.id !== option.id) })
                       }
                     >
-                      ×
+                      <TrashIcon />
                     </button>
                   </td>
                 </tr>
@@ -546,12 +593,14 @@ export function QuestionnaireItemEditor({
                         <td className="qe-options__actions">
                           <button
                             type="button"
+                            className="rp-card__icon-button"
+                            title="項目コードを削除"
                             aria-label="項目コードを削除"
                             onClick={() =>
                               patch({ codes: item.codes.filter((c) => c.id !== coding.id) })
                             }
                           >
-                            ×
+                            <TrashIcon />
                           </button>
                         </td>
                       </tr>
