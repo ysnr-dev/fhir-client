@@ -32,7 +32,7 @@ export function DpcForm1ExportPage() {
         <h1>DPC様式1</h1>
         <div className="page__header-actions">
           {data?.filename ? (
-            <a href={dpcForm1FileUrl(month)} download={data.filename}>
+            <a className="button" href={dpcForm1FileUrl(month)} download={data.filename}>
               ダウンロード
             </a>
           ) : (

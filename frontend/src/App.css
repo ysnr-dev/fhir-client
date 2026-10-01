@@ -21270,6 +21270,15 @@ body.page-home .app__main {
   gap: 4px;
 }
 
+/* 傷病名・手術名など、長さの決まっていない文字列の欄は 1 行使う。 */
+.dpc-form1__field--wide {
+  flex-basis: 100%;
+}
+
+.dpc-form1__field--wide input {
+  flex: 1;
+}
+
 .dpc-form1__field select {
   max-width: 320px;
 }

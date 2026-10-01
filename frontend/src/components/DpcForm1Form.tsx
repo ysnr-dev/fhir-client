@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useDpcMdc6 } from "../api/masterQueries";
 import { useKarteConditions } from "../api/queries";
 import type { Disease, MedicalProcedure } from "../api/masterClient";
@@ -93,6 +93,12 @@ export function DpcForm1Form({
   const [values, setValues] = useState<Dpc1Values>(initialValues);
   const [pick, setPick] = useState<PickTarget | null>(null);
   const [adding, setAdding] = useState("");
+
+  // 検証エラーはフォームの先頭に出る。確定ボタンは一番下にあるので、出たら見える位置へ送る。
+  const errorRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (validationErrors.length) errorRef.current?.scrollIntoView({ block: "start" });
+  }, [validationErrors]);
 
   const conditions = useKarteConditions(patientId);
   const mdc6 = useDpcMdc6(dpc1DiagnosisIcds(values));
@@ -205,7 +211,7 @@ export function DpcForm1Form({
         <ErrorBanner error={submitError} />
         <ErrorBanner error={conditions.error ?? mdc6.error} />
         {validationErrors.length > 0 && (
-          <div className="error-banner" role="alert">
+          <div className="error-banner" role="alert" ref={errorRef}>
             {validationErrors.map((message) => (
               <p key={message} className="error-banner__line error-banner__line--error">
                 {message}
@@ -238,7 +244,7 @@ export function DpcForm1Form({
                 return (
                   <div key={def.code} className="dpc-form1__record">
                     <div className="dpc-form1__record-head">
-                      <span className="dpc-form1__record-name">{def.name}</span>
+                      <span className="dpc-form1__record-name">{recordLabel(def)}</span>
                       {def.code === "A006010" && (
                         <button
                           type="button"
@@ -259,7 +265,7 @@ export function DpcForm1Form({
                       )}
                       {!alwaysShown(def) && !def.repeat && (
                         <RemoveButton
-                          label={`${def.name}を外す`}
+                          label={`${recordLabel(def) || def.name}を外す`}
                           onClick={() => setRows(def.code, null)}
                         />
                       )}
@@ -334,7 +340,7 @@ export function DpcForm1Form({
                 <option value="">選択してください</option>
                 {hidden.map((def) => (
                   <option key={def.code} value={def.code}>
-                    {DPC1_SECTION_LABELS[def.section]} / {def.name}
+                    {DPC1_SECTION_LABELS[def.section]} / {recordLabel(def) || def.name}
                   </option>
                 ))}
               </select>
@@ -398,6 +404,16 @@ export function DpcForm1Form({
   );
 }
 
+/**
+ * レコードの見出し。定義表の名称は「患者プロファイル/褥瘡」のように区画の名前から始まる
+ * ものがあるので、区画(fieldset の見出し)と重なる部分は出さない。
+ */
+function recordLabel(def: Dpc1RecordDef): string {
+  const section = DPC1_SECTION_LABELS[def.section];
+  if (def.name === section) return "";
+  return def.name.startsWith(`${section}/`) ? def.name.slice(section.length + 1) : def.name;
+}
+
 function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
@@ -459,7 +475,13 @@ function FieldInput({
   }
 
   return (
-    <label className="dpc-form1__field">
+    <label
+      className={
+        field.kind === "text" && !field.maxLength && !field.pattern
+          ? "dpc-form1__field dpc-form1__field--wide"
+          : "dpc-form1__field"
+      }
+    >
       {label}
       <span className="dpc-form1__control">
         {!special && <ValueInput field={field} value={value} onChange={onChange} />}
