@@ -165,14 +165,9 @@ export function TemplateEntryForm({
   const expressionContext = useMemo(
     () =>
       patient && !populate.isLoading
-        ? buildPopulateContext({
-            patient,
-            conditions: populate.conditions,
-            labDetail: populate.labDetail,
-            prescriptionDetail: populate.prescriptionDetail,
-          })
+        ? buildPopulateContext({ patient, ...populate.sources })
         : undefined,
-    [patient, populate.isLoading, populate.conditions, populate.labDetail, populate.prescriptionDetail],
+    [patient, populate.isLoading, populate.sources],
   );
 
   function handleSubmit(

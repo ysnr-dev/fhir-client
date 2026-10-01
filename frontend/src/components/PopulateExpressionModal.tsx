@@ -31,6 +31,9 @@ export function PopulateExpressionModal({
         <ul className="populate-expression__list">
           {POPULATE_EXPRESSION_OPTIONS.map((option, index) => (
             <li key={option.expression}>
+              {option.group !== POPULATE_EXPRESSION_OPTIONS[index - 1]?.group && (
+                <div className="populate-expression__group">{option.group}</div>
+              )}
               <button
                 type="button"
                 className={

@@ -21,6 +21,7 @@ export * from "./micro";
 export * from "./dischargeSummary";
 export * from "./broughtMedication";
 export * from "./patientProfile";
+export * from "./populate";
 export * from "./karte";
 export * from "./chart";
 export * from "./physio";

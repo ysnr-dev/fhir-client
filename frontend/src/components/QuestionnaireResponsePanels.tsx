@@ -125,20 +125,15 @@ export function QuestionnaireResponseCreatePanel({
     );
   }, [selfInstitutionNumber]);
 
-  // 初期値式(%conditions / %labResults / %prescriptions / %patient)の実行時
+  // 初期値式(%conditions / %patient など。populateContext.ts 参照)の実行時
   // コンテキスト。取得完了までフォームを描画しない(初期回答はマウント時に確定するため)。
   const populate = usePopulateSources(patientId);
   const expressionContext = useMemo(
     () =>
       patient && !populate.isLoading
-        ? buildPopulateContext({
-            patient,
-            conditions: populate.conditions,
-            labDetail: populate.labDetail,
-            prescriptionDetail: populate.prescriptionDetail,
-          })
+        ? buildPopulateContext({ patient, ...populate.sources })
         : undefined,
-    [patient, populate.isLoading, populate.conditions, populate.labDetail, populate.prescriptionDetail],
+    [patient, populate.isLoading, populate.sources],
   );
 
   const createResponse = useCreateQuestionnaireResponse();

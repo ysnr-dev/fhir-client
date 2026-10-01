@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { referenceId } from "../../fhir/shared";
 import { HAS_LAB_MAPPED_TYPES, type InfectionRow, summarizeInfections } from "../../fhir/infectionHelpers";
-import { PRESCRIPTION_CATEGORY_SYSTEM } from "../../fhir/prescriptionHelpers";
 import { buildQuestionnaire, collectPendingImageEntries } from "../../fhir/questionnaireHelpers";
 import { questionnaireCanonical } from "../../fhir/questionnaireResponseHelpers";
 import {
@@ -797,62 +796,6 @@ export function useQuestionnaireResponseWithQuestionnaire(id: string | undefined
     ...query,
     response: query.data?.response ?? undefined,
     questionnaire: query.data?.questionnaire ?? undefined,
-  };
-}
-
-// テンプレート回答フォームの初期値式(%conditions / %labResults / %prescriptions)の
-// 元データ取得。傷病名はアクティブなもの全件(上流の _count 上限 500 まで)、
-// 検査結果・処方は最新 1 件を _sort + _count + _include/_revinclude の 1 リクエスト
-// で関連リソースごと取る(この組み合わせは上流の回帰 spec で保証済み)。
-export function usePopulateSources(patientId: string | undefined) {
-  const conditionParams = new URLSearchParams();
-  if (patientId) conditionParams.set("patient", `Patient/${patientId}`);
-  // 初期値式が対象にするのはアクティブな傷病名のみ(populateContext 参照)。
-  conditionParams.set("clinical-status", "active");
-  conditionParams.set("_count", "500");
-  conditionParams.set("_sort", "-onset-date");
-  const conditions = useQuery({
-    queryKey: ["Condition", "populate", patientId],
-    queryFn: () => searchResource<fhir4.Condition>("Condition", conditionParams),
-    enabled: Boolean(patientId),
-  });
-
-  const labParams = new URLSearchParams();
-  if (patientId) labParams.set("patient", `Patient/${patientId}`);
-  labParams.set("category", "LAB");
-  labParams.set("_count", "1");
-  labParams.set("_sort", "-date");
-  labParams.append("_include", "DiagnosticReport:result");
-  labParams.append("_include", "DiagnosticReport:specimen");
-  const labDetail = useQuery({
-    queryKey: ["DiagnosticReport", "populate", patientId],
-    queryFn: () => searchResource<fhir4.Resource>("DiagnosticReport", labParams),
-    enabled: Boolean(patientId),
-  });
-
-  const rxParams = new URLSearchParams();
-  if (patientId) rxParams.set("patient", `Patient/${patientId}`);
-  // 処方だけが持つ処方区分の system で絞る(注射も同じ ServiceRequest として保存されるため)。
-  rxParams.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|`);
-  rxParams.set("_count", "1");
-  rxParams.set("_sort", "-authoredon");
-  rxParams.set("_revinclude", "MedicationRequest:based-on");
-  const rxDetail = useQuery({
-    queryKey: ["ServiceRequest", "populate", patientId],
-    queryFn: () => searchResource<fhir4.Resource>("ServiceRequest", rxParams),
-    enabled: Boolean(patientId),
-  });
-
-  const queries = [conditions, labDetail, rxDetail];
-
-  return {
-    isLoading: queries.some((q) => q.isPending),
-    error: queries.find((q) => q.error)?.error ?? null,
-    conditions: (conditions.data?.data.entry ?? [])
-      .map((e) => e.resource)
-      .filter((r): r is fhir4.Condition => r?.resourceType === "Condition"),
-    labDetail: labDetail.data?.data,
-    prescriptionDetail: rxDetail.data?.data,
   };
 }
 
