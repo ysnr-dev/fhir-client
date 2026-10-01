@@ -484,6 +484,9 @@ export interface PlannedAdmissionFormValues {
   /** 入院予定日(YYYY-MM-DD)。空なら日付未定。 */
   plannedDate: string;
   note: string;
+  /** 入院の経緯(入院経路・予定/救急の区分など)。任意。入院実施の初期値になる。 */
+  route: AdmissionRouteValues;
+  routeDisplay?: { route?: string; admissionType?: string };
 }
 
 export function validatePlannedAdmissionForm(
@@ -545,7 +548,7 @@ export function buildPlannedAdmissionEncounter(
   };
   if (values.plannedDate) encounter.period = { start: values.plannedDate };
   applyAdmissionDetails(encounter, target, values);
-  return encounter;
+  return withAdmissionRoute(encounter, values.route, values.routeDisplay);
 }
 
 /** 入院予定日(YYYY-MM-DD)。日付未定なら空。 */

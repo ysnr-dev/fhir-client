@@ -29,7 +29,7 @@ export function AdmissionRouteFields({
 
   return (
     <>
-      <label>
+      <label className="admission__route-select">
         入院経路
         <select value={values.route} onChange={(e) => set("route", e.target.value)}>
           <option value="">未指定</option>
@@ -40,7 +40,7 @@ export function AdmissionRouteFields({
           ))}
         </select>
       </label>
-      <label>
+      <label className="admission__route-select">
         予定・救急医療入院
         <select value={values.admissionType} onChange={(e) => set("admissionType", e.target.value)}>
           <option value="">未指定</option>
@@ -53,7 +53,7 @@ export function AdmissionRouteFields({
       </label>
       {details && (
         <>
-          <label>
+          <label className="admission__route-select">
             入院前の在宅医療
             <select
               value={values.priorHomeCare}

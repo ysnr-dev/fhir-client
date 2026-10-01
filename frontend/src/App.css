@@ -12165,6 +12165,18 @@ body.page-wide-md .app__main {
   flex-basis: 100%;
 }
 
+/* 入院の経緯の選択欄。選択肢の文言が長い(救急医療入院の理由など)ので、欄はフォームの
+   幅までで止める(止めないとフォームが横にはみ出す)。 */
+.walk-in__fields .admission__route-select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.walk-in__fields .admission__route-select select {
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+
 /* 入院の経緯のうち有無で答える項目。横に並べるチェック(列向きの label と、入力欄に付く
    枠・余白を打ち消す)。 */
 .walk-in__fields .admission__route-flags {

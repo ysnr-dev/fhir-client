@@ -6,6 +6,7 @@ import {
   useWardGrid,
   useWardOptions,
 } from "../api/queries";
+import { admissionRouteDisplay, emptyAdmissionRoute } from "../fhir/admissionRouteHelpers";
 import { departmentDisplayName } from "../fhir/departmentHelpers";
 import {
   buildPlannedAdmissionEncounter,
@@ -16,6 +17,7 @@ import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { resolveBedSelection, type BedRoomIds } from "../fhir/wardHelpers";
 import { today } from "../lib/dates";
 import { makeFieldUpdater } from "../lib/form";
+import { AdmissionRouteFields } from "./AdmissionRouteFields";
 import { BedRoomSelects } from "./BedRoomSelects";
 import { ErrorBanner } from "./ErrorBanner";
 import { NursePicker } from "./NursePicker";
@@ -59,6 +61,7 @@ export function PlannedAdmissionForm({
     nurseIds: [],
     plannedDate: today(),
     note: "",
+    route: emptyAdmissionRoute(),
   });
   // 日付未定。日付欄の値は消さずに置いておき、外したときに戻せるようにする。
   const [undated, setUndated] = useState(false);
@@ -82,6 +85,7 @@ export function PlannedAdmissionForm({
       roomId: selection.roomId,
       bedId: selection.bedId,
       plannedDate: undated ? "" : values.plannedDate,
+      routeDisplay: admissionRouteDisplay(values.route),
     };
     const error =
       validatePlannedAdmissionForm(merged) ??
@@ -180,6 +184,7 @@ export function PlannedAdmissionForm({
           />
           日付未定
         </label>
+        <AdmissionRouteFields values={values.route} onChange={(route) => update("route", route)} />
         <label className="admission__note">
           特記事項
           <textarea rows={2} value={values.note} onChange={(e) => update("note", e.target.value)} />
