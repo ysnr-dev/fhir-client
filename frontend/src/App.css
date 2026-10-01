@@ -21306,3 +21306,8 @@ body.page-home .app__main {
   align-items: flex-end;
   gap: 8px;
 }
+
+/* 提出ファイル画面の退院月。検索フォームの欄は行の幅まで伸びるが、年月だけなので伸ばさない。 */
+.master-search__form--row .dpc-form1-export__month {
+  flex: none;
+}

@@ -44,7 +44,7 @@ export function DpcForm1ExportPage() {
       </div>
 
       <div className="master-search__form master-search__form--row">
-        <label>
+        <label className="dpc-form1-export__month">
           退院月
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
         </label>
