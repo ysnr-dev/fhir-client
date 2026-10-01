@@ -16,6 +16,7 @@ import { ORGANIZATION_FIELD_OPTIONS } from "../fhir/organizationField";
 import { PRACTITIONER_FIELD_OPTIONS } from "../fhir/practitionerField";
 import { PRACTITIONER_ROLE_OPTIONS } from "../fhir/practitionerRoleHelpers";
 import { normalizeImageFile } from "../fhir/schemaImage";
+import { PopulateExpressionModal } from "./PopulateExpressionModal";
 
 interface QuestionnaireItemEditorProps {
   item: EditorItem;
@@ -78,6 +79,7 @@ export function QuestionnaireItemEditor({
   onAppendChild,
 }: QuestionnaireItemEditorProps) {
   const [imageError, setImageError] = useState<string | null>(null);
+  const [expressionPickerOpen, setExpressionPickerOpen] = useState(false);
   // 保存済み画像のサムネイル。未アップロードの dataUrl があるときは取得しない。
   const savedImage = useBinaryImage(item.image?.dataUrl ? undefined : (item.image?.binaryId ?? undefined));
   const imageSrc = item.image?.dataUrl ?? (item.image?.binaryId ? savedImage.data : undefined);
@@ -615,16 +617,36 @@ export function QuestionnaireItemEditor({
           )}
           {hasInitial && (
             <>
-              <label className="qe-item__text-field">
-                初期値式(FHIRPath)
-                <input
-                  type="text"
-                  value={item.initialExpression}
-                  onChange={(e) => patch({ initialExpression: e.target.value })}
-                  disabled={Boolean(item.calculatedExpression)}
-                  placeholder="計算式とは同時に設定できません"
-                />
-              </label>
+              <div className="qe-item__text-field">
+                <label htmlFor={`${item.id}-initial-expression`}>初期値式(FHIRPath)</label>
+                <div className="qe-item__expression-row">
+                  <input
+                    id={`${item.id}-initial-expression`}
+                    type="text"
+                    value={item.initialExpression}
+                    onChange={(e) => patch({ initialExpression: e.target.value })}
+                    disabled={Boolean(item.calculatedExpression)}
+                    placeholder="計算式とは同時に設定できません"
+                  />
+                  <button
+                    type="button"
+                    disabled={Boolean(item.calculatedExpression)}
+                    onClick={() => setExpressionPickerOpen(true)}
+                  >
+                    変数から選択
+                  </button>
+                </div>
+                {expressionPickerOpen && (
+                  <PopulateExpressionModal
+                    currentExpression={item.initialExpression}
+                    onSelect={(expression) => {
+                      patch({ initialExpression: expression });
+                      setExpressionPickerOpen(false);
+                    }}
+                    onClose={() => setExpressionPickerOpen(false)}
+                  />
+                )}
+              </div>
               <label className="qe-item__text-field">
                 計算式(FHIRPath)
                 <input
