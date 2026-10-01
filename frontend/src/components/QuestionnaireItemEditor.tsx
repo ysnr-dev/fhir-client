@@ -17,6 +17,7 @@ import { PRACTITIONER_FIELD_OPTIONS } from "../fhir/practitionerField";
 import { PRACTITIONER_ROLE_OPTIONS } from "../fhir/practitionerRoleHelpers";
 import { normalizeImageFile } from "../fhir/schemaImage";
 import { PopulateExpressionModal } from "./PopulateExpressionModal";
+import { qeItemAnchorId } from "./QuestionnaireEditorToc";
 
 interface QuestionnaireItemEditorProps {
   item: EditorItem;
@@ -154,7 +155,10 @@ export function QuestionnaireItemEditor({
   const isConditionalGroup = isGroup && parentChoice !== null;
 
   return (
-    <div className={`qe-item${item.type === "group" ? " qe-item--group" : ""}`}>
+    <div
+      id={qeItemAnchorId(item.id)}
+      className={`qe-item${item.type === "group" ? " qe-item--group" : ""}`}
+    >
       <div className="qe-item__header">
         <span className="qe-item__type-badge">{ITEM_TYPE_LABELS[item.type]}</span>
         <span className="qe-item__header-text">{item.text || item.linkId}</span>
