@@ -9,6 +9,7 @@ import { SubMenu } from "./components/SubMenu";
 import { ThemeToggleItem } from "./components/ThemeToggleItem";
 import { WakeButton } from "./components/WakeButton";
 import { ConnectionSettingsPage } from "./pages/ConnectionSettingsPage";
+import { DocumentTemplatesPage } from "./pages/DocumentTemplatesPage";
 import { ExternalCodeMappingPage } from "./pages/ExternalCodeMappingPage";
 import { ExternalSystemListPage } from "./pages/ExternalSystemListPage";
 import { ExternalSystemSettingsPage } from "./pages/ExternalSystemSettingsPage";
@@ -356,6 +357,9 @@ function App() {
               </Link>
               <Link to="/report-layouts" className="row-menu__item">
                 帳票レイアウト
+              </Link>
+              <Link to="/document-templates" className="row-menu__item">
+                文書テンプレート
               </Link>
               <Link to="/schemas" className="row-menu__item">
                 シェーマ
@@ -803,6 +807,7 @@ function App() {
           {/* 帳票レイアウトは日常運用で使うため管理者ログインを要求しない
               (backend 側も認証対象外)。 */}
           <Route path="/report-layouts" element={<ReportLayoutsPage />} />
+          <Route path="/document-templates" element={<DocumentTemplatesPage />} />
         </Routes>
       </main>
       </div>

@@ -100,6 +100,23 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_01_100000) do
     t.index ["study_instance_uid", "series_instance_uid", "instance_number"], name: "index_dicom_instances_on_study_series_number"
   end
 
+  create_table "document_templates", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.bigint "file_category_id"
+    t.string "file_name", null: false
+    t.string "content_type", null: false
+    t.binary "data", null: false
+    t.integer "byte_size", null: false
+    t.integer "display_order", default: 0, null: false
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_document_templates_on_code", unique: true
+    t.index ["file_category_id"], name: "index_document_templates_on_file_category_id"
+    t.index ["name"], name: "index_document_templates_on_name", unique: true
+  end
+
   create_table "external_code_mappings", force: :cascade do |t|
     t.string "system_type", null: false
     t.string "kind", null: false
@@ -2356,5 +2373,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_01_100000) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "document_templates", "file_categories", on_delete: :nullify
   add_foreign_key "master_formulary_entries", "master_formulary_groups", column: "formulary_group_id", on_delete: :cascade
 end

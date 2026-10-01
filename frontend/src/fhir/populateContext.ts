@@ -9,7 +9,7 @@
 // 変数選択モーダルに出すもの)が正。テンプレートの変数(variable 拡張)が同じ名前を
 // 定義していれば、そちらが優先される(QuestionnaireResponseForm の expressionEnv)。
 import type { PatientCaution } from "../api/masterClient";
-import { dateTimeLabel, diffDays } from "../lib/dates";
+import { dateTimeLabel, diffDays, toWareki } from "../lib/dates";
 import { summarizeAllergy } from "./allergyHelpers";
 import { summarizeBodyMeasures } from "./bodyMeasureHelpers";
 import { bloodTypeLabel } from "./transfusionOrderHelpers";
@@ -28,7 +28,10 @@ import {
   splitLabResultDetailBundle,
 } from "./labResultHelpers";
 import type { ActiveMedication } from "./medicationSafetyHelpers";
+import { parseOrganization } from "./organizationHelpers";
 import { calculateAge, genderLabel, patientNumberOf } from "./patientHelpers";
+import { practitionerFieldValue } from "./practitionerField";
+import { baseRoleOf, parseDepartmentRoles } from "./practitionerRoleHelpers";
 import { groupByRp, splitPrescriptionDetailBundle, summarizeServiceRequest } from "./prescriptionHelpers";
 import {
   BLOOD_PRESSURE,
@@ -70,6 +73,10 @@ export interface PopulateSources {
   admission: { encounter: fhir4.Encounter; wardName: string; roomName: string } | null;
   /** 今日の時点で投与中の処方の薬剤。 */
   activeMedications: ActiveMedication[];
+  /** 自院(施設設定)。未設定なら null。 */
+  facility: fhir4.Organization | null;
+  /** ログイン中の医療従事者とそのロール(所属・診療科)。紐付く医療従事者が無ければ null。 */
+  author: { practitioner: fhir4.Practitioner; roles: fhir4.PractitionerRole[] } | null;
 }
 
 // テンプレート編集画面で初期値式として選べる式の一覧(変数選択モーダル)。
@@ -130,6 +137,14 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
   },
   {
     group: "患者",
+    variable: "birthDateWareki",
+    label: "生年月日(和暦)",
+    expression: "%birthDateWareki",
+    description: "患者の生年月日を和暦で入れます。",
+    sample: "昭和33年4月12日",
+  },
+  {
+    group: "患者",
     variable: "age",
     label: "年齢",
     expression: "%age",
@@ -167,6 +182,14 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     expression: "%today",
     description: "記入を始めた日の日付を YYYY-MM-DD で入れます。「日付」項目で使えます。",
     sample: "2026-10-01",
+  },
+  {
+    group: "患者",
+    variable: "todayWareki",
+    label: "今日の日付(和暦)",
+    expression: "%todayWareki",
+    description: "記入を始めた日の日付を和暦で入れます。",
+    sample: "令和8年10月1日",
   },
 
   // ---- 体格・バイタル ----
@@ -300,6 +323,14 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
   },
   {
     group: "入院",
+    variable: "admissionDateWareki",
+    label: "入院日(和暦)",
+    expression: "%admissionDateWareki",
+    description: "入院中の入院日を和暦で入れます。入院していなければ入りません。",
+    sample: "令和8年9月25日",
+  },
+  {
+    group: "入院",
     variable: "hospitalDay",
     label: "入院日数",
     expression: "%hospitalDay",
@@ -383,6 +414,90 @@ export const POPULATE_EXPRESSION_OPTIONS: PopulateExpressionOption[] = [
     expression: "%labResults",
     description: `最新の検体検査結果 1 件(検査日が最も新しいもの)の全項目を、項目ごとに 1 行で並べます。基準値外は (H)/(L) が付きます。${MULTILINE_NOTE}`,
     sample: "【検査結果 2026/09/05】\nAST: 32 U/L\nALT: 48 U/L (H)\nHbA1c: 7.2 % (H)\n血糖: 142 mg/dL (H)",
+  },
+
+  // ---- 自院 ----
+  {
+    group: "自院",
+    variable: "facilityName",
+    label: "医療機関名",
+    expression: "%facilityName",
+    description: "施設設定の自院の名称を入れます。",
+    sample: "テスト病院",
+  },
+  {
+    group: "自院",
+    variable: "facilityPostalCode",
+    label: "医療機関郵便番号",
+    expression: "%facilityPostalCode",
+    description: "自院の郵便番号を入れます。",
+    sample: "100-0001",
+  },
+  {
+    group: "自院",
+    variable: "facilityAddress",
+    label: "医療機関住所",
+    expression: "%facilityAddress",
+    description: "自院の住所を入れます。",
+    sample: "東京都千代田区千代田1-1",
+  },
+  {
+    group: "自院",
+    variable: "facilityPhone",
+    label: "医療機関電話番号",
+    expression: "%facilityPhone",
+    description: "自院の電話番号を入れます。",
+    sample: "03-1234-5678",
+  },
+  {
+    group: "自院",
+    variable: "facilityFax",
+    label: "医療機関FAX",
+    expression: "%facilityFax",
+    description: "自院の FAX 番号を入れます。",
+    sample: "03-1234-5679",
+  },
+  {
+    group: "自院",
+    variable: "facilityInstitutionNumber",
+    label: "保険医療機関番号",
+    expression: "%facilityInstitutionNumber",
+    description: "自院の保険医療機関番号を入れます。",
+    sample: "1310000001",
+  },
+
+  // ---- 作成者 ----
+  {
+    group: "作成者",
+    variable: "authorName",
+    label: "作成者氏名",
+    expression: "%authorName",
+    description: "ログイン中の医療従事者の漢字氏名を「姓 名」で入れます。",
+    sample: "児玉 義憲",
+  },
+  {
+    group: "作成者",
+    variable: "authorKana",
+    label: "作成者氏名(カナ)",
+    expression: "%authorKana",
+    description: "ログイン中の医療従事者のカナ氏名を「姓 名」で入れます。",
+    sample: "コダマ ヨシノリ",
+  },
+  {
+    group: "作成者",
+    variable: "authorRole",
+    label: "作成者職種",
+    expression: "%authorRole",
+    description: "ログイン中の医療従事者の職種を入れます。",
+    sample: "医師",
+  },
+  {
+    group: "作成者",
+    variable: "authorDepartment",
+    label: "作成者診療科",
+    expression: "%authorDepartment",
+    description: "ログイン中の医療従事者の診療科(既定の診療科)を入れます。",
+    sample: "消化器外科",
   },
 ];
 
@@ -565,7 +680,14 @@ function admissionValues(
   today: string,
 ): Record<string, string | number | undefined> {
   if (!admission) {
-    return { admissionDate: "", hospitalDay: undefined, ward: "", attending: "", admissionDepartment: "" };
+    return {
+      admissionDate: "",
+      admissionDateWareki: "",
+      hospitalDay: undefined,
+      ward: "",
+      attending: "",
+      admissionDepartment: "",
+    };
   }
   const { encounter, wardName, roomName } = admission;
   const admissionDate = encounterAdmissionDate(encounter);
@@ -574,10 +696,35 @@ function admissionValues(
   const department = encounterDepartmentName(encounter);
   return {
     admissionDate: hasDate ? admissionDate : "",
+    admissionDateWareki: hasDate ? toWareki(admissionDate) : "",
     hospitalDay: hasDate ? diffDays(admissionDate, today) + 1 : undefined,
     ward: [wardName, roomName].filter(Boolean).join(" "),
     attending: attending === "-" ? "" : attending,
     admissionDepartment: department === "-" ? "" : department,
+  };
+}
+
+function facilityValues(facility: PopulateSources["facility"]): Record<string, string> {
+  const values = facility ? parseOrganization(facility) : undefined;
+  return {
+    facilityName: values?.name ?? "",
+    facilityPostalCode: values?.postalCode ?? "",
+    facilityAddress: values?.addressText ?? "",
+    facilityPhone: values?.phone ?? "",
+    facilityFax: values?.fax ?? "",
+    facilityInstitutionNumber: values?.institutionNumber ?? "",
+  };
+}
+
+function authorValues(author: PopulateSources["author"]): Record<string, string> {
+  if (!author) return { authorName: "", authorKana: "", authorRole: "", authorDepartment: "" };
+  const { practitioner, roles } = author;
+  const role = baseRoleOf(roles);
+  return {
+    authorName: practitionerFieldValue(practitioner, role, "name"),
+    authorKana: practitionerFieldValue(practitioner, role, "kana"),
+    authorRole: practitionerFieldValue(practitioner, role, "role"),
+    authorDepartment: parseDepartmentRoles(roles)[0]?.name ?? "",
   };
 }
 
@@ -595,6 +742,8 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     age,
     gender: gender === "-" ? "" : gender,
     today,
+    todayWareki: toWareki(today),
+    birthDateWareki: toWareki(patient.birthDate),
     bodyHeight: body.height?.value,
     bodyWeight: body.weight?.value,
     bmi: body.bmi ?? undefined,
@@ -611,5 +760,7 @@ export function buildPopulateContext(sources: PopulateSources): Record<string, u
     activeMedications: formatActiveMedications(sources.activeMedications),
     labResults: formatLabResults(sources.labDetail),
     prescriptions: formatPrescriptions(sources.prescriptionDetail),
+    ...facilityValues(sources.facility),
+    ...authorValues(sources.author),
   };
 }

@@ -6,10 +6,12 @@ import { HAS_LAB_MAPPED_TYPES, summarizeInfections } from "../../fhir/infectionH
 import type { PopulateSources } from "../../fhir/populateContext";
 import { PRESCRIPTION_CATEGORY_SYSTEM } from "../../fhir/prescriptionHelpers";
 import { today as todayString } from "../../lib/dates";
+import { useAuthSession } from "../authQueries";
 import { searchResource } from "../fhirClient";
 import { useActiveAllergies } from "./dischargeSummary";
 import { useActiveMedications, usePatientAdmission } from "./encounter";
 import { useKarteConditions } from "./micro";
+import { useSelfOrganization } from "./organization";
 import {
   useActiveFlags,
   useBloodType,
@@ -17,6 +19,7 @@ import {
   useLabInfectionResults,
   useManualInfections,
 } from "./patientProfile";
+import { usePractitioner, usePractitionerRoles } from "./practitioner";
 
 /** 項目ごとの最新値を拾うのに読むバイタルの件数(新しい順)。測定 10 回ぶん程度。 */
 const VITAL_COUNT = 50;
@@ -37,6 +40,8 @@ function resourcesOf<T extends fhir4.Resource>(
  * _sort + _count + _include/_revinclude の 1 リクエストで関連リソースごと取る
  * (この組み合わせは上流の回帰 spec で保証済み)。アレルギー・注意・血液型・感染症・
  * 身長体重・入院は患者帯やプロファイルと同じ取得を使い回す(キャッシュも共有される)。
+ * 自院は施設設定、作成者はログイン中の医療従事者から取る(administrator ログインのように
+ * 紐付く医療従事者が無ければ作成者は null)。
  *
  * 初期回答はフォームのマウント時に一度だけ確定するので、呼び出し側は isLoading が
  * 落ちてから buildPopulateContext に渡す。
@@ -106,6 +111,12 @@ export function usePopulateSources(patientId: string | undefined) {
   const admission = usePatientAdmission(patientId);
   const activeMedications = useActiveMedications(patientId, today);
 
+  const facility = useSelfOrganization();
+  const session = useAuthSession();
+  const practitionerId = session.data?.user?.practitioner_id ?? undefined;
+  const practitioner = usePractitioner(practitionerId);
+  const practitionerRoles = usePractitionerRoles(practitionerId);
+
   const queries = [
     conditions,
     labDetail,
@@ -121,9 +132,15 @@ export function usePopulateSources(patientId: string | undefined) {
     labInfections,
     admission,
     activeMedications,
+    session,
+    practitioner,
+    practitionerRoles,
   ];
   // isPending だと無効化したクエリ(感染症の検査由来など)で落ちないので isLoading で見る。
-  const isLoading = queries.some((q) => q.isLoading);
+  const isLoading = queries.some((q) => q.isLoading) || facility.isLoading;
+
+  const author = practitioner.data?.data;
+  const authorRoles = practitionerRoles.data?.data;
 
   const sources = useMemo((): Omit<PopulateSources, "patient"> => {
     const cautionsByCode = new Map<string, PatientCaution>(
@@ -147,6 +164,13 @@ export function usePopulateSources(patientId: string | undefined) {
       vitals: resourcesOf<fhir4.Observation>(vitals.data?.data, "Observation"),
       admission: admission.data ?? null,
       activeMedications: activeMedications.data ?? [],
+      facility: facility.organization ?? null,
+      author: author
+        ? {
+            practitioner: author,
+            roles: resourcesOf<fhir4.PractitionerRole>(authorRoles, "PractitionerRole"),
+          }
+        : null,
     };
   }, [
     today,
@@ -164,6 +188,9 @@ export function usePopulateSources(patientId: string | undefined) {
     vitals.data,
     admission.data,
     activeMedications.data,
+    facility.organization,
+    author,
+    authorRoles,
   ]);
 
   return {

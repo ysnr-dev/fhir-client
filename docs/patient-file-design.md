@@ -149,7 +149,11 @@ DocumentReference
 - **表示**(`KarteFilePreview.tsx`): `contentType` で出し分ける。画像は `<img>`、PDF は `<object>`、
   テキストは `<pre>`、それ以外はダウンロードだけ。中身は `Binary` から blob で取り、object URL にして描く
   (dataURL にすると大きなファイルで文字列が肥大する)。アンマウントで `revokeObjectURL` する
-- **編集**: 表示名・診療日・カテゴリだけ。ファイル本体は差し替えない(消して入れ直す)
+- **編集**: 表示名・診療日・カテゴリだけ
+- **差し替え**: ファイル本体だけを別のファイルに替える。`DocumentReference` は同じ id のまま、
+  新しい `Binary` の作成と `DocumentReference` の更新を 1 本の transaction で送る。
+  元の `Binary` は消さない(上流の旧バージョンが参照している)。形式の違うファイルに替えたときは
+  表示名の拡張子だけ新しいファイルに合わせる(`docs/document-template-design.md` 6 章)
 
 ［導出］**タイムライン(カルテタブのカード)には出さない**。診療の経過そのものではなく
 「患者に付いている書類の束」なので、予約・指示簿と同じくタブでのみ見る。

@@ -107,3 +107,27 @@ export function nowFhirDateTime(now: Date = new Date()): string {
     `${toDateInput(now)}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
   );
 }
+
+// 元号の開始日(新しい順)。
+const ERAS: { name: string; start: string; year: number }[] = [
+  { name: "令和", start: "2019-05-01", year: 2019 },
+  { name: "平成", start: "1989-01-08", year: 1989 },
+  { name: "昭和", start: "1926-12-25", year: 1926 },
+  { name: "大正", start: "1912-07-30", year: 1912 },
+  { name: "明治", start: "1868-01-25", year: 1868 },
+];
+
+/**
+ * YYYY-MM-DD を和暦(「令和8年10月1日」)にする。1 年目は「元年」と書く。
+ * 明治より前は西暦のまま、日付として読めない値は空文字を返す。
+ */
+export function toWareki(date: string | undefined): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(date ?? "");
+  if (!match) return "";
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  // 同じ桁数の日付は文字列のまま大小を比べられる。
+  const era = ERAS.find((e) => match[0] >= e.start);
+  if (!era) return `${year}年${month}月${day}日`;
+  const eraYear = year - era.year + 1;
+  return `${era.name}${eraYear === 1 ? "元" : eraYear}年${month}月${day}日`;
+}

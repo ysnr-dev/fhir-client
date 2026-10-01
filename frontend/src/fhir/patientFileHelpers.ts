@@ -14,6 +14,12 @@ import { toFhirDateTime } from "../lib/dates";
 export const PATIENT_FILE_CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/file-category";
 
 /**
+ * 文書テンプレートから作った文書の種類(DocumentReference.type)のコード体系。
+ * code は backend の document_templates が採番した UUID(docs/document-template-design.md)。
+ */
+export const DOCUMENT_TEMPLATE_SYSTEM = "http://fhir-client.local/CodeSystem/document-template";
+
+/**
  * 1 ファイルの上限。上流はリクエスト本文が 10MB を超えると 413 で拒否し
  * (fhir-server の RequestSizeLimiter)、base64 にすると約 4/3 倍になるため、
  * DocumentReference のぶんの余白を残してこの値にしている。
@@ -50,6 +56,12 @@ export interface PatientFile {
 }
 
 export interface PatientFileCategory {
+  code: string;
+  name: string;
+}
+
+/** 文書テンプレートから作った文書の、元のテンプレート。 */
+export interface PatientFileDocumentType {
   code: string;
   name: string;
 }
@@ -109,11 +121,54 @@ export function buildPatientFileBundle(
     category: PatientFileCategory | null;
     practitionerId?: string;
     practitionerName?: string;
+    documentType?: PatientFileDocumentType;
   },
 ): fhir4.Bundle {
   const { placeholder, entry } = imageBinaryEntry(draft.dataUrl, draft.contentType);
   const doc = buildDocumentReference({ ...options, draft, attachmentUrl: placeholder });
   return resourceWithImagesBundle(doc, [entry]);
+}
+
+/**
+ * 本体を差し替える transaction Bundle(新しい Binary の作成 + DocumentReference の更新)。
+ * DocumentReference は同じ id のまま、指す Binary だけを替える。診療日・カテゴリ・登録者は
+ * 変えない。元の Binary は消さない(上流の旧バージョンが参照している)。
+ */
+export function buildPatientFileReplaceBundle(
+  doc: fhir4.DocumentReference,
+  draft: PatientFileDraft,
+  etag: string,
+): fhir4.Bundle {
+  const { placeholder, entry } = imageBinaryEntry(draft.dataUrl, draft.contentType);
+  const attachment = doc.content?.[0]?.attachment ?? {};
+  const replaced: fhir4.DocumentReference = {
+    ...doc,
+    content: [
+      {
+        ...doc.content?.[0],
+        attachment: {
+          ...attachment,
+          contentType: draft.contentType,
+          url: placeholder,
+          title: withExtensionOf(attachment.title || draft.title, draft.title),
+          size: draft.size,
+        },
+      },
+      ...(doc.content?.slice(1) ?? []),
+    ],
+  };
+  return resourceWithImagesBundle(replaced, [entry], etag);
+}
+
+const EXTENSION = /\.[A-Za-z0-9]{1,8}$/;
+
+// 表示名はダウンロード時のファイル名になるので、形式の違うファイルに差し替えたら
+// (Word で作った文書を PDF にして戻すなど)拡張子だけ新しいファイルに合わせる。
+function withExtensionOf(title: string, fileName: string): string {
+  const next = EXTENSION.exec(fileName)?.[0];
+  const current = EXTENSION.exec(title)?.[0];
+  if (!next || !current || next.toLowerCase() === current.toLowerCase()) return title;
+  return title.slice(0, -current.length) + next;
 }
 
 /** 表示名・診療日・カテゴリだけを差し替えた DocumentReference(本体は差し替えない)。 */
@@ -145,6 +200,7 @@ function buildDocumentReference(args: {
   category: PatientFileCategory | null;
   practitionerId?: string;
   practitionerName?: string;
+  documentType?: PatientFileDocumentType;
 }): fhir4.DocumentReference {
   const doc: fhir4.DocumentReference = {
     resourceType: "DocumentReference",
@@ -162,6 +218,10 @@ function buildDocumentReference(args: {
       },
     ],
   };
+  if (args.documentType) {
+    const { code, name } = args.documentType;
+    doc.type = { coding: [{ system: DOCUMENT_TEMPLATE_SYSTEM, code, display: name }], text: name };
+  }
   const category = categoryConcepts(args.category);
   if (category) doc.category = category;
   if (args.practitionerId) {

@@ -59,6 +59,11 @@ Rails.application.routes.draw do
     # ファイルカテゴリ(独自マスタ)。取り込んだファイルの DocumentReference 側は
     # category の coding に code を持つ。
     resources :file_categories, only: %i[index create update destroy]
+
+    # 文書テンプレート(Word / Excel の様式ファイル)。本体は file で返す。
+    resources :document_templates, only: %i[index show create update destroy] do
+      get :file, on: :member
+    end
   end
 
   # レセコン連携(docs/receipt-computer-integration.md)。患者・保険・受付は

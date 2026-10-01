@@ -1,15 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createDocumentTemplate,
   createFileCategory,
   createOauthClient,
   createQuestionnaireCategory,
   createReportLayout,
+  deleteDocumentTemplate,
   deleteFileCategory,
   deleteOauthClient,
   deleteQuestionnaireCategory,
   deleteReportLayout,
   fetchAdminSession,
   fetchConnectionSettings,
+  fetchDocumentTemplateFile,
+  fetchDocumentTemplates,
   fetchExternalCodeCandidates,
   fetchExternalCodeMappings,
   fetchExternalSystem,
@@ -30,10 +34,13 @@ import {
   updateAdminFacilitySettings,
   type FacilitySettingsPayload,
   updateConnectionSettings,
+  updateDocumentTemplate,
   updateFileCategory,
   updateQuestionnaireCategory,
   updateReportLayout,
   type ConnectionSettingsUpdate,
+  type DocumentTemplatePayload,
+  type DocumentTemplateSummary,
   type ExternalSystemUpdate,
   type FileCategoryPayload,
   type NewOauthClient,
@@ -52,6 +59,7 @@ const SCOPE_OPTIONS_KEY = ["admin", "scope_options"];
 const REPORT_LAYOUTS_KEY = ["admin", "report_layouts"];
 const QUESTIONNAIRE_CATEGORIES_KEY = ["admin", "questionnaire_categories"];
 const FILE_CATEGORIES_KEY = ["admin", "file_categories"];
+const DOCUMENT_TEMPLATES_KEY = ["admin", "document_templates"];
 
 // 管理系はすべて retry: false。自動リトライされた 401 は上流 fhir-server の
 // レート制限(admin/ip)を無駄に消費するだけで、状況を改善しない。
@@ -400,6 +408,62 @@ export function useDeleteFileCategory() {
     retry: false,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: FILE_CATEGORIES_KEY });
+    },
+  });
+}
+
+// --- 文書テンプレート --------------------------------------------------------
+
+/** activeOnly: 有効なものだけ(カルテの文書作成の選択肢)。 */
+export function useDocumentTemplates(activeOnly = false) {
+  return useQuery({
+    queryKey: [...DOCUMENT_TEMPLATES_KEY, "list", activeOnly],
+    queryFn: () => fetchDocumentTemplates(activeOnly),
+    retry: false,
+  });
+}
+
+/** テンプレートの本体。更新日時をキーに含めるので、差し替えるまで取り直さない。 */
+export function useDocumentTemplateFile(template: DocumentTemplateSummary | undefined) {
+  return useQuery({
+    queryKey: [...DOCUMENT_TEMPLATES_KEY, "file", template?.id, template?.updated_at],
+    queryFn: () => fetchDocumentTemplateFile((template as DocumentTemplateSummary).id),
+    enabled: Boolean(template),
+    retry: false,
+    staleTime: Infinity,
+  });
+}
+
+export function useCreateDocumentTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: DocumentTemplatePayload) => createDocumentTemplate(payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DOCUMENT_TEMPLATES_KEY });
+    },
+  });
+}
+
+export function useUpdateDocumentTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: DocumentTemplatePayload }) =>
+      updateDocumentTemplate(id, payload),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DOCUMENT_TEMPLATES_KEY });
+    },
+  });
+}
+
+export function useDeleteDocumentTemplate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => deleteDocumentTemplate(id),
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: DOCUMENT_TEMPLATES_KEY });
     },
   });
 }

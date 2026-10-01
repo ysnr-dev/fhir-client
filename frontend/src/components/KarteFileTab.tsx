@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useFileCategories } from "../api/adminQueries";
 import { FhirError } from "../api/fhirClient";
 import {
   usePatientFileDocument,
   usePatientFileSearch,
+  useReplacePatientFile,
   useUpdatePatientFile,
 } from "../api/queries";
 import { isPatientMismatch } from "../fhir/patientHelpers";
@@ -13,6 +14,7 @@ import {
   formatFileSize,
   parsePatientFile,
   parsePatientFileValues,
+  readPatientFileDraft,
   type PatientFileValues,
 } from "../fhir/patientFileHelpers";
 import { readFileViewMode, storeFileViewMode, type KarteFileViewMode } from "../karteLayout";
@@ -26,7 +28,7 @@ import { PatientFileGrid } from "./PatientFileGrid";
 import { PatientFileTable } from "./PatientFileTable";
 
 // カルテ画面の「ファイル」タブ(docs/patient-file-design.md)。
-// 一覧・表示・取込・編集・削除を左ペイン内で完結させる。
+// 一覧・表示・取込・編集・差し替え・削除を左ペイン内で完結させる。
 //
 // 一覧と詳細は URL(view パラメータ)で表す。取込・編集は入力途中の内容を URL では
 // 復元できないので、このコンポーネント内の状態に留める。
@@ -82,6 +84,53 @@ export function KarteFileTab({ patientId, view, onViewChange }: KarteFileTabProp
     onViewChange(null);
   }
 
+  // 本体の差し替え。一覧の行メニューと表示画面の両方から、同じファイル選択を開く。
+  const replaceFile = useReplacePatientFile();
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const replaceTargetRef = useRef("");
+  const [replaceMessage, setReplaceMessage] = useState<string | null>(null);
+
+  function startReplace(fileId: string) {
+    replaceTargetRef.current = fileId;
+    replaceInputRef.current?.click();
+  }
+
+  async function handleReplaceInput(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // 同じファイルを続けて選び直せるよう、読み込み前に入力を空にしておく。
+    e.target.value = "";
+    const fileId = replaceTargetRef.current;
+    if (!file || !fileId) return;
+    setReplaceMessage(null);
+    try {
+      const draft = await readPatientFileDraft(file);
+      await replaceFile.mutateAsync({ fileId, draft });
+    } catch (err) {
+      setReplaceMessage(
+        err instanceof FhirError && err.status === 412
+          ? "このファイルは他の操作によって更新されています。画面を再読込してから再度差し替えてください。"
+          : err instanceof FhirError
+            ? null
+            : err instanceof Error
+              ? err.message
+              : "ファイルを差し替えられませんでした。",
+      );
+    }
+  }
+
+  const replaceControls = (
+    <>
+      <input ref={replaceInputRef} type="file" hidden onChange={(e) => void handleReplaceInput(e)} />
+      {replaceMessage ? (
+        <div className="error-banner" role="alert">
+          <p className="error-banner__line error-banner__line--error">{replaceMessage}</p>
+        </div>
+      ) : (
+        <ErrorBanner error={replaceFile.error} />
+      )}
+    </>
+  );
+
   if (mode.kind !== "list") {
     return (
       <div className="karte-tabpanel">
@@ -89,15 +138,25 @@ export function KarteFileTab({ patientId, view, onViewChange }: KarteFileTabProp
           <h3>{MODE_TITLES[mode.kind]}</h3>
           <div className="karte-tabpanel__actions">
             {mode.kind === "detail" && (
-              <button type="button" onClick={() => setForm({ kind: "edit", fileId: mode.fileId })}>
-                編集
-              </button>
+              <>
+                <button type="button" onClick={() => setForm({ kind: "edit", fileId: mode.fileId })}>
+                  編集
+                </button>
+                <button
+                  type="button"
+                  disabled={replaceFile.isPending}
+                  onClick={() => startReplace(mode.fileId)}
+                >
+                  差し替え
+                </button>
+              </>
             )}
             <button type="button" onClick={backToList}>
               ← 一覧に戻る
             </button>
           </div>
         </div>
+        {replaceControls}
         {mode.kind === "detail" ? (
           <DetailPanel patientId={patientId} fileId={mode.fileId} />
         ) : mode.kind === "create" ? (
@@ -148,6 +207,7 @@ export function KarteFileTab({ patientId, view, onViewChange }: KarteFileTabProp
       </div>
 
       <ErrorBanner error={error} />
+      {replaceControls}
 
       {isLoading ? (
         <p>読み込み中...</p>
@@ -158,12 +218,14 @@ export function KarteFileTab({ patientId, view, onViewChange }: KarteFileTabProp
               files={files}
               onView={(fileId) => onViewChange(fileId)}
               onEdit={(fileId) => setForm({ kind: "edit", fileId })}
+              onReplace={startReplace}
             />
           ) : (
             <PatientFileTable
               files={files}
               onView={(fileId) => onViewChange(fileId)}
               onEdit={(fileId) => setForm({ kind: "edit", fileId })}
+              onReplace={startReplace}
             />
           )}
           <Pagination

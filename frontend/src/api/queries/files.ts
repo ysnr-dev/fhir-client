@@ -2,8 +2,10 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { errorMessages } from "../../fhir/outcome";
 import {
   buildPatientFileBundle,
+  buildPatientFileReplaceBundle,
   PATIENT_FILE_CATEGORY_SYSTEM,
   type PatientFileCategory,
+  type PatientFileDocumentType,
   type PatientFileDraft,
 } from "../../fhir/patientFileHelpers";
 import {
@@ -100,6 +102,8 @@ export function useCreatePatientFiles() {
       category: PatientFileCategory | null;
       practitionerId?: string;
       practitionerName?: string;
+      /** 文書テンプレートから作った文書なら、元のテンプレート。 */
+      documentType?: PatientFileDocumentType;
     }): Promise<PatientFileUploadResult> => {
       let saved = 0;
       const failedKeys: string[] = [];
@@ -131,6 +135,27 @@ export function useUpdatePatientFile() {
     onSuccess: (result: FhirResult<fhir4.DocumentReference>) => {
       queryClient.invalidateQueries({ queryKey: PATIENT_FILE_KEY });
       queryClient.invalidateQueries({ queryKey: ["DocumentReference", result.data.id] });
+    },
+  });
+}
+
+/**
+ * ファイルの本体を差し替える。最新の DocumentReference を読み直してから、新しい Binary の
+ * 作成と DocumentReference の更新を 1 本の transaction で送る(読み直してから送るまでに
+ * 他の操作で更新されていれば 412 になる)。
+ */
+export function useReplacePatientFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ fileId, draft }: { fileId: string; draft: PatientFileDraft }) => {
+      const current = await readResource<fhir4.DocumentReference>("DocumentReference", fileId);
+      if (!current.etag) throw new Error("ファイルの版を確認できませんでした。");
+      await postBundle(buildPatientFileReplaceBundle(current.data, draft, current.etag));
+      return fileId;
+    },
+    onSuccess: (fileId) => {
+      queryClient.invalidateQueries({ queryKey: PATIENT_FILE_KEY });
+      queryClient.invalidateQueries({ queryKey: ["DocumentReference", fileId] });
     },
   });
 }

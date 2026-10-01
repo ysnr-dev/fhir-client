@@ -21551,3 +21551,57 @@ body.page-home .app__main {
 .master-search__form--row .dpc-form1-export__month {
   flex: none;
 }
+
+/* 文書テンプレート(docs/document-template-design.md) */
+.document-placeholders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.document-placeholders__item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.document-placeholders__item--unknown,
+.document-create__row--unresolved td {
+  color: var(--danger, #c0392b);
+}
+
+.document-placeholders__empty {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.document-template-form__placeholders {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.document-create__title {
+  flex: 1;
+  min-width: 200px;
+}
+
+.document-create__values th,
+.document-create__values td {
+  padding: 4px 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  vertical-align: top;
+}
+
+/* 複数行の値(プロブレム・処方など)は改行のまま見せる。 */
+.document-create__value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

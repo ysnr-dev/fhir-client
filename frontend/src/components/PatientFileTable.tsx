@@ -18,10 +18,13 @@ export function PatientFileTable({
   files,
   onView,
   onEdit,
+  onReplace,
 }: {
   files: PatientFile[];
   onView: (fileId: string) => void;
   onEdit: (fileId: string) => void;
+  /** 本体を別のファイルに差し替える。 */
+  onReplace: (fileId: string) => void;
 }) {
   const deleteFile = useDeletePatientFile();
 
@@ -71,6 +74,13 @@ export function PatientFileTable({
                       onClick={() => onEdit(file.id)}
                     >
                       編集
+                    </button>
+                    <button
+                      type="button"
+                      className="row-menu__item"
+                      onClick={() => onReplace(file.id)}
+                    >
+                      差し替え
                     </button>
                     <button
                       type="button"

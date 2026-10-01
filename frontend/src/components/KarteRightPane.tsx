@@ -3,6 +3,7 @@ import { AppointmentCreatePanel, AppointmentReschedulePanel } from "./Appointmen
 import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePanels";
 import { DischargeSummaryCreatePanel, DischargeSummaryEditPanel } from "./DischargeSummaryPanels";
 import { DpcForm1CreatePanel, DpcForm1EditPanel } from "./DpcForm1Panels";
+import { DocumentCreatePanel } from "./DocumentCreatePanel";
 import { InjectionCreatePanel, InjectionEditPanel } from "./InjectionPanels";
 import { LabOrderCreatePanel, LabOrderEditPanel } from "./LabOrderPanels";
 import { MicroOrderCreatePanel, MicroOrderEditPanel } from "./MicroOrderPanels";
@@ -56,6 +57,8 @@ export type KartePaneState =
   // DPC 様式1。encounterId は対象の入院の初期値(提出ファイルの一覧から)。
   | { kind: "dpc-form1-create"; encounterId?: string }
   | { kind: "dpc-form1-edit"; responseId: string }
+  // 文書テンプレート(Word / Excel)から文書を作る。作った文書は「ファイル」タブに入る。
+  | { kind: "document-create" }
   | { kind: "vital-create"; problem?: ProblemRef }
   // 1 回の測定は複数の Observation なので、束ねている identifier で対象を指す。
   | { kind: "vital-edit"; entryId: string }
@@ -138,6 +141,7 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "summary-edit": "退院時サマリー編集",
   "dpc-form1-create": "DPC様式1登録",
   "dpc-form1-edit": "DPC様式1編集",
+  "document-create": "文書作成",
   "vital-create": "バイタル登録",
   "vital-edit": "バイタル編集",
   "prescription-create": "処方登録",
@@ -491,6 +495,9 @@ export function KarteRightPane({
         <button type="button" onClick={() => onStateChange({ kind: "dpc-form1-create" })}>
           DPC様式1
         </button>
+        <button type="button" onClick={() => onStateChange({ kind: "document-create" })}>
+          文書作成
+        </button>
       </div>
     </section>
   );
@@ -604,6 +611,8 @@ function PaneContent({
       return (
         <DpcForm1EditPanel patientId={patientId} responseId={state.responseId} onSaved={onSaved} />
       );
+    case "document-create":
+      return <DocumentCreatePanel patientId={patientId} onSaved={onSaved} />;
     case "note-edit":
       return (
         <ClinicalNoteEditPanel patientId={patientId} noteId={state.noteId} onSaved={onSaved} />

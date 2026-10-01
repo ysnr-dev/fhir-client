@@ -424,6 +424,75 @@ export async function deleteFileCategory(id: number): Promise<void> {
   if (!res.ok) throw await buildError(res);
 }
 
+// --- 文書テンプレート --------------------------------------------------------
+// Word / Excel の様式ファイル(docs/document-template-design.md)。一覧は本体を含まない。
+
+export interface DocumentTemplateSummary {
+  id: number;
+  /** 作成した文書の DocumentReference.type の coding から参照される不変のコード(UUID)。 */
+  code: string;
+  name: string;
+  /** 作成した文書を入れるファイルカテゴリ。未設定は null。 */
+  file_category_id: number | null;
+  file_category_code: string | null;
+  file_category_name: string | null;
+  file_name: string;
+  content_type: string;
+  byte_size: number;
+  display_order: number;
+  active: boolean;
+  updated_at: string;
+}
+
+export interface DocumentTemplatePayload {
+  name?: string;
+  file_category_id?: number | null;
+  file_name?: string;
+  /** 本体(base64)。更新で省くと本体は差し替えない。 */
+  file_data?: string;
+  display_order?: number;
+  active?: boolean;
+}
+
+const DOCUMENT_TEMPLATES = "/admin/document_templates";
+
+export async function fetchDocumentTemplates(activeOnly = false): Promise<DocumentTemplateSummary[]> {
+  const body = await adminJson<{ total: number; items: DocumentTemplateSummary[] }>(
+    activeOnly ? `${DOCUMENT_TEMPLATES}?active=true` : DOCUMENT_TEMPLATES,
+  );
+  return body.items;
+}
+
+export async function createDocumentTemplate(
+  payload: DocumentTemplatePayload,
+): Promise<DocumentTemplateSummary> {
+  return adminJson<DocumentTemplateSummary>(DOCUMENT_TEMPLATES, {
+    method: "POST",
+    ...jsonBody(payload),
+  });
+}
+
+export async function updateDocumentTemplate(
+  id: number,
+  payload: DocumentTemplatePayload,
+): Promise<DocumentTemplateSummary> {
+  return adminJson<DocumentTemplateSummary>(`${DOCUMENT_TEMPLATES}/${id}`, {
+    method: "PATCH",
+    ...jsonBody(payload),
+  });
+}
+
+export async function deleteDocumentTemplate(id: number): Promise<void> {
+  const res = await adminFetch(`${DOCUMENT_TEMPLATES}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildError(res);
+}
+
+export async function fetchDocumentTemplateFile(id: number): Promise<Uint8Array> {
+  const res = await adminFetch(`${DOCUMENT_TEMPLATES}/${id}/file`);
+  if (!res.ok) throw await buildError(res);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
 // --- 外部システム連携 ---------------------------------------------------------
 // システム(レセコン等)ごとに 1 件の設定。項目を宣言するのは backend の定義。
 
