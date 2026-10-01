@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { HEIGHT_LOINC, WEIGHT_LOINC } from "../../fhir/bodyMeasureHelpers";
+import { DISCHARGE_SUMMARY_TYPE_SEARCH } from "../../fhir/clinicalNoteHelpers";
+import { DIAGNOSIS_SECTION } from "../../fhir/dischargeSummaryHelpers";
 import type { DpcForm1Sources, DpcSurgerySource } from "../../fhir/dpcForm1Draft";
 import { DPC_FORM1_QUESTIONNAIRE } from "../../fhir/dpcForm1Helpers";
 import {
@@ -27,6 +29,9 @@ import { resourcesOfType } from "./core";
 
 const SURGERY_PROCEDURE_CODE_SYSTEM = "http://fhir-client.local/CodeSystem/surgery-procedure-code";
 const SURGERY_KIND = "surgery";
+const LATERALITY_SYSTEM = "http://fhir-client.local/CodeSystem/jj1017-laterality";
+const LOINC = "http://loinc.org";
+const SOCIAL_HISTORY_SYSTEM = "http://jpfhir.jp/fhir/core/CodeSystem/JP_ObservationSocialHistoryCode_CS";
 
 /** その入院の様式1 を引く検索条件(1 入院 1 件)。作成時の重複防止にも同じ条件を使う。 */
 function dpcForm1Query(encounterId: string): URLSearchParams {
@@ -97,6 +102,30 @@ async function fetchSurgeries(
     : { items: [] };
   const kCodes = new Map(master.items.map((item) => [item.procedure_code, item.k_code ?? ""]));
 
+  // 左右は申込の術式(明細)が持つ。申込ごとに、同じ診療行為コードの明細から引く。
+  const itemParams = new URLSearchParams();
+  itemParams.set(
+    "based-on",
+    Array.from(orders.keys())
+      .map((id) => `ServiceRequest/${id}`)
+      .join(","),
+  );
+  itemParams.set("_count", "200");
+  const items = orders.size
+    ? resourcesOfType<fhir4.ServiceRequest>(
+        (await searchResource<fhir4.ServiceRequest>("ServiceRequest", itemParams)).data,
+        "ServiceRequest",
+      )
+    : [];
+  const lateralityOf = (orderId: string | undefined, code: string) =>
+    items
+      .find(
+        (item) =>
+          referenceId(item.basedOn?.[0]?.reference) === orderId &&
+          item.code?.coding?.some((c) => c.system === SURGERY_PROCEDURE_CODE_SYSTEM && c.code === code),
+      )
+      ?.bodySite?.[0]?.coding?.find((c) => c.system === LATERALITY_SYSTEM)?.code ?? "";
+
   return procedures
     .map((procedure) => {
       const code = codeOf(procedure);
@@ -110,6 +139,7 @@ async function fetchSurgeries(
         // 主たる手術(ハブ)を先に並べる。
         hub: !procedure.partOf?.length,
         anesthesiaMethods: order ? summarizeSurgeryOrder(order).anesthesiaMethods : [],
+        laterality: code ? lateralityOf(order?.id, code) : "",
       };
     })
     .filter((s) => !s.known || s.kCode === "" || s.kCode.startsWith("K"))
@@ -117,14 +147,41 @@ async function fetchSurgeries(
     .map(({ known: _known, hub: _hub, ...surgery }) => surgery);
 }
 
-async function fetchObservations(patientId: string, codes: string[]): Promise<fhir4.Observation[]> {
+async function fetchObservations(
+  patientId: string,
+  system: string,
+  codes: string[],
+): Promise<fhir4.Observation[]> {
   const params = new URLSearchParams();
   params.set("patient", `Patient/${patientId}`);
-  params.set("code", codes.map((code) => `http://loinc.org|${code}`).join(","));
+  params.set("code", codes.map((code) => `${system}|${code}`).join(","));
   params.set("_count", "100");
   params.set("_sort", "-date");
   const { data: bundle } = await searchResource<fhir4.Observation>("Observation", params);
   return resourcesOfType<fhir4.Observation>(bundle, "Observation");
+}
+
+/** この入院の退院時サマリーで、退院時診断に選ばれている病名。サマリーが無ければ空。 */
+async function fetchDischargeDiagnoses(encounterId: string): Promise<fhir4.Condition[]> {
+  const params = new URLSearchParams();
+  params.set("encounter", `Encounter/${encounterId}`);
+  params.set("type", DISCHARGE_SUMMARY_TYPE_SEARCH);
+  params.set("_count", "5");
+  params.set("_sort", "-date");
+  const { data: bundle } = await searchResource<fhir4.Composition>("Composition", params);
+  const summary = resourcesOfType<fhir4.Composition>(bundle, "Composition")[0];
+  const ids = (
+    summary?.section?.find((s) => s.code?.coding?.some((c) => c.code === DIAGNOSIS_SECTION))?.entry ??
+    []
+  )
+    .map((entry) => referenceId(entry.reference))
+    .filter((id): id is string => Boolean(id));
+  if (!ids.length) return [];
+
+  const conditionParams = new URLSearchParams();
+  conditionParams.set("_id", ids.join(","));
+  const { data: conditions } = await searchResource<fhir4.Condition>("Condition", conditionParams);
+  return resourcesOfType<fhir4.Condition>(conditions, "Condition");
 }
 
 /**
@@ -159,13 +216,16 @@ export function useDpcForm1Sources(
       admissionParams.set("_sort", "-date");
       admissionParams.set("_count", "50");
 
-      const [patient, admissions, surgeries, bodyMeasures, pregnancy] = await Promise.all([
-        readResource<fhir4.Patient>("Patient", id),
-        searchResource<fhir4.Encounter>("Encounter", admissionParams),
-        fetchSurgeries(id, start, end),
-        fetchObservations(id, [HEIGHT_LOINC, WEIGHT_LOINC]),
-        fetchObservations(id, ["82810-3", "63895-7"]),
-      ]);
+      const [patient, admissions, surgeries, bodyMeasures, pregnancy, smoking, dischargeDiagnoses] =
+        await Promise.all([
+          readResource<fhir4.Patient>("Patient", id),
+          searchResource<fhir4.Encounter>("Encounter", admissionParams),
+          fetchSurgeries(id, start, end),
+          fetchObservations(id, LOINC, [HEIGHT_LOINC, WEIGHT_LOINC]),
+          fetchObservations(id, LOINC, ["82810-3", "63895-7"]),
+          fetchObservations(id, SOCIAL_HISTORY_SYSTEM, ["MD0012870", "MD0012920"]),
+          fetchDischargeDiagnoses(enc.id as string),
+        ]);
 
       return {
         patient: patient.data,
@@ -174,6 +234,8 @@ export function useDpcForm1Sources(
         surgeries,
         bodyMeasures,
         pregnancy,
+        smoking,
+        dischargeDiagnoses,
         institutionNumber,
       };
     },

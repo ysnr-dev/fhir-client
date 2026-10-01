@@ -8,9 +8,14 @@ import { admissionRouteHasDetails, admissionRoutePayloads } from "./admissionRou
 import { HEIGHT_LOINC, WEIGHT_LOINC } from "./bodyMeasureHelpers";
 import { conditionDisplayName, isSuspected, parseConditionForm } from "./conditionHelpers";
 import { dpc1FiscalYear } from "./dpcForm1";
+import { DEPARTMENT_OPTIONS } from "./dpcForm1/records/common";
 import type { Dpc1Header, Dpc1PayloadNo, Dpc1Row, Dpc1Values } from "./dpcForm1/types";
-import { emptyDpc1Row } from "./dpcForm1Helpers";
-import { DISCHARGED_STATUS, encounterDischargeDisposition } from "./encounterHelpers";
+import { emptyDpc1Row, isEmptyDpc1Row } from "./dpcForm1Helpers";
+import {
+  DISCHARGED_STATUS,
+  encounterDepartmentName,
+  encounterDischargeDisposition,
+} from "./encounterHelpers";
 import { calculateAge, patientNumberOf } from "./patientHelpers";
 import { summarizePregnancy } from "./pregnancyHelpers";
 
@@ -25,6 +30,8 @@ export interface DpcSurgerySource {
   kCode: string;
   /** 申込に入れた麻酔方法(手術オーダーのコード)。 */
   anesthesiaMethods: string[];
+  /** 申込の術式に入れた左右(R / L / B)。指定が無ければ空。 */
+  laterality: string;
 }
 
 export interface DpcForm1Sources {
@@ -37,6 +44,10 @@ export interface DpcForm1Sources {
   bodyMeasures: fhir4.Observation[];
   /** 妊娠・授乳の Observation。 */
   pregnancy: fhir4.Observation[];
+  /** 喫煙歴の有無と喫煙指数の Observation(社会歴のテンプレートから作られたもの)。 */
+  smoking: fhir4.Observation[];
+  /** この入院の退院時サマリーで退院時診断に選ばれた病名。サマリーが無ければ空。 */
+  dischargeDiagnoses: fhir4.Condition[];
   /** 自院の保険医療機関番号(10 桁)。 */
   institutionNumber: string;
 }
@@ -175,11 +186,15 @@ function anesthesiaCode(methods: string[]): string {
   return "9";
 }
 
+/** 手術側数。申込で左右を指定した術式だけ決まる(指定なしは「区別なし」とは限らない)。 */
+const SURGERY_SIDE: Record<string, string> = { R: "1", L: "2", B: "3" };
+
 function surgeryRow(surgery: DpcSurgerySource): Dpc1Row {
   return {
     p: {
       1: toDpcDate(surgery.date),
       2: surgery.kCode,
+      5: SURGERY_SIDE[surgery.laterality] ?? "",
       6: anesthesiaCode(surgery.anesthesiaMethods),
       9: surgery.name,
     },
@@ -209,6 +224,53 @@ function measuredOf(observations: fhir4.Observation[], loinc: string): Measured[
 }
 
 const weightText = (value: number) => value.toFixed(1);
+
+// ---- 喫煙指数 ----
+
+const SMOKING_HISTORY_CODE = "MD0012870";
+const SMOKING_INDEX_CODE = "MD0012920";
+const NO_SMOKING_HISTORY = "01";
+
+/**
+ * 喫煙指数。入院までの記録のうち、喫煙歴が「無」なら 0、喫煙指数の記録があればその値。
+ * どちらも無ければ空(喫煙していないのか聞いていないのかが分からない)。
+ */
+function smokingIndex(observations: fhir4.Observation[], until: string): string {
+  const latest = (code: string) =>
+    observations
+      .filter(
+        (o) =>
+          o.code?.coding?.some((c) => c.code === code) &&
+          (o.effectiveDateTime ?? "").slice(0, 10) <= until,
+      )
+      .sort((a, b) => (b.effectiveDateTime ?? "").localeCompare(a.effectiveDateTime ?? ""))[0];
+  const history = latest(SMOKING_HISTORY_CODE);
+  if (history?.valueCodeableConcept?.coding?.some((c) => c.code === NO_SMOKING_HISTORY)) return "0";
+  const index = latest(SMOKING_INDEX_CODE);
+  const value = index?.valueInteger ?? index?.valueQuantity?.value;
+  return value === undefined ? "" : String(Math.round(value));
+}
+
+// ---- 妊娠週数 ----
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const FULL_TERM_DAYS = 280;
+
+/** 入院時の妊娠週数。分娩予定日から逆算する(予定日が 40 週 0 日)。出せなければ空。 */
+function gestationalWeeks(dueDate: string, admissionDay: string): string {
+  if (!dueDate || !admissionDay) return "";
+  const untilDue = Math.round((Date.parse(dueDate) - Date.parse(admissionDay)) / DAY_MS);
+  const days = FULL_TERM_DAYS - untilDue;
+  return days >= 0 && days <= 45 * 7 ? String(Math.floor(days / 7)) : "";
+}
+
+// ---- 診療科 ----
+
+/** 入院の診療科の名称が、様式1 の診療科目と同じ名前ならそのコード。違えば空(人が近いものを選ぶ)。 */
+function departmentCode(encounter: fhir4.Encounter): string {
+  const name = encounterDepartmentName(encounter);
+  return DEPARTMENT_OPTIONS.find((option) => option.label === name)?.code ?? "";
+}
 
 // ---- 下書き ----
 
@@ -263,6 +325,9 @@ function draftRecords(sources: DpcForm1Sources): Record<string, Dpc1Row[]> {
     set("A000031", { 1: toDpcDate(start) });
   }
 
+  const department = departmentCode(encounter);
+  if (department) set("A000040", { 2: department });
+
   // 前回退院: この入院より前に退院した入院のうち、最も新しいもの。
   const previous = admissions
     .filter((e) => e.id !== encounter.id && e.period?.end && e.period.end < start)
@@ -284,10 +349,20 @@ function draftRecords(sources: DpcForm1Sources): Record<string, Dpc1Row[]> {
     4: dischargeWeight ? weightText(dischargeWeight.value) : "",
   });
 
+  const smoking = smokingIndex(sources.smoking, startDay);
+  if (smoking) set("A001020", { 2: smoking });
+
+  const pregnancy = summarizePregnancy(sources.pregnancy);
   if (patient.gender === "male") {
     set("A002010", { 2: "0" });
-  } else if (summarizePregnancy(sources.pregnancy)?.pregnant) {
-    set("A002010", { 2: "1" });
+  } else if (pregnancy?.pregnant) {
+    set("A002010", { 2: "1", 3: gestationalWeeks(pregnancy.dueDate, startDay) });
+  }
+
+  // 主傷病名は「退院時サマリの主傷病欄に記入された傷病名」。サマリーの退院時診断は主・副を
+  // 分けていないので、1 件だけのときに限って主傷病に入れる。
+  if (sources.dischargeDiagnoses.length === 1) {
+    records.A006010 = [dpc1DiagnosisRowOfCondition(sources.dischargeDiagnoses[0])];
   }
 
   if (sources.surgeries.length) records.A007010 = sources.surgeries.map(surgeryRow);
@@ -306,7 +381,8 @@ function draftRecords(sources: DpcForm1Sources): Record<string, Dpc1Row[]> {
 
 /**
  * 様式1 の下書き。existing を渡すと「集め直し」になり、入力済みの値はそのままに空欄だけを
- * 埋める。手術は、まだ行になっていない実施記録だけを足す。
+ * 埋める。手術は、行になっている実施記録の空欄を埋め、まだ行になっていない実施記録を足す。
+ * 主傷病は、何か入力されていれば触らない(別の病名のコードと混ざらないように)。
  */
 export function draftDpcForm1(
   sources: DpcForm1Sources,
@@ -321,8 +397,19 @@ export function draftDpcForm1(
   for (const [code, rows] of Object.entries(drafted)) {
     if (code === "A007010") {
       const current = records[code] ?? [];
+      const byRef = new Map(rows.map((row) => [row.ref, row]));
       const known = new Set(current.map((row) => row.ref).filter(Boolean));
-      records[code] = [...current, ...rows.filter((row) => !known.has(row.ref))];
+      records[code] = [
+        ...current.map((row) => {
+          const source = row.ref ? byRef.get(row.ref) : undefined;
+          return source ? { ...row, p: { ...source.p, ...row.p } } : row;
+        }),
+        ...rows.filter((row) => !known.has(row.ref)),
+      ];
+      continue;
+    }
+    if (code === "A006010") {
+      if (!records[code]?.some((row) => !isEmptyDpc1Row(row))) records[code] = rows;
       continue;
     }
     const current = records[code]?.[0] ?? emptyDpc1Row();
