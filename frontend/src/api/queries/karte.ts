@@ -1,3 +1,4 @@
+import { DPC_FORM1_QUESTIONNAIRE } from "../../fhir/dpcForm1Helpers";
 import { useMemo } from "react";
 import {
   keepPreviousData,
@@ -222,6 +223,8 @@ export function useKarteQuestionnaireResponsesInfinite(
       params.set("patient", `Patient/${patientId}`);
       // 診療記録と同じローカル拡張による絞り込み。
       if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+      // DPC 様式1 も QuestionnaireResponse だが、カルテの記載ではないので出さない。
+      params.set("questionnaire:not", DPC_FORM1_QUESTIONNAIRE);
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-authored");
@@ -382,6 +385,7 @@ export function useKarteDayIndex(
           const params = new URLSearchParams();
           params.set("patient", `Patient/${patientId}`);
           if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+          params.set("questionnaire:not", DPC_FORM1_QUESTIONNAIRE);
           return params;
         })(),
         "authored",

@@ -40,3 +40,4 @@ export * from "./adverseEvent";
 export * from "./pathway";
 export * from "./files";
 export * from "./radiotherapy";
+export * from "./dpcForm1";

@@ -2,6 +2,7 @@ import type { ProblemRef } from "../fhir/conditionHelpers";
 import { AppointmentCreatePanel, AppointmentReschedulePanel } from "./AppointmentPanels";
 import { ClinicalNoteCreatePanel, ClinicalNoteEditPanel } from "./ClinicalNotePanels";
 import { DischargeSummaryCreatePanel, DischargeSummaryEditPanel } from "./DischargeSummaryPanels";
+import { DpcForm1CreatePanel, DpcForm1EditPanel } from "./DpcForm1Panels";
 import { InjectionCreatePanel, InjectionEditPanel } from "./InjectionPanels";
 import { LabOrderCreatePanel, LabOrderEditPanel } from "./LabOrderPanels";
 import { MicroOrderCreatePanel, MicroOrderEditPanel } from "./MicroOrderPanels";
@@ -52,6 +53,9 @@ export type KartePaneState =
   // 退院時サマリー。encounterId は対象の入院の初期値(通知・入院患者一覧のリンクから)。
   | { kind: "summary-create"; encounterId?: string }
   | { kind: "summary-edit"; noteId: string }
+  // DPC 様式1。encounterId は対象の入院の初期値(提出ファイルの一覧から)。
+  | { kind: "dpc-form1-create"; encounterId?: string }
+  | { kind: "dpc-form1-edit"; responseId: string }
   | { kind: "vital-create"; problem?: ProblemRef }
   // 1 回の測定は複数の Observation なので、束ねている identifier で対象を指す。
   | { kind: "vital-edit"; entryId: string }
@@ -132,6 +136,8 @@ const PANE_TITLES: Record<KartePaneState["kind"], string> = {
   "note-edit": "診療記録編集",
   "summary-create": "退院時サマリー登録",
   "summary-edit": "退院時サマリー編集",
+  "dpc-form1-create": "DPC様式1登録",
+  "dpc-form1-edit": "DPC様式1編集",
   "vital-create": "バイタル登録",
   "vital-edit": "バイタル編集",
   "prescription-create": "処方登録",
@@ -193,7 +199,10 @@ function paneKey(state: KartePaneState): string {
     case "summary-edit":
       return `${state.kind}:${state.noteId}`;
     case "summary-create":
+    case "dpc-form1-create":
       return `${state.kind}:${state.encounterId ?? ""}`;
+    case "dpc-form1-edit":
+      return `${state.kind}:${state.responseId}`;
     case "prescription-edit":
     case "injection-edit":
     case "lab-order-edit":
@@ -479,6 +488,9 @@ export function KarteRightPane({
         <button type="button" onClick={() => onStateChange({ kind: "summary-create" })}>
           退院時サマリー
         </button>
+        <button type="button" onClick={() => onStateChange({ kind: "dpc-form1-create" })}>
+          DPC様式1
+        </button>
       </div>
     </section>
   );
@@ -579,6 +591,19 @@ function PaneContent({
       );
     case "summary-edit":
       return <DischargeSummaryEditPanel patientId={patientId} noteId={state.noteId} onSaved={onSaved} />;
+    case "dpc-form1-create":
+      return (
+        <DpcForm1CreatePanel
+          patientId={patientId}
+          defaultEncounterId={state.encounterId}
+          onSaved={onSaved}
+          onStateChange={onStateChange}
+        />
+      );
+    case "dpc-form1-edit":
+      return (
+        <DpcForm1EditPanel patientId={patientId} responseId={state.responseId} onSaved={onSaved} />
+      );
     case "note-edit":
       return (
         <ClinicalNoteEditPanel patientId={patientId} noteId={state.noteId} onSaved={onSaved} />

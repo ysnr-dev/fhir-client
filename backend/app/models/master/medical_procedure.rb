@@ -21,6 +21,25 @@ module Master
       abolished_on.present? && abolished_on != NOT_ABOLISHED
     end
 
+    # 点数表コード(「K0821」「K082-21」「K4073ｲ」)。DPC 様式1 の手術情報などに書く形。
+    # 配布マスタの点数表区分番号があればそれを使い、空のときはコード表用番号の
+    # 区分番号(3 桁)・枝番(00 は無し)・項番(000 は無し)から組む。区分番号が
+    # 000(通則の加算など、特定の区分に属さない行)や章が英字でない行は nil。
+    def k_code
+      return point_table_section_number if point_table_section_number.present?
+      return nil unless code_table_number_alpha.to_s.match?(/\A[A-Z]\z/)
+      return nil unless code_table_section.to_s.match?(/\A\d{3}\z/) && code_table_section != "000"
+
+      branch = code_table_branch.to_i
+      item = code_table_item.to_i
+      "#{code_table_number_alpha}#{code_table_section}#{"-#{branch}" if branch.positive?}#{item if item.positive?}"
+    end
+
+    # 一覧の応答に点数表コードを添える。
+    def serializable_hash(options = nil)
+      super.merge("k_code" => k_code)
+    end
+
     private
 
     def set_search_columns

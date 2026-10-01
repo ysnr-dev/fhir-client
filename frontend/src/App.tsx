@@ -137,6 +137,7 @@ import { InjectionWorklistPage } from "./pages/InjectionWorklistPage";
 import { ReportLayoutsPage } from "./pages/ReportLayoutsPage";
 import { HomePage } from "./pages/HomePage";
 import { BulletinPage } from "./pages/BulletinPage";
+import { DpcForm1ExportPage } from "./pages/DpcForm1ExportPage";
 
 // 患者配下の未定義パスをその患者のカルテへ寄せる。
 function KarteRedirect() {
@@ -302,6 +303,12 @@ function App() {
           <NavLink to="/schedules">予約枠</NavLink>
           {/* 掲示板は院内のお知らせ。職種を問わず全員が読むので独立して置く(ホームにも出る)。 */}
           <NavLink to="/bulletin">掲示板</NavLink>
+          {/* 院外へ提出するデータの作成状況の確認と出力をまとめる(DPC 調査など)。 */}
+          <HoverMenu label="データ提出">
+            <Link to="/dpc-form1-export" className="row-menu__item">
+              DPC様式1
+            </Link>
+          </HoverMenu>
           {/* マスタメンテは項目が増えるため、診療領域ごとに入れ子にする。
               どの領域にも属さないものは「共通」にまとめる。
               マスタ取込は領域をまたぐので直下に置く。 */}
@@ -651,6 +658,8 @@ function App() {
           <Route path="/emergency" element={<EmergencyListPage />} />
           {/* 入院患者一覧。病棟のベッド(Location)に入院(Encounter)を突き合わせて出す。 */}
           <Route path="/inpatients" element={<InpatientListPage />} />
+          {/* DPC 様式1 の提出ファイル(FF1)の出力。 */}
+          <Route path="/dpc-form1-export" element={<DpcForm1ExportPage />} />
           {/* 部門業務の画面。オーダーを受けた側が、その日の検査を捌くための一覧。 */}
           <Route path="/lab-worklist" element={<LabWorklistPage />} />
           <Route path="/lab-arrivals" element={<LabArrivalPage />} />

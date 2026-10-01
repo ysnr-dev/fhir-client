@@ -22,6 +22,7 @@
 // status=entered-in-error で、退院とは区別する(退院日を持たない)。どちらも
 // in-progress ではなくなるので入院患者一覧からは外れる。
 
+import { type AdmissionRouteValues, withAdmissionRoute } from "./admissionRouteHelpers";
 import { toFhirDateTime } from "./clinicalNoteHelpers";
 import { diffDays } from "../lib/dates";
 import { referenceId } from "./shared";
@@ -67,6 +68,10 @@ export interface AdmissionFormValues {
   admissionDate: string;
   /** 特記事項。任意。 */
   note: string;
+  /** 入院の経緯(入院経路・予定/救急の区分など)。任意。 */
+  route: AdmissionRouteValues;
+  /** 入院経路と予定・救急の区分の表示名(Encounter の coding.display に入れる)。 */
+  routeDisplay?: { route?: string; admissionType?: string };
 }
 
 export function validateAdmissionForm(values: AdmissionFormValues): string | null {
@@ -113,7 +118,7 @@ export function buildAdmissionEncounter(
   };
 
   applyAdmissionDetails(encounter, target, values);
-  return encounter;
+  return withAdmissionRoute(encounter, values.route, values.routeDisplay);
 }
 
 /**
@@ -612,7 +617,7 @@ export function buildAdmissionFromPlan(
     ],
   };
   applyAdmissionDetails(encounter, target, values);
-  return encounter;
+  return withAdmissionRoute(encounter, values.route, values.routeDisplay);
 }
 
 /** 入院予定の取り消し。誤登録(entered-in-error)ではなく cancelled にする。 */

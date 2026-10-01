@@ -6,6 +6,7 @@ import {
   useWardGrid,
   useWardOptions,
 } from "../api/queries";
+import { admissionRouteDisplay, encounterAdmissionRoute } from "../fhir/admissionRouteHelpers";
 import { departmentDisplayName } from "../fhir/departmentHelpers";
 import {
   buildAdmissionFromPlan,
@@ -24,6 +25,7 @@ import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { bedDisplayName, resolveBedSelection, type BedRoomIds } from "../fhir/wardHelpers";
 import { nowDateTimeInput } from "../lib/dates";
 import { makeFieldUpdater } from "../lib/form";
+import { AdmissionRouteFields } from "./AdmissionRouteFields";
 import { BedRoomSelects } from "./BedRoomSelects";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
@@ -65,6 +67,8 @@ export function AdmissionExecuteModal({
     // 予定日ではなく今日を既定にする。実施はその日のうちに登録するのが普通なので。
     admissionDate: nowDateTimeInput(),
     note: encounterNote(plan),
+    // 救急外来から作った予定は、救急車による搬送を引き継いでいる。
+    route: encounterAdmissionRoute(plan),
   });
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -120,7 +124,7 @@ export function AdmissionExecuteModal({
         practitionerName: practitioner ? practitionerDisplayName(practitioner) : "",
         nurses,
       },
-      values,
+      { ...values, routeDisplay: admissionRouteDisplay(values.route) },
     );
     execute.mutate(encounter, { onSuccess: onClose });
   }
@@ -191,6 +195,7 @@ export function AdmissionExecuteModal({
               onChange={(e) => update("admissionDate", e.target.value)}
             />
           </label>
+          <AdmissionRouteFields values={values.route} onChange={(route) => update("route", route)} />
           <label className="admission__note">
             特記事項
             <textarea

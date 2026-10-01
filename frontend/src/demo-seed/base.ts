@@ -8,6 +8,7 @@
 // 日付はすべて実行日からの相対で決める(いつ流しても「直近 N 年の経過」になる)。
 
 import { fetchAuthSession } from "../api/authClient";
+import { emptyAdmissionRoute } from "../fhir/admissionRouteHelpers";
 import { createResource, postBundle, searchResource, typeOperation } from "../api/fhirClient";
 import {
   createChartDefinition,
@@ -472,7 +473,7 @@ export async function createStay(
   const encounter = buildAdmissionEncounter(
     patient,
     { bedId: bed.id, bedLabel: bed.name, departmentName: department.name, practitionerName: env.practitioner.name, nurses: [] },
-    { departmentId: department.id, practitionerId: env.practitioner.id, nurseIds: [], admissionDate: `${admitted}T10:00`, note: "" },
+    { departmentId: department.id, practitionerId: env.practitioner.id, nurseIds: [], admissionDate: `${admitted}T10:00`, note: "", route: emptyAdmissionRoute() },
   );
   const { data } = await createResource(buildDischargedEncounter(encounter, `${discharged}T10:00`));
   return data.id ?? null;

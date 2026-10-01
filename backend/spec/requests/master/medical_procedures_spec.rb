@@ -65,6 +65,30 @@ RSpec.describe "Master::MedicalProcedures", type: :request do
       expect(body["items"].map { |i| i["procedure_code"] }).to eq(%w[170000410])
     end
 
+    it "点数表コード(k_code)を添えて返す" do
+      Master::MedicalProcedure.create!(
+        procedure_code: "150465050", name: "骨移植術（特殊）", code_table_number_alpha: "K",
+        code_table_section: "059", code_table_branch: "00", code_table_item: "003",
+        point_table_section_number: "K0593ｲ", publication_order: "500000001"
+      )
+      Master::MedicalProcedure.create!(
+        procedure_code: "150398910", name: "内視鏡下甲状腺悪性腫瘍手術", code_table_number_alpha: "K",
+        code_table_section: "463", code_table_branch: "02", code_table_item: "002",
+        point_table_section_number: "", publication_order: "500000002"
+      )
+      Master::MedicalProcedure.create!(
+        procedure_code: "150000190", name: "新生児加算（手術）", code_table_number_alpha: "K",
+        code_table_section: "000", code_table_branch: "00", code_table_item: "000",
+        publication_order: "500000003"
+      )
+
+      get "/master/medical_procedures", params: { code_table_number_alpha: "K" }
+
+      expect(body["items"].map { |i| i["k_code"] }).to eq(["K0593ｲ", "K463-22", nil])
+      expect(body["items"].first).to include("procedure_code" => "150465050",
+                                              "point_table_section_number" => "K0593ｲ")
+    end
+
     it "カナ読み(ひらがな)でヒットする" do
       get "/master/medical_procedures", params: { name: "たんじゅんさつえい" }
 

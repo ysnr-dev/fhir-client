@@ -9,6 +9,7 @@ import {
   useWardOptions,
   type PatientSearchParams,
 } from "../api/queries";
+import { admissionRouteDisplay, emptyAdmissionRoute } from "../fhir/admissionRouteHelpers";
 import { departmentDisplayName } from "../fhir/departmentHelpers";
 import {
   ADMISSION_STATUS,
@@ -25,6 +26,7 @@ import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { bedDisplayName } from "../fhir/wardHelpers";
 import { nowDateTimeInput, today } from "../lib/dates";
 import { makeFieldUpdater } from "../lib/form";
+import { AdmissionRouteFields } from "./AdmissionRouteFields";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 import { NursePicker } from "./NursePicker";
@@ -61,6 +63,7 @@ export function AdmissionModal({
         ? `${defaultAdmissionDate}T${nowDateTimeInput().slice(11)}`
         : nowDateTimeInput(),
     note: "",
+    route: emptyAdmissionRoute(),
   });
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -106,7 +109,7 @@ export function AdmissionModal({
         practitionerName: practitioner ? practitionerDisplayName(practitioner) : "",
         nurses,
       },
-      values,
+      { ...values, routeDisplay: admissionRouteDisplay(values.route) },
     );
     admit.mutate(encounter, { onSuccess: onClose });
   }
@@ -178,6 +181,10 @@ export function AdmissionModal({
                 onChange={(e) => update("admissionDate", e.target.value)}
               />
             </label>
+            <AdmissionRouteFields
+              values={values.route}
+              onChange={(route) => update("route", route)}
+            />
             <label className="admission__note">
               特記事項
               <textarea

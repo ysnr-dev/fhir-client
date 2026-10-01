@@ -26,6 +26,7 @@ import {
   encounterAttendingId,
   encounterPatientId,
 } from "./encounterHelpers";
+import { withAmbulanceArrival } from "./admissionRouteHelpers";
 import { displayName } from "./patientHelpers";
 import { referenceId } from "./shared";
 
@@ -443,28 +444,51 @@ const ORIGIN_ENCOUNTER_EXTENSION_URL =
   "http://fhir-client.local/StructureDefinition/encounter-origin-emergency";
 export const ADMIT_SOURCE_SYSTEM = "http://terminology.hl7.org/CodeSystem/admit-source";
 
-/** 救急から入院するときの入院 Encounter に、入院経路と元の救急受診を添える。 */
+/** 救急車による搬送にあたる来院方法(現場からの要請で出たドクターカー・ヘリを含む)。 */
+const AMBULANCE_ARRIVAL_MODES: string[] = ["ambulance", "doctor-heli", "doctor-car"];
+
+/**
+ * 救急から入院するときの入院 Encounter に、入院経路と元の救急受診を添える。救急車などで
+ * 来院していれば、救急車による搬送も引き継ぐ。admitSource には入院登録で入れる入院経路も
+ * 並ぶので、coding は system ごとに差し替える。
+ */
 export function withEmergencyOrigin(
   encounter: fhir4.Encounter,
-  emergencyEncounterId: string,
+  emergency: fhir4.Encounter,
 ): fhir4.Encounter {
   const rest = (encounter.extension ?? []).filter((e) => e.url !== ORIGIN_ENCOUNTER_EXTENSION_URL);
-  return {
+  const otherSources = (encounter.hospitalization?.admitSource?.coding ?? []).filter(
+    (c) => c.system !== ADMIT_SOURCE_SYSTEM,
+  );
+  const next: fhir4.Encounter = {
     ...encounter,
     hospitalization: {
       ...encounter.hospitalization,
       admitSource: {
-        coding: [{ system: ADMIT_SOURCE_SYSTEM, code: "emd", display: "救急外来から" }],
+        coding: [
+          ...otherSources,
+          { system: ADMIT_SOURCE_SYSTEM, code: "emd", display: "救急外来から" },
+        ],
       },
     },
     extension: [
       ...rest,
       {
         url: ORIGIN_ENCOUNTER_EXTENSION_URL,
-        valueReference: { reference: `Encounter/${emergencyEncounterId}` },
+        valueReference: { reference: `Encounter/${emergency.id}` },
       },
     ],
   };
+  return AMBULANCE_ARRIVAL_MODES.includes(emergencyArrivalMode(emergency) ?? "")
+    ? withAmbulanceArrival(next)
+    : next;
+}
+
+/** 入院 Encounter が指している、元の救急受診の id。救急からの入院でなければ undefined。 */
+export function originEmergencyEncounterId(encounter: fhir4.Encounter): string | undefined {
+  const reference = encounter.extension?.find((e) => e.url === ORIGIN_ENCOUNTER_EXTENSION_URL)
+    ?.valueReference?.reference;
+  return reference?.split("/").pop();
 }
 
 // ---- 身元不明患者 ----

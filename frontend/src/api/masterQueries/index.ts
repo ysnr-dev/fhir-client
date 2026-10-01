@@ -5,6 +5,7 @@ export * from "./jlac";
 export * from "./disease";
 export * from "./jfagy";
 export * from "./ctcae";
+export * from "./dpc";
 export * from "./lab";
 export * from "./medicalMaterial";
 export * from "./rad";

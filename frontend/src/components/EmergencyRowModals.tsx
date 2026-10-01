@@ -239,7 +239,7 @@ export function EmergencyDispositionModal({
         <PlannedAdmissionForm
           patient={patient}
           header={() => <PatientLine row={row} />}
-          prepare={(planned) => withEmergencyOrigin(planned, encounter.id as string)}
+          prepare={(planned) => withEmergencyOrigin(planned, encounter)}
           onSaved={onClose}
           onCancel={onClose}
         />

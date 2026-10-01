@@ -170,6 +170,12 @@ const MASTER_OPTIONS: MasterOption[] = [
     accept: ".csv",
   },
   {
+    type: "dpc_icd_codes",
+    label: "DPC ICD対応表（診断群分類 電子点数表）",
+    formatHint: "厚生労働省 診断群分類（DPC）電子点数表 .xlsx（「４）ＩＣＤ」シートを読む）",
+    accept: ".xlsx",
+  },
+  {
     type: "nursing_units",
     label: "看護観察 単位テーブル",
     formatHint: "看護観察編 unit-ver.*.txt（Shift_JIS、ヘッダあり・2列）",

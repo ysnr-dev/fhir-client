@@ -309,7 +309,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     });
   }, [detached, patientId]);
 
-  // 一覧・通知のリンクから右ペインのフォームを開く(退院時サマリー、放射線治療の週次レビュー)。
+  // 一覧・通知のリンクから右ペインのフォームを開く(退院時サマリー、DPC 様式1、放射線治療の週次レビュー)。
   // 一回限りの引数なので、読んだら URL から消す(フォームを URL に載せない方針)。
   const openValue = searchParams.get(KARTE_OPEN_PARAM);
   const openTarget = parseKarteOpen(openValue);
@@ -318,7 +318,9 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     openForm(
       openTarget.kind === "discharge-summary"
         ? { kind: "summary-create", encounterId: openTarget.encounterId }
-        : { kind: "radiotherapy-review", srId: openTarget.srId },
+        : openTarget.kind === "dpc-form1"
+          ? { kind: "dpc-form1-create", encounterId: openTarget.encounterId }
+          : { kind: "radiotherapy-review", srId: openTarget.srId },
     );
     updateParams((params) => params.delete(KARTE_OPEN_PARAM));
     // URL から消した時点で openValue は null になる(同じ対象で再発火しない)。

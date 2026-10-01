@@ -29,7 +29,7 @@ export const KARTE_PROBLEM_PARAM = "problem";
 export const KARTE_CARD_PARAM = "card";
 /**
  * 開いた直後に右ペインで始める登録("discharge-summary:<入院の Encounter id>")。
- * 通知や入院患者一覧のリンクから登録を始めるための一回限りの引数で、KartePage が
+ * 通知や入院患者一覧・提出ファイルの一覧のリンクから登録を始めるための一回限りの引数で、KartePage が
  * 読んだら URL から消す(フォームを URL に載せない方針と両立させるため)。
  */
 export const KARTE_OPEN_PARAM = "open";
@@ -40,10 +40,11 @@ export const KARTE_OPEN_PARAM = "open";
  */
 export type KarteOpenTarget =
   | { kind: "discharge-summary"; encounterId: string }
+  | { kind: "dpc-form1"; encounterId: string }
   | { kind: "radiotherapy-review"; srId: string };
 
 export function formatKarteOpen(target: KarteOpenTarget): string {
-  const id = target.kind === "discharge-summary" ? target.encounterId : target.srId;
+  const id = target.kind === "radiotherapy-review" ? target.srId : target.encounterId;
   return `${target.kind}:${id}`;
 }
 
@@ -54,7 +55,7 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
   const kind = value.slice(0, separator);
   const id = value.slice(separator + 1);
   if (!id) return null;
-  if (kind === "discharge-summary") return { kind, encounterId: id };
+  if (kind === "discharge-summary" || kind === "dpc-form1") return { kind, encounterId: id };
   if (kind === "radiotherapy-review") return { kind, srId: id };
   return null;
 }

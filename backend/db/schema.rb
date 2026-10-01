@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_09_30_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_10_01_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -397,6 +397,20 @@ ActiveRecord::Schema[8.0].define(version: 2026_09_30_100000) do
     t.index ["management_number"], name: "index_master_diseases_on_management_number", unique: true
     t.index ["search_kana"], name: "idx_master_diseases_search_kana_trgm", opclass: :gin_trgm_ops, using: :gin
     t.index ["search_name"], name: "idx_master_diseases_search_name_trgm", opclass: :gin_trgm_ops, using: :gin
+  end
+
+  create_table "master_dpc_icd_codes", force: :cascade do |t|
+    t.string "mdc6", null: false
+    t.string "icd10", null: false
+    t.string "match_type", null: false
+    t.string "icd_pattern", null: false
+    t.string "icd_name"
+    t.string "valid_from"
+    t.string "valid_to"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["icd10"], name: "index_master_dpc_icd_codes_on_icd10"
+    t.index ["mdc6"], name: "index_master_dpc_icd_codes_on_mdc6"
   end
 
   create_table "master_endoscopy_dataset_details", force: :cascade do |t|

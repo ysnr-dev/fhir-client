@@ -110,6 +110,9 @@ Rails.application.routes.draw do
     # 注射箋(注射指示票)・注射ラベル。処方箋と同じくオーダー id だけを受け取る。
     get "injections/:order_id/pdf", to: "injection_pdfs#show"
     get "injection_labels/:order_id/pdf", to: "injection_label_pdfs#show"
+    # DPC 様式1 の提出ファイル(FF1)。対象月(退院月)の一覧と、ファイル本体。
+    get "dpc_form1", to: "dpc_form1#show"
+    get "dpc_form1/file", to: "dpc_form1#file"
   end
 
   # 国内マスタデータ（FHIR リソースではないプレーンな JSON REST）
@@ -341,6 +344,11 @@ Rails.application.routes.draw do
     # 郵便番号マスタ(日本郵便 utf_ken_all.csv)。住所補完で郵便番号から引くだけなので
     # 検索専用(取込で全件洗い替え)。
     resources :postal_codes, only: %i[index] do
+      collection { post :import }
+    end
+    # DPC 電子点数表の ICD-10 → 診断群分類上6桁の対応表。様式1 の必須判定で引くだけ
+    # なので検索専用(取込で全件洗い替え)。
+    resources :dpc_icd_codes, only: %i[index] do
       collection { post :import }
     end
     # シェーマ(診療記録に描き込む台紙画像)。カテゴリは parent_id の隣接リストで
