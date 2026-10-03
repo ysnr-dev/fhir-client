@@ -3,7 +3,13 @@ import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Color, FontSize, TextStyle } from "@tiptap/extension-text-style";
 import Image from "@tiptap/extension-image";
+import Link from "@tiptap/extension-link";
 import { normalizeImageFile } from "../fhir/schemaImage";
+import {
+  isKarteLinkHref,
+  KARTE_LINK_ATTR,
+  sanitizePastedKarteLinks,
+} from "../fhir/karteLinkHelpers";
 
 // 診療記録本文のリッチテキストエディタ(Tiptap)。
 // 装飾はフォントサイズと文字色のみ(要件)。出力は HTML で、FHIR へは
@@ -32,7 +38,31 @@ interface RichTextEditorProps {
   editable?: boolean;
   // 外部操作用ハンドル。prop 名 ref はコンポーネント参照と紛れるので分ける。
   apiRef?: Ref<RichTextEditorHandle>;
+  // 記載している患者。貼り付けたリンクの患者と照合する。
+  patientId: string;
 }
+
+// カルテ内リンク(fhir/karteLinkHelpers)。「リンクを取得」でコピーしたものを貼ったときだけ
+// リンクになり、外部 URL は文字のまま。編集中のクリックでは開かない。
+const KarteLinkMark = Link.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      [KARTE_LINK_ATTR]: {
+        default: null,
+        parseHTML: (element: HTMLElement) => element.getAttribute(KARTE_LINK_ATTR),
+        renderHTML: (attributes: Record<string, unknown>) =>
+          attributes[KARTE_LINK_ATTR] ? { [KARTE_LINK_ATTR]: attributes[KARTE_LINK_ATTR] } : {},
+      },
+    };
+  },
+}).configure({
+  openOnClick: false,
+  autolink: false,
+  linkOnPaste: false,
+  HTMLAttributes: { target: null, rel: null },
+  isAllowedUri: (url) => isKarteLinkHref(url),
+});
 
 // SchemaPaintModal の PEN_COLORS と同じパレット(アプリ内で装飾色を統一する)。
 const TEXT_COLORS = [
@@ -55,6 +85,7 @@ export function RichTextEditor({
   actions,
   editable = true,
   apiRef,
+  patientId,
 }: RichTextEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   // 装飾は使う機会が限られるため既定では畳んでおく。セクションが複数並ぶ画面で
@@ -63,7 +94,8 @@ export function RichTextEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({ link: false }),
+      KarteLinkMark,
       TextStyle,
       Color,
       FontSize,
@@ -72,6 +104,10 @@ export function RichTextEditor({
     ],
     content: initialHtml,
     editable,
+    editorProps: {
+      // 別患者のカルテからコピーしたリンクは文字だけにする。
+      transformPastedHTML: (html) => sanitizePastedKarteLinks(html, patientId),
+    },
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
   });
 

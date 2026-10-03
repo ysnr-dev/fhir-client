@@ -17,12 +17,14 @@ import {
   readPatientFileDraft,
   type PatientFileValues,
 } from "../fhir/patientFileHelpers";
+import { karteLinkLabel } from "../fhir/karteLinkHelpers";
 import { readFileViewMode, storeFileViewMode, type KarteFileViewMode } from "../karteLayout";
 import { dateTimeLabel } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { FileCategoryModal } from "./FileCategoryModal";
 import { KarteFilePreview } from "./KarteFilePreview";
 import { KarteFileUploadForm } from "./KarteFileUploadForm";
+import { KarteLinkMenu } from "./KarteLinkMenu";
 import { Pagination } from "./Pagination";
 import { PatientFileGrid } from "./PatientFileGrid";
 import { PatientFileTable } from "./PatientFileTable";
@@ -154,6 +156,7 @@ export function KarteFileTab({ patientId, view, onViewChange }: KarteFileTabProp
             <button type="button" onClick={backToList}>
               ← 一覧に戻る
             </button>
+            {mode.kind === "detail" && <FileLinkMenu patientId={patientId} fileId={mode.fileId} />}
           </div>
         </div>
         {replaceControls}
@@ -448,5 +451,26 @@ function EditForm({
         )
       )}
     </>
+  );
+}
+
+function FileLinkMenu({ patientId, fileId }: { patientId: string; fileId: string }) {
+  const doc = usePatientFileDocument(fileId).data?.data;
+  const file = doc && !isPatientMismatch(patientId, doc.subject) ? parsePatientFile(doc) : undefined;
+  return (
+    <KarteLinkMenu
+      label="このファイルの操作"
+      patientId={patientId}
+      link={
+        file
+          ? {
+              kind: "file",
+              resourceType: "DocumentReference",
+              id: fileId,
+              label: karteLinkLabel("ファイル", file.date, file.title),
+            }
+          : null
+      }
+    />
   );
 }

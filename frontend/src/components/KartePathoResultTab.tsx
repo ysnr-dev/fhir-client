@@ -13,10 +13,12 @@ import {
   emptyPathoResultForm,
   type PathoResultFormValues,
 } from "../fhir/pathoResultHelpers";
+import { karteLinkLabel } from "../fhir/karteLinkHelpers";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { usePathoResultInitialValues } from "../hooks/usePathoResultInitialValues";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
+import { KarteLinkMenu } from "./KarteLinkMenu";
 import { PathoResultDetailPanel } from "./PathoResultDetailPanel";
 import { PathoResultForm } from "./PathoResultForm";
 import { ResultReviewAction } from "./ResultReviewAction";
@@ -124,6 +126,20 @@ export function KartePathoResultTab({ patientId, view, onViewChange }: KartePath
             >
               削除
             </button>
+            <KarteLinkMenu
+              label="この病理診断レポートの操作"
+              patientId={patientId}
+              link={
+                selected
+                  ? {
+                      kind: "patho-result",
+                      resourceType: "DiagnosticReport",
+                      id: selected.id,
+                      label: karteLinkLabel("病理診断レポート", selected.date),
+                    }
+                  : null
+              }
+            />
           </div>
         </div>
 

@@ -47,6 +47,7 @@ interface KarteLabResultTabProps {
 
 export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabResultTabProps) {
   const [form, setForm] = useState<FormMode | null>(null);
+  const [menuSlot, setMenuSlot] = useState<HTMLSpanElement | null>(null);
 
   // 戻る・進むで表示対象が変わったら、開いていたフォームは畳む。
   useEffect(() => setForm(null), [view]);
@@ -140,6 +141,8 @@ export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabRes
             >
               削除
             </button>
+            {/* 結果パネルのケバブ(リンク取得・変更履歴・FHIR JSON)をここに出す。 */}
+            <span className="karte-tabpanel__menu-slot" ref={setMenuSlot} />
           </div>
         </div>
 
@@ -149,7 +152,7 @@ export function KarteLabResultTab({ patientId, view, onViewChange }: KarteLabRes
         {isLoading ? (
           <p>読み込み中...</p>
         ) : selected ? (
-          <LabResultDetailPanel reportId={selected.id} />
+          <LabResultDetailPanel reportId={selected.id} menuContainer={menuSlot} />
         ) : (
           <p className="patient-table__empty">登録されている検査結果がありません。</p>
         )}

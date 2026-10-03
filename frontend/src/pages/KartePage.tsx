@@ -56,6 +56,7 @@ import { EXAM_REPORT_KINDS } from "../fhir/examReportHelpers";
 import { KarteProblemList } from "../components/KarteProblemList";
 import { KarteProblemSummary } from "../components/KarteProblemSummary";
 import { KarteDetailModal } from "../components/KarteCardModals";
+import { KarteLinkContext, type KarteLinkActions } from "../components/KarteLinkContext";
 import { KarteRightPane, type KartePaneState } from "../components/KarteRightPane";
 import { KarteSplitter } from "../components/KarteSplitter";
 import { KarteTodayPane } from "../components/KarteTodayPane";
@@ -285,6 +286,27 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   const closeDetail = useCallback(() => {
     updateParams((params) => params.delete(KARTE_DETAIL_PARAM));
   }, [updateParams]);
+
+  // 診療記録の本文に貼ったリンク。オーダー・レポートは詳細モーダルで、詳細モーダルを
+  // 持たないファイル・DICOM はそのタブで開く。
+  const linkActions = useMemo<KarteLinkActions>(
+    () => ({
+      patientId: patientId ?? "",
+      openLink: (link) => {
+        const { kind } = link;
+        if (kind === "file" || kind === "imaging") {
+          updateParams((params) => {
+            params.set(KARTE_TAB_PARAM, kind);
+            params.set(KARTE_VIEW_PARAM, link.id);
+            params.delete(KARTE_DETAIL_PARAM);
+          }, true);
+          return;
+        }
+        openDetail({ kind, id: link.id });
+      },
+    }),
+    [patientId, updateParams, openDetail],
+  );
 
   const [pane, setPane] = useState<KartePaneState>({ kind: "empty" });
 
@@ -1144,101 +1166,103 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   );
 
   return (
-    <div className="page karte-page">
-      {/* 見出しは置かず、患者情報と戻るボタンを 1 行にまとめて縦幅を左右のペインに回す。 */}
-      <div className="karte-page__header">
-        <PatientHeader patientId={patientId} />
-        {!detached && outpatientExam.data && (
-          <button type="button" disabled={finishExam.isPending} onClick={handleFinishExam}>
-            診察終了
-          </button>
-        )}
-        {!detached && (
-          <Link to={returnTo} className="button">
-            ← 戻る
-          </Link>
-        )}
-      </div>
-      <ErrorBanner error={finishExam.error} />
-
-      {/* 左右の幅はカスタムプロパティで渡す。狭い画面では CSS 側で縦積みに切り替える
-          ため、grid-template-columns 自体はインラインで上書きしない。 */}
-      <div
-        className={`karte-layout${detached ? " karte-layout--pane" : ""}`}
-        ref={layoutRef}
-        style={{ "--karte-left-ratio": leftWidthRatio } as CSSProperties}
-      >
-        <section
-          className={`karte-left${mode === "split" ? " karte-left--split" : ""}${
-            todayVisible ? " karte-left--today" : ""
-          }`}
-        >
-          {todayVisible ? (
-            // 左ペインの縦分割。手前に既存のカルテ(上下分割ならその一式)、
-            // 奥に本日のカルテを単独のペインとして並べる。
-            <div
-              className="karte-left__vsplit"
-              ref={vsplitRef}
-              style={{ "--karte-today-main-ratio": todayMainRatio } as CSSProperties}
-            >
-              <div className="karte-left__vsplit-main">{leftMain}</div>
-              <KarteSplitter
-                containerRef={vsplitRef}
-                orientation="vertical"
-                ratio={todayMainRatio}
-                label="カルテと本日のカルテの幅"
-                onChange={(ratio) => setTodayMainRatio(clampTodayMainRatio(ratio))}
-                onChangeEnd={storeTodayMainRatio}
-              />
-              {todayPane}
-            </div>
-          ) : (
-            leftMain
+    <KarteLinkContext.Provider value={linkActions}>
+      <div className="page karte-page">
+        {/* 見出しは置かず、患者情報と戻るボタンを 1 行にまとめて縦幅を左右のペインに回す。 */}
+        <div className="karte-page__header">
+          <PatientHeader patientId={patientId} />
+          {!detached && outpatientExam.data && (
+            <button type="button" disabled={finishExam.isPending} onClick={handleFinishExam}>
+              診察終了
+            </button>
           )}
-        </section>
+          {!detached && (
+            <Link to={returnTo} className="button">
+              ← 戻る
+            </Link>
+          )}
+        </div>
+        <ErrorBanner error={finishExam.error} />
 
-        {!detached && (
-          <>
-            <KarteSplitter
-              containerRef={layoutRef}
-              orientation="vertical"
-              ratio={leftWidthRatio}
-              label="左ペインと右ペインの幅"
-              onChange={(ratio) => setLeftWidthRatio(clampLeftWidthRatio(ratio))}
-              onChangeEnd={storeLeftWidthRatio}
-            />
+        {/* 左右の幅はカスタムプロパティで渡す。狭い画面では CSS 側で縦積みに切り替える
+            ため、grid-template-columns 自体はインラインで上書きしない。 */}
+        <div
+          className={`karte-layout${detached ? " karte-layout--pane" : ""}`}
+          ref={layoutRef}
+          style={{ "--karte-left-ratio": leftWidthRatio } as CSSProperties}
+        >
+          <section
+            className={`karte-left${mode === "split" ? " karte-left--split" : ""}${
+              todayVisible ? " karte-left--today" : ""
+            }`}
+          >
+            {todayVisible ? (
+              // 左ペインの縦分割。手前に既存のカルテ(上下分割ならその一式)、
+              // 奥に本日のカルテを単独のペインとして並べる。
+              <div
+                className="karte-left__vsplit"
+                ref={vsplitRef}
+                style={{ "--karte-today-main-ratio": todayMainRatio } as CSSProperties}
+              >
+                <div className="karte-left__vsplit-main">{leftMain}</div>
+                <KarteSplitter
+                  containerRef={vsplitRef}
+                  orientation="vertical"
+                  ratio={todayMainRatio}
+                  label="カルテと本日のカルテの幅"
+                  onChange={(ratio) => setTodayMainRatio(clampTodayMainRatio(ratio))}
+                  onChangeEnd={storeTodayMainRatio}
+                />
+                {todayPane}
+              </div>
+            ) : (
+              leftMain
+            )}
+          </section>
 
-            <KarteRightPane
-              patientId={patientId}
-              state={pane}
-              selectedProblem={selectedProblem}
-              onStateChange={setPane}
-            />
-          </>
+          {!detached && (
+            <>
+              <KarteSplitter
+                containerRef={layoutRef}
+                orientation="vertical"
+                ratio={leftWidthRatio}
+                label="左ペインと右ペインの幅"
+                onChange={(ratio) => setLeftWidthRatio(clampLeftWidthRatio(ratio))}
+                onChangeEnd={storeLeftWidthRatio}
+              />
+
+              <KarteRightPane
+                patientId={patientId}
+                state={pane}
+                selectedProblem={selectedProblem}
+                onStateChange={setPane}
+              />
+            </>
+          )}
+        </div>
+
+        {/* 詳細モーダルはタイムラインの読み込み位置に依存しないよう、対象を ID で
+            受け取って自分で取得する(古い記録の URL を直接開いても表示できる)。 */}
+        {detailTarget && (
+          <KarteDetailModal
+            patientId={patientId}
+            target={detailTarget}
+            problemsById={problemsById}
+            onClose={closeDetail}
+          />
+        )}
+        {/* 診察終了の直後だけ出す。閉じたら(送っても送らなくても)外来患者一覧へ。 */}
+        {billingTarget && (
+          <BillingSendModal
+            target={billingTarget}
+            onClose={() => {
+              setBillingTarget(null);
+              leaveKarte();
+            }}
+          />
         )}
       </div>
-
-      {/* 詳細モーダルはタイムラインの読み込み位置に依存しないよう、対象を ID で
-          受け取って自分で取得する(古い記録の URL を直接開いても表示できる)。 */}
-      {detailTarget && (
-        <KarteDetailModal
-          patientId={patientId}
-          target={detailTarget}
-          problemsById={problemsById}
-          onClose={closeDetail}
-        />
-      )}
-      {/* 診察終了の直後だけ出す。閉じたら(送っても送らなくても)外来患者一覧へ。 */}
-      {billingTarget && (
-        <BillingSendModal
-          target={billingTarget}
-          onClose={() => {
-            setBillingTarget(null);
-            leaveKarte();
-          }}
-        />
-      )}
-    </div>
+    </KarteLinkContext.Provider>
   );
 }
 

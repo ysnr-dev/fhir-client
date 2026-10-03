@@ -33,6 +33,7 @@ import {
   KARTE_KIND_LABELS,
   karteItemKindLabel,
   karteDayHeadingLabel,
+  karteDayLabel,
   karteItemKey,
   itemPathway,
   itemProblem,
@@ -40,7 +41,9 @@ import {
   type KarteDayGroup,
   type KarteTimelineItem,
 } from "../fhir/karteTimeline";
+import { karteLinkLabel, type KarteLink } from "../fhir/karteLinkHelpers";
 import type { KarteDetailTarget } from "../karteUrl";
+import { copyKarteLink } from "../lib/copyKarteLink";
 import {
   groupInjectionByRp,
   injectionComment,
@@ -191,6 +194,7 @@ import { PlainTextModal } from "./PlainTextModal";
 import { RichTextView } from "./RichTextView";
 import { ResponseSchemaImages, SchemaImageGallery } from "./SchemaImageGallery";
 import { RowMenu } from "./RowMenu";
+import { useKarteLinkActions } from "./KarteLinkContext";
 import type { PathwayEvaluationCard } from "../fhir/pathwayKarteHelpers";
 
 interface KarteTimelineProps {
@@ -450,6 +454,7 @@ const KarteCard = memo(function KarteCard({
   // 詳細表示は URL に載せるので親に任せる。
   const [plainTextOpen, setPlainTextOpen] = useState(false);
   const [jsonOpen, setJsonOpen] = useState(false);
+  const linkActions = useKarteLinkActions();
   const [injectionDeleteOpen, setInjectionDeleteOpen] = useState(false);
   // 注射の中止・中止取消。開いているときだけモーダルを出す。
   const [injectionCancel, setInjectionCancel] = useState<"cancel" | "restore" | null>(null);
@@ -661,6 +666,15 @@ const KarteCard = memo(function KarteCard({
             {item.kind !== "vital" && item.kind !== "pathway-evaluation" && (
               <button type="button" className="row-menu__item" onClick={() => onOpenDetail(item)}>
                 詳細表示
+              </button>
+            )}
+            {linkActions && item.kind !== "vital" && item.kind !== "pathway-evaluation" && (
+              <button
+                type="button"
+                className="row-menu__item"
+                onClick={() => void copyKarteLink(karteLinkOfItem(item), linkActions.patientId)}
+              >
+                リンクを取得
               </button>
             )}
             {/* 検体検査・細菌検査は、結果が登録済みのオーダーだけ結果内容を開ける。 */}
@@ -1026,6 +1040,24 @@ function DocumentIcon() {
 /** 他科依頼の回答(診療記録)の id。まだ回答が無ければ空。 */
 function consultReplyId(sr: fhir4.ServiceRequest): string {
   return consultReply(sr).replyId;
+}
+
+// 「リンクを取得」で貼るリンク。開き方はカードの詳細モーダルと同じ。
+function karteLinkOfItem(
+  item: Exclude<KarteTimelineItem, { kind: "vital" } | { kind: "pathway-evaluation" }>,
+): KarteLink {
+  const resourceType =
+    item.kind === "note" ? "Composition" : item.kind === "qr" ? "QuestionnaireResponse" : "ServiceRequest";
+  return {
+    kind: item.kind,
+    resourceType,
+    id: item.id,
+    label: karteLinkLabel(
+      item.kind === "qr" ? item.label : karteItemKindLabel(item),
+      item.day && karteDayLabel(item.day),
+      item.kind !== "qr" && cardTitle(item),
+    ),
+  };
 }
 
 function cardTitle(item: KarteTimelineItem): string {

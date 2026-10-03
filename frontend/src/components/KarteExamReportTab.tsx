@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useExamReportEntries, useUnreviewedReportIds } from "../api/queries";
 import type { ExamReportConfig } from "../fhir/examReportHelpers";
+import { karteLinkLabel } from "../fhir/karteLinkHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { ExamReportCreatePanel } from "./ExamReportCreatePanel";
 import { ExamReportDetailPanel } from "./ExamReportDetailPanel";
 import { ExamReportEntry } from "./ExamReportEntryModal";
+import { KarteLinkMenu } from "./KarteLinkMenu";
 import { ResultReviewAction } from "./ResultReviewAction";
 import { SpecimenDateList } from "./SpecimenDateList";
 
@@ -105,6 +107,20 @@ export function KarteExamReportTab({
             >
               編集
             </button>
+            <KarteLinkMenu
+              label={`この${labels.report}の操作`}
+              patientId={patientId}
+              link={
+                selected
+                  ? {
+                      kind: config.detailKind,
+                      resourceType: "DiagnosticReport",
+                      id: selected.id,
+                      label: karteLinkLabel(labels.report, selected.date),
+                    }
+                  : null
+              }
+            />
           </div>
         </div>
 

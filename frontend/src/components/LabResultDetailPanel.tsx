@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLabResultItemsByCodes, useLabResultItemsByJlac11Codes } from "../api/masterQueries";
 import { useLabOrderDetail, useLabResultDetail } from "../api/queries";
+import { karteLinkLabel } from "../fhir/karteLinkHelpers";
 import {
   labOrderItemRequests,
   labOrderItems,
@@ -20,6 +22,7 @@ import {
   splitLabResultDetailBundle,
   summarizeDiagnosticReport,
 } from "../fhir/labResultHelpers";
+import { copyKarteLink } from "../lib/copyKarteLink";
 import { ErrorBanner } from "./ErrorBanner";
 import { FhirJsonView } from "./FhirJsonView";
 import { LAB_CATEGORIES } from "./labOrderItemOptions";
@@ -116,7 +119,14 @@ function groupByCategory(
     .map(([category, list]) => ({ category, observations: list }));
 }
 
-export function LabResultDetailPanel({ reportId }: { reportId: string }) {
+export function LabResultDetailPanel({
+  reportId,
+  menuContainer,
+}: {
+  reportId: string;
+  /** ケバブを置く場所。無ければ結果表の上のボタン列に置く。 */
+  menuContainer?: HTMLElement | null;
+}) {
   const detail = useLabResultDetail(reportId);
   const [checkedIds, setCheckedIds] = useState<ReadonlySet<string>>(new Set());
   const [copyResult, setCopyResult] = useState<"copied" | "failed" | null>(null);
@@ -224,6 +234,43 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
     }
   }
 
+  // リンク取得と、普段は使わない変更履歴・FHIR JSON 表示はケバブに畳む。
+  // カルテのタブではヘッダのボタン群の右端(menuContainer)に出す。
+  const menu = (
+    <RowMenu label="この検査結果の操作">
+      <button
+        type="button"
+        className="row-menu__item"
+        disabled={!patientId}
+        onClick={() =>
+          void copyKarteLink(
+            {
+              kind: "lab-result",
+              resourceType: "DiagnosticReport",
+              id: reportId,
+              label: karteLinkLabel("検査結果", summary?.date),
+            },
+            patientId,
+          )
+        }
+      >
+        リンクを取得
+      </button>
+      <button
+        type="button"
+        className="row-menu__item"
+        disabled={checkedObservations.length === 0}
+        title={checkedObservations.length === 0 ? "履歴を見る検査項目を選んでください" : undefined}
+        onClick={() => setHistoryOpen(true)}
+      >
+        選択項目の変更履歴
+      </button>
+      <button type="button" className="row-menu__item" onClick={() => setJsonOpen(true)}>
+        FHIR JSON を表示
+      </button>
+    </RowMenu>
+  );
+
   return (
     <>
       <ErrorBanner error={detail.error} />
@@ -281,29 +328,7 @@ export function LabResultDetailPanel({ reportId }: { reportId: string }) {
               >
                 時系列表示
               </button>
-              {/* 普段は使わない変更履歴・FHIR JSON 表示はケバブに畳む。 */}
-              <RowMenu label="この検査結果の操作">
-                <button
-                  type="button"
-                  className="row-menu__item"
-                  disabled={checkedObservations.length === 0}
-                  title={
-                    checkedObservations.length === 0
-                      ? "履歴を見る検査項目を選んでください"
-                      : undefined
-                  }
-                  onClick={() => setHistoryOpen(true)}
-                >
-                  選択項目の変更履歴
-                </button>
-                <button
-                  type="button"
-                  className="row-menu__item"
-                  onClick={() => setJsonOpen(true)}
-                >
-                  FHIR JSON を表示
-                </button>
-              </RowMenu>
+              {menuContainer ? createPortal(menu, menuContainer) : menu}
             </div>
 
             <table className="rp-card__medicines rp-card__medicines--detail rp-card__medicines--lab">

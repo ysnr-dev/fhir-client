@@ -6241,6 +6241,23 @@ button.populate-expression__option--active {
   margin: 0 0 0.5em;
 }
 
+/* カルテ内リンク(オーダー・レポート・ファイル・DICOM)。表示側は押すと開く。 */
+.rich-text__link,
+.rich-text-editor .ProseMirror a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.rich-text__link {
+  cursor: pointer;
+}
+
+.rich-text__link:hover,
+.rich-text__link:focus-visible {
+  background: var(--accent-bg);
+  outline: none;
+}
+
 /* 本文を書き込む画面なので、.patient-form 既定の max-width(480px)では狭すぎる。
    セクションの操作バー(種別+装飾+画像+並べ替え/削除)が 1 行に収まる幅を確保する。 */
 .clinical-note-form {
@@ -7921,6 +7938,16 @@ body.karte-wide {
 .karte-tabpanel__actions {
   display: flex;
   gap: 8px;
+}
+
+/* ボタン群の右端のケバブ。三点リーダーだけなので横幅を詰める。 */
+.karte-tabpanel__actions .row-menu__trigger {
+  padding: 4px 5px;
+}
+
+/* 子のパネルがケバブを差し込む枠。空のときに隙間を作らない。 */
+.karte-tabpanel__menu-slot {
+  display: contents;
 }
 
 /* 検査結果・細菌検査タブ: カルテタブの診療日パネルと同様に、左端に検体採取日の

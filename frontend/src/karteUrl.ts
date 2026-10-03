@@ -163,7 +163,7 @@ export interface KarteDetailTarget {
   id: string;
 }
 
-const DETAIL_KINDS: KarteDetailKind[] = [
+export const DETAIL_KINDS: KarteDetailKind[] = [
   "note",
   "prescription",
   "injection",

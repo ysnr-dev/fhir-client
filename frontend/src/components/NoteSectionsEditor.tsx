@@ -135,6 +135,7 @@ export function useNoteSectionsEditor({
             key={`${section.uid}:${section.template?.draft?.response.authored ?? (section.template ? "saved" : "plain")}`}
             initialHtml={section.html}
             onChange={(html) => updateSection(section.uid, { html })}
+            patientId={patientId}
             // テンプレート由来の本文は直接編集させない(回答との差異を防ぐ)。
             editable={!section.template}
             apiRef={(handle) => {

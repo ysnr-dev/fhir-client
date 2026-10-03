@@ -13,10 +13,12 @@ import {
   emptyMicroResultForm,
   type MicroResultFormValues,
 } from "../fhir/microResultHelpers";
+import { karteLinkLabel } from "../fhir/karteLinkHelpers";
 import { useDefaultOrderSetting } from "../hooks/useDefaultOrderSetting";
 import { useMicroResultInitialValues } from "../hooks/useMicroResultInitialValues";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
+import { KarteLinkMenu } from "./KarteLinkMenu";
 import { MicroResultDetailPanel } from "./MicroResultDetailPanel";
 import { MicroResultForm } from "./MicroResultForm";
 import { ResultReviewAction } from "./ResultReviewAction";
@@ -121,6 +123,20 @@ export function KarteMicroResultTab({ patientId, view, onViewChange }: KarteMicr
             >
               削除
             </button>
+            <KarteLinkMenu
+              label="この細菌検査結果の操作"
+              patientId={patientId}
+              link={
+                selected
+                  ? {
+                      kind: "micro-result",
+                      resourceType: "DiagnosticReport",
+                      id: selected.id,
+                      label: karteLinkLabel("細菌検査結果", selected.date),
+                    }
+                  : null
+              }
+            />
           </div>
         </div>
 

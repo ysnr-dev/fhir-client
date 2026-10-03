@@ -1,9 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { useImagingStudySearch } from "../api/queries";
+import { useImagingStudy, useImagingStudySearch } from "../api/queries";
 import { parseImagingStudy } from "../fhir/imagingHelpers";
+import { karteLinkLabel } from "../fhir/karteLinkHelpers";
+import { isPatientMismatch } from "../fhir/patientHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { ImagingStudyTable } from "./ImagingStudyTable";
 import { KarteImagingDetail } from "./KarteImagingDetail";
+import { KarteLinkMenu } from "./KarteLinkMenu";
 import { Pagination } from "./Pagination";
 
 // ZIP の展開と DICOM のタグ解析は、取込を開いたときだけ読み込む。
@@ -67,6 +70,9 @@ export function KarteImagingTab({ patientId, view, onViewChange }: KarteImagingT
             <button type="button" onClick={backToList}>
               ← 一覧に戻る
             </button>
+            {mode.kind === "detail" && (
+              <ImagingLinkMenu patientId={patientId} studyId={mode.studyId} />
+            )}
           </div>
         </div>
         {mode.kind === "detail" ? (
@@ -114,5 +120,27 @@ export function KarteImagingTab({ patientId, view, onViewChange }: KarteImagingT
         </>
       )}
     </div>
+  );
+}
+
+function ImagingLinkMenu({ patientId, studyId }: { patientId: string; studyId: string }) {
+  const resource = useImagingStudy(studyId).data?.data;
+  const study =
+    resource && !isPatientMismatch(patientId, resource.subject) ? parseImagingStudy(resource) : undefined;
+  return (
+    <KarteLinkMenu
+      label="この DICOM の操作"
+      patientId={patientId}
+      link={
+        study
+          ? {
+              kind: "imaging",
+              resourceType: "ImagingStudy",
+              id: studyId,
+              label: karteLinkLabel("DICOM", study.date, study.modalities.join("/"), study.description),
+            }
+          : null
+      }
+    />
   );
 }
