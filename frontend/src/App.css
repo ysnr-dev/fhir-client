@@ -22050,7 +22050,6 @@ thead .injection-calendar__head {
   min-height: 40px;
   padding: 2px 4px;
   border: 0;
-  border-left: 3px solid var(--border);
   border-radius: 0;
   background: var(--surface-card);
   font-size: 12px;
@@ -22061,16 +22060,6 @@ thead .injection-calendar__head {
 
 .injection-calendar__entry + .injection-calendar__entry {
   border-top: 1px dashed var(--border);
-}
-
-.injection-calendar__entry--completed {
-  border-left-color: var(--accent);
-}
-
-.injection-calendar__entry--partial,
-.injection-calendar__entry--stopped,
-.injection-calendar__entry--not-done {
-  border-left-color: var(--warning);
 }
 
 .injection-calendar__entry--cancelled {
