@@ -17,7 +17,7 @@ import { InjectionContinueModal } from "./InjectionContinueModal";
 import { InjectionDayModal } from "./InjectionDayModal";
 import { RowMenu } from "./RowMenu";
 
-// カルテ画面の「注射」タブ(注射カレンダー)。docs/injection-order-design.md §9。
+// カルテ画面の「注射カレンダー」タブ。docs/injection-order-design.md §9。
 //
 // 「RP × 日付(2 週間)」の表で、各日の注射の予定・進捗・実施を並べる。表から直接
 // 指示を出し入れできるようにする:
@@ -132,17 +132,29 @@ export function KarteInjectionTab({ patientId, view, onViewChange, onEdit, onCre
     <div className="karte-tabpanel injection-calendar-panel">
       <div className="karte-tabpanel__header">
         <div className="karte-tabpanel__title">
-          <h3>注射</h3>
+          <h3>注射カレンダー</h3>
         </div>
       </div>
 
       <div className="injection-calendar__toolbar">
-        <button type="button" onClick={() => shift(-7)} aria-label="前の週">
-          ‹
+        <button
+          type="button"
+          className="patient-chart__step"
+          onClick={() => shift(-7)}
+          title="前の週"
+          aria-label="前の週"
+        >
+          ◀
         </button>
         <span className="injection-calendar__range">{`${start}〜${end}`}</span>
-        <button type="button" onClick={() => shift(7)} aria-label="次の週">
-          ›
+        <button
+          type="button"
+          className="patient-chart__step"
+          onClick={() => shift(7)}
+          title="次の週"
+          aria-label="次の週"
+        >
+          ▶
         </button>
         <button
           type="button"

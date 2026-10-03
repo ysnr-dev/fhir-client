@@ -21811,7 +21811,7 @@ body.page-home .app__main {
   overflow-wrap: anywhere;
 }
 
-/* ---- 注射カレンダー(カルテ左ペイン「注射」タブ) ---- */
+/* ---- 注射カレンダー(カルテ左ペイン「注射カレンダー」タブ) ---- */
 
 .karte-tabpanel.injection-calendar-panel {
   display: flex;
@@ -21883,6 +21883,12 @@ body.page-home .app__main {
   gap: 8px;
   margin-bottom: 8px;
   flex-wrap: wrap;
+}
+
+/* 週送りの ◀ ▶ はマルチチャートと同じく左右を詰める。 */
+.injection-calendar__toolbar .patient-chart__step {
+  padding-left: 7px;
+  padding-right: 7px;
 }
 
 .injection-calendar__range {

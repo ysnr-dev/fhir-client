@@ -21,7 +21,7 @@ import { injectionTaskStatus, injectionTasksByOrderId } from "./injectionTaskHel
 import { regimenOrderLabel, regimenOrderOf } from "./regimenOrderHelpers";
 import { referenceId } from "./shared";
 
-// 注射カレンダー(カルテ左ペイン「注射」タブ)。docs/injection-order-design.md §9。
+// 注射カレンダー(カルテ左ペイン「注射カレンダー」タブ)。docs/injection-order-design.md §9。
 //
 // 「RP × 日付」の表にする。行は経過表の注射欄と同じ行キー(薬剤の組・用法種別・経路)で、
 // 別の束ねで出した同じ内容の注射も同じ行に並ぶ。1 マスはその日のその RP で、予定時刻と
