@@ -2,6 +2,7 @@
 // テンプレート回答リソースの組み立て・復元。
 // https://jaspehr.jp/wp-content/docs/full-ig_v1.0.0/site/index.html
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
+import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 import { annotationOf, binaryIdFromAttachment } from "./schemaImage";
 
 export const JASPEHR_QUESTIONNAIRE_RESPONSE_PROFILE_URL =
@@ -115,6 +116,11 @@ export interface BuildQuestionnaireResponseArgs {
    * コース単位で診察を集めるのに使う(`radiotherapyReviewHelpers.ts`)。
    */
   basedOn?: fhir4.Reference[];
+  /**
+   * 記録した診療科。オーダーの依頼科と同じローカル拡張に入れ、カルテのカードに出す。
+   * 更新では保存済みの値を引き継ぐ。
+   */
+  department?: { departmentId: string; departmentName: string };
   // 更新時は id と identifier(報告単位ID)を引き継ぐ。
   existing?: fhir4.QuestionnaireResponse;
 }
@@ -131,7 +137,7 @@ function buildIdentifierValue(
 export function buildQuestionnaireResponse(
   args: BuildQuestionnaireResponseArgs,
 ): fhir4.QuestionnaireResponse {
-  const { questionnaire, patient, items, meta, problem, basedOn, existing } = args;
+  const { questionnaire, patient, items, meta, problem, basedOn, department, existing } = args;
 
   // contained の型は基底 Resource のため、いったん Practitioner として組み立てる。
   const author: fhir4.Practitioner = {
@@ -159,17 +165,21 @@ export function buildQuestionnaireResponse(
   const target = basedOn ?? existing?.basedOn;
   if (target?.length) response.basedOn = target;
   if (items.length) response.item = items;
+  const extension: fhir4.Extension[] = [];
   if (problem) {
-    response.extension = [
-      {
-        url: QR_PROBLEM_EXT_URL,
-        valueReference: {
-          reference: `Condition/${problem.conditionId}`,
-          display: problem.display,
-        },
+    extension.push({
+      url: QR_PROBLEM_EXT_URL,
+      valueReference: {
+        reference: `Condition/${problem.conditionId}`,
+        display: problem.display,
       },
-    ];
+    });
   }
+  const responseDepartment = department?.departmentId ? department : departmentOf(existing ?? {});
+  if (responseDepartment.departmentId) {
+    extension.push(departmentExtension(responseDepartment.departmentId, responseDepartment.departmentName));
+  }
+  if (extension.length) response.extension = extension;
 
   return response;
 }

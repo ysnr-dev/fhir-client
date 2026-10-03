@@ -14,6 +14,7 @@ import {
 import { NURSING_OBSERVATION_RESULT_SYSTEM, nursingVitalCodeOf } from "./nursingPerformHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
 import { buildBloodPressureComponents } from "./vitalHelpers";
+import { departmentExtension } from "./prescriptionHelpers";
 import { pathwayVarianceTaskEntries, type PathwayVarianceNotice } from "./pathwayVarianceHelpers";
 
 // クリニカルパスの日次評価(1 病日 × 1 OAT ユニット)の FHIR 構造。ePath の適用後パスデータに倣う。
@@ -385,6 +386,8 @@ export interface PathwayEvaluationContext {
   procedures: Map<string, fhir4.Procedure>;
   existing: PathwayEvaluationState | null;
   performer: { practitionerId: string; display: string } | null;
+  /** 記録した診療科。評価の Observation に入れ、カルテのカードに出す。 */
+  department?: { departmentId: string; departmentName: string };
   /** バリアンスの通知に要る情報。渡さなければ通知を作らない(指示簿のタスクの記録など)。 */
   variance?: PathwayVarianceNotice | null;
 }
@@ -500,6 +503,10 @@ export function buildPathwayEvaluationBundle(
       }),
       note: values.comment.trim() ? [{ text: values.comment.trim(), time: recordedAt }] : undefined,
     };
+    // 記録済みの評価は保存済みの拡張(診療科)をそのまま引き継ぐので、初回だけ入れる。
+    if (!existing?.observation && ctx.department?.departmentId) {
+      observation.extension = [departmentExtension(ctx.department.departmentId, ctx.department.departmentName)];
+    }
     if (!values.achievement) delete observation.valueCodeableConcept;
     if (observation.component?.length === 0) delete observation.component;
     if (!observation.note) delete observation.note;

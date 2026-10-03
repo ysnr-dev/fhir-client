@@ -357,6 +357,7 @@ export function labResultBundle(
 /** 画面のバイタル入力と同じ形(1 回の測定を束ねる identifier 付き)で Observation を作る。 */
 export function vitalEntries(
   patientId: string,
+  department: Named,
   dateTime: string,
   values: { weight?: number; systolic?: number; diastolic?: number; pulse?: number; temperature?: number; spo2?: number },
 ): fhir4.BundleEntry[] {
@@ -365,6 +366,7 @@ export function vitalEntries(
     patientId,
     entryId: crypto.randomUUID(),
     problem: null,
+    department: { departmentId: department.id, departmentName: department.name },
     values: {
       ...emptyVitalFormValues(),
       measuredAt: dateTime,
@@ -608,6 +610,7 @@ export function templateEntries(
   env: SeedEnv,
   questionnaire: fhir4.Questionnaire,
   patient: fhir4.Patient,
+  department: Named,
   dateTime: string,
   answers: Record<string, number>,
 ): fhir4.BundleEntry[] {
@@ -645,6 +648,7 @@ export function templateEntries(
     patient,
     items: itemsOf(questionnaire.item),
     meta: { status: "completed", authorName: env.practitioner.name, institutionNumber: DEFAULT_INSTITUTION_NUMBER },
+    department: { departmentId: department.id, departmentName: department.name },
   });
   response.authored = dateTime;
   return responseSaveBundle({ questionnaire, response }).entry ?? [];

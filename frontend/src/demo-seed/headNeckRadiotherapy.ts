@@ -133,15 +133,15 @@ export async function seedHeadNeckRadiotherapy(env: SeedEnv): Promise<void> {
   }
 
   for (const [n, weight] of RT_WEIGHT) {
-    await post({ resourceType: "Bundle", type: "transaction", entry: vitalEntries(patientId, at(weekday(day(n)), "09:30"), { weight }) });
+    await post({ resourceType: "Bundle", type: "transaction", entry: vitalEntries(patientId, radiation, at(weekday(day(n)), "09:30"), { weight }) });
   }
 
   const exams = EXAMS.filter((exam) => day(exam.day) <= daysAgo(0));
   for (const exam of exams) {
     const date = weekday(day(exam.day));
     const lab = labResultBundle(env, labs, patient, ent, date, [[LAB.alb, exam.alb]]);
-    const vitals = vitalEntries(patientId, at(date, "09:30"), { weight: exam.weight });
-    const oral = templateEntries(env, questionnaire, patient, at(date, "14:00"), {
+    const vitals = vitalEntries(patientId, ent, at(date, "09:30"), { weight: exam.weight });
+    const oral = templateEntries(env, questionnaire, patient, ent, at(date, "14:00"), {
       tci: exam.tci,
       mucosal_moisture: exam.moisture,
       bite_force: exam.bite,

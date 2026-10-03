@@ -161,6 +161,7 @@ import type { EndoscopyPerformDisplay } from "../fhir/endoscopyResultHelpers";
 import { endoscopyTaskStatusDisplay } from "../fhir/endoscopyTaskHelpers";
 import { isAsNeededUsage } from "../fhir/medicationScheduleHelpers";
 import {
+  departmentOf,
   groupByRp,
   hasDoseDays,
   orderContextSummary,
@@ -175,7 +176,7 @@ import {
   schemaImageRefs,
   summarizeQuestionnaireResponse,
 } from "../fhir/questionnaireResponseHelpers";
-import { vitalDisplayRows } from "../fhir/vitalHelpers";
+import { vitalDisplayRows, vitalEntryDepartment } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { AnesthesiaChartModal } from "./AnesthesiaChartModal";
 import { ClinicalNoteHistoryModal } from "./ClinicalNoteHistoryModal";
@@ -1138,21 +1139,36 @@ function cardTitle(item: KarteTimelineItem): string {
 
 function cardMeta(item: KarteTimelineItem): string {
   const time = timeOf(item.dateTime);
+  // 記録系のカードも、オーダーの「依頼科 | 依頼医師」と同じ並びで診療科・記入者を出す。
   if (item.kind === "note") {
-    return [time, statusLabel(item.note.status), item.note.author?.[0]?.display]
+    return [
+      time,
+      statusLabel(item.note.status),
+      departmentOf(item.note).departmentName,
+      item.note.author?.[0]?.display,
+    ]
       .filter(Boolean)
       .join(" | ");
   }
   if (item.kind === "qr") {
-    // 診療記録と同じく、時刻・ステータス・記入者を並べる。
     const summary = summarizeQuestionnaireResponse(item.response);
-    return [time, summary.statusLabel, summary.authorName].filter(Boolean).join(" | ");
+    return [time, summary.statusLabel, departmentOf(item.response).departmentName, summary.authorName]
+      .filter(Boolean)
+      .join(" | ");
   }
-  // バイタルは測定時刻だけ(誰が測ったかは Observation に持たせていない)。
-  if (item.kind === "vital") return time;
-  // パス評価は記録時刻・達成状態・記録者。
+  // バイタルは測定時刻と診療科(誰が測ったかは Observation に持たせていない)。
+  if (item.kind === "vital") {
+    return [time, vitalEntryDepartment(item.entry).departmentName].filter(Boolean).join(" | ");
+  }
   if (item.kind === "pathway-evaluation") {
-    return [time, item.evaluation.achievementLabel, item.evaluation.performerName].filter(Boolean).join(" | ");
+    return [
+      time,
+      item.evaluation.achievementLabel,
+      departmentOf(item.evaluation.observation).departmentName,
+      item.evaluation.performerName,
+    ]
+      .filter(Boolean)
+      .join(" | ");
   }
   const requesterSummary = orderContextSummary(prescriptionRequester(item.serviceRequest));
   // 放射線検査は撮影時刻を指定できるので、依頼科・依頼医師の前に添える。記入時刻を

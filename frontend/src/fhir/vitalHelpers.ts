@@ -1,4 +1,5 @@
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
+import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
 import { codingBySystem } from "./shared";
 
@@ -197,6 +198,8 @@ export interface BuildVitalObservationsArgs {
   /** 1 回の測定を束ねる identifier の値。編集では既存のものを使い回す。 */
   entryId: string;
   problem: ProblemRef | null;
+  /** 記録した診療科。オーダーの依頼科と同じローカル拡張に入れ、カルテのカードに出す。 */
+  department?: { departmentId: string; departmentName: string };
 }
 
 /**
@@ -204,10 +207,15 @@ export interface BuildVitalObservationsArgs {
  * (0 や null の Observation を残すと「測って 0 だった」と読めてしまう)。
  */
 export function buildVitalObservations(args: BuildVitalObservationsArgs): fhir4.Observation[] {
-  const { values, patientId, entryId, problem } = args;
+  const { values, patientId, entryId, problem, department } = args;
   // datetime-local はタイムゾーンを持たないので、端末のオフセットを付けて確定させる。
   const effectiveDateTime = new Date(values.measuredAt).toISOString();
-  const extension = problemExtension(problem);
+  const extension = [
+    ...(problemExtension(problem) ?? []),
+    ...(department?.departmentId
+      ? [departmentExtension(department.departmentId, department.departmentName)]
+      : []),
+  ];
 
   const base = {
     resourceType: "Observation" as const,
@@ -216,7 +224,7 @@ export function buildVitalObservations(args: BuildVitalObservationsArgs): fhir4.
     category: [{ coding: [{ system: OBSERVATION_CATEGORY_SYSTEM, code: "vital-signs" }] }],
     subject: { reference: `Patient/${patientId}` },
     effectiveDateTime,
-    ...(extension ? { extension } : {}),
+    ...(extension.length ? { extension } : {}),
   };
 
   const observations: fhir4.Observation[] = [];
@@ -340,6 +348,11 @@ export function vitalEntryProblem(entry: VitalEntry): ProblemRef | null {
     if (problem) return problem;
   }
   return null;
+}
+
+/** 測定を記録した診療科。どの Observation にも同じ値が入っている。 */
+export function vitalEntryDepartment(entry: VitalEntry): { departmentId: string; departmentName: string } {
+  return departmentOf(entry.observations[0] ?? {});
 }
 
 function observationCode(observation: fhir4.Observation): string {

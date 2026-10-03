@@ -20,6 +20,7 @@ import { buildPopulateContext } from "../fhir/populateContext";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { ProblemSelect } from "./ProblemSelect";
 import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
+import { useOrderContext } from "../hooks/useOrderContext";
 import { useSelfInstitutionNumber } from "../hooks/useSelfInstitutionNumber";
 import {
   DEFAULT_INSTITUTION_NUMBER,
@@ -87,6 +88,8 @@ export function QuestionnaireResponseCreatePanel({
   // 対象プロブレム(POMR)。診療記録・オーダーと同じく、回答 1 件に 1 プロブレム。
   const [problem, setProblem] = useState<ProblemRef | null>(defaultProblem ?? null);
   const problemOptions = useProblemOptions(patientId);
+  // 記録した診療科。ヘッダーで選択中の科を焼き付ける(オーダーの依頼科と同じ扱い)。
+  const orderContext = useOrderContext();
 
   // 前回の回答。基礎データのように「前回を見て差分を直す」使い方のために複写できる。
   // 自動では入れない(前回の内容を今回の所見として無自覚に確定してしまうため)。
@@ -152,7 +155,15 @@ export function QuestionnaireResponseCreatePanel({
     createResponse.mutate(
       {
         questionnaire,
-        response: buildQuestionnaireResponse({ questionnaire, patient, items, meta, problem, basedOn }),
+        response: buildQuestionnaireResponse({
+          questionnaire,
+          patient,
+          items,
+          meta,
+          problem,
+          basedOn,
+          department: orderContext,
+        }),
         imageEntries,
       },
       { onSuccess: onSaved },

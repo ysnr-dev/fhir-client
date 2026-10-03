@@ -488,8 +488,8 @@ export function buildClinicalNote(
      */
     consultOrderId?: string;
     /**
-     * 回答した診療科。オーダーの依頼科・検査結果の実施科と同じローカル拡張に入れる
-     * (どの科が答えたかを、参照を引き直さずに一覧・カードで出せるように)。
+     * 記録した診療科(他科依頼の回答なら回答した科)。オーダーの依頼科・検査結果の
+     * 実施科と同じローカル拡張に入れる(参照を引き直さずに一覧・カードで出せるように)。
      */
     department?: { departmentId: string; departmentName: string };
   },

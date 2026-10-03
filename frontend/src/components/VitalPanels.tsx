@@ -7,11 +7,13 @@ import {
   parseVitalEntry,
   toDateTimeLocal,
   validateVitalForm,
+  vitalEntryDepartment,
   vitalEntryProblem,
   type VitalEntry,
   type VitalFormValues,
 } from "../fhir/vitalHelpers";
 import { ErrorBanner } from "./ErrorBanner";
+import { useOrderContext } from "../hooks/useOrderContext";
 import { useProblemOptions } from "../hooks/useProblemOptions";
 import { VitalForm } from "./VitalForm";
 
@@ -34,6 +36,8 @@ export function VitalCreatePanel({ patientId, defaultProblem, onSaved }: VitalCr
   const [problem, setProblem] = useState<ProblemRef | null>(defaultProblem ?? null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const problemOptions = useProblemOptions(patientId);
+  // 記録した診療科。ヘッダーで選択中の科を焼き付ける(オーダーの依頼科と同じ扱い)。
+  const orderContext = useOrderContext();
   const save = useSaveVitalEntry();
 
   function handleSubmit() {
@@ -50,6 +54,7 @@ export function VitalCreatePanel({ patientId, defaultProblem, onSaved }: VitalCr
           patientId,
           entryId: crypto.randomUUID(),
           problem,
+          department: orderContext,
         }),
       },
       { onSuccess: onSaved },
@@ -132,6 +137,8 @@ function EditForm({
           patientId,
           entryId: entry.entryId,
           problem,
+          // 作り直しでも記録した科は保存済みのものを引き継ぐ。
+          department: vitalEntryDepartment(entry),
         }),
         existingObservationIds: entry.observations
           .map((observation) => observation.id ?? "")

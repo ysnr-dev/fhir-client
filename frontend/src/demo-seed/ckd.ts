@@ -202,7 +202,7 @@ export async function seedCkd(env: SeedEnv): Promise<void> {
       [LAB.protein, protein],
     ]);
     const rx = prescriptionBundle(drugs, patientId, requester, date, prescriptionFor(day, days), ckd);
-    const vitals = vitalEntries(patientId, at(date, "09:30"), { weight, systolic, diastolic });
+    const vitals = vitalEntries(patientId, department, at(date, "09:30"), { weight, systolic, diastolic });
     await post({
       resourceType: "Bundle",
       type: "transaction",

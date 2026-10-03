@@ -35,6 +35,7 @@ import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { useValidationError } from "../hooks/useValidationError";
 import { toDateTimeInputValue, toFhirDateTime } from "../lib/dates";
 import { usePathwayVarianceNotice } from "../hooks/usePathwayVarianceNotice";
+import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { ObservationInput } from "./NursingPerformModal";
 import { TemplateEntryModal } from "./TemplateEntryModal";
@@ -58,6 +59,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
   const nursingPerforms = useNursingPerformsOf(patientId);
   const performDates = useMemo(() => nursingPerformDates(nursingPerforms.data), [nursingPerforms.data]);
   const { practitionerId, practitioner } = useCurrentPractitioner();
+  const orderContext = useOrderContext();
   const record = useRecordPathwayEvaluation();
   const variance = usePathwayVarianceNotice(patientId, tree.data?.application);
   const [validationError, setValidationError, validationErrorRef] = useValidationError();
@@ -166,6 +168,7 @@ export function PathwayEvaluatePanel({ patientId, applyId, unitId, onSaved }: Pa
           practitionerId && practitioner
             ? { practitionerId, display: practitionerDisplayName(practitioner) }
             : null,
+        department: orderContext,
         variance: variance.noticeFor(event),
       },
       values,

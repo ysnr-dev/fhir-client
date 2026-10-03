@@ -121,7 +121,7 @@ export async function seedDiabetes(env: SeedEnv): Promise<void> {
     const rx = prescriptionBundle(drugs, patientId, requester, date, rps, dm);
 
     const systolic = 132 + Math.round(k * 0.4);
-    const vitals = vitalEntries(patientId, at(date, "09:30"), {
+    const vitals = vitalEntries(patientId, department, at(date, "09:30"), {
       weight: WEIGHT[k],
       systolic,
       diastolic: Math.round(systolic * 0.62),

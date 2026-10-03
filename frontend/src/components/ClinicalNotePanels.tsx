@@ -17,6 +17,7 @@ import {
 import { isPatientMismatch } from "../fhir/patientHelpers";
 import { parsePractitionerRole } from "../fhir/practitionerRoleHelpers";
 import { useLoginAutofillSource } from "../hooks/useLoginAutofillSource";
+import { useOrderContext } from "../hooks/useOrderContext";
 
 // 診療記録の登録・編集 UI。ページ(/patients/:id/clinical-notes/new など)と
 // カルテ画面の右ペインの双方から使うため、保存後の遷移は onSaved に委ねる。
@@ -37,6 +38,8 @@ export function ClinicalNoteCreatePanel({
   // Composition.author(1..*)にログイン中の医療従事者の実参照を入れる。
   // administrator など Practitioner 未紐付けのアカウントでは validate で保存を止める。
   const { practitionerId, practitioner } = useCurrentPractitioner();
+  // 記録した診療科。ヘッダーで選択中の科を焼き付ける(オーダーの依頼科と同じ扱い)。
+  const orderContext = useOrderContext();
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // 初期値のタイトルは、職種がログイン中の医療従事者と一致するマスタの先頭(表示順)。
@@ -56,7 +59,7 @@ export function ClinicalNoteCreatePanel({
       return;
     }
     setValidationError(null);
-    createNote.mutate(buildClinicalNote(values, { patientId, practitioner }), {
+    createNote.mutate(buildClinicalNote(values, { patientId, practitioner, department: orderContext }), {
       onSuccess: onSaved,
     });
   }

@@ -18,6 +18,7 @@ import { isOrderDrivenTask, pathwayTaskPerformedOn } from "../fhir/pathwaySheetH
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { nowFhirDateTime } from "../lib/dates";
 import { usePathwayVarianceNotice } from "../hooks/usePathwayVarianceNotice";
+import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
 import { ObservationInput } from "./NursingPerformModal";
 
@@ -86,6 +87,7 @@ export function PathwayDayView({
   const record = useRecordPathwayEvaluation();
   const variance = usePathwayVarianceNotice(patientId, application);
   const { practitionerId, practitioner } = useCurrentPractitioner();
+  const orderContext = useOrderContext();
   // 入力中の値はアウトカムごとに持ち、病日をめくっても残す(記録で全部まとめて送る)。
   const [drafts, setDrafts] = useState<Map<string, UnitDraft>>(new Map());
 
@@ -152,6 +154,7 @@ export function PathwayDayView({
             practitionerId && practitioner
               ? { practitionerId, display: practitionerDisplayName(practitioner) }
               : null,
+          department: orderContext,
           variance: variance.noticeFor(unitEvent),
         },
         {

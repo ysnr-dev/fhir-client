@@ -97,6 +97,7 @@ export async function seedPeriodontal(env: SeedEnv): Promise<void> {
   const patientId = patient.id;
   const internal = departmentOf(env, "糖尿病内科", "内分泌内科", "内科");
   const requester = requesterOf(env, internal);
+  const dental = departmentOf(env, "歯科", "歯科口腔外科", "内科");
 
   const labs = new LabMaster();
   await labs.load(Object.values(LAB));
@@ -114,13 +115,13 @@ export async function seedPeriodontal(env: SeedEnv): Promise<void> {
     const glucose = Math.round(a1c * 28.7 - 46.7 + ((k * 7) % 11) - 5);
     const lab = labResultBundle(env, labs, patient, internal, date, [[LAB.a1c, a1c], [LAB.glu, glucose]]);
     const rx = prescriptionBundle(drugs, patientId, requester, date, [{ usage: BID, days: 28, medicines: [[MED.met500, 2]] }], dm);
-    const vitals = vitalEntries(patientId, at(date, "09:30"), { weight: 72.4 - k * 0.05, systolic: 128, diastolic: 78 });
+    const vitals = vitalEntries(patientId, internal, at(date, "09:30"), { weight: 72.4 - k * 0.05, systolic: 128, diastolic: 78 });
     await post({ resourceType: "Bundle", type: "transaction", entry: [...(lab?.entry ?? []), ...(rx.entry ?? []), ...vitals] });
   }
 
   const exams = EXAMS.filter((exam) => day(exam.day) <= daysAgo(0));
   for (const exam of exams) {
-    const entries = templateEntries(env, questionnaire, patient, at(weekday(day(exam.day)), "14:00"), {
+    const entries = templateEntries(env, questionnaire, patient, dental, at(weekday(day(exam.day)), "14:00"), {
       exam_type: exam.exam,
       present_teeth: exam.teeth,
       pd4_sites: exam.pd4,

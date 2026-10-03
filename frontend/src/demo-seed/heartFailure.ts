@@ -23,6 +23,7 @@ import {
   vitalEntries,
   vitalItem,
   type RpSpec,
+  type Named,
   type SeedEnv,
 } from "./base";
 import { addDays } from "../lib/dates";
@@ -157,6 +158,7 @@ function symptomEntries(
   env: SeedEnv,
   questionnaire: fhir4.Questionnaire,
   patient: fhir4.Patient,
+  department: Named,
   dateTime: string,
   edema: number,
   nyha: number,
@@ -171,6 +173,7 @@ function symptomEntries(
     patient,
     items: [answer("edema", edema), answer("nyha", nyha)],
     meta: { status: "completed", authorName: env.practitioner.name, institutionNumber: DEFAULT_INSTITUTION_NUMBER },
+    department: { departmentId: department.id, departmentName: department.name },
   });
   response.authored = dateTime;
   return responseSaveBundle({ questionnaire, response }).entry ?? [];
@@ -218,7 +221,7 @@ export async function seedHeartFailure(env: SeedEnv): Promise<void> {
     if (visit.k != null) values.push([LAB.k, visit.k]);
     if (visit.na != null) values.push([LAB.na, visit.na]);
     const lab = values.length ? labResultBundle(env, labs, patient, department, date, values, setting) : null;
-    const vitals = vitalEntries(patientId, at(date, "09:30"), {
+    const vitals = vitalEntries(patientId, department, at(date, "09:30"), {
       weight: visit.weight,
       systolic: visit.systolic,
       diastolic: visit.diastolic,
@@ -226,7 +229,7 @@ export async function seedHeartFailure(env: SeedEnv): Promise<void> {
     });
     const symptoms =
       visit.edema != null && visit.nyha != null
-        ? symptomEntries(env, questionnaire, patient, at(date, "10:00"), visit.edema, visit.nyha)
+        ? symptomEntries(env, questionnaire, patient, department, at(date, "10:00"), visit.edema, visit.nyha)
         : [];
     const plan = prescriptionFor(visit.day);
     const rx = plan

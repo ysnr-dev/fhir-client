@@ -472,13 +472,13 @@ export async function seedRectalCancer(env: SeedEnv): Promise<void> {
       n >= 110 && n <= 126 ? "inpatient" : "outpatient",
     );
     const weight = WEIGHT.find(([d]) => d === n)?.[1];
-    const vitals = weight != null ? vitalEntries(patientId, at(date, "09:20"), { weight }) : [];
+    const vitals = weight != null ? vitalEntries(patientId, n >= 110 && n <= 126 ? surgical : gastro, at(date, "09:20"), { weight }) : [];
     await post({ resourceType: "Bundle", type: "transaction", entry: [...(lab?.entry ?? []), ...vitals] });
   }
   await post({
     resourceType: "Bundle",
     type: "transaction",
-    entry: vitalEntries(patientId, at(t0, "09:15"), { systolic: 124, diastolic: 76, pulse: 82, temperature: 36.6 }),
+    entry: vitalEntries(patientId, gastro, at(t0, "09:15"), { systolic: 124, diastolic: 76, pulse: 82, temperature: 36.6 }),
   });
 
   // 精査
