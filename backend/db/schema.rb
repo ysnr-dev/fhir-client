@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_10_01_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_10_03_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -428,6 +428,38 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_01_100000) do
     t.datetime "updated_at", null: false
     t.index ["icd10"], name: "index_master_dpc_icd_codes_on_icd10"
     t.index ["mdc6"], name: "index_master_dpc_icd_codes_on_mdc6"
+  end
+
+  create_table "master_drug_dose_rules", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "dosage_form"
+    t.integer "age_from"
+    t.integer "age_to"
+    t.string "renal_index"
+    t.decimal "renal_below", precision: 8, scale: 2
+    t.decimal "max_single_dose", precision: 12, scale: 4
+    t.decimal "max_daily_dose", precision: 12, scale: 4
+    t.string "dose_unit"
+    t.boolean "per_kg", default: false, null: false
+    t.string "severity", null: false
+    t.text "message"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_master_drug_dose_rules_on_code"
+  end
+
+  create_table "master_drug_interactions", force: :cascade do |t|
+    t.string "code_a", null: false
+    t.string "name_a", null: false
+    t.string "code_b", null: false
+    t.string "name_b", null: false
+    t.string "severity", null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code_a", "code_b"], name: "index_master_drug_interactions_on_code_a_and_code_b", unique: true
+    t.index ["code_b"], name: "index_master_drug_interactions_on_code_b"
   end
 
   create_table "master_endoscopy_dataset_details", force: :cascade do |t|

@@ -39,6 +39,7 @@ import type { FlowsheetOralData } from "../../fhir/flowsheetOralHelpers";
 import { buildOralPerformDeleteEntries, type OralPerformDisplay } from "../../fhir/oralPerformHelpers";
 import { addDays } from "../../fhir/scheduleHelpers";
 import { createResource, postBundle, searchResource } from "../fhirClient";
+import { fetchYakkaCodes } from "../masterClient";
 import { ORAL_LOOKBACK_DAYS, resourcesOfType, setOrderPeriod } from "./core";
 import { splitLocationMatches } from "./location";
 import { fetchNursingPerforms, nursingOrderParams, nursingOrderSetOf, nursingPerformParams } from "./nursing";
@@ -665,6 +666,12 @@ export function useActiveMedications(patientId: string | undefined, onDate: stri
       );
 
       const active: ActiveMedication[] = [];
+      const lines: {
+        orderId: string;
+        name: string;
+        endDate: string;
+        medicine: { yj_code?: string | null; medicine_code: string; generic?: boolean };
+      }[] = [];
       for (const order of orders) {
         if (!order.id) continue;
         if (rxTaskStatus(tasksByOrder.get(order.id)) === "cancelled") continue;
@@ -677,15 +684,29 @@ export function useActiveMedications(patientId: string | undefined, onDate: stri
           const endDate = rpEndDate(startDate, rp) ?? startDate;
           if (endDate < onDate) continue;
           for (const line of rp.medicines) {
-            const ingredient = ingredientKey({
-              yj_code: line.yjCode,
-              medicine_code: line.code,
-              generic: line.generic,
+            lines.push({
+              orderId: order.id,
+              name: line.name,
+              endDate,
+              medicine: { yj_code: line.yjCode, medicine_code: line.code, generic: line.generic },
             });
-            if (!ingredient) continue;
-            active.push({ orderId: order.id, name: line.name, ingredient, endDate });
           }
         }
+      }
+
+      // YJ コードを持たない薬(統一名収載品など)は、医薬品マスタの薬価基準コードで成分を補う。
+      const missing = lines
+        .filter((l) => !ingredientKey(l.medicine) && l.medicine.medicine_code)
+        .map((l) => l.medicine.medicine_code);
+      const yakkaCodes = missing.length > 0 ? await fetchYakkaCodes(missing) : new Map<string, string>();
+
+      for (const line of lines) {
+        const ingredient = ingredientKey({
+          ...line.medicine,
+          yakka_code: yakkaCodes.get(line.medicine.medicine_code),
+        });
+        if (!ingredient) continue;
+        active.push({ orderId: line.orderId, name: line.name, ingredient, endDate: line.endDate });
       }
       return active;
     },

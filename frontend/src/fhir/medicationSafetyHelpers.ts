@@ -22,6 +22,10 @@ const INGREDIENT_LENGTH = 7;
  * 一般名処方は YJ コードを持たないが、一般名処方コードが同じ体系(末尾 3 桁が ZZZ)
  * なので同じ桁を使える。
  *
+ * YJ コードが無い薬(HOT コードマスタに載っていない統一名収載品など。例: ワルファリンカリウム錠)は
+ * 薬価基準コードの上 7 桁を使う。薬価基準コードと YJ コードは上 9 桁が一致する(開発 DB の
+ * 内服で不一致 0 件)ので、成分の判定には同じに使える。
+ *
  * **限界**: 上 4 桁が薬効分類なので、同じ成分でも効能が違えば別のキーになる。
  * 例: アスピリン(解熱鎮痛 1143001)とバイアスピリン(抗血小板 3399007)は重複と出ない。
  * 成分そのもので突き合わせるには別の成分マスタが要る(アレルギー照合も同じ制約)。
@@ -29,12 +33,26 @@ const INGREDIENT_LENGTH = 7;
 export function ingredientKey(
   // 保存済みのオーダーから起こした表示用の行(`MedicineLineDisplay`)も渡せるよう、
   // マスタの `Medicine` そのものではなく必要な 3 項目だけを受ける。
-  medicine: { yj_code?: string | null; medicine_code?: string | null; generic?: boolean } | null | undefined,
+  medicine:
+    | {
+        yj_code?: string | null;
+        medicine_code?: string | null;
+        generic?: boolean;
+        yakka_code?: string | null;
+      }
+    | null
+    | undefined,
 ): string | null {
   if (!medicine) return null;
-  const code = medicine.yj_code || (medicine.generic ? medicine.medicine_code : "");
+  const code =
+    ingredientSourceCode(medicine) || (medicine.generic ? medicine.medicine_code : "");
   const trimmed = (code ?? "").trim();
   return trimmed.length >= INGREDIENT_LENGTH ? trimmed.slice(0, INGREDIENT_LENGTH) : null;
+}
+
+/** 成分の判定に使う 12 桁のコード。YJ コード、無ければ薬価基準コード。 */
+function ingredientSourceCode(medicine: { yj_code?: string | null; yakka_code?: string | null }): string {
+  return (medicine.yj_code || medicine.yakka_code || "").trim();
 }
 
 export type MedicineCautionKind =
@@ -109,12 +127,13 @@ export interface ActiveMedication {
   brought?: boolean;
 }
 
-export type MedicationWarningKind = "allergy" | "duplicate";
+/** `interaction` と `dose` は施設マスタによるチェック(`drugCheckHelpers.ts`)。 */
+export type MedicationWarningKind = "allergy" | "duplicate" | "interaction" | "dose";
 
 export interface MedicationWarning {
   kind: MedicationWarningKind;
   text: string;
-  /** 重篤度が高いアレルギー。赤く出す。 */
+  /** 重篤度が高いアレルギー・併用禁忌・禁忌・上限超過。赤く出す。 */
   high: boolean;
   /** 補足(アレルギーの症状など)。title 属性に出す。 */
   detail?: string;
@@ -131,8 +150,8 @@ export interface MedicationRp {
 /**
  * フォームの全薬剤行ぶんの警告を、`rps` と同じ形([RP][薬剤])で返す。
  *
- * 薬剤を選んでいない行は空配列。YJ コードを持たない薬剤(HOT コードマスタに無いもの)は
- * アレルギーも重複も照合できず**黙って通る**ので、薬剤マスタの取り込み範囲が穴になる。
+ * 薬剤を選んでいない行は空配列。YJ コードも薬価基準コードも持たない薬剤は
+ * アレルギーも重複も照合できず**黙って通る**。
  */
 export function buildMedicationWarnings(args: {
   rps: MedicationRp[];
@@ -161,7 +180,8 @@ export function buildMedicationWarnings(args: {
       const warnings: MedicationWarning[] = [];
       if (!line.medicine) return warnings;
 
-      for (const match of matchMedicationAllergies(line.medicine.yj_code, allergies)) {
+      // 成分指定のアレルギー(一般名コード = 上 9 桁)は薬価基準コードでも当たる。
+      for (const match of matchMedicationAllergies(ingredientSourceCode(line.medicine), allergies)) {
         warnings.push({
           kind: "allergy",
           text: `アレルギー: ${allergyMatchLabel(match)}`,

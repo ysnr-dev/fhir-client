@@ -106,7 +106,7 @@ export interface MedicineUsage {
 
 export async function searchMedicines(params: {
   name?: string;
-  /** レセプト電算コードの完全一致(フォーミュラリの行から医薬品マスタの行を引くとき)。 */
+  /** レセプト電算コードの完全一致。カンマ区切りで複数指定できる。 */
   medicine_code?: string;
   yakko_code?: string;
   yakko_name?: string;
@@ -132,6 +132,26 @@ export async function searchMedicines(params: {
   const res = await masterFetch(`/master/medicines?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<Medicine>;
+}
+
+const YAKKA_LOOKUP_CHUNK = 100;
+
+/**
+ * レセプト電算コード → 薬価基準コード。保存済みのオーダーは YJ コードを持たない薬
+ * (統一名収載品など)の成分が分からないので、医薬品マスタを引き直して補う。
+ * マスタに無いコードは入らない。
+ */
+export async function fetchYakkaCodes(medicineCodes: string[]): Promise<Map<string, string>> {
+  const codes = Array.from(new Set(medicineCodes.filter(Boolean)));
+  const map = new Map<string, string>();
+  for (let i = 0; i < codes.length; i += YAKKA_LOOKUP_CHUNK) {
+    const chunk = codes.slice(i, i + YAKKA_LOOKUP_CHUNK);
+    const result = await searchMedicines({ medicine_code: chunk.join(","), per: YAKKA_LOOKUP_CHUNK });
+    for (const medicine of result.items) {
+      if (medicine.yakka_code) map.set(medicine.medicine_code, medicine.yakka_code);
+    }
+  }
+  return map;
 }
 
 // 薬効分類の選択プルダウン用。全件を薬効分類番号順で返す（ページングなし）。

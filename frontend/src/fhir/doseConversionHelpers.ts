@@ -39,6 +39,40 @@ export function toMilliliters(
   return dose * mlPerPack;
 }
 
+/**
+ * 投与量を任意の単位に直す。薬剤チェックの用量上限(mg/日 など)と比べるのに使う。
+ * いったん製剤数に直し(単位が薬価算定単位か空ならそのまま)、目的の単位の係数を掛ける。
+ * 換算行が足りなければ null。
+ */
+export function convertDose(
+  dose: number,
+  unit: string | null | undefined,
+  medicineCode: string,
+  targetUnit: string,
+  conversions: MedicineDoseConversionMap | undefined,
+): number | null {
+  const from = (unit ?? "").trim();
+  const to = targetUnit.trim();
+  if (from === to) return dose;
+
+  const byUnit = conversions?.factors.get(medicineCode);
+  const packUnit = conversions?.packUnits.get(medicineCode);
+  if (!packUnit) return null;
+
+  let packs: number;
+  if (!from || from === packUnit) {
+    packs = dose;
+  } else {
+    const fromFactor = byUnit?.get(from);
+    if (!fromFactor) return null;
+    packs = dose / fromFactor;
+  }
+
+  if (to === packUnit) return packs;
+  const toFactor = byUnit?.get(to);
+  return toFactor ? packs * toFactor : null;
+}
+
 export interface MedicineDoseConversionMap {
   /** 薬剤コード → 力価の単位 → 1 [薬価算定単位] あたりの力価。 */
   factors: Map<string, Map<string, number>>;

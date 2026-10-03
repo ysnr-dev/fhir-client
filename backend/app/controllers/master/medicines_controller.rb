@@ -17,7 +17,8 @@ module Master
       end
 
       scope = medicines_with_type
-      scope = scope.where(medicine_code: params[:medicine_code]) if params[:medicine_code].present?
+      # カンマ区切りで複数指定できる(保存済みのオーダーの薬をまとめて引き直すとき)。
+      scope = scope.where(medicine_code: params[:medicine_code].split(",")) if params[:medicine_code].present?
       scope = scope.where(yakka_code: params[:yakka_code]) if params[:yakka_code].present?
       # 剤形区分(1:内用薬、4:注射薬、6:外用薬、8:歯科用薬剤)。注射オーダーの医薬品検索で使う。
       scope = scope.where(dosage_form: params[:dosage_form]) if params[:dosage_form].present?

@@ -10,6 +10,7 @@ import {
   emptyPrescriptionForm,
   emptyRp,
   hasDoseDays,
+  prescriptionLineDose,
   SETTING_OPTIONS,
   type MedicineLineValues,
   type PrescriptionFormValues,
@@ -146,10 +147,17 @@ export function PrescriptionForm({
       ),
     [values.rps],
   );
+  const checkedRps = useMemo(
+    () =>
+      values.rps.map((rp) => ({
+        medicines: rp.medicines.map((m) => ({ medicine: m.medicine, dose: prescriptionLineDose(rp, m) })),
+      })),
+    [values.rps],
+  );
   const warnings = useMedicationWarnings({
     patientId: setMode ? "" : patientId,
     startDate: values.startDate,
-    rps: values.rps,
+    rps: checkedRps,
     excludeOrderId: orderId,
     excludeBroughtIds: broughtIds,
   });

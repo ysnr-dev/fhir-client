@@ -86,6 +86,7 @@ import { PatientCautionPage } from "./pages/PatientCautionPage";
 import { ClinicalNoteTitlePage } from "./pages/ClinicalNoteTitlePage";
 import { MedicineDoseConversionPage } from "./pages/MedicineDoseConversionPage";
 import { FormularyPage } from "./pages/FormularyPage";
+import { DrugCheckPage } from "./pages/DrugCheckPage";
 import { PractitionerCreatePage } from "./pages/PractitionerCreatePage";
 import { PractitionerEditPage } from "./pages/PractitionerEditPage";
 import { PractitionerListPage } from "./pages/PractitionerListPage";
@@ -371,6 +372,9 @@ function App() {
               </Link>
               <Link to="/formularies" className="row-menu__item">
                 フォーミュラリ
+              </Link>
+              <Link to="/drug-checks" className="row-menu__item">
+                薬剤チェック
               </Link>
             </SubMenu>
             {/* 化学療法のマスタ。レジメンは審査委員会で承認する施設共通の参照表なので
@@ -702,6 +706,7 @@ function App() {
           <Route path="/master-import" element={<MasterImportPage />} />
           <Route path="/medicine-dose-conversions" element={<MedicineDoseConversionPage />} />
           <Route path="/formularies" element={<FormularyPage />} />
+          <Route path="/drug-checks" element={<DrugCheckPage />} />
           <Route path="/lab-order-items" element={<LabOrderItemPage />} />
           <Route path="/lab-result-items" element={<LabResultItemPage />} />
           <Route path="/lab-order-item-layouts" element={<LabOrderItemLayoutPage />} />

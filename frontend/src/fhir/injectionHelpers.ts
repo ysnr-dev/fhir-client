@@ -353,6 +353,7 @@ export interface RpDoseTotal {
 }
 
 import { toMilliliters, type MedicineDoseConversionMap } from "./doseConversionHelpers";
+import type { LineDose } from "./drugCheckHelpers";
 
 /**
  * RP の総投与量(mL)。手入力の注射は投与量を薬価算定単位(管・瓶・袋…)で入れるが、
@@ -375,6 +376,20 @@ export function rpDoseTotal(
     else ml += converted;
   }
   return { ml, unconvertible };
+}
+
+/**
+ * 薬剤チェックの用量上限と比べる量(`drugCheckHelpers.LineDose`)。投与量が 1 回(1 施用)の量で、
+ * 1 日量は施用の時刻の数を掛けたもの。時刻が未入力なら 1 日 1 回とみなす。
+ */
+export function injectionLineDose(
+  rp: Pick<InjectionRpValues, "times">,
+  line: Pick<MedicineLineValues, "medicine" | "dose">,
+): LineDose | null {
+  const dose = Number(line.dose);
+  if (!line.medicine || !(dose > 0)) return null;
+  const times = Math.max(rp.times.length, 1);
+  return { daily: dose * times, single: dose, unit: line.medicine.unit_name ?? "" };
 }
 
 /** 総投与量(mL)と投与時間から投与速度(mL/h)を求める。表示・保存とも小数第 1 位まで。 */

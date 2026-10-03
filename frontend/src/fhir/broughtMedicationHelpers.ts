@@ -137,15 +137,21 @@ export function countBroughtStates(statements: fhir4.MedicationStatement[]) {
 }
 
 /**
- * 重複チェックの相手にする持参薬(未鑑別・未判断)。成分キーは YJ コードから作るので、
- * 名前だけで登録した鑑別前の薬は相手にならない(docs §6)。
+ * 重複チェックの相手にする持参薬(未鑑別・未判断)。成分キーは YJ コード(無ければ
+ * `yakkaCodes` で引いた薬価基準コード)から作るので、名前だけで登録した鑑別前の薬は
+ * 相手にならない(docs §6)。
  */
 export function broughtActiveMedications(
   statements: fhir4.MedicationStatement[],
+  /** レセプト電算コード → 薬価基準コード。 */
+  yakkaCodes?: Map<string, string>,
 ): ActiveMedication[] {
   return statements.filter(isAwaitingDecision).flatMap((statement) => {
     const summary = summarizeBroughtMedication(statement);
-    const ingredient = ingredientKey(summary.medicine);
+    const medicine = summary.medicine;
+    const ingredient = ingredientKey(
+      medicine ? { ...medicine, yakka_code: yakkaCodes?.get(medicine.medicine_code) } : null,
+    );
     return ingredient && summary.id
       ? [{ orderId: summary.id, name: summary.name, ingredient, endDate: "", brought: true }]
       : [];

@@ -38,6 +38,12 @@ RSpec.describe "Master::Medicines", type: :request do
       JSON.parse(response.body)["items"].map { |i| i["name"] }
     end
 
+    it "医薬品コードはカンマ区切りで複数指定できる" do
+      get "/master/medicines", params: { medicine_code: "610000001,610000003" }
+
+      expect(JSON.parse(response.body)["items"].map { |i| i["medicine_code"] }).to contain_exactly("610000001", "610000003")
+    end
+
     it "ひらがなでカタカナ名にヒットする" do
       expect(names_for("ろきそにん")).to eq(["ロキソニン錠６０ｍｇ"])
     end

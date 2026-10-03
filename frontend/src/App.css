@@ -7953,6 +7953,64 @@ body.karte-wide {
 }
 
 /* フォーミュラリマスタ: 左に薬効群、右に選んだ群の薬剤(順位順)。 */
+/* 薬剤チェックの施設マスタ(docs/drug-check-master-design.md)。 */
+.drug-check__drug,
+.drug-check__inline {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.drug-check__drug > span:first-child,
+.drug-check__inline > span:first-child {
+  min-width: 4em;
+}
+
+.lab-order-item__fields .drug-check__code {
+  width: 8em;
+}
+
+.lab-order-item__fields .drug-check__name {
+  width: 24em;
+}
+
+.lab-order-item__fields .drug-check__inline input[type="number"] {
+  width: 6em;
+}
+
+.lab-order-item__fields .drug-check__unit {
+  width: 5em;
+}
+
+.lab-order-item__fields label.drug-check__check {
+  flex-direction: row;
+  align-items: center;
+}
+
+.drug-check__textarea {
+  min-width: 32em;
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.drug-check__note {
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+
+.drug-check__severity--high {
+  color: var(--danger, #c0392b);
+  font-weight: 600;
+}
+
 .formulary-page {
   display: grid;
   grid-template-columns: minmax(360px, 2fr) 3fr;

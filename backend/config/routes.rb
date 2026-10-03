@@ -142,6 +142,9 @@ Rails.application.routes.draw do
     resources :formulary_entries, only: %i[show create update destroy] do
       collection { post :reorder }
     end
+    # 薬剤チェック(相互作用・用量と患者条件)。docs/drug-check-master-design.md
+    resources :drug_interactions, only: %i[index show create update destroy]
+    resources :drug_dose_rules, only: %i[index show create update destroy]
     # 投与量の単位換算。配布ファイルではなく規格単位から生成 + 手動メンテするため
     # 取込ではなく generate を持つ。
     resources :medicine_dose_conversions, only: %i[index show create update destroy] do

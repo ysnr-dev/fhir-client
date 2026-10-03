@@ -1,5 +1,6 @@
 import { today } from "../lib/dates";
 import type { Medicine, MedicineUsage } from "../api/masterClient";
+import type { LineDose } from "./drugCheckHelpers";
 import { emptyOrderContext, type OrderContext } from "../orderContext";
 import { orderProblem, type ProblemRef } from "./conditionHelpers";
 import { isAsNeededUsage } from "./medicationScheduleHelpers";
@@ -91,6 +92,31 @@ export function hasDoseDays(
   basicCategory: string | null | undefined,
 ): boolean {
   return basicCategory === BASIC_USAGE_CATEGORY_ORAL && !isAsNeededUsage(usageCode ?? undefined);
+}
+
+/**
+ * 薬剤チェックの用量上限と比べる量(`drugCheckHelpers.LineDose`)。
+ * - 日数を持つ内服: 用量が 1 日量。1 回量は不均等なら最大の回、そうでなければ 1 日量 ÷ 回数
+ *   (用法コード 4 桁目。`Z` などで回数が分からなければ出さない)
+ * - 頓用: 用量が 1 回量。1 日量は出さない
+ * - 外用など: 用量の意味が決まっていないので比べない
+ */
+export function prescriptionLineDose(
+  rp: Pick<RpValues, "usage">,
+  line: Pick<MedicineLineValues, "medicine" | "dose" | "unevenDoses">,
+): LineDose | null {
+  const dose = Number(line.dose);
+  if (!line.medicine || !(dose > 0)) return null;
+  const unit = line.medicine.unit_name ?? "";
+  const usageCode = rp.usage?.usage_code ?? "";
+
+  if (isAsNeededUsage(usageCode)) return { daily: null, single: dose, unit };
+  if (!hasDoseDays(usageCode, rp.usage?.basic_usage_category)) return null;
+
+  const uneven = (line.unevenDoses ?? []).map(Number).filter((d) => d > 0);
+  const times = Number(usageCode[3]);
+  const single = uneven.length > 0 ? Math.max(...uneven) : times >= 1 ? dose / times : null;
+  return { daily: dose, single, unit };
 }
 
 export type PrescriptionSetting = "inpatient" | "outpatient" | "";

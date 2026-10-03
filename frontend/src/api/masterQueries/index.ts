@@ -1,6 +1,7 @@
 export * from "./core";
 export * from "./medicine";
 export * from "./formulary";
+export * from "./drugCheck";
 export * from "./jlac";
 export * from "./disease";
 export * from "./jfagy";

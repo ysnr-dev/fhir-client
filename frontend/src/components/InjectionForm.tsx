@@ -1,6 +1,6 @@
 import { makeFieldUpdater } from "../lib/form";
 import { diffDays } from "../lib/dates";
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Medicine } from "../api/masterClient";
 import { refreshProblemDisplay } from "../fhir/conditionHelpers";
 import {
@@ -24,6 +24,7 @@ import {
   infusionDurationHours,
   infusionEndTime,
   infusionRate,
+  injectionLineDose,
   methodForRoute,
   rpDoseTotal,
   type InjectionFormValues,
@@ -161,10 +162,17 @@ export function InjectionForm({
 
   // 薬剤の安全性チェック(アレルギー・重複投与)。オーダーセットの内容入力では患者が
   // 決まらないので出さない。
+  const checkedRps = useMemo(
+    () =>
+      values.rps.map((rp) => ({
+        medicines: rp.medicines.map((m) => ({ medicine: m.medicine, dose: injectionLineDose(rp, m) })),
+      })),
+    [values.rps],
+  );
   const warnings = useMedicationWarnings({
     patientId: setMode ? "" : patientId,
     startDate: values.startDate,
-    rps: values.rps,
+    rps: checkedRps,
     excludeOrderId: orderId,
   });
 

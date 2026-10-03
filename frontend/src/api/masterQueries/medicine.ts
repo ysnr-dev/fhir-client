@@ -6,6 +6,7 @@ import {
   fetchMedicineTypeOptions,
   fetchMedicineUsageCategories,
   generateMedicineDoseConversions,
+  fetchYakkaCodes,
   type MedicineDoseConversionPayload,
   searchMedicineDoseConversions,
   searchMedicines,
@@ -197,6 +198,17 @@ export function useDeleteMedicineDoseConversion() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: DOSE_CONVERSIONS_KEY });
     },
+  });
+}
+
+/** レセプト電算コード → 薬価基準コード(`fetchYakkaCodes`)。コードが無ければ引かない。 */
+export function useYakkaCodes(medicineCodes: string[]) {
+  const codes = Array.from(new Set(medicineCodes)).sort();
+  return useQuery({
+    queryKey: ["master", "medicines", "yakka-codes", codes],
+    queryFn: () => fetchYakkaCodes(codes),
+    staleTime: Infinity,
+    enabled: codes.length > 0,
   });
 }
 
