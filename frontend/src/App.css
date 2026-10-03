@@ -6422,7 +6422,11 @@ button.populate-expression__option--active {
    (padding 8px 16px)ではなく、同じバーのツールボタンやカルテのカード操作
    (.karte-card__actions button)と同じ小さめのサイズに揃える。 */
 .clinical-note-section__actions button {
-  padding: 2px 10px;
+  --control-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
   font-size: 12px;
 }
 

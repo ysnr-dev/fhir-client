@@ -8,6 +8,7 @@ import {
 } from "../fhir/clinicalNoteHelpers";
 import type { TemplateDraft } from "../fhir/questionnaireResponseHelpers";
 import { TemplateEntryModal } from "./TemplateEntryModal";
+import { TrashIcon } from "./QuestionnaireItemEditor";
 import { RichTextEditor, type RichTextEditorHandle } from "./RichTextEditor";
 import { TemplateSchemaImages } from "./SchemaImageGallery";
 import { SchemaPickerModal } from "./SchemaPickerModal";
@@ -204,8 +205,9 @@ export function useNoteSectionsEditor({
                     type="button"
                     onClick={() => removeSection(section.uid)}
                     title="セクションを削除"
+                    aria-label="セクションを削除"
                   >
-                    削除
+                    <TrashIcon />
                   </button>
                 </div>
               ) : undefined
