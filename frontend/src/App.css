@@ -21926,6 +21926,12 @@ body.page-home .app__main {
   font-weight: normal;
 }
 
+/* 見出しの列は行ごとに重なるので、メニューを開いている行だけを前に出す
+   (出さないと、開いたメニューが下の行の見出しに隠れる)。 */
+.injection-calendar__head:has(.row-menu__trigger[aria-expanded="true"]) {
+  z-index: 3;
+}
+
 thead .injection-calendar__head {
   padding: 4px 8px;
   vertical-align: middle;
