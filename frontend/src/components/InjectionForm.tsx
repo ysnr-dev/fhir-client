@@ -53,6 +53,7 @@ import {
 } from "./MedicineWarnings";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { ProblemSelect } from "./ProblemSelect";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 注射オーダーの入力フォーム。構成は処方(PrescriptionForm)に合わせ、用法だけ
 // 注射固有の構造化項目(用法種別・投与経路・部位・手技・ライン・速度・開始時刻)にする。
@@ -115,21 +116,6 @@ function defaultWeekday(date: string): string {
   if (!date) return DAY_OF_WEEK_OPTIONS[0].code;
   const [y, m, d] = date.split("-").map(Number);
   return DAY_OF_WEEK_OPTIONS[(new Date(y, m - 1, d).getDay() + 6) % 7].code;
-}
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }
 
 export function InjectionForm({

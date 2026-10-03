@@ -13,7 +13,7 @@ import {
   type ChartStateEventKind,
   type ChartTrackRef,
 } from "./chartDefinitionHelpers";
-import { epochOf } from "./flowsheetEventHelpers";
+import { epochOf } from "../lib/dates";
 
 // マルチチャートの「状態」。帯の行(選択肢の項目・追う薬剤・入院・化学療法のクール・有害事象)を
 // 時刻で引けるようにした区間の並びで、ホバーのツールチップ(その時点の状態)、全レーンの網掛け、

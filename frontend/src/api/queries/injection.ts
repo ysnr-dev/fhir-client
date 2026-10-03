@@ -146,7 +146,7 @@ export function useRegisterRxDispense() {
 /**
  * 検体到着確認のための 1 オーダーぶんの文脈。スキャンした番号の逆引き結果
  * (order id)から、患者・検査項目・進捗を 1 リクエストで揃える
- * (docs/lab-arrival-design.md §4-1。_id 検索 + revinclude は上流で確認済み)。
+ * (docs/lab-arrival-design.md §4-1)。
  */
 export interface LabArrivalContext {
   order: fhir4.ServiceRequest;

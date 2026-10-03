@@ -15,6 +15,7 @@ import { TransfusionBloodBadge } from "./TransfusionBloodBadge";
 import { summarizeTransfusionOrder } from "../fhir/transfusionOrderHelpers";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 輸血の実施入力。手術(SurgeryPerformModal)と同じく、実施記録一式と Task の完了を
 // 1 つの transaction で登録する。
@@ -34,21 +35,6 @@ import { Modal } from "./Modal";
 // 「コードは A 製剤・表示は B 製剤」という記録ができてしまう。製剤番号を必須にして
 // 遡及調査の起点にしている以上、製剤コードが実物と食い違ってはいけない。
 // マスタに無い製剤を使ったときは、マスタ側を直すのが筋。
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 interface Props {
   order: fhir4.ServiceRequest;

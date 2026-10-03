@@ -1,6 +1,6 @@
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
 import { draftObservationEntries } from "./observationExtract";
-import { departmentExtension, departmentOf } from "./prescriptionHelpers";
+import { departmentExtension, departmentOf, type DepartmentRef } from "./prescriptionHelpers";
 import { practitionerDisplayName } from "./practitionerHelpers";
 import {
   SCHEMA_IMAGE_NOTE,
@@ -237,7 +237,7 @@ export function emptyClinicalNoteForm(
 
 // toFhirDateTime の実体は lib/dates.ts(オーダーの登録日時 nowFhirDateTime と同じ場所)。
 // ここからも出す。
-import { toFhirDateTime } from "../lib/dates";
+import { nowFhirDateTime, toFhirDateTime } from "../lib/dates";
 
 export { toFhirDateTime };
 
@@ -351,7 +351,7 @@ export function buildAttester(
   return [
     {
       mode: "legal",
-      time: new Date().toISOString(),
+      time: nowFhirDateTime(),
       party: {
         reference: `Practitioner/${practitioner.id}`,
         display: practitionerDisplayName(practitioner),
@@ -491,7 +491,7 @@ export function buildClinicalNote(
      * 記録した診療科(他科依頼の回答なら回答した科)。オーダーの依頼科・検査結果の
      * 実施科と同じローカル拡張に入れる(参照を引き直さずに一覧・カードで出せるように)。
      */
-    department?: { departmentId: string; departmentName: string };
+    department?: DepartmentRef;
   },
 ): ClinicalNoteSave {
   const { patientId, practitioner, existing, consultOrderId, department } = options;

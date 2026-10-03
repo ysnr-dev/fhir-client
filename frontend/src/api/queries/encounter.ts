@@ -534,11 +534,34 @@ export function usePatientSurgeryPerforms(patientId: string | undefined, from: s
 }
 
 /**
+ * オーダーと、薬剤・進捗・実施記録(ハブの Procedure と薬剤ごとの MedicationAdministration)を
+ * 1 つの検索で揃える。経過表・注射カレンダーは期間ぶんを読むので、ページを辿って全件読む。
+ */
+async function fetchOrdersWithPerforms(params: URLSearchParams): Promise<FlowsheetInjectionData> {
+  params.append("_revinclude", "MedicationRequest:based-on");
+  params.append("_revinclude", "Task:focus");
+  params.append("_revinclude", "Procedure:based-on");
+  params.append("_revinclude:iterate", "MedicationAdministration:part-of");
+  const { matches, bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
+    page: 500,
+    maxPages: 4,
+  });
+  const of = <T extends fhir4.Resource>(type: T["resourceType"]) =>
+    bundles.flatMap((bundle) => resourcesOfType<T>(bundle, type));
+  return {
+    orders: matches,
+    medicationRequests: of<fhir4.MedicationRequest>("MedicationRequest"),
+    tasks: of<fhir4.Task>("Task"),
+    procedures: of<fhir4.Procedure>("Procedure"),
+    administrations: of<fhir4.MedicationAdministration>("MedicationAdministration"),
+  };
+}
+
+/**
  * 経過表の注射欄と注射カレンダーに出す、その期間の注射オーダー一式。
  *
  * 注射は 1 施行(= 1 日)= 1 ServiceRequest で、薬剤(用法・開始時刻)・進捗・実施記録が
- * それぞれ別リソースに分かれる。カルテのタイムラインと同じ `_revinclude` の組みで
- * 1 つの検索にまとめて取る(上流で動作を確認済み)。
+ * それぞれ別リソースに分かれる(fetchOrdersWithPerforms で揃える)。
  */
 export function usePatientInjectionOrders(
   patientId: string | undefined,
@@ -554,36 +577,14 @@ export function usePatientInjectionOrders(
       params.set("based-on:missing", "true");
       params.append("occurrence", `ge${rangeStart}`);
       params.append("occurrence", `le${rangeEnd}`);
-      params.append("_revinclude", "MedicationRequest:based-on");
-      params.append("_revinclude", "Task:focus");
-      params.append("_revinclude", "Procedure:based-on");
-      params.append("_revinclude:iterate", "MedicationAdministration:part-of");
-
-      // 注射カレンダーは 2 週間ぶんを読むので、1 ページに収まらないこともある。
-      const { bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
-        page: 100,
-        maxPages: 10,
-      });
-      const resources = bundles.flatMap((bundle) =>
-        (bundle.entry ?? []).map((entry) => entry.resource).filter((r): r is fhir4.Resource => Boolean(r)),
-      );
-      const of = <T extends fhir4.Resource>(type: T["resourceType"]) =>
-        resources.filter((r): r is T => r.resourceType === type);
-
-      return {
-        orders: of<fhir4.ServiceRequest>("ServiceRequest"),
-        medicationRequests: of<fhir4.MedicationRequest>("MedicationRequest"),
-        tasks: of<fhir4.Task>("Task"),
-        procedures: of<fhir4.Procedure>("Procedure"),
-        administrations: of<fhir4.MedicationAdministration>("MedicationAdministration"),
-      };
+      return fetchOrdersWithPerforms(params);
     },
     enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
   });
 }
 
 /**
- * 注射カレンダーの右ペインに出す注射(1 日分)。比べる前の日のオーダーも一緒に読む。
+ * 注射カレンダーのマスから開くモーダルに出す注射(1 日分)。比べる前の日のオーダーも一緒に読む。
  * 中身は usePatientInjectionOrders と同じ組み(オーダー・薬剤・進捗・実施記録)。
  */
 export function useInjectionDayOrders(srIds: string[]) {
@@ -593,18 +594,7 @@ export function useInjectionDayOrders(srIds: string[]) {
     queryFn: async (): Promise<FlowsheetInjectionData> => {
       const params = new URLSearchParams();
       params.set("_id", ids.join(","));
-      params.append("_revinclude", "MedicationRequest:based-on");
-      params.append("_revinclude", "Task:focus");
-      params.append("_revinclude", "Procedure:based-on");
-      params.append("_revinclude:iterate", "MedicationAdministration:part-of");
-      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-      return {
-        orders: resourcesOfType<fhir4.ServiceRequest>(bundle, "ServiceRequest"),
-        medicationRequests: resourcesOfType<fhir4.MedicationRequest>(bundle, "MedicationRequest"),
-        tasks: resourcesOfType<fhir4.Task>(bundle, "Task"),
-        procedures: resourcesOfType<fhir4.Procedure>(bundle, "Procedure"),
-        administrations: resourcesOfType<fhir4.MedicationAdministration>(bundle, "MedicationAdministration"),
-      };
+      return fetchOrdersWithPerforms(params);
     },
     enabled: ids.length > 0,
   });
@@ -635,29 +625,7 @@ export function usePatientOralPrescriptions(
       params.set("category", `${PRESCRIPTION_CATEGORY_SYSTEM}|`);
       params.append("occurrence", `ge${addDays(rangeStart, -ORAL_LOOKBACK_DAYS)}`);
       params.append("occurrence", `le${rangeEnd}`);
-      params.append("_revinclude", "MedicationRequest:based-on");
-      params.append("_revinclude", "Task:focus");
-      params.append("_revinclude", "Procedure:based-on");
-      params.append("_revinclude:iterate", "MedicationAdministration:part-of");
-
-      // 注射カレンダーは 2 週間ぶんを読むので、1 ページに収まらないこともある。
-      const { bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
-        page: 100,
-        maxPages: 10,
-      });
-      const resources = bundles.flatMap((bundle) =>
-        (bundle.entry ?? []).map((entry) => entry.resource).filter((r): r is fhir4.Resource => Boolean(r)),
-      );
-      const of = <T extends fhir4.Resource>(type: T["resourceType"]) =>
-        resources.filter((r): r is T => r.resourceType === type);
-
-      return {
-        orders: of<fhir4.ServiceRequest>("ServiceRequest"),
-        medicationRequests: of<fhir4.MedicationRequest>("MedicationRequest"),
-        tasks: of<fhir4.Task>("Task"),
-        procedures: of<fhir4.Procedure>("Procedure"),
-        administrations: of<fhir4.MedicationAdministration>("MedicationAdministration"),
-      };
+      return fetchOrdersWithPerforms(params);
     },
     enabled: Boolean(patientId) && Boolean(rangeStart) && Boolean(rangeEnd),
   });
@@ -683,12 +651,15 @@ export function useActiveMedications(patientId: string | undefined, onDate: stri
       params.append("occurrence", `le${onDate}`);
       params.append("_revinclude", "MedicationRequest:based-on");
       params.append("_revinclude", "Task:focus");
-      params.set("_count", "100");
+      params.set("_sort", "occurrence");
 
-      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-      const resources = (bundle.entry ?? [])
-        .map((entry) => entry.resource)
-        .filter((r): r is fhir4.Resource => Boolean(r));
+      const { bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
+        page: 500,
+        maxPages: 2,
+      });
+      const resources = bundles.flatMap((bundle) =>
+        (bundle.entry ?? []).map((entry) => entry.resource).filter((r): r is fhir4.Resource => Boolean(r)),
+      );
       const orders = resources
         .filter((r): r is fhir4.ServiceRequest => r.resourceType === "ServiceRequest")
         .filter(isPrescriptionServiceRequest);

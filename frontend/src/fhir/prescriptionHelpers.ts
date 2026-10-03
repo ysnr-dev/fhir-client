@@ -259,11 +259,14 @@ export function departmentExtension(departmentId: string, departmentName: string
   };
 }
 
-/** ローカル拡張に入れた診療科。未設定なら id・名前とも空。 */
-export function departmentOf(resource: { extension?: fhir4.Extension[] }): {
+/** 診療科(Organization)の id と名前。 */
+export interface DepartmentRef {
   departmentId: string;
   departmentName: string;
-} {
+}
+
+/** ローカル拡張に入れた診療科。未設定なら id・名前とも空。 */
+export function departmentOf(resource: { extension?: fhir4.Extension[] }): DepartmentRef {
   const reference = resource.extension?.find(
     (e) => e.url === ORDER_DEPARTMENT_EXT_URL,
   )?.valueReference;

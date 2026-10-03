@@ -15,7 +15,7 @@ import {
   type RadiotherapyPlanOptions,
   type RadiotherapyPlanRow,
 } from "../fhir/radiotherapyResultHelpers";
-import { today } from "../lib/dates";
+import { today, WEEKDAY_LABELS } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./Modal";
 
@@ -25,8 +25,6 @@ import { Modal } from "./Modal";
 // 1 日 1 回ずつ割り付ける。祝日や装置の点検日は知らないので、割り付けた日付は表で直せ、
 // 行ごとに外せる。登録すると 1 回 = Procedure(status=preparation)1 件ができ、カレンダーの
 // 装置の列に並ぶ。
-
-const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
 interface PlanProps {
   order: fhir4.ServiceRequest;
@@ -158,7 +156,7 @@ export function RadiotherapyPlanModal({
             </select>
           </label>
           <div className="radiotherapy-plan__weekdays" role="group" aria-label="照射する曜日">
-            {WEEKDAYS.map((label, weekday) => (
+            {WEEKDAY_LABELS.map((label, weekday) => (
               <label key={label} className="dose-conversion__checkbox">
                 <input
                   type="checkbox"
@@ -209,7 +207,7 @@ export function RadiotherapyPlanModal({
                           required
                         />
                       </td>
-                      <td>{WEEKDAYS[new Date(`${row.date}T00:00:00`).getDay()] ?? ""}</td>
+                      <td>{WEEKDAY_LABELS[new Date(`${row.date}T00:00:00`).getDay()] ?? ""}</td>
                       <td>{row.phaseLabel}</td>
                       <td>{row.fractionNumber}</td>
                       <td>

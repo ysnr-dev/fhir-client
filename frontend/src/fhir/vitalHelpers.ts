@@ -1,5 +1,6 @@
+import { epochOf, toDateTimeInputValue, toFhirDateTime, WEEKDAY_LABELS } from "../lib/dates";
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
-import { departmentExtension, departmentOf } from "./prescriptionHelpers";
+import { departmentExtension, departmentOf, type DepartmentRef } from "./prescriptionHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
 import { codingBySystem } from "./shared";
 
@@ -199,7 +200,7 @@ export interface BuildVitalObservationsArgs {
   entryId: string;
   problem: ProblemRef | null;
   /** 記録した診療科。オーダーの依頼科と同じローカル拡張に入れ、カルテのカードに出す。 */
-  department?: { departmentId: string; departmentName: string };
+  department?: DepartmentRef;
 }
 
 /**
@@ -209,7 +210,7 @@ export interface BuildVitalObservationsArgs {
 export function buildVitalObservations(args: BuildVitalObservationsArgs): fhir4.Observation[] {
   const { values, patientId, entryId, problem, department } = args;
   // datetime-local はタイムゾーンを持たないので、端末のオフセットを付けて確定させる。
-  const effectiveDateTime = new Date(values.measuredAt).toISOString();
+  const effectiveDateTime = toFhirDateTime(values.measuredAt);
   const extension = [
     ...(problemExtension(problem) ?? []),
     ...(department?.departmentId
@@ -351,7 +352,7 @@ export function vitalEntryProblem(entry: VitalEntry): ProblemRef | null {
 }
 
 /** 測定を記録した診療科。どの Observation にも同じ値が入っている。 */
-export function vitalEntryDepartment(entry: VitalEntry): { departmentId: string; departmentName: string } {
+export function vitalEntryDepartment(entry: VitalEntry): DepartmentRef {
   return departmentOf(entry.observations[0] ?? {});
 }
 
@@ -541,7 +542,7 @@ export function buildVitalFlowsheet(
   }
   // 列は古い順(左が古く、右が新しい。紙の温度板と同じ向き)。取得順は当てにならないので
   // 明示的に整える。期間は取得側で絞ってあるので、ここでは件数で切らない。
-  columns.sort((a, b) => a.localeCompare(b));
+  columns.sort((a, b) => epochOf(a) - epochOf(b) || a.localeCompare(b));
   const shown = new Set(columns);
 
   const rows = new Map<string, VitalFlowsheetRow>();
@@ -674,11 +675,9 @@ export function bloodPressureNumbers(
   return numbers;
 }
 
-const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
-
 /** 列ヘッダに出す "MM/DD" と "HH:mm"。 */
 export function flowsheetColumnLabel(at: string): { date: string; time: string; year: string } {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(toDateTimeLocal(at));
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(toDateTimeInputValue(at));
   if (!match) return { date: at.slice(0, 10), time: "", year: at.slice(0, 4) };
   return { year: match[1], date: `${match[2]}/${match[3]}`, time: `${match[4]}:${match[5]}` };
 }
@@ -699,19 +698,10 @@ export function flowsheetDayLabel(day: string): {
   return { year: String(y), label: `${short}(${WEEKDAY_LABELS[weekday]})`, short, weekday };
 }
 
-/** ISO 日時 → datetime-local の値。端末のタイムゾーンで表示する。 */
-export function toDateTimeLocal(iso: string | undefined): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-}
-
 /** 既存の測定を編集フォームの値に戻す。 */
 export function parseVitalEntry(entry: VitalEntry): VitalFormValues {
   const values = emptyVitalFormValues();
-  values.measuredAt = toDateTimeLocal(entry.effectiveDateTime);
+  values.measuredAt = toDateTimeInputValue(entry.effectiveDateTime);
 
   for (const observation of entry.observations) {
     const code = observationCode(observation);

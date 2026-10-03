@@ -484,13 +484,6 @@ export function withEmergencyOrigin(
     : next;
 }
 
-/** 入院 Encounter が指している、元の救急受診の id。救急からの入院でなければ undefined。 */
-export function originEmergencyEncounterId(encounter: fhir4.Encounter): string | undefined {
-  const reference = encounter.extension?.find((e) => e.url === ORIGIN_ENCOUNTER_EXTENSION_URL)
-    ?.valueReference?.reference;
-  return reference?.split("/").pop();
-}
-
 // ---- 身元不明患者 ----
 
 export const PROVISIONAL_PATIENT_TAG_SYSTEM = "http://fhir-client.local/CodeSystem/patient-tag";

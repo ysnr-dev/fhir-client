@@ -391,11 +391,18 @@ function minutesBetween(start: string, end: string): number | undefined {
 
 // ---- 書き込み(Appointment と Slot は必ず同じ transaction で動かす) ----
 
+// 枠を押さえる(busy)ときは読んだ版を ifMatch で添え、同じ空き枠を先に取られていたら
+// transaction ごと 412 にする(二重予約を防ぐ)。空きに戻す側は取消を止めないよう付けない。
 function slotEntry(slot: fhir4.Slot, status: fhir4.Slot["status"]): fhir4.BundleEntry {
   const updated: fhir4.Slot = { ...slot, status };
+  const versionId = status === "busy" ? slot.meta?.versionId : undefined;
   return {
     resource: updated,
-    request: { method: "PUT", url: `Slot/${slot.id}` },
+    request: {
+      method: "PUT",
+      url: `Slot/${slot.id}`,
+      ...(versionId ? { ifMatch: `W/"${versionId}"` } : {}),
+    },
   };
 }
 
@@ -490,7 +497,7 @@ export function buildNutritionGuidanceAppointmentBundle(
  *
  * ［決定］レジメンの適用と**同じ transaction には入れない**。1 つの適用に投与日が
  * 何日もあり、日ごとに枠を取るものなので、リハビリ・栄養指導と同じ「オーダーは先に立て、
- * 予約は投与日ごとに都度取る」形にした。`basedOn` は**その日の注射オーダー**を指す
+ * 予約は投与日ごとに都度取る」形にする。`basedOn` は**その日の注射オーダー**を指す
  * (適用ヘッダではない。予約は日単位で、移動・中止もその日のオーダーに従う)。
  */
 export function buildChemoAppointmentBundle(

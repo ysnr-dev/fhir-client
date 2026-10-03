@@ -82,9 +82,6 @@ export function rehabTaskActions(status: RehabTaskStatus): RehabTaskAction[] {
   }
 }
 
-/** Task がリハビリの進捗かどうか。他部門との振り分けに使う。 */
-export const isRehabTask = helpers.isTask;
-
 /** 進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
 export const rehabTaskStatus = helpers.taskStatus;
 

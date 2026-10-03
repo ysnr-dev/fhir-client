@@ -2,7 +2,6 @@ import type { ExamReportKind } from "./examReportHelpers";
 import {
   buildCancelledNotificationTask,
   buildNotificationTask,
-  hasTaskCode,
   notificationTaskEntry,
   taskInputOf,
   taskOwnerName,
@@ -52,10 +51,6 @@ export const REVIEW_REPORT_KIND_LABEL: Record<ReviewReportKind, string> = {
 const KIND_INPUT = "種別";
 const DATE_INPUT = "対象日";
 const SUMMARY_INPUT = "内容";
-
-export function isResultReviewTask(task: fhir4.Task): boolean {
-  return hasTaskCode(task, RESULT_REVIEW_TASK_CODE.code);
-}
 
 export interface ResultReviewTaskInput {
   /** 焦点。同じ transaction 内で作るレポートは urn:uuid、更新は DiagnosticReport/{id}。 */

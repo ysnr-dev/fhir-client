@@ -1,5 +1,5 @@
 import type { KarteDetailTarget } from "../karteUrl";
-import { addDays, toDateInput } from "../lib/dates";
+import { addDays, epochOf, toDateInput } from "../lib/dates";
 import type { LabResultItem, Medicine } from "../api/masterClient";
 import {
   JLAC11_SYSTEM,
@@ -19,7 +19,7 @@ import {
 } from "./vitalHelpers";
 import type { VitalThresholdSettings } from "./vitalHelpers";
 import { questionnaireChoiceItems, questionnaireNumericItems } from "./observationExtract";
-import { buildFlowsheetEvents, epochOf, localDateOf } from "./flowsheetEventHelpers";
+import { buildFlowsheetEvents } from "./flowsheetEventHelpers";
 import type { EncounterStay } from "./flowsheetEventHelpers";
 import type { EncounterEvent } from "./encounterHelpers";
 import type { RegimenApplication, RegimenDayOrder } from "./regimenOrderHelpers";
@@ -1653,5 +1653,3 @@ export function filterChartEvents(events: ChartEvent[], range: ChartRange): Char
     })
     .sort((a, b) => epochOf(a.at) - epochOf(b.at));
 }
-
-export { localDateOf };

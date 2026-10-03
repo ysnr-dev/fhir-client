@@ -41,6 +41,7 @@ import { ConditionPickerModal } from "./ConditionPickerModal";
 import { DiseaseSearchModal } from "./DiseaseSearchModal";
 import { ErrorBanner } from "./ErrorBanner";
 import { MedicalProcedureSearchModal } from "./MedicalProcedureSearchModal";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // DPC 様式1 の入力フォーム(登録・編集共用)。画面は定義表(fhir/dpcForm1)から作る。
 // 必須のレコードは最初から出し、条件を満たさないレコードは「項目を追加」で開く。
@@ -425,21 +426,6 @@ function RemoveButton({ label, onClick }: { label: string; onClick: () => void }
     >
       <TrashIcon />
     </button>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
 

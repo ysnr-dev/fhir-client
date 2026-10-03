@@ -66,7 +66,7 @@ export function useDeletePathoOrder() {
 //
 // 採取(予定)日で 1 日ぶんの病理検査オーダーを読む。画面の作りは検体検査一覧と同じで、
 // 検査区分・入外区分・病棟・診療科・進捗での絞り込みは画面側で行う
-// (理由は検体検査一覧の節のコメントを参照)。
+// (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
 
 /** 病理検査一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
 export interface PathoWorklistRow {

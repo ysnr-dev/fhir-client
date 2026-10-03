@@ -3,7 +3,7 @@ import type { FormularyEntry, FormularyGroup, FormularyGroupPayload, Medicine } 
 import { useFormularyGroups, useFormularyMutations, useMedicineTypeOptions } from "../api/masterQueries";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { MedicineSearchModal } from "../components/MedicineSearchModal";
-import { TrashIcon } from "../components/PathwayEventCard";
+import { TrashIcon } from "../components/icons/TrashIcon";
 import { Modal } from "../components/Modal";
 import { dosageFormLabel } from "../fhir/medicineHelpers";
 

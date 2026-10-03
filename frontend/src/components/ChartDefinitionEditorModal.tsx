@@ -29,7 +29,7 @@ import {
   type ChartTrackRef,
 } from "../fhir/chartDefinitionHelpers";
 import { ErrorBanner } from "./ErrorBanner";
-import { TrashIcon } from "./PathwayEventCard";
+import { TrashIcon } from "./icons/TrashIcon";
 import { LabResultItemSearchModal } from "./LabResultItemSearchModal";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";

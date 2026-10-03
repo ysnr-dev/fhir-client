@@ -1,3 +1,4 @@
+import { dateTimeLabel } from "../lib/dates";
 import { useState } from "react";
 import { useClinicalNoteHistory } from "../api/queries";
 import { clinicalNoteAttestation, statusLabel } from "../fhir/clinicalNoteHelpers";
@@ -15,7 +16,7 @@ interface ClinicalNoteHistoryModalProps {
 }
 
 function versionTime(note: fhir4.Composition): string {
-  return note.meta?.lastUpdated?.slice(0, 16).replace("T", " ") ?? "";
+  return dateTimeLabel(note.meta?.lastUpdated);
 }
 
 export function ClinicalNoteHistoryModal({ noteId, onClose }: ClinicalNoteHistoryModalProps) {

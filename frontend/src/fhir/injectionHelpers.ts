@@ -54,8 +54,7 @@ const CATEGORY_SYSTEM = "http://fhir-client.local/CodeSystem/injection-category"
 // 注射は 1 日 1 オーダー(ServiceRequest + MedicationRequest)に展開して一括登録する
 // (docs/injection-order-design.md §3)。展開した各日のオーダーは同じ requisition
 // (uuid)で束ね、開始日を root 拡張に焼き付けて「何日目」かを出せるようにする。
-// 束ねの検索は上流に requisition パラメータが無いので、患者 + 注射 + 日付で引いて
-// クライアント側で requisition を突き合わせる(queries.ts の useInjectionSeriesLater)。
+// 束ねは requisition で検索する(api/queries/outpatient.ts の useInjectionSeriesLater)。
 export const INJECTION_SERIES_SYSTEM = "http://fhir-client.local/Identifier/injection-series";
 export const SERIES_START_EXT_URL =
   "http://fhir-client.local/StructureDefinition/injection-series-start";

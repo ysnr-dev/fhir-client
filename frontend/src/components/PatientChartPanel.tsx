@@ -22,8 +22,7 @@ import {
 } from "../fhir/chartDefinitionHelpers";
 import type { ChartSegmentBreak } from "../fhir/chartDefinitionHelpers";
 import { describeStatesAt, type ChartStateTrack } from "../fhir/chartStateHelpers";
-import { epochOf } from "../fhir/flowsheetEventHelpers";
-import { today } from "../lib/dates";
+import { epochOf, today } from "../lib/dates";
 import { interpretationClass, referenceRangeLabel } from "../fhir/labResultHelpers";
 import { formatPointDate, formatValue, niceTicks } from "./chartScale";
 

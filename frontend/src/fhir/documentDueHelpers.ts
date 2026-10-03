@@ -9,7 +9,6 @@ import {
   buildCompletedNotificationTask,
   buildNotificationTask,
   completeNotificationEntry,
-  hasTaskCode,
   notificationTaskEntry,
   taskInputOf,
   taskOwnerName,
@@ -45,10 +44,6 @@ const DOCUMENT_LABELS: Record<string, string> = {
 
 export function documentLabelOf(code: string): string {
   return DOCUMENT_LABELS[code] ?? code;
-}
-
-export function isDocumentDueTask(task: fhir4.Task): boolean {
-  return hasTaskCode(task, DOCUMENT_DUE_TASK_CODE.code);
 }
 
 /** 施設設定「文書作成の督促」。値は日数。 */

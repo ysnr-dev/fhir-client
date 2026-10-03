@@ -18,7 +18,7 @@ export const OBSERVATION_EXTRACT_EXT_URL =
   "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract";
 export const OBSERVATION_EXTRACT_CATEGORY_EXT_URL =
   "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observation-extract-category";
-/** SDC に無い URL で書いていた頃のテンプレートを読むためだけに使う。書き込みには使わない。 */
+/** SDC に無いこの URL を持つテンプレートを読むためだけに使う。書き込みには使わない。 */
 const LEGACY_OBSERVATION_EXTRACT_CATEGORY_EXT_URL =
   "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-observationExtract-category";
 

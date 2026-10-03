@@ -400,7 +400,7 @@ export function buildInjectionCalendar(
   return orderRows([...rows.values()], firstDate, seriesOfRow);
 }
 
-// ---- 右ペインの「その日の注射」 ----
+// ---- その日の注射(InjectionDayModal) ----
 
 /** 予定と実施の見比べの 1 行(薬剤 1 件)。 */
 export interface InjectionComparisonLine {

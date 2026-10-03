@@ -24,12 +24,13 @@ async function fetchChartObservations(
   params.append("date", `le${rangeEnd}`);
   // グラフに出せない状態は上流で落とす。
   params.set("status:not", "entered-in-error,cancelled");
-  params.set("_sort", "date");
+  // 新しい順に読み、上限で切れるときは古い側を落とす(返すのは古い順)。
+  params.set("_sort", "-date");
   const { matches } = await searchAllPages<fhir4.Observation>("Observation", params, {
     page: CHART_OBSERVATION_PAGE,
     maxPages: CHART_OBSERVATION_MAX_PAGES,
   });
-  return matches;
+  return matches.reverse();
 }
 
 /**
@@ -72,12 +73,13 @@ async function fetchChartProcedures(
   // 2 件目以降の手技(partOf 付き)はハブと同じ日時なので、ハブだけをイベントにする。
   params.set("part-of:missing", "true");
   params.set("status:not", "entered-in-error,not-done");
-  params.set("_sort", "date");
+  // 新しい順に読み、上限で切れるときは古い側を落とす(返すのは古い順)。
+  params.set("_sort", "-date");
   const { matches } = await searchAllPages<fhir4.Procedure>("Procedure", params, {
     page: CHART_PROCEDURE_PAGE,
     maxPages: CHART_PROCEDURE_MAX_PAGES,
   });
-  return matches;
+  return matches.reverse();
 }
 
 /**

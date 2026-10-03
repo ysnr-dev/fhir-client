@@ -33,7 +33,6 @@ import {
   snapMinutes,
   DRAG_SNAP_MINUTES,
   timeRange,
-  weekdayOf,
   type MinuteRange,
 } from "../fhir/surgeryConflictHelpers";
 import { useCardDrag, type DragState } from "../hooks/useCardDrag";
@@ -48,6 +47,7 @@ import { SurgeryMoveConfirmModal, type SurgeryMoveTarget } from "./SurgeryMoveCo
 import { SurgeryOrderCreateModal, SurgeryOrderEditModal } from "./SurgeryOrderModals";
 import type { SurgeryDefaultSchedule } from "./SurgeryOrderPanels";
 import { SurgeryPerformModal } from "./SurgeryPerformModal";
+import { weekdayOf } from "../lib/dates";
 
 // 手術室カレンダー。手術一覧の 3 つ目のタブ。
 //

@@ -44,6 +44,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 import { RadiotherapyPreCheck } from "./RadiotherapyPreCheck";
 import { renderJj1017CodeOptions } from "./radItemOptions";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 放射線治療の治療処方フォーム(docs/radiotherapy-order-design.md §5)。
 //
@@ -53,21 +54,6 @@ import { renderJj1017CodeOptions } from "./radItemOptions";
 //
 // 治療プロトコル(施設の定型処方)を選ぶと標的と Phase が展開される。展開後は自由に直せる。
 // ビーム・MU・DVH などの治療計画の中身はここでは扱わない(治療計画装置の領域。§1)。
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 interface RadiotherapyOrderFormProps {
   patientId: string;

@@ -1,3 +1,4 @@
+import { nowDateTimeInput } from "../lib/dates";
 import { useState } from "react";
 import { useSaveVitalEntry, useVitalEntry } from "../api/queries";
 import type { ProblemRef } from "../fhir/conditionHelpers";
@@ -5,7 +6,6 @@ import {
   buildVitalObservations,
   emptyVitalFormValues,
   parseVitalEntry,
-  toDateTimeLocal,
   validateVitalForm,
   vitalEntryDepartment,
   vitalEntryProblem,
@@ -31,7 +31,7 @@ export function VitalCreatePanel({ patientId, defaultProblem, onSaved }: VitalCr
   // 測定日時の既定は「いま」。過去分の入力もあるので変更できる。
   const [values, setValues] = useState<VitalFormValues>(() => ({
     ...emptyVitalFormValues(),
-    measuredAt: toDateTimeLocal(new Date().toISOString()),
+    measuredAt: nowDateTimeInput(),
   }));
   const [problem, setProblem] = useState<ProblemRef | null>(defaultProblem ?? null);
   const [validationError, setValidationError] = useState<string | null>(null);

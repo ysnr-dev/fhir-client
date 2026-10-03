@@ -58,7 +58,7 @@ import {
 // ボタンから編集できる(確定後の編集は自動的に修正報告になる)。
 //
 // 採取日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
-// (理由は queries.ts の useLabWorklist を参照)。
+// (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
 
 interface Filters {
   examCategory: string;

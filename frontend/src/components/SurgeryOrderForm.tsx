@@ -43,6 +43,7 @@ import { SurgeryConflictConfirmModal } from "./SurgeryConflictConfirmModal";
 import { SurgeryRoomDaySchedule } from "./SurgeryRoomDaySchedule";
 import { TemplateEntryModal } from "./TemplateEntryModal";
 import { TemplateSchemaImages } from "./SchemaImageGallery";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 手術オーダー(申込)の入力フォーム。既存 4 種のオーダーと骨格は同じだが、
 // 伝票レイアウトのタブは持たず、術式は検索モーダルから選ぶ。
@@ -76,21 +77,6 @@ function ArrowUpIcon() {
     <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
       <path
         d="M8 13V3.5M8 3.5L4 7.5M8 3.5l4 4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.2"

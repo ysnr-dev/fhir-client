@@ -1988,8 +1988,6 @@ function PhysioPerformSection({ performs }: { performs: PhysioPerformDisplay[] }
   );
 }
 
-// 処置は GP(処置項目 1 つ、またはセット 1 つ)ごとに出す。生理検査と同じだが、
-// GP 単位の記入欄(依頼病名・検査目的・特別指示)を持たないので項目名だけを並べる。
 function SurgeryOrderCardBody({
   serviceRequest,
   itemRequests,
@@ -2562,6 +2560,8 @@ function TransfusionOrderCardBody({
   );
 }
 
+// 処置は GP(処置項目 1 つ、またはセット 1 つ)ごとに出す。生理検査と同じだが、
+// GP 単位の記入欄(依頼病名・検査目的・特別指示)を持たないので項目名だけを並べる。
 function TreatmentOrderCardBody({
   serviceRequest,
   itemRequests,

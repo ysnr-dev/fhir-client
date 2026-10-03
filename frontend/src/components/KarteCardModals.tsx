@@ -682,8 +682,6 @@ function LabResultDetail({ patientId, reportId }: { patientId: string; reportId:
   );
 }
 
-// 細菌検査のカードから開く「検査結果表示」。中身は細菌検査タブの内容表示と同じ
-// パネルで、患者の取り違えだけここで弾く(パネルと同じクエリなので追加の取得は無い)。
 function PathoOrderDetail({
   patientId,
   srId,
@@ -774,6 +772,8 @@ function ExamResultDetail({
   );
 }
 
+// 細菌検査のカードから開く「検査結果表示」。中身は細菌検査タブの内容表示と同じ
+// パネルで、患者の取り違えだけここで弾く(パネルと同じクエリなので追加の取得は無い)。
 function MicroResultDetail({ patientId, reportId }: { patientId: string; reportId: string }) {
   const detail = useMicroResultDetail(reportId);
   const report = detail.data ? splitMicroResultDetailBundle(detail.data.data).report : undefined;

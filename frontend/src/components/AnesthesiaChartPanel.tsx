@@ -33,6 +33,7 @@ import {
   surgeryOrderItemRequests,
   surgeryOrderItems,
 } from "../fhir/surgeryOrderHelpers";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 麻酔チャート(術中リアルタイム記録)の中身。docs/anesthesia-chart-design.md。
 //
@@ -44,21 +45,6 @@ import {
 /** datetime-local に入れる現在時刻。 */
 function nowInput(): string {
   return toDateTimeInput(new Date());
-}
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }
 
 /** 行を消すボタン。イベント・薬剤で同じ見た目・同じ意味なのでまとめる。 */

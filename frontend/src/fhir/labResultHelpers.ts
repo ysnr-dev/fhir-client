@@ -1,4 +1,4 @@
-import { today } from "../lib/dates";
+import { nowFhirDateTime, today } from "../lib/dates";
 import {
   categoryCoding,
   codingBySystem,
@@ -46,8 +46,8 @@ export const JLAC11_SPECIMEN_SYSTEM = "http://fhir-client.local/CodeSystem/jlac1
 // 検査項目の略称。詳細表示・編集フォームへの復元に使う補助 coding。
 // 検体検査オーダー(labOrderHelpers)も同じ用途で使うので共有する。
 export { ABBREVIATION_SYSTEM };
-// 検体ラベル番号(Specimen.accessionIdentifier)。ラベル発行(backend の LabLabelNumber)が
-// 採番し、到着確認(labSpecimenHelpers)がスキャンで引く。
+// 検体ラベル番号(Specimen.accessionIdentifier)。上流が Specimen 作成時に採番し、
+// 到着確認(labSpecimenHelpers)がスキャンで引く。
 export const LAB_LABEL_NUMBER_SYSTEM = "http://fhir-client.local/IdSystem/lab-label-number";
 
 /**
@@ -651,7 +651,7 @@ function buildLabResultTransactionBundle(
   const effective = values.specimenDate;
   // 保存するたびに決まる報告区分と報告日時。訂正のたびに「いつ出し直したか」が残る。
   const status = nextLabReportStatus(values);
-  const issued = new Date().toISOString();
+  const issued = nowFhirDateTime();
   const performers = buildPerformerReferences(values.performer);
   const reportReference = reportId
     ? `DiagnosticReport/${reportId}`

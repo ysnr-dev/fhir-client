@@ -22,25 +22,11 @@ import { EndoscopyItemSearchModal } from "../components/EndoscopyItemSearchModal
 import { KIND_LABELS, renderExamTypeOptions } from "../components/endoscopyItemOptions";
 import { TemplateSelect } from "../components/TemplateSelect";
 import { questionnaireCanonical } from "../fhir/questionnaireResponseHelpers";
+import { TrashIcon } from "../components/icons/TrashIcon";
 
 // 内視鏡オーダー項目マスタ。放射線の RadItemPage と同じ作りだが、JJ1017 の
 // 11 要素・32桁コードのプレビュー・頻用コードからの一括作成は持たない。
 // 分類軸は検査種別(master_endoscopy_exam_types)ひとつ。
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 // 編集フォームの値。input で扱うため全て文字列で持ち、保存時に payload へ変換する。
 interface Draft {

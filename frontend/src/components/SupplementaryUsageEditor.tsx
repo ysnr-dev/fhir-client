@@ -5,11 +5,11 @@ import {
   MAX_INTERVAL_DAYS,
   SUPPLEMENT_KIND_OPTIONS,
   SUPPLEMENT_PERIOD_OPTIONS,
-  WEEKDAY_LABELS,
   type SupplementDateMonth,
   type SupplementPeriod,
   type SupplementaryUsage,
 } from "../fhir/supplementaryUsage";
+import { WEEKDAY_LABELS } from "../lib/dates";
 
 const MONTH_OPTIONS = [
   { value: 0, label: "毎月" },

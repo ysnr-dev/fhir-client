@@ -19,7 +19,6 @@ import {
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import {
-  WEEKDAY_LABELS,
   actorId,
   scheduleSummary,
   today,
@@ -27,6 +26,7 @@ import {
 } from "../fhir/scheduleHelpers";
 import { useOrderContext } from "../hooks/useOrderContext";
 import { ErrorBanner } from "./ErrorBanner";
+import { WEEKDAY_LABELS } from "../lib/dates";
 
 // 予約する枠を選ぶ。枠表を決め、月カレンダーで日を選び、その日の時刻から選ぶ。
 //

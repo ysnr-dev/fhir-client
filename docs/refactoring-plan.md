@@ -6,10 +6,63 @@ fhir-client の非効率なコードを洗い出し、リファクタリング�
 1. クライアントが手元でしている絞り込み・並べ替え・結合のうち、FHIR サーバーに任せた方がよいもの
 2. コメントに残った修正経緯と、過剰な説明
 
-- 調査日: 2026-09-15（第 1 回）、2026-09-27（第 2 回。下の節）
+- 調査日: 2026-09-15（第 1 回）、2026-09-27（第 2 回）、2026-10-04（第 3 回。下の節）
 - 調査範囲: `frontend/src`、`backend/app`、上流 fhir-server の
   `app/lib/fhir/search_definitions/*.rb` と `app/lib/fhir/search_references.rb`
 - 行番号は調査時点のもの。着手時は関数名で探し直すこと。
+
+## 第 3 回（2026-10-04）
+
+第 2 回以降の約 22k 行(注射カレンダー・カルテ内リンク・自科／個人の絞り込みほか)を中心に、全体を再点検して
+同日に実施した。上流が対応していない検索パラメータを送って黙殺されている箇所は 0 件(全リソース型で照合)。
+
+### 正しさ
+
+| # | 箇所 | 問題 | 対応 |
+|---|---|---|---|
+| S1 | バイタル・テンプレート回答・DPC 様式1・確定署名・検査結果の発行日時 | `toISOString()`(UTC)で書き、カルテなどが文字列の先頭 10 文字を診療日にしていた。JST 0〜9 時の記録が前日に並ぶ | 書き込みは `toFhirDateTime` / `nowFhirDateTime`(オフセット付き)。読む側は `lib/dates` の `localDay` / `epochOf`、表示は `dateTimeLabel` がオフセット付きの値を端末時刻に直す(既存の UTC データも正しく読める) |
+| S2 | 予約(`slotEntry`) | Slot を busy にする PUT に `ifMatch` が無く、同じ空き枠を 2 人が同時に取ると両方成功した | busy にするときは読んだ版を `ifMatch` で添える。412 は「先に更新されています」と出し、枠を読み直す |
+| S3 | 食事オーダーの再開・連動作成 | POST に `fullUrl` が無く、代行入力で来歴(Provenance)が付かなかった | `fullUrl` を付ける |
+| S4 | 黙って切れる上限 | マルチチャート(古い順 2,000 件で新しい側が落ちる)、担当医セレクト(100 人)、退院時に止めるリハビリ・栄養指導(20 件)と看護指示(200 件)、看護の実施記録(200 件。パス取消の実施有無判定に使う)、リハビリ・栄養指導の当日実施と予約(施設全体で 200 件)、重複投与チェック(100 件、並び無し)、カルテの先読み(100 件) | `searchAllPages`。チャートは新しい順に読んで古い側を落とす |
+| S5 | backend `FhirStore.search` | `_include` の行も limit に数え、添えられた Task などを切り捨てていた(医事送信) | 一致した行だけを数える |
+| S6 | 手入力の感染症 | `category=exam` がテンプレート抽出の Observation にも一致し、件数を食っていた | 手入力分だけが持つ種類コードの system でも絞る |
+| S7 | `searchAllPages` | 同じ型を `_revinclude:iterate` で添えると一致として数えてしまう | `search.mode` が include の行を除く |
+
+### 上流に寄せた
+
+- カルテの「自科」を上流の `department` 検索に(`server-improvement-backlog.md` の 2026-10-04 節)。診療日ペインも
+  自科の記録がある日だけになり、疎な絞り込みで番兵が読み込みを繰り返すことも無くなった。
+
+### コメント整理(約 40 件)
+
+分割前の `queries.ts` を指す参照 9 件、事実でなくなった「上流は〜できない」(requisition・token の `:not`・category の
+先頭だけ索引・同名の `_revinclude:iterate`)7 件、存在しない名前(`LabLabelNumber`・`karteFrom`・
+`QuestionnaireResponseCreatePage`・`BASIC_USAGE_CATEGORY_AS_NEEDED`)、注射カレンダーの「右ペイン」(実体はモーダル)、
+写し間違い(内服の hook に注射カレンダーの説明)、置き場所のずれ 3 件(KartePage の初期スクロール・細菌検査の結果表示・
+処置のカード本体)、「〜にした」「〜していた頃」などの経緯表現。
+
+### 機械的な重複統合
+
+- `TrashIcon` 31 か所 → `components/icons/TrashIcon.tsx`。
+- `WEEKDAY_LABELS` 10 か所・`weekdayOf`・日付だけの判定 → `lib/dates`(`isDateOnly` / `localDay` / `epochOf` も)。
+  `flowsheetEventHelpers` の `epochOf` / `localDateOf`、`vitalHelpers` の `toDateTimeLocal` は削除。
+- 注射・内服の「オーダー + 薬剤・進捗・実施記録」の検索 3 本 → `fetchOrdersWithPerforms`。
+- 診療科の型の直書き 6 か所 → `DepartmentRef`。
+- 参照ゼロの export 28 件(部門ごとの `is*Task` の別名 14 件ほか)と、使われていない CSS 約 80 行を削除。
+- 検証: 上流 rspec 2142 件・backend rspec 1822 件・`tsc -b`・lint(エラー 0)・import 循環 0。開発環境の画面で
+  自科の絞り込み、JST 朝のバイタル登録、注射カレンダー・経過表・マルチチャートを確認。
+
+### 次の候補(今回やらない)
+
+1. 部門ごとの結果 helper のコピー(型付き `referenceId` 11 か所、`conceptLabel` 8、`quantityLabel` 5、`materialLabel` 5、
+   `RemoveRowButton` 5 ほか)を `fhir/shared.ts` に。第 2 回の候補 1(生理・内視鏡・処置の全層統一)より手前でできる。
+2. 第 2 回の候補 7(`departmentOf` などを `fhir/orderHeader.ts` へ)。参照が約 72 ファイルに増え、記録にも使うようになった。
+3. `api/` の `resourcesOfType` の再実装約 38 か所と、型を見ずに `Boolean(r)` で拾う約 22 か所。
+4. transaction の PUT 約 120 か所に `ifMatch` が無い(Task 進捗・Encounter 更新・受付など)。検索結果の entry は
+   `meta.versionId` を持つので、共通の `putEntry` で添えられる。「一覧は ETag を持たない」というコメントの前提は事実でない。
+5. backend の「今日」に `Date.current`(UTC)を使う箇所(マスタの有効期間 20 か所ほか)。
+6. テーマ変数を使わない警告・危険色 61 か所、文になっているボタン名・フォーム内の説明文。
+7. `api/` 外からの FHIR 呼び出し 4 か所、`KarteTimeline.tsx` のカード本体(約 1,600 行)の分割。
 
 ## 第 2 回（2026-09-27）
 

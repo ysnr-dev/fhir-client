@@ -12,6 +12,7 @@ import type { SurgeryWorklistRow } from "../api/queries";
 import type { SurgeryRoomBlock } from "../api/masterClient";
 import { summarizeSurgeryOrder } from "./surgeryOrderHelpers";
 import { surgeryTaskStatus } from "./surgeryTaskHelpers";
+import { weekdayOf } from "../lib/dates";
 
 /** その日の何分目から何分目か。 */
 export interface MinuteRange {
@@ -124,15 +125,6 @@ export function blocksOfRoomDay(
     .sort((a, b) => a.start_time.localeCompare(b.start_time));
 }
 
-/** "YYYY-MM-DD" の曜日(0=日 … 6=土)。不正な日付は null。 */
-export function weekdayOf(date: string): number | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
-  const [year, month, day] = date.split("-").map(Number);
-  // ローカルタイムで作る(UTC 解釈だと日本時間では前日の曜日になる)。
-  const parsed = new Date(year, month - 1, day);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.getDay();
-}
-
 /**
  * 入れようとしている時間帯が、割当のある科と食い違っているか。
  *
@@ -167,8 +159,6 @@ export function blockRange(block: SurgeryRoomBlock): MinuteRange | null {
 export function blockLabel(block: SurgeryRoomBlock): string {
   return `${block.start_time}-${block.end_time} ${block.department_name || block.department_code}`;
 }
-
-export const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 // ---- 日程の移動(カレンダーのドラッグ＆ドロップ) ----
 

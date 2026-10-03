@@ -58,7 +58,7 @@ export function isOralUsage(usageCode: string | undefined): boolean {
  * 頓用の用法か(3 桁目)。
  *
  * `basic_usage_category` は 内服 / 外用 / 注射 / 注入 の 4 種だけで「頓服」は無いので、
- * `prescriptionHelpers` の `BASIC_USAGE_CATEGORY_AS_NEEDED` では判定できない。
+ * `basic_usage_category` では判定できない。
  */
 export function isAsNeededUsage(usageCode: string | undefined): boolean {
   return usageCode?.[2] === "5";

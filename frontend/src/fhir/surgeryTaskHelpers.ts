@@ -97,9 +97,6 @@ export function surgeryTaskActions(status: SurgeryTaskStatus): SurgeryTaskAction
   }
 }
 
-/** Task が手術の進捗かどうか。他部門の Task が増えたときの振り分けに使う。 */
-export const isSurgeryTask = helpers.isTask;
-
 /** 進捗。Task がまだ無いオーダー(手術部が触っていない)は申込済。 */
 export const surgeryTaskStatus = helpers.taskStatus;
 

@@ -22,8 +22,6 @@ export const CONTACT_RELATIONSHIP_OPTIONS = [
   { code: "U", display: "不明" },
 ] as const;
 
-export type ContactRelationship = (typeof CONTACT_RELATIONSHIP_OPTIONS)[number]["code"];
-
 export function contactRelationshipLabel(code: string | undefined): string {
   return CONTACT_RELATIONSHIP_OPTIONS.find((o) => o.code === code)?.display ?? "";
 }

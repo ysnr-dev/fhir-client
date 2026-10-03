@@ -186,7 +186,6 @@ export function buildMealIntakeBundle(args: {
       resourceType: "Observation",
       ...(existingId ? { id: existingId } : {}),
       status: "final",
-      // 上流は先頭の category しか索引しないので、これ以外は付けない。
       category: [{ coding: [{ system: ORDER_TYPE_SYSTEM, ...MEAL_ORDER_TYPE }] }],
       code: {
         coding: [

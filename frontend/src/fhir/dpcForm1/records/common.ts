@@ -828,7 +828,7 @@ export const COMMON_RECORDS: Dpc1RecordDef[] = [
     name: "高齢者情報",
     version: V2014,
     section: "profile",
-    // 40 歳以上で介護保険が適用されている患者は入力値から分からないので、手動で開く。
+    // 65 歳以上は必須。40〜64 歳の介護保険適用者は入力値から分からないので手動で開く。
     required: ageAtLeast(65),
     fields: [
       {
@@ -844,7 +844,7 @@ export const COMMON_RECORDS: Dpc1RecordDef[] = [
     name: "要介護度",
     version: V2018,
     section: "profile",
-    // 40 歳以上で介護保険が適用されている患者は入力値から分からないので、手動で開く。
+    // 65 歳以上は必須。40〜64 歳の介護保険適用者は入力値から分からないので手動で開く。
     required: ageAtLeast(65),
     fields: [{ payload: 2, label: "要介護度", kind: "select", options: CARE_LEVEL_OPTIONS }],
   },

@@ -15,12 +15,13 @@ import {
 import { displayName } from "../fhir/patientHelpers";
 import { summarizeRadiotherapyOrder } from "../fhir/radiotherapyOrderHelpers";
 import { addDays, formatDateLabel, today, weekDates, weekStart } from "../fhir/scheduleHelpers";
-import { minutesToTime, weekdayOf } from "../fhir/surgeryConflictHelpers";
+import { minutesToTime } from "../fhir/surgeryConflictHelpers";
 import { useCardDrag, type DragState } from "../hooks/useCardDrag";
 import { clampGridRatio, readGridRatio, storeGridRatio } from "../surgeryCalendarLayout";
 import { ErrorBanner } from "./ErrorBanner";
 import { KarteSplitter } from "./KarteSplitter";
 import { RowMenu } from "./RowMenu";
+import { weekdayOf } from "../lib/dates";
 
 // 放射線治療カレンダー(docs/radiotherapy-order-design.md §7)。
 //

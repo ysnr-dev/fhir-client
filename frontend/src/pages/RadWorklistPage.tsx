@@ -58,7 +58,7 @@ import {
 // 行がそのまま撮影の単位になる(放射線オーダー項目マスタの「オーダー単位」)。
 //
 // 撮影日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
-// (理由は queries.ts の useRadWorklist を参照)。
+// (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
 
 interface Filters {
   modalityCode: string;

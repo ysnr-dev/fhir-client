@@ -9,7 +9,7 @@ import {
 } from "../../fhir/practitionerRoleHelpers";
 import { deleteLoginAccount } from "../authClient";
 import { postBundle, readResource, searchResource } from "../fhirClient";
-import { resourcesOfType } from "./core";
+import { resourcesOfType, searchAllPages } from "./core";
 import { hasRelation } from "./patient";
 
 export interface PractitionerSearchParams {
@@ -266,22 +266,20 @@ export function useDeletePractitioner() {
   });
 }
 
-// 予約枠の担当医セレクト用。医療従事者は施設あたり数百人を超えない前提で
-// まとめて取り、並べ替えは画面側で行う(useOrganizationOptions と同じ扱い)。
+// 担当医セレクト用。医療従事者は施設あたり数百人の規模なので、全員を読む。
 export function usePractitionerOptions() {
-  const params = new URLSearchParams();
-  params.set("_count", "100");
-
   const query = useQuery({
     queryKey: ["Practitioner", "search", "options"],
-    queryFn: () => searchResource<fhir4.Practitioner>("Practitioner", params),
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("_sort", "family");
+      const { matches } = await searchAllPages<fhir4.Practitioner>("Practitioner", params, {
+        page: 500,
+        maxPages: 4,
+      });
+      return matches;
+    },
   });
 
-  return {
-    ...query,
-    practitioners:
-      query.data?.data.entry
-        ?.map((e) => e.resource)
-        .filter((r): r is fhir4.Practitioner => Boolean(r)) ?? [],
-  };
+  return { ...query, practitioners: query.data ?? [] };
 }

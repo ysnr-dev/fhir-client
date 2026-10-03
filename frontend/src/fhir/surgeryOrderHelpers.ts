@@ -216,7 +216,7 @@ export const SURGERY_LATERALITY_OPTIONS = [
   { code: "B", display: "両側" },
 ] as const;
 
-/** 「右」「左」の表示で bodySite.text を書いていた頃の明細を読むための表示名。 */
+/** bodySite.text に「右」「左」の表示を持つ明細を読むための表示名。 */
 const LEGACY_LATERALITY_LABELS: Record<string, string> = { R: "右", L: "左" };
 
 export function surgeryPriorityDisplay(code: string): string {

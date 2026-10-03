@@ -1,3 +1,4 @@
+import { epochOf, isDateOnly, localDay, WEEKDAY_LABELS, weekdayOf } from "../lib/dates";
 import { clinicalNoteProblem, isDischargeSummary, referencedResponseIds } from "./clinicalNoteHelpers";
 import type { ProblemRef } from "./conditionHelpers";
 import { isInjectionServiceRequest } from "./injectionHelpers";
@@ -543,7 +544,7 @@ function pickByType<T extends fhir4.Resource>(
 }
 
 function dayOf(dateTime: string | undefined): string {
-  return dateTime?.slice(0, 10) ?? "";
+  return localDay(dateTime);
 }
 
 // ---- 日付未定 ----
@@ -579,8 +580,6 @@ export function karteDayLabel(day: string): string {
   return day || "日付なし";
 }
 
-const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
-
 /** 診療日の年(YYYY)。日付未定・日付なしは年が無いので undefined。 */
 export function karteDayYear(day: string): string | undefined {
   const parts = /^(\d{4})-\d{2}-\d{2}$/.exec(day);
@@ -591,26 +590,22 @@ export function karteDayYear(day: string): string | undefined {
  * 診療日ペイン用の短い表示名(例: 09/01(火))。
  *
  * 年はペイン側の見出しにまとめて出すので、ここでは月日と曜日だけにする。
- * 曜日はローカル時刻の Date で求める(日付だけの文字列を new Date に渡すと UTC
- * 解釈になって前日にずれるため、年月日を分解して渡す)。
  */
 export function karteDayShortLabel(day: string): string {
   const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
   if (!parts) return karteDayLabel(day);
-  const [, year, month, date] = parts;
-  const weekday = WEEKDAY_LABELS[new Date(Number(year), Number(month) - 1, Number(date)).getDay()];
+  const [, , month, date] = parts;
+  const weekday = WEEKDAY_LABELS[weekdayOf(day) ?? 0];
   return `${month}/${date}(${weekday})`;
 }
 
 /**
  * タイムラインの見出し用の表示名(例: 2026-09-01 (火))。日付未定・日付なしは
- * karteDayLabel のまま。曜日の求め方は karteDayShortLabel と同じ。
+ * karteDayLabel のまま。
  */
 export function karteDayHeadingLabel(day: string): string {
-  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
-  if (!parts) return karteDayLabel(day);
-  const [, year, month, date] = parts;
-  const weekday = WEEKDAY_LABELS[new Date(Number(year), Number(month) - 1, Number(date)).getDay()];
+  if (!isDateOnly(day)) return karteDayLabel(day);
+  const weekday = WEEKDAY_LABELS[weekdayOf(day) ?? 0];
   return `${day} (${weekday})`;
 }
 
@@ -637,6 +632,18 @@ export function groupByKarteDayYear<T>(
     else groups.push({ year, entries: [entry] });
   }
   return groups;
+}
+
+// パス評価は記録日時の日に置く(他の記載と同じく「いつ書いたか」の軸。どの病日の評価かは本文に出す)。
+function pathwayEvaluationItem(evaluation: PathwayEvaluationCard): KarteTimelineItem {
+  return {
+    kind: "pathway-evaluation",
+    id: evaluation.observation.id ?? "",
+    day: dayOf(evaluation.recordedAt),
+    dateTime: evaluation.recordedAt,
+    label: KARTE_KIND_LABELS["pathway-evaluation"],
+    evaluation,
+  };
 }
 
 /**
@@ -1121,15 +1128,7 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
     (source) => source.hasNext && (source.oldest ?? CUTOFF_BLOCK_ALL) >= (cutoff ?? ""),
   );
 
-  // ［決定］パス評価は記録日時の日に置く(他の記載と同じく「いつ書いたか」の軸。どの病日の評価かは本文に出す)。
-  const pathwayEvaluationItems: KarteTimelineItem[] = input.pathwayEvaluations.map((evaluation) => ({
-    kind: "pathway-evaluation",
-    id: evaluation.observation.id ?? "",
-    day: dayOf(evaluation.recordedAt),
-    dateTime: evaluation.recordedAt,
-    label: KARTE_KIND_LABELS["pathway-evaluation"],
-    evaluation,
-  }));
+  const pathwayEvaluationItems = input.pathwayEvaluations.map(pathwayEvaluationItem);
 
   const visible = [...noteItems, ...prescriptionItems, ...qrItems, ...vitalItems, ...pathwayEvaluationItems].filter(
     // 日付未定は先読みで全件持っているので、カットオフで隠さない。
@@ -1147,7 +1146,9 @@ export function buildKarteTimeline(input: KarteTimelineInput): KarteTimelineResu
   const groups = Array.from(byDay.entries())
     .map(([day, items]) => ({
       day,
-      items: items.sort((a, b) => b.dateTime.localeCompare(a.dateTime)),
+      items: items.sort(
+        (a, b) => epochOf(b.dateTime) - epochOf(a.dateTime) || b.dateTime.localeCompare(a.dateTime),
+      ),
     }))
     .sort((a, b) => compareKarteDaysDesc(a.day, b.day));
 
@@ -1217,7 +1218,7 @@ export function matchesCardFilter(item: KarteTimelineItem, filter: KarteCardFilt
 
 /**
  * 指定した種別の情報だけを残す。空になった診療日のグループは落とす。
- * 種別はサーバー検索に無いのでここで絞る(プロブレムの絞り込みは検索側で済む)。
+ * 種別は 4 つの検索をまたぐ(テンプレートは版を問わない URL で突き合わせる)のでここで絞る。
  * ページングの判定は読み込み済みの全データで決まるので、ここで件数が減っても
  * 読み進みには影響しない。
  */
@@ -1309,8 +1310,23 @@ export function matchesScopeFilter(
 }
 
 /**
+ * パス評価(全件読んである)のうち絞り込みに合うものの記録日。診療日ペインの索引に足す。
+ */
+export function pathwayEvaluationDays(
+  evaluations: PathwayEvaluationCard[],
+  scope: KarteScopeFilter,
+  target: KarteScopeTarget,
+): string[] {
+  return evaluations
+    .map(pathwayEvaluationItem)
+    .filter((item) => scope === "all" || matchesScopeFilter(item, scope, target))
+    .map((item) => item.day);
+}
+
+/**
  * 診療科・記録者で絞り込む。空になった診療日のグループは落とす。種別の絞り込み
- * (filterKarteGroupsByCard)と同じく、ページングの判定より後に行う。
+ * (filterKarteGroupsByCard)と同じく、ページングの判定より後に行う。自科はサーバー検索でも
+ * 絞るので、ここで効くのは全件読んであるパス評価と、診療科を選んでいないときの空表示。
  */
 export function filterKarteGroupsByScope(
   groups: KarteDayGroup[],

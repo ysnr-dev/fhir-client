@@ -1,5 +1,4 @@
 import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { serviceRequestsOf } from "../../fhir/labOrderHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
 import {
   buildNutritionGuidanceOrderCloseEntry,
@@ -19,12 +18,12 @@ import {
 } from "../../fhir/nutritionGuidanceResultHelpers";
 import { SERVICE_TYPE_SYSTEM as SCHEDULE_SERVICE_TYPE_SYSTEM } from "../../fhir/scheduleHelpers";
 import { appointmentOrderId, buildNutritionGuidanceAppointmentBundle, type SlotSelection } from "../../fhir/appointmentHelpers";
-import { postBundle, readResource, searchResource } from "../fhirClient";
+import { postBundle, readResource } from "../fhirClient";
 import { fetchOrderAppointmentCancelEntries, invalidateAppointments, setActiveAppointmentStatus } from "./appointment";
 import {
   makeOrderDetailHook,
   ORDER_PERFORM_REVINCLUDES,
-  resourcesOfType,
+  searchAllPages,
   setOrderPeriod,
   WORKLIST_PAGE,
 } from "./core";
@@ -51,13 +50,13 @@ export function usePatientNutritionGuidanceOrders(patientId: string | undefined)
   params.set("category", `${ORDER_TYPE_SYSTEM}|${NUTRITION_GUIDANCE_ORDER_TYPE.code}`);
   params.set("status", "active");
   params.set("_sort", "-authoredon");
-  params.set("_count", "20");
 
   return useQuery({
     queryKey: ["ServiceRequest", "search", "nutrition-guidance-patient", patientId],
     queryFn: async () => {
-      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
-      return serviceRequestsOf(bundle).filter(isNutritionGuidanceServiceRequest);
+      // 打ち切りの対象を取りこぼさないよう、ページを辿って全件読む。
+      const { matches } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, { page: 500, maxPages: 4 });
+      return matches.filter(isNutritionGuidanceServiceRequest);
     },
     enabled: Boolean(patientId),
   });
@@ -122,7 +121,7 @@ export function useDeleteNutritionGuidanceOrder() {
 // オーダー」を引き、終了日の判定はクライアントで行う。
 //
 // 指導形態・入外区分・病棟・診療科・進捗での絞り込みは画面側で行う
-// (理由は検体検査一覧の節のコメントを参照)。
+// (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
 
 /** 栄養指導一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
 export interface NutritionGuidanceWorklistRow {
@@ -166,13 +165,9 @@ async function fetchNutritionGuidancePerformsOn(
   const params = new URLSearchParams();
   params.set("category", `${ORDER_TYPE_SYSTEM}|${NUTRITION_GUIDANCE_ORDER_TYPE.code}`);
   params.set("date", date);
-  params.set("_count", "200");
 
-  const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
-  const procedures = (bundle.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Procedure => r?.resourceType === "Procedure");
-  return nutritionGuidancePerformsByOrderId(procedures);
+  const { matches } = await searchAllPages<fhir4.Procedure>("Procedure", params, { page: 500, maxPages: 4 });
+  return nutritionGuidancePerformsByOrderId(matches);
 }
 
 /**
@@ -186,11 +181,9 @@ async function fetchNutritionGuidanceAppointmentsFrom(
   params.set("date", `ge${from}`);
   params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|nutrition-guidance`);
   setActiveAppointmentStatus(params);
-  params.set("_count", "200");
   params.set("_sort", "date");
 
-  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
-  const appointments = resourcesOfType<fhir4.Appointment>(bundle, "Appointment");
+  const { matches: appointments } = await searchAllPages<fhir4.Appointment>("Appointment", params, { page: 500, maxPages: 4 });
 
   const byOrderId = new Map<string, fhir4.Appointment[]>();
   for (const appointment of appointments) {

@@ -90,7 +90,7 @@ import { today } from "../fhir/scheduleHelpers";
 // 作り、同じ一覧に載せる(登録は WalkInCheckInModal)。
 //
 // 診察日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
-// (理由は queries.ts の useOutpatientList を参照)。
+// (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
 
 interface Filters {
   departmentCode: string;

@@ -131,7 +131,8 @@ export function useBookAppointment() {
   return useMutation({
     mutationFn: ({ appointment, slots }: { appointment: fhir4.Appointment; slots: fhir4.Slot[] }) =>
       postBundle(buildBookBundle(appointment, slots)),
-    onSuccess: () => invalidateAppointments(queryClient),
+    // 先に枠を取られて 412 になったときも、枠の空き状況を読み直す。
+    onSettled: () => invalidateAppointments(queryClient),
   });
 }
 
@@ -164,7 +165,7 @@ export function useRescheduleAppointment() {
       postBundle(
         buildRescheduleBundle(appointment, await fetchAppointmentSlots(appointment), slots),
       ),
-    onSuccess: () => invalidateAppointments(queryClient),
+    onSettled: () => invalidateAppointments(queryClient),
   });
 }
 

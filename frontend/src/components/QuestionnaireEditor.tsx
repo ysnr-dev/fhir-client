@@ -20,7 +20,8 @@ import {
 import { OBSERVATION_CATEGORY_OPTIONS } from "../fhir/observationExtract";
 import { ErrorBanner } from "./ErrorBanner";
 import { QuestionnaireEditorToc } from "./QuestionnaireEditorToc";
-import { QuestionnaireItemEditor, TrashIcon } from "./QuestionnaireItemEditor";
+import { QuestionnaireItemEditor } from "./QuestionnaireItemEditor";
+import { TrashIcon } from "./icons/TrashIcon";
 
 interface QuestionnaireEditorProps {
   initialValues?: QuestionnaireFormValues;

@@ -8,6 +8,7 @@
 // coding を持たない要素なので、system で見分ける。
 
 import { isAsNeededUsage, isOralUsage } from "./medicationScheduleHelpers";
+import { WEEKDAY_LABELS } from "../lib/dates";
 
 export const SUPPLEMENTARY_USAGE_SYSTEM = "urn:oid:1.2.392.200250.2.2.20.22";
 
@@ -39,8 +40,6 @@ export const SUPPLEMENT_PERIOD_OPTIONS: { code: SupplementPeriod; label: string 
   { code: "M", label: "月" },
   { code: "Y", label: "年" },
 ];
-
-export const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
 export const MAX_INTERVAL_DAYS = 31;
 export const MAX_COUNT_TIMES = 35;

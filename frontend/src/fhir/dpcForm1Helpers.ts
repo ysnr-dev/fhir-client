@@ -12,6 +12,7 @@
 // (backend)はこの item を機械的に行へ展開するだけで、項目の意味は知らない。必須の
 // 検証はここ(画面側)だけが持つので、「確定」で保存したもの = 検証を通ったものとする。
 
+import { nowFhirDateTime } from "../lib/dates";
 import { DIAGNOSIS_CODES } from "./dpcForm1/rules";
 import type {
   Dpc1Context,
@@ -93,13 +94,6 @@ function requirementMet(requirement: Dpc1Requirement | undefined, ctx: Dpc1Conte
 /** いまの入力内容で、このレコードが必須か。 */
 export function dpc1RecordRequired(def: Dpc1RecordDef, ctx: Dpc1Context): boolean {
   return requirementMet(def.required, ctx);
-}
-
-/**
- * このレコードを画面に出すか。必須のものと、手動で開いたもの(値に行があるもの)を出す。
- */
-export function dpc1RecordShown(def: Dpc1RecordDef, ctx: Dpc1Context): boolean {
-  return dpc1RecordRequired(def, ctx) || ctx.rows(def.code).length > 0;
 }
 
 export function dpc1FieldVisible(
@@ -277,30 +271,6 @@ export function normalizeDpc1Values(
   return { header: values.header, records };
 }
 
-/** 提出ファイルの 1 行(17 列)。画面のプレビューに使う。 */
-export function dpcForm1Rows(values: Dpc1Values, defs: Dpc1RecordDef[]): string[][] {
-  const header = values.header;
-  const lines: string[][] = [];
-  for (const def of defs) {
-    (values.records[def.code] ?? []).forEach((row, index) => {
-      lines.push([
-        header.facility,
-        header.dataId,
-        header.admitDate,
-        header.count,
-        header.summaryNo,
-        def.code,
-        def.version,
-        String(def.repeat ? index + 1 : 0),
-        ...PAYLOADS.map((n) => row.p[n] ?? ""),
-      ]);
-    });
-  }
-  return lines.sort(
-    (a, b) => a[5].localeCompare(b[5]) || a[6].localeCompare(b[6]) || Number(a[7]) - Number(b[7]),
-  );
-}
-
 // ---- QuestionnaireResponse ----
 
 const HEADER_LINK_ID = "header";
@@ -380,7 +350,7 @@ export function buildDpcForm1Response(args: BuildDpcForm1Args): fhir4.Questionna
     status,
     subject: { reference: `Patient/${patient.id}` },
     encounter: { reference: `Encounter/${encounterId}` },
-    authored: new Date().toISOString(),
+    authored: nowFhirDateTime(),
     author: { reference: `#${CONTAINED_PRACTITIONER_ID}` },
     item: itemsOf(values, defs),
   };
@@ -418,10 +388,6 @@ export function parseDpcForm1Form(response: fhir4.QuestionnaireResponse): Dpc1Va
 
 export function dpcForm1EncounterId(response: fhir4.QuestionnaireResponse | undefined): string {
   return referenceId(response?.encounter?.reference) ?? "";
-}
-
-export function isDpcForm1(response: fhir4.QuestionnaireResponse): boolean {
-  return response.questionnaire === DPC_FORM1_QUESTIONNAIRE;
 }
 
 /** 保存するときの状態。確定済みを保存し直すと修正済みになる。 */

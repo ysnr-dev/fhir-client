@@ -1,17 +1,16 @@
 import { keepPreviousData, type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { serviceRequestsOf } from "../../fhir/labOrderHelpers";
 import { ORDER_TYPE_SYSTEM } from "../../fhir/prescriptionHelpers";
 import { buildRehabOrderCloseEntry, isRehabServiceRequest, REHAB_ORDER_TYPE } from "../../fhir/rehabOrderHelpers";
 import { buildRehabTaskUpdate, rehabTasksByOrderId, type RehabTaskStatus } from "../../fhir/rehabTaskHelpers";
 import { type RehabPerformDisplay, rehabPerformsByOrderId } from "../../fhir/rehabResultHelpers";
 import { SERVICE_TYPE_SYSTEM as SCHEDULE_SERVICE_TYPE_SYSTEM } from "../../fhir/scheduleHelpers";
 import { appointmentOrderId, buildRehabAppointmentBundle, type SlotSelection } from "../../fhir/appointmentHelpers";
-import { deleteResource, postBundle, searchResource } from "../fhirClient";
+import { deleteResource, postBundle } from "../fhirClient";
 import { fetchOrderAppointmentCancelEntries, invalidateAppointments, setActiveAppointmentStatus } from "./appointment";
 import {
   makeOrderDetailHook,
   ORDER_PERFORM_REVINCLUDES,
-  resourcesOfType,
+  searchAllPages,
   setOrderPeriod,
   WORKLIST_PAGE,
 } from "./core";
@@ -41,13 +40,13 @@ export function usePatientRehabOrders(patientId: string | undefined) {
   params.set("category", `${ORDER_TYPE_SYSTEM}|${REHAB_ORDER_TYPE.code}`);
   params.set("status", "active");
   params.set("_sort", "-authoredon");
-  params.set("_count", "20");
 
   return useQuery({
     queryKey: ["ServiceRequest", "search", "rehab-patient", patientId],
     queryFn: async () => {
-      const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
-      return serviceRequestsOf(bundle).filter(isRehabServiceRequest);
+      // 打ち切りの対象を取りこぼさないよう、ページを辿って全件読む。
+      const { matches } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, { page: 500, maxPages: 4 });
+      return matches.filter(isRehabServiceRequest);
     },
     enabled: Boolean(patientId),
   });
@@ -103,7 +102,7 @@ export function useDeleteRehabOrder() {
 // order-period で引く。
 //
 // 疾患別リハ区分・療法種別・入外区分・病棟・診療科・進捗での絞り込みは画面側で行う
-// (理由は検体検査一覧の節のコメントを参照)。
+// (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
 
 /** リハビリ一覧の 1 行。オーダー(ヘッダ)1 件ぶん。 */
 export interface RehabWorklistRow {
@@ -145,13 +144,9 @@ async function fetchRehabPerformsOn(date: string): Promise<Map<string, RehabPerf
   const params = new URLSearchParams();
   params.set("category", `${ORDER_TYPE_SYSTEM}|${REHAB_ORDER_TYPE.code}`);
   params.set("date", date);
-  params.set("_count", "200");
 
-  const { data: bundle } = await searchResource<fhir4.Procedure>("Procedure", params);
-  const procedures = (bundle.entry ?? [])
-    .map((e) => e.resource)
-    .filter((r): r is fhir4.Procedure => r?.resourceType === "Procedure");
-  return rehabPerformsByOrderId(procedures);
+  const { matches } = await searchAllPages<fhir4.Procedure>("Procedure", params, { page: 500, maxPages: 4 });
+  return rehabPerformsByOrderId(matches);
 }
 
 async function fetchRehabWorklist(date: string): Promise<RehabWorklistResult> {
@@ -219,11 +214,9 @@ async function fetchRehabAppointmentsFrom(
   params.set("date", `ge${from}`);
   params.set("service-type", `${SCHEDULE_SERVICE_TYPE_SYSTEM}|rehab`);
   setActiveAppointmentStatus(params);
-  params.set("_count", "200");
   params.set("_sort", "date");
 
-  const { data: bundle } = await searchResource<fhir4.Appointment>("Appointment", params);
-  const appointments = resourcesOfType<fhir4.Appointment>(bundle, "Appointment");
+  const { matches: appointments } = await searchAllPages<fhir4.Appointment>("Appointment", params, { page: 500, maxPages: 4 });
 
   const byOrderId = new Map<string, fhir4.Appointment[]>();
   for (const appointment of appointments) {

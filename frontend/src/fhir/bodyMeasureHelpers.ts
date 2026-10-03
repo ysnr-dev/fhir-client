@@ -6,6 +6,8 @@
  * そこから最新値を引くだけ(同じ情報を 2 経路に持たない、§1 の方針)。
  */
 
+import { localDay } from "../lib/dates";
+
 const LOINC = "http://loinc.org";
 const JLAC11_SYSTEM = "http://fhir-client.local/CodeSystem/jlac11";
 
@@ -54,7 +56,7 @@ function measurementOf(observation: fhir4.Observation | undefined): Measurement 
   return {
     value: quantity.value,
     unit: quantity.unit ?? "",
-    date: observation?.effectiveDateTime?.slice(0, 10) ?? "",
+    date: localDay(observation?.effectiveDateTime),
   };
 }
 

@@ -1,4 +1,5 @@
 import type { KarteDetailTarget } from "../karteUrl";
+import { epochOf, isDateOnly, localDay } from "../lib/dates";
 import type { EncounterEvent } from "./encounterHelpers";
 
 // 経過表(温度板)のイベントの帯・検査の行と、病日・術後日数。
@@ -135,29 +136,6 @@ const DAY_MS = 86_400_000;
 /** 術後日数を出す上限。これを超えたら「前回の手術」ではなく既往なので出さない。 */
 export const POST_OP_DAY_LIMIT = 90;
 
-/**
- * 日時 → epoch(ms)。日付だけの値(YYYY-MM-DD)は端末ローカルの 0 時として読む。
- * `new Date("2026-08-22")` は仕様上 UTC 0 時なので、そのまま使うと時差のぶんだけ
- * 日がずれる。
- */
-export function epochOf(value: string): number {
-  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  const date = dateOnly
-    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
-    : new Date(value);
-  const time = date.getTime();
-  return Number.isNaN(time) ? 0 : time;
-}
-
-/** 日時 → 端末ローカルの YYYY-MM-DD。日付だけの値はそのまま。 */
-export function localDateOf(at: string): string {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(at)) return at;
-  const date = new Date(at);
-  if (Number.isNaN(date.getTime())) return "";
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
-}
-
 /** 日付の差(日数)。どちらもローカルの 0 時として数えるので、夏時間でもずれない。 */
 function diffDays(from: string, to: string): number {
   return Math.round((epochOf(to) - epochOf(from)) / DAY_MS);
@@ -186,7 +164,7 @@ const KIND_ORDER: FlowsheetEventKind[] = ["surgery", "encounter", "exam", "injec
 export function groupFlowsheetEventsByDay(events: FlowsheetEvent[]): FlowsheetEventGroup[] {
   const byDay = new Map<string, FlowsheetEvent[]>();
   for (const event of events) {
-    const day = localDateOf(event.at);
+    const day = localDay(event.at);
     if (!day) continue;
     const list = byDay.get(day);
     if (list) list.push(event);
@@ -400,10 +378,10 @@ export function postOpDayLabel(day: number | undefined): string {
 
 /** イベントの日時。時刻を持たない登録(検査オーダー・入院日など)は日付だけ出す。 */
 export function flowsheetEventAtLabel(at: string): string {
-  const date = localDateOf(at);
+  const date = localDay(at);
   if (!date) return at;
   const shown = date.replace(/^\d{4}-/, "").replace("-", "/");
-  if (/^\d{4}-\d{2}-\d{2}$/.test(at)) return shown;
+  if (isDateOnly(at)) return shown;
   const time = new Date(at);
   if (Number.isNaN(time.getTime())) return shown;
   const hh = String(time.getHours()).padStart(2, "0");
@@ -413,7 +391,7 @@ export function flowsheetEventAtLabel(at: string): string {
 
 /** 一覧モーダルの見出しに出す期間。同じ日に収まっていれば 1 つだけ出す。 */
 export function flowsheetEventRangeLabel(events: FlowsheetEvent[]): string {
-  const dates = events.map((event) => localDateOf(event.at)).filter(Boolean).sort();
+  const dates = events.map((event) => localDay(event.at)).filter(Boolean).sort();
   if (dates.length === 0) return "";
   const from = dates[0].replace(/^\d{4}-/, "").replace("-", "/");
   const to = dates[dates.length - 1].replace(/^\d{4}-/, "").replace("-", "/");

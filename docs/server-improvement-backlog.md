@@ -8,7 +8,8 @@ fhir-client のワークアラウンド調査で見つかった「fhir-server �
   2026-09-09（パフォーマンス観点の再調査で 6 項目を追加し、C-6・C-8 と合わせて同日サーバー側を実装。
   クライアント側の追随 F-4〜F-9 も同日実装）、2026-09-15（リファクタリング観点の再調査。上流が対応済みなのに
   クライアントが使っていない検索と C-9 を `refactoring-plan.md` にまとめた）、2026-09-27（第 2 回の再調査。
-  `Encounter.appointment` を同日実装し、C-10〜C-16 を追加）。
+  `Encounter.appointment` を同日実装し、C-10〜C-16 を追加）、2026-10-04（第 3 回。記録の `department` 検索と
+  transaction PATCH の `ifMatch` を同日実装し、C-17〜C-20 を追加）。
 - 実装済みの項目（日付のみ dateTime の受理、qualification[].identifier の索引化、
   Questionnaire canonical の一意制約、canonical `_include`、チェーン検索・`_sort`×`_include` の
   回帰 spec、プロブレム単位の絞り込み検索と `Observation.derived-from`、
@@ -309,6 +310,25 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 
 ---
 
+## 2026-10-04 に対応済み
+
+### 記録の `department` 検索(Composition / QuestionnaireResponse / Observation)
+
+- **背景**: カルテの「自科」絞り込みは、オーダー以外の記録に診療科の検索が無いため、ページングの後に
+  手元で絞っていた。疎な絞り込みだとタイムラインの番兵が読み込みを繰り返し、診療日ペインにも自科の記録が
+  無い日が並んでいた。
+- **対応**: 3 つの `search_definitions` に `department`(reference、0..*、jsonb 包含、`order-department` 拡張の
+  `valueReference`、target Organization)を追加。ServiceRequest の `department` と同じ定義で、migration・再索引は
+  不要。`$distinct-dates` にも効く。spec を 4 件追加(上流の rspec 2142 件通過)。
+- **クライアント**: `api/queries/karte.ts` の 4 本の無限クエリ・先読み・診療日の索引が `department=` を送る。
+  **上流を先にデプロイする**(旧版だと lenient で黙殺され、自科を選んでも全件が出る)。
+
+### transaction の PATCH エントリで `ifMatch` を効かせる
+
+- **背景**: `bundle_processor.rb` が PATCH エントリの `request.ifMatch` を `Operation.patch` に渡しておらず、
+  版違いでも黙って適用されていた(PUT は渡していた)。
+- **対応**: `if_match: req["ifMatch"]` を渡す。spec を 2 件追加。
+
 ## 2026-09-27 に対応済み
 
 ### `Encounter.appointment` 検索と `_include` / `_revinclude`
@@ -323,6 +343,25 @@ semantics）で固定し、クライアント側のコメントも「上流の�
   「診察開始済み」に倒れ、予約を取り消せなくなる）。
 
 ## 優先度 C: 個別の検索パラメータ・仕様適合（残り）
+
+### C-17. `Composition:entry` の `_include`
+
+- **現状**: `dpcForm1.ts` の `fetchDischargeDiagnoses` が退院時サマリーを引いてから病名を別に読む(2 往復)。
+- **望ましいサーバー機能**: `search_references.rb` に Composition の `entry`(`nested_path` は既にある)。
+
+### C-18. QuestionnaireResponse の `questionnaire` を版を問わず突き合わせる
+
+- **現状**: カルテの種別絞り込み(テンプレート単位)は版違いを同じテンプレートとして扱うため、手元で絞る。
+- **望ましいサーバー機能**: uri の `:below`、または版を落とした `questionnaire-url` の派生列。
+
+### C-19. `Observation.performer` の検索
+
+- **現状**: パス評価の「個人」絞り込みは記録者で手元で絞る(評価は全件読んでいるので実害は小さい)。
+
+### C-20. 検索 Bundle の truncated の明示(C-16 の具体化)
+
+- **現状**: `searchAllPages` は `maxPages` の上限で切れたかどうかを、最後のページが埋まっていたかで推測する。
+  マルチチャート・経過表など 10 か所ほどが上限で黙って切れうる(第 3 回で新しい側を残す並びにはした)。
 
 ### C-10. token の前方一致（`code:below`）か、成分 YJ 7 桁の派生 token
 

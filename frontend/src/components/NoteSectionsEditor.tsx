@@ -8,7 +8,7 @@ import {
 } from "../fhir/clinicalNoteHelpers";
 import type { TemplateDraft } from "../fhir/questionnaireResponseHelpers";
 import { TemplateEntryModal } from "./TemplateEntryModal";
-import { TrashIcon } from "./QuestionnaireItemEditor";
+import { TrashIcon } from "./icons/TrashIcon";
 import { RichTextEditor, type RichTextEditorHandle } from "./RichTextEditor";
 import { TemplateSchemaImages } from "./SchemaImageGallery";
 import { SchemaPickerModal } from "./SchemaPickerModal";

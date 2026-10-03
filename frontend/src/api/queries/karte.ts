@@ -31,8 +31,10 @@ import { hasRelation } from "./patient";
 // (登録後にタイムラインが自動で再取得される)。
 const KARTE_PAGE = 20;
 
-// 先読み(日付未定・未来の予定)の取得上限。どちらも未処理の仕事なので溜まらない前提。
+// 先読み(日付未定・未来の予定)の 1 ページの件数と、辿るページ数の上限。どちらも未処理の
+// 仕事なので溜まらない前提だが、1 ページを超えても取りこぼさないようページを辿る。
 const KARTE_PENDING_COUNT = 100;
+const KARTE_PENDING_MAX_PAGES = 5;
 
 /**
  * カルテのオーダー検索から外す種別。看護指示はカルテのカードにせず指示簿タブで見せる
@@ -66,12 +68,23 @@ function problemQueryKey(problemIds: KarteProblemFilter): string | null {
   return problemIds?.length ? problemIds.join(",") : null;
 }
 
+/**
+ * 「自科」の絞り込み。記録した診療科(オーダーは依頼科)の id で、null は絞り込みなし。
+ * 診療記録・オーダー・テンプレート回答・バイタルとも同じローカル拡張を department で引く。
+ */
+export type KarteDepartmentFilter = string | null;
+
+function setDepartment(params: URLSearchParams, departmentId: KarteDepartmentFilter) {
+  if (departmentId) params.set("department", `Organization/${departmentId}`);
+}
+
 export function useKarteClinicalNotesInfinite(
   patientId: string | undefined,
   problemIds: KarteProblemFilter = null,
+  departmentId: KarteDepartmentFilter = null,
 ) {
   return useInfiniteQuery({
-    queryKey: ["Composition", "search", "karte", patientId, problemQueryKey(problemIds)],
+    queryKey: ["Composition", "search", "karte", patientId, problemQueryKey(problemIds), departmentId],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("subject", `Patient/${patientId}`);
@@ -79,6 +92,7 @@ export function useKarteClinicalNotesInfinite(
       // 対象プロブレムは問題リストセクション(LOINC 11450-4)の section.entry に持つので、
       // R4 標準の entry で引ける(参照検索のカンマは OR)。
       if (problemIds?.length) params.set("entry", problemSearchValue(problemIds));
+      setDepartment(params, departmentId);
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-date");
@@ -103,17 +117,19 @@ export function useKarteClinicalNotesInfinite(
 export function useKartePrescriptionsInfinite(
   patientId: string | undefined,
   problemIds: KarteProblemFilter = null,
+  departmentId: KarteDepartmentFilter = null,
 ) {
   // 日を跨いで開きっぱなしのタブが古い境界で読み続けないよう、キーに今日を含める。
   const todayDay = today();
   return useInfiniteQuery({
-    queryKey: ["ServiceRequest", "search", "karte", patientId, problemQueryKey(problemIds), todayDay],
+    queryKey: ["ServiceRequest", "search", "karte", patientId, problemQueryKey(problemIds), departmentId, todayDay],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       // オーダーの対象プロブレムは reasonReference(R4 標準)。明細も親から
       // 引き継いだ理由を持つが、下の based-on:missing でヘッダだけに絞られる。
       if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
+      setDepartment(params, departmentId);
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-occurrence");
@@ -161,6 +177,7 @@ export function useKartePrescriptionsInfinite(
 export function useKartePendingOrders(
   patientId: string | undefined,
   problemIds: KarteProblemFilter = null,
+  departmentId: KarteDepartmentFilter = null,
 ) {
   const enabled = Boolean(patientId) && problemIds !== undefined;
 
@@ -168,10 +185,10 @@ export function useKartePendingOrders(
     const params = new URLSearchParams();
     params.set("patient", `Patient/${patientId}`);
     if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
+    setDepartment(params, departmentId);
     // カードになるのはヘッダだけ(明細は下の :iterate で添えてもらう)。
     params.set("based-on:missing", "true");
     params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
-    params.set("_count", String(KARTE_PENDING_COUNT));
     params.set("_include", "ServiceRequest:subject");
     params.append("_revinclude", "MedicationRequest:based-on");
     params.append("_revinclude", "DiagnosticReport:based-on");
@@ -183,29 +200,39 @@ export function useKartePendingOrders(
     return params;
   }
 
+  async function fetchAll(params: URLSearchParams): Promise<fhir4.Bundle[]> {
+    const { bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
+      page: KARTE_PENDING_COUNT,
+      maxPages: KARTE_PENDING_MAX_PAGES,
+    });
+    return bundles;
+  }
+
   const unscheduled = useQuery({
-    queryKey: ["ServiceRequest", "search", "karte-unscheduled", patientId, problemQueryKey(problemIds)],
+    queryKey: ["ServiceRequest", "search", "karte-unscheduled", patientId, problemQueryKey(problemIds), departmentId],
     queryFn: () => {
       const params = baseParams();
       params.set("occurrence:missing", "true");
-      return searchResource<fhir4.Resource>("ServiceRequest", params);
+      params.set("_sort", "-authoredon");
+      return fetchAll(params);
     },
     enabled,
   });
 
   const upcoming = useQuery({
-    queryKey: ["ServiceRequest", "search", "karte-upcoming", patientId, problemQueryKey(problemIds)],
+    queryKey: ["ServiceRequest", "search", "karte-upcoming", patientId, problemQueryKey(problemIds), departmentId],
     queryFn: () => {
       const params = baseParams();
       // 今日より後の開始日。今日以前は本流(occurrence=le{今日})が読む。
       params.set("occurrence", `gt${today()}`);
-      return searchResource<fhir4.Resource>("ServiceRequest", params);
+      params.set("_sort", "occurrence");
+      return fetchAll(params);
     },
     enabled,
   });
 
   const bundles = useMemo(
-    () => [unscheduled.data?.data, upcoming.data?.data].filter((b): b is fhir4.Bundle => Boolean(b)),
+    () => [...(unscheduled.data ?? []), ...(upcoming.data ?? [])],
     [unscheduled.data, upcoming.data],
   );
 
@@ -220,14 +247,16 @@ export function useKartePendingOrders(
 export function useKarteQuestionnaireResponsesInfinite(
   patientId: string | undefined,
   problemIds: KarteProblemFilter = null,
+  departmentId: KarteDepartmentFilter = null,
 ) {
   return useInfiniteQuery({
-    queryKey: ["QuestionnaireResponse", "search", "karte", patientId, problemQueryKey(problemIds)],
+    queryKey: ["QuestionnaireResponse", "search", "karte", patientId, problemQueryKey(problemIds), departmentId],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       // 診療記録と同じローカル拡張による絞り込み。
       if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+      setDepartment(params, departmentId);
       // DPC 様式1 も QuestionnaireResponse だが、カルテの記載ではないので出さない。
       params.set("questionnaire:not", DPC_FORM1_QUESTIONNAIRE);
       params.set("_count", String(KARTE_PAGE));
@@ -248,15 +277,17 @@ export function useKarteQuestionnaireResponsesInfinite(
 export function useKarteVitalsInfinite(
   patientId: string | undefined,
   problemIds: KarteProblemFilter = null,
+  departmentId: KarteDepartmentFilter = null,
 ) {
   return useInfiniteQuery({
-    queryKey: ["Observation", "search", "karte-vital", patientId, problemQueryKey(problemIds)],
+    queryKey: ["Observation", "search", "karte-vital", patientId, problemQueryKey(problemIds), departmentId],
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       params.set("category", "vital-signs");
       params.set("derived-from:missing", "true");
       if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+      setDepartment(params, departmentId);
       params.set("_count", String(KARTE_PAGE));
       params.set("_offset", String(pageParam));
       params.set("_sort", "-date");
@@ -326,12 +357,13 @@ async function fetchKarteDays(
 export function useKarteDayIndex(
   patientId: string | undefined,
   problemIds: KarteProblemFilter = null,
+  departmentId: KarteDepartmentFilter = null,
 ) {
   const enabled = Boolean(patientId) && problemIds !== undefined;
   const problemKey = problemQueryKey(problemIds);
 
   const notes = useQuery({
-    queryKey: ["Composition", "search", "karte-days", patientId, problemKey],
+    queryKey: ["Composition", "search", "karte-days", patientId, problemKey, departmentId],
     queryFn: () =>
       fetchKarteDays(
         "Composition",
@@ -340,6 +372,7 @@ export function useKarteDayIndex(
           params.set("subject", `Patient/${patientId}`);
           params.set("type", KARTE_NOTE_TYPE_SEARCH);
           if (problemIds?.length) params.set("entry", problemSearchValue(problemIds));
+          setDepartment(params, departmentId);
           return params;
         })(),
         "date",
@@ -355,11 +388,12 @@ export function useKarteDayIndex(
   // 該当があるときだけ種別と登録日を引き直し、タイムラインと同じ orderCardDay で写す
   // —— 写さずに一律「日付未定」に足すと、カードが登録日に出るぶん空の「日付未定」が並ぶ。
   const orders = useQuery({
-    queryKey: ["ServiceRequest", "search", "karte-days-occurrence", patientId, problemKey],
+    queryKey: ["ServiceRequest", "search", "karte-days-occurrence", patientId, problemKey, departmentId],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("patient", `Patient/${patientId}`);
       if (problemIds?.length) params.set("reason-reference", problemSearchValue(problemIds));
+      setDepartment(params, departmentId);
       params.set("based-on:missing", "true");
       params.set("category:not", KARTE_EXCLUDED_ORDER_TYPE_TOKENS);
       // fetchDistinctDates は渡した params に集計用の値を足すので、引き直し用に写しを渡す。
@@ -382,7 +416,7 @@ export function useKarteDayIndex(
   });
 
   const responses = useQuery({
-    queryKey: ["QuestionnaireResponse", "search", "karte-days", patientId, problemKey],
+    queryKey: ["QuestionnaireResponse", "search", "karte-days", patientId, problemKey, departmentId],
     queryFn: () =>
       fetchKarteDays(
         "QuestionnaireResponse",
@@ -390,6 +424,7 @@ export function useKarteDayIndex(
           const params = new URLSearchParams();
           params.set("patient", `Patient/${patientId}`);
           if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+          setDepartment(params, departmentId);
           params.set("questionnaire:not", DPC_FORM1_QUESTIONNAIRE);
           return params;
         })(),
@@ -399,7 +434,7 @@ export function useKarteDayIndex(
   });
 
   const vitals = useQuery({
-    queryKey: ["Observation", "search", "karte-days", patientId, problemKey],
+    queryKey: ["Observation", "search", "karte-days", patientId, problemKey, departmentId],
     queryFn: () =>
       fetchKarteDays(
         "Observation",
@@ -409,6 +444,7 @@ export function useKarteDayIndex(
           params.set("category", "vital-signs");
           params.set("derived-from:missing", "true");
           if (problemIds?.length) params.set("problem", problemSearchValue(problemIds));
+          setDepartment(params, departmentId);
           return params;
         })(),
         "date",

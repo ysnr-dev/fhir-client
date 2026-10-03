@@ -1,9 +1,8 @@
 module LabImport
   # 検体ラベル番号(11 桁 + M10W3 チェックデジット)。
   #
-  # 採番は上流の Specimen に移っていて backend には計算が残っていないため
-  # (docs/lab-arrival-design.md §6-1)、frontend の
-  # labSpecimenHelpers.ts#isValidLabelNumber と同じ計算をここに持つ。
+  # 採番は上流(Fhir::AccessionAssigner)が行う(docs/lab-arrival-design.md §6-1)。取込の検証用に、
+  # frontend の labSpecimenHelpers.ts#isValidLabelNumber と同じ計算をここに持つ。
   module LabelNumber
     LENGTH = 11
 

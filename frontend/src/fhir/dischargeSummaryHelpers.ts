@@ -23,7 +23,7 @@ import {
   withDischargeDisposition,
   type EncounterEvent,
 } from "./encounterHelpers";
-import { departmentExtension, departmentOf } from "./prescriptionHelpers";
+import { departmentExtension, departmentOf, type DepartmentRef } from "./prescriptionHelpers";
 import { practitionerDisplayName } from "./practitionerHelpers";
 import { orderDay } from "./shared";
 
@@ -378,7 +378,7 @@ export interface DischargeSummaryBuildOptions {
   existing?: fhir4.Composition;
   /** 対象の入院。転帰を書き換えたときは同じ transaction で PUT する。 */
   encounter: fhir4.Encounter;
-  department?: { departmentId: string; departmentName: string };
+  department?: DepartmentRef;
 }
 
 export function buildDischargeSummary(

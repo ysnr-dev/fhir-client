@@ -20,7 +20,7 @@ import {
   type MedicationHistoryUnit,
   type MedicationHistoryView,
 } from "../karteUrl";
-import { addDays, today } from "../lib/dates";
+import { addDays, today, WEEKDAY_LABELS } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 
 // カルテの投薬歴タブ。処方・注射・持参薬を「薬剤 × 日付」の表にして、いつ何をどれだけ
@@ -39,7 +39,6 @@ const COLUMN_CHOICES: Record<MedicationHistoryUnit, number[]> = {
   month: [6, 12, 24],
 };
 const DEFAULT_COLUMNS: Record<MedicationHistoryUnit, number> = { day: 30, month: 12 };
-const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
 const CHANGE_MARKS = { increase: "↑", decrease: "↓", change: "*" } as const;
 const CHANGE_LABELS = { increase: "増量", decrease: "減量", change: "変更" } as const;

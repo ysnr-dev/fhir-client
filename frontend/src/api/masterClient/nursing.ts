@@ -68,15 +68,8 @@ export interface NursingObservationResult {
   name: string;
 }
 
-export interface NursingUnit {
-  id: number;
-  unit_code: string;
-  name: string;
-}
-
 const NURSING_ACTS_PATH = "/master/nursing_acts";
 const NURSING_OBSERVATIONS_PATH = "/master/nursing_observations";
-const NURSING_OBSERVATION_RESULTS_PATH = "/master/nursing_observation_results";
 
 export async function searchNursingActs(params: {
   name?: string;
@@ -169,15 +162,4 @@ export async function searchNursingObservations(params: {
   const res = await masterFetch(`${NURSING_OBSERVATIONS_PATH}?${search.toString()}`);
   if (!res.ok) throw await buildError(res);
   return (await res.json()) as MasterSearchResult<NursingObservation>;
-}
-
-export async function fetchNursingObservationResults(params: {
-  result_group_code: string;
-}): Promise<MasterSearchResult<NursingObservationResult>> {
-  const search = new URLSearchParams();
-  search.set("result_group_code", params.result_group_code);
-  search.set("per", "500");
-  const res = await masterFetch(`${NURSING_OBSERVATION_RESULTS_PATH}?${search.toString()}`);
-  if (!res.ok) throw await buildError(res);
-  return (await res.json()) as MasterSearchResult<NursingObservationResult>;
 }

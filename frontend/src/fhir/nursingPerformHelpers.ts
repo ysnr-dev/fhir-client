@@ -22,9 +22,8 @@ import {
 // vital-entry とは別の system にしてあるのは、カルテのバイタルカードに混ぜないため
 // (groupVitalEntries は vital-entry を持つものだけを拾う)。
 //
-// Observation の category は order-type の nursing **だけ**。上流は category の先頭の
-// concept しか索引しないので vital-signs を足しても検索には効かず、カルテのバイタル
-// 検索に混ざる害しかない。経過表は category を `vital-signs,nursing` で引く
+// Observation の category は order-type の nursing **だけ**。vital-signs を足すとカルテの
+// バイタル検索(category=vital-signs)に混ざるので付けない。経過表は category を `vital-signs,nursing` で引く
 // (api/queries/karte.ts の VITAL_FLOWSHEET_CATEGORY)。
 //
 // 真のバイタル(SpO2・体温など)は LOINC を第 2 coding に併記する。経過表の行キーは
@@ -366,8 +365,7 @@ function buildNursingObservation(
     resourceType: "Observation",
     status: "final",
     identifier: [{ system: NURSING_PERFORM_ENTRY_SYSTEM, value: ctx.entryId }],
-    // 他オーダーの Observation と振り分ける区分。上流は先頭の concept しか索引しない
-    // ので、これ以外の category は付けない(ファイル冒頭のコメント)。
+    // 他オーダーの Observation と振り分ける区分。他の category は付けない(ファイル冒頭のコメント)。
     category: [{ coding: [{ system: ORDER_TYPE_SYSTEM, ...NURSING_ORDER_TYPE }] }],
     code: observationCode(order),
     subject: order.subject ?? {},

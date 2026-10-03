@@ -11,8 +11,8 @@ import { comparePatientNumber, fetchWorklistBundles, worklistParams } from "./wo
 // ---- 処方一覧(部門ワークリスト) ----
 //
 // 処方日(交付日 = 登録日 authoredOn の日付)で 1 日ぶんの処方オーダーを読む。画面の作りは
-// 検体検査一覧と同じで、入外区分・処方区分・診療科での絞り込みは画面側で行う(理由は
-// 検体検査一覧の節のコメントを参照)。
+// 検体検査一覧と同じで、入外区分・処方区分・診療科での絞り込みは画面側で行う
+// (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
 //
 // 他の部門一覧と違って開始日(occurrence = 投与開始日)で引かないのは、薬剤部は「今日交付
 // された処方」を当日に受け取って開始日の前日までに調剤するため。入院の定期処方は木曜に
@@ -45,9 +45,7 @@ export async function fetchRxWorklist(date: string): Promise<RxWorklistResult> {
 
   const { patientsById, tasks, truncated } = await fetchWorklistBundles(
     (page) => {
-      // 処方オーダーはオーダー種別(order-type)を持たない(種別が無いものを処方とする)ので、
-      // 処方オーダーだけが持つ処方区分の CodeSystem を system だけ指定して引く
-      // (FHIR token 検索の `system|` 形式。注射は別の CodeSystem なので混ざらない)。
+      // 処方区分の system だけで引く(節の冒頭)。注射は別の CodeSystem なので混ざらない。
       const params = worklistParams(`${PRESCRIPTION_CATEGORY_SYSTEM}|`, date, page, "authoredon");
       // 処方明細も同じ応答に添えてもらう。
       params.set("_revinclude", "MedicationRequest:based-on");

@@ -5,11 +5,12 @@ export interface OutcomeMessage {
   text: string;
 }
 
-// issue.code 単位の和訳(上流の diagnostics は英語のため)。現状 duplicate を返すのは
-// Questionnaire の canonical (url, version) 一意制約のみ。
+// issue.code 単位の和訳(上流の diagnostics は英語のため)。duplicate を返すのは
+// Questionnaire の canonical (url, version) 一意制約、conflict は If-Match の版違い(412)。
 const CODE_MESSAGES: Record<string, string> = {
   duplicate:
     "この URL・バージョンの組み合わせは既に別のテンプレートで使われています。URL かバージョンを変更してください。",
+  conflict: "ほかの操作で先に更新されています。読み直してからやり直してください。",
 };
 
 export function outcomeMessages(outcome?: fhir4.OperationOutcome): OutcomeMessage[] {

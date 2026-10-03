@@ -36,15 +36,20 @@ module Integrations
     end
 
     # 検索して entry の resource だけを配列で返す。link[next] を追う。
+    # limit は検索に一致した行の件数で数える(_include / _revinclude で添えられた行は数えず、
+    # 読んだページの分をすべて返す)。
     def search(resource_type, params, limit: 500)
       collected = []
+      matched = 0
       query = encode(params)
       path = "/#{resource_type}"
 
-      while collected.length < limit
+      while matched < limit
         bundle = parse!(gateway.forward(method: :get, path: path, query: query,
                                         headers: STRICT_HANDLING))
-        collected.concat(Array(bundle["entry"]).filter_map { |entry| entry["resource"] })
+        entries = Array(bundle["entry"])
+        collected.concat(entries.filter_map { |entry| entry["resource"] })
+        matched += entries.count { |entry| entry.dig("search", "mode") != "include" }
 
         nxt = Array(bundle["link"]).find { |l| l["relation"] == "next" }&.dig("url")
         break if nxt.blank?
@@ -54,7 +59,7 @@ module Integrations
         query = uri.query
       end
 
-      collected.first(limit)
+      collected
     end
 
     # identifier などの検索条件で作成/更新する(FHIR の conditional update)。

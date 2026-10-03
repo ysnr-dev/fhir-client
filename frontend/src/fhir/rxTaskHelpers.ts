@@ -81,9 +81,6 @@ export function rxTaskActions(status: RxTaskStatus): RxTaskAction[] {
   }
 }
 
-/** Task が処方(調剤)の進捗かどうか。検体検査など他部門との振り分けに使う。 */
-export const isRxTask = helpers.isTask;
-
 /** 進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
 export const rxTaskStatus = helpers.taskStatus;
 

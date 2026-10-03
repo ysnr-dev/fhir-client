@@ -14,7 +14,7 @@ const WORKLIST_MAX_PAGES = 2;
  *
  * 日付はオーダー開始日(occurrenceDateTime: 撮影日・検査日・注射日・投与予定日 …)で引く。
  * 全種別で occurrence が開始日、authoredOn が登録日時(fhir/shared.ts 冒頭)。
- * 例外は処方一覧だけで、交付日(登録日)で引く(理由は useRxWorklist のコメント)。
+ * 例外は処方一覧だけで、交付日(登録日)で引く(理由は api/queries/prescription.ts の「処方一覧」の節)。
  */
 export function worklistParams(
   category: string,

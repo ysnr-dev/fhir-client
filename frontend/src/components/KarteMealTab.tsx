@@ -15,7 +15,7 @@ import {
   mealStapleSummary,
   type MealDayEntry,
 } from "../fhir/mealOrderHelpers";
-import { toDateInput, today } from "../lib/dates";
+import { toDateInput, today, WEEKDAY_LABELS } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 
 // カルテ画面の「食事」タブ。1 か月ぶんの食事を暦の形で並べる。
@@ -28,8 +28,6 @@ import { ErrorBanner } from "./ErrorBanner";
 // 退院で終わり、外出泊で止まる)ので、暦の上で食事の切れ目と突き合わせられる。
 //
 // 編集は右ペイン(MealOrderPanels)の担当。左ペインは表示と、編集を開く導線だけ持つ。
-
-const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
 interface KarteMealTabProps {
   patientId: string;

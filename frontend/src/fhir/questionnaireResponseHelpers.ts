@@ -1,8 +1,9 @@
 // JASPEHR 実装ガイド v1.0.0 の QuestionnaireResponse プロファイルに準拠した
 // テンプレート回答リソースの組み立て・復元。
 // https://jaspehr.jp/wp-content/docs/full-ig_v1.0.0/site/index.html
+import { nowFhirDateTime } from "../lib/dates";
 import { problemRefFromReference, type ProblemRef } from "./conditionHelpers";
-import { departmentExtension, departmentOf } from "./prescriptionHelpers";
+import { departmentExtension, departmentOf, type DepartmentRef } from "./prescriptionHelpers";
 import { annotationOf, binaryIdFromAttachment } from "./schemaImage";
 
 export const JASPEHR_QUESTIONNAIRE_RESPONSE_PROFILE_URL =
@@ -120,7 +121,7 @@ export interface BuildQuestionnaireResponseArgs {
    * 記録した診療科。オーダーの依頼科と同じローカル拡張に入れ、カルテのカードに出す。
    * 更新では保存済みの値を引き継ぐ。
    */
-  department?: { departmentId: string; departmentName: string };
+  department?: DepartmentRef;
   // 更新時は id と identifier(報告単位ID)を引き継ぐ。
   existing?: fhir4.QuestionnaireResponse;
 }
@@ -156,7 +157,7 @@ export function buildQuestionnaireResponse(
     questionnaire: questionnaireCanonical(questionnaire),
     status: meta.status,
     subject: { reference: `Patient/${patient.id}` },
-    authored: new Date().toISOString(),
+    authored: nowFhirDateTime(),
     author: { reference: `#${CONTAINED_PRACTITIONER_ID}` },
   };
 

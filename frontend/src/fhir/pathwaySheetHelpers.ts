@@ -251,17 +251,6 @@ export function nursingPerformDates(
   return map;
 }
 
-/** タスクが看護指示を結んでいるか(実施はタスクの Procedure ではなく、指示の実施記録で表す)。 */
-export function isNursingLinkedTask(
-  task: { orderIds: string[] },
-  orders: Map<string, fhir4.ServiceRequest> | undefined,
-): boolean {
-  return task.orderIds.some((id) => {
-    const sr = orders?.get(id);
-    return Boolean(sr && isNursingServiceRequest(sr));
-  });
-}
-
 /**
  * その病日にタスクを実施したか。［決定］看護指示を結んだタスクは、その日の実施記録があれば実施とみなす
  * (続く病日にまたがる 1 件の指示を日ごとに記録するため)。リハビリ・栄養指導も同じくその日の実施記録で決める。

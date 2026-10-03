@@ -1,8 +1,8 @@
 import type { TemplateBinding } from "../fhir/questionnaireResponseHelpers";
 import { TemplateSchemaImages } from "./SchemaImageGallery";
 
-// テンプレートからも直接入力もできる 1 欄。放射線オーダーの検査目的・特別指示で
-// 作った形を、栄養指導の指導目的でも使うので共通の部品にした。
+// テンプレートからも直接入力もできる 1 欄。放射線オーダーの検査目的・特別指示と
+// 栄養指導の指導目的で共用する。
 //
 // テンプレートから記載した場合は、回答との
 // 食い違いを防ぐため直接編集は不可にし、直すときはテンプレート画面を開き直す

@@ -71,9 +71,6 @@ export function pathoTaskActions(status: PathoTaskStatus): PathoTaskAction[] {
   }
 }
 
-/** Task が病理検査の進捗かどうか。他部門との振り分けに使う。 */
-export const isPathoTask = helpers.isTask;
-
 /** 進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
 export const pathoTaskStatus = helpers.taskStatus;
 

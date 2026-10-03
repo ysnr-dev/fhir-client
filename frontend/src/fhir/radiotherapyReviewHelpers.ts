@@ -2,7 +2,6 @@ import {
   buildCompletedNotificationTask,
   buildNotificationTask,
   completeNotificationEntry,
-  hasTaskCode,
   notificationTaskEntry,
   taskInputOf,
   taskOwnerName,
@@ -10,7 +9,7 @@ import {
   type NotificationRowBase,
 } from "./notificationHelpers";
 import { parseQuestionnaireResponseMeta } from "./questionnaireResponseHelpers";
-import { diffDays, today } from "../lib/dates";
+import { diffDays, localDay, today } from "../lib/dates";
 
 /**
  * 治療中の診察(週次レビュー)の記録(docs/radiotherapy-order-design.md §6.3)。
@@ -70,7 +69,7 @@ export function parseRadiotherapyReview(
   return {
     id: qr.id,
     orderSrId,
-    date: (qr.authored ?? "").slice(0, 10),
+    date: localDay(qr.authored),
     questionnaire: qr.questionnaire ?? "",
     authorName: parseQuestionnaireResponseMeta(qr).authorName,
   };
@@ -131,10 +130,6 @@ export const RADIOTHERAPY_REVIEW_DUE_NOTE = "診察を記録しました。";
 
 const COURSE_INPUT = "治療コース";
 const LAST_REVIEW_INPUT = "前回の診察";
-
-export function isRadiotherapyReviewDueTask(task: fhir4.Task): boolean {
-  return hasTaskCode(task, RADIOTHERAPY_REVIEW_DUE_TASK_CODE.code);
-}
 
 /**
  * 督促 Task の entry。間隔を超えていなければ null(呼び出し側で既存の未対応 Task の

@@ -4,9 +4,9 @@ import { useSurgeryRoomBlockMutations, useSurgeryRoomBlockSearch } from "../api/
 import { useLocationOptions, useSelfDepartments } from "../api/queries";
 import { departmentCode, departmentDisplayName } from "../fhir/departmentHelpers";
 import { locationDisplayName, locationTypeCode } from "../fhir/locationHelpers";
-import { WEEKDAY_LABELS } from "../fhir/surgeryConflictHelpers";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
+import { WEEKDAY_LABELS } from "../lib/dates";
 
 // 手術室のブロックスケジュール(曜日ごとの科割り当て)のマスタ。
 //

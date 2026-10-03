@@ -1,7 +1,6 @@
-import { addDays } from "../lib/dates";
+import { addDays, localDay } from "../lib/dates";
 import {
   flowsheetEventAtLabel,
-  localDateOf,
   type FlowsheetMark,
   type FlowsheetMarkKind,
   type FlowsheetMarkRow,
@@ -196,5 +195,5 @@ export function buildInjectionRows(data: FlowsheetInjectionData): FlowsheetMarkR
 
 /** 印の日時を「MM/DD HH:mm」にする。日付だけの値は日付のみ。 */
 export function flowsheetTimeLabel(at: string): string {
-  return flowsheetEventAtLabel(at) || localDateOf(at);
+  return flowsheetEventAtLabel(at) || localDay(at);
 }

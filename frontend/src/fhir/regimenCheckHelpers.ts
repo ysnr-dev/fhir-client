@@ -1,5 +1,5 @@
 import type { RegimenLabCriterion } from "../api/masterClient";
-import { diffDays } from "../lib/dates";
+import { diffDays, localDay } from "../lib/dates";
 
 /**
  * 投与前チェック(レジメンの適応基準と直近の検査結果の突き合わせ)。
@@ -143,7 +143,7 @@ function latestOf(
     return {
       value: quantity.value,
       unit: quantity.unit ?? "",
-      date: observation.effectiveDateTime?.slice(0, 10) ?? "",
+      date: localDay(observation.effectiveDateTime),
     };
   }
   return null;

@@ -98,7 +98,6 @@ export function radiotherapyTaskActions(status: RadiotherapyTaskStatus): Radioth
   }
 }
 
-export const isRadiotherapyTask = helpers.isTask;
 export const radiotherapyTaskStatus = helpers.taskStatus;
 export const radiotherapyTasksByOrderId = helpers.tasksByOrderId;
 export const buildRadiotherapyTaskUpdate = helpers.buildTaskUpdate;

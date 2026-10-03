@@ -12,6 +12,60 @@ export function today(): string {
   return toDateInput(new Date());
 }
 
+export const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
+
+/** "YYYY-MM-DD" の曜日(0=日 … 6=土)。不正な日付は null。 */
+export function weekdayOf(date: string): number | null {
+  if (!isDateOnly(date)) return null;
+  const [year, month, day] = date.split("-").map(Number);
+  // ローカルタイムで作る(UTC 解釈だと日本時間では前日の曜日になる)。
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getDay();
+}
+
+/** YYYY-MM-DD の形(日付だけの値)か。 */
+export function isDateOnly(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+/**
+ * FHIR の date / dateTime を端末ローカルの YYYY-MM-DD にする。日付だけの値はそのまま返す。
+ * UTC("...Z")で書かれた値は文字列の先頭を切り出すと日付がずれるので、時刻を持つ値は
+ * 必ずここを通す。
+ */
+export function localDay(value: string | undefined): string {
+  if (!value) return "";
+  if (value.length <= 10) return value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value.slice(0, 10) : toDateInput(date);
+}
+
+/**
+ * FHIR の date / dateTime をミリ秒にする。日付だけの値はローカルの 0 時
+ * (`new Date("2026-08-22")` は UTC 0 時になり、時差のぶんだけ日がずれる)。読めない値は 0。
+ */
+export function epochOf(value: string): number {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const date = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(value);
+  const time = date.getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+/**
+ * タイムゾーン付きの dateTime を、端末ローカルの「YYYY-MM-DDTHH:mm[:ss]」に直す。
+ * タイムゾーンを持たない値(日付だけ・ローカル時刻)はそのまま返す。
+ */
+function toLocalWallClock(value: string): string {
+  if (!/(?:Z|[+-]\d\d:\d\d)$/.test(value)) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const seconds = /T\d\d:\d\d:\d\d/.test(value) ? `:${pad(date.getSeconds())}` : "";
+  return `${toDateInput(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}${seconds}`;
+}
+
 /** ISO 日時をローカル表記(ja-JP)にする。パースできなければそのまま返す。 */
 export function formatDateTime(iso: string): string {
   const date = new Date(iso);
@@ -39,29 +93,26 @@ export function diffDays(from: string, to: string): number {
 
 /**
  * FHIR の date / dateTime を一覧向けの「YYYY-MM-DD HH:mm」にする。時刻を持たない値
- * (日付だけの入退院・外出泊)は日付だけ返す。タイムゾーンは変換しない
- * (入退院の日時はローカル時刻 + オフセットで書いているので、文字列のまま切り出せる)。
+ * (日付だけの入退院・外出泊)は日付だけ返す。タイムゾーン付きの値は端末のローカル時刻で出す。
  */
 export function dateTimeLabel(value: string | undefined): string {
   if (!value) return "";
-  const date = value.slice(0, 10);
-  const time = value.slice(11, 16);
+  const local = toLocalWallClock(value);
+  const date = local.slice(0, 10);
+  const time = local.slice(11, 16);
   return /^\d\d:\d\d$/.test(time) ? `${date} ${time}` : date;
 }
 
 /**
  * FHIR の dateTime を「YYYY-MM-DD HH:mm:ss」にする。秒を持たない値は分まで、時刻を持たない値は
- * 日付だけ返す。dateTimeLabel と同じくタイムゾーンは変換しない(ローカル時刻 + オフセットで
- * 書いているので文字列のまま切り出せる)。オーダーの登録日時のように、同じ分に何件も並びうる
- * ものに使う。
+ * 日付だけ返す。オーダーの登録日時のように、同じ分に何件も並びうるものに使う。
  */
 export function dateTimeSecondsLabel(value: string | undefined): string {
   const label = dateTimeLabel(value);
   if (!value || label.length <= 10) return label;
-  // 秒まで含めて判定する。分までの値("...T22:55+09:00")で 17-18 文字目だけを見ると、
-  // オフセットの時("09")を秒として拾ってしまう。
-  const time = value.slice(11, 19);
-  return /^\d\d:\d\d:\d\d$/.test(time) ? `${value.slice(0, 10)} ${time}` : label;
+  const local = toLocalWallClock(value);
+  const time = local.slice(11, 19);
+  return /^\d\d:\d\d:\d\d$/.test(time) ? `${local.slice(0, 10)} ${time}` : label;
 }
 
 /**
@@ -70,8 +121,9 @@ export function dateTimeSecondsLabel(value: string | undefined): string {
  */
 export function toDateTimeInputValue(value: string | undefined): string {
   if (!value) return "";
-  const date = value.slice(0, 10);
-  const time = value.slice(11, 16);
+  const local = toLocalWallClock(value);
+  const date = local.slice(0, 10);
+  const time = local.slice(11, 16);
   return /^\d\d:\d\d$/.test(time) ? `${date}T${time}` : `${date}T00:00`;
 }
 
@@ -85,10 +137,11 @@ export function nowDateTimeInput(): string {
 /**
  * ローカル時刻の文字列(YYYY-MM-DDTHH:mm または YYYY-MM-DDTHH:mm:ss)に実行環境のオフセットを
  * 付けて FHIR dateTime にする("2026-09-01T10:30:00+09:00")。FHIR の dateTime は時刻を含むなら
- * タイムゾーン必須。分までの入力(datetime-local)には秒 :00 を補う。空文字はそのまま返す。
+ * タイムゾーン必須。分までの入力(datetime-local)には秒 :00 を補う。空文字とタイムゾーン付きの値は
+ * そのまま返す。
  */
 export function toFhirDateTime(input: string): string {
-  if (!input) return "";
+  if (!input || /(?:Z|[+-]\d\d:\d\d)$/.test(input)) return input;
   const offsetMinutes = -new Date(input).getTimezoneOffset();
   const sign = offsetMinutes >= 0 ? "+" : "-";
   const abs = Math.abs(offsetMinutes);

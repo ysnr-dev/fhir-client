@@ -271,25 +271,6 @@
   gap: 16px;
 }
 
-/* 詳細ページのレコード送り（＜ / ＞） */
-.record-nav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.record-nav__button {
-  padding: 2px 10px;
-  line-height: 1.4;
-}
-
-.record-nav__status {
-  min-width: 88px;
-  font-size: 13px;
-  color: var(--text);
-  text-align: center;
-}
-
 .patient-header {
   display: flex;
   flex-wrap: wrap;
@@ -9531,11 +9512,6 @@ fieldset.lab-order-item__section label.dose-conversion__checkbox {
   color: var(--text);
 }
 
-/* 一覧の分離菌名。長くなりがちなので折り返す。 */
-.micro-result__organisms {
-  white-space: normal;
-}
-
 /* 報告区分(中間/最終)のラジオ。ラベルと選択肢を 1 行に並べる。 */
 .micro-result-form__status {
   display: flex;
@@ -10797,8 +10773,7 @@ body.page-wide-md .app__main {
   background: var(--surface-sunken);
 }
 
-.discharge__meal-toggle,
-.discharge__meal-timing {
+.discharge__meal-toggle {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -10892,38 +10867,6 @@ body.page-wide-md .app__main {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
-}
-
-/* flex-direction は .prescription-form label の縦並びを打ち消すために要る
-   (チェックボックスを項目名の左に置く)。 */
-.prescription-form .rad-perform-now__toggle {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-/* 登録されるオーダーごとの実施入力。オーダーが 1 件なら 1 行だけになる。 */
-.rad-perform-now__orders {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-}
-
-.rad-perform-now__orders > li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 4px 0;
-  font-size: 13px;
-}
-
-/* どのオーダーぶんの実施入力か。行が複数並ぶときだけ出る。 */
-.rad-perform-now__order {
-  flex: 1 1 140px;
 }
 
 .rad-perform-now__summary {
@@ -18145,17 +18088,6 @@ button.chemo-calendar__cell[draggable="true"] {
   font-size: 10px;
 }
 
-.chemo-calendar__drug {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chemo-calendar__drug--more {
-  color: var(--text);
-  font-size: 10px;
-}
-
 /* 化学療法タブの中の表示切り替え(カレンダー / レジメン詳細)。見出しの右に置く
    小さめのタブで、適用の選択(.chemo-calendar__regimens)とは段を分ける。 */
 .chemo-views {
@@ -19133,12 +19065,6 @@ button.chemo-calendar__cell[draggable="true"] {
 
 .ward-map__bed-menu {
   margin-left: auto;
-}
-
-.ward-map__bed-menu .row-menu__button {
-  padding: 0 4px;
-  font-size: 12px;
-  line-height: 1;
 }
 
 .ward-map__bed-name {
@@ -21427,10 +21353,6 @@ body.page-home .app__main {
   overflow-y: auto;
 }
 
-.home__card--wide {
-  grid-column: 1 / -1;
-}
-
 .home__card-header {
   position: sticky;
   top: 0;
@@ -22156,7 +22078,7 @@ thead .injection-calendar__head {
   color: var(--danger);
 }
 
-/* 右ペイン「その日の注射」 */
+/* その日の注射(モーダル) */
 
 .injection-day__title {
   display: flex;

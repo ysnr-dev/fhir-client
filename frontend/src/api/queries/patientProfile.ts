@@ -1,7 +1,12 @@
 import { useMemo } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { referenceId } from "../../fhir/shared";
-import { HAS_LAB_MAPPED_TYPES, type InfectionRow, summarizeInfections } from "../../fhir/infectionHelpers";
+import {
+  HAS_LAB_MAPPED_TYPES,
+  INFECTION_TYPE_SYSTEM,
+  type InfectionRow,
+  summarizeInfections,
+} from "../../fhir/infectionHelpers";
 import { buildQuestionnaire, collectPendingImageEntries } from "../../fhir/questionnaireHelpers";
 import { questionnaireCanonical } from "../../fhir/questionnaireResponseHelpers";
 import {
@@ -139,6 +144,9 @@ function patientIdsKey(patientIds: string[]): string {
 }
 
 const PATIENT_CHUNK = 50;
+
+/** 手入力の感染症だけが持つ種類コード(system だけ指定して引く)。 */
+const MANUAL_INFECTION_CODE = `${INFECTION_TYPE_SYSTEM}|`;
 /** 検査結果は 1 人あたりの件数が多いので、塊を小さくして _count の上限に当たりにくくする。 */
 const LAB_PATIENT_CHUNK = 5;
 
@@ -197,7 +205,10 @@ export function useInfectionsForPatients(patientIds: string[]) {
         key.split(","),
         PATIENT_CHUNK,
         "subject",
-        (params) => params.set("category", "exam"),
+        (params) => {
+          params.set("category", "exam");
+          params.set("code", MANUAL_INFECTION_CODE);
+        },
         (observation) => referenceId(observation.subject?.reference),
       ),
     enabled: key.length > 0,
@@ -375,12 +386,14 @@ export function useSavePregnancy() {
 
 /**
  * 手入力の感染症。検体検査の結果と混ざらないよう category=exam で絞る
- * (検査結果は下の useLabInfectionResults が JLAC11 コードで引く)。
+ * (検査結果は下の useLabInfectionResults が JLAC11 コードで引く)。同じ category を持つ
+ * テンプレート抽出の Observation を外すため、手入力分だけが持つ種類コードの system でも絞る。
  */
 export function useManualInfections(patientId: string | undefined) {
   const params = new URLSearchParams();
   if (patientId) params.set("subject", `Patient/${patientId}`);
   params.set("category", "exam");
+  params.set("code", MANUAL_INFECTION_CODE);
   params.set("_count", "50");
   params.set("_sort", "-date");
 
@@ -769,7 +782,7 @@ export function useLatestQuestionnaireResponse(
 // テンプレート表示用に QuestionnaireResponse と元テンプレートを 1 リクエストで取得する
 // (canonical を解決する _include=QuestionnaireResponse:questionnaire)。
 // 削除済みは read の 410 と違い空の Bundle になる(response が undefined のまま)。
-// 編集画面は If-Match 用の ETag が要るため read(useQuestionnaireResponse)を使い続ける。
+// 編集画面は If-Match 用の ETag が要るため read(useQuestionnaireResponse)を使う。
 export function useQuestionnaireResponseWithQuestionnaire(id: string | undefined) {
   const query = useQuery({
     queryKey: ["QuestionnaireResponse", id, "withQuestionnaire"],

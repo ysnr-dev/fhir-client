@@ -10,7 +10,7 @@
 // 枠の生成に使った曜日パターン(月水金 9:00-12:00、15分刻み …)は R4 の標準要素に
 // 置き場が無いので extension に JSON で持たせる。翌月ぶんを同じ条件で作り直せる
 // ようにするためで、Slot の内容そのものは常に Slot リソース側が正。
-import { addDays, addMonths, toDateInput, today } from "../lib/dates";
+import { addDays, addMonths, toDateInput, today, WEEKDAY_LABELS } from "../lib/dates";
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
 
 export { addDays, addMonths, toDateInput, today };
@@ -42,7 +42,6 @@ export function appointmentTypeLabel(code: string | undefined): string {
   return APPOINTMENT_TYPE_OPTIONS.find((o) => o.code === code)?.label ?? code;
 }
 
-
 // ---- Slot の状態 ----
 
 export const SLOT_STATUS_OPTIONS = [
@@ -66,8 +65,6 @@ export function isBookedSlot(slot: fhir4.Slot): boolean {
 }
 
 // ---- 曜日パターン ----
-
-export const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 export interface SlotTimeBlock {
   /** "09:00" 形式。 */

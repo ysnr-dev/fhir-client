@@ -175,8 +175,9 @@ interface PagedSearch<T extends fhir4.Resource> {
 }
 
 /**
- * `_count` を 1 ページとして `_offset` で順に辿る。検索対象の型の件数が 1 ページに満たなければ
- * 終わり。_include / _revinclude の行は上流が `_count` に数えないので、entry の総数では判定しない。
+ * `_count` を 1 ページとして `_offset` で順に辿る。検索に一致した行(search.mode が include で
+ * ないもの)が 1 ページに満たなければ終わり。_include / _revinclude の行は上流が `_count` に
+ * 数えないので、entry の総数では判定しない(同じ型を _revinclude:iterate で添える検索もある)。
  */
 export async function searchAllPages<T extends fhir4.Resource>(
   type: T["resourceType"],
@@ -190,7 +191,10 @@ export async function searchAllPages<T extends fhir4.Resource>(
     pageParams.set("_count", String(options.page));
     pageParams.set("_offset", String(page * options.page));
     const { data: bundle } = await searchResource<fhir4.Resource>(type, pageParams);
-    const found = resourcesOfType<T>(bundle, type);
+    const found = (bundle.entry ?? [])
+      .filter((entry) => entry.search?.mode !== "include")
+      .map((entry) => entry.resource)
+      .filter((r): r is T => r?.resourceType === type);
     matches.push(...found);
     bundles.push(bundle);
     if (found.length < options.page) return { matches, bundles, truncated: false };

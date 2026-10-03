@@ -43,7 +43,6 @@ import {
   groupFlowsheetEventsByDay,
   hospitalDayLabel,
   hospitalDayOf,
-  localDateOf,
   markKey,
   markModalEvents,
   postOpDayLabel,
@@ -61,7 +60,7 @@ import {
   parseFlowsheetView,
   type FlowsheetView,
 } from "../karteUrl";
-import { addDays, toDateTimeInputValue, today } from "../lib/dates";
+import { addDays, isDateOnly, localDay, toDateTimeInputValue, today } from "../lib/dates";
 import { FlowsheetEventModal } from "./FlowsheetEventModal";
 import { InjectionPerformModal } from "./InjectionPerformModal";
 import { MealIntakeModal } from "./MealIntakeModal";
@@ -149,8 +148,8 @@ interface ColumnGroup {
 
 /** 日時 → 枠のキー。時刻を持たない値(検査オーダーなど)は日のキーのまま。 */
 function groupKeyOf(at: string, dayMode: boolean): string {
-  const day = localDateOf(at);
-  if (!dayMode || /^\d{4}-\d{2}-\d{2}$/.test(at)) return day;
+  const day = localDay(at);
+  if (!dayMode || isDateOnly(at)) return day;
   const time = new Date(at);
   if (Number.isNaN(time.getTime())) return day;
   return `${day}T${String(time.getHours()).padStart(2, "0")}`;
@@ -511,7 +510,7 @@ export function VitalFlowsheetPanel({
       (surgeries.data ?? [])
         .map((procedure) => procedure.performedPeriod?.start ?? procedure.performedDateTime ?? "")
         .filter(Boolean)
-        .map(localDateOf)
+        .map(localDay)
         .filter(Boolean),
     [surgeries.data],
   );

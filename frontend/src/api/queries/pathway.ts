@@ -516,7 +516,6 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
   params.append("_include", "CarePlan:goal");
   // オーダーの進み具合は ServiceRequest ではなく focus で指す進捗の Task にあるので、それも辿る。
   // リハビリ・栄養指導は日ごとの実施記録(オーダーを basedOn で指す Procedure)で実施を見るので、それも辿る。
-  // 上流は同じ名前の _revinclude:iterate を並べると最後の 1 つしか効かないので、カンマで 1 つにまとめる。
   params.append("_revinclude:iterate", "Task:focus,Procedure:based-on");
   params.set("_count", String(PATHWAY_TREE_PAGE));
 
@@ -575,8 +574,8 @@ export function usePathwayApplicationTree(applyId: string | undefined) {
 }
 
 /**
- * 患者のパスの評価と観察項目の実績(Observation)。category の先頭がパスの印なので
- * 患者 + category の 1 回で全部引ける(上流は category の先頭しか索引しない)。
+ * 患者のパスの評価と観察項目の実績(Observation)。category にパスの印を持つので
+ * 患者 + category の 1 回で全部引ける。
  */
 export function usePathwayObservations(patientId: string | undefined) {
   const params = new URLSearchParams();

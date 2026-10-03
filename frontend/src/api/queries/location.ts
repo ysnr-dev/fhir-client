@@ -37,8 +37,7 @@ export function useLocationSearch(search: LocationSearchParams, offset: number) 
   if (search.name) params.set("name", search.name);
   if (search.status) params.set("status", search.status);
   // 入院の場所(病棟・病室・ベッド)はこの一覧の担当ではない(/wards が持つ)。
-  // 上流の token 検索に :not は無いので「除く」ではなく「診察室の種別だけを
-  // 挙げて OR で引く」で分ける。取得後に落とすやり方だと total とページ内件数が
+  // 診察室の種別だけを挙げて OR で引く。取得後に落とすやり方だと total とページ内件数が
   // ずれるため、サーバー側で絞りきる。
   params.set("type", LOCATION_TYPE_CODES.join(","));
   params.set("_count", String(LOCATION_COUNT));

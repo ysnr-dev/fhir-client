@@ -19,8 +19,8 @@ export { LAB_LABEL_NUMBER_SYSTEM, isLabelSpecimen };
 const ARRIVAL_RECORDER_EXT_URL = "http://fhir-client.local/StructureDefinition/lab-arrival-recorder";
 
 /**
- * スキャン入力の形式検証(11 桁 + M10W3 チェックデジット)。backend の採番
- * (LabLabelNumber.check_digit)と同じ計算で、手入力ミスに送信前に気付くためのもの。
+ * スキャン入力の形式検証(11 桁 + M10W3 チェックデジット)。上流の採番
+ * (Fhir::AccessionAssigner)と同じ計算で、手入力ミスに送信前に気付くためのもの。
  */
 export function isValidLabelNumber(number: string): boolean {
   if (!/^\d{11}$/.test(number)) return false;

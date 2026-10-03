@@ -212,7 +212,7 @@ export function useGenerateSlots() {
 /**
  * 枠の状態を変える(停止 ⇄ 再開)。カレンダーは検索結果の Slot を持っているだけで
  * ETag が無いため、単体 PUT ではなく transaction Bundle で書く
- * (useUpdateRadTaskStatus と同じ理由)。
+ * (makeUpdateTaskStatusHook と同じ理由)。
  */
 export function useUpdateSlotStatus() {
   const queryClient = useQueryClient();

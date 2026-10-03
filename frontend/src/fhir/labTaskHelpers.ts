@@ -78,9 +78,6 @@ export function labTaskActions(status: LabTaskStatus): LabTaskAction[] {
   }
 }
 
-/** Task が検体検査の進捗かどうか。放射線検査など他部門との振り分けに使う。 */
-export const isLabTask = helpers.isTask;
-
 /** 進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
 export const labTaskStatus = helpers.taskStatus;
 

@@ -1,6 +1,6 @@
 import type { NursingObservation } from "../api/masterClient";
 import type { TemplateBinding } from "./questionnaireResponseHelpers";
-import { nowFhirDateTime } from "../lib/dates";
+import { localDay, nowFhirDateTime } from "../lib/dates";
 import {
   nursingObservationInputSpec,
   nursingObservationValueLabel,
@@ -14,7 +14,7 @@ import {
 import { NURSING_OBSERVATION_RESULT_SYSTEM, nursingVitalCodeOf } from "./nursingPerformHelpers";
 import { NURSING_OBSERVATION_CODE_SYSTEM } from "./nursingOrderHelpers";
 import { buildBloodPressureComponents } from "./vitalHelpers";
-import { departmentExtension } from "./prescriptionHelpers";
+import { departmentExtension, type DepartmentRef } from "./prescriptionHelpers";
 import { pathwayVarianceTaskEntries, type PathwayVarianceNotice } from "./pathwayVarianceHelpers";
 
 // クリニカルパスの日次評価(1 病日 × 1 OAT ユニット)の FHIR 構造。ePath の適用後パスデータに倣う。
@@ -28,7 +28,7 @@ import { pathwayVarianceTaskEntries, type PathwayVarianceNotice } from "./pathwa
 //
 // ［決定］評価・実績の Observation は Goal に contained せず独立のリソースにする(検索で読める。
 // EP12 出力で contained に畳む)。category の先頭にパスの印を置き、患者 + category の 1 回の検索で
-// 全部引く(上流は category の先頭しか索引しない)。
+// 全部引く。
 
 const ID_SYSTEM_BASE = "http://e-path.jp/fhir/ePath/IdSystem";
 export const PATHWAY_OUTCOME_GOAL_ID_SYSTEM = `${ID_SYSTEM_BASE}/outcome-goal-id`;
@@ -263,7 +263,7 @@ export function assessmentCandidate(
   const vital = nursingVitalCodeOf(manageNo);
   const matches = observations
     .filter((o) => !isPathwayObservation(o) && o.status !== "entered-in-error")
-    .filter((o) => (o.effectiveDateTime ?? "").slice(0, 10) === date)
+    .filter((o) => localDay(o.effectiveDateTime) === date)
     .filter((o) => {
       if (hasCoding(o.code, NURSING_OBSERVATION_CODE_SYSTEM, manageNo)) return true;
       if (vital?.kind === "measure") return hasCoding(o.code, LOINC_SYSTEM, vital.code);
@@ -387,7 +387,7 @@ export interface PathwayEvaluationContext {
   existing: PathwayEvaluationState | null;
   performer: { practitionerId: string; display: string } | null;
   /** 記録した診療科。評価の Observation に入れ、カルテのカードに出す。 */
-  department?: { departmentId: string; departmentName: string };
+  department?: DepartmentRef;
   /** バリアンスの通知に要る情報。渡さなければ通知を作らない(指示簿のタスクの記録など)。 */
   variance?: PathwayVarianceNotice | null;
 }

@@ -14,7 +14,7 @@ import {
   type RegimenApplication,
   type RegimenDayOrder,
 } from "../fhir/regimenOrderHelpers";
-import { toDateInput, today } from "../lib/dates";
+import { toDateInput, today, WEEKDAY_LABELS } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { RegimenDetailView } from "./RegimenDetailView";
 import { RegimenHistoryView } from "./RegimenHistoryView";
@@ -28,7 +28,6 @@ import { RegimenMoveModal } from "./RegimenPanels";
 //
 // 操作(適用・次クール・移動・中止・編集)は右ペインの担当。暦は表示と導線だけ持つ。
 
-const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 /** 暦の 1 マスに出すステップの上限。 */
 const MAX_STEPS_IN_CELL = 3;
 

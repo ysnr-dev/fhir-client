@@ -31,9 +31,6 @@ export interface NotificationRowBase {
   ownerName: string;
 }
 
-/** 通知の状態。requested = 未対応 / completed = 対応済み / cancelled = 取り下げ。 */
-export type NotificationStatus = "requested" | "completed" | "cancelled";
-
 /**
  * 通知の強度。`Task.priority` に写す。
  *

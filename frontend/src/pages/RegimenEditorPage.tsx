@@ -47,27 +47,13 @@ import {
 import type { RegimenEmeticRisk, RegimenPurpose, RegimenSetting, RegimenStatus } from "../api/masterClient";
 import { useValidationError } from "../hooks/useValidationError";
 import { makeFieldUpdater } from "../lib/form";
+import { TrashIcon } from "../components/icons/TrashIcon";
 
 // 化学療法レジメンの登録・編集。1 レジメン 1 ページで、本体と子(適応疾患・投与
 // ステップ・薬剤・検査基準・副作用)をローカルの draft に持ち、「保存」で 1 リクエスト
 // にまとめる。薬剤・病名・検査項目の検索モーダルを開くので、外側は <form> にしない
 // (Modal は非ポータルで、入れ子の form が外側の submit を誘発する)。
 // 設計は docs/chemo-regimen-design.md。
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 type Picker =
   | { kind: "disease" }

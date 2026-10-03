@@ -19,6 +19,7 @@ import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { Modal } from "../components/Modal";
 import { MedicalMaterialSearchModal } from "../components/MedicalMaterialSearchModal";
 import { TREATMENT_ROUTE_OPTIONS } from "../fhir/treatmentResultHelpers";
+import { TrashIcon } from "../components/icons/TrashIcon";
 
 // 処置の実施入力用データセット。
 //
@@ -27,21 +28,6 @@ import { TREATMENT_ROUTE_OPTIONS } from "../fhir/treatmentResultHelpers";
 // オーダーに載っている処置項目に紐付く全データセットの明細をマージして初期表示する。
 //
 // 放射線と違い、器材は施設内の器材マスタを挟まず特定保険医療材料そのものを指す。
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 interface Draft {
   dataset_code: string;

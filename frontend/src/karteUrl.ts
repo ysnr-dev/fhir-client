@@ -63,8 +63,7 @@ export function parseKarteOpen(value: string | null): KarteOpenTarget | null {
 export const KARTE_TABS = [
   { key: "karte", label: "カルテ" },
   { key: "condition", label: "病名" },
-  // 患者の「現在の状態」を区画ごとに読むタブ(時系列ではない)。今は診療上の注意
-  // だけで、身体・感染症・生活などの区画を後から足す。
+  // 患者の「現在の状態」を区画(基本・保険・身体・感染症・注意)ごとに読むタブ(時系列ではない)。
   { key: "profile", label: "プロファイル" },
   { key: "allergy", label: "アレルギー" },
   // 入院時の持参薬。登録・鑑別・継続/中止の判断をタブの中で行う(docs/brought-medication-design.md)。

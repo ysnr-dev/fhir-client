@@ -8,7 +8,6 @@ import {
 } from "./labResultHelpers";
 import {
   buildNotificationTask,
-  hasTaskCode,
   taskInputOf,
   taskOwnerName,
   taskPatientId,
@@ -29,10 +28,6 @@ export const LAB_PANIC_TASK_CODE = { code: "lab-panic", display: "緊急異常�
 
 /** 確認したときに通知へ残す文。通知一覧とカルテの確認ボタンで共通。 */
 export const LAB_PANIC_NOTE = "緊急異常値を確認しました。";
-
-export function isPanicTask(task: fhir4.Task): boolean {
-  return hasTaskCode(task, LAB_PANIC_TASK_CODE.code);
-}
 
 /** パニック値だった行。一覧はこれを項目・値・判定に分けて出す。 */
 export interface PanicItem {

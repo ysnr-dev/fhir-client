@@ -83,9 +83,6 @@ export function physioTaskActions(status: PhysioTaskStatus): PhysioTaskAction[] 
   }
 }
 
-/** Task が生理検査の進捗かどうか。他部門の Task が増えたときの振り分けに使う。 */
-export const isPhysioTask = helpers.isTask;
-
 /** 進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
 export const physioTaskStatus = helpers.taskStatus;
 

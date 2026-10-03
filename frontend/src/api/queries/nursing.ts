@@ -11,7 +11,7 @@ import {
   withTaskOwner,
 } from "../../fhir/nursingTaskHelpers";
 import { deleteResource, postBundle, searchResource } from "../fhirClient";
-import { resourcesOfType, setOrderPeriod, WORKLIST_PAGE } from "./core";
+import { searchAllPages, setOrderPeriod, WORKLIST_PAGE } from "./core";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import { comparePatientNumber, fetchWorklistBundles } from "./worklist";
 
@@ -60,14 +60,24 @@ export function useActiveNursingOrders(patientId: string | undefined, at: string
   });
 }
 
-/** その患者の看護指示すべて(中止・終了を含む)。履歴ビューと退院時の打ち切りに使う。 */
+/**
+ * その患者の看護指示すべて(中止・終了を含む)。履歴ビューと退院時の打ち切りに使う。
+ * 打ち切りの対象を取りこぼさないよう、ページを辿って全件読む。
+ */
 export function usePatientNursingOrders(patientId: string | undefined) {
   const params = nursingOrderParams(patientId);
   return useQuery({
     queryKey: ["ServiceRequest", "search", "nursing-patient", patientId],
     queryFn: async () => {
-      const { data: bundle } = await searchResource<fhir4.Resource>("ServiceRequest", params);
-      return nursingOrderSetOf(bundle);
+      const { bundles } = await searchAllPages<fhir4.ServiceRequest>("ServiceRequest", params, {
+        page: 500,
+        maxPages: 4,
+      });
+      return nursingOrderSetOf({
+        resourceType: "Bundle",
+        type: "searchset",
+        entry: bundles.flatMap((bundle) => bundle.entry ?? []),
+      });
     },
     enabled: Boolean(patientId),
   });
@@ -288,14 +298,13 @@ export async function fetchNursingPerforms(
   const procedureParams = nursingPerformParams();
   setParams(observationParams);
   setParams(procedureParams);
+  // 実施記録の有無でパスの取消・指示の削除を止めるので、上限で切らずにページを辿る。
+  const paging = { page: 500, maxPages: 4 };
   const [observations, procedures] = await Promise.all([
-    searchResource<fhir4.Observation>("Observation", observationParams),
-    searchResource<fhir4.Procedure>("Procedure", procedureParams),
+    searchAllPages<fhir4.Observation>("Observation", observationParams, paging),
+    searchAllPages<fhir4.Procedure>("Procedure", procedureParams, paging),
   ]);
-  return nursingPerformsByOrderId(
-    resourcesOfType<fhir4.Observation>(observations.data, "Observation"),
-    resourcesOfType<fhir4.Procedure>(procedures.data, "Procedure"),
-  );
+  return nursingPerformsByOrderId(observations.matches, procedures.matches);
 }
 
 /** その患者の実施記録(指示の id ごと、新しい順)。パスの画面が指示ごとの実施を見るのに使う。 */

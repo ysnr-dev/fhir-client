@@ -78,8 +78,10 @@ import {
   filterKarteGroupsByCard,
   filterKarteGroupsByScope,
   mergeDayIndex,
+  pathwayEvaluationDays,
   type KarteCardFilter,
   type KarteScopeFilter,
+  type KarteScopeTarget,
   type KarteTimelineItem,
 } from "../fhir/karteTimeline";
 import {
@@ -107,7 +109,7 @@ import { receptionCoverageSetKey } from "../fhir/coverageHelpers";
 import { encounterAttendingId } from "../fhir/encounterHelpers";
 import { buildFinishedOutpatientEncounter } from "../fhir/outpatientEncounterHelpers";
 import { displayName } from "../fhir/patientHelpers";
-import { nowFhirDateTime, today } from "../lib/dates";
+import { isDateOnly, nowFhirDateTime, today } from "../lib/dates";
 import { useKarteReturnTo } from "../returnTo";
 import {
   clampLeftWidthRatio,
@@ -374,12 +376,23 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   const [sidePaneMode, setSidePaneMode] = useState<KarteSidePaneMode>(readSidePaneMode);
   // 情報の種別での絞り込み。共有できるよう URL に載せる(プロブレムと同じ扱い)。
   const cardFilter = parseKarteCard(searchParams.get(KARTE_CARD_PARAM));
-  // 診療科・記録者での絞り込み。見る人ごとの好みなので URL ではなく端末に覚える。
+  // 診療科・記録者での絞り込み。見る人ごとの好みなので URL には載せず端末に覚える。
   const [scopeFilter, setScopeFilter] = useState<KarteScopeFilter>(readScopeFilter);
   // 自科はヘッダーで選択中の診療科、個人はログイン中の医療従事者と突き合わせる。
   const orderContext = useOrderContext();
   const { practitionerId: loginPractitionerId, practitioner: loginPractitioner } =
     useCurrentPractitioner();
+  const scopeTarget = useMemo<KarteScopeTarget>(
+    () => ({
+      departmentId: orderContext.departmentId,
+      practitionerId: loginPractitionerId ?? "",
+      practitionerName: loginPractitioner ? displayJapaneseName(loginPractitioner.name) : "",
+    }),
+    [orderContext.departmentId, loginPractitionerId, loginPractitioner],
+  );
+  // 自科はサーバー検索で絞る(ページングと診療日ペインが絞り込み後の件数で進む)。
+  const timelineDepartmentId =
+    scopeFilter === "department" && orderContext.departmentId ? orderContext.departmentId : null;
   // 絞り込み中のプロブレム。これがあれば「関連する記録のみ表示」の状態。
   const filterProblemId = searchParams.get(KARTE_PROBLEM_PARAM);
   // 減光と絞り込みのどちらであれ、いま選ばれているプロブレム。
@@ -423,17 +436,17 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     return [...(activeProblemIds ?? [filterProblemId])].sort();
   }, [filterProblemId, conditionsPending, activeProblemIds]);
 
-  const notes = useKarteClinicalNotesInfinite(patientId, timelineProblemIds);
-  const prescriptions = useKartePrescriptionsInfinite(patientId, timelineProblemIds);
-  const responses = useKarteQuestionnaireResponsesInfinite(patientId, timelineProblemIds);
+  const notes = useKarteClinicalNotesInfinite(patientId, timelineProblemIds, timelineDepartmentId);
+  const prescriptions = useKartePrescriptionsInfinite(patientId, timelineProblemIds, timelineDepartmentId);
+  const responses = useKarteQuestionnaireResponsesInfinite(patientId, timelineProblemIds, timelineDepartmentId);
   // 日付未定・開始日が今日より後のオーダーは本流(開始日が今日以前)に乗らないので別に先読みする。
-  const pendingOrders = useKartePendingOrders(patientId, timelineProblemIds);
-  const vitals = useKarteVitalsInfinite(patientId, timelineProblemIds);
+  const pendingOrders = useKartePendingOrders(patientId, timelineProblemIds, timelineDepartmentId);
+  const vitals = useKarteVitalsInfinite(patientId, timelineProblemIds, timelineDepartmentId);
   // 記載のあるパスの評価。患者ぶんを全部読むので、ページングの判定には加わらない。
   const pathwayEvaluations = useKartePathwayEvaluations(patientId, timelineProblemIds);
   // 診療日ペイン用の全診療日。タイムラインのページングとは別に日付だけを読み切る
   // ので、スクロール(読み込み状況)に関係なく過去の日付まで最初から並ぶ。
-  const dayIndex = useKarteDayIndex(patientId, timelineProblemIds);
+  const dayIndex = useKarteDayIndex(patientId, timelineProblemIds, timelineDepartmentId);
 
   // 選択中のプロブレムは、診療記録を新規登録するときの対象の初期値にする。
   const selectedProblem = useMemo(() => {
@@ -548,24 +561,13 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     ],
   );
 
-  // プロブレムの絞り込みはサーバー検索で済んでいるので、ここで残るのは種別だけ。
-  // 種別はページングの判定(カットオフ・pending)より後に行う。判定は読み込み済みの
-  // 全データで決まるので、ここで件数が減っても読み進みには影響しない。
+  // プロブレムと自科の絞り込みはサーバー検索で済んでいる。ここで残るのは種別と個人、それに
+  // 全件読んであるパス評価の自科。ページングの判定(カットオフ・pending)より後に行う。判定は
+  // 読み込み済みの全データで決まるので、ここで件数が減っても読み進みには影響しない。
   const filteredGroups = useMemo(() => {
     const byCard = cardFilter ? filterKarteGroupsByCard(timeline.groups, cardFilter) : timeline.groups;
-    return filterKarteGroupsByScope(byCard, scopeFilter, {
-      departmentId: orderContext.departmentId,
-      practitionerId: loginPractitionerId ?? "",
-      practitionerName: loginPractitioner ? displayJapaneseName(loginPractitioner.name) : "",
-    });
-  }, [
-    timeline.groups,
-    cardFilter,
-    scopeFilter,
-    orderContext.departmentId,
-    loginPractitionerId,
-    loginPractitioner,
-  ]);
+    return filterKarteGroupsByScope(byCard, scopeFilter, scopeTarget);
+  }, [timeline.groups, cardFilter, scopeFilter, scopeTarget]);
 
   // 診療日ペインに出す全日付。読み込み済みの日はタイムラインの項目付き。
   const dayEntries = useMemo(
@@ -576,16 +578,16 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         // 絞り込み後の groups だけで決まるので、評価の日付を足すのは絞り込んでいないときだけ)。
         cardFilter && cardFilter.kind !== "pathway-evaluation"
           ? dayIndex.days
-          : [...dayIndex.days, ...(pathwayEvaluations.data ?? []).map((e) => e.recordedAt.slice(0, 10))],
+          : [...dayIndex.days, ...pathwayEvaluationDays(pathwayEvaluations.data ?? [], scopeFilter, scopeTarget)],
         timeline.cutoff,
       ),
-    [filteredGroups, dayIndex.days, timeline.cutoff, cardFilter, pathwayEvaluations.data],
+    [filteredGroups, dayIndex.days, timeline.cutoff, cardFilter, pathwayEvaluations.data, scopeFilter, scopeTarget],
   );
 
   // 本日のカルテのペインに出す 1 日分。オーダーの本流は開始日が今日以前のものを新しい順に
   // 読むので、本日の分は常に最初のページに入っている(追加読み込みを待つ必要が無い)。
-  // 種別の絞り込み(左端のペイン)は左のタイムラインを絞るためのものなので、ここには
-  // 効かせない。本日の分は常に全部見えるようにしておく。
+  // 種別と個人の絞り込み(左端のペイン)は左のタイムラインを絞るためのものなので、ここには
+  // 効かせない。サーバー検索で絞るプロブレムと自科は、ここにも効く。
   const todayDay = today();
   const todayGroup = useMemo(
     () => timeline.groups.find((group) => group.day === todayDay),
@@ -634,11 +636,6 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   }, []);
   useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
 
-  // 本日のカルテのペインを出していないときは、カルテを本日の位置で開く。タイムラインは
-  // 新しい日が上(日付未定・先の予定・本日・過去の順)なので、先の予定があると本日が下に
-  // 隠れる。本日の項目が無ければ、本日より前で最も新しい日にする。患者ごとに 1 回だけで、
-  // 先読み(日付未定・先の予定)と最初のページが揃ってから合わせる(後から上に日が足されて
-  // ずれないように)。強調はしない(飛んだのではなく、開いた位置なので)。
   // タイムラインの先頭に見えている日。診療日ペインのその行に色を付ける。スクロールのたびに
   // 日の見出し(section)を上から見て、下端がまだ枠の上端より下にある最初の日を取る。
   // requestAnimationFrame は使わない(隠れたタブで止まり、更新が来なくなる)。
@@ -664,6 +661,11 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     return () => container.removeEventListener("scroll", update);
   }, [filteredGroups, tab, mode, todayVisible]);
 
+  // 本日のカルテのペインを出していないときは、カルテを本日の位置で開く。タイムラインは
+  // 新しい日が上(日付未定・先の予定・本日・過去の順)なので、先の予定があると本日が下に
+  // 隠れる。本日の項目が無ければ、本日より前で最も新しい日にする。患者ごとに 1 回だけで、
+  // 先読み(日付未定・先の予定)と最初のページが揃ってから合わせる(後から上に日が足されて
+  // ずれないように)。開いた位置なので、飛んだときの強調はしない。
   const initialScrollPatient = useRef<string | null>(null);
   const timelineReady =
     !notes.isPending && !prescriptions.isPending && !responses.isPending && !vitals.isPending && !pendingOrders.isPending;
@@ -673,7 +675,7 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     if (!container) return;
     initialScrollPatient.current = patientId;
     if (todayVisible) return;
-    const target = filteredGroups.find((group) => /^\d{4}-\d{2}-\d{2}$/.test(group.day) && group.day <= todayDay);
+    const target = filteredGroups.find((group) => isDateOnly(group.day) && group.day <= todayDay);
     const element = target && container.querySelector(`[${KARTE_TARGET_ATTR}="${target.day}"]`);
     if (!element) return;
     container.scrollTop += element.getBoundingClientRect().top - container.getBoundingClientRect().top;

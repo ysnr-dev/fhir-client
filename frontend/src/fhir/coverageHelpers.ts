@@ -5,7 +5,6 @@
 
 /** カルテがレセコン連携で発行する識別子の名前空間。レセコンの製品名は入れない。 */
 const NAMESPACE = "http://fhir-client.local/integrations/receipt-computer";
-export const COVERAGE_IDENTIFIER_SYSTEM = `${NAMESPACE}/coverage`;
 export const COVERAGE_CLASS_SYSTEM = `${NAMESPACE}/coverage-class`;
 export const RECEPTION_COVERAGE_SET_URL = `${NAMESPACE}/StructureDefinition/reception-coverage-set`;
 /** 請求セット(同時に適用する保険の組)を表す class のコード。 */

@@ -28,8 +28,8 @@ import { TemplateSelect } from "./TemplateSelect";
 
 // テンプレート記入モーダル。診療記録のセクションと放射線オーダーの検査目的・
 // 特別指示で共用する。
-// QuestionnaireResponseCreatePage と同じ流れ(テンプレート選択 → 記入)を
-// モーダル内で行い、登録時に組み立て済みの QuestionnaireResponse を親へ返す。
+// テンプレート選択 → 記入をモーダル内で行い、登録時に組み立て済みの
+// QuestionnaireResponse を親へ返す。
 // ここでは FHIR サーバーへ保存しない — 保存は診療記録本体と同じ
 // transaction Bundle で行う(親フォーム側の責務)。
 //
@@ -131,7 +131,7 @@ export function TemplateEntryForm({
       : options.questionnaires.find((q) => q.id === questionnaireId));
   const initialResponse = draft?.response ?? (needsFetch ? savedResponse.data?.data : undefined);
 
-  // 記入者名はログイン中の医療従事者で補完(QuestionnaireResponseCreatePage と同じ規約)。
+  // 記入者名はログイン中の医療従事者で補完(QuestionnaireResponsePanels と同じ規約)。
   const loginAutofill = useLoginAutofillSource();
   const loginPractitionerName = loginAutofill.source
     ? displayJapaneseName(loginAutofill.source.practitioner.name)

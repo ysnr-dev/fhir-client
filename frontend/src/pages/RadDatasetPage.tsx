@@ -19,27 +19,13 @@ import { MedicineSearchModal } from "../components/MedicineSearchModal";
 import { Modal } from "../components/Modal";
 import { RadMaterialSearchModal } from "../components/RadMaterialSearchModal";
 import { RAD_ROUTE_OPTIONS } from "../fhir/radResultHelpers";
+import { TrashIcon } from "../components/icons/TrashIcon";
 
 // 放射線検査の実施入力用データセット。
 //
 // 実施入力で毎回登録することになる手技料・造影剤・器材の組み合わせに名前を付けて
 // おき、撮影項目マスタ(放射線オーダー項目)に紐付ける。実施入力モーダルは、
 // オーダーに載っている撮影項目に紐付く全データセットの明細をマージして初期表示する。
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 interface Draft {
   dataset_code: string;

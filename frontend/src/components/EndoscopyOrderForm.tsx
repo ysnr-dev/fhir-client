@@ -56,6 +56,7 @@ import { ErrorBanner } from "./ErrorBanner";
 import { ProblemSelect } from "./ProblemSelect";
 import { EndoscopyPerformInputModal } from "./EndoscopyPerformModal";
 import { TemplateSchemaImages } from "./SchemaImageGallery";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 内視鏡オーダーの入力フォーム。検査伝票(内視鏡オーダーレイアウト)のタブと
 // 個別検索から項目を選び、選んだ内容を GP ごとに確認・記入してから登録する。
@@ -125,21 +126,6 @@ type ActiveTab = { kind: "layout"; id: number } | { kind: "search" };
 
 /** テンプレート記入モーダルの対象。どの GP のどちらの欄かを持つ。 */
 type TemplateTarget = { code: string; field: "purpose" | "remarks" };
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 export function EndoscopyOrderForm({
   patientId,

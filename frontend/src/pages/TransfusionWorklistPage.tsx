@@ -62,7 +62,7 @@ import {
 // 同じ入力を開ける(docs/transfusion-order-design.md §5.1)。
 //
 // 投与予定日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
-// (理由は queries.ts の useLabWorklist を参照)。
+// (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
 
 interface Filters {
   testType: string;

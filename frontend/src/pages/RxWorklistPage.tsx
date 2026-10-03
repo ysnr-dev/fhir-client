@@ -53,7 +53,7 @@ import {
 // MedicationDispense と一緒に書き込む。
 //
 // 処方日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
-// (理由は queries.ts の useRxWorklist を参照)。
+// (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
 
 interface Filters {
   setting: string;

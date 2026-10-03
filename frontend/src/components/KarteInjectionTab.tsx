@@ -10,7 +10,7 @@ import {
 } from "../fhir/injectionCalendarHelpers";
 import { canCancelInjection, injectionTaskStatus, injectionTasksByOrderId } from "../fhir/injectionTaskHelpers";
 import { referenceId } from "../fhir/shared";
-import { addDays, today } from "../lib/dates";
+import { addDays, isDateOnly, today, WEEKDAY_LABELS, weekdayOf } from "../lib/dates";
 import { ErrorBanner } from "./ErrorBanner";
 import { InjectionCancelModal } from "./InjectionCancelModal";
 import { InjectionContinueModal } from "./InjectionContinueModal";
@@ -28,7 +28,6 @@ import { RowMenu } from "./RowMenu";
 //
 // 進捗は施用 1 回ごとに記号で出し、記号の意味はツールバーの下に凡例として並べる。
 
-const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 /** 表示する日数。 */
 const CALENDAR_DAYS = 14;
 /** 既定の表示開始日は今日の何日前か(過去 1 週間と先 1 週間を並べる)。 */
@@ -52,12 +51,7 @@ interface Selection {
   to: string;
 }
 
-function weekdayOf(date: string): number {
-  const [y, m, d] = date.split("-").map(Number);
-  return new Date(y, m - 1, d).getDay();
-}
-
-function weekendClass(weekday: number): string {
+function weekendClass(weekday: number | null): string {
   if (weekday === 0) return " injection-calendar__day--sunday";
   if (weekday === 6) return " injection-calendar__day--saturday";
   return "";
@@ -68,7 +62,7 @@ export function KarteInjectionTab({ patientId, view, onViewChange, onEdit, onCre
   // タブの外(別ペイン)から使うときは URL に載せずローカルに持つ。
   const [localView, setLocalView] = useState("");
   const viewValue = onViewChange ? view : localView;
-  const start = /^\d{4}-\d{2}-\d{2}$/.test(viewValue) ? viewValue : addDays(todayDate, -DEFAULT_LOOKBACK);
+  const start = isDateOnly(viewValue) ? viewValue : addDays(todayDate, -DEFAULT_LOOKBACK);
   const setStart = (next: string | null) => {
     if (onViewChange) onViewChange(next);
     else setLocalView(next ?? "");
@@ -230,7 +224,7 @@ export function KarteInjectionTab({ patientId, view, onViewChange, onEdit, onCre
                     }`}
                   >
                     <span>{`${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`}</span>
-                    <span className="injection-calendar__weekday">{WEEKDAY_LABELS[weekdayOf(date)]}</span>
+                    <span className="injection-calendar__weekday">{WEEKDAY_LABELS[weekdayOf(date) ?? 0]}</span>
                   </th>
                 ))}
               </tr>

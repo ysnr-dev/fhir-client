@@ -659,11 +659,6 @@ export function isExamReport(config: ExamReportConfig, report: fhir4.DiagnosticR
   );
 }
 
-/** 3 種のどれのレポートか。どれでもなければ undefined。 */
-export function examReportConfigOf(report: fhir4.DiagnosticReport): ExamReportConfig | undefined {
-  return EXAM_REPORT_KINDS.find((config) => isExamReport(config, report));
-}
-
 export function examReportObservationIds(report: fhir4.DiagnosticReport): string[] {
   return (report.result ?? [])
     .map((reference) => reference.reference?.match(/^Observation\/(.+)$/)?.[1])

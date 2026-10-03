@@ -31,6 +31,7 @@ import { MedicalProcedureSearchModal } from "./MedicalProcedureSearchModal";
 import { MedicineSearchModal } from "./MedicineSearchModal";
 import { Modal } from "./Modal";
 import { PractitionerSearchModal } from "./PractitionerSearchModal";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // 手術の実施記録。退室後にまとめて 1 回入れる。
 //
@@ -45,21 +46,6 @@ import { PractitionerSearchModal } from "./PractitionerSearchModal";
 // 開腹移行・追加術式・当日の応援は差し替えて記録する。
 
 type Adding = "procedure-k" | "procedure-l" | "medicine" | "material" | null;
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 function RemoveRowButton({ onClick }: { onClick: () => void }) {
   return (

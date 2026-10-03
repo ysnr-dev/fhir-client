@@ -737,6 +737,7 @@ export function buildMealOrderResumeEntry(
     values.endTiming = options.endTiming ?? DEFAULT_MEAL_END_TIMING;
   }
   return {
+    fullUrl: `urn:uuid:${crypto.randomUUID()}`,
     resource: buildMealOrderServiceRequest(values, patientId, requester, {
       encounterId: options.encounterId ?? mealOrderEncounterId(sr),
       link: { kind: "resume", sourceId: sr.id, leaveId: options.leaveId },
@@ -759,6 +760,7 @@ export function buildMealOrderCreateEntry(
   options: MealOrderBuildOptions = {},
 ): fhir4.BundleEntry {
   return {
+    fullUrl: `urn:uuid:${crypto.randomUUID()}`,
     resource: buildMealOrderServiceRequest(values, patientId, requester, options),
     request: { method: "POST", url: "ServiceRequest" },
   };

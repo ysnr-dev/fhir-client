@@ -83,9 +83,6 @@ export function endoscopyTaskActions(status: EndoscopyTaskStatus): EndoscopyTask
   }
 }
 
-/** Task が内視鏡の進捗かどうか。他部門の Task が増えたときの振り分けに使う。 */
-export const isEndoscopyTask = helpers.isTask;
-
 /** 進捗。Task がまだ無いオーダー(部門が触っていない)は依頼済。 */
 export const endoscopyTaskStatus = helpers.taskStatus;
 

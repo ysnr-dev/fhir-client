@@ -50,7 +50,7 @@ import {
 // 行がそのまま処置の単位になる(処置オーダー項目マスタの「オーダー単位」)。
 //
 // 実施日だけが上流での絞り込みで、残りは読み込んだ 1 日ぶんから画面側で絞る
-// (理由は queries.ts の useTreatmentWorklist を参照)。
+// (理由は api/queries/rad.ts の「放射線検査一覧」の節)。
 
 interface Filters {
   setting: string;

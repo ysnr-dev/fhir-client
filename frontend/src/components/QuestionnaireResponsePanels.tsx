@@ -1,3 +1,4 @@
+import { localDay } from "../lib/dates";
 import { useEffect, useMemo, useState } from "react";
 import { FhirError } from "../api/fhirClient";
 import {
@@ -35,7 +36,7 @@ import { stripResponseAnnotations } from "../fhir/schemaImage";
 
 // 複写ボタンに添える「いつの回答か」。日付だけで足りる。
 function formatAuthored(authored: string | undefined): string {
-  return authored ? authored.slice(0, 10) : "日付不明";
+  return authored ? localDay(authored) : "日付不明";
 }
 
 // テンプレート回答の登録・編集 UI。ページとカルテ画面の右ペインの双方から使う。

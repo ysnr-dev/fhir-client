@@ -3,6 +3,7 @@
 //
 // 「集め直す」でも同じ処理を使う。そのときは入力済みの値を上書きせず、空欄だけを埋める。
 
+import { epochOf, localDay } from "../lib/dates";
 import type { Disease, Modifier } from "../api/masterClient";
 import { admissionRouteHasDetails, admissionRoutePayloads } from "./admissionRouteHelpers";
 import { HEIGHT_LOINC, WEIGHT_LOINC } from "./bodyMeasureHelpers";
@@ -217,7 +218,7 @@ function measuredOf(observations: fhir4.Observation[], loinc: string): Measured[
   return observations
     .filter((o) => loincOf(o) === loinc && o.valueQuantity?.value !== undefined)
     .map((o) => ({
-      date: o.effectiveDateTime?.slice(0, 10) ?? "",
+      date: localDay(o.effectiveDateTime),
       value: o.valueQuantity?.value as number,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -241,9 +242,9 @@ function smokingIndex(observations: fhir4.Observation[], until: string): string 
       .filter(
         (o) =>
           o.code?.coding?.some((c) => c.code === code) &&
-          (o.effectiveDateTime ?? "").slice(0, 10) <= until,
+          localDay(o.effectiveDateTime) <= until,
       )
-      .sort((a, b) => (b.effectiveDateTime ?? "").localeCompare(a.effectiveDateTime ?? ""))[0];
+      .sort((a, b) => epochOf(b.effectiveDateTime ?? "") - epochOf(a.effectiveDateTime ?? ""))[0];
   const history = latest(SMOKING_HISTORY_CODE);
   if (history?.valueCodeableConcept?.coding?.some((c) => c.code === NO_SMOKING_HISTORY)) return "0";
   const index = latest(SMOKING_INDEX_CODE);

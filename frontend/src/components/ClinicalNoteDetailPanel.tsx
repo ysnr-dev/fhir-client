@@ -19,7 +19,7 @@ import {
   encounterDischargeDisposition,
   encounterStayDays,
 } from "../fhir/encounterHelpers";
-import { today } from "../lib/dates";
+import { dateTimeLabel, today } from "../lib/dates";
 import { RichTextView } from "./RichTextView";
 import { ResponseSchemaImages } from "./SchemaImageGallery";
 
@@ -56,7 +56,7 @@ export function ClinicalNoteDetailPanel({
               <dt>確定者</dt>
               <dd>
                 {attestation.name || "-"}
-                {attestation.time && ` (${attestation.time.slice(0, 16).replace("T", " ")})`}
+                {attestation.time && ` (${dateTimeLabel(attestation.time)})`}
               </dd>
             </>
           )}

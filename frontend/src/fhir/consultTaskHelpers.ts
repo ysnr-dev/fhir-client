@@ -84,9 +84,6 @@ export function consultTaskActions(status: ConsultTaskStatus): ConsultTaskAction
   }
 }
 
-/** Task が他科依頼の進捗かどうか。他部門との振り分けに使う。 */
-export const isConsultTask = helpers.isTask;
-
 /** 進捗。Task がまだ無いオーダー(依頼先科が触っていない)は依頼済。 */
 export const consultTaskStatus = helpers.taskStatus;
 

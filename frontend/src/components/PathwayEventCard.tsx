@@ -19,25 +19,11 @@ import {
 import { ORDER_SET_TYPE_LABELS } from "./orderSetRegistry";
 import { isOrderSetOrderType } from "../fhir/orderSetHelpers";
 import { RowMenu } from "./RowMenu";
+import { TrashIcon } from "./icons/TrashIcon";
 
 // パス定義の病日カードと、その中の OAT ユニットカード。1 病日 = 1 カードで、OAT ユニット
 // (アウトカム + 観察項目 + タスク)を縦に積む。検索モーダルと雛形モーダルはページが開くので、
 // ここは「どの行で押されたか」を返すだけ。
-
-export function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9L12 4M6.5 6.5v5M9.5 6.5v5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 export function moveItem<T>(items: T[], index: number, delta: number): T[] {
   const target = index + delta;
