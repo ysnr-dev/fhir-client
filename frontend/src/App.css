@@ -7121,6 +7121,31 @@ body.karte-wide {
   background: var(--accent-bg);
 }
 
+/* 診療科・記録者の絞り込みのケバブ。表示切替アイコンと同じ大きさで、その左に置く。 */
+.karte-sidepane__scope {
+  margin-left: auto;
+  flex: none;
+}
+
+.karte-sidepane__scope + .karte-daylist__visibility {
+  margin-left: 0;
+}
+
+.karte-daylist .karte-sidepane__scope .row-menu__trigger {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* 絞り込み中は、閉じたメニューからでも分かるようにトリガーを強調する。 */
+.karte-daylist .karte-sidepane__scope--active .row-menu__trigger {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
 .karte-daylist__empty {
   margin: 0;
   font-size: 13px;

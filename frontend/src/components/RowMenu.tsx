@@ -78,7 +78,8 @@ export function RowMenu({
     if (!escapesClipping) return;
     const horizontal: CSSProperties = start
       ? { left: triggerRect.left, right: "auto" }
-      : { right: window.innerWidth - triggerRect.right };
+      : // fixed の right はスクロールバーを除いた幅が基準なので、innerWidth ではなく clientWidth で測る。
+        { right: document.documentElement.clientWidth - triggerRect.right };
     setFixedStyle(
       next === "down"
         ? { position: "fixed", top: triggerRect.bottom + 4, bottom: "auto", ...horizontal }

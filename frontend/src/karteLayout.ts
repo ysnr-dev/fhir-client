@@ -1,3 +1,5 @@
+import type { KarteScopeFilter } from "./fhir/karteTimeline";
+
 // カルテ画面の左ペインの表示モードと、各スプリッタ位置の保存。
 // tabs: カルテと他タブを 1 つの領域で切り替える(既定)
 // split: 上にカルテ、下にそれ以外のタブを同時に表示する
@@ -25,6 +27,7 @@ const PROBLEM_LIST_STORAGE_KEY = "fhir-client.karte.problemListVisible";
 const RESOLVED_PROBLEMS_STORAGE_KEY = "fhir-client.karte.resolvedProblemsVisible";
 const PROBLEM_MODE_STORAGE_KEY = "fhir-client.karte.problemMode";
 const SIDE_PANE_MODE_STORAGE_KEY = "fhir-client.karte.sidePaneMode";
+const SCOPE_FILTER_STORAGE_KEY = "fhir-client.karte.scopeFilter";
 const TODAY_PANE_STORAGE_KEY = "fhir-client.karte.todayPaneVisible";
 const TODAY_RATIO_STORAGE_KEY = "fhir-client.karte.todayPaneRatio";
 const FILE_VIEW_MODE_STORAGE_KEY = "fhir-client.karte.fileViewMode";
@@ -194,6 +197,24 @@ export function readSidePaneMode(): KarteSidePaneMode {
 export function storeSidePaneMode(mode: KarteSidePaneMode) {
   try {
     localStorage.setItem(SIDE_PANE_MODE_STORAGE_KEY, mode);
+  } catch {
+    // 保存できなくてもその場の表示は切り替える。
+  }
+}
+
+// タイムラインの診療科・記録者での絞り込み(左端のペインのケバブ)。既定はすべて。
+export function readScopeFilter(): KarteScopeFilter {
+  try {
+    const value = localStorage.getItem(SCOPE_FILTER_STORAGE_KEY);
+    return value === "department" || value === "self" ? value : "all";
+  } catch {
+    return "all";
+  }
+}
+
+export function storeScopeFilter(scope: KarteScopeFilter) {
+  try {
+    localStorage.setItem(SCOPE_FILTER_STORAGE_KEY, scope);
   } catch {
     // 保存できなくてもその場の表示は切り替える。
   }

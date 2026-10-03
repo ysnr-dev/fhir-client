@@ -18,7 +18,7 @@ import {
 import { pathoTaskStatus, pathoTasksByOrderId, type PathoTaskStatus } from "./pathoTaskHelpers";
 import { pathwayOf } from "./pathwayApplyHelpers";
 import type { PathwayEvaluationCard } from "./pathwayKarteHelpers";
-import { ORDER_TYPE_SYSTEM, prescriptionProblem } from "./prescriptionHelpers";
+import { departmentOf, ORDER_TYPE_SYSTEM, prescriptionProblem } from "./prescriptionHelpers";
 import { categoryCoding } from "./shared";
 import {
   isRadServiceRequest,
@@ -145,10 +145,16 @@ import {
   type EndoscopyTaskStatus,
 } from "./endoscopyTaskHelpers";
 import {
+  parseQuestionnaireResponseMeta,
   questionnaireCanonical,
   questionnaireResponseProblem,
 } from "./questionnaireResponseHelpers";
-import { groupVitalEntries, vitalEntryProblem, type VitalEntry } from "./vitalHelpers";
+import {
+  groupVitalEntries,
+  vitalEntryDepartment,
+  vitalEntryProblem,
+  type VitalEntry,
+} from "./vitalHelpers";
 
 // カルテ画面のタイムライン(診療日ごとの時系列表示)を組み立てる純粋ロジック。
 //
@@ -1221,6 +1227,102 @@ export function filterKarteGroupsByCard(
 ): KarteDayGroup[] {
   return groups
     .map((group) => ({ ...group, items: group.items.filter((item) => matchesCardFilter(item, filter)) }))
+    .filter((group) => group.items.length > 0);
+}
+
+// ---- 診療科・記録者での絞り込み ----
+
+/**
+ * 誰の情報を出すか。
+ *   all        … すべて
+ *   department … ヘッダーで選択中の診療科で記録・依頼したもの
+ *   self       … ログイン中の医療従事者が記録・依頼したもの
+ */
+export type KarteScopeFilter = "all" | "department" | "self";
+
+/** 記録した診療科(オーダーは依頼科)の id。持たない情報は空。 */
+function itemDepartmentId(item: KarteTimelineItem): string {
+  switch (item.kind) {
+    case "note":
+      return departmentOf(item.note).departmentId;
+    case "qr":
+      return departmentOf(item.response).departmentId;
+    case "vital":
+      return vitalEntryDepartment(item.entry).departmentId;
+    case "pathway-evaluation":
+      return departmentOf(item.evaluation.observation).departmentId;
+    default:
+      return departmentOf(item.serviceRequest).departmentId;
+  }
+}
+
+/**
+ * 記録者(オーダーは依頼医師)。テンプレート回答の記入者は contained の Practitioner で
+ * 実参照を持たないので名前だけ。バイタルは記録者を持たない。
+ */
+function itemRecorder(item: KarteTimelineItem): { practitionerId: string; name: string } | null {
+  const fromReference = (reference: fhir4.Reference | undefined) =>
+    reference?.reference?.startsWith("Practitioner/")
+      ? { practitionerId: reference.reference.split("/").pop() ?? "", name: reference.display ?? "" }
+      : null;
+  switch (item.kind) {
+    case "note":
+      return fromReference(item.note.author?.[0]);
+    case "qr":
+      return { practitionerId: "", name: parseQuestionnaireResponseMeta(item.response).authorName };
+    case "vital":
+      return null;
+    case "pathway-evaluation":
+      return fromReference(item.evaluation.observation.performer?.[0]);
+    default:
+      return fromReference(item.serviceRequest.requester);
+  }
+}
+
+// 記入者名は手入力もできるので、空白(全角を含む)の有無の違いは同じ名前とみなす。
+function normalizeName(name: string): string {
+  return name.replace(/\s/g, "");
+}
+
+export interface KarteScopeTarget {
+  departmentId: string;
+  practitionerId: string;
+  /** テンプレート回答の記入者(名前しか持たない)と突き合わせる表示名。 */
+  practitionerName: string;
+}
+
+export function matchesScopeFilter(
+  item: KarteTimelineItem,
+  scope: Exclude<KarteScopeFilter, "all">,
+  target: KarteScopeTarget,
+): boolean {
+  if (scope === "department") {
+    return Boolean(target.departmentId) && itemDepartmentId(item) === target.departmentId;
+  }
+  const recorder = itemRecorder(item);
+  if (!recorder) return false;
+  if (recorder.practitionerId) {
+    return Boolean(target.practitionerId) && recorder.practitionerId === target.practitionerId;
+  }
+  const name = normalizeName(recorder.name);
+  return Boolean(name) && name === normalizeName(target.practitionerName);
+}
+
+/**
+ * 診療科・記録者で絞り込む。空になった診療日のグループは落とす。種別の絞り込み
+ * (filterKarteGroupsByCard)と同じく、ページングの判定より後に行う。
+ */
+export function filterKarteGroupsByScope(
+  groups: KarteDayGroup[],
+  scope: KarteScopeFilter,
+  target: KarteScopeTarget,
+): KarteDayGroup[] {
+  if (scope === "all") return groups;
+  return groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => matchesScopeFilter(item, scope, target)),
+    }))
     .filter((group) => group.items.length > 0);
 }
 

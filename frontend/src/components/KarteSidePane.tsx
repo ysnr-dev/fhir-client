@@ -1,6 +1,7 @@
 import { KarteCategoryList } from "./KarteCategoryList";
 import { KarteDayList } from "./KarteDayList";
-import type { KarteCardFilter, KarteDayEntry } from "../fhir/karteTimeline";
+import { RowMenu } from "./RowMenu";
+import type { KarteCardFilter, KarteDayEntry, KarteScopeFilter } from "../fhir/karteTimeline";
 import type { KarteSidePaneMode } from "../karteLayout";
 
 // カルテ左端のペイン。「診療日」(日付から探す)と「カテゴリ」(情報の種別で絞り込む)を
@@ -20,6 +21,9 @@ interface KarteSidePaneProps {
   onModeChange: (mode: KarteSidePaneMode) => void;
   filter: KarteCardFilter | null;
   onFilterChange: (filter: KarteCardFilter | null) => void;
+  /** 診療科・記録者での絞り込み。診療日・種別のどちらを出していても効く。 */
+  scope: KarteScopeFilter;
+  onScopeChange: (scope: KarteScopeFilter) => void;
   visible: boolean;
   onToggleVisible: () => void;
 }
@@ -29,6 +33,12 @@ interface KarteSidePaneProps {
 const MODES: { key: KarteSidePaneMode; label: string }[] = [
   { key: "days", label: "診療日" },
   { key: "categories", label: "種別" },
+];
+
+const SCOPES: { key: KarteScopeFilter; label: string }[] = [
+  { key: "all", label: "全て" },
+  { key: "department", label: "自科" },
+  { key: "self", label: "個人" },
 ];
 
 export function KarteSidePane({
@@ -41,6 +51,8 @@ export function KarteSidePane({
   onModeChange,
   filter,
   onFilterChange,
+  scope,
+  onScopeChange,
   visible,
   onToggleVisible,
 }: KarteSidePaneProps) {
@@ -67,6 +79,24 @@ export function KarteSidePane({
               {item.label}
             </button>
           ))}
+        </div>
+        <div className={`karte-sidepane__scope${scope === "all" ? "" : " karte-sidepane__scope--active"}`}>
+          {/* ペインは overflow: hidden なので、メニューはペインの外へはみ出させる。 */}
+          <RowMenu label="表示する記録" escapesClipping>
+            {SCOPES.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className="row-menu__item"
+                role="menuitemradio"
+                aria-checked={scope === item.key}
+                onClick={() => onScopeChange(item.key)}
+              >
+                {scope === item.key ? "✓ " : "　"}
+                {item.label}
+              </button>
+            ))}
+          </RowMenu>
         </div>
         {visibilityButton}
       </div>

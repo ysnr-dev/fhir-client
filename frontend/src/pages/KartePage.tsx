@@ -25,6 +25,9 @@ import {
   type OutpatientExam,
 } from "../api/queries";
 import { useReceiptStatus } from "../api/receiptQueries";
+import { useCurrentPractitioner } from "../api/authQueries";
+import { useOrderContext } from "../hooks/useOrderContext";
+import { displayJapaneseName } from "../fhir/humanName";
 import { isDischargeSummary } from "../fhir/clinicalNoteHelpers";
 import { BillingSendModal, type BillingSendTarget } from "../components/BillingSendModal";
 import { ErrorBanner } from "../components/ErrorBanner";
@@ -72,8 +75,10 @@ import {
 import {
   buildKarteTimeline,
   filterKarteGroupsByCard,
+  filterKarteGroupsByScope,
   mergeDayIndex,
   type KarteCardFilter,
+  type KarteScopeFilter,
   type KarteTimelineItem,
 } from "../fhir/karteTimeline";
 import {
@@ -113,6 +118,7 @@ import {
   readProblemListVisible,
   readProblemMode,
   readResolvedProblemsVisible,
+  readScopeFilter,
   readSidePaneMode,
   readTodayMainRatio,
   readTodayPaneVisible,
@@ -123,6 +129,7 @@ import {
   storeProblemListVisible,
   storeProblemMode,
   storeResolvedProblemsVisible,
+  storeScopeFilter,
   storeSidePaneMode,
   storeTodayMainRatio,
   storeTodayPaneVisible,
@@ -345,6 +352,12 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   const [sidePaneMode, setSidePaneMode] = useState<KarteSidePaneMode>(readSidePaneMode);
   // 情報の種別での絞り込み。共有できるよう URL に載せる(プロブレムと同じ扱い)。
   const cardFilter = parseKarteCard(searchParams.get(KARTE_CARD_PARAM));
+  // 診療科・記録者での絞り込み。見る人ごとの好みなので URL ではなく端末に覚える。
+  const [scopeFilter, setScopeFilter] = useState<KarteScopeFilter>(readScopeFilter);
+  // 自科はヘッダーで選択中の診療科、個人はログイン中の医療従事者と突き合わせる。
+  const orderContext = useOrderContext();
+  const { practitionerId: loginPractitionerId, practitioner: loginPractitioner } =
+    useCurrentPractitioner();
   // 絞り込み中のプロブレム。これがあれば「関連する記録のみ表示」の状態。
   const filterProblemId = searchParams.get(KARTE_PROBLEM_PARAM);
   // 減光と絞り込みのどちらであれ、いま選ばれているプロブレム。
@@ -419,6 +432,11 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
     },
     [updateParams, cardFilter],
   );
+
+  const selectScopeFilter = useCallback((scope: KarteScopeFilter) => {
+    setScopeFilter(scope);
+    storeScopeFilter(scope);
+  }, []);
 
   const selectSidePaneMode = useCallback(
     (mode: KarteSidePaneMode) => {
@@ -511,10 +529,21 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
   // プロブレムの絞り込みはサーバー検索で済んでいるので、ここで残るのは種別だけ。
   // 種別はページングの判定(カットオフ・pending)より後に行う。判定は読み込み済みの
   // 全データで決まるので、ここで件数が減っても読み進みには影響しない。
-  const filteredGroups = useMemo(
-    () => (cardFilter ? filterKarteGroupsByCard(timeline.groups, cardFilter) : timeline.groups),
-    [timeline.groups, cardFilter],
-  );
+  const filteredGroups = useMemo(() => {
+    const byCard = cardFilter ? filterKarteGroupsByCard(timeline.groups, cardFilter) : timeline.groups;
+    return filterKarteGroupsByScope(byCard, scopeFilter, {
+      departmentId: orderContext.departmentId,
+      practitionerId: loginPractitionerId ?? "",
+      practitionerName: loginPractitioner ? displayJapaneseName(loginPractitioner.name) : "",
+    });
+  }, [
+    timeline.groups,
+    cardFilter,
+    scopeFilter,
+    orderContext.departmentId,
+    loginPractitionerId,
+    loginPractitioner,
+  ]);
 
   // 診療日ペインに出す全日付。読み込み済みの日はタイムラインの項目付き。
   const dayEntries = useMemo(
@@ -860,6 +889,8 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
         onModeChange={selectSidePaneMode}
         filter={cardFilter}
         onFilterChange={selectCardFilter}
+        scope={scopeFilter}
+        onScopeChange={selectScopeFilter}
         visible={dayListVisible}
         onToggleVisible={toggleDayList}
       />
@@ -910,7 +941,11 @@ export function KartePage({ detached = false, patientId: followedPatientId }: Ka
               ? "このプロブレムに紐付く診療情報がありません。"
               : cardFilter
                 ? "この種別の診療情報がありません。"
-                : undefined
+                : scopeFilter === "department"
+                  ? "自科の診療情報がありません。"
+                  : scopeFilter === "self"
+                    ? "自分が記録した診療情報がありません。"
+                    : undefined
           }
         />
       </div>
