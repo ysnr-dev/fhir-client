@@ -11,7 +11,7 @@ RSpec.describe "Master::MealCategories", type: :request do
                                    display_order: 1)
       Master::MealCategory.create!(category_code: "02", name: "特別食", display_order: 2)
       Master::MealCategory.create!(category_code: "03", name: "廃止した種別", display_order: 3,
-                                   valid_from: Date.current - 100, valid_to: Date.current - 1)
+                                   valid_from: FacilityClock.today - 100, valid_to: FacilityClock.today - 1)
     end
 
     it "表示順で一覧を返す" do

@@ -14,11 +14,7 @@ module Master
       scope = scope.where(groupable: params[:groupable] == "true") if params[:groupable].present?
       scope = scope.where(exam_type_code: params[:exam_type_code]) if params[:exam_type_code].present?
       # active=true は今日オーダーできる項目(有効期間内)だけに絞る。
-      if params[:active] == "true"
-        scope = scope
-          .where("valid_from IS NULL OR valid_from <= ?", Date.current)
-          .where("valid_to IS NULL OR valid_to >= ?", Date.current)
-      end
+      scope = scope.active_on if params[:active] == "true"
       if params[:name].present?
         # レセ電算名称の LEFT JOIN(with_receipt_name)先も search_name を持つので、
         # 列名は必ずテーブル名で限定する。

@@ -39,10 +39,7 @@ module Master
     validate :valid_period_is_ordered
 
     # 今日オーダーに使えるレジメン(有効期間内)。
-    scope :active_on, lambda { |date = Date.current|
-      where("valid_from IS NULL OR valid_from <= ?", date)
-        .where("valid_to IS NULL OR valid_to >= ?", date)
-    }
+    include Master::ValidityPeriod
 
     before_save :set_search_columns
 

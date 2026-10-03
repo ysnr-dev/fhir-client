@@ -13,6 +13,7 @@ import {
   orderDay,
   registrationAuthoredOn,
   priorityDisplay,
+  withVersionLock,
 } from "./shared";
 
 export { PRIORITY_OPTIONS };
@@ -613,14 +614,17 @@ export function buildPathoOrderUpdateBundle(
   /** 元のオーダーが参照していた記入内容の回答 id。外れたら同じ transaction で消す。 */
   originalResponseIds: string[] = [],
 ): fhir4.Bundle {
-  return buildPathoOrderTransactionBundle(
-    values,
-    patientId,
-    requester,
-    registrationAuthoredOn(original),
-    original.id,
-    originalItemIds,
-    originalResponseIds,
+  return withVersionLock(
+    buildPathoOrderTransactionBundle(
+      values,
+      patientId,
+      requester,
+      registrationAuthoredOn(original),
+      original.id,
+      originalItemIds,
+      originalResponseIds,
+    ),
+    original,
   );
 }
 

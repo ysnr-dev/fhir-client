@@ -10,6 +10,7 @@ module Master
   # 持たないので、項目は施設定義とし、JED とは検査種別を介して繋ぐ。
   class EndoscopyItem < ApplicationRecord
     self.table_name = "master_endoscopy_items"
+    include Master::ValidityPeriod
 
     KINDS = %w[single set].freeze
 

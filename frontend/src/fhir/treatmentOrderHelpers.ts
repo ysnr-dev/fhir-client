@@ -13,6 +13,7 @@ import {
   registrationAuthoredOn,
   transactionBundle,
   ABBREVIATION_SYSTEM,
+  withVersionLock,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -531,9 +532,12 @@ export function buildTreatmentOrderUpdateBundle(
   originalItemIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
-  return transactionBundle(
-    buildTreatmentOrderEntries(values, patientId, requester, original, originalItemIds)
-      .entries,
+  return withVersionLock(
+    transactionBundle(
+      buildTreatmentOrderEntries(values, patientId, requester, original, originalItemIds)
+        .entries,
+    ),
+    original,
   );
 }
 

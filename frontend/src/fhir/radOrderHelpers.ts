@@ -16,6 +16,7 @@ import {
   transactionBundle,
   priorityDisplay,
   ABBREVIATION_SYSTEM,
+  withVersionLock,
 } from "./shared";
 
 export { EXAM_PRIORITY_OPTIONS, RETRO_PRIORITY };
@@ -783,15 +784,18 @@ export function buildRadOrderUpdateBundle(
   originalResponseIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
-  return transactionBundle(
-    buildRadOrderEntries(
-      values,
-      patientId,
-      requester,
-      original,
-      originalItemIds,
-      originalResponseIds,
-    ).entries,
+  return withVersionLock(
+    transactionBundle(
+      buildRadOrderEntries(
+        values,
+        patientId,
+        requester,
+        original,
+        originalItemIds,
+        originalResponseIds,
+      ).entries,
+    ),
+    original,
   );
 }
 

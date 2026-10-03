@@ -6,6 +6,7 @@ module Master
   # 測定法(method_name)は試薬・機器の名称で、Observation.method に写す。
   class LabResultItem < ApplicationRecord
     self.table_name = "master_lab_result_items"
+    include Master::ValidityPeriod
 
     DATA_TYPES = %w[PQ CD CO ST].freeze
 

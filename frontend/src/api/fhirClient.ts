@@ -1,3 +1,4 @@
+import { withVersionLock } from "../fhir/shared";
 import { notifyUnauthorized, withCsrfHeaders } from "./session";
 
 const BASE = "/fhir";
@@ -91,11 +92,16 @@ export function readHistory<T extends fhir4.Resource>(
   ).then((r) => handle(r));
 }
 
+/**
+ * Bundle(transaction / batch)を送る。PUT エントリのリソースが読んだ時点の版(meta.versionId)を
+ * 持っていれば ifMatch に添えるので、検索・read で得たリソースを書き換えて送る更新は、ここを
+ * 通すだけで楽観ロックが効く(版違いは 412)。
+ */
 export function postBundle(bundle: fhir4.Bundle): Promise<FhirResult<fhir4.Bundle>> {
   return fhirFetch(BASE, {
     method: "POST",
     headers: { "Content-Type": FHIR_JSON },
-    body: JSON.stringify(bundle),
+    body: JSON.stringify(withVersionLock(bundle)),
   }).then((r) => handle(r));
 }
 

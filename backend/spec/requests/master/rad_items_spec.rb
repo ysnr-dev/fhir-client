@@ -14,7 +14,7 @@ RSpec.describe "Master::RadItems", type: :request do
       create_item("R0001", name: "胸部単純Ｘ線正面", short_name: "胸部XP", name_kana: "キョウブエックスピー",
                   modality_code: "1", body_part_code: "200", display_order: 20)
       create_item("R0002", name: "頭部CTセット", kind: "set", display_order: 10)
-      create_item("R0003", name: "旧項目", valid_to: Date.current - 1, display_order: 30)
+      create_item("R0003", name: "旧項目", valid_to: FacilityClock.today - 1, display_order: 30)
     end
 
     it "表示順で返す" do
@@ -334,7 +334,7 @@ RSpec.describe "Master::RadItems", type: :request do
       expect(item.body_position_code).to eq("1")
       expect(item.direction_code).to eq("01")
       expect(item.nuclide_code).to eq("01")
-      expect(item.valid_from).to eq(Date.current)
+      expect(item.valid_from).to eq(FacilityClock.today)
     end
 
     it "掲載順で連番の項目コードを振る" do

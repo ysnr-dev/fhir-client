@@ -10,6 +10,7 @@ module Master
   # 施設ごとに呼び名も刻みの段階数も違うのでマスタにしてある。
   class MealItem < ApplicationRecord
     self.table_name = "master_meal_items"
+    include Master::ValidityPeriod
 
     KINDS = %w[staple side_dish_form].freeze
 

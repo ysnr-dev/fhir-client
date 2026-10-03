@@ -22,6 +22,7 @@ import {
   orderDay,
   registrationAuthoredOn,
   SETTING_OPTIONS,
+  withVersionLock,
 } from "./shared";
 
 export { codingBySystem, SETTING_OPTIONS };
@@ -666,13 +667,16 @@ export function buildPrescriptionUpdateBundle(
   requester: OrderAttribution,
 ): fhir4.Bundle {
   if (!original.id) throw new Error("更新する処方に id がありません");
-  return buildPrescriptionTransactionBundle(
-    values,
-    patientId,
-    requester,
-    registrationAuthoredOn(original),
-    original.id,
-    originalMedicationRequestIds,
+  return withVersionLock(
+    buildPrescriptionTransactionBundle(
+      values,
+      patientId,
+      requester,
+      registrationAuthoredOn(original),
+      original.id,
+      originalMedicationRequestIds,
+    ),
+    original,
   );
 }
 

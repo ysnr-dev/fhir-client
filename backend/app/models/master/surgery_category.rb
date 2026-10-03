@@ -16,10 +16,7 @@ module Master
     validate :parent_is_not_circular
 
     # 今日使える分類(オーダー画面・術式マスタの選択肢に出す対象)。
-    scope :active_on, lambda { |date = Date.current|
-      where("valid_from IS NULL OR valid_from <= ?", date)
-        .where("valid_to IS NULL OR valid_to >= ?", date)
-    }
+    include Master::ValidityPeriod
 
     before_save :set_search_columns
 

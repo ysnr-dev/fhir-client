@@ -23,6 +23,7 @@ import { PathoResultDetailPanel } from "./PathoResultDetailPanel";
 import { PathoResultForm } from "./PathoResultForm";
 import { ResultReviewAction } from "./ResultReviewAction";
 import { SpecimenDateList } from "./SpecimenDateList";
+import { withVersionLock } from "../fhir/shared";
 
 // カルテ画面の「病理検査」タブ(検査結果配下)。「細菌検査」タブと同じ構成で、左端の
 // ペインに報告日を新しい順で並べ、その右に選択した病理レポートの内容を表示する。
@@ -239,12 +240,15 @@ export function PathoResultEditForm({
       .map((s) => s.id)
       .filter((id): id is string => Boolean(id));
     updatePathoResult.mutate(
-      buildPathoResultUpdateBundle(
-        values,
-        patientId,
-        reportId,
-        originalObservationIds,
-        originalSpecimenIds,
+      withVersionLock(
+        buildPathoResultUpdateBundle(
+          values,
+          patientId,
+          reportId,
+          originalObservationIds,
+          originalSpecimenIds,
+        ),
+        report,
       ),
       { onSuccess: onSaved },
     );

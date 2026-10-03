@@ -480,8 +480,6 @@ semantics）で固定し、クライアント側のコメントも「上流の�
 
 ### L-2. その他（低優先で記録のみ）
 
-- **検索 Bundle の ETag（または version-less PUT の許容）**: 一覧画面はエントリの ETag を
-  持たないため、単発 PUT でなく transaction Bundle PUT を使うパターンが 5 箇所以上ある。
 - **削除時の参照整合性ガード**: 病棟削除などはクライアントが事前に `_summary=count` で
   子の存在を確認している。サーバー側の参照整合性チェック（409 応答）があれば確実になる。
 - **QuestionnaireResponse 帳票での Binary の `_include`**: backend は QR の検索に患者と

@@ -253,6 +253,7 @@ function EditForm({
         patientId,
         owner,
         reportId,
+        report,
         originalObservationIds: originalIds,
         // 結果側が所有する Specimen だけ(ラベル由来はオーダー側の台帳)。
         originalSpecimens: specimenRefsFrom(specimens),

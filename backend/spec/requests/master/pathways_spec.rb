@@ -48,7 +48,7 @@ RSpec.describe "Master::Pathways", type: :request do
                                             scheduled_days: 3, display_order: 1)
       create_pathway("000002", "胆嚢摘出", department_code: "02", status: "draft", setting: "outpatient", display_order: 2)
       create_pathway("000003", "旧パス", status: "retired", display_order: 3,
-                                valid_from: Date.current - 100, valid_to: Date.current - 1)
+                                valid_from: FacilityClock.today - 100, valid_to: FacilityClock.today - 1)
       create_event("000001", elapsed_days: 1)
       create_event("000001", elapsed_days: 3)
     end
@@ -138,7 +138,7 @@ RSpec.describe "Master::Pathways", type: :request do
 
       expect(response).to have_http_status(:created)
       expect(body["pathway_code"]).to eq("000013")
-      expect(body["approved_on"]).to eq(Date.current.to_s)
+      expect(body["approved_on"]).to eq(FacilityClock.today.to_s)
       events = body["events"]
       expect(events.map { |e| e["display_order"] }).to eq([1, 2])
       unit = events[0]["oat_units"][0]
@@ -305,7 +305,7 @@ RSpec.describe "Master::Pathways", type: :request do
 
   describe "PUT /master/pathways/:id(承認済の凍結)" do
     let!(:pathway) do
-      create_pathway("000001", "PCI", status: "approved", approved_on: Date.current, approved_by: "p1")
+      create_pathway("000001", "PCI", status: "approved", approved_on: FacilityClock.today, approved_by: "p1")
     end
 
     it "承認済は内容を変更できない" do
@@ -342,7 +342,7 @@ RSpec.describe "Master::Pathways", type: :request do
       put "/master/pathways/#{pathway.id}", params: { status: "approved", approved_on: "2000-01-01" }, as: :json
 
       expect(response).to have_http_status(:ok)
-      expect(body["approved_on"]).to eq(Date.current.to_s)
+      expect(body["approved_on"]).to eq(FacilityClock.today.to_s)
 
       put "/master/pathways/#{pathway.id}", params: { status: "draft" }, as: :json
 
@@ -508,7 +508,7 @@ RSpec.describe "Master::Pathways", type: :request do
 
   describe "POST /master/pathways/:id/copy" do
     it "新しいコードで全部写し、uuid を引き継ぎ、承認は引き継がず下書きになる" do
-      create_pathway("000001", "PCI", status: "approved", approved_on: Date.current, approved_by: "p1",
+      create_pathway("000001", "PCI", status: "approved", approved_on: FacilityClock.today, approved_by: "p1",
                                      adaptive_criteria: "a", scheduled_days: 3, valid_from: "2026-01-01")
       Master::PathwayIndication.create!(pathway_code: "000001", management_number: "20058911", name: "狭心症")
       event = create_event("000001", elapsed_days: 1, title: "入院日")

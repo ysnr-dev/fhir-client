@@ -15,7 +15,7 @@ RSpec.describe "Master::LabOrderItems", type: :request do
                   category: "免疫学的検査", specimen_code: "019", display_order: 20)
       create_item("L0002", name: "末梢血液一般検査", short_name: "CBC", kind: "panel",
                   category: "血液学的検査", display_order: 10)
-      create_item("L0003", name: "旧項目", valid_to: Date.current - 1, display_order: 30)
+      create_item("L0003", name: "旧項目", valid_to: FacilityClock.today - 1, display_order: 30)
     end
 
     it "表示順で返す" do

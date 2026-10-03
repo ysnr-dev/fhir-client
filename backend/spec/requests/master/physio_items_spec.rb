@@ -14,7 +14,7 @@ RSpec.describe "Master::PhysioItems", type: :request do
       create_item("P0001", name: "心電図12誘導", short_name: "ECG12", name_kana: "シンデンズ",
                   exam_type_code: "01", display_order: 20)
       create_item("P0002", name: "心肺機能セット", kind: "set", display_order: 10)
-      create_item("P0003", name: "旧項目", valid_to: Date.current - 1, display_order: 30)
+      create_item("P0003", name: "旧項目", valid_to: FacilityClock.today - 1, display_order: 30)
     end
 
     it "表示順で返す" do

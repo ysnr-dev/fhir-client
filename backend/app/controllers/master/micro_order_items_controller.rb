@@ -6,7 +6,7 @@ module Master
     def index
       scope = Master::MicroOrderItem.all
       # active=true は今日オーダーできる項目(有効期間内)だけに絞る。
-      scope = scope.active if params[:active] == "true"
+      scope = scope.active_on if params[:active] == "true"
       if params[:name].present?
         scope = flexible_name_match(scope, params[:name], %w[search_name])
       end

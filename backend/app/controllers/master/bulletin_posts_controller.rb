@@ -49,9 +49,9 @@ module Master
     def model_class = BulletinPost
 
     def today
-      @today ||= params[:date].present? ? Date.iso8601(params[:date]) : Date.current
+      @today ||= params[:date].present? ? Date.iso8601(params[:date]) : FacilityClock.today
     rescue Date::Error
-      @today = Date.current
+      @today = FacilityClock.today
     end
 
     def record_params

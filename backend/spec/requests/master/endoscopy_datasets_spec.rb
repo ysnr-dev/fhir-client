@@ -11,7 +11,7 @@ RSpec.describe "Master::EndoscopyDatasets", type: :request do
                                     name_kana: "ﾌｶｼﾝﾃﾞﾝｽﾞﾋｮｳｼﾞｭﾝｾｯﾄ", display_order: 1)
       Master::EndoscopyDataset.create!(dataset_code: "000002", name: "気道可逆性試験セット", display_order: 2)
       Master::EndoscopyDataset.create!(dataset_code: "000003", name: "運用終了セット", display_order: 3,
-                                    valid_from: Date.current - 100, valid_to: Date.current - 1)
+                                    valid_from: FacilityClock.today - 100, valid_to: FacilityClock.today - 1)
     end
 
     it "表示順で一覧を返す" do

@@ -4,6 +4,7 @@ module Master
   # 検体・採取管はコードで master_lab_specimens / master_lab_containers に緩く紐づく。
   class LabOrderItem < ApplicationRecord
     self.table_name = "master_lab_order_items"
+    include Master::ValidityPeriod
 
     KINDS = %w[single panel].freeze
     JLAC_CODE_SYSTEMS = %w[jlac10 jlac11].freeze

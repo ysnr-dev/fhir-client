@@ -14,7 +14,7 @@ RSpec.describe "Master::TreatmentItems", type: :request do
       create_item("T0001", name: "創傷処置(100cm2未満)", short_name: "創処置", name_kana: "ソウショウショチ",
                   display_order: 20)
       create_item("T0002", name: "褥瘡処置セット", kind: "set", display_order: 10)
-      create_item("T0003", name: "旧項目", valid_to: Date.current - 1, display_order: 30)
+      create_item("T0003", name: "旧項目", valid_to: FacilityClock.today - 1, display_order: 30)
     end
 
     it "表示順で返す" do

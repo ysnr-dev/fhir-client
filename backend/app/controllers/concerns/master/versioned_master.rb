@@ -163,7 +163,7 @@ module Master
     def approval_attrs(previous_status, next_status)
       return {} if next_status.blank? || previous_status == next_status
 
-      next_status == "approved" ? { approved_on: Date.current, approved_by: approver_id } : {}
+      next_status == "approved" ? { approved_on: FacilityClock.today, approved_by: approver_id } : {}
     end
 
     # 承認者。認証なしモード(開発)ではパラメータを通す(order_sets の持ち主と同じ扱い)。

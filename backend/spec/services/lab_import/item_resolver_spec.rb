@@ -58,7 +58,7 @@ RSpec.describe LabImport::ItemResolver do
   end
 
   it "有効期間の外の項目には当てない" do
-    create_item("L006", jlac10_code: "3B035000002327201", valid_to: Date.current - 1)
+    create_item("L006", jlac10_code: "3B035000002327201", valid_to: FacilityClock.today - 1)
     target = row(jlac10_code: "3B035000002327201")
 
     described_class.new.resolve_all([target])

@@ -12,7 +12,7 @@ RSpec.describe "Master::PhysioExamTypes", type: :request do
       Master::PhysioExamType.create!(exam_type_code: "02", name: "超音波検査", short_name: "US",
                                      display_order: 2)
       Master::PhysioExamType.create!(exam_type_code: "03", name: "廃止した種別", display_order: 3,
-                                     valid_from: Date.current - 100, valid_to: Date.current - 1)
+                                     valid_from: FacilityClock.today - 100, valid_to: FacilityClock.today - 1)
     end
 
     it "表示順で一覧を返す" do

@@ -26,10 +26,9 @@ class BulletinPost < ApplicationRecord
 
   private
 
-  # 掲載開始日を省略したら投稿した日から。画面は必ず送ってくる(サーバーの時計は UTC で、
-  # 朝 9 時前は前日になる)ので、これは運用ツールから直接投稿したときの保険。
+  # 掲載開始日を省略したら投稿した日から(運用ツールから直接投稿したときの保険。画面は必ず送る)。
   def assign_published_from
-    self.published_from = Date.current if published_from.blank?
+    self.published_from = FacilityClock.today if published_from.blank?
   end
 
   def published_until_not_before_from

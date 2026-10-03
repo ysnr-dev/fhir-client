@@ -17,7 +17,7 @@ RSpec.describe "Master::SurgeryCategories", type: :request do
       create_category("0901", "腹壁、ヘルニア", "09", display_order: 1)
       create_category("0902", "胃、食道、腸、他", "09", display_order: 2)
       create_category("10", "尿路系・副腎", nil, display_order: 2,
-                                                valid_from: Date.current - 100, valid_to: Date.current - 1)
+                                                valid_from: FacilityClock.today - 100, valid_to: FacilityClock.today - 1)
     end
 
     it "表示順・コード順で一覧を返す" do

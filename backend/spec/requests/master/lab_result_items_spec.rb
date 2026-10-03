@@ -17,7 +17,7 @@ RSpec.describe "Master::LabResultItems", type: :request do
                   jlac11_code: "E3019000025001385", jlac10_code: "5C070000002306101", display_order: 20)
       create_item("R0002", name: "白血球数", short_name: "WBC", category: "血液学的検査",
                   jlac11_code: "B1002000021156901", display_order: 10)
-      create_item("R0003", name: "旧項目", valid_to: Date.current - 1, data_type: "ST", display_order: 30)
+      create_item("R0003", name: "旧項目", valid_to: FacilityClock.today - 1, data_type: "ST", display_order: 30)
     end
 
     it "表示順で返し、材料名を添える" do

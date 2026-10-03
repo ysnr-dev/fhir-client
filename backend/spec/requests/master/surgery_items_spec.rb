@@ -14,7 +14,7 @@ RSpec.describe "Master::SurgeryItems", type: :request do
       create_item("S0001", name: "腹腔鏡下胆嚢摘出術", short_name: "ラパコレ", name_kana: "フククウキョウカタンノウテキシュツジュツ",
                   display_order: 20)
       create_item("S0002", name: "鼠径ヘルニア手術", display_order: 10)
-      create_item("S0003", name: "旧術式", valid_to: Date.current - 1, display_order: 30)
+      create_item("S0003", name: "旧術式", valid_to: FacilityClock.today - 1, display_order: 30)
     end
 
     it "表示順で返す" do

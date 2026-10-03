@@ -3,6 +3,7 @@ module Master
   # セット構成も実施入力データセットも持たない。
   class TransfusionProduct < ApplicationRecord
     self.table_name = "master_transfusion_products"
+    include Master::ValidityPeriod
 
     # rbc = 赤血球 / ffp = 血漿 / plt = 血小板 / auto = 自己血 / other = その他
     CATEGORIES = %w[rbc ffp plt auto other].freeze

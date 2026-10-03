@@ -10,6 +10,7 @@ import {
   orderDay,
   registrationAuthoredOn,
   priorityDisplay,
+  withVersionLock,
 } from "./shared";
 import { toFhirDateTime } from "../lib/dates";
 
@@ -520,13 +521,16 @@ export function buildMicroOrderUpdateBundle(
   originalItemIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildMicroOrderTransactionBundle(
-    values,
-    patientId,
-    requester,
-    registrationAuthoredOn(original),
-    original.id,
-    originalItemIds,
+  return withVersionLock(
+    buildMicroOrderTransactionBundle(
+      values,
+      patientId,
+      requester,
+      registrationAuthoredOn(original),
+      original.id,
+      originalItemIds,
+    ),
+    original,
   );
 }
 

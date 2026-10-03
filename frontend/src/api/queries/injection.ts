@@ -253,9 +253,8 @@ export async function fetchLabelSpecimens(orderId: string): Promise<fhir4.Specim
 
 /**
  * 検体到着の記録・取消。管の Specimen(receivedTime)と、必要ならオーダーの進捗
- * (Task)を 1 つの transaction で書き込む。transaction なのは ETag を持たないため
- * (useUpdateLabTaskStatus と同じ)に加え、「最後の管の到着」と「実施済への遷移」が
- * 片方だけ成功する事態を避けるため。
+ * (Task)を 1 つの transaction で書き込む(「最後の管の到着」と「実施済への遷移」が
+ * 片方だけ成功する事態を避けるため)。
  */
 export function useUpdateLabArrival() {
   const queryClient = useQueryClient();

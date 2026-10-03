@@ -7,6 +7,7 @@ import {
   orderComment,
   registrationAuthoredOn,
   transactionBundle,
+  withVersionLock,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -305,9 +306,12 @@ export function buildNursingOrderUpdateBundle(
   });
   // 中止・終了済みを編集で有効に戻さない。
   resource.status = original.status;
-  return transactionBundle([
-    { resource, request: { method: "PUT", url: `ServiceRequest/${original.id}` } },
-  ]);
+  return withVersionLock(
+    transactionBundle([
+      { resource, request: { method: "PUT", url: `ServiceRequest/${original.id}` } },
+    ]),
+    original,
+  );
 }
 
 /** 継続中の指示に終了日を書き足す PUT エントリ(食事・リハビリと同じ形)。 */

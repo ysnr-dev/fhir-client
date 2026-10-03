@@ -11,7 +11,7 @@ module Master
       scope = scope.where(department_code: params[:department_code]) if params[:department_code].present?
       # active=true は今日使える割り当てだけ。日付を渡せばその日で判定する
       # (カレンダーが過去日・未来日を描くため)。
-      scope = scope.active_on(active_on_date || Date.current) if params[:active] == "true"
+      scope = scope.active_on(active_on_date || FacilityClock.today) if params[:active] == "true"
 
       render json: paginate(scope.order(:location_id, :weekday, :start_time))
     end

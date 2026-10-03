@@ -15,7 +15,7 @@ RSpec.describe "Master::TransfusionProducts", type: :request do
                                abbreviation: "RBC-LR", default_units: 2, display_order: 20)
       create_product("000002", name: "新鮮凍結血漿-LR「日赤」120", category: "ffp",
                                abbreviation: "FFP-LR", requires_crossmatch: false, display_order: 10)
-      create_product("000003", name: "旧製剤", valid_to: Date.current - 1, display_order: 30)
+      create_product("000003", name: "旧製剤", valid_to: FacilityClock.today - 1, display_order: 30)
     end
 
     it "表示順で返す" do

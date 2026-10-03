@@ -15,7 +15,7 @@ module LabImport
     JLAC_LENGTH = 17
     NUMERIC = /\A[-+]?\d+(\.\d+)?\z/
 
-    def initialize(as_of: Date.current)
+    def initialize(as_of: FacilityClock.today)
       @as_of = as_of
     end
 

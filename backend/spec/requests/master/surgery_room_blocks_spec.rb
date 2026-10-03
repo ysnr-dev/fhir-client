@@ -21,8 +21,8 @@ RSpec.describe "Master::SurgeryRoomBlocks", type: :request do
       Master::SurgeryRoomBlock.create!(block_attributes(location_id: "or-2", location_name: "第2手術室",
                                                         weekday: 3))
       Master::SurgeryRoomBlock.create!(block_attributes(location_id: "or-3", weekday: 5,
-                                                        valid_from: Date.current - 100,
-                                                        valid_to: Date.current - 1))
+                                                        valid_from: FacilityClock.today - 100,
+                                                        valid_to: FacilityClock.today - 1))
     end
 
     it "手術室 → 曜日 → 開始時刻の順で一覧を返す" do
@@ -51,7 +51,7 @@ RSpec.describe "Master::SurgeryRoomBlocks", type: :request do
     end
 
     it "date を渡すとその日で有効期間を判定する" do
-      get "/master/surgery_room_blocks", params: { active: "true", date: (Date.current - 50).to_s }
+      get "/master/surgery_room_blocks", params: { active: "true", date: (FacilityClock.today - 50).to_s }
 
       expect(body["items"].map { |i| i["location_id"] }).to eq(%w[or-1 or-1 or-2 or-3])
     end
@@ -100,9 +100,9 @@ RSpec.describe "Master::SurgeryRoomBlocks", type: :request do
     end
 
     it "有効期間が重ならなければ同じ時間帯でも登録できる" do
-      Master::SurgeryRoomBlock.create!(block_attributes(valid_to: Date.current - 1))
+      Master::SurgeryRoomBlock.create!(block_attributes(valid_to: FacilityClock.today - 1))
 
-      post "/master/surgery_room_blocks", params: block_attributes(valid_from: Date.current), as: :json
+      post "/master/surgery_room_blocks", params: block_attributes(valid_from: FacilityClock.today), as: :json
 
       expect(response).to have_http_status(:created)
     end

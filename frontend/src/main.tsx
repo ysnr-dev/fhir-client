@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
@@ -16,7 +16,17 @@ function isClientError(error: unknown): boolean {
   return typeof status === "number" && status >= 400 && status < 500
 }
 
-const queryClient = new QueryClient({
+// 楽観ロックの版違い(412)。ほかの操作で先に更新されているので、手元のデータを古い扱いにし、
+// 表示中の一覧(search)は読み直す。編集フォームの元になる詳細(detail / read)はその場では読み直さない
+// (読み直すと、入力中の内容が新しい版への上書きとしてそのまま通ってしまう)。開き直すと読み直される。
+function refreshAfterConflict(error: unknown) {
+  if ((error as { status?: unknown } | null)?.status !== 412) return
+  queryClient.invalidateQueries({ refetchType: "none" })
+  queryClient.refetchQueries({ type: "active", predicate: (query) => query.queryKey[1] === "search" })
+}
+
+const queryClient: QueryClient = new QueryClient({
+  mutationCache: new MutationCache({ onError: refreshAfterConflict }),
   defaultOptions: {
     queries: {
       // 同じ検索が複数の部品から続けて呼ばれたり、タブの切り替えで部品が付け直されたり

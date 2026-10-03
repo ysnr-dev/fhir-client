@@ -70,12 +70,15 @@ docker compose exec frontend node scripts/import-cycles.cjs src/api/queries
 - 日付の検索値はタイムゾーン無しで渡してよい(上流が Asia/Tokyo で解釈)。
 - レート制限は 1 トークン 300 件/分。まとめて書くときは transaction Bundle にし、hook の連続呼び出しで読み直しを積み重ねない。
 - transaction Bundle でオーダーヘッダを書くときも `fullUrl` を必ず付ける(漏れると来歴とパス参照が付かない)。
-- 楽観ロックは `If-Match`(ETag)。更新系は `FhirResult.etag` を引き回す。
+- 楽観ロックは `If-Match`(ETag)。単体の更新は `FhirResult.etag` を引き回す。transaction の PUT は、読んだリソースを
+  書き換えて送れば `postBundle` が版(`meta.versionId`)を `ifMatch` に添える。フォームから組み直す更新は
+  `withVersionLock(bundle, 元のリソース)`(`fhir/shared.ts`)。版違いは 412。
 
 ## 実装上の約束
 
 - 「今日」は `lib/dates` の `today()` を使う。`toISOString().slice(0, 10)` は JST 9 時前に前日になるので禁止。
-  backend の `Date.current` も UTC なので、日付は画面から渡す。
+  日時を書くときは `nowFhirDateTime()` / `toFhirDateTime()`(オフセット付き)、読むときは `localDay()`。
+  backend の `Date.current` も UTC なので使わず、`FacilityClock.today`(日本時間)か画面から渡した日付を使う。
 - 色はテーマ変数(`index.css` の `:root` / `:root[data-theme="dark"]`)を使い、直書きしない。
 - コメントには現状の意図だけを書く。修正経緯や過去との比較(「〜に変更」「以前は〜」など)は残さない。
 - フォームには項目ラベルと入力欄だけを置く。説明文・補足文・注意書きは書かない。

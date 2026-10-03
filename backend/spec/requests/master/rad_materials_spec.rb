@@ -25,7 +25,7 @@ RSpec.describe "Master::RadMaterials", type: :request do
       )
       Master::RadMaterial.create!(
         material_code: "000003", name: "採用終了した器材",
-        valid_from: Date.current - 100, valid_to: Date.current - 1, display_order: 3
+        valid_from: FacilityClock.today - 100, valid_to: FacilityClock.today - 1, display_order: 3
       )
     end
 

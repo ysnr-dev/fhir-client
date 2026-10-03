@@ -21,10 +21,7 @@ module Master
     validate :does_not_overlap_same_room_weekday
 
     # 今日使える割り当て(カレンダー・警告に出す対象)。
-    scope :active_on, lambda { |date = Date.current|
-      where("valid_from IS NULL OR valid_from <= ?", date)
-        .where("valid_to IS NULL OR valid_to >= ?", date)
-    }
+    include Master::ValidityPeriod
 
     private
 

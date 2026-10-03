@@ -123,8 +123,8 @@ export function useEmergencyCheckIn() {
 }
 
 /**
- * 受診を書き換える(状態の遷移・トリアージ・ベッドや担当医の変更・転帰)。一覧は
- * 検索結果のリソースを持っているだけで ETag が無いので、単体 PUT ではなく Bundle で書く。
+ * 受診を書き換える(状態の遷移・トリアージ・ベッドや担当医の変更・転帰)。一覧が読んだ
+ * 版は postBundle が ifMatch に添える。
  */
 export function useUpdateEmergencyEncounter() {
   const queryClient = useQueryClient();
@@ -197,8 +197,7 @@ export function usePatientEmergency(patientId: string | undefined) {
 }
 
 /**
- * 身元不明で仮登録した患者の身元が分かったときの書き換え。一覧は検索結果の患者を
- * 持っているだけで ETag が無いので Bundle で書く。
+ * 身元不明で仮登録した患者の身元が分かったときの書き換え。
  */
 export function useIdentifyProvisionalPatient() {
   const queryClient = useQueryClient();

@@ -8,6 +8,7 @@ import {
   orderDay,
   registrationAuthoredOn,
   transactionBundle,
+  withVersionLock,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -368,18 +369,21 @@ export function buildRehabOrderUpdateBundle(
   original: fhir4.ServiceRequest,
   requester: OrderAttribution,
 ): fhir4.Bundle {
-  return transactionBundle([
-    {
-      resource: buildRehabOrderServiceRequest(
-        values,
-        patientId,
-        requester,
-        registrationAuthoredOn(original),
-        original.id,
-      ),
-      request: { method: "PUT", url: `ServiceRequest/${original.id}` },
-    },
-  ]);
+  return withVersionLock(
+    transactionBundle([
+      {
+        resource: buildRehabOrderServiceRequest(
+          values,
+          patientId,
+          requester,
+          registrationAuthoredOn(original),
+          original.id,
+        ),
+        request: { method: "PUT", url: `ServiceRequest/${original.id}` },
+      },
+    ]),
+    original,
+  );
 }
 
 /**

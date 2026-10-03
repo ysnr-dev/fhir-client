@@ -27,7 +27,7 @@ RSpec.describe "Master::BulletinPosts", type: :request do
 
   def body = JSON.parse(response.body)
 
-  let(:today) { Time.zone.today }
+  let(:today) { FacilityClock.today }
 
   describe "GET /master/bulletin_posts" do
     before do

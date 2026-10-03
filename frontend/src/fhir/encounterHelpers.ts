@@ -363,9 +363,8 @@ export function buildCancelledEncounter(encounter: fhir4.Encounter): fhir4.Encou
 }
 
 /**
- * Encounter 1 件を書き換える transaction Bundle。一覧は検索結果の Encounter を
- * 持っているだけで ETag が無いため、単体 PUT ではなく If-Match の付かない
- * Bundle で書く(枠の状態変更 useUpdateSlotStatus と同じ理由)。
+ * Encounter 1 件を書き換える transaction Bundle。読んだ Encounter の版は postBundle が
+ * ifMatch に添える(入退院・転棟の同時操作は 412 になる)。
  */
 export function buildEncounterUpdateBundle(
   encounter: fhir4.Encounter,

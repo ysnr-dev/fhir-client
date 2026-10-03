@@ -5,6 +5,7 @@ module Master
   # (所要時間・到達法・体位・麻酔方法)を持つこと。
   class SurgeryItem < ApplicationRecord
     self.table_name = "master_surgery_items"
+    include Master::ValidityPeriod
 
     validates :item_code, presence: true, uniqueness: true
     validates :name, presence: true

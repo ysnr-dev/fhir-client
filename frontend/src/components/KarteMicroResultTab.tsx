@@ -23,6 +23,7 @@ import { MicroResultDetailPanel } from "./MicroResultDetailPanel";
 import { MicroResultForm } from "./MicroResultForm";
 import { ResultReviewAction } from "./ResultReviewAction";
 import { SpecimenDateList } from "./SpecimenDateList";
+import { withVersionLock } from "../fhir/shared";
 
 // カルテ画面の「細菌検査」タブ(検査結果配下)。「検体検査」タブと同じ構成で、左端の
 // ペインに検体採取日を新しい順で並べ、その右に選択した細菌検査結果の内容を表示する。
@@ -218,7 +219,10 @@ function EditForm({
     if (!report || patientMismatch) return;
     const originalIds = observations.map((o) => o.id).filter((id): id is string => Boolean(id));
     updateMicroResult.mutate(
-      buildMicroResultUpdateBundle(values, patientId, reportId, originalIds, specimens[0]?.id),
+      withVersionLock(
+        buildMicroResultUpdateBundle(values, patientId, reportId, originalIds, specimens[0]?.id),
+        report,
+      ),
       { onSuccess: onSaved },
     );
   }

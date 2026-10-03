@@ -11,6 +11,7 @@ import {
   registrationAuthoredOn,
   transactionBundle,
   ABBREVIATION_SYSTEM,
+  withVersionLock,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -883,20 +884,23 @@ export function buildSurgeryOrderUpdateBundle(
     registrationAuthoredOn(original),
     serviceRequestId,
   );
-  return transactionBundle([
-    ...templateEntries,
-    {
-      fullUrl: headerReference,
-      resource: header,
-      request: { method: "PUT", url: headerReference },
-    },
-    ...buildItemEntries(values.items, patientId, header, headerReference, originalItemIds),
-    ...originalResponseIds
-      .filter((id) => id !== preop.keptResponseId)
-      .map((id) => ({
-        request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` },
-      })),
-  ]);
+  return withVersionLock(
+    transactionBundle([
+      ...templateEntries,
+      {
+        fullUrl: headerReference,
+        resource: header,
+        request: { method: "PUT", url: headerReference },
+      },
+      ...buildItemEntries(values.items, patientId, header, headerReference, originalItemIds),
+      ...originalResponseIds
+        .filter((id) => id !== preop.keptResponseId)
+        .map((id) => ({
+          request: { method: "DELETE" as const, url: `QuestionnaireResponse/${id}` },
+        })),
+    ]),
+    original,
+  );
 }
 
 /** 手術部が確定する日程。日程未定の申込に後から入れる。 */

@@ -37,6 +37,7 @@ import {
 import { fetchLabelSpecimens } from "./injection";
 import { fetchReportTasks } from "./notification";
 import { invalidateProvenance, useOrderEnterer, useWithOrderProvenance } from "./provenance";
+import { withVersionLock } from "../../fhir/shared";
 
 // ---- 検査結果に紐付けるオーダー(検体検査・細菌検査・病理)の候補 ----
 
@@ -489,6 +490,7 @@ export function useUpdateLabResult() {
       originalSpecimens,
       subject,
       owner,
+      report,
     }: {
       values: LabResultFormValues;
       patientId: string;
@@ -497,6 +499,8 @@ export function useUpdateLabResult() {
       originalSpecimens: SpecimenRef[];
       subject?: LabResultSubject;
       owner?: fhir4.Reference;
+      /** 画面が読み込んだ報告書。渡すと、その版からの更新として楽観ロックが効く。 */
+      report?: fhir4.DiagnosticReport;
     }) => {
       const [labelSpecimens, reportTasks] = await Promise.all([
         fetchLabelSpecimens(values.orderId),
@@ -507,15 +511,18 @@ export function useUpdateLabResult() {
       const existingPanicTask = reportTasks.get(LAB_PANIC_TASK_CODE.code);
       const existingReviewTask = reportTasks.get(RESULT_REVIEW_TASK_CODE.code);
       return postBundle(
-        buildLabResultUpdateBundle(
-          values,
-          patientId,
-          reportId,
-          originalObservationIds,
-          originalSpecimens,
-          labelSpecimens,
-          subject,
-          { owner, existingPanicTask, existingReviewTask },
+        withVersionLock(
+          buildLabResultUpdateBundle(
+            values,
+            patientId,
+            reportId,
+            originalObservationIds,
+            originalSpecimens,
+            labelSpecimens,
+            subject,
+            { owner, existingPanicTask, existingReviewTask },
+          ),
+          report,
         ),
       );
     },

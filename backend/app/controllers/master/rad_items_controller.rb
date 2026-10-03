@@ -15,11 +15,7 @@ module Master
       scope = scope.where(modality_code: params[:modality_code]) if params[:modality_code].present?
       scope = scope.where(body_part_code: params[:body_part_code]) if params[:body_part_code].present?
       # active=true は今日オーダーできる項目(有効期間内)だけに絞る。
-      if params[:active] == "true"
-        scope = scope
-          .where("valid_from IS NULL OR valid_from <= ?", Date.current)
-          .where("valid_to IS NULL OR valid_to >= ?", Date.current)
-      end
+      scope = scope.active_on if params[:active] == "true"
       if params[:name].present?
         scope = flexible_name_match(scope, params[:name], %w[search_name search_short_name search_kana])
       end
@@ -140,7 +136,7 @@ module Master
         record.name = source.name
         record.kind = "single"
         record.generic_extension_code = elements["generic_extension"]
-        record.valid_from = Date.current
+        record.valid_from = FacilityClock.today
       end
     end
 

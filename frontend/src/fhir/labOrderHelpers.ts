@@ -11,6 +11,7 @@ import {
   parentRequestId,
   registrationAuthoredOn,
   priorityDisplay,
+  withVersionLock,
 } from "./shared";
 
 export { PRIORITY_OPTIONS };
@@ -560,13 +561,16 @@ export function buildLabOrderUpdateBundle(
   originalItemIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildLabOrderTransactionBundle(
-    values,
-    patientId,
-    requester,
-    registrationAuthoredOn(original),
-    original.id,
-    originalItemIds,
+  return withVersionLock(
+    buildLabOrderTransactionBundle(
+      values,
+      patientId,
+      requester,
+      registrationAuthoredOn(original),
+      original.id,
+      originalItemIds,
+    ),
+    original,
   );
 }
 

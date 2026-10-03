@@ -33,7 +33,7 @@ RSpec.describe "Master::Regimens", type: :request do
                                             treatment_days: 3, rest_days: 11, display_order: 1)
       create_regimen("000002", "CapeOX", department_code: "02", status: "draft", display_order: 2)
       create_regimen("000003", "旧レジメン", status: "retired", display_order: 3,
-                                    valid_from: Date.current - 100, valid_to: Date.current - 1)
+                                    valid_from: FacilityClock.today - 100, valid_to: FacilityClock.today - 1)
       Master::RegimenStep.create!(regimen_code: "000002", usage_type: "drip", days: [1], display_order: 1).then do |step|
         Master::RegimenDrug.create!(regimen_code: "000002", step_id: step.id, drug_role: "anticancer",
                                     medicine_code: "622480401", dose_basis: "bsa", dose_value: 130)
@@ -265,7 +265,7 @@ RSpec.describe "Master::Regimens", type: :request do
       put "/master/regimens/000001", params: { status: "approved", approved_by: "practitioner-1" }, as: :json
 
       expect(response).to have_http_status(:ok)
-      expect(body["approved_on"]).to eq(Date.current.to_s)
+      expect(body["approved_on"]).to eq(FacilityClock.today.to_s)
       expect(body["approved_by"]).to eq("practitioner-1")
 
       # 下書きに戻せると「下書きにしてから直す」で凍結をすり抜けられる。

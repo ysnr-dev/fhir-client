@@ -10,6 +10,7 @@ module Master
   # 32桁コードの組み立てが無いぶん素直になる。
   class PhysioItem < ApplicationRecord
     self.table_name = "master_physio_items"
+    include Master::ValidityPeriod
 
     KINDS = %w[single set].freeze
 

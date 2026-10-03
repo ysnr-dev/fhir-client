@@ -12,7 +12,7 @@ RSpec.describe "Master::EndoscopyExamTypes", type: :request do
       Master::EndoscopyExamType.create!(exam_type_code: "02", name: "下部消化管内視鏡", short_name: "CS",
                                      display_order: 2)
       Master::EndoscopyExamType.create!(exam_type_code: "03", name: "廃止した種別", display_order: 3,
-                                     valid_from: Date.current - 100, valid_to: Date.current - 1)
+                                     valid_from: FacilityClock.today - 100, valid_to: FacilityClock.today - 1)
     end
 
     it "表示順で一覧を返す" do

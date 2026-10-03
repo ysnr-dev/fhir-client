@@ -10,6 +10,7 @@ import {
   orderDay,
   registrationAuthoredOn,
   transactionBundle,
+  withVersionLock,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -392,7 +393,7 @@ export function buildNutritionGuidanceOrderUpdateBundle(
     }
   }
 
-  return transactionBundle(entries);
+  return withVersionLock(transactionBundle(entries), existing);
 }
 
 /**

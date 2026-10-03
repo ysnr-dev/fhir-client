@@ -44,6 +44,7 @@ import { ExamReportForm } from "./ExamReportForm";
 import { Modal } from "./Modal";
 import { PhysioOrderDetailPanel } from "./PhysioOrderDetailPanel";
 import { RadOrderDetailPanel } from "./RadOrderDetailPanel";
+import { withVersionLock } from "../fhir/shared";
 
 // 検査レポート(読影・生理検査・内視鏡の所見)の登録・編集(docs/rad-report-design.md §4.1)。
 // 部門一覧のボタンとカルテのカードはモーダルで、カルテの検査結果タブはタブの中で開く。
@@ -253,7 +254,7 @@ export function ExamReportEntry({
       originalObservationIds: report ? examReportObservationIds(report) : [],
       originalResponseIds: report ? examReportResponseIds(config, report) : [],
     });
-    save.mutate(bundle, { onSuccess: onDone });
+    save.mutate(withVersionLock(bundle, report), { onSuccess: onDone });
   }
 
   function handleDelete() {

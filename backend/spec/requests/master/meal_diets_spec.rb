@@ -13,7 +13,7 @@ RSpec.describe "Master::MealDiets", type: :request do
     before do
       create_diet("A00105", name: "一般食2000kcal", name_kana: "イッパンショク", display_order: 20)
       create_diet("NPO", name: "食止め", is_fasting: true, display_order: 90)
-      create_diet("A00900", name: "旧食種", valid_to: Date.current - 1, display_order: 30)
+      create_diet("A00900", name: "旧食種", valid_to: FacilityClock.today - 1, display_order: 30)
     end
 
     it "表示順で返す" do

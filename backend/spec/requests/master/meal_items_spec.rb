@@ -13,7 +13,7 @@ RSpec.describe "Master::MealItems", type: :request do
     before do
       create_item("105AG", name: "米飯180g", name_kana: "ベイハン", display_order: 10)
       create_item("105AK", name: "全粥", display_order: 20)
-      create_item("105ZZ", name: "旧主食", valid_to: Date.current - 1, display_order: 30)
+      create_item("105ZZ", name: "旧主食", valid_to: FacilityClock.today - 1, display_order: 30)
       create_item("F02", name: "きざみ", kind: "side_dish_form", display_order: 50)
     end
 

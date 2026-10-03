@@ -22,11 +22,7 @@ module Master
       # データ型もカンマ区切りで複数可(チャートは数値型とコード型を一度に探す)。
       scope = scope.where(data_type: params[:data_type].split(",")) if params[:data_type].present?
       # active=true は今日使える項目(有効期間内)だけに絞る。
-      if params[:active] == "true"
-        scope = scope
-          .where("valid_from IS NULL OR valid_from <= ?", Date.current)
-          .where("valid_to IS NULL OR valid_to >= ?", Date.current)
-      end
+      scope = scope.active_on if params[:active] == "true"
       if params[:name].present?
         # JLAC11 前方一致などと同じく、表名で修飾しておく。
         scope = flexible_name_match(

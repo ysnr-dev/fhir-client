@@ -391,18 +391,13 @@ function minutesBetween(start: string, end: string): number | undefined {
 
 // ---- 書き込み(Appointment と Slot は必ず同じ transaction で動かす) ----
 
-// 枠を押さえる(busy)ときは読んだ版を ifMatch で添え、同じ空き枠を先に取られていたら
-// transaction ごと 412 にする(二重予約を防ぐ)。空きに戻す側は取消を止めないよう付けない。
+// 読んだ枠をそのまま書き換えるので、postBundle が読んだ版を ifMatch に添える。同じ空き枠を
+// 先に取られていたら transaction ごと 412 になる(二重予約を防ぐ)。
 function slotEntry(slot: fhir4.Slot, status: fhir4.Slot["status"]): fhir4.BundleEntry {
   const updated: fhir4.Slot = { ...slot, status };
-  const versionId = status === "busy" ? slot.meta?.versionId : undefined;
   return {
     resource: updated,
-    request: {
-      method: "PUT",
-      url: `Slot/${slot.id}`,
-      ...(versionId ? { ifMatch: `W/"${versionId}"` } : {}),
-    },
+    request: { method: "PUT", url: `Slot/${slot.id}` },
   };
 }
 

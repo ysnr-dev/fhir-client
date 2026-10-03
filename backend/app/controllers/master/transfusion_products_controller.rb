@@ -10,11 +10,7 @@ module Master
       scope = scope.where(item_code: params[:item_code].split(",")) if params[:item_code].present?
       scope = scope.where(category: params[:category]) if params[:category].present?
       # active=true は今日オーダーできる製剤(有効期間内)だけに絞る。
-      if params[:active] == "true"
-        scope = scope
-          .where("valid_from IS NULL OR valid_from <= ?", Date.current)
-          .where("valid_to IS NULL OR valid_to >= ?", Date.current)
-      end
+      scope = scope.active_on if params[:active] == "true"
       query = params[:name].presence || params[:keyword].presence
       scope = flexible_name_match(scope, query, ITEM_SEARCH_COLUMNS) if query
 

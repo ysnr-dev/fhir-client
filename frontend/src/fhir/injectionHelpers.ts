@@ -8,6 +8,7 @@ import {
   orderDay,
   registrationAuthoredOn,
   transactionBundle,
+  withVersionLock,
 } from "./shared";
 import {
   MEDICINE_CODE_SYSTEM,
@@ -1050,16 +1051,19 @@ export function buildInjectionUpdateBundle(
     end: values.startDate,
     schedule: DAILY_SCHEDULE,
   };
-  return transactionBundle(
-    buildInjectionDayEntries(
-      values,
-      patientId,
-      requester,
-      registrationAuthoredOn(original),
-      series,
-      original.id,
-      originalMedicationRequestIds,
+  return withVersionLock(
+    transactionBundle(
+      buildInjectionDayEntries(
+        values,
+        patientId,
+        requester,
+        registrationAuthoredOn(original),
+        series,
+        original.id,
+        originalMedicationRequestIds,
+      ),
     ),
+    original,
   );
 }
 

@@ -12,10 +12,7 @@ module Master
     before_save :set_search_columns
 
     # 今日オーダーできる項目(有効期間内)。
-    scope :active, -> {
-      where("valid_from IS NULL OR valid_from <= ?", Date.current)
-        .where("valid_to IS NULL OR valid_to >= ?", Date.current)
-    }
+    include Master::ValidityPeriod
 
     private
 

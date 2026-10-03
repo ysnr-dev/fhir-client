@@ -113,8 +113,8 @@ interface UpdateTaskStatusOptions<S> {
 
 /**
  * 受付などの進捗を書き込む hook を作る。Task がまだ無いオーダーでは新しく作る。
- * 単体の PUT ではなく transaction Bundle にするのは、更新に If-Match(ETag)が要る
- * ためで、一覧は検索結果から Task を持っているだけで ETag を持たないため。
+ * transaction Bundle で書き、一覧が読んだ Task の版(meta.versionId)は postBundle が
+ * ifMatch に添える(ほかの人が先に進捗を変えていたら 412)。
  */
 export function makeUpdateTaskStatusHook<S extends fhir4.Task["status"]>(
   buildUpdate: (

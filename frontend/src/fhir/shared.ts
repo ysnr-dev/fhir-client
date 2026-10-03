@@ -115,6 +115,42 @@ export function transactionBundle(entry: fhir4.BundleEntry[]): fhir4.Bundle {
   return { resourceType: "Bundle", type: "transaction", entry };
 }
 
+/** 読んだ時点の版を表す ETag(`W/"3"`)。版を持たないリソースは undefined。 */
+export function versionEtag(resource: { meta?: fhir4.Meta } | undefined): string | undefined {
+  const versionId = resource?.meta?.versionId;
+  return versionId ? `W/"${versionId}"` : undefined;
+}
+
+/**
+ * Bundle の PUT エントリに、読んだ時点の版を ifMatch で添える(楽観ロック。ほかの人が先に
+ * 更新していたら transaction ごと 412 になる)。版は loaded(画面が読み込んだ元のリソース)から、
+ * 無ければエントリのリソース自身の meta.versionId から取る。フォームの値から組み直した
+ * リソースは meta を持たないので、更新用のビルダーが元のリソースを loaded に渡す。
+ * ifMatch を指定済みのエントリと、版の分からないエントリはそのまま。同じリソースを 1 つの
+ * Bundle で 2 回書くときは最初の 1 回にだけ添える(1 回目で版が進むため)。
+ */
+export function withVersionLock(bundle: fhir4.Bundle, ...loaded: (fhir4.Resource | undefined)[]): fhir4.Bundle {
+  const etagByUrl = new Map<string, string>();
+  for (const resource of loaded) {
+    const etag = versionEtag(resource);
+    if (resource?.id && etag) etagByUrl.set(`${resource.resourceType}/${resource.id}`, etag);
+  }
+  let changed = false;
+  const written = new Set<string>();
+  const entry = (bundle.entry ?? []).map((item) => {
+    const request = item.request;
+    if (request?.method !== "PUT") return item;
+    const first = !written.has(request.url);
+    written.add(request.url);
+    if (request.ifMatch || !first) return item;
+    const ifMatch = etagByUrl.get(request.url) ?? versionEtag(item.resource);
+    if (!ifMatch) return item;
+    changed = true;
+    return { ...item, request: { ...request, ifMatch } };
+  });
+  return changed ? { ...bundle, entry } : bundle;
+}
+
 /** オーダーの緊急度の表示(通常・至急・事後)。未設定なら空。 */
 export function priorityDisplay(priority: string | undefined): string {
   return priority ? displayOf(EXAM_PRIORITY_OPTIONS, priority) : "";

@@ -190,7 +190,7 @@ module Reports
       return "" if birth_date.blank?
 
       birth = Date.parse(birth_date)
-      as_of = @response["authored"].present? ? time_zone.parse(@response["authored"]).to_date : Date.current
+      as_of = @response["authored"].present? ? time_zone.parse(@response["authored"]).to_date : FacilityClock.today
       age = as_of.year - birth.year
       age -= 1 if as_of.month < birth.month || (as_of.month == birth.month && as_of.day < birth.day)
       age.negative? ? "" : age

@@ -7,6 +7,7 @@ module Master
   # (requires_perform_input = false)は初期明細を持たない。
   class RadItem < ApplicationRecord
     self.table_name = "master_rad_items"
+    include Master::ValidityPeriod
 
     KINDS = %w[single set].freeze
 

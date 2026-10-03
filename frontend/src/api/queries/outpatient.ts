@@ -227,9 +227,8 @@ export function useOutpatientOrders(
 }
 
 /**
- * 受付・受付取消を予約の status に書き込む。単体の PUT には If-Match(ETag)が
- * 要るが、一覧は検索結果から Appointment を持っているだけで ETag を持たないので、
- * If-Match の付かない transaction Bundle の PUT で書く(放射線 Task の進捗と同じ)。
+ * 受付・受付取消を予約の status に書き込む。transaction Bundle で書き、一覧が読んだ
+ * Appointment の版は postBundle が ifMatch に添える。
  *
  * 受付では受付時刻も一緒に残す(予約時間とは別の列で出すため)。受付取消では
  * 消して、受付していない予約に受付時刻が残らないようにする。
@@ -295,8 +294,7 @@ export function useStartOutpatientExam() {
  * 予約は据え置き)をこれ 1 本で賄う。
  *
  * 予約も動かすときは appointment を渡す。診察だけが進んで予約が受付済のまま、
- * といった食い違いを作らないよう 1 本の transaction で書く。一覧は検索結果の
- * リソースを持っているだけで ETag が無いため、単体 PUT ではなく Bundle で書く。
+ * といった食い違いを作らないよう 1 本の transaction で書く。
  */
 export function useUpdateOutpatientExam() {
   const queryClient = useQueryClient();

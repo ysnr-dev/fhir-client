@@ -12,7 +12,7 @@ RSpec.describe "Master::MicroOrderItems", type: :request do
     end
     let!(:retired) do
       Master::MicroOrderItem.create!(item_code: "9", name: "廃止した項目",
-                                     valid_to: Date.current - 1, display_order: 20)
+                                     valid_to: FacilityClock.today - 1, display_order: 20)
     end
 
     it "掲載順で返す" do

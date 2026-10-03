@@ -13,10 +13,7 @@ module Master
     validate :valid_period_is_ordered
 
     # 今日使える検査種別(オーダー画面・項目マスタの選択肢に出す対象)。
-    scope :active_on, lambda { |date = Date.current|
-      where("valid_from IS NULL OR valid_from <= ?", date)
-        .where("valid_to IS NULL OR valid_to >= ?", date)
-    }
+    include Master::ValidityPeriod
 
     before_save :set_search_columns
 

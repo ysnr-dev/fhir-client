@@ -10,6 +10,7 @@ module Master
   # 特別指示の欄が無い。
   class TreatmentItem < ApplicationRecord
     self.table_name = "master_treatment_items"
+    include Master::ValidityPeriod
 
     KINDS = %w[single set].freeze
 

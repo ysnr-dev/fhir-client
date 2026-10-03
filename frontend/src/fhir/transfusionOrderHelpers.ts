@@ -18,6 +18,7 @@ import {
   PRIORITY_OPTIONS,
   registrationAuthoredOn,
   priorityDisplay,
+  withVersionLock,
 } from "./shared";
 
 export { PRIORITY_OPTIONS };
@@ -419,13 +420,16 @@ export function buildTransfusionOrderUpdateBundle(
   originalItemIds: string[],
   requester: OrderContext,
 ): fhir4.Bundle {
-  return buildTransfusionOrderTransactionBundle(
-    values,
-    patientId,
-    requester,
-    registrationAuthoredOn(original),
-    original.id,
-    originalItemIds,
+  return withVersionLock(
+    buildTransfusionOrderTransactionBundle(
+      values,
+      patientId,
+      requester,
+      registrationAuthoredOn(original),
+      original.id,
+      originalItemIds,
+    ),
+    original,
   );
 }
 

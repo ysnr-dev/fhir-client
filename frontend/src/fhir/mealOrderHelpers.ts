@@ -7,6 +7,7 @@ import {
   orderComment,
   registrationAuthoredOn,
   transactionBundle,
+  withVersionLock,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -854,18 +855,21 @@ export function buildMealOrderUpdateBundle(
   const endUnchanged =
     (values.endDate ? mealDateTime(values.endDate, values.endTiming) : "") ===
     mealOrderEnd(original);
-  return transactionBundle([
-    {
-      resource: buildMealOrderServiceRequest(values, patientId, requester, {
-        serviceRequestId: original.id,
-        authoredOn: registrationAuthoredOn(original),
-        encounterId: mealOrderEncounterId(original),
-        link: mealOrderLink(original),
-        endCause: endUnchanged ? cause : undefined,
-      }),
-      request: { method: "PUT", url: `ServiceRequest/${original.id}` },
-    },
-  ]);
+  return withVersionLock(
+    transactionBundle([
+      {
+        resource: buildMealOrderServiceRequest(values, patientId, requester, {
+          serviceRequestId: original.id,
+          authoredOn: registrationAuthoredOn(original),
+          encounterId: mealOrderEncounterId(original),
+          link: mealOrderLink(original),
+          endCause: endUnchanged ? cause : undefined,
+        }),
+        request: { method: "PUT", url: `ServiceRequest/${original.id}` },
+      },
+    ]),
+    original,
+  );
 }
 
 /**

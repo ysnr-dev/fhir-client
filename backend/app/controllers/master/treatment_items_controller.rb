@@ -13,11 +13,7 @@ module Master
       # オーダー単位(groupable=true グループ化 / false 単独)での絞り込み。
       scope = scope.where(groupable: params[:groupable] == "true") if params[:groupable].present?
       # active=true は今日オーダーできる項目(有効期間内)だけに絞る。
-      if params[:active] == "true"
-        scope = scope
-          .where("valid_from IS NULL OR valid_from <= ?", Date.current)
-          .where("valid_to IS NULL OR valid_to >= ?", Date.current)
-      end
+      scope = scope.active_on if params[:active] == "true"
       # 名称検索。keyword は「その場で項目を足す検索欄」用。生理検査と違い処置には
       # 分類軸が無いので、当てる先は名称・略称・カナだけ。
       query = params[:name].presence || params[:keyword].presence

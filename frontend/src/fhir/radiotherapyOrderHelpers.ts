@@ -16,6 +16,7 @@ import {
   referenceId,
   registrationAuthoredOn,
   transactionBundle,
+  withVersionLock,
 } from "./shared";
 import {
   ORDER_TYPE_SYSTEM,
@@ -608,18 +609,21 @@ export function buildRadiotherapyOrderUpdateBundle(
   original: fhir4.ServiceRequest,
   requester: OrderAttribution,
 ): fhir4.Bundle {
-  return transactionBundle([
-    {
-      resource: buildRadiotherapyServiceRequest(
-        values,
-        patientId,
-        requester,
-        registrationAuthoredOn(original),
-        original,
-      ),
-      request: { method: "PUT", url: `ServiceRequest/${original.id}` },
-    },
-  ]);
+  return withVersionLock(
+    transactionBundle([
+      {
+        resource: buildRadiotherapyServiceRequest(
+          values,
+          patientId,
+          requester,
+          registrationAuthoredOn(original),
+          original,
+        ),
+        request: { method: "PUT", url: `ServiceRequest/${original.id}` },
+      },
+    ]),
+    original,
+  );
 }
 
 export function buildRadiotherapyOrderDeleteBundle(serviceRequestId: string): fhir4.Bundle {
