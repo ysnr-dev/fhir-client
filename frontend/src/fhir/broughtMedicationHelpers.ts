@@ -569,6 +569,26 @@ export function buildBroughtMedicationCloseEntries(
 
 // ---- 継続 → 処方 ----
 
+function hasDays(usage: ReturnType<typeof usageFromDosage>): boolean {
+  return Boolean(usage && hasDoseDays(usage.usage_code, usage.basic_usage_category));
+}
+
+/**
+ * 持参薬の 1 回量を処方の用量にする。処方の内服(頓用以外)の用量は 1 日量なので、
+ * 1 回量 × 1 日の服用回数(用法コード 4 桁目)にする。頓用・外用などは 1 回量 / 全量の
+ * ままでよい。回数が読めない用法は 1 日量を決められないので空にして手で入れてもらう。
+ */
+export function prescriptionDoseFromBrought(
+  dose: number | undefined,
+  usageCode: string | undefined,
+  oralWithDays: boolean,
+): string {
+  if (dose == null) return "";
+  if (!oralWithDays) return String(dose);
+  const timesPerDay = usageCode ? dailyTimesOf(usageCode) : 0;
+  return timesPerDay ? String(Number((dose * timesPerDay).toFixed(4))) : "";
+}
+
 /**
  * 継続する持参薬から処方フォームの初期値を作る。RP は用法・頓用の回数・日数・用法の
  * コメントが同じものをまとめる。薬剤は代替薬があればそれ、無ければ特定した医薬品。
@@ -608,7 +628,7 @@ export function buildPrescriptionFormFromBrought(
     rp.medicines.push({
       ...emptyMedicineLine,
       medicine,
-      dose: summary.dose != null ? String(summary.dose) : "",
+      dose: prescriptionDoseFromBrought(summary.dose, usage?.usage_code, hasDays(usage)),
       ...(statement.id ? { broughtMedicationId: statement.id } : {}),
     });
   }

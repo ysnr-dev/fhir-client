@@ -209,11 +209,15 @@ export const SURGERY_CONSENT_OPTIONS = [
   { code: "transfusion", display: "輸血同意書" },
 ] as const;
 
+// 表示名は JJ1017 の左右区分の名称(放射線検査・放射線治療と同じ)。
 export const SURGERY_LATERALITY_OPTIONS = [
-  { code: "R", display: "右" },
-  { code: "L", display: "左" },
+  { code: "R", display: "右側" },
+  { code: "L", display: "左側" },
   { code: "B", display: "両側" },
 ] as const;
+
+/** 「右」「左」の表示で bodySite.text を書いていた頃の明細を読むための表示名。 */
+const LEGACY_LATERALITY_LABELS: Record<string, string> = { R: "右", L: "左" };
 
 export function surgeryPriorityDisplay(code: string): string {
   return displayOf([...SURGERY_PRIORITY_OPTIONS], code);
@@ -469,14 +473,21 @@ function parseItemRequest(request: fhir4.ServiceRequest): SurgeryOrderItemLine {
   const bodySite = request.bodySite?.[0];
   const laterality = codingBySystem(bodySite?.coding, LATERALITY_SYSTEM)?.code ?? "";
   // text は「左右 + 部位」で保存しているので、左右の表示を頭から外して部位だけに戻す。
-  const lateralityLabel = surgeryLateralityDisplay(laterality);
   const text = bodySite?.text ?? "";
-  const bodySiteText =
-    lateralityLabel && text.startsWith(`${lateralityLabel} `)
-      ? text.slice(lateralityLabel.length + 1)
-      : lateralityLabel && text === lateralityLabel
-        ? ""
-        : text;
+  const labels = [surgeryLateralityDisplay(laterality), LEGACY_LATERALITY_LABELS[laterality]].filter(
+    (label): label is string => Boolean(label),
+  );
+  let bodySiteText = text;
+  for (const label of labels) {
+    if (text === label) {
+      bodySiteText = "";
+      break;
+    }
+    if (text.startsWith(`${label} `)) {
+      bodySiteText = text.slice(label.length + 1);
+      break;
+    }
+  }
   const approach =
     request.extension?.find((e) => e.url === APPROACH_EXT_URL)?.valueCoding?.code ?? "";
   const reasonReference = request.reasonReference?.[0];
@@ -952,21 +963,49 @@ export function buildSurgeryScheduleServiceRequest(
 }
 
 /**
+ * 日程を動かしたときの術式明細の書き換え。明細の occurrenceDateTime はヘッダの複製
+ * (登録・編集で揃える)なので、日程の確定・移動・入室でも同じ値に揃える。値が
+ * 既に同じ明細は書かない。
+ */
+function itemScheduleEntries(
+  items: fhir4.ServiceRequest[],
+  scheduled: fhir4.ServiceRequest,
+): fhir4.BundleEntry[] {
+  return items
+    .filter((item) => item.id && item.occurrenceDateTime !== scheduled.occurrenceDateTime)
+    .map((item) => {
+      const next: fhir4.ServiceRequest = { ...item };
+      delete next.occurrencePeriod;
+      if (scheduled.occurrenceDateTime) next.occurrenceDateTime = scheduled.occurrenceDateTime;
+      else delete next.occurrenceDateTime;
+      return {
+        fullUrl: `ServiceRequest/${item.id}`,
+        resource: next,
+        request: { method: "PUT", url: `ServiceRequest/${item.id}` },
+      };
+    });
+}
+
+/**
  * 日程の確定を 1 つの transaction にする。オーダーの日程と進捗(受付済 = 日程確定)は
  * 必ず一緒に動かす(片方だけ通ると「日程は入ったが未受付」「受付済だが日程未定」に
- * なってしまう)。Task のエントリは呼び出し側が組み立てて渡す。
+ * なってしまう)。Task のエントリは呼び出し側が組み立てて渡す。術式明細の予定日時も
+ * 同じ transaction で揃える。
  */
 export function buildSurgeryScheduleBundle(
   order: fhir4.ServiceRequest,
   values: SurgeryScheduleValues,
   taskEntry: fhir4.BundleEntry,
+  items: fhir4.ServiceRequest[],
 ): fhir4.Bundle {
+  const scheduled = buildSurgeryScheduleServiceRequest(order, values);
   return transactionBundle([
     {
       fullUrl: `ServiceRequest/${order.id}`,
-      resource: buildSurgeryScheduleServiceRequest(order, values),
+      resource: scheduled,
       request: { method: "PUT", url: `ServiceRequest/${order.id}` },
     },
+    ...itemScheduleEntries(items, scheduled),
     taskEntry,
   ]);
 }
@@ -981,13 +1020,16 @@ export function buildSurgeryScheduleBundle(
 export function buildSurgeryMoveBundle(
   order: fhir4.ServiceRequest,
   values: SurgeryScheduleValues,
+  items: fhir4.ServiceRequest[],
 ): fhir4.Bundle {
+  const scheduled = buildSurgeryScheduleServiceRequest(order, values);
   return transactionBundle([
     {
       fullUrl: `ServiceRequest/${order.id}`,
-      resource: buildSurgeryScheduleServiceRequest(order, values),
+      resource: scheduled,
       request: { method: "PUT", url: `ServiceRequest/${order.id}` },
     },
+    ...itemScheduleEntries(items, scheduled),
   ]);
 }
 

@@ -417,7 +417,8 @@ function buildMicroOrderServiceRequest(
   if (values.examPurpose) {
     extension.push({ url: EXAM_PURPOSE_EXT_URL, valueCode: values.examPurpose });
   }
-  if (extension.length > 0) resource.extension = extension;
+  // applyOrderContext が付けた依頼科・病棟の拡張に足す(置き換えると依頼科・病棟が消える)。
+  if (extension.length > 0) resource.extension = [...(resource.extension ?? []), ...extension];
 
   if (values.comment) {
     resource.note = [{ text: values.comment }];

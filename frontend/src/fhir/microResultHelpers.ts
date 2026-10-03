@@ -3,8 +3,9 @@ import {
   SETTING_SYSTEM,
   type LabResultSetting,
   observationIdsFromReport,
+  settingCategory,
 } from "./labResultHelpers";
-import { categoryCoding, codingBySystem, findSettingDisplay } from "./shared";
+import { categoryCoding, codingBySystem } from "./shared";
 import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 import { SPECIMEN_TYPE_SYSTEM, ORGANISM_SYSTEM } from "./microOrderHelpers";
 
@@ -652,15 +653,7 @@ function buildMicroResultTransactionBundle(
     status: values.reportStatus,
     category: [
       { coding: [{ system: REPORT_CATEGORY_SYSTEM, code: "MB", display: "Microbiology" }] },
-      {
-        coding: [
-          {
-            system: SETTING_SYSTEM,
-            code: values.setting,
-            display: findSettingDisplay(values.setting),
-          },
-        ],
-      },
+      ...settingCategory(values.setting),
     ],
     code: {
       coding: [

@@ -17,6 +17,9 @@
 export const OBSERVATION_EXTRACT_EXT_URL =
   "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract";
 export const OBSERVATION_EXTRACT_CATEGORY_EXT_URL =
+  "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observation-extract-category";
+/** SDC に無い URL で書いていた頃のテンプレートを読むためだけに使う。書き込みには使わない。 */
+const LEGACY_OBSERVATION_EXTRACT_CATEGORY_EXT_URL =
   "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-observationExtract-category";
 
 const OBSERVATION_CATEGORY_SYSTEM = "http://terminology.hl7.org/CodeSystem/observation-category";
@@ -47,7 +50,9 @@ export function observationExtractEnabled(questionnaire: fhir4.Questionnaire): b
 
 export function observationExtractCategory(questionnaire: fhir4.Questionnaire): string {
   const coding = questionnaire.extension?.find(
-    (e) => e.url === OBSERVATION_EXTRACT_CATEGORY_EXT_URL,
+    (e) =>
+      e.url === OBSERVATION_EXTRACT_CATEGORY_EXT_URL ||
+      e.url === LEGACY_OBSERVATION_EXTRACT_CATEGORY_EXT_URL,
   )?.valueCodeableConcept?.coding?.[0];
   return coding?.code ?? DEFAULT_OBSERVATION_CATEGORY;
 }

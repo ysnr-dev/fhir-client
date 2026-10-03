@@ -1129,6 +1129,11 @@ export function VitalFlowsheetPanel({
               order={oralPerformTarget.order}
               medicationRequests={oralPerformTarget.medicationRequests}
               slotAt={oralPerformTarget.slotAt}
+              schedule={{
+                meal: mealSchedule,
+                medication: medicationSchedule,
+                nursing: nursingSchedule,
+              }}
               onClose={() => setOralPerform(null)}
             />
           )}

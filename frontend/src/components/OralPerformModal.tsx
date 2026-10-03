@@ -8,6 +8,7 @@ import {
   validateOralPerformForm,
   type OralPerformFormValues,
   type OralPerformOutcome,
+  type OralScheduleSettings,
 } from "../fhir/oralPerformHelpers";
 import { practitionerDisplayName } from "../fhir/practitionerHelpers";
 import { groupByRp } from "../fhir/prescriptionHelpers";
@@ -23,6 +24,8 @@ interface Props {
   medicationRequests: fhir4.MedicationRequest[];
   /** どの予定枠の与薬か "YYYY-MM-DDTHH:mm"。 */
   slotAt: string;
+  /** 予定枠の展開に使った設定。枠が 1 日の何回目かを出し、不均等投与の量を引く。 */
+  schedule: OralScheduleSettings;
   onClose: () => void;
 }
 
@@ -31,15 +34,15 @@ interface Props {
 //
 // 注射の実施入力との違い:
 // - 結果は 与薬 / 与薬せず の 2 つ(内服に「途中で中止」は無い)
-// - 与薬量は変えられない(内服は 1 回量が決まっており、量を刻む運用が無い)。
+// - 与薬量は変えられない(処方の 1 日量をその枠の 1 回量に割ったもの。量を刻む運用が無い)。
 //   一部の薬だけ飲ませなかったときは行のチェックを外す
 // - 時刻の既定は**予定枠の時刻**(注射は「今」)。配薬は枠に沿うので、ずれたら手で直す
-export function OralPerformModal({ order, medicationRequests, slotAt, onClose }: Props) {
+export function OralPerformModal({ order, medicationRequests, slotAt, schedule, onClose }: Props) {
   const register = useRegisterOralPerform();
   const { practitionerId, practitioner } = useCurrentPractitioner();
 
   const [values, setValues] = useState<OralPerformFormValues>(() =>
-    emptyOralPerformForm(medicationRequests, slotAt),
+    emptyOralPerformForm(medicationRequests, slotAt, schedule),
   );
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -161,7 +164,7 @@ export function OralPerformModal({ order, medicationRequests, slotAt, onClose }:
                 <thead>
                   <tr>
                     <th>医薬品</th>
-                    <th>用量</th>
+                    <th>1回量</th>
                     <th>単位</th>
                     <th>与薬</th>
                   </tr>

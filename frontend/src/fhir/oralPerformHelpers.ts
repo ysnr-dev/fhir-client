@@ -1,5 +1,12 @@
 import { toDateTimeInput, toFhirDateTime } from "./clinicalNoteHelpers";
-import { isAsNeededUsage, isOralUsage } from "./medicationScheduleHelpers";
+import type { MealScheduleSettings } from "./mealOrderHelpers";
+import {
+  expandUsageSchedule,
+  isAsNeededUsage,
+  isOralUsage,
+  type MedicationScheduleSettings,
+} from "./medicationScheduleHelpers";
+import type { NursingScheduleSettings } from "./nursingScheduleHelpers";
 import {
   MEDICINE_CODE_SYSTEM,
   ORDER_IN_RP_SYSTEM,
@@ -10,6 +17,7 @@ import {
   groupByRp,
   identifierValue,
 } from "./prescriptionHelpers";
+import { unevenDosesOf } from "./supplementaryUsage";
 
 // 内服の与薬実施(1 回ごとの服薬)。注射の実施(injectionPerformHelpers)と同じ形で、
 // 与薬 1 回を Procedure のハブにし、薬剤ごとの MedicationAdministration をぶら下げる。
@@ -23,7 +31,7 @@ import {
 //         │  note         = コメント
 //         └ partOf ← MedicationAdministration (薬剤 1 件ごと)
 //              request = その薬剤の MedicationRequest
-//              dosage  = 用量(オーダーから写す)
+//              dosage  = 1 回量(処方の用量は 1 日量なので、その枠のぶんに割る)
 //
 // **なぜ予定枠を拡張で持つか。** 処方は 1 件で何日ぶんも続き、1 日に何回も飲ませる
 // (朝昼夕食後 × 7 日 = 21 枠)。実際に飲ませた時刻は予定と数十分ずれるのが普通なので、
@@ -64,7 +72,11 @@ export interface OralPerformMedicineLine {
   code: string;
   yjCode?: string;
   name: string;
-  /** 用量。オーダーの値をそのまま出し、変えられない(内服は量を刻まない)。 */
+  /**
+   * この枠で飲ませる 1 回量。処方の用量(内服は 1 日量)を 1 日の回数で割ったもの、
+   * 不均等投与ならその枠の量。変えられない(内服は量を刻まない)。回数が用法から
+   * 読めなければ undefined。
+   */
   dose?: number;
   unit: string;
   /** 飲ませなかった。この薬剤の記録を作らない。 */
@@ -82,8 +94,42 @@ export interface OralPerformFormValues {
   medicines: OralPerformMedicineLine[];
 }
 
+/** 予定枠を時刻に展開するための設定(経過表と同じもの)。 */
+export interface OralScheduleSettings {
+  meal: MealScheduleSettings;
+  medication: MedicationScheduleSettings;
+  nursing: NursingScheduleSettings;
+}
+
+/**
+ * 1 回量。処方の内服(頓用以外)の用量は 1 日量なので、不均等投与ならその枠の量、
+ * そうでなければ 1 日量 ÷ 1 日の回数(用法コード 4 桁目)。
+ *
+ * `slotIndex` は 1 日の予定時刻の中での順(0 始まり)。不均等の量は 1 日の中の順に
+ * 並んでいる(`unevenTimingLabels` と同じ)ので、この順で引く。
+ */
+export function slotDose(
+  usageCode: string | undefined,
+  dailyDose: number | undefined,
+  unevenDoses: string[] | null,
+  slotIndex: number | null,
+): number | undefined {
+  if (unevenDoses?.length && slotIndex !== null) {
+    const value = Number(unevenDoses[slotIndex]);
+    if (value > 0) return value;
+  }
+  if (dailyDose == null) return undefined;
+  const times = Number(usageCode?.[3]);
+  if (!Number.isInteger(times) || times < 1) return undefined;
+  return Number((dailyDose / times).toFixed(4));
+}
+
 /** その処方の内服の薬剤行。頓用の RP は予定枠を持たないので出さない。 */
-export function oralMedicineLines(mrs: fhir4.MedicationRequest[]): OralPerformMedicineLine[] {
+export function oralMedicineLines(
+  mrs: fhir4.MedicationRequest[],
+  slotAt = "",
+  schedule?: OralScheduleSettings,
+): OralPerformMedicineLine[] {
   const mrByKey = new Map<string, fhir4.MedicationRequest>();
   for (const mr of mrs) {
     const key = `${identifierValue(mr, RP_NUMBER_SYSTEM) ?? ""}/${identifierValue(mr, ORDER_IN_RP_SYSTEM) ?? ""}`;
@@ -93,6 +139,11 @@ export function oralMedicineLines(mrs: fhir4.MedicationRequest[]): OralPerformMe
   const lines: OralPerformMedicineLine[] = [];
   for (const rp of groupByRp(mrs)) {
     if (!isOralUsage(rp.usageCode) || isAsNeededUsage(rp.usageCode)) continue;
+    const times = schedule
+      ? expandUsageSchedule(rp.usageCode, schedule.meal, schedule.medication, schedule.nursing)
+      : [];
+    const index = times.indexOf(slotAt.slice(11, 16));
+    const slotIndex = index >= 0 ? index : null;
     for (const medicine of rp.medicines) {
       const mr = mrByKey.get(`${rp.rpNumber}/${medicine.orderInRp}`);
       lines.push({
@@ -102,7 +153,12 @@ export function oralMedicineLines(mrs: fhir4.MedicationRequest[]): OralPerformMe
         code: medicine.code,
         yjCode: medicine.yjCode,
         name: medicine.name,
-        dose: medicine.dose,
+        dose: slotDose(
+          rp.usageCode,
+          medicine.dose,
+          unevenDosesOf(mr?.dosageInstruction?.[0]),
+          slotIndex,
+        ),
         unit: medicine.unit ?? "",
         skipped: false,
       });
@@ -118,6 +174,7 @@ export function oralMedicineLines(mrs: fhir4.MedicationRequest[]): OralPerformMe
 export function emptyOralPerformForm(
   mrs: fhir4.MedicationRequest[],
   slotAt: string,
+  schedule?: OralScheduleSettings,
 ): OralPerformFormValues {
   return {
     performedAt: toDateTimeInput(slotAt),
@@ -126,7 +183,7 @@ export function emptyOralPerformForm(
     outcome: "completed",
     reason: "",
     comment: "",
-    medicines: oralMedicineLines(mrs),
+    medicines: oralMedicineLines(mrs, slotAt, schedule),
   };
 }
 
@@ -194,11 +251,10 @@ function buildAdministration(
 ): fhir4.MedicationAdministration {
   const instruction = mr?.dosageInstruction?.[0];
   const dosage: fhir4.MedicationAdministrationDosage = {};
-  const dose = instruction?.doseAndRate?.[0]?.doseQuantity ?? {
-    ...(line.dose == null ? {} : { value: line.dose }),
-    ...(line.unit ? { unit: line.unit } : {}),
-  };
-  if (dose.value != null) dosage.dose = dose;
+  // 処方の doseQuantity(1 日量)は写さず、その枠の 1 回量を入れる。
+  if (line.dose != null) {
+    dosage.dose = { value: line.dose, ...(line.unit ? { unit: line.unit } : {}) };
+  }
   if (instruction?.route) dosage.route = instruction.route;
 
   const administration: fhir4.MedicationAdministration = {

@@ -408,12 +408,10 @@ export function buildDosage(
   }
 
   const dosage: fhir4.Dosage = {
-    timing: {
-      code: {
-        coding: timingCoding.length ? timingCoding : undefined,
-        text: rp.usage?.usage_name,
-      },
-    },
+    // 用法が無いときは timing ごと持たない(空の timing.code は FHIR として不正)。
+    timing: rp.usage
+      ? { code: { coding: timingCoding, text: rp.usage.usage_name } }
+      : undefined,
     doseAndRate: medLine.dose
       ? [{ doseQuantity: { value: Number(medLine.dose), unit: medLine.medicine?.unit_name ?? undefined } }]
       : undefined,

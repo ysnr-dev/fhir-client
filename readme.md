@@ -1596,7 +1596,7 @@ transaction でまとめて送ります。コードの値集合は輸血オー�
 （SDC の Observation-based extraction 相当。実装は `frontend/src/fhir/observationExtract.ts`）。
 
 - **設定はテンプレート単位**です。SDC 標準の拡張 `sdc-questionnaire-observationExtract`（有無）と
-  `sdc-observationExtract-category`（生成する Observation の `category`）を Questionnaire に
+  `sdc-questionnaire-observation-extract-category`（生成する Observation の `category`）を Questionnaire に
   持たせます。項目コードの無い設問は対象外なので、除外したい設問はコードを付けなければ済みます。
 - 生成される Observation は `code` = 項目コード、`value[x]` = 回答値、`subject` / `effectiveDateTime` は
   回答から引き継ぎ、`derivedFrom` に生成元の `QuestionnaireResponse` を持ちます。回答が下書き

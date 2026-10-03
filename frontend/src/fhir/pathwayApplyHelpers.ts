@@ -376,7 +376,10 @@ export function buildPathwayApplyBundle(input: PathwayApplyInput): PathwayApplyB
         url: PATHWAY_EXT.adaptiveCriteriaConfirmation,
         valueCode: input.adaptiveCriteriaConfirmed ? "1" : "0",
       },
-      { url: PATHWAY_EXT.adaptiveCriteriaText, valueString: pathway.adaptive_criteria ?? "" },
+      // 空文字は FHIR として不正なので、適応基準の無いパスでは付けない。
+      ...(pathway.adaptive_criteria
+        ? [{ url: PATHWAY_EXT.adaptiveCriteriaText, valueString: pathway.adaptive_criteria }]
+        : []),
       ...(pathway.scheduled_days !== null
         ? [{ url: PATHWAY_EXT.scheduledDays, valueInteger: pathway.scheduled_days }]
         : []),
@@ -640,7 +643,7 @@ function buildEventCarePlan(
     identifier: [{ system: PATHWAY_EVENT_ID_SYSTEM, value: ctx.eventId }],
     status: "active",
     intent: "plan",
-    title: event.title ?? "",
+    ...(event.title ? { title: event.title } : {}),
     category: [markerCategory("event")],
     subject: { reference: `Patient/${ctx.patientId}` },
     ...(ctx.encounterId ? { encounter: { reference: `Encounter/${ctx.encounterId}` } } : {}),
@@ -733,7 +736,7 @@ function buildAssessmentCarePlan(
     identifier: [{ system: PATHWAY_ASSESSMENT_ID_SYSTEM, value: ctx.assessmentId }],
     status: "active",
     intent: "plan",
-    title: assessment?.name ?? "",
+    ...(assessment?.name ? { title: assessment.name } : {}),
     category: [
       markerCategory("assessment"),
       ...(assessment
@@ -1108,7 +1111,7 @@ export function buildUnplannedUnitBundle(input: UnplannedUnitInput): fhir4.Bundl
       identifier: [{ system: PATHWAY_ASSESSMENT_ID_SYSTEM, value: assessmentId }],
       status: "active",
       intent: "plan",
-      title: name ?? "",
+      ...(name ? { title: name } : {}),
       category: [
         markerCategory("assessment"),
         { coding: [{ system: PATHWAY_CODE_SYSTEM.assessmentCodeEmpty, code: EMPTY_ASSESSMENT_CODE }] },

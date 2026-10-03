@@ -3,8 +3,9 @@ import {
   SETTING_SYSTEM,
   type LabResultSetting,
   observationIdsFromReport,
+  settingCategory,
 } from "./labResultHelpers";
-import { categoryCoding, codingBySystem, findSettingDisplay } from "./shared";
+import { categoryCoding, codingBySystem } from "./shared";
 import { departmentExtension, departmentOf } from "./prescriptionHelpers";
 import type { SchemaImageRef } from "./questionnaireResponseHelpers";
 import { binaryIdFromAttachment, imageBinaryEntry } from "./schemaImage";
@@ -553,15 +554,7 @@ function buildPathoResultTransactionBundle(
             : { system: REPORT_CATEGORY_SYSTEM, code: "SP", display: "Surgical Pathology" },
         ],
       },
-      {
-        coding: [
-          {
-            system: SETTING_SYSTEM,
-            code: values.setting,
-            display: findSettingDisplay(values.setting),
-          },
-        ],
-      },
+      ...settingCategory(values.setting),
     ],
     code: {
       coding: [{ system: LOINC_SYSTEM, code: LOINC_PATHO_REPORT_CODE, display: "Pathology study" }],

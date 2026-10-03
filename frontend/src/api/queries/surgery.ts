@@ -19,7 +19,7 @@ import {
   type SurgeryTaskStatus,
 } from "../../fhir/surgeryTaskHelpers";
 import { buildSurgeryPerformDeleteEntries } from "../../fhir/surgeryResultHelpers";
-import { postBundle } from "../fhirClient";
+import { postBundle, searchResource } from "../fhirClient";
 import { makeOrderDetailHook, ORDER_ITEM_REVINCLUDES, WORKLIST_PAGE } from "./core";
 import { invalidateProvenance, useWithOrderProvenance } from "./provenance";
 import {
@@ -181,6 +181,21 @@ function surgeryUrgencyRank(order: fhir4.ServiceRequest): number {
   return 2;
 }
 
+/** 手術オーダーの術式明細。日程を動かすときに、明細の予定日時も揃えるために引く。 */
+async function fetchSurgeryItems(order: fhir4.ServiceRequest): Promise<fhir4.ServiceRequest[]> {
+  if (!order.id) return [];
+  const params = new URLSearchParams();
+  params.set("based-on", `ServiceRequest/${order.id}`);
+  params.set("_count", "200");
+  const { data: bundle } = await searchResource<fhir4.ServiceRequest>("ServiceRequest", params);
+  return surgeryOrderItemRequests(
+    (bundle.entry ?? [])
+      .map((entry) => entry.resource)
+      .filter((r): r is fhir4.ServiceRequest => r?.resourceType === "ServiceRequest"),
+    order.id,
+  );
+}
+
 /**
  * 日程の確定。オーダーの日程と Task(受付済 = 日程確定)を 1 transaction で書く。
  * 片方だけ通ると「日程は入ったが未受付」「受付済だが日程未定」になってしまう。
@@ -188,7 +203,7 @@ function surgeryUrgencyRank(order: fhir4.ServiceRequest): number {
 export function useConfirmSurgerySchedule() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       order,
       task,
       values,
@@ -198,12 +213,14 @@ export function useConfirmSurgerySchedule() {
       values: SurgeryScheduleValues;
     }) => {
       const scheduled = buildSurgeryScheduleServiceRequest(order, values);
+      const items = await fetchSurgeryItems(order);
       return postBundle(
         buildSurgeryScheduleBundle(
           order,
           values,
           // Task には確定後のオーダー(priority・requester)を渡す。
           taskBundleEntry(buildSurgeryTaskUpdate(task, scheduled, "accepted")),
+          items,
         ),
       );
     },
@@ -223,13 +240,13 @@ export function useConfirmSurgerySchedule() {
 export function useMoveSurgerySchedule() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       order,
       values,
     }: {
       order: fhir4.ServiceRequest;
       values: SurgeryScheduleValues;
-    }) => postBundle(buildSurgeryMoveBundle(order, values)),
+    }) => postBundle(buildSurgeryMoveBundle(order, values, await fetchSurgeryItems(order))),
     onSuccess: () => {
       // 日付をまたぐ移動があるので、日別のキャッシュをまとめて読み直させる。
       queryClient.invalidateQueries({ queryKey: ["ServiceRequest"] });
@@ -248,7 +265,7 @@ export function useMoveSurgerySchedule() {
 export function useAdmitUnscheduledSurgery() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       order,
       task,
       now,
@@ -268,11 +285,13 @@ export function useAdmitUnscheduledSurgery() {
         roomName: summary.roomName,
       };
       const scheduled = buildSurgeryScheduleServiceRequest(order, values);
+      const items = await fetchSurgeryItems(order);
       return postBundle(
         buildSurgeryScheduleBundle(
           order,
           values,
           taskBundleEntry(buildSurgeryTaskUpdate(task, scheduled, "in-progress")),
+          items,
         ),
       );
     },
