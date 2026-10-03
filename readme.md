@@ -6,7 +6,7 @@ FHIR サーバー(`../fhir-server`)に対する CRUD を仲介する、Rails 製
 
 ```
 fhir-client/
-├── backend/    # Rails 7 API-only。/fhir/* を FHIR サーバーへ中継するプロキシ + /master/* マスタデータAPI (port 3001)
+├── backend/    # Rails 8 API-only。/fhir/* を FHIR サーバーへ中継するプロキシ + /master/* マスタデータAPI (port 3001)
 └── frontend/   # Vite + React + TypeScript。Patient の登録/更新/削除/一覧/検索 UI、マスタ取込 UI (port 5173)
 ```
 

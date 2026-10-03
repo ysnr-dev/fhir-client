@@ -2,7 +2,8 @@ require "rails_helper"
 
 RSpec.describe Master::WardMap do
   def layout(objects: [], canvas: { "width" => 60, "height" => 40 }, **overrides)
-    { "schema_version" => 1, "canvas" => canvas, "grid_size" => 20, "objects" => objects }.merge(overrides)
+    { "schema_version" => 1, "canvas" => canvas, "grid_size" => 20, "objects" => objects }
+      .merge(overrides.transform_keys(&:to_s))
   end
 
   def fixture(**overrides)

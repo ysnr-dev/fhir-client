@@ -7,7 +7,7 @@
 ## 構成
 
 ```
-backend/   Rails 7 API-only (port 3001)
+backend/   Rails 8 API-only (port 3001)
   app/controllers/fhir_proxy_controller.rb  /fhir/* を上流へ中継(FhirGateway)。FHIR リソースは自前 DB に保存しない
   app/controllers/master/                   /master/* 国内マスタ(JSON REST, snake_case, {error}/{errors} 形式)
   app/controllers/{admin,auth,reports,imaging,integrations}/
