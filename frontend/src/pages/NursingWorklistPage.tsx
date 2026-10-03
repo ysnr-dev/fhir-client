@@ -20,6 +20,7 @@ import {
   useWardOptions,
   type NursingWorklistRow,
 } from "../api/queries";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { NursingOrderDetailModal } from "../components/NursingOrderDetailModal";
 import { NursingPerformModal } from "../components/NursingPerformModal";
@@ -522,11 +523,19 @@ export function NursingWorklistPage() {
           patientId={drawerGroup.patientId}
           patient={drawerGroup.patient}
           actions={
-            selectedOrderRow && selectedOrderRow.order.status === "active" ? (
-              <OrderMenuItems
-                pending={accept.isPending || revoke.isPending}
-                onRevoke={() => handleRevoke(selectedOrderRow)}
-              />
+            // 患者の見出し行なら実施入力、指示の行ならその指示の表示と中止。
+            selectedGroup ? (
+              <PatientRowButtons onPerform={() => setPerformingPatientId(selectedGroup.patientId)} />
+            ) : selectedOrderRow ? (
+              <>
+                <OrderRowButtons onView={() => setDetailId(selectedOrderRow.order.id ?? "")} />
+                {selectedOrderRow.order.status === "active" && (
+                  <OrderMenuItems
+                    pending={accept.isPending || revoke.isPending}
+                    onRevoke={() => handleRevoke(selectedOrderRow)}
+                  />
+                )}
+              </>
             ) : undefined
           }
           onClose={drawer.close}
@@ -613,12 +622,7 @@ function FilterForm({
     <form className="patient-search-form" onSubmit={handleSubmit}>
       <label>
         基準日
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => onDateChange(e.target.value)}
-          required
-        />
+        <DateStepper value={date} onChange={onDateChange} />
       </label>
       <label>
         病棟
@@ -755,10 +759,7 @@ function PatientGroup({
               未指示受け {group.pendingRows.length} 件
             </span>
           )}
-          {/* 実施は患者単位でまとめて入れる(ラウンドの運用)。 */}
-          <button type="button" className="nursing-worklist__perform" onClick={onPerform}>
-            実施入力
-          </button>
+          <PatientRowButtons className="nursing-worklist__perform" onPerform={onPerform} />
         </th>
       </tr>
       {rows.map((row) => (
@@ -891,9 +892,7 @@ function OrderRow({
         </td>
       )}
       <td className="lab-worklist__actions sticky-table__fix-actions">
-        <button type="button" onClick={onView}>
-          表示
-        </button>
+        <OrderRowButtons onView={onView} />
         {/* 中止は押し間違えると指示が消えるので一段畳む。内容の編集はカルテの右ペイン。 */}
         {row.order.status === "active" && (
           <RowMenu label={`${summary.text} の操作`} escapesClipping>
@@ -902,6 +901,34 @@ function OrderRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/**
+ * 患者の見出し行に直接出すボタン。ドロワーにも並べる。className は見出し行の中での
+ * 置き方(氏名などとの間隔)で、ドロワーでは付けない。
+ */
+function PatientRowButtons({
+  className,
+  onPerform,
+}: {
+  className?: string;
+  onPerform: () => void;
+}) {
+  // 実施は患者単位でまとめて入れる(ラウンドの運用)。
+  return (
+    <button type="button" className={className} onClick={onPerform}>
+      実施入力
+    </button>
+  );
+}
+
+/** 指示の行に直接出すボタン。ドロワーにもケバブの項目の前に並べる。 */
+function OrderRowButtons({ onView }: { onView: () => void }) {
+  return (
+    <button type="button" onClick={onView}>
+      表示
+    </button>
   );
 }
 

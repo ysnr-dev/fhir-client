@@ -1,5 +1,12 @@
 import { today } from "../lib/dates";
-import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+  type FormEvent,
+  type ReactElement,
+} from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
@@ -9,6 +16,7 @@ import {
   type LabWorklistRow,
 } from "../api/queries";
 import { labLabelPdfUrl } from "../api/reportsClient";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { LabOrderViewModal } from "../components/LabOrderViewModal";
 import { LabResultEntryModal } from "../components/LabResultEntryModal";
@@ -136,13 +144,29 @@ export function LabWorklistPage() {
     );
   }, [worklist.data]);
 
-  // 行の進捗の操作。行のボタン・ケバブと、ドロワーに並べるケバブの項目で共有する。
+  // 行の操作。行のボタン・ケバブと、ドロワーに並べるボタン・ケバブの項目で共有する。
   function actionsFor(row: LabWorklistRow): WorklistRowActions {
     return {
       pending: updateStatus.isPending,
       onChangeStatus: (status) =>
         updateStatus.mutate({ order: row.order, task: row.task, status }),
+      onView: () => setViewingId(row.order.id ?? null),
+      onEnterResult: () => setEnteringId(row.order.id ?? null),
     };
+  }
+
+  // ドロワーには行のボタン(カルテを除く)を先に、ケバブの項目を後に並べる。
+  // どちらも無い行では操作の欄そのものを出さない。
+  function drawerActionsFor(row: LabWorklistRow) {
+    const actions = actionsFor(row);
+    const buttons = worklistRowButtons(row, actions);
+    if (buttons.length === 0 && secondaryActionsOf(row).length === 0) return undefined;
+    return (
+      <>
+        {buttons}
+        <WorklistMenuItems row={row} {...actions} />
+      </>
+    );
   }
 
   function handleDateChange(value: string) {
@@ -205,8 +229,6 @@ export function LabWorklistPage() {
                       row.patient?.id && row.order.id,
                       summarizeLabOrder(row.order).urgent ? "lab-worklist__row--urgent" : undefined,
                     )}
-                    onView={() => setViewingId(row.order.id ?? null)}
-                    onEnterResult={() => setEnteringId(row.order.id ?? null)}
                     {...actionsFor(row)}
                   />
                 ))}
@@ -230,11 +252,7 @@ export function LabWorklistPage() {
         <PatientProfileDrawer
           patientId={selectedRow.patient.id}
           patient={selectedRow.patient}
-          actions={
-            secondaryActionsOf(selectedRow).length > 0 ? (
-              <WorklistMenuItems row={selectedRow} {...actionsFor(selectedRow)} />
-            ) : undefined
-          }
+          actions={drawerActionsFor(selectedRow)}
           onClose={drawer.close}
         />
       )}
@@ -297,7 +315,7 @@ function FilterForm({
     <form className="patient-search-form" onSubmit={handleSubmit}>
       <label>
         検査日
-        <input type="date" value={date} required onChange={(e) => onDateChange(e.target.value)} />
+        <DateStepper value={date} onChange={onDateChange} />
       </label>
       <label>
         検体
@@ -390,6 +408,10 @@ function specimenNames(groups: LabSpecimenGroup[]): string {
 interface WorklistRowActions {
   pending: boolean;
   onChangeStatus: (status: LabTaskStatus) => void;
+  /** 検査項目・採取番号のモーダルを開く。 */
+  onView: () => void;
+  /** 結果入力のモーダルを開く。 */
+  onEnterResult: () => void;
 }
 
 /** ケバブに畳む操作(取消・中止など)。 */
@@ -400,17 +422,12 @@ function secondaryActionsOf(row: LabWorklistRow) {
 function WorklistRow({
   row,
   rowProps,
-  onView,
-  onEnterResult,
-  ...menuActions
+  ...rowActions
 }: {
   row: LabWorklistRow;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
-  onView: () => void;
-  onEnterResult: () => void;
 } & WorklistRowActions) {
-  const { pending, onChangeStatus } = menuActions;
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
   const { order, patient } = row;
@@ -418,7 +435,6 @@ function WorklistRow({
   const groups = groupBySpecimen(labOrderItems(order, row.itemRequests));
   const requester = prescriptionRequester(order);
   const status = labTaskStatus(row.task);
-  const actions = labTaskActions(status);
 
   return (
     <tr {...rowProps}>
@@ -456,64 +472,85 @@ function WorklistRow({
         </span>
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
-        {actions
-          .filter((action) => !action.secondary)
-          .map((action) => (
-            <button
-              key={action.next}
-              type="button"
-              disabled={pending}
-              onClick={() => onChangeStatus(action.next)}
-            >
-              {action.label}
-            </button>
-          ))}
-        {/* 検体ラベルの発行が受付を兼ねる(docs/lab-label-design.md §4)。採血室が
-            最初にするのがラベルの発行なので、依頼済のオーダーはこの操作で受付済へ
-            進める。受付済で押したときは再発行(同じ番号が刷られるだけなので文言も
-            進捗も変えない)。中止のオーダーには出さない。 */}
-        {(status === "requested" || status === "accepted") && (
-          <a
-            className="button"
-            href={labLabelPdfUrl(order.id ?? "")}
-            target="_blank"
-            rel="noopener"
-            title="検体ラベルの PDF を新規タブで開く"
-            onClick={() => {
-              if (status === "requested") onChangeStatus("accepted");
-            }}
-          >
-            ラベル発行
-          </a>
-        )}
-        {/* 検体が着いたら結果を入力できる。紐付け先はこの行のオーダーで決まっているので、
-            モーダルの中でオーダーを選ばせない(LabResultEntryModal)。
-            結果が登録済みのオーダーは 1 件目と二重にならないよう押させない
-            (中間報告の確定・訂正はカルテの検査結果タブで行う)。 */}
-        {status === "completed" &&
-          (row.reportId ? (
-            <button type="button" disabled title="この検査の結果は登録済みです">
-              結果登録
-            </button>
-          ) : (
-            <button type="button" disabled={!patient?.id} onClick={onEnterResult}>
-              結果登録
-            </button>
-          ))}
-        {/* 一覧には検体しか出さないので、検査項目・採取番号はここから開く。行によって
-            数が変わる進捗のボタンより右に置いて、どの行でも同じ位置で押せるようにする。 */}
-        <button type="button" onClick={onView}>
-          表示
-        </button>
+        {worklistRowButtons(row, rowActions)}
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(放射線検査一覧と同じ)。 */}
         {secondaryActionsOf(row).length > 0 && (
           <RowMenu label="この検査の操作" escapesClipping>
-            <WorklistMenuItems row={row} {...menuActions} />
+            <WorklistMenuItems row={row} {...rowActions} />
           </RowMenu>
         )}
       </td>
     </tr>
   );
+}
+
+/**
+ * 行の操作セルに直接並べるボタン(カルテへのリンクは除く)。ドロワーにも同じものを並べる。
+ */
+function worklistRowButtons(
+  row: LabWorklistRow,
+  { pending, onChangeStatus, onView, onEnterResult }: WorklistRowActions,
+): ReactElement[] {
+  const { order, patient } = row;
+  const status = labTaskStatus(row.task);
+  const buttons = labTaskActions(status)
+    .filter((action) => !action.secondary)
+    .map((action) => (
+      <button
+        key={action.next}
+        type="button"
+        disabled={pending}
+        onClick={() => onChangeStatus(action.next)}
+      >
+        {action.label}
+      </button>
+    ));
+  // 検体ラベルの発行が受付を兼ねる(docs/lab-label-design.md §4)。採血室が
+  // 最初にするのがラベルの発行なので、依頼済のオーダーはこの操作で受付済へ
+  // 進める。受付済で押したときは再発行(同じ番号が刷られるだけなので文言も
+  // 進捗も変えない)。中止のオーダーには出さない。
+  if (status === "requested" || status === "accepted") {
+    buttons.push(
+      <a
+        key="label"
+        className="button"
+        href={labLabelPdfUrl(order.id ?? "")}
+        target="_blank"
+        rel="noopener"
+        title="検体ラベルの PDF を新規タブで開く"
+        onClick={() => {
+          if (status === "requested") onChangeStatus("accepted");
+        }}
+      >
+        ラベル発行
+      </a>,
+    );
+  }
+  // 検体が着いたら結果を入力できる。紐付け先はこの行のオーダーで決まっているので、
+  // モーダルの中でオーダーを選ばせない(LabResultEntryModal)。
+  // 結果が登録済みのオーダーは 1 件目と二重にならないよう押させない
+  // (中間報告の確定・訂正はカルテの検査結果タブで行う)。
+  if (status === "completed") {
+    buttons.push(
+      row.reportId ? (
+        <button key="result" type="button" disabled title="この検査の結果は登録済みです">
+          結果登録
+        </button>
+      ) : (
+        <button key="result" type="button" disabled={!patient?.id} onClick={onEnterResult}>
+          結果登録
+        </button>
+      ),
+    );
+  }
+  // 一覧には検体しか出さないので、検査項目・採取番号はここから開く。行によって
+  // 数が変わる進捗のボタンより右に置いて、どの行でも同じ位置で押せるようにする。
+  buttons.push(
+    <button key="view" type="button" onClick={onView}>
+      表示
+    </button>,
+  );
+  return buttons;
 }
 
 /** 検査の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */

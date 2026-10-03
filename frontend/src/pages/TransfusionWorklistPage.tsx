@@ -8,6 +8,7 @@ import {
   useUpdateTransfusionTaskStatus,
   type TransfusionWorklistRow,
 } from "../api/queries";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
@@ -217,13 +218,20 @@ export function TransfusionWorklistPage() {
           patientId={selectedRow.patient.id}
           patient={selectedRow.patient}
           actions={
-            selectedMenuActions.length > 0 ? (
+            <>
+              <WorklistRowButtons
+                row={selectedRow}
+                pending={updateStatus.isPending}
+                onView={() => setViewingId(selectedRow.order.id ?? null)}
+                onPerform={() => setPerformingId(selectedRow.order.id ?? null)}
+                onChangeStatus={(status) => changeStatus(selectedRow, status)}
+              />
               <WorklistMenuItems
                 actions={selectedMenuActions}
                 pending={updateStatus.isPending}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
-            ) : undefined
+            </>
           }
           onClose={drawer.close}
         />
@@ -292,7 +300,7 @@ function FilterForm({
     <form className="patient-search-form" onSubmit={handleSubmit}>
       <label>
         投与予定日
-        <input type="date" value={date} required onChange={(e) => onDateChange(e.target.value)} />
+        <DateStepper value={date} onChange={onDateChange} />
       </label>
       <label>
         輸血検査区分
@@ -418,7 +426,6 @@ function WorklistRow({
   const products = transfusionOrderProducts(row.itemRequests);
   const requester = prescriptionRequester(order);
   const status = transfusionTaskStatus(row.task);
-  const actions = transfusionTaskActions(status);
   const secondaryActions = secondaryActionsOf(row);
 
   return (
@@ -470,30 +477,13 @@ function WorklistRow({
         </span>
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
-        {actions
-          .filter((action) => !action.secondary)
-          .map((action) => (
-            <button
-              key={action.next}
-              type="button"
-              disabled={pending}
-              onClick={() => onChangeStatus(action.next)}
-            >
-              {action.label}
-            </button>
-          ))}
-        {/* 実施は Task を進めるだけでなく実施記録を入れるので、他の進捗ボタンとは
-            別に置く。出庫していない製剤は輸血できないので出庫済のときだけ出す。 */}
-        {status === "in-progress" && (
-          <button type="button" onClick={onPerform}>
-            実施
-          </button>
-        )}
-        {/* 一覧には製剤の略称しか出さないので、備考・同意書・依頼コメントはここから開く。
-            行によって数が変わる進捗のボタンより右に置いて、どの行でも同じ位置で押せるようにする。 */}
-        <button type="button" onClick={onView}>
-          表示
-        </button>
+        <WorklistRowButtons
+          row={row}
+          pending={pending}
+          onView={onView}
+          onPerform={onPerform}
+          onChangeStatus={onChangeStatus}
+        />
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(病理一覧と同じ)。 */}
         {secondaryActions.length > 0 && (
           <RowMenu label="この輸血の操作" escapesClipping>
@@ -506,6 +496,51 @@ function WorklistRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/** 行に直接並べるボタン。ドロワーにもケバブの項目より先に同じものを並べる。 */
+function WorklistRowButtons({
+  row,
+  pending,
+  onView,
+  onPerform,
+  onChangeStatus,
+}: {
+  row: TransfusionWorklistRow;
+  pending: boolean;
+  onView: () => void;
+  onPerform: () => void;
+  onChangeStatus: (status: TransfusionTaskStatus) => void;
+}) {
+  const status = transfusionTaskStatus(row.task);
+  return (
+    <>
+      {transfusionTaskActions(status)
+        .filter((action) => !action.secondary)
+        .map((action) => (
+          <button
+            key={action.next}
+            type="button"
+            disabled={pending}
+            onClick={() => onChangeStatus(action.next)}
+          >
+            {action.label}
+          </button>
+        ))}
+      {/* 実施は Task を進めるだけでなく実施記録を入れるので、他の進捗ボタンとは
+          別に置く。出庫していない製剤は輸血できないので出庫済のときだけ出す。 */}
+      {status === "in-progress" && (
+        <button type="button" onClick={onPerform}>
+          実施
+        </button>
+      )}
+      {/* 一覧には製剤の略称しか出さないので、備考・同意書・依頼コメントはここから開く。
+          行によって数が変わる進捗のボタンより右に置いて、どの行でも同じ位置で押せるようにする。 */}
+      <button type="button" onClick={onView}>
+        表示
+      </button>
+    </>
   );
 }
 

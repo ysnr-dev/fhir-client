@@ -10,6 +10,7 @@ import {
   useUpdateNutritionGuidanceTaskStatus,
   type NutritionGuidanceWorklistRow,
 } from "../api/queries";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
@@ -191,26 +192,51 @@ export function NutritionGuidanceWorklistPage() {
     };
   }
 
-  // ドロワーに並べる操作。表示中のビューの行のケバブと同じもの。
+  // 予約の行からの実施。予約の時刻を実施時刻の初期値にする。行とドロワーで共有する。
+  function performAppointment(row: NutritionGuidanceWorklistRow, appointment: fhir4.Appointment) {
+    setPerforming({
+      orderId: row.order.id ?? "",
+      time: (appointment.start ?? "").slice(11, 16),
+    });
+  }
+
+  // ドロワーに並べる操作。表示中のビューの行のボタンとケバブと同じもの。
   function drawerActions() {
     if (view === "orders") {
-      if (!selectedOrderRow || guidanceSecondaryActions(selectedOrderRow).length === 0) {
-        return null;
-      }
+      if (!selectedOrderRow) return null;
       const row = selectedOrderRow;
+      // 「表示」はどの行にもあるので、ボタンが空になることはない。
       return (
-        <OrderMenuItems
-          row={row}
-          pending={updateStatus.isPending}
-          onChangeStatus={(status) => handleChangeStatus(row, status)}
-        />
+        <>
+          <OrderRowButtons
+            row={row}
+            pending={updateStatus.isPending}
+            onView={() => setViewingId(row.order.id ?? null)}
+            onPerform={() => setPerforming({ orderId: row.order.id ?? "" })}
+            onBook={() => setBooking({ orderId: row.order.id ?? "" })}
+            onChangeStatus={(status) => handleChangeStatus(row, status)}
+          />
+          {guidanceSecondaryActions(row).length > 0 && (
+            <OrderMenuItems
+              row={row}
+              pending={updateStatus.isPending}
+              onChangeStatus={(status) => handleChangeStatus(row, status)}
+            />
+          )}
+        </>
       );
     }
     if (!selectedAppointmentRow) return null;
+    const { row, appointment } = selectedAppointmentRow;
     return (
-      <AppointmentMenuItems
-        {...appointmentActionsFor(selectedAppointmentRow.row, selectedAppointmentRow.appointment)}
-      />
+      <>
+        <AppointmentRowButtons
+          row={row}
+          onView={() => setViewingId(row.order.id ?? null)}
+          onPerform={() => performAppointment(row, appointment)}
+        />
+        <AppointmentMenuItems {...appointmentActionsFor(row, appointment)} />
+      </>
     );
   }
 
@@ -342,13 +368,7 @@ export function NutritionGuidanceWorklistPage() {
                     appointment={appointment}
                     rowProps={drawer.rowProps(row.patient?.id && appointment.id)}
                     onView={() => setViewingId(row.order.id ?? null)}
-                    onPerform={() =>
-                      setPerforming({
-                        orderId: row.order.id ?? "",
-                        // 予約の時刻を実施時刻の初期値にする。
-                        time: (appointment.start ?? "").slice(11, 16),
-                      })
-                    }
+                    onPerform={() => performAppointment(row, appointment)}
                     {...appointmentActionsFor(row, appointment)}
                   />
                 ))}
@@ -496,7 +516,7 @@ function FilterForm({
     <form className="patient-search-form" onSubmit={handleSubmit}>
       <label>
         基準日
-        <input type="date" value={date} required onChange={(e) => onDateChange(e.target.value)} />
+        <DateStepper value={date} onChange={onDateChange} />
       </label>
       <label>
         指導形態
@@ -613,7 +633,6 @@ function OrderRow({
   const summary = summarizeNutritionGuidanceOrder(order);
   const requester = prescriptionRequester(order);
   const status = nutritionGuidanceTaskStatus(row.task);
-  const actions = nutritionGuidanceTaskActions(status);
   const performed = todaySummary(row);
   // 基準日以降で最初の予約。取れていない行は次回が決まっていない。
   const next = row.appointments.find((a) => (a.start ?? "") >= date);
@@ -659,33 +678,14 @@ function OrderRow({
         </span>
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
-        {actions
-          .filter((action) => !action.secondary)
-          .map((action) => (
-            <button
-              key={action.next}
-              type="button"
-              disabled={pending}
-              onClick={() => onChangeStatus(action.next)}
-            >
-              {action.label}
-            </button>
-          ))}
-        {/* 実施と次回予約は受け入れ済のオーダーにだけ出す。実施は Task を動かさず
-            Procedure を足すだけなので、押しても行のステータスは実施中のまま。 */}
-        {status === "accepted" && (
-          <>
-            <button type="button" onClick={onPerform}>
-              実施
-            </button>
-            <button type="button" onClick={onBook}>
-              次回予約
-            </button>
-          </>
-        )}
-        <button type="button" onClick={onView}>
-          表示
-        </button>
+        <OrderRowButtons
+          row={row}
+          pending={pending}
+          onView={onView}
+          onPerform={onPerform}
+          onBook={onBook}
+          onChangeStatus={onChangeStatus}
+        />
         {/* 終了・取消・中止は押し間違えると期間や進捗が動くので一段畳む。 */}
         {guidanceSecondaryActions(row).length > 0 && (
           <RowMenu label="この栄養指導の操作" escapesClipping>
@@ -694,6 +694,56 @@ function OrderRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/** 依頼の行の操作列に直接並べるボタン。ドロワーにも同じものを並べる。 */
+function OrderRowButtons({
+  row,
+  pending,
+  onView,
+  onPerform,
+  onBook,
+  onChangeStatus,
+}: {
+  row: NutritionGuidanceWorklistRow;
+  pending: boolean;
+  onView: () => void;
+  onPerform: () => void;
+  onBook: () => void;
+  onChangeStatus: (status: NutritionGuidanceTaskStatus) => void;
+}) {
+  const status = nutritionGuidanceTaskStatus(row.task);
+  return (
+    <>
+      {nutritionGuidanceTaskActions(status)
+        .filter((action) => !action.secondary)
+        .map((action) => (
+          <button
+            key={action.next}
+            type="button"
+            disabled={pending}
+            onClick={() => onChangeStatus(action.next)}
+          >
+            {action.label}
+          </button>
+        ))}
+      {/* 実施と次回予約は受け入れ済のオーダーにだけ出す。実施は Task を動かさず
+          Procedure を足すだけなので、押しても行のステータスは実施中のまま。 */}
+      {status === "accepted" && (
+        <>
+          <button type="button" onClick={onPerform}>
+            実施
+          </button>
+          <button type="button" onClick={onBook}>
+            次回予約
+          </button>
+        </>
+      )}
+      <button type="button" onClick={onView}>
+        表示
+      </button>
+    </>
   );
 }
 
@@ -807,20 +857,38 @@ function AppointmentRow({
         </span>
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
-        {/* 予約が入っていても受付前なら実施できない(依頼をまだ受けていない)。 */}
-        {status === "accepted" && (
-          <button type="button" onClick={onPerform}>
-            実施
-          </button>
-        )}
-        <button type="button" onClick={onView}>
-          表示
-        </button>
+        <AppointmentRowButtons row={row} onView={onView} onPerform={onPerform} />
         <RowMenu label="この予約の操作" escapesClipping>
           <AppointmentMenuItems {...menuActions} />
         </RowMenu>
       </td>
     </tr>
+  );
+}
+
+/** 予約の行の操作列に直接並べるボタン。ドロワーにも同じものを並べる。 */
+function AppointmentRowButtons({
+  row,
+  onView,
+  onPerform,
+}: {
+  row: NutritionGuidanceWorklistRow;
+  onView: () => void;
+  onPerform: () => void;
+}) {
+  const status = nutritionGuidanceTaskStatus(row.task);
+  return (
+    <>
+      {/* 予約が入っていても受付前なら実施できない(依頼をまだ受けていない)。 */}
+      {status === "accepted" && (
+        <button type="button" onClick={onPerform}>
+          実施
+        </button>
+      )}
+      <button type="button" onClick={onView}>
+        表示
+      </button>
+    </>
   );
 }
 

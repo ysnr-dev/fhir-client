@@ -902,8 +902,9 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   gap: 12px;
 }
 
-/* 行のケバブと同じ操作。メニューの項目(.row-menu__item)をボタンとして横に並べる。
-   button は全体の button {} がそのまま効くので、リンクの項目だけ見た目を合わせる。 */
+/* 行と同じ操作。行のボタンを先に、ケバブの項目(.row-menu__item)を後に、ボタンとして
+   横に並べる。button は全体の button {} がそのまま効くので、メニューのリンクの項目
+   だけ見た目を合わせる。 */
 .patient-drawer__menu {
   display: flex;
   flex-wrap: wrap;
@@ -913,6 +914,8 @@ tbody tr.patient-table__row--selected > td[rowspan="1"] {
   border-bottom: 1px solid var(--border);
 }
 
+.patient-drawer__menu button,
+.patient-drawer__menu .button,
 .patient-drawer__menu .row-menu__item {
   --control-height: 28px;
   padding: 0 10px;

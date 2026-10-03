@@ -10,6 +10,7 @@ import {
   useUpdateSurgeryTaskStatus,
   type SurgeryWorklistRow,
 } from "../api/queries";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
@@ -121,6 +122,10 @@ export function SurgeryWorklistPage() {
     updateStatus.mutate({ order: row.order, task: row.task, status });
   }
 
+  function admitRow(row: SurgeryWorklistRow) {
+    admit.mutate({ order: row.order, task: row.task, now: toDateTimeInput(new Date()) });
+  }
+
   // 手術室・病棟の選択肢は読み込んだ 1 日ぶんのオーダーから拾う。名前はオーダーに
   // 焼き付けてあるのでマスタを引く必要がなく、その日に無い部屋を並べても仕方がない。
   const roomOptions = useMemo(
@@ -227,13 +232,7 @@ export function SurgeryWorklistPage() {
                     onChangeStatus={(status) => changeStatus(row, status)}
                     onSchedule={() => setScheduling(row)}
                     onPerform={() => setPerforming(row)}
-                    onAdmit={() =>
-                      admit.mutate({
-                        order: row.order,
-                        task: row.task,
-                        now: toDateTimeInput(new Date()),
-                      })
-                    }
+                    onAdmit={() => admitRow(row)}
                     rowProps={drawer.rowProps(row.patient?.id && row.order.id)}
                   />
                 ))}
@@ -260,13 +259,24 @@ export function SurgeryWorklistPage() {
           patientId={selectedRow.patient.id}
           patient={selectedRow.patient}
           actions={
-            hasMenuItems(selectedRow, tab) ? (
-              <WorklistMenuItems
-                row={selectedRow}
-                tab={tab}
-                pending={pending}
-                onChangeStatus={(status) => changeStatus(selectedRow, status)}
-              />
+            hasRowButtons(selectedRow, tab) || hasMenuItems(selectedRow, tab) ? (
+              <>
+                <WorklistRowButtons
+                  row={selectedRow}
+                  tab={tab}
+                  pending={pending}
+                  onChangeStatus={(status) => changeStatus(selectedRow, status)}
+                  onSchedule={() => setScheduling(selectedRow)}
+                  onPerform={() => setPerforming(selectedRow)}
+                  onAdmit={() => admitRow(selectedRow)}
+                />
+                <WorklistMenuItems
+                  row={selectedRow}
+                  tab={tab}
+                  pending={pending}
+                  onChangeStatus={(status) => changeStatus(selectedRow, status)}
+                />
+              </>
             ) : undefined
           }
           onClose={drawer.close}
@@ -349,12 +359,7 @@ function FilterForm({
         <>
           <label>
             予定手術日
-            <input
-              type="date"
-              value={date}
-              required
-              onChange={(e) => onDateChange(e.target.value)}
-            />
+            <DateStepper value={date} onChange={onDateChange} />
           </label>
           <label>
             手術室
@@ -439,6 +444,26 @@ function FilterForm({
   );
 }
 
+/** 行に直接並べる進捗の操作。日程未定タブでは日程の確定(と緊急の入室)を並べる。 */
+function rowButtonContents(row: SurgeryWorklistRow, tab: Tab) {
+  const status = surgeryTaskStatus(row.task);
+  return {
+    primaryActions:
+      tab === "scheduled" ? surgeryTaskActions(status).filter((action) => !action.secondary) : [],
+    // 緊急・準緊急は日程の確定を待たずに始まる。押した日時がそのまま
+    // 予定日時になり、以後は予定日別タブの当日ぶんに並ぶ。
+    showAdmit:
+      tab === "unscheduled" &&
+      summarizeSurgeryOrder(row.order).priority !== "routine" &&
+      status === "requested",
+  };
+}
+
+function hasRowButtons(row: SurgeryWorklistRow, tab: Tab): boolean {
+  // 日程未定タブには常に「日程を確定」がある。
+  return tab === "unscheduled" || rowButtonContents(row, tab).primaryActions.length > 0;
+}
+
 /** 行のケバブに畳む操作。 */
 function menuContents(row: SurgeryWorklistRow, tab: Tab) {
   const status = surgeryTaskStatus(row.task);
@@ -483,7 +508,6 @@ function WorklistRow({
   const items = surgeryOrderItems(order, row.itemRequests);
   const status = surgeryTaskStatus(task);
   const requester = prescriptionRequester(order);
-  const actions = surgeryTaskActions(status);
   const surgeon = summary.staff.find((line) => line.role === "surgeon");
   const others = summary.staff.filter((line) => line.role !== "surgeon");
 
@@ -565,33 +589,15 @@ function WorklistRow({
         </span>
       </td>
       <td className="rad-worklist__actions sticky-table__fix-actions">
-        {tab === "unscheduled" ? (
-          <>
-            <button type="button" disabled={pending} onClick={onSchedule}>
-              日程を確定
-            </button>
-            {/* 緊急・準緊急は日程の確定を待たずに始まる。押した日時がそのまま
-                予定日時になり、以後は予定日別タブの当日ぶんに並ぶ。 */}
-            {summary.priority !== "routine" && surgeryTaskStatus(row.task) === "requested" && (
-              <button type="button" disabled={pending} onClick={onAdmit}>
-                入室
-              </button>
-            )}
-          </>
-        ) : (
-          actions
-            .filter((action) => !action.secondary)
-            .map((action) => (
-              <button
-                key={action.next}
-                type="button"
-                disabled={pending}
-                onClick={() => (action.opensPerformInput ? onPerform() : onChangeStatus(action.next))}
-              >
-                {action.label}
-              </button>
-            ))
-        )}
+        <WorklistRowButtons
+          row={row}
+          tab={tab}
+          pending={pending}
+          onChangeStatus={onChangeStatus}
+          onSchedule={onSchedule}
+          onPerform={onPerform}
+          onAdmit={onAdmit}
+        />
         {/* 訂正・取りやめは押し間違えると進捗が巻き戻るので、一段畳んで置く。
             麻酔チャートも毎回は開かないので同じメニューに入れる。
             一覧は横スクロールできるよう overflow を持つため、メニューは
@@ -608,6 +614,57 @@ function WorklistRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/** 行に直接並べるボタン。ドロワーにもケバブの項目より先に同じものを並べる。 */
+function WorklistRowButtons({
+  row,
+  tab,
+  pending,
+  onChangeStatus,
+  onSchedule,
+  onPerform,
+  onAdmit,
+}: {
+  row: SurgeryWorklistRow;
+  tab: Tab;
+  pending: boolean;
+  onChangeStatus: (status: SurgeryTaskStatus) => void;
+  onSchedule: () => void;
+  onPerform: () => void;
+  onAdmit: () => void;
+}) {
+  const { primaryActions, showAdmit } = rowButtonContents(row, tab);
+
+  if (tab === "unscheduled") {
+    return (
+      <>
+        <button type="button" disabled={pending} onClick={onSchedule}>
+          日程を確定
+        </button>
+        {showAdmit && (
+          <button type="button" disabled={pending} onClick={onAdmit}>
+            入室
+          </button>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {primaryActions.map((action) => (
+        <button
+          key={action.next}
+          type="button"
+          disabled={pending}
+          onClick={() => (action.opensPerformInput ? onPerform() : onChangeStatus(action.next))}
+        >
+          {action.label}
+        </button>
+      ))}
+    </>
   );
 }
 

@@ -10,10 +10,12 @@ interface PatientProfileDrawerProps {
   /** patient が引けていないときの見出し。 */
   fallbackName?: string;
   /**
-   * 行のケバブメニューと同じ操作。メニューの項目(.row-menu__item)をそのまま渡すと、
-   * ドロワーの中ではボタンとして並ぶ。
+   * 行と同じ操作。行のボタン(カルテを除く)を先に、ケバブメニューの項目
+   * (.row-menu__item)を後に渡すと、ドロワーの中ではどちらもボタンとして並ぶ。
    */
   actions?: ReactNode;
+  /** 見出しのカルテの左に置く操作。カルテを開く前後に続けて押すもの。 */
+  headerActions?: ReactNode;
   onClose: () => void;
 }
 
@@ -32,6 +34,7 @@ export function PatientProfileDrawer({
   patient,
   fallbackName,
   actions,
+  headerActions,
   onClose,
 }: PatientProfileDrawerProps) {
   // 別の患者に切り替えたら表示対象は持ち越さない。ドロワー自体は作り直さない
@@ -58,6 +61,7 @@ export function PatientProfileDrawer({
           {(patient && displayName(patient)) || fallbackName || patientId}
         </h2>
         <div className="patient-drawer__actions">
+          {headerActions}
           <Link className="button" to={`/patients/${patientId}/karte`} state={returnLinkState}>
             カルテ
           </Link>

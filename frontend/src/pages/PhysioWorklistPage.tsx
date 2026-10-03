@@ -1,5 +1,12 @@
 import { today } from "../lib/dates";
-import { useEffect, useMemo, useState, type ComponentProps, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentProps,
+  type FormEvent,
+  type ReactElement,
+} from "react";
 import { Link } from "react-router-dom";
 import { useReturnLinkState } from "../returnTo";
 import {
@@ -10,6 +17,7 @@ import {
 } from "../api/queries";
 import type { PhysioExamType, PhysioItem } from "../api/masterClient";
 import { usePhysioExamTypeOptions, usePhysioItemsByCodes } from "../api/masterQueries";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PhysioPerformModal } from "../components/PhysioPerformModal";
 import { renderExamTypeOptions } from "../components/physioItemOptions";
@@ -157,14 +165,35 @@ export function PhysioWorklistPage() {
     else updateStatus.mutate({ order: row.order, task: row.task, status: "completed" });
   }
 
-  // 行の進捗の操作。行のボタン・ケバブと、ドロワーに並べるケバブの項目で共有する。
+  // 行の操作。行のボタン・ケバブと、ドロワーに並べるボタン・ケバブの項目で共有する。
   function actionsFor(row: PhysioWorklistRow): WorklistRowActions {
     return {
       // マスタが読めるまでは実施入力の有無が決まらないので押させない。
       pending: updateStatus.isPending || items.isLoading,
       onChangeStatus: (status) =>
         updateStatus.mutate({ order: row.order, task: row.task, status }),
+      onPerform: () => handlePerform(row),
+      onReport: () =>
+        setReporting({
+          orderId: row.order.id ?? "",
+          patientId: row.patient?.id ?? "",
+          title: row.patient ? displayName(row.patient) : "",
+        }),
     };
+  }
+
+  // ドロワーには行のボタン(カルテを除く)を先に、ケバブの項目を後に並べる。
+  // どちらも無い行では操作の欄そのものを出さない。
+  function drawerActionsFor(row: PhysioWorklistRow) {
+    const actions = actionsFor(row);
+    const buttons = worklistRowButtons(row, actions);
+    if (buttons.length === 0 && secondaryActionsOf(row).length === 0) return undefined;
+    return (
+      <>
+        {buttons}
+        <WorklistMenuItems row={row} {...actions} />
+      </>
+    );
   }
 
   function handleDateChange(value: string) {
@@ -230,14 +259,6 @@ export function PhysioWorklistPage() {
                       summarizePhysioOrder(row.order).urgent ? "rad-worklist__row--urgent" : undefined,
                     )}
                     {...actionsFor(row)}
-                    onPerform={() => handlePerform(row)}
-                    onReport={() =>
-                      setReporting({
-                        orderId: row.order.id ?? "",
-                        patientId: row.patient?.id ?? "",
-                        title: row.patient ? displayName(row.patient) : "",
-                      })
-                    }
                   />
                 ))}
                 {rows.length === 0 && (
@@ -260,11 +281,7 @@ export function PhysioWorklistPage() {
         <PatientProfileDrawer
           patientId={selectedRow.patient.id}
           patient={selectedRow.patient}
-          actions={
-            secondaryActionsOf(selectedRow).length > 0 ? (
-              <WorklistMenuItems row={selectedRow} {...actionsFor(selectedRow)} />
-            ) : undefined
-          }
+          actions={drawerActionsFor(selectedRow)}
           onClose={drawer.close}
         />
       )}
@@ -337,7 +354,7 @@ function FilterForm({
     <form className="patient-search-form" onSubmit={handleSubmit}>
       <label>
         実施日
-        <input type="date" value={date} required onChange={(e) => onDateChange(e.target.value)} />
+        <DateStepper value={date} onChange={onDateChange} />
       </label>
       <label>
         検査種別
@@ -417,6 +434,10 @@ function FilterForm({
 interface WorklistRowActions {
   pending: boolean;
   onChangeStatus: (status: PhysioTaskStatus) => void;
+  /** 実施入力を開く(実施入力の要らない検査はそのまま実施済にする)。 */
+  onPerform: () => void;
+  /** 所見レポートの入力を開く。 */
+  onReport: () => void;
 }
 
 /** ケバブに畳む操作(訂正・取りやめ)。 */
@@ -427,17 +448,12 @@ function secondaryActionsOf(row: PhysioWorklistRow) {
 function WorklistRow({
   row,
   rowProps,
-  onPerform,
-  onReport,
-  ...menuActions
+  ...rowActions
 }: {
   row: PhysioWorklistRow;
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
-  onPerform: () => void;
-  onReport: () => void;
 } & WorklistRowActions) {
-  const { pending, onChangeStatus } = menuActions;
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
   const { order, patient, task } = row;
@@ -445,7 +461,6 @@ function WorklistRow({
   const entries = orderEntries(physioOrderItems(order, row.itemRequests));
   const status = physioTaskStatus(task);
   const requester = prescriptionRequester(order);
-  const actions = physioTaskActions(status);
 
   return (
     <tr {...rowProps}>
@@ -492,36 +507,50 @@ function WorklistRow({
         )}
       </td>
       <td className="rad-worklist__actions sticky-table__fix-actions">
-        {actions
-          .filter((action) => !action.secondary)
-          .map((action) => (
-            <button
-              key={action.next}
-              type="button"
-              disabled={pending}
-              onClick={() => (action.opensPerformInput ? onPerform() : onChangeStatus(action.next))}
-            >
-              {action.label}
-            </button>
-          ))}
-        {/* 所見は検査した後に書く。既に書いてあれば同じボタンから直す
-            (確定済みのレポートを直すと訂正報告になる)。 */}
-        {status === "completed" && (
-          <button type="button" disabled={!patient?.id} onClick={onReport}>
-            {row.reportId ? "所見編集" : "所見"}
-          </button>
-        )}
+        {worklistRowButtons(row, rowActions)}
         {/* 訂正・取りやめは押し間違えると進捗が巻き戻るので、一段畳んで置く。
             一覧は横スクロールできるよう overflow を持つため、メニューは
             escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
         {secondaryActionsOf(row).length > 0 && (
           <RowMenu label="この検査の操作" escapesClipping>
-            <WorklistMenuItems row={row} {...menuActions} />
+            <WorklistMenuItems row={row} {...rowActions} />
           </RowMenu>
         )}
       </td>
     </tr>
   );
+}
+
+/**
+ * 行の操作セルに直接並べるボタン(カルテへのリンクは除く)。ドロワーにも同じものを並べる。
+ */
+function worklistRowButtons(
+  row: PhysioWorklistRow,
+  { pending, onChangeStatus, onPerform, onReport }: WorklistRowActions,
+): ReactElement[] {
+  const status = physioTaskStatus(row.task);
+  const buttons = physioTaskActions(status)
+    .filter((action) => !action.secondary)
+    .map((action) => (
+      <button
+        key={action.next}
+        type="button"
+        disabled={pending}
+        onClick={() => (action.opensPerformInput ? onPerform() : onChangeStatus(action.next))}
+      >
+        {action.label}
+      </button>
+    ));
+  // 所見は検査した後に書く。既に書いてあれば同じボタンから直す
+  // (確定済みのレポートを直すと訂正報告になる)。
+  if (status === "completed") {
+    buttons.push(
+      <button key="report" type="button" disabled={!row.patient?.id} onClick={onReport}>
+        {row.reportId ? "所見編集" : "所見"}
+      </button>,
+    );
+  }
+  return buttons;
 }
 
 /** 検査の行のケバブの項目。ドロワーにも同じものをボタンとして並べる。 */

@@ -8,6 +8,7 @@ import {
   useUpdatePathoTaskStatus,
   type PathoWorklistRow,
 } from "../api/queries";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 import { PathoOrderDetailPanel } from "../components/PathoOrderDetailPanel";
@@ -212,13 +213,20 @@ export function PathoWorklistPage() {
           patientId={selectedRow.patient.id}
           patient={selectedRow.patient}
           actions={
-            selectedMenuActions.length > 0 ? (
+            <>
+              <WorklistRowButtons
+                row={selectedRow}
+                pending={updateStatus.isPending}
+                onView={() => setViewingId(selectedRow.order.id ?? null)}
+                onEnterReport={() => setEnteringId(selectedRow.order.id ?? null)}
+                onChangeStatus={(status) => changeStatus(selectedRow, status)}
+              />
               <WorklistMenuItems
                 actions={selectedMenuActions}
                 pending={updateStatus.isPending}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
-            ) : undefined
+            </>
           }
           onClose={drawer.close}
         />
@@ -281,7 +289,7 @@ function FilterForm({
     <form className="patient-search-form" onSubmit={handleSubmit}>
       <label>
         採取日
-        <input type="date" value={date} required onChange={(e) => onDateChange(e.target.value)} />
+        <DateStepper value={date} onChange={onDateChange} />
       </label>
       <label>
         検査区分
@@ -394,7 +402,6 @@ function WorklistRow({
   const specimens = pathoOrderSpecimens(row.itemRequests);
   const requester = prescriptionRequester(order);
   const status = pathoTaskStatus(row.task);
-  const actions = pathoTaskActions(status);
   const secondaryActions = secondaryActionsOf(row);
 
   return (
@@ -442,30 +449,13 @@ function WorklistRow({
         )}
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
-        {actions
-          .filter((action) => !action.secondary)
-          .map((action) => (
-            <button
-              key={action.next}
-              type="button"
-              disabled={pending}
-              onClick={() => onChangeStatus(action.next)}
-            >
-              {action.label}
-            </button>
-          ))}
-        {/* レポートは検体が届いてから書く。既に書いてあれば同じボタンから直す
-            (確定済みのレポートを直すと修正報告になる)。 */}
-        {(status === "accepted" || status === "completed") && (
-          <button type="button" disabled={!patient?.id} onClick={onEnterReport}>
-            {row.reportId ? "レポート編集" : "レポート登録"}
-          </button>
-        )}
-        {/* 一覧には臓器しか出さないので、検体タイプ・採取法・臨床経過はここから開く。
-            行によって数が変わる進捗のボタンより右に置いて、どの行でも同じ位置で押せるようにする。 */}
-        <button type="button" onClick={onView}>
-          表示
-        </button>
+        <WorklistRowButtons
+          row={row}
+          pending={pending}
+          onView={onView}
+          onEnterReport={onEnterReport}
+          onChangeStatus={onChangeStatus}
+        />
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(検体検査一覧と同じ)。 */}
         {secondaryActions.length > 0 && (
           <RowMenu label="この検査の操作" escapesClipping>
@@ -478,6 +468,51 @@ function WorklistRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/** 行に直接並べるボタン。ドロワーにもケバブの項目より先に同じものを並べる。 */
+function WorklistRowButtons({
+  row,
+  pending,
+  onView,
+  onEnterReport,
+  onChangeStatus,
+}: {
+  row: PathoWorklistRow;
+  pending: boolean;
+  onView: () => void;
+  onEnterReport: () => void;
+  onChangeStatus: (status: PathoTaskStatus) => void;
+}) {
+  const status = pathoTaskStatus(row.task);
+  return (
+    <>
+      {pathoTaskActions(status)
+        .filter((action) => !action.secondary)
+        .map((action) => (
+          <button
+            key={action.next}
+            type="button"
+            disabled={pending}
+            onClick={() => onChangeStatus(action.next)}
+          >
+            {action.label}
+          </button>
+        ))}
+      {/* レポートは検体が届いてから書く。既に書いてあれば同じボタンから直す
+          (確定済みのレポートを直すと修正報告になる)。 */}
+      {(status === "accepted" || status === "completed") && (
+        <button type="button" disabled={!row.patient?.id} onClick={onEnterReport}>
+          {row.reportId ? "レポート編集" : "レポート登録"}
+        </button>
+      )}
+      {/* 一覧には臓器しか出さないので、検体タイプ・採取法・臨床経過はここから開く。
+          行によって数が変わる進捗のボタンより右に置いて、どの行でも同じ位置で押せるようにする。 */}
+      <button type="button" onClick={onView}>
+        表示
+      </button>
+    </>
   );
 }
 

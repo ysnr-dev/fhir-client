@@ -1,6 +1,7 @@
-import { useEffect, useState, type ComponentProps, type FormEvent } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import { Link } from "react-router-dom";
 import { useChemoRoomList, type ChemoRoomRow } from "../api/queries";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { PatientKana, PatientProfileCells, PatientProfileHeadCells } from "../components/PatientRowCells";
@@ -95,22 +96,12 @@ export function ChemoRoomWorklistPage() {
 }
 
 function DateForm({ date, onChange }: { date: string; onChange: (date: string) => void }) {
-  const [value, setValue] = useState(date);
-
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    onChange(value);
-  }
-
   return (
-    <form className="patient-search-form" onSubmit={handleSubmit}>
+    <form className="patient-search-form" onSubmit={(e) => e.preventDefault()}>
       <label>
         予約日
-        <input type="date" value={value} onChange={(e) => setValue(e.target.value)} />
+        <DateStepper value={date} onChange={onChange} />
       </label>
-      <div className="patient-search-form__actions">
-        <button type="submit">表示</button>
-      </div>
     </form>
   );
 }

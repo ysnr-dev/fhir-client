@@ -241,13 +241,23 @@ export function ConsultWorklistPage() {
           patientId={selectedRow.patient.id}
           patient={selectedRow.patient}
           actions={
-            consultSecondaryActions(selectedRow).length > 0 && (
-              <ConsultMenuItems
+            // 「表示」はどの行にもあるので、ボタンが空になることはない。
+            <>
+              <ConsultRowButtons
                 row={selectedRow}
                 pending={updateStatus.isPending}
+                onView={() => setViewingId(selectedRow.order.id ?? null)}
+                onReply={() => setReplyingId(selectedRow.order.id ?? null)}
                 onChangeStatus={(status) => handleChangeStatus(selectedRow, status)}
               />
-            )
+              {consultSecondaryActions(selectedRow).length > 0 && (
+                <ConsultMenuItems
+                  row={selectedRow}
+                  pending={updateStatus.isPending}
+                  onChangeStatus={(status) => handleChangeStatus(selectedRow, status)}
+                />
+              )}
+            </>
           }
           onClose={drawer.close}
         />
@@ -441,7 +451,6 @@ function OrderRow({
   const summary = summarizeConsultOrder(order);
   const requester = prescriptionRequester(order);
   const status = consultTaskStatus(row.task);
-  const actions = consultTaskActions(status);
 
   return (
     <tr {...rowProps}>
@@ -482,28 +491,13 @@ function OrderRow({
         </span>
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
-        {actions
-          .filter((action) => !action.secondary)
-          .map((action) => (
-            <button
-              key={action.next}
-              type="button"
-              disabled={pending}
-              onClick={() => onChangeStatus(action.next)}
-            >
-              {action.label}
-            </button>
-          ))}
-        {/* 回答は状態を選ぶ操作ではなく診療記録を書く操作なので、進捗ボタンとは別に出す。
-            受付を経ずに直接回答することもできる(短い相談で受付だけ残るのを防ぐ)。 */}
-        {(status === "requested" || status === "accepted") && (
-          <button type="button" onClick={onReply}>
-            回答
-          </button>
-        )}
-        <button type="button" onClick={onView}>
-          表示
-        </button>
+        <ConsultRowButtons
+          row={row}
+          pending={pending}
+          onView={onView}
+          onReply={onReply}
+          onChangeStatus={onChangeStatus}
+        />
         {/* 取消・回答取消は押し間違えると進捗が動くので一段畳む。 */}
         {consultSecondaryActions(row).length > 0 && (
           <RowMenu label="この他科依頼の操作" escapesClipping>
@@ -512,6 +506,49 @@ function OrderRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/** 他科依頼の行の操作列に直接並べるボタン。ドロワーにも同じものを並べる。 */
+function ConsultRowButtons({
+  row,
+  pending,
+  onView,
+  onReply,
+  onChangeStatus,
+}: {
+  row: ConsultWorklistRow;
+  pending: boolean;
+  onView: () => void;
+  onReply: () => void;
+  onChangeStatus: (status: ConsultTaskStatus) => void;
+}) {
+  const status = consultTaskStatus(row.task);
+  return (
+    <>
+      {consultTaskActions(status)
+        .filter((action) => !action.secondary)
+        .map((action) => (
+          <button
+            key={action.next}
+            type="button"
+            disabled={pending}
+            onClick={() => onChangeStatus(action.next)}
+          >
+            {action.label}
+          </button>
+        ))}
+      {/* 回答は状態を選ぶ操作ではなく診療記録を書く操作なので、進捗ボタンとは別に出す。
+          受付を経ずに直接回答することもできる(短い相談で受付だけ残るのを防ぐ)。 */}
+      {(status === "requested" || status === "accepted") && (
+        <button type="button" onClick={onReply}>
+          回答
+        </button>
+      )}
+      <button type="button" onClick={onView}>
+        表示
+      </button>
+    </>
   );
 }
 

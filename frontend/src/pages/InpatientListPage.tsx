@@ -888,7 +888,12 @@ export function InpatientListPage() {
         <PatientProfileDrawer
           patientId={selectedPlannedRow.patient.id}
           patient={selectedPlannedRow.patient}
-          actions={<PlannedMenuItems {...plannedActions(selectedPlannedRow)} />}
+          actions={
+            <>
+              <PlannedRowButtons {...plannedActions(selectedPlannedRow)} />
+              <PlannedMenuItems {...plannedActions(selectedPlannedRow)} />
+            </>
+          }
           onClose={drawer.close}
         />
       )}
@@ -1109,7 +1114,6 @@ function PlannedTableRow({
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
 } & PlannedMenuActions) {
-  const { onExecute } = actions;
   const returnLinkState = useReturnLinkState();
   const { encounter, patient } = row;
   const patientId = patient?.id;
@@ -1135,11 +1139,7 @@ function PlannedTableRow({
       <td>{plannedAdmissionDate(encounter) || "未定"}</td>
       <td className="inpatient__note">{encounterNote(encounter) || "-"}</td>
       <td className="patient-table__actions sticky-table__fix-actions">
-        {/* 入院実施はこのタブでいちばん使う操作なので、ケバブに畳まずカルテの左に
-            独立したボタンでも出す(ケバブにも残す)。 */}
-        <button type="button" className="button" onClick={onExecute}>
-          入院実施
-        </button>
+        <PlannedRowButtons {...actions} />
         {patientId && (
           <Link className="button" to={`/patients/${patientId}/karte`} state={returnLinkState}>
             カルテ
@@ -1205,6 +1205,17 @@ function InpatientMenuItems({
         入院取消
       </button>
     </>
+  );
+}
+
+/** 入院予定の行に直接出すボタン(カルテを除く)。ドロワーにもケバブの項目の前に並べる。 */
+function PlannedRowButtons({ onExecute }: PlannedMenuActions) {
+  // 入院実施はこのタブでいちばん使う操作なので、ケバブに畳まずカルテの左に
+  // 独立したボタンでも出す(ケバブにも残す)。
+  return (
+    <button type="button" className="button" onClick={onExecute}>
+      入院実施
+    </button>
   );
 }
 

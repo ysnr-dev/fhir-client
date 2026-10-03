@@ -96,7 +96,7 @@ export function BroughtMedicationWorklistPage() {
     }
   }
 
-  // 行の操作。行のボタン・ケバブと、ドロワーに並べるケバブの項目で共有する。
+  // 行の操作。行のボタン・ケバブと、ドロワーに並べるボタン・ケバブの項目で共有する。
   function actionsFor(item: BroughtMedWorklistItem): WorklistRowActions {
     return {
       pending: transaction.isPending,
@@ -106,7 +106,7 @@ export function BroughtMedicationWorklistPage() {
     };
   }
 
-  // ケバブを出さない行(鑑別済・取り下げ済)はドロワーにも項目を並べない。
+  // ボタンもケバブも出さない行(鑑別済・取り下げ済)はドロワーにも何も並べない。
   const selectedReviewStatus = selectedItem && broughtMedReviewRowOf(selectedItem.task).status;
   const selectedOpen =
     selectedReviewStatus === "requested" || selectedReviewStatus === "in-progress";
@@ -176,7 +176,10 @@ export function BroughtMedicationWorklistPage() {
           patient={selectedItem.patient}
           actions={
             selectedOpen ? (
-              <WorklistMenuItems item={selectedItem} {...actionsFor(selectedItem)} />
+              <>
+                <WorklistRowButtons item={selectedItem} {...actionsFor(selectedItem)} />
+                <WorklistMenuItems item={selectedItem} {...actionsFor(selectedItem)} />
+              </>
             ) : undefined
           }
           onClose={drawer.close}
@@ -211,7 +214,6 @@ function WorklistRow({
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
 } & WorklistRowActions) {
-  const { pending, onChangeStatus, onIdentify, onComplete } = actions;
   const returnLinkState = useReturnLinkState();
   const row = broughtMedReviewRowOf(item.task);
   const { patient } = item;
@@ -258,26 +260,7 @@ function WorklistRow({
         </span>
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
-        {row.status === "requested" && (
-          <button type="button" disabled={pending} onClick={() => onChangeStatus("in-progress")}>
-            鑑別開始
-          </button>
-        )}
-        {open && (
-          <button type="button" onClick={onIdentify} disabled={item.statements.length === 0}>
-            鑑別
-          </button>
-        )}
-        {row.status === "in-progress" && (
-          <button
-            type="button"
-            disabled={pending || counts.unidentified > 0 || counts.total === 0}
-            title={counts.unidentified > 0 ? "鑑別していない持参薬があります" : undefined}
-            onClick={onComplete}
-          >
-            鑑別完了
-          </button>
-        )}
+        <WorklistRowButtons item={item} {...actions} />
         {open && (
           <RowMenu label="この鑑別依頼の操作" escapesClipping>
             <WorklistMenuItems item={item} {...actions} />
@@ -285,6 +268,44 @@ function WorklistRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/** 鑑別依頼の行に直接出すボタン。ドロワーにもケバブの項目の前に並べる。 */
+function WorklistRowButtons({
+  item,
+  pending,
+  onChangeStatus,
+  onIdentify,
+  onComplete,
+}: { item: BroughtMedWorklistItem } & WorklistRowActions) {
+  const { status } = broughtMedReviewRowOf(item.task);
+  const counts = useMemo(() => countBroughtStates(item.statements), [item.statements]);
+  const open = status === "requested" || status === "in-progress";
+
+  return (
+    <>
+      {status === "requested" && (
+        <button type="button" disabled={pending} onClick={() => onChangeStatus("in-progress")}>
+          鑑別開始
+        </button>
+      )}
+      {open && (
+        <button type="button" onClick={onIdentify} disabled={item.statements.length === 0}>
+          鑑別
+        </button>
+      )}
+      {status === "in-progress" && (
+        <button
+          type="button"
+          disabled={pending || counts.unidentified > 0 || counts.total === 0}
+          title={counts.unidentified > 0 ? "鑑別していない持参薬があります" : undefined}
+          onClick={onComplete}
+        >
+          鑑別完了
+        </button>
+      )}
+    </>
   );
 }
 

@@ -211,7 +211,7 @@ export function EmergencyListPage() {
     update.mutate({ encounter: buildEmergencyCancelled(row.encounter) });
   }
 
-  // 行の操作。行のボタン・ケバブと、ドロワーに並べるケバブの項目で共有する。
+  // 行の操作。行のボタン・ケバブと、ドロワーに並べるボタン・ケバブの項目で共有する。
   function actionsFor(row: EmergencyRow): EmergencyRowActions {
     return {
       pending: update.isPending,
@@ -333,7 +333,12 @@ export function EmergencyListPage() {
           patientId={selectedPatientId}
           patient={selectedRow.patient}
           fallbackName={selectedRow.encounter.subject?.display}
-          actions={<EmergencyMenuItems row={selectedRow} {...actionsFor(selectedRow)} />}
+          actions={
+            <>
+              <EmergencyRowButtons row={selectedRow} {...actionsFor(selectedRow)} />
+              <EmergencyMenuItems row={selectedRow} {...actionsFor(selectedRow)} />
+            </>
+          }
           onClose={drawer.close}
         />
       )}
@@ -484,7 +489,6 @@ function EmergencyTableRow({
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
 } & EmergencyRowActions) {
-  const { pending, onTriage, onStartExam, onDisposition } = actions;
   const returnLinkState = useReturnLinkState();
   const { encounter, patient } = row;
   const patientId = emergencyPatientId(encounter);
@@ -566,16 +570,7 @@ function EmergencyTableRow({
       </td>
       <td className="outpatient__orders-cell">{orders}</td>
       <td className="outpatient__actions sticky-table__fix-actions">
-        {(status === "arrived" || status === "triaged") && (
-          <button type="button" disabled={pending} onClick={status === "arrived" ? onTriage : onStartExam}>
-            {status === "arrived" ? "トリアージ" : "診察開始"}
-          </button>
-        )}
-        {status === "in-progress" && (
-          <button type="button" disabled={pending} onClick={onDisposition}>
-            転帰
-          </button>
-        )}
+        <EmergencyRowButtons row={row} {...actions} />
         {patientId && (
           <Link className="button" to={`/patients/${patientId}/karte`} state={returnLinkState}>
             カルテ
@@ -586,6 +581,32 @@ function EmergencyTableRow({
         </RowMenu>
       </td>
     </tr>
+  );
+}
+
+/** 受診の行に直接出すボタン(カルテを除く)。ドロワーにもケバブの項目の前に並べる。 */
+function EmergencyRowButtons({
+  row,
+  pending,
+  onTriage,
+  onStartExam,
+  onDisposition,
+}: { row: EmergencyRow } & EmergencyRowActions) {
+  const status = row.encounter.status;
+
+  return (
+    <>
+      {(status === "arrived" || status === "triaged") && (
+        <button type="button" disabled={pending} onClick={status === "arrived" ? onTriage : onStartExam}>
+          {status === "arrived" ? "トリアージ" : "診察開始"}
+        </button>
+      )}
+      {status === "in-progress" && (
+        <button type="button" disabled={pending} onClick={onDisposition}>
+          転帰
+        </button>
+      )}
+    </>
   );
 }
 

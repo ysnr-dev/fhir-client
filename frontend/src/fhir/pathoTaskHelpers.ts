@@ -55,7 +55,7 @@ export function pathoTaskActions(status: PathoTaskStatus): PathoTaskAction[] {
   switch (status) {
     case "requested":
       return [
-        { label: "受付済", next: "accepted" },
+        { label: "受付", next: "accepted" },
         { label: "中止", next: "cancelled", secondary: true },
       ];
     case "accepted":

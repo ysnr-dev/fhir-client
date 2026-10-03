@@ -9,6 +9,7 @@ import {
   type RxWorklistRow,
 } from "../api/queries";
 import { prescriptionPdfUrl } from "../api/reportsClient";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { RowMenu } from "../components/RowMenu";
@@ -220,13 +221,22 @@ export function RxWorklistPage() {
           patientId={selectedRow.patient.id}
           patient={selectedRow.patient}
           actions={
-            hasRxMenuItems(selectedRow) && (
-              <RxMenuItems
+            // 「表示」はどの行にもあるので、ボタンが空になることはない。
+            <>
+              <RxRowButtons
                 row={selectedRow}
-                pending={updateStatus.isPending}
+                onView={() => setViewingId(selectedRow.order.id ?? null)}
+                onDispense={() => setDispensingId(selectedRow.order.id ?? null)}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
-            )
+              {hasRxMenuItems(selectedRow) && (
+                <RxMenuItems
+                  row={selectedRow}
+                  pending={updateStatus.isPending}
+                  onChangeStatus={(status) => changeStatus(selectedRow, status)}
+                />
+              )}
+            </>
           }
           onClose={drawer.close}
         />
@@ -291,7 +301,7 @@ function FilterForm({
     <form className="patient-search-form" onSubmit={handleSubmit}>
       <label>
         処方日
-        <input type="date" value={date} required onChange={(e) => onDateChange(e.target.value)} />
+        <DateStepper value={date} onChange={onDateChange} />
       </label>
       <label>
         入外区分
@@ -452,35 +462,12 @@ function WorklistRow({
         </span>
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
-        {/* 処方箋の発行が受付を兼ねる(検体検査のラベル発行と同じ)。薬剤部が最初に
-            するのが処方箋の発行なので、依頼済のオーダーは PDF を開くと同時に受付済へ
-            進める。院外・院内どちらの様式で刷るかは backend がオーダーの区分で決める。
-            発行済みの再発行はケバブメニューへ畳む(同じ内容が刷られるだけの操作なので、
-            主ボタンの列には出さない)。 */}
-        {status === "requested" && !brought && (
-          <a
-            className="button"
-            href={prescriptionPdfUrl(order.id ?? "")}
-            target="_blank"
-            rel="noopener"
-            title="処方箋の PDF を新規タブで開く"
-            onClick={() => onChangeStatus("accepted")}
-          >
-            処方箋発行
-          </a>
-        )}
-        {/* 受付が済んだら調剤の結果を登録できる。紐付け先はこの行のオーダーで決まって
-            いるので、モーダルの中でオーダーを選ばせない(RxDispenseModal)。 */}
-        {status === "accepted" && !brought && (
-          <button type="button" disabled={!patient?.id} onClick={onDispense}>
-            調剤登録
-          </button>
-        )}
-        {/* 一覧には医薬品名しか出さないので、用法・用量はここから開く。行によって
-            数が変わる進捗のボタンより右に置いて、どの行でも同じ位置で押せるようにする。 */}
-        <button type="button" onClick={onView}>
-          表示
-        </button>
+        <RxRowButtons
+          row={row}
+          onView={onView}
+          onDispense={onDispense}
+          onChangeStatus={onChangeStatus}
+        />
         {/* 取消・中止は押し間違えると進捗が巻き戻るので一段畳む(検体検査一覧と同じ)。
             処方箋の再発行も同じメニューに置く(進捗は動かさず、同じ処方箋を開くだけ)。 */}
         {hasRxMenuItems(row) && (
@@ -490,6 +477,56 @@ function WorklistRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/** 処方の行の操作列に直接並べるボタン。ドロワーにも同じものを並べる。 */
+function RxRowButtons({
+  row,
+  onView,
+  onDispense,
+  onChangeStatus,
+}: {
+  row: RxWorklistRow;
+  onView: () => void;
+  onDispense: () => void;
+  onChangeStatus: (status: RxTaskStatus) => void;
+}) {
+  const { order, patient } = row;
+  const status = rxTaskStatus(row.task);
+  const brought = isBroughtPrescription(order);
+  return (
+    <>
+      {/* 処方箋の発行が受付を兼ねる(検体検査のラベル発行と同じ)。薬剤部が最初に
+          するのが処方箋の発行なので、依頼済のオーダーは PDF を開くと同時に受付済へ
+          進める。院外・院内どちらの様式で刷るかは backend がオーダーの区分で決める。
+          発行済みの再発行はケバブメニューへ畳む(同じ内容が刷られるだけの操作なので、
+          主ボタンの列には出さない)。 */}
+      {status === "requested" && !brought && (
+        <a
+          className="button"
+          href={prescriptionPdfUrl(order.id ?? "")}
+          target="_blank"
+          rel="noopener"
+          title="処方箋の PDF を新規タブで開く"
+          onClick={() => onChangeStatus("accepted")}
+        >
+          処方箋発行
+        </a>
+      )}
+      {/* 受付が済んだら調剤の結果を登録できる。紐付け先はこの行のオーダーで決まって
+          いるので、モーダルの中でオーダーを選ばせない(RxDispenseModal)。 */}
+      {status === "accepted" && !brought && (
+        <button type="button" disabled={!patient?.id} onClick={onDispense}>
+          調剤登録
+        </button>
+      )}
+      {/* 一覧には医薬品名しか出さないので、用法・用量はここから開く。行によって
+          数が変わる進捗のボタンより右に置いて、どの行でも同じ位置で押せるようにする。 */}
+      <button type="button" onClick={onView}>
+        表示
+      </button>
+    </>
   );
 }
 

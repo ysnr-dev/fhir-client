@@ -332,7 +332,7 @@ export function OutpatientListPage() {
     });
   }
 
-  // 行の操作。行のボタン・ケバブと、ドロワーに並べるケバブの項目で共有する。
+  // 行の操作。行のボタン・ケバブと、ドロワーに並べるボタン・ケバブの項目で共有する。
   function actionsFor(row: OutpatientRow): OutpatientRowActions {
     return {
       pending:
@@ -486,7 +486,28 @@ export function OutpatientListPage() {
           patientId={selectedPatientId}
           patient={selectedRow.patient}
           fallbackName={appointmentActorDisplay(selectedRow.appointment, "Patient")}
-          actions={<OutpatientMenuItems row={selectedRow} {...actionsFor(selectedRow)} />}
+          // 診察開始のあとはカルテを書くので、行と同じくカルテの左に並べる。
+          headerActions={
+            canStartExam(selectedRow.appointment, selectedRow.encounter) && (
+              <button
+                type="button"
+                disabled={actionsFor(selectedRow).pending}
+                onClick={actionsFor(selectedRow).onStartExam}
+              >
+                診察開始
+              </button>
+            )
+          }
+          actions={
+            <>
+              <OutpatientRowButtons
+                row={selectedRow}
+                withStartExam={false}
+                {...actionsFor(selectedRow)}
+              />
+              <OutpatientMenuItems row={selectedRow} {...actionsFor(selectedRow)} />
+            </>
+          }
           onClose={drawer.close}
         />
       )}
@@ -680,7 +701,6 @@ function OutpatientTableRow({
   /** 行を押してドロワーを開くための className と onClick。 */
   rowProps: ComponentProps<"tr">;
 } & OutpatientRowActions) {
-  const { pending, onChangeStatus, onStartExam, onFinishExam, onSendBilling } = actions;
   // カルテの「戻る」でこの一覧に戻れるように遷移元を渡す。
   const returnLinkState = useReturnLinkState();
   const { appointment, patient, encounter } = row;
@@ -688,8 +708,6 @@ function OutpatientTableRow({
   const patientName = patient
     ? displayName(patient)
     : appointmentActorDisplay(appointment, "Patient");
-  const inExam = isExamInProgress(encounter);
-  const examFinished = isExamFinished(encounter);
 
   return (
     <tr {...rowProps}>
@@ -734,28 +752,7 @@ function OutpatientTableRow({
         <OrderSummaryChips orders={orders} />
       </td>
       <td className="outpatient__actions sticky-table__fix-actions">
-        {/* 受付 → 診察開始 → 診察終了 と、同じ位置でボタンが入れ替わる。 */}
-        {canCheckInAppointment(appointment) && (
-          <button type="button" disabled={pending} onClick={() => onChangeStatus("checked-in")}>
-            受付
-          </button>
-        )}
-        {canStartExam(appointment, encounter) && (
-          <button type="button" disabled={pending} onClick={onStartExam}>
-            診察開始
-          </button>
-        )}
-        {inExam && (
-          <button type="button" disabled={pending} onClick={onFinishExam}>
-            診察終了
-          </button>
-        )}
-        {/* 診察が終わったら次にやることは会計送信なので、同じ位置に出す。 */}
-        {examFinished && onSendBilling && (
-          <button type="button" disabled={pending} onClick={onSendBilling}>
-            医事送信
-          </button>
-        )}
+        <OutpatientRowButtons row={row} {...actions} />
         {patientId && (
           <Link className="button" to={`/patients/${patientId}/karte`} state={returnLinkState}>
             カルテ
@@ -769,6 +766,52 @@ function OutpatientTableRow({
         </RowMenu>
       </td>
     </tr>
+  );
+}
+
+/** 予約の行に直接出すボタン(カルテを除く)。ドロワーにもケバブの項目の前に並べる。 */
+function OutpatientRowButtons({
+  row,
+  withStartExam = true,
+  pending,
+  onChangeStatus,
+  onStartExam,
+  onFinishExam,
+  onSendBilling,
+}: {
+  row: OutpatientRow;
+  /** 診察開始を含めるか。ドロワーでは見出しのカルテの隣に別に置くので外す。 */
+  withStartExam?: boolean;
+} & OutpatientRowActions) {
+  const { appointment, encounter } = row;
+  const inExam = isExamInProgress(encounter);
+  const examFinished = isExamFinished(encounter);
+
+  return (
+    <>
+      {/* 受付 → 診察開始 → 診察終了 と、同じ位置でボタンが入れ替わる。 */}
+      {canCheckInAppointment(appointment) && (
+        <button type="button" disabled={pending} onClick={() => onChangeStatus("checked-in")}>
+          受付
+        </button>
+      )}
+      {withStartExam && canStartExam(appointment, encounter) && (
+        <button type="button" disabled={pending} onClick={onStartExam}>
+          診察開始
+        </button>
+      )}
+      {inExam && (
+        <button type="button" disabled={pending} onClick={onFinishExam}>
+          診察終了
+        </button>
+      )}
+      {/* 診察が終わったら次にやることは会計送信なので、同じ位置に出す。 */}
+      {examFinished && onSendBilling && (
+        <button type="button" disabled={pending} onClick={onSendBilling}>
+          医事送信
+        </button>
+      )}
+    </>
   );
 }
 

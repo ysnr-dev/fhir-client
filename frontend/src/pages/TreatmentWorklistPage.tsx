@@ -10,6 +10,7 @@ import {
 } from "../api/queries";
 import type { TreatmentItem } from "../api/masterClient";
 import { useTreatmentItemsByCodes } from "../api/masterQueries";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { PatientProfileDrawer, useRowDrawer } from "../components/PatientProfileDrawer";
 import { TreatmentPerformModal } from "../components/TreatmentPerformModal";
@@ -151,6 +152,7 @@ export function TreatmentWorklistPage() {
   // (同じ患者が同じ日に複数の処置を持つこともある)。絞り込みで行が消えたら閉じる。
   const drawer = useRowDrawer();
   const selectedRow = rows.find((row) => row.patient?.id && row.order.id === drawer.selectedKey);
+  const selectedButtonActions = selectedRow ? primaryActionsOf(selectedRow) : [];
   const selectedMenuActions = selectedRow ? secondaryActionsOf(selectedRow) : [];
 
   function handleDateChange(value: string) {
@@ -236,12 +238,20 @@ export function TreatmentWorklistPage() {
           patientId={selectedRow.patient.id}
           patient={selectedRow.patient}
           actions={
-            selectedMenuActions.length > 0 ? (
-              <WorklistMenuItems
-                actions={selectedMenuActions}
-                pending={pending}
-                onChangeStatus={(status) => changeStatus(selectedRow, status)}
-              />
+            selectedButtonActions.length + selectedMenuActions.length > 0 ? (
+              <>
+                <WorklistRowButtons
+                  actions={selectedButtonActions}
+                  pending={pending}
+                  onChangeStatus={(status) => changeStatus(selectedRow, status)}
+                  onPerform={() => handlePerform(selectedRow)}
+                />
+                <WorklistMenuItems
+                  actions={selectedMenuActions}
+                  pending={pending}
+                  onChangeStatus={(status) => changeStatus(selectedRow, status)}
+                />
+              </>
             ) : undefined
           }
           onClose={drawer.close}
@@ -296,7 +306,7 @@ function FilterForm({
     <form className="patient-search-form" onSubmit={handleSubmit}>
       <label>
         実施日
-        <input type="date" value={date} required onChange={(e) => onDateChange(e.target.value)} />
+        <DateStepper value={date} onChange={onDateChange} />
       </label>
       <label>
         入外区分
@@ -363,6 +373,11 @@ function FilterForm({
   );
 }
 
+/** 受付・実施など、行に直接並べる進捗の操作。 */
+function primaryActionsOf(row: TreatmentWorklistRow) {
+  return treatmentTaskActions(treatmentTaskStatus(row.task)).filter((action) => !action.secondary);
+}
+
 /** 訂正・取りやめ。押し間違えると進捗が巻き戻るので、行のケバブに畳む。 */
 function secondaryActionsOf(row: TreatmentWorklistRow) {
   return treatmentTaskActions(treatmentTaskStatus(row.task)).filter((action) => action.secondary);
@@ -389,7 +404,7 @@ function WorklistRow({
   const entries = orderEntries(treatmentOrderItems(order, row.itemRequests));
   const status = treatmentTaskStatus(task);
   const requester = prescriptionRequester(order);
-  const actions = treatmentTaskActions(status);
+  const primaryActions = primaryActionsOf(row);
   const secondaryActions = secondaryActionsOf(row);
 
   return (
@@ -427,18 +442,12 @@ function WorklistRow({
         </span>
       </td>
       <td className="rad-worklist__actions sticky-table__fix-actions">
-        {actions
-          .filter((action) => !action.secondary)
-          .map((action) => (
-            <button
-              key={action.next}
-              type="button"
-              disabled={pending}
-              onClick={() => (action.opensPerformInput ? onPerform() : onChangeStatus(action.next))}
-            >
-              {action.label}
-            </button>
-          ))}
+        <WorklistRowButtons
+          actions={primaryActions}
+          pending={pending}
+          onChangeStatus={onChangeStatus}
+          onPerform={onPerform}
+        />
         {/* 訂正・取りやめは押し間違えると進捗が巻き戻るので、一段畳んで置く。
             一覧は横スクロールできるよう overflow を持つため、メニューは
             escapesClipping で領域の外に出す(でないと縁で切れる)。 */}
@@ -453,6 +462,34 @@ function WorklistRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/** 行に直接並べるボタン。ドロワーにもケバブの項目より先に同じものを並べる。 */
+function WorklistRowButtons({
+  actions,
+  pending,
+  onChangeStatus,
+  onPerform,
+}: {
+  actions: TreatmentTaskAction[];
+  pending: boolean;
+  onChangeStatus: (status: TreatmentTaskStatus) => void;
+  onPerform: () => void;
+}) {
+  return (
+    <>
+      {actions.map((action) => (
+        <button
+          key={action.next}
+          type="button"
+          disabled={pending}
+          onClick={() => (action.opensPerformInput ? onPerform() : onChangeStatus(action.next))}
+        >
+          {action.label}
+        </button>
+      ))}
+    </>
   );
 }
 

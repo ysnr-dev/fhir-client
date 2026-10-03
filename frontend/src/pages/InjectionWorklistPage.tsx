@@ -9,6 +9,7 @@ import {
   type InjectionWorklistRow,
 } from "../api/queries";
 import { injectionLabelPdfUrl, injectionPdfUrl } from "../api/reportsClient";
+import { DateStepper } from "../components/DateStepper";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { InjectionDispenseModal } from "../components/InjectionDispenseModal";
 import { InjectionOrderViewModal } from "../components/InjectionOrderViewModal";
@@ -197,13 +198,21 @@ export function InjectionWorklistPage() {
           patientId={selectedRow.patient.id}
           patient={selectedRow.patient}
           actions={
-            hasMenuItems(selectedRow) ? (
-              <WorklistMenuItems
+            <>
+              <WorklistRowButtons
                 row={selectedRow}
-                pending={updateStatus.isPending}
+                onView={() => setViewingId(selectedRow.order.id ?? null)}
+                onDispense={() => setDispensingId(selectedRow.order.id ?? null)}
                 onChangeStatus={(status) => changeStatus(selectedRow, status)}
               />
-            ) : undefined
+              {hasMenuItems(selectedRow) && (
+                <WorklistMenuItems
+                  row={selectedRow}
+                  pending={updateStatus.isPending}
+                  onChangeStatus={(status) => changeStatus(selectedRow, status)}
+                />
+              )}
+            </>
           }
           onClose={drawer.close}
         />
@@ -251,7 +260,7 @@ function FilterForm({ date, filters, wards, departments, onDateChange, onChange 
     <form className="patient-search-form" onSubmit={handleSubmit}>
       <label>
         注射日
-        <input type="date" value={date} required onChange={(e) => onDateChange(e.target.value)} />
+        <DateStepper value={date} onChange={onDateChange} />
       </label>
       <label>
         入外区分
@@ -433,28 +442,12 @@ function WorklistRow({
         </span>
       </td>
       <td className="lab-worklist__actions sticky-table__fix-actions">
-        {/* 注射箋の発行が受付を兼ねる(処方箋発行と同じ)。依頼済のオーダーは PDF を
-            開くと同時に受付済へ進める。再発行はケバブメニューへ畳む。 */}
-        {status === "requested" && (
-          <a
-            className="button"
-            href={injectionPdfUrl(order.id ?? "")}
-            target="_blank"
-            rel="noopener"
-            title="注射箋の PDF を新規タブで開く"
-            onClick={() => onChangeStatus("accepted")}
-          >
-            注射箋発行
-          </a>
-        )}
-        {status === "accepted" && (
-          <button type="button" disabled={!patient?.id} onClick={onDispense}>
-            払出登録
-          </button>
-        )}
-        <button type="button" onClick={onView}>
-          表示
-        </button>
+        <WorklistRowButtons
+          row={row}
+          onView={onView}
+          onDispense={onDispense}
+          onChangeStatus={onChangeStatus}
+        />
         {hasMenuItems(row) && (
           <RowMenu label="この注射の操作" escapesClipping>
             <WorklistMenuItems row={row} pending={pending} onChangeStatus={onChangeStatus} />
@@ -462,6 +455,48 @@ function WorklistRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/** 行に直接並べるボタン。ドロワーにもケバブの項目より先に同じものを並べる。 */
+function WorklistRowButtons({
+  row,
+  onView,
+  onDispense,
+  onChangeStatus,
+}: {
+  row: InjectionWorklistRow;
+  onView: () => void;
+  onDispense: () => void;
+  onChangeStatus: (status: InjectionTaskStatus) => void;
+}) {
+  const status = injectionTaskStatus(row.task);
+
+  return (
+    <>
+      {/* 注射箋の発行が受付を兼ねる(処方箋発行と同じ)。依頼済のオーダーは PDF を
+          開くと同時に受付済へ進める。再発行はケバブメニューへ畳む。 */}
+      {status === "requested" && (
+        <a
+          className="button"
+          href={injectionPdfUrl(row.order.id ?? "")}
+          target="_blank"
+          rel="noopener"
+          title="注射箋の PDF を新規タブで開く"
+          onClick={() => onChangeStatus("accepted")}
+        >
+          注射箋発行
+        </a>
+      )}
+      {status === "accepted" && (
+        <button type="button" disabled={!row.patient?.id} onClick={onDispense}>
+          払出登録
+        </button>
+      )}
+      <button type="button" onClick={onView}>
+        表示
+      </button>
+    </>
   );
 }
 
