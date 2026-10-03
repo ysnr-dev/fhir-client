@@ -39,7 +39,6 @@ import {
 } from "../fhir/bloodTypeHelpers";
 import { BloodTypeForm } from "./BloodTypeForm";
 import { PatientBodySection } from "./PatientBodySection";
-import { PatientBroughtMedicationSection } from "./PatientBroughtMedicationSection";
 import type { PatientCaution } from "../api/masterClient";
 import { buildFlag, parseFlagForm, type FlagFormValues } from "../fhir/flagHelpers";
 import {
@@ -72,7 +71,6 @@ const SECTIONS = [
   { key: "coverage", label: "保険・公費" },
   { key: "body", label: "身体情報" },
   { key: "infection", label: "感染症" },
-  { key: "brought-medication", label: "持参薬" },
   { key: "caution", label: "診療上の注意" },
 ] as const;
 
@@ -221,8 +219,6 @@ export function KarteProfileTab({ patientId, view, onViewChange }: KarteProfileT
           onAdd={() => setForm({ kind: "create-infection" })}
           onEdit={(observationId) => setForm({ kind: "edit-infection", observationId })}
         />
-      ) : section === "brought-medication" ? (
-        <PatientBroughtMedicationSection patientId={patientId} />
       ) : (
         <CautionSection
           patientId={patientId}

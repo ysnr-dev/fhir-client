@@ -20897,21 +20897,6 @@ button.chemo-calendar__cell[draggable="true"] {
   font-size: 13px;
 }
 
-.brought-med__preview {
-  margin: 0;
-  padding-left: 20px;
-  font-size: 13px;
-  color: var(--text-h);
-}
-
-.brought-med__preview li + li {
-  margin-top: 2px;
-}
-
-.brought-med__preview .brought-med__state {
-  margin-left: 8px;
-}
-
 /* ---- 投薬歴(薬剤 × 日付の表) ---- */
 
 /* ツールバーは残して表だけを送る(マルチチャートと同じ)。 */
