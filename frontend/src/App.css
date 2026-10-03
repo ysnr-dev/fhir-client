@@ -4987,8 +4987,58 @@ fieldset.rp-card {
   scroll-margin-top: 80px;
 }
 
+/* テンプレート記入(モーダル)の目次。モーダル自体がスクロール領域なので、その上端に追従させる。 */
+/* 幅は 目次 200 + 間隔 20 + 記入フォームの上限(.qp の max-width)720。 */
+.modal--wide:has(.qr-toc-layout) {
+  width: min(940px, 94vw);
+}
+
+.qr-toc-layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+/* 本文のグループ見出しと同じ書式だと見分けにくいので、一段沈んだ面に置き、文字も小さく淡くする。 */
+.qe-toc.qr-toc {
+  top: 0;
+  max-height: calc(85vh - 40px);
+  padding: 8px;
+  border-right: none;
+  border-radius: 8px;
+  background: var(--surface-sunken);
+}
+
+.qr-toc__caption {
+  margin: 0 0 4px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.qe-toc.qr-toc > ul.qe-toc__items {
+  padding-left: 0;
+}
+
+.qe-toc.qr-toc button.qe-toc__item {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.qe-toc.qr-toc button.qe-toc__item:hover,
+.qe-toc.qr-toc button.qe-toc__item--active {
+  color: var(--accent);
+}
+
+.qr-toc-layout .qp-group {
+  scroll-margin-top: 8px;
+}
+
 @media (max-width: 900px) {
-  .qe-layout {
+  .qe-layout,
+  .qr-toc-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 

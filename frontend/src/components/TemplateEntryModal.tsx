@@ -61,6 +61,13 @@ interface TemplateEntryFormProps {
   questionnaireId?: string;
   submitLabel?: string;
   submitting?: boolean;
+  /** 記入フォームの左にグループの目次を出す。 */
+  showToc?: boolean;
+  /**
+   * 記入フォームの先頭にテンプレート名・版を出すか。呼び出し側がテンプレート名を
+   * 見せているときに false を渡す(既定は、ここで選択欄を出すとき以外は出す)。
+   */
+  showHeader?: boolean;
   onSubmit: (draft: TemplateDraft) => void;
 }
 
@@ -71,7 +78,7 @@ interface TemplateEntryModalProps extends TemplateEntryFormProps {
 export function TemplateEntryModal({ onClose, ...props }: TemplateEntryModalProps) {
   return (
     <Modal title="テンプレート記載" onClose={onClose} className="modal--wide">
-      <TemplateEntryForm {...props} />
+      <TemplateEntryForm {...props} showToc />
     </Modal>
   );
 }
@@ -85,6 +92,8 @@ export function TemplateEntryForm({
   questionnaireId: selectedQuestionnaireId,
   submitLabel = "記載を反映",
   submitting = false,
+  showToc = false,
+  showHeader,
   onSubmit,
 }: TemplateEntryFormProps) {
   const { data: patientResult, error: patientError } = usePatient(patientId);
@@ -194,6 +203,9 @@ export function TemplateEntryForm({
     });
   }
 
+  // テンプレートを選ばせるときは選択欄に名前と版が出ているので、記入フォームの見出しは省く。
+  const showsSelect = !initialResponse && selectsOwn && options.questionnaires.length > 0;
+
   const loading =
     !patient ||
     (needsFetch && (savedResponse.isLoading || savedQuestionnaire.isLoading)) ||
@@ -253,6 +265,8 @@ export function TemplateEntryForm({
               submitting={submitting}
               expressionContext={initialResponse ? undefined : expressionContext}
               loginAutofill={initialResponse ? undefined : loginAutofill.source}
+              showToc={showToc}
+              showHeader={showHeader ?? !showsSelect}
             >
               <QuestionnaireResponseMetaFields values={meta} onChange={setMeta} />
             </QuestionnaireResponseForm>

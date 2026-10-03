@@ -225,6 +225,8 @@ export function QuestionnaireResponseCreatePanel({
             submitting={createResponse.isPending}
             expressionContext={expressionContext}
             loginAutofill={loginAutofill.source}
+            // テンプレート名と版は上の選択欄に出ている。
+            showHeader={false}
           >
             <QuestionnaireResponseMetaFields values={meta} onChange={setMeta} />
             <div className="qp-field">

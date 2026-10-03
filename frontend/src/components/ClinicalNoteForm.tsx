@@ -337,6 +337,8 @@ export function ClinicalNoteForm({
             responseId={savedResponseId}
             questionnaireId={questionnaireId}
             extractsObservations
+            // テンプレート名は記録情報の欄(選択欄、再編集では名前)に出ている。
+            showHeader={false}
             submitLabel={submitLabel}
             submitting={submitting}
             onSubmit={handleTemplateSubmit}

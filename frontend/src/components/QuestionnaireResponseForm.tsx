@@ -24,6 +24,11 @@ import {
 } from "../fhir/schemaImage";
 import { OrganizationSearchModal } from "./OrganizationSearchModal";
 import { PractitionerSearchModal } from "./PractitionerSearchModal";
+import {
+  QuestionnaireResponseToc,
+  responseTocAnchorId,
+  type ResponseTocEntry,
+} from "./QuestionnaireResponseToc";
 import { SchemaImageField, type AnnotationState } from "./SchemaImageField";
 
 // Questionnaire の item ツリーからテンプレート入力フォームを再帰レンダリングする。
@@ -403,6 +408,24 @@ function isEnabled(item: fhir4.QuestionnaireItem, prefix: string, answers: Answe
   return item.enableBehavior === "any" ? results.some(Boolean) : results.every(Boolean);
 }
 
+// 目次に載せる、見出しのあるグループのツリー。見出しの無いグループは中身だけを同じ段に並べる。
+// 繰り返しグループはグループ自体だけを載せる(インスタンスごとの中身までは並べない)。
+function buildTocEntries(
+  items: fhir4.QuestionnaireItem[] | undefined,
+  prefix: string,
+  answers: Answers,
+): ResponseTocEntry[] {
+  return (items ?? []).flatMap((item): ResponseTocEntry[] => {
+    if (isHidden(item)) return [];
+    const key = prefix + item.linkId;
+    if (item.type !== "group") return buildTocEntries(item.item, `${key}.`, answers);
+    if (!isEnabled(item, prefix, answers)) return [];
+    const children = item.repeats ? [] : buildTocEntries(item.item, `${key}.`, answers);
+    if (!item.text) return children;
+    return [{ anchorId: responseTocAnchorId(key), text: item.text, children }];
+  });
+}
+
 interface QuestionnaireResponseFormProps {
   questionnaire: fhir4.Questionnaire;
   // 編集・表示時に回答を復元する保存済みリソース。
@@ -427,6 +450,10 @@ interface QuestionnaireResponseFormProps {
   loginAutofill?: LoginAutofillSource;
   // フォーム先頭(質問項目の前)に描画するメタ情報フィールド。
   children?: ReactNode;
+  // 左にグループの目次を出す(見出しのあるグループが無ければ出さない)。
+  showToc?: boolean;
+  // テンプレート名・版の見出しを出すか。呼び出し側でテンプレートを選ばせていて名前が見えているなら省く。
+  showHeader?: boolean;
 }
 
 export function QuestionnaireResponseForm({
@@ -439,6 +466,8 @@ export function QuestionnaireResponseForm({
   expressionContext,
   loginAutofill,
   children,
+  showToc = false,
+  showHeader = true,
 }: QuestionnaireResponseFormProps) {
   const [initialState] = useState(() =>
     buildInitialState(questionnaire, initialResponse, expressionContext, loginAutofill),
@@ -465,6 +494,8 @@ export function QuestionnaireResponseForm({
   const [selectedOrganizations, setSelectedOrganizations] = useState<
     Record<string, { id: string; name: string }>
   >({});
+
+  const tocEntries = showToc ? buildTocEntries(questionnaire.item, "", answers) : [];
 
   // 必須マークの入力強制はフォーム(保存あり)のときのみ行う。
   const requireInputs = Boolean(onSubmit) && !readOnly;
@@ -896,7 +927,7 @@ export function QuestionnaireResponseForm({
 
       if (!item.repeats) {
         return (
-          <fieldset className="qp-group" key={key}>
+          <fieldset className="qp-group" key={key} id={tocAnchor(item, key)}>
             {item.text && <legend>{item.text}</legend>}
             {renderPickers(item, `${key}.`)}
             {renderSchemaImage(item, key)}
@@ -908,7 +939,7 @@ export function QuestionnaireResponseForm({
       const maxOccurs = numberExt(item, MAX_OCCURS_EXT_URL);
       const count = counts[key] ?? 1;
       return (
-        <fieldset className="qp-group" key={key}>
+        <fieldset className="qp-group" key={key} id={tocAnchor(item, key)}>
           {item.text && <legend>{item.text}</legend>}
           {Array.from({ length: count }, (_, i) => (
             <div className="qp-group__instance" key={`${key}#${i}`}>
@@ -971,11 +1002,16 @@ export function QuestionnaireResponseForm({
     );
   }
 
+  // 目次の移動先。同じ画面に複数のフォームが並ぶこともあるので、目次を出すときだけ振る。
+  function tocAnchor(item: fhir4.QuestionnaireItem, key: string): string | undefined {
+    return tocEntries.length > 0 && item.text ? responseTocAnchorId(key) : undefined;
+  }
+
   function renderItems(items: fhir4.QuestionnaireItem[] | undefined, prefix: string) {
     return (items ?? []).map((item) => renderItem(item, prefix));
   }
 
-  const header = (
+  const header = showHeader && (
     <div className="qp__header">
       <h2>{questionnaire.title}</h2>
       <p className="qp__meta">
@@ -1022,19 +1058,29 @@ export function QuestionnaireResponseForm({
     />
   );
 
+  const withToc = (content: ReactNode) =>
+    tocEntries.length > 0 ? (
+      <div className="qr-toc-layout">
+        <QuestionnaireResponseToc entries={tocEntries} />
+        {content}
+      </div>
+    ) : (
+      content
+    );
+
   if (!onSubmit) {
-    return (
+    return withToc(
       <div className="qp">
         {header}
         {children}
         {body}
         {organizationModal}
         {practitionerModal}
-      </div>
+      </div>,
     );
   }
 
-  return (
+  return withToc(
     <form className="qp" onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
       {header}
       {children}
@@ -1046,6 +1092,6 @@ export function QuestionnaireResponseForm({
       </div>
       {organizationModal}
       {practitionerModal}
-    </form>
+    </form>,
   );
 }
