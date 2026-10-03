@@ -15930,8 +15930,9 @@ button.meal-calendar__cell:hover {
   margin: 0;
   padding: 6px 8px;
   font-size: 12px;
-  color: var(--warning-text, #8a5a00);
-  background: var(--warning-bg, #fff6e0);
+  color: var(--text-h);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border-left: 3px solid var(--warning);
 }
 
 /* 「同じ病名が継続中のため登録しません」のような、既に除外済みの理由。警告ではなく
@@ -18478,7 +18479,7 @@ button.chemo-calendar__cell[draggable="true"] {
   display: block;
   margin-top: 2px;
   font-size: 11px;
-  color: var(--warning-text, #8a5a00);
+  color: var(--warning);
 }
 
 .medicine-warning--high {
@@ -18490,7 +18491,7 @@ button.chemo-calendar__cell[draggable="true"] {
   display: block;
   margin-top: 2px;
   font-size: 11px;
-  color: var(--warning-text, #8a5a00);
+  color: var(--warning);
 }
 
 .regimen-apply__allergy--high {
